@@ -389,6 +389,14 @@ export abstract class DeformRig {
    * owner's stack column (union 5af15133).
    */
   readonly liftOffset = new THREE.Vector3();
+  /** The drawn body's lift over the masses (m, world, along the car's up), kept by the car at its pose: zero for an unlifted class. */
+  readonly bodyLift = new THREE.Vector3();
+
+  /** `world`, a point read off the drawn (lifted) cage, in the masses' frame: less the body's lift. */
+  massPoint(world: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+    return out.copy(world).sub(this.bodyLift);
+  }
+
   /** Share (0–1) of the read pitch/roll the frame takes, and the sim time it was last eased at (followGroup). */
   protected lean = 1;
   protected leanAt = -Infinity;

@@ -384,6 +384,7 @@ const PRE_B = new Float64Array(CONTACTS * 6);
 const _postV = new THREE.Vector3();
 const _postW = new THREE.Vector3();
 const _centre = new THREE.Vector3();
+const _massPoint = new THREE.Vector3();
 
 /** What the stepping car and the cars its rows rest on move at, before the solve gives them any impulse: the speeds their crush is armed with. */
 function snapshotRows(car: DeformableCar, n: number): void {
@@ -453,18 +454,19 @@ function collectCrush(car: DeformableCar, n: number): void {
  * had then (`PENDING` at `pre`), and the exchange's change of the car's speed and spin since (planar, about its centre of mass) is handed
  * to them as the kernel's increment (`shiftBody`, the face moving at `common` along `inward`). Armed after it, the masses had no closing
  * to crush with. A car whose masses already run (armed earlier this slice) takes the hit as it stands. `tyreSide`: the hit is a tyre's on
- * a solid's side (`applyImpact`).
+ * a solid's side (`applyImpact`); a tyre's point already stands in the masses' frame, a cage's is taken into it (`massPoint`).
  */
 function armAtExchange(car: DeformableCar, pre: number, point: THREE.Vector3, inward: THREE.Vector3, closing: number, ebs: number, common: number, tyreSide: boolean): void {
+  const at = tyreSide ? point : car.deform.massPoint(point, _massPoint);
   if (!car.rigid) {
-    car.applyImpact(point, inward, closing, ebs, tyreSide);
+    car.applyImpact(at, inward, closing, ebs, tyreSide);
     return;
   }
   _postV.copy(car.velocity);
   _postW.copy(car.angular);
   car.velocity.fromArray(PENDING, pre);
   car.angular.fromArray(PENDING, pre + 3);
-  car.applyImpact(point, inward, closing, ebs, tyreSide);
+  car.applyImpact(at, inward, closing, ebs, tyreSide);
   _centre.set(0, centreY(car), 0).applyQuaternion(car.group.quaternion).add(car.group.position);
   car.deform.shiftBody(car.velocity, car.angular, _postV.x - PENDING[pre]!, _postV.z - PENDING[pre + 2]!, _postW.y - PENDING[pre + 4]!, _centre.x, _centre.z, inward.x, inward.z, common);
 }
@@ -540,12 +542,12 @@ export function armCrushRows(dt: number): void {
     armAtExchange(a, f + P_PRE_A, _crushPoint, _crushNormal, closing, Math.sqrt(PENDING[f + P_EBS_A2]!), common, tyre);
     if (b !== null) armAtExchange(b, f + P_PRE_B, _crushPoint, _crushBack, closing, Math.sqrt(PENDING[f + P_EBS_B2]!), -common, false);
     a.deform.markMotion();
-    a.deform.feedOverlap(_crushPoint, _crushNormal, fed, closing, dt, common);
+    a.deform.feedOverlap(tyre ? _crushPoint : a.deform.massPoint(_crushPoint, _massPoint), _crushNormal, fed, closing, dt, common);
     a.deform.takeMotion(a.velocity, a.angular);
     a.deform.notifyContact();
     if (b === null) continue;
     b.deform.markMotion();
-    b.deform.feedOverlap(_crushPoint, _crushBack, fed, closing, dt, -common);
+    b.deform.feedOverlap(b.deform.massPoint(_crushPoint, _massPoint), _crushBack, fed, closing, dt, -common);
     b.deform.takeMotion(b.velocity, b.angular);
     b.deform.notifyContact();
   }
