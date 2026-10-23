@@ -26,41 +26,10 @@ const KINDS = ["rippleDeg", "shadeDeg", "seamDeg"] as const;
  * removes its line); an unlisted one must stay under it.
  */
 const OPEN: Readonly<Partial<Record<CarStyleId, Readonly<Record<string, string>>>>> = {
-  sedan: {
-    "boot outer rippleDeg": "the rolled tail corner's chords meet the tail fold's first ring (13°)",
-    "boot inner rippleDeg": "the rolled corner's chords read from the fender side as the inner skin",
-    "roof outer seamDeg": "the end cap's thin fan: one of its triangles tilts down 27° and reads from the hood, so the loft's end ring and the cap copy disagree",
-  },
-  police: {
-    "boot outer rippleDeg": "as the sedan's",
-    "boot inner rippleDeg": "as the sedan's",
-    "roof outer seamDeg": "as the sedan's",
-  },
   hatchback: {
     "doorL outer rippleDeg": "a concave row-edge where the shoulder rows meet the top roll, door columns z 0 to 0.31",
     "doorR outer rippleDeg": "as the left door",
-    "roof outer seamDeg": "the end cap's thin fan, as the sedan's",
-    "roof inner seamDeg": "the end cap's thin fan, as the sedan's",
-  },
-  coupe: {
-    "hood outer rippleDeg": "the hood's rear 30 cm follows a belt that crests 1.3 cm at the cowl (profile stations 0.64, 0.73, 0.95)",
-    "roof outer rippleDeg": "the roof's front end: yRoof, cabin and cabinHw ease between stations on a smoothstep, an S in every interval",
-    "roof outer seamDeg": "the end cap's thin fan, as the sedan's",
-    "roof inner shadeDeg": "the roof's headliner pinch at its front corners",
-  },
-  pickup: {
-    "hood inner seamDeg": "the nose fold's first ring",
-    "roof outer rippleDeg": "the roof's front end: the smoothstep between profile stations, as the coupe's",
-    "roof outer seamDeg": "the end cap's thin fan, as the sedan's",
-    "roof inner seamDeg": "the end cap's thin fan, as the sedan's",
-  },
-  monster: {
-    "doorL inner rippleDeg": "the skin's top corners at the hinge cut (door.hingeTop 0.99 drops the top rows)",
-    "doorR inner rippleDeg": "as the left door",
-    "roof outer rippleDeg": "the roof's front end: the smoothstep between profile stations, as the coupe's",
-    "roof outer shadeDeg": "the roof's end rings",
-    "roof outer seamDeg": "the end cap's thin fan, as the sedan's",
-    "roof inner shadeDeg": "the roof's end rings",
+    "roof inner rippleDeg": "the rear run is 1.9 cm under a 1.5 cm bow, a 1.8x stretch at the crown: the headliner's chords at x ±0.4 fold gently each way beside it",
   },
 };
 

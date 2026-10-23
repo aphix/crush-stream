@@ -57,20 +57,25 @@ export interface GlassQuad {
   roundOutline?: boolean;
 }
 
-/** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright). */
+/** A deck lid that wraps the tail: below the deck it folds over the tail edge and runs down the rear face to `y`, `w` its half-width there (m); `z` the face's bottom edge, leaning it like a tailgate's `z0` (default `z1`, upright); `steps` the fold's ring intervals (default 3: a 30° turn a ring; more turn it gentler, so the corner's cells twist less). */
 export interface LidDrop {
   y: number;
   w: number;
   z?: number;
+  steps?: number;
 }
 
 /** Drawn only: a hood that wraps the nose, folding over it on a `radius` (m) bend and running `drop` (m) down its face from its edge, onto the grille's top. */
 export type HoodNose = readonly [drop: number, radius: number];
 
-/** Ducktail kick on a boot's free edge (a deck lid's rear edge, a tailgate's top edge): it rises `rise` (m) outward at the edge, easing to the panel over `depth` (m). */
+/**
+ * Ducktail kick on a boot's free edge (a deck lid's rear edge, a tailgate's top edge): it rises `rise` (m) outward at the edge, easing to the panel over `depth` (m).
+ * `rings`: where the kick's drawn rings stand, as shares of `depth` in from the edge, ascending to 1 (absent: [0.5, 1]); more rings turn the quadratic's chords gentler.
+ */
 export interface BootLip {
   rise: number;
   depth: number;
+  rings?: readonly number[];
 }
 
 /** The panel's shape; `pivot` is where it turns (default `origin`): a hatch's or liftgate's roof hinge, a drop gate's bottom edge. `swing`: its latch, struts and limits (default by kind, `hinge-spec.ts`). */
@@ -80,9 +85,9 @@ export type BootSpec = (
    * (m, drawn only): its top domes as a parabola across x, `drop` under its centre line at |x| `at`, its edge (the shut line) kept.
    * `halfWidth` (m, drawn only, `flush` lids only): |x| of the lid's side edge, held under the profile's own (half-width less 7 cm); the body's
    * boot hollow narrows with it, its rim 1 cm outboard of the edge at the deck edge's height (a cap past the deck edge leaves it on the deck edge), so the quarter top outboard of the groove stands
-   * 3 mm under the lid's edge, as the fender beside the hood does. Absent, the lid runs to the deck edge.
+   * 3 mm under the lid's edge, as the fender beside the hood does. Absent, the lid runs to the deck edge. `deckRings` (drawn only): the deck's plain ring intervals (default 10).
    */
-  | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop; crown?: readonly [drop: number, at: number]; halfWidth?: number }
+  | { kind: "lid"; z0: number; z1: number; origin: YZ; drop?: LidDrop; crown?: readonly [drop: number, at: number]; halfWidth?: number; deckRings?: number }
   /**
    * Tail panel (hatch / tailgate) from its bottom edge [y0, z0] up to origin, its top edge; z0 defaults to origin's z (upright). `outline`:
    * its edge, the reference's gate seam, as [x, y] on the right side from top to bottom (held past its ends); absent, the tail panel's
@@ -335,8 +340,9 @@ export interface BodyStyle {
    * `sideBow` (m): the pane bulges this far forward (z) at mid-height, none at its base and top: a convex side edge in side view; absent, straight.
    * `seat`: drawn only, set it in a `drawn` twin's `windshield`: the base row sits `WINDSHIELD_SEAT` over the hood's top at every column (the hood as `hood.followGlass` bends it, or straight at `hood.z0`), never above `base[0]`; the A-post and the door glass's foot follow it.
    * `round` (m): drawn only, set it in a `drawn` twin's `windshield` (the cage's pane keeps its plain grid): the pane's top corners round to this radius, the glass's own outline (the base corners stay square on the cowl), and the A-post's front rail follows the arc into the roof.
+   * `domeFall`: this pane's share of the roof's dome its top edge falls with (absent: the style's `domeFall`, else 1); set in a `drawn` twin's `windshield`, where the roof's front lands flat on the glass's top, so the pane's corners stand under its skin by the roof's thickness and not the dome's fall.
    */
-  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow; sideBow?: number; seat?: boolean; round?: number };
+  windshield: { base: YZ; wBase: number; wTop: number; bow?: GlassBow; sideBow?: number; seat?: boolean; round?: number; domeFall?: number };
   windshieldTop: YZ;
   /**
    * Windshield wipers parked along the glass's base (`styleWipers`): `count` blades (default 2), each `length` of the glass's base width
@@ -379,6 +385,8 @@ export interface BodyStyle {
      */
     mirror?: { cap: "rounded" | "box" | "tear" | "nose"; finish: "body" | "black" | "chrome"; size?: readonly [number, number, number]; lift?: number; stalk?: number; neck?: number; mount?: "glass"; round?: number; taper?: number };
     hingeTop?: number;
+    /** Drawn only: with `hingeTop`, the run (m) back from the hinge cut over which the top rows close down to it (absent: the hinge end's slope, 0.11); a longer run turns the closing's two bends gentler, so the skin's rim shows no wave there. */
+    hingeRun?: number;
     /** Drawn only: the door skin's outer face stands this far (m) over the body side inside its cut (absent `DOOR_PROUD`, 3 mm); 0: flush, the shut line a groove only. */
     proud?: number;
     /** Drawn only: under the lowest body-ring row the skin carries, its outer face stands no less than this far (m) over the body side, easing in from `proud` at that row to this at the door's bottom edge and tapering in over the cut's ends like `proud`; those cells turn their diagonal on the hinge half so the lift reaches both end cells alike. The cut's ramp barely leaves the side down there (the rocker point never drops), so a flush skin lies within a millimetre of it and z-fights; absent: the skin holds `proud` all the way down. */

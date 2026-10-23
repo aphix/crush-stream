@@ -29,10 +29,9 @@ function quadPoint(q: BowedQuad, xn: number, t: number): THREE.Vector3 {
   return _pt.set(x, lerp(q.base[0], q.top[0], t) - q.fall(x, t), lerp(q.base[1], q.top[1], t) + lerp(q.bow.base, q.bow.top, t) * (1 - xn * xn) + (q.ahead?.(t) ?? 0));
 }
 
-/** How far (m) a raked pane whose top edge lies at `topZ` falls under its flat quad at car `x`, `t` up from its base: its top edge follows the roof's dome across the car (none at the centre line), fading to the base. */
-export function domeFall(style: BodyStyle, topZ: number): (x: number, t: number) => number {
+/** How far (m) a raked pane whose top edge lies at `topZ` falls under its flat quad at car `x`, `t` up from its base: its top edge follows `share` of the roof's dome across the car (none at the centre line; default the style's), fading to the base. */
+export function domeFall(style: BodyStyle, topZ: number, share = style.domeFall ?? 1): (x: number, t: number) => number {
   const crown = roofTopY(0, topZ, style);
-  const share = style.domeFall ?? 1;
   return (x, t) => share * t * (crown - roofTopY(x, topZ, style));
 }
 
@@ -125,7 +124,7 @@ function makeGlassQuad(q: BowedQuad, { segX, segY }: QuadDraw): THREE.BufferGeom
 function windshieldQuad(style: BodyStyle): BowedQuad {
   const { base, wBase, wTop, bow = WINDSHIELD_BOW, sideBow, seat, round } = style.windshield;
   const ahead = sideBow === undefined ? undefined : (t: number) => sideBowZ(sideBow, t);
-  const dome = domeFall(style, style.windshieldTop[1]);
+  const dome = domeFall(style, style.windshieldTop[1], style.windshield.domeFall);
   // quadPoint lays x = xn * lerp(wBase, wTop, t) / 2: dividing it out gives the column's xn; the seat's drop fades to nothing at the top.
   const fall = seat !== true ? dome : (x: number, t: number) => dome(x, t) + (1 - t) * (base[0] - windshieldBaseY(style, x / (lerp(wBase, wTop, t) / 2)));
   return { base, top: style.windshieldTop, wBase, wTop, bow, fall, ahead, ...(round === undefined ? {} : { round, roundOutline: true, roundTop: true }) };
