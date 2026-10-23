@@ -491,7 +491,7 @@ function collectCrush(car: DeformableCar, n: number): void {
  * a solid's side (`applyImpact`); a tyre's point already stands in the masses' frame, a cage's is taken into it (`massPoint`).
  */
 function armAtExchange(car: DeformableCar, pre: number, point: THREE.Vector3, inward: THREE.Vector3, closing: number, ebs: number, common: number, tyreSide: boolean): void {
-  const at = tyreSide ? point : car.deform.massPoint(point, _massPoint);
+  const at = tyreSide ? point : car.deform.massPoint(point, _massPoint, car.group.position.y);
   if (!car.rigid) {
     car.applyImpact(at, inward, closing, ebs, tyreSide);
     return;
@@ -589,8 +589,8 @@ export function armPairWithRows(a: DeformableCar, b: DeformableCar, point: THREE
     PENDING_B[i] = PENDING_B[queue.size]!;
   }
   if (!met) return false;
-  a.applyImpact(point, normal, closing, Math.sqrt(ebsA2), false, true);
-  b.applyImpact(point, _crushBack.copy(normal).negate(), closing, Math.sqrt(ebsB2), false, true);
+  a.applyImpact(a.deform.massPoint(point, _massPoint, a.group.position.y), normal, closing, Math.sqrt(ebsA2), false, true);
+  b.applyImpact(b.deform.massPoint(point, _massPoint, b.group.position.y), _crushBack.copy(normal).negate(), closing, Math.sqrt(ebsB2), false, true);
   return true;
 }
 
@@ -616,12 +616,12 @@ export function armCrushRows(dt: number): void {
     armAtExchange(a, f + P_PRE_A, _crushPoint, _crushNormal, closing, Math.sqrt(PENDING[f + P_EBS_A2]!), common, tyre);
     if (b !== null) armAtExchange(b, f + P_PRE_B, _crushPoint, _crushBack, closing, Math.sqrt(PENDING[f + P_EBS_B2]!), -common, false);
     a.deform.markMotion();
-    a.deform.feedOverlap(tyre ? _crushPoint : a.deform.massPoint(_crushPoint, _massPoint), _crushNormal, fed, closing, dt, common);
+    a.deform.feedOverlap(tyre ? _crushPoint : a.deform.massPoint(_crushPoint, _massPoint, a.group.position.y), _crushNormal, fed, closing, dt, common);
     a.deform.takeMotion(a.velocity, a.angular);
     a.deform.notifyContact();
     if (b === null) continue;
     b.deform.markMotion();
-    b.deform.feedOverlap(b.deform.massPoint(_crushPoint, _massPoint), _crushBack, fed, closing, dt, -common);
+    b.deform.feedOverlap(b.deform.massPoint(_crushPoint, _massPoint, b.group.position.y), _crushBack, fed, closing, dt, -common);
     b.deform.takeMotion(b.velocity, b.angular);
     b.deform.notifyContact();
   }

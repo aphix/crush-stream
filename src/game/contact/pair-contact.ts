@@ -598,8 +598,8 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
     const idleA = carA.deform.quietTime() >= REARM_QUIET_S;
     const idleB = carB.deform.quietTime() >= REARM_QUIET_S;
     if (!armPairWithRows(carA, carB, _p, n, closing, shareA, shareB)) {
-      brushA = !carA.applyImpact(carA.deform.massPoint(_p, _massPoint), n, closing, shareA, false, true) && idleA;
-      brushB = !carB.applyImpact(carB.deform.massPoint(_p, _massPoint), _w.copy(n).negate(), closing, shareB, false, true) && idleB;
+      brushA = !carA.applyImpact(carA.deform.massPoint(_p, _massPoint, carA.group.position.y), n, closing, shareA, false, true) && idleA;
+      brushB = !carB.applyImpact(carB.deform.massPoint(_p, _massPoint, carB.group.position.y), _w.copy(n).negate(), closing, shareB, false, true) && idleB;
     }
   }
 
@@ -620,12 +620,12 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // feed is never less than that travel (`closing * dt`). The overlap is the two faces' together: each structure crushes its half.
   const fed = Math.max(hit, closing * dt) / 2;
   if (carA.deform.massActive) carA.deform.markMotion();
-  const pointA = carA.deform.massPoint(_p, _massPoint);
+  const pointA = carA.deform.massPoint(_p, _massPoint, carA.group.position.y);
   carA.deform.aimHit(carA.worldToLocalPoint(pointA, _aim));
   carA.deform.feedOverlap(pointA, n, fed, Math.max(0, closing), dt, faces[0]!);
   if (carA.deform.massActive) carA.deform.takeMotion(carA.velocity, carA.angular);
   if (carB.deform.massActive) carB.deform.markMotion();
-  const pointB = carB.deform.massPoint(_p, _massPoint);
+  const pointB = carB.deform.massPoint(_p, _massPoint, carB.group.position.y);
   carB.deform.aimHit(carB.worldToLocalPoint(pointB, _aim));
   carB.deform.feedOverlap(pointB, _w.copy(n).negate(), fed, Math.max(0, closing), dt, faces[1]!);
   if (carB.deform.massActive) carB.deform.takeMotion(carB.velocity, carB.angular);

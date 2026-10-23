@@ -398,9 +398,31 @@ export abstract class DeformRig {
   /** The drawn body's lift over the masses (m, world, along the car's up), kept by the car at its pose: zero for an unlifted class. */
   readonly bodyLift = new THREE.Vector3();
 
-  /** `world`, a point read off the drawn (lifted) cage, in the masses' frame: less the body's lift. */
-  massPoint(world: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
-    return out.copy(world).sub(this.bodyLift);
+  /** The lowest and highest rest height (m, the car's frame) of the masses that crush (all but the roof); NaN until `massPoint` first reads them. */
+  private bandLow = NaN;
+  private bandHigh = NaN;
+
+  /**
+   * `world`, a point read off the drawn (lifted) cage, in the masses' frame: less the body's lift, and held between the heights the crushing
+   * masses stand at over the car's origin height `originY`. A cage point's height is wherever the other body's overlap lands on it (a
+   * hood's lip, a windshield, a lifted tail's band) and moves with the slice the contact is first read in; the crush reads it only as a
+   * distance to those masses.
+   */
+  massPoint(world: THREE.Vector3, out: THREE.Vector3, originY: number): THREE.Vector3 {
+    if (Number.isNaN(this.bandLow)) {
+      let low = Infinity;
+      let high = -Infinity;
+      for (const m of this.masses) {
+        if (m.name === "roof") continue;
+        low = Math.min(low, m.rest.y);
+        high = Math.max(high, m.rest.y);
+      }
+      this.bandLow = low;
+      this.bandHigh = high;
+    }
+    out.copy(world).sub(this.bodyLift);
+    out.y = Math.min(originY + this.bandHigh, Math.max(originY + this.bandLow, out.y));
+    return out;
   }
 
   /** Share (0–1) of the read pitch/roll the frame takes, and the sim time it was last eased at (followGroup). */
