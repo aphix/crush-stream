@@ -16,6 +16,7 @@ const setup: TraceSetup = {
   ramps: true,
   compactor: false,
   compactFace: 0,
+  compactStage: "open",
   carCount: 2,
   speedMin: 0,
   speedMax: 32,

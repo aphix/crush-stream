@@ -64,47 +64,60 @@ export type OwnerHit = {
   /** Both cars' motion in the slice before the first touch, and `READ_AFTER` slices after it. */
   before: [Motion, Motion];
   after: [Motion, Motion];
-  /** Where the striker's front-right corner was when the cars first touched, and the unit normal out of the struck car's right side. */
+  /** Where the cars first touched (the engine's contact point), and the unit normal out of the struck car's right side. */
   point: THREE.Vector3;
   normal: THREE.Vector3;
 };
 
+/** Where on the coupe's right side the hatchback's nose is aimed: its right-rear hub (the owner's clip), its middle, its right-front hub. */
+export type Spot = "rearWheel" | "middle" | "frontWheel";
+const HUB_OF = { rearWheel: 3, frontWheel: 1 } as const; // frame.wheels runs FL FR RL RR
+const B_X = 122.3;
+const A_Z = 55.312;
+
 /**
- * The striker (A, hatchback, 858 kg) drives at `speedA` m/s along +x, 0.7 degrees off it, its front-right corner onto the
- * struck car's (B, coupe, 858 kg) right side; B drives along -z at 8.03 m/s and starts `aim` m further along z than the clip
- * had it (0: the wheel 1.65 m behind B's centre; negative: nearer its middle; positive: nearer its tail).
+ * The striker (A, hatchback, 858 kg) drives at `speedA` m/s along +x, 0.7 degrees off it, the middle of its nose onto the
+ * struck car's (B, coupe, 858 kg) right side at `spot`; B drives along -z at 8.03 m/s. A keeps the clip's heading and z line, B its x.
  */
-export function ownerHit(aim: number, speedA = 27.301): OwnerHit {
+export function ownerHit(spot: Spot, speedA = 27.301): OwnerHit {
   const a = dressedCar("hatchback", "sedan", 0);
   const b = dressedCar("coupe", "muscle", 27);
   const yawA = Math.atan2(27.536, -0.331);
-  const vax = Math.sin(yawA) * speedA;
-  const vaz = Math.cos(yawA) * speedA;
+  const fx = Math.sin(yawA);
+  const fz = Math.cos(yawA);
+  const vax = fx * speedA;
+  const vaz = fz * speedA;
   const lead = 0.5;
-  launch(a, 119.122 - vax * lead, 55.312 - vaz * lead, yawA, vax, vaz);
-  launch(b, 122.3, 53.296 - aim + 8.034 * lead, Math.PI, 0, -8.034);
+  const nose = a.cage.fields.planBox[3]!;
+  const spotZ = spot === "middle" ? 0 : b.frame.wheels[HUB_OF[spot]]![2];
+  // A's centre as its nose face meets B's right side (B faces -z, so its right is -x); B's centre so `spotZ` of its length stands where A's nose line crosses.
+  const px = B_X - b.cage.fields.planBox[1]! - fx * nose;
+  const bz = A_Z + fz * nose + spotZ;
+  launch(a, px - vax * lead, A_Z - vaz * lead, yawA, vax, vaz);
+  launch(b, B_X, bz + 8.034 * lead, Math.PI, 0, -8.034);
   const cars = [a, b];
   const world = newWorld(cars, null, null);
   let touchedAt = -1;
   let step = 0;
-  // The rigid answer is taken at the contact the engine reports for the first touch (the overlap patch's centre: the nose's face
-  // against a flat flank presses at its middle, half a nose's width from the corner that touches first), along the struck car's side.
+  // The rigid answer is taken at the contact the engine reports for the first touch (the overlap patch's centre) and along its normal,
+  // which must be out of the struck car's right side: a restaged hit that lands on a tail face would not be this row.
   const point = new THREE.Vector3();
+  const normal = new THREE.Vector3();
   world.pairHit = (_i, _j, hit) => {
     if (touchedAt < 0 && hit.impulse > 0.2) {
       touchedAt = step;
       point.copy(hit.contact);
+      normal.set(hit.normal.x, 0, hit.normal.z).normalize();
     }
   };
   let before: [Motion, Motion] = [motionOf(a), motionOf(b)];
-  const normal = new THREE.Vector3();
   for (; step < FINE_HZ * 3; step++) {
     const last: [Motion, Motion] = [motionOf(a), motionOf(b)];
     stepWorld(world, SLICE);
     settleStep(cars, SLICE, false);
     if (touchedAt === step) {
       before = last;
-      normal.set(b.rightFlat.x, 0, b.rightFlat.z);
+      if (normal.dot(b.rightFlat) < Math.cos(0.35)) throw new Error(`the restaged hit is not on the coupe's right side: contact normal ${normal.toArray()}`);
     }
     if (touchedAt >= 0 && step === touchedAt + READ_AFTER) break;
   }

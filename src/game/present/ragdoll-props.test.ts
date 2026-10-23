@@ -267,8 +267,8 @@ describe("given a crate knocked over in a course's infield, lying asleep where i
 
 describe("given a cone lying asleep against the foot of a course's road wall, where a car's bumper knocked it", () => {
   // Knocked across the road at the wall 7 m off (car 0's bumper, 12 m/s), it comes to rest lying against the wall's face.
-  // A car then drives along the road from 12 m back to 15 m past it with its side (0.86 m from its middle line) 0.1 m off
-  // the wall's face: its box sweeps along the wall's foot, over the cone.
+  // A car then drives along the road from 12 m back to 15 m past it with its wall side (its cage's plan box, local +x) 0.1 m off the
+  // wall's face: its box sweeps along the wall's foot, over the cone.
   // 17 m/s todo (measured, ReelTrap): the cage-fitted nose row tiles 5 cm sliver columns (leaves 128 = the cap) whose internal faces
   // carry contradictory normals; a step at 17 m/s (3.5 cm) exceeds a sliver's half width, so Rapier's minimum axis flips to the
   // internal lateral face and the cone ends 4.3 mm into the wall against the 3 mm bound (20 m/s passes). A minimum-width law keeps the cone out but breaks
@@ -289,11 +289,12 @@ describe("given a cone lying asleep against the foot of a course's road wall, wh
       sys.propAt(0, lay, new THREE.Vector3());
       const lying = deepestInStatics(world, own);
       const along = (lay.x - ROAD.x) * ROAD.along.x + (lay.z - ROAD.z) * ROAD.along.z;
-      const line = WALL_OFF - 0.86 - 0.1;
+      const car = makeCar();
+      const line = WALL_OFF - car.cage.fields.planBox[1]! - 0.1;
       const x = ROAD.x + ROAD.left.x * line + ROAD.along.x * (along - 12);
       const z = ROAD.z + ROAD.left.z * line + ROAD.along.z * (along - 12);
       let deepest = lying;
-      drive(sys, makeCar(), x, z, ROAD.along.x, ROAD.along.z, testCase.speed, 27 / testCase.speed, (frame) => {
+      drive(sys, car, x, z, ROAD.along.x, ROAD.along.z, testCase.speed, 27 / testCase.speed, (frame) => {
         frame();
         deepest = Math.max(deepest, deepestInStatics(world, own));
       });

@@ -6,7 +6,7 @@ import { beginImpact, easeTimeScale, phaseClock, stepPhase, type PhaseClock } fr
 import { CAGES } from "../kernel/rig-spec.ts";
 import { BARRIER_HALF, physicsSlice, sliceSpeed } from "./sat.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
-import { mass, paint } from "../vehicle/test-support.ts";
+import { closedOn, mass, paint } from "../vehicle/test-support.ts";
 import { newWorld, stepWorld, type World } from "../engine/world-step.ts";
 import { EjectionWatch, type Ejection } from "../vehicle/ejection.ts";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -370,18 +370,19 @@ export class Probe {
     this.t += simDt;
     const d = car.deform;
     for (const o of w.cars) if (o !== car && o.deform.massActive && d.massActive) this.r.tyreOverlap = Math.max(this.r.tyreOverlap, tyreOverlap(car, o));
-    const cell = mass(d, "cell").local;
+    const cellMass = mass(d, "cell");
+    const cell = cellMass.local;
     const r = this.r;
     const yaw = heading(car);
     if (d.quietTime() >= 0.1) r.quietYawDrift += Math.abs(Math.atan2(Math.sin(yaw - this.prevYaw), Math.cos(yaw - this.prevYaw)));
     this.prevYaw = yaw;
     if (Math.abs(car.angular.y) >= 5.9) r.spinFrames++;
     r.crushMax = Math.max(r.crushMax, d.crushAmount);
-    const noseL = 2.0 - (mass(d, "bumperFL").local.z - cell.z);
-    const noseR = 2.0 - (mass(d, "bumperFR").local.z - cell.z);
-    const tail = Math.max(2.12 - (cell.z - mass(d, "bumperRL").local.z), 2.12 - (cell.z - mass(d, "bumperRR").local.z));
-    const engL = 1.16 - (mass(d, "engineL").local.z - cell.z);
-    const engR = 1.16 - (mass(d, "engineR").local.z - cell.z);
+    const noseL = closedOn(mass(d, "bumperFL"), cellMass, "z");
+    const noseR = closedOn(mass(d, "bumperFR"), cellMass, "z");
+    const tail = Math.max(closedOn(mass(d, "bumperRL"), cellMass, "z"), closedOn(mass(d, "bumperRR"), cellMass, "z"));
+    const engL = closedOn(mass(d, "engineL"), cellMass, "z");
+    const engR = closedOn(mass(d, "engineR"), cellMass, "z");
     r.noseShortL = noseL;
     r.noseShortR = noseR;
     r.tailShort = tail;
@@ -390,13 +391,15 @@ export class Probe {
     r.tailMax = Math.max(r.tailMax, tail);
     r.engineMax = Math.max(r.engineMax, engL, engR);
     r.engineMin = Math.min(r.engineMin, engL, engR);
-    r.doorMaxL = Math.max(r.doorMaxL, mass(d, "doorL").local.x - cell.x + 0.78);
-    r.doorMaxR = Math.max(r.doorMaxR, 0.78 - (mass(d, "doorR").local.x - cell.x));
-    r.roofMax = Math.max(r.roofMax, 0.63 - (mass(d, "roof").local.y - cell.y));
-    const cellRest = mass(d, "cell").rest;
+    r.doorMaxL = Math.max(r.doorMaxL, closedOn(mass(d, "doorL"), cellMass, "x"));
+    r.doorMaxR = Math.max(r.doorMaxR, closedOn(mass(d, "doorR"), cellMass, "x"));
+    r.roofMax = Math.max(r.roofMax, closedOn(mass(d, "roof"), cellMass, "y"));
+    const cellRest = cellMass.rest;
     r.cellShift = Math.max(r.cellShift, Math.hypot(cell.x - cellRest.x, cell.z - cellRest.z));
     r.cabinIntrusion = Math.max(r.doorMaxL, r.doorMaxR, r.roofMax);
-    r.engineGapErr = Math.max(r.engineGapErr, Math.abs(mass(d, "engineL").local.distanceTo(mass(d, "engineR").local) - 0.6));
+    const eL = mass(d, "engineL");
+    const eR = mass(d, "engineR");
+    r.engineGapErr = Math.max(r.engineGapErr, Math.abs(eL.local.distanceTo(eR.local) - eL.rest.distanceTo(eR.rest)));
     // From where the hulls first reach the slab's face (`HeldBarrier.touch`), not from the slice before the contact began; a world with
     // no slab counts from the slice before the first contact.
     const from = w.touch.get(car) ?? this.start;

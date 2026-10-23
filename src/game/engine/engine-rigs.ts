@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { COMPACTOR, compactorStage } from "../scenes/compactor.ts";
+import { COMPACTOR } from "../scenes/compactor.ts";
 import { PISTON, PISTON_IDS, type PistonConfig } from "../scenes/piston-rig.ts";
 import { placeDrop, STACK_RANGES, type StackConfig } from "../scenes/stack-rig.ts";
 import { PISTON_ORBIT_RATE, pistonAhead, pistonToGo } from "../present/engine-pistons.ts";
@@ -119,7 +119,7 @@ export abstract class EngineRigs extends EngineScenes {
         }
       }
     }
-    const stage = compactorStage(this.compactor.face);
+    const stage = this.compactor.stage;
     if (stage === "contact" || stage === "wells") this.clock.phase = this.clock.phase === "approach" ? "impact" : this.clock.phase;
     if (stage === "mid") this.clock.phase = "slowmo";
     if (stage === "max") this.clock.phase = "aftermath";

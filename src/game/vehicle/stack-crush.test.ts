@@ -6,7 +6,6 @@ import { FLIGHT } from "./car-flight.ts";
 import { paint } from "./test-support.ts";
 import { makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FACE_LEFT, FACE_NOSE, FACE_RIGHT, FACE_TAIL, FACE_TOP, faceMax, faceStrength } from "../deform/load-crush.ts";
-import { MASS_SPECS } from "../kernel/rig-spec.ts";
 import { crownY, keelY } from "./car-cage-rig.ts";
 
 /**
@@ -14,7 +13,6 @@ import { crownY, keelY } from "./car-cage-rig.ts";
  * weight above it, and a car dropped on its roof, nose, tail or flank crushes that face by its own weight and drop.
  * Headless, through the engine's own step (`stepWorld`), on the flat pad.
  */
-const ROOF_REST_Y = MASS_SPECS.find((m) => m.name === "roof")!.rest[1];
 /** Belly-to-roof gap of a car above (m): its belly starts this far over the drawn roof of the car below. */
 const GAP = 0.02;
 /** A stack has settled once every car's speed and spin stay under `STILL_SPEED` for `STILL_S`; it has done so within this many seconds of the drop (measured about 1 s). */
@@ -33,8 +31,9 @@ function settle(w: CrashWorld, cars: readonly DeformableCar[], hz: number): void
   throw new Error(`the stack did not stand still within ${SETTLE_S} s`);
 }
 
+/** How far (m) the car's roof mass stands under its own rest height. */
 function roofSink(c: DeformableCar): number {
-  return ROOF_REST_Y - c.deform.massLocal("roof").y;
+  return c.roofRestY - c.deform.massLocal("roof").y;
 }
 
 function run(w: CrashWorld, seconds: number, hz = 60): void {

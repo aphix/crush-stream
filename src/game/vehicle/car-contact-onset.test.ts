@@ -18,6 +18,8 @@ const DROP_FROM_M = 1.8;
 const FIRST_CONTACT_MPS = 0.02;
 const GAP_M = 0.05;
 const FRAMES = 60 * 5;
+/** The road (m) the flank car rolls before its nose meets the parked car's side: short of what it coasts from 1 m/s in `FRAMES`. */
+const FLANK_RUN_M = 3;
 
 type Meeting = "nose" | "flank" | "drop";
 
@@ -41,7 +43,7 @@ function scene(damaged: boolean, meeting: Meeting, withParked: boolean) {
     relaunchDamaged(parked, 0, 0, 0, 0, 0);
   } else launch(parked, 0, 0, 0, 0, 0);
   const second = buildCar("sedan", "sedan");
-  if (meeting === "flank") launch(second, 6, 0, -Math.PI / 2, -APPROACH_MPS, 0);
+  if (meeting === "flank") launch(second, parked.cage.fields.planBox[1]! + second.cage.fields.planBox[3]! + FLANK_RUN_M, 0, -Math.PI / 2, -APPROACH_MPS, 0);
   else if (meeting === "nose") launch(second, 0, 6, Math.PI, 0, -APPROACH_MPS);
   else {
     second.spawnFacing(0, 0, 0, 0);

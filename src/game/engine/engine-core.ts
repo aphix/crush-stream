@@ -554,6 +554,7 @@ export abstract class EngineCore {
       ramps: this.rampsUp,
       compactor: this.showCompactor,
       compactFace: this.compactor.face,
+      compactStage: this.showCompactor ? this.compactor.stage : "open",
       carCount: this.carCount,
       speedMin: this.speedMin,
       speedMax: this.speedMax,

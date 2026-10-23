@@ -1,5 +1,4 @@
 import { stackLoads } from "../scenes/stack-rig.ts";
-import { compactorStage } from "../scenes/compactor.ts";
 import { LAB_PRESET } from "../scenes/constants.ts";
 import type { GarageHud, HudStore, LabHud } from "../hud/hud-store.ts";
 import { carGauge } from "../match/car-view.ts";
@@ -149,7 +148,7 @@ export abstract class EngineHud extends EngineWarm {
       speedMax: this.speedMax,
       traceSamples: this.captureTrace ? this.trace.samples.length : this.trace.setupCopied ? 1 : 0,
       wallGap: this.showCompactor ? this.compactor.face * 2 : 0,
-      compactStage: this.showCompactor ? compactorStage(this.compactor.face) : "open",
+      compactStage: this.showCompactor ? this.compactor.stage : "open",
       fps: this.fps,
       captureTrace: this.captureTrace,
       derby: this.derbyMode,
