@@ -395,6 +395,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * crushed only where the face presses it, not at the corner hanging past the end.
  * The press closes its plates 0.26 m inside the rails' rest in shape deform mode (0.06 m in lattice), where every car class folds its rails
  * past 0.2 m, not stalls at 0.183-0.199 m: a pressed sedan's rails fold 0.244 m, were 0.191.
+ * A torn hatchback gate flies as its glass and spoiler only (its D-posts stay on the body); a torn SUV liftgate flies with its D-post shares as
+ * closed pieces cut on one shared section and a flange under its slab.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
