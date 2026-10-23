@@ -243,10 +243,11 @@ export const SEDAN: BodyStyle = {
   /**
    * Drawn only: the reference's glass base bows forward in plan (1.044 on the centre line, ~.88 at the corners) and its side edge is
    * convex in side view; its base seats on the hood at every column; the door glass's front edge runs straight from the belt to the
-   * A-post's top, without the cage's knee.
+   * A-post's top, without the cage's knee. Its top is the top view's 1.06 header (corners at |x| .53, under the roof's dome edge;
+   * the cage's 1.16 stood them ~6 cm outside it).
    */
   drawn: {
-    windshield: { base: [0.95, 0.88], wBase: 1.4, wTop: 1.16, bow: { base: 0.165, top: WINDSHIELD_BOW.top }, sideBow: 0.036, seat: true },
+    windshield: { base: [0.95, 0.88], wBase: 1.4, wTop: 1.06, bow: { base: 0.165, top: WINDSHIELD_BOW.top }, sideBow: 0.036, seat: true },
     aPillarFoot: 0.64,
     aPillarTop: 0.05,
     aPillarKnee: undefined,
