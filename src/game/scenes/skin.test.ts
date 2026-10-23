@@ -24,7 +24,7 @@ type Internals = {
   masses: MassNode[];
   rig: RigTables;
   clusters: ShapeCluster[];
-  cages: { corners: THREE.Vector3[]; restCorners: THREE.Vector3[]; min: THREE.Vector3; size: THREE.Vector3 }[];
+  cages: { spec: { name: string }; corners: THREE.Vector3[]; restCorners: THREE.Vector3[]; min: THREE.Vector3; size: THREE.Vector3 }[];
   cageByPart: Map<string, { corners: THREE.Vector3[]; min: THREE.Vector3; size: THREE.Vector3 }>;
   skinN: Uint8Array;
   skinXf: Int32Array;
@@ -207,7 +207,10 @@ function restCentroid(d: Internals, c: ShapeCluster): THREE.Vector3 {
 }
 
 function referenceCageSolve(d: Internals): void {
+  const cell = d.masses.findIndex((m) => m.name === "cell");
   for (const [ci, cage] of d.cages.entries()) {
+    // A door cage's corners hang on the cabin: only the clusters that hold the cell move them.
+    const hung = cage.spec.name.startsWith("door");
     for (let i = 0; i < 8; i++) {
       const rest = cage.restCorners[i]!;
       const a = anchor(d, d.vertexCount + ci * 8 + i);
@@ -216,6 +219,7 @@ function referenceCageSolve(d: Internals): void {
         pz = 0,
         wsum = 0;
       for (const c of d.clusters) {
+        if (hung && !c.idx.includes(cell)) continue;
         const dd = rest.distanceTo(restCentroid(d, c));
         if (dd > 1.4) continue;
         const w = Math.exp(-dd * 2.35);
