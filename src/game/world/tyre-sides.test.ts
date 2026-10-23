@@ -6,8 +6,11 @@ import { BARRIER_HALF, BARRIER_TOP } from "../contact/sat.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { HUBS } from "../vehicle/car-air-body.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { SPRINGS } from "../vehicle/car-suspension.ts";
-import { STEP_MAX } from "./surfaces.ts";
+import { CLASSES } from "../vehicle/vehicle-classes.ts";
+import { MOUNT } from "./surfaces.ts";
 
 /**
  * Main, ruling (a) of the car overhaul: a tyre meets a solid's side faces, for every car. A monster stands on 1.23 m tyres with its
@@ -19,8 +22,8 @@ import { STEP_MAX } from "./surfaces.ts";
 
 /** Deepest a tyre may stand inside the slab (m): its stroke, and a centimetre of the slice that meets its end. */
 const TYRE_IN = SPRINGS.monster.travel + 0.01;
-/** Most the body may rise in a frame past what its own vertical speed carries it (m): a tyre mounting what it may (`STEP_MAX` over its hub), not a teleport. */
-const POP = STEP_MAX;
+/** Most the body may rise in a frame past what its own vertical speed carries it (m): a tyre mounting what it may (the monster's own mount over its hub), not a teleport. */
+const POP = MOUNT * carFrame(CAR_STYLES.monster).rig.tyre.r * CLASSES.monster.wheelScale;
 const SPEEDS = [5, 15, 30];
 
 const _hub = new THREE.Vector3();

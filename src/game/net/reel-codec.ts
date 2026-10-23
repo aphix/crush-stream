@@ -367,8 +367,9 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A car's collision cage carries its bumpers' fascias, each a 12-point panel of its own past the body's budget (a push bar, tow hitch and exhaust
  * tips stay drawn only), so it meets cars, walls, figures and props at its drawn bumper faces, 3-15 cm past its nose's and tail's sheet metal,
  * until a bumper tears off; a pair's plan test reads a bumper at its own heights, never its body's behind it; the piston rig's faces rest clear of them.
- * The tallest step a tyre mounts by grip, and how far under a prism's top a tyre still stands on it, is the biggest drawn tyre's (the
- * monster's 0.614 m tyre, 0.158 m), not 0.140 m sized for the platform's tyre.
+ * The tallest step a tyre mounts by grip, and how far under a prism's top a tyre still stands on it, is its own drawn radius's share (the
+ * sedan's 0.342 m tyre 0.088 m, the monster's 0.614 m 0.158 m), not 0.140 m sized for the platform's tyre on every car; a point that names no
+ * tyre keeps the biggest tyre's, and a tyre that landed on a prism's top counts it only within its radius.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { C_GRIP, C_H, C_OWNER, C_SURF, HIT_SIZE, pointContact, PQ_SIZE, PQ_X, PQ_Y, PQ_Z } from "../world/surfaces.ts";
+import { C_GRIP, C_H, C_OWNER, C_SURF, HIT_SIZE, pointContact, PQ_MOUNT, PQ_SIZE, PQ_X, PQ_Y, PQ_Z, treadMount } from "../world/surfaces.ts";
 import { SURFACE_IDS, type SurfaceId } from "../world/catalog.ts";
 import { hypot2 } from "../kernel/physics-core.js";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { MIN_SIM_DT } from "./constants.ts";
 import { carClass, CLASSES, drivenAxles } from "../vehicle/vehicle-classes.ts";
 
@@ -316,10 +317,12 @@ export class SkidMarks {
         const vz = hadPrev ? (z - w.pz[s]!) / simDt : 0;
         const jump = vx * vx + vz * vz > 80 * 80;
         // Where the tyre's bottom stands on the store's surfaces, asked as the sim asks it (a wheel over a deck sees the deck, one on
-        // another car's roof is not on the mark map's floor), whatever moves the car: its drive, a wreck's masses, a netplay pose.
+        // another car's roof is not on the mark map's floor, a prism's step is mounted by this tyre's own mount), whatever moves the car:
+        // its drive, a wreck's masses, a netplay pose.
         _pq[PQ_X] = x;
         _pq[PQ_Z] = z;
         _pq[PQ_Y] = _q.y - tyreR;
+        _pq[PQ_MOUNT] = treadMount(car.wheels[k]!.scale.x * (tyreR / PLATFORM_TYRE.r));
         pointContact(_pq, car.slot, _hit);
         const gap = _q.y - tyreR - _hit[C_H]!;
         const grounded = gap < 0.14 && _hit[C_OWNER]! < 0;

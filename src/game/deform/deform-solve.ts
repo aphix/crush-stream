@@ -712,7 +712,8 @@ export abstract class DeformSolve extends DeformFreeze {
    *  read a wedge's gap floor 1.2 m down under a hub 2 cm short of its high end, holding the frame 0.25 m under its cell
    *  until the anchor's read stepping onto the wedge snapped it up in one slice (19.7 m/s). The side points are read only
    *  where `staticTop` within `treadFore` of the hub, lowered by `treadDrop`, is above the centre's read. The grip is read
-   *  once, at the read that wins. */
+   *  once, at the read that wins. Every read names no tyre (`PQ_MOUNT` 0, a prism's step up to `STEP_MAX` is floor): the rig holds no
+   *  wheel scale to give a hub's own mount. */
   protected sampleGround(floor: Float64Array, grip: Float64Array | null): void {
     const ground = activeGround();
     const withGrip = grip !== null;
