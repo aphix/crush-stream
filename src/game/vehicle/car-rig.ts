@@ -167,6 +167,12 @@ function bootCage(boot: BodyStyle["boot"], base: CageSpec, xScale: number): Cage
   return { ...base, min: [-x, boot.y0 - TAILGATE_CAGE.below, Math.min(z, foot) - TAILGATE_CAGE.back], max: [x, y + TAILGATE_CAGE.above, Math.max(z, foot) + TAILGATE_CAGE.ahead] };
 }
 
+/** The map carrying the platform's roof onto the car's: up from the windshield's top to the body's height, along from the roof panel's front to its back. Its cage and its mass both ride it. */
+function roofShift(style: BodyStyle): { dy: Shift; dz: Shift } {
+  const P = PLATFORM_CABIN;
+  return { dy: spanned(P.windshieldTop[0], PLATFORM_DIMS.height, style.windshieldTop[0], style.dims.height), dz: spanned(P.roofZ[0], P.roofZ[1], style.roofZ[0], style.roofZ[1]) };
+}
+
 /** The cages wrapping the cabin's panels, the hood and the boot: carried by the car's own panel offsets from the platform's, not by the body's warp. */
 function cabinCage(style: BodyStyle, base: CageSpec, xScale: number): CageSpec | null {
   const P = PLATFORM_CABIN;
@@ -174,8 +180,8 @@ function cabinCage(style: BodyStyle, base: CageSpec, xScale: number): CageSpec |
   const glass = style.rearGlass;
   switch (base.name) {
     case "roof": {
-      const dy = spanned(P.windshieldTop[0], PLATFORM_DIMS.height, style.windshieldTop[0], style.dims.height);
-      return moved(base, xScale, dy, spanned(P.roofZ[0], P.roofZ[1], style.roofZ[0], style.roofZ[1]), style.lightBar ? LIGHT_BAR_ROOM : 0);
+      const { dy, dz } = roofShift(style);
+      return moved(base, xScale, dy, dz, style.lightBar ? LIGHT_BAR_ROOM : 0);
     }
     // The platform's glass cages wrap today's bow; a pane bowed deeper at its base carries its cage that much further out.
     case "glassFront": {
@@ -225,9 +231,13 @@ function rigOf(style: BodyStyle, w: Warp, wheels: readonly V3[]): RigTables {
   const P = PLATFORM_RIG;
   const cages = P.cages.map((base) => cabinCage(style, base, w.xScale) ?? warpedCage(w, base));
   const hubs = new Map<string, V3>(HUB_NAMES.map((name, i) => [name, wheels[i]!]));
+  // The roof mass is the roof the car draws: it rides its cage's map, at the platform's share of the cage (its y-centre, 0.57 of its length back to front).
+  const roof = roofShift(style);
   const masses = P.masses.map((spec): MassSpec => {
     const hub = hubs.get(spec.name);
-    return { ...spec, rest: hub ? [hub[0], hub[1], hub[2]] : warped(w, spec.rest) };
+    if (hub) return { ...spec, rest: [hub[0], hub[1], hub[2]] };
+    const [x, y, z] = spec.rest;
+    return { ...spec, rest: spec.name === "roof" ? [x * w.xScale, y + roof.dy(y), z + roof.dz(z)] : warped(w, spec.rest) };
   });
   const sensors = P.sensors.map((spec, i): SensorSpec => (i === BOOT_SENSOR ? bootSensor(style.boot, spec) : { ...spec, rest: warped(w, spec.rest) }));
   const r = style.dims.wheel.radius;
