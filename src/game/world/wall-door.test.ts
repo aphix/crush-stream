@@ -8,7 +8,7 @@ import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
 import { DeformableCar, DOOR } from "../vehicle/car.ts";
 import { DOOR_OPEN_MAX, type DetachPart } from "../vehicle/car-core.ts";
-import { PartSeat } from "../vehicle/part-geometry.ts";
+import { drawnGeometry } from "../vehicle/drawn-body.test-util.ts";
 import { assertSameDigest, paint } from "../vehicle/test-support.ts";
 import { assignClass, CLASSES } from "../vehicle/vehicle-classes.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
@@ -72,8 +72,9 @@ function doorDepth(car: Probe, side: -1 | 1, wall: PropCollider): number {
   let deepest = 0;
   car.group.updateMatrixWorld(true);
   car.door(side).object.traverse((o) => {
-    if (!(o instanceof THREE.Mesh || o instanceof PartSeat)) return;
-    const pos = o.geometry.getAttribute("position");
+    const geometry = drawnGeometry(o);
+    if (geometry === null) return;
+    const pos = geometry.getAttribute("position");
     for (let k = 0; k < pos.count; k++) {
       v.fromBufferAttribute(pos, k).applyMatrix4(o.matrixWorld);
       const u = (v.x - wall.x) * cos - (v.z - wall.z) * sin;
