@@ -952,12 +952,6 @@ function cPillarSail(sign: number, style: BodyStyle, { rb, rt, ft }: { rb: V3; r
   return sail;
 }
 
-/** The sail's two mid outer points on every ring: the cage's decimation keeps them, so its post stands on the sail's bulge, not on the chord from foot to head. */
-function sailCrownVertices(sail: THREE.BufferGeometry): number[] {
-  const { ring, slices } = sail.userData.loft as { ring: number; slices: number };
-  return Array.from({ length: slices }, (_, s) => [s * ring + SAIL_OUTER / 2 - 1, s * ring + SAIL_OUTER / 2]).flat();
-}
-
 /** The triangle behind the quarter glass goes by this name. */
 const C_PILLAR_TIP = "cPillarTip";
 /** The gloss-black triangle on the side glass's plane between the quarter glass's rear edge and the side window's line down to `tip` ([y, z]) (drawn only). */
@@ -1017,7 +1011,7 @@ function rearPostCorners(style: BodyStyle, source: BodySource) {
   // roof's clamp takes its whole top ring, not half of it.
   const [rtX, rtY, rtZ] = rearPillar.rt;
   const [heldY, heldZ] = [rtY - domeFall(style, rg.top[1])(rg.wTop / 2, 1), Math.max(rtZ, style.roofZ[0] + ROOF_TUCK)];
-  const sail = source === "drawn" || style.cPillar?.cageSail === true ? style.cPillar : undefined;
+  const sail = source === "drawn" ? style.cPillar : undefined;
   // A squared post (`pillars.rearSquare`, a truck cab's back corner): its rear edge on the side glass's plane like its front, so its face never
   // turns to the tail; a flat cab back panel closes the cab from inside it over the rear glass's side edge.
   const squared = source === "drawn" && !sail && style.pillars?.rearSquare === true;
@@ -1129,10 +1123,8 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
       ),
     );
     const { rearPillar, held, sail, squared, share } = rearPostCorners(style, source);
-    const post = () => (sail ? cPillarSail(sign, style, rearPillar) : source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : roundedPillarFromCorners(sign, held, 0.05, true));
-    const rearPost = share ? postPiece(sign, style, held, share, "body") : post();
-    if (source === "cage" && sail) rearPost.userData.hold = sailCrownVertices(rearPost);
-    parts.push(share ? rearPost : pillar(rearPost, "rear"));
+    const post = () => (source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : sail ? cPillarSail(sign, style, rearPillar) : roundedPillarFromCorners(sign, held, 0.05, true));
+    parts.push(share ? postPiece(sign, style, held, share, "body") : pillar(post(), "rear"));
     if (squared) {
       const cabBack = pillar(cabBackPanel(sign, held.rb, held.rt, 0.05, style.rearGlass), "rear");
       cabBack.name = "cabBack";
@@ -1140,7 +1132,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     }
     const rearFoot = source === "drawn" && !sail ? style.pillars?.rearFoot : undefined;
     if (rearFoot) parts.push(rearFootPlate(sign, held.rb, rearPillar.fb, [rearFoot[0], rearFoot[1], rearPillar.rb[2]]));
-    if (source === "drawn" && sail?.tip) parts.push(cPillarTip(sign, style, sail.tip));
+    if (sail?.tip) parts.push(cPillarTip(sign, style, sail.tip));
     if (m !== null) {
       const topZ = divider.z?.[1] ?? m;
       const { belt: [dRear, dFront], top: [dTopRear, dTopFront] } = pillarBands(divider, m);

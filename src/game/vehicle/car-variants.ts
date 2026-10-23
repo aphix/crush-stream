@@ -463,9 +463,9 @@ export interface BodyStyle {
    * `reachLip` (0..1, drawn only, a flat sail on a `roofSection`): ahead of the roof end the sail's outer face reaches the roof's cant lip at the cant line (the roll end's own section carried onto each ring), not a chord under the roof's edge; absent 0.
    * `dEnd` ([radius, z], m, drawn only, with `pinch`): the side window's rear end rounded: its line leaves the belt on an arc of `radius` tangent to the
    * line's start (tip to the glass's top corner), the arc's rearmost point at car `z` (ahead of the tip); the sail covers the glass behind it; absent,
-   * the line meets the belt in a point at the tip. `cageSail`: the cage's C-post is the sail's own loft, so a tyre above stands on the bulge it sees; absent, the flat box between the post's corners.
+   * the line meets the belt in a point at the tip.
    */
-  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; sweep?: number; bead?: boolean; blend?: number; railRun?: number; reachLip?: number; rollShare?: number; dEnd?: readonly [radius: number, z: number]; cageSail?: boolean };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; sweep?: number; bead?: boolean; blend?: number; railRun?: number; reachLip?: number; rollShare?: number; dEnd?: readonly [radius: number, z: number] };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Drawn only: the body paint's base roughness, clear coat and clear coat roughness (`makePaintMaterial`); absent the platform paint's (0.42, 0.72, 0.24). */

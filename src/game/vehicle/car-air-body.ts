@@ -148,8 +148,6 @@ export const CLOSING = new Float64Array(CONTACTS);
 export const GAPV = new Float64Array(CONTACTS);
 /** A point this close (m) over its surface is a contact already: it is held where it would arrive within the slice, not after it. */
 export const SPECULATIVE_GAP = 0.0002;
-/** A tyre standing on another car's top has a push that fades out over this much (m) of its spring's extension past the droop, its rubber's give: a push that stopped dead there rocked a car that bridges a ledge with a tail tyre just reaching its surface. */
-export const TYRE_LIFT_BAND = 0.002;
 /** Margin (m) the whole-body clear check keeps for its own rounding against each point's test (both are ~1e-15 of a few metres). */
 export const CLEAR_ROUND = 1e-6;
 /** Passes of the contact solve over a slice's contacts: a contact parting gives back its rest impulse over them (a sedan on a roof stood still). */

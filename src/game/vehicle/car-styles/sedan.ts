@@ -320,7 +320,7 @@ export const SEDAN: BodyStyle = {
    * point, which stands over the deck there: a long sweep left a see-through wedge under it. Its belt rail runs on 1.5 cm behind the point
    * (`railRun`), so no side ray passes under the sail's foot. The window's rear end rounds (`dEnd`), not a triangular notch.
    */
-  cPillar: { pinch: 0.08, sweep: 0.02, bead: true, railRun: 0.015, dEnd: [0.0275, -1.249], cageSail: true },
+  cPillar: { pinch: 0.08, sweep: 0.02, bead: true, railRun: 0.015, dEnd: [0.0275, -1.249] },
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,

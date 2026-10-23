@@ -270,12 +270,6 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const fittings = source === "drawn" ? makeRoofFittings(style, "body") : null;
   const fittingCount = fittings?.geometry.getAttribute("position").count ?? 0;
   if (fittings) parts.push(fittings.geometry);
-  const hold: number[] = [];
-  let partFrom = 0;
-  for (const g of parts) {
-    for (const v of (g.userData.hold ?? []) as number[]) hold.push(partFrom + v);
-    partFrom += g.getAttribute("position").count;
-  }
   const merged = mergeGeometries(parts, false);
   if (!merged) throw new Error("Failed to merge chassis");
   // 0 = paint, 1 = primer (`car-materials.ts` withPrimer): torn panels; `BLACKOUT` gloss black: blacked-out pillars, roof rails and
@@ -295,7 +289,6 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   merged.computeBoundingBox();
   merged.computeBoundingSphere();
   merged.userData.tubs = tubs;
-  merged.userData.hold = hold;
   // The loft is merged first: its vertex `s * ring + i` and its first (slices - 1) * ring * 2 triangles (`panelRegions` cuts panels out of them).
   merged.userData.loft = { ring: n, slices: zs.length };
   merged.userData.wallTops = wallTops.length;

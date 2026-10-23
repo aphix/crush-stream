@@ -228,7 +228,6 @@ export function cageSourceOf(car: DeformableCar): CageSource {
   const index = new Uint32Array(triangles);
   const group = new Uint8Array(total);
   const held = new Uint8Array(total);
-  for (const v of cageBody.userData.hold as number[]) held[v] = 1;
   const apart: { from: number; count: number }[] = [];
   const skinN = new Uint8Array(total);
   const skinXf = new Int32Array(total * SKIN_K);
