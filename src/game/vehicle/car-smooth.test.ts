@@ -1407,7 +1407,8 @@ const BASELINE_BY_STYLE = [
   { id: "hatchback", drawCalls: 13, triangles: 5064, bodyVertices: 1587 },
   // The wagon's re-pinned for its roof spoiler carrying the roof's crown and rounding its corners in plan, as the reference's, and its drawn twin's front roll down onto the windshield top.
   { id: "wagon", drawCalls: 13, triangles: 5152, bodyVertices: 1660 },
-  { id: "coupe", drawCalls: 16, triangles: 5152, bodyVertices: 1530 },
+  // The coupe's chrome trim is eight meshes, not three: each follows what it frames (a pane's frame its pane, a strip its paint), 16 -> 21.
+  { id: "coupe", drawCalls: 21, triangles: 5152, bodyVertices: 1530 },
   // The pickup's re-pinned for its drawn windshield's round top corners (`windshield.round`): the A-post's rail takes two more stations a side along the arc.
   { id: "pickup", drawCalls: 13, triangles: 5026, bodyVertices: 1572 },
   // The police carries the sedan's quarter window (pinch ring, sail sweep ring, round end), its divider bar and its belt rail's run-on under the sail.

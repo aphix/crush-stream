@@ -4528,13 +4528,16 @@ describe("given a style with chrome window trim", () => {
     };
     assert.ok(trims(cars.coupe).every((m) => m.material === chrome), "every trim mesh wears the shared chrome");
     const coupe = cars.coupe;
+    // Split by what each follows in a crush: per door its glass frame and its chrome strips, on the body the quarter frames, the windshield's, the rear glass's and the strips.
     const parents = trims(coupe).map((m) => m.parent);
-    assert.equal(parents.length, 3, "three trim meshes: two doors and the body");
-    assert.ok(parents.includes(coupe["doorL"]) && parents.includes(coupe["doorR"]) && parents.includes(coupe.group), "one on each door, one on the body");
+    assert.equal(parents.length, 8, "eight trim meshes: two on each door, four on the body");
+    assert.equal(parents.filter((p) => p === coupe.group).length, 4, "four on the body");
     for (const door of [coupe["doorL"], coupe["doorR"]]) {
-      const trim = trims(coupe).find((m) => m.parent === door)!;
+      const onDoor = trims(coupe).filter((m) => m.parent === door);
+      assert.equal(onDoor.length, 2, "a frame and the strips on each door");
+      const trim = onDoor[0]!;
       const pane = coupe["glassPanes"].find((g) => g.mesh.parent === door)!.mesh;
-      assert.ok(trim.position.equals(pane.position), "the door's trim sits at its glass's seat");
+      assert.ok(onDoor.every((m) => m.position.equals(pane.position)), "the door's trims sit at its glass's seat");
       trim.geometry.computeBoundingBox();
       pane.geometry.computeBoundingBox();
       const out = (b: THREE.Box3) => Math.max(Math.abs(b.min.x), Math.abs(b.max.x));
