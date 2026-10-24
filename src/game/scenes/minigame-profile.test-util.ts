@@ -136,6 +136,12 @@ export type ClimbRun = {
   lipVerticalSpeed: number;
 };
 
+/** A speed (m/s) read at a line the car crossed between two frames: interpolated between the frame before (`fromX`, `fromSpeed`) and the frame after, not the first frame past it (a 0.3 m stride at 18 m/s, where the speed rises 1 m/s per metre). */
+export function speedAtLine(fromX: number, fromSpeed: number, toX: number, toSpeed: number, line: number): number {
+  const along = toX === fromX ? 1 : (line - fromX) / (toX - fromX);
+  return fromSpeed + Math.max(0, Math.min(1, along)) * (toSpeed - fromSpeed);
+}
+
 const _forward = new THREE.Vector3();
 
 /**
@@ -163,6 +169,8 @@ export function driveToLip(type: DriverCar, profile: DriveProfile, cell: number,
     let stalledFor = 0;
     const position = car.group.position;
     for (let n = 0; n < RUN_SECONDS / FRAME; n++) {
+      const fromX = position.x;
+      const fromSpeed = car.speed;
       const aheadX = position.x + STEER_LOOK_AHEAD + car.speed * STEER_LOOK_PER_SPEED;
       const error = Math.atan2(aheadX - position.x, -position.z) - car.yaw;
       input.steer = Math.max(-1, Math.min(1, STEER_GAIN * Math.atan2(Math.sin(error), Math.cos(error))));
@@ -174,20 +182,20 @@ export function driveToLip(type: DriverCar, profile: DriveProfile, cell: number,
       run.endX = position.x;
       if (!crossedFoot && position.x >= profile.footX) {
         crossedFoot = true;
-        run.footSpeed = car.speed;
+        run.footSpeed = speedAtLine(fromX, fromSpeed, position.x, car.speed, profile.footX);
       }
       if (crossedFoot) run.slowestOnClimb = Math.min(run.slowestOnClimb, car.speed);
       stalledFor = car.speed < STALLED_SPEED ? stalledFor + FRAME : 0;
       if (!run.reachedLip && position.x + noseReach >= 0) {
         run.reachedLip = true;
-        run.lipSpeed = car.speed;
+        run.lipSpeed = speedAtLine(fromX, fromSpeed, position.x, car.speed, -noseReach);
         car.group.getWorldDirection(_forward);
         run.noseUp = Math.asin(_forward.y);
         run.centreY = position.y;
         run.airborne = car.airborne;
       }
       if (position.x >= 0) {
-        run.lipCentreSpeed = car.speed;
+        run.lipCentreSpeed = speedAtLine(fromX, fromSpeed, position.x, car.speed, 0);
         run.lipHorizontalSpeed = Math.hypot(car.velocity.x, car.velocity.z);
         run.lipVerticalSpeed = car.velocity.y;
         break;
