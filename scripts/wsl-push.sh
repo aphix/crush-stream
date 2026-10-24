@@ -9,10 +9,14 @@
 #   1. Ensures the Windows mount has a `wsl` remote pointing at the
 #      WSL clone (adds it if missing; never edits existing remotes).
 #   2. Fetches wsl/$branch on the Windows mount.
-#   3. Fast-forwards wsl/$branch into the Windows mount's current branch.
+#   3. If the Windows mount is on another branch and its tree is clean,
+#      switches it to $branch: creates it from wsl/$branch when it doesn't
+#      exist there, checks it out when it's at or behind wsl/$branch.
+#      A dirty tree or a Windows-side branch with its own commits fails cleanly.
+#   4. Fast-forwards wsl/$branch into the Windows mount's current branch.
 #      Fast-forward ONLY — never creates merge commits, never rebases.
 #      If the Windows side has diverged, fails cleanly.
-#   4. Stashes uncommitted work on the Windows mount before the ff,
+#   5. Stashes uncommitted work on the Windows mount before the ff,
 #      restores it after.
 #
 # What it never does:
@@ -48,12 +52,6 @@ fi
 branch="$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD)"
 win_branch="$(git -C "$WIN_MOUNT" rev-parse --abbrev-ref HEAD 2>/dev/null)"
 
-if [ "$win_branch" != "$branch" ]; then
-    echo_red "wsl-push: branch mismatch — WSL is on '$branch', Windows mount is on '$win_branch'."
-    echo_red "  Checkout '$branch' on the Windows mount first."
-    exit 1
-fi
-
 # ---------------------------------------------------------------------------
 # Ensure `wsl` remote on the Windows mount (additive only)
 # ---------------------------------------------------------------------------
@@ -77,6 +75,30 @@ fi
 if ! git -C "$WIN_MOUNT" rev-parse "wsl/$branch" >/dev/null 2>&1; then
     echo_red "wsl-push: wsl/$branch not found after fetch."
     exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Put the Windows mount on $branch, but only when that cannot lose anything:
+# clean tree, and the branch is new there or strictly behind wsl/$branch.
+# ---------------------------------------------------------------------------
+if [ "$win_branch" != "$branch" ]; then
+    if [ -n "$(git -C "$WIN_MOUNT" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+        echo_red "wsl-push: Windows mount is on '$win_branch' with a dirty tree; not switching to '$branch'."
+        echo_red "  Commit or stash there, then checkout '$branch' on the Windows mount."
+        exit 1
+    fi
+    if git -C "$WIN_MOUNT" show-ref --verify --quiet "refs/heads/$branch"; then
+        if ! git -C "$WIN_MOUNT" merge-base --is-ancestor "$branch" "wsl/$branch"; then
+            echo_red "wsl-push: Windows mount's '$branch' has commits WSL lacks; not switching."
+            echo_red "  Reconcile on the Windows mount first (git log wsl/$branch..$branch)."
+            exit 1
+        fi
+        echo_blue "  checking out existing '$branch' on the Windows mount"
+        git -C "$WIN_MOUNT" checkout -q "$branch" || exit 1
+    else
+        echo_blue "  creating '$branch' on the Windows mount from wsl/$branch (upstream left for 'git push -u origin')"
+        git -C "$WIN_MOUNT" checkout -q --no-track -b "$branch" "wsl/$branch" || exit 1
+    fi
 fi
 
 cur="$(git -C "$WIN_MOUNT" rev-parse HEAD)"
