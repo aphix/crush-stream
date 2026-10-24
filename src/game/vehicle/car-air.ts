@@ -164,15 +164,15 @@ export function solveRows(n: number): void {
   let rides = !powered && !part;
   let thrust = 0;
   // A wreck at rest parts from the ground it stands in at `GROUND_LIFT_V` as a speed the solve gives the row: a positional lift hopped the body off its other rows (a 21 Hz hop, never asleep).
-  // How deep its deepest such row still is goes to `S_LIFTING`: the wreck is not at rest until it is out (`restOrSleep`).
+  // How deep its deepest such row still is goes to `S_LIFTING`: the wreck is not at rest until it is out (`restOrSleep`). The depth is read at any speed: a wreck rolling a little
+  // either side of `REST_SPEED` (the solve's input over it, its output under) was counted out of the ground in the slices it was over and fell asleep 3.5 cm in it.
   _s[S_LIFTING] = 0;
   for (let c = 0; c < n; c++) {
     if (OWN[c]! >= 0) rides = false;
-    LIFTING[c] = body.wreck && atRest && standsOnGround(c) ? 1 : 0;
-    if (LIFTING[c] === 1) {
-      GAPV[c] = -Math.min(SINK[c]! / dt, GROUND_LIFT_V);
-      _s[S_LIFTING] = Math.max(_s[S_LIFTING]!, SINK[c]!);
-    }
+    const standing = body.wreck && standsOnGround(c);
+    LIFTING[c] = standing && atRest ? 1 : 0;
+    if (standing) _s[S_LIFTING] = Math.max(_s[S_LIFTING]!, SINK[c]!);
+    if (LIFTING[c] === 1) GAPV[c] = -Math.min(SINK[c]! / dt, GROUND_LIFT_V);
   }
   for (let pass = 0; pass < passes; pass++) {
     for (let c = 0; c < n; c++) {
