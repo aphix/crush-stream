@@ -691,6 +691,13 @@ export abstract class EngineInput extends EngineRigs {
   }
 
   protected onKey = (e: KeyboardEvent): void => {
+    // In the free view Ctrl sinks (`readFreeInput`): its keydown, and any key chorded with it (Ctrl+W while flying forward), is the
+    // game's there, held and kept from the browser (Ctrl+S, Ctrl+D). Chrome still closes the tab on Ctrl+W outside fullscreen keyboard lock.
+    if (this.view.flying && e.ctrlKey && !e.metaKey && !e.altKey && !this.race.menuOpen) {
+      e.preventDefault();
+      this.keys.add(e.code);
+      return;
+    }
     if (!gameKey(e)) return;
     // A race menu owns the keyboard (and the pad) through the HUD.
     if (this.race.menuOpen) return;

@@ -81,6 +81,24 @@ describe("given the real engine in the fleet, watching a car", () => {
     press("Space");
   });
 
+  it("when Ctrl goes down in the free view (its keydown carries ctrlKey, as a browser's does) and W is pressed with it, then the eye sinks and flies on, and neither keydown reaches the browser", () => {
+    flyFree();
+    const start = eye();
+    const down = (code: string) => Object.assign(new Event("keydown", { cancelable: true }), { code, repeat: false, ctrlKey: true, metaKey: false, altKey: false }) as KeyboardEvent;
+    const ctrl = down("ControlLeft");
+    const w = down("KeyW");
+    engine["onKey"](ctrl);
+    engine["onKey"](w);
+    run(0.5);
+    engine["onKeyUp"](Object.assign(new Event("keyup"), { code: "ControlLeft" }) as KeyboardEvent);
+    engine["onKeyUp"](Object.assign(new Event("keyup"), { code: "KeyW" }) as KeyboardEvent);
+    assert.ok(start.y - eye().y > 1, `Ctrl sank the eye ${(start.y - eye().y).toFixed(2)} m in 0.5 s`);
+    assert.ok(level(eye(), start) > 1, `Ctrl+W still flew it forward ${level(eye(), start).toFixed(2)} m`);
+    assert.equal(ctrl.defaultPrevented, true, "the Ctrl keydown is the game's");
+    assert.equal(w.defaultPrevented, true, "Ctrl+W is the game's, not the browser's");
+    assert.equal(engine["keys"].size, 0, "both released");
+  });
+
   it("when the same W is held without the free view, then the seat takes the wheel (the control for the test above)", () => {
     engine["view"].leaveFree();
     engine["view"].spec = null;
