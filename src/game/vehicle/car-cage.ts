@@ -158,7 +158,7 @@ export interface CageLive {
   readonly co: Float64Array;
   /** Per panel: 1 while its mesh is on the car (a torn-off hood or a shattered pane is not drawn, so it is not the cage). */
   readonly panelOn: Uint8Array;
-  /** 1 for a crashed car, whose panels follow the cage (`skinPanels` runs only then); 0 for a car whose panels stand at rest. */
+  /** 1 for a car whose panels follow the cage (`DeformableCar.panelsFollow`: a wreck, or a car carrying a load crush; `skinPanels` runs only then); 0 for a car whose panels stand at rest. */
   panelsFollow: number;
   /** Per panel, where its mesh stands: position (x, y, z), then rotation (x, y, z, w) about it (a bonnet's hinge). */
   readonly panelPose: Float64Array;

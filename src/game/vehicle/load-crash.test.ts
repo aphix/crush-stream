@@ -10,8 +10,8 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
  * A face a load crushes is a wreck only past its elastic range (docs/LOAD_CRUSH.md, `SPRING_YIELD`): a dent that shallow springs back whole in the
- * structure, so a belly's soft touch on a ramp's edge (1.7 mm) leaves the car as it was. The depth is the face's total over every press. A roof
- * another car presses carries that car's weight, so it is a wreck from its first press.
+ * structure, so a belly's soft touch on a ramp's edge (1.7 mm) leaves the car as it was. The depth is the face's total over every press, whatever
+ * presses: the ground, a wall, or another car's belly on a roof.
  */
 const DT = 1 / FRAME_HZ;
 /** More impulse (per unit mass) than a face carries in a slice (`room`): the contact yields. */
@@ -59,21 +59,34 @@ describe("given a car whose nose a load presses in slices, harder than the nose 
   });
 });
 
+/** `under`'s roof pressed `depth` m by `over`'s belly in one slice, harder than the roof carries. */
+function pressRoof(depth: number): { under: DeformableCar; over: DeformableCar } {
+  const under = new DeformableCar(paint(), new THREE.Scene());
+  const over = new DeformableCar(paint(), new THREE.Scene());
+  under.spawnFacing(0, 0, 0, 0);
+  over.spawnFacing(0, 0, 0, 0);
+  const surfaces = new CarSurfaces();
+  surfaces.cars = [over, under];
+  surfaces.begin(over);
+  const roof = FACES * 2 + FACE_TOP;
+  surfaces.take(roof, MORE_THAN_CARRIED, G, DT);
+  surfaces.note(roof, depth, 1);
+  surfaces.commit();
+  return { under, over };
+}
+
 describe("given a car whose roof another car's belly presses, harder than the roof carries", () => {
-  it("when it presses in 1.7 mm, then the roof's car is a wreck and the pressing car is not", () => {
-    const under = new DeformableCar(paint(), new THREE.Scene());
-    const over = new DeformableCar(paint(), new THREE.Scene());
-    under.spawnFacing(0, 0, 0, 0);
-    over.spawnFacing(0, 0, 0, 0);
-    const surfaces = new CarSurfaces();
-    surfaces.cars = [over, under];
-    surfaces.begin(over);
-    const roof = FACES * 2 + FACE_TOP;
-    surfaces.take(roof, MORE_THAN_CARRIED, G, DT);
-    surfaces.note(roof, 0.0017, 1);
-    surfaces.commit();
+  it("when it presses in 1.7 mm, then the roof carries the dent and neither car is a wreck", () => {
+    const { under, over } = pressRoof(0.0017);
     assert.ok(Math.abs(under.deform.crush[FACE_TOP]! - 0.0017) < 1e-12, `the roof is crushed ${under.deform.crush[FACE_TOP]!.toFixed(4)} m`);
-    assert.equal(under.crashed, true, "a roof under a car's weight is no wreck");
+    assert.equal(under.crashed, false, "a dent under its elastic range wrecked the roof's car");
+    assert.equal(over.crashed, false);
+    assert.equal(under.panelsFollow, true, "the dented roof's panels do not follow the dent");
+  });
+
+  it("when it presses in 20 mm, then the roof's car is a wreck and the pressing car is not", () => {
+    const { under, over } = pressRoof(0.02);
+    assert.equal(under.crashed, true);
     assert.equal(over.crashed, false);
   });
 });
