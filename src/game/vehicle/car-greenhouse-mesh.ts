@@ -137,8 +137,21 @@ function stripCap(index: THREE.BufferAttribute["array"], first: number, base: nu
   }
 }
 
-/** The cage roof ring's left and right lips (`makeRoofGeometry`): a style that sets `cageRoofRearLips` keeps its rear ring's in the cage's decimation. */
+/** The cage roof ring's left and right lips (`makeRoofGeometry`): a style that sets `cageRearCorners` keeps its rear ring's in the cage's decimation. */
 const CAGE_ROOF_LIPS = [0, 8] as const;
+
+/** The cage's rear header box is this much (m) wider than the rear glass's top, so it covers the glass's frame there. */
+const REAR_HEADER_MARGIN = 0.12;
+
+/** A geometry's vertices at its greatest height. */
+function topVertices(geo: THREE.BufferGeometry): number[] {
+  const pos = geo.getAttribute("position");
+  let top = -Infinity;
+  for (let v = 0; v < pos.count; v++) top = Math.max(top, pos.getY(v));
+  const held: number[] = [];
+  for (let v = 0; v < pos.count; v++) if (pos.getY(v) > top - 1e-6) held.push(v);
+  return held;
+}
 
 /** The drawn roof loft's ring stations (z, ascending): `ROOF_SEGS` even ones, plus each rolled end's `ROOF_ROLL_STATIONS` in the drawn roof. */
 function roofRingZs(style: BodyStyle, source: BodySource): number[] {
@@ -183,7 +196,7 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
   const geo = loftFromRings(rings, zs, 0.28, 0.72);
   ensureOutwardNormals(geo);
   if (source === "cage") {
-    if (style.cageRoofRearLips) geo.userData.hold = [...CAGE_ROOF_LIPS];
+    if (style.cageRearCorners) geo.userData.hold = [...CAGE_ROOF_LIPS];
     return geo;
   }
   // The loft's rings, then each end cap's own copy of its ring: the shell's ring is concave, so `loftFromRings` ear-clips its caps
@@ -1269,6 +1282,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
     const post = () => (sail ? cPillarSail(sign, style, rearPillar) : source === "cage" ? boxFromCorners(sign, rearPillar, 0.05) : roundedPillarFromCorners(sign, held, 0.05, true));
     const rearPost = share ? postPiece(sign, style, held, share, "body") : post();
     if (source === "cage" && sail) rearPost.userData.hold = sailCrownVertices(rearPost);
+    if (source === "cage" && !sail && style.cageRearCorners) rearPost.userData.hold = topVertices(rearPost);
     parts.push(share ? rearPost : pillar(rearPost, "rear"));
     if (squared) {
       const cabBack = pillar(cabBackPanel(sign, held.rb, held.rt, 0.05, style.rearGlass), "rear");
@@ -1318,7 +1332,7 @@ export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "draw
   // The cage keeps its header boxes until the rig derives the cabin cage; the drawn roof covers both glass tops, so it draws none.
   if (source === "cage") {
     parts.push(makeBox(ws.wTop + 0.1, 2 * HEADER_HALF_HEIGHT, HEADER_DEPTH, 0, wsY + 0.03, wsZ - 0.02));
-    parts.push(makeBox(rg.wTop + 0.12, 2 * HEADER_HALF_HEIGHT, HEADER_DEPTH, 0, rg.top[0] + (style.rearHeaderRise ?? REAR_HEADER_RISE), rg.top[1] - 0.02));
+    parts.push(makeBox(style.rearHeaderWidth ?? rg.wTop + REAR_HEADER_MARGIN, 2 * HEADER_HALF_HEIGHT, HEADER_DEPTH, 0, rg.top[0] + (style.rearHeaderRise ?? REAR_HEADER_RISE), rg.top[1] - 0.02));
   }
   return parts;
 }
