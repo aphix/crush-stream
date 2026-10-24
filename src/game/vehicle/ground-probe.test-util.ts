@@ -339,6 +339,7 @@ export function worstGap(f: Fit): number {
 }
 
 const BRAKE: DriveInput = { throttle: 0, steer: 0, brake: 1, ebrake: true, boost: false };
+const COAST: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
 
 /** `slide` is the rigid centre's travel: a lifted body turning about its centre swings its origin without sliding. */
 export type Drop = Fit & { slide: number; speed: number };
@@ -361,7 +362,7 @@ function centreOf(car: DeformableCar, out: THREE.Vector3): THREE.Vector3 {
 
 /**
  * One car dropped `height` m above the ground at (x, z) facing `yaw` and held (brake and handbrake) for `seconds`:
- * where it ends up and how it sits. `ground` is made the active one; the caller restores it.
+ * where it ends up and how it sits. `brake` false lets it coast instead, `speed` (m/s) sets it rolling along its heading. `ground` is made the active one; the caller restores it.
  */
 export function drop(
   ground: Ground,
@@ -369,16 +370,17 @@ export function drop(
   x: number,
   z: number,
   yaw: number,
-  o: { height?: number; seconds?: number; hint?: number; collide?: ((c: DeformableCar, h: number) => unknown) | null } = {},
+  o: { height?: number; seconds?: number; hint?: number; brake?: boolean; speed?: number; collide?: ((c: DeformableCar, h: number) => unknown) | null } = {},
 ): Drop {
   setGround(ground);
   const car = pooled(cls);
-  car.spawnFacing(x, z, yaw, 0);
+  car.spawnFacing(x, z, yaw, o.speed ?? 0);
   car.group.position.y = ground.heightAt(x, z, o.hint) + (o.height ?? 0.5);
   centreOf(car, _centre0);
   const w = worldOf(car, o.collide ?? null);
   const st = { acc: 0 };
-  for (let f = 0; f < (o.seconds ?? 3) / FRAME; f++) frame(w, BRAKE, st);
+  const input = o.brake === false ? COAST : BRAKE;
+  for (let f = 0; f < (o.seconds ?? 3) / FRAME; f++) frame(w, input, st);
   const r = fit(car, ground);
   centreOf(car, _centre);
   const slide = Math.hypot(_centre.x - _centre0.x, _centre.z - _centre0.z);
