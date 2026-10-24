@@ -138,6 +138,8 @@ function stopInto(car: DeformableCar, nx: number, nz: number): void {
 /**
  * The drawn body rides the rigid body, so a shove also answers what the body's turn swept in, which `strikeCar` (the centre's closing) never
  * reads: the face takes it at the deepest vertex (`faceExit`), the rigid plastic impulse that leaves that point closing at the centre's speed.
+ * Masses on the face carry the stop as they carry its exchange (the driving ones, `refVn` 0); with none on it the drawn body is the only
+ * contact and every mass takes the impulse whole. Whole on every slice of a post's side face, a wreck clipping it as it swings round exits at either of two spins.
  */
 function stopTurnInto(car: DeformableCar, nx: number, nz: number): void {
   const centre = _turnCentre.copy(wreckCentre(car)).applyQuaternion(car.group.quaternion);
@@ -148,7 +150,8 @@ function stopTurnInto(car: DeformableCar, nx: number, nz: number): void {
   if (sweep >= 0) return;
   const dvn = -sweep / (1 + lever * lever * wreckInvI.y);
   const pos = car.group.position;
-  car.deform.shiftBody(car.velocity, car.angular, nx * dvn, nz * dvn, dvn * lever * wreckInvI.y, pos.x + centre.x, pos.z + centre.z, nx, nz, Infinity);
+  const onFace = car.deform.faceContacts > 0;
+  car.deform.shiftBody(car.velocity, car.angular, nx * dvn, nz * dvn, dvn * lever * wreckInvI.y, pos.x + centre.x, pos.z + centre.z, nx, nz, onFace ? 0 : Infinity);
 }
 
 /**
