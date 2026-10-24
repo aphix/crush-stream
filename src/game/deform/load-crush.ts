@@ -24,6 +24,12 @@ export const FACE_RIGHT = 4;
 export const FACES = 5;
 
 /**
+ * A dent this shallow (m) springs back whole: a skin panel's elastic range (the structure solver keeps no set under it, `deform-solve`). A face
+ * crushed no deeper than this by a load has taken no damage the car keeps, so it is no wreck (`CarSurfaces.commit`).
+ */
+export const SPRING_YIELD = 0.015;
+
+/**
  * Strain share (β) of the cluster map a skin point's offset from its parent masses takes; the rotation is taken whole. At 1 the strain
  * between the particles extrapolates past them: paint 0.1 m outboard of a pushed door went 8% deeper than the door (piston `right`), at
  * 0.65 within 1%. It is also how far the drawn body follows a face's crush: the roof the cage draws sinks this share of the roof mass's

@@ -5,7 +5,7 @@ import type { CageFields, CageStyle } from "./car-cage.ts";
 import { planFieldOf } from "./cage-fields.ts";
 import { hypot3 } from "../kernel/physics-core.js";
 import { cageLift } from "./car-cage-rig.ts";
-import { FACES, FACE_AXIS, FACE_TOP, faceFollow, faceMax, faceStrength, IMPRINT_NONE, SKIN_STRAIN, type FaceBands } from "../deform/load-crush.ts";
+import { FACES, FACE_AXIS, FACE_TOP, faceFollow, faceMax, faceStrength, IMPRINT_NONE, SKIN_STRAIN, SPRING_YIELD, type FaceBands } from "../deform/load-crush.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 
@@ -343,12 +343,14 @@ export class CarSurfaces extends Surface {
       any = true;
       if (this.grew[s] === 0) continue;
       const car = this.carOf(s);
-      // A car with a load-crushed face is a wreck: it rides the replay's and netplay's wreck sections.
-      car.crashed = true;
+      // The stepping car's own face (the ground's, a wall's or a ramp's press) is a wreck only past its elastic range (`SPRING_YIELD`): a dent under it springs back whole in the
+      // structure, so a belly's soft touch on a ramp's edge leaves the car as it was (its crush still rides a keyframe: `CrashRecorder.encodeKey`). A roof another car presses carries
+      // that car's weight: a wreck from its first press, where the stack's roof law reads its crush from.
       const d = car.deform;
       const f = s % FACES;
       const before = d.crush[f]!;
       d.crush[f] = Math.min(faceMax(f), before + this.grew[s]!);
+      if (d.crush[f]! > (car === self ? SPRING_YIELD : 0)) car.crashed = true;
       // A roof another car's belly sank takes the shape of that belly; the ground's or a wall's press (the stepping car's own faces) has no pan.
       if (f === FACE_TOP && car !== self && d.crush[f]! > before) imprint(self, car);
       d.bakeLoadCrush();
