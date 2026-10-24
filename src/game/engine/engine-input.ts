@@ -706,6 +706,7 @@ export abstract class EngineInput extends EngineRigs {
     // Every Space keydown, repeats included: an unprevented repeat arms a focused HUD button and the release clicks it.
     if (e.code === "Space") e.preventDefault();
     if (e.repeat) return;
+    if (this.onFoot.key(e)) return;
     // The Konami code in a race brings out its course's secret (the keys still do their own jobs).
     if (this.race.active && this.konami.press(e.code)) this.race.revealSecret(this.canvas.parentElement ?? this.canvas);
     if (this.race.active && this.raceKey(e.code)) return;
@@ -830,13 +831,17 @@ export abstract class EngineInput extends EngineRigs {
       this.stepReset(false, false, wallDt);
       return;
     }
-    this.seat.detached = this.view.flying;
+    this.seat.detached = this.view.flying || this.onFoot.active;
     this.seat.boostLocked = this.minigameMode === MINIGAME_MODE.longJump;
     if (this.seat.sample(this.keys, pad)) this.emitHud();
     this.minigames.sampleBoost(this.seat.intent.boost, (pad.pressed & BOOST_PAD_MASK) !== 0, this.elapsedWall + wallDt);
-    this.stepReset(this.race.active, (pad.held & (1 << PAD_BUTTON.down)) !== 0, wallDt, (pad.pressed & (1 << PAD_BUTTON.down)) !== 0);
+    this.stepReset(this.race.active && !this.onFoot.active, (pad.held & (1 << PAD_BUTTON.down)) !== 0, wallDt, (pad.pressed & (1 << PAD_BUTTON.down)) !== 0);
     const hit = pad.pressed;
     if (hit === 0) return;
+    if (this.onFoot.padPress(hit)) {
+      this.emitHud();
+      return;
+    }
     if (this.race.active) {
       this.racePad(hit);
       return;

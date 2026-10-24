@@ -143,6 +143,25 @@ describe("given the seated drivers' batch and two cars", () => {
   });
 });
 
+describe("given the seated drivers' batch and two cars, one of whose players has walked off", () => {
+  test("when the first car is named as the one left on foot, then its driver is not drawn and the other's is, and with none named both are", () => {
+    const cars = [0, 5].map((x) => {
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
+      car.spawn(x, 0, 0);
+      car.group.updateMatrixWorld(true);
+      return car;
+    });
+    const drivers = new SeatedDrivers(() => false);
+    const look = (car: number) => driverLook(1, car);
+    drivers.sync(cars, look, 0);
+    assert.equal(drivers.mesh.count, 1, "the other car's driver alone");
+    drivers.sync(cars, look);
+    assert.equal(drivers.mesh.count, 2, "both with none named");
+    assert.equal(cars[0]!.driverOut, null, "and nothing is written to the car");
+    drivers.dispose();
+  });
+});
+
 describe("given the seated drivers fed by the ragdoll system's driver looks", () => {
   test("when the seated drivers sync twice with nothing changed, then each car's driver look is the same object, and a new look seed rebuilds it", () => {
     const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");

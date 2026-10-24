@@ -96,6 +96,8 @@ interface RaceHost {
   throwFigure(strike: FigureStrike): void;
   /** Car `i`'s boost meter as netplay heard it (a peer's own, from its input; on a client, the host's every car), null when nothing was heard. */
   heardMeter(i: number): number | null;
+  /** This browser's player left car `i` on foot (`OnFootDirector.away`): the car stands on its brakes, as a human at the wheel with his foot down, and no rule sees an empty seat. */
+  afoot(i: number): boolean;
 }
 
 /** Seconds upside down before a car counts as dead. */
@@ -792,15 +794,15 @@ export abstract class RaceField {
     return this.entrants[i]?.kind === "player" && !this.spectating && seat.mode === "drive" && seat.carIndex === i;
   }
 
-  /** A human has car `i`: this browser's driver or a netplay peer (who can press R too). Only the AI needs the rules' automatic resets. */
+  /** A human has car `i`: this browser's driver (at the wheel or out walking) or a netplay peer (who can press R too). Only the AI needs the rules' automatic resets. */
   private humanDrives(i: number): boolean {
-    return this.seatDrives(i) || this.entrants[i]?.kind === "remote";
+    return this.seatDrives(i) || this.host.afoot(i) || this.entrants[i]?.kind === "remote";
   }
 
-  /** The race AI drives car `i`: an AI rival, or the player's car while its seat isn't driving. */
+  /** The race AI drives car `i`: an AI rival, or the player's car while its seat isn't driving and he is not out walking. */
   protected aiDrives(i: number): boolean {
     const kind = this.entrants[i]?.kind;
-    return kind === "ai" || (kind === "player" && !this.seatDrives(i));
+    return kind === "ai" || (kind === "player" && !this.seatDrives(i) && !this.host.afoot(i));
   }
 
   /** Cars the race AI drives that gained under `STALL_GAIN` m of track in the `STALL_WINDOW` s since they last gained that much ask for a respawn (a pin is met `STALL_WINDOW` s after its start, not up to twice that, as a fixed grid of windows would meet it); police cars out driving that stood still over it are put away (`copStalls`). */

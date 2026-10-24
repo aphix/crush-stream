@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { Collider, ColliderDesc, World } from "@dimforge/rapier3d-simd";
 import type { Rapier } from "../kernel/rapier.ts";
-import { activeGround } from "../world/ground.ts";
+import { activeGround, type Ground } from "../world/ground.ts";
 import { GRID, P_AX, P_BX, P_CX, P_OX, P_OY, P_OZ, P_RAD2, P_STEP, P_STEPV, P_STRIDE, P_U0, P_V0, PRISM, Q_KIND, Q_NU, Q_NV, Q_SOLID, Q_STRIDE, type Surface } from "../world/surfaces.ts";
 import type { Track } from "../world/track.ts";
 import { DOLL_FLOOR_GROUPS, PROP_FLOOR_GROUPS } from "./ragdoll-config.ts";
@@ -21,6 +21,8 @@ const POLE_H = 5.3;
 const PATCH_CELL = 2;
 /** A dummy's patch around a throw (`groundColliders`' `half`): 96 m across. */
 export const PATCH_HALF = 48;
+/** The run's fixed colliders when the walker is the first on the ground (`startWalker`): wide enough that wherever he stands, every spot of a bounded arena has terrain under it. */
+export const STATICS_HALF = 2 * PATCH_HALF;
 /** Metres down a throw that the patch built for it is centred. */
 export const PATCH_AHEAD = 24;
 /** Half-size (m) of the sandbox's flat pad collider: past any spot a car reaches. */
@@ -88,6 +90,47 @@ function cellSolid(R: Rapier, s: Surface, k: number): ColliderDesc | null {
   return R.ColliderDesc.convexHull(new Float32Array(pts))?.setFriction(0.9) ?? null;
 }
 
+/** A piece of ground twice: as it always was (0.9) for props, purses and boxes, and with `GROUND_GRIP` for the dummies alone. */
+function floorInto(R: Rapier, world: World, into: Collider[], desc: ColliderDesc): void {
+  into.push(world.createCollider(desc.setFriction(0.9).setFrictionCombineRule(R.CoefficientCombineRule.Average).setCollisionGroups(PROP_FLOOR_GROUPS)));
+  into.push(world.createCollider(desc.setFriction(GROUND_GRIP).setFrictionCombineRule(R.CoefficientCombineRule.Max).setCollisionGroups(DOLL_FLOOR_GROUPS)));
+}
+
+/**
+ * The active ground's terrain as one heightfield `half` m to a side around (`cx`, `cz`) at height `y`. Its vertices lie on the world's `PATCH_CELL` lattice,
+ * so every patch (any size, anywhere) has the same triangles where they overlap, and what a body lands on does not hang on where its patch was centred.
+ */
+function terrainInto(R: Rapier, world: World, into: Collider[], ground: Ground, cx: number, cz: number, y: number, half: number): void {
+  const n = Math.round((2 * half) / PATCH_CELL);
+  const size = n * PATCH_CELL;
+  const x0 = Math.round((cx - size / 2) / PATCH_CELL) * PATCH_CELL;
+  const z0 = Math.round((cz - size / 2) / PATCH_CELL) * PATCH_CELL;
+  const heights = new Float32Array((n + 1) * (n + 1));
+  for (let ix = 0; ix <= n; ix++) {
+    for (let iz = 0; iz <= n; iz++) {
+      // A bridge deck counts only for a throw at its height: under it the heightfield is the road.
+      const h = ground.heightAt(x0 + ix * PATCH_CELL, z0 + iz * PATCH_CELL, y);
+      // Rapier's heightfield: rows run along z, columns along x.
+      heights[iz + ix * (n + 1)] = Number.isFinite(h) ? h : -40;
+    }
+  }
+  // Its triangles' inner edges are fixed (`FIX_INTERNAL_EDGES`): a body sliding over the seam between two never catches on
+  // it. Without, a crate slid flat at 11 m/s across the flat infield tipped 88° on a seam instead of sliding 7 m upright.
+  floorInto(R, world, into, R.ColliderDesc.heightfield(n, n, heights, { x: size, y: 1, z: size }, R.HeightFieldFlags.FIX_INTERNAL_EDGES).setTranslation(x0 + size / 2, 0, z0 + size / 2));
+}
+
+/** The ground's terrain only, `half` m round (`cx`, `cz`) at height `y` (none where the active ground has no multi-cell solid patch): the patch that walks with the player on foot. */
+export function terrainColliders(R: Rapier, world: World, cx: number, cz: number, y: number, half: number): Collider[] {
+  const ground = activeGround();
+  const into: Collider[] = [];
+  for (let k = 0; k < ground.count; k++) {
+    if (ground.q[k * Q_STRIDE + Q_KIND] === PRISM || ground.q[k * Q_STRIDE + Q_SOLID] === 0 || oneCell(ground, k)) continue;
+    terrainInto(R, world, into, ground, cx, cz, y, half);
+    break;
+  }
+  return into;
+}
+
 /**
  * The ground under a throw at (`cx`, `cz`), `y` high: the active surface's own solids (`cellSolid` for its one-cell patches,
  * its `meshes`) and, where it has terrain (a multi-cell patch or a road deck), one heightfield patch of it `half` m to a side around the throw (its square, and the reach of the walls and solids built with it);
@@ -100,11 +143,7 @@ export function groundColliders(R: Rapier, world: World, groups: number, course:
   const into: Collider[] = [];
   const place = (desc: ColliderDesc) => into.push(world.createCollider(desc.setCollisionGroups(groups)));
   const add = (desc: ColliderDesc, friction = 0.9) => place(desc.setFriction(friction));
-  // A piece of ground twice: as it always was (0.9) for props, purses and boxes, and with `GROUND_GRIP` for the dummies alone.
-  const floor = (desc: ColliderDesc) => {
-    into.push(world.createCollider(desc.setFriction(0.9).setFrictionCombineRule(R.CoefficientCombineRule.Average).setCollisionGroups(PROP_FLOOR_GROUPS)));
-    into.push(world.createCollider(desc.setFriction(GROUND_GRIP).setFrictionCombineRule(R.CoefficientCombineRule.Max).setCollisionGroups(DOLL_FLOOR_GROUPS)));
-  };
+  const floor = (desc: ColliderDesc) => floorInto(R, world, into, desc);
   const n = Math.round((2 * half) / PATCH_CELL);
   const size = n * PATCH_CELL;
   let terrain = false;
@@ -125,24 +164,7 @@ export function groundColliders(R: Rapier, world: World, groups: number, course:
   }
   for (const m of ground.meshes) floor(R.ColliderDesc.trimesh(m.vertices, m.indices));
   // A course's heightfield; a scene's own solids (the Lab's bench and floor, `setSolids`) carry its ground, edges sharp.
-  if (terrain && course?.track !== null) {
-    // Its vertices lie on the world's `PATCH_CELL` lattice, so every patch (any size, anywhere) has the same triangles where they
-    // overlap, and what a body lands on does not hang on where its patch was centred.
-    const x0 = Math.round((cx - size / 2) / PATCH_CELL) * PATCH_CELL;
-    const z0 = Math.round((cz - size / 2) / PATCH_CELL) * PATCH_CELL;
-    const heights = new Float32Array((n + 1) * (n + 1));
-    for (let ix = 0; ix <= n; ix++) {
-      for (let iz = 0; iz <= n; iz++) {
-        // A bridge deck counts only for a throw at its height: under it the heightfield is the road.
-        const h = ground.heightAt(x0 + ix * PATCH_CELL, z0 + iz * PATCH_CELL, y);
-        // Rapier's heightfield: rows run along z, columns along x.
-        heights[iz + ix * (n + 1)] = Number.isFinite(h) ? h : -40;
-      }
-    }
-    // Its triangles' inner edges are fixed (`FIX_INTERNAL_EDGES`): a body sliding over the seam between two never catches on
-    // it. Without, a crate slid flat at 11 m/s across the flat infield tipped 88° on a seam instead of sliding 7 m upright.
-    floor(R.ColliderDesc.heightfield(n, n, heights, { x: size, y: 1, z: size }, R.HeightFieldFlags.FIX_INTERNAL_EDGES).setTranslation(x0 + size / 2, 0, z0 + size / 2));
-  }
+  if (terrain && course?.track !== null) terrainInto(R, world, into, ground, cx, cz, y, half);
   // Off a course every solid is built; on one, those near it.
   const reach = course ? size / 2 : Infinity;
   for (const p of poles) {

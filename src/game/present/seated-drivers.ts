@@ -137,13 +137,13 @@ export class SeatedDrivers {
     this.mesh.receiveShadow = true;
   }
 
-  /** Pose the drivers of `cars` (world matrices current), dressed as `lookOf` has them; empty slots, thrown drivers and cut cars hide. */
-  sync(cars: readonly DeformableCar[], lookOf: (car: number, cop: boolean) => DriverLook): void {
+  /** Pose the drivers of `cars` (world matrices current), dressed as `lookOf` has them; empty slots, thrown drivers, cut cars and car `away` (its driver is out walking) hide. */
+  sync(cars: readonly DeformableCar[], lookOf: (car: number, cop: boolean) => DriverLook, away = -1): void {
     let s = 0;
     for (let c = 0; c < MAX_CARS; c++) {
       const car = cars[c];
       const seat = car?.partSeats[PART_KIND.seatFront];
-      if (!car || !seat || this.cut(car) || !seatedShown(car, seat)) continue;
+      if (!car || !seat || c === away || this.cut(car) || !seatedShown(car, seat)) continue;
       const cop = copDriver(car);
       const look = lookOf(c, cop);
       // Another car in the slot dresses it afresh, so its bust starts at rest there.

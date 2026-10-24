@@ -70,6 +70,9 @@ export type GarageHud = { car: Record<CarPart, number>; person: DriverLook; pick
 /** The garage's spray can: on or off, its dot's radius (m), its colour (sRGB) and whether each puff is also painted mirrored left-right (Symmetric). */
 export type SprayTool = { on: boolean; radius: number; colour: number; mirror: boolean };
 
+/** The trip out of the car as the HUD reads it: `out` while he is on foot, and the line under the view (what the control does now, or why it refused). */
+export type FootHud = { out: boolean; prompt: string | null };
+
 export type CrashHudState = {
   playing: boolean;
   looping: boolean;
@@ -184,6 +187,8 @@ export type CrashHudState = {
   /** Race scene state for the HUD; null outside race mode. */
   race: RaceHud | null;
   seat: "global" | "follow" | "drive";
+  /** The trip out of the car (offline free play only), null where it is not offered: `out` is he is on foot, `prompt` what the control does now or why it just refused. */
+  foot: FootHud | null;
   boost: number;
   /** The seat's slide while driving, `NO_DRIFT` otherwise: the free-drive boost bar's charge cue (a race and a derby read `RaceView.drift`). */
   drift: DriftView;
@@ -322,6 +327,7 @@ export const INITIAL_HUD: CrashHudState = {
   derbyBoard: [],
   race: null,
   seat: "global",
+  foot: null,
   boost: 1,
   drift: NO_DRIFT,
   view: "third",
