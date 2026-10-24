@@ -862,10 +862,11 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   const tyres = n;
   if (body.wreck && tyres === 4) wreckShares(frame);
   // A car lying flat on its side stands on the tyres its flank is down on, and they alone carry it: each spring holds its part of the whole weight, not a
-  // quarter of it (the springs sank under the other quarters up to their full stroke: a monster on its flank 24.8 cm into the ground).
+  // quarter of it (the springs sank under the other quarters up to their full stroke: a monster on its flank 24.8 cm into the ground). Two tyres or more:
+  // a single tyre under the whole car is a pivot (a monster with one low hub gone rocked for 12 s, its cage 10 cm in the ground), the body points carry the rest.
   let flank = 0;
   for (let c = 0; c < tyres; c++) if (N[c]!.y >= CLIMB_NY && ((notFlat >> ROW_WHEEL[c]!) & 1) === 0) flank++;
-  if (flank === tyres && tyres > 0) for (let c = 0; c < tyres; c++) SHARE[c] = 1 / tyres;
+  if (flank === tyres && tyres > 1) for (let c = 0; c < tyres; c++) SHARE[c] = 1 / tyres;
   n = readTyreSides(car, n, sp.travel);
   const tyreSides = n;
   // A point that stays higher than the static surface anywhere within its slice's plan travel, by its descent over the slice and a
