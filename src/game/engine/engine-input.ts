@@ -715,7 +715,8 @@ export abstract class EngineInput extends EngineRigs {
       e.preventDefault(); // Slash would open Firefox's quick find
       this.setScene(scene);
     } else if (e.code === "Space") {
-      if (!driving) this.togglePlay();
+      // In the free view Space rises (`readFreeInput`), so it does not pause there.
+      if (!driving && !this.view.flying) this.togglePlay();
     } else if (e.code === SEAT_KEYS.stepOut) {
       if (!this.view.leaveFree()) this.seat.esc();
       this.emitHud();

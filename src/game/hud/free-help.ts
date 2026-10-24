@@ -5,5 +5,5 @@
 export function freeHelp(pad: boolean, touch: boolean): string {
   if (touch) return "drag look · two fingers pan · pinch fly · View returns";
   if (pad) return "left stick fly · right stick look · RT up · LT down · A fast · Y or Back return";
-  return "W/A/S/D fly · PgUp/PgDn up/down · Shift fast · wheel speed · drag look · V or Esc return";
+  return "W/A/S/D fly · Space/PgUp up · Ctrl/PgDn down · Shift fast · wheel speed · drag look · V or Esc return";
 }

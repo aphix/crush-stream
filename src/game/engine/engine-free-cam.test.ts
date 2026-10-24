@@ -64,6 +64,23 @@ describe("given the real engine in the fleet, watching a car", () => {
     assert.ok(Math.abs(level(eye(), start) - DISC_CRUISE) < 0.5, `the eye flew ${level(eye(), start).toFixed(2)} m level in a second, cruise ${DISC_CRUISE} m/s`);
   });
 
+  it("when Space is pressed and held in the free view, then the eye rises and the game does not pause; out of the free view the same Space pauses", () => {
+    flyFree();
+    const playing = engine["playing"];
+    const start = eye();
+    engine["onKey"](Object.assign(new Event("keydown"), { code: "Space", repeat: false, ctrlKey: false, metaKey: false, altKey: false }) as KeyboardEvent);
+    run(0.5);
+    engine["keys"].clear();
+    assert.equal(engine["playing"], playing, "Space in the free view left play as it was");
+    assert.ok(eye().y - start.y > 1, `Space raised the eye ${(eye().y - start.y).toFixed(2)} m in 0.5 s`);
+    engine["view"].leaveFree();
+    engine["seat"].esc();
+    run(FRAME);
+    press("Space");
+    assert.notEqual(engine["playing"], playing, "Space out of the free view, nobody driven, toggled play");
+    press("Space");
+  });
+
   it("when the same W is held without the free view, then the seat takes the wheel (the control for the test above)", () => {
     engine["view"].leaveFree();
     engine["view"].spec = null;

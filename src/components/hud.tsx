@@ -109,7 +109,7 @@ const CAMERA_KEYS: [string, string][] = [
   ["Drag · scroll", "Orbit camera"],
   [";", "Mouse look (Esc ends it)"],
   ["V", "Camera view (also C, T): chase, far, hood / trackside, wheel, orbit, auto, free fly"],
-  ["Free fly · V", "Detached camera: W A S D · PgUp / PgDn up, down · Shift fast · wheel speed · drag look · V or Esc back"],
+  ["Free fly · V", "Detached camera: W A S D · Space or PgUp up · Ctrl or PgDn down · Shift fast · wheel speed · drag look · V or Esc back"],
 ];
 
 function seatHint(state: CrashHudState): { title: string; keys: string } {

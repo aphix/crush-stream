@@ -3,8 +3,9 @@ import { PAD_BUTTON, type PadState } from "../vehicle/gamepad.ts";
 import type { FreeInput } from "../present/free-cam.ts";
 import { SEAT_KEYS } from "./engine-keys.ts";
 
-const FLY_UP_KEYS = [SEAT_KEYS.flyUp];
-const FLY_DOWN_KEYS = [SEAT_KEYS.flyDown];
+/** Space rises and Ctrl sinks as well as the page keys (in the free view Space is neither the handbrake nor the pause: `onKeyDown` skips it there). */
+const FLY_UP_KEYS = [SEAT_KEYS.flyUp, "Space"];
+const FLY_DOWN_KEYS = [SEAT_KEYS.flyDown, "ControlLeft", "ControlRight"];
 
 /** 1 while any of `codes` is held, else 0. */
 function held(keys: ReadonlySet<string>, codes: readonly string[]): number {
@@ -18,7 +19,7 @@ function stronger(key: number, stick: number): number {
 
 /**
  * The free view's input this frame into `out`: the drive keys fly it (W / S forward and back, A / D strafe, the arrows too, Shift fast),
- * the page keys rise and sink it. The pad: left stick flies, right stick looks, RT rises, LT sinks, A (the boost button) is fast.
+ * the page keys or Space rise and the page keys or Ctrl sink it. The pad: left stick flies, right stick looks, RT rises, LT sinks, A (the boost button) is fast.
  * `hold` zeroes it all (a menu owns the keys).
  */
 export function readFreeInput(keys: ReadonlySet<string>, pad: PadState, hold: boolean, out: FreeInput): FreeInput {
