@@ -54,9 +54,9 @@ function hardMarks(track: Track): string[] {
  * and when every style's cabin cages came from its own panels (the fleet's hatchback, wagon, coupe and pickup meet each other on new contact shapes).
  */
 const HARD_MARKS: Record<string, string[]> = {
-  oval: ["c146ba08", "e01cb6da", "81fd6a0c", "299e2a50", "8c6cb518", "e21ba71", "74e75d12", "6f06aa74", "81988b30", "637c9590", "1c90932a", "b7b49d0b", "adf9993d", "d20dd2b3", "5ff9c87b", "68eb79cc"],
-  rally: ["7e530a53", "530d9d34", "165d63fb", "b085288d", "393d6d39", "64108629", "b766f9ab", "42cb9a2a", "d62aa821", "9c85c721", "c5142a0", "a7eaa24f", "98885778", "2af50d3c", "61b0c89a", "de08edc6"],
-  stunt: ["16cd1970", "e744a0ef", "b2398f05", "894961ec", "ee60510", "6c00e6", "a7e09cf8", "27d02d0c", "d0c48277", "5caf5a3", "7813f99e", "581fa579", "7cd8a84a", "79b833bf", "c04635b", "6ac2ee25"],
+  oval: ["e9df8473", "7e9593ab", "6b5fc308", "9be8ec8e", "1da391b9", "15cb62d5", "b81974e2", "f9f01605", "1eb60b86", "92a70774", "5aed2cd0", "ccaba551", "c3295f1d", "cd39d90a", "7cb6e26c", "52acf03f"],
+  rally: ["b1e61d10", "1bbe9778", "951aed75", "471cab69", "56ca513a", "43157051", "7c7497de", "15c5bb3e", "f9c3b299", "2dd5efd2", "a2349e6d", "c91501ea", "4eae5cf", "79c88744", "60b34093", "67b9f622"],
+  stunt: ["c1d612be", "5c943686", "b4edb297", "626250d3", "8c8e2f9e", "6be38f3e", "457704cf", "65f44394", "eca75d66", "7db5998", "f1a6cf0c", "4d144eb4", "d52b81ac", "ca859afa", "1c5e8e1b", "efe91c7a"],
 };
 
 describe("given 8 clean AI cars (aggression 0) on the grid of the oval", () => {
