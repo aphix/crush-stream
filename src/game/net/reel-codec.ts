@@ -459,6 +459,7 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * Each bumper's cage holds its drawn bottom corner (the lowest, outermost vertex of its end) through the decimation, and `frame.hullUnder`'s four bumper rows stand on those vertices (the lofted-end bumpers' rows stood 6-17 cm off the drawn lip): a rolled car's bumper corner meets a ramp's flank or a wall at the vertex the sim collides, not 6.5-14.5 cm from it.
  * A wheel arch's plant under the body side's rocker line turns with the cell's clusters, as the rest of the sill does, instead of the nose's: a sedan's front sill vertex (2.5 cm beside the cage's sill sample) stood 7.5 cm lower and 15 cm further in than it after a head-on crush, 3.0-6.7 cm into the ground under a wreck resting on the cage's own points; now none stands 3 cm past them.
  * A tyre cap's damper (the tread's own damping) follows a press or release rate no faster than the tread's ring speed, 2 sqrt(G TYRE_SAG) = 0.63 m/s: a 38 m/s landing's release no longer holds the tread down while the frame turns onto the slope (crest muscle 3.11° -> 0.57°, SUV 4.50° -> 4.10°).
+ * The derby arena's wall stands 20.5 m (its glass twice the old 8.5 m): a monster that cleared the 12 m wall now meets it.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

@@ -104,7 +104,7 @@ its first throttle measured 0.964–0.965 s (sedan), 0.786 (muscle), 1.023–1.0
 
 ## The arena
 
-One fixed arena for every field (`DERBY_ARENA`, `scenes/constants.ts`): a round 38 m inner radius, 1 m thick ring wall of 48 flat boxes (mitred), `wallHeight` 12 m high: a `concreteHeight` 3.5 m concrete lower wall with
+One fixed arena for every field (`DERBY_ARENA`, `scenes/constants.ts`): a round 38 m inner radius, 1 m thick ring wall of 48 flat boxes (mitred), `wallHeight` 20.5 m high: a `concreteHeight` 3.5 m concrete lower wall with
 the yellow/black hazard band at its top and translucent glass above it. Inside it is a bowl: four perimeter ramps (`DERBY_RAMPS`) rise toward the wall, each with a 4 m wide deck, 3 m side wedges and a 2 m lip on the
 wall side, its flat top set back 4 m from the wall: north 14 m long and 2.8 m high, east 13 m and 2.5 m, south 15 m and 3 m, west 13 m and 2.5 m.
 The middle stays open round a 12 x 12 m table-top 2.2 m up (`DERBY_TABLE_TOP`, grade 0.26), a 10 x 8 m pit plateau 1 m up and a scrap hump 0.8 m up. The ground is still one baked 1 m grid (the Havana plateau mechanism, `world/terrain.ts`
@@ -115,7 +115,8 @@ ring-band box is in `DERBY_FREE_PROPS`) and the bearings facing a free-standing 
 
 `derby-containment.test.ts` drives every class flat out and boosting at the wall: from the open ring in every direction, across the arena from every fourth heading (every heading in the full-sanity suite, `derby-containment.ai-long-run.ts`), from
 each ramp's far entry heading up it, and outward from each ramp's foot and crest. No vertex passes the wall's outer face, and the car touches the wall at least 1 m under its top. The measured worst wall touch is 6.83 m up, so the
-need is 7.83 m with that 1 m margin; the wall is 12 m by choice, above the 10 m the owner asked to exceed.
+need is 7.83 m with that 1 m margin; the wall was 12 m, above the 10 m the owner asked to exceed, but a monster in play still left over it, so its glass is twice the old 8.5 m (20.5 m wall), drawn at half
+the glass texture's opacity so the taller pane stays easy to see through.
 
 What the AI does not know: it steers by the ring radius (`DerbyBrain.radius` = `DERBY_RADIUS`) and its stuck recovery, not by the containers, rails, pads, tyre
 berms, the table-top or the ramps. Cars can be wedged against a container or rail and recover by the existing stuck rule; an obstacle-aware aim (steer round a prism, treat a rise as a
