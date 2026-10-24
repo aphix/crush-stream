@@ -450,6 +450,7 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * The monster's springs damp at ζ 0.42 (were 0.35; Monster Jam 0.35-0.5): a 0.3 m drop's ride, which swung 115, 34 and 10 mm over three turns, swings 91 and 20 mm over one, and it arrives 0.4 m/s slower at the long jump's barrier. Its wheels come off a hit only from 24 m/s of
  * equivalent barrier speed (a sedan's at 18-20: hub hardware is built for the load its wheel's mass makes).
  * A car lying flat on its side (the face's normal under 0.25 along its up, within 15°) stands on the tyres it lies on, each holding its share of the whole car (half with two) where it held a quarter and sank to its stroke: a monster dropped on its side stood 24.8 cm in the ground, a sedan 5.0, a truck 3.5, and now they stand 0.4 to 2.2 cm in it or over it. A wreck whose rigid body sleeps past the contact window no longer steps its structure (its masses stood still in the body, where they crept 7 cm/s after it fell asleep): a monster on its flank with its low wheels gone settles 2.5 to 2.9 cm in the ground where it settled 8 to 15.
+ * The monster's cage has the drawn arch opening, an ellipse crowning at .83 of the round one's height over each hub (collision is what is seen): its side rows between the opening and the floor tuck in 8 cm lower at each wheel.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

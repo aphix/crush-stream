@@ -28,7 +28,7 @@ type Bounds = {
    *  one, a curved crest or a bend under the car) added, and pitch / roll the twist `atan(warp / (2 · lever))` (a body rests on any
    *  three hubs, so with one hub `warp` m off the plane of the other three it may sit that far off the mean pitch / roll). */
   pose: number;
-  /** Most the car may move (m). */
+  /** Most the car's rigid centre may move over the ground (m): a body turning about a lifted centre swings its origin without sliding (`drop`). */
   slide: number;
 };
 const PLAIN: Bounds = { gap: 0.02, hull: 0.02, pen: 0.01, overlap: 0.02, pose: 1.5, slide: 0.5 };

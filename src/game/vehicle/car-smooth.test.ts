@@ -1707,6 +1707,7 @@ function cageSourceDigest(car: DeformableCar): string {
 // Every style re-pinned for the skin points' lever share (`skinN` packs it above the cluster count, `SKIN_LEVER_REACH`): sedan 71833061 -> 23998ad2, hatchback a345b883 -> 0669e184, wagon fb9bfc07 -> 0528ab07,
 // coupe ad88ed74 -> a2b04729, pickup 16a4b3a7 -> 69f1d761, police 9c06e568 -> 531228c0, monster 54c38d76 -> c32740f6: only the tables' `skinN` bytes moved.
 // Every style re-pinned for the roof mass standing at the roof panel's own place (`roofShift`: y by the windshield-top-to-body map, z 0.57 along the roof from the rear) which the cage's cluster tables are built over, and for the sill samples read off the drawn underside (the last table): sedan 23998ad2 -> 42c41ed3, hatchback 0669e184 -> 27214b16, wagon 0528ab07 -> 442af3ac, coupe a2b04729 -> ac78d12f, pickup 69f1d761 -> 49d43ba4, police 531228c0 -> 9097740d, monster c32740f6 -> f408bddd.
+// Monster re-pinned for its cage's arch opening standing at the drawn one (`arch.rise` .83 in the cage too): f408bddd -> 96ec5590.
 const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // CarSedan's shape data and arch radius (as the sim digests above): sedan b9e9e98b... -> df8e0b97... -> 720053fe...; police 2466b278... -> 5e59494a... -> 23142cfa....
   // Sedan and police re-pinned for the door glass's top-front corner kept in under the slim A-post (`aPillarTop` 0.143): 8540eed1 -> 2fc92389; police 5af761d2 -> d97239fa.
@@ -1755,7 +1756,7 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Again for its roof's flatter crown and tighter edge roll (`roofSection` crown .75, blend .8), as the pickup's.
   // The monster's again for its bed gate hinged at its bottom edge (`boot.pivot` [.45, -2.3]): it dropped open from its top like a hatch; the gate panel's origin and its rest local to it moved: 18934885... -> fc41fe09....
   // The monster's again for its door's hinge run (`door.hingeRun` .2: the drawn skin's hinge end): the cage door follows the drawn skin, so its corners moved: 393f00cc... -> 54c38d76....
-  { id: "monster", digest: "f408bddd05d03646f170f9bda463ea5f0f09bb12018b46628150c8575a55e8d7" },
+  { id: "monster", digest: "96ec55904850e2576df8b74f1ecd3389697e890038605b6266e7dfe3b2ac5c2c" },
   // Every style re-pinned with its bumpers in the cage (`CageSource.held`, `apart`), then with its front doors: both ride in the source's tail.
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
 
