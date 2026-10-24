@@ -123,13 +123,16 @@ const MOUNT_APPROACH_M = 12;
 /** Most the springs may give back over the mount (J/kg): a sliver of a car's 18 to 50 on the faces and speeds above. */
 const MOUNT_SPRING_GIVE_BACK = 0.5;
 
+/** The monster's mount, a todo: it gains energy climbing a steep face coasting (readings over the 31.7 J/kg at 6 m/s and 63.7 at 10 it came with). */
+const MONSTER_MOUNT_TODO = "a coasting monster climbs a steep face on the rigid tyre rows' straight-up push, which keeps its horizontal speed (a thrust the engine owes): +19.5 J/kg at 31° and 6 m/s (5.3 m past the foot), +47.3 at 31° and 10 (12 m), +15.7 at 40° and 6 (3.0 m), +37.1 at 40° and 10 (7.4 m); the push along the face's normal for an unpowered car cuts them to +4.0/0/+3.9/0 but turns wreck-slope's two monster rows red";
+
 describe("given a car coasting from flat road onto a steep wedge face", () => {
   afterEach(() => setGround(null));
 
-  for (const cls of ["sedan"] as const) {
+  for (const cls of ["sedan", "monster"] as const) {
     for (const deg of MOUNT_DEGREES) {
       for (const speed of MOUNT_SPEEDS) {
-        it(`when a ${cls} coasts onto the ${deg}° face at ${speed} m/s, then it never holds more energy than it came with`, () => {
+        it(`when a ${cls} coasts onto the ${deg}° face at ${speed} m/s, then it never holds more energy than it came with`, cls === "monster" ? { todo: MONSTER_MOUNT_TODO } : {}, () => {
           const wedge = new Wedge(deg);
           setGround(wedge);
           const car = makeCar(cls);
