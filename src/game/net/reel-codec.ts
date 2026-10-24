@@ -445,6 +445,8 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * already held on it), and as the moment of that impulse about the car's centre: a resting sedan struck 1 m ahead of its middle with most of its mass already on
  * the face took 556 of the exchange's 1713 N·s and spun 2.14 rad/s, now 0.67; a wreck turning with its drawn vertex in a face takes the rigid plastic impulse there
  * (recoil and spin), where its spin went with no momentum taken: a sedan hitting a palm's trunk 0.6 m off its middle turns toward it (+0.09 rad, was +0.03).
+ * The monster's springs damp at ζ 0.5 (were 0.35), as a Monster Jam truck's (0.35-0.5): a 0.3 m drop's ride, which swung 115, 34 and 10 mm over three turns, now turns once past rest. Its wheels come off a hit only from 24 m/s of
+ * equivalent barrier speed (a sedan's at 18-20: hub hardware is built for the load its wheel's mass makes).
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */

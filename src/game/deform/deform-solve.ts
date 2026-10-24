@@ -291,7 +291,7 @@ export abstract class DeformSolve extends DeformFreeze {
     }
     if ((m.name === "engineL" || m.name === "engineR") && !squeeze && !sideHit && iz < 0) dz = this.engineMountDz(m, dz, bz, stroke);
     if (m.hub && !deep) {
-      if (!m.popped && this.hitSpeed >= HUB_OVERRUN_MPS) {
+      if (!m.popped && this.hitSpeed >= HUB_OVERRUN_MPS && this.hitSpeed >= this.rig.hubHoldMps) {
         const front = m.rest.z > 0;
         const corner = front ? (m.rest.x < 0 ? this.at.bumperFL : this.at.bumperFR) : m.rest.x < 0 ? this.at.bumperRL : this.at.bumperRR;
         const reach = Math.abs(corner.rest.z - m.rest.z);
