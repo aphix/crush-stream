@@ -113,26 +113,28 @@ describe("given a car coasting along a steep wedge face on springs so stiff that
   }
 });
 
-/** A car coasting from flat road onto a steep face holds the energy it came with at most (the springs' own give-back aside): it cannot climb higher than its speed lifts it. */
+/** A car coasting from flat road onto a steep face holds the energy it came with at most: it cannot climb higher than its speed lifts it. */
 const MOUNT_DEGREES = [31, 40] as const;
 const MOUNT_SPEEDS = [6, 10] as const;
 const MOUNT_RUN_FROM_FOOT_M = 12;
 const MOUNT_RUN_S = 5;
 /** The run-up's length before the face's foot (m): the car is rolling steadily by it. */
 const MOUNT_APPROACH_M = 12;
-/** Most the springs may give back over the mount (J/kg): a sliver of a car's 18 to 50 on the faces and speeds above. */
-const MOUNT_SPRING_GIVE_BACK = 0.5;
+/** Most the contacts may give a coasting car over the mount (J/kg): a sliver of its 18 to 64 on the faces and speeds above (stiff springs store none). */
+const MOUNT_GAIN_ROUNDING = 0.5;
 
-/** The monster's mount, a todo: it gains energy climbing a steep face coasting (readings over the 31.7 J/kg at 6 m/s and 63.7 at 10 it came with). */
-const MONSTER_MOUNT_TODO = "a coasting monster climbs a steep face on the rigid tyre rows' straight-up push, which keeps its horizontal speed (a thrust the engine owes): +19.5 J/kg at 31° and 6 m/s (5.3 m past the foot), +47.3 at 31° and 10 (12 m), +15.7 at 40° and 6 (3.0 m), +37.1 at 40° and 10 (7.4 m); the push along the face's normal for an unpowered car cuts them to +4.0/0/+3.9/0 but turns wreck-slope's two monster rows red";
-
-describe("given a car coasting from flat road onto a steep wedge face", () => {
+describe("given a car coasting from flat road onto a steep wedge face, on springs so stiff that none of its energy is stored in them", () => {
+  let restoreSprings = (): void => {};
+  before(() => {
+    restoreSprings = useStiffSprings();
+  });
+  after(() => restoreSprings());
   afterEach(() => setGround(null));
 
   for (const cls of ["sedan", "monster"] as const) {
     for (const deg of MOUNT_DEGREES) {
       for (const speed of MOUNT_SPEEDS) {
-        it(`when a ${cls} coasts onto the ${deg}° face at ${speed} m/s, then it never holds more energy than it came with`, cls === "monster" ? { todo: MONSTER_MOUNT_TODO } : {}, () => {
+        it(`when a ${cls} coasts onto the ${deg}° face at ${speed} m/s, then it never holds more energy than it came with`, () => {
           const wedge = new Wedge(deg);
           setGround(wedge);
           const car = makeCar(cls);
@@ -144,7 +146,7 @@ describe("given a car coasting from flat road onto a steep wedge face", () => {
             stepSlices(car, 1 / RATE_HZ, RATE_HZ);
             peak = Math.max(peak, energyOf(car));
           }
-          assert.ok(peak - start <= MOUNT_SPRING_GIVE_BACK, `the car held ${(peak - start).toFixed(2)} J/kg more than the ${start.toFixed(1)} it came with, ${(car.group.position.x - WEDGE_FOOT).toFixed(1)} m past the foot`);
+          assert.ok(peak - start <= MOUNT_GAIN_ROUNDING, `the car held ${(peak - start).toFixed(2)} J/kg more than the ${start.toFixed(1)} it came with, ${(car.group.position.x - WEDGE_FOOT).toFixed(1)} m past the foot`);
         });
       }
     }

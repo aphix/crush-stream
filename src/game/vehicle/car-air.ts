@@ -760,12 +760,16 @@ function pitchHolds(r: THREE.Vector3, n: THREE.Vector3): boolean {
   return push * closes >= 0;
 }
 
-/** Whether the solve has a rigid tyre row pushing straight up on the world's ground and none on a car (a car's top takes its reaction, `give`): the one case its impulse can add to the body's kinetic energy. */
-function liftsOnWorld(tyres: number, n: number): boolean {
+/** A face steeper than this (its normal's up component under it: 26°) is a climb whose straight-up push can add a coasting car's own plan speed to its kinetic energy (½ (v tan 26°)² a mount, 5-19 J/kg at 6-10 m/s); a ramp's few-degree foot adds a few J/kg and is left to the springs. */
+const HELD_FACE_NY = 0.9;
+
+/** Whether a body rolling on (not coming down from a flight: a landing's impulse is the closing's, not a thrust), unpowered (the engine owes a powered one its thrust up a face) and no wreck (its masses carry its energy) has a rigid tyre row pushing straight up a steep face of the world and none on a car (a car's top takes its reaction, `give`). */
+function liftsOnWorld(tyres: number, n: number, airborne: boolean): boolean {
+  if (body.powered || airborne || body.wreck) return false;
   let lifts = false;
   for (let c = 0; c < n; c++) {
     if (OWN[c]! >= 0) return false;
-    if (c < tyres && !SOFT[c] && DIR[c] === UP) lifts = true;
+    if (c < tyres && !SOFT[c] && DIR[c] === UP && N[c]!.y < HELD_FACE_NY) lifts = true;
   }
   return lifts;
 }
@@ -1090,7 +1094,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   }
   snapshotRows(car, n);
   noteTyreSides(tyres, tyreSides);
-  const keBefore = liftsOnWorld(tyres, n) ? kineticEnergy() : NaN;
+  const keBefore = liftsOnWorld(tyres, n, car.airborne) ? kineticEnergy() : NaN;
   solveRows(n);
   if (keBefore === keBefore) holdLiftEnergy(keBefore);
   collectCrush(car, n);
