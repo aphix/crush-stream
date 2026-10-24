@@ -122,6 +122,8 @@ export class PoliceBrain extends CopBrain {
   /** Per racer id: 1 for a netplay peer's car, whose screen is not this camera's: what it sees is its racer sight. */
   private readonly peers: Uint8Array;
   private now = 0;
+  /** Scratch: the race time of the last patrol, to tell a race clock that has stopped. */
+  private seenTime = Number.NEGATIVE_INFINITY;
   private fieldCars: readonly AiCar[] = [];
   /** Scratch: the last `nearest` call's distance. */
   private nearD = Infinity;
@@ -261,10 +263,12 @@ export class PoliceBrain extends CopBrain {
   /**
    * One patrol pass (the director's bubble beat, `dt` s): knock-outs, wake-ups, pursuits kept, lost or
    * reinforced, stakeouts, units stored. `hunt[id]` is 1 for a racer still racing; `lead` is the
-   * leader's progress (m).
+   * leader's progress (m). The race clock `time` stands still once the race is over while the patrol goes on: a unit's age
+   * (`now`, what `MIN_LIFE` counts) then runs on by `dt`, or a cop put on the road just before the finish would never come of age.
    */
   update(time: number, dt: number, cars: readonly AiCar[], hunt: Uint8Array, lead: number, world: HunterWorld): void {
-    this.now = time;
+    this.now = time > this.seenTime ? time : this.now + dt;
+    this.seenTime = time;
     this.fieldCars = cars;
     this.sight.watch(cars);
     this.patrolUnits(dt, cars, hunt, time, world);
