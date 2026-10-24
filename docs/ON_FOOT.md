@@ -135,6 +135,8 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
   he is out (the race AI drives his car to the finish), any car's door letting him in (fleet red).
 - `ragdoll-walker-car.test.ts`: a car driven through the spot where his walker stands, and again where nobody does; the car's position, velocity and
   every mass match bit for bit (`assertSameNumbers`). Red against a walker that shoves a car it is near.
+- `ragdoll-walker-ground.test.ts`: starting the walker puts a run the worker held into this thread's world (red without the pin), and his ground patch
+  is built again only once he is 24 m from its middle (red when it is rebuilt at 10 m).
 - `onfoot-doors.test.ts` (own car's reach; room on any ground, not the disc's radius), `seated-drivers.test.ts` (the car left on foot has no driver
   drawn), `drive-keys.test.ts`, and the lane's rows: `onfoot-flow`, `engine-walk-input`, `ragdoll-walker`, `ragdoll-walker-getup`, `ragdoll-hit`,
   `ragdoll-mesh-pick`, `showcase-walks`.
