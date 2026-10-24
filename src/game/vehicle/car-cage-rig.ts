@@ -384,7 +384,7 @@ function readCageLive(car: DeformableCar, panels: readonly Panel[], live: CageLi
       live.panelPose[k * 7 + 6] = 1;
     }
   }
-  live.panelsFollow = car.crashed ? 1 : 0;
+  live.panelsFollow = car.panelsFollow ? 1 : 0;
 }
 
 /**

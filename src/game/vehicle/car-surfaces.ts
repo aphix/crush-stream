@@ -343,14 +343,13 @@ export class CarSurfaces extends Surface {
       any = true;
       if (this.grew[s] === 0) continue;
       const car = this.carOf(s);
-      // The stepping car's own face (the ground's, a wall's or a ramp's press) is a wreck only past its elastic range (`SPRING_YIELD`): a dent under it springs back whole in the
-      // structure, so a belly's soft touch on a ramp's edge leaves the car as it was (its crush still rides a keyframe: `CrashRecorder.encodeKey`). A roof another car presses carries
-      // that car's weight: a wreck from its first press, where the stack's roof law reads its crush from.
+      // A face crushed past its elastic range (`SPRING_YIELD`) by a load is a wreck, whatever presses it (the ground, a wall, a ramp, another car's belly): a dent under it springs back
+      // whole in the structure, so a belly's soft touch on a ramp's edge leaves the car as it was (its crush still rides a keyframe and a netplay wreck section: `loadCrushed`).
       const d = car.deform;
       const f = s % FACES;
       const before = d.crush[f]!;
       d.crush[f] = Math.min(faceMax(f), before + this.grew[s]!);
-      if (d.crush[f]! > (car === self ? SPRING_YIELD : 0)) car.crashed = true;
+      if (d.crush[f]! > SPRING_YIELD) car.crashed = true;
       // A roof another car's belly sank takes the shape of that belly; the ground's or a wall's press (the stepping car's own faces) has no pan.
       if (f === FACE_TOP && car !== self && d.crush[f]! > before) imprint(self, car);
       d.bakeLoadCrush();

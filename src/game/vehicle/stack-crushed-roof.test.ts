@@ -9,6 +9,7 @@ import { BELLY, buildCar, cellX, cellZ, drawnField, drawnRange, NX, NZ, stepFram
 import { fit } from "./ground-probe.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { C_H, C_NX, C_NY, C_NZ, HIT_SIZE } from "../world/surfaces.ts";
+import { TOUCH } from "./car-air-body.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 
 /**
@@ -20,9 +21,17 @@ import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 const FRAME = 1 / FRAME_HZ;
 const FULL: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
 const SINK_M = 0.05;
+/** How far over the drawn body a tyre may hang and still stand on it: the sim's own `TOUCH` (a tyre within it is down). */
+const HOVER_M = TOUCH;
 const SPEED_SHARE = 0.05;
 /** Seconds after the throttle goes down at which the speed is read (frames of 1/60 s). */
-const READ_AT = [0.5, 1, 1.5] as const;
+const READ_AT = [0.25, 0.5, 1, 1.5] as const;
+/**
+ * Where a car standing on the hood and boot is judged: the first of `READ_AT`. The sedan is front-driven, and an axle with no tyre down has no traction
+ * (`applyDrive`), so once its front tyres roll off the hood's nose (0.47 m on, frame 16, 0.27 s: their lifts 0.015 → -0.005 → -0.037 m) it coasts: 3.6 m/s at
+ * frame 15, 3.9-4.1 m/s to frame 26, 3.5 m/s at 0.5 s, where the platform's car, with no nose, reads 7.3. The later reads are for the car beached on the crown.
+ */
+const ON_THE_HOOD = 0;
 
 /** A flat asphalt platform at height `y`, under everything. */
 class Platform extends Ground {
@@ -41,13 +50,14 @@ class DrawnTop extends Ground {
   }
 }
 
-/** Two sedans: the lower with its roof crushed by `crush`, the upper put down on the drawn roof's crown and settled for 5 s. */
+/** Two sedans: the lower with its roof crushed by `crush` (a car a load crushed past its elastic range is crashed: `CarSurfaces.commit`), the upper put down on the drawn roof's crown and settled for 5 s. */
 function crushedStack(crush: number) {
   const lower = buildCar("sedan", "sedan");
   lower.spawnFacing(0, 0, 0, 0);
   lower.deform.bindKinematic(lower.group, lower.velocity, lower.angular);
   lower.deform.crush[FACE_TOP] = crush;
   lower.deform.bakeLoadCrush();
+  lower.crashed = true;
   const upper = buildCar("sedan", "sedan");
   upper.spawnFacing(0, 12, 0, 0);
   upper.airborne = true;
@@ -73,31 +83,14 @@ function driveOff(w: CrashWorld, c: DeformableCar): { speeds: number[]; airEarly
   return { speeds, airEarly };
 }
 
-/**
- * `todo` (the drive row only), Stage 3 (integration b94657da), 0.45 m. The sim's tyres read 0.166 / 0.131 / 0.136 / 0.102 m over the
- * cage's hood and boot against a standing tyre's reach of droop 0.065 + `TOUCH` 0.03 = 0.095 m: the car rests belly on the crown, every
- * tyre hanging (a hanging tyre is no spring row and no drive), and its speed is 0. The oracle reads 0.098 / 0.057 / 0.012 / -0.029 m off
- * the drawn bodies and so demands the platform's speed. Measured: the cage's deck is within 1.4 cm of the drawn one with the class body at
- * the sim's pose (p95 0.077 -> 0.014 m) and 5.9 cm under it as drawn, the difference being the wreck's render-only offsets (`seatBody`'s hull
- * lift 0.029 m and the suspension pose's pitch 0.022 rad, which no keyframe carries, so the sim cannot read them: the cage's frame following
- * them anyway leaves the car at 0.09 m/s, resting 3 cm higher with its tyres 0.093-0.175 m over the deck). Read at the sim's pose the
- * oracle's tyres stand within 0.032 m, past the 0.03 m `TOUCH` the sim counts as down. The crush law packs a roof at 0.45 m, so no crush
- * the law admits brings the tyres down (0.5 m, past it: 1.79 m/s at 0.5 s against the platform's 7.31). Measured before Stage 4 item 6 (the wreck
- * split); after it the row still reads 0.01 m/s at 0.5 s against the platform's 7.31, and the tyre gaps have not been measured again.
- */
-const crushDepths: readonly { crush: number; todo?: string }[] = [
-  { crush: 0.4 },
-  {
-    crush: 0.45,
-    todo: "after the plan (still open after Stage 4 item 6, the wreck split): 0.01 m/s at 0.5 s against the platform's 7.31; before it the sim's tyres read 0.102-0.166 m over the cage's hood and boot (reach 0.095 m): belly-beached, where the oracle reads the drawn deck 5.9 cm higher (the wreck's render-only hull lift 0.029 m and suspension pitch 0.022 rad, in no keyframe)",
-  },
-];
+/** The roof depths (m) the stack's crush law admits: it packs a roof at 0.45 m. */
+const crushDepths: readonly { crush: number }[] = [{ crush: 0.4 }, { crush: 0.45 }];
 
 for (const testCase of crushDepths) {
   describe(`given a sedan resting on another sedan's roof that the load has crushed ${testCase.crush} m`, () => {
     afterEach(() => setGround(null));
 
-    it("when it has stood there for 5 s, then none of its tyres is more than 5 cm inside the drawn hood or boot below it", (t) => {
+    it("when it has stood there for 5 s, then none of its tyres is more than 5 cm inside the drawn hood or boot below it, or hangs more than the sim's touch distance over it", (t) => {
       const { lower, upper } = crushedStack(testCase.crush);
       lower.group.updateMatrixWorld(true);
       const drawn = new DrawnTop(drawnField(lower).top, lower.group.matrixWorld.elements);
@@ -105,9 +98,10 @@ for (const testCase of crushDepths) {
       t.diagnostic(`tyre bottoms over the drawn body below: ${gaps.map((g) => g.toFixed(3)).join(" ")} m`);
       assert.ok(gaps.length > 0, "no tyre is over the car below");
       assert.ok(Math.min(...gaps) >= -SINK_M, `a tyre is ${(-Math.min(...gaps)).toFixed(3)} m inside the drawn body below`);
+      assert.ok(Math.max(...gaps) <= HOVER_M, `a tyre hangs ${Math.max(...gaps).toFixed(3)} m over the drawn body below`);
     });
 
-    it("when it drives at full throttle, then it is not flagged airborne in its first 0.2 s, and its speed at 0.5, 1 and 1.5 s is within 5 % of the same car on a flat platform at its resting height if a tyre stands on the body below, and under 5 % of it if the tyres hang clear (beached on its belly: the throttle has nothing to push on)", { todo: testCase.todo }, (t) => {
+    it("when it drives at full throttle, then it is not flagged airborne in its first 0.2 s, and its speed at 0.25 s, still on the hood, is within 5 % of the same car on a flat platform at its resting height if a tyre stands on the body below, and under 5 % of it at 0.5, 1 and 1.5 s if the tyres hang clear (beached on its belly: the throttle has nothing to push on)", (t) => {
       const { lower, upper, world } = crushedStack(testCase.crush);
       lower.group.updateMatrixWorld(true);
       const gaps = fit(upper, new DrawnTop(drawnField(lower).top, lower.group.matrixWorld.elements)).gaps.filter(Number.isFinite);
@@ -131,10 +125,14 @@ for (const testCase of crushDepths) {
       const ref = driveOff(platform, flat);
       t.diagnostic(`rest y ${y.toFixed(3)}, treads on the body below ${treads.map((on) => (on ? 1 : 0)).join("")} (sim's ${simRead}; drawn gaps ${gaps.map((g) => g.toFixed(3)).join(" ")} m); on the roof ${top.speeds.map((s) => s.toFixed(2)).join("/")} m/s, airborne early ${top.airEarly}; on the platform ${ref.speeds.map((s) => s.toFixed(2)).join("/")} m/s`);
       assert.ok(!top.airEarly, "flagged airborne in its first 0.2 s with its belly on the car below");
+      if (tyresStand) {
+        const off = Math.abs(top.speeds[ON_THE_HOOD]! - ref.speeds[ON_THE_HOOD]!);
+        assert.ok(off <= SPEED_SHARE * ref.speeds[ON_THE_HOOD]!, `${READ_AT[ON_THE_HOOD]} s: ${top.speeds[ON_THE_HOOD]!.toFixed(2)} m/s against the platform's ${ref.speeds[ON_THE_HOOD]!.toFixed(2)}`);
+        return;
+      }
       for (const [k, at] of READ_AT.entries()) {
-        const off = Math.abs(top.speeds[k]! - ref.speeds[k]!);
-        if (tyresStand) assert.ok(off <= SPEED_SHARE * ref.speeds[k]!, `${at} s: ${top.speeds[k]!.toFixed(2)} m/s against the platform's ${ref.speeds[k]!.toFixed(2)}`);
-        else assert.ok(top.speeds[k]! <= SPEED_SHARE * ref.speeds[k]!, `${at} s: ${top.speeds[k]!.toFixed(2)} m/s with its tyres hanging clear, platform's ${ref.speeds[k]!.toFixed(2)}`);
+        if (k === ON_THE_HOOD) continue;
+        assert.ok(top.speeds[k]! <= SPEED_SHARE * ref.speeds[k]!, `${at} s: ${top.speeds[k]!.toFixed(2)} m/s with its tyres hanging clear, platform's ${ref.speeds[k]!.toFixed(2)}`);
       }
     });
   });

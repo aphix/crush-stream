@@ -63,6 +63,10 @@ export class DeformableCar extends CarParts {
   get rigid(): boolean {
     return !this.deform.massActive;
   }
+  /** A wreck or a car carrying a load crush (a dent under the crash's depth, `SPRING_YIELD`): its panels, glass and tyre hold follow the dented body, and the cage's panels with them (`readCageLive`). An undamaged car's stand at rest. */
+  get panelsFollow(): boolean {
+    return this.crashed || this.deform.loadCrushed();
+  }
   /** Faster than rest (`REST_SPEED`, m/s or rad/s) in translation or spin: what wakes a neighbour (`wakePair`) and what a sleeper's `stirNear` sees of a car top. */
   get moving(): boolean {
     const v = this.velocity;
@@ -654,7 +658,7 @@ export class DeformableCar extends CarParts {
     if (this.vaporized || this.falling) return;
     this.deform.update(this.body.geometry);
     if (this.deform.skinnedThisFrame) this.poseLamps();
-    if (this.crashed) {
+    if (this.panelsFollow) {
       if (this.deform.skinnedThisFrame) this.skinPanels();
       this.holdSkinOffTyres(this.deform.skinnedThisFrame);
       if (this.deform.skinnedThisFrame) this.poseOpenShells();
@@ -671,7 +675,7 @@ export class DeformableCar extends CarParts {
     this.deform.skinDeferred = false;
     if (!this.deform.flushSkin(this.body.geometry)) return;
     this.poseLamps();
-    if (this.crashed) {
+    if (this.panelsFollow) {
       this.skinPanels();
       this.holdSkinOffTyres(true);
       this.poseOpenShells();
