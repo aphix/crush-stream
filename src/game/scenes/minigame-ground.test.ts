@@ -271,6 +271,7 @@ function driveFromStart(type: DriverCar, mode: MinigameMode, assignHook = true):
       if (!drive.reachedLip && position.x >= anchor.x) {
         drive.reachedLip = true;
         if (!thrown) drive.lipSpeed = speedAtLine(fromX, fromSpeed, position.x, car.speed, anchor.x);
+        if (mode === "longJump" || !assignHook) break;
       }
       stalledFor = car.speed < STALLED_SPEED ? stalledFor + PROBE_FRAME : 0;
       if (stalledFor > STALL_SECONDS) break;
