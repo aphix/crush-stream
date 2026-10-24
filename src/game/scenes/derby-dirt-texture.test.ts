@@ -33,7 +33,7 @@ const FULL_TURN = 2 * Math.PI;
 const FNV_OFFSET = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;
 /** FNV-1a of the dirt's 4 MiB as the per-texel closure painted it: a rewrite that keeps random()'s order keeps every byte. */
-const DIRT_BYTES_HASH = 0x49e9ba3d;
+const DIRT_BYTES_HASH = 0xbb744187;
 
 function luminanceAtTexel(column: number, row: number): number {
   return dirtPixels[(row * dirt.image.width + column) * CHANNELS];

@@ -8,11 +8,11 @@ import { blankEjection } from "../vehicle/ejection.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 
 /**
  * A 32-car field: every car drives a ring around the middle (no car physics; the dummies only read the cars' poses),
- * and drivers are thrown up out of their windshields. Heap growth is summed per frame, positive deltas only: a
- * frame with a scavenge counts as 0, so this only undercounts.
+ * and drivers are thrown up out of their windshields. Allocation is the bytes V8's sampling heap profiler sees made, dead or alive.
  */
 const CARS = 32;
 const FRAME = 1 / FRAME_HZ;
@@ -50,45 +50,80 @@ function throwOut(ragdolls: RagdollSystem, cars: DeformableCar[], i: number): vo
   ragdolls.launch(e, cars);
 }
 
+/** Frames of a flight before the measured ones: the throw's own launch frames. */
+const LAUNCH_FRAMES = 4;
+/** Frames of a flight the allocation is read over, and the flights run first so the code is warm. */
+const MEASURED_FRAMES = 40;
+const WARM_FLIGHTS = 6;
+/** Vectors the control makes each frame: over 100 B each, so 1200 are more than the biggest bar. */
+const CONTROL_VECTORS = 1200;
+
+/**
+ * `thrown` drivers thrown out of the field's first cars. `kbPerFrame` flies them again from the launch and reads what the dummies allocate over `MEASURED_FRAMES` frames after
+ * `LAUNCH_FRAMES` (KB a frame, dead or alive; `extra` is more work each frame); `lowestTorso` is the lowest a torso reached in the frames it read.
+ */
+async function flightRig(thrown: number) {
+  const { cars, drive } = field();
+  const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+  drive(0);
+  await ragdolls.preload();
+  const dolls = ragdolls["dolls"];
+  let lowestTorso = Infinity;
+  const launch = (): void => {
+    ragdolls.reset();
+    drive(0);
+    for (let k = 0; k < thrown; k++) throwOut(ragdolls, cars, k);
+  };
+  const fly = (from: number, to: number, extra: () => void): void => {
+    for (let f = from; f < to; f++) {
+      drive((f + 1) * FRAME);
+      ragdolls.update(FRAME, cars, true, false, null);
+      extra();
+      if (f >= LAUNCH_FRAMES) for (let k = 0; k < thrown; k++) lowestTorso = Math.min(lowestTorso, dolls[k]!.cur[1]!);
+    }
+  };
+  const nothing = (): void => {};
+  for (let warm = 0; warm < WARM_FLIGHTS; warm++) {
+    launch();
+    fly(0, LAUNCH_FRAMES + MEASURED_FRAMES + 6, nothing);
+  }
+  lowestTorso = Infinity;
+  return {
+    dispose: () => ragdolls.dispose(),
+    lowestTorso: () => lowestTorso,
+    kbPerFrame: (extra: () => void = nothing): number => {
+      launch();
+      fly(0, LAUNCH_FRAMES, nothing);
+      return allocatedBytes(() => fly(LAUNCH_FRAMES, LAUNCH_FRAMES + MEASURED_FRAMES, extra)) / MEASURED_FRAMES / 1024;
+    },
+  };
+}
+
 const flightAllocCases = [
-  { it: "when one driver is thrown and flies for 40 frames, then the dummies allocate at most 75 KB of heap per frame", thrown: 1, boundKb: 75 },
-  { it: "when four drivers are thrown and fly for 40 frames, then the dummies allocate at most 125 KB of heap per frame", thrown: 4, boundKb: 125 },
+  { it: "when one driver is thrown and flies for 40 frames, then the dummies allocate at most 75 KB per frame", thrown: 1, boundKb: 75 },
+  { it: "when four drivers are thrown and fly for 40 frames, then the dummies allocate at most 125 KB per frame", thrown: 4, boundKb: 125 },
 ] as const;
 
 describe("given 32 cars driving around the middle of an open field and drivers thrown out of their windshields", () => {
   for (const testCase of flightAllocCases) {
     it(testCase.it, async () => {
-      const { cars, drive } = field();
-      const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-      drive(0);
-      await ragdolls.preload();
-      const run = (frames: number, perFrame: (f: number) => void) => {
-        ragdolls.reset();
-        drive(0);
-        for (let k = 0; k < testCase.thrown; k++) throwOut(ragdolls, cars, k);
-        for (let f = 0; f < frames; f++) {
-          drive((f + 1) * FRAME);
-          ragdolls.update(FRAME, cars, true, false, null);
-          perFrame(f);
-        }
-      };
-      for (let warm = 0; warm < 6; warm++) run(50, () => {});
-      const dolls = ragdolls["dolls"];
-      let grown = 0;
-      let lowestTorso = Infinity;
-      let before = process.memoryUsage().heapUsed;
-      run(44, (f) => {
-        const now = process.memoryUsage().heapUsed;
-        if (f >= 4) grown += Math.max(0, now - before);
-        before = now;
-        if (f >= 4) for (let k = 0; k < testCase.thrown; k++) lowestTorso = Math.min(lowestTorso, dolls[k]!.cur[1]!);
-      });
-      ragdolls.dispose();
-      assert.ok(lowestTorso > 1.5, `the dummies were down to ${lowestTorso.toFixed(2)} m: not a flight`);
-      const kb = grown / 40 / 1024;
-      assert.ok(kb <= testCase.boundKb, `${kb.toFixed(1)} KB per frame`);
+      const rig = await flightRig(testCase.thrown);
+      const kb = untilQuiet(() => rig.kbPerFrame(), testCase.boundKb);
+      rig.dispose();
+      assert.ok(rig.lowestTorso() > 1.5, `the dummies were down to ${rig.lowestTorso().toFixed(2)} m: not a flight`);
+      assert.ok(kb <= testCase.boundKb, `${kb.toFixed(1)} KB per frame > ${testCase.boundKb} in every flight for ${COMPILE_WAIT_S} s`);
     });
   }
+
+  it("when each frame of a flight also makes a vector hundreds of times over, then the allocation reads over the biggest bar", async () => {
+    const rig = await flightRig(1);
+    const kept: THREE.Vector3[] = [];
+    const kb = rig.kbPerFrame(() => {
+      for (let i = 0; i < CONTROL_VECTORS; i++) kept[i % 8] = new THREE.Vector3();
+    });
+    rig.dispose();
+    assert.ok(kb > Math.max(...flightAllocCases.map((c) => c.boundKb)), `${kb.toFixed(0)} KB per frame for ${CONTROL_VECTORS} vectors a frame: the measure sees nothing`);
+  });
 
   it("when a car comes at a dummy lying 40 m ahead of it at 25 m/s, then it strikes him and shoves him at least 3 m", async () => {
     const car = makeCar("shape", 0.32, 0.45);

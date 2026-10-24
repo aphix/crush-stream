@@ -89,7 +89,8 @@ export function clipCarToBarrier(
 
 /**
  * Per direction of `deepestIn`, sums over the overlap patch, each node weighted by its depth: the weight, the place in the world (x, z,
- * then height), and the container's outline normal (x, z) in its frame there.
+ * then height), and the container's outline normal (x, z) in its frame there; then the deepest node's depth and the second moments of
+ * (x, z) about the origin (xx, zz, xz), from which `satCars` reads the patch's width.
  */
 const F_W = 0;
 const F_X = 1;
@@ -98,9 +99,18 @@ const F_Y = 3;
 const F_NX = 4;
 const F_NZ = 5;
 const F_BEST = 6;
-const _inA = new Float64Array(7);
-const _inB = new Float64Array(7);
+const F_XX = 7;
+const F_ZZ = 8;
+const F_XZ = 9;
+const _inA = new Float64Array(10);
+const _inB = new Float64Array(10);
 const _grad = new Float64Array(2);
+
+/** The last `satCars` overlap's half width (m) along the contact's tangent, both cars' nodes together (reused): a broad flat contact is not a point, and the crush it feeds spreads over it (`feedOverlap`). */
+export const patch = { half: 0 };
+
+/** A uniform strip's half width in standard deviations of its length (√3). */
+const STRIP_HALF_PER_SIGMA = Math.sqrt(3);
 
 /** `a`'s frame into `b`'s, both full poses (`frameInto`): per axis of `b` (x, y, z), its offset and its x, y, z coefficients on a point of `a`'s. */
 const _ab = new Float64Array(12);
@@ -527,12 +537,17 @@ function addToPatch(found: Float64Array, eb: readonly number[], plan: Float32Arr
   SAMPLE[0] = bx;
   SAMPLE[1] = bz;
   outlineNormal(plan, style);
+  const wx = eb[12]! + eb[0]! * bx + eb[4]! * by + eb[8]! * bz;
+  const wz = eb[14]! + eb[2]! * bx + eb[6]! * by + eb[10]! * bz;
   found[F_W] += depth;
-  found[F_X] += depth * (eb[12]! + eb[0]! * bx + eb[4]! * by + eb[8]! * bz);
-  found[F_Z] += depth * (eb[14]! + eb[2]! * bx + eb[6]! * by + eb[10]! * bz);
+  found[F_X] += depth * wx;
+  found[F_Z] += depth * wz;
   found[F_Y] += depth * (eb[13]! + eb[1]! * bx + eb[5]! * by + eb[9]! * bz);
   found[F_NX] += depth * _grad[0]!;
   found[F_NZ] += depth * _grad[1]!;
+  found[F_XX] += depth * wx * wx;
+  found[F_ZZ] += depth * wz * wz;
+  found[F_XZ] += depth * wx * wz;
 }
 
 /** `_grad` ← the unit direction in which `plan` (a cage's plan distance field) grows fastest at frame (x, z): out of the outline; zero where it has none. */
@@ -565,7 +580,8 @@ function outlineNormal(plan: Float32Array, style: CageStyle): void {
  * Returns the depth (m) of the deeper side, negative for the gap while only within `look`, or null. The contact is the overlap patch
  * itself, both ways: `contactOut` is the depth-weighted centre of every covered outline node of either cage (the point the contact's
  * pressure acts at), `normalOut` the depth-weighted mean of the outline normals there, pointing b → a (turned to the side of the
- * centres where the two cross). Neither car's list order nor one corner node picks them. The cages are as of the last slice's sync.
+ * centres where the two cross). Neither car's list order nor one corner node picks them. `patch.half` is the patch's half width along the
+ * contact's tangent. The cages are as of the last slice's sync.
  */
 export function satCars(a: DeformableCar, b: DeformableCar, normalOut: THREE.Vector3, contactOut: THREE.Vector3, look = 0): number | null {
   const pa = a.group.position;
@@ -615,8 +631,14 @@ export function satCars(a: DeformableCar, b: DeformableCar, normalOut: THREE.Vec
   normalOut.x = nx;
   normalOut.y = 0;
   normalOut.z = nz;
-  contactOut.x = (_inA[F_X]! + _inB[F_X]!) / w;
+  const cx = (_inA[F_X]! + _inB[F_X]!) / w;
+  const cz = (_inA[F_Z]! + _inB[F_Z]!) / w;
+  contactOut.x = cx;
   contactOut.y = (_inA[F_Y]! + _inB[F_Y]!) / w;
-  contactOut.z = (_inA[F_Z]! + _inB[F_Z]!) / w;
+  contactOut.z = cz;
+  const vxx = (_inA[F_XX]! + _inB[F_XX]!) / w - cx * cx;
+  const vzz = (_inA[F_ZZ]! + _inB[F_ZZ]!) / w - cz * cz;
+  const vxz = (_inA[F_XZ]! + _inB[F_XZ]!) / w - cx * cz;
+  patch.half = STRIP_HALF_PER_SIGMA * Math.sqrt(Math.max(0, nz * nz * vxx - 2 * nx * nz * vxz + nx * nx * vzz));
   return Math.max(depthA, depthB) - look;
 }

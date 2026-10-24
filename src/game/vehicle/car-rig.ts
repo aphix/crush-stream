@@ -11,8 +11,9 @@ import type { FaceBands } from "../deform/load-crush.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { PLATFORM_CABIN, PLATFORM_DIMS, PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
 import { CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
-import { floorY, REAR_GLASS_BOW, wheelsOf, WINDSHIELD_BOW } from "./car-lines.ts";
-import { sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { floorY, REAR_GLASS_BOW, rockerAt, wheelsOf, WINDSHIELD_BOW } from "./car-lines.ts";
+import { makeBumperGeometry, sampleSlice, sectionPoints } from "./car-mesh.ts";
+import { bumperCorner } from "./car-bumper-corner.ts";
 import { PUSH_BAR_REACH } from "./car-materials.ts";
 
 type V3 = readonly [number, number, number];
@@ -248,6 +249,7 @@ function rigOf(style: BodyStyle, w: Warp, wheels: readonly V3[]): RigTables {
     massScale: CLASSES[STYLE_CLASS[style.id]].crashMass,
     archTop: P.archTop + (r - PLATFORM_TYRE.r) + arch,
     archPlant: P.archPlant + arch,
+    rockerTop: Math.max(...wheels.map((wheel) => rockerAt(wheel[2], style)), rockerAt(0, style)),
     roofClampY: P.roofClampY + (named(cages, "roof").min[1] - named(P.cages, "roof").min[1]),
     roofSkin: [roofRest[0], roofRest[1], roofZ + roof.dz(roofZ)],
     faceBands: bandsOf(w, cages, masses),
@@ -392,10 +394,10 @@ function buildFrame(style: BodyStyle): CarFrame {
   const underside = rows.filter((r) => !Number.isNaN(r[2]));
   const pan = panOf(style);
   const { belly, absent } = bellyOf(w, rows, pan, style);
-  // Each bumper's drawn bottom corner, swept back by its wrap.
-  const bumperCorners = ([[style.bumpers.front, 1], [style.bumpers.rear, -1]] as const).flatMap(([b, sign]) => {
-    const [fy, out] = b.fascia[b.fascia.length - 1]!;
-    return [-1, 1].flatMap((sx) => [sx * b.span, sign * (b.seat.z + out - b.wrap.back), b.seat.y + fy]);
+  // Each bumper's drawn bottom corner: the vertex its cage holds (`bumperCorner`).
+  const bumperCorners = ([[style.bumpers.front, true], [style.bumpers.rear, false]] as const).flatMap(([b, front]) => {
+    const { x, y, z } = bumperCorner(makeBumperGeometry(front, style));
+    return [-1, 1].flatMap((sx) => [sx * x, (front ? 1 : -1) * b.seat.z + z, b.seat.y + y]);
   });
   return {
     rig: rigOf(style, w, wheels),

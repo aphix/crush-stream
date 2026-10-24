@@ -15,17 +15,13 @@ import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_WORST_M, topGaps
  */
 const interiorThroughRoof =
   "the drawn interior (its headliner stands 1.09 m over the origin and does not follow the roof mass) pokes up through the roof the drop crushed, up to 0.115 m over the drawn roof on 352 cells, and the cage is the roof there: the cage carries the interior over a gone pane's opening only, because over the whole roof it takes stack-crush.test.ts to 6 of 8 (the bottom roof 0.384 m under three cars, its band 0.12-0.26 m); after the plan: make the drawn interior follow the roof's crush";
-const roofCornerHole =
-  "the cage's decimation loses the wagon's roof rear corners (|x| .50-.60, z -1.75..-1.90), so the surface there stands far under the drawn roof, which now reaches into the deck box; turns back on with rig-roof/rig-hole after the overhaul (CarRig)";
+const rearGlassGone =
+  "the wagon's rear glass shatters in the 2 m roof drop (its roof crushes at the rear), so the drawn top over its opening is the cargo floor (0.38-0.58 m) while the surface other cars stand on there is the cage's closed tail (z -2.11..-1.94) at 1.10 m: up 0.52 m at (+-0.48, -1.98); after the plan: the cage's tail opens where the rear glass is gone, as the drawn body's does";
 const edgeCliffs: readonly { key: string; part: string; measured: string; cause: string }[] = [
   { key: "sedan/rolled", part: "cabin", measured: "p95 0.062 (bar 0.05), worst 0.079 under (bar 0.10)", cause: interiorThroughRoof },
   { key: "pickup truck/rolled", part: "cabin", measured: "p95 0.064 (bar 0.05), worst 0.078 under (bar 0.10)", cause: interiorThroughRoof },
   { key: "monster pickup/rolled", part: "cabin", measured: "p95 0.064 (bar 0.05), worst 0.078 under (bar 0.10)", cause: interiorThroughRoof },
-  { key: "wagon/untouched", part: "deck", measured: "p95 0.044, worst 0.785 under (bar 0.10)", cause: roofCornerHole },
-  { key: "wagon/loaded", part: "deck", measured: "p95 0.038, worst 0.785 under (bar 0.10)", cause: roofCornerHole },
-  { key: "wagon/headon", part: "deck", measured: "p95 0.042, worst 0.701 under (bar 0.10)", cause: roofCornerHole },
-  { key: "wagon/rolled", part: "deck", measured: "p95 0.034, worst 0.746 under (bar 0.10)", cause: roofCornerHole },
-  { key: "wagon/airborne", part: "deck", measured: "p95 0.047, worst 0.295 under (bar 0.10), no surface over 17 of 504 cells", cause: roofCornerHole },
+  { key: "wagon/rolled", part: "deck", measured: "p95 0.154 (bar 0.05), worst 0.515 over (bar 0.10)", cause: rearGlassGone },
 ];
 
 const topCases = BODIES.flatMap((b) =>

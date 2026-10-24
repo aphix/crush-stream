@@ -335,6 +335,10 @@ export interface BodyStyle {
    * dome's flat top and its rolled side lip.
    */
   roofSection?: { crown: number; blend: number; squareFront?: number };
+  /** Cage only: the roof's rear corners keep their points in the cage's decimation (the rear end ring's two lips, the D-posts' heads). A roof that ends flat (no rear roll) would otherwise lose them to the keel apex and the cage's top there ends short of the drawn roof. Absent: decimated freely. */
+  cageRearCorners?: boolean;
+  /** The cage's rear header box's width (m), the span between the roof's rear corners; absent, the rear glass's top width plus `REAR_HEADER_MARGIN`. */
+  rearHeaderWidth?: number;
   /**
    * Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`).
    * `sideBow` (m): the pane bulges this far forward (z) at mid-height, none at its base and top: a convex side edge in side view; absent, straight.

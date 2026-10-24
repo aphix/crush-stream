@@ -18,14 +18,15 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import * as THREE from "three";
 import { ViewPort, alphaMask, composeShot, writePlate } from "./trace-core.mjs";
 import { iou, labelRegions, maskBox, round } from "./trace-metrics.mjs";
 import { refLayers, refPlate } from "./trace-ref.mjs";
 import { makeCamera, perspectiveSpec, project, solveCamera } from "./trace-camera.mjs";
 
-/** The references (git-ignored, survives a reboot). */
-export const REFS_DIR = "/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign";
+/** The references (git-ignored `.tmp/ModernCarDesign` at the repo root, survives a reboot). */
+export const REFS_DIR = fileURLToPath(new URL("../.tmp/ModernCarDesign", import.meta.url));
 /** Output pixels per reference pixel in the iso views (the lineup crops are ~400 px), and the blank border (share of the larger side). */
 const ISO_ZOOM = 2;
 const PAD_SHARE = 0.12;
