@@ -30,9 +30,11 @@ const FLEET: Fleet = [
 const FLANK_FLEET: Fleet = [...FLEET, ...VEHICLE_CLASS_IDS.filter((cls) => !FLEET.some((f) => f.cls === cls)).map((cls) => ({ style: CLASSES[cls].style, cls }))];
 /** The hubs of the tyres a car lying on its `left` or `right` flank stands on: with those gone it lies on its body. */
 const LOW_HUBS = { left: ["hubFL", "hubRL"], right: ["hubFR", "hubRR"] } as const;
-/** The attitudes a car is dropped in (pitch, yaw, roll about the car's own axes, radians): flat on its roof, on its left flank, on its right flank. */
+/** The attitudes a car is dropped in (pitch, yaw, roll about the car's own axes, radians): flat on its roof, on its roof nose down or up by 0.5 rad, on its left flank, on its right flank. */
 const ATTITUDE = {
   roof: [0, 0, Math.PI],
+  roofNoseDown: [0.5, 0, Math.PI],
+  roofNoseUp: [-0.5, 0, Math.PI],
   left: [0, 0, Math.PI / 2],
   right: [0, 0, -Math.PI / 2],
   wheels: [0, 0, 0],
@@ -57,8 +59,8 @@ const MASS_STILL_M = 1e-3;
 const TYRE_POINTS = makeWheelGeometry().getAttribute("position");
 /** A nose hit (m/s) hard enough to tear the hood off every fleet class but the monster, whose bay stays shut. */
 const HOOD_OFF_MPS = 40;
-/** The seats the wreck's rigid under-parts ride on the ground (`restOnGround`): the engine bay, the monster's frame and axles. */
-const GROUND_RIDERS: readonly number[] = [PART_KIND.engineBay, PART_KIND.ladderFrame, PART_KIND.axle];
+/** The seats that ride the wreck's ground (`restOnGround`): the cabin shell, the engine bay, the monster's frame and axles. */
+const GROUND_RIDERS: readonly number[] = [PART_KIND.interior, PART_KIND.engineBay, PART_KIND.ladderFrame, PART_KIND.axle];
 const _tyreAt = new THREE.Matrix4();
 const _tyreScale = new THREE.Vector3();
 
@@ -249,14 +251,14 @@ describe("given a monster that lost the two wheels on one side, dropped onto tha
   });
 });
 
-describe("given a car struck on the nose and dropped onto its roof or a flank on the flat pad, and left to rest", () => {
-  for (const { style, cls } of FLEET) {
-    it(`when it is a ${cls}, then every rigid under-part of it that shows (engine bay, frame, axles) stands out of the ground`, (t) => {
-      for (const attitude of ["roof", "left", "right"] as const) {
+describe("given a car struck on the nose and dropped onto its roof (flat, nose down or up) or a flank on the flat pad, and left to rest", () => {
+  for (const { style, cls } of FLANK_FLEET) {
+    it(`when it is a ${cls}, then every rigid under-part of it that shows (cabin shell, engine bay, frame, axles) stands out of the ground`, (t) => {
+      for (const attitude of ["roof", "roofNoseDown", "roofNoseUp", "left", "right"] as const) {
         const { lowest } = dropped(style, cls, attitude, 0.5, HOOD_OFF_MPS);
         const tag = `${cls} struck at ${HOOD_OFF_MPS} m/s and dropped on its ${attitude}`;
         t.diagnostic(`${tag}: lowest rigid under-part ${cm(lowest.kit)} over the ground`);
-        assert.ok(lowest.kit < Infinity, `${tag}: none of the engine bay, frame or axles shows, so nothing here could stand in the ground`);
+        assert.ok(lowest.kit < Infinity, `${tag}: none of the cabin shell, engine bay, frame or axles shows, so nothing here could stand in the ground`);
         assert.ok(lowest.kit > 0, `${tag}: a rigid under-part ${cm(-lowest.kit)} into the ground`);
       }
     });

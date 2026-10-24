@@ -820,6 +820,7 @@ export abstract class CarParts extends CarGlass {
     this.cabin.fit(this.deform);
     this.underbody?.fit(this.deform);
     this.cabin.squeezeUnderRoof(this.deform.massLocal("roof").y);
+    this.cabin.standOnGround();
   }
 
   /** Once a frame on a crashed car (`updateSkin`, after the skin): the parts' poses a step left pending are written first, door glass rides its door. */
