@@ -194,7 +194,7 @@ export interface CageStyle {
   readonly u0: number;
   readonly v0: number;
   readonly vertexCount: number;
-  /** Of `vertexCount`, the `heldCount` underside points `decimate` held over `CAGE_VERTICES`, from `heldFrom` on: a wreck's alone (`loadPoints`). */
+  /** Of `vertexCount`, the `heldCount` underside points `decimate` held over `CAGE_VERTICES`, from `heldFrom` on: the drawn rocker's lowest points between the belly's rows (`loadPoints` reads them as underside rows for an intact car, as hull points for a wreck). */
   readonly heldCount: number;
   readonly heldFrom: number;
   /**

@@ -101,7 +101,7 @@ export const _lift = new THREE.Vector3();
  * per call): the impulse `give` and `push` give and the part of it that stops closing, the speed `reach` reads, the closing the weight
  * brings (`weightClosing`) and the depth `bodyContact` takes.
  */
-export const _s = new Float64Array(7);
+export const _s = new Float64Array(9);
 export const S_J = 0;
 export const S_JD = 1;
 export const S_REACH = 2;
@@ -111,6 +111,9 @@ export const S_PEN = 4;
 export const S_POINT_REACH = 5;
 /** How deep (m) the deepest row a wreck at rest still lifts out of the world's ground stands in it (`solveRows`, this step's car). */
 export const S_LIFTING = 6;
+/** The loaded points `S_HELD_FROM` up to `S_HELD_TO` are an intact car's held underside points (`loadPoints`): the drawn rocker, read as the belly's rows are. */
+export const S_HELD_FROM = 7;
+export const S_HELD_TO = 8;
 export const N = Array.from({ length: CONTACTS }, () => new THREE.Vector3());
 /** Per contact: the direction its impulse and its lift go: up for a tyre on a face it can climb, else the face's normal. */
 export const DIR = Array.from({ length: CONTACTS }, () => UP);

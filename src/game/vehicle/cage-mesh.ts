@@ -76,8 +76,8 @@ function holdUnderside(px: Float64Array, py: Float64Array, pz: Float64Array, rep
  * vertex of the drawn mesh and takes that vertex's skin weights as they are. Vertices at one rest position are one
  * (the mesh splits them for its normals). `lofted`: the body loft's vertices, the first of the mesh, whose underside a body rests on
  * is held (`holdUnderside`), over the `target`: held within it, they cost the vertices that stood elsewhere (an upside-down sedan lost its
- * cowl's sides, rested on the drawn A-pillar's foot 7.3 cm in the ground). They come last in `source`, from `heldFrom` (`held` of them),
- * so a reader may leave them out where only a wreck stands on them. `keep` (per mesh vertex): 1 never collapses, within the `target`.
+ * cowl's sides, rested on the drawn A-pillar's foot 7.3 cm in the ground). They come last in `source`, from `heldFrom` (`held` of them), so a reader finds
+ * them as one run. `keep` (per mesh vertex): 1 never collapses, within the `target`.
  * Build-time only: allocates freely, runs once per style.
  */
 export function decimate(rest: Float32Array, index: ArrayLike<number>, group: Uint8Array, target: number, lofted = 0, keep?: Uint8Array): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array; held: number; heldFrom: number } {
