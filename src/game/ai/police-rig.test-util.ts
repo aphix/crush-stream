@@ -44,9 +44,14 @@ export function rig(units = 2, seed = 1, leadShare = 0.4, racers = 1) {
   const police = new PoliceBrain(track, new RaceBrain(track, racers), first, units, seed);
   const lead = track.length * leadShare;
   let time = 0;
+  let finishedAt = Number.NaN;
   const beat = () => {
-    police.update(time, BEAT, cars, hunt, lead, world);
+    police.update(Number.isNaN(finishedAt) ? time : finishedAt, BEAT, cars, hunt, lead, world);
     time += BEAT;
+  };
+  /** The race is over: its clock (what `update` is given) stands still from here while the beats go on. */
+  const finish = () => {
+    finishedAt = time;
   };
   const run = (seconds: number) => {
     for (let n = 0; n < seconds / BEAT; n++) beat();
@@ -69,5 +74,5 @@ export function rig(units = 2, seed = 1, leadShare = 0.4, racers = 1) {
   beat();
   assert.deepEqual(police.chasers(cars, []).map((c) => c.id), [first], "the first unit chases");
   assert.equal(stored.length, 0);
-  return { police, cars, hunt, stored, parks, knockedOut, camera, beat, run, sit, world, clock: () => time };
+  return { police, cars, hunt, stored, parks, knockedOut, camera, beat, run, sit, world, clock: () => time, finish };
 }
