@@ -350,9 +350,18 @@ describe("given the ramps with no slab between them, and a car that is or become
     assert.ok(rise <= 0, `a wreck falling at ${car.velocity.y.toFixed(1)} m/s rose ${rise.toFixed(3)} m in one slice (landed ${!car.airborne})`);
   });
 
-  it("when a car driven at 15 m/s up the ramp is struck so it slides off the lip, then it is wrecked, flies past the lip and lands, with no frame moving its height away from its speed", (t) => {
+/**
+ * The speed (m/s) the struck car is driven up the ramp at. The first ramp's 14.6° foot used to add 7 J/kg to a coasting car (the free energy a rigid tyre's
+ * straight-up lift keeps as plan speed), which carried the 15 m/s car 0.8 m further: past the descent ramp's lip onto the flat. With the lift's energy
+ * taken off its speed the car's tail meets the lip's back face 5 cm under its edge and the wreck rests high-centred on it, tail over the gap, nose down the
+ * slope, 15° off any ground (a real wall stop, not a defect). Where it comes down against the launch speed: 14.4 to 15.0 m/s on the lip, 15.2 m/s and up
+ * past it onto the flat (3 s after the launch it stands at z 8.2 m from 15.2 m/s, 8.3 m from 15.4, 9.1 m from 15.6).
+ */
+const STRUCK_SPEED = 15.4;
+
+  it(`when a car driven at ${STRUCK_SPEED} m/s up the ramp is struck so it slides off the lip, then it is wrecked, flies past the lip and lands, with no frame moving its height away from its speed`, (t) => {
     const { ramps, w, car } = scene(false);
-    car.spawnFacing(0, -14, 0, 15);
+    car.spawnFacing(0, -14, 0, STRUCK_SPEED);
     const p = car.group.position;
     const flags = watch([car]);
     let struck = false;
@@ -381,7 +390,7 @@ const NEAR_REST = 0.5;
 const AT_REST_TILT_DEGREES = 1.72;
   it("when that struck car has landed and come to rest, then it has no vertical speed and takes the pitch and roll of the ground it lies on", (t) => {
     const { ramps, w, car } = scene(false);
-    car.spawnFacing(0, -14, 0, 15);
+    car.spawnFacing(0, -14, 0, STRUCK_SPEED);
     const p = car.group.position;
     let struck = false;
     let stale = 0;

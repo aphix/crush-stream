@@ -182,3 +182,23 @@ describe(`given an undamaged sedan turning on the spot at ${TURN_RAD_S} rad/s, i
     assert.ok(closingAfter >= SWEEP_LEFT * closingBefore, `the door's deepest vertex still closes on the face at ${(-closingAfter).toFixed(2)} m/s (${(-closingBefore).toFixed(2)} before the slice)`);
   });
 });
+
+/** How far (m) the one body point a ramp's side meets stands in it: a tail a few cm in the back face, under the ramp's top. */
+const SIDE_POINT_IN = 0.02;
+
+/** How far (m) the slice shoves the turning wreck of `turningWreckAtFace` out of the face, the shove counting the drawn body at most `sunkCap` m in it. */
+function shovedBy(sunkCap: number): number {
+  const { car, face } = turningWreckAtFace();
+  const x0 = car.group.position.x;
+  wallBounce(car, face, END_NX, 0, PAST_END, H, false, false, Infinity, sunkCap);
+  return car.group.position.x - x0;
+}
+
+describe(`given the side-hit wreck turning at ${TURN_RAD_S} rad/s with its drawn door ${PAST_END * 100} cm through a solid's face, where the solid's side meets only a body point ${SIDE_POINT_IN * 100} cm in it (a ramp's back face: its plan box counts the whole drawn body, though the ramp's top is under the rest of it)`, () => {
+  it("when the slice shoves it out, then it moves no further than that point is in, where the plan box's whole depth moves it further", () => {
+    const whole = shovedBy(Infinity);
+    const capped = shovedBy(SIDE_POINT_IN);
+    assert.ok(whole > SIDE_POINT_IN, `the plan box's depth shoves it only ${whole.toFixed(4)} m: the staging cannot tell the cap from none`);
+    assert.ok(capped > 0 && capped <= SIDE_POINT_IN, `shoved ${capped.toFixed(4)} m for a point ${SIDE_POINT_IN} m in the face`);
+  });
+});

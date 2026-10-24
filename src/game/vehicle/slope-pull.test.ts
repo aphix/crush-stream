@@ -125,13 +125,11 @@ const MOUNT_READ_BEFORE_FOOT_M = 1;
 /** Most the contacts may give a coasting car over the mount (J/kg): 3 % of the least energy a row holds (31), a kink's own rounding (the monster at 31° and 6 m/s reads 0.62 on the first slices of the face, stiff springs storing none). */
 const MOUNT_GAIN_ROUNDING = 1;
 
-type MountCase = { cls: "sedan" | "monster"; deg: number; speed: number; todo?: string };
-
-const GENTLE_MOUNT_TODO = "a coasting sedan mounting a face of 10-20° keeps the plan speed its rigid tyre rows' straight-up push lifts it on (a thrust only the engine gives), and on springs so stiff that its tyres stand on rigid rows it is not pulled down the face at all; the hold of that energy is for faces over 26°: +2.12 and +2.73 J/kg at 10° (6 and 10 m/s), +3.42 and +4.76 at 15°, +4.23 and +42.84 at 20° (vx 9.3 m/s for the 12 m it climbs)";
+type MountCase = { cls: "sedan" | "monster"; deg: number; speed: number };
 
 const mountCases: MountCase[] = [
   ...(["sedan", "monster"] as const).flatMap((cls) => MOUNT_DEGREES.flatMap((deg) => MOUNT_SPEEDS.map((speed): MountCase => ({ cls, deg, speed })))),
-  ...GENTLE_MOUNT_DEGREES.flatMap((deg) => MOUNT_SPEEDS.map((speed): MountCase => ({ cls: "sedan", deg, speed, todo: GENTLE_MOUNT_TODO }))),
+  ...GENTLE_MOUNT_DEGREES.flatMap((deg) => MOUNT_SPEEDS.map((speed): MountCase => ({ cls: "sedan", deg, speed }))),
 ];
 
 /** The most energy (J/kg) `c`'s car holds over the one it had a metre before the face's foot, and how far past the foot it was then. */
@@ -165,7 +163,7 @@ describe("given a car coasting from flat road onto a wedge face, on springs so s
   afterEach(() => setGround(null));
 
   for (const c of mountCases) {
-    it(`when a ${c.cls} coasts onto the ${c.deg}° face at ${c.speed} m/s, then it never holds more energy than it came with`, c.todo === undefined ? {} : { todo: c.todo }, (t) => {
+    it(`when a ${c.cls} coasts onto the ${c.deg}° face at ${c.speed} m/s, then it never holds more energy than it came with`, (t) => {
       const { gain, start, at } = mountGain(c);
       t.diagnostic(`${c.cls} ${c.deg}° at ${c.speed} m/s: ${gain >= 0 ? "+" : ""}${gain.toFixed(2)} J/kg of the ${start.toFixed(1)} it came with, ${at.toFixed(1)} m past the foot`);
       assert.ok(gain <= MOUNT_GAIN_ROUNDING, `the car held ${gain.toFixed(2)} J/kg more than the ${start.toFixed(1)} it came with, ${at.toFixed(1)} m past the foot`);

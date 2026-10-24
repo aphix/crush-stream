@@ -52,12 +52,13 @@ function hardMarks(track: Track): string[] {
  * and when every AI's wheel was held to a pad player's 12 of lock a second (`applyAiDrive`, which the harness drives through as the game does) and the guard's push kept its side on a contact near the path's centre (`SIDE_BAND`): bug fixes, AI wheels flipped full lock in a step;
  * and when that side was kept only while the guard steers clear, not while it brakes: a bug fix, the push steered toward a car crossing the centre line,
  * and when every style's cabin cages came from its own panels (the fleet's hatchback, wagon, coupe and pickup meet each other on new contact shapes),
- * and when a tyre in its springs on a slope began to be pulled down it by the weight it carries, at any slope (a coasting or driven car on rally's and stunt's grades met a different pull; oval is flat and keeps its marks).
+ * and when a tyre in its springs on a slope began to be pulled down it by the weight it carries, at any slope (a coasting or driven car on rally's and stunt's grades met a different pull; oval is flat and keeps its marks),
+ * and when a coasting car's rigid tyre rows' straight-up lift came off its plan speed instead of adding to it (stunt's cars 0 and 1 between thinks 300 and 600: 6c1aa909 -> 480dfde1 and 27444265 -> 1bbd006a; the other 14 marks, and oval's and rally's, stand).
  */
 const HARD_MARKS: Record<string, string[]> = {
   oval: ["e9df8473", "7e9593ab", "6b5fc308", "9be8ec8e", "1da391b9", "15cb62d5", "b81974e2", "f9f01605", "1eb60b86", "92a70774", "5aed2cd0", "ccaba551", "c3295f1d", "cd39d90a", "7cb6e26c", "52acf03f"],
   rally: ["da61bb0d", "3abf139b", "9c70cadc", "511405a1", "6762bfe2", "31533273", "f9db9095", "f121f1c9", "dee3e590", "c3915fa0", "1ee5026a", "c898f223", "7b7c4918", "1951ebc4", "9a15bef2", "53aa8b5c"],
-  stunt: ["53229d9d", "6c1aa909", "1e34a67d", "27444265", "bada6771", "bbdc1d8d", "bcf0675f", "6eb7b5d9", "9c3ef3c", "ed928c18", "ce00fdf1", "70c9b6e6", "62ebb384", "b05a5ec9", "36e8f114", "d6982bc7"],
+  stunt: ["53229d9d", "480dfde1", "1e34a67d", "1bbd006a", "bada6771", "bbdc1d8d", "bcf0675f", "6eb7b5d9", "9c3ef3c", "ed928c18", "ce00fdf1", "70c9b6e6", "62ebb384", "b05a5ec9", "36e8f114", "d6982bc7"],
 };
 
 describe("given 8 clean AI cars (aggression 0) on the grid of the oval", () => {

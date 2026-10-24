@@ -361,7 +361,7 @@ export function sideContact(car: DeformableCar, s: Surface, hits: PropHits, dt: 
   box.hardness = s.p[o + PR_HARD]!;
   const v = car.velocity;
   const closing = Math.max(0, -(v.x * nx + v.z * nz));
-  wallBounce(car, box, nx, nz, Math.min(_side.depth + SIDE_PUSH_SKIN, SIDE_PUSH_SPEED * dt), dt, false);
+  wallBounce(car, box, nx, nz, Math.min(_side.depth + SIDE_PUSH_SKIN, SIDE_PUSH_SPEED * dt), dt, false, false, Infinity, _side.depth + SIDE_PUSH_SKIN);
   car.deform.notifyContact();
   hits.wall(s.p[o + PR_ID]!, car.slot, closing, _side.x, _side.z, nx, nz);
   return true;
