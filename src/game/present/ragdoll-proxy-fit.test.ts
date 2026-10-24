@@ -42,9 +42,6 @@ const noseFaceUnderLeaf =
 /** The pickup's airborne deck row (25°): the fitter's one leaf over the bed floor and the cab's rear wall, a cut or leaf budget, not the cage. */
 const bedFrontLeaf =
   "CarRig: a dummy-proxy leaf spans the bed floor (0.80) and the cab's rear wall at the bed front, airborne 25°: deck worst +0.12 m at (0.43, -1.08..-1.18), up .072 before the door/C-post step; the fitter's cut or leaf budget, not the door data";
-/** The wagon's rolled deck row: the rear glass is gone, the cage's tail opens to the cargo floor, and the drawn D-posts stand at the opening's edge, inside the fitter's rim. */
-const dPostAtOpenTail =
-  "deck worst -0.18 m under the drawn top at (+-0.57, -1.88), p95 0.013, the rest within 0.08 m: the wagon's rear glass is gone after the roof drop and the cage's tail opens down to the cargo floor (0.38), where the drawn D-posts stand 1.28 m at the opening's edge; their cage nodes (x +-0.55..0.60, 1.09-1.23 m) lie 3-9 cm inside the plan's outline, in the fitter's rim (`RIM` 0.1 m), and a rim node over its leaf's inside top is excluded from the leaf's spread (`counts`), so no cut splits the posts off the leaf over the row (x -0.67..0.68, z -1.92..-1.87), which stands at the floor's 0.395; after the plan: the fitter takes a post at an opened tail's edge as a surface of its own";
 const todoCause: Record<string, string> = { cabin: interiorThroughRoof, hood: noseFaceUnderLeaf };
 
 const proxyCases = BODIES.flatMap((b) =>
@@ -58,11 +55,10 @@ const proxyCases = BODIES.flatMap((b) =>
     /** The parts of this row held to the bars as a todo (`todoCause`, or the row's own `todoCauses`), the others as plain tests. */
     todoParts: [
       ...(s.id === "rolled" && (b.style === "pickup" || b.style === "monster") ? ["cabin"] : s.id === "headon" && b.cls !== "monster" && b.style !== "sedan" ? ["hood"] : []),
-      ...((s.id === "airborne" && b.style === "pickup") || (s.id === "rolled" && b.style === "wagon") ? ["deck"] : []),
+      ...(s.id === "airborne" && b.style === "pickup" ? ["deck"] : []),
     ],
     todoCauses: {
       ...(b.style === "pickup" && s.id === "airborne" ? { deck: bedFrontLeaf } : {}),
-      ...(b.style === "wagon" && s.id === "rolled" ? { deck: dPostAtOpenTail } : {}),
     } as Partial<Record<string, string>>,
   })),
 );

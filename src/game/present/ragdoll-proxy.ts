@@ -151,13 +151,25 @@ export class ProxyFitter {
    * Whether node `n` counts in leaf `k`'s spread: one the leaf holds that is inside the rim, or in it and no more than `RIM_DROP`
    * under the inside's highest nor `LEAF_RANGE` over it (a crater's wall, not the edge rolling away or a stray vertex), or the foot
    * of a wall (an outline node more than `CLIFF` under a neighbour: a crushed nose's face, not the slope of a bed's tailgate), or
+   * the head of one (a rim node over the inside that a neighbour stands beside at its height: a post, `standsWith`), or
    * any it holds when it has none inside the rim (a stray row along an outline, which a cut never splits off a leaf with an inside).
    */
   private counts(k: number, f: CageFields, n: number): boolean {
     if (this.side[n] !== this.roof[k]! + 1) return false;
     if (this.rim[k] === 1 || this.plan[n]! <= -RIM || (f.top[n]! >= this.floor[k]! && f.top[n]! <= this.ceil[k]!)) return true;
+    if (f.top[n]! > this.ceil[k]! && this.standsWith(k, f, n)) return true;
     if (f.covered[n - 1] !== 0 && f.covered[n + 1] !== 0 && f.covered[n - this.nu] !== 0 && f.covered[n + this.nu] !== 0) return false;
     return this.under(k, f, n, n - 1) || this.under(k, f, n, n + 1) || this.under(k, f, n, n - this.nu) || this.under(k, f, n, n + this.nu);
+  }
+
+  /** Whether a node beside `n` (leaf `k`'s, over its inside) stands within `LEAF_RANGE` of `n`'s top: a wall or a post of two nodes, not a lone vertex. */
+  private standsWith(k: number, f: CageFields, n: number): boolean {
+    return this.beside(k, f, n, n - 1) || this.beside(k, f, n, n + 1) || this.beside(k, f, n, n - this.nu) || this.beside(k, f, n, n + this.nu);
+  }
+
+  /** Whether node `m` is one leaf `k` holds, over its inside, and within `LEAF_RANGE` of node `n`'s top. */
+  private beside(k: number, f: CageFields, n: number, m: number): boolean {
+    return m >= 0 && m < f.top.length && this.side[m] === this.roof[k]! + 1 && f.top[m]! > this.ceil[k]! && Math.abs(f.top[m]! - f.top[n]!) <= LEAF_RANGE;
   }
 
   /** Whether node `n` lies more than `CLIFF` under node `m`, which leaf `k` holds. */
@@ -223,8 +235,8 @@ export class ProxyFitter {
         if (i > ci1) ci1 = i;
         if (j < cj0) cj0 = j;
         if (j > cj1) cj1 = j;
-        // A node counted under the floor is a wall's foot (`counts`): a surface of its own, which a cut may split off.
-        const inside = plan[n]! <= -RIM || (glassNode[n] === 0 && y < floor) ? 1 : 0;
+        // A node counted under the floor is a wall's foot, one counted over the ceiling its head (`counts`): a surface of its own, which a cut may split off.
+        const inside = plan[n]! <= -RIM || (glassNode[n] === 0 && (y < floor || y > this.ceil[k]!)) ? 1 : 0;
         for (let axis = 0; axis < 2; axis++) {
           const o = base + (axis * LINES + (axis === 0 ? i : j)) * MOMENTS;
           mom[o]!++;
