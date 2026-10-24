@@ -1,8 +1,9 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import * as THREE from "three";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { stepFree } from "./car-air.ts";
-import { SPRINGS } from "./car-suspension.ts";
+import { droop, SPRINGS } from "./car-suspension.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
 import { layOnWedge, RAD, stepSlices, Wedge } from "./wedge.test-util.ts";
 import { setGround } from "../world/ground.ts";
@@ -84,6 +85,68 @@ describe("given a car let down onto flat ground from above its rest ride", () =>
     car.group.position.y = 0.08;
     stepSlices(car, 0.05, 144);
     assert.ok(car.velocity.y < -0.01, `vertical speed ${car.velocity.y.toFixed(4)} m/s`);
+  });
+});
+
+describe("given a monster let down onto flat ground, on the springs of a heavy truck (Monster Jam: ζ 0.35-0.5, one or two cycles to settle)", () => {
+  const DROP_M = 0.3;
+  const TILT_DEG = 5;
+  const LAND_S = 4;
+  const LAND_HZ = 144;
+  const SWING_M = 0.005;
+  const SWING_DEG = 0.3;
+  const SETTLE_AFTER_TOUCH_S = 1.5;
+  const ZETA_BAND = { min: 0.4, max: 0.7 };
+
+  /** The turning points of `series` standing more than `floor` from level, in order. */
+  function turningPoints(series: readonly number[], floor: number): number[] {
+    const out: number[] = [];
+    for (let i = 1; i < series.length - 1; i++) {
+      const v = series[i]!;
+      if (Math.abs(v) > floor && ((v > series[i - 1]! && v >= series[i + 1]!) || (v < series[i - 1]! && v <= series[i + 1]!))) out.push(v);
+    }
+    return out;
+  }
+
+  /** The damping ratio a first swing and its rebound (opposite sign, `first` the larger) show: the log decrement of half a cycle. */
+  function dampingRatio(first: number, rebound: number): number {
+    const decrement = -Math.log(Math.abs(rebound / first));
+    return decrement / Math.sqrt(Math.PI * Math.PI + decrement * decrement);
+  }
+
+  function letDown(tiltDeg: number): { ride: number[]; pitch: number[] } {
+    const car = makeCar("monster");
+    car.spawnFacing(0, 0, 0, 0);
+    car.parked = true;
+    car.group.rotation.set(tiltDeg * RAD, 0, 0, "YXZ");
+    car.group.position.y = DROP_M;
+    const ride: number[] = [];
+    const pitch: number[] = [];
+    for (let s = 0; s < LAND_S * LAND_HZ; s++) {
+      stepFree(car, 1 / LAND_HZ);
+      ride.push(car.group.position.y);
+      pitch.push(new THREE.Euler().setFromQuaternion(car.group.quaternion, "YXZ").x / RAD);
+    }
+    return { ride, pitch };
+  }
+
+  it(`when it is let down ${DROP_M} m up, then its ride overshoots rest by over ${SWING_M * 1000} mm at most once, swings with a damping ratio of ${ZETA_BAND.min}-${ZETA_BAND.max}, and rests within ${SWING_M * 1000} mm ${SETTLE_AFTER_TOUCH_S} s after it touches`, (t) => {
+    const { ride } = letDown(0);
+    const points = turningPoints(ride, SWING_M);
+    const touchedAt = ride.findIndex((y) => y <= droop("monster"));
+    let unsettled = ride.length - 1;
+    while (unsettled > 0 && Math.abs(ride[unsettled]!) <= SWING_M) unsettled--;
+    assert.ok(points.length - 1 <= 1, `overshoots ${points.slice(1).map((p) => (p * 1000).toFixed(1)).join(", ")} mm after a ${(points[0]! * 1000).toFixed(0)} mm compression`);
+    const zeta = dampingRatio(points[0]!, points[1] ?? SWING_M);
+    t.diagnostic(`let down ${DROP_M} m: turns ${points.map((p) => (p * 1000).toFixed(1)).join(", ")} mm, damping ratio ${zeta.toFixed(2)}, within ${SWING_M * 1000} mm ${((unsettled - touchedAt) / LAND_HZ).toFixed(2)} s after touching`);
+    assert.ok(zeta >= ZETA_BAND.min && zeta <= ZETA_BAND.max, `damping ratio ${zeta.toFixed(2)}`);
+    assert.ok((unsettled - touchedAt) / LAND_HZ <= SETTLE_AFTER_TOUCH_S, `${(((unsettled - touchedAt) / LAND_HZ)).toFixed(2)} s after touching it is still ${(Math.abs(ride[unsettled]!) * 1000).toFixed(1)} mm from rest`);
+  });
+
+  it(`when it is let down ${DROP_M} m up pitched ${TILT_DEG}°, then its pitch swings back past level over ${SWING_DEG}° at most once`, () => {
+    const { pitch } = letDown(TILT_DEG);
+    const points = turningPoints(pitch, SWING_DEG);
+    assert.ok(points.length - 1 <= 1, `pitch turns at ${points.map((p) => p.toFixed(2)).join(", ")}°`);
   });
 });
 

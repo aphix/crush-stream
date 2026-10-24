@@ -46,6 +46,8 @@ const TAU = 0.06;
 const A_MAX = 80;
 const JUMP = 100;
 const RAD = Math.PI / 180;
+/** Damping ratio of the body's squat, dive and lean on its springs: near critical, so it settles onto a load over a few tenths of a second without ringing. */
+const LOAD_ZETA = 0.7;
 
 /**
  * `load` (m, a spring offset) that leans the body against the road's own slope `slope` (sin of its angle, + nose / +x
@@ -78,6 +80,11 @@ export class LoadTransfer {
   private gear = 0;
   private age = Infinity;
   private dir = 0;
+  /** The body's pitch and roll load (m of wheel offset) and its rate (m/s): the springs' quasi-static load, taken through the body's own spring and damper. */
+  private squat = 0;
+  private squatRate = 0;
+  private lean = 0;
+  private leanRate = 0;
 
   private readonly frame: CarFrame;
 
@@ -91,6 +98,10 @@ export class LoadTransfer {
     this.az = 0;
     this.gear = 0;
     this.age = Infinity;
+    this.squat = 0;
+    this.squatRate = 0;
+    this.lean = 0;
+    this.leanRate = 0;
     this.target.fill(0);
   }
 
@@ -112,6 +123,10 @@ export class LoadTransfer {
       this.vz = 0;
       this.ax = 0;
       this.az = 0;
+      this.squat = 0;
+      this.squatRate = 0;
+      this.lean = 0;
+      this.leanRate = 0;
       this.gear = 0;
       return;
     }
@@ -138,8 +153,15 @@ export class LoadTransfer {
     const { halfBase, halfTrack } = this.frame;
     const capP = halfBase * Math.tan(c.pitch * RAD);
     const capR = halfTrack * Math.tan(c.roll * RAD * (1 + LOAD_FEEL.driftLean * slide));
-    const p = alongRoad(capP * tanh((along * cg) / (halfBase * k * capP)), e[9]!, c.pitch * RAD) + this.kick(dt);
-    const r = alongRoad(capR * tanh((side * cg) / (halfTrack * k * capR)), e[1]!, c.roll * RAD);
+    const squatLoad = alongRoad(capP * tanh((along * cg) / (halfBase * k * capP)), e[9]!, c.pitch * RAD);
+    const leanLoad = alongRoad(capR * tanh((side * cg) / (halfTrack * k * capR)), e[1]!, c.roll * RAD);
+    const damping = 2 * LOAD_ZETA * Math.sqrt(k);
+    this.squatRate += (k * (squatLoad - this.squat) - damping * this.squatRate) * dt;
+    this.squat += this.squatRate * dt;
+    this.leanRate += (k * (leanLoad - this.lean) - damping * this.leanRate) * dt;
+    this.lean += this.leanRate * dt;
+    const p = this.squat + this.kick(dt);
+    const r = this.lean;
     // Front and the +x side rise under +along and +side; the rear and the −x side sink.
     this.target[0] = p - r;
     this.target[1] = p + r;

@@ -122,6 +122,25 @@ describe("given a monster whose tyres alone meet the range's slab", () => {
   });
 });
 
+describe("given a sedan and a monster that meet the range's slab and a stucco wall at the same speed", () => {
+  const HOLD_MPS = CLASSES.monster.hubHoldMps;
+  const TEARS_SEDAN_MPS = 20;
+  const OVER_HOLD_MPS = HOLD_MPS + 6;
+
+  for (const target of ["barrier", "stucco"] as const) {
+    it(`when they meet the ${target} at ${TEARS_SEDAN_MPS} m/s, then the sedan loses a wheel and the monster, whose hubs hold to ${HOLD_MPS} m/s, keeps all four`, () => {
+      const [sedan] = strike(target, "sedan", TEARS_SEDAN_MPS);
+      const [monster] = strike(target, "monster", TEARS_SEDAN_MPS);
+      assert.ok(sedan!.wheels < 4 && monster!.wheels === 4, `sedan ${JSON.stringify(sedan)}, monster ${JSON.stringify(monster)}`);
+    });
+
+    it(`when the monster meets the ${target} at ${OVER_HOLD_MPS} m/s, over the speed its hubs hold to, then a wheel comes off`, () => {
+      const [monster] = strike(target, "monster", OVER_HOLD_MPS);
+      assert.ok(monster!.wheels < 4, JSON.stringify(monster));
+    });
+  }
+});
+
 /**
  * A tyre meets a face at both corners of each edge of its tread and, where an edge's corners read nothing, between them (`readTyreSides`): a wall
  * thinner than the tyre is long stands between its corners while the tyre straddles it, and the rear pair rolled through the oval's.
