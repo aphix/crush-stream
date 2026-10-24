@@ -29,6 +29,10 @@ const APPROACH_M = 1.5;
 const WALK_BACK_LIMIT_S = 45;
 /** The failure message lists the cars within this many metres of him. */
 const NEAR_REPORT_M = 8;
+/** The fleet's crash loop: car 0 counts as stopped under this speed (m/s), checked every step (s), for at most this long (sim s). */
+const LOOP_STOPPED_MPS = 0.2;
+const LOOP_STEP_S = 0.25;
+const LOOP_STOPS_WITHIN_S = 40;
 
 const _forward = new THREE.Vector3();
 const _spot = new THREE.Vector3();
@@ -47,6 +51,7 @@ export class OnFootRig {
     Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
     await engine.ready;
     engine.fadeScenes = false;
+    engine.autoSlomo = false;
     let tick = 0;
     Object.assign(engine.pace, { now: () => (tick += 0.001) });
     await engine["ragdolls"].preload();
@@ -106,11 +111,38 @@ export class OnFootRig {
     car.group.visible = true;
   }
 
+  /**
+   * The fleet's own loop as a player meets it, slow motion and all: the scene rolled again from `seed` (`engine.reset()`, which launches the cars at each other),
+   * the seat on car 0, and the engine run until car 0 has stopped in the crash (the loop's slow motion makes that 5 to 20 s of wall time). The seeds are the loop's;
+   * each rolls the same crash. `normalTime` ends it.
+   */
+  stoppedInFleetLoop(seed: number): DeformableCar {
+    this.engine.autoSlomo = true;
+    this.engine["pinnedSeed"] = seed;
+    this.engine.reset();
+    this.engine["pinnedSeed"] = null;
+    this.sit(0);
+    const car = this.cars()[0]!;
+    for (let t = 0; t < LOOP_STOPS_WITHIN_S && car.velocity.length() > LOOP_STOPPED_MPS; t += LOOP_STEP_S) this.run(LOOP_STEP_S);
+    assert.ok(car.velocity.length() <= LOOP_STOPPED_MPS, `car 0 stopped in the loop of seed ${seed}: ${car.velocity.length().toFixed(2)} m/s`);
+    return car;
+  }
+
+  /** Time at its own pace, and the engine's automatic slow motion off: a crash earlier in the file does not stretch a later row's seconds. */
+  normalTime(): void {
+    const clock = this.engine["clock"];
+    this.engine.autoSlomo = false;
+    clock.userTimeScale = null;
+    clock.targetScale = 1;
+    clock.timeScale = 1;
+    clock.phase = "approach";
+  }
+
   /** Enter in the driving seat, then the climb: he stands on foot beside the door. */
   getOut(): void {
     this.press("Enter");
     this.run(CLIMB_OUT_S);
-    assert.equal(this.phase(), "onFoot", "the climb out is over");
+    assert.equal(this.phase(), "onFoot", `the climb out is over (he was told: ${this.engine["onFoot"].flow.refusal})`);
   }
 
   /** A point on the level, `out` m further out from `car`'s driver door (away from its middle) and `along` m ahead of it: somewhere to walk to that is not through the car. */

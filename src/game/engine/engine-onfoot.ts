@@ -135,14 +135,21 @@ export class OnFootDirector {
     else if (step === "enterStarted") this.beginEnter();
   }
 
+  /** The car he sits in and may leave: the seat is driving it and its driver is still in it (a thrown-out one has nobody to get out). Null otherwise. */
+  private carAtWheel(): DeformableCar | null {
+    const { seat } = this.host;
+    const car = this.host.cars()[seat.carIndex];
+    return seat.mode === "drive" && car && car.driverOut === null ? car : null;
+  }
+
   /** What the flow needs to know: in the driving seat, the car and whether its door has room; on foot, whether his car is in reach. Null while the seat is not his to leave. */
   private senseWorld(): OnFootSense | null {
     const { seat, ragdolls } = this.host;
     const cars = this.host.cars();
     const sense = this.sense;
     if (this.flow.phase === "inCar") {
-      const car = cars[seat.carIndex];
-      if (seat.mode !== "drive" || !car || car.driverOut !== null) return null;
+      const car = this.carAtWheel();
+      if (car === null) return null;
       sense.car = seat.carIndex;
       sense.speed = car.velocity.length();
       sense.doorBlocked = doorBlocked(cars, car, ragdolls.poles);
@@ -279,6 +286,6 @@ export class OnFootDirector {
     if (this.refusalLeft > 0 && this.refusal !== null && this.refusal !== "busy") return REFUSAL_TEXT[this.refusal];
     if (!this.host.available()) return null;
     if (this.flow.phase === "onFoot") return this.reach ? "Enter or B: get in" : REFUSAL_TEXT.noCarInReach;
-    return this.host.seat.mode === "drive" ? "Enter or B: get out" : null;
+    return this.carAtWheel() !== null ? "Enter or B: get out" : null;
   }
 }
