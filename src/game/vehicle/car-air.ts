@@ -1042,22 +1042,24 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     _s[S_JD] = ASK[c]! - Math.min(ASK[c]!, REST[c]!);
     give(c, v, w, q, UP, surf);
   }
-  // The tyres in their springs push straight up, so the world's face under them leaves the body its gravity along it, each tyre's share
-  // by the weight it carries: it slows a car uphill and speeds it downhill. Before the passes, so a gripping tyre holds it in the slice.
-  // Where the passes' grip holds the tyre (a car not driven: its tyres grip both ways), that push is the face's on the tread and acts
-  // there, as the grip holding it does: pushed at the centre, the grip at the tread rolled the body, and a monster parked across a 10°
-  // face rolled to 6.9° and crept back at 0.9°/s, its origin sinking 3.6 mm after its springs had settled. A driven car's drive owns
-  // its travel along the ground, so its push stays at the centre.
+  // The tyres in their springs push straight up, so the world's face leaves the body its gravity along it: each tyre's share of the weight
+  // the springs on the world carry (not a spring's push, which the tread's cap holds under it on a steep face; not gated on the tread's
+  // reach, which reads 0 on a face mounted at speed). Before the passes, so a gripping tyre holds it in the slice.
+  // Where the grip holds the tyre (a car not driven) the push acts at the tread: at the centre it rolled a monster parked across a 10° face
+  // to 6.9°. A driven car's drive owns its travel along the ground, so its push stays at the centre.
+  let carried = 0;
+  for (let c = 0; c < tyres; c++) if (SOFT[c] && OWN[c]! < 0) carried += SHARE[c]!;
   for (let c = 0; c < tyres; c++) {
-    if (!rolling || !SOFT[c] || OWN[c]! >= 0) continue;
+    if (!SOFT[c] || OWN[c]! >= 0) continue;
+    const weight = (SHARE[c]! / carried) * G * dt;
     if (driven) {
-      v.x += ASK[c]! * N[c]!.y * N[c]!.x;
-      v.z += ASK[c]! * N[c]!.y * N[c]!.z;
+      v.x += weight * N[c]!.y * N[c]!.x;
+      v.z += weight * N[c]!.y * N[c]!.z;
       continue;
     }
     const along = hypot2(N[c]!.x, N[c]!.z);
     if (along > 0) {
-      _s[S_J] = ASK[c]! * N[c]!.y * along;
+      _s[S_J] = weight * N[c]!.y * along;
       push(v, w, q, R[c]!, _vp.set(N[c]!.x / along, 0, N[c]!.z / along));
     }
   }
