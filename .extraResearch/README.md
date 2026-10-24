@@ -54,6 +54,9 @@ Treat model-written prose as leads, not facts; cite the listed sources.
 | `perplexity/2026-10-23-monster-truck-wheel-separation.md` | Monster Jam wheel loss: no public frequency or teardown data; one documented case was a sheared six-bolt wheel restraint; planetary hubs from heavy military/commercial axles; no published hub/stud ratings (CarMonsterRide) |
 | `perplexity/2026-10-23-passenger-car-wheel-separation.md` | Sedan suspension failure loads (engineering-order estimates): ball joint 25–60 kN, control arm 30–80 kN, knuckle 50–120 kN, tie rods 15–45 kN; IIHS small overlap 64 km/h, 25 %; no detachment rate published (CarMonsterRide) |
 | `perplexity/2026-10-23-monster-truck-vs-sedan-wheel-mass.md` | Monster Jam tyre ~211 kg, tyre+wheel ~293 kg, with planetary hub ~350–410 kg per corner, gross ~5,443 kg (3.6× a 1,500 kg sedan); sedan wheel+tyre 16–25 kg, unsprung ~40 kg per corner (CarMonsterRide) |
+| `perplexity/2026-10-23-soft-body-settle-rest-detection.md` | How soft-body/shape-matching engines end spring-back after a hit: damping dissipates it, plastic yield resets the rest shape, sleep on low residual motion; no fixed post-impact clock (roof settle, CarRig) |
+| `perplexity/2026-10-23-crash-contact-patch-force-distribution.md` | Distributing crush force over a contact patch: per-element penetration × effective area, pressure laws (linear/Hertz), combined compliance, action–reaction pairs conserving momentum (CarCrushFeed) |
+| `perplexity/2026-10-23-vehicle-bump-stop-landing-damping.md` | Bump stops for games: progressive engagement, rate-limited/position-dependent damping, hysteresis, clamping so a landing isn't a dead stop (CarStackCrush8, CarCrest) |
 
 ## Papers (`papers/`)
 
