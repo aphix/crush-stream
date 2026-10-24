@@ -848,8 +848,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     SLOT[n] = surf.slot(own, N[n]!, false, q, FOLLOW[n]!);
     // How far past what holds it the point is: a tyre's springs and their full travel.
     const sink = pen * N[n]!.y - stop;
-    // A tyre's springs run along the body's up: on a floor its flank lies flat on (a car on its side) they are not under it and the contact is rigid.
-    SOFT[n] = sink < 0 && (N[n]!.y < CLIMB_NY || ((notFlat >> i) & 1) === 1);
+    SOFT[n] = sink < 0;
     GAPV[n] = 0;
     SINK[n] = sink;
     PRESS[n] = pen;
@@ -862,6 +861,11 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   }
   const tyres = n;
   if (body.wreck && tyres === 4) wreckShares(frame);
+  // A car lying flat on its side stands on the tyres its flank is down on, and they alone carry it: each spring holds its part of the whole weight, not a
+  // quarter of it (the springs sank under the other quarters up to their full stroke: a monster on its flank 24.8 cm into the ground).
+  let flank = 0;
+  for (let c = 0; c < tyres; c++) if (N[c]!.y >= CLIMB_NY && ((notFlat >> ROW_WHEEL[c]!) & 1) === 0) flank++;
+  if (flank === tyres && tyres > 0) for (let c = 0; c < tyres; c++) SHARE[c] = 1 / tyres;
   n = readTyreSides(car, n, sp.travel);
   const tyreSides = n;
   // A point that stays higher than the static surface anywhere within its slice's plan travel, by its descent over the slice and a

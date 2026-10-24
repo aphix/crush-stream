@@ -7,6 +7,8 @@ import { rasterise } from "./cage-fields.ts";
 import { IMPRINT_NONE } from "../deform/load-crush.ts";
 import { BODIES, buildCar, carInState, drawnField, drawnTriangles, STATES, stepFrames, TOP_P95_M, TOP_WORST_M, topGapsOff, topParts } from "./drawn-body.test-util.ts";
 import { makeBumperGeometry } from "./car-mesh.ts";
+import { CAR_STYLE_IDS } from "./car-variants.ts";
+import { STYLE_CLASS } from "./vehicle-classes.ts";
 import { cageLift } from "./car-cage-rig.ts";
 import { PUSH_BAR_REACH } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
@@ -164,6 +166,28 @@ describe("given the cage's vertex budget", () => {
     assert.ok(triCount - partTris >= 150 && triCount - partTris <= 330 + 2 * (heldCount + kept), `${triCount - partTris} hull triangles`);
     assert.ok(parts > 0 && parts <= CAGE_PART_VERTICES && partTris <= 2 * CAGE_PART_VERTICES, `${parts} part vertices, ${partTris} triangles`);
   });
+});
+
+/** The bumper corners are `frame.hullUnder`'s last four rows (x, z, height). */
+const BUMPER_CORNER_ROWS = 4;
+
+describe("given every body style's cage and the bottom corners of its drawn bumpers (`frame.hullUnder`'s last four rows)", () => {
+  for (const id of CAR_STYLE_IDS) {
+    it(`when a ${id}'s corners are measured to its nearest cage vertex, then each is within the cage fit's ${TOP_P95_M * 100} cm, as only vertices collide`, (t) => {
+      const car = carInState("untouched", id, STYLE_CLASS[id]);
+      const { rest, vertexCount } = cageOf(car).style;
+      const under = car.frame.hullUnder;
+      const far: string[] = [];
+      for (let i = under.length - BUMPER_CORNER_ROWS * 3; i < under.length; i += 3) {
+        let nearest = Infinity;
+        for (let k = 0; k < vertexCount; k++) nearest = Math.min(nearest, Math.hypot(rest[k * 3]! - under[i]!, rest[k * 3 + 1]! - under[i + 2]!, rest[k * 3 + 2]! - under[i + 1]!));
+        const corner = `${under[i]! > 0 ? "+" : "-"}x ${under[i + 1]! > 0 ? "front" : "rear"}`;
+        t.diagnostic(`${corner}: nearest cage vertex ${(nearest * 100).toFixed(1)} cm`);
+        if (nearest > TOP_P95_M) far.push(`${corner} ${(nearest * 100).toFixed(1)} cm`);
+      }
+      assert.deepEqual(far, []);
+    });
+  }
 });
 
 /** How far (m) the cage's nose may stand behind the drawn nose: the bumper's face is the cage's, a push bar's box as far out as its pads. */
