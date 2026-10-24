@@ -408,7 +408,7 @@ export interface BodyStyle {
   /** Side glass top: its drop under the roof (m, absent 0.075), the roof's side lip ending there too; or [z, y] stations (ascending, linear, held past the ends) under a 0.075 lip, painted fill between them and the lip. */
   glassTop?: number | readonly (readonly [number, number])[];
   /**
-   * Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it; `rise` (drawn only, absent 1) the opening's crown height over the hub as a fraction of `radius`: an elliptic opening, as wide at hub height, its lip following it under the round fender flare.
+   * Wheel-arch opening radius (m) about each hub; `lip` its drawn flare lip (drawn only: the cage keeps the bare opening); `wellWall` (drawn only) the |x| (m) of an outboard tyre's well wall, the liner widened inboard to it; `rise` (absent 1) the opening's crown height over the hub as a fraction of `radius`, in the cage and the drawn body alike: an elliptic opening, as wide at hub height, its lip (drawn only) following it under the round fender flare.
    * `feet` (drawn only): each opening's legs get a ring either side of them (the nearest plain station within 6 cm outside moving onto the outer one), so they drop straight to the rocker under the lip's; absent, a leg spans the gap between its nearest stations, leaning out.
    */
   arch: { radius: number; lip?: ArchLip; wellWall?: number; rise?: number; feet?: boolean };

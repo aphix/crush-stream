@@ -302,6 +302,8 @@ const FACE_DEPTH = 0.06;
 const BOOT_FLOOR_CLEAR = 0.03;
 /** Past the tail: a hollow open "through" it never ramps back up. */
 const THROUGH = 1;
+/** The face's jambs narrow the opening only while the cage's deck is still closed over the tail panel: once its tub has dropped this far (0..1) they stand on its rim, so the drawn rim never stands over the cage's dipping deck. */
+const FACE_TUB_FADE = 0.05;
 
 export function bootCut(style: BodyStyle): BootCut {
   const b = style.boot;
@@ -463,8 +465,8 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
   const floor = floorY(z, style);
   const tub = tubAt(z, style, bodyTubs(style, source));
   const wheels = wheelsOf(style.dims);
-  // The drawn opening may stand lower than the cage's (`arch.rise`), under the round fender flare; the cage keeps the round one.
-  const well = wheelWell(z, wheels, style.arch.radius) * (source === "drawn" ? (style.arch.rise ?? 1) : 1);
+  // The opening may stand lower than the round one (`arch.rise`), cage and drawn alike: what you see is what collides.
+  const well = wheelWell(z, wheels, style.arch.radius) * (style.arch.rise ?? 1);
   const archY = wheels[0]![1] + well;
   const inset = seamInset(z, style);
   const drop = shoulderDrop(z, style);
@@ -504,12 +506,13 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
   if (cut.open > 0) {
     // The hollow's floor stays inside the cage's hull: over its floor pan, and over a wheel's well.
     const hollow = Math.max(boot.floor, floor + BOOT_FLOOR_CLEAR, well >= 0.03 ? archY + BOOT_FLOOR_CLEAR : -Infinity);
-    const wall = lerp(lidWall, Math.min(boot.face?.wall ?? hw, lidWall), cut.face);
-    const bottom = lerp(hollow, Math.max(boot.face?.sill ?? 0, hollow), cut.face);
+    const face = cut.face * (1 - THREE.MathUtils.smoothstep(deckTub, 0, FACE_TUB_FADE));
+    const wall = lerp(lidWall, Math.min(boot.face?.wall ?? hw, lidWall), face);
+    const bottom = lerp(hollow, Math.max(boot.face?.sill ?? 0, hollow), face);
     half[0] = [lerp(half[0]![0], wall, cut.open), lerp(half[0]![1], bottom, cut.open)];
     // The wall's top takes the tub's rim (`tubWall`) as far as the cage's has dropped into the tub.
     const inner = lerp(Number.isFinite(lidCap) ? Math.min(lidWall, half[1]![0]) : lidWall, hw - tubWall(style), deckTub);
-    const rim = lerp(inner, Math.min(boot.face?.wall ?? hw, inner), cut.face);
+    const rim = lerp(inner, Math.min(boot.face?.wall ?? hw, inner), face);
     // A capped lid's rim keeps the closed deck edge's height and never stands outboard of it: the lid's edge then stands `HOOD_SEAT` over it, as the hood over the fender.
     half[1] = [lerp(half[1]![0], rim, cut.open), Number.isFinite(lidCap) ? half[1]![1] : lerp(half[1]![1], yb - 0.006, cut.open)];
   }

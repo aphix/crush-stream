@@ -2,7 +2,7 @@ import { after, afterEach, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
-import { ALONG, COMPASS, report, type Heading, type Kind, type Run, type Site } from "./ground-judge.test-util.ts";
+import { ALONG, COMPASS, judge, report, type Heading, type Kind, type Run, type Site } from "./ground-judge.test-util.ts";
 import { drive, drop } from "./ground-probe.test-util.ts";
 import { VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
 import { FleetRamps, RAMP } from "../scenes/fleet-ramps.ts";
@@ -205,5 +205,16 @@ describe("given a car braking on a flat straight", () => {
       assert.ok(pen <= 0.01, `${cls}: the drawn underside is ${(pen * 100).toFixed(1)} cm in the road while braking`);
       assert.ok(dive <= -0.5, `${cls}: the drawn nose dips only ${(-dive).toFixed(2)}° (the dive look is gone)`);
     }
+  });
+});
+
+describe("given a car with its brakes off on the fleet ramp's face", () => {
+  afterEach(() => setGround(null));
+
+  // The control for the judge's slide measure (the rigid centre's travel): a car that really rolls down the face reads as a slide.
+  it("when a sedan is rolling down the face at 3 m/s with its brakes off for 3 s, then its centre has travelled past the slide bound and the judge flags it", () => {
+    const r = drop(ramps, "sedan", 0, MID, 0, { collide, seconds: 3, brake: false, speed: 3 });
+    assert.ok(r.slide > 0.5, `the centre slid only ${r.slide.toFixed(2)} m down the face`);
+    assert.ok(judge("plain", r).includes("slide"), "the judge does not flag the slide");
   });
 });

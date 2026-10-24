@@ -4569,7 +4569,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
     });
   }
 
-  /** A squashed drawn opening (`arch.rise`) keeps this much (m) over a tyre risen to its spring's stop: the cage keeps the round one, so nothing else stops the tyre showing through the fender. */
+  /** A squashed opening (`arch.rise`) keeps this much (m) over a tyre risen to its spring's stop: the cage's opening is the drawn one, so nothing else stops the tyre showing through the fender. */
   const CROWN_CLEAR = 0.02;
   for (const id of CAR_STYLE_IDS) {
     const style = CAR_STYLES[id];
