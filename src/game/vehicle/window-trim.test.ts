@@ -14,8 +14,12 @@ import { paint } from "./test-support.ts";
 const FRAME_FOLLOW_M = 0.01;
 /** A strip stays within this (m) of the move of the paint's nearest point: the paint's own 5 cm fit bar (`drawn-body.test-util`). */
 const STRIP_FOLLOW_M = 0.05;
-/** A move (m) of the paint under a trim point that counts as a dent. */
-const DENT_M = 0.03;
+/**
+ * A move (m) of the paint under a trim point that counts as a dent: one and a half times the frame's follow bar, so a trim that did not follow
+ * its paint would miss it by more than the bar. The cracked windshield ends a front hit 2-4 cm back of where it stood at every speed from 35 to 52 km/h
+ * (its frame hangs on the cabin, dc81e0f8, and the cabin's own offset is the pane's); a 3 cm control found it at 38-41 km/h and not at 45-52.
+ */
+const DENT_M = 0.015;
 /** The wall hits that dent the front (the windshield, left whole, and its frame) and the side (the strips): approach, km/h, whether the frames or the strips are read, and the bar. */
 const HITS: readonly (readonly [WallApproach, number, boolean, number])[] = [
   ["front", 52, true, FRAME_FOLLOW_M],
@@ -94,4 +98,34 @@ describe("given a coupe whose chrome window trim frames its glass and runs along
       assert.ok(worst <= bar, `a trim point ${(worst * 100).toFixed(1)} cm off the move of the paint it stands on`);
     });
   }
+});
+
+/**
+ * Where the windshield stands when a front hit has played out must not step with the speed by more than the hit's own change does. The pane rides the
+ * cabin's roof mass, and the roof's return after the hit is cut off a fixed time after the last contact (`CONTACT_WINDOW`: the shape matching and the mass
+ * step go dead), wherever it has got to. The step was there before the windshield's frame hung on the cabin: the pane shows the roof's offset, it does not cause it.
+ */
+const ROOF_LATCH =
+  "the windshield's mean offset after a front hit steps 1.4 cm between 41 and 42 km/h: the roof ends 3.4 / 2.8 / 2.4 cm back of its seat at 38 / 40 / 41 km/h, still creeping back at 0.05 cm a frame when the window (0.35 s after the last contact) cuts it, and at its seat from 42 km/h, where it is passing it at 0.10 cm a frame (a 2 s window ends it 6 cm forward and drifting from 42, 0.5 cm back at 38-41); the step is older than the hang (the roof 0.6 cm back at 41 and at its seat at 42 on a071b774); closes when the cabin's springback settles to a rest, not a time";
+const LATCH_STEP_M = 0.01;
+
+describe("given a coupe's cracked windshield after a front wall hit", () => {
+  it(`when it is crushed front on at each km/h from 38 to 44, then the pane's mean offset when the hit has played out changes no more than ${LATCH_STEP_M * 100} cm from one speed to the next`, { todo: ROOF_LATCH }, () => {
+    const pristine = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
+    const rest = carPoints(pristine, [pristine.glassPanes.find((g) => g.name === "windshield")!.mesh]);
+    let before = NaN;
+    for (let kph = 38; kph <= 44; kph++) {
+      const crushed = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
+      crushed.deform.setMode("shape");
+      runWall(kph, 1, "front", { car: crushed });
+      crushed.flushDeferredSkin();
+      crushed.updateSkin();
+      const now = carPoints(crushed, [crushed.glassPanes.find((g) => g.name === "windshield")!.mesh]);
+      let sum = 0;
+      for (let i = 0; i < now.length; i += 3) sum += Math.hypot(now[i]! - rest[i]!, now[i + 1]! - rest[i + 1]!, now[i + 2]! - rest[i + 2]!);
+      const mean = sum / (now.length / 3);
+      assert.ok(!(Math.abs(mean - before) > LATCH_STEP_M), `${kph} km/h: the pane stands ${(mean * 100).toFixed(1)} cm off its seat, ${((mean - before) * 100).toFixed(1)} cm from the speed below`);
+      before = mean;
+    }
+  });
 });
