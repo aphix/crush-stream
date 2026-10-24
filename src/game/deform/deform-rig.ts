@@ -115,6 +115,8 @@ const RES_K = 4;
 export const RES_SLOTS = 5;
 /** IDW softening (m²) of the parent weights, 1/(d² + RES_SOFT). */
 const RES_SOFT = 0.04;
+/** Height (m) under the roof's clamp (`roofClampY`) over which the roof mass fades out of a skin point's parents: a door or fender hangs on the masses that are struck, not on a roof mass above it. */
+const ROOF_PARENT_FADE = 0.25;
 /** Plan travel (m) off its plant at which an arch vertex lets go of its hub: a deeper crush takes the arch with the body (held, a 0.3 m nose crush ran the fender through the arch's lip and folded it). */
 const ARCH_YIELD = 0.15;
 
@@ -795,8 +797,14 @@ export abstract class DeformRig {
     const outside = body.filter((j) => !cabinBody.includes(j));
     const roofJ = this.masses.findIndex((m) => m.name === "roof");
     const anchors = this.masses.map((m, j): readonly [number, number, number] => (j === roofJ ? this.rig.roofSkin : [m.rest.x, m.rest.y, m.rest.z]));
+    const roofFade = (ry: number) => {
+      const u = Math.min(1, Math.max(0, (ry - (this.rig.roofClampY - ROOF_PARENT_FADE)) / ROOF_PARENT_FADE));
+      return u * u * (3 - 2 * u);
+    };
     const near = (rx: number, ry: number, rz: number, set: number[]) =>
-      set.map((j) => ({ j, w: 1 / ((rx - anchors[j]![0]) ** 2 + (ry - anchors[j]![1]) ** 2 + (rz - anchors[j]![2]) ** 2 + RES_SOFT) })).sort((a, b) => b.w - a.w);
+      set
+        .map((j) => ({ j, w: (j === roofJ ? roofFade(ry) : 1) / ((rx - anchors[j]![0]) ** 2 + (ry - anchors[j]![1]) ** 2 + (rz - anchors[j]![2]) ** 2 + RES_SOFT) }))
+        .sort((a, b) => b.w - a.w);
     return (rx, ry, rz, i, t, hung = false, foot = false) => {
       const cabin = inCell(rx, ry, rz);
       const ds = near(rx, ry, rz, cabin || hung ? cabinBody : body);
