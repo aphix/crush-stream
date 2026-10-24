@@ -12,6 +12,7 @@ import { REST_SPEED } from "../vehicle/car-air-body.ts";
 import { CarSurfaces, REACH } from "../vehicle/car-surfaces.ts";
 import { armTops, calmSolids } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
+import { CONTACT_WINDOW, UPRIGHT_RIDE_QUIET } from "../deform/constants.ts";
 import { STOCK_PAINT } from "../vehicle/constants.ts";
 import { UPRIGHT_UP_Y } from "../vehicle/car-suspension.ts";
 import { FINE_HZ, SLICES_PER_STEP } from "../kernel/constants.ts";
@@ -147,10 +148,14 @@ function idle(car: DeformableCar): boolean {
   return car.stored && EPICENTER.storedSkip === 1;
 }
 
-/** A car whose wreck's masses ride its body (`DeformFreeze.ridesBody`): asleep, or lying on its side or roof (`UPRIGHT_UP_Y`) and at rest on the ground. One on its wheels keeps stepping: its structure still settles it. */
-function atRest(car: DeformableCar): boolean {
+/**
+ * The quiet (s) a wreck's contact clock must have run before its masses ride its body (`DeformFreeze.ridesBody`); never for a car that moves or flies (a sleeper does neither).
+ * One lying on its side or roof (`UPRIGHT_UP_Y`) rides from the contact window, one on its wheels from `UPRIGHT_RIDE_QUIET`: its structure still settles it first.
+ */
+function rideQuiet(car: DeformableCar): number {
+  if (!car.asleep && (car.moving || car.airborne)) return Infinity;
   const q = car.group.quaternion;
-  return car.asleep || (!car.moving && !car.airborne && 1 - 2 * (q.x * q.x + q.z * q.z) < UPRIGHT_UP_Y);
+  return 1 - 2 * (q.x * q.x + q.z * q.z) < UPRIGHT_UP_Y ? CONTACT_WINDOW : UPRIGHT_RIDE_QUIET;
 }
 
 /** Scratch for the weight an unstepped car's roof drops (`stepWorld`). */
@@ -390,7 +395,7 @@ export function stepWorld(w: World, dt: number): void {
       const car = cars[ci]!;
       if (idle(car)) continue;
       if (car.deform.massActive) {
-        if (!car.deform.ridesBody(atRest(car))) car.syncPose(0);
+        if (!car.deform.ridesBody(rideQuiet(car))) car.syncPose(0);
       } else car.refreshBasis();
     }
     if (barrier) {
@@ -420,7 +425,7 @@ export function stepWorld(w: World, dt: number): void {
     // The pair pass moved the wrecks' masses (a tilted wreck's frame jumped 0.35 m in one re-measure): their pose and velocity are derived
     // from them now, before the structure step reads them, as the second pass's start did (the mixed fleet's column read a wreck at
     // -7.4 m/s against its masses' -2.8 without it: stack-column 'owner's drops').
-    for (let ci = 0; ci < n; ci++) if (cars[ci]!.deform.massActive && !cars[ci]!.deform.ridesBody(atRest(cars[ci]!)) && (i === 0 || !lonely.flag[ci])) cars[ci]!.syncPose(0);
+    for (let ci = 0; ci < n; ci++) if (cars[ci]!.deform.massActive && !cars[ci]!.deform.ridesBody(rideQuiet(cars[ci]!)) && (i === 0 || !lonely.flag[ci])) cars[ci]!.syncPose(0);
     armCrushRows(h);
     lap(ph, PHASE.pairs);
 
@@ -432,7 +437,7 @@ export function stepWorld(w: World, dt: number): void {
       const d = car.deform;
       if (d.massActive) {
         // A relocked wreck (`epicenter` activation) and one at rest run their clock and ride their body: no solve, no frame re-measure.
-        if (d.ridesBody(atRest(car))) {
+        if (d.ridesBody(rideQuiet(car))) {
           // `followGroup` hands these over each step and does not run while the wreck rides: a wreck put on a spot has fresh vectors until it does.
           d.bodyV = car.velocity;
           d.bodyW = car.angular;

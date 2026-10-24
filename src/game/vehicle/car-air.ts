@@ -860,7 +860,12 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     const pen = hit[o + C_H]!;
     const own = hit[o + C_OWNER]!;
     if (!(pen > (own >= 0 ? 0 : -spring))) continue;
-    if (onWreckTop(car, surf.cars, i)) continue;
+    // A wreck takes no row from another wreck's top, but the tyre is in that wreck's top all the same: the world must hear it touch, or a highlight clip
+    // keeps this car and not the wreck, and its replay stands the tyre on the ground the wreck covered (seed 8: a monster's front tyre, 0.5 m in a sedan wreck's top).
+    if (onWreckTop(car, surf.cars, i)) {
+      surf.touch(own);
+      continue;
+    }
     R[n]!.set(hit[o + C_PX]! - centreOfMass.x, hit[o + C_PY]! - centreOfMass.y, hit[o + C_PZ]! - centreOfMass.z);
     N[n]!.set(hit[o + C_NX]!, hit[o + C_NY]!, hit[o + C_NZ]!);
     TYRE[n] = true;
