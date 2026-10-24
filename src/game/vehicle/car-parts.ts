@@ -72,8 +72,8 @@ const MIRROR_POP = 0.5;
 const _seatDoor = new THREE.Matrix4();
 const _seatMirror = new THREE.Matrix4();
 const _unitScale = new THREE.Vector3(1, 1, 1);
-/** Glass against its frame's distortion (`glassDistortion`, m): the laminated windscreen cracks from a few mm of differential aperture movement. */
-const GLASS_CRACK = 0.005;
+/** Glass against its frame's distortion (`glassDistortion`, m): the laminated windscreen cracks from a few mm of differential aperture movement, between a 35 km/h wall's frame and a 50 km/h one's. */
+const GLASS_CRACK = 0.003;
 /** Tempered side and rear glass bursts once its frame is about 3 cm out of true, in any direction. */
 const GLASS_TEMPERED = 0.03;
 /** The laminated windscreen "shatters" (extensive cracking, the bond line letting go) at about 30 mm of racking. */

@@ -412,7 +412,7 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A car's roof keeps a permanent set from a frontal, tail or side hit as the sheet metal around it does (its crush less the elastic part, `SPRING_SHARE`), and
  * stands on it once the contact lets go: it ended wherever the contact window cut the windscreen cluster's pull, 2.4 cm back of its seat after a coupe's
  * 41 km/h wall hit and at its seat after a 42 km/h one (and drifting 0.1 cm a frame past it, 6 cm after 2 s), now 1.9 cm back from 38 to 52 km/h at either window length;
- * the coupe's windshield cracks between 45 and 48 km/h in place of from 38.
+ * the laminated windscreen cracks from 3 mm of its frame's distortion, not 5, which the roof's set moved the walls' under (a 35 km/h wall reads 1.6 mm and a 50 km/h one 4.0, from 4.3 and 5.4).
  * A tyre meets a solid's side at both corners of each edge of its tread and, where an edge's corners read nothing, at samples 0.2 m apart between them: a
  * wall thinner than the tyre is long (the oval's 0.6 m) no longer stands between its corners while the tyre straddles it, so a monster's rear pair that rolled
  * through it at 56 m/s (two wheels still on, 24.9 m/s after the hit) is torn off at it (none left, 10.7 m/s). A point that came in by no face within the
