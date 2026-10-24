@@ -379,6 +379,8 @@ function makeGlass(): THREE.InstancedMesh {
   const material = new THREE.MeshStandardMaterial({
     map: makeGlassTexture(),
     transparent: true,
+    // Half the texture's alpha: the doubled glass stands between the stands' cameras and the field, so it stays easy to see through.
+    opacity: 0.5,
     // Front faces only: blending a closed box's back face over its front mirrors the reflection streak into an X lattice.
     side: THREE.FrontSide,
     depthWrite: false,
