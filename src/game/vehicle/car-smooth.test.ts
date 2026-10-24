@@ -1642,24 +1642,24 @@ const SIM_DIGEST_BY_STYLE = [
   // CarSedan's shape data on top of CarRig's re-pin (sedan and police alike): crowned hood and its stations (f3ba51c8), the sedan's own front
   // fascia (e17b83ac), mirror reach .128 (28843919), then the reference's arch radius .405 -> .375. Sedan 3b05ae33... -> 26331e81... (shape
   // data) -> 92a72440... (arch); police 70734ab6... -> 2fe405f6... -> 1071e0a8....
-  { id: "sedan", digest: "c9c48cd8d8a311a78a8fa439cf67c1419bad568950b69f407a87870c93448f66" },
+  { id: "sedan", digest: "7b545d4710d52fc6a1f52fabd6059f0fdeb94b6591a59acd752b90afe358b220" },
   // Re-pinned when every style's roof, glass, hood and boot cages came from its own panels (`carFrame`) instead of a hand fit; the sedan's are the fit itself.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's boot foot.
   // The hatchback's again when the cage kept the underside a body rests on, over its vertex budget (CarRig rig-lip): d1b0dbd0... ->
   // ace6af8c...; the other six unchanged.
   // The hatchback's again for its roof rolling round into its side glass (`roofSection` .4/.9, as the coupe's): the panes' tops and roof cage follow it: ace6af8c... -> b1cfea45....
-  { id: "hatchback", digest: "b3db576f028a1f5f4cbb7e7e927e4ed53d5cbd175a66ea3cb3cc50ec3a91f9b6" },
-  { id: "wagon", digest: "b55991925d629d4787e7cda626bb19f7b7d29b89a97d54b0f5cde8f292368f94" },
+  { id: "hatchback", digest: "66d68cd1a838ea6fb8bf0828e8c1b5143c5b852ba5c69aa88a74903e53707ef8" },
+  { id: "wagon", digest: "23259e9028c66cd846e5b7cdcd54e4b1daf9136d4292fef1fc18012a0b5cf1e1" },
   // The coupe re-pinned for its nose deck lowered 0.5-2.8 cm over z 1.76-1.945 to the reference's side line.
-  { id: "coupe", digest: "b46408f38e5f0abb4100977513463b3ffdc9b4685641e9997e533821f097e154" },
+  { id: "coupe", digest: "a5827d47522b732fc4a2a875e10372404e3af61d209b168588817e96ff96b243" },
   // The pickup re-pinned for its hood wrapping the nose (`hood.z1` 1.86 -> 1.92): its hood's cage reaches the nose the wall meets.
   // Its cab roof narrowed to the top plate's (profile cabinHw) brings the wall hit back to the same crush as before its mid-cab roof rose.
-  { id: "pickup", digest: "22096bc801ae2bdea53e815b9373a872109e3e03d90015988b6a2745f190dc1d" },
+  { id: "pickup", digest: "4b1e83eb64a91271bc57fa1df5f3ba4f7e8b94ba89b5430c2f81e5b1d61718bc" },
   // The police's moved at REPLAY 116 (12fb33c4... before): its light bar folds about a base hinge across the car, so the bar's cage pose, which is part of the car's
   // contact shape, differs in the hit and the masses differ by the bar's contact. Probe: with the fold set to 0 the digest is another (899b2770...), so it is the bar's
   // pose that moves it; the five bar-less styles above are unchanged to the bit.
   // Again for its push bar's box in the cage and the wall's hold on its bumper's particles a bar's reach back (`noseReach`): 2691a219... -> 30a73a14...; the other six unchanged.
-  { id: "police", digest: "7c731fbf2467e13a4b1677e7c21d41b8d32c9e12dd014f074dfd9668fae0ba31" },
+  { id: "police", digest: "209a7b69dca5864abece01803cbef64c6ae3f0371712a8fb0368e014f86ba5b5" },
   // The monster is its own body style (its own dims, cage and lifted class body), no longer the pickup's.
   // Again when a wreck's masses rode its lifted centre, not their centroid (CarRig rig-seat): the other six unchanged.
   // Again when a point of a body at rest inside a solid left by the side its body stands on, not the nearest (CarRig rig-entry): the monster's front
