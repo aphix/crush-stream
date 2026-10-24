@@ -4,7 +4,7 @@
  * silhouette fast: writes an overlay PNG and prints one JSON line with the silhouette and glass fit, the per-corner checklist,
  * the gap regions and the car's dimensions.
  *
- *   R=/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/ModernCarDesigns_SideAndTop
+ *   R=.tmp/ModernCarDesign/ModernCarDesigns_SideAndTop
  *   node --disable-warning=ExperimentalWarning scripts/trace-car.mjs --style sedan --view side \
  *     --ref $R/silver-sedan/silver-sedan-1.png --ref-span 3,299=4.221 [--anchor ends|wheels] [--ref-ground 95] [--ref-crop x,y,w,h] \
  *     [--omit doors,glass,bumpers,mirrors,hood,trunk,lightbar,wheels,lamps,parts] [--points '[[2.0,0.65],[1.2,0.9]]'] \
