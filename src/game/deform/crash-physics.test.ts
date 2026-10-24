@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
 import { ENGINE_KILL_TRAVEL, PLATFORM_RIG, type DeformMode } from "./deform-rig.ts";
 import { CRASH, crushStroke, leftoverCrumple } from "./physics-util.ts";
-import { DT, MODES, assertSameDigest, dummyGeom, mass } from "../vehicle/test-support.ts";
+import { DT, MODES, assertSameDigest, assertSameNumbers, dummyGeom, mass } from "../vehicle/test-support.ts";
 import { runPair } from "../contact/crash-scenarios.test-util.ts";
 import { holdOnFace } from "../contact/external-contact.ts";
 import { warmCrashPath } from "../engine/world-step.ts";
@@ -177,12 +177,14 @@ forModes("given a car hit at the front, where the hit point snaps to the centre 
     assert.ok(live.rearmHit(squarely, aslant, 14, 14, true), "taken over on the live car");
     assert.ok(restored.rearmHit(squarely, aslant, 14, 14, true), "taken over on the restored one");
     assert.ok(Math.abs(live.hitSpeedValue - Math.sqrt(10 * 10 + 14 * 14)) < 1e-9, `live hit speed ${live.hitSpeedValue}`);
-    const after = (d: StreamedDeformation): number[] => {
+    assert.equal(restored.hitSpeedValue, live.hitSpeedValue, "hit speed");
+    for (const field of ["armedAt", "armedEbs", "armedEnd", "armedEnd2", "armedWear"] as const) assert.equal(restored[field], live[field], field);
+    const after = (d: StreamedDeformation): Float64Array => {
       const out = new Float64Array(d.simSize());
       d.simState(out, false);
-      return [...out];
+      return out;
     };
-    assert.deepEqual(after(restored), after(live));
+    assertSameNumbers(after(restored), after(live), "the sim state after the take-over");
   });
 });
 
