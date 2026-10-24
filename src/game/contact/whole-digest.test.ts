@@ -43,14 +43,14 @@ function staged(cars: DeformableCar[], barrier: boolean, probes: Probe[], pedals
 const X = new THREE.Vector3(1, 0, 0);
 const NX = new THREE.Vector3(-1, 0, 0);
 
-// Re-pinned for a pair's crush fed over its patch's width at its hit's speed (`feedOverlap`) and the bumpers' held bottom corners; the barrier's pin was stale at the union head.
+// Three re-pinned for a pair's crush patch at most its face wide and the hit's speed holding the feed's scale at the reference (`feedOverlap`): head-on e2fe2a6ea3f54ade -> 6757bcb07d30036b, door 4338c12666a975b6 -> 8f3f952128425564, pile-up d15a38884ad0eaac -> 5e3be57e5d5144b1; the barrier's is unchanged (no pair).
 describe("given four staged crashes with the epicenter activation off", () => {
   it("when the owner's head-on, 20 m/s each, runs 5 s, then every mass and pose is the pinned one", () => {
     const a = makeCar("shape");
     const b = makeCar("shape");
     launch(a, -5, 0, Math.PI / 2, 20, 0);
     launch(b, 5, 0, -Math.PI / 2, -20, 0);
-    assert.equal(staged([a, b], false, [new Probe(a, X), new Probe(b, NX)], [FREEWHEEL, FREEWHEEL], 5), "e2fe2a6ea3f54ade");
+    assert.equal(staged([a, b], false, [new Probe(a, X), new Probe(b, NX)], [FREEWHEEL, FREEWHEEL], 5), "6757bcb07d30036b");
   });
 
   it("when a car meets a parked one's door at 50 km/h, 5 s, then every mass and pose is the pinned one", () => {
@@ -58,7 +58,7 @@ describe("given four staged crashes with the epicenter activation off", () => {
     const b = makeCar("shape");
     launch(a, 0, 0, 0, 0, 0);
     launch(b, 6, 0, -Math.PI / 2, -50 * KPH, 0);
-    assert.equal(staged([a, b], false, [new Probe(a, NX), new Probe(b, NX)], [PARKED, FREEWHEEL], 5), "4338c12666a975b6");
+    assert.equal(staged([a, b], false, [new Probe(a, NX), new Probe(b, NX)], [PARKED, FREEWHEEL], 5), "8f3f952128425564");
   });
 
   it("when a car hits the held barrier at 50 km/h, 5 s, then every mass and pose is the pinned one", () => {
@@ -74,6 +74,6 @@ describe("given four staged crashes with the epicenter activation off", () => {
     launch(a, -4, 0, Math.PI / 2, 50 * KPH, 0);
     launch(b, 4, 0, -Math.PI / 2, -50 * KPH, 0);
     launch(c, 28, 0, -Math.PI / 2, -90 * KPH, 0);
-    assert.equal(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6), "d15a38884ad0eaac");
+    assert.equal(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6), "5e3be57e5d5144b1");
   });
 });

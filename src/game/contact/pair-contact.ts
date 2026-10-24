@@ -186,9 +186,6 @@ function massesInto(car: DeformableCar, nx: number, nz: number): number {
 /** Cosine within which a contact's normal presses on the face a car's hit struck (`impactInward`, the hit's inward direction in the car's frame). */
 const STRUCK_FACE_COS = 0.5;
 
-/** A face with less than this share of its crumple travel left (`leftoverCrumple`) is stiff: it takes whatever the pair's other face passes on, and its hit's pulse feeds it no more crush (`feedDrive`). */
-const STIFF_LEFTOVER = 0.12;
-
 /** The crush stroke (m) `car`'s hit has left (`hitStroke` less `strokeUsed`) where a contact presses into it along the unit (nx, nz): on the face the hit struck, else none. */
 function strokeLeftOn(car: DeformableCar, nx: number, nz: number): number {
   const inward = car.deform.impactInward;
@@ -198,11 +195,13 @@ function strokeLeftOn(car: DeformableCar, nx: number, nz: number): number {
 
 /**
  * The speed (m/s) a face's crush energy is sized by (`feedOverlap`'s `drive`): while the pair closes faster than a graze, the hit is still its own pulse (`REARM_QUIET_S`) and the
- * face it struck has stroke and travel left, its hit's (`impulseValue`, the closing that armed it), not the slice's, which the exchange takes away as the structure yields. The force
- * that crushes the face (`crushForce`) is the hit's whole stroke long, so the crush it feeds must be; a later, slower shove of the wreck is its own closing.
+ * stroke it has left on the face it struck fits the face's travel, its hit's (`impulseValue`, the closing that armed it), not the slice's, which the exchange takes away as the
+ * structure yields. The force that crushes the face (`crushForce`) is the hit's whole stroke long, so the crush it feeds must be. A hit whose stroke is longer than the face's travel
+ * (a 57 m/s head-on's 1.9 m on a 1 m nose) packs the structure instead of crushing through its stroke, and a later, slower shove of the wreck is its own closing: both are fed as they close.
  */
 function feedDrive(car: DeformableCar, nx: number, nz: number, closing: number): number {
-  const own = closing > CRASH.grazeMps && car.deform.hitAge() < REARM_QUIET_S && strokeLeftOn(car, nx, nz) > 0 && leftoverCrumple(car.deform.faceTravel()) >= STIFF_LEFTOVER;
+  const left = strokeLeftOn(car, nx, nz);
+  const own = closing > CRASH.grazeMps && car.deform.hitAge() < REARM_QUIET_S && left > 0 && left <= car.deform.faceTravel();
   return own ? Math.max(closing, car.deform.impulseValue) : Math.max(0, closing);
 }
 
@@ -651,8 +650,8 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // A face whose crumple travel is used up (`leftoverCrumple`) is stiff: it takes whatever the pair's other face passes on.
   const leftoverA = leftoverCrumple(carA.deform.faceTravel());
   const leftoverB = leftoverCrumple(carB.deform.faceTravel());
-  const stiffA = leftoverA < STIFF_LEFTOVER;
-  const stiffB = leftoverB < STIFF_LEFTOVER;
+  const stiffA = leftoverA < 0.12;
+  const stiffB = leftoverB < 0.12;
   if (closing > 0) {
     // The one exchange of the pair, at the patch, once per slice: the normal impulse that closes the approach of the two cars' contact
     // points (the lever of each about its centre in the kernel's effective mass), at the most what the crush force over the slice has
