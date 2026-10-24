@@ -75,7 +75,7 @@ export function roundCard(value: unknown, decimals?: number): unknown {
 /** The HUD state that is not a setting: what the game reads out (the race standings, the derby board, the speeds, the clock) and the piston and door scenes' readouts. A card keeps none of it. */
 const HUD_READOUT = [
   "race", "derbyBoard", "derbyView", "fleetView", "derbyWinner", "derbyDecided", "derbyTime", "elapsed", "speedA", "speedB", "closingKph",
-  "impactKph", "eta", "fps", "phase", "trackSerial", "nowPlaying", "drift", "boost", "pistons", "doors", "viewFar", "pixelRatio", "shadowMap",
+  "impactKph", "eta", "fps", "phase", "trackSerial", "nowPlaying", "drift", "boost", "foot", "pistons", "doors", "viewFar", "pixelRatio", "shadowMap",
 ] as const satisfies readonly (keyof CrashHudState)[];
 
 /** The HUD as a card carries it: only the keys that are settings and differ from `defaults` (`INITIAL_HUD`); a key that is absent is at its default. */

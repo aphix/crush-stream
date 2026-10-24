@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import type { CrashEngine } from "@/game/engine/engine";
 import { SCENE_KEY_BINDINGS } from "@/game/engine/engine-keys";
 import { audioLevels } from "@/game/hud/audio-levels";
-import { driveKeys } from "@/game/hud/drive-keys";
+import { driveKeys, footKeys } from "@/game/hud/drive-keys";
 import { showsPrevNext } from "@/game/hud/watch-cycle";
 import { freeHelp } from "@/game/hud/free-help";
 import { watchCalm, type CalmWatch } from "@/game/hud/hud-collapse";
@@ -113,16 +113,16 @@ const CAMERA_KEYS: [string, string][] = [
 ];
 
 function seatHint(state: CrashHudState): { title: string; keys: string } {
+  if (state.foot?.out) return { title: "On foot", keys: footKeys(state.pad !== null, state.foot.prompt) };
   if (state.race && state.seat === "drive") {
-    return {
-      title: `Racing · ${CAM_LABEL[state.view]}`,
-      keys: state.pad
-        ? "RT gas · LT brake, then reverse · left stick steer · X handbrake · A boost · Y view · R3 look back · D-pad ↓ respawn · hold D-pad ↓ back on the road, damage kept · Start pause"
-        : "W gas · S brake, then reverse · A/D steer · Space handbrake · Shift boost · V view · ` look back · R respawn · hold R back on the road, damage kept · Esc pause",
-    };
+    const keys = state.pad
+      ? "RT gas · LT brake, then reverse · left stick steer · X handbrake · A boost · Y view · R3 look back · D-pad ↓ respawn · hold D-pad ↓ back on the road, damage kept · Start pause"
+      : "W gas · S brake, then reverse · A/D steer · Space handbrake · Shift boost · V view · ` look back · R respawn · hold R back on the road, damage kept · Esc pause";
+    return { title: `Racing · ${CAM_LABEL[state.view]}`, keys: state.foot?.prompt ? `${keys} · ${state.foot.prompt}` : keys };
   }
   if (state.seat === "drive") {
-    return { title: `Driving · ${CAM_LABEL[state.view]}`, keys: driveKeys(state.pad !== null, state.minigame?.bail == null) };
+    const keys = driveKeys(state.pad !== null, state.minigame?.bail == null);
+    return { title: `Driving · ${CAM_LABEL[state.view]}`, keys: state.foot?.prompt ? `${keys} · ${state.foot.prompt}` : keys };
   }
   if (state.cam === "free") return { title: `${state.seat === "global" ? "Whole field" : "Watching"} · ${CAM_LABEL.free}`, keys: freeHelp(state.pad !== null, false) };
   if (state.seat === "follow") {

@@ -34,6 +34,9 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
   /** Every slot's spray (`PERSON_SPRAY`), one bitmap's rows per slot, slot 0 lowest; null on a mesh whose slots wear none, which samples `BARE_SPRAY`. */
   private readonly sprayRgba: Uint8Array | null;
   private readonly sprayAtlas: THREE.DataTexture;
+  /** What a pick skins a slot's vertices into, and which of them the slot draws (made at the first pick). */
+  private pickPoints: Float32Array | null = null;
+  private pickDrawn: Uint8Array | null = null;
 
   /**
    * `sprayed`: its slots wear sprays (`spray`: the thrown drivers, the garage's); the course's figures wear none and hold no atlas.
@@ -159,26 +162,39 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     return this.rows[(s * ROW_TEXELS + FLAGS_AT) * 4]!;
   }
 
-  /** A ray against each slot's drawn body as its torso carries it (every part is rigid on it at rest: the garage's standing driver, exactly). */
+  /**
+   * A ray against each slot's body as it is posed now, the triangles the slot draws skinned from its part poses (`posed`): a hand raised, a
+   * leg swung or a dummy flung is picked where it is drawn, and a woman or a portly man by her own shape. A slot is skinned only when the ray crosses
+   * the sphere of its reach. The garage's spray reads the hit's point, face normal and instance.
+   */
   override raycast(raycaster: THREE.Raycaster, intersects: THREE.Intersection[]): void {
-    const hits: THREE.Intersection[] = [];
-    const kinds = this.geometry.getAttribute(KINDS_ATTRIBUTE);
+    _inverse.copy(this.matrixWorld).invert();
+    _local.copy(raycaster.ray).applyMatrix4(_inverse);
+    const index = this.geometry.index!;
+    const count = this.geometry.getAttribute("position").count;
+    const points = (this.pickPoints ??= new Float32Array(count * 3));
+    const drawn = (this.pickDrawn ??= new Uint8Array(count));
+    const cull = this.material.side !== THREE.DoubleSide;
     for (let s = 0; s < this.count; s++) {
       if (((this.shown >> s) & 1) === 0) continue;
       const at = s * ROW_TEXELS * 4;
-      _torso.compose(_o.fromArray(this.rows, at), _q.fromArray(this.rows, at + 4), _unit);
-      _world.multiplyMatrices(this.matrixWorld, _torso);
-      _pick.geometry = this.geometry;
-      _pick.material = this.material;
-      _pick.matrixWorld = _world;
-      _pick.raycast(raycaster, hits);
-      for (const hit of hits) {
-        if (!hit.face || !isDrawn(kinds.getY(hit.face.a), this.flagsOf(s))) continue;
-        hit.instanceId = s;
-        hit.object = this;
-        intersects.push(hit);
+      _reach.center.set(PARTS[0].c[0], PARTS[0].c[1], PARTS[0].c[2]).applyQuaternion(_q.fromArray(this.rows, at + 4)).add(_o.fromArray(this.rows, at));
+      if (!_local.intersectsSphere(_reach)) continue;
+      for (let i = 0; i < count; i++) {
+        drawn[i] = this.posed(s, i, _o) ? 1 : 0;
+        _o.toArray(points, 3 * i);
       }
-      hits.length = 0;
+      for (let t = 0; t < index.count; t += 3) {
+        const a = index.getX(t);
+        const b = index.getX(t + 1);
+        const c = index.getX(t + 2);
+        if (drawn[a] === 0 || _local.intersectTriangle(_va.fromArray(points, 3 * a), _vb.fromArray(points, 3 * b), _vc.fromArray(points, 3 * c), cull, _at) === null) continue;
+        const point = _at.clone().applyMatrix4(this.matrixWorld);
+        const distance = raycaster.ray.origin.distanceTo(point);
+        if (distance < raycaster.near || distance > raycaster.far) continue;
+        const normal = _vb.clone().sub(_va).cross(_vc.clone().sub(_va)).normalize();
+        intersects.push({ distance, point, face: { a, b, c, normal, materialIndex: 0 }, faceIndex: t / 3, instanceId: s, object: this });
+      }
     }
   }
 }
@@ -195,8 +211,12 @@ function sprayAtlas(rgba: Uint8Array, slots: number): THREE.DataTexture {
   return atlas;
 }
 
-const _pick = new THREE.Mesh();
-const _torso = new THREE.Matrix4();
-const _world = new THREE.Matrix4();
+const _inverse = new THREE.Matrix4();
+const _local = new THREE.Ray();
 const _q = new THREE.Quaternion();
-const _unit = new THREE.Vector3(1, 1, 1);
+const _va = new THREE.Vector3();
+const _vb = new THREE.Vector3();
+const _vc = new THREE.Vector3();
+const _at = new THREE.Vector3();
+/** The sphere a posed body lies within, about its torso's centre: the standing feet are 1.11 m below it, a flung limb no farther. */
+const _reach = new THREE.Sphere(new THREE.Vector3(), 1.3);

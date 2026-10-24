@@ -168,6 +168,7 @@ export abstract class EngineHud extends EngineWarm {
       })),
       race: this.race.active ? { ...this.race.hud(), ...this.reelHud() } : null,
       seat: this.seat.mode,
+      foot: this.onFoot?.hud() ?? null,
       boost: this.seat.boost,
       drift: seatDrift,
       view: this.seat.view,

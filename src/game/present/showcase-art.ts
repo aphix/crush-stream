@@ -71,11 +71,13 @@ export const SHOWCASE_CAR_YAW = -Math.PI / 5;
 /** The eye the scene opens on (m; it looks at `look`), the sandbox car's parking spot out of sight, and a knock (m/s up, and away from the eye along -z). */
 export const SHOWCASE_EYE = { x: 0, y: 1.5, z: 8, lookX: 0, lookY: 1, lookZ: 0 };
 export const SHOWCASE_CAR = { x: 60, z: 60 };
-export const SHOWCASE_KNOCK = { up: 2.5, away: 5 };
+export const SHOWCASE_KNOCK = { speed: 6, lift: 0.3 };
 /** The reference's studio: a key from the eye's upper left (42° up, 20° round), so each front falls off to its right side as the reference's do, a cool sky light filling with its grey floor's bounce from below, and the fill as a low back light behind the rows so their backs are not left in the dark (low, so it lights no cap or hair top). */
 export const SHOWCASE_LIGHT = { ...LAB_LIGHT, sunIntensity: 1.6, sunAt: [-5, 14, 14] as const, hemi: "#bcc2cc", hemiIntensity: 1.4, ground: "#7a7a7a", fillIntensity: 1.1, fillAt: [0, 3, -14] as const };
 /** The reference's floor: a matte mid-grey (sRGB, tuned to its lightness under the showcase's light) over the sandbox's asphalt, under its grid and rings; matte so the back light does not glint off it at the eye's grazing angle. */
 const STUDIO_FLOOR = 0x3f3c39;
+
+const _mark = new THREE.Vector3();
 
 export class ShowcaseArt {
   readonly group = new THREE.Group();
@@ -94,16 +96,28 @@ export class ShowcaseArt {
     this.stand();
   }
 
-  /** Every figure back on his mark (a reset), turned to face the scene's eye as the reference's line-up faces its camera; the cop stands square to the line as the reference's does, so the key rakes his front as it does the man's. */
+  /** Every figure back on his mark (a reset). */
   stand(): void {
-    const at = new THREE.Vector3();
-    const stance = blankStance();
-    for (let slot = 0; slot < SLOTS; slot++) {
-      this.markOf(slot, at);
-      const yaw = this.figureOf(slot).square ? 0 : Math.atan2(SHOWCASE_EYE.x - at.x, SHOWCASE_EYE.z - at.z);
-      this.people.stand(slot, at.x, at.y, at.z, yaw, ROWS[Math.floor(slot / FIGURES.length)]!.pose(stance), false);
-    }
+    for (let slot = 0; slot < SLOTS; slot++) this.place(slot);
     this.people.update(0);
+  }
+
+  /** Slot `slot` back on his mark (he has walked home). */
+  restore(slot: number): void {
+    this.place(slot);
+    this.people.update(0);
+  }
+
+  /** Slot `slot` on his mark in his row's pose, turned to face the scene's eye as the reference's line-up faces its camera; the cop stands square to the line as the reference's does, so the key rakes his front as it does the man's. */
+  private place(slot: number): void {
+    this.markOf(slot, _mark);
+    this.people.stand(slot, _mark.x, _mark.y, _mark.z, this.yawOf(slot), ROWS[Math.floor(slot / FIGURES.length)]!.pose(blankStance()), false);
+  }
+
+  /** The way slot `slot` faces on his mark (rad about the vertical, 0 along +z). */
+  yawOf(slot: number): number {
+    this.markOf(slot, _mark);
+    return this.figureOf(slot).square ? 0 : Math.atan2(SHOWCASE_EYE.x - _mark.x, SHOWCASE_EYE.z - _mark.z);
   }
 
   /** Slot `slot` taken off the set (knocked over: the ragdoll world has him now). */
