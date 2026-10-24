@@ -495,7 +495,7 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
     [edge === null ? hw * 0.8 : lerp(hw * 0.8, Math.min(hw * 0.8, edge), tub.t), floor + 0.004],
   ];
   const boot = bootCut(style);
-  const cut = source === "drawn" ? bootCutAt(z, boot) : { open: 0, face: 0 };
+  const cut = source === "drawn" || style.cageTailCut === true ? bootCutAt(z, boot) : { open: 0, face: 0 };
   const lidCap = source === "drawn" ? flushLidCap(style.boot) : Infinity;
   const lidWall = Math.min(hw - 0.06, lidCap + LID_GROOVE);
   // A capped lid's quarter top runs straight back at the rim's x through the cut's ramps, so no twisted wedge opens into the hollow beside the lid's corners.
@@ -1181,6 +1181,8 @@ export function recessShutLine(ring: Pt[], z: number, style: BodyStyle): void {
 const TAILGATE_INSET = 0.135;
 /** A tailgate's (and the infill beside its step) thickness (m). */
 const TAILGATE_TK = 0.03;
+/** The cage's tailgate thickness (m) where its tail is cut open (`cageTailCut`): the lid's raster reach (a step) already carries the gate's face, and a 3 cm slab put its inner top edge within that reach of the cargo floor's nodes 5 cm ahead, lifting them to the gate's top. */
+const CAGE_TAILGATE_TK = 0.01;
 /** The shut line (m) between a stepped tailgate's edge and the infill panel beside it. */
 const SEAM_GAP = 0.004;
 
@@ -1223,6 +1225,7 @@ function makeTailgate(style: BodyStyle, b: Tailgate, source: BodySource, lip?: B
   const [y1] = b.origin;
   const bow = 0.02;
   const segs = 5;
+  const thick = source === "cage" && style.cageTailCut === true ? CAGE_TAILGATE_TK : TAILGATE_TK;
   const corners = gateHeights(b).slice(1, -1).map((y) => (y - y0) / (y1 - y0));
   // The bow is one parabola over the widest span and its inner lines stand at half the narrowest width, so its lines run smooth past a
   // step in the outline (a narrower stretch's edge stands a little proud of the body beside it).
@@ -1244,8 +1247,8 @@ function makeTailgate(style: BodyStyle, b: Tailgate, source: BodySource, lip?: B
       { x: 0, y: bow + out },
       { x: mid, y: bowAt(mid) + out },
       ...corner,
-      { x: w, y: -TAILGATE_TK },
-      { x: -w, y: -TAILGATE_TK },
+      { x: w, y: -thick },
+      { x: -w, y: -thick },
     ]);
     ys.push(y);
   }
@@ -1320,6 +1323,21 @@ export function makeTrunkGeometry(style: BodyStyle = SEDAN, source: BodySource =
   const [py, pz] = bootPivot(b);
   if (py !== b.origin[0] || pz !== b.origin[1]) g.translate(0, b.origin[0] - py, b.origin[1] - pz);
   return markSkinDynamic(g);
+}
+
+/** A geometry's vertices at its greatest height. */
+export function topVertices(geo: THREE.BufferGeometry): number[] {
+  const pos = geo.getAttribute("position");
+  let top = -Infinity;
+  for (let v = 0; v < pos.count; v++) top = Math.max(top, pos.getY(v));
+  const held: number[] = [];
+  for (let v = 0; v < pos.count; v++) if (pos.getY(v) > top - 1e-6) held.push(v);
+  return held;
+}
+
+/** The vertices of a style's cage tailgate the decimation keeps (`cageTailCut`): its top ring, so the gate's cap stands as wide as the gate over a gone rear glass, not as a triangle the decimation narrows. None for a style that does not cut its tail. */
+export function cageGateHold(style: BodyStyle, gate: THREE.BufferGeometry): number[] {
+  return style.cageTailCut === true ? topVertices(gate) : [];
 }
 
 /** How far inside the body side (m) a bumper's wrapped corner is held: a tail or nose narrower than the fascia would show the corner through the skin. */

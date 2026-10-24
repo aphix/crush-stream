@@ -8,7 +8,7 @@ import { CarCage, type CageLive, type CageSource, P_CAP, P_CUT_X, P_CUT_Y, P_CUT
 import type { DeformableCar } from "./car.ts";
 import { hingePose, INTERIOR_MASSES } from "./part-pose.ts";
 import { CAGE_DOOR_THICKNESS, doorSkinZ, makeDoorGeometry } from "./car-door-mesh.ts";
-import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
+import { cageGateHold, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
 import { bumperCorner } from "./car-bumper-corner.ts";
 import { makeWindshield } from "./car-glass.ts";
 import { makeLightBar, pushBarBox } from "./car-materials.ts";
@@ -144,7 +144,12 @@ function cagePanelsOf(car: DeformableCar): Panel[] {
   const cageLid = (panel: Panel, geometry: THREE.BufferGeometry, held?: Uint8Array): Panel => ({ ...panel, mesh: new THREE.Mesh(geometry), rest: Float32Array.from(geometry.getAttribute("position").array), held });
   return panelsOf(car).map((panel) => {
     if (panel.part === "bonnet") return cageLid(panel, makeHoodGeometry(car.style, "cage"));
-    if (panel.part === "boot") return cageLid(panel, makeTrunkGeometry(car.style, "cage"));
+    if (panel.part === "boot") {
+      const gate = makeTrunkGeometry(car.style, "cage");
+      const held = new Uint8Array(gate.getAttribute("position").count);
+      for (const v of cageGateHold(car.style, gate)) held[v] = 1;
+      return cageLid(panel, gate, held);
+    }
     if (panel.mesh === car[LIGHT_BAR]) return cageLid(panel, makeLightBar("cage"));
     if (panel.part === "glassFront" && car.style.drawn !== undefined) return cageLid(panel, makeWindshield(car.style));
     if (panel.bar) {

@@ -39,12 +39,12 @@ const interiorThroughRoof =
 const noseFaceUnderLeaf =
   "hood p95 0.06 m against the 0.05 m bar on the wagon and pickup head-on rows (the sedan's reads 0.036 and is a plain row): the cage reaches the crushed nose's front rows (0.10 m under the hood in one node, under CLIFF, in the rim), which no cut splits off a leaf with an inside, so the leaf over them stands 6.6 cm over the drawn nose face; after the plan (Stage 5): the proxy fitter takes the crushed nose's front as a surface of its own";
 
-/** The wagon's rolled deck row: its rear glass is gone after the roof drop, and the cage's closed tail is a cuboid the drawn body shows no top for. */
-const rearGlassGone =
-  "deck p95 0.52 m, worst +0.53 m over the drawn top at (0.43, -1.93..-1.98): the wagon's rear glass shatters in the 2 m roof drop, so the drawn top over its opening is the cargo floor (0.38-0.58 m) while the proxy's cuboid over the cage's closed tail stands at 1.11 m; after the plan: the cage's tail opens where the rear glass is gone, as the drawn body's does";
 /** The pickup's airborne deck row (25°): the fitter's one leaf over the bed floor and the cab's rear wall, a cut or leaf budget, not the cage. */
 const bedFrontLeaf =
   "CarRig: a dummy-proxy leaf spans the bed floor (0.80) and the cab's rear wall at the bed front, airborne 25°: deck worst +0.12 m at (0.43, -1.08..-1.18), up .072 before the door/C-post step; the fitter's cut or leaf budget, not the door data";
+/** The wagon's rolled deck row: the rear glass is gone, the cage's tail opens to the cargo floor, and the drawn D-posts stand at the opening's edge, inside the fitter's rim. */
+const dPostAtOpenTail =
+  "deck worst -0.18 m under the drawn top at (+-0.57, -1.88), p95 0.013, the rest within 0.08 m: the wagon's rear glass is gone after the roof drop and the cage's tail opens down to the cargo floor (0.38), where the drawn D-posts stand 1.28 m at the opening's edge; their cage nodes (x +-0.55..0.60, 1.09-1.23 m) lie 3-9 cm inside the plan's outline, in the fitter's rim (`RIM` 0.1 m), and a rim node over its leaf's inside top is excluded from the leaf's spread (`counts`), so no cut splits the posts off the leaf over the row (x -0.67..0.68, z -1.92..-1.87), which stands at the floor's 0.395; after the plan: the fitter takes a post at an opened tail's edge as a surface of its own";
 const todoCause: Record<string, string> = { cabin: interiorThroughRoof, hood: noseFaceUnderLeaf };
 
 const proxyCases = BODIES.flatMap((b) =>
@@ -62,7 +62,7 @@ const proxyCases = BODIES.flatMap((b) =>
     ],
     todoCauses: {
       ...(b.style === "pickup" && s.id === "airborne" ? { deck: bedFrontLeaf } : {}),
-      ...(b.style === "wagon" && s.id === "rolled" ? { deck: rearGlassGone } : {}),
+      ...(b.style === "wagon" && s.id === "rolled" ? { deck: dPostAtOpenTail } : {}),
     } as Partial<Record<string, string>>,
   })),
 );

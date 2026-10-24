@@ -29,6 +29,7 @@ import {
   sampleSlice,
   sectionPoints,
   shoulderTop,
+  topVertices,
   type BodySource,
   type Pt,
   type V3,
@@ -142,16 +143,6 @@ const CAGE_ROOF_LIPS = [0, 8] as const;
 
 /** The cage's rear header box is this much (m) wider than the rear glass's top, so it covers the glass's frame there. */
 const REAR_HEADER_MARGIN = 0.12;
-
-/** A geometry's vertices at its greatest height. */
-function topVertices(geo: THREE.BufferGeometry): number[] {
-  const pos = geo.getAttribute("position");
-  let top = -Infinity;
-  for (let v = 0; v < pos.count; v++) top = Math.max(top, pos.getY(v));
-  const held: number[] = [];
-  for (let v = 0; v < pos.count; v++) if (pos.getY(v) > top - 1e-6) held.push(v);
-  return held;
-}
 
 /** The drawn roof loft's ring stations (z, ascending): `ROOF_SEGS` even ones, plus each rolled end's `ROOF_ROLL_STATIONS` in the drawn roof. */
 function roofRingZs(style: BodyStyle, source: BodySource): number[] {
