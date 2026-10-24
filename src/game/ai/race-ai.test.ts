@@ -51,12 +51,13 @@ function hardMarks(track: Track): string[] {
  * whole class brake, and the harness began to give each car its class (`setClass`: the mix of fleet styles plans with its own figures, as the game does), and re-pinned when the contact guard's push and braking demand began to be held and released over time instead of coming and going with the contact on its 0.1 s look-ahead grid (`contact-guard.ts` `PUSH_RELEASE_S`: a bug fix, the racer's wheel reversed 32 times a second on a grazing contact),
  * and when every AI's wheel was held to a pad player's 12 of lock a second (`applyAiDrive`, which the harness drives through as the game does) and the guard's push kept its side on a contact near the path's centre (`SIDE_BAND`): bug fixes, AI wheels flipped full lock in a step;
  * and when that side was kept only while the guard steers clear, not while it brakes: a bug fix, the push steered toward a car crossing the centre line,
- * and when every style's cabin cages came from its own panels (the fleet's hatchback, wagon, coupe and pickup meet each other on new contact shapes).
+ * and when every style's cabin cages came from its own panels (the fleet's hatchback, wagon, coupe and pickup meet each other on new contact shapes),
+ * and when a tyre in its springs on a slope began to be pulled down it by the weight it carries, at any slope (a coasting or driven car on rally's and stunt's grades met a different pull; oval is flat and keeps its marks).
  */
 const HARD_MARKS: Record<string, string[]> = {
   oval: ["e9df8473", "7e9593ab", "6b5fc308", "9be8ec8e", "1da391b9", "15cb62d5", "b81974e2", "f9f01605", "1eb60b86", "92a70774", "5aed2cd0", "ccaba551", "c3295f1d", "cd39d90a", "7cb6e26c", "52acf03f"],
-  rally: ["b1e61d10", "1bbe9778", "951aed75", "471cab69", "56ca513a", "43157051", "7c7497de", "15c5bb3e", "f9c3b299", "2dd5efd2", "a2349e6d", "c91501ea", "4eae5cf", "79c88744", "60b34093", "67b9f622"],
-  stunt: ["c1d612be", "5c943686", "b4edb297", "626250d3", "8c8e2f9e", "6be38f3e", "457704cf", "65f44394", "eca75d66", "7db5998", "f1a6cf0c", "4d144eb4", "d52b81ac", "ca859afa", "1c5e8e1b", "efe91c7a"],
+  rally: ["da61bb0d", "3abf139b", "9c70cadc", "511405a1", "6762bfe2", "31533273", "f9db9095", "f121f1c9", "dee3e590", "c3915fa0", "1ee5026a", "c898f223", "7b7c4918", "1951ebc4", "9a15bef2", "53aa8b5c"],
+  stunt: ["53229d9d", "6c1aa909", "1e34a67d", "27444265", "bada6771", "bbdc1d8d", "bcf0675f", "6eb7b5d9", "9c3ef3c", "ed928c18", "ce00fdf1", "70c9b6e6", "62ebb384", "b05a5ec9", "36e8f114", "d6982bc7"],
 };
 
 describe("given 8 clean AI cars (aggression 0) on the grid of the oval", () => {
