@@ -67,6 +67,8 @@ export interface ClassStats {
   wheelScale: number;
   /** The share of the platform rig's crash mass (858 kg) this class's body carries: the masses and beams of its soft body (`RigTables.massScale`), so a heavier archetype pushes a little more in a crash (±20 % about the sedan). */
   crashMass: number;
+  /** The hit speed (m/s EBS) under which no hit takes this class's wheels off (`RigTables.hubHoldMps`); 0: only the platform's gates stand. Hub hardware is built for loads that follow its wheel's mass, so a Monster Jam truck's is the platform's `HUB_POP_MPS` times the square root of its corner's unsprung share of the car over a sedan's (380 of 5440 kg a corner against 40 of 1500): 24. */
+  hubHoldMps: number;
 }
 
 const SEDAN: ClassStats = {
@@ -92,6 +94,7 @@ const SEDAN: ClassStats = {
   lift: 0,
   wheelScale: 1,
   crashMass: 1,
+  hubHoldMps: 0,
 };
 
 /**
@@ -123,6 +126,7 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
     lift: 0,
     wheelScale: 1,
     crashMass: 1,
+    hubHoldMps: 0,
   },
   truck: {
     id: "truck",
@@ -147,6 +151,7 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
     lift: 0,
     wheelScale: 1,
     crashMass: 1,
+    hubHoldMps: 0,
   },
   monster: {
     id: "monster",
@@ -172,6 +177,7 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
     lift: 0.87,
     wheelScale: 1.73,
     crashMass: 1,
+    hubHoldMps: 24,
   },
   /**
    * The sedan's drive on the black-and-white body with the light bar, rear-driven: the archetype is a rear-drive pursuit sedan

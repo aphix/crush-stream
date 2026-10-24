@@ -64,6 +64,8 @@ export interface RigTables {
   readonly noseReach: number;
   /** Packed bumper-to-block-centre length (m): bumper beam and radiator crushed flat ahead of the block. The nose's rest gap less this is its crumple, 0.30 m on every body; crush past it shoves the engine back. */
   readonly packGap: number;
+  /** The hit speed (m/s EBS) under which no hit takes a wheel off, whatever the crush: 0 on the platform (the gates of `clampMass` stand alone), more where the hub hardware is built for heavier wheels. */
+  readonly hubHoldMps: number;
 }
 /** Platform bonnet top (m): where the top band starts following the roof's crush. */
 const PLATFORM_BONNET_TOP = CAGES.find((cage) => cage.name === "bonnet")!.max[1];
@@ -89,6 +91,7 @@ export const PLATFORM_RIG: RigTables = {
   tyreReach: 0.42,
   noseReach: 0,
   packGap: 0.54,
+  hubHoldMps: 0,
 };
 /** Depth (m) inside the chassisCell span's front/rear face over which non-cell skin weight blends back in. */
 const CELL_FACE_BLEND = 0.3;

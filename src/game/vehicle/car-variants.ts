@@ -421,13 +421,16 @@ export interface BodyStyle {
    * `groove` [out, down] (m, drawn only): over the open bay the fender's deck edge beside a lid hood stands `out` outboard of the hood's edge and `down` lower, a shut-line slot onto the bay wall.
    * `nose` [drop, radius] (drawn only, `HoodNose`): the lid folds over the nose at z1 and runs down its face.
    * `inset` [nose, cowl] (m, drawn only, with `crown`): the side shut line's inset from the half-width, z1 to z0; the flat fender top runs in to it, the crown kept.
+   * `cageCrown` (with `crown`): the cage's lid takes the crown's rise too (its plain edge and dome points kept), so what other cars and the dummies stand on is the drawn dome, not a flat lid 4-5 cm under its centre line; absent, the cage's plain lid.
    * `followGlass` (m): drawn only, the hood's rear edge runs this far in front of the windshield's base along its plan bow (the cowl between them), fading into the lid; absent, straight at `z0`.
    * `calmPan` (drawn only): the hidden inner pan (skirts, underside) lays its gentle folds flat, keeping the bends a stamped panel would; absent, it follows the lid's own curve.
    */
-  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number]; groove?: readonly [out: number, down: number]; nose?: HoodNose; inset?: readonly [nose: number, cowl: number]; followGlass?: number; calmPan?: boolean };
+  hood: { z0: number; z1: number; origin: YZ; kind?: "lid" | "clamshell"; bulge?: HoodBulge; crown?: readonly [drop: number, at: number]; cageCrown?: boolean; groove?: readonly [out: number, down: number]; nose?: HoodNose; inset?: readonly [nose: number, cowl: number]; followGlass?: number; calmPan?: boolean };
   /** The rear bumper may carry a tow-hitch receiver under its middle (`hitch`). */
   bumpers: { front: BumperSpec; rear: BumperSpec & { hitch?: boolean } };
   rearGlass: GlassQuad;
+  /** The cage's rear header box (a stand-in over the rear glass's top corner): its centre stands this far (m) over the glass's top (absent `REAR_HEADER_RISE`); a roof that ends at the glass's top sets its box's top onto the glass's, so the box never stands over the drawn deck there. */
+  rearHeaderRise?: number;
   /** Side glass behind the B-pillar: rear edge z at the belt and at the top. `drawn` (drawn only): the drawn pane, sail and trim's own; the cage's post and rail and the dummies' pane keep these. */
   quarter: { zRearBot: number; zRearTop: number; drawn?: { zRearBot: number; zRearTop: number } };
   /** Extra pillar splitting the quarter glass (wagon C-pillar), or null. */
@@ -474,9 +477,9 @@ export interface BodyStyle {
    * `reachLip` (0..1, drawn only, a flat sail on a `roofSection`): ahead of the roof end the sail's outer face reaches the roof's cant lip at the cant line (the roll end's own section carried onto each ring), not a chord under the roof's edge; absent 0.
    * `dEnd` ([radius, z], m, drawn only, with `pinch`): the side window's rear end rounded: its line leaves the belt on an arc of `radius` tangent to the
    * line's start (tip to the glass's top corner), the arc's rearmost point at car `z` (ahead of the tip); the sail covers the glass behind it; absent,
-   * the line meets the belt in a point at the tip.
+   * the line meets the belt in a point at the tip. `cageSail`: the cage's C-post is the sail's own loft, so a tyre above stands on the bulge it sees; absent, the flat box between the post's corners.
    */
-  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; sweep?: number; bead?: boolean; blend?: number; railRun?: number; reachLip?: number; rollShare?: number; dEnd?: readonly [radius: number, z: number] };
+  cPillar?: { tip?: YZ; flush?: boolean; flat?: boolean; corner?: number; pinch?: number; sweep?: number; bead?: boolean; blend?: number; railRun?: number; reachLip?: number; rollShare?: number; dEnd?: readonly [radius: number, z: number]; cageSail?: boolean };
   /** Dark-tinted panes (drawn only): the rear glass and the side panes behind the B-pillar, as the reference's privacy glass; "matte" ones rougher. */
   privacyGlass?: { rear?: boolean | "matte"; quarter?: boolean | "matte" };
   /** Drawn only: the body paint's base roughness, clear coat and clear coat roughness (`makePaintMaterial`); absent the platform paint's (0.42, 0.72, 0.24). */

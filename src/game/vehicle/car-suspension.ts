@@ -1,11 +1,12 @@
 import * as THREE from "three";
-import type { VehicleClassId } from "./vehicle-classes.ts";
+import { CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
 import { CLASS_LIFT } from "./constants.ts";
 import type { CarFrame } from "./car-rig.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { C_H, HIT_SIZE, staticTop } from "../world/surfaces.ts";
 import { LoadTransfer } from "./car-load.ts";
 import { detSin, detCos, detAtan } from "../kernel/physics-core.js";
+import { GRAVITY } from "../kernel/constants.ts";
 
 /**
  * The tyre springs and dampers of a body on the road (`stepFree`): a spring and a damper per corner push the physics body up, per
@@ -13,23 +14,34 @@ import { detSin, detCos, detAtan } from "../kernel/physics-core.js";
  * is the body's own heave, pitch and roll, and only the load transfer (squat, dive and lean) is drawn on top.
  *
  * Per class: ride frequency f (Hz), one symmetric damping ratio ζ (a little under real bump/rebound, for arcade
- * bounce) and total travel (m), split evenly into bump and droop with a hard stop at each end. Per corner mass m:
+ * bounce), total travel (m), split evenly into bump and droop with a hard stop at each end, and the unsprung over the sprung mass,
+ * which hangs an upside-down body's wheels up their springs (0: they stay on their rest hubs). Per corner mass m:
  * k = m (2πf)², c = 2ζ √(k m); per unit mass ω² and 2ζω. Ranges: `.extraResearch` 2026-10-02-suspension-*.
  */
-export const SPRINGS: Readonly<Record<VehicleClassId, { hz: number; zeta: number; travel: number }>> = {
-  sedan: { hz: 1.3, zeta: 0.3, travel: 0.13 },
-  muscle: { hz: 1.6, zeta: 0.3, travel: 0.11 },
-  police: { hz: 1.5, zeta: 0.35, travel: 0.13 },
-  truck: { hz: 1.1, zeta: 0.25, travel: 0.22 },
-  // ζ 0.2 (the starting value) still swung 1 cm 2.4 s after a 14 m/s ramp landing (0.3: 2.3 s); 0.35 settles by 2 s.
-  monster: { hz: 0.8, zeta: 0.35, travel: 0.45 },
-  hatch: { hz: 1.45, zeta: 0.35, travel: 0.12 },
-  suv: { hz: 1.15, zeta: 0.35, travel: 0.19 },
+export const SPRINGS: Readonly<Record<VehicleClassId, { hz: number; zeta: number; travel: number; unsprung: number }>> = {
+  sedan: { hz: 1.3, zeta: 0.3, travel: 0.13, unsprung: 0 },
+  muscle: { hz: 1.6, zeta: 0.3, travel: 0.11, unsprung: 0 },
+  police: { hz: 1.5, zeta: 0.35, travel: 0.13, unsprung: 0 },
+  truck: { hz: 1.1, zeta: 0.25, travel: 0.22, unsprung: 0 },
+  // Monster Jam: ζ 0.35-0.5; 0.42, the most of it that leaves a monster clearing the long jump's barrier. 1350 lb unsprung over 1650 lb sprung a corner.
+  monster: { hz: 0.8, zeta: 0.42, travel: 0.45, unsprung: 0.82 },
+  hatch: { hz: 1.45, zeta: 0.35, travel: 0.12, unsprung: 0 },
+  suv: { hz: 1.15, zeta: 0.35, travel: 0.19, unsprung: 0 },
 };
 
 /** How far (m) a class's wheels reach below its body's rest ride (half its travel): further off its ground no wheel holds it, it flies. */
 export function droop(cls: VehicleClassId): number {
   return SPRINGS[cls].travel / 2;
+}
+
+/** The distance (m) a bump stop keeps ahead of an upside-down body's hanging wheels: 3 in at a monster truck's 0.73 tyre scale, the design margin of a truck's full-bump clearance. */
+export const BUMP_RESERVE = 0.055;
+
+/** How far (m) a class's wheels hang up their springs from a body whose up is `upY` (< 0 upside down): the unsprung weight presses them toward the frame, held `BUMP_RESERVE` short of the bump stop. */
+function invertedHang(cls: VehicleClassId, upY: number): number {
+  const s = SPRINGS[cls];
+  const w = 2 * Math.PI * s.hz;
+  return Math.max(0, Math.min(archStop(cls) - BUMP_RESERVE, (s.unsprung * GRAVITY * Math.max(0, -upY)) / (w * w)));
 }
 
 /**
@@ -204,7 +216,7 @@ export class Suspension {
     const off = this.offset;
     const sunk = this.rise > 0 || off[0]! < 0 || off[1]! < 0 || off[2]! < 0 || off[3]! < 0;
     const bottom = wreck || (air && !sunk) ? 0 : this.bottomOut(e, lift);
-    if (this.seatWheels(e, hit, wheels, stop, room, air, gone, unheld, dt) || moved || bottom !== this.rise || lift !== this.posedLift) {
+    if (this.seatWheels(e, hit, wheels, stop, room, air, gone, unheld, dt, invertedHang(cls, e[5]!) - (CLASSES[cls].lift - lift)) || moved || bottom !== this.rise || lift !== this.posedLift) {
       this.rise = bottom;
       this.pose(lift);
     }
@@ -236,7 +248,7 @@ export class Suspension {
    * that corner of the body beyond. A wheel in `gone` is a world object of its own (`stepLoose`): not seated. One in `unheld` eases back onto its
    * hub, as off the ground. True when it lifted one.
    */
-  private seatWheels(e: readonly number[], hit: Float64Array, wheels: readonly THREE.Object3D[], stop: number, room: number, air: boolean, gone: number, unheld: number, dt: number): boolean {
+  private seatWheels(e: readonly number[], hit: Float64Array, wheels: readonly THREE.Object3D[], stop: number, room: number, air: boolean, gone: number, unheld: number, dt: number, shift: number): boolean {
     const uy = e[5]!;
     let lifted = false;
     for (let i = 0; i < 4; i++) {
@@ -256,7 +268,7 @@ export class Suspension {
       }
       // Along the world's vertical (the body's up leans a rolled wheel's hub sideways: over a ramp's edge it stood on the wrong side of it).
       const hub = this.frame.wheels[i]!;
-      w.position.set(hub[0] + s * e[1]!, hub[1] + s * uy, hub[2] + s * e[9]!);
+      w.position.set(hub[0] + s * e[1]!, hub[1] + s * uy + shift, hub[2] + s * e[9]!);
       this.seat[i] = s;
     }
     return lifted;

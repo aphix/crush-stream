@@ -34,7 +34,7 @@ export const CAGE_STEP = 0.05;
 /** The decimation's vertex target: the body and its panels (lids, glass), which keeps the cage near 300 triangles. */
 export const CAGE_VERTICES = 220;
 /** A style's cage build, counted: its sill candidates (`cageSourceOf`: welded, under its rocker line, between its axles) and loft stations. */
-function cageBuildCounts(style: BodyStyle): { sill: number; stations: number } {
+function cageBuildCounts(style: BodyStyle): { sill: number; stations: number; kept: number } {
   const geo = makeChassisGeometry(style, "cage");
   const pos = geo.getAttribute("position").array;
   let axleR = Infinity;
@@ -51,14 +51,17 @@ function cageBuildCounts(style: BodyStyle): { sill: number; stations: number } {
     welded.add(`${Math.round(pos[i]! * 1e4)},${y},${Math.round(z * 1e4)}`);
   }
   const stations = (geo.userData.loft as { slices: number }).slices;
+  const kept = (geo.userData.hold as number[]).length;
   geo.dispose();
-  return { sill: welded.size, stations };
+  return { sill: welded.size, stations, kept };
 }
 const BUILD_COUNTS = CAR_STYLE_IDS.map((id) => cageBuildCounts(CAR_STYLES[id]));
 /** Room for a style's sill samples past the hull (`CageSource.sill`): every sample is one of its style's sill candidates, so the most any style has. */
 export const SILL_CAPACITY = Math.max(...BUILD_COUNTS.map((c) => c.sill));
 /** Room for the underside points the decimation holds over its target (`decimate`'s `held`): at most a station's lowest on each side, every station. */
 export const CAGE_HELD_VERTICES = Math.max(...BUILD_COUNTS.map((c) => 2 * c.stations));
+/** Room for the vertices a style's cage build keeps through the decimation (`hold`: its C-post's crown points), which cost the hull none of its target: the most any style keeps. */
+export const CAGE_KEPT_VERTICES = Math.max(...BUILD_COUNTS.map((c) => c.kept));
 /** Room for a style's bed wheel tubs past its decimated hull (`CageSource.tubs`, kept whole): the most any style's cage build carries. */
 export const CAGE_TUB_VERTICES = Math.max(...CAR_STYLE_IDS.map((id) => wellHumpGeometry(CAR_STYLES[id], "cage")?.getAttribute("position").count ?? 0));
 /** A part decimated on a budget of its own (`CageSource.apart`: a bumper or a door standing on the body), its held points within it: its vertex target. */
@@ -730,7 +733,8 @@ function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGr
     if (tri.every((v) => v >= from && v < to)) tubTris.push(...tri);
     else index.push(...tri.map((v) => (v < from ? v : v - count)));
   }
-  const hull = decimate(rest, index, group, CAGE_VERTICES, Math.min(src.loft, from), held);
+  const kept = held.reduce((n, h) => n + h, 0);
+  const hull = decimate(rest, index, group, CAGE_VERTICES + kept, Math.min(src.loft, from), held);
   const source = Array.from(hull.source, (v) => (v < from ? v : v + count));
   const slots = new Map<string, number>();
   const slotOf = new Int32Array(count);
@@ -753,7 +757,7 @@ function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGr
     triGroup.push(src.group[tubTris[k]!]!);
   }
   appendParts(src, end, source, tris, triGroup);
-  const room = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_TUB_VERTICES + CAGE_PART_VERTICES + CAGE_BAR_VERTICES;
+  const room = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_KEPT_VERTICES + CAGE_TUB_VERTICES + CAGE_PART_VERTICES + CAGE_BAR_VERTICES;
   if (source.length > room) throw new Error(`${source.length} hull vertices, room for ${room}`);
   return { source: Int32Array.from(source), tris: Uint16Array.from(tris), triGroup: Uint8Array.from(triGroup), held: hull.held, heldFrom: hull.heldFrom };
 }

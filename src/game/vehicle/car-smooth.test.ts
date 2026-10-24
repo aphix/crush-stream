@@ -1712,7 +1712,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Sedan and police re-pinned for the door glass's top-front corner kept in under the slim A-post (`aPillarTop` 0.143): 8540eed1 -> 2fc92389; police 5af761d2 -> d97239fa.
   // Then 0.13, so the cage's A-pillar box keeps the dummies' roof proxy off the windshield: 2fc92389 -> d4d091d3; police d97239fa -> 26d74836.
   // Again for the tail widened to the reference's plan: d4d091d3 -> 03293d37; police 26d74836 -> bb93a908.
-  { id: "sedan", digest: "42c41ed32de3c0acaccfb654e2e297e429906df956c36d062b0e0e8b635e7a48" },
+  // Again for the cage's rear header box's top onto the rear glass's (`rearHeaderRise` -0.03: it stood 7 cm over the drawn deck), the cage hood's dome (`hood.cageCrown`: its centre line was 4-5 cm under the drawn crown) and the C-post as the drawn sail's own loft (`cPillar.cageSail`: the box left the cage 10-16 cm under the sail's top): 42c41ed3... -> 5d7bb2e6....
+  { id: "sedan", digest: "5d7bb2e62c75e0c7df943c89955259f78b915d20a8fda94070f97262b4b7289f" },
   // Re-pinned with the cabin cages derived from each style's panels (`carFrame`): the cage-skinned tables over them moved.
   // Hatch, SUV, truck and monster re-pinned with the boot hinged at its own pivot (`bootPivot`): its panel origin and its lid's rest local to it moved; the car-frame cage at rest did not.
   // Hatch and SUV re-pinned for their reference shapes: door shut lines, cowl belt, the SUV's clamshell hood and raked nose, bumpers wrapped to their seams, the hatch's C-pillar top and boot foot.
@@ -1747,7 +1748,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   // Again for its door run back to the side plate's seam (`door.aperture`) with the B and rear post boxes behind it (`bPillar`, `quarter`).
   { id: "pickup", digest: "49d43ba4f5aa04ad65f3154784c6d0cac902c307011cfd33d48f899211a4ab40" },
   // The police's again for its push bar's box in the cage, skinned to its bumper's two masses (`pushBarBox`, a part apart of its own): 64de4e9e... -> d088c1af...; then with its front doors (the bar's part between the bumpers and the doors): d088c1af... -> 9c06e568....
-  { id: "police", digest: "9097740db3f73977425b37ed930a9c13b2cfa56f85a8ad9e39617192004bab6e" },
+  // The police's again with the sedan's rear shoulder cage (`rearHeaderRise`, `hood.cageCrown`, `cPillar.cageSail`): 9097740d... -> aff89a24....
+  { id: "police", digest: "aff89a24d5205015cf7b5f9093b1c84dddbefdace2c4d3dfdd02fa3a074f3714" },
   // The monster re-pinned for its rear door glass ending at the reference's C-pillar (`quarter` -0.55); again for its windshield base at the side
   // plate's (`windshield.base` [1.0, .92] -> [1.05, .98]) and its door glass starting back at .60 (`aPillarFoot` .74 -> .6): the glass-front and A-post boxes moved.
   // Again for its roof's flatter crown and tighter edge roll (`roofSection` crown .75, blend .8), as the pickup's.

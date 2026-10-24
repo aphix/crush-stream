@@ -130,6 +130,37 @@ describe("given a car driven on the road, whose drawn body squats, dives and lea
   });
 });
 
+/** A body's squat, dive and lean build over its springs' own time: a few degrees over a few tenths of a second, not in a frame or two (a heavy truck's launch and stop read 2-5° over 0.3-0.5 s). */
+const TURN_RATE_MAX = 20;
+const BUILD_FRAMES_MIN = 12;
+const HELD_AT_S = 1;
+
+/** The fastest turn (deg/s) of `angles` taken from level one frame to the next, and the frames its magnitude takes to reach 90 % of what it is `HELD_AT_S` s in. */
+function build(angles: readonly number[]): { rate: number; frames: number } {
+  const series = [0, ...angles];
+  let rate = 0;
+  for (let i = 1; i < series.length; i++) rate = Math.max(rate, Math.abs(series[i]! - series[i - 1]!) * FRAME_HZ);
+  const held = series[Math.round(HELD_AT_S * FRAME_HZ)]!;
+  return { rate, frames: series.findIndex((a) => Math.abs(a) >= 0.9 * Math.abs(held)) };
+}
+
+describe("given a car whose throttle, brake or steering goes down at once", () => {
+  for (const cls of VEHICLE_CLASS_IDS) {
+    it(`when a ${cls} launches from rest at full throttle and brakes hard from 25 m/s, then its pitch never turns faster than ${TURN_RATE_MAX}°/s and takes ${BUILD_FRAMES_MIN} frames to reach 90 % of what it is ${HELD_AT_S} s in`, () => {
+      const launch = build(drive(cls, 0, () => ({ throttle: 1 }), 1.5).map((s) => s.pitch));
+      const stop = build(drive(cls, 25, () => ({ brake: 1 }), 1.5).map((s) => s.pitch));
+      assert.ok(launch.rate <= TURN_RATE_MAX && stop.rate <= TURN_RATE_MAX, `launch ${launch.rate.toFixed(1)}°/s, stop ${stop.rate.toFixed(1)}°/s`);
+      assert.ok(launch.frames >= BUILD_FRAMES_MIN && stop.frames >= BUILD_FRAMES_MIN, `launch built in ${launch.frames} frames, stop in ${stop.frames}`);
+    });
+
+    it(`when a ${cls} turns hard at 20 m/s, then its roll never turns faster than ${TURN_RATE_MAX}°/s and takes ${BUILD_FRAMES_MIN} frames to reach 90 % of what it is ${HELD_AT_S} s in`, () => {
+      const turn = build(drive(cls, 20, (v) => ({ throttle: v < 20 ? 0.6 : 0.1, steer: 1 }), 1.5).map((s) => s.roll));
+      assert.ok(turn.rate <= TURN_RATE_MAX, `roll turned ${turn.rate.toFixed(1)}°/s`);
+      assert.ok(turn.frames >= BUILD_FRAMES_MIN, `roll built in ${turn.frames} frames`);
+    });
+  }
+});
+
 describe("given a chase camera that rides the car's drawn body, next to one that does not", () => {
   const H = 1 / FRAME_HZ;
   function rig(ride: boolean) {
