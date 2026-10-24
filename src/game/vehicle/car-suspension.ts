@@ -82,6 +82,9 @@ function reach(frame: CarFrame, j: number, i: number): number {
 /** The body's up (its up axis's world y) from which it stands on its wheels: below it the springs and the body's lift are off. */
 export const UPRIGHT_UP_Y = 0.5;
 
+/** The face's normal along the body's up from below which a tyre's flank is down on it (within 15° of lying flat): its springs, along the body's up, are not under it. */
+export const FLANK_UP_Y = 0.25;
+
 /** The drawn body's class lift (m along its up) at up `upY`: the whole lift while upright, none once on its side, so a lifted body lying over is not drawn into the ground its stock hull rests on. */
 export function bodyLift(lift: number, upY: number): number {
   return lift * Math.max(0, Math.min(1, upY / UPRIGHT_UP_Y));

@@ -6,7 +6,7 @@ import { ASKER } from "../world/prism.ts";
 import { GQ } from "../world/ground-clock.ts";
 import { MIN_SLIDE } from "../deform/constants.ts";
 import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-util.ts";
-import { droop, SPRINGS, UPRIGHT_UP_Y } from "./car-suspension.ts";
+import { droop, FLANK_UP_Y, SPRINGS, UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
@@ -712,10 +712,11 @@ function centredTop(statics: Surface, turnRate: number, dt: number, pointEnd: nu
 }
 
 /**
- * Of the wheels in `mask` (`wheelsAt`), those whose tread meets the surface under it: that surface's normal within `UPRIGHT_UP_Y` of the
- * body's up (`q`). A car lying on its side has its tyres' flanks on the ground; one up a kicker's steep face has its treads on it.
+ * Of the wheels in `mask` (`wheelsAt`), those whose tread meets the surface under it: that surface's normal at least `minUp` along the
+ * body's up (`q`). With `UPRIGHT_UP_Y`, a car lying on its side has its tyres' flanks on the ground and one up a kicker's steep face has
+ * its treads on it; with `FLANK_UP_Y`, only a tyre lying flat on its side is off its tread.
  */
-function onTreads(car: DeformableCar, mask: number, q: THREE.Quaternion): number {
+function onTreads(car: DeformableCar, mask: number, q: THREE.Quaternion, minUp: number): number {
   // The body's up axis in the world: the rotation's second column.
   const ux = 2 * (q.x * q.y - q.w * q.z);
   const uy = 1 - 2 * (q.x * q.x + q.z * q.z);
@@ -724,7 +725,7 @@ function onTreads(car: DeformableCar, mask: number, q: THREE.Quaternion): number
   let on = 0;
   for (let i = 0; i < 4; i++) {
     const o = i * HIT_SIZE;
-    if (((mask >> i) & 1) === 1 && hit[o + C_NX]! * ux + hit[o + C_NY]! * uy + hit[o + C_NZ]! * uz >= UPRIGHT_UP_Y) on |= 1 << i;
+    if (((mask >> i) & 1) === 1 && hit[o + C_NX]! * ux + hit[o + C_NY]! * uy + hit[o + C_NZ]! * uz >= minUp) on |= 1 << i;
   }
   return on;
 }
@@ -803,7 +804,9 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // its side with its brakes held rolled down a 10° slope on its two low tyres, 1.3 to 4.5 m/s over 9 s. Judged by the world's up, a sedan
   // up a kicker's steepest pitch lost its drive on its treads.
   const near = wheelsAt(car, within, true, TOUCH);
-  const driving = (!wreck || car.deform.drivetrainAlive) && (near === 0 || onTreads(car, near, q) !== 0);
+  const treads = near === 0 ? 0 : onTreads(car, near, q, UPRIGHT_UP_Y);
+  const notFlat = near === 0 ? 0 : onTreads(car, near, q, FLANK_UP_Y);
+  const driving = (!wreck || car.deform.drivetrainAlive) && (near === 0 || treads !== 0);
   const rolling = near !== 0 && (wreck || !car.crashed);
   const driven = rolling && !car.parked && driving;
   const hit = car.wheelHit;
@@ -845,7 +848,8 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     SLOT[n] = surf.slot(own, N[n]!, false, q, FOLLOW[n]!);
     // How far past what holds it the point is: a tyre's springs and their full travel.
     const sink = pen * N[n]!.y - stop;
-    SOFT[n] = sink < 0;
+    // A tyre's springs run along the body's up: on a floor its flank lies flat on (a car on its side) they are not under it and the contact is rigid.
+    SOFT[n] = sink < 0 && (N[n]!.y < CLIMB_NY || ((notFlat >> i) & 1) === 1);
     GAPV[n] = 0;
     SINK[n] = sink;
     PRESS[n] = pen;

@@ -134,9 +134,10 @@ const PART_CLEAR = 0.04;
 const PART_PROBE = 1.5;
 
 /**
- * Lifts `seat` along the world's up (in its parent's frame, which carries no scale) until every bottom corner of its drawn box stands
+ * Lifts `seat` along the world's up (in its parent's frame, which carries no scale) until every corner of its drawn box stands
  * `PART_CLEAR` over the ground under it: a rigid part hanging under its car's cage (a pickup's bay over its V-shaped underside, the
- * monster's frame under its lifted body) rests on the road the wreck rests on, not through it.
+ * monster's frame under its lifted body) rests on the road the wreck rests on, not through it. Every corner, not the box's bottom
+ * ones: a wreck on its roof or side stands on the box's other faces.
  */
 function restOnGround(seat: PartSeat): void {
   const parent = seat.parent;
@@ -149,8 +150,8 @@ function restOnGround(seat: PartSeat): void {
   _seatWorld.multiplyMatrices(parent.matrixWorld, seat.matrix);
   const ground = activeGround();
   let rise = 0;
-  for (let k = 0; k < 4; k++) {
-    _corner.set(k & 1 ? box.max.x : box.min.x, box.min.y, k & 2 ? box.max.z : box.min.z).applyMatrix4(_seatWorld);
+  for (let k = 0; k < 8; k++) {
+    _corner.set(k & 1 ? box.max.x : box.min.x, k & 2 ? box.max.y : box.min.y, k & 4 ? box.max.z : box.min.z).applyMatrix4(_seatWorld);
     const floor = ground.heightAt(_corner.x, _corner.z, _corner.y + PART_PROBE);
     if (floor !== NO_FLOOR) rise = Math.max(rise, floor + PART_CLEAR - _corner.y);
   }

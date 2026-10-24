@@ -448,6 +448,7 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A pair tilted 30° to 150° against each other (a car on its side beside one on its wheels or on its roof) reads the plan overlap from every node of the cages with its own column, not from the outline's stretched band: a monster rolled 70° with a cop's nose in its roof read 0.253 m shallow (0.021 m against 0.274 m) and a one-level graze of the other's top counted as a contact up to 0.75 m deep, and now reads the cages' overlap to within 0.04 m; pairs tilted less (a car pitched 27° on a tier) or turned over flat read as before.
  * The monster's springs damp at ζ 0.42 (were 0.35; Monster Jam 0.35-0.5): a 0.3 m drop's ride, which swung 115, 34 and 10 mm over three turns, swings 91 and 20 mm over one, and it arrives 0.4 m/s slower at the long jump's barrier. Its wheels come off a hit only from 24 m/s of
  * equivalent barrier speed (a sedan's at 18-20: hub hardware is built for the load its wheel's mass makes).
+ * A tyre lying flank-down on the ground (the face's normal under 0.25 along the body's up, within 15° of flat; not a wall) is rigid on it: its springs run along the body's up, not under it, and it sank up to the class's stroke into the ground (a monster dropped on its side 24.8 cm, a sedan 5.0, a truck 3.5), and now stands 4.8-12.3 cm over it.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
