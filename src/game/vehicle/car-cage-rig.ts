@@ -9,6 +9,7 @@ import type { DeformableCar } from "./car.ts";
 import { hingePose, INTERIOR_MASSES } from "./part-pose.ts";
 import { CAGE_DOOR_THICKNESS, doorSkinZ, makeDoorGeometry } from "./car-door-mesh.ts";
 import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry } from "./car-mesh.ts";
+import { bumperCorner } from "./car-bumper-corner.ts";
 import { makeWindshield } from "./car-glass.ts";
 import { makeLightBar, pushBarBox } from "./car-materials.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
@@ -66,8 +67,8 @@ const FACE_RING = 0.01;
 /** The masses a cruiser's push bar rides: its front bumper's two, so the bar's box keeps its reach from the bumper's face as the bumper crushes. */
 const BAR_MASSES = ["bumperFL", "bumperFR"] as const;
 
-/** A bumper's plan points (`Panel.held`): its face's middle and the two ends of its face with its first corner ring (`FACE_RING`), frontmost (`front`) or rearmost. Decimated freely, the face went 1-1.5 cm back. */
-function facePoints(geometry: THREE.BufferGeometry, front: boolean): Uint8Array {
+/** A bumper's held points (`Panel.held`): its face's middle, the two ends of its face with its first corner ring (`FACE_RING`), frontmost (`front`) or rearmost, and its two bottom corners (`bumperCorner`, where `frame.hullUnder` stands). Decimated freely, the face went 1-1.5 cm back and a rolled car's corner sank into a flank. */
+function bumperPoints(geometry: THREE.BufferGeometry, front: boolean): Uint8Array {
   const pos = geometry.getAttribute("position");
   const s = front ? 1 : -1;
   let face = -Infinity;
@@ -81,8 +82,12 @@ function facePoints(geometry: THREE.BufferGeometry, front: boolean): Uint8Array 
     }
     if (within(i, 0)) middle = Math.min(middle, Math.abs(pos.getX(i)));
   }
+  const corner = bumperCorner(geometry);
   const at = (x: number, target: number): boolean => Math.abs(x - target) < 1e-4;
-  return Uint8Array.from({ length: pos.count }, (_, i) => ((within(i, FACE_RING) && (at(pos.getX(i), lo) || at(pos.getX(i), hi))) || (within(i, 0) && at(Math.abs(pos.getX(i)), middle)) ? 1 : 0));
+  return Uint8Array.from({ length: pos.count }, (_, i) => {
+    const onFace = (within(i, FACE_RING) && (at(pos.getX(i), lo) || at(pos.getX(i), hi))) || (within(i, 0) && at(Math.abs(pos.getX(i)), middle));
+    return onFace || (at(Math.abs(pos.getX(i)), corner.x) && at(pos.getY(i), corner.y) && at(pos.getZ(i), corner.z)) ? 1 : 0;
+  });
 }
 
 /** A door's slab corners (`Panel.held`): at each end of its length, its lowest and highest points on the outer and the inner face, so the decimated slab keeps its footprint. */
@@ -148,7 +153,7 @@ function cagePanelsOf(car: DeformableCar): Panel[] {
     }
     if (panel.part === "bumperFront" || panel.part === "bumperRear") {
       const bumper = makeBumperGeometry(panel.part === "bumperFront", car.style);
-      return cageLid(panel, bumper, facePoints(bumper, panel.part === "bumperFront"));
+      return cageLid(panel, bumper, bumperPoints(bumper, panel.part === "bumperFront"));
     }
     if (panel.part === "doorLeft" || panel.part === "doorRight") {
       const door = makeDoorGeometry(panel.part === "doorLeft" ? -1 : 1, car.style, CAGE_DOOR_THICKNESS).translate(0, 0, doorSkinZ(car.style));
