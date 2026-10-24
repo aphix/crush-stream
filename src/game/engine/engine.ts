@@ -74,6 +74,8 @@ const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _bn = new THREE.Vector3();
 const _bp = new THREE.Vector3();
+/** No cars: the showcase's set outside its scene. */
+const NO_CARS: readonly DeformableCar[] = [];
 
 export class CrashEngine extends EngineGarage {
   /** Resolves when `warmPrograms` is done (a failure is logged): the loop simulates and draws only after it, so play never links a program. */
@@ -173,7 +175,7 @@ export class CrashEngine extends EngineGarage {
   };
 
   /** What this device is (`deviceClass`), decided once from the GL context, the pointer and the user agent. */
-  private readonly deviceClass: DeviceClass;
+  protected readonly deviceClass: DeviceClass;
 
   constructor(canvas: HTMLCanvasElement, hudStore: HudStore, veil: HTMLElement) {
     super();
@@ -214,13 +216,19 @@ export class CrashEngine extends EngineGarage {
 
     this.glassDots = new GlassDotSystem(this.scene);
     this.ensureCars(INITIAL_HUD.carCount);
-    this.scene.add(this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.coverBatch.group);
-    // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels, lamps and parts.
+    this.scene.add(this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.seated.mesh, this.coverBatch.group);
+    // Under the wheel shadow prisms, shown to the shadow pass alone: the casters cost no camera-pass draw.
+    this.wheels.meshes.at(-1)!.add(...this.partBatch.casters);
+    const driverLook = (car: number, cop: boolean) => this.ragdolls.carDriverLook(car, cop);
+    // After the renderer's scene matrix update, before culling/upload: every render path draws current wheels, lamps, parts and seated drivers.
     this.scene.onBeforeRender = (renderer) => {
       const drawn = this.drawnCars();
       this.wheels.sync(drawn, renderer);
+      this.lampBatch.night = this.stage.night;
       this.lampBatch.sync(drawn);
       this.partBatch.sync(drawn);
+      // In the garage the standing dummy beside the car is the driver, and the showcase's cars show their empty cabins: no one sits in the car there.
+      this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook);
       this.coverBatch.sync(drawn);
     };
 
@@ -372,15 +380,17 @@ export class CrashEngine extends EngineGarage {
   /** The scratch list `drawnCars` rewrites in place. */
   private readonly drawnBuf: DeformableCar[] = [];
 
-  /** The cars the wheel, lamp and part batches draw (instanced, not meshes of the car): the field's, and the podium's own while it stands (it hides the field). */
+  /** The cars the wheel, lamp and part batches draw (instanced, not meshes of the car): the field's, the podium's own while it stands (it hides the field), and the showcase's set in its scene. */
   private drawnCars(): readonly DeformableCar[] {
     const live = this.live();
     const stand = this.podium.cars();
-    if (stand.length === 0) return live;
+    const set = this.showShowcase && this.showcase ? this.showcase.cars : NO_CARS;
+    if (stand.length === 0 && set.length === 0) return live;
     const out = this.drawnBuf;
     out.length = 0;
     for (let i = 0; i < live.length; i++) out.push(live[i]!);
     for (let i = 0; i < stand.length; i++) out.push(stand[i]!);
+    for (let i = 0; i < set.length; i++) out.push(set[i]!);
     return out;
   }
 
@@ -437,7 +447,7 @@ export class CrashEngine extends EngineGarage {
     this.garage?.dispose();
     this.looks.dispose();
     this.rivals.dispose();
-    for (const batch of [this.wheels, this.lampBatch, this.partBatch, this.coverBatch]) batch.dispose();
+    for (const batch of [this.wheels, this.lampBatch, this.partBatch, this.seated, this.coverBatch]) batch.dispose();
     this.sparks.dispose();
     this.fountains.dispose();
     this.debris.dispose();
@@ -648,6 +658,7 @@ export class CrashEngine extends EngineGarage {
     this.rumbleFrame(this.playing && !held ? wallDt : 0);
     this.flushVisibleSkins();
     this.detail.update(this.cars, this.camera, this.followedCar(), this.highlights.playing ? this.highlights.focus() : null);
+    this.lampLights.night = this.stage.night;
     this.lampLights.update(this.live(), this.camera, this.followedCar(), performance.now() / 1000, this.highlights.playing ? this.highlights.cars() : undefined, wallDt);
     if (this.audioOn) this.audio.frame(wallDt, this.highlights.playing ? this.highlights.cars() : this.live(), this.highlights.playing ? this.highlights.focus() : this.followedCar(), this.clock.timeScale * this.cine.timeWarp, this.playing && !held);
     if (this.stage.night) this.stage.syncPools(this.poles);
@@ -833,10 +844,10 @@ export class CrashEngine extends EngineGarage {
     const ejected = this.ejection.take();
     for (let k = 0; k < ejected.length; k++) {
       const e = ejected[k]!;
-      if (this.minigameMode === MINIGAME_MODE.longJump) this.minigames.holdForBail(e, this.elapsedSim + dt);
+      if (this.minigameMode === MINIGAME_MODE.longJump) this.minigames.holdForBail(e, this.elapsedWall);
       else this.throwDriver(e, cars, this.minigameMode === null ? undefined : THROW_BOOST[this.minigameMode]);
     }
-    const bailed = this.minigameMode === MINIGAME_MODE.longJump ? this.minigames.bailThrowDue(this.elapsedSim + dt) : null;
+    const bailed = this.minigameMode === MINIGAME_MODE.longJump ? this.minigames.bailThrowDue(this.elapsedWall) : null;
     if (bailed !== null) this.throwDriver(bailed.event, cars, bailed.release);
     if (this.race.active) this.race.step(dt, w.shape, w.loners);
 
@@ -890,7 +901,7 @@ export class CrashEngine extends EngineGarage {
     stepPhase(this.clock, wallDt);
     // A minigame has no loop and no timer: the dummy lies where he lands, and the session waits for the player's Retry.
     if (this.minigameMode !== null) {
-      this.minigames.step(this.ragdolls, this.seat.mode === "drive" && this.seat.carIndex === 0);
+      this.minigames.step(this.ragdolls, this.seat.mode === "drive" && this.seat.carIndex === 0, this.carA, wallDt);
       return;
     }
     // A thrown range driver holds the loop until his landing has been shown (`RangeRun`); otherwise it runs as the

@@ -1,4 +1,4 @@
-import { DOOR } from "./car-door-mesh.ts";
+import type { HingeSpec } from "./hinge-spec.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 
@@ -58,8 +58,6 @@ export const DOOR_ACC_MAX = 15;
 export const DOOR_YAW_ACC_MAX = 30;
 /** The pendulum feels the car's acceleration only after contact has been quiet this long (s): a crash's jolts are the crash rules' (C1). */
 export const DOOR_QUIET_S = 0.3;
-/** Dry friction and detent in the hinge (rad/s²): a pendulum drive under this moves nothing, so a jostle leaves the door where it hangs. */
-export const DOOR_DRY = 2;
 
 /** Plastic moment of a quarter panel's crease (N·m ≈ 200 MPa × 1.2 mm² × 0.5 m / 4): the work a striker pays per rad it bends it. */
 export const PANEL_BEND_NM = 36;
@@ -72,16 +70,16 @@ export const PANEL_PULL_J = 60;
 export const PANEL_FRAGILE_J = 15;
 
 /**
- * Opening acceleration (rad/s²) of a door of side `sx` (−1 left, +1 right) open `theta`, from the car frame's pseudo
+ * Opening acceleration (rad/s²) of a door of side `sx` (−1 left, +1 right) on hinge `h`, open `theta`, from the car frame's pseudo
  * force: the hinge frame accelerates at (`ax` right, `az` forward) m/s² and turns at `w` rad/s with `al` rad/s². The door is
- * a uniform slab hinged at (sx·hingeX, hingeZ) and swinging along u = (sx sin θ, −cos θ); its virtual work per rad is
+ * a uniform slab hinged at (sx·hx, hz) and swinging along u = (sx sin θ, −cos θ); its virtual work per rad is
  * ∫ r (∂p/∂θ)·F dm over the slab with F = −a + ω² p − α × p. Braking (az < 0) swings an open door forward (opens),
  * accelerating shuts it; the outside of a turn opens, the inside shuts.
  */
-export function swingAccel(sx: number, theta: number, ax: number, az: number, w: number, al: number): number {
+export function swingAccel(h: HingeSpec, sx: number, theta: number, ax: number, az: number, w: number, al: number): number {
   const s = detSin(theta);
   const c = detCos(theta);
-  const k = 3 / (2 * DOOR.length);
-  const drive = -(sx * c * ax + s * az) + w * w * (DOOR.hingeX * c + DOOR.hingeZ * s);
-  return k * drive - al * sx * (k * (DOOR.hingeZ * c - DOOR.hingeX * s) - 1);
+  const k = 3 / (2 * h.length);
+  const drive = -(sx * c * ax + s * az) + w * w * (h.hx * c + h.hz * s);
+  return k * drive - al * sx * (k * (h.hz * c - h.hx * s) - 1);
 }

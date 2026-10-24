@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, detSin, detCos, detAtan2, detAsin, PART_FAMILY } from "../kernel/physics-core.js";
-import { PRIMER_ATTRIBUTE } from "./constants.ts";
-import { ARCH_R, ROCKER, WHEEL_POS } from "./car-mesh.ts";
-import { DOOR } from "./car-door-mesh.ts";
+import { INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
+import { ROCKER, type V3 } from "./car-mesh.ts";
+import { carFrame } from "./car-rig.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
 /**
@@ -24,6 +24,8 @@ export interface PanelRegion {
   side: -1 | 1;
   /** Body vertex of each shell vertex. */
   verts: Uint16Array;
+  /** Each shell vertex's rest primer (`PRIMER_ATTRIBUTE`): what `setPrimer` puts back (an arch lip's return is unpainted). */
+  rest: Float32Array;
   /** Peel weight per vertex: 0 at the hinge, 1 at the free end. */
   w: Float32Array;
   /** The panel's rest centroid in car space: its part's origin. */
@@ -74,10 +76,12 @@ export function panelRegions(style: BodyStyle, body: THREE.BufferGeometry): read
 function cut(style: BodyStyle, body: THREE.BufferGeometry): PanelRegion[] {
   const { ring: n, slices } = body.userData.loft as { ring: number; slices: number };
   const pos = (body.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
+  const primer = body.getAttribute(PRIMER_ATTRIBUTE)?.array as Float32Array | undefined;
   // The quarter runs from behind the rear door's shut line (on a two-door, behind the door) to the tail corner.
-  const zFront = style.rearDoorSeam ?? DOOR.hingeZ - DOOR.length;
+  const zFront = style.rearDoorSeam ?? style.door.hingeZ - style.door.length;
   const zTail = style.profile[0]!.z + 0.15;
-  const hubY = WHEEL_POS[0]![1];
+  const { wheels } = carFrame(style);
+  const hubY = wheels[0]![1];
   const tris = Object.fromEntries(PANEL_NAMES.map((k) => [k, [] as number[]])) as Record<PanelName, number[]>;
   for (let s = 0; s < slices - 1; s++) {
     for (let i = 1; i < n; i++) {
@@ -94,20 +98,29 @@ function cut(style: BodyStyle, body: THREE.BufferGeometry): PanelRegion[] {
       const y = (pos[a * 3 + 1]! + pos[b * 3 + 1]! + pos[c * 3 + 1]! + pos[d * 3 + 1]!) / 4;
       let name: PanelName | null = null;
       for (let k = 0; k < 4; k++) {
-        const [wx, , wz] = WHEEL_POS[k]!;
+        const [wx, , wz] = wheels[k]!;
         if (Math.sign(wx) !== side) continue;
         const dy = y - hubY;
         const r = dy > 0 ? hypot2(z - wz, dy) : Math.abs(z - wz);
-        if (archOk && r >= ARCH_R - ARCH_IN && r <= ARCH_R + ARCH_OUT) name = PANEL_NAMES[2 + k]!;
+        if (archOk && r >= style.arch.radius - ARCH_IN && r <= style.arch.radius + ARCH_OUT) name = PANEL_NAMES[2 + k]!;
       }
       if (!name && m <= QUARTER_LAST && z <= zFront && z >= zTail) name = side < 0 ? "quarterL" : "quarterR";
       if (name) tris[name].push(a, b, c, b, d, c);
     }
   }
-  return PANEL_NAMES.map((name) => region(name, tris[name], pos));
+  // An arch's drawn lip (`archLipGeometry`) is skin of its arch: it peels and tears with it.
+  const lips = body.userData.archLips as { from: number; perWheel: readonly number[] } | undefined;
+  if (lips) {
+    const index = body.getIndex()!.array;
+    let at = lips.from;
+    for (let k = 0; k < lips.perWheel.length; k++) {
+      for (const end = at + lips.perWheel[k]!; at < end; at++) tris[PANEL_NAMES[2 + k]!].push(index[at]!);
+    }
+  }
+  return PANEL_NAMES.map((name) => region(name, tris[name], pos, primer, wheels));
 }
 
-function region(name: PanelName, ids: number[], pos: Float32Array): PanelRegion {
+function region(name: PanelName, ids: number[], pos: Float32Array, primer: Float32Array | undefined, wheels: readonly V3[]): PanelRegion {
   const local = new Map<number, number>();
   const verts: number[] = [];
   const tris: number[] = [];
@@ -143,7 +156,7 @@ function region(name: PanelName, ids: number[], pos: Float32Array): PanelRegion 
     yMin = Math.min(yMin, pos[g * 3 + 1]!);
     yMax = Math.max(yMax, pos[g * 3 + 1]!);
   }
-  const hub = WHEEL_POS[PANEL_NAMES.indexOf(name) - 2];
+  const hub = wheels[PANEL_NAMES.indexOf(name) - 2];
   const w = new Float32Array(nv);
   // The hinge line's mean: a quarter's trailing edge (x), an arch's top (x, y).
   let px = 0;
@@ -173,6 +186,7 @@ function region(name: PanelName, ids: number[], pos: Float32Array): PanelRegion 
     kind,
     side,
     verts: Uint16Array.from(verts),
+    rest: Float32Array.from(verts, (g) => primer?.[g] ?? 0),
     w,
     origin,
     pivot: kind === "quarter" ? [pn ? px / pn : side * 0.8, zMin] : [pn ? px / pn : side * 0.88, pn ? py / pn : yMax],
@@ -184,10 +198,17 @@ function region(name: PanelName, ids: number[], pos: Float32Array): PanelRegion 
   };
 }
 
-/** A panel's shell, posed on `body`'s current skin, unbent. */
+/**
+ * A panel's shell, posed on `body`'s current skin, unbent. Its front layer (vertices 0 to n - 1) wears the panel's rest tones, its back
+ * layer (n to 2n - 1, the panel's inside once it peels or tears) is an unpainted inner panel; the rim skirt between them blends the two.
+ */
 export function makeShell(r: PanelRegion, body: THREE.BufferGeometry): THREE.BufferGeometry {
   const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(r.verts.length * 6), 3).setUsage(THREE.DynamicDrawUsage));
+  const n = r.verts.length;
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 6), 3).setUsage(THREE.DynamicDrawUsage));
+  const primer = new Float32Array(2 * n).fill(INNER_PANEL);
+  primer.set(r.rest);
+  g.setAttribute(PRIMER_ATTRIBUTE, new THREE.BufferAttribute(primer, 1));
   g.setIndex(r.shell);
   poseShell(r, g, body, 0, 0);
   return g;
@@ -218,19 +239,30 @@ function bend(r: PanelRegion, k: number, x: number, z: number, t: number, flutte
  * Rebuild `shell` from the body's skin, bent by hinge value `t`: a quarter panel peels from its leading edge
  * about the vertical hinge line at its tail; an arch flare flaps out at both feet (`flutter` -1..1 shakes it).
  * Vertices are relative to the region's origin, the part's frame.
+ * `floor` (drawn only) is the road under the shell in the body's frame: a body point p stands `floor · [p, 1]` m above the road,
+ * along its normal, and one metre up the body lifts it `floor[1]`. An arch flare's free ends drop only as far as the road lets
+ * them: a point whose body skin is already in the road keeps to the skin. Returns whether the road held any of the drop.
  */
-export function poseShell(r: PanelRegion, shell: THREE.BufferGeometry, body: THREE.BufferGeometry, t: number, flutter: number): void {
+export function poseShell(r: PanelRegion, shell: THREE.BufferGeometry, body: THREE.BufferGeometry, t: number, flutter: number, floor: Float64Array | null = null): boolean {
   const bp = (body.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
   const bn = (body.getAttribute("normal") as THREE.BufferAttribute).array as Float32Array;
   const attr = shell.getAttribute("position") as THREE.BufferAttribute;
   const o = attr.array as Float32Array;
   const nv = r.verts.length;
+  let held = false;
   for (let k = 0; k < nv; k++) {
     const g = r.verts[k]! * 3;
     const x = bp[g]!;
     const y = bp[g + 1]!;
     const z = bp[g + 2]!;
     bend(r, k, x, z, t, flutter);
+    if (floor !== null && _shift[1]! < 0) {
+      const room = dropRoom(floor, x, y, z);
+      if (room < -_shift[1]!) {
+        _shift[1] = -room;
+        held = true;
+      }
+    }
     for (let c = 0, at = k * 3, sign = PROUD; c < 2; c++, at += nv * 3, sign = -THICK) {
       o[at] = x + _shift[0]! + bn[g]! * sign - r.origin.x;
       o[at + 1] = y + _shift[1]! + bn[g + 1]! * sign - r.origin.y;
@@ -242,6 +274,24 @@ export function poseShell(r: PanelRegion, shell: THREE.BufferGeometry, body: THR
   // The shell moved: a scrape test against its box (`setFromObject`) must not read the last pose's.
   shell.boundingBox = null;
   shell.boundingSphere = null; // three rebuilds it when it next culls, so a torn panel is culled like any mesh
+  return held;
+}
+
+/** Whether `poseShell` on `floor` would hold any of region `r`'s drop at hinge value `t` and `flutter`. */
+export function shellReaches(r: PanelRegion, body: THREE.BufferGeometry, t: number, flutter: number, floor: Float64Array): boolean {
+  if (r.kind === "quarter") return false;
+  const bp = (body.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
+  for (let k = 0; k < r.verts.length; k++) {
+    const g = r.verts[k]! * 3;
+    bend(r, k, bp[g]!, bp[g + 2]!, t, flutter);
+    if (_shift[1]! < 0 && dropRoom(floor, bp[g]!, bp[g + 1]!, bp[g + 2]!) < -_shift[1]!) return true;
+  }
+  return false;
+}
+
+/** How far (m, ≥ 0) body point (x, y, z), shifted sideways by `bend`'s last `_shift`, can drop before it meets `floor` (`poseShell`). */
+function dropRoom(floor: Float64Array, x: number, y: number, z: number): number {
+  return Math.max(0, (floor[0]! * (x + _shift[0]!) + floor[1]! * y + floor[2]! * (z + _shift[2]!) + floor[3]!) / floor[1]!);
 }
 
 const _v = new THREE.Vector3();
@@ -306,9 +356,12 @@ export function flutterShell(r: PanelRegion, object: THREE.Object3D, a: number):
   }
 }
 
-/** The under-panel: the panel's vertices on the body painted to primer (or back to paint), by the paint's `primer` attribute. */
+/**
+ * The under-panel: the panel's vertices on the body turned to unpainted inner panel, the dark steel a torn panel bares (or back to their
+ * rest tone), by the paint's `primer` attribute. A vertex darker still at rest (a well's own tone) keeps it.
+ */
 export function setPrimer(r: PanelRegion, body: THREE.BufferGeometry, on: boolean): void {
   const attr = body.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute;
-  for (const v of r.verts) attr.setX(v, on ? 1 : 0);
+  for (let k = 0; k < r.verts.length; k++) attr.setX(r.verts[k]!, on ? Math.max(INNER_PANEL, r.rest[k]!) : r.rest[k]!);
   attr.needsUpdate = true;
 }

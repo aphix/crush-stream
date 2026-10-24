@@ -3,8 +3,11 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
-import { LIGHT_BAR_FOOT, makeLightBar } from "./car-materials.ts";
-import { ROOF_REST_Y } from "./car-parts.ts";
+import { LIGHT_BAR_FOOT, LIGHT_BAR_LENS, makeLightBar, withPushBar } from "./car-materials.ts";
+import { makeBumperGeometry } from "./car-mesh.ts";
+import { withRearFittings } from "./car-fittings-mesh.ts";
+import { withSeamCover } from "./part-variants.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 import { BAR_FOLD, hingePose } from "./part-pose.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { DT, paint } from "./test-support.ts";
@@ -74,7 +77,7 @@ class Probe extends DeformableCar {
   }
   /** The roof mass pushed down to `sink` m under its rest height, then the step's breakage rules run on it. */
   sinkRoof(sink: number): void {
-    this.deform.massLocal("roof").y = ROOF_REST_Y - sink;
+    this.deform.massLocal("roof").y = this.roofRestY - sink;
     this.evaluateBreakage(0, DT);
   }
 }
@@ -168,5 +171,91 @@ describe("given the police light bar on its base hinge", () => {
     assert.equal(digest(56), digest(56), "an attached bar differs between two runs of one crash");
     assert.equal(digest(64), digest(64), "a torn bar differs between two runs of one crash");
     assert.notEqual(digest(56), digest(64), "the two crashes read alike");
+  });
+});
+
+/** The mean x (m, bar space) of `count` vertices of `geo` from `first`. */
+function meanX(geo: THREE.BufferGeometry, first: number, count: number): number {
+  const pos = geo.getAttribute("position");
+  let x = 0;
+  for (let v = first; v < first + count; v++) x += pos.getX(v);
+  return x / count;
+}
+
+describe("given the light bar and the push bar as the reference cruiser wears them", () => {
+  it("when the light bar is built, then its red lens stands on the car's left (+x) and its blue on its right, a clear module between", () => {
+    const bar = makeLightBar();
+    const [[redFirst, redCount], [blueFirst, blueCount]] = LIGHT_BAR_LENS;
+    assert.ok(meanX(bar, redFirst, redCount) > 0.2, `red lens at x ${meanX(bar, redFirst, redCount)}`);
+    assert.ok(meanX(bar, blueFirst, blueCount) < -0.2, `blue lens at x ${meanX(bar, blueFirst, blueCount)}`);
+  });
+
+  it("when the light bar is built, then each lens is domed, its top falling over its front and back edges, with a white lamp cell at its centre standing proud of its faces, as the reference's", () => {
+    /** A domed lens's top falls at least this far (m) over its outer 1.5 cm front and back (its 3.5 cm round: 10 mm); a brick's falls none. */
+    const DOME_DROP = 0.008;
+    /** Over its outer this far (m) of half-depth, front and back. */
+    const EDGE_RUN = 0.015;
+    /** A white cell's vertex colour (linear) is over this in every channel; the clear takedown module's is under it. */
+    const WHITE = 0.8;
+    const bar = makeLightBar();
+    const pos = bar.getAttribute("position");
+    const color = bar.getAttribute("color");
+    for (const [first, count] of LIGHT_BAR_LENS) {
+      let [top, edgeTop, depth] = [-Infinity, -Infinity, 0];
+      for (let v = first; v < first + count; v++) depth = Math.max(depth, Math.abs(pos.getZ(v)));
+      for (let v = first; v < first + count; v++) {
+        top = Math.max(top, pos.getY(v));
+        if (Math.abs(pos.getZ(v)) > depth - EDGE_RUN) edgeTop = Math.max(edgeTop, pos.getY(v));
+      }
+      const x = meanX(bar, first, count);
+      assert.ok(top - edgeTop >= DOME_DROP, `lens at x ${x.toFixed(2)}: its top falls ${((top - edgeTop) * 1000).toFixed(1)} mm over its edges, want ${DOME_DROP * 1000} or more`);
+      let proud = -Infinity;
+      for (let v = 0; v < pos.count; v++) {
+        if (Math.abs(pos.getX(v) - x) > 0.05 || color.getX(v) < WHITE || color.getY(v) < WHITE || color.getZ(v) < WHITE) continue;
+        proud = Math.max(proud, Math.abs(pos.getZ(v)) - depth);
+      }
+      assert.ok(proud > 0, `lens at x ${x.toFixed(2)}: no white cell stands proud of its faces at its centre`);
+    }
+  });
+
+  it("when a front bumper takes a push bar, then one geometry stands its uprights ahead of the bumper's face and above its top, the bumper's own vertices first and unmoved", () => {
+    const bumper = makeBumperGeometry(true, CAR_STYLES.police);
+    bumper.computeBoundingBox();
+    const before = bumper.boundingBox!.clone();
+    const rest = (bumper.getAttribute("position").array as Float32Array).slice();
+    const guarded = withPushBar(bumper);
+    guarded.computeBoundingBox();
+    const after = guarded.boundingBox!;
+    // The reference cruiser's guard: its tubes 4 cm ahead of the face (their pads' face 9 cm), its top bar ~18 cm over the bumper's top (y ~0.62).
+    assert.ok(after.max.z - before.max.z > 0.08 && after.max.z - before.max.z < 0.1, `face ${before.max.z} -> ${after.max.z}`);
+    assert.ok(after.max.y - before.max.y > 0.15 && after.max.y - before.max.y < 0.21, `top ${before.max.y} -> ${after.max.y}`);
+    assert.ok(after.min.y >= before.min.y - 1e-6, "the bar reaches below the bumper");
+    const now = guarded.getAttribute("position").array;
+    let moved = 0;
+    for (let i = 0; i < rest.length; i++) moved = Math.max(moved, Math.abs(now[i]! - rest[i]!));
+    assert.equal(moved, 0, "the bumper's own vertices moved");
+  });
+
+  it("when a police and a sedan are built, then the police's front bumper mesh carries its push bar and the sedan's is its bare fascia with its seam cover, and each rear bumper is its own fascia (the sedan's with its cover)", () => {
+    const scene = new THREE.Scene();
+    const [police, sedan] = (["police", "sedan"] as const).map((id) => new DeformableCar(paint(), scene, null, id));
+    const box = (car: DeformableCar, i: 0 | 1): THREE.Box3 => {
+      const geo = (car["bumperMeshes"] as THREE.Mesh[])[i]!.geometry;
+      geo.computeBoundingBox();
+      return geo.boundingBox!;
+    };
+    const geoBox = (geo: THREE.BufferGeometry): THREE.Box3 => {
+      geo.computeBoundingBox();
+      return geo.boundingBox!;
+    };
+    const bare = geoBox(makeBumperGeometry(true, CAR_STYLES.sedan));
+    const covered = geoBox(withSeamCover(makeBumperGeometry(true, CAR_STYLES.sedan), CAR_STYLES.sedan, true));
+    const [cop, plain] = [box(police!, 0), box(sedan!, 0)];
+    assert.ok(plain.equals(covered), `sedan front bumper face ${plain.max.z}, top ${plain.max.y}: its fascia's with its seam cover`);
+    assert.ok(cop.max.z - bare.max.z > 0.08 && cop.max.y - bare.max.y > 0.15, `police front bumper face ${cop.max.z} (bare fascia ${bare.max.z}), top ${cop.max.y} (bare fascia ${bare.max.y})`);
+    const [copRear, plainRear] = [box(police!, 1), box(sedan!, 1)];
+    const copFascia = geoBox(withRearFittings(makeBumperGeometry(false, CAR_STYLES.police), CAR_STYLES.police));
+    const sedanDrawn = geoBox(withSeamCover(withRearFittings(makeBumperGeometry(false, CAR_STYLES.sedan), CAR_STYLES.sedan), CAR_STYLES.sedan, false));
+    assert.ok(copRear.equals(copFascia) && plainRear.equals(sedanDrawn), "each rear bumper is its own fascia, the sedan's with its seam cover");
   });
 });

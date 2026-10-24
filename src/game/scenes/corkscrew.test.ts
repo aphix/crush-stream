@@ -2,7 +2,6 @@ import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
-import { WHEEL_POS } from "../vehicle/car-mesh.ts";
 import { Corkscrew, CORKSCREW } from "./corkscrew.ts";
 import { setGround } from "../world/ground.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
@@ -55,9 +54,10 @@ function launch(v: number): Run {
     car.refitCage();
     const body = car.cage.fields.pos;
     // The tyre contacts, then the cage's vertices (the drawn body, crushed as drawn): what can meet the ground.
-    for (let i = 0; i < WHEEL_POS.length + car.cage.style.vertexCount; i++) {
-      if (i < WHEEL_POS.length) p.set(WHEEL_POS[i]![0], 0, WHEEL_POS[i]![2]);
-      else p.set(body[(i - WHEEL_POS.length) * 3]!, body[(i - WHEEL_POS.length) * 3 + 1]!, body[(i - WHEEL_POS.length) * 3 + 2]!);
+    const wheels = car.frame.wheels;
+    for (let i = 0; i < wheels.length + car.cage.style.vertexCount; i++) {
+      if (i < wheels.length) p.set(wheels[i]![0], 0, wheels[i]![2]);
+      else p.set(body[(i - wheels.length) * 3]!, body[(i - wheels.length) * 3 + 1]!, body[(i - wheels.length) * 3 + 2]!);
       p.applyQuaternion(q).add(car.group.position);
       low = Math.min(low, p.y - cork.heightAt(p.x, p.z, p.y));
     }
@@ -80,32 +80,21 @@ function launch(v: number): Run {
 }
 
 /**
- * Each band: launch speed, whether it leaves the lip, the roll it touches down with (deg), how it rests.
- * The 27 m/s roll is spin × air: the lip's spin is 189°/s on main 0902bf1 and on the airborne lane alike, the lane's
- * air 0.10 s longer there (3.15 vs 3.05 s: the body leaves the lip 0.9 m sooner, on the steeper 0.53 grade, at 14.4
- * against 13.4 m/s up, where main's constant takeoff gap held it to the flatter 0.49). Sweep 26 / 26.5 / 27 / 27.5 /
- * 28 m/s: lane 508 / 572 / 596 / 619 / 645°, main 540 / 558 / 576 / 599 / 620° — a shift of +20° at 27 m/s, 590 → 620
- * keeps the roll-and-a-half band 540° ± 80° and the 2-roll wheels landing (710° at 29 m/s) out of it.
- *
- * Stage 3: the rigid step's points are the cage's vertices, the drawn body to its bumper ends (rear chin 0.14 m up, 2.11 m behind the
- * centre of mass), where the belly table ended at 2.0 m and 0.161 m. At the mouth's 22° kink the tail meets the flat pad 1.4° of pitch
- * sooner (7.6° against 9.0°), closing at 1.5 m/s on a 2.1 m lever, and the car leaves the lip spinning 1.01 rad/s, not 1.27 (the same
- * 20 % short at every speed: 14 m/s 125° against 151°, 22 m/s 268 against 329, 27 m/s 358 against 571). The bands are the plan's
- * and stand; with no cage vertices in the point table the same flight reproduces them to the bit (151 / 329 / 573°, roof / wheels /
- * roof). Rows that fail by it stay `todo` with today's roll and rest; closer: after the plan, recalibrate the corkscrew's takeoff against the cage's tail.
+ * Each band: launch speed, whether it leaves the lip, the roll it touches down with (deg), how it rests. The roll is the lip's spin
+ * times the air time, so `CORKSCREW.bank` (the twist rate) sets where each speed lands: a turn at 22 m/s, a turn and a half at 27.
  */
 const BANDS = [
-  { v: 6, name: "it is too slow to climb, so it rolls back out of the mouth without leaving the ground", air: false, roll: [0, 0], rest: "wheels", todo: "" },
-  { v: 14, name: "it flies, rolls half a turn and lands on its roof", air: true, roll: [130, 230], rest: "roof", todo: "" },
-  { v: 22, name: "it flies, rolls a full turn and lands back on its wheels", air: true, roll: [310, 410], rest: "wheels", todo: "" },
-  { v: 27, name: "it flies, rolls a turn and a half and lands on its roof", air: true, roll: [490, 620], rest: "roof", todo: "touchdown roll 443° (band 490–620°), rests on its side" },
+  { v: 6, name: "it is too slow to climb, so it rolls back out of the mouth without leaving the ground", air: false, roll: [0, 0], rest: "wheels" },
+  { v: 14, name: "it flies, rolls half a turn and lands on its roof", air: true, roll: [130, 230], rest: "roof" },
+  { v: 22, name: "it flies, rolls a full turn and lands back on its wheels", air: true, roll: [310, 410], rest: "wheels" },
+  { v: 27, name: "it flies, rolls a turn and a half and lands on its roof", air: true, roll: [490, 620], rest: "roof" },
 ] as const;
 
 describe("given the corkscrew ramp as the ground, and a driverless car launched at it from 6 m short of its mouth until the car comes to rest", () => {
   afterEach(() => setGround(null));
 
   for (const b of BANDS) {
-    (b.todo ? it.todo : it)(`when it is launched at ${b.v} m/s, then ${b.name}, and after takeoff it never goes deeper into the ground than the suspension's stop${b.todo ? ` (today ${b.todo}; after the plan: recalibrate the corkscrew's takeoff against the cage's tail)` : ""}`, (t) => {
+    it(`when it is launched at ${b.v} m/s, then ${b.name}, and after takeoff it never goes deeper into the ground than the suspension's stop`, (t) => {
       const r = launch(b.v);
       t.diagnostic(`${b.v} m/s: air ${r.air.toFixed(2)} s, touchdown roll ${r.landRoll.toFixed(0)}°, up.y ${r.upY.toFixed(2)} (${r.rest}), deepest ${r.dip.toFixed(3)} m`);
       const failures: string[] = [];

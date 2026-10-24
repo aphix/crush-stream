@@ -1,0 +1,255 @@
+import type { BodyStyle } from "../car-variants.ts";
+import { pullHandle, st } from "./platform.ts";
+import { LIFTGATE } from "../hinge-spec.ts";
+
+/** Wagon's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const WAGON_LAMP_SHAPES = {
+  // Its DRL a rounded loop in the inner end, then a line along the bottom curling up the outer end, as the reference's; the amber
+  // indicator at the corner. The lens's bottom keeps 1 cm over the bumper's top seam.
+  head: {
+    loops: [
+      { points: [[0.41, 0.685], [0.62, 0.77], [0.66, 0.78], [0.7, 0.797], [0.76, 0.8], [0.76, 0.835], [0.7, 0.832], [0.62, 0.815], [0.55, 0.8], [0.41, 0.805]] },
+      // Its side run sweeps back and up along the fender to z 1.58, its bright underline on to 1.46 curling up, as the reference's side view.
+      { side: true, points: [[1.92, 0.795], [1.75, 0.82], [1.6, 0.845], [1.575, 0.858], [1.62, 0.864], [1.75, 0.85], [1.86, 0.83], [1.92, 0.81]] },
+    ],
+    lens: "dark",
+    bezel: "black",
+    recess: 0.01,
+    cells: [
+      { loop: { side: true, points: [[1.86, 0.815], [1.76, 0.825], [1.72, 0.836], [1.8, 0.84], [1.86, 0.83]] }, tone: "amber" },
+      // The reference's reflector over its DRL loop, behind the clear glass: smoked grey (a chrome cell read as a flat white box in the garage).
+      { loop: { points: [[0.44, 0.75], [0.54, 0.787], [0.6, 0.8], [0.6, 0.806], [0.55, 0.797], [0.44, 0.797]] }, tone: "smoked" },
+    ],
+    strips: [
+      { line: { points: [[0.43, 0.705], [0.54, 0.748], [0.54, 0.77], [0.43, 0.73], [0.43, 0.705]] }, width: 0.008, tone: "lit" },
+      { line: { points: [[0.55, 0.752], [0.62, 0.78], [0.7, 0.803], [0.745, 0.806], [0.75, 0.828]] }, width: 0.008, tone: "lit" },
+      { line: { side: true, points: [[1.9, 0.8], [1.75, 0.822], [1.6, 0.846], [1.5, 0.852], [1.46, 0.862]] }, width: 0.008, tone: "lit" },
+    ],
+  },
+  tail: {
+    loops: [
+      { points: [[0.62, 0.9], [0.68, 0.905], [0.68, 0.995], [0.62, 1.0]] },
+      { points: [[0.5, 0.9], [0.62, 0.9], [0.62, 1.0], [0.5, 1.0]] },
+      { side: true, points: [[-2.08, 0.91], [-1.74, 0.97], [-1.74, 0.99], [-2.08, 1.0]] },
+    ],
+    lens: "lit",
+    bezel: "black",
+    strips: [{ line: { points: [[0.5, 0.995], [0.68, 0.99]] }, width: 0.006, tone: "lit" }],
+    cells: [
+      { loop: { points: [[0, 0.91], [0.5, 0.91], [0.5, 0.98], [0, 0.98]] }, tone: "dark" },
+      { loop: { points: [[0.5, 0.9], [0.68, 0.9], [0.68, 0.94], [0.5, 0.94]] }, tone: "smoked" },
+      { loop: { points: [[0.5, 0.94], [0.55, 0.94], [0.55, 1.0], [0.5, 1.0]] }, tone: "clear" },
+    ],
+  },
+  front: {
+    // The reference's corner intake: a tall, narrow recess above the lower intake, its bright blade across its upper third from inboard of it.
+    loops: [{ points: [[0.6, 0.555], [0.7, 0.555], [0.725, 0.535], [0.73, 0.37], [0.71, 0.345], [0.64, 0.345], [0.62, 0.36], [0.61, 0.48]] }],
+    lens: "dark",
+    onBody: true,
+    fill: 0.03,
+    // The silver splitter along the fascia's bottom lip (diffuse silver: chrome reads dark there).
+    strips: [
+      { line: { points: [[0.45, 0.505], [0.6, 0.505], [0.68, 0.507], [0.71, 0.52]] }, width: 0.014, tone: "clear" },
+      { line: { points: [[0.006, 0.345], [0.2, 0.345], [0.35, 0.345], [0.5, 0.345], [0.64, 0.345]] }, width: 0.014, tone: "clear" },
+    ],
+  },
+  // The red reflector's black housing in the black valance (the valance is the bumper's `band`).
+  rear: {
+    loops: [{ points: [[0.475, 0.485], [0.645, 0.485], [0.645, 0.515], [0.475, 0.515]] }],
+    lens: "black",
+    onBody: true,
+    cells: [{ loop: { points: [[0.48, 0.49], [0.64, 0.49], [0.64, 0.51], [0.48, 0.51]] }, tone: "red" }],
+  },
+} as const;
+
+/** The door pull handles at the reference's places: front z -0.03..-0.24 at y 0.955, rear -0.9..-1.04 at 0.97. */
+const HANDLES = [pullHandle(-0.03, -0.24, 0.955, 0.04), pullHandle(-0.9, -1.04, 0.97, 0.04)];
+
+/** Luxury SUV (the `wagon` id): tall clamshell nose, flat floating roof, a roof-hinged liftgate carrying the raked rear glass. */
+export const WAGON: BodyStyle = {
+  id: "wagon",
+  dims: { wheelbase: 2.45, overhang: { front: 0.8415, rear: 0.9185 }, track: 1.4, width: 1.687, height: 1.595, rideHeight: 0.23, wheel: { radius: 0.37, width: 0.23 } },
+  windshield: { base: [1.1, 0.89], wBase: 1.42, wTop: 0.98 },
+  bPillar: { rear: -0.325, front: -0.245 },
+  belt: { x: [[-1.97, 0.64], [-1.8, 0.7], [-1.6, 0.74], [-1.4, 0.77], [-1.2, 0.785]], y: [[-2.033, 1.095], [0.024, 1.07], [0.887, 1.062]] },
+  rocker: { y: 0.28 },
+  arch: { radius: 0.455, lip: { flare: 0.016, width: 0.055 } },
+  hood: { z0: 0.86, z1: 1.93, origin: [0.96, 0.84], kind: "clamshell", crown: [0.03, 0.7], followGlass: -0.05 },
+  bumpers: {
+    front: {
+      seat: { y: 0.48, z: 1.9785 },
+      fascia: [[0.17, -0.07], [0.17, 0.02], [0.15, 0.062], [0.085, 0.08], [0.031, 0.074], [-0.02, 0.062], [-0.085, 0.064], [-0.119, 0.088], [-0.17, 0.075], [-0.17, -0.07]],
+      span: 0.78,
+      wrap: { from: 0.25, back: 0.3 },
+      trim: "body",
+      top: [[0.4, 0.668], [0.62, 0.756], [0.66, 0.766]],
+      edge: [[1.86, 0.766], [1.75, 0.756], [1.5, 0.74], [1.62, 0.6], [1.7, 0.42], [1.72, 0.36]],
+    },
+    rear: {
+      seat: { y: 0.54, z: 2.0555 },
+      fascia: [[0.1, -0.07], [0.1, 0.02], [0.088, 0.062], [0.05, 0.08], [0.018, 0.074], [-0.012, 0.062], [-0.05, 0.064], [-0.07, 0.088], [-0.1, 0.075], [-0.1, -0.07]],
+      span: 0.66,
+      // The lip turns the corners on lofted ends and runs back to the arch's foot at an even stand-off.
+      wrap: { from: 0.24, back: 0.41, end: { corner: 0.32, stand: 0.02 } },
+      trim: "body",
+      top: [[0, 0.62], [0.55, 0.62], [0.62, 0.615]],
+      edge: [[-2, 0.615], [-1.85, 0.6], [-1.68, 0.6], [-1.725, 0.45], [-1.735, 0.38]],
+      plateless: true,
+      // The reference's black valance: the fascia's own rows from its foot over the lip's crest, so nothing chords under the crest.
+      band: [0.43, 0.53],
+    },
+  },
+  // The reference's mirror: a black pod tapering gently to its nose, standing clear over the belt on a slim neck, about 4 cm past the body side, 19 cm along it; its inner face clear of the foot's.
+  door: { hingeX: 0.795, hingeY: 0.69, hingeZ: 0.665, length: 0.995, halfHeight: 0.38, mirrorY: 0.35, mirrorZ: 0.21, mirrorReach: 0.065, mirrorHalfDepth: 0.08, aperture: [-0.31, 0.655], mirror: { cap: "nose", finish: "black", size: [0.055, 0.135, 0.19], lift: 0.09, neck: 0.015, stalk: 0.06, round: 0.48, taper: 0.8 } },
+  aPillarFoot: 0.66,
+  aPillarTop: 0.17,
+  glassTop: 0.05,
+  camera: { hood: [1.31, 1.01], third: { dist: 6.4, height: 2.3, aimUp: 1.15 }, far: { dist: 10.4, height: 3.7, aimUp: 1.35 } },
+  underside: [[-2.143, 0.463], [-2.111, 0.421], [-2.058, 0.378], [-2.015, 0.349], [-1.86, 0.295], [-1.744, 0.296], [-1.651, 0.271], [-1.55, 0.24], [-0.45, 0.25], [-0.018, 0.239], [0.167, 0.228], [1.846, 0.225], [1.868, 0.242], [1.989, 0.264], [2.042, 0.307], [2.067, 0.524]],
+  profile: [
+    st(-2.11, 0.46, 1.095, 1.12, 0.495, 0.25),
+    st(-2.001, 0.63, 1.094, 1.276, 0.487, 0.62),
+    st(-1.908, 0.7, 1.093, 1.516, 0.511, 0.49),
+    st(-1.833, 0.725, 1.092, 1.585, 0.531, 0.55),
+    st(-1.773, 0.735, 1.091, 1.478, 0.518, 1),
+    st(-1.689, 0.745, 1.09, 1.49, 0.532, 1),
+    st(-1.591, 0.765, 1.089, 1.5, 0.545, 1),
+    st(-1.466, 0.79, 1.088, 1.515, 0.557, 1),
+    st(-1.366, 0.821, 1.086, 1.535, 0.568, 1),
+    st(-1.302, 0.826, 1.086, 1.545, 0.574, 1),
+    st(-1.12, 0.826, 1.083, 1.555, 0.585, 1),
+    st(-0.821, 0.826, 1.08, 1.56, 0.59, 1),
+    st(-0.036, 0.83, 1.07, 1.552, 0.59, 1),
+    st(0.156, 0.83, 1.067, 1.505, 0.559, 1),
+    st(0.22, 0.83, 1.066, 1.478, 0.547, 1),
+    st(0.345, 0.83, 1.065, 1.567, 0.55, 0.727),
+    st(0.438, 0.83, 1.065, 1.557, 0.541, 0.624),
+    st(0.506, 0.83, 1.065, 1.536, 0.537, 0.554),
+    st(0.577, 0.83, 1.065, 1.514, 0.534, 0.481),
+    st(0.648, 0.83, 1.064, 1.459, 0.53, 0.402),
+    st(0.734, 0.826, 1.068, 1.338, 0.526, 0.25),
+    st(0.801, 0.826, 1.07, 1.231, 0.523, 0.25),
+    st(0.958, 0.826, 1.07, 1.082, 0.506, 0.25),
+    st(1.048, 0.825, 1.064),
+    st(1.172, 0.823, 1.06),
+    st(1.339, 0.818, 1.04),
+    st(1.486, 0.81, 1.018),
+    st(1.568, 0.798, 1.001),
+    st(1.632, 0.781, 0.984),
+    st(1.718, 0.767, 0.957),
+    st(1.793, 0.744, 0.929),
+    st(1.86, 0.683, 0.898),
+    st(1.928, 0.557, 0.863),
+    st(2.035, 0.36, 0.66),
+  ],
+  roofZ: [-1.84, 0.3],
+  // The cage keeps the roof's rear corners (lips, D-post heads) and its rear header box spans them, its top on the roof's (the glass's top, 6 cm box).
+  cageRearCorners: true,
+  rearHeaderWidth: 1.2,
+  rearHeaderRise: -0.03,
+  windshieldTop: [1.45, 0.3],
+  // The A-post upright and even as its reference side plate's band (drawn twin: the windshield's side edge bows back in plan to the roof's square front, the cage keeps the style's own).
+  drawn: {
+    windshield: { base: [1.1, 0.73], wBase: 1.42, wTop: 0.98, bow: { base: 0.18, top: 0.023 }, seat: true },
+    aPillarFoot: 0.675,
+    aPillarTop: 0.175,
+    // The roof's front rolls down onto the windshield's top (its whole bow), so the dome's crown meets the pane's top edge: no see-through slot between them.
+    roofEnds: { front: 0.1, glassBow: { front: true } },
+  },
+  // The rear glass's top as wide as the roof end lets it (its post-top clamp), so the D-post's edges run near parallel.
+  rearGlass: { base: [1.1, -2.065], top: [1.47, -1.79], wBase: 1.22, wTop: 0.96 },
+  // The quarter glass runs back to a slim D-post of even width, as the reference's rear iso.
+  quarter: { zRearBot: -1.99, zRearTop: -1.76 },
+  midPillarZ: -1.2,
+  rearBulkhead: { z: -1.3, yTop: 1.0 },
+  tubs: [[-1.96, 0.7, 0.38]],
+  // Hood tops to 1.10 m and tail deck to 1.12 m, roof from 1.45 m: the cabin starts 7 cm over the highest, as the trucks' do.
+  proxyBelt: 1.19,
+  rearDoorSeam: -1.23,
+  // The liftgate carries its share of each D-post when it opens or tears, as the reference's popped gates.
+  boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE, edgeRoll: 0.02, postShare: [0.6, 0.6] },
+  lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES, bulb: "led" },
+  // The reference's wide diamond mesh: about nine across and four rows down.
+  grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 11, angle: 0.37, finish: "black", rim: "chrome", lean: 0.387 },
+  seats: { front: [0.37, 0.52, -0.15], rear: [0.54, -0.8] },
+  pillars: { b: { width: [0.088, 0.088] }, divider: { width: [0.105, 0.105] } },
+  // The reference's D-post reads gloss black like the glass beside it; its quarter glass a dark blur, not the garage's sharp mirror.
+  blackout: { a: true, sail: true, b: true, divider: true, rear: true },
+  privacyGlass: { rear: true, quarter: "matte" },
+  // The glass panel as the reference's isos: from 19 cm behind the windshield's top, 0.57 m long, 0.72 m across. The spoiler caps the roof's
+  // last drawn chord from its ring (z -1.662) flush with the roof's crown, so no face stands over the sagging chord; trailing corners rounded.
+  // The liftgate carries the spoiler's share behind the shut line at z -1.79, as the reference's popped gates; a 3 cm flange (`lip`) under it hangs over the rear glass's top,
+  // which falls 2.4 cm at the corners (dome): no slit between them, and the shut line stays one ring.
+  roof: { rails: { x: [0.5, 0.56], z: [-1.64, 0.12], rise: 0.03 }, spoiler: { z: [-1.86, -1.662], y: [1.46, 1.516], halfWidth: 0.6, ends: [0.06, 0.1], round: true, crown: 0.026, gate: -1.79, lip: { drop: 0.03, depth: 0.04, halfWidth: 0.496 } }, glassPanel: { z: [-0.46, 0.11], width: 0.72 } },
+  exhaust: { tips: 2, x: 0.5, y: 0.42, size: [0.15, 0.05], shape: "round" },
+  details: {
+    lines: [
+      { view: "top", points: [[1.97, 0], [1.95, 0.35], [1.9, 0.52], [1.82, 0.62]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[0.88, 0], [0.86, 0.4], [0.85, 0.65], [0.88, 0.72]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[1.03, 0], [0.99, 0.3], [0.88, 0.55], [0.8, 0.65]], width: 0.01, depth: 0.002, profile: "u", cavity: 0.7 },
+      { view: "top", points: [[1.92, 0.4], [1.65, 0.43], [1.45, 0.46], [1.25, 0.49]], width: 0.05, depth: 0.003, profile: "u", cavity: 0 },
+      { view: "top", points: [[1.85, 0.6], [1.55, 0.6], [1.2, 0.6]], width: 0.03, depth: 0.0015, profile: "u", cavity: 0 },
+      { view: "top", points: [[1.18, 0.47], [1.18, 0.55], [1, 0.55], [1, 0.47]], closed: true, width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "front", points: [[0.55, 0.53], [0.65, 0.53], [0.74, 0.53]], width: 0.012, depth: 0.003, profile: "u", cavity: 0 },
+      { view: "front", points: [[0, 0.28], [0.58, 0.29]], width: 0.012, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "front", points: [[0.42, 0.78], [0.55, 0.78], [0.66, 0.76], [0.74, 0.8]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[1.44, 0.87], [1.42, 0.88]], width: 0.01, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "front", points: [[0.42, 0.83], [0.55, 0.83], [0.66, 0.84], [0.74, 0.86], [0.77, 0.87]], width: 0.012, depth: 0.003, profile: "u", cavity: 0 },
+      { view: "front", points: [[0.44, 0.76], [0.58, 0.755], [0.7, 0.76], [0.76, 0.78]], width: 0.006, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "side", points: [[0.64, 1.06], [0.665, 0.95], [0.665, 0.6], [0.66, 0.38]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[1.42, 0.87], [1.15, 0.88], [0.92, 0.89]], width: 0.03, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "side", points: [[0.6, 1.04], [-0.33, 1.03], [-1.23, 1.03], [-1.74, 0.99]], width: 0.04, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "side", points: [[0.73, 0.5], [-0.3, 0.49]], width: 0.03, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "side", points: [[-0.36, 0.49], [-1, 0.5]], width: 0.03, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "side", points: [[-0.31, 1.07], [-0.33, 0.95], [-0.33, 0.6], [-0.335, 0.39]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[0.66, 0.385], [0, 0.38], [-0.33, 0.38]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[0.06, 1.48], [-0.1, 1.485], [-0.3, 1.485]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.7 },
+      { view: "side", points: [[0.5, 1.08], [0.3, 1.28], [0.07, 1.47]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.7 },
+      { view: "side", points: [[-0.36, 1.07], [-0.44, 1.47]], width: 0.07, depth: 0.002, profile: "u", cavity: 0.7 },
+      { view: "side", points: [[-1.06, 1.44], [-1.22, 1.08], [-1.235, 0.8], [-1.23, 0.39]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.335, 0.38], [-0.8, 0.375], [-1.23, 0.375]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.44, 1.46], [-0.97, 1.455]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.7 },
+      { view: "side", points: [[-1, 1.08], [-0.98, 1.45]], width: 0.05, depth: 0.002, profile: "u", cavity: 0.7 },
+      { view: "side", points: [[-1.13, 1.09], [-1.13, 1.45], [-1.53, 1.39], [-1.75, 1.28], [-1.97, 1.12]], width: 0.01, depth: 0.002, profile: "u", cavity: 0.7 },
+      { view: "side", points: [[0.45, 1.06], [-0.33, 1.07], [-1.27, 1.08], [-1.98, 1.1]], width: 0.014, depth: 0.003, profile: "u", cavity: 0 },
+      { view: "side", points: [[0.47, 0.35], [-0.3, 0.35]], width: 0.03, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "side", points: [[-0.36, 0.35], [-0.95, 0.355]], width: 0.03, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "side", points: [[0.75, 0.315], [-0.3, 0.315], [-1, 0.315], [-1.12, 0.32]], width: 0.006, depth: 0.004, profile: "step", cavity: 0.85 },
+      { view: "side", points: [[-1.3, 0.6], [-1.67, 0.6], [-1.95, 0.6]], width: 0.03, depth: 0.002, profile: "u", cavity: 0 },
+      { view: "side", points: [[-1.51, 0.95], [-1.54, 0.99], [-1.57, 1.01], [-1.6, 0.99], [-1.63, 0.95], [-1.6, 0.91], [-1.57, 0.89], [-1.54, 0.91]], closed: true, width: 0.01, depth: -0.005, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[0.04, 0.5], [-0.7, 0.5], [-1.3, 0.5], [-1.57, 0.49]], width: 0.035, depth: 0.006, profile: "u", cavity: 0 },
+      { view: "top", points: [[-1.83, 0.55], [-1.83, 0]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[-1.6, 0], [-1.6, 0.55]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-1.6, 1.52], [-1.85, 1.4], [-2.07, 1.11], [-2.115, 0.9], [-2.125, 0.66]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "rear", points: [[0.55, 1.52], [0.6, 1.4], [0.62, 1.11], [0.62, 0.9], [0.62, 0.66], [0, 0.65]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "rear", points: [[0, 1.42], [0.53, 1.38], [0.44, 1.12], [0, 1.11]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.7 },
+      { view: "rear", points: [[0.62, 0.99], [0.62, 0.91]], width: 0.01, depth: -0.006, profile: "v", cavity: 0.85 },
+      { view: "rear", points: [[0.5, 0.96], [0.8, 0.96]], width: 0.01, depth: 0.002, profile: "u", cavity: 0.7 },
+      { view: "rear", points: [[0.5, 0.93], [0.8, 0.93]], width: 0.01, depth: 0.002, profile: "u", cavity: 0.7 },
+      { view: "side", points: [[-1.93, 0.45], [-1.97, 0.45]], width: 0.006, depth: 0.004, profile: "step", cavity: 0.85 },
+      { view: "rear", points: [[0.6, 0.45], [0, 0.45]], width: 0.006, depth: 0.004, profile: "step", cavity: 0.85 },
+      ...HANDLES.flatMap((h) => h.lines),
+    ],
+    patches: [
+      { view: "top", points: [[1.18, 0.47], [1.18, 0.55], [1, 0.55], [1, 0.47]], depth: -0.006, rim: 0.004, pattern: { kind: "hslats", pitch: 0.02, bar: 0.006, depth: 0.004 }, cavity: 0.7 },
+      { view: "front", points: [[0, 0.58], [0.025, 0.585], [0.035, 0.6], [0.025, 0.615], [0, 0.62]], depth: 0.003, rim: 0.004, cavity: 0 },
+      // The lower intake and the corner intake's recess end where the corner intake's dark lens does: no stepped edge.
+      { view: "front", points: [[0, 0.48], [0.61, 0.48], [0.62, 0.36], [0.62, 0.31], [0, 0.31]], depth: -0.006, rim: 0.004, cavity: 0.95 },
+      { view: "front", points: [[0.6, 0.555], [0.7, 0.555], [0.725, 0.535], [0.73, 0.37], [0.71, 0.345], [0.64, 0.345], [0.62, 0.36], [0.61, 0.48]], depth: -0.006, rim: 0.004, cavity: 0.95 },
+      { view: "front", points: [[0.485, 0.758], [0.555, 0.758], [0.555, 0.803], [0.485, 0.803]], depth: -0.006, rim: 0.004, cavity: 0.7 },
+      { view: "side", points: [[0.92, 0.89], [0.92, 0.925], [0.47, 0.925], [0.47, 0.89]], depth: -0.006, rim: 0.004, cavity: 0.7 },
+      { view: "rear", points: [[0.5, 0.91], [0.8, 0.91], [0.8, 0.99], [0.5, 0.99]], depth: -0.004, rim: 0.004, cavity: 0 },
+      { view: "side", points: [[-1.74, 0.91], [-2.03, 0.91], [-2.03, 0.99], [-1.74, 0.99]], depth: -0.004, rim: 0.004, cavity: 0 },
+      { view: "rear", points: [[0, 0.91], [0.5, 0.91], [0.5, 0.98], [0, 0.98]], depth: 0, rim: 0.004, cavity: 0.7 },
+      { view: "rear", points: [[0, 0.62], [0.6, 0.62], [0.6, 0.66], [0, 0.66]], depth: -0.006, rim: 0.004, cavity: 0.7 },
+      { view: "rear", points: [[0.485, 0.278], [0.615, 0.278], [0.615, 0.323], [0.485, 0.323]], depth: -0.006, rim: 0.004, cavity: 0.7 },
+      // The gate's pressed plate recess under the lettering band; the reference leaves it empty (no plate), its cavity shadowed.
+      { view: "rear", points: [[0, 0.77], [0.36, 0.77], [0.39, 0.778], [0.4, 0.8], [0.4, 0.905], [0, 0.905]], depth: -0.006, rim: 0.008, cavity: 0.6 },
+      { view: "rear", points: [[0.475, 0.773], [0.525, 0.773], [0.525, 0.788], [0.475, 0.788]], depth: 0.002, rim: 0.004, cavity: 0 },
+      { view: "rear", points: [[0, 0.3], [0.7, 0.3], [0.7, 0.465], [0, 0.465]], depth: -0.004, rim: 0.004, pattern: { kind: "hslats", pitch: 0.03, bar: 0.006, depth: -0.004 }, cavity: 0.85 },
+      // The black sill cladding between the arches, under the door bottoms' beads.
+      { view: "side", points: [[0.76, 0.26], [-0.76, 0.26], [-0.76, 0.345], [0.76, 0.345]], depth: 0, rim: 0.002, cavity: 0.9 },
+      ...HANDLES.flatMap((h) => h.patches),
+    ],
+  },
+};

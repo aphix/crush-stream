@@ -7,7 +7,7 @@ import type { CarPose, RaceEvent, RaceResultRow } from "./types.ts";
 import { DT, along, centreline, field, fromGrid, polyline, runTo, samples, shortcutLine, type Driver, type Pt } from "./session-drive.test-util.ts";
 import { square as squareFile } from "../world/track.test-util.ts";
 import { assertSameDigest } from "../vehicle/test-support.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import oval from "../world/tracks/oval.json" with { type: "json" };
 import { PoliceBrain } from "../ai/police.ts";
 import type { HunterWorld } from "../ai/cop-brain.ts";
@@ -229,7 +229,7 @@ describe("given car 0 whose wreck is due to respawn just as car 1 comes down the
     assert.ok(s.time > due + 0.3 && s.time < due + 2.1, `respawned at ${s.time.toFixed(2)} s (due ${due} s)`);
     const q = fast(s.time);
     const ahead = ((rs.x - q.x) * q.vx + (rs.z - q.z) * q.vz) / 30;
-    assert.ok(ahead < -CAR_HALF.z || ahead > CLEARANCE + (30 * 30) / (2 * RESPAWN_BRAKE), `dropped ${ahead.toFixed(1)} m ahead of a car at 30 m/s`);
+    assert.ok(ahead < -FLEET_HALF.z || ahead > CLEARANCE + (30 * 30) / (2 * RESPAWN_BRAKE), `dropped ${ahead.toFixed(1)} m ahead of a car at 30 m/s`);
   });
 });
 
@@ -618,13 +618,13 @@ describe("given a two-car race on the square track, where one car follows anothe
     }
   });
 
-  /** Whether the second car is counted as drafting after half a second, `x` m behind the leader's rear bumper (CG offset `CAR_HALF.z`) and `side` m off its line. */
+  /** Whether the second car is counted as drafting after half a second, `x` m behind the leader's rear bumper (CG offset `FLEET_HALF.z`) and `side` m off its line. */
   const wakes = (x: number, side: number, vx = 0, vz = 30): boolean => {
     const s = race();
-    runTo(s, [leader, (t) => ({ ...straight(side, 20 - CAR_HALF.z - x, 30)(t), vx, vz })], 0.5);
+    runTo(s, [leader, (t) => ({ ...straight(side, 20 - FLEET_HALF.z - x, 30)(t), vx, vz })], 0.5);
     return s.cars[1]!.draft > 0;
   };
-  const LEN = 2 * CAR_HALF.z;
+  const LEN = 2 * FLEET_HALF.z;
 
   it("when the follower is 1 m behind the bumper, at 3 car lengths, or at 3.5 car lengths on a straight, then the first two are in the wake and the third is not", () => {
     assert.ok(wakes(1, 0), "1 m behind the bumper (inside the old 2 m near cut)");

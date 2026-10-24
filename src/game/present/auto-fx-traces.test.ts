@@ -52,7 +52,7 @@ function replay(fx: AutoFx, segments: Segment[], opts: { timer: boolean; race: b
 
 describe("given recorded frames of a race that opens on a burst of load (the first seconds after green are slow while shaders and first-use assets settle)", () => {
   const raceStartCases = [
-    { it: "when a 144 Hz display with a GPU timer runs the race, then the load check waits out the burst and lifts to high 5.5 s after green and holds it", trace: "race-start-burst-144hz", timer: true, seconds: 16, expected: [[5.5, "high"]] },
+    { it: "when a 144 Hz display with a GPU timer runs the race, then the load check waits out the burst and lifts to high 6.5 s after green (one window later than plain room: the climb needs 30 % to spare) and holds it", trace: "race-start-burst-144hz", timer: true, seconds: 16, expected: [[6.5, "high"]] },
     { it: "when a 60 Hz display runs it with no GPU timer, then it lifts to high once the wall rate is back (5.3 s) and holds it through the 2 s fall to 30 fps at 10 s", trace: "race-start-burst-60hz-no-timer", timer: false, seconds: 16, expected: [[5.3, "high"]] },
     { it: "when a plain 60 Hz display with a GPU timer runs it, then it lifts to high shortly after the load check", trace: "race-60hz", timer: true, seconds: 16, expected: [[4, "high"]] },
   ] as const;

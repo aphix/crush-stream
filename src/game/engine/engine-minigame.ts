@@ -33,6 +33,8 @@ export class Minigames {
   private throwsPerSet: number = THROWS_PER_SET.default;
   /** An ejection has been launched for this attempt. */
   private thrown = false;
+  /** Presented seconds the player's car has lain at rest (0 while it moves): a driven car that rests the rest hold with nobody thrown ends the attempt as a no throw. */
+  private carStill = 0;
   private art: MinigameArt | null = null;
   private ground: MinigameGround | null = null;
   private collideHook: ((car: DeformableCar, index: number) => void) | null = null;
@@ -137,6 +139,7 @@ export class Minigames {
   /** A new attempt's scene (after `ragdolls.reset`, which drops both): the dummy lives until released, the boxes stand again, no bail yet. */
   armRagdolls(ragdolls: RagdollSystem): void {
     this.thrown = false;
+    this.carStill = 0;
     this.heldThrow = null;
     this.bail.reset();
     ragdolls.holdThrown();
@@ -144,7 +147,7 @@ export class Minigames {
     if (boxes) ragdolls.setBoxes(boxes);
   }
 
-  /** The Long jump's boost control, once per frame: `down` is the control held, `tapped` a press the poll saw begin. The first press of a run is the bail, stamped at game time `now`; before the car moves it is nothing. */
+  /** The Long jump's boost control, once per frame: `down` is the control held, `tapped` a press the poll saw begin. The first press of a run is the bail, stamped at presented time `now` (the end of the frame that polled it); before the car moves it is nothing. */
   sampleBoost(down: boolean, tapped: boolean, now: number): void {
     const pressed = tapped || (down && !this.boostWasDown);
     this.boostWasDown = down;
@@ -153,13 +156,13 @@ export class Minigames {
     if (phase === "running" || phase === "thrown") this.bail.press(now);
   }
 
-  /** The barrier's throw at game time `now`: the dummy waits (up to the bail window) for a late press. */
+  /** The barrier's throw at presented time `now` (the end of its frame): the dummy waits (up to the bail window) for a late press. */
   holdForBail(event: Ejection, now: number): void {
     this.heldThrow = event;
     this.bail.hit(now);
   }
 
-  /** The held throw and its release once the bail has decided it at game time `now`, else null. */
+  /** The held throw and its release once the bail has decided it at presented time `now`, else null. */
   bailThrowDue(now: number): { event: Ejection; release: ReleaseScale } | null {
     if (this.heldThrow === null) return null;
     const verdict = this.bail.launchDue(now);
@@ -186,10 +189,11 @@ export class Minigames {
   }
 
   /**
-   * One render frame: the dummy's torso (station-local, from the ragdoll's latest) and whether the player has pressed a pedal go to the
-   * session, and the high jump's boxes are drawn where the physics left them.
+   * One render frame: the dummy's torso (station-local, from the ragdoll's latest), whether the player has pressed a pedal and how long the
+   * player's `car` has lain at rest (presented seconds, like the bail's window) go to the session, and the high jump's boxes are drawn where
+   * the physics left them.
    */
-  step(ragdolls: RagdollSystem, pedalPressed: boolean): void {
+  step(ragdolls: RagdollSystem, pedalPressed: boolean, car: DeformableCar, wallDt: number): void {
     if (this.activeMode === null) return;
     const still = ragdolls.latest(this.torsoWorld);
     let torso: TorsoSample | null = null;
@@ -201,7 +205,8 @@ export class Minigames {
       torso.z = this.torsoWorld.z - anchor.z;
       torso.still = still;
     }
-    this.session.step({ pedalPressed, thrown: this.thrown, torso });
+    this.carStill = car.moving ? 0 : this.carStill + wallDt;
+    this.session.step({ pedalPressed, thrown: this.thrown, torso, carStill: this.carStill });
     if (this.boxPlacements[this.activeMode]) this.art?.updateBoxes(this.boxPoses, ragdolls.copyBoxPoses(this.boxPoses));
   }
 

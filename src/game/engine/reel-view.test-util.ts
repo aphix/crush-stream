@@ -111,8 +111,8 @@ export function holdAfter(tl: ScaleCurve, at: number): number {
   return (tl.scale.length - 1 - k) * dt;
 }
 
-/** One frame of a reel clip: its wall second into the clip timeline, its clip second, which camera held it (`MomentView.rig`) and the clip's slow-mo hold (`PhaseClock.hold`). */
-export type RigSample = { clip: number; wall: number; at: number; rig: string; hold: number };
+/** One frame of a reel clip: its wall second into the clip timeline, its clip second, which camera held it (`MomentView.rig`), the clip's slow-mo hold (`PhaseClock.hold`) and the crash cam's own clock after the frame (`CrashCam.camT`, negative when it is off). */
+export type RigSample = { clip: number; wall: number; at: number; rig: string; hold: number; camT: number };
 
 const _ndc = new THREE.Vector3();
 
@@ -225,7 +225,7 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
       const sim = cur.sim;
       const shot = cur.shots[Math.max(0, reel["shot"])]!;
       const rig = rode ? "ride" : cut ? "crash" : reel["flying"] ? "flight" : `shot:${shot.kind === "chase" || reel["shotCam"].found ? shot.kind : "chase"}`;
-      trace?.push({ clip: i, wall: k * FRAME, at: sim.time, rig, hold: clock.hold });
+      trace?.push({ clip: i, wall: k * FRAME, at: sim.time, rig, hold: clock.hold, camT: crash.camT });
       // A crash-cam cut is its held eye on its axis: a later crash moves the axis onto itself (`CrashCam.retarget`).
       const axis = `${crash["camAt"].x.toFixed(1)},${crash["camAt"].z.toFixed(1)}`;
       const cam = `${rig}|${reel["shot"]}|${crash["held"]}|${axis}`;

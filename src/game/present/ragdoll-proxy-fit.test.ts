@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it, type TestContext } from "node:test";
+import type { RayColliderHit } from "@dimforge/rapier3d-simd";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { BODIES, carInState, drawnField, gapsOver, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST_M, topGapsOff } from "../vehicle/drawn-body.test-util.ts";
+import { BODIES, carInState, drawnField, gapsOver, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST_M, topGapsOff, topParts } from "../vehicle/drawn-body.test-util.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
+import { BOX_FLOATS } from "./ragdoll-proxy.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
@@ -35,7 +37,14 @@ const interiorThroughRoof =
  * rim rows off a leaf with an inside (`ProxyFitter.cut`), and the leaf over z 1.65-1.75 stands 6.6 cm over the drawn nose face.
  */
 const noseFaceUnderLeaf =
-  "hood p95 0.06 m against the 0.05 m bar on the sedan, wagon and pickup head-on rows: the cage reaches the crushed nose's front rows (0.10 m under the hood in one node, under CLIFF, in the rim), which no cut splits off a leaf with an inside, so the leaf over them stands 6.6 cm over the drawn nose face; after the plan (Stage 5): the proxy fitter takes the crushed nose's front as a surface of its own";
+  "hood p95 0.06 m against the 0.05 m bar on the wagon and pickup head-on rows (the sedan's reads 0.036 and is a plain row): the cage reaches the crushed nose's front rows (0.10 m under the hood in one node, under CLIFF, in the rim), which no cut splits off a leaf with an inside, so the leaf over them stands 6.6 cm over the drawn nose face; after the plan (Stage 5): the proxy fitter takes the crushed nose's front as a surface of its own";
+
+/** The wagon's rolled deck row: its rear glass is gone after the roof drop, and the cage's closed tail is a cuboid the drawn body shows no top for. */
+const rearGlassGone =
+  "deck p95 0.52 m, worst +0.53 m over the drawn top at (0.43, -1.93..-1.98): the wagon's rear glass shatters in the 2 m roof drop, so the drawn top over its opening is the cargo floor (0.38-0.58 m) while the proxy's cuboid over the cage's closed tail stands at 1.11 m; after the plan: the cage's tail opens where the rear glass is gone, as the drawn body's does";
+/** The pickup's airborne deck row (25°): the fitter's one leaf over the bed floor and the cab's rear wall, a cut or leaf budget, not the cage. */
+const bedFrontLeaf =
+  "CarRig: a dummy-proxy leaf spans the bed floor (0.80) and the cab's rear wall at the bed front, airborne 25°: deck worst +0.12 m at (0.43, -1.08..-1.18), up .072 before the door/C-post step; the fitter's cut or leaf budget, not the door data";
 const todoCause: Record<string, string> = { cabin: interiorThroughRoof, hood: noseFaceUnderLeaf };
 
 const proxyCases = BODIES.flatMap((b) =>
@@ -46,8 +55,15 @@ const proxyCases = BODIES.flatMap((b) =>
     cls: b.cls,
     state: s.id,
     stateText: s.text,
-    /** The parts of this row held to the bars as a todo (`todoCause`), the others as plain tests. */
-    todoParts: s.id === "rolled" && b.style === "pickup" ? ["cabin"] : s.id === "headon" && b.cls !== "monster" ? ["hood"] : [],
+    /** The parts of this row held to the bars as a todo (`todoCause`, or the row's own `todoCauses`), the others as plain tests. */
+    todoParts: [
+      ...(s.id === "rolled" && (b.style === "pickup" || b.style === "monster") ? ["cabin"] : s.id === "headon" && b.cls !== "monster" && b.style !== "sedan" ? ["hood"] : []),
+      ...((s.id === "airborne" && b.style === "pickup") || (s.id === "rolled" && b.style === "wagon") ? ["deck"] : []),
+    ],
+    todoCauses: {
+      ...(b.style === "pickup" && s.id === "airborne" ? { deck: bedFrontLeaf } : {}),
+      ...(b.style === "wagon" && s.id === "rolled" ? { deck: rearGlassGone } : {}),
+    } as Partial<Record<string, string>>,
   })),
 );
 
@@ -70,11 +86,22 @@ async function proxyGaps(t: TestContext, testCase: ProxyCase): Promise<Record<st
   const body = ragdolls["proxies"].carBodies[0]!;
   const down = { x: 0, y: -1, z: 0 };
   const off: Record<string, string[]> = {};
-  for (const [part, region] of Object.entries(TOP_PARTS)) {
-    const g = gapsOver(car, field, region, (x, y, z) => {
-      const hit = world.castRay(new R.Ray({ x, y: y + RAY_FROM_M, z }, down), RAY_LENGTH_M, true, undefined, undefined, undefined, undefined, (c) => c.parent() === body && c.collisionGroups() !== 0);
-      return hit === null ? NaN : y + RAY_FROM_M - hit.timeOfImpact;
-    });
+  let hit: RayColliderHit | null = null;
+  for (const [part, region] of Object.entries(topParts(testCase.style))) {
+    const g = gapsOver(
+      car,
+      field,
+      region,
+      (x, y, z) => {
+        hit = world.castRay(new R.Ray({ x, y: y + RAY_FROM_M, z }, down), RAY_LENGTH_M, true, undefined, undefined, undefined, undefined, (c) => c.parent() === body && c.collisionGroups() !== 0);
+        return hit === null ? NaN : y + RAY_FROM_M - hit.timeOfImpact;
+      },
+      () => {
+        if (hit === null) return "";
+        const shape = hit.collider.shapeType();
+        return String(R.ShapeType[shape] ?? shape);
+      },
+    );
     t.diagnostic(`${part}: cells ${g.cells} p95 ${g.p95.toFixed(3)} up ${g.worstUp.toFixed(3)} down ${g.worstDown.toFixed(3)} missing ${g.missing}`);
     off[part] = topGapsOff(part, g);
   }
@@ -91,9 +118,39 @@ for (const testCase of proxyCases) {
       );
     });
     for (const part of testCase.todoParts) {
-      it(`${testCase.it}, over its ${part}`, { todo: todoCause[part] }, async (t) => {
+      it(`${testCase.it}, over its ${part}`, { todo: testCase.todoCauses[part] ?? todoCause[part] }, async (t) => {
         assert.deepEqual((await proxyGaps(t, testCase))[part], []);
       });
     }
+  });
+}
+
+/**
+ * The hood's and deck's regions (`TOP_PARTS`): on a truck, its hood and its open bed, where the proxy stands columns from under the
+ * ground, never a cabin's roof slab (a car's deck region reaches under its rear glass and, on the wagon, its roof).
+ */
+const LOW_PARTS = [TOP_PARTS.hood, TOP_PARTS.deck] as const;
+
+for (const b of BODIES.filter((body) => body.style === "pickup" || body.style === "monster")) {
+  describe(`given a dummy lying 3 m from a ${b.body} body untouched`, () => {
+    it("when its proxy's leaves are read, then each one over its hood and bed is a column from under the ground, none a roof slab hung over them", async () => {
+      const car = carInState("untouched", b.style, b.cls);
+      const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+      await ragdolls.preload();
+      ragdolls.update(FRAME, [], true, true, null);
+      ragdolls["spawn"]({ car: 3, p: new THREE.Vector3(3, 1.2, 0), q: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
+      for (let f = 0; f < 3; f++) ragdolls.update(FRAME, [car], true, true, null);
+      const proxies = ragdolls["proxies"];
+      const fits = proxies["leafFits"];
+      const slabs: string[] = [];
+      // A leaf's floats: its centre (x, y, z), half sizes, turn; the first is the lower box under the cabin.
+      for (let k = 1; k < proxies["shapeN"][0]!; k++) {
+        const o = k * BOX_FLOATS;
+        const [x, y, z, hy] = [fits[o]!, fits[o + 1]!, fits[o + 2]!, fits[o + 4]!];
+        if (!LOW_PARTS.some((r) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1)) continue;
+        if (y - hy > 0) slabs.push(`leaf at x ${x.toFixed(2)} z ${z.toFixed(2)}: ${(y - hy).toFixed(2)}-${(y + hy).toFixed(2)} m`);
+      }
+      assert.deepEqual(slabs, []);
+    });
   });
 }

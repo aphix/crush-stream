@@ -2,13 +2,12 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
-import { TYRE_R } from "./deform-state.ts";
 import type { DeformMode } from "./deform-rig.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { PART_KIND, PartSeat } from "../vehicle/part-geometry.ts";
 import { leftoverCrumple, snapshotPoints } from "./physics-util.ts";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
-import { DT, dummyGeom, forModes, mass, paint } from "../vehicle/test-support.ts";
+import { closedOn, DT, dummyGeom, forModes, mass, paint } from "../vehicle/test-support.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, PARKED, runPair, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { classCar } from "../vehicle/ejection.test-util.ts";
 import { sliceSpeed } from "../contact/sat.ts";
@@ -323,7 +322,8 @@ forModes("given a car whose wheel hubs all pop off after a 2 m/s nose knock", (m
     for (const m of car.deform.masses) if (m.hub) car.deform.popHub(m);
     const before = car.wheels.map((w) => w.position.clone());
     const bodies = car["looseWheels"];
-    const toContact = new THREE.Vector3(0, -TYRE_R, 0);
+    const tyreR = car.frame.rig.tyre.r;
+    const toContact = new THREE.Vector3(0, -tyreR, 0);
     const slide = new THREE.Vector3();
     for (let i = 0; i < 600; i++) {
       if (i === 599) for (const [k, w] of car.wheels.entries()) before[k]!.copy(w.position);
@@ -339,7 +339,7 @@ forModes("given a car whose wheel hubs all pop off after a 2 m/s nose knock", (m
         const slip = slide.crossVectors(body.angular, toContact).add(body.velocity).setY(0).length();
         const speed = body.velocity.length();
         assert.equal(w.parent, scene, `wheel ${k} still rides the car`);
-        assert.ok(Math.abs(w.position.y - TYRE_R) <= TYRE_R * FACET_SLIP + 0.02, `wheel ${k} rolls at y ${w.position.y.toFixed(3)}, not on its tyre`);
+        assert.ok(Math.abs(w.position.y - tyreR) <= tyreR * FACET_SLIP + 0.02, `wheel ${k} rolls at y ${w.position.y.toFixed(3)}, not on its tyre`);
         assert.ok(slip <= speed * FACET_SLIP + GRAVITY * DT, `wheel ${k} slides at 5 s: ${slip.toFixed(3)} m/s at the road at ${speed.toFixed(2)} m/s`);
       }
     }
@@ -426,11 +426,11 @@ describe("given a corner crushed to within 0.12 m of its wheel hub", () => {
   });
 });
 
-describe("given an engine block made of a left and a right half, 0.60 m apart", () => {
-  it("when a car hits a wall at 56 km/h with a 40 % offset, and a car is T-boned at 50 km/h, then the halves stay within 1.2 cm of their 0.60 m spacing on the offset-hit car and on both T-bone cars", () => {
+describe("given an engine block made of a left and a right half", () => {
+  it("when a car hits a wall at 56 km/h with a 40 % offset, and a car is T-boned at 50 km/h, then the halves stay within 1.2 cm of their rest spacing on the offset-hit car and on both T-bone cars", () => {
     const [struck, bullet] = runPair(0, 50, "t-bone");
     for (const [name, r] of [["offset56", runWall(56, 0.4)], ["struck", struck], ["bullet", bullet]] as const) {
-      assert.ok(r.engineGapErr <= 0.012, `${name}: engineL–engineR off 0.60 by ${r.engineGapErr.toFixed(3)} m`);
+      assert.ok(r.engineGapErr <= 0.012, `${name}: engineL–engineR off their rest spacing by ${r.engineGapErr.toFixed(3)} m`);
     }
   });
 });
@@ -539,7 +539,7 @@ function tbone(squash: number): { door: number; gap: number } {
     if (since < 0 && a.crashed) since = 0;
     if (since < 0 || !a.deform.massActive || !b.deform.massActive) continue;
     since += 1 / FRAME_HZ;
-    if (since <= 0.3) door = Math.max(door, 0.78 - (mass(a.deform, "doorR").local.x - mass(a.deform, "cell").local.x));
+    if (since <= 0.3) door = Math.max(door, closedOn(mass(a.deform, "doorR"), mass(a.deform, "cell"), "x"));
     gap = Math.min(gap, mass(b.deform, "cell").world.x - mass(a.deform, "cell").world.x);
   }
   return { door, gap };
@@ -935,6 +935,24 @@ describe("given two cars driving head-on at each other, in shape deform mode", (
     for (let i = 0; i < 2; i++) assert.ok(nose(fast[i]!) > 1.4 * nose(slow[i]!), `56=${nose(fast[i]!).toFixed(3)} 28=${nose(slow[i]!).toFixed(3)}`);
   });
 
+  // The thrown-driver rows stage this hit as the one that kills both engines (`ragdoll-trigger`): with the contact hull's decimation
+  // changed (lid outlines held over its budget) the noses crushed 0.267 m, not 0.549, and both engines lived.
+  it("when each car drives at 56 km/h, then both engines are pushed back far enough to die", () => {
+    for (const [i, r] of fast.entries()) assert.equal(r.drivetrainAlive, false, `car ${i}: engine pushed back ${r.engineMax.toFixed(3)} m, nose ${nose(r).toFixed(3)} m`);
+  });
+
+  // The pair's stop lands the packed nose within a slice of PACKED_STROKE and the structure then springs it back by a few mm, a landing that moves
+  // with the slice the stop falls in: the block's travel is the hit's energy once it packs, so it rises with speed through the kill window.
+  it("when each car drives at 54.5, 55, 55.5, 56 and 56.5 km/h, then the engine block travels farther the faster they meet, and both engines die at 56", () => {
+    let slower = 0;
+    for (const kph of [54.5, 55, 55.5, 56, 56.5]) {
+      const [r] = runPair(kph, kph);
+      assert.ok(r.engineTravel > slower, `${kph} km/h: engine block ${r.engineTravel.toFixed(4)} m, the slower pair's ${slower.toFixed(4)} m`);
+      slower = r.engineTravel;
+      if (kph === 56) assert.equal(r.drivetrainAlive, false, `56 km/h: engine pushed back ${r.engineTravel.toFixed(4)} m`);
+    }
+  });
+
   it("when they hit at 28 km/h each with full overlap, then the impact point stays within 0.2 m of the centre line on both cars", () => {
     for (const r of slow) assert.ok(Math.abs(r.impactLocalX) < 0.2, `impactLocal.x=${r.impactLocalX.toFixed(3)}`);
   });
@@ -969,7 +987,8 @@ describe("given a car's glass panes, named for ragdoll ejection (a thrown-out dr
     const car = new DeformableCar(paint(), new THREE.Scene(), (origin) => bursts.push(origin.clone()));
     car.spawn(4, 9, 0);
     const at = (name: "windshield" | "doorL" | "doorR") => car.group.worldToLocal(car.glassWorld(name, new THREE.Vector3()));
-    assert.ok(at("windshield").z > 0.6 && Math.abs(at("windshield").x) < 0.05, `windshield at ${at("windshield").toArray()}`);
+    const doorsZ = Math.max(at("doorL").z, at("doorR").z);
+    assert.ok(at("windshield").z > doorsZ && Math.abs(at("windshield").x) < 0.05, `windshield at ${at("windshield").toArray()}, ahead of the door panes at z ${doorsZ}`);
     assert.ok(at("doorL").x < -0.6 && at("doorR").x > 0.6, `doors at ${at("doorL").x} / ${at("doorR").x}`);
     assert.equal(car.smashGlass("doorL"), true);
     assert.equal(car.smashGlass("doorL"), false, "a shattered pane smashed twice");

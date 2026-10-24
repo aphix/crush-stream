@@ -6,6 +6,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { cageLift, crownY, keelY } from "../vehicle/car-cage-rig.ts";
 import { SAMPLE, sampleAt } from "../vehicle/car-cage.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
+import { driverSeat } from "../vehicle/interior.ts";
 import type { Ground } from "../world/ground.ts";
 import { insidePolygon } from "../world/terrain.ts";
 import type { GuardSpec } from "../world/track-schema.ts";
@@ -67,13 +68,11 @@ const BOARD_SPEED = 2.5;
 /** How far (m) outside the passenger door he stands to get in; he goes back in when the car is `GIVE_UP` m off and off the grounds. */
 const DOOR_OUT = 1.1;
 const GIVE_UP = 45;
-/** In his seat: hips this far (m) in from the passenger window's middle, down from it, and back of it. */
-const SEAT = { in: 0.42, down: 0.92, back: 0.15 };
-/** His window: the passenger's, across from the driver's (`DRIVER_SIDE`). */
-const PASSENGER_PANE = DRIVER_SIDE > 0 ? "doorL" : "doorR";
-/** How far (m) from the driver's torso a thrown passenger leaves: beside him (toward the passenger side) out of the windshield, behind him out of a door. */
+/** How far (m) from the driver's torso a thrown passenger leaves: beside him (toward the passenger's side) out of the windshield, behind him out of a door. */
 const BESIDE = 0.75;
 const BEHIND = 0.8;
+/** His window: the passenger's, across from the driver's (`DRIVER_SIDE`). */
+const PASSENGER_PANE = DRIVER_SIDE > 0 ? "doorL" : "doorR";
 /** The secret's flash (ms; the owner: "a slow bright flash"): its swell, hold at full glare, and fade. */
 const NUKE_FLASH = { rise: 1800, hold: 500, fade: 4200 } as const;
 
@@ -85,7 +84,6 @@ const _qb = new THREE.Quaternion();
 const _q = new THREE.Quaternion();
 const _turn = new THREE.Quaternion();
 const _gun = new THREE.Quaternion();
-const _inv = new THREE.Quaternion();
 const _c = new THREE.Vector3();
 const _j = new THREE.Vector3();
 const _k = new THREE.Vector3();
@@ -592,12 +590,13 @@ export class VipEscort {
     return false;
   }
 
-  /** In the passenger seat: hips in from the passenger window, facing the car's way (`HIP[3]`: the hips' height standing). */
+  /** In the passenger seat: hips on its H-point (the driver's mirrored across the car, `driverSeat`), carried by the cabin as it crushes, facing the car's way (`HIP[3]`: the hips' height standing). */
   private sit(car: DeformableCar): void {
-    const g = car.group;
-    car.glassWorld(PASSENGER_PANE, _pane).sub(g.position).applyQuaternion(_inv.copy(g.quaternion).invert());
-    _root.set(_pane.x + DRIVER_SIDE * SEAT.in, _pane.y - SEAT.down - HIP[3]!, _pane.z - SEAT.back).applyQuaternion(g.quaternion).add(g.position);
-    this.people.pose(this.slot, _root, g.quaternion, seatedStance(this.stance), false);
+    const hip = driverSeat(car.style).hip;
+    car.interior.updateWorldMatrix(true, false);
+    // The cabin's pose only squeezes x and moves (`fitInterior`), so dropping by the hips' height before it is exact.
+    _root.set(-hip.x, hip.y - HIP[3]!, hip.z).applyMatrix4(car.interior.matrixWorld);
+    this.people.pose(this.slot, _root, car.group.quaternion, seatedStance(this.stance), false);
   }
 }
 

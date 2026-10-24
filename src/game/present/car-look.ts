@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { makePaintMaterial, trimMaterial } from "../vehicle/car-materials.ts";
+import { bumperMaterial, makePaintMaterial, trimMaterial } from "../vehicle/car-materials.ts";
+import { applyDetailMap, ensureRestFrame, REST_FRAME_ATTRIBUTES } from "../vehicle/car-detail-map.ts";
 import { CAR_SPRAY, carPickText, NO_CAR_PICK, type CarPart, type CarPick } from "../match/look-data.ts";
 import { applySpray, BARE_SPRAY, sprayUniforms, type SprayBitmap } from "./spray.ts";
 
@@ -18,9 +19,6 @@ type Worn = {
 type CarBase = { body: number; doors: number; bumpers: number; glass: number };
 
 const worn = new WeakMap<DeformableCar, Worn>();
-const _m = new THREE.Matrix4();
-const _n = new THREE.Matrix3();
-const _v = new THREE.Vector3();
 const DEFAULT_PICK = carPickText(NO_CAR_PICK);
 /** Rims as built: white is the instance tint (`WheelBatch`) that leaves the alloy as toned. */
 const RIMS_AS_BUILT = 0xffffff;
@@ -44,8 +42,9 @@ export function wearCarLook(car: DeformableCar, pick: CarPick, spray: SprayBitma
   w.hood.color.setHex(c.hood);
   w.trunk.color.setHex(c.trunk);
   w.doors.color.setHex(c.doors);
-  const trim = trimMaterial(c.bumpers);
-  for (const bumper of w.bumpers) bumper.material = trim;
+  car.setPartPaint(c.body, c.doors);
+  const ends = [car.style.bumpers.front, car.style.bumpers.rear];
+  for (let i = 0; i < w.bumpers.length; i++) w.bumpers[i]!.material = pick.bumpers === null ? bumperMaterial(ends[i]!.trim, c.bumpers, c.body) : trimMaterial(c.bumpers);
   car.setGlassTint(c.glass);
   for (const wheel of car.wheels) {
     if (c.rims === RIMS_AS_BUILT) delete wheel.userData.rim;
@@ -82,49 +81,21 @@ function baseOf(car: DeformableCar): CarBase {
 function firstWear(car: DeformableCar): Worn {
   const m = car.lookMeshes();
   const base = baseOf(car);
-  const bumpers: THREE.Mesh[] = [];
-  car.group.traverse((o) => {
-    if (o instanceof THREE.Mesh && o.material === trimMaterial(base.bumpers)) bumpers.push(o);
-  });
   const w: Worn = {
     uniforms: sprayUniforms(CAR_SPRAY, BARE_SPRAY, 1),
-    hood: makePaintMaterial(base.body),
-    trunk: makePaintMaterial(base.body),
-    doors: makePaintMaterial(base.doors),
-    bumpers,
+    hood: makePaintMaterial(base.body, car.style.paintFinish),
+    trunk: makePaintMaterial(base.body, car.style.paintFinish),
+    doors: makePaintMaterial(base.doors, car.style.paintFinish),
+    bumpers: m.bumpers,
     base,
   };
   m.hood.material = w.hood;
   m.trunk.material = w.trunk;
   for (const door of m.doors) door.material = w.doors;
+  for (const paint of [w.hood, w.trunk, w.doors]) applyDetailMap(paint, car.style);
   for (const paint of [m.bodyPaint, w.hood, w.trunk, w.doors]) {
-    applySpray(paint, w.uniforms, "attribute vec3 sprayPos;\nattribute vec3 sprayNrm;", "vSprayP = sprayPos;\nvSprayN = sprayNrm;\nvSprayRow = 0.0;", "car");
+    applySpray(paint, w.uniforms, REST_FRAME_ATTRIBUTES, "vSprayP = sprayPos;\nvSprayN = sprayNrm;\nvSprayRow = 0.0;", "car");
   }
-  for (const mesh of [m.body, m.hood, m.trunk, ...m.doors]) restFrame(mesh, car.group);
+  for (const mesh of [m.body, m.hood, m.trunk, ...m.doors]) ensureRestFrame(mesh, car.group);
   return w;
-}
-
-/**
- * `sprayPos` / `sprayNrm` on `mesh`'s geometry: each vertex and its normal in the car's frame, read off the mesh as it is now
- * through its parents up to `group`.
- */
-// ponytail: read off the car as it is at its first look (a fresh car in the garage or at a join); a car already dented or with a lid open then maps its paint off that shape. Read the rest arrays if a dented car ever wears one.
-function restFrame(mesh: THREE.Mesh, group: THREE.Object3D): void {
-  _m.identity();
-  for (let o: THREE.Object3D | null = mesh; o && o !== group; o = o.parent) {
-    o.updateMatrix();
-    _m.premultiply(o.matrix);
-  }
-  _n.getNormalMatrix(_m);
-  const geo = mesh.geometry;
-  const pos = geo.getAttribute("position");
-  const nrm = geo.getAttribute("normal");
-  const outP = new Float32Array(pos.count * 3);
-  const outN = new Float32Array(pos.count * 3);
-  for (let i = 0; i < pos.count; i++) {
-    _v.fromBufferAttribute(pos, i).applyMatrix4(_m).toArray(outP, i * 3);
-    _v.fromBufferAttribute(nrm, i).applyMatrix3(_n).normalize().toArray(outN, i * 3);
-  }
-  geo.setAttribute("sprayPos", new THREE.BufferAttribute(outP, 3));
-  geo.setAttribute("sprayNrm", new THREE.BufferAttribute(outN, 3));
 }

@@ -1,7 +1,6 @@
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { CAR_HALF, WHEEL_POS } from "../vehicle/car-mesh.ts";
 import { NO_FLOOR, type Ground } from "../world/ground.ts";
 import { PREFABS } from "../world/catalog.ts";
 import { propColliders, type Placed } from "../world/placements.ts";
@@ -10,6 +9,7 @@ import { projectGrid, roadGrid, type RoadGrid } from "./road-grid.ts";
 import { GANTRY_BEAM, RoadIndex, sampleAt, TUNNEL_GAP, TUNNEL_SIDE } from "./track-mesh.ts";
 import { levelAt, sections } from "../world/track-sections.ts";
 import { pillarPieces } from "./track-structures.ts";
+import { BELT_Y } from "./ragdoll-proxy.ts";
 
 /**
  * Spectator cams beyond the chase views: the trackside cinematic (a fixed eye ahead of the car that tracks it past, then cuts
@@ -25,22 +25,36 @@ export function occluder(x: number, z: number, yaw: number, hx: number, hz: numb
   return { x, z, cos: Math.cos(yaw), sin: Math.sin(yaw), hx, hz, circle, y0, y1 };
 }
 
-/** Every visible car but `except` (not vaporized) into `occ` as a solid the eye may not stand in or look through: an upright cylinder over its body. */
+/** The cars' solids reach this far (m) under their origin. */
+const CAR_SIGHT_BELOW = 0.3;
+/**
+ * Every visible car but `except` (not vaporized) into `occ` as the solids the eye may not stand in or look through: its body
+ * (the `frame.half` footprint turned with its flat heading, up to the style's belt, where hoods and decks end) and its cabin
+ * (the greenhouse's span, up to the roof). A dummy flying over a hood is clear of it, as he is of the real car.
+ */
 export function addCars(occ: Occluder[], cars: readonly DeformableCar[], except: DeformableCar | null): void {
   for (const c of cars) {
     if (c === except || c.vaporized || !c.group.visible) continue;
     const p = c.group.position;
-    occ.push(occluder(p.x, p.z, 0, CAR_HALF.z, CAR_HALF.z, true, p.y - 0.3, p.y + 1.6));
+    const { half, comY } = c.frame;
+    const cos = c.fwdFlat.z;
+    const sin = c.fwdFlat.x;
+    occ.push({ x: p.x, z: p.z, cos, sin, hx: half.x, hz: half.z, circle: false, y0: p.y - CAR_SIGHT_BELOW, y1: p.y + (c.style.proxyBelt ?? BELT_Y) });
+    const back = c.style.rearGlass.base[1];
+    const front = c.style.windshield.base[1];
+    const mid = (back + front) / 2;
+    occ.push({ x: p.x + sin * mid, z: p.z + cos * mid, cos, sin, hx: half.x, hz: (front - back) / 2, circle: false, y0: p.y - CAR_SIGHT_BELOW, y1: p.y + comY + half.y });
   }
 }
 
-/** `s` with every visible car (not vaporized) as its tight box (`CAR_HALF`'s footprint turned with its flat heading, ground to roof): what a crash cam's eye is picked against (`carsBlock`), at the poses of the pick. */
+/** `s` with every visible car (not vaporized) as its tight box (its `frame.half` footprint turned with its flat heading, ground to roof): what a crash cam's eye is picked against (`carsBlock`), at the poses of the pick. */
 export function withCars(s: Sight, cars: readonly DeformableCar[]): Sight {
   const boxes: Occluder[] = [];
   for (const c of cars) {
     if (c.vaporized || !c.group.visible) continue;
     const p = c.group.position;
-    boxes.push({ x: p.x, z: p.z, cos: c.fwdFlat.z, sin: c.fwdFlat.x, hx: CAR_HALF.x, hz: CAR_HALF.z, circle: false, y0: p.y, y1: p.y + 2 * CAR_HALF.y });
+    const h = c.frame.half;
+    boxes.push({ x: p.x, z: p.z, cos: c.fwdFlat.z, sin: c.fwdFlat.x, hx: h.x, hz: h.z, circle: false, y0: p.y, y1: p.y + 2 * h.y });
   }
   return { ...s, cars: boxes };
 }
@@ -697,12 +711,8 @@ export const DUTCH = {
   range: 90,
 };
 
-type Mount = { x: number; y: number; z: number; dz: number; roll: number };
-
-/** Each wheel well, hanging outboard of the body above the tyre, looking forward (dz 1) or back (−1). */
-const MOUNTS: readonly Mount[] = WHEEL_POS.flatMap(([x, y, z]) =>
-  [1, -1].map((dz) => ({ x: Math.sign(x) * (CAR_HALF.x + DUTCH.out), y: y + 0.34, z, dz, roll: Math.sign(x) * dz * DUTCH.roll })),
-);
+/** The mounts: each wheel well (`frame.wheels` order), hanging outboard of the body above the tyre, looking forward (even) or back (odd). */
+const MOUNTS = 8;
 const _a = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 
@@ -722,16 +732,19 @@ export class DutchCam {
 
   /** Re-choose on the next `update`, starting the search after `mount` (replays: same seed, same cuts). */
   reset(mount = this.mount): void {
-    this.mount = mount % MOUNTS.length;
+    this.mount = mount % MOUNTS;
     this.car = null;
   }
 
   /** `camera` on mount `j` of `car`: aimed along the body, splayed outward and a touch down, then rolled. */
   place(camera: THREE.PerspectiveCamera, car: DeformableCar, j: number): void {
-    const m = MOUNTS[j]!;
-    car.group.localToWorld(camera.position.set(m.x, m.y, m.z));
-    camera.lookAt(car.group.localToWorld(_a.set(m.x + Math.sign(m.x) * 10 * DUTCH.splay, m.y - 0.5, m.z + m.dz * 10)));
-    camera.rotateZ(m.roll);
+    const [wx, wy, wz] = car.frame.wheels[j >> 1]!;
+    const dz = j & 1 ? -1 : 1;
+    const x = Math.sign(wx) * (car.frame.half.x + DUTCH.out);
+    const y = wy + 0.34;
+    car.group.localToWorld(camera.position.set(x, y, wz));
+    camera.lookAt(car.group.localToWorld(_a.set(x + Math.sign(x) * 10 * DUTCH.splay, y - 0.5, wz + dz * 10)));
+    camera.rotateZ(Math.sign(wx) * dz * DUTCH.roll);
   }
 
   /** Rivals (not `car`, not vaporized) in mount `j`'s view within `DUTCH.range`; `lens` gives the aspect. */
@@ -781,8 +794,8 @@ export class DutchCam {
   choose(car: DeformableCar, rivals: readonly DeformableCar[], lens: THREE.PerspectiveCamera, need = 0): void {
     let best = -1;
     let pick = this.mount;
-    for (let d = 1; d < MOUNTS.length; d++) {
-      const j = (this.mount + d) % MOUNTS.length;
+    for (let d = 1; d < MOUNTS; d++) {
+      const j = (this.mount + d) % MOUNTS;
       const n = this.seen(car, rivals, j, lens);
       if (n > best) {
         best = n;

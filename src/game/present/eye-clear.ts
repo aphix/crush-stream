@@ -1,6 +1,6 @@
 import type * as THREE from "three";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { boxEntry, CINE, gather, inside, solid, type Occluder, type Sight } from "./spectate-cam.ts";
 import { Spring } from "./spring.ts";
 
@@ -13,7 +13,7 @@ const BISECT = 6;
 const SWING_STEP = Math.PI / 12;
 const SWING_STEPS = 12;
 /** An eye pulled in closer than a car's length to its subject swings round it instead. */
-const SWING_BELOW = 2 * CAR_HALF.z;
+const SWING_BELOW = 2 * FLEET_HALF.z;
 /** After a search that found no turn with room, the next waits this long (s). */
 const SEARCH_RETRY = 0.25;
 /** Rates (1/s) at which a pull-in eases back out and the swing's spring settles on its turn, and the fastest (m/s) the pull-in lets go. */

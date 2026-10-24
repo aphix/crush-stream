@@ -19,7 +19,7 @@ import { ENGINE_SLACK } from "./deform-contact.ts";
 import { DeformFreeze } from "./deform-freeze.ts";
 import { HUB_OVERRUN, type MassNode } from "./deform-rig.ts";
 import { FACE_TOP } from "./load-crush.ts";
-import { ENGINE_PACK_GAP, PLANT_QUIET, TYRE_R, WHEEL_DIAMETER } from "./deform-state.ts";
+import { PLANT_QUIET } from "./deform-state.ts";
 import { holdMomentum, holdPositions, turnVelocities, undoNetTurn } from "./turn-hold.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
  import { CONTACT_WINDOW, MIN_INV_MASS, SQUASH_REACH } from "./constants.ts";
@@ -27,17 +27,17 @@ import { detSin, detCos } from "../kernel/physics-core.js";
 /** The body lies over below this up (y of its up axis): the car's own `UPRIGHT_UP_Y`, where its wheels stop being what it stands on. */
 const LYING_UP_Y = 0.5;
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+/** A hub's spring to its mount (N/m) and its damper (N s/m) while the wreck is moving; a quiet planted wreck's is critical (`stepSuspension`). */
+const SUSPENSION_K = 11000;
+const SUSPENSION_C = 260;
 /** Most of a crushed node's travel (m) that springs back; the rest is permanent set. */
 const SPRINGBACK = 0.08;
 /** A dent this shallow (m) springs back whole: a skin panel's elastic range. */
 const SPRING_YIELD = 0.015;
 /** Share of a crush past the yield that springs back: real structure keeps 75-90 % of its peak crush (17 % back at 56 km/h, SAE 2006-01-0908). */
 const SPRING_SHARE = 0.1;
-/** C4: a wheel separates only on an off-centre hit this hard (m/s EBS, 54 km/h)… */
-const HUB_POP_MPS = 15;
-/** …once the struck corner has crushed to within this of the hub (m): tyre radius 0.32 plus a 0.10 m
- *  packed bumper beam. With the 0.72 m overhang the wheel is reached after 0.30 m of corner crush. */
-const TYRE_REACH = 0.42;
+/** C4: a wheel separates only on an off-centre hit this hard (m/s EBS, 54 km/h), once the struck corner has crushed to within the rig's `tyreReach` of the hub. */
+export const HUB_POP_MPS = 15;
 /** The hit speed (m/s EBS) from which a corner crushed to `HUB_OVERRUN` of its hub takes the wheel. */
 const HUB_OVERRUN_MPS = 3;
 
@@ -50,11 +50,6 @@ const _pq = new Float64Array(PQ_SIZE);
 const _read = new Float64Array(2);
 const READ_H = 0;
 const READ_GRIP = 1;
-/** How far (m, plan) fore and aft of a wreck's hub `sampleGround` also reads what its tyre can rest on, and how far (m) the
- *  tyre's arc stands there over its bottom: R − √(R² − d²), its whole radius at d = R. */
-const TREAD_FORE = TYRE_R;
-const TREAD_DROP = TYRE_R - Math.sqrt(TYRE_R * TYRE_R - TREAD_FORE * TREAD_FORE);
-
 /** The ground under the query point `_pq` into `_read`: its height (`READ_H`) and, with `grip`, the grip there (`READ_GRIP`). */
 function readGround(ground: Ground, grip: boolean): void {
   const h = heightIn(ground, _pq, grip);
@@ -244,8 +239,10 @@ export abstract class DeformSolve extends DeformFreeze {
       // cell (to the cabin's own cap), not back into the face, which pushed it in again every clamp (50 km/h wall: door 0.299 m, band 0.12-0.28).
       const door = sideHit && (m.name === "doorL" || m.name === "doorR");
       let into = 0;
+      let packed = false;
       if (door) {
         cap = Math.min(cap, m.bands.max);
+        packed = cap === m.bands.max;
         const c = this.at.cell;
         into = (c.local.x - c.rest.x - c.baseX) * ix + (c.local.z - c.rest.z - c.baseZ) * iz;
       }
@@ -267,10 +264,14 @@ export abstract class DeformSolve extends DeformFreeze {
         rel -= k;
       }
       along = Math.max(-cap, Math.min(cap, rel));
-      if (!cabin && this.hitSpeed >= 0) {
+      if ((!cabin || m.name === "roof") && this.hitSpeed >= 0) {
         // Sheet metal keeps its set: only the elastic part of the crush springs back. Only a loading contact's crush sets, within its contact hold:
         // unloaded, each set's rest shift drew its mass (and the seated frame) on in, which read as more crush: a ratchet.
-        const set = along - Math.min(SPRINGBACK, SPRING_YIELD + SPRING_SHARE * along);
+        // A door pressed onto its band's max is packed (`nodePacked`): no elastic part is left, so it rests on its cap.
+        // The roof is sheet metal too (the cell, the frame's anchor, is not): with no set its rest was wherever the clusters' elastic residual
+        // left it when the contact window closed (the windscreen cluster's squash kept drawing it past its seat), so it takes the set like the
+        // panels around it and stands on it once the contact lets go: its elastic part is back then, and no clock or cluster pull ends its settle.
+        const set = along - (packed && along >= cap ? 0 : Math.min(SPRINGBACK, SPRING_YIELD + SPRING_SHARE * along));
         if (set > m.crushSet && this.quietTime() <= CONTACT_HOLD) {
           if (this.mode === "shape") {
             REST_SHIFT[1] = (set - m.crushSet) * ix;
@@ -279,7 +280,8 @@ export abstract class DeformSolve extends DeformFreeze {
             this.restTakesSet(i);
           }
           m.crushSet = set;
-        } else if (along < m.crushSet) along = m.crushSet;
+        } else if (cabin && this.quietTime() > CONTACT_HOLD) along = m.crushSet;
+        else if (along < m.crushSet) along = m.crushSet;
       }
       along += into;
       const perp = hypot2(px, pz);
@@ -293,16 +295,16 @@ export abstract class DeformSolve extends DeformFreeze {
     }
     if ((m.name === "engineL" || m.name === "engineR") && !squeeze && !sideHit && iz < 0) dz = this.engineMountDz(m, dz, bz, stroke);
     if (m.hub && !deep) {
-      if (!m.popped && this.hitSpeed >= HUB_OVERRUN_MPS) {
+      if (!m.popped && this.hitSpeed >= HUB_OVERRUN_MPS && this.hitSpeed >= this.rig.hubHoldMps) {
         const front = m.rest.z > 0;
         const corner = front ? (m.rest.x < 0 ? this.at.bumperFL : this.at.bumperFR) : m.rest.x < 0 ? this.at.bumperRL : this.at.bumperRR;
         const reach = Math.abs(corner.rest.z - m.rest.z);
         // C4: a hard off-centre hit whose struck corner has crushed onto the tyre pops it (a full-width hit loads the rails), as does any hit that overruns the hub.
         const crushed = (corner.local.x - corner.rest.x) * ix + (corner.local.z - corner.rest.z) * iz;
-        const c4 = !sideHit && front === iz < 0 && this.hitSpeed >= HUB_POP_MPS && Math.abs(this.impactLocal.x) >= 0.2 && cw > 0.6 && crushed >= reach - TYRE_REACH;
+        const c4 = !sideHit && front === iz < 0 && this.hitSpeed >= HUB_POP_MPS && Math.abs(this.impactLocal.x) >= 0.2 && cw > 0.6 && crushed >= reach - this.rig.tyreReach;
         if (c4 || (front ? corner.rest.z - corner.local.z : corner.local.z - corner.rest.z) >= reach - HUB_OVERRUN) this.popHub(m);
       }
-      if (!m.popped && hypot2(m.shoveX, m.shoveZ) > WHEEL_DIAMETER) this.popHub(m);
+      if (!m.popped && hypot2(m.shoveX, m.shoveZ) > 2 * this.rig.tyre.r) this.popHub(m);
       if (!m.popped) {
         dx = m.shoveX;
         dz = m.shoveZ;
@@ -329,8 +331,8 @@ export abstract class DeformSolve extends DeformFreeze {
    *  stroke's reach let a 43 km/h hit creep the block 0.045 m with 0.58 m of nose left. */
   private engineMountDz(m: MassNode, dz: number, bz: number, stroke: number): number {
     const nose = Math.min(this.at.bumperFL.local.z, this.at.bumperFR.local.z);
-    const pushed = nose - ENGINE_PACK_GAP - m.rest.z;
-    const reach = Math.max(ENGINE_SLACK, stroke - (Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - m.rest.z - ENGINE_PACK_GAP));
+    const pushed = nose - this.rig.packGap - m.rest.z;
+    const reach = Math.max(ENGINE_SLACK, stroke - (Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - m.rest.z - this.rig.packGap));
     const floor = Math.max(-reach, Math.min(Math.min(0, bz) - ENGINE_SLACK, pushed));
     if (dz < floor) dz = floor;
     if (dz > pushed) dz = pushed;
@@ -716,16 +718,21 @@ export abstract class DeformSolve extends DeformFreeze {
 
   /** A course's ground (hills, bridge decks; 0 and grip 1 on the flat pad) under every dynamic mass on its own layer, and the
    *  grip where there is ground. An attached hub's is what its tyre rests on, the highest ground within its radius: the read
-   *  under it and one `TREAD_FORE` fore and aft along its heading, each lowered by the tyre's arc there. The centre alone
+   *  under it and one `treadFore` fore and aft along its heading, each lowered by the tyre's arc there. The centre alone
    *  read a wedge's gap floor 1.2 m down under a hub 2 cm short of its high end, holding the frame 0.25 m under its cell
    *  until the anchor's read stepping onto the wedge snapped it up in one slice (19.7 m/s). The side points are read only
-   *  where `staticTop` within `TREAD_FORE` of the hub, lowered by `TREAD_DROP`, is above the centre's read. The grip is read
-   *  once, at the read that wins. */
+   *  where `staticTop` within `treadFore` of the hub, lowered by `treadDrop`, is above the centre's read. The grip is read
+   *  once, at the read that wins. Every read names no tyre (`PQ_MOUNT` 0, a prism's step up to `STEP_MAX` is floor): the rig holds no
+   *  wheel scale to give a hub's own mount. */
   protected sampleGround(floor: Float64Array, grip: Float64Array | null): void {
     const ground = activeGround();
     const withGrip = grip !== null;
-    const fx = detSin(this.prevYaw) * TREAD_FORE;
-    const fz = detCos(this.prevYaw) * TREAD_FORE;
+    const r = this.rig.tyre.r;
+    // How far (m, plan) fore and aft of a hub the tyre's rest is also read, and its arc's rise there: R − √(R² − d²).
+    const treadFore = r;
+    const treadDrop = r - Math.sqrt(r * r - treadFore * treadFore);
+    const fx = detSin(this.prevYaw) * treadFore;
+    const fz = detCos(this.prevYaw) * treadFore;
     for (let i = 0; i < this.masses.length; i++) {
       const m = this.masses[i]!;
       if (!m.dynamic) continue;
@@ -737,13 +744,13 @@ export abstract class DeformSolve extends DeformFreeze {
       let h = _read[READ_H]!;
       // The highest of the three; on a tie the centre's, then the aft one's.
       let side = 0;
-      if (m.hub && !m.popped && staticTop(ground, w.x - TREAD_FORE, w.x + TREAD_FORE, w.z - TREAD_FORE, w.z + TREAD_FORE) - TREAD_DROP > h) {
+      if (m.hub && !m.popped && staticTop(ground, w.x - treadFore, w.x + treadFore, w.z - treadFore, w.z + treadFore) - treadDrop > h) {
         _pq[PQ_X] = w.x - fx;
         _pq[PQ_Z] = w.z - fz;
-        const aft = heightIn(ground, _pq) - TREAD_DROP;
+        const aft = heightIn(ground, _pq) - treadDrop;
         _pq[PQ_X] = w.x + fx;
         _pq[PQ_Z] = w.z + fz;
-        const fore = heightIn(ground, _pq) - TREAD_DROP;
+        const fore = heightIn(ground, _pq) - treadDrop;
         if (aft > h) {
           h = aft;
           side = -1;
@@ -808,18 +815,20 @@ export abstract class DeformSolve extends DeformFreeze {
   /**
    * The hubs' springs act along the body's up (`frameUp`), the way the strut runs (along the world's up they pulled a tumbling or lying
    * wreck's hubs sideways through its body), but along the world's up under a wreck standing on its planted tyres: tilted on three wheels,
-   * the spring's sideways share crept its planted hubs 2-3 mm a second.
+   * the spring's sideways share crept its planted hubs 2-3 mm a second. Under planted hubs the pair is critically damped for its masses
+   * (`c = 2 sqrt(k m)` at the reduced mass): at the crash's light damping a heavy wreck on three tyres kept rocking on them for as long as it
+   * lay, never still.
    */
   private stepSuspension(dt: number): void {
-    const k = 11000;
-    const c = 260;
-    const u = this.hubsPlanted() ? WORLD_UP : this.frameUp;
+    const planted = this.hubsPlanted();
+    const u = planted ? WORLD_UP : this.frameUp;
     for (let si = 0; si < this.suspension.length; si++) {
       const [hub, mount] = this.suspension[si]!;
       const restDy = hub.rest.y - mount.rest.y;
       const dy = (hub.world.x - mount.world.x) * u.x + (hub.world.y - mount.world.y) * u.y + (hub.world.z - mount.world.z) * u.z - restDy;
       const dv = (hub.vel.x - mount.vel.x) * u.x + (hub.vel.y - mount.vel.y) * u.y + (hub.vel.z - mount.vel.z) * u.z;
-      const f = (-k * dy - c * dv) * dt;
+      const c = planted ? 2 * Math.sqrt(SUSPENSION_K * ((hub.mass * mount.mass) / (hub.mass + mount.mass))) : SUSPENSION_C;
+      const f = (-SUSPENSION_K * dy - c * dv) * dt;
       if (hub.dynamic) hub.vel.addScaledVector(u, f / hub.mass);
       if (mount.dynamic) mount.vel.addScaledVector(u, -f / mount.mass);
     }

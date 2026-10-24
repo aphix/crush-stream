@@ -34,6 +34,11 @@ part lifts off its body and settles, it never folds into it). No random draw: sp
 
 - quarter panel / arch flare: the whole shell mesh turns about its hinge line (`flutterShell`, a transform: **no vertex rebuild,
   no upload**); a quarter about the vertical line at its tail, an arch flare about the line along z at its top;
+  an arch flare's free ends also drop (`FLAP_DROP` 4 cm × hinge value, `poseShell`) only as far as the road under the shell lets
+  them, 5 mm (`SHELL_CLEAR`) over the plane of the ground's height and normal under its middle, while the car is on its wheels;
+  a point whose body skin is already in the road keeps to the skin (a sedan wreck drew its flap 4.2 cm in the road). Drawn only:
+  the held shell is re-posed as the car moves over the road, and torn off it leaves bent as its hinge alone bends it, the pose
+  replays already throw (`detachPart` poses it free);
 - hanging bumper: its roll about the corner it hangs by grows by the flutter.
   The bumper's box stays 4 cm (`BUMPER_CLEAR`) above the ground under it: a bumper hangs rolled about its corner up to
   `BUMPER_ROLL` = 0.6 rad, cut (by halving, `hangBumper`) to the roll at which its free end rests on the road (a sedan's bumper rides
@@ -51,8 +56,9 @@ An unlatched door is a uniform slab hinged at (±0.86, 0.55) swinging along u = 
 F = −a + ω² p − α × p gives its opening acceleration (`swingAccel`): braking (a_z < 0) swings it forward (open), accelerating
 shuts it, the outside of a turn opens it, the inside shuts it; a shut door has no torque from braking. a is the change of the
 car's velocity since the last sample, rotated into the car frame and capped at 1.5 g (a crash's spike saturates; the crash rules
-C1 tear or spare a door), α the same for the yaw rate. Hinge friction: 0.8/s viscous plus `DOOR_DRY` = 2 rad/s² dry, so a jostle
-leaves a door hanging. Because only Δv enters, a car carried at any constant speed, or turned any way, swings the same.
+C1 tear or spare a door), α the same for the yaw rate. Hinge friction: 0.8/s viscous plus a dry detent: a door's holds it against a
+car-frame push of up to 0.76 m/s² across its slab whatever its length (`DOOR_DETENT_ACC`, as the swing it drives: 3/(2L) rad/s² per
+m/s²); a lid's is 2 rad/s² (`LID_DRY`), so a jostle leaves either hanging. Because only Δv enters, a car carried at any constant speed, or turned any way, swings the same.
 
 The door ends on the check-strap stop (`loadDoorStop`), on its crash jam, or in the latch: `closeDoor` is the one rule for
 reaching shut, used by the car's own swing and by the Doors ram alike (latched below `SLAM_TEAR_J`, wrenched off above it).
@@ -60,6 +66,9 @@ reaching shut, used by the car's own swing and by the Doors ram alike (latched b
 A door a **side hit** opens past `DOOR_AJAR` is sprung (`springDoor`): unlatched, hanging at least as far open as its crash
 jam (`hingeT × 1.45`, which it can never shut past), swinging with the car. Frontal and rear hits still only jam it ajar,
 latched (C1).
+
+The trunk lid, hatch, liftgate and drop gate swing on the same hinge once a rear hit springs them, turning about car x with their
+own law (`lidAccel`: weight, struts, fore-aft acceleration; [`DOOR_RIG.md`](DOOR_RIG.md), Lids).
 
 ## The Doors scene: panels (D, E) and frame parity
 
@@ -93,3 +102,8 @@ Netted already: `hingeT` (also a smushed panel's), door `theta` and latch, part 
 three hinge slots free; they now carry `fatigue` and `1 − hingeMax` (0 = uncapped, so old data reads as before), so a keyframe
 restores the wear and the dent cap. Not carried: the flap clock (cosmetic), the contact timing and door motion sample (re-read from the
 restored deform and velocity, `restoreWear`). No layout change: NET_VERSION 8 and REPLAY_VERSION 6 stay.
+
+Lids: the trunk slot (3) now has a swing, so its two free hinge slots carry the lid's `theta` and 0 (were `fatigue` and
+`1 − hingeMax`, always 0 for it) and part flag bit 4 its latch. Same layout, new meaning: a NET_VERSION bump (it rides the car
+rig's combined bump) and a REPLAY entry (lids swing, spring, re-latch and tear; a part resting on its stop takes no strap load; the
+lid's crash hinge runs on rear crush).

@@ -49,11 +49,15 @@ export const PR_MASS = 26;
 /** A knockable prop's knock speed (m/s): a body closing on it slower than this meets it as a solid (a lamp post's fold speed); 0: any touch knocks it. */
 export const PR_KNOCK_V = 27;
 
-/** `exitFace`'s output row: depth (m) the point is inside, the face's outward unit normal (plan). */
+/**
+ * `exitFace`'s output row: depth (m) the point is inside, the face's outward unit normal (plan), and how long ago (s) a moving point
+ * crossed that face (`Infinity`: at rest, or it crossed none within `ENTRY_WINDOW`).
+ */
 export const F_DEPTH = 0;
 export const F_NX = 1;
 export const F_NZ = 2;
-export const F_SIZE = 3;
+export const F_TIME = 3;
+export const F_SIZE = 4;
 
 /** The rate at which a point closes on a face (m/s) under which it is not closing at all. */
 const NOT_CLOSING = 1e-6;
@@ -122,12 +126,20 @@ export function cameThroughTop(moving: boolean, vy: number, topDepth: number, si
 }
 
 /**
+ * The plan point (x, z) of the body whose points are being asked, NaN where no body is (`moveBody` sets it in a car's step, `stepFree` clears
+ * it): a point of it at rest inside a prism leaves by the side that body stands on (`exitFace`).
+ */
+export const ASKER = new Float64Array([NaN, NaN]);
+
+/**
  * Whether point (`x`, `y`, `z`) is inside prism `o` of `P` (in plan, over its base, under its top), and the face it came in
  * through: of its faces (the sides, and the top) the one its velocity (`vx`, `vy`, `vz`, less the prism's own) closes on that it
  * crossed last, the one with the least `depth / closing`: how long ago it crossed it. That time stays the same as the point
  * goes deeper, so the face does not change with where in a step the point's first touch fell, and a point that came down onto
- * the top is not a point that came in at the side. A point at rest leaves through the nearest face. A side is written to `out`
- * (`F_*`); a box's end that is a joint (`PR_ENDS`) is no face.
+ * the top is not a point that came in at the side. A point that came in by no face (at rest, or moving off one it is deep in) leaves through
+ * the nearest face of the side its body stands on (`ASKER`: the body's centre outside that face), else the nearest (a tyre that stopped past
+ * a thin wall's middle left by the far face, through the wall, and the drive pushing the car back out was read as closing on it). A side is
+ * written to `out` (`F_*`); a box's end that is a joint (`PR_ENDS`) is no face.
  */
 export function exitFace(P: Float64Array, o: number, x: number, y: number, z: number, vx: number, vy: number, vz: number, out: Float64Array): number {
   const dx = x - P[o + PR_X]!;
@@ -141,6 +153,8 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
   const w = dx * s + dz * c;
   const moving = rvx * rvx + vy * vy + rvz * rvz > SOLID_AT_REST * SOLID_AT_REST;
   let depth = Infinity;
+  // The depth of the nearest side: what a point at rest weighs its top against, whichever side it then leaves by (the top is the way out when it is nearer than every side).
+  let near = Infinity;
   let time = Infinity;
   let nx = 0;
   let nz = 0;
@@ -160,8 +174,18 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
     if (!entered) {
       time = Infinity;
       depth = r - d;
+      near = depth;
       nx = d > 1e-9 ? dx / d : 1;
       nz = d > 1e-9 ? dz / d : 0;
+      const ax = ASKER[0]! - P[o + PR_X]!;
+      const az = ASKER[1]! - P[o + PR_Z]!;
+      const al = hypot2(ax, az);
+      if (al > 1e-9) {
+        // Out toward its body, which the point's depth along then is (a point past the middle leaves by the far side of the middle, not the near one).
+        nx = ax / al;
+        nz = az / al;
+        depth = r - (dx * nx + dz * nz);
+      }
     }
   } else {
     const hx = P[o + PR_HX]!;
@@ -171,6 +195,12 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
     let nearDepth = Infinity;
     let nearFace = -1;
     let timeFace = -1;
+    // Where the asking body's centre stands in the prism's frame: the faces it is outside of are the sides it can be left by.
+    const asked = ASKER[0]! === ASKER[0]!;
+    const au = asked ? (ASKER[0]! - P[o + PR_X]!) * c - (ASKER[1]! - P[o + PR_Z]!) * s : 0;
+    const aw = asked ? (ASKER[0]! - P[o + PR_X]!) * s + (ASKER[1]! - P[o + PR_Z]!) * c : 0;
+    let bodyDepth = Infinity;
+    let bodyFace = -1;
     for (let face = 0; face < 4; face++) {
       if (face === 2 && (ends & 2) === 0) continue;
       if (face === 3 && (ends & 1) === 0) continue;
@@ -178,6 +208,10 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
       if (faceDepth < nearDepth) {
         nearDepth = faceDepth;
         nearFace = face;
+      }
+      if (asked && faceDepth < bodyDepth && (face === 0 ? au > hx : face === 1 ? au < -hx : face === 2 ? aw > hz : aw < -hz)) {
+        bodyDepth = faceDepth;
+        bodyFace = face;
       }
       const fnx = face === 0 ? c : face === 1 ? -c : face === 2 ? s : -s;
       const fnz = face === 0 ? -s : face === 1 ? s : face === 2 ? c : -c;
@@ -187,20 +221,22 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
         timeFace = face;
       }
     }
-    const face = moving && timeFace >= 0 ? timeFace : nearFace;
+    const face = moving && timeFace >= 0 ? timeFace : bodyFace >= 0 ? bodyFace : nearFace;
     if (face < 0) return IN_NONE;
     depth = face === 0 ? hx - u : face === 1 ? hx + u : face === 2 ? hz - w : hz + w;
     nx = face === 0 ? c : face === 1 ? -c : face === 2 ? s : -s;
     nz = face === 0 ? -s : face === 1 ? s : face === 2 ? c : -c;
+    near = nearDepth;
     if (face !== timeFace) time = Infinity;
   }
   const topDepth = topAt(P, o, u, w) - y;
   // The top is the face it came in through when it was crossed more recently than every side (or, at rest, is the nearest).
-  const top = cameThroughTop(moving, vy, topDepth, depth, time);
+  const top = cameThroughTop(moving, vy, topDepth, moving && time < Infinity ? depth : near, time);
   if (top) return IN_TOP;
   out[F_DEPTH] = depth;
   out[F_NX] = nx;
   out[F_NZ] = nz;
+  out[F_TIME] = moving ? time : Infinity;
   return IN_SIDE;
 }
 

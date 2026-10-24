@@ -7,6 +7,9 @@ const MODE_UNITS: Readonly<Record<MinigameMode, string>> = { longJump: "m", high
 /** The caption of the live reading: what the number measures in each mode. */
 const LIVE_CAPTIONS: Readonly<Record<MinigameMode, string>> = { longJump: "Distance", highJump: "Height", ringFling: "Ring:" };
 
+/** The card's line for an attempt that ended with nobody thrown out. */
+const NO_THROW_TEXT = "No throw: nobody was thrown out";
+
 function valueText(mode: MinigameMode, value: number): string {
   return mode === MINIGAME_MODE.ringFling ? `${Math.round(value)} ${MODE_UNITS[mode]}` : `${value.toFixed(1)} ${MODE_UNITS[mode]}`;
 }
@@ -27,6 +30,8 @@ export type MinigamePanelView = {
   live: string | null;
   /** The big Score line once the attempt is scored (in a Ring Fling, the throw's score; after the set, the total), else null. */
   score: string | null;
+  /** What a scored attempt with nobody thrown says ("No throw: nobody was thrown out"), else null. */
+  noThrow: string | null;
   /** Ring Fling only: a scored throw of 0 reads "Short of the cups"; null otherwise. */
   scoreHint: string | null;
   /** Ring Fling only: "Throw n / N"; null in the other modes. */
@@ -52,9 +57,10 @@ export function minigamePanelView(state: MinigameHudState, bailControl: string):
   const isRing = mode === MINIGAME_MODE.ringFling;
   const throwsPerSet = state.throwsPerSet ?? THROWS_PER_SET.default;
   const stepperOpen = (phase === "ready" && state.setScores.length === 0) || state.setComplete;
-  const retryLabel = !isRing ? "Retry" : state.setComplete ? "New set" : "Next throw";
+  const retryLabel = state.noThrow || !isRing ? "Retry" : state.setComplete ? "New set" : "Next throw";
   const finishedScore = state.setComplete ? state.setTotal : state.lastScore;
-  const scoreShown = phase === "scored" && !state.setComplete;
+  const throwScored = phase === "scored" && !state.noThrow;
+  const scoreShown = throwScored && !state.setComplete;
   const earlierScores = (scoreShown ? state.setScores.slice(0, -1) : state.setScores).map((score) => Math.round(score));
   const bail = state.bail;
   return {
@@ -62,8 +68,9 @@ export function minigamePanelView(state: MinigameHudState, bailControl: string):
     bailPrompt: bail !== null && bailArmed(state) ? bailPromptText(bailControl, bail.pressed) : null,
     bailResult: bail === null || bail.verdict === null ? null : bailResultText(bail.verdict),
     live: state.liveValue === null ? null : `${LIVE_CAPTIONS[mode]} ${isRing ? Math.round(state.liveValue) : valueText(mode, state.liveValue)}`,
-    score: phase === "scored" && finishedScore !== null ? valueText(mode, finishedScore) : null,
-    scoreHint: isRing && phase === "scored" && state.lastScore === 0 ? "Short of the cups" : null,
+    score: throwScored && finishedScore !== null ? valueText(mode, finishedScore) : null,
+    noThrow: state.noThrow ? NO_THROW_TEXT : null,
+    scoreHint: isRing && throwScored && state.lastScore === 0 ? "Short of the cups" : null,
     throwCounter: isRing ? `Throw ${state.attempt} / ${throwsPerSet}` : null,
     setScores: isRing && earlierScores.length > 0 ? `Set: ${earlierScores.join(" · ")}` : null,
     total: isRing ? valueText(mode, state.setTotal) : null,

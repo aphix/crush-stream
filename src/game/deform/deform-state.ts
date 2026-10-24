@@ -10,22 +10,14 @@ import {
 import type { BodyPartName, MassName } from "../kernel/rig-spec.ts";
 import { DeformParticleHelper, DeformRigHelper } from "./deform-helper.ts";
 import { DeformHit } from "./deform-hit.ts";
-import type { Beam, MassNode } from "./deform-rig.ts";
+import { RES_SLOTS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS, type Beam, type MassNode, type PointSkin } from "./deform-rig.ts";
 import { CageStrain, maxCompression, sensorsByPart } from "./cage-measure.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
-import { FAR_SIDE_DOT, MIN_IMPACT_ZONE, MIN_MASS_SUM, MIN_WEIGHT_SUM } from "./constants.ts";
-
-/** Packed bumper-to-block-centre length (m): bumper beam and radiator crushed flat ahead of a
- *  0.36 m block. Nose crush past the 0.84 m rest gap minus this shoves the engine back. */
-export const ENGINE_PACK_GAP = 0.54;
+import { CORNER_BLEND, CORNER_CENTRED, FAR_SIDE_DOT, MIN_IMPACT_ZONE, MIN_MASS_SUM, MIN_WEIGHT_SUM } from "./constants.ts";
 
 /** How far (m) a single nose hit's dynamic crush peaks short of its stroke: single 48–54 km/h hits at
  *  squash 0.32 and 0.4 all peak the block at the stroke's reach (stroke − 0.30) minus 0.06 ± 0.01 m. */
 const STROKE_SHORTFALL = 0.06;
-/** Tyre (m): radius along the car (TYRE_REACH's 0.32) and half-width across it, for the faces' hub contact. */
-export const TYRE_R = 0.32;
-/** A face that shoves a planted hub this far (m, one wheel diameter) off its rest tears the wheel off. */
-export const WHEEL_DIAMETER = 2 * TYRE_R;
 /** Throttle input this recent (s) still counts as "under power" for the settle rule. */
 const POWER_HOLD = 0.1;
 /**
@@ -149,10 +141,17 @@ export abstract class DeformState extends DeformHit {
     m.shoveX += dx * gc - dz * gs;
     m.shoveZ += dx * gs + dz * gc;
     const len = hypot2(m.shoveX, m.shoveZ);
-    if (!this.wheelsDetach && len > WHEEL_DIAMETER) {
-      m.shoveX *= WHEEL_DIAMETER / len;
-      m.shoveZ *= WHEEL_DIAMETER / len;
+    const diameter = 2 * this.rig.tyre.r;
+    if (!this.wheelsDetach && len > diameter) {
+      m.shoveX *= diameter / len;
+      m.shoveZ *= diameter / len;
     }
+  }
+
+  /** A tyre on a solid's side shoved wheel `name` back by (dx, dz) in world (`readTyreSides`, past its stroke): its hub's shove, as a face's on a planted hub. */
+  shoveWheel(name: MassName, dx: number, dz: number): void {
+    const m = this.massByName(name);
+    if (!m.popped) this.shoveHub(m, dx, dz);
   }
 
   massLocal(name: MassName): THREE.Vector3 {
@@ -193,10 +192,11 @@ export abstract class DeformState extends DeformHit {
    * Engine pushed back toward the cell along the hit; forward stretch is not a
    * dead block. `local` is the frame's: a live car's group sits on the cell, but a planted wreck's sits on
    * its hubs, so the cell's held offset in it (a flank scrape leaves the cabin 0.05–0.09 m back of the
-   * wheels) is not the block's travel.
+   * wheels) is not the block's travel. A dead block keeps counting through the hit: the slice that kills it samples the block
+   * mid-stroke, so its travel then would be the slice phase's, not the hit's.
    */
   updateDrivetrain(): void {
-    if (!this.drivetrainAlive || !this.massActive || this.quietTime() > PACK_QUIET) return;
+    if (!this.massActive || this.quietTime() > PACK_QUIET) return;
     const el = this.at.engineL;
     const er = this.at.engineR;
     // Only the block's travel along the car toward the cabin packs it into the firewall (measured along
@@ -228,11 +228,13 @@ export abstract class DeformState extends DeformHit {
     // geometric peak up to that, which kept single-hit kills monotone (0.4: 49.5 km/h peaked 0.155 m and
     // died, 50 km/h 0.139 m lived). A re-armed hit counts it outright: its own peak rides the packed nose's
     // springback and the clip, so three 35 km/h hits killed on the 4th at squash 0.32 (0.128 m at 60 km/h
-    // equivalent) and on the 2nd at 0.4 (0.154 m at 49 km/h).
+    // equivalent) and on the 2nd at 0.4 (0.154 m at 49 km/h). So does a tyre's side hit: it meets the running gear
+    // under the nose, whose crush reached the block 0.225 m at a monster's 55 m/s slab hit (alive at 0.58) where
+    // its body's own hit on a wall packed it 0.54 m and killed it.
     if (noseHit) {
-      const crumple = Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - Math.max(el.rest.z, er.rest.z) - ENGINE_PACK_GAP;
+      const crumple = Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - Math.max(el.rest.z, er.rest.z) - this.rig.packGap;
       const energy = this.hitStroke() - crumple - STROKE_SHORTFALL;
-      travel = this.rearmed ? energy : Math.min(travel, energy);
+      travel = this.energyTravel ? energy : Math.min(travel, energy);
     }
     if (travel > this.engineTravel) this.engineTravel = travel;
     if (travel / this.killTravel + this.wreckShare() > 1) this.drivetrainAlive = false;
@@ -323,19 +325,22 @@ export abstract class DeformState extends DeformHit {
     return this.massCornerW[m.index]!;
   }
 
-  /** `cornerWeight` of every mass for a hit at car-frame x `hitX`: it reads nothing else, and `exp` per mass per call was 6% of a derby-32 frame. */
+  /**
+   * `cornerWeight` of every mass for a hit at car-frame x `hitX`: it reads nothing else, and `exp` per mass per call was 6% of a derby-32 frame. A hit within
+   * `CORNER_CENTRED` of the centre line crushes the whole width alike; the further out, the more it crushes only its own side, in full from
+   * `CORNER_CENTRED + CORNER_BLEND`: a step at the first (a patch 1 cm either side of it crushed the nose 0.74 m or 0.45 m) moved a sedan's T-bone with
+   * the step phase.
+   */
   private fillCornerWeights(hitX: number): void {
+    const side = THREE.MathUtils.clamp((Math.abs(hitX) - CORNER_CENTRED) / CORNER_BLEND, 0, 1);
     for (let mi = 0; mi < this.masses.length; mi++) {
       const m = this.masses[mi]!;
-      if (Math.abs(hitX) < 0.2) {
-        this.massCornerW[mi] = 1;
-        continue;
-      }
       const lat = Math.abs(m.rest.x - hitX);
       const hitSide = Math.sign(hitX);
       const nodeSide = Math.sign(m.rest.x);
       const opposite = nodeSide !== 0 && nodeSide !== hitSide;
-      this.massCornerW[mi] = Math.exp(-lat * (opposite ? 4.6 : 1.8)) * (opposite ? 0.06 : 1);
+      const own = Math.exp(-lat * (opposite ? 4.6 : 1.8)) * (opposite ? 0.06 : 1);
+      this.massCornerW[mi] = 1 + side * (own - 1);
     }
     this.massCornerX = hitX;
   }
@@ -504,7 +509,8 @@ export abstract class DeformState extends DeformHit {
     return false;
   }
 
-  skinPanel(geometry: THREE.BufferGeometry, rest: Float32Array, name: BodyPartName, origin: THREE.Vector3): void {
+  /** Skins vertices `[from, to)` of `geometry` (default all) to the cage `name`; the rest are left as they are. */
+  skinPanel(geometry: THREE.BufferGeometry, rest: Float32Array, name: BodyPartName, origin: THREE.Vector3, from = 0, to?: number): void {
     const cage = this.cageByPart.get(name);
     if (!cage) return;
     const attr = geometry.getAttribute("position") as THREE.BufferAttribute;
@@ -520,13 +526,65 @@ export abstract class DeformState extends DeformHit {
     const ox = origin.x - cage.min.x;
     const oy = origin.y - cage.min.y;
     const oz = origin.z - cage.min.z;
-    for (let r = 0; r < attr.count * 3; r += 3) {
+    for (let r = from * 3, end = (to ?? attr.count) * 3; r < end; r += 3) {
       const u = THREE.MathUtils.clamp((rest[r]! + ox) * isx, -0.15, 1.15);
       const v = THREE.MathUtils.clamp((rest[r + 1]! + oy) * isy, -0.15, 1.15);
       const w = THREE.MathUtils.clamp((rest[r + 2]! + oz) * isz, -0.15, 1.15);
       arr[r] = cageAxis(co, 0, u, v, w);
       arr[r + 1] = cageAxis(co, 8, u, v, w);
       arr[r + 2] = cageAxis(co, 16, u, v, w);
+    }
+    attr.needsUpdate = true;
+    computeNormalsFast(geometry);
+  }
+
+  /**
+   * A mesh outside the body skin written as the body paint is (A5, `bindPoints`): its rest points `rest`, in its own frame seated at car-frame
+   * `origin`, ride their parent masses and cluster maps as of the last bake. The lattice mode skins it by its cage `name` (`skinPanel`), as it
+   * skins the body by the cages.
+   */
+  skinPoints(geometry: THREE.BufferGeometry, rest: Float32Array, skin: PointSkin, name: BodyPartName, origin: THREE.Vector3): void {
+    if (this.mode !== "shape") {
+      this.skinPanel(geometry, rest, name, origin);
+      return;
+    }
+    const attr = geometry.getAttribute("position") as THREE.BufferAttribute;
+    const arr = attr.array as Float32Array;
+    const X = this.clusterXf;
+    const pos = this.massPos;
+    const { sN, sXf, sW, rJ, rW, rC } = skin;
+    for (let i = 0, r = 0; i < skin.count; i++, r += 3) {
+      const dx = rest[r]! + origin.x - rC[r]!;
+      const dy = rest[r + 1]! + origin.y - rC[r + 1]!;
+      const dz = rest[r + 2]! + origin.z - rC[r + 2]!;
+      const packed = sN[i]!;
+      const n = packed & SKIN_COUNT_MASK;
+      let px = n > 0 ? 0 : dx,
+        py = n > 0 ? 0 : dy,
+        pz = n > 0 ? 0 : dz;
+      for (let k = i * SKIN_K, e = k + n; k < e; k++) {
+        const o = sXf[k]!;
+        const w = sW[k]!;
+        px += (X[o]! * dx + X[o + 1]! * dy + X[o + 2]! * dz) * w;
+        py += (X[o + 3]! * dx + X[o + 4]! * dy + X[o + 5]! * dz) * w;
+        pz += (X[o + 6]! * dx + X[o + 7]! * dy + X[o + 8]! * dz) * w;
+      }
+      if (n > 0) {
+        const lever = (packed >> SKIN_COUNT_BITS) / SKIN_LEVER_STEPS;
+        px = lever * px + (1 - lever) * dx;
+        py = lever * py + (1 - lever) * dy;
+        pz = lever * pz + (1 - lever) * dz;
+      }
+      for (let k = i * RES_SLOTS, e = k + RES_SLOTS; k < e; k++) {
+        const j = rJ[k]!;
+        const w = rW[k]!;
+        px += pos[j]! * w;
+        py += pos[j + 1]! * w;
+        pz += pos[j + 2]! * w;
+      }
+      arr[r] = px - origin.x;
+      arr[r + 1] = py - origin.y;
+      arr[r + 2] = pz - origin.z;
     }
     attr.needsUpdate = true;
     computeNormalsFast(geometry);

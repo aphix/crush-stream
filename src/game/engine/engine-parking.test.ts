@@ -69,7 +69,7 @@ describe("given the real engine drawing a city race and then the derby", () => {
     assert.equal(found, true);
   });
 
-  it("when the race has run, then every wheel draw is in the graph the renderer draws, the shadow prisms hidden outside the shadow pass included", () => {
+  it("when the race has run, then every wheel draw is in the graph the renderer draws, the shadow prisms hidden outside the shadow pass and the designs no car uses included", () => {
     assert.equal(wheelDrawsInGraph, engine["wheels"].meshes.map(() => true).join());
   });
 

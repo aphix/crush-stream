@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { DERBY_ARENA } from "./constants.ts";
 import {
   DIRT_BASE_GREY,
@@ -32,7 +33,7 @@ const FULL_TURN = 2 * Math.PI;
 const FNV_OFFSET = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;
 /** FNV-1a of the dirt's 4 MiB as the per-texel closure painted it: a rewrite that keeps random()'s order keeps every byte. */
-const DIRT_BYTES_HASH = 0x49e9ba3d;
+const DIRT_BYTES_HASH = 0xbb744187;
 
 function luminanceAtTexel(column: number, row: number): number {
   return dirtPixels[(row * dirt.image.width + column) * CHANNELS];
@@ -211,8 +212,8 @@ describe("given the generated tyre track paths", () => {
     assert.ok(shortest >= 2 * FEATHER_LEAST - 2, "the shortest skid (m) still tapers to a point over its half length");
   });
 
-  it("when the gauge is read, then it is the car's wheel pair: twice CAR_HALF.x", () => {
-    assert.equal(TRACK_GAUGE, 2 * CAR_HALF.x, "gauge");
+  it("when the gauge is read, then it is the slot-0 sedan's body width", () => {
+    assert.equal(TRACK_GAUGE, 2 * carFrame(CAR_STYLES.sedan).half.x, "gauge");
   });
 });
 

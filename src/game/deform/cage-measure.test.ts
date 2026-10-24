@@ -5,6 +5,7 @@ import { CAGES, type BodyPartName } from "../kernel/rig-spec.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { paint } from "../vehicle/test-support.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
+import { RES_SLOTS, type DeformRig, type MassNode } from "./deform-rig.ts";
 
 const DT = 1 / FINE_HZ;
 const NAMES = CAGES.map((c) => c.name);
@@ -100,5 +101,26 @@ describe("given a car's glazed cages (the windscreen's, the rear glass's and the
 
   test("when a cage holds no pane, then its glass distortion is 0", () => {
     assert.equal(crashed().deform.glassDistortion("bonnet"), 0);
+  });
+
+  /** The masses a cage's eight corners follow (their A5 parents, weight above 0). */
+  function parentsOf(rig: DeformRig, name: BodyPartName): MassNode[] {
+    const first = rig["cages"].findIndex((c) => c.spec.name === name);
+    const found = new Set<MassNode>();
+    for (let corner = 0; corner < 8; corner++) {
+      const at = (rig["vertexCount"] + first * 8 + corner) * RES_SLOTS;
+      for (let slot = 0; slot < RES_SLOTS; slot++) if (rig["resW"][at + slot]! > 0) found.add(rig["masses"][rig["resJ"][at + slot]! / 3]!);
+    }
+    return [...found];
+  }
+
+  test("when each door cage's corners' parent masses are listed, then every one is a cabin mass (its rest inside the cell cage's span above its floor), and the windscreen's are cabin masses and the two wings (the foot's share of the nose), never a rail or the engine, whereas the bonnet's follow masses outside the cabin", () => {
+    const rig = new DeformableCar(paint(), new THREE.Scene()).deform;
+    const cell = rig["cageByPart"].get("chassisCell")!.spec;
+    const inCabin = (m: MassNode): boolean => m.rest.z >= cell.min[2] && m.rest.z <= cell.max[2] && m.rest.y >= cell.min[1];
+    const outside = (name: BodyPartName): string[] => parentsOf(rig, name).filter((m) => !inCabin(m)).map((m) => m.name).sort();
+    for (const name of ["doorLeft", "doorRight"] as const) assert.deepEqual(outside(name), [], `${name}'s corners follow masses outside the cabin`);
+    assert.deepEqual(outside("glassFront"), ["wingFL", "wingFR"], "the windscreen's corners follow the cabin and the wings' share alone");
+    assert.ok(outside("bonnet").length > 0, "the control: the bonnet's corners follow the nose");
   });
 });

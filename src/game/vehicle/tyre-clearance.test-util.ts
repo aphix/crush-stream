@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { makeWheelGeometry } from "./car-materials.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import type { DeformableCar } from "./car.ts";
-import { ARCH_PLANT, ARCH_TOP } from "../deform/deform-rig.ts";
 
 /**
  * How far a drawn tyre stands under the drawn skin over it (docs/UNIFIED_CONTACT.md's drawn body, not the cage): for the upper half of
@@ -14,6 +14,7 @@ const AXLE_NEAR = 0.45;
 
 const _m = new THREE.Matrix4();
 const _v = new THREE.Vector3();
+const _tyre = new THREE.Vector3();
 
 /** The highest triangle of `tris` over plan point (x, z), NaN if none. */
 function skinTop(tris: Float32Array, x: number, z: number): number {
@@ -37,11 +38,13 @@ function skinTop(tris: Float32Array, x: number, z: number): number {
   return best;
 }
 
-/** The least clearance (m) over wheel `wheel` (`WHEEL_POS` order) of `car`, whose car-local drawn triangles are `tris` (`drawnTriangles`). Infinity when no point has a hood over it. */
+/** The least clearance (m) over wheel `wheel` (`frame.wheels` order) of `car`, whose car-local drawn triangles are `tris` (`drawnTriangles`). Infinity when no point has a hood over it. */
 export function tyreClearance(car: DeformableCar, wheel: number, tris: Float32Array): number {
   const w = car.wheels[wheel]!;
   w.updateMatrixWorld(true);
-  _m.multiplyMatrices(car.group.matrixWorld.clone().invert(), w.matrixWorld);
+  const { r, halfW } = car.frame.rig.tyre;
+  // The drawn tyre: the wheel batch scales the platform mesh by the car's tyre (wheel-batch.ts).
+  _m.multiplyMatrices(car.group.matrixWorld.clone().invert(), w.matrixWorld).scale(_tyre.set(halfW / PLATFORM_TYRE.halfW, r / PLATFORM_TYRE.r, r / PLATFORM_TYRE.r));
   const hub = _v.setFromMatrixPosition(_m).clone();
   const near: number[] = [];
   for (let t = 0; t < tris.length; t += 9) {
@@ -70,12 +73,13 @@ const TYRE_RADIUS = Math.max(...Array.from({ length: TYRE_POINTS.count }, (_, i)
 const _s = new THREE.Vector3();
 
 /**
- * How deep (m) the drawn sill of `car` stands inside the tyre of wheel `wheel`: the body skin below `ARCH_TOP`, between the axles and beyond
- * the arch plant (`ARCH_PLANT` of a hub), the rocker and the arch's rear lip. 0 when none of it is inside.
+ * How deep (m) the drawn sill of `car` stands inside the tyre of wheel `wheel`: the body skin below the rig's `archTop`, between the axles and beyond
+ * the arch plant (`archPlant` of a hub), the rocker and the arch's rear lip. 0 when none of it is inside.
  */
 export function sillInTyre(car: DeformableCar, wheel: number): number {
   const d = car.deform;
   const rest = d["restPos"];
+  const { archTop, archPlant } = car.frame.rig;
   const hubs = d.masses.filter((m) => m.hub);
   const front = Math.max(...hubs.map((m) => m.rest.z));
   const back = Math.min(...hubs.map((m) => m.rest.z));
@@ -89,7 +93,7 @@ export function sillInTyre(car: DeformableCar, wheel: number): number {
   for (let i = 0; i < pos.count; i++) {
     const rx = rest[i * 3]!;
     const rz = rest[i * 3 + 2]!;
-    if (rest[i * 3 + 1]! >= ARCH_TOP || rz >= front || rz <= back || hubs.some((m) => Math.hypot(rx - m.rest.x, rz - m.rest.z) <= ARCH_PLANT)) continue;
+    if (rest[i * 3 + 1]! >= archTop || rz >= front || rz <= back || hubs.some((m) => Math.hypot(rx - m.rest.x, rz - m.rest.z) <= archPlant)) continue;
     _v.fromBufferAttribute(pos, i).applyMatrix4(_m);
     const across = Math.abs(_v.x);
     const out = Math.hypot(_v.y, _v.z);

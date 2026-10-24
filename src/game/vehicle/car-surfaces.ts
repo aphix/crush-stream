@@ -1,10 +1,13 @@
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
-import { Surface } from "../world/surfaces.ts";
+import { FL_DEPTH, FL_NX, FL_NY, FL_NZ, P_AX, P_BX, P_CX, P_OX, P_OY, P_OZ, P_STRIDE, PQ_X, PQ_Y, PQ_Z, Surface } from "../world/surfaces.ts";
 import type { CageFields, CageStyle } from "./car-cage.ts";
+import { planFieldOf } from "./cage-fields.ts";
+import { hypot3 } from "../kernel/physics-core.js";
 import { cageLift } from "./car-cage-rig.ts";
-import { FACES, FACE_AXIS, FACE_TOP, faceFollow, faceMax, faceStrength, IMPRINT_NONE, SKIN_STRAIN } from "../deform/load-crush.ts";
-import { PAN } from "./car-suspension.ts";
+import { FACES, FACE_AXIS, FACE_TOP, faceFollow, faceMax, faceStrength, IMPRINT_NONE, SKIN_STRAIN, type FaceBands } from "../deform/load-crush.ts";
+import { carFrame } from "./car-rig.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 
 /**
  * What a body in flight (`stepAir`) rests on besides the world's ground: the other cars' tops, as the dynamic part of the
@@ -34,15 +37,15 @@ const NEAR_SLACK = 2;
 const YIELDS = 0.3;
 const ROOFS = new WeakMap<CageStyle, { crown: number; follow: Float32Array }>();
 
-/** A style's pristine roof: its crown (the highest node, m over the car's origin at the stock ride) and per node how far the drawn top follows the roof's crush (`faceFollow` at the node's height, times the share of a mass's travel the skin takes: `SKIN_STRAIN`; NaN where there is no top). */
-function roofOf(style: CageStyle): { crown: number; follow: Float32Array } {
+/** A style's pristine roof: its crown (the highest node, m over the car's origin at the stock ride) and per node how far the drawn top follows the roof's crush (`faceFollow` over the style's `bands` at the node's height, times the share of a mass's travel the skin takes: `SKIN_STRAIN`; NaN where there is no top). */
+function roofOf(style: CageStyle, bands: FaceBands): { crown: number; follow: Float32Array } {
   let roof = ROOFS.get(style);
   if (roof === undefined) {
     const top = style.pristine.top;
     const follow = new Float32Array(top.length);
     let crown = 0;
     for (let k = 0; k < top.length; k++) {
-      follow[k] = faceFollow(FACE_TOP, 0, top[k]!, 0) * SKIN_STRAIN;
+      follow[k] = faceFollow(bands, FACE_TOP, 0, top[k]!, 0) * SKIN_STRAIN;
       if (top[k]! > crown) crown = top[k]!;
     }
     ROOFS.set(style, (roof = { crown, follow }));
@@ -58,16 +61,12 @@ const _qi = new THREE.Quaternion();
 const IMPRINT_REACH = 0.05;
 const _mi = new THREE.Matrix4();
 const _pt = new THREE.Vector3();
-/** The pan's six points in the pressed roof's frame (x, y, z each), scratch of `imprint`. */
-const _pl = new Float64Array(3 * PAN.length);
+/** The pan's points in the pressed roof's frame (x, y, z each), scratch of `imprint`: every frame's pan has the sedan's count. */
+const _pl = new Float64Array(3 * carFrame(CAR_STYLES.sedan).pan.length);
 
-/** The pan's rise per metre along its own z axis (the drawn underside's slant: the front 23 mm under the rear) and its length (m). */
-const PAN_SLOPE = (PAN[3]![1] - PAN[0]![1]) / (PAN[3]![2] - PAN[0]![2]);
-const PAN_LENGTH = PAN[3]![2] - PAN[0]![2];
-
-/** `presser`'s `PAN` point `k` (class lift on) in the roof frame `_mi` of a car whose class lift is `lift`, into `_pl` at `3k`. */
+/** `presser`'s pan point `k` (class lift on) in the roof frame `_mi` of a car whose class lift is `lift`, into `_pl` at `3k`. */
 function inRoofFrame(presser: DeformableCar, k: number, lift: number): void {
-  const p = PAN[k]!;
+  const p = presser.frame.pan[k]!;
   _pt.set(p[0], p[1] + cageLift(presser), p[2]).applyQuaternion(presser.group.quaternion).add(presser.group.position).applyMatrix4(_mi);
   _pl[3 * k] = _pt.x;
   _pl[3 * k + 1] = _pt.y - lift;
@@ -98,22 +97,25 @@ function gridAt(style: CageStyle, g: Float32Array, x: number, z: number): number
 function imprint(presser: DeformableCar, pressed: DeformableCar): void {
   _mi.copy(pressed.group.matrixWorld).invert();
   const lift = cageLift(pressed);
-  for (let k = 0; k < PAN.length; k++) inRoofFrame(presser, k, lift);
-  const a = (PAN_SLOPE * (_pl[9]! - _pl[0]!)) / PAN_LENGTH;
-  const b = (PAN_SLOPE * (_pl[11]! - _pl[2]!)) / PAN_LENGTH;
+  const pan = presser.frame.pan;
+  for (let k = 0; k < pan.length; k++) inRoofFrame(presser, k, lift);
+  const slope = (pan[3]![1] - pan[0]![1]) / (pan[3]![2] - pan[0]![2]);
+  const length = pan[3]![2] - pan[0]![2];
+  const a = (slope * (_pl[9]! - _pl[0]!)) / length;
+  const b = (slope * (_pl[11]! - _pl[2]!)) / length;
   let c = Infinity;
-  for (let k = 0; k < PAN.length; k++) c = Math.min(c, _pl[3 * k + 1]! - a * _pl[3 * k]! - b * _pl[3 * k + 2]!);
+  for (let k = 0; k < pan.length; k++) c = Math.min(c, _pl[3 * k + 1]! - a * _pl[3 * k]! - b * _pl[3 * k + 2]!);
   const d = pressed.deform;
   const im = d.imprint;
   const drop = d.crush[FACE_TOP]!;
-  if (!(c <= roofOf(pressed.cage.style).crown - drop + IMPRINT_REACH)) return;
+  if (!(c <= roofOf(pressed.cage.style, pressed.frame.rig.faceBands).crown - drop + IMPRINT_REACH)) return;
   const old = im[0] !== IMPRINT_NONE;
   const style = pressed.cage.style;
   const top = style.pristine.top;
-  const follow = roofOf(style).follow;
+  const follow = roofOf(style, pressed.frame.rig.faceBands).follow;
   let relief = 0;
   let overRoof = false;
-  for (let k = 0; k < PAN.length; k++) {
+  for (let k = 0; k < pan.length; k++) {
     const x = _pl[3 * k]!;
     const z = _pl[3 * k + 2]!;
     let surface = gridAt(style, top, x, z) - drop * gridAt(style, follow, x, z);
@@ -145,6 +147,8 @@ export class CarSurfaces extends Surface {
   private self: DeformableCar | null = null;
   /** The cage fields each slot's surface shows (the style's shared ones while the car is pristine, else the car's own). */
   private shown: (CageFields | undefined)[] = [];
+  /** The style whose lattice each slot's `shown` fields are on. */
+  private styles: (CageStyle | undefined)[] = [];
   /** The `cage.serial` each slot's surface was last set from: an own fit that changed the fields in place moves it. */
   private shownSerial: number[] = [];
   private left = new Float64Array(FACES);
@@ -391,8 +395,9 @@ export class CarSurfaces extends Surface {
     car.refitCage();
     if (this.shown[i] !== cage.fields || this.shownSerial[i] !== cage.serial) {
       const { nu, nv, step, u0, v0 } = cage.style;
-      this.setGridData(i, nu, nv, step, step, u0, v0, cage.fields.top, roofOf(cage.style).follow, cage.fields.heightMax);
+      this.setGridData(i, nu, nv, step, step, u0, v0, cage.fields.top, roofOf(cage.style, car.frame.rig.faceBands).follow, cage.fields.heightMax);
       this.shown[i] = cage.fields;
+      this.styles[i] = cage.style;
       this.shownSerial[i] = cage.serial;
     }
     const e = car.group.matrixWorld.elements;
@@ -410,6 +415,55 @@ export class CarSurfaces extends Surface {
     this.setFrame(i, e[12]! + lift * e[4]!, e[13]! + lift * e[5]!, e[14]! + lift * e[6]!, _axes);
     if (car.falling || car.vaporized || e[5]! < UPRIGHT) this.disable(i);
     else this.clipBox(i, e[12]!, e[14]!, REACH);
+  }
+
+  /**
+   * A point under car `i`'s top, inside its plan and over its underside, is in its side: the plan outline's outward normal (the plan field's
+   * gradient, turned to the world by the patch's axes: a tilted car's flank leans) and the distance back out to the outline.
+   */
+  override flank(i: number, q: Float64Array, out: Float64Array): boolean {
+    const fields = this.shown[i];
+    const style = this.styles[i];
+    if (fields === undefined || style === undefined) return false;
+    const P = this.p;
+    const o = i * P_STRIDE;
+    const dx = q[PQ_X]! - P[o + P_OX]!;
+    const dy = q[PQ_Y]! - P[o + P_OY]!;
+    const dz = q[PQ_Z]! - P[o + P_OZ]!;
+    const { nu, nv, step } = style;
+    const fu = (P[o + P_AX]! * dx + P[o + P_AX + 1]! * dy + P[o + P_AX + 2]! * dz - style.u0) / step;
+    const fv = (P[o + P_CX]! * dx + P[o + P_CX + 1]! * dy + P[o + P_CX + 2]! * dz - style.v0) / step;
+    if (fu < 0 || fv < 0 || fu >= nu - 1 || fv >= nv - 1) return false;
+    const ci = Math.floor(fu);
+    const cj = Math.floor(fv);
+    const tu = fu - ci;
+    const tv = fv - cj;
+    const c = cj * nu + ci;
+    const plan = planFieldOf(style, fields);
+    const p00 = plan[c]!;
+    const p10 = plan[c + 1]!;
+    const p01 = plan[c + nu]!;
+    const p11 = plan[c + nu + 1]!;
+    const depth = -((p00 * (1 - tu) + p10 * tu) * (1 - tv) + (p01 * (1 - tu) + p11 * tu) * tv);
+    if (!(depth > 0)) return false;
+    let under = Infinity;
+    for (let k = 0; k < 4; k++) {
+      const n = c + (k & 1) + (k >> 1) * nu;
+      if (fields.covered[n] === 1 && fields.bottom[n]! < under) under = fields.bottom[n]!;
+    }
+    if (P[o + P_BX]! * dx + P[o + P_BX + 1]! * dy + P[o + P_BX + 2]! * dz < under) return false;
+    const gu = ((p10 - p00) * (1 - tv) + (p11 - p01) * tv) / step;
+    const gv = ((p01 - p00) * (1 - tu) + (p11 - p10) * tu) / step;
+    const nx = P[o + P_AX]! * gu + P[o + P_CX]! * gv;
+    const ny = P[o + P_AX + 1]! * gu + P[o + P_CX + 1]! * gv;
+    const nz = P[o + P_AX + 2]! * gu + P[o + P_CX + 2]! * gv;
+    const len = hypot3(nx, ny, nz);
+    if (len < 1e-9) return false;
+    out[FL_DEPTH] = depth;
+    out[FL_NX] = nx / len;
+    out[FL_NY] = ny / len;
+    out[FL_NZ] = nz / len;
+    return true;
   }
 
   /** A step's list holds `n` cars: the roofs of slots `n` and up are of cars no longer in the world, and answer nothing until `sync` sets them again. */

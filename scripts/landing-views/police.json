@@ -1,0 +1,120 @@
+{
+  "side": {
+    "ref": "ModernCarDesigns_SideAndTop/police-car/police-car-1.png"
+  },
+  "top": {
+    "ref": "ModernCarDesigns_SideAndTop/police-car/police-car-2.png"
+  },
+  "iso": {
+    "ref": "ModernCarDesignIsometric.png",
+    "crop": [
+      124,
+      639,
+      553,
+      412
+    ],
+    "wheels": {
+      "fl": {
+        "hub": [
+          241,
+          331
+        ],
+        "contact": [
+          239,
+          380
+        ]
+      },
+      "rl": {
+        "hub": [
+          478,
+          175
+        ],
+        "contact": [
+          476,
+          221
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        6.168,
+        5.6192,
+        7.6378
+      ],
+      "target": [
+        5.6172,
+        5.1472,
+        6.9495
+      ],
+      "up": [
+        -0.2979,
+        0.8816,
+        -0.3662
+      ],
+      "fov": 18
+    }
+  },
+  "rear-iso": {
+    "ref": "ModernCarDesignIsometric_Rear.png",
+    "crop": [
+      85,
+      525,
+      439,
+      340
+    ],
+    "wheels": {
+      "rr": {
+        "hub": [
+          216,
+          266
+        ],
+        "contact": [
+          213,
+          303
+        ]
+      },
+      "fr": {
+        "hub": [
+          393,
+          126
+        ],
+        "contact": [
+          391,
+          158
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        -7.1363,
+        9.2973,
+        -9.2426
+      ],
+      "target": [
+        -6.6466,
+        8.6822,
+        -8.6246
+      ],
+      "up": [
+        0.4014,
+        0.7882,
+        0.4664
+      ],
+      "fov": 15
+    },
+    "landmarks": [
+      {
+        "name": "rear glass top centre",
+        "at": [
+          0,
+          1.235,
+          -1.159
+        ],
+        "pixel": [
+          151,
+          134.2
+        ]
+      }
+    ]
+  }
+}

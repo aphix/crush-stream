@@ -17,12 +17,45 @@ import { throwComing } from "../present/ragdoll-trigger.ts";
 import { displayFrames, rangeCar } from "../present/range-run.test-util.ts";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
 import { JerseyBarrier } from "./engine-props.ts";
+import { BARRIER_HALF } from "../contact/sat.ts";
 import { RANGE_GROUND } from "./range.ts";
 
 /** Half the width (m) of the test ground's lane: well past a car's side. */
 const LANE_HALF_WIDTH = 3;
 /** Plan cell (m) of the grid that stands for the analytic profile: fine enough for the bilinear height to be within 2 mm of it. */
 export const FINE_CELL = 0.05;
+
+/** Per station and car type (`DRIVER_CARS` ids): the least speed (m/s) its centre may have at the climb's foot and as it reaches the lip, measured with 0.5 m/s of room. One table for the profile's 5 cm grid and the real ground. */
+export const MINIMUM_SPEED: Readonly<Record<MinigameMode, Readonly<Record<string, { foot: number; lip: number }>>>> = {
+  longJump: {
+    sedan: { foot: 17.5, lip: 25 },
+    muscle: { foot: 18, lip: 27 },
+    truck: { foot: 17.5, lip: 24.5 },
+    monster: { foot: 19, lip: 26.5 },
+    police: { foot: 17.5, lip: 24.5 },
+    hatch: { foot: 17.5, lip: 25 },
+    suv: { foot: 17.5, lip: 25 },
+  },
+  highJump: {
+    sedan: { foot: 31, lip: 26.5 },
+    muscle: { foot: 34, lip: 29.5 },
+    truck: { foot: 31, lip: 26 },
+    monster: { foot: 34.5, lip: 28.5 },
+    police: { foot: 31, lip: 26.5 },
+    hatch: { foot: 31, lip: 26.5 },
+    suv: { foot: 31, lip: 26.5 },
+  },
+  ringFling: {
+    sedan: { foot: 29.5, lip: 32 },
+    muscle: { foot: 32, lip: 35.5 },
+    truck: { foot: 29, lip: 32 },
+    monster: { foot: 32.5, lip: 37.5 },
+    police: { foot: 29.5, lip: 32 },
+    hatch: { foot: 29.5, lip: 32 },
+    suv: { foot: 29.5, lip: 32 },
+  },
+};
+
 /** Seconds the parked car is left alone before the release, to see it hold on the pad. */
 const HOLD_SECONDS = 2;
 /** The car stands still when slower than this (m/s). */
@@ -389,14 +422,20 @@ export async function driveIntoBarrier(type: DriverCar, ground: Ground | null, s
 export type BarrierHit = {
   /** Drivers the sim threw out of the car, over the hit and the second after it. */
   ejections: number;
-  /** The car's speed (m/s) and vertical speed (m/s) in the last frame before its first contact with the barrier. */
+  /** The car's speed (m/s) and vertical speed (m/s) in the last frame before it reached the barrier (`HIT_WATCH_SECONDS`). */
   arrivalSpeed: number;
   arrivalVertical: number;
   /** The car's centre went back (m) from its furthest x after the hit: a rebound. */
   reboundDistance: number;
+  /** The car's centre's x (m) when the watch ends: past the barrier's far face when it rode over it. */
+  endX: number;
 };
 
-/** Sim seconds the car is watched after its first contact, and the wall seconds a run may last. */
+/**
+ * Sim seconds the car is watched after it reached the barrier, and the wall seconds a run may last. It reached it at its first contact,
+ * or when its centre passed the barrier's near face: a car flying the barrier meets nothing and is watched landing past it, not driving
+ * on off the ground's end.
+ */
 const HIT_WATCH_SECONDS = 1;
 const HIT_WALL_MAX = 40;
 
@@ -431,7 +470,7 @@ export function driveToBarrier(type: DriverCar, profile: DriveProfile, startOffs
       world.pedals.set(car, input);
       return inner(slice);
     };
-    const out: BarrierHit = { ejections: 0, arrivalSpeed: 0, arrivalVertical: 0, reboundDistance: 0 };
+    const out: BarrierHit = { ejections: 0, arrivalSpeed: 0, arrivalVertical: 0, reboundDistance: 0, endX: 0 };
     world.onEject = () => {
       out.ejections++;
     };
@@ -439,7 +478,7 @@ export function driveToBarrier(type: DriverCar, profile: DriveProfile, startOffs
     let hitAt = Infinity;
     let furthestX = -Infinity;
     for (let wall = 0; wall < HIT_WALL_MAX && simulated < hitAt + HIT_WATCH_SECONDS; wall += FRAME) {
-      if (!car.crashed) {
+      if (!car.crashed && car.group.position.x <= -BARRIER_HALF.x) {
         out.arrivalSpeed = car.speed;
         out.arrivalVertical = car.velocity.y;
       } else if (hitAt === Infinity) hitAt = simulated;
@@ -453,6 +492,7 @@ export function driveToBarrier(type: DriverCar, profile: DriveProfile, startOffs
         out.reboundDistance = Math.max(out.reboundDistance, furthestX - car.group.position.x);
       }
     }
+    out.endX = car.group.position.x;
     return out;
   } finally {
     car.dispose();

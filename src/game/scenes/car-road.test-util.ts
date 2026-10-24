@@ -11,14 +11,13 @@ import { type Corkscrew, CORKSCREW } from "./corkscrew.ts";
  * run driven over the real feature and over the cars that stand for it. Not a test file itself.
  */
 
-/** Car-local mass rest heights (m): the lowest (the hubs) and the highest (the roof). */
-const MASS_LO = 0.32;
-const MASS_HI = 1.18;
-/** The pristine skin's reach (m) under the lowest mass and over the highest, and the share of a mass's travel the skin takes (about 0.7: strain 0.65 and the cages). */
-const SKIN_BELOW = 0.175;
-const SKIN_ABOVE = 0.186;
+/** The share of a mass's travel the skin takes (about 0.7: strain 0.65 and the cages). */
 const SKIN_FOLLOW = 0.7;
 const FIT_PASSES = 5;
+/** Half the length (m) over which a pressed car's top is the layer's: out to about its bumper masses. */
+const TOP_HALF_M = 2;
+/** Samples per metre of the plane fitted to a layer's top. */
+const PLANE_PER_M = 5;
 
 /** A car's top and bottom surface (car-local y) at car-local z. */
 export type Layer = { top: (z: number) => number; bottom: (z: number) => number };
@@ -61,43 +60,70 @@ function reskin(car: DeformableCar): void {
 }
 
 /**
+ * The plane (height at z 0, rise per metre along z) that fits `layer`'s top over the judged span: the shape a pressed top takes is a plane
+ * in the body frame (`DeformRig.imprint`), and the skin above it is cut down to it, as a roof pressed under another body's is.
+ */
+function pressTop(car: DeformableCar, layer: Layer): void {
+  const zs: number[] = [];
+  for (let k = -PLANE_PER_M * TOP_HALF_M; k <= PLANE_PER_M * TOP_HALF_M; k++) zs.push(k / PLANE_PER_M);
+  const meanTop = zs.reduce((sum, z) => sum + layer.top(z), 0) / zs.length;
+  const spread = zs.reduce((sum, z) => sum + z * z, 0);
+  const rise = zs.reduce((sum, z) => sum + z * (layer.top(z) - meanTop), 0) / spread;
+  car.deform.imprint[0] = meanTop;
+  car.deform.imprint[1] = 0;
+  car.deform.imprint[2] = rise;
+}
+
+/**
  * A sedan pressed into `layer` and held at `pose`: every mass (the wheels' hubs too) is placed at its rest z along the profile,
- * its height in proportion to its rest height between the layer's bottom and top, the pristine skin's reach (`SKIN_BELOW`,
- * `SKIN_ABOVE`) left over at each end; the frame may yield (`deepCrush`), or the roof stays within 0.14 m of rest. The skin
- * follows the masses at only `SKIN_FOLLOW` of their travel and the hood, roof and boot differ, so a few passes then lift or
- * sink every mass by what the drawn top is still off the layer's top at its z.
+ * its height in proportion to its rest height between its lowest and highest mass, inside the band between the layer's bottom
+ * and top less the pristine skin's own reach under the lowest mass (to the ride height) and over the highest (to the roof line);
+ * the frame may yield (`deepCrush`), or the roof stays within 0.14 m of rest. The skin follows the masses at only `SKIN_FOLLOW`
+ * of their travel and the hood, roof and boot differ, so a few passes then lift or sink every mass by what the drawn top is still
+ * off the layer's top at its z, each held inside the layer at its own z: a mass driven under the ground levers its cluster's far
+ * end up (the tail bumper over a sunk rear axle), which the next pass reads as skin too high and sinks it further.
  */
 export function shapeCar(layer: Layer, pose: Pose): Held {
   const car = makeCar("sedan");
   car.spawnFacing(0, 0, 0, 0);
   car.deform.frameCrush = true;
   car.deform.deepCrush = true;
-  for (const m of car.deform.masses) {
-    const z = m.rest.z;
-    const top = layer.top(z);
-    const lo = Math.min(layer.bottom(z), top - SKIN_BELOW - SKIN_ABOVE) + SKIN_BELOW;
-    const hi = top - SKIN_ABOVE;
-    m.local.set(m.rest.x, lo + ((m.rest.y - MASS_LO) / (MASS_HI - MASS_LO)) * (hi - lo), z);
+  const restY = car.deform.masses.map((m) => m.rest.y);
+  const massLo = Math.min(...restY);
+  const massHi = Math.max(...restY);
+  const skinBelow = massLo - car.style.dims.rideHeight;
+  const skinAbove = car.style.dims.height - massHi;
+  const bands = car.deform.masses.map((m) => {
+    const top = layer.top(m.rest.z);
+    const lo = Math.min(layer.bottom(m.rest.z), top - skinBelow - skinAbove) + skinBelow;
+    return { lo, hi: top - skinAbove };
+  });
+  for (const [i, m] of car.deform.masses.entries()) {
+    const { lo, hi } = bands[i]!;
+    m.local.set(m.rest.x, lo + ((m.rest.y - massLo) / (massHi - massLo)) * (hi - lo), m.rest.z);
   }
   hold(car, pose);
   reskin(car);
   for (let pass = 0; pass < FIT_PASSES; pass++) {
     const tops = skinTops(car, 10);
     for (const m of car.deform.masses) {
-      const k = Math.round(m.local.z * 10);
+      // A mass past the judged span (a bumper) is fitted on its edge bin: the skin's rounded end beyond it is no top.
+      const k = THREE.MathUtils.clamp(Math.round(m.local.z * 10), -10 * TOP_HALF_M, 10 * TOP_HALF_M);
       const y = tops.get(k) ?? tops.get(k - 1) ?? tops.get(k + 1);
-      if (y !== undefined) m.local.y -= (y - layer.top(k / 10)) / SKIN_FOLLOW;
+      if (y !== undefined) m.local.y = THREE.MathUtils.clamp(m.local.y - (y - layer.top(k / 10)) / SKIN_FOLLOW, layer.bottom(m.rest.z), layer.top(m.rest.z));
     }
     hold(car, pose);
     reskin(car);
   }
+  pressTop(car, layer);
+  reskin(car);
   return { car, pose };
 }
 
-/** The drawn skin's top against the layer's top, per 0.2 m along the car up to its bumper masses (|z| ≤ 2.0, past that the nose and tail round off): the largest gap (m). The skin's own tolerance is 0.2 m (`SKIN`), ideally 5 cm. */
+/** The drawn skin's top against the layer's top, per 0.2 m along the car within `TOP_HALF_M` of its middle (past that the nose and tail round off): the largest gap (m). The skin's own tolerance is 0.2 m (`SKIN`), ideally 5 cm. */
 export function skinGap(held: Held, layer: Layer): number {
   let gap = 0;
-  for (const [k, y] of skinTops(held.car, 5)) if (Math.abs(k) <= 10) gap = Math.max(gap, Math.abs(y - layer.top(k / 5)));
+  for (const [k, y] of skinTops(held.car, 5)) if (Math.abs(k) <= 5 * TOP_HALF_M) gap = Math.max(gap, Math.abs(y - layer.top(k / 5)));
   return gap;
 }
 

@@ -6,14 +6,16 @@
 import * as THREE from "three";
 import type { CarStyleId } from "./car-variants.ts";
 import { CLASS_HUBS, CLASS_LIFT } from "./constants.ts";
-import { WHEEL_POS } from "./car-mesh.ts";
 import { MU_TYRE } from "../world/surfaces.ts";
 import { SURFACES } from "../world/catalog.ts";
 import { FRICTION_G } from "../deform/physics-util.ts";
 
-export type VehicleClassId = "sedan" | "muscle" | "truck" | "monster" | "police";
+/** What the traction and driveline laws read of a car's frame: its half wheelbase and its tyre. */
+type Axles = { readonly halfBase: number; readonly rig: { readonly tyre: { readonly r: number } } };
+
+export type VehicleClassId = "sedan" | "muscle" | "truck" | "monster" | "police" | "hatch" | "suv";
 /** Netplay wire order (a snapshot sends the index): append only. */
-export const VEHICLE_CLASS_IDS: readonly VehicleClassId[] = ["sedan", "muscle", "truck", "monster", "police"];
+export const VEHICLE_CLASS_IDS: readonly VehicleClassId[] = ["sedan", "muscle", "truck", "monster", "police", "hatch", "suv"];
 
 /**
  * Which axles the engine turns: `fwd` / `rwd` one axle; `awd` both through an open centre differential (the torque split evenly, so the
@@ -63,6 +65,10 @@ export interface ClassStats {
   /** Visual body lift above the stock ride (m) and wheel scale; collision hulls stay stock. */
   lift: number;
   wheelScale: number;
+  /** The share of the platform rig's crash mass (858 kg) this class's body carries: the masses and beams of its soft body (`RigTables.massScale`), so a heavier archetype pushes a little more in a crash (±20 % about the sedan). */
+  crashMass: number;
+  /** The hit speed (m/s EBS) under which no hit takes this class's wheels off (`RigTables.hubHoldMps`); 0: only the platform's gates stand. Hub hardware is built for loads that follow its wheel's mass, so a Monster Jam truck's is the platform's `HUB_POP_MPS` times the square root of its corner's unsprung share of the car over a sedan's (380 of 5440 kg a corner against 40 of 1500): 24. */
+  hubHoldMps: number;
 }
 
 const SEDAN: ClassStats = {
@@ -87,6 +93,8 @@ const SEDAN: ClassStats = {
   durability: 1,
   lift: 0,
   wheelScale: 1,
+  crashMass: 1,
+  hubHoldMps: 0,
 };
 
 /**
@@ -116,7 +124,9 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
     boostAccel: 1.55,
     durability: 1.15,
     lift: 0,
-    wheelScale: 1.04,
+    wheelScale: 1,
+    crashMass: 1,
+    hubHoldMps: 0,
   },
   truck: {
     id: "truck",
@@ -138,13 +148,15 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
     boostTop: 1.22,
     boostAccel: 1.6,
     durability: 1.25,
-    lift: 0.08,
-    wheelScale: 1.12,
+    lift: 0,
+    wheelScale: 1,
+    crashMass: 1,
+    hubHoldMps: 0,
   },
   monster: {
     id: "monster",
     label: "Monster",
-    style: "pickup",
+    style: "monster",
     mass: 2900,
     topSpeed: 190 / 3.6,
     revSpeed: 10,
@@ -161,8 +173,11 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
     boostTop: 1.22,
     boostAccel: 1.6,
     durability: 1.7,
-    lift: 0.48,
-    wheelScale: 1.7,
+    // The monster's body is the pickup family's at its stock ride: lifted from its rocker (0.40) to the reference's (1.27), on the truck tyre scaled to 1.23 m.
+    lift: 0.87,
+    wheelScale: 1.73,
+    crashMass: 1,
+    hubHoldMps: 24,
   },
   /**
    * The sedan's drive on the black-and-white body with the light bar, rear-driven: the archetype is a rear-drive pursuit sedan
@@ -171,20 +186,22 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
    * +30 % at the realistic end. A player's police car keeps the sedan's (`killClass`).
    */
   police: { ...SEDAN, id: "police", label: "Police", style: "police", drive: "rwd", redlineRpm: 7000, durability: 1.3 },
+  /** A front-driven compact hatchback (2017 Golf 1.8T: 0-60 mph 7.3 s, 127 mph, 3061 lb, 0.84 g, Car and Driver): lighter and quicker to turn than the sedan, a little slower flat out, and it takes less before it dies. */
+  hatch: { ...SEDAN, id: "hatch", label: "Hatchback", style: "hatchback", mass: 1390, topSpeed: 192 / 3.6, launch: [17, 6.5], power: [178.5, 58.4], cgHeight: 0.52, redlineRpm: 6500, turn: 1.62, grip: 40.5, drift: 0.3, durability: 0.95 },
+  /** A front-driven luxury SUV on the wagon body (2018 Range Rover Velar P250: 0-60 mph 7.4 s, 4392 lb, 0.84 g, Car and Driver), front-driven as the sedan it replaces: tall and heavy, slower to turn, tougher in a crash. */
+  suv: { ...SEDAN, id: "suv", label: "SUV", style: "wagon", mass: 1990, topSpeed: 198 / 3.6, revSpeed: 10, launch: [16.6, 6], power: [178.05, 58.6], cgHeight: 0.7, redlineRpm: 6000, brake: 27, turn: 1.42, grip: 37, drift: 0.25, boostTop: 1.22, boostAccel: 1.6, durability: 1.2 },
 };
 
-/** The class each body style drives as unless assigned another (the monster truck rides the pickup body). */
+/** The class each body style drives as unless assigned another. */
 export const STYLE_CLASS: Readonly<Record<CarStyleId, VehicleClassId>> = {
   sedan: "sedan",
-  hatchback: "sedan",
-  wagon: "sedan",
+  hatchback: "hatch",
+  wagon: "suv",
   coupe: "muscle",
   pickup: "truck",
   police: "police",
+  monster: "monster",
 };
-
-/** Wheel radius of the shared mesh (m); a scaled wheel is lifted to keep its tyre on the ground (`assignClass`) and its tread speed is the hub's × its scale (`rotatingShare`). */
-const WHEEL_RADIUS = 0.32;
 
 export function classStats(id: VehicleClassId): ClassStats {
   return CLASSES[id];
@@ -464,19 +481,19 @@ const ROTATING_PER_RATIO2 = 0.0025;
  * overall ratio that puts the engine at its redline at `ws`, held at 1st's top below it. Gillespie's per-gear value at every gear's top,
  * continuous between: a per-gear step fed the gear back into the spin and hunted at a bucket edge.
  */
-export function rotatingShare(k: ClassStats, ws: number): number {
-  const ratio = (((k.redlineRpm * 2 * Math.PI) / 60) * WHEEL_RADIUS * k.wheelScale) / Math.max(ws, gearHi(k, 0));
+export function rotatingShare(frame: Axles, k: ClassStats, ws: number): number {
+  const ratio = (((k.redlineRpm * 2 * Math.PI) / 60) * frame.rig.tyre.r * k.wheelScale) / Math.max(ws, gearHi(k, 0));
   return ROTATING_FIXED + ROTATING_PER_RATIO2 * ratio * ratio;
 }
 
 /**
  * Gillespie ch. 2 traction-limited acceleration, in g, for the class's driveline on front and rear tyre μ `f`, `r`: the static 50/50 split
- * (`WHEEL_POS` ±AXLE) and the longitudinal transfer a·h/L (h the class CG height, L the wheelbase) give front load share ½ − h·a/(gL), rear
+ * (`frame.halfBase` fore and aft) and the longitudinal transfer a·h/L (h the class CG height, L the wheelbase) give front load share ½ − h·a/(gL), rear
  * ½ + h·a/(gL); fwd a = μF g (½ − h a/(gL)) → ½ μF / (1 + μF h/L); rwd ½ μR / (1 − μR h/L); awd (open centre, equal torque) 2 × the weaker
  * axle's limit; 4wd (locked) the axles' limits add with the transfer moving load from front to rear: ½ (μF + μR) / (1 + (h/L)(μF − μR)).
  */
-function tractionG(k: ClassStats, f: number, r: number): number {
-  const h = k.cgHeight / (2 * WHEEL_POS[0]![2]);
+function tractionG(frame: Axles, k: ClassStats, f: number, r: number): number {
+  const h = k.cgHeight / (2 * frame.halfBase);
   return k.drive === "fwd" ? (0.5 * f) / (1 + f * h) : k.drive === "rwd" ? (0.5 * r) / (1 - r * h) : k.drive === "awd" ? Math.min(f / (1 + 2 * f * h), r / (1 - 2 * r * h)) : (0.5 * (f + r)) / (1 + h * (f - r));
 }
 
@@ -488,9 +505,9 @@ function tractionG(k: ClassStats, f: number, r: number): number {
  * `MU_TYRE`) gives the layout there against dry asphalt, so a front-driven car loses more of its launch on a loose surface than a rear-driven
  * one and a locked 4wd the least.
  */
-export function tractionLimit(k: ClassStats, muF: number, muR: number, realism: number): number {
+export function tractionLimit(frame: Axles, k: ClassStats, muF: number, muR: number, realism: number): number {
   const arcade = k.launch[0] * (k.drive === "fwd" ? muF : k.drive === "rwd" ? muR : k.drive === "awd" ? Math.min(muF, muR) : 0.5 * (muF + muR));
-  const real = (k.launch[1] * tractionG(k, muF * MU_TYRE, muR * MU_TYRE)) / tractionG(k, MU_TYRE, MU_TYRE);
+  const real = (k.launch[1] * tractionG(frame, k, muF * MU_TYRE, muR * MU_TYRE)) / tractionG(frame, k, MU_TYRE, MU_TYRE);
   return arcade + (real - arcade) * realism;
 }
 
@@ -499,9 +516,13 @@ export function tractionLimit(k: ClassStats, muF: number, muR: number, realism: 
 type Dressable = {
   readonly group: THREE.Group;
   readonly wheels: readonly THREE.Object3D[];
-  /** Lamp seats ride the lift like the body they sit on (bare objects, not children of the group). */
+  /** Lamp seats and the drawn-only lamp fittings ride the lift like the body they sit on (bare objects, not children of the group); a lid's lamps ride the lid. */
   readonly lamps: readonly { readonly seat: THREE.Object3D }[];
+  readonly lampFittings: readonly { readonly seat: THREE.Object3D; readonly anchor: object | null }[];
+  /** A lifted truck's axles ride the hubs with the wheels. */
+  readonly underbody: { readonly axles: readonly THREE.Object3D[] } | null;
   readonly style: { id: CarStyleId };
+  readonly frame: Axles;
 };
 
 
@@ -525,15 +546,16 @@ export function assignClass(car: Dressable, id: VehicleClassId): void {
     hubs.name = CLASS_HUBS;
     g.add(body, hubs);
   }
-  const wheelLift = WHEEL_RADIUS * (s.wheelScale - 1);
+  const wheelLift = car.frame.rig.tyre.r * (s.wheelScale - 1);
   body.position.y = s.lift;
   hubs!.position.y = wheelLift;
   for (let i = g.children.length - 1; i >= 0; i--) {
     const c = g.children[i]!;
     if (c === body || c === hubs) continue;
-    if (car.wheels.includes(c)) hubs!.add(c);
+    if (car.wheels.includes(c) || car.underbody?.axles.includes(c)) hubs!.add(c);
     else body.add(c);
   }
   for (const w of car.wheels) w.scale.setScalar(s.wheelScale);
   for (const lamp of car.lamps) lamp.seat.parent = body;
+  for (const f of car.lampFittings) if (f.anchor) f.seat.parent = body;
 }

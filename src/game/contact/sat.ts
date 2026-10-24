@@ -1,11 +1,13 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { SAMPLE, sampleAt, type CageFields, type CageStyle } from "../vehicle/car-cage.ts";
-import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
+import { cageLift } from "../vehicle/car-cage-rig.ts";
+import { PLATFORM_HALF } from "../vehicle/car-rig.ts";
 import { hypot2 } from "../deform/physics-util.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { OUTLINE_REACH, outlineOf, VERTICAL_CLEAR, type CageOutline } from "./cage-outline.ts";
+import { activeGround } from "../world/ground.ts";
 
 export const BARRIER_HALF = { x: 0.38, z: 1.96 };
 /** The slab's top (m): `makeJerseyBarrier`'s profile peak. A car whose every mass clears it flies over (a ramp jump). */
@@ -34,6 +36,17 @@ export function sliceSpeed(cars: readonly DeformableCar[]): number {
   return vmax;
 }
 
+/**
+ * The clip's keeps on the platform (m from the car's origin): its nose (2.05) and its cabin's side (1.08), each carried by this car's
+ * own box over the platform's (`PLATFORM_HALF`). On the platform's alone, a shorter coupe sliding sideways at 24 m/s was clipped to a
+ * stop 2 cm short of the slab, its body never touching it and no hit armed (`strikeCar`).
+ */
+const NOSE_KEEP = 2.05;
+const CABIN_KEEP = 1.08;
+
+/** A lifted car whose origin stands this close (m) to the ground under it is on its wheels: its frame, axles and wheels, which the cage does not draw, reach from its body down to that ground. */
+const STANDS_WITHIN = 0.3;
+
 /** Keep the cabin from crossing the jersey face. leftover=1 → bumper still on the face. */
 export function clipCarToBarrier(
   car: DeformableCar,
@@ -49,9 +62,9 @@ export function clipCarToBarrier(
   const pz = car.group.position.z - origin.z;
   const lx = px * _bRight.x + pz * _bRight.z;
   const lz = px * _bFwd.x + pz * _bFwd.z;
-  const alongFwd = Math.abs(car.fwdFlat.x * _bRight.x + car.fwdFlat.z * _bRight.z) * 2.05;
+  const alongFwd = Math.abs(car.fwdFlat.x * _bRight.x + car.fwdFlat.z * _bRight.z) * (NOSE_KEEP + (car.frame.half.z - PLATFORM_HALF.z));
   const bumperKeep = hx + 0.22 + alongFwd * 0.85 * leftover;
-  const cabinKeep = hx + 1.08;
+  const cabinKeep = hx + CABIN_KEEP + (car.frame.half.x - PLATFORM_HALF.x);
   const minLx = THREE.MathUtils.lerp(cabinKeep, bumperKeep, leftover);
   if (Math.abs(lz) > BARRIER_HALF.z + 1.1) return false;
   // Face from position — a rebound vel flip must not drag the car through the slab.
@@ -76,7 +89,8 @@ export function clipCarToBarrier(
 
 /**
  * Per direction of `deepestIn`, sums over the overlap patch, each node weighted by its depth: the weight, the place in the world (x, z,
- * then height), and the container's outline normal (x, z) in its frame there.
+ * then height), and the container's outline normal (x, z) in its frame there; then the deepest node's depth and the second moments of
+ * (x, z) about the origin (xx, zz, xz), from which `satCars` reads the patch's width.
  */
 const F_W = 0;
 const F_X = 1;
@@ -85,9 +99,18 @@ const F_Y = 3;
 const F_NX = 4;
 const F_NZ = 5;
 const F_BEST = 6;
-const _inA = new Float64Array(7);
-const _inB = new Float64Array(7);
+const F_XX = 7;
+const F_ZZ = 8;
+const F_XZ = 9;
+const _inA = new Float64Array(10);
+const _inB = new Float64Array(10);
 const _grad = new Float64Array(2);
+
+/** The last `satCars` overlap's half width (m) along the contact's tangent, both cars' nodes together (reused): a broad flat contact is not a point, and the crush it feeds spreads over it (`feedOverlap`). */
+export const patch = { half: 0 };
+
+/** A uniform strip's half width in standard deviations of its length (√3). */
+const STRIP_HALF_PER_SIGMA = Math.sqrt(3);
 
 /** `a`'s frame into `b`'s, both full poses (`frameInto`): per axis of `b` (x, y, z), its offset and its x, y, z coefficients on a point of `a`'s. */
 const _ab = new Float64Array(12);
@@ -114,7 +137,7 @@ function frameInto(ea: readonly number[], eb: readonly number[]): void {
  * places: its frame x and z, the height up `a` it stands at, its band's low and high up `b`, how far short of the box and plan it may
  * be, the height up `b` of its frame's zero height, and the height up `b` `meetAt` places it at.
  */
-const _in = new Float64Array(16);
+const _in = new Float64Array(18);
 const I_LOW = 4;
 const I_HIGH = 5;
 const I_REACH = 6;
@@ -127,8 +150,10 @@ const I_A_HIGH = 12;
 const I_MARGIN = 13;
 const I_YC = 14;
 const I_AT = 15;
-/** What the last `meet` found: the node's depth in `b`'s plan, its place (x, z) in `b`'s frame, the heights the two bodies share there in `b`'s frame (the node's own where `b` has no band), whether `b` has one there (1), and the heights `b` stands at there. */
-const _meet = new Float64Array(8);
+const I_HANG = 16;
+const I_ROLLED = 17;
+/** What the last `meet` found: the node's depth in `b`'s plan, its place (x, z) in `b`'s frame, the heights the two bodies share there in `b`'s frame (the node's own where `b` has no band), whether `b` has one there (1), the heights `b` stands at there, and whether those are its own column's (1) or its band's. */
+const _meet = new Float64Array(9);
 const M_DEPTH = 0;
 const M_X = 1;
 const M_Z = 2;
@@ -137,10 +162,59 @@ const M_HIGH = 4;
 const M_BANDED = 5;
 const M_STAND_LOW = 6;
 const M_STAND_HIGH = 7;
+const M_COLUMN = 8;
 /** `_meet` of the end of a slanted band `deepestIn` placed first, while it places the other. */
-const _deeper = new Float64Array(8);
+const _deeper = new Float64Array(9);
+/** `_meet` of an end first placed past its cell's column, while `endAt` places it again at that column's end. */
+const _again = new Float64Array(9);
 /** How far (m) inside the heights two bands share their ends are sampled: on an end itself, whether the cell it lands in holds it is rounding. */
 const BAND_INSET = VERTICAL_CLEAR / 4;
+/** An end's own cell's end this close (m) to where the end was placed is the same place: no second placement. */
+const END_MOVED = 1e-4;
+/** A rolled car's slanted column crosses its container's top cell after cell: each re-placement at the landing cell's end walks one cell on, and this many reach the crossing. */
+const ROLLED_CLIMBS = 6;
+/** The pair's relative tilt (its ups' dot) below which the SAT reads every node's own column, not the outline's stretched bands: 30°, past the 27° of the owner's pitched clip, which stays on the outline, and well short of the tilts (44° and over) where the outline's band reads a slanted column's graze of the other's top as a contact up to 0.75 m deep. */
+export const ROLLED_UP_Y = detCos((30 * Math.PI) / 180);
+/** A rolled car's column lies near flat, so an end's inset in height moves it by its tangent in plan (a 1.25 cm inset at 75° is 4.7 cm of depth): the inset shrinks to what rounding of the cell's own column needs. */
+const ROLLED_INSET = BAND_INSET / 8;
+/** A rolled node's column as a segment in `b`'s frame (start and end per axis: x, y, z), and the box it must cross (low and high per axis). */
+const _seg = new Float64Array(6);
+const _lim = new Float64Array(6);
+/** A height (m) no body reaches: a lifted container that stands on its wheels has cars pass under it, so no height is out of its reach. */
+const ANY_HEIGHT = 1e3;
+/** The part of `_seg` that `segmentMisses` left inside the box: its first and last parameter. */
+const _clip = new Float64Array(2);
+/** What the rows' envelope (`CageOutline.rowLows`, kept in 32 bits) may round by (m). */
+const ROW_SLACK = 1e-5;
+
+/** Whether the segment in `_seg` stays out of the box in `_lim`: its parameter range clipped by each axis's slab is empty. */
+function segmentMisses(): boolean {
+  let t0 = 0;
+  let t1 = 1;
+  for (let axis = 0; axis < 6; axis += 2) {
+    const from = _seg[axis]!;
+    const step = _seg[axis + 1]! - from;
+    const lo = _lim[axis]!;
+    const hi = _lim[axis + 1]!;
+    if (step === 0) {
+      if (from < lo || from > hi) return true;
+      continue;
+    }
+    let enter = (lo - from) / step;
+    let leave = (hi - from) / step;
+    if (enter > leave) {
+      const swap = enter;
+      enter = leave;
+      leave = swap;
+    }
+    if (enter > t0) t0 = enter;
+    if (leave < t1) t1 = leave;
+    if (t0 > t1) return true;
+  }
+  _clip[0] = t0;
+  _clip[1] = t1;
+  return false;
+}
 
 /**
  * Whether every node of `outline` at a height in `a`'s range, placed in `b`'s frame by `_ab`, misses `b`'s box. A node's own sum adds
@@ -185,13 +259,18 @@ function meet(plan: Float32Array, style: CageStyle, outlineB: CageOutline, field
   const i = Math.round((bx - style.u0) / style.step) | 0;
   const j = Math.round((bz - style.v0) / style.step) | 0;
   outlineB.band(i, j, _band);
-  const banded = _band[0]! <= _band[1]!;
   const lift = _in[I_LIFT_B]!;
+  // A node of a car standing wholly under the heights of a lifted body that stands on its wheels meets it at its own heights.
+  const bridged = _in[I_HANG]! > 0 && _in[I_A_HIGH]! >= 0 && _band[0]! + lift > _in[I_A_HIGH]!;
+  const banded = _band[0]! <= _band[1]! && !bridged;
   _meet[M_BANDED] = banded ? 1 : 0;
-  _meet[M_LOW] = banded ? Math.max(_in[I_A_LOW]!, _band[0]! + lift) : _in[I_A_LOW]!;
-  _meet[M_HIGH] = banded ? Math.min(_in[I_A_HIGH]!, _band[1]! + lift) : _in[I_A_HIGH]!;
   const k = j * style.nu + i;
   const column = i >= 0 && j >= 0 && i < style.nu && j < style.nv && fields.covered[k] !== 0 && fields.top[k]! - fields.bottom[k]! > VERTICAL_CLEAR;
+  // A rolled car's node has a column of its own to share heights with, so it shares with `b`'s own column where `b` has one, not with the band stretched around it.
+  const own = column && _in[I_ROLLED]! > 0;
+  _meet[M_LOW] = banded ? Math.max(_in[I_A_LOW]!, (own ? fields.bottom[k]! : _band[0]!) + lift) : _in[I_A_LOW]!;
+  _meet[M_HIGH] = banded ? Math.min(_in[I_A_HIGH]!, (own ? fields.top[k]! : _band[1]!) + lift) : _in[I_A_HIGH]!;
+  _meet[M_COLUMN] = column ? 1 : 0;
   _meet[M_STAND_LOW] = column ? fields.bottom[k]! + lift : banded ? _band[0]! + lift : _in[I_A_LOW]!;
   _meet[M_STAND_HIGH] = column ? fields.top[k]! + lift : banded ? _band[1]! + lift : _in[I_A_HIGH]!;
 }
@@ -200,29 +279,116 @@ function meet(plan: Float32Array, style: CageStyle, outlineB: CageOutline, field
 function meetAt(plan: Float32Array, style: CageStyle, outlineB: CageOutline, fields: CageFields): void {
   const at = _in[I_AT]!;
   _in[I_Y] = (at - _in[I_YC]!) / _ab[6]!;
+  if (_in[I_ROLLED]! > 0 && _in[I_HANG]! === 0) {
+    // A rolled placement past the end of the own column of the covered cell it lands in reads -Infinity there, and leaves that column for a re-placement: its plan depth and band need not be read.
+    const bx = _ab[0]! + _ab[1]! * _in[I_X]! + _ab[2]! * _in[I_Y]! + _ab[3]! * _in[I_Z]!;
+    const bz = _ab[8]! + _ab[9]! * _in[I_X]! + _ab[10]! * _in[I_Y]! + _ab[11]! * _in[I_Z]!;
+    const i = Math.round((bx - style.u0) / style.step) | 0;
+    const j = Math.round((bz - style.v0) / style.step) | 0;
+    if (i >= 0 && j >= 0 && i < style.nu && j < style.nv) {
+      const k = j * style.nu + i;
+      const lift = _in[I_LIFT_B]!;
+      if (fields.covered[k] !== 0 && fields.top[k]! - fields.bottom[k]! > VERTICAL_CLEAR && (at < fields.bottom[k]! + lift || at > fields.top[k]! + lift)) {
+        _meet[M_DEPTH] = -Infinity;
+        _meet[M_X] = bx;
+        _meet[M_Z] = bz;
+        _meet[M_COLUMN] = 1;
+        _meet[M_STAND_LOW] = fields.bottom[k]! + lift;
+        _meet[M_STAND_HIGH] = fields.top[k]! + lift;
+        return;
+      }
+    }
+  }
   meet(plan, style, outlineB, fields);
   if (_meet[M_BANDED] === 1 && (_meet[M_HIGH]! - _meet[M_LOW]! <= VERTICAL_CLEAR || at < _meet[M_STAND_LOW]! || at > _meet[M_STAND_HIGH]!)) _meet[M_DEPTH] = -Infinity;
 }
 
 /**
  * `_meet` ← the deeper of the node in `_in` placed at either end (`BAND_INSET` inside) of the heights where its band and `b`'s body
- * meet where `meet` last placed it: `b`'s standing heights there, or the bands' shared heights where those leave too little.
+ * meet where `meet` last placed it: `b`'s standing heights there, or the bands' shared heights where those leave too little. A rolled
+ * car's node is placed at the ends of its own column too: its middle's cell bounds the first ends, and its column's end can stand in a
+ * cell further in.
  */
 function deeperEnd(plan: Float32Array, style: CageStyle, outlineB: CageOutline, fields: CageFields): void {
+  const rolled = _in[I_ROLLED]! > 0;
+  const inset = rolled ? ROLLED_INSET : BAND_INSET;
   let low = Math.max(_in[I_A_LOW]!, _meet[M_STAND_LOW]!);
   let high = Math.min(_in[I_A_HIGH]!, _meet[M_STAND_HIGH]!);
-  if (high - low <= 2 * BAND_INSET) {
+  if (high - low <= 2 * inset) {
     low = _meet[M_LOW]!;
     high = _meet[M_HIGH]!;
   }
-  if (high - low <= 2 * BAND_INSET) return;
+  const ends = high - low > 2 * inset;
+  if (!ends && !rolled) return;
   _in[I_MARGIN] = 0;
-  _in[I_AT] = low + BAND_INSET;
+  if (ends) {
+    endAt(low + inset, -1, plan, style, outlineB, fields);
+    _deeper.set(_meet);
+    endAt(high - inset, 1, plan, style, outlineB, fields);
+    if (_deeper[M_DEPTH]! > _meet[M_DEPTH]!) _meet.set(_deeper);
+  }
+  if (!rolled) return;
+  const aLow = _in[I_A_LOW]!;
+  const aHigh = _in[I_A_HIGH]!;
+  if (aHigh - aLow <= 2 * inset) return;
+  if (!ends || Math.abs(aLow - low) > END_MOVED) {
+    _deeper.set(_meet);
+    endAt(aLow + inset, -1, plan, style, outlineB, fields);
+    if (_deeper[M_DEPTH]! > _meet[M_DEPTH]!) _meet.set(_deeper);
+  }
+  if (!ends || Math.abs(aHigh - high) > END_MOVED) {
+    _deeper.set(_meet);
+    endAt(aHigh - inset, 1, plan, style, outlineB, fields);
+    if (_deeper[M_DEPTH]! > _meet[M_DEPTH]!) _meet.set(_deeper);
+  }
+}
+
+/**
+ * `_meet` ← the node in `_in` placed `at` up `b` (`meetAt`); when that lands it in a cell whose own column stands short of `at` along
+ * `dir` (+1 up, -1 down), placed again at that column's end (`BAND_INSET` inside, within its own band), the deeper of the two. The
+ * middle's cell bounds the first placement, and a slanted band's end lands in another: a cop's hood under a 27° monster's tail stood
+ * 1.7 cm lower in the end's cell than in the middle's, the end placed under the middle's top stood over it, and the pair read 0.10 m
+ * shallow (0.408 m against the cages' 0.512). A band's heights (an outline's sliver, `meet`) are no column to place an end at. Only where
+ * the end's column shares more than the two insets of the node's own band (as `deeperEnd` asks of the middle's): a raised monster
+ * tail's band (1.044-1.653 m) over a cop's column topped at 1.042 m was placed at 1.029, under its own bottom, and read 0.30-0.80 m deep
+ * where the cages stand apart (1 m up, 3.3 m back).
+ */
+function endAt(at: number, dir: number, plan: Float32Array, style: CageStyle, outlineB: CageOutline, fields: CageFields): void {
+  const rolled = _in[I_ROLLED]! > 0;
+  const inset = rolled ? ROLLED_INSET : BAND_INSET;
+  // A placement that misses the plan leaves the last cell's column in `_meet`: clear it, so a climb never reads one it did not land in.
+  if (rolled) _meet[M_COLUMN] = 0;
+  _in[I_AT] = at;
   meetAt(plan, style, outlineB, fields);
-  _deeper.set(_meet);
-  _in[I_AT] = high - BAND_INSET;
-  meetAt(plan, style, outlineB, fields);
-  if (_deeper[M_DEPTH]! > _meet[M_DEPTH]!) _meet.set(_deeper);
+  let here = at;
+  let replaced = false;
+  for (let step = 0, steps = rolled ? ROLLED_CLIMBS : 1; step < steps; step++) {
+    const stand = dir > 0 ? _meet[M_STAND_HIGH]! : _meet[M_STAND_LOW]!;
+    if (_meet[M_COLUMN] !== 1 || (!rolled && !((here - stand) * dir > 0))) break;
+    const low = Math.max(_in[I_A_LOW]!, _meet[M_STAND_LOW]!);
+    const high = Math.min(_in[I_A_HIGH]!, _meet[M_STAND_HIGH]!);
+    if (high - low <= 2 * inset) break;
+    const end = dir > 0 ? high - inset : low + inset;
+    const back = (here - end) * dir;
+    if (rolled ? Math.abs(back) <= END_MOVED : back <= END_MOVED) break;
+    if (!replaced) _again.set(_meet);
+    replaced = true;
+    here = end;
+    _in[I_AT] = end;
+    if (rolled) _meet[M_COLUMN] = 0;
+    meetAt(plan, style, outlineB, fields);
+    if (!rolled) break;
+    // A climb that no longer deepens a valid reading has reached the crossing.
+    if (_meet[M_DEPTH]! > _again[M_DEPTH]!) _again.set(_meet);
+    else if (_again[M_DEPTH]! > -Infinity) break;
+  }
+  if (replaced && _again[M_DEPTH]! > _meet[M_DEPTH]!) _meet.set(_again);
+}
+
+/** Whether lifted car `b`'s origin stands within `STANDS_WITHIN` of the ground under it. */
+function standsOnWheels(b: DeformableCar): boolean {
+  const e = b.group.matrixWorld.elements;
+  return e[13]! - activeGround().heightAt(e[12]!, e[14]!, e[13]!) <= STANDS_WITHIN;
 }
 
 /**
@@ -238,34 +404,109 @@ function deeperEnd(plan: Float32Array, style: CageStyle, outlineB: CageOutline, 
  */
 function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look: number): void {
   const outline = outlineOf(a);
+  const outlineB = outlineOf(b);
   const style = b.cage.style;
-  const box = b.cage.fields.planBox;
   const reach = OUTLINE_REACH + look;
-  const liftA = CLASSES[carClass(a)].lift;
-  _in[0] = box[0]! - reach;
-  _in[1] = box[1]! + reach;
-  _in[2] = box[2]! - reach;
-  _in[3] = box[3]! + reach;
+  const liftA = cageLift(a);
+  // The field's zero stands OUTLINE_REACH out from the outermost outline node, which the drawn triangles' box does not reach: a node there reads a depth at once, not one that grows from nothing.
+  const bound = OUTLINE_REACH + reach;
+  _in[0] = outlineB.xLo - bound;
+  _in[1] = outlineB.xHi + bound;
+  _in[2] = outlineB.zLo - bound;
+  _in[3] = outlineB.zHi + bound;
   _in[I_LOW] = outline.low + liftA;
   _in[I_HIGH] = outline.high + liftA;
   _in[I_REACH] = reach;
-  _in[I_LIFT_B] = CLASSES[carClass(b)].lift;
+  _in[I_HANG] = standsOnWheels(b) ? cageLift(b) : 0;
+  _in[I_LIFT_B] = cageLift(b);
   const eb = b.group.matrixWorld.elements;
   frameInto(a.group.matrixWorld.elements, eb);
   found.fill(0);
   if (boxMissed(outline)) return;
-  const outlineB = outlineOf(b);
   const plan = b.cage.planField();
   const fields = b.cage.fields;
   const ty = _ab[4]!, kyx = _ab[5]!, kyy = _ab[6]!, kyz = _ab[7]!;
   const sweep = Math.abs(_ab[2]!) + Math.abs(_ab[10]!);
+  // The pair's relative tilt, the same read from either car: a column stands slanted across the other's cells once its up is turned this far from the other's.
+  const rolled = Math.abs(kyy) < ROLLED_UP_Y;
+  _in[I_ROLLED] = rolled ? 1 : 0;
+  const styleA = a.cage.style;
+  const fieldsA = a.cage.fields;
   let best = 0;
-  for (let n = 0; n < outline.count; n++) {
-    const yl = outline.lows[n]! + liftA;
-    const yh = outline.highs[n]! + liftA;
-    const yc = ty + kyx * outline.xs[n]! + kyz * outline.zs[n]!;
-    _in[I_X] = outline.xs[n]!;
-    _in[I_Z] = outline.zs[n]!;
+  let count = outline.count;
+  let colFrom = 0;
+  let cols = 1;
+  let rowFrom = 0;
+  _lim[0] = _in[0]!;
+  _lim[1] = _in[1]!;
+  _lim[2] = _in[I_HANG]! > 0 ? -ANY_HEIGHT : outlineB.low + _in[I_LIFT_B]!;
+  _lim[3] = _in[I_HANG]! > 0 ? ANY_HEIGHT : outlineB.high + _in[I_LIFT_B]!;
+  _lim[4] = _in[2]!;
+  _lim[5] = _in[3]!;
+  if (rolled) {
+    // `b`'s box in `a`'s frame: only the lattice nodes under it can have a column that crosses it.
+    let loX = Infinity, hiX = -Infinity, loZ = Infinity, hiZ = -Infinity;
+    for (let corner = 0; corner < 8; corner++) {
+      const dx = _lim[corner & 1]! - _ab[0]!;
+      const dy = _lim[2 + ((corner >> 1) & 1)]! - _ab[4]!;
+      const dz = _lim[4 + (corner >> 2)]! - _ab[8]!;
+      const ax = _ab[1]! * dx + _ab[5]! * dy + _ab[9]! * dz;
+      const az = _ab[3]! * dx + _ab[7]! * dy + _ab[11]! * dz;
+      if (ax < loX) loX = ax;
+      if (ax > hiX) hiX = ax;
+      if (az < loZ) loZ = az;
+      if (az > hiZ) hiZ = az;
+    }
+    colFrom = Math.max(0, Math.floor((loX - styleA.u0) / styleA.step));
+    rowFrom = Math.max(0, Math.floor((loZ - styleA.v0) / styleA.step));
+    cols = Math.max(0, Math.min(styleA.nu - 1, Math.ceil((hiX - styleA.u0) / styleA.step)) - colFrom + 1);
+    count = cols * Math.max(0, Math.min(styleA.nv - 1, Math.ceil((hiZ - styleA.v0) / styleA.step)) - rowFrom + 1);
+  }
+  for (let m = 0; m < count; m++) {
+    let x: number, z: number, yl: number, yh: number;
+    if (rolled) {
+      const i = colFrom + (m % cols);
+      const n = (rowFrom + (m - (m % cols)) / cols) * styleA.nu + i;
+      if (fieldsA.covered[n] === 0) continue;
+      x = styleA.u0 + i * styleA.step;
+      z = styleA.v0 + ((n - i) / styleA.nu) * styleA.step;
+      yl = fieldsA.bottom[n]! + liftA;
+      yh = fieldsA.top[n]! + liftA;
+      // The column is a segment in `b`'s frame: out of `b`'s plan box, or over or under all its heights, no placement of it is in.
+      const bx = _ab[0]! + _ab[1]! * x + _ab[3]! * z;
+      const bz = _ab[8]! + _ab[9]! * x + _ab[11]! * z;
+      const by = ty + kyx * x + kyz * z;
+      _seg[0] = bx + _ab[2]! * yl;
+      _seg[1] = bx + _ab[2]! * yh;
+      _seg[2] = by + kyy * yl;
+      _seg[3] = by + kyy * yh;
+      _seg[4] = bz + _ab[10]! * yl;
+      _seg[5] = bz + _ab[10]! * yh;
+      if (segmentMisses()) continue;
+      if (_in[I_HANG]! === 0) {
+        // The part of the column inside the box, over or under every cell of the rows of `b` it spans: no placement of it is in a column.
+        const dz = _seg[5]! - _seg[4]!;
+        const dy = _seg[3]! - _seg[2]!;
+        const zA = _seg[4]! + _clip[0]! * dz, zB = _seg[4]! + _clip[1]! * dz;
+        const yA = _seg[2]! + _clip[0]! * dy, yB = _seg[2]! + _clip[1]! * dy;
+        const rFrom = Math.max(0, Math.round((Math.min(zA, zB) - style.v0) / style.step) - 1);
+        const rTo = Math.min(style.nv - 1, Math.round((Math.max(zA, zB) - style.v0) / style.step) + 1);
+        let under = Infinity, over = -Infinity;
+        for (let r = rFrom; r <= rTo; r++) {
+          if (outlineB.rowLows[r]! < under) under = outlineB.rowLows[r]!;
+          if (outlineB.rowHighs[r]! > over) over = outlineB.rowHighs[r]!;
+        }
+        if (Math.min(yA, yB) > over + _in[I_LIFT_B]! + ROW_SLACK || Math.max(yA, yB) < under + _in[I_LIFT_B]! - ROW_SLACK) continue;
+      }
+    } else {
+      x = outline.xs[m]!;
+      z = outline.zs[m]!;
+      yl = outline.lows[m]! + liftA;
+      yh = outline.highs[m]! + liftA;
+    }
+    const yc = ty + kyx * x + kyz * z;
+    _in[I_X] = x;
+    _in[I_Z] = z;
     _in[I_Y] = (yl + yh) * 0.5;
     _in[I_A_LOW] = Math.min(yc + kyy * yl, yc + kyy * yh);
     _in[I_A_HIGH] = Math.max(yc + kyy * yl, yc + kyy * yh);
@@ -274,7 +515,8 @@ function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look
     _in[I_MARGIN] = slant;
     meet(plan, style, outlineB, fields);
     if (!(_meet[M_DEPTH]! > -slant)) continue;
-    if (slant > 0 && Math.abs(kyy) > 1e-6 && _meet[M_BANDED] === 1) {
+    // A rolled node's ends read no deeper than its middle does plus the slant: those that cannot pass the deepest so far are left at the middle.
+    if (slant > 0 && Math.abs(kyy) > 1e-6 && _meet[M_BANDED] === 1 && !(rolled && _meet[M_DEPTH]! + slant <= best)) {
       _in[I_YC] = yc;
       deeperEnd(plan, style, outlineB, fields);
     }
@@ -295,12 +537,17 @@ function addToPatch(found: Float64Array, eb: readonly number[], plan: Float32Arr
   SAMPLE[0] = bx;
   SAMPLE[1] = bz;
   outlineNormal(plan, style);
+  const wx = eb[12]! + eb[0]! * bx + eb[4]! * by + eb[8]! * bz;
+  const wz = eb[14]! + eb[2]! * bx + eb[6]! * by + eb[10]! * bz;
   found[F_W] += depth;
-  found[F_X] += depth * (eb[12]! + eb[0]! * bx + eb[4]! * by + eb[8]! * bz);
-  found[F_Z] += depth * (eb[14]! + eb[2]! * bx + eb[6]! * by + eb[10]! * bz);
+  found[F_X] += depth * wx;
+  found[F_Z] += depth * wz;
   found[F_Y] += depth * (eb[13]! + eb[1]! * bx + eb[5]! * by + eb[9]! * bz);
   found[F_NX] += depth * _grad[0]!;
   found[F_NZ] += depth * _grad[1]!;
+  found[F_XX] += depth * wx * wx;
+  found[F_ZZ] += depth * wz * wz;
+  found[F_XZ] += depth * wx * wz;
 }
 
 /** `_grad` ← the unit direction in which `plan` (a cage's plan distance field) grows fastest at frame (x, z): out of the outline; zero where it has none. */
@@ -333,7 +580,8 @@ function outlineNormal(plan: Float32Array, style: CageStyle): void {
  * Returns the depth (m) of the deeper side, negative for the gap while only within `look`, or null. The contact is the overlap patch
  * itself, both ways: `contactOut` is the depth-weighted centre of every covered outline node of either cage (the point the contact's
  * pressure acts at), `normalOut` the depth-weighted mean of the outline normals there, pointing b → a (turned to the side of the
- * centres where the two cross). Neither car's list order nor one corner node picks them. The cages are as of the last slice's sync.
+ * centres where the two cross). Neither car's list order nor one corner node picks them. `patch.half` is the patch's half width along the
+ * contact's tangent. The cages are as of the last slice's sync.
  */
 export function satCars(a: DeformableCar, b: DeformableCar, normalOut: THREE.Vector3, contactOut: THREE.Vector3, look = 0): number | null {
   const pa = a.group.position;
@@ -383,8 +631,14 @@ export function satCars(a: DeformableCar, b: DeformableCar, normalOut: THREE.Vec
   normalOut.x = nx;
   normalOut.y = 0;
   normalOut.z = nz;
-  contactOut.x = (_inA[F_X]! + _inB[F_X]!) / w;
+  const cx = (_inA[F_X]! + _inB[F_X]!) / w;
+  const cz = (_inA[F_Z]! + _inB[F_Z]!) / w;
+  contactOut.x = cx;
   contactOut.y = (_inA[F_Y]! + _inB[F_Y]!) / w;
-  contactOut.z = (_inA[F_Z]! + _inB[F_Z]!) / w;
+  contactOut.z = cz;
+  const vxx = (_inA[F_XX]! + _inB[F_XX]!) / w - cx * cx;
+  const vzz = (_inA[F_ZZ]! + _inB[F_ZZ]!) / w - cz * cz;
+  const vxz = (_inA[F_XZ]! + _inB[F_XZ]!) / w - cx * cz;
+  patch.half = STRIP_HALF_PER_SIGMA * Math.sqrt(Math.max(0, nz * nz * vxx - 2 * nx * nz * vxz + nx * nx * vzz));
   return Math.max(depthA, depthB) - look;
 }

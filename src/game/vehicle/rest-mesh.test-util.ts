@@ -14,7 +14,7 @@ export function restSideProfile(
   doorHole: number;
 } {
   const s = sampleSlice(z, style.profile);
-  const doorHole = doorAperture(z);
+  const doorHole = doorAperture(z, style);
   return {
     hw: s.hw,
     yBelt: s.yBelt,

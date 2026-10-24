@@ -1,0 +1,180 @@
+import type { BodyStyle } from "../car-variants.ts";
+import { PLATFORM_HARDPOINTS, pullHandle, st } from "./platform.ts";
+import { TOW_MIRROR, TRUCK_ROOF_ENDS, TRUCK_ROOF_SECTION } from "./pickup.ts";
+
+/** The crew cab's slim front and rear door pulls, 15 x 4 cm. */
+const DOOR_PULLS = [pullHandle(0.055, -0.095, 0.838, 0.04), pullHandle(-0.47, -0.62, 0.834, 0.04)];
+
+/** The side reference's tow mirror: a rounded black head 14 cm tall, its top within 1 cm of the reference's, on a 4.5 cm arm reaching 4 cm under it. */
+const MONSTER_MIRROR = { ...TOW_MIRROR, cap: "rounded", size: [0.07, 0.14, 0.125], lift: 0.035, neck: 0.04, stalk: 0.045 } as const;
+
+const { bumpers } = PLATFORM_HARDPOINTS;
+/** Black steel bar bumper, 28 cm tall with a flat face 9 cm proud ([y, out] m, top to bottom). */
+const MONSTER_BUMPER_FASCIA = [
+  [0.14, -0.07],
+  [0.14, 0.03],
+  [0.13, 0.08],
+  [0.06, 0.09],
+  [-0.08, 0.09],
+  [-0.13, 0.08],
+  [-0.14, 0.03],
+  [-0.14, -0.07],
+] as const;
+
+/** Monster's own lamps and bumper lamps, read off its reference isos and side/top crops. */
+const MONSTER_LAMP_SHAPES = {
+  head: {
+    loops: [{ points: [[0.445, 0.595], [0.655, 0.595], [0.655, 0.785], [0.445, 0.785]] }],
+    lens: "lit",
+    bezel: "black",
+    recess: 0.02,
+    cells: [
+      { loop: { points: [[0.665, 0.605], [0.735, 0.605], [0.735, 0.775], [0.665, 0.775]] }, tone: "amber" },
+      { loop: { side: true, points: [[2.08, 0.605], [2.01, 0.605], [2.01, 0.775], [2.08, 0.775]] }, tone: "amber" },
+    ],
+  },
+  tail: {
+    loops: [
+      // The amber cell (y .71-.836) stands in its own window: the red lens runs under and over it, not beneath it (a cell over the lens z-fought it 1.5 mm apart).
+      { points: [[0.68, 0.62], [0.78, 0.62], [0.78, 0.71], [0.68, 0.71]] },
+      { points: [[0.68, 0.836], [0.78, 0.836], [0.78, 0.98], [0.68, 0.98]] },
+      { side: true, points: [[-2.295, 0.62], [-2.255, 0.62], [-2.255, 0.98], [-2.295, 0.98]] },
+    ],
+    lens: "lit",
+    bezel: "black",
+    recess: 0.01,
+    cells: [{ loop: { points: [[0.68, 0.71], [0.78, 0.71], [0.78, 0.836], [0.68, 0.836]] }, tone: "amber" }],
+  },
+  front: {
+    loops: [{ points: [[0.51, 0.365], [0.59, 0.365], [0.59, 0.435], [0.51, 0.435]] }],
+    lens: "clear",
+    bezel: "black",
+  },
+  rear: {
+    loops: [{ points: [[0.615, 0.37], [0.685, 0.37], [0.685, 0.43], [0.615, 0.43]] }],
+    lens: "amber",
+  },
+} as const;
+
+/** The side plate's windshield edge stands .80 back at y 1.19 and .55 at 1.40: its base 2 cm over the hood's crown, 6 cm further forward. */
+const MONSTER_WINDSHIELD: BodyStyle["windshield"] = { base: [1.05, 0.98], wBase: 1.46, wTop: 1.3 };
+
+/** The truck family as a crew cab, squatter and longer than the pickup; the monster class lifts it onto its big wheels. */
+export const MONSTER: BodyStyle = {
+  id: "monster",
+  dims: { wheelbase: 2.77, overhang: { front: 0.755, rear: 1.065 }, track: 2.39, width: 1.712, height: 1.511, rideHeight: 0.34, wheel: { radius: 0.355, width: 0.364 } },
+  ...PLATFORM_HARDPOINTS,
+  windshield: MONSTER_WINDSHIELD,
+  belt: { x: 0.8, y: [[0, 1.0]] },
+  rocker: { y: 0.4 },
+  underside: [[-2.4, 0.38], [-2.1, 0.34], [2.1, 0.34]],
+  // The skin's top meets the fender's deck at the hinge cut (`hingeTop`): the door glass starts .60 back at the belt as the side plate's, a sail under the mirror.
+  door: { hingeX: 0.83, hingeY: 0.71, hingeZ: 0.76, length: 0.88, halfHeight: 0.31, hingeTop: 0.99, hingeRun: 0.2, mirrorY: 0.315, mirrorZ: 0.27, mirrorReach: 0.16, mirrorHalfDepth: 0.08, aperture: [-0.11, 0.75], mirror: MONSTER_MIRROR },
+  aPillarFoot: 0.6,
+  aPillarTop: 0.41,
+  // The door glass's front edge knees onto the A-post's rear edge at the mirror head's top, so the post stays an even tube over a small black sail.
+  aPillarKnee: 1.15,
+  // Drawn, its pane's top is the roof dome's width (|x| .617): the cage's 1.3 stands the corners out past the roof's roll.
+  drawn: { windshield: { ...MONSTER_WINDSHIELD, wTop: 1.234 } },
+  blackout: { sail: true },
+  bPillar: { rear: -0.19, front: -0.12 },
+  // The side plate's B-post stands upright between the door glasses, z -.214 to -.128.
+  pillars: { b: { width: [0.086, 0.086], z: [-0.171, -0.171] } },
+  arch: { radius: 0.47, rise: 0.83, lip: { flare: 0.028, width: 0.085, square: true, inset: 0.03 }, wellWall: 0.56 },
+  hood: { z0: 0.94, z1: 2.1, origin: [0.96, 0.92], nose: [0.022, 0.02] },
+  bumpers: {
+    front: { ...bumpers.front, seat: { y: 0.39, z: 2.05 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black" },
+    rear: { ...bumpers.rear, seat: { y: 0.44, z: 2.36 }, span: 0.82, fascia: MONSTER_BUMPER_FASCIA, trim: "black", hitch: true },
+  },
+  profile: [
+    st(-2.3, 0.8, 1.02),
+    st(-1.6, 0.82, 1.03),
+    st(-0.95, 0.82, 1.03),
+    st(-0.8, 0.82, 1.03),
+    st(-0.76, 0.82, 1.0, 1.475, 0.62, 1),
+    st(-0.2, 0.82, 0.99, 1.485, 0.64, 1),
+    st(0.4, 0.815, 0.99, 1.475, 0.62, 1),
+    st(1.0, 0.815, 1.0, 1.02, 0.6, 0.3),
+    st(1.3, 0.815, 0.98),
+    st(1.6, 0.81, 0.95),
+    st(1.9, 0.8, 0.9),
+    st(2.1, 0.78, 0.8),
+  ],
+  roofZ: [-0.7, 0.45],
+  roofEnds: TRUCK_ROOF_ENDS,
+  // A flatter crown and a tighter edge roll, as the top plate's flat roof panel runs to 5 cm inside the edge.
+  roofSection: { ...TRUCK_ROOF_SECTION, crown: 0.75, blend: 0.8 },
+  roofDrip: 0,
+  windshieldTop: [1.46, 0.45],
+  rearGlass: { base: [1.02, -0.78], top: [1.45, -0.7], wBase: 1.36, wTop: 1.18 },
+  privacyGlass: { rear: true },
+  quarter: { zRearBot: -0.55, zRearTop: -0.55 },
+  midPillarZ: null,
+  rearBulkhead: { z: -0.79, yTop: 1.03 },
+  tubs: [[-0.76, 0.96, 0.5], [-2.26, -0.82, 0.62]],
+  bayFloor: 0.36,
+  wheelTub: { rise: 0.21, length: 0.82, width: 0.25 },
+  tubWall: 0.04,
+  // Its cage's hood tops stand 0.90-1.04 m and its bed rim 1.02 m, its roof from 1.38 m: the cabin starts 8 cm over the highest of them
+  // (as the cars' 1 m stands 9 cm over theirs), so its hood's cowl and its bed rim are columns, not roof slabs.
+  proxyBelt: 1.12,
+  rearDoorSeam: -0.15,
+  // The bed gate drops from its bottom edge, as the pickup's does (unset, it hinged at its top and swung up like a hatch).
+  boot: { kind: "tailgate", y0: 0.45, origin: [1.02, -2.3], pivot: [0.45, -2.3] },
+  // The reference side plate's markers are a deep amber rear (~0xb0581e) and a duller red-amber front (~0xa04a3a): factors on the shared amber 0xff9a1a.
+  lamps: { head: [0.55, 0.69], tail: [0.73, 0.8], shapes: MONSTER_LAMP_SHAPES, bulb: "halogen", sideMarkers: [{ at: [0.788, -2.0], size: [0.085, 0.045], tint: 0xb095ff }, { at: [0.744, 0.814], size: [0.06, 0.032], tint: 0xa07fff }] },
+  // The reference's grille fills the face between its head lamps (inner edges x .445), its top and foot on theirs.
+  grille: { y: 0.69, size: [0.86, 0.19], kind: "bars", count: 4, finish: "black" },
+  underbody: true,
+  camera: { hood: [2.08, 1.27], third: { dist: 7.4, height: 3.0, aimUp: 1.7 }, far: { dist: 11.5, height: 4.3, aimUp: 1.9 } },
+  details: {
+    lines: [
+      { view: "side", points: [[0.72, 0.948], [0.713, 0.406]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.157, 1.404], [-0.164, 0.406]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.713, 1.39], [-0.72, 0.962], [-0.734, 0.406]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "side", points: [[-0.763, 1.005], [-0.77, 0.392]], width: 0.025, depth: -0.006, profile: "v", cavity: 0.95 },
+      { view: "side", points: [[0.713, 0.42], [-0.713, 0.42]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
+      { view: "side", points: [[0.727, 0.948], [-0.741, 0.948]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
+      { view: "side", points: [[0.413, 1.397], [-0.128, 1.397], [-0.128, 0.976], [0.599, 0.976], [0.528, 1.19]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
+      { view: "side", points: [[-0.214, 1.397], [-0.542, 1.397], [-0.542, 0.976], [-0.214, 0.976]], closed: true, width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
+      { view: "side", points: [[0.713, 1.048], [0.399, 1.397]], width: 0.014, depth: 0.002, profile: "u", cavity: 0.1 },
+      { view: "side", points: [[0.67, 1.048], [0.371, 1.383]], width: 0.014, depth: 0.002, profile: "u", cavity: 0.1 },
+      { view: "side", points: [[0.627, 1.062], [0.342, 1.369]], width: 0.014, depth: 0.002, profile: "u", cavity: 0.1 },
+      { view: "side", points: [[0.356, 1.433], [-0.642, 1.433]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
+      { view: "side", points: [[1.012, 1.055], [0.804, 1.19], [0.535, 1.413], [0.413, 1.443]], width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
+      { view: "side", points: [[-0.613, 1.418], [-0.613, 0.976]], width: 0.016, depth: 0.0015, profile: "u", cavity: 0.3 },
+      { view: "side", points: [[0.713, 0.549], [-0.713, 0.549]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
+      { view: "side", points: [[1.761, 0.549], [1.718, 0.648], [1.611, 0.734], [1.433, 0.777], [1.198, 0.777], [1.041, 0.734], [0.955, 0.634], [0.898, 0.506]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
+      { view: "side", points: [[1.64, 0.52], [1.568, 0.634], [1.433, 0.677], [1.162, 0.677], [1.027, 0.634], [0.955, 0.549]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
+      { view: "side", points: [[-0.984, 0.549], [-1.019, 0.634], [-1.112, 0.72], [-1.226, 0.777], [-1.561, 0.784], [-1.711, 0.734], [-1.811, 0.606], [-1.868, 0.485]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
+      { view: "side", points: [[-1.041, 0.534], [-1.098, 0.634], [-1.226, 0.691], [-1.554, 0.696], [-1.725, 0.634], [-1.797, 0.534]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
+      { view: "side", points: [[-0.784, 0.984], [-2.296, 0.984]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
+      { view: "side", points: [[-2.231, 0.962], [-2.231, 0.534]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[0.973, 0], [0.966, 0.722], [2.074, 0.722], [2.074, 0]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "top", points: [[2.103, 0], [1.024, 0]], width: 0.02, depth: 0.0025, profile: "u", cavity: 0 },
+      { view: "top", points: [[2.059, 0.313], [1.563, 0.342], [1.082, 0.372]], width: 0.03, depth: 0.006, profile: "u", cavity: 0.3 },
+      { view: "top", points: [[2.074, 0.386], [1.592, 0.365], [1.111, 0.343]], width: 0.03, depth: 0.006, profile: "u", cavity: 0.3 },
+      { view: "top", points: [[-0.772, 0], [-0.772, 0.576], [0.365, 0.576], [0.365, 0]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
+      { view: "top", points: [[-0.813, 0], [-0.813, 0.838]], width: 0.025, depth: -0.006, profile: "v", cavity: 0.95 },
+      { view: "top", points: [[-2.256, 0], [-2.256, 0.678], [-0.886, 0.678], [-0.886, 0]], width: 0.012, depth: -0.003, profile: "v", cavity: 0.7 },
+      { view: "top", points: [[-0.827, 0.772], [-2.344, 0.772]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
+      { view: "top", points: [[-0.827, 0.758], [-2.344, 0.758]], width: 0.025, depth: 0.002, profile: "u", cavity: 0.1 },
+      { view: "top", points: [[-2.256, 0], [-2.256, 0.751]], width: 0.012, depth: -0.004, profile: "v", cavity: 0.85 },
+      // The bed floor's ribs, 8.75 cm apart as the reference's rear iso reads.
+      ...[0.525, 0.4375, 0.35, 0.2625, 0.175, 0.0875, 0].map((x) => ({ view: "top", points: [[-0.915, x], [-2.242, x]], width: 0.02, depth: 0.003, profile: "u", cavity: 0 }) as const),
+      { view: "front", points: [[0, 0.9], [0.7, 0.9]], width: 0.008, depth: -0.004, profile: "v", cavity: 0.85 },
+      { view: "front", points: [[0, 0.52], [0.82, 0.52]], width: 0.012, depth: 0.002, profile: "u", cavity: 0.1 },
+      ...DOOR_PULLS.flatMap((h) => h.lines),
+    ],
+    patches: [
+      ...DOOR_PULLS.flatMap((h) => h.patches),
+      { view: "side", points: [[0.848, 0.763], [0.78, 0.763], [0.78, 0.724], [0.848, 0.724]], depth: -0.002, rim: 0.003, cavity: 0.3 },
+      { view: "side", points: [[-1.953, 0.814], [-2.045, 0.814], [-2.045, 0.761], [-1.953, 0.761]], depth: -0.002, rim: 0.003, cavity: 0.3 },
+      { view: "front", points: [[0.62, 0.36], [0.72, 0.36], [0.72, 0.42], [0.62, 0.42]], depth: -0.005, rim: 0.003, cavity: 0.5 },
+      { view: "rear", points: [[0, 0.85], [0.11, 0.85], [0.11, 0.91], [0, 0.91]], depth: -0.006, rim: 0.004, cavity: 0.85 },
+      { view: "rear", points: [[0.7, 0.4], [0.78, 0.4], [0.78, 0.46], [0.7, 0.46]], depth: -0.002, rim: 0.003, cavity: 0.3 },
+      { view: "rear", points: [[0, 0.47], [0.32, 0.47], [0.32, 0.52], [0, 0.52]], depth: 0.002, rim: 0.003, cavity: 0.4 },
+    ],
+  },
+  seats: { front: [0.36, 0.64, 0], rear: [0.66, -0.52] },
+};

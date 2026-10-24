@@ -62,8 +62,8 @@ const POST_ROUGHNESS = 0.6;
 const POST_CAP_HEIGHT = 0.25;
 const POST_CAP_OVERHANG = 1.3;
 
-/** The brass plate on each post at a slat without a height plate: depth along the throw, share of the post's width, height (m). */
-const PLATE = { depth: 0.04, widthShare: 0.8, height: 0.3 } as const;
+/** The brass plate on each post at a slat without a height plate: thickness along the throw, share of the post's width, height (m). */
+const PLATE = { thickness: 0.04, widthShare: 0.8, height: 0.3 } as const;
 /** A height plate (m): half the range's 2.6 x 1.3 m distance sign, so a lip-side chase camera about 20 m off reads its number; lifted off the post's face against z-fighting. */
 const HEIGHT_PLATE = { width: 1.3, height: 0.65, lift: 0.02 } as const;
 /** The slats' paint: the major ones (every 50 m) the signs' yellow, the rest plain timber. */
@@ -262,7 +262,7 @@ function heightPlatesMesh(layout: HighJumpLayout): THREE.Mesh {
 function frameTrim(layout: HighJumpLayout): THREE.BufferGeometry[] {
   const net = netExtent(layout);
   const cable = NET_CABLE_THICKNESS * net.scale;
-  const plateX = layout.postsX - POST_THICKNESS / 2 - PLATE.depth / 2;
+  const plateX = layout.postsX - POST_THICKNESS / 2 - PLATE.thickness / 2;
   const cables = [
     boxAt(cable, cable, 2 * net.halfWidth, layout.netX, net.top, 0),
     ...Array.from({ length: Math.ceil(layout.netHeight / NET_CABLE_SPACING) - 1 }, (_, cableIndex) =>
@@ -272,7 +272,7 @@ function frameTrim(layout: HighJumpLayout): THREE.BufferGeometry[] {
   const marked = new Set(layout.signs.map((sign) => sign.heightAboveLip));
   const plates = layout.boards
     .filter((board) => !marked.has(board.heightAboveLip))
-    .flatMap((board) => [-1, 1].map((side) => painted(boxAt(PLATE.depth, PLATE.height, POST_THICKNESS * PLATE.widthShare, plateX, board.y, side * POST_HALF_SPAN), BRASS_COLOR)));
+    .flatMap((board) => [-1, 1].map((side) => painted(boxAt(PLATE.thickness, PLATE.height, POST_THICKNESS * PLATE.widthShare, plateX, board.y, side * POST_HALF_SPAN), BRASS_COLOR)));
   return [...cables, ...plates];
 }
 

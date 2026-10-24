@@ -3,11 +3,11 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { PISTON, PISTON_IDS } from "./piston-rig.ts";
-import { firePiston, pistonLocality, PISTON_DENT_RADIUS, PISTON_FAR, type PistonLocality, type PistonShot, type PistonShotResult } from "./piston-rig.test-util.ts";
+import { doorShell, firePiston, pistonLocality, PISTON_DENT_RADIUS, PISTON_FAR, type PistonLocality, type PistonShot, type PistonShotResult } from "./piston-rig.test-util.ts";
 import { transformSkinPointInto } from "../deform/shape-match.test-util.ts";
 import { REST_SHIFT, type ShapeCluster } from "../deform/shape-match.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { RES_SLOTS, type DeformMode, type MassNode } from "../deform/deform-rig.ts";
+import { RES_SLOTS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_LEVER_STEPS, type DeformMode, type MassNode, type RigTables } from "../deform/deform-rig.ts";
 import { forModes } from "../vehicle/test-support.ts";
 
 /** The deformer internals the reference skin reads (private in production). */
@@ -22,8 +22,9 @@ type Internals = {
   deepCrush: boolean;
   bidirectional: boolean;
   masses: MassNode[];
+  rig: RigTables;
   clusters: ShapeCluster[];
-  cages: { corners: THREE.Vector3[]; restCorners: THREE.Vector3[]; min: THREE.Vector3; size: THREE.Vector3 }[];
+  cages: { spec: { name: string }; corners: THREE.Vector3[]; restCorners: THREE.Vector3[]; min: THREE.Vector3; size: THREE.Vector3 }[];
   cageByPart: Map<string, { corners: THREE.Vector3[]; min: THREE.Vector3; size: THREE.Vector3 }>;
   skinN: Uint8Array;
   skinXf: Int32Array;
@@ -110,7 +111,7 @@ function referenceSkin(d: Internals): Float32Array {
     const rx = d.restPos[i * 3]!;
     const ry = d.restPos[i * 3 + 1]!;
     const rz = d.restPos[i * 3 + 2]!;
-    const ws = Array.from({ length: d.skinN[i]! }, (_, k) => ({ ci: d.skinXf[i * 5 + k]! / 9, w: d.skinW[i * 5 + k]! }));
+    const ws = Array.from({ length: d.skinN[i]! & SKIN_COUNT_MASK }, (_, k) => ({ ci: d.skinXf[i * 5 + k]! / 9, w: d.skinW[i * 5 + k]! }));
     const infs = Array.from({ length: d.infN[i]! }, (_, k) => {
       const s = i * 4 + k;
       return { part: d.infCo[s]! / 24, u: d.infUvw[s * 4]!, v: d.infUvw[s * 4 + 1]!, w: d.infUvw[s * 4 + 2]!, weight: d.infUvw[s * 4 + 3]! };
@@ -121,20 +122,25 @@ function referenceSkin(d: Internals): Float32Array {
     let wsum = 0;
     if (shape && ws.length > 0) {
       const a = anchor(d, i);
-      px = a.x;
-      py = a.y;
-      pz = a.z;
+      let cx = 0,
+        cy = 0,
+        cz = 0;
       for (const inf of ws) {
         const p = transformSkinPointInto(d.clusters[inf.ci]!, rx, ry, rz);
-        px += p.x * inf.w;
-        py += p.y * inf.w;
-        pz += p.z * inf.w;
+        cx += p.x * inf.w;
+        cy += p.y * inf.w;
+        cz += p.z * inf.w;
         const q = transformSkinPointInto(d.clusters[inf.ci]!, a.cx, a.cy, a.cz);
-        px -= q.x * inf.w;
-        py -= q.y * inf.w;
-        pz -= q.z * inf.w;
+        cx -= q.x * inf.w;
+        cy -= q.y * inf.w;
+        cz -= q.z * inf.w;
         wsum += inf.w;
       }
+      // The clusters' maps carry the point only as far as its lever share; the rest of its offset from its parents' centroid goes with the parents alone.
+      const lever = (d.skinN[i]! >> SKIN_COUNT_BITS) / SKIN_LEVER_STEPS;
+      px = a.x + lever * cx + (1 - lever) * (rx - a.cx);
+      py = a.y + lever * cy + (1 - lever) * (ry - a.cy);
+      pz = a.z + lever * cz + (1 - lever) * (rz - a.cz);
     }
     if (!shape || wsum < 1e-8) {
       for (const inf of infs) {
@@ -173,11 +179,11 @@ function referenceSkin(d: Internals): Float32Array {
       py = ry + (py - ry) * t;
       pz = rz + (pz - rz) * t;
     }
-    if (ry > 1.05 && !d.deepCrush) py = THREE.MathUtils.clamp(py, ry - 0.1, ry + 0.08);
-    if (ry < 0.55) {
+    if (ry > d.rig.roofClampY && !d.deepCrush) py = THREE.MathUtils.clamp(py, ry - 0.1, ry + 0.08);
+    if (ry < d.rig.archTop) {
       for (const m of d.masses) {
         if (!m.hub) continue;
-        if (Math.hypot(rx - m.rest.x, rz - m.rest.z) > 0.4) continue;
+        if (Math.hypot(rx - m.rest.x, rz - m.rest.z) > d.rig.archPlant) continue;
         const hx = m.popped ? rx + m.local.x - m.rest.x : rx;
         const hz = m.popped ? rz + m.local.z - m.rest.z : rz;
         const keep = (m.popped ? 0.15 : 0.82) * Math.max(0, 1 - Math.hypot(px - hx, pz - hz) / ARCH_YIELD_M);
@@ -206,7 +212,10 @@ function restCentroid(d: Internals, c: ShapeCluster): THREE.Vector3 {
 }
 
 function referenceCageSolve(d: Internals): void {
+  const cell = d.masses.findIndex((m) => m.name === "cell");
   for (const [ci, cage] of d.cages.entries()) {
+    // A door cage's corners hang on the cabin, and the windscreen's: only the clusters that hold the cell move them.
+    const hung = cage.spec.name.startsWith("door") || cage.spec.name === "glassFront";
     for (let i = 0; i < 8; i++) {
       const rest = cage.restCorners[i]!;
       const a = anchor(d, d.vertexCount + ci * 8 + i);
@@ -215,6 +224,7 @@ function referenceCageSolve(d: Internals): void {
         pz = 0,
         wsum = 0;
       for (const c of d.clusters) {
+        if (hung && !c.idx.includes(cell)) continue;
         const dd = rest.distanceTo(restCentroid(d, c));
         if (dd > 1.4) continue;
         const w = Math.exp(-dd * 2.35);
@@ -319,7 +329,7 @@ describe("given a car tapped at 3 km/h by a piston", () => {
       for (let i = 0; i < d.vertexCount; i++) {
         const rx = d.restPos[i * 3]!;
         const rz = d.restPos[i * 3 + 2]!;
-        if (d.restPos[i * 3 + 1]! >= 0.55 || !d.masses.some((m) => m.hub && Math.hypot(rx - m.rest.x, rz - m.rest.z) <= 0.4)) continue;
+        if (d.restPos[i * 3 + 1]! >= d.rig.archTop || !d.masses.some((m) => m.hub && Math.hypot(rx - m.rest.x, rz - m.rest.z) <= d.rig.archPlant)) continue;
         worst = Math.max(worst, Math.hypot(now[i * 3]! - rx, now[i * 3 + 2]! - rz));
       }
       assert.ok(worst <= 0.03, `arch skin moved ${worst.toFixed(3)} m in plan`);
@@ -339,7 +349,7 @@ function onSkinAnchors(car: DeformableCar, shot: PistonShotResult, tap: PistonSh
   const struck = shot.struck.map((s) => shot.names.indexOf(s.name));
   const share = new Float64Array(struck.length);
   let farSkin = 0;
-  for (let v = 0, k = 0; k < shot.skinRest.length; v++, k += 3) {
+  for (let v = 0, k = 0; k < shot.bodyVerts * 3; v++, k += 3) {
     const rx = shot.skinRest[k]!;
     const rz = shot.skinRest[k + 2]!;
     const dent = Math.hypot(rx - sx, shot.skinRest[k + 1]! - PISTON.faceY, rz - sz) < PISTON_DENT_RADIUS;
@@ -352,6 +362,19 @@ function onSkinAnchors(car: DeformableCar, shot: PistonShotResult, tap: PistonSh
       if (Math.hypot(shot.particleRest[j * 3]! - sx, shot.particleRest[j * 3 + 2]! - sz) <= PISTON_FAR) farParents = false;
     }
     if (farParents) farSkin = Math.max(farSkin, Math.hypot(shot.skin[k]! - tap.skin[k]!, shot.skin[k + 1]! - tap.skin[k + 1]!, shot.skin[k + 2]! - tap.skin[k + 2]!));
+  }
+  let at = shot.bodyVerts;
+  for (const mesh of car.flushCasters) {
+    const count = mesh.geometry.getAttribute("position").count;
+    const skin = doorShell(car, mesh)?.skin;
+    for (let v = 0, k = at * 3; skin && v < count; v++, k += 3) {
+      if (Math.hypot(shot.skinRest[k]! - sx, shot.skinRest[k + 1]! - PISTON.faceY, shot.skinRest[k + 2]! - sz) >= PISTON_DENT_RADIUS) continue;
+      for (let s = v * RES_SLOTS; s < (v + 1) * RES_SLOTS; s++) {
+        const q = struck.indexOf(skin.rJ[s]! / 3);
+        if (q >= 0) share[q] += skin.rW[s]!;
+      }
+    }
+    at += count;
   }
   let weight = 0;
   let particle = 0;

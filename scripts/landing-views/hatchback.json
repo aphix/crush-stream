@@ -1,0 +1,135 @@
+{
+  "paint": "#3f3352",
+  "side": {
+    "ref": "ModernCarDesigns_SideAndTop/purple-hatchback/purple-hatchback-2.png"
+  },
+  "top": {
+    "ref": "ModernCarDesigns_SideAndTop/purple-hatchback/purple-hatchback-1.png"
+  },
+  "iso": {
+    "ref": "ModernCarDesignIsometric.png",
+    "crop": [
+      551,
+      759,
+      528,
+      448
+    ],
+    "wheels": {
+      "fl": {
+        "hub": [
+          244.6,
+          375.7
+        ],
+        "contact": [
+          240.8,
+          417
+        ]
+      },
+      "rl": {
+        "hub": [
+          475.4,
+          213.3
+        ],
+        "contact": [
+          473.6,
+          251.5
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        6.8783,
+        7.4786,
+        8.5337
+      ],
+      "target": [
+        6.3507,
+        6.9365,
+        7.8797
+      ],
+      "up": [
+        -0.3612,
+        0.84,
+        -0.4048
+      ],
+      "fov": 15
+    },
+    "landmarks": [
+      {
+        "name": "roof antenna foot",
+        "at": [
+          0,
+          1.305,
+          -0.95
+        ],
+        "pixel": [
+          370,
+          34
+        ]
+      }
+    ]
+  },
+  "rear-iso": {
+    "ref": "ModernCarDesignIsometric_Rear.png",
+    "crop": [
+      434,
+      609,
+      400,
+      340
+    ],
+    "wheels": {
+      "rr": {
+        "hub": [
+          215.6,
+          272.6
+        ],
+        "contact": [
+          214.3,
+          309.5
+        ]
+      },
+      "fr": {
+        "hub": [
+          364.2,
+          131.5
+        ],
+        "contact": [
+          363,
+          164.6
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        -6.7807,
+        8.7966,
+        -11.2879
+      ],
+      "target": [
+        -6.3461,
+        8.2534,
+        -10.5695
+      ],
+      "up": [
+        0.2951,
+        0.8395,
+        0.4563
+      ],
+      "fov": 12
+    },
+    "landmarks": [
+      {
+        "name": "rear badge",
+        "at": [
+          0,
+          0.76,
+          -1.715
+        ],
+        "pixel": [
+          77,
+          224
+        ]
+      }
+    ]
+  }
+}

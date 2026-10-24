@@ -26,6 +26,9 @@ export class CageOutline {
   /** Per outline node: the body's lowest and highest height around it (`bandAround`). */
   lows: Float32Array = new Float32Array(0);
   highs: Float32Array = new Float32Array(0);
+  /** Per lattice row (z): the lowest bottom and the highest top (m, no class lift) of its covered nodes; Infinity, -Infinity where it has none. */
+  rowLows: Float32Array = new Float32Array(0);
+  rowHighs: Float32Array = new Float32Array(0);
   count = 0;
   /** The outline nodes' frame bounds (m): x min, x max, z min, z max. */
   xLo = 0;
@@ -61,14 +64,22 @@ export class CageOutline {
       this.bands = new Float64Array(2 * nu * nv);
       this.bandStamp = new Int32Array(nu * nv);
     }
+    if (this.rowLows.length < nv) {
+      this.rowLows = new Float32Array(nv);
+      this.rowHighs = new Float32Array(nv);
+    }
     let count = 0;
     let low = Infinity;
     let high = -Infinity;
     for (let j = 0; j < nv; j++) {
+      let rowLow = Infinity;
+      let rowHigh = -Infinity;
       for (let i = 0; i < nu; i++) {
         const k = j * nu + i;
         if (covered[k] === 0) continue;
         if (bottom[k]! < low) low = bottom[k]!;
+        if (bottom[k]! < rowLow) rowLow = bottom[k]!;
+        if (top[k]! > rowHigh) rowHigh = top[k]!;
         if (top[k]! > high) high = top[k]!;
         const edge = i === 0 || j === 0 || i === nu - 1 || j === nv - 1 || covered[k - 1] === 0 || covered[k + 1] === 0 || covered[k - nu] === 0 || covered[k + nu] === 0;
         if (!edge) continue;
@@ -80,6 +91,8 @@ export class CageOutline {
         this.highs[count] = _window[1]!;
         count++;
       }
+      this.rowLows[j] = rowLow;
+      this.rowHighs[j] = rowHigh;
     }
     this.count = count;
     let xLo = Infinity, xHi = -Infinity, zLo = Infinity, zHi = -Infinity;
@@ -112,6 +125,27 @@ export class CageOutline {
     out[0] = this.bands[2 * k]!;
     out[1] = this.bands[2 * k + 1]!;
   }
+
+  /**
+   * |x| (m, frame) of the outermost covered node on side `side` whose own height span meets `bottom`..`top` (frame heights, no class lift):
+   * the body's width at those heights, the outline's own extreme where they cross its widest section. -Infinity where no body stands there.
+   */
+  edgeAt(side: -1 | 1, bottom: number, top: number): number {
+    const { nu, nv, step, u0 } = this.cage!.style;
+    const { covered, top: tops, bottom: bottoms } = this.cage!.fields;
+    const widest = side > 0 ? this.xHi : this.xLo;
+    for (let n = 0; n < this.count; n++) {
+      const k = this.nodes[n]!;
+      if (this.xs[n] === widest && bottoms[k]! < top && tops[k]! > bottom) return side * widest;
+    }
+    for (let i = Math.round((widest - u0) / step) - side; i >= 0 && i < nu; i -= side) {
+      for (let j = 0; j < nv; j++) {
+        const k = j * nu + i;
+        if (covered[k] !== 0 && bottoms[k]! < top && tops[k]! > bottom) return side * (u0 + i * step);
+      }
+    }
+    return -Infinity;
+  }
 }
 
 const OUTLINES = new WeakMap<CarCage, CageOutline>();
@@ -136,12 +170,15 @@ export function sampleField(field: Float32Array, style: CageStyle, x: number, z:
 }
 
 /**
- * The lowest and highest height (`out[0]`, `out[1]`, m; frame, no class lift) of the covered nodes within `VERTICAL_WINDOW` nodes of
- * node (i, j): an outline node's own top and bottom are a sliver of the body's edge (a hood's lip, 5 mm thick), the body's height at
- * that place is what the window around it holds. Infinity, -Infinity when none is covered.
+ * The lowest and highest height (`out[0]`, `out[1]`, m; frame, no class lift) of the covered nodes of node (i, j)'s own part
+ * (`CageFields.part`) within `VERTICAL_WINDOW` nodes of it: an outline node's own top and bottom are a sliver of the body's edge (a hood's
+ * lip, 5 mm thick), the body's height at that place is what the window around it holds. A bumper is no sliver: its window never reads
+ * the body behind it (a pitched monster's tail bumper took its body's heights and met a cop's cowl it stood clear of), nor the body's it.
+ * Infinity, -Infinity when none is covered.
  */
 function bandAround(fields: CageFields, style: CageStyle, i: number, j: number, out: Float64Array): void {
   const { nu, nv } = style;
+  const own = fields.part[j * nu + i] ?? 0;
   const i1 = Math.min(nu - 1, i + VERTICAL_WINDOW);
   const j1 = Math.min(nv - 1, j + VERTICAL_WINDOW);
   let low = Infinity;
@@ -149,7 +186,7 @@ function bandAround(fields: CageFields, style: CageStyle, i: number, j: number, 
   for (let jj = Math.max(0, j - VERTICAL_WINDOW); jj <= j1; jj++) {
     for (let ii = Math.max(0, i - VERTICAL_WINDOW); ii <= i1; ii++) {
       const k = jj * nu + ii;
-      if (fields.covered[k] === 0) continue;
+      if (fields.covered[k] === 0 || fields.part[k] !== own) continue;
       if (fields.bottom[k]! < low) low = fields.bottom[k]!;
       if (fields.top[k]! > high) high = fields.top[k]!;
     }

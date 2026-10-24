@@ -23,8 +23,8 @@ const SPEED = 40;
 const START_GAP = 40;
 /** A start on the flat at the wall's foot (level from x = -28): from `START_GAP` the car flies off the crest into the wall, and a cm of the lone run's lower flight picks the hit's outcome. */
 const FLAT_GAP = 11;
-/** Start gaps (m) on the flat at the wall's foot, tried in turn for a nose left resting on the face: how long the masses stay on it before the wreck sleeps follows every change to the contact, so the setup searches rather than pins one gap. */
-const RESTING_GAPS = [11, 11.5, 10.5, 12, 10, 9.5, 9] as const;
+/** Start gaps (m) on the flat at the wall's foot (it is level out to 12 m), tried in turn for a nose left resting on the face: how long the masses stay on it before the wreck sleeps follows every change to the contact, so the setup searches rather than pins one gap. Whole and half metres first, then the quarters between them: a cm of flight moves which gaps rest, and a half-metre grid can miss every one. */
+const RESTING_GAPS = [11, 11.5, 10.5, 12, 10, 9.5, 9, 11.25, 11.75, 10.75, 10.25, 9.75, 9.25, 8.75, 8.25, 7.75, 7.25] as const;
 /** The free steps with masses on the face a resting run needs: enough that the frame's walk is a mean over the rest, not one step's. */
 const MIN_FREE_STEPS = 10;
 /** A hit the sedan backs away from under reverse: slow enough that its drivetrain lives (m/s). */
@@ -106,7 +106,7 @@ describe("given a sedan driven at 40 m/s at Havana's alley wall from 11 m, on th
   });
 });
 
-/** Cars `abeam` m apart, the far one on the side away from the wall: just outside the hulls' clearance (2.45 m) so the test calls them clear. */
+/** Cars `abeam` m apart, the far one on the side away from the wall: just outside the two hulls' clearance so the test calls them clear. */
 const ABEAM = 2.6;
 /** The grazing car's steer toward the wall (of full lock): a firm lean in, pressing the wall below a crash's 5.5 m/s (`WALL_CRUSH`), so no `nearHit` holds it and the wall's push is the course's alone. */
 const WALLWARD_STEER = 0.4;

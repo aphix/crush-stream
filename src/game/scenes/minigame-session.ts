@@ -7,7 +7,9 @@ import { ringScore } from "./minigame-ring.ts";
  * One minigame session: the state machine of a station's attempts (ready -> running -> thrown -> scored), the set of throws in a Ring
  * Fling and the scoring rule of each mode. Pure like `RangeRun` (no THREE, no DOM): the engine feeds it one frame at a time and reads
  * the `hud()` card back. Every coordinate is station-local (+x throw direction, x = 0 the lip, z = 0 the lane centre, y from the pad).
- * Nothing here runs on a timer: a scored attempt stays scored until `retry()`, `resetRun()` or `begin()`.
+ * Nothing here runs on a timer: a scored attempt stays scored until `retry()`, `resetRun()` or `begin()`. An attempt in which nobody is
+ * thrown (the car stalls on the hill, stops at the barrier or clears it) is scored as a no throw once the car that was driving has lain
+ * still the rest hold, as a thrown driver's does: it has no score, uses no attempt and records no best.
  */
 
 type MinigamePhase = "ready" | "running" | "thrown" | "scored";
@@ -43,6 +45,8 @@ export type MinigameHudState = {
   best: MinigameBestPair;
   /** The Long jump's bail (the engine fills it; the session knows nothing of it): null in every other mode. */
   bail: BailHud | null;
+  /** The attempt ended with nobody thrown: no score, and `retry()` puts the same attempt back. */
+  noThrow: boolean;
 };
 
 /** What the card shows of the bail: it has been pressed, and the verdict once the throw has gone (null before). */
@@ -63,6 +67,8 @@ export type MinigameFrame = {
   thrown: boolean;
   /** The dummy's torso while he is out; `still` is the sim seconds his speed has been under 0.4 m/s. */
   torso: TorsoSample | null;
+  /** Seconds the car has been at rest (0 while it moves): a car that drove and then rests this long with nobody thrown is a no throw. */
+  carStill: number;
 };
 
 function clampThrowsPerSet(count: number): number {
@@ -76,6 +82,9 @@ export class MinigameSession {
   /** High jump only: the posts' plane (the score is read around it) and the lip's height above the pad, the zero of the score. */
   private highJump = { postsX: 0, lipY: 0 };
   private phase: MinigamePhase = "ready";
+  /** The car has moved since the pedal went down: a car that never leaves the hilltop is not an attempt. */
+  private carMoved = false;
+  private noThrow = false;
   private attempt = 1;
   private liveValue: number | null = null;
   private lastScore: number | null = null;
@@ -107,6 +116,7 @@ export class MinigameSession {
   step(frame: MinigameFrame): { scored: number } | null {
     if (this.phase === "ready" && frame.pedalPressed) this.phase = "running";
     if (this.phase === "running" && frame.thrown) this.phase = "thrown";
+    if (this.phase === "running") this.watchCar(frame.carStill);
     if (this.phase !== "thrown") return null;
     const { torso } = frame;
     if (torso === null) return null;
@@ -121,6 +131,10 @@ export class MinigameSession {
   /** The next attempt at the same station; after a Ring Fling set's last throw, a new set. A no-op before the attempt scores. */
   retry(): void {
     if (this.phase !== "scored") return;
+    if (this.noThrow) {
+      this.readyAgain();
+      return;
+    }
     if (this.mode === MINIGAME_MODE.ringFling && this.setScores.length >= this.throwsPerSetCount) {
       this.setScores = [];
       this.attempt = 1;
@@ -168,13 +182,25 @@ export class MinigameSession {
       setComplete: ringFling && this.setScores.length >= this.throwsPerSetCount,
       best: { ...this.best },
       bail: null,
+      noThrow: this.noThrow,
     };
   }
 
   private readyAgain(): void {
     this.phase = "ready";
+    this.noThrow = false;
+    this.carMoved = false;
     this.liveValue = null;
     this.peak.reset();
+  }
+
+  /** While he is not thrown: the attempt is over once the car, having driven, has lain still the rest hold. The card keeps the last score; `noThrow` says this attempt has none. */
+  private watchCar(carStill: number): void {
+    if (carStill === 0) this.carMoved = true;
+    else if (this.carMoved && carStill >= REST_HOLD) {
+      this.phase = "scored";
+      this.noThrow = true;
+    }
   }
 
   private refreshBest(): void {

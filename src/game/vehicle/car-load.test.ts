@@ -17,8 +17,8 @@ const FRAME = 1 / FRAME_HZ;
 const DEG = 180 / Math.PI;
 const IDLE: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
 
-/** Most the drawn body may pitch (deg) in a launch or a stop, per class: a few degrees, the monster more. */
-const PITCH_MAX: Record<VehicleClassId, number> = { sedan: 3, muscle: 3, police: 3, truck: 4.5, monster: 6 };
+/** Most the drawn body may pitch (deg) in a launch or a stop, per class: a few degrees, the tall SUV and the truck more, the monster most. */
+const PITCH_MAX: Record<VehicleClassId, number> = { sedan: 3, muscle: 3, police: 3, truck: 4.5, monster: 6, hatch: 3, suv: 4 };
 const ROLL_MAX = 6.5;
 
 type Sample = { pitch: number; roll: number; speed: number };
@@ -128,6 +128,37 @@ describe("given a car driven on the road, whose drawn body squats, dives and lea
     const end = stop[stop.length - 1]!;
     assert.ok(end.speed < 0.05 && Math.abs(end.pitch) < 0.02 && Math.abs(end.roll) < 0.02, `stopped at ${end.speed.toFixed(2)} m/s, ${end.pitch.toFixed(3)}° / ${end.roll.toFixed(3)}°`);
   });
+});
+
+/** A body's squat, dive and lean build over its springs' own time: a few degrees over a few tenths of a second, not in a frame or two (a heavy truck's launch and stop read 2-5° over 0.3-0.5 s). */
+const TURN_RATE_MAX = 20;
+const BUILD_FRAMES_MIN = 12;
+const HELD_AT_S = 1;
+
+/** The fastest turn (deg/s) of `angles` taken from level one frame to the next, and the frames its magnitude takes to reach 90 % of what it is `HELD_AT_S` s in. */
+function build(angles: readonly number[]): { rate: number; frames: number } {
+  const series = [0, ...angles];
+  let rate = 0;
+  for (let i = 1; i < series.length; i++) rate = Math.max(rate, Math.abs(series[i]! - series[i - 1]!) * FRAME_HZ);
+  const held = series[Math.round(HELD_AT_S * FRAME_HZ)]!;
+  return { rate, frames: series.findIndex((a) => Math.abs(a) >= 0.9 * Math.abs(held)) };
+}
+
+describe("given a car whose throttle, brake or steering goes down at once", () => {
+  for (const cls of VEHICLE_CLASS_IDS) {
+    it(`when a ${cls} launches from rest at full throttle and brakes hard from 25 m/s, then its pitch never turns faster than ${TURN_RATE_MAX}°/s and takes ${BUILD_FRAMES_MIN} frames to reach 90 % of what it is ${HELD_AT_S} s in`, () => {
+      const launch = build(drive(cls, 0, () => ({ throttle: 1 }), 1.5).map((s) => s.pitch));
+      const stop = build(drive(cls, 25, () => ({ brake: 1 }), 1.5).map((s) => s.pitch));
+      assert.ok(launch.rate <= TURN_RATE_MAX && stop.rate <= TURN_RATE_MAX, `launch ${launch.rate.toFixed(1)}°/s, stop ${stop.rate.toFixed(1)}°/s`);
+      assert.ok(launch.frames >= BUILD_FRAMES_MIN && stop.frames >= BUILD_FRAMES_MIN, `launch built in ${launch.frames} frames, stop in ${stop.frames}`);
+    });
+
+    it(`when a ${cls} turns hard at 20 m/s, then its roll never turns faster than ${TURN_RATE_MAX}°/s and takes ${BUILD_FRAMES_MIN} frames to reach 90 % of what it is ${HELD_AT_S} s in`, () => {
+      const turn = build(drive(cls, 20, (v) => ({ throttle: v < 20 ? 0.6 : 0.1, steer: 1 }), 1.5).map((s) => s.roll));
+      assert.ok(turn.rate <= TURN_RATE_MAX, `roll turned ${turn.rate.toFixed(1)}°/s`);
+      assert.ok(turn.frames >= BUILD_FRAMES_MIN, `roll built in ${turn.frames} frames`);
+    });
+  }
 });
 
 describe("given a chase camera that rides the car's drawn body, next to one that does not", () => {

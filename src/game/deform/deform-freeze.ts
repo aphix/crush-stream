@@ -53,8 +53,18 @@ export abstract class DeformFreeze extends DeformContact {
   }
 
   /**
-   * The body is rigid now: every mass takes the rigid body's velocity and spin (`followGroup`'s `bodyV`, `bodyW`) about their centroid. `rigid`: the
-   * drivetrain runs, so the turn is applyDrive's and the body keeps none of its own. A frozen wreck (`stepFrozen`) runs only this.
+   * Whether the wreck's masses ride its body this slice: it is frozen (`EPICENTER`), or its car rests (`rideQuiet`, `world-step`) and its contact clock has run `quiet` s,
+   * so its masses stand where the whole path left them. Stepped, a resting wreck's structure crept on with
+   * nothing moving the body to meet it, 7 cm/s sideways in the body toward the ground it lay on: a monster on its flank with its two low hubs popped sank its cage
+   * 8.2 cm after it fell asleep, and one on a rear hub lifted out of the ground at 5 cm/s while its cage crept back in, 5.7 cm (police), and slept there.
+   */
+  ridesBody(quiet: number): boolean {
+    return this.frozen || this.quietTime() >= quiet;
+  }
+
+  /**
+   * The body is rigid now: every mass takes the rigid body's velocity and spin (`followGroup`'s `bodyV`, `bodyW`) about its centre (their centroid
+   * off by `liftOffset`). `rigid`: the drivetrain runs, so the turn is applyDrive's and the body keeps none of its own. A frozen wreck (`stepFrozen`) runs only this.
    */
   protected rideBody(rigid: boolean): void {
     let cx = 0,
@@ -70,9 +80,9 @@ export abstract class DeformFreeze extends DeformContact {
       msum += m.mass;
     }
     if (msum > MIN_MASS_SUM) {
-      cx /= msum;
-      cy /= msum;
-      cz /= msum;
+      cx = cx / msum + this.liftOffset.x;
+      cy = cy / msum + this.liftOffset.y;
+      cz = cz / msum + this.liftOffset.z;
       // A driven wreck's turn is applyDrive's (its tyres, not this rule, stop a wreck's spin): the body keeps none of its own.
       if (rigid) this.bodyW.y = 0;
       const wx = this.bodyW.x;

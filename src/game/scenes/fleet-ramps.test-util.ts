@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
-import { COM_Y, G, TOUCH } from "../vehicle/car-air-body.ts";
+import { G, TOUCH } from "../vehicle/car-air-body.ts";
 import { JerseyBarrier } from "./engine-props.ts";
 import { FleetRamps, RAMP } from "./fleet-ramps.ts";
 import { collideOn } from "./ramp-collide.test-util.ts";
@@ -11,7 +11,8 @@ import { LID } from "../vehicle/constants.ts";
 import { cageLift } from "../vehicle/car-cage-rig.ts";
 import { newWorld, stepWorld, type World } from "../engine/world-step.ts";
 import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
-import { assignClass, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
+import { assignClass, CLASSES, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
+import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { frame, FRAME } from "../vehicle/ground-probe.test-util.ts";
 
 /**
@@ -26,15 +27,15 @@ const WRECK_DROP = 0.1;
 const RAMP_SLOPE = RAMP.top / RAMP.len;
 const DEG = 180 / Math.PI;
 
-/** Ramps on a slab whose long axis is +z (the engine's end-on placement), and one car `x0` across, `z0` along. */
-export function scene(withSlab: boolean): { ramps: FleetRamps; w: World; car: DeformableCar } {
+/** Ramps on a slab whose long axis is +z (the engine's end-on placement), and one car of body `style`. */
+export function scene(withSlab: boolean, style: CarStyleId = "sedan"): { ramps: FleetRamps; w: World; car: DeformableCar } {
   const three = new THREE.Scene();
   const ramps = new FleetRamps(three);
   const slab = withSlab ? new JerseyBarrier(three, new THREE.Group()) : null;
   slab?.reset();
   ramps.place(0, slab);
   setGround(ramps);
-  const car = new DeformableCar(paint(), three);
+  const car = new DeformableCar(paint(), three, null, style);
   const w = newWorld([car], slab);
   w.collide = collideOn(ramps);
   return { ramps, w, car };
@@ -97,7 +98,7 @@ export function pair(vA: number, vB: number, dx = 0.4): { w: World; cars: [Defor
 export function watch(cars: readonly DeformableCar[]): { list: string[]; frame: () => void; slice: (h: number) => void } {
   const heights = (c: DeformableCar): [number, number] => {
     const q = c.group.quaternion;
-    return [c.group.position.y, c.group.position.y + COM_Y * (1 - 2 * (q.x * q.x + q.z * q.z))];
+    return [c.group.position.y, c.group.position.y + c.frame.comY * (1 - 2 * (q.x * q.x + q.z * q.z))];
   };
   const last = cars.map((c) => [...heights(c), c.velocity.y, c.airborne] as const);
   const vmin = cars.map((c) => c.velocity.y);
@@ -155,7 +156,8 @@ export function watch(cars: readonly DeformableCar[]): { list: string[]; frame: 
  * a jump starts), or `frames` (default 360: 6 s) are up. `dx` moves the spawn along +x (m).
  */
 export function approachSide(cls: VehicleClassId, off: number, wall: number, { frames = 360, dx = 0 } = {}): { roll: number; high: number; z: number } {
-  const { w, car } = scene(false);
+  // The class on its own body (`CLASSES[cls].style`): a monster's 2.39 m track, not a sedan's 1.48 under its lift and wheels.
+  const { w, car } = scene(false, CLASSES[cls].style);
   assignClass(car, cls);
   const th = off / DEG;
   const zWall = RAMP.start + ((RAMP.top - wall) * RAMP.len) / RAMP.top;

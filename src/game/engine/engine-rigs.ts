@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { COMPACTOR, compactorStage } from "../scenes/compactor.ts";
+import { COMPACTOR } from "../scenes/compactor.ts";
 import { PISTON, PISTON_IDS, type PistonConfig } from "../scenes/piston-rig.ts";
 import { placeDrop, STACK_RANGES, type StackConfig } from "../scenes/stack-rig.ts";
 import { PISTON_ORBIT_RATE, pistonAhead, pistonToGo } from "../present/engine-pistons.ts";
@@ -41,14 +41,17 @@ export abstract class EngineRigs extends EngineScenes {
     this.emitHud();
   }
 
-  /** Fire a sketch scene (A/B/C: door and mirror; D/E: quarter panel) on the selected side; a car missing the part it needs is parked fresh first. */
+  /** Fire a sketch scene (A/B/C: door and mirror; D/E: quarter panel; F/G: trunk lid) on the selected side; a car missing the part it needs is parked fresh first. */
   fireDoorRam(scenario: DoorScenario): void {
     if (!this.showDoors || this.doorRig.phase === "run") return;
     const side = this.doorRig.side;
+    const part = DOOR_LANES[scenario].part;
     const gone =
-      DOOR_LANES[scenario].part === "panel"
+      part === "panel"
         ? this.carA.partOff(side < 0 ? "quarterL" : "quarterR")
-        : this.carA.partOff(side < 0 ? "doorL" : "doorR") || this.carA.partOff(side < 0 ? "mirrorL" : "mirrorR");
+        : part === "lid"
+          ? this.carA.lidOff()
+          : this.carA.partOff(side < 0 ? "doorL" : "doorR") || this.carA.partOff(side < 0 ? "mirrorL" : "mirrorR");
     if (gone) this.randomizeAndReset();
     this.doorShot = null;
     this.doorFx = false;
@@ -59,12 +62,17 @@ export abstract class EngineRigs extends EngineScenes {
     this.emitHud();
   }
 
-  setDoorConfig(patch: { kph?: number; kg?: number; side?: -1 | 1 }): void {
+  setDoorConfig(patch: { kph?: number; kg?: number; side?: -1 | 1; lid?: number }): void {
     if (patch.kph != null) this.doorRig.kph = THREE.MathUtils.clamp(patch.kph, 1, 120);
     if (patch.kg != null) this.doorRig.kg = THREE.MathUtils.clamp(patch.kg, 5, 5000);
     if (patch.side != null && this.doorRig.phase === "idle") {
       this.doorRig.side = patch.side;
       this.doorRam.sync(this.doorRig);
+    }
+    // A torn lid only goes back on through a reset's `resetVisual`, so a new lid state re-parks the car.
+    if (patch.lid != null && patch.lid !== this.doorRig.lid) {
+      this.doorRig.lid = patch.lid;
+      if (this.showDoors && !this.net.client) this.randomizeAndReset();
     }
     this.emitHud();
   }
@@ -111,7 +119,7 @@ export abstract class EngineRigs extends EngineScenes {
         }
       }
     }
-    const stage = compactorStage(this.compactor.face);
+    const stage = this.compactor.stage;
     if (stage === "contact" || stage === "wells") this.clock.phase = this.clock.phase === "approach" ? "impact" : this.clock.phase;
     if (stage === "mid") this.clock.phase = "slowmo";
     if (stage === "max") this.clock.phase = "aftermath";

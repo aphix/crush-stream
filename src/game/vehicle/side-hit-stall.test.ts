@@ -25,19 +25,20 @@ function struck(id: PistonId, kph: number) {
   return car;
 }
 
-/** The speed of the t-bone's struck sedan on its +z heading, and the bullet's (km/h): the staging of the slide rows. */
+/** The speed of the t-bone's struck sedan on its +z heading (km/h): the staging of the slide rows. */
 const STRUCK_KPH = 60;
-/** The bullet's speed that leaves the engine running (`FUEL_CUTOFF_G`), and the next whole km/h, which cuts it. */
-const BULLET_UNDER_SENSOR_KPH = 49;
-const BULLET_PAST_SENSOR_KPH = 50;
 /** Seconds after the hit the slide is followed: far past the stop of either. */
 const SLIDE_WATCH_S = 4;
+/** Seconds the bullet has to meet the struck sedan: a bullet slower than the passing car's window never does. */
+const MEET_WITHIN_S = 2;
+
+type Slide = { metres: number; stalledAtHit: number };
 
 /**
- * The metres the struck sedan travels from the first crash flag, rolling in neutral up to the hit and on the zero pedals after it; and the fuel left cut at the hit.
- * With `fuelRestored` the cut is cleared before every slice: the same hit on a car whose engine runs.
+ * The metres the struck sedan travels from the first crash flag, rolling in neutral up to the hit and on the zero pedals after it; and the fuel
+ * left cut at the slice after the hit's, before the drive counts it down. With `fuelRestored` the cut is cleared before every slice: the same hit on a car whose engine runs.
  */
-function slideAfterTBone(bulletKph: number, fuelRestored = false): { metres: number; stalledAtHit: number } {
+function slideAfterTBone(bulletKph: number, fuelRestored = false): Slide {
   const struckCar = makeCar("shape");
   const bullet = makeCar("shape");
   launch(struckCar, 0, -(STRUCK_KPH / 3.6) * 0.2, 0, 0, STRUCK_KPH / 3.6);
@@ -48,12 +49,14 @@ function slideAfterTBone(bulletKph: number, fuelRestored = false): { metres: num
   world.pedals.set(struckCar, FREEWHEEL);
   world.pedals.set(bullet, FREEWHEEL);
   const stepSlice = world.world.beforeSlice!;
+  let stalledAtHit = -1;
   world.world.beforeSlice = (slice) => {
+    if (stalledAtHit < 0 && struckCar.crashed) stalledAtHit = struckCar.stalledS;
     if (fuelRestored) struckCar.stalledS = 0;
     return stepSlice(slice);
   };
   let metres = 0;
-  let stalledAtHit = 0;
+  let waited = 0;
   let since = -1;
   let x = 0;
   let z = 0;
@@ -62,16 +65,50 @@ function slideAfterTBone(bulletKph: number, fuelRestored = false): { metres: num
     const at = struckCar.group.position;
     if (since < 0 && struckCar.crashed) {
       since = 0;
-      stalledAtHit = struckCar.stalledS;
       world.pedals.set(struckCar, COAST);
     } else if (since >= 0) {
       since += FRAME * world.clock.timeScale;
       metres += Math.hypot(at.x - x, at.z - z);
-    }
+    } else assert.ok((waited += FRAME) < MEET_WITHIN_S, `the ${bulletKph} km/h bullet never met the struck sedan in ${MEET_WITHIN_S} s`);
     x = at.x;
     z = at.z;
   }
   return { metres, stalledAtHit };
+}
+
+/** The bullet (km/h) the edge search starts from: the cut-and-running row's hit. */
+const SEARCH_FROM_KPH = 55;
+/** The widest step (km/h) the search gallops by before it calls the cut stuck. */
+const SEARCH_STEP_MAX = 32;
+
+/**
+ * The first whole km/h of the bullet that cuts the struck sedan's fuel (`FUEL_CUTOFF_G`) and the slides either side of it: from
+ * `SEARCH_FROM_KPH` the search gallops (1, 2, 4 km/h ...) toward the edge until the cut flips, then bisects the last step.
+ */
+function sensorEdge(): { edge: number; running: Slide; stalled: Slide } {
+  let near = slideAfterTBone(SEARCH_FROM_KPH);
+  const cuts = near.stalledAtHit > 0;
+  const toward = cuts ? -1 : 1;
+  let nearKph = SEARCH_FROM_KPH;
+  let step = 1;
+  let farKph = nearKph + toward;
+  let far = slideAfterTBone(farKph);
+  while (far.stalledAtHit > 0 === cuts) {
+    step *= 2;
+    assert.ok(step <= SEARCH_STEP_MAX, `the cut never flipped from ${SEARCH_FROM_KPH} km/h to ${farKph} km/h`);
+    [nearKph, near] = [farKph, far];
+    farKph = nearKph + toward * step;
+    far = slideAfterTBone(farKph);
+  }
+  let [under, running]: [number, Slide] = cuts ? [farKph, far] : [nearKph, near];
+  let [past, stalled]: [number, Slide] = cuts ? [nearKph, near] : [farKph, far];
+  while (past - under > 1) {
+    const mid = Math.floor((under + past) / 2);
+    const slide = slideAfterTBone(mid);
+    if (slide.stalledAtHit > 0) [past, stalled] = [mid, slide];
+    else [under, running] = [mid, slide];
+  }
+  return { edge: past, running, stalled };
 }
 
 /** An uncrashed sedan rolling on the flat ground at `kph` on its +z heading with `stalledS` seconds of fuel cut, its wheels read. */
@@ -169,10 +206,9 @@ describe("given a sedan rolling on flat ground with its fuel cut", () => {
 
 describe("given a sedan t-boned at its door while rolling at 60 km/h, its pedals zero after the hit", () => {
   it("when the bullet is just past the crash sensor, then the engine stalls and the struck car slides no farther than a running one's few metres", () => {
-    const running = slideAfterTBone(BULLET_UNDER_SENSOR_KPH);
-    const stalled = slideAfterTBone(BULLET_PAST_SENSOR_KPH);
-    assert.equal(running.stalledAtHit, 0, "the hit just under the sensor leaves the engine running");
-    assert.equal(stalled.stalledAtHit, STALL_S, "the next km/h cuts the fuel");
+    const { edge, running, stalled } = sensorEdge();
+    assert.equal(running.stalledAtHit, 0, `the hit just under the sensor (${edge - 1} km/h) leaves the engine running`);
+    assert.equal(stalled.stalledAtHit, STALL_S, `the next km/h (${edge}) cuts the fuel`);
     // The two hits are one km/h apart, so the same tyres on the same slide: a dragged wreck went 4x as far.
     assert.ok(stalled.metres < 1.5 * running.metres, `stalled ${stalled.metres.toFixed(2)} m vs running ${running.metres.toFixed(2)} m`);
   });

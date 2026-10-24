@@ -8,18 +8,18 @@ import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import { applyAiDrive } from "../ai/input-fade.ts";
 import { fleetStyle, layoutDerby, MAX_CARS } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
 import { mayRecoverFlipped, recoverInPlace } from "../vehicle/car-drive.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { stepWorld } from "../engine/world-step.ts";
-import { CAGES } from "../kernel/rig-spec.ts";
+import { CAR_STYLE_IDS, CAR_STYLES } from "../vehicle/car-variants.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
 import { armKill, carClass, DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
  * Full-sanity run, not the per-commit suite (`npm run test:ai-long-run`): AI derby matches watched for anything going wrong: six-car matches at the arcade and the realistic knobs
  * (hits, nose to nose, wedged, the elimination rate over seeds 1-20, wrecking kills) and the owner's 9-car capture for zips. What pins each named failure in the per-commit suite:
- * accumulated wrecking (a re-armed hit adds its EBS²) is `vehicle/barrier.test.ts` (engine killed on the third 35 km/h hit) and `deform/crash-physics.test.ts` (`rearmHit`); a settled
+ * accumulated wrecking (a re-armed hit adds its EBS²) is `vehicle/barrier.test.ts` (engine killed on the third 33 km/h hit) and `deform/crash-physics.test.ts` (`rearmHit`); a settled
  * wreck that zips when hit again is `contact/pile-push.test.ts`; two AI cars meeting is `derby.test.ts`.
  */
 
@@ -27,8 +27,8 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 function face(car: DeformableCar, p: THREE.Vector3): "front" | "rear" | "side" {
   const dx = p.x - car.group.position.x;
   const dz = p.z - car.group.position.z;
-  const along = (dx * car.fwdFlat.x + dz * car.fwdFlat.z) / CAR_HALF.z;
-  const across = (dx * car.fwdFlat.z - dz * car.fwdFlat.x) / CAR_HALF.x;
+  const along = (dx * car.fwdFlat.x + dz * car.fwdFlat.z) / car.frame.half.z;
+  const across = (dx * car.fwdFlat.z - dz * car.fwdFlat.x) / car.frame.half.x;
   if (Math.abs(along) * 1.15 < Math.abs(across)) return "side";
   return along > 0 ? "front" : "rear";
 }
@@ -58,15 +58,15 @@ const ARCADE: Knobs = { squash: 0.4, rear: 0.45, realism: null };
 /** CrushCalibration's realistic defaults (lane/calib-defaults) at Handling's default realism. */
 const REALISTIC: Knobs = { squash: 0.32, rear: 0.38, realism: DEFAULT_REALISM };
 
-/** Builds and runs cars with chassisRear's maxCrush at `knobs.rear` (cages copy their spec at construction). */
+/** Builds and runs cars with every style frame's chassisRear maxCrush at `knobs.rear` (cages copy their spec at construction). */
 function atKnobs(knobs: Knobs, build: () => DeformableCar[], seconds: number, start?: number): DerbyRun {
-  const rear = CAGES.find((c) => c.name === "chassisRear")!;
-  const rest = rear.maxCrush;
-  rear.maxCrush = knobs.rear;
+  const rears = CAR_STYLE_IDS.map((id) => carFrame(CAR_STYLES[id]).rig.cages.find((c) => c.name === "chassisRear")!);
+  const rests = rears.map((c) => c.maxCrush);
+  for (const c of rears) c.maxCrush = knobs.rear;
   try {
     return runDerby(build(), seconds, knobs, start);
   } finally {
-    rear.maxCrush = rest;
+    for (const [k, c] of rears.entries()) c.maxCrush = rests[k]!;
     leaveArena();
   }
 }

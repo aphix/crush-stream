@@ -1,4 +1,4 @@
-import { WHEEL_POS } from "./car-mesh.ts";
+import type { CarFrame } from "./car-rig.ts";
 import { CLASSES, gearAt, type VehicleClassId } from "./vehicle-classes.ts";
 import { detSin } from "../kernel/physics-core.js";
 
@@ -9,10 +9,6 @@ function tanh(x: number): number {
   const e = Math.exp(2 * x);
   return (e - 1) / (e + 1);
 }
-
-/** Half the wheelbase and half the track (m). */
-const AXLE = WHEEL_POS[0]![2];
-const TRACK = Math.abs(WHEEL_POS[0]![0]);
 
 /**
  * Drawn-pose feel knobs (mutable: the debug panel sets them live). `driftLean`: extra drawn roll in a slide, a share of the class cap at full slide; the body leans into the drift.
@@ -40,6 +36,8 @@ const LOAD: Readonly<Record<VehicleClassId, { pitch: number; roll: number }>> = 
   police: { pitch: 1.5, roll: 3 },
   truck: { pitch: 2.2, roll: 3.4 },
   monster: { pitch: 3.5, roll: 4 },
+  hatch: { pitch: 1.5, roll: 3 },
+  suv: { pitch: 1.5, roll: 3 },
 };
 
 /** Time constant (s) the ground pose's acceleration is smoothed over: a few slices, so one contact spike doesn't kick the body. */
@@ -48,6 +46,8 @@ const TAU = 0.06;
 const A_MAX = 80;
 const JUMP = 100;
 const RAD = Math.PI / 180;
+/** Damping ratio of the body's squat, dive and lean on its springs: near critical, so it settles onto a load over a few tenths of a second without ringing. */
+const LOAD_ZETA = 0.7;
 
 /**
  * `load` (m, a spring offset) that leans the body against the road's own slope `slope` (sin of its angle, + nose / +x
@@ -65,7 +65,7 @@ function alongRoad(load: number, slope: number, cap: number): number {
  * Drawn only: the acceleration is read off `group.matrixWorld` across slices, as `Suspension` reads vertical speed.
  */
 export class LoadTransfer {
-  /** Each wheel's body offset (m, `Suspension.offset` sign) the load holds the body at, `WHEEL_POS` order. */
+  /** Each wheel's body offset (m, `Suspension.offset` sign) the load holds the body at, `frame.wheels` order. */
   readonly target = new Float64Array(4);
   private px = 0;
   private pz = 0;
@@ -80,6 +80,17 @@ export class LoadTransfer {
   private gear = 0;
   private age = Infinity;
   private dir = 0;
+  /** The body's pitch and roll load (m of wheel offset) and its rate (m/s): the springs' quasi-static load, taken through the body's own spring and damper. */
+  private squat = 0;
+  private squatRate = 0;
+  private lean = 0;
+  private leanRate = 0;
+
+  private readonly frame: CarFrame;
+
+  constructor(frame: CarFrame) {
+    this.frame = frame;
+  }
 
   reset(): void {
     this.seen = 0;
@@ -87,6 +98,10 @@ export class LoadTransfer {
     this.az = 0;
     this.gear = 0;
     this.age = Infinity;
+    this.squat = 0;
+    this.squatRate = 0;
+    this.lean = 0;
+    this.leanRate = 0;
     this.target.fill(0);
   }
 
@@ -108,6 +123,10 @@ export class LoadTransfer {
       this.vz = 0;
       this.ax = 0;
       this.az = 0;
+      this.squat = 0;
+      this.squatRate = 0;
+      this.lean = 0;
+      this.leanRate = 0;
       this.gear = 0;
       return;
     }
@@ -131,10 +150,18 @@ export class LoadTransfer {
     const cg = CLASSES[cls].cgHeight;
     // Per wheel a spring k m/4 carries ΔF = m a h / (2 L) (axle) or m a h / (2 T) (side): Δ = 2 a h / (L k) with
     // L the wheelbase and T the track; the springs' own scale is saturated at the class's limit.
-    const capP = AXLE * Math.tan(c.pitch * RAD);
-    const capR = TRACK * Math.tan(c.roll * RAD * (1 + LOAD_FEEL.driftLean * slide));
-    const p = alongRoad(capP * tanh((along * cg) / (AXLE * k * capP)), e[9]!, c.pitch * RAD) + this.kick(dt);
-    const r = alongRoad(capR * tanh((side * cg) / (TRACK * k * capR)), e[1]!, c.roll * RAD);
+    const { halfBase, halfTrack } = this.frame;
+    const capP = halfBase * Math.tan(c.pitch * RAD);
+    const capR = halfTrack * Math.tan(c.roll * RAD * (1 + LOAD_FEEL.driftLean * slide));
+    const squatLoad = alongRoad(capP * tanh((along * cg) / (halfBase * k * capP)), e[9]!, c.pitch * RAD);
+    const leanLoad = alongRoad(capR * tanh((side * cg) / (halfTrack * k * capR)), e[1]!, c.roll * RAD);
+    const damping = 2 * LOAD_ZETA * Math.sqrt(k);
+    this.squatRate += (k * (squatLoad - this.squat) - damping * this.squatRate) * dt;
+    this.squat += this.squatRate * dt;
+    this.leanRate += (k * (leanLoad - this.lean) - damping * this.leanRate) * dt;
+    this.lean += this.leanRate * dt;
+    const p = this.squat + this.kick(dt);
+    const r = this.lean;
     // Front and the +x side rise under +along and +side; the rear and the −x side sink.
     this.target[0] = p - r;
     this.target[1] = p + r;
@@ -157,6 +184,6 @@ export class LoadTransfer {
   private kick(dt: number): number {
     this.age += dt;
     if (this.age > SHIFT_END) return 0;
-    return -this.dir * LOAD_FEEL.shiftKick * AXLE * Math.tan(SHIFT_DEG * RAD) * detSin(2 * Math.PI * SHIFT_HZ * this.age) * Math.exp(-this.age / SHIFT_TAU);
+    return -this.dir * LOAD_FEEL.shiftKick * this.frame.halfBase * Math.tan(SHIFT_DEG * RAD) * detSin(2 * Math.PI * SHIFT_HZ * this.age) * Math.exp(-this.age / SHIFT_TAU);
   }
 }

@@ -1,8 +1,9 @@
 import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { SURFACE_IDS, SURFACES } from "./catalog.ts";
 import { SURFACE } from "./constants.ts";
-import { exitFace, F_DEPTH, F_NX, F_NZ, F_SIZE, IN_SIDE, IN_TOP, PR_BASE, PR_COS, PR_ENDS, PR_GU, PR_GW, PR_HARD, PR_HX, PR_HZ, PR_ID, PR_KNOCK_V, PR_MASS, PR_R, PR_SIN, PR_TOP, PR_VX, PR_VZ, PR_WALL, PR_X, PR_YAW, PR_Z, topAt } from "./prism.ts";
+import { exitFace, F_DEPTH, F_NX, F_NZ, F_SIZE, F_TIME, IN_SIDE, IN_TOP, PR_BASE, PR_COS, PR_ENDS, PR_GU, PR_GW, PR_HARD, PR_HX, PR_HZ, PR_ID, PR_KNOCK_V, PR_MASS, PR_R, PR_SIN, PR_TOP, PR_VX, PR_VZ, PR_WALL, PR_X, PR_YAW, PR_Z, topAt } from "./prism.ts"
 import { G, GQ, gqEnter, gqLeave } from "./ground-clock.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 
 /**
  * The one store of solid surfaces (docs/UNIFIED_CONTACT.md, Stage 1): everything a body can stand on answers one question,
@@ -42,21 +43,25 @@ export const C_TOUCH = 12;
  */
 export const C_DEPTH = 13;
 export const HIT_SIZE = 14;
+/** `Surface.flank`'s output row: the depth (m) a point is inside a car's side, and that face's outward unit normal. */
+export const FL_DEPTH = 0;
+export const FL_NX = 1;
+export const FL_NY = 2;
+export const FL_NZ = 3;
+const FL_SIZE = 4;
 
 /** Friction of a tyre across what it stands on and climbs. */
 export const MU_TYRE = 0.9;
 /**
  * The step a tyre mounts by grip alone, as a share of its radius: a step of height s puts the contact normal at the tyre's edge
- * asin(1 - s/r) over the horizontal, and the tyre climbs while that is steeper than the friction angle atan(1/mu): s <= r (1 - 1/sqrt(1 + mu^2)),
- * 0.26 r (a sedan's 0.32 m tyre mounts 8 cm, a monster's 0.54 m tyre 14 cm).
+ * asin(1 - s/r) over the horizontal, and the tyre climbs while that is steeper than the friction angle atan(1/mu): s <= r (1 - 1/sqrt(1 + mu^2)).
  */
 export const MOUNT = 1 - 1 / Math.sqrt(1 + MU_TYRE ** 2);
 /**
- * The tallest step (m) any class's tyre mounts by grip alone: `MOUNT` of the biggest tyre's radius (the monster's, 0.32 m × a wheel
- * scale of 1.7; `vehicle/vehicle-classes.ts`, held by `world/prism.test.ts`). What a surface that cannot tell the asking class
- * holds out as floor, and how far under a prism's top a tyre still stands on it: a higher face is a wall.
+ * The step (m) a surface holds out as floor to a reader that names no tyre (`PQ_MOUNT` 0): `MOUNT` of the biggest drawn tyre's radius,
+ * the biggest class's tyre radius (0.355 m) times its wheel scale (1.73).
  */
-export const STEP_MAX = MOUNT * 0.32 * 1.7;
+export const STEP_MAX = MOUNT * 0.355 * 1.73;
 
 /** No surface under the point: `pointContact` answers this height. */
 const NONE = -Infinity;
@@ -108,7 +113,7 @@ const D_RUNR = 11;
 const D_TAN = 12;
 
 /** Patch integers, `Q_STRIDE` each. */
-export const Q_STRIDE = 10;
+export const Q_STRIDE = 11;
 export const Q_KIND = 0;
 export const Q_NU = 1;
 export const Q_NV = 2;
@@ -126,6 +131,8 @@ export const Q_SOLID = 7;
 const Q_DYN = 8;
 /** 1: a prism that moves after the seal (`movePrism`): every query tests it, the cells list only what stays. */
 const Q_MOVES = 9;
+/** 1: the patch is in `Surface.dyn` (changed since the last step's end). */
+const Q_STIR = 10;
 
 /** A patch's slots grow by this many at a time. */
 const GROW = 8;
@@ -295,7 +302,7 @@ export class Surface {
   rasterBuilt = false;
   /** Patches whose box or drop changed after the raster was built (a slab top riding its car): read one by one, never rastered. */
   readonly moving: number[] = [];
-  /** The patches changed after the seal (`Q_DYN`), `nDyn` of them valid, in the order they first changed (`stirNear` reads only these). */
+  /** The patches changed since the last step's end (`Q_STIR`, `calm`), `nDyn` of them valid, in the order they first changed (`stirNear` reads only these). */
   dyn = new Int32Array(0);
   nDyn = 0;
   /** Static triangle-mesh solids the scene has that are not height fields (the corkscrew's channel walls): world-space vertices and indices. */
@@ -353,6 +360,11 @@ export class Surface {
 
   /** Readies `always` for queries at plan (`x`, `z`) and up to `r` (m) about it, asked by body slot `skip`: every query tests a static surface's alike; the cars' tops list the roofs near the asker (`CarSurfaces`). */
   near(_skip: number, _x: number, _z: number, _r = 0): void {}
+
+  /** Patch `i`'s side for a point that stands under its top by more than its reach, asked only by a point with `PQ_FLANK`: into `out` (`FL_*`); false where the point is not in its body. */
+  flank(_i: number, _q: Float64Array, _out: Float64Array): boolean {
+    return false;
+  }
 
   /** A bilinear grid patch; returns its index. */
   addGrid(g: GridSpec): number {
@@ -463,7 +475,7 @@ export class Surface {
   /**
    * A prism patch (`world/prism.ts`): a plan shape (a box of half extents `hx`, `hz`, or a circle of radius `hx`) turned by
    * `yaw`, from `base` up to a top `top` over its middle that rises `gu` per metre across and `gw` along. It is no floor
-   * to a tyre that is not within `STEP_MAX` of its top, and a wall to everything else: a body in it is answered the face
+   * to a tyre that is not within its mount (`PQ_MOUNT`, else `STEP_MAX`) of its top, and a wall to everything else: a body in it is answered the face
    * it entered by (`pointContact`). A prop that is knocked off its spot (`knock`) answers nothing here: only a body's
    * footprint meets it (`prop-contact.ts`).
    */
@@ -516,20 +528,26 @@ export class Surface {
     this.moved(i);
   }
 
-  /** A moving prism's pose and plan velocity (a press plate, the slab): rewritten in place each step, no allocation. Its spec said `moves`. */
+  /** A moving prism's pose and plan velocity (a press plate, the slab): rewritten in place each step, no allocation. Its spec said `moves`. A rewrite to the same pose is no change, so nothing is stirred. */
   movePrism(i: number, x: number, z: number, yaw: number, vx: number, vz: number): void {
     const o = i * P_STRIDE;
-    this.p[o + PR_VX] = vx;
-    this.p[o + PR_VZ] = vz;
-    this.shapePrism(i, x, z, yaw, this.p[o + PR_HX]!, this.p[o + PR_HZ]!);
+    const P = this.p;
+    if (this.sealed && this.inPlay(i) && Object.is(P[o + PR_X], x) && Object.is(P[o + PR_Z], z) && Object.is(P[o + PR_YAW], yaw) && Object.is(P[o + PR_VX], vx) && Object.is(P[o + PR_VZ], vz)) return;
+    P[o + PR_VX] = vx;
+    P[o + PR_VZ] = vz;
+    this.shapePrism(i, x, z, yaw, P[o + PR_HX]!, P[o + PR_HZ]!);
   }
 
-  /** Prism `i`'s half extents again (a slab's dented width) and its heights. */
+  /** Prism `i`'s half extents again (a slab's dented width) and its heights. The same ones are no change: nothing is stirred. */
   resizePrism(i: number, hx: number, hz: number, base: number, top: number): void {
     const o = i * P_STRIDE;
-    this.p[o + PR_BASE] = base;
-    this.p[o + PR_TOP] = top;
-    this.shapePrism(i, this.p[o + PR_X]!, this.p[o + PR_Z]!, this.p[o + PR_YAW]!, hx, hz);
+    const P = this.p;
+    // A circle keeps no `hz` of its own (it takes `hx`).
+    const sameHz = P[o + PR_R]! > 0 || Object.is(P[o + PR_HZ], hz);
+    if (this.sealed && this.inPlay(i) && Object.is(P[o + PR_HX], hx) && sameHz && Object.is(P[o + PR_BASE], base) && Object.is(P[o + PR_TOP], top)) return;
+    P[o + PR_BASE] = base;
+    P[o + PR_TOP] = top;
+    this.shapePrism(i, P[o + PR_X]!, P[o + PR_Z]!, P[o + PR_YAW]!, hx, hz);
   }
 
   /**
@@ -776,8 +794,9 @@ export class Surface {
     this.box(i);
   }
 
-  /** Empty patch `i`'s box: it answers nothing until its frame is set again. */
+  /** Empty patch `i`'s box: it answers nothing until its frame is set again. Already empty after the seal is no change: nothing is stirred. */
   disable(i: number): void {
+    if (this.sealed && !this.inPlay(i)) return;
     const o = i * P_STRIDE;
     this.p[o + P_MINX] = Infinity;
     this.p[o + P_MAXX] = -Infinity;
@@ -844,20 +863,30 @@ export class Surface {
     return level && open && !Object.is(P[o + P_OY], -0) && this.q[qo + Q_KIND] === GRID && this.q[qo + Q_DYN] === 0 && this.q[qo + Q_OWNER] === -1 && this.auxs[i]!.length === 0;
   }
 
-  /** Patch `i` changed after the seal (`Q_DYN`): no cell reads it as plain from then on, every one that did tests its candidates. */
+  /** Patch `i` changed after the seal: it is listed in `dyn` until the step's end (`Q_STIR`), and no cell reads it as plain from then on (`Q_DYN`), every one that did tests its candidates. */
   private unplain(i: number): void {
     const qo = i * Q_STRIDE;
-    if (!this.sealed || this.q[qo + Q_DYN] === 1) return;
-    this.q[qo + Q_DYN] = 1;
-    if (this.nDyn === this.dyn.length) {
-      const grown = new Int32Array(this.nDyn + GROW);
-      grown.set(this.dyn);
-      this.dyn = grown;
+    if (!this.sealed) return;
+    if (this.q[qo + Q_STIR] !== 1) {
+      this.q[qo + Q_STIR] = 1;
+      if (this.nDyn === this.dyn.length) {
+        const grown = new Int32Array(this.nDyn + GROW);
+        grown.set(this.dyn);
+        this.dyn = grown;
+      }
+      this.dyn[this.nDyn++] = i;
     }
-    this.dyn[this.nDyn++] = i;
+    if (this.q[qo + Q_DYN] === 1) return;
+    this.q[qo + Q_DYN] = 1;
     if (this.plainOne === i) this.plainOne = -1;
     if (this.plainOutside === i) this.plainOutside = -1;
     for (let c = 0; c < this.plainCells.length; c++) if (this.plainCells[c] === i) this.plainCells[c] = -1;
+  }
+
+  /** A step's end: the patches changed so far are no longer news (`dyn` empties), the next change lists its patch again. */
+  calm(): void {
+    for (let k = 0; k < this.nDyn; k++) this.q[this.dyn[k]! * Q_STRIDE + Q_STIR] = 0;
+    this.nDyn = 0;
   }
 
   private indexBoxes(): void {
@@ -952,6 +981,12 @@ export function armSolids(s: Surface | null): void {
   live.solids = s;
 }
 
+/** A step's end: the armed static surface's and solids' changes so far are no longer news (`Surface.calm`). */
+export function calmSolids(): void {
+  live.solids?.calm();
+  live.statics?.calm();
+}
+
 /** The scene's armed solids (`armSolids`), null when none: where the bench reads the prism counters. */
 export function armedSolids(): Surface | null {
   return live.solids;
@@ -963,7 +998,7 @@ export function armedSolids(): Surface | null {
  * (`S_TU`, `S_TV`) and height out (`S_CH`) and, for a best `plainOffer` found, the point in its grid (`S_PFU`, `S_PFV`; `S_PFU` −1 for
  * any other best), its node, factor and partials left to `plainRest`.
  */
-const _s = new Float64Array(23);
+const _s = new Float64Array(24);
 const S_BEST = 0;
 const S_PATCH = 1;
 const S_G0 = 2;
@@ -989,6 +1024,8 @@ const S_SNZ = 20;
 const S_SPATCH = 21;
 /** The reach (m) the candidate prism's top counts from below: its patch's, or without limit for a point that came in through the top. */
 const S_CREACH = 22;
+/** The normal's y of the deepest side answer: 0 for a prism's face, a car's flank may lean. */
+const S_SNY = 23;
 /** `Surface.plainOne`: read `Surface.plainCells` per index cell. */
 const PLAIN_BY_CELL = -2;
 /** A `Surface.plainCells` entry: the index cell lists patches besides the one always-tested plain grid (`plainOutside`): `find` reads that grid plain, then offers the cell's patches in list order, as `offerAll` does. */
@@ -1217,7 +1254,11 @@ function offer(s: Surface, i: number, q: Float64Array, skip: number, need: numbe
   // for a tyre (`wheelContact`) only up to the hub's height (`live.topCap`): one above it is a wall.
   const y = q[PQ_Y]!;
   const reach = kind === PRISM ? _s[S_CREACH]! : P[o + P_REACH]!;
-  if (h !== h || h > y + (owner >= 0 && reach > live.topCap ? live.topCap : reach) || h < _s[S_BEST]) return;
+  if (h !== h || h < _s[S_BEST]) return;
+  if (h > y + (owner >= 0 && reach > live.topCap ? live.topCap : reach)) {
+    if (q[PQ_FLANK] === 1 && owner >= 0) flankSide(s, i, q);
+    return;
+  }
   _s[S_BEST] = h;
   live.surf = s;
   _s[S_PATCH] = i;
@@ -1228,13 +1269,28 @@ function offer(s: Surface, i: number, q: Float64Array, skip: number, need: numbe
   _s[S_PFU] = -1;
 }
 
+const _flank = new Float64Array(FL_SIZE);
+
+/** A point in a car's side under its top (`Surface.flank`) is that car's face: the side answer if it is the deepest so far, as a prism's is. */
+function flankSide(s: Surface, i: number, q: Float64Array): void {
+  if (!s.flank(i, q, _flank) || _flank[FL_DEPTH]! <= _s[S_SDEPTH]!) return;
+  _s[S_SDEPTH] = _flank[FL_DEPTH]!;
+  _s[S_SNX] = _flank[FL_NX]!;
+  _s[S_SNY] = _flank[FL_NY]!;
+  _s[S_SNZ] = _flank[FL_NZ]!;
+  _s[S_SPATCH] = i;
+  live.side = s;
+}
+
 const _face = new Float64Array(F_SIZE);
 
 /**
  * Prism patch `i` at the point: a floor candidate (`_s[S_H]`, the top's height and its slope) where the point is inside the
- * plan and over the base, for a tyre not deeper under the top than it mounts (`P_REACH`), a body point (`PQ_BODY`: a cage vertex, a
- * belly row) no deeper under it than the face it is in is deep, or a point that came in through the top (`exitFace`: it landed); else
- * the face it entered by as the side answer if that is the deepest so far (`S_SDEPTH`).
+ * plan and over the base, for a tyre not deeper under the top than it mounts (`PQ_MOUNT`: its own; a reader that names none gets
+ * `P_REACH`, `STEP_MAX`) unless it is rolling into the side it came in by (`F_TIME`), a body point (`PQ_BODY`: a cage vertex, a belly
+ * row) no deeper under it than the face it is in is deep, or a point that came in through the top (`exitFace`: it landed; a tyre's
+ * reach under the top is then its radius, not unbounded); else the face it entered by as the side answer if that is the deepest so far
+ * (`S_SDEPTH`).
  * NaN: no candidate, outside the plan or under the base (a body passes beneath).
  */
 function prismAt(s: Surface, i: number, q: Float64Array): void {
@@ -1259,20 +1315,26 @@ function prismAt(s: Surface, i: number, q: Float64Array): void {
   _s[S_H] = top;
   _s[S_CG0] = P[o + PR_GU]! * c + P[o + PR_GW]! * sn;
   _s[S_CG1] = -P[o + PR_GU]! * sn + P[o + PR_GW]! * c;
-  const mounts = P[o + P_REACH]!;
+  const tyre = q[PQ_MOUNT]! > 0 && q[PQ_BODY] !== 1;
+  const mounts = tyre ? q[PQ_MOUNT]! : P[o + P_REACH]!;
   const body = q[PQ_BODY] === 1;
   const under = top - y;
   _s[S_CREACH] = mounts;
-  if (under <= (body ? 0 : mounts)) return;
+  if (under <= (body || tyre ? 0 : mounts)) return;
   const entered = exitFace(P, o, x, y, z, q[PQ_VX]!, q[PQ_VY]!, q[PQ_VZ]!, _face);
-  if (entered === IN_TOP) _s[S_CREACH] = Infinity;
+  if (entered === IN_TOP) _s[S_CREACH] = tyre ? mounts / MOUNT : Infinity;
   else if (entered === IN_SIDE) {
+    // A face whose top stands over the hub is a wall to a tyre rolling into it: it climbs only what meets its circle under the hub. Its
+    // mount over the hub is what a tyre at rest in the face stands on. Mounting it at any speed, a monster sliding sideways into the slab
+    // with its outer hubs raised by its roll read the slab's top as floor and drove up onto it.
+    if (tyre && under <= mounts && _face[F_TIME] === Infinity) return;
     if (body && under <= mounts && under <= _face[F_DEPTH]!) return;
     _s[S_CREACH] = 0;
     if (_face[F_DEPTH]! > _s[S_SDEPTH]!) {
       _s[S_SDEPTH] = _face[F_DEPTH]!;
       _s[S_SNX] = _face[F_NX]!;
       _s[S_SNZ] = _face[F_NZ]!;
+      _s[S_SNY] = 0;
       _s[S_SPATCH] = i;
       live.side = s;
     }
@@ -1480,13 +1542,17 @@ export function heightGrip(): number {
 export const PQ_X = 0;
 export const PQ_Z = 1;
 export const PQ_Y = 2;
-export const PQ_SIZE = 7;
+export const PQ_SIZE = 9;
 /** The point's own velocity (m/s): the face it came in through is the one this opposes (`exitFace`); 0 for a point at rest or one that never asks a wall. */
 export const PQ_VX = 3;
 export const PQ_VZ = 4;
 export const PQ_VY = 5;
-/** 1 for a point of a body's own shape (a cage vertex, a belly row): a prism's side it is in answers the face, however shallow; 0 (a tyre) mounts a step within the prism's reach under its top. */
+/** 1 for a point of a body's own shape (a cage vertex, a belly row): a prism's side it is in answers the face, however shallow; 0 (a tyre) mounts a step within its `PQ_MOUNT` under the top. */
 export const PQ_BODY = 6;
+/** A tyre's own mount (m): `MOUNT` of its drawn radius, the step it climbs by grip. 0 (a body point, a reader that names no tyre): the prism's `P_REACH`. */
+export const PQ_MOUNT = 7;
+/** 1 for a point of a loose part: a car's side it is in answers its face (`Surface.flank`), as a prism's does; 0 for every other asker. */
+export const PQ_FLANK = 8;
 
 /**
  * The surface at plan (x, z) of the query point `q` (`PQ_X`, `PQ_Z`, `PQ_Y`) under a body asking from height y (`Infinity`: the
@@ -1503,6 +1569,15 @@ export function pointContact(q: Float64Array, skip: number, out: Float64Array, t
   if (GQ.on) return pointOn(POINT_ALL, q, skip, out, travel2, gap);
   seekAll(q, skip);
   return finish(q, out, travel2, gap);
+}
+
+/**
+ * `pointContact` over the static surface and the solids alone, no car top: what a tyre's side meets (`readTyreSides`). A top answers no
+ * side, and asking the tops would list the near ones (`CarSurfaces.near`) again for every tyre point.
+ */
+export function pointContactSolids(q: Float64Array, skip: number, out: Float64Array): void {
+  seek(q, skip, null, NO_TOPS, 0);
+  answer(q, out);
 }
 
 /** `pointContact` over the car tops `holdTops` readied last, not those near the point: a body asks the tops once for all its points. */
@@ -1604,12 +1679,13 @@ function answer(q: Float64Array, out: Float64Array): void {
   const qo = _s[S_SPATCH]! * Q_STRIDE;
   out[C_H] = NONE;
   out[C_NX] = _s[S_SNX]!;
-  out[C_NY] = 0;
+  out[C_NY] = _s[S_SNY]!;
   out[C_NZ] = _s[S_SNZ]!;
   out[C_DEPTH] = depth;
   out[C_SURF] = side.q[qo + Q_SURF]!;
   out[C_GRIP] = side.p[_s[S_SPATCH]! * P_STRIDE + P_GRIP]! * GRIPS[out[C_SURF]!]!;
-  out[C_OWNER] = -1;
+  // A prism's patch has no owner (-1); a car's flank names its car.
+  out[C_OWNER] = side.q[qo + Q_OWNER]!;
   out[C_ARG] = _s[S_SPATCH]!;
   out[C_AUX] = 1;
 }
@@ -1701,12 +1777,12 @@ function checkPoint(kind: number, q: Float64Array, out: Float64Array, far: boole
   if (v.first === "") v.first = `point kind ${kind} entry ${bad} far ${far}: baked ${out[bad]} live ${_live[bad]} at ${q[PQ_X]}, ${q[PQ_Z]}, ${q[PQ_Y]}`;
 }
 
-/** What `stirNear` asks of a car: whether it moves (speed or spin at or above rest). */
-export type StirCar = { readonly moving: boolean };
+/** What `stirNear` asks of a car: whether it moves (speed or spin at or above rest); a part's flank contact its velocity (m/s). */
+export type StirCar = { readonly moving: boolean; readonly velocity: { readonly x: number; readonly y: number; readonly z: number } };
 
 /**
  * Whether anything that moves or changes has its box over the square of half side `r` about plan (`x`, `z`): a static's or a solid's patch rewritten
- * since the seal (a press plate, a ramp slid into place, a prism put out) or a car's top but the asker `skip`'s own. A body at rest there is
+ * since the last step's end (a press plate, a ramp slid into place, a prism put out) or a car's top but the asker `skip`'s own. A body at rest there is
  * answered what it was the step before when this is false: the queries read nothing else. With `cars` (the world's, a top's owner being its slot) a
  * top whose car does not move (asleep, or resting under rest speed) is not a change either: neighbours settling together all fall asleep.
  */
@@ -1714,7 +1790,7 @@ export function stirNear(x: number, z: number, r: number, skip: number, cars: re
   return stirIn(live.statics, x, z, r, -2, null) || stirIn(live.solids, x, z, r, -2, null) || stirIn(live.tops, x, z, r, skip, cars);
 }
 
-/** `stirNear` over `s`: every patch but `skip`'s own when `skip` is a slot (-1 or more), else only those changed since the seal (`Surface.dyn`). */
+/** `stirNear` over `s`: every patch but `skip`'s own when `skip` is a slot (-1 or more), else only those changed since the last step's end (`Surface.dyn`). */
 function stirIn(s: Surface | null, x: number, z: number, r: number, skip: number, cars: readonly StirCar[] | null): boolean {
   if (s === null) return false;
   const P = s.p;
@@ -1812,10 +1888,10 @@ export function clearOf(skip: number, x: number, z: number, r: number, y: number
   return (s === null || staticTop(s, x - r, x + r, z - r, z + r) < y) && (o === null || staticTop(o, x - r, x + r, z - r, z + r) < y) && topsTop(skip, x - r, x + r, z - r, z + r) === -Infinity;
 }
 
-/** `staticTop` over the armed solids alone (-Infinity: none armed). */
-export function solidTop(xMin: number, xMax: number, zMin: number, zMax: number): number {
+/** `staticTop` over the armed solids alone (-Infinity: none armed); `cellsOnly` as `staticTop`'s (a bound that never falls as the box grows). */
+export function solidTop(xMin: number, xMax: number, zMin: number, zMax: number, cellsOnly = false): number {
   if (GQ.on) GQ.calls[G.solidTop] = GQ.calls[G.solidTop]! + 1;
-  return live.solids === null ? -Infinity : staticTop(live.solids, xMin, xMax, zMin, zMax);
+  return live.solids === null ? -Infinity : staticTop(live.solids, xMin, xMax, zMin, zMax, cellsOnly);
 }
 
 /** `patchOf` the contact `seek` found would report. */
@@ -1857,7 +1933,7 @@ function look(s: Surface, q: Float64Array, need: number): number {
 // the drawn tyre does. Where no patch ends within the tyre's reach (`edgeIn`) the rings' bottoms, turned to face the surface, are the
 // whole footprint (`BASE`): over one patch's surface the arcs add nothing but queries.
 const RINGS: readonly (readonly [number, number])[] = [
-  [0, 0.32],
+  [0, PLATFORM_TYRE.r],
   [0.082, 0.314],
   [-0.082, 0.314],
   [0.104, 0.298],
@@ -1865,6 +1941,10 @@ const RINGS: readonly (readonly [number, number])[] = [
 ];
 const STEPS = 12;
 const FOOT = RINGS.length * (2 * STEPS + 1);
+/** The step (m) a tyre whose tread is the platform tyre's at `scale` mounts by grip: `MOUNT` of its drawn radius. */
+export function treadMount(scale: number): number {
+  return MOUNT * RINGS[0]![1] * scale;
+}
 /**
  * The footprint's first points, every ring's bottom, hold the tread's lowest point over one plane at any tilt: tilted φ across the axle
  * (up to π/2, a rolled car's tyre on its sidewall) the tread's lowest point is the bottom of the ring with the greatest
@@ -2230,14 +2310,28 @@ const _w = new Float64Array(HIT_SIZE);
 const _x = new Float64Array(HIT_SIZE);
 const _pq = new Float64Array(PQ_SIZE);
 /**
- * The footprint's pose `tread` reads: its turn in the rolling plane (cos, sin), the wheel's scale and the highest the surfaces stand
- * over the footprint (`Infinity`: unbounded) (no boxed doubles cross the call).
+ * The footprint's pose `tread` reads: its turn in the rolling plane (cos, sin), the wheel's scale along its radius and across its tread,
+ * and the highest the surfaces stand over the footprint (`Infinity`: unbounded) (no boxed doubles cross the call).
  */
-const _foot = new Float64Array(4);
+const _foot = new Float64Array(5);
 const FOOT_COS = 0;
 const FOOT_SIN = 1;
 const FOOT_SCALE = 2;
 const FOOT_TOP = 3;
+const FOOT_ACROSS = 4;
+/**
+ * The wheel's motion its tread's points ask with (`wheelContact`'s `motion`): the hub's plan velocity (x, z) and the body's spin (x, y, z);
+ * vertical motion is none, as a tyre's side points' (a pitching tyre's falling tread read a face's top as come in through). A point moving
+ * into a face whose top stands over the hub meets it as the side it came in by, not as a top it stands in: asked at rest, a wrecked
+ * monster's tyres read the slab's top over their hubs as floor once inside its plan, and it rode up onto it. Zero: a wheel read at rest
+ * (placing a car).
+ */
+const _motion = new Float64Array(5);
+const MOTION_VX = 0;
+const MOTION_VZ = 1;
+const MOTION_WX = 2;
+const MOTION_WY = 3;
+const MOTION_WZ = 4;
 /** Per footprint point of the last `wheelContact`: its rise, the patch that sets it (`patchOf`) and the point (world x, y, z). */
 const _rise = new Float64Array(FOOT);
 const _pid = new Float64Array(FOOT);
@@ -2464,7 +2558,7 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
   const c = _foot[FOOT_COS]!;
   const s = _foot[FOOT_SIN]!;
   const scale = _foot[FOOT_SCALE]!;
-  const lx = FX[k]! * scale;
+  const lx = FX[k]! * _foot[FOOT_ACROSS]!;
   const ly = (FY[k]! * c + FZ[k]! * s) * scale;
   const lz = (FZ[k]! * c - FY[k]! * s) * scale;
   const px = hub[0]! + axes[0]! * lx + axes[3]! * ly + axes[6]! * lz;
@@ -2474,6 +2568,8 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
   _pq[PQ_X] = px;
   _pq[PQ_Z] = pz;
   _pq[PQ_Y] = hub[1]!;
+  _pq[PQ_VX] = _motion[MOTION_VX]! + _motion[MOTION_WY]! * (pz - hub[2]!) - _motion[MOTION_WZ]! * (py - hub[1]!);
+  _pq[PQ_VZ] = _motion[MOTION_VZ]! + _motion[MOTION_WX]! * (py - hub[1]!) - _motion[MOTION_WY]! * (px - hub[0]!);
   seek(_pq, skip, treadReach.tops, treadReach.list, treadReach.count);
   const r = _s[S_BEST] - py;
   _rise[k] = r;
@@ -2491,7 +2587,9 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
 
 /**
  * A wheel's contact with the surfaces: its tread's footprint swept over the store. `hub` is the hub's world position (x, y, z),
- * `axes` the body's rotation (world x, y, z axes, 9 numbers), `scale` the wheel's size.
+ * `axes` the body's rotation (world x, y, z axes, 9 numbers), `scale` the wheel's size along its radius and `across` across its tread
+ * (the platform tyre's rings stretched to the drawn tyre's width: a monster's 0.63 m tread read 0.42 m wide on the radius' scale, its
+ * drawn shoulders 2.1 cm in a 20° slope banked 10°).
  * `out` = [rise, nx, ny, nz, grip, surface, owner, footprint index, aux, footprint point x, y, z, touch]: `rise` the greatest height
  * any footprint point must lift to clear the surface under it (the tread gap is `-rise`; `-Infinity` with nothing under the wheel),
  * the rest as `pointContact`'s at the point that sets it (the hub itself with nothing under the wheel), so a wheel riding up a lip
@@ -2499,15 +2597,17 @@ function tread(hub: Float64Array, axes: Float64Array, skip: number, k: number, o
  * `C_PZ`): where the tyre rests, whichever side of the hub that is. `touch` is `rise` or, when a face too high to mount is pressed by
  * the tread, how far that is in it.
  */
-export function wheelContact(hub: Float64Array, axes: Float64Array, scale: number, skip: number, out: Float64Array): void {
+export function wheelContact(hub: Float64Array, axes: Float64Array, scale: number, across: number, skip: number, out: Float64Array, motion: Float64Array | null = null): void {
+  if (motion === null) _motion.fill(0);
+  else _motion.set(motion);
   const t = GQ.on ? gqEnter(G.wheelContact) : -1;
   if (GQ.check) {
     const baked = BAKE.on;
     BAKE.on = false;
-    wheelContactRead(hub, axes, scale, skip, _live);
+    wheelContactRead(hub, axes, scale, across, skip, _live);
     BAKE.on = baked;
   }
-  wheelContactRead(hub, axes, scale, skip, out);
+  wheelContactRead(hub, axes, scale, across, skip, out);
   if (GQ.check) {
     const v = GQ.verify;
     v.compared[WHEEL_KIND] = v.compared[WHEEL_KIND]! + 1;
@@ -2521,7 +2621,7 @@ export function wheelContact(hub: Float64Array, axes: Float64Array, scale: numbe
   if (t >= 0) gqLeave(G.wheelContact, t);
 }
 
-function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, skip: number, out: Float64Array): void {
+function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, across: number, skip: number, out: Float64Array): void {
   out[C_NX] = 0;
   out[C_NY] = 1;
   out[C_NZ] = 0;
@@ -2561,7 +2661,11 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
   _pq[PQ_X] = x;
   _pq[PQ_Z] = z;
   _pq[PQ_Y] = y;
+  _pq[PQ_VX] = _motion[MOTION_VX]!;
+  _pq[PQ_VZ] = _motion[MOTION_VZ]!;
+  _pq[PQ_MOUNT] = treadMount(scale);
   _foot[FOOT_SCALE] = scale;
+  _foot[FOOT_ACROSS] = across;
   treadReach.tops = tops !== null && edgeIn(tops, _pq, skip) ? tops : null;
   const n = treadReach.tops !== null || (live.statics !== null && edgeIn(live.statics, _pq, skip)) || (live.solids !== null && edgeIn(live.solids, _pq, skip)) ? FOOT : BASE;
   // The footprint turns in the rolling plane to face the surface under the hub: each ring's bottom is then its point nearest that
@@ -2594,6 +2698,8 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
   // neighbour on another patch is halved (`edgeCross`; a front tyre leaving the wedge's side read 1.6 cm lower at its nearest arc
   // than the drawn tyre's tread).
   if (n === FOOT) {
+    _pq[PQ_VX] = _motion[MOTION_VX]!;
+    _pq[PQ_VZ] = _motion[MOTION_VZ]!;
     const best = out[C_H]! - ARC_RISE * scale;
     for (let ring = 0; ring < RINGS.length; ring++) {
       let jb = 0;
@@ -2621,5 +2727,8 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
     }
   }
   live.topCap = Infinity;
+  _pq[PQ_MOUNT] = 0;
+  _pq[PQ_VX] = 0;
+  _pq[PQ_VZ] = 0;
   out[C_TOUCH] = out[C_H]!;
 }

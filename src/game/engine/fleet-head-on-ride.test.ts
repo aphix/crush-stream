@@ -41,13 +41,26 @@ function wreckAt(style: CarStyleId, cls: VehicleClassId, x: number, y: number, z
   return car;
 }
 
+/** The pair of the staging: a sedan wreck parked at the origin, a muscle car's wreck over its bonnet, in a world with idle pedals. */
+function bonnetStaging(): { over: DeformableCar; cars: readonly DeformableCar[]; w: ReturnType<typeof makeWorld> } {
+  const parked = wreckAt("sedan", "sedan", 0, 0, 0, 0, 0);
+  const pitch = Math.asin(BONNET_Y / (2 * HALF_BASE));
+  const over = wreckAt("coupe", "muscle", 0, HUB_Y + HALF_BASE * Math.sin(pitch) - HUB_Y * Math.cos(pitch), AXLE_OVER_Z + HALF_BASE * Math.cos(pitch), Math.PI, pitch);
+  const cars = [parked, over];
+  return { over, cars, w: makeWorld(cars, false, false, PARKED) };
+}
+
 describe("given a muscle car's wreck set with its front tyres on a parked sedan wreck's bonnet and its rear tyres on the road", () => {
+  it("when its front tyres read the other wreck's top, which the rigid step takes no row from, then the world hears the two touch: a highlight clip that keeps the car keeps the wreck its tyres lost their row to", () => {
+    const { w } = bonnetStaging();
+    let heard = false;
+    w.world.partTouch = () => (heard = true);
+    for (let frame = 0; frame < ON_TOP_FRAMES; frame++) tickWorld(w, FRAME);
+    assert.ok(heard, "the world never heard the muscle car and the sedan wreck touch");
+  });
+
   it("when its front tyres read the other wreck's top, which the rigid step takes no row from, then its drawn nose is not seated on it: no raise and no raise/flat flips", () => {
-    const parked = wreckAt("sedan", "sedan", 0, 0, 0, 0, 0);
-    const pitch = Math.asin(BONNET_Y / (2 * HALF_BASE));
-    const over = wreckAt("coupe", "muscle", 0, HUB_Y + HALF_BASE * Math.sin(pitch) - HUB_Y * Math.cos(pitch), AXLE_OVER_Z + HALF_BASE * Math.cos(pitch), Math.PI, pitch);
-    const cars = [parked, over];
-    const w = makeWorld(cars, false, false, PARKED);
+    const { over, cars, w } = bonnetStaging();
     let onTop = 0;
     let raised = 0;
     let flips = 0;

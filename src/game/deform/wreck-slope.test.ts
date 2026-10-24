@@ -95,12 +95,25 @@ const label = (f: Fit) =>
   `pitch ${f.pitch.toFixed(1)}° vs ground ${f.groundPitch.toFixed(1)}°, roll ${f.roll.toFixed(1)}° vs ${f.groundRoll.toFixed(1)}°, ` +
   `gaps ${f.gaps.map((g) => (g * 100).toFixed(1)).join("/")} cm, underside ${(f.pen * 100).toFixed(1)} cm in the ground at ${f.penAt}`;
 
+/**
+ * Cells held to a tighter bound than `TILT_DEG` (degrees off the intact car's attitude). The monster on the 10° bank rested 2.2-2.6° nose-off
+ * the intact car's at the row's 20 m/s hit (0.5° at 10 m/s, 0.3° at 6 m/s), and 0.5° nose-off on flat ground, with its tyres on the ground and
+ * no hub shoved: the pitch was the tyre spring rows' equilibrium, whose weight shares read the hubs where the stock frame puts them while a
+ * hit leaves a wreck's hubs shoved along its body for the second its body takes to seat on them (the wreck fell asleep before it had), and
+ * with the shares read at the hubs' own places it rests within 0.2° of the intact car's pitch and roll at every hit.
+ */
+const TILT_BY_CELL: Record<string, number> = {
+  "monster on flat ground": 0.3,
+  "monster on a 10° bank": 0.3,
+};
+
 describe("given a car struck head-on while standing on flat ground, a slope, a bank or the stunt road, so that it becomes a wreck", () => {
   afterEach(() => setGround(null));
 
   for (const cls of CLASSES_UNDER_TEST) {
     for (const site of SITES) {
-      it(`when a ${cls} on ${site.name} is left to settle for ${REST_S} s after the hit, then it sits on the ground under its wheels (pitch and roll within 2° of the intact ${cls} parked and settled ${PARKED_S} s there, tyres within 2 cm of the ground, underside no more than 1 cm in it)`, () => {
+      const tilt = TILT_BY_CELL[`${cls} on ${site.name}`] ?? TILT_DEG;
+      it(`when a ${cls} on ${site.name} is left to settle for ${REST_S} s after the hit, then it sits on the ground under its wheels (pitch and roll within ${tilt}° of the intact ${cls} parked and settled ${PARKED_S} s there, tyres within 2 cm of the ground, underside no more than 1 cm in it)`, () => {
         const intact = parkedFit(site, cls);
         const { car, step } = wreck(site, cls, 0);
         for (let n = 0; n < REST_S * 60; n++) step();
@@ -108,8 +121,8 @@ describe("given a car struck head-on while standing on flat ground, a slope, a b
         car.dispose();
         assert.ok(car.crashed && car.deform.massActive, "the hit did not make a wreck");
         const where = `${cls} on ${site.name}: ${label(f)}`;
-        assert.ok(Math.abs(f.pitch - intact.pitch) <= TILT_DEG, `pitch off the intact car's (${intact.pitch.toFixed(1)}°): ${where}`);
-        assert.ok(Math.abs(f.roll - intact.roll) <= TILT_DEG, `roll off the intact car's (${intact.roll.toFixed(1)}°): ${where}`);
+        assert.ok(Math.abs(f.pitch - intact.pitch) <= tilt, `pitch off the intact car's (${intact.pitch.toFixed(1)}°): ${where}`);
+        assert.ok(Math.abs(f.roll - intact.roll) <= tilt, `roll off the intact car's (${intact.roll.toFixed(1)}°): ${where}`);
         assert.ok(Math.max(...f.gaps.map(Math.abs)) <= GAP_M, `a tyre off the ground or in it: ${where}`);
         assert.ok(f.pen <= PEN_M, `the underside is in the ground: ${where}`);
       });

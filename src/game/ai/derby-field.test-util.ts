@@ -6,7 +6,6 @@ import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import { applyAiDrive } from "./input-fade.ts";
 import { fleetStyle, layoutDerby } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { stepWorld } from "../engine/world-step.ts";
 import { armKill, assignClass, carClass, CLASSES, HANDLING, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
@@ -46,8 +45,8 @@ export type Field = {
 function face(c: DeformableCar, p: THREE.Vector3): "front" | "rear" | "side" {
   const dx = p.x - c.group.position.x;
   const dz = p.z - c.group.position.z;
-  const along = (dx * c.fwdFlat.x + dz * c.fwdFlat.z) / CAR_HALF.z;
-  const across = (dx * c.fwdFlat.z - dz * c.fwdFlat.x) / CAR_HALF.x;
+  const along = (dx * c.fwdFlat.x + dz * c.fwdFlat.z) / c.frame.half.z;
+  const across = (dx * c.fwdFlat.z - dz * c.fwdFlat.x) / c.frame.half.x;
   if (Math.abs(along) * 1.15 < Math.abs(across)) return "side";
   return along > 0 ? "front" : "rear";
 }

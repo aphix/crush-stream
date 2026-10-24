@@ -1,10 +1,15 @@
 import { IMPRINT_NONE } from "../deform/load-crush.ts";
 import { INF_K } from "../deform/deform-build.ts";
 import { cageAxis } from "../deform/deform-state.ts";
-import { archKeep, RES_SLOTS, SKIN_K } from "../deform/deform-rig.ts";
+import { archKeep, RES_SLOTS, SKIN_COUNT_BITS, SKIN_COUNT_MASK, SKIN_K, SKIN_LEVER_STEPS } from "../deform/deform-rig.ts";
 import { interiorPose } from "./part-pose.ts";
 import { decimate, upFacing } from "./cage-mesh.ts";
 import { planFieldOf, rasterise } from "./cage-fields.ts";
+import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { wellHumpGeometry } from "./car-well-mesh.ts";
+import { carFrame } from "./car-rig.ts";
+import { rockerAt } from "./car-lines.ts";
+import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 
 /**
  * The car's contact shape is its drawn body (docs/UNIFIED_CONTACT.md stage 3): the cage.
@@ -24,15 +29,47 @@ import { planFieldOf, rasterise } from "./cage-fields.ts";
  * @internal Imported by nothing until the Stage 3 lane wires it in (`armTops`, `HULL`, `satCars`, the ragdoll proxies).
  */
 
-/** The lattice's half width (m) along x and along z: the body (x ±0.91, z ±2.11) and the skin's 1.35 m travel cap, trimmed. */
-const HALF_X = 1.2;
-const HALF_Z = 2.4;
 /** Node spacing (m) of the fields. */
 export const CAGE_STEP = 0.05;
 /** The decimation's vertex target: the body and its panels (lids, glass), which keeps the cage near 300 triangles. */
 export const CAGE_VERTICES = 220;
-/** Room for a style's sill samples past the hull (`CageSource.sill`, less those the decimation kept): 24 or 25 per style today. */
-export const SILL_CAPACITY = 32;
+/** A style's cage build, counted: its sill candidates (`cageSourceOf`: welded, under its rocker line, between its axles) and loft stations. */
+function cageBuildCounts(style: BodyStyle): { sill: number; stations: number; kept: number } {
+  const geo = makeChassisGeometry(style, "cage");
+  const pos = geo.getAttribute("position").array;
+  let axleR = Infinity;
+  let axleF = -Infinity;
+  for (const [, , z] of carFrame(style).wheels) {
+    axleR = Math.min(axleR, z);
+    axleF = Math.max(axleF, z);
+  }
+  const welded = new Set<string>();
+  for (let i = 0; i < pos.length; i += 3) {
+    const z = pos[i + 2]!;
+    const y = Math.round(pos[i + 1]! * 1e4);
+    if (y >= rockerAt(z, style) * 1e4 || z <= axleR || z >= axleF) continue;
+    welded.add(`${Math.round(pos[i]! * 1e4)},${y},${Math.round(z * 1e4)}`);
+  }
+  const stations = (geo.userData.loft as { slices: number }).slices;
+  const kept = (geo.userData.hold as number[]).length;
+  geo.dispose();
+  return { sill: welded.size, stations, kept };
+}
+const BUILD_COUNTS = CAR_STYLE_IDS.map((id) => cageBuildCounts(CAR_STYLES[id]));
+/** Room for a style's sill samples past the hull (`CageSource.sill`): every sample is one of its style's sill candidates, so the most any style has. */
+export const SILL_CAPACITY = Math.max(...BUILD_COUNTS.map((c) => c.sill));
+/** Room for the underside points the decimation holds over its target (`decimate`'s `held`): at most a station's lowest on each side, every station. */
+export const CAGE_HELD_VERTICES = Math.max(...BUILD_COUNTS.map((c) => 2 * c.stations));
+/** Room for the vertices a style's cage build keeps through the decimation (`hold`: its C-post's crown points), which cost the hull none of its target: the most any style keeps. */
+export const CAGE_KEPT_VERTICES = Math.max(...BUILD_COUNTS.map((c) => c.kept));
+/** Room for a style's bed wheel tubs past its decimated hull (`CageSource.tubs`, kept whole): the most any style's cage build carries. */
+export const CAGE_TUB_VERTICES = Math.max(...CAR_STYLE_IDS.map((id) => wellHumpGeometry(CAR_STYLES[id], "cage")?.getAttribute("position").count ?? 0));
+/** A part decimated on a budget of its own (`CageSource.apart`: a bumper or a door standing on the body), its held points within it: its vertex target. */
+const PART_VERTICES = 12;
+/** Room for the parts decimated apart past the hull: the two bumpers and the two doors. */
+export const CAGE_PART_VERTICES = 4 * PART_VERTICES;
+/** Room for a push bar's box, a part apart of its own (`pushBarBox`, its eight corners all held): the cruiser's. */
+export const CAGE_BAR_VERTICES = 8;
 /** The interior's vertex target: what shows through a gone pane (the dash, the headliner, the seats), a few boxes. */
 const INTERIOR_VERTICES = 32;
 
@@ -42,8 +79,7 @@ export const P_ROOF_CLAMP = 4;
 export const P_CUT_Y = 9;
 export const P_CUT_X = 10;
 export const P_CUT_Z = 11;
-/** The skin's roof clamp: a vertex of the rest roof (over this height) rises at most `ROOF_UP` and sinks at most `ROOF_DOWN` (streamed-deform.ts `skin`). */
-const ROOF_CLAMP_Y = 1.05;
+/** How far a vertex of the rest roof, over the clamp height, may rise and sink (streamed-deform.ts `skin`). */
 const ROOF_DOWN = 0.1;
 const ROOF_UP = 0.08;
 /** The wheel arch's share of the hub's own offset it plants the paint at, with the wheel on and off (streamed-deform.ts `skin`). */
@@ -77,9 +113,15 @@ export interface CageSource {
   /** Per source vertex: 0 the body mesh, k + 1 panel k; and the number of panels (at most 255). */
   readonly group: Uint8Array;
   readonly panelCount: number;
+  /** Per source vertex: 1 where the decimation may never collapse it (a bumper's face points, a door's slab corners: `cagePanelsOf`). */
+  readonly held: Uint8Array;
+  /** Ranges of `rest`, its tail, each decimated alone to `PART_VERTICES` and appended past the hull: a part on the body (a bumper, a door) costs the hull none of its budget. */
+  readonly apart: readonly { readonly from: number; readonly count: number }[];
   /** Per panel, the origin its mesh is skinned about (`skinPanel`'s), x, y, z. */
   readonly panelOrigin: Float64Array;
-  /** Per panel: 1 for a glass pane, 0 for a lid or the light bar. */
+  /** A rest vertex over this height (m) is roof: the skin's roof clamp holds it (the rig's `roofClampY`). */
+  readonly roofClampY: number;
+  /** Per panel: 1 for a glass pane, 0 for a lid, the light bar, a bumper or a door. */
   readonly panelGlass: Uint8Array;
   /** The interior mesh's rest positions (x, y, z per vertex) and triangle indices: seen through a gone pane, so part of the body drawn. */
   readonly interiorRest: Float32Array;
@@ -91,6 +133,12 @@ export interface CageSource {
    * each row's ends and wherever the lattice can bend the row between two samples (`sillSamples`). A wreck's hull points, on no triangle.
    */
   readonly sill: Int32Array;
+  /** The lattice's half extents (m), the body's frame's. */
+  readonly lattice: { readonly x: number; readonly z: number };
+  /** The body's bed wheel tubs (`BodyStyle.wheelTub`): `count` vertices of `rest` from `from`, kept out of the decimation and whole past the hull. */
+  readonly tubs: { readonly from: number; readonly count: number };
+  /** The body loft's vertices: the first `loft` of `rest`, one ring a station (the underside the decimation holds where it rises). */
+  readonly loft: number;
 }
 
 /** What a fit reads of the car now: a `SkinDynamic`, less its lattice coefficients (the cage is the shape-mode skin). */
@@ -124,6 +172,8 @@ export interface CageFields {
   readonly bottom: Float32Array;
   /** Per node: 1 where the cage's plan strictly covers it. */
   readonly covered: Uint8Array;
+  /** Per node: the panel group (`vertexGroup`) of the part apart (a bumper) that alone covers it; 0 where the body, a lid or a pane covers it, or nothing does. */
+  readonly part: Uint8Array;
   /** Per node: signed distance (m) to the plan outline, negative inside. Current only while `planFresh` (`CarCage.planField` makes it so). */
   readonly plan: Float32Array;
   planFresh: boolean;
@@ -144,6 +194,9 @@ export interface CageStyle {
   readonly u0: number;
   readonly v0: number;
   readonly vertexCount: number;
+  /** Of `vertexCount`, the `heldCount` underside points `decimate` held over `CAGE_VERTICES`, from `heldFrom` on: a wreck's alone (`loadPoints`). */
+  readonly heldCount: number;
+  readonly heldFrom: number;
   /**
    * The sill samples (`CageSource.sill`) follow the hull's vertices in the per-vertex tables and in `pos`: skinned as they are, on no
    * triangle, so no field reads them. A wreck's rigid step rests on them too (`loadPoints`): a crushed sill bends between the hull's
@@ -177,14 +230,18 @@ export interface CageStyle {
   /** Per cage vertex: 0 the body, k + 1 panel k. */
   readonly vertexGroup: Uint8Array;
   readonly panelCount: number;
+  /** The first panel group of the parts apart (`CageSource.apart`, the last panels); `panelCount + 1` where there are none. */
+  readonly partGroup: number;
   /** Per panel, the origin its mesh is skinned about (`skinPanel`'s), x, y, z. */
   readonly panelOrigin: Float64Array;
   /** Every panel on, the fit of a pristine car. */
   readonly panelsOn: Uint8Array;
-  /** Per panel: 1 for a glass pane, 0 for a lid (`CageSource.panelGlass`). */
+  /** Per panel: 1 for a glass pane, 0 for a lid, a bumper or a door (`CageSource.panelGlass`). */
   readonly panelGlass: Uint8Array;
   /** The interior's vertices follow the sill samples in `pos` (`vertexCount` is the body's alone: the rigid step's hull points are those), and its triangles the body's, in group `panelCount + 1`: never a lid, never cut by the roof imprint. */
   readonly interiorCount: number;
+  /** A rest vertex over this height (m) is roof: the skin's roof clamp holds it (the rig's `roofClampY`). */
+  readonly roofClampY: number;
   /** The interior's rest positions as `fitInterior` places them with the masses at rest, x, y, z each. */
   readonly interiorRest: Float32Array;
   readonly interiorMass: Int32Array;
@@ -208,6 +265,7 @@ function skinCage(style: CageStyle, live: CageLive, out: CageFields): void {
   const hubs = live.hubs;
   const cap = live.params[P_CAP]!;
   const roofClamp = live.params[P_ROOF_CLAMP]! !== 0;
+  const roofY = style.roofClampY;
   const cutY = live.params[P_CUT_Y]!;
   const cutX = live.params[P_CUT_X]!;
   const cutZ = live.params[P_CUT_Z]!;
@@ -223,14 +281,20 @@ function skinCage(style: CageStyle, live: CageLive, out: CageFields): void {
     const dx = rx - resC[r]!;
     const dy = ry - resC[r + 1]!;
     const dz = rz - resC[r + 2]!;
-    if (skinN[i]! > 0) {
-      for (let k = i * SKIN_K, e = k + skinN[i]!; k < e; k++) {
+    const packed = skinN[i]!;
+    const n = packed & SKIN_COUNT_MASK;
+    if (n > 0) {
+      for (let k = i * SKIN_K, e = k + n; k < e; k++) {
         const o = skinXf[k]!;
         const w = skinW[k]!;
         px += (X[o]! * dx + X[o + 1]! * dy + X[o + 2]! * dz) * w;
         py += (X[o + 3]! * dx + X[o + 4]! * dy + X[o + 5]! * dz) * w;
         pz += (X[o + 6]! * dx + X[o + 7]! * dy + X[o + 8]! * dz) * w;
       }
+      const lever = (packed >> SKIN_COUNT_BITS) / SKIN_LEVER_STEPS;
+      px = lever * px + (1 - lever) * dx;
+      py = lever * py + (1 - lever) * dy;
+      pz = lever * pz + (1 - lever) * dz;
       for (let k = i * RES_SLOTS, e = k + RES_SLOTS; k < e; k++) {
         const j = resJ[k]!;
         const w = resW[k]!;
@@ -292,7 +356,7 @@ function skinCage(style: CageStyle, live: CageLive, out: CageFields): void {
       py = ry + ty * t;
       pz = rz + tz * t;
     }
-    if (roofClamp && ry > ROOF_CLAMP_Y) py = Math.min(Math.max(py, ry - ROOF_DOWN), ry + ROOF_UP);
+    if (roofClamp && ry > roofY) py = Math.min(Math.max(py, ry - ROOF_DOWN), ry + ROOF_UP);
     const rawHeight = py;
     const cut = cutY + cutX * px + cutZ * pz;
     if (py > cut) py = cut;
@@ -339,6 +403,7 @@ function allocateFields(vertexCount: number, nu: number, nv: number, panelCount:
     top: new Float32Array(nu * nv),
     bottom: new Float32Array(nu * nv),
     covered: new Uint8Array(nu * nv),
+    part: new Uint8Array(nu * nv),
     plan: new Float32Array(nu * nv),
     planFresh: false,
     planBox: new Float64Array(4),
@@ -642,8 +707,83 @@ function sillOffHull(src: CageSource, hull: Int32Array): Int32Array {
   return sill;
 }
 
+/**
+ * The hull: `src`'s body and panels decimated to `CAGE_VERTICES` (and the underside points it holds over that) exactly as the same body
+ * without its wheel tubs and its parts apart (`CageSource.apart`), then the tubs' vertices (welded) and triangles, then each part decimated
+ * alone to `PART_VERTICES`, so neither costs the hull any of its budget.
+ */
+function hullOf(src: CageSource): { source: Int32Array; tris: Uint16Array; triGroup: Uint8Array; held: number; heldFrom: number } {
+  const { from, count } = src.tubs;
+  const to = from + count;
+  const end = src.apart[0]?.from ?? src.group.length;
+  const rest = new Float32Array((end - count) * 3);
+  rest.set(src.rest.subarray(0, from * 3));
+  rest.set(src.rest.subarray(to * 3, end * 3), from * 3);
+  const group = new Uint8Array(end - count);
+  group.set(src.group.subarray(0, from));
+  group.set(src.group.subarray(to, end), from);
+  const held = new Uint8Array(end - count);
+  held.set(src.held.subarray(0, from));
+  held.set(src.held.subarray(to, end), from);
+  const index: number[] = [];
+  const tubTris: number[] = [];
+  for (let t = 0; t + 2 < src.index.length; t += 3) {
+    const tri = [src.index[t]!, src.index[t + 1]!, src.index[t + 2]!];
+    if (tri[0]! >= end) continue;
+    if (tri.every((v) => v >= from && v < to)) tubTris.push(...tri);
+    else index.push(...tri.map((v) => (v < from ? v : v - count)));
+  }
+  const kept = held.reduce((n, h) => n + h, 0);
+  const hull = decimate(rest, index, group, CAGE_VERTICES + kept, Math.min(src.loft, from), held);
+  const source = Array.from(hull.source, (v) => (v < from ? v : v + count));
+  const slots = new Map<string, number>();
+  const slotOf = new Int32Array(count);
+  for (let v = from; v < to; v++) {
+    const key = `${Math.round(src.rest[v * 3]! * 1e4)},${Math.round(src.rest[v * 3 + 1]! * 1e4)},${Math.round(src.rest[v * 3 + 2]! * 1e4)}`;
+    let slot = slots.get(key);
+    if (slot === undefined) {
+      slot = source.length;
+      slots.set(key, slot);
+      source.push(v);
+    }
+    slotOf[v - from] = slot;
+  }
+  const tris = Array.from(hull.tris);
+  const triGroup = Array.from(hull.triGroup);
+  for (let k = 0; k < tubTris.length; k += 3) {
+    const [a, b, c] = [slotOf[tubTris[k]! - from]!, slotOf[tubTris[k + 1]! - from]!, slotOf[tubTris[k + 2]! - from]!];
+    if (a === b || b === c || a === c) continue;
+    tris.push(a, b, c);
+    triGroup.push(src.group[tubTris[k]!]!);
+  }
+  appendParts(src, end, source, tris, triGroup);
+  const room = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_KEPT_VERTICES + CAGE_TUB_VERTICES + CAGE_PART_VERTICES + CAGE_BAR_VERTICES;
+  if (source.length > room) throw new Error(`${source.length} hull vertices, room for ${room}`);
+  return { source: Int32Array.from(source), tris: Uint16Array.from(tris), triGroup: Uint8Array.from(triGroup), held: hull.held, heldFrom: hull.heldFrom };
+}
+
+/** Each of `src`'s parts apart (`CageSource.apart`: the source's tail from `end`) decimated alone to `PART_VERTICES`, appended to a hull's `source`, `tris` and `triGroup`. */
+function appendParts(src: CageSource, end: number, source: number[], tris: number[], triGroup: number[]): void {
+  let next = end;
+  for (const part of src.apart) {
+    if (part.from !== next) throw new Error(`a part apart at ${part.from} is not the source's tail (${next})`);
+    next = part.from + part.count;
+    const own: number[] = [];
+    for (let t = 0; t + 2 < src.index.length; t += 3) {
+      if (src.index[t]! < part.from || src.index[t]! >= next) continue;
+      own.push(src.index[t]! - part.from, src.index[t + 1]! - part.from, src.index[t + 2]! - part.from);
+    }
+    const sub = decimate(src.rest.subarray(part.from * 3, next * 3), own, src.group.subarray(part.from, next), PART_VERTICES, 0, src.held.subarray(part.from, next));
+    if (sub.source.length > PART_VERTICES) throw new Error(`${sub.source.length} vertices of a part apart, room for ${PART_VERTICES}`);
+    const base = source.length;
+    for (const v of sub.source) source.push(v + part.from);
+    for (const v of sub.tris) tris.push(v + base);
+    triGroup.push(...sub.triGroup);
+  }
+}
+
 function buildStyle(src: CageSource, step: number): CageStyle {
-  const body = decimate(src.rest, src.index, src.group, CAGE_VERTICES);
+  const body = hullOf(src);
   const top = upFacing(src.interiorRest, src.interiorIndex);
   const inner = decimate(top.rest, top.index, new Uint8Array(top.rest.length / 3), INTERIOR_VERTICES);
   const n = body.source.length;
@@ -657,15 +797,17 @@ function buildStyle(src: CageSource, step: number): CageStyle {
   const interiorRest = new Float32Array(ni * 3);
   for (let i = 0; i < ni; i++) for (let k = 0; k < 3; k++) interiorRest[i * 3 + k] = top.rest[inner.source[i]! * 3 + k]!;
   const tables = vertexTables(src, source);
-  const nu = 2 * Math.round(HALF_X / step) + 1;
-  const nv = 2 * Math.round(HALF_Z / step) + 1;
+  const nu = 2 * Math.round(src.lattice.x / step) + 1;
+  const nv = 2 * Math.round(src.lattice.z / step) + 1;
   const style: CageStyle = {
     step,
     nu,
     nv,
-    u0: -HALF_X,
-    v0: -HALF_Z,
+    u0: -src.lattice.x,
+    v0: -src.lattice.z,
     vertexCount: n,
+    heldCount: body.held,
+    heldFrom: body.heldFrom,
     sillCount: points - n,
     triCount: tris.length / 3,
     source,
@@ -678,12 +820,14 @@ function buildStyle(src: CageSource, step: number): CageStyle {
     triGroup: Uint8Array.from({ length: tris.length / 3 }, (_, t) => (t < bodyTris ? body.triGroup[t]! : src.panelCount + 1)),
     vertexGroup: Uint8Array.from(source, (v) => src.group[v]!),
     panelCount: src.panelCount,
+    partGroup: src.apart.length > 0 ? src.group[src.apart[0]!.from]! : src.panelCount + 1,
     interiorCount: ni,
     interiorRest,
     interiorMass: src.interiorMass,
     panelsOn: new Uint8Array(src.panelCount).fill(1),
     panelGlass: src.panelGlass,
     panelOrigin: src.panelOrigin,
+    roofClampY: src.roofClampY,
   };
   style.pristine.pos.set(tables.rest);
   style.pristine.panelOn.fill(1);

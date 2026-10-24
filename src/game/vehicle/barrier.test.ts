@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
-import { physicsSlice } from "../contact/sat.ts";
+import { BARRIER_HALF, BARRIER_TOP, physicsSlice } from "../contact/sat.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
 import { mass, paint } from "./test-support.ts";
 import { makeCar, makeWorld, pooledCar, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -16,7 +16,7 @@ function blockTravel(car: DeformableCar): number {
   return Math.max(mass(car.deform, "engineL").rest.z - mass(car.deform, "engineL").local.z, mass(car.deform, "engineR").rest.z - mass(car.deform, "engineR").local.z);
 }
 
-/** Nose-to-block length (m): 0.84 at rest, 0.54 packed (ENGINE_PACK_GAP: beam and radiator flat ahead of the block). */
+/** Nose-to-block length (m): the sedan's 0.827 at rest, packed to its rig's `packGap` 0.527 (beam and radiator flat ahead of the block). */
 function noseGap(car: DeformableCar): number {
   const d = car.deform;
   return Math.min(mass(d, "bumperFL").local.z, mass(d, "bumperFR").local.z) - Math.max(mass(d, "engineL").local.z, mass(d, "engineR").local.z);
@@ -26,6 +26,15 @@ function noseGap(car: DeformableCar): number {
 // absorbs nothing more and passes the load to the next node (the block), so damage accumulates.
 // Each runs at main's squash 0.4 and the calibrated 0.32 (lane/calib-defaults).
 const SQUASHES = [0.4, 0.32];
+/**
+ * The repeated hit (km/h), and the speeds of one hit that carries the energy of two and of three of it. Hits of v kill on the third when
+ * v·√2 is under the sedan's single-hit kill speed and v·√3 over it, at both settings; v sits in the middle of the window that holds for
+ * both, so a few km/h of the kill speed (a reshaped nose, a rig re-derived) does not move which hit kills. A v at the window's edge
+ * kills on the second at one setting.
+ */
+const REPEAT_KPH = 33;
+const TWO_HITS_KPH = REPEAT_KPH * Math.SQRT2;
+const THREE_HITS_KPH = REPEAT_KPH * Math.sqrt(3);
 
 describe("given a car driving front-first into a rigid wall in shape deform mode, at either crumple-zone setting (0.4, or the calibrated 0.32)", () => {
   it("when it hits at 20, 25, 30, 35, 40 or 43 km/h, then the engine block stays on its mounts for as long as the nose has not packed against it", () => {
@@ -33,7 +42,7 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
       for (const kph of [20, 25, 30, 35, 40, 43]) {
         const car = makeCar("shape", squash);
         runWall(kph, 1, "front", { car });
-        if (noseGap(car) > 0.56) assert.ok(blockTravel(car) <= 0.045, `squash ${squash}, ${kph} km/h: block moved ${blockTravel(car).toFixed(4)} m with ${noseGap(car).toFixed(3)} m of nose left`);
+        if (noseGap(car) > car.frame.rig.packGap + 0.02) assert.ok(blockTravel(car) <= 0.045, `squash ${squash}, ${kph} km/h: block moved ${blockTravel(car).toFixed(4)} m with ${noseGap(car).toFixed(3)} m of nose left`);
       }
     }
   });
@@ -47,7 +56,7 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
       runWall(52, 1, "front", { car });
       const gap = noseGap(car);
       const block = blockTravel(car);
-      assert.ok(gap <= 0.545, `squash ${squash} fixture: 52 km/h left ${gap.toFixed(3)} m of nose, not packed to 0.54`);
+      assert.ok(gap <= car.frame.rig.packGap + 0.005, `squash ${squash} fixture: 52 km/h left ${gap.toFixed(3)} m of nose, not packed to ${car.frame.rig.packGap.toFixed(3)}`);
       runWall(35, 1, "front", { car });
       assert.ok(gap - noseGap(car) < 0.02, `squash ${squash}: the packed nose shortened ${(gap - noseGap(car)).toFixed(3)} m more`);
       assert.ok(blockTravel(car) - block > 0.04, `squash ${squash}: the block took ${(blockTravel(car) - block).toFixed(3)} m of the second hit`);
@@ -55,15 +64,15 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
   });
 
   // Basis: rearmHit adds each hit's EBS² to the struck end (a linear spring's energy), so n hits at v
-  // carry one hit's energy at v·√n: two 35s ≈ 49.5 km/h, under the 52–54 km/h single-hit kill, three
-  // ≈ 60.6 km/h, past it. Was hit 4 at squash 0.32 and hit 2 at 0.4 (geometric re-hit peaks).
-  it("when it takes 35 km/h wall hits one after another, then the engine block keeps moving back with every hit and the engine is killed on the third, at either setting", () => {
+  // carry one hit's energy at v·√n: two hits' is under the single-hit kill speed at either setting, three's over it.
+  // Was hit 4 at squash 0.32 and hit 2 at 0.4 (geometric re-hit peaks).
+  it(`when it takes ${REPEAT_KPH} km/h wall hits one after another, then the engine block keeps moving back with every hit and the engine is killed on the third, at either setting`, () => {
     for (const squash of SQUASHES) {
       const car = makeCar("shape", squash);
       const travel: number[] = [];
       let killedAt = 0;
       for (let k = 1; k <= 4; k++) {
-        runWall(35, 1, "front", { car });
+        runWall(REPEAT_KPH, 1, "front", { car });
         travel.push(blockTravel(car));
         if (!car.deform.drivetrainAlive && !killedAt) killedAt = k;
       }
@@ -73,15 +82,28 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
     }
   });
 
-  it("when one hit carries the energy of two 35 km/h hits (49.5 km/h) or of three (60.6 km/h), then the first leaves the engine running and the second kills it, at either setting", () => {
+  it(`when one hit carries the energy of two ${REPEAT_KPH} km/h hits (${TWO_HITS_KPH.toFixed(1)} km/h) or of three (${THREE_HITS_KPH.toFixed(1)} km/h), then the first leaves the engine running and the second kills it, at either setting`, () => {
     for (const squash of SQUASHES) {
       const alive = (kph: number) => {
         const car = makeCar("shape", squash);
         runWall(kph, 1, "front", { car });
         return car.deform.drivetrainAlive;
       };
-      const [a, b] = [alive(49.5), alive(60.6)];
-      assert.ok(a && !b, `squash ${squash}: 49.5 km/h alive ${a}, 60.6 km/h alive ${b}`);
+      const [a, b] = [alive(TWO_HITS_KPH), alive(THREE_HITS_KPH)];
+      assert.ok(a && !b, `squash ${squash}: ${TWO_HITS_KPH.toFixed(1)} km/h alive ${a}, ${THREE_HITS_KPH.toFixed(1)} km/h alive ${b}`);
+    }
+  });
+
+  // A tyre that stopped past the slab's middle was pushed on through it (its point at rest left by the nearest face, the far one) and the
+  // car stood on its nose with its front hubs inside the slab; it leaves by the side the car stands on, so the slab tears the tyres off
+  // and the truck goes over it.
+  it("when a monster hits the slab at 48 km/h, then none of its hubs ends inside the slab", () => {
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "monster");
+    car.deform.setMode("shape");
+    runWall(48, 1, "front", { car });
+    for (const name of ["hubFL", "hubFR", "hubRL", "hubRR"]) {
+      const at = mass(car.deform, name).world;
+      assert.ok(Math.abs(at.x) >= BARRIER_HALF.x || Math.abs(at.z) >= BARRIER_HALF.z || at.y >= BARRIER_TOP, `${name} at (${at.x.toFixed(2)}, ${at.y.toFixed(2)}, ${at.z.toFixed(2)}) inside the slab`);
     }
   });
 });

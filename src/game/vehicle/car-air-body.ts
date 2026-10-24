@@ -1,53 +1,38 @@
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
-import { HIT_SIZE, PQ_BODY, PQ_SIZE } from "../world/surfaces.ts";
-import { CAR_HALF, WHEEL_POS } from "./car-mesh.ts";
-import { PAN, UNDERSIDE } from "./car-suspension.ts";
+import { HIT_SIZE, PQ_BODY, PQ_SIZE, type StirCar } from "../world/surfaces.ts";
+import { ASKER } from "../world/prism.ts";
+import { carFrame, type CarFrame } from "./car-rig.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
-import { CAGE_VERTICES, SILL_CAPACITY } from "./car-cage.ts";
+import { CAGE_BAR_VERTICES, CAGE_HELD_VERTICES, CAGE_KEPT_VERTICES, CAGE_PART_VERTICES, CAGE_TUB_VERTICES, CAGE_VERTICES, SILL_CAPACITY } from "./car-cage.ts";
+import { centreY } from "./car-cage-rig.ts";
 
 export const G = 9.6;
-/** Centre of mass above the group's origin (car-local y, m); the origin is on the ground under the body's middle. */
-export const COM_Y = 0.55;
-/** Inverse inertia per unit mass (1/m²) of the body's box about its centre of mass: car-local x, y, z. */
-export const INV_I = new THREE.Vector3(3 / (CAR_HALF.y ** 2 + CAR_HALF.z ** 2), 3 / (CAR_HALF.x ** 2 + CAR_HALF.z ** 2), 3 / (CAR_HALF.x ** 2 + CAR_HALF.y ** 2));
-/**
- * The underside (car-local x, height, z): `UNDERSIDE`'s keel and rockers, and the belly between them 0.5 m either side of
- * the keel (its height interpolated), so a car on another's flat roof rests on its width, not balanced on the keel line, and `PAN`
- * (the belly's centre patch, car-suspension.ts): the only part of the belly that meets a car top's ridge between its points
- * (`ridgeCross`), since the hull lines past it slope down to the nose and stood under the pan at a roof's front edge (every car in a
- * stack rested 1° nose-up on the one under it).
- */
-export const BELLY: readonly (readonly [number, number, number])[] = [
-  ...UNDERSIDE.map(([x, z, h]): [number, number, number] => [x, h, z]),
-  ...[2, 1, 0, -2].flatMap((z) => {
-    const keel = UNDERSIDE.find((p) => p[0] === 0 && p[1] === z)![2];
-    const rocker = UNDERSIDE.find((p) => p[0] === 0.8 && p[1] === z)![2];
-    return [-0.5, 0.5].map((x): [number, number, number] => [x, keel + (rocker - keel) * 0.625, z]);
-  }),
-  ...PAN,
-];
-/** Room for a style's cage vertices at most (`CAGE_VERTICES`), a wreck's sill samples (`SILL_CAPACITY`) and the belly: `loadPoints` fills it per body each slice. */
-export const POINT_CAPACITY = CAGE_VERTICES + SILL_CAPACITY + BELLY.length;
+/** Sizes the per-slice tables and the unbound body: every frame's belly and wheels share the sedan's layout. */
+const PLATFORM = carFrame(CAR_STYLES.sedan);
+/** Room for a style's cage vertices at most (`CAGE_VERTICES`, the underside points held over it, `CAGE_HELD_VERTICES`, the C-post's kept crown points, `CAGE_KEPT_VERTICES`, its bed's tubs, `CAGE_TUB_VERTICES`, its parts apart, `CAGE_PART_VERTICES`, and a push bar's box, `CAGE_BAR_VERTICES`), a wreck's sill samples (`SILL_CAPACITY`) and the belly: `loadPoints` fills it per body each slice. */
+const POINT_CAPACITY = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_KEPT_VERTICES + CAGE_TUB_VERTICES + CAGE_PART_VERTICES + CAGE_BAR_VERTICES + SILL_CAPACITY + PLATFORM.belly.length;
 /** The loaded points as flat car-local x, y (class lift on), z rows: `hullPoint` reads them per slice without unpacking a tuple. */
 export const POINT_X = new Float64Array(POINT_CAPACITY);
 export const POINT_Y = new Float64Array(POINT_CAPACITY);
 export const POINT_Z = new Float64Array(POINT_CAPACITY);
-/** Per belly point this slice: 1 while a wreck has no drawn body over it (the cage's bottom has no node there: a bumper's rounded corner), so it is no point. */
-export const BELLY_ABSENT = new Uint8Array(BELLY.length);
+/** Per belly point this slice: 1 while the body has no drawn body over it (a wreck's cage bottom, an intact car's `bellyAbsent`: a bumper's rounded corner has no node there), so it is no point. */
+export const BELLY_ABSENT = new Uint8Array(PLATFORM.belly.length);
 export const HUBS = ["hubFL", "hubFR", "hubRL", "hubRR"] as const;
-/** Neighbouring belly points as `BELLY` index pairs (along x at one z, along z at one x): where the two stand on different patches,
+/** Neighbouring belly points as belly index pairs (along x at one z, along z at one x): where the two stand on different patches,
  *  the belly between them meets that patch's edge (`edgeCross`), as a ramp's crest does between rows half a metre apart. */
 export const SEGS: Int16Array = (() => {
-  const pairs = new Int16Array(BELLY.length * BELLY.length);
+  const belly = PLATFORM.belly;
+  const pairs = new Int16Array(belly.length * belly.length);
   let m = 0;
-  for (let i = 0; i < BELLY.length; i++) {
-    for (let j = i + 1; j < BELLY.length; j++) {
-      const [xi, , zi] = BELLY[i]!;
-      const [xj, , zj] = BELLY[j]!;
+  for (let i = 0; i < belly.length; i++) {
+    for (let j = i + 1; j < belly.length; j++) {
+      const [xi, , zi] = belly[i]!;
+      const [xj, , zj] = belly[j]!;
       if (xi !== xj && zi !== zj) continue;
       let between = false;
-      for (const [xk, , zk] of BELLY) {
+      for (const [xk, , zk] of belly) {
         if (zi === zj && zk === zi && (xk - xi) * (xk - xj) < 0) between = true;
         if (xi === xj && xk === xi && (zk - zi) * (zk - zj) < 0) between = true;
       }
@@ -58,8 +43,18 @@ export const SEGS: Int16Array = (() => {
   }
   return pairs.slice(0, m);
 })();
-/** Contacts a body can hold in one slice: its tyres and points, and a belly segment's edge each. */
-export const CONTACTS = POINT_CAPACITY + SEGS.length / 2;
+/**
+ * How far apart (m) a tyre's side-face samples (`readTyreSides`) lie along its length: no further than the thinnest solid the world places is
+ * across, so a solid never stands between two of them while the tyre straddles it (a wall thinner than the tyre is long stood between its
+ * four corners, and the rear pair rolled through it). They lie along both edges of its tread in plan, at hub height. A face that stands
+ * no higher over the hub than the tyre mounts is its floor (`wheelContact` asks from the hub too); points under the hub met a kerb the
+ * tread climbs as a wall.
+ */
+export const TYRE_SAMPLE_GAP = 0.2;
+/** Most samples along one edge of a tyre: the largest tyre's diameter over `TYRE_SAMPLE_GAP`, plus the end (`tyre-sides.test.ts` holds it for every class). */
+export const TYRE_ALONG_MAX = 8;
+/** Contacts a body can hold in one slice: its four tyres' spring rows and every tyre sample's side row, its points, and a belly segment's edge each. */
+export const CONTACTS = 4 * (1 + 2 * TYRE_ALONG_MAX) + POINT_CAPACITY + SEGS.length / 2;
 /** A wheel this close (m) to the ground counts as down. */
 export const TOUCH = 0.03;
 /** Restitution of a body point closing faster than `BOUNCE_V` (m/s); slower contacts and tyres (their springs,
@@ -106,7 +101,7 @@ export const _lift = new THREE.Vector3();
  * per call): the impulse `give` and `push` give and the part of it that stops closing, the speed `reach` reads, the closing the weight
  * brings (`weightClosing`) and the depth `bodyContact` takes.
  */
-export const _s = new Float64Array(6);
+export const _s = new Float64Array(7);
 export const S_J = 0;
 export const S_JD = 1;
 export const S_REACH = 2;
@@ -114,6 +109,8 @@ export const S_WEIGHT = 3;
 export const S_PEN = 4;
 /** How far (m) the farthest loaded body point stands from the centre of mass (`loadPoints`). */
 export const S_POINT_REACH = 5;
+/** How deep (m) the deepest row a wreck at rest still lifts out of the world's ground stands in it (`solveRows`, this step's car). */
+export const S_LIFTING = 6;
 export const N = Array.from({ length: CONTACTS }, () => new THREE.Vector3());
 /** Per contact: the direction its impulse and its lift go: up for a tyre on a face it can climb, else the face's normal. */
 export const DIR = Array.from({ length: CONTACTS }, () => UP);
@@ -158,6 +155,8 @@ export const PASSES = 12;
 /** Passes for a body at rest (what a slice's gravity leaves it, under `REST_SPEED`, as `loose-step.ts` counts rest): 12 left the car-on-car friction unconverged (rebuilt from 0 every slice), and the house of cards' top car crept 0.13 mm in 10 s on the residual. 24 passes crept, 48 stood still. ponytail: more passes at rest, not a warm start; a friction+normal warm start across slices if the rest cost shows in the cost rows. */
 export const REST_PASSES = 48;
 export const REST_SPEED = (2 * G) / 120;
+/** The speed (m/s) a body at rest parts from what it stands in (a wreck from the ground, a tyre from the face it pressed): under `REST_SPEED`, so it stays at rest and may sleep. */
+export const GROUND_LIFT_V = REST_SPEED / 3;
 /** The most (in G·dt) the solve's change of velocity moves the body within its own slice (half of it, the trapezoid rule). */
 export const SOLVE_MOVE_G = 1.5;
 /** Per contact: the depth (m) along its normal the lift has still to take out (-Infinity: a row that does not lift). */
@@ -214,12 +213,11 @@ export const CRUSH_POINT = new Float64Array(CONTACTS * 3);
 export const _crushPoint = new THREE.Vector3();
 export const _crushNormal = new THREE.Vector3();
 export const _crushBack = new THREE.Vector3();
-/** A car's centre of mass in its own frame: `COM_Y` up the origin. */
-export const CAR_CENTRE = new THREE.Vector3(0, COM_Y, 0);
 
 /** A torn part or popped wheel of car `own` met car `top`'s top (`stepLoose`): what moved it is in the world, which a highlight clip with `own` must keep. */
 export type TopMet = (own: number, top: number) => void;
 const NO_MET: TopMet = () => {};
+const NO_CARS: readonly StirCar[] = [];
 
 /**
  * The body the rigid step moves, set by `bindBody`. Every body takes the same step (`moveBody`, `placeBody`, `readPoints`, `openRows`,
@@ -228,15 +226,15 @@ const NO_MET: TopMet = () => {};
  * its own frame, `invI` its inverse inertia per unit mass about its own axes, `skip` its slot asked of the world, `surf` the faces it
  * shares with other cars, `mass` its mass over theirs. `driven`, `parked`, `powered` are a car's drive state (its tyres' friction),
  * `nearing` that a point not yet in a surface reaches it within the slice at its closing speed, `met` what a part's point on a car's top reports,
- * `panel` that the part is a torn panel (`stepLoose` with its mass), not a popped wheel.
+ * `panel` that the part is a torn panel (`stepLoose` with its mass), not a popped wheel, `cars` the world's cars a part's points may meet the flank of.
  */
 export const body = {
   q: new THREE.Quaternion(),
   pos: new THREE.Vector3(),
   v: new THREE.Vector3(),
   w: new THREE.Vector3(),
-  centre: CAR_CENTRE,
-  invI: INV_I,
+  centre: PLATFORM.centre,
+  invI: PLATFORM.invI,
   skip: -1,
   part: false,
   dt: 0,
@@ -249,6 +247,7 @@ export const body = {
   nearing: false,
   met: NO_MET,
   panel: false,
+  cars: NO_CARS,
 };
 
 /**
@@ -276,6 +275,7 @@ export function bindBody(object: THREE.Object3D, v: THREE.Vector3, w: THREE.Vect
   body.nearing = false;
   body.met = NO_MET;
   body.panel = false;
+  body.cars = NO_CARS;
   // No car under it bears weight onto it (`takeBorne` sets these for a car).
   if (part) {
     _lv.set(0, 0, 0);
@@ -293,6 +293,8 @@ export function moveBody(): void {
   _vMove.copy(v);
   v.y -= G * dt;
   centreOfMass.copy(_r.copy(centre).applyQuaternion(q)).add(pos).addScaledVector(_vMove, dt);
+  ASKER[0] = body.part ? NaN : centreOfMass.x;
+  ASKER[1] = centreOfMass.z;
   const spin = w.length();
   if (spin > 1e-9) q.premultiply(_dq.setFromAxisAngle(_axis.copy(w).divideScalar(spin), spin * dt));
 }
@@ -317,7 +319,7 @@ export function carrier(surf: CarSurfaces, n: number, own: number, mass: number)
   }
   HELD[n] = o;
   RATIO[n] = mass / o.deform.totalMass;
-  ARM[n]!.copy(centreOfMass).add(R[n]!).sub(o.group.position).sub(_r.set(0, COM_Y, 0).applyQuaternion(o.group.quaternion));
+  ARM[n]!.copy(centreOfMass).add(R[n]!).sub(o.group.position).sub(_r.set(0, centreY(o), 0).applyQuaternion(o.group.quaternion));
 }
 
 /** World inverse inertia (body orientation `q`, its inverse `qi`; `inertia` its inverse inertia per unit mass about its own axes) applied to `x` in place. */
@@ -342,24 +344,50 @@ export function pointVel(c: number, v: THREE.Vector3, w: THREE.Vector3, out: THR
   return out;
 }
 
+/** Numbers `GIVEN` keeps per contact: what its impulses changed this solve, each a velocity then a spin (3 + 3): the stepping body, the car under it at once, that car's borne weight. */
+export const GIVEN_STRIDE = 18;
+/** Per contact with a car under it: the change its impulses made this solve (`snapshotRows` clears it), which `rewindRows` takes back. */
+export const GIVEN = new Float64Array(CONTACTS * GIVEN_STRIDE);
+
+/** `GIVEN[at..at + 2]` plus `k` of `x`. */
+function accumulate(at: number, x: THREE.Vector3, k: number): void {
+  GIVEN[at] = GIVEN[at]! + x.x * k;
+  GIVEN[at + 1] = GIVEN[at + 1]! + x.y * k;
+  GIVEN[at + 2] = GIVEN[at + 2]! + x.z * k;
+}
+
 /**
  * Impulse `j` along unit `dir` at contact `c` on the stepping body (unit mass `v`, `w`, orientation `q`), and its reaction at the same
  * point on the car under it (`HELD`), centre and spin both: the part `jd` that stops closing beyond this slice's weight at once, the
  * weight's part (`j - jd`) borne on it for its next step (`CarSurfaces.bear`), which its own contacts then hold and bear on. Taken at
  * that car's centre alone, a load off the middle of its roof never turned it, and a car turning back under a still rider lifted it
- * 48 mm in 0.1 s (329 J) on 54 J of its own spin.
+ * 48 mm in 0.1 s (329 J) on 54 J of its own spin. What a contact with a car under it changes is kept in `GIVEN`.
  */
 export function give(c: number, v: THREE.Vector3, w: THREE.Vector3, q: THREE.Quaternion, dir: THREE.Vector3, surf: CarSurfaces): void {
   const j = _s[S_J]!;
   const jd = _s[S_JD]!;
-  push(v, w, q, R[c]!, dir);
   const o = HELD[c];
-  if (o === null) return;
+  if (o === null) {
+    push(v, w, q, R[c]!, dir);
+    return;
+  }
+  const g = c * GIVEN_STRIDE;
+  accumulate(g, v, -1);
+  accumulate(g + 3, w, -1);
+  push(v, w, q, R[c]!, dir);
+  accumulate(g, v, 1);
+  accumulate(g + 3, w, 1);
   const oq = o.group.quaternion;
-  invInertia(_rn.crossVectors(ARM[c]!, dir), oq, _qo.copy(oq).invert(), INV_I);
-  o.velocity.addScaledVector(dir, -jd * RATIO[c]!);
-  o.angular.addScaledVector(_rn, -jd * RATIO[c]!);
-  if (j !== jd) surf.bear(OWN[c]!, dir, _rn, (jd - j) * RATIO[c]!);
+  invInertia(_rn.crossVectors(ARM[c]!, dir), oq, _qo.copy(oq).invert(), o.frame.invI);
+  const now = -jd * RATIO[c]!;
+  const borne = (jd - j) * RATIO[c]!;
+  o.velocity.addScaledVector(dir, now);
+  o.angular.addScaledVector(_rn, now);
+  accumulate(g + 6, dir, now);
+  accumulate(g + 9, _rn, now);
+  accumulate(g + 12, dir, borne);
+  accumulate(g + 15, _rn, borne);
+  if (j !== jd) surf.bear(OWN[c]!, dir, _rn, borne);
 }
 
 /**
@@ -373,7 +401,7 @@ export function reach(c: number, dir: THREE.Vector3, along: THREE.Vector3, q: TH
   const o = HELD[c];
   if (both && o !== null) {
     const oq = o.group.quaternion;
-    other = RATIO[c]! * (along.dot(dir) + _k.crossVectors(invInertia(_rn.crossVectors(ARM[c]!, dir), oq, _qo.copy(oq).invert(), INV_I), ARM[c]!).dot(along));
+    other = RATIO[c]! * (along.dot(dir) + _k.crossVectors(invInertia(_rn.crossVectors(ARM[c]!, dir), oq, _qo.copy(oq).invert(), o.frame.invI), ARM[c]!).dot(along));
   }
   _s[S_REACH] = 1 / (own + other);
 }
@@ -383,7 +411,7 @@ export function weightClosing(c: number): void {
   _s[S_WEIGHT] = Math.max(0, -_vp.crossVectors(_lw, R[c]!).add(_lv).addScaledVector(UP, -G * body.dt).dot(N[c]!));
 }
 
-const WHEELS = WHEEL_POS.length;
+const WHEELS = PLATFORM.wheels.length;
 const AUGMENTED_STRIDE = WHEELS + 1;
 /** The tyre springs' system for the slice: matrix, right side, the tyres still pushing, their rows, the augmented rows and the solution. */
 const SPRING_LHS = new Float64Array(WHEELS * WHEELS);
@@ -392,6 +420,8 @@ const SPRING_PUSHING = Array.from({ length: WHEELS }, () => false);
 const SPRING_ROW = new Int32Array(WHEELS);
 const SPRING_AUGMENTED = new Float64Array(WHEELS * AUGMENTED_STRIDE);
 const SPRING_SOLUTION = new Float64Array(WHEELS);
+/** Per tyre: the rate (m/s) its surface presses up at, at the slice's start (the damper's input). */
+const SPRING_RATE = new Float64Array(WHEELS);
 /** Per tyre: the spin one unit of impulse straight up at it gives the body (the body's inverse inertia on its arm × up). */
 const SPIN_PER_PUSH = Array.from({ length: WHEELS }, () => new THREE.Vector3());
 
@@ -418,24 +448,33 @@ function solveSpringSystem(tyres: number): void {
   for (let a = 0; a < rows; a++) ASK[SPRING_ROW[a]!] = SPRING_SOLUTION[a]!;
 }
 
+/** How far (m) a tyre flattens under its car's weight on it: a centimetre under a quarter of a car. */
+const TYRE_SAG = 0.01;
+/** The damping ratio of that flattening: left at the suspension's own damper, the stiff tread rang for seconds. */
+const TYRE_DAMP_RATIO = 0.5;
+/** The fastest (m/s) the tread's own oscillation moves: its ring speed at twice its static flattening (a 2 g load), 2 sqrt(G TYRE_SAG). The cap's damper follows a press or release rate no faster: past it is a landing or a bounce, which the springs carry. */
+const TREAD_RING_SPEED = 2 * Math.sqrt(G * TYRE_SAG);
+
 /**
  * The tyres in their springs push together, `ASK[c]` each (impulse per unit mass): `dt (G share + stiff x + damp u)` with u the press rate
  * of the slice's start and x the press at the end of it, after every tyre's push, moved by half the rate's change (the trapezoid rule
  * of the slice's move). One linear system over the four tyres, so no tyre's push depends on the order they are listed in, and a stiff
  * spring cannot swing the body from one side to the other every slice (the push of the slice's start state did: the roll mode of a
- * 24 Hz spring at 120 Hz, a limit cycle of 0.09°). A tyre the system would pull is left out and the rest solved again.
+ * 24 Hz spring at 120 Hz, a limit cycle of 0.09°). A tyre the system would pull is left out and the rest solved again. No tyre pushes
+ * harder than its own flattening since its contact began (`TYRE_SAG`): the droop plane `travel` below the rest ride, or the rest ride on a car's top.
  */
-export function springPushes(tyres: number, stiff: number, damp: number, dt: number, q: THREE.Quaternion, v: THREE.Vector3, w: THREE.Vector3): void {
+export function springPushes(frame: CarFrame, tyres: number, stiff: number, damp: number, travel: number, dt: number, q: THREE.Quaternion, v: THREE.Vector3, w: THREE.Vector3): void {
   const endForce = 0.5 * dt * stiff;
   for (let d = 0; d < tyres; d++) {
     SPRING_PUSHING[d] = SOFT[d]!;
-    if (SOFT[d]) invInertia(SPIN_PER_PUSH[d]!.crossVectors(R[d]!, UP), q, _qi, INV_I);
+    if (SOFT[d]) invInertia(SPIN_PER_PUSH[d]!.crossVectors(R[d]!, UP), q, _qi, frame.invI);
   }
   for (let c = 0; c < tyres; c++) {
     if (!SOFT[c]) continue;
     const rising = N[c]!.y > 0;
     const gravityRate = rising ? G * dt : 0;
     const startRate = rising ? -pointVel(c, v, w, _vp).dot(N[c]!) / N[c]!.y - G * dt : 0;
+    SPRING_RATE[c] = startRate;
     SPRING_RHS[c] = dt * (SHARE[c]! * G + stiff * (PRESS[c]! + 0.5 * dt * gravityRate) + damp * startRate);
     for (let d = 0; d < tyres; d++) {
       const response = rising && SOFT[d] ? (N[c]!.y + _k.crossVectors(SPIN_PER_PUSH[d]!, R[c]!).dot(N[c]!)) / N[c]!.y : 0;
@@ -452,5 +491,11 @@ export function springPushes(tyres: number, stiff: number, damp: number, dt: num
       pulled = true;
     }
     if (!pulled) break;
+  }
+  for (let c = 0; c < tyres; c++) {
+    if (!SPRING_PUSHING[c]) continue;
+    const flat = PRESS[c]! + (OWN[c]! >= 0 ? 0 : travel);
+    const k = (SHARE[c]! * G) / TYRE_SAG;
+    ASK[c] = Math.max(0, Math.min(ASK[c]!, dt * (k * flat + 2 * TYRE_DAMP_RATIO * Math.sqrt(Math.max(0, k)) * Math.min(1, flat / TYRE_SAG) * Math.max(-TREAD_RING_SPEED, Math.min(SPRING_RATE[c]!, TREAD_RING_SPEED)))));
   }
 }

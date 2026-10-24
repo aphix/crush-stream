@@ -25,7 +25,7 @@ function Readings({ view }: { view: MinigamePanelView }) {
   return (
     <>
       {view.throwCounter === null ? null : <p className="font-display text-xs tabular-nums text-muted">{view.throwCounter}</p>}
-      {view.live === null && view.score !== null ? null : (
+      {view.live === null && (view.score !== null || view.noThrow !== null) ? null : (
         <p className="font-display text-xl font-semibold leading-none tabular-nums" role="status">
           {view.live ?? "–"}
         </p>
@@ -33,6 +33,11 @@ function Readings({ view }: { view: MinigamePanelView }) {
       {view.score === null ? null : (
         <p className="font-display text-xl font-semibold tabular-nums">
           Score <span className="text-2xl">{view.score}</span>
+        </p>
+      )}
+      {view.noThrow === null ? null : (
+        <p className="font-display text-sm font-semibold" role="status" aria-label="No throw">
+          {view.noThrow}
         </p>
       )}
       {view.scoreHint === null ? null : <p className="font-display text-xs text-muted">{view.scoreHint}</p>}
@@ -139,7 +144,7 @@ export function MinigamePanel({
           <div className="min-w-0">
             <p className="hud-label">{view.title}</p>
             <p className="truncate font-display text-lg font-semibold leading-tight tabular-nums" role="status">
-              {view.score === null ? (view.live ?? "–") : `Score ${view.score}`}
+              {view.score === null ? (view.noThrow ?? view.live ?? "–") : `Score ${view.score}`}
             </p>
           </div>
           <Button className="shrink-0" size="icon" variant="ghost" aria-label="Mini game menu" onClick={() => setSheetOpen(true)}>

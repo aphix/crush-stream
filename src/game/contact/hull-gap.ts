@@ -1,6 +1,4 @@
 import type { DeformableCar } from "../vehicle/car.ts";
-import { DOOR } from "../vehicle/car-door-mesh.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
 import { hypot2 } from "../deform/physics-util.ts";
 import { OUTLINE_REACH } from "./cage-outline.ts";
 
@@ -26,10 +24,6 @@ export const HULL_STRIDE = 11;
 
 /** The largest `|y|` of the car's forward and right vectors (2.9 degrees) at which it is still read as its plan box. */
 export const LEVEL = 0.05;
-/** How far (m) the plan of a car-tall body reaches past the level box when it leans by `LEVEL`. */
-const TILT_REACH = 2 * CAR_HALF.y * LEVEL;
-/** The mirror's tip from the car's axis (m); a latched door reaches no further. */
-const MIRROR_TIP = DOOR.hingeX + DOOR.mirrorX + DOOR.mirrorReach;
 /** The most a car's velocity changes over a step (m/s²): a position error of half that times the step squared per car. Measured across classes in `world-step-hull.test.ts`: the worst is 56 (a muscle car braking to a stop). */
 export const ACCEL_BOUND = 60;
 /** What the speeds do not say a step may move a hull by (m): the ride's pitch and the contact passes' capped pushes. */
@@ -38,7 +32,7 @@ const HULL_SLACK = 0.02;
 /** `car`'s hull into `out` from index `o`; false (`out` unwritten) where the plan box does not describe the car: a wreck, airborne, falling, on a roof, leaning, a door ajar or a part off, asleep. */
 export function readHull(car: DeformableCar, out: Float64Array, o: number): boolean {
   if (car.deform.massActive || car.crashed || car.vaporized || car.falling || car.airborne || car.asleep || car.restsOn !== null) return false;
-  if (!car.doorsLatched || car.hasLoosePart()) return false;
+  if (!car.hingesLatched || car.hasLoosePart()) return false;
   if (Math.abs(car.forward.y) > LEVEL || Math.abs(car.right.y) > LEVEL) return false;
   const plan = car.cage.fields.planBox;
   const midX = (plan[0]! + plan[1]!) / 2;
@@ -46,8 +40,12 @@ export function readHull(car: DeformableCar, out: Float64Array, o: number): bool
   const p = car.group.position;
   const f = car.fwdFlat;
   const r = car.rightFlat;
-  const hx = Math.max((plan[1]! - plan[0]!) / 2, MIRROR_TIP) + OUTLINE_REACH + TILT_REACH;
-  const hz = (plan[3]! - plan[2]!) / 2 + OUTLINE_REACH + TILT_REACH;
+  // How far the plan of a car-tall body reaches past the level box when it leans by `LEVEL`.
+  const tilt = 2 * car.frame.half.y * LEVEL;
+  const d = car.style.door;
+  // The mirror's tip from the car's axis (its own door's); a latched door reaches no further.
+  const hx = Math.max((plan[1]! - plan[0]!) / 2, car.mirrorBaseX + d.mirrorReach) + OUTLINE_REACH + tilt;
+  const hz = (plan[3]! - plan[2]!) / 2 + OUTLINE_REACH + tilt;
   const w = car.angular;
   out[o + H_CX] = p.x + r.x * midX + f.x * midZ;
   out[o + H_CZ] = p.z + r.z * midX + f.z * midZ;

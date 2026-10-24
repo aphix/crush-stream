@@ -89,8 +89,24 @@ describe("given a highlight clip recorded from a crash and replayed from its key
     for (const testCase of raceHeadOnCases) {
       it(testCase.it, () => run(testCase.name, () => (put(0, 40, testCase.sideA, 0, 20), put(1, 48, testCase.sideB, Math.PI, 20)), 1));
     }
-    it("when a car driven flat out hits the side of a stopped car, then the clip's first impact is between those two cars and the replay matches the live sim at every step, to the bit", () =>
-      run("race T-bone", () => (put(0, 40, 0, 0, 20), put(1, 54, 0, Math.PI / 2, 0), drive()), 1));
+    it("when a car driven flat out hits the side of a stopped car, then the clip's first impact is between those two cars and the replay matches the live sim at every step, to the bit", () => {
+      let strayed = Infinity;
+      // The stopped car has no driver: an AI driver's pedals walk it off its spot before the hit and turn the T-bone oblique.
+      const place = (): void => {
+        put(0, 40, 0, 0, 20);
+        put(1, 54, 0, Math.PI / 2, 0);
+        const spot = w.cars[1]!.group.position.clone();
+        w.cars[1]!.driverOut = "windshield";
+        drive();
+        const stopSeat = w.onPairContact!;
+        w.onPairContact = (a, b) => {
+          strayed = Math.min(strayed, w.cars[1]!.group.position.distanceTo(spot));
+          stopSeat(a, b);
+        };
+      };
+      run("race T-bone", place, 1);
+      assert.ok(strayed < 0.05, `the stopped car stood ${strayed.toFixed(2)} m off its spot when the first car touched it`);
+    });
     it("when two cars hit head-on and two more run into the wreck, then the clip's first impact is between the head-on pair and the replay matches the live sim at every step, to the bit", () => run("race pile-up", pile(0), 3));
     for (const s of SHIFTS) it(`when the same pile-up happens ${s} m further along the road, then the replay matches the live sim at every step, to the bit, just as for the unshifted pile-up`, () => run(`race pile-up shifted ${s} m`, pile(s), 3));
     // Seeds 1 to 64 of `engine-replay.ai-long-run.ts` replayed up to 4.4 m off until the clip carried the course's road-segment hint: a car

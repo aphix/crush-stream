@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as THREE from "three";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { FLAT_GROUND, Ground, STEP_UP } from "../world/ground.ts";
 import { Corkscrew, CORKSCREW } from "./corkscrew.ts";
 import { FleetRamps, RAMP } from "./fleet-ramps.ts";
 import { collideOn } from "./ramp-collide.test-util.ts";
 import { corkPose, driveOver, shapeCar, skinGap, surfaceInFrame, type DriveSetup, type Held, type Layer, type Run } from "./car-road.test-util.ts";
+
+const SEDAN_HALF = carFrame(CAR_STYLES.sedan).half;
 
 // docs/UNIFIED_CONTACT.md stage 0: one situation, built from different kinds of object, the same outcome.
 
@@ -41,7 +44,7 @@ function compare(real: DriveSetup, held: readonly Held[], tol: Tol, t: { diagnos
 describe("given a flat strip of ground 0.894 m high over four car lengths, and the same strip built from four held cars pressed to that height", () => {
   const H = 0.894;
   const N = 4;
-  const SPACING = 2 * CAR_HALF.z + 0.1;
+  const SPACING = 2 * SEDAN_HALF.z + 0.1;
   const END = N * SPACING - 0.1;
   class Strip extends Ground {
     constructor() {
@@ -52,7 +55,7 @@ describe("given a flat strip of ground 0.894 m high over four car lengths, and t
   }
   const strip: Ground = new Strip();
   const flat: Layer = { top: () => H, bottom: () => 0 };
-  const road = () => Array.from({ length: N }, (_, k) => shapeCar(flat, { pos: new THREE.Vector3(0, 0, CAR_HALF.z + k * SPACING), rot: NO_TURN }));
+  const road = () => Array.from({ length: N }, (_, k) => shapeCar(flat, { pos: new THREE.Vector3(0, 0, SEDAN_HALF.z + k * SPACING), rot: NO_TURN }));
 
   it("when each pressed car's drawn top is read against the pressed height, then the skin follows the masses within the skin's 0.2 m", (t) => {
     const [first] = road();
@@ -106,7 +109,7 @@ describe("given the fleet's jump wedge, and a car pressed into its profile and h
   const scene = new THREE.Scene();
   const ramps = new FleetRamps(scene);
   ramps.place(0, null);
-  const zc = -RAMP.start - CAR_HALF.z;
+  const zc = -RAMP.start - SEDAN_HALF.z;
   const layer: Layer = { top: (z) => ramps.heightAt(0, zc + z), bottom: () => 0 };
   const wedge = () => [shapeCar(layer, { pos: new THREE.Vector3(0, 0, zc), rot: NO_TURN })];
 
@@ -130,7 +133,7 @@ describe("given the fleet's jump wedge, and a car pressed into its profile and h
 
 describe("given the corkscrew channel, and cars pressed into its floor along its length and held", () => {
   const cork = new Corkscrew(new THREE.Scene());
-  const PITCH = 2 * CAR_HALF.z + 0.1;
+  const PITCH = 2 * SEDAN_HALF.z + 0.1;
   const floor = () =>
     Array.from({ length: Math.ceil(CORKSCREW.len / PITCH) }, (_, k) => {
       const pose = corkPose(cork, PITCH / 2 + k * PITCH);

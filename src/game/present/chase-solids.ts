@@ -1,7 +1,6 @@
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { DERBY_BOXES, DERBY_PROP } from "../scenes/derby-ground.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
 import { activeGround, FLAT_GROUND } from "../world/ground.ts";
 import { occluder, type Occluder, type Sight } from "./spectate-cam.ts";
 
@@ -46,7 +45,7 @@ const NO_CARS: readonly DeformableCar[] = [];
 
 /**
  * The one Sight a chase, rear or orbit eye keeps its line clear of (`EyeClear`), rebuilt in place each frame: the scene's own
- * solids (a course's, the derby bowl's, the sandbox's) and, in `cars`, every other visible car's tight box (`CAR_HALF`'s footprint
+ * solids (a course's, the derby bowl's, the sandbox's) and, in `cars`, every other visible car's tight box (its `frame.half` footprint
  * turned with its flat heading, floor to roof). No allocation once the pools have grown.
  */
 export class ChaseSolids {
@@ -68,7 +67,8 @@ export class ChaseSolids {
       const car = list[i]!;
       if (car === except || car.vaporized || !car.group.visible) continue;
       const p = car.group.position;
-      this.boxes.add(p.x, p.z, car.fwdFlat.z, car.fwdFlat.x, CAR_HALF.x, CAR_HALF.z, false, p.y, p.y + 2 * CAR_HALF.y);
+      const h = car.frame.half;
+      this.boxes.add(p.x, p.z, car.fwdFlat.z, car.fwdFlat.x, h.x, h.z, false, p.y, p.y + 2 * h.y);
     }
     this.boxes.end();
     const s = this.sight;

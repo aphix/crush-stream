@@ -173,16 +173,21 @@ describe("given the ejection range at its defaults, for every car type, at 60 an
 /** Metres before the barrier's line where the driver pulls the handbrake turn: every car type then meets the barrier 66–71° off its run-up, at 24.4–24.6 m/s (measured). */
 const TURN_AT = 12;
 
-type Slide = { run: RangeThrow; exit: ExitPane | null; out: THREE.Vector3; heading: number; speed: number };
+type Slide = { run: RangeThrow; exit: ExitPane | null; out: THREE.Vector3; heading: number; speed: number; lean: number; top: number };
+
+const _roll = new THREE.Vector3();
 
 /**
  * The range with a hard handbrake turn: full lock `steer` (+1 swings the nose left) and the handbrake from `TURN_AT` m
  * before the barrier, off the throttle, until the driver is out. At the last slice before the car first touches the
- * barrier, how far its heading is off the run-up (deg) and its speed (m/s); the first throw's pane and way out (world).
+ * barrier, how far its heading is off the run-up (deg) and its speed (m/s); the first throw's pane and way out (world);
+ * the most the car's up ever leant from the world's (deg) and the highest its origin rose (m).
  */
 async function slideIn(type: DriverCar, steer: number): Promise<Slide> {
   const fwd = new THREE.Vector3();
   let speed = 0;
+  let lean = 0;
+  let top = -Infinity;
   let exit: ExitPane | null = null;
   const out = new THREE.Vector3();
   const run = await rangeThrow(type, {
@@ -191,6 +196,8 @@ async function slideIn(type: DriverCar, steer: number): Promise<Slide> {
         fwd.copy(car.fwdFlat);
         speed = Math.hypot(car.velocity.x, car.velocity.z);
       }
+      lean = Math.max(lean, THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(_roll.set(0, 1, 0).applyQuaternion(car.group.quaternion).y, -1, 1))));
+      top = Math.max(top, car.group.position.y);
       if (car.group.position.x > -TURN_AT && car.driverOut === null) return { throttle: 0, steer, brake: 0, ebrake: true, boost: false };
       return undefined;
     },
@@ -200,7 +207,7 @@ async function slideIn(type: DriverCar, steer: number): Promise<Slide> {
       out.copy(e.dir);
     },
   });
-  return { run, exit, out, heading: THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(fwd.dot(run.runUp), -1, 1))), speed };
+  return { run, exit, out, heading: THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(fwd.dot(run.runUp), -1, 1))), speed, lean, top };
 }
 
 /** The car types, the owner's truck and monster first. */
@@ -211,9 +218,27 @@ const TURNS: readonly [string, number, ExitPane][] = [
   ["right", -1, "doorR"],
 ];
 
+/** How far (deg) a car's up leans from the world's when it lies on its side: a car leaning further has rolled over. */
+const ON_ITS_SIDE_DEG = 90;
+
 describe(`given the ejection range with a hard handbrake turn ${TURN_AT} m before the barrier, so the car slides into it sideways while still moving fast toward it`, () => {
   for (const type of SLIDERS) {
     for (const [side, steer, pane] of TURNS) {
+      // The monster's body clears the slab (its keel stands over the top), but the slab's top stands over its hubs: its tyres, rolling into
+      // the face they came in by (within the entry window, `exitFace`), meet it as a wall, side-on. It trips on them and rolls over the slab;
+      // the throw is the speed a hit took (`peakClosing`), and tripping it loses too little of it for the alive bar, so nobody is thrown.
+      // While its wrecked tyres were asked at rest they read the slab's top as a floor once inside its plan, and it rode up onto a face above
+      // its hubs without rolling.
+      if (type.id === "monster") {
+        it(`when a ${type.label} swings its nose ${side} and slides into the barrier, then its tyres meet the slab as a wall (its 0.81 m top stands over their 0.614 m hubs, and a side a tyre came in by within the entry window is a wall), it trips on them and rolls over the slab, and nobody is thrown`, async (t) => {
+          const s = await slideIn(type, steer);
+          t.diagnostic(`${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s, rose to ${s.top.toFixed(2)} m, leant ${s.lean.toFixed(0)}° at most, ${s.run.ejections} throws`);
+          assert.ok(s.heading >= 60 && s.speed >= 20, `${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s`);
+          assert.ok(s.lean >= ON_ITS_SIDE_DEG, `${type.id}: leant ${s.lean.toFixed(0)}° at most, rose to ${s.top.toFixed(2)} m`);
+          assert.equal(s.run.ejections, 0, `${type.id}: ${s.run.ejections} throws`);
+        });
+        continue;
+      }
       it(`when a ${type.label} swings its nose ${side} and slides into the barrier, then its driver is thrown once, out of the side window that met the barrier, facing it, not out of the windshield`, async () => {
         const s = await slideIn(type, steer);
         assert.ok(s.heading >= 60 && s.speed >= 20, `${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s`);

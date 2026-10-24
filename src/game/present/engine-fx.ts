@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { hypot3, round4, snapshotPoints } from "../deform/physics-util.ts";
 import { GRAVITY } from "../kernel/constants.ts";
+import { store3f } from "../kernel/store.ts";
 import { landOn } from "../vehicle/loose-step.ts";
 
 const _pv = new THREE.Vector3();
@@ -155,7 +156,7 @@ export class DebrisSystem {
       p.z += this.vz[i]! * dt;
       this.vel.set(this.vx[i]!, this.vy[i]!, this.vz[i]!);
       landBit(p, this.vel, 0.03, dt);
-      p.toArray(this.pos, i * 3);
+      store3f(this.pos, i * 3, p);
       this.vx[i] = this.vel.x;
       this.vy[i] = this.vel.y;
       this.vz[i] = this.vel.z;

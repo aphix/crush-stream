@@ -1,0 +1,137 @@
+{
+  "paint": "#2a313e",
+  "side": {
+    "ref": "ModernCarDesigns_SideAndTop/blue-coupe/blue-coupe-1.png"
+  },
+  "top": {
+    "ref": "ModernCarDesigns_SideAndTop/blue-coupe/blue-coupe-2.png"
+  },
+  "iso": {
+    "ref": "ModernCarDesignIsometric.png",
+    "crop": [
+      380,
+      205,
+      520,
+      370
+    ],
+    "wheels": {
+      "fl": {
+        "hub": [
+          245,
+          314
+        ],
+        "contact": [
+          240,
+          358
+        ]
+      },
+      "rl": {
+        "hub": [
+          445,
+          174
+        ],
+        "contact": [
+          440,
+          217
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        8.367,
+        8.372,
+        11.6011
+      ],
+      "target": [
+        7.8546,
+        7.8897,
+        10.8905
+      ],
+      "up": [
+        -0.3059,
+        0.8756,
+        -0.3738
+      ],
+      "fov": 12
+    },
+    "fov": 12,
+    "landmarks": [
+      {
+        "name": "grille badge",
+        "at": [
+          0,
+          0.59,
+          1.95
+        ],
+        "pixel": [
+          77,
+          286
+        ]
+      }
+    ]
+  },
+  "rear-iso": {
+    "ref": "ModernCarDesignIsometric_Rear.png",
+    "crop": [
+      296,
+      186,
+      396,
+      288
+    ],
+    "wheels": {
+      "rr": {
+        "hub": [
+          215,
+          235
+        ],
+        "contact": [
+          212,
+          270
+        ]
+      },
+      "fr": {
+        "hub": [
+          356,
+          114
+        ],
+        "contact": [
+          352,
+          146
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        -7.7058,
+        9.3204,
+        -11.7231
+      ],
+      "target": [
+        -7.2343,
+        8.7826,
+        -11.0243
+      ],
+      "up": [
+        0.299,
+        0.843,
+        0.4471
+      ],
+      "fov": 12
+    },
+    "fov": 12,
+    "landmarks": [
+      {
+        "name": "tail panel emblem",
+        "at": [
+          0,
+          0.66,
+          -2.08
+        ],
+        "pixel": [
+          78,
+          229
+        ]
+      }
+    ]
+  }
+}

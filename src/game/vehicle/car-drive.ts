@@ -1,6 +1,7 @@
 import { EPICENTER } from "../deform/epicenter.ts";
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
+import type { CarFrame } from "./car-rig.ts";
 import { blankIntent, readIntent, shapeDrive, type DriveFeel } from "./drive-input.ts";
 import type { PadState } from "./gamepad.ts";
 import { CRASH, FRICTION_G, hypot2 } from "../deform/physics-util.ts";
@@ -137,7 +138,7 @@ function idleDriveState(d: DeformableCar["drive"]): void {
 }
 
 /** applyDrive's pedals: speed along the nose (`_pedal` layout above). */
-function pedals(k: (typeof CLASSES)[keyof typeof CLASSES], dmg: Drivability, input: DriveInput, io: Float64Array): void {
+function pedals(frame: CarFrame, k: (typeof CLASSES)[keyof typeof CLASSES], dmg: Drivability, input: DriveInput, io: Float64Array): void {
   const throttle = io[0]!;
   const brake = io[1]!;
   const along = io[2]!;
@@ -157,7 +158,7 @@ function pedals(k: (typeof CLASSES)[keyof typeof CLASSES], dmg: Drivability, inp
   // with the pull: on dry asphalt the cap is the launch pull (`tractionLimit`), boosted the boosted launch, so a boost launch on asphalt grips as it
   // always has and only a surface under 1 spins it.
   const boosted = 1 + (k.boostAccel - 1) * boost;
-  const cap = tractionLimit(k, muF, muR, realism) * driveShare * boosted;
+  const cap = tractionLimit(frame, k, muF, muR, realism) * driveShare * boosted;
   // The engine the wheels see: damage, the wheels lost and the boost scale its pull; the handbrake takes from the push below.
   const scale = dmg.power * driveShare * boosted;
   // The wheel spin: m/s the driven tread runs ahead of the body (0 gripping). The state is the excess, not the wheel speed, so what the world does
@@ -215,7 +216,7 @@ function pedals(k: (typeof CLASSES)[keyof typeof CLASSES], dmg: Drivability, inp
   // The driven wheels: the engine's gross torque (its pull × 1 + the driveline's rotating share) less the road's reaction (`cap`) spins the
   // rotating mass while the body takes the road's cap less its drag; their difference is how fast the tread runs ahead (Uncharted 4 15:33–16:55,
   // the leftover goes back into the wheel, and it slows to meet the friction on a lift). Gripping wheels (`engine <= cap`) never start.
-  if (over > 0 || engine > cap) over = Math.max(0, over + ((engine - cap) * (1 + 1 / rotatingShare(k, ws)) + resist) * dt);
+  if (over > 0 || engine > cap) over = Math.max(0, over + ((engine - cap) * (1 + 1 / rotatingShare(frame, k, ws)) + resist) * dt);
   const v1 = Math.abs(speed);
   io[7] = top;
   io[8] = speed;
@@ -330,7 +331,7 @@ export function applyDrive(car: DeformableCar, input: DriveInput, dt: number, to
   _pedal[14] = d.spinSpeed;
   _pedal[15] = rollingOver(crr);
   _pedal[16] = crr * FRICTION_G;
-  pedals(k, dmg, input, _pedal);
+  pedals(car.frame, k, dmg, input, _pedal);
   const top = _pedal[7]!;
   const speed = _pedal[8]!;
   const want = _pedal[9]!;

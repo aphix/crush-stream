@@ -1,9 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { COMPACTOR, CompactorRig as Rig, compactorStage } from "./compactor.ts";
+import { CompactorRig as Rig, compactorStage } from "./compactor.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { leftoverCrumple } from "../deform/physics-util.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
 import type { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { forModes } from "../vehicle/test-support.ts";
@@ -22,7 +21,7 @@ function pressRig(mode: DeformMode): Rig {
   return new Rig(car);
 }
 
-function massAABB(d: { masses: { local: { x: number; y: number; z: number } }[] }): {
+function massAABB(d: Pick<StreamedDeformation, "masses">, at: "local" | "rest" = "local"): {
   length: number;
   width: number;
   height: number;
@@ -34,12 +33,12 @@ function massAABB(d: { masses: { local: { x: number; y: number; z: number } }[] 
     minZ = Infinity,
     maxZ = -Infinity;
   for (const m of d.masses) {
-    minX = Math.min(minX, m.local.x);
-    maxX = Math.max(maxX, m.local.x);
-    minY = Math.min(minY, m.local.y);
-    maxY = Math.max(maxY, m.local.y);
-    minZ = Math.min(minZ, m.local.z);
-    maxZ = Math.max(maxZ, m.local.z);
+    minX = Math.min(minX, m[at].x);
+    maxX = Math.max(maxX, m[at].x);
+    minY = Math.min(minY, m[at].y);
+    maxY = Math.max(maxY, m[at].y);
+    minZ = Math.min(minZ, m[at].z);
+    maxZ = Math.max(maxZ, m[at].z);
   }
   return { length: maxZ - minZ, width: maxX - minX, height: maxY - minY };
 }
@@ -53,41 +52,48 @@ function axialOf(
   return Math.abs(m.rest.z - m.local.z);
 }
 
-function intrusion(face: number): number {
-  return Math.max(0, COMPACTOR.bumperZ - face);
+/** How far (m) a plate at `face` stands inside the car's `end` (+1 nose, -1 tail): the bumper's rest reach past it. */
+function intrusion(d: StreamedDeformation, end: 1 | -1, face: number): number {
+  return Math.max(0, Math.abs(d.masses.find((m) => m.name === (end > 0 ? "bumperFL" : "bumperRL"))!.rest.z) - face);
 }
 
 describe("given the compactor press's plate positions along its run (distance of each plate from the car's centre)", () => {
-  it("when the start, wheel-well, hub-midpoint and maximum positions are compared with the bumper and hubs, then the plates start outside the bumper, reach past the hubs at the wheel wells, stop on the hub midpoint, and the maximum passes the hubs and the rails at 0.68", () => {
-    assert.ok(COMPACTOR.startFace > COMPACTOR.bumperZ);
-    assert.ok(COMPACTOR.wellFace > COMPACTOR.hubZ);
-    assert.ok(COMPACTOR.midFace === COMPACTOR.hubZ);
-    assert.ok(COMPACTOR.maxFace < COMPACTOR.hubZ);
-    assert.ok(COMPACTOR.maxFace < 0.68, "max face must pass the rails at 0.68");
+  it("when the start, wheel-well, hub-midpoint and maximum positions are compared with the bumper and hubs, then the plates start outside the bumper, reach past the hubs at the wheel wells, stop on the hub midpoint, and the maximum passes the hubs and the rails", () => {
+    const r = pressRig("lattice");
+    const f = r.faces;
+    const railZ = Math.abs(r.d.masses.find((m) => m.name === "railL")!.rest.z);
+    assert.ok(f.startFace > f.bumperZ);
+    assert.ok(f.wellFace > f.hubZ);
+    assert.ok(f.midFace === f.hubZ);
+    assert.ok(f.maxFace < f.hubZ);
+    assert.ok(f.maxFace < railZ, "max face must pass the rails");
   });
 
   it("when the start position is compared with the bumper, then the plates start more than 0.1 m outside the bumper, so the nose is not teleported on the first frame", () => {
-    assert.ok(COMPACTOR.startFace - COMPACTOR.bumperZ > 0.1);
+    const f = pressRig("lattice").faces;
+    assert.ok(f.startFace - f.bumperZ > 0.1);
   });
 
   it("when the wheel-well position is compared with the hub centre-line, then it is the wheel-well lip, between 0.1 m and 0.3 m outside the hub centre", () => {
-    assert.ok(COMPACTOR.wellFace - COMPACTOR.hubZ >= 0.1);
-    assert.ok(COMPACTOR.wellFace - COMPACTOR.hubZ < 0.3);
+    const f = pressRig("lattice").faces;
+    assert.ok(f.wellFace - f.hubZ >= 0.1);
+    assert.ok(f.wellFace - f.hubZ < 0.3);
   });
 
-  it("when the press stage is read at plate distances 2.22, 1.8, 1.42, 1.0 and 0.62, then it reports open, contact, wells, mid and max in turn, not a single on/off crush", () => {
-    assert.equal(compactorStage(2.22), "open");
-    assert.equal(compactorStage(1.8), "contact");
-    assert.equal(compactorStage(1.42), "wells");
-    assert.equal(compactorStage(1.0), "mid");
-    assert.equal(compactorStage(0.62), "max");
+  it("when the press stage is read at the start, 0.4 m inside it, 0.08 m inside the wheel-well lip, 0.3 m inside the hub midpoint and at the maximum, then it reports open, contact, wells, mid and max in turn, not a single on/off crush", () => {
+    const f = pressRig("lattice").faces;
+    assert.equal(compactorStage(f.startFace, f), "open");
+    assert.equal(compactorStage(f.startFace - 0.4, f), "contact");
+    assert.equal(compactorStage(f.wellFace - 0.08, f), "wells");
+    assert.equal(compactorStage(f.midFace - 0.3, f), "mid");
+    assert.equal(compactorStage(f.maxFace, f), "max");
   });
 });
 
 forModes("given a parked car in the compactor press (plates squeezing its nose and tail), early in the crush", (mode) => {
   it("when the plates close to the wheel wells, then the nose and tail crush, the cabin and roof barely move and the car is not lofted", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.wellFace);
+    r.runTo(r.faces.wellFace);
     const nose = (travelOf(r.d, "bumperFL") + travelOf(r.d, "bumperFR")) * 0.5;
     const tail = (travelOf(r.d, "bumperRL") + travelOf(r.d, "bumperRR")) * 0.5;
     const cell = travelOf(r.d, "cell");
@@ -102,7 +108,7 @@ forModes("given a parked car in the compactor press (plates squeezing its nose a
 
   it("when the plates close to the wheel wells, then both plates push with real impulse (the rear less than the front on this front-heavy sedan) and the front impulse stays under 25000", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.wellFace);
+    r.runTo(r.faces.wellFace);
     assert.ok(r.frontJ > 80, `front plate dead ${r.frontJ}`);
     assert.ok(r.rearJ > (mode === "shape" ? 40 : 80), `rear plate dead ${r.rearJ}`);
     assert.ok(
@@ -114,13 +120,13 @@ forModes("given a parked car in the compactor press (plates squeezing its nose a
 
   it("when the plates close to the wheel wells, then the rear bumper moves inward more than 0.12 m, so the rear plate crushes the car too", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.wellFace);
+    r.runTo(r.faces.wellFace);
     assert.ok(travelOf(r.d, "bumperRL") > 0.12, "rear ignored — far-side clamp still on");
   });
 
   it("when the plates have pushed 5 cm into the bumper, then the car is not flung: no point moves at 40 m/s, none leaves the 6 m by 3 m region around the press, and the car stays within 4 m of the origin", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.bumperZ - 0.05);
+    r.runTo(r.faces.bumperZ - 0.05);
     for (const m of r.d.masses) {
       assert.ok(m.vel.length() < 40, `${m.name} vel ${m.vel.length()} [${mode}]`);
       assert.ok(
@@ -133,7 +139,7 @@ forModes("given a parked car in the compactor press (plates squeezing its nose a
 
   it("when the plates stay at the starting position, then they never touch the car: no contact, no bumper movement and no plate impulse", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.startFace);
+    r.runTo(r.faces.startFace);
     assert.equal(r.contacted, false);
     assert.equal(travelOf(r.d, "bumperFL"), 0);
     assert.equal(r.frontJ, 0);
@@ -141,7 +147,7 @@ forModes("given a parked car in the compactor press (plates squeezing its nose a
 
   it("when the plates reach the wheel wells, then the wheel hubs are only nicked: they move less than the bumper does and have not travelled past the midpoint of their crush", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.wellFace);
+    r.runTo(r.faces.wellFace);
     const hub = (travelOf(r.d, "hubFL") + travelOf(r.d, "hubFR")) * 0.5;
     const bumper = (travelOf(r.d, "bumperFL") + travelOf(r.d, "bumperFR")) * 0.5;
     assert.ok(
@@ -157,12 +163,13 @@ forModes("given a parked car in the compactor press (plates squeezing its nose a
   // Planted hubs were pinned at rest, so the plates passed straight through the tyres (owner screenshot).
   it("when the plates are 0.1 m short of the hubs' midpoint, then no hub has popped and no tyre pokes more than 1 cm past the plate, as the hubs ride the plates back", () => {
     const r = pressRig(mode);
-    const face = COMPACTOR.midFace + 0.1;
+    const face = r.faces.midFace + 0.1;
     r.runTo(face);
+    const tyreR = r.car!.frame.rig.tyre.r;
     for (const name of ["hubFL", "hubFR", "hubRL", "hubRR"] as const) {
       const h = r.d.masses.find((m) => m.name === name)!;
       assert.equal(h.popped, false, `${name} popped before a wheel diameter`);
-      assert.ok(Math.abs(h.world.z) + TYRE_R <= face + 0.01, `${name} tyre reaches ${(Math.abs(h.world.z) + TYRE_R).toFixed(3)} past the plate at ${face.toFixed(3)}`);
+      assert.ok(Math.abs(h.world.z) + tyreR <= face + 0.01, `${name} tyre reaches ${(Math.abs(h.world.z) + tyreR).toFixed(3)} past the plate at ${face.toFixed(3)}`);
     }
   });
 });
@@ -170,7 +177,7 @@ forModes("given a parked car in the compactor press (plates squeezing its nose a
 forModes("given a parked car in the compactor press, as the plates go past the wheel hubs to the maximum crush", (mode) => {
   it("when the plates close to the maximum, then the nose is accordioned, the cabin cage and rails yield, the roof gives and the crumple zone is mostly spent", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.maxFace);
+    r.runTo(r.faces.maxFace);
     const cell = travelOf(r.d, "cell");
     const rail = Math.max(travelOf(r.d, "railL"), travelOf(r.d, "railR"));
     const roof = travelOf(r.d, "roof");
@@ -184,7 +191,7 @@ forModes("given a parked car in the compactor press, as the plates go past the w
 
   it("when the plates close to the maximum, then the car is flattened like a pancake and not launched: it stays under 0.25 m off the ground and the hubs stay within a height band", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.maxFace);
+    r.runTo(r.faces.maxFace);
     assert.ok(r.maxGroupY < 0.25, `group lofted to ${r.maxGroupY.toFixed(3)}`);
     assert.ok(r.group.position.y < 0.22);
     const hubY = r.d.masses.filter((m) => m.name.startsWith("hub")).map((m) => m.world.y);
@@ -198,9 +205,9 @@ forModes("given a parked car in the compactor press, as the plates go past the w
 
   it("when the plates close to the maximum rather than only to the wheel wells, then the cabin has crushed at least 1.4 times as far and the plates are over 0.5 m closer", () => {
     const wells = pressRig(mode);
-    wells.runTo(COMPACTOR.wellFace);
+    wells.runTo(wells.faces.wellFace);
     const max = pressRig(mode);
-    max.runTo(COMPACTOR.maxFace);
+    max.runTo(max.faces.maxFace);
     assert.ok(
       travelOf(max.d, "cell") > travelOf(wells.d, "cell") * 1.4,
       `cell ${travelOf(max.d, "cell").toFixed(3)} vs wells ${travelOf(wells.d, "cell").toFixed(3)}`,
@@ -210,7 +217,7 @@ forModes("given a parked car in the compactor press, as the plates go past the w
 
   it("when the plates close to the maximum, then the front and rear bumpers end the same distance from the car's middle, in the plates' frame, within a tolerance per deform mode", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.maxFace);
+    r.runTo(r.faces.maxFace);
     const fl = r.d.masses.find((m) => m.name === "bumperFL")!;
     const rl = r.d.masses.find((m) => m.name === "bumperRL")!;
     // World, not `local`: a squeeze's group follows the cell now, so `local` z is measured from the cell.
@@ -222,9 +229,9 @@ forModes("given a parked car in the compactor press, as the plates go past the w
 
   it("when the plates close to the maximum rather than only to the wheel wells, then the crumple zone's remaining length drops by more than 0.08", () => {
     const wells = pressRig(mode);
-    wells.runTo(COMPACTOR.wellFace);
+    wells.runTo(wells.faces.wellFace);
     const max = pressRig(mode);
-    max.runTo(COMPACTOR.maxFace);
+    max.runTo(max.faces.maxFace);
     const a = leftoverCrumple(wells.d.crumpleTravel());
     const b = leftoverCrumple(max.d.crumpleTravel());
     assert.ok(b < a - 0.08, `leftover wells ${a.toFixed(3)} max ${b.toFixed(3)}`);
@@ -232,9 +239,9 @@ forModes("given a parked car in the compactor press, as the plates go past the w
 
   it("when the plates close to the wheel wells and then to the maximum, then the cage's deep-crush state is off at the wheel wells and on only at the maximum, not early", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.wellFace);
+    r.runTo(r.faces.wellFace);
     assert.equal(r.d.deepCrush, false, "deepCrush at wells — cage would pancake too early");
-    r.runTo(COMPACTOR.maxFace);
+    r.runTo(r.faces.maxFace);
     assert.equal(r.d.deepCrush, true);
   });
 });
@@ -242,37 +249,37 @@ forModes("given a parked car in the compactor press, as the plates go past the w
 forModes("given a parked car in the compactor press, and where its inner frame and skin sit relative to the plates", (mode) => {
   it("when the plates close to the wheel wells, then every structural point, cage and skin stays inside the plates, within an allowance per deform mode", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.wellFace);
+    r.runTo(r.faces.wellFace);
     const pad = mode === "shape" ? 0.9 : 0.08;
     const cagePad = mode === "shape" ? 0.7 : 0.28;
     const skinPad = mode === "shape" ? 0.9 : 0.35;
     assert.ok(
-      r.d.massMaxAbsZ() <= COMPACTOR.wellFace + pad,
-      `mass z ${r.d.massMaxAbsZ().toFixed(3)} past well ${COMPACTOR.wellFace}`,
+      r.d.massMaxAbsZ() <= r.faces.wellFace + pad,
+      `mass z ${r.d.massMaxAbsZ().toFixed(3)} past well ${r.faces.wellFace}`,
     );
     const cageZ = r.d.cageMaxAbsZ();
     if (Number.isFinite(cageZ))
       assert.ok(
-        cageZ <= COMPACTOR.wellFace + cagePad,
+        cageZ <= r.faces.wellFace + cagePad,
         `cage z ${cageZ.toFixed(3)} spilled past wells`,
       );
     const skinZ = r.d.skinMaxAbsZ(r.geom);
     if (Number.isFinite(skinZ))
-      assert.ok(skinZ <= COMPACTOR.wellFace + skinPad, `skin z ${skinZ.toFixed(3)}`);
+      assert.ok(skinZ <= r.faces.wellFace + skinPad, `skin z ${skinZ.toFixed(3)}`);
   });
 
-  it("when the plates close to the maximum, then the structural points, cages and skin all follow the crush inward, and none stays at the rest-length bumper position (about 2.16 m)", () => {
+  it("when the plates close to the maximum, then the structural points, cages and skin all follow the crush inward, and none stays at the rest-length bumper position", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.maxFace);
+    r.runTo(r.faces.maxFace);
     const cageZ = r.d.cageMaxAbsZ();
     const massZ = r.d.massMaxAbsZ();
     const skinZ = r.d.skinMaxAbsZ(r.geom);
     const massPad = mode === "shape" ? 1.6 : 0.1;
     const cagePad = mode === "shape" ? 1.2 : 0.35;
-    assert.ok(massZ <= COMPACTOR.maxFace + massPad, `mass ${massZ.toFixed(3)}`);
+    assert.ok(massZ <= r.faces.maxFace + massPad, `mass ${massZ.toFixed(3)}`);
     if (Number.isFinite(cageZ))
       assert.ok(
-        cageZ <= COMPACTOR.maxFace + cagePad || cageZ < 1.7,
+        cageZ <= r.faces.maxFace + cagePad || cageZ < 1.7,
         `cage still at rest length ${cageZ.toFixed(3)}`,
       );
     if (Number.isFinite(skinZ) && Number.isFinite(cageZ)) {
@@ -284,21 +291,21 @@ forModes("given a parked car in the compactor press, and where its inner frame a
     if (Number.isFinite(cageZ)) assert.ok(cageZ < 2.2, "cages never left rest (~2.16)");
   });
 
-  it("when a 0.38 m skin limit from rest is applied to the bumper's 2.16 m rest position, then the bumper would stay outside the wheel-well plates, so that limit is too tight to follow the crush", () => {
-    const bumperRestZ = 2.16;
+  it("when a 0.38 m skin limit from rest is applied to the bumper's rest position, then the bumper would stay outside the wheel-well plates, so that limit is too tight to follow the crush", () => {
+    const r = pressRig(mode);
     const oldCap = 0.38;
-    assert.ok(bumperRestZ - oldCap > COMPACTOR.wellFace, "regression: old skin clamp undoes FFD");
+    assert.ok(r.faces.bumperZ - oldCap > r.faces.wellFace, "regression: old skin clamp undoes FFD");
   });
 
   it("when the plates close to the wheel wells and then to the maximum, then the cabin has not yielded at the wheel wells and has yielded (over 0.16) at the maximum", () => {
     const wells = pressRig(mode);
-    wells.runTo(COMPACTOR.wellFace);
+    wells.runTo(wells.faces.wellFace);
     assert.ok(
       travelOf(wells.d, "cell") < (mode === "shape" ? 0.22 : 0.14),
       `cell folded at wells ${travelOf(wells.d, "cell").toFixed(3)}`,
     );
     const max = pressRig(mode);
-    max.runTo(COMPACTOR.maxFace);
+    max.runTo(max.faces.maxFace);
     assert.ok(
       travelOf(max.d, "cell") > 0.16,
       `cell never yielded at max ${travelOf(max.d, "cell").toFixed(3)}`,
@@ -307,11 +314,11 @@ forModes("given a parked car in the compactor press, and where its inner frame a
 
   it("when the plates stop 0.04 m short of the wheel wells and 0.04 m past the hub midpoint, then the cage is intact at the first (cabin under 0.14) and deep-crushing at the second", () => {
     const a = pressRig(mode);
-    a.runTo(COMPACTOR.wellFace + 0.04);
+    a.runTo(a.faces.wellFace + 0.04);
     assert.equal(a.d.deepCrush, false);
     assert.ok(travelOf(a.d, "cell") < 0.14);
     const b = pressRig(mode);
-    b.runTo(COMPACTOR.midFace - 0.04);
+    b.runTo(b.faces.midFace - 0.04);
     assert.equal(b.d.deepCrush, true);
   });
 });
@@ -319,35 +326,36 @@ forModes("given a parked car in the compactor press, and where its inner frame a
 forModes("given a parked car in the compactor press, and how far it crushes compared with how far the plates intrude", (mode) => {
   it("when the plates close to the wheel wells, then bumper travel matches the plates' intrusion (not over it by more than the allowance, not under 35% of it) and neither bumper crawls inside its plate", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.wellFace);
-    const ate = intrusion(COMPACTOR.wellFace);
+    r.runTo(r.faces.wellFace);
+    const ateNose = intrusion(r.d, 1, r.faces.wellFace);
+    const ateTail = intrusion(r.d, -1, r.faces.wellFace);
     const nose = (axialOf(r.d, "bumperFL") + axialOf(r.d, "bumperFR")) * 0.5;
     const tail = (axialOf(r.d, "bumperRL") + axialOf(r.d, "bumperRR")) * 0.5;
-    const cap = ate + (mode === "shape" ? 0.38 : 0.3);
+    const pad = mode === "shape" ? 0.38 : 0.3;
     assert.ok(
-      nose <= cap,
-      `nose over-crushed Δz=${nose.toFixed(3)} > intrusion ${ate.toFixed(3)} + pad`,
+      nose <= ateNose + pad,
+      `nose over-crushed Δz=${nose.toFixed(3)} > intrusion ${ateNose.toFixed(3)} + pad`,
     );
     assert.ok(
-      tail <= cap,
-      `tail over-crushed Δz=${tail.toFixed(3)} > intrusion ${ate.toFixed(3)} + pad`,
+      tail <= ateTail + pad,
+      `tail over-crushed Δz=${tail.toFixed(3)} > intrusion ${ateTail.toFixed(3)} + pad`,
     );
-    assert.ok(nose > ate * 0.35, `nose under-crushed ${nose.toFixed(3)} vs ate ${ate.toFixed(3)}`);
+    assert.ok(nose > ateNose * 0.35, `nose under-crushed ${nose.toFixed(3)} vs ate ${ateNose.toFixed(3)}`);
     const flz = Math.abs(r.d.masses.find((m) => m.name === "bumperFL")!.local.z);
     const rlz = Math.abs(r.d.masses.find((m) => m.name === "bumperRL")!.local.z);
     assert.ok(
-      flz >= COMPACTOR.wellFace - 0.38,
+      flz >= r.faces.wellFace - 0.38,
       `front bumper crawled inside the plate |z|=${flz.toFixed(3)}`,
     );
     assert.ok(
-      rlz >= COMPACTOR.wellFace - 0.38,
+      rlz >= r.faces.wellFace - 0.38,
       `rear bumper crawled inside the plate |z|=${rlz.toFixed(3)}`,
     );
   });
 
   it("when the plates close to the wheel wells, then the engine and cabin are still a car, not a pile: the engine is not eaten, length and width hold, roof and doors hold, and over 0.45 of the crumple zone is left", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.wellFace);
+    r.runTo(r.faces.wellFace);
     const box = massAABB(r.d);
     const engine = (travelOf(r.d, "engineL") + travelOf(r.d, "engineR")) * 0.5;
     const roof = r.d.masses.find((m) => m.name === "roof")!;
@@ -360,8 +368,8 @@ forModes("given a parked car in the compactor press, and how far it crushes comp
       `engine eaten at wells ${engine.toFixed(3)}`,
     );
     assert.ok(
-      box.length > 2 * COMPACTOR.wellFace - 0.55,
-      `length collapsed to ${box.length.toFixed(3)} (gap ${(2 * COMPACTOR.wellFace).toFixed(2)})`,
+      box.length > 2 * r.faces.wellFace - 0.55,
+      `length collapsed to ${box.length.toFixed(3)} (gap ${(2 * r.faces.wellFace).toFixed(2)})`,
     );
     assert.ok(box.width > 1.15, `pinched to width ${box.width.toFixed(3)}`);
     assert.ok(roof.local.y > 0.95, `roof dropped to y=${roof.local.y.toFixed(3)}`);
@@ -369,15 +377,15 @@ forModes("given a parked car in the compactor press, and how far it crushes comp
     assert.ok(leftoverCrumple(r.d.crumpleTravel()) > 0.45, "crumple zone already spent at the lip");
   });
 
-  it("when the plates close to 2.68 m apart (the hubs' midpoint), then the car is a shortened sedan, not wreckage: length, width, height, roof and cabin all hold", () => {
+  it("when the plates close to the hubs' midpoint, then the car is a shortened sedan, not wreckage: length, width, height, roof and cabin all hold", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.midFace);
+    r.runTo(r.faces.midFace);
     const box = massAABB(r.d);
     const roof = r.d.masses.find((m) => m.name === "roof")!;
     const cell = travelOf(r.d, "cell");
     assert.ok(
-      box.length > 2 * COMPACTOR.midFace - 0.65,
-      `length ${box.length.toFixed(3)} vs gap ${(2 * COMPACTOR.midFace).toFixed(2)}`,
+      box.length > 2 * r.faces.midFace - 0.65,
+      `length ${box.length.toFixed(3)} vs gap ${(2 * r.faces.midFace).toFixed(2)}`,
     );
     assert.ok(box.width > 1.05, `width ${box.width.toFixed(3)}`);
     assert.ok(box.height > 0.7, `height flattened to ${box.height.toFixed(3)}`);
@@ -390,7 +398,7 @@ forModes("given a parked car in the compactor press, and how far it crushes comp
 
   it("when the plates have pushed 4 cm into the bumper, then it is a kiss, not a wreck: the cabin and roof move under 0.08 m, the nose under 0.35 m and the car keeps over 3.5 m of length", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.bumperZ - 0.04);
+    r.runTo(r.faces.bumperZ - 0.04);
     assert.ok(
       travelOf(r.d, "cell") < 0.08,
       `cabin moved on a kiss ${travelOf(r.d, "cell").toFixed(3)}`,
@@ -402,23 +410,24 @@ forModes("given a parked car in the compactor press, and how far it crushes comp
     assert.ok(box.length > 3.5, `kiss shortened the car to ${box.length.toFixed(3)}`);
   });
 
-  it("when the plates stay at the starting position, then the car keeps its rest length (4.12 m) and width (1.56 m) within 0.08 m, and the bumper and cabin have not moved", () => {
+  it("when the plates stay at the starting position, then the car keeps its rest length and width within 0.08 m, and the bumper and cabin have not moved", () => {
     const r = pressRig(mode);
-    r.runTo(COMPACTOR.startFace);
+    r.runTo(r.faces.startFace);
     const box = massAABB(r.d);
-    assert.ok(Math.abs(box.length - 4.12) < 0.08, `rest length ${box.length.toFixed(3)}`);
-    assert.ok(Math.abs(box.width - 1.56) < 0.08, `rest width ${box.width.toFixed(3)}`);
+    const rest = massAABB(r.d, "rest");
+    assert.ok(Math.abs(box.length - rest.length) < 0.08, `rest length ${box.length.toFixed(3)} vs ${rest.length.toFixed(3)}`);
+    assert.ok(Math.abs(box.width - rest.width) < 0.08, `rest width ${box.width.toFixed(3)} vs ${rest.width.toFixed(3)}`);
     assert.ok(travelOf(r.d, "bumperFL") === 0);
     assert.ok(travelOf(r.d, "cell") === 0);
   });
 
   it("when the plates are 4 cm into the bumper, at the wheel wells and at the hubs' midpoint, then nose travel grows with the plates' intrusion and never exceeds it by more than the allowance, not a constant wreck amount", () => {
     const kiss = pressRig(mode);
-    kiss.runTo(COMPACTOR.bumperZ - 0.04);
+    kiss.runTo(kiss.faces.bumperZ - 0.04);
     const wells = pressRig(mode);
-    wells.runTo(COMPACTOR.wellFace);
+    wells.runTo(wells.faces.wellFace);
     const mid = pressRig(mode);
-    mid.runTo(COMPACTOR.midFace);
+    mid.runTo(mid.faces.midFace);
     const nKiss = (axialOf(kiss.d, "bumperFL") + axialOf(kiss.d, "bumperFR")) * 0.5;
     const nWells = (axialOf(wells.d, "bumperFL") + axialOf(wells.d, "bumperFR")) * 0.5;
     const nMid = (axialOf(mid.d, "bumperFL") + axialOf(mid.d, "bumperFR")) * 0.5;
@@ -427,8 +436,8 @@ forModes("given a parked car in the compactor press, and how far it crushes comp
       `wells ${nWells.toFixed(3)} vs kiss ${nKiss.toFixed(3)} — crush is not progressive`,
     );
     assert.ok(nMid > nWells * 0.9, `mid ${nMid.toFixed(3)} vs wells ${nWells.toFixed(3)}`);
-    const ateWells = intrusion(COMPACTOR.wellFace);
-    const ateMid = intrusion(COMPACTOR.midFace);
+    const ateWells = intrusion(wells.d, 1, wells.faces.wellFace);
+    const ateMid = intrusion(mid.d, 1, mid.faces.midFace);
     assert.ok(
       nWells < ateWells + 0.4,
       `wells travel ${nWells.toFixed(3)} >> ate ${ateWells.toFixed(3)}`,
@@ -452,7 +461,7 @@ describe("given a shape-deform-mode car at squash setting 0.32 and at 0.4, press
       const car = makeCar("shape", squash);
       car.spawnFacing(0, 0, 0, 0);
       const r = new Rig(car);
-      r.runTo(COMPACTOR.maxFace);
+      r.runTo(r.faces.maxFace);
       const d = r.d;
       const cell = d.masses.find((m) => m.name === "cell")!;
       const crush = (m: (typeof d.masses)[number]) => (m.hub ? 0 : Math.abs(m.local.distanceTo(cell.local) - m.rest.distanceTo(cell.rest)));
@@ -460,7 +469,7 @@ describe("given a shape-deform-mode car at squash setting 0.32 and at 0.4, press
       let drop = 0;
       let worst = "";
       for (let f = 0; f < 120; f++) {
-        r.step(1 / FRAME_HZ, COMPACTOR.maxFace);
+        r.step(1 / FRAME_HZ, r.faces.maxFace);
         car.afterContacts(1 / FRAME_HZ);
         car.stepBreakage(1 / FRAME_HZ);
         car.updateSkin();

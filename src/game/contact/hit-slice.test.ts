@@ -5,6 +5,8 @@ import { FINE_HZ, FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 import { stepWorld } from "../engine/world-step.ts";
 import { FREEWHEEL, launch, makeWorld, tickWorld } from "./crash-scenarios.test-util.ts";
 import { classCar } from "../vehicle/ejection.test-util.ts";
+import * as THREE from "three";
+import { satCars } from "./sat.ts";
 
 /**
  * Owner, 2026-10-05: a cop T-boning a sedan at speed reads as a pass-through of about 1 m. A device whose 1/240 s steps do not
@@ -57,6 +59,23 @@ describe("given a sedan driving its nose into a parked sedan's right door at 20 
   });
 });
 
+/** Where in one 1/240 s slice of the approach (0.125 m at 30 m/s) the first touch falls: the striker started 0 to 120 mm further back, 10 mm apart. */
+const TOUCH_MM = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
+/** Widest (m) the nose, and the door, may be crushed apart by where in a slice the first touch falls: the hit's centre follows the pair's patch while the faces close, its snap to the nearest mass has no step in its lateral position, and a hit armed on a corner's first aslant touch takes over the face-on one that follows (a patch 1 cm either side of 0.2 m off centre crushed the nose 0.38 m or 0.74 m; armed aslant at 10.3 m/s it crushed 0.34 m, face-on at 13.5 m/s 0.47 m). */
+const TOUCH_NOSE = 0.06;
+const TOUCH_DOOR = 0.1;
+describe("given a sedan driving its nose into a parked sedan's right door at 30 m/s, from first touches across one 1/240 s slice of travel", () => {
+  it("when the first touch falls 0 to 120 mm apart, then each car is crushed as far to within 0.06 m (nose) and 0.1 m (door) and the same driver is thrown", () => {
+    const hits = TOUCH_MM.map((mm) => tbone(30, false, (mm / 1000) * (QUIET_HZ / 30)));
+    const spread = (xs: number[]): number => Math.max(...xs) - Math.min(...xs);
+    const nose = hits.map((h) => h.strikerNose);
+    const door = hits.map((h) => h.struckDoor);
+    assert.ok(spread(nose) <= TOUCH_NOSE, `nose ${nose.map((v) => v.toFixed(2)).join(" ")} m over ${TOUCH_MM.join(" ")} mm back`);
+    assert.ok(spread(door) <= TOUCH_DOOR, `door ${door.map((v) => v.toFixed(2)).join(" ")} m over ${TOUCH_MM.join(" ")} mm back`);
+    assert.equal(new Set(hits.map((h) => `${h.strikerThrown} ${h.struckThrown}`)).size, 1, "one driver thrown at every touch");
+  });
+});
+
 /** A sedan at 56 km/h into the rigid wall, stepped at the coarse step with the contact cut to slices of `fine` s (the pacer's floor): how far its nose crumples (m). */
 function wallNose(fine: number): number {
   const car = classCar("sedan");
@@ -84,4 +103,41 @@ describe("given a sedan driving into the rigid wall at 56 km/h in coarse steps",
     const fine = wallNose(1 / FINER_HZ);
     assert.ok(Math.abs(coarse - fine) <= 0.01, `nose ${coarse.toFixed(3)} m in 1/${FINE_HZ} s slices, ${fine.toFixed(3)} m in 1/${FINER_HZ} s ones`);
   });
+});
+
+/** How far (m) a nose's first touch is read ahead of the overlap: none, and the travel of a 1/240 s slice at 30 m/s. */
+const LOOKS = [0, 30 / FINE_HZ];
+/** How far (mm) into the contact the patch is followed: past the outlines' outermost half step, where the other cage's nodes first read a depth. */
+const ENTRY_MM = 60;
+/** The widest (m) the patch's centre may move between two readings 1 mm apart of the nose's closing, in its first `ENTRY_MM`: a node enters with the depth it has, from nothing (read at the gate of the drawn triangles' box, the door's nodes at the nose's edge entered with 0.02 m at once: 0.021 m at no look, 0.112 m at a slice's; now 0.009 m and 0.002 m). */
+const PATCH_STEP = 0.015;
+describe("given a sedan's nose closing on a parked sedan's right door, read 1 mm at a time from the first touch", () => {
+  for (const look of LOOKS) {
+    it(`when the pair's patch is read ${look.toFixed(3)} m ahead of the overlap, then its centre moves under ${PATCH_STEP} m between neighbouring millimetres of the first ${ENTRY_MM}`, (t) => {
+      const struck = classCar("sedan");
+      const striker = classCar("sedan");
+      launch(struck, 0, 0, 0, 0, 0);
+      const n = new THREE.Vector3();
+      const p = new THREE.Vector3();
+      const last = new THREE.Vector3();
+      let first = -1;
+      let worst = 0;
+      let worstAt = 0;
+      for (let mm = 0; mm <= 800 && (first < 0 || mm < first + ENTRY_MM); mm++) {
+        launch(striker, 3.4 - mm / 1000, 0, -Math.PI / 2, 0, 0);
+        if (satCars(striker, struck, n, p, look) === null) continue;
+        if (first < 0) first = mm;
+        else if (last.distanceTo(p) > worst) {
+          worst = last.distanceTo(p);
+          worstAt = mm - first;
+        }
+        last.copy(p);
+      }
+      striker.dispose();
+      struck.dispose();
+      t.diagnostic(`first touch at ${first} mm, the largest step ${worst.toFixed(4)} m at ${worstAt} mm in`);
+      assert.ok(first > 0, "the sweep never met the contact");
+      assert.ok(worst <= PATCH_STEP, `the patch's centre moved ${worst.toFixed(4)} m in 1 mm of closing, ${worstAt} mm into the contact`);
+    });
+  }
 });

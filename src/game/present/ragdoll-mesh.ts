@@ -35,9 +35,12 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
   private readonly sprayRgba: Uint8Array | null;
   private readonly sprayAtlas: THREE.DataTexture;
 
-  /** `sprayed`: its slots wear sprays (`spray`: the thrown drivers, the garage's); the course's figures wear none and hold no atlas. */
-  constructor(slots: number, sprayed = false) {
-    super(dummyGeometry(), new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0 }), slots);
+  /**
+   * `sprayed`: its slots wear sprays (`spray`: the thrown drivers, the garage's); the course's figures wear none and hold no atlas.
+   * `geometry`: `dummyGeometry` or a view of it on the same attributes (`seatedGeometry`).
+   */
+  constructor(slots: number, sprayed = false, geometry: THREE.BufferGeometry = dummyGeometry()) {
+    super(geometry, new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0 }), slots);
     this.rows = new Float32Array(slots * ROW_TEXELS * 4);
     this.bust = new BustSprings(slots);
     this.dolls = new THREE.DataTexture(this.rows, ROW_TEXELS, slots, THREE.RGBAFormat, THREE.FloatType);

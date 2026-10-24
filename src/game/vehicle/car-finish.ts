@@ -23,8 +23,8 @@ export function finishForTier(tier: FinishTierName): boolean {
 const PAINT_MAP_SIZE = 256;
 /** Trim grain map edge (texels): one channel at 0.6 mm a texel over `TRIM_TILE_M`; a stipple needs no more. */
 const TRIM_MAP_SIZE = 128;
-/** Anisotropic filtering on both maps: a flank is seen at a grazing angle, where plain trilinear blurs the relief away. Three clamps it to the GPU's limit. */
-const MAP_ANISOTROPY = 8;
+/** Anisotropic filtering on the car's surface maps (the finish's and the detail atlas): a flank or a hood is seen at a grazing angle, where plain trilinear blurs the relief and the shut lines away. Three clamps it to the GPU's limit. */
+export const MAP_ANISOTROPY = 8;
 
 /** One layer of value noise: `cells` lattice cells across the tile, each added at `weight`. */
 type NoiseOctave = { readonly cells: number; readonly weight: number };
@@ -212,13 +212,24 @@ const FLAKE_FADE_START_M = 1.5;
 const FLAKE_FADE_END_M = 5;
 const TRIM_FADE_START_M = 4;
 const TRIM_FADE_END_M = 16;
+/**
+ * The peel is drawn 50 times its real relief so it survives the pixel at play distance; up close, where its 15 mm waves span many
+ * pixels, that relief reads as hammered metal, so it keeps `PEEL_NEAR_SHARE` of its height nearer than `PEEL_NEAR_M`, rising to its
+ * full height only at `PEEL_FULL_M`, past the garage's opening orbit, where full height read hammered on silver and red hoods.
+ */
+const PEEL_NEAR_SHARE = 0.25;
+const PEEL_NEAR_M = 2;
+const PEEL_FULL_M = 9;
+/** Linear luma over which paint keeps its peel and flake: near-black albedo leaves their slopes as sparse glints that read as brown speckle. */
+const DARK_LUMA_FROM = 0.004;
+const DARK_LUMA_TO = 0.04;
 /** Furthest any pixel of a finish mesh lies from its origin (m): a car is ~2.6 m corner to middle, the rest is crush and loose-panel slack. */
 const FINISH_MESH_REACH_M = 4;
 /** The weight of each plane is |object normal| to this power, normalised: 4 keeps a plane's blend to the corners where two planes meet. */
 const PLANE_BLEND_SHARPNESS = 4;
 
 /** A number as a GLSL float literal. */
-function glslFloat(value: number): string {
+export function glslFloat(value: number): string {
   return Number.isInteger(value) ? `${value}.0` : `${value}`;
 }
 
@@ -239,7 +250,12 @@ vec3 finishHeights(vec3 p, vec3 w) {
   return heights;
 }
 const vec3 finishFadeStart = vec3(${glslFloat(WAVE_FADE_START_M)}, ${glslFloat(PEEL_FADE_START_M)}, ${glslFloat(FLAKE_FADE_START_M)});
-const vec3 finishFadeEnd = vec3(${glslFloat(WAVE_FADE_END_M)}, ${glslFloat(PEEL_FADE_END_M)}, ${glslFloat(FLAKE_FADE_END_M)});`;
+const vec3 finishFadeEnd = vec3(${glslFloat(WAVE_FADE_END_M)}, ${glslFloat(PEEL_FADE_END_M)}, ${glslFloat(FLAKE_FADE_END_M)});
+const vec3 finishNearShare = vec3(1.0, ${glslFloat(PEEL_NEAR_SHARE)}, 1.0);
+vec3 finishKeep(vec3 albedo) {
+  float keep = smoothstep(${glslFloat(DARK_LUMA_FROM)}, ${glslFloat(DARK_LUMA_TO)}, dot(albedo, vec3(0.2126, 0.7152, 0.0722)));
+  return vec3(1.0, keep, keep);
+}`;
 
 /** The same three outputs for the trim: only the peel slot carries the grain. */
 const TRIM_HEIGHTS = /* glsl */ `
@@ -250,7 +266,11 @@ vec3 finishHeights(vec3 p, vec3 w) {
   return vec3(0.0, (grain - 0.5) * ${glslFloat(TRIM_GRAIN_HEIGHT_M)}, 0.0);
 }
 const vec3 finishFadeStart = vec3(${glslFloat(TRIM_FADE_START_M)});
-const vec3 finishFadeEnd = vec3(${glslFloat(TRIM_FADE_END_M)});`;
+const vec3 finishFadeEnd = vec3(${glslFloat(TRIM_FADE_END_M)});
+const vec3 finishNearShare = vec3(1.0);
+vec3 finishKeep(vec3 albedo) {
+  return vec3(1.0);
+}`;
 
 /**
  * Mikkelsen's screen-space bump (three's `perturbNormalArb`, bump_pars_fragment) on `surfaceNormal` (view space): the height
@@ -282,7 +302,8 @@ vec3 finishPerturbedNormal(vec3 surfaceNormal, vec2 heightSlope, float faceDirec
 
 /**
  * After the clear coat's normal is declared, unless every layer has faded on every pixel of the draw: each layer's height step one
- * pixel right and down (`dFdx` / `dFdy` of the triplanar heights: one sample set a pixel, not three), faded by view distance, then
+ * pixel right and down (`dFdx` / `dFdy` of the triplanar heights: one sample set a pixel, not three), faded by view distance (the peel
+ * also held to its near share up close), then
  * the base layer's normal takes waviness, peel and flake, and the clear coat's takes waviness and peel only (the peel lives in the
  * clear coat; the flake sits under it).
  */
@@ -291,7 +312,10 @@ if (finishMeshNear() < max(finishFadeEnd.x, max(finishFadeEnd.y, finishFadeEnd.z
   vec3 finishPoint = vFinishPos;
   vec3 finishWeights = finishPlaneWeights(normalize(vFinishNormal));
   vec3 finishHere = finishHeights(finishPoint, finishWeights);
-  vec3 finishFade = 1.0 - smoothstep(finishFadeStart, finishFadeEnd, vec3(length(vViewPosition)));
+  float finishDistance = length(vViewPosition);
+  vec3 finishFade = (1.0 - smoothstep(finishFadeStart, finishFadeEnd, vec3(finishDistance)))
+    * mix(finishNearShare, vec3(1.0), smoothstep(${glslFloat(PEEL_NEAR_M)}, ${glslFloat(PEEL_FULL_M)}, finishDistance))
+    * finishKeep(diffuseColor.rgb);
   vec3 finishStepX = dFdx(finishHere) * finishFade;
   vec3 finishStepY = dFdy(finishHere) * finishFade;
   vec2 coatSlope = vec2(finishStepX.x + finishStepX.y, finishStepY.x + finishStepY.y);
@@ -309,6 +333,12 @@ type CarFinishState = { on: boolean };
 
 function isCarFinishState(value: unknown): value is CarFinishState {
   return typeof value === "object" && value !== null && "on" in value && typeof value.on === "boolean";
+}
+
+/** Whether `material`'s finish is switched on: a hook chained after `applyFinish` may call the finish's shader functions only then. */
+export function finishOn(material: THREE.Material): boolean {
+  const state: unknown = material.userData.carFinish;
+  return isCarFinishState(state) && state.on;
 }
 
 /**

@@ -17,6 +17,9 @@ export type CageStyle = Pick<CarCageStyle, "step" | "nu" | "nv" | "u0" | "v0">;
 export const PROXY_BOXES = 128;
 /** A cuboid's floats: centre x, y, z (car frame, origin on the ground, +z forward), half extents x, y, z, its turn (quaternion x, y, z, w). */
 export const BOX_FLOATS = 10;
+/** A pane slab's floats: its bounding sphere (centre x, y, z and radius, car frame), then its 8 corners, x, y, z each (`PANE_CORNERS` on). */
+export const PANE_FLOATS = 28;
+export const PANE_CORNERS = 4;
 export const PANES = GLASS_NAMES.length;
 /**
  * How far (m) a car's columns reach under the ground: no gap under one for a lying body to wedge into, so the box's front
@@ -25,7 +28,11 @@ export const PANES = GLASS_NAMES.length;
  * it aside. A bridge deck clears a road under it by more.
  */
 export const UNDER = 1;
-/** Where the cabin starts in the cage's frame (m): every cage body's hood and deck top stays under it (0.62-0.91 m), every roof is over it (1.19-1.37 m). */
+/**
+ * Where the cabin starts in the cage's frame (m) when a style names none (`BodyStyle.proxyBelt`): the cars' hood and deck tops stand
+ * under it (0.62-0.91 m), their roofs over it (1.19-1.37 m). A truck's hood and bed rim stand over it (the pickup's up to 1.23 m) and it
+ * names its own.
+ */
 export const BELT_Y = 1;
 /** The top (m, cage frame) of the lower box under the cabin: under the doors' flank (0.80-0.83 m on every cage body) and every hood and deck. */
 export const SILL_Y = 0.8;
@@ -97,11 +104,9 @@ function misses(m: Float64Array): number {
   return m[2]! - (m[1]! * m[1]!) / m[0]!;
 }
 
-const _basis = new THREE.Matrix4();
 const _x = new THREE.Vector3();
 const _y = new THREE.Vector3();
 const _z = new THREE.Vector3();
-const _q = new THREE.Quaternion();
 const _u = new THREE.Vector3();
 
 /** One car's proxy cuboids, fitted from its cage: `fit` the leaves, `fitPanes` the glass. Allocates once, here. */
@@ -109,8 +114,8 @@ export class ProxyFitter {
   /** The boxes, `BOX_FLOATS` each, `count` of them. */
   readonly boxes = new Float64Array(PROXY_BOXES * BOX_FLOATS);
   count = 0;
-  /** The pane slabs, `BOX_FLOATS` each, in `GLASS_NAMES` order. */
-  readonly panes = new Float64Array(PANES * BOX_FLOATS);
+  /** The pane slabs, `PANE_FLOATS` each, in `GLASS_NAMES` order. */
+  readonly panes = new Float64Array(PANES * PANE_FLOATS);
   private readonly corner = new Float64Array(12);
   /** Per leaf, its node rectangle (inclusive), whether it is of the roof (nodes over the belt), whether it has no node inside the rim (it fits all its nodes), the lowest and highest the cage's top lies over it, and the band of tops a rim node may lie in to count (`counts`). */
   private readonly i0 = new Int16Array(PROXY_BOXES);
@@ -250,10 +255,11 @@ export class ProxyFitter {
 
   /**
    * Node `n`'s height as leaf `k`'s spread reads it: its top when it counts, `OPEN_Y` (the ground: nothing there) for a node under a
-   * gone pane, so no leaf spans the opening a dummy falls through and every cut across one splits it off; NaN for the rest.
+   * gone pane, and for a roof leaf under a standing one too, so no leaf spans the opening a dummy falls through nor a slab the glass
+   * between its pillars (cut where they stand at one height, it would float over the pane) and every cut across one splits it off; NaN for the rest.
    */
   private sample(k: number, f: CageFields, n: number): number {
-    if (this.glassNode[n] === OPEN && f.covered[n] === 1) return OPEN_Y;
+    if (f.covered[n] === 1 && (this.glassNode[n] === OPEN || (this.glassNode[n] !== 0 && this.roof[k] === 1))) return OPEN_Y;
     return this.counts(k, f, n) ? f.top[n]! : NaN;
   }
 
@@ -391,29 +397,29 @@ export class ProxyFitter {
     }
   }
 
-  /** Fills `side` for the `nodes` of the lattice: 0 where no leaf holds the node, else 2 over the belt (`BELT_Y`) and 1 under it. */
-  private markSides(f: CageFields, nodes: number): void {
+  /** Fills `side` for the `nodes` of the lattice: 0 where no leaf holds the node, else 2 over `belt` (m, the cabin's start) and 1 under it. */
+  private markSides(f: CageFields, nodes: number, belt: number): void {
     for (let n = 0; n < nodes; n++) {
       const top = f.top[n]!;
-      this.side[n] = f.covered[n] === 1 && this.glassNode[n] === 0 && Number.isFinite(top) ? (top > BELT_Y ? 2 : 1) : 0;
+      this.side[n] = f.covered[n] === 1 && this.glassNode[n] === 0 && Number.isFinite(top) ? (top > belt ? 2 : 1) : 0;
     }
   }
 
   /**
    * Fits the leaves to `f` on `style`'s lattice (the body mesh's frame), `plan` its plan distance field, `glass` its panes' corners
    * and `paneBits` their states (`markGlass`): the plan's covered nodes not under a standing pane are cut into rectangles of the
-   * nodes under the belt and of those over it (cutting the one whose top spreads most over its area, `cut`) until none spreads
-   * over `LEAF_RANGE` or the boxes are used. A leaf under the belt is a column from `UNDER` under the ground up to the middle of
-   * its spread (a hood, a deck, a bed), one over it a slab there (the roof), with the lower box under the cabin (the roof leaves
-   * of `CABIN_SIDE` nodes each way and over) from `UNDER` under the ground to the sill (first box, only when there is a cabin).
-   * Writes `boxes` and `count`.
+   * nodes under the belt (`belt`, m: the body style's, `BELT_Y` unless it names one) and of those over it (cutting the one whose top
+   * spreads most over its area, `cut`) until none spreads over `LEAF_RANGE` or the boxes are used. A leaf under the belt is a column
+   * from `UNDER` under the ground up to the middle of its spread (a hood, a deck, a bed), one over it a slab there (the roof), with the
+   * lower box under the cabin (the roof leaves of `CABIN_SIDE` nodes each way and over) from `UNDER` under the ground to the sill (first
+   * box, only when there is a cabin). Writes `boxes` and `count`.
    */
-  fit(f: CageFields, style: CageStyle, plan: Float32Array, glass: Float32Array, paneBits: number): void {
+  fit(f: CageFields, style: CageStyle, plan: Float32Array, glass: Float32Array, paneBits: number, belt: number): void {
     const { nu, nv, step, u0, v0 } = style;
     this.plan = plan;
     this.nu = nu;
     this.markGlass(f, style, glass, paneBits);
-    this.markSides(f, nu * nv);
+    this.markSides(f, nu * nv, belt);
     let leaves = 0;
     for (let side = 0; side < 2; side++) {
       this.roof[leaves] = side;
@@ -532,8 +538,8 @@ export class ProxyFitter {
   /**
    * Fits each pane's slab to its glass's corners `glass` (`glassCorners`: per pane, across 0 and 1 at the base, then at the top,
    * xyz each, as the body mesh has them), a corner taken down to the cage's top where the cage is under it (a crushed roof takes its
-   * glass down): a cuboid on the glass's middle turned to its plane, `PANE_PAD` past its sides, `PANE_HALF` inside it (away from
-   * the middle of all the glass), `step` / 2 out of the glass. Writes `panes`.
+   * glass down): the glass's own quad, `PANE_PAD` past its sides, `2 * PANE_HALF` thick inside it (away from the middle of all the
+   * glass). Writes `panes`.
    */
   fitPanes(f: CageFields, style: CageStyle, glass: Float32Array): void {
     let mx = 0;
@@ -559,24 +565,66 @@ export class ProxyFitter {
     }
   }
 
-  /** Pane `p`'s slab from `corner` (its four corners), turned outward from (`mx`, `my`, `mz`). */
+  /**
+   * Pane `p`'s slab from `corner` (its four corners), turned outward from (`mx`, `my`, `mz`): the quad itself, each corner `PANE_PAD`
+   * on past it along its base or top edge, the top corners `PANE_TOP_TRIM` down their sides, and the same corners `2 * PANE_HALF`
+   * inside. A cuboid on the quad's mean width stood past a trapezoid's short edge: the reference sedan's windshield (1.40 m at its
+   * base, 1.16 at its header) stood 11 cm past its header's ends, over the door window's front, and a torso aimed at that window
+   * cracked the windshield; the door's own slab left the window's foot under its raked A-pillar open.
+   */
   private paneSlab(p: number, mx: number, my: number, mz: number): void {
     const k = this.corner;
-    _x.set(k[3]! - k[0]! + k[9]! - k[6]!, k[4]! - k[1]! + k[10]! - k[7]!, k[5]! - k[2]! + k[11]! - k[8]!);
-    _y.set(k[6]! - k[0]! + k[9]! - k[3]!, k[7]! - k[1]! + k[10]! - k[4]!, k[8]! - k[2]! + k[11]! - k[5]!);
-    _u.copy(_y).normalize();
-    const width = hypot3(k[3]! - k[0]!, k[4]! - k[1]!, k[5]! - k[2]!) + hypot3(k[9]! - k[6]!, k[10]! - k[7]!, k[11]! - k[8]!);
-    const height = hypot3(k[6]! - k[0]!, k[7]! - k[1]!, k[8]! - k[2]!) + hypot3(k[9]! - k[3]!, k[10]! - k[4]!, k[11]! - k[5]!);
+    _x.set(k[9]! - k[0]!, k[10]! - k[1]!, k[11]! - k[2]!);
+    _y.set(k[6]! - k[3]!, k[7]! - k[4]!, k[8]! - k[5]!);
+    _z.crossVectors(_x, _y).normalize();
     const cx = (k[0]! + k[3]! + k[6]! + k[9]!) / 4;
     const cy = (k[1]! + k[4]! + k[7]! + k[10]!) / 4;
     const cz = (k[2]! + k[5]! + k[8]! + k[11]!) / 4;
-    _z.crossVectors(_x, _y).normalize();
-    if (_z.x * (cx - mx) + _z.y * (cy - my) + _z.z * (cz - mz) < 0) _z.negate();
-    _x.normalize();
-    _y.crossVectors(_z, _x);
-    _q.setFromRotationMatrix(_basis.makeBasis(_x, _y, _z));
-    // The slab stops `PANE_TOP_TRIM` short of the glass's top: its half length shrinks by half that and its middle moves toward the base by as much.
-    const slide = PANE_TOP_TRIM / 2;
-    this.setTurned(p, cx - _z.x * PANE_HALF - _u.x * slide, cy - _z.y * PANE_HALF - _u.y * slide, cz - _z.z * PANE_HALF - _u.z * slide, width / 4 + PANE_PAD, height / 4 - slide, PANE_HALF, _q.x, _q.y, _q.z, _q.w, this.panes);
+    // A lying pane (a windshield, a rear window, a crushed roof's glass) faces up, whatever its height against the mean of all the glass (a
+    // crushed roof's flat pane stood under that mean and its slab grew 6 cm up over it); an upright one faces away from the mean.
+    const faceUp = Math.abs(_z.y) >= GLASS_LYING;
+    if (faceUp ? _z.y < 0 : _z.x * (cx - mx) + _z.y * (cy - my) + _z.z * (cz - mz) < 0) _z.negate();
+    const out = this.panes;
+    const o = p * PANE_FLOATS;
+    for (let c = 0; c < 4; c++) {
+      // Its edge (base: corners 0 and 1, top: 2 and 3), along which it is padded outward, and its side (down to its base corner).
+      const mate = c ^ 1;
+      _u.set(k[3 * c]! - k[3 * mate]!, k[3 * c + 1]! - k[3 * mate + 1]!, k[3 * c + 2]! - k[3 * mate + 2]!).normalize();
+      let x = k[3 * c]! + _u.x * PANE_PAD;
+      let y = k[3 * c + 1]! + _u.y * PANE_PAD;
+      let z = k[3 * c + 2]! + _u.z * PANE_PAD;
+      if (c >= 2) {
+        const base = c - 2;
+        _u.set(k[3 * base]! - k[3 * c]!, k[3 * base + 1]! - k[3 * c + 1]!, k[3 * base + 2]! - k[3 * c + 2]!).normalize();
+        x += _u.x * PANE_TOP_TRIM;
+        y += _u.y * PANE_TOP_TRIM;
+        z += _u.z * PANE_TOP_TRIM;
+      }
+      const face = o + PANE_CORNERS + 3 * c;
+      const inside = face + 12;
+      out[face] = x;
+      out[face + 1] = y;
+      out[face + 2] = z;
+      out[inside] = x - _z.x * 2 * PANE_HALF;
+      out[inside + 1] = y - _z.y * 2 * PANE_HALF;
+      out[inside + 2] = z - _z.z * 2 * PANE_HALF;
+    }
+    let sx = 0;
+    let sy = 0;
+    let sz = 0;
+    for (let c = 0; c < 8; c++) {
+      sx += out[o + PANE_CORNERS + 3 * c]!;
+      sy += out[o + PANE_CORNERS + 3 * c + 1]!;
+      sz += out[o + PANE_CORNERS + 3 * c + 2]!;
+    }
+    sx /= 8;
+    sy /= 8;
+    sz /= 8;
+    let r = 0;
+    for (let c = 0; c < 8; c++) r = Math.max(r, hypot3(out[o + PANE_CORNERS + 3 * c]! - sx, out[o + PANE_CORNERS + 3 * c + 1]! - sy, out[o + PANE_CORNERS + 3 * c + 2]! - sz));
+    out[o] = sx;
+    out[o + 1] = sy;
+    out[o + 2] = sz;
+    out[o + 3] = r;
   }
 }

@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { launch } from "../contact/crash-scenarios.test-util.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { MU_BODY } from "../vehicle/car-air-body.ts";
 import { EjectionWatch } from "../vehicle/ejection.ts";
 import { activeGround, Ground, NO_FLOOR, setGround } from "./ground.ts";
@@ -29,8 +30,8 @@ import { FRAME_HZ } from "../kernel/constants.ts";
  * k = 1 + I (r x dir)^2 (I the body's inverse inertia per unit mass about the pitch axis). The nose stops dead while
  * MU_BODY nh / kn >= ny / kt, that is ny / nh <= MU_BODY kt / kn: the sedan's lever (2.0 m forward, 0.52 m down, I 0.56) makes kt
  * 3.2 against kn 1.5 and the limit ny 0.71, not 0.51. Measured on this tree the sedan at 12 m/s stops at every face up to ny 0.66
- * and rides onto a ny 0.72 one (the point-mass limit's ny 0.58 flank sticks: -1.94 m past the foot, 0.33 m up). The hull rows and
- * the tyres' footprint answer a terrain cell by this one law (the tyre's `STEP_MAX` makes a higher face a wall to it), so the
+ * and rides onto a ny 0.72 one (the point-mass limit's ny 0.58 flank sticks: -1.94 m past the foot, 0.33 m up). The hull rows answer a
+ * terrain cell by this one law (a terrain grid reaches without limit: a tyre's mount limits a prism's top, not a grid's), so the
  * terrain needs no side rule of its own. `.bench/uc2/cliff.ts`, which found the sedan climbing 5 to 9 m, launched it horizontally off
  * the top of the flank: it flew.
  * Mutation: body friction 0 in `stepFree` (both caps) fails the ny 0.30, 0.40 and 0.50 faces (the sedan rides 4 to 9 m up them).
@@ -45,7 +46,7 @@ const HEIGHT = 2.7;
 const POINT_STOPS_BELOW = MU_BODY / Math.sqrt(1 + MU_BODY * MU_BODY);
 /** The sedan's nose lever from its centre of mass (m, forward and up: the belly's front row) and its inverse inertia about the pitch axis. */
 const LEVER = { x: 2.0, y: -0.52 };
-const INV_I_PITCH = 3 / (CAR_HALF.y ** 2 + CAR_HALF.z ** 2);
+const INV_I_PITCH = carFrame(CAR_STYLES.sedan).invI.x;
 /** The normal's up component below which the nose's friction stops the sedan dead: ny / nh = MU_BODY kt / kn, solved by bisection. */
 function stopsBelow(): number {
   let lo = 0;

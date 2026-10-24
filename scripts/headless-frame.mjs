@@ -7,17 +7,31 @@
  * program that failed to link. Exit 1 on a link failure or a GL error. Not a frame-time judge: the browser bench is.
  *
  *   node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out screenshots/headless-frame-high.png]
- *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--at 8] [--detail 2]
- *     [--draw auto|far|max] [--scale auto|0.75|1|1.5|2] [--shadow auto|high|max]
+ *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--view hood] [--at 8] [--tear hood,bumperF]
+ *     [--view side|top|iso|rear-iso --view-camera <json>] [--backdrop '#ffffff'] [--detail 2] [--paint '#8b8a8d' | --paint coupe=#2a313e,...] [--state intact|open|stripped]
  *
  * `--root` draws another checkout's game on its own node_modules (same seed, same clock): two trees give a before/after pair.
  * `--hash` boots the page on a share link's `#` (the scene, the car, the settings) instead of the derby; `--camera radius,pitch,angle`
- * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--at` is the sim seconds before the drawn frames;
- * `--detail` puts a distance-detail rung in force (`DETAIL_LEVELS`: 0 the desktop's, 2 the phone's; `off`: no cuts, the bench's detail A/B arms),
- * and the JSON counts the cars cut to their body (`farCars`).
+ * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--view hood|chase|far` follows the hash's car
+ * (`car=<id>`) in that drive view instead, e.g. `--hash 'scene=race&car=coupe'`; `--at` is the sim seconds before the drawn frames.
+ * `--tear` tears the named parts (`DetachPart.name`: hood, bumperF, archFL, ...) off every car before the framing and hides them, to
+ * show what is under them (the engine bay, the crash bars, the bare metal). `--open doorL,doorR,trunk,quarterL,quarterR` swings those
+ * doors and the lid to their stops and peels those quarter panels as the Doors scene does, on every car, to show their inner faces.
+ * `--state` poses the hash's cars (`showPose`); `--camera r,pitch,angle[,x,y,z]` in a free-eye scene (the showcase) sets the eye about
+ * the point x,y,z (default the origin), looking at it.
+ * `--sirens` flashes every light bar (with `night=1` in the hash: the lamps as seen in a night pursuit). `--break headL,headR,tailL,tailR`
+ * breaks those lamps on every car, as a corner crush does. `--brake` holds every car's brake pedal down (its brake lamps lit).
+ * `--view side|top|iso|rear-iso` draws the hash's car through the camera spec trace-car writes for that view (`--camera-out`,
+ * `trace-camera.mjs`: car space, orthographic for side and top), at the spec's size, so the shot lines up with trace-car's overlay;
+ * `scripts/landing-shots.mjs` runs the pair. `--backdrop <colour>` draws the car alone over that colour (no garage room, no fog).
+ * With a view camera the JSON's `wheelsPx` is where the shot drew each wheel (`wheelMarks`), for landing-shots' registration.
+ * `--detail <rung>` pins the distance-detail ladder's rung (`DETAIL_LEVELS`: 0 desktop, 2 the phone's start; `off`: no cuts, the bench's
+ * detail A/B arms) with its governor off; the JSON counts the cars cut to their body (`farCars`).
+ * `--paint <colour>` paints the hash's car that colour, `--paint <style>=<colour>,...` every car of those styles (a livery, the
+ * police's, stays): the landing shots and lineup sheets in each reference's colour.
  * `--draw`, `--scale` and `--shadow` pin the quality knobs (`?draw=`, `?scale=`, `?shadow=`). A numeric `--scale` keeps the shot's size and shrinks the CSS box (`--size` over the scale), so the drawing buffer stays `--size`.
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -30,6 +44,12 @@ const SEED = 12641919;
 const START_S = 8;
 /** Sim seconds a hand `--camera` framing gets to settle before the drawn frames (readme-shots' `at: 0.3`). */
 const FRAMING_S = 0.3;
+/** Sim seconds a `--view` gets to settle before the drawn frames: the chase springs' convergence. */
+const VIEW_S = 2;
+/** `--view`'s names for the seat's views. */
+const SEAT_VIEWS = { hood: "first", chase: "third", far: "far" };
+/** `--view`'s landing views: the car through a trace-car camera spec. */
+const LANDING_VIEWS = ["side", "top", "iso", "rear-iso"];
 /** What the sim's pacer reads as its clock advances by on every read, so its time budget never depends on the host's speed. */
 const PACE_STEP_S = 0.001;
 /** The yardstick shader's timed frames. */
@@ -45,6 +65,8 @@ const YARDSTICK_VS = "#version 300 es\nlayout(location = 0) in vec2 a; void main
 const BUILTIN_IDS = /\bgl_(VertexID|InstanceID)\b/g;
 /** How often `settle` looks again: three checks an async compile every 10 ms where `KHR_parallel_shader_compile` is missing (here). */
 const SETTLE_POLL_MS = 5;
+/** A wheel-batch instance centred this near (m) one of the shot car's wheels is that wheel (another car's stands metres off). */
+const WHEEL_MATCH_M = 0.5;
 
 const { values } = parseArgs({
   options: {
@@ -55,8 +77,18 @@ const { values } = parseArgs({
     root: { type: "string", default: join(import.meta.dirname, "..") },
     hash: { type: "string" },
     camera: { type: "string" },
-    at: { type: "string", default: String(START_S) },
+    view: { type: "string" },
+    "view-camera": { type: "string" },
+    backdrop: { type: "string" },
     detail: { type: "string" },
+    paint: { type: "string" },
+    at: { type: "string", default: String(START_S) },
+    tear: { type: "string" },
+    open: { type: "string" },
+    state: { type: "string", default: "intact" },
+    sirens: { type: "boolean" },
+    break: { type: "string" },
+    brake: { type: "boolean" },
     draw: { type: "string" },
     scale: { type: "string" },
     shadow: { type: "string" },
@@ -71,16 +103,20 @@ const camera = values.camera?.split(",").map(Number);
 if (!Number.isInteger(frames) || frames < 1) throw new Error(`--frames ${values.frames}: a whole number of frames, at least 1`);
 if (size === null) throw new Error(`--size ${values.size}: width x height, e.g. 1280x800`);
 if (!(atS >= 0)) throw new Error(`--at ${values.at}: sim seconds, 0 or more`);
-if (camera !== undefined && (camera.length !== 3 || !camera.every(Number.isFinite))) throw new Error(`--camera ${values.camera}: radius,pitch,angle, e.g. 2.4,0.12,2.1`);
-const detail = values.detail === undefined || values.detail === "off" ? values.detail : Number(values.detail);
-if (typeof detail === "number" && !Number.isInteger(detail)) throw new Error(`--detail ${values.detail}: a rung of DETAIL_LEVELS (e.g. 2) or off`);
-const W = Number(size[1]);
-const H = Number(size[2]);
+if (camera !== undefined && ((camera.length !== 3 && camera.length !== 6) || !camera.every(Number.isFinite))) throw new Error(`--camera ${values.camera}: radius,pitch,angle[,x,y,z], e.g. 2.4,0.12,2.1`);
+const seatView = values.view === undefined ? undefined : SEAT_VIEWS[values.view];
+const landingView = LANDING_VIEWS.includes(values.view) ? JSON.parse(readFileSync(resolve(values["view-camera"] ?? ""), "utf8")) : null;
+if (values.view !== undefined && seatView === undefined && landingView === null) throw new Error(`--view ${values.view}: hood, chase, far, ${LANDING_VIEWS.join(", ")}`);
+if (landingView !== null && landingView.view !== values.view) throw new Error(`--view-camera ${values["view-camera"]}: a ${landingView.view} camera, not ${values.view}`);
+const W = landingView?.W ?? Number(size[1]);
+const H = landingView?.H ?? Number(size[2]);
 // The headless context cannot grow: a render scale draws the same buffer from a smaller CSS box.
 const renderScale = Number(values.scale);
 const CSS_W = renderScale > 0 ? Math.round(W / renderScale) : W;
 const CSS_H = renderScale > 0 ? Math.round(H / renderScale) : H;
 const out = resolve(values.out ?? `screenshots/headless-frame-${tier}.png`);
+const detail = values.detail === undefined ? null : values.detail === "off" ? "off" : Number(values.detail);
+if (typeof detail === "number" && !(Number.isInteger(detail) && detail >= 0)) throw new Error(`--detail ${values.detail}: a rung of the distance-detail ladder (0 or more) or off`);
 
 // WSL: Mesa's d3d12 driver reaches the host GPU through /dev/dxg; without it Mesa draws on the CPU. Elsewhere Mesa has no d3d12 driver.
 if (existsSync("/dev/dxg")) process.env.GALLIUM_DRIVER ??= "d3d12";
@@ -105,6 +141,15 @@ const { CrashEngine } = await game("engine/engine.ts");
 const { HudStore } = await game("hud/hud-store.ts");
 const { FX_TIERS } = await game("present/engine-post.ts");
 const { FRAME_HZ } = await game("kernel/constants.ts");
+const { DRIVER_CARS } = await game("match/types.ts");
+/** The body style the hash's `car=` boots (a car-menu id: a class, e.g. `muscle` for the coupe body), or null; any other id would boot the default sedan unnoticed. */
+const hashStyle = (() => {
+  const id = new URLSearchParams(values.hash ?? "").get("car");
+  if (id === null) return null;
+  const style = DRIVER_CARS.find((d) => d.id === id)?.style;
+  if (style === undefined) throw new Error(`--hash car=${id}: not a car-menu id (${DRIVER_CARS.map((d) => `${d.id} = ${d.style}`).join(", ")})`);
+  return style;
+})();
 if (!FX_TIERS.includes(tier)) throw new Error(`--tier ${tier}: one of ${FX_TIERS.join(", ")}`);
 
 // Referenced for the process's life: @kmamal/gl aborts the process when the garbage collector frees a context.
@@ -208,9 +253,11 @@ if (tier === "ultra" && !(await engine.loadUltra())) throw new Error("headless-f
 engine.setFxTier(tier);
 // A pick of Ultra switches once its warm-up has linked the look (`pickUltra`).
 while (engine.cine.tier !== tier) await sleep(SETTLE_POLL_MS);
-// The tier set by hand turns Auto off, so the detail governor leaves the rung put from here.
-if (detail === "off") engine["detail"].setDistances(Infinity, Infinity);
-else if (detail !== undefined) engine["detail"].setLevel(detail);
+if (detail !== null) {
+  if (detail === "off") engine.detail.setDistances(Infinity, Infinity);
+  else engine.detail.setLevel(detail);
+  engine.detailGov.frame = () => null;
+}
 
 const FRAME = 1 / FRAME_HZ;
 engine.fadeScenes = false;
@@ -220,12 +267,63 @@ engine.pace.now = () => (paceClock += PACE_STEP_S);
 if (values.hash === undefined) engine.toggleDerby();
 engine.advance(atS, { frameDt: FRAME });
 await settle();
+for (const name of values.tear?.split(",") ?? []) {
+  for (const car of engine["live"]()) {
+    const part = car["parts"].find((p) => p.name === name);
+    if (!part) throw new Error(`--tear ${name}: no such part on the ${car.style.id}`);
+    car["detachPart"](part, 0);
+    part.object.visible = false;
+  }
+}
+/** `--open`'s poses: a door or the lid at its stop (the swing clamps), a quarter panel peeled the Doors scene's way. */
+const OPEN = {
+  doorL: (car) => car.setDoorOpen(-1, Math.PI),
+  doorR: (car) => car.setDoorOpen(1, Math.PI),
+  trunk: (car) => car.setLidOpen(Math.PI),
+  quarterL: (car) => car.setPanelOpen(-1, 0.45),
+  quarterR: (car) => car.setPanelOpen(1, 0.45),
+};
+for (const name of values.open?.split(",") ?? []) {
+  if (!(name in OPEN)) throw new Error(`--open ${name}: one of ${Object.keys(OPEN).join(", ")}`);
+  for (const car of engine["live"]()) OPEN[name](car);
+}
+// `--state`: the hash's cars in a presentation pose (`showPose`, the showcase's): as built, every door and lid open, or every part off.
+if (!["intact", "open", "stripped"].includes(values.state)) throw new Error(`--state ${values.state}: intact, open or stripped`);
+if (values.state !== "intact") for (const car of engine["live"]()) car.showPose(values.state);
+// `--brake`: each step's drive writes the pedal (`applyDrive`), so the pedal is pinned down on the drive itself, not set once.
+if (values.brake) for (const car of engine["live"]()) Object.defineProperty(car.drive, "brake", { get: () => 1, set() {} });
+// `--sirens`: every car with a light bar flashes it, as a police car in pursuit does.
+if (values.sirens) for (const car of engine["live"]()) car.setSirens(true);
+/** `--break`'s lamps: `car.lamps` holds the heads (left, right) then the tails. */
+const LAMP_AT = { headL: 0, headR: 1, tailL: 2, tailR: 3 };
+for (const name of values.break?.split(",") ?? []) {
+  if (!(name in LAMP_AT)) throw new Error(`--break ${name}: one of ${Object.keys(LAMP_AT).join(", ")}`);
+  for (const car of engine["live"]()) car["breakLamp"](car["lamps"][LAMP_AT[name]]);
+}
 if (camera !== undefined) {
-  const [radius, pitch, angle] = camera;
-  Object.assign(engine.view, { userFramed: true, radius, pitch, angle });
+  const [radius, pitch, angle, x = 0, y = 0, z = 0] = camera;
+  // The free eye (the showcase's) has no orbit: it is put at radius, pitch and angle about x,y,z, looking at it, and flies from there.
+  if (engine.view.flying) {
+    engine["camera"].position.set(x + Math.sin(angle) * radius * Math.cos(pitch), y + radius * Math.sin(pitch), z + Math.cos(angle) * radius * Math.cos(pitch));
+    engine["camera"].lookAt(x, y, z);
+    engine.view.free.begun = false;
+  } else Object.assign(engine.view, { userFramed: true, radius, pitch, angle });
   engine.advance(FRAMING_S, { frameDt: FRAME });
   await settle();
 }
+if (seatView !== undefined) {
+  // The hash's car, followed in that drive view (a spectator's spec view: any scene, driven or not).
+  const want = hashStyle;
+  const cars = engine.live();
+  const index = want === null ? engine.seat.carIndex : cars.findIndex((car) => car.style.id === want);
+  if (index < 0) throw new Error(`--view ${values.view}: no ${want} car in the scene (field: ${cars.map((car) => car.style.id)})`);
+  Object.assign(engine.seat, { mode: "follow", carIndex: index });
+  engine.view.spec = seatView;
+  engine.advance(VIEW_S, { frameDt: FRAME });
+  await settle();
+}
+if (values.paint !== undefined) paintCars(values.paint);
+const shooting = landingView !== null || values.backdrop !== undefined ? await shootAs(landingView, values.backdrop) : null;
 const notDrawn = new Set();
 // three draws on with a program that failed to link, a GL error per draw: the quirk's meshes leave the camera's layer for the drawn
 // frames, and the errors their draws left so far are dropped, so `glError` speaks for the drawn frames.
@@ -257,11 +355,107 @@ for (let y = 0; y < h; y++) rows.set(rgba.subarray((h - 1 - y) * w * 4, (h - y) 
 shot.getContext("2d").putImageData(new ImageData(rows, w, h), 0, 0);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, await shot.encode("png"));
-
+const wheelsPx = shooting?.camera ? wheelMarks(shooting, w, h) : null;
 engine.dispose();
-const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, camera: camera ?? null, detail: engine["detail"].level, farCars, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, png: out };
+const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
 process.stdout.write(`${JSON.stringify(result)}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
+
+/**
+ * `--paint`: one colour (hex) for the hash's car, or `<style>=<colour>` pairs; a car whose style fixes its paint (a livery) keeps
+ * it. The hinged panels wear their own copies of the body paint, so every material still in the body's colour takes the new one;
+ * a body-finish mirror cap or grille is a part-batch tint, set as the garage look sets it (`setPartPaint`).
+ */
+function paintCars(spec) {
+  const pairs = spec.includes("=") ? spec.split(",").map((p) => p.split("=")) : [[hashStyle, spec]];
+  const colours = new Map(pairs);
+  if (colours.has(null)) throw new Error("--paint <colour> paints the hash's car: name one (--hash 'scene=garage&car=<id>'), or give <style>=<colour> pairs");
+  for (const car of engine.live()) {
+    const colour = colours.get(car.style.id);
+    if (colour === undefined || car.style.livery) continue;
+    const was = car.lookMeshes().bodyPaint.color.getHex();
+    car.group.traverse((o) => {
+      for (const m of [o.material ?? []].flat()) if (m.color?.getHex() === was) m.color.set(colour);
+    });
+    const hex = Number.parseInt(colour.replace(/^#/, ""), 16);
+    car.setPartPaint(hex, hex);
+  }
+}
+
+/**
+ * Where the shot drew the car's wheels (px on its W x H frame), named as trace-car's picks are (`fl`, `fr`, `rl`, `rr`; +x is the
+ * car's left): `centre` the hub, `hub` the hub on the wheels' outer face, `contact` that face at their bottom. The face and the
+ * bottom are the drawn wheels' box in car space (each batch instance's geometry box through its instance matrix, as trace-car's
+ * measure takes them), so both tools mark the same points; the loaded tyre's flat is a vertex shader's and neither sees it.
+ */
+function wheelMarks({ THREE, car, camera }, W, H) {
+  const toCar = car.group.matrixWorld.clone().invert();
+  const centres = car.wheels.map((w) => new THREE.Vector3().setFromMatrixPosition(w.matrixWorld).applyMatrix4(toCar));
+  const box = new THREE.Box3();
+  const piece = new THREE.Box3();
+  const instance = new THREE.Matrix4();
+  const mid = new THREE.Vector3();
+  for (const mesh of engine.wheels.meshes) {
+    if (!mesh.visible || mesh.count === 0) continue;
+    mesh.geometry.computeBoundingBox();
+    for (let i = 0; i < mesh.count; i++) {
+      mesh.getMatrixAt(i, instance);
+      piece.copy(mesh.geometry.boundingBox).applyMatrix4(instance.premultiply(mesh.matrixWorld).premultiply(toCar));
+      if (centres.some((c) => c.distanceTo(piece.getCenter(mid)) < WHEEL_MATCH_M)) box.union(piece);
+    }
+  }
+  if (box.isEmpty()) return null;
+  const px = (x, y, z) => {
+    const p = new THREE.Vector3(x, y, z).applyMatrix4(car.group.matrixWorld).project(camera);
+    return [Number((((p.x + 1) / 2) * W).toFixed(1)), Number((((1 - p.y) / 2) * H).toFixed(1))];
+  };
+  const marks = {};
+  for (const c of centres) {
+    const face = c.x > 0 ? box.max.x : box.min.x;
+    marks[`${c.z > 0 ? "f" : "r"}${c.x > 0 ? "l" : "r"}`] = { centre: px(c.x, c.y, c.z), hub: px(face, c.y, c.z), contact: px(face, box.min.y, c.z) };
+  }
+  return marks;
+}
+
+/**
+ * Every drawn frame from here goes through `spec`'s camera (trace-camera, car space, placed on the hash's car) and/or over a flat
+ * `backdrop` colour with the garage room and fog gone. The engine's own camera keeps running unchanged: the detail, skin and lamp
+ * pickers read it before the draw, so the car keeps the detail the garage's orbit eye gives it.
+ */
+async function shootAs(spec, backdrop) {
+  const THREE = await import(pathToFileURL(join(root, "node_modules/three/build/three.module.js")).href);
+  const { makeCamera } = await import(pathToFileURL(join(import.meta.dirname, "trace-camera.mjs")).href);
+  const want = hashStyle;
+  const car = engine.live().find((c) => want === null || c.style.id === want);
+  if (car === undefined) throw new Error(`--view/--backdrop: no ${want} car in the scene; boot one: --hash 'scene=garage&car=<id>'`);
+  car.group.updateMatrixWorld(true);
+  const shotCamera = spec === null ? null : makeCamera(THREE, spec, car.group.matrixWorld);
+  const flat = backdrop === undefined ? null : new THREE.Color(backdrop);
+  // The car alone: its group, the batches that draw its wheels, lamps and parts, and the lights. The rest (room, sky dome, props) hides.
+  const kept = new Set([car.group, engine.wheels.group, ...engine.lampBatch.meshes, ...engine.partBatch.meshes]);
+  const cine = engine.cine;
+  const draw = cine.render.bind(cine);
+  cine.render = (scene, viewCamera, ...rest) => {
+    const saved = { background: scene.background, fog: scene.fog?.density, hidden: [] };
+    if (flat !== null) {
+      scene.background = flat;
+      if (scene.fog) scene.fog.density = 0;
+      for (const o of scene.children) {
+        if (kept.has(o) || o.isLight || !o.visible) continue;
+        o.visible = false;
+        saved.hidden.push(o);
+      }
+    }
+    try {
+      return draw(scene, shotCamera ?? viewCamera, ...rest);
+    } finally {
+      scene.background = saved.background;
+      if (scene.fog) scene.fog.density = saved.fog;
+      for (const o of saved.hidden) o.visible = true;
+    }
+  };
+  return { THREE, car, camera: shotCamera };
+}
 
 /** Waits out the page's file loads and the engine's program warms, so every run draws its frames over the same state. */
 async function settle() {

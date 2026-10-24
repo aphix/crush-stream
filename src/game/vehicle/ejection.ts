@@ -140,13 +140,16 @@ const NONE: readonly Ejection[] = [];
 
 const f32 = (v: THREE.Vector3): THREE.Vector3 => v.set(Math.fround(v.x), Math.fround(v.y), Math.fround(v.z));
 
+/** A police car's driver wears the uniform, seated and thrown. */
+export const copDriver = (car: DeformableCar): boolean => car.style.id === "police";
+
 /** Car `i`'s driver leaving through `exit`, as the sim has the car now, with his seat's motion at the hit: the car's centre velocity `v` and turn rate `w` (world) then. */
 function launch(car: DeformableCar, i: number, exit: ExitPane, v: THREE.Vector3, w: THREE.Vector3): Ejection {
   const e = blankEjection();
   const g = car.group;
   e.car = i;
   e.exit = exit;
-  e.cop = car.style.id === "police";
+  e.cop = copDriver(car);
   // The way out: z out of the pane (a side throw is the windshield's turned a quarter about the car's up). Leaning
   // out along it, his shoulders stay level, so they fit the side window's height.
   const side = exit === "windshield" ? 0 : exit === "doorL" ? -1 : 1;

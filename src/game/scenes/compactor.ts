@@ -2,40 +2,47 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { strikeCar, bodyHit, makeBox, type ContactBox } from "../contact/external-contact.ts";
 import type { StreamedDeformation } from "../deform/streamed-deform.ts";
+import type { MassName } from "../kernel/rig-spec.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
  * Hydraulic car-compactor: two kinematic plates, equal and opposite, square
  * to the car's length. Faces start just past the bumpers, close to the wheel
  * wells, then past the hub midpoint into the cage.
- *
- * Hub rest |z| = 1.34, bumper |z| = 2.06.
  */
 export const COMPACTOR = {
-  bumperZ: 2.06,
-  hubZ: 1.34,
-  /** Just beyond the visible bumper. */
-  startFace: 2.22,
-  /** Plates at the wheel-well lip (hub + tyre). */
-  wellFace: 1.5,
-  /** Hub centre-line — "wheel midpoint". */
-  midFace: 1.34,
-  /** Past the rails (0.68) into the passenger cell. */
-  maxFace: 0.62,
   /** m/s each plate travels inward. */
   speed: 0.55,
+  /** The plates start this far (m) past the longer bumper's rest, and stop this far past the hub centre-line (the wheel-well lip). */
+  startGap: 0.16,
+  wellGap: 0.16,
+  /** Shape mode: the plates finish this far (m) inside the rails' rest; its shape-matched rails stall just under a 0.2 m fold until the plates are about 0.2 m in. */
+  shapeRailGap: 0.26,
+  /** Lattice mode: the plates finish this far (m) inside the rails' rest; deeper, its front keeps crushing while its rear stalls and the bumpers end uneven about the middle. */
+  latticeRailGap: 0.06,
 } as const;
+
+/** The plates' faces for one car: |z| (m) from its centre, off its own rig. */
+type PressFaces = { bumperZ: number; hubZ: number; startFace: number; wellFace: number; midFace: number; maxFace: number };
+
+function pressFaces(car: DeformableCar): PressFaces {
+  const rest = (name: MassName): number => Math.abs(car.frame.rig.masses.find((m) => m.name === name)!.rest[2]);
+  const bumperZ = Math.max(rest("bumperFL"), rest("bumperRL"));
+  const hubZ = car.frame.halfBase;
+  const railGap = car.deform.mode === "shape" ? COMPACTOR.shapeRailGap : COMPACTOR.latticeRailGap;
+  return { bumperZ, hubZ, startFace: bumperZ + COMPACTOR.startGap, wellFace: hubZ + COMPACTOR.wellGap, midFace: hubZ, maxFace: rest("railL") - railGap };
+}
 
 /** Plate slab (m): half thickness along the travel, half width, half height and centre height. */
 export const PLATE = { hz: 0.24, hx: 1.8, hy: 1.05, y: 1.02 } as const;
 
-type CompactorStage = "open" | "contact" | "wells" | "mid" | "max";
+export type CompactorStage = "open" | "contact" | "wells" | "mid" | "max";
 
-export function compactorStage(face: number): CompactorStage {
-  if (face >= COMPACTOR.startFace - 0.02) return "open";
-  if (face > COMPACTOR.wellFace) return "contact";
-  if (face > COMPACTOR.midFace) return "wells";
-  if (face > COMPACTOR.maxFace + 0.02) return "mid";
+export function compactorStage(face: number, f: PressFaces): CompactorStage {
+  if (face >= f.startFace - 0.02) return "open";
+  if (face > f.wellFace) return "contact";
+  if (face > f.midFace) return "wells";
+  if (face > f.maxFace + 0.02) return "mid";
   return "max";
 }
 
@@ -65,7 +72,8 @@ function placePlate(box: ContactBox, end: 1 | -1, face: number, speed: number): 
  */
 export class CompactorRig {
   car: DeformableCar | null = null;
-  face: number = COMPACTOR.startFace;
+  faces!: PressFaces;
+  face = 0;
   frontJ = 0;
   rearJ = 0;
   /** Plate work on the car (J): Σ plate impulse × plate speed. */
@@ -85,7 +93,8 @@ export class CompactorRig {
   attach(car: DeformableCar): void {
     this.car = car;
     car.parked = true;
-    this.face = COMPACTOR.startFace;
+    this.faces = pressFaces(car);
+    this.face = this.faces.startFace;
     this.frontJ = 0;
     this.rearJ = 0;
     this.work = 0;
@@ -107,11 +116,11 @@ export class CompactorRig {
   }
 
   get stage(): CompactorStage {
-    return compactorStage(this.face);
+    return compactorStage(this.face, this.faces);
   }
 
   /** One physics slice: move the plates toward `targetFace`, then the car against them. */
-  step(dt: number, targetFace: number = COMPACTOR.maxFace): WallHit {
+  step(dt: number, targetFace: number = this.faces.maxFace): WallHit {
     const car = this.car!;
     const hit = this.hit;
     const moving = this.face > targetFace;

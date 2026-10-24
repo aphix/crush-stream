@@ -7,6 +7,10 @@
 
 // deform-rig.ts `ARCH_YIELD`: an arch vertex's plan travel (m) off its plant at which the plant has let go.
 const ARCH_YIELD: f64 = 0.15;
+// deform-rig.ts `SKIN_COUNT_BITS`, `SKIN_COUNT_MASK`, `SKIN_LEVER_STEPS`: how `skinN` packs a point's cluster count and lever share.
+const SKIN_COUNT_BITS: usize = 3;
+const SKIN_COUNT_MASK: usize = 7;
+const SKIN_LEVER_STEPS: f64 = 31.0;
 
 #[inline(always)]
 unsafe fn f(p: *const f64, i: usize) -> f64 {
@@ -14,7 +18,7 @@ unsafe fn f(p: *const f64, i: usize) -> f64 {
 }
 
 // ---- skin: the vertex loop of StreamedDeformation.skin -------------------------------------------------------
-// params: [wrinkles(0/1), ampK, extraCap, cap, roofClamp(0/1), ix, iy, iz, shape(0/1), cutY, cutX, cutZ (the roof's imprint plane)]
+// params: [wrinkles(0/1), ampK, extraCap, cap, roofClamp(0/1), ix, iy, iz, shape(0/1), cutY, cutX, cutZ (the roof's imprint plane), roofY (the roof clamp's height)]
 // hubs: 5 per mass [popped(0/1), local.x, rest.x, local.z, rest.z] (the JS adds them in its own order)
 #[no_mangle]
 pub unsafe extern "C" fn skin_shape(
@@ -46,6 +50,7 @@ pub unsafe extern "C" fn skin_shape(
     let (ix, iy, iz) = (f(params, 5), f(params, 6), f(params, 7));
     let shape = f(params, 8) != 0.0;
     let (cut_y, cut_x, cut_z) = (f(params, 9), f(params, 10), f(params, 11));
+    let roof_y = f(params, 12);
     let mut r = 0usize;
     for i in 0..nverts {
         let rx = *rest.add(r) as f64;
@@ -54,9 +59,11 @@ pub unsafe extern "C" fn skin_shape(
         let mut px = 0.0f64;
         let mut py = 0.0f64;
         let mut pz = 0.0f64;
-        let n = if shape { *s_n.add(i) as usize } else { 0 };
+        // `skinN` packs the cluster count (low bits) with the lever share (the rest, in `SKIN_LEVER_STEPS`): deform-rig.ts `SKIN_COUNT_BITS`.
+        let packed = if shape { *s_n.add(i) as usize } else { 0 };
+        let n = packed & SKIN_COUNT_MASK;
         if n > 0 {
-            // A5: the parents' positions plus the blended cluster map on the offset from their rest centroid.
+            // A5: the parents' positions plus the blended cluster map on the offset from their rest centroid, as far as its lever share.
             let dx = rx - f(r_c, r);
             let dy = ry - f(r_c, r + 1);
             let dz = rz - f(r_c, r + 2);
@@ -70,6 +77,10 @@ pub unsafe extern "C" fn skin_shape(
                 pz += (f(x, o + 6) * dx + f(x, o + 7) * dy + f(x, o + 8) * dz) * w;
                 k += 1;
             }
+            let lever = (packed >> SKIN_COUNT_BITS) as f64 / SKIN_LEVER_STEPS;
+            px = lever * px + (1.0 - lever) * dx;
+            py = lever * py + (1.0 - lever) * dy;
+            pz = lever * pz + (1.0 - lever) * dz;
             let mut k = i * 5;
             let e = k + 5;
             while k < e {
@@ -131,7 +142,7 @@ pub unsafe extern "C" fn skin_shape(
             py = ry + ty * t;
             pz = rz + tz * t;
         }
-        if roof_clamp && ry > 1.05 {
+        if roof_clamp && ry > roof_y {
             // THREE.MathUtils.clamp(py, ry - 0.1, ry + 0.08)
             let lo = ry - 0.1;
             let hi = ry + 0.08;

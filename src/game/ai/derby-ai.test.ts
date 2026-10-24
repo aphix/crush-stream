@@ -5,7 +5,7 @@ import { DerbyMatch } from "../match/derby.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { DerbyGround, DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import { layoutDerby, type DerbySlot } from "../scenes/fleet.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { aiCar as car, decide } from "../vehicle/test-support.ts";
 
 describe("given an AI derby driver and a rival car close beside or ahead of it", () => {
@@ -131,13 +131,13 @@ describe("given a derby whose rules count a car out after 60 s without an aggres
   });
 });
 
-/** Two oriented car hulls (CAR_HALF boxes) overlap: separating-axis test on the four edge normals. */
+/** Two oriented car hulls (`FLEET_HALF` boxes) overlap: separating-axis test on the four edge normals. */
 function hullsOverlap(a: DerbySlot, b: DerbySlot): boolean {
   const axes = [a.yaw, a.yaw + Math.PI / 2, b.yaw, b.yaw + Math.PI / 2];
   const dx = b.x - a.x;
   const dz = b.z - a.z;
   const reach = (yaw: number, ax: number, az: number) =>
-    CAR_HALF.z * Math.abs(Math.sin(yaw) * ax + Math.cos(yaw) * az) + CAR_HALF.x * Math.abs(Math.cos(yaw) * ax - Math.sin(yaw) * az);
+    FLEET_HALF.z * Math.abs(Math.sin(yaw) * ax + Math.cos(yaw) * az) + FLEET_HALF.x * Math.abs(Math.cos(yaw) * ax - Math.sin(yaw) * az);
   for (const t of axes) {
     const ax = Math.sin(t);
     const az = Math.cos(t);
@@ -154,11 +154,11 @@ describe("given derby fields of 2 to 32 cars laid out in the one fixed arena", (
       assert.equal(slots.length, n);
       for (let i = 0; i < n; i++) {
         const s = slots[i]!;
-        assert.ok(Math.hypot(s.x, s.z) + CAR_HALF.z < DERBY_RADIUS, `${n} cars: car ${i} spawns in the wall`);
+        assert.ok(Math.hypot(s.x, s.z) + FLEET_HALF.z < DERBY_RADIUS, `${n} cars: car ${i} spawns in the wall`);
         for (const lengthSide of [-1, 1]) {
           for (const widthSide of [-1, 1]) {
-            const cornerX = s.x + lengthSide * CAR_HALF.z * Math.sin(s.yaw) + widthSide * CAR_HALF.x * Math.cos(s.yaw);
-            const cornerZ = s.z + lengthSide * CAR_HALF.z * Math.cos(s.yaw) - widthSide * CAR_HALF.x * Math.sin(s.yaw);
+            const cornerX = s.x + lengthSide * FLEET_HALF.z * Math.sin(s.yaw) + widthSide * FLEET_HALF.x * Math.cos(s.yaw);
+            const cornerZ = s.z + lengthSide * FLEET_HALF.z * Math.cos(s.yaw) - widthSide * FLEET_HALF.x * Math.sin(s.yaw);
             assert.equal(ground.heightAt(cornerX, cornerZ), 0, `${n} cars: car ${i} spawns on a rise`);
           }
         }

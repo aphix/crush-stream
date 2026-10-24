@@ -7,7 +7,7 @@ import {
   crushStroke,
   hypot2,
 } from "./physics-util.ts";
-import { DeformState, ENGINE_PACK_GAP, PLANT_QUIET, TYRE_R } from "./deform-state.ts";
+import { DeformState, PLANT_QUIET } from "./deform-state.ts";
 import { BodyFit } from "./body-fit.ts";
 import { detSin, detCos, detAtan2, sinCosAt } from "../kernel/physics-core.js";
 import { CONTACT_REF_SLICE, MIN_IMPACT_ZONE, MIN_INERTIA, MIN_MASS_SUM, SQUASH_REACH } from "./constants.ts";
@@ -20,7 +20,6 @@ import { EPICENTER } from "./epicenter.ts";
 export const ENGINE_SLACK = 0.04;
 /** `stepStructure`'s frame when its caller gives none: level. */
 const LEVEL = new THREE.Quaternion();
-export const TYRE_HALF_W = 0.11;
 /** Fastest (m/s) a wreck's body follows its cell's drift off its seat (`followGroup`): the nose's springback against a wall in 0.4 s, no faster than the pair pass's pushes. */
 export const SEAT_SPEED = 1;
 /** A seat step (m) under this is the rigid step's jitter once seated (3e-8 to 2e-6 m measured), not a move to re-bake the skin for: an active seat steps 8 mm at 120 Hz. */
@@ -33,6 +32,8 @@ const STAND_SKIN = 0.05;
 const REAR_STROKE_GAIN = 1.08;
 /** Numbers per contact row of `faceHits`: x, z, nx, nz, depth. */
 export const FACE_ROW = 5;
+/** A face's span along its lateral axis (`rx`, `rz`) through (`x`, `z`), half `hx` wide: what a contact's crush is fed within (`feedOverlap`). */
+export type FaceSpan = { x: number; z: number; rx: number; rz: number; hx: number };
 
 const _a = new THREE.Vector3();
 /** followGroup's world→local: one invert per call, not one per mass (Object3D.worldToLocal). */
@@ -49,6 +50,10 @@ const _settled = { mark: new Uint8Array(64) };
 /** `markMotion`'s mass motion (x, y, z, spin) and `takeMotion`'s: a mark is always taken on the same car before another car's mark. */
 const _marked = new Float64Array(4);
 const _motionNow = new Float64Array(4);
+/** What a driving mass at `vn` along the face's normal takes of the push (m/s): none once it moves as fast as the face (`refVn`), never past it. */
+function drivenCut(vn: number, refVn: number, push: number): number {
+  return vn >= refVn ? 0 : Math.min(refVn - vn, push);
+}
 
 /**
  * Contact: pair collision, the structure step, following the group, pose measurement, stroke, pushes and the impact entry.
@@ -468,11 +473,14 @@ export abstract class DeformContact extends DeformState {
 
   /**
    * A contact's change of the body's motion (`bodyContact`'s increment): the whole body's velocity change (`dvx`, `dvz`) and yaw-rate
-   * change `dw` about (`cx`, `cz`) go onto every dynamic mass as one rigid body (v += dv + dw × r). The part along the face's normal
-   * (`nx`, `nz`) is carried by the masses still driving into the face, those moving along it slower than the face (`refVn`): a mass
-   * held on the face is at rest on it and the face's impulse cannot reach it, so the driving masses carry the whole normal momentum
-   * (dv scaled by the mass over their mass) and none is taken past the face's speed. The rigid body (`velocity`, `angular`) takes the
-   * momentum and spin the masses took; what is left of them in the masses against it is the crush. Returns the normal momentum taken (N·s).
+   * change `dw` about (`cx`, `cz`). The part along the face's normal (`nx`, `nz`) is carried by the masses still driving into the face,
+   * those moving along it slower than the face (`refVn`): a mass held on the face is at rest on it and the face's impulse cannot reach
+   * it, so the driving masses carry the normal momentum (dv scaled by the mass over their mass), none taken past the face's speed.
+   * The spin is only the share the masses took (`taken` of the `dvn · all` asked), the moment of the impulse they took about the
+   * centre whichever masses carried it (the uneven push's own moment is taken out of the rotation field, so it is not counted twice).
+   * The tangential part stays whole: friction stops the contact's sliding whatever share of the normal impulse the masses took.
+   * The rigid body (`velocity`, `angular`) takes the momentum and spin the masses took; what is left of them in the masses against
+   * it is the crush. Returns the normal momentum taken (N·s).
    */
   shiftBody(velocity: THREE.Vector3, angular: THREE.Vector3, dvx: number, dvz: number, dw: number, cx: number, cz: number, nx: number, nz: number, refVn: number): number {
     if (!this.massActive) return 0;
@@ -495,35 +503,43 @@ export abstract class DeformContact extends DeformState {
     }
     const dvn = dvx * nx + dvz * nz;
     const push = driving > 1e-6 ? (dvn * all) / driving : 0;
-    const tx = dvx - dvn * nx;
-    const tz = dvz - dvn * nz;
     let taken = 0;
-    let px = 0;
-    let pz = 0;
-    let spin = 0;
+    let moment = 0;
     for (let mi = 0; mi < this.masses.length; mi++) {
       const m = this.masses[mi]!;
       if (!m.dynamic) continue;
-      const vn = m.vel.x * nx + m.vel.z * nz;
-      const cut = vn >= refVn ? 0 : Math.min(refVn - vn, push);
-      const rx = m.world.x - cx;
-      const rz = m.world.z - cz;
-      const ux = tx + nx * cut + dw * rz;
-      const uz = tz + nz * cut - dw * rx;
+      const cut = drivenCut(m.vel.x * nx + m.vel.z * nz, refVn, push);
+      taken += cut * m.mass;
+      moment += cut * m.mass * ((m.world.z - cz) * nx - (m.world.x - cx) * nz);
+    }
+    const asked = dvn * all;
+    const share = asked > taken && asked > 1e-6 ? taken / asked : 1;
+    let lean = 0;
+    if (all > 1e-6) {
+      inertia -= (sx * sx + sz * sz) / all;
+      if (inertia > MIN_INERTIA) lean = (moment - (taken * (sz * nx - sx * nz)) / all) / inertia;
+    }
+    const field = dw * share - lean;
+    const tx = dvx - dvn * nx;
+    const tz = dvz - dvn * nz;
+    let px = 0;
+    let pz = 0;
+    for (let mi = 0; mi < this.masses.length; mi++) {
+      const m = this.masses[mi]!;
+      if (!m.dynamic) continue;
+      const cut = drivenCut(m.vel.x * nx + m.vel.z * nz, refVn, push);
+      const ux = tx + nx * cut + field * (m.world.z - cz);
+      const uz = tz + nz * cut - field * (m.world.x - cx);
       m.vel.x += ux;
       m.vel.z += uz;
-      taken += cut * m.mass;
       px += ux * m.mass;
       pz += uz * m.mass;
-      spin += m.mass * (rz * ux - rx * uz);
     }
     if (all > 1e-6) {
       velocity.x += px / all;
       velocity.z += pz / all;
-      inertia -= (sx * sx + sz * sz) / all;
-      spin -= (sz * px - sx * pz) / all;
     }
-    if (inertia > MIN_INERTIA) angular.y += spin / inertia;
+    if (inertia > MIN_INERTIA) angular.y += dw * share;
     return taken;
   }
 
@@ -548,6 +564,7 @@ export abstract class DeformContact extends DeformState {
     // which the slab clip reads) in step with the projected world positions.
     const gc = detCos(this.prevYaw);
     const gs = detSin(this.prevYaw);
+    const tyre = this.rig.tyre;
     let n = 0;
     this.faceContacts = 0;
     for (let mi = 0; mi < this.masses.length; mi++) {
@@ -557,15 +574,15 @@ export abstract class DeformContact extends DeformState {
       // centres (`deepCrush`) meets the tyres.
       if (!m.dynamic || (planted && !this.bidirectional && !this.deepCrush)) continue;
       // A mass whose bottom stands within `STAND_SKIN` of the solid's top (or over it) is on the top, whatever its plan overlap with the box.
-      if (m.world.y - (planted ? TYRE_R : m.radius * 0.5) >= topY - STAND_SKIN) continue;
+      if (m.world.y - (planted ? tyre.r : m.radius * 0.5) >= topY - STAND_SKIN) continue;
       const ox = m.world.x - cx;
       const oz = m.world.z - cz;
-      let r = m.radius * 0.5;
+      let r = m.radius * 0.5 + (m.bumper && m.rest.z > 0 ? this.rig.noseReach : 0);
       let rEnd = r;
       if (planted) {
-        // The face meets the tyre: its tread (TYRE_R) along the car, its sidewall across it.
-        r = hypot2(TYRE_HALF_W * (rx * gc - rz * gs), TYRE_R * (rx * gs + rz * gc));
-        rEnd = hypot2(TYRE_HALF_W * (fx * gc - fz * gs), TYRE_R * (fx * gs + fz * gc));
+        // The face meets the tyre: its tread (radius) along the car, its sidewall across it.
+        r = hypot2(tyre.halfW * (rx * gc - rz * gs), tyre.r * (rx * gs + rz * gc));
+        rEnd = hypot2(tyre.halfW * (fx * gc - fz * gs), tyre.r * (fx * gs + fz * gc));
       }
       const lz = ox * fx + oz * fz;
       const penX = hx + r - (ox * rx + oz * rz) * side;
@@ -619,8 +636,8 @@ export abstract class DeformContact extends DeformState {
     const into = -(cell.vel.x * rx + cell.vel.z * rz) * side;
     if (into < 0.3 && !this.bidirectional && this.hitSpeed >= 0 && -this.impactInward.z > Math.abs(this.impactInward.x)) {
       this.thaw();
-      const front = Math.min(this.at.bumperFL.local.z, this.at.bumperFR.local.z) - ENGINE_PACK_GAP;
-      const crumple = Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - Math.max(this.at.engineL.rest.z, this.at.engineR.rest.z) - ENGINE_PACK_GAP;
+      const front = Math.min(this.at.bumperFL.local.z, this.at.bumperFR.local.z) - this.rig.packGap;
+      const crumple = Math.min(this.at.bumperFL.rest.z, this.at.bumperFR.rest.z) - Math.max(this.at.engineL.rest.z, this.at.engineR.rest.z) - this.rig.packGap;
       const reach = Math.max(ENGINE_SLACK, this.hitStroke() - crumple);
       for (const m of [this.at.engineL, this.at.engineR]) {
         const back = Math.min(m.local.z - front, m.local.z - (m.rest.z - reach));
@@ -764,8 +781,10 @@ export abstract class DeformContact extends DeformState {
    * fixed slab's 0, or a car-car pair's common velocity, so the struck car's contact masses are driven
    * to it (its side crushes) rather than the bullet's nose stopping dead against a car that gets no momentum. `whole`: the overlap is
    * all of the crush (a fixed solid no particle reaches, so no particle held on its face takes the rest), not the 0.4 + 0.35·squash share.
+   * `span`: the face's extent; a mass beyond it is not under the face and takes none of its crush. `patch`: the half width (m) of a broad
+   * contact along the face: a mass within it of the point presses as near as one at the point (a flat bumper's corner crushes as its middle).
    */
-  feedOverlap(worldPoint: THREE.Vector3, inward: THREE.Vector3, overlap: number, closing: number, dt = 1 / FRAME_HZ, refVn = 0, whole = false): number {
+  feedOverlap(worldPoint: THREE.Vector3, inward: THREE.Vector3, overlap: number, closing: number, dt = 1 / FRAME_HZ, refVn = 0, whole = false, span?: FaceSpan, patch = 0): number {
     if (!this.massActive) return closing;
     this.overlapFrame = true;
     const leftover = leftoverCrumple(this.crumpleTravel());
@@ -802,7 +821,13 @@ export abstract class DeformContact extends DeformState {
       if (m.hub && !m.popped && !this.deepCrush) continue;
       const zone = this.impactWeight(m);
       if (zone < MIN_IMPACT_ZONE) continue;
-      const d = m.world.distanceTo(worldPoint);
+      if (span !== undefined && Math.abs((m.world.x - span.x) * span.rx + (m.world.z - span.z) * span.rz) > span.hx + m.radius * 0.5) continue;
+      let d = m.world.distanceTo(worldPoint);
+      if (patch > 0) {
+        const across = Math.abs((m.world.z - worldPoint.z) * inward.x - (m.world.x - worldPoint.x) * inward.z);
+        const beyond = Math.max(0, across - patch);
+        d = Math.sqrt(Math.max(0, d * d - across * across + beyond * beyond));
+      }
       const reach = 1.05 + s * 0.35;
       if (d > reach) continue;
       const fall = (1 - d / reach) ** 2 * zone;

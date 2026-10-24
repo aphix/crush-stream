@@ -319,9 +319,150 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * wheels drawn in the ground), and a door jammed open on a wreck lying over stands out of the ground under it. Every crash moves differently.
  * A cop knocked out near a racer is put away only once its body has stopped every way (it was by its plan speed at the slice's start): a race
  * with police puts its cops away at other times. Every car another car is set inside moves differently. A clip of 157 or before no longer reads.
+ * 159: the car overhaul (every car to its reference design). Each car's soft-body rig is carried from the platform's onto its own body: its cages,
+ * sensors and masses move with its own dims (axles, ends, width, floor, roof; hubs on its wheels), its roof, windscreen, rear-glass, bonnet and boot
+ * cages fit its own panels, and every style's cage source follows its new shape (the sedan and police from their reference, wheel arches .405 → .375;
+ * the monster and truck at their reference dims, with wheel tubs in the truck's bed; the wagon, coupe, pickup and hatchback reshaped; the muscle's and
+ * pickup's bonnets spanning their panel seams). The hatchback and wagon drive as their own classes (hatch, SUV: mass, power, grip, springs, voice); the
+ * muscle and truck stand on their true tyres and the truck no longer rides lifted. A tyre's footprint reads the ground at its own radius across its whole
+ * drawn tread, and meets a solid's sides (a wall, the slab, a prism's flank) at four hub-height points through the shared crash path, giving over its
+ * class's spring travel before the face holds it (a monster whose keel clears the slab stops on its tyres); the slab keeps each car off it by its own
+ * box, a car on its side drags that side's tyres, and a wreck pressed into the ground stays awake until it is out. A lifted car (the monster) turns,
+ * lands and is thrown about a centre risen by its sprung share of the lift (0.81 of the monster's 0.87 m), and a respawn re-attaches it there; as a
+ * wreck its masses ride that centre too, and its fading lift as it lies over moves the centre without moving its momentum; a wreck at rest on a
+ * tyre at the end of its springs rests on the stop (it fell onto it every other slice and never slept). Trunk
+ * lids, hatches, the SUV liftgate and the pickup's drop gate swing on hinges: a rear crush pops the latch, a slam re-latches it, a hard stop, slam,
+ * crush or hit tears it off (a loose lid weighs its car's share), struts raise a lid to its stop and a drop gate falls level on its cables; the
+ * hatch's and SUV's rear glass rides its gate. The monster's tailgate drops on a hinge at its foot, as the pickup's does. Door glass ends 1 cm under its B-pillar's front edge; a mirror keeps its style's reach (sedan 0.157 m,
+ * 0.25 m behind its hinge; hatchback 0.075, SUV 0.065; it stood at the platform's 0.21) through a reset and every crash pose; a sedan's torn bumper flies as the box of
+ * everything it draws, its seam cover included; its seams no longer hook back over the wheel arches' tops, so each torn bumper's box is 6-7 cm shorter;
+ * the sedan's door glass meets a thrown driver at its drawn front edge;
+ * the sedan's hood ends at z 0.99; the police light bar sits over the B-pillars. A driver thrown out
+ * of the windshield leaves from the pane's bowed middle (`userData.centre`, 1 cm further forward), each raked pane's top corners fall onto the roof's
+ * dome (`domeFall`, about 2 cm), and the hatchback's windshield reaches its reference's glass top (17 cm further back, 8 cm higher) with its rear glass
+ * base and tailgate top at .905, its roof rolling round into its side glass as the coupe's. The sedan's and police's tails end 3.5 cm wider. A car's collision cage keeps the underside it rests on out to its nose and tail lips (read once it is a wreck), so a
+ * wreck that loses a front wheel rests on its lip instead of rocking 3-4 cm in the ground, and a car pitched over another meets it as deep as the two
+ * cages stand. A thrown driver meets each pane as its glass's own quad, and breaks it only with a blow on its face: a door strike no longer
+ * cracks the windshield. A sedan dropped on its roof keeps its rear glass (its fastback frame stands clear of the crushed roof). A wreck
+ * struck again re-arms its hit on the slice's hardest contact, whichever touched first, and a graze too soft to arm no longer shuts the
+ * window on the face behind it: a derby sedan's 25 km/h side hits wear its drivetrain out in 6 (each counted its graze's 8 of 36, or none).
+ * A torn part flies as its drawn shell's own points (the shell point farthest along each of its box's twenty ways), not its box, where its
+ * box leaves a corner empty: every torn part but the mirrors and the light bar. A bumper, door, quarter or arch no longer rests on a corner
+ * where nothing is drawn (12-73 cm off its shell), and the keyframe carries each loose part's twenty points and its shell flag. A torn grille,
+ * tail trim or mirror flies and collides as its style draws it, not as the platform part.
+ * The coupe's flanks carry their widest line 5-9 cm under the belt from its tail to its door (its reference's haunch crest), its quarter sill dips
+ * behind the door and rises to the window's point, and its roof's rear corner stands 2 cm wider.
+ * A solid placed or rewritten where it already stands (a wall, the slab, a ramp or rig synced each step) stirs the wrecks near it only on the step
+ * it changes: a wreck at rest beside one sleeps (it was woken every slice for good).
+ * A popped wheel flies as a disk of its own tyre's width (the sedan's 0.22 m, the hatchback's 0.17, the monster's 0.364 before its wheel
+ * scale), not the platform's 0.24 on every car.
+ * A car's nose closing on another car's steep face (a sloped bonnet corner) faster than a crash, read against that car's own motion, is the pair's
+ * hit: a head-on no longer arms on one corner at the rigid step's sideways reading (28 km/h each: 0.237 m of even nose crush, was 0.092 on one corner).
+ * A pair that packs its noses stops at the packed stroke with the next slice's crush feed counted, not up to that feed past it (200 km/h
+ * each: 0.904 of the stroke, was 0.916).
+ * A door swings, is struck and is shut by a solid as its style draws it (its own length and inertia about its hinge, not the platform's),
+ * a mirror is met at its drawn seat and heights and folds only until its tip clears the striker, a striker above a car's shoulder
+ * meets the body only where it stands at those heights, and two cars side by side read each other's own mirror tips; a door's hinge detent
+ * holds it against the same car-frame jostle whatever its length.
+ * A tyre climbing a steep face pushes its car straight up only while that push lifts its tread off the face (else along the face): a monster
+ * no longer leaves a kicker's lip, or a slope on one tyre, at over 100 m/s up, and every car climbs a kicker's last metres differently.
+ * A wreck rising out of the ground counts its second of rest while it rises and sleeps once it is out: one sunk a few centimetres sleeps
+ * as soon as it would on the road, one sunk deep stays awake until it is out.
+ * A car's collision cage carries its bumpers' fascias, each a 12-point panel of its own past the body's budget, and a cruiser's push bar as one
+ * box of its own riding its bumper's two masses (tow hitch and exhaust tips stay drawn only), so it meets cars, walls, figures and props at its
+ * drawn bumper faces, 3-15 cm past its nose's and tail's sheet metal, until a bumper tears off; a pair's plan test reads a bumper at its own
+ * heights, never its body's behind it; the piston rig's faces rest clear of them. A wall holds a cruiser's bumper particles a bar's reach (9 cm)
+ * further back than a sedan's, so the bar's box is no deeper in the face than a bumper's is: its front wings crush as a sedan's do.
+ * The tallest step a tyre mounts by grip, and how far under a prism's top a tyre still stands on it, is its own drawn radius's share (the
+ * sedan's 0.342 m tyre 0.088 m, the monster's 0.614 m 0.158 m), not 0.140 m sized for the platform's tyre on every car; a point that names no
+ * tyre keeps the biggest tyre's, and a tyre that landed on a prism's top counts it only within its radius.
+ * A tyre rolling into a face it came in by meets it as a wall even within that mount, so a face whose top stands over a moving tyre's hub is never
+ * climbed (a monster sliding sideways into the slab trips on its tyres and rolls over it, nobody thrown; off the long jump's crest it flies the slab
+ * and keeps its driver in, thrown only when it arrives too slow to clear it), and a tyre climbs what it rolls onto over many slices, rising no
+ * faster than its plan speed times its grip (a step no longer sets a car on its top in one slice). A car in the air clears the slab by its lifted
+ * body, as a wreck does, and a striker under a lifted body meets its tyres, not a body edge standing over it.
+ * A car's point at rest inside a wall, a slab or a prop leaves by the side its car stands on, not the nearest: a tyre that stopped past a thin
+ * wall's middle was pushed on through the wall, and the drive pushing the car back out was read as closing on it, so a car pinned to a wall at
+ * 0.1 m/s stayed there for seconds (a monster on a slab ends with its front tyres torn off and over it, where it stood on its nose with them in it).
+ * A quiet wreck standing on its planted tyres has its hubs' springs critically damped (they were damped a little over a quarter of critical),
+ * so a truck on three tyres comes to rest and sleeps instead of rocking on them for as long as it lies; every wreck's hubs settle a
+ * centimetre or two off where they stood.
+ * A lifted car's (the monster's) crash contact reaches its masses where they stand: a car-car hit's point, read off its lifted body, stood 0.8-0.9 m over
+ * its nose masses, so it fed its bumper a thousandth of the crush and its engine none (a monster head-on at 40 m/s crushed 0.61 m and left its engine 0.42
+ * healthy, where it crushed 0.84 m and killed it before the overhaul), and its plan contact reads its body's lift as drawn (faded as it lies over; it
+ * stood at the whole 0.87 m up its tilted axis). Monster hits crush, kill, throw and push differently; a monster lying over meets cars where it is drawn.
+ * A pair whose nose corners meet each other's sloped bonnet is one contact, taken whole by the pair: the rigid step's exchange at those
+ * corners is taken back first, so an undriven 60 km/h head-on arms at its own closing (16.66 m/s, its engine blocks 0.165 m back; was
+ * 15.70 m/s and 0.118 m).
+ * A door a side hit presses onto its crush band's full depth keeps it (it is packed: nothing springs back), where it sprang 4 cm back once the face left.
+ * A pair whose stop packs a nose counts that car's engine block travel as the hit's own energy (a re-armed hit's rule), not the geometric peak the
+ * stop's slice leaves it (6-12 mm off with the phase): a sedan head-on's block travel now rises with speed through its kill window (56 km/h each:
+ * 0.1579 m, was 0.1461 beside 0.1521 at 55.5 and 0.1511 at 56.5).
+ * A killed engine block keeps counting its travel through the hit, so it reads the hit's peak rather than the kill slice's sample (a sedan at 55 m/s
+ * reads 0.608 m into the slab and every wall, where it read 0.46-0.58 by the slice's phase); a car half over the end of a slab or a wall's hold face is
+ * crushed only where the face presses it, not at the corner hanging past the end.
+ * The press closes its plates 0.26 m inside the rails' rest in shape deform mode (0.06 m in lattice), where every car class folds its rails
+ * past 0.2 m, not stalls at 0.183-0.199 m: a pressed sedan's rails fold 0.244 m, were 0.191.
+ * A torn hatchback gate flies as its glass and spoiler only (its D-posts stay on the body); a torn SUV liftgate flies with its D-post shares as
+ * closed pieces cut on one shared section and a flange under its slab.
+ * A door cage's corners hang on the cabin (its masses and the clusters that hold the cell), not on the tail and axle a side hit's tyres hold back: a side
+ * hit no longer shears the far door's frame by 5-6 cm (a 30 km/h side hit read 55 mm, now 18; its glass burst), and a 50 km/h wall hit racks a door's frame 12 mm, not 26.
+ * A windscreen's frame hangs on the cabin as a door's does, its base corners with half of the nearest wing's give (the cowl, where the nose meets the
+ * cabin) in place of the rails' and engine's: a 35 km/h wall hit racks it 4.3 mm, not 6.5 (the pane cracked), and a 50 km/h one 5.4 mm, not 24.5 (it still cracks).
+ * A car's roof keeps a permanent set from a frontal, tail or side hit as the sheet metal around it does (its crush less the elastic part, `SPRING_SHARE`), and
+ * stands on it once the contact lets go: it ended wherever the contact window cut the windscreen cluster's pull, 2.4 cm back of its seat after a coupe's
+ * 41 km/h wall hit and at its seat after a 42 km/h one (and drifting 0.1 cm a frame past it, 6 cm after 2 s), now 1.9 cm back from 38 to 52 km/h at either window length;
+ * the laminated windscreen cracks from 3 mm of its frame's distortion, not 5, which the roof's set moved the walls' under (a 35 km/h wall reads 1.6 mm and a 50 km/h one 4.0, from 4.3 and 5.4).
+ * A tyre meets a solid's side at both corners of each edge of its tread and, where an edge's corners read nothing, at samples 0.2 m apart between them: a
+ * wall thinner than the tyre is long (the oval's 0.6 m) no longer stands between its corners while the tyre straddles it, so a monster's rear pair that rolled
+ * through it at 56 m/s (two wheels still on, 24.9 m/s after the hit) is torn off at it (none left, 10.7 m/s). A point that came in by no face within the
+ * entry window leaves by the side its car stands on, as one at rest does, not by the nearest face (a car's tyre deep in a panel it was rebounding from was put out through its far face).
+ * A wreck's tyre springs hold its weight at the hubs where its hit has left them in its body (a planted hub keeps its place on the ground while the body is
+ * driven back off it, and the body seats on it again over the next second), not at the stock wheel places: a monster's axles were loaded 1.3 % of its weight unevenly 1.2 s after a
+ * 20 m/s hit, which the springs took up as a pitch the wreck kept if it fell asleep before it had seated (0.5° nose-off on flat ground, 2.2° on a 10° bank, more with a harder hit), now none (0.0° and 0.1°).
+ * A torn part that flies as its shell takes the wind on the broad face it draws (the axis its drawn triangles face most), not its box's shortest axis, which
+ * a bumper's wrapped ends and seam cover tie with its height within 2 mm: a sedan's, hatchback's or wagon's front bumper, a monster's rear one and a
+ * coupe's front arches met the wind edge-on and lifted where they should brake. The keyframe carries each loose part's plate axis with its flags.
+ * A torn part that flies as its shell is supported the same either side of its car's middle plane: the farthest point along a way tied between a
+ * bumper's two lower front ends and one slot took one, so a sedan's, hatchback's or wagon's front bumper rested on a lone point and tipped forward end
+ * over end at its first slide (73-85° in 0.4 s: 4.658 m where its box slides 4.39), where it now slides flat.
+ * A loose point (a torn part's, a popped wheel's) more than a car's roof reach (0.25 m) under its top, inside its drawn plan and over its underside is in
+ * that car's flank and is put out along the plan outline's normal, where it passed through any car whose top stood out of its reach (a door cage's 0.9 m
+ * shelf): a bumper a car is driven into at 2 m/s is shoved 0.67 m (0.51 m riding the sill top; 0.002 m under the door cages, now 0.82), and one flying at
+ * a parked car's door stops at its face, where it ended 1.02 m inside it.
+ * A hit's centre follows the pair's patch for its first 15 ms and its snap to the nearest mass has no step at 0.2 m off the centre line: a T-bone's nose
+ * no longer crushes 0.38 m or 0.74 m with where in a 1/240 s slice the first touch fell (now within 0.09 m), and a pair's crush spreads over a flat face.
+ * A pair's hit armed on its first aslant touch of one corner (10.3 m/s, patch normal 26° off) takes over the face-on contact that follows within 15 ms
+ * (13.5 m/s), keeping the crush it has taken: a T-bone's nose crushes 0.42-0.47 m wherever in a slice the touch fell, not 0.34 m (the stroke of the aslant arm).
+ * A keyframe carries what a pair's take-over reads (the armed hit's slice, EBS, end, energy and wear): one inside the 15 ms window replays the take-over the live sim made, and a respawn clears it.
+ * A pair's first overlap no longer depends on the step it is first read in: a car under a lifted body that stands on its wheels meets it at its own heights
+ * (the frame and wheels the cage does not draw), and a patch's height is held within the heights the crushing masses stand at, so a car hit into or by
+ * a monster crushes alike a m/s faster, not 0.14 healthier on every third step (a sedan into a monster's tail, 29 -> 30 m/s: striker 0.69 -> 0.80).
+ * Each car's nose packs to its own length ahead of its engine block, leaving the platform's 0.30 m of crumple on every body (the sedan's
+ * was 0.287, the wagon's 0.318, the monster's 0.255, the hatchback's and pickup's 0.18), so a nose hit reaches the block and kills the
+ * engine at the same speed whatever the car.
+ * A car's two front doors are cage panels of their own while they hang latched (a sprung or torn door leaves it), so a side striker meets the drawn door's skin, not the sill and belt behind it.
+ * A hood's and a trunk lid's heights in the cage reach a lattice step past their triangles (they reached half of one), so the drawn lid's wrapped nose and rolled edge, which stand 1-2 cm past the plain cage lid, have a cage under them: a tyre meets hood up to 5 cm past the lid's true edge.
+ * A pair's patch reads every node of the other outline that reads a depth: the plan field's edge stands half a lattice step past the outermost node, beyond the drawn triangles' box that gated them, so a door's nodes
+ * at a nose's edge joined the patch at once and moved its centre 2.1 or 11.2 cm in a millimetre of closing (a T-bone's door crushed 0.706 m or 0.753 m by 2 mm of start, now 0.750-0.753 m).
+ * A skin point standing more than 0.35 m from its parents' rest centroid turns with its clusters' maps only as far as it would at 0.35 m, the rest of its offset going with the parents alone (a rear pillar 0.75 m over the tail's masses was swung 0.198 m by their 0.1-0.2 rad rolls where the particles moved 0.140: now 0.171), so the cage cut from the crushed skin differs on every crushed car's upper rear and the contacts that read it with it.
+ * A hit's spin and friction reach a car's masses only in the share of the exchange's impulse those masses took (the face's impulse cannot reach masses
+ * already held on it), and as the moment of that impulse about the car's centre: a resting sedan struck 1 m ahead of its middle with most of its mass already on
+ * the face took 556 of the exchange's 1713 N·s and spun 2.14 rad/s, now 0.67; a wreck turning with its drawn vertex closing on a face takes the rigid plastic impulse there
+ * (recoil and spin), where its spin went with no momentum taken, and one whose centre leaves the face faster than the turn swings the vertex in takes none (stopped whole, a sedan wrapping a 0.28 m post at 55 m/s exited at 21.3-29.4 m/s by the start's phase, now 21.7-22.7): a sedan hitting a palm's trunk 0.6 m off its middle turns toward it (+0.09 rad, was +0.03).
+ * A pair tilted 30° to 150° against each other (a car on its side beside one on its wheels or on its roof) reads the plan overlap from every node of the cages with its own column, not from the outline's stretched band: a monster rolled 70° with a cop's nose in its roof read 0.253 m shallow (0.021 m against 0.274 m) and a one-level graze of the other's top counted as a contact up to 0.75 m deep, and now reads the cages' overlap to within 0.04 m; pairs tilted less (a car pitched 27° on a tier) or turned over flat read as before.
+ * The monster's springs damp at ζ 0.42 (were 0.35; Monster Jam 0.35-0.5): a 0.3 m drop's ride, which swung 115, 34 and 10 mm over three turns, swings 91 and 20 mm over one, and it arrives 0.4 m/s slower at the long jump's barrier. Its wheels come off a hit only from 24 m/s of
+ * equivalent barrier speed (a sedan's at 18-20: hub hardware is built for the load its wheel's mass makes).
+ * A pair's crush is fed over its overlap patch's width, not from its centre point alone (a mass within the patch's half width of the point presses as near as one at it), and, while the pair still closes faster than a graze and the face the hit struck has stroke left, at its hit's closing speed, not the slice's (which the exchange takes away): a 53 km/h T-bone's bumper corners crush 0.234 and 0.236 m of their 0.25 m stroke by the time the struck car has 90 % of the common speed (were 0.146 and 0.150), its door 0.175 m (was 0.141).
+ * A car lying flat on its side (the face's normal under 0.25 along its up, within 15°) stands on the tyres it lies on, each holding its share of the whole car (half with two, never the whole of it on one) where it held a quarter and sank to its stroke: a monster dropped on its side stood 24.8 cm in the ground, a sedan 5.0, a truck 3.5, and now they stand 0.4 to 2.2 cm in it or over it. A wreck at rest on the ground (slower than `REST_SPEED`, touching, or asleep) no longer steps its structure once its contact clock has run the contact window if it lies on its side or roof, a second if it stands on its wheels (its masses ride the body, where they crept 7 cm/s toward the ground it lay on, and the car's own velocity and spin reach them, a held reset's fresh vectors having been 6 cm/s short): a monster on its flank with its low wheels gone settles 2.5 to 2.9 cm in the ground where it settled 8 to 15, and with one low wheel gone every class is asleep inside 8 s with its cage within 1.0 cm of the ground (a monster rocked for 12 s, 10.7 cm in it). A held reset starts the laid wreck's clock over (it was left at a quiet of 10 s). A wreck's tyre in another wreck's top, which takes no row from it, touches that wreck: a highlight clip that keeps one keeps both (seed 8 of the long replay: a monster's tyre 0.5 m in a sedan wreck's top, 15.8 m off in the replay).
+ * The monster's cage has the drawn arch opening, an ellipse crowning at .83 of the round one's height over each hub (collision is what is seen): its side rows between the opening and the floor tuck in 8 cm lower at each wheel.
+ * Each bumper's cage holds its drawn bottom corner (the lowest, outermost vertex of its end) through the decimation, and `frame.hullUnder`'s four bumper rows stand on those vertices (the lofted-end bumpers' rows stood 6-17 cm off the drawn lip): a rolled car's bumper corner meets a ramp's flank or a wall at the vertex the sim collides, not 6.5-14.5 cm from it.
+ * A wheel arch's plant under the body side's rocker line turns with the cell's clusters, as the rest of the sill does, instead of the nose's: a sedan's front sill vertex (2.5 cm beside the cage's sill sample) stood 7.5 cm lower and 15 cm further in than it after a head-on crush, 3.0-6.7 cm into the ground under a wreck resting on the cage's own points; now none stands 3 cm past them.
+ * A tyre cap's damper (the tread's own damping) follows a press or release rate no faster than the tread's ring speed, 2 sqrt(G TYRE_SAG) = 0.63 m/s: a 38 m/s landing's release no longer holds the tread down while the frame turns onto the slope (crest muscle 3.11° -> 0.57°, SUV 4.50° -> 4.10°).
+ * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 158;
+const REPLAY_VERSION = 159;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

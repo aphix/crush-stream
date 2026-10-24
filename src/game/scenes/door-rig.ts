@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { detAtan2, hypot3 } from "../kernel/physics-core.js";
-import { strikeCar, makeBox, partContact } from "../contact/external-contact.ts";
+import { bodyEdge, strikeCar, makeBox, partContact } from "../contact/external-contact.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
 
 /**
@@ -14,39 +14,76 @@ import { KPH_PER_MS } from "../kernel/constants.ts";
  * - `panelPush` (D): the quarter panel stands out (a hinged, not yet fragile panel); the ram runs rear→front into it and
  *   pushes it back onto the body (it stays dented), or tears it off when hard enough.
  * - `panelPull` (E): the same panel; the ram runs front→rear into its free end and pulls it open (past its tear energy: off).
+ * - `lidPop` (F): a rear ram square into the tail with the lid shut; crush past the latch's `ajar` springs it.
+ * - `lidTear` (G): the same with the lid on its stop; a hard enough hit tears it off.
  * The ram is kinematic apart from the momentum it trades with the car; it is a striker box in the
  * shared contact (`external-contact.ts`): the door and mirror colliders a car running down the
  * side meets too, and the body contact if a lane reaches the skin (the stock lanes do not).
  */
-export type DoorScenario = "mirror" | "overOpen" | "shut" | "panelPush" | "panelPull";
+export type DoorScenario = "mirror" | "overOpen" | "shut" | "panelPush" | "panelPull" | "lidPop" | "lidTear";
 
 type RamLane = {
   /** Travel along the car: +1 rear→front, −1 front→rear. */
   dir: 1 | -1;
-  /** |x| of the face's inner edge (m); the door skin ends at ~0.91. */
+  /** |x| of the face's inner edge (m); a mirror or panel lane's is the car's own (`laneFor`). */
   inner: number;
   /** Face width outward from `inner` (m). */
   width: number;
   /** Face bottom and top (m above the ground). */
   bottom: number;
   top: number;
-  /** Door angle (rad) when the shot starts, 0 shut and latched; for a `panel` scenario the quarter panel's hinge value (0..1). */
+  /** Door angle (rad) when the shot starts, 0 shut and latched; for a `panel` scenario the quarter panel's hinge value (0..1); for a `lid` one the lid's angle (clamped to its stop). */
   open: number;
-  /** The part the lane is for: a door and its mirror (default) or the quarter panel. */
-  part?: "panel";
+  /** The part the lane is for: a door and its mirror (default), the quarter panel or the trunk lid. */
+  part?: "panel" | "lid";
 };
 
+/** Half the rear ram's face (m): centred on the tail, inside every car's track. */
+const TAIL_HALF = 0.6;
+/** The lid lanes' ram, square into the tail from behind, bumper to boot-lid height. */
+const TAIL_LANE = { dir: 1, inner: -TAIL_HALF, width: 2 * TAIL_HALF, bottom: 0.3, top: 0.9, part: "lid" } as const;
+
 export const DOOR_LANES: Readonly<Record<DoorScenario, RamLane>> = {
-  // 4 cm of air to the shut door, 3 cm outside the mirror base: only the mirror is in the lane.
-  mirror: { dir: 1, inner: 0.95, width: 0.4, bottom: 0.5, top: 1.1, open: 0 },
-  // Below the mirror (0.82–0.91 m) so only the door slab is in the lane.
+  // Only the mirror's top in the lane, over the belt and pillars: `laneFor` sets it on the car's own mirror.
+  mirror: { dir: 1, inner: 0, width: 0.4, bottom: 0, top: 0, open: 0 },
+  // Below the mirror so only the door slab is in the lane.
   overOpen: { dir: 1, inner: 0.95, width: 0.6, bottom: 0.3, top: 0.75, open: (55 * Math.PI) / 180 },
   // Outside the mirror head on the open door, so the ram meets the slab first.
   shut: { dir: -1, inner: 1.1, width: 0.6, bottom: 0.3, top: 0.75, open: (55 * Math.PI) / 180 },
-  // Outside the car's widest drawn point (the cage's plan half width, 0.894) and the last node of its field (0.9: a point in the rim cell reads a ramp rising into the flank): a quarter panel at hinge 0.45 stands 0.18 off its pivot, its free end at 0.942, so its tip is in the lane.
-  panelPush: { dir: 1, inner: 0.91, width: 0.6, bottom: 0.3, top: 0.75, open: 0.45, part: "panel" },
-  panelPull: { dir: -1, inner: 0.91, width: 0.6, bottom: 0.3, top: 0.75, open: 0.45, part: "panel" },
+  // A quarter panel standing out (hinge 0.45); `laneFor` puts the inner edge outside the car's own body.
+  panelPush: { dir: 1, inner: 0, width: 0.6, bottom: 0.3, top: 0.75, open: 0.45, part: "panel" },
+  panelPull: { dir: -1, inner: 0, width: 0.6, bottom: 0.3, top: 0.75, open: 0.45, part: "panel" },
+  lidPop: { ...TAIL_LANE, open: 0 },
+  lidTear: { ...TAIL_LANE, open: Math.PI },
 };
+
+/** A mirror or panel lane's inner edge stands at least this far (m) outside the body's edge at the striker's heights: past the cage field's last node, half a lattice step out. */
+const BODY_LANE_GAP = 0.03;
+/** The mirror lane's inner edge stands this far (m) outside the mirror's base: well inside its reach, so the cap folds onto its stop. */
+const MIRROR_LANE_GAP = 0.03;
+/** The mirror lane's bottom stands this far (m) under the drawn mirror's top: clear of the belt and pillars under it, which a taller ram would dent. */
+const MIRROR_LANE_CATCH = 0.02;
+/** The mirror lane runs from just under the drawn mirror's top up this far (m): a head over the cap, never down onto the belt and the door below. */
+const MIRROR_LANE_TALL = 0.6;
+
+/** A head's shape on a lane: a car-shaped striker for docs/CONTACT_PARITY.md. */
+export type RamShape = Partial<Pick<RamLane, "bottom" | "top" | "width">>;
+
+/**
+ * `scenario`'s lane beside side `side` of `car` for a head of `shape`: a mirror lane on that car's own mirror (its top in the lane, its base
+ * `MIRROR_LANE_GAP` in), a panel lane on its body; neither inside the body at the head's own heights, which would be a body hit.
+ */
+export function laneFor(scenario: DoorScenario, car: DeformableCar, side: -1 | 1, shape: RamShape | null = null): RamLane {
+  let lane = DOOR_LANES[scenario];
+  if (scenario === "mirror") {
+    const bottom = car.mirrorSpanY[1] - MIRROR_LANE_CATCH;
+    lane = { ...lane, inner: car.mirrorBaseX + MIRROR_LANE_GAP, bottom, top: bottom + MIRROR_LANE_TALL };
+  }
+  if (shape) lane = { ...lane, ...shape };
+  if (scenario !== "mirror" && lane.part !== "panel") return lane;
+  const clear = bodyEdge(car, side, lane.bottom, lane.top) + BODY_LANE_GAP;
+  return { ...lane, inner: scenario === "mirror" ? Math.max(lane.inner, clear) : clear };
+}
 
 export const RAM_DEFAULTS = { kph: 12, kg: 300 } as const;
 
@@ -85,6 +122,8 @@ export type RamShot = {
 
 const D2R = Math.PI / 180;
 const _c = new THREE.Vector3();
+/** A lid torn off at park leaves rearward and up (car-space m/s) so it falls clear of the tail. */
+const PARK_TEAR_PUSH = new THREE.Vector3(0, 1, -2);
 
 /** DOM-free door rig: the engine's doors scene and the tests run the same `step`. */
 export class DoorRig {
@@ -94,6 +133,8 @@ export class DoorRig {
   side: -1 | 1 = 1;
   kph: number = RAM_DEFAULTS.kph;
   kg: number = RAM_DEFAULTS.kg;
+  /** The trunk lid at park (share link `dlid`): 0 shut, 1 on its stop, 2 torn off. */
+  lid = 0;
   phase: RamPhase = "idle";
   /** Head length along the travel (m). */
   length: number = RAM.length;
@@ -114,10 +155,11 @@ export class DoorRig {
    */
   carMoves = false;
 
-  /** A head of another shape on the scenario's lane (a car-shaped striker for docs/CONTACT_PARITY.md). */
-  shape: Partial<Pick<RamLane, "bottom" | "top" | "width">> | null = null;
+  /** A head of another shape on the scenario's lane. */
+  shape: RamShape | null = null;
 
   get lane(): RamLane {
+    if (this.car) return laneFor(this.scenario, this.car, this.side, this.shape);
     const lane = DOOR_LANES[this.scenario];
     return this.shape ? { ...lane, ...this.shape } : lane;
   }
@@ -129,6 +171,9 @@ export class DoorRig {
     this.face = -this.lane.dir * RAM.start;
     this.particles0 = new Float64Array(car.deform.masses.length * 3);
     this.verts0 = new Float32Array((car.body.geometry.getAttribute("position") as THREE.BufferAttribute).array.length);
+    // Every reset's `resetVisual` re-hangs the lid before the park, so its share-link state is set again here.
+    if (this.lid === 1) car.setLidOpen(car.lidHinge().spec.stop);
+    else if (this.lid === 2) car.ripLid(PARK_TEAR_PUSH);
   }
 
   /** Set the door for the scenario and launch the ram. Speed in km/h, mass in kg. */
@@ -146,7 +191,8 @@ export class DoorRig {
     if (this.lane.part === "panel") {
       car.setDoorOpen(side, 0);
       car.setPanelOpen(side, this.lane.open);
-    } else car.setDoorOpen(side, this.lane.open);
+    } else if (this.lane.part === "lid") car.setLidOpen(this.lane.open);
+    else car.setDoorOpen(side, this.lane.open);
     const masses = car.deform.masses;
     for (let i = 0; i < masses.length; i++) masses[i]!.local.toArray(this.particles0, i * 3);
     this.verts0.set((car.body.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array);
@@ -162,24 +208,25 @@ export class DoorRig {
   step(dt: number): void {
     const car = this.car;
     if (!car) return;
+    const lane = this.lane;
     const n = Math.max(1, Math.ceil(dt / RAM.substep));
     const h = dt / n;
     for (let i = 0; i < n; i++) {
       if (this.phase === "run") {
-        this.face += this.lane.dir * this.u * h;
-        this.hit(car, h);
+        this.face += lane.dir * this.u * h;
+        this.hit(car, h, lane);
         if (this.u <= 0.01) {
           this.u = 0;
           this.stopped = true;
           this.phase = "settle";
-        } else if (this.lane.dir * this.face - this.length > RAM.end - RAM.length) {
+        } else if (lane.dir * this.face - this.length > RAM.end - RAM.length) {
           this.phase = "settle";
         }
       } else if (this.phase === "settle") {
         this.settled += h;
         if (this.settled > RAM.settle) this.phase = "idle";
       }
-      car.swingDoors(h);
+      car.swingHinges(h);
     }
     // A dented body runs the same structure step as every other crash.
     if (car.deform.massActive) {
@@ -189,8 +236,7 @@ export class DoorRig {
   }
 
   /** Ram centre (car space) for the visuals. */
-  centre(out: THREE.Vector3): THREE.Vector3 {
-    const lane = this.lane;
+  centre(out: THREE.Vector3, lane = this.lane): THREE.Vector3 {
     return out.set(
       this.side * (lane.inner + lane.width * 0.5),
       (lane.bottom + lane.top) * 0.5,
@@ -234,10 +280,9 @@ export class DoorRig {
    * The ram as a striker box riding the car's frame (its kinematic travel plus the speed it
    * keeps), through the same door, mirror and body contact every scene uses.
    */
-  private hit(car: DeformableCar, h: number): void {
-    const lane = this.lane;
+  private hit(car: DeformableCar, h: number, lane: RamLane): void {
     const box = this.box;
-    this.centre(_c);
+    this.centre(_c, lane);
     const p = car.group.position;
     const r = car.rightFlat;
     const f = car.fwdFlat;

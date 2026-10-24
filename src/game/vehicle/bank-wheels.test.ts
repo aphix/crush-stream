@@ -12,6 +12,7 @@ import { setGround } from "../world/ground.ts";
 import { Track, blankPoint, blankProjection, pointOn, type TrackPath } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 
 /**
  * Tyres on banked road. Bound 2 cm: a loaded tyre's sidewall squats about that much and the drawn road sits
@@ -21,6 +22,9 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 const BOUND = 0.02;
 const FRAME = 1 / FRAME_HZ;
 const DEG = 180 / Math.PI;
+/** An edge run drives this far (m) inside the road's edge, or this far (m) past the car's outer tread edge, whichever is farther in: the outer tread stays on the road's flat bank and off the convex crease. */
+const EDGE_INSET = 1;
+const OUTER_TREAD_CLEAR = 0.06;
 
 const courses = TRACKS.map((j) => new Track(j));
 const stunt = courses.find((t) => t.id === "stunt")!;
@@ -38,7 +42,7 @@ function roadY(path: TrackPath, s: number, lat: number): number {
   return path.y[k]! + (path.y[b]! - path.y[k]!) * f - Math.max(-half, Math.min(half, lat)) * Math.tan(bank);
 }
 
-/** Tread points (wheel-local; axle along x) on the mesh's tyre crown, `TYRE_PROFILE` in car-materials.ts. */
+/** The platform tyre's tread points (wheel-local; axle along x) on the mesh's tyre crown, `TYRE_PROFILE` in car-materials.ts; a car's own tyre scales them. */
 const TREAD: THREE.Vector3[] = [];
 for (let a = 0; a < 48; a++) {
   const t = (a / 48) * Math.PI * 2;
@@ -51,7 +55,7 @@ for (let a = 0; a < 48; a++) {
  * A `cls` car driven at 25 m/s along lateral `lat(half)` through the main loop's steepest bank (50 m either
  * side); the worst tread clearance (m, negative = sunk) of any drawn tyre on a grounded frame.
  */
-function bankRun(track: Track, cls: VehicleClassId, lat: (half: number) => number): { low: number; high: number; at: string } {
+function bankRun(track: Track, cls: VehicleClassId, lat: (half: number, inset: number) => number): { low: number; high: number; at: string } {
   const path = track.path;
   let kMax = 0;
   for (let k = 0; k < path.count; k++) if (Math.abs(path.bank[k]!) > Math.abs(path.bank[kMax]!)) kMax = k;
@@ -60,10 +64,11 @@ function bankRun(track: Track, cls: VehicleClassId, lat: (half: number) => numbe
   setGround(ground);
   const car = new DeformableCar(paint(), new THREE.Scene(), null, CLASSES[cls].style);
   assignClass(car, cls);
+  const inset = Math.max(EDGE_INSET, car.frame.halfTrack + car.frame.rig.tyre.halfW * CLASSES[cls].wheelScale + OUTER_TREAD_CLEAR);
   const pt = blankPoint();
   const at = (s: number) => {
     pointOn(path, s, pt);
-    const l = lat(pt.half);
+    const l = lat(pt.half, inset);
     return [pt.x + pt.tz * l, pt.z - pt.tx * l] as const;
   };
   pointOn(path, sMax - 50, pt);
@@ -71,10 +76,13 @@ function bankRun(track: Track, cls: VehicleClassId, lat: (half: number) => numbe
   car.spawnFacing(x0, z0, Math.atan2(pt.tx, pt.tz), 25);
   car.group.position.y = ground.heightAt(x0, z0, pt.y + 0.5);
   layOnGround(car);
+  const { r: tyreR, halfW: tyreHalfW } = car.frame.rig.tyre;
+  const kAcross = tyreHalfW / PLATFORM_TYRE.halfW;
+  const kRadius = tyreR / PLATFORM_TYRE.r;
+  const p = new THREE.Vector3();
   const w = newWorld([car]);
   const proj = blankProjection();
   const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
-  const p = new THREE.Vector3();
   let low = Infinity;
   let high = -Infinity;
   let where = "";
@@ -101,7 +109,7 @@ function bankRun(track: Track, cls: VehicleClassId, lat: (half: number) => numbe
     for (const [i, wh] of car.wheels.entries()) {
       let gap = Infinity;
       for (const t of TREAD) {
-        p.copy(t).applyMatrix4(wh.matrixWorld);
+        p.set(t.x * kAcross, t.y * kRadius, t.z * kRadius).applyMatrix4(wh.matrixWorld);
         gap = Math.min(gap, p.y - ground.heightAt(p.x, p.z, car.group.position.y + 0.5));
       }
       if (gap < low || gap > high) where = `wheel ${i} at s ${s.toFixed(0)} (bank ${(path.bank[proj.k]! * DEG).toFixed(1)}°)`;
@@ -157,9 +165,9 @@ for (const cls of ["sedan", "monster"] as const) {
     afterEach(() => setGround(null));
 
     for (const [name, lat] of [
-      ["the low edge", (h: number) => (h - 1) * LOW],
+      ["the low edge", (h: number, inset: number) => (h - inset) * LOW],
       ["the centre", () => 0],
-      ["the high edge", (h: number) => -(h - 1) * LOW],
+      ["the high edge", (h: number, inset: number) => -(h - inset) * LOW],
     ] as const) {
       describe(`when it drives along ${name} of the road`, () => {
         it(`then every tyre stays within ${BOUND * 100} cm of the ground`, (t) => {

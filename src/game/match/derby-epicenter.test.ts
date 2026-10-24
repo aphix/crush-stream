@@ -8,10 +8,10 @@ import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import { applyAiDrive } from "../ai/input-fade.ts";
 import { layoutDerby } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
-import { WHEEL_POS } from "../vehicle/car-mesh.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { stepWorld } from "../engine/world-step.ts";
-import { CAGES } from "../kernel/rig-spec.ts";
+import { CAR_STYLE_IDS, CAR_STYLES } from "../vehicle/car-variants.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
 import { armKill, carClass, DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
@@ -32,9 +32,9 @@ afterEach(() => loadEpicenter(saved));
 function derbySeed(): { frozenSlices: number; worstHub: number; worstWheel: number } {
   loadEpicenter(EPICENTER_AT_LOAD);
   EPICENTER.on = 1;
-  const rear = CAGES.find((c) => c.name === "chassisRear")!;
-  const rest = rear.maxCrush;
-  rear.maxCrush = 0.38;
+  const rears = CAR_STYLE_IDS.map((id) => carFrame(CAR_STYLES[id]).rig.cages.find((c) => c.name === "chassisRear")!);
+  const rests = rears.map((c) => c.maxCrush);
+  for (const c of rears) c.maxCrush = 0.38;
   try {
     const scene = new THREE.Scene();
     const cars = Array.from({ length: 6 }, (_, i) => new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: `c${i}` }, scene));
@@ -74,7 +74,7 @@ function derbySeed(): { frozenSlices: number; worstHub: number; worstWheel: numb
         for (const [k, name] of (["hubFL", "hubFR", "hubRL", "hubRR"] as const).entries()) {
           if (c.deform.hubPopped(name)) continue;
           const hub = c.deform.massLocal(name);
-          const rp = WHEEL_POS[k]!;
+          const rp = c.frame.wheels[k]!;
           worstHub = Math.max(worstHub, Math.hypot(hub.x - rp[0], hub.z - rp[2]));
           const wp = c.wheels[k]!.position;
           worstWheel = Math.max(worstWheel, Math.hypot(wp.x - rp[0], wp.z - rp[2]));
@@ -84,7 +84,7 @@ function derbySeed(): { frozenSlices: number; worstHub: number; worstWheel: numb
     }
     return { frozenSlices, worstHub, worstWheel };
   } finally {
-    rear.maxCrush = rest;
+    for (const [k, c] of rears.entries()) c.maxCrush = rests[k]!;
     leaveArena();
   }
 }

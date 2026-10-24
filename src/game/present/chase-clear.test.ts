@@ -12,11 +12,10 @@ import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { ChaseCamera, type CarPicker } from "./engine-camera.ts";
-import { CHASE } from "./drive-cam.ts";
+import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
 import { ChaseSolids } from "./chase-solids.ts";
 import { EyeClear } from "./eye-clear.ts";
 import { carsBlock, CINE, inside, occluder, raceSight, solid, type Sight } from "./spectate-cam.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const DT = 1 / FRAME_HZ;
@@ -64,7 +63,7 @@ type Drive = { it: string; x: number; z: number; yaw: number; speed: number; sec
 const CONTAINER = DERBY_BOXES.find((b) => b.kind === DERBY_PROP.container)!;
 /** A rail of the chicane against the wall (its long axis along the wall, its width radial). */
 const RAIL = DERBY_BOXES.find((b) => b.kind === DERBY_PROP.rail)!;
-/** A car this far (m) in front of a prop's face: the eye `CHASE.third.dist` behind it is past the prop. */
+/** A car this far (m) in front of a prop's face: the eye `PLATFORM_CAMERA.third.dist` behind it is past the prop. */
 const FACE_GAP = 2.58;
 /** A stretch of the ring wall with no prop or ramp at it (degrees round from +z, between the east ramp and the tyre berm), and how far out (m) a car stands at it: nose to the wall, or driving off it with the eye outside. */
 const BARE_WALL_DEGREES = 128;
@@ -93,7 +92,7 @@ function chaseRig(x: number, z: number, yaw: number, y = 0) {
   const seat = new DriverSeat();
   seat.mode = "drive";
   const view = new ChaseCamera(camera, fakeCanvas(), seat, { rx: 0, ry: 0 } as PadState, false, NO_PICK);
-  camera.position.set(x - Math.sin(yaw) * CHASE.third.dist, y + CHASE.third.height, z - Math.cos(yaw) * CHASE.third.dist);
+  camera.position.set(x - Math.sin(yaw) * PLATFORM_CAMERA.third.dist, y + PLATFORM_CAMERA.third.height, z - Math.cos(yaw) * PLATFORM_CAMERA.third.dist);
   return { camera, view };
 }
 
@@ -125,7 +124,7 @@ function follow(drive: Drive, keep: boolean) {
     car.group.position.set(x, floor.heightAt(x, z), z);
     car.velocity.set(moving ? sx * drive.speed : 0, 0, moving ? cz * drive.speed : 0);
     view.frameDrive(car, keep ? sight : null, DT, false);
-    subject.set(car.group.position.x, car.group.position.y + CHASE.third.aimUp, car.group.position.z);
+    subject.set(car.group.position.x, car.group.position.y + PLATFORM_CAMERA.third.aimUp, car.group.position.z);
     if (sightBlocked(exact, camera.position, subject)) blocked++;
     eyes.push(camera.position.clone());
   }
@@ -182,7 +181,7 @@ describe("given the chase camera on a car driven through the derby bowl", () => 
     const sight = bowlSight([], rivalCar);
     const exact = exactSolids(sight);
     const ahead = inFrontOf(CONTAINER, 1.08);
-    const subject = new THREE.Vector3(ahead.x, CHASE.third.aimUp, ahead.z);
+    const subject = new THREE.Vector3(ahead.x, PLATFORM_CAMERA.third.aimUp, ahead.z);
     const behind = inFrontOf(CONTAINER, -5.32);
     const rig = new THREE.Vector3(behind.x, 2.4, behind.z);
     const eye = rig.clone();
@@ -226,7 +225,7 @@ describe("given the chase camera on a car driven through the derby bowl", () => 
       const sight = bowlSight([], car);
       const { camera, view } = chaseRig(nose.x, nose.z, nose.yaw + Math.PI);
       view.lookBack(car, keep ? sight : null, DT);
-      const subject = new THREE.Vector3(nose.x, CHASE.third.aimUp, nose.z);
+      const subject = new THREE.Vector3(nose.x, PLATFORM_CAMERA.third.aimUp, nose.z);
       return sightBlocked(exactSolids(sight), camera.position, subject);
     };
     assert.equal(rear(true), false, "the rear view's eye hidden from the car or in a solid, kept");
@@ -278,7 +277,7 @@ describe("given the chase camera on a car 2 m outside a tall prop or building of
               for (let f = 0; f < 2 / DT; f++) {
                 const t = Math.max(0, f * DT - 1);
                 car.group.position.set(x + Math.sin(yaw) * SPEED * t, ground, z + Math.cos(yaw) * SPEED * t);
-                subject.set(car.group.position.x, car.group.position.y + CHASE.third.aimUp, car.group.position.z);
+                subject.set(car.group.position.x, car.group.position.y + PLATFORM_CAMERA.third.aimUp, car.group.position.z);
                 // The drive ends where the car itself would be inside a wall or a prop: no camera can see a car through its own wall.
                 if (solid(sight, subject.x, subject.y, subject.z, CINE.pad)) break;
                 car.velocity.set(f * DT >= 1 ? Math.sin(yaw) * SPEED : 0, 0, f * DT >= 1 ? Math.cos(yaw) * SPEED : 0);
@@ -319,6 +318,30 @@ function rivalAt(t: number, tailGap: number): { gap: number; side: number } {
   return { gap, side: PULL_OUT * s * s * (3 - 2 * s) };
 }
 
+/** How far (m) a tailgating rival's roof stands over the bare eye's line to the car, at its nose: just over it, so the eye must lift to clear it. */
+const ROOF_OVER_LINE = 0.033;
+
+/** The bare rig's settled eye line to the car at `RACE_SPEED` (read where the rival reaches the tail): its height (m) over the subject's per metre behind the car's origin. */
+function eyeLineRise(): number {
+  const car = newCar(0, 0, 0);
+  const bare = chaseRig(0, 0, 0);
+  let z = 0;
+  for (let f = 0; f < (HOLD + RIVAL_BACK / CLOSING) / DT; f++) {
+    z = RACE_SPEED * f * DT;
+    car.group.position.set(0, 0, z);
+    car.velocity.set(0, 0, RACE_SPEED);
+    bare.view.frameDrive(car, null, DT, false);
+  }
+  const eye = bare.camera.position;
+  return (eye.y - PLATFORM_CAMERA.third.aimUp) / (z - eye.z);
+}
+
+/** The tail gap (m) at which a rival's roof stands `ROOF_OVER_LINE` over the bare eye's line: the line rises toward the eye, the roof is the rival's own box top. */
+function tailGapUnderRoofline(): number {
+  const { half } = newCar(0, 0, 0).frame;
+  return (2 * half.y - PLATFORM_CAMERA.third.aimUp - ROOF_OVER_LINE) / eyeLineRise() - half.z;
+}
+
 /**
  * Every frame of a rival overtaking the driven car from behind after tailgating `tailGap` m off its tail, with one chase camera
  * keeping clear and a bare one beside it: the most the clear eye stood off the bare one to the side, in along its line and up,
@@ -331,7 +354,8 @@ function overtake(tailGap: number) {
   const solids = new ChaseSolids(() => {});
   const kept = chaseRig(0, 0, 0);
   const bare = chaseRig(0, 0, 0);
-  const own = occluder(0, 0, 0, CAR_HALF.x, CAR_HALF.z, false, 0, 2 * CAR_HALF.y);
+  const { half } = car.frame;
+  const own = occluder(0, 0, 0, half.x, half.z, false, 0, 2 * half.y);
   const subject = new THREE.Vector3();
   const offset = new THREE.Vector3();
   const last = new THREE.Vector3();
@@ -342,11 +366,11 @@ function overtake(tailGap: number) {
     car.group.position.set(0, 0, z);
     car.velocity.set(0, 0, RACE_SPEED);
     const { gap, side } = rivalAt(t, tailGap);
-    rival.group.position.set(side, 0, z - 2 * CAR_HALF.z - gap);
+    rival.group.position.set(side, 0, z - 2 * rival.frame.half.z - gap);
     const sight = solids.frame(null, false, [rival], car);
     kept.view.frameDrive(car, sight, DT, false);
     bare.view.frameDrive(car, null, DT, false);
-    subject.set(0, CHASE.third.aimUp, z);
+    subject.set(0, PLATFORM_CAMERA.third.aimUp, z);
     own.z = z;
     const k = kept.camera.position;
     const b = bare.camera.position;
@@ -364,8 +388,11 @@ function overtake(tailGap: number) {
 }
 
 describe("given the chase camera on a car racing down a flat straight, a rival closing from behind, tailgating, pulling out and passing", () => {
-  it("when the rival's nose sits 0.3 m off the tail, on the eye's line to the car, then the eye lifts over it: never into the car, in along the line or out to the side, and never off the rig's path faster than the rival closes", () => {
-    const run = overtake(0.3);
+  it(`when the rival tailgates with its roof ${(ROOF_OVER_LINE * 100).toFixed(1)} cm over the eye's line to the car, then the eye lifts over it: never into the car, in along the line or out to the side, and never off the rig's path faster than the rival closes`, (t) => {
+    const gap = tailGapUnderRoofline();
+    const run = overtake(gap);
+    t.diagnostic(`tail gap ${gap.toFixed(3)} m, eye lifted ${run.lift.toFixed(3)} m`);
+    assert.ok(gap > 0, `the rival's nose stands ${gap.toFixed(2)} m behind the car's tail: no tailgate sits its roof ${ROOF_OVER_LINE} m over the eye's line`);
     assert.ok(run.bareHidden > 30, `frames with the rival on the bare eye's line: ${run.bareHidden} (the tailgate must hide the car)`);
     assert.equal(run.hidden, 0, "frames with the rival on the eye's line");
     assert.equal(run.inCar, 0, "frames with the eye inside the driven car");

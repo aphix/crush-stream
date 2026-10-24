@@ -19,7 +19,7 @@ import { highJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS } from "
 import { MinigameGround } from "./minigame-ground.ts";
 import { FRAME_BOX_FLOATS, frameBoxCount, frameMeshOf, withoutFrame } from "./minigame-frame.test-util.ts";
 import { climbFootX, floorHeightAt, lipHeight, stationBackX, stationFrontX, stationStartPose } from "./minigame-profile.ts";
-import { dressedDriverCar } from "./minigame-profile.test-util.ts";
+import { dressedDriverCar, MINIMUM_SPEED } from "./minigame-profile.test-util.ts";
 import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_CUPS, RING_MESH_STEP, ringBoardMesh, ringHeightAt, ringScore } from "./minigame-ring.ts";
 import { RANGE } from "./range.ts";
 
@@ -55,36 +55,6 @@ const LONG_JUMP_REACH_X = -1.5;
 /** The slowest (m/s) any class may carry through the high jump's last stretch, below its bar. */
 const CLIMB_STALL_ALLOWANCE = 1;
 
-/** Per station and car type: the least speed (m/s) its centre may have at the climb's foot and as it reaches the lip: the numbers `minigame-profile.test.ts` pins on its own 5 cm grid. */
-const MINIMUM_SPEED: Readonly<Record<MinigameMode, Readonly<Record<string, { foot: number; lip: number }>>>> = {
-  longJump: {
-    sedan: { foot: 17.5, lip: 25 },
-    muscle: { foot: 18, lip: 27 },
-    truck: { foot: 17.5, lip: 24.5 },
-    monster: { foot: 19, lip: 26.5 },
-    police: { foot: 17.5, lip: 24.5 },
-    hatchback: { foot: 17.5, lip: 25 },
-    wagon: { foot: 17.5, lip: 25 },
-  },
-  highJump: {
-    sedan: { foot: 31, lip: 26.5 },
-    muscle: { foot: 34, lip: 29.5 },
-    truck: { foot: 31, lip: 26 },
-    monster: { foot: 34.5, lip: 35 },
-    police: { foot: 31, lip: 26.5 },
-    hatchback: { foot: 31, lip: 26.5 },
-    wagon: { foot: 31, lip: 26.5 },
-  },
-  ringFling: {
-    sedan: { foot: 29.5, lip: 32 },
-    muscle: { foot: 32, lip: 35.5 },
-    truck: { foot: 29, lip: 32 },
-    monster: { foot: 32.5, lip: 37.5 },
-    police: { foot: 29.5, lip: 32 },
-    hatchback: { foot: 29.5, lip: 32 },
-    wagon: { foot: 29.5, lip: 32 },
-  },
-};
 
 /** The dummy's frame of reference: the ragdoll steps at the render frame, and a part's centre may sit this far (m) inside a solid before it is called through it. */
 const RAGDOLL_FRAME = 1 / FRAME_HZ;
@@ -248,7 +218,8 @@ type Drive = {
 /**
  * One car of `type` parked at the station's start on the real ground (laid on the floor, the parked flag set), left alone, then
  * released at full throttle and steered down the lane's middle with the ground's hook on the world (`assignHook`: the control without it).
- * It ends at its throw plus `AFTER_THROW_SECONDS` (the thrown driver's car freewheels), or at the long jump's lip, or a stall.
+ * It ends at its throw plus `AFTER_THROW_SECONDS`, or at the long jump's lip, or a stall; the control ends at the lip too, as past it the
+ * unhooked car flies on into the backstop and is really thrown.
  */
 function driveFromStart(type: DriverCar, mode: MinigameMode, assignHook = true): Drive {
   const anchor = STATION_ANCHORS[mode];
@@ -298,7 +269,7 @@ function driveFromStart(type: DriverCar, mode: MinigameMode, assignHook = true):
       if (!drive.reachedLip && position.x >= anchor.x) {
         drive.reachedLip = true;
         if (!thrown) drive.lipSpeed = car.speed;
-        if (mode === "longJump") break;
+        if (mode === "longJump" || !assignHook) break;
       }
       stalledFor = car.speed < STALLED_SPEED ? stalledFor + PROBE_FRAME : 0;
       if (stalledFor > STALL_SECONDS) break;
@@ -332,7 +303,7 @@ describe("given each of the 7 car types parked at each station's start on the re
     });
   }
 
-  it("when the world's collide hook is not assigned, then the sedan reaches the high jump's lip and Ring Fling's and nobody is thrown: the hook is what throws", () => {
+  it("when the world's collide hook is not assigned, then the sedan reaches the high jump's lip and Ring Fling's and nobody is thrown by the run up to it: the hook is what throws (past the lip the unhooked sedan flies into the backstop at 29 m/s, a crash that really throws)", () => {
     const sedan = DRIVER_CARS.find((type) => type.id === "sedan")!;
     for (const mode of ["highJump", "ringFling"] as const) {
       const drive = driveFromStart(sedan, mode, false);

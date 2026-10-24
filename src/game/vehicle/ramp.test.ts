@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { DeformableCar } from "./car.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
 import { Ground, setGround } from "../world/ground.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { paint } from "./test-support.ts";
@@ -69,7 +68,7 @@ function settle(deg: number, yaw: number): Settled {
   // Tyre clearance along the face normal: wheel centre's distance from the face plane minus the tyre radius.
   const gaps = car.wheels.map((wh) => {
     wh.getWorldPosition(p);
-    return (p.x - FOOT) * -s + p.y * c - TYRE_R;
+    return (p.x - FOOT) * -s + p.y * c - car.frame.rig.tyre.r;
   });
   const q = car.group.quaternion;
   const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);

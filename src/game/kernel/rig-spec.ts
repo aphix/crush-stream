@@ -108,7 +108,7 @@ export type MassName =
   | "hubRL"
   | "hubRR";
 
-interface MassSpec {
+export interface MassSpec {
   name: MassName;
   rest: [number, number, number];
   mass: number;
@@ -137,6 +137,9 @@ export const MASS_SPECS: MassSpec[] = [
   { name: "hubRL", rest: [-0.74, 0.32, -1.34], mass: 26, radius: 0.28 },
   { name: "hubRR", rest: [0.74, 0.32, -1.34], mass: 26, radius: 0.28 },
 ];
+
+/** The platform's tyre (m): radius along the car and half-width across it, the hubs' size in the tables above. */
+export const PLATFORM_TYRE = { r: 0.32, halfW: 0.11 } as const;
 
 /** Rectangular crumple boxes at the nose and tail — no diagonal truss. */
 export const BEAM_SPECS: [MassName, MassName, number, number, number][] = [

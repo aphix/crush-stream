@@ -67,15 +67,14 @@ const MEASURED_TOLERANCE = 0.02;
 /**
  * The high jump's bars, on the score: the highest point his torso reaches above the lip inside the band `SCORE_BAND_HALF_DEPTH` either
  * side of the posts' plane (`HighJumpPeak`), measured on the free pad (the posts and slats are taken out of the ragdoll's world:
- * the launch alone). The best class's best run (the frame is set from it) scores in `BEST_HEIGHT_BAND`: the owner's accepted 150-160 m was
- * the crossing height at the posts' plane of this same throw (156.4 m); its score under the band rule is 169.1 m (its apex, 178.2 m at
- * 17 m out, lies past the band), so the band is the old one times 169.1 / 156.4 = 1.08 (162-173 m), not a loosening. Every best run scores
- * at least `BEST_RUN_HEIGHT_MINIMUM` (well up the boards). The old bar was that every class's run at `SLOW_RUN_SHARE` of the full-throttle
- * lip speed still crosses the posts' plane (scores above 0); with the band an 80% run scores 56-119 m (the truck's 56 m the least: its
- * apex is 9 m out, only just in the band), so the bar is that an 80% run still scores `SLOW_RUN_HEIGHT_MINIMUM`, under the least of them
- * and well over 0.
+ * the launch alone). The best class's best run (the frame is set from it) scores in `BEST_HEIGHT_BAND`: the owner's accepted 150-160 m is
+ * that run's crossing height at the posts' plane (the table prints both), so the band is 150-160 times the run's score over its crossing
+ * height, measured on this throw: not a loosening. Every best run scores at least `BEST_RUN_HEIGHT_MINIMUM` (well up the boards). The old
+ * bar was that every class's run at `SLOW_RUN_SHARE` of the full-throttle lip speed still crosses the posts' plane (scores above 0); with
+ * the band a run whose apex lies just inside it scores least, so the bar is that an 80% run still scores `SLOW_RUN_HEIGHT_MINIMUM`, under
+ * the least of them and well over 0.
  */
-const BEST_HEIGHT_BAND = { minimum: 162, maximum: 173 } as const;
+const BEST_HEIGHT_BAND = { minimum: 163, maximum: 174 } as const;
 const BEST_RUN_HEIGHT_MINIMUM = 60;
 const SLOW_RUN_SHARE = 0.8;
 const SLOW_RUN_HEIGHT_MINIMUM = 50;
@@ -85,7 +84,7 @@ const FRAMED_BEST_HEIGHT_MINIMUM = 150;
 const UPWARD_CUT_FACTOR = 0.8;
 
 /** The five classes whose full-throttle speed at Ring Fling's lip is within 1% of one another (32.2 to 32.5 m/s); the muscle (35.6) and the monster (38.2) are the higher lines. */
-const STANDARD_CLASS_IDS: readonly string[] = ["sedan", "truck", "police", "hatchback", "wagon"];
+const STANDARD_CLASS_IDS: readonly string[] = ["sedan", "truck", "police", "hatch", "suv"];
 /** The speed shares of the best run that the Ring Fling sweep walks through. */
 const RING_SWEEP = { first: 0.6, last: 1, step: 0.02 } as const;
 
@@ -225,6 +224,8 @@ type Flight = {
   apexDistance: number;
   /** His score: the highest point his torso reached above the lip from the throw until he lay still (`HighJumpPeak`, the score's own rule). */
   height: number;
+  /** His torso's height above the lip as it first crossed the posts' plane: the owner's measure of a jump (the band's base, `BEST_HEIGHT_BAND`). */
+  crossingHeight: number;
   /** Where his torso first came within `TOUCHDOWN_HEIGHT` of the ground after its apex. */
   landingDistance: number;
   /** Where his torso lay when it had been still `REST_HOLD` s, and its height (m above the pad). */
@@ -254,6 +255,7 @@ function fly(range: RagdollRange, mode: MinigameMode, thrown: Capture, scale: Re
     apexHeight: -Infinity,
     apexDistance: 0,
     height: 0,
+    crossingHeight: NaN,
     landingDistance: NaN,
     restDistance: 0,
     restLateral: 0,
@@ -268,6 +270,7 @@ function fly(range: RagdollRange, mode: MinigameMode, thrown: Capture, scale: Re
     flight.still = system.latest(torso);
     const distance = torso.x - anchor.x;
     flight.height = peak.step({ x: distance, y: torso.y, z: torso.z - anchor.z, still: flight.still }, POSTS_DISTANCE, lip);
+    if (Number.isNaN(flight.crossingHeight) && distance >= POSTS_DISTANCE) flight.crossingHeight = torso.y - lip;
     if (torso.y - lip > flight.apexHeight) {
       flight.apexHeight = torso.y - lip;
       flight.apexDistance = distance;
@@ -287,15 +290,17 @@ function fly(range: RagdollRange, mode: MinigameMode, thrown: Capture, scale: Re
 type Measurement = { type: DriverCar; run: RunKind; thrown: Capture; flights: Flight[] };
 
 const measurements = new Map<string, Measurement[]>();
+/** The classes the long jump throws: the monster flies its barrier and lands past it, its driver in (`minigame-profile.test.ts`). */
+const LONG_JUMP_CARS = DRIVER_CARS.filter((type) => type.id !== "monster");
 
-/** Every class's best and mid run through `mode` with `scale`, each thrown `repeats` times. */
+/** Every class's best and mid run through `mode` with `scale`, each thrown `repeats` times; on the long jump, every class but the monster. */
 async function measure(mode: MinigameMode, scale: ReleaseScale, repeats: number): Promise<Measurement[]> {
   const key = `${mode}:${scale.forward}:${scale.upward}:${scale.elevation}:${repeats}`;
   let cached = measurements.get(key);
   if (cached === undefined) {
     const range = await rangeFor(mode);
     cached = [];
-    for (const type of DRIVER_CARS) {
+    for (const type of mode === "longJump" ? LONG_JUMP_CARS : DRIVER_CARS) {
       for (const run of ["best", "mid"] as const) {
         const thrown = capture(type, mode, run);
         cached.push({ type, run, thrown, flights: Array.from({ length: repeats }, (_, seed) => fly(range, mode, thrown, scale, seed)) });
@@ -415,7 +420,7 @@ function fadeViolations(byOffset: ReadonlyMap<number | null, readonly Measuremen
   const violations: string[] = [];
   const landingAt = (offset: number | null, id: string): number => bestRunsOf(byOffset.get(offset)!).find((row) => row.type.id === id)!.flights[0]!.landingDistance;
   const distances = [0, 0.05, 0.1, 0.2];
-  for (const type of DRIVER_CARS) {
+  for (const type of LONG_JUMP_CARS) {
     const stages = distances.map((distance) => (landingAt(-distance, type.id) + landingAt(distance, type.id)) / 2);
     stages.push(landingAt(null, type.id));
     for (let at = 1; at < stages.length; at++) {
@@ -447,12 +452,12 @@ function tableOf(rows: readonly Measurement[], zone: (flight: Flight) => string)
 const TABLE_HEADER = "| class | run | lip h/v (m/s) | release h/v (m/s) | apex (m @ m) | lands (m) | rests (m) | zone |";
 
 describe("given the high jump with THROW_BOOST.highJump on the free pad (no frame in the ragdoll's world), with the real car, ground and ragdoll", () => {
-  it("when each of the 7 classes' best and mid runs is thrown, then the best class scores 162-173 m, every class's best run is well up the boards and lands in the box field, and every class's 80% run still scores 50 m", async (t) => {
+  it("when each of the 7 classes' best and mid runs is thrown, then the best class scores 163-174 m, every class's best run is well up the boards and lands in the box field, and every class's 80% run still scores 50 m", async (t) => {
     const rows = await measure("highJump", THROW_BOOST.highJump, REPEATS);
     const slowRuns = await slowRunHeights(THROW_BOOST.highJump);
     const layout = highJumpLayout(measuredBest(rows, 0), lipHeight("highJump"));
     const slowLines = [...slowRuns].map(([id, height]) => `${id} ${metres(height)} m`).join(", ");
-    t.diagnostic(`THROW_BOOST.highJump ${JSON.stringify(THROW_BOOST.highJump)}; posts ${layout.postsX} m, net ${layout.netX} m, box piles end ${metres(layout.boxes.reduce((end, box) => Math.max(end, box.x), 0))} m, frame top ${layout.frameTop} m\nscore of a run at ${SLOW_RUN_SHARE * 100}% of full lip speed: ${slowLines}\n${TABLE_HEADER}\n${tableOf(rows, (flight) => `scores ${metres(flight.height)} m`)}`);
+    t.diagnostic(`THROW_BOOST.highJump ${JSON.stringify(THROW_BOOST.highJump)}; posts ${layout.postsX} m, net ${layout.netX} m, box piles end ${metres(layout.boxes.reduce((end, box) => Math.max(end, box.x), 0))} m, frame top ${layout.frameTop} m\nscore of a run at ${SLOW_RUN_SHARE * 100}% of full lip speed: ${slowLines}\n${TABLE_HEADER}\n${tableOf(rows, (flight) => `scores ${metres(flight.height)} m, crosses the posts' plane at ${metres(flight.crossingHeight)} m`)}`);
     assert.deepEqual(highJumpViolations(rows), []);
     assert.deepEqual(slowRunViolations(slowRuns), []);
   });
@@ -570,7 +575,7 @@ const offsetName = (offset: number | null): string => (offset === null ? "no pre
 /** Per class, the best run's landing and rest (m) at every bail offset: one line a class. */
 function bailTable(byOffset: ReadonlyMap<number | null, readonly Measurement[]>): string {
   const header = `| class | ${BAIL_OFFSETS.map(offsetName).join(" | ")} |`;
-  const lines = DRIVER_CARS.map((type) => {
+  const lines = LONG_JUMP_CARS.map((type) => {
     const cells = BAIL_OFFSETS.map((offset) => {
       const flight = bestRunsOf(byOffset.get(offset)!).find((row) => row.type.id === type.id)!.flights[0]!;
       return `${metres(flight.landingDistance)} / ${metres(flight.restDistance)}`;
@@ -587,7 +592,7 @@ async function bailMeasurements(): Promise<Map<number | null, Measurement[]>> {
 }
 
 describe("given the long jump's timed bail with THROW_BOOST.longJump on the real ground, car, barrier and ragdoll", () => {
-  it("when every class's best and mid run is thrown at each bail offset, then the perfect bail lands the best class near the far end short of the last sign, every no-press run lands mid-field, and the metres fade smoothly and alike for an early and a late press", async (t) => {
+  it("when the best and mid run of every class the long jump throws (all but the monster, which flies the barrier) is thrown at each bail offset, then the perfect bail lands the best class near the far end short of the last sign, every no-press run lands mid-field, and the metres fade smoothly and alike for an early and a late press", async (t) => {
     const byOffset = await bailMeasurements();
     const perfect = byOffset.get(0)!;
     const none = byOffset.get(null)!;

@@ -1,11 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import { idleDrive, applyDrive } from "./car-drive.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
 import { boxShape, newLooseShape } from "./loose-step.ts";
+import { PART_KIND, PartSeat, partGeometry } from "./part-geometry.ts";
 import { LOOSE_STATE_MAX } from "./part-state.ts";
 import { assertSameNumbers } from "./test-support.ts";
+import { LID } from "./constants.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 import { makeCarFrame } from "../net/codec.ts";
@@ -61,7 +64,88 @@ describe("given a wreck whose arch flare tore off while its body was still crush
     const drawnNow = newLooseShape();
     boxShape(drawnNow, twinArch.object);
     assert.notEqual(drawnNow.reach, arch.shape.reach, "the control: the twin's shell, drawn on the skin as it is now, is the box of another size");
-    const [twinBox, liveBox] = [twinArch.shape, arch.shape].map((s) => [s.count, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
+    const [twinBox, liveBox] = [twinArch.shape, arch.shape].map((s) => [s.count, s.plate, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
     assertSameNumbers(twinBox!, liveBox!, "the twin's arch box");
   });
+});
+
+describe("given a parked sedan whose front bumper tore off and flew, and a twin rebuilt from its keyframe's net state and loose block", () => {
+  it("when the twin's bumper is put back where the sedan's lies, then it flies as the same shell points (a torn bumper is a U in plan, not its box), not as its box", () => {
+    const car = makeCar("sedan");
+    car.spawnFacing(0, 0, 0, 0);
+    const world = newWorld([car]);
+    const bumper = car["parts"].find((p) => p.name === "bumperF")!;
+    car["detachPart"](bumper, 0);
+    for (let slice = 0; slice < AFTER_SLICES; slice++) stepWorld(world, SLICE_S);
+    assert.ok(bumper.shape.count > 0 && !bumper.shape.box, `the bumper flew as its shell's points: count ${bumper.shape.count}, box ${bumper.shape.box}`);
+    const twin = twinFromKeyframe(car);
+    const twinBumper = twin["parts"].find((p) => p.name === "bumperF")!;
+    const [twinShape, liveShape] = [twinBumper.shape, bumper.shape].map((s) => [s.count, s.box ? 1 : 0, s.plate, s.reach, ...s.centre.toArray(), ...s.half.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
+    assertSameNumbers(twinShape!, liveShape!, "the twin's bumper shape");
+  });
+});
+
+// A torn seat flies as drawn (owner ruling); host and client each measure it from the same style tables.
+describe("given a sedan whose front bumper, carrying the style's own drawn grille, tore off, and a netplay client's twin that tears it from the net state alone", () => {
+  it("when each measures the torn bumper's loose shape, then the client's is the host's to the bit, and its grille flies as the style draws it, not as the platform grille", () => {
+    const car = makeCar("sedan");
+    car.spawnFacing(0, 0, 0, 0);
+    car.group.updateMatrixWorld(true);
+    car.updateSkin();
+    const bumper = car["parts"].find((p) => p.name === "bumperF")!;
+    car["detachPart"](bumper, 0);
+    boxShape(bumper.shape, bumper.object);
+    const frame = makeCarFrame(carLayout(car));
+    car.deform.readNetState(frame.deform);
+    car.readPartNetState(frame.parts);
+    const twin = makeCar("sedan");
+    twin.spawnFacing(car.group.position.x, car.group.position.z, car.yaw, 0);
+    twin.writeNetState(frame.deform, frame.parts);
+    const twinBumper = twin["parts"].find((p) => p.name === "bumperF")!;
+    assert.ok(twinBumper.detached, "the client's bumper tore from the net state alone");
+    boxShape(twinBumper.shape, twinBumper.object);
+    const [client, host] = [twinBumper.shape, bumper.shape].map((s) => [s.count, s.plate, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
+    assertSameNumbers(client!, host!, "the client's torn bumper shape");
+
+    const seats: PartSeat[] = [];
+    bumper.object.traverse((o) => {
+      if (o instanceof PartSeat && o.kind === PART_KIND.grille) seats.push(o);
+    });
+    assert.equal(seats.length, 1, "the bumper carries one grille seat");
+    const loose = seats[0]!.children.find((c): c is THREE.Mesh => c instanceof THREE.Mesh)!;
+    const flies = loose.geometry.boundingBox!;
+    const drawn = new THREE.Box3().setFromBufferAttribute(loose.geometry.getAttribute("position") as THREE.BufferAttribute);
+    assert.ok(flies.equals(drawn), `the torn grille's box ${flies.min.toArray()} .. ${flies.max.toArray()} is not its drawn vertices' ${drawn.min.toArray()} .. ${drawn.max.toArray()}`);
+    const platform = partGeometry(PART_KIND.grille);
+    if (platform.boundingBox === null) platform.computeBoundingBox();
+    assert.ok(!platform.boundingBox!.equals(flies), "the control: the sedan's drawn grille is the platform grille's box");
+  });
+});
+
+describe("given a rear-ended hatch or SUV whose roof-hinged gate, carrying its D-post shares and spoiler, tore off, and a netplay client's twin that tears it from the net state alone", () => {
+  for (const id of ["hatch", "suv"] as const) {
+    it(`when each measures the torn ${id} gate's loose shape, then the client's is the host's to the bit`, (t) => {
+      const car = makeCar(id);
+      car.spawnFacing(0, 0, 0, 0);
+      car.group.updateMatrixWorld(true);
+      car.updateSkin();
+      car.applyImpact(car.group.position.clone().addScaledVector(car.forward, -1.85), car.forward.clone(), 0.5, 0.5);
+      car.updateSkin();
+      const gate = car["parts"].find((p) => p.name === LID.trunk)!;
+      car["detachPart"](gate, 0);
+      boxShape(gate.shape, gate.object);
+      const frame = makeCarFrame(carLayout(car));
+      car.deform.readNetState(frame.deform);
+      car.readPartNetState(frame.parts);
+      const twin = makeCar(id);
+      twin.spawnFacing(car.group.position.x, car.group.position.z, car.yaw, 0);
+      twin.writeNetState(frame.deform, frame.parts);
+      const twinGate = twin["parts"].find((p) => p.name === LID.trunk)!;
+      assert.ok(twinGate.detached, "the client's gate tore from the net state alone");
+      boxShape(twinGate.shape, twinGate.object);
+      const [client, host] = [twinGate.shape, gate.shape].map((s) => [s.count, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
+      t.diagnostic(`${id} torn gate: count ${gate.shape.count}, reach ${gate.shape.reach.toFixed(4)}, centre ${gate.shape.centre.toArray().map((v) => v.toFixed(4))}, invI ${gate.shape.invI.toArray().map((v) => v.toFixed(3))}`);
+      assertSameNumbers(client!, host!, `the client's torn ${id} gate shape`);
+    });
+  }
 });

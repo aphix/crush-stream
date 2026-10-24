@@ -6,7 +6,7 @@ import { Track } from "../world/track.ts";
 import city from "../world/tracks/city.json" with { type: "json" };
 import stunt from "../world/tracks/stunt.json" with { type: "json" };
 import { clipTitle, type HighlightClip } from "../match/highlights.ts";
-import { CrashCam, crashCamEnd, CUTS, hitAim, laterHits } from "../present/engine-cine.ts";
+import { CrashCam, crashCamEnd, hitAim, laterHits } from "../present/engine-cine.ts";
 import { raceOn, recordRace, reelViews, type Crash, type RigSample } from "./reel-view.test-util.ts";
 import { clipTimeline } from "./engine-highlights.ts";
 import { TIMELINE_HZ } from "./constants.ts";
@@ -45,10 +45,12 @@ function wallOf(frames: readonly RigSample[], t: number): number {
   return frames.find((f) => f.at >= t - 1e-9)!.wall;
 }
 
-/** The crash cam's window on the clip's timeline: from its first cut to its hand-back (`crashCamEnd` of the hold the frame carried). */
+/** The crash cam's window on the clip's timeline: from its first cut to the frame it hands back (the first frame its own clock reaches `crashCamEnd` of the hold the frame carried; the replay's frames and the hold's grid differ by half a frame). */
 function crashWindow(frames: readonly RigSample[]): { from: number; until: number } | null {
   const first = frames.find((f) => f.rig === "crash");
-  return first ? { from: first.wall, until: first.wall + crashCamEnd(first.hold) - CUTS[0] } : null;
+  if (!first) return null;
+  const handBack = frames.find((f) => f.wall > first.wall && f.camT >= crashCamEnd(first.hold));
+  return { from: first.wall, until: handBack?.wall ?? Infinity };
 }
 
 describe("given highlight clips of a head-on that throws both drivers, and of a car at 40 and at 70 m/s into a chain of two stopped cars, replayed through the reel's cameras", () => {

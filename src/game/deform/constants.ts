@@ -14,6 +14,10 @@ export const MIN_INV_MASS = 1e-8;
 export const MIN_SLIDE = 1e-6;
 /** A point whose rest position projects on the hit's inward direction beyond this (m) lies on the far side of a one-ended hit. */
 export const FAR_SIDE_DOT = 0.18;
+/** A hit this far (m) off the car's centre line or less crushes the whole width alike; further out it crushes its own side more (`cornerWeight`). */
+export const CORNER_CENTRED = 0.2;
+/** The distance (m) past `CORNER_CENTRED` over which a hit's own side takes over from the whole width, in full beyond it. */
+export const CORNER_BLEND = 0.1;
 /** The crush reach (m) a hit's stroke gains per unit of the squash setting (on top of its 0.5 m base). */
 export const SQUASH_REACH = 1.15;
 /** Physics slice (s) the per-call contact shares (feedOverlap nibble and inbound-speed kill) were tuned at: a calibration reference, kept when the sim's own fine floor moves. */
@@ -23,4 +27,6 @@ export const DEFAULT_SQUASH = 0.32;
 export const DEFAULT_BUCKLE = 0.45;
 /** The contact window (s): how long after its last contact a crashed car's shape matching and mass step stay live (`DeformSolve.live`), and the time over which its tyres' grip comes back after a hit (`DeformSolve.settledShare`). */
 export const CONTACT_WINDOW = 0.35;
+/** How long (s) after its last contact a wreck at rest on its wheels keeps stepping its structure before its masses ride its body (`DeformFreeze.ridesBody`): ridden from the contact window a relaunched wreck's drawn door stood 4.5 cm off its cage and a held reset left the drawn body 1.7 cm off the damaged car's; from here they stand. One lying over rides from the window (the creep sank it). */
+export const UPRIGHT_RIDE_QUIET = 1;
 

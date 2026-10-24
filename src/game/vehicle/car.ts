@@ -2,12 +2,10 @@ import * as THREE from "three";
 import { detAtan2 } from "../kernel/physics-core.js";
 import type { DeformNetState } from "../deform/streamed-deform.ts";
 import { applyGroundFriction, CRASH, FRICTION_G, hypot2 } from "../deform/physics-util.ts";
-import { CAR_HALF, WHEEL_POS } from "./car-mesh.ts";
-import { DOOR } from "./car-door-mesh.ts";
 import { activeGround } from "../world/ground.ts";
 import { CarParts } from "./car-parts.ts";
 import { END_WINDOW, type PartNetState, REARM_QUIET_S } from "./car-core.ts";
-import { COM_Y, REST_SPEED } from "./car-air-body.ts";
+import { REST_SPEED, _s, S_LIFTING } from "./car-air-body.ts";
 import { FLIGHT_BORNE, FLIGHT_CONTACT, FLIGHT_DOWN, FLIGHT_DRIFT, FLIGHT_END_AGO, FLIGHT_END_REACH, FLIGHT_END_SQUEEZE, FLIGHT_EULER, FLIGHT_INV_YAW, FLIGHT_POSITION, FLIGHT_QUATERNION, FLIGHT_RAMPS, FLIGHT_REST, FLIGHT_SLEEP, FLIGHT_SPIN, FLIGHT_STALL, FLIGHT_VELOCITY, FLIGHT_WHEEL_RATE, FLIGHT_WHEEL_SPIN } from "./car-flight.ts";
 import { onWreckTop, readContact } from "./car-air-points.ts";
 import { stepFree, wreckCentre, wreckInvI } from "./car-air.ts";
@@ -19,11 +17,10 @@ import { clearDents } from "./loose-dent.ts";
 import { clearShape } from "./loose-step.ts";
 import { REACH, type CarSurfaces } from "./car-surfaces.ts";
 import type { CarCage } from "./car-cage.ts";
-import { CageRig } from "./car-cage-rig.ts";
+import { CageRig, centreY } from "./car-cage-rig.ts";
 import { PartSeat } from "./part-geometry.ts";
+import { setBare } from "./interior.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
-
-export { CAR_HALF, DOOR, WHEEL_POS };
 
 const _p = new THREE.Vector3();
 const _m = new THREE.Matrix4();
@@ -37,6 +34,12 @@ const _wantQuaternion = new THREE.Quaternion();
 
 /** A wreck rests this long (s) before it sleeps: a toppling pile pauses on the way over, and a monster settling on a bank creeps to its pose for most of a second after it first slows under `REST_SPEED`. */
 const WRECK_REST_S = 1;
+/**
+ * How deep (m) a wreck at rest may still stand in the world's ground and sleep. It parts from it at `GROUND_LIFT_V`, under
+ * `REST_SPEED`: a monster rolled onto its side (its body's lift fading onto its frame, `cageLift`) slept rising at 5 cm/s with its
+ * drawn body 18.6 cm in the ground.
+ */
+const SLEEP_SINK = 0.01;
 /** How far (m) a hub's car-frame place re-derived from its world place may be from the place its clamp pinned, in the slice a freeze starts in, before the pin is kept (`integrateWreck`). */
 const HUB_PIN_MAX = 0.3;
 /** Each wheel's contact standing on level road, as built and at a spawn (`resetContact`): no lift, the normal up, full grip, the world's. */
@@ -67,9 +70,9 @@ export class DeformableCar extends CarParts {
     const r2 = REST_SPEED * REST_SPEED;
     return v.x * v.x + v.y * v.y + v.z * v.z >= r2 || w.x * w.x + w.y * w.y + w.z * w.z >= r2;
   }
-  /** Both doors shut (`swing.latched`): nothing of the car stands out past its hull and its mirrors; an unlatched door swings out up to its hinge plus its length. */
-  get doorsLatched(): boolean {
-    return this.doorParts[0]!.swing!.latched && this.doorParts[1]!.swing!.latched;
+  /** Both doors and the trunk lid shut (`swing.latched`; a torn lid is no lid): nothing of the car stands out past its hull and its mirrors; an unlatched door swings out up to its hinge plus its length, a lid past the tail or roof. */
+  get hingesLatched(): boolean {
+    return !this.swingFree();
   }
   private cageRig: CageRig | null = null;
   /** The car's contact shape: its drawn body (`CarCage`), fitted by `refitCage`. */
@@ -126,16 +129,16 @@ export class DeformableCar extends CarParts {
   hardTouch = false;
   /** A hard hit is about to land: this car is closing on a fixed solid (the course's collide pass) or on another car (`markApproaches`), within a step or two of travel of it, or driving into it. Not state: derived again every step, read by `stepWorld` to cut the step. */
   nearHit = false;
-  /** Each wheel's last contact (`wheelContact`, `HIT_SIZE` doubles per wheel, `WHEEL_POS` order): the lift it needs, normal, grip, surface and owner. */
+  /** Each wheel's last contact (`wheelContact`, `HIT_SIZE` doubles per wheel, `frame.wheels` order): the lift it needs, normal, grip, surface and owner. */
   readonly wheelHit = STANDING.slice();
-  /** The wheels within their springs' reach of a surface, bit i: wheel i (`WHEEL_POS` order). Drive and traction follow them. */
+  /** The wheels within their springs' reach of a surface, bit i: wheel i (`frame.wheels` order). Drive and traction follow them. */
   wheelsDown = 15;
   /** The slice (s) `stepFree` moved this body in the slice under way; 0 once that slice's masses have stepped (`afterContacts`). */
   private flewDt = 0;
   /** The yaw inverse inertia per unit mass (`wreckInvI`) the last wreck step had; 0 off the masses. */
   private invYaw = 0;
   /** The drawn body's load transfer over the physics body, and its wheels' seats (drawn only). */
-  readonly suspension = new Suspension();
+  readonly suspension = new Suspension(this.frame);
   private bodyTyres: TyreSkin | null = null;
   private hoodTyres: TyreSkin | null = null;
   private classBody: THREE.Object3D | null = null;
@@ -204,6 +207,7 @@ export class DeformableCar extends CarParts {
     this.restoreRest(this.trunk.geometry, this.trunkRest);
     this.restoreRest(this.doorMeshL.geometry, this.doorLRest);
     this.restoreRest(this.doorMeshR.geometry, this.doorRRest);
+    this.seatDoorCards();
     if (this.lightBar) this.restoreRest(this.lightBar.geometry, this.lightBarRest!);
     this.wheelSpin.fill(0);
     this.wheelRate.fill(0);
@@ -220,7 +224,7 @@ export class DeformableCar extends CarParts {
         loose.angular.set(0, 0, 0);
       }
       clearShape(loose.shape);
-      const rest = WHEEL_POS[i]!;
+      const rest = this.frame.wheels[i]!;
       w.position.set(rest[0], rest[1], rest[2]);
       w.rotation.set(0, 0, 0);
       w.visible = true;
@@ -229,6 +233,8 @@ export class DeformableCar extends CarParts {
     this.group.rotation.set(0, 0, 0);
     this.interior.scale.set(1, 1, 1);
     this.interior.position.set(0, 0, 0);
+    this.cabin.fit(null);
+    this.cabin.squeezeUnderRoof(null);
 
     this.endAgo.fill(9);
     this.endReach = Infinity;
@@ -243,8 +249,10 @@ export class DeformableCar extends CarParts {
         else if (!p.region) this.bodyParent().add(p.object);
       }
       if (p.region) this.closePanel(p);
+      if (p.bare) setBare(p.bare, this.body.geometry, false);
       p.detached = false;
       p.folding = false;
+      p.shown = false;
       p.hingeT = 0;
       p.hingeMax = 1;
       p.fatigue = 0;
@@ -258,7 +266,7 @@ export class DeformableCar extends CarParts {
       p.object.position.copy(p.restPos);
       p.object.quaternion.copy(p.restQuat);
       p.object.rotation.set(0, 0, 0);
-      p.object.scale.set(1, 1, 1);
+      p.object.scale.copy(p.restScale);
       p.object.visible = true;
       p.velocity.set(0, 0, 0);
       p.angular.set(0, 0, 0);
@@ -268,13 +276,13 @@ export class DeformableCar extends CarParts {
     for (const g of this.glassPanes) this.resetGlass(g);
     this.resetLamps();
   }
-  /** `impulse` is the closing speed (FX, glass); `ebs` the equivalent barrier speed that sizes the crush. The first hit starts the crash; on a wreck a fresh, hard enough contact re-arms a new hit (`rearmHit`). Returns whether the hit armed. */
-  applyImpact(worldPoint: THREE.Vector3, worldInward: THREE.Vector3, impulse: number, ebs: number): boolean {
+  /** `impulse` is the closing speed (FX, glass); `ebs` the equivalent barrier speed that sizes the crush; `tyreSide`, a tyre met a solid's side (`beginCrush`); `pair`, the pair contact arms it (a harder contact in the hit's first slices takes it over: `rearmHit`). The first hit starts the crash; on a wreck a fresh, hard enough contact re-arms a new hit (`rearmHit`). Returns whether the hit armed. */
+  applyImpact(worldPoint: THREE.Vector3, worldInward: THREE.Vector3, impulse: number, ebs: number, tyreSide = false, pair = false): boolean {
     const rigid = this.rigid;
     if (rigid) {
       // A rigid body (`stepFree`) takes the hit on its masses: its centre's velocity carried to the group's origin, as `land` does, and a wreck's masses keep their dents. Its masses fly it on (`syncPose`)
       // and hand it back to `stepFree` once their contact window closes; left rigid, nothing ever landed it and its drive stayed idled (8 s, stopped, on the stunt course).
-      this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, COM_Y, 0).applyQuaternion(this.group.quaternion)));
+      this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, centreY(this), 0).applyQuaternion(this.group.quaternion)));
       if (this.crashed) {
         this.deform.armMasses(this.group, this.velocity, this.angular);
         this.deform.unstep(this.flewDt);
@@ -292,12 +300,12 @@ export class DeformableCar extends CarParts {
     const localN = this.worldToLocalDir(_in, _n);
     const rough = Math.min(0.82, 0.42 + impulse * 0.012);
     if (this.crashed && this.deform.massActive) {
-      if (!this.deform.rearmHit(localP, localN, impulse, ebs)) return false;
+      if (!this.deform.rearmHit(localP, localN, impulse, ebs, pair)) return false;
       this.bodyMat.roughness = Math.max(this.bodyMat.roughness, rough);
     } else {
       this.crashed = true;
       this.ride(0);
-      this.deform.beginCrush(localP, localN, impulse, ebs, this.group, this.velocity, this.angular);
+      this.deform.beginCrush(localP, localN, impulse, ebs, this.group, this.velocity, this.angular, tyreSide);
       if (rigid) {
         this.deform.unstep(this.flewDt);
       }
@@ -414,7 +422,7 @@ export class DeformableCar extends CarParts {
 
   /** A wreck flying as a rigid body (`stepFree`) with three wheels on the world goes back to its masses (`armed`), taking its centre's velocity less the spin's carry (a body crushed only by a load has no masses and stands on its wheels). */
   private landWreck(): void {
-    this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, COM_Y, 0).applyQuaternion(this.group.quaternion)));
+    this.velocity.sub(_v.crossVectors(this.angular, _p.set(0, centreY(this), 0).applyQuaternion(this.group.quaternion)));
     this.angular.set(0, this.angular.y, 0);
     this.speed = hypot2(this.velocity.x, this.velocity.z);
     this.deform.armMasses(this.group, this.velocity, this.angular);
@@ -449,7 +457,7 @@ export class DeformableCar extends CarParts {
       d.deepCrush = false;
     }
     if (this.endReach < Infinity && d.quietTime() > REARM_QUIET_S && Math.min(this.endAgo[0]!, this.endAgo[1]!) > END_WINDOW) this.endReach = Infinity;
-    if (!this.doorParts[0]!.swing!.latched || !this.doorParts[1]!.swing!.latched) this.swingDoors(dt);
+    if (this.swingFree()) this.swingHinges(dt);
     else this.sampleMotion();
   }
 
@@ -462,7 +470,7 @@ export class DeformableCar extends CarParts {
       this.endSqueeze = true;
       this.deform.bidirectional = true;
     }
-    if (this.endSqueeze && this.endReach < WHEEL_POS[0]![2]) this.deform.deepCrush = true;
+    if (this.endSqueeze && this.endReach < this.frame.halfBase) this.deform.deepCrush = true;
   }
 
   step(dt: number): void {
@@ -526,7 +534,12 @@ export class DeformableCar extends CarParts {
     this.pitch = g.rotation.x;
     this.roll = g.rotation.z;
     g.updateWorldMatrix(false, false);
-    _c.copy(centre).applyMatrix4(g.matrixWorld);
+    // The masses go back about the centre at the body's new pose: a lifted wreck's (`centreLift`) moves along its frame as the body tips.
+    // `velocity` is its centre of mass's, which that inner shift leaves as it was. Carried to the new centre (`velocity` += ω × the shift),
+    // a monster wreck tumbling at 9 rad/s gained 6.1 m/s upward in free fall as its lift faded. An unlifted one's stays where it was (its
+    // masses stand still in the frame through the step), so it is not read again.
+    const turned = CLASSES[carClass(this)].lift === 0 ? centre : wreckCentre(this);
+    _c.copy(turned).applyMatrix4(g.matrixWorld);
     for (const m of ms) {
       m.world.copy(m.local).applyMatrix4(g.matrixWorld);
       _r.copy(m.world).sub(_c);
@@ -534,7 +547,7 @@ export class DeformableCar extends CarParts {
     }
     // A frozen wreck (`EPICENTER`) keeps what this step read: its masses stand still in the frame from here on.
     if (this.deform.frozen) {
-      this.deform.frozenCentre.copy(centre);
+      this.deform.frozenCentre.copy(turned);
       this.deform.frozenInvI.copy(wreckInvI);
       this.deform.frozenReady = true;
     }
@@ -544,11 +557,13 @@ export class DeformableCar extends CarParts {
     this.stepLooseParts(dt, this.slot, this.surfaces);
   }
 
-  /** A wreck at rest for `WRECK_REST_S` on three wheels or more, and not crushing, falls asleep where it lies. */
+  /**
+   * A wreck at rest for `WRECK_REST_S` on three wheels or more and not crushing falls asleep where it lies, once out of the ground
+   * (`SLEEP_SINK`): its rest runs while it rises out (under `REST_SPEED`), so a shallow sink costs it no time and a deep one keeps it awake.
+   */
   private restOrSleep(dt: number): void {
-    const rest = !this.moving;
-    if (!this.deform.crushing && this.contacts >= 3 && rest) {
-      if ((this.restS += dt) >= WRECK_REST_S) {
+    if (!this.deform.crushing && this.contacts >= 3 && !this.moving) {
+      if ((this.restS += dt) >= WRECK_REST_S && _s[S_LIFTING]! <= SLEEP_SINK) {
         this.velocity.set(0, 0, 0);
         this.angular.set(0, 0, 0);
         this.asleep = true;
@@ -642,9 +657,11 @@ export class DeformableCar extends CarParts {
     if (this.crashed) {
       if (this.deform.skinnedThisFrame) this.skinPanels();
       this.holdSkinOffTyres(this.deform.skinnedThisFrame);
+      if (this.deform.skinnedThisFrame) this.poseOpenShells();
       this.followGlass();
     }
-    if (this.deform.massActive) this.fitInterior();
+    // A load crushes the roof's skin with the masses at rest: the headliner follows it too.
+    if (this.deform.massActive || this.deform.skinnedThisFrame) this.fitInterior();
     if (this.hullHelper?.visible) this.updateHullHelper();
     this.settleCasters();
   }
@@ -657,14 +674,16 @@ export class DeformableCar extends CarParts {
     if (this.crashed) {
       this.skinPanels();
       this.holdSkinOffTyres(true);
+      this.poseOpenShells();
     }
+    this.fitInterior();
   }
 
   /** A crushed skin drawn over a standing tyre stands on it (`TyreSkin`); a thrown wheel is the world's. */
   private holdSkinOffTyres(skinWritten: boolean): void {
     if (!tyresUnderSkin(carClass(this))) return;
-    this.bodyTyres ??= new TyreSkin(this.body, this.deform.restSkin);
-    this.hoodTyres ??= new TyreSkin(this.hood, this.hoodRest);
+    this.bodyTyres ??= new TyreSkin(this.frame, this.body, this.deform.restSkin, true);
+    this.hoodTyres ??= new TyreSkin(this.frame, this.hood, this.hoodRest, false);
     let gone = 0;
     for (let i = 0; i < this.wheels.length; i++) if (this.looseWheels[i]!.loose) gone |= 1 << i;
     const lift = CLASSES[carClass(this)].lift;
@@ -672,7 +691,7 @@ export class DeformableCar extends CarParts {
     if (!this.parts.some((p) => p.detached && p.name === LID.hood)) this.hoodTyres.hold(this.group, this.wheels, gone, lift, skinWritten);
   }
 
-  /** Bonnet, boot lid, the police light bar and the skinned glass follow the body skin. */
+  /** Bonnet, boot lid, door skins, the police light bar, the skinned glass and the chrome trims follow the body skin; a door's hinge pose turns its skin after. */
   private skinPanels(): void {
     let hood = true;
     let trunk = true;
@@ -682,13 +701,30 @@ export class DeformableCar extends CarParts {
       else if (p.name === LID.trunk) trunk = false;
     }
     if (hood) this.deform.skinPanel(this.hood.geometry, this.hoodRest, "bonnet", this.hoodOrigin);
-    if (trunk) this.deform.skinPanel(this.trunk.geometry, this.trunkRest, "boot", this.trunkOrigin);
+    if (trunk) {
+      // The gate's frame and spoiler (from `surround`) dent with the rear glass; the boot cage's ±15 % clamp would flatten them.
+      const surround = this.trunk.geometry.userData.surround as number | undefined;
+      this.deform.skinPanel(this.trunk.geometry, this.trunkRest, "boot", this.trunkOrigin, 0, surround);
+      if (surround !== undefined) this.deform.skinPanel(this.trunk.geometry, this.trunkRest, "glassRear", this.trunkOrigin, surround);
+    }
+    if (!this.doorParts[0]!.detached) this.deform.skinPoints(this.doorMeshL.geometry, this.doorLRest, this.doorLSkin, "doorLeft", this.doorLOrigin);
+    if (!this.doorParts[1]!.detached) this.deform.skinPoints(this.doorMeshR.geometry, this.doorRRest, this.doorRSkin, "doorRight", this.doorROrigin);
+    this.seatDoorCards();
     if (this.lightBar && !this.lightBarPart!.detached) this.deform.skinPanel(this.lightBar.geometry, this.lightBarRest!, "roof", this.lightBarOrigin);
-    for (const p of this.parts) if (p.region && p.open && !p.detached) this.shellPose(p);
     for (const g of this.glassPanes) {
       if (!g.skin || !g.restVerts || g.state === "shattered") continue;
       this.deform.skinPanel(g.mesh.geometry, g.restVerts, g.skin, _zero);
     }
+    for (const t of this.trims) {
+      if (t.door !== null && this.doorParts[t.door]!.detached) continue;
+      if (t.paint) this.deform.skinPoints(t.mesh.geometry, t.rest, t.paint, t.cage, t.origin);
+      else this.deform.skinPanel(t.mesh.geometry, t.rest, t.cage, t.origin);
+    }
+  }
+
+  /** Each hinged panel's shell, posed on the body skin as the tyres hold it (`holdSkinOffTyres`): posed on the skin before the hold, an arch flare's lip stood in its tyre. */
+  private poseOpenShells(): void {
+    for (const p of this.parts) if (p.region && p.open && !p.detached) this.shellPose(p);
   }
 
   /** `drop`: a popped hub throws its wheel (host); a netplay client takes loose wheels from snapshots. */
@@ -703,7 +739,7 @@ export class DeformableCar extends CarParts {
     for (let i = 0; i < this.wheels.length; i++) {
       const w = this.wheels[i]!;
       if (this.looseWheels[i]!.loose) continue;
-      const rest = WHEEL_POS[i]!;
+      const rest = this.frame.wheels[i]!;
       if (!this.deform.massActive) {
         w.position.set(rest[0], rest[1], rest[2]);
         continue;
@@ -744,14 +780,14 @@ export class DeformableCar extends CarParts {
     this.group.traverse(free);
   }
 
-  /** The meshes a player's look recolours (`car-look.ts`): the body (on the body paint), the lids, the door skins and the glass panes. */
-  lookMeshes(): { body: THREE.Mesh; bodyPaint: THREE.MeshPhysicalMaterial; hood: THREE.Mesh; trunk: THREE.Mesh; doors: readonly THREE.Mesh[]; glass: readonly THREE.Mesh[] } {
-    return { body: this.body, bodyPaint: this.bodyMat, hood: this.hood, trunk: this.trunk, doors: [this.doorMeshL, this.doorMeshR], glass: this.glassPanes.map((g) => g.mesh) };
+  /** The meshes a player's look recolours (`car-look.ts`): the body (on the body paint), the lids, the door skins, the glass panes and the front and rear bumpers. */
+  lookMeshes(): { body: THREE.Mesh; bodyPaint: THREE.MeshPhysicalMaterial; hood: THREE.Mesh; trunk: THREE.Mesh; doors: readonly THREE.Mesh[]; glass: readonly THREE.Mesh[]; bumpers: readonly THREE.Mesh[] } {
+    return { body: this.body, bodyPaint: this.bodyMat, hood: this.hood, trunk: this.trunk, doors: [this.doorMeshL, this.doorMeshR], glass: this.glassPanes.map((g) => g.mesh), bumpers: this.bumperMeshes };
   }
 
-  /** The meshes the crush skin writes (`updateSkin`): the body, the lids, the light bar and the skinned panes. */
+  /** The meshes the crush skin writes (`updateSkin`): the body, the lids, the door skins, the light bar and the skinned panes. */
   skinGeometries(): THREE.BufferGeometry[] {
-    const geometries = [this.body.geometry, this.hood.geometry, this.trunk.geometry];
+    const geometries = [this.body.geometry, this.hood.geometry, this.trunk.geometry, this.doorMeshL.geometry, this.doorMeshR.geometry];
     if (this.lightBar) geometries.push(this.lightBar.geometry);
     for (const pane of this.glassPanes) if (pane.skin) geometries.push(pane.mesh.geometry);
     return geometries;
@@ -772,7 +808,7 @@ export class DeformableCar extends CarParts {
       if (loose !== p.detached) {
         // The host tore it off: this client throws its own copy (debris is per player; the host's pose is not sent).
         if (loose) {
-          if (p.region) this.shellPose(p);
+          if (p.region) this.shellPose(p, false);
           this.detachPart(p, 0);
         } else {
           p.object.removeFromParent();
@@ -780,6 +816,7 @@ export class DeformableCar extends CarParts {
           else if (p.name === "mirrorL") this.doorL.add(p.object);
           else if (p.name === "mirrorR") this.doorR.add(p.object);
           else this.bodyParent().add(p.object);
+          if (p.bare) setBare(p.bare, this.body.geometry, false);
           p.detached = false;
         }
       }
@@ -882,7 +919,7 @@ export class DeformableCar extends CarParts {
 
   /**
    * Where a part put back on goes: the class body it rode before it tore off (`assignClass`), or the group of a car with no class. Put
-   * on the group, a monster's re-attached part stood 0.48 m under its body until something re-dressed the car.
+   * on the group, a monster's re-attached part stood 0.87 m under its body until something re-dressed the car.
    */
   private bodyParent(): THREE.Object3D {
     return this.classBodyObject() ?? this.group;
@@ -890,7 +927,7 @@ export class DeformableCar extends CarParts {
 
   /**
    * Where a wheel put back on goes: the class's hub group, raised by its bigger tyres (`assignClass`), or the group of a car with no
-   * class. Put on the group, a monster's re-attached wheel was drawn 22 cm under its hub, its tread in the ground.
+   * class. Put on the group, a monster's re-attached wheel was drawn 26 cm under its hub, its tread in the ground.
    */
   private hubParent(): THREE.Object3D {
     return this.group.getObjectByName(CLASS_HUBS) ?? this.group;
@@ -911,7 +948,7 @@ export class DeformableCar extends CarParts {
 
 /**
  * Start the fake fall: the soft body stops (`massActive` off; its state is left as it is) and the car flies on as the rigid step
- * flies every body, off the world's ground, with the `angular` it has and the `velocity` it has at its own centre (`COM_Y`; a wreck's body
+ * flies every body, off the world's ground, with the `angular` it has and the `velocity` it has at its own centre (`centreY`; a wreck's body
  * turned about its masses' centroid, so the spin carries the difference). `keepMotion`: a replay or netplay client has set the pose,
  * `velocity` and `angular` already.
  */
@@ -919,7 +956,7 @@ export function beginFakeFall(car: DeformableCar, keepMotion = false): void {
   if (car.deform.massActive && !keepMotion) {
     car.group.updateMatrixWorld(false);
     _p.copy(wreckCentre(car)).applyMatrix4(car.group.matrixWorld);
-    _c.set(0, COM_Y, 0).applyQuaternion(car.group.quaternion).add(car.group.position);
+    _c.set(0, centreY(car), 0).applyQuaternion(car.group.quaternion).add(car.group.position);
     car.velocity.add(_v.crossVectors(car.angular, _c.sub(_p)));
   }
   car.deform.massActive = false;

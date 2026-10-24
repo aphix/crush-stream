@@ -2,15 +2,15 @@
 
 import { hypot2, detSin, detCos, detAtan2, detAsin } from "../kernel/physics-core.js";
 import { FLEET_STYLE_IDS, type CarStyleId } from "../vehicle/car-variants.ts";
-import { CAR_HALF } from "../vehicle/car-mesh.ts";
+import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { DERBY_ARENA } from "./constants.ts";
 import { CLASSES, STYLE_CLASS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 
 /** Car pool size: the per-car typed arrays (derby/race AI, race, traffic), wheel batch and lamp pool are sized for it,
  *  `setCarCount` clamps to it and the HUD Cars slider stops at it. Set in the initial export (7a09b34), not measured. */
 export const MAX_CARS = 32;
-/** Closest two fleet spawns sit, centre to centre (m): one 4.44 m car (2 × CAR_HALF.z) plus ~1 m. From the initial
- *  export (7a09b34); fleet.test.ts holds every layout to it and `respawnSlot` keeps it from every other car. */
+/** Closest two fleet spawns sit, centre to centre (m): the longest car (2 × FLEET_HALF.z, 4.44 m) plus ~1 m.
+ *  fleet.test.ts holds every layout to it and `respawnSlot` keeps it from every other car. */
 export const FLEET_MIN_SEP = 5.4;
 /** The six lamp posts stand on a ring this far (m) from the pad's centre, at bearings `k / LAMP_POSTS` of a turn from +z (`resetLampPoles`). */
 export const LAMP_RING_R = 16;
@@ -158,7 +158,7 @@ export function layoutFleet(
 
 const TAU = Math.PI * 2;
 /** A car driving at the arena's centre keeps this far (m) from a free-standing prop: half its length and a margin. */
-const PROP_CLEAR = CAR_HALF.z + 0.5;
+const PROP_CLEAR = FLEET_HALF.z + 0.5;
 
 /** A free-standing prop's plan box: centre, yaw (local z is (sin yaw, cos yaw)) and half extents. */
 type SpawnProp = { x: number; z: number; yaw: number; hx: number; hz: number };

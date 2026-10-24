@@ -4,7 +4,6 @@ import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
-import { WHEEL_POS } from "../vehicle/car-mesh.ts";
 import { BLOCK_DEPTH, BLOCK_WIDTH, PODIUM_BLOCKS, type PodiumPlace } from "../match/podium.ts";
 import { CarDamage } from "./car-damage.ts";
 import { NOW, PodiumDirector, type PodiumHost } from "./engine-podium.ts";
@@ -38,7 +37,7 @@ function hostOver(scene: THREE.Scene, shove?: (donor: DeformableCar) => void) {
   const make = (id: number): DeformableCar => new DeformableCar({ body: 0x808080, accent: 0, name: `c${id}` }, scene, null, fleetStyle(id));
   const donor = make(0);
   donor.spawnFacing(0, 0, 0, 0);
-  donor.applyImpact(new THREE.Vector3(0, 0.5, 2.2), new THREE.Vector3(0, 0, -1), 18, 14);
+  donor.applyImpact(new THREE.Vector3(0, 0.5, donor.cage.fields.planBox[3]!), new THREE.Vector3(0, 0, -1), 18, 14);
   for (let i = 0; i < 30; i++) donor.step(1 / FINE_HZ);
   shove?.(donor);
   donor.updateSkin();
@@ -55,12 +54,12 @@ function hostOver(scene: THREE.Scene, shove?: (donor: DeformableCar) => void) {
     scene,
     jet: (x, y, z, _in, _run, _power, color) => void jets.push({ x, y, z, color }),
   };
-  return { host, donor, jets };
+  return { host, donor, jets, make };
 }
 
 describe("given the podium raised over a course with three racers, the winner's car a wreck", () => {
   const scene = new THREE.Scene();
-  const { host, donor, jets } = hostOver(scene);
+  const { host, donor, jets, make } = hostOver(scene);
   const director = new PodiumDirector(host);
   const wreckSkin = bodyOf(donor);
   assert.ok(director.raise(PLACES, "race", "Test Oval"), "raised");
@@ -96,10 +95,10 @@ describe("given the podium raised over a course with three racers, the winner's 
     }
   });
 
-  it("when the winner's skin is read beside the wreck the race ended with, then it is that wreck's, and a fresh car's is not", () => {
+  it("when the winner's skin is read beside the wreck the race ended with, then it is that wreck's, and a fresh car's of the same body is not", () => {
     const shown = bodyOf(cars[0]!);
     assert.ok(skinGap(shown, wreckSkin) <= SAME_SKIN_M, `the winner's car is ${skinGap(shown, wreckSkin)} m from the wreck's skin`);
-    assert.ok(skinGap(bodyOf(cars[1]!), wreckSkin) >= DENT_M, "the control: an undamaged car is a dent away from the wreck");
+    assert.ok(skinGap(bodyOf(make(0)), wreckSkin) >= DENT_M, "the control: an undamaged car of the wreck's own body is a dent away from the wreck");
   });
 
   it("when the HUD is read, then it names the three racers as the standings do", () => {
@@ -205,7 +204,7 @@ describe("given a wreck whose rear left hub the crash shoved off its rest seat",
 
   it("when the podium car's wheels are read, then the wheel of the shoved hub sits on that hub, off its rest seat, and the wheel of a hub that stayed sits on it", () => {
     const shoved = car.deform.massLocal("hubRL");
-    const rest = WHEEL_POS[2]!;
+    const rest = car.frame.wheels[2]!;
     assert.ok(Math.abs(shoved.x - rest[0]) > HUB_SHOVE_M / 2, `the control: the shove survived the net state (hub at x ${shoved.x}, rest ${rest[0]})`);
     const wheel = car["wheels"][2]!;
     assert.ok(Math.abs(wheel.position.x - shoved.x) <= SEAT_TOLERANCE_M, `the wheel is at x ${wheel.position.x}, its hub at ${shoved.x}`);

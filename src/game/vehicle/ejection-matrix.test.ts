@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { collide, type Hit, type Outcome } from "./ejection.test-util.ts";
+import { collide, ejectBar, strikerShare, type Hit, type Outcome } from "./ejection.test-util.ts";
 import { VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
 
 /**
@@ -15,11 +15,11 @@ const CLASSES = VEHICLE_CLASS_IDS.filter((id) => id !== "police" && id !== "musc
 const PAIRS = CLASSES.flatMap((a) => CLASSES.map((b) => [a, b] as const));
 const HITS: readonly Hit[] = ["head-on", "t-bone", "rear-end"];
 
-/** Closing speed (m/s): a head-on is this per car, a T-bone or rear-end this on the striker alone. A survivable head-on keeps a sedan's share against a monster truck (22 × 2900/4300 = 14.8 m/s) under its 16.0 m/s alive bar. */
+/** Closing speed (m/s): a head-on is this per car, a T-bone or rear-end this on the striker alone. A survivable head-on keeps a hatchback's share against a monster truck (22 × 2900/4290 = 14.9 m/s) under its 15.6 m/s alive bar. */
 const SURVIVABLE: Record<Hit, number> = { "head-on": 11, "t-bone": 20, "rear-end": 20 };
 const LETHAL: Record<Hit, number> = { "head-on": 40, "t-bone": 55, "rear-end": 55 };
-/** The lethal T-bone whose struck driver stays in: he outweighs the striker so far that his share of the closing stays under his alive bar (a sedan into a monster truck: 55 × 1400/4300 = 17.9 m/s against 20.9). */
-const STRUCK_STAYS = "sedan monster";
+/** A lethal T-bone's struck driver stays in when the striker's share of the closing is under his alive bar (`ejectBar`): a sedan into a monster truck is 55 × 1400/4300 = 17.9 m/s against 20.9, a hatchback 17.8. */
+const struckStays = (a: VehicleClassId, b: VehicleClassId): boolean => LETHAL["t-bone"] * strikerShare(a, b) < ejectBar(b);
 
 const label = (hit: Hit, a: VehicleClassId, b: VehicleClassId, mps: number): string => `${hit} ${a} into ${b} at ${mps} m/s`;
 
@@ -50,7 +50,7 @@ describe("given every striker and struck class pair (police and muscle left out)
           assert.equal(struck.thrown, true, `${where}: struck not thrown (health ${struck.health.toFixed(2)}, block ${struck.travel.toFixed(3)} m)`);
           assert.ok(struck.health <= 0.2, `${where}: struck health ${struck.health.toFixed(2)}`);
         } else {
-          assert.equal(struck.thrown, hit === "t-bone" && `${a} ${b}` !== STRUCK_STAYS, `${where}: struck ${struck.thrown ? "thrown" : "not thrown"}`);
+          assert.equal(struck.thrown, hit === "t-bone" && !struckStays(a, b), `${where}: struck ${struck.thrown ? "thrown" : "not thrown"}`);
           assert.ok(struck.alive && struck.health >= 0.8, `${where}: struck health ${struck.health.toFixed(2)}`);
         }
       }

@@ -10,6 +10,7 @@ import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { FLAT_GROUND, Ground, setGround, STEP_UP } from "../world/ground.ts";
 import { Spring, Spring3 } from "./spring.ts";
 import { CHASE, DriveCam } from "./drive-cam.ts";
+import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
 import { LANDING } from "./landing.ts";
 import { type CarPicker, ChaseCamera, RIDE_PAUSE, type SpecScene } from "./engine-camera.ts";
 import { blankFreeInput, DRAG_PITCH_PER_PX, DRAG_YAW_PER_PX } from "./free-cam.ts";
@@ -350,8 +351,8 @@ describe("given the chase camera on a car driven by its own drive", () => {
   it(`when the car holds 20 m/s straight for 3 s, then the eye sits the chase offset behind it and ${FRAME_HZ} and ${FINE_HZ} Hz agree`, () => {
     const r = followed(20, (car) => ({ throttle: Math.min(1, Math.max(0, 0.3 + (20 - car.speed) * 0.5)) }), 3);
     const p = r.car.group.position;
-    const dist = CHASE.third.dist + Math.min(r.car.speed, 30) * CHASE.pullback;
-    const gap = Math.hypot(r.fine.position.x - (p.x - r.car.fwdFlat.x * dist), r.fine.position.y - (p.y + CHASE.third.height), r.fine.position.z - (p.z - r.car.fwdFlat.z * dist));
+    const dist = PLATFORM_CAMERA.third.dist + Math.min(r.car.speed, 30) * CHASE.pullback;
+    const gap = Math.hypot(r.fine.position.x - (p.x - r.car.fwdFlat.x * dist), r.fine.position.y - (p.y + PLATFORM_CAMERA.third.height), r.fine.position.z - (p.z - r.car.fwdFlat.z * dist));
     assert.ok(gap < 0.02, `the eye is ${(gap * 100).toFixed(1)} cm off the chase offset`);
     const rates = r.fine.position.distanceTo(r.coarse.position);
     assert.ok(rates < 0.01, `${FRAME_HZ} and ${FINE_HZ} Hz eyes are ${(rates * 100).toFixed(2)} cm apart`);
@@ -408,7 +409,7 @@ describe("given the chase camera on a car driven by its own drive", () => {
     car.airborne = false;
     car.wheelsDown = 15;
     car.velocity.y = 0;
-    const settled = ground + CHASE.third.height;
+    const settled = ground + PLATFORM_CAMERA.third.height;
     let low = Infinity;
     let roll = 0;
     const pitch: number[] = [];
@@ -678,6 +679,33 @@ describe("given the driven car's chase and far chase eye beside a course wall an
       }
     } finally {
       setGround(null);
+    }
+  });
+});
+
+describe("given a driven car whose body style seats its own cameras", () => {
+  it("when it is framed in the hood, chase and far chase views, then the hood eye stands at its style's seat and each chase settles at its style's distance and height", () => {
+    const own = { hood: [1.4, 0.6], third: { dist: 8, height: 3, aimUp: 1.5 }, far: { dist: 12.5, height: 4.6, aimUp: 2 } } as const;
+    for (const view of ["first", "third", "far"] as const) {
+      const seat = new DriverSeat();
+      seat.mode = "drive";
+      seat.view = view;
+      const camera = new THREE.PerspectiveCamera(56, 16 / 9, 0.1, 180);
+      const cam = new ChaseCamera(camera, fakeCanvas(), seat, { rx: 0, ry: 0 } as PadState, false, NO_PICK);
+      const car = new DeformableCar(paint(), new THREE.Scene());
+      Object.assign(car, { style: { ...car.style, camera: own } });
+      assignClass(car, "sedan");
+      car.spawnFacing(0, 0, 0, 0);
+      for (let n = 0; n < 180; n++) cam.frameDrive(car, null, DT, false);
+      const p = camera.position;
+      const g = car.group.position;
+      if (view === "first") {
+        const eye = car.group.localToWorld(new THREE.Vector3(0, own.hood[0], own.hood[1]));
+        assert.ok(p.distanceTo(eye) < 0.05, `hood eye ${p.toArray().map((v) => v.toFixed(2))} vs the style's ${eye.toArray().map((v) => v.toFixed(2))}`);
+      } else {
+        const [back, up] = [Math.hypot(p.x - g.x, p.z - g.z), p.y - g.y];
+        assert.ok(Math.abs(back - own[view].dist) < 0.3 && Math.abs(up - own[view].height) < 0.3, `${view}: eye ${back.toFixed(2)} m back, ${up.toFixed(2)} m up; the style's ${own[view].dist}, ${own[view].height}`);
+      }
     }
   });
 });

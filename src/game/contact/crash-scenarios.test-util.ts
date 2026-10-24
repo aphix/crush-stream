@@ -1,20 +1,20 @@
 import * as THREE from "three";
 import { bleedAfterSlide, DeformableCar } from "../vehicle/car.ts";
 import { JerseyBarrier, type ContactHit } from "../scenes/engine-props.ts";
-import { TYRE_HALF_W } from "../deform/deform-contact.ts";
-import { TYRE_R } from "../deform/deform-state.ts";
 import { bodyHit } from "./external-contact.ts";
 import { beginImpact, easeTimeScale, phaseClock, stepPhase, type PhaseClock } from "../match/phase.ts";
 import { CAGES } from "../kernel/rig-spec.ts";
 import { BARRIER_HALF, physicsSlice, sliceSpeed } from "./sat.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
-import { mass, paint } from "../vehicle/test-support.ts";
+import { closedOn, mass, paint } from "../vehicle/test-support.ts";
 import { newWorld, stepWorld, type World } from "../engine/world-step.ts";
 import { EjectionWatch, type Ejection } from "../vehicle/ejection.ts";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import type { SimPacer } from "../engine/sim-pace.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
+import { RigSolids } from "../scenes/rig-solids.ts";
+import { armedSolids, armSolids } from "../world/surfaces.ts";
 
 /**
  * Headless crash scenarios through the engine's own step (`stepWorld`) and phase clock, at
@@ -195,16 +195,26 @@ class HeldBarrier extends JerseyBarrier {
   }
 }
 
+/** The range's slab as the engine arms it (`RigSolids`, synced before each step): the solid a tyre or a part meets of it. */
+let slabSolids: RigSolids | null = null;
+
 /**
  * One rendered frame of `CrashEngine.tickInner`: the physics part and the phase clock (sandbox impact rule). With `pace` the
  * frame is stepped as the engine does (`SimPacer`: whole slices of its floor); without it the frame's time is cut into
- * `physicsSlice`s that end exactly on it.
+ * `physicsSlice`s that end exactly on it. A world with a slab arms it as the engine's range does, and puts back what was armed.
  */
 export function tickWorld(w: CrashWorld, wallDt = FRAME, pace?: SimPacer): void {
   easeTimeScale(w.clock, wallDt);
   const simDt = wallDt * w.clock.timeScale;
   const vmax = sliceSpeed(w.cars);
+  const armed = armedSolids();
   const step = (h: number): void => {
+    const slab = w.world.barrier;
+    if (slab) {
+      slabSolids ??= new RigSolids();
+      slabSolids.syncSlab(slab);
+      armSolids(slabSolids);
+    }
     if (pace) w.world.fine = pace.fine;
     stepWorld(w.world, h);
     for (const e of w.world.ejection?.take() ?? []) {
@@ -231,6 +241,7 @@ export function tickWorld(w: CrashWorld, wallDt = FRAME, pace?: SimPacer): void 
     }
   }
   for (const car of w.cars) car.updateSkin();
+  armSolids(armed);
   stepPhase(w.clock, wallDt);
 }
 
@@ -359,18 +370,19 @@ export class Probe {
     this.t += simDt;
     const d = car.deform;
     for (const o of w.cars) if (o !== car && o.deform.massActive && d.massActive) this.r.tyreOverlap = Math.max(this.r.tyreOverlap, tyreOverlap(car, o));
-    const cell = mass(d, "cell").local;
+    const cellMass = mass(d, "cell");
+    const cell = cellMass.local;
     const r = this.r;
     const yaw = heading(car);
     if (d.quietTime() >= 0.1) r.quietYawDrift += Math.abs(Math.atan2(Math.sin(yaw - this.prevYaw), Math.cos(yaw - this.prevYaw)));
     this.prevYaw = yaw;
     if (Math.abs(car.angular.y) >= 5.9) r.spinFrames++;
     r.crushMax = Math.max(r.crushMax, d.crushAmount);
-    const noseL = 2.0 - (mass(d, "bumperFL").local.z - cell.z);
-    const noseR = 2.0 - (mass(d, "bumperFR").local.z - cell.z);
-    const tail = Math.max(2.12 - (cell.z - mass(d, "bumperRL").local.z), 2.12 - (cell.z - mass(d, "bumperRR").local.z));
-    const engL = 1.16 - (mass(d, "engineL").local.z - cell.z);
-    const engR = 1.16 - (mass(d, "engineR").local.z - cell.z);
+    const noseL = closedOn(mass(d, "bumperFL"), cellMass, "z");
+    const noseR = closedOn(mass(d, "bumperFR"), cellMass, "z");
+    const tail = Math.max(closedOn(mass(d, "bumperRL"), cellMass, "z"), closedOn(mass(d, "bumperRR"), cellMass, "z"));
+    const engL = closedOn(mass(d, "engineL"), cellMass, "z");
+    const engR = closedOn(mass(d, "engineR"), cellMass, "z");
     r.noseShortL = noseL;
     r.noseShortR = noseR;
     r.tailShort = tail;
@@ -379,13 +391,15 @@ export class Probe {
     r.tailMax = Math.max(r.tailMax, tail);
     r.engineMax = Math.max(r.engineMax, engL, engR);
     r.engineMin = Math.min(r.engineMin, engL, engR);
-    r.doorMaxL = Math.max(r.doorMaxL, mass(d, "doorL").local.x - cell.x + 0.78);
-    r.doorMaxR = Math.max(r.doorMaxR, 0.78 - (mass(d, "doorR").local.x - cell.x));
-    r.roofMax = Math.max(r.roofMax, 0.63 - (mass(d, "roof").local.y - cell.y));
-    const cellRest = mass(d, "cell").rest;
+    r.doorMaxL = Math.max(r.doorMaxL, closedOn(mass(d, "doorL"), cellMass, "x"));
+    r.doorMaxR = Math.max(r.doorMaxR, closedOn(mass(d, "doorR"), cellMass, "x"));
+    r.roofMax = Math.max(r.roofMax, closedOn(mass(d, "roof"), cellMass, "y"));
+    const cellRest = cellMass.rest;
     r.cellShift = Math.max(r.cellShift, Math.hypot(cell.x - cellRest.x, cell.z - cellRest.z));
     r.cabinIntrusion = Math.max(r.doorMaxL, r.doorMaxR, r.roofMax);
-    r.engineGapErr = Math.max(r.engineGapErr, Math.abs(mass(d, "engineL").local.distanceTo(mass(d, "engineR").local) - 0.6));
+    const eL = mass(d, "engineL");
+    const eR = mass(d, "engineR");
+    r.engineGapErr = Math.max(r.engineGapErr, Math.abs(eL.local.distanceTo(eR.local) - eL.rest.distanceTo(eR.rest)));
     // From where the hulls first reach the slab's face (`HeldBarrier.touch`), not from the slice before the contact began; a world with
     // no slab counts from the slice before the first contact.
     const from = w.touch.get(car) ?? this.start;
@@ -603,19 +617,21 @@ export function runPair(kphA: number, kphB: number, kind: "head-on" | "t-bone" =
 /** A pair's four tyre-rectangle axes (unit x, z) and both tyres' summed half-extent along each. */
 const tyreAxesOf = new Float64Array(12);
 
-/** A tyre seen from above is a 2·TYRE_R × 2·TYRE_HALF_W rectangle on its hub, along its car. */
+/** A tyre seen from above is a 2·r × 2·halfW rectangle on its hub, along its car. */
+// ponytail: both cars' tyres read off carA's frame (one factor, bit-identical); split per car once styles differ in tyre size.
 function tyreAxes(carA: DeformableCar, carB: DeformableCar): void {
   const fA = carA.fwdFlat,
     rA = carA.rightFlat,
     fB = carB.fwdFlat,
     rB = carB.rightFlat;
+  const { r, halfW } = carA.frame.rig.tyre;
   for (let k = 0; k < 4; k++) {
     const u = k === 0 ? fA : k === 1 ? rA : k === 2 ? fB : rB;
     tyreAxesOf[k * 3] = u.x;
     tyreAxesOf[k * 3 + 1] = u.z;
     tyreAxesOf[k * 3 + 2] =
-      TYRE_R * (Math.abs(fA.x * u.x + fA.z * u.z) + Math.abs(fB.x * u.x + fB.z * u.z)) +
-      TYRE_HALF_W * (Math.abs(rA.x * u.x + rA.z * u.z) + Math.abs(rB.x * u.x + rB.z * u.z));
+      r * (Math.abs(fA.x * u.x + fA.z * u.z) + Math.abs(fB.x * u.x + fB.z * u.z)) +
+      halfW * (Math.abs(rA.x * u.x + rA.z * u.z) + Math.abs(rB.x * u.x + rB.z * u.z));
   }
 }
 

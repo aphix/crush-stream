@@ -1,7 +1,11 @@
+import * as THREE from "three";
+import { OUTLINE_REACH, VERTICAL_CLEAR } from "../contact/cage-outline.ts";
 import type { CarCage, CageLive } from "./car-cage.ts";
 import { CageRig } from "./car-cage-rig.ts";
+import { doorSkinZ, makeDoorGeometry } from "./car-door-mesh.ts";
 import type { DeformableCar } from "./car.ts";
-import { cellI, cellJ, cellX, cellZ, type DrawnField, NX, type Region, reliefGap, type TopGaps } from "./drawn-body.test-util.ts";
+import type { BodyStyle } from "./car-variants.ts";
+import { cellI, cellJ, cellX, cellZ, type DrawnField, NX, type Region, reliefGap, type TopGaps, WorstCells } from "./drawn-body.test-util.ts";
 import { CLASSES, carClass } from "./vehicle-classes.ts";
 
 export { cageOf, cageSourceOf } from "./car-cage-rig.ts";
@@ -55,6 +59,7 @@ export function cageGaps(car: DeformableCar, cage: CarCage, drawn: DrawnField, r
   const field = which === "top" ? cage.fields.top : cage.fields.bottom;
   const reference = which === "top" ? drawn.top : drawn.bottom;
   const gaps: number[] = [];
+  const worst = new WorstCells();
   let missing = 0;
   let worstUp = 0;
   let worstDown = 0;
@@ -65,15 +70,40 @@ export function cageGaps(car: DeformableCar, cage: CarCage, drawn: DrawnField, r
       const h = fieldAt(cage, field, cellX(i), cellZ(j));
       if (!Number.isFinite(h)) {
         missing++;
+        worst.add(cellX(i), cellZ(j), y, NaN, NaN, `cage ${which}`);
         continue;
       }
       const gap = reliefGap(reference, i, j, h + lift - y);
       gaps.push(gap);
       worstUp = Math.max(worstUp, gap);
       worstDown = Math.min(worstDown, gap);
+      worst.add(cellX(i), cellZ(j), y, h + lift, gap, `cage ${which}`);
     }
   }
   const sorted = gaps.map(Math.abs).sort((p, q) => p - q);
-  return { cells: gaps.length + missing, p95: sorted.length === 0 ? 0 : sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))]!, worstUp, worstDown, missing };
+  return { cells: gaps.length + missing, p95: sorted.length === 0 ? 0 : sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))]!, worstUp, worstDown, missing, worst: worst.words() };
+}
+
+/** |x| (m) where a striker spanning [yLo, yHi] first meets `cage`'s `side` along the lattice row at frame z, read as the pair SAT reads it; NaN when none. */
+export function cageSideX(cage: CarCage, side: 1 | -1, z: number, yLo: number, yHi: number): number {
+  const { nu, step, u0, v0 } = cage.style;
+  const { covered, top, bottom } = cage.fields;
+  const j = Math.round((z - v0) / step);
+  for (let n = 0; n < nu; n++) {
+    const i = side > 0 ? nu - 1 - n : n;
+    const k = j * nu + i;
+    if (covered[k] === 1 && Math.min(top[k]!, yHi) - Math.max(bottom[k]!, yLo) > VERTICAL_CLEAR) return side * (u0 + i * step) + OUTLINE_REACH;
+  }
+  return NaN;
+}
+
+/** |x| (m) of the shut door's outer skin at height y, frame z, the door mesh seated as the car seats it (the body frame, no class lift); NaN off the skin. */
+export function drawnDoorX(style: BodyStyle, side: 1 | -1, y: number, z: number): number {
+  const { hingeX, hingeY, hingeZ } = style.door;
+  const door = new THREE.Mesh(makeDoorGeometry(side, style), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+  door.position.set(side * hingeX, hingeY, hingeZ + doorSkinZ(style));
+  door.updateMatrixWorld();
+  const hit = new THREE.Raycaster(new THREE.Vector3(side * 2, y, z), new THREE.Vector3(-side, 0, 0)).intersectObject(door)[0];
+  return hit ? Math.abs(hit.point.x) : NaN;
 }
 

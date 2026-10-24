@@ -46,6 +46,10 @@ const WHEEL_SEAT_TOLERANCE = 0.01;
 /** The corner hit every field car takes: closing speed (m/s) and equivalent barrier speed (`DeformableCar.applyImpact`). */
 const CORNER_HIT_MPS = 28;
 const CORNER_HIT_EBS = 24;
+/** Height (m) of the corner hit: the front guard's, as the platform's wing stands. */
+const CORNER_Y = 0.4;
+/** A height (m) no road reaches: the car read at it has nothing under it to fit its doors and bumpers to. */
+const CLEAR_OF_ROAD_M = 1000;
 
 type Part = DeformableCar["parts"][number];
 /** A part's place, turn and scale on the car. */
@@ -58,8 +62,12 @@ function partState(car: DeformableCar, p: Part): PartState {
   if (p.detached) return { detached: true, pose: [], rest: [] };
   // Hinged panels and bumpers flutter with the car's speed (`flapAngle`); the podium's cars stand still.
   car.flapSpeed = 0;
+  // The podium stands clear of the road: a door's lift off the road under a tilted finish is not a pose the level copy can show.
+  car.group.position.y += CLEAR_OF_ROAD_M;
   car["posePart"](p);
-  return { detached: false, pose: poseOf(p), rest: [...p.restPos.toArray(), ...p.restQuat.toArray(), 1, 1, 1] };
+  car.group.position.y -= CLEAR_OF_ROAD_M;
+  car.group.updateMatrixWorld(true);
+  return { detached: false, pose: poseOf(p), rest: [...p.restPos.toArray(), ...p.restQuat.toArray(), ...p.restScale.toArray()] };
 }
 
 /** Car `k` of the field's front four loses a wheel (not the third), has its hood and left door forced open, and cars 0 and 3 lose their front bumper. */
@@ -98,7 +106,8 @@ describe("given the real engine and a race ended with every car dented", () => {
     run(5);
     // Every racer takes a hard hit on its front left corner (a hub shoved) and loses what `wreck` takes; then the race is closed where it stands.
     for (const car of live().slice(0, 4)) {
-      const corner = car.group.localToWorld(new THREE.Vector3(-0.7, 0.4, 2.2));
+      // The car's own front left corner: its left hub's line, its cage's nose face.
+      const corner = car.group.localToWorld(new THREE.Vector3(car.frame.wheels[0]![0], CORNER_Y, car.cage.fields.planBox[3]!));
       car.applyImpact(corner, car.forward.clone().negate(), CORNER_HIT_MPS, CORNER_HIT_EBS);
     }
     run(1);
@@ -114,7 +123,7 @@ describe("given the real engine and a race ended with every car dented", () => {
       partsAtTheFinish.set(row.id, car["parts"].map((p) => partState(car, p)));
       wheelSeatsAtTheFinish.set(
         row.id,
-        car["wheels"].map((w, i) => (car["looseWheels"][i]!.loose ? null : w.position.clone())),
+        car["wheels"].map((_, i) => (car["looseWheels"][i]!.loose ? null : car.deform.massLocal(HUBS[i]!).clone())),
       );
     }
     // The results reel respawns the field's cars from its clips: stand in for it, so a podium that read the live cars would show none of the damage.
@@ -163,7 +172,7 @@ describe("given the real engine and a race ended with every car dented", () => {
       for (const [i, wheel] of car["wheels"].entries()) {
         const want = seats[i];
         if (!want) continue;
-        // Along the ground only: the seat's height is the suspension's ride, which a car standing level has at rest.
+        // Along the ground only: the podium's wheel stands on its hub mass's x and z (`followHubs`), not on the live car's suspension seat.
         const gap = Math.hypot(wheel.position.x - want.x, wheel.position.z - want.z);
         assert.ok(gap <= WHEEL_SEAT_TOLERANCE, `place ${k + 1}, wheel ${i}: ${wheel.position.toArray()} against the finish's ${want.toArray()}`);
         checked++;
@@ -181,7 +190,7 @@ describe("given the real engine and a race ended with every car dented", () => {
     // The renderer's pre-draw hook, run by hand: the stubbed renderer draws nothing.
     const scene = engine["scene"];
     scene.onBeforeRender(engine["renderer"], scene, engine["camera"], new THREE.BufferGeometry(), new THREE.MeshBasicMaterial(), new THREE.Group());
-    const drawn = engine["wheels"]["near"].mesh.count + engine["wheels"]["far"].mesh.count;
+    const drawn = engine["wheels"].meshes.slice(0, -1).reduce((n, mesh) => n + mesh.count, 0);
     assert.equal(drawn, lost.reduce((total, n) => total + 4 - n, 0), "wheels drawn: four a car less the ones it lost");
     assert.ok(drawn > 0, "the control: some wheels are drawn");
   });

@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { TYRE_R } from "../deform/deform-state.ts";
+import { carFrame } from "./car-rig.ts";
+import { CAR_STYLES } from "./car-variants.ts";
 import { CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
 import { SPOKE_PERIOD, spokeSmear } from "./wheel-blur.ts";
 
@@ -15,7 +16,7 @@ const seen = (step: number): number => step - SPOKE_PERIOD * Math.round(step / S
 
 describe("given a 5-spoke rim (it repeats every 72°, so a frame that turns it more than half of that shows the wrong motion), and the smear drawn over its spokes", () => {
   for (const cls of Object.keys(CLASSES) as VehicleClassId[]) {
-    const radius = TYRE_R * CLASSES[cls].wheelScale;
+    const radius = carFrame(CAR_STYLES[CLASSES[cls].style]).rig.tyre.r * CLASSES[cls].wheelScale;
     it(`when a ${cls} wheel turns at 0 to 60 m/s drawn at 60, 144 and 240 Hz, then the spokes are fully smeared wherever they would read slow or backwards and not smeared where they read true`, () => {
       for (const hz of [60, 144, 240]) {
         for (let v = 0; v <= 60; v += 0.25) {
@@ -39,7 +40,8 @@ describe("given a 5-spoke rim (it repeats every 72°, so a frame that turns it m
   });
 
   it("when a sedan wheel turns at 20 m/s, then the spokes are fully smeared at 60 Hz, not smeared at 60 Hz in 1/10 slow-mo, and almost sharp (under 0.05) at 240 Hz", () => {
-    const step = (hz: number, scale: number) => (20 * scale) / TYRE_R / hz;
+    const tyreR = carFrame(CAR_STYLES.sedan).rig.tyre.r;
+    const step = (hz: number, scale: number) => (20 * scale) / tyreR / hz;
     assert.equal(spokeSmear(step(60, 1)), 1);
     assert.equal(spokeSmear(step(60, 0.1)), 0);
     assert.ok(spokeSmear(step(240, 1)) < 0.05, `240 Hz smear ${spokeSmear(step(240, 1))}`);

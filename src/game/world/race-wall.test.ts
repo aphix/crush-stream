@@ -11,7 +11,6 @@ import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { bodyPoints } from "../vehicle/body-points.test-util.ts";
 import { makeCar } from "../vehicle/ground-probe.test-util.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
-import { FOOT_HALF_L } from "../vehicle/car-mesh.ts";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
@@ -183,10 +182,11 @@ describe("given a lone car in the city race on a walled stretch of the loop with
       const p = track.path;
       // A walled stretch (10 samples either side) with no prop within a car's length of the three poses below: a prop would push the car too.
       const props = propColliders(placeProps(track));
+      const footL = w.cars[0]!.frame.footHalfL;
       const free = (j: number) =>
         [-2, -0.9, 2.8].every((d) => {
           const lat = p.half[j]! + p.runL[j]! + d;
-          return props.every((c) => Math.hypot(c.x - (p.x[j]! + p.tz[j]! * lat), c.z - (p.z[j]! - p.tx[j]! * lat)) > c.r + 2 * FOOT_HALF_L);
+          return props.every((c) => Math.hypot(c.x - (p.x[j]! + p.tz[j]! * lat), c.z - (p.z[j]! - p.tx[j]! * lat)) > c.r + 2 * footL);
         });
       let k = 20;
       while (k < p.count && !(free(k) && Array.from({ length: 21 }, (_, d) => p.wallL[(k + d - 10 + p.count) % p.count]).every(Boolean))) k++;

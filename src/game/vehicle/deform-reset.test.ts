@@ -78,7 +78,7 @@ describe("given a monster truck whose rear-right wheel and front bumper have com
     torn.dropWheel(3, "hubRR");
     torn.detachPart(part, 0);
     assert.ok(wheel.parent?.name !== CLASS_HUBS && part.object.parent?.name !== CLASS_LIFT, "the wheel or the bumper never came off");
-    // Put on the plain group, the wheel was drawn 22 cm under its hub (the monster's tyre lift) and the bumper 0.48 m under its body.
+    // Put on the plain group, the wheel was drawn 26 cm under its hub (the monster's tyre lift) and the bumper 0.87 m under its body.
     car.spawnFacing(10, 10, 1, 0);
     assert.equal(wheel.parent?.name, CLASS_HUBS, "the wheel's parent");
     assert.equal(part.object.parent?.name, CLASS_LIFT, "the bumper's parent");

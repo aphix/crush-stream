@@ -1,9 +1,9 @@
 import * as THREE from "three";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { DeformableCar } from "./car.ts";
-import { UNDERSIDE } from "./car-suspension.ts";
 import { sampleField } from "../contact/cage-outline.ts";
 import { layOnGround } from "./car-air-points.ts";
+import { rigidCentre } from "./car-air.ts";
 import { assignClass, CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
 import { paint } from "./test-support.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
@@ -11,6 +11,7 @@ import { newWorld, stepWorld, type World } from "../engine/world-step.ts";
 import { setGround, type Ground } from "../world/ground.ts";
 import { blankPoint, blankProjection, pointOn, type Track } from "../world/track.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 
 /**
  * How a car sits on ANY `Ground`, read straight off its drawn pose, for the drop matrix (`ground-fit.test.ts`) and the
@@ -21,7 +22,7 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 export const FRAME = 1 / FRAME_HZ;
 export const DEG = 180 / Math.PI;
 
-/** The tyre's tread as `TYRE_PROFILE` draws it (wheel-local, axle along x): crown and shoulders, [axle offset, radius]. */
+/** The platform tyre's tread as `TYRE_PROFILE` draws it (wheel-local, axle along x): crown and shoulders, [axle offset, radius]; a car's own tyre scales it (`fit`). */
 const TREAD_RINGS = [
   [0, 0.32],
   [0.082, 0.314],
@@ -31,18 +32,13 @@ const TREAD_RINGS = [
 ] as const;
 /** Points round each tread ring (7.5° apart). */
 const TREAD_STEPS = 48;
-/** The body's front bumper corners, over the underside samples (car-local x, y, z). */
-const BUMPERS = [-1, 1].flatMap((sx) => [-1, 1].map((sz): [number, number, number] => [sx * 0.88, 0.35, sz * 2.22]));
+/** A bumper corner is a row (x, z, height) of `frame.hullUnder`'s last four. */
+const BUMPER_ROWS = 4;
 
 /** Height hints are the asking point plus this (m): the layer rule (`STEP_UP`, a ramp's kerb) reads them. */
 const HINT_ABOVE = 1;
 
-/** `UNDERSIDE`'s keel (x 0) and rocker (x ±`ROCKER`) lines, [z, height] from the nose back. */
-const ROCKER = 0.8;
-const KEEL = UNDERSIDE.filter((p) => p[0] === 0).map(([, z, h]) => [z, h] as const);
-const ROCKERS = UNDERSIDE.filter((p) => p[0] === ROCKER).map(([, z, h]) => [z, h] as const);
-/** The lines the belly is read along (car-local): along z at each `LINE_X`, across x at each `LINE_Z` (car-air.ts `BELLY`'s rows). */
-const LINE_X = [-ROCKER, -0.5, 0, 0.5, ROCKER] as const;
+/** The lines the belly is read along (car-local): along z at each of the car's `lineX` (its rockers at ±the underside's widest x), across x at each `LINE_Z` (the frame's `belly` rows). */
 const LINE_Z = [2, 1, 0, -0.5, -1, -2] as const;
 /** A belly line is halved down to this (m) where the ground under it is not one plane: a face's edge under the belly is found within 1 cm. */
 const LINE_STEP = 0.01;
@@ -66,7 +62,7 @@ function along(line: readonly (readonly [number, number])[], z: number): number 
 
 export type Fit = {
   airborne: boolean;
-  /** Per tyre (`WHEEL_POS` order): its lowest tread point's height above the ground under it (m; < 0 sunk in). */
+  /** Per tyre (`frame.wheels` order): its lowest tread point's height above the ground under it (m; < 0 sunk in). */
   gaps: number[];
   /** Per tyre: the tread point with the smallest gap, as (x, ground height under it, z): where the tyre rests on the ground (`NaN`s with no ground under it). */
   contacts: Float64Array;
@@ -109,6 +105,8 @@ export type Fit = {
 const _p = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _m = new THREE.Vector3();
+const _centre = new THREE.Vector3();
+const _centre0 = new THREE.Vector3();
 const _hub: THREE.Vector3[] = [0, 1, 2, 3].map(() => new THREE.Vector3());
 const _g = [0, 0, 0, 0];
 
@@ -154,6 +152,9 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   const gy = car.group.position.y;
   const gaps: number[] = [];
   const contacts = new Float64Array(12).fill(NaN);
+  const { r: tyreR, halfW: tyreHalfW } = car.frame.rig.tyre;
+  const kAcross = tyreHalfW / PLATFORM_TYRE.halfW;
+  const kRadius = tyreR / PLATFORM_TYRE.r;
   for (const [i, wh] of car.wheels.entries()) {
     wh.getWorldPosition(_hub[i]!);
     const hint = _hub[i]!.y;
@@ -174,7 +175,9 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
     // Each ring at `TREAD_STEPS` points, then at 1/32 of that step across the step either side of its lowest one: at a face's edge the
     // tread's lowest point over the face is where the ring crosses the edge, and the nearest of 48 points read up to 4 cm above it.
     if (!hullOnly) {
-      for (const [x, r] of TREAD_RINGS) {
+      for (const [ringX, ringR] of TREAD_RINGS) {
+        const x = ringX * kAcross;
+        const r = ringR * kRadius;
         let low = 0;
         let lowGap = Infinity;
         for (let a = 0; a < TREAD_STEPS; a++) {
@@ -231,11 +234,16 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   // keel, and no drawn body is at a point the cage bottom has no node over), the height the rigid step rests its belly rows at.
   car.refitCage();
   const wreck = car.deform.massActive;
-  for (const [x, z, h] of UNDERSIDE) {
+  for (const [x, z, h] of car.frame.underside) {
     const drawn = wreck ? sampleField(car.cage.fields.bottom, car.cage.style, x, z) : h;
     if (!Number.isNaN(drawn)) probe(`under(${x},${z})`, x, drawn, z);
   }
-  for (const [x, y, z] of BUMPERS) probe(`bumper(${x > 0 ? "+" : "-"}x,${z > 0 ? "front" : "rear"})`, x, y, z);
+  const under = car.frame.hullUnder;
+  for (let i = under.length - BUMPER_ROWS * 3; i < under.length; i += 3) {
+    const x = under[i]!;
+    const z = under[i + 1]!;
+    probe(`bumper(${x > 0 ? "+" : "-"}x,${z > 0 ? "front" : "rear"})`, x, under[i + 2]!, z);
+  }
   // The cage's vertices (the drawn body's points the rigid step meets surfaces with, in the body's frame), so a car on its side or
   // roof is judged on the points it lies on.
   const cagePos = car.cage.fields.pos;
@@ -248,9 +256,16 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   // The belly between the keel and the rockers, along its lines: where the ground under a line is not one plane between two samples (a
   // face's edge or a crest under the belly) the line is halved down to `LINE_STEP`, so a belly resting on an edge between the stations
   // above reads as resting. A sample deeper than `BELLY_IN` is in the ground, not resting on it (its depth is not `pen`'s reading).
+  // The underside's keel and rocker lines, [z, height] from the nose back.
+  const keelLine = car.frame.underside.filter((p) => p[0] === 0).map(([, z, h]) => [z, h] as const);
+  // The rockers stand at the underside's widest x: the frame scales it with the car's width.
+  let rockerX = 0;
+  for (const p of car.frame.underside) rockerX = Math.max(rockerX, p[0]);
+  const lineX = [-rockerX, -0.5, 0, 0.5, rockerX];
+  const rockerLine = car.frame.underside.filter((p) => p[0] === rockerX).map(([, z, h]) => [z, h] as const);
   const clearance = (x: number, z: number): number => {
-    const keel = along(KEEL, z);
-    _p.set(x, keel + ((along(ROCKERS, z) - keel) * Math.abs(x)) / ROCKER, z).applyMatrix4(body.matrixWorld);
+    const keel = along(keelLine, z);
+    _p.set(x, keel + ((along(rockerLine, z) - keel) * Math.abs(x)) / rockerX, z).applyMatrix4(body.matrixWorld);
     const c = _p.y - ground.heightAt(_p.x, _p.z, _p.y);
     if (c >= -BELLY_IN) hull = Math.min(hull, c);
     return c;
@@ -289,8 +304,8 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
     }
   };
   if (!hullOnly) {
-    for (const x of LINE_X) for (let i = 1; i < LINE_Z.length; i++) line(x, LINE_Z[i - 1]!, x, LINE_Z[i]!);
-    for (const z of LINE_Z) for (let i = 1; i < LINE_X.length; i++) line(LINE_X[i - 1]!, z, LINE_X[i]!, z);
+    for (const x of lineX) for (let i = 1; i < LINE_Z.length; i++) line(x, LINE_Z[i - 1]!, x, LINE_Z[i]!);
+    for (const z of LINE_Z) for (let i = 1; i < lineX.length; i++) line(lineX[i - 1]!, z, lineX[i]!, z);
   }
   const ge = car.group.matrixWorld.elements;
   return {
@@ -324,7 +339,9 @@ export function worstGap(f: Fit): number {
 }
 
 const BRAKE: DriveInput = { throttle: 0, steer: 0, brake: 1, ebrake: true, boost: false };
+const COAST: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
 
+/** `slide` is the rigid centre's travel: a lifted body turning about its centre swings its origin without sliding. */
 export type Drop = Fit & { slide: number; speed: number };
 
 /** The car a drop of class `cls` uses: built once and stood up again by `spawnFacing` (the engine's own scene reset, `resetVisual`) for each of a matrix's thousand cells. */
@@ -338,9 +355,14 @@ function pooled(cls: VehicleClassId): DeformableCar {
   return car;
 }
 
+/** `car`'s rigid centre (a wreck's masses' centroid) in the world, into `out`. */
+function centreOf(car: DeformableCar, out: THREE.Vector3): THREE.Vector3 {
+  return out.copy(rigidCentre(car)).applyQuaternion(car.group.quaternion).add(car.group.position);
+}
+
 /**
  * One car dropped `height` m above the ground at (x, z) facing `yaw` and held (brake and handbrake) for `seconds`:
- * where it ends up and how it sits. `ground` is made the active one; the caller restores it.
+ * where it ends up and how it sits. `brake` false lets it coast instead, `speed` (m/s) sets it rolling along its heading. `ground` is made the active one; the caller restores it.
  */
 export function drop(
   ground: Ground,
@@ -348,17 +370,20 @@ export function drop(
   x: number,
   z: number,
   yaw: number,
-  o: { height?: number; seconds?: number; hint?: number; collide?: ((c: DeformableCar, h: number) => unknown) | null } = {},
+  o: { height?: number; seconds?: number; hint?: number; brake?: boolean; speed?: number; collide?: ((c: DeformableCar, h: number) => unknown) | null } = {},
 ): Drop {
   setGround(ground);
   const car = pooled(cls);
-  car.spawnFacing(x, z, yaw, 0);
+  car.spawnFacing(x, z, yaw, o.speed ?? 0);
   car.group.position.y = ground.heightAt(x, z, o.hint) + (o.height ?? 0.5);
+  centreOf(car, _centre0);
   const w = worldOf(car, o.collide ?? null);
   const st = { acc: 0 };
-  for (let f = 0; f < (o.seconds ?? 3) / FRAME; f++) frame(w, BRAKE, st);
+  const input = o.brake === false ? COAST : BRAKE;
+  for (let f = 0; f < (o.seconds ?? 3) / FRAME; f++) frame(w, input, st);
   const r = fit(car, ground);
-  const slide = Math.hypot(car.group.position.x - x, car.group.position.z - z);
+  centreOf(car, _centre);
+  const slide = Math.hypot(_centre.x - _centre0.x, _centre.z - _centre0.z);
   const speed = car.velocity.length();
   // Not disposed: the next drop of this class stands it up again.
   return { ...r, slide, speed };

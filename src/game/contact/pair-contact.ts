@@ -1,15 +1,14 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { REARM_QUIET_S } from "../vehicle/car-core.ts";
-import { armPairWithRows, rowsClosing, wreckCentre, wreckInvI } from "../vehicle/car-air.ts";
+import { armPairWithRows, rewindRows, wreckCentre, wreckInvI } from "../vehicle/car-air.ts";
 import { MU_BODY, REST_SPEED, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { leftoverCrumple, satPushCap, hypot2, CRASH } from "../deform/physics-util.ts";
-import { satCars } from "./sat.ts";
+import { patch, satCars } from "./sat.ts";
 import { bandsMeet, OUTLINE_REACH } from "./cage-outline.ts";
 import { strikeCar, faceDepth, faceExit, carRow, takeRow, moveAsOneBody, bodyHit, type ContactBox } from "./external-contact.ts";
 import { bodyContact, BODY_SIZE, BODY_VX, BODY_VZ, BODY_W, BODY_X, BODY_Z, CT_DEPTH, CT_E, CT_JMAX, CT_MU, CT_NX, CT_NZ, CT_SIZE, CT_X, CT_Z, OUT_EBS_A, OUT_EBS_B, OUT_PUSH_A, OUT_PUSH_B, OUT_SIZE } from "./body-contact.ts";
 import { ARM_CLOSING, PAIR_MU, SOLID_E } from "./constants.ts";
-import { CAR_HALF, FOOT_HALF_L } from "../vehicle/car-mesh.ts";
 import { SOLID_AT_REST } from "../world/constants.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { FINE_HZ, QUIET_HZ } from "../kernel/constants.ts";
@@ -19,6 +18,8 @@ const _v = new THREE.Vector3();
 const _w = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
+const _massPoint = new THREE.Vector3();
+const _aim = new THREE.Vector3();
 const _tn = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _turnCentre = new THREE.Vector3();
@@ -106,8 +107,9 @@ export function markApproaches(cars: readonly DeformableCar[], pairs: Int32Array
     if (d2 === 0 || !bandsMeet(ca, cb) || ca.falling || cb.falling) continue;
     const d = Math.sqrt(d2);
     const closing = ((ca.velocity.x - cb.velocity.x) * dx + (ca.velocity.z - cb.velocity.z) * dz) / d;
-    markApproach(ca, d - 2 * FOOT_HALF_L, closing);
-    markApproach(cb, d - 2 * FOOT_HALF_L, closing);
+    const gap = d - (ca.frame.footHalfL + cb.frame.footHalfL);
+    markApproach(ca, gap, closing);
+    markApproach(cb, gap, closing);
   }
 }
 
@@ -135,18 +137,20 @@ function stopInto(car: DeformableCar, nx: number, nz: number): void {
 
 /**
  * The drawn body rides the rigid body, so a shove also answers what the body's turn swept in, which `strikeCar` (the centre's closing) never
- * reads: the face takes it at the deepest vertex (`faceExit`), the rigid plastic impulse that leaves that point closing at the centre's speed.
+ * reads: the face takes it at the deepest vertex (`faceExit`), the rigid plastic impulse that leaves that point closing no faster than the centre.
+ * A centre leaving the face carries the vertex out with it, so only the closing the sweep still has beyond that is stopped (none where the vertex
+ * opens): stopping the sweep alone kicked a wreck wrapping a post on every slice and it exited at either of two spins.
  */
 function stopTurnInto(car: DeformableCar, nx: number, nz: number): void {
   const centre = _turnCentre.copy(wreckCentre(car)).applyQuaternion(car.group.quaternion);
   const rx = faceExit.offX - centre.x;
   const rz = faceExit.offZ - centre.z;
   const lever = rz * nx - rx * nz;
-  const sweep = car.angular.y * lever;
-  if (sweep >= 0) return;
-  const dvn = -sweep / (1 + lever * lever * wreckInvI.y);
+  const closing = car.angular.y * lever + Math.max(0, car.velocity.x * nx + car.velocity.z * nz);
+  if (closing >= 0) return;
+  const dvn = -closing / (1 + lever * lever * wreckInvI.y);
   const pos = car.group.position;
-  car.deform.shiftBody(car.velocity, car.angular, nx * dvn, nz * dvn, dvn * lever * wreckInvI.y, pos.x + centre.x, pos.z + centre.z, nx, nz, 0);
+  car.deform.shiftBody(car.velocity, car.angular, nx * dvn, nz * dvn, dvn * lever * wreckInvI.y, pos.x + centre.x, pos.z + centre.z, nx, nz, Infinity);
 }
 
 /**
@@ -160,9 +164,11 @@ function sinkReach(car: DeformableCar, nx: number, nz: number, dt: number, inbou
   const f = car.fwdFlat;
   const r = car.rightFlat;
   let corner = inboundFloor;
+  const { footHalfL } = car.frame;
+  const halfW = car.frame.half.x;
   for (let k = 0; k < 4; k++) {
-    const sl = k & 1 ? FOOT_HALF_L : -FOOT_HALF_L;
-    const sw = k & 2 ? CAR_HALF.x : -CAR_HALF.x;
+    const sl = k & 1 ? footHalfL : -footHalfL;
+    const sw = k & 2 ? halfW : -halfW;
     const rx = f.x * sl + r.x * sw;
     const rz = f.z * sl + r.z * sw;
     corner = Math.max(corner, -((v.x + w * rz) * nx + (v.z - w * rx) * nz));
@@ -185,6 +191,15 @@ function strokeLeftOn(car: DeformableCar, nx: number, nz: number): number {
   const inward = car.deform.impactInward;
   const onFace = inward.x * (nx * car.rightFlat.x + nz * car.rightFlat.z) + inward.z * (nx * car.fwdFlat.x + nz * car.fwdFlat.z) > STRUCK_FACE_COS;
   return onFace ? car.deform.hitStroke() * (1 - car.deform.strokeUsed()) : 0;
+}
+
+/**
+ * The closing speed (m/s) a face's crush feed is sized by (`feedOverlap`): while the pair closes faster than a graze and the face the hit struck has stroke left, its
+ * hit's (`impulseValue`, the closing that armed it), not the slice's, which the exchange takes away as the structure yields. The force that crushes the face (`crushForce`)
+ * is the hit's whole stroke long, so the crush it feeds must be: a feed that fell with the closing left the faces at 0.6-0.7 of their stroke when the cars had taken their common speed.
+ */
+function feedClosing(car: DeformableCar, nx: number, nz: number, closing: number): number {
+  return closing > CRASH.grazeMps && strokeLeftOn(car, nx, nz) > 0 ? Math.max(closing, car.deform.impulseValue) : Math.max(0, closing);
 }
 
 /**
@@ -472,17 +487,19 @@ function crushedSoFar(d: DeformableCar["deform"]): number {
 }
 
 /**
- * Share (0-1) of this slice's stroke travel that fits in the room a crashed car's struck face has left before `PACKED_STROKE`, both read
- * off its masses as they stand now, this slice's feed in (`strokeAt`); 1 when all of it fits.
+ * Share (0-1) of the next slice's stroke travel that fits in the room a crashed car's struck face has left before `PACKED_STROKE`, read off
+ * its masses as they stand now, this slice's feed in (`strokeAt`). The travel is its masses' at their velocities and the next slice's feed,
+ * as deep as this one's at `closingLeft` of its closing: that feed crushes before the next slice's exchange can stop the pair.
  */
-function roomShare(car: DeformableCar, dt: number): number {
+function roomShare(car: DeformableCar, dt: number, closingLeft: number): number {
   const d = car.deform;
   if (!car.crashed || !d.massActive) return 1;
   const q = car.group.quaternion;
   const now = d.strokeAt(q, 0);
   const room = PACKED_STROKE * d.hitStroke() - now;
   if (room <= 0) return 0;
-  const travel = d.strokeAt(q, dt) - now;
+  const fed = Math.max(0, now - d.strokeUsed() * d.hitStroke());
+  const travel = d.strokeAt(q, dt) - now + fed * closingLeft;
   return travel > room ? room / travel : 1;
 }
 
@@ -519,11 +536,12 @@ function blendVelocities(carA: DeformableCar, carB: DeformableCar, base: Float64
 }
 
 /**
- * The exchange of the slice in which the pair packs: the share of the slice's stroke travel that fits in the room left before
- * `PACKED_STROKE` (`roomShare`, read after the crush-limited exchange) stays crush-limited (`maxJ`), the rest is rigid, so the pair stops
- * at the packed stroke, not up to one slice's travel past it (the check reads the stroke the last slice left).
+ * The exchange of the slice in which the pair packs: the share of the next slice's stroke travel that fits in the room left before
+ * `PACKED_STROKE` (`roomShare`, read after the crush-limited exchange, at the share of this slice's `closing` that exchange left) stays
+ * crush-limited (`maxJ`), the rest is rigid, so the pair stops at the packed stroke, not up to one slice's travel past it (the check reads
+ * the stroke the last slice left). A face the stop packs counts its block travel as the hit's energy (`notePacked`).
  */
-function splitExchange(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector3, p: THREE.Vector3, maxJ: number, dt: number): void {
+function splitExchange(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector3, p: THREE.Vector3, maxJ: number, dt: number, closing: number): void {
   const need = 12 + 3 * (carA.deform.masses.length + carB.deform.masses.length);
   if (split.start.length < need) {
     split.start = new Float64Array(need);
@@ -534,7 +552,12 @@ function splitExchange(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector
   holdVelocities(carA, carB, split.rigid);
   blendVelocities(carA, carB, split.start, 0);
   exchangePair(carA, carB, n, p, maxJ);
-  blendVelocities(carA, carB, split.rigid, Math.max(roomShare(carA, dt), roomShare(carB, dt)));
+  const left = Math.max(0, -_v.copy(carA.velocity).sub(carB.velocity).dot(n)) / closing;
+  const roomA = roomShare(carA, dt, left);
+  const roomB = roomShare(carB, dt, left);
+  if (roomA < 1) carA.deform.notePacked();
+  if (roomB < 1) carB.deform.notePacked();
+  blendVelocities(carA, carB, split.rigid, Math.max(roomA, roomB));
 }
 
 /**
@@ -557,15 +580,15 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // the closing leaves the faces apart by what it has eaten: the contact does not end where it works), the hit goes on.
   const eaten = crushedSoFar(carA.deform) + crushedSoFar(carB.deform);
   const hit = satCars(carA, carB, _n, _p, hypot2(carA.velocity.x - carB.velocity.x, carA.velocity.z - carB.velocity.z) * dt + eaten);
+  const half = patch.half;
   const n = _n;
   n.y = 0;
   if (n.lengthSq() > 1e-8) n.normalize();
-  const rel = _v.copy(carA.velocity).sub(carB.velocity);
-  const closing = -rel.dot(n);
+  let closing = -_v.copy(carA.velocity).sub(carB.velocity).dot(n);
   if (hit === null || hit < -(Math.max(0, closing) * dt + eaten)) return null;
 
-  // What the pair met with: the rows of the rigid step that met it this slice have traded part of it already (read before `armPairWithRows` takes them).
-  const met = Math.max(closing, rowsClosing(carA, carB));
+  // The rows of the rigid step that met this pair this slice (a nose corner on the other's sloped bonnet) traded part of the approach already: it is the pair's to take whole.
+  if (rewindRows(carA, carB, n, ARM_CLOSING)) closing = -_v.copy(carA.velocity).sub(carB.velocity).dot(n);
 
   // Where the contact masses of both cars are driven to along the normal: the speed each car's contact point has once the plastic
   // exchange at the patch is done (the pair's common speed when the hit goes through both centres).
@@ -577,9 +600,8 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   let brushB = false;
   if (closing > ARM_CLOSING) {
     // Equivalent barrier speed: each car takes the share of the pair's plastic exchange the kernel gives it at the contact point (a hit
-    // through both centres: the closing times the other's mass share). The rows of the rigid step that met this pair in this slice (a
-    // car's nose on the other's top) read the same contact from before their exchange: it is armed once, at the larger reading, as it
-    // stood before it (`armPairWithRows`).
+    // through both centres: the closing times the other's mass share). The rows that met this pair arm with it, once, at the larger
+    // reading (`armPairWithRows`).
     // Before notifyContact: a wreck's re-arm reads how long it has been quiet.
     loadPair(carA, carB, n, _p, faces[0]!, faces[1]!, 0);
     bodyContact(pairRows, 0, BODY_SIZE, pairContact, pairResult);
@@ -588,8 +610,8 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
     const idleA = carA.deform.quietTime() >= REARM_QUIET_S;
     const idleB = carB.deform.quietTime() >= REARM_QUIET_S;
     if (!armPairWithRows(carA, carB, _p, n, closing, shareA, shareB)) {
-      brushA = !carA.applyImpact(_p, n, closing, shareA) && idleA;
-      brushB = !carB.applyImpact(_p, _w.copy(n).negate(), closing, shareB) && idleB;
+      brushA = !carA.applyImpact(carA.deform.massPoint(_p, _massPoint, carA.group.position.y), n, closing, shareA, false, true) && idleA;
+      brushB = !carB.applyImpact(carB.deform.massPoint(_p, _massPoint, carB.group.position.y), _w.copy(n).negate(), closing, shareB, false, true) && idleB;
     }
   }
 
@@ -610,10 +632,14 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // feed is never less than that travel (`closing * dt`). The overlap is the two faces' together: each structure crushes its half.
   const fed = Math.max(hit, closing * dt) / 2;
   if (carA.deform.massActive) carA.deform.markMotion();
-  carA.deform.feedOverlap(_p, n, fed, Math.max(0, closing), dt, faces[0]!);
+  const pointA = carA.deform.massPoint(_p, _massPoint, carA.group.position.y);
+  carA.deform.aimHit(carA.worldToLocalPoint(pointA, _aim));
+  carA.deform.feedOverlap(pointA, n, fed, feedClosing(carA, n.x, n.z, closing), dt, faces[0]!, false, undefined, half);
   if (carA.deform.massActive) carA.deform.takeMotion(carA.velocity, carA.angular);
   if (carB.deform.massActive) carB.deform.markMotion();
-  carB.deform.feedOverlap(_p, _w.copy(n).negate(), fed, Math.max(0, closing), dt, faces[1]!);
+  const pointB = carB.deform.massPoint(_p, _massPoint, carB.group.position.y);
+  carB.deform.aimHit(carB.worldToLocalPoint(pointB, _aim));
+  carB.deform.feedOverlap(pointB, _w.copy(n).negate(), fed, feedClosing(carB, -n.x, -n.z, closing), dt, faces[1]!, false, undefined, half);
   if (carB.deform.massActive) carB.deform.takeMotion(carB.velocity, carB.angular);
   // The momentum (N·s) the feed took off each car's closing along the normal: the structure's force already at work this slice.
   const killed = 0.5 * (momentumAlong(carA, n.x, n.z) - preA + momentumAlong(carB, -n.x, -n.z) - preB);
@@ -632,7 +658,7 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
     const crushes = closing > CRASH.grazeMps && !spent && !(stiffA && stiffB);
     const force = Math.min(stiffA ? Infinity : crushForce(carA.deform), stiffB ? Infinity : crushForce(carB.deform));
     const maxJ = crushes ? Math.max(0, force * dt - Math.max(0, killed)) : Infinity;
-    if (crushes && Math.max(roomShare(carA, dt), roomShare(carB, dt)) < 1) splitExchange(carA, carB, n, _p, maxJ, dt);
+    if (crushes && Math.max(roomShare(carA, dt, 1), roomShare(carB, dt, 1)) < 1) splitExchange(carA, carB, n, _p, maxJ, dt, closing);
     else exchangePair(carA, carB, n, _p, maxJ);
   }
   // The crush layer's kills are the lattice's, not an exchange: the pair's momentum is the one it had, the kernel's impulse the only
@@ -648,8 +674,8 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   if (extra > 0) pushApart(carA, carB, n.x, n.z, Math.min(extra + 0.006, satPushCap(dt)), dt);
 
   if (spent && closing > 0 && dist > 1e-4) holdComGap(carA, carB, leftoverA, leftoverB, dist, dt);
-  _hit.impulse = Math.max(met, hit * 6);
-  _hit.closing = met;
+  _hit.closing = Math.max(0, closing);
+  _hit.impulse = Math.max(_hit.closing, hit * 6);
   _hit.contact.copy(_p);
   _hit.normal.copy(n);
   return _hit;

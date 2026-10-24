@@ -1,0 +1,135 @@
+{
+  "paint": "#5e1c1f",
+  "side": {
+    "ref": "ModernCarDesigns_SideAndTop/red-suv/red-suv-1.png"
+  },
+  "top": {
+    "ref": "ModernCarDesigns_SideAndTop/red-suv/red-suv-2.png"
+  },
+  "iso": {
+    "ref": "ModernCarDesignIsometric.png",
+    "crop": [
+      945,
+      862,
+      638,
+      561
+    ],
+    "wheels": {
+      "fl": {
+        "hub": [
+          291,
+          461.5
+        ],
+        "contact": [
+          294.5,
+          522.5
+        ]
+      },
+      "rl": {
+        "hub": [
+          566,
+          267
+        ],
+        "contact": [
+          563,
+          325
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        3.3286,
+        3.0258,
+        3.7392
+      ],
+      "target": [
+        2.7237,
+        2.5792,
+        3.0801
+      ],
+      "up": [
+        -0.2773,
+        0.8942,
+        -0.3515
+      ],
+      "fov": 40
+    },
+    "landmarks": [
+      {
+        "name": "roof fin foot",
+        "at": [
+          0,
+          1.585,
+          -1.33
+        ],
+        "pixel": [
+          470,
+          49
+        ]
+      }
+    ]
+  },
+  "rear-iso": {
+    "ref": "ModernCarDesignIsometric_Rear.png",
+    "crop": [
+      754,
+      684,
+      447,
+      406
+    ],
+    "wheels": {
+      "rr": {
+        "hub": [
+          257.7,
+          329.6
+        ],
+        "contact": [
+          255.2,
+          373
+        ]
+      },
+      "fr": {
+        "hub": [
+          413.5,
+          157.1
+        ],
+        "contact": [
+          412.2,
+          195.3
+        ]
+      }
+    },
+    "camera": {
+      "position": [
+        -6.725,
+        10.9993,
+        -13.059
+      ],
+      "target": [
+        -6.347,
+        10.4125,
+        -12.3429
+      ],
+      "up": [
+        0.3214,
+        0.8085,
+        0.4929
+      ],
+      "fov": 12
+    },
+    "landmarks": [
+      {
+        "name": "rear strip centre",
+        "at": [
+          0,
+          1.03,
+          -2.115
+        ],
+        "pixel": [
+          97,
+          275
+        ]
+      }
+    ]
+  }
+}
