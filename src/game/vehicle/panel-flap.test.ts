@@ -383,6 +383,15 @@ describe("given a front arch shell hanging off a wreck sitting low on the road (
     car.group.updateMatrixWorld(true);
     return car;
   };
+  /** `sunk`'s car turned a quarter about its length, left side down (the arch's side), lowered until the front arch's skin stands `SKIN_OVER_ROAD` over the road: a wreck lying on its flank. */
+  const onFlank = (): Probe => {
+    const car = crashed();
+    car.group.rotateOnAxis(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+    car.group.updateMatrixWorld(true);
+    car.group.position.y -= lowest(car, car.part("archFL"), true) - SKIN_OVER_ROAD;
+    car.group.updateMatrixWorld(true);
+    return car;
+  };
 
   it("when the arch shell is hinged to full, then its lowest point stands on the road, not the 2 cm under it its drop would take it", () => {
     const car = sunk();
@@ -394,6 +403,23 @@ describe("given a front arch shell hanging off a wreck sitting low on the road (
   it("when the shell resting on the road is torn off, then it leaves bent as its hinge alone bends it, as the same shell torn off a car standing high", () => {
     const low = sunk();
     assert.ok(low.hang("archFL", 1).held, "the sunk wreck's shell does not rest on the road: there is no hold to tear it free of");
+    const high = crashed();
+    high.hang("archFL", 1);
+    const shape = (car: Probe) => ((car.tear("archFL").object as THREE.Mesh).geometry.getAttribute("position") as THREE.BufferAttribute).array;
+    assertSameNumbers(shape(low), shape(high), "torn shell vertices");
+  });
+
+  it("when the wreck lies on the flank the arch is on and the shell is hinged to full, then its flap, which reaches out of the body side into the road, stands on the road, not under it", () => {
+    const car = onFlank();
+    const p = car.hang("archFL", 1);
+    assert.ok(p.held, "the road held none of the flap: it hangs out of the flank into the road");
+    assert.ok(lowest(car, p) >= 0, `the arch shell's lowest point is ${(-lowest(car, p) * 100).toFixed(1)} cm under the road`);
+    assert.ok(lowest(car, p) < SKIN_OVER_ROAD, `the arch shell hangs ${(lowest(car, p) * 100).toFixed(1)} cm over the road: its flap did not drop to it`);
+  });
+
+  it("when the flank wreck's shell resting on the road is torn off, then it leaves bent as its hinge alone bends it, as the same shell torn off a car standing high", () => {
+    const low = onFlank();
+    assert.ok(low.hang("archFL", 1).held, "the flank wreck's shell does not rest on the road: there is no hold to tear it free of");
     const high = crashed();
     high.hang("archFL", 1);
     const shape = (car: Probe) => ((car.tear("archFL").object as THREE.Mesh).geometry.getAttribute("position") as THREE.BufferAttribute).array;

@@ -1074,8 +1074,7 @@ export abstract class CarParts extends CarGlass {
 
   /**
    * The road under arch shell `p` as `poseShell`'s `floor` in the body's frame: the plane the ground's height and normal under the
-   * shell's middle give, lifted `SHELL_CLEAR`. Null for a quarter panel (it never drops), with no ground under it, or on a car
-   * not on its wheels (on its side, the body's up runs along the road).
+   * shell's middle give, lifted `SHELL_CLEAR`. Null for a quarter panel (it never drops) and with no ground under it.
    */
   private shellFloor(p: DetachPart): Float64Array | null {
     if (p.region!.kind === "quarter") return null;
@@ -1091,7 +1090,7 @@ export abstract class CarParts extends CarGlass {
     _floor[1] = n.x * e[4]! + n.y * e[5]! + n.z * e[6]!;
     _floor[2] = n.x * e[8]! + n.y * e[9]! + n.z * e[10]!;
     _floor[3] = n.x * (e[12]! - at.x) + n.y * (e[13]! - gy) + n.z * (e[14]! - at.z) - SHELL_CLEAR;
-    return _floor[1]! < UPRIGHT_UP_Y ? null : _floor;
+    return _floor;
   }
 
   /** A torn shell counts against the car's cap: past `LIVE_SHELLS` the oldest stops being drawn. */
