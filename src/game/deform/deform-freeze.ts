@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { DeformContact } from "./deform-contact.ts";
 import { EPICENTER, epicenterOn } from "./epicenter.ts";
-import { MIN_MASS_SUM } from "./constants.ts";
+import { CONTACT_WINDOW, MIN_MASS_SUM } from "./constants.ts";
 import { MASS_SPECS } from "../kernel/rig-spec.ts";
 
 const _a = new THREE.Vector3();
@@ -50,6 +50,15 @@ export abstract class DeformFreeze extends DeformContact {
       this.freezes++;
       this.frozenBased = false;
     } else this.thaws++;
+  }
+
+  /**
+   * Whether the wreck's masses ride its body this slice: it is frozen (`EPICENTER`), or its rigid body sleeps and the contact window is long past, so
+   * its masses stand where the whole path left them. Stepped, a sleeper's structure crept on with nothing moving the body to meet it: a monster on
+   * its flank with its two low hubs popped sank its cage 8.2 cm into the ground at 7 cm/s over the second after it fell asleep.
+   */
+  standsAsleep(asleep: boolean): boolean {
+    return this.frozen || (asleep && this.quietTime() >= CONTACT_WINDOW);
   }
 
   /**
