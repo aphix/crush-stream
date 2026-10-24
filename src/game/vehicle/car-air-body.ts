@@ -334,6 +334,13 @@ export function push(v: THREE.Vector3, w: THREE.Vector3, q: THREE.Quaternion, r:
   w.addScaledVector(invInertia(_rn.crossVectors(r, dir), q, _qi, body.invI), j);
 }
 
+/** The body's kinetic energy per unit mass (J/kg): its velocity and its spin about its centre of mass. */
+export function kineticEnergy(): number {
+  const { v, w, invI } = body;
+  _rn.copy(w).applyQuaternion(_qi);
+  return 0.5 * (v.lengthSq() + (_rn.x * _rn.x) / invI.x + (_rn.y * _rn.y) / invI.y + (_rn.z * _rn.z) / invI.z);
+}
+
 const _ov = new THREE.Vector3();
 const _qo = new THREE.Quaternion();
 /** Contact `c`'s point velocity on the stepping body (`v`, `w`) against its surface, into `out`: the top of a car in the rigid step moves with that car. */

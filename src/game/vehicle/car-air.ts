@@ -9,7 +9,7 @@ import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-ut
 import { droop, FLANK_UP_Y, SPRINGS, UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
+import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes, kineticEnergy } from "./car-air-body.ts";
 import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop, readTyreSides, wreckShares, ROW_WHEEL } from "./car-air-points.ts";
 import { centreLift, centreY } from "./car-cage-rig.ts";
 import { store3d } from "../kernel/store.ts";
@@ -760,6 +760,31 @@ function pitchHolds(r: THREE.Vector3, n: THREE.Vector3): boolean {
   return push * closes >= 0;
 }
 
+/** Whether the solve has a rigid tyre row pushing straight up on the world's ground and none on a car (a car's top takes its reaction, `give`): the one case its impulse can add to the body's kinetic energy. */
+function liftsOnWorld(tyres: number, n: number): boolean {
+  let lifts = false;
+  for (let c = 0; c < n; c++) {
+    if (OWN[c]! >= 0) return false;
+    if (c < tyres && !SOFT[c] && DIR[c] === UP) lifts = true;
+  }
+  return lifts;
+}
+
+/**
+ * A contact's impulse never adds energy to a body, but a rigid tyre pushing straight up a face keeps the plan speed it lifts the body on: a
+ * coasting monster mounting a 31° face at 6 m/s gained 19.5 J/kg of the 31.7 it came with. The lift comes out of the plan speed: the body's
+ * kinetic energy after the solve is at most what it had before it.
+ */
+function holdLiftEnergy(before: number): void {
+  const excess = kineticEnergy() - before;
+  if (excess <= 0) return;
+  const { v } = body;
+  const plan = v.x * v.x + v.z * v.z;
+  const keep = plan > 2 * excess ? Math.sqrt(1 - (2 * excess) / plan) : 0;
+  v.x *= keep;
+  v.z *= keep;
+}
+
 function stepFreeBody(car: DeformableCar, dt: number): boolean {
   const q = car.group.quaternion;
   const pos = car.group.position;
@@ -1065,7 +1090,9 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   }
   snapshotRows(car, n);
   noteTyreSides(tyres, tyreSides);
+  const keBefore = liftsOnWorld(tyres, n) ? kineticEnergy() : NaN;
   solveRows(n);
+  if (keBefore === keBefore) holdLiftEnergy(keBefore);
   collectCrush(car, n);
   surf.commit();
   const hard = hardContactNear(tyres, n, body.nearing);
