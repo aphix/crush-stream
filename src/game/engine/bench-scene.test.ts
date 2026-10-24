@@ -56,12 +56,12 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
     assert.notEqual(digests["strip"], digests["city first"]);
   });
 
-  it("when the page enters the next step, then every Debug knob is at its default and the epicenter activation is off unless that step asks for it", () => {
+  it("when the page enters the next step, then every Debug knob but the activation is at its default, and the activation is off unless that step asks for it (the default is on)", () => {
     enterBenchScene(engine, engine.benchParts(), benchPlan("?bench=city&epi=1")!);
     assert.equal(epicenterOn(), true, "the control: the activation is on in its own arm");
     enterBenchScene(engine, engine.benchParts(), benchPlan("?bench=city")!);
     assert.equal(epicenterOn(), false, "off in the next step");
-    for (const knob of KNOBS) assert.equal(knob.get(), KNOB_DEFAULTS[knob.id], `${knob.id} at its default`);
+    for (const knob of KNOBS) if (knob.id !== "epi.on") assert.equal(knob.get(), KNOB_DEFAULTS[knob.id], `${knob.id} at its default`);
   });
 
   it("when the loop's steps are entered in turn (city, city with the activation, strip, city), then the card's arm label follows the knob each time: off, ON, off, off", () => {

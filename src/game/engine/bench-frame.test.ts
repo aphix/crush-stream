@@ -107,11 +107,13 @@ describe("given an A/B's arm whose sim cost swings from one second to the next, 
 
 describe("given the bench card's arm label, kept up to date by the bench's frames", () => {
   const knob = KNOBS.find((k) => k.id === "epi.on")!;
+  const initial = knob.get();
 
   it("when the epicenter knob is turned on between two frames, then the label reads ON after the next frame, and off again after the knob goes back", async () => {
     const { engine, parts, t, beat } = rig();
     const element = { textContent: "" as string | null, style: { cssText: "" } };
     beat.arm = new ArmBadge(element, epicenterOn);
+    knob.set(0);
     try {
       await frame(engine, parts.renderer, t, beat);
       assert.equal(element.textContent, "epicenter off", "the first frame");
@@ -122,7 +124,7 @@ describe("given the bench card's arm label, kept up to date by the bench's frame
       await frame(engine, parts.renderer, t, beat);
       assert.equal(element.textContent, "epicenter off", "the frame after it went back");
     } finally {
-      knob.set(0);
+      knob.set(initial);
     }
   });
 });

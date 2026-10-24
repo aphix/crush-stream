@@ -6,11 +6,11 @@ import { FREEWHEEL, launch, makeCar, makeWorld, PARKED, Probe, run } from "./cra
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { DriveInput } from "../vehicle/car-drive.ts";
-import { epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
+import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 
 /**
- * `whole` (the epicenter activation off, the default) is the solver as it was before the activation existed: a hash of every mass (world, velocity, local) and every car's pose and
+ * `whole` (the epicenter activation off, set by `staged`: the default is on) is the solver as it was before the activation existed: a hash of every mass (world, velocity, local) and every car's pose and
  * velocity after four staged crashes reads the same on the tree before the activation (`ed4aef07`) and after it. The pins are of THIS solver: a deliberate change to contact,
  * deform or car physics moves them and re-pins them (the commit says why); an activation change that moves one has changed `whole`.
  */
@@ -33,6 +33,7 @@ function digestOf(cars: DeformableCar[]): string {
 
 function staged(cars: DeformableCar[], barrier: boolean, probes: Probe[], pedals: DriveInput[], after: number): string {
   loadEpicenter(EPICENTER_AT_LOAD);
+  EPICENTER.on = 0;
   for (const c of cars) layOnGround(c);
   const w = makeWorld(cars, barrier, false, FREEWHEEL);
   for (const [i, c] of cars.entries()) w.pedals.set(c, pedals[i]!);

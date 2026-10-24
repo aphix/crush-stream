@@ -25,7 +25,7 @@ const ROOT = path.resolve(HERE, "../..");
 const PHASES = ["drive", "plan", "integrate", "wreck", "pairs", "structure", "course", "bake", "rules", "settle"];
 const COUNTERS = ["slices", "liveCarSlices", "wreckCarSlices", "asleepCarSlices", "pairTests", "pairContacts", "partContacts", "nodesLoose", "nodesLocked", "frozenCarSlices", "freezes", "thaws", "crossingsSkipped"];
 export const DEFAULT_ARMS = [
-  { name: "off", knobs: {} },
+  { name: "off", knobs: { "epi.on": 0 } },
   { name: "on", knobs: { "epi.on": 1 } },
 ];
 
