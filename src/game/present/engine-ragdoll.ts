@@ -49,6 +49,8 @@ import type { RideFrame } from "./ride-cam.ts";
 import type { Sight } from "./spectate-cam.ts";
 import { AIR_ANGULAR, AIR_LINEAR, ARM, blendPose, CALM_FOR, type Doll, GROUND_ANGULAR, GROUND_LINEAR, give, isCalm, JOINTS, limit, limp, PARTS, readPose, SETTLE_AFTER, SETTLE_ANGULAR, SETTLE_LINEAR, SHOULDER_Y } from "./ragdoll-body.ts";
 import { brace, joinUp, loosen } from "./ragdoll-joints.ts";
+import { Walker } from "./ragdoll-walker.ts";
+import { strikeAt } from "./ragdoll-hit.ts";
 import { groundColliders, PATCH_AHEAD, PATCH_HALF, type Pole } from "./ragdoll-ground.ts";
 import { courseSolids, type Solid } from "./ragdoll-solids.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
@@ -64,6 +66,8 @@ const GRACE = 0.35;
 const SLIDE = 0.12;
 /** Torso speed (m/s) under which a dummy counts as lying still. */
 const REST_SPEED = 0.4;
+/** The pool slot the player's walker takes: the last, so a throw that takes the oldest slot finds him driven and passes him by. */
+const WALKER_SLOT = SLOTS - 1;
 
 /**
  * Sim seconds a throw judged before Rapier is in may wait for it; later it is dropped (a dummy out of a car that
@@ -115,6 +119,7 @@ const Y = new THREE.Vector3(0, 1, 0);
 const _w = new THREE.Vector3();
 const _roll = new THREE.Vector3();
 const _com = new THREE.Vector3();
+const NO_MOTION = new THREE.Vector3();
 /** A thrown driver's centre of mass from his torso, standing, arms raised (`spawn`'s layout; the parts' masses go as their volumes): his roll turns about it. */
 const RAISED_COM = PARTS.reduce((sum, p, k) => {
   const m = p.h[0] * p.h[1] * p.h[2];
@@ -247,6 +252,8 @@ export class RagdollSystem {
   private readonly proxies = new CarProxies(this.dolls);
   /** The ride-along camera over the dummies (`follow`, `frameCamera`). */
   private readonly ride = new RideAlong();
+  /** One walker per pool slot: a dummy of the pool (`startWalker`) held up and walked by motors, in this world with the cars and the ground. The player on foot is the one in `WALKER_SLOT`. */
+  readonly walkers: readonly Walker[] = Array.from({ length: SLOTS }, () => new Walker());
 
   /**
    * `onThrow(car)`: a sandbox driver just left car `car` (the engine decides whether the camera follows).
@@ -305,7 +312,7 @@ export class RagdollSystem {
         return body;
       });
       const joints = joinUp(R, world, bodies);
-      this.dolls.push({ bodies, joints, loose: false, braced: false, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3) });
+      this.dolls.push({ bodies, joints, loose: false, braced: false, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3), driven: false });
     }
     // A child of the dummies' mesh, so the scene root keeps its one `ragdolls` child and the props draw only while a dummy is out.
     this.mesh.add((this.purses = this.proxies.purses = new Purses(R, world, SLOTS, propGroups, GRACE)).mesh);
@@ -426,6 +433,7 @@ export class RagdollSystem {
       this.step = step;
       world.timestep = step;
     }
+    if (steps > 0) for (let s = 0; s < SLOTS; s++) this.walkers[s]!.control(steps * step);
     for (let j = 1; j <= steps; j++) {
       this.proxies.move(Math.min(1, (j * step - lead) / dt));
       // One step this frame: the pose before it is the last frame's last (nothing moves a part between steps but a step).
@@ -447,7 +455,7 @@ export class RagdollSystem {
       for (let s = 0; s < SLOTS; s++) {
         const d = this.dolls[s]!;
         if (!d.live) continue;
-        this.hits(s, d);
+        if (!d.driven) this.hits(s, d);
         limit(d.bodies);
       }
     }
@@ -473,7 +481,7 @@ export class RagdollSystem {
       d.vel[1] = v.y;
       d.vel[2] = v.z;
       d.still = d.speed < REST_SPEED ? d.still + dt : 0;
-      this.calm(d, dt);
+      if (!d.driven) this.calm(d, dt);
       if (this.hosted) continue;
       for (let k = 0; k < PARTS.length; k++) {
         this.blend(d, k, _p, _q);
@@ -847,10 +855,84 @@ export class RagdollSystem {
     this.place(_p.set(d.cur[0]!, d.cur[1]!, d.cur[2]!), _q.set(d.cur[3]!, d.cur[4]!, d.cur[5]!, d.cur[6]!), v, _w.set(0, 0, 0), Infinity, s);
   }
 
+  /** The dummies' instanced mesh: what a press picks a dummy from (its instance is his pool slot). */
+  get pickMesh(): DummyMesh {
+    return this.mesh;
+  }
+
+  /** The player on foot: his walker. */
+  get walker(): Walker {
+    return this.walkers[WALKER_SLOT]!;
+  }
+
+  /** A dummy in `dress` stands with his feet at `at` facing `yaw`, held up and walked by the walker of his pool slot (`slot`: the player's, or a free one); his slot, or -1 while Rapier is still loading. */
+  startWalker(at: THREE.Vector3, yaw: number, dress: { cop: boolean; look: DriverLook }, slot = WALKER_SLOT): number {
+    if (!this.R || !this.world) return -1;
+    _p.set(at.x, at.y + PARTS[0].c[1], at.z);
+    _q.setFromAxisAngle(Y, yaw);
+    const placed = this.place(_p, _q, NO_MOTION, NO_MOTION, Infinity, slot, dress);
+    if (placed >= 0) this.walkers[placed]!.attach(this.R, this.world, this.dolls[placed]!, yaw);
+    return placed;
+  }
+
+  /** The walker in `slot` leaves the pool: the slot is free for a throw again. */
+  stopWalker(slot = WALKER_SLOT): void {
+    if (this.walkers[slot]!.active) this.despawn(slot);
+  }
+
+  /** A push of `speed` m/s along `direction` lands on the world `point` of the dummy the walker in `slot` is (`strikeAt`), and he goes limp: a ragdoll that reacts to where it landed. */
+  strikeWalker(slot: number, point: THREE.Vector3, direction: THREE.Vector3, speed: number): void {
+    const d = this.dolls[slot];
+    if (!d?.live) return;
+    strikeAt(d.bodies, point, direction, speed);
+    this.walkers[slot]!.struck();
+  }
+
+  /** The first slot no dummy is out in, or -1. */
+  freeSlot(): number {
+    return this.dolls.findIndex((d) => !d.live);
+  }
+
+  /** His torso as drawn this frame (between the last two steps) into `out`; false while he is not out. */
+  walkerTorso(out: THREE.Vector3, slot = WALKER_SLOT): boolean {
+    const d = this.dolls[slot];
+    if (!d?.live) return false;
+    blendPose(d.prev, d.cur, 0, this.alpha, out, _q);
+    return true;
+  }
+
+  /**
+   * A car ran him down (`runsDown`; `s` from `fell`, the launch a lawn guard or the VIP takes): every part moves as one body at the strike's
+   * velocity and spin, he goes limp (`Walker.struck`) and ignores the car for `GRACE` s, as a thrown figure does. Nothing while he is not out.
+   */
+  knockWalker(s: FigureStrike): void {
+    const d = this.dolls[WALKER_SLOT];
+    if (!d?.live) return;
+    const centre = d.bodies[0]!.translation();
+    _s.set(s.wx, s.wy, s.wz);
+    const groups = thrownGroups(WALKER_SLOT, s.car);
+    for (const body of d.bodies) {
+      const at = body.translation();
+      _r.set(at.x - centre.x, at.y - centre.y, at.z - centre.z);
+      _c.copy(_s).cross(_r);
+      _v.x = s.vx + _c.x;
+      _v.y = s.vy + _c.y;
+      _v.z = s.vz + _c.z;
+      body.setLinvel(_v, true);
+      _v.x = s.wx;
+      _v.y = s.wy;
+      _v.z = s.wz;
+      body.setAngvel(_v, true);
+      body.collider(0).setCollisionGroups(groups);
+    }
+    d.age = 0;
+    this.walker.struck();
+  }
+
   /** Throw `t`'s dummy into slot `at` (-1: a free slot, else the oldest one's), to lie about `life` sim s, in `dressed` (none: his car's driver's look); returns the slot. */
   spawn(t: Throw, at = -1, life = this.thrownLife, dressed: DriverLook | null = null): number {
     let slot = at >= 0 ? at : this.dolls.findIndex((d) => !d.live);
-    if (slot < 0) slot = this.dolls.reduce((o, d, s) => (d.age > this.dolls[o]!.age ? s : o), 0);
+    if (slot < 0) slot = this.dolls.reduce((o, d, s) => (!d.driven && (this.dolls[o]!.driven || d.age > this.dolls[o]!.age) ? s : o), 0);
     this.despawn(slot);
     const d = this.dolls[slot]!;
     const t0 = PARTS[0]!.c;
@@ -1164,6 +1246,7 @@ export class RagdollSystem {
 
   private despawn(s: number): void {
     const d = this.dolls[s]!;
+    if (d.driven) this.walkers[s]!.detach();
     if (d.live) this.live--;
     d.live = false;
     for (const b of d.bodies) disable(b);
