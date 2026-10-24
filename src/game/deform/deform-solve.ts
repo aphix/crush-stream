@@ -264,10 +264,13 @@ export abstract class DeformSolve extends DeformFreeze {
         rel -= k;
       }
       along = Math.max(-cap, Math.min(cap, rel));
-      if (!cabin && this.hitSpeed >= 0) {
+      if ((!cabin || m.name === "roof") && this.hitSpeed >= 0) {
         // Sheet metal keeps its set: only the elastic part of the crush springs back. Only a loading contact's crush sets, within its contact hold:
         // unloaded, each set's rest shift drew its mass (and the seated frame) on in, which read as more crush: a ratchet.
         // A door pressed onto its band's max is packed (`nodePacked`): no elastic part is left, so it rests on its cap.
+        // The roof is sheet metal too (the cell, the frame's anchor, is not): with no set its rest was wherever the clusters' elastic residual
+        // left it when the contact window closed (the windscreen cluster's squash kept drawing it past its seat), so it takes the set like the
+        // panels around it and stands on it once the contact lets go: its elastic part is back then, and no clock or cluster pull ends its settle.
         const set = along - (packed && along >= cap ? 0 : Math.min(SPRINGBACK, SPRING_YIELD + SPRING_SHARE * along));
         if (set > m.crushSet && this.quietTime() <= CONTACT_HOLD) {
           if (this.mode === "shape") {
@@ -277,7 +280,8 @@ export abstract class DeformSolve extends DeformFreeze {
             this.restTakesSet(i);
           }
           m.crushSet = set;
-        } else if (along < m.crushSet) along = m.crushSet;
+        } else if (cabin && this.quietTime() > CONTACT_HOLD) along = m.crushSet;
+        else if (along < m.crushSet) along = m.crushSet;
       }
       along += into;
       const perp = hypot2(px, pz);
