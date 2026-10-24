@@ -3,6 +3,7 @@ import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { DeformableCar } from "./car.ts";
 import { sampleField } from "../contact/cage-outline.ts";
 import { layOnGround } from "./car-air-points.ts";
+import { rigidCentre } from "./car-air.ts";
 import { assignClass, CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
 import { paint } from "./test-support.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
@@ -104,6 +105,8 @@ export type Fit = {
 const _p = new THREE.Vector3();
 const _n = new THREE.Vector3();
 const _m = new THREE.Vector3();
+const _centre = new THREE.Vector3();
+const _centre0 = new THREE.Vector3();
 const _hub: THREE.Vector3[] = [0, 1, 2, 3].map(() => new THREE.Vector3());
 const _g = [0, 0, 0, 0];
 
@@ -337,6 +340,7 @@ export function worstGap(f: Fit): number {
 
 const BRAKE: DriveInput = { throttle: 0, steer: 0, brake: 1, ebrake: true, boost: false };
 
+/** `slide` is the rigid centre's travel: a lifted body turning about its centre swings its origin without sliding. */
 export type Drop = Fit & { slide: number; speed: number };
 
 /** The car a drop of class `cls` uses: built once and stood up again by `spawnFacing` (the engine's own scene reset, `resetVisual`) for each of a matrix's thousand cells. */
@@ -348,6 +352,11 @@ function pooled(cls: VehicleClassId): DeformableCar {
     dropCars.set(cls, car);
   }
   return car;
+}
+
+/** `car`'s rigid centre (a wreck's masses' centroid) in the world, into `out`. */
+function centreOf(car: DeformableCar, out: THREE.Vector3): THREE.Vector3 {
+  return out.copy(rigidCentre(car)).applyQuaternion(car.group.quaternion).add(car.group.position);
 }
 
 /**
@@ -366,11 +375,13 @@ export function drop(
   const car = pooled(cls);
   car.spawnFacing(x, z, yaw, 0);
   car.group.position.y = ground.heightAt(x, z, o.hint) + (o.height ?? 0.5);
+  centreOf(car, _centre0);
   const w = worldOf(car, o.collide ?? null);
   const st = { acc: 0 };
   for (let f = 0; f < (o.seconds ?? 3) / FRAME; f++) frame(w, BRAKE, st);
   const r = fit(car, ground);
-  const slide = Math.hypot(car.group.position.x - x, car.group.position.z - z);
+  centreOf(car, _centre);
+  const slide = Math.hypot(_centre.x - _centre0.x, _centre.z - _centre0.z);
   const speed = car.velocity.length();
   // Not disposed: the next drop of this class stands it up again.
   return { ...r, slide, speed };

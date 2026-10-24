@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { type CrashWorld, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { buildCar, TOP_PARTS } from "./drawn-body.test-util.ts";
 import { makeLampUnit, makeWheelGeometry } from "./car-materials.ts";
 import type { CarStyleId } from "./car-variants.ts";
@@ -10,7 +10,7 @@ import type { DeformableCar } from "./car.ts";
 import { PART_KIND, PartSeat } from "./part-geometry.ts";
 import { CLASSES, VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
 import { CLASS_LIFT } from "./constants.ts";
-import { BUMP_RESERVE, droop, UPRIGHT_UP_Y } from "./car-suspension.ts";
+import { BUMP_RESERVE, droop } from "./car-suspension.ts";
 import { FRAME_RAIL_Y } from "./interior-geometry.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 
@@ -26,8 +26,10 @@ const FLEET: Fleet = [
   { style: "pickup", cls: "truck" },
   { style: "sedan", cls: "monster" },
 ];
-/** The classes whose flank stands the body off the ground by less than a mirror's reach: a monster's tyres stand its body 0.25 m clear (its own rows below). */
-const FLANK_FLEET: Fleet = VEHICLE_CLASS_IDS.filter((cls) => cls !== "monster").map((cls) => ({ style: CLASSES[cls].style, cls }));
+/** The flank row's classes: the fleet's, then the other four, so every class has its flank tested. */
+const FLANK_FLEET: Fleet = [...FLEET, ...VEHICLE_CLASS_IDS.filter((cls) => !FLEET.some((f) => f.cls === cls)).map((cls) => ({ style: CLASSES[cls].style, cls }))];
+/** The hubs of the tyres a car lying on its `left` or `right` flank stands on: with those gone it lies on its body. */
+const LOW_HUBS = { left: ["hubFL", "hubRL"], right: ["hubFR", "hubRR"] } as const;
 /** The attitudes a car is dropped in (pitch, yaw, roll about the car's own axes, radians): flat on its roof, on its left flank, on its right flank. */
 const ATTITUDE = {
   roof: [0, 0, Math.PI],
@@ -47,8 +49,10 @@ const CROWN_DEPTH_M = 0.15;
 const NOSE_HIT_M = 2.05;
 /** A mirror of a car on its wheels is at least this high (m): it stands on the door, a good half metre up. */
 const MIRROR_ON_WHEELS_MIN_M = 0.3;
-/** A monster on its flank stands its body and mirrors at least this far (m) over the ground on its tyres (measured 0.16-0.25 m). */
-const TYRE_STANDOFF_M = 0.1;
+/** A loaded tyre's sidewall flattens about this much (m) under its share of the car, and the drawn tread stands a little under the footprint the sim rests on. */
+const TYRE_SQUASH_M = 0.03;
+/** A sleeping wreck's mass stays within this (m) of where it lay. */
+const MASS_STILL_M = 1e-3;
 /** The platform tyre's vertices (wheel-local, axle along x): a car's own tyre scales them, as the wheel batch draws it. */
 const TYRE_POINTS = makeWheelGeometry().getAttribute("position");
 /** A nose hit (m/s) hard enough to tear the hood off every fleet class but the monster, whose bay stays shut. */
@@ -131,13 +135,14 @@ function lowestDrawn(car: DeformableCar, crown: ReadonlySet<number>): Lowest {
   return low;
 }
 
-/** A car of `style` and `cls` dropped in `attitude` from `height` m (its lowest drawn point) on the flat pad and left `DROP_SECONDS` s, a wreck once its nose is hit first at `strike` m/s (none: 0); with the crown it had fresh. */
-function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, height: number, strike = 0): { car: DeformableCar; lowest: Lowest } {
+/** A car of `style` and `cls` dropped in `attitude` from `height` m (its lowest drawn point) on the flat pad and left `DROP_SECONDS` s, a wreck once its nose is hit first at `strike` m/s (none: 0), the hubs in `popped` torn off after the hit; with the crown it had fresh. */
+function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, height: number, strike = 0, popped: readonly string[] = []): { car: DeformableCar; lowest: Lowest; world: CrashWorld } {
   const car = buildCar(style, cls);
   car.spawnFacing(0, 0, 0, 0);
   car.updateSkin();
   const crown = crownVertices(car);
   if (strike > 0) car.applyImpact(car.group.position.clone().addScaledVector(car.forward, NOSE_HIT_M), car.forward.clone().negate(), strike, strike);
+  for (const name of popped) car.deform.popHub(car.deform.masses.find((m) => m.name === name)!);
   const [pitch, yaw, roll] = ATTITUDE[attitude];
   car.group.rotation.set(pitch, yaw, roll, "YXZ");
   car.group.updateMatrixWorld(true);
@@ -146,7 +151,7 @@ function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, hei
   car.parked = true;
   const world = makeWorld([car], false, false);
   for (let f = 0; f < DROP_SECONDS * FRAME_HZ; f++) tickWorld(world, 1 / FRAME_HZ);
-  return { car, lowest: lowestDrawn(car, crown) };
+  return { car, lowest: lowestDrawn(car, crown), world };
 }
 
 const cm = (m: number): string => `${(m * 100).toFixed(1)} cm`;
@@ -203,28 +208,43 @@ describe("given a car dropped onto its left or right flank on the flat pad, from
 
 describe("given any class dropped onto its left or right flank on the flat pad, from 0.5 and from 2 m, and left to rest", () => {
   for (const cls of VEHICLE_CLASS_IDS) {
-    it(`when it is a ${cls}, then no tyre's tread is in the ground: a tyre lying flank-down is rigid on the ground, its springs run along the body's up and are not under it`, (t) => {
+    it(`when it is a ${cls}, then no tyre sinks more than its sidewall flattens: the tyres it lies on carry its whole weight, each its half`, (t) => {
       for (const side of ["left", "right"] as const) {
         for (const height of [0.5, 2]) {
           const { lowest } = dropped(CLASSES[cls].style, cls, side, height);
           t.diagnostic(`${cls} dropped on its ${side} flank from ${height} m: lowest tyre ${cm(lowest.tyres)} over the ground`);
-          assert.ok(lowest.tyres > 0, `${cls} dropped on its ${side} flank from ${height} m: a tyre ${cm(-lowest.tyres)} into the ground`);
+          assert.ok(lowest.tyres > -TYRE_SQUASH_M, `${cls} dropped on its ${side} flank from ${height} m: a tyre ${cm(-lowest.tyres)} into the ground`);
         }
       }
     });
   }
+});
 
-  it("when it is a monster, then it rests on its two low tyres: its body and both mirrors stand clear of the ground and neither mirror is torn off", () => {
+describe("given a monster that lost the two wheels on one side, dropped onto that flank on the flat pad, from 0.5 and from 2 m, and left to rest", () => {
+  it("when it rests, then it lies on its body: the drawn body stays out of the ground, the mirror it lies on is torn off, and the other mirror is left as it was", (t) => {
     for (const side of ["left", "right"] as const) {
       for (const height of [0.5, 2]) {
-        const { car, lowest } = dropped("sedan", "monster", side, height);
-        const q = car.group.quaternion;
-        const tag = `monster dropped on its ${side} flank from ${height} m`;
-        assert.ok(Math.abs(1 - 2 * (q.x * q.x + q.z * q.z)) < UPRIGHT_UP_Y, `${tag}: it did not come to rest on its flank`);
-        assert.ok(lowest.body > TYRE_STANDOFF_M, `${tag}: body ${cm(lowest.body)} over the ground, the tyres' stand-off is lost`);
-        assert.ok(lowest.mirrors > TYRE_STANDOFF_M, `${tag}: a mirror ${cm(lowest.mirrors)} over the ground`);
-        assert.ok(!car.partOff("mirrorL") && !car.partOff("mirrorR"), `${tag}: a mirror that stands clear of the ground was torn off`);
+        const { car, lowest } = dropped("sedan", "monster", side, height, 0.5, LOW_HUBS[side]);
+        const tag = `monster without its ${side} wheels dropped on its ${side} flank from ${height} m`;
+        const [down, up] = side === "left" ? (["mirrorL", "mirrorR"] as const) : (["mirrorR", "mirrorL"] as const);
+        t.diagnostic(`${tag}: body ${cm(lowest.body)}, mirrors ${cm(lowest.mirrors)} over the ground`);
+        assert.ok(lowest.body > -BODY_SINK_M, `${tag}: body ${cm(-lowest.body)} into the ground`);
+        assert.ok(lowest.mirrors > -PART_SINK_M, `${tag}: a mirror ${cm(-lowest.mirrors)} into the ground`);
+        assert.ok(car.partOff(down), `${tag}: the mirror under the car is still on it`);
+        assert.ok(!car.partOff(up), `${tag}: the mirror above the car was torn off`);
       }
+    }
+  });
+
+  it("when it has slept for 2 s more, then none of its masses has moved a millimetre: a sleeping wreck's masses stand where it lies", () => {
+    for (const side of ["left", "right"] as const) {
+      const { car, world } = dropped("sedan", "monster", side, 2, 0.5, LOW_HUBS[side]);
+      const tag = `monster without its ${side} wheels dropped on its ${side} flank from 2 m`;
+      assert.ok(car.asleep, `${tag}: it has not fallen asleep in ${DROP_SECONDS} s`);
+      const before = car.deform.masses.map((m) => m.local.clone());
+      for (let f = 0; f < 2 * FRAME_HZ; f++) tickWorld(world, 1 / FRAME_HZ);
+      const moved = Math.max(...car.deform.masses.map((m, i) => m.local.distanceTo(before[i]!)));
+      assert.ok(car.asleep && moved < MASS_STILL_M, `${tag}: a mass moved ${cm(moved)} in 2 s asleep`);
     }
   });
 });

@@ -218,7 +218,8 @@ type Drive = {
 /**
  * One car of `type` parked at the station's start on the real ground (laid on the floor, the parked flag set), left alone, then
  * released at full throttle and steered down the lane's middle with the ground's hook on the world (`assignHook`: the control without it).
- * It ends at its throw plus `AFTER_THROW_SECONDS` (the thrown driver's car freewheels), or at the long jump's lip, or a stall.
+ * It ends at its throw plus `AFTER_THROW_SECONDS`, or at the long jump's lip, or a stall; the control ends at the lip too, as past it the
+ * unhooked car flies on into the backstop and is really thrown.
  */
 function driveFromStart(type: DriverCar, mode: MinigameMode, assignHook = true): Drive {
   const anchor = STATION_ANCHORS[mode];
@@ -268,7 +269,7 @@ function driveFromStart(type: DriverCar, mode: MinigameMode, assignHook = true):
       if (!drive.reachedLip && position.x >= anchor.x) {
         drive.reachedLip = true;
         if (!thrown) drive.lipSpeed = car.speed;
-        if (mode === "longJump") break;
+        if (mode === "longJump" || !assignHook) break;
       }
       stalledFor = car.speed < STALLED_SPEED ? stalledFor + PROBE_FRAME : 0;
       if (stalledFor > STALL_SECONDS) break;
@@ -302,7 +303,7 @@ describe("given each of the 7 car types parked at each station's start on the re
     });
   }
 
-  it("when the world's collide hook is not assigned, then the sedan reaches the high jump's lip and Ring Fling's and nobody is thrown: the hook is what throws", () => {
+  it("when the world's collide hook is not assigned, then the sedan reaches the high jump's lip and Ring Fling's and nobody is thrown by the run up to it: the hook is what throws (past the lip the unhooked sedan flies into the backstop at 29 m/s, a crash that really throws)", () => {
     const sedan = DRIVER_CARS.find((type) => type.id === "sedan")!;
     for (const mode of ["highJump", "ringFling"] as const) {
       const drive = driveFromStart(sedan, mode, false);
