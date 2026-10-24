@@ -137,21 +137,20 @@ function stopInto(car: DeformableCar, nx: number, nz: number): void {
 
 /**
  * The drawn body rides the rigid body, so a shove also answers what the body's turn swept in, which `strikeCar` (the centre's closing) never
- * reads: the face takes it at the deepest vertex (`faceExit`), the rigid plastic impulse that leaves that point closing at the centre's speed.
- * Masses on the face carry the stop as they carry its exchange (the driving ones, `refVn` 0); with none on it the drawn body is the only
- * contact and every mass takes the impulse whole. Whole on every slice of a post's side face, a wreck clipping it as it swings round exits at either of two spins.
+ * reads: the face takes it at the deepest vertex (`faceExit`), the rigid plastic impulse that leaves that point closing no faster than the centre.
+ * A centre leaving the face carries the vertex out with it, so only the closing the sweep still has beyond that is stopped (none where the vertex
+ * opens): stopping the sweep alone kicked a wreck wrapping a post on every slice and it exited at either of two spins.
  */
 function stopTurnInto(car: DeformableCar, nx: number, nz: number): void {
   const centre = _turnCentre.copy(wreckCentre(car)).applyQuaternion(car.group.quaternion);
   const rx = faceExit.offX - centre.x;
   const rz = faceExit.offZ - centre.z;
   const lever = rz * nx - rx * nz;
-  const sweep = car.angular.y * lever;
-  if (sweep >= 0) return;
-  const dvn = -sweep / (1 + lever * lever * wreckInvI.y);
+  const closing = car.angular.y * lever + Math.max(0, car.velocity.x * nx + car.velocity.z * nz);
+  if (closing >= 0) return;
+  const dvn = -closing / (1 + lever * lever * wreckInvI.y);
   const pos = car.group.position;
-  const onFace = car.deform.faceContacts > 0;
-  car.deform.shiftBody(car.velocity, car.angular, nx * dvn, nz * dvn, dvn * lever * wreckInvI.y, pos.x + centre.x, pos.z + centre.z, nx, nz, onFace ? 0 : Infinity);
+  car.deform.shiftBody(car.velocity, car.angular, nx * dvn, nz * dvn, dvn * lever * wreckInvI.y, pos.x + centre.x, pos.z + centre.z, nx, nz, Infinity);
 }
 
 /**
