@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import { ALONG, COMPASS, judge, report, type Heading, type Kind, type Run, type Site } from "./ground-judge.test-util.ts";
-import { drive, drop } from "./ground-probe.test-util.ts";
+import { bodyPointDepth, drive, drop } from "./ground-probe.test-util.ts";
 import { VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
 import { FleetRamps, RAMP } from "../scenes/fleet-ramps.ts";
 import { collideOn } from "../scenes/ramp-collide.test-util.ts";
@@ -216,5 +216,35 @@ describe("given a car with its brakes off on the fleet ramp's face", () => {
     const r = drop(ramps, "sedan", 0, MID, 0, { collide, seconds: 3, brake: false, speed: 3 });
     assert.ok(r.slide > 0.5, `the centre slid only ${r.slide.toFixed(2)} m down the face`);
     assert.ok(judge("plain", r).includes("slide"), "the judge does not flag the slide");
+  });
+});
+
+describe("given the judge's reading of a hull point in the fleet ramp", () => {
+  afterEach(() => setGround(null));
+
+  /** How far (m) the controls' points stand in from the face they enter by. */
+  const IN = 0.05;
+
+  // The controls for the judge's depth: a point is as deep as its shortest way out, wall or floor, so the judge goes red when it
+  // reads a side face as its height under the top (a point 1 mm in a side face and 10 cm under the top is 1 mm in, not 10 cm).
+  it("when a point stands 5 cm through the ramp's side face and 10 cm under its top, then it reads 5 cm in by that side", () => {
+    setGround(ramps);
+    const top = ramps.heightAt(RAMP.halfW - IN, MID, undefined);
+    const { depth, side } = bodyPointDepth(RAMP.halfW - IN, top - 0.1, MID);
+    assert.ok(side && Math.abs(depth - IN) < 1e-6, `${side ? "side" : "floor"} ${(depth * 100).toFixed(2)} cm in`);
+  });
+
+  it("when a point stands 1 mm inside the side face and 10 cm under the top, then it reads 1 mm in, not 10 cm", () => {
+    setGround(ramps);
+    const top = ramps.heightAt(RAMP.halfW - 0.001, MID, undefined);
+    const { depth, side } = bodyPointDepth(RAMP.halfW - 0.001, top - 0.1, MID);
+    assert.ok(side && Math.abs(depth - 0.001) < 1e-6, `${side ? "side" : "floor"} ${(depth * 100).toFixed(2)} cm in`);
+  });
+
+  it("when a point stands 5 cm under the ramp's top, in the middle of its face, then it reads 5 cm in under it", () => {
+    setGround(ramps);
+    const top = ramps.heightAt(0, MID, undefined);
+    const { depth, side } = bodyPointDepth(0, top - IN, MID);
+    assert.ok(!side && Math.abs(depth - IN) < 1e-6, `${side ? "side" : "floor"} ${(depth * 100).toFixed(2)} cm in`);
   });
 });
