@@ -333,6 +333,10 @@ export abstract class DeformSolve extends DeformFreeze {
       if (away > HUB_RETURN_MAX) {
         m.world.addScaledVector(_a, HUB_RETURN_MAX / away);
         m.local.copy(m.world).applyMatrix4(_inverse.copy(group.matrixWorld).invert());
+        // The step is the hub going home, not the cloud turning: held where it now stands, `undoTurn` does not count it as a turn and turn the whole wreck back by it (derby seed 3 c0, lying on its roof at 1.4 rad/s:
+        // each clamp's +0.3 m return was undone by 0.38 m and the hubs walked 0.15 to 1.6 m off their places in ten slices).
+        this.turnX[i] = m.world.x;
+        this.turnZ[i] = m.world.z;
         return;
       }
     }

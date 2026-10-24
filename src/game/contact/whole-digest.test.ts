@@ -50,7 +50,7 @@ describe("given four staged crashes with the epicenter activation off", () => {
     const b = makeCar("shape");
     launch(a, -5, 0, Math.PI / 2, 20, 0);
     launch(b, 5, 0, -Math.PI / 2, -20, 0);
-    assert.equal(staged([a, b], false, [new Probe(a, X), new Probe(b, NX)], [FREEWHEEL, FREEWHEEL], 5), "fb01a6cf3d0c2038");
+    assert.equal(staged([a, b], false, [new Probe(a, X), new Probe(b, NX)], [FREEWHEEL, FREEWHEEL], 5), "baff0220de6d5ea7");
   });
 
   it("when a car meets a parked one's door at 50 km/h, 5 s, then every mass and pose is the pinned one", () => {
@@ -58,13 +58,13 @@ describe("given four staged crashes with the epicenter activation off", () => {
     const b = makeCar("shape");
     launch(a, 0, 0, 0, 0, 0);
     launch(b, 6, 0, -Math.PI / 2, -50 * KPH, 0);
-    assert.equal(staged([a, b], false, [new Probe(a, NX), new Probe(b, NX)], [PARKED, FREEWHEEL], 5), "0555910764384cc5");
+    assert.equal(staged([a, b], false, [new Probe(a, NX), new Probe(b, NX)], [PARKED, FREEWHEEL], 5), "a822a3b1f1a859d0");
   });
 
   it("when a car hits the held barrier at 50 km/h, 5 s, then every mass and pose is the pinned one", () => {
     const a = makeCar("shape");
     launch(a, 6.2, 0, -Math.PI / 2, -50 * KPH, 0);
-    assert.equal(staged([a], true, [new Probe(a, a.velocity)], [FREEWHEEL], 5), "2b86a03b3868a69a");
+    assert.equal(staged([a], true, [new Probe(a, a.velocity)], [FREEWHEEL], 5), "9fd91e7d5989df85");
   });
 
   it("when three cars pile up, 6 s, then every mass and pose is the pinned one", () => {

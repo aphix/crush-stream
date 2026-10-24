@@ -306,3 +306,34 @@ describe("given a wreck quiet past PLANT_QUIET and lying over, with a hub 1 m of
     assert.ok(home < 0.1, `the hub stands ${home.toFixed(3)} m off its place after ${HUB_HOME_CLAMPS} clamps`);
   });
 });
+
+/** How far (rad) the four hubs are turned about the wreck's centre from their places: a wreck that spun on its roof while its hubs stayed where the world held them. */
+const HUBS_TURNED_RAD = 0.5;
+const HUBS_TURNED_CLAMPS = 12;
+
+describe("given a wreck quiet past PLANT_QUIET and lying over, with its four hubs turned 0.5 rad about its centre off their places", () => {
+  it("when its frame is read again and again, then the hubs come home and the clamp's turn undo does not walk them back out", () => {
+    const d = wreck();
+    const group = new THREE.Group();
+    group.updateMatrixWorld();
+    d.stepStructure(PLANT_QUIET + 0.05, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), LYING_ROLL));
+    assert.ok(d.quietTime() > PLANT_QUIET, `quiet ${d.quietTime().toFixed(3)} s: the wreck is not past its plant time`);
+    const [cx, cz] = centroid(d);
+    const hubs = d.masses.filter((q) => q.hub && !q.popped);
+    const c = Math.cos(HUBS_TURNED_RAD);
+    const s = Math.sin(HUBS_TURNED_RAD);
+    for (const q of hubs) {
+      const rx = q.world.x - cx;
+      const rz = q.world.z - cz;
+      q.world.x = cx + rx * c - rz * s;
+      q.world.z = cz + rx * s + rz * c;
+    }
+    const off = (): number => Math.max(...hubs.map((q) => Math.hypot(q.world.x - q.rest.x, q.world.z - q.rest.z)));
+    const start = off();
+    assert.ok(start > 0.5, `the hubs stand ${start.toFixed(3)} m off their places: not far enough to need a return`);
+    const velocity = new THREE.Vector3();
+    const spin = new THREE.Vector3();
+    for (let k = 0; k < HUBS_TURNED_CLAMPS; k++) d.followGroup(group, velocity, spin, 1 / FRAME_HZ);
+    assert.ok(off() < 0.1, `the hubs stand ${off().toFixed(3)} m off their places after ${HUBS_TURNED_CLAMPS} clamps (from ${start.toFixed(3)} m)`);
+  });
+});
