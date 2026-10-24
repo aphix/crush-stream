@@ -276,3 +276,33 @@ describe("given a still sedan wreck that a car is driven straight at", () => {
     });
   }
 });
+
+/** A quiet wreck turned this far (rad) about its length lies over: its frame's up is under `LYING_UP_Y` (0.5), the plant is over. */
+const LYING_ROLL = (70 * Math.PI) / 180;
+/** How far (m) the hub is stood off its place: a wreck carried on another's top, whose wheels stayed where they stood while the body went. */
+const HUB_STRANDED_M = 1;
+/** The hub's farthest return (m) in one clamp, and the clamps its way home takes at most. */
+const HUB_RETURN_STEP_M = 0.3 + 1e-9;
+const HUB_HOME_CLAMPS = 6;
+
+describe("given a wreck quiet past PLANT_QUIET and lying over, with a hub 1 m off its place (its plant over: a tipped wreck that was carried)", () => {
+  it("when its frame is read, then the hub returns toward its place by 0.3 m a clamp, not across the body in one, and is home within a few", () => {
+    const d = wreck();
+    const group = new THREE.Group();
+    group.updateMatrixWorld();
+    const hub = d.masses.find((q) => q.hub && !q.popped)!;
+    d.stepStructure(PLANT_QUIET + 0.05, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), LYING_ROLL));
+    assert.ok(d.quietTime() > PLANT_QUIET, `quiet ${d.quietTime().toFixed(3)} s: the wreck is not past its plant time`);
+    hub.world.y += HUB_STRANDED_M;
+    const velocity = new THREE.Vector3();
+    const spin = new THREE.Vector3();
+    const before = hub.world.clone();
+    d.followGroup(group, velocity, spin, 1 / FRAME_HZ);
+    const moved = hub.world.distanceTo(before);
+    assert.ok(moved > 0.05, `the hub did not move (${moved.toFixed(3)} m): it was not written back, so there is nothing to bound`);
+    assert.ok(moved <= HUB_RETURN_STEP_M, `the hub crossed ${moved.toFixed(3)} m in one clamp`);
+    for (let k = 1; k < HUB_HOME_CLAMPS; k++) d.followGroup(group, velocity, spin, 1 / FRAME_HZ);
+    const home = Math.hypot(hub.world.x - hub.rest.x, hub.world.y - hub.rest.y, hub.world.z - hub.rest.z);
+    assert.ok(home < 0.1, `the hub stands ${home.toFixed(3)} m off its place after ${HUB_HOME_CLAMPS} clamps`);
+  });
+});
