@@ -16,6 +16,10 @@ const REACHED_CANARY = 1.6;
 const SHORT_HOLD = 1;
 /** The time scale the clock has eased back up to before the second pair is sent in: the speed-up between crashes. */
 const BACK_UP = 0.9;
+/** Frames the second pair has to meet in: the ease holds the slow scale for the last metre, so contact is about 2 s of wall after the send-in, give or take the step's lead. Twice that is "never". */
+const MEET_WITHIN_FRAMES = 240;
+/** Ms the pacer's clock moves at each read: no frame is cut at the wall deadline, whatever the box's load. */
+const PACER_TICK_MS = 0.001;
 
 /** The parts of the engine this file reaches: the private rules it drives are the ones under test. */
 type Reach = {
@@ -34,6 +38,9 @@ describe("given the real engine's fleet sandbox with two cars wrecked head-on an
     await engine.ready;
     engine.fadeScenes = false;
     e = engine as unknown as Reach;
+    let tick = 0;
+    Object.assign(engine.pace, { now: () => (tick += PACER_TICK_MS) });
+    engine.pace.pin = true;
   });
   after(() => {
     engine.dispose();
@@ -76,7 +83,7 @@ describe("given the real engine's fleet sandbox with two cars wrecked head-on an
     };
     try {
       headOn(2, 30, 12);
-      for (let g = 0; g < 120 && met.length === 0; g++) engine.advance(FRAME, { frameDt: FRAME });
+      for (let g = 0; g < MEET_WITHIN_FRAMES && met.length === 0; g++) engine.advance(FRAME, { frameDt: FRAME });
     } finally {
       e.pairHit = pairHit;
     }
