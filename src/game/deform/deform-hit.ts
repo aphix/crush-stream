@@ -434,6 +434,11 @@ export abstract class DeformHit extends DeformRig {
     return Math.max(0, this.elapsed - this.lastContact);
   }
 
+  /** Seconds since the current hit armed (`beginCrush`, `rearmHit`): a contact within `REARM_QUIET` of it is that hit's own pulse. */
+  hitAge(): number {
+    return this.elapsed - this.hitAt;
+  }
+
   /**
    * A fresh contact on a wreck: after REARM_QUIET without contact before its slice (`sliceQuiet`), or at HARDER_HIT times the armed
    * hit's EBS (else a door graze's hit sizes the nose hit that follows it into a pile), a hit of at least REARM_EBS takes over the hit

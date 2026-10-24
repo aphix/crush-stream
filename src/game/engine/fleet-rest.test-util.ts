@@ -31,6 +31,8 @@ export async function makeEngine(): Promise<CrashEngine> {
   stubBrowser();
   const engine = new CrashEngine(element(), new HudStore(), element());
   Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
+  // The sandbox restarts its crash once the slow-mo, held on by each later impact, has run 10.4 wall s (`updatePhase`): the replay reads the first run through.
+  engine.looping = false;
   await engine.ready;
   const throwDriver = engine["throwDriver"].bind(engine);
   // The live game's dummy world calls `onThrow` at once (the slow-mo lifts for the driver's exit); headless has none.
