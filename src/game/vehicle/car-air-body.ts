@@ -452,6 +452,8 @@ function solveSpringSystem(tyres: number): void {
 const TYRE_SAG = 0.01;
 /** The damping ratio of that flattening: left at the suspension's own damper, the stiff tread rang for seconds. */
 const TYRE_DAMP_RATIO = 0.5;
+/** The fastest (m/s) the tread's own oscillation moves: its ring speed at twice its static flattening (a 2 g load), 2 sqrt(G TYRE_SAG). The cap's damper follows a press or release rate no faster: past it is a landing or a bounce, which the springs carry. */
+const TREAD_RING_SPEED = 2 * Math.sqrt(G * TYRE_SAG);
 
 /**
  * The tyres in their springs push together, `ASK[c]` each (impulse per unit mass): `dt (G share + stiff x + damp u)` with u the press rate
@@ -494,6 +496,6 @@ export function springPushes(frame: CarFrame, tyres: number, stiff: number, damp
     if (!SPRING_PUSHING[c]) continue;
     const flat = PRESS[c]! + (OWN[c]! >= 0 ? 0 : travel);
     const k = (SHARE[c]! * G) / TYRE_SAG;
-    ASK[c] = Math.max(0, Math.min(ASK[c]!, dt * (k * flat + 2 * TYRE_DAMP_RATIO * Math.sqrt(Math.max(0, k)) * Math.min(1, flat / TYRE_SAG) * SPRING_RATE[c]!)));
+    ASK[c] = Math.max(0, Math.min(ASK[c]!, dt * (k * flat + 2 * TYRE_DAMP_RATIO * Math.sqrt(Math.max(0, k)) * Math.min(1, flat / TYRE_SAG) * Math.max(-TREAD_RING_SPEED, Math.min(SPRING_RATE[c]!, TREAD_RING_SPEED)))));
   }
 }
