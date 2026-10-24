@@ -194,15 +194,12 @@ function strokeLeftOn(car: DeformableCar, nx: number, nz: number): number {
 }
 
 /**
- * The speed (m/s) a face's crush energy is sized by (`feedOverlap`'s `drive`): while the pair closes faster than a graze, the hit is still its own pulse (`REARM_QUIET_S`) and the
- * stroke it has left on the face it struck fits the face's travel, its hit's (`impulseValue`, the closing that armed it), not the slice's, which the exchange takes away as the
- * structure yields. The force that crushes the face (`crushForce`) is the hit's whole stroke long, so the crush it feeds must be. A hit whose stroke is longer than the face's travel
- * (a 57 m/s head-on's 1.9 m on a 1 m nose) packs the structure instead of crushing through its stroke, and a later, slower shove of the wreck is its own closing: both are fed as they close.
+ * The closing speed (m/s) a face's crush feed is sized by (`feedOverlap`): while the pair closes faster than a graze and the face the hit struck has stroke left, its
+ * hit's (`impulseValue`, the closing that armed it), not the slice's, which the exchange takes away as the structure yields. The force that crushes the face (`crushForce`)
+ * is the hit's whole stroke long, so the crush it feeds must be: a feed that fell with the closing left the faces at 0.6-0.7 of their stroke when the cars had taken their common speed.
  */
-function feedDrive(car: DeformableCar, nx: number, nz: number, closing: number): number {
-  const left = strokeLeftOn(car, nx, nz);
-  const own = closing > CRASH.grazeMps && car.deform.hitAge() < REARM_QUIET_S && left > 0 && left <= car.deform.faceTravel();
-  return own ? Math.max(closing, car.deform.impulseValue) : Math.max(0, closing);
+function feedClosing(car: DeformableCar, nx: number, nz: number, closing: number): number {
+  return closing > CRASH.grazeMps && strokeLeftOn(car, nx, nz) > 0 ? Math.max(closing, car.deform.impulseValue) : Math.max(0, closing);
 }
 
 /**
@@ -637,12 +634,12 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   if (carA.deform.massActive) carA.deform.markMotion();
   const pointA = carA.deform.massPoint(_p, _massPoint, carA.group.position.y);
   carA.deform.aimHit(carA.worldToLocalPoint(pointA, _aim));
-  carA.deform.feedOverlap(pointA, n, fed, Math.max(0, closing), dt, faces[0]!, false, undefined, half, feedDrive(carA, n.x, n.z, closing));
+  carA.deform.feedOverlap(pointA, n, fed, feedClosing(carA, n.x, n.z, closing), dt, faces[0]!, false, undefined, half);
   if (carA.deform.massActive) carA.deform.takeMotion(carA.velocity, carA.angular);
   if (carB.deform.massActive) carB.deform.markMotion();
   const pointB = carB.deform.massPoint(_p, _massPoint, carB.group.position.y);
   carB.deform.aimHit(carB.worldToLocalPoint(pointB, _aim));
-  carB.deform.feedOverlap(pointB, _w.copy(n).negate(), fed, Math.max(0, closing), dt, faces[1]!, false, undefined, half, feedDrive(carB, -n.x, -n.z, closing));
+  carB.deform.feedOverlap(pointB, _w.copy(n).negate(), fed, feedClosing(carB, -n.x, -n.z, closing), dt, faces[1]!, false, undefined, half);
   if (carB.deform.massActive) carB.deform.takeMotion(carB.velocity, carB.angular);
   // The momentum (N·s) the feed took off each car's closing along the normal: the structure's force already at work this slice.
   const killed = 0.5 * (momentumAlong(carA, n.x, n.z) - preA + momentumAlong(carB, -n.x, -n.z) - preB);
