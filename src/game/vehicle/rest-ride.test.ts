@@ -130,7 +130,7 @@ describe("given a monster let down onto flat ground, on the springs of a heavy t
     return { ride, pitch };
   }
 
-  it(`when it is let down ${DROP_M} m up, then its ride overshoots rest by over ${SWING_M * 1000} mm at most once, swings with a damping ratio of ${ZETA_BAND.min}-${ZETA_BAND.max}, and rests within ${SWING_M * 1000} mm ${SETTLE_AFTER_TOUCH_S} s after it touches`, () => {
+  it(`when it is let down ${DROP_M} m up, then its ride overshoots rest by over ${SWING_M * 1000} mm at most once, swings with a damping ratio of ${ZETA_BAND.min}-${ZETA_BAND.max}, and rests within ${SWING_M * 1000} mm ${SETTLE_AFTER_TOUCH_S} s after it touches`, (t) => {
     const { ride } = letDown(0);
     const points = turningPoints(ride, SWING_M);
     const touchedAt = ride.findIndex((y) => y <= droop("monster"));
@@ -138,6 +138,7 @@ describe("given a monster let down onto flat ground, on the springs of a heavy t
     while (unsettled > 0 && Math.abs(ride[unsettled]!) <= SWING_M) unsettled--;
     assert.ok(points.length - 1 <= 1, `overshoots ${points.slice(1).map((p) => (p * 1000).toFixed(1)).join(", ")} mm after a ${(points[0]! * 1000).toFixed(0)} mm compression`);
     const zeta = dampingRatio(points[0]!, points[1] ?? SWING_M);
+    t.diagnostic(`let down ${DROP_M} m: turns ${points.map((p) => (p * 1000).toFixed(1)).join(", ")} mm, damping ratio ${zeta.toFixed(2)}, within ${SWING_M * 1000} mm ${((unsettled - touchedAt) / LAND_HZ).toFixed(2)} s after touching`);
     assert.ok(zeta >= ZETA_BAND.min && zeta <= ZETA_BAND.max, `damping ratio ${zeta.toFixed(2)}`);
     assert.ok((unsettled - touchedAt) / LAND_HZ <= SETTLE_AFTER_TOUCH_S, `${(((unsettled - touchedAt) / LAND_HZ)).toFixed(2)} s after touching it is still ${(Math.abs(ride[unsettled]!) * 1000).toFixed(1)} mm from rest`);
   });

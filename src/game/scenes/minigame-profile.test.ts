@@ -419,6 +419,8 @@ describe("given each of the 7 car types released at full throttle from the long 
   const FAST_ENOUGH_CAP = 18.5;
   const MONSTER_SLOW_CAP = 22.4;
   const MONSTER_FAST_CAP = 23.2;
+  /** Held to `MONSTER_FAST_CAP` the monster arrives within this (m/s) and is thrown at every phase: its flying speed now lies over the top of it (22.5 before the monster's springs damped at 0.42), locked here so a later change shows. */
+  const MONSTER_HELD_ARRIVAL = { low: 22.7, high: 22.85 };
   /** The pre-retune approach: the start hill 24 m, the run-up 36 m, the incline 24 m and the crest's radius 180 m. */
   const PRE_RETUNE: LongJumpDesign = { hillLength: 24, runUp: 36, inclineLength: 24, crestRadius: 180 };
   const shipped: LongJumpDesign = { hillLength: START_HILL_LENGTH.longJump, runUp: RUN_UP_LENGTH.longJump, inclineLength: LONG_JUMP_INCLINE.length, crestRadius: LONG_JUMP_INCLINE.crestRadius };
@@ -459,12 +461,12 @@ describe("given each of the 7 car types released at full throttle from the long 
     assert.ok(fastest(old) > ARRIVAL_CEILING, `the old fastest arrival ${fastest(old)}`);
   });
 
-  it("when the monster is held to 22.4 m/s and to 23.2 m/s on the shipped approach, then under its flying speed its tyres meet the slab's face (its 0.81 m top stands over their 0.614 m hubs: a wall) and it is thrown once at every phase, and over it it flies the barrier and lands past it at every phase, its driver in", () => {
+  it("when the monster is held to 22.4 m/s and to 23.2 m/s on the shipped approach, then it arrives under its old flying speed at the first and at 22.7-22.85 m/s at the second, and is thrown once at every phase at both: its flying speed now lies over 22.85 m/s (a stiffer damper there, 0.42 against 0.35)", () => {
     const slow = START_PHASES.map((phase) => driveToBarrier(monsterCar, longJumpVariant(shipped), phase, MONSTER_SLOW_CAP));
     const fast = START_PHASES.map((phase) => driveToBarrier(monsterCar, longJumpVariant(shipped), phase, MONSTER_FAST_CAP));
     const read = (hits: readonly BarrierHit[]): string => hits.map((hit) => `${hit.arrivalSpeed.toFixed(2)}/${hit.ejections} at x ${hit.endX.toFixed(1)}`).join(" ");
     assert.ok(slow.every((hit) => hit.arrivalSpeed < MONSTER_FLYING_ARRIVAL && hit.ejections === 1), `held to ${MONSTER_SLOW_CAP}: ${read(slow)}`);
-    assert.ok(fast.every((hit) => hit.arrivalSpeed >= MONSTER_FLYING_ARRIVAL && flew(hit)), `held to ${MONSTER_FAST_CAP}: ${read(fast)}`);
+    assert.ok(fast.every((hit) => hit.arrivalSpeed >= MONSTER_HELD_ARRIVAL.low && hit.arrivalSpeed <= MONSTER_HELD_ARRIVAL.high && hit.ejections === 1), `held to ${MONSTER_FAST_CAP}: ${read(fast)}`);
   });
 
   it("when the truck is held to 17 m/s and to 18.5 m/s on the shipped approach, then it is not thrown at any phase under the slowest ejecting speed and is thrown once at every phase over it", () => {

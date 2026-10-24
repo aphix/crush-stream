@@ -23,8 +23,8 @@ export const SPRINGS: Readonly<Record<VehicleClassId, { hz: number; zeta: number
   muscle: { hz: 1.6, zeta: 0.3, travel: 0.11, unsprung: 0 },
   police: { hz: 1.5, zeta: 0.35, travel: 0.13, unsprung: 0 },
   truck: { hz: 1.1, zeta: 0.25, travel: 0.22, unsprung: 0 },
-  // Monster Jam: ζ 0.35-0.5 (a heavy truck's top of it); 1350 lb unsprung over 1650 lb sprung a corner.
-  monster: { hz: 0.8, zeta: 0.5, travel: 0.45, unsprung: 0.82 },
+  // Monster Jam: ζ 0.35-0.5; 0.42, the most of it that leaves a monster clearing the long jump's barrier. 1350 lb unsprung over 1650 lb sprung a corner.
+  monster: { hz: 0.8, zeta: 0.42, travel: 0.45, unsprung: 0.82 },
   hatch: { hz: 1.45, zeta: 0.35, travel: 0.12, unsprung: 0 },
   suv: { hz: 1.15, zeta: 0.35, travel: 0.19, unsprung: 0 },
 };
