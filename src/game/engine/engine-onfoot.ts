@@ -2,7 +2,6 @@ import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { DriverSeat } from "../vehicle/car-drive.ts";
-import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { blankStrike, fell, runsDown } from "../scenes/figure-strike.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { PAD_BUTTON, type PadState } from "../vehicle/gamepad.ts";
@@ -12,7 +11,7 @@ import { OnFootFlow, type OnFootRefusal, type OnFootSense, type OnFootStep } fro
 import type { FootHud } from "../hud/hud-store.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { RUN_SPEED, WALK_SPEED } from "../present/walker-gait.ts";
-import { doorBlocked, doorSpot, nearestDoor } from "./onfoot-doors.ts";
+import { doorBlocked, doorInReach, doorSpot, inPlay } from "./onfoot-doors.ts";
 import { SEAT_KEYS } from "./engine-keys.ts";
 import { blankWalkIntent, readWalkIntent } from "./engine-walk-input.ts";
 
@@ -25,8 +24,10 @@ interface OnFootHost {
   keys: ReadonlySet<string>;
   pad: PadState;
   cars(): readonly DeformableCar[];
-  /** Offline free play only: the scene is the fleet, no room, no race or reel. */
+  /** The game is running a scene with a player's car to leave: free play, a race (not in its menu), a derby, a mini game, a rig; online or off. */
   available(): boolean;
+  /** A race is on: Escape and the pad's Back are its pause menu's, so they are not swallowed on foot. */
+  racing(): boolean;
   /** The player's own look, as the garage dresses him. */
   look(): DriverLook;
 }
@@ -35,12 +36,9 @@ interface OnFootHost {
 const ON_FOOT_BUTTON = 1 << PAD_BUTTON.east;
 /** Keys the car's seat uses that mean nothing on foot (and would pause, reset or switch cars under his feet). */
 const SWALLOWED_KEYS: readonly string[] = ["Space", SEAT_KEYS.reset, SEAT_KEYS.stepOut, SEAT_KEYS.previousCar, SEAT_KEYS.nextCar, ...SEAT_KEYS.camera];
-const SWALLOWED_BUTTONS = (1 << PAD_BUTTON.back) | (1 << PAD_BUTTON.lb) | (1 << PAD_BUTTON.rb) | (1 << PAD_BUTTON.north) | (1 << PAD_BUTTON.down);
+const BACK_BUTTON = 1 << PAD_BUTTON.back;
+const SWALLOWED_BUTTONS = BACK_BUTTON | (1 << PAD_BUTTON.lb) | (1 << PAD_BUTTON.rb) | (1 << PAD_BUTTON.north) | (1 << PAD_BUTTON.down);
 
-/** The driver's door swings this wide (rad), at this rate (rad/s); it shuts once he is this far (m) from it. */
-const DOOR_OPEN = 1.1;
-const DOOR_RATE = 3.5;
-const DOOR_CLOSE_DISTANCE = 4;
 /** A stick pushed less than this far does not move him; slower pushes walk slower, down to this speed (m/s). */
 const WALK_DEADZONE = 0.15;
 const CREEP_SPEED = 0.8;
@@ -55,7 +53,7 @@ const REFUSAL_SECONDS = 2;
 const REFUSAL_TEXT: Record<OnFootRefusal, string> = {
   tooFast: "Stop the car first",
   doorBlocked: "No room to open the door",
-  noCarInReach: "Walk up to a car's driver door",
+  noCarInReach: "Walk up to your car's driver door",
   busy: "",
 };
 
@@ -64,9 +62,9 @@ const _spot = new THREE.Vector3();
 const _forward = new THREE.Vector3();
 
 /**
- * The player's trip out of the car and back, in the offline fleet: `OnFootFlow` decides what the control does, this carries it out (the
- * door, the seat, the car left parked, the walker the ragdoll pool stands up, the camera that orbits him) and turns the driving controls
- * into the walker's heading and pace. Presentation only: nothing here writes a car's sim state but its parking brake and its driver's door.
+ * The player's trip out of his car and back, in any scene that has one: `OnFootFlow` decides what the control does, this carries it out (the walker
+ * the ragdoll pool stands up, the seat stepped back, the camera that orbits him) and turns the driving controls into the walker's heading and pace.
+ * Presentation only, and the car is never written: the engine reads `away` to treat the car as a driverless one holding its brakes.
  */
 export class OnFootDirector {
   readonly flow = new OnFootFlow();
@@ -75,15 +73,11 @@ export class OnFootDirector {
   private readonly sense: OnFootSense = { car: -1, speed: 0, doorBlocked: false };
   private readonly speed = new Float64Array(1);
   private readonly strike = blankStrike();
-  /** The car he left or is entering: its door is the one that swings. */
-  private car: DeformableCar | null = null;
-  private door = 0;
-  private doorTarget = 0;
   private framed = false;
   private refusal: OnFootRefusal | null = null;
   private refusalLeft = 0;
-  /** The car whose door is in reach this frame (-1 none), for the prompt. */
-  private reach = -1;
+  /** Whether his car's door is in reach this frame, for the prompt. */
+  private reach = false;
 
   constructor(host: OnFootHost) {
     this.host = host;
@@ -93,14 +87,17 @@ export class OnFootDirector {
     return this.flow.active;
   }
 
+  /** The index of the car he left and may get back into (his own, and only his own) while he is out or climbing in or out; -1 while he is in the seat. */
+  get away(): number {
+    return this.flow.active ? this.flow.car : -1;
+  }
+
   /** Back in the seat, nothing out: a scene reset has emptied the world. */
   reset(): void {
     this.flow.reset();
-    this.car = null;
-    this.door = this.doorTarget = 0;
     this.framed = false;
     this.refusal = null;
-    this.reach = -1;
+    this.reach = false;
   }
 
   /** A keydown: true when the director took it (the control, or a seat key that means nothing on foot). */
@@ -111,14 +108,16 @@ export class OnFootDirector {
       this.press();
       return true;
     }
-    return this.flow.active && SWALLOWED_KEYS.includes(e.code);
+    if (!this.flow.active || !SWALLOWED_KEYS.includes(e.code)) return false;
+    return e.code !== SEAT_KEYS.stepOut || !this.host.racing();
   }
 
   /** The pad buttons that went down this poll: true when none is left for the seat (the control, and on foot the seat's buttons). */
   padPress(pressed: number): boolean {
     if (!this.host.available()) return false;
     if ((pressed & ON_FOOT_BUTTON) !== 0) this.press();
-    return (pressed & ON_FOOT_BUTTON) !== 0 || (this.flow.active && (pressed & SWALLOWED_BUTTONS) !== 0);
+    const swallowed = this.host.racing() ? SWALLOWED_BUTTONS & ~BACK_BUTTON : SWALLOWED_BUTTONS;
+    return (pressed & ON_FOOT_BUTTON) !== 0 || (this.flow.active && (pressed & swallowed) !== 0);
   }
 
   /** The control was pressed: ask the flow, carry out what it allows, remember what it refused. */
@@ -136,22 +135,23 @@ export class OnFootDirector {
     else if (step === "enterStarted") this.beginEnter();
   }
 
-  /** What the flow needs to know: in the driving seat, the car and whether its door has room; on foot, the car in reach. Null while the seat is not his to leave. */
+  /** What the flow needs to know: in the driving seat, the car and whether its door has room; on foot, whether his car is in reach. Null while the seat is not his to leave. */
   private senseWorld(): OnFootSense | null {
     const { seat, ragdolls } = this.host;
     const cars = this.host.cars();
     const sense = this.sense;
     if (this.flow.phase === "inCar") {
       const car = cars[seat.carIndex];
-      if (seat.mode !== "drive" || !car) return null;
+      if (seat.mode !== "drive" || !car || car.driverOut !== null) return null;
       sense.car = seat.carIndex;
       sense.speed = car.velocity.length();
       sense.doorBlocked = doorBlocked(cars, car, ragdolls.poles);
       return sense;
     }
     sense.doorBlocked = false;
-    if (!ragdolls.walkerTorso(_torso)) return null;
-    sense.car = nearestDoor(cars, _torso, this.speed);
+    const car = cars[this.flow.car];
+    if (!car || !ragdolls.walkerTorso(_torso)) return null;
+    sense.car = doorInReach(car, _torso, this.speed) ? this.flow.car : -1;
     sense.speed = sense.car < 0 ? 0 : this.speed[0]!;
     return sense;
   }
@@ -165,40 +165,42 @@ export class OnFootDirector {
       this.flow.reset();
       return;
     }
-    car.parked = true;
-    car.driverOut = "doorR";
     seat.esc();
-    this.car = car;
-    this.doorTarget = DOOR_OPEN;
     this.framed = false;
   }
 
   private beginEnter(): void {
     const { ragdolls } = this.host;
-    this.car = this.host.cars()[this.flow.car]!;
-    this.doorTarget = DOOR_OPEN;
+    const car = this.host.cars()[this.flow.car]!;
     ragdolls.walker.command = 0;
-    doorSpot(this.car, _spot);
-    if (ragdolls.walkerTorso(_torso)) ragdolls.walker.heading = detAtan2(this.car.group.position.x - _torso.x, this.car.group.position.z - _torso.z);
+    if (ragdolls.walkerTorso(_torso)) ragdolls.walker.heading = detAtan2(car.group.position.x - _torso.x, car.group.position.z - _torso.z);
   }
 
-  /** Once per frame, before the ragdoll world steps: the driving controls into the walker's pace, the flow's clock, the door. */
+  /** The seat no longer follows his car (a race put him to watching, a scene took it), or his car is gone from play: the trip is over and he is in the seat's follow. */
+  private lost(): boolean {
+    const car = this.host.cars()[this.flow.car];
+    return !car || !inPlay(car) || this.host.seat.carIndex !== this.flow.car;
+  }
+
+  /** Once per frame, before the ragdoll world steps: the driving controls into the walker's pace, the flow's clock. */
   frame(wallDt: number): void {
     const flow = this.flow;
     this.refusalLeft = Math.max(0, this.refusalLeft - wallDt);
     if (!flow.active) return;
     const { ragdolls } = this.host;
-    if (!ragdolls.walker.active) {
+    if (!ragdolls.walker.active || this.lost()) {
+      ragdolls.stopWalker();
       this.reset();
       return;
     }
     if (flow.phase === "onFoot") {
-      this.walk();
+      if (this.host.available()) this.walk();
+      else ragdolls.walker.command = 0;
       this.runDown();
     } else ragdolls.walker.command = 0;
-    this.finish(flow.tick(wallDt));
-    this.swingDoor(wallDt);
-    this.reach = flow.phase === "onFoot" && ragdolls.walkerTorso(_torso) ? nearestDoor(this.host.cars(), _torso, this.speed) : -1;
+    const car = flow.car;
+    this.finish(flow.tick(wallDt), car);
+    this.reach = flow.phase === "onFoot" && ragdolls.walkerTorso(_torso) && doorInReach(this.host.cars()[flow.car]!, _torso, this.speed);
   }
 
   /** A car moving fast enough over him (`runsDown`, the lawn guards' and the VIP's rule) throws him with the same launch (`fell`): he goes ragdoll. */
@@ -238,40 +240,17 @@ export class OnFootDirector {
     walker.ask();
   }
 
-  private finish(step: OnFootStep): void {
-    if (step === "seated") this.seated();
+  private finish(step: OnFootStep, car: number): void {
+    if (step === "seated") this.seated(car);
   }
 
-  /** In the seat: he leaves the pool, the door shuts, the car is his again and the wheel is in his hands. */
-  private seated(): void {
+  /** In the seat: he leaves the pool and the wheel of car `index`, the one he left, is in his hands. */
+  private seated(index: number): void {
     const { ragdolls, seat } = this.host;
-    const car = this.car!;
-    const index = this.host.cars().indexOf(car);
     ragdolls.stopWalker();
-    car.setDoorOpen(DRIVER_SIDE, 0);
-    car.driverOut = null;
-    car.parked = false;
     seat.focus(index);
     seat.mode = "drive";
-    this.car = null;
-    this.door = this.doorTarget = 0;
-    this.reach = -1;
-  }
-
-  /** The door eases toward its target; once he has walked away from it the target is shut. */
-  private swingDoor(wallDt: number): void {
-    const car = this.car;
-    if (car === null) return;
-    const { ragdolls } = this.host;
-    if (this.flow.phase === "onFoot" && this.doorTarget > 0 && ragdolls.walkerTorso(_torso)) {
-      doorSpot(car, _spot);
-      if (hypot2(_spot.x - _torso.x, _spot.z - _torso.z) > DOOR_CLOSE_DISTANCE) this.doorTarget = 0;
-    }
-    const gap = this.doorTarget - this.door;
-    if (gap === 0) return;
-    this.door += Math.max(-DOOR_RATE * wallDt, Math.min(DOOR_RATE * wallDt, gap));
-    car.setDoorOpen(DRIVER_SIDE, this.door);
-    if (this.doorTarget === 0 && this.door === 0 && this.flow.phase === "onFoot") this.car = null;
+    this.reach = false;
   }
 
   /** The camera: it orbits his chest, with the same drag, stick and mouse look as everywhere. True while it is his. */
@@ -299,7 +278,7 @@ export class OnFootDirector {
   prompt(): string | null {
     if (this.refusalLeft > 0 && this.refusal !== null && this.refusal !== "busy") return REFUSAL_TEXT[this.refusal];
     if (!this.host.available()) return null;
-    if (this.flow.phase === "onFoot") return this.reach >= 0 ? "Enter or B: get in" : "Walk up to a car's driver door";
+    if (this.flow.phase === "onFoot") return this.reach ? "Enter or B: get in" : REFUSAL_TEXT.noCarInReach;
     return this.host.seat.mode === "drive" ? "Enter or B: get out" : null;
   }
 }

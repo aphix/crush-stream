@@ -165,6 +165,9 @@ export abstract class RagdollPool {
   protected readonly ride = new RideAlong();
   /** One walker per pool slot: a dummy of the pool (`startWalker`) held up and walked by motors, in this world with the cars and the ground. The player on foot is the one in `WALKER_SLOT`. */
   readonly walkers: readonly Walker[] = Array.from({ length: SLOTS }, () => new Walker());
+  /** Where the ground patch under the player's walker is centred (`followWalkerGround`). */
+  protected walkerPatchX = 0;
+  protected walkerPatchZ = 0;
 
   /**
    * `onThrow(car)`: a sandbox driver just left car `car` (the engine decides whether the camera follows).
@@ -425,7 +428,12 @@ export abstract class RagdollPool {
   protected buildPatch(d: Doll, cx: number, cz: number, y: number): void {
     const c = this.course;
     if (c !== null && activeGround() === c.ground) d.patch.push(...this.patchAt(cx, cz, y, PATCH_HALF));
-    else if (this.statics.length === 0) this.statics.push(...groundColliders(this.R!, this.world!, FIXED_GROUPS, null, this.poles, cx, cz, y, PATCH_HALF));
+    else this.buildStatics(cx, cz, y, PATCH_HALF);
+  }
+
+  /** The run's fixed colliders off a course, built once round (`cx`, `cz`): the first dummy of the run builds them. */
+  protected buildStatics(cx: number, cz: number, y: number, half: number): void {
+    if (this.statics.length === 0) this.statics.push(...groundColliders(this.R!, this.world!, FIXED_GROUPS, null, this.poles, cx, cz, y, half));
   }
 
   /** The course's or the scene's ground, walls and solids `half` m around (`cx`, `cz`) at height `y` (`groundColliders`): a dummy's patch, or knocked props'. */

@@ -49,7 +49,7 @@ import { Corkscrew } from "../scenes/corkscrew.ts";
 import { TraceRecorder } from "./engine-trace.ts";
 import { snapshotAiCar } from "../match/derby.ts";
 import { LampLights, lampPoolFor } from "../vehicle/lamp-lights.ts";
-import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
+import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { applyAiDrive } from "../ai/input-fade.ts";
 import { makeDerbyArena, WinnerSpot } from "../scenes/derby-arena.ts";
 import { NetPlay } from "../net/net-play.ts";
@@ -134,7 +134,9 @@ export class CrashEngine extends EngineGarage {
     clearScene: () => this.clearLocal(),
     playReel: (reel, startAt) => this.highlights.play(reel, startAt),
     reelPlaying: () => this.highlights.playing,
-    launchEjection: (e) => this.ragdolls.launch(e, this.live()),
+    launchEjection: (e) => {
+      if (e.car !== this.onFoot.away) this.ragdolls.launch(e, this.live());
+    },
     meterOf: (i) => this.meterOf(i),
     playerLook: () => this.playerLook(),
     wearLook: (i, look) => this.wearLook(i, look),
@@ -150,6 +152,8 @@ export class CrashEngine extends EngineGarage {
   private readonly blend = new PoseBlend();
   /** What a crashed car nobody drives rolls on: its drive's idle pedals (engine braking, the test world's IDLE). */
   private readonly wreckCoast = idleDrive();
+  /** The car its player left on foot stands on its brakes, as a driver with his foot on the pedal does: no rule sees an empty seat. */
+  private readonly standHold: DriveInput = { ...idleDrive(), brake: 1 };
   private readonly slice = (h: number): void => {
     const cars = this.live();
     const phases = this.world.phases;
@@ -229,8 +233,8 @@ export class CrashEngine extends EngineGarage {
       this.lampBatch.night = this.stage.night;
       this.lampBatch.sync(drawn);
       this.partBatch.sync(drawn);
-      // In the garage the standing dummy beside the car is the driver, and the showcase's cars show their empty cabins: no one sits in the car there.
-      this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook);
+      // In the garage the standing dummy beside the car is the driver, and the showcase's cars show their empty cabins: no one sits in the car there. A car its player left on foot has nobody in it either.
+      this.seated.sync(this.showGarage || this.showShowcase ? [] : drawn, driverLook, this.onFoot.away);
       this.coverBatch.sync(drawn);
     };
 
@@ -250,7 +254,8 @@ export class CrashEngine extends EngineGarage {
       keys: this.keys,
       pad: this.pad.state,
       cars: () => this.live(),
-      available: () => this.sceneId === "fleet" && this.net.role === "off" && !this.highlights.playing && this.playing && !this.warming && this.sceneFade.pending === null,
+      available: () => this.onFootOffered(),
+      racing: () => this.race.active,
       look: () => ownLook(this.looks.mine.person),
     });
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
@@ -363,6 +368,7 @@ export class CrashEngine extends EngineGarage {
       reelReady: (clips, since) => this.startReel(clips, since),
       clear: () => this.clearScene(),
       heardMeter: (i) => this.net.heard(i),
+      afoot: (i) => this.onFoot.away === i,
     });
   }
 
@@ -793,10 +799,16 @@ export class CrashEngine extends EngineGarage {
 
   /** A driver thrown out: his dummy flies (`release`: a minigame's boost), the minigame knows he is out, the race recorder and the netplay peers hear of it. */
   private throwDriver(e: Ejection, cars: readonly DeformableCar[], release?: ReleaseScale): void {
-    this.ragdolls.launch(e, cars, true, release);
+    if (e.car !== this.onFoot.away) this.ragdolls.launch(e, cars, true, release);
     if (this.minigameMode !== null) this.minigames.noteThrown();
     if (this.race.active) this.race.recorder.eject(e);
     this.net.sendEject(e);
+  }
+
+  /** The on-foot control is offered: the game is running a scene with a player's car to leave (not the garage, the lab or the showcase), and no reel, fade, boot warm-up or race menu holds it. Online or off. */
+  private onFootOffered(): boolean {
+    if (this.highlights.playing || !this.playing || this.warming || this.sceneFade.pending !== null) return false;
+    return !this.showGarage && !this.showLab && !this.showShowcase && !this.race.menuOpen;
   }
 
   private fixedStep(dt: number): void {
@@ -809,6 +821,9 @@ export class CrashEngine extends EngineGarage {
       if (car.deform.drivetrainAlive && !(this.derbyMode && this.derby.held(driven))) applyDrive(car, this.seat.input(car, dt), dt);
       if (this.seat.selfRight(car.group.matrixWorld.elements[5]!, car.velocity.length(), dt)) this.recoverDriven();
     }
+    // The player on foot has left his car with its brakes on (the race director holds it in a race; the other scenes here).
+    const away = !this.race.active && this.onFoot.away < cars.length && cars[this.onFoot.away]?.deform.drivetrainAlive ? this.onFoot.away : -1;
+    if (away >= 0) applyDrive(cars[away]!, this.standHold, dt);
     this.net.drive(cars, dt, driven);
     if (this.derbyMode && this.derby.winnerId == null) {
       const snaps = this.derby.snapshots(cars.length);
@@ -817,7 +832,7 @@ export class CrashEngine extends EngineGarage {
         snapshotAiCar(snaps[i]!, i, c, c.deform.drivetrainAlive);
       }
       for (let i = 0; i < cars.length; i++) {
-        if (i === driven || this.derbySeated.has(i)) continue;
+        if (i === driven || i === away || this.derbySeated.has(i)) continue;
         applyAiDrive(cars[i]!, this.derby.think(snaps[i]!, snaps, dt), dt);
         if (this.derby.recoverDue(i, cars[i]!, dt)) this.recoverCar(cars[i]!);
       }
@@ -827,7 +842,7 @@ export class CrashEngine extends EngineGarage {
     if (!this.race.active && !(this.derbyMode && this.derby.winnerId == null)) {
       for (let i = 0; i < cars.length; i++) {
         const car = cars[i]!;
-        if (i === driven || car.parked || !car.crashed || !car.deform.massActive || this.net.drives(i, driven)) continue;
+        if (i === driven || i === away || car.parked || !car.crashed || !car.deform.massActive || this.net.drives(i, driven)) continue;
         applyDrive(car, this.wreckCoast, dt);
       }
     }

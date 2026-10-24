@@ -80,6 +80,7 @@ export class RagdollSystem extends RagdollThrower {
       this.updateRemote(dt, cars);
       return;
     }
+    this.followWalkerGround();
     this.applyStruck(cars);
     this.stepWorld(dt, cars, authority, sandbox, barrier);
     for (const hit of this.proxies.strikes.splice(0)) this.struck.push({ frame: this.frameNo, ...hit });

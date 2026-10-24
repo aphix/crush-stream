@@ -18,6 +18,10 @@ import { hypot2 } from "../kernel/physics-core.js";
 import { DOLL_CAR, DOLL_FLOATS, DOLL_HEADER, DOLL_LIVE, DOLL_RIDES, DOLL_SETTLED, DOLL_STILL, DOLL_VELOCITY, PROP_FLOATS, type ResultMessage } from "./ragdoll-wire.ts";
 import { LIFE, STEP_LOG, type Throw, WALKER_SLOT } from "./ragdoll-pool.ts";
 import { RagdollStepper } from "./ragdoll-step.ts";
+import { PATCH_HALF, STATICS_HALF, terrainColliders } from "./ragdoll-ground.ts";
+
+/** The walker's ground patch is built again when he is this far (m) from its middle: half of what it reaches, so he is never near its edge. */
+const WALKER_FOLLOW = PATCH_HALF / 2;
 
 const _q = new THREE.Quaternion();
 const _qx = new THREE.Quaternion();
@@ -148,19 +152,47 @@ export abstract class RagdollThrower extends RagdollStepper {
     else this.spawn(t, -1, this.thrownLife, look);
   }
 
-  /** A dummy in `dress` stands with his feet at `at` facing `yaw`, held up and walked by the walker of his pool slot (`slot`: the player's, or a free one); his slot, or -1 while Rapier is still loading. */
+  /**
+   * A dummy in `dress` stands with his feet at `at` facing `yaw`, held up and walked by the walker of his pool slot (`slot`: the player's, or a free one); his slot, or -1 while Rapier is still loading.
+   * He lives in this thread's world, so a run the worker holds is begun again here, and a bounded ground gets its fixed colliders wide enough for everyone after him.
+   */
   startWalker(at: THREE.Vector3, yaw: number, dress: { cop: boolean; look: DriverLook }, slot = WALKER_SLOT): number {
     if (!this.R || !this.world) return -1;
+    if (this.mode === "remote") this.reset();
+    this.mode = "inline";
+    const c = this.course;
+    if (c === null || activeGround() !== c.ground) this.buildStatics(at.x, at.z, at.y, STATICS_HALF);
     _p.set(at.x, at.y + PARTS[0].c[1], at.z);
     _q.setFromAxisAngle(Y, yaw);
     const placed = this.place(_p, _q, NO_MOTION, NO_MOTION, Infinity, slot, dress);
-    if (placed >= 0) this.walkers[placed]!.attach(this.R, this.world, this.dolls[placed]!, yaw);
+    if (placed < 0) return placed;
+    this.walkers[placed]!.attach(this.R, this.world, this.dolls[placed]!, yaw);
+    if (placed === WALKER_SLOT) {
+      this.walkerPatchX = at.x;
+      this.walkerPatchZ = at.z;
+    }
     return placed;
   }
 
   /** The walker in `slot` leaves the pool: the slot is free for a throw again. */
   stopWalker(slot = WALKER_SLOT): void {
     if (this.walkers[slot]!.active) this.despawn(slot);
+  }
+
+  /** The player's walker has walked `WALKER_FOLLOW` m from the middle of the ground patch he stands on: it is built again round him (a heightfield 96 m across reaches no further than 48 m). */
+  protected followWalkerGround(): void {
+    const d = this.dolls[WALKER_SLOT];
+    if (!d?.live || !d.driven || !this.R || !this.world) return;
+    const x = d.cur[0]!;
+    const z = d.cur[2]!;
+    if (hypot2(x - this.walkerPatchX, z - this.walkerPatchZ) < WALKER_FOLLOW) return;
+    for (const c of d.patch) this.world.removeCollider(c, false);
+    d.patch.length = 0;
+    const c = this.course;
+    if (c !== null && activeGround() === c.ground) d.patch.push(...this.patchAt(x, z, d.cur[1]!, PATCH_HALF));
+    else d.patch.push(...terrainColliders(this.R, this.world, x, z, d.cur[1]!, PATCH_HALF));
+    this.walkerPatchX = x;
+    this.walkerPatchZ = z;
   }
 
   /** A push of `speed` m/s along `direction` lands on the world `point` of the dummy the walker in `slot` is (`strikeAt`), and he goes limp: a ragdoll that reacts to where it landed. */

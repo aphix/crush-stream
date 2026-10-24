@@ -626,10 +626,11 @@ export class RaceDirector extends RaceHudLayer {
         continue;
       }
       const rec = s.cars[this.rowOf[i]!]!;
-      // No driver, no pedals: not the player's seat, a peer's input or the AI (`coast`); the rules reset or retire the car (`judge`).
+      // No driver, no pedals: not the player's seat, a peer's input or the AI (`coast`); the rules reset or retire the car (`judge`). A player on foot stands on the brakes (`hold`).
       let input: DriveInput = this.hold;
       let ai = false;
       if (car.driverOut !== null) input = this.coast;
+      else if (this.host.afoot(i)) input = this.hold;
       else if (racing && rec.status === "racing") {
         const kind = this.entrants[i]!.kind;
         if (kind === "remote") input = this.remote[i]!;

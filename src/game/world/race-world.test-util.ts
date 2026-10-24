@@ -57,6 +57,8 @@ export type World = {
   figures: FigureStrike[];
   /** Called for every prop knock the race hands the engine (`RaceHost.knockProp`): where the engine's dummies' world takes it. */
   onKnock: ((index: number, car: number, vx: number, vy: number, vz: number) => void) | null;
+  /** The car its player left on foot (`RaceHost.afoot`), -1 while he is in it. */
+  away: number;
 };
 
 /**
@@ -137,6 +139,7 @@ export function makeWorld(survivalCourse?: unknown, tracks?: Map<string, Track>)
       w.watchCams++;
     },
     heardMeter: () => null,
+    afoot: (i) => w.away === i,
     throwPassenger: () => {},
     throwFigure: (strike) => void w.figures.push({ ...strike }),
   }, survivalCourse);
@@ -144,7 +147,7 @@ export function makeWorld(survivalCourse?: unknown, tracks?: Map<string, Track>)
   const step = newWorld(liveBuf);
   step.ejection = new EjectionWatch();
   step.collide = (car, i, h) => race.collide(car, i, h);
-  const w: World = { cars, live, race, camera, leaves: 0, seat, onPairContact: null, step, dress, clears: 0, watchCams: 0, ejections: [], figures: [], onKnock: null };
+  const w: World = { cars, live, race, camera, leaves: 0, seat, onPairContact: null, step, dress, clears: 0, watchCams: 0, ejections: [], figures: [], onKnock: null, away: -1 };
   step.pairHit = (a, b, hit) => {
     race.pairHit(a, b, hit);
     w.onPairContact?.(a, b);

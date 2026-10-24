@@ -8,8 +8,8 @@
  */
 export function footKeys(pad: boolean, prompt: string | null): string {
   const parts = pad
-    ? ["left stick walk", "A or RT run", "right stick look", "B get in at a driver door"]
-    : ["W/A/S/D walk", "Shift run", "drag look", "; mouse look", "Enter get in at a driver door"];
+    ? ["left stick walk", "A or RT run", "right stick look", "B get in at your car's driver door"]
+    : ["W/A/S/D walk", "Shift run", "drag look", "; mouse look", "Enter get in at your car's driver door"];
   return (prompt === null ? parts : [prompt, ...parts]).join(" · ");
 }
 

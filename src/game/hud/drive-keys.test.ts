@@ -20,9 +20,9 @@ describe("given the driven car's key line", () => {
 
 describe("given the walker's key line", () => {
   const cases = [
-    { it: "when a keyboard walks him with nothing to say, then the keys that drive the car walk, run and look, and Enter gets in", pad: false, prompt: null, expectedKeys: "W/A/S/D walk · Shift run · drag look · ; mouse look · Enter get in at a driver door" },
-    { it: "when a controller walks him with nothing to say, then the stick walks, A or RT runs, and B gets in", pad: true, prompt: null, expectedKeys: "left stick walk · A or RT run · right stick look · B get in at a driver door" },
-    { it: "when he stands at a driver door, then the prompt leads the line", pad: false, prompt: "Enter or B: get in", expectedKeys: "Enter or B: get in · W/A/S/D walk · Shift run · drag look · ; mouse look · Enter get in at a driver door" },
+    { it: "when a keyboard walks him with nothing to say, then the keys that drive the car walk, run and look, and Enter gets in", pad: false, prompt: null, expectedKeys: "W/A/S/D walk · Shift run · drag look · ; mouse look · Enter get in at your car's driver door" },
+    { it: "when a controller walks him with nothing to say, then the stick walks, A or RT runs, and B gets in", pad: true, prompt: null, expectedKeys: "left stick walk · A or RT run · right stick look · B get in at your car's driver door" },
+    { it: "when he stands at a driver door, then the prompt leads the line", pad: false, prompt: "Enter or B: get in", expectedKeys: "Enter or B: get in · W/A/S/D walk · Shift run · drag look · ; mouse look · Enter get in at your car's driver door" },
   ] as const;
   for (const testCase of cases) {
     it(testCase.it, () => {
