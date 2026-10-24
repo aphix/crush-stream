@@ -7,6 +7,8 @@ import { rasterise } from "./cage-fields.ts";
 import { IMPRINT_NONE } from "../deform/load-crush.ts";
 import { BODIES, buildCar, carInState, drawnField, drawnTriangles, STATES, stepFrames, TOP_P95_M, TOP_WORST_M, topGapsOff, topParts } from "./drawn-body.test-util.ts";
 import { makeBumperGeometry } from "./car-mesh.ts";
+import { CAR_STYLE_IDS } from "./car-variants.ts";
+import { STYLE_CLASS } from "./vehicle-classes.ts";
 import { cageLift } from "./car-cage-rig.ts";
 import { PUSH_BAR_REACH } from "./car-materials.ts";
 import type { DeformableCar } from "./car.ts";
@@ -24,17 +26,13 @@ import { launch, makeWorld } from "../contact/crash-scenarios.test-util.ts";
  */
 const interiorThroughRoof =
   "the drawn interior (its headliner stands 1.09 m over the origin and does not follow the roof mass) pokes up through the roof the drop crushed, so the drawn top is the interior and the cage's is the roof (the cage carries the interior over a gone pane's opening only: over the whole roof it takes stack-crush.test.ts to 6 of 8); after the plan: make the drawn interior follow the roof's crush";
-const roofCornerHole =
-  "the decimation loses the wagon's roof rear corners (|x| .50-.60, z -1.75..-1.90): the cage's top reads 0.38 m there under the drawn roof's 1.46 (the cage source's own top there 1.459); after the overhaul: CarRig rig-hole 987f1739 (no vertex left on no triangle: worst -0.42), then the roof outline's corners held";
+const rearGlassGone =
+  "the wagon's rear glass shatters in the 2 m roof drop (its roof crushes at the rear), so the drawn top over its opening is the cargo floor (0.38-0.58 m) while the cage's closed tail (z -2.11..-1.94) stands at 1.10 m: up 0.52 m at (+-0.48, -1.98); after the plan: the cage's tail opens where the rear glass is gone, as the drawn body's does";
 const edgeCliffs: readonly { key: string; part: string; measured: string; cause: string }[] = [
   { key: "sedan/rolled", part: "cabin", measured: "p95 0.060 (bar 0.05), worst 0.063 under (bar 0.10)", cause: interiorThroughRoof },
   { key: "pickup truck/rolled", part: "cabin", measured: "p95 0.060 (bar 0.05), worst 0.065 under (bar 0.10)", cause: interiorThroughRoof },
   { key: "monster pickup/rolled", part: "cabin", measured: "p95 0.060 (bar 0.05), worst 0.065 under (bar 0.10)", cause: interiorThroughRoof },
-  { key: "wagon/untouched", part: "deck", measured: "p95 0.043, worst 0.716 under (bar 0.10)", cause: roofCornerHole },
-  { key: "wagon/loaded", part: "deck", measured: "p95 0.035, worst 0.722 under (bar 0.10)", cause: roofCornerHole },
-  { key: "wagon/headon", part: "deck", measured: "p95 0.042, worst 0.682 under (bar 0.10)", cause: roofCornerHole },
-  { key: "wagon/rolled", part: "deck", measured: "p95 0.034, worst 0.723 under (bar 0.10)", cause: roofCornerHole },
-  { key: "wagon/airborne", part: "deck", measured: "p95 0.043, worst 0.716 under (bar 0.10)", cause: roofCornerHole },
+  { key: "wagon/rolled", part: "deck", measured: "p95 0.154 (bar 0.05), worst 0.515 over (bar 0.10)", cause: rearGlassGone },
 ];
 
 for (const body of BODIES) {
@@ -164,6 +162,28 @@ describe("given the cage's vertex budget", () => {
     assert.ok(triCount - partTris >= 150 && triCount - partTris <= 330 + 2 * (heldCount + kept), `${triCount - partTris} hull triangles`);
     assert.ok(parts > 0 && parts <= CAGE_PART_VERTICES && partTris <= 2 * CAGE_PART_VERTICES, `${parts} part vertices, ${partTris} triangles`);
   });
+});
+
+/** The bumper corners are `frame.hullUnder`'s last four rows (x, z, height). */
+const BUMPER_CORNER_ROWS = 4;
+
+describe("given every body style's cage and the bottom corners of its drawn bumpers (`frame.hullUnder`'s last four rows)", () => {
+  for (const id of CAR_STYLE_IDS) {
+    it(`when a ${id}'s corners are measured to its nearest cage vertex, then each is within the cage fit's ${TOP_P95_M * 100} cm, as only vertices collide`, (t) => {
+      const car = carInState("untouched", id, STYLE_CLASS[id]);
+      const { rest, vertexCount } = cageOf(car).style;
+      const under = car.frame.hullUnder;
+      const far: string[] = [];
+      for (let i = under.length - BUMPER_CORNER_ROWS * 3; i < under.length; i += 3) {
+        let nearest = Infinity;
+        for (let k = 0; k < vertexCount; k++) nearest = Math.min(nearest, Math.hypot(rest[k * 3]! - under[i]!, rest[k * 3 + 1]! - under[i + 2]!, rest[k * 3 + 2]! - under[i + 1]!));
+        const corner = `${under[i]! > 0 ? "+" : "-"}x ${under[i + 1]! > 0 ? "front" : "rear"}`;
+        t.diagnostic(`${corner}: nearest cage vertex ${(nearest * 100).toFixed(1)} cm`);
+        if (nearest > TOP_P95_M) far.push(`${corner} ${(nearest * 100).toFixed(1)} cm`);
+      }
+      assert.deepEqual(far, []);
+    });
+  }
 });
 
 /** How far (m) the cage's nose may stand behind the drawn nose: the bumper's face is the cage's, a push bar's box as far out as its pads. */

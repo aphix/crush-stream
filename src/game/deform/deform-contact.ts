@@ -781,9 +781,10 @@ export abstract class DeformContact extends DeformState {
    * fixed slab's 0, or a car-car pair's common velocity, so the struck car's contact masses are driven
    * to it (its side crushes) rather than the bullet's nose stopping dead against a car that gets no momentum. `whole`: the overlap is
    * all of the crush (a fixed solid no particle reaches, so no particle held on its face takes the rest), not the 0.4 + 0.35·squash share.
-   * `span`: the face's extent; a mass beyond it is not under the face and takes none of its crush.
+   * `span`: the face's extent; a mass beyond it is not under the face and takes none of its crush. `patch`: the half width (m) of a broad
+   * contact along the face: a mass within it of the point presses as near as one at the point (a flat bumper's corner crushes as its middle).
    */
-  feedOverlap(worldPoint: THREE.Vector3, inward: THREE.Vector3, overlap: number, closing: number, dt = 1 / FRAME_HZ, refVn = 0, whole = false, span?: FaceSpan): number {
+  feedOverlap(worldPoint: THREE.Vector3, inward: THREE.Vector3, overlap: number, closing: number, dt = 1 / FRAME_HZ, refVn = 0, whole = false, span?: FaceSpan, patch = 0): number {
     if (!this.massActive) return closing;
     this.overlapFrame = true;
     const leftover = leftoverCrumple(this.crumpleTravel());
@@ -821,7 +822,12 @@ export abstract class DeformContact extends DeformState {
       const zone = this.impactWeight(m);
       if (zone < MIN_IMPACT_ZONE) continue;
       if (span !== undefined && Math.abs((m.world.x - span.x) * span.rx + (m.world.z - span.z) * span.rz) > span.hx + m.radius * 0.5) continue;
-      const d = m.world.distanceTo(worldPoint);
+      let d = m.world.distanceTo(worldPoint);
+      if (patch > 0) {
+        const across = Math.abs((m.world.z - worldPoint.z) * inward.x - (m.world.x - worldPoint.x) * inward.z);
+        const beyond = Math.max(0, across - patch);
+        d = Math.sqrt(Math.max(0, d * d - across * across + beyond * beyond));
+      }
       const reach = 1.05 + s * 0.35;
       if (d > reach) continue;
       const fall = (1 - d / reach) ** 2 * zone;

@@ -11,20 +11,24 @@ import { resolveCarPair } from "./pair-contact.ts";
 import { partContactPair } from "./external-contact.ts";
 import { physicsSlice, sliceSpeed } from "./sat.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 
 /**
  * docs/PERF_HITCH.md "GC during races": physics garbage is what drives the race GC pauses. A warmed 24-car
  * pile-up in the engine's derby contact order (drive, integrate/sync, part contact, SAT passes, structure, then the
  * arena's prisms met at the end of the slice),
- * every car driving at the arena centre. Heap growth is summed per frame, positive deltas only: a frame with
- * a scavenge counts as 0, so this only undercounts. 75bc12d: 2280–2300 KB per frame; f8821eb (boxing, iterator
+ * every car driving at the arena centre. Read as the bytes V8's sampling heap profiler sees allocated per frame, dead or alive.
+ * A pile-up is not steady (the cars crash into each other), so a late tier-up is waited out by fresh pile-ups until
+ * one reads under the bar. 75bc12d: 2280–2300 KB per frame; f8821eb (boxing, iterator
  * and closure fixes): 657–672; with the split mass loops, typed-array outs and double-from-construction fields:
- * 421–425. The bound sits between, with room for JIT timing under a loaded runner.
+ * 421–425 (heap deltas summed per frame). The bound sits between.
  */
 const CARS = 24;
 const WARM = 600;
 const MEASURE = 300;
 const BOUND_KB = 540;
+/** Vectors the control makes each frame: far more than the bar's worth (over 50 B each). */
+const CONTROL_VECTORS = 12000;
 
 function pileUp(): { cars: DeformableCar[]; step: () => void } {
   const scene = new THREE.Scene();
@@ -73,26 +77,42 @@ function pileUp(): { cars: DeformableCar[]; step: () => void } {
   return { cars, step };
 }
 
+/** Bytes a window of `MEASURE` frames of a fresh warmed pile-up allocates, in KB a frame; `extra` is more work each frame. */
+function pileUpKbPerFrame(extra: () => void = () => {}): number {
+  const { cars, step } = pileUp();
+  try {
+    for (let f = 0; f < WARM; f++) step();
+    const crashed = cars.filter((c) => c.deform.massActive).length;
+    assert.ok(crashed >= CARS / 2, `only ${crashed} of ${CARS} cars crashed: the pile-up no longer exercises the crush path`);
+    const kb =
+      allocatedBytes(() => {
+        for (let f = 0; f < MEASURE; f++) {
+          step();
+          extra();
+        }
+      }) /
+      1024 /
+      MEASURE;
+    if (process.env.ALLOC_PRINT) console.log(`physics-alloc: ${kb.toFixed(1)} KB/frame, ${crashed} crashed`);
+    return kb;
+  } finally {
+    leaveArena();
+  }
+}
+
 describe("given a warmed 24-car derby pile-up with every car driving at the arena centre", () => {
-  it(`when 300 frames are stepped, then physics allocates at most ${BOUND_KB} KB of heap per frame (boxed doubles, iterators and per-call arrays would show up as race GC pauses)`, () => {
-    const { cars, step } = pileUp();
-    try {
-      for (let f = 0; f < WARM; f++) step();
-      const crashed = cars.filter((c) => c.deform.massActive).length;
-      assert.ok(crashed >= CARS / 2, `only ${crashed} of ${CARS} cars crashed: the pile-up no longer exercises the crush path`);
-      let grown = 0;
-      let last = process.memoryUsage().heapUsed;
-      for (let f = 0; f < MEASURE; f++) {
-        step();
-        const now = process.memoryUsage().heapUsed;
-        if (now > last) grown += now - last;
-        last = now;
-      }
-      const kb = grown / 1024 / MEASURE;
-      if (process.env.ALLOC_PRINT) console.log(`physics-alloc: ${kb.toFixed(1)} KB/frame, ${crashed} crashed`);
-      assert.ok(kb <= BOUND_KB, `${kb.toFixed(0)} KB per frame > ${BOUND_KB}: a hot physics path allocates again (see docs/PERF_HITCH.md)`);
-    } finally {
-      leaveArena();
-    }
+  it(`when 300 frames are stepped, then physics allocates at most ${BOUND_KB} KB per frame (boxed doubles, iterators and per-call arrays would show up as race GC pauses)`, () => {
+    const kb = untilQuiet(() => pileUpKbPerFrame(), BOUND_KB);
+    assert.ok(kb <= BOUND_KB, `${kb.toFixed(0)} KB per frame > ${BOUND_KB} in every pile-up for ${COMPILE_WAIT_S} s: a hot physics path allocates again (see docs/PERF_HITCH.md)`);
+  });
+});
+
+describe("given the allocation measure on a derby pile-up", () => {
+  it("when each frame also makes twelve thousand vectors, then it reads over the bar", () => {
+    const kept: THREE.Vector3[] = [];
+    const kb = pileUpKbPerFrame(() => {
+      for (let i = 0; i < CONTROL_VECTORS; i++) kept[i % 8] = new THREE.Vector3();
+    });
+    assert.ok(kb > BOUND_KB, `${kb.toFixed(0)} KB per frame for ${CONTROL_VECTORS} vectors a frame: the measure sees nothing`);
   });
 });

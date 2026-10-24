@@ -146,6 +146,11 @@ function idle(car: DeformableCar): boolean {
   return car.stored && EPICENTER.storedSkip === 1;
 }
 
+/** A car resting on the ground: slower than rest and touching. Its wreck's masses ride its body (`DeformFreeze.ridesBody`). */
+function atRest(car: DeformableCar): boolean {
+  return !car.moving && !car.airborne;
+}
+
 /** Scratch for the weight an unstepped car's roof drops (`stepWorld`). */
 const _borneV = new THREE.Vector3();
 const _borneW = new THREE.Vector3();
@@ -383,7 +388,7 @@ export function stepWorld(w: World, dt: number): void {
       const car = cars[ci]!;
       if (idle(car)) continue;
       if (car.deform.massActive) {
-        if (!car.deform.standsAsleep(car.asleep)) car.syncPose(0);
+        if (!car.deform.ridesBody(atRest(car))) car.syncPose(0);
       } else car.refreshBasis();
     }
     if (barrier) {
@@ -413,7 +418,7 @@ export function stepWorld(w: World, dt: number): void {
     // The pair pass moved the wrecks' masses (a tilted wreck's frame jumped 0.35 m in one re-measure): their pose and velocity are derived
     // from them now, before the structure step reads them, as the second pass's start did (the mixed fleet's column read a wreck at
     // -7.4 m/s against its masses' -2.8 without it: stack-column 'owner's drops').
-    for (let ci = 0; ci < n; ci++) if (cars[ci]!.deform.massActive && !cars[ci]!.deform.standsAsleep(cars[ci]!.asleep) && (i === 0 || !lonely.flag[ci])) cars[ci]!.syncPose(0);
+    for (let ci = 0; ci < n; ci++) if (cars[ci]!.deform.massActive && !cars[ci]!.deform.ridesBody(atRest(cars[ci]!)) && (i === 0 || !lonely.flag[ci])) cars[ci]!.syncPose(0);
     armCrushRows(h);
     lap(ph, PHASE.pairs);
 
@@ -424,8 +429,8 @@ export function stepWorld(w: World, dt: number): void {
       const hc = lonely.flag[ci] ? dt : h;
       const d = car.deform;
       if (d.massActive) {
-        // A relocked wreck (`epicenter` activation) and a sleeping one run their clock and ride their body: no solve, no frame re-measure.
-        if (d.standsAsleep(car.asleep)) {
+        // A relocked wreck (`epicenter` activation) and one at rest run their clock and ride their body: no solve, no frame re-measure.
+        if (d.ridesBody(atRest(car))) {
           d.stepFrozen(hc, car.group, car.asleep);
           if (d.frozen) work[WORK.frozenCarSlices] = work[WORK.frozenCarSlices]! + 1;
         } else {
