@@ -14,6 +14,7 @@ import { square } from "../world/track.test-util.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { deepestInStatics, lowestPoint } from "./ragdoll-props.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const UP = new THREE.Vector3(0, 1, 0);
@@ -309,34 +310,63 @@ describe("given a cone lying asleep against the foot of a course's road wall, wh
   }
 });
 
+/** The sleeping crates' allocation is read over the dummies' world's own update (the drive harness teleports the car each frame and is not under test). */
+const CRATE_UPDATE = { fn: "update", file: "engine-ragdoll.ts" } as const;
+const CRATE_BOUND_KB = 16;
+/** Seconds of a pass along the row: passes are read until one is under the bar (a late optimizing compile lands in the first). */
+const CRATE_PASS_S = 2.5;
+/** Vectors the control makes each frame: over 100 B each, so 200 beat the bar. */
+const CONTROL_VECTORS = 200;
+
+/** A world holding 24 crates asleep in a row, and a car to drive along it. */
+async function sleepingRow() {
+  const props = Array.from({ length: 24 }, (_, k) => ({ prefab: "crate" as const, x: 40 + 2 * k, z: 60, yaw: 0, scale: 1 }));
+  const sys = await system(new Track(parseTrack(square({ props }))));
+  for (let i = 0; i < props.length; i++) sys.knockProp(i, -1, 0, 0, 0);
+  run(sys, 3, [], () => {});
+  return { sys, car: makeCar(), bodies: sys["props"]["bodies"] };
+}
+
 describe("given 24 crates knocked over where they stood, lying asleep in a row", () => {
   // Measured: 27.5–28.6 KB a frame while every sleeping crate was read each frame, 8.4–12.1 KB without (the world's own steps).
   it("when a car drives along the row 3 m off at 20 m/s, near enough that the world steps but never touching, then the crates stay asleep and a frame allocates at most 16 KB", async () => {
-    const props = Array.from({ length: 24 }, (_, k) => ({ prefab: "crate" as const, x: 40 + 2 * k, z: 60, yaw: 0, scale: 1 }));
-    const sys = await system(new Track(parseTrack(square({ props }))));
-    for (let i = 0; i < props.length; i++) sys.knockProp(i, -1, 0, 0, 0);
-    run(sys, 3, [], () => {});
-    const bodies = sys["props"]["bodies"];
-    const car = makeCar();
-    // A first pass warms the code up; the second is measured.
-    drive(sys, car, 30, 63, 1, 0, 20, 2.5);
+    const { sys, car, bodies } = await sleepingRow();
+    // A first pass warms the code up; the later ones are read.
+    drive(sys, car, 30, 63, 1, 0, 20, CRATE_PASS_S);
     const tick = sys["tick"];
-    let grown = 0;
-    let frames = 0;
-    drive(sys, car, 30, 63, 1, 0, 20, 2.5, (frame) => {
-      const before = process.memoryUsage().heapUsed;
-      frame();
-      const after = process.memoryUsage().heapUsed;
-      frames++;
-      if (after > before) grown += after - before;
-    });
+    const frames = Math.round(CRATE_PASS_S / FRAME);
+    const kb = untilQuiet(() => allocatedBytes(() => drive(sys, car, 30, 63, 1, 0, 20, CRATE_PASS_S), CRATE_UPDATE) / frames / 1024, CRATE_BOUND_KB);
     const steps = sys["tick"] - tick;
     const awake = bodies.filter((b) => !b!.isSleeping()).length;
     sys.dispose();
-    const kb = grown / 1024 / frames;
     assert.ok(steps > 0, "the world never stepped: nothing here reads the crates");
     assert.equal(awake, 0, `${awake} crates woke`);
-    assert.ok(kb <= 16, `${kb.toFixed(2)} KB per frame`);
+    assert.ok(kb <= CRATE_BOUND_KB, `${kb.toFixed(2)} KB per frame > ${CRATE_BOUND_KB} in every pass for ${COMPILE_WAIT_S} s`);
+  });
+
+  it("when vectors are made each frame under the dummies' update, then the allocation reads over the bar, and made outside it, it does not", async () => {
+    const { sys, car } = await sleepingRow();
+    const kept: THREE.Vector3[] = [];
+    const makeVectors = (): void => {
+      for (let i = 0; i < CONTROL_VECTORS; i++) kept[i % 8] = new THREE.Vector3();
+    };
+    const frames = Math.round(CRATE_PASS_S / FRAME);
+    const kbOf = (each: (frame: () => void) => void): number => allocatedBytes(() => drive(sys, car, 30, 63, 1, 0, 20, CRATE_PASS_S, each), CRATE_UPDATE) / frames / 1024;
+    const outside = kbOf((frame) => {
+      frame();
+      makeVectors();
+    });
+    const props = sys["props"];
+    const here = props.here;
+    props.here = (...args) => {
+      makeVectors();
+      here.apply(props, args);
+    };
+    const inside = kbOf((frame) => frame());
+    props.here = here;
+    sys.dispose();
+    assert.ok(outside < CRATE_BOUND_KB, `${outside.toFixed(2)} KB per frame: vectors made outside the dummies' update must not count`);
+    assert.ok(inside > CRATE_BOUND_KB, `${inside.toFixed(2)} KB per frame for ${CONTROL_VECTORS} vectors a frame under update: the measure sees nothing`);
   });
 });
 

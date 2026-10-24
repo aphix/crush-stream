@@ -98,8 +98,8 @@ keyframe puts it there again). 80 m covers the replay cameras' sight lines (`DUT
 the 46 cars a camera could see on five seeded races, 80 m holds 44 and 60 m holds 39. A clip grows by bystanders only to
 `CLIP_SHARE` (`REEL_BUDGET` / `TOP` × 3.3 ≈ 158 KiB estimated: a car's inputs plus its 21 KB solver state if it is a
 wreck in the clip's first keyframe). A bystander too big for what is left is skipped (a cheaper one further out may still
-fit), and a pile-up that already fills the share takes none. The recorder's steady-state allocation is 1.2 B a step
-against a 16 B bound (`engine-record.test.ts`): `simState` reads a wreck's scalar fields as plain properties (`simScalarsOut`,
+fit), and a pile-up that already fills the share takes none. The recorder's steady-state allocation is 14-15 B a step (the bytes V8's sampling heap profiler
+sees allocated, dead objects included; the typed-array views a keyframe makes) against a 16 B bound (`engine-record.test.ts`, read through `kernel/alloc-sample.test-util.ts`): `simState` reads a wreck's scalar fields as plain properties (`simScalarsOut`,
 `simScalarsIn`; read by name, V8 boxed every double: 1050 B a wreck a keyframe, 46.0 B a step at 11 wrecks, now 48 B a wreck a keyframe).
 
 ## Ejections

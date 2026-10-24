@@ -12,67 +12,90 @@ import { makeWorld } from "../world/race-world.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { newWorld, settleStep, stepWorld } from "./world-step.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
+import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 
 const H = 1 / FINE_HZ;
 /**
  * Two minutes of racing: the 1 Hz keyframe encode (`writeSnapshot`, `simState`) is cold code, so V8 runs it in the
  * interpreter, where every double is boxed, for its first ~40 s; the test measures the steady state after it tiers up
  * (the keyframes were 2 Hz and the warm-up a minute before `KEY_EVERY` became 1 s: the same number of keyframes).
- * Under full-suite load the tier-up comes late: the test takes the quietest of `WINDOWS` windows, so a steady per-step
- * allocation still fails every one of them.
+ * The optimizing compile runs on a background thread and lands late under load: windows are read until one is quiet, so a
+ * steady per-step allocation still fails every one of them.
  */
 const WARM = 28800;
-const WINDOWS = 5;
 const MEASURE = 1200;
 /**
- * Heap growth allowed per recorded step (B), summed over positive deltas: JIT and test noise, not a buffer per step.
+ * Bytes allocated per recorded step allowed (B): JIT and test noise, not a buffer per step.
  * The keyframes' `simState` reads each wreck's scalar fields as plain properties (read by name, V8 boxed every double:
- * ~1050 B a wreck a keyframe, 46.0 B/step at 11 wrecks; now 1.2 B/step), so no wreck allowance remains.
+ * ~1050 B a wreck a keyframe, 46.0 B/step at 11 wrecks), so no wreck allowance remains.
  */
 const BOUND_B = 16;
 
+/** The recorder fed a `MAX_CARS`-car race, a third of it wrecked, with grinding contacts under the impact bar; `step` is one recorded step. */
+function steadyRace(): { rec: CrashRecorder; step: () => void } {
+  const scene = new THREE.Scene();
+  const cars = Array.from({ length: MAX_CARS }, (_, i) => new DeformableCar({ body: 0x808080, accent: 0, name: `c${i}` }, scene, null, fleetStyle(i)));
+  for (const [i, c] of cars.entries()) c.spawnFacing(i * 6, 0, 0, 10);
+  // A third are wrecks: every keyframe encodes their netplay wreck section.
+  for (let i = 0; i < MAX_CARS; i += 3) cars[i]!.applyImpact(new THREE.Vector3(i * 6, 0.5, 2.2), new THREE.Vector3(0, 0, -1), 16, 12);
+  // With a course (the race's road-segment hint and props: every keyframe reads them too), not the flat field's.
+  const knocks = new Uint8Array(40);
+  const rec = new CrashRecorder({
+    recall: (i, out) => {
+      out[0] = i;
+    },
+    knocks: () => knocks,
+  });
+  rec.begin("oval", 0.35, false, MAX_CARS, () => "x", 1);
+  // Grinding contact under the impact bar: the contact path runs, no cluster ever opens.
+  const grind: ContactHit = { impulse: 2, contact: new THREE.Vector3(), normal: new THREE.Vector3(1, 0, 0) };
+  const step = (): void => {
+    rec.startStep(cars);
+    for (let i = 0; i + 1 < MAX_CARS; i += 2) rec.pairHit(i, i + 1, grind);
+    rec.wallHit(5, 1, 0, 0);
+    rec.endStep(cars, H, 0, 0);
+  };
+  return { rec, step };
+}
+
+/** Bytes a window of `MEASURE` calls of `step` allocates, per call. */
+function windowPerStep(step: () => void): number {
+  return allocatedBytes(() => {
+    for (let s = 0; s < MEASURE; s++) step();
+  }) / MEASURE;
+}
+
 describe(`given the highlight recorder fed a ${MAX_CARS}-car race with a third of the cars wrecked, grinding contacts and a keyframe every second`, () => {
   it("when it records minutes of steady racing with no crash opening, then it allocates no more than 16 bytes per recorded step", () => {
-    const scene = new THREE.Scene();
-    const cars = Array.from({ length: MAX_CARS }, (_, i) => new DeformableCar({ body: 0x808080, accent: 0, name: `c${i}` }, scene, null, fleetStyle(i)));
-    for (const [i, c] of cars.entries()) c.spawnFacing(i * 6, 0, 0, 10);
-    // A third are wrecks: every keyframe encodes their netplay wreck section.
-    for (let i = 0; i < MAX_CARS; i += 3) cars[i]!.applyImpact(new THREE.Vector3(i * 6, 0.5, 2.2), new THREE.Vector3(0, 0, -1), 16, 12);
-    // With a course (the race's road-segment hint and props: every keyframe reads them too), not the flat field's.
-    const knocks = new Uint8Array(40);
-    const rec = new CrashRecorder({
-      recall: (i, out) => {
-        out[0] = i;
-      },
-      knocks: () => knocks,
-    });
-    rec.begin("oval", 0.35, false, MAX_CARS, () => "x", 1);
-    // Grinding contact under the impact bar: the contact path runs, no cluster ever opens.
-    const grind: ContactHit = { impulse: 2, contact: new THREE.Vector3(), normal: new THREE.Vector3(1, 0, 0) };
-    const step = (): void => {
-      rec.startStep(cars);
-      for (let i = 0; i + 1 < MAX_CARS; i += 2) rec.pairHit(i, i + 1, grind);
-      rec.wallHit(5, 1, 0, 0);
-      rec.endStep(cars, H, 0, 0);
-    };
+    const { rec, step } = steadyRace();
     for (let s = 0; s < WARM; s++) step();
-    // Read the heap once a recorded second (`memoryUsage` allocates its own result), positive deltas only.
-    let perStep = Infinity;
-    for (let w = 0; w < WINDOWS; w++) {
-      let grown = 0;
-      let last = process.memoryUsage().heapUsed;
-      for (let s = 0; s < MEASURE; s++) {
-        step();
-        if (s % 240 !== 239) continue;
-        const now = process.memoryUsage().heapUsed;
-        if (now > last) grown += now - last;
-        last = now;
-      }
-      perStep = Math.min(perStep, grown / MEASURE);
-    }
+    const perStep = untilQuiet(() => windowPerStep(step), BOUND_B);
     if (process.env.ALLOC_PRINT) console.log(`recorder: ${perStep.toFixed(1)} B/step`);
     assert.equal(rec.ledger.open.length, 0, "no cluster opened: this measures the steady state");
-    assert.ok(perStep <= BOUND_B, `${perStep.toFixed(1)} B per recorded step > ${BOUND_B}: the recorder allocates in steady state`);
+    assert.ok(perStep <= BOUND_B, `${perStep.toFixed(1)} B per recorded step > ${BOUND_B} in every window for ${COMPILE_WAIT_S} s: the recorder allocates in steady state`);
+  });
+});
+
+/** Steps the control runs before it reads, and the window it reads over. */
+const CONTROL_WARM = 2400;
+
+// After the row above, and with loops of its own: a second callee at the measured loop's call site costs the recorder its inlined step (60 B a step, not 20).
+describe("given the allocation measure on a recorded step", () => {
+  it("when a step also makes a vector, then the window reads more than the bar over a plain one", () => {
+    const { step } = steadyRace();
+    for (let s = 0; s < CONTROL_WARM; s++) step();
+    const kept: THREE.Vector3[] = [];
+    const read = (more: boolean): number =>
+      allocatedBytes(() => {
+        for (let s = 0; s < MEASURE; s++) {
+          step();
+          if (more) kept[s % 8] = new THREE.Vector3();
+        }
+      }) / MEASURE;
+    read(false);
+    const plain = read(false);
+    const withVector = read(true);
+    assert.ok(withVector - plain > BOUND_B, `${(withVector - plain).toFixed(1)} B per step more for a vector a step: the measure sees nothing`);
   });
 });
 
