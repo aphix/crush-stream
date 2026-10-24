@@ -5,8 +5,8 @@
  * plan for a few rounds, all in one process. Writes the table as TS to paste (`fit.ts`), before/after overlays, and one JSON line:
  * both fits (IoU, edge offsets, glass), the per-corner and gap checklist, and what it leaves to the builders and to the hand.
  *
- *   R=/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/ModernCarDesigns_SideAndTop/silver-sedan
- *   CAP=2G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning scripts/fit-car.mjs \
+ *   R=.tmp/ModernCarDesign/ModernCarDesigns_SideAndTop/silver-sedan
+ *   node --disable-warning=ExperimentalWarning scripts/fit-car.mjs \
  *     --style sedan --side $R/silver-sedan-1.png --side-span 3,299=4.221 --top $R/silver-sedan-2.png --top-span 3,292 \
  *     [--class sedan] [--side-ground 95] [--rounds 6] [--out-dir .tmp/fit/sedan] [--lines-out src/game/vehicle/car-reference-lines.fixture.json]
  *

@@ -260,8 +260,8 @@ views, then the lineup. Archetype research (real cars of the type) sets ratios a
 
 Two tools share one core (`scripts/trace-core.mjs`, `trace-ref.mjs`, `trace-metrics.mjs`): a style's drawn car (its class's lift
 and wheel scale applied, no engine boot) in a bare scene through headless GL, over a reference picture calibrated to metres.
-The references live in `/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/` (git-ignored; `/tmp` does not survive a
-reboot). Run both through the box gate: `CAP=2G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node ...`.
+The references live in `.tmp/ModernCarDesign/` at the repo root (git-ignored; `/tmp` does not survive a reboot). Both tools are plain
+`node` scripts: `node --disable-warning=ExperimentalWarning scripts/<tool>.mjs ...`.
 
 **`fit-car.mjs`: a speed-up.** It reads the side and top pictures into the style's own fields, builds the car from them, and
 nudges the profile stations toward the reference's roof line and plan for a few rounds, all in one process of about 6 s. It
@@ -278,7 +278,7 @@ the plan gets worse (mean and largest |offset| over the sides, ends and wheel ar
 measured off the built car, as the dims rows hold them.
 
 ```sh
-R=/home/aphix/github/crash-deformer-test/.tmp/ModernCarDesign/ModernCarDesigns_SideAndTop
+R=.tmp/ModernCarDesign/ModernCarDesigns_SideAndTop
 node --disable-warning=ExperimentalWarning scripts/fit-car.mjs --style sedan \
   --side $R/silver-sedan/silver-sedan-1.png --side-span 3,299=4.221 --top $R/silver-sedan/silver-sedan-2.png --top-span 3,292
 ```
@@ -305,7 +305,7 @@ the two side by side (`pair`: the reference alone left, ours right), all through
 canvas, so they line up pixel for pixel and every car is framed the same way:
 
 ```sh
-CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
+node --disable-warning=ExperimentalWarning \
   scripts/landing-shots.mjs --root <tree> --car <style> [--paint]   # writes <tree>/.tmp/shots/landing/<car>-<view>-{ours,overlay,pair}.png
 ```
 
@@ -364,7 +364,7 @@ How to run it. Add `--png` for one car's shot; `--all` runs the five bodies (pol
 name either with `--car`):
 
 ```sh
-CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
+node --disable-warning=ExperimentalWarning \
   scripts/contour-sections.mjs --root <tree> --car <style> [--png <out>]          # JSON lines on stdout
   scripts/contour-sections.mjs --root <tree> --all --sheet <png> [--curves <png>]  # every body
   scripts/contour-sections.mjs --root <tree> --ripples [--car <style>] [--png <out>]  # rest ripples alone, all seven cars

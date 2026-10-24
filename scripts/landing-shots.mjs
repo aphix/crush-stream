@@ -7,7 +7,7 @@
  * never cropped or scaled per half. The references, crops, picked wheels and solved iso cameras are the car's
  * `scripts/landing-views/<car>.json` (`trace-landing.mjs`).
  *
- *   CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
+ *   node --disable-warning=ExperimentalWarning \
  *     scripts/landing-shots.mjs --root <tree> --car <style> [--paint] [--state intact|open|stripped] [--out-dir <tree>/.tmp/shots/landing] [--views side,top,iso,rear-iso]
  *
  * `--paint` paints the car its reference's colour (the landing file's `paint`; a livery stays) in both shots, so they compare like

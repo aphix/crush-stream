@@ -3,7 +3,7 @@
  * Surface contour sections (geometry only, never airflow): the built car's drawn meshes cut by planes at fixed stations, scored per
  * region the owner marks (roof edge, A-pillar, rear pillar, rear bumper, lower lip), never as one smoothness score.
  *
- *   CAP=4G /home/aphix/crash-wt/slot-run /home/aphix/crash-wt/capped node --disable-warning=ExperimentalWarning \
+ *   node --disable-warning=ExperimentalWarning \
  *     scripts/contour-sections.mjs --root <tree> --car <style> [--png <out.png>]
  *   ... scripts/contour-sections.mjs --root <tree> --all --sheet <out.png>     (the five bodies: one JSON line each, one sheet)
  *   ... scripts/contour-sections.mjs --root <tree> --ripples [--car <style>] [--png <out.png>]   (the rest-ripple check alone, all seven cars)
