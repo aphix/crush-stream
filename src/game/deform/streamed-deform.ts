@@ -155,6 +155,9 @@ export interface DeformNetState {
   skinPopped: number;
   /** 1 massActive, 2 drivetrainAlive (now); 4 deepCrush, 8 bidirectional, 16 lattice mode (at the last bake). */
   flags: number;
+  /** FACES: each face's load crush depth (m) and the depth already baked into the masses (docs/LOAD_CRUSH.md): a dent under the crash's depth rides the wreck section too. */
+  readonly crush: Float32Array;
+  readonly crushBaked: Float32Array;
   /** Rearward engine-block travel (m) and the travel that kills it (class × realism): `drivetrainHealth`. */
   engineTravel: number;
   killTravel: number;
@@ -730,6 +733,8 @@ export class StreamedDeformation extends DeformSolve {
     out.flags = (this.massActive ? 1 : 0) | (this.drivetrainAlive ? 2 : 0) | this.netFlags;
     out.engineTravel = this.engineTravel;
     out.killTravel = this.killTravel;
+    out.crush.set(this.crush);
+    out.crushBaked.set(this.crushBaked);
   }
 
   /**
@@ -758,6 +763,9 @@ export class StreamedDeformation extends DeformSolve {
     this.clusterXf.set(src.skinXf);
     this.netPopped = src.skinPopped;
     this.netFlags = f & 28;
+    // The load crush the host's masses and skin already carry (a car repaired by `reset` zeroes both): a client that holds a dent knows to clear it.
+    this.crush.set(src.crush);
+    this.crushBaked.set(src.crushBaked);
     // Saturates the wrinkle and lattice ramps: the host's value already carries its ramp.
     this.elapsed = Math.max(this.elapsed, 1);
     let maxC = 0;

@@ -84,11 +84,12 @@ What holds a column up, in the shared car-on-car rule:
 
 ## Limits
 
-- Load crush rides replays and netplay: `crush[]` and `crushBaked` are in `simState`. A car whose own face the ground, a wall or a ramp crushed
-  past its elastic range (`SPRING_YIELD`, 15 mm: a dent that shallow springs back whole in the structure) is `crashed`, so it rides the wreck
-  section; a shallower dent (a belly's soft touch on a ramp's edge, 1.7 mm) leaves the car uncrashed, and a keyframe still carries its solver
-  state (`CrashRecorder`, `loadCrushed`); the netplay host sends wreck sections of crashed cars only, so a peer draws such a dent (15 mm at
-  most) as none. The depth is the face's total, so touches add up to a crash. A roof another car presses is `crashed` from its first press:
+- Load crush rides replays and netplay: `crush[]` and `crushBaked` are in `simState`, and in the netplay wreck section (`DeformNetState.crush`,
+  `crushBaked`). A car whose own face the ground, a wall or a ramp crushed past its elastic range (`SPRING_YIELD`, 15 mm: a dent that shallow
+  springs back whole in the structure) is `crashed`; a shallower dent (a belly's soft touch on a ramp's edge, 1.7 mm) leaves the car
+  uncrashed, and it still rides a keyframe (`CrashRecorder`, `loadCrushed`) and a netplay wreck section, which the snapshot's `dented` flag
+  (flags bit 7) asks for: a guest draws the dent the host has, and clears it when the host's car reads neither crashed nor dented
+  (`net-view.ts`; `net-session.test.ts`). The depth is the face's total, so touches add up to a crash. A roof another car presses is `crashed` from its first press:
   it carries that car's weight, and with the threshold on it the roof under a car dropped 2 cm crushes 9.5 cm at 60 Hz where the law gives
   8.4 (`stack-roof-law.test.ts`). `stack-crush.test.ts` restores a 4-stack from a keyframe: the same roofs, the same 3 s later. The stack table
   and the roof drops read as before the threshold; the drop table's other faces moved (nose 43 / 75 / 128 → 45 / 70 / 131, tail 38 /

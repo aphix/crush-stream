@@ -18,6 +18,7 @@ import type { LookData } from "./look-codec.ts";
 import { CAR_SPRAY, NO_CAR_PICK, NO_PERSON_PICK, PERSON_SPRAY, SPRAY_PALETTE, carPickText, personPickText } from "../match/look-data.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
+import { FACE_NOSE } from "../deform/load-crush.ts";
 
 /** A player who picked nothing and sprayed nothing. */
 const bareLook = (): LookData => ({
@@ -656,6 +657,43 @@ describe("given a client whose scene is cleared when the host's clear count chan
     s.cg.playing = false;
     s.step(10);
     assert.equal(s.cg.clears, 1, "back to the host's scene: its clear lands");
+  });
+});
+
+describe("given a host car dented under the crash's depth (8 mm on its nose: no wreck, `SPRING_YIELD`) and a guest drawing it", () => {
+  const DENT = 0.008;
+  /** A car's body skin as the sim wrote it, before the drawn tyre hold (each peer holds that over its own wheels): what crosses the wire. */
+  const skin = (car: DeformableCar): ArrayLike<number> => car["bodyTyres"]?.["written"] ?? car.body.geometry.getAttribute("position").array;
+  const apart = (a: ArrayLike<number>, b: ArrayLike<number>): number => {
+    let m = 0;
+    for (let i = 0; i < a.length; i++) m = Math.max(m, Math.abs(a[i]! - b[i]!));
+    return m;
+  };
+
+  it("when the host dents the car, then the guest draws the same dent and no wreck; when the host repairs it, then the dent is cleared on both", () => {
+    const s = session();
+    const host = s.hg.cars()[0]!;
+    const guest = s.cg.cars()[0]!;
+    const rest = Float32Array.from(skin(makeCar()));
+    host.deform.crush[FACE_NOSE] = DENT;
+    host.deform.bakeLoadCrush();
+    host.deform.skinLoaded();
+    host.updateSkin();
+    assert.ok(!host.crashed && host.deform.loadCrushed(), "the host car is dented and no wreck");
+    const dented = apart(skin(host), rest);
+    assert.ok(dented > 0.003, `the host's skin is dented (${dented.toFixed(4)} m)`);
+    s.step(20);
+    assert.equal(guest.crashed, false, "the guest draws no wreck");
+    const depth = guest.deform.crush[FACE_NOSE]!;
+    assert.ok(Math.abs(depth - DENT) <= codec.Q.fine / 2 + 1e-9, `the guest's nose depth is ${depth.toFixed(4)} m, the host's ${DENT} m`);
+    const off = apart(skin(guest), skin(host));
+    assert.ok(off < 0.002, `the guest's skin is the host's within 2 mm (${off.toFixed(4)} m)`);
+    host.resetVisual();
+    s.step(20);
+    assert.equal(host.deform.loadCrushed(), false, "the host's dent is repaired");
+    assert.equal(guest.deform.loadCrushed(), false, "the guest's dent is cleared with it");
+    const back = apart(skin(guest), rest);
+    assert.ok(back < 0.002, `the guest's skin is the car's rest skin again (${back.toFixed(4)} m off)`);
   });
 });
 

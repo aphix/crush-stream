@@ -127,7 +127,7 @@ describe("given a two-car network snapshot with every field filled in", () => {
     for (let c = 0; c < 2; c++) {
       const f = s.cars[c]!;
       // Car 0 a falling fake, car 1 vaporized with its sirens on: each flag must come back on its own car only.
-      Object.assign(f, { x: 12.345 + c, y: 0.0123, z: -40.5, yaw: 3.1, pitch: -0.12, roll: 0.4, vx: 17.3, vy: -1.2, vz: -0.07, wy: 2.345, crashed: true, wreck: c === 0, falling: c === 0, vaporized: c === 1, sirens: c === 1, style: 4 + c, cls: 3 - c, meter: c === 0 ? 0.4 : -1, spin: c === 0 ? 12.37 : 0 });
+      Object.assign(f, { x: 12.345 + c, y: 0.0123, z: -40.5, yaw: 3.1, pitch: -0.12, roll: 0.4, vx: 17.3, vy: -1.2, vz: -0.07, wy: 2.345, crashed: true, wreck: c === 0, falling: c === 0, vaporized: c === 1, sirens: c === 1, dented: c === 1, style: 4 + c, cls: 3 - c, meter: c === 0 ? 0.4 : -1, spin: c === 0 ? 12.37 : 0 });
       const d = f.deform;
       for (let i = 0; i < d.local.length; i++) d.local[i] = Math.sin(i * 1.7) * 2.2;
       for (let i = 0; i < d.skinPos.length; i++) d.skinPos[i] = Math.cos(i * 0.9) * 2.1;
@@ -139,6 +139,8 @@ describe("given a two-car network snapshot with every field filled in", () => {
       d.flags = 1 | 2 | 8;
       d.engineTravel = 0.123;
       d.killTravel = 0.5;
+      d.crush.set([0.008, 0, 0.0123, 0.4, 0.05]);
+      d.crushBaked.set([0.008, 0, 0.012, 0.39, 0.05]);
       const p = f.parts;
       p.flags.set([1, 0, 2, 3, 5, 4, 1, 0]);
       for (let i = 0; i < p.hinge.length; i++) p.hinge[i] = (i % 3) * 0.37;
@@ -175,6 +177,7 @@ describe("given a two-car network snapshot with every field filled in", () => {
       assert.equal(b.falling, c === 0);
       assert.equal(b.vaporized, c === 1);
       assert.equal(b.sirens, c === 1);
+      assert.equal(b.dented, c === 1);
       if (c === 0) assert.ok(Math.abs(b.meter - 0.4) <= 0.5 / 254, `meter ${b.meter}`);
       else assert.equal(b.meter, -1, "a car with no nitrous reads back as none");
       assert.ok(Math.abs(b.spin - a.spin) <= 0.125 + 1e-9, `spin ${b.spin}`);
@@ -191,6 +194,8 @@ describe("given a two-car network snapshot with every field filled in", () => {
     assert.equal(b.deform.flags, a.deform.flags);
     assert.ok(Math.abs(b.deform.engineTravel - 0.123) <= Q.pos / 2 + 1e-6);
     assert.ok(Math.abs(b.deform.killTravel - 0.5) <= Q.pos / 2 + 1e-6);
+    assert.ok(maxDiff(a.deform.crush, b.deform.crush) <= Q.fine / 2 + 1e-6, "face depths within 0.05 mm");
+    assert.ok(maxDiff(a.deform.crushBaked, b.deform.crushBaked) <= Q.fine / 2 + 1e-6);
     assertSameNumbers(b.parts.flags, a.parts.flags, "part flags");
     assert.ok(maxDiff(a.parts.hinge, b.parts.hinge) <= Q.fine / 2 + 1e-6);
     assert.equal(b.parts.lamps, a.parts.lamps);
@@ -200,8 +205,8 @@ describe("given a two-car network snapshot with every field filled in", () => {
       for (let k = 0; k < 3; k++) assert.equal(b.parts.wheels[i * 7 + k], Math.fround(a.parts.wheels[i * 7 + k]!));
       for (let k = 3; k < 7; k++) assert.ok(Math.abs(b.parts.wheels[i * 7 + k]! - a.parts.wheels[i * 7 + k]!) <= Q.quat);
     }
-    // 17-byte header, 30-byte poses (body, meter, spin, pose), a 667-byte wreck (its impact block is 12 numbers of 2 bytes) with 20 more per loose wheel (2): a loose part's pose is not sent.
-    assert.equal(w.off, 17 + 30 + (667 + 20 * 2) + 30);
+    // 17-byte header, 30-byte poses (body, meter, spin, pose), a 687-byte wreck (its impact block is 12 numbers of 2 bytes, its load crush 10) with 20 more per loose wheel (2): a loose part's pose is not sent.
+    assert.equal(w.off, 17 + 30 + (687 + 20 * 2) + 30);
   });
 });
 
