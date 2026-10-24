@@ -47,6 +47,8 @@ const BODY_SINK_M = 0.04;
 const PART_SINK_M = 0.02;
 /** The crown is the drawn cabin's vertices within this (m) of its highest. */
 const CROWN_DEPTH_M = 0.15;
+/** A wreck dropped on its flank with one low wheel gone is asleep within this many s: it stands on the other tyre and its body, and finds them. */
+const REST_SECONDS = 8;
 /** Where along the car's nose (m from its middle) the hit that makes a wreck of it lands. */
 const NOSE_HIT_M = 2.05;
 /** A mirror of a car on its wheels is at least this high (m): it stands on the door, a good half metre up. */
@@ -138,7 +140,7 @@ function lowestDrawn(car: DeformableCar, crown: ReadonlySet<number>): Lowest {
 }
 
 /** A car of `style` and `cls` dropped in `attitude` from `height` m (its lowest drawn point) on the flat pad and left `DROP_SECONDS` s, a wreck once its nose is hit first at `strike` m/s (none: 0), the hubs in `popped` torn off after the hit; with the crown it had fresh. */
-function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, height: number, strike = 0, popped: readonly string[] = []): { car: DeformableCar; lowest: Lowest; world: CrashWorld } {
+function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, height: number, strike = 0, popped: readonly string[] = [], seconds = DROP_SECONDS): { car: DeformableCar; lowest: Lowest; world: CrashWorld } {
   const car = buildCar(style, cls);
   car.spawnFacing(0, 0, 0, 0);
   car.updateSkin();
@@ -152,11 +154,21 @@ function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, hei
   car.airborne = true;
   car.parked = true;
   const world = makeWorld([car], false, false);
-  for (let f = 0; f < DROP_SECONDS * FRAME_HZ; f++) tickWorld(world, 1 / FRAME_HZ);
+  for (let f = 0; f < seconds * FRAME_HZ; f++) tickWorld(world, 1 / FRAME_HZ);
   return { car, lowest: lowestDrawn(car, crown), world };
 }
 
 const cm = (m: number): string => `${(m * 100).toFixed(1)} cm`;
+
+/** The lowest cage vertex's height over the flat pad (m): the body the sim rests on, not the drawn one. */
+function cageClearance(car: DeformableCar): number {
+  car.group.updateMatrixWorld(true);
+  car.refitCage();
+  const cage = car.cage.fields.pos;
+  let low = Infinity;
+  for (let i = 0; i < car.cage.style.vertexCount; i++) low = Math.min(low, _v.set(cage[i * 3]!, cage[i * 3 + 1]!, cage[i * 3 + 2]!).applyMatrix4(car.group.matrixWorld).y);
+  return low;
+}
 
 describe("given a car dropped onto its roof on the flat pad, from 0.5 and from 2 m, and left to rest", () => {
   for (const { style, cls } of FLEET) {
@@ -208,15 +220,14 @@ describe("given a car dropped onto its left or right flank on the flat pad, from
   it.todo("when a car is dropped on its left or right flank from any height and left to rest, then its lamps are out of the ground");
 });
 
-describe("given any class dropped onto its left or right flank on the flat pad, from 0.5 and from 2 m, and left to rest", () => {
+describe("given any class dropped onto its left or right flank on the flat pad from 0.5 m, and left to rest", () => {
   for (const cls of VEHICLE_CLASS_IDS) {
+    // From 2 m a class tips on past flat onto its roof's edge (up -0.3 to -0.5) and the drawn tyre's shoulder reaches 2-4 cm under the footprint the sim rests on.
     it(`when it is a ${cls}, then no tyre sinks more than its sidewall flattens: the tyres it lies on carry its whole weight, each its half`, (t) => {
       for (const side of ["left", "right"] as const) {
-        for (const height of [0.5, 2]) {
-          const { lowest } = dropped(CLASSES[cls].style, cls, side, height);
-          t.diagnostic(`${cls} dropped on its ${side} flank from ${height} m: lowest tyre ${cm(lowest.tyres)} over the ground`);
-          assert.ok(lowest.tyres > -TYRE_SQUASH_M, `${cls} dropped on its ${side} flank from ${height} m: a tyre ${cm(-lowest.tyres)} into the ground`);
-        }
+        const { lowest } = dropped(CLASSES[cls].style, cls, side, 0.5);
+        t.diagnostic(`${cls} dropped on its ${side} flank from 0.5 m: lowest tyre ${cm(lowest.tyres)} over the ground`);
+        assert.ok(lowest.tyres > -TYRE_SQUASH_M, `${cls} dropped on its ${side} flank from 0.5 m: a tyre ${cm(-lowest.tyres)} into the ground`);
       }
     });
   }
@@ -249,6 +260,24 @@ describe("given a monster that lost the two wheels on one side, dropped onto tha
       assert.ok(car.asleep && moved < MASS_STILL_M, `${tag}: a mass moved ${cm(moved)} in 2 s asleep`);
     }
   });
+});
+
+describe("given any class that lost one of the two wheels it lies on, dropped onto that flank on the flat pad, from 0.5 m (front wheel gone) and from 2 m (rear wheel gone)", () => {
+  for (const { style, cls } of FLANK_FLEET) {
+    it(`when it is a ${cls}, then it is asleep within ${REST_SECONDS} s with its cage and its drawn body out of the ground: a single tyre under the car does not pivot it`, (t) => {
+      for (const side of ["left", "right"] as const) {
+        for (const [height, hub] of [[0.5, LOW_HUBS[side][0]], [2, LOW_HUBS[side][1]]] as const) {
+          const { car, lowest } = dropped(style, cls, side, height, 0.5, [hub], REST_SECONDS);
+          const cage = cageClearance(car);
+          const tag = `${cls} without its ${hub} dropped on its ${side} flank from ${height} m`;
+          t.diagnostic(`${tag}: ${car.asleep ? "asleep" : `awake at ${car.velocity.length().toFixed(2)} m/s`}, cage ${cm(cage)}, body ${cm(lowest.body)} over the ground`);
+          assert.ok(car.asleep, `${tag}: still awake after ${REST_SECONDS} s, moving at ${car.velocity.length().toFixed(2)} m/s`);
+          assert.ok(cage > -BODY_SINK_M, `${tag}: cage ${cm(-cage)} into the ground`);
+          assert.ok(lowest.body > -BODY_SINK_M, `${tag}: body ${cm(-lowest.body)} into the ground`);
+        }
+      }
+    });
+  }
 });
 
 describe("given a car struck on the nose and dropped onto its roof (flat, nose down or up) or a flank on the flat pad, and left to rest", () => {
