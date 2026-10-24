@@ -9,6 +9,9 @@ import type { CarStyleId } from "./car-variants.ts";
 import type { DeformableCar } from "./car.ts";
 import { PartSeat } from "./part-geometry.ts";
 import type { VehicleClassId } from "./vehicle-classes.ts";
+import { CLASS_LIFT } from "./constants.ts";
+import { BUMP_RESERVE, droop } from "./car-suspension.ts";
+import { FRAME_RAIL_Y } from "./interior-geometry.ts";
 
 /**
  * A wreck lying on its roof or its side rests so that what is drawn stays out of the ground: the body and the roof crown within the
@@ -183,5 +186,27 @@ describe("given a car lying on its roof, with its doors drawn on their rest seat
   it("when it rests after a 2 m drop, then each drawn door is out of the ground (the 0.19 m it read was the hidden shattered pane)", () => {
     const { lowest } = dropped("sedan", "sedan", "roof", 2);
     assert.ok(lowest.doors > 0, `a door ${cm(-lowest.doors)} into the ground`);
+  });
+});
+
+describe("given a monster truck lying on its roof, next to one on its wheels, on the flat pad", () => {
+  const SLACK_M = 1e-6;
+
+  /** Each wheel's hub height over the frame's rails (m), in the car's own frame. */
+  function hubsOverRails(car: DeformableCar): number[] {
+    car.group.updateMatrixWorld(true);
+    const inverse = new THREE.Matrix4().copy(car.group.matrixWorld).invert();
+    const rails = car.group.getObjectByName(CLASS_LIFT)!.position.y + FRAME_RAIL_Y;
+    return car.wheels.map((wheel) => _v.setFromMatrixPosition(wheel.matrixWorld).applyMatrix4(inverse).y - rails);
+  }
+
+  it("when both rest for 5 s, then every wheel of the one on its roof has come toward its frame by more than nothing and by no more than its bump stop less the reserve a truck keeps to it, and each axle is still under the frame", () => {
+    const standing = hubsOverRails(dropped("monster", "monster", "wheels", 0.5).car);
+    const inverted = hubsOverRails(dropped("monster", "monster", "roof", 0.5).car);
+    for (const [i, rest] of standing.entries()) {
+      const compression = inverted[i]! - rest;
+      assert.ok(compression > 0 && compression <= droop("monster") - BUMP_RESERVE + SLACK_M, `wheel ${i} stands ${cm(compression)} nearer its frame than at rest, its bump stop ${cm(droop("monster"))}`);
+      assert.ok(inverted[i]! < 0, `wheel ${i}'s hub stands ${cm(inverted[i]!)} over the frame's rails`);
+    }
   });
 });
