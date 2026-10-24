@@ -774,11 +774,16 @@ export abstract class RaceField {
   /** The racers' damage as the race ended: what the podium shows (`FinalDamage`). */
   protected readonly ended = new FinalDamage();
 
-  /** Put a car at (x, z) facing `yaw` at rest with its damage as it is (`CarDamage`). The wreck state that is not damage (velocity, the solver's contacts) starts again. */
+  /**
+   * Put a car at (x, z) facing `yaw` at rest with its damage as it is (`CarDamage`). The wreck state that is not damage (velocity, the solver's contacts) starts again, its contact clock too:
+   * `spawnFacing` leaves it at a quiet of 10 s and the masses were laid just now, so ridden as a wreck long at rest (`DeformFreeze.ridesBody`) they stood where they were laid, 2 cm off
+   * the drawn body the damage had (`race-reset-skin.test.ts`).
+   */
   private placeKeeping(car: DeformableCar, x: number, z: number, yaw: number, y: number): void {
     this.kept.read(car);
     this.place(car, x, z, yaw, y, 0, true);
     this.kept.lay(car);
+    car.deform.notifyContact();
   }
 
   /** This browser's driver has car `i` (its own car, in drive mode, not spectating); otherwise the race AI or a peer does. */

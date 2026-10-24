@@ -27,4 +27,6 @@ export const DEFAULT_SQUASH = 0.32;
 export const DEFAULT_BUCKLE = 0.45;
 /** The contact window (s): how long after its last contact a crashed car's shape matching and mass step stay live (`DeformSolve.live`), and the time over which its tyres' grip comes back after a hit (`DeformSolve.settledShare`). */
 export const CONTACT_WINDOW = 0.35;
+/** How long (s) after its last contact a wreck at rest on its wheels keeps stepping its structure before its masses ride its body (`DeformFreeze.ridesBody`): ridden from the contact window a relaunched wreck's drawn door stood 4.5 cm off its cage and a held reset left the drawn body 1.7 cm off the damaged car's; from here they stand. One lying over rides from the window (the creep sank it). */
+export const UPRIGHT_RIDE_QUIET = 1;
 
