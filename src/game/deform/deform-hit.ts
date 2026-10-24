@@ -339,6 +339,12 @@ export abstract class DeformHit extends DeformRig {
     this.crushBaked.set(this.crush);
   }
 
+  /** Whether any face carries a load crush (a dent too shallow to wreck the car included): the solver state it rides in a keyframe. */
+  loadCrushed(): boolean {
+    for (let f = 0; f < FACES; f++) if (this.crush[f]! > 0) return true;
+    return false;
+  }
+
   /** The masses were placed by hand (a test rig: `shapeCar`): the skin is owed from them, the same one re-solve path as `bakeLoadCrush`. */
   markMassesMoved(): void {
     this.loadDirty[0] = 1;

@@ -583,8 +583,9 @@ export class CrashRecorder {
     for (let i = 0; i < s.count; i++) {
       const car = this.cars[i]!;
       const f = s.cars[i]!;
-      // As the netplay host: a falling fake or a vaporized car carries no wreck. A car with a part torn off carries one, wreck or not.
-      f.wreck = (car.crashed || car.hasLoosePart()) && !car.falling && !car.vaporized;
+      // As the netplay host: a falling fake or a vaporized car carries no wreck. A car with a part torn off carries one, wreck or not, and so does one with a dent under the crash's depth
+      // (`SPRING_YIELD`): its load crush is solver state a replay would otherwise restore as none.
+      f.wreck = (car.crashed || car.hasLoosePart() || car.deform.loadCrushed()) && !car.falling && !car.vaporized;
       if (!f.wreck) continue;
       car.deform.readNetState(f.deform);
       car.readPartNetState(f.parts);

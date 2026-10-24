@@ -18,7 +18,7 @@ import {
 import { ENGINE_SLACK } from "./deform-contact.ts";
 import { DeformFreeze } from "./deform-freeze.ts";
 import { HUB_OVERRUN, type MassNode } from "./deform-rig.ts";
-import { FACE_TOP } from "./load-crush.ts";
+import { FACE_TOP, SPRING_YIELD } from "./load-crush.ts";
 import { PLANT_QUIET } from "./deform-state.ts";
 import { holdMomentum, holdPositions, turnVelocities, undoNetTurn } from "./turn-hold.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
@@ -32,8 +32,6 @@ const SUSPENSION_K = 11000;
 const SUSPENSION_C = 260;
 /** Most of a crushed node's travel (m) that springs back; the rest is permanent set. */
 const SPRINGBACK = 0.08;
-/** A dent this shallow (m) springs back whole: a skin panel's elastic range. */
-const SPRING_YIELD = 0.015;
 /** Share of a crush past the yield that springs back: real structure keeps 75-90 % of its peak crush (17 % back at 56 km/h, SAE 2006-01-0908). */
 const SPRING_SHARE = 0.1;
 /** C4: a wheel separates only on an off-centre hit this hard (m/s EBS, 54 km/h), once the struck corner has crushed to within the rig's `tyreReach` of the hub. */

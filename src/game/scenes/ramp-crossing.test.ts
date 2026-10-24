@@ -80,8 +80,6 @@ type Result = {
   airWhileTouching: number;
   slices: number;
   crashed: boolean;
-  /** Whether it had crashed (a face yielded) by the slice its last tyre passed the toe line: the crossing the other bars judge. */
-  crashedInCrossing: boolean;
   /** Worst angle (deg) between the plane through the touching wheels' hub points and the one through their tread contact points, over the slices where every one of those points has the same ground normal (one plane under all of them). */
   planeGap: number;
   /** Slices that `planeGap` covers, and of those the ones on level ground. */
@@ -161,7 +159,7 @@ function cross(v: number, thDeg: number, e: number, mirrored = false): Result {
   car.spawnFacing(mirrored ? edge - e - dx * 10 : edge + e - dx * 10, TOE - dz * 10, yaw, v);
   const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
   const p = car.group.position;
-  const out: Result = { yaw: 0, heading: 0, shove: 0, dv: 0, tilt: 0, tiltAt: "", airWhileTouching: 0, slices: 0, crashed: false, crashedInCrossing: false, planeGap: 0, planeSlices: 0, flatSlices: 0 };
+  const out: Result = { yaw: 0, heading: 0, shove: 0, dv: 0, tilt: 0, tiltAt: "", airWhileTouching: 0, slices: 0, crashed: false, planeGap: 0, planeSlices: 0, flatSlices: 0 };
   const yaw0 = car.group.rotation.y;
   const head0 = wrap(yaw);
   let lastVx = car.velocity.x;
@@ -216,7 +214,6 @@ function cross(v: number, thDeg: number, e: number, mirrored = false): Result {
       const mx = p.x + _c.x - lastCx;
       const mz = p.z + _c.z - lastCz;
       if (crossing) {
-        if (car.crashed) out.crashedInCrossing = true;
         out.yaw = Math.max(out.yaw, Math.abs(wrap(car.group.rotation.y - yaw0)) * DEG);
         out.heading = Math.max(out.heading, Math.abs(wrap(Math.atan2(car.velocity.x, car.velocity.z) - head0)) * DEG);
         out.dv = Math.max(out.dv, Math.hypot(car.velocity.x - lastVx, car.velocity.z - lastVz));
@@ -267,11 +264,6 @@ function cross(v: number, thDeg: number, e: number, mirrored = false): Result {
   return out;
 }
 
-/** Where the car crashed: in the crossing (until every tyre is past the toe line), after it (the roll-off the crossing does not judge), or never. */
-function crashedAt(r: Result): string {
-  return r.crashedInCrossing ? "in the crossing" : r.crashed ? "after it" : "never";
-}
-
 describe("given a sedan cruising at the fleet's jump ramp with steer 0 and the throttle holding its speed", () => {
   before(() => {
     restoreSprings = useStiffSprings();
@@ -285,10 +277,10 @@ describe("given a sedan cruising at the fleet's jump ramp with steer 0 and the t
         it(`when it drives at ${v} m/s at ${th}° to the ramp's axis and its centreline crosses the toe ${e} m inside the ramp's edge, then through the crossing (until every tyre is past the toe line) it keeps its heading within 1°, is never shoved sideways by more than 1 cm or changes speed in a slice by more than 0.3 m/s and what its chin scraping onto the face takes, stays within 1.5° of the plane through its tyres standing in their springs, and is airborne only while all four tyres are over 3 cm off the ground`, (t) => {
           const r = cross(v, th, e);
           t.diagnostic(
-            `yaw ${r.yaw.toFixed(2)}°, velocity heading ${r.heading.toFixed(2)}°, shove ${(r.shove * 100).toFixed(2)} cm, dv ${r.dv.toFixed(3)} m/s, plane ${r.tilt.toFixed(2)}° (${r.tiltAt}), airborne with a tyre down in ${r.airWhileTouching} of ${r.slices} slices, crashed ${crashedAt(r)}`,
+            `yaw ${r.yaw.toFixed(2)}°, velocity heading ${r.heading.toFixed(2)}°, shove ${(r.shove * 100).toFixed(2)} cm, dv ${r.dv.toFixed(3)} m/s, plane ${r.tilt.toFixed(2)}° (${r.tiltAt}), airborne with a tyre down in ${r.airWhileTouching} of ${r.slices} slices`,
           );
           const failures: string[] = [];
-          if (r.crashedInCrossing) failures.push("crashed");
+          if (r.crashed) failures.push("crashed");
           if (r.yaw > BAR.yaw) failures.push(`yaw ${r.yaw.toFixed(2)}°`);
           if (r.heading > BAR.heading) failures.push(`velocity heading ${r.heading.toFixed(2)}°`);
           if (r.shove > BAR.shove) failures.push(`shove ${(r.shove * 100).toFixed(2)} cm`);
@@ -302,22 +294,6 @@ describe("given a sedan cruising at the fleet's jump ramp with steer 0 and the t
   }
 });
 
-/** The off-ramp touch of the 15° crossing 0.4 m inside the edge at 8 m/s: the sedan, past the crossing and rolled off the ramp's flank, lands a belly row on its edge. */
-const rollOffKiss =
-  "the sedan drives off the ramp's side (roll -36 to -50°) and 5.4 m past the toe line a rear belly row (0, 0.165, -1.489) touches the ramp's edge at 0.78 m/s: the flank's load law yields 1.7 mm and a load-crushed car is a wreck (`CarSurfaces.commit`), so a soft belly kiss leaves it crashed; after the plan: a dent counts as a crash only past a threshold (a centimetre, or the pair graze's closing speed), not at any depth";
-
-describe("given a sedan that drives off the ramp's side after crossing its toe", () => {
-  before(() => {
-    restoreSprings = useStiffSprings();
-  });
-  after(() => restoreSprings());
-  afterEach(() => setGround(null));
-
-  it("when it drives at 8 m/s at 15° to the ramp's axis and its centreline crosses the toe 0.4 m inside the edge, then its belly's touch of the ramp's edge as it rolls off the flank leaves it uncrashed", { todo: rollOffKiss }, () => {
-    assert.equal(cross(8, 15, 0.4).crashed, false);
-  });
-});
-
 describe("given the same crossing built twice, once over the ramp's -x edge and once reflected in the ramp's axis", () => {
   before(() => {
     restoreSprings = useStiffSprings();
@@ -328,13 +304,11 @@ describe("given the same crossing built twice, once over the ramp's -x edge and 
   for (const v of SPEEDS) {
     for (const th of [0, 30]) {
       for (const e of [-0.4, 0.4]) {
-        it(`when a sedan drives at ${v} m/s at ${th}° to the ramp's axis and its centreline crosses the toe ${e} m inside the edge, then the reflected crossing measures the same yaw, heading, shove, speed change and plane, to float error`, (t) => {
+        it(`when a sedan drives at ${v} m/s at ${th}° to the ramp's axis and its centreline crosses the toe ${e} m inside the edge, then the reflected crossing measures the same yaw, heading, shove, speed change and plane, to float error`, () => {
           const direct = cross(v, th, e);
           const reflected = cross(v, th, e, true);
-          t.diagnostic(`crashed ${crashedAt(direct)} direct, ${crashedAt(reflected)} reflected`);
           assert.equal(reflected.slices, direct.slices);
           assert.equal(reflected.crashed, direct.crashed);
-          assert.equal(reflected.crashedInCrossing, direct.crashedInCrossing);
           for (const measure of ["yaw", "heading", "shove", "dv", "tilt"] as const) {
             const floatError = Number.EPSILON * DEG * direct.slices;
             assert.ok(Math.abs(reflected[measure] - direct[measure]) <= floatError, `${measure}: ${direct[measure]} against ${reflected[measure]} reflected`);

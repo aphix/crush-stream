@@ -64,10 +64,10 @@ A car dropped on a face, 60 Hz, crush after settling (mm):
 | drop | 0.5 m | 1 m | 2 m |
 |---|---|---|---|
 | upside-down, roof | 301 | 385 | 450 (packed at 450) |
-| nose first (stands on its nose, then falls over onto its roof) | nose 43 | 75 | 128 |
-| tail first | tail 38 | 80 | 109 |
-| left flank | 99 | 166 | 291 |
-| corner (nose + left, pitch 60°, roll 45°) | nose 54 | 84 | 132 |
+| nose first (stands on its nose, then falls over onto its roof) | nose 45 | 70 | 131 |
+| tail first | tail 40 | 81 | 111 |
+| left flank | 111 | 168 | 257 |
+| corner (nose + left, pitch 60°, roll 45°) | nose 55 | 90 | 135 |
 
 Opposite faces stay at 0 (nose drop: tail 0; left: right 0).
 
@@ -84,9 +84,17 @@ What holds a column up, in the shared car-on-car rule:
 
 ## Limits
 
-- Load crush rides replays and netplay: `crush[]` and `crushBaked` are in `simState`, and a car whose face yielded is
-  `crashed`, so it rides the wreck section. `stack-crush.test.ts` restores a 4-stack from a keyframe: the same roofs, the
-  same 3 s later.
+- Load crush rides replays and netplay: `crush[]` and `crushBaked` are in `simState`, and in the netplay wreck section (`DeformNetState.crush`,
+  `crushBaked`). A car whose own face the ground, a wall or a ramp crushed past its elastic range (`SPRING_YIELD`, 15 mm: a dent that shallow
+  springs back whole in the structure) is `crashed`; a shallower dent (a belly's soft touch on a ramp's edge, 1.7 mm) leaves the car
+  uncrashed, and it still rides a keyframe (`CrashRecorder`, `loadCrushed`) and a netplay wreck section, which the snapshot's `dented` flag
+  (flags bit 7) asks for: a guest draws the dent the host has, and clears it when the host's car reads neither crashed nor dented
+  (`net-view.ts`; `net-session.test.ts`). The depth is the face's total, so touches add up to a crash. A roof another car presses is `crashed` from its first press:
+  it carries that car's weight, and with the threshold on it the roof under a car dropped 2 cm crushes 9.5 cm at 60 Hz where the law gives
+  8.4 (`stack-roof-law.test.ts`). `stack-crush.test.ts` restores a 4-stack from a keyframe: the same roofs, the same 3 s later. The stack table
+  and the roof drops read as before the threshold; the drop table's other faces moved (nose 43 / 75 / 128 → 45 / 70 / 131, tail 38 /
+  80 / 109 → 40 / 81 / 111, left 99 / 166 / 291 → 111 / 168 / 257, corner 54 / 84 / 132 → 55 / 90 / 135), and `tumbled-rest.test.ts`'s flank
+  drops rest up to 2 cm differently (lowest tyre, mirrors and lamps; every bar holds).
 - A wreck (`massActive`) keeps its lattice: it takes no load crush, and a car that load-crushed and is then hit re-fits its
   shape-match rests to the undamaged shape (the roof's vertical cap keeps its sag: `maxLift`).
 - Forces between stacked cars are vertical only: a tilted pair does not pass friction to the car below, and there is no
