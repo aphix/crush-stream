@@ -38,6 +38,13 @@ import { FRAME_HZ } from "../kernel/constants.ts";
  */
 
 const SPEED = 12;
+/**
+ * The flank row's speed (m/s). The sedan's nose meets the foot of the ny 0.81 flank and its crush takes the car from 72 J/kg to 24.6 at 12 m/s (6.5 m/s
+ * left along the face), enough for 2.5 m of the flank's 2.7 at best (G h). With the pull the weight the springs carry gives (G sin cos a second) and no
+ * lift of the rigid tyre rows adding to its speed it rides to 2.18 m at 12 m/s (2.39 with the pull alone; 3.42 with neither: the free climb this row stood
+ * on, 3.76 before the pull). The honest sweep: 12.5 m/s 2.24 m, 13 2.48, 13.5 2.56, 14 2.75, over the top.
+ */
+const FLANK_SPEED = 14;
 /** How far (m) the sedan starts from the foot, on level ground the whole way, so it arrives at its launch speed. */
 const RUN_UP = 8;
 /** The face rises this much (m): what dam-spine's cut faces rise within 3 m, at least. */
@@ -83,12 +90,12 @@ class FaceGround extends Ground {
 }
 
 /** Drives a sedan at the `ny` face from its run-up: how far past the foot its origin got (m), how far it rose over its height at the first touch (m), its highest (m), and whether it met the face. */
-function driveAt(ny: number): { past: number; climb: number; top: number; met: boolean } {
+function driveAt(ny: number, speed: number): { past: number; climb: number; top: number; met: boolean } {
   setGround(new FaceGround(ny));
   const car = armedCar("sedan");
   const world = newWorld([car]);
   world.ejection = new EjectionWatch();
-  launch(car, -RUN_UP, 0, Math.atan2(1, 0), SPEED, 0);
+  launch(car, -RUN_UP, 0, Math.atan2(1, 0), speed, 0);
   let accumulated = 0;
   let past = -Infinity;
   let metY = NaN;
@@ -104,7 +111,7 @@ function driveAt(ny: number): { past: number; climb: number; top: number; met: b
       accumulated -= h;
     }
     const p = car.group.position;
-    if (Number.isNaN(metY) && car.velocity.length() < SPEED * 0.8) metY = p.y;
+    if (Number.isNaN(metY) && car.velocity.length() < speed * 0.8) metY = p.y;
     if (!Number.isNaN(metY)) rose = Math.max(rose, p.y);
     top = Math.max(top, p.y);
     past = Math.max(past, p.x);
@@ -118,7 +125,7 @@ after(() => setGround(null));
 describe(`given a face rising ${HEIGHT} m on level ground, the body friction's limit ny ${STOPS_BELOW.toFixed(3)}`, () => {
   for (const ny of STOPPING_NY) {
     it(`when a sedan drives square into the ny ${ny.toFixed(2)} face at ${SPEED} m/s, then the face stops it: its origin never reaches the foot (${PAST_FOOT} m) and never rises over its height at the touch by more than ${CLIMB} m`, () => {
-      const r = driveAt(ny);
+      const r = driveAt(ny, SPEED);
       const at = `${r.past.toFixed(2)} m past the foot, rose ${r.climb.toFixed(2)} m, highest ${r.top.toFixed(2)} m`;
       assert.ok(r.met, `never met the face: ${at}`);
       assert.ok(r.past <= PAST_FOOT, at);
@@ -126,8 +133,8 @@ describe(`given a face rising ${HEIGHT} m on level ground, the body friction's l
     });
   }
 
-  it(`when it drives into the ny ${FLANK_NY.toFixed(2)} flank at ${SPEED} m/s, then it is a ramp: the origin rides up it onto the top`, () => {
-    const r = driveAt(FLANK_NY);
+  it(`when it drives into the ny ${FLANK_NY.toFixed(2)} flank at ${FLANK_SPEED} m/s, then it is a ramp: the origin rides up it onto the top`, () => {
+    const r = driveAt(FLANK_NY, FLANK_SPEED);
     const run = new FaceGround(FLANK_NY).run;
     assert.ok(r.past > run && r.top >= HEIGHT, `${r.past.toFixed(2)} m past the foot (the flank is ${run.toFixed(2)} m), highest ${r.top.toFixed(2)} m`);
     setGround(null);

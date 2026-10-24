@@ -211,9 +211,11 @@ function feedClosing(car: DeformableCar, nx: number, nz: number, closing: number
  * A light touch of a whole car, or a hard one whose hull is still `WALL_HOLD` short of the face while the footprint is in it
  * (a corner the face does not reach), pushes out and bounces by `WALL_E`; the car's tyres and its body's friction on the face
  * hold it where it touched or let it slide along the face. `held`: the wall's plane was met already this slice by another face of it
- * (the pieces of one wall share one hold face), so a hard hit has nothing left to do here.
+ * (the pieces of one wall share one hold face), so a hard hit has nothing left to do here. `sunkCap`: the most a wreck's shove counts the drawn
+ * body in the face (m): a ramp's side is a wall under the ramp's top only, and its plan box counted the whole body above it (a wreck that landed
+ * on a descent ramp's high end, its tail a few cm in the back face, was shoved 5 cm a frame out of it and crept uphill onto the slab).
  */
-export function wallBounce(car: DeformableCar, face: ContactBox, nx: number, nz: number, pen: number, dt: number, held: boolean, wreckAtStart = false, top = Infinity): void {
+export function wallBounce(car: DeformableCar, face: ContactBox, nx: number, nz: number, pen: number, dt: number, held: boolean, wreckAtStart = false, top = Infinity, sunkCap = Infinity): void {
   const v = car.velocity;
   const pos = car.group.position;
   const fx = detSin(face.yaw);
@@ -247,7 +249,7 @@ export function wallBounce(car: DeformableCar, face: ContactBox, nx: number, nz:
       const exitZ = faceExit.nz;
       const drive = Math.max(0, Math.min(1, (-(v.x * exitX + v.z * exitZ) - SOLID_AT_REST) / (WALL_CRUSH - SOLID_AT_REST)));
       const room = WALL_SKIN + (0.4 * leftoverCrumple(car.deform.faceTravel()) - WALL_SKIN) * drive;
-      const sunk = deepest - room;
+      const sunk = Math.min(deepest, sunkCap) - room;
       // A hit armed this slice starts with what the car drove in before the face was met (a truck at 55 m/s: 0.39 m of its drawn body
       // in a 0.79 m deep footprint), pushed out as far as the footprint is in.
       const reach = sinkReach(car, exitX, exitZ, dt);

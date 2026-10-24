@@ -9,19 +9,23 @@ import { paint } from "../vehicle/test-support.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { droop } from "../vehicle/car-suspension.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const DEG = 180 / Math.PI;
+/** The pedals of the driver who keeps the gas down. */
+const FULL_THROTTLE: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
 
-type Run = { air: number; landRoll: number; upY: number; dip: number; rest: "wheels" | "roof" | "side" };
+type Run = { air: number; landRoll: number; upY: number; dip: number; drove: number; rest: "wheels" | "roof" | "side" };
 
 /**
  * A car launched (no driver) at `v` m/s 6 m short of the mouth, stepped by the world step alone with the corkscrew
  * as the ground and its walls as the collide hook, until it rests. Air: the first flight's seconds with every body
  * point (tyre contacts and cage vertices) more than 5 cm off the ground; landRoll: the body's turn about its own nose (signed, summed) when a body
- * point first touches down again; dip: the deepest body point under the ground from takeoff on.
+ * point first touches down again; dip: the deepest body point under the ground from takeoff on. With `driveSeconds`, a car at rest on its wheels
+ * then holds full throttle that long, and `drove` is how far it went in plan (m; 0 for one that rests on its side or roof).
  */
-function launch(v: number): Run {
+function launch(v: number, driveSeconds = 0): Run {
   const scene = new THREE.Scene();
   const cork = new Corkscrew(scene);
   setGround(cork);
@@ -75,8 +79,26 @@ function launch(v: number): Run {
     last.copy(car.group.position);
   }
   const upY = up.y;
+  let drove = 0;
+  if (driveSeconds > 0 && upY > 0.5) {
+    const from = car.group.position.clone();
+    w.beforeSlice = (h) => {
+      applyDrive(car, FULL_THROTTLE, h);
+      return false;
+    };
+    for (let s = 0; s < driveSeconds; s += FRAME) {
+      acc = Math.min(0.05, acc + FRAME);
+      while (acc > 1e-5) {
+        const h = physicsSlice(acc, sliceSpeed(w.cars));
+        stepWorld(w, h);
+        acc -= h;
+      }
+      car.updateSkin();
+    }
+    drove = Math.hypot(car.group.position.x - from.x, car.group.position.z - from.z);
+  }
   car.dispose();
-  return { air, landRoll, upY, dip, rest: upY > 0.5 ? "wheels" : upY < 0 ? "roof" : "side" };
+  return { air, landRoll, upY, dip, drove, rest: upY > 0.5 ? "wheels" : upY < 0 ? "roof" : "side" };
 }
 
 /**
@@ -106,4 +128,23 @@ describe("given the corkscrew ramp as the ground, and a driverless car launched 
       assert.deepEqual(failures, []);
     });
   }
+});
+
+/** The sweep of the owner's bar for the corkscrew (the car flips and can land and keep driving): launch speeds around 22 m/s, in steps of 0.2. */
+const SWEEP_SPEEDS = [21.6, 21.8, 22, 22.2, 22.4] as const;
+/** Seconds of full throttle from a rest on its wheels, and the least the car must cover over them (m). */
+const DRIVE_S = 3;
+const DRIVE_MIN_M = 10;
+
+describe("given the corkscrew ramp as the ground, and a car launched at it at 21.6 to 22.4 m/s in steps of 0.2 until it comes to rest", () => {
+  afterEach(() => setGround(null));
+
+  it(`when each that stands on its wheels at rest holds full throttle for ${DRIVE_S} s, then at least one does, and at least one of those covers ${DRIVE_MIN_M} m or more: the car flips and can land and keep driving`, (t) => {
+    const runs = SWEEP_SPEEDS.map((v) => ({ v, ...launch(v, DRIVE_S) }));
+    const line = runs.map((r) => `${r.v} m/s: ${r.rest}${r.rest === "wheels" ? `, ${r.drove.toFixed(1)} m` : ""}`).join("; ");
+    t.diagnostic(line);
+    const upright = runs.filter((r) => r.rest === "wheels");
+    assert.ok(upright.length > 0, `none came to rest on its wheels: ${line}`);
+    assert.ok(upright.some((r) => r.drove >= DRIVE_MIN_M), `none that stands on its wheels drove ${DRIVE_MIN_M} m in ${DRIVE_S} s of full throttle: ${line}`);
+  });
 });
