@@ -770,11 +770,15 @@ export abstract class DeformRig {
    * CELL_FACE_SHARE of the nearest other cluster blends back in. The sill (skin below the arch top between the axles, outside the arches, and
    * all skin under the rocker line even where an arch plant holds it: the plant's reach spans the rocker's ends, and a plant on the nose's
    * clusters hung 15 cm off the rocker vertex 2.5 cm beside it) is the cell's rocker and follows the cell's clusters too: on the nose's
-   * clusters, which a frontal crush turns, it swung into the standing front tyre.
+   * clusters, which a frontal crush turns, it swung into the standing front tyre. So is the windshield's frame, the skin over the bonnet's top
+   * up to the glass's front (the A-posts and the cowl): on the nose's clusters, past the cell's face, the post's bow stayed 2.6 cm down while the
+   * roof it meets went 31 cm, and stood 6.6 cm in the ground over a truck dropped on its roof.
    */
   private skinZones(): SkinZones {
     const span = this.cageByPart.get("chassisCell")!;
-    const inCell = (x: number, y: number, z: number): boolean => z >= span.min.z && z <= span.max.z && y >= span.min.y;
+    const frame = this.cageByPart.get("glassFront")!;
+    const frameFloor = (this.cageByPart.get("bonnet")!.max.y + this.cageByPart.get("roof")!.min.y) / 2;
+    const inCell = (x: number, y: number, z: number): boolean => z >= span.min.z && y >= span.min.y && (z <= span.max.z || (z <= frame.max.z && y > frameFloor));
     const axleF = Math.max(...this.masses.filter((m) => m.hub).map((m) => m.rest.z));
     const axleR = Math.min(...this.masses.filter((m) => m.hub).map((m) => m.rest.z));
     const { archTop, rockerTop } = this.rig;
@@ -869,7 +873,7 @@ export abstract class DeformRig {
       let sum = 0;
       for (const s of scored) sum += s.w;
       if (sum > 1e-8) for (const s of scored) s.w /= sum;
-      const face = Math.min(rz - span.min.z, span.max.z - rz);
+      const face = Math.max(0, Math.min(rz - span.min.z, span.max.z - rz));
       if (inCell(rx, ry, rz) && other >= 0 && face < CELL_FACE_BLEND && scored.length > 0) {
         const share = CELL_FACE_SHARE * (1 - face / CELL_FACE_BLEND);
         for (const s of scored) s.w *= 1 - share;
