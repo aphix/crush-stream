@@ -102,15 +102,14 @@ describe("given a coupe whose chrome window trim frames its glass and runs along
 
 /**
  * Where the windshield stands when a front hit has played out must not step with the speed by more than the hit's own change does. The pane rides the
- * cabin's roof mass, and the roof's return after the hit is cut off a fixed time after the last contact (`CONTACT_WINDOW`: the shape matching and the mass
- * step go dead), wherever it has got to. The step was there before the windshield's frame hung on the cabin: the pane shows the roof's offset, it does not cause it.
+ * cabin's roof mass, and the roof rests at its permanent set (`clampMass`: sheet metal keeps its set, and the roof stands on it once the contact lets
+ * go), wherever the clusters' pull would have taken it. With no set it ended wherever the contact window cut its return: 2.4 cm back of its seat at
+ * 41 km/h and at its seat at 42, a step of the pane's offset of its own.
  */
-const ROOF_LATCH =
-  "the windshield's mean offset after a front hit steps 1.4 cm between 41 and 42 km/h: the roof ends 3.4 / 2.8 / 2.4 cm back of its seat at 38 / 40 / 41 km/h, still creeping back at 0.05 cm a frame when the window (0.35 s after the last contact) cuts it, and at its seat from 42 km/h, where it is passing it at 0.10 cm a frame (a 2 s window ends it 6 cm forward and drifting from 42, 0.5 cm back at 38-41); the step is older than the hang (the roof 0.6 cm back at 41 and at its seat at 42 on a071b774); closes when the cabin's springback settles to a rest, not a time";
 const LATCH_STEP_M = 0.01;
 
-describe("given a coupe's cracked windshield after a front wall hit", () => {
-  it(`when it is crushed front on at each km/h from 38 to 44, then the pane's mean offset when the hit has played out changes no more than ${LATCH_STEP_M * 100} cm from one speed to the next`, { todo: ROOF_LATCH }, () => {
+describe("given a coupe's windshield after a front wall hit", () => {
+  it(`when it is crushed front on at each km/h from 38 to 44, then the pane's mean offset when the hit has played out changes no more than ${LATCH_STEP_M * 100} cm from one speed to the next`, () => {
     const pristine = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
     const rest = carPoints(pristine, [pristine.glassPanes.find((g) => g.name === "windshield")!.mesh]);
     let before = NaN;

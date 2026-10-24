@@ -4,10 +4,10 @@ import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { FREEWHEEL, launch, makeWorld, PARKED, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FLAT_GROUND, Ground, setGround } from "../world/ground.ts";
-import { layOnGround } from "./car-air-points.ts";
+import { layOnGround, loadPoints } from "./car-air-points.ts";
 import type { DeformableCar } from "./car.ts";
 import { buildCar } from "./drawn-body.test-util.ts";
-import { REST_SPEED } from "./car-air-body.ts";
+import { BELLY_ABSENT, POINT_X, POINT_Y, POINT_Z, REST_SPEED } from "./car-air-body.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
@@ -97,6 +97,46 @@ function wrecksAtRest(hit: Hit, ground: Ground, scale = 1): DeformableCar[] {
   return cars.filter((car) => car.deform.massActive);
 }
 
+/** Directions (pitch, roll about the car's own axes, degrees) a wreck can lie with its underside down within: the steepest slope plus the tilt a wreck settles at. */
+const LIE_RANGE_DEG = 30;
+const LIE_STEP_DEG = 5;
+
+/**
+ * How far (m) the drawn body's skin reaches past the rigid step's own points (the cage's hull and sill samples, and the belly where it is
+ * drawn), lowest along each direction within `LIE_RANGE_DEG` of straight down in the car's frame, and where the worst vertex stands there:
+ * a wreck the step rests on those points, in any pose, has that much of its skin in the ground. A pose no settle can move.
+ */
+function skinReachPastCage(wreck: DeformableCar): { gap: number; at: string } {
+  wreck.flushDeferredSkin();
+  wreck.updateSkin();
+  wreck.group.updateMatrixWorld(true);
+  const bellyFrom = loadPoints(wreck);
+  const points: number[] = [];
+  for (let k = 0; k < bellyFrom + wreck.frame.belly.length; k++) if (k < bellyFrom || BELLY_ABSENT[k - bellyFrom] === 0) points.push(POINT_X[k]!, POINT_Y[k]!, POINT_Z[k]!);
+  const toCar = wreck.group.matrixWorld.clone().invert().multiply(wreck.body.matrixWorld);
+  const position = wreck.body.geometry.getAttribute("position");
+  const skin = new Float64Array(position.count * 3);
+  for (let k = 0; k < position.count; k++) skin.set(_v.fromBufferAttribute(position, k).applyMatrix4(toCar).toArray(), k * 3);
+  const furthest = (cloud: ArrayLike<number>, d: THREE.Vector3): { reach: number; at: number } => {
+    let best = { reach: -Infinity, at: -1 };
+    for (let k = 0; k < cloud.length; k += 3) {
+      const reach = cloud[k]! * d.x + cloud[k + 1]! * d.y + cloud[k + 2]! * d.z;
+      if (reach > best.reach) best = { reach, at: k };
+    }
+    return best;
+  };
+  let worst = { gap: -Infinity, at: "" };
+  for (let pitch = -LIE_RANGE_DEG; pitch <= LIE_RANGE_DEG; pitch += LIE_STEP_DEG) {
+    for (let roll = -LIE_RANGE_DEG; roll <= LIE_RANGE_DEG; roll += LIE_STEP_DEG) {
+      const down = new THREE.Vector3(0, -1, 0).applyEuler(new THREE.Euler(pitch / DEG, 0, roll / DEG));
+      const drawn = furthest(skin, down);
+      const gap = drawn.reach - furthest(points, down).reach;
+      if (gap > worst.gap) worst = { gap, at: `car-frame ${[0, 1, 2].map((a) => skin[drawn.at + a]!.toFixed(2)).join(",")} lying pitch ${pitch}° roll ${roll}°` };
+    }
+  }
+  return worst;
+}
+
 describe("given two cars crushed head-on, left to rest on the ground", () => {
   afterEach(() => setGround(null));
 
@@ -145,5 +185,21 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
         });
       }
     }
+  }
+
+  // The rows above rest each wreck however its sim settles (a wheelless nose lands on a sill or a fender, a few cm either way, with every
+  // change to the sim), so a cage that falls short of the drawn body there reads green on one settle and red on the next. These read the
+  // crushed shape alone: with the cage's rigid-step points under the wreck whichever way it lies (`LIE_RANGE_DEG`: any pitch and roll to
+  // 30°, a 15° slope and the tilt a wreck settles at), no vertex of its drawn body stands more than 3 cm beyond them, so none can be
+  // in the ground. The truck and monster stand on a body lift the sim's own pose sync sets (`cageLift`): not read here.
+  for (const hit of HITS.filter((h) => h.a !== "truck")) {
+    it(`when ${hit.name} leaves wrecks, then the cage's points under each reach within 3 cm of its drawn body's skin whichever way it lies`, () => {
+      const wrecks = wrecksAtRest(hit, new Slope(15), 1);
+      assert.ok(wrecks.length > 0, "the hit left no wreck");
+      for (const wreck of wrecks) {
+        const { gap, at } = skinReachPastCage(wreck);
+        assert.ok(gap <= SINK_M, `${wreck.style.id}: the drawn body reaches ${(gap * 100).toFixed(1)} cm past the cage's points at ${at}`);
+      }
+    });
   }
 });

@@ -53,12 +53,13 @@ export abstract class DeformFreeze extends DeformContact {
   }
 
   /**
-   * Whether the wreck's masses ride its body this slice: it is frozen (`EPICENTER`), or its rigid body sleeps and the contact window is long past, so
-   * its masses stand where the whole path left them. Stepped, a sleeper's structure crept on with nothing moving the body to meet it: a monster on
-   * its flank with its two low hubs popped sank its cage 8.2 cm into the ground at 7 cm/s over the second after it fell asleep.
+   * Whether the wreck's masses ride its body this slice: it is frozen (`EPICENTER`), or its car rests (`atRest`, `world-step`) and the contact window is long past,
+   * so its masses stand where the whole path left them. Stepped, a resting wreck's structure crept on with
+   * nothing moving the body to meet it, 7 cm/s sideways in the body toward the ground it lay on: a monster on its flank with its two low hubs popped sank its cage
+   * 8.2 cm after it fell asleep, and one on a rear hub lifted out of the ground at 5 cm/s while its cage crept back in, 5.7 cm (police), and slept there.
    */
-  standsAsleep(asleep: boolean): boolean {
-    return this.frozen || (asleep && this.quietTime() >= CONTACT_WINDOW);
+  ridesBody(atRest: boolean): boolean {
+    return this.frozen || (atRest && this.quietTime() >= CONTACT_WINDOW);
   }
 
   /**

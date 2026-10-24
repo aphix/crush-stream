@@ -52,6 +52,8 @@ export interface RigTables {
   readonly archTop: number;
   /** Plan reach (m) of the arch plant: skin below `archTop` this near a hub's rest stands at its rest offset from that hub. */
   readonly archPlant: number;
+  /** Height (m) of the body side's lowest line (its rocker, the highest it stands between the axles): skin below it between the axles is the rocker, even where an arch plant holds it. */
+  readonly rockerTop: number;
   /** A rest vertex over this height (m) is roof: the skin's roof clamp holds it. */
   readonly roofClampY: number;
   /** Where the roof's skin hangs on the roof mass (m): at the roof panel's own place, which its crush reaches. The mass itself stands where the sim has it. */
@@ -80,6 +82,7 @@ export const PLATFORM_RIG: RigTables = {
   massScale: 1,
   archTop: 0.55,
   archPlant: 0.4,
+  rockerTop: 0.2,
   roofClampY: 1.05,
   roofSkin: PLATFORM_ROOF.rest,
   faceBands: {
@@ -115,8 +118,13 @@ const RES_K = 4;
 export const RES_SLOTS = 5;
 /** IDW softening (m²) of the parent weights, 1/(d² + RES_SOFT). */
 const RES_SOFT = 0.04;
+/** Height (m) under the roof's clamp (`roofClampY`) over which the roof mass fades out of a skin point's parents: a door or fender hangs on the masses that are struck, not on a roof mass above it. */
+const ROOF_PARENT_FADE = 0.25;
 /** Plan travel (m) off its plant at which an arch vertex lets go of its hub: a deeper crush takes the arch with the body (held, a 0.3 m nose crush ran the fender through the arch's lip and folded it). */
 const ARCH_YIELD = 0.15;
+
+/** Height (m) a rest vertex may stand over `RigTables.rockerTop` and still be on the rocker's line: the loft's rocker ring and its fillets stand on the line to a few mm. */
+const ROCKER_LINE_EPS = 0.005;
 
 /** The share `keep` of an arch vertex's pull onto its plant, as it stands `dx`, `dz` (m) off it: whole at the plant, none from `ARCH_YIELD` on (the skin kernel's `skin_shape` mirrors it). */
 export function archKeep(keep: number, dx: number, dz: number): number {
@@ -759,19 +767,21 @@ export abstract class DeformRig {
   /**
    * D1: skin in the cabin section (the chassisCell cage's z span, above its floor) follows only the clusters and masses that hold the cell, so
    * A-pillar and footwell skin cannot ride the crushed nose into the cabin; within CELL_FACE_BLEND of the span's front or rear face up to
-   * CELL_FACE_SHARE of the nearest other cluster blends back in. The sill (skin below the arch top between the axles, outside the arches) is
-   * the cell's rocker and follows the cell's clusters too: on the nose's clusters, which a frontal crush turns, it swung into the standing front tyre.
+   * CELL_FACE_SHARE of the nearest other cluster blends back in. The sill (skin below the arch top between the axles, outside the arches, and
+   * all skin under the rocker line even where an arch plant holds it: the plant's reach spans the rocker's ends, and a plant on the nose's
+   * clusters hung 15 cm off the rocker vertex 2.5 cm beside it) is the cell's rocker and follows the cell's clusters too: on the nose's
+   * clusters, which a frontal crush turns, it swung into the standing front tyre.
    */
   private skinZones(): SkinZones {
     const span = this.cageByPart.get("chassisCell")!;
     const inCell = (x: number, y: number, z: number): boolean => z >= span.min.z && z <= span.max.z && y >= span.min.y;
     const axleF = Math.max(...this.masses.filter((m) => m.hub).map((m) => m.rest.z));
     const axleR = Math.min(...this.masses.filter((m) => m.hub).map((m) => m.rest.z));
-    const { archTop } = this.rig;
+    const { archTop, rockerTop } = this.rig;
     return {
       span,
       inCell,
-      cellOnly: (x, y, z, hub) => inCell(x, y, z) || (y < archTop && z < axleF && z > axleR && hub < 0),
+      cellOnly: (x, y, z, hub) => inCell(x, y, z) || (y < archTop && z < axleF && z > axleR && (hub < 0 || y < rockerTop + ROCKER_LINE_EPS)),
     };
   }
 
@@ -795,8 +805,14 @@ export abstract class DeformRig {
     const outside = body.filter((j) => !cabinBody.includes(j));
     const roofJ = this.masses.findIndex((m) => m.name === "roof");
     const anchors = this.masses.map((m, j): readonly [number, number, number] => (j === roofJ ? this.rig.roofSkin : [m.rest.x, m.rest.y, m.rest.z]));
+    const roofFade = (ry: number) => {
+      const u = Math.min(1, Math.max(0, (ry - (this.rig.roofClampY - ROOF_PARENT_FADE)) / ROOF_PARENT_FADE));
+      return u * u * (3 - 2 * u);
+    };
     const near = (rx: number, ry: number, rz: number, set: number[]) =>
-      set.map((j) => ({ j, w: 1 / ((rx - anchors[j]![0]) ** 2 + (ry - anchors[j]![1]) ** 2 + (rz - anchors[j]![2]) ** 2 + RES_SOFT) })).sort((a, b) => b.w - a.w);
+      set
+        .map((j) => ({ j, w: (j === roofJ ? roofFade(ry) : 1) / ((rx - anchors[j]![0]) ** 2 + (ry - anchors[j]![1]) ** 2 + (rz - anchors[j]![2]) ** 2 + RES_SOFT) }))
+        .sort((a, b) => b.w - a.w);
     return (rx, ry, rz, i, t, hung = false, foot = false) => {
       const cabin = inCell(rx, ry, rz);
       const ds = near(rx, ry, rz, cabin || hung ? cabinBody : body);

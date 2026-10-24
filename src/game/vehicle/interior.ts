@@ -11,6 +11,7 @@ import { BUMPER_F, DRIVER_SIDE, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./con
 import { AXLE_HALF_SPAN, CRASH_BAR_HALF, FRAME_RAIL_LENGTH, FRAME_RAIL_Z, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
+import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 
 /** Gap (m) between a seated head's top and the roof line over it (the roof skin, the headliner its inner face). */
 const HEAD_CLEAR = 0.05;
@@ -128,6 +129,7 @@ const _bay = new THREE.Vector3();
 const _mass = new THREE.Vector3();
 const _corner = new THREE.Vector3();
 const _seatWorld = new THREE.Matrix4();
+const _parentInverse = new THREE.Matrix4();
 /** A wreck's rigid under-part stands at least this far (m) over the ground under it (`restOnGround`), as a hanging bumper does. */
 const PART_CLEAR = 0.04;
 /** The ground under a part's corner is looked up from this far (m) over it: a corner already in a slope finds no floor under itself. */
@@ -139,7 +141,7 @@ const PART_PROBE = 1.5;
  * monster's frame under its lifted body) rests on the road the wreck rests on, not through it. Every corner, not the box's bottom
  * ones: a wreck on its roof or side stands on the box's other faces.
  */
-function restOnGround(seat: PartSeat): void {
+function restOnGround(seat: PartSeat, support: Float32Array | null = null): void {
   const parent = seat.parent;
   if (parent === null) return;
   const drawn = seat.drawn;
@@ -150,14 +152,40 @@ function restOnGround(seat: PartSeat): void {
   _seatWorld.multiplyMatrices(parent.matrixWorld, seat.matrix);
   const ground = activeGround();
   let rise = 0;
-  for (let k = 0; k < 8; k++) {
-    _corner.set(k & 1 ? box.max.x : box.min.x, k & 2 ? box.max.y : box.min.y, k & 4 ? box.max.z : box.min.z).applyMatrix4(_seatWorld);
+  const count = support === null ? 8 : support.length / 3;
+  for (let k = 0; k < count; k++) {
+    if (support === null) _corner.set(k & 1 ? box.max.x : box.min.x, k & 2 ? box.max.y : box.min.y, k & 4 ? box.max.z : box.min.z);
+    else _corner.set(support[k * 3]!, support[k * 3 + 1]!, support[k * 3 + 2]!);
+    _corner.applyMatrix4(_seatWorld);
     const floor = ground.heightAt(_corner.x, _corner.z, _corner.y + PART_PROBE);
     if (floor !== NO_FLOOR) rise = Math.max(rise, floor + PART_CLEAR - _corner.y);
   }
   if (rise <= 0) return;
-  const e = parent.matrixWorld.elements;
-  seat.position.set(seat.position.x + rise * e[1]!, seat.position.y + rise * e[5]!, seat.position.z + rise * e[9]!);
+  // The world's up in the parent's own coordinates (its scale, a cabin's width, taken out): the inverse's second column.
+  const up = _parentInverse.copy(parent.matrixWorld).invert().elements;
+  seat.position.set(seat.position.x + rise * up[4]!, seat.position.y + rise * up[5]!, seat.position.z + rise * up[6]!);
+}
+
+/** The directions of a box's faces, edges and corners: the vertices farthest along them bound a body's lowest point at whatever attitude it lies. */
+const SUPPORT_DIRECTIONS: readonly (readonly [number, number, number])[] = [-1, 0, 1].flatMap((x) => [-1, 0, 1].flatMap((y) => [-1, 0, 1].map((z) => [x, y, z] as const))).filter(([x, y, z]) => x !== 0 || y !== 0 || z !== 0);
+
+/** `geometry`'s vertices farthest along each of `SUPPORT_DIRECTIONS`, xyz in a row each. */
+function supportVertices(geometry: THREE.BufferGeometry): Float32Array {
+  const pos = geometry.getAttribute("position");
+  const out = new Float32Array(SUPPORT_DIRECTIONS.length * 3);
+  for (let d = 0; d < SUPPORT_DIRECTIONS.length; d++) {
+    const [dx, dy, dz] = SUPPORT_DIRECTIONS[d]!;
+    let best = -Infinity;
+    for (let i = 0; i < pos.count; i++) {
+      const along = dx * pos.getX(i) + dy * pos.getY(i) + dz * pos.getZ(i);
+      if (along <= best) continue;
+      best = along;
+      out[d * 3] = pos.getX(i);
+      out[d * 3 + 1] = pos.getY(i);
+      out[d * 3 + 2] = pos.getZ(i);
+    }
+  }
+  return out;
 }
 
 /**
@@ -175,6 +203,9 @@ export class CarCabin {
   /** The cabin shell, its floor and top (car space, m) at rest, and the roof mass's rest height: the shell squeezes under the roof. */
   private readonly shell: PartSeat;
   private readonly shellY: readonly [floor: number, top: number];
+  /** The shell's vertices that bound its lowest point at any attitude (`supportVertices`), in its own space. */
+  private readonly shellSupport: Float32Array;
+  private readonly shellXZ: readonly [x: number, z: number];
   private readonly roofRest: number;
   /** The bay's rear and front at rest (m, car z), and each of `under`'s z drift this frame. */
   private readonly bayZ: readonly [rear: number, front: number];
@@ -198,6 +229,8 @@ export class CarCabin {
     const floor = style.tubs[0]![2];
     fitBox(cabin!, { halfX: REF_CABIN.halfX, y0: REF_CABIN.floor, y1: REF_CABIN.roof, z0: REF_CABIN.rear, z1: REF_CABIN.front }, halfX, floor, roof, style.rearBulkhead.z, style.windshield.base[1]);
     this.shell = cabin!;
+    this.shellSupport = supportVertices(cabin!.geometry);
+    this.shellXZ = [cabin!.position.x, cabin!.position.z];
     this.shellY = [floor, roof];
     place(driver!, seat.hip.x, seat.hip.y, seat.hip.z, lean);
     place(passenger!, -seat.hip.x, seat.hip.y, seat.hip.z, lean);
@@ -287,7 +320,20 @@ export class CarCabin {
     const sink = roofY === null ? 0 : Math.min(0, roofY - this.roofRest - this.pose.position.y);
     const sy = (top + sink - floor) / (REF_CABIN.roof - REF_CABIN.floor);
     this.shell.scale.y = sy;
-    this.shell.position.y = floor - REF_CABIN.floor * sy;
+    this.shell.position.set(this.shellXZ[0], floor - REF_CABIN.floor * sy, this.shellXZ[1]);
+    this.shell.updateMatrix();
+  }
+
+  /**
+   * A wreck lying over (up under `UPRIGHT_UP_Y`) stands the shell on the ground it rests on, as the bay and the frame do: the shell is rigid and the cell
+   * it rides crushes with the skin, so a roof-down car pitched on its crushed nose had the dash corner 5-7 cm in the ground. After `squeezeUnderRoof`.
+   */
+  standOnGround(): void {
+    const group = this.pose.parent;
+    if (group === null) return;
+    group.updateWorldMatrix(true, false);
+    if (group.matrixWorld.elements[5]! >= UPRIGHT_UP_Y) return;
+    restOnGround(this.shell, this.shellSupport);
     this.shell.updateMatrix();
   }
 }

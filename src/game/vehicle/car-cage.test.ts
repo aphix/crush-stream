@@ -26,17 +26,13 @@ import { launch, makeWorld } from "../contact/crash-scenarios.test-util.ts";
  */
 const interiorThroughRoof =
   "the drawn interior (its headliner stands 1.09 m over the origin and does not follow the roof mass) pokes up through the roof the drop crushed, so the drawn top is the interior and the cage's is the roof (the cage carries the interior over a gone pane's opening only: over the whole roof it takes stack-crush.test.ts to 6 of 8); after the plan: make the drawn interior follow the roof's crush";
-const roofCornerHole =
-  "the decimation loses the wagon's roof rear corners (|x| .50-.60, z -1.75..-1.90): the cage's top reads 0.38 m there under the drawn roof's 1.46 (the cage source's own top there 1.459); after the overhaul: CarRig rig-hole 987f1739 (no vertex left on no triangle: worst -0.42), then the roof outline's corners held";
+const rearGlassGone =
+  "the wagon's rear glass shatters in the 2 m roof drop (its roof crushes at the rear), so the drawn top over its opening is the cargo floor (0.38-0.58 m) while the cage's closed tail (z -2.11..-1.94) stands at 1.10 m: up 0.52 m at (+-0.48, -1.98); after the plan: the cage's tail opens where the rear glass is gone, as the drawn body's does";
 const edgeCliffs: readonly { key: string; part: string; measured: string; cause: string }[] = [
   { key: "sedan/rolled", part: "cabin", measured: "p95 0.060 (bar 0.05), worst 0.063 under (bar 0.10)", cause: interiorThroughRoof },
   { key: "pickup truck/rolled", part: "cabin", measured: "p95 0.060 (bar 0.05), worst 0.065 under (bar 0.10)", cause: interiorThroughRoof },
   { key: "monster pickup/rolled", part: "cabin", measured: "p95 0.060 (bar 0.05), worst 0.065 under (bar 0.10)", cause: interiorThroughRoof },
-  { key: "wagon/untouched", part: "deck", measured: "p95 0.043, worst 0.716 under (bar 0.10)", cause: roofCornerHole },
-  { key: "wagon/loaded", part: "deck", measured: "p95 0.035, worst 0.722 under (bar 0.10)", cause: roofCornerHole },
-  { key: "wagon/headon", part: "deck", measured: "p95 0.042, worst 0.682 under (bar 0.10)", cause: roofCornerHole },
-  { key: "wagon/rolled", part: "deck", measured: "p95 0.034, worst 0.723 under (bar 0.10)", cause: roofCornerHole },
-  { key: "wagon/airborne", part: "deck", measured: "p95 0.043, worst 0.716 under (bar 0.10)", cause: roofCornerHole },
+  { key: "wagon/rolled", part: "deck", measured: "p95 0.154 (bar 0.05), worst 0.515 over (bar 0.10)", cause: rearGlassGone },
 ];
 
 for (const body of BODIES) {

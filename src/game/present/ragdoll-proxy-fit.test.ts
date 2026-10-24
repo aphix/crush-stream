@@ -39,18 +39,13 @@ const interiorThroughRoof =
 const noseFaceUnderLeaf =
   "hood p95 0.06 m against the 0.05 m bar on the wagon and pickup head-on rows (the sedan's reads 0.036 and is a plain row): the cage reaches the crushed nose's front rows (0.10 m under the hood in one node, under CLIFF, in the rim), which no cut splits off a leaf with an inside, so the leaf over them stands 6.6 cm over the drawn nose face; after the plan (Stage 5): the proxy fitter takes the crushed nose's front as a surface of its own";
 
-/**
- * The wagon's deck rows, whose proxy the cage leaves a hole in: the decimation loses the roof's rear corners (|x| .50-.60, z
- * -1.75..-1.90), the cage's top reads 0.38 m there under the drawn roof's 1.46 (car-cage.test.ts's wagon deck todo), and the ray
- * falls to a column 1.0-1.1 m down. Measured (union d4781954): deck p95 0.059-0.072 and worst 1.00-1.02 m under on the untouched,
- * loaded, head-on and rolled rows; the airborne one p95 0.040, worst 0.317 m under.
- */
-const roofCornerHole =
-  "deck worst 1.0 m under on the wagon (0.32 m airborne), p95 0.06-0.07 m: the cage's top has a hole at the roof's rear corners (0.38 m under the drawn 1.46), so no roof leaf stands there; after the overhaul: CarRig rig-hole 987f1739, then the roof outline's corners held";
+/** The wagon's rolled deck row: its rear glass is gone after the roof drop, and the cage's closed tail is a cuboid the drawn body shows no top for. */
+const rearGlassGone =
+  "deck p95 0.52 m, worst +0.53 m over the drawn top at (0.43, -1.93..-1.98): the wagon's rear glass shatters in the 2 m roof drop, so the drawn top over its opening is the cargo floor (0.38-0.58 m) while the proxy's cuboid over the cage's closed tail stands at 1.11 m; after the plan: the cage's tail opens where the rear glass is gone, as the drawn body's does";
 /** The pickup's airborne deck row (25°): the fitter's one leaf over the bed floor and the cab's rear wall, a cut or leaf budget, not the cage. */
 const bedFrontLeaf =
   "CarRig: a dummy-proxy leaf spans the bed floor (0.80) and the cab's rear wall at the bed front, airborne 25°: deck worst +0.12 m at (0.43, -1.08..-1.18), up .072 before the door/C-post step; the fitter's cut or leaf budget, not the door data";
-const todoCause: Record<string, string> = { cabin: interiorThroughRoof, hood: noseFaceUnderLeaf, deck: roofCornerHole };
+const todoCause: Record<string, string> = { cabin: interiorThroughRoof, hood: noseFaceUnderLeaf };
 
 const proxyCases = BODIES.flatMap((b) =>
   STATES.map((s) => ({
@@ -63,10 +58,11 @@ const proxyCases = BODIES.flatMap((b) =>
     /** The parts of this row held to the bars as a todo (`todoCause`, or the row's own `todoCauses`), the others as plain tests. */
     todoParts: [
       ...(s.id === "rolled" && (b.style === "pickup" || b.style === "monster") ? ["cabin"] : s.id === "headon" && b.cls !== "monster" && b.style !== "sedan" ? ["hood"] : []),
-      ...(b.style === "wagon" || (s.id === "airborne" && b.style === "pickup") ? ["deck"] : []),
+      ...((s.id === "airborne" && b.style === "pickup") || (s.id === "rolled" && b.style === "wagon") ? ["deck"] : []),
     ],
     todoCauses: {
       ...(b.style === "pickup" && s.id === "airborne" ? { deck: bedFrontLeaf } : {}),
+      ...(b.style === "wagon" && s.id === "rolled" ? { deck: rearGlassGone } : {}),
     } as Partial<Record<string, string>>,
   })),
 );
