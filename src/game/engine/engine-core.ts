@@ -29,7 +29,7 @@ import { Cinematics } from "../present/engine-cine.ts";
 import { loadHdrEnv, STUDIO_ENV_URL } from "../present/look-env.ts";
 import { CarDetail } from "../present/car-detail.ts";
 import { addCars, withCars, type Occluder, type Sight } from "../present/spectate-cam.ts";
-import { ChaseSolids, OccluderPool } from "../present/chase-solids.ts";
+import { ChaseSolids, DERBY_OCCLUDERS, OccluderPool } from "../present/chase-solids.ts";
 import { activeGround } from "../world/ground.ts";
 import { BARRIER_HALF } from "../contact/sat.ts";
 import type { AutoFx, DeviceClass } from "../present/auto-fx.ts";
@@ -719,7 +719,7 @@ export abstract class EngineCore {
 
   /**
    * The scene's solids as the spectator and crash cams see them: the course's own, or the sandbox's lamp poles, barrier and
-   * balls, within the derby bowl's rim. `cars`: every visible car but `followed` stands in it too (a crash cam leaves them out:
+   * balls, or the derby bowl's rim and prisms (berms, containers, rails, pads). `cars`: every visible car but `followed` stands in it too (a crash cam leaves them out:
    * they are what it films).
    */
   protected sceneSight(followed: DeformableCar | null, cars: boolean): Sight {
@@ -732,6 +732,7 @@ export abstract class EngineCore {
     this.addSandboxSolids(sandbox);
     sandbox.end();
     for (const o of sandbox.list) occ.push(o);
+    if (this.derbyMode) for (const o of DERBY_OCCLUDERS) occ.push(o);
     return { ground: activeGround(), path: null, wallTop: 0, rim: this.derbyMode ? DERBY_RADIUS : Infinity, occ };
   }
 

@@ -32,7 +32,7 @@ export const VIEW = {
 export type Screen = { view: ViewBox; covers: readonly ViewBox[] };
 
 /** The browser probe's desktop page, nothing over it. */
-const DESKTOP: Screen = { view: { left: 0, top: 0, right: 1280, bottom: 720 }, covers: [] };
+export const DESKTOP: Screen = { view: { left: 0, top: 0, right: 1280, bottom: 720 }, covers: [] };
 
 /** The scene's lens (deg), as `ChaseCamera.lens`. */
 const LENS = 55;
