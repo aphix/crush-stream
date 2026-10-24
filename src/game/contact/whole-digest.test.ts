@@ -43,14 +43,14 @@ function staged(cars: DeformableCar[], barrier: boolean, probes: Probe[], pedals
 const X = new THREE.Vector3(1, 0, 0);
 const NX = new THREE.Vector3(-1, 0, 0);
 
-// Re-pinned for a pair's crush fed over its patch's width at its hit's speed (`feedOverlap`); the barrier's pin was stale at the union head.
+// Re-pinned for a pair's crush fed over its patch's width at its hit's speed (`feedOverlap`) and the bumpers' held bottom corners; the barrier's pin was stale at the union head.
 describe("given four staged crashes with the epicenter activation off", () => {
   it("when the owner's head-on, 20 m/s each, runs 5 s, then every mass and pose is the pinned one", () => {
     const a = makeCar("shape");
     const b = makeCar("shape");
     launch(a, -5, 0, Math.PI / 2, 20, 0);
     launch(b, 5, 0, -Math.PI / 2, -20, 0);
-    assert.equal(staged([a, b], false, [new Probe(a, X), new Probe(b, NX)], [FREEWHEEL, FREEWHEEL], 5), "2be6a606da84d6a6");
+    assert.equal(staged([a, b], false, [new Probe(a, X), new Probe(b, NX)], [FREEWHEEL, FREEWHEEL], 5), "f2440a595926d44a");
   });
 
   it("when a car meets a parked one's door at 50 km/h, 5 s, then every mass and pose is the pinned one", () => {
@@ -58,13 +58,13 @@ describe("given four staged crashes with the epicenter activation off", () => {
     const b = makeCar("shape");
     launch(a, 0, 0, 0, 0, 0);
     launch(b, 6, 0, -Math.PI / 2, -50 * KPH, 0);
-    assert.equal(staged([a, b], false, [new Probe(a, NX), new Probe(b, NX)], [PARKED, FREEWHEEL], 5), "7c72041f76a20ebc");
+    assert.equal(staged([a, b], false, [new Probe(a, NX), new Probe(b, NX)], [PARKED, FREEWHEEL], 5), "1628707e5d954b80");
   });
 
   it("when a car hits the held barrier at 50 km/h, 5 s, then every mass and pose is the pinned one", () => {
     const a = makeCar("shape");
     launch(a, 6.2, 0, -Math.PI / 2, -50 * KPH, 0);
-    assert.equal(staged([a], true, [new Probe(a, a.velocity)], [FREEWHEEL], 5), "dbae3901c7e78ede");
+    assert.equal(staged([a], true, [new Probe(a, a.velocity)], [FREEWHEEL], 5), "72855c6031de4947");
   });
 
   it("when three cars pile up, 6 s, then every mass and pose is the pinned one", () => {
@@ -74,6 +74,6 @@ describe("given four staged crashes with the epicenter activation off", () => {
     launch(a, -4, 0, Math.PI / 2, 50 * KPH, 0);
     launch(b, 4, 0, -Math.PI / 2, -50 * KPH, 0);
     launch(c, 28, 0, -Math.PI / 2, -90 * KPH, 0);
-    assert.equal(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6), "765ebd7cfb9bface");
+    assert.equal(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6), "0f050550aa24ad71");
   });
 });
