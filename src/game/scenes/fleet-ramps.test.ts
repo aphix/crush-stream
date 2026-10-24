@@ -377,8 +377,10 @@ describe("given the ramps with no slab between them, and a car that is or become
  * (its masses' mean) carries its masses' rebound off a landing while the ground holds its height: 0.077 m/s for one frame at 6 m/s.
  */
 const NEAR_REST = 0.5;
-  it("when that struck car has landed and come to rest, then it has no vertical speed and takes the flat ground's pitch and roll", (t) => {
-    const { w, car } = scene(false);
+/** The tilt (deg) a car at rest may stand off the ground under its hubs: the 0.03 rad its flat-ground row held it to. */
+const AT_REST_TILT_DEGREES = 1.72;
+  it("when that struck car has landed and come to rest, then it has no vertical speed and takes the pitch and roll of the ground it lies on", (t) => {
+    const { ramps, w, car } = scene(false);
     car.spawnFacing(0, -14, 0, 15);
     const p = car.group.position;
     let struck = false;
@@ -393,11 +395,11 @@ const NEAR_REST = 0.5;
       if (!car.airborne && car.velocity.length() < NEAR_REST && Math.abs(p.y - lastY) < 1e-4) stale = Math.max(stale, Math.abs(car.velocity.y));
       lastY = p.y;
     });
-    const pitch = car.group.rotation.x;
-    const roll = car.group.rotation.z;
-    t.diagnostic(`at rest: y ${p.y.toFixed(3)}, vy ${car.velocity.y.toFixed(3)}, worst vy with y still ${stale.toFixed(3)} m/s, pitch ${pitch.toFixed(3)}, roll ${roll.toFixed(3)} rad`);
+    // Where it comes down is the flight's: a slower run up the ramp lands it on the far ramp's foot (a 5.7° face), not the flat between them.
+    const rest = fit(car, ramps);
+    t.diagnostic(`at rest: y ${p.y.toFixed(3)}, vy ${car.velocity.y.toFixed(3)}, worst vy with y still ${stale.toFixed(3)} m/s, pitch ${rest.pitch.toFixed(2)}° on a ground pitched ${rest.groundPitch.toFixed(2)}°, tilt from it ${rest.tilt.toFixed(2)}°`);
     assert.ok(stale < 0.05, `y still while vy ${stale.toFixed(3)} m/s`);
-    assert.ok(Math.abs(pitch) < 0.03 && Math.abs(roll) < 0.03, `pitch ${pitch.toFixed(3)}, roll ${roll.toFixed(3)} rad on flat ground`);
+    assert.ok(rest.tilt < AT_REST_TILT_DEGREES, `${rest.tilt.toFixed(2)}° off the ground under it (pitch ${rest.pitch.toFixed(2)}° on ${rest.groundPitch.toFixed(2)}°, roll ${rest.roll.toFixed(2)}° on ${rest.groundRoll.toFixed(2)}°)`);
   });
 });
 

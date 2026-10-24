@@ -51,8 +51,8 @@ export const START_HILL = { padLength: 6, drop: 3 } as const;
  * and the car's speed there is set by the distance it covers from the pad (measured in `minigame-profile.test.ts`).
  */
 export const START_HILL_LENGTH: Readonly<Record<MinigameMode, number>> = {
-  longJump: 11,
-  highJump: 24,
+  longJump: 11.4,
+  highJump: 23,
   ringFling: 24,
 };
 
@@ -127,4 +127,4 @@ export const THROW_BOOST: Readonly<Record<MinigameMode, { forward: number; upwar
  * the free pad) and the first touchdown's distance past the lip (where the box piles end). Pinned within 2% by `minigame-sizing.test.ts`,
  * which recomputes them from the real car and ragdoll.
  */
-export const HIGH_JUMP_MEASURED = { bestHeight: 164.1, landingDistance: 31.9 } as const;
+export const HIGH_JUMP_MEASURED = { bestHeight: 171, landingDistance: 33.2 } as const;

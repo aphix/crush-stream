@@ -9,7 +9,7 @@ import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-ut
 import { droop, FLANK_UP_Y, SPRINGS, UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
+import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes, kineticEnergy } from "./car-air-body.ts";
 import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop, readTyreSides, wreckShares, ROW_WHEEL } from "./car-air-points.ts";
 import { centreLift, centreY } from "./car-cage-rig.ts";
 import { store3d } from "../kernel/store.ts";
@@ -760,6 +760,35 @@ function pitchHolds(r: THREE.Vector3, n: THREE.Vector3): boolean {
   return push * closes >= 0;
 }
 
+/** A face steeper than this (its normal's up component under it: 26°) is a climb whose straight-up push can add a coasting car's own plan speed to its kinetic energy (½ (v tan 26°)² a mount, 5-19 J/kg at 6-10 m/s); a ramp's few-degree foot adds a few J/kg and is left to the springs. */
+const HELD_FACE_NY = 0.9;
+
+/** Whether a body rolling on (not coming down from a flight: a landing's impulse is the closing's, not a thrust), unpowered (the engine owes a powered one its thrust up a face) and no wreck (its masses carry its energy) has a rigid tyre row pushing straight up a steep face of the world and none on a car (a car's top takes its reaction, `give`). */
+function liftsOnWorld(tyres: number, n: number, airborne: boolean): boolean {
+  if (body.powered || airborne || body.wreck) return false;
+  let lifts = false;
+  for (let c = 0; c < n; c++) {
+    if (OWN[c]! >= 0) return false;
+    if (c < tyres && !SOFT[c] && DIR[c] === UP && N[c]!.y < HELD_FACE_NY) lifts = true;
+  }
+  return lifts;
+}
+
+/**
+ * A contact's impulse never adds energy to a body, but a rigid tyre pushing straight up a face keeps the plan speed it lifts the body on: a
+ * coasting monster mounting a 31° face at 6 m/s gained 19.5 J/kg of the 31.7 it came with. The lift comes out of the plan speed: the body's
+ * kinetic energy after the solve is at most what it had before it.
+ */
+function holdLiftEnergy(before: number): void {
+  const excess = kineticEnergy() - before;
+  if (excess <= 0) return;
+  const { v } = body;
+  const plan = v.x * v.x + v.z * v.z;
+  const keep = plan > 2 * excess ? Math.sqrt(1 - (2 * excess) / plan) : 0;
+  v.x *= keep;
+  v.z *= keep;
+}
+
 function stepFreeBody(car: DeformableCar, dt: number): boolean {
   const q = car.group.quaternion;
   const pos = car.group.position;
@@ -1042,28 +1071,32 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     _s[S_JD] = ASK[c]! - Math.min(ASK[c]!, REST[c]!);
     give(c, v, w, q, UP, surf);
   }
-  // The tyres in their springs push straight up, so the world's face under them leaves the body its gravity along it, each tyre's share
-  // by the weight it carries: it slows a car uphill and speeds it downhill. Before the passes, so a gripping tyre holds it in the slice.
-  // Where the passes' grip holds the tyre (a car not driven: its tyres grip both ways), that push is the face's on the tread and acts
-  // there, as the grip holding it does: pushed at the centre, the grip at the tread rolled the body, and a monster parked across a 10°
-  // face rolled to 6.9° and crept back at 0.9°/s, its origin sinking 3.6 mm after its springs had settled. A driven car's drive owns
-  // its travel along the ground, so its push stays at the centre.
+  // The tyres in their springs push straight up, so the world's face leaves the body its gravity along it: each tyre's share of the weight
+  // the springs on the world carry (not a spring's push, which the tread's cap holds under it on a steep face; not gated on the tread's
+  // reach, which reads 0 on a face mounted at speed). Before the passes, so a gripping tyre holds it in the slice.
+  // Where the grip holds the tyre (a car not driven) the push acts at the tread: at the centre it rolled a monster parked across a 10° face
+  // to 6.9°. A driven car's drive owns its travel along the ground, so its push stays at the centre.
+  let carried = 0;
+  for (let c = 0; c < tyres; c++) if (SOFT[c] && OWN[c]! < 0) carried += SHARE[c]!;
   for (let c = 0; c < tyres; c++) {
-    if (!rolling || !SOFT[c] || OWN[c]! >= 0) continue;
+    if (!SOFT[c] || OWN[c]! >= 0) continue;
+    const weight = (SHARE[c]! / carried) * G * dt;
     if (driven) {
-      v.x += ASK[c]! * N[c]!.y * N[c]!.x;
-      v.z += ASK[c]! * N[c]!.y * N[c]!.z;
+      v.x += weight * N[c]!.y * N[c]!.x;
+      v.z += weight * N[c]!.y * N[c]!.z;
       continue;
     }
     const along = hypot2(N[c]!.x, N[c]!.z);
     if (along > 0) {
-      _s[S_J] = ASK[c]! * N[c]!.y * along;
+      _s[S_J] = weight * N[c]!.y * along;
       push(v, w, q, R[c]!, _vp.set(N[c]!.x / along, 0, N[c]!.z / along));
     }
   }
   snapshotRows(car, n);
   noteTyreSides(tyres, tyreSides);
+  const keBefore = liftsOnWorld(tyres, n, car.airborne) ? kineticEnergy() : NaN;
   solveRows(n);
+  if (keBefore === keBefore) holdLiftEnergy(keBefore);
   collectCrush(car, n);
   surf.commit();
   const hard = hardContactNear(tyres, n, body.nearing);

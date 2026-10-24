@@ -387,8 +387,9 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
       assert.ok(hit.shove <= hit.bound, `${(t * 1000).toFixed(1)} ms in: shoved ${(hit.shove * 1000).toFixed(0)} mm, past its zip bound of ${(hit.bound * 1000).toFixed(0)} mm`);
       for (const id of hit.walls) met.add(id);
       towardMiddle += hit.towardMiddle;
-      // Parted: the stack neither met it nor moved it this slice.
-      if (met.size > 0 && hit.walls.length === 0 && hit.towardMiddle <= 0) break;
+      // Parted: the stack neither met it nor moved it this slice, and the wreck is not still driving into it (a touch read from a few
+      // cm off, then a slice with none while the hull closes the last mm, is not the end of the contact).
+      if (met.size > 0 && hit.walls.length === 0 && hit.towardMiddle <= 0 && wreck.velocity.x * prism.x + wreck.velocity.z * prism.z <= 0) break;
     }
     assert.ok(met.size > 0 && [...met].every((i) => i === 54), `met the stack alone: ${[...met]}`);
     assert.ok(towardMiddle >= MIN_PUSH, `pushed ${(towardMiddle * 1000).toFixed(1)} mm back toward the middle over the contact (at least ${MIN_PUSH * 1000} mm)`);
