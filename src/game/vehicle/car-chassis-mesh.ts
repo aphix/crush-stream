@@ -221,6 +221,16 @@ function splitShutRings(body: THREE.BufferGeometry, ring: number, zs: readonly n
 /** A `blackout.cowl` darkens the deck from this far (m) under the windshield's foot to as far under the hood's rear edge. */
 const COWL_LAP = 0.05;
 
+/** A cage loft's ring points the boot cut shapes (deck crown and rim, both sides) at each slice it is open on: held through the cage's decimation, which would otherwise take the cut's sill for the closed deck's chord. */
+function tailCutHold(zs: readonly number[], ring: number, style: BodyStyle): number[] {
+  const cut = bootCut(style);
+  const held: number[] = [];
+  for (let s = 0; s < zs.length; s++) {
+    if (bootCutAt(zs[s]!, cut).open > 0) held.push(s * ring, s * ring + 1, s * ring + ring - 2, s * ring + ring - 1);
+  }
+  return held;
+}
+
 export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const zs = sliceZs(style, source);
   const sectionAt = (z: number) => {
@@ -232,6 +242,7 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
   const n = rings[0]!.length;
   const body = loftFromRings(rings, zs, 0, 1, source === "cage");
   ensureOutwardNormals(body);
+  if (source === "cage" && style.cageTailCut === true) body.userData.hold = tailCutHold(zs, n, style);
   // How far each drawn slice has dropped into the bay's trough: its walls and floor are unpainted inner panel. Into a lid's lined boot: its
   // walls and floor are the cabin's dark trim, the boot's carpet as the references' popped lids show it. Into the cabin's tub: its floor
   // is dark cabin trim, as the glass shows it (the tub's walls keep one vertex with the belt, so they shade from it to the trim; the door

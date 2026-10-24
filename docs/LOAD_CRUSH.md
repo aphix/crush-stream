@@ -18,12 +18,15 @@ Load crush is how `stepAir`, the rigid flight step, meets a body's five faces (r
   `d`, and the masses that follow the face (`faceFollow`: the roof mass for the roof, the bumpers and engine for the
   nose) are baked in by `bakeLoadCrush`, which re-skins the car once (`update`: `loadDirty`). The skin's 0.1 m roof clamp
   lifts when the roof mass is sunk past 7.5 cm, as a squeeze's does.
+  The roof mass stands at its roof cage's height and the roof's skin hangs at the roof panel's own place (`RigTables.roofSkin`), so the drawn roof follows
+  the crush along its whole length, not about the mass alone (`vehicle/roof-skin.test.ts`).
 - A face that has reached its packed depth (`faceMax`) is rigid and lifts the body; a contact the face can carry never
   yields (at rest under 0.5 W a roof does not move).
 - A car resting on another car's top presses it back (`CarSurfaces.press`): the lower car takes the upper's reaction as a
   velocity change, so the bottom roof carries every car above it, and a car's yield is judged against **its own** weight
   in the lower car's roof (`mOwner / mSelf`). A car carried this way stays in `stepAir`; the plan SAT leaves it alone because the
   two cages' heights do not overlap at the contact.
+- A face's crush grows by `pen / follow` (`FOLLOW`: how far the drawn top follows the face's crush at the contact), so a contact's **dynamic** impulse spends only `FOLLOW` of its crush's work on the face's budget; the weight it bears stays at the law's force. A car set 2 cm over another's roof by its belly rows then crushes that roof as the law gives for a car released that high, within 10 mm at 60, 144 and 240 Hz (`vehicle/stack-roof-law.test.ts`).
 - A step runs at 480 Hz (`stepWorld`: up to 8 slices, `CONTACT_HZ`) only while a body in flight touched something last
   slice (`contactHz`); free flight, a body frozen at rest, and every car with no flight cost what they cost otherwise. No
   allocation in `stepAir`, `CarSurfaces` or `bakeLoadCrush`.
@@ -48,9 +51,9 @@ Stack, wagons, each car dropped 2 cm onto the roof below (bottom car first) and 
 
 | cars | bottom | 2nd | 3rd | top | 5 s on |
 |---|---|---|---|---|---|
-| 2 | 113 mm | 0 | | | same |
-| 3 | 184 mm | 113 mm | 0 | | same |
-| 4 | **245 mm** | 207 mm | 134 mm | **0 mm** | roofs 0 mm moved, slide 19 mm both reads, cars sink 0 / 0.6 / 1.3 / 4.6 mm |
+| 2 | 116 mm | 0 | | | same |
+| 3 | 191 mm | 108 mm | 0 | | same |
+| 4 | **250 mm** | 211 mm | 138 mm | **0 mm** | roofs 0 mm moved, the base car 1.7 mm off its spot (bar 20 mm), cars sink 0 / 0 / 0.4 / 4.1 mm |
 
 Strictly increasing from the top; the bottom roof under three cars lands in the **0.12-0.26 m** band (FMVSS 216's static
 122 mm for 3 W, plus the overshoot of the cars' 2 cm fall). The same 4-stack at 60 / 144 / 240 Hz reads within 4 % + 2 mm.
@@ -60,11 +63,11 @@ A car dropped on a face, 60 Hz, crush after settling (mm):
 
 | drop | 0.5 m | 1 m | 2 m |
 |---|---|---|---|
-| upside-down, roof | 286 | 383 | 450 (packed at 450) |
-| nose first (stands on its nose, then falls over onto its roof) | nose 28 | 59 | 98 |
-| tail first | tail 27 | 57 | 90 |
-| left / right flank | 74 | 94 | 149 |
-| corner (nose + left, pitch 60°, roll 45°) | nose 29 | 46 | 96 |
+| upside-down, roof | 301 | 385 | 450 (packed at 450) |
+| nose first (stands on its nose, then falls over onto its roof) | nose 43 | 75 | 128 |
+| tail first | tail 38 | 80 | 109 |
+| left flank | 99 | 166 | 291 |
+| corner (nose + left, pitch 60°, roll 45°) | nose 54 | 84 | 132 |
 
 Opposite faces stay at 0 (nose drop: tail 0; left: right 0).
 

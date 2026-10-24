@@ -1726,7 +1726,8 @@ const CAGE_SOURCE_DIGEST_BY_STYLE = [
   { id: "hatchback", digest: "fe96c4d21ffe3fdad05800fe180c72cc70d2474b4dac2772b04bfbb19f1788e6" },
   // The SUV's for its quarter glass running back to a slim D-post (rear edge belt -1.945 -> -1.995, top -1.67 -> -1.72): 367e3e9f... -> 94bad84a....
   // Again for its D-post's edges running near parallel (quarter top -1.72 -> -1.76, belt -1.995 -> -1.99; rear glass `wTop` .92 -> .96): 94bad84a... -> fa93839f....
-  { id: "wagon", digest: "86d39f74ce7d91e353c76b7e8067c434e8eab463ef545db153e12215fdcfd493" },
+  // The wagon's again for its cage's tail opened to the cargo floor (`cageTailCut`: the boot cut's rings held, the gate a 1 cm sheet with its top ring held): 86d39f74 -> f428bc2c; the other six styles are byte-identical.
+  { id: "wagon", digest: "f428bc2c8b35e2c1f50a9e1369b5651d9f55e1cf22916deebf4a6dbd63579a20" },
   // The coupe re-pinned for its crisper nose (hood lip and held station at z 1.945), its rear glass bowed 5 mm deeper than the default at its base (its glassRear cage 5 mm back), its nose crown at z 1.9 dropped 2.5 mm (as its sim digest above), and its drawn roof rolled onto the windshield's top (`roofEnds.front`).
   // Re-pinned for its rear glass's round outline (`rearGlass.roundOutline`): the frit's corner fans stand 1 cm in behind the pane as a backing, and the pane's drawn vertices are the glass panel's cage-skinned rest.
   // Re-pinned for its curved roof (`roofSection` .4/.6) and narrower rear glass top (`rearGlass.wTop` .92): the raked panes fall with the dome and the glass panel's cage-skinned rest moved.
