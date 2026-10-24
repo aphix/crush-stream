@@ -30,8 +30,6 @@ const FACE_SKIN = 0.02;
 const STAND_SKIN = 0.05;
 /** A rear hit's stroke over the front's, beyond the cages' chassisRear / chassisFront ratio: 50 km/h reverse into the wall crushes the tail 0.6–1.0× the nose's 50 km/h front hit (barrier.test.ts), 0.57× at the bare 0.69 ratio. */
 const REAR_STROKE_GAIN = 1.08;
-/** The crush scale (`closingKeScale`, 1 at the 14 m/s frontal reference) a hit's own speed holds a pair's feed at once the slice's closing has fallen: violent hits, whose scale is already past it, are fed as their closing is (a 57 m/s head-on sank a hatchback 10 cm in the road). */
-const PULSE_KE = 1;
 /** Numbers per contact row of `faceHits`: x, z, nx, nz, depth. */
 export const FACE_ROW = 5;
 /** A face's span along its lateral axis (`rx`, `rz`) through (`x`, `z`), half `hx` wide: what a contact's crush is fed within (`feedOverlap`). */
@@ -784,16 +782,16 @@ export abstract class DeformContact extends DeformState {
    * to it (its side crushes) rather than the bullet's nose stopping dead against a car that gets no momentum. `whole`: the overlap is
    * all of the crush (a fixed solid no particle reaches, so no particle held on its face takes the rest), not the 0.4 + 0.35·squash share.
    * `span`: the face's extent; a mass beyond it is not under the face and takes none of its crush. `patch`: the half width (m) of a broad
-   * contact along the face, to at most this car's own face (its bumper's half width): a mass within it of the point presses as near as one at the point.
-   * `drive`: the speed (m/s) the crush's energy is sized by, the hit's while the contact is its own pulse, held at the `PULSE_KE` scale at most where `closing` (what the gates read) falls as the exchange works.
+   * contact along the face, at most this car's own bumper's (a pile's patch is wider than any face): a mass within it of the point
+   * presses as near as one at the point (a flat bumper's corner crushes as its middle).
    */
-  feedOverlap(worldPoint: THREE.Vector3, inward: THREE.Vector3, overlap: number, closing: number, dt = 1 / FRAME_HZ, refVn = 0, whole = false, span?: FaceSpan, patch = 0, drive = closing): number {
+  feedOverlap(worldPoint: THREE.Vector3, inward: THREE.Vector3, overlap: number, closing: number, dt = 1 / FRAME_HZ, refVn = 0, whole = false, span?: FaceSpan, patch = 0): number {
     if (!this.massActive) return closing;
     this.overlapFrame = true;
     const leftover = leftoverCrumple(this.crumpleTravel());
     const s = this.squash;
     const live = s < 0.03 ? 0 : 1;
-    const ke = Math.max(closingKeScale(closing), Math.min(PULSE_KE, closingKeScale(drive)));
+    const ke = closingKeScale(closing);
     const absorbFrac = leftover * (0.5 + s * 0.42) * live;
     const eaten = Math.max(0, closing) * absorbFrac;
     // Per-call shares are tuned at the engine's 1/240 s slice; scale them to the slice actually
