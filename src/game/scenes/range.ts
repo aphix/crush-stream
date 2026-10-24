@@ -16,8 +16,8 @@ export const RANGE = {
   halfWidth: 10,
   signStep: 10,
   signs: 11,
-  /** The kicker against the wall's face (m): it rocks the nose up as it hits, so the driver leaves climbing and lands further (owner, 2026-10-20: tiny, a lip not a ramp); 15 cm landed furthest of the 5, 10 and 15 tried. */
-  lip: { height: 0.15, length: 2, halfWidth: BARRIER_HALF.z },
+  /** The kicker against the wall's face (m): it rocks the nose up as it hits, so the driver leaves climbing and lands further (owner, 2026-10-20: tiny, a lip not a ramp). 20 cm stands over the drawn bumpers of the sedan, coupe and cruiser (17-19 cm), so it meets the nose and not only the tyres. */
+  lip: { height: 0.2, length: 2, halfWidth: BARRIER_HALF.z },
 } as const;
 
 /** x (m) of the lip's foot: its top edge stands against the wall's face. */
