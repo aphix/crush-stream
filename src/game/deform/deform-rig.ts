@@ -54,6 +54,8 @@ export interface RigTables {
   readonly archPlant: number;
   /** A rest vertex over this height (m) is roof: the skin's roof clamp holds it. */
   readonly roofClampY: number;
+  /** Where the roof's skin hangs on the roof mass (m): at the roof panel's own place, which its crush reaches. The mass itself stands where the sim has it. */
+  readonly roofSkin: readonly [number, number, number];
   /** Where each face's crush reaches into this body (`faceFollow`): the bands follow its bonnet, roof and ends. */
   readonly faceBands: FaceBands;
   /** Plan reach (m) from its hub at which a crushed corner has hit the tyre: tyre radius plus the packed bumper beam. */
@@ -65,6 +67,8 @@ export interface RigTables {
 }
 /** Platform bonnet top (m): where the top band starts following the roof's crush. */
 const PLATFORM_BONNET_TOP = CAGES.find((cage) => cage.name === "bonnet")!.max[1];
+/** The platform's roof mass. */
+const PLATFORM_ROOF = MASS_SPECS.find((spec) => spec.name === "roof")!;
 /** The tables as they stand: the platform every body shared. */
 export const PLATFORM_RIG: RigTables = {
   cages: CAGES,
@@ -75,6 +79,7 @@ export const PLATFORM_RIG: RigTables = {
   archTop: 0.55,
   archPlant: 0.4,
   roofClampY: 1.05,
+  roofSkin: PLATFORM_ROOF.rest,
   faceBands: {
     top: [PLATFORM_BONNET_TOP, MASS_SPECS.find((spec) => spec.name === "roof")!.rest[1] - PLATFORM_BONNET_TOP],
     nose: [0.7, 1.36],
@@ -779,13 +784,10 @@ export abstract class DeformRig {
     const body = this.masses.flatMap((m, j) => (m.hub || (only && !only.includes(j)) ? [] : [j]));
     const cabinBody = body.filter((j) => inCell(this.masses[j]!.rest.x, this.masses[j]!.rest.y, this.masses[j]!.rest.z));
     const outside = body.filter((j) => !cabinBody.includes(j));
+    const roofJ = this.masses.findIndex((m) => m.name === "roof");
+    const anchors = this.masses.map((m, j): readonly [number, number, number] => (j === roofJ ? this.rig.roofSkin : [m.rest.x, m.rest.y, m.rest.z]));
     const near = (rx: number, ry: number, rz: number, set: number[]) =>
-      set
-        .map((j) => {
-          const r = this.masses[j]!.rest;
-          return { j, w: 1 / ((rx - r.x) ** 2 + (ry - r.y) ** 2 + (rz - r.z) ** 2 + RES_SOFT) };
-        })
-        .sort((a, b) => b.w - a.w);
+      set.map((j) => ({ j, w: 1 / ((rx - anchors[j]![0]) ** 2 + (ry - anchors[j]![1]) ** 2 + (rz - anchors[j]![2]) ** 2 + RES_SOFT) })).sort((a, b) => b.w - a.w);
     return (rx, ry, rz, i, t, hung = false, foot = false) => {
       const cabin = inCell(rx, ry, rz);
       const ds = near(rx, ry, rz, cabin || hung ? cabinBody : body);

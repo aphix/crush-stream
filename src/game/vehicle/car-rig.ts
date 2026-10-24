@@ -228,13 +228,14 @@ function rigOf(style: BodyStyle, w: Warp, wheels: readonly V3[]): RigTables {
   const P = PLATFORM_RIG;
   const cages = P.cages.map((base) => cabinCage(style, base, w.xScale) ?? warpedCage(w, base));
   const hubs = new Map<string, V3>(HUB_NAMES.map((name, i) => [name, wheels[i]!]));
-  // The roof mass is the roof the car draws: it rides its cage's map, at the platform's share of the cage (its y-centre, 0.57 of its length back to front).
+  // The roof mass stands up at its roof cage's height (`roofShift.dy`) and along where the body's warp puts it; its skin hangs at the roof panel's own place, so the roof the car draws follows the crush the mass takes. Moving the mass itself moved every crash it takes part in.
   const roof = roofShift(style);
+  const [roofX, roofY, roofZ] = named(P.masses, "roof").rest;
+  const roofRest: V3 = [roofX * w.xScale, roofY + roof.dy(roofY), warped(w, [roofX, roofY, roofZ])[2]];
   const masses = P.masses.map((spec): MassSpec => {
     const hub = hubs.get(spec.name);
     if (hub) return { ...spec, rest: [hub[0], hub[1], hub[2]] };
-    const [x, y, z] = spec.rest;
-    return { ...spec, rest: spec.name === "roof" ? [x * w.xScale, y + roof.dy(y), z + roof.dz(z)] : warped(w, spec.rest) };
+    return { ...spec, rest: spec.name === "roof" ? [roofRest[0], roofRest[1], roofRest[2]] : warped(w, spec.rest) };
   });
   const sensors = P.sensors.map((spec, i): SensorSpec => (i === BOOT_SENSOR ? bootSensor(style.boot, spec) : { ...spec, rest: warped(w, spec.rest) }));
   const r = style.dims.wheel.radius;
@@ -248,6 +249,7 @@ function rigOf(style: BodyStyle, w: Warp, wheels: readonly V3[]): RigTables {
     archTop: P.archTop + (r - PLATFORM_TYRE.r) + arch,
     archPlant: P.archPlant + arch,
     roofClampY: P.roofClampY + (named(cages, "roof").min[1] - named(P.cages, "roof").min[1]),
+    roofSkin: [roofRest[0], roofRest[1], roofZ + roof.dz(roofZ)],
     faceBands: bandsOf(w, cages, masses),
     tyreReach: P.tyreReach + (r - PLATFORM_TYRE.r),
     noseReach: style.pushBar ? PUSH_BAR_REACH : 0,
@@ -311,6 +313,37 @@ function panOf(style: BodyStyle): V3[] {
   const at = sum / n;
   const rise = sz / (n * PAN_HALF * PAN_HALF);
   return [-PAN_HALF, PAN_HALF].flatMap((z) => [-PAN_HALF, 0, PAN_HALF].map((x): V3 => [x, at + rise * z, z]));
+}
+
+/** The lower convex hull of `run` ([z, height, x] by z): a point over the chord between two others is the lowest at no pitch. */
+function lowerHull(run: readonly V3[]): V3[] {
+  const hull: V3[] = [];
+  for (const c of run) {
+    while (hull.length >= 2) {
+      const a = hull[hull.length - 2]!;
+      const b = hull[hull.length - 1]!;
+      if ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) > 0) break;
+      hull.pop();
+    }
+    hull.push(c);
+  }
+  return hull;
+}
+
+/** The drawn underside's standing points (x, z, height): per profile station the lowest point of the keel and of the rocker side (mirrored), those on the lower hull of each line, so the nose and tail lips between the rows are met too. */
+function standingPoints(style: BodyStyle): V3[] {
+  const { profile } = style;
+  const keel: V3[] = [];
+  const side: V3[] = [];
+  for (const station of profile) {
+    const ring = sectionPoints(sampleSlice(station.z, profile), style, "drawn");
+    const mid = (ring.length - 1) / 2;
+    let low = ring[mid]!;
+    keel.push([station.z, low.y, 0]);
+    for (let i = mid + 1; i < ring.length; i++) if (ring[i]!.y < low.y || (ring[i]!.y === low.y && ring[i]!.x > low.x)) low = ring[i]!;
+    side.push([station.z, low.y, low.x]);
+  }
+  return [...lowerHull(keel).map(([z, y]): V3 => [0, z, y]), ...lowerHull(side).flatMap(([z, y, x]): V3[] => [[x, z, y], [-x, z, y]])];
 }
 
 /** The belly points (x, height, z): the underside rows, the mid rows, then the pan, a point with no drawn body under it standing on the floor; and per point 1 where the drawn body is absent. `rows` are [x, z, height], NaN where absent. */
