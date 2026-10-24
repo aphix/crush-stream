@@ -75,8 +75,8 @@ bit-identical.
 
 ### GC during races
 
-Race GC pauses (30–64 ms) are driven by physics allocation. `contact/physics-alloc.test.ts` bounds the heap growth of a
-warmed 24-car pile-up per frame, and the hot-path rules ([`ARCHITECTURE.md`](ARCHITECTURE.md) H1–H4) keep per-step code allocation-free.
+Race GC pauses (30–64 ms) are driven by physics allocation. `contact/physics-alloc.test.ts` bounds the bytes a warmed 24-car pile-up allocates per frame (read as V8's sampling heap profiler sees them, dead objects included, through `kernel/alloc-sample.test-util.ts`: a heap-size delta moves with where a scavenge falls and with whether V8 has optimized the code yet),
+and the hot-path rules ([`ARCHITECTURE.md`](ARCHITECTURE.md) H1–H4) keep per-step code allocation-free.
 Measure allocation with the sampling heap profiler, including objects already collected.
 
 **Not causes** (measured per frame): HUD React, FX emitters, tyre marks, lamp lights, skinning, texture uploads.
