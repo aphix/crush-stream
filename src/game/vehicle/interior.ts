@@ -287,7 +287,7 @@ export class CarCabin {
 
   /**
    * The bay rides the engine masses through a crush, its front no further out than the nose (the front bumper's masses), and each bar
-   * its bumper's, none sideways into a wheel: once a frame on a crashed car, at rest without (`deform` null). On a wreck the bay then rests on the ground under it.
+   * its bumper's, none sideways into a wheel: once a frame on a crashed car, at rest without (`deform` null). On a wreck each then rests on the ground under it.
    */
   fit(deform: StreamedDeformation | null): void {
     for (let k = 0; k < this.under.length; k++) {
@@ -309,7 +309,7 @@ export class CarCabin {
     const sz = (zFront + Math.min(engine!, nose!) - zRear - engine!) / (REF_BAY.front - REF_BAY.rear);
     bay.scale.z = sz;
     bay.position.z = zRear + engine! - REF_BAY.rear * sz;
-    if (deform !== null) restOnGround(bay);
+    if (deform !== null) for (let k = 0; k < this.under.length; k++) restOnGround(this.under[k]!);
     for (let k = 0; k < this.under.length; k++) this.under[k]!.updateMatrix();
   }
 
