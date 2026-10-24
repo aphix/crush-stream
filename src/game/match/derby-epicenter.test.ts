@@ -18,16 +18,30 @@ import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.t
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 
 /**
- * The epicenter freeze on a derby: six AI cars in the arena at the realistic crush knobs (the long-run's `REALISTIC`), seed 7, the first 15 s. A wreck that spins on its running drivetrain has its wheel hubs standing up
+ * The epicenter freeze on a derby: six AI cars in the arena at the realistic crush knobs (the long-run's `REALISTIC`), seed 10, the first 15 s. A wreck that spins on its running drivetrain has its wheel hubs standing up
  * to 1.5 m off their car-frame places (the world's place of a planted hub, not its pin); the freeze used to re-derive each hub's car-frame place from that world place, so the frozen wreck kept its hubs (and the drawn
- * wheels, which sit at their hubs' frame x and z) there for good: a rear wheel drawn at the front on the other side. Seed 7's first such freeze is at 13.2 s.
+ * wheels, which sit at their hubs' frame x and z) there for good: a rear wheel drawn at the front on the other side. The seed is the one whose run has such a freeze (a hub 0.80 m off its place when the re-derive is
+ * restored: `HUB_PIN_MAX` infinite); the course's other seeds up to 12 do not reach one in 15 s on this sim.
  */
-const SEED = 7;
+const SEED = 10;
 const SECONDS = 15;
-/** How far (m) a frozen wreck's hub may stand from its rest place in the car frame, and a drawn wheel from its own: a bumper crushes to 0.6 m, a hub is shoved by a face (0.1 to 0.35 m). */
+/** How far (m) a frozen wreck's hub may stand from its rest place in the car frame, and a drawn wheel from its hub: a bumper crushes to 0.6 m, a hub is shoved by a face (0.1 to 0.35 m). */
 const HUB_BOUND = 0.5;
 const saved = epicenterValues();
 afterEach(() => loadEpicenter(saved));
+const _wheel = new THREE.Vector3();
+const _place = new THREE.Vector3();
+
+/**
+ * How far (m, in the world's plan) a car's drawn wheel `k` stands from its hub's place in the car frame. The suspension seats a wheel on the surface it rides (a prop, another wreck's top)
+ * along the world's vertical, which a rolled body's frame reads as a sideways car-frame offset: a frame distance would count that legitimate seat as the freeze bug, the plan distance does not.
+ */
+function wheelOffHub(car: DeformableCar, k: number, hub: THREE.Vector3): number {
+  car.group.updateMatrixWorld(true);
+  car.group.localToWorld(_wheel.copy(car.wheels[k]!.position));
+  car.group.localToWorld(_place.set(hub.x, car.frame.wheels[k]![1]!, hub.z));
+  return Math.hypot(_wheel.x - _place.x, _wheel.z - _place.z);
+}
 
 function derbySeed(): { frozenSlices: number; worstHub: number; worstWheel: number } {
   loadEpicenter(EPICENTER_AT_LOAD);
@@ -76,8 +90,7 @@ function derbySeed(): { frozenSlices: number; worstHub: number; worstWheel: numb
           const hub = c.deform.massLocal(name);
           const rp = c.frame.wheels[k]!;
           worstHub = Math.max(worstHub, Math.hypot(hub.x - rp[0], hub.z - rp[2]));
-          const wp = c.wheels[k]!.position;
-          worstWheel = Math.max(worstWheel, Math.hypot(wp.x - rp[0], wp.z - rp[2]));
+          worstWheel = Math.max(worstWheel, wheelOffHub(c, k, hub));
         }
       }
       t += h;
@@ -89,11 +102,11 @@ function derbySeed(): { frozenSlices: number; worstHub: number; worstWheel: numb
   }
 }
 
-describe("given a six-car derby (seed 7) with the epicenter activation on", () => {
-  it("when it runs 15 s, then every frozen wreck's hubs and drawn wheels stay within half a metre of their car-frame places", () => {
+describe("given a six-car derby (seed 10) with the epicenter activation on", () => {
+  it("when it runs 15 s, then every frozen wreck's hubs stay within half a metre of their car-frame places and its drawn wheels within half a metre of their hubs", () => {
     const { frozenSlices, worstHub, worstWheel } = derbySeed();
     assert.ok(frozenSlices > 1000, `${frozenSlices} frozen wreck slices: the row proves nothing`);
     assert.ok(worstHub < HUB_BOUND, `a frozen wreck's hub stood ${worstHub.toFixed(2)} m off its place in the car frame`);
-    assert.ok(worstWheel < HUB_BOUND, `a frozen wreck's drawn wheel stood ${worstWheel.toFixed(2)} m off its place`);
+    assert.ok(worstWheel < HUB_BOUND, `a frozen wreck's drawn wheel stood ${worstWheel.toFixed(2)} m off its hub`);
   });
 });
