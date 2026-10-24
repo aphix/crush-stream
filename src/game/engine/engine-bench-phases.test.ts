@@ -12,7 +12,24 @@ const WINDOW_FRAMES = 960;
 /** The most of the window's sim ms the phases may leave unattributed: the pacer's loop and the pose blend between steps (measured 0.7 %). */
 const MAX_UNATTRIBUTED = 0.08;
 
+/** The head-on sent into the window: the second racer's speed (m/s) and its distance (m) ahead of the first, who comes on at his race speed: contact within a quarter of a second, too soon for a driver to dodge. */
+const STAGED_SPEED = 20;
+const STAGED_AHEAD = 12;
+
 const emptySeries = (): WorkSeries => ({ seconds: 0, wallS: new Float64Array(0), clockS: new Float64Array(0), phaseMs: new Float64Array(0), counts: new Float64Array(0) });
+
+/** Sends the second racer head-on at the first, so the window holds a crash (the skin kernel only runs on a deforming car) whatever the race does in it. */
+function stageHeadOn(engine: CrashEngine): void {
+  const racers = engine["live"]().filter((car) => !car.crashed);
+  assert.ok(racers.length >= 2, `${racers.length} racers left to stage a crash between`);
+  const first = racers[0]!;
+  const second = racers[1]!;
+  first.refreshBasis();
+  const yaw = Math.atan2(first.forward.x, first.forward.z);
+  const at = first.group.position;
+  second.spawnFacing(at.x + first.forward.x * STAGED_AHEAD, at.z + first.forward.z * STAGED_AHEAD, yaw + Math.PI, STAGED_SPEED);
+}
+
 describe("given a phase table made of a window's phase ms and counter differences", () => {
   const phaseMs = new Float64Array(PHASE_NAMES.length).fill(10);
   const counts = new Float64Array(COUNTER_NAMES.length).fill(50);
@@ -71,6 +88,7 @@ describe("given the real engine on the city bench's race, headless", () => {
     };
     const stepsBefore = pace.total;
     const work = watchWork(parts, pace);
+    stageHeadOn(engine);
     for (let i = 1; i <= WINDOW_FRAMES; i++) {
       runFrames(engine, 1);
       work.tick(i * FRAME_S, i * FRAME_S);
