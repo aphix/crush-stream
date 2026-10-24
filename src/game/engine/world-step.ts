@@ -13,6 +13,7 @@ import { CarSurfaces, REACH } from "../vehicle/car-surfaces.ts";
 import { armTops, calmSolids } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { STOCK_PAINT } from "../vehicle/constants.ts";
+import { UPRIGHT_UP_Y } from "../vehicle/car-suspension.ts";
 import { FINE_HZ, SLICES_PER_STEP } from "../kernel/constants.ts";
 import { FINE_SLICE } from "./sim-pace.ts";
 import { lap, PHASE, SimPhases, WORK } from "./sim-phases.ts";
@@ -146,9 +147,10 @@ function idle(car: DeformableCar): boolean {
   return car.stored && EPICENTER.storedSkip === 1;
 }
 
-/** A car resting on the ground: slower than rest and touching. Its wreck's masses ride its body (`DeformFreeze.ridesBody`). */
+/** A car whose wreck's masses ride its body (`DeformFreeze.ridesBody`): asleep, or lying on its side or roof (`UPRIGHT_UP_Y`) and at rest on the ground. One on its wheels keeps stepping: its structure still settles it. */
 function atRest(car: DeformableCar): boolean {
-  return !car.moving && !car.airborne;
+  const q = car.group.quaternion;
+  return car.asleep || (!car.moving && !car.airborne && 1 - 2 * (q.x * q.x + q.z * q.z) < UPRIGHT_UP_Y);
 }
 
 /** Scratch for the weight an unstepped car's roof drops (`stepWorld`). */
@@ -431,6 +433,9 @@ export function stepWorld(w: World, dt: number): void {
       if (d.massActive) {
         // A relocked wreck (`epicenter` activation) and one at rest run their clock and ride their body: no solve, no frame re-measure.
         if (d.ridesBody(atRest(car))) {
+          // `followGroup` hands these over each step and does not run while the wreck rides: a wreck put on a spot has fresh vectors until it does.
+          d.bodyV = car.velocity;
+          d.bodyW = car.angular;
           d.stepFrozen(hc, car.group, car.asleep);
           if (d.frozen) work[WORK.frozenCarSlices] = work[WORK.frozenCarSlices]! + 1;
         } else {
