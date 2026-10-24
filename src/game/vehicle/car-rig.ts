@@ -2,7 +2,7 @@
  * A body style's sim frame: its rig (`StreamedDeformation`'s cages, sensors, masses and tyre, and the heights and reaches its skin and
  * crush read off them), where its wheels stand, its body box, centre of mass and inertia, and the underside its rigid step rests on.
  * One frame per style, built once: the platform's tables, tuned on `PLATFORM_DIMS` and `PLATFORM_CABIN`, carried onto the car by its
- * own dims' and cabin's offsets from those. Zero offsets leave every number as it was.
+ * own dims' and cabin's offsets from those. Zero offsets leave every rig number as it was; the underside it rests on is read off its own drawn body.
  */
 import * as THREE from "three";
 import { PLATFORM_TYRE, type CageSpec, type MassSpec, type SensorSpec } from "../kernel/rig-spec.ts";
@@ -11,7 +11,8 @@ import type { FaceBands } from "../deform/load-crush.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { PLATFORM_CABIN, PLATFORM_DIMS, PLATFORM_HARDPOINTS } from "./car-styles/platform.ts";
 import { CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
-import { floorY, REAR_GLASS_BOW, WINDSHIELD_BOW } from "./car-lines.ts";
+import { floorY, REAR_GLASS_BOW, wheelsOf, WINDSHIELD_BOW } from "./car-lines.ts";
+import { sampleSlice, sectionPoints } from "./car-mesh.ts";
 import { PUSH_BAR_REACH } from "./car-materials.ts";
 
 type V3 = readonly [number, number, number];
@@ -27,26 +28,19 @@ const PLATFORM_FOOT_HALF_L = 2.3;
 /** Centre of mass above the group's origin (car-local y, m); the origin is on the ground under the body's middle. */
 const PLATFORM_COM_Y = 0.55;
 /**
- * The body's underside (x, z, height m over the ground at the stock ride with no class lift), read off the skinned
- * wreck mesh of every style (sedan, wagon, coupe, hatchback and pickup alike): the keel along the middle, rising to
- * the tail, and the rocker and bumper corners 0.8 m out. The wheel arches are cut out and left out.
+ * The underside's sample rows (x, z on the platform): the keel along the middle and the rocker lines 0.8 m out, at which each
+ * style's underside is read off its own drawn body (`drawnUnderY`).
  */
-const PLATFORM_UNDERSIDE: readonly V3[] = [
-  [0, 2, 0.032], [0, 1, 0.072], [0, 0, 0.131], [0, -1, 0.136], [0, -2, 0.161],
-  ...([-0.8, 0.8] as const).flatMap((x) => [[x, 2, 0.051], [x, 1, 0.101], [x, 0, 0.134], [x, -0.5, 0.147], [x, -2, 0.169]] as const),
+const PLATFORM_UNDERSIDE: readonly (readonly [number, number])[] = [
+  [0, 2], [0, 1], [0, 0], [0, -1], [0, -2],
+  ...([-0.8, 0.8] as const).flatMap((x) => [[x, 2], [x, 1], [x, 0], [x, -0.5], [x, -2]] as const),
 ];
-/** `PLATFORM_UNDERSIDE` rows of the keel and of the right rocker at the belly's cross rows (z 2, 1, 0 and −2 on the platform). */
+/** `PLATFORM_UNDERSIDE` rows of the keel at the belly's cross rows (z 2, 1, 0 and −2 on the platform). */
 const BELLY_KEEL_ROWS = [0, 1, 2, 4] as const;
-const BELLY_ROCKER_ROWS = [10, 11, 12, 14] as const;
-/** The belly's points between keel and rocker: this far out (m, on the platform) at this share of the way from the keel's height to the rocker's. */
+/** The belly's points between keel and rocker stand this far out (m, on the platform). */
 const BELLY_MID_X = 0.5;
-const BELLY_MID_SHARE = 0.625;
-/** The underside's height (m) at each hub's plan position (a front hub's is the bumper corner's, a rear hub's the tail's). */
-const PLATFORM_SILL = [0.084, 0.084, 0.157, 0.157] as const;
 /** The pan's half width and half length (m). */
 const PAN_HALF = 0.35;
-/** A bumper's bottom corner over the tyre plane (m): `hullUnder`'s corner rows. */
-const BUMPER_UNDER = 0.35;
 /** The cage lattice's half extents (m) on the platform: the body (x ±0.91, z ±2.11) and the skin's 1.35 m travel cap, trimmed. A bigger body widens it by its own growth. */
 const PLATFORM_LATTICE = { x: 1.2, z: 2.4 } as const;
 /** The roof cage's reach (m) over the roof's own top on a body carrying a light bar: the bar skins with the roof, never clamped flat at the cage top. */
@@ -79,18 +73,20 @@ export interface CarFrame {
   readonly centre: THREE.Vector3;
   /** Inverse inertia per unit mass (1/m²) of the body's box about its centre of mass: car-local x, y, z. */
   readonly invI: THREE.Vector3;
-  /** The underside's samples, rows of car-local x, z and height over the tyre plane (stock ride, no class lift). */
+  /** Rows of car-local x, z and height over the tyre plane (stock ride, no class lift) read off the drawn body's section rings; rows the drawn body has nothing under are left out. */
   readonly underside: readonly V3[];
-  /** The underside's height (m) under each hub, `wheels` order. */
+  /** The floor's height (m) at each hub's z (`floorY`), `wheels` order: where an empty hub's corner comes down. */
   readonly sill: readonly number[];
-  /** The belly's centre patch under the cabin (car-local x, height, z): six points on the underside's plane there. */
+  /** The belly's centre patch under the cabin (car-local x, height, z): six points on the drawn underside's least-squares plane under the cabin, flat across. */
   readonly pan: readonly V3[];
   /**
    * The belly (car-local x, height, z): the underside's keel and rockers, the belly between them either side of the keel (its height
-   * interpolated), so a car on another's flat roof rests on its width, not balanced on the keel line, and the pan last.
+   * read off the drawn body there), so a car on another's flat roof rests on its width, not balanced on the keel line, and the pan last.
    */
   readonly belly: readonly V3[];
-  /** What the body bottoms out on: the underside's samples and the bumpers' bottom corners, rows of x, z, height. */
+  /** Per belly point: 1 where the drawn body has nothing under it (past its ends or outside its plan at that row): no point while the car is intact (its height there is the floor's, a stand-in). */
+  readonly bellyAbsent: Uint8Array;
+  /** What the body bottoms out on: the drawn underside's rows and the bumpers' drawn bottom corners, rows of x, z, height. */
   readonly hullUnder: Float64Array;
   /** The cage lattice's half extents (m): room for the body and the skin's travel. */
   readonly lattice: { readonly x: number; readonly z: number };
@@ -168,6 +164,12 @@ function bootCage(boot: BodyStyle["boot"], base: CageSpec, xScale: number): Cage
   return { ...base, min: [-x, boot.y0 - TAILGATE_CAGE.below, Math.min(z, foot) - TAILGATE_CAGE.back], max: [x, y + TAILGATE_CAGE.above, Math.max(z, foot) + TAILGATE_CAGE.ahead] };
 }
 
+/** The map carrying the platform's roof onto the car's: up from the windshield's top to the body's height, along from the roof panel's front to its back. Its cage and its mass both ride it. */
+function roofShift(style: BodyStyle): { dy: Shift; dz: Shift } {
+  const P = PLATFORM_CABIN;
+  return { dy: spanned(P.windshieldTop[0], PLATFORM_DIMS.height, style.windshieldTop[0], style.dims.height), dz: spanned(P.roofZ[0], P.roofZ[1], style.roofZ[0], style.roofZ[1]) };
+}
+
 /** The cages wrapping the cabin's panels, the hood and the boot: carried by the car's own panel offsets from the platform's, not by the body's warp. */
 function cabinCage(style: BodyStyle, base: CageSpec, xScale: number): CageSpec | null {
   const P = PLATFORM_CABIN;
@@ -175,8 +177,8 @@ function cabinCage(style: BodyStyle, base: CageSpec, xScale: number): CageSpec |
   const glass = style.rearGlass;
   switch (base.name) {
     case "roof": {
-      const dy = spanned(P.windshieldTop[0], PLATFORM_DIMS.height, style.windshieldTop[0], style.dims.height);
-      return moved(base, xScale, dy, spanned(P.roofZ[0], P.roofZ[1], style.roofZ[0], style.roofZ[1]), style.lightBar ? LIGHT_BAR_ROOM : 0);
+      const { dy, dz } = roofShift(style);
+      return moved(base, xScale, dy, dz, style.lightBar ? LIGHT_BAR_ROOM : 0);
     }
     // The platform's glass cages wrap today's bow; a pane bowed deeper at its base carries its cage that much further out.
     case "glassFront": {
@@ -226,9 +228,13 @@ function rigOf(style: BodyStyle, w: Warp, wheels: readonly V3[]): RigTables {
   const P = PLATFORM_RIG;
   const cages = P.cages.map((base) => cabinCage(style, base, w.xScale) ?? warpedCage(w, base));
   const hubs = new Map<string, V3>(HUB_NAMES.map((name, i) => [name, wheels[i]!]));
+  // The roof mass is the roof the car draws: it rides its cage's map, at the platform's share of the cage (its y-centre, 0.57 of its length back to front).
+  const roof = roofShift(style);
   const masses = P.masses.map((spec): MassSpec => {
     const hub = hubs.get(spec.name);
-    return { ...spec, rest: hub ? [hub[0], hub[1], hub[2]] : warped(w, spec.rest) };
+    if (hub) return { ...spec, rest: [hub[0], hub[1], hub[2]] };
+    const [x, y, z] = spec.rest;
+    return { ...spec, rest: spec.name === "roof" ? [x * w.xScale, y + roof.dy(y), z + roof.dz(z)] : warped(w, spec.rest) };
   });
   const sensors = P.sensors.map((spec, i): SensorSpec => (i === BOOT_SENSOR ? bootSensor(style.boot, spec) : { ...spec, rest: warped(w, spec.rest) }));
   const r = style.dims.wheel.radius;
@@ -271,18 +277,33 @@ export function underY(underside: readonly V3[], x: number, z: number): number {
   return keel + ((rocker - keel) * Math.abs(x)) / rockerX;
 }
 
+/** The drawn body's underside height (m) at car-local (`x`, `z`), stock ride, no class lift: its section ring's lower edge from the keel outward (`sectionPoints`), NaN past the body's ends or out past its widest side there. */
+function drawnUnderY(style: BodyStyle, x: number, z: number): number {
+  const { profile } = style;
+  if (z < profile[0]!.z || z > profile[profile.length - 1]!.z) return NaN;
+  const ring = sectionPoints(sampleSlice(z, profile), style, "drawn");
+  const ax = Math.abs(x);
+  // The ring runs the left half top-down, the keel, then the right half bottom-up: from the keel its x grows out to the widest side.
+  for (let i = (ring.length - 1) / 2; i + 1 < ring.length; i++) {
+    const p = ring[i]!;
+    const q = ring[i + 1]!;
+    if (q.x <= p.x) break;
+    if (ax <= q.x) return p.y + ((q.y - p.y) * (ax - p.x)) / (q.x - p.x);
+  }
+  return NaN;
+}
+
 /**
- * The pan: six points on the least-squares plane through the underside under its rows (22 mm higher at the rear row than at the
- * front on the platform), flat across. On the underside's V (keel 5 mm under its rocker side) it stood on the keel line alone,
- * rolling 1° each way on a flat roof; a flat pan at 0.132 stood 15-22 mm over the underside at its front row.
+ * The pan: six points on the least-squares plane through the drawn underside under its rows, flat across: a pan standing on the
+ * keel line alone rolled 1° each way on a flat roof.
  */
-function panOf(underside: readonly V3[]): V3[] {
+function panOf(style: BodyStyle): V3[] {
   let sum = 0;
   let sz = 0;
   let n = 0;
   for (const z of [-PAN_HALF, PAN_HALF]) {
     for (const x of [-PAN_HALF, 0, PAN_HALF]) {
-      const h = underY(underside, x, z);
+      const h = drawnUnderY(style, x, z);
       sum += h;
       sz += h * z;
       n++;
@@ -293,23 +314,32 @@ function panOf(underside: readonly V3[]): V3[] {
   return [-PAN_HALF, PAN_HALF].flatMap((z) => [-PAN_HALF, 0, PAN_HALF].map((x): V3 => [x, at + rise * z, z]));
 }
 
-function bellyOf(w: Warp, underside: readonly V3[], pan: readonly V3[]): V3[] {
-  return [
-    ...underside.map(([x, z, h]): V3 => [x, h, z]),
-    ...BELLY_KEEL_ROWS.flatMap((k, i) => {
-      const keel = underside[k]!;
-      const rocker = underside[BELLY_ROCKER_ROWS[i]!]!;
-      return [-BELLY_MID_X, BELLY_MID_X].map((x): V3 => [x + dxOf(w, x), keel[2] + (rocker[2] - keel[2]) * BELLY_MID_SHARE, keel[1]]);
-    }),
-    ...pan,
+/** The belly points (x, height, z): the underside rows, the mid rows, then the pan, a point with no drawn body under it standing on the floor; and per point 1 where the drawn body is absent. `rows` are [x, z, height], NaN where absent. */
+function bellyOf(w: Warp, rows: readonly V3[], pan: readonly V3[], style: BodyStyle): { belly: V3[]; absent: Uint8Array } {
+  const drawn: V3[] = [
+    ...rows.map(([x, z, h]): V3 => [x, h, z]),
+    ...BELLY_KEEL_ROWS.flatMap((k) =>
+      [-BELLY_MID_X, BELLY_MID_X].map((x): V3 => {
+        const mx = x + dxOf(w, x);
+        const z = rows[k]![1];
+        return [mx, drawnUnderY(style, mx, z), z];
+      }),
+    ),
   ];
+  const belly = [...drawn.map(([x, h, z]): V3 => [x, Number.isNaN(h) ? floorY(z, style) : h, z]), ...pan];
+  const absent = new Uint8Array(belly.length);
+  for (let k = 0; k < drawn.length; k++) absent[k] = Number.isNaN(drawn[k]![1]) ? 1 : 0;
+  return { belly, absent };
 }
 
-function wheelsOf(d: Dims): V3[] {
-  const b = d.wheelbase / 2;
-  const t = d.track / 2;
-  const r = d.wheel.radius;
-  return [[-t, r, b], [t, r, b], [-t, r, -b], [t, r, -b]];
+/** The body's box (half extents, m) and plan half length (m): the platform's grown by the car's own width, height and length over it. */
+function boxOf(d: Dims): { half: { x: number; y: number; z: number }; footHalfL: number } {
+  const P = PLATFORM_DIMS;
+  const grow = (lengthOf(d) - lengthOf(P)) / 2;
+  return {
+    half: { x: PLATFORM_HALF.x + (d.width - P.width) / 2, y: PLATFORM_HALF.y + (d.height - P.height) / 2, z: PLATFORM_HALF.z + grow },
+    footHalfL: PLATFORM_FOOT_HALF_L + grow,
+  };
 }
 
 function buildFrame(style: BodyStyle): CarFrame {
@@ -318,16 +348,22 @@ function buildFrame(style: BodyStyle): CarFrame {
   const w = warpOf(d);
   const wheels = wheelsOf(d);
   const rise = d.rideHeight - P.rideHeight;
-  const grow = (lengthOf(d) - lengthOf(P)) / 2;
-  const half = { x: PLATFORM_HALF.x + (d.width - P.width) / 2, y: PLATFORM_HALF.y + (d.height - P.height) / 2, z: PLATFORM_HALF.z + grow };
+  const { half, footHalfL } = boxOf(d);
   const comY = PLATFORM_COM_Y + (rise + (d.height - P.height)) / 2;
-  // The underside rides the style's own floor line (`floorY`: its rideHeight, or its stations where the floor rises to a nose or a tail).
-  const lifted = (z: number): number => floorY(z, style) - P.rideHeight;
-  const underside = PLATFORM_UNDERSIDE.map(([x, z, h]): V3 => {
+  // Every row of the underside is read off the car's own drawn body; a row it has nothing under stays in the belly's layout as absent.
+  const rows = PLATFORM_UNDERSIDE.map(([x, z]): V3 => {
     const at = z + dzOf(w, z);
-    return [x + dxOf(w, x), at, h + lifted(at)];
+    const rx = x + dxOf(w, x);
+    return [rx, at, drawnUnderY(style, rx, at)];
   });
-  const pan = panOf(underside);
+  const underside = rows.filter((r) => !Number.isNaN(r[2]));
+  const pan = panOf(style);
+  const { belly, absent } = bellyOf(w, rows, pan, style);
+  // Each bumper's drawn bottom corner, swept back by its wrap.
+  const bumperCorners = ([[style.bumpers.front, 1], [style.bumpers.rear, -1]] as const).flatMap(([b, sign]) => {
+    const [fy, out] = b.fascia[b.fascia.length - 1]!;
+    return [-1, 1].flatMap((sx) => [sx * b.span, sign * (b.seat.z + out - b.wrap.back), b.seat.y + fy]);
+  });
   return {
     rig: rigOf(style, w, wheels),
     wheels,
@@ -336,15 +372,16 @@ function buildFrame(style: BodyStyle): CarFrame {
     halfBase: d.wheelbase / 2,
     halfTrack: d.track / 2,
     half,
-    footHalfL: PLATFORM_FOOT_HALF_L + grow,
+    footHalfL,
     comY,
     centre: new THREE.Vector3(0, comY, 0),
     invI: new THREE.Vector3(3 / (half.y ** 2 + half.z ** 2), 3 / (half.x ** 2 + half.z ** 2), 3 / (half.x ** 2 + half.y ** 2)),
     underside,
-    sill: PLATFORM_SILL.map((h, i) => h + lifted(wheels[i]![2])),
+    sill: wheels.map(([, , wz]) => floorY(wz, style)),
     pan,
-    belly: bellyOf(w, underside, pan),
-    hullUnder: Float64Array.from([...underside.flat(), ...[-1, 1].flatMap((sx) => [-1, 1].flatMap((sz) => [sx * half.x, sz * half.z, BUMPER_UNDER + lifted(sz * half.z)]))]),
+    belly,
+    bellyAbsent: absent,
+    hullUnder: Float64Array.from([...underside.flat(), ...bumperCorners]),
     lattice: { x: PLATFORM_LATTICE.x + Math.max(0, half.x - PLATFORM_HALF.x), z: PLATFORM_LATTICE.z + Math.max(0, half.z - PLATFORM_HALF.z) },
   };
 }
@@ -361,11 +398,11 @@ export function carFrame(style: BodyStyle): CarFrame {
 export const FLEET_HALF = (() => {
   const out = { x: 0, y: 0, z: 0, footHalfL: 0 };
   for (const id of CAR_STYLE_IDS) {
-    const f = carFrame(CAR_STYLES[id]);
-    out.x = Math.max(out.x, f.half.x);
-    out.y = Math.max(out.y, f.half.y);
-    out.z = Math.max(out.z, f.half.z);
-    out.footHalfL = Math.max(out.footHalfL, f.footHalfL);
+    const { half, footHalfL } = boxOf(CAR_STYLES[id].dims);
+    out.x = Math.max(out.x, half.x);
+    out.y = Math.max(out.y, half.y);
+    out.z = Math.max(out.z, half.z);
+    out.footHalfL = Math.max(out.footHalfL, footHalfL);
   }
   return out;
 })();

@@ -2,7 +2,7 @@
 
 A body's faces crush under a **load**, not only under an impact: a car dropped on its roof flattens it, and a stack of
 cars crushes the bottom roof by the weight above it. `vehicle/stack-crush.test.ts` pins the numbers below (headless,
-sedan, flat pad).
+wagons, flat pad).
 
 ## Mechanism
 
@@ -44,22 +44,23 @@ and the same law under impact gives the numbers below: the work a drop does is `
 
 ## Bars
 
-Stack, aligned, each car dropped 2 cm onto the roof below (bottom car first), settled 8 s, then 5 s more:
+Stack, wagons, each car dropped 2 cm onto the roof below (bottom car first) and turned 180° from it, read once no roof's crush moves 1 mm in 0.5 s (about 1 s after the drop; within 8 s or the test fails), then again 5 s on:
 
-| cars | bottom | 2nd | 3rd | top | drift in 5 s more |
+| cars | bottom | 2nd | 3rd | top | 5 s on |
 |---|---|---|---|---|---|
-| 2 | 38 mm | 0 | | | 0 |
-| 3 | 119 mm | 76 mm | 0 | | 0 |
-| 4 | **189 mm** | 145 mm | 96 mm | **0 mm** | 0 (position and roof) |
+| 2 | 113 mm | 0 | | | same |
+| 3 | 184 mm | 113 mm | 0 | | same |
+| 4 | **245 mm** | 207 mm | 134 mm | **0 mm** | roofs 0 mm moved, slide 19 mm both reads, cars sink 0 / 0.6 / 1.3 / 4.6 mm |
 
 Strictly increasing from the top; the bottom roof under three cars lands in the **0.12-0.26 m** band (FMVSS 216's static
-122 mm for 3 W, plus the overshoot of the cars' 2 cm fall). The same 4-stack at 60 / 144 / 240 Hz reads within 2 mm.
+122 mm for 3 W, plus the overshoot of the cars' 2 cm fall). The same 4-stack at 60 / 144 / 240 Hz reads within 4 % + 2 mm.
+The stack only has to stand while that ordering is read: the top cars of every non-sedan stack keep a 0.1-0.2 mm, 1-5 mm/s chatter (a rigid belly pair and one tyre spring), so stillness is not asked of it. The sedan's roof sits 0.45 m behind its belly pan, so an aligned stack of them leans once its C-post is the drawn sail; the wagon's long flat roof carries the car above.
 
 A car dropped on a face, 60 Hz, crush after settling (mm):
 
 | drop | 0.5 m | 1 m | 2 m |
 |---|---|---|---|
-| upside-down, roof | 244 | 318 | 412 (packed at 450) |
+| upside-down, roof | 286 | 383 | 450 (packed at 450) |
 | nose first (stands on its nose, then falls over onto its roof) | nose 28 | 59 | 98 |
 | tail first | tail 27 | 57 | 90 |
 | left / right flank | 74 | 94 | 149 |
@@ -93,10 +94,12 @@ What holds a column up, in the shared car-on-car rule:
 
 The **Stack** scene (`/`, `scenes/stack-rig.ts`) drops cars one at a time onto a base car: the first after 1 s, then one
 every **gap** seconds (sim time), each from **drop** m over the roof of the stack below it (the roof of the car's own body
-style, 0.13 m belly room). After the last car's gap it restarts through the shared clear path (with Loop on). The three
+style, 0.13 m belly room), standing over the middle of that roof (`roofSupport`: every style's roof sits behind its belly
+pan) and turned 180° from the car below, so the column zigzags about 0.5 m instead of walking off. After the last car's
+gap it restarts through the shared clear path (with Loop on). The three
 sliders (cars 2–20, drop 0.02–2 m, gap 1–20 s) default to 4 / 0.02 m / 8 s, live in the share URL (`scars` / `sdrop` /
 `sgap`) and restart the stack when changed. The panel lists, per car, the load (kN: the mass of the cars standing in the
-column above it, each upright, within 0.6 m of the car under it and one car's height over it; a car off the column reads
+column above it, each upright, within 0.6 m of the roof's middle of the car under it and one car's height over it; a car off the column reads
 "—") and its roof's sink (mm, `ROOF_REST_Y` minus the roof mass's height), both read off the sim's cars. Every car is the
 car type picked in the settings (Driving, Car), not the fleet's mix; changing the pick, or entering or leaving the scene,
 rebuilds the cars (`followSceneTypes`). Tall stacks of tall bodies (truck, monster) topple; the scene shows what the

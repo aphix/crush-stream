@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { readContact } from "../vehicle/car-air-points.ts";
 import { crownY, keelY } from "../vehicle/car-cage-rig.ts";
@@ -67,13 +68,21 @@ export class StackRig {
   }
 }
 
-/** Stand car `k` (hidden or spent) upright over the crushed roof of the stack below it (`cars[0..k-1]`), its belly `drop` m clear, falling. */
+const _support = new THREE.Vector3();
+/** The world point over the middle of `car`'s roof (y is its origin's): every style's roof sits behind its belly pan, so a car above stands over it, not over the lower car's origin. */
+function roofSupport(car: DeformableCar): THREE.Vector3 {
+  const [rear, front] = car.style.roofZ;
+  return _support.set(0, 0, 0.5 * (rear + front)).applyQuaternion(car.group.quaternion).add(car.group.position);
+}
+
+/** Stand car `k` (hidden or spent) upright over the roof's support of the car below it (`cars[k-1]`), turned from it, over the crushed roofs of the stack (`cars[0..k-1]`), its belly `drop` m clear, falling. */
 export function placeDrop(cars: readonly DeformableCar[], k: number, drop: number): void {
   let top = 0;
   for (let i = 0; i < k; i++) top = Math.max(top, cars[i]!.group.position.y + crownY(cars[i]!));
   const car = cars[k]!;
   car.group.visible = true;
-  car.spawnFacing(0, 0, 0, 0);
+  const over = k > 0 ? roofSupport(cars[k - 1]!) : _support.set(0, 0, 0);
+  car.spawnFacing(over.x, over.z, (k % 2) * Math.PI, 0);
   car.parked = true;
   car.group.position.y = top - keelY(car) + drop;
   readContact(car);
@@ -109,10 +118,11 @@ export function stackLoads(cars: readonly DeformableCar[], n: number): { loadKn:
   return { loadKn, crushMm };
 }
 
-/** Whether `upper` stands on `lower`: upright, near its axis and its belly on the roof (at most `SKIN` in it, `COLUMN_CLEAR` over it), whatever the two bodies' heights, lifts and crush. */
+/** Whether `upper` stands on `lower`: upright, its origin near the support of the roof (`COLUMN_OFFSET`) and its belly on it (at most `SKIN` in it, `COLUMN_CLEAR` over it), whatever the two bodies' heights, lifts and crush. */
 function stands(lower: DeformableCar, upper: DeformableCar): boolean {
   const a = lower.group.position;
   const b = upper.group.position;
   const over = b.y + keelY(upper) - (a.y + crownY(lower));
-  return upper.group.matrixWorld.elements[5]! > UPRIGHT && hypot2(b.x - a.x, b.z - a.z) < COLUMN_OFFSET && over > -SKIN && over < COLUMN_CLEAR;
+  const support = roofSupport(lower);
+  return upper.group.matrixWorld.elements[5]! > UPRIGHT && hypot2(b.x - support.x, b.z - support.z) < COLUMN_OFFSET && over > -SKIN && over < COLUMN_CLEAR;
 }

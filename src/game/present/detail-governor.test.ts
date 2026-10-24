@@ -147,6 +147,8 @@ const renderScaleCases = [
   { it: "when the frames come every 25 ms on 22 ms of main-thread work and no GPU timer (CPU-bound), then it never steps: a full main thread is not the render scale's to fix", start: 0, wallMs: 25, workMs: 22, gpuMs: NO_GPU, expected: "" },
   { it: "when the GPU timer reads 20 ms a frame on 3 ms of main-thread work, then it steps down both rungs", start: 0, wallMs: 20, workMs: 3, gpuMs: 20, expected: "1,2" },
   { it: "when the GPU timer reads 5 ms a frame on the 60 Hz vsync from the lowest rung, then it climbs back to the top", start: 2, wallMs: 1000 / 60, workMs: 3, gpuMs: 5, expected: "1,0" },
+  { it: "when the GPU timer reads 8.3 ms (half the frame) from the lowest rung, then it climbs back to the top: the work fits 30 % more under the room bar", start: 2, wallMs: 1000 / 60, workMs: 3, gpuMs: 8.3, expected: "1,0" },
+  { it: "when the GPU timer reads 10.8 ms (0.65 of the frame: room, but not 30 % more) from the lowest rung, then it stays: a step back needs the climb's margin", start: 2, wallMs: 1000 / 60, workMs: 3, gpuMs: 10.8, expected: "" },
 ] as const;
 
 describe("given Auto render scale's ladder (three rungs) judged on the GPU's basis", () => {

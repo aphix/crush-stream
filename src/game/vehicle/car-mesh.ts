@@ -1,10 +1,9 @@
 import * as THREE from "three";
 import { hypot2, detAcos, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { CAR_STYLES, type BodyStyle, type BootLip, type BootSpec, type BumperEnd, type HoodNose, type LidDrop, type ProfileStation, type YZ } from "./car-variants.ts";
-import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, roofDrip, shoulderDropAt, tubWall, WINDSHIELD_BOW } from "./car-lines.ts";
+import { beltX, beltY, cantDrop, floorY, glassTopStation, rockerAt, roofDrip, shoulderDropAt, tubWall, wheelsOf, WINDSHIELD_BOW } from "./car-lines.ts";
 import { splitCreases, splitLoftOnLowDiagonals } from "./car-crease.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
-import { carFrame } from "./car-rig.ts";
 import { DECK_RISE, INNER_PANEL, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { bootPivot, roofHinged } from "./hinge-spec.ts";
 
@@ -463,7 +462,7 @@ function halfRing(s: ProfileStation, style: BodyStyle, source: BodySource, doorC
   const rockerY = rockerAt(z, style);
   const floor = floorY(z, style);
   const tub = tubAt(z, style, bodyTubs(style, source));
-  const { wheels } = carFrame(style);
+  const wheels = wheelsOf(style.dims);
   // The drawn opening may stand lower than the cage's (`arch.rise`), under the round fender flare; the cage keeps the round one.
   const well = wheelWell(z, wheels, style.arch.radius) * (source === "drawn" ? (style.arch.rise ?? 1) : 1);
   const archY = wheels[0]![1] + well;
@@ -555,7 +554,7 @@ export const WELL_LINER_WIDTH = 0.24;
 function wellEdge(z: number, hw: number, tubT: number, floorClear: boolean, well: number, style: BodyStyle, source: BodySource): number | null {
   if (tubT === 0 || floorClear || well < 0.03 || (source === "drawn" && bayAt(z, style) >= tubT)) return null;
   // A tub only grazing an arch (the coupe's cabin floor ramping out over its rear arch's front edge) keeps the arch's lift.
-  const wheel = carFrame(style).wheels.find(([wx, , wz]) => Math.abs(z - wz) < style.arch.radius && Math.abs(wx) <= hw && style.tubs.some(([a, b]) => wz > a && wz < b));
+  const wheel = wheelsOf(style.dims).find(([wx, , wz]) => Math.abs(z - wz) < style.arch.radius && Math.abs(wx) <= hw && style.tubs.some(([a, b]) => wz > a && wz < b));
   return wheel ? Math.min(hw - 0.06, Math.abs(wheel[0]) - WELL_LINER_WIDTH / 2) : null;
 }
 
@@ -796,7 +795,11 @@ function domeAt(dome: Dome, u: number): number {
 function lidSection(z: number, style: BodyStyle, seated: boolean, crowned: BodyStyle["hood"]["crown"], halfWidth = Infinity): { w: number; edge: number; crown: number; dome: Dome } {
   const sl = sampleSlice(z, style.profile);
   const crown = sl.yBelt + LID_RISE + DECK_DOME;
-  if (!seated) return { w: sl.hw - DECK_INSET, edge: sl.yBelt + LID_RISE, crown, dome: DECK_DOME_POINTS };
+  if (!seated) {
+    const [w, edge] = [sl.hw - DECK_INSET, sl.yBelt + LID_RISE];
+    // The cage's crowned hood (`hood.cageCrown`): the drawn dome's rise over the plain edge, the plain lid's dome points kept.
+    return { w, edge, crown: crowned === undefined ? crown : edge + crowned[0] * (w / crowned[1]) ** 2, dome: DECK_DOME_POINTS };
+  }
   const w = Math.min(sl.hw - HOOD_INSET, halfWidth);
   // A rigid lid: its edge keeps the fender's height where a cabin tub's blend runs under its rear end (the coupe's and monster's), never bending into it.
   const edge = deckEdgeY(sl.yBelt, 0) + HOOD_SEAT;
@@ -963,9 +966,10 @@ function makeDeckPanel(
   z1: number,
   origin: YZ,
   source: BodySource,
-  { hood = false, seated = hood, clamshell = false, lip, drop, nose, crown, roll = 0, halfWidth = Infinity, calmPan = false, segs = 10 }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop; nose?: HoodNose; crown?: readonly [number, number]; roll?: number; halfWidth?: number; calmPan?: boolean; segs?: number } = {},
+  { hood = false, seated = hood, clamshell = false, lip, drop, nose, crown, roll = 0, halfWidth = Infinity, calmPan = false, cageCrown = false, segs = 10 }: { hood?: boolean; seated?: boolean; clamshell?: boolean; lip?: BootLip; drop?: LidDrop; nose?: HoodNose; crown?: readonly [number, number]; roll?: number; halfWidth?: number; calmPan?: boolean; cageCrown?: boolean; segs?: number } = {},
 ): THREE.BufferGeometry {
   const tk = 0.04;
+  const crowned = hood || cageCrown ? style.hood.crown : undefined;
   const skirt = 0.06;
   const [oy, oz] = origin;
   // The skirt's upper point lies on its straight wall: a rolled lid and the drawn seated hood drop it (a clamshell lays it over the shoulder).
@@ -1006,7 +1010,7 @@ function makeDeckPanel(
   let endLid = { w: 0, base: 0, edge: 0, dome: DECK_DOME_POINTS };
   const deckZs = hood ? noseRefined(stations, style.profile) : stations;
   const edgeAt = (z: number) => {
-    const lid = lidSection(z, style, seated, hood ? style.hood.crown : undefined, halfWidth);
+    const lid = lidSection(z, style, seated, crowned, halfWidth);
     return { w: lid.w, y: lid.edge + lipKick(Math.abs(zEnd - z), lip) };
   };
   // A rolled edge's run at deck ring `i`: the mitre of the edge's runs in from the rings either side of it.
@@ -1023,11 +1027,11 @@ function makeDeckPanel(
     return { taper: along.x / along.z, rise: along.y / along.z, scale: 1 };
   };
   // A calm pan (`calmPan`, drawn only) takes no gentle fold: see `flattenGentleFolds`.
-  const under = source === "drawn" && calmPan ? { w: flattenGentleFolds(deckZs, deckZs.map((z) => lidSection(z, style, seated, hood ? style.hood.crown : undefined, halfWidth).w)), y: flattenGentleFolds(deckZs, deckZs.map((z) => sampleSlice(z, style.profile).yBelt + LID_RISE - oy)) } : undefined;
+  const under = source === "drawn" && calmPan ? { w: flattenGentleFolds(deckZs, deckZs.map((z) => lidSection(z, style, seated, crowned, halfWidth).w)), y: flattenGentleFolds(deckZs, deckZs.map((z) => sampleSlice(z, style.profile).yBelt + LID_RISE - oy)) } : undefined;
   for (let i = 0; i < deckZs.length; i++) {
     const z = deckZs[i]!;
     const sl = sampleSlice(z, style.profile);
-    const lid = lidSection(z, style, seated, hood ? style.hood.crown : undefined, halfWidth);
+    const lid = lidSection(z, style, seated, crowned, halfWidth);
     const kick = lipKick(Math.abs(zEnd - z), lip);
     const crownY = crown ? lerp(lid.crown, lid.edge + crown[0] * (lid.w / crown[1]) ** 2, THREE.MathUtils.smoothstep(Math.abs(z - z0), 0, BOOT_CROWN_RUN)) : lid.crown;
     endRise = crownY - lid.edge;
@@ -1289,7 +1293,7 @@ export function bootInfill(style: BodyStyle): THREE.BufferGeometry[] {
 export function makeHoodGeometry(style: BodyStyle = SEDAN, source: BodySource = "drawn"): THREE.BufferGeometry {
   const { z0, z1, origin, kind } = style.hood;
   const drawn = source === "drawn";
-  const geo = makeDeckPanel(style, z0, z1, origin, source, { hood: drawn, clamshell: drawn && kind === "clamshell", nose: drawn ? style.hood.nose : undefined, calmPan: drawn && style.hood.calmPan === true });
+  const geo = makeDeckPanel(style, z0, z1, origin, source, { hood: drawn, clamshell: drawn && kind === "clamshell", nose: drawn ? style.hood.nose : undefined, calmPan: drawn && style.hood.calmPan === true, cageCrown: !drawn && style.hood.cageCrown === true });
   if (source === "drawn") {
     // Its underside, the lid over the bay, is an unpainted inner panel.
     const normal = geo.getAttribute("normal");

@@ -5,19 +5,19 @@ import { ASKER } from "../world/prism.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
-import { CAGE_BAR_VERTICES, CAGE_HELD_VERTICES, CAGE_PART_VERTICES, CAGE_TUB_VERTICES, CAGE_VERTICES, SILL_CAPACITY } from "./car-cage.ts";
+import { CAGE_BAR_VERTICES, CAGE_HELD_VERTICES, CAGE_KEPT_VERTICES, CAGE_PART_VERTICES, CAGE_TUB_VERTICES, CAGE_VERTICES, SILL_CAPACITY } from "./car-cage.ts";
 import { centreY } from "./car-cage-rig.ts";
 
 export const G = 9.6;
 /** Sizes the per-slice tables and the unbound body: every frame's belly and wheels share the sedan's layout. */
 const PLATFORM = carFrame(CAR_STYLES.sedan);
-/** Room for a style's cage vertices at most (`CAGE_VERTICES`, the underside points held over it, `CAGE_HELD_VERTICES`, its bed's tubs, `CAGE_TUB_VERTICES`, its parts apart, `CAGE_PART_VERTICES`, and a push bar's box, `CAGE_BAR_VERTICES`), a wreck's sill samples (`SILL_CAPACITY`) and the belly: `loadPoints` fills it per body each slice. */
-const POINT_CAPACITY = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_TUB_VERTICES + CAGE_PART_VERTICES + CAGE_BAR_VERTICES + SILL_CAPACITY + PLATFORM.belly.length;
+/** Room for a style's cage vertices at most (`CAGE_VERTICES`, the underside points held over it, `CAGE_HELD_VERTICES`, the C-post's kept crown points, `CAGE_KEPT_VERTICES`, its bed's tubs, `CAGE_TUB_VERTICES`, its parts apart, `CAGE_PART_VERTICES`, and a push bar's box, `CAGE_BAR_VERTICES`), a wreck's sill samples (`SILL_CAPACITY`) and the belly: `loadPoints` fills it per body each slice. */
+const POINT_CAPACITY = CAGE_VERTICES + CAGE_HELD_VERTICES + CAGE_KEPT_VERTICES + CAGE_TUB_VERTICES + CAGE_PART_VERTICES + CAGE_BAR_VERTICES + SILL_CAPACITY + PLATFORM.belly.length;
 /** The loaded points as flat car-local x, y (class lift on), z rows: `hullPoint` reads them per slice without unpacking a tuple. */
 export const POINT_X = new Float64Array(POINT_CAPACITY);
 export const POINT_Y = new Float64Array(POINT_CAPACITY);
 export const POINT_Z = new Float64Array(POINT_CAPACITY);
-/** Per belly point this slice: 1 while a wreck has no drawn body over it (the cage's bottom has no node there: a bumper's rounded corner), so it is no point. */
+/** Per belly point this slice: 1 while the body has no drawn body over it (a wreck's cage bottom, an intact car's `bellyAbsent`: a bumper's rounded corner has no node there), so it is no point. */
 export const BELLY_ABSENT = new Uint8Array(PLATFORM.belly.length);
 export const HUBS = ["hubFL", "hubFR", "hubRL", "hubRR"] as const;
 /** Neighbouring belly points as belly index pairs (along x at one z, along z at one x): where the two stand on different patches,
@@ -420,6 +420,8 @@ const SPRING_PUSHING = Array.from({ length: WHEELS }, () => false);
 const SPRING_ROW = new Int32Array(WHEELS);
 const SPRING_AUGMENTED = new Float64Array(WHEELS * AUGMENTED_STRIDE);
 const SPRING_SOLUTION = new Float64Array(WHEELS);
+/** Per tyre: the rate (m/s) its surface presses up at, at the slice's start (the damper's input). */
+const SPRING_RATE = new Float64Array(WHEELS);
 /** Per tyre: the spin one unit of impulse straight up at it gives the body (the body's inverse inertia on its arm × up). */
 const SPIN_PER_PUSH = Array.from({ length: WHEELS }, () => new THREE.Vector3());
 
@@ -446,14 +448,20 @@ function solveSpringSystem(tyres: number): void {
   for (let a = 0; a < rows; a++) ASK[SPRING_ROW[a]!] = SPRING_SOLUTION[a]!;
 }
 
+/** How far (m) a tyre flattens under its car's weight on it: a centimetre under a quarter of a car. */
+const TYRE_SAG = 0.01;
+/** The damping ratio of that flattening: left at the suspension's own damper, the stiff tread rang for seconds. */
+const TYRE_DAMP_RATIO = 0.5;
+
 /**
  * The tyres in their springs push together, `ASK[c]` each (impulse per unit mass): `dt (G share + stiff x + damp u)` with u the press rate
  * of the slice's start and x the press at the end of it, after every tyre's push, moved by half the rate's change (the trapezoid rule
  * of the slice's move). One linear system over the four tyres, so no tyre's push depends on the order they are listed in, and a stiff
  * spring cannot swing the body from one side to the other every slice (the push of the slice's start state did: the roll mode of a
- * 24 Hz spring at 120 Hz, a limit cycle of 0.09°). A tyre the system would pull is left out and the rest solved again.
+ * 24 Hz spring at 120 Hz, a limit cycle of 0.09°). A tyre the system would pull is left out and the rest solved again. No tyre pushes
+ * harder than its own flattening since its contact began (`TYRE_SAG`): the droop plane `travel` below the rest ride, or the rest ride on a car's top.
  */
-export function springPushes(frame: CarFrame, tyres: number, stiff: number, damp: number, dt: number, q: THREE.Quaternion, v: THREE.Vector3, w: THREE.Vector3): void {
+export function springPushes(frame: CarFrame, tyres: number, stiff: number, damp: number, travel: number, dt: number, q: THREE.Quaternion, v: THREE.Vector3, w: THREE.Vector3): void {
   const endForce = 0.5 * dt * stiff;
   for (let d = 0; d < tyres; d++) {
     SPRING_PUSHING[d] = SOFT[d]!;
@@ -464,6 +472,7 @@ export function springPushes(frame: CarFrame, tyres: number, stiff: number, damp
     const rising = N[c]!.y > 0;
     const gravityRate = rising ? G * dt : 0;
     const startRate = rising ? -pointVel(c, v, w, _vp).dot(N[c]!) / N[c]!.y - G * dt : 0;
+    SPRING_RATE[c] = startRate;
     SPRING_RHS[c] = dt * (SHARE[c]! * G + stiff * (PRESS[c]! + 0.5 * dt * gravityRate) + damp * startRate);
     for (let d = 0; d < tyres; d++) {
       const response = rising && SOFT[d] ? (N[c]!.y + _k.crossVectors(SPIN_PER_PUSH[d]!, R[c]!).dot(N[c]!)) / N[c]!.y : 0;
@@ -480,5 +489,11 @@ export function springPushes(frame: CarFrame, tyres: number, stiff: number, damp
       pulled = true;
     }
     if (!pulled) break;
+  }
+  for (let c = 0; c < tyres; c++) {
+    if (!SPRING_PUSHING[c]) continue;
+    const flat = PRESS[c]! + (OWN[c]! >= 0 ? 0 : travel);
+    const k = (SHARE[c]! * G) / TYRE_SAG;
+    ASK[c] = Math.max(0, Math.min(ASK[c]!, dt * (k * flat + 2 * TYRE_DAMP_RATIO * Math.sqrt(Math.max(0, k)) * Math.min(1, flat / TYRE_SAG) * SPRING_RATE[c]!)));
   }
 }

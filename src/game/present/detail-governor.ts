@@ -1,6 +1,6 @@
 import { DETAIL_LEVELS } from "./car-detail.ts";
 import { SLOW_WINDOWS } from "./constants.ts";
-import { FrameWork, type Judge } from "./frame-work.ts";
+import { climbFits, FrameWork, type Judge } from "./frame-work.ts";
 
 /**
  * A quality rung chosen by how the match runs: the distance detail's (`DETAIL_LEVELS`) on the main thread's total, and Auto
@@ -29,6 +29,8 @@ export class DetailGovernor {
   private lostMs = 0;
   private slow = 0;
   private fine = 0;
+  /** The busier sides summed over `fine`'s windows: a step back needs their mean to fit `climbFits`. */
+  private fineBusy = 0;
   /** Windows since the last step back (-1: none yet); it only matters while it is within twice the hold. */
   private sinceBack = -1;
 
@@ -58,7 +60,7 @@ export class DetailGovernor {
     this.lostMs = 0;
     if (this.sinceBack >= 0) this.sinceBack++;
     if (slow) {
-      this.fine = 0;
+      this.fine = this.fineBusy = 0;
       this.slow++;
       if (this.slow < SLOW_WINDOWS || this.level >= this.last) return null;
       // Too soon after a step back: the next try waits longer.
@@ -68,10 +70,11 @@ export class DetailGovernor {
     }
     this.slow = 0;
     if (this.level <= 0 || !this.win.roomy()) {
-      this.fine = 0;
+      this.fine = this.fineBusy = 0;
       return null;
     }
-    if (++this.fine < this.holdWindows) return null;
+    this.fineBusy += this.win.busy;
+    if (++this.fine < this.holdWindows || !climbFits(this.fineBusy / this.fine)) return null;
     this.sinceBack = 0;
     return this.move(this.level - 1);
   }
@@ -79,7 +82,7 @@ export class DetailGovernor {
   /** Drop the window under way and its counts (outside a match, or a lost context's frames that drew nothing). */
   restart(): void {
     this.win.restart();
-    this.lostMs = this.slow = this.fine = 0;
+    this.lostMs = this.slow = this.fine = this.fineBusy = 0;
   }
 
   private move(to: number): number {

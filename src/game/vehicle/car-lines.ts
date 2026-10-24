@@ -41,6 +41,14 @@ export function floorY(z: number, style: BodyStyle): number {
   return style.underside ? piecewise(style.underside, z) : style.dims.rideHeight;
 }
 
+/** The four wheel centres (x, y, z; rear and front, left and right) of a style's dimensions: its track, wheelbase and wheel radius. */
+export function wheelsOf(d: BodyStyle["dims"]): [number, number, number][] {
+  const b = d.wheelbase / 2;
+  const t = d.track / 2;
+  const r = d.wheel.radius;
+  return [[-t, r, b], [t, r, b], [-t, r, -b], [t, r, -b]];
+}
+
 /** The body side's lowest line at `z`: the rocker rides up with the floor pan. */
 export function rockerAt(z: number, style: BodyStyle): number {
   return style.rocker.y + (floorY(z, style) - style.dims.rideHeight);

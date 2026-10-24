@@ -258,6 +258,49 @@ export function drawnDoorCard(sign: number): THREE.BufferGeometry {
 }
 
 /**
+ * The face vertices of a `style` door skin (indices into `makeDoorGeometry`'s positions, whose grid comes first; `rest` is the skin
+ * as built) that a side `sign` card stands behind: each one whose neighbours span the card's footprint.
+ */
+export function doorCardFace(style: BodyStyle, sign: number, rest: ArrayLike<number>): Int32Array {
+  const { rows, columns } = doorGrid(style);
+  const card = drawnDoorCard(sign);
+  card.computeBoundingBox();
+  const box = card.boundingBox!;
+  const dz = doorSkinZ(style);
+  const nc = columns.length;
+  const behind: number[] = [];
+  for (let r = 0; r < rows.length; r++) {
+    for (let c = 0; c < nc; c++) {
+      let yLo = Infinity;
+      let yHi = -Infinity;
+      let zLo = Infinity;
+      let zHi = -Infinity;
+      for (let rr = Math.max(0, r - 1); rr <= Math.min(rows.length - 1, r + 1); rr++) {
+        for (let cc = Math.max(0, c - 1); cc <= Math.min(nc - 1, c + 1); cc++) {
+          const v = rr * nc + cc;
+          yLo = Math.min(yLo, rest[v * 3 + 1]!);
+          yHi = Math.max(yHi, rest[v * 3 + 1]!);
+          zLo = Math.min(zLo, rest[v * 3 + 2]! + dz);
+          zHi = Math.max(zHi, rest[v * 3 + 2]! + dz);
+        }
+      }
+      if (yHi >= box.min.y && yLo <= box.max.y && zHi >= box.min.z && zLo <= box.max.z) behind.push(r * nc + c);
+    }
+  }
+  return Int32Array.from(behind);
+}
+
+/** How far (m) the door skin has been pushed in from its rest at the card's `face` vertices, the deepest of them (0: none): the card is one rigid shape the batch draws, so it rides in by that much and stays under the skin. */
+export function doorCardDent(face: Int32Array, sign: number, rest: ArrayLike<number>, now: ArrayLike<number>): number {
+  let dent = 0;
+  for (let k = 0; k < face.length; k++) {
+    const i = face[k]! * 3;
+    dent = Math.max(dent, sign * (rest[i]! - now[i]!));
+  }
+  return dent;
+}
+
+/**
  * Door skin in hinge-local space (parent at the A-pillar hinge, the skin centred on the door cut). The outer face
  * follows the body side (`sideX`) at each height and station, its rows on the body ring's side rows so its facets
  * meet the body's at each cut, and rolls over its perimeter in a rounded edge into a slab inboard, closed by a flat

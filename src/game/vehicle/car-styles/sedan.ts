@@ -158,7 +158,7 @@ export const SEDAN: BodyStyle = {
    * Its shut lines run onto the fender tops as the reference's: 9 cm inside the side at the nose, 18 at the cowl (top view, front iso).
    * Drawn, its rear edge runs along the glass's plan bow and tucks 5.5 cm under the pane's base (`followGlass` = z0 - (drawn base z + bow), the reference's hood running clean under the glass), the pane seated on it.
    */
-  hood: { z0: 0.99, z1: 1.97, origin: [0.81, 0.97], crown: [0.06, 0.66], inset: [0.09, 0.18], followGlass: -0.055, calmPan: true },
+  hood: { z0: 0.99, z1: 1.97, origin: [0.81, 0.97], crown: [0.06, 0.66], cageCrown: true, inset: [0.09, 0.18], followGlass: -0.055, calmPan: true },
   // Body-colour fascias, as the reference's: its black is the lower intake, grille and diffuser (`details`, grille, tail trim), not the
   // bumper. Seams off the gridded side reference: the front bumper up to the head lamp's lower edge and round to the front arch, the rear
   // one up to the tail lamp's lower edge (under the lid, its shut line) and round the quarter to the rear arch; both follow their arch's lip.
@@ -302,6 +302,8 @@ export const SEDAN: BodyStyle = {
   roofZ: [-1.159, 0.15],
   windshieldTop: [1.285, 0.15],
   rearGlass: { base: [1.02, -1.68], top: [1.235, -1.159], wBase: 1.05, wTop: 1.0 },
+  /** The sedan's roof ends at the rear glass's top, the deck running on from it: its cage's rear header box (6 cm tall) puts its top on the glass's, not 7 cm over the drawn deck there. */
+  rearHeaderRise: -0.03,
   /**
    * The reference's quarter glass narrows to a point on the belt at -1.26, its top rounding over into the rear door's glass top (`cPillar.pinch`).
    * Drawn only: the cage's C-post stands at -0.88, where the dummies' windshield rows hold.
@@ -322,7 +324,7 @@ export const SEDAN: BodyStyle = {
    * point, which stands over the deck there: a long sweep left a see-through wedge under it. Its belt rail runs on 1.5 cm behind the point
    * (`railRun`), so no side ray passes under the sail's foot. The window's rear end rounds (`dEnd`), not a triangular notch.
    */
-  cPillar: { pinch: 0.08, sweep: 0.02, bead: true, railRun: 0.015, dEnd: [0.0275, -1.249] },
+  cPillar: { pinch: 0.08, sweep: 0.02, bead: true, railRun: 0.015, dEnd: [0.0275, -1.249], cageSail: true },
   rearBulkhead: { z: -0.72, yTop: 0.84 },
   tubs: [CABIN_TUB],
   rearDoorSeam: -1.06,

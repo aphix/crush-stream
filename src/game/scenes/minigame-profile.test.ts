@@ -224,10 +224,10 @@ describe("given the high jump's kicker made steeper, an arc of the shipped radiu
    * The sweep stops at the steepest 5° step the sedan still climbs over that speed: one step steeper the face bears too little of the car's
    * weight for the tyres' drive (`standingBite`), and the next pitch is a wall by the drive model.
    */
-  const SWEEP_DEGREES = [HIGH_JUMP_KICKER.lipPitchDegrees, 65, 70, 75];
+  const SWEEP_DEGREES = [HIGH_JUMP_KICKER.lipPitchDegrees, 65, 70, 75, 80];
   const LIP_SPEED_FLOOR = 17;
   /** The largest radius (m), in 5 m steps under the shipped one, at which the sedan reaches the shipped pitch's lip under its bar. */
-  const TIGHT_RADIUS = 15;
+  const TIGHT_RADIUS = 5;
   const sedan = DRIVER_CARS.find((type) => type.id === "sedan")!;
 
   it("when every car type climbs each pitch, then all reach the lip at any of them (no tyre treats the face as a wall) and the sedan's lip speed falls with the pitch yet stays over the floor even at the steepest", (t) => {
@@ -252,7 +252,7 @@ describe("given the high jump's kicker made steeper, an arc of the shipped radiu
     assert.ok(run.reachedLip && run.lipCentreSpeed < LIP_SPEED_FLOOR, `sedan at ${past} deg: ${run.lipCentreSpeed}, reached ${run.reachedLip}`);
   });
 
-  it("when the shipped pitch is given a radius of 15 m, then the sedan reaches the lip under the speed the shipped kicker gives it: the climb row can fail", () => {
+  it("when the shipped pitch is given a radius of 5 m, then the sedan reaches the lip under the speed the shipped kicker gives it: the climb row can fail", () => {
     const shipped = driveToLip(sedan, stationDriveProfile("highJump"), FINE_CELL);
     const tighter = driveToLip(sedan, highJumpVariant(TIGHT_RADIUS, HIGH_JUMP_KICKER.lipPitchDegrees, RUN_UP_LENGTH.highJump), FINE_CELL);
     assert.ok(shipped.lipCentreSpeed >= MINIMUM_SPEED.highJump.sedan!.lip, "shipped meets its bar");

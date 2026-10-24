@@ -64,7 +64,8 @@ export function openRows(n: number): void {
     NOTED[c] = 0;
     CLOSE_FIRST[c] = 0;
     FRA[c]!.set(0, 0, 0);
-    if (SOFT[c]) REST[c] = SHARE[c]! * G * dt;
+    // A tyre in its springs rests at its share of the weight borne on its car too: only the push past that goes into the car under at once, the rest is borne on it for its next step.
+    if (SOFT[c]) REST[c] = SHARE[c]! * (G * dt - _lv.y);
     else {
       weightClosing(c);
       REST[c] = _s[S_WEIGHT]!;
@@ -273,7 +274,8 @@ export function solveRows(n: number): void {
       give(c, v, w, q, _fd.divideScalar(fj), surf);
     }
     for (let c = 0; c < n; c++) if (FIRST[c] === c) SUMF[c] = 0;
-    for (let c = 0; c < n; c++) if (FIRST[c]! >= 0) SUMF[FIRST[c]!] = SUMF[FIRST[c]!]! + ACC[c]!;
+    // The face's crush grows by pen/follow, so a contact's dynamic impulse does only `FOLLOW` of its crush's work on the face (virtual work): the budget meets that. The weight a contact bears (`RIMP`) stays at the law's force, so one car's weight still settles a roof at the law's depth.
+    for (let c = 0; c < n; c++) if (FIRST[c]! >= 0) SUMF[FIRST[c]!] = SUMF[FIRST[c]!]! + RIMP[c]! + DYN[c]! * FOLLOW[c]!;
     for (let c = 0; c < n; c++) {
       const f = FIRST[c]!;
       if (f < 0) continue;
@@ -800,7 +802,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // their flanks (`onTreads`: none whose tread meets the surface under it): driven there, none of its rows gripped, and a monster wreck on
   // its side with its brakes held rolled down a 10° slope on its two low tyres, 1.3 to 4.5 m/s over 9 s. Judged by the world's up, a sedan
   // up a kicker's steepest pitch lost its drive on its treads.
-  const near = wheelsAt(car, within, true);
+  const near = wheelsAt(car, within, true, TOUCH);
   const driving = (!wreck || car.deform.drivetrainAlive) && (near === 0 || onTreads(car, near, q) !== 0);
   const rolling = near !== 0 && (wreck || !car.crashed);
   const driven = rolling && !car.parked && driving;
@@ -824,9 +826,9 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   for (let i = 0; i < 4; i++) {
     const o = i * HIT_SIZE;
     const pen = hit[o + C_H]!;
-    if (!(pen > -spring)) continue;
-    if (onWreckTop(car, surf.cars, i)) continue;
     const own = hit[o + C_OWNER]!;
+    if (!(pen > (own >= 0 ? 0 : -spring))) continue;
+    if (onWreckTop(car, surf.cars, i)) continue;
     R[n]!.set(hit[o + C_PX]! - centreOfMass.x, hit[o + C_PY]! - centreOfMass.y, hit[o + C_PZ]! - centreOfMass.z);
     N[n]!.set(hit[o + C_NX]!, hit[o + C_NY]!, hit[o + C_NZ]!);
     TYRE[n] = true;
@@ -962,7 +964,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
       if (!(BPATCH[a]! >= 0) || a < panFrom || b < panFrom) continue;
       if (wreckTop(BPATCH[a]!)) continue;
       pen = ridgeCross(BX[a]!, BY[a]!, BZ[a]!, BX[b]!, BY[b]!, BZ[b]!, car.slot, BPATCH[a]!);
-      if (!(pen > 0 && pen > BRISE[a]! && pen > BRISE[b]!)) continue;
+      if (!(pen > -SPECULATIVE_GAP && pen > BRISE[a]! && pen > BRISE[b]!)) continue;
       EDGE_HIT[C_NX] = _up.x;
       EDGE_HIT[C_NY] = _up.y;
       EDGE_HIT[C_NZ] = _up.z;
@@ -974,19 +976,21 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
       if (BRISE[a] === NO_FLOOR) continue;
       if (BPATCH[a]! >= 0 && wreckTop(BPATCH[a]!)) continue;
       pen = edgeCross(BX[a]!, BY[a]!, BZ[a]!, BX[b]!, BY[b]!, BZ[b]!, 0, 0, 0, 0, NaN, car.slot, BPATCH[a]!);
-      if (!(pen > 0)) continue;
+      if (!(pen > -SPECULATIVE_GAP)) continue;
     }
     R[n]!.set(EDGE_HIT[C_PX]! - centreOfMass.x, EDGE_HIT[C_PY]! - centreOfMass.y, EDGE_HIT[C_PZ]! - centreOfMass.z);
     if (!body.part && EDGE_HIT[C_OWNER]! >= 0 && ((body.wreck && body.surf.cars[EDGE_HIT[C_OWNER]!]!.deform.massActive) || crossedPlanFromSide(EDGE_HIT, pen, R[n]!))) continue;
     _s[S_PEN] = pen;
     bodyContact(n, EDGE_HIT, false);
+    // As a body point's row: an edge a speculative gap above the belly is held there (`GAPV`), not left for the next slice's gravity.
+    if (pen <= 0) GAPV[n] = GAPV[n]! + (-pen * EDGE_HIT[C_NY]!) / dt;
     n++;
   }
 
   // The tyres in their springs push together, from the slice's state, and share each face's budget (`take`) in proportion to what each
   // asks: in list order the first spent it, and a coupe's two rear tyres landing on a wagon's roof took 6.2 and 2.3 of 6.2 each and rolled
   // it off the column.
-  springPushes(frame, tyres, stiff, damp, dt, q, v, w);
+  springPushes(frame, tyres, stiff, damp, spring, dt, q, v, w);
   // A wreck at rest: its tyres' closing counts at their stops too (below).
   const settling = body.wreck && bodyAtRest();
   for (let c = 0; c < tyres; c++) {
@@ -1062,7 +1066,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   for (let i = 0; i < 4; i++) {
     const o = i * HIT_SIZE + C_H;
     hit[o] = hit[o]! - dy;
-    if (-hit[o]! <= within) down |= 1 << i;
+    if (-hit[o]! <= (hit[i * HIT_SIZE + C_OWNER]! >= 0 ? TOUCH : within)) down |= 1 << i;
   }
   car.wheelsDown = down;
   car.airborne = down === 0 && n === 0;

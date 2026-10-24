@@ -5,6 +5,8 @@ import type { CarFrame } from "./car-rig.ts";
 
 /** How far (m) a held skin point stands over the tyre: the triangles between held points sag under their chords (edges up to 25 cm over a tyre). */
 const TYRE_GAP = 0.05;
+/** How far (m) the body paint stands over the tyre: 95 % of its edges between points resting within 6 cm of a tyre are under 0.21 m (the coupe's longest, 0.31 m), and a chord of 0.21 m dips 1.6 cm over the arc (L²/8r, r 0.342); the bonnet's 25 cm and longer chords keep `TYRE_GAP`. */
+const BODY_TYRE_GAP = 0.03;
 /** How steeply (m/m) the tyre's surface is carried on past the tread's edges and the arc's ends: a point near an edge is held a little, never with a step. */
 const FALL = 1;
 /** From this share of the tyre's radius out along the road its surface is steeper than a lip can stand on: a body vertex there leaves along the road when that is shorter than going over. */
@@ -250,7 +252,7 @@ export class TyreSkin {
     for (let v = 0; v < over.length; v++) {
       const rested = over[v]!;
       if (Number.isNaN(rested)) continue;
-      const c = clearOver(this.frame.rig.tyre, pos, v * 3, _h, _a, scale, Math.min(TYRE_GAP, rested));
+      const c = clearOver(this.frame.rig.tyre, pos, v * 3, _h, _a, scale, Math.min(this.pushSide ? BODY_TYRE_GAP : TYRE_GAP, rested));
       if (c >= 0) continue;
       const p = weld[v]!;
       const up = -c / uy;

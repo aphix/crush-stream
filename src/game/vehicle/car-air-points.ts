@@ -336,8 +336,8 @@ export function loadPoints(car: DeformableCar): number {
     SAMPLE[0] = x;
     SAMPLE[1] = z;
     sampleAt(bottom, car.cage.style);
-    BELLY_ABSENT[k] = wreck && Number.isNaN(SAMPLE[2]!) ? 1 : 0;
-    // A wreck's belly is the cage's own bottom (the drawn body, crushed as drawn), not the stock underside table.
+    BELLY_ABSENT[k] = (wreck ? Number.isNaN(SAMPLE[2]!) : car.frame.bellyAbsent[k] === 1) ? 1 : 0;
+    // A wreck's belly is the cage's own bottom (crushed as drawn); an intact car's is its frame's, read off the drawn body; a row with nothing drawn over it is no point.
     const h = (wreck && BELLY_ABSENT[k] === 0 ? SAMPLE[2]! : y) + lift;
     POINT_X[bellyFrom + k] = x;
     POINT_Y[bellyFrom + k] = h;
@@ -460,10 +460,11 @@ function hubMotion(): Float64Array {
 /**
  * Each wheel's contact (`wheelContact`: its tread's footprint on what is under it) with the body as posed, into
  * `car.wheelHit` (slot i at `i * HIT_SIZE`: the lift it needs, the normal, grip, surface, owner and the footprint point).
- * Returns the wheels reaching, bit i: the tread within `within` m above its surface (or in it). `moving`: in a step, each tread asks with
- * its hub's motion (`hubMotion`), so it meets a face it rolls into as a side; placing a car, at rest.
+ * Returns the wheels reaching, bit i: the tread within `within` m above its surface (or in it), `onTop` m above another car's top (its
+ * wheel does not hang down to meet one). `moving`: in a step, each tread asks with its hub's motion (`hubMotion`), so it meets a face it
+ * rolls into as a side; placing a car, at rest.
  */
-export function wheelsAt(car: DeformableCar, within: number, moving = false): number {
+export function wheelsAt(car: DeformableCar, within: number, moving = false, onTop = within): number {
   const p = car.group.position;
   basisOf(car.group.quaternion);
   const hit = car.wheelHit;
@@ -499,7 +500,7 @@ export function wheelsAt(car: DeformableCar, within: number, moving = false): nu
     TYRE_DIM[2 * i] = r;
     TYRE_DIM[2 * i + 1] = halfW * sc;
     for (let k = 0; k < HIT_SIZE; k++) hit[o + k] = _hit[k]!;
-    if (-_hit[C_TOUCH]! <= within && _hit[C_H]! > NO_FLOOR) mask |= 1 << i;
+    if (-_hit[C_TOUCH]! <= (_hit[C_OWNER]! >= 0 ? onTop : within) && _hit[C_H]! > NO_FLOOR) mask |= 1 << i;
   }
   return mask;
 }
@@ -707,7 +708,7 @@ export function readContact(car: DeformableCar): void {
   car.yielding = false;
   car.hardTouch = false;
   beginContacts(car);
-  const mask = wheelsAt(car, droop(carClass(car)) + TOUCH);
+  const mask = wheelsAt(car, droop(carClass(car)) + TOUCH, false, TOUCH);
   car.wheelsDown = mask;
   car.airborne = mask === 0;
 }
