@@ -162,6 +162,28 @@ forModes("given a car hit at the front, where the hit point snaps to the centre 
     assert.equal(late.rearmHit(squarely, aslant, 13, 13, true), false, "refused after 15 ms");
     assert.equal(late.hitSpeedValue, 10);
   });
+
+  it("when a car's solver state is restored into another inside that window (a replay's keyframe), then the pair's contact takes the hit over there as it does on the live car (the hit speed is the base's and the new contact's, not all three summed) and every number of the two states is the same after", () => {
+    const aslant = new THREE.Vector3(0, 0, -1);
+    const squarely = new THREE.Vector3(0, 0.36, 2.06);
+    const live = spawn(0, 10).d;
+    live.stepStructure(0.35);
+    assert.ok(live.rearmHit(squarely, aslant, 12, 12, true), "the wreck's second hit armed after 0.3 s quiet");
+    live.stepStructure(0.004);
+    const state = new Float64Array(live.simSize());
+    live.simState(state, false);
+    const restored = spawn(0, 10).d;
+    restored.simState(state, true);
+    assert.ok(live.rearmHit(squarely, aslant, 14, 14, true), "taken over on the live car");
+    assert.ok(restored.rearmHit(squarely, aslant, 14, 14, true), "taken over on the restored one");
+    assert.ok(Math.abs(live.hitSpeedValue - Math.sqrt(10 * 10 + 14 * 14)) < 1e-9, `live hit speed ${live.hitSpeedValue}`);
+    const after = (d: StreamedDeformation): number[] => {
+      const out = new Float64Array(d.simSize());
+      d.simState(out, false);
+      return [...out];
+    };
+    assert.deepEqual(after(restored), after(live));
+  });
 });
 
 forModes("given a car meeting a wall at 20 m/s or more for the first time, where a bad contact solver could fling it off the map", (spawn, mode) => {

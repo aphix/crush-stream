@@ -21,8 +21,8 @@ import { FACES, faceFollow, IMPRINT_NONE, type FaceBands } from "./load-crush.ts
 import { PushBudget } from "./push-budget.ts";
 import { hypot3, hypot2, PART_FAMILY } from "../kernel/physics-core.js";
 
-/** Numbers a `simState` block spends on the rig’s scalar fields (`simScalarsOut`: 58 fields, one double each: nine are the epicenter freeze: `frozen`, `frozenReady`, `sinceThaw`, the cached centre and inertia; the last two the solids' hold of the slice, `solidHold`). */
-export const SIM_SCALAR_NUMBERS = 58;
+/** Numbers a `simState` block spends on the rig’s scalar fields (`simScalarsOut`: 63 fields, one double each: nine are the epicenter freeze: `frozen`, `frozenReady`, `sinceThaw`, the cached centre and inertia; then the solids' hold of the slice, `solidHold`; the last five the hit's take-over, `armedAt` to `armedWear`). */
+export const SIM_SCALAR_NUMBERS = 63;
 
 export type DeformMode = "shape" | "lattice";
 
@@ -354,7 +354,7 @@ export abstract class DeformRig {
   protected hitAt = -0;
   /** `lastContact` before the slice now touching (`touchNow`): a re-arm reads the quiet the wreck had when its slice began. Read within one slice only, so not netted. */
   protected touchedBefore = -10;
-  /** `elapsed` of the slice whose contact re-armed the hit (`rearmHit`), with that contact's EBS and what it found: a harder contact of the same slice takes the hit over. Read within one slice only. */
+  /** `elapsed` of the slice whose contact armed or re-armed the hit (`beginCrush`, `rearmHit`), with that contact's EBS and what it found: a harder contact of the same slice, or of a pair's within `AIM_WINDOW` of it, takes the hit over. A restored wreck takes it over as the live one does, so all five are in the sim state. */
   protected armedAt = -1;
   protected armedEbs = 0;
   protected armedEnd = 0;
@@ -674,6 +674,12 @@ export abstract class DeformRig {
     this.hitAt = -0;
     this.touchedBefore = -10;
     this.armedAt = -1;
+    this.armedEbs = 0;
+    this.armedEnd = 0;
+    this.armedEnd2 = 0;
+    this.armedWear = 0;
+    this.bandLow = NaN;
+    this.bandHigh = NaN;
     this.wrinkleAmp = -0;
     this.cornerLow = Infinity;
     this.prevYaw = 0;
@@ -1016,6 +1022,11 @@ export abstract class DeformRig {
     buf[o + 55] = this.frozenInvI.z;
     buf[o + 56] = this.solidHold[0]!;
     buf[o + 57] = this.solidHold[1]!;
+    buf[o + 58] = this.armedAt;
+    buf[o + 59] = this.armedEbs;
+    buf[o + 60] = this.armedEnd;
+    buf[o + 61] = this.armedEnd2;
+    buf[o + 62] = this.armedWear;
     return o + SIM_SCALAR_NUMBERS;
   }
 
@@ -1074,6 +1085,11 @@ export abstract class DeformRig {
     this.frozenInvI.set(buf[o + 53]!, buf[o + 54]!, buf[o + 55]!);
     this.solidHold[0] = buf[o + 56]!;
     this.solidHold[1] = buf[o + 57]!;
+    this.armedAt = buf[o + 58]!;
+    this.armedEbs = buf[o + 59]!;
+    this.armedEnd = buf[o + 60]!;
+    this.armedEnd2 = buf[o + 61]!;
+    this.armedWear = buf[o + 62]!;
     return o + SIM_SCALAR_NUMBERS;
   }
 }

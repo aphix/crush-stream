@@ -430,6 +430,7 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * no longer crushes 0.38 m or 0.74 m with where in a 1/240 s slice the first touch fell (now within 0.09 m), and a pair's crush spreads over a flat face.
  * A pair's hit armed on its first aslant touch of one corner (10.3 m/s, patch normal 26° off) takes over the face-on contact that follows within 15 ms
  * (13.5 m/s), keeping the crush it has taken: a T-bone's nose crushes 0.42-0.47 m wherever in a slice the touch fell, not 0.34 m (the stroke of the aslant arm).
+ * A keyframe carries what a pair's take-over reads (the armed hit's slice, EBS, end, energy and wear): one inside the 15 ms window replays the take-over the live sim made, and a respawn clears it.
  * A pair's first overlap no longer depends on the step it is first read in: a car under a lifted body that stands on its wheels meets it at its own heights
  * (the frame and wheels the cage does not draw), and a patch's height is held within the heights the crushing masses stand at, so a car hit into or by
  * a monster crushes alike a m/s faster, not 0.14 healthier on every third step (a sedan into a monster's tail, 29 -> 30 m/s: striker 0.69 -> 0.80).
