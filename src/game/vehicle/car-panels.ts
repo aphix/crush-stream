@@ -240,8 +240,9 @@ function bend(r: PanelRegion, k: number, x: number, z: number, t: number, flutte
  * about the vertical hinge line at its tail; an arch flare flaps out at both feet (`flutter` -1..1 shakes it).
  * Vertices are relative to the region's origin, the part's frame.
  * `floor` (drawn only) is the road under the shell in the body's frame: a body point p stands `floor · [p, 1]` m above the road,
- * along its normal, and one metre up the body lifts it `floor[1]`. An arch flare's free ends drop only as far as the road lets
- * them: a point whose body skin is already in the road keeps to the skin. Returns whether the road held any of the drop.
+ * along its unit normal `floor[0..2]`. An arch flare's free ends go only as far toward the road as it lets them, however the car lies (the
+ * drop on its wheels, the flap's reach out of a flank on the ground): a point whose body skin is already in the road keeps to the skin.
+ * Returns whether the road held any of the flap.
  */
 export function poseShell(r: PanelRegion, shell: THREE.BufferGeometry, body: THREE.BufferGeometry, t: number, flutter: number, floor: Float64Array | null = null): boolean {
   const bp = (body.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
@@ -256,10 +257,12 @@ export function poseShell(r: PanelRegion, shell: THREE.BufferGeometry, body: THR
     const y = bp[g + 1]!;
     const z = bp[g + 2]!;
     bend(r, k, x, z, t, flutter);
-    if (floor !== null && _shift[1]! < 0) {
-      const room = dropRoom(floor, x, y, z);
-      if (room < -_shift[1]!) {
-        _shift[1] = -room;
+    if (floor !== null) {
+      const lift = roadLift(floor, x, y, z);
+      if (lift > 0) {
+        _shift[0] = _shift[0]! + lift * floor[0]!;
+        _shift[1] = _shift[1]! + lift * floor[1]!;
+        _shift[2] = _shift[2]! + lift * floor[2]!;
         held = true;
       }
     }
@@ -277,21 +280,24 @@ export function poseShell(r: PanelRegion, shell: THREE.BufferGeometry, body: THR
   return held;
 }
 
-/** Whether `poseShell` on `floor` would hold any of region `r`'s drop at hinge value `t` and `flutter`. */
+/** Whether `poseShell` on `floor` would hold any of region `r`'s flap at hinge value `t` and `flutter`. */
 export function shellReaches(r: PanelRegion, body: THREE.BufferGeometry, t: number, flutter: number, floor: Float64Array): boolean {
   if (r.kind === "quarter") return false;
   const bp = (body.getAttribute("position") as THREE.BufferAttribute).array as Float32Array;
   for (let k = 0; k < r.verts.length; k++) {
     const g = r.verts[k]! * 3;
     bend(r, k, bp[g]!, bp[g + 2]!, t, flutter);
-    if (_shift[1]! < 0 && dropRoom(floor, bp[g]!, bp[g + 1]!, bp[g + 2]!) < -_shift[1]!) return true;
+    if (roadLift(floor, bp[g]!, bp[g + 1]!, bp[g + 2]!) > 0) return true;
   }
   return false;
 }
 
-/** How far (m, ≥ 0) body point (x, y, z), shifted sideways by `bend`'s last `_shift`, can drop before it meets `floor` (`poseShell`). */
-function dropRoom(floor: Float64Array, x: number, y: number, z: number): number {
-  return Math.max(0, (floor[0]! * (x + _shift[0]!) + floor[1]! * y + floor[2]! * (z + _shift[2]!) + floor[3]!) / floor[1]!);
+/** How far (m, ≥ 0) `floor` lifts body point (x, y, z) shifted by `bend`'s last `_shift`, along the road's normal: as much of the shift's way toward the road as would put the point under it. */
+function roadLift(floor: Float64Array, x: number, y: number, z: number): number {
+  const toward = floor[0]! * _shift[0]! + floor[1]! * _shift[1]! + floor[2]! * _shift[2]!;
+  if (toward >= 0) return 0;
+  const clear = floor[0]! * x + floor[1]! * y + floor[2]! * z + floor[3]! + toward;
+  return Math.min(-toward, Math.max(0, -clear));
 }
 
 const _v = new THREE.Vector3();
