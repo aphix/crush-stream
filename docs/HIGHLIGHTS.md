@@ -176,7 +176,8 @@ crash it recorded. What it takes, each found by the replay straying from the liv
   The wreck's `squash` and `buckle` are stored as doubles in the clip header.
 - **The solver state as doubles** (9). `simState` writes each scalar, and every mass, beam, sensor and cluster number, as a
   double: a restored wreck is bit for bit the live one. It includes the hit vectors (`impactLocal`, `impactInward`), the body
-  frame, the ground samples, the shape clusters' fit state (`Rprev`, `rotQ`, warm start) and the clocks (`elapsed`,
+  frame, the body's up as its last structure step took it (`frameUp`: a wreck that rides its body takes no such step, and whether its hubs stand
+  planted reads it: a rolled wreck restored upright clamped as a planted one when a touch woke it; `frame-up-state.test.ts`), the ground samples, the shape clusters' fit state (`Rprev`, `rotQ`, warm start) and the clocks (`elapsed`,
   `lastContact`, `lastPower`, `contactAt`, compared by holds of whole steps). A car with a part torn off carries it whether or
   not it crashed: its netplay wreck section alone leaves the hit frame zeroed (`impactInward` (0, 0, 0) for the intact car's (0, 0, -1)) and, when no skin
   bake ever ran for it, the skin inputs zeroed too: `StreamedDeformation.writeNetState` leaves such a car its rest mesh, where skinning from zeros collapsed

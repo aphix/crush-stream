@@ -646,7 +646,7 @@ export class StreamedDeformation extends DeformSolve {
 
   /** The solver arrays and vectors outside the scalar fields, `masses`, `beams` and `clusters` (the cage corners and the sensors' positions too: the next step's contacts read them before the structure step moves them) that one step leaves for the next to read (built with the car: a recorder's steady state allocates nothing). */
   private readonly simTables = {
-    vecs: [this.impactLocal, this.impactInward, this.bodyC, this.bodyRestC, ...this.cages.flatMap((c) => c.corners), ...this.sensors.map((x) => x.pos), ...this.skinRest],
+    vecs: [this.impactLocal, this.impactInward, this.bodyC, this.bodyRestC, this.frameUp, ...this.cages.flatMap((c) => c.corners), ...this.sensors.map((x) => x.pos), ...this.skinRest],
     arrays: [this.endEbs2, this.floorPre, this.floorPost, this.gripPost, this.pose, this.hubStand],
   };
 
@@ -669,7 +669,8 @@ export class StreamedDeformation extends DeformSolve {
    * Highlight keyframes (docs/HIGHLIGHTS.md): the solver state a netplay wreck section leaves out, `simSize()` numbers
    * read into `buf`, or with `write` restored from it. Every scalar field (crash clocks, crush, settle and plant
    * state; not the renderer's skin flags); the current hit (`impactLocal`, `impactInward`), the body frame
-   * (`bodyC`, `bodyRestC`), each end's accumulated hit energy (`endEbs2`), the ground under each mass and the body pose
+   * (`bodyC`, `bodyRestC`) and the body's up as the last structure step took it (`frameUp`: a wreck that rides its body takes no structure step, and what
+   * `hubsPlanted` reads of it is the live car's, not a rolled wreck's restored upright), each end's accumulated hit energy (`endEbs2`), the ground under each mass and the body pose
    * the last step measured (`floorPre`, `floorPost`, `gripPost`, `pose`: the next step's hub plane and suspension tilt
    * read them before they are measured again); each mass's world, local and velocity with its crush offsets, each
    * beam's rest and set, each shape cluster's plastic rest (q0, cm0, AqqInv, plane normal, `planar`, Sp) and the fit's
