@@ -143,6 +143,7 @@ export const WAGON: BodyStyle = {
     st(2.035, 0.36, 0.66),
   ],
   roofZ: [-1.84, 0.3],
+  cageRoofRearLips: true,
   windshieldTop: [1.45, 0.3],
   // The A-post upright and even as its reference side plate's band (drawn twin: the windshield's side edge bows back in plan to the roof's square front, the cage keeps the style's own).
   drawn: {

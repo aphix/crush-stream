@@ -137,8 +137,8 @@ function stripCap(index: THREE.BufferAttribute["array"], first: number, base: nu
   }
 }
 
-/** The cage roof ring's left lip, crown and right lip (`makeRoofGeometry`): its end rings keep them in the cage's decimation, so a roof that ends flat keeps its end edge instead of collapsing across it to the keel. */
-const CAGE_ROOF_RING_HOLD = [0, 4, 8] as const;
+/** The cage roof ring's left and right lips (`makeRoofGeometry`): a style that sets `cageRoofRearLips` keeps its rear ring's in the cage's decimation. */
+const CAGE_ROOF_LIPS = [0, 8] as const;
 
 /** The drawn roof loft's ring stations (z, ascending): `ROOF_SEGS` even ones, plus each rolled end's `ROOF_ROLL_STATIONS` in the drawn roof. */
 function roofRingZs(style: BodyStyle, source: BodySource): number[] {
@@ -183,7 +183,7 @@ export function makeRoofGeometry(style: BodyStyle, source: BodySource = "drawn")
   const geo = loftFromRings(rings, zs, 0.28, 0.72);
   ensureOutwardNormals(geo);
   if (source === "cage") {
-    geo.userData.hold = [0, zs.length - 1].flatMap((s) => CAGE_ROOF_RING_HOLD.map((k) => s * rings[0]!.length + k));
+    if (style.cageRoofRearLips) geo.userData.hold = [...CAGE_ROOF_LIPS];
     return geo;
   }
   // The loft's rings, then each end cap's own copy of its ring: the shell's ring is concave, so `loftFromRings` ear-clips its caps

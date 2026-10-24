@@ -335,6 +335,8 @@ export interface BodyStyle {
    * dome's flat top and its rolled side lip.
    */
   roofSection?: { crown: number; blend: number; squareFront?: number };
+  /** Cage only: the roof's rear end ring keeps its two lips in the cage's decimation. A roof that ends flat (no rear roll) would otherwise collapse across its end onto the keel apex, and the cage's top there ends short of the drawn roof. Absent: decimated freely. */
+  cageRoofRearLips?: boolean;
   /**
    * Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`).
    * `sideBow` (m): the pane bulges this far forward (z) at mid-height, none at its base and top: a convex side edge in side view; absent, straight.
