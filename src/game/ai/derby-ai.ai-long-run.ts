@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { runField } from "./derby-field.test-util.ts";
+import { SPIN_RATE_BAR } from "./vertical-turn.test-util.ts";
 import { heatLimit } from "../match/derby.ts";
 
 /**
@@ -150,5 +151,29 @@ describe("given ten AI cars at the default aggression, each played through the f
     const flagged = judged.reduce((a, r) => a + r.scoot.flagged, 0);
     assert.ok(windows >= SCOOT_MIN_WINDOWS, `only ${windows} late-heat car windows in ${judged.length} heats: the bar below judges nothing\n${rows.join("\n")}`);
     assert.ok(flagged <= SCOOT_SHARE * windows, `scoot ${flagged}/${windows} = ${((100 * flagged) / windows).toFixed(1)} % over ${judged.length} heats\n${rows.join("\n")}`);
+  });
+});
+
+/** The window (match s) in which the control forces car 0 to turn, and how fast (rad/s): over the spin bar. No car is near it this early in the heat. */
+const FORCED_SPIN_FROM = 1;
+const FORCED_SPIN_TO = 3;
+const FORCED_SPIN_RATE = SPIN_RATE_BAR + 1;
+
+describe("given a heat in which car 0 is turned over the spin bar for two seconds with no car, prop or wall near it", () => {
+  const forced = runField(10, SEEDS[0]!, undefined, {
+    step: (cars, t, h) => {
+      const car = cars[0]!;
+      if (t < FORCED_SPIN_FROM || t > FORCED_SPIN_TO || car.deform.massActive) return;
+      car.yaw += FORCED_SPIN_RATE * h;
+      car.group.rotation.set(car.pitch, car.yaw, car.roll, "YXZ");
+      car.refreshBasis();
+    },
+  });
+
+  it("when the heat is played out, then the free-spin row's measure reports it as a spin of car 0 that no contact explains", () => {
+    const mine = forced.freeSpins.filter((note) => note.includes(" c0 "));
+    assert.ok(mine.length > 0, `no free spin of c0 (free ${JSON.stringify(forced.freeSpins)}, contact ${JSON.stringify(forced.contactSpins)}): the row cannot see a spin`);
+    const at = Number(/^t=([\d.]+)/.exec(mine[0]!)![1]);
+    assert.ok(at >= FORCED_SPIN_FROM && at <= FORCED_SPIN_TO + 0.1, `the spin was counted at t=${at}, outside the window it was forced in`);
   });
 });
