@@ -159,12 +159,15 @@ function rideQuiet(car: DeformableCar): number {
 }
 
 /**
- * Whether a wreck that is not frozen yet may freeze this slice (`DeformFreeze.settleFreeze`): one that is driven (`powered`: its tyres are applyDrive's, the frozen masses ride a body the drive moves) or at rest
- * (neither `moving` nor `airborne`). A wreck nobody drives that still moves or flies is left to the whole path: frozen at 0.35 s in a tumble (a sedan on its flank, 0.5 m/s) it rocked on two contacts and was not asleep at 8 s
- * where whole it sleeps at 2.5 s; frozen sliding (a monster missing its left wheels, 0.52 m/s) it coasted at that speed for good where whole it stops in 0.3 s.
+ * Whether a wreck that is not frozen yet may freeze this slice (`DeformFreeze.settleFreeze`): its frame stands on its cell's seat (`seated`: a wreck frozen while still seating, a side-hit sedan 0.12 m short of its
+ * cell, never closed that gap) and it is driven (`powered`: its tyres are applyDrive's, the frozen masses ride a body the drive moves) or at rest (neither `moving` nor `airborne`). A wreck nobody drives that still
+ * moves or flies is left to the whole path: frozen at 0.35 s in a tumble (a sedan on its flank, 0.5 m/s) it rocked on two contacts and was not asleep at 8 s where whole it sleeps at 2.5 s; frozen sliding (a monster
+ * missing its left wheels, 0.52 m/s) it coasted at that speed for good where whole it stops in 0.3 s. The answer is read only where it matters: a frozen wreck stays so, and one still in its contact clock cannot start.
  */
 function mayFreeze(car: DeformableCar): boolean {
-  return car.deform.powered || (!car.moving && !car.airborne);
+  const d = car.deform;
+  if (d.frozen || d.quietTime() < EPICENTER.relockHold) return true;
+  return (d.powered || (!car.moving && !car.airborne)) && d.seated(car.group);
 }
 
 /** Scratch for the weight an unstepped car's roof drops (`stepWorld`). */
