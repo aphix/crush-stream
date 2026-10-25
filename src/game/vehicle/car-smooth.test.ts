@@ -1664,7 +1664,7 @@ const SIM_DIGEST_BY_STYLE = [
   // Again when a wreck's masses rode its lifted centre, not their centroid (CarRig rig-seat): the other six unchanged.
   // Again when a point of a body at rest inside a solid left by the side its body stands on, not the nearest (CarRig rig-entry): the monster's front
   // tyres no longer stand in the slab at the end, they are torn off by it and the truck vaults over; the other six unchanged.
-  { id: "monster", digest: "ea4907bbbb20f91aec04620e62e1d3e7144705bb2072ade2a421fa50ee720179" },
+  { id: "monster", digest: "04f52bc671e02388de2b34b2cdbfbc927d49366bd03d1ccb0f425df7ebb2b2e0" },
   // Every style re-pinned with its bumpers in the cage (`CageSource.apart`), each a window of its own (`CageFields.part`): the cage's nose and tail meet the drawn bumper faces.
   // Again for each bumper's bottom corner held in its decimation (`bumperCorner`) and `frame.hullUnder`'s bumper rows standing on it: sedan 32ce12d9 -> 18748cc4, hatchback 05034364 -> 3a8ae274, wagon 14004d19 -> 8c803d8e, coupe a8bbcc35 -> 2f4d595f, pickup 87ed8880 -> 6506a0dd, police 30a73a14 -> b9cb6cec, monster 1417aa98 -> 0227b53d.
 ] as const satisfies readonly { id: CarStyleId; digest: string }[];
