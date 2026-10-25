@@ -66,6 +66,24 @@ function growDrawn(o: THREE.Object3D, box: THREE.Box3): void {
   }
   for (let i = 0; i < o.children.length; i++) growDrawn(o.children[i]!, box);
 }
+
+/** The lowest clearance (m) of what `o` and its descendants draw over the ground under each vertex, at their world matrices as they stand; `Infinity` where there is no ground under any. */
+function lowestClearance(o: THREE.Object3D): number {
+  if (!o.visible) return Infinity;
+  let low = Infinity;
+  const geometry = o instanceof PartSeat ? o.drawn : o instanceof THREE.Mesh ? (o.geometry as THREE.BufferGeometry) : null;
+  if (geometry !== null) {
+    const position = geometry.getAttribute("position");
+    const ground = activeGround();
+    for (let k = 0; k < position.count; k++) {
+      _bumpW.fromBufferAttribute(position, k).applyMatrix4(o.matrixWorld);
+      const y = ground.heightAt(_bumpW.x, _bumpW.z, _bumpW.y);
+      if (y !== NO_FLOOR) low = Math.min(low, _bumpW.y - y);
+    }
+  }
+  for (let i = 0; i < o.children.length; i++) low = Math.min(low, lowestClearance(o.children[i]!));
+  return low;
+}
 const _bumpW = new THREE.Vector3();
 /** A mirror the ground crushes off its car leaves with this much speed straight up (m/s, world). */
 const MIRROR_POP = 0.5;
@@ -435,9 +453,9 @@ export abstract class CarParts extends CarGlass {
     o.position.y = y0 - px * detSin(r);
     o.updateWorldMatrix(false, true);
     growDrawn(o, _box.makeEmpty());
-    _bumpW.setFromMatrixPosition(o.matrixWorld);
-    const gy = activeGround().heightAt(_bumpW.x, _bumpW.z, _bumpW.y);
-    return gy === NO_FLOOR ? 0 : gy + BUMPER_CLEAR - _box.min.y;
+    const high = groundUnderBox(_box);
+    if (high === NO_FLOOR || _box.min.y >= high + BUMPER_CLEAR) return 0;
+    return BUMPER_CLEAR - lowestClearance(o);
   }
 
   /** Door hinge state; `side` −1 is the left door, +1 the right. */
