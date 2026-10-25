@@ -51,6 +51,33 @@ export function carOfClass(cls: VehicleClassId, x: number, z: number, yaw: numbe
   return car;
 }
 
+const centroid = new THREE.Vector3();
+
+/** The plan centroid of the car's drawn body (its cage's vertices, torn-off lids left out, as the car stands: lifted and turned whole), into `out` (y 0). Where the body ends: a tilted wreck's group origin hangs off it (a truck on a wedge, 0.84 m). */
+export function bodyCentroid(car: DeformableCar, out: THREE.Vector3): THREE.Vector3 {
+  const lift = cageLift(car);
+  const { pos, panelOn } = car.cage.fields;
+  const { vertexCount, vertexGroup } = car.cage.style;
+  let x = 0;
+  let z = 0;
+  let n = 0;
+  for (let k = 0; k < vertexCount; k++) {
+    const group = vertexGroup[k]!;
+    if (group > 0 && panelOn[group - 1] === 0) continue;
+    vertex.set(pos[k * 3]!, pos[k * 3 + 1]! + lift, pos[k * 3 + 2]!).applyQuaternion(car.group.quaternion).add(car.group.position);
+    x += vertex.x;
+    z += vertex.z;
+    n++;
+  }
+  return out.set(x / n, 0, z / n);
+}
+
+/** How far (m) the car's drawn body ends from the arena's middle: its centroid's radius. */
+export function bodyRadius(car: DeformableCar): number {
+  bodyCentroid(car, centroid);
+  return Math.hypot(centroid.x, centroid.z);
+}
+
 function fly(cls: VehicleClassId, x: number, z: number, yaw: number, speed: number, seconds: number): Flight {
   const car = carOfClass(cls, x, z, yaw, speed);
   const hits: PropHits = { knock() {}, fx() {}, wall() {} };
@@ -74,7 +101,7 @@ function fly(cls: VehicleClassId, x: number, z: number, yaw: number, speed: numb
       }
     });
   }
-  flight.finalRadius = Math.hypot(car.group.position.x, car.group.position.z);
+  flight.finalRadius = bodyRadius(car);
   return flight;
 }
 

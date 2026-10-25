@@ -23,25 +23,62 @@ export type PropHits = {
 
 /**
  * The world heights (m) of the lowest and highest points of `car`'s drawn body (its cage's vertices, class lift on) as the group's own
- * quaternion tilts it, never a slice stale: a level car's keel and crown, a nose-down one's front-bottom and rear-top points.
+ * quaternion tilts it, never a slice stale: a level car's keel and crown, a nose-down one's front-bottom and rear-top points. And its plan box
+ * (`tilted`: x min, x max, z min, z max on the heading's right and forward axes, as `cage.fields.planBox` is) with the body stood at that tilt:
+ * a wreck rolled onto its side has its roof a car's height out beside its plan box, in a wall a body-frame plan box says it is clear of.
  */
-function bodySpan(car: DeformableCar, out: { low: number; high: number }): void {
+function bodySpan(car: DeformableCar, out: { low: number; high: number }, tilted: Float64Array): void {
   const { x, y, z, w } = car.group.quaternion;
   const rightY = 2 * (x * y + w * z);
   const upY = 1 - 2 * (x * x + z * z);
   const fwdY = 2 * (y * z - w * x);
+  const r00 = 1 - 2 * (y * y + z * z);
+  const r01 = 2 * (x * y - z * w);
+  const r02 = 2 * (x * z + y * w);
+  const r20 = 2 * (x * z - y * w);
+  const r21 = 2 * (y * z + x * w);
+  const r22 = 1 - 2 * (x * x + y * y);
+  const rt = car.rightFlat;
+  const fw = car.fwdFlat;
+  const ax = rt.x * r00 + rt.z * r20;
+  const ay = rt.x * r01 + rt.z * r21;
+  const az = rt.x * r02 + rt.z * r22;
+  const bx = fw.x * r00 + fw.z * r20;
+  const by = fw.x * r01 + fw.z * r21;
+  const bz = fw.x * r02 + fw.z * r22;
   const cage = car.cage;
   const pos = cage.fields.pos;
+  const { panelOn } = cage.fields;
+  const { vertexGroup } = cage.style;
   const lift = cageLift(car);
   let low = Infinity;
   let high = -Infinity;
+  let x0 = Infinity;
+  let x1 = -Infinity;
+  let z0 = Infinity;
+  let z1 = -Infinity;
   for (let k = 0; k < cage.style.vertexCount; k++) {
-    const h = rightY * pos[k * 3]! + upY * (pos[k * 3 + 1]! + lift) + fwdY * pos[k * 3 + 2]!;
+    const px = pos[k * 3]!;
+    const py = pos[k * 3 + 1]! + lift;
+    const pz = pos[k * 3 + 2]!;
+    const h = rightY * px + upY * py + fwdY * pz;
     if (h < low) low = h;
     if (h > high) high = h;
+    const g = vertexGroup[k]!;
+    if (g > 0 && panelOn[g - 1] === 0) continue;
+    const lx = ax * px + ay * py + az * pz;
+    const lz = bx * px + by * py + bz * pz;
+    if (lx < x0) x0 = lx;
+    if (lx > x1) x1 = lx;
+    if (lz < z0) z0 = lz;
+    if (lz > z1) z1 = lz;
   }
   out.low = car.group.position.y + low;
   out.high = car.group.position.y + high;
+  tilted[0] = x0;
+  tilted[1] = x1;
+  tilted[2] = z0;
+  tilted[3] = z1;
 }
 
 const _c = new THREE.Vector3();
@@ -69,16 +106,24 @@ const SAME_WALL_GAP = 0.25;
 const DOOR_REACH = 0.3;
 /** The mass (kg) of a car a knocked prop's momentum share is taken against: a sedan's. */
 const KNOCK_CAR_MASS = 1400;
-/** The footprint's body-frame plan box (x min, x max, z min, z max), `planBox` grown by a wreck's masses (`footprint`). */
+/** The footprint's body-frame plan box (x min, x max, z min, z max), `planBox` grown by the drawn body at the car's tilt and by a wreck's masses (`footprint`). */
 const _plan = new Float64Array(4);
+/** The drawn body's plan box at the car's tilt (`bodySpan`), grown into the footprint. */
+const _tilt = new Float64Array(4);
 
 /**
- * `car`'s footprint into `_plan`: the drawn body's plan box and, for a wreck, its masses as a face meets them (`faceHits`: half-radius
+ * `car`'s footprint into `_plan` (after `bodySpan` filled `_tilt`): the body-frame plan box grown by the drawn body's plan box at the car's whole
+ * orientation (a wreck on its side or tumbling stands a car's height beside its flat plan box, and a wall that read it clear never met it) and, for
+ * a wreck, its masses as a face meets them (`faceHits`: half-radius
  * spheres; a planted hub is the world pin). The drawn body is baked from the masses as they were held a slice before, so a wreck resting
  * with its masses on a face stood 0-6 cm short of it: slices with no wall, and a nose coasting into it at 14 m/s.
  */
 function footprint(car: DeformableCar): void {
   _plan.set(car.cage.fields.planBox);
+  _plan[0] = Math.min(_plan[0]!, _tilt[0]!);
+  _plan[1] = Math.max(_plan[1]!, _tilt[1]!);
+  _plan[2] = Math.min(_plan[2]!, _tilt[2]!);
+  _plan[3] = Math.max(_plan[3]!, _tilt[3]!);
   const d = car.deform;
   if (!d.massActive) return;
   const pos = car.group.position;
@@ -102,7 +147,7 @@ function footprint(car: DeformableCar): void {
 /** The car as every solid meets it this slice: `_span` filled from its drawn body (`bodySpan`) and its footprint (`footprint`). */
 function measure(car: DeformableCar): void {
   const v = car.velocity;
-  bodySpan(car, _span);
+  bodySpan(car, _span, _tilt);
   footprint(car);
   const plan = _plan;
   _span.cx = (plan[0]! + plan[1]!) / 2;
