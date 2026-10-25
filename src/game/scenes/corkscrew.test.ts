@@ -132,8 +132,8 @@ describe("given the corkscrew ramp as the ground, and a driverless car launched 
 
 /**
  * The owner's bar for the corkscrew: the car flips and can land and keep driving. One launch, at the speed that comes to rest on its wheels on the
- * union (21.6 m/s: 56.3 m driven; 21.8 m/s also stands, 57.3 m; 22.0 to 22.4 m/s rest on the roof there). The landing is a lottery of the launch
- * speed (the roll at 22 m/s is 307° to 412° across banks 1.02 to 1.04), so the speed is named, not swept.
+ * union (21.6 m/s at bank 0.96: touchdown roll 353°, 58.1 m driven). The landing is a lottery of the launch speed and the bank (21.6 m/s rests on its roof at
+ * banks 0.90, 0.93, 0.99, 1.01, 1.03, 1.04, 1.08, 1.10 and 1.12, and on its wheels at 0.96, 1.02, 1.05 and 1.06), so the speed is named, not swept.
  */
 const DRIVE_LAUNCH_SPEED = 21.6;
 /** Seconds of full throttle from the rest on its wheels, and the least the car must cover over them (m). */
