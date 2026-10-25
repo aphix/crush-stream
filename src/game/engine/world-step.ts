@@ -158,6 +158,15 @@ function rideQuiet(car: DeformableCar): number {
   return car.asleep || 1 - 2 * (q.x * q.x + q.z * q.z) < UPRIGHT_UP_Y ? CONTACT_WINDOW : Infinity;
 }
 
+/**
+ * Whether a wreck that is not frozen yet may freeze this slice (`DeformFreeze.settleFreeze`): one that is driven (`powered`: its tyres are applyDrive's, the frozen masses ride a body the drive moves) or at rest
+ * (neither `moving` nor `airborne`). A wreck nobody drives that still moves or flies is left to the whole path: frozen at 0.35 s in a tumble (a sedan on its flank, 0.5 m/s) it rocked on two contacts and was not asleep at 8 s
+ * where whole it sleeps at 2.5 s; frozen sliding (a monster missing its left wheels, 0.52 m/s) it coasted at that speed for good where whole it stops in 0.3 s.
+ */
+function mayFreeze(car: DeformableCar): boolean {
+  return car.deform.powered || (!car.moving && !car.airborne);
+}
+
 /** Scratch for the weight an unstepped car's roof drops (`stepWorld`). */
 const _borneV = new THREE.Vector3();
 const _borneW = new THREE.Vector3();
@@ -454,7 +463,7 @@ export function stepWorld(w: World, dt: number): void {
       car.afterContacts(hc);
       w.afterCar?.(car, hc);
       // After this slice's solve, so the slice that crossed the quiet time still ran it: the next one freezes the car.
-      d.settleFreeze(hc);
+      d.settleFreeze(hc, mayFreeze(car));
       work[WORK.freezes] = work[WORK.freezes]! + d.freezes;
       work[WORK.thaws] = work[WORK.thaws]! + d.thaws;
       d.freezes = 0;
