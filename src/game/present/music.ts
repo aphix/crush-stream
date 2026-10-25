@@ -1,5 +1,5 @@
-import { loadManifest, trackUrl, type MusicTrack } from "./music-manifest.ts";
-import { firstTrack, nextTrack } from "./playlist.ts";
+import { loadManifest, stationName, stationOf, trackUrl, type MusicTrack, type StationId } from "./music-manifest.ts";
+import { Radio } from "./playlist.ts";
 
 /** The element's event for "this track's file loaded far enough to play" (fires once per source, not on a resume). */
 const STARTED_EVENT = "loadedmetadata";
@@ -14,20 +14,22 @@ export class MusicPlayer {
   private readonly source: MediaElementAudioSourceNode;
   private readonly base: string;
   private tracks: readonly MusicTrack[] = [];
-  private index = -1;
+  private radio = new Radio([], Math.random);
+  private station: StationId;
+  private current: MusicTrack | null = null;
   private loading = false;
   /** Whether the music should be playing (audio on, tab visible): a manifest that arrives late starts only then. */
   private wanted = false;
-  /** Tracks that failed in a row; once every track has, the music stops until the next play. */
+  /** Tracks that failed in a row; once every track of the station has, the music stops until the next play. */
   private failures = 0;
   private readonly onEnded = (): void => {
     this.failures = 0;
-    this.startTrack(nextTrack(this.index, this.tracks.length));
+    this.startNextTrack();
   };
   private readonly onError = (): void => {
-    console.warn("music: track failed", this.tracks[this.index]?.file, this.element.error?.message);
+    console.warn("music: track failed", this.current?.file, this.element.error?.message);
     this.failures++;
-    if (this.failures < this.tracks.length) this.startTrack(nextTrack(this.index, this.tracks.length));
+    if (this.failures < this.stationTrackCount()) this.startNextTrack();
   };
   /** Tracks whose file loaded far enough to play, counted in `serial` (a file that fails is no "now playing"). */
   private started = 0;
@@ -35,8 +37,9 @@ export class MusicPlayer {
     this.started++;
   };
 
-  constructor(context: AudioContext, destination: AudioNode, base: string) {
+  constructor(context: AudioContext, destination: AudioNode, base: string, station: StationId) {
     this.base = base;
+    this.station = station;
     // The element is cross-origin when `VITE_MUSIC_BASE` points off-site: without CORS the Web Audio graph would get silence.
     // The empty string is the attribute's "anonymous" state (no credentials).
     this.element.crossOrigin = "";
@@ -48,16 +51,16 @@ export class MusicPlayer {
     this.source.connect(destination);
   }
 
-  /** Starts the music (first time: fetches the manifest, then plays a random track) or resumes it. */
+  /** Starts the music (first time: fetches the manifest, then plays the station's next shuffled track) or resumes it. */
   play(): void {
     this.wanted = true;
     if (this.tracks.length === 0) {
       if (!this.loading) void this.load();
-    } else if (this.index < 0) {
-      this.startTrack(firstTrack(this.tracks.length, Math.random()));
-    } else if (this.failures >= this.tracks.length) {
+    } else if (this.current === null) {
+      this.startNextTrack();
+    } else if (this.failures >= this.stationTrackCount()) {
       this.failures = 0;
-      this.startTrack(this.index);
+      this.startTrack(this.current);
     } else {
       this.playElement();
     }
@@ -69,15 +72,25 @@ export class MusicPlayer {
     this.element.pause();
   }
 
+  /** Tunes to another station: its shuffle bag deals a fresh track at once while the music is wanted, else on the next `play()`. */
+  setStation(station: StationId): void {
+    if (station === this.station) return;
+    this.station = station;
+    this.current = null;
+    this.failures = 0;
+    this.element.pause();
+    if (this.wanted) this.startNextTrack();
+  }
+
   /** Counts the tracks that have started playing (0 before the first): a change is "a new song began", for the now-playing toast. */
   get serial(): number {
     return this.started;
   }
 
-  /** "Artist – Title" of the current track, "" before the first. */
+  /** "Artist – Title · Station" of the current track, "" before the first. */
   get nowPlaying(): string {
-    const track = this.tracks[this.index];
-    return track ? `${track.artist} – ${track.title}` : "";
+    const track = this.current;
+    return track ? `${track.artist} – ${track.title} · ${stationName(stationOf(track))}` : "";
   }
 
   dispose(): void {
@@ -95,6 +108,7 @@ export class MusicPlayer {
     this.loading = true;
     try {
       this.tracks = await loadManifest(this.base);
+      this.radio = new Radio(this.tracks, Math.random);
     } catch (reason) {
       console.warn("music: no soundtrack", reason);
     }
@@ -102,10 +116,20 @@ export class MusicPlayer {
     if (this.wanted && this.tracks.length > 0) this.play();
   }
 
-  private startTrack(index: number): void {
-    this.index = index;
-    this.element.src = trackUrl(this.base, this.tracks[index]!);
+  private startTrack(track: MusicTrack): void {
+    this.current = track;
+    this.element.src = trackUrl(this.base, track);
     this.playElement();
+  }
+
+  /** The current station's next shuffled track; a station with no track plays nothing. */
+  private startNextTrack(): void {
+    const track = this.radio.next(this.station);
+    if (track) this.startTrack(track);
+  }
+
+  private stationTrackCount(): number {
+    return this.radio.trackCount(this.station);
   }
 
   private playElement(): void {

@@ -3,6 +3,7 @@ import { dismissBootLoader } from "@/lib/boot-loader";
 import { Hud } from "@/components/hud";
 import { useDriver } from "@/components/use-driver";
 import { useQualityPrefs } from "@/components/use-quality";
+import { useStation } from "@/components/use-station";
 import { useDeepLinkJoin } from "@/components/use-deep-link-join";
 import type { CrashEngine } from "@/game/engine/engine";
 import { runBenchPage } from "@/components/bench-run";
@@ -31,6 +32,7 @@ export function CrashLab() {
   const [booted, setBooted] = useState(false);
   const driver = useDriver();
   const quality = useQualityPrefs();
+  const station = useStation();
   useDeepLinkJoin(engineRef);
   const newer = useUpdateCheck();
   const benchPage = useSyncExternalStore(subscribeNever, () => isBenchPage(window.location.search), () => false);
@@ -86,6 +88,11 @@ export function CrashLab() {
   useEffect(() => {
     if (booted && !benchPage) engineRef.current?.setSavedQuality(quality.draw, quality.scale, quality.shadow);
   }, [booted, benchPage, quality.draw, quality.scale, quality.shadow]);
+
+  // This browser's radio station reaches the engine at boot and on every change.
+  useEffect(() => {
+    if (booted) engineRef.current?.setStation(station.station);
+  }, [booted, station.station]);
 
   // A reload that landed on the new build is done with; the `?v=` it carried goes from the address.
   useEffect(() => settleOnLoad(__BUILD_SHA__), []);

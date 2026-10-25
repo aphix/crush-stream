@@ -13,6 +13,7 @@ import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import { RIM_LIGHT } from "../present/rim-light.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
 import type { DrawDistance, RenderScale, ShadowQuality } from "../present/player-quality.ts";
+import { stationIdOrDefault } from "../present/music-manifest.ts";
 import { KNOBS, type KnobId } from "../hud/knobs.ts";
 import { loadUltra as fetchUltra } from "../present/ultra/load.ts";
 import { boostPadButton, gameKey } from "../vehicle/drive-input.ts";
@@ -378,6 +379,11 @@ export abstract class EngineInput extends EngineRigs {
     this.engineVolume = THREE.MathUtils.clamp(value, KNOB_RANGES.engineVolume.min, KNOB_RANGES.engineVolume.max);
     this.audio.setVolumes(this.musicVolume, this.engineVolume);
     this.emitHud();
+  }
+
+  /** This browser's saved radio station (`CrashLab`, at boot and on every change; stored text, anything unknown is the default station). */
+  setStation(saved: string): void {
+    this.audio.setStation(stationIdOrDefault(saved));
   }
 
   /** Arcade (0) ↔ realistic (1): grip and drift assists in applyDrive, and when every car's drivetrain dies. */

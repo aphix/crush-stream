@@ -8,6 +8,23 @@ const MUSIC_FOLDER = "music/";
 const FILE_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*\.mp3$/;
 const LINK_PATTERN = /^https?:\/\/\S+$/;
 
+/** The radio stations, in the order the HUD lists them; a track plays only on its own station. */
+export const STATION_IDS = ["high", "calm"] as const;
+export type StationId = (typeof STATION_IDS)[number];
+const STATION_NAMES: Record<StationId, string> = { high: "High Energy", calm: "Calm" };
+/** The station of a track the manifest gives none, and of a browser that has not picked one. */
+export const DEFAULT_STATION: StationId = "high";
+
+/** A stored or typed text as a station id; anything else is the default station. */
+export function stationIdOrDefault(text: string): StationId {
+  return STATION_IDS.find((id) => id === text) ?? DEFAULT_STATION;
+}
+
+/** A station's display name ("High Energy"). */
+export function stationName(id: StationId): string {
+  return STATION_NAMES[id];
+}
+
 const trackSchema = z.object({
   file: z.string().regex(FILE_PATTERN),
   artist: z.string().min(1),
@@ -16,6 +33,8 @@ const trackSchema = z.object({
   attribution: z.array(z.string().min(1)),
   /** `label: url` credit lines, shown after the attribution as links ("Free Download/Stream", "Watch"). */
   links: z.array(z.object({ label: z.string().min(1), url: z.string().regex(LINK_PATTERN) })),
+  /** The station that plays this track; none puts it on the default station. */
+  station: z.enum(STATION_IDS).optional(),
 });
 
 const manifestSchema = z
@@ -23,6 +42,11 @@ const manifestSchema = z
   .refine((manifest) => new Set(manifest.tracks.map((track) => track.file)).size === manifest.tracks.length, { message: "duplicate file" });
 
 export type MusicTrack = z.infer<typeof trackSchema>;
+
+/** The station a track plays on. */
+export function stationOf(track: MusicTrack): StationId {
+  return track.station ?? DEFAULT_STATION;
+}
 
 /** The parts of Vite's `import.meta.env` the music base reads (undefined where there is no Vite, e.g. node tests). */
 interface MusicEnv {

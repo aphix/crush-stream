@@ -42,6 +42,7 @@ import { useStoredString } from "@/components/use-stored-string";
 import { VoiceDevicePickers } from "@/components/voice-device-pickers";
 import { useDriver } from "@/components/use-driver";
 import { QualityRows } from "@/components/quality-rows";
+import { StationRow } from "@/components/station-row";
 import { cn } from "@/lib/utils";
 
 /** The storage key of the open sections: the menu reads it to know whether any is open (`HudSections` writes it). */
@@ -336,6 +337,7 @@ function AudioSection({ state, engine }: HudProps) {
       </div>
       <RangeRow label="Music" name="Music volume" value={audio.music} min={KNOB_RANGES.musicVolume.min} max={KNOB_RANGES.musicVolume.max} step={0.01} digits={2} changed={ch("music")} onValue={audio.onMusic} />
       <RangeRow label="Engines" name="Engine volume" value={audio.engines} min={KNOB_RANGES.engineVolume.min} max={KNOB_RANGES.engineVolume.max} step={0.01} digits={2} changed={ch("engines")} onValue={audio.onEngines} />
+      <StationRow />
       <VoiceDevicePickers engine={engine} />
     </>
   );
