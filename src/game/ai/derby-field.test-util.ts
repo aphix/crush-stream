@@ -6,6 +6,7 @@ import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import { applyAiDrive } from "./input-fade.ts";
 import { fleetStyle, layoutDerby } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
+import type { DriveInput } from "../vehicle/car-drive.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { stepWorld } from "../engine/world-step.ts";
 import { armKill, assignClass, carClass, CLASSES, HANDLING, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
@@ -70,14 +71,18 @@ function centroid(c: DeformableCar): { x: number; z: number } {
  */
 const MOVE_GAP = 1;
 
-/** A watcher on a heat: `step` after every physics slice of `h` s at match time `t` (`running(i)`: car i alive and not out), `pair` on every car pair in contact. */
-export type FieldWatch = { step?: (cars: DeformableCar[], t: number, h: number, running: (i: number) => boolean) => void; pair?: (a: number, b: number) => void };
+/** A watcher on a heat: `step` after every physics slice of `h` s at match time `t` (`running(i)`: car i alive and not out), `pair` on every car pair in contact, `drive` on car i's AI input before it is applied (a control may change it). */
+export type FieldWatch = {
+  step?: (cars: DeformableCar[], t: number, h: number, running: (i: number) => boolean) => void;
+  pair?: (a: number, b: number) => void;
+  drive?: (i: number, t: number, input: DriveInput) => void;
+};
 
 /**
  * A derby of `n` AI cars through the engine's stack (`stepWorld` with the derby's hit credit and arena,
  * cars dressed as `dressCar` does at the game's defaults), at the default slider, to the end of the heat.
  * `playerClass` is car 0's class (the HUD's player class, the sedan by default).
- * Spins: turn rate about the vertical (`verticalTurn`) > `SPIN_RATE_BAR` for > 0.2 s in the first 2 min, split by a car contact in the 0.3 s before the spin began.
+ * Spins: turn rate about the vertical (`verticalTurn`) > `SPIN_RATE_BAR` for > 0.2 s in the first 2 min, split by a contact in the 0.5 s before it was counted: a car, or a prop or wall of the arena (a crash's spin, not the AI's own driving).
  * Zips: a live mass centroid moving more than 3·v·h + 5 cm in a step. Impacts: AI hits closing ≥ 3 m/s,
  * by the attacker's face. Moves: swings, J-turns and sideswipes, each a manoeuvre (`MOVE_GAP`).
  */
@@ -103,7 +108,18 @@ function runFieldHeat(n: number, seed: number, playerClass?: VehicleClassId, on?
     cars.map((_, i) => ({ id: i, name: `c${i}` })),
     { seed },
   );
-  const { world: w } = arenaWorld(cars);
+  /** Per car: the match time of its last pair hit (`contactPeak`), and of its last contact with anything solid: a car, or a prop or wall of the arena (`PropHits`). A spin within 0.5 s of the second is the crash's, not the AI's own driving. */
+  const touched = new Array<number>(n).fill(-9);
+  const struck = new Array<number>(n).fill(-9);
+  const { world: w } = arenaWorld(cars, {
+    knock: (_prop, car) => {
+      struck[car] = t;
+    },
+    fx: () => {},
+    wall: (_prop, car) => {
+      struck[car] = t;
+    },
+  });
   for (const [i, c] of cars.entries()) {
     c.spawnFacing(slots[i]!.x, slots[i]!.z, slots[i]!.yaw, 0);
     c.deform.squash = INITIAL_HUD.squash;
@@ -141,7 +157,6 @@ function runFieldHeat(n: number, seed: number, playerClass?: VehicleClassId, on?
   const spinFor = new Array<number>(n).fill(0);
   /** Per car: [t, heading] pairs spanning about 0.1 s, for the contact peak. */
   const ring = cars.map((): number[] => []);
-  const touched = new Array<number>(n).fill(-9);
   /** Per car, when it was last in each move: back in it within MOVE_GAP s is the same manoeuvre. */
   const lastIn = { swing: new Array<number>(n).fill(-9), jturn: new Array<number>(n).fill(-9), sideswipe: new Array<number>(n).fill(-9) };
   const alive = new Array<boolean>(n).fill(true);
@@ -160,6 +175,7 @@ function runFieldHeat(n: number, seed: number, playerClass?: VehicleClassId, on?
     for (const [i, c] of cars.entries()) snapshotAiCar(snaps[i]!, i, c, c.deform.drivetrainAlive);
     for (const [i, c] of cars.entries()) {
       const input = match.think(snaps[i]!, snaps, h);
+      on?.drive?.(i, t, input);
       applyAiDrive(c, input, h);
       const now = match.brain.tacticOf(i);
       if ((now === "swing" && input.ebrake) || now === "jturn" || now === "sideswipe") {
@@ -173,6 +189,8 @@ function runFieldHeat(n: number, seed: number, playerClass?: VehicleClassId, on?
       const cb = cars[b]!;
       touched[a] = t;
       touched[b] = t;
+      struck[a] = t;
+      struck[b] = t;
       shove[a] = Math.max(shove[a]!, speed0[b]!);
       shove[b] = Math.max(shove[b]!, speed0[a]!);
       const aInto = -(ca.velocity.x * pair.normal.x + ca.velocity.z * pair.normal.z);
@@ -205,7 +223,7 @@ function runFieldHeat(n: number, seed: number, playerClass?: VehicleClassId, on?
       else spinFor[i] = 0;
       if (spinFor[i]! > 0.2 && spinFor[i]! - h <= 0.2 && t < 120) {
         const note = `t=${t.toFixed(1)} c${i} ${(Math.abs(dyaw) / h).toFixed(1)} rad/s`;
-        (t - touched[i]! < 0.5 ? out.contactSpins : out.freeSpins).push(note);
+        (t - struck[i]! < 0.5 ? out.contactSpins : out.freeSpins).push(note);
       }
       const rb = ring[i]!;
       rb.push(t, heading[i]!);
