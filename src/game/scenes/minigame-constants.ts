@@ -51,8 +51,8 @@ export const START_HILL = { padLength: 6, drop: 3 } as const;
  * and the car's speed there is set by the distance it covers from the pad (measured in `minigame-profile.test.ts`).
  */
 export const START_HILL_LENGTH: Readonly<Record<MinigameMode, number>> = {
-  longJump: 11.4,
-  highJump: 23,
+  longJump: 11.8,
+  highJump: 23.5,
   ringFling: 24,
 };
 
@@ -98,6 +98,16 @@ export const LIP_BACK_FACE_PITCH_DEGREES = 60;
 
 /** High jump and Ring Fling: the share of its speed (and so of every velocity component) the car keeps as its driver is thrown at the lip. Measured in `minigame-lip.test.ts`. */
 export const LIP_CAR_SPEED_KEEP = 0.25;
+
+/**
+ * Per kicker (the high jump's and Ring Fling's lip): the launch push the lip gives a car as it leaves it, as a share of the car's own velocity (0.08: it leaves at
+ * 1.08 times the speed it arrived at, in the direction it arrived), applied once as its centre crosses the lip and before its driver is thrown (`LipThrow`). The ground gives
+ * a car no energy: what a kicker's arc takes from a monster climbing it (its lip 27.2 m/s against the 28.5 bar) the lip hands back as the launch the game is about, tuned so
+ * every class meets its lip bar again (`minigame-profile.test.ts`) and the sizing's pins hold (`minigame-sizing.test.ts`: the muscle's best run scores 168.4 m, the monster's
+ * 80% run 53.8 m: at 0.06 it was 47.0, under the bar of 50). A share, not a speed: a car held to 70% of the speed leaves at 70% of it. Ring Fling's lip holds its bars
+ * without one (0).
+ */
+export const LIP_LAUNCH_PUSH: Readonly<Record<"highJump" | "ringFling", number>> = { highJump: 0.08, ringFling: 0 };
 
 /**
  * Per minigame, the release on the thrown driver's launch velocity: `forward` scales its horizontal (x, z) components, `upward` its vertical (y)

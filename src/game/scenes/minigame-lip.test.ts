@@ -11,7 +11,7 @@ import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { EjectionWatch, ejectionVelocity, THROW_OUT, type Ejection } from "../vehicle/ejection.ts";
 import { FRAME, frame } from "../vehicle/ground-probe.test-util.ts";
 import { Ground, setGround, STEP_UP } from "../world/ground.ts";
-import { LANDING_HEIGHT, LIP_CAR_SPEED_KEEP, STATION_ANCHORS, STATION_HALF_WIDTH, THROW_YAW } from "./minigame-constants.ts";
+import { LANDING_HEIGHT, LIP_CAR_SPEED_KEEP, LIP_LAUNCH_PUSH, STATION_ANCHORS, STATION_HALF_WIDTH, THROW_YAW } from "./minigame-constants.ts";
 import { LipThrow, type LipMode } from "./minigame-lip.ts";
 import { lipHeight } from "./minigame-profile.ts";
 import { dressedDriverCar, FINE_CELL, lipPitch, stationDriveProfile } from "./minigame-profile.test-util.ts";
@@ -89,7 +89,7 @@ function crossing(lip: LipThrow, car: DeformableCar, mode: LipMode, localXs: rea
 describe("given a car whose centre crosses the lip plane going forward at speed v", () => {
   for (const mode of LIP_MODES) {
     for (const speed of CROSSING_SPEEDS) {
-      it(`when it crosses the ${mode} lip at ${speed} m/s in one step, then one windshield ejection launches the driver at the car's velocity plus the usual pop (out along its nose, then up) and the car keeps LIP_CAR_SPEED_KEEP of its speed`, () => {
+      it(`when it crosses the ${mode} lip at ${speed} m/s in one step, then the lip pushes it on, one windshield ejection launches the driver at the pushed car's velocity plus the usual pop (out along its nose, then up) and the car keeps LIP_CAR_SPEED_KEEP of its speed`, () => {
         const car = carMovingAtLip(mode, speed);
         const { lip, watch } = lipThrowFor(mode, car);
         const step = speed * FRAME;
@@ -105,12 +105,13 @@ describe("given a car whose centre crosses the lip plane going forward at speed 
         assert.equal(car.driverOut, "windshield", "the car's driver is out");
         const launched = ejectionVelocity(events[0]!, new THREE.Vector3());
         const dir = events[0]!.dir;
-        assert.ok(Math.abs(launched.x - (velocityAtLip.x + dir.x * THROW_OUT)) <= F32_TOLERANCE, `launch x ${launched.x}`);
-        assert.ok(Math.abs(launched.y - (velocityAtLip.y + dir.y * THROW_OUT + THROW_UP_PINNED)) <= F32_TOLERANCE, `launch y ${launched.y}`);
-        assert.ok(Math.abs(launched.z - (velocityAtLip.z + dir.z * THROW_OUT)) <= F32_TOLERANCE, `launch z ${launched.z}`);
-        assert.ok(Math.abs(car.speed - speed * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `car speed ${car.speed}`);
-        assert.ok(Math.abs(car.velocity.length() - speed * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `car velocity ${car.velocity.length()}`);
-        assert.ok(car.velocity.distanceTo(velocityAtLip.multiplyScalar(LIP_CAR_SPEED_KEEP)) <= EXACT_TOLERANCE, "every component scaled: the direction is kept");
+        const pushed = velocityAtLip.clone().multiplyScalar(1 + LIP_LAUNCH_PUSH[mode]);
+        assert.ok(Math.abs(launched.x - (pushed.x + dir.x * THROW_OUT)) <= F32_TOLERANCE, `launch x ${launched.x}`);
+        assert.ok(Math.abs(launched.y - (pushed.y + dir.y * THROW_OUT + THROW_UP_PINNED)) <= F32_TOLERANCE, `launch y ${launched.y}`);
+        assert.ok(Math.abs(launched.z - (pushed.z + dir.z * THROW_OUT)) <= F32_TOLERANCE, `launch z ${launched.z}`);
+        assert.ok(Math.abs(car.speed - speed * (1 + LIP_LAUNCH_PUSH[mode]) * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `car speed ${car.speed}`);
+        assert.ok(Math.abs(car.velocity.length() - speed * (1 + LIP_LAUNCH_PUSH[mode]) * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `car velocity ${car.velocity.length()}`);
+        assert.ok(car.velocity.distanceTo(pushed.multiplyScalar(LIP_CAR_SPEED_KEEP)) <= EXACT_TOLERANCE, "every component scaled: the direction is kept");
         car.dispose();
       });
     }
@@ -122,7 +123,7 @@ describe("given a car whose centre crosses the lip plane going forward at speed 
       const slice = (speed * FRAME) / 4;
       crossing(lip, car, mode, [-1.5 * slice, -0.5 * slice, 0.5 * slice, 1.5 * slice, 2.5 * slice]);
       assert.equal(watch.take().length, 1, "one ejection over the four slices");
-      assert.ok(Math.abs(car.speed - speed * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `cut once: ${car.speed}`);
+      assert.ok(Math.abs(car.speed - speed * (1 + LIP_LAUNCH_PUSH[mode]) * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `pushed and cut once: ${car.speed}`);
       car.dispose();
     });
   }
@@ -166,7 +167,7 @@ describe("given a car that does not cross the lip plane going forward in the lan
       const { lip, watch } = lipThrowFor(mode, car);
       crossing(lip, car, mode, [-0.3, 0.4, -0.3, 0.4, -0.3, 0.4]);
       assert.equal(watch.take().length, 1, "one ejection over three crossings");
-      assert.ok(Math.abs(car.speed - 20 * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `cut once: ${car.speed}`);
+      assert.ok(Math.abs(car.speed - 20 * (1 + LIP_LAUNCH_PUSH[mode]) * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `pushed and cut once: ${car.speed}`);
       car.dispose();
     });
 
