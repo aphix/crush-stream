@@ -6,7 +6,7 @@ import { TRACKS } from "../world/tracks/index.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { CLASSES, VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
 import { DEG, drive, FRAME, type Sample } from "./ground-probe.test-util.ts";
-import { CONTACT_HZ, G } from "./car-air-body.ts";
+import { CONTACT_HZ, G, REST_SPEED } from "./car-air-body.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 import { SPRINGS } from "./car-suspension.ts";
@@ -36,7 +36,29 @@ const SNAP = 6;
  */
 const TOP_HEAVY: Readonly<Partial<Record<VehicleClassId, { pitch: number; gap: number }>>> = { monster: { pitch: 10.6, gap: 0.035 } };
 
-function worst(run: Sample[], from: number, to: number) {
+/** What a drive's frame says of the body's pose on the road: `Sample`'s own fields the readings below use. */
+type Reading = Pick<Sample, "s" | "airborne" | "gaps" | "pen" | "pitch" | "groundPitch" | "framePitch" | "wheelbase">;
+
+/** The pitch is still when neither axle moves up or down against the road faster than this (m/s): the speed the sim lets a body sleep under. */
+const PITCH_STILL_SPEED = REST_SPEED;
+/** Frames in a row the pitch holds still to be settled (1/6 s): a rebound's turning point holds still for 3 or 4 frames, a body at rest holds on. */
+const PITCH_STILL_FRAMES = 10;
+/** Frames the settled pitch is read over (0.5 s). */
+const READ_FRAMES = 30;
+
+/** The first frame from `from` on that begins `PITCH_STILL_FRAMES` frames in a row of a frame off the slope whose pitch turns an axle (half the wheelbase out) slower than `PITCH_STILL_SPEED`; -1 when the run has none. */
+function settledFrom(run: readonly Reading[], from: number): number {
+  let still = 0;
+  for (let i = Math.max(1, from + 1); i < run.length; i++) {
+    const [now, before] = [run[i]!, run[i - 1]!];
+    const turn = Math.abs(now.framePitch - now.groundPitch - (before.framePitch - before.groundPitch)) / DEG / FRAME;
+    still = turn * (now.wheelbase / 2) < PITCH_STILL_SPEED ? still + 1 : 0;
+    if (still === PITCH_STILL_FRAMES) return i - PITCH_STILL_FRAMES;
+  }
+  return -1;
+}
+
+function worst(run: readonly Reading[], from: number, to: number) {
   let gap = 0;
   let pen = 0;
   let pitch = 0;
@@ -155,15 +177,17 @@ describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboa
       const hung = Math.max(...run[first]!.gaps.map(Math.abs));
       const fallFrames = Math.ceil(Math.sqrt((2 * hung) / G) / FRAME);
       const down = run.findIndex((r, i) => i >= first && i <= first + fallFrames && r.gaps.every((g) => Math.abs(g) <= PLAIN.gap));
-      // "From then on" is `fallFrames` after touchdown, the latest the clause above lets the tyres be down: a tail's tyres reach the road at
-      // their springs' droop stop with the frame still turning onto the slope (a monster: 12.6° off it at the frame its rear tyres touch, 0.2°
-      // eight frames on), so the frame the tyres are within `gap` of the road is not the frame the body has settled onto it.
-      const w = worst(run.slice(first + fallFrames, first + fallFrames + 30), 0, Infinity);
-      t.diagnostic(`${cls}: touched down at s ${run[first]!.s.toFixed(0)} with the tail ${(hung * 100).toFixed(0)} cm up, all down ${down - first} of ${fallFrames} frames later; the next 0.5 s: most turn in a frame ${turn.toFixed(2)}°, deepest tyre ${(sunk * 100).toFixed(1)} cm, underside ${(pen * 100).toFixed(1)} cm of ${(slicePenetration(closing) * 100).toFixed(1)}; from ${fallFrames} frames on: frame ${w.framePitch.toFixed(2)}° off the slope of ${springPitch(cls).toFixed(1)}°`);
+      // "From then on" is once the frame's pitch has settled, searched from `fallFrames` after touchdown (the latest the clause above lets
+      // the tyres be down): the body rebounds off the landing and the frame is still turning onto the slope for a while after its tyres
+      // reach the road (a hatch landing nose-down 15.9°: 5.1° nose-up at 13 frames, 3.8° at 21, 3.0° at 23, 0° at 29), so no fixed frame is settled.
+      const settled = settledFrom(run, first + fallFrames);
+      const w = worst(run.slice(Math.max(0, settled), settled + READ_FRAMES), 0, Infinity);
+      t.diagnostic(`${cls}: touched down at s ${run[first]!.s.toFixed(0)} with the tail ${(hung * 100).toFixed(0)} cm up, all down ${down - first} of ${fallFrames} frames later, pitch settled ${settled - first} frames after touchdown; the next 0.5 s: most turn in a frame ${turn.toFixed(2)}°, deepest tyre ${(sunk * 100).toFixed(1)} cm, underside ${(pen * 100).toFixed(1)} cm of ${(slicePenetration(closing) * 100).toFixed(1)}; once settled: frame ${w.framePitch.toFixed(2)}° off the slope of ${springPitch(cls).toFixed(1)}°`);
       assert.ok(turn <= SNAP, `the body turned ${turn.toFixed(2)}° in one frame after touchdown`);
       assert.ok(sunk <= PLAIN.gap, `a tyre ${(sunk * 100).toFixed(1)} cm into the road after touchdown`);
       assert.ok(pen <= slicePenetration(closing), `underside ${(pen * 100).toFixed(1)} cm into the road after touchdown`);
       assert.ok(down >= 0, `the tyres were not all on the road ${fallFrames} frames after touchdown`);
+      assert.ok(settled >= 0, `the frame's pitch never settled within the run (still moving at ${PITCH_STILL_SPEED} m/s an axle)`);
       assert.ok(w.airFrames === 0 && w.framePitch <= springPitch(cls), `after settling: ${w.airFrames} frames off the road, the frame ${w.framePitch.toFixed(2)}° off the slope`);
     });
   }
@@ -174,5 +198,32 @@ describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboa
       assert.ok(!flies(cls, 6), `${cls} flew at 6 m/s`);
       assert.ok(flies(cls, 16), `${cls} stayed down at 16 m/s`);
     }
+  });
+});
+
+/** A run of `frames` frames whose frame stands `error(i)` deg off the slope at frame i, tyres down: what the settled reading needs of a drive. */
+function heldRun(frames: number, error: (i: number) => number): Reading[] {
+  return Array.from({ length: frames }, (_, i): Reading => ({ s: i, airborne: false, gaps: [0, 0, 0, 0], pen: 0, pitch: error(i), groundPitch: 0, framePitch: error(i), wheelbase: 2.4 }));
+}
+
+describe("given the reading of where the frame settles after a landing", () => {
+  const HATCH_BAR = springPitch("hatch");
+
+  it("when a run holds the frame 4° off the slope, then it settles at once and reads 4°, over the hatch's springs' bar", () => {
+    const run = heldRun(120, () => 4);
+    const at = settledFrom(run, 21);
+    assert.equal(at, 21);
+    assert.ok(worst(run.slice(at, at + READ_FRAMES), 0, Infinity).framePitch > HATCH_BAR, "the held frame reads inside the bar");
+  });
+
+  it("when a rebound of 5° at 3 Hz decays over a second, then it settles only once the rebound is under the pitch's rest and reads inside the bar, not the rebound's turning points", () => {
+    const run = heldRun(240, (i) => 5 * Math.cos(2 * Math.PI * 3 * i * FRAME) * Math.exp(-i * FRAME * 4));
+    const at = settledFrom(run, 0);
+    assert.ok(at > 30, `settled at frame ${at}, inside the rebound`);
+    assert.ok(worst(run.slice(at, at + READ_FRAMES), 0, Infinity).framePitch <= HATCH_BAR, "the settled frame reads over the bar");
+  });
+
+  it("when a frame rocks 2° at 3 Hz for the whole run, then it never settles", () => {
+    assert.equal(settledFrom(heldRun(240, (i) => 2 * Math.cos(2 * Math.PI * 3 * i * FRAME)), 0), -1);
   });
 });

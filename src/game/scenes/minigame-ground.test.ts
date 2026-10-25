@@ -14,12 +14,12 @@ import { FRAME as PROBE_FRAME, frame } from "../vehicle/ground-probe.test-util.t
 import { activeGround, FLAT_GROUND, setGround, type Ground } from "../world/ground.ts";
 import { PR_ID } from "../world/prism.ts";
 import { GRID, P_OX, P_STRIDE, PRISM, Q_KIND, Q_STRIDE } from "../world/surfaces.ts";
-import { HIGH_JUMP_MEASURED, LANDING_HEIGHT, MINIGAME_MODES, REST_HOLD, STATION_ANCHORS, STATION_HALF_WIDTH, type MinigameMode } from "./minigame-constants.ts";
+import { HIGH_JUMP_MEASURED, LANDING_HEIGHT, LIP_LAUNCH_PUSH, MINIGAME_MODES, REST_HOLD, STATION_ANCHORS, STATION_HALF_WIDTH, type MinigameMode } from "./minigame-constants.ts";
 import { highJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS } from "./minigame-high-jump.ts";
 import { MinigameGround } from "./minigame-ground.ts";
 import { FRAME_BOX_FLOATS, frameBoxCount, frameMeshOf, withoutFrame } from "./minigame-frame.test-util.ts";
 import { climbFootX, floorHeightAt, lipHeight, stationBackX, stationFrontX, stationStartPose } from "./minigame-profile.ts";
-import { dressedDriverCar, MINIMUM_SPEED } from "./minigame-profile.test-util.ts";
+import { dressedDriverCar, MINIMUM_SPEED, speedAtLine } from "./minigame-profile.test-util.ts";
 import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_CUPS, RING_MESH_STEP, ringBoardMesh, ringHeightAt, ringScore } from "./minigame-ring.ts";
 import { RANGE } from "./range.ts";
 
@@ -52,7 +52,7 @@ const STEER_LOOK_PER_SPEED = 0.4;
 const STEER_GAIN = 2.5;
 /** The long jump's bar: the car's centre reaches this local x. */
 const LONG_JUMP_REACH_X = -1.5;
-/** The slowest (m/s) any class may carry through the high jump's last stretch, below its bar. */
+/** The slowest (m/s) any class may carry through the high jump's last stretch, below the speed it must arrive at the lip with for the lip's push to give it its bar. */
 const CLIMB_STALL_ALLOWANCE = 1;
 
 
@@ -259,16 +259,18 @@ function driveFromStart(type: DriverCar, mode: MinigameMode, assignHook = true):
         const error = Math.atan2(aheadX - position.x, anchor.z - position.z) - car.yaw;
         input.steer = Math.max(-1, Math.min(1, STEER_GAIN * Math.atan2(Math.sin(error), Math.cos(error))));
       }
+      const fromX = position.x;
+      const fromSpeed = car.speed;
       frame(world, input, clock, afterSlice);
       if (!crossedFoot && position.x >= footX) {
         crossedFoot = true;
-        drive.footSpeed = car.speed;
+        drive.footSpeed = speedAtLine(fromX, fromSpeed, position.x, car.speed, footX);
       }
       if (crossedFoot && !thrown) drive.slowestOnClimb = Math.min(drive.slowestOnClimb, car.speed);
       if (position.x - anchor.x >= LONG_JUMP_REACH_X) drive.reachedLongJumpBar = true;
       if (!drive.reachedLip && position.x >= anchor.x) {
         drive.reachedLip = true;
-        if (!thrown) drive.lipSpeed = car.speed;
+        if (!thrown) drive.lipSpeed = speedAtLine(fromX, fromSpeed, position.x, car.speed, anchor.x);
         if (mode === "longJump" || !assignHook) break;
       }
       stalledFor = car.speed < STALLED_SPEED ? stalledFor + PROBE_FRAME : 0;
@@ -295,7 +297,7 @@ describe("given each of the 7 car types parked at each station's start on the re
         assert.ok(drive.reachedLip, `${type.id} reached the lip`);
         assert.ok(drive.footSpeed >= minimum.foot, `${type.id} at the foot ${drive.footSpeed} against ${minimum.foot}`);
         assert.ok(drive.lipSpeed >= minimum.lip, `${type.id} at the lip ${drive.lipSpeed} against ${minimum.lip}`);
-        assert.ok(drive.slowestOnClimb >= minimum.lip - CLIMB_STALL_ALLOWANCE - 1e-9 || mode !== "highJump", `${type.id} slowest ${drive.slowestOnClimb}`);
+        assert.ok(drive.slowestOnClimb >= minimum.lip / (1 + LIP_LAUNCH_PUSH.highJump) - CLIMB_STALL_ALLOWANCE - 1e-9 || mode !== "highJump", `${type.id} slowest ${drive.slowestOnClimb}`);
         if (mode === "longJump") assert.ok(drive.reachedLongJumpBar, `${type.id} reached x = ${LONG_JUMP_REACH_X}`);
         else assert.equal(drive.ejections, 1, `${type.id}: ${drive.ejections} ejections`);
       }

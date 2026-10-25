@@ -782,7 +782,8 @@ export abstract class DeformContact extends DeformState {
    * to it (its side crushes) rather than the bullet's nose stopping dead against a car that gets no momentum. `whole`: the overlap is
    * all of the crush (a fixed solid no particle reaches, so no particle held on its face takes the rest), not the 0.4 + 0.35·squash share.
    * `span`: the face's extent; a mass beyond it is not under the face and takes none of its crush. `patch`: the half width (m) of a broad
-   * contact along the face: a mass within it of the point presses as near as one at the point (a flat bumper's corner crushes as its middle).
+   * contact along the face, at most this car's own bumper's (a pile's patch is wider than any face): a mass within it of the point
+   * presses as near as one at the point (a flat bumper's corner crushes as its middle).
    */
   feedOverlap(worldPoint: THREE.Vector3, inward: THREE.Vector3, overlap: number, closing: number, dt = 1 / FRAME_HZ, refVn = 0, whole = false, span?: FaceSpan, patch = 0): number {
     if (!this.massActive) return closing;
@@ -814,6 +815,7 @@ export abstract class DeformContact extends DeformState {
     const tailLeft = Math.max(0, cell.local.z - tail - 0.38);
     const bumperLeft = THREE.MathUtils.clamp(Math.max(noseLeft, tailLeft) / 1.45, 0, 1);
     const passFront = this.frontTransfer();
+    const spread = Math.min(patch, this.at.bumperFR.rest.x);
 
     for (let mi = 0; mi < this.masses.length; mi++) {
       const m = this.masses[mi]!;
@@ -823,9 +825,9 @@ export abstract class DeformContact extends DeformState {
       if (zone < MIN_IMPACT_ZONE) continue;
       if (span !== undefined && Math.abs((m.world.x - span.x) * span.rx + (m.world.z - span.z) * span.rz) > span.hx + m.radius * 0.5) continue;
       let d = m.world.distanceTo(worldPoint);
-      if (patch > 0) {
+      if (spread > 0) {
         const across = Math.abs((m.world.z - worldPoint.z) * inward.x - (m.world.x - worldPoint.x) * inward.z);
-        const beyond = Math.max(0, across - patch);
+        const beyond = Math.max(0, across - spread);
         d = Math.sqrt(Math.max(0, d * d - across * across + beyond * beyond));
       }
       const reach = 1.05 + s * 0.35;

@@ -12,7 +12,7 @@ import { REST_SPEED } from "../vehicle/car-air-body.ts";
 import { CarSurfaces, REACH } from "../vehicle/car-surfaces.ts";
 import { armTops, calmSolids } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { CONTACT_WINDOW, UPRIGHT_RIDE_QUIET } from "../deform/constants.ts";
+import { CONTACT_WINDOW } from "../deform/constants.ts";
 import { STOCK_PAINT } from "../vehicle/constants.ts";
 import { UPRIGHT_UP_Y } from "../vehicle/car-suspension.ts";
 import { FINE_HZ, SLICES_PER_STEP } from "../kernel/constants.ts";
@@ -149,13 +149,13 @@ function idle(car: DeformableCar): boolean {
 }
 
 /**
- * The quiet (s) a wreck's contact clock must have run before its masses ride its body (`DeformFreeze.ridesBody`); never for a car that moves or flies (a sleeper does neither).
- * One lying on its side or roof (`UPRIGHT_UP_Y`) rides from the contact window, one on its wheels from `UPRIGHT_RIDE_QUIET`: its structure still settles it first.
+ * The quiet (s) a wreck's contact clock must have run before its masses ride its body (`DeformFreeze.ridesBody`): the contact window for a car that sleeps or lies on its side or roof (`UPRIGHT_UP_Y`) and
+ * is at rest, never for one that moves or flies, and never for an awake one on its wheels: its structure still settles it (riding from a second, upright wrecks cost the derby 11 % of its scored hits).
  */
 function rideQuiet(car: DeformableCar): number {
   if (!car.asleep && (car.moving || car.airborne)) return Infinity;
   const q = car.group.quaternion;
-  return 1 - 2 * (q.x * q.x + q.z * q.z) < UPRIGHT_UP_Y ? CONTACT_WINDOW : UPRIGHT_RIDE_QUIET;
+  return car.asleep || 1 - 2 * (q.x * q.x + q.z * q.z) < UPRIGHT_UP_Y ? CONTACT_WINDOW : Infinity;
 }
 
 /** Scratch for the weight an unstepped car's roof drops (`stepWorld`). */

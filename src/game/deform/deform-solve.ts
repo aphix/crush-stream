@@ -18,7 +18,7 @@ import {
 import { ENGINE_SLACK } from "./deform-contact.ts";
 import { DeformFreeze } from "./deform-freeze.ts";
 import { HUB_OVERRUN, type MassNode } from "./deform-rig.ts";
-import { FACE_TOP } from "./load-crush.ts";
+import { FACE_TOP, SPRING_YIELD } from "./load-crush.ts";
 import { PLANT_QUIET } from "./deform-state.ts";
 import { holdMomentum, holdPositions, turnVelocities, undoNetTurn } from "./turn-hold.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
@@ -32,16 +32,17 @@ const SUSPENSION_K = 11000;
 const SUSPENSION_C = 260;
 /** Most of a crushed node's travel (m) that springs back; the rest is permanent set. */
 const SPRINGBACK = 0.08;
-/** A dent this shallow (m) springs back whole: a skin panel's elastic range. */
-const SPRING_YIELD = 0.015;
 /** Share of a crush past the yield that springs back: real structure keeps 75-90 % of its peak crush (17 % back at 56 km/h, SAE 2006-01-0908). */
 const SPRING_SHARE = 0.1;
 /** C4: a wheel separates only on an off-centre hit this hard (m/s EBS, 54 km/h), once the struck corner has crushed to within the rig's `tyreReach` of the hub. */
 export const HUB_POP_MPS = 15;
 /** The hit speed (m/s EBS) from which a corner crushed to `HUB_OVERRUN` of its hub takes the wheel. */
 const HUB_OVERRUN_MPS = 3;
+/** The farthest (m) a hub that stands off its place returns toward it in one clamp, once its wreck has been quiet past `PLANT_QUIET` or lies over (frame up under `LYING_UP_Y`): an upright wreck's crash window clamps a hub 0.3-0.4 m a slice and keeps doing so. */
+const HUB_RETURN_MAX = 0.3;
 
 const _a = new THREE.Vector3();
+const _inverse = new THREE.Matrix4();
 const _n = new THREE.Vector3();
 /** `clampMass`'s per-call doubles: [0] ix, [1] iz, [2] maxAway, [3] maxCrush, [4] stroke (as arguments to the out-of-line call all five were boxed per mass). */
 const _clamp = new Float64Array(5);
@@ -323,6 +324,22 @@ export abstract class DeformSolve extends DeformFreeze {
     // Planted tires are the world pin. Projecting them through a pitched
     // group was ratcheting the wreck backward every followGroup.
     if (m.hub && !m.popped && pinned) return;
+    // A hub standing off its place (a wreck carried on another's top, tipped through `LYING_UP_Y`, its plant over with no contact to start it; a lying wreck whose suspension drew
+    // its hubs a metre toward the ground) comes back to its place by `HUB_RETURN_MAX` a clamp, not across the body in one: four hubs 0.6-1.0 m off crossed it in one slice
+    // (derby seeds 4 and 3: 6.5 and 6.6 cm of centroid, a zip). An upright wreck in its crash window keeps the full clamp: its wheels' drag is what the crush rows read.
+    if (m.hub && !m.popped && (this.quietTime() >= PLANT_QUIET || this.frameUp.y < LYING_UP_Y)) {
+      _a.copy(m.local).applyMatrix4(group.matrixWorld).sub(m.world);
+      const away = _a.length();
+      if (away > HUB_RETURN_MAX) {
+        m.world.addScaledVector(_a, HUB_RETURN_MAX / away);
+        m.local.copy(m.world).applyMatrix4(_inverse.copy(group.matrixWorld).invert());
+        // The step is the hub going home, not the cloud turning: held where it now stands, `undoTurn` does not count it as a turn and turn the whole wreck back by it (derby seed 3 c0, lying on its roof at 1.4 rad/s:
+        // each clamp's +0.3 m return was undone by 0.38 m and the hubs walked 0.15 to 1.6 m off their places in ten slices).
+        this.turnX[i] = m.world.x;
+        this.turnZ[i] = m.world.z;
+        return;
+      }
+    }
     m.world.copy(m.local).applyMatrix4(group.matrixWorld);
   }
 

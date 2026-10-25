@@ -66,6 +66,24 @@ function growDrawn(o: THREE.Object3D, box: THREE.Box3): void {
   }
   for (let i = 0; i < o.children.length; i++) growDrawn(o.children[i]!, box);
 }
+
+/** The lowest clearance (m) of what `o` and its descendants draw over the ground under each vertex, at their world matrices as they stand; `Infinity` where there is no ground under any. */
+function lowestClearance(o: THREE.Object3D): number {
+  if (!o.visible) return Infinity;
+  let low = Infinity;
+  const geometry = o instanceof PartSeat ? o.drawn : o instanceof THREE.Mesh ? (o.geometry as THREE.BufferGeometry) : null;
+  if (geometry !== null) {
+    const position = geometry.getAttribute("position");
+    const ground = activeGround();
+    for (let k = 0; k < position.count; k++) {
+      _bumpW.fromBufferAttribute(position, k).applyMatrix4(o.matrixWorld);
+      const y = ground.heightAt(_bumpW.x, _bumpW.z, _bumpW.y);
+      if (y !== NO_FLOOR) low = Math.min(low, _bumpW.y - y);
+    }
+  }
+  for (let i = 0; i < o.children.length; i++) low = Math.min(low, lowestClearance(o.children[i]!));
+  return low;
+}
 const _bumpW = new THREE.Vector3();
 /** A mirror the ground crushes off its car leaves with this much speed straight up (m/s, world). */
 const MIRROR_POP = 0.5;
@@ -435,9 +453,9 @@ export abstract class CarParts extends CarGlass {
     o.position.y = y0 - px * detSin(r);
     o.updateWorldMatrix(false, true);
     growDrawn(o, _box.makeEmpty());
-    _bumpW.setFromMatrixPosition(o.matrixWorld);
-    const gy = activeGround().heightAt(_bumpW.x, _bumpW.z, _bumpW.y);
-    return gy === NO_FLOOR ? 0 : gy + BUMPER_CLEAR - _box.min.y;
+    const high = groundUnderBox(_box);
+    if (high === NO_FLOOR || _box.min.y >= high + BUMPER_CLEAR) return 0;
+    return BUMPER_CLEAR - lowestClearance(o);
   }
 
   /** Door hinge state; `side` −1 is the left door, +1 the right. */
@@ -1074,8 +1092,7 @@ export abstract class CarParts extends CarGlass {
 
   /**
    * The road under arch shell `p` as `poseShell`'s `floor` in the body's frame: the plane the ground's height and normal under the
-   * shell's middle give, lifted `SHELL_CLEAR`. Null for a quarter panel (it never drops), with no ground under it, or on a car
-   * not on its wheels (on its side, the body's up runs along the road).
+   * shell's middle give, lifted `SHELL_CLEAR`. Null for a quarter panel (it never drops) and with no ground under it.
    */
   private shellFloor(p: DetachPart): Float64Array | null {
     if (p.region!.kind === "quarter") return null;
@@ -1091,7 +1108,7 @@ export abstract class CarParts extends CarGlass {
     _floor[1] = n.x * e[4]! + n.y * e[5]! + n.z * e[6]!;
     _floor[2] = n.x * e[8]! + n.y * e[9]! + n.z * e[10]!;
     _floor[3] = n.x * (e[12]! - at.x) + n.y * (e[13]! - gy) + n.z * (e[14]! - at.z) - SHELL_CLEAR;
-    return _floor[1]! < UPRIGHT_UP_Y ? null : _floor;
+    return _floor;
   }
 
   /** A torn shell counts against the car's cap: past `LIVE_SHELLS` the oldest stops being drawn. */

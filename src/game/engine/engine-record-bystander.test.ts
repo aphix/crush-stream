@@ -15,6 +15,7 @@ import type { HighlightClip } from "../match/highlights.ts";
 import { newWorld, settleStep, stepWorld } from "./world-step.ts";
 import { CrashRecorder } from "./engine-record.ts";
 import { ClipSim } from "./engine-replay.ts";
+import { FACE_NOSE } from "../deform/load-crush.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 
@@ -39,11 +40,14 @@ const JUMPER = 4;
 const FAR = 5;
 /** 45 m from the hit with a mirror snapped off and no crash: no wreck, yet its net state rides the keyframe and so must its solver state. */
 const MIRROR = 20;
+/** 40 m from the hit with a nose dent under the crash's depth (`SPRING_YIELD`) and nothing else: no wreck and no torn part, yet its load crush is solver state the keyframe must carry. */
+const DENTED = 21;
+const DENT_M = 0.008;
 /** Wrecks (a solver state in the clip's first keyframe: the costly kind of car) 50 to 74 m out, in two columns 6 m apart: the clip has room for some. */
 const WRECKS = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19];
 /** The pair meets at x = `IMPACT_X` about 3.3 s in, so the clip's pre-roll holds a full 3 s of keyframes. */
 const IMPACT_X = 60;
-const ALL = 21;
+const ALL = 22;
 /** 4 s in, inside the clip: `FAR` (outside it) knocks prop `OUTSIDE_PROP` off its spot, and `NEAR` (in it) prop `INSIDE_PROP`. */
 const KNOCK_STEP = 4 * 240;
 const OUTSIDE_PROP = 7;
@@ -76,6 +80,10 @@ function record(): Recorded {
   cars[MIRROR]!.spawnFacing(IMPACT_X, 45, Math.PI / 2, 12);
   cars[MIRROR]!.breakMirror(-1, new THREE.Vector3(1, 1, 0));
   assert.ok(!cars[MIRROR]!.crashed && cars[MIRROR]!.hasLoosePart(), "the mirror car has a part off and is no wreck");
+  cars[DENTED]!.spawnFacing(IMPACT_X, -40, Math.PI / 2, 12);
+  cars[DENTED]!.deform.crush[FACE_NOSE] = DENT_M;
+  cars[DENTED]!.deform.bakeLoadCrush();
+  assert.ok(!cars[DENTED]!.crashed && !cars[DENTED]!.hasLoosePart() && cars[DENTED]!.deform.loadCrushed(), "the dented car has a nose dent under the crash's depth, no part off and is no wreck");
   for (const [k, i] of WRECKS.entries()) {
     const car = cars[i]!;
     car.spawnFacing(IMPACT_X + 6 * (k & 1), 50 + 4 * (k >> 1), Math.PI / 2, 12);
@@ -175,6 +183,17 @@ describe("given a flat-field head-on recorded as a highlight with 19 bystander c
     const sim = new ClipSim(clip, clip.cars.map((c) => cars[c.slot]!), { dress, collide: () => {}, blend: new PoseBlend() });
     sim.restart();
     assert.deepEqual(cars[MIRROR]!.deform.impactInward.toArray(), [0, 0, -1]);
+  });
+
+  it("when the clip is restored, then a car with a nose dent under the crash's depth and no crash gets its load crush back from the keyframe, no wreck", () => {
+    const { clip, cars, dress } = run;
+    const car = cars[DENTED]!;
+    assert.ok(clip.cars.some((c) => c.slot === DENTED), "the dented car (40 m from the hit) is in the clip");
+    car.deform.crush.fill(0);
+    const sim = new ClipSim(clip, clip.cars.map((c) => cars[c.slot]!), { dress, collide: () => {}, blend: new PoseBlend() });
+    sim.restart();
+    assert.ok(!car.crashed, "the dented car is restored with no wreck");
+    assert.ok(Math.abs(car.deform.crush[FACE_NOSE]! - DENT_M) < 1e-9, `its nose crush is ${car.deform.crush[FACE_NOSE]!.toFixed(4)} m after the restore, ${DENT_M} m as recorded`);
   });
 
   it("when the clip is restored, then a car with a torn mirror and no crash is drawn in its rest skin, not collapsed by the zero skin inputs of its network state (no bake ever ran for it)", () => {

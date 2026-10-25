@@ -101,7 +101,7 @@ export const _lift = new THREE.Vector3();
  * per call): the impulse `give` and `push` give and the part of it that stops closing, the speed `reach` reads, the closing the weight
  * brings (`weightClosing`) and the depth `bodyContact` takes.
  */
-export const _s = new Float64Array(7);
+export const _s = new Float64Array(9);
 export const S_J = 0;
 export const S_JD = 1;
 export const S_REACH = 2;
@@ -111,6 +111,9 @@ export const S_PEN = 4;
 export const S_POINT_REACH = 5;
 /** How deep (m) the deepest row a wreck at rest still lifts out of the world's ground stands in it (`solveRows`, this step's car). */
 export const S_LIFTING = 6;
+/** The loaded points `S_HELD_FROM` up to `S_HELD_TO` are an intact car's held underside points (`loadPoints`): the drawn rocker, read as the belly's rows are. */
+export const S_HELD_FROM = 7;
+export const S_HELD_TO = 8;
 export const N = Array.from({ length: CONTACTS }, () => new THREE.Vector3());
 /** Per contact: the direction its impulse and its lift go: up for a tyre on a face it can climb, else the face's normal. */
 export const DIR = Array.from({ length: CONTACTS }, () => UP);
@@ -334,6 +337,16 @@ export function push(v: THREE.Vector3, w: THREE.Vector3, q: THREE.Quaternion, r:
   w.addScaledVector(invInertia(_rn.crossVectors(r, dir), q, _qi, body.invI), j);
 }
 
+/** `kineticEnergy`'s result (J/kg): a number returned across a call that is not inlined is boxed, an allocation per call. */
+export const _ke = new Float64Array(1);
+
+/** The body's kinetic energy per unit mass into `_ke[0]` (J/kg): its velocity and its spin about its centre of mass. */
+export function kineticEnergy(): void {
+  const { v, w, invI } = body;
+  _rn.copy(w).applyQuaternion(_qi);
+  _ke[0] = 0.5 * (v.lengthSq() + (_rn.x * _rn.x) / invI.x + (_rn.y * _rn.y) / invI.y + (_rn.z * _rn.z) / invI.z);
+}
+
 const _ov = new THREE.Vector3();
 const _qo = new THREE.Quaternion();
 /** Contact `c`'s point velocity on the stepping body (`v`, `w`) against its surface, into `out`: the top of a car in the rigid step moves with that car. */
@@ -452,7 +465,7 @@ function solveSpringSystem(tyres: number): void {
 const TYRE_SAG = 0.01;
 /** The damping ratio of that flattening: left at the suspension's own damper, the stiff tread rang for seconds. */
 const TYRE_DAMP_RATIO = 0.5;
-/** The fastest (m/s) the tread's own oscillation moves: its ring speed at twice its static flattening (a 2 g load), 2 sqrt(G TYRE_SAG). The cap's damper follows a press or release rate no faster: past it is a landing or a bounce, which the springs carry. */
+/** The fastest (m/s) the tread's own oscillation moves on the ground: its ring speed at twice its static flattening (a 2 g load), 2 sqrt(G TYRE_SAG). The cap's damper follows a ground tyre's press or release rate no faster: past it is a landing or a bounce, which the springs carry. A tyre on another car's top keeps its whole rate: the stack's roofs settle on it. */
 const TREAD_RING_SPEED = 2 * Math.sqrt(G * TYRE_SAG);
 
 /**
@@ -496,6 +509,7 @@ export function springPushes(frame: CarFrame, tyres: number, stiff: number, damp
     if (!SPRING_PUSHING[c]) continue;
     const flat = PRESS[c]! + (OWN[c]! >= 0 ? 0 : travel);
     const k = (SHARE[c]! * G) / TYRE_SAG;
-    ASK[c] = Math.max(0, Math.min(ASK[c]!, dt * (k * flat + 2 * TYRE_DAMP_RATIO * Math.sqrt(Math.max(0, k)) * Math.min(1, flat / TYRE_SAG) * Math.max(-TREAD_RING_SPEED, Math.min(SPRING_RATE[c]!, TREAD_RING_SPEED)))));
+    const rate = OWN[c]! >= 0 ? SPRING_RATE[c]! : Math.max(-TREAD_RING_SPEED, Math.min(SPRING_RATE[c]!, TREAD_RING_SPEED));
+    ASK[c] = Math.max(0, Math.min(ASK[c]!, dt * (k * flat + 2 * TYRE_DAMP_RATIO * Math.sqrt(Math.max(0, k)) * Math.min(1, flat / TYRE_SAG) * rate)));
   }
 }

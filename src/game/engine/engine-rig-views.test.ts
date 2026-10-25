@@ -7,9 +7,13 @@ import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { G } from "../vehicle/car-air-body.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
 
 const FRAME = 1 / FRAME_HZ;
 type Rig = "press" | "pistons" | "doors" | "corkscrew";
+/** The share of its spawn's kinetic energy a coasting rig car still holds a second after a reset (rolling drag costs it under a tenth). */
+const COAST_SHARE = 0.9;
 
 describe("given the real engine in a rig scene, watching its car", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -28,6 +32,16 @@ describe("given the real engine in a rig scene, watching its car", () => {
     engine["keys"].clear();
     run(FRAME); // one frame with no key down: the seat's pedal edge starts fresh
     engine["emitHud"]();
+  };
+  /**
+   * A rig car that coasts keeps its energy: the corkscrew's mouth takes it up 7.7 m in the second after a reset (24 -> 21.1 m/s at the lip, 66 J/kg of
+   * speed into height), so the bar is its mechanical energy (speed and height), 0.9 of the spawn's kinetic energy, not 0.9 of its speed. Measured
+   * on the engine: 100 % of the spawn's at the mount's start, 96 % at its dip, 103 % at the lip. A car braked or parked after the reset holds none of it.
+   */
+  const assertCoasting = (car: DeformableCar): void => {
+    const spawn = 0.5 * car.spawnSpeed * car.spawnSpeed;
+    const held = 0.5 * car.velocity.lengthSq() + G * car.group.position.y;
+    assert.ok(held > COAST_SHARE * spawn, `the car holds ${held.toFixed(0)} J/kg (speed ${car.velocity.length().toFixed(1)} m/s, ${car.group.position.y.toFixed(1)} m up) of the ${spawn.toFixed(0)} J/kg it spawned with, under ${COAST_SHARE}`);
   };
   /** W for a moment (the seat takes the wheel), then released. */
   const takeWheel = (): void => {
@@ -89,7 +103,7 @@ describe("given the real engine in a rig scene, watching its car", () => {
     engine.reset();
     assert.equal(engine["view"].specView(false), "third", "the reset keeps the view");
     run(1);
-    assert.ok(car.velocity.length() > 0.9 * car.spawnSpeed, `the corkscrew car coasts at ${car.velocity.length().toFixed(1)} of ${car.spawnSpeed.toFixed(1)} m/s after the reset`);
+    assertCoasting(car);
   });
 
   it("when the car was driven and the scene resets (the HUD's reset, or the loop), then the seat hands the car back and it coasts the run at its spawn speed again", () => {
@@ -101,7 +115,7 @@ describe("given the real engine in a rig scene, watching its car", () => {
     assert.equal(engine["seat"].mode, "follow", "the reset handed the car back to the rig");
     assert.equal(hud.get().seat, "follow", "the HUD says so");
     run(1);
-    assert.ok(car.velocity.length() > 0.9 * car.spawnSpeed, `coasting at ${car.velocity.length().toFixed(1)} of ${car.spawnSpeed.toFixed(1)} m/s`);
+    assertCoasting(car);
   });
 
   it("when the car was driven, Esc steps back and the scene resets, then it coasts the run at its spawn speed", () => {
@@ -112,6 +126,6 @@ describe("given the real engine in a rig scene, watching its car", () => {
     assert.equal(engine["seat"].mode, "follow");
     engine.reset();
     run(1);
-    assert.ok(car.velocity.length() > 0.9 * car.spawnSpeed, `coasting at ${car.velocity.length().toFixed(1)} of ${car.spawnSpeed.toFixed(1)} m/s`);
+    assertCoasting(car);
   });
 });

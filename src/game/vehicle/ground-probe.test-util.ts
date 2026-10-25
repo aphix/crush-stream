@@ -9,6 +9,7 @@ import { paint } from "./test-support.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, stepWorld, type World } from "../engine/world-step.ts";
 import { setGround, type Ground } from "../world/ground.ts";
+import { C_DEPTH, C_H, HIT_SIZE, pointContactSolids, PQ_BODY, PQ_SIZE, PQ_X, PQ_Y, PQ_Z } from "../world/surfaces.ts";
 import { blankPoint, blankProjection, pointOn, type Track } from "../world/track.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
@@ -16,7 +17,7 @@ import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 /**
  * How a car sits on ANY `Ground`, read straight off its drawn pose, for the drop matrix (`ground-fit.test.ts`) and the
  * driving sweeps: every tyre's clearance, the body's pitch and roll against the ground under its hubs, and how deep its
- * underside is in the ground. All of it asks `Ground.heightAt` (the one door wheels, hull and FX use); there is no
+ * underside is in the ground. Tyres and hubs ask `Ground.heightAt`; hull points the rigid step's own body rule (`bodyPointDepth`); there is no
  * ramp, bank or crest path. Not a test file itself.
  */
 export const FRAME = 1 / FRAME_HZ;
@@ -34,9 +35,6 @@ const TREAD_RINGS = [
 const TREAD_STEPS = 48;
 /** A bumper corner is a row (x, z, height) of `frame.hullUnder`'s last four. */
 const BUMPER_ROWS = 4;
-
-/** Height hints are the asking point plus this (m): the layer rule (`STEP_UP`, a ramp's kerb) reads them. */
-const HINT_ABOVE = 1;
 
 /** The lines the belly is read along (car-local): along z at each of the car's `lineX` (its rockers at ±the underside's widest x), across x at each `LINE_Z` (the frame's `belly` rows). */
 const LINE_Z = [2, 1, 0, -0.5, -1, -2] as const;
@@ -76,11 +74,10 @@ export type Fit = {
   /** The physics frame's own pitch / roll (deg), before the springs. */
   framePitch: number;
   frameRoll: number;
-  /** Deepest underside or bumper point under the ground as the physics reads it (each point asks `heightAt` at its own
-   *  height: a face more than a kerb above it is a wall, not floor) (m, ≥ 0), and where. */
+  /** Deepest underside or bumper point under a floor as the physics reads it (`bodyPointDepth`) (m, ≥ 0), and where. */
   pen: number;
   penAt: string;
-  /** The same, asking at the body's height + 1 m: a wall's depth too (a fleet ramp's side face the car is inside). */
+  /** The deepest of those points in the ground by the shortest way out, a wall's side face included (a fleet ramp's side the car is inside) (m, ≥ 0), and where. */
   overlap: number;
   overlapAt: string;
   /** Lowest clearance of any underside or bumper point over the ground as the physics reads it (m; negative is `pen`), and of the
@@ -103,12 +100,32 @@ export type Fit = {
 };
 
 const _p = new THREE.Vector3();
+const _bodyQuery = new Float64Array(PQ_SIZE);
+const _bodyHit = new Float64Array(HIT_SIZE);
+_bodyQuery[PQ_BODY] = 1;
+const _bodyDepth = { depth: -Infinity, side: false };
 const _n = new THREE.Vector3();
 const _m = new THREE.Vector3();
 const _centre = new THREE.Vector3();
 const _centre0 = new THREE.Vector3();
 const _hub: THREE.Vector3[] = [0, 1, 2, 3].map(() => new THREE.Vector3());
 const _g = [0, 0, 0, 0];
+
+/**
+ * How far (m) the body point (x, y, z) is in the active ground by the shortest way out, as the rigid step reads a body point (`readPoints`,
+ * `PQ_BODY`): `side` for a wall's face it came in by (the way back out through it), else a floor's height over it less its own (negative
+ * above the floor). `depth` is -Infinity with no ground there. Read at once, the result is the next call's.
+ */
+export function bodyPointDepth(x: number, y: number, z: number): { depth: number; side: boolean } {
+  _bodyQuery[PQ_X] = x;
+  _bodyQuery[PQ_Y] = y;
+  _bodyQuery[PQ_Z] = z;
+  pointContactSolids(_bodyQuery, -1, _bodyHit);
+  const floor = _bodyHit[C_H]!;
+  _bodyDepth.side = floor === -Infinity;
+  _bodyDepth.depth = floor !== -Infinity ? floor - y : _bodyHit[C_DEPTH]! > 0 ? _bodyHit[C_DEPTH]! : -Infinity;
+  return _bodyDepth;
+}
 
 export function makeCar(cls: VehicleClassId): DeformableCar {
   const car = new DeformableCar(paint(), new THREE.Scene(), null, CLASSES[cls].style);
@@ -149,7 +166,6 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   // A car with no class assigned has no class body: its drawn body is the group (the springs move nothing, `Suspension.body`).
   const body = car.group.getObjectByName("classLift") ?? car.group;
   const e = body.matrixWorld.elements;
-  const gy = car.group.position.y;
   const gaps: number[] = [];
   const contacts = new Float64Array(12).fill(NaN);
   const { r: tyreR, halfW: tyreHalfW } = car.frame.rig.tyre;
@@ -216,17 +232,15 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   let hull = Infinity;
   const probe = (name: string, x: number, y: number, z: number) => {
     _p.set(x, y, z).applyMatrix4(body.matrixWorld);
-    const own = ground.heightAt(_p.x, _p.z, _p.y);
-    if (own !== -Infinity) {
-      hull = Math.min(hull, _p.y - own);
-      if (own - _p.y > pen) {
-        pen = own - _p.y;
-        penAt = name;
-      }
+    const { depth, side } = bodyPointDepth(_p.x, _p.y, _p.z);
+    if (depth === -Infinity) return;
+    if (!side) hull = Math.min(hull, -depth);
+    if (!side && depth > pen) {
+      pen = depth;
+      penAt = name;
     }
-    const wide = ground.heightAt(_p.x, _p.z, gy + HINT_ABOVE);
-    if (wide !== -Infinity && wide - _p.y > overlap) {
-      overlap = wide - _p.y;
+    if (depth > overlap) {
+      overlap = depth;
       overlapAt = name;
     }
   };

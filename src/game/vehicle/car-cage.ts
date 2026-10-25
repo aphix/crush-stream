@@ -6,6 +6,7 @@ import { interiorPose } from "./part-pose.ts";
 import { decimate, upFacing } from "./cage-mesh.ts";
 import { planFieldOf, rasterise } from "./cage-fields.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
+import { cageGateHold, makeTrunkGeometry } from "./car-mesh.ts";
 import { wellHumpGeometry } from "./car-well-mesh.ts";
 import { carFrame } from "./car-rig.ts";
 import { rockerAt } from "./car-lines.ts";
@@ -51,7 +52,9 @@ function cageBuildCounts(style: BodyStyle): { sill: number; stations: number; ke
     welded.add(`${Math.round(pos[i]! * 1e4)},${y},${Math.round(z * 1e4)}`);
   }
   const stations = (geo.userData.loft as { slices: number }).slices;
-  const kept = (geo.userData.hold as number[]).length;
+  const gate = makeTrunkGeometry(style, "cage");
+  const kept = (geo.userData.hold as number[]).length + cageGateHold(style, gate).length;
+  gate.dispose();
   geo.dispose();
   return { sill: welded.size, stations, kept };
 }
@@ -155,7 +158,7 @@ export interface CageLive {
   readonly co: Float64Array;
   /** Per panel: 1 while its mesh is on the car (a torn-off hood or a shattered pane is not drawn, so it is not the cage). */
   readonly panelOn: Uint8Array;
-  /** 1 for a crashed car, whose panels follow the cage (`skinPanels` runs only then); 0 for a car whose panels stand at rest. */
+  /** 1 for a car whose panels follow the cage (`DeformableCar.panelsFollow`: a wreck, or a car carrying a load crush; `skinPanels` runs only then); 0 for a car whose panels stand at rest. */
   panelsFollow: number;
   /** Per panel, where its mesh stands: position (x, y, z), then rotation (x, y, z, w) about it (a bonnet's hinge). */
   readonly panelPose: Float64Array;
@@ -194,7 +197,7 @@ export interface CageStyle {
   readonly u0: number;
   readonly v0: number;
   readonly vertexCount: number;
-  /** Of `vertexCount`, the `heldCount` underside points `decimate` held over `CAGE_VERTICES`, from `heldFrom` on: a wreck's alone (`loadPoints`). */
+  /** Of `vertexCount`, the `heldCount` underside points `decimate` held over `CAGE_VERTICES`, from `heldFrom` on: the drawn rocker's lowest points between the belly's rows (`loadPoints` reads them as underside rows for an intact car, as hull points for a wreck). */
   readonly heldCount: number;
   readonly heldFrom: number;
   /**

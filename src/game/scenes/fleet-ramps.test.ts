@@ -350,9 +350,18 @@ describe("given the ramps with no slab between them, and a car that is or become
     assert.ok(rise <= 0, `a wreck falling at ${car.velocity.y.toFixed(1)} m/s rose ${rise.toFixed(3)} m in one slice (landed ${!car.airborne})`);
   });
 
-  it("when a car driven at 15 m/s up the ramp is struck so it slides off the lip, then it is wrecked, flies past the lip and lands, with no frame moving its height away from its speed", (t) => {
+/**
+ * The speed (m/s) the struck car is driven up the ramp at. The first ramp's 14.6° foot used to add 7 J/kg to a coasting car (the free energy a rigid tyre's
+ * straight-up lift keeps as plan speed), which carried the 15 m/s car 0.8 m further: past the descent ramp's lip onto the flat. With the lift's energy
+ * taken off its speed the car's tail meets the lip's back face 5 cm under its edge and the wreck rests high-centred on it, tail over the gap, nose down the
+ * slope, 15° off any ground (a real wall stop, not a defect). Where it comes down against the launch speed: 14.4 to 15.0 m/s on the lip, 15.2 m/s and up
+ * past it onto the flat (3 s after the launch it stands at z 8.2 m from 15.2 m/s, 8.3 m from 15.4, 9.1 m from 15.6).
+ */
+const STRUCK_SPEED = 15.4;
+
+  it(`when a car driven at ${STRUCK_SPEED} m/s up the ramp is struck so it slides off the lip, then it is wrecked, flies past the lip and lands, with no frame moving its height away from its speed`, (t) => {
     const { ramps, w, car } = scene(false);
-    car.spawnFacing(0, -14, 0, 15);
+    car.spawnFacing(0, -14, 0, STRUCK_SPEED);
     const p = car.group.position;
     const flags = watch([car]);
     let struck = false;
@@ -377,9 +386,11 @@ describe("given the ramps with no slab between them, and a car that is or become
  * (its masses' mean) carries its masses' rebound off a landing while the ground holds its height: 0.077 m/s for one frame at 6 m/s.
  */
 const NEAR_REST = 0.5;
-  it("when that struck car has landed and come to rest, then it has no vertical speed and takes the flat ground's pitch and roll", (t) => {
-    const { w, car } = scene(false);
-    car.spawnFacing(0, -14, 0, 15);
+/** The tilt (deg) a car at rest may stand off the ground under its hubs: the 0.03 rad its flat-ground row held it to. */
+const AT_REST_TILT_DEGREES = 1.72;
+  it("when that struck car has landed and come to rest, then it has no vertical speed and takes the pitch and roll of the ground it lies on", (t) => {
+    const { ramps, w, car } = scene(false);
+    car.spawnFacing(0, -14, 0, STRUCK_SPEED);
     const p = car.group.position;
     let struck = false;
     let stale = 0;
@@ -393,11 +404,11 @@ const NEAR_REST = 0.5;
       if (!car.airborne && car.velocity.length() < NEAR_REST && Math.abs(p.y - lastY) < 1e-4) stale = Math.max(stale, Math.abs(car.velocity.y));
       lastY = p.y;
     });
-    const pitch = car.group.rotation.x;
-    const roll = car.group.rotation.z;
-    t.diagnostic(`at rest: y ${p.y.toFixed(3)}, vy ${car.velocity.y.toFixed(3)}, worst vy with y still ${stale.toFixed(3)} m/s, pitch ${pitch.toFixed(3)}, roll ${roll.toFixed(3)} rad`);
+    // Where it comes down is the flight's: a slower run up the ramp lands it on the far ramp's foot (a 5.7° face), not the flat between them.
+    const rest = fit(car, ramps);
+    t.diagnostic(`at rest: y ${p.y.toFixed(3)}, vy ${car.velocity.y.toFixed(3)}, worst vy with y still ${stale.toFixed(3)} m/s, pitch ${rest.pitch.toFixed(2)}° on a ground pitched ${rest.groundPitch.toFixed(2)}°, tilt from it ${rest.tilt.toFixed(2)}°`);
     assert.ok(stale < 0.05, `y still while vy ${stale.toFixed(3)} m/s`);
-    assert.ok(Math.abs(pitch) < 0.03 && Math.abs(roll) < 0.03, `pitch ${pitch.toFixed(3)}, roll ${roll.toFixed(3)} rad on flat ground`);
+    assert.ok(rest.tilt < AT_REST_TILT_DEGREES, `${rest.tilt.toFixed(2)}° off the ground under it (pitch ${rest.pitch.toFixed(2)}° on ${rest.groundPitch.toFixed(2)}°, roll ${rest.roll.toFixed(2)}° on ${rest.groundRoll.toFixed(2)}°)`);
   });
 });
 

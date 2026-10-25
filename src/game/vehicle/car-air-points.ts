@@ -14,7 +14,7 @@ import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift, centreLift } from "./car-cage-rig.ts";
 import { HUB_POP_MPS } from "../deform/deform-solve.ts";
-import { POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, N, DIR, TYRE, SOFT, SHARE, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_SAMPLE_GAP, TYRE_ALONG_MAX, GROUND_LIFT_V, REST_SPEED, body, carrier, pointVel } from "./car-air-body.ts";
+import { POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, S_HELD_FROM, S_HELD_TO, N, DIR, TYRE, SOFT, SHARE, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_SAMPLE_GAP, TYRE_ALONG_MAX, GROUND_LIFT_V, REST_SPEED, body, carrier, pointVel } from "./car-air-body.ts";
 
 /** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
 export function readBelly(i: number, slot: number, travel2 = NaN): boolean {
@@ -259,7 +259,7 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
     }
     if (GQ.on) GQ.calls[G.ptRow] = GQ.calls[G.ptRow]! + 1;
     _s[S_PEN] = pen;
-    bodyContact(n, HIT, i < bellyFrom);
+    bodyContact(n, HIT, i < bellyFrom && !(i >= _s[S_HELD_FROM]! && i < _s[S_HELD_TO]!));
     if (pen <= 0) GAPV[n] = GAPV[n]! + (-pen * HIT[C_NY]!) / dt;
     n++;
   }
@@ -277,6 +277,9 @@ interface LoadedPoints {
   lift: number;
   wreck: boolean;
   bellyFrom: number;
+  /** The held underside points' loaded range (`S_HELD_FROM`, `S_HELD_TO`); empty for a wreck. */
+  heldFrom: number;
+  heldTo: number;
   reach: number;
   x: Float64Array;
   y: Float64Array;
@@ -304,6 +307,8 @@ export function loadPoints(car: DeformableCar): number {
     POINT_Z.set(memo.z);
     BELLY_ABSENT.set(memo.absent);
     _s[S_POINT_REACH] = memo.reach;
+    _s[S_HELD_FROM] = memo.heldFrom;
+    _s[S_HELD_TO] = memo.heldTo;
     return memo.bellyFrom;
   }
   const { pos, panelOn } = car.cage.fields;
@@ -313,11 +318,12 @@ export function loadPoints(car: DeformableCar): number {
   const comY = car.frame.comY + centreLift(car);
   let reach2 = 0;
   let n = 0;
-  // The underside's held points (`CageStyle.heldFrom`) and the sill samples are a wreck's alone: a car on its tyres stands on neither.
-  const heldTo = wreck ? heldFrom : heldFrom + heldCount;
+  // The sill samples are a wreck's alone; the underside's held points (the drawn rocker's low points between the belly's rows) are every car's.
+  let heldAt = 0;
+  let heldTo = 0;
   for (let k = 0, end = vertexCount + (wreck ? sillCount : 0); k < end; k++) {
-    if (k === heldFrom && heldTo > heldFrom) k = heldTo;
-    if (k >= end) break;
+    if (k === heldFrom) heldAt = n;
+    if (k === heldFrom + heldCount) heldTo = n;
     const g = vertexGroup[k]!;
     if (g > 0 && panelOn[g - 1] === 0) continue;
     const x = pos[k * 3]!;
@@ -345,6 +351,8 @@ export function loadPoints(car: DeformableCar): number {
     reach2 = Math.max(reach2, x * x + (h - comY) * (h - comY) + z * z);
   }
   _s[S_POINT_REACH] = Math.sqrt(reach2);
+  _s[S_HELD_FROM] = wreck ? 0 : heldAt;
+  _s[S_HELD_TO] = wreck ? 0 : heldTo;
   const count = bellyFrom + belly.length;
   if (memo === undefined || memo.x.length !== count) {
     memo = {
@@ -353,6 +361,8 @@ export function loadPoints(car: DeformableCar): number {
       lift: 0,
       wreck: false,
       bellyFrom: 0,
+      heldFrom: 0,
+      heldTo: 0,
       reach: 0,
       x: new Float64Array(count),
       y: new Float64Array(count),
@@ -365,6 +375,8 @@ export function loadPoints(car: DeformableCar): number {
   memo.lift = lift;
   memo.wreck = wreck;
   memo.bellyFrom = bellyFrom;
+  memo.heldFrom = _s[S_HELD_FROM]!;
+  memo.heldTo = _s[S_HELD_TO]!;
   memo.reach = _s[S_POINT_REACH]!;
   for (let k = 0; k < count; k++) {
     memo.x[k] = POINT_X[k]!;

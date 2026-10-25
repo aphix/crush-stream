@@ -39,7 +39,7 @@ export class OccluderPool {
 }
 
 /** The derby bowl's free-standing prisms (tyre berms, containers, rails, pads) as occluders; its ring wall is the Sight's `rim`. */
-const DERBY_OCCLUDERS: readonly Occluder[] = DERBY_BOXES.filter((b) => b.kind !== DERBY_PROP.wall).map((b) => occluder(b.x, b.z, b.yaw, b.hx, b.hz, false, 0, b.height));
+export const DERBY_OCCLUDERS: readonly Occluder[] = DERBY_BOXES.filter((b) => b.kind !== DERBY_PROP.wall).map((b) => occluder(b.x, b.z, b.yaw, b.hx, b.hz, false, 0, b.height));
 
 const NO_CARS: readonly DeformableCar[] = [];
 

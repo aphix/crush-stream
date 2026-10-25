@@ -5,6 +5,7 @@ import {
   DEGREES_TO_RADIANS,
   HIGH_JUMP_KICKER,
   LIP_BACK_FACE_PITCH_DEGREES,
+  LIP_LAUNCH_PUSH,
   LONG_JUMP_INCLINE,
   MINIGAME_MODES,
   RING_FLING_LANE,
@@ -51,7 +52,7 @@ const GRID_TOLERANCE = 0.002;
 const PARKED_SLIDE_LIMIT = 0.5;
 /** The steepest face (deg) a parked car is pinned to hold on (`vehicle/ramp.test.ts`'s wedges are 10, 20 and 30). */
 const PARKED_HOLD_DEGREES = 20;
-/** The slowest (m/s) any class may carry through the climb's last stretch, below its bar: it never stalls. */
+/** The slowest (m/s) any class may carry through the climb's last stretch, below the speed it must arrive at the lip with for the lip's push to give it its bar: it never stalls. */
 const CLIMB_STALL_ALLOWANCE = 1;
 
 
@@ -198,7 +199,7 @@ describe("given each of the 7 car types parked on the pad of each station and re
         assert.ok(run.reachedLip, `${type.id} reached the lip (stopped at x = ${run.endX})`);
         assert.ok(run.footSpeed >= minimum.foot, `${type.id} at the foot ${run.footSpeed} against ${minimum.foot}`);
         assert.ok(run.lipCentreSpeed >= minimum.lip, `${type.id} at the lip ${run.lipCentreSpeed} against ${minimum.lip}`);
-        assert.ok(run.slowestOnClimb >= minimum.lip - CLIMB_STALL_ALLOWANCE - 1e-9 || mode !== "highJump", `${type.id} slowest ${run.slowestOnClimb}`);
+        assert.ok(run.slowestOnClimb >= minimum.lip / (1 + LIP_LAUNCH_PUSH.highJump) - CLIMB_STALL_ALLOWANCE - 1e-9 || mode !== "highJump", `${type.id} slowest ${run.slowestOnClimb}`);
       }
       t.diagnostic(`${mode}, speeds in m/s:\n${table(rows)}`);
     });
@@ -226,6 +227,8 @@ describe("given the high jump's kicker made steeper, an arc of the shipped radiu
    */
   const SWEEP_DEGREES = [HIGH_JUMP_KICKER.lipPitchDegrees, 65, 70, 75, 80];
   const LIP_SPEED_FLOOR = 17;
+  /** A step to a steeper pitch may read this much (m/s) faster: a car under throttle still gains on a longer arc (60 to 65 deg: 33.162 to 33.198), and only a climb that costs more than it gains falls. */
+  const LIP_SPEED_RISE_ALLOWED = 0.1;
   /** The largest radius (m), in 5 m steps under the shipped one, at which the sedan reaches the shipped pitch's lip under its bar. */
   const TIGHT_RADIUS = 5;
   const sedan = DRIVER_CARS.find((type) => type.id === "sedan")!;
@@ -242,7 +245,7 @@ describe("given the high jump's kicker made steeper, an arc of the shipped radiu
       }
       t.diagnostic(`arc radius ${HIGH_JUMP_KICKER.radius} m to ${pitch} deg:\n${table(rows)}`);
     }
-    for (let i = 1; i < sedanCentre.length; i++) assert.ok(sedanCentre[i]! <= sedanCentre[i - 1]! + 1e-6, `sedan lip speeds ${sedanCentre.join(", ")}`);
+    for (let i = 1; i < sedanCentre.length; i++) assert.ok(sedanCentre[i]! <= sedanCentre[i - 1]! + LIP_SPEED_RISE_ALLOWED, `sedan lip speeds ${sedanCentre.join(", ")}`);
     assert.ok(sedanCentre[sedanCentre.length - 1]! >= LIP_SPEED_FLOOR, `the sedan's lip speed at the steepest swept pitch ${sedanCentre[sedanCentre.length - 1]}: the climb has no wall in the sweep`);
   });
 
@@ -291,8 +294,9 @@ describe("given each of the 7 car types released at full throttle from the high 
   /**
    * The mutations the apex rows must fail: a kicker too shallow to throw high (deg), and one tight and steep enough (radius m, pitch deg)
    * that the sedan family's climb cliffs while the monster's tyres carry it, found by a sweep of radius, pitch and run-up.
+   * The shallow one is 34° (the lowest class's apex 34.7 m under the minimum 40): with the lip's push the shipped 36° read 40.02, a hair over it.
    */
-  const SHALLOW_DEGREES = 36;
+  const SHALLOW_DEGREES = 34;
   const CLIFF_RADIUS = 3;
   const CLIFF_DEGREES = 85;
   const shipped = flightsOn(stationDriveProfile("highJump"));

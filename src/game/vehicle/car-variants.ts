@@ -339,6 +339,8 @@ export interface BodyStyle {
   cageRearCorners?: boolean;
   /** The cage's rear header box's width (m), the span between the roof's rear corners; absent, the rear glass's top width plus `REAR_HEADER_MARGIN`. */
   rearHeaderWidth?: number;
+  /** Cage only: the loft's tail takes the drawn body's boot cut (a tailgate's face and the floor through it, its ring points held), so the cage over a gone rear glass is the cargo floor the drawn body shows; the gate's and the glass's panels close it while they are on. Absent: the cage's deck stays closed over the tail. */
+  cageTailCut?: boolean;
   /**
    * Windshield: base [y, z] of its edges' line, its widths at the base and the top (`windshieldTop`), its centre line's plan bow (default `WINDSHIELD_BOW`).
    * `sideBow` (m): the pane bulges this far forward (z) at mid-height, none at its base and top: a convex side edge in side view; absent, straight.

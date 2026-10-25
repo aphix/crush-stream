@@ -413,6 +413,17 @@ describe("given a stakeout parked and its pack stood down half a second later, t
     assert.ok(r.stored.includes(1) && r.stored.includes(2), "both cops are put away once MIN_LIFE has passed");
   });
 
+  it("when the race is over (its clock stands still, the beats go on), then the cops are put away once they have been on the road MIN_LIFE s all the same", () => {
+    const r = rig();
+    r.hunt[0] = 0;
+    r.sit(PAST_SIGHT);
+    r.finish();
+    r.run(MIN_LIFE - 3);
+    assert.equal(r.stored.length, 0, "a cop was put away before MIN_LIFE");
+    r.run(4);
+    assert.ok(r.stored.includes(1) && r.stored.includes(2), "both cops are put away once MIN_LIFE s of beats have passed");
+  });
+
   it("when the racer is farther than OUT_RANGE away, then the cops are put away at once", () => {
     const r = rig();
     r.hunt[0] = 0;

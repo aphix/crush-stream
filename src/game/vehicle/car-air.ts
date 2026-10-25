@@ -9,7 +9,7 @@ import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-ut
 import { droop, FLANK_UP_Y, SPRINGS, UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
+import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes, kineticEnergy, _ke } from "./car-air-body.ts";
 import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop, readTyreSides, wreckShares, ROW_WHEEL } from "./car-air-points.ts";
 import { centreLift, centreY } from "./car-cage-rig.ts";
 import { store3d } from "../kernel/store.ts";
@@ -150,7 +150,7 @@ function bodyAtRest(): boolean {
  * it needs (restitution `RESTITUTION` above `BOUNCE_V` on the first pass), a parting one giving back what it over-took, Coulomb
  * friction at the row's `MU` bounded by the normal impulse held, the face budgets cut in list order, and the body then lifted out by
  * the deepest depth its move leaves (straight up where its friction holds it, else along the face's normal): the centre of mass only;
- * `standAtCentre` then puts the body's origin there.
+ * `standAtCentre` then puts the body's origin there. The energy the rigid tyres' straight-up pushes add comes off an unpowered body's plan speed.
  */
 export function solveRows(n: number): void {
   const { v, w, q, dt, surf, driven, parked, powered, part } = body;
@@ -160,15 +160,19 @@ export function solveRows(n: number): void {
   // A body at rest solves over more passes: its friction is rebuilt from 0 every slice and the residual slide integrates (a wreck at rest then sleeps, `integrateWreck`).
   const atRest = bodyAtRest();
   const passes = atRest ? REST_PASSES : PASSES;
+  // The kinetic energy the rigid tyres' straight-up pushes on the world's ground add (J/kg): not a powered body's (the engine owes its thrust up a face), nor one on a car (`give` passes the push to the car under).
+  let rides = !powered && !part;
+  let thrust = 0;
   // A wreck at rest parts from the ground it stands in at `GROUND_LIFT_V` as a speed the solve gives the row: a positional lift hopped the body off its other rows (a 21 Hz hop, never asleep).
-  // How deep its deepest such row still is goes to `S_LIFTING`: the wreck is not at rest until it is out (`restOrSleep`).
+  // How deep its deepest such row still is goes to `S_LIFTING`: the wreck is not at rest until it is out (`restOrSleep`). The depth is read at any speed: a wreck rolling a little
+  // either side of `REST_SPEED` (the solve's input over it, its output under) was counted out of the ground in the slices it was over and fell asleep 3.5 cm in it.
   _s[S_LIFTING] = 0;
   for (let c = 0; c < n; c++) {
-    LIFTING[c] = body.wreck && atRest && standsOnGround(c) ? 1 : 0;
-    if (LIFTING[c] === 1) {
-      GAPV[c] = -Math.min(SINK[c]! / dt, GROUND_LIFT_V);
-      _s[S_LIFTING] = Math.max(_s[S_LIFTING]!, SINK[c]!);
-    }
+    if (OWN[c]! >= 0) rides = false;
+    const standing = body.wreck && standsOnGround(c);
+    LIFTING[c] = standing && atRest ? 1 : 0;
+    if (standing) _s[S_LIFTING] = Math.max(_s[S_LIFTING]!, SINK[c]!);
+    if (LIFTING[c] === 1) GAPV[c] = -Math.min(SINK[c]! / dt, GROUND_LIFT_V);
   }
   for (let pass = 0; pass < passes; pass++) {
     for (let c = 0; c < n; c++) {
@@ -183,6 +187,12 @@ export function solveRows(n: number): void {
         jn = ASK[c]!;
       } else {
         const dir = DIR[c]!;
+        const lifts = rides && TYRE[c] && dir === UP;
+        let keRow = 0;
+        if (lifts) {
+          kineticEnergy();
+          keRow = _ke[0]!;
+        }
         const vn = pointVel(c, v, w, _vp).dot(nrm) + GAPV[c]!;
         // A contact that closes takes what it needs. One that already parts takes back, of the dynamic impulse the earlier passes gave it,
         // what its parting asks (never more: it never pulls). A neighbour's impulse that had over-corrected it kept it for good, so the
@@ -230,6 +240,10 @@ export function solveRows(n: number): void {
           _s[S_J] = jn;
           _s[S_JD] = jd;
           give(c, v, w, q, dir, surf);
+        }
+        if (lifts) {
+          kineticEnergy();
+          thrust += _ke[0]! - keRow;
         }
       }
       if (driven && OWN[c]! < 0) continue;
@@ -297,6 +311,13 @@ export function solveRows(n: number): void {
       _s[S_JD] = 0;
       give(c, v, w, q, _fd, surf);
     }
+  }
+  // What the rigid tyres' straight-up pushes added to the body's energy comes out of its plan speed: a push up a face keeps the plan speed it lifts the body on.
+  if (thrust > 0) {
+    const plan = v.x * v.x + v.z * v.z;
+    const keep = plan > 2 * thrust ? Math.sqrt(1 - (2 * thrust) / plan) : 0;
+    v.x *= keep;
+    v.z *= keep;
   }
   for (let c = 0; c < n; c++) {
     if (FIRST[c] === c) surf.take(SLOT[c]!, DEMAND[c]!, G, dt);
@@ -1047,22 +1068,24 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     _s[S_JD] = ASK[c]! - Math.min(ASK[c]!, REST[c]!);
     give(c, v, w, q, UP, surf);
   }
-  // The tyres in their springs push straight up, so the world's face under them leaves the body its gravity along it, each tyre's share
-  // by the weight it carries: it slows a car uphill and speeds it downhill. Before the passes, so a gripping tyre holds it in the slice.
-  // Where the passes' grip holds the tyre (a car not driven: its tyres grip both ways), that push is the face's on the tread and acts
-  // there, as the grip holding it does: pushed at the centre, the grip at the tread rolled the body, and a monster parked across a 10°
-  // face rolled to 6.9° and crept back at 0.9°/s, its origin sinking 3.6 mm after its springs had settled. A driven car's drive owns
-  // its travel along the ground, so its push stays at the centre.
+  // A spring pushes straight up, but its face carries the push as a load along its normal: a push U up a face with unit normal n is the load
+  // U / n.y along n, and the plan part of it, U n / n.y, is what the face leaves the body of gravity along it. A body following a face is
+  // pushed G n.y² of the weight up, so the pull is G sin cos a second there; on a loaded bank, or unloaded over a crest, the push is the load
+  // the springs really carry, which a fixed share of the weight was not (a banked right-hander at 42 m/s met its wall with it).
+  // A wall (under `CLIMB_NY`) carries the push along its normal already. Before the passes, so a gripping tyre holds it in the slice.
+  // Where the grip holds the tyre (a car not driven) the push acts at the tread: at the centre it rolled a monster parked across a 10° face
+  // to 6.9°. A driven car's drive owns its travel along the ground, so its push stays at the centre.
   for (let c = 0; c < tyres; c++) {
-    if (!rolling || !SOFT[c] || OWN[c]! >= 0) continue;
+    if (!SOFT[c] || OWN[c]! >= 0 || N[c]!.y < CLIMB_NY) continue;
+    const load = ASK[c]! / N[c]!.y;
     if (driven) {
-      v.x += ASK[c]! * N[c]!.y * N[c]!.x;
-      v.z += ASK[c]! * N[c]!.y * N[c]!.z;
+      v.x += load * N[c]!.x;
+      v.z += load * N[c]!.z;
       continue;
     }
     const along = hypot2(N[c]!.x, N[c]!.z);
     if (along > 0) {
-      _s[S_J] = ASK[c]! * N[c]!.y * along;
+      _s[S_J] = load * along;
       push(v, w, q, R[c]!, _vp.set(N[c]!.x / along, 0, N[c]!.z / along));
     }
   }

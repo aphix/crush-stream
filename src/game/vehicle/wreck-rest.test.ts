@@ -129,6 +129,7 @@ function skinReachPastCage(wreck: DeformableCar): { gap: number; at: string } {
   for (let pitch = -LIE_RANGE_DEG; pitch <= LIE_RANGE_DEG; pitch += LIE_STEP_DEG) {
     for (let roll = -LIE_RANGE_DEG; roll <= LIE_RANGE_DEG; roll += LIE_STEP_DEG) {
       const down = new THREE.Vector3(0, -1, 0).applyEuler(new THREE.Euler(pitch / DEG, 0, roll / DEG));
+      if (-down.y < Math.cos(LIE_RANGE_DEG / DEG)) continue;
       const drawn = furthest(skin, down);
       const gap = drawn.reach - furthest(points, down).reach;
       if (gap > worst.gap) worst = { gap, at: `car-frame ${[0, 1, 2].map((a) => skin[drawn.at + a]!.toFixed(2)).join(",")} lying pitch ${pitch}° roll ${roll}°` };

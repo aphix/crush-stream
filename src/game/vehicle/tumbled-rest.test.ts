@@ -9,7 +9,7 @@ import type { CarStyleId } from "./car-variants.ts";
 import type { DeformableCar } from "./car.ts";
 import { PART_KIND, PartSeat } from "./part-geometry.ts";
 import { CLASSES, VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
-import { CLASS_LIFT } from "./constants.ts";
+import { BUMPER_F, CLASS_LIFT } from "./constants.ts";
 import { BUMP_RESERVE, droop } from "./car-suspension.ts";
 import { FRAME_RAIL_Y } from "./interior-geometry.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
@@ -61,8 +61,8 @@ const MASS_STILL_M = 1e-3;
 const TYRE_POINTS = makeWheelGeometry().getAttribute("position");
 /** A nose hit (m/s) hard enough to tear the hood off every fleet class but the monster, whose bay stays shut. */
 const HOOD_OFF_MPS = 40;
-/** The seats that ride the wreck's ground (`restOnGround`): the cabin shell, the engine bay, the monster's frame and axles. */
-const GROUND_RIDERS: readonly number[] = [PART_KIND.interior, PART_KIND.engineBay, PART_KIND.ladderFrame, PART_KIND.axle];
+/** The seats that ride the wreck's ground (`restOnGround`): the cabin shell, the engine bay, the crash bars (shown once a bumper is off), the monster's frame and axles. */
+const GROUND_RIDERS: readonly number[] = [PART_KIND.interior, PART_KIND.engineBay, PART_KIND.crashBar, PART_KIND.ladderFrame, PART_KIND.axle];
 const _tyreAt = new THREE.Matrix4();
 const _tyreScale = new THREE.Vector3();
 
@@ -139,14 +139,15 @@ function lowestDrawn(car: DeformableCar, crown: ReadonlySet<number>): Lowest {
   return low;
 }
 
-/** A car of `style` and `cls` dropped in `attitude` from `height` m (its lowest drawn point) on the flat pad and left `DROP_SECONDS` s, a wreck once its nose is hit first at `strike` m/s (none: 0), the hubs in `popped` torn off after the hit; with the crown it had fresh. */
-function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, height: number, strike = 0, popped: readonly string[] = [], seconds = DROP_SECONDS): { car: DeformableCar; lowest: Lowest; world: CrashWorld } {
+/** A car of `style` and `cls` dropped in `attitude` from `height` m (its lowest drawn point) on the flat pad and left `DROP_SECONDS` s, a wreck once its nose is hit first at `strike` m/s (none: 0), the hubs in `popped` and, with `bumperOff`, the front bumper torn off after the hit; with the crown it had fresh. */
+function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, height: number, strike = 0, popped: readonly string[] = [], seconds = DROP_SECONDS, bumperOff = false): { car: DeformableCar; lowest: Lowest; world: CrashWorld } {
   const car = buildCar(style, cls);
   car.spawnFacing(0, 0, 0, 0);
   car.updateSkin();
   const crown = crownVertices(car);
   if (strike > 0) car.applyImpact(car.group.position.clone().addScaledVector(car.forward, NOSE_HIT_M), car.forward.clone().negate(), strike, strike);
   for (const name of popped) car.deform.popHub(car.deform.masses.find((m) => m.name === name)!);
+  if (bumperOff) car["detachPart"](car["parts"].find((p) => p.name === BUMPER_F)!, 0);
   const [pitch, yaw, roll] = ATTITUDE[attitude];
   car.group.rotation.set(pitch, yaw, roll, "YXZ");
   car.group.updateMatrixWorld(true);
@@ -280,14 +281,14 @@ describe("given any class that lost one of the two wheels it lies on, dropped on
   }
 });
 
-describe("given a car struck on the nose and dropped onto its roof (flat, nose down or up) or a flank on the flat pad, and left to rest", () => {
+describe("given a car struck on the nose, its front bumper torn off, and dropped onto its roof (flat, nose down or up) or a flank on the flat pad, and left to rest", () => {
   for (const { style, cls } of FLANK_FLEET) {
-    it(`when it is a ${cls}, then every rigid under-part of it that shows (cabin shell, engine bay, frame, axles) stands out of the ground`, (t) => {
+    it(`when it is a ${cls}, then every rigid under-part of it that shows (cabin shell, engine bay, crash bar, frame, axles) stands out of the ground`, (t) => {
       for (const attitude of ["roof", "roofNoseDown", "roofNoseUp", "left", "right"] as const) {
-        const { lowest } = dropped(style, cls, attitude, 0.5, HOOD_OFF_MPS);
+        const { lowest } = dropped(style, cls, attitude, 0.5, HOOD_OFF_MPS, [], DROP_SECONDS, true);
         const tag = `${cls} struck at ${HOOD_OFF_MPS} m/s and dropped on its ${attitude}`;
         t.diagnostic(`${tag}: lowest rigid under-part ${cm(lowest.kit)} over the ground`);
-        assert.ok(lowest.kit < Infinity, `${tag}: none of the cabin shell, engine bay, frame or axles shows, so nothing here could stand in the ground`);
+        assert.ok(lowest.kit < Infinity, `${tag}: none of the cabin shell, engine bay, crash bar, frame or axles shows, so nothing here could stand in the ground`);
         assert.ok(lowest.kit > 0, `${tag}: a rigid under-part ${cm(-lowest.kit)} into the ground`);
       }
     });
