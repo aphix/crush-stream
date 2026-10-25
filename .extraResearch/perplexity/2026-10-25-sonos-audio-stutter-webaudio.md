@@ -1,3 +1,5 @@
+> Question: Windows: audio stutters on a Sonos/network output while a browser tab runs a WebGL game with Web Audio, even with music from VLC; Bluetooth headphones are fine. Causes, and how should a web game configure its AudioContext (latencyHint, sampleRate) so it doesn't cause stutter?
+
 The most likely cause is **real-time audio starvation in the shared Windows/browser audio path**, often made worse by a Web Audio context configured for low latency—not that the WebGL game directly “controls” VLC or Sonos. Network speakers expose these timing problems more readily because audio must be rendered, mixed, resampled if necessary, packetized, buffered, and delivered over the network.
 
 ## What is probably happening

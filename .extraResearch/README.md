@@ -57,6 +57,7 @@ Treat model-written prose as leads, not facts; cite the listed sources.
 | `perplexity/2026-10-23-soft-body-settle-rest-detection.md` | How soft-body/shape-matching engines end spring-back after a hit: damping dissipates it, plastic yield resets the rest shape, sleep on low residual motion; no fixed post-impact clock (roof settle, CarRig) |
 | `perplexity/2026-10-23-crash-contact-patch-force-distribution.md` | Distributing crush force over a contact patch: per-element penetration × effective area, pressure laws (linear/Hertz), combined compliance, action–reaction pairs conserving momentum (CarCrushFeed) |
 | `perplexity/2026-10-23-vehicle-bump-stop-landing-damping.md` | Bump stops for games: progressive engagement, rate-limited/position-dependent damping, hysteresis, clamping so a landing isn't a dead stop (CarStackCrush8, CarCrest) |
+| `perplexity/2026-10-25-sonos-audio-stutter-webaudio.md` | Web Audio stutter on Sonos/network outputs: buffer underruns under load, `latencyHint: "playback"`, matching the device sample rate, exclusive mode (audio) |
 
 ## Papers (`papers/`)
 
