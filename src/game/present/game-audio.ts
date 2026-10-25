@@ -6,7 +6,9 @@ import { MusicPlayer } from "./music.ts";
 import { musicBase } from "./music-manifest.ts";
 import { TyreSound } from "./tyre-sound.ts";
 
-const LATENCY_HINT = "interactive";
+/** "playback" over "interactive": a larger output buffer, so a busy frame never starves the device. Network and Bluetooth outputs (Sonos) crackled
+ *  under the game's load with the smallest buffer; the engine and crash sounds lose nothing a player hears. */
+const LATENCY_HINT = "playback";
 /** Time constant of the master gain ramp when audio is toggled. */
 const MASTER_TAU_S = 0.05;
 /** Time constant (s) of the engine bus's pause fade and of the slow-mo lowpass following the time rate. */
@@ -70,7 +72,7 @@ export class GameAudio {
       this.music?.pause();
     } else if (this.on) {
       void context.resume();
-      this.music?.play();
+      if (this.musicLevel > 0) this.music?.play();
     }
   };
 
@@ -152,7 +154,7 @@ export class GameAudio {
     this.tyres = new TyreSound(context, engineBus);
     motor.load(context, listener).catch((reason: Error) => console.warn("motor sound: unavailable", reason));
     this.music = new MusicPlayer(context, musicBus, musicBase(import.meta.env));
-    if (this.on) this.music.play();
+    if (this.on && this.musicLevel > 0) this.music.play();
     void context.resume();
   }
 
@@ -164,7 +166,7 @@ export class GameAudio {
     this.master.gain.setTargetAtTime(on ? 1 : 0, context.currentTime, MASTER_TAU_S);
     if (on) {
       void context.resume();
-      this.music?.play();
+      if (this.musicLevel > 0) this.music?.play();
     } else {
       void context.suspend();
       this.music?.pause();
@@ -179,6 +181,9 @@ export class GameAudio {
     if (!context || !this.musicBus || !this.engineBus) return;
     this.musicBus.gain.setTargetAtTime(musicGain(music, 1, 1), context.currentTime, MASTER_TAU_S);
     this.engineBus.gain.setTargetAtTime(this.live ? engineBusGain(engine) : 0, context.currentTime, MASTER_TAU_S);
+    // Music at 0 is off, not silent: the element stops streaming and decoding, and the playlist holds its place instead of moving on unheard.
+    if (music <= 0) this.music?.pause();
+    else if (this.on && document.visibilityState !== "hidden") this.music?.play();
   }
 
   /**
