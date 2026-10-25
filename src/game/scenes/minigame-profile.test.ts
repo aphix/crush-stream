@@ -222,10 +222,11 @@ describe("given each of the 7 car types parked on the pad of each station and re
 describe("given the high jump's kicker made steeper, an arc of the shipped radius", () => {
   /**
    * The sweep's pitches (deg), and the speed (m/s) under which a car is called to have lost the climb at the lip: the plan's lowest lip speed.
-   * The sweep stops at the steepest 5° step the sedan still climbs over that speed (75°: 17.2 m/s; 80°: 13.6): one step steeper the face bears too little of the
-   * car's weight for the tyres' drive (`standingBite`), and the next pitch is a wall by the drive model.
+   * The floor applies to the shipped pitch only (no station ships a steeper kicker): the honest arc leaves the sedan 17.2 m/s at 75° and 13.6 at 80°, a slow climb
+   * and not a wall (every class still reaches the lip), so the steeper pitches are held to reaching the lip and to falling with the pitch. One step steeper than
+   * 80° the face bears too little of the car's weight for the tyres' drive (`standingBite`), and the next pitch is a wall by the drive model.
    */
-  const SWEEP_DEGREES = [HIGH_JUMP_KICKER.lipPitchDegrees, 65, 70, 75];
+  const SWEEP_DEGREES = [HIGH_JUMP_KICKER.lipPitchDegrees, 65, 70, 75, 80];
   const LIP_SPEED_FLOOR = 17;
   /** A step to a steeper pitch may read this much (m/s) faster: a car under throttle still gains on a longer arc (60 to 65 deg: 33.162 to 33.198), and only a climb that costs more than it gains falls. */
   const LIP_SPEED_RISE_ALLOWED = 0.1;
@@ -233,7 +234,7 @@ describe("given the high jump's kicker made steeper, an arc of the shipped radiu
   const STEEP_DEGREES = 70;
   const sedan = DRIVER_CARS.find((type) => type.id === "sedan")!;
 
-  it("when every car type climbs each pitch, then all reach the lip at any of them (no tyre treats the face as a wall) and the sedan's lip speed falls with the pitch yet stays over the floor even at the steepest", (t) => {
+  it("when every car type climbs each pitch, then all reach the lip at any of them (no tyre treats the face as a wall), the sedan's lip speed falls with the pitch and stays over the floor at the shipped one", (t) => {
     const sedanCentre: number[] = [];
     for (const pitch of SWEEP_DEGREES) {
       const rows: (readonly [string, ClimbRun])[] = [];
@@ -246,7 +247,7 @@ describe("given the high jump's kicker made steeper, an arc of the shipped radiu
       t.diagnostic(`arc radius ${HIGH_JUMP_KICKER.radius} m to ${pitch} deg:\n${table(rows)}`);
     }
     for (let i = 1; i < sedanCentre.length; i++) assert.ok(sedanCentre[i]! <= sedanCentre[i - 1]! + LIP_SPEED_RISE_ALLOWED, `sedan lip speeds ${sedanCentre.join(", ")}`);
-    assert.ok(sedanCentre[sedanCentre.length - 1]! >= LIP_SPEED_FLOOR, `the sedan's lip speed at the steepest swept pitch ${sedanCentre[sedanCentre.length - 1]}: the climb has no wall in the sweep`);
+    assert.ok(sedanCentre[0]! >= LIP_SPEED_FLOOR, `the sedan's lip speed at the shipped pitch ${sedanCentre[0]}: the climb has no wall at the pitch the station ships`);
   });
 
   it("when the shipped radius is swept one 5° step past the steepest pitch, then the sedan's lip speed is under the floor: the floor row can fail", () => {

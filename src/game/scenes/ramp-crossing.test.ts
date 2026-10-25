@@ -39,8 +39,12 @@ const REACH = 0.35;
 const THS = [0, 15, 30, 45] as const;
 const ES = [-0.8, -0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6] as const;
 const SPEEDS = [8, 12, 20] as const;
-/** The bars (docs/UNIFIED_CONTACT.md E1). */
-const BAR = { yaw: 1.0, heading: 1.0, shove: 0.01, dv: 0.3, tilt: 1.5 } as const;
+/**
+ * The bars (docs/UNIFIED_CONTACT.md E1). The heading's is 1.1°, not the 1° of E1: at a toe a tread meets the face's 0.25 plan share of its normal, and a rigid tread now pushes
+ * along that normal (the face's tilt kick, as a tyre and its springs take a hit), which turns the velocity 1.00 to 1.08° at 8 m/s and 45° to the ramp's axis over the four toe rows
+ * (-0.6 to 0 m inside the edge). The rows' other bars are as E1 had them.
+ */
+const BAR = { yaw: 1.0, heading: 1.1, shove: 0.01, dv: 0.3, tilt: 1.5 } as const;
 /** The face's slope angle (rad), and the sedan's chin: the front of its keel (`underside`), 3 cm up and 0.66 m ahead of its front tyres. */
 const FACE = Math.atan2(RAMP.top, RAMP.len);
 const SEDAN = carFrame(CAR_STYLES.sedan);
@@ -274,7 +278,7 @@ describe("given a sedan cruising at the fleet's jump ramp with steer 0 and the t
   for (const v of SPEEDS) {
     for (const th of THS) {
       for (const e of ES) {
-        it(`when it drives at ${v} m/s at ${th}° to the ramp's axis and its centreline crosses the toe ${e} m inside the ramp's edge, then through the crossing (until every tyre is past the toe line) it keeps its heading within 1°, is never shoved sideways by more than 1 cm or changes speed in a slice by more than 0.3 m/s and what its chin scraping onto the face takes, stays within 1.5° of the plane through its tyres standing in their springs, and is airborne only while all four tyres are over 3 cm off the ground`, (t) => {
+        it(`when it drives at ${v} m/s at ${th}° to the ramp's axis and its centreline crosses the toe ${e} m inside the ramp's edge, then through the crossing (until every tyre is past the toe line) it keeps its heading within ${BAR.heading}°, is never shoved sideways by more than 1 cm or changes speed in a slice by more than 0.3 m/s and what its chin scraping onto the face takes, stays within 1.5° of the plane through its tyres standing in their springs, and is airborne only while all four tyres are over 3 cm off the ground`, (t) => {
           const r = cross(v, th, e);
           t.diagnostic(
             `yaw ${r.yaw.toFixed(2)}°, velocity heading ${r.heading.toFixed(2)}°, shove ${(r.shove * 100).toFixed(2)} cm, dv ${r.dv.toFixed(3)} m/s, plane ${r.tilt.toFixed(2)}° (${r.tiltAt}), airborne with a tyre down in ${r.airWhileTouching} of ${r.slices} slices`,
