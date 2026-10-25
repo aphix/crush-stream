@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { hypot3, round4, snapshotPoints } from "../deform/physics-util.ts";
 import { GRAVITY } from "../kernel/constants.ts";
 import { store3f } from "../kernel/store.ts";
+import { BASIS_SIZE, cameraBasis, float32Of, writeBillboard } from "./fx-matrix.ts";
 import { landOn } from "../vehicle/loose-step.ts";
 
 const _pv = new THREE.Vector3();
@@ -695,7 +696,9 @@ export class TireSmokeSystem {
   private life: Float32Array;
   private maxLife: Float32Array;
   private size: Float32Array;
-  private dummy = new THREE.Object3D();
+  /** The camera's rotation, read once a frame (`cameraBasis`). */
+  private readonly basis = new Float64Array(BASIS_SIZE);
+  private readonly matrices: Float32Array;
   private n: number;
   private cursor = 0;
   private anyAlive = false;
@@ -733,6 +736,7 @@ export class TireSmokeSystem {
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, n);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.matrices = float32Of(this.mesh.instanceMatrix);
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     scene.add(this.mesh);
@@ -815,6 +819,9 @@ export class TireSmokeSystem {
   update(dt: number, camera: THREE.Camera): void {
     if (!this.anyAlive) return;
     const damp = Math.exp(-0.7 * dt);
+    const basis = this.basis;
+    cameraBasis(camera.quaternion, basis);
+    const matrices = this.matrices;
     let live = 0;
     for (let i = 0; i < this.n; i++) {
       if (this.life[i]! <= 0) continue;
@@ -830,12 +837,8 @@ export class TireSmokeSystem {
       this.vy[i]! += 0.55 * dt;
       this.vx[i]! *= damp;
       this.vz[i]! *= damp;
-      this.dummy.position.set(this.px[i]!, this.py[i]!, this.pz[i]!);
-      this.dummy.scale.setScalar(this.size[i]! * (0.7 + (1 - fade) * this.grow));
-      this.dummy.quaternion.copy(camera.quaternion);
-      this.dummy.updateMatrix();
       // Packed in slot order, the order the ring drew them in: the alpha-blended puffs composite as before.
-      this.mesh.setMatrixAt(live, this.dummy.matrix);
+      writeBillboard(matrices, live * MATRIX_FLOATS, basis, this.size[i]! * (0.7 + (1 - fade) * this.grow), this.px[i]!, this.py[i]!, this.pz[i]!);
       const g = (0.55 + fade * 0.4) * this.shade;
       this.mesh.setColorAt(live, _smokeColor.setRGB(g * this.tint[i * 3]!, g * this.tint[i * 3 + 1]!, g * 0.96 * this.tint[i * 3 + 2]!));
       live++;
