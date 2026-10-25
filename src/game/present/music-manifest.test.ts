@@ -1,7 +1,7 @@
 import { describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { creditLines, loadManifest, musicBase, trackUrl } from "./music-manifest.ts";
+import { creditLines, DEFAULT_STATION, loadManifest, musicBase, stationIdOrDefault, stationOf, trackUrl, type MusicTrack } from "./music-manifest.ts";
 
 const BASE = "/crush/music/";
 const REFERENCE = JSON.parse(readFileSync(new URL("../../../public/music/manifest.json", import.meta.url), "utf8"));
@@ -56,6 +56,24 @@ describe("given a manifest served by the music folder", () => {
     const { outcome } = await load({ tracks: [] });
     assert.equal(((await outcome) as unknown[]).length, 0);
   });
+  it("when a track names the calm station and another names none, then the first is calm and the second is on the default station", async () => {
+    const { outcome } = await load({ tracks: [{ ...TRACK, station: "calm" }, { ...TRACK, file: "syntact-ego.mp3" }] });
+    const tracks = (await outcome) as MusicTrack[];
+    assert.equal(stationOf(tracks[0]!), "calm", "named calm");
+    assert.equal(stationOf(tracks[1]!), "high", "no station: the default");
+    assert.equal(DEFAULT_STATION, "high", "the default station");
+  });
+  const stationTexts = [
+    { it: "a stored calm", text: "calm", expected: "calm" },
+    { it: "a stored high", text: "high", expected: "high" },
+    { it: "nothing stored", text: "", expected: "high" },
+    { it: "an id this build does not know", text: "polka", expected: "high" },
+  ] as const;
+  for (const c of stationTexts) {
+    it(`when the saved station is ${c.it}, then the station is ${c.expected}`, () => {
+      assert.equal(stationIdOrDefault(c.text), c.expected);
+    });
+  }
   const rejected = [
     { name: "is missing (404)", body: "not found", status: 404 },
     { name: "is not JSON", body: "<!doctype html>", status: 200 },
@@ -65,6 +83,7 @@ describe("given a manifest served by the music folder", () => {
     { name: "names a file that is not an mp3", body: { tracks: [{ ...TRACK, file: "aspyer-overdrive.wav" }] }, status: 200 },
     { name: "lists one file twice", body: { tracks: [TRACK, TRACK] }, status: 200 },
     { name: "has an empty title", body: { tracks: [{ ...TRACK, title: "" }] }, status: 200 },
+    { name: "names a station that does not exist", body: { tracks: [{ ...TRACK, station: "loud" }] }, status: 200 },
     { name: "has a link that is not http(s)", body: { tracks: [{ ...TRACK, links: [{ label: "Watch", url: "javascript:alert(1)" }] }] }, status: 200 },
   ];
   for (const c of rejected) {

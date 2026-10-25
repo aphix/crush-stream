@@ -3,7 +3,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { ceilingCurve, crashDuck, engineBusGain, engineDuck, GLUE_TRIM, IMPACT, MASTER_GLUE, MASTER_LIMITER, musicGain, slowmoCutoff } from "./audio-mix.ts";
 import { bandpass, lowpass, MotorSound } from "./motor-sound.ts";
 import { MusicPlayer } from "./music.ts";
-import { musicBase } from "./music-manifest.ts";
+import { DEFAULT_STATION, musicBase, type StationId } from "./music-manifest.ts";
 import { TyreSound } from "./tyre-sound.ts";
 
 /** "playback" over "interactive": a larger output buffer, so a busy frame never starves the device. Network and Bluetooth outputs (Sonos) crackled
@@ -57,6 +57,7 @@ export class GameAudio {
   private tyres: TyreSound | null = null;
   private music: MusicPlayer | null = null;
   private on = false;
+  private station: StationId = DEFAULT_STATION;
   /** Whether the game is running (not paused or held): a pause fades the engines out, the music plays on. */
   private live = true;
   /** Slider levels; the engine pushes the real ones with `setVolumes` right after construction. */
@@ -153,7 +154,7 @@ export class GameAudio {
     this.motor = motor;
     this.tyres = new TyreSound(context, engineBus);
     motor.load(context, listener).catch((reason: Error) => console.warn("motor sound: unavailable", reason));
-    this.music = new MusicPlayer(context, musicBus, musicBase(import.meta.env));
+    this.music = new MusicPlayer(context, musicBus, musicBase(import.meta.env), this.station);
     if (this.on && this.musicLevel > 0) this.music.play();
     void context.resume();
   }
@@ -171,6 +172,12 @@ export class GameAudio {
       void context.suspend();
       this.music?.pause();
     }
+  }
+
+  /** The radio station the music plays (a MusicPlayer is built on the first `unlock()` with the one set by then); a change starts a fresh track on it. */
+  setStation(station: StationId): void {
+    this.station = station;
+    this.music?.setStation(station);
   }
 
   /** The slider levels: the music bus (capped by `musicGain`) and the engine bus. The engine pushes them at construction and on every change. */
