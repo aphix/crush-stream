@@ -222,15 +222,15 @@ describe("given each of the 7 car types parked on the pad of each station and re
 describe("given the high jump's kicker made steeper, an arc of the shipped radius", () => {
   /**
    * The sweep's pitches (deg), and the speed (m/s) under which a car is called to have lost the climb at the lip: the plan's lowest lip speed.
-   * The sweep stops at the steepest 5° step the sedan still climbs over that speed: one step steeper the face bears too little of the car's
-   * weight for the tyres' drive (`standingBite`), and the next pitch is a wall by the drive model.
+   * The sweep stops at the steepest 5° step the sedan still climbs over that speed (75°: 17.2 m/s; 80°: 13.6): one step steeper the face bears too little of the
+   * car's weight for the tyres' drive (`standingBite`), and the next pitch is a wall by the drive model.
    */
-  const SWEEP_DEGREES = [HIGH_JUMP_KICKER.lipPitchDegrees, 65, 70, 75, 80];
+  const SWEEP_DEGREES = [HIGH_JUMP_KICKER.lipPitchDegrees, 65, 70, 75];
   const LIP_SPEED_FLOOR = 17;
   /** A step to a steeper pitch may read this much (m/s) faster: a car under throttle still gains on a longer arc (60 to 65 deg: 33.162 to 33.198), and only a climb that costs more than it gains falls. */
   const LIP_SPEED_RISE_ALLOWED = 0.1;
-  /** The largest radius (m), in 5 m steps under the shipped one, at which the sedan reaches the shipped pitch's lip under its bar. */
-  const TIGHT_RADIUS = 5;
+  /** The steeper pitch (deg) at the shipped radius that leaves the sedan's lip speed under its bar: the honest arc carries it up a tight radius at any speed the bar asks (a 5 m radius gave 42.0 against 26.5), so the climb row's control is a pitch. */
+  const STEEP_DEGREES = 70;
   const sedan = DRIVER_CARS.find((type) => type.id === "sedan")!;
 
   it("when every car type climbs each pitch, then all reach the lip at any of them (no tyre treats the face as a wall) and the sedan's lip speed falls with the pitch yet stays over the floor even at the steepest", (t) => {
@@ -255,11 +255,11 @@ describe("given the high jump's kicker made steeper, an arc of the shipped radiu
     assert.ok(run.reachedLip && run.lipCentreSpeed < LIP_SPEED_FLOOR, `sedan at ${past} deg: ${run.lipCentreSpeed}, reached ${run.reachedLip}`);
   });
 
-  it("when the shipped pitch is given a radius of 5 m, then the sedan reaches the lip under the speed the shipped kicker gives it: the climb row can fail", () => {
+  it(`when the shipped radius is given a pitch of ${STEEP_DEGREES}°, then the sedan reaches the lip under the speed the shipped kicker gives it: the climb row can fail`, () => {
     const shipped = driveToLip(sedan, stationDriveProfile("highJump"), FINE_CELL);
-    const tighter = driveToLip(sedan, highJumpVariant(TIGHT_RADIUS, HIGH_JUMP_KICKER.lipPitchDegrees, RUN_UP_LENGTH.highJump), FINE_CELL);
+    const steeper = driveToLip(sedan, highJumpVariant(HIGH_JUMP_KICKER.radius, STEEP_DEGREES, RUN_UP_LENGTH.highJump), FINE_CELL);
     assert.ok(shipped.lipCentreSpeed >= MINIMUM_SPEED.highJump.sedan!.lip, "shipped meets its bar");
-    assert.ok(tighter.reachedLip && tighter.lipCentreSpeed < MINIMUM_SPEED.highJump.sedan!.lip, `a ${TIGHT_RADIUS} m radius gives ${tighter.lipCentreSpeed}, reached ${tighter.reachedLip}`);
+    assert.ok(steeper.reachedLip && steeper.lipCentreSpeed < MINIMUM_SPEED.highJump.sedan!.lip, `a ${STEEP_DEGREES}° pitch gives ${steeper.lipCentreSpeed}, reached ${steeper.reachedLip}`);
   });
 
   it("when the sweep's builder is given the shipped numbers, then its floor is the shipped floor", () => {
@@ -294,11 +294,12 @@ describe("given each of the 7 car types released at full throttle from the high 
   /**
    * The mutations the apex rows must fail: a kicker too shallow to throw high (deg), and one tight and steep enough (radius m, pitch deg)
    * that the sedan family's climb cliffs while the monster's tyres carry it, found by a sweep of radius, pitch and run-up.
-   * The shallow one is 34° (the lowest class's apex 34.7 m under the minimum 40): with the lip's push the shipped 36° read 40.02, a hair over it.
+   * With the lip's push the honest climb carries more at every pitch: the shallow one is 24° (the lowest class's apex 34.6 m under the minimum 40; the shipped 36 read
+   * 69 to 84), and the cliff 3 m at 88° (apexes 21 to 107 m, ratio 5.0; at 85° it reads 3.6).
    */
-  const SHALLOW_DEGREES = 34;
+  const SHALLOW_DEGREES = 24;
   const CLIFF_RADIUS = 3;
-  const CLIFF_DEGREES = 85;
+  const CLIFF_DEGREES = 88;
   const shipped = flightsOn(stationDriveProfile("highJump"));
 
   it("when each is thrown at the shipped kicker's lip, then every class's unboosted apex is at least the minimum", (t) => {
