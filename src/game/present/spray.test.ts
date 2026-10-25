@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { CAR_SPRAY, packSpray, PERSON_SPRAY, SPRAY_PALETTE, sprayFace, unpackSpray, type SprayLayout } from "../match/look-data.ts";
-import { SprayBitmap } from "./spray.ts";
+import { compileHooks } from "../vehicle/car-detail-map.test-util.ts";
+import { applySpray, BARE_SPRAY, SprayBitmap, sprayUniforms } from "./spray.ts";
+import { personSprayDepthTexture } from "./spray-depth.ts";
 
 const LAYOUTS: Record<string, SprayLayout> = { car: CAR_SPRAY, person: PERSON_SPRAY };
 /** Face order in a layout's `faces`. */
@@ -135,5 +137,20 @@ describe("given a spray bitmap wrapped round a car or a driver as a box", () => 
     for (let x = fx; x < fx + fw; x++) if (bitmap.texels[cy * CAR_SPRAY.w + x] !== 0) assert.ok(Math.abs(x + 0.5 - (fx + fw / 2)) <= reach + 0.5, `texel ${x} within the radius`);
     assert.equal(bitmap.texels[cy * CAR_SPRAY.w + Math.floor(fx + fw / 2 + reach - 1)], 6, "painted out to a texel short of its radius");
     bitmap.dispose();
+  });
+});
+
+describe("given the spray patch on a material", () => {
+  const patched = (outer: THREE.Texture | null, key: string): THREE.Material => {
+    const material = new THREE.MeshStandardMaterial();
+    applySpray(material, sprayUniforms(PERSON_SPRAY, BARE_SPRAY, 1, outer), "", "vSprayP = position;", key);
+    return material;
+  };
+
+  it("when it is given the dummy's depth map, then its fragment tests the fragment's depth against the texel's outermost surface, and a car's patch (no map) does not", () => {
+    const dummy = compileHooks(patched(personSprayDepthTexture(), "dummy-depth")).fragmentShader;
+    const car = compileHooks(patched(null, "car")).fragmentShader;
+    assert.ok(dummy.includes("#define SPRAY_DEPTH") && dummy.includes("sprayBand"), "the dummy's patch has the depth test");
+    assert.ok(!car.includes("#define SPRAY_DEPTH"), "the car's patch is as it was");
   });
 });

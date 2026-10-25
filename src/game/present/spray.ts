@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { hypot3 } from "../kernel/physics-core.js";
-import { depthOfCode, SPRAY_DEPTH_BAND, SPRAY_FACE, SPRAY_PALETTE, sprayAxisSpan, sprayFace, sprayPlace, type SprayLayout, type SprayPaint } from "../match/look-data.ts";
+import { SPRAY_DEPTH_BAND, SPRAY_FACE, SPRAY_PALETTE, sprayFace, type SprayLayout, type SprayPaint, type SpraySurface } from "../match/look-data.ts";
 
 /**
  * Spray paint drawn: a bitmap's texels as the premultiplied texture the paint shader samples (`SprayBitmap`), the can's
@@ -11,11 +11,7 @@ import { depthOfCode, SPRAY_DEPTH_BAND, SPRAY_FACE, SPRAY_PALETTE, sprayAxisSpan
 /** Along a stroke, a puff every this many dot radii of its travel (world), so a fast drag leaves a line, not dots: the garage's can and the rivals' pen (`rival-pen.ts`) both step by it. */
 export const PUFF_STEP = 0.5;
 
-/** A puff reaches a surface this much of its radius (m) nearer or farther along the face's axis than where it landed (30 degrees of slope), and `SPRAY_DEPTH_BAND` more. */
-const REACH_SLOPE = 0.5;
-
 const _uv = new Float64Array(2);
-const _place = new Float64Array(2);
 
 /** One bitmap: an ink per texel, each ink's colour (`palette`, the presets until a colour of the player's own takes an ink), and the premultiplied RGBA texture the shader samples (linear filtered: soft edges). */
 export class SprayBitmap {
@@ -68,14 +64,13 @@ export class SprayBitmap {
   /**
    * A puff of the can at rest point `p` with normal `n`: texels within `radius` m of it on its face take ink `ink`, each
    * with a chance falling from 1 at the middle to 0 at the edge (`rand`), so the dot is dense in the middle and speckled at
-   * its rim. With `outer` (the outermost surface per texel, `sprayDepth`), a texel whose surface lies out of the puff's reach
-   * along the face's axis (a hip behind a hand) stays bare. False when the point's face takes no paint.
+   * its rim. With `surface` (the outermost surface per texel) the paint belongs to the body part `part` (an index + 1) the
+   * can hit: only texels whose outermost surface is that part take it, so a hip beside or behind a hand stays bare.
+   * False when the point's face takes no paint.
    */
-  spray(p: THREE.Vector3, n: THREE.Vector3, radius: number, ink: number, rand: () => number, outer: Uint8Array | null = null): boolean {
+  spray(p: THREE.Vector3, n: THREE.Vector3, radius: number, ink: number, rand: () => number, surface: SpraySurface | null = null, part = 0): boolean {
     const face = sprayFace(this.layout, p.x, p.y, p.z, n.x, n.y, n.z, _uv);
     if (face < 0) return false;
-    const landed = sprayPlace(this.layout, face, p.x, p.y, p.z, _place);
-    const reach = (SPRAY_DEPTH_BAND + radius * REACH_SLOPE) / sprayAxisSpan(this.layout, face);
     const [fx, fy, fw, fh] = this.layout.faces[face]!;
     const { min, max } = this.layout;
     // The face's axes in metres: u runs along z on the sides and the top, x on the ends; v along y, x on the top.
@@ -90,8 +85,7 @@ export class SprayBitmap {
         const du = (x + 0.5 - cu) / ru;
         const dv = (y + 0.5 - cv) / rv;
         const d = Math.sqrt(du * du + dv * dv);
-        const surface = outer?.[y * this.layout.w + x] ?? 0;
-        if (surface !== 0 && Math.abs(depthOfCode(surface) - landed) > reach) continue;
+        if (surface && surface.part[y * this.layout.w + x] !== part) continue;
         if (d < 1 && rand() < 1 - d) this.set(y * this.layout.w + x, ink);
       }
     }

@@ -21,7 +21,7 @@ const ROUTER_INDEX = "__TSR_index";
  * defaults, the run's spawn seed, the netplay room hosted or joined), and a pasted or edited `#` sets it. The hash is
  * untrusted: `decodeShare` validates it and every value then goes through the setter the HUD uses, which clamps again.
  * The `#` is the only thing that decides what a page load starts as: nothing the last run left in localStorage
- * (only preferences live there: name, car, HUD layout, saved highlights) picks a scene, a setting or a room.
+ * (only preferences live there: name, car, HUD layout, the garage's picks and spray, saved highlights) picks a scene, a setting or a room.
  */
 export abstract class EngineShare extends EngineReel {
   /** Off until `attachShare` has read the page's `#`, so boot never overwrites it. */

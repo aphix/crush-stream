@@ -101,18 +101,14 @@ function across(v: number, min: number, max: number): number {
   return Math.min(1, Math.max(0, (v - min) / (max - min)));
 }
 
-/** `face`'s axis length in the layout's box (m): x on the sides, y on the top, z on the ends. */
-export function sprayAxisSpan(layout: SprayLayout, face: number): number {
-  const axis = face === SPRAY_FACE.left || face === SPRAY_FACE.right ? 0 : face === SPRAY_FACE.top ? 1 : 2;
-  return layout.max[axis]! - layout.min[axis]!;
-}
-
-/** A depth map's byte for `depth` (0..1 along the face's axis); 0 is a texel with no surface, so a map texel is 1..255. The shader's `sprayDepth` decodes this. */
+/** A depth map's byte for `depth` (0..1 along the face's axis); 0 is a texel with no surface, so a map texel is 1..255. The shader's `sprayDepth` decodes it: `(code - 1) / 254`. */
 export const depthCode = (depth: number): number => Math.round(depth * 254) + 1;
-export const depthOfCode = (code: number): number => (code - 1) / 254;
 
 /** A fragment this much (m) behind its texel's outermost surface is under another surface and takes no paint; also one quantisation step and a 45 degree slope across a texel. */
 export const SPRAY_DEPTH_BAND = 0.02;
+
+/** A layout's outermost surface per texel (those of its faces; 0 elsewhere): its depth (`depthCode`) and the body part it is (an index + 1). */
+export type SpraySurface = { readonly depth: Uint8Array; readonly part: Uint8Array };
 
 /** `packSpray`'s first byte: the texels as nibbles, two to a byte, or as runs (length 1-255, then the ink); `INKS` set when the bitmap's own inks follow (a count, then ink, r, g, b each). */
 const PACKED = 0;
