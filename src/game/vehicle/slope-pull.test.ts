@@ -79,12 +79,30 @@ function stageOnSteepFace(c: (typeof steepCases)[number]): DeformableCar {
   return car;
 }
 
+/**
+ * The seconds a car is parked on its face before the pull is read: `layOnWedge` puts it there at its rest-ride compression, where the springs push the car's whole weight
+ * straight up, and a body on a face needs only G n.y² of it (the normal load G cos, its vertical part). Released at once, the spring gives the surplus back (a monster at 40°: the
+ * four pushes 1.0 of G·dt in total at slice 1, the front pair unloading to 0 by slice 55 with the rear pair at 0.27 each) and the tread's plan pull, the load's plan part, follows
+ * that: +9.5 % of the window's speed change. A spring returning stored energy is not a pull off the law: a car that coasts on a face sits at the settled compression.
+ */
+const SETTLE_PARKED_S = 1;
+
+/** `stageOnSteepFace`'s car, its springs settled on the face parked (its grip holds it), then let go at the face's own velocity. */
+function settleOnFace(c: (typeof steepCases)[number], car: DeformableCar): void {
+  car.velocity.set(0, 0, 0);
+  car.parked = true;
+  stepSlices(car, SETTLE_PARKED_S, RATE_HZ);
+  car.parked = false;
+  car.velocity.set(c.startSpeedX, c.startSpeedX * Math.tan(c.deg * RAD), 0);
+}
+
 describe("given a car coasting along a steep wedge face on its tyre springs", () => {
   afterEach(() => setGround(null));
 
   for (const c of steepCases) {
-    it(`when a ${c.cls} coasts ${c.way} the ${c.deg}° face at 6 m/s for ${COAST_S} s, then gravity has changed its speed by G·sin·cos a second within 5 %`, () => {
+    it(`when a ${c.cls} coasts ${c.way} the ${c.deg}° face at 6 m/s for ${COAST_S} s from its settled compression, then gravity has changed its speed by G·sin·cos a second within 5 %`, () => {
       const car = stageOnSteepFace(c);
+      settleOnFace(c, car);
       stepSlices(car, COAST_S, RATE_HZ);
       const gain = car.velocity.x - c.startSpeedX;
       const expected = -G * Math.sin(c.deg * RAD) * Math.cos(c.deg * RAD) * COAST_S;

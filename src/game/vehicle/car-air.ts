@@ -1068,24 +1068,24 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     _s[S_JD] = ASK[c]! - Math.min(ASK[c]!, REST[c]!);
     give(c, v, w, q, UP, surf);
   }
-  // The tyres in their springs push straight up, so the world's face leaves the body its gravity along it: each tyre's share of the weight
-  // the springs on the world carry (not a spring's push, which the tread's cap holds under it on a steep face; not gated on the tread's
-  // reach, which reads 0 on a face mounted at speed). Before the passes, so a gripping tyre holds it in the slice.
+  // A spring pushes straight up, but its face carries the push as a load along its normal: a push U up a face with unit normal n is the load
+  // U / n.y along n, and the plan part of it, U n / n.y, is what the face leaves the body of gravity along it. A body following a face is
+  // pushed G n.y² of the weight up, so the pull is G sin cos a second there; on a loaded bank, or unloaded over a crest, the push is the load
+  // the springs really carry, which a fixed share of the weight was not (a banked right-hander at 42 m/s met its wall with it).
+  // A wall (under `CLIMB_NY`) carries the push along its normal already. Before the passes, so a gripping tyre holds it in the slice.
   // Where the grip holds the tyre (a car not driven) the push acts at the tread: at the centre it rolled a monster parked across a 10° face
   // to 6.9°. A driven car's drive owns its travel along the ground, so its push stays at the centre.
-  let carried = 0;
-  for (let c = 0; c < tyres; c++) if (SOFT[c] && OWN[c]! < 0) carried += SHARE[c]!;
   for (let c = 0; c < tyres; c++) {
-    if (!SOFT[c] || OWN[c]! >= 0) continue;
-    const weight = (SHARE[c]! / carried) * G * dt;
+    if (!SOFT[c] || OWN[c]! >= 0 || N[c]!.y < CLIMB_NY) continue;
+    const load = ASK[c]! / N[c]!.y;
     if (driven) {
-      v.x += weight * N[c]!.y * N[c]!.x;
-      v.z += weight * N[c]!.y * N[c]!.z;
+      v.x += load * N[c]!.x;
+      v.z += load * N[c]!.z;
       continue;
     }
     const along = hypot2(N[c]!.x, N[c]!.z);
     if (along > 0) {
-      _s[S_J] = weight * N[c]!.y * along;
+      _s[S_J] = load * along;
       push(v, w, q, R[c]!, _vp.set(N[c]!.x / along, 0, N[c]!.z / along));
     }
   }
