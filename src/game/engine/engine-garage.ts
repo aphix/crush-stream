@@ -10,18 +10,20 @@ import type { SprayUndo } from "./spray-undo.ts";
 
 /**
  * The garage's controls (its HUD panel) and the player looks netplay carries: the player's own picks and spray, and each
- * peer's look worn on its car and driver (`MSG.look`). Choices live in this page (the picks in its URL, the spray in
- * localStorage) and travel to other players once, when they join.
+ * peer's look worn on its car and driver (`MSG.look`). Choices live in this browser (the picks and the spray in localStorage,
+ * the picks in the URL too) and travel to other players once, when they join.
  */
 export abstract class EngineGarage extends EngineShare {
   /** Car part `part` takes colour `colour` (sRGB), or (null) its own again. */
   setCarColour(part: CarPart, colour: number | null): void {
     this.wearPicks({ ...this.looks.mine.car, [part]: colour }, this.looks.mine.person);
+    this.looks.savePicks();
   }
 
   /** The player's driver takes `pick`'s fields. */
   setPersonPick(pick: Partial<PersonPick>): void {
     this.wearPicks(this.looks.mine.car, { ...this.looks.mine.person, ...pick });
+    this.looks.savePicks();
   }
 
   /** The spray can: on or off, its radius (m, clamped to `SPRAY_RADIUS`), its colour (sRGB), Symmetric on or off. */

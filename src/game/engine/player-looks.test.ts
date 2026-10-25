@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { CAR_SPRAY, NO_CAR_PICK, NO_PERSON_PICK, packSpray, PERSON_SPRAY, SPRAY_PALETTE } from "../match/look-data.ts";
+import { CAR_SPRAY, carPickText, NO_CAR_PICK, NO_PERSON_PICK, packSpray, PERSON_SPRAY, personPickText, SPRAY_PALETTE } from "../match/look-data.ts";
 import { packLook, readLook } from "../net/look-codec.ts";
 import { RELAY_MSG_MAX } from "../net/net-hub.test-util.ts";
 import { PlayerLooks } from "./player-looks.ts";
@@ -73,5 +73,23 @@ describe("given the player's spray kept in this browser's storage", () => {
     looks.wear(1, looks.data());
     assert.equal(looks.of(1, 0)?.carSpray.texture.generateMipmaps, true);
     looks.dispose();
+  });
+});
+
+describe("given the player's picks kept in this browser's storage", () => {
+  it("when the driver's build and clothes and the car's colours are kept and the page loads again, then the next visit wears the same picks, and a bare browser or a garbled save wears none", () => {
+    const looks = new PlayerLooks();
+    looks.mine.person = { woman: true, shirt: 0x123456, pants: 0x654321, hair: null, hat: 0xabcdef, mustache: false };
+    looks.mine.car = { ...NO_CAR_PICK, body: 0xff0000, rims: 0x00ff00 };
+    looks.savePicks();
+    const next = new PlayerLooks();
+    assert.equal(personPickText(next.mine.person), personPickText(looks.mine.person), "the driver's picks");
+    assert.equal(carPickText(next.mine.car), carPickText(looks.mine.car), "the car's picks");
+    saved.set("crush.look.person", "garbled");
+    saved.delete("crush.look.car");
+    const garbled = new PlayerLooks();
+    assert.equal(personPickText(garbled.mine.person), personPickText(NO_PERSON_PICK), "a garbled save");
+    assert.equal(carPickText(garbled.mine.car), carPickText(NO_CAR_PICK), "no save");
+    for (const l of [looks, next, garbled]) l.dispose();
   });
 });

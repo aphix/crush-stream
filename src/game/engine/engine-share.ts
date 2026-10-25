@@ -10,6 +10,9 @@ import { KNOBS, knobValues } from "../hud/knobs.ts";
 import { ownLook } from "../present/driver-look.ts";
 import { shareHashOf } from "./bench-loop.ts";
 
+const NO_CAR_TEXT = carPickText(NO_CAR_PICK);
+const NO_PERSON_TEXT = personPickText(NO_PERSON_PICK);
+
 /** The key `@tanstack/history` keeps a history entry's place in its stack under (`history.state`); a pushed entry carries the next one. */
 const ROUTER_INDEX = "__TSR_index";
 
@@ -18,7 +21,7 @@ const ROUTER_INDEX = "__TSR_index";
  * defaults, the run's spawn seed, the netplay room hosted or joined), and a pasted or edited `#` sets it. The hash is
  * untrusted: `decodeShare` validates it and every value then goes through the setter the HUD uses, which clamps again.
  * The `#` is the only thing that decides what a page load starts as: nothing the last run left in localStorage
- * (only preferences live there: name, car, HUD layout, saved highlights) picks a scene, a setting or a room.
+ * (only preferences live there: name, car, HUD layout, the garage's picks and spray, saved highlights) picks a scene, a setting or a room.
  */
 export abstract class EngineShare extends EngineReel {
   /** Off until `attachShare` has read the page's `#`, so boot never overwrites it. */
@@ -162,7 +165,8 @@ export abstract class EngineShare extends EngineReel {
       if (differs("evol")) this.setEngineVolume(t.evol);
       if (differs("deform")) this.toggleDeformMode();
       if (differs("car")) this.setPlayerCar(t.car);
-      if (differs("ck", "pk")) this.wearPicks(parseCarPick(t.ck) ?? NO_CAR_PICK, parsePersonPick(t.pk) ?? NO_PERSON_PICK);
+      // A link that names no picks leaves the look this browser kept (`PlayerLooks`); one that does overrides it for the visit.
+      if (differs("ck", "pk")) this.wearPicks(t.ck === NO_CAR_TEXT ? this.looks.mine.car : (parseCarPick(t.ck) ?? NO_CAR_PICK), t.pk === NO_PERSON_TEXT ? this.looks.mine.person : (parsePersonPick(t.pk) ?? NO_PERSON_PICK));
       if (differs("pkph", "pkg", "phard", "phold", "phop")) {
         this.setPistonConfig({ speedKph: t.pkph, massKg: t.pkg, hardness: t.phard, holdCar: t.phold, hopSeconds: t.phop });
       }

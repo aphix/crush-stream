@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { hypot3 } from "../kernel/physics-core.js";
-import { SPRAY_FACE, SPRAY_PALETTE, sprayFace, type SprayLayout, type SprayPaint } from "../match/look-data.ts";
+import { SPRAY_DEPTH_BAND, SPRAY_FACE, SPRAY_PALETTE, sprayFace, type SprayLayout, type SprayPaint, type SpraySurface } from "../match/look-data.ts";
 
 /**
  * Spray paint drawn: a bitmap's texels as the premultiplied texture the paint shader samples (`SprayBitmap`), the can's
@@ -64,9 +64,11 @@ export class SprayBitmap {
   /**
    * A puff of the can at rest point `p` with normal `n`: texels within `radius` m of it on its face take ink `ink`, each
    * with a chance falling from 1 at the middle to 0 at the edge (`rand`), so the dot is dense in the middle and speckled at
-   * its rim. False when the point's face takes no paint.
+   * its rim. With `surface` (the outermost surface per texel) the paint belongs to the body part `part` (an index + 1) the
+   * can hit: only texels whose outermost surface is that part take it, so a hip beside or behind a hand stays bare.
+   * False when the point's face takes no paint.
    */
-  spray(p: THREE.Vector3, n: THREE.Vector3, radius: number, ink: number, rand: () => number): boolean {
+  spray(p: THREE.Vector3, n: THREE.Vector3, radius: number, ink: number, rand: () => number, surface: SpraySurface | null = null, part = 0): boolean {
     const face = sprayFace(this.layout, p.x, p.y, p.z, n.x, n.y, n.z, _uv);
     if (face < 0) return false;
     const [fx, fy, fw, fh] = this.layout.faces[face]!;
@@ -83,6 +85,7 @@ export class SprayBitmap {
         const du = (x + 0.5 - cu) / ru;
         const dv = (y + 0.5 - cv) / rv;
         const d = Math.sqrt(du * du + dv * dv);
+        if (surface && surface.part[y * this.layout.w + x] !== part) continue;
         if (d < 1 && rand() < 1 - d) this.set(y * this.layout.w + x, ink);
       }
     }
@@ -135,24 +138,29 @@ export function colourDistance(a: number, b: number): number {
   return hypot3((a >> 16) - (b >> 16), ((a >> 8) & 0xff) - ((b >> 8) & 0xff), (a & 0xff) - (b & 0xff));
 }
 
-/** The shader's spray uniforms for a bitmap of `layout` sampled from `map`, `rows` bitmaps stacked up it (one per dummy slot). */
-export function sprayUniforms(layout: SprayLayout, map: THREE.Texture, rows: number): Record<string, THREE.IUniform> {
+/** The shader's spray uniforms for a bitmap of `layout` sampled from `map`, `rows` bitmaps stacked up it (one per dummy slot); with `outer` (`personSprayDepthTexture`) a fragment under its texel's outermost surface draws no paint. */
+export function sprayUniforms(layout: SprayLayout, map: THREE.Texture, rows: number, outer: THREE.Texture | null = null): Record<string, THREE.IUniform> {
   return {
     sprayMap: { value: map },
     sprayMin: { value: new THREE.Vector3(...layout.min) },
     spraySpan: { value: new THREE.Vector3(layout.max[0] - layout.min[0], layout.max[1] - layout.min[1], layout.max[2] - layout.min[2]) },
     sprayFaces: { value: layout.faces.map(([x, y, w, h]) => new THREE.Vector4(x / layout.w, y / layout.h, w / layout.w, h / layout.h)) },
     sprayRows: { value: rows },
+    ...(outer && { sprayDepth: { value: outer }, sprayBand: { value: SPRAY_DEPTH_BAND } }),
   };
 }
 
-/** `sprayFace` on the GPU: the premultiplied spray over this fragment (none off the box's painted faces, or with no rest normal). */
+/** `sprayFace` and `sprayDraws` on the GPU: the premultiplied spray over this fragment (none off the box's painted faces, or with no rest normal). */
 const SPRAY_FRAGMENT = /* glsl */ `
 uniform sampler2D sprayMap;
 uniform vec3 sprayMin;
 uniform vec3 spraySpan;
 uniform vec4 sprayFaces[5];
 uniform float sprayRows;
+#ifdef SPRAY_DEPTH
+uniform sampler2D sprayDepth;
+uniform float sprayBand;
+#endif
 varying vec3 vSprayP;
 varying vec3 vSprayN;
 varying float vSprayRow;
@@ -163,10 +171,16 @@ vec4 sprayTexel() {
   vec3 t = clamp((vSprayP - sprayMin) / spraySpan, 0.0, 1.0);
   vec4 f;
   vec2 uv;
-  if (a.x >= a.y && a.x >= a.z) { f = n.x < 0.0 ? sprayFaces[0] : sprayFaces[1]; uv = t.zy; }
-  else if (a.y >= a.z) { if (n.y < 0.0) return vec4(0.0); f = sprayFaces[2]; uv = t.zx; }
-  else { f = n.z > 0.0 ? sprayFaces[3] : sprayFaces[4]; uv = t.xy; }
+  float depth;
+  float axis;
+  if (a.x >= a.y && a.x >= a.z) { if (n.x < 0.0) { f = sprayFaces[0]; depth = 1.0 - t.x; } else { f = sprayFaces[1]; depth = t.x; } uv = t.zy; axis = spraySpan.x; }
+  else if (a.y >= a.z) { if (n.y < 0.0) return vec4(0.0); f = sprayFaces[2]; uv = t.zx; depth = t.y; axis = spraySpan.y; }
+  else { if (n.z > 0.0) { f = sprayFaces[3]; depth = t.z; } else { f = sprayFaces[4]; depth = 1.0 - t.z; } uv = t.xy; axis = spraySpan.z; }
   vec2 st = f.xy + uv * f.zw;
+#ifdef SPRAY_DEPTH
+  float code = floor(texture2D(sprayDepth, st).r * 255.0 + 0.5);
+  if (code > 0.0 && depth < (code - 1.0) / 254.0 - sprayBand / axis) return vec4(0.0);
+#endif
   return texture2D(sprayMap, vec2(st.x, (vSprayRow + st.y) / sprayRows));
 }`;
 
@@ -185,7 +199,7 @@ export function applySpray(material: THREE.Material, uniforms: Record<string, TH
       .replace("#include <common>", `#include <common>\n${shader.vertexShader.includes(attributes) ? "" : attributes}\nvarying vec3 vSprayP;\nvarying vec3 vSprayN;\nvarying float vSprayRow;`)
       .replace("#include <begin_vertex>", `#include <begin_vertex>\n${vertex}`);
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", `#include <common>\n${SPRAY_FRAGMENT}`)
+      .replace("#include <common>", `#include <common>\n${"sprayDepth" in uniforms ? "#define SPRAY_DEPTH\n" : ""}${SPRAY_FRAGMENT}`)
       .replace("#include <color_fragment>", "#include <color_fragment>\nvec4 sprayS = sprayTexel();\ndiffuseColor.rgb = diffuseColor.rgb * (1.0 - sprayS.a) + sprayS.rgb;");
   };
   material.customProgramCacheKey = () => `${prevKey.call(material)}|spray-${key}`;

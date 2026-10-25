@@ -69,28 +69,46 @@ export function sprayFace(layout: SprayLayout, px: number, py: number, pz: numbe
   const ax = Math.abs(nx);
   const ay = Math.abs(ny);
   const az = Math.abs(nz);
+  const face = ax >= ay && ax >= az ? (nx < 0 ? SPRAY_FACE.left : SPRAY_FACE.right) : ay >= az ? (ny < 0 ? -1 : SPRAY_FACE.top) : nz > 0 ? SPRAY_FACE.front : SPRAY_FACE.back;
+  if (face >= 0) sprayPlace(layout, face, px, py, pz, uv);
+  return face;
+}
+
+/**
+ * The rest point (px, py, pz)'s place across `face` (0..1 each) into `uv`, and its depth: how far out along the face's axis it
+ * lies in the layout's box (0..1, the face's own side being 1). The shader's `sprayTexel` is this, line for line.
+ */
+export function sprayPlace(layout: SprayLayout, face: number, px: number, py: number, pz: number, uv: Float64Array): number {
   const tx = across(px, layout.min[0], layout.max[0]);
   const ty = across(py, layout.min[1], layout.max[1]);
   const tz = across(pz, layout.min[2], layout.max[2]);
-  if (ax >= ay && ax >= az) {
+  if (face === SPRAY_FACE.left || face === SPRAY_FACE.right) {
     uv[0] = tz;
     uv[1] = ty;
-    return nx < 0 ? SPRAY_FACE.left : SPRAY_FACE.right;
+    return face === SPRAY_FACE.left ? 1 - tx : tx;
   }
-  if (ay >= az) {
-    if (ny < 0) return -1;
+  if (face === SPRAY_FACE.top) {
     uv[0] = tz;
     uv[1] = tx;
-    return SPRAY_FACE.top;
+    return ty;
   }
   uv[0] = tx;
   uv[1] = ty;
-  return nz > 0 ? SPRAY_FACE.front : SPRAY_FACE.back;
+  return face === SPRAY_FACE.front ? tz : 1 - tz;
 }
 
 function across(v: number, min: number, max: number): number {
   return Math.min(1, Math.max(0, (v - min) / (max - min)));
 }
+
+/** A depth map's byte for `depth` (0..1 along the face's axis); 0 is a texel with no surface, so a map texel is 1..255. The shader's `sprayDepth` decodes it: `(code - 1) / 254`. */
+export const depthCode = (depth: number): number => Math.round(depth * 254) + 1;
+
+/** A fragment this much (m) behind its texel's outermost surface is under another surface and takes no paint; also one quantisation step and a 45 degree slope across a texel. */
+export const SPRAY_DEPTH_BAND = 0.02;
+
+/** A layout's outermost surface per texel (those of its faces; 0 elsewhere): its depth (`depthCode`) and the body part it is (an index + 1). */
+export type SpraySurface = { readonly depth: Uint8Array; readonly part: Uint8Array };
 
 /** `packSpray`'s first byte: the texels as nibbles, two to a byte, or as runs (length 1-255, then the ink); `INKS` set when the bitmap's own inks follow (a count, then ink, r, g, b each). */
 const PACKED = 0;
