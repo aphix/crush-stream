@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
-import { SPRAY_FACE, SPRAY_PALETTE, type SprayLayout } from "../match/look-data.ts";
+import { carPickText, NO_CAR_PICK, NO_PERSON_PICK, personPickText, SPRAY_FACE, SPRAY_PALETTE, type SprayLayout } from "../match/look-data.ts";
+import { decodeShare } from "../hud/share-url.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { ORBIT_RADIUS } from "../present/engine-camera.ts";
 import { GARAGE } from "../present/garage-art.ts";
@@ -342,5 +343,25 @@ describe("given the real engine in the garage", () => {
       Math.random = random;
       engine.setSprayTool({ on: false, mirror: false });
     }
+  });
+
+  it("when the driver and the car are picked in the garage and the page loads with a link that names no picks, then the picks stay; a link that names the driver's picks overrides them for that visit and leaves the car's", async () => {
+    const saved = new Map<string, string>();
+    Object.assign(globalThis, { localStorage: { getItem: (k: string) => saved.get(k) ?? null, setItem: (k: string, v: string) => saved.set(k, v), removeItem: (k: string) => saved.delete(k) } });
+    const chosen = { woman: true, shirt: 0x123456, pants: 0x654321, hair: null, hat: 0xabcdef, mustache: true };
+    engine.setPersonPick(chosen);
+    engine.setCarColour("body", 0xff0000);
+    const look = (): string => `${personPickText(engine["looks"].mine.person)} ${carPickText(engine["looks"].mine.car)}`;
+    const chosenLook = look();
+    engine["applyShare"](decodeShare(""), false);
+    assert.equal(look(), chosenLook, "a bare link");
+    const reloaded = new PlayerLooks();
+    assert.equal(personPickText(reloaded.mine.person), personPickText({ ...NO_PERSON_PICK, ...chosen }), "what the next visit starts with");
+    reloaded.dispose();
+    engine["applyShare"](decodeShare(`pk=${personPickText({ ...NO_PERSON_PICK, woman: false })}`), false);
+    assert.equal(look(), `${personPickText({ ...NO_PERSON_PICK, woman: false })} ${carPickText(engine["looks"].mine.car)}`, "a link naming the driver");
+    assert.ok(look().endsWith(carPickText({ ...NO_CAR_PICK, body: 0xff0000 })), "the car's pick kept");
+    engine.setPersonPick(NO_PERSON_PICK);
+    engine.setCarColour("body", null);
   });
 });

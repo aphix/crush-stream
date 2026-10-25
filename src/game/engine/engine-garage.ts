@@ -17,11 +17,13 @@ export abstract class EngineGarage extends EngineShare {
   /** Car part `part` takes colour `colour` (sRGB), or (null) its own again. */
   setCarColour(part: CarPart, colour: number | null): void {
     this.wearPicks({ ...this.looks.mine.car, [part]: colour }, this.looks.mine.person);
+    this.looks.savePicks();
   }
 
   /** The player's driver takes `pick`'s fields. */
   setPersonPick(pick: Partial<PersonPick>): void {
     this.wearPicks(this.looks.mine.car, { ...this.looks.mine.person, ...pick });
+    this.looks.savePicks();
   }
 
   /** The spray can: on or off, its radius (m, clamped to `SPRAY_RADIUS`), its colour (sRGB), Symmetric on or off. */

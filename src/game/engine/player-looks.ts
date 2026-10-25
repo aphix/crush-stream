@@ -1,12 +1,13 @@
 import type { LookData } from "../net/look-codec.ts";
-import { CAR_SPRAY, NO_CAR_PICK, NO_PERSON_PICK, packSpray, PERSON_SPRAY, unpackSpray, type CarPick, type PersonPick, type SprayPaint } from "../match/look-data.ts";
+import { carPickText, CAR_SPRAY, NO_CAR_PICK, NO_PERSON_PICK, packSpray, parseCarPick, parsePersonPick, PERSON_SPRAY, personPickText, unpackSpray, type CarPick, type PersonPick, type SprayPaint } from "../match/look-data.ts";
 import { SprayBitmap } from "../present/spray.ts";
 
 /** A player's look as worn: the picks and both spray bitmaps, drawn. */
 type PlayerLook = { car: CarPick; person: PersonPick; carSpray: SprayBitmap; personSpray: SprayBitmap };
 
-/** Where this browser keeps its spray between visits (its picks ride the URL). */
+/** Where this browser keeps its look between visits: the spray as bytes, the picks as their URL text (a link that names picks overrides them for its visit). */
 const SPRAY_KEY = { car: "crush.spray.car", person: "crush.spray.person" } as const;
+const PICK_KEY = { car: "crush.look.car", person: "crush.look.person" } as const;
 export type SprayTarget = keyof typeof SPRAY_KEY;
 
 /** A kept spray for a bitmap `side` texels square: as saved, or a save from when the side was half this (128), each texel doubled 2 x 2; null when it is neither. */
@@ -31,12 +32,20 @@ export class PlayerLooks {
 
   constructor() {
     if (typeof localStorage === "undefined") return;
+    this.mine.car = parseCarPick(localStorage.getItem(PICK_KEY.car) ?? "") ?? this.mine.car;
+    this.mine.person = parsePersonPick(localStorage.getItem(PICK_KEY.person) ?? "") ?? this.mine.person;
     for (const target of ["car", "person"] as const) {
       const text = localStorage.getItem(SPRAY_KEY[target]);
       if (text === null) continue;
       const bitmap = this.sprayOf(target);
       bitmap.load(savedSpray(Uint8Array.from(atob(text), (c) => c.charCodeAt(0)), bitmap.layout.w));
     }
+  }
+
+  /** Keep the player's own picks for the next visit. */
+  savePicks(): void {
+    localStorage.setItem(PICK_KEY.car, carPickText(this.mine.car));
+    localStorage.setItem(PICK_KEY.person, personPickText(this.mine.person));
   }
 
   sprayOf(target: SprayTarget): SprayBitmap {
