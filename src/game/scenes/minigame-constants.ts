@@ -51,8 +51,8 @@ export const START_HILL = { padLength: 6, drop: 3 } as const;
  * and the car's speed there is set by the distance it covers from the pad (measured in `minigame-profile.test.ts`).
  */
 export const START_HILL_LENGTH: Readonly<Record<MinigameMode, number>> = {
-  longJump: 11.4,
-  highJump: 23,
+  longJump: 11.8,
+  highJump: 23.5,
   ringFling: 24,
 };
 
