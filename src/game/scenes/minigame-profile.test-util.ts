@@ -9,7 +9,8 @@ import { paint } from "../vehicle/test-support.ts";
 import { armKill, assignClass, HANDLING, killClass } from "../vehicle/vehicle-classes.ts";
 import { Ground, setGround, STEP_UP } from "../world/ground.ts";
 import { FREEWHEEL, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
-import { DEGREES_TO_RADIANS, HIGH_JUMP_KICKER, INCLINE_FOOT_RADIUS, LANDING_HEIGHT, LIP_BACK_FACE_PITCH_DEGREES, LONG_JUMP_INCLINE, RING_FLING_LANE, RUN_UP_LENGTH, START_HILL, THROW_YAW, type MinigameMode } from "./minigame-constants.ts";
+import { DEGREES_TO_RADIANS, HIGH_JUMP_KICKER, INCLINE_FOOT_RADIUS, LANDING_HEIGHT, LIP_BACK_FACE_PITCH_DEGREES, LIP_LAUNCH_PUSH, LONG_JUMP_INCLINE, RING_FLING_LANE, RUN_UP_LENGTH, START_HILL, THROW_YAW, type MinigameMode } from "./minigame-constants.ts";
+import { launchPush } from "./minigame-lip.ts";
 import { climbFootX, floorHeightAt, stationBackX, stationFrontX, stationStartPose } from "./minigame-profile.ts";
 import { holdForThrow, PRE_IMPACT_LEAD, preImpact, type PhaseClock } from "../match/phase.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
@@ -81,6 +82,8 @@ export type DriveProfile = {
   frontX: number;
   startX: number;
   footX: number;
+  /** The kicker's launch push at the lip (`LIP_LAUNCH_PUSH`; none: 0), applied as the centre crosses it. */
+  launchPush?: number;
 };
 
 /** A grid of the profile from `backX` to `frontX` (two cells beyond, the profile's own height there too), `cell` m between nodes, then the level landing (one plane) past it. */
@@ -195,7 +198,10 @@ export function driveToLip(type: DriverCar, profile: DriveProfile, cell: number,
         run.airborne = car.airborne;
       }
       if (position.x >= 0) {
-        run.lipCentreSpeed = speedAtLine(fromX, fromSpeed, position.x, car.speed, 0);
+        // The lip's push (`LipThrow`) as the centre crosses: the speeds read are the ones the car leaves the lip at, and its driver is thrown from.
+        const approach = car.speed;
+        launchPush(car, profile.launchPush ?? 0);
+        run.lipCentreSpeed = speedAtLine(fromX, fromSpeed, position.x, approach, 0) * (car.speed / approach);
         run.lipHorizontalSpeed = Math.hypot(car.velocity.x, car.velocity.z);
         run.lipVerticalSpeed = car.velocity.y;
         break;
@@ -260,6 +266,7 @@ export function stationDriveProfile(mode: MinigameMode): DriveProfile {
     frontX: stationFrontX(mode),
     startX: stationStartPose(mode).x,
     footX: climbFootX(mode),
+    launchPush: mode === "longJump" ? 0 : LIP_LAUNCH_PUSH[mode],
   };
 }
 
@@ -285,6 +292,7 @@ export function highJumpVariant(radius: number, pitchDegrees: number, runUp: num
     frontX: (lipY - LANDING_HEIGHT) / backFaceSlope,
     startX: shipped.startX - shift,
     footX,
+    launchPush: shipped.launchPush,
   };
 }
 
