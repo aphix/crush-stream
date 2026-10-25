@@ -5,7 +5,8 @@ import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { JET_SLOTS } from "../present/engine-fx.ts";
+import { JET_SLOTS } from "../present/fountain-system.ts";
+import { sparkLives } from "../present/fountain-sparks.test-util.ts";
 import { RACE_ROW_GAP, ROAD_MARGIN, STATION_ROW_GAP } from "../present/fountain-plan.ts";
 import { MINIGAME_MODES, STATION_ANCHORS, STATION_HALF_WIDTH } from "../scenes/minigame-constants.ts";
 import { RANGE } from "../scenes/range.ts";
@@ -85,10 +86,10 @@ describe("given the real engine", () => {
       assert.equal(launches.length, 1, "the driver was thrown");
       assert.equal(fountains().jets.jets, 6, "the jets keep going through the launch");
       advance(FRAME_HZ);
-      assert.ok(fountains().jets["life"].some((life) => life > 0), "sparks are in the air while the dummy flies");
+      assert.ok(sparkLives(fountains().jets).some((life) => life > 0), "sparks are in the air while the dummy flies");
       engine["clearLocal"]();
       assert.equal(fountains().jets.jets, 0, "a reset stops the jets");
-      assert.ok(fountains().jets["life"].every((life) => life <= 0), "and clears their sparks");
+      assert.ok(sparkLives(fountains().jets).every((life) => life <= 0), "and clears their sparks");
     });
 
     for (const mode of MINIGAME_MODES) {

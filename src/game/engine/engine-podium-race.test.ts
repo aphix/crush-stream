@@ -9,6 +9,7 @@ import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { PODIUM_BLOCKS } from "../match/podium.ts";
+import { sparkAt, sparkLives } from "../present/fountain-sparks.test-util.ts";
 import type { RaceResultRow } from "../match/types.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
@@ -241,14 +242,18 @@ describe("given the real engine and a race ended with every car dented", () => {
     run(10);
     const spot = race().podiumSpot()!;
     const sys = engine["fountains"].jets;
-    const overPlatform = (i: number): boolean => Math.hypot(sys["pos"][i * 3]! - spot.x, sys["pos"][i * 3 + 2]! - spot.z) < PLATFORM_REACH_M && sys["pos"][i * 3 + 1]! > spot.y - 1;
-    const inAir = (): number[] => [...sys["life"].keys()].filter((i) => sys["life"][i]! > 0 && overPlatform(i));
+    const at = new THREE.Vector3();
+    const overPlatform = (k: number): boolean => {
+      sparkAt(sys, k, at);
+      return Math.hypot(at.x - spot.x, at.z - spot.z) < PLATFORM_REACH_M && at.y > spot.y - 1;
+    };
+    const inAir = (): number[] => [...sparkLives(sys).keys()].filter((k) => sparkLives(sys)[k]! > 0 && overPlatform(k));
     const before = inAir();
     assert.ok(before.length > 0, "the control: the podium's jets have sparks in the air");
-    const lifeBefore = new Map(before.map((i) => [i, sys["life"][i]!]));
+    const heightBefore = new Map(before.map((k) => [k, sparkAt(sys, k, at).y]));
     run(0.1);
-    const aged = before.filter((i) => sys["life"][i]! < lifeBefore.get(i)!);
-    assert.ok(aged.length > 0, "the jets update while the podium shows: the sparks in the air are not frozen");
+    const moved = before.filter((k) => sparkLives(sys)[k]! > 0 && sparkAt(sys, k, at).y !== heightBefore.get(k));
+    assert.ok(moved.length > 0, "the jets update while the podium shows: the sparks in the air are not frozen");
   });
 
   it("when Skip is pressed, then the podium is down, the field is back as it was and the sheet's cars are not the podium's", () => {

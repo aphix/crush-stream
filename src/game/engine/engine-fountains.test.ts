@@ -1,10 +1,11 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { setImmediate as yieldToLoop } from "node:timers/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { PerformanceObserver } from "node:perf_hooks";
 import * as THREE from "three";
 import { FRAME_HZ, GRAVITY, KPH_PER_MS } from "../kernel/constants.ts";
-import { FountainSystem, JET_FADE_S, JET_RATE, JET_SLOTS, JET_UP_MAX } from "../present/engine-fx.ts";
+import { FountainSystem, JET_FADE_S, JET_RATE, JET_SLOTS, JET_UP_MAX } from "../present/fountain-system.ts";
+import { sparkAt, sparkLives, sparkTint } from "../present/fountain-sparks.test-util.ts";
 import type { FxTier } from "../present/engine-post.ts";
 import { APPROACH_LEAD_S, APPROACH_RUN_S, FOUNTAIN_TIER, LINE_POWER, RACE_ROW_GAP, RANGE_ROW_GAP, ROAD_MARGIN, ROW_POWER, ROW_STAGGER_S, RUNUP_ROWS, STATION_ROW_GAP } from "../present/fountain-plan.ts";
 import { RANGE } from "../scenes/range.ts";
@@ -23,8 +24,8 @@ const ctx = { createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}
 const CANVAS = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx }) };
 
 const STEP = 1 / FRAME_HZ;
-/** The explicit step runs a spark's position before its speed, so its path overshoots the true apex by up to half a step of its launch speed (16 m/s x 1/60 s / 2 = 0.14 m). */
-const APEX_OVERSHOOT = 0.2;
+/** A spark flies its exact parabola (the vertex shader's formula), so it peaks at its apex; this is the float32 rounding of its launch. */
+const APEX_OVERSHOOT = 0.01;
 const TIERS: readonly FxTier[] = ["off", "minimal", "low", "high", "ultra"];
 /** What each tier throws, as the brief reads: off none, minimal a single thin pair, ultra the full show; stated here, not read back from the plan's table. */
 const RACE_JETS: Readonly<Record<FxTier, number>> = { off: 0, minimal: 2, low: 4, high: 6, ultra: 8 };
@@ -43,13 +44,10 @@ function pool(): FountainSystem {
   return new FountainSystem(scene);
 }
 
-const alive = (sys: FountainSystem): number => sys["life"].filter((life) => life > 0).length;
-/** The colour channel `c` the GPU gets for the live spark in ring slot `k`: the live sparks are packed from the front in ring order. */
-const drawnTint = (sys: FountainSystem, k: number, c: number): number => {
-  let row = 0;
-  for (let j = 0; j < k; j++) if (sys["life"][j]! > 0) row++;
-  return sys["drawTint"]![row * 3 + c]!;
-};
+const alive = (sys: FountainSystem): number => sparkLives(sys).filter((life) => life > 0).length;
+/** Wall time (ms) the collector's queued entries get to reach the observer: a short run ends before a pending collection is reported, so one turn of the loop is not enough. */
+const DRAIN_MS = 100;
+const drainLoop = (): Promise<void> => delay(DRAIN_MS);
 const run = (sys: { update(dt: number): void }, seconds: number): void => {
   for (let i = 0; i < Math.round(seconds / STEP); i++) sys.update(STEP);
 };
@@ -102,12 +100,14 @@ describe("given a fountain jet", () => {
     const apex = nozzleY + (JET_UP_MAX * JET_UP_MAX) / (2 * GRAVITY);
     let top = nozzleY;
     let low = nozzleY;
+    const spark = new THREE.Vector3();
     for (let i = 0; i < Math.round(6 / STEP); i++) {
       sys.update(STEP);
-      for (let k = 0; k < sys["n"]; k++) {
-        if (sys["life"][k]! <= 0) continue;
-        top = Math.max(top, sys["pos"][k * 3 + 1]!);
-        low = Math.min(low, sys["pos"][k * 3 + 1]!);
+      for (const [k, life] of sparkLives(sys).entries()) {
+        if (life <= 0) continue;
+        sparkAt(sys, k, spark);
+        top = Math.max(top, spark.y);
+        low = Math.min(low, spark.y);
       }
     }
     assert.ok(top > nozzleY + 3 && top <= apex + APEX_OVERSHOOT, `the highest spark reached ${top.toFixed(2)} m, the arc's apex is ${apex.toFixed(2)} m`);
@@ -116,18 +116,16 @@ describe("given a fountain jet", () => {
     assert.equal(sys.jets, 0, "the jet is spent");
   });
 
-  it("when sparks are in the air, then each fades to nothing over its last JET_FADE_S and is full before", () => {
+  it("when sparks are in the air, then the ones in their last JET_FADE_S are dimmed in step with the time they have left, and the rest are full", () => {
     const sys = pool();
     sys.jet(0, 0, 0, 0, 1);
     run(sys, 2.6);
     let fading = 0;
     let full = 0;
-    for (let k = 0; k < sys["n"]; k++) {
-      const life = sys["life"][k]!;
+    for (const [k, life] of sparkLives(sys).entries()) {
       if (life <= 0) continue;
       const want = Math.min(1, life / JET_FADE_S);
-      const got = drawnTint(sys, k, 0) / sys["base"][k * 3]!;
-      assert.ok(Math.abs(got - want) < 0.02, `a spark with ${life.toFixed(2)} s left is at ${got.toFixed(2)}, wanted ${want.toFixed(2)}`);
+      assert.ok(Math.abs(sparkTint(sys, k, 0) / sys["spawnHue"][k * 3]! - want) < 1e-6, `a spark with ${life.toFixed(2)} s left is not at ${want.toFixed(2)}`);
       if (want < 1) fading++;
       else full++;
     }
@@ -138,9 +136,9 @@ describe("given a fountain jet", () => {
     const sys = pool();
     sys.jet(0, 0, 0, 0, 0.5, 1, new THREE.Color(0.2, 0.4, 0.8));
     run(sys, 0.5);
-    const k = sys["life"].findIndex((life) => life > JET_FADE_S);
+    const k = sparkLives(sys).findIndex((life) => life > JET_FADE_S);
     assert.ok(k >= 0, "a spark at full brightness");
-    assert.ok(Math.abs(drawnTint(sys, k, 0) - 0.2) < 1e-6 && Math.abs(drawnTint(sys, k, 1) - 0.4) < 1e-6 && Math.abs(drawnTint(sys, k, 2) - 0.8) < 1e-6);
+    assert.ok(Math.abs(sparkTint(sys, k, 0) - 0.2) < 1e-6 && Math.abs(sparkTint(sys, k, 1) - 0.4) < 1e-6 && Math.abs(sparkTint(sys, k, 2) - 0.8) < 1e-6);
   });
 
   it("when more jets are asked for than the table holds, then the extra ones are dropped, and a spent jet frees its slot", () => {
@@ -178,11 +176,11 @@ describe("given a fountain jet", () => {
     watch.observe({ entryTypes: ["gc"] });
     // The earlier rows left garbage (each built a pool): a first stretch lets the collector take it, and only the second is counted.
     run(sys, 120);
-    await yieldToLoop();
+    await drainLoop();
     watch.takeRecords();
     run(sys, 600);
     // The collector's entries reach the observer through the event loop: let them in before counting.
-    await yieldToLoop();
+    await drainLoop();
     const collections = watch.takeRecords().length;
     watch.disconnect();
     assert.equal(collections, 0, "a collection ran inside 36000 frames of eight running jets");

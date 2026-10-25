@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
-import { DebrisSystem, FountainSystem, GlassDotSystem, SparkSystem, TireSmokeSystem } from "./engine-fx.ts";
+import { DebrisSystem, GlassDotSystem, SparkSystem, TireSmokeSystem } from "./engine-fx.ts";
+import { FountainSystem } from "./fountain-system.ts";
 
 /**
  * The FX pools allocate nothing of their own in a frame: a warmed scene with eight fountain jets, crash sparks, glass, debris and a
