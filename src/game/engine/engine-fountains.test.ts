@@ -44,6 +44,12 @@ function pool(): FountainSystem {
 }
 
 const alive = (sys: FountainSystem): number => sys["life"].filter((life) => life > 0).length;
+/** The colour channel `c` the GPU gets for the live spark in ring slot `k`: the live sparks are packed from the front in ring order. */
+const drawnTint = (sys: FountainSystem, k: number, c: number): number => {
+  let row = 0;
+  for (let j = 0; j < k; j++) if (sys["life"][j]! > 0) row++;
+  return sys["drawTint"]![row * 3 + c]!;
+};
 const run = (sys: { update(dt: number): void }, seconds: number): void => {
   for (let i = 0; i < Math.round(seconds / STEP); i++) sys.update(STEP);
 };
@@ -120,7 +126,7 @@ describe("given a fountain jet", () => {
       const life = sys["life"][k]!;
       if (life <= 0) continue;
       const want = Math.min(1, life / JET_FADE_S);
-      const got = sys["tint"]![k * 3]! / sys["base"][k * 3]!;
+      const got = drawnTint(sys, k, 0) / sys["base"][k * 3]!;
       assert.ok(Math.abs(got - want) < 0.02, `a spark with ${life.toFixed(2)} s left is at ${got.toFixed(2)}, wanted ${want.toFixed(2)}`);
       if (want < 1) fading++;
       else full++;
@@ -134,7 +140,7 @@ describe("given a fountain jet", () => {
     run(sys, 0.5);
     const k = sys["life"].findIndex((life) => life > JET_FADE_S);
     assert.ok(k >= 0, "a spark at full brightness");
-    assert.ok(Math.abs(sys["tint"]![k * 3]! - 0.2) < 1e-6 && Math.abs(sys["tint"]![k * 3 + 1]! - 0.4) < 1e-6 && Math.abs(sys["tint"]![k * 3 + 2]! - 0.8) < 1e-6);
+    assert.ok(Math.abs(drawnTint(sys, k, 0) - 0.2) < 1e-6 && Math.abs(drawnTint(sys, k, 1) - 0.4) < 1e-6 && Math.abs(drawnTint(sys, k, 2) - 0.8) < 1e-6);
   });
 
   it("when more jets are asked for than the table holds, then the extra ones are dropped, and a spent jet frees its slot", () => {

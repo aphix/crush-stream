@@ -88,6 +88,13 @@ for (const { name, make } of POOLS) {
       assert.equal(drawn(sys), 0);
     });
 
+    it("when the pool is made, then its material reads vertex colours exactly when it has a colour attribute", () => {
+      const { sys } = make(new THREE.Scene());
+      const material = sys["points"].material;
+      assert.ok(material instanceof THREE.PointsMaterial);
+      assert.equal(material.vertexColors, sys["geo"].getAttribute("color") !== undefined);
+    });
+
     it("when a shower is in the air, then the GPU draws exactly its live dots, all near the world", () => {
       const { sys, shower } = make(new THREE.Scene());
       shower();
