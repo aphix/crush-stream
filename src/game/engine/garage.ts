@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { GarageArt, GARAGE } from "../present/garage-art.ts";
 import { PUFF_STEP, type SprayBitmap } from "../present/spray.ts";
+import { personSprayDepth } from "../present/spray-depth.ts";
 import { SPRAY_PALETTE } from "../match/look-data.ts";
 import type { PlayerLooks, SprayTarget } from "./player-looks.ts";
 import { SprayUndo } from "./spray-undo.ts";
@@ -123,20 +124,22 @@ export class Garage {
    */
   private restPoint(hit: THREE.Intersection, car: DeformableCar | undefined, bitmap: SprayBitmap): void {
     _n.copy(hit.face!.normal);
+    let outer: Uint8Array | null = null;
     if (hit.object === this.art.dummy) {
       this.art.dummy.getMatrixAt(hit.instanceId!, _m);
       _n.applyMatrix3(_nm.getNormalMatrix(_m));
       _p.sub(GARAGE.person);
+      outer = personSprayDepth();
     } else if (car) {
       const body = car.group.getObjectByName(CLASS_LIFT) ?? car.group;
       _n.transformDirection(hit.object.matrixWorld).applyQuaternion(body.getWorldQuaternion(_q).invert());
       body.worldToLocal(_p);
     }
-    bitmap.spray(_p, _n, this.tool.radius, this.ink, Math.random);
+    bitmap.spray(_p, _n, this.tool.radius, this.ink, Math.random, outer);
     if (!this.tool.mirror) return;
     _p.x = -_p.x;
     _n.x = -_n.x;
-    bitmap.spray(_p, _n, this.tool.radius, this.ink, Math.random);
+    bitmap.spray(_p, _n, this.tool.radius, this.ink, Math.random, outer);
   }
 
   dispose(): void {
