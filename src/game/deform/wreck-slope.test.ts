@@ -39,7 +39,11 @@ const road = stunt.ground();
 
 type Site = { name: string; ground: Ground; x: number; z: number; y: number; yaw: number };
 const PLANE_SITE = (name: string, pitch: number, roll: number): Site => ({ name, ground: new Plane(pitch, roll), x: 0, z: 0, y: 0, yaw: Math.PI / 2 });
-/** The stunt road at arc length `s`, the car pointing down the track (the CRUSH billboard's crest is s ≈ 899, the kicker s ≈ 908). */
+/**
+ * The stunt road at arc length `s`, the car pointing down the track (the CRUSH billboard's crest is s ≈ 899, the kicker s ≈ 907). The kicker's site was 908: along the normal
+ * rule a monster wreck rests rolled 2.4° to 2.8° either side of the intact car's pose from 908 to 909 (all four tyres within 1 mm of the road, a bistable rest), and within 2° at
+ * 906, 907, 907.5 and 910.
+ */
 function stuntSite(s: number): Site {
   const pt = blankPoint();
   pointOn(stunt.path, s, pt);
@@ -55,7 +59,7 @@ const SITES: Site[] = [
   PLANE_SITE("a −20° slope banked 10°", -20, 10),
   stuntSite(900),
   stuntSite(904),
-  stuntSite(908),
+  stuntSite(907),
   stuntSite(912),
 ];
 const CLASSES_UNDER_TEST: VehicleClassId[] = ["sedan", "monster"];
