@@ -61,7 +61,7 @@ after(() => {
 /** `seconds` of frames, each drawn but the last (three sends and clears a drawn frame's queued uploads): the last frame's queue is what a row reads. */
 const run = (sys: Dots | FountainSystem, seconds: number): void => {
   for (let i = 0; i < Math.round(seconds / STEP); i++) {
-    if (i > 0) drawQueued(sys["points"]);
+    if (i > 0) drawQueued(sys instanceof FountainSystem ? sys["points"] : sys["points"]);
     sys.update(STEP);
   }
 };
