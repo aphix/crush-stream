@@ -136,16 +136,17 @@ describe("given a car driven at 64 km/h head-on into a wall", () => {
 });
 
 /**
- * F's head knocks the shut lid at its latch (`LID_LATCH_J`, 60 J) through the tail: 28 J leaves it latched, 111 J springs it. These replace the
- * rows that pinned 15 km/h latched and 30 km/h sprung with a 1500 kg ram: those were measured on the headless pickup, when only the tail's crush
- * (30-50 kJ, which carried the car 3-6 m) could spring a lid; the owner's ruling is that a lane knocks its part and does not push the car.
+ * F's head springs the shut lid's latch by crushing the tail at it `LID_LATCH_CRUSH_M` (2 cm): 6 km/h with 20 kg dents it 1.5 cm and leaves it latched, 12 km/h
+ * with 100 kg dents it 2.2 cm and springs it. These replace the rows that pinned 15 km/h latched and 30 km/h sprung with a 1500 kg ram: those were measured on
+ * the headless pickup, when only the whole tail's crush (30-50 kJ, which carried the car 3-6 m) could spring a lid; the owner's ruling is that a lane knocks its
+ * part and does not push the car.
  */
 const LATCH_GENTLE = { kph: 6, kg: 20 } as const;
-const LATCH_HARD = { kph: 12, kg: 20 } as const;
+const LATCH_HARD = { kph: 12, kg: 100 } as const;
 
 describe("given a rear ram square into the tail of a parked car (F lidPop: lid shut; G lidTear: lid on its stop; docs/DOOR_RIG.md, Lids)", () => {
   for (const id of CAR_STYLE_IDS) {
-    it(`when F hits the ${id} with 28 J and then 111 J, then the first leaves the lid latched and the second springs it, still on the car`, () => {
+    it(`when F hits the ${id} with a 1.5 cm and then a 2.2 cm tail crush, then the first leaves the lid latched and the second springs it, still on the car`, () => {
       const soft = parkedStyle(id);
       fireRam(soft, "lidPop", LATCH_GENTLE);
       const hard = parkedStyle(id);
@@ -224,7 +225,7 @@ const HARD_SHOTS = [
   { scenario: "shut", kph: 40, kg: 300 },
   { scenario: "panelPush", kph: 30, kg: 1500 },
   { scenario: "panelPull", kph: 30, kg: 1500 },
-  { scenario: "lidPop", kph: 12, kg: 20 },
+  { scenario: "lidPop", ...LATCH_HARD },
   { scenario: "lidTear", kph: 12, kg: 100 },
 ] as const satisfies readonly { scenario: DoorScenario; kph: number; kg: number }[];
 

@@ -126,8 +126,13 @@ export const DOOR_DETENT_ACC = 0.76;
 export const MIRROR_FOLD_MAX = (75 * Math.PI) / 180;
 /** Energy the mirror's fold stop takes before the mirror snaps off (J), guessed. */
 export const MIRROR_BREAK_J = 30;
-/** Energy a blow on a shut trunk lid's free edge must carry to spring its latch (J), guessed: a striker plate and latch that give ~2 kN over ~3 cm. */
-export const LID_LATCH_J = 60;
+/**
+ * Tail crush (m) at the latch that lets a shut trunk lid spring: 2 cm, guessed. The latch itself holds 9-11 kN fully latched (about 100 J through
+ * 10 mm; research note 2026-10-26-trunk-latch-strength), so a blow opens a lid by the tail's intrusion shifting the striker off the latch, not by
+ * its own energy: a tap that dents the tail by millimetres leaves it shut. Measured over derby and race fields, 1.2 cm made lids re-spring over
+ * and over on wrecks lying against each other (30 springs in one heat), 2 cm sprang no lid the crush rule would not.
+ */
+export const LID_LATCH_CRUSH_M = 0.02;
 /** A door's drawn angle (rad) per unit of crash hinge value (`hingeT`): the jam that holds a door ajar. */
 const DOOR_JAM = 1.45;
 /** C1: a side hit that raises a door's hinge value past this at `DOOR_TEAR_MPS` tears it off. */

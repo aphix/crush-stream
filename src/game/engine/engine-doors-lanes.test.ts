@@ -92,10 +92,9 @@ const GENTLE_SHOTS = [
   { lane: "panelPull", reacts: "the quarter panel is opened further and stays on", kph: 3, kg: 30 },
 ] as const;
 
-/** F springs the latch through the tail's crush, which takes ~50 kJ; G's head tears the open lid off its strap in a few hundred J. */
-/** F's blow carries 111 J through the tail to the latch (`LID_LATCH_J` is 60 J) with a 20 kg head: 67 N·s, which a parked car takes without moving 10 cm. */
-const F_HARD = { kph: 12, kg: 20 } as const;
-/** 28 J: the same head under the latch's energy. */
+/** F's blow crushes the tail 2.2 cm at the latch (`LID_LATCH_CRUSH_M` is 2 cm): 12 km/h with 100 kg, 333 N·s, which a parked car takes without moving 10 cm. */
+const F_HARD = { kph: 12, kg: 100 } as const;
+/** The same car under the latch's crush: 6 km/h with 20 kg dents the tail 1.5 cm. */
 const F_GENTLE = { kph: 6, kg: 20 } as const;
 const G_HARD = { kph: 12, kg: 100 } as const;
 const TAIL_SHOTS = [

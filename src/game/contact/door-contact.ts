@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { DOOR_OPEN_MAX, HINGE_TEAR_J, LID_LATCH_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX } from "../vehicle/car-core.ts";
+import { DOOR_OPEN_MAX, HINGE_TEAR_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX } from "../vehicle/car-core.ts";
 import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import type { LidProfile } from "../vehicle/car-parts.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";
@@ -229,9 +229,9 @@ function lidRearmost(car: DeformableCar, lane: Lane, lx: number, ex: number): nu
 /**
  * The trunk lid against a rear→front face: a lid hanging on its stop has its strap (a drop gate's cables) take the striker's closing energy, as a
  * door pushed past its stop does (`hitDoor`): past the hinge's tear energy the lid leaves and the striker goes on with what it still carries. A
- * shut lid takes the blow at its latch, through the tail it is latched to: the face meets the tail's rearmost point, and a face at the lid's
- * heights carrying `LID_LATCH_J` there springs the latch (the lid swings open on its struts) and pays that much; one carrying less is stopped
- * by the tail's crush, which the body contact meets. A lid between (sprung, swinging) is no collider.
+ * shut lid is held by its latch, which a blow opens by crushing the tail at it (`LID_LATCH_CRUSH_M`: the striker shifts off the latch), not by
+ * its own energy: a face at the lid's heights that has passed the tail and crushed it that far springs the latch (the lid swings open on its
+ * struts); a lighter blow leaves the lid latched. A lid between (sprung, swinging) is no collider.
  */
 export function hitLid(car: DeformableCar, lane: Lane, lx: number, ex: number): void {
   const onStop = car.lidHangsOnStop();
@@ -239,14 +239,14 @@ export function hitLid(car: DeformableCar, lane: Lane, lx: number, ex: number): 
   const rearmost = lidRearmost(car, lane, lx, ex);
   if (rearmost === Infinity) return;
   const depth = lane.face - (onStop ? rearmost : Math.min(rearmost, car.cage.fields.planBox[2]!));
-  if (depth <= 0 || depth > lane.length) return;
-  partHit.touched = true;
-  const energy = 0.5 * lane.kg * lane.u * lane.u;
-  if (onStop) strikeLidStrap(car, lane, energy);
-  else if (energy >= LID_LATCH_J) {
-    car.springLidLatch();
-    lane.u = Math.sqrt(Math.max(0, lane.u * lane.u - (2 * LID_LATCH_J) / lane.kg));
+  if (depth <= 0) return;
+  if (!onStop) {
+    car.noteLidStruck();
+    return;
   }
+  if (depth > lane.length) return;
+  partHit.touched = true;
+  strikeLidStrap(car, lane, 0.5 * lane.kg * lane.u * lane.u);
 }
 
 /** The strap of a lid on its stop takes `energy` (J) of a blow; past the hinge's tear energy the lid leaves and the striker keeps what the tear did not cost. */

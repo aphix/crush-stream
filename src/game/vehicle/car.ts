@@ -639,6 +639,7 @@ export class DeformableCar extends CarParts {
   stepBreakage(dt: number): void {
     if (this.vaporized || this.falling) return;
     this.deform.stepCrush(dt);
+    this.settleLidStrike();
     if (this.crashed) {
       this.syncAttachedParts(dt);
       this.evaluateBreakage(this.deform.impulseValue, dt);
