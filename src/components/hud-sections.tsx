@@ -1,5 +1,4 @@
 import { useEffect, useState, type ReactNode } from "react";
-import * as Accordion from "@radix-ui/react-accordion";
 import {
   ArrowUp,
   Braces,
@@ -59,19 +58,24 @@ type AccordionId = SectionId | "controls";
 export function HudSections({ onClose, ...props }: HudProps & { onClose?: () => void }) {
   const touch = useCoarsePointer();
   // Every section starts closed: the 3D view comes first, settings are a click away.
-  const [open, setOpen] = useStoredString(HUD_SECTIONS_KEY, "", "");
-  const section = (id: SectionId) => ({ id, changed: changedSettings(props.state, id), engine: props.engine });
+  const [stored, setStored] = useStoredString(HUD_SECTIONS_KEY, "", "");
+  const openIds = stored.split(",").filter(Boolean);
+  const fold = (id: AccordionId) => ({
+    id,
+    open: openIds.includes(id),
+    onToggle: (open: boolean) => {
+      if (open !== openIds.includes(id)) setStored((open ? [...openIds, id] : openIds.filter((s) => s !== id)).join(","));
+    },
+  });
+  const section = (id: SectionId) => ({ ...fold(id), changed: changedSettings(props.state, id), engine: props.engine });
   const sheeted = touch && onClose !== undefined;
   const accordion = (
-    <Accordion.Root
-      type="multiple"
-      value={open.split(",").filter(Boolean)}
-      onValueChange={(v) => setOpen(v.join(","))}
+    <div
       className={sheeted ? "min-w-0 divide-y divide-border pr-2" : "hud-panel hud-settings pointer-events-auto divide-y divide-border self-end overflow-y-auto idle:hidden"}
       style={sheeted ? undefined : { gridArea: "settings" }}
     >
       {touch ? (
-        <Section id="controls" changed={[]} engine={props.engine} title="Controls">
+        <Section {...fold("controls")} changed={[]} engine={props.engine} title="Controls">
           <ControlsSection />
         </Section>
       ) : null}
@@ -90,7 +94,7 @@ export function HudSections({ onClose, ...props }: HudProps & { onClose?: () => 
       <Section {...section("debug")} title="Debug views">
         <DebugSection {...props} />
       </Section>
-    </Accordion.Root>
+    </div>
   );
   return sheeted ? (
     <Sheet edge="dock" title="Settings" onClose={onClose}>
@@ -105,54 +109,54 @@ export function HudSections({ onClose, ...props }: HudProps & { onClose?: () => 
  * One section: its header counts the settings changed from their defaults, and a row of reset chips undoes each on its
  * own (the Defaults button resets them all).
  */
-function Section({ id, title, changed, engine, children }: { id: AccordionId; title: string; changed: SettingId[]; engine: HudProps["engine"]; children: ReactNode }) {
+function Section({ id, title, changed, engine, open, onToggle, children }: { id: AccordionId; title: string; changed: SettingId[]; engine: HudProps["engine"]; open: boolean; onToggle: (open: boolean) => void; children: ReactNode }) {
   const driver = useDriver();
   return (
-    <Accordion.Item value={id}>
-      <Accordion.Header>
-        <Accordion.Trigger
-          data-hud-section={id}
-          className="group flex h-11 w-full items-center justify-between rounded-lg px-2 font-display text-xs font-medium uppercase tracking-[0.16em] text-muted transition-colors duration-[var(--motion-quick)] hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:text-fg pointer-fine:h-8"
-        >
-          <span className="flex items-center gap-2">
-            {title}
-            {changed.length > 0 ? (
-              <span
-                data-changed-count={changed.length}
-                aria-label={`${changed.length} changed from the default`}
-                className="rounded-sm bg-accent px-1 tracking-normal text-accent-fg tabular-nums"
-              >
-                {changed.length}
-              </span>
-            ) : null}
-          </span>
-          <ChevronDown className="size-4 transition-transform duration-[var(--motion-fast)] ease-[var(--ease-out)] group-data-[state=open]:rotate-180" />
-        </Accordion.Trigger>
-      </Accordion.Header>
-      <Accordion.Content className="space-y-1.5 px-2 pb-2">
-        {changed.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Changed settings">
-            <span className="hud-label w-12 shrink-0">Changed</span>
-            {changed.map((s) => (
-              <Button
-                key={s}
-                variant="ghost"
-                className="h-11 gap-1 px-1.5 text-xs pointer-fine:h-8"
-                aria-label={`Reset ${SETTINGS[s].label} to its default`}
-                onClick={() => {
-                  if (s === "car") driver.setCar(INITIAL_HUD.playerCar);
-                  engine.current?.resetSetting(s);
-                }}
-              >
-                <Undo2 className="size-3.5" />
-                {SETTINGS[s].label}
-              </Button>
-            ))}
-          </div>
-        ) : null}
-        {children}
-      </Accordion.Content>
-    </Accordion.Item>
+    <details open={open} onToggle={(e) => onToggle(e.currentTarget.open)} className="group">
+      <summary
+        data-hud-section={id}
+        className="flex h-11 w-full cursor-pointer list-none select-none items-center justify-between rounded-lg px-2 font-display text-xs font-medium uppercase tracking-[0.16em] text-muted transition-colors duration-[var(--motion-quick)] hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-open:text-fg pointer-fine:h-8 [&::-webkit-details-marker]:hidden"
+      >
+        <span className="flex items-center gap-2">
+          {title}
+          {changed.length > 0 ? (
+            <span
+              data-changed-count={changed.length}
+              aria-label={`${changed.length} changed from the default`}
+              className="rounded-sm bg-accent px-1 tracking-normal text-accent-fg tabular-nums"
+            >
+              {changed.length}
+            </span>
+          ) : null}
+        </span>
+        <ChevronDown className="size-4 transition-transform duration-[var(--motion-fast)] ease-[var(--ease-out)] group-open:rotate-180" />
+      </summary>
+      {open ? (
+        <div className="space-y-1.5 px-2 pb-2">
+          {changed.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Changed settings">
+              <span className="hud-label w-12 shrink-0">Changed</span>
+              {changed.map((s) => (
+                <Button
+                  key={s}
+                  variant="ghost"
+                  className="h-11 gap-1 px-1.5 text-xs pointer-fine:h-8"
+                  aria-label={`Reset ${SETTINGS[s].label} to its default`}
+                  onClick={() => {
+                    if (s === "car") driver.setCar(INITIAL_HUD.playerCar);
+                    engine.current?.resetSetting(s);
+                  }}
+                >
+                  <Undo2 className="size-3.5" />
+                  {SETTINGS[s].label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          {children}
+        </div>
+      ) : null}
+    </details>
   );
 }
 
