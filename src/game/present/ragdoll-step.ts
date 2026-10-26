@@ -1,12 +1,12 @@
 import * as THREE from "three";
-import { activeGround } from "../world/ground.ts";
+import { activeGround, fellOffRim } from "../world/ground.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { BARRIER_HALF } from "../contact/sat.ts";
 import { CAR_BOX } from "./ragdoll-props.ts";
 import { DOLL_REACH, NEAR_HOLD, NEAR_MARGIN, PURSE_REACH } from "./ragdoll-cars.ts";
 import type { RagCar } from "./ragdoll-car-view.ts";
 import { dollGroups, MAX_ACC, SLOTS, STEP } from "./ragdoll-config.ts";
-import { CALM_FOR, type Doll, GROUND_ANGULAR, GROUND_LINEAR, give, isCalm, limit, PARTS, SETTLE_AFTER, SETTLE_ANGULAR, SETTLE_LINEAR } from "./ragdoll-body.ts";
+import { CALM_FOR, type Doll, GROUND_ANGULAR, GROUND_LINEAR, give, isCalm, limit, lowestPoint, PARTS, SETTLE_AFTER, SETTLE_ANGULAR, SETTLE_LINEAR } from "./ragdoll-body.ts";
 import { brace } from "./ragdoll-joints.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { FIT_AHEAD } from "./ragdoll-wire.ts";
@@ -145,7 +145,7 @@ export abstract class RagdollStepper extends RagdollPool {
       const before = d.age;
       d.age += dt;
       if (before < GRACE && d.age >= GRACE) for (const b of d.bodies) b.collider(0).setCollisionGroups(dollGroups(s));
-      if (d.age > d.life || d.bodies[0]!.translation().y < -30) {
+      if (d.age > d.life || d.bodies[0]!.translation().y < -30 || this.fellOff(d)) {
         this.despawn(s);
         continue;
       }
@@ -166,6 +166,13 @@ export abstract class RagdollStepper extends RagdollPool {
     if (!this.hosted) this.purses?.pose(this.alpha);
     this.props.advance(dt, this.step);
     this.props.pose(this.alpha);
+  }
+
+  /** Whether his lowest point has fallen off the active ground's rim (`fellOffRim`): he is put away at once, not 30 m down. */
+  private fellOff(d: Doll): boolean {
+    if (!activeGround().rimmed) return false;
+    lowestPoint(d.cur, _c);
+    return fellOffRim(_c.x, _c.y, _c.z);
   }
 
   /**

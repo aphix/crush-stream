@@ -1,9 +1,9 @@
 import * as THREE from "three";
-import { beginFakeFall, DeformableCar } from "../vehicle/car.ts";
+import { DeformableCar } from "../vehicle/car.ts";
 import { BOOST } from "../vehicle/car-drive.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
 import { PISTON_ORBIT_RATE, pistonBearing } from "../present/engine-pistons.ts";
-import { VAPOR_DEPTH, edgeAction, fleetEmptied, layoutFleet, layoutDerby, MAX_CARS, respawnSlot } from "../scenes/fleet.ts";
+import { carFellOffRim, edgeAction, fleetEmptied, layoutFleet, layoutDerby, MAX_CARS, respawnSlot } from "../scenes/fleet.ts";
 import { RANGE, RANGE_GROUND } from "../scenes/range.ts";
 import { LAB_PRESET } from "../scenes/constants.ts";
 import { makeRangeArt } from "../present/range-art.ts";
@@ -823,19 +823,17 @@ export abstract class EngineScenes extends EngineMinigames {
     return flags;
   }
 
-  /** Fleet disc, once per frame after physics: `edgeAction` fakes, vaporizes or respawns a car; a falling fake shrinks over its last 4 m (also on a netplay client, which mirrors the host's events). */
+  /** Fleet disc, once per frame after physics: `edgeAction` vaporizes a car whose lowest point has gone off the rim, or respawns the driven one (also on a netplay client's mirrored flags). */
   protected stepEdge(): void {
     if (activeGround() !== DISC_GROUND && activeGround() !== this.ramps) return;
     const cars = this.live();
     for (let i = 0; i < cars.length; i++) {
       const car = cars[i]!;
-      if (car.falling) car.group.scale.setScalar(0.2 + 0.8 * THREE.MathUtils.clamp((car.group.position.y + VAPOR_DEPTH) / 4, 0, 1));
       if (this.net.client) continue;
       // Driven here or by a network peer: either comes back after vaporizing.
       const driven = (i === this.seat.carIndex && this.seat.mode === "drive") || this.net.remoteCar(i);
-      const act = edgeAction(car.group.position.y, car.falling, car.vaporized, driven, this.elapsedWall - (this.vaporAt[i] ?? 0));
-      if (act === "fake") beginFakeFall(car);
-      else if (act === "vaporize") this.setVaporized(i, true);
+      const act = edgeAction(carFellOffRim(car), car.vaporized, driven, this.elapsedWall - (this.vaporAt[i] ?? 0));
+      if (act === "vaporize") this.setVaporized(i, true);
       else if (act === "respawn") this.respawnOnDisc(i);
     }
     // No hit ever ends the run once every car has driven off the rim: the loop's own reset (`updatePhase`) waits on a crash. The showcase parks its car off the rim, out of sight: that is no run to end, and a reset would stand the knocked figures up before they walk home.

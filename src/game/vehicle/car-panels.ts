@@ -32,9 +32,10 @@ export interface PanelRegion {
   origin: THREE.Vector3;
   /** Quarter panels: the vertical hinge line (x, z) at the trailing edge. Arch flares: the line along z at the arch's top, through (x, y). */
   pivot: readonly [number, number];
-  /** Quarter panels: lever length from the hinge line to the free end (m), and the peel angle (rad) at which that end stands `STAND_MAX` off the body. */
+  /** Quarter panels: lever length from the hinge line to the free end (m), the peel angle (rad) at which that end stands `STAND_MAX` off the body, and how far the free end's rest skin stands outboard of the hinge line (m: the body widens ahead of its tail, so the sheet's chord from the hinge leans out). */
   reach: number;
   peel: number;
+  lean: number;
   /** Lowest and highest body vertex of the panel (m). */
   span: readonly [number, number];
   /** The shell's triangles (front, back, rim skirt), shared by every car of the style. */
@@ -158,10 +159,12 @@ function region(name: PanelName, ids: number[], pos: Float32Array, primer: Float
   }
   const hub = wheels[PANEL_NAMES.indexOf(name) - 2];
   const w = new Float32Array(nv);
-  // The hinge line's mean: a quarter's trailing edge (x), an arch's top (x, y).
+  // The hinge line's mean: a quarter's trailing edge (x), an arch's top (x, y); and a quarter's free end's mean x.
   let px = 0;
   let py = 0;
   let pn = 0;
+  let tipX = 0;
+  let tipN = 0;
   for (let k = 0; k < nv; k++) {
     const g = verts[k]! * 3;
     if (kind === "quarter") {
@@ -169,6 +172,10 @@ function region(name: PanelName, ids: number[], pos: Float32Array, primer: Float
       if (pos[g + 2]! - zMin < 0.05) {
         px += pos[g]!;
         pn++;
+      }
+      if (zMax - pos[g + 2]! < 0.05) {
+        tipX += pos[g]!;
+        tipN++;
       }
     } else {
       // Hinged at the top of the arch, free where it meets the rocker.
@@ -181,6 +188,8 @@ function region(name: PanelName, ids: number[], pos: Float32Array, primer: Float
     }
   }
   const reach = zMax - zMin;
+  const pivotX = pn ? px / pn : side * 0.8;
+  const lean = kind === "quarter" && tipN ? side * (tipX / tipN - pivotX) : 0;
   return {
     name,
     kind,
@@ -189,9 +198,10 @@ function region(name: PanelName, ids: number[], pos: Float32Array, primer: Float
     rest: Float32Array.from(verts, (g) => primer?.[g] ?? 0),
     w,
     origin,
-    pivot: kind === "quarter" ? [pn ? px / pn : side * 0.8, zMin] : [pn ? px / pn : side * 0.88, pn ? py / pn : yMax],
+    pivot: kind === "quarter" ? [pivotX, zMin] : [pn ? px / pn : side * 0.88, pn ? py / pn : yMax],
     reach,
     peel: kind === "quarter" ? detAsin(Math.min(1, STAND_MAX / reach)) : 0,
+    lean,
     span: [yMin, yMax],
     shell: new THREE.BufferAttribute(Uint16Array.from(shell), 1),
     tris: new THREE.BufferAttribute(Uint16Array.from(ids), 1),

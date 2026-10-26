@@ -619,8 +619,12 @@ export function partContact(car: DeformableCar, box: ContactBox, dt: number): ty
   lane.dir = uz > 0 ? 1 : -1;
   lane.face = lz + lane.dir * ez;
   lane.length = 2 * ez;
-  lane.bottom = box.y - box.hy - p.y;
-  lane.top = box.y + box.hy - p.y;
+  // The doors, mirrors and panels stand at the style's own heights; a lifted class's body rides over them (`bodyEdge` reads the world's).
+  const lift = CLASSES[carClass(car)].lift;
+  const bottom = box.y - box.hy - p.y;
+  const top = box.y + box.hy - p.y;
+  lane.bottom = bottom - lift;
+  lane.top = top - lift;
   lane.kg = box.kg;
   const u0 = Math.abs(uz);
   lane.u = u0;
@@ -629,7 +633,7 @@ export function partContact(car: DeformableCar, box: ContactBox, dt: number): ty
     if (side * lx + ex <= 0) continue;
     lane.inner = side * lx - ex;
     // Past the open door's trailing edge and the mirror cap: nothing to meet; inside the body's width at the striker's heights is a body hit.
-    if (lane.inner > car.style.door.hingeX + car.style.door.length || lane.inner < bodyEdge(car, side, lane.bottom, lane.top)) continue;
+    if (lane.inner > car.style.door.hingeX + car.style.door.length || lane.inner < bodyEdge(car, side, bottom, top)) continue;
     lane.width = 2 * ex;
     hitMirror(car, side, lane);
     hitDoor(car, side, lane);

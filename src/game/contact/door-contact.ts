@@ -1,10 +1,11 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { DOOR_OPEN_MAX, HINGE_TEAR_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX } from "../vehicle/car-core.ts";
+import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";
 import { MIRROR_REACH } from "../vehicle/part-geometry.ts";
 import { PANEL_BEND_NM, PANEL_FRAGILE_J, PANEL_FRAGILE_T, PANEL_PULL_J, PANEL_SLAM_J } from "../vehicle/car-wear.ts";
-import { detAcos, detSin, detCos } from "../kernel/physics-core.js";
+import { detAcos, detSin, detCos, hypot2 } from "../kernel/physics-core.js";
 import type { ContactBox } from "./external-contact.ts";
 
 /** The sideways kick (m/s) a broken mirror leaves with, away from its side of the car. */
@@ -17,7 +18,7 @@ type Lane = {
   /** |x| of the striker's edge nearest the car, and its width outward (m). */
   inner: number;
   width: number;
-  /** Bottom and top (m above the car's ground). */
+  /** Bottom and top in the style's own frame (m above the car's ground, the class's lift taken off): the heights its doors, mirrors and panels are built at. */
   bottom: number;
   top: number;
   /** Leading face along car z (m) and the striker's length along its travel. */
@@ -162,9 +163,9 @@ export function hitDoor(car: DeformableCar, side: -1 | 1, lane: Lane): void {
 }
 
 /**
- * A stretched quarter panel (top view: hinge at the tail → free end ahead), the door slab's mirror image: rear→front pushes it
- * back onto the body (it stays dented, `bendPanel`), front→rear pulls it out. The striker pays `PANEL_BEND_NM` of plastic work over
- * the angle moved, no rebound; one carrying more than the tear energy rips the panel off (`PANEL_FRAGILE_T`: at a nudge).
+ * A stretched quarter panel (top view: the sheet's chord from the hinge at the tail to its free end ahead, which leans outboard where the body
+ * widens), the door slab's mirror image: rear→front pushes it back onto the body (it stays dented, `bendPanel`), front→rear pulls it out.
+ * The striker pays `PANEL_BEND_NM` of plastic work over the angle moved, no rebound; one carrying more than the tear energy rips the panel off (`PANEL_FRAGILE_T`: at a nudge).
  */
 export function hitPanel(car: DeformableCar, side: -1 | 1, lane: Lane): void {
   const p = car.quarterPanel(side);
@@ -174,16 +175,19 @@ export function hitPanel(car: DeformableCar, side: -1 | 1, lane: Lane): void {
   if (lane.bottom > r.span[1] || lane.top < r.span[0]) return;
   const t = p.hingeT;
   const theta = r.peel * t;
-  const sin = detSin(theta);
-  if (sin < 1e-3) return;
+  if (detSin(theta) < 1e-3) return;
+  const chord = hypot2(r.lean, r.reach);
+  const outboard = (r.lean * detCos(theta) + r.reach * detSin(theta)) / chord;
+  if (outboard < 1e-3) return;
+  const along = (r.reach * detCos(theta) - r.lean * detSin(theta)) / chord;
   const hx = Math.abs(r.pivot[0]);
-  const rLo = (lane.inner - hx) / sin;
-  const rHi = Math.min(r.reach, (lane.inner + lane.width - hx) / sin);
+  const rLo = (lane.inner - hx) / outboard;
+  const rHi = Math.min(chord, (lane.inner + lane.width - hx) / outboard);
   if (rLo > rHi || rHi <= 0) return;
   const s = lane.dir;
   // A rear→front face meets the slab's rear-most (lowest-z) end in the lane first, a front→rear face its front-most.
   const at = s > 0 ? Math.max(rLo, 0) : rHi;
-  const depth = s * (lane.face - (r.pivot[1] + at * detCos(theta)));
+  const depth = s * (lane.face - (r.pivot[1] + at * along));
   if (depth <= 0 || depth > lane.length) return;
   partHit.touched = true;
   const limit = t >= PANEL_FRAGILE_T ? PANEL_FRAGILE_J : s > 0 ? PANEL_SLAM_J : PANEL_PULL_J;
@@ -194,7 +198,7 @@ export function hitPanel(car: DeformableCar, side: -1 | 1, lane: Lane): void {
     return;
   }
   // Push the slab out of the face: back (s > 0: the angle falls) or out (s < 0: it rises).
-  const k = Math.max(at * sin, 0.02);
+  const k = Math.max(at * outboard, 0.02);
   car.bendPanel(side, t - (s * depth) / (k * r.peel));
   const moved = Math.abs(p.hingeT - t) * r.peel;
   // A panel that cannot go further (full hinge) holds the striker.
@@ -251,7 +255,7 @@ function angleClearingSolid(car: DeformableCar, side: -1 | 1, angle: number, box
  * A door the solid stands against even shut is the body's to hold.
  */
 export function shutDoorsOnSolid(car: DeformableCar, box: ContactBox, dt: number): void {
-  const groundY = car.group.position.y;
+  const groundY = car.group.position.y + CLASSES[carClass(car)].lift;
   if (!doorInHeights(car.style.door, box.y - box.hy - groundY, box.y + box.hy - groundY)) return;
   for (let q = 0; q < SIDES.length; q++) {
     const side = SIDES[q]!;

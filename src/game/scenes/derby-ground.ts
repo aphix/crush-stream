@@ -7,7 +7,7 @@ import { SURFACE } from "../world/constants.ts";
 import { Ground } from "../world/ground.ts";
 import { raisePlateaus, type Plateau } from "../world/terrain.ts";
 import { DERBY_ARENA } from "./constants.ts";
-import { FAKE_DEPTH } from "./fleet.ts";
+import { SUNK_CAR_DEPTH } from "./fleet.ts";
 
 /**
  * The derby arena's ground (the Havana plateau mechanism, `world/terrain.ts`): one 1 m grid patch holds every rise, so the middle
@@ -244,10 +244,10 @@ const FLOOR = SURFACE_IDS.indexOf(SURFACE.asphalt);
 /**
  * Where every prism of the arena starts (m, under the floor): a wreck that sank through the floor (measured: a body 1.9 m under it,
  * its group origin 1.2 m) must still meet the wall and the props instead of passing beneath them (`prop-contact.ts` skips a prism
- * a body is wholly under the base of). A car stays in the soft-body sim down to `FAKE_DEPTH` at its origin, its body reaching a
+ * a body is wholly under the base of). A car is met down to `SUNK_CAR_DEPTH` at its origin, its body reaching a
  * body height lower still.
  */
-const DERBY_PRISM_BASE = -(FAKE_DEPTH + 2 * FLEET_HALF.y);
+const DERBY_PRISM_BASE = -(SUNK_CAR_DEPTH + 2 * FLEET_HALF.y);
 
 export class DerbyGround extends Ground {
   /** The baked grid, row-major along x: node (i, j) is at world (i - gridHalf, j - gridHalf). The floor mesh reads the same nodes. */
