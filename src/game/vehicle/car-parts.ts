@@ -17,7 +17,7 @@ import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
 import type { TopMet } from "./car-air-body.ts";
 import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
-import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, type Lamp, type PartNetState } from "./car-core.ts";
+import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, LID_LATCH_CRUSH_M, type Lamp, type PartNetState } from "./car-core.ts";
 import {
   DOOR_ACC_MAX,
   DOOR_QUIET_S,
@@ -43,6 +43,7 @@ export interface LidProfile {
   edgeZ: number;
   halfWidth: number;
 }
+
 const DOOR_LEFT: GlassPart = "doorLeft";
 const DOOR_RIGHT: GlassPart = "doorRight";
 
@@ -491,6 +492,31 @@ export abstract class CarParts extends CarGlass {
     hinge.latched = false;
     hinge.omega = 0;
     this.sampleMotion();
+  }
+
+  /** How far (m) the tail's rear bumper masses stand pushed forward of their rest: the crush at the lid's latch end of the car. */
+  tailCrushM(): number {
+    const masses = this.deform.masses;
+    let crush = 0;
+    for (let i = 0; i < masses.length; i++) {
+      const m = masses[i]!;
+      if (m.name === "bumperRL" || m.name === "bumperRR") crush = Math.max(crush, m.local.z - m.rest.z);
+    }
+    return crush;
+  }
+
+  private lidStruck = false;
+
+  /** A striker met the shut lid's tail this slice (`hitLid`): the step's end reads whether it crushed the tail far enough to spring the latch (`settleLidStrike`). */
+  noteLidStruck(): void {
+    this.lidStruck = true;
+  }
+
+  /** Once per step, as the crash rules run (never mid-slice: the arming slice throws the tail's masses 3-4 cm past where they settle): a strike that left the tail crushed `LID_LATCH_CRUSH_M` springs the latch. */
+  settleLidStrike(): void {
+    const struck = this.lidStruck;
+    this.lidStruck = false;
+    if (struck && this.tailCrushM() >= LID_LATCH_CRUSH_M) this.springLidLatch();
   }
 
   /** Whether the trunk lid hangs unlatched on its stop (a hatch, an SUV gate or a deck lid up; a drop gate level on its cables), still on the car. */

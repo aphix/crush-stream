@@ -154,14 +154,18 @@ A quarter panel's hit (`hitPanel`) follows the drawn sheet's chord from its hing
 widens ahead of the tail, so the free end rests outboard of the hinge (`PanelRegion.lean`: the SUV's 0.145 m) and a ram on the body's side
 passed a stretched SUV panel that is drawn 0.14 m into its lane.
 
-F's head runs at the shut lid's heights (a flat deck lid sits above the stock head: the coupe's top is raised to it) and knocks the lid at its
-latch, through the tail it is latched to (`hitLid`): the face meets the tail's rearmost point, and a head carrying `LID_LATCH_J` there (60 J, guessed:
-a striker plate and latch that give ~2 kN over ~3 cm) springs the latch, pays that energy, and the lid swings open on its struts. A head carrying
-less is stopped by the tail's crush, which the body contact meets, and the lid stays latched. F's hard shot is 12 km/h with 20 kg (111 J, 67 N·s:
-the car moves under 10 cm), its gentle one 6 km/h with 20 kg (28 J); a drop gate has no struts (its `lift` is 0), so a sprung gate is off its
-latch and stands a few hundredths of a radian open. These replace the headless-pickup pins (15 km/h latched, 30 km/h sprung with 1500 kg): there
-only the tail's crush, 30-50 kJ that carried the car 3-6 m, could spring a lid. A heavy head still crushes the tail and shoves the car (12 km/h with
-300 kg moves it 0.07 m parked), and stops short of the drawn rear seat's back (`CarParts.rearSeatBackZ`) in every shot of the rows.
+F's head runs at the shut lid's heights (a flat deck lid sits above the stock head: the coupe's top is raised to it) and hits the tail the lid is
+latched to. A latch holds 9-11 kN fully latched (about 100 J through 10 mm; `.extraResearch/perplexity/2026-10-26-trunk-latch-strength.md`), so a
+blow opens a lid by the tail's intrusion shifting the striker off the latch, not by its own energy: `hitLid` marks the car when a face at the lid's
+heights has passed the tail, and the step's end (`stepBreakage`, never mid-slice: the arming slice throws the tail's masses 3-4 cm past where they
+settle) springs the latch if the rear bumper masses stand `LID_LATCH_CRUSH_M` (2 cm, guessed) forward of their rest; the lid swings open on its struts.
+A tap that dents the tail by millimetres leaves it latched. Measured over derby heats and a race field, 1.2 cm made lids re-spring on wrecks lying
+together (30 springs in one heat) and 2 cm adds a handful of pops to the crush rule's (31 against 29 over four 8-car derbies, 5 against 1 in two
+7-rival races at the ramming slider). F's hard shot is 12 km/h with 100 kg (a 2.2 cm crush, 333 N·s: a parked car moves under 10 cm), its gentle
+one 6 km/h with 20 kg (1.5 cm: the latch stays); a drop gate has no struts (its `lift` is 0), so a sprung gate is off its latch and stands a few
+hundredths of a radian open. These replace the headless-pickup pins (15 km/h latched, 30 km/h sprung with 1500 kg): there only the whole tail's
+crush, 30-50 kJ that carried the car 3-6 m, could spring a lid. The head stops short of the drawn rear seat's back (`CarParts.rearSeatBackZ`) in
+every shot of the rows.
 
 G's head runs over the deck, level with the open lid, and meets the lid (`hitLid`): the lid hangs on its stop and the strap takes the head's
 closing energy, as a door pushed past its stop does. Under the hinge's `tearJ` (trunk lid 150 J, hatch 200 J, liftgate 300 J, drop gate 450 J) the
