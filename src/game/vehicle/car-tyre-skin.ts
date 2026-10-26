@@ -46,9 +46,7 @@ const TOP_CELL = 0.05;
 /** Per part geometry, its top samples in its own frame (`topSamples`). */
 const topsOf = new WeakMap<THREE.BufferGeometry, Float32Array>();
 /** The samples of the parts under the skin in the mesh's frame (x, y + `PART_CLEAR`, z), grown as needed. */
-let _parts = new Float64Array(0);
-let _partSkin = new Float64Array(0);
-let _partCorner = new Int32Array(0);
+const _part = { samples: new Float64Array(0), skin: new Float64Array(0), corner: new Int32Array(0) };
 const _seat = new THREE.Matrix4();
 const _top = new THREE.Vector3();
 const NO_PARTS: readonly PartSeat[] = [];
@@ -391,28 +389,28 @@ export class TyreSkin {
     this.partFloor.set(this.lift);
   }
 
-  /** Fills `_parts` with the top samples (`topSamples`) of the shown parts of `under` in the mesh's frame, each raised by `PART_CLEAR`; returns their count. */
+  /** Fills `_part.samples` with the top samples (`topSamples`) of the shown parts of `under` in the mesh's frame, each raised by `PART_CLEAR`; returns their count. */
   private partSamples(group: THREE.Object3D, under: readonly PartSeat[]): number {
     let n = 0;
     for (const seat of under) {
       if (seat.showIf && !seat.showIf()) continue;
       const top = topSamples(seat.drawn);
-      if (_parts.length < (n + top.length / 3) * 3) {
-        const grown = new Float64Array(2 * (_parts.length + top.length));
-        grown.set(_parts);
-        _parts = grown;
+      if (_part.samples.length < (n + top.length / 3) * 3) {
+        const grown = new Float64Array(2 * (_part.samples.length + top.length));
+        grown.set(_part.samples);
+        _part.samples = grown;
       }
       _seat.multiplyMatrices(_mesh, matrixIn(group, seat, _seat));
       for (let i = 0; i < top.length; i += 3, n++) {
         _top.set(top[i]!, top[i + 1]!, top[i + 2]!).applyMatrix4(_seat);
-        _parts[n * 3] = _top.x;
-        _parts[n * 3 + 1] = _top.y + PART_CLEAR;
-        _parts[n * 3 + 2] = _top.z;
+        _part.samples[n * 3] = _top.x;
+        _part.samples[n * 3 + 1] = _top.y + PART_CLEAR;
+        _part.samples[n * 3 + 2] = _top.z;
       }
     }
-    if (_partSkin.length < n) {
-      _partSkin = new Float64Array(_parts.length / 3);
-      _partCorner = new Int32Array(_parts.length / 3);
+    if (_part.skin.length < n) {
+      _part.skin = new Float64Array(_part.samples.length / 3);
+      _part.corner = new Int32Array(_part.samples.length / 3);
     }
     return n;
   }
@@ -426,8 +424,8 @@ export class TyreSkin {
     const { weld } = this.edges;
     let raised = false;
     for (let n = 0; n < count; n++) {
-      const t = _partCorner[n]!;
-      const short = _parts[n * 3 + 1]! - _partSkin[n]!;
+      const t = _part.corner[n]!;
+      const short = _part.samples[n * 3 + 1]! - _part.skin[n]!;
       if (t < 0 || short <= 0) continue;
       for (let corner = 0; corner < 3; corner++) {
         const p = weld[this.corner(t + corner)]!;
@@ -449,10 +447,10 @@ export class TyreSkin {
     return index ? index.getX(k) : k;
   }
 
-  /** Per part sample, the height (`_partSkin`) of the highest up-facing triangle of the skin (lifts included) over it in plan and that triangle's first corner (`_partCorner`, -1: none). */
+  /** Per part sample, the height (`_part.skin`) of the highest up-facing triangle of the skin (lifts included) over it in plan and that triangle's first corner (`_part.corner`, -1: none). */
   private readPartSkin(pos: Float32Array, count: number): void {
-    _partSkin.fill(-Infinity, 0, count);
-    _partCorner.fill(-1, 0, count);
+    _part.skin.fill(-Infinity, 0, count);
+    _part.corner.fill(-1, 0, count);
     const index = this.mesh.geometry.index;
     const corners = index ? index.count : pos.length / 3;
     const { weld } = this.edges;
@@ -473,16 +471,16 @@ export class TyreSkin {
       const yb = pos[b + 1]! + this.lift[weld[vb]!]!;
       const yc = pos[c + 1]! + this.lift[weld[vc]!]!;
       for (let n = 0; n < count; n++) {
-        const x = _parts[n * 3]!;
-        const z = _parts[n * 3 + 2]!;
+        const x = _part.samples[n * 3]!;
+        const z = _part.samples[n * 3 + 2]!;
         if (x < xLow || x > xHigh || z < zLow || z > zHigh) continue;
         const l1 = ((pos[b + 2]! - pos[c + 2]!) * (x - pos[c]!) + (pos[c]! - pos[b]!) * (z - pos[c + 2]!)) / den;
         const l2 = ((pos[c + 2]! - pos[a + 2]!) * (x - pos[c]!) + (pos[a]! - pos[c]!) * (z - pos[c + 2]!)) / den;
         if (l1 < 0 || l2 < 0 || l1 + l2 > 1) continue;
         const y = l1 * ya + l2 * yb + (1 - l1 - l2) * yc;
-        if (y <= _partSkin[n]!) continue;
-        _partSkin[n] = y;
-        _partCorner[n] = t;
+        if (y <= _part.skin[n]!) continue;
+        _part.skin[n] = y;
+        _part.corner[n] = t;
       }
     }
   }

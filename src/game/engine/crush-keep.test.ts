@@ -8,6 +8,7 @@ import { assignClass, type VehicleClassId } from "../vehicle/vehicle-classes.ts"
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import type { DriveInput } from "../vehicle/car-drive.ts";
 import { paint } from "../vehicle/test-support.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 import { carLayout } from "../net/car-pose.ts";
 import { ensureFrames, makeSnapshot } from "../net/codec.ts";
 import { FLIGHT } from "../vehicle/car-flight.ts";
@@ -72,7 +73,7 @@ function noseAsDrawn(car: DeformableCar): number {
 }
 
 function ticks(w: CrashWorld, seconds: number): void {
-  for (let t = 0; t < seconds; t += 1 / 60) tickWorld(w);
+  for (let t = 0; t < seconds; t += 1 / FRAME_HZ) tickWorld(w);
 }
 
 function assertKept(label: string, before: number, after: number): void {
@@ -122,7 +123,7 @@ for (const [style, cls] of STYLES) {
       car.deform.thaw();
       ticks(w, 0.5);
       assertKept(`${style} thawed`, before, drawnNose(car));
-      for (let t = 0; t < 6 && !car.asleep; t += 1 / 60) tickWorld(w);
+      for (let t = 0; t < 6 && !car.asleep; t += 1 / FRAME_HZ) tickWorld(w);
       assert.ok(car.asleep, `${style}: the wreck never fell asleep`);
       car.wake();
       ticks(w, 0.5);
@@ -147,12 +148,12 @@ for (const [style, cls] of STYLES) {
       const car = styled(style, cls);
       launch(car, 6.2, 0, -Math.PI / 2, -50 / 3.6, 0);
       const w = makeWorld([car], true, false, FREEWHEEL);
-      for (let t = 0; t < 3 && (!car.crashed || car.deform.crushing); t += 1 / 60) tickWorld(w);
+      for (let t = 0; t < 3 && (!car.crashed || car.deform.crushing); t += 1 / FRAME_HZ) tickWorld(w);
       assert.ok(car.crashed && !car.deform.crushing, `${style}: the hit's crash window never closed`);
       w.pedals.set(car, GAS);
       let last = noseAsDrawn(car);
       let worst = 0;
-      for (let t = 0; t < 3; t += 1 / 60) {
+      for (let t = 0; t < 3; t += 1 / FRAME_HZ) {
         tickWorld(w);
         const now = noseAsDrawn(car);
         worst = Math.max(worst, Math.abs(now - last));

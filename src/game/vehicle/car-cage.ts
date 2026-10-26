@@ -1,4 +1,4 @@
-import { hypot3 } from "../kernel/physics-core.js";
+import { detAcos, hypot3 } from "../kernel/physics-core.js";
 import { IMPRINT_NONE } from "../deform/load-crush.ts";
 import { INF_K } from "../deform/deform-build.ts";
 import { cageAxis } from "../deform/deform-state.ts";
@@ -507,7 +507,7 @@ function movedSince(style: CageStyle, last: Float64Array, now: Float64Array, eps
     const shift = hypot3(now[pose]! - last[pose]!, now[pose + 1]! - last[pose + 1]!, now[pose + 2]! - last[pose + 2]!);
     const q = pose + POSE_QUATERNION;
     const agree = Math.abs(now[q]! * last[q]! + now[q + 1]! * last[q + 1]! + now[q + 2]! * last[q + 2]! + now[q + 3]! * last[q + 3]!);
-    const turn = 2 * Math.acos(Math.min(1, agree));
+    const turn = 2 * detAcos(Math.min(1, agree));
     if (shift + turn * style.panelReach[panel]! > epsilon) return true;
   }
   for (let k = poseEnd; k < last.length; k++) if (now[k] !== last[k]) return true;
@@ -817,7 +817,7 @@ function panelReachOf(panelCount: number, origin: Float64Array, rest: Float64Arr
     const g = group[i]!;
     if (g === 0 || g > panelCount) continue;
     const o = (g - 1) * 3;
-    reach[g - 1] = Math.max(reach[g - 1]!, Math.hypot(rest[i * 3]! - origin[o]!, rest[i * 3 + 1]! - origin[o + 1]!, rest[i * 3 + 2]! - origin[o + 2]!));
+    reach[g - 1] = Math.max(reach[g - 1]!, hypot3(rest[i * 3]! - origin[o]!, rest[i * 3 + 1]! - origin[o + 1]!, rest[i * 3 + 2]! - origin[o + 2]!));
   }
   return reach;
 }
