@@ -233,11 +233,9 @@ export function solveRows(n: number): void {
           give(c, v, w, q, dir, surf);
         }
       }
-      if (driven && OWN[c]! < 0) {
-        // A driven car's heading is its steering's: a tread's push along a bank's normal, at the tread's arm, must not spin it about the vertical.
-        if (TYRE[c]) w.y = yaw0;
-        continue;
-      }
+      // A tread on the ground grips across its width: its lateral grip holds the body against the yaw torque of the push along a bank's normal at the tread's arm (0.1-0.6 rad/s against a driven wreck's steering on the stunt bowl's banks).
+      if (TYRE[c] && OWN[c]! < 0 && nrm.y >= CLIMB_NY) w.y = yaw0;
+      if (driven && OWN[c]! < 0) continue;
       // Friction against the point's sliding: a tyre grips only across its tread (its axle laid in the contact plane) where it
       // rolls: on the world's ground and under power. A car in flight on another car's top is unpowered with its wheels not
       // turning under it, and a free-rolling tyre slid a car down the 8° of a pickup's bed at 0.38 m/s, for good: it grips both ways.
