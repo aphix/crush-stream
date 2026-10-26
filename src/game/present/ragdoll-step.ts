@@ -10,7 +10,7 @@ import { CALM_FOR, type Doll, GROUND_ANGULAR, GROUND_LINEAR, give, isCalm, limit
 import { brace } from "./ragdoll-joints.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { FIT_AHEAD } from "./ragdoll-wire.ts";
-import { GRACE, RagdollPool, STEP_LOG } from "./ragdoll-pool.ts";
+import { GRACE, INTERNAL_PASSES, ITERATIONS, RagdollPool, STEP_LOG } from "./ragdoll-pool.ts";
 
 const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
@@ -37,10 +37,9 @@ const PROP_STEP = 1 / PROP_STEP_HZ;
  * 23.0 at 1/480 throughout.
  */
 const PROP_FAST = 8;
-/** Rapier's contact spring frequency (Hz): its default, for props, boxes, purses and the walker. */
-const CONTACT_HZ = 30;
-/** The contact spring frequency while a thrown dummy is out (`thrownOut`). A joint chain pulled a landing arm down at 2-3 m/s against the 30 Hz contact: an arm of a 29 m/s range throw ended 6.4 cm in the ground (bar 5 cm); at 40 the deepest of 28 range throws is 3.6 cm. */
-const THROWN_CONTACT_HZ = 40;
+/** The solver's iterations and internal passes while a thrown dummy is out (`thrownOut`): at 4 x 2 a landing arm sank 6.4 cm (bar 5) through the joint chain's pull; at 6 x 3 the deepest of the 28 range throws is 3.9 cm and the monster's flat throw 54.8 m (54.6 at 4 x 2, 56.6 at 6 x 2, 65.4 at 8 x 2: its slide is chaotic in the solver). */
+const THROWN_ITERATIONS = 6;
+const THROWN_PASSES = 3;
 /** The skin's hits, the spin limit and the purses are judged at this rate (Hz) whatever `STEP` is: `HIT_DV` is a speed change per interval. */
 const WATCH_HZ = 120;
 const WATCH = 1 / WATCH_HZ;
@@ -118,7 +117,11 @@ export abstract class RagdollStepper extends RagdollPool {
       world.timestep = step;
     }
     if (steps > 0) for (let s = 0; s < SLOTS; s++) this.walkers[s]!.control(steps * step);
-    if (steps > 0) world.integrationParameters.contact_natural_frequency = this.thrownOut() ? THROWN_CONTACT_HZ : CONTACT_HZ;
+    if (steps > 0) {
+      const thrown = this.thrownOut();
+      world.numSolverIterations = thrown ? THROWN_ITERATIONS : ITERATIONS;
+      world.integrationParameters.numInternalPgsIterations = thrown ? THROWN_PASSES : INTERNAL_PASSES;
+    }
     for (let j = 1; j <= steps; j++) {
       this.proxies.move(Math.min(1, (j * step - lead) / dt));
       // One step this frame: the pose before it is the last frame's last (nothing moves a part between steps but a step).
