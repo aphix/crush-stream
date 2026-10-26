@@ -4,7 +4,8 @@ import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { GROUND_REACH, RagdollSystem } from "./engine-ragdoll.ts";
+import { RagdollSystem } from "./engine-ragdoll.ts";
+import { GROUND_REACH } from "./ragdoll-step.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
