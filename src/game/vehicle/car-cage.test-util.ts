@@ -8,8 +8,6 @@ import type { BodyStyle } from "./car-variants.ts";
 import { cellI, cellJ, cellX, cellZ, type DrawnField, NX, type Region, reliefGap, type TopGaps, WorstCells } from "./drawn-body.test-util.ts";
 import { CLASSES, carClass } from "./vehicle-classes.ts";
 
-export { cageOf, cageSourceOf } from "./car-cage-rig.ts";
-
 /** A fresh `CageLive` of `car` as it stands: what a `CageRig` reads off the car at its refit (allocates). */
 export function cageLiveOf(car: DeformableCar): CageLive {
   const rig = new CageRig(car);

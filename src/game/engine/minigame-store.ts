@@ -12,7 +12,7 @@ function bestKey(mode: MinigameMode, throwsPerSet: number | null, suffix: string
 }
 
 /** The score kept under `key`, null when none, or when the browser's storage is off or holds something else. */
-function load(key: string): number | null {
+export function load(key: string): number | null {
   try {
     const score = Number(localStorage.getItem(key));
     return Number.isFinite(score) && score > 0 ? score : null;
@@ -22,7 +22,7 @@ function load(key: string): number | null {
 }
 
 /** A blocked or full storage keeps nothing: the HUD still shows the attempt's own result. */
-function save(key: string, score: number): void {
+export function save(key: string, score: number): void {
   try {
     localStorage.setItem(key, String(score));
   } catch {

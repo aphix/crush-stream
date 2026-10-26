@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { Witness } from "./witness.ts";
+import { mulberry32 } from "../world/placements.ts";
 
 /** Camera at the origin looking down -z: near 0.1, far 200, 50° vertical, 16:9. */
 function cam(): THREE.PerspectiveCamera {
@@ -67,14 +68,7 @@ describe("given a Witness (the camera view cone that decides whether a purely co
   });
 
   it("when 4000 random cameras and box poses are tried, then a box with any corner inside the viewport is always witnessed", () => {
-    // mulberry32: the same 4000 trials every run.
-    let s = 0x9e3779b9;
-    const rnd = () => {
-      s = (s + 0x6d2b79f5) | 0;
-      let t = Math.imul(s ^ (s >>> 15), 1 | s);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
+    const rnd = mulberry32(0x9e3779b9);
     const w = new Witness();
     const c = new THREE.PerspectiveCamera(30 + rnd() * 60, 1 + rnd(), 0.1, 300);
     const half = new THREE.Vector3(1, 0.8, 2.3);

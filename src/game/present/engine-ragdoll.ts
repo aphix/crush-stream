@@ -29,7 +29,6 @@ import { GLASS_NAMES } from "../vehicle/car-glass.ts";
 import { LIFE } from "./ragdoll-pool.ts";
 import { RagdollThrower } from "./ragdoll-throw.ts";
 
-export { HIT_DV, GROUND_REACH } from "./ragdoll-step.ts";
 export type { RagdollStats, Throw } from "./ragdoll-pool.ts";
 
 export class RagdollSystem extends RagdollThrower {

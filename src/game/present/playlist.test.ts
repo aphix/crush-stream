@@ -2,17 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Radio, ShuffleBag, shuffledOrder } from "./playlist.ts";
 import type { MusicTrack, StationId } from "./music-manifest.ts";
-
-/** A seeded dice (mulberry32) in [0, 1): the same seed rolls the same shuffles. */
-function seededDice(seed: number): () => number {
-  let state = seed;
-  return () => {
-    state = (state + 0x6d2b79f5) | 0;
-    let mixed = Math.imul(state ^ (state >>> 15), 1 | state);
-    mixed = (mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)) ^ mixed;
-    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
-  };
-}
+import { mulberry32 } from "../world/placements.ts";
 
 /** The next `plays` tracks the bag deals. */
 function deal(bag: ShuffleBag, plays: number): number[] {
@@ -29,7 +19,7 @@ describe("given a shuffle bag over a station's tracks", () => {
   for (const c of testCases) {
     it(`when ${c.count} tracks are walked ${c.loops} loops from any seed, then every loop plays every track exactly once`, () => {
       for (let seed = 0; seed < 25; seed++) {
-        const plays = deal(new ShuffleBag(c.count, seededDice(seed)), c.count * c.loops);
+        const plays = deal(new ShuffleBag(c.count, mulberry32(seed)), c.count * c.loops);
         for (let loop = 0; loop < c.loops; loop++) {
           const played = plays.slice(loop * c.count, (loop + 1) * c.count).sort((a, b) => a - b);
           assert.equal(played.join(), Array.from({ length: c.count }, (_, index) => index).join(), `seed ${seed} loop ${loop}`);
@@ -39,12 +29,12 @@ describe("given a shuffle bag over a station's tracks", () => {
   }
   it("when 4 tracks are walked twice round, then every track plays twice", () => {
     const counts = [0, 0, 0, 0];
-    for (const index of deal(new ShuffleBag(4, seededDice(7)), 8)) counts[index]!++;
+    for (const index of deal(new ShuffleBag(4, mulberry32(7)), 8)) counts[index]!++;
     assert.equal(counts.join(), "2,2,2,2");
   });
   it("when a loop ends, then the next loop never opens with the track that just ended", () => {
     for (let seed = 0; seed < 200; seed++) {
-      const plays = deal(new ShuffleBag(3, seededDice(seed)), 60);
+      const plays = deal(new ShuffleBag(3, mulberry32(seed)), 60);
       for (let loop = 1; loop < 20; loop++) assert.notEqual(plays[loop * 3], plays[loop * 3 - 1], `seed ${seed} loop ${loop}`);
     }
   });
@@ -55,11 +45,11 @@ describe("given a shuffle bag over a station's tracks", () => {
   });
   it("when the order is shuffled, then different dice give different first tracks (every track can open a session)", () => {
     const openers = new Set<number>();
-    for (let seed = 0; seed < 100; seed++) openers.add(new ShuffleBag(4, seededDice(seed)).next());
+    for (let seed = 0; seed < 100; seed++) openers.add(new ShuffleBag(4, mulberry32(seed)).next());
     assert.equal([...openers].sort().join(), "0,1,2,3");
   });
   it("when the station has no track, then the bag deals -1", () => {
-    assert.equal(new ShuffleBag(0, seededDice(1)).next(), -1);
+    assert.equal(new ShuffleBag(0, mulberry32(1)).next(), -1);
   });
 });
 
@@ -70,7 +60,7 @@ function track(file: string, station?: StationId): MusicTrack {
 describe("given a radio over tracks on two stations and one with no station", () => {
   const tracks = [track("a", "high"), track("b", "calm"), track("c"), track("d", "calm"), track("e", "high")];
   const dealt = (station: StationId, plays: number, seed: number): string[] => {
-    const radio = new Radio(tracks, seededDice(seed));
+    const radio = new Radio(tracks, mulberry32(seed));
     return Array.from({ length: plays }, () => radio.next(station)!.title);
   };
   it("when the calm station plays, then only its own tracks come out, every one once per loop", () => {
@@ -84,12 +74,12 @@ describe("given a radio over tracks on two stations and one with no station", ()
     for (let seed = 0; seed < 25; seed++) assert.equal(dealt("high", 3, seed).sort().join(), "a,c,e", `seed ${seed}`);
   });
   it("when the station switches from high to calm, then the next track is a calm one", () => {
-    const radio = new Radio(tracks, seededDice(3));
+    const radio = new Radio(tracks, mulberry32(3));
     assert.ok(["a", "c", "e"].includes(radio.next("high")!.title), "high plays a high track");
     assert.ok(["b", "d"].includes(radio.next("calm")!.title), "calm plays a calm track");
   });
   it("when a station has no track, then it deals none and counts zero", () => {
-    const onlyHigh = new Radio([track("a")], seededDice(1));
+    const onlyHigh = new Radio([track("a")], mulberry32(1));
     assert.equal(onlyHigh.next("calm"), null);
     assert.equal(onlyHigh.trackCount("calm"), 0);
     assert.equal(onlyHigh.trackCount("high"), 1);

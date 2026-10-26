@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Microbench the JS kernels. Run with `npm run bench` (or `node scripts/bench-physics.mjs`, its old entry); the scenario bench of whole sims is `bench.mjs` next to it.
+ * Microbench the JS kernels. Run with `npm run bench`; the scenario bench of whole sims is `bench.mjs` next to it.
  * Times are wall ms for a fixed inner-loop count — compare before/after a change.
  * "static" rows repeat one input (a warm-started solver converges on the first
  * call); "animated" rows step through a moving deformation like a crash does.

@@ -8,7 +8,7 @@ and compare builds inside one session with alternating runs.
 
 | Bench | Run | Measures |
 |---|---|---|
-| JS kernels | `npm run bench` (`scripts/bench/kernels.mjs`; `scripts/bench-physics.mjs` stays as its old entry) | wall ms of the plain-JS kernels over a fixed loop; "static" rows repeat one input, "animated" rows step a moving deformation |
+| JS kernels | `npm run bench` (`scripts/bench/kernels.mjs`) | wall ms of the plain-JS kernels over a fixed loop; "static" rows repeat one input, "animated" rows step a moving deformation |
 | Browser frame | `node scripts/bench-browser.mjs [--url …] [--cars 2,10,16,24,32] [--modes fleet,derby,race-oval,race-rally,race-city] [--seconds 8] [--warmup 2] [--out bench.json] [--vsync]` | wraps `tickInner`, `fixedStep`, `updateSkin` and `renderer.render` on the live `window.__crush` and reports their times and the frame interval |
 | Program links | `npm run check:programs -- --url <server>` (`scripts/check-programs.mjs`) | fails if any GPU program links after the boot warm-up or during a race (about 3 min; needs a server and a browser) |
 | Headless frame | `node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--frames 60] [--size 1280x800] [--out <png>] [--root <checkout>]` | no time: the real engine's derby frame in node, its draw calls, triangles, programs, textures and geometries, and every program that failed to link ([`TOOLCHAIN.md`](TOOLCHAIN.md)). Its ms are not the browser's |

@@ -5,6 +5,7 @@ import { beginFakeFall, type DeformableCar } from "./car.ts";
 import { FREEWHEEL, makeCar, makeWorld, runPair, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { edgeAction, FAKE_DEPTH, FLEET_MIN_SEP, fleetEmptied, layoutFleet, respawnSlot, RESPAWN_S, VAPOR_DEPTH } from "../scenes/fleet.ts";
 import { DISC_GROUND, DISC_RADIUS, FLAT_GROUND, setGround, type Ground } from "../world/ground.ts";
+import { mulberry32 } from "../world/placements.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 
 const G_FRAME2 = 9.6 / 3600;
@@ -47,19 +48,9 @@ function record(cars: DeformableCar[], frames: number): number[] {
   return out;
 }
 
-function seeded(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) >>> 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t ^= t + Math.imul(t ^ (t >>> 7), 61 | t);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 function fleetCrash(ground: Ground): number[] {
   setGround(ground);
-  const slots = layoutFleet(6, 12, 16, seeded(7));
+  const slots = layoutFleet(6, 12, 16, mulberry32(7));
   const cars = slots.map((s) => {
     const c = makeCar("shape");
     c.spawn(s.x, s.z, s.speed);

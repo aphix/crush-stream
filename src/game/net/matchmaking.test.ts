@@ -17,6 +17,7 @@ import {
   type MatchDeps,
 } from "./matchmaking.ts";
 import type { PublicKind } from "./net-ports.ts";
+import { mulberry32 } from "../world/placements.ts";
 
 /** A room name without its kind and build: "A" for `publicRoomName("race", "A")`, so expectations read as literals. */
 const codeOf = (name: string): string => name.replace(/^pub-(race|campaign|survival|derby)-v\d+-/, "");
@@ -50,17 +51,6 @@ class Clock {
       next.fn();
     }
   }
-}
-
-/** Mulberry32: a seeded [0, 1) stream, so a failing seed replays. */
-function rng(seed: number): () => number {
-  let a = seed;
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 /** One search against a stubbed room list; records what the search did and when. */
@@ -264,7 +254,7 @@ describe("given searchers pressing Play online together, with simulated relay de
    */
   async function crowd(seed: number, startsMs: number[], fits: boolean[], latency = WIRE) {
     const clock = new Clock();
-    const dice = rng(seed);
+    const dice = mulberry32(seed);
     const rooms = new Map<string, { players: number; guests: (() => void)[] }>();
     let restarts = 0;
     const kill = (name: string): void => {
@@ -335,7 +325,7 @@ describe("given searchers pressing Play online together, with simulated relay de
     const loners: number[] = [];
     const split: number[] = [];
     for (let seed = 1; seed <= 200; seed++) {
-      const dice = rng(seed * 7919);
+      const dice = mulberry32(seed * 7919);
       const starts = Array.from({ length: 5 }, () => Math.floor(dice() * 300));
       const fits = Array.from({ length: 5 }, () => dice() < 0.6);
       const r = await crowd(seed, starts, fits);
