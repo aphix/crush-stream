@@ -20,9 +20,9 @@ export type Run = { session: RaceSession; onRoad: number; samples: number; mista
 /**
  * Real cars on the real drive model (kinematic, as every car is until it crashes) on the course's
  * ground, no car-to-car contact: the AI alone has to keep them on the road and round the laps. Each car's brain plans with its own class's
- * figures (`setClass`), as the game's race field does: a muscle car plans as a muscle car.
+ * figures (`setClass`), as the game's race field does: a muscle car plans as a muscle car. `each` sees the cars after every step.
  */
-export function race(track: Track, n: number, aggression: number, laps: number, limit: number, difficulty: AiDifficulty = AI_EVERY_SLICE, tap?: (id: number, out: DriveInput) => void): Run {
+export function race(track: Track, n: number, aggression: number, laps: number, limit: number, difficulty: AiDifficulty = AI_EVERY_SLICE, tap?: (id: number, out: DriveInput) => void, each?: (cars: readonly DeformableCar[], session: RaceSession) => void): Run {
   const scene = new THREE.Scene();
   const ground = track.ground();
   setGround(ground);
@@ -69,6 +69,7 @@ export function race(track: Track, n: number, aggression: number, laps: number, 
     }
     session.step(DT, poses);
     session.events();
+    each?.(cars, session);
     if (session.phase === "racing" && ++step % 6 === 0) {
       for (const [i, c] of cars.entries()) {
         if (session.cars[i]!.status !== "racing") continue;

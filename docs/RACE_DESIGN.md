@@ -546,7 +546,7 @@ without scrolling, so a long menu keeps its scroll offset; it never falls back t
 - `vehicle-classes.test.ts` (a draft's `topScale`), `race-ai.test.ts` (8 clean AI cars finish 3 laps of the oval on
   the road ≥ 95 % at every tier; easy is slower than hard by ≥ 8 %, makes mistakes where hard makes none,
   two easy runs agree to the bit, hard's `think` output is pinned bit for bit; a stale medium driver's guard brakes for a car ahead; ram / block / follow, boost, the aggression model),
-  `race-ai.ai-long-run.ts` (the full-sanity sweep: the same 3-lap field on every course at every tier, easy slower than hard on every course, medium's mistakes), `race-contact.test.ts` (the contact classifier on eight real contacts), `race-contact.ai-long-run.ts` (aggression-0 fields of 4 and 7 rivals on every course at medium and hard start no contact), `traffic.test.ts`, `placements.test.ts`,
+  `race-ai.ai-long-run.ts` (the full-sanity sweep: the same 3-lap field on every course at every tier, easy slower than hard on every course, medium's mistakes), `race-contact.test.ts` (the contact classifier on eight real contacts; aggression-0 full grids on the oval and the city at medium and hard drive into nobody in the kinematic race, the ramming field does), `race-contact.ai-long-run.ts` (the same on every other course), `traffic.test.ts`, `placements.test.ts`,
   `menu-nav.test.ts`, `checkpoint-sweep.test.ts`.
 - `race-finish.ai-long-run.ts` (`npm run test:ai-long-run`), every course: 4 AI rivals plus the AI-driven player slot, 2 laps; results within the grid + 2 laps
   at 3 × the reference lap with ≥ 4 of 5 home or out. `RACE_FINISH_RUNS=5` runs 5 seeds at the default slider and 5 more

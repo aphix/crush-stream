@@ -4,12 +4,17 @@ import { AI_DIFFICULTIES, type AiDifficulty } from "../ai/constants.ts";
 import { fieldAggression } from "../ai/ai-aggression.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { setGround } from "./ground.ts";
-import { classifyContact, contactRace, type Role, type Sample } from "./race-contact.test-util.ts";
+import { classifyContact, kinematicContacts, type Role, type Sample } from "./race-contact.test-util.ts";
+import { COURSES } from "../ai/race-ai.test-util.ts";
 import { makeWorld, raceOnce, type Outcome, type World } from "./race-world.test-util.ts";
 import { Track } from "./track.ts";
 import oval from "./tracks/oval.json" with { type: "json" };
 
 type Kin = Omit<Sample, "bumped">;
+
+const OVAL = COURSES.find((t) => t.id === "oval")!;
+/** The city's streets: the course whose field meets most when the contact guard is off. */
+const CITY = COURSES.find((t) => t.id === "city")!;
 
 /** The classifier reads the last frame's kinematics and whether the car was bumped in the half second before. */
 const window = (s: Kin, knocked: boolean): Sample[] => [{ ...s, bumped: knocked }, { ...s, bumped: false }];
@@ -154,18 +159,18 @@ describe("given the aggression slider at 0, so every rival is as gentle as can b
       assertSameNumbers(stand(2), first, "every car's position under field seed 2");
     });
 
-    it(`when ${AI_RIVALS} rivals leave the oval's grid at ${difficulty} AI, then no racer drives into another car in the first ${OPENING} s of racing`, () => {
-      const track = new Track(oval);
-      const w = makeWorld();
-      w.race.enter();
-      try {
-        const r = contactRace(w, track, COUNTDOWN + OPENING, 1, 0, AI_RIVALS, difficulty);
-        const hits = r.contacts.filter((c) => !c.traffic && c.initiator >= 0).map((c) => `frame ${c.frame}: car ${c.initiator} into car ${c.initiator === c.a ? c.b : c.a} (closing ${c.verdict.closing.toFixed(1)} m/s)`);
-        assert.deepEqual(hits, []);
-      } finally {
-        w.race.exit();
-        setGround(null);
-      }
-    });
+    for (const track of [OVAL, CITY]) {
+      it(`when a full grid of 8 races 2 laps of the ${track.id} course at ${difficulty} AI, as the brains decide (the kinematic race), then no racer drives into another car`, () => {
+        const r = kinematicContacts(track, 8, 0, 2, difficulty);
+        assert.equal(r.finished, 8, "every car finished: the field raced");
+        assert.deepEqual(r.hits, []);
+      });
+    }
   }
+});
+
+describe("given every rival at the ramming maximum of the aggression slider", () => {
+  it("when a full grid of 8 races 2 laps of the oval at hard AI (the kinematic race), then racers drive into other cars (the clean-field check can fail)", () => {
+    assert.ok(kinematicContacts(OVAL, 8, 1, 2, "hard").hits.length >= 1, "no racer-initiated contact at the ramming maximum: the clean-field rows above prove nothing");
+  });
 });
