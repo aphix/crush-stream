@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { Collider, RigidBody, World } from "@dimforge/rapier3d-simd";
+import type { Collider, Cuboid, RigidBody, World } from "@dimforge/rapier3d-simd";
 import type { CageView, RagCar } from "./ragdoll-car-view.ts";
 import { CLASS_LIFT } from "../vehicle/constants.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
@@ -94,6 +94,8 @@ export class CarProxies {
   teleport = false;
   private R: Rapier | null = null;
   private world: World | null = null;
+  /** `setCuboid`'s shape, reused: Rapier 0.19.3's `setHalfExtents` leaves its RawVector to the finalizer; `setShape` frees its RawShape. */
+  private cuboid: Cuboid | null = null;
   /** Each car's leaves, `PROXY_BOXES` per car, and how many are fitted: its lower box, columns and slabs (`ProxyFitter`). */
   private readonly shapes: (Collider | null)[] = Array.from({ length: MAX_CARS * PROXY_BOXES }, () => null);
   private readonly shapeN = new Uint8Array(MAX_CARS);
@@ -135,6 +137,7 @@ export class CarProxies {
   load(R: Rapier, world: World): void {
     this.R = R;
     this.world = world;
+    this.cuboid = new R.Cuboid(1, 1, 1);
     for (let i = 0; i < MAX_CARS; i++) this.carBodies.push(world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(0, -100, i * 10)));
     this.barrierBody = world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(0, -100, -10));
     world.createCollider(R.ColliderDesc.cuboid(BARRIER_HALF.x, BARRIER_H / 2, BARRIER_HALF.z).setTranslation(0, BARRIER_H / 2, 0).setCollisionGroups(FIXED_GROUPS), this.barrierBody);
@@ -344,10 +347,11 @@ export class CarProxies {
 
   /** The cuboid at float offset `o` of `boxes` (`BOX_FLOATS` each) onto collider `c`: its size, its place and its turn on the car's body. */
   private setCuboid(c: Collider, boxes: Float64Array, o: number): void {
-    _v.x = boxes[o + 3]!;
-    _v.y = boxes[o + 4]!;
-    _v.z = boxes[o + 5]!;
-    c.setHalfExtents(_v);
+    const he = this.cuboid!.halfExtents;
+    he.x = boxes[o + 3]!;
+    he.y = boxes[o + 4]!;
+    he.z = boxes[o + 5]!;
+    c.setShape(this.cuboid!);
     _v.x = boxes[o]!;
     _v.y = boxes[o + 1]!;
     _v.z = boxes[o + 2]!;
