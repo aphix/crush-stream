@@ -6,6 +6,7 @@ import { DriftLabel, DriftOverlay } from "@/components/drift-charge";
 import { nitroGlowStyle } from "@/components/nitro-glow";
 import { RESET_GLOW } from "@/components/reset-prompt";
 import { usePadHold } from "@/components/use-pad-hold";
+import { useGlide } from "@/components/use-glide";
 import { useSpeedUnit } from "@/components/use-speed-unit";
 import { needsReset } from "@/game/hud/reset-prompt";
 import { formatSpeed } from "@/game/hud/speed-units";
@@ -35,6 +36,13 @@ const px = (r: number, deg: number) => (C + r * Math.sin(rad(deg))).toFixed(1);
 const py = (r: number, deg: number) => (C - r * Math.cos(rad(deg))).toFixed(1);
 /** Clockwise arc of radius `r` from `from` to `to` degrees off straight up. */
 const arc = (r: number, from: number, to: number) => `M${px(r, from)} ${py(r, from)}A${r} ${r} 0 ${to - from > 180 ? 1 : 0} 1 ${px(r, to)} ${py(r, to)}`;
+
+const drawNeedle = (el: HTMLDivElement, deg: number): void => {
+  el.style.transform = `rotate(${deg.toFixed(1)}deg)`;
+};
+const drawFill = (el: HTMLDivElement, share: number): void => {
+  el.style.transform = `scaleY(${share})`;
+};
 
 /** The dial's fixed parts: ring, redline, ticks and numerals. Memoised: nothing in it ever changes. */
 const DialFace = memo(function DialFace() {
@@ -71,6 +79,7 @@ const DialFace = memo(function DialFace() {
  * (police, traffic, a car nobody drives: `boost` null) shows it empty and greyed, so the cluster always carries the bottle.
  */
 function Nitro({ boost, boosting, drafting, drift }: { boost: number | null; boosting: number; drafting: boolean; drift: DriftView }) {
+  const fill = useGlide(boost ?? 0, drawFill);
   if (boost === null) {
     return (
       <div className="relative flex flex-col items-center opacity-30" role="img" aria-label="No boost">
@@ -93,10 +102,7 @@ function Nitro({ boost, boosting, drafting, drift }: { boost: number | null; boo
         className="relative h-[2.6em] w-[1.5em] overflow-hidden rounded-[0.4em] bg-fg/20 shadow-[var(--shadow-border)] transition-shadow duration-[var(--motion-fast)]"
         style={nitroGlowStyle("bottle", boost, boosting)}
       >
-        <div
-          className={cn("absolute inset-0 origin-bottom transition-transform duration-150 ease-linear will-change-transform", boosting > 0 ? "bg-fg" : "bg-scene-race")}
-          style={{ transform: `scaleY(${boost})` }}
-        />
+        <div ref={fill} className={cn("absolute inset-0 origin-bottom will-change-transform", boosting > 0 ? "bg-fg" : "bg-scene-race")} />
         <DriftOverlay drift={drift} boost={boost} vertical />
       </div>
     </div>
@@ -117,11 +123,11 @@ function BoostHold({ children }: { children: ReactNode }) {
  * gear under it (the revs are faked from the speed inside the gear's bucket: `carRpm`); the damage arc on its left
  * (`RaceView.damage`) over a wrench that is lit while the game would accept a reset (`canReset`: dim in a no-reset race or while
  * spectating) and glows like every reset control once the car needs one (`needsReset`); the nitrous bottle, the boost meter.
- * The needle and the bottle's fill move by `transform` transitions (the compositor, not a repaint) between the HUD's snapshots.
+ * The needle and the bottle's fill glide between the HUD's snapshots (`useGlide`), on their own styles: a snapshot re-renders neither.
  */
 export function DriveCluster({ view, boostable }: { view: RaceView; boostable: boolean }) {
   const unit = useSpeedUnit();
-  const needle = -HALF_SWEEP + view.rpm * 2 * HALF_SWEEP;
+  const needle = useGlide(-HALF_SWEEP + view.rpm * 2 * HALF_SWEEP, drawNeedle);
   const dmgTo = DMG_FROM + (DMG_TO - DMG_FROM) * view.damage;
   const dmgTone = view.damage > DMG_AMBER ? "stroke-fg" : view.damage > DMG_RED ? "stroke-signal-amber" : "stroke-signal-red";
   return (
@@ -142,8 +148,8 @@ export function DriveCluster({ view, boostable }: { view: RaceView; boostable: b
         </text>
       </svg>
       <div
-        className="pointer-events-none absolute left-0 top-0 aspect-square w-full will-change-transform transition-transform duration-150 ease-linear"
-        style={{ transform: `rotate(${needle.toFixed(1)}deg)` }}
+        ref={needle}
+        className="pointer-events-none absolute left-0 top-0 aspect-square w-full will-change-transform"
         role="meter"
         aria-label="Revs"
         aria-valuemin={0}
