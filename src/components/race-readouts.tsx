@@ -9,6 +9,7 @@ import { useTouchScheme } from "@/components/use-touch-scheme";
 import { useSpeedUnit } from "@/components/use-speed-unit";
 import { SurvivalReadout } from "@/components/survival-hud";
 import type { RaceHud, RaceView } from "@/game/match/types";
+import { schemeLayout } from "@/game/hud/touch-scheme";
 import { formatSpeed } from "@/game/hud/speed-units";
 import { KPH_PER_MS } from "@/game/kernel/constants";
 import { cn } from "@/lib/utils";
@@ -161,17 +162,19 @@ function Cluster({ race, view, corner }: { race: RaceHud; view: RaceView; corner
 }
 
 /**
- * The drive cluster in its slot: the bottom right corner, as it always was (on a phone 80 px, in either orientation, the right thumb's pedals standing
- * above it and Boost and Handbrake beside it; the left corner when the controls are mirrored). It fades with the rest while the player drives.
- * Its bottle boosts when tapped, unless the car is a `spectated` one.
+ * The drive cluster in its slot: the bottom right corner, as it always was (on a phone 80 px, in either orientation, the right thumb's control standing
+ * above it; the left corner when the controls are mirrored). On a phone on its side the two-thumb schemes' pedals take the corner and the dial stands
+ * beside them, one pedal column (72 px) and a gap in. It fades with the rest while the player drives. Its bottle boosts when tapped, unless the car is a `spectated` one.
  */
 function Dial({ view, corner, spectated }: { view: RaceView; corner: boolean; spectated: boolean }) {
-  const { mirror } = useTouchScheme();
+  const { mirror, scheme } = useTouchScheme();
+  const beside = schemeLayout(scheme).right !== "buttons";
   return (
     <div
       className={cn(
         "absolute bottom-4 right-4 hidden pointer-coarse:hud-bottom pointer-coarse:block pointer-coarse:pb-3 pointer-coarse:pr-3 pointer-coarse:[--phone-cluster:5rem] pointer-coarse:calm:opacity-60 pointer-coarse:hud-fade",
         mirror ? "pointer-coarse:hud-left pointer-coarse:right-auto" : "pointer-coarse:hud-right",
+        beside && (mirror ? "phone-landscape:ml-22" : "phone-landscape:mr-22"),
         corner && "md:block",
       )}
     >
