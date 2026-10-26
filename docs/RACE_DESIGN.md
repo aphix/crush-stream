@@ -551,10 +551,11 @@ without scrolling, so a long menu keeps its scroll offset; it never falls back t
 - `race-finish.ai-long-run.ts` (`npm run test:ai-long-run`), every course: 4 AI rivals plus the AI-driven player slot, 2 laps; results within the grid + 2 laps
   at 3 × the reference lap with ≥ 4 of 5 home or out. `RACE_FINISH_RUNS=5` runs 5 seeds at the default slider and 5 more
   at 1. Also the city seed-1 race that once held the player car nose to nose with oncoming traffic, and the police lead-in pools
-  (heading converging over many seeds, no cop pair meeting, Dam Spine and Four-Count). `race-finish.test.ts`: a 1-lap oval race,
+  (heading converging over many seeds, no cop pair meeting). `race-finish.test.ts`: a 1-lap oval race,
   Watch races and campaign, the police chase on a 1-lap oval (parked units show no sirens, chasing ones do; cycling reaches
   no police car; no police car in the results), one stakeout's lead-in falling in behind its target; `ai/traffic.test.ts` (a
-  traffic car facing a racer edges to its own kerb) and `ai/police-lead-in.test.ts` (a nose-to-nose stakeout pair's lead-ins do not touch).
+  traffic car facing a racer edges to its own kerb) and `ai/police-lead-in.test.ts` (a nose-to-nose stakeout pair's lead-ins do not touch, on the
+  oval and, a racer driven past it, on Dam Spine's valley road under the dam and Four-Count's back straight: both cops wake, only once it is past).
   `race-police-sight.ai-long-run.ts`, `race-start.ai-long-run.ts` and `spectate-cam.ai-long-run.ts` are the whole-race sweeps of
   the police put-on / put-away rules, the first seconds of every grid and the Auto camera on every course; their rules are pinned in
   `ai/cop-sight.test.ts`, `ai/police.test.ts`, `race-start.test.ts` and `present/spectate-cam.test.ts`.
