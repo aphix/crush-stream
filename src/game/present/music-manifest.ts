@@ -12,10 +12,10 @@ const LINK_PATTERN = /^https?:\/\/\S+$/;
 export const STATION_IDS = ["calm", "high"] as const;
 export type StationId = (typeof STATION_IDS)[number];
 const STATION_NAMES: Record<StationId, string> = { high: "High Energy", calm: "Calm" };
-/** The station a browser that has not picked one plays (owner: calm by default). */
-export const DEFAULT_STATION: StationId = "calm";
+/** The station a browser that has not picked one plays (owner: calm by default): the first listed. */
+export const DEFAULT_STATION: StationId = STATION_IDS[0];
 /** The station of a track the manifest gives none. */
-const UNTAGGED_STATION: StationId = "high";
+const UNTAGGED_STATION: StationId = STATION_IDS[1];
 
 /** A stored or typed text as a station id; anything else is the default station. */
 export function stationIdOrDefault(text: string): StationId {
