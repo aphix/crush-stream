@@ -559,9 +559,10 @@ ground can stand on at some pitch.
   (half rolled). The rest is the placements themselves; a further 2x would need fewer nodes (a semantic cut).
   **Perf pass 2 (REPLAY 162):** in a 9-car derby heat the cage refits 110-190 times a sim-second at ~0.5 ms (rasterise 12-16 % of the sim, plan field 3-5 %, outline
   refresh 2-3 %); 97 % of the vertices change by a bit between fits, so nothing is incremental or lazy. 44 % of the fits fired on a panel pose changing, 26 a second
-  for panes that are gone and whose pose `skinCage` ignores: `movedSince` skips those. A 1 cm / 0.01 rad tolerance on the other poses was tried and dropped: it cut
-  the fits further but moved `fleet-tyres` (pickup tyre -42 mm under its hood) and `fleet-rest-sleep` (median 2.84-3.21 s, seeds never sleeping) even at 0.5 mm: those rows
-  are lotteries of the refit timing, and the exact poses keep them green.
+  for panes that are gone and whose pose `skinCage` ignores: `movedSince` skips those. A panel's pose now refits only once its tip has moved 1 cm (REPLAY 163). That first moved `fleet-tyres` (pickup tyre -42 mm
+  under its drawn body) and `fleet-rest-sleep` (median 3.21 s, seeds never sleeping), which were latent defects the refit timing happened to miss, not lotteries: the tyre hold
+  (`TyreSkin`) lifted skin points over the tyre but not the triangle a crush stretched from one of them to two low points (its plane ran 4 cm under the arc), and a sleeper
+  woken by a neighbour tipping about rest speed (`stirNear`) lost its whole second of rest. Both are fixed (`liftSaggingTriangles`, `DeformableCar.stir`); the rows stay green with the tolerance.
 - **Cost** (worker, `ab-stage/stepw.mjs`: 16 cars, identical state in both arms, only `stepWorld` timed): cruising −0.7 / +1.5 %,
   parked +0.5 / −2.3 %, so flat. City16 races, seeds 1-3, both arm orders: mean 0.999 (0.969-1.032), each run tracking its arm's wreck
   count. Sixteen wrecks each with a front wheel popped: 0.67-0.72 ms a step against 2.07, because all 16 sleep on their lips
