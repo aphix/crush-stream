@@ -46,6 +46,7 @@ const NX = new THREE.Vector3(-1, 0, 0);
 
 // Three re-pinned for a pair's crush patch at most its face wide (`feedOverlap`): head-on e2fe2a6ea3f54ade -> baff0220de6d5ea7, door 4338c12666a975b6 -> a822a3b1f1a859d0, pile-up d15a38884ad0eaac -> 8bfde84dd16812c1; the barrier's is unchanged (no pair).
 // Re-pinned for the cage's refit skipping the pose of a torn-off or shattered pane and refitting for a panel's pose only once its tip has moved 1 cm (REPLAY 162, 163; the cage stands up to 1 cm off a swinging lid or door between fits, which the contact reads): door a822a3b1f1a859d0 -> a5928a5241b57ca2, barrier 9fd91e7d5989df85 -> ca2e30a830f5a144, pile-up 8bfde84dd16812c1 -> 89f13dd0b4f77e81; the head-on is unchanged.
+// Pile-up re-pinned for land-163, the other three unchanged: the creeping wreck's 2 mm skin rebake (5eba324a, `SKIN_DRIFT`: the cage follows the creep) 89f13dd0b4f77e81 -> dd2e1cfe38b39d3b, a striker along the car springing the shut lid's latch by contact (0714f314) -> b7ebb3306d68d636, and that latch springing on 2 cm of tail crush instead of the striker's energy (31bd7f13) -> 9808dbe9f7b483e3.
 describe("given four staged crashes with the epicenter activation off", () => {
   it("when the owner's head-on, 20 m/s each, runs 5 s, then every mass and pose is the pinned one", () => {
     const a = makeCar("shape");
@@ -76,6 +77,6 @@ describe("given four staged crashes with the epicenter activation off", () => {
     launch(a, -4, 0, Math.PI / 2, 50 * KPH, 0);
     launch(b, 4, 0, -Math.PI / 2, -50 * KPH, 0);
     launch(c, 28, 0, -Math.PI / 2, -90 * KPH, 0);
-    assert.equal(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6), "89f13dd0b4f77e81");
+    assert.equal(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6), "9808dbe9f7b483e3");
   });
 });
