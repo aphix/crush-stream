@@ -319,7 +319,7 @@ describe("given the Auto spectator camera (the shot director that cuts between s
         const car = new DeformableCar({ body: 0x808080, accent: 0x404040, name: "watched" }, scene, null);
         const camera = new THREE.PerspectiveCamera(56, 16 / 9, 0.1, 900);
         const auto = new AutoCam();
-        const autoScene: AutoScene = { sight: () => sight, cut: (c) => c };
+        const autoScene: AutoScene = { sight: () => sight, rivals: () => [], cut: (c) => c };
         const pt = blankPoint();
         const kinds = new Set<string>();
         const bad: string[] = [];
@@ -365,6 +365,7 @@ describe("given the Auto spectator camera (the shot director that cuts between s
       // The Auto driver's cut: the other car of the pair.
       const autoScene: AutoScene = {
         sight: () => sight,
+        rivals: () => pair,
         cut: (car) => {
           watched = car === pair[0] ? pair[1]! : pair[0]!;
           return watched;
@@ -406,7 +407,7 @@ describe("given the Auto spectator camera (the shot director that cuts between s
   it("when a wreck's velocity swings 4° a frame at 60 and 240 Hz, then the chase eye follows a low-passed heading and does not swing", (t) => {
     // Every spot is solid: every shot poses as the chase.
     const solidAll: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0, rim: 1, occ: [] };
-    const autoScene: AutoScene = { sight: () => solidAll, cut: (car) => car };
+    const autoScene: AutoScene = { sight: () => solidAll, rivals: () => [], cut: (car) => car };
     const swing = (4 * Math.PI) / 180;
     for (const hz of [60, 240]) {
       const car = new DeformableCar({ body: 0x808080, accent: 0x404040, name: "wreck" }, new THREE.Scene());

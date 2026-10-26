@@ -361,9 +361,14 @@ it happens; the ride-along no longer takes it).
 The held cam's lens opens past its cut's own to keep every beat of the moment in the frame of the narrowest screen (`fovFor`, never past `WIDEN_MAX` 70°), eased like the aim, except on the first frame of a held cut: a cut change (`heldCut` moved the shot, say crane to long lens as two drivers are thrown) is a new eye with a new own lens, so the opening is taken whole there (`CrashCam.widenCut`), not eased up from the last cut's. Eased, the long lens (21°) stood at 26° on the frame the throw came and one of two drivers thrown 3.2 m apart sat at NDC 0.81 on the phone-portrait layout (margin 0.8); now 36° there, in frame.
 
 A shot is one of: chase (behind the car along its travel), trackside cinematic (`CineCam.pick`, searched in full when
-the shot starts, so the pick depends only on the poses and the seed), wheel-well dutch (`DutchCam.place` on a seeded
-mount) or a high static eye 22 m off the crash (the seeded angle, else the first eighth-turn from it whose eye is clear
-and sees the car). The shot picking and posing is `present/shot-cam.ts` (`pickShot`, `ShotCam`), shared with the Auto
+the shot starts, so the pick depends only on the poses and the seed), wheel-well dutch (`DutchCam.place`: of the eight
+mounts, four wells looking forward or back, the one seeing the most of the clip's other cars, the first from the seeded one
+among ties) or a high static eye 22 m off the crash (the seeded angle, else the first eighth-turn from it whose eye is clear
+and sees the car). A wheel mount hangs `DUTCH.out` outboard of the drawn tyre or body, whichever stands further out (the
+monster's 1.73× tyres put it 0.7 m further out than a sedan's), level with the drawn tyre's top, and is skipped while its own
+car's open or torn door, hanging panel or lid covers the lens (`DutchCam.clear`: its lines to the frame's centre and to the
+car's flank at the end it looks toward, raycast against those parts' drawn triangles); no clear mount, the chase. The Auto
+cam and the Wheel cam view leave a mount once it is covered. The shot picking and posing is `present/shot-cam.ts` (`pickShot`, `ShotCam`), shared with the Auto
 spectator cam (`present/auto-cam.ts`: the same kinds and pool order run live on the watched car). Every searched spot
 (trackside, high, each crash-cam eye) must pass `camUsable` (`present/spectate-cam.ts`): 2 m of room round it
 (`clearSpot`: 12 flat samples, one up, one down) and a clear sight line to the car now and over the next seconds. Each

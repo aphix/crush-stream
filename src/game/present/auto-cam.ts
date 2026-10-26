@@ -8,6 +8,8 @@ import { foldHeading, OPENERS, pickShot, RUN_INS, ShotCam, type Shot } from "./s
 export type AutoScene = {
   /** The scene's solids (every other car where it stands now). */
   sight(): Sight;
+  /** The cars a dutch shot scores its wheel mounts on (`ShotCam.start`). */
+  rivals(): readonly DeformableCar[];
   /**
    * The cam is about to cut: the car to frame next. The Auto driver may hand over another one here (a driver switch
    * happens on a camera cut); otherwise `car` comes back.
@@ -81,7 +83,7 @@ export class AutoCam {
           this.heading.set(0, 0);
         }
         this.pending = pickShot(this.shot === null ? OPENERS : RUN_INS, this.shot?.kind, mulberry32(Math.imul(++this.cuts, 0x9e3779b9)));
-        this.next.start(this.pending, scene.sight());
+        this.next.start(this.pending, scene.sight(), scene.rivals());
       }
     }
     if (this.pending !== null) {
