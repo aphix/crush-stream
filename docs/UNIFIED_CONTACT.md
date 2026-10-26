@@ -557,6 +557,10 @@ ground can stand on at some pitch.
   stops at the first row that decides it; `roundHalfUp` for `Math.round` (V8 calls the runtime for it) and nine stores for `TypedArray.set` in
   `copyMeet`. A touching rolled pair 113-160 → 89-132 µs, a 9-car pile pass of 30 pairs 1613 → 1059 µs (all rolled; upright 163) and 1836 → 1504 µs
   (half rolled). The rest is the placements themselves; a further 2x would need fewer nodes (a semantic cut).
+  **Perf pass 2 (REPLAY 162):** in a 9-car derby heat the cage refits 110-190 times a sim-second at ~0.5 ms (rasterise 12-16 % of the sim, plan field 3-5 %, outline
+  refresh 2-3 %); 97 % of the vertices change by a bit between fits, so nothing is incremental or lazy. 44 % of the fits fired on a panel pose changing at all,
+  80 of 85 a second by under 1 cm / 0.01 rad, 26 a second for panes that are gone and whose pose `skinCage` ignores. `movedSince` now gives a pose the masses' own
+  tolerance and skips those panes: derby heats 9 cars 286 → 247 ms per sim-second, 16 cars 542 → 462 (trajectories differ, 4 and 2 seeds, epicenter on).
 - **Cost** (worker, `ab-stage/stepw.mjs`: 16 cars, identical state in both arms, only `stepWorld` timed): cruising −0.7 / +1.5 %,
   parked +0.5 / −2.3 %, so flat. City16 races, seeds 1-3, both arm orders: mean 0.999 (0.969-1.032), each run tracking its arm's wreck
   count. Sixteen wrecks each with a front wheel popped: 0.67-0.72 ms a step against 2.07, because all 16 sleep on their lips
