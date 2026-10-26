@@ -20,7 +20,7 @@ const SPEC_VIEWS: readonly SpecView[] = ["third", "far", "first", "cine", "dutch
  * the orbit to keep their line of sight clear (`EyeClear`): the scene's solids (the course's, the derby bowl's, the sandbox's) and the other
  * cars' tight boxes in `cars`. Null: nothing to keep clear of.
  */
-export type SpecScene = AutoScene & { rivals(): readonly DeformableCar[]; fixed(): Sight | null };
+export type SpecScene = AutoScene & { fixed(): Sight | null };
 
 /** A lamp post the orbit keeps clear of: it stands from its base up `POST_TOP` m and is thin, so the eye's distance to its axis is what counts. */
 type Post = { intact: boolean; group: { visible: boolean; position: THREE.Vector3 } };

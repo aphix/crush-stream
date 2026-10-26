@@ -12,7 +12,7 @@
  *
  * `--root` draws another checkout's game on its own node_modules (same seed, same clock): two trees give a before/after pair.
  * `--hash` boots the page on a share link's `#` (the scene, the car, the settings) instead of the derby; `--camera radius,pitch,angle`
- * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--view hood|chase|far` follows the hash's car
+ * frames the orbit camera by hand (metres, radians), as readme-shots' `frame()` does; `--view hood|chase|far|dutch` follows the hash's car
  * (`car=<id>`) in that drive view instead, e.g. `--hash 'scene=race&car=coupe'`; `--at` is the sim seconds before the drawn frames.
  * `--tear` tears the named parts (`DetachPart.name`: hood, bumperF, archFL, ...) off every car before the framing and hides them, to
  * show what is under them (the engine bay, the crash bars, the bare metal). `--open doorL,doorR,trunk,quarterL,quarterR` swings those
@@ -47,7 +47,7 @@ const FRAMING_S = 0.3;
 /** Sim seconds a `--view` gets to settle before the drawn frames: the chase springs' convergence. */
 const VIEW_S = 2;
 /** `--view`'s names for the seat's views. */
-const SEAT_VIEWS = { hood: "first", chase: "third", far: "far" };
+const SEAT_VIEWS = { hood: "first", chase: "third", far: "far", dutch: "dutch" };
 /** `--view`'s landing views: the car through a trace-car camera spec. */
 const LANDING_VIEWS = ["side", "top", "iso", "rear-iso"];
 /** What the sim's pacer reads as its clock advances by on every read, so its time budget never depends on the host's speed. */
@@ -106,7 +106,7 @@ if (!(atS >= 0)) throw new Error(`--at ${values.at}: sim seconds, 0 or more`);
 if (camera !== undefined && ((camera.length !== 3 && camera.length !== 6) || !camera.every(Number.isFinite))) throw new Error(`--camera ${values.camera}: radius,pitch,angle[,x,y,z], e.g. 2.4,0.12,2.1`);
 const seatView = values.view === undefined ? undefined : SEAT_VIEWS[values.view];
 const landingView = LANDING_VIEWS.includes(values.view) ? JSON.parse(readFileSync(resolve(values["view-camera"] ?? ""), "utf8")) : null;
-if (values.view !== undefined && seatView === undefined && landingView === null) throw new Error(`--view ${values.view}: hood, chase, far, ${LANDING_VIEWS.join(", ")}`);
+if (values.view !== undefined && seatView === undefined && landingView === null) throw new Error(`--view ${values.view}: ${Object.keys(SEAT_VIEWS).join(", ")}, ${LANDING_VIEWS.join(", ")}`);
 if (landingView !== null && landingView.view !== values.view) throw new Error(`--view-camera ${values["view-camera"]}: a ${landingView.view} camera, not ${values.view}`);
 const W = landingView?.W ?? Number(size[1]);
 const H = landingView?.H ?? Number(size[2]);

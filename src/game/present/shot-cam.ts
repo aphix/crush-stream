@@ -68,9 +68,11 @@ export class ShotCam {
   /** The trackside search; its spot is `cine.eye`. */
   readonly cine = new CineCam();
   private readonly dutch = new DutchCam();
+  /** Square, between a phone held upright and a desktop's frame: what a dutch mount's rivals are counted in. */
   private readonly probe = new THREE.PerspectiveCamera();
   private readonly highEye = new THREE.Vector3();
   private sight: Sight | null = null;
+  private rivals: readonly DeformableCar[] = [];
   private kind: ShotKind = "chase";
   private mount = 0;
   /** The next eighth-turn the high search tries. */
@@ -84,10 +86,11 @@ export class ShotCam {
 
   /**
    * Begin the search for `shot`'s spot: a cine shot resets its trackside search, a high shot its eight turns. Chase
-   * shots are found at once. Continue with `step`.
+   * shots are found at once. `rivals`: the cars a dutch shot scores its mounts on. Continue with `step`.
    */
-  start(shot: Shot, sight: Sight): void {
+  start(shot: Shot, sight: Sight, rivals: readonly DeformableCar[]): void {
     this.sight = sight;
+    this.rivals = rivals;
     this.pull.reset();
     this.kind = shot.kind;
     this.found = shot.kind === "chase";
@@ -100,8 +103,9 @@ export class ShotCam {
    * Search on for `shot`'s spot, until about `budget` sight-line samples are spent (a candidate's sight lines go on over
    * the calls, one line at a time): a cine shot tries `CINE.tries` trackside spots, a high shot the eight eighth-turns
    * round the shot's centre (cx, cz), each clear and seeing the car (`camUsable`; its room costs `CLEAR_COST`); a dutch
-   * shot takes the first of the eight wheel mounts from its seeded one whose eye is out of every solid and looks down a
-   * clear 8 m. True when the search is over: `found`, or false for a shot with no usable spot, which poses as the
+   * shot takes, of the eight wheel mounts whose eye is out of every solid, looks down a clear 8 m and is not covered by its
+   * own car's open door or hanging panel (`DutchCam.clear`), the one seeing the most rivals, the first from its seeded one
+   * among ties. True when the search is over: `found`, or false for a shot with no usable spot, which poses as the
    * chase. No allocation.
    */
   step(shot: Shot, car: DeformableCar, cx: number, cz: number, budget: number): boolean {
@@ -138,19 +142,26 @@ export class ShotCam {
     }
     if (shot.kind === "dutch") {
       const p = this.probe;
-      for (let d = 0; d < DUTCH_MOUNTS && !this.found; d++) {
-        this.mount = (shot.mount + d) % DUTCH_MOUNTS;
-        this.dutch.place(p, car, this.mount);
+      let best = -1;
+      for (let d = 0; d < DUTCH_MOUNTS; d++) {
+        const j = (shot.mount + d) % DUTCH_MOUNTS;
+        this.dutch.place(p, car, j);
         p.getWorldDirection(_e);
-        this.found = !solid(sight, p.position.x, p.position.y, p.position.z, 0.1) && sightLine(sight, p.position.x, p.position.y, p.position.z, p.position.x + _e.x * 8, p.position.y + _e.y * 8, p.position.z + _e.z * 8) >= 0;
+        if (solid(sight, p.position.x, p.position.y, p.position.z, 0.1) || sightLine(sight, p.position.x, p.position.y, p.position.z, p.position.x + _e.x * 8, p.position.y + _e.y * 8, p.position.z + _e.z * 8) < 0 || !this.dutch.clear(car, j)) continue;
+        const n = this.dutch.seen(car, this.rivals, j, p);
+        if (n > best) {
+          best = n;
+          this.mount = j;
+        }
       }
+      this.found = best >= 0;
     }
     return true;
   }
 
-  /** The whole search now (the reel: the pick depends only on the poses and the seed, never on frame times). `sight`: the scene's solids, kept for the chase's per-frame push-out. */
-  frame(shot: Shot, car: DeformableCar, sight: Sight, cx: number, cz: number): void {
-    this.start(shot, sight);
+  /** The whole search now (the reel: the pick depends only on the poses and the seed, never on frame times). `sight`: the scene's solids, kept for the chase's per-frame push-out; `rivals` as `start`. */
+  frame(shot: Shot, car: DeformableCar, sight: Sight, cx: number, cz: number, rivals: readonly DeformableCar[]): void {
+    this.start(shot, sight, rivals);
     this.step(shot, car, cx, cz, Infinity);
   }
 
@@ -171,11 +182,13 @@ export class ShotCam {
   /**
    * Is the held shot's spot still usable (within `SHOT_RANGE`, clear, sees `car` now and `SHOT_AHEAD` s on)? "clear" or
    * "blocked", or "more" when `budget` samples ran out first: ask again (`sight` null) to go on with the lines, which
-   * keep the solids the ask began with. The chase and the wheel mount always are usable. No allocation.
+   * keep the solids the ask began with. The chase always is usable; the wheel mount while its own car's parts leave its lens
+   * clear (`DutchCam.clear`). No allocation.
    */
   usable(sight: Sight | null, car: DeformableCar, budget = Infinity): "clear" | "blocked" | "more" {
     const l = this.lines;
     if (!l.active) {
+      if (this.found && this.kind === "dutch") return this.dutch.clear(car, this.mount) ? "clear" : "blocked";
       const eye = !this.found ? null : this.kind === "cine" ? this.cine.eye : this.kind === "high" ? this.highEye : null;
       if (eye === null || sight === null) return "clear";
       const pos = car.group.position;

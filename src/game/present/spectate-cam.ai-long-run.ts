@@ -76,7 +76,7 @@ describe("given the Auto spectator camera (the shot director that cuts between s
         w.race.command({ type: "start" });
         const camera = new THREE.PerspectiveCamera(56, 16 / 9, 0.1, 900);
         const auto = new AutoCam();
-        const scene: AutoScene = { sight: () => w.race.courseSight()!, cut: (car) => car };
+        const scene: AutoScene = { sight: () => w.race.courseSight()!, rivals: () => w.live(), cut: (car) => car };
         const state = { acc: 0 };
         const kinds = new Set<string>();
         const bad: string[] = [];
