@@ -34,6 +34,7 @@ are in `docs/ARCHITECTURE.md` and enforced by `npm run check:boundaries`.
 | `npm run test:parity` | the WASM skin kernel against the JS skin (`deform/skin-kernel.parity.ts`), alone: every other test process skins with the kernel |
 | `node scripts/run-tests.mjs <files or globs> [--concurrency=2]` | the same runner on just the files named (one process per file); `--concurrency=` also works after `test:app` |
 | `npm run test:ai-long-run` | the full-sanity suite, `src/game/**/*.ai-long-run.ts`: long AI-driven fuzz runs (whole fields watched for stuck cars, false ejections, seed sweeps). Not in the gate: run it before a release or after a change to AI, contact or course code. Linted, typechecked and boundary-checked like tests |
+| `npm run test:all` | `test:app` and `test:ai-long-run` in one pass, longest files first across both, so neither waits on the other's last file (the landing gate; `--concurrency=` as above) |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run check:boundaries` | the structural rules, ratcheted against `scripts/boundary-caps.json` |
 | `npm run lint` | `oxlint` (`docs/TOOLCHAIN.md`) |
