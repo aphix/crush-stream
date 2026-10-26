@@ -175,6 +175,7 @@ export abstract class EngineScenes extends EngineMinigames {
     // Frame only on entering: re-parks and loop hops keep the user's view and the orbit running. The camera
     // starts 1.2 s of orbit short of the front-right ram so the first synced shot comes from its side.
     if (next === "pistons") this.view.frameReset(true, this.live(), pistonBearing(2) - PISTON_ORBIT_RATE * 1.2);
+    if (next === "doors") this.view.frameReset(true, this.live());
     if (next === "stack") this.frameStack();
     if (next === "lab") {
       this.stage.look(LAB_LIGHT);
@@ -691,8 +692,8 @@ export abstract class EngineScenes extends EngineMinigames {
     this.impactLight.intensity = 0;
 
     this.view.rim = this.derbyMode ? DERBY_RADIUS : Infinity;
-    // The pistons, the stack, the Lab, the garage and the showcase frame on entering only (`applyScene`): their resets keep the user's view.
-    if (!this.showPistons && !this.showStack && !this.showLab && !this.showGarage && !this.showShowcase) this.view.frameReset(this.showCompactor || this.showDoors, this.live());
+    // The pistons, the doors, the stack, the Lab, the garage and the showcase frame on entering only (`applyScene`): their resets keep the user's view.
+    if (!this.showPistons && !this.showDoors && !this.showStack && !this.showLab && !this.showGarage && !this.showShowcase) this.view.frameReset(this.showCompactor, this.live());
     this.smokeUntil.fill(0);
     this.deadSmokeAcc.length = 0;
     this.vaporAt.length = 0;

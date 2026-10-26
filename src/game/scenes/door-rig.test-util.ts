@@ -88,6 +88,8 @@ export function fireRam(
     stillWhen?: (dt: number) => boolean;
     /** Called once the rig has set the car up for the shot and launched the ram, before the first step. */
     onFired?: (rig: DoorRig) => void;
+    /** Called after each 60 Hz step's rig step. */
+    onStep?: (rig: DoorRig) => void;
   },
 ): RamShot {
   const rig = new DoorRig();
@@ -102,6 +104,7 @@ export function fireRam(
     if (opts.tyres) tyresStep([car], dt);
     car.integrate(dt);
     rig.step(dt);
+    opts.onStep?.(rig);
     car.stepBreakage(dt);
     car.updateSkin();
     const readoutHeld = opts.stillWhen?.(dt) ?? false;

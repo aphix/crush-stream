@@ -1,0 +1,164 @@
+import { after, before, describe, it } from "node:test";
+import assert from "node:assert/strict";
+import "../kernel/rapier-node.test-util.ts";
+import { HudStore } from "../hud/hud-store.ts";
+import { setGround } from "../world/ground.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
+import type { DoorScenario, RamShot } from "../scenes/door-rig.ts";
+import { MIRROR_FOLD_MAX } from "../vehicle/car-core.ts";
+import { CrashEngine } from "./engine.ts";
+import { element, stubBrowser } from "./engine-headless.test-util.ts";
+
+const FRAME = 1 / FRAME_HZ;
+/** The least crush (mm) a tail shot must leave: a head that met the tail leaves tens of mm, one that went through leaves none. */
+const CRUSH_MIN_MM = 50;
+/** How far (share) a second click's crush may differ from the first's: the tail's deep crush rides the body's own settling, a few per cent apart between two parks. */
+const CRUSH_SHARE_TOL = 0.04;
+/** The most (mm) the head's furthest point may differ between two clicks: the body rides its springs a few mm differently after each re-park. */
+const REACH_TOL_MM = 10;
+/** The longest a shot may run (sim s): the ram's run and its settle hold end well inside it. */
+const SHOT_LIMIT_S = 90;
+/** The door's check-strap stop (deg). */
+const DOOR_STOP_DEG = 68;
+const R2D = 180 / Math.PI;
+const STYLES = ["sedan", "hatch", "suv", "muscle", "truck", "police", "monster"] as const;
+
+/** One lane fired through the Doors scene's button path (`fireDoorRam`): what came of the shot and how far the head got along the car. */
+type Fired = { shot: RamShot; furthest: number; wall: number; lidLatched: boolean; lidRad: number };
+
+/** The real engine in the Doors scene, one for the file (a second `CrashEngine` in the same process never resolves `ready`). */
+class DoorsBench {
+  engine!: CrashEngine;
+
+  async start(): Promise<void> {
+    stubBrowser();
+    this.engine = new CrashEngine(element(), new HudStore(), element());
+    Object.assign(this.engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
+    await this.engine.ready;
+    this.engine.fadeScenes = false;
+    // The pacer's wall clock would give a loaded box's late frames up as lost sim time: a clock 1 µs later at each read is never late.
+    let tick = 0;
+    Object.assign(this.engine.pace, { now: () => (tick += 0.001) });
+    this.engine["setScene"]("doors");
+  }
+
+  stop(): void {
+    this.engine.dispose();
+    setGround(null);
+  }
+
+  /** The scene with `id` as the player's car, parked and settled. */
+  park(id: string): void {
+    this.engine.setPlayerCar(id);
+    for (let i = 0; i < FRAME_HZ; i++) this.engine.advance(FRAME, { frameDt: FRAME });
+  }
+
+  fire(scenario: DoorScenario, kph: number, kg: number): Fired {
+    const engine = this.engine;
+    engine.setDoorConfig({ kph, kg, side: 1 });
+    engine.fireDoorRam(scenario);
+    let furthest = -Infinity;
+    for (let i = 0; i < SHOT_LIMIT_S * FRAME_HZ && engine["doorRig"].phase !== "idle"; i++) {
+      engine.advance(FRAME, { frameDt: FRAME });
+      furthest = Math.max(furthest, engine["doorRig"].face);
+    }
+    const car = engine["carA"];
+    const shot = engine["doorShot"];
+    assert.ok(shot, `${scenario} ${kph} km/h: the shot ended with no result`);
+    return { shot, furthest, wall: car.rearSeatBackZ(), lidLatched: car.lidHinge().latched, lidRad: car.lidAngle() };
+  }
+}
+
+const bench = new DoorsBench();
+before(() => bench.start());
+after(() => bench.stop());
+
+const HARD_SHOTS = [
+  { lane: "mirror", reacts: "the mirror is knocked off", kph: 12, kg: 300, expected: "mirrorR" },
+  { lane: "overOpen", reacts: "the door is driven off", kph: 15, kg: 300, expected: "doorR" },
+  { lane: "shut", reacts: "the door is slammed off", kph: 40, kg: 300, expected: "doorR" },
+  { lane: "panelPush", reacts: "the quarter panel is torn off", kph: 30, kg: 1500, expected: "quarterR" },
+  { lane: "panelPull", reacts: "the quarter panel is torn off", kph: 30, kg: 1500, expected: "quarterR" },
+  { lane: "lidTear", reacts: "the lid is torn off", kph: 56, kg: 5000, expected: "trunk" },
+] as const;
+
+const GENTLE_SHOTS = [
+  { lane: "mirror", reacts: "the mirror folds onto its stop and stays on", kph: 4, kg: 38.9 },
+  { lane: "overOpen", reacts: "the door is driven to its stop and stays on", kph: 5, kg: 120 },
+  { lane: "shut", reacts: "the door is shut and latched", kph: 4, kg: 300 },
+  { lane: "panelPush", reacts: "the quarter panel is dented and stays on", kph: 3, kg: 30 },
+  { lane: "panelPull", reacts: "the quarter panel is opened further and stays on", kph: 3, kg: 30 },
+] as const;
+
+const TAIL_SHOTS = [
+  { kph: 6, kg: 30 },
+  { kph: 12, kg: 300 },
+  { kph: 30, kg: 1500 },
+] as const;
+
+/** The reaction a gentle shot on `lane` must show, or "" when it shows it. */
+function gentleFailure(lane: DoorScenario, fired: Fired): string {
+  const { shot } = fired;
+  if (shot.detached.length > 0) return `parts off a gentle shot: [${shot.detached}]`;
+  if (lane === "mirror" && shot.mirrorFoldDeg <= MIRROR_FOLD_MAX * R2D - 1) return `mirror folded only ${shot.mirrorFoldDeg}°`;
+  if (lane === "overOpen" && Math.abs(shot.doorDeg - DOOR_STOP_DEG) >= 0.5) return `door at ${shot.doorDeg}°, not on its stop`;
+  if (lane === "shut" && !(shot.latched && shot.doorDeg < 0.01)) return `door ${shot.doorDeg}°, latched ${shot.latched}`;
+  if (lane === "panelPush" && !(shot.panelHinge > 0 && shot.panelHinge < 0.45)) return `panel hinge ${shot.panelHinge}, not dented back`;
+  if (lane === "panelPull" && !(shot.panelHinge > 0.45)) return `panel hinge ${shot.panelHinge}, not pulled out`;
+  return "";
+}
+
+describe("given the real engine in the Doors scene, every lane's button pressed on every car (docs/DOOR_RIG.md, Rig)", () => {
+  for (const id of STYLES) {
+    for (const c of HARD_SHOTS) {
+      it(`when ${c.lane} is fired on the ${id} at ${c.kph} km/h and ${c.kg} kg, then ${c.reacts}`, () => {
+        bench.park(id);
+        const fired = bench.fire(c.lane, c.kph, c.kg);
+        assert.ok(fired.shot.detached.includes(c.expected), `off [${fired.shot.detached}], wanted ${c.expected}`);
+      });
+    }
+
+    it(`when lidPop is fired on the ${id} at 30 km/h and 1500 kg, then the lid is sprung past its latch, still on the car`, () => {
+      bench.park(id);
+      const fired = bench.fire("lidPop", 30, 1500);
+      assert.ok(!fired.lidLatched && !fired.shot.detached.includes("trunk"), `lid latched ${fired.lidLatched}, off [${fired.shot.detached}]`);
+      assert.ok(fired.lidRad > 0.05, `the lid stands ${fired.lidRad} rad open`);
+    });
+
+    for (const g of GENTLE_SHOTS) {
+      it(`when ${g.lane} is fired on the ${id} at ${g.kph} km/h and ${g.kg} kg, then ${g.reacts}`, () => {
+        bench.park(id);
+        assert.equal(gentleFailure(g.lane, bench.fire(g.lane, g.kph, g.kg)), "");
+      });
+    }
+  }
+});
+
+describe("given the real engine in the Doors scene, a tail lane's button pressed twice in a row on every car", () => {
+  for (const id of STYLES) {
+    for (const tail of TAIL_SHOTS) {
+      for (const lane of ["lidPop", "lidTear"] as const) {
+        it(`when ${lane} is fired twice on the ${id} at ${tail.kph} km/h and ${tail.kg} kg, then the second shot crushes the tail as the first did and neither head passes the rear seat back`, () => {
+          bench.park(id);
+          const first = bench.fire(lane, tail.kph, tail.kg);
+          const second = bench.fire(lane, tail.kph, tail.kg);
+          assert.ok(first.furthest <= first.wall + 1e-6, `first head reached z ${first.furthest} past the seat back at ${first.wall}`);
+          assert.ok(second.furthest <= second.wall + 1e-6, `second head reached z ${second.furthest} past the seat back at ${second.wall}`);
+          assert.ok(first.shot.ramStopped && second.shot.ramStopped, `the tail did not stop the head (first ${first.shot.ramStopped}, second ${second.shot.ramStopped})`);
+          assert.ok(Math.abs(second.furthest - first.furthest) < REACH_TOL_MM / 1000, `furthest z ${second.furthest} against ${first.furthest}`);
+          assert.ok(Math.abs(second.shot.bodyVertexMm - first.shot.bodyVertexMm) < CRUSH_SHARE_TOL * first.shot.bodyVertexMm, `crush ${second.shot.bodyVertexMm} mm against ${first.shot.bodyVertexMm} mm`);
+          assert.equal(second.shot.detached.join(), first.shot.detached.join(), "parts off");
+          assert.ok(first.shot.bodyVertexMm > CRUSH_MIN_MM, `the tail was barely crushed (${first.shot.bodyVertexMm} mm): the head met little or nothing`);
+        });
+      }
+    }
+  }
+
+  it("when F is fired after G on the muscle, then the head stops at the rear seat back and springs the lid, as a single F does", () => {
+    bench.park("muscle");
+    bench.fire("lidTear", 12, 300);
+    const second = bench.fire("lidPop", 30, 1500);
+    assert.ok(second.shot.ramStopped && second.furthest <= second.wall + 1e-6, `F after G: furthest z ${second.furthest}, wall ${second.wall}`);
+    assert.ok(!second.lidLatched, "F after G left the lid latched");
+  });
+});
