@@ -8,6 +8,7 @@ import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { useTouchScheme } from "@/components/use-touch-scheme";
 import { useSpeedUnit } from "@/components/use-speed-unit";
 import { SurvivalReadout } from "@/components/survival-hud";
+import { PursuitStrip } from "@/components/race-status";
 import type { RaceHud, RaceView } from "@/game/match/types";
 import { schemeLayout } from "@/game/hud/touch-scheme";
 import { formatSpeed } from "@/game/hud/speed-units";
@@ -55,8 +56,8 @@ export function RaceReadouts({ race, corner }: { race: RaceHud; corner: boolean 
  * The phone's read-out band, top left (never the top right: the strip of buttons owns it): the whole group fades while the player drives (`calm:`).
  * The first row stays narrow in portrait (the strip owns the rest of that row) and under 42 % of the width on a phone on its side.
  */
-const PHONE_BAND =
-  "pointer-events-none absolute hud-left hud-top flex max-w-[10.5rem] flex-col items-start gap-0.5 font-display tabular-nums phone-landscape:max-w-[42vw] calm:opacity-35 hud-fade";
+const PHONE_BAND_AT = "pointer-events-none absolute hud-left hud-top";
+const PHONE_BAND = "flex max-w-[10.5rem] flex-col items-start gap-0.5 font-display tabular-nums phone-landscape:max-w-[42vw] calm:opacity-35 hud-fade";
 
 /** The band's thin line: small clocks that wrap rather than grow wide. */
 const PHONE_THIN_LINE = "hud-ink flex flex-wrap items-center gap-x-2 text-[11px] leading-4";
@@ -108,13 +109,17 @@ function Cluster({ race, view, corner }: { race: RaceHud; view: RaceView; corner
   if (touch) {
     return (
       <>
-        <div className={PHONE_BAND}>
-          {race.survival ? (
-            <SurvivalReadout race={race} survival={race.survival} phone />
-          ) : r ? (
-            <PhoneRaceLines race={race} racer={r} flash={flash} />
-          ) : null}
-        </div>
+        {race.survival ? (
+          // The pursuit strip hangs under the band, outside its `calm` fade: an event, and clear of the top strip's buttons and the road.
+          <div className={cn(PHONE_BAND_AT, "flex flex-col items-start gap-1")}>
+            <div className={PHONE_BAND}>
+              <SurvivalReadout race={race} survival={race.survival} phone />
+            </div>
+            {view.chase === null ? null : <PursuitStrip chase={view.chase} size="band" />}
+          </div>
+        ) : (
+          <div className={cn(PHONE_BAND_AT, PHONE_BAND)}>{r ? <PhoneRaceLines race={race} racer={r} flash={flash} /> : null}</div>
+        )}
         <Dial view={view} corner={false} spectated={race.spectating !== null} />
       </>
     );

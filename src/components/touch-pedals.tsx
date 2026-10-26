@@ -141,14 +141,17 @@ function BrakeAndBoost({ engine, bail, gasOn, onBrake, onArm }: Pick<HudProps, "
   );
 }
 
+/** Under 380 px the Disc's buttons drop to 48 px: the 128 px disc, both buttons and the dial's slot then fit 360 px side by side. */
+const DISC_BUTTON = cn(SIZE.button, "max-[380px]:size-12");
+
 /** The Disc's right thumb: Handbrake and Boost, held, beside the dial's slot. */
 function DiscButtons({ engine, bail }: Pick<HudProps, "engine"> & { bail: boolean }) {
   return (
     <>
-      <PadButton engine={engine} button={PAD_BUTTON.west} name="handbrake" label="Handbrake (hold)" caption="Hand" showCaption className={SIZE.button}>
+      <PadButton engine={engine} button={PAD_BUTTON.west} name="handbrake" label="Handbrake (hold)" caption="Hand" showCaption className={DISC_BUTTON}>
         <CircleParking />
       </PadButton>
-      <PadButton engine={engine} button={PAD_BUTTON.south} name="boost" label="Boost (hold)" caption="Boost" showCaption className={bail ? SIZE.bail : SIZE.button}>
+      <PadButton engine={engine} button={PAD_BUTTON.south} name="boost" label="Boost (hold)" caption="Boost" showCaption className={bail ? SIZE.bail : DISC_BUTTON}>
         <Zap />
       </PadButton>
     </>
