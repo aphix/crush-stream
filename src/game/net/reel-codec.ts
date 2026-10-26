@@ -509,9 +509,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A door or lid swinging home slower than `LATCH_CATCH_RATE` (0.2 rad/s) rests unlatched instead of latching: a sprung drop gate settling shut at 0.0001 rad/s latched again, and a door or lid that creeps to its frame does not.
  * A held reset rests the wreck's shape clusters on the dent it lays (`rebaseShapeRest`), where the reset's rebuilt rest pulled the dent back out in the contact window it opens (a sedan's bumpers 1.8 mm a frame).
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 162 or before no longer reads.
+ * 164: a derby car whose driver is thrown out takes no pedals, the player's and a peer's too: it coasts (`COAST`) and the rules count it a wreck (`carRuns`), as a race does; and a derby's harness (`DERBY_HARNESS`, 1.5) raises the bar for a hit that leaves the engine running, so the first hard ram no longer throws a driver (a hit that kills the engine throws at the normal bar). A clip of 163 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 163;
+const REPLAY_VERSION = 164;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

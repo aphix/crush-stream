@@ -82,6 +82,9 @@ export function idleDrive(): DriveInput {
   return { ..._zero };
 }
 
+/** A car whose driver was thrown out (`driverOut`) freewheels: no throttle, brake or steering and no engine braking (`DriveInput.neutral`), only the tyres and the road. */
+export const COAST: DriveInput = { ..._zero, neutral: true };
+
 /** No input: zero `out` in place and return it (an AI driver's scratch input before it decides). */
 export function clearDrive(out: DriveInput): DriveInput {
   out.throttle = 0;
@@ -579,9 +582,14 @@ export class FlipClock {
   }
 }
 
-/** What R may right in a derby, for the player and the AI alike: a flipped car (body up·world-up ≤ 0.5) that still runs, so it is no free heal. */
-export function mayRecoverFlipped(car: Pick<DeformableCar, "group" | "deform">): boolean {
-  return !(car.group.matrixWorld.elements[5]! > 0.5) && car.deform.drivetrainAlive;
+/** Alive for a race's or a derby's rules: a driver at the wheel and a running drivetrain. A thrown-out driver is a wreck like a dead engine. */
+export function carRuns(car: Pick<DeformableCar, "driverOut" | "deform">): boolean {
+  return car.driverOut === null && car.deform.drivetrainAlive;
+}
+
+/** What R may right in a derby, for the player and the AI alike: a flipped car (body up·world-up ≤ 0.5) that still runs (`carRuns`), so it is no free heal. */
+export function mayRecoverFlipped(car: Pick<DeformableCar, "group" | "deform" | "driverOut">): boolean {
+  return !(car.group.matrixWorld.elements[5]! > 0.5) && carRuns(car);
 }
 
 /** R for `car` (the player's or a derby AI's): back on its wheels where it stands, at rest and repaired, when `may` lets it. */

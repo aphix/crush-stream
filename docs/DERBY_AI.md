@@ -61,6 +61,14 @@ failed the rear-first rule and the J-turn share fell to 0.19.
   running cars wins, shown as "Time! / Winner on points". Last car standing shows "Last engine still
   running" (wreck) or "the rest counted out" (count-out). The board shows each car's count-out clock.
 - Counted-out cars take no input and read as dead to every driver.
+- A thrown-out driver (`EjectionWatch`) leaves a wreck, as in a race: his car takes no pedals, the player's, a peer's or
+  the AI's (`COAST`), and the rules count it out like a dead engine (`carRuns`). A derby's harness (`DERBY_HARNESS`
+  1.5, `vehicle/ejection.ts`; owner, 2026-10-26: real derby drivers are belted and harnessed, and a throw on the first
+  ram is no fun) raises the bar of a hit that leaves the engine running to 1.5 × the race's (a sedan: 16.0 -> 24.0 m/s
+  of its share of the closing); a hit that kills the engine throws at the race's bar. Headless 10-car heats with
+  breakage stepped (seeds 1-8, the `runField` order): 6 throws in 8 heats before and after, every one an engine kill
+  (6.6-16.3 m/s); no hit on a running car reached 0.9 × its `killSpeed` (0.79 with car 0 at full throttle), so the
+  harness only meets a player's ram above the AI's pace.
 
 ## Same rules as the player (R-recover and boost)
 

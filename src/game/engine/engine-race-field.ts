@@ -1,6 +1,6 @@
 import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import * as THREE from "three";
-import { idleDrive, type DriveInput, type DriverSeat } from "../vehicle/car-drive.ts";
+import { carRuns, idleDrive, type DriveInput, type DriverSeat } from "../vehicle/car-drive.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import { blankAiCar, type AiCar } from "../ai/derby-ai.ts";
@@ -277,8 +277,6 @@ export abstract class RaceField {
   protected readonly held: DriveInput[] = Array.from({ length: MAX_CARS }, () => idleDrive());
   protected readonly cruise: DriveInput = idleDrive();
   protected readonly hold: DriveInput = { ...idleDrive(), brake: 1 };
-  /** A car whose driver was thrown out (`driverOut`) freewheels: no throttle, brake or steering and no engine braking (`DriveInput.neutral`), only the tyres and the road. */
-  protected readonly coast: DriveInput = { ...idleDrive(), neutral: true };
   protected readonly proj = blankProjection();
   /** The sandbox's scene as `enter` found it; `far` and `density` are its authored far plane and fog density (`ViewDistance`), not the Draw distance's. */
   protected saved: { background: THREE.Color | THREE.Texture | null; fog: THREE.Fog | THREE.FogExp2 | null; far: number; density: number } | null = null;
@@ -859,7 +857,7 @@ export abstract class RaceField {
    * Respawn race's reset timer or the No-reset race's elimination follow.
    */
   protected judge(i: number, car: DeformableCar, dt: number, racing: boolean): boolean {
-    if (car.driverOut !== null || !car.deform.drivetrainAlive) return false;
+    if (!carRuns(car)) return false;
     const upY = car.group.matrixWorld.elements[5]!;
     this.flipFor[i] = upY < FLIPPED_UP_Y ? this.flipFor[i]! + dt : 0;
     if (this.flipFor[i]! > FLIP_DEAD) return false;

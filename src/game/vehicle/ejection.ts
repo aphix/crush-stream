@@ -52,10 +52,14 @@ export function killSpeed(car: DeformableCar): number {
 /** The share of its `killSpeed` the closing must reach to throw a car whose drivetrain still runs (a packed block, a fresh hit on its nose or a door): drivers went out "a little too easy" when the engine did not die at 1, and nobody went out at 1.05 (owner, 2026-10-19: halfway back). */
 const ALIVE_CLOSING_SHARE = 1.025;
 
-/** The closing speed (m/s) at which a hit on `car` throws its driver: `EJECT_CLOSING` with a dead drivetrain, else its `killSpeed`, × `ALIVE_CLOSING_SHARE` outside a mini game. */
-export function ejectThreshold(car: DeformableCar, minigame: boolean): number {
+/** A derby's harness (owner, 2026-10-26: harnessed drivers, and no fun thrown on the first ram): a hit that leaves the engine running needs this × the alive bar; one that kills it (`killed`) throws at the normal bar. */
+const DERBY_HARNESS = 1.5;
+
+/** The closing speed (m/s) at which a hit on `car` throws its driver: `EJECT_CLOSING` with a dead drivetrain, else its `killSpeed`, × `ALIVE_CLOSING_SHARE` outside a mini game and × `DERBY_HARNESS` too when `harnessed`. */
+export function ejectThreshold(car: DeformableCar, minigame: boolean, harnessed: boolean): number {
   if (!car.deform.drivetrainAlive) return EJECT_CLOSING;
-  return minigame ? killSpeed(car) : ALIVE_CLOSING_SHARE * killSpeed(car);
+  if (minigame) return killSpeed(car);
+  return (harnessed ? DERBY_HARNESS : 1) * ALIVE_CLOSING_SHARE * killSpeed(car);
 }
 
 /**
@@ -367,7 +371,7 @@ export class EjectionWatch {
     if (Math.abs(ix) > Math.abs(iz)) exit = ix > 0 ? "doorL" : "doorR";
     else if (iz < 0) exit = "windshield";
     else return;
-    if (this.peakClosing(cars, i, killed) < ejectThreshold(car, this.minigame)) return;
+    if (this.peakClosing(cars, i, killed) < ejectThreshold(car, this.minigame, this.ctx === "derby" && !killed)) return;
     car.driverOut = exit;
     this.atHit(car, i);
     this.pending.push(launch(car, i, exit, _pre, _spin));

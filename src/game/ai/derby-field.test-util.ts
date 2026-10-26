@@ -6,7 +6,8 @@ import { applyAiDrive } from "./input-fade.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { massCentroid } from "../vehicle/test-support.ts";
-import type { DriveInput } from "../vehicle/car-drive.ts";
+import { applyDrive, carRuns, COAST, type DriveInput } from "../vehicle/car-drive.ts";
+import { EjectionWatch } from "../vehicle/ejection.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { settleStep, stepWorld } from "../engine/world-step.ts";
 import { armKill, assignClass, carClass, HANDLING } from "../vehicle/vehicle-classes.ts";
@@ -25,6 +26,8 @@ export type Field = {
   zips: string[];
   /** Largest zip, in metres (0 when none). */
   zipMax: number;
+  /** Each driver thrown out (`EjectionWatch`): match time and car. His car coasts from then on and is a wreck to the rules (`carRuns`). */
+  thrown: { t: number; car: number }[];
 };
 
 
@@ -36,7 +39,7 @@ export type FieldWatch = {
 };
 
 /**
- * A derby of `n` AI cars through the engine's stack (`stepWorld` then `settleStep` each slice, with the derby's hit credit and arena,
+ * A derby of `n` AI cars through the engine's stack (`stepWorld` then `settleStep` each slice, with the derby's hit credit, arena and ejection watch,
  * cars dressed as `dressCar` does at the game's defaults), at the default slider, to the end of the heat or to match second `until`.
  * Spins: turn rate about the vertical (`verticalTurn`) > `SPIN_RATE_BAR` for > 0.2 s in the first 2 min, split by a contact in the 0.5 s before it was counted: a car, or a prop or wall of the arena (a crash's spin, not the AI's own driving).
  * Zips: a live mass centroid moving more than 3·v·h + 5 cm in a step.
@@ -69,6 +72,9 @@ function runFieldHeat(n: number, seed: number, on: FieldWatch | undefined, until
       struck[car] = t;
     },
   });
+  const ejections = new EjectionWatch();
+  ejections.ctx = "derby";
+  w.ejection = ejections;
   placeDerby(cars, seed);
   for (const c of cars) {
     c.deform.squash = INITIAL_HUD.squash;
@@ -86,6 +92,7 @@ function runFieldHeat(n: number, seed: number, on: FieldWatch | undefined, until
     zips: [],
     zipMax: 0,
     contactPeak: { rate: 0, note: "none" },
+    thrown: [],
   };
   /** Per car: its orientation one step ago, and the turn about the vertical it has made since the start (rad, unwrapped). */
   const lastTurn = cars.map((c) => c.group.quaternion.clone());
@@ -106,8 +113,12 @@ function runFieldHeat(n: number, seed: number, on: FieldWatch | undefined, until
     const speed0 = cars.map((c) => Math.hypot(c.velocity.x, c.velocity.z));
     const shove = new Array<number>(n).fill(0);
     const snaps = match.snapshots(n);
-    for (const [i, c] of cars.entries()) snapshotAiCar(snaps[i]!, i, c, c.deform.drivetrainAlive);
+    for (const [i, c] of cars.entries()) snapshotAiCar(snaps[i]!, i, c, carRuns(c));
     for (const [i, c] of cars.entries()) {
+      if (c.driverOut !== null) {
+        applyDrive(c, COAST, h);
+        continue;
+      }
       const input = match.think(snaps[i]!, snaps, h);
       on?.drive?.(i, t, input);
       applyAiDrive(c, input, h);
@@ -127,13 +138,14 @@ function runFieldHeat(n: number, seed: number, on: FieldWatch | undefined, until
       match.noteHit(a, b, aInto, bInto, pair.impulse);
     };
     stepWorld(w, h);
+    for (const e of ejections.take()) out.thrown.push({ t: +t.toFixed(2), car: e.car });
     // No bleed: the engine's derby never starts the crash clock.
     settleStep(cars, h, false);
     state = match.step(
       h,
-      cars.map((c, i) => ({ id: i, name: `c${i}`, alive: c.deform.drivetrainAlive, x: c.group.position.x, z: c.group.position.z })),
+      cars.map((c, i) => ({ id: i, name: `c${i}`, alive: carRuns(c), x: c.group.position.x, z: c.group.position.z })),
     );
-    const running = (i: number) => cars[i]!.deform.drivetrainAlive && !match.board[i]!.out;
+    const running = (i: number) => carRuns(cars[i]!) && !match.board[i]!.out;
     on?.step?.(cars, t, h, running);
     for (const [i, c] of cars.entries()) {
       if (alive[i] && !c.deform.drivetrainAlive) out.deaths.push(+t.toFixed(1));

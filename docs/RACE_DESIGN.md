@@ -113,8 +113,8 @@ and demands no `missed`, no `wrongWay` and the laps done.
 - No-reset: a death is final (`out`); resets are refused. The player gets the dead menu.
 - **Driver thrown out** (`DeformableCar.driverOut`, set by `EjectionWatch`, `vehicle/ejection.ts`, once per fixed step: a
   disabling or realistic-end-kill hit, head-on or from the side, closing ≥ 6 m/s, begun within the last 0.35 s). The car
-  freewheels (`RaceField.coast`: no thrust and no lift-off braking, only rolling resistance and air drag) whoever's it is.
-  It is dead for the rules: the Respawn race's reset puts the driver back, the No-reset race eliminates it. The HUD shows
+  freewheels (`COAST`, `vehicle/car-drive.ts`: no thrust and no lift-off braking, only rolling resistance and air drag) whoever's it is.
+  It is dead for the rules (`carRuns`, the derby's too): the Respawn race's reset puts the driver back, the No-reset race eliminates it. The HUD shows
   DRIVER OUT. The flag rides netplay snapshots and the dummy rides `MSG.eject`; highlight clips record each ejection
   (`ClipEjection`, `EJECT_POINTS`).
 

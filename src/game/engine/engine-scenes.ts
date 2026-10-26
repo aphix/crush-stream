@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
-import { BOOST } from "../vehicle/car-drive.ts";
+import { BOOST, carRuns } from "../vehicle/car-drive.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
 import { PISTON_ORBIT_RATE, pistonBearing } from "../present/engine-pistons.ts";
 import { carFellOffRim, edgeAction, fleetEmptied, layoutFleet, layoutDerby, MAX_CARS, respawnSlot } from "../scenes/fleet.ts";
@@ -817,7 +817,7 @@ export abstract class EngineScenes extends EngineMinigames {
       const c = cars[i]!;
       const f = flags[i]!;
       f.name = c.paint.name;
-      f.alive = c.deform.drivetrainAlive;
+      f.alive = carRuns(c);
       f.x = c.group.position.x;
       f.z = c.group.position.z;
     }

@@ -40,7 +40,7 @@ export function classCar(cls: VehicleClassId): DeformableCar {
 /** The closing speed (m/s) at which a hit on a running car of class `cls` throws its driver outside a mini game (`ejectThreshold`). */
 export function ejectBar(cls: VehicleClassId): number {
   const car = classCar(cls);
-  const bar = ejectThreshold(car, false);
+  const bar = ejectThreshold(car, false, false);
   car.dispose();
   return bar;
 }

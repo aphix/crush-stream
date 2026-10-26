@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
+import { applyDrive, COAST, type DriveInput } from "../vehicle/car-drive.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { ContactHit } from "../scenes/engine-props.ts";
 import { propContact } from "../contact/prop-contact.ts";
@@ -594,7 +594,7 @@ export class RaceDirector extends RaceHudLayer {
       for (let i = 0; i < cars.length; i++) {
         const car = cars[i]!;
         const own = i === this.self && this.host.seat.mode === "drive" && this.host.seat.carIndex === i;
-        const input = car.driverOut !== null ? this.coast : own ? this.host.seat.input(car, dt) : this.seats.has(i) ? this.remote[i]! : this.hold;
+        const input = car.driverOut !== null ? COAST : own ? this.host.seat.input(car, dt) : this.seats.has(i) ? this.remote[i]! : this.hold;
         applyDrive(car, input, dt);
       }
       return;
@@ -620,17 +620,17 @@ export class RaceDirector extends RaceHudLayer {
       const car = cars[i]!;
       car.stored = this.dormant[i] === 1;
       if (i >= racers) {
-        // A thrown-out driver is nobody's input: the car coasts (`coast`), police and traffic units too.
+        // A thrown-out driver is nobody's input: the car coasts (`COAST`), police and traffic units too.
         const unit = car.driverOut !== null || this.dormant[i] ? null : i >= this.policeFrom ? police : traffic;
         if (unit) applyAiDrive(car, unit.think(snaps[i]!, snaps, dt), dt);
-        else applyDrive(car, car.driverOut !== null ? this.coast : this.hold, dt);
+        else applyDrive(car, car.driverOut !== null ? COAST : this.hold, dt);
         continue;
       }
       const rec = s.cars[this.rowOf[i]!]!;
-      // No driver, no pedals: not the player's seat, a peer's input or the AI (`coast`); the rules reset or retire the car (`judge`). A player on foot stands on the brakes (`hold`).
+      // No driver, no pedals: not the player's seat, a peer's input or the AI (`COAST`); the rules reset or retire the car (`judge`). A player on foot stands on the brakes (`hold`).
       let input: DriveInput = this.hold;
       let ai = false;
-      if (car.driverOut !== null) input = this.coast;
+      if (car.driverOut !== null) input = COAST;
       else if (this.host.afoot(i)) input = this.hold;
       else if (racing && rec.status === "racing") {
         const kind = this.entrants[i]!.kind;

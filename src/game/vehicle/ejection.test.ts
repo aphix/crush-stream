@@ -273,17 +273,18 @@ describe("given a fleet sedan hit on its nose (its engine block packed past the 
   const STRUCK_Z = 3;
   const SHARE = 0.5;
 
-  /** A fleet sedan driving at `mps` into a square hit on its nose from a parked fleet sedan; `packed`: its block past the realistic kill, else short of it; `dies`: its drivetrain stops with it, else it runs on; `minigame`: a mini game's watch. */
-  function noseHit(mps: number, packed: boolean, dies = false, minigame = false): Ejection[] {
+  /** A fleet sedan driving at `mps` into a square hit on its nose from a parked fleet sedan; `packed`: its block past the realistic kill (the context's), else short of it; `dies`: its drivetrain stops with it, else it runs on; `minigame`: a mini game's watch; `ctx`: the watch's kill context. */
+  function noseHit(mps: number, packed: boolean, dies = false, minigame = false, ctx: "derby" | "default" = "default"): Ejection[] {
     const car = fleetCar();
     const struck = fleetCar();
     launch(car, 0, 0, 0, 0, mps);
     launch(struck, STRUCK_X, STRUCK_Z, 0, 0, 0);
     const w = makeWorld([car, struck], false, false, FREEWHEEL);
     w.world.ejection!.minigame = minigame;
+    w.world.ejection!.ctx = ctx;
     for (let f = 0; f < 2; f++) tickWorld(w);
     car.applyImpact(new THREE.Vector3(0, 0.5, 2), new THREE.Vector3(0, 0, -1), 7, 3.5);
-    const kill = killTravel(killClass(car), 1, "default");
+    const kill = killTravel(killClass(car), 1, ctx);
     car.deform.engineTravel = packed ? kill + PACKED_OVER : SHORT_OF_KILL * kill;
     if (dies) car.deform.drivetrainAlive = false;
     for (let f = 0; f < 3; f++) tickWorld(w);
@@ -293,10 +294,11 @@ describe("given a fleet sedan hit on its nose (its engine block packed past the 
   }
 
   /** A fleet sedan sliding sideways into the barrier at `mps`: the throws. */
-  function slammed(mps: number): Ejection[] {
+  function slammed(mps: number, ctx: "derby" | "default" = "default"): Ejection[] {
     const car = fleetCar();
     launch(car, -BARRIER_HALF.x - 2.4, 0, 0, mps, 0);
     const w = makeWorld([car], true, false, FREEWHEEL);
+    w.world.ejection!.ctx = ctx;
     for (let f = 0; f < 150; f++) tickWorld(w);
     car.dispose();
     return w.ejections;
@@ -307,19 +309,19 @@ describe("given a fleet sedan hit on its nose (its engine block packed past the 
   });
 
   it("when its block is packed past the kill just under, and then just over, the alive threshold, then the driver stays in and is thrown", () => {
-    const threshold = ejectThreshold(fleetCar(), false);
+    const threshold = ejectThreshold(fleetCar(), false, false);
     assert.deepEqual(noseHit(threshold - NEAR, true), [], "just under");
     assert.deepEqual(noseHit(threshold + NEAR, true).map((e) => e.exit), ["windshield"], "just over");
   });
 
   it("when its block stops short of the kill and its drivetrain runs, its share of the closing just under and then just over the alive threshold, then the driver stays in and is thrown out of the windshield", () => {
-    const threshold = ejectThreshold(fleetCar(), false);
+    const threshold = ejectThreshold(fleetCar(), false, false);
     assert.deepEqual(noseHit((threshold - NEAR) / SHARE, false), [], "just under");
     assert.deepEqual(noseHit((threshold + NEAR) / SHARE, false).map((e) => e.exit), ["windshield"], "just over");
   });
 
   it("when its block is packed past the kill between the mini games' bar and the alive threshold, then a mini game throws the driver and anywhere else he stays in", () => {
-    const between = (ejectThreshold(fleetCar(), true) + ejectThreshold(fleetCar(), false)) / 2;
+    const between = (ejectThreshold(fleetCar(), true, false) + ejectThreshold(fleetCar(), false, false)) / 2;
     assert.deepEqual(noseHit(between, true, false, true).map((e) => e.exit), ["windshield"], "mini game");
     assert.deepEqual(noseHit(between, true), [], "anywhere else");
   });
@@ -329,13 +331,34 @@ describe("given a fleet sedan hit on its nose (its engine block packed past the 
   });
 
   it("when it slides sideways into the barrier just under, and then just over, the alive threshold, then the driver stays in and goes out of the door", () => {
-    const threshold = ejectThreshold(fleetCar(), false);
+    const threshold = ejectThreshold(fleetCar(), false, false);
     assert.deepEqual(slammed(threshold - NEAR), [], "just under");
     assert.deepEqual(slammed(threshold + NEAR).map((e) => e.exit), ["doorR"], "just over");
   });
 
   it("when it slides its door into the barrier at 7.5 m/s, as the replay's police car slid into a car, then the driver stays in", () => {
     assert.deepEqual(slammed(7.5), []);
+  });
+
+  /** A derby ram between the alive threshold and the derby's harnessed one (m/s): it throws a running car's driver in a race, not in a derby. */
+  const derbyRam = (): number => (ejectThreshold(fleetCar(), false, false) + ejectThreshold(fleetCar(), false, true)) / 2;
+
+  it("when it slides its door into the barrier at a derby ram's speed with the engine running on, then a race throws the driver out of the door and a derby's harness keeps him in", () => {
+    assert.deepEqual(slammed(derbyRam()).map((e) => e.exit), ["doorR"], "race");
+    assert.deepEqual(slammed(derbyRam(), "derby"), [], "derby");
+  });
+
+  it("when it slides its door into the barrier in a derby just under, and then just over, the harnessed threshold, then the driver stays in and a severe slam still throws him out of the door", () => {
+    const harnessed = ejectThreshold(fleetCar(), false, true);
+    assert.deepEqual(slammed(harnessed - NEAR, "derby"), [], "just under");
+    assert.deepEqual(slammed(harnessed + NEAR, "derby").map((e) => e.exit), ["doorR"], "just over");
+  });
+
+  it("when a derby nose hit takes its share of a derby ram, then a hit that kills the engine (block packed past the derby's kill, drivetrain dead) throws the driver and one that leaves it running keeps him in, where a race throws him", () => {
+    const mps = derbyRam() / SHARE;
+    assert.deepEqual(noseHit(mps, true, true, false, "derby").map((e) => e.exit), ["windshield"], "engine killed");
+    assert.deepEqual(noseHit(mps, false, false, false, "derby"), [], "engine runs on");
+    assert.deepEqual(noseHit(mps, false).map((e) => e.exit), ["windshield"], "race");
   });
 });
 

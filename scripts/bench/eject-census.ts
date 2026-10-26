@@ -42,7 +42,7 @@ const judge = watch.judge;
 watch.judge = function (this: EjectionWatch, cars: readonly DeformableCar[], i: number, killed: boolean): void {
   const car = cars[i]!;
   const cause: Cause = !killed ? "slam" : car.deform.drivetrainAlive ? "packed" : "dead";
-  const threshold = ejectThreshold(car, this.minigame);
+  const threshold = ejectThreshold(car, this.minigame, this.ctx === "derby" && !killed);
   lastClosing = NaN;
   judge.call(this, cars, i, killed);
   if (Number.isNaN(lastClosing)) return;

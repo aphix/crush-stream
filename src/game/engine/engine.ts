@@ -50,7 +50,7 @@ import { Corkscrew } from "../scenes/corkscrew.ts";
 import { TraceRecorder } from "./engine-trace.ts";
 import { snapshotAiCar } from "../match/derby.ts";
 import { LampLights, lampPoolFor } from "../vehicle/lamp-lights.ts";
-import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
+import { applyDrive, carRuns, COAST, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { applyAiDrive } from "../ai/input-fade.ts";
 import { makeDerbyArena, WinnerSpot } from "../scenes/derby-arena.ts";
 import { NetPlay } from "../net/net-play.ts";
@@ -124,7 +124,7 @@ export class CrashEngine extends EngineGarage {
     },
     playerName: () => this.race.playerName,
     hostFit: () => this.autoFx.canHost(),
-    remoteDrivable: (i) => !this.derbyMode || (this.derbySeated.has(i) && !this.derby.held(i)),
+    remoteDrivable: (i) => !this.derbyMode || (this.derbySeated.has(i) && !this.derby.held(i) && this.cars[i]?.driverOut === null),
     derbyPhase: () => (!this.derbyMode ? null : !this.derby.active ? "lobby" : this.derby.winnerId == null ? "running" : "over"),
     derbyState: () => this.derbyNetState(),
     applyDerby: (s, self) => this.applyNetDerby(s, self),
@@ -822,7 +822,8 @@ export class CrashEngine extends EngineGarage {
     const driven = this.seat.mode === "drive" && !this.race.active ? this.seat.carIndex : -1;
     if (driven >= 0 && driven < cars.length) {
       const car = cars[driven]!;
-      if (car.deform.drivetrainAlive && !(this.derbyMode && this.derby.held(driven))) applyDrive(car, this.seat.input(car, dt), dt);
+      const seatHeld = this.derbyMode && (this.derby.held(driven) || car.driverOut !== null);
+      if (car.deform.drivetrainAlive && !seatHeld) applyDrive(car, this.seat.input(car, dt), dt);
       if (this.seat.selfRight(car.group.matrixWorld.elements[5]!, car.velocity.length(), dt)) this.recoverDriven();
     }
     // The player on foot has left his car with its brakes on (the race director holds it in a race; the other scenes here).
@@ -833,12 +834,16 @@ export class CrashEngine extends EngineGarage {
       const snaps = this.derby.snapshots(cars.length);
       for (let i = 0; i < cars.length; i++) {
         const c = cars[i]!;
-        snapshotAiCar(snaps[i]!, i, c, c.deform.drivetrainAlive);
+        snapshotAiCar(snaps[i]!, i, c, carRuns(c));
       }
       for (let i = 0; i < cars.length; i++) {
-        if (i === driven || i === away || this.derbySeated.has(i)) continue;
-        applyAiDrive(cars[i]!, this.derby.think(snaps[i]!, snaps, dt), dt);
-        if (this.derby.recoverDue(i, cars[i]!, dt)) this.recoverCar(cars[i]!);
+        const car = cars[i]!;
+        // A thrown-out driver is nobody's input, the player's and a peer's car too: it coasts, a wreck to the rules (`carRuns`).
+        if (car.driverOut !== null) applyDrive(car, COAST, dt);
+        else if (i !== driven && i !== away && !this.derbySeated.has(i)) {
+          applyAiDrive(car, this.derby.think(snaps[i]!, snaps, dt), dt);
+          if (this.derby.recoverDue(i, car, dt)) this.recoverCar(car);
+        }
       }
     }
     // A crashed car nobody drives still rolls on its drive's law (car-air `driven` skips tyre friction for it): the race, the derby
