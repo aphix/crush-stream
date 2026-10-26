@@ -29,14 +29,21 @@ const MATRIX_FLOATS = 16;
 /** Each attribute's one reused update range: `addUpdateRange` builds a new one per call, so a running pool would allocate every frame. */
 const UPLOAD_RANGES = new WeakMap<THREE.BufferAttribute, { start: number; count: number }>();
 
-/** Upload only `floats` floats of `attr` from float `start` this frame. */
+/**
+ * Upload `floats` floats of `attr` from float `start` at its next draw. A range still waiting (the pool was not drawn since: three clears
+ * a range once it sends it) grows to cover both, so a frame that is never drawn loses none of its writes.
+ */
 export function uploadRange(attr: THREE.BufferAttribute, start: number, floats: number): void {
   let range = UPLOAD_RANGES.get(attr);
   if (!range) UPLOAD_RANGES.set(attr, (range = { start: 0, count: 0 }));
-  range.start = start;
-  range.count = floats;
-  if (attr.updateRanges[0] !== range) {
+  if (attr.updateRanges.length === 1 && attr.updateRanges[0] === range) {
+    const end = Math.max(range.start + range.count, start + floats);
+    range.start = Math.min(range.start, start);
+    range.count = end - range.start;
+  } else {
     attr.clearUpdateRanges();
+    range.start = start;
+    range.count = floats;
     attr.updateRanges[0] = range;
   }
   attr.needsUpdate = true;
