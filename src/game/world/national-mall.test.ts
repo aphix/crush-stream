@@ -258,6 +258,13 @@ describe("given the National Mall street circuit (x east, z south, origin 3rd St
     assert.ok(baked.paintCellsVisited <= boxes, `${baked.paintCellsVisited} cells visited over ${boxes.toFixed(0)} cells of polygon bounds`);
   });
 
+  it("when its ground is registered with the surface store, then the field is one grid patch whose cells are each bounded once, beside one patch per bridge deck", () => {
+    const decks = track.path.deck.slice(0, track.path.count).reduce((n, d) => n + d, 0);
+    const gridCells = (ground.nx - 1) * (ground.nz - 1);
+    assert.equal(baked.patches, 1 + decks, `${baked.patches} patches registered for ${decks} deck segments`);
+    assert.equal(baked.cellsBounded, gridCells, `${baked.cellsBounded} cells bounded over ${gridCells} grid cells`);
+  });
+
   it("when the Washington Monument's grounds are walked (owner, 2026-10-14: like the map of them), then it stands on a knoll in a paved circle ringed by 50 flags, gravel walks loop round it and cross the lawn, and the lawn round them is open", () => {
     const obelisk = placed.find((p) => p.prefab === "obelisk")!;
     const flags = placed.filter((p) => p.prefab === "flagpole");
