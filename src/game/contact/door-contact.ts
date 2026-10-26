@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { DOOR_OPEN_MAX, HINGE_TEAR_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX } from "../vehicle/car-core.ts";
 import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
+import type { LidProfile } from "../vehicle/car-parts.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";
 import { MIRROR_REACH } from "../vehicle/part-geometry.ts";
 import { PANEL_BEND_NM, PANEL_FRAGILE_J, PANEL_FRAGILE_T, PANEL_PULL_J, PANEL_SLAM_J } from "../vehicle/car-wear.ts";
@@ -203,6 +204,36 @@ export function hitPanel(car: DeformableCar, side: -1 | 1, lane: Lane): void {
   const moved = Math.abs(p.hingeT - t) * r.peel;
   // A panel that cannot go further (full hinge) holds the striker.
   lane.u = moved > 0 ? Math.sqrt(Math.max(0, lane.u * lane.u - (2 * PANEL_BEND_NM * moved) / lane.kg)) : 0;
+}
+
+const _lid: LidProfile = { hingeY: 0, hingeZ: 0, edgeY: 0, edgeZ: 0, halfWidth: 0 };
+
+/**
+ * The trunk lid hanging on its stop (side view: a line from its hinge to its free edge, `halfWidth` either side of the car's axis) against a
+ * rear→front face centred `lx` with half width `ex`: the rearmost point of the line within the face's heights is met first, and the strap
+ * (a drop gate's cables) takes the striker's closing energy, as a door pushed past its stop does (`hitDoor`): past the hinge's tear energy
+ * the lid leaves, and the striker goes on with what it still carries. A shut or only sprung lid is no collider here: it lies on the body, which the body contact meets.
+ */
+export function hitLid(car: DeformableCar, lane: Lane, lx: number, ex: number): void {
+  const hinge = car.lidHinge();
+  if (lane.dir < 0 || !car.lidHangsOnStop()) return;
+  const lid = car.lidProfile(_lid);
+  if (Math.abs(lx) - ex >= lid.halfWidth) return;
+  const rise = lid.edgeY - lid.hingeY;
+  const at = (y: number): number => (Math.abs(rise) < 1e-6 ? 0 : (y - lid.hingeY) / rise);
+  const t0 = Math.min(Math.max(Math.min(at(lane.bottom), at(lane.top)), 0), 1);
+  const t1 = Math.min(Math.max(Math.max(at(lane.bottom), at(lane.top)), 0), 1);
+  if (Math.abs(rise) >= 1e-6 && t0 === t1) return;
+  if (Math.abs(rise) < 1e-6 && (lid.hingeY < lane.bottom || lid.hingeY > lane.top)) return;
+  const rearmost = Math.min(lid.hingeZ + t0 * (lid.edgeZ - lid.hingeZ), lid.hingeZ + t1 * (lid.edgeZ - lid.hingeZ));
+  const depth = lane.face - rearmost;
+  if (depth <= 0 || depth > lane.length) return;
+  partHit.touched = true;
+  const closing = lane.u;
+  // What the striker still carries after paying for the tear.
+  const left = Math.sqrt(Math.max(0, lane.u * lane.u - (2 * Math.max(0, hinge.spec.tearJ - hinge.load)) / lane.kg));
+  if (car.loadLidStop(0.5 * lane.kg * closing * closing, _push.set(0, 0.8, Math.max(left, 1)))) lane.u = left;
+  else lane.u = 0;
 }
 
 /** Plan samples along a door, hinge to trailing edge, a fixed solid is asked about: dense enough that no thin solid (a lamp post) fits between two. */
