@@ -191,7 +191,7 @@ crash it recorded. What it takes, each found by the replay straying from the liv
   every step of a crush window, a load crush's step, and outside a window any step that finds a body mass 2 mm off its last bake) and from its parts' state
   (`hingePose`), never from what was drawn: drawing writes the mesh from the last bake and solves nothing (`engine/cage-draw-independence.test.ts`:
   a race with and without an extra `updateSkin()` on every car at every step is bit-identical). The fit is skipped while no mass or hub moved
-  `REFIT_EPSILON` (1 cm) and no panel flag or pose the cage reads changed (a torn-off or shattered pane's pose is not read), so what a car stands on depends on that fit's history: a keyframe carries the cage's last-fit inputs as float32
+  `REFIT_EPSILON` (1 cm) and no panel flag changed or panel tip moved `REFIT_EPSILON` (the pose of a torn-off or shattered pane is not read), so what a car stands on depends on that fit's history: a keyframe carries the cage's last-fit inputs as float32
   (`CarCage.writeState`: 388 doubles, the fit reads exactly those floats), each cluster's skin fit (`skinRprev`, `skinRotQ`) and the
   cage and baked flags, through `DeformableCar.solverState`. A wreck's solver state is 2619 doubles (21 KB) per keyframe, 598 of them these.
 - **The course's memory** (9, 23). Each keyframe carries per car its wall contact history and road projection hint, and the
