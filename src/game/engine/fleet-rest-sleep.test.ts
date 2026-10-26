@@ -17,10 +17,14 @@ const LATE_BY = 3.0;
 /** At most this many of the eight seeds are late: before the skin read a kept dent once, the sill rule's tree had two (seed 6 at 3.31 s, seed 7 never), main before it one (seed 2 never). */
 const LATE_SEEDS = 2;
 
-/** Seeds on which the hatchback sleeps at 2.3-2.6 s and the pickup beside it, still tipping at about rest speed, wakes it by `stirNear` 0.1-0.3 s later: its rest began again, and it was still awake at 3.5 s. */
-const STIRRED_SEEDS = [6, 7];
-/** A stir that leaves the wreck at rest costs it none of its rest: it sleeps again as soon as the neighbour is under rest speed (the pickup's tip ends at about 2.9 s). */
-const SLEEPS_AGAIN_BY = 3.2;
+/**
+ * The seed on which the hatchback falls asleep while the pickup beside it is still tipping across rest speed (asleep 2.32 s; the pickup
+ * stands moving to 3.35 s): every `stirNear` the pickup sends reaches a sleeping hatchback at rest. A stir that leaves the wreck at rest
+ * costs it none of its rest, so it stays asleep through all of them; the rule restarting its rest on each stir woke it and slept it a
+ * second after the last, past the replay's end. (Seed 7 was here too: on 163 its hatchback's own settle ends after the pickup's, so it
+ * takes no stir asleep and tests nothing of this.)
+ */
+const STIRRED_SEED = 6;
 
 let engine: CrashEngine | undefined;
 
@@ -45,13 +49,10 @@ describe("given the owner's fleet capture replayed on a fresh engine over jitter
     assert.ok(late <= LATE_SEEDS, `${late} seeds slept after ${LATE_BY} s or never (${read})`);
   });
 
-  it(`when the pickup beside it tips slowly across rest speed after the hatchback has slept (seeds ${STIRRED_SEEDS.join(" and ")}), then the hatchback sleeps again by ${SLEEPS_AGAIN_BY} s`, async () => {
+  it(`when the pickup beside it tips slowly across rest speed after the hatchback has slept (seed ${STIRRED_SEED}), then the hatchback stays asleep through its stirs`, async () => {
     const fresh = (engine ??= await makeEngine());
-    const late: string[] = [];
-    for (const seed of STIRRED_SEEDS) {
-      const { asleepAt } = await replay(fresh, seed);
-      if (asleepAt < 0 || asleepAt > SLEEPS_AGAIN_BY) late.push(`${seed}: ${asleepAt < 0 ? "never" : asleepAt.toFixed(2)}`);
-    }
-    assert.equal(late.length, 0, `slept late or never (${late.join(", ")})`);
+    const { asleepAt, stirred } = await replay(fresh, STIRRED_SEED);
+    assert.ok(asleepAt >= 0, "the hatchback never slept for good");
+    assert.ok(asleepAt < stirred, `the hatchback slept for good at ${asleepAt.toFixed(3)} s, after the pickup's last stir at ${stirred.toFixed(3)} s: a stir cost it its rest`);
   });
 });
