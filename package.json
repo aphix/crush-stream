@@ -33,8 +33,7 @@
     "bake:env": "node scripts/bake-env.mjs",
     "build:kernel": "node scripts/build-skin-kernel.mjs",
     "build:motor": "node scripts/build-motor-worklet.mjs",
-    "lint": "oxlint",
-    "format": "prettier --write ."
+    "lint": "oxlint"
   },
   "dependencies": {
     "@dimforge/rapier3d-simd": "0.19.3",
@@ -69,7 +68,6 @@
     "oxlint": "1.86.0",
     "oxlint-plugin-eslint": "1.86.0",
     "playwright": "^1.62.0",
-    "prettier": "^3.4.0",
     "typescript": "^5.7.0",
     "vite": "^8.2.0"
   }
