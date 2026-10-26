@@ -2,6 +2,8 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 import { PerformanceObserver } from "node:perf_hooks";
+import { setFlagsFromString } from "node:v8";
+import { runInNewContext } from "node:vm";
 import * as THREE from "three";
 import { FRAME_HZ, GRAVITY, KPH_PER_MS } from "../kernel/constants.ts";
 import { FountainSystem, JET_FADE_S, JET_RATE, JET_SLOTS, JET_UP_MAX } from "../present/fountain-system.ts";
@@ -51,6 +53,11 @@ const drainLoop = (): Promise<void> => delay(DRAIN_MS);
 const run = (sys: { update(dt: number): void }, seconds: number): void => {
   for (let i = 0; i < Math.round(seconds / STEP); i++) sys.update(STEP);
 };
+/** A full collection on demand (`gc`, exposed for this call only), so garbage left by earlier rows is gone before a counted window. */
+function forceCollect(): void {
+  setFlagsFromString("--expose-gc");
+  (runInNewContext("gc") as () => void)();
+}
 
 describe("given a fountain jet", () => {
   it("when it is scheduled 1 s ahead, then nothing flies before then and sparks fly after", () => {
@@ -174,8 +181,9 @@ describe("given a fountain jet", () => {
     for (let k = 0; k < 8; k++) sys.jet(k * 4, 0, 0, 0, 1000, k < 2 ? LINE_POWER : 1);
     const watch = new PerformanceObserver(() => {});
     watch.observe({ entryTypes: ["gc"] });
-    // The earlier rows left garbage (each built a pool): a first stretch lets the collector take it, and only the second is counted.
+    // The earlier rows left garbage (each built a pool): a full collection now clears it, so none of it can land in the counted window.
     run(sys, 120);
+    forceCollect();
     await drainLoop();
     watch.takeRecords();
     run(sys, 600);
