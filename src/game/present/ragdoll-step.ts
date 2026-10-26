@@ -37,6 +37,10 @@ const PROP_STEP = 1 / PROP_STEP_HZ;
  * 23.0 at 1/480 throughout.
  */
 const PROP_FAST = 8;
+/** Rapier's contact spring frequency (Hz): its default, for props, boxes, purses and the walker. */
+const CONTACT_HZ = 30;
+/** The contact spring frequency while a thrown dummy is out (`thrownOut`). A joint chain pulled a landing arm down at 2-3 m/s against the 30 Hz contact: an arm of a 29 m/s range throw ended 6.4 cm in the ground (bar 5 cm); at 40 the deepest of 28 range throws is 3.6 cm. */
+const THROWN_CONTACT_HZ = 40;
 /** The skin's hits, the spin limit and the purses are judged at this rate (Hz) whatever `STEP` is: `HIT_DV` is a speed change per interval. */
 const WATCH_HZ = 120;
 const WATCH = 1 / WATCH_HZ;
@@ -59,6 +63,12 @@ export const GROUND_REACH = 0.45;
 
 /** The stepping layer: one frame's physics and draw (`stepWorld`), its sleep test, which cars need a proxy, and the skin and settling that run after each step. */
 export abstract class RagdollStepper extends RagdollPool {
+  /** A thrown dummy (live, not the player's walker) is out. */
+  private thrownOut(): boolean {
+    for (const d of this.dolls) if (d.live && !d.driven) return true;
+    return false;
+  }
+
   /** The frame's physics and its draw, here: what `update` does in this thread and the world's worker does for each posted frame. */
   stepWorld(dt: number, cars: readonly RagCar[], authority: boolean, sandbox: boolean, barrier: THREE.Object3D | null): void {
     this.authority = authority;
@@ -108,6 +118,7 @@ export abstract class RagdollStepper extends RagdollPool {
       world.timestep = step;
     }
     if (steps > 0) for (let s = 0; s < SLOTS; s++) this.walkers[s]!.control(steps * step);
+    if (steps > 0) world.integrationParameters.contact_natural_frequency = this.thrownOut() ? THROWN_CONTACT_HZ : CONTACT_HZ;
     for (let j = 1; j <= steps; j++) {
       this.proxies.move(Math.min(1, (j * step - lead) / dt));
       // One step this frame: the pose before it is the last frame's last (nothing moves a part between steps but a step).
