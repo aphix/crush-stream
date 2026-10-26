@@ -156,6 +156,8 @@ export class CarSurfaces extends Surface {
   private grew = new Float64Array(FACES);
   private react = new Float64Array(1);
   private touched = new Uint8Array(1);
+  /** Per car, 1 if the stepping car struck its top at a crash's closing speed this slice: met, but resting on nothing. */
+  private struck = new Uint8Array(1);
   /**
    * Per car, 6 numbers (velocity, spin): the weight the cars resting on its top bore on it at their contacts (`bear`), which its next
    * rigid step takes after its move and before its own contacts, so they hold it and bear it on in turn (`takeBorne`). Pushed into its
@@ -181,12 +183,14 @@ export class CarSurfaces extends Surface {
       this.grew = new Float64Array(n);
       this.react = new Float64Array(1 + m);
       this.touched = new Uint8Array(1 + m);
+      this.struck = new Uint8Array(1 + m);
     }
     this.left.fill(NaN);
     this.yielded.fill(0);
     this.grew.fill(0);
     this.react.fill(0);
     this.touched.fill(0);
+    this.struck.fill(0);
     this.nearOf = -1;
     this.near(car.slot, car.group.position.x, car.group.position.z);
   }
@@ -325,6 +329,11 @@ export class CarSurfaces extends Surface {
     this.touched[own] = 1;
   }
 
+  /** The stepping car has a point in car `own`'s top this slice, closing at a crash's speed (`WALL_CRUSH`): the pair's crush is the SAT's, but a clip that keeps one car keeps the other. */
+  strike(own: number): void {
+    this.struck[own] = 1;
+  }
+
   /** Contact penetration `pen` (m) at a point of slot `slot`, which `follow` of the face's depth reaches. */
   note(slot: number, pen: number, follow: number): void {
     this.grew[slot] = Math.max(this.grew[slot]!, pen / follow);
@@ -356,7 +365,7 @@ export class CarSurfaces extends Surface {
       d.skinLoaded();
     }
     // Every car the stepping car presses or touches this slice met it: a highlight clip that keeps one keeps the other (`World.partTouch`).
-    if (this.met) for (let i = 0; i < this.cars.length; i++) if (this.react[i] !== 0 || this.touched[i] !== 0) this.met(self.slot, i);
+    if (this.met) for (let i = 0; i < this.cars.length; i++) if (this.react[i] !== 0 || this.touched[i] !== 0 || this.struck[i] !== 0) this.met(self.slot, i);
     let top = 0;
     self.restsOn = null;
     for (let i = 0; i < this.cars.length; i++) {

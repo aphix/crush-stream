@@ -80,8 +80,8 @@ const SLOW_RUN_SHARE = 0.8;
 const SLOW_RUN_HEIGHT_MINIMUM = 50;
 /** With the posts and slats in the world a catch may cost the best class some height, never below the owner's accepted 150 m. */
 const FRAMED_BEST_HEIGHT_MINIMUM = 150;
-/** The mutation that shrinks the slow runs: upward times this must put an 80% run under the bar. */
-const UPWARD_CUT_FACTOR = 0.8;
+/** The mutation that shrinks the slow runs: upward times this must put an 80% run under the bar. 0.7: with the lip's push the least 80% run scores 96.5 m (the SUV's), and 0.8 left an 80% run over the bar of 50. */
+const UPWARD_CUT_FACTOR = 0.7;
 
 /** The five classes whose full-throttle speed at Ring Fling's lip is within 1% of one another (32.2 to 32.5 m/s); the muscle (35.6) and the monster (38.2) are the higher lines. */
 const STANDARD_CLASS_IDS: readonly string[] = ["sedan", "truck", "police", "hatch", "suv"];

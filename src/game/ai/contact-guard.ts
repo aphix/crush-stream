@@ -2,7 +2,8 @@ import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import type { DriveInput } from "../vehicle/car-drive.ts";
 import { DERBY_RULES, type AiCar } from "./derby-ai.ts";
 import { clamp } from "../kernel/scalar.ts";
-import { GUARD_BRAKE_IDX, GUARD_DT_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_STEER_NEED_IDX, GUARD_TURN_IDX } from "./constants.ts";
+import { GRIP_YAW_CAP } from "../vehicle/constants.ts";
+import { GUARD_BRAKE_IDX, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_STEER_NEED_IDX, GUARD_TURN_IDX } from "./constants.ts";
 
 /** Seconds ahead the guard looks for a contact, in steps of `STEP`. */
 const HORIZON = 1.5;
@@ -34,6 +35,16 @@ const SIDE_BAND = LAT / 2;
  * The look-ahead's sample times: 0 to `HORIZON` in steps of `STEP`, accumulated as the first version of the guard did. The last,
  * 1.5000000000000002 s, is not under `HORIZON`, so a contact first met there is not acted on: the guard acts on contacts within 1.4 s.
  */
+/** Half-length and half-width (m) of a car (4.6 × 1.9 m), and the margin (m) the zone keeps at its sides. */
+const HALF_LONG = 2.3;
+const HALF_WIDE = 0.95;
+const SIDE_MARGIN = 0.5;
+
+/** Half-width (m) of the zone round a car for one turned `s` (|sin|) and `c` (|cos|) of the angle between the pair's axes: `LAT` side by side (both cars' half-widths and the margin), more as the pair turns across each other, one car's length reaching past the other's axis. */
+function reachAcross(s: number, c: number): number {
+  return SIDE_MARGIN + HALF_WIDE + HALF_LONG * s + HALF_WIDE * c;
+}
+
 const TIMES = sampleTimes();
 const STEPS = TIMES.length;
 /** Where the guarded car is (`DX`, `DZ`: its displacement), which way it points (`GX`, `GZ`) and how it moves (`VX`, `VZ`) at each sample time, filled once per call. */
@@ -82,7 +93,10 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
     return;
   }
   const heading = detAtan2(sx, sz);
-  const omega = steer * turn;
+  // The wheel's yaw rate as the drive turns the car: held to `GRIP_YAW_CAP` grip / speed by its tyres (no cap with no grip given).
+  const grip = tune[GUARD_GRIP_IDX]!;
+  const cap = grip > 0 ? (GRIP_YAW_CAP * grip) / speed : Infinity;
+  const omega = clamp(steer * turn, -cap, cap);
   const straight = Math.abs(omega) < STRAIGHT;
   const last = TIMES[STEPS - 1]!;
   let arc = false;
@@ -128,8 +142,10 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
     let cn = 0;
     let cl = 0;
     let cw = 0;
+    let ca = LAT;
     let n0 = 0;
     let l0 = 0;
+    let reach = 0;
     const ox = ospeed > 0.1 ? o.vx / ospeed : detSin(o.yaw);
     const oz = ospeed > 0.1 ? o.vz / ospeed : detCos(o.yaw);
     for (let i = 0; i < STEPS; i++) {
@@ -141,10 +157,12 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
       const rz = o.z + oz * shed - self.z - DZ[i]!;
       const pn = rx * GX[i]! + rz * GZ[i]!;
       const pl = rx * GZ[i]! - rz * GX[i]!;
-      // The zone is a car-shaped ellipse around either car: crossing traffic is long across the guarded car's path.
+      // The zone is a car-shaped ellipse around either car: crossing traffic is long across the guarded car's path. A stopped car lies at any angle (a wreck in the road), and one turned across the guarded car's way reaches further past its axis than one beside it (`reachAcross`).
       const qn = -(rx * ox + rz * oz);
       const ql = -(rx * oz - rz * ox);
-      const m = Math.min((pl / LAT) ** 2 + (pn / LON) ** 2, (ql / LAT) ** 2 + (qn / LON) ** 2);
+      const across = ospeed > 0.1 ? LAT : reachAcross(Math.abs(GX[i]! * oz - GZ[i]! * ox), Math.abs(GX[i]! * ox + GZ[i]! * oz));
+      const ahead = ospeed > 0.1 ? 0 : HALF_LONG * Math.abs(GX[i]! * ox + GZ[i]! * oz) + HALF_WIDE * Math.abs(GX[i]! * oz - GZ[i]! * ox);
+      const m = Math.min((pl / across) ** 2 + (pn / LON) ** 2, (ql / across) ** 2 + (qn / LON) ** 2);
       if (i === 0) {
         n0 = pn;
         l0 = pl;
@@ -156,6 +174,8 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
           cn = n0;
           cl = l0;
           cw = hypot2(ox * ospeed - VX[0]!, oz * ospeed - VZ[0]!);
+          ca = across;
+          reach = ahead;
         }
         break;
       }
@@ -166,6 +186,8 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
         cn = pn;
         cl = pl;
         cw = hypot2(ox * ov - VX[i]!, oz * ov - VZ[i]!);
+        ca = across;
+        reach = ahead;
         break;
       }
       // Moving apart from outside the zone: nothing further out is a contact.
@@ -173,14 +195,14 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
       prev = m;
     }
     if (tc < 0) continue;
-    // The sideways room the car can make by then: a contact it can steer clear of is not braked for.
+    // The sideways room the car can make by then: a contact it can steer clear of is not braked for. Only a car ahead is braked for (`ahead`: a stopped car's near end counts, it lies across the way).
     const room = 0.5 * STEER_ACC * tc * tc;
-    const clear = room >= LAT - Math.abs(cl);
-    if (cn > 0 && !clear) need = Math.max(need, Math.max(0, cw - TAP) / (2 * Math.max(tc, 0.05) * brake));
+    const clear = room >= ca - Math.abs(cl);
+    if (cn + reach > 0 && !clear) need = Math.max(need, Math.max(0, cw - TAP) / (2 * Math.max(tc, 0.05) * brake));
     if (tc < soonest) {
       soonest = tc;
       lateral = cl;
-      offset = clamp(Math.abs(cl) / LAT, 0, 1);
+      offset = clamp(Math.abs(cl) / ca, 0, 1);
       steerable = clear;
     }
   }
@@ -202,6 +224,7 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
   tune[GUARD_PUSH_IDX] = push;
   out.steer = clamp((toward ? out.steer * (1 - steerNeed) : out.steer) * (1 - Math.abs(push)) + push, -1, 1);
   brakeFor(out, need, soonest <= 0);
+  if (self.id === 4 && speed > 5) console.log(`GE v ${speed.toFixed(1)} need ${need.toFixed(2)} soonest ${soonest.toFixed(2)} brake ${out.brake.toFixed(2)} steer ${out.steer.toFixed(2)} lat ${lateral.toFixed(1)}`);
 }
 
 /** The steer push held from the calls before, faded by this call's step; a one-off call (step 0) holds nothing, or a wreck would steer on its last contact's push for good. */

@@ -46,9 +46,9 @@ const SLIDE = 0.12;
 /** The pool slot the player's walker takes: the last, so a throw that takes the oldest slot finds him driven and passes him by. */
 export const WALKER_SLOT = SLOTS - 1;
 /** Rapier's solver iterations (default 4); no CCD on the parts (it tears the joints: 11–28 cm apart vs 0.9 cm at 8 iterations of 1/120). At 1/960 four hold a joint to 0.1 cm; two kicked one to 125 rad/s. */
-const ITERATIONS = 4;
+export const ITERATIONS = 4;
 /** Rapier's internal solver passes per iteration (default 1): at the first touch of a 29 m/s throw one pass rose energy 75–325 J in a frame at 1/120 and 26–30 J (1 of 5 runs) at 1/480 and 1/960; two at most 0.6 J over 60 runs (60/144/240 Hz). */
-const INTERNAL_PASSES = 2;
+export const INTERNAL_PASSES = 2;
 /** A throw, placed: car (-1: none, `place`; else the one he ignores for `GRACE` s), torso point and orientation, linear and angular velocity (world), sim seconds waiting, a police driver, whether the ride-along may frame him, whether his purse flies too (unset: when his look is a woman's), arms hanging (a figure thrown standing) instead of raised, a look of his own (unset: his car's driver's), and whether his limbs leave loose (`limp`: a driver thrown out of a car). */
 export type Throw = { car: number; p: THREE.Vector3; q: THREE.Quaternion; v: THREE.Vector3; w: THREE.Vector3; age: number; cop: boolean; rides: boolean; purse?: boolean; armsDown?: boolean; look?: DriverLook; loose?: boolean };
 

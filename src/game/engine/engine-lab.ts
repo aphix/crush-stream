@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { GROUND_REACH, HIT_DV, type RagdollSystem } from "../present/engine-ragdoll.ts";
+import type { RagdollSystem } from "../present/engine-ragdoll.ts";
+import { GROUND_REACH, HIT_DV } from "../present/ragdoll-step.ts";
 import type { PropTumble } from "../present/prop-tumble.ts";
 import { colliderSolids, type Solid } from "../present/ragdoll-solids.ts";
 import type { DeformableCar } from "../vehicle/car.ts";

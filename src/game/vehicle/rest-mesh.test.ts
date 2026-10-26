@@ -1,16 +1,39 @@
 import * as THREE from "three";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { makeHoodGeometry, makeTrunkGeometry, SEDAN } from "./car-mesh.ts";
+import { doorAperture, lerp, makeHoodGeometry, makeTrunkGeometry, sampleSlice, SEDAN } from "./car-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { doorSkinZ, makeDoorGeometry } from "./car-door-mesh.ts";
-import { restSideProfile } from "./rest-mesh.test-util.ts";
 import { DOOR_GLASS_SEAT, makeSideGlass, makeRearSideGlass, makeWindshield, makeRearGlass } from "./car-glass.ts";
 import { makeWheelGeometry, RUBBER, treadNormalMap } from "./car-materials.ts";
 import { FLAT_DEVIATION, mapBytes, SIDEWALL_RELIEF_MIN, strongestDeviationSampledAt } from "./tyre-map.test-util.ts";
 import { carFrame } from "./car-rig.ts";
-import { CAR_STYLES } from "./car-variants.ts";
+import { CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
+
+/** Side-view rest profile — tests lock this so the body cannot become a van blob. */
+function restSideProfile(
+  z: number,
+  style: BodyStyle = CAR_STYLES.sedan,
+): {
+  hw: number;
+  yBelt: number;
+  ySideTop: number;
+  yRoof: number;
+  cabin: number;
+  doorHole: number;
+} {
+  const s = sampleSlice(z, style.profile);
+  const doorHole = doorAperture(z, style);
+  return {
+    hw: s.hw,
+    yBelt: s.yBelt,
+    ySideTop: lerp(s.yBelt, 0.22, doorHole),
+    yRoof: lerp(s.yBelt, s.yRoof, s.cabin),
+    cabin: s.cabin,
+    doorHole,
+  };
+}
 
 function bbox(geo: THREE.BufferGeometry) {
   geo.computeBoundingBox();

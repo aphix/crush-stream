@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import type { TrackJson } from "../world/track-schema.ts";
+import { mulberry32 } from "../world/placements.ts";
 
 /**
  * A picture on the sky (`environment.backdrop`): a panel of the sky sphere round the camera, `PANEL.half` (rad) either side of
@@ -86,18 +87,6 @@ export function disposeBackdrop(mesh: THREE.Mesh): void {
   mesh.geometry.dispose();
 }
 
-/** A small seeded generator (mulberry32): the same cloud every load. */
-function seeded(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /** The fire's light adds to what is under it. */
 const ADDITIVE: GlobalCompositeOperation = "lighter";
 
@@ -134,7 +123,7 @@ function paintMushroomCloud(ctx: CanvasRenderingContext2D): void {
   const k = (CANVAS.w / (2 * PANEL.half)) * CLOUD_SCALE;
   const px = (x: number): number => CANVAS.w / 2 + x * k;
   const py = (el: number): number => ((PANEL.top - el * CLOUD_SCALE) / (PANEL.top - PANEL.foot)) * CANVAS.h;
-  const rand = seeded(1945);
+  const rand = mulberry32(1945);
   const between = (a: number, b: number): number => a + (b - a) * rand();
   /** A billow: a ball lit from above left, fading out at its rim. */
   const puff = (x: number, el: number, r: number, lit: Rgb, shade: Rgb, alpha: number): void => {

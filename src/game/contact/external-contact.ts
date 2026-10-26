@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
+import { cageLift } from "../vehicle/car-cage-rig.ts";
 import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import { detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { bodyContact, BODY_HARD, BODY_I, BODY_M, BODY_SIZE, BODY_VX, BODY_VZ, BODY_W, BODY_X, BODY_Z, CT_DEPTH, CT_E, CT_JMAX, CT_MU, CT_NX, CT_NZ, CT_SIZE, CT_X, CT_Z, OUT_EBS_A, OUT_PUSH_A, OUT_SIZE } from "./body-contact.ts";
@@ -197,9 +198,17 @@ export function faceDepth(car: DeformableCar, box: ContactBox): number {
   const fz = detCos(box.yaw);
   const rx = fz;
   const rz = -fx;
-  const ax = car.rightFlat;
-  const az = car.fwdFlat;
   const p = car.group.position;
+  const q = car.group.quaternion;
+  // The drawn body stands at the car's whole orientation: the heading's flat axes (`rightFlat`, `fwdFlat`) put a car on its side or roof, or tumbling, a car's height from where its vertices are
+  // (a monster tail 0.85-1.0 m into the arena wall read 0.1-0.5 m clear: derby side-wedge launch, east ramp). Their horizontal rows of the rotation, the cage lifted as it is drawn.
+  const r00 = 1 - 2 * (q.y * q.y + q.z * q.z);
+  const r01 = 2 * (q.x * q.y - q.z * q.w);
+  const r02 = 2 * (q.x * q.z + q.y * q.w);
+  const r20 = 2 * (q.x * q.z - q.y * q.w);
+  const r21 = 2 * (q.y * q.z + q.x * q.w);
+  const r22 = 1 - 2 * (q.x * q.x + q.y * q.y);
+  const lift = cageLift(car);
   const { pos, panelOn } = car.cage.fields;
   const { vertexCount, vertexGroup } = car.cage.style;
   const ox = p.x - box.x;
@@ -215,9 +224,10 @@ export function faceDepth(car: DeformableCar, box: ContactBox): number {
     const g = vertexGroup[k]!;
     if (g > 0 && panelOn[g - 1] === 0) continue;
     const x = pos[k * 3]!;
+    const y = pos[k * 3 + 1]! + lift;
     const z = pos[k * 3 + 2]!;
-    const wx = ox + ax.x * x + az.x * z;
-    const wz = oz + ax.z * x + az.z * z;
+    const wx = ox + r00 * x + r01 * y + r02 * z;
+    const wz = oz + r20 * x + r21 * y + r22 * z;
     const side = wx * rx + wz * rz;
     if (Math.abs(side) > box.hx) continue;
     const along = wx * fx + wz * fz;
@@ -235,9 +245,10 @@ export function faceDepth(car: DeformableCar, box: ContactBox): number {
   faceExit.nz = bestAtEnd ? endSign * rz : fz;
   faceExit.atEnd = bestAtEnd;
   const dx = pos[deepest * 3]!;
+  const dy = pos[deepest * 3 + 1]! + lift;
   const dz = pos[deepest * 3 + 2]!;
-  faceExit.offX = ax.x * dx + az.x * dz;
-  faceExit.offZ = ax.z * dx + az.z * dz;
+  faceExit.offX = r00 * dx + r01 * dy + r02 * dz;
+  faceExit.offZ = r20 * dx + r21 * dy + r22 * dz;
   // A body with a point in the slab is as deep as its farthest point, however far past the back face (the pushed-through corner is
   // what the push-out must bring back); one wholly beyond the back face is on the slab's other side, no contact of this face.
   return inside ? best : -Infinity;

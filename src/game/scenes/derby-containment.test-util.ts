@@ -19,7 +19,7 @@ import { DERBY_RAMPS, type DerbyRamp } from "./derby-ground.ts";
  * its run and from its crest at top speed. "In" is the whole drawn body: no cage vertex is ever past the wall's outer face, the car
  * ends inside the inner face, and whenever the body touches the wall it is well under the wall's top.
  */
-const FLAT_OUT: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: true };
+export const FLAT_OUT: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: true };
 /** Seconds a launch plays: from rest across the arena or from a jump's far entry, the run-up and the wall; from the open ring at its top speed the car meets the wall at once (the last it was seen to move outward was 0.3 s in, in every class). */
 const SECONDS = 8;
 const OPEN_FLOOR_SECONDS = 3;
@@ -41,7 +41,7 @@ type Flight = { maxRadius: number; maxHeightAtWall: number; finalRadius: number 
 
 const vertex = new THREE.Vector3();
 
-function carOfClass(cls: VehicleClassId, x: number, z: number, yaw: number, speed: number): DeformableCar {
+export function carOfClass(cls: VehicleClassId, x: number, z: number, yaw: number, speed: number): DeformableCar {
   const car = makeCar(cls);
   car.spawnFacing(x, z, yaw, speed);
   car.deform.squash = INITIAL_HUD.squash;
@@ -49,6 +49,33 @@ function carOfClass(cls: VehicleClassId, x: number, z: number, yaw: number, spee
   car.deform.setMode(INITIAL_HUD.deformMode);
   armKill(car.deform, cls, HANDLING.realism, "derby");
   return car;
+}
+
+const centroid = new THREE.Vector3();
+
+/** The plan centroid of the car's drawn body (its cage's vertices, torn-off lids left out, as the car stands: lifted and turned whole), into `out` (y 0). Where the body ends: a tilted wreck's group origin hangs off it (a truck on a wedge, 0.84 m). */
+export function bodyCentroid(car: DeformableCar, out: THREE.Vector3): THREE.Vector3 {
+  const lift = cageLift(car);
+  const { pos, panelOn } = car.cage.fields;
+  const { vertexCount, vertexGroup } = car.cage.style;
+  let x = 0;
+  let z = 0;
+  let n = 0;
+  for (let k = 0; k < vertexCount; k++) {
+    const group = vertexGroup[k]!;
+    if (group > 0 && panelOn[group - 1] === 0) continue;
+    vertex.set(pos[k * 3]!, pos[k * 3 + 1]! + lift, pos[k * 3 + 2]!).applyQuaternion(car.group.quaternion).add(car.group.position);
+    x += vertex.x;
+    z += vertex.z;
+    n++;
+  }
+  return out.set(x / n, 0, z / n);
+}
+
+/** How far (m) the car's drawn body ends from the arena's middle: its centroid's radius. */
+export function bodyRadius(car: DeformableCar): number {
+  bodyCentroid(car, centroid);
+  return Math.hypot(centroid.x, centroid.z);
 }
 
 function fly(cls: VehicleClassId, x: number, z: number, yaw: number, speed: number, seconds: number): Flight {
@@ -74,12 +101,12 @@ function fly(cls: VehicleClassId, x: number, z: number, yaw: number, speed: numb
       }
     });
   }
-  flight.finalRadius = Math.hypot(car.group.position.x, car.group.position.z);
+  flight.finalRadius = bodyRadius(car);
   return flight;
 }
 
 /** One launch: where it starts and heads, and what it is (for a failure message). */
-type Launch = { label: string; x: number; z: number; yaw: number; speed: number; seconds: number };
+export type Launch = { label: string; x: number; z: number; yaw: number; speed: number; seconds: number };
 
 function openFloorLaunches(cls: VehicleClassId): Launch[] {
   return OFFSETS.flatMap((offset) =>
@@ -142,6 +169,39 @@ function outwardLaunches(cls: VehicleClassId): Launch[] {
   });
 }
 
+/** Headings (deg) off the square a launch takes at a side wedge: square, and a slant either way (the owner's two traces met a side at 0° and about 40°). */
+const SIDE_SLANTS_DEGREES = [0, 30, -30] as const;
+
+/**
+ * From rest at the longest run-up the arena allows (back along the heading from the wedge to a car's length inside the wall), each bowl ramp's
+ * two side planes met at the middle of the plane's run, square and slanted: the run a player boosts across at the 45° wedge beside a ramp.
+ */
+export function sideWedgeLaunches(): Launch[] {
+  return DERBY_RAMPS.flatMap((ramp) => {
+    const { plateau, toward } = ramp;
+    const alongX = toward.x !== 0;
+    const halfAcross = alongX ? plateau.halfZ : plateau.halfX;
+    const centre = alongX ? plateau.x : plateau.z;
+    return ([1, -1] as const).flatMap((side) => {
+      // run: -x, +x, -z, +z.
+      const planeRun = plateau.run[(alongX ? 2 : 0) + (side > 0 ? 1 : 0)]!;
+      const across = (alongX ? plateau.z : plateau.x) + side * (halfAcross + planeRun / 2);
+      const targetX = alongX ? centre : across;
+      const targetZ = alongX ? across : centre;
+      const square = alongX ? Math.atan2(0, -side) : Math.atan2(-side, 0);
+      return SIDE_SLANTS_DEGREES.map((slant): Launch => {
+        const yaw = square + (slant * Math.PI) / 180;
+        const dx = Math.sin(yaw);
+        const dz = Math.cos(yaw);
+        const along = targetX * dx + targetZ * dz;
+        const reach = radius - RUN_UP_MARGIN;
+        const back = along + Math.sqrt(along * along - (targetX * targetX + targetZ * targetZ - reach * reach));
+        return { label: `${ramp.name} ramp's ${side > 0 ? "+" : "-"}${alongX ? "z" : "x"} side, ${slant}° off square`, x: targetX - dx * back, z: targetZ - dz * back, yaw, speed: 0, seconds: SECONDS };
+      });
+    });
+  });
+}
+
 /**
  * The launches of one class: the open ring in every direction, across the arena at every `stride`th of the headings, each ramp's far entry, and each ramp's outward flights
  * (from the foot of its run, from its crest at top speed). The per-commit suite (`derby-containment.test.ts`) takes every fourth heading across the arena, the full-sanity
@@ -160,6 +220,24 @@ export function containmentCases(stride: number): void {
           assert.ok(flight.finalRadius < radius, `${launch.label}: ended at ${flight.finalRadius.toFixed(2)} m, outside the inner face at ${radius} m`);
           assert.ok(flight.maxHeightAtWall <= WALL_TOUCH_CEILING, `${launch.label}: touched the wall ${flight.maxHeightAtWall.toFixed(2)} m up, over ${WALL_TOUCH_CEILING} m of its ${wallHeight} m`);
         }
+      });
+    }
+  });
+
+  describe("given a derby car driven flat out from the arena's far side at each bowl ramp's side wedge (the 45° plane beside the ramp), square and slanted", () => {
+    const launches = sideWedgeLaunches();
+    for (const cls of VEHICLE_CLASS_IDS) {
+      let flights: Flight[] | null = null;
+      const flown = (): Flight[] => (flights ??= launches.map((l) => fly(cls, l.x, l.z, l.yaw, l.speed, l.seconds)));
+      it(`when the ${cls} meets each ramp's two sides, then no part of it passes the wall's outer face and it ends inside`, () => {
+        for (const [i, flight] of flown().entries()) {
+          assert.ok(flight.maxRadius < OUTER_FACE, `${launches[i]!.label}: a vertex reached ${flight.maxRadius.toFixed(2)} m, past the outer face at ${OUTER_FACE} m`);
+          assert.ok(flight.finalRadius < radius, `${launches[i]!.label}: ended at ${flight.finalRadius.toFixed(2)} m, outside the inner face at ${radius} m`);
+        }
+      });
+      it(`when the ${cls} meets each ramp's two sides, then it touches the wall no higher than ${WALL_TOUCH_CEILING} m of its ${wallHeight} m`, () => {
+        const over = flown().flatMap((flight, i) => (flight.maxHeightAtWall > WALL_TOUCH_CEILING ? [`${launches[i]!.label}: ${flight.maxHeightAtWall.toFixed(1)} m`] : []));
+        assert.deepEqual(over, []);
       });
     }
   });

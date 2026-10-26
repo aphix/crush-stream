@@ -22,7 +22,7 @@ import { FACE_TOP, SPRING_YIELD } from "./load-crush.ts";
 import { PLANT_QUIET } from "./deform-state.ts";
 import { holdMomentum, holdPositions, turnVelocities, undoNetTurn } from "./turn-hold.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
- import { CONTACT_WINDOW, MIN_INV_MASS, SQUASH_REACH } from "./constants.ts";
+import { CONTACT_WINDOW, HUB_PIN_MAX, HUB_PULL_STEP, MIN_INV_MASS, SQUASH_REACH } from "./constants.ts";
 
 /** The body lies over below this up (y of its up axis): the car's own `UPRIGHT_UP_Y`, where its wheels stop being what it stands on. */
 const LYING_UP_Y = 0.5;
@@ -38,11 +38,12 @@ const SPRING_SHARE = 0.1;
 export const HUB_POP_MPS = 15;
 /** The hit speed (m/s EBS) from which a corner crushed to `HUB_OVERRUN` of its hub takes the wheel. */
 const HUB_OVERRUN_MPS = 3;
-/** The farthest (m) a hub that stands off its place returns toward it in one clamp, once its wreck has been quiet past `PLANT_QUIET` or lies over (frame up under `LYING_UP_Y`): an upright wreck's crash window clamps a hub 0.3-0.4 m a slice and keeps doing so. */
-const HUB_RETURN_MAX = 0.3;
 
 const _a = new THREE.Vector3();
 const _inverse = new THREE.Matrix4();
+/** `clampLocal`'s inverse of the group's world matrix while its hubs are planted, and the car-frame place `tetherHub` reads a hub at. */
+const _toCar = new THREE.Matrix4();
+const _stand = new THREE.Vector3();
 const _n = new THREE.Vector3();
 /** `clampMass`'s per-call doubles: [0] ix, [1] iz, [2] maxAway, [3] maxCrush, [4] stroke (as arguments to the out-of-line call all five were boxed per mass). */
 const _clamp = new Float64Array(5);
@@ -114,6 +115,7 @@ export abstract class DeformSolve extends DeformFreeze {
     _clamp[4] = stroke;
     // The group's world matrix once for the masses below (`localToWorld` re-composed it and its parents for every mass).
     group.updateWorldMatrix(true, false);
+    if (pinned) _toCar.copy(group.matrixWorld).invert();
     for (let i = 0; i < this.masses.length; i++) this.clampMass(i, group, sideHit, pinned, squeeze, deep);
     this.settleHubStand(pinned);
     // A3: each mount caps its own side of the block, but the block is one casting; hold its rest
@@ -321,17 +323,19 @@ export abstract class DeformSolve extends DeformFreeze {
         if (m.local.distanceTo(m.rest) < 0.22) m.local.z = m.rest.z * 0.67;
       }
     }
-    // Planted tires are the world pin. Projecting them through a pitched
-    // group was ratcheting the wreck backward every followGroup.
-    if (m.hub && !m.popped && pinned) return;
+    // Planted tires are the world pin. Projecting them through a pitched group was ratcheting the wreck backward every followGroup; a stretch past `HUB_PIN_MAX` is drawn back (`tetherHub`).
+    if (m.hub && !m.popped && pinned) {
+      this.tetherHub(i, m, group);
+      return;
+    }
     // A hub standing off its place (a wreck carried on another's top, tipped through `LYING_UP_Y`, its plant over with no contact to start it; a lying wreck whose suspension drew
-    // its hubs a metre toward the ground) comes back to its place by `HUB_RETURN_MAX` a clamp, not across the body in one: four hubs 0.6-1.0 m off crossed it in one slice
+    // its hubs a metre toward the ground) comes back to its place by `HUB_PIN_MAX` a clamp, not across the body in one: four hubs 0.6-1.0 m off crossed it in one slice
     // (derby seeds 4 and 3: 6.5 and 6.6 cm of centroid, a zip). An upright wreck in its crash window keeps the full clamp: its wheels' drag is what the crush rows read.
     if (m.hub && !m.popped && (this.quietTime() >= PLANT_QUIET || this.frameUp.y < LYING_UP_Y)) {
       _a.copy(m.local).applyMatrix4(group.matrixWorld).sub(m.world);
       const away = _a.length();
-      if (away > HUB_RETURN_MAX) {
-        m.world.addScaledVector(_a, HUB_RETURN_MAX / away);
+      if (away > HUB_PIN_MAX) {
+        m.world.addScaledVector(_a, HUB_PIN_MAX / away);
         m.local.copy(m.world).applyMatrix4(_inverse.copy(group.matrixWorld).invert());
         // The step is the hub going home, not the cloud turning: held where it now stands, `undoTurn` does not count it as a turn and turn the whole wreck back by it (derby seed 3 c0, lying on its roof at 1.4 rad/s:
         // each clamp's +0.3 m return was undone by 0.38 m and the hubs walked 0.15 to 1.6 m off their places in ten slices).
@@ -341,6 +345,26 @@ export abstract class DeformSolve extends DeformFreeze {
       }
     }
     m.world.copy(m.local).applyMatrix4(group.matrixWorld);
+  }
+
+  /**
+   * A planted hub stays where its wheel stands in the world while `m.local` is its pin (`rest` + shove), so a body that slides on over its planted tyres stretches it from the pin: a driven side-hit wreck
+   * at 1.1 m/s stood its four hubs 0.23-0.37 m off in 0.15 s, and the freeze that came with the quiet time pinned them back in one slice (crash-parts '56 side': 0.306 m past the zip bound); a wreck lying on
+   * another's top had them 0.84-1.07 m off, and the plant's end crossed that in one clamp (derby seed 4 c8 at 36.57 s: 6.5 cm of centroid). The part of the stretch past `HUB_PIN_MAX` is drawn back, by at most
+   * `HUB_PULL_STEP` a clamp (a few of them a slice, inside the zip bound), so the tyre drags along with the body once it is that far from where it was planted.
+   */
+  private tetherHub(i: number, m: MassNode, group: THREE.Object3D): void {
+    _stand.copy(m.world).applyMatrix4(_toCar);
+    const dx = _stand.x - m.local.x;
+    const dz = _stand.z - m.local.z;
+    const stretch = hypot2(dx, dz);
+    if (stretch <= HUB_PIN_MAX) return;
+    const k = Math.min(stretch - HUB_PIN_MAX, HUB_PULL_STEP) / stretch;
+    _stand.x -= dx * k;
+    _stand.z -= dz * k;
+    m.world.copy(_stand).applyMatrix4(group.matrixWorld);
+    this.hubStand[i * 2] = _stand.x;
+    this.hubStand[i * 2 + 1] = _stand.z;
   }
 
   /** The engine block's z travel (`dz`) under a frontal hit: the mounts hold it (ENGINE_SLACK past earlier hits' set, `bz`) until

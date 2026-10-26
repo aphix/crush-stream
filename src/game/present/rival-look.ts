@@ -1,5 +1,6 @@
 import { SPRAY_PALETTE, carSprayLayout } from "../match/look-data.ts";
 import { mulberry32 } from "../world/placements.ts";
+import { shuffledOrder } from "./playlist.ts";
 import type { FxTier } from "./engine-post.ts";
 import type { DeviceClass } from "./auto-fx.ts";
 import { BAND_PATTERNS } from "./rival-patterns-bands.ts";
@@ -39,15 +40,9 @@ function streamOf(salt: number, seed: number, slot = -1): () => number {
   return mulberry32(Math.imul(seed ^ salt, SEED_MIX) ^ Math.imul(slot + 1, SLOT_MIX));
 }
 
-/** The pattern order of a field: a Fisher-Yates shuffle of the pattern indices, a function of the seed alone. */
+/** The pattern order of a field: a shuffle of the pattern indices, a function of the seed alone. */
 function orderOf(seed: number): number[] {
-  const rand = streamOf(ORDER_SALT, seed);
-  const order = RIVAL_PATTERNS.map((_, index) => index);
-  for (let at = order.length - 1; at > 0; at--) {
-    const swap = Math.floor(rand() * (at + 1));
-    [order[at], order[swap]] = [order[swap]!, order[at]!];
-  }
-  return order;
+  return shuffledOrder(RIVAL_PATTERNS.length, -1, streamOf(ORDER_SALT, seed));
 }
 
 /**

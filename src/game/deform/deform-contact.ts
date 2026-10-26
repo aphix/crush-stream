@@ -24,6 +24,8 @@ const LEVEL = new THREE.Quaternion();
 export const SEAT_SPEED = 1;
 /** A seat step (m) under this is the rigid step's jitter once seated (3e-8 to 2e-6 m measured), not a move to re-bake the skin for: an active seat steps 8 mm at 120 Hz. */
 const SEAT_REBAKE = 0.001;
+/** A frame this close (m) to its cell's seat is seated (`seated`): `followGroup` closes the gap to its last micrometre, and a freeze at 1 mm left a side-hit wreck's frame that much short of where whole mode puts it (`wall-bounce.test.ts` reads the drawn door to 1 um). */
+const SEATED_M = 1e-6;
 /** A mass this close (m) to a rigid face still counts as resting on it. */
 const FACE_SKIN = 0.02;
 /** How far (m) under a fixed solid's top a mass's bottom may be and still stand on it: a tyre resting on a rail, a wreck crushed a few cm into one in a slice. */
@@ -322,6 +324,18 @@ export abstract class DeformContact extends DeformState {
     out[1] = my / mass;
     out[2] = mz / mass;
     out[3] = _fit.spin();
+  }
+
+  /**
+   * Whether the frame stands on its cell's seat (`followGroup`'s `off` under `SEATED_M`): the body follows what the cell drifted from it at no more than `SEAT_SPEED`, so a wreck whose cell
+   * sprang 0.12 m off its seat in the hit is still seating for a tenth of a second after its contact window, and a freeze then (`DeformFreeze.settleFreeze`) leaves the frame short of its cell for good.
+   */
+  seated(group: THREE.Object3D): boolean {
+    const cell = this.at.cell;
+    group.updateWorldMatrix(false, false);
+    _toLocal.copy(group.matrixWorld).invert();
+    _a.copy(cell.world).applyMatrix4(_toLocal);
+    return hypot2(_a.x - cell.rest.x - cell.baseX, _a.z - cell.rest.z - cell.baseZ) < SEATED_M;
   }
 
   /** Marks the masses' mean motion: `takeMotion` hands the body what contact work on them changed since. */

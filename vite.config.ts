@@ -7,7 +7,6 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import { nitro } from "nitro/vite";
-import { VitePWA, type VitePWAOptions } from "vite-plugin-pwa";
 
 /**
  * WSL serves `/mnt/c` over 9p, where inotify never fires (measured: 0 `fs.watch` events for a WSL-side write), so
@@ -96,36 +95,53 @@ function versionFilePlugin(sha: string): Plugin {
   };
 }
 
-/**
- * The installable-app manifest, served at `<base>manifest.webmanifest` with the icons from `public/icons/`: everything under
- * the base, nothing at the domain root. `display: "fullscreen"` keeps a home-screen launch (and every reload of it) fullscreen.
- *
- * No service worker is registered: `injectRegister: false` leaves the page without a register script, and `selfDestroying`
- * makes the `sw.js` the plugin must still emit one that unregisters itself and clears every cache. With nothing intercepting
- * requests, a plain reload always reaches the server, so the bench loop and `src/lib/deploy/update-check.ts` land on the
- * newest build (an offline precache would hand back the stale one).
- */
-const pwa: Partial<VitePWAOptions> = {
-  injectRegister: false,
-  selfDestroying: true,
-  // Where Nitro puts the client build (the plugin reads the top-level `build.outDir`, which is not it) for the `sw.js` it writes.
-  outDir: ".output/public",
-  devOptions: { enabled: true },
-  manifest: {
-    name: "Crush Stream",
-    short_name: "Crush Stream",
-    id: base,
-    start_url: base,
-    scope: base,
-    display: "fullscreen",
-    background_color: "#09090b",
-    theme_color: "#09090b",
-    icons: [
-      { src: `${base}icons/icon-192.png`, sizes: "192x192", type: "image/png" },
-      { src: `${base}icons/icon-512.png`, sizes: "512x512", type: "image/png" },
-    ],
-  },
-};
+/** Installable-app manifest under the base; `display: "fullscreen"` keeps a home-screen launch fullscreen. */
+const MANIFEST = `${JSON.stringify({
+  name: "Crush Stream",
+  short_name: "Crush Stream",
+  start_url: base,
+  display: "fullscreen",
+  background_color: "#09090b",
+  theme_color: "#09090b",
+  lang: "en",
+  scope: base,
+  id: base,
+  icons: [
+    { src: `${base}icons/icon-192.png`, sizes: "192x192", type: "image/png" },
+    { src: `${base}icons/icon-512.png`, sizes: "512x512", type: "image/png" },
+  ],
+})}\n`;
+
+/** No page registers a worker: this one only replaces and removes any worker an older build installed, so a reload always reaches the server. */
+const SELF_UNREGISTERING_SW = `self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", async () => {
+  await self.registration.unregister();
+  for (const client of await self.clients.matchAll()) {
+    if (client instanceof WindowClient) client.navigate(client.url);
+  }
+  for (const name of await self.caches.keys()) await self.caches.delete(name);
+});
+`;
+
+const PWA_FILES = { "manifest.webmanifest": MANIFEST, "sw.js": SELF_UNREGISTERING_SW };
+
+function pwaFilesPlugin(): Plugin {
+  return {
+    name: "crush:pwa-files",
+    applyToEnvironment: (environment) => environment.name === "client",
+    generateBundle() {
+      for (const [fileName, source] of Object.entries(PWA_FILES)) this.emitFile({ type: "asset", fileName, source });
+    },
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const file = Object.keys(PWA_FILES).find((name) => req.url?.split("?")[0] === `${base}${name}`);
+        if (!file) return next();
+        res.setHeader("Content-Type", file.endsWith(".js") ? "text/javascript" : "application/manifest+json");
+        res.end(PWA_FILES[file as keyof typeof PWA_FILES]);
+      });
+    },
+  };
+}
 
 // `0.0.0.0:8080` is the dev server, `127.0.0.1:8081` the preview server (docs/DEPLOY.md).
 export default defineConfig(({ command, isPreview }) => ({
@@ -158,8 +174,7 @@ export default defineConfig(({ command, isPreview }) => ({
   plugins: [
     // Reload on commits/merges where the file watcher is blind (a /mnt checkout under WSL).
     gitHeadWatchPlugin(),
-    // Web app manifest under the base (see `pwa`).
-    VitePWA(pwa),
+    pwaFilesPlugin(),
     tailwindcss(),
     tanstackStart(),
     ...(command === "build" ? [versionFilePlugin(BUILD_SHA)] : []),

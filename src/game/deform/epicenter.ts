@@ -5,14 +5,14 @@ import { CONTACT_WINDOW } from "./constants.ts";
  * write it, `EPICENTER_KNOBS`; the camera's `CHASE` knobs are the precedent). Values are numbers so each is a slider and a URL field: switches are 0/1,
  * and 0 turns a threshold off. A replay records the whole object (`reel-codec`).
  *
- * `on` 0 is `whole`, today: every crashed car runs the soft-body structure step and the frame re-measure every slice, bit for bit. 1: a crashed car whose quiet time
+ * `on` 0 is `whole`: every crashed car runs the soft-body structure step and the frame re-measure every slice, bit for bit. 1 (the default): a crashed car whose quiet time
  * has reached `relockHold` is frozen: its masses ride the car's frame (the rigid velocity field, one pass), no solve and no frame re-measure; any write to a mass or
  * to its contact clock thaws it (`DeformRig.thaw`). Phase A (8 scenes at 1x sim time, the owner's fleet traces of two and three cars head on, the piston
  * matrix of five classes x eight pistons x 15-75 mph) is the evidence for each default.
  */
 export const EPICENTER = {
   /** 0 `whole`, 1 `epicenter`. */
-  on: 0,
+  on: 1,
   /** Quiet time (s) a crashed car reaches before it freezes. Today's `CONTACT_WINDOW`: past it the solver already stops and every mass is overwritten with the rigid body's velocity; the owner's traces show every mass within 0.1 mm per 0.25 s from 0.39 s. Lower (0.2) freezes nodes that still move (8-32 % of node-time in the 0.25-0.5 s age bin). */
   relockHold: CONTACT_WINDOW,
   /** The body must be slower than this (m/s) to freeze; 0 is off. The 2 s+ wrecks of the city bench are racing cars with damage (99.9 % above 5 m/s), so this is the lever between 'freeze the driving wrecks' and 'only the stopped ones'. */

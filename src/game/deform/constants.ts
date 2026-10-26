@@ -27,4 +27,8 @@ export const DEFAULT_SQUASH = 0.32;
 export const DEFAULT_BUCKLE = 0.45;
 /** The contact window (s): how long after its last contact a crashed car's shape matching and mass step stay live (`DeformSolve.live`), and the time over which its tyres' grip comes back after a hit (`DeformSolve.settledShare`). */
 export const CONTACT_WINDOW = 0.35;
+/** How far (m) a hub may stand from its pin (`rest` + shove, car frame, plan): a freeze keeps a place this far off (`Car.integrateWreck`), and a planted hub (its wheel where the world holds it) is drawn back to within it (`DeformSolve.tetherHub`). A quiet planted wreck stands 2 cm off; one carried over its planted wheels at 1 m/s stood 0.37 m off in 0.15 s. */
+export const HUB_PIN_MAX = 0.3;
+/** The farthest (m) a planted hub is drawn toward its pin in one clamp (`DeformSolve.tetherHub`): three clamps a slice at 240 Hz are 3 cm, inside the 5 cm a slice of the zip bound; also the slack a freeze allows past `HUB_PIN_MAX` before it keeps a hub's pin (`Car.integrateWreck`). */
+export const HUB_PULL_STEP = 0.01;
 

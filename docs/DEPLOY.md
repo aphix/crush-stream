@@ -23,10 +23,10 @@ variables do).
   and for share links `location.origin + import.meta.env.BASE_URL + "?net=join&room=X"`. A
   request outside the base gets a redirect to it.
 
-  The installable-app manifest (`<base>manifest.webmanifest`, `vite-plugin-pwa`; `display: fullscreen`,
+  The installable-app manifest (`<base>manifest.webmanifest`, emitted by `pwaFilesPlugin` in `vite.config.ts`; `display: fullscreen`,
   `id`/`start_url`/`scope` = the base) and its icons (`<base>icons/`) live under the base too, so
   `deploy/nginx-crush.conf` holds the app's `location ^~ <base>` block (plus the soundtrack's `<base>music/`, below) and the site root is not touched.
-  The plugin registers no service worker (`vite.config.ts`, `pwa`): it would serve a stale build.
+  No service worker is registered (it would serve a stale build); the `sw.js` beside the manifest only unregisters any worker an older build installed.
 
 Runtime variables for the node server: `PORT` (default 3000), `HOST`, `PGLITE_DATA_DIR`
 (unset = in-memory, wiped on restart).

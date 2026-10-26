@@ -1,18 +1,12 @@
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
 
 /**
- * Minimal SQL surface over PGLite. Both the
- * tagged-template and `.query()` forms resolve to an array of row objects:
+ * Minimal SQL surface over PGLite: `.query()` resolves to an array of row objects.
  *
  *   const sql = await getSql();
- *   const rows = await sql`select * from todos where id = ${id}`; // parameterized
- *   const rows2 = await sql.query("select * from todos where id = $1", [id]);
+ *   const rows = await sql.query("select * from todos where id = $1", [id]);
  */
 export interface Sql {
-  <T = Record<string, unknown>>(
-    strings: TemplateStringsArray,
-    ...values: unknown[]
-  ): Promise<T[]>;
   query<T = Record<string, unknown>>(
     text: string,
     params?: unknown[],
@@ -44,24 +38,6 @@ const OID_INT8 = 20;
 const OID_DATE = 1082;
 const OID_INTERVAL = 1186;
 const identity = (v: string) => v;
-
-type Run = <T>(text: string, params: unknown[]) => Promise<T[]>;
-
-/** Wrap a query runner in the tagged-template + `.query()` `Sql` surface. */
-function toSql(run: Run): Sql {
-  const sql = (async <T = Record<string, unknown>>(
-    strings: TemplateStringsArray,
-    ...values: unknown[]
-  ): Promise<T[]> => {
-    // Rebuild with $1, $2, … placeholders so values stay parameterized.
-    let text = strings[0];
-    for (let i = 0; i < values.length; i += 1) text += `$${i + 1}${strings[i + 1]}`;
-    return run<T>(text, values);
-  }) as unknown as Sql;
-  sql.query = <T = Record<string, unknown>>(text: string, params: unknown[] = []) =>
-    run<T>(text, params);
-  return sql;
-}
 
 async function createPgliteSql(): Promise<Sql> {
   // Embedded Postgres, imported on demand.
@@ -139,10 +115,7 @@ async function createPgliteSql(): Promise<Sql> {
   globalRef.__pgliteMigrateChain__ = pass;
   await pass;
 
-  return toSql(async <T>(text: string, params: unknown[]) => {
-    const result = await pg.query<T>(text, params);
-    return result.rows;
-  });
+  return { query: async <T>(text: string, params: unknown[] = []) => (await pg.query<T>(text, params)).rows };
 }
 
 let sqlPromise: Promise<Sql> | null = null;

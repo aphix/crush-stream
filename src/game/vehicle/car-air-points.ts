@@ -54,7 +54,10 @@ export function bodyContact(n: number, hit: Float64Array, hull: boolean): void {
   CLOSING[n] = Math.max(0, -pointVel(n, v, w, _vp).dot(N[n]!));
   // A torn panel's row is solved to part at `RESTITUTION` of its closing on every pass: a bounce given on the first pass alone, the later passes took back.
   GAPV[n] = body.panel && CLOSING[n]! > BOUNCE_V ? -RESTITUTION * CLOSING[n]! : 0;
-  if (own >= 0 && CLOSING[n]! < WALL_CRUSH) surf.touch(own);
+  if (own >= 0) {
+    if (CLOSING[n]! < WALL_CRUSH) surf.touch(own);
+    else surf.strike(own);
+  }
 }
 
 /** A part point's query: with the point's own velocity (`PQ_VX`..), which a car's (`PQ`) never carries. */

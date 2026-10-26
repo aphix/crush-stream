@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { cageOf } from "./car-cage.test-util.ts";
+import { cageOf } from "./car-cage-rig.ts";
 import { carInState } from "./drawn-body.test-util.ts";
 
 /**

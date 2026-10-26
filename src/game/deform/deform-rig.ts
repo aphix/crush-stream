@@ -658,6 +658,8 @@ export abstract class DeformRig {
     this.massActive = false;
     this.frozen = false;
     this.frozenReady = false;
+    this.frozenCentre.set(0, 0, 0);
+    this.frozenInvI.set(0, 0, 0);
     this.sinceThaw = Infinity;
     this.nodesLoose = 0;
     this.nodesLocked = 0;

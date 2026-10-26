@@ -1,9 +1,8 @@
 import { after, afterEach, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import { G } from "./car-air-body.ts";
-import { rigidCentre } from "./car-air.ts";
+import { energyOf } from "./energy.test-util.ts";
 import { layOnWedge, RAD, stepSlices, Wedge, WEDGE_FOOT } from "./wedge.test-util.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
 import { useStiffSprings } from "./stiff-springs.test-util.ts";
@@ -50,19 +49,6 @@ const SETTLE_S = 0.25;
 const ENERGY_WINDOW_S = 0.25;
 /** Most mechanical energy (J/kg, a coasting 6 m/s car holds 18) a car may gain over the window: a slice's contact rounding, not a lift that pays no speed. */
 const ENERGY_ROUNDING = 0.1;
-
-const _centre = new THREE.Vector3();
-const _spin = new THREE.Vector3();
-const _inverse = new THREE.Quaternion();
-
-/** The car's mechanical energy per unit mass (J/kg): its velocity and spin about its rigid centre, and that centre's height (a monster's stands 1.4 m over its origin, so a pitching one lifts it). */
-function energyOf(car: DeformableCar): number {
-  _centre.copy(rigidCentre(car)).applyQuaternion(car.group.quaternion);
-  _spin.copy(car.angular).applyQuaternion(_inverse.copy(car.group.quaternion).invert());
-  const inverseInertia = car.frame.invI;
-  const spin = 0.5 * (_spin.x * _spin.x / inverseInertia.x + _spin.y * _spin.y / inverseInertia.y + _spin.z * _spin.z / inverseInertia.z);
-  return 0.5 * car.velocity.lengthSq() + spin + G * (car.group.position.y + _centre.y);
-}
 
 const steepCases = (["sedan", "monster"] as const).flatMap((cls) =>
   STEEP_DEGREES.flatMap((deg) => [

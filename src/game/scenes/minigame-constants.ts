@@ -97,17 +97,18 @@ export const RING_FLING_LANE = {
 export const LIP_BACK_FACE_PITCH_DEGREES = 60;
 
 /** High jump and Ring Fling: the share of its speed (and so of every velocity component) the car keeps as its driver is thrown at the lip. Measured in `minigame-lip.test.ts`. */
-export const LIP_CAR_SPEED_KEEP = 0.25;
+export const LIP_CAR_SPEED_KEEP = 0.3;
 
 /**
- * Per kicker (the high jump's and Ring Fling's lip): the launch push the lip gives a car as it leaves it, as a share of the car's own velocity (0.08: it leaves at
- * 1.08 times the speed it arrived at, in the direction it arrived), applied once as its centre crosses the lip and before its driver is thrown (`LipThrow`). The ground gives
- * a car no energy: what a kicker's arc takes from a monster climbing it (its lip 27.2 m/s against the 28.5 bar) the lip hands back as the launch the game is about, tuned so
- * every class meets its lip bar again (`minigame-profile.test.ts`) and the sizing's pins hold (`minigame-sizing.test.ts`: the muscle's best run scores 168.4 m, the monster's
- * 80% run 53.8 m: at 0.06 it was 47.0, under the bar of 50). A share, not a speed: a car held to 70% of the speed leaves at 70% of it. Ring Fling's lip holds its bars
- * without one (0).
+ * Per kicker (the high jump's and Ring Fling's lip): the launch push the lip gives a car as it leaves it, as a share of the car's own velocity (it leaves at 1 + push times the
+ * speed it arrived at, in the direction it arrived), applied once as its centre crosses the lip and before its driver is thrown (`LipThrow`). The ground gives a car no energy,
+ * powered or not: the kicker's arc and Ring Fling's incline cost a driven car what climbing them costs (the sedan reaches the High jump's lip at 16.5 m/s, not the 26.5 its
+ * bar asks), and the lip hands back the launch the game is about. High jump 0.9 returns the sedan's lip speed to the 31.4 m/s the free lift gave it (31.2), so the launch the
+ * sizing was tuned on is kept (0.64 is the least that clears every class's lip bar: the SUV's 16.2 m/s needs 26.5); Ring Fling 0.14: the monster's 36.1 of 37.5 on the real
+ * ground at 0.09, so 0.131 is the least. A share, not a speed: a car held to 70% of the speed leaves at 70% of it. The sizing's pins (`minigame-sizing.test.ts`) hold with
+ * `THROW_BOOST` retuned to the lip.
  */
-export const LIP_LAUNCH_PUSH: Readonly<Record<"highJump" | "ringFling", number>> = { highJump: 0.08, ringFling: 0 };
+export const LIP_LAUNCH_PUSH: Readonly<Record<"highJump" | "ringFling", number>> = { highJump: 0.9, ringFling: 0.14 };
 
 /**
  * Per minigame, the release on the thrown driver's launch velocity: `forward` scales its horizontal (x, z) components, `upward` its vertical (y)
@@ -118,8 +119,8 @@ export const LIP_LAUNCH_PUSH: Readonly<Record<"highJump" | "ringFling", number>>
  *   3 m/s along). The posts stand 11 m out, so `forward` keeps the longest best run (the best class's) landing in the box field before the
  *   net, and `upward` puts that run's score (its highest point within 2 m of the posts) in the band its crossing height at the posts'
  *   plane gives (`minigame-sizing.test.ts`).
- * - Ring Fling: a ballistic landing distance goes with the speed squared. `forward` 0.4 and `upward` 0.65 bring a full-throttle sedan
- *   family run down on the 30 cup, a 75% run on the 10 cup, and the monster's run is stopped by the backstop.
+ * - Ring Fling: a ballistic landing distance goes with the speed squared. `forward` 0.37 and `upward` 0.6 bring a full-throttle sedan
+ *   family run down on the 30 cup (31.3 to 31.9 m), a run at 80% of its speed on the 10 cup, and no class's run is carried past the backstop.
  * - Long jump: the barrier's throw is a flat skim with the same 3.2 m/s climb at any approach speed, so the release is built from the
  *   horizontal speed alone: `forward` is the share of it that is the whole release speed of a perfect bail (1.13 lands the standard classes'
  *   best runs at about 88 m and the muscle and monster at about 99 and 105), and the elevation and speed of any other bail are the bail's
@@ -127,8 +128,8 @@ export const LIP_LAUNCH_PUSH: Readonly<Record<"highJump" | "ringFling", number>>
  */
 export const THROW_BOOST: Readonly<Record<MinigameMode, { forward: number; upward: number; elevation: number | null }>> = {
   longJump: { forward: 1.13, upward: 1, elevation: null },
-  highJump: { forward: 0.112, upward: 1, elevation: null },
-  ringFling: { forward: 0.4, upward: 0.65, elevation: null },
+  highJump: { forward: 0.115, upward: 1.04, elevation: null },
+  ringFling: { forward: 0.37, upward: 0.6, elevation: null },
 };
 
 /**
