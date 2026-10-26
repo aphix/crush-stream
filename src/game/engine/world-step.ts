@@ -360,15 +360,16 @@ export function stepWorld(w: World, dt: number): void {
       car.slot = ci;
       // A wreck is its rigid body's: `integrate` steps the body and carries its masses.
       const wreck = car.deform.massActive;
-      for (let k = 0; k < w.stirs.length; k += 2) if (w.stirs[k] === i && w.stirs[k + 1] === ci) car.wake();
+      for (let k = 0; k < w.stirs.length; k += 2) if (w.stirs[k] === i && w.stirs[k + 1] === ci) car.stir();
       car.sliceBit = 1 << i;
       for (let k = 0; k < w.partStirs.length; k += 3) if (w.partStirs[k] === i && w.partStirs[k + 1] === ci) car.wakeBody(w.partStirs[k + 2]!);
       // A sleeper at rest that this slice wakes (`integrateWreck`: nothing but `stirNear` wakes a still one) was stirred in slice `i`.
       const sleeper = wreck && car.asleep && car.velocity.lengthSq() + car.angular.lengthSq() === 0;
       const slot = car.asleep ? WORK.asleepCarSlices : wreck ? WORK.wreckCarSlices : WORK.liveCarSlices;
       work[slot] = work[slot]! + 1;
+      car.stirred = false;
       car.integrate(hc);
-      if (sleeper && !car.asleep) car.stirSlice = i;
+      if (sleeper && car.stirred) car.stirSlice = i;
       if (!wreck) {
         if (car.deform.massActive) car.syncPose(hc);
         else car.refreshBasis();
