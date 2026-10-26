@@ -20,9 +20,9 @@ import { raceOn, recordRace, reelViews, secondsToFirstImpact, STAGED_MEETING_S, 
  *
  * Owner, 2026-10-07: "hold car collisions a little longer and human ejections about twice as long, in real world time". On
  * main the browser timed 4.50 s of wall clock from the cars meeting to the slow-mo's hand-back to 1×, and 3.65 s from a
- * driver thrown: `HOLD` is +40 % and 2× of those.
+ * driver thrown: `HOLD.impact` is +40 % of the first, `HOLD.throw` 2× of the second less 16 % (owner, 2026-10-25: the camera lingers on people too much).
  */
-const HOLD = { impact: 6.3, throw: 7.3 };
+const HOLD = { impact: 6.3, throw: 6.13 };
 /** Three steps of the reel's 120 Hz timeline. */
 const STEP = 1 / 40;
 
@@ -202,7 +202,7 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
       assert.deepEqual(lost.map((v) => `${v.scene} ${v.at.toFixed(2)}`), []);
     });
 
-    it("when each clip plays, then its slow-mo holds 6.3 s of wall clock past the cars meeting and past each later hit, 7.3 s past each driver thrown while it runs, every hold plays out in full before the clip ends, it hands back to 1× when the last of those is up, a later hit after that has a slow-mo of its own, and a driver thrown with none running plays at 1×", (t) => {
+    it("when each clip plays, then its slow-mo holds 6.3 s of wall clock past the cars meeting and past each later hit, 6.13 s past each driver thrown while it runs, every hold plays out in full before the clip ends, it hands back to 1× when the last of those is up, a later hit after that has a slow-mo of its own, and a driver thrown with none running plays at 1×", (t) => {
       staged();
       const held = views.filter((v) => v.kind !== "takeoff" && v.at >= v.hitAt);
       const key = (v: MomentView): string => `${v.scene}|${v.title}|${v.hitAt}`;

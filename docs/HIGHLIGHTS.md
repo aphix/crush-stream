@@ -283,8 +283,8 @@ the shot. A peer at 45 Hz and one at 60 Hz therefore frame the same camera at th
   that reaches the slow scale as the cars meet (`easeTimeScale`: about 0.8 wall s; the live sandbox's `preImpact` uses the
   same constant and ease), the crash clock's `impact` phase starts at the meeting, and the slow-mo is held `CONTACT_HOLD`
   (6.3 wall s) past the cars meeting and
-  `THROW_HOLD` (7.3 wall s) past each of the crash's own throws that comes while it runs (owner 2026-10-07: +40 % and 2×
-  of the 4.50 s and 3.65 s timed on main), then back to 1× to the clip's end. Each later hit of the clip's scope
+  `THROW_HOLD` (6.13 wall s) past each of the crash's own throws that comes while it runs (owner 2026-10-07: +40 % and 2×
+  of the 4.50 s and 3.65 s timed on main; owner 2026-10-25: the throw hold 16 % shorter, "lingers on people too much"), then back to 1× to the clip's end. Each later hit of the clip's scope
   (`ClipHit`) is a crash of its own (owner 2026-10-19, "each crash its own slow-mo"; `laterImpact`): one that lands while a
   slow-mo holds holds it `CONTACT_HOLD` past itself; one after the hand-back drops the clock back to approach
   `PRE_IMPACT_LEAD` before it, eases back down with the first's ease (from wherever the ease back up had got to, so it
@@ -296,7 +296,7 @@ the shot. A peer at 45 Hz and one at 60 Hz therefore frame the same camera at th
   clock, the clip's hold too (`PhaseClock.hold`: to the last slow-mo's hand-back, which the crash cam's window follows), so the letterbox,
   the HUD and the crash cam behave as in a live crash.
   A race that ends as a driver is thrown (Survival's run-ending throw) would leave his clip no hold, so at "over" the
-  recorder runs on (`CrashRecorder.over`) until `THROW_HOLD_SIM` (7.3 × 0.032 = 0.23 s of race) past the last throw,
+  recorder runs on (`CrashRecorder.over`) until `THROW_HOLD_SIM` (6.13 × 0.032 = 0.20 s of race) past the last throw,
   then files: every hold plays whole on recorded motion.
 - **Fudge.** The crash starts `PRE_IMPACT_LEAD` before the cars meet, where the replay's contact is still being worked
   out (owner 2026-10-10: cover the impact point with sparks "where it's probably still cooking"). From the slow-mo's start

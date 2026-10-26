@@ -30,6 +30,7 @@ export class FleetRamps extends Ground {
   constructor(scene: THREE.Scene) {
     super();
     this.addPlane(0, -DISC_RADIUS, DISC_RADIUS, -DISC_RADIUS, DISC_RADIUS, STEP_UP, DISC_RADIUS);
+    this.rimmed = true;
     // The slab: its width is rewritten as it crumples, its place as it slides.
     this.slabPrism = this.addPrism({ x: 0, z: 0, yaw: 0, hx: BARRIER_HALF.x, hz: BARRIER_HALF.z, base: 0, top: BARRIER_TOP, id: 0, moves: true });
     // A wedge: the plan from the slab's end to its toe, its top rising toward the slab (the plane's slope runs along the prism's z, away from the high end).

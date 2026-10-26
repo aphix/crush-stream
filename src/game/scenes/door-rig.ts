@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { detAtan2, hypot3 } from "../kernel/physics-core.js";
+import { detAtan2, detCos, hypot3 } from "../kernel/physics-core.js";
+import { MIRROR_FOLD_MAX } from "../vehicle/car-core.ts";
+import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import { bodyEdge, strikeCar, makeBox, partContact } from "../contact/external-contact.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
 
@@ -59,30 +61,41 @@ export const DOOR_LANES: Readonly<Record<DoorScenario, RamLane>> = {
 
 /** A mirror or panel lane's inner edge stands at least this far (m) outside the body's edge at the striker's heights: past the cage field's last node, half a lattice step out. */
 const BODY_LANE_GAP = 0.03;
-/** The mirror lane's inner edge stands this far (m) outside the mirror's base: well inside its reach, so the cap folds onto its stop. */
+/** The mirror lane's inner edge stands at most this far (m) outside the mirror's base: well inside its reach, so the cap folds onto its stop. */
 const MIRROR_LANE_GAP = 0.03;
+/** A short mirror's lane stands no further out than this share of the cap's sideways reach at its fold stop, so the cap is still in the lane when it gets there. */
+const MIRROR_LANE_STOP_SHARE = 0.75;
 /** The mirror lane's bottom stands this far (m) under the drawn mirror's top: clear of the belt and pillars under it, which a taller ram would dent. */
 const MIRROR_LANE_CATCH = 0.02;
 /** The mirror lane runs from just under the drawn mirror's top up this far (m): a head over the cap, never down onto the belt and the door below. */
 const MIRROR_LANE_TALL = 0.6;
+/** A lid lane's head reaches this far (m) up past the lowest point of the trunk lid where it hangs. */
+const LID_LANE_BITE = 0.03;
 
 /** A head's shape on a lane: a car-shaped striker for docs/CONTACT_PARITY.md. */
 export type RamShape = Partial<Pick<RamLane, "bottom" | "top" | "width">>;
 
 /**
- * `scenario`'s lane beside side `side` of `car` for a head of `shape`: a mirror lane on that car's own mirror (its top in the lane, its base
- * `MIRROR_LANE_GAP` in), a panel lane on its body; neither inside the body at the head's own heights, which would be a body hit.
+ * `scenario`'s lane beside side `side` of `car` for a head of `shape`, at the heights the world draws it (the style's own heights over the class's lift): a mirror
+ * lane on that car's own mirror (its top in the lane, its base `mirrorLaneGap` in), a panel lane on its body; neither inside the body at the head's own heights, which would be a body hit.
+ * A lid lane's head stands tall enough to meet the trunk lid where it hangs (`lidBottom`).
  */
-export function laneFor(scenario: DoorScenario, car: DeformableCar, side: -1 | 1, shape: RamShape | null = null): RamLane {
-  let lane = DOOR_LANES[scenario];
+export function laneFor(scenario: DoorScenario, car: DeformableCar, side: -1 | 1, shape: RamShape | null = null, lidBottom = -Infinity): RamLane {
+  const lift = CLASSES[carClass(car)].lift;
+  let lane = { ...DOOR_LANES[scenario], bottom: DOOR_LANES[scenario].bottom + lift, top: DOOR_LANES[scenario].top + lift };
   if (scenario === "mirror") {
-    const bottom = car.mirrorSpanY[1] - MIRROR_LANE_CATCH;
-    lane = { ...lane, inner: car.mirrorBaseX + MIRROR_LANE_GAP, bottom, top: bottom + MIRROR_LANE_TALL };
+    const bottom = car.mirrorSpanY[1] - MIRROR_LANE_CATCH + lift;
+    lane = { ...lane, inner: car.mirrorBaseX + mirrorLaneGap(car), bottom, top: bottom + MIRROR_LANE_TALL };
   }
+  if (lane.part === "lid") lane = { ...lane, top: Math.max(lane.top, lidBottom + LID_LANE_BITE) };
   if (shape) lane = { ...lane, ...shape };
   if (scenario !== "mirror" && lane.part !== "panel") return lane;
   const clear = bodyEdge(car, side, lane.bottom, lane.top) + BODY_LANE_GAP;
   return { ...lane, inner: scenario === "mirror" ? Math.max(lane.inner, clear) : clear };
+}
+
+function mirrorLaneGap(car: DeformableCar): number {
+  return Math.min(MIRROR_LANE_GAP, MIRROR_LANE_STOP_SHARE * car.style.door.mirrorReach * detCos(MIRROR_FOLD_MAX));
 }
 
 export const RAM_DEFAULTS = { kph: 12, kg: 300 } as const;
@@ -157,9 +170,11 @@ export class DoorRig {
 
   /** A head of another shape on the scenario's lane. */
   shape: RamShape | null = null;
+  /** The lowest point (m) the trunk lid drew when the last lid shot was fired: the lid lane's head reaches it. */
+  private lidBottom = -Infinity;
 
   get lane(): RamLane {
-    if (this.car) return laneFor(this.scenario, this.car, this.side, this.shape);
+    if (this.car) return laneFor(this.scenario, this.car, this.side, this.shape, this.lidBottom);
     const lane = DOOR_LANES[this.scenario];
     return this.shape ? { ...lane, ...this.shape } : lane;
   }
@@ -191,8 +206,10 @@ export class DoorRig {
     if (this.lane.part === "panel") {
       car.setDoorOpen(side, 0);
       car.setPanelOpen(side, this.lane.open);
-    } else if (this.lane.part === "lid") car.setLidOpen(this.lane.open);
-    else car.setDoorOpen(side, this.lane.open);
+    } else if (this.lane.part === "lid") {
+      car.setLidOpen(this.lane.open);
+      this.lidBottom = car.lidBottom();
+    } else car.setDoorOpen(side, this.lane.open);
     const masses = car.deform.masses;
     for (let i = 0; i < masses.length; i++) masses[i]!.local.toArray(this.particles0, i * 3);
     this.verts0.set((car.body.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array);

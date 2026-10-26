@@ -11,8 +11,8 @@ import { inside, occluder, type Occluder, type Sight } from "./spectate-cam.ts";
 /**
  * The ride cam over a dummy flung on a ballistic path (released from the origin under the sim's gravity, 60 Hz frames, the
  * camera's own smoothing, a 16:9 frame at the default 50° lens): how often he leaves the central 95% of the frame.
- * Measured with the aim not led (the windshield shot opens the ride, frames after it counted): High jump release 11.96%,
- * Ring Fling release 27.18%. With `MINIGAME_AIM_LEAD` (the follow shot opens the ride): 0 of every frame, the first included.
+ * Measured with the aim not led (the windshield shot opens the ride, frames after it counted): High jump release 0 % (11.96 %
+ * before the windshield shot's change to the follow shot orbited the heads), Ring Fling release 13.59 % (27.18 %). With `MINIGAME_AIM_LEAD` (the follow shot opens the ride): 0 of every frame, the first included.
  */
 const FRAME_SECONDS = 1 / FRAME_HZ;
 const DEFAULT_LENS_DEGREES = 50;
@@ -32,8 +32,6 @@ const CAR_SPEED = 5;
 const SLOWMO_AIM_OFFSET_LIMIT = 0.25;
 /** The follow shot's metres behind the heads (`BACK`): lifting the eye never moves it nearer than this. */
 const FOLLOW_STANDOFF = 4.5;
-/** Over the 5% the owner found unwatchable on the High jump. */
-const FAILING_SHARE = 0.05;
 const TOLERANCE = 1e-9;
 /** The engine's slow-mo after a throw: the sim runs this fraction of the wall's time for the first `SLOWMO_FRAMES` wall frames (measured in the real long jump), then at 1×. */
 const SLOWMO_SCALE = 0.032;
@@ -121,11 +119,11 @@ function filmFlight(release: THREE.Vector3, options: FlightOptions = {}): Flight
 }
 
 describe("given a dummy thrown up the High jump's path (release 4, 58, 0 m/s) filmed at the default 50° lens", () => {
-  it("when the aim is not led, then more than 5% of the frames after the windshield shot have him outside the central 95% (the fault)", () => {
+  it("when the aim is not led, then the eased change from the windshield shot orbits the heads and no frame after the windshield shot has him outside the central 95% (the fault was 11.96%)", () => {
     const flight = filmFlight(HIGH_JUMP_RELEASE);
     assert.ok(flight.windshieldFrames > 0, "the windshield shot opens the ride");
     assert.ok(flight.frames - flight.windshieldFrames > 600, "frames after the windshield shot");
-    assert.ok(flight.outsideAfterWindshield / (flight.frames - flight.windshieldFrames) > FAILING_SHARE, `${flight.outsideAfterWindshield} of ${flight.frames - flight.windshieldFrames} frames outside`);
+    assert.equal(flight.outsideAfterWindshield, 0, "frames outside after the windshield shot");
   });
 
   it("when the aim is led by MINIGAME_AIM_LEAD, then the ride opens on the follow shot and not one frame of the flight, the first included, has him outside the central 95%", () => {
@@ -171,11 +169,11 @@ describe("given the long jump's throw filmed in the engine's slow-mo (the sim at
   });
 });
 
-/** Camera poses a ride cam at its default framing (no lead) gave over each path before the lead existed: frame index (0 first), pose. */
+/** Camera poses a ride cam at its default framing (no lead) gave over each path: frame index (0 first), pose. The High jump's frame 120 and the Ring Fling's frame 60 lie in the windshield shot's ease to the follow shot, re-pinned when it began to orbit the heads (was x 5.100 and 6.066): frame 240 lies after it and stands where it did before the lead existed. */
 const UNCHANGED_POSES = [
-  { it: "the High jump path, frame 120", release: HIGH_JUMP_RELEASE, frame: 119, pose: [5.100226247559617, 30.617308552858937, 0.5887506368884301, 0.49960957172233206, 0.18245120430047626, -0.3179321766515528, 0.784870030605284] },
+  { it: "the High jump path, frame 120", release: HIGH_JUMP_RELEASE, frame: 119, pose: [10.346548192222755, 66.59948963302654, 3.0804805178221515, 0.612136678077203, 0.2632909934023136, -0.22691551914998573, 0.7102646600491413] },
   { it: "the High jump path, frame 240", release: HIGH_JUMP_RELEASE, frame: 239, pose: [10.732870510274214, 152.3726309414169, 1.7999999999999998, 0.09793471337795458, -0.5699997725585184, 0.06867181812202833, 0.8128918947773008] },
-  { it: "the Ring Fling path, frame 60", release: RING_FLING_RELEASE, frame: 59, pose: [6.065559755725496, 2.2120401147301036, 0.16918571393626006, 0.5393681119997217, 0.3166570789214994, -0.40755661206526356, 0.6653630152695924] },
+  { it: "the Ring Fling path, frame 60", release: RING_FLING_RELEASE, frame: 59, pose: [7.85243462883957, 2.8208774481939, 0.061635026417417485, 0.6566111370289573, 0.09776545340316233, -0.1683289177312756, 0.7286762698934501] },
 ] as const;
 
 describe("given a ride cam whose framing has no lead set", () => {
@@ -184,7 +182,7 @@ describe("given a ride cam whose framing has no lead set", () => {
   });
 
   for (const testCase of UNCHANGED_POSES) {
-    it(`when it films ${testCase.it}, then the camera stands exactly where it did before the lead existed`, () => {
+    it(`when it films ${testCase.it}, then the camera stands exactly at its pinned pose`, () => {
       const pose = filmFlight(testCase.release).poses[testCase.frame]!;
       for (let index = 0; index < testCase.pose.length; index++) {
         assert.ok(Math.abs(pose[index]! - testCase.pose[index]!) < TOLERANCE, `pose[${index}] ${pose[index]} against ${testCase.pose[index]}`);
