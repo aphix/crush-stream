@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { launch, makeCar, relaunchDamaged } from "../contact/crash-scenarios.test-util.ts";
@@ -68,27 +68,33 @@ function drive(w: World, steps: number): Row[] {
 }
 
 describe("given 16 sedans in two columns, 5 m nose to tail and 3.5 m abeam, at 15 m/s with the throttle held (the old reach's 6.3 m holds every one of them)", () => {
-  it("when lone cars run, then every step is one slice of every car (16 car-slices) and no step is cut; with them off the same field cuts every step to 3 slices (48)", () => {
+  /** The convoy run 3 s (240 coarse steps) lone and sliced once for the file: the first row reads its first second, the second its end. */
+  let runs: { on: Field; off: Field; rows: Row[]; cut: Row[] } | undefined;
+  const convoyRuns = (): NonNullable<typeof runs> => {
+    if (runs) return runs;
     const on = convoy(16, 2, 5, 3.5, SPEED, true);
-    const rows = drive(on.w, 80);
-    assert.ok(rows.every((r) => r.slices === 1 && r.loners === 0 && r.carSlices === 16 && r.missed === 0), `slices per step ${[...new Set(rows.map((r) => r.slices))]}, car-slices ${[...new Set(rows.map((r) => r.carSlices))]}`);
     const off = convoy(16, 2, 5, 3.5, SPEED, false);
-    const cut = drive(off.w, 80);
+    runs = { on, off, rows: drive(on.w, 240), cut: drive(off.w, 240) };
+    return runs;
+  };
+  after(() => {
+    if (runs) dispose([...runs.on.cars, ...runs.off.cars]);
+  });
+
+  it("when lone cars run, then every step is one slice of every car (16 car-slices) and no step is cut; with them off the same field cuts every step to 3 slices (48)", () => {
+    const rows = convoyRuns().rows.slice(0, 80);
+    assert.ok(rows.every((r) => r.slices === 1 && r.loners === 0 && r.carSlices === 16 && r.missed === 0), `slices per step ${[...new Set(rows.map((r) => r.slices))]}, car-slices ${[...new Set(rows.map((r) => r.carSlices))]}`);
+    const cut = convoyRuns().cut.slice(0, 80);
     assert.ok(cut.every((r) => r.slices === SLICES_PER_STEP && r.carSlices === 16 * SLICES_PER_STEP), "the old test cut every step of the convoy");
-    dispose([...on.cars, ...off.cars]);
   });
 
   it("when it runs for 3 s lone and sliced, then every car ends within 0.15 m and 0.1 m/s of where the sliced car does", () => {
-    const on = convoy(16, 2, 5, 3.5, SPEED, true);
-    const off = convoy(16, 2, 5, 3.5, SPEED, false);
-    drive(on.w, 240);
-    drive(off.w, 240);
+    const { on, off } = convoyRuns();
     for (const [i, car] of on.cars.entries()) {
       const ref = off.cars[i]!;
       const gap = dist(car, ref);
       assert.ok(gap < 0.15 && Math.abs(car.velocity.length() - ref.velocity.length()) < 0.1, `car ${i}: ${gap.toFixed(3)} m apart`);
     }
-    dispose([...on.cars, ...off.cars]);
   });
 
   it("when it drives at 40 m/s with 0.56 m between bumpers (a step of 0.5 m, as much as the gap), then it is one slice a step and ends within 0.15 m of the sliced field with no car crashed", () => {
@@ -117,26 +123,36 @@ function firstMask(apart: number, closing: number, trim?: (a: DeformableCar, b: 
   return rows[0]!.loners & 0b11;
 }
 
-/** The smallest centre to centre distance (m, to 0.1 mm) at which cars abeam closing at `closing` m/s are both lone: the clearance the test asks. */
-function threshold(closing: number, trim?: (a: DeformableCar, b: DeformableCar) => void): number {
+/** Whether cars abeam `apart` m, closing at `closing` m/s, are both lone. */
+const lone = (apart: number, closing: number, trim?: (a: DeformableCar, b: DeformableCar) => void): boolean => firstMask(apart, closing, trim) === 0b11;
+
+/** The smallest centre to centre distance (m, to 0.1 mm) at which still cars abeam are both lone: the clearance the test asks. Bisected once for the file. */
+let clearance: number | undefined;
+function stillClearance(): number {
+  if (clearance !== undefined) return clearance;
   let lo = 1;
   let hi = 8;
-  while (hi - lo > 1e-4) {
+  while (hi - lo > BISECT_M) {
     const mid = (lo + hi) / 2;
-    if (firstMask(mid, closing, trim) === 0b11) hi = mid;
+    if (lone(mid, 0)) hi = mid;
     else lo = mid;
   }
-  return hi;
+  return (clearance = hi);
 }
 
+/** The bisection's resolution (m), and how near (m) a clearance must match the hull rule's: each row reads the two distances either side of that band. */
+const BISECT_M = 1e-4;
+const MATCH_M = 0.002;
 /** The most the clearance may ask beyond the mirrors meeting (m): the lattice's outline and the lean of two bodies (about 0.19 m) and the slack (0.03 m). */
 const MOST_BEYOND = 0.25;
 /** The least it asks beyond them (m): each car's outline half lattice step and level-bar lean (`OUTLINE_REACH`, `LEVEL`), less a hair. */
 const LEAST_BEYOND = 0.17;
+/** The least a spin of 3 rad/s grows the clearance by (m). */
+const SPIN_GROWS = 0.08;
 
 describe("given two sedans abeam at 15 m/s, the step cut by a pair parked far off", () => {
   it("when their lateral closing speed is 0, then they stay lone from the distance their mirrors meet plus 0.17 to 0.25 m, and stay in the slices below it", () => {
-    const s = threshold(0);
+    const s = stillClearance();
     const sedan = makeCar("shape");
     /** The mirrors' tips of two sedans side by side meet at this centre distance (m): each car's own (`mirrorBaseX` + its door's `mirrorReach`). */
     const meet = 2 * (sedan.mirrorBaseX + sedan.style.door.mirrorReach);
@@ -147,24 +163,28 @@ describe("given two sedans abeam at 15 m/s, the step cut by a pair parked far of
 
   for (const closing of [1, 2, 4]) {
     it(`when one closes on the other at ${closing} m/s (below a crash's 5.5 m/s), then the clearance grows by exactly the step's travel (${closing} m/s of 1/80 s)`, () => {
-      const grown = threshold(closing) - threshold(0);
-      assert.ok(Math.abs(grown - closing * COARSE) < 0.002, `${grown.toFixed(4)} m against ${(closing * COARSE).toFixed(4)} m`);
+      const grown = stillClearance() + closing * COARSE;
+      assert.ok(!lone(grown - MATCH_M, closing), `lone ${MATCH_M * 1000} mm inside the still clearance plus the step's travel (${grown.toFixed(4)} m)`);
+      assert.ok(lone(grown + MATCH_M, closing), `held ${MATCH_M * 1000} mm outside the still clearance plus the step's travel (${grown.toFixed(4)} m)`);
     });
   }
 
   for (const closing of [6, 20]) {
     it(`when one closes on the other at ${closing} m/s (a crash's closing: the hit-ahead mark of \`nearHit\` holds the pair too), then the clearance is never less than the hull rule's: the 0-speed one and the step's travel`, () => {
-      assert.ok(threshold(closing) >= threshold(0) + closing * COARSE - 0.002, `lone from ${threshold(closing).toFixed(3)} m`);
+      const rule = stillClearance() + closing * COARSE;
+      assert.ok(!lone(rule - MATCH_M, closing), `lone ${MATCH_M * 1000} mm inside the hull rule's ${rule.toFixed(3)} m`);
     });
   }
 
   it("when one car is leaving the other (negative closing), then the clearance does not shrink below the 0-speed one", () => {
-    assert.ok(Math.abs(threshold(-10) - threshold(0)) < 0.002, "separating speed buys no clearance");
+    const s = stillClearance();
+    assert.ok(!lone(s - MATCH_M, -10), "separating speed buys clearance: lone inside the still one");
+    assert.ok(lone(s + MATCH_M, -10), "separating speed costs clearance: held outside the still one");
   });
 
-  it("when one is spinning at 3 rad/s (its rim moves 7 m/s), then the clearance grows by what the rim travels in a step, at least 0.08 m", () => {
-    const spun = threshold(0, (a) => a.angular.set(0, 3, 0));
-    assert.ok(spun - threshold(0) >= 0.08, `lone from ${spun.toFixed(3)} m`);
+  it(`when one is spinning at 3 rad/s (its rim moves 7 m/s), then the clearance grows by what the rim travels in a step, at least ${SPIN_GROWS} m`, () => {
+    const at = stillClearance() + SPIN_GROWS - BISECT_M;
+    assert.ok(!lone(at, 0, (a) => a.angular.set(0, 3, 0)), `the spinning pair is lone at ${at.toFixed(4)} m`);
   });
 });
 
