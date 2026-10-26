@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { FREEWHEEL, makeWorld, runWall, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
+import { FREEWHEEL, launch, makeWorld, runWall, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { pushCar } from "../contact/pair-contact.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { assignClass, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
@@ -52,6 +52,11 @@ function wreck(style: CarStyleId, cls: VehicleClassId): DeformableCar {
 function drawnNose(car: DeformableCar): number {
   car.deform.bakeSkin();
   car.deform.flushSkin(car.body.geometry, true);
+  return noseAsDrawn(car);
+}
+
+/** Mean inward travel (m) of the front band of the skin as last written to the mesh. */
+function noseAsDrawn(car: DeformableCar): number {
   const rest = car.deform.restSkin;
   const at = car.body.geometry.getAttribute("position").array;
   let front = -Infinity;
@@ -132,6 +137,29 @@ for (const [style, cls] of STYLES) {
       assertKept(`${style} restored`, before, drawnNose(copy));
       ticks(makeWorld([copy], false, false, FREEWHEEL), 1);
       assertKept(`${style} replayed`, before, drawnNose(copy));
+    });
+  });
+
+  describe(`given a ${style} that hits a wall at 50 km/h nose first and is held on it by its driver once the hit's crash window closes`, () => {
+    // The pickup still pops 2.1 mm at the freeze step itself (no drift before it: its front masses' car-frame z re-derived from the wall-held world).
+    const todo = style === "pickup" ? "the freeze step's own re-derive moves the pickup's nose 2.1 mm" : undefined;
+    it("when it settles there 3 s, then its drawn nose never jumps more than 2 mm between frames, its next bake included", { todo }, () => {
+      const car = styled(style, cls);
+      launch(car, 6.2, 0, -Math.PI / 2, -50 / 3.6, 0);
+      const w = makeWorld([car], true, false, FREEWHEEL);
+      for (let t = 0; t < 3 && (!car.crashed || car.deform.crushing); t += 1 / 60) tickWorld(w);
+      assert.ok(car.crashed && !car.deform.crushing, `${style}: the hit's crash window never closed`);
+      w.pedals.set(car, GAS);
+      let last = noseAsDrawn(car);
+      let worst = 0;
+      for (let t = 0; t < 3; t += 1 / 60) {
+        tickWorld(w);
+        const now = noseAsDrawn(car);
+        worst = Math.max(worst, Math.abs(now - last));
+        last = now;
+      }
+      worst = Math.max(worst, Math.abs(drawnNose(car) - last));
+      assert.ok(worst <= KEEP, `${style}: the drawn nose jumped ${(worst * 1000).toFixed(1)} mm between frames`);
     });
   });
 }

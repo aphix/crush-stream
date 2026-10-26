@@ -29,6 +29,8 @@ const POWER_HOLD = 0.1;
 const PACK_QUIET = 0.35;
 /** Quiet time (s) past which a wreck is planted: its frame moves from the cell onto its hubs (`measurePose`) and its hubs stop being clamped (`clampLocal`). */
 export const PLANT_QUIET = 0.2;
+/** How far (m) a body mass may stand off where the skin last baked it before the skin bakes again outside a crash window: a wreck its driver held on a wall crept 55 mm further into it with nothing baked, and the next bake (a thaw, a wake, a contact) drew the whole creep in one frame. */
+const SKIN_DRIFT = 0.002;
 
 const _a = new THREE.Vector3();
 const _b = new THREE.Vector3();
@@ -424,12 +426,25 @@ export abstract class DeformState extends DeformHit {
         this.skinFinal = true;
         this.cageExact = true;
       }
-    } else if (this.loadDirty[0] !== 0) {
-      // Masses moved with no crash window open (load crush `bakeLoadCrush`, the seat in `followGroup`): skin once from them.
+    } else if (this.loadDirty[0] !== 0 || this.skinDrifted()) {
+      // Masses moved with no crash window open (load crush `bakeLoadCrush`, the seat in `followGroup`, a creep or settle after the window): skin once from them.
       bake = true;
     }
     this.loadDirty[0] = 0;
     if (bake) this.bakeSkin();
+  }
+
+  /** Whether any body mass stands more than `SKIN_DRIFT` off its place at the last bake (`massPos`); a hub rides its suspension, not a dent. */
+  private skinDrifted(): boolean {
+    if (!this.skinBaked) return false;
+    const pos = this.massPos;
+    for (let i = 0, r = 0; i < this.masses.length; i++, r += 3) {
+      const m = this.masses[i]!;
+      if (m.hub) continue;
+      const p = m.local;
+      if (Math.abs(p.x - pos[r]!) > SKIN_DRIFT || Math.abs(p.y - pos[r + 1]!) > SKIN_DRIFT || Math.abs(p.z - pos[r + 2]!) > SKIN_DRIFT) return true;
+    }
+    return false;
   }
 
   /**

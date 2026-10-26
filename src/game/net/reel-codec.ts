@@ -501,9 +501,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 162: the cage no longer refits for the pose of a torn-off or shattered pane (it never read it): a wreck with a door off refits on fewer steps, and the cage's hold on its masses' sub-centimetre drift changes with it.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 161 or before no longer reads.
  * 163: an overlap push (`separateAlong`) leaves a wreck's crumple masses on the contact plane only while its crash window is open: a settled wreck moves whole, so a later shove or graze no longer springs its dent back out (a driven hatch rammed from behind: 19 mm of nose crush lost; flag 8JSS-CGEY). A clip of 162 or before no longer reads.
+ * 164: outside a crash window the skin bakes again once any body mass stands 2 mm off where it last baked it (`DeformState.stepCrush`): a wreck its driver holds on a wall after the hit creeps further in, and its skin and cage now follow the creep step by step where the next thaw drew it in one frame (a hatch 39 mm, a wagon 70 mm). A clip of 163 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 163;
+const REPLAY_VERSION = 164;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
