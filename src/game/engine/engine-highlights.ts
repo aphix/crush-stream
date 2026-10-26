@@ -707,7 +707,7 @@ export class ReelDirector {
     const { clip, sim } = p;
     const car = sim.cars[sim.subject]!;
     const cam = this.shotCam;
-    cam.frame(shot, car, this.host.sight(car), clip.x, clip.z);
+    cam.frame(shot, car, this.host.sight(car), clip.x, clip.z, sim.cars);
     if (!shot.hit) return;
     // The shot the cars meet in: its spot must see where they will meet (the record says where), else it is the chase.
     const still = this.host.still();

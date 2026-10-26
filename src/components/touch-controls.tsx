@@ -5,6 +5,7 @@ import { showsDriveReadouts } from "@/components/drive-readouts";
 import { RESET_GLOW } from "@/components/reset-prompt";
 import { Button } from "@/components/ui/button";
 import { PadButton, TouchPedals, ZONE } from "@/components/touch-pedals";
+import { thumbSideClass } from "@/components/thumb-side";
 import { TouchSteer } from "@/components/touch-steer";
 import { useCoarsePointer } from "@/components/use-coarse-pointer";
 import { useTouchScheme } from "@/components/use-touch-scheme";
@@ -185,10 +186,10 @@ function DriveControls({ state, engine }: HudProps) {
   const bail = state.minigame !== null && bailArmed(state.minigame);
 
   /**
-   * ARMING (Easy and Tilt, whose gas is automatic). In a live race the car pulls whenever the player drives. Everywhere else (sandbox, derby, range,
-   * Mini games) the seat can be "drive" without the player having decided to move: a Mini game starts its run when the pedal goes down, and gas
-   * on a car that is only being followed would take the wheel. So there auto-gas waits for the first finger on the steering control or on
-   * Brake, and drops again when the player stops driving, a Mini game is ready for its next run, or the race ends.
+   * ARMING (Easy, whose gas is automatic, and Tilt, whose wheel is the phone). In a live race the car pulls and turns whenever the player drives. Everywhere else
+   * (sandbox, derby, range, Mini games) the seat can be "drive" without the player having decided to move: a Mini game starts its run when the pedal goes
+   * down, and gas or tilt on a car that is only being followed would take the wheel. So there they wait for the first finger on the steering control,
+   * Brake or the pedal strip, and drop again when the player stops driving, a Mini game is ready for its next run, or the race ends.
    */
   const armed = useRef(false);
   const [, redraw] = useReducer((count: number) => count + 1, 0);
@@ -210,8 +211,8 @@ function DriveControls({ state, engine }: HudProps) {
   const [braking, setBraking] = useState(false);
   const autoGasLive = (): boolean => (raceLive ? driving : armed.current);
 
-  /** The fingers on the two pedals, and the pad's pedals written from them on every change. */
-  const fingers = useRef({ gas: false, brake: false });
+  /** What the right thumb reads (gas and brake, 0..1), and the pad's pedals written from it on every change. */
+  const fingers = useRef({ gas: 0, brake: 0 });
   const writePedals = (): void => {
     const touch = engine.current?.touch;
     if (!touch) return;
@@ -221,7 +222,7 @@ function DriveControls({ state, engine }: HudProps) {
   };
   // The pedals unmount with the seat or the scheme: a finger on one is gone with it.
   useEffect(() => {
-    fingers.current = { gas: false, brake: false };
+    fingers.current = { gas: 0, brake: 0 };
   }, [scheme, canDrive]);
   // Auto-gas has no finger to write it: it starts with the seat (a fresh race driver, a re-armed car) and stops with it, never stuck on after.
   const applyPedals = useEffectEvent(writePedals);
@@ -241,13 +242,14 @@ function DriveControls({ state, engine }: HudProps) {
     writePedals();
   };
   const gasOn = layout.autoGas && canDrive && !braking && autoGasLive();
-  // The drive dial (race, derby) takes the bottom row's outer corner; Boost and Handbrake stand beside it.
+  // The drive dial (race, derby) takes the bottom row's outer corner; the Disc's Boost and Handbrake stand beside it.
   const dial = race !== null ? showsDriveReadouts(race) : state.derbyView !== null;
+  const disc = layout.right === "buttons";
 
   return (
     <>
       {canDrive ? (
-        <div role="group" aria-label="Steering" className={cn("pointer-events-none absolute hud-bottom", mirror ? "hud-right" : "hud-left")}>
+        <div role="group" aria-label="Steering" className={cn("pointer-events-none absolute", disc ? "hud-bottom" : "thumb-bottom", thumbSideClass(mirror ? "right" : "left", disc))}>
           <TouchSteer steer={layout.steer} tilt={tilt} engine={engine} onArm={arm} steerLive={() => raceLive || armed.current} />
         </div>
       ) : null}
@@ -261,9 +263,9 @@ function DriveControls({ state, engine }: HudProps) {
           bail={bail}
           dial={dial}
           gasOn={gasOn}
-          onPedal={(pedal, down) => {
-            fingers.current[pedal] = down;
-            if (pedal === "brake") setBraking(down);
+          onThumb={(gas, brake) => {
+            fingers.current = { gas, brake };
+            setBraking(brake > 0);
             writePedals();
           }}
           onArm={arm}

@@ -1190,6 +1190,12 @@ export abstract class CarParts extends CarGlass {
     return n;
   }
 
+  /** Into `out` from index `n` on: the parts drawn off their rest (a door or lid swung open, a hinged or hanging panel or bumper, a shown hood) and the torn ones still drawn. Returns the count past the last one written. */
+  displacedParts(out: THREE.Object3D[], n: number): number {
+    for (const p of this.parts) if (p.object.visible && (p.detached || p.shown || p.hingeT > 0 || (p.swing !== null && p.swing.theta > 0))) out[n++] = p.object;
+    return n;
+  }
+
   /** Every part's object, torn or not, in `parts` order: what `PoseBlend` draws between two poses while the part is on the car (`partOn`). */
   partObjects(): THREE.Object3D[] {
     return this.parts.map((p) => p.object);
