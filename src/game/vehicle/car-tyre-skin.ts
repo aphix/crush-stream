@@ -15,6 +15,23 @@ const ENDS_ZONE = 0.9;
 const END_GAP = 0.01;
 /** How far (m) over the tyre's surface a skin point may rest and still be held: the hood and fenders, not the roof. */
 const REACH = 0.5;
+/** How far (m) a triangle spanning a tyre's top must stand over it at the samples `SAG_AHEAD` x `SAG_ALONG`: twice the 5 mm the drawn skin keeps over a tyre, so a stretched triangle's chord is lifted before it dips through. */
+const SAG_CLEAR = 0.01;
+/** The tyre top's samples: along the road in steps of this share of the tyre's radius either side of the hub (a chord of the arc stands 3 mm under it across a step of 0.1 radius: finer than a stretched triangle is narrow), and across the tread in these shares of its half width. */
+const SAG_STEP = 0.05;
+const SAG_AHEAD_COUNT = 39;
+const SAG_ALONG = [-1, -0.5, 0, 0.5, 1] as const;
+const SAG_COUNT = SAG_AHEAD_COUNT * SAG_ALONG.length;
+const _sampleX = new Float64Array(SAG_COUNT);
+const _sampleZ = new Float64Array(SAG_COUNT);
+const _sampleY = new Float64Array(SAG_COUNT);
+const _sampleSkin = new Float64Array(SAG_COUNT);
+const _sampleCorner = new Int32Array(SAG_COUNT);
+const _sampleShare = new Float64Array(SAG_COUNT);
+/** The least share of a sample's height that comes from points the hold can lift: below it the triangle sags on points the hold cannot move, and lifting the others would carry them a metre. */
+const SAG_LIFTABLE = 0.5;
+/** A lifted point moves the planes of every triangle it is a corner of, so the samples are read again until none is short: at most this many times. */
+const SAG_PASSES = 4;
 /** Rounding of the rest frame (m), rebuilt from matrices. */
 const REST_SLACK = 1e-3;
 /** The elements of a wheel's matrix that place its tyre: the axle (first column) and the hub (last). */
@@ -132,11 +149,15 @@ export class TyreSkin {
   private readonly lift: Float32Array;
   /** Per welded rest point, the push (m, along `pushDir`, the axle turned outward) this hold gives it instead of a lift. */
   private readonly push: Float32Array;
+  /** Per welded rest point, the most (m) the samples of one `liftSaggingTriangles` read ask it lifted further. */
+  private readonly bump: Float32Array;
   private readonly pushDir: Float32Array;
   /** Per wheel and vertex, how far (m) it rests over the tyre's surface; NaN for one that does not rest over it. */
   private readonly over: Float32Array[] = [];
   /** Per wheel and vertex, its height over the hub (m, up the tyre's frame) at rest. */
   private readonly restUp: Float32Array[] = [];
+  /** Per wheel, the corners (vertex ids, three a triangle) of the triangles with a point resting over its tyre. */
+  private readonly overTris: Int32Array[] = [];
   /** The class lift, hub shift and wheel scale `over` was found for. */
   private readonly overFor = new Float64Array(3).fill(NaN);
   /** Per wheel, its axle and hub in the mesh's frame at the last hold. */
@@ -157,6 +178,7 @@ export class TyreSkin {
     this.edges = restEdges(rest, mesh.geometry.index);
     this.lift = new Float32Array(this.edges.order.length);
     this.push = new Float32Array(this.edges.order.length);
+    this.bump = new Float32Array(this.edges.order.length);
     this.pushDir = new Float32Array(this.edges.order.length * 3);
     this.written = new Float32Array(rest.length);
   }
@@ -189,7 +211,22 @@ export class TyreSkin {
         restUp[i / 3] = _read.up;
         over[i / 3] = c >= -REST_SLACK && c < REACH ? c : NaN;
       }
+      this.overTris[w] = this.trianglesOver(over);
     }
+  }
+
+  /** The corners of the mesh's triangles that have a point in `over` (not NaN). */
+  private trianglesOver(over: Float32Array): Int32Array {
+    const index = this.mesh.geometry.index;
+    const corners = index ? index.count : over.length;
+    const found: number[] = [];
+    for (let t = 0; t + 2 < corners; t += 3) {
+      const a = index ? index.getX(t) : t;
+      const b = index ? index.getX(t + 1) : t + 1;
+      const c = index ? index.getX(t + 2) : t + 2;
+      if (!Number.isNaN(over[a]!) || !Number.isNaN(over[b]!) || !Number.isNaN(over[c]!)) found.push(a, b, c);
+    }
+    return Int32Array.from(found);
   }
 
   /** Holds the skin over each tyre of `wheels` not in `gone` (bit i: wheel i is the world's). `skinWritten`: the mesh's positions were just written from the cage. */
@@ -221,6 +258,15 @@ export class TyreSkin {
       this.needOver(pos, this.over[w]!, this.restUp[w]!, scale);
     }
     this.carryLift();
+    for (let pass = 0; pass < SAG_PASSES; pass++) {
+      let sagged = false;
+      for (let w = 0; w < wheels.length; w++) {
+        if ((gone >> w) & 1) continue;
+        if (this.liftSaggingTriangles(pos, w)) sagged = true;
+      }
+      if (!sagged) break;
+      this.carryLift();
+    }
     const { weld } = this.edges;
     for (let v = 0; v < weld.length; v++) {
       const p = weld[v]!;
@@ -231,6 +277,98 @@ export class TyreSkin {
     }
     attr.needsUpdate = true;
     computeNormalsFast(this.mesh.geometry);
+  }
+
+  /**
+   * A skin point held over a tyre is no tyre-top clearance for the triangle it shares with points the crush left away from it: a nose's
+   * edge stretched across the tyre sags under the arc between its lifted corner and its low ones. Each triangle with a point resting over
+   * wheel `w`'s tyre is read at the tyre's top samples (`SAG_AHEAD`, `SAG_ALONG`): where its plane stands under the tyre plus `SAG_CLEAR`,
+   * the points the hold can lift (those resting over the tyre) are lifted by the shortfall over their share of the plane there. True when any is.
+   */
+  private liftSaggingTriangles(pos: Float32Array, w: number): boolean {
+    const e = this.heldAt.subarray(w * HELD_ELEMENTS.length, (w + 1) * HELD_ELEMENTS.length);
+    const scale = hypot3(e[0]!, e[1]!, e[2]!);
+    for (let k = 0; k < 3; k++) _h[k] = e[3 + k]!;
+    const ax = e[0]! / scale;
+    const ay = e[1]! / scale;
+    const az = e[2]! / scale;
+    const flat = hypot2(ax, az);
+    const fx = -az / flat;
+    const fz = ax / flat;
+    const ux = fz * ay;
+    const uy = fz * ax - fx * az;
+    const uz = -fx * ay;
+    const r = this.frame.rig.tyre.r * scale;
+    const halfW = this.frame.rig.tyre.halfW * scale;
+    const over = this.over[w]!;
+    const tris = this.overTris[w]!;
+    const { weld } = this.edges;
+    for (let i = 0, n = 0; i < SAG_AHEAD_COUNT; i++) {
+      const ahead = (i - (SAG_AHEAD_COUNT - 1) / 2) * SAG_STEP;
+      const top = Math.sqrt(1 - ahead * ahead) * r;
+      for (let k = 0; k < SAG_ALONG.length; k++, n++) {
+        const across = SAG_ALONG[k]! * halfW;
+        _sampleX[n] = _h[0]! + fx * ahead * r + ax * across + ux * top;
+        _sampleZ[n] = _h[2]! + fz * ahead * r + az * across + uz * top;
+        _sampleY[n] = _h[1]! + ay * across + uy * top + SAG_CLEAR;
+      }
+    }
+    _sampleSkin.fill(-Infinity);
+    _sampleCorner.fill(-1);
+    for (let t = 0; t < tris.length; t += 3) {
+      const va = tris[t]!;
+      const vb = tris[t + 1]!;
+      const vc = tris[t + 2]!;
+      const a = va * 3;
+      const b = vb * 3;
+      const c = vc * 3;
+      const den = (pos[b + 2]! - pos[c + 2]!) * (pos[a]! - pos[c]!) + (pos[c]! - pos[b]!) * (pos[a + 2]! - pos[c + 2]!);
+      if (Math.abs(den) < 1e-12) continue;
+      const xLow = Math.min(pos[a]!, pos[b]!, pos[c]!);
+      const xHigh = Math.max(pos[a]!, pos[b]!, pos[c]!);
+      const zLow = Math.min(pos[a + 2]!, pos[b + 2]!, pos[c + 2]!);
+      const zHigh = Math.max(pos[a + 2]!, pos[b + 2]!, pos[c + 2]!);
+      const liftA = !Number.isNaN(over[va]!);
+      const liftB = !Number.isNaN(over[vb]!);
+      const liftC = !Number.isNaN(over[vc]!);
+      const ya = pos[a + 1]! + this.lift[weld[va]!]!;
+      const yb = pos[b + 1]! + this.lift[weld[vb]!]!;
+      const yc = pos[c + 1]! + this.lift[weld[vc]!]!;
+      for (let n = 0; n < SAG_COUNT; n++) {
+        const x = _sampleX[n]!;
+        const z = _sampleZ[n]!;
+        if (x < xLow || x > xHigh || z < zLow || z > zHigh) continue;
+        const l1 = ((pos[b + 2]! - pos[c + 2]!) * (x - pos[c]!) + (pos[c]! - pos[b]!) * (z - pos[c + 2]!)) / den;
+        const l2 = ((pos[c + 2]! - pos[a + 2]!) * (x - pos[c]!) + (pos[a]! - pos[c]!) * (z - pos[c + 2]!)) / den;
+        const l3 = 1 - l1 - l2;
+        if (l1 < 0 || l2 < 0 || l3 < 0) continue;
+        const y = l1 * ya + l2 * yb + l3 * yc;
+        if (y <= _sampleSkin[n]!) continue;
+        _sampleSkin[n] = y;
+        _sampleCorner[n] = t;
+        _sampleShare[n] = (liftA ? l1 : 0) + (liftB ? l2 : 0) + (liftC ? l3 : 0);
+      }
+    }
+    let raised = false;
+    for (let n = 0; n < SAG_COUNT; n++) {
+      const t = _sampleCorner[n]!;
+      if (t < 0 || _sampleShare[n]! < SAG_LIFTABLE) continue;
+      const short = _sampleY[n]! - _sampleSkin[n]!;
+      if (short <= 0) continue;
+      const by = short / _sampleShare[n]!;
+      for (let corner = 0; corner < 3; corner++) {
+        const v = tris[t + corner]!;
+        if (!Number.isNaN(over[v]!) && by > this.bump[weld[v]!]!) this.bump[weld[v]!] = by;
+      }
+      raised = true;
+    }
+    if (!raised) return false;
+    for (let k = 0; k < tris.length; k++) {
+      const p = weld[tris[k]!]!;
+      this.lift[p] = this.lift[p]! + this.bump[p]!;
+      this.bump[p] = 0;
+    }
+    return true;
   }
 
   /** Records wheel `w`'s axle and hub (`e`, null for a wheel gone, NaN); true when they changed since the last hold. */
