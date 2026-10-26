@@ -1,7 +1,10 @@
 /** Shared spawn layout so 1–N cars never start overlapping. */
 
+import * as THREE from "three";
 import { hypot2, detSin, detCos, detAtan2, detAsin } from "../kernel/physics-core.js";
 import { FLEET_STYLE_IDS, type CarStyleId } from "../vehicle/car-variants.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
+import { fellOffRim } from "../world/ground.ts";
 import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { DERBY_ARENA } from "./constants.ts";
 import { CLASSES, STYLE_CLASS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
@@ -245,10 +248,9 @@ export function layoutDerby(count: number, radius: number, rng: () => number = M
   return slots;
 }
 
-/** Fleet disc: a car this far (m) below its top leaves the soft-body sim and falls on as a fake (`beginFakeFall`). */
-export const FAKE_DEPTH = 2;
-/** Fleet disc: a car this far (m) below its top vaporizes into smoke. */
-export const VAPOR_DEPTH = 20;
+/** The depth (m) under the floor of its origin a sunk car is still met at: the derby arena's prisms start below it (`DERBY_PRISM_BASE`). */
+export const SUNK_CAR_DEPTH = 2;
+
 /** The driven car is back on the disc this long (s) after vaporizing; AI cars stay gone until reset. */
 export const RESPAWN_S = 2;
 /**
@@ -271,21 +273,23 @@ export function fleetEmptied(cars: readonly { vaporized: boolean }[], vaporAt: r
 /** Respawn this far (m) out from the disc's centre. */
 const RESPAWN_R = 36;
 
-/**
- * The fleet disc's edge rule for one car this frame at group height `y`: past `FAKE_DEPTH` the real car
- * becomes a falling fake, past `VAPOR_DEPTH` it vaporizes; vaporized for `goneFor` s, only the `driven`
- * car comes back.
- */
-export function edgeAction(
-  y: number,
-  falling: boolean,
-  vaporized: boolean,
-  driven: boolean,
-  goneFor: number,
-): "fake" | "vaporize" | "respawn" | null {
+const _lowestCorner = new THREE.Vector3();
+const _localUp = new THREE.Vector3();
+const _inverse = new THREE.Quaternion();
+
+/** Whether `car`'s lowest point (its box's lowest corner) is 10 mm under the disc's top over no floor: it has gone off the rim. */
+export function carFellOffRim(car: Pick<DeformableCar, "group" | "frame">): boolean {
+  const { half } = car.frame;
+  const q = car.group.quaternion;
+  _localUp.set(0, 1, 0).applyQuaternion(_inverse.copy(q).invert());
+  _lowestCorner.set(_localUp.x > 0 ? -half.x : half.x, _localUp.y > 0 ? 0 : 2 * half.y, _localUp.z > 0 ? -half.z : half.z).applyQuaternion(q).add(car.group.position);
+  return fellOffRim(_lowestCorner.x, _lowestCorner.y, _lowestCorner.z);
+}
+
+/** The fleet disc's edge rule for one car this frame: it vaporizes once it has fallen off the rim (`carFellOffRim`); vaporized for `goneFor` s, only the `driven` car comes back. */
+export function edgeAction(fellOff: boolean, vaporized: boolean, driven: boolean, goneFor: number): "vaporize" | "respawn" | null {
   if (vaporized) return driven && goneFor > RESPAWN_S ? "respawn" : null;
-  if (y < -VAPOR_DEPTH) return "vaporize";
-  return !falling && y < -FAKE_DEPTH ? "fake" : null;
+  return fellOff ? "vaporize" : null;
 }
 
 /**

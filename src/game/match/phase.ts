@@ -13,12 +13,11 @@ const CALM_SCALE = 0.16;
 export const SLOMO_HOLD = 6.5;
 const CALM_HOLD = 1.4;
 /**
- * Wall seconds a highlight reel's slow-mo holds past the cars meeting, and past each driver thrown out while it runs (owner,
- * 2026-10-07: collisions "a little longer", ejections "about twice as long", in the viewer's real time): +40 % and 2× of the
- * 4.50 s and 3.65 s the browser timed on main. It hands back to 1× when the last of them is up.
+ * Wall seconds a highlight reel's slow-mo holds past the cars meeting (+40 % of the 4.50 s timed on main) and past each driver
+ * thrown out while it runs (2× the 3.65 s timed there, then cut 16 %: the camera lingered on people), then back to 1×.
  */
 export const CONTACT_HOLD = 6.3;
-export const THROW_HOLD = 7.3;
+export const THROW_HOLD = 6.13;
 /** Sim seconds a reel's slow-mo plays over a thrown driver's hold: how far past his throw a recording must run to show it whole. */
 export const THROW_HOLD_SIM = THROW_HOLD * IMPACT_SCALE;
 /**

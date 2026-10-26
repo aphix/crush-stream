@@ -503,12 +503,12 @@ Loose wheels: `PartNetState.wheelLoose` (bit per wheel) and `wheels` (world pose
 ride in the wreck section; a client's `netFrame` never throws a wheel itself (`nudgeWheels(dt,
 false)`). Clients never step contacts, so `partContactPair` never runs on net cars.
 
-Fleet disc edge (EdgeFall): a car past the rim falls as a frozen fake 2 m down and vaporizes 20 m
-down. Clients follow the host's pose of a falling car (roll is interpolated the short way round),
-set `falling` so their `stepEdge` shrinks it, and take no wreck or wheel updates for it. A change
+Fleet disc edge (EdgeFall): a car whose lowest point (its box's lowest corner, `carFellOffRim`) is 10 mm under the disc's top
+over no floor is vaporized at once (owner 2026-10-25: the camera lingered on cars falling 20 m); the host no longer sends a
+falling fake (`falling` stays in the wire for clips recorded before). A change
 of `vaporized` calls `CrashEngine.setVaporized`, so each page plays the smoke burst itself. The host
 brings back its own driven car and every network peer's car (`NetPlay.remoteCar`) 2 s after it
-vaporizes. Measured (`.bench/net/edge2.mjs`, two pages over WebRTC): the host launched car 0 (its own)
+vaporizes. Measured before the rule (`.bench/net/edge2.mjs`, two pages over WebRTC, a fall to 2 m as a frozen fake and to 20 m before vaporizing): the host launched car 0 (its own)
 and car 1 (B's) off opposite rims while B watched car 0. B saw each car fall at 2.0 s, vaporize at
 3.6 s and come back at 5.6 s, 0.10–0.11 s after the host (1.9, 3.5, 5.5 s). On B, the falling car
 shrank to scale 0.23 before it vanished.

@@ -57,7 +57,8 @@ describe("given the highlight reel timeline of a 10 s clip whose first impact is
   it("when it has one hit, with or without a throw in its slow-mo, then its timeline is the one a reel played before later hits had slow-mo of their own, to the bit", () => {
     const pin = (t: typeof tl): unknown[] => [t.wall, t.sim.length, t.contact, t.hold, weighted(t.sim), weighted(t.scale), t.phase.indexOf("slowmo"), t.phase.indexOf("aftermath")];
     assert.deepEqual(pin(tl), [17.541666666666668, 2106, 4.6, 8.391666666666667, 12936122.622336175, 1358162.5092070885, 567, 1308]);
-    assert.deepEqual(pin(clipTimeline(4, 10, [4.05], [])), [20, 2401, 4.6, 10.933333333333334, 16370142.26882532, 1560823.1620817408, 567, 1613]);
+    // The throw's hold is THROW_HOLD 6.13 s (7.3 before: wall 20 -> 18.8667, hold 10.9333 -> 9.7667); the hit's own timeline above is unchanged.
+    assert.deepEqual(pin(clipTimeline(4, 10, [4.05], [])), [18.866666666666667, 2265, 4.6, 9.766666666666667, 14729763.787223917, 1466836.7705807388, 567, 1473]);
   });
 });
 

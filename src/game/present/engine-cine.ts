@@ -422,8 +422,9 @@ export class CrashCam {
    * Takes the camera for the replay cuts. False when the orbit / chase camera should run. With `hold` (the results reel)
    * it keeps ONE cut per crash, its eye where its cut begins, turning smoothly toward the car, and moves to another when a
    * later crash's look begins or its eye has no room or no sight of the car (`heldCut`); no usable eye: the reel camera.
+   * `lens` false: the cut's own lens is not set, a ride-along placing the camera over it owns the lens (two writers made it jump at each cut).
    */
-  direct(camera: THREE.PerspectiveCamera, wallDt: number, allowed: boolean, hold: CrashHold | null = null): boolean {
+  direct(camera: THREE.PerspectiveCamera, wallDt: number, allowed: boolean, hold: CrashHold | null = null, lens = true): boolean {
     if (this.camT < 0) return false;
     if (!allowed) this.camT = -1;
     else this.camT += wallDt;
@@ -495,7 +496,7 @@ export class CrashCam {
       fov += Math.max(0, this.widen);
     }
     camera.lookAt(aim);
-    if (camera.fov !== fov) {
+    if (lens && camera.fov !== fov) {
       camera.fov = fov;
       camera.updateProjectionMatrix();
     }
@@ -674,8 +675,8 @@ export class Cinematics {
   }
 
   /** The crash cam's `direct`, its letterbox drawn by the post chain. */
-  direct(camera: THREE.PerspectiveCamera, wallDt: number, allowed: boolean, hold: CrashHold | null = null): boolean {
-    const on = this.crash.direct(camera, wallDt, allowed, hold);
+  direct(camera: THREE.PerspectiveCamera, wallDt: number, allowed: boolean, hold: CrashHold | null = null, lens = true): boolean {
+    const on = this.crash.direct(camera, wallDt, allowed, hold, lens);
     this.post.letterbox = this.crash.letterbox;
     return on;
   }

@@ -223,6 +223,24 @@ export function blendPose(a: Float32Array, c: Float32Array, o: number, alpha: nu
   q.set(a[o + 3]!, a[o + 4]!, a[o + 5]!, a[o + 6]!).slerp(_qb.set(c[o + 3]!, c[o + 4]!, c[o + 5]!, c[o + 6]!), alpha);
 }
 
+const _poseQuat = new THREE.Quaternion();
+const _poseInverse = new THREE.Quaternion();
+const _localUp = new THREE.Vector3();
+const _corner = new THREE.Vector3();
+
+/** The lowest point of any part's box in `pose` (`PARTS` order, 7 floats each: position xyz, rotation xyzw) into `out`. */
+export function lowestPoint(pose: Float32Array, out: THREE.Vector3): void {
+  out.y = Infinity;
+  for (let k = 0; k < PARTS.length; k++) {
+    const o = 7 * k;
+    const half = PARTS[k]!.h;
+    _poseQuat.set(pose[o + 3]!, pose[o + 4]!, pose[o + 5]!, pose[o + 6]!);
+    _localUp.set(0, 1, 0).applyQuaternion(_poseInverse.copy(_poseQuat).invert());
+    _corner.set(_localUp.x > 0 ? -half[0] : half[0], _localUp.y > 0 ? -half[1] : half[1], _localUp.z > 0 ? -half[2] : half[2]).applyQuaternion(_poseQuat);
+    if (pose[o + 1]! + _corner.y < out.y) out.set(pose[o]! + _corner.x, pose[o + 1]! + _corner.y, pose[o + 2]! + _corner.z);
+  }
+}
+
 export type Doll = {
   bodies: RigidBody[];
   /** Its joints, `JOINTS` order. */
