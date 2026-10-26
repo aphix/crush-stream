@@ -80,21 +80,21 @@ export type FieldWatch = {
 
 /**
  * A derby of `n` AI cars through the engine's stack (`stepWorld` then `settleStep` each slice, with the derby's hit credit and arena,
- * cars dressed as `dressCar` does at the game's defaults), at the default slider, to the end of the heat.
+ * cars dressed as `dressCar` does at the game's defaults), at the default slider, to the end of the heat or to match second `until`.
  * `playerClass` is car 0's class (the HUD's player class, the sedan by default).
  * Spins: turn rate about the vertical (`verticalTurn`) > `SPIN_RATE_BAR` for > 0.2 s in the first 2 min, split by a contact in the 0.5 s before it was counted: a car, or a prop or wall of the arena (a crash's spin, not the AI's own driving).
  * Zips: a live mass centroid moving more than 3·v·h + 5 cm in a step. Impacts: AI hits closing ≥ 3 m/s,
  * by the attacker's face. Moves: swings, J-turns and sideswipes, each a manoeuvre (`MOVE_GAP`).
  */
-export function runField(n: number, seed: number, playerClass?: VehicleClassId, on?: FieldWatch): Field {
+export function runField(n: number, seed: number, playerClass?: VehicleClassId, on?: FieldWatch, until = Infinity): Field {
   try {
-    return runFieldHeat(n, seed, playerClass, on);
+    return runFieldHeat(n, seed, playerClass, on, until);
   } finally {
     leaveArena();
   }
 }
 
-function runFieldHeat(n: number, seed: number, playerClass?: VehicleClassId, on?: FieldWatch): Field {
+function runFieldHeat(n: number, seed: number, playerClass: VehicleClassId | undefined, on: FieldWatch | undefined, until: number): Field {
   const scene = new THREE.Scene();
   const cars = Array.from(
     { length: n },
@@ -163,7 +163,7 @@ function runFieldHeat(n: number, seed: number, playerClass?: VehicleClassId, on?
   // Match time: negative through the start lights, 0 at green.
   let t = match.time;
   let state = "running";
-  const end = heatLimit(n) + 1;
+  const end = Math.min(heatLimit(n) + 1, until);
   while (t < end && state === "running") {
     let vmax = 8;
     for (const c of cars) vmax = Math.max(vmax, c.speed);

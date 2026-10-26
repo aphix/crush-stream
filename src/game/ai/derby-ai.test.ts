@@ -81,6 +81,23 @@ describe("given derby drivers on the shared aggression slider, a parked rival 8 
   it("when only one rival is left alive at aggression 0.3, then the driver goes in for a hit instead of waiting for the others to soften it up", () => {
     assert.notEqual(tactic(0.3, {}, {}, false), "layback");
   });
+
+  it("when a cautious driver (aggression 0.5) keeps clear of an equal car but paces inside one 9 m pocket, then the deadlock breaker drops its caution within 9 s (its dwell is 6 s × its 0.5-1.5 roll) and it attacks", () => {
+    // The owner's scoot capture (2026-10-04): four sandbaggers pacing in place, no hit for 20 s. Rolling at 2 m/s on the same spot every
+    // tick: pacing, not wedged (a stopped car under throttle is the wedge breaker's, `unstick`).
+    const brain = new DerbyBrain();
+    brain.setAggression(0, 0.5);
+    const cars = field({ vz: 2 });
+    decide(brain, cars[0]!, cars);
+    assert.equal(brain.tacticOf(0), "layback", "it starts out keeping clear");
+    const ATTACKS = ["reverse", "jturn", "nose"];
+    let boldAt = -1;
+    for (let t = 0.1; t <= 9.05 && boldAt < 0; t += 0.1) {
+      decide(brain, cars[0]!, cars, 0.1);
+      if (ATTACKS.includes(brain.tacticOf(0))) boldAt = t;
+    }
+    assert.ok(boldAt > 0, "the driver kept clear for 9 s in one pocket: the deadlock breaker never fired");
+  });
 });
 
 describe("given a derby whose rules count a car out after 60 s without an aggressive hit or 60 s without moving", () => {
