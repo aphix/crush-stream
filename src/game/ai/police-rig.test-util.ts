@@ -14,9 +14,10 @@ export const pt = blankPoint();
 /**
  * `racers` racers (car 0 racing, any others half a lap on and not yet racing) and a stakeout of two units (cars `racers` and `racers + 1`) parked
  * ahead of car 0, `units` cops in all, the stakeout a `leadShare` of the lap on. The first unit has just woken (the racer passed it); the second,
- * 12 m on, is still parked. The local camera sees nothing (as the headless race's) until a test sets `camera.sees`.
+ * 12 m on, is still parked. The local camera sees nothing (as the headless race's) until a test sets `camera.sees`. `on`: the course (the oval by default);
+ * `woken` false: the stakeout is left parked with car 0 still at the lead, for a test that drives the racer past it.
  */
-export function rig(units = 2, seed = 1, leadShare = 0.4, racers = 1) {
+export function rig(units = 2, seed = 1, leadShare = 0.4, racers = 1, on: Track = track, woken = true) {
   const first = racers;
   const cars: AiCar[] = Array.from({ length: racers + units }, (_, i) => blankAiCar(i));
   const hunt = new Uint8Array(cars.length);
@@ -41,8 +42,8 @@ export function rig(units = 2, seed = 1, leadShare = 0.4, racers = 1) {
     sirens: () => {},
     hidden: () => !camera.sees,
   };
-  const police = new PoliceBrain(track, new RaceBrain(track, racers), first, units, seed);
-  const lead = track.length * leadShare;
+  const police = new PoliceBrain(on, new RaceBrain(on, racers), first, units, seed);
+  const lead = on.length * leadShare;
   let time = 0;
   let finishedAt = Number.NaN;
   const beat = () => {
@@ -58,21 +59,23 @@ export function rig(units = 2, seed = 1, leadShare = 0.4, racers = 1) {
   };
   /** Car 0 on the centreline `ds` m along from the first unit's spot. */
   const sit = (ds: number) => {
-    const s = track.project(spots[first]!.x, spots[first]!.z, -1, blankProjection()).s;
-    const p = track.pointAt(s + ds, pt);
+    const s = on.project(spots[first]!.x, spots[first]!.z, -1, blankProjection()).s;
+    const p = on.pointAt(s + ds, pt);
     Object.assign(cars[0]!, { x: p.x, z: p.z });
   };
-  const start = track.pointAt(lead, pt);
+  const start = on.pointAt(lead, pt);
   Object.assign(cars[0]!, { x: start.x, z: start.z });
   for (let i = 1; i < racers; i++) {
-    const p = track.pointAt(lead + track.length / 2, pt);
+    const p = on.pointAt(lead + on.length / 2, pt);
     Object.assign(cars[i]!, { x: p.x, z: p.z });
   }
   beat();
   assert.ok(spots[first] && spots[first + 1], "the stakeout parked");
-  sit(5);
-  beat();
-  assert.deepEqual(police.chasers(cars, []).map((c) => c.id), [first], "the first unit chases");
-  assert.equal(stored.length, 0);
+  if (woken) {
+    sit(5);
+    beat();
+    assert.deepEqual(police.chasers(cars, []).map((c) => c.id), [first], "the first unit chases");
+    assert.equal(stored.length, 0);
+  }
   return { police, cars, hunt, stored, parks, knockedOut, camera, beat, run, sit, world, clock: () => time, finish };
 }
