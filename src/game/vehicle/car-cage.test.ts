@@ -327,11 +327,8 @@ describe("given a fitted car whose masses have not moved", () => {
 describe("given a fitted car whose panel poses are moved", () => {
   const POSE = 7;
   const testCases = [
-    { it: "when an attached lid's position moves 0.5 cm, then nothing is refitted", off: false, at: 0, by: 0.005, expectedRefit: false },
-    { it: "when an attached lid's position moves 2 cm, then the cage is refitted", off: false, at: 0, by: 0.02, expectedRefit: true },
-    { it: "when an attached lid turns 0.003 in a quaternion component (0.006 rad), then nothing is refitted", off: false, at: 3, by: 0.003, expectedRefit: false },
-    { it: "when an attached lid turns 0.02 in a quaternion component (0.04 rad), then the cage is refitted", off: false, at: 3, by: 0.02, expectedRefit: true },
-    { it: "when a torn-off panel's pose moves 1 m, then nothing is refitted, the cage never read it", off: true, at: 0, by: 1, expectedRefit: false },
+    { it: "when an attached panel's pivot moves 1 mm, then the cage is refitted", off: false, expectedRefit: true },
+    { it: "when a torn-off panel's pose moves 1 m, then nothing is refitted, the cage never read it", off: true, expectedRefit: false },
   ] as const;
 
   for (const testCase of testCases) {
@@ -343,7 +340,7 @@ describe("given a fitted car whose panel poses are moved", () => {
       assert.ok(panel >= 0, "fixture: the style has a panel that is no glass");
       live.panelOn[panel] = testCase.off ? 0 : 1;
       cage.refit(live);
-      live.panelPose[panel * POSE + testCase.at] += testCase.by;
+      live.panelPose[panel * POSE] += testCase.off ? 1 : 0.001;
       assert.equal(cage.refit(live), testCase.expectedRefit, "refitted");
     });
   }

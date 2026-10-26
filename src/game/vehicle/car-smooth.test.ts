@@ -1648,8 +1648,7 @@ const SIM_DIGEST_BY_STYLE = [
   // The hatchback's again when the cage kept the underside a body rests on, over its vertex budget (CarRig rig-lip): d1b0dbd0... ->
   // ace6af8c...; the other six unchanged.
   // The hatchback's again for its roof rolling round into its side glass (`roofSection` .4/.9, as the coupe's): the panes' tops and roof cage follow it: ace6af8c... -> b1cfea45....
-  // Again for the cage's refit tolerance on a panel's pose (REPLAY 162): the hatch's swinging tailgate no longer refits the cage on every bit: ebe36deb... -> f57f8543...; the other six unchanged.
-  { id: "hatchback", digest: "f57f854357d3e19b7d9e74959f1b8a55323c995d2b4194a973717f7c146f78ae" },
+  { id: "hatchback", digest: "ebe36deb3b9abba36059c479f4e64273f0c8a91acf0192f1154cd8cdde409a05" },
   { id: "wagon", digest: "0757e5fb68345b9f9efa11c07346853aa3327f2d23fa8e496f6fbe3913474e56" },
   // The coupe re-pinned for its nose deck lowered 0.5-2.8 cm over z 1.76-1.945 to the reference's side line.
   { id: "coupe", digest: "682c9d6e7a063bdc56cc7b474f262db33753c349383fe063ad68a27fb4d78694" },

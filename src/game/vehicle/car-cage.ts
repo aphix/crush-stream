@@ -472,17 +472,14 @@ function unpackInputs(inputs: Float64Array, out: CageLive): void {
  * 5 cm fit bar (`CAGE_STEP`'s), so the cage never stands more than 1 cm off what the last raster read, well inside the bar.
  */
 const REFIT_EPSILON = CAGE_STEP / 5;
-/** `REFIT_EPSILON`'s turn: a panel's hinge reaches about a metre, so 0.01 rad moves its far edge 1 cm; a quaternion component moves half the angle. */
-const REFIT_POSE_ROTATION = 0.005;
 /** Per panel in `packInputs`' layout: its pose is a position (x, y, z), then a quaternion (x, y, z, w). */
 const POSE_STRIDE = 7;
-const POSE_QUATERNION = 3;
 
 /**
- * Whether `now` differs from `last` (same layout) enough to refit: a mass, a hub or a panel's pose more than `epsilon` away (a pose's turn
- * by `REFIT_POSE_ROTATION`), or any panel flag, roof clamp or imprint cut at all. A torn-off or shattered pane's pose is none of the
- * cage's (`skinCage` leaves its vertices at rest), so it never counts. With no `epsilon` (an exact fit) every input counts as it is. The
- * cluster maps and cage coefficients are fitted from the masses, so they move only when a mass does and are not read here.
+ * Whether `now` differs from `last` (same layout) enough to refit: a mass or a hub more than `epsilon` away, or any panel flag, the pose of a
+ * panel the cage reads, roof clamp or imprint cut at all. A torn-off or shattered pane's pose is none of the cage's (`skinCage` leaves its
+ * vertices at rest), so it never counts; with no `epsilon` (an exact fit) every input does. The cluster maps and cage coefficients are fitted
+ * from the masses, so they move only when a mass does and are not read here.
  */
 function movedSince(style: CageStyle, last: Float64Array, now: Float64Array, epsilon: number): boolean {
   const massEnd = style.massCount * 3;
@@ -498,10 +495,7 @@ function movedSince(style: CageStyle, last: Float64Array, now: Float64Array, eps
   for (let panel = 0; panel < panels; panel++) {
     if (epsilon > 0 && now[flagsStart + panel] === 0 && style.panelGlass[panel] === 0) continue;
     const pose = poseStart + panel * POSE_STRIDE;
-    for (let k = pose; k < pose + POSE_STRIDE; k++) {
-      const tolerance = k < pose + POSE_QUATERNION ? epsilon : epsilon > 0 ? REFIT_POSE_ROTATION : 0;
-      if (Math.abs(now[k]! - last[k]!) > tolerance) return true;
-    }
+    for (let k = pose; k < pose + POSE_STRIDE; k++) if (now[k] !== last[k]) return true;
   }
   for (let k = poseEnd; k < last.length; k++) if (now[k] !== last[k]) return true;
   return false;
