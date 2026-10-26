@@ -158,6 +158,10 @@ export abstract class DeformState extends DeformHit {
     return this.massByName(name).local;
   }
 
+  massRest(name: MassName): THREE.Vector3 {
+    return this.massByName(name).rest;
+  }
+
   massWorld(name: MassName): THREE.Vector3 {
     return this.massByName(name).world;
   }

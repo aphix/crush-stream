@@ -3,7 +3,7 @@ import { MAX_CARS } from "../scenes/fleet.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";
 import { copDriver } from "../vehicle/ejection.ts";
-import { driverSeat } from "../vehicle/interior.ts";
+import { driverSeat, HEAD } from "../vehicle/interior.ts";
 import { PART_KIND } from "../vehicle/part-geometry.ts";
 import type { DriverLook } from "./driver-look.ts";
 import { JOINTS, PARTS } from "./ragdoll-body.ts";
@@ -113,6 +113,28 @@ const _turn = new THREE.Quaternion();
 const _scale = new THREE.Vector3();
 const _p = new THREE.Vector3();
 const _q = new THREE.Quaternion();
+const _lean = new THREE.Quaternion();
+const X_AXIS = new THREE.Vector3(1, 0, 0);
+const _duck = { lean: 0, down: 0 };
+/** A ducking head stays this far (m) ahead of the roof's rear end: the roof rolls down there, open from above until the rear glass. */
+const ROOF_END_CLEAR = 0.05;
+
+/**
+ * How `style`'s driver leans further back (rad) and then slumps down (m) to bring his head `d` m lower, under a roof crushed that
+ * far: he leans until his head would leave the roof's rear end or meet the cab's back wall (a short truck cab's come first), then slumps.
+ */
+function duck(style: BodyStyle, d: number): { lean: number; down: number } {
+  _duck.lean = 0;
+  _duck.down = 0;
+  if (d <= 0) return _duck;
+  const { recline, hip } = driverSeat(style);
+  const back = Math.max(style.rearBulkhead.z, style.roofZ[0]) + HEAD.r + ROOF_END_CLEAR;
+  const wall = Math.asin(THREE.MathUtils.clamp((hip.z - back) / HEAD.up, 0, 1));
+  const to = Math.min(wall, Math.acos(Math.max(-1, Math.cos(recline) - d / HEAD.up)));
+  _duck.lean = Math.max(0, to - recline);
+  _duck.down = d - HEAD.up * (Math.cos(recline) - Math.cos(recline + _duck.lean));
+  return _duck;
+}
 
 /**
  * Every car's driver, seated in it while he is in: one instanced draw (`DummyMesh` on `seatedGeometry`), the drivers shown packed
@@ -156,9 +178,14 @@ export class SeatedDrivers {
       const pose = seatedPose(car.style);
       const frame = car.interior.matrixWorld;
       frame.decompose(_at, _turn, _scale);
+      const place = driverSeat(car.style);
+      const drop = duck(car.style, -car.cabin.roofSink);
+      _lean.setFromAxisAngle(X_AXIS, -drop.lean);
       // His legs (parts from LEFT_LEG on) are cut from `seatedGeometry`.
       for (let k = 0; k < LEFT_LEG; k++) {
-        this.mesh.pose(s, k, _p.copy(pose.p[k]!).applyMatrix4(frame), _q.copy(_turn).multiply(pose.q[k]!));
+        _p.copy(pose.p[k]!).sub(place.hip).applyQuaternion(_lean).add(place.hip);
+        _p.y -= drop.down;
+        this.mesh.pose(s, k, _p.applyMatrix4(frame), _q.copy(_turn).multiply(_lean).multiply(pose.q[k]!));
       }
       s++;
     }

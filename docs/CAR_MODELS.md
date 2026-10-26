@@ -198,12 +198,14 @@ with the small parts at mid distance; the undercarriage (`UNDERBODY_SEAT`) is in
 see it; each axle's shock shafts slide into the frame's shock bodies, so the pair telescopes through the suspension's travel.
 
 - **Seat lean:** seats and the seated driver lean `SEAT_RECLINE` back; under a low roof the seat leans further (to
-  `SEAT_RECLINE` + 0.35 rad) until the driver's head clears the roof line by 5 cm.
+  `SEAT_RECLINE` + 0.35 rad) until the driver's head, hair and cap (`HEAD.r` 0.15 m about its centre) clear the roof line by 5 cm.
 - **The driver:** `present/seated-drivers.ts` draws every car's driver seated (one `DummyMesh` for the field, slot = the car's
   index), posed by `seatedPose(style)`: hips on the H-point, back on the seat, hands on the rim's grips, soles on the floor. He
   wears the car's driver look (`RagdollSystem.carDriverLook`, as he is thrown) and hides once `driverOut` is set or the far
-  cut takes his seat. In the garage no one sits in the car: the standing dummy beside it is the driver. The National Mall's
-  VIP rides with his hips on the passenger H-point (`seats.front` mirrored).
+  cut takes his seat. Under a crushed roof (`CarCabin.roofSink`, the roof mass's drop past the cabin's pose) he ducks: he leans
+  further back about his hips until his head would leave the roof's rear end, then slumps down the rest. In the garage no one
+  sits in the car: the standing dummy beside it is the driver. The National Mall's VIP rides with his hips on the passenger
+  H-point (`seats.front` mirrored).
 - **Headliner:** the drawn roof panel is a thin shell (the cage's stays a closed wedge): its inner face, inset 4 mm from the roof
   skin's cants and crown, is the headliner, dark primer. It is skinned with the body, so it follows a crushed roof and never stands
   outside it (`shellTwins` pairs each headliner vertex with the skin vertex it is inset from). An end cap (bowed in plan with its

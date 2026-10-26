@@ -15,8 +15,8 @@ import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 
 /** Gap (m) between a seated head's top and the roof line over it (the roof skin, the headliner its inner face). */
 const HEAD_CLEAR = 0.05;
-/** The seated dummy's head centre along his back from the H-point, its radius, and his shoulders along his back (m): `PARTS`/`JOINTS` over the hips' 0.84. */
-const HEAD = { up: 0.79, r: 0.11 } as const;
+/** The seated dummy's head centre along his back from the H-point and its reach from there to its hair or cap (m; the cap's top 0.141, the hair's back 0.145), and his shoulders along his back: `PARTS`/`JOINTS` over the hips' 0.84. */
+export const HEAD = { up: 0.79, r: 0.15 } as const;
 const SHOULDER_UP = 0.51;
 /** The most a seat leans back past `SEAT_RECLINE` (rad) to keep a head under a low roof, and the step it tries. */
 const RECLINE_MAX = 0.35;
@@ -195,6 +195,8 @@ function supportVertices(geometry: THREE.BufferGeometry): Float32Array {
 export class CarCabin {
   /** The cabin's pose (`car.interior`): `fitInterior` moves it with the crushed cell. */
   readonly pose = new THREE.Group();
+  /** How far (m, 0 or less) the roof has dropped past the pose (`squeezeUnderRoof`): the seated driver ducks under it. */
+  roofSink = 0;
   /** The bay, then the front and rear crash bars. */
   private readonly under: readonly PartSeat[];
   private readonly rests: readonly THREE.Vector3[];
@@ -318,6 +320,7 @@ export class CarCabin {
     const [floor, top] = this.shellY;
     // The pose already moved the shell by the cell's y; only the roof's further drop squeezes it.
     const sink = roofY === null ? 0 : Math.min(0, roofY - this.roofRest - this.pose.position.y);
+    this.roofSink = sink;
     const sy = (top + sink - floor) / (REF_CABIN.roof - REF_CABIN.floor);
     this.shell.scale.y = sy;
     this.shell.position.set(this.shellXZ[0], floor - REF_CABIN.floor * sy, this.shellXZ[1]);

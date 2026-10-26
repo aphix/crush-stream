@@ -75,17 +75,17 @@ export function hingePose(p: DetachPart, deform: StreamedDeformation, out: Float
   out[o + 6] = detCos(turn / 2);
 }
 
-/** The masses the cabin interior is placed by (`interiorPose`'s `lx`/`rx`, then `cy`/`cz`). */
+/** The masses the cabin interior is placed by (`interiorPose`'s `lx`/`rx`, then the cell's travel `dy`/`dz`). */
 export const INTERIOR_MASSES = ["doorL", "doorR", "cell"] as const;
 
 /**
- * Where the interior mesh stands once the cabin is crushed, from the door masses' x (`lx`, `rx`) and the cell mass's y and z (`cy`,
- * `cz`), as its x scale then its x, y, z position into `out`. The one placement the drawn mesh (`CarParts.fitInterior`) and the
- * car's cage (`CageRig`: the interior is what shows through a gone pane) both take.
+ * Where the interior mesh stands once the cabin is crushed, from the door masses' x (`lx`, `rx`) and the cell mass's travel off its
+ * rest in y and z (`dy`, `dz`), as its x scale then its x, y, z position into `out`. The one placement the drawn mesh
+ * (`CarParts.fitInterior`) and the car's cage (`CageRig`: the interior is what shows through a gone pane) both take.
  */
-export function interiorPose(lx: number, rx: number, cy: number, cz: number, out: Float64Array): void {
+export function interiorPose(lx: number, rx: number, dy: number, dz: number, out: Float64Array): void {
   out[0] = Math.max(0.32, Math.min(1, Math.max(0.35, rx - lx) / 1.56));
   out[1] = (lx + rx) * 0.5;
-  out[2] = Math.max(-0.08, Math.min(0.1, cy - 0.55));
-  out[3] = cz * 0.35;
+  out[2] = Math.max(-0.08, Math.min(0.1, dy));
+  out[3] = dz * 0.35;
 }

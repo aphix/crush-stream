@@ -848,7 +848,8 @@ export abstract class CarParts extends CarGlass {
     const l = this.deform.massLocal(INTERIOR_MASSES[0]);
     const r = this.deform.massLocal(INTERIOR_MASSES[1]);
     const cell = this.deform.massLocal(INTERIOR_MASSES[2]);
-    interiorPose(l.x, r.x, cell.y, cell.z, _interior);
+    const cellRest = this.deform.massRest(INTERIOR_MASSES[2]);
+    interiorPose(l.x, r.x, cell.y - cellRest.y, cell.z - cellRest.z, _interior);
     this.interior.scale.x = _interior[0]!;
     this.interior.position.set(_interior[1]!, _interior[2]!, _interior[3]!);
     this.cabin.fit(this.deform);
