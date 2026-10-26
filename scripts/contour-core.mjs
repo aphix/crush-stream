@@ -1,7 +1,7 @@
 /**
  * Surface contour diagnostics' shared core (geometry only, never airflow): the built car's drawn surface as world triangles with
  * their mesh kinds, exact plane cuts of it, the per-style intended edges a score leaves alone, the cool-to-warm turn colours and the
- * three-quarter camera the shots use. `contour-sections.mjs`, `contour-ribbons.mjs` and `contour-zebra.mjs` build on it.
+ * three-quarter camera the shots use. `contour-sections.mjs`, `contour-defects.mjs` and `contour-ripples.mjs` build on it.
  */
 import * as THREE from "three";
 
