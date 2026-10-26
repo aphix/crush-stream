@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { DERBY_ARENA } from "./constants.ts";
 import { bodyRadius, carOfClass, containmentCases } from "./derby-containment.test-util.ts";
 
-containmentCases(4);
+containmentCases();
 
 const { radius } = DERBY_ARENA;
 /** How far (m) the group origin stands off the inner face in the two poses below: well under the half-height the drawn body of a car on its nose or tail hangs off the origin. */
