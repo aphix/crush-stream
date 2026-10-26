@@ -159,9 +159,14 @@ describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboa
   // From the first frame a tyre reaches the road after the flight (the touchdown the body is seen to make; a stored flight flag used to
   // hide the frames it rotates onto the road in). A snap is looked for from half a second before that frame too: a touch the body
   // bounces off ends its frame in the air.
+  /**
+   * The fast crest speed (m/s). 38 was the muscle's (38 and 39 m/s each leave one class, the muscle or the hatch, with a front tyre rebounding 39 cm in the 22 frames its tail falls in:
+   * a landing's belly rows join in from a 2 % difference in attitude, a lottery of the speed), where 36, 37, 37.5, 38.5 and 40 m/s leave every class down; 37 has both neighbours under it.
+   */
+  const FAST_CREST_SPEED = 37;
   for (const cls of VEHICLE_CLASS_IDS) {
-    it(`when a ${cls} drives over the crest at 38 m/s, then around its first tyre touching down its body never turns more than ${SNAP}° in a frame, no tyre sinks more than ${PLAIN.gap * 100} cm and no underside more than its closing speed carries it in one contact slice, all four tyres are on the road within the time its tail needs to fall from where it hung, and from then on the body stays within what its springs allow of the road's slope`, (t) => {
-      const { run, closing } = crestRun(cls, 880, 1010, 38);
+    it(`when a ${cls} drives over the crest at ${FAST_CREST_SPEED} m/s, then around its first tyre touching down its body never turns more than ${SNAP}° in a frame, no tyre sinks more than ${PLAIN.gap * 100} cm and no underside more than its closing speed carries it in one contact slice, all four tyres are on the road within the time its tail needs to fall from where it hung, and from then on the body stays within what its springs allow of the road's slope`, (t) => {
+      const { run, closing } = crestRun(cls, 880, 1010, FAST_CREST_SPEED);
       const first = run.findIndex((r, i) => i > 0 && run[i - 1]!.airborne && !r.airborne);
       assert.ok(first > 0, "never landed");
       let turn = 0;

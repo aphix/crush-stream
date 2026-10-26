@@ -27,9 +27,9 @@ Start pad (6 m) -> start hill (falls 3 m over `START_HILL_LENGTH`: 11.8 / 23.5 /
   Radius sweep at 60 degrees (lip height; sedan / muscle / truck / monster unboosted apex m; ratio): R20 7.0 m 60/142/110/219 3.64 | R22 8.0 m 127/146/123/213 1.81 | R25 9.5 m 135/158/125/200 1.67 | R28 11.0 m 125/151/127/207 1.66 | R30 12.0 m 136/154/125/218 1.75. R25 was chosen (R20 is a cliff for the sedan: lip speed 18.9 vs 27 m/s). After the climb fix the R20 cliff no longer holds (R20 at 60 degrees: sedan lip 26.8 m/s; R15 26.4; R10 26.0), so the 'can fail' controls are the shipped radius one 5-degree step past the sweep's end (80 degrees: sedan 14.0 m/s, under the 17 floor; the sweep ends at 75 where it reads 18.0), a 15 m radius at 60 degrees for the climb bar (26.42 under 26.5), and a 3 m radius at 85 degrees for the apex ratio (10.4: the sedan family cliffs, the monster carries).
 - **Ring Fling**: 5 degree incline plus a 4 m ball-hop quarter wave (1.005 m, the machine's 3.35 in on 120 in), lip 1.31 m high, hill 24 m, run-up 30 m; the board starts 6 m past the lip.
 
-**Forced lip throw** (High jump, Ring Fling; `minigame-lip.ts` `LipThrow`): there is no wall on those ramps, so when a car's centre crosses the lip plane going +x (tested between two `collide` calls, so a fast slice cannot step over it) the lip pushes it on (`launchPush`: its whole velocity times `1 + LIP_LAUNCH_PUSH[mode]`, the High jump's 0.08 and Ring Fling's 0, a share so a governed run keeps its proportions), its driver leaves through the windscreen at that car's full 3D velocity (`EjectionWatch.throwDriverNow`) and the driverless car is cut to `LIP_CAR_SPEED_KEEP` (0.25) of its speed so it falls short of the boxes and board. The push is the kicker's launch made explicit: the ground gives a driven car no energy (a rigid tyre's lift comes off its plan speed, and the pull down the arc is its spring load's), so what the arc takes from a monster the lip hands back. **Back drop**: behind the lip the floor falls away at `LIP_BACK_FACE_PITCH_DEGREES` (60) down to the landing level.
+**Forced lip throw** (High jump, Ring Fling; `minigame-lip.ts` `LipThrow`): there is no wall on those ramps, so when a car's centre crosses the lip plane going +x (tested between two `collide` calls, so a fast slice cannot step over it) the lip pushes it on (`launchPush`: its whole velocity times `1 + LIP_LAUNCH_PUSH[mode]`, the High jump's 0.9 and Ring Fling's 0.14, a share so a governed run keeps its proportions), its driver leaves through the windscreen at that car's full 3D velocity (`EjectionWatch.throwDriverNow`) and the driverless car is cut to `LIP_CAR_SPEED_KEEP` (0.3) of its speed so it falls short of the boxes and board. The push is the kicker's launch made explicit: the ground gives a car no energy, powered or not (a rigid tread on it pushes along the face's normal, and the pull down the arc is its spring load's), so what the arc costs a driven car, the sedan reaching the High jump's lip at 16.5 m/s against the 26.5 its bar asks, the lip hands back. **Back drop**: behind the lip the floor falls away at `LIP_BACK_FACE_PITCH_DEGREES` (60) down to the landing level.
 
-Class lip speeds at full throttle (horizontal m/s; High jump on a 5 cm grid, at the centre, after the lip's push; before it): High jump sedan 33.9 (31.2), police 33.4 (31.0), hatch 33.4 (31.0), suv 32.0 (29.8), truck 31.1 (29.0), muscle 38.1 (35.2), monster 29.4 (27.2: under its 28.5 bar without the push). Ring Fling sedan 32.4, muscle 35.7, truck 32.3, monster 38.2, police 32.5 (no push).
+Class lip speeds at full throttle (horizontal m/s; High jump on a 5 cm grid, at the centre, after the lip's push; before it): High jump sedan 31.4 (16.5), police 31.8 (16.7), hatch 30.9 (16.3), suv 30.7 (16.2), truck 31.3 (16.4), muscle 34.9 (18.4), monster 35.6 (18.7). Ring Fling sedan 35.2 (30.9), muscle 38.6 (33.9), truck 34.7 (30.4), monster 39.5 (34.7), police 35.4 (31.1), hatch 34.9 (30.6), suv 34.4 (30.2).
 
 ## 3. Scoring
 
@@ -56,10 +56,10 @@ Why a triple: the sim keeps a car's horizontal speed on a slope and lets its ver
 | Mode | forward | upward | Intent |
 |---|---|---|---|
 | Long jump | 1.13 | 1 | the base of a perfect bail: the whole release speed is 1.13 x the car's horizontal speed at 45 degrees; the bail (section 1) sets the angle and speed of every other press |
-| High jump | 0.112 | 1 | forward keeps the best run landing in the box field before the net; upward puts it over the posts |
-| Ring Fling | 0.4 | 0.65 | a ballistic landing that puts a full-throttle sedan on the 30 cup |
+| High jump | 0.115 | 1.04 | forward keeps the best run landing in the box field before the net; upward puts it over the posts |
+| Ring Fling | 0.385 | 0.65 | a ballistic landing that puts a full-throttle sedan on the 30 cup |
 
-Retuned 2026-10-20 for the seat-velocity launch (the push out follows the pitched nose, so a kicker's throw leaves 1.5 m/s higher and 1.5 m/s less along; was 1.15, 0.108 / 1.03 and 0.4 / 0.7), so each mode lands where it was tuned. Retuned again after the climb fix: high jump 0.117 / 1.03 -> 0.112 / 1 (forward keeps the longest best run, now the muscle's, in the box field; upward puts its crossing at the posts' plane in the owner's 150-160 m: 156.9 m).
+Retuned 2026-10-20 for the seat-velocity launch (the push out follows the pitched nose, so a kicker's throw leaves 1.5 m/s higher and 1.5 m/s less along; was 1.15, 0.108 / 1.03 and 0.4 / 0.7), so each mode lands where it was tuned. Retuned again after the climb fix: high jump 0.117 / 1.03 -> 0.112 / 1 (forward keeps the longest best run, now the muscle's, in the box field; upward puts its crossing at the posts' plane in the owner's 150-160 m: 156.9 m). Retuned again with the lip's push (the ground gives a car no energy, powered or not: High jump 0.9, Ring Fling 0.14): high jump 0.112 / 1 -> 0.115 / 1.04 (the best class, now the monster's, crosses the posts' plane at 158.5 m; the muscle's 152.3), Ring Fling 0.4 -> 0.385 (the push's lip speeds are 9% above the old free-lift ones for the sedan family).
 
 Unboosted a best long jump rests 16-26 m.
 
@@ -67,33 +67,33 @@ Unboosted a best long jump rests 16-26 m.
 
 Worst of 3 repeats, from `minigame-sizing.test.ts`.
 
-**High jump** (boost 0.112 / 1; best run: score, the highest point above the lip within `SCORE_BAND_HALF_DEPTH` 2 m of the posts / apex @ distance / lands, all m)
+**High jump** (boost 0.115 / 1.04; best run: score, the highest point above the lip within `SCORE_BAND_HALF_DEPTH` 2 m of the posts / apex @ distance / lands, all m)
 
 | Class | Score / apex @ dist / lands |
 |---|---|
-| sedan | 111.3 / 111.3 @ 10.2 / 19.9 |
-| police | 111.0 / 111.0 @ 10.2 / 19.9 |
-| hatch | 116.6 / 116.6 @ 10.5 / 20.5 |
-| suv | 115.7 / 115.7 @ 10.3 / 20.0 |
-| truck | 136.5 / 136.5 @ 12.4 / 23.9 |
-| monster | 112.3 / 112.3 @ 9.9 / 20.0 |
-| muscle | 170.3 / 182.9 @ 17.5 (past the band; crosses the posts' plane at 156.9) / 33.0 |
+| sedan | 147.8 / 149.2 @ 14.3 / 27.5 |
+| police | 148.7 / 150.6 @ 14.6 / 28.0 |
+| hatch | 146.5 / 147.5 @ 14.1 / 27.0 |
+| suv | 145.5 / 145.9 @ 13.7 / 26.4 |
+| truck | 145.7 / 146.1 @ 13.7 / 26.6 |
+| monster | 169.0 / 178.0 @ 16.8 (crosses the posts' plane at 158.5) / 32.4 |
+| muscle | 165.2 / 178.2 @ 17.7 (crosses the posts' plane at 152.3) / 33.5 |
 
-An 80% run (the best throw scaled alike horizontally and vertically) scores sedan 60.7, police 59.5, hatch 66.7, suv 62.5, truck 88.0, muscle 121.8, monster 55.1 m (the bar `SLOW_RUN_HEIGHT_MINIMUM` 50 holds; the monster's 55.1 the least). The best-height band is the owner's 150-160 m crossing height times the best run's score over its crossing (170.3 / 156.9 = 1.085): 163-174 m (was 162-173 from a ratio measured on the artifact). Frame top 225 m, 45 slats, 22 height marks, net height 85 m, posts 11 m, net 41 m, box piles end 33.6 m.
+An 80% run (the best throw scaled alike horizontally and vertically) scores sedan 98.9, police 100.0, hatch 97.7, suv 96.5, truck 96.7, muscle 118.6, monster 118.7 m (the bar `SLOW_RUN_HEIGHT_MINIMUM` 50 holds; the SUV's 96.5 the least). The best-height band is the owner's 150-160 m crossing height times the best run's score over its crossing (170.3 / 156.9 = 1.085): 163-174 m (was 162-173 from a ratio measured on the artifact); the best runs now score 169.0 (the monster's, crossing at 158.5) and 165.2 (the muscle's, 152.3). Frame top 225 m, 45 slats, 22 height marks, net height 85 m, posts 11 m, net 41 m, box piles end 33.6 m.
 
-The table above and its bars are measured on the free pad: the posts and slats are taken out of the ragdoll's world (`rangeFor` in the sizing test), so they size the launch alone. With the frame in (the sizing test's framed row, one throw per class's best run at the steady 60 Hz; score / lands, m): sedan 111.3 / 16.0, police 111.0 / 17.0, hatch 116.6 / 21.9, suv 115.7 / caught (NaN), truck 134.8 / 13.2, monster 112.3 / 18.6, muscle 156.3 / 31.1. A slat catches the muscle's best run on the way up inside the band, so it costs 13.9 m of score (170.3 to 156.3); every best run still scores well up the boards and the best class stays over the owner's accepted 150 m (the framed bars). With the middle signs gone (they were 4.7 m tall colliders between the posts) the sedan, police and hatch are no longer caught at the plane: they land 16-22 m out instead of resting 8.5-9.8 m out. `HIGH_JUMP_MEASURED` stays the free pad's: it is the most a run can score, which the frame is sized over. Whether a run is caught is a lottery a browser's own frame times change, so a score with the frame in is a range, not a number.
+The table above and its bars are measured on the free pad: the posts and slats are taken out of the ragdoll's world (`rangeFor` in the sizing test), so they size the launch alone. With the frame in (the sizing test's framed row, one throw per class's best run at the steady 60 Hz; score / lands, m): sedan 140.2 / caught (NaN), police 139.3 / caught (NaN), hatch 139.9 / 17.0, suv 140.0 / caught (NaN), truck 140.1 / 26.4, monster 164.1 / 33.8, muscle 156.6 / 29.9. A slat catches the best runs on the way up inside the band (it costs 5.0 to 9.4 m of score: the sedan 7.6, muscle 8.5, truck 5.6, monster 5.0, police 9.4, hatch 6.5, suv 5.5); every best run still scores well up the boards and the best class stays over the owner's accepted 150 m (the framed bars). `HIGH_JUMP_MEASURED` stays the free pad's: it is the most a run can score, which the frame is sized over. Whether a run is caught is a lottery a browser's own frame times change, so a score with the frame in is a range, not a number.
 
-**Ring Fling** (boost 0.4 / 0.65; lip h/v m/s -> rest x, cup)
+**Ring Fling** (boost 0.37 / 0.6; lip h/v m/s -> rest x, cup; the mid run's throttle and brake hold its horizontal speed to `MID_RUN_SPEED_SHARE` of the best run's at the lip)
 
 | Class | Full throttle | 70% run |
 |---|---|---|
-| sedan, hatchback, wagon | 32.4/13.5 -> 31.9-32.1, cup 30 | sedan 21.6/8.9 -> 18.6, 0 (short of the 10 cup at 20.1 m); hatchback/wagon 23.3-23.6, cup 10 |
-| truck | 32.2/13.7 -> 32.0, cup 30 | 23.3-23.6, cup 10 |
-| police | 32.5/13.6 -> 32.0, cup 30 | 23.3-23.6, cup 10 |
-| muscle | 35.6/14.9 -> 38.1, cup 50 | 21.0, cup 10 |
-| monster | 38.2/18.0 -> 41.0, bounced off the backstop (0) | 25.1, cup 20 |
+| sedan, hatchback, wagon | 35.2/16.1 -> 31.5, cup 30 (hatchback 34.9/16.1 -> 31.5, suv 34.5/16.4 -> 31.3) | sedan 25.2/11.6 -> 18.8, 0 (short of the 10 cup); hatchback 19.2, suv 19.0, 0 |
+| truck | 34.5/16.3 -> 31.6, cup 30 | 24.6/11.5 -> 19.1, 0 |
+| police | 35.3/16.4 -> 31.9, cup 30 | 25.6/11.7 -> 19.5, 0 |
+| muscle | 38.4/18.0 -> 37.2, cup 50 | 27.6/13.0 -> 23.1, cup 10 |
+| monster | 37.8/18.4 -> 35.1, cup 40 | 26.5/12.6 -> 20.5, cup 10 |
 
-Sedan speed-share sweep (share of full-throttle lip speed -> cup): 0.72-0.86 -> 10, 0.88-0.94 -> 20, 0.96-1.00 -> 30; below 0.70 no cup.
+Sedan speed-share sweep (share of full-throttle lip speed -> cup): 0.78-0.84 -> 10, 0.88-0.92 -> 20, 0.96-1.00 -> 30; below 0.78 no cup.
 
 **Long jump** (the timed bail; `THROW_BOOST.longJump` forward 1.13; best run of each class it throws, landing / rest in m by press offset from the hit, early and late alike, seed 0 of `minigame-sizing.test.ts`; the monster flies the barrier and throws nobody)
 

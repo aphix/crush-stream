@@ -30,3 +30,23 @@ describe("given a crushed car whose own cage fields are refitted in place", () =
     assert.equal(k, -1, `the roof patch differs from a fresh sync's at parameter ${k}: ${a[k]} vs ${b[k]}`);
   });
 });
+
+describe("given a car with a point in another car's top, closing at a crash's speed", () => {
+  it("when the slice ends, then the surfaces report the two cars met and the stepping car rests on nothing", () => {
+    const a = carInState("loaded", "sedan", "sedan");
+    const b = carInState("loaded", "sedan", "sedan");
+    a.slot = 0;
+    b.slot = 1;
+    const surfaces = new CarSurfaces();
+    surfaces.cars = [a, b];
+    surfaces.sync(0, a);
+    surfaces.sync(1, b);
+    const met: [number, number][] = [];
+    surfaces.met = (x, y) => void met.push([x, y]);
+    surfaces.begin(a);
+    surfaces.strike(1);
+    surfaces.commit();
+    assert.deepEqual(met, [[0, 1]], "the strike was not reported as a meeting");
+    assert.equal(a.restsOn, null, "a car it struck at a crash's speed is not what it rests on");
+  });
+});

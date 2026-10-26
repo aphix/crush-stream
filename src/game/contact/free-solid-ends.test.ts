@@ -9,6 +9,8 @@ import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
 import type { PropHits } from "./prop-contact.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
+import * as THREE from "three";
+import { cageLift } from "../vehicle/car-cage-rig.ts";
 
 /** How far (m) the box's end plane stands inside the car's nose, in the vertex-depth cases. */
 const NOSE_IN_END = 0.02;
@@ -74,6 +76,41 @@ describe("given a car at rest straddling a 0.5 m wide, 1.2 m thick open-ended po
     const depth = faceDepth(car, box);
     assert.ok(depth > 0.5, `depth ${depth.toFixed(3)} m`);
     assert.ok(Math.abs(faceExit.nx + 1) < 1e-9 && Math.abs(faceExit.nz) < 1e-9, `exit (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`);
+  });
+});
+
+/** The car's roll (rad) about its length: lying on its side, the roof toward -x, where its flat axes put every vertex at its car-frame x, a car's height from the world's. */
+const ON_ITS_SIDE = Math.PI / 2;
+/** How far (m) the brute-force depth over the drawn vertices may differ from `faceDepth`'s. */
+const DEPTH_EPS = 1e-9;
+
+describe("given a car lying on its side at rest, beside a 4 m wide, 1 m thick wall face seen from its -x side", () => {
+  it("when the face's depth into the drawn body is read, then it is the deepest of the vertices where the car's whole turn puts them, not where its heading's flat axes do", () => {
+    const car = makeCar("shape");
+    launch(car, 0, 0, 0, 0, 0);
+    car.group.rotation.set(0, 0, ON_ITS_SIDE, "YXZ");
+    car.group.updateMatrixWorld(true);
+    car.refreshBasis();
+    const box = makeBox();
+    box.yaw = -Math.PI / 2;
+    box.hx = 2;
+    box.hz = 0.5;
+    box.x = -1.4;
+    box.z = 0;
+    const lift = cageLift(car);
+    const { pos, panelOn } = car.cage.fields;
+    const { vertexCount, vertexGroup } = car.cage.style;
+    const at = new THREE.Vector3();
+    let deepest = -Infinity;
+    for (let k = 0; k < vertexCount; k++) {
+      const group = vertexGroup[k]!;
+      if (group > 0 && panelOn[group - 1] === 0) continue;
+      at.set(pos[k * 3]!, pos[k * 3 + 1]! + lift, pos[k * 3 + 2]!).applyQuaternion(car.group.quaternion).add(car.group.position);
+      if (Math.abs(at.z - box.z) > box.hx) continue;
+      deepest = Math.max(deepest, box.hz - box.x + at.x);
+    }
+    const depth = faceDepth(car, box);
+    assert.ok(Math.abs(depth - deepest) < DEPTH_EPS, `faceDepth ${depth.toFixed(4)} m, the drawn vertices' deepest ${deepest.toFixed(4)} m`);
   });
 });
 

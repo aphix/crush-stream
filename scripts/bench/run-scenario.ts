@@ -153,8 +153,9 @@ for (const method of ["posePart", "followGlass"] as const) {
   };
 }
 
-// Staged with every knob at its off value, so both arms start from the same state; the arm's knobs apply after.
+// Staged with every knob at its off value (the activation too: its default is on), so both arms start from the same state; the arm's knobs apply after.
 loadEpicenter(EPICENTER_AT_LOAD);
+EPICENTER_KNOBS.find((k) => k.id === "epi.on")!.set(0);
 const sim = await scenario.build();
 const label = scenario.label(sim);
 // An epicenter arm runs with `frozenCheck` on unless its own knobs say otherwise (`epi.frozenCheck=0`: the timing arms): a write to a frozen car without a thaw is then counted (`frozenBreaches`) and cannot hide.

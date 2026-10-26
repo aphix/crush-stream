@@ -31,14 +31,17 @@ export abstract class DeformFreeze extends DeformContact {
    * placement (`world = local x matrixWorld`) is only right while the last write to `local` was that re-derive. That is why the pre-pair and post-pair `syncPose` and the structure step all
    * skip on `frozen`, the one slice after the flag is set (still the whole integrate) included. The re-derive has one exception, in that freeze slice: a hub that stands more than `HUB_PIN_MAX`
    * from its pin keeps the pin (`integrateWreck`), since a planted hub of a spinning wreck stands up to 1.5 m off its frame place at that moment (derby seed 7, 13.2 s) and the re-derive froze it there.
+   * `mayStart` is the world's say on a wreck that is not frozen yet (`mayFreeze`, `world-step`): a wreck nobody drives that still moves or flies is left to the whole path, whose slice brings it to rest (frozen while
+   * tumbling or sliding it rocked or coasted for good); once frozen it stays so, as before.
    */
-  settleFreeze(dt: number): void {
+  settleFreeze(dt: number, mayStart = true): void {
     this.sinceThaw += dt;
     const want =
       this.massActive &&
       epicenterOn() &&
       this.mode === "shape" &&
       !this.bidirectional &&
+      (this.frozen || mayStart) &&
       this.quietTime() >= EPICENTER.relockHold &&
       this.sinceThaw >= EPICENTER.thawHold &&
       (EPICENTER.settleMps <= 0 || this.bodyV.length() < EPICENTER.settleMps) &&

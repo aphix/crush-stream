@@ -21,6 +21,7 @@ import { CageRig, centreY } from "./car-cage-rig.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { setBare } from "./interior.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
+import { HUB_PIN_MAX, HUB_PULL_STEP } from "../deform/constants.ts";
 
 const _p = new THREE.Vector3();
 const _m = new THREE.Matrix4();
@@ -40,8 +41,6 @@ const WRECK_REST_S = 1;
  * drawn body 18.6 cm in the ground.
  */
 const SLEEP_SINK = 0.01;
-/** How far (m) a hub's car-frame place re-derived from its world place may be from the place its clamp pinned, in the slice a freeze starts in, before the pin is kept (`integrateWreck`). */
-const HUB_PIN_MAX = 0.3;
 /** Each wheel's contact standing on level road, as built and at a spawn (`resetContact`): no lift, the normal up, full grip, the world's. */
 const STANDING = new Float64Array(4 * HIT_SIZE);
 for (let i = 0; i < 4; i++) {
@@ -512,12 +511,13 @@ export class DeformableCar extends CarParts {
     const toLocal = _m.copy(g.matrixWorld).invert();
     // The slice a freeze starts in (`DeformFreeze.settleFreeze` set `frozen`, the rigid step has not cached it yet): a hub that stands far off the car-frame place its clamp pinned keeps that place, which is what the whole path
     // draws (a wheel sits at its hub's frame x and z). Re-derived from its world place, as every other mass is, a wreck that spins on a running drivetrain has hubs standing up to 1.5 m off the frame (planted where the world
-    // left them), and the frozen wreck kept them there for good: a wheel drawn at the other end of the car. A hub within `HUB_PIN_MAX` of its pin (the 2 cm a planted hub stands off it in a quiet wreck) is re-derived like
-    // every other mass: it stays where the whole path leaves it.
+    // left them), and the frozen wreck kept them there for good: a wheel drawn at the other end of the car. A hub within `HUB_PIN_MAX` of its pin in plan (the 2 cm a planted hub stands off it in a quiet wreck; the tether
+    // (`DeformSolve.tetherHub`) holds one there, to a step's slack) is re-derived like every other mass: it stays where the whole path leaves it, whatever its height.
     const pin = this.deform.frozen && !this.deform.frozenReady;
     for (const m of ms) {
       if (pin && m.hub && !m.popped) {
-        const keep = _r.copy(m.world).applyMatrix4(toLocal).distanceTo(m.local) > HUB_PIN_MAX;
+        const at = _r.copy(m.world).applyMatrix4(toLocal);
+        const keep = hypot2(at.x - m.local.x, at.z - m.local.z) > HUB_PIN_MAX + HUB_PULL_STEP;
         if (keep) continue;
       }
       m.local.copy(m.world).applyMatrix4(toLocal);

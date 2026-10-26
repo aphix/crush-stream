@@ -48,7 +48,7 @@ export function enterBenchScene(engine: SceneEngine, parts: BenchParts, plan: Be
   const t1 = performance.now();
   parts.race.reseed(BENCH.seed);
   engine.raceCommand({ type: "start" });
-  if (plan.epicenter) engine.setKnob("epi.on", 1);
+  engine.setKnob("epi.on", plan.epicenter ? 1 : 0);
   setupMs.options = t1 - t0;
   setupMs.start = performance.now() - t1;
   parts.seat.mode = "follow";

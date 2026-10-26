@@ -63,16 +63,16 @@ describe("given the real engine and a camera slider of the debug panel", () => {
     assert.deepEqual(camKeys(), []);
   });
 
-  it("when a link carrying the epicenter keys is applied, then the activation and its thresholds take them, a link without them puts them back, and the phone's #epi.on=1 is the whole of what turns it on", () => {
-    engine["applyShare"](decodeShare("#epi.on=1&epi.relockHold=0.5"), false);
-    assert.equal(EPICENTER.on, 1, "on");
+  it("when a link carrying the epicenter keys is applied, then the activation and its thresholds take them, a link without them puts them back, and #epi.on=0 is the whole of what turns it off", () => {
+    engine["applyShare"](decodeShare("#epi.on=0&epi.relockHold=0.5"), false);
+    assert.equal(EPICENTER.on, 0, "on");
     assert.equal(EPICENTER.relockHold, 0.5, "relockHold");
     assert.deepEqual(changedSettings(hud.get(), "debug"), ["epi.relockHold"], "the Debug views list the threshold, not the activation");
     assert.deepEqual(changedSettings(hud.get(), "tuning"), ["epi.on"], "Cars & crash lists the activation beside Solver");
     assert.equal(SETTINGS["epi.on"].label, "Activation");
     assert.deepEqual(
       encodeShare(engine["shareState"]()).split("&").filter((kv) => kv.startsWith("epi.")),
-      ["epi.on=1", "epi.relockHold=0.5"],
+      ["epi.on=0", "epi.relockHold=0.5"],
       "the share URL carries them, so the bar the engine writes keeps them through a race start",
     );
     engine["applyShare"](decodeShare("#"), false);
@@ -100,15 +100,15 @@ describe("given the real engine and a camera slider of the debug panel", () => {
   });
 
   it("when the activation toggle's knob (epi.on) is set, then the HUD field the toggle reads follows, the link carries it, and a link restores it", () => {
-    engine.setKnob("epi.on", 1);
-    assert.equal(hud.get()["epi.on"], 1);
-    assert.equal(EPICENTER.on, 1);
-    assert.match(encodeShare(engine["shareState"]()), /(^|&)epi\.on=1(&|$)/);
-    engine.resetDefaults();
-    assert.equal(hud.get()["epi.on"], 0, "Defaults: whole");
-    engine["applyShare"](decodeShare("#epi.on=1"), false);
-    assert.equal(hud.get()["epi.on"], 1, "the link");
-    engine["applyShare"](decodeShare("#"), false);
+    engine.setKnob("epi.on", 0);
     assert.equal(hud.get()["epi.on"], 0);
+    assert.equal(EPICENTER.on, 0);
+    assert.match(encodeShare(engine["shareState"]()), /(^|&)epi\.on=0(&|$)/);
+    engine.resetDefaults();
+    assert.equal(hud.get()["epi.on"], 1, "Defaults: epicenter");
+    engine["applyShare"](decodeShare("#epi.on=0"), false);
+    assert.equal(hud.get()["epi.on"], 0, "the link");
+    engine["applyShare"](decodeShare("#"), false);
+    assert.equal(hud.get()["epi.on"], 1);
   });
 });

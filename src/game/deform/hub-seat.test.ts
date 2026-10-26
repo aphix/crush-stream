@@ -9,6 +9,7 @@ import { dummyGeom, paint } from "../vehicle/test-support.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { HUB_PIN_MAX } from "./constants.ts";
 
 /**
  * `seatHubs` frees the wheels of a wreck that is about to plant at no more than HUB_SLIP m/s off the body. The body a
@@ -335,5 +336,43 @@ describe("given a wreck quiet past PLANT_QUIET and lying over, with its four hub
     const spin = new THREE.Vector3();
     for (let k = 0; k < HUBS_TURNED_CLAMPS; k++) d.followGroup(group, velocity, spin, 1 / FRAME_HZ);
     assert.ok(off() < 0.1, `the hubs stand ${off().toFixed(3)} m off their places after ${HUBS_TURNED_CLAMPS} clamps (from ${start.toFixed(3)} m)`);
+  });
+});
+
+/** A planted wreck's hub stood this far (m) off its pin in plan: its body slid on over the tyre. */
+const HUB_DRAGGED_M = 1;
+/** The most (m) the tether moves a planted hub in one clamp (`HUB_PULL_STEP`), with the rounding of the matrix round trip. */
+const TETHER_STEP_M = 0.01 + 1e-9;
+const TETHER_CLAMPS = 150;
+
+describe("given a wreck quiet past PLANT_QUIET and upright, its planted hub dragged 1 m off its pin in plan by a body that slid on over it", () => {
+  it("when its frame is read again and again, then the hub is drawn back to HUB_PIN_MAX of its pin by at most 1 cm a clamp, and a hub within it is left where it stands", () => {
+    const d = wreck();
+    const group = new THREE.Group();
+    group.updateMatrixWorld();
+    d.stepStructure(PLANT_QUIET + 0.05, new THREE.Quaternion());
+    assert.ok(d.quietTime() > PLANT_QUIET, `quiet ${d.quietTime().toFixed(3)} s: the wreck is not past its plant time`);
+    const [far, near] = d.masses.filter((q) => q.hub && !q.popped);
+    far!.world.x += HUB_DRAGGED_M;
+    near!.world.x += HUB_PIN_MAX / 2;
+    const velocity = new THREE.Vector3();
+    const spin = new THREE.Vector3();
+    const stretch = (q: typeof far): number => {
+      group.updateMatrixWorld();
+      const at = q!.world.clone().applyMatrix4(group.matrixWorld.clone().invert());
+      return Math.hypot(at.x - q!.local.x, at.z - q!.local.z);
+    };
+    d.followGroup(group, velocity, spin, 0);
+    const nearBefore = near!.world.clone();
+    let worstStep = 0;
+    for (let k = 0; k < TETHER_CLAMPS; k++) {
+      const before = far!.world.clone();
+      d.followGroup(group, velocity, spin, 0);
+      worstStep = Math.max(worstStep, far!.world.distanceTo(before));
+    }
+    assert.ok(worstStep <= TETHER_STEP_M, `the hub moved ${worstStep.toFixed(4)} m in one clamp`);
+    assert.ok(stretch(far) <= HUB_PIN_MAX + 1e-6, `the hub stands ${stretch(far).toFixed(3)} m off its pin after ${TETHER_CLAMPS} clamps`);
+    assert.ok(stretch(far) >= HUB_PIN_MAX - 1e-3, `the hub was drawn in past the bound: ${stretch(far).toFixed(3)} m off its pin`);
+    assert.equal(near!.world.distanceTo(nearBefore), 0, "a hub within the bound was moved");
   });
 });

@@ -42,9 +42,10 @@ const SPEED = 12;
  * The flank row's speed (m/s). The sedan's nose meets the foot of the ny 0.81 flank and its crush takes the car from 72 J/kg to 24.6 at 12 m/s (6.5 m/s
  * left along the face), enough for 2.5 m of the flank's 2.7 at best (G h). With the pull the weight the springs carry gives (G sin cos a second) and no
  * lift of the rigid tyre rows adding to its speed it rides to 2.18 m at 12 m/s (2.39 with the pull alone; 3.42 with neither: the free climb this row stood
- * on, 3.76 before the pull). The honest sweep: 12.5 m/s 2.24 m, 13 2.48, 13.5 2.56, 14 2.75, over the top.
+ * on, 3.76 before the pull). The honest sweep: 12.5 m/s 2.24 m, 13 2.48, 13.5 2.56, 14 2.75, over the top. A rigid tread on the world pushes along the face's normal, so the
+ * nose's hit on the flank's foot (a 36° kink: 8 m/s of closing) is absorbed and the car loses its ½ v² sin² of it: 14 m/s reaches 2.64 m, 14.5 2.62, and 15 and up rides over the top (15.5, 16).
  */
-const FLANK_SPEED = 14;
+const FLANK_SPEED = 15;
 /** How far (m) the sedan starts from the foot, on level ground the whole way, so it arrives at its launch speed. */
 const RUN_UP = 8;
 /** The face rises this much (m): what dam-spine's cut faces rise within 3 m, at least. */
