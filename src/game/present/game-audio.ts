@@ -56,6 +56,8 @@ export class GameAudio {
   private motor: MotorSound | null = null;
   private tyres: TyreSound | null = null;
   private music: MusicPlayer | null = null;
+  /** The impact's decaying noise burst, filled once per context (it was a fresh ~0.5 s buffer and 26k randoms on every crash). */
+  private impactNoise: AudioBuffer | null = null;
   private on = false;
   private station: StationId = DEFAULT_STATION;
   /** Whether the game is running (not paused or held): a pause fades the engines out, the music plays on. */
@@ -237,10 +239,12 @@ export class GameAudio {
     thump.stop(t + dur);
 
     const noise = context.createBufferSource();
-    const nbuf = context.createBuffer(1, context.sampleRate * (IMPACT.noiseDecayS + 0.05), context.sampleRate);
-    const data = nbuf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
-    noise.buffer = nbuf;
+    if (!this.impactNoise) {
+      this.impactNoise = context.createBuffer(1, context.sampleRate * (IMPACT.noiseDecayS + 0.05), context.sampleRate);
+      const data = this.impactNoise.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    }
+    noise.buffer = this.impactNoise;
     const ng = context.createGain();
     const bp = bandpass(context, IMPACT.noiseHz, IMPACT.noiseQ);
     ng.gain.setValueAtTime(0.001, t);
