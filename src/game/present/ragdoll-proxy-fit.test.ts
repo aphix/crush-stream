@@ -190,7 +190,9 @@ describe("given a dummy lying 3 m from a sedan whose cage refits every frame", (
       if (!c) continue;
       const h = c.halfExtents();
       const o = k * BOX_FLOATS;
-      assert.deepEqual([h.x, h.y, h.z], [Math.fround(fits[o + 3]!), Math.fround(fits[o + 4]!), Math.fround(fits[o + 5]!)]);
+      assert.equal(h.x, Math.fround(fits[o + 3]!));
+      assert.equal(h.y, Math.fround(fits[o + 4]!));
+      assert.equal(h.z, Math.fround(fits[o + 5]!));
       resized++;
     }
     assert.ok(resized > 0);
