@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import type { BufferAttribute } from "three";
 import { type CrashWorld, FREEWHEEL, launch, makeWorld, PARKED, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { buildCar, drawnTriangles } from "./drawn-body.test-util.ts";
@@ -81,5 +82,27 @@ describe("given a pickup that hits something with its nose", () => {
     launch(b, 0, 0, 0, 0, 0);
     const seen = leastClearance(w, a, FRONT_WHEELS, 150);
     assert.ok(seen.clearance >= CLEARANCE_M, `${fmt(seen.clearance)} at frame ${seen.at}`);
+  });
+});
+
+describe("given a pickup wrecked head-on and lying still, its skin held over its tyres", () => {
+  it("when a front hub moves 1 mm the skin is held again, and when it then jitters by 5 µm the skin is left as held", () => {
+    const a = crashCar("pickup", "truck");
+    const b = crashCar("pickup", "truck");
+    const w = makeWorld([a, b], false, false);
+    launch(a, -5, 0, Math.PI / 2, 50 / 3.6, 0);
+    launch(b, 5, 0, -Math.PI / 2, -50 / 3.6, 0);
+    for (let f = 0; f < 90; f++) tickWorld(w, FRAME);
+    assert.ok(a.panelsFollow);
+    const skin = a.body.geometry.getAttribute("position") as BufferAttribute;
+    a.updateSkin();
+    const before = skin.version;
+    a.wheels[0]!.position.y += 1e-3;
+    a.updateSkin();
+    const held = skin.version;
+    assert.ok(held > before);
+    a.wheels[0]!.position.y += 5e-6;
+    a.updateSkin();
+    assert.equal(skin.version, held);
   });
 });

@@ -19,6 +19,8 @@ const REACH = 0.5;
 const REST_SLACK = 1e-3;
 /** The elements of a wheel's matrix that place its tyre: the axle (first column) and the hub (last). */
 const HELD_ELEMENTS = [0, 1, 2, 12, 13, 14] as const;
+/** How far (m, and axle direction) a wheel may drift before its hold is redone: a settled wreck's ride jitters its hubs by under 10 µm every frame, and each redo re-lifts and re-normals the whole skin. */
+const HOLD_SLACK = 1e-4;
 
 const _mesh = new THREE.Matrix4();
 const _wheel = new THREE.Matrix4();
@@ -141,6 +143,8 @@ export class TyreSkin {
   private readonly overFor = new Float64Array(3).fill(NaN);
   /** Per wheel, its axle and hub in the mesh's frame at the last hold. */
   private readonly heldAt = new Float64Array(4 * HELD_ELEMENTS.length).fill(NaN);
+  /** Per wheel, its axle and hub this hold, kept in `heldAt` only when the hold is redone. */
+  private readonly seen = new Float64Array(4 * HELD_ELEMENTS.length);
   /** The skin as last written, which every hold starts from. */
   private readonly written: Float32Array;
   private hasWritten = false;
@@ -202,6 +206,7 @@ export class TyreSkin {
       if (this.noteWheel(w, (gone >> w) & 1 ? null : _wheel.elements)) wheelMoved = true;
     }
     if (!skinWritten && !wheelMoved && this.hasWritten) return;
+    this.heldAt.set(this.seen);
     const attr = this.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
     const pos = attr.array as Float32Array;
     if (skinWritten || !this.hasWritten) {
@@ -233,14 +238,15 @@ export class TyreSkin {
     computeNormalsFast(this.mesh.geometry);
   }
 
-  /** Records wheel `w`'s axle and hub (`e`, null for a wheel gone, NaN); true when they changed since the last hold. */
+  /** Records wheel `w`'s axle and hub (`e`, null for a wheel gone, NaN) in `seen`; true when they drifted past `HOLD_SLACK` from the last hold. */
   private noteWheel(w: number, e: ArrayLike<number> | null): boolean {
     let moved = false;
     for (let k = 0; k < HELD_ELEMENTS.length; k++) {
       const v = e ? e[HELD_ELEMENTS[k]!]! : NaN;
       const at = w * HELD_ELEMENTS.length + k;
-      if (!Object.is(this.heldAt[at], v)) moved = true;
-      this.heldAt[at] = v;
+      const was = this.heldAt[at]!;
+      if (!Object.is(was, v) && !(Math.abs(was - v) <= HOLD_SLACK)) moved = true;
+      this.seen[at] = v;
     }
     return moved;
   }
