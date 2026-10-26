@@ -18,7 +18,7 @@ export const SCORE_GAP = 6;
 export const DISABLE_POINTS = 2;
 const HIT_DEBOUNCE = 2;
 const WINNER_HOLD = 4.4;
-export const STALEMATE = 90;
+const STALEMATE = 90;
 
 /**
  * Heat time limit for a field of `count`: 30 s a car, never under `STALEMATE` (10 cars: 5 min). Real heats
@@ -240,7 +240,7 @@ export class DerbyMatch {
    * (`aiRecoverDelay`) and the player's rule lets R right it (`mayRecoverFlipped`: it still runs). The engine then
    * rights it as the R key does (`recoverCar`).
    */
-  recoverDue(id: number, car: Pick<DeformableCar, "group" | "deform" | "velocity">, dt: number): boolean {
+  recoverDue(id: number, car: Pick<DeformableCar, "group" | "deform" | "velocity" | "driverOut">, dt: number): boolean {
     const clock = (this.flips[id] ??= new FlipClock());
     return clock.step(car.group.matrixWorld.elements[5]!, car.velocity.length(), dt, aiRecoverDelay()) && mayRecoverFlipped(car);
   }
