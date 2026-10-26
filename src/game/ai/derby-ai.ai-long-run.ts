@@ -124,7 +124,7 @@ describe("given ten AI cars at the default aggression, each played through the f
   // 47.4 c3) against the old 4.33-5.41. The struck car's spin is now the lever's (`bodyContact`: dw = J·lever/I, which the owner's clip asks
   // for: the rigid answer there is 8.7 rad/s), not undone by `clampLocal`/`separateAlong`; what slows a spinning wreck is the tyres' yaw grip,
   // which the wreck split (`tyre-yaw.ts`, `followGroup`) still owns until Stage 5 makes the wreck one rigid body on the same solve.
-  it("when every heat is played out, then the turn rate over 0.1 s while cars are in contact (first 2 min) averages under 5.2 rad/s, never exceeds 6.5 rad/s in any heat, and no car spins", { todo: "contact peaks 7.66 rad/s in seed 1 (bar 6.5; 5.3-6.9 before the wreck split; lever torque of the pair kernel, tyre yaw grip is the wreck's): Stage 5" }, () => {
+  it("when every heat is played out, then the turn rate over 0.1 s while cars are in contact (first 2 min) averages under 5.2 rad/s, never exceeds 6.5 rad/s in any heat, and no car spins", { todo: "contact peaks 8.67 rad/s in seed 6 (bar 6.5; 5.3-6.9 before the wreck split; lever torque of the pair kernel, tyre yaw grip is the wreck's): Stage 5" }, () => {
     for (const r of runs) {
       assert.deepEqual(r.contactSpins, [], `seed ${r.seed}`);
       assert.ok(r.contactPeak.rate <= 6.5, `seed ${r.seed}: contact peak ${r.contactPeak.note}`);
