@@ -197,5 +197,35 @@
         ]
       }
     }
+    ,
+    {
+      "files": [
+        "src/**/*.ts",
+        "src/**/*.tsx"
+      ],
+      "rules": {
+        "no-console": [
+          "error",
+          {
+            "allow": [
+              "warn",
+              "error",
+              "info"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/**/*.test.ts",
+        "src/**/*.test-util.ts",
+        "src/**/*.ai-long-run.ts",
+        "src/**/*.parity.ts"
+      ],
+      "rules": {
+        "no-console": "off"
+      }
+    }
   ]
 }

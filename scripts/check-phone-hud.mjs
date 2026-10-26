@@ -431,6 +431,31 @@ async function checkFullscreen(browser, device, { name, hash, query }) {
   }
 }
 
+/** The race setup menu's Radio row: absent with the sound off; Sound On shows it with Calm (the default station) pressed; a tap on High Energy saves "high". */
+async function checkRadio(browser, device) {
+  const context = `${device.id} radio row (race setup)`;
+  console.log(context);
+  const { context: browserContext, page } = await open(browser, device, "scene=race");
+  try {
+    const row = (label) => page.getByRole("group", { name: new RegExp(`^${label}:`) });
+    const sound = row("Sound");
+    if ((await sound.count()) === 0) return fail(context, "no Sound row in the race setup menu (a blind probe proves nothing)");
+    if ((await row("Radio").count()) > 0) fail(context, "a Radio row shows with the sound off");
+    await sound.getByRole("button", { name: "On", exact: true }).tap();
+    await settle(page, 400);
+    const radio = row("Radio");
+    if ((await radio.count()) === 0) return fail(context, "Sound On shows no Radio row");
+    const calmPressed = await radio.getByRole("button", { name: "Calm", exact: true }).getAttribute("aria-pressed");
+    if (calmPressed !== "true") fail(context, `the Radio row opens with Calm aria-pressed=${calmPressed}, not the default station`);
+    await radio.getByRole("button", { name: "High Energy", exact: true }).tap();
+    await settle(page, 300);
+    const saved = await evaluate(page, () => localStorage.getItem("crush.audio.station"));
+    if (saved !== "high") fail(context, `a tap on High Energy saved crush.audio.station = ${JSON.stringify(saved)}, not "high"`);
+  } finally {
+    await browserContext.close();
+  }
+}
+
 process.env.GALLIUM_DRIVER ??= "d3d12";
 const chromePath = process.env.CHROME_PATH ?? newestChromium();
 function newestChromium() {
@@ -449,6 +474,13 @@ try {
         await checkScreen(browser, device, name, screen);
       } catch (error) {
         fail(`${device.id} ${name}`, `could not run: ${String(error).split("\n")[0]}`);
+      }
+    }
+    if (!only || only.includes("radio")) {
+      try {
+        await checkRadio(browser, device);
+      } catch (error) {
+        fail(`${device.id} radio row`, `could not run: ${String(error).split("\n")[0]}`);
       }
     }
     if (only && !only.includes("touch")) continue;

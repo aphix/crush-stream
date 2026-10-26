@@ -467,7 +467,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   };
   ui.done(describeBench(result), () => JSON.stringify(payload(), null, 1), () => void send());
   (window as unknown as { __benchResult?: BenchResult }).__benchResult = result;
-  console.log("CRUSH BENCH", JSON.stringify(result));
+  console.info("CRUSH BENCH", JSON.stringify(result));
   engine.start();
   // The bench loop posts each card as it finishes, before the page moves on to the next bench.
   if (opts.auto) await send();
