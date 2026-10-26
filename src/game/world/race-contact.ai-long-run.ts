@@ -18,7 +18,7 @@ for (const difficulty of AI_DIFFICULTIES.slice(1)) {
     for (const track of COURSES.filter((t) => t.id !== "oval" && t.id !== "city")) {
       it(`when a full grid of 8 races 2 laps of the ${track.id} course, then no racer drives into another car`, (t) => {
         const r = kinematicContacts(track, 8, 0, 2, difficulty);
-        t.diagnostic(`${track.id}: ${r.contacts} contacts, ${r.hits.length} racer-initiated, finished ${r.finished}/8`);
+        t.diagnostic(`${track.id}: ${r.touches.length} contacts, ${r.hits.length} racer-initiated, finished ${r.finished}/8`);
         assert.equal(r.finished, 8, "every car finished: the field raced");
         assert.deepEqual(r.hits, []);
       });

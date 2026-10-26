@@ -75,17 +75,16 @@ function overlaps(a: Footprint, b: Footprint): boolean {
 }
 
 /**
- * `n` AI cars, every one at aggression `slider`, racing `laps` laps of `track` in the kinematic race (`race`: the real drive model and brains, cars passing
- * through each other): every first frame two racing cars' footprints overlap, classified by `classifyContact` (no car is ever knocked). What the brains
- * decide, without the crush.
+ * `n` AI cars, every one at aggression `slider`, racing `laps` laps of `track` (or `limit` s of racing) in the kinematic race (`race`: the real drive
+ * model and brains, cars passing through each other): every first frame two racing cars' footprints overlap (`touches`), and those `classifyContact`
+ * says one car started (`hits`; no car is ever knocked). What the brains decide, without the crush.
  */
-export function kinematicContacts(track: Track, n: number, slider: number, laps: number, difficulty: AiDifficulty): { contacts: number; hits: string[]; finished: number } {
+export function kinematicContacts(track: Track, n: number, slider: number, laps: number, difficulty: AiDifficulty, limit = (laps * track.length) / (DRIVE.maxFwd / 2) + 10): { touches: string[]; hits: string[]; finished: number } {
   const hist: Sample[][] = Array.from({ length: n }, () => []);
   const lastPair = new Map<number, number>();
   const hits: string[] = [];
-  let contacts = 0;
+  const touches: string[] = [];
   let step = 0;
-  const limit = (laps * track.length) / (DRIVE.maxFwd / 2) + 10;
   const run = race(track, n, slider, laps, limit, difficulty, undefined, (cars, session) => {
     step++;
     for (let a = 0; a < n; a++) {
@@ -99,10 +98,11 @@ export function kinematicContacts(track: Track, n: number, slider: number, laps:
         // A finished car is held on the brakes where it crossed the line (the kinematic race has no results screen to clear it): not racing.
         const racing = session.cars[a]!.status === "racing" && session.cars[b]!.status === "racing";
         if (session.phase !== "racing" || !racing || (prev !== undefined && step - prev <= SAME) || hist[a]!.length === 0) continue;
-        contacts++;
         const v = classifyContact(hist[a]!, hist[b]!);
         const initiator = v.a === "initiated" ? a : v.b === "initiated" ? b : -1;
-        if (initiator >= 0) hits.push(`step ${step} (${session.time.toFixed(2)} s): car ${initiator} into car ${initiator === a ? b : a} (closing ${v.closing.toFixed(1)} m/s)`);
+        const at = `${session.time.toFixed(2)} s of racing`;
+        touches.push(`${at}: cars ${a} and ${b} (${v.a} / ${v.b}, closing ${v.closing.toFixed(1)} m/s)`);
+        if (initiator >= 0) hits.push(`${at}: car ${initiator} into car ${initiator === a ? b : a} (closing ${v.closing.toFixed(1)} m/s)`);
       }
     }
     for (const [i, c] of cars.entries()) {
@@ -111,5 +111,5 @@ export function kinematicContacts(track: Track, n: number, slider: number, laps:
       if (h.length > KEEP) h.shift();
     }
   });
-  return { contacts, hits, finished: run.session.cars.filter((c) => c.status === "finished").length };
+  return { touches, hits, finished: run.session.cars.filter((c) => c.status === "finished").length };
 }
