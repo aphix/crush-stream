@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
-import type { CrashHudState } from "@/game/hud/hud-store";
+import type { HudStore } from "@/game/hud/hud-store";
 import { NOW_PLAYING_FADE_MS, NOW_PLAYING_MS, nowPlayingCorner, type NowPlayingCorner } from "@/game/hud/now-playing";
 
 /** A phone in portrait: Tailwind's `sm` breakpoint is 640 px. */
@@ -23,7 +23,8 @@ type Phase = "hidden" | "shown" | "fading";
  * "♪ Artist – Title" for `NOW_PLAYING_MS` each time a song starts (`trackSerial` changes), then a fade of `NOW_PLAYING_FADE_MS`
  * (none under reduced motion: it simply goes). It sits in the corner the screen leaves free (`nowPlayingCorner`).
  */
-export function NowPlaying({ hud }: { hud: Pick<CrashHudState, "trackSerial" | "nowPlaying" | "race" | "derbyView"> }) {
+export function NowPlaying({ store }: { store: HudStore }) {
+  const hud = useSyncExternalStore(store.subscribe, store.get, store.get);
   const narrow = useSyncExternalStore(subscribeNarrow, () => window.matchMedia(NARROW_QUERY).matches, () => false);
   const [phase, setPhase] = useState<Phase>("hidden");
   const serial = hud.trackSerial;

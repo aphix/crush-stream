@@ -27,7 +27,6 @@ export function CrashLab() {
   const veilRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<CrashEngine | null>(null);
   const [hudStore] = useState(() => new HudStore());
-  const hud = useSyncExternalStore(hudStore.subscribe, hudStore.get, hudStore.get);
   const [bootError, setBootError] = useState<string | null>(null);
   const [booted, setBooted] = useState(false);
   const driver = useDriver();
@@ -36,7 +35,9 @@ export function CrashLab() {
   useDeepLinkJoin(engineRef);
   const newer = useUpdateCheck();
   const benchPage = useSyncExternalStore(subscribeNever, () => isBenchPage(window.location.search), () => false);
-  const deployed = updateNoticeShown(newer, hud.race) ? newer : null;
+  // Only whether the update notice shows is read off the HUD here, so a HUD change re-renders the root only when that flips.
+  const noticeShown = (): boolean => updateNoticeShown(newer, hudStore.get().race);
+  const deployed = useSyncExternalStore(hudStore.subscribe, noticeShown, noticeShown) ? newer : null;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -116,13 +117,13 @@ export function CrashLab() {
         {bootError ? (
           <p className="absolute inset-x-4 top-1/2 z-50 -translate-y-1/2 rounded-lg bg-black/80 px-4 py-3 text-center text-sm text-red-200">{bootError}</p>
         ) : null}
-        <Hud state={hud} engine={engineRef} onlineShown={!benchPage} />
+        <Hud store={hudStore} engine={engineRef} onlineShown={!benchPage} />
         {/* The scene switch's fade to black (`SceneFade`): the engine drives its opacity; it covers the HUD and takes no input. */}
         <div ref={veilRef} aria-hidden className="pointer-events-none fixed inset-0 z-[100] bg-black opacity-0" />
         <BuildLabel />
         <UpdateNotice newer={deployed} />
         <SubmissionToast />
-        <NowPlaying hud={hud} />
+        <NowPlaying store={hudStore} />
       </main>
     </EngineContext.Provider>
   );

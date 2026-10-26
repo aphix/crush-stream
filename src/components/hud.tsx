@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type RefObject } from "react";
+import { Fragment, useEffect, useRef, useState, useSyncExternalStore, type RefObject } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import { BrickWall, CircleDot, CircleHelp, Menu, Pause, Play, RotateCcw, SlidersHorizontal, TriangleRight, Video } from "lucide-react";
 import { DerbyBoard, DoorPanel, LabPanel, MinigamePick, PistonPanel, RangePanel, StackPanel } from "@/components/hud-panels";
@@ -35,7 +35,7 @@ import { resetGlow, resetInput, type ResetInput } from "@/game/hud/reset-prompt"
 import { netDeepLink } from "@/game/hud/share-url";
 import { KPH_PER_MS } from "@/game/kernel/constants";
 import { PAD_BUTTON } from "@/game/vehicle/gamepad";
-import type { CrashHudState } from "@/game/hud/hud-store";
+import type { CrashHudState, HudStore } from "@/game/hud/hud-store";
 import { formatSpeed } from "@/game/hud/speed-units";
 import type { RaceCommand } from "@/game/match/types";
 import { benchHoldsCommand } from "@/game/hud/submit-rules";
@@ -136,8 +136,9 @@ function seatHint(state: CrashHudState): { title: string; keys: string } {
   return { title: "Whole field", keys: "LB/RB to pick a car" };
 }
 
-export function Hud(props: HudProps) {
-  const { state, engine, onlineShown } = props;
+/** The HUD over the view: it alone subscribes to the engine's `store`, so a HUD change re-renders from here down, not the page. */
+export function Hud({ store, engine, onlineShown }: Omit<HudProps, "state"> & { store: HudStore }) {
+  const state = useSyncExternalStore(store.subscribe, store.get, store.get);
   // Phones and tablets get the thumb controls and the corner layout; a fine pointer keeps the desktop HUD as it was.
   const touch = useCoarsePointer();
   // What resets the driven car: the connected pad, the thumb pad's button, or R.
@@ -156,7 +157,7 @@ export function Hud(props: HudProps) {
   if (state.race?.podium) return <PodiumView podium={state.race.podium} onCommand={raceCommand} />;
   // Solo view: one clip alone, full screen; the HUD is nothing but its exit.
   if (state.race?.solo != null) return <SoloExit title={state.race.solo} shown={state.race.shown} onCommand={raceCommand} />;
-  const shell: HudShell = { hud: props, reset, raceCommand, tapReset, focus };
+  const shell: HudShell = { hud: { state, engine, onlineShown }, reset, raceCommand, tapReset, focus };
   return touch ? <PhoneHud {...shell} /> : <DesktopHud {...shell} />;
 }
 
