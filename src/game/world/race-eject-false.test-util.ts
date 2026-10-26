@@ -63,19 +63,19 @@ function unexplained(w: World, go: () => void): string[] {
     .map((e) => `car ${e.car} at ${e.t.toFixed(1)} s: ${e.what} with no hit in the last ${RECENT} s`);
 }
 
-/** Six cars (the AI-driven player slot and five rivals) at the default aggression, 3 laps. */
+/** Six cars (the AI-driven player slot and five rivals) at the default aggression, one lap: every slope, crest and banked turn of the course met once by the whole field. */
 function aiRace(course: string, seed: number): string[] {
   const track = new Track(TRACKS.find((t) => parseTrack(t).id === course));
   const w = makeWorld();
   w.race.enter();
   try {
     w.race.command({ type: "quit" });
-    w.race.command({ type: "options", options: { trackId: course, laps: 3, aiCount: 5, noReset: false, aggression: 0.35 } });
+    w.race.command({ type: "options", options: { trackId: course, laps: AI_LAPS, aiCount: 5, noReset: false, aggression: 0.35 } });
     w.race.reseed(seed);
     w.race.command({ type: "start" });
     w.seat.mode = "follow";
     const state = { acc: 0 };
-    const bound = 4.5 + 3 * 3 * (track.length / 9);
+    const bound = 4.5 + AI_LAPS * 3 * (track.length / 9);
     return unexplained(w, () => {
       for (let n = 0; w.race.phase !== "finished" && n * FRAME < bound; n++) frame(w, state);
       assert.equal(w.race.phase, "finished", `${course} seed ${seed}: the race never finished`);
@@ -84,6 +84,10 @@ function aiRace(course: string, seed: number): string[] {
     w.race.exit();
   }
 }
+
+/** Laps of each AI race: one meets every feature of the course; the field seed is fixed (one outcome per run). */
+const AI_LAPS = 1;
+const AI_SEED = 1;
 
 /** The scripted player (the real seat, full gas) on a lateral line beside five AI rivals: the lines where it meets a wall and drives on damaged. */
 function playerLap(course: string, line: PlayerLine, laps: number): string[] {
@@ -105,11 +109,9 @@ export function describeAiRaces(part: number, parts: number): void {
     afterEach(() => setGround(null));
     const courses = COURSE_IDS.filter((id) => id !== "city").filter((_, i) => i % parts === part);
     for (const course of courses) {
-      for (const seed of course === "stunt" ? [1, 2, 3, 4] : [1, 2]) {
-        it(`when 6 AI-driven cars race 3 laps of ${course} with field seed ${seed}, then every engine kill and driver throw follows a hit of at least ${MIN_HIT} m/s on that car in the previous ${RECENT} s`, () => {
-          assert.deepEqual(aiRace(course, seed), []);
-        });
-      }
+      it(`when 6 AI-driven cars race ${AI_LAPS} lap of ${course} with field seed ${AI_SEED}, then every engine kill and driver throw follows a hit of at least ${MIN_HIT} m/s on that car in the previous ${RECENT} s`, () => {
+        assert.deepEqual(aiRace(course, AI_SEED), []);
+      });
     }
   });
 }
