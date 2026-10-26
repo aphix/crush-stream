@@ -1000,7 +1000,8 @@ export class CrashEngine extends EngineGarage {
     // exit's windshield and then frames the dummy, waits for its window to close (the range's own dummy cam rides at once).
     // A drag hands the ride to the orbit around the dummy, the ride's cuts waiting; the ride then picks up from the user's view.
     if (this.onFoot.aim(wallDt)) return;
-    const cut = this.cine.direct(this.camera, wallDt, !this.view.flying && !this.view.userFramed && this.seat.mode !== "drive");
+    // The Range's ride takes the camera while the crash cam cuts (it does not wait for it): the ride's lens is the shot's, not the cut's.
+    const cut = this.cine.direct(this.camera, wallDt, !this.view.flying && !this.view.userFramed && this.seat.mode !== "drive", null, !(this.showRange && this.ragdolls.rideAlong));
     if (this.view.flying) {
       this.flyFree(wallDt);
       return;

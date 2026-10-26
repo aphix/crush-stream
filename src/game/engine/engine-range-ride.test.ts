@@ -15,9 +15,11 @@ import { element, stubBrowser } from "./engine-headless.test-util.ts";
  */
 
 const FRAME = 1 / FRAME_HZ;
-/** Wall seconds of the throw's ride the rows watch: the windshield, the change to the follow shot, and the follow's first seconds. */
-const WATCHED_S = 4;
+/** Wall seconds of the throw's ride the rows watch: the windshield, the change to the follow shot, and the crash cam's three cuts (1.3, 2.9 and 4.5 s after the hit) and hand-back (6.1 s). */
+const WATCHED_S = 7;
 const HEAD_STEP_BAR = 0.05;
+/** The most (degrees) the lens may change between two frames: the ride owns it, the crash cam's cut lenses (50 to 46, then to 21 degrees) are not set over it. */
+const LENS_STEP_BAR = 0.5;
 const _ndc = new THREE.Vector3();
 const _was = new THREE.Vector3();
 
@@ -55,7 +57,7 @@ describe("given the real engine in the Range, its thrown driver ridden through t
   }
 
   for (const screen of screens) {
-    it(`when ${screen.it} watches the driver thrown over the barrier, then for ${WATCHED_S} s of the ride his head never leaves the frame and never moves more than ${HEAD_STEP_BAR} of it between two frames`, () => {
+    it(`when ${screen.it} watches the driver thrown over the barrier, then for ${WATCHED_S} s of the ride his head never leaves the frame, never moves more than ${HEAD_STEP_BAR} of it and the lens never changes more than ${LENS_STEP_BAR} degrees between two frames`, () => {
       engine["setScene"]("fleet");
       engine["setScene"]("range");
       const camera = engine["camera"];
@@ -64,11 +66,16 @@ describe("given the real engine in the Range, its thrown driver ridden through t
       let worstStep = 0;
       let worstAt = 0;
       let leftFrame = 0;
+      let worstLens = 0;
+      let worstLensAt = 0;
+      let lens = camera.fov;
       for (let frame = 0; frame < 30 * FRAME_HZ && framed < WATCHED_S * FRAME_HZ; frame++) {
         camera.aspect = screen.width / screen.height;
         engine.advance(FRAME, { frameDt: FRAME });
         if (!ragdolls.rideAlong || ragdolls["ride"].cam.fresh) continue;
         headOnScreen(_ndc);
+        if (framed > 0 && Math.abs(camera.fov - lens) > worstLens) [worstLens, worstLensAt] = [Math.abs(camera.fov - lens), framed / FRAME_HZ];
+        lens = camera.fov;
         if (framed > 0) {
           const step = _ndc.distanceTo(_was);
           if (step > worstStep) [worstStep, worstAt] = [step, framed / FRAME_HZ];
@@ -80,6 +87,7 @@ describe("given the real engine in the Range, its thrown driver ridden through t
       assert.ok(framed >= WATCHED_S * FRAME_HZ, `the ride lasted ${(framed / FRAME_HZ).toFixed(1)} s`);
       assert.equal(leftFrame, 0, `his head was off screen for ${leftFrame} frames`);
       assert.ok(worstStep <= HEAD_STEP_BAR, `his head moved ${worstStep.toFixed(3)} of the frame in one frame, ${worstAt.toFixed(2)} s into the ride`);
+      assert.ok(worstLens <= LENS_STEP_BAR, `the lens changed ${worstLens.toFixed(2)} degrees in one frame, ${worstLensAt.toFixed(2)} s into the ride`);
     });
   }
 });
