@@ -224,7 +224,6 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
   tune[GUARD_PUSH_IDX] = push;
   out.steer = clamp((toward ? out.steer * (1 - steerNeed) : out.steer) * (1 - Math.abs(push)) + push, -1, 1);
   brakeFor(out, need, soonest <= 0);
-  if (self.id === 4 && speed > 5) console.log(`GE v ${speed.toFixed(1)} need ${need.toFixed(2)} soonest ${soonest.toFixed(2)} brake ${out.brake.toFixed(2)} steer ${out.steer.toFixed(2)} lat ${lateral.toFixed(1)}`);
 }
 
 /** The steer push held from the calls before, faded by this call's step; a one-off call (step 0) holds nothing, or a wreck would steer on its last contact's push for good. */
