@@ -73,6 +73,21 @@ export class DeformableCar extends CarParts {
     const r2 = REST_SPEED * REST_SPEED;
     return v.x * v.x + v.y * v.y + v.z * v.z >= r2 || w.x * w.x + w.y * w.y + w.z * w.z >= r2;
   }
+  /** Set when `stir` woke this car at rest and kept its rest: `stepWorld` clears it before the slice and records the stir (`stirSlice`) when it is set after. */
+  stirred = false;
+
+  /**
+   * Something that moves came within reach of this sleeping wreck (`stirNear`, or a replay's recorded stir). A wreck that itself moves is woken whole (`wake`); one at rest wakes to
+   * take the slice's step with the rest it had: the neighbour that stirred it need not touch it, and a neighbour tipping across rest speed restarted a second of rest on each stir.
+   */
+  stir(): void {
+    if (this.moving) {
+      this.wake();
+      return;
+    }
+    this.asleep = false;
+    this.stirred = true;
+  }
   /** Both doors and the trunk lid shut (`swing.latched`; a torn lid is no lid): nothing of the car stands out past its hull and its mirrors; an unlatched door swings out up to its hinge plus its length, a lid past the tail or roof. */
   get hingesLatched(): boolean {
     return !this.swingFree();
@@ -497,7 +512,7 @@ export class DeformableCar extends CarParts {
         this.stepLooseParts(dt, this.slot, this.surfaces);
         return;
       }
-      this.wake();
+      this.stir();
     }
     if (this.deform.frozenReady) {
       this.integrateFrozen(dt);
