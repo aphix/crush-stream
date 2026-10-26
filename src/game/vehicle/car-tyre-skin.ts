@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import type { CarFrame } from "./car-rig.ts";
+import type { PartSeat } from "./part-geometry.ts";
 
 /** How far (m) a held skin point stands over the tyre: the triangles between held points sag under their chords (edges up to 25 cm over a tyre). */
 const TYRE_GAP = 0.05;
@@ -36,6 +37,40 @@ const SAG_PASSES = 4;
 const REST_SLACK = 1e-3;
 /** The elements of a wheel's matrix that place its tyre: the axle (first column) and the hub (last). */
 const HELD_ELEMENTS = [0, 1, 2, 12, 13, 14] as const;
+/** How far (m) the skin stands over a part under it (`liftOverParts`): the 5 mm the drawn skin keeps over a tyre. */
+const PART_CLEAR = 0.005;
+/** A part's top is read at its highest vertex in each plan cell this wide (m): a skin over the part clears every vertex of the cell to within its tilt over 5 cm. */
+const TOP_CELL = 0.05;
+/** Per part geometry, its top samples in its own frame (`topSamples`). */
+const topsOf = new WeakMap<THREE.BufferGeometry, Float32Array>();
+/** The samples of the parts under the skin in the mesh's frame (x, y + `PART_CLEAR`, z), grown as needed. */
+let _parts = new Float64Array(0);
+let _partSkin = new Float64Array(0);
+let _partCorner = new Int32Array(0);
+const _seat = new THREE.Matrix4();
+const _top = new THREE.Vector3();
+
+/** `geometry`'s highest vertex (own frame, x y z each) in each `TOP_CELL` plan cell: what a skin over it must clear. */
+function topSamples(geometry: THREE.BufferGeometry): Float32Array {
+  const known = topsOf.get(geometry);
+  if (known) return known;
+  const pos = geometry.getAttribute("position");
+  const best = new Map<string, number>();
+  for (let i = 0; i < pos.count; i++) {
+    const key = `${Math.floor(pos.getX(i) / TOP_CELL)},${Math.floor(pos.getZ(i) / TOP_CELL)}`;
+    const at = best.get(key);
+    if (at === undefined || pos.getY(i) > pos.getY(at)) best.set(key, i);
+  }
+  const out = new Float32Array(best.size * 3);
+  let n = 0;
+  for (const i of best.values()) {
+    out[n++] = pos.getX(i);
+    out[n++] = pos.getY(i);
+    out[n++] = pos.getZ(i);
+  }
+  topsOf.set(geometry, out);
+  return out;
+}
 
 const _mesh = new THREE.Matrix4();
 const _wheel = new THREE.Matrix4();
@@ -229,8 +264,8 @@ export class TyreSkin {
     return Int32Array.from(found);
   }
 
-  /** Holds the skin over each tyre of `wheels` not in `gone` (bit i: wheel i is the world's). `skinWritten`: the mesh's positions were just written from the cage. */
-  hold(group: THREE.Object3D, wheels: readonly THREE.Object3D[], gone: number, lift: number, skinWritten: boolean): void {
+  /** Holds the skin over each tyre of `wheels` not in `gone` (bit i: wheel i is the world's), and over `under` (parts drawn under it, those whose `showIf` holds). `skinWritten`: the mesh's positions were just written from the cage. */
+  hold(group: THREE.Object3D, wheels: readonly THREE.Object3D[], gone: number, lift: number, skinWritten: boolean, under: readonly PartSeat[] = []): void {
     this.findOver(group, wheels, lift);
     matrixIn(group, this.mesh, _mesh).invert();
     let wheelMoved = false;
@@ -258,12 +293,14 @@ export class TyreSkin {
       this.needOver(pos, this.over[w]!, this.restUp[w]!, scale);
     }
     this.carryLift();
+    const parts = this.partSamples(group, under);
     for (let pass = 0; pass < SAG_PASSES; pass++) {
       let sagged = false;
       for (let w = 0; w < wheels.length; w++) {
         if ((gone >> w) & 1) continue;
         if (this.liftSaggingTriangles(pos, w)) sagged = true;
       }
+      if (parts > 0 && this.liftOverParts(pos, parts)) sagged = true;
       if (!sagged) break;
       this.carryLift();
     }
@@ -277,6 +314,102 @@ export class TyreSkin {
     }
     attr.needsUpdate = true;
     computeNormalsFast(this.mesh.geometry);
+  }
+
+  /** Fills `_parts` with the top samples (`topSamples`) of the shown parts of `under` in the mesh's frame, each raised by `PART_CLEAR`; returns their count. */
+  private partSamples(group: THREE.Object3D, under: readonly PartSeat[]): number {
+    let n = 0;
+    for (const seat of under) {
+      if (seat.showIf && !seat.showIf()) continue;
+      const top = topSamples(seat.drawn);
+      if (_parts.length < (n + top.length / 3) * 3) {
+        const grown = new Float64Array(2 * (_parts.length + top.length));
+        grown.set(_parts);
+        _parts = grown;
+      }
+      _seat.multiplyMatrices(_mesh, matrixIn(group, seat, _seat));
+      for (let i = 0; i < top.length; i += 3, n++) {
+        _top.set(top[i]!, top[i + 1]!, top[i + 2]!).applyMatrix4(_seat);
+        _parts[n * 3] = _top.x;
+        _parts[n * 3 + 1] = _top.y + PART_CLEAR;
+        _parts[n * 3 + 2] = _top.z;
+      }
+    }
+    if (_partSkin.length < n) {
+      _partSkin = new Float64Array(_parts.length / 3);
+      _partCorner = new Int32Array(_parts.length / 3);
+    }
+    return n;
+  }
+
+  /**
+   * A crushed bonnet folds down onto the engine bay and the cabin's dash under it: each of the `count` part samples (`partSamples`) is read under the highest up-facing
+   * triangle over it, and where that triangle's plane stands under the sample, its three corners are lifted by the shortfall. True when any is.
+   */
+  private liftOverParts(pos: Float32Array, count: number): boolean {
+    this.readPartSkin(pos, count);
+    const { weld } = this.edges;
+    let raised = false;
+    for (let n = 0; n < count; n++) {
+      const t = _partCorner[n]!;
+      const short = _parts[n * 3 + 1]! - _partSkin[n]!;
+      if (t < 0 || short <= 0) continue;
+      for (let corner = 0; corner < 3; corner++) {
+        const p = weld[this.corner(t + corner)]!;
+        if (short > this.bump[p]!) this.bump[p] = short;
+      }
+      raised = true;
+    }
+    if (!raised) return false;
+    for (let p = 0; p < this.bump.length; p++) {
+      this.lift[p] = this.lift[p]! + this.bump[p]!;
+      this.bump[p] = 0;
+    }
+    return true;
+  }
+
+  /** Vertex id of triangle corner `k` of the mesh. */
+  private corner(k: number): number {
+    const index = this.mesh.geometry.index;
+    return index ? index.getX(k) : k;
+  }
+
+  /** Per part sample, the height (`_partSkin`) of the highest up-facing triangle of the skin (lifts included) over it in plan and that triangle's first corner (`_partCorner`, -1: none). */
+  private readPartSkin(pos: Float32Array, count: number): void {
+    _partSkin.fill(-Infinity, 0, count);
+    _partCorner.fill(-1, 0, count);
+    const index = this.mesh.geometry.index;
+    const corners = index ? index.count : pos.length / 3;
+    const { weld } = this.edges;
+    for (let t = 0; t + 2 < corners; t += 3) {
+      const va = this.corner(t);
+      const vb = this.corner(t + 1);
+      const vc = this.corner(t + 2);
+      const a = va * 3;
+      const b = vb * 3;
+      const c = vc * 3;
+      if ((pos[b + 2]! - pos[a + 2]!) * (pos[c]! - pos[a]!) - (pos[b]! - pos[a]!) * (pos[c + 2]! - pos[a + 2]!) <= 0) continue;
+      const den = (pos[b + 2]! - pos[c + 2]!) * (pos[a]! - pos[c]!) + (pos[c]! - pos[b]!) * (pos[a + 2]! - pos[c + 2]!);
+      const xLow = Math.min(pos[a]!, pos[b]!, pos[c]!);
+      const xHigh = Math.max(pos[a]!, pos[b]!, pos[c]!);
+      const zLow = Math.min(pos[a + 2]!, pos[b + 2]!, pos[c + 2]!);
+      const zHigh = Math.max(pos[a + 2]!, pos[b + 2]!, pos[c + 2]!);
+      const ya = pos[a + 1]! + this.lift[weld[va]!]!;
+      const yb = pos[b + 1]! + this.lift[weld[vb]!]!;
+      const yc = pos[c + 1]! + this.lift[weld[vc]!]!;
+      for (let n = 0; n < count; n++) {
+        const x = _parts[n * 3]!;
+        const z = _parts[n * 3 + 2]!;
+        if (x < xLow || x > xHigh || z < zLow || z > zHigh) continue;
+        const l1 = ((pos[b + 2]! - pos[c + 2]!) * (x - pos[c]!) + (pos[c]! - pos[b]!) * (z - pos[c + 2]!)) / den;
+        const l2 = ((pos[c + 2]! - pos[a + 2]!) * (x - pos[c]!) + (pos[a]! - pos[c]!) * (z - pos[c + 2]!)) / den;
+        if (l1 < 0 || l2 < 0 || l1 + l2 > 1) continue;
+        const y = l1 * ya + l2 * yb + (1 - l1 - l2) * yc;
+        if (y <= _partSkin[n]!) continue;
+        _partSkin[n] = y;
+        _partCorner[n] = t;
+      }
+    }
   }
 
   /**

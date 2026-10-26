@@ -1,7 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
+import { runWall } from "../contact/crash-scenarios.test-util.ts";
+import type { DeformableCar } from "./car.ts";
+import { LID } from "./constants.ts";
 import { buildCar } from "./drawn-body.test-util.ts";
+import { PART_KIND } from "./part-geometry.ts";
 import { TyreSkin } from "./car-tyre-skin.ts";
 import { tyreClearance } from "./tyre-clearance.test-util.ts";
 import { CLASSES, carClass } from "./vehicle-classes.ts";
@@ -58,4 +62,76 @@ describe("given a pickup's skin of which one point rests over its front tyre and
     }
     assert.ok(clearance >= CLEARANCE_M, `${(clearance * 1000).toFixed(1)} mm`);
   });
+});
+
+/** Owner: interior and engine shapes showed through a crushed hatch's bonnet. A corner hit folds the bonnet down onto the dash and the bay (drawn once the bonnet springs open). */
+const HOOD_COVER_KPH = [55, 65, 70] as const;
+/** The share of the car's width on the wall, from its left: the struck corner folds the bonnet down. */
+const HOOD_COVER_OVERLAP = 0.4;
+/** A body skin triangle that rests at least this high (m) is the roof over the cabin; under it are the floor and the sills a gone pane shows. */
+const ROOF_REST_Y = 1.15;
+
+/** The triangles (car frame, nine numbers each) of `mesh`, those whose rest corners (`rest`, null: all) all stand at least `minY`. */
+function carTriangles(car: DeformableCar, mesh: THREE.Mesh, rest: Float32Array | null, minY: number): Float64Array {
+  const toCar = new THREE.Matrix4().multiplyMatrices(car.group.matrixWorld.clone().invert(), mesh.matrixWorld);
+  const positions = mesh.geometry.getAttribute("position");
+  const index = mesh.geometry.index!;
+  const out: number[] = [];
+  const place = new THREE.Vector3();
+  for (let t = 0; t < index.count; t += 3) {
+    const corners = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
+    if (rest && corners.some((v) => rest[v * 3 + 1]! < minY)) continue;
+    for (const v of corners) {
+      place.fromBufferAttribute(positions, v).applyMatrix4(toCar);
+      out.push(place.x, place.y, place.z);
+    }
+  }
+  return Float64Array.from(out);
+}
+
+/** The highest of `triangles` over plan point (x, z) among those facing up (the paint draws its front faces only), -Infinity where none is over it. */
+function skinTopAt(triangles: Float64Array, x: number, z: number): number {
+  let top = -Infinity;
+  for (let i = 0; i < triangles.length; i += 9) {
+    const [ax, ay, az, bx, by, bz, cx, cy, cz] = triangles.subarray(i, i + 9) as unknown as number[];
+    if ((bz! - az!) * (cx! - ax!) - (bx! - ax!) * (cz! - az!) <= 0) continue;
+    const den = (bz! - cz!) * (ax! - cx!) + (cx! - bx!) * (az! - cz!);
+    const l1 = ((bz! - cz!) * (x - cx!) + (cx! - bx!) * (z - cz!)) / den;
+    const l2 = ((cz! - az!) * (x - cx!) + (ax! - cx!) * (z - cz!)) / den;
+    if (l1 < 0 || l2 < 0 || l1 + l2 > 1) continue;
+    top = Math.max(top, l1 * ay! + l2 * by! + (1 - l1 - l2) * cy!);
+  }
+  return top;
+}
+
+describe(`given a hatchback driven into a wall with ${HOOD_COVER_OVERLAP * 100} % of its nose on it, at ${HOOD_COVER_KPH.join(", ")} km/h`, () => {
+  for (const kph of HOOD_COVER_KPH) {
+    it(`when it has come to rest after the ${kph} km/h hit, then no drawn vertex of its cabin shell or engine bay stands over the drawn bonnet or roof over it`, () => {
+      const car = buildCar("hatchback", "hatch");
+      runWall(kph, HOOD_COVER_OVERLAP, "front", { car });
+      car.updateSkin();
+      car.group.updateMatrixWorld(true);
+      const hood = car["hood"] as THREE.Mesh;
+      const covers = [carTriangles(car, car.body, car.deform.restSkin, ROOF_REST_Y)];
+      if (!car.parts.some((p) => p.detached && p.name === LID.hood)) covers.push(carTriangles(car, hood, null, -Infinity));
+      const toCar = new THREE.Matrix4();
+      const place = new THREE.Vector3();
+      let worst = 0;
+      let where = "";
+      for (const seat of car.partSeats) {
+        if (seat.kind !== PART_KIND.interior && seat.kind !== PART_KIND.engineBay) continue;
+        if (seat.showIf && !seat.showIf()) continue;
+        toCar.multiplyMatrices(car.group.matrixWorld.clone().invert(), seat.matrixWorld);
+        const positions = seat.drawn.getAttribute("position");
+        for (let v = 0; v < positions.count; v++) {
+          place.fromBufferAttribute(positions, v).applyMatrix4(toCar);
+          const top = Math.max(...covers.map((t) => skinTopAt(t, place.x, place.z)));
+          if (top === -Infinity) continue;
+          const over = place.y - top;
+          if (over > worst) [worst, where] = [over, `${seat.kind === PART_KIND.interior ? "cabin shell" : "engine bay"} at (${place.x.toFixed(2)}, ${place.y.toFixed(2)}, ${place.z.toFixed(2)})`];
+        }
+      }
+      assert.equal(worst, 0, `${kph} km/h: the ${where} stands ${(worst * 1000).toFixed(1)} mm over the drawn skin over it`);
+    });
+  }
 });

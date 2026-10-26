@@ -18,7 +18,7 @@ import { clearShape } from "./loose-step.ts";
 import { REACH, type CarSurfaces } from "./car-surfaces.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CageRig, centreY } from "./car-cage-rig.ts";
-import { PartSeat } from "./part-geometry.ts";
+import { PART_KIND, PartSeat } from "./part-geometry.ts";
 import { setBare } from "./interior.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
 import { HUB_PIN_MAX, HUB_PULL_STEP } from "../deform/constants.ts";
@@ -159,6 +159,8 @@ export class DeformableCar extends CarParts {
   readonly suspension = new Suspension(this.frame);
   private bodyTyres: TyreSkin | null = null;
   private hoodTyres: TyreSkin | null = null;
+  /** The parts the bonnet folds down onto, which its hold keeps under it: the cabin shell (its dash) and the engine bay. */
+  private underHood: readonly PartSeat[] | null = null;
   private classBody: THREE.Object3D | null = null;
 
   spawn(x: number, z: number, speed: number): void {
@@ -673,14 +675,14 @@ export class DeformableCar extends CarParts {
     if (this.vaporized || this.falling) return;
     this.deform.update(this.body.geometry);
     if (this.deform.skinnedThisFrame) this.poseLamps();
+    // A load crushes the roof's skin with the masses at rest: the headliner follows it too. Before the panels: the bonnet's hold reads the shell and the bay.
+    if (this.deform.massActive || this.deform.skinnedThisFrame) this.fitInterior();
     if (this.panelsFollow) {
       if (this.deform.skinnedThisFrame) this.skinPanels();
       this.holdSkinOffTyres(this.deform.skinnedThisFrame);
       if (this.deform.skinnedThisFrame) this.poseOpenShells();
       this.followGlass();
     }
-    // A load crushes the roof's skin with the masses at rest: the headliner follows it too.
-    if (this.deform.massActive || this.deform.skinnedThisFrame) this.fitInterior();
     if (this.hullHelper?.visible) this.updateHullHelper();
     this.settleCasters();
   }
@@ -690,12 +692,12 @@ export class DeformableCar extends CarParts {
     this.deform.skinDeferred = false;
     if (!this.deform.flushSkin(this.body.geometry)) return;
     this.poseLamps();
+    this.fitInterior();
     if (this.panelsFollow) {
       this.skinPanels();
       this.holdSkinOffTyres(true);
       this.poseOpenShells();
     }
-    this.fitInterior();
   }
 
   /** A crushed skin drawn over a standing tyre stands on it (`TyreSkin`); a thrown wheel is the world's. */
@@ -707,7 +709,8 @@ export class DeformableCar extends CarParts {
     for (let i = 0; i < this.wheels.length; i++) if (this.looseWheels[i]!.loose) gone |= 1 << i;
     const lift = CLASSES[carClass(this)].lift;
     this.bodyTyres.hold(this.group, this.wheels, gone, lift, skinWritten);
-    if (!this.parts.some((p) => p.detached && p.name === LID.hood)) this.hoodTyres.hold(this.group, this.wheels, gone, lift, skinWritten);
+    this.underHood ??= this.partSeats.filter((s) => s.kind === PART_KIND.interior || s.kind === PART_KIND.engineBay);
+    if (!this.parts.some((p) => p.detached && p.name === LID.hood)) this.hoodTyres.hold(this.group, this.wheels, gone, lift, skinWritten, this.underHood);
   }
 
   /** Bonnet, boot lid, door skins, the police light bar, the skinned glass and the chrome trims follow the body skin; a door's hinge pose turns its skin after. */
