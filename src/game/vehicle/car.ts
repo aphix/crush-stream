@@ -144,6 +144,8 @@ export class DeformableCar extends CarParts {
   readonly suspension = new Suspension(this.frame);
   private bodyTyres: TyreSkin | null = null;
   private hoodTyres: TyreSkin | null = null;
+  /** The `placements` count the tyre holds last ran at: a car put on a spot since is held afresh. */
+  private heldPlacements = -1;
   private classBody: THREE.Object3D | null = null;
 
   spawn(x: number, z: number, speed: number): void {
@@ -691,8 +693,12 @@ export class DeformableCar extends CarParts {
     let gone = 0;
     for (let i = 0; i < this.wheels.length; i++) if (this.looseWheels[i]!.loose) gone |= 1 << i;
     const lift = CLASSES[carClass(this)].lift;
-    this.bodyTyres.hold(this.group, this.wheels, gone, lift, skinWritten);
-    if (!this.parts.some((p) => p.detached && p.name === LID.hood)) this.hoodTyres.hold(this.group, this.wheels, gone, lift, skinWritten);
+    // A car put on a spot since the last hold (a reset, held or tapped) is held afresh: the hold redoes only when its wheels drift past a
+    // slack, and a held reset rewrites the skin from the kept state while its wheels land where they stood (the drawn body lost its lift).
+    const fresh = skinWritten || this.placements !== this.heldPlacements;
+    this.heldPlacements = this.placements;
+    this.bodyTyres.hold(this.group, this.wheels, gone, lift, fresh);
+    if (!this.parts.some((p) => p.detached && p.name === LID.hood)) this.hoodTyres.hold(this.group, this.wheels, gone, lift, fresh);
   }
 
   /** Bonnet, boot lid, door skins, the police light bar, the skinned glass and the chrome trims follow the body skin; a door's hinge pose turns its skin after. */
