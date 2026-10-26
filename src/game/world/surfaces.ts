@@ -282,6 +282,8 @@ export class Surface {
   /** `plainOne`'s patch is bounded or a disc: `find` tests its box and disc first (`plainChecked`). */
   plainChecks = false;
   plainCells = new Int32Array(0);
+  /** Grid cells given a height and a normal bound (`cellTopsOf`, `cellNyOf`), for the tests that pin a bake's cost. */
+  cellsBounded = 0;
   /** The `always` index (`indexAlways`), rebuilt on the next `offerAll` after a patch moved: cell (`ax0`, `az0`, `anx`, `anz`; `anx` 0: none) → `aList[aStart[c]..aStart[c+1])`; `aWide[0..aNWide)` scanned outside it. */
   alwaysStale = true;
   ax0 = 0;
@@ -403,6 +405,7 @@ export class Surface {
     if (g.hmax === undefined) {
       this.cellTops[i] = cellTopsOf(g.nu, g.nv, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!);
       this.cellNy[i] = cellNyOf(g.nu, g.nv, g.step, g.stepV, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!);
+      this.cellsBounded += (g.nu - 1) * (g.nv - 1);
     }
     this.setFrame(i, g.ox, g.oy, g.oz, g.axes ?? YAW0);
     return i;
@@ -2075,27 +2078,28 @@ function hillsTop(hills: Float64Array, far: Float64Array, xMin: number, xMax: nu
  */
 function cellTopsOf(nu: number, nv: number, nodes: Float32Array, centre: Float32Array, lat: Float32Array, drop: Float32Array): Float64Array {
   const tops = new Float64Array((nu - 1) * (nv - 1));
-  const corners = [0, 1, nu, nu + 1];
   for (let cj = 0; cj < nv - 1; cj++) {
     for (let ci = 0; ci < nu - 1; ci++) {
       const c = cj * nu + ci;
+      const d = c + nu;
       let top = -Infinity;
-      const creased = lat.length > 0 && corners.every((k) => !Number.isNaN(lat[c + k]!));
-      if (creased) {
-        let latLow = Infinity;
-        let latHigh = -Infinity;
-        let dropLow = Infinity;
-        let dropHigh = -Infinity;
-        for (const k of corners) {
-          top = Math.max(top, centre[c + k]!);
-          latLow = Math.min(latLow, Math.max(-1, Math.min(1, lat[c + k]!)));
-          latHigh = Math.max(latHigh, Math.max(-1, Math.min(1, lat[c + k]!)));
-          dropLow = Math.min(dropLow, drop[c + k]!);
-          dropHigh = Math.max(dropHigh, drop[c + k]!);
-        }
+      if (creased(lat, c, nu)) {
+        const l0 = Math.max(-1, Math.min(1, lat[c]!));
+        const l1 = Math.max(-1, Math.min(1, lat[c + 1]!));
+        const l2 = Math.max(-1, Math.min(1, lat[d]!));
+        const l3 = Math.max(-1, Math.min(1, lat[d + 1]!));
+        const latLow = Math.min(l0, l1, l2, l3);
+        const latHigh = Math.max(l0, l1, l2, l3);
+        const dropLow = Math.min(drop[c]!, drop[c + 1]!, drop[d]!, drop[d + 1]!);
+        const dropHigh = Math.max(drop[c]!, drop[c + 1]!, drop[d]!, drop[d + 1]!);
+        top = Math.max(centre[c]!, centre[c + 1]!, centre[d]!, centre[d + 1]!);
         top += Math.max(-latLow * dropLow, -latLow * dropHigh, -latHigh * dropLow, -latHigh * dropHigh);
       } else {
-        for (const k of corners) if (nodes[c + k]! > top) top = nodes[c + k]!;
+        // In corner order, a NaN node skipped (not `Math.max`, which would take it).
+        if (nodes[c]! > top) top = nodes[c]!;
+        if (nodes[c + 1]! > top) top = nodes[c + 1]!;
+        if (nodes[d]! > top) top = nodes[d]!;
+        if (nodes[d + 1]! > top) top = nodes[d + 1]!;
       }
       tops[cj * (nu - 1) + ci] = top + TOP_SLACK;
     }
