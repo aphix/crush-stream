@@ -17,7 +17,7 @@ import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
 import type { TopMet } from "./car-air-body.ts";
 import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
-import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, LID_LATCH_CRUSH_M, type Lamp, type PartNetState } from "./car-core.ts";
+import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, LATCH_CATCH_RATE, LID_LATCH_CRUSH_M, type Lamp, type PartNetState } from "./car-core.ts";
 import {
   DOOR_ACC_MAX,
   DOOR_QUIET_S,
@@ -746,7 +746,14 @@ export abstract class CarParts extends CarGlass {
       h.omega = 0;
       return e > 0 && this.loadStop(p, e, _push);
     }
-    if (h.theta <= jam && h.omega < 0) return this.closeSwing(p, jam);
+    if (h.theta <= jam && h.omega < 0) {
+      if (-h.omega < LATCH_CATCH_RATE) {
+        h.theta = jam;
+        h.omega = 0;
+        return false;
+      }
+      return this.closeSwing(p, jam);
+    }
     if (h.theta < jam) h.theta = jam;
     return false;
   }

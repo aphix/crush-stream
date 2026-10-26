@@ -39,8 +39,9 @@ L = 0.98 m, so I = 8.00 kg·m².
 - **Check-strap stop** at θ = 68°. The door's swing energy ½Iω² at the stop goes into `load`. The
   strap's detent then holds it (ω = 0). Once `load` reaches `HINGE_TEAR_J` the door tears off
   with its trailing edge's velocity.
-- **Latch** at θ = 0: a closing door latches (θ = 0, ω = 0). If one slam carries ½Iω² ≥
-  `SLAM_TEAR_J`, the door is wrenched off instead and leaves outward and rearward.
+- **Latch** at θ = 0: a door or lid closing at `LATCH_CATCH_RATE` (0.2 rad/s) or faster latches (θ = 0, ω = 0). One creeping home slower than that
+  rests unlatched against its seal (a real latch needs a push to engage: a sprung drop gate, which has no struts, settled to 0.0001 rad/s and latched again).
+  If one slam carries ½Iω² ≥ `SLAM_TEAR_J`, the door is wrenched off instead and leaves outward and rearward.
 
 The ram calls `loadDoorStop` when it pushes a door that already sits on its stop. The car is rigid
 there, so the strap takes the ram's closing energy ½·m_ram·v².

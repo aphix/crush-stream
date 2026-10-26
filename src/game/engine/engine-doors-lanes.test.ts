@@ -55,6 +55,11 @@ class DoorsBench {
     for (let i = 0; i < FRAME_HZ; i++) this.engine.advance(FRAME, { frameDt: FRAME });
   }
 
+  /** The scene runs `seconds` more with nothing fired. */
+  idle(seconds: number): void {
+    for (let i = 0; i < seconds * FRAME_HZ; i++) this.engine.advance(FRAME, { frameDt: FRAME });
+  }
+
   fire(scenario: DoorScenario, kph: number, kg: number): Fired {
     const engine = this.engine;
     engine.setDoorConfig({ kph, kg, side: 1 });
@@ -107,6 +112,9 @@ const TAIL_SHOTS = [
 ] as const;
 /** The furthest (m) a lane that only knocks its part may carry the whole car. */
 const CAR_MOVED_MAX_M = 0.1;
+/** Shots of each gate row, and how long (s) a sprung gate must stay unlatched after each. */
+const GATE_SHOTS = 5;
+const GATE_HOLD_S = 2;
 
 /** The reaction a gentle shot on `lane` must show, or "" when it shows it. */
 function gentleFailure(lane: DoorScenario, fired: Fired): string {
@@ -149,6 +157,22 @@ describe("given the real engine in the Doors scene, every lane's button pressed 
       it(`when ${g.lane} is fired on the ${id} at ${g.kph} km/h and ${g.kg} kg, then ${g.reacts}`, () => {
         bench.park(id);
         assert.equal(gentleFailure(g.lane, bench.fire(g.lane, g.kph, g.kg)), "");
+      });
+    }
+  }
+});
+
+describe("given the real engine in the Doors scene, a drop gate's latch sprung by F", () => {
+  for (const id of ["truck", "monster"] as const) {
+    for (const kph of [12, 16, 20]) {
+      it(`when F is fired on the ${id}'s gate five times at ${kph} km/h and 100 kg, then each sprung gate stays unlatched for 2 s after the shot`, () => {
+        for (let shot = 0; shot < GATE_SHOTS; shot++) {
+          bench.park(id);
+          const fired = bench.fire("lidPop", kph, 100);
+          assert.ok(!fired.lidLatched, `shot ${shot}: the gate was not sprung`);
+          bench.idle(GATE_HOLD_S);
+          assert.ok(!bench.engine["carA"].lidHinge().latched, `shot ${shot}: the sprung gate latched again within ${GATE_HOLD_S} s`);
+        }
       });
     }
   }
