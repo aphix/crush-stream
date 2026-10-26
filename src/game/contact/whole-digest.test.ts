@@ -45,6 +45,7 @@ const X = new THREE.Vector3(1, 0, 0);
 const NX = new THREE.Vector3(-1, 0, 0);
 
 // Three re-pinned for a pair's crush patch at most its face wide (`feedOverlap`): head-on e2fe2a6ea3f54ade -> baff0220de6d5ea7, door 4338c12666a975b6 -> a822a3b1f1a859d0, pile-up d15a38884ad0eaac -> 8bfde84dd16812c1; the barrier's is unchanged (no pair).
+// The door re-pinned for the cage's refit skipping the pose of a torn-off or shattered pane (REPLAY 162; the cage never read it): a822a3b1f1a859d0 -> a5928a5241b57ca2; the other three unchanged.
 describe("given four staged crashes with the epicenter activation off", () => {
   it("when the owner's head-on, 20 m/s each, runs 5 s, then every mass and pose is the pinned one", () => {
     const a = makeCar("shape");
@@ -59,7 +60,7 @@ describe("given four staged crashes with the epicenter activation off", () => {
     const b = makeCar("shape");
     launch(a, 0, 0, 0, 0, 0);
     launch(b, 6, 0, -Math.PI / 2, -50 * KPH, 0);
-    assert.equal(staged([a, b], false, [new Probe(a, NX), new Probe(b, NX)], [PARKED, FREEWHEEL], 5), "a822a3b1f1a859d0");
+    assert.equal(staged([a, b], false, [new Probe(a, NX), new Probe(b, NX)], [PARKED, FREEWHEEL], 5), "a5928a5241b57ca2");
   });
 
   it("when a car hits the held barrier at 50 km/h, 5 s, then every mass and pose is the pinned one", () => {
