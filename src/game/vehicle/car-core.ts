@@ -133,6 +133,8 @@ export const MIRROR_BREAK_J = 30;
  * and over on wrecks lying against each other (30 springs in one heat), 2 cm sprang no lid the crush rule would not.
  */
 export const LID_LATCH_CRUSH_M = 0.02;
+/** A swinging door or lid must reach its frame at least this fast (rad/s) for the latch to catch: one creeping home (a sprung gate with no struts settling against its seal at 0.0001 rad/s) rests unlatched, as a real latch needs a push to engage; a hand's close is several rad/s, guessed. */
+export const LATCH_CATCH_RATE = 0.2;
 /** A door's drawn angle (rad) per unit of crash hinge value (`hingeT`): the jam that holds a door ajar. */
 const DOOR_JAM = 1.45;
 /** C1: a side hit that raises a door's hinge value past this at `DOOR_TEAR_MPS` tears it off. */

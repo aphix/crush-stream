@@ -501,6 +501,7 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 162: the cage no longer refits for the pose of a torn-off or shattered pane (it never read it): a wreck with a door off refits on fewer steps, and the cage's hold on its masses' sub-centimetre drift changes with it.
  * 163: a trunk lid hanging unlatched on its stop is a collider for a striker running along the car from behind (`hitLid`: the strap or cables take its closing energy, and past the hinge's `tearJ` the lid leaves with it), where only the tail's crush could tear it: a car-car rear-end into an open lid tears it off at its own energy.
  * A shut trunk lid's latch is sprung by a strike on the tail too: a striker running along the car from behind at the lid's heights marks the car (`noteLidStruck`), and the step's end (`stepBreakage`) springs the latch (the lid swings open on its struts) if the tail's rear bumper masses stand `LID_LATCH_CRUSH_M` (2 cm) forward of their rest, where only the whole bumper cage's compression (`hingeT`) could spring it: a rear-end that dents the tail 2 cm opens the lid, a tap leaves it latched.
+ * A door or lid swinging home slower than `LATCH_CATCH_RATE` (0.2 rad/s) rests unlatched instead of latching: a sprung drop gate settling shut at 0.0001 rad/s latched again, and a door or lid that creeps to its frame does not.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 162 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
