@@ -500,9 +500,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * The contact guard counts a stopped car lying across the way at its true reach (`reachAcross`: the pair's lateral reach grows with the angle between their axes, and its near end counts as ahead) and holds the arc it predicts for the wheel to the yaw rate the tyres give (`GUARD_GRIP_IDX`, `GRIP_YAW_CAP` grip / speed), so a racer brakes for a wreck across a bend that it used to steer past into (race-contact rally x7 hard: a 9.0 m/s hit).
  * 162: the cage no longer refits for the pose of a torn-off or shattered pane (it never read it): a wreck with a door off refits on fewer steps, and the cage's hold on its masses' sub-centimetre drift changes with it.
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 161 or before no longer reads.
+ * 163: an overlap push (`separateAlong`) leaves a wreck's crumple masses on the contact plane only while its crash window is open: a settled wreck moves whole, so a later shove or graze no longer springs its dent back out (a driven hatch rammed from behind: 19 mm of nose crush lost; flag 8JSS-CGEY). A clip of 162 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 162;
+const REPLAY_VERSION = 163;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

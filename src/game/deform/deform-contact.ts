@@ -690,7 +690,8 @@ export abstract class DeformContact extends DeformState {
 
   /**
    * Push the passenger cell out of overlap. Crumple-zone masses stay on the contact plane so the leftover penetration
-   * becomes plastic crush — only as far as the push runs into the struck end (impactInward). Across it, e.g. a derby
+   * becomes plastic crush — only while the hit's crash window is open and as far as the push runs into the struck end
+   * (impactInward); a settled wreck moves whole, so a later push never springs its dent back out. Across it, e.g. a derby
    * shove on the side of a car whose last hit was frontal, the lagging nose read as a turn of the engine→axle axis and
    * clampLocal turned the whole wreck with it, with no angular momentum (zips 2 → 0 in derby seed 1, 120 s). Positions
    * only: the uneven push changed Σ m r × v of a wreck whose nose and cabin move apart, and the next clamp kept it as
@@ -706,7 +707,7 @@ export abstract class DeformContact extends DeformState {
     this.yawMomentum(1, false);
     const gc = detCos(this.prevYaw);
     const gs = detSin(this.prevYaw);
-    const into = Math.max(0, (nx * gc - nz * gs) * this.impactInward.x + (nx * gs + nz * gc) * this.impactInward.z);
+    const into = this.crushing ? Math.max(0, (nx * gc - nz * gs) * this.impactInward.x + (nx * gs + nz * gc) * this.impactInward.z) : 0;
     let all = 0;
     let kept = 0;
     if (dv !== 0) {
