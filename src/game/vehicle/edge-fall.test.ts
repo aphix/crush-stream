@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { beginFakeFall, type DeformableCar } from "./car.ts";
 import { FREEWHEEL, makeCar, makeWorld, runPair, tickWorld } from "../contact/crash-scenarios.test-util.ts";
-import { edgeAction, FAKE_DEPTH, FLEET_MIN_SEP, fleetEmptied, layoutFleet, respawnSlot, RESPAWN_S, VAPOR_DEPTH } from "../scenes/fleet.ts";
+import { carFellOffRim, edgeAction, FLEET_MIN_SEP, fleetEmptied, layoutFleet, respawnSlot, RESPAWN_S } from "../scenes/fleet.ts";
 import { DISC_GROUND, DISC_RADIUS, FLAT_GROUND, setGround, type Ground } from "../world/ground.ts";
 import { assertSameDigest, assertSameNumbers } from "./test-support.ts";
 
@@ -72,20 +72,18 @@ describe("given the fleet course's disc-shaped ground (a round pad with a rim pa
   afterEach(() => setGround(null));
 
   for (const wreck of [false, true]) {
-    it(`when a ${wreck ? "wreck sliding" : "car driven"} goes past the rim at 16 m/s, then it falls in one piece, is swapped for a frozen fake at ${FAKE_DEPTH} m down and is vaporized (removed) at ${VAPOR_DEPTH} m down`, () => {
+    it(`when a ${wreck ? "wreck sliding" : "car driven"} goes past the rim at 16 m/s, then it stays in one piece until its lowest point is 10 mm under the disc's top off the rim, and is vaporized (removed) in that frame`, () => {
       setGround(DISC_GROUND);
       const car = launch(40, 16, wreck);
       const w = makeWorld([car], false, false, FREEWHEEL);
       const p = car.group.position;
-      const skin = car.body.geometry.getAttribute("position").array;
       let prevY = 0;
       let prevD = 0;
       let worstJerk = 0;
       let worstShape = 0;
-      let frozenMasses: number[] = [];
-      let frozenSkin: number[] = [];
-      let fakeAt = -1;
       let frame = 0;
+      let fellOffAt = -1;
+      let onDiscFrames = 0;
       // `CrashEngine.stepEdge`'s order: physics for the frame, then the edge rule.
       for (; frame < 300; frame++) {
         tickWorld(w);
@@ -97,24 +95,20 @@ describe("given the fleet course's disc-shaped ground (a round pad with a rim pa
         prevD = d;
         prevY = p.y;
         if (!car.falling) worstShape = Math.max(worstShape, shapeErr(car));
-        const act = edgeAction(p.y, car.falling, car.vaporized, false, 0);
-        if (act === "vaporize") break;
-        if (act === "fake") {
-          beginFakeFall(car);
-          fakeAt = frame;
-          frozenMasses = car.deform.masses.flatMap((m) => [m.world.x, m.world.y, m.world.z]);
-          frozenSkin = Array.from(skin);
+        const fellOff = carFellOffRim(car);
+        if (!fellOff && Math.hypot(p.x, p.z) < DISC_RADIUS) onDiscFrames++;
+        const act = edgeAction(fellOff, car.vaporized, false, 0);
+        if (act === "vaporize") {
+          fellOffAt = frame;
+          break;
         }
       }
-      assert.ok(fakeAt > 0 && p.y < -VAPOR_DEPTH, `y ${p.y.toFixed(2)} m after ${frame} frames (fake at ${fakeAt}): the ground did not end`);
-      assert.ok(Math.hypot(p.x, p.z) > DISC_RADIUS, "fell inside the rim");
-      assert.ok(frame < 200, `took ${frame} frames to fall ${VAPOR_DEPTH} m`);
+      assert.ok(fellOffAt > 0 && onDiscFrames > 0, `no vaporize (frame ${fellOffAt}), ${onDiscFrames} frames on the disc`);
+      assert.ok(Math.hypot(p.x, p.z) > DISC_RADIUS - 2, "vaporized before it reached the rim");
+      assert.ok(p.y > -1 && p.y < 0.01, `vaporized at y ${p.y.toFixed(3)} m: the first frame its lowest point was 10 mm under, not a fall of metres`);
       assert.ok(worstJerk <= G_FRAME2 * 1.05, `height popped ${worstJerk.toFixed(4)} m/frame² (gravity ${G_FRAME2.toFixed(4)})`);
       // Measured 0.000 m driven, ≈0.1 m for the wreck (its nose tips over the rim first; 0.03 before the rim).
       assert.ok(worstShape < 0.2, `body bent ${worstShape.toFixed(3)} m while falling`);
-      // The fake is the car as it was: no mass or skin vertex moved after the swap, only the group.
-      assertSameNumbers(car.deform.masses.flatMap((m) => [m.world.x, m.world.y, m.world.z]), frozenMasses, "masses after the swap");
-      assertSameNumbers(skin, frozenSkin, "skin after the swap");
     });
   }
 
@@ -146,14 +140,31 @@ describe("given the fleet course's disc-shaped ground (a round pad with a rim pa
     assertSameNumbers(record([car], 30).slice(-before.length), before, "vaporized car");
   });
 
-  it(`when a car falls past the edge depths, then it is faked, then vaporized, and only the driven car respawns ${RESPAWN_S} s later while an AI car stays gone`, () => {
-    assert.equal(edgeAction(-FAKE_DEPTH + 0.1, false, false, true, 0), null);
-    assert.equal(edgeAction(-FAKE_DEPTH - 0.1, false, false, true, 0), "fake");
-    assert.equal(edgeAction(-FAKE_DEPTH - 0.1, true, false, true, 0), null);
-    assert.equal(edgeAction(-VAPOR_DEPTH - 0.1, true, false, false, 0), "vaporize");
-    assert.equal(edgeAction(-VAPOR_DEPTH - 0.1, false, true, true, RESPAWN_S - 0.1), null);
-    assert.equal(edgeAction(-VAPOR_DEPTH - 0.1, false, true, true, RESPAWN_S + 0.1), "respawn");
-    assert.equal(edgeAction(-VAPOR_DEPTH - 0.1, false, true, false, 60), null, "an AI car stays gone");
+  const rimCases = [
+    { it: "when it sits on the disc 2 cm under its top, then it stays (a sunk car on the pad is no fall)", x: 0, y: -0.02, flipped: false, expectedFellOff: false },
+    { it: "when it stands on the disc on its wheels, then it stays", x: 0, y: 0, flipped: false, expectedFellOff: false },
+    { it: "when it is off the rim and its lowest point is 5 mm under the disc's top, then it stays", x: 60, y: -0.005, flipped: false, expectedFellOff: false },
+    { it: "when it is off the rim and its lowest point is 20 mm under the disc's top, then it has fallen off", x: 60, y: -0.02, flipped: false, expectedFellOff: true },
+    { it: "when it hangs off the rim on its roof with the roof's lowest corner 0.36 m under the disc's top, then it has fallen off", x: 60, y: 1, flipped: true, expectedFellOff: true },
+    { it: "when it lies on its roof on the disc, then it stays", x: 0, y: 1, flipped: true, expectedFellOff: false },
+  ];
+  for (const testCase of rimCases) {
+    it(`given a car beside the fleet disc, ${testCase.it}`, () => {
+      setGround(DISC_GROUND);
+      const car = makeCar();
+      car.group.position.set(testCase.x, testCase.y, 0);
+      if (testCase.flipped) car.group.quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI);
+      assert.equal(carFellOffRim(car), testCase.expectedFellOff, "fell off the rim");
+    });
+  }
+
+  it(`when a car has fallen off the rim, then it is vaporized at once, and only the driven car respawns ${RESPAWN_S} s later while an AI car stays gone`, () => {
+    assert.equal(edgeAction(false, false, true, 0), null);
+    assert.equal(edgeAction(true, false, false, 0), "vaporize");
+    assert.equal(edgeAction(true, false, true, 0), "vaporize");
+    assert.equal(edgeAction(true, true, true, RESPAWN_S - 0.1), null);
+    assert.equal(edgeAction(true, true, true, RESPAWN_S + 0.1), "respawn");
+    assert.equal(edgeAction(true, true, false, 60), null, "an AI car stays gone");
   });
 
   it("when a car respawns, then it is on the disc along the bearing it fell from, facing the centre, and clear of other cars", () => {
@@ -200,9 +211,8 @@ describe("given the fleet course's disc-shaped ground (a round pad with a rim pa
       const now = frame / 60;
       for (let i = 0; i < n; i++) {
         const car = cars[i]!;
-        const act = edgeAction(car.group.position.y, car.falling, car.vaporized, false, now - (vaporAt[i] ?? 0));
-        if (act === "fake") beginFakeFall(car);
-        else if (act === "vaporize") {
+        const act = edgeAction(carFellOffRim(car), car.vaporized, false, now - (vaporAt[i] ?? 0));
+        if (act === "vaporize") {
           car.vaporized = true;
           vaporAt[i] = now;
         }

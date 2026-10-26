@@ -12,6 +12,8 @@ export const NO_FLOOR = -Infinity;
 
 /** Radius (m) of the fleet scene's asphalt disc (`WorldStage`'s ground mesh, sandbox marks). */
 export const DISC_RADIUS = 48;
+/** A body whose lowest point is this far (m) under the fleet disc's top, over no floor, has fallen off its rim. */
+const RIM_DROP = 0.01;
 
 const _out = new Float64Array(HIT_SIZE);
 const _q = new Float64Array(PQ_SIZE);
@@ -36,6 +38,9 @@ function ask(g: Ground, x: number, z: number, y: number): void {
  * one-line readings of `contactIn` (`world/surfaces.ts`): the one answer every body gets.
  */
 export class Ground extends Surface {
+  /** The ground ends at a rim (the fleet disc's, with or without its ramps): `fellOffRim` judges a body past it. */
+  rimmed = false;
+
   /** Surface height (m) at world (x, z); `NO_FLOOR` where nothing is under the body. */
   heightAt(x: number, z: number, y = Infinity): number {
     _q[PQ_X] = x;
@@ -84,6 +89,7 @@ class DiscGround extends Ground {
   constructor() {
     super();
     this.addPlane(0, -DISC_RADIUS, DISC_RADIUS, -DISC_RADIUS, DISC_RADIUS, STEP_UP, DISC_RADIUS);
+    this.rimmed = true;
   }
 }
 
@@ -101,4 +107,9 @@ export function activeGround(): Ground {
 export function setGround(g: Ground | null): void {
   world.ground = g ?? FLAT_GROUND;
   activate(world.ground);
+}
+
+/** Whether a point (x, y, z) of a body has fallen off the active ground's rim: 10 mm under its top where there is no floor. Never on a ground without a rim. */
+export function fellOffRim(x: number, y: number, z: number): boolean {
+  return world.ground.rimmed && y < -RIM_DROP && world.ground.heightAt(x, z) === NO_FLOOR;
 }

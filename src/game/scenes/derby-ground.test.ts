@@ -5,7 +5,7 @@ import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { arenaWorld, leaveArena } from "./derby-arena.test-util.ts";
 import { plateauHeight } from "../world/terrain.ts";
-import { FAKE_DEPTH, MAX_CARS, layoutDerby } from "./fleet.ts";
+import { SUNK_CAR_DEPTH, MAX_CARS, layoutDerby } from "./fleet.ts";
 import { DERBY_ARENA } from "./constants.ts";
 import { DERBY_BOXES, DERBY_FREE_PROPS, DERBY_PLATEAUS, DERBY_PROP, DERBY_RAMPS, DERBY_TABLE_TOP, DerbyGround, SPAWN_CLEARANCE, type DerbyBox } from "./derby-ground.ts";
 import { DERBY_RADIUS } from "./derby-arena.ts";
@@ -23,8 +23,8 @@ const SAMPLE_STEP = 0.5;
 /** The foot of a rise is a parabola that dies out over its last metres: under this (m) the floor counts as level. */
 const LEVEL = 0.01;
 
-/** A sunk wreck is driven at a solid: the depth (m) its origin lies under the floor (a car leaves the sim past `FAKE_DEPTH`), the speed (m/s) and the slice (s). */
-const SUNK_DEPTH = FAKE_DEPTH;
+/** A sunk wreck is driven at a solid: the depth (m) its origin lies under the floor (`SUNK_CAR_DEPTH`), the speed (m/s) and the slice (s). */
+const SUNK_DEPTH = SUNK_CAR_DEPTH;
 const DRIVE_MPS = 8;
 const SLICE_SECONDS = 1 / FINE_HZ;
 /** How far (m) behind the solid's face the car's origin starts: its nose (`frame.half.z`) is then inside the face. */
