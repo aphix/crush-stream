@@ -55,12 +55,13 @@ function hardMarks(track: Track): string[] {
  * and when a tyre in its springs on a slope began to be pulled down it by the weight it carries, at any slope (a coasting or driven car on rally's and stunt's grades met a different pull; oval is flat and keeps its marks),
  * and when a coasting car's rigid tyre rows' straight-up lift came off its plan speed instead of adding to it (stunt's cars 0 and 1 between thinks 300 and 600: 6c1aa909 -> 480dfde1 and 27444265 -> 1bbd006a; the other 14 marks, and oval's and rally's, stand),
  * and when the pull down a face became the plan part of each tyre's real load (the spring's push over the face's normal, not a fixed share of the weight): every rally and stunt mark changes (a loaded bank and a crest read their own load), oval is flat and keeps its marks,
- * and when a rigid tread on the world's ground began to push along the face's normal, not straight up (stunt's cars 0 to 7 between thinks 300 and 600, 9 of its 16 marks: its kicker and crests meet the normal's plan push; oval's and rally's stand).
+ * and when a rigid tread on the world's ground began to push along the face's normal, not straight up (stunt's cars 0 to 7 between thinks 300 and 600, 9 of its 16 marks: its kicker and crests meet the normal's plan push; oval's and rally's stand),
+ * and when the contact guard's arc was held to the yaw rate the tyres give (`GUARD_GRIP_IDX`: grip / speed, as `applyDrive` caps it) and began to count a stopped car lying across the way at its true reach (rally's cars 1 to 7 and stunt's 3 to 7 between thinks 300 and 600: the cars that meet traffic; oval's marks stand).
  */
 const HARD_MARKS: Record<string, string[]> = {
   oval: ["e9df8473", "7e9593ab", "6b5fc308", "9be8ec8e", "1da391b9", "15cb62d5", "b81974e2", "f9f01605", "1eb60b86", "92a70774", "5aed2cd0", "ccaba551", "c3295f1d", "cd39d90a", "7cb6e26c", "52acf03f"],
-  rally: ["91996808", "275c4c87", "67b6acec", "983535d7", "e3754e83", "75233861", "9249d068", "e09b3f7d", "fff59221", "da8ed942", "a0554cfe", "125e8cce", "b8c140d", "a6922d14", "c3de18f", "b08e3d8c"],
-  stunt: ["10806970", "5d6c0a38", "1437e3fe", "5252720a", "258a4215", "b2a128c8", "fd72ae50", "b59003fd", "bb9a8610", "e53e9156", "614dbfdd", "99dd709b", "39fef24f", "4ade322", "33160d2d", "a587a442"],
+  rally: ["91996808", "275c4c87", "67b6acec", "11693bb", "e3754e83", "5156843b", "9249d068", "ec6998a4", "fff59221", "6d696987", "a0554cfe", "bb3c5113", "b8c140d", "a77c0348", "c3de18f", "faa65b07"],
+  stunt: ["10806970", "5d6c0a38", "1437e3fe", "5252720a", "258a4215", "b2a128c8", "fd72ae50", "45f7eca6", "bb9a8610", "c2e3138b", "614dbfdd", "cf40067b", "39fef24f", "890af02a", "33160d2d", "c4f91e59"],
 };
 
 describe("given 8 clean AI cars (aggression 0) on the grid of the oval", () => {

@@ -1,7 +1,7 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { chargeBoost, idleDrive, topUpBoost, type DriveInput } from "../vehicle/car-drive.ts";
 import { mood } from "./ai-aggression.ts";
-import { AI_EVERY_SLICE, AI_SKILL, GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_LEAD_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_DUE_SLACK, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
+import { AI_EVERY_SLICE, AI_SKILL, GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_DUE_SLACK, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
 import { guardContact } from "./contact-guard.ts";
 import { DERBY_RULES, STUCK_SPEED, type AiCar } from "./derby-ai.ts";
 import { personality, type Personality } from "./personality.ts";
@@ -9,8 +9,10 @@ import { MAX_CARS } from "../scenes/fleet.ts";
 import { SURFACE_IDS, SURFACES, type Surface } from "../world/catalog.ts";
 import { blankPoint, blankProjection, pointOn, projectPath, type Track, type TrackPath, type TrackPoint } from "../world/track.ts";
 import { junctionsOf } from "../world/junctions.ts";
-import { classStats, cornerSpeed, rollingOver, terminalSpeed, type ClassStats } from "../vehicle/vehicle-classes.ts";
+import { assists, classStats, cornerSpeed, HANDLING, rollingOver, terminalSpeed, type Assists, type ClassStats } from "../vehicle/vehicle-classes.ts";
 import { clamp, hash01, wrapPi } from "../kernel/scalar.ts";
+/** The assists' scratch (`assists` fills it): the guard reads the tyres' share of grip from it. */
+const _assist: Assists = { grip: 1, slipCap: 0, catchRate: 0, scrub: 0, selfRight: 0 };
 
 /** Steering authority on a surface: `applyDrive` scales the yaw rate by this (front-axle grip). */
 export function steerGrip(grip: number): number {
@@ -476,6 +478,7 @@ export class RaceBrain {
       g[GUARD_BRAKE_IDX] = cls.brake * BRAKE_SHARE;
       g[GUARD_LEAD_IDX] = cls.brake;
       g[GUARD_TURN_IDX] = turnMax;
+      g[GUARD_GRIP_IDX] = cls.grip * surf.grip * assists(HANDLING.realism, _assist).grip;
       g[GUARD_DT_IDX] = dt;
       if (this.thinkEvery[i] === 0 && !this.guardLate) guardContact(self, others, this.guarded, this.hit, g, out);
       else this.hitOf[i]!.set(this.hit);
