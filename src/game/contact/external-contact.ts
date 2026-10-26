@@ -9,7 +9,7 @@ import { ARM_CLOSING, SOLID_MU } from "./constants.ts";
 import { CRASH } from "../deform/physics-util.ts";
 import { OUTLINE_REACH, outlineOf, type CageOutline } from "./cage-outline.ts";
 import { LEVEL } from "./hull-gap.ts";
-import { _lane, hitDoor, hitMirror, hitPanel, partHit, shutDoorsOnSolid, SIDES } from "./door-contact.ts";
+import { _lane, hitDoor, hitLid, hitMirror, hitPanel, partHit, shutDoorsOnSolid, SIDES } from "./door-contact.ts";
 
 /**
  * One contact model for anything that strikes a car (the Doors ram, a press plate, a piston face, another car's body): an oriented
@@ -650,6 +650,7 @@ export function partContact(car: DeformableCar, box: ContactBox, dt: number): ty
     hitDoor(car, side, lane);
     hitPanel(car, side, lane);
   }
+  hitLid(car, lane, lx, ex);
   partHit.du = u0 - lane.u;
   partHit.nx = az.x * lane.dir;
   partHit.nz = az.z * lane.dir;

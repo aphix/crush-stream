@@ -3,6 +3,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { detAtan2, detCos, hypot3 } from "../kernel/physics-core.js";
 import { MIRROR_FOLD_MAX } from "../vehicle/car-core.ts";
 import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
+import type { LidProfile } from "../vehicle/car-parts.ts";
 import { bodyEdge, strikeCar, makeBox, partContact } from "../contact/external-contact.ts";
 import { KPH_PER_MS } from "../kernel/constants.ts";
 
@@ -69,8 +70,11 @@ const MIRROR_LANE_STOP_SHARE = 0.75;
 const MIRROR_LANE_CATCH = 0.02;
 /** The mirror lane runs from just under the drawn mirror's top up this far (m): a head over the cap, never down onto the belt and the door below. */
 const MIRROR_LANE_TALL = 0.6;
-/** A lid lane's head reaches this far (m) up past the lowest point of the trunk lid where it hangs. */
+/** G's head starts this far (m) under the lowest point of the open trunk lid, and stands this tall: it meets the lid where it hangs. */
 const LID_LANE_BITE = 0.03;
+const LID_LANE_TALL = 0.4;
+/** G's head runs this far (m) over the deck a lid that opens up stands on. */
+const LID_LANE_DECK_CLEAR = 0.02;
 
 /** A head's shape on a lane: a car-shaped striker for docs/CONTACT_PARITY.md. */
 export type RamShape = Partial<Pick<RamLane, "bottom" | "top" | "width">>;
@@ -78,16 +82,17 @@ export type RamShape = Partial<Pick<RamLane, "bottom" | "top" | "width">>;
 /**
  * `scenario`'s lane beside side `side` of `car` for a head of `shape`, at the heights the world draws it (the style's own heights over the class's lift): a mirror
  * lane on that car's own mirror (its top in the lane, its base `mirrorLaneGap` in), a panel lane on its body; neither inside the body at the head's own heights, which would be a body hit.
- * A lid lane's head stands tall enough to meet the trunk lid where it hangs (`lidBottom`).
+ * G's head stands at the open lid where it hangs (`hangingLidHeights`).
  */
-export function laneFor(scenario: DoorScenario, car: DeformableCar, side: -1 | 1, shape: RamShape | null = null, lidBottom = -Infinity): RamLane {
+export function laneFor(scenario: DoorScenario, car: DeformableCar, side: -1 | 1, shape: RamShape | null = null): RamLane {
   const lift = CLASSES[carClass(car)].lift;
   let lane = { ...DOOR_LANES[scenario], bottom: DOOR_LANES[scenario].bottom + lift, top: DOOR_LANES[scenario].top + lift };
   if (scenario === "mirror") {
     const bottom = car.mirrorSpanY[1] - MIRROR_LANE_CATCH + lift;
     lane = { ...lane, inner: car.mirrorBaseX + mirrorLaneGap(car), bottom, top: bottom + MIRROR_LANE_TALL };
   }
-  if (lane.part === "lid") lane = { ...lane, top: Math.max(lane.top, lidBottom + LID_LANE_BITE) };
+  if (scenario === "lidTear") lane = { ...lane, ...hangingLidHeights(car, lift) };
+  if (scenario === "lidPop") lane = { ...lane, top: Math.max(lane.top, shutLidLowest(car) + lift + LID_LANE_BITE) };
   if (shape) lane = { ...lane, ...shape };
   if (scenario !== "mirror" && lane.part !== "panel") return lane;
   const clear = bodyEdge(car, side, lane.bottom, lane.top) + BODY_LANE_GAP;
@@ -96,6 +101,26 @@ export function laneFor(scenario: DoorScenario, car: DeformableCar, side: -1 | 1
 
 function mirrorLaneGap(car: DeformableCar): number {
   return Math.min(MIRROR_LANE_GAP, MIRROR_LANE_STOP_SHARE * car.style.door.mirrorReach * detCos(MIRROR_FOLD_MAX));
+}
+
+const _lidShut: LidProfile = { hingeY: 0, hingeZ: 0, edgeY: 0, edgeZ: 0, halfWidth: 0 };
+const _lidOpen: LidProfile = { hingeY: 0, hingeZ: 0, edgeY: 0, edgeZ: 0, halfWidth: 0 };
+
+/** The heights (m, over the class's `lift`) G's head runs at: the open lid's lowest point to `LID_LANE_TALL` above it; a lid that opens up stands over the deck, which the head clears by `LID_LANE_DECK_CLEAR` so it meets the lid and not the tail under it. */
+function hangingLidHeights(car: DeformableCar, lift: number): Pick<RamLane, "bottom" | "top"> {
+  const hinge = car.lidHinge().spec;
+  const open = car.lidProfile(_lidOpen, hinge.stop);
+  const shut = car.lidProfile(_lidShut, 0);
+  const lowest = Math.min(open.hingeY, open.edgeY) - LID_LANE_BITE;
+  const deck = Math.max(shut.hingeY, shut.edgeY) + LID_LANE_DECK_CLEAR;
+  const bottom = (hinge.dir > 0 ? Math.max(lowest, deck) : lowest) + lift;
+  return { bottom, top: bottom + LID_LANE_TALL };
+}
+
+/** The lowest point (m) of the shut trunk lid's chord: a flat deck lid sits above the stock head, which F's head is raised to reach. */
+function shutLidLowest(car: DeformableCar): number {
+  const shut = car.lidProfile(_lidShut, 0);
+  return Math.min(shut.hingeY, shut.edgeY);
 }
 
 export const RAM_DEFAULTS = { kph: 12, kg: 300 } as const;
@@ -170,11 +195,9 @@ export class DoorRig {
 
   /** A head of another shape on the scenario's lane. */
   shape: RamShape | null = null;
-  /** The lowest point (m) the trunk lid drew when the last lid shot was fired: the lid lane's head reaches it. */
-  private lidBottom = -Infinity;
 
   get lane(): RamLane {
-    if (this.car) return laneFor(this.scenario, this.car, this.side, this.shape, this.lidBottom);
+    if (this.car) return laneFor(this.scenario, this.car, this.side, this.shape);
     const lane = DOOR_LANES[this.scenario];
     return this.shape ? { ...lane, ...this.shape } : lane;
   }
@@ -206,10 +229,8 @@ export class DoorRig {
     if (this.lane.part === "panel") {
       car.setDoorOpen(side, 0);
       car.setPanelOpen(side, this.lane.open);
-    } else if (this.lane.part === "lid") {
-      car.setLidOpen(this.lane.open);
-      this.lidBottom = car.lidBottom();
-    } else car.setDoorOpen(side, this.lane.open);
+    } else if (this.lane.part === "lid") car.setLidOpen(this.lane.open);
+    else car.setDoorOpen(side, this.lane.open);
     const masses = car.deform.masses;
     for (let i = 0; i < masses.length; i++) masses[i]!.local.toArray(this.particles0, i * 3);
     this.verts0.set((car.body.geometry.getAttribute("position") as THREE.BufferAttribute).array as Float32Array);
@@ -317,6 +338,8 @@ export class DoorRig {
     const hit = partContact(car, box, h);
     if (hit.touched) this.touched = true;
     this.u = Math.max(0, this.u - hit.du);
+    // G's head runs over the deck and meets the open lid (`hitLid`), not the tail under it: the body contact's plan outline has no heights to tell them apart, so it waits for the lid to be gone. F's lid, sprung by the crush, never hides the tail.
+    if (this.scenario === "lidTear" && car.lidHangsOnStop()) return;
     // A lane that reaches the skin dents it through the same body contact the other rigs use.
     const taken = strikeCar(car, box, h, true);
     if (taken > 0) this.touched = true;
