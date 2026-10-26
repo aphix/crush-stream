@@ -4,11 +4,11 @@ import * as THREE from "three";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { _lane, hitMirror } from "../contact/door-contact.ts";
 import { DOOR_OPEN_MAX, HINGE_TEAR_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX, SLAM_TEAR_J } from "../vehicle/car-core.ts";
-import { DeformableCar } from "../vehicle/car.ts";
-import type { CarStyleId } from "../vehicle/car-variants.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
+import { CAR_STYLE_IDS, type CarStyleId } from "../vehicle/car-variants.ts";
 import { DoorRig, type DoorScenario, type RamShot } from "./door-rig.ts";
-import { fireRam } from "./door-rig.test-util.ts";
-import { assertSameDigest, paint } from "../vehicle/test-support.ts";
+import { drawnBox, fireRam, laneBox, LANE_PART, overlapMetres, parkedStyle, partName } from "./door-rig.test-util.ts";
+import { assertSameDigest } from "../vehicle/test-support.ts";
 
 /** The door swing integrates at its own 120 Hz, a finer step than the quiet one: the test pins one second of it, not the shipped step. */
 const SWING_HZ = 120;
@@ -73,22 +73,27 @@ const CASES: Case[] = [
   { scenario: "shut", level: "with high force, which slams the door off", kph: 40, kg: 300, off: ["door", "mirror"], check: () => {} },
 ];
 
-describe("given a ram on a lane beside a parked car (mirror: A grazes the shut door's mirror; overOpen: B drives the open door past its stop; shut: C drives the open door shut)", () => {
-  for (const side of [-1, 1] as const) {
-    const suffix = side < 0 ? "L" : "R";
-    for (const c of CASES) {
-      it(`when the ${c.scenario} ram hits the ${suffix} side ${c.level}, then the parts that come off are [${c.off.join(", ")}] and the body does not move more than 1 mm`, () => {
-        const r = fireRam(makeCar(), c.scenario, { kph: c.kph, kg: c.kg, side });
-        assertSameDigest([...r.detached].sort(), c.off.map((p) => p + suffix).sort(), `detached [${[...r.detached].sort()}]`);
-        const doorOn = !c.off.includes("door");
-        if (doorOn && c.scenario !== "overOpen") assert.ok(r.latched, "door should be shut and latched");
-        assert.ok(r.bodyParticleMm <= BODY_TOL_MM, `control particles moved ${r.bodyParticleMm} mm`);
-        assert.ok(r.bodyVertexMm <= BODY_TOL_MM, `skinned vertices moved ${r.bodyVertexMm} mm`);
-        c.check(r);
-      });
+/** The cars the sketch cases run on: the sedan the rows were written on (`makeCar`), then every other style, the muscle (coupe) with its short bullet mirror among them. */
+const SKETCH_CARS = CAR_STYLE_IDS.map((id) => ({ name: id === "coupe" ? "muscle (coupe)" : id, park: id === "sedan" ? makeCar : () => parkedStyle(id) }));
+
+for (const sketchCar of SKETCH_CARS) {
+  describe(`given a ram on a lane beside a parked ${sketchCar.name} (mirror: A grazes the shut door's mirror; overOpen: B drives the open door past its stop; shut: C drives the open door shut)`, () => {
+    for (const side of [-1, 1] as const) {
+      const suffix = side < 0 ? "L" : "R";
+      for (const c of CASES) {
+        it(`when the ${c.scenario} ram hits the ${suffix} side ${c.level}, then the parts that come off are [${c.off.join(", ")}] and the body does not move more than 1 mm`, () => {
+          const r = fireRam(sketchCar.park(), c.scenario, { kph: c.kph, kg: c.kg, side });
+          assertSameDigest([...r.detached].sort(), c.off.map((p) => p + suffix).sort(), `detached [${[...r.detached].sort()}]`);
+          const doorOn = !c.off.includes("door");
+          if (doorOn && c.scenario !== "overOpen") assert.ok(r.latched, "door should be shut and latched");
+          assert.ok(r.bodyParticleMm <= BODY_TOL_MM, `control particles moved ${r.bodyParticleMm} mm`);
+          assert.ok(r.bodyVertexMm <= BODY_TOL_MM, `skinned vertices moved ${r.bodyVertexMm} mm`);
+          c.check(r);
+        });
+      }
     }
-  }
-});
+  });
+}
 
 describe("given a car's right door swung from half a radian open at a chosen opening rate", () => {
   const inertia = makeCar().doorHinge(1).spec.inertia;
@@ -129,13 +134,6 @@ describe("given a car driven at 64 km/h head-on into a wall", () => {
     }
   });
 });
-
-/** A parked car of style `id` facing +Z. */
-function parkedStyle(id: CarStyleId): DeformableCar {
-  const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
-  car.spawnFacing(0, 0, 0, 0);
-  return car;
-}
 
 /** The heavy ram the lid lanes are pinned with (kg): a car's mass, so the tail crushes as a rear-ender's does. */
 const LID_RAM_KG = 1500;
@@ -212,5 +210,88 @@ describe("given a mirror on a shut right door struck by a face that clears its b
     const car = makeCar();
     car.setMirrorFold(1, -MIRROR_FOLD_MAX);
     assert.equal(strikeMirror(car, 0.5), MIRROR_FOLD_MAX);
+  });
+});
+
+/** A hard shot on each lane (km/h, kg): one that takes off what the lane is for wherever its head meets it. */
+const HARD_SHOTS = [
+  { scenario: "mirror", kph: 60, kg: 3000 },
+  { scenario: "overOpen", kph: 30, kg: 1500 },
+  { scenario: "shut", kph: 40, kg: 300 },
+  { scenario: "panelPush", kph: 30, kg: 1500 },
+  { scenario: "panelPull", kph: 30, kg: 1500 },
+  { scenario: "lidPop", kph: 60, kg: 3000 },
+  { scenario: "lidTear", kph: 60, kg: 3000 },
+] as const satisfies readonly { scenario: DoorScenario; kph: number; kg: number }[];
+
+/** The lighter shots every lane is also fired at, to see what comes off at each. */
+const SOFT_SHOTS = [
+  { kph: 6, kg: 30 },
+  { kph: 12, kg: 300 },
+] as const;
+
+/** How far (m) a head's lane must overlap a part's drawn box, across the car's width and in height, to be said to meet it. */
+const MEETS_M = 0.01;
+
+type DrawnShot = { shot: RamShot; overlap: (name: string) => number };
+const drawnShots = new Map<string, DrawnShot>();
+
+/** One shot at the right side of a parked, class-dressed `id`, with how far its head's lane overlaps each part's drawn box as the shot began. */
+function shootDrawn(id: CarStyleId, scenario: DoorScenario, kph: number, kg: number): DrawnShot {
+  const key = `${id}/${scenario}/${kph}/${kg}`;
+  const cached = drawnShots.get(key);
+  if (cached) return cached;
+  const car = parkedStyle(id);
+  const overlaps = new Map<string, number>();
+  const shot = fireRam(car, scenario, {
+    kph,
+    kg,
+    side: 1,
+    onFired: (rig) => {
+      const lane = laneBox(rig.lane, 1, new THREE.Box3());
+      for (const part of car["parts"]) overlaps.set(part.name, overlapMetres(lane, drawnBox(car, part.name, new THREE.Box3())));
+    },
+  });
+  const drawn = { shot, overlap: (name: string) => overlaps.get(name) ?? -Infinity };
+  drawnShots.set(key, drawn);
+  return drawn;
+}
+
+const styleLanes = CAR_STYLE_IDS.flatMap((id) => HARD_SHOTS.map((hard) => ({ ...hard, id, part: LANE_PART[hard.scenario] })));
+
+describe("given each lane's ram fired at the right side of a parked car of every style (docs/DOOR_RIG.md, Rig)", () => {
+  for (const c of styleLanes) {
+    it(`when ${c.scenario} is fired at the ${c.id}, then its head's lane meets the drawn ${c.part} by ${MEETS_M * 1000} mm or more`, () => {
+      const metres = shootDrawn(c.id, c.scenario, c.kph, c.kg).overlap(partName(c.part, 1));
+      assert.ok(metres >= MEETS_M, `${c.id} ${c.scenario}: the head overlaps the drawn ${c.part} by ${metres} m`);
+    });
+
+    it(`when ${c.scenario} is fired at the ${c.id} at ${c.kph} km/h and ${c.kg} kg, then the ${c.part} comes off`, () => {
+      const { detached } = shootDrawn(c.id, c.scenario, c.kph, c.kg).shot;
+      assert.ok(detached.includes(partName(c.part, 1)), `${c.id} ${c.scenario}: off [${detached}]`);
+    });
+
+    it(`when ${c.scenario} is fired at the ${c.id} at 6 km/h, 12 km/h and ${c.kph} km/h, then every part that comes off was met by the head`, () => {
+      const unseen: string[] = [];
+      for (const strength of [...SOFT_SHOTS, c]) {
+        const drawn = shootDrawn(c.id, c.scenario, strength.kph, strength.kg);
+        for (const name of drawn.shot.detached) {
+          const door = `door${name.slice("mirror".length)}`;
+          const carrier = name.startsWith("mirror") && drawn.shot.detached.includes(door) ? door : name;
+          if (drawn.overlap(carrier) < MEETS_M) unseen.push(`${name} at ${strength.kph} km/h`);
+        }
+      }
+      assert.equal(unseen.join(", "), "", `${c.id} ${c.scenario}: parts off that the head never met`);
+    });
+  }
+});
+
+describe("given a monster whose drawn body rides 0.87 m over its stock heights, its right door open 55°", () => {
+  it("when B's head runs under the door's drawn height and then at it, then the first leaves the door alone and the second tears it off", () => {
+    const under = fireRam(parkedStyle("monster"), "overOpen", { kph: 30, kg: 1500, shape: { bottom: 0.3, top: 0.75 } });
+    const level = fireRam(parkedStyle("monster"), "overOpen", { kph: 30, kg: 1500, shape: { bottom: 1.3, top: 1.6 } });
+    assert.equal(under.detached.join(), "", "a head under the lifted door took something off");
+    assert.ok(Math.abs(under.doorDeg - 55) < 0.5, `the door under the head moved to ${under.doorDeg}°`);
+    assert.ok(level.detached.includes("doorR"), `a head at the door's drawn height left [${level.detached}]`);
   });
 });

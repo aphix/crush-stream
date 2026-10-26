@@ -479,10 +479,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A finished race's police patrol keeps its clock (`PoliceBrain.update`: the session's clock stands still at the finish, so a cop put on the road in the 12 s before it never came of age, `MIN_LIFE`, and was never put away): such a cop is put away once it has been on the road 12 s of patrol, where it stayed for good (seed 1's oval: 1 of 6 given-up cops still on the course 30 s after the finish).
  * The derby arena's wall stands 20.5 m (its glass twice the old 8.5 m): a monster that cleared the 12 m wall now meets it.
  * A keyframe's solver state carries a wreck's body up as its last structure step took it (`DeformRig.frameUp`, 3 doubles more in `simState`): a wreck that rides its body takes no such step, and a rolled one restored from a keyframe stood upright in the replay, so a touch that woke it clamped it as a planted wreck where the live sim's lying one stood on none (engine-replay seeds 7 and 9: masses 1e-14 m off at the first re-measure, off the live sim after). A clip replays the live sim it recorded, as before.
- * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 158 or before no longer reads.
+ * A lifted class's doors, mirrors and quarter panels are met at the heights the world draws them (the class's lift taken off the striker's, as the body edge already did): a monster's door, 0.87 m up, was struck by a head at the stock heights under it, and a head at the door's own height passed it. A quarter panel's hit follows the drawn sheet's chord from its hinge to its free end, which leans outboard where the body widens (a wagon's stretched panel, 0.16 m past the old line, was passed through by a ram on its side).
+ * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 159 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 159;
+const REPLAY_VERSION = 160;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

@@ -47,6 +47,7 @@ const _doorW = new THREE.Vector3();
 const _c = new THREE.Vector3();
 const _com = new THREE.Vector3();
 const _drawn = new THREE.Box3();
+const _lidBox = new THREE.Box3();
 const _hoodHinge = new THREE.Vector3();
 const _hoodSwung = new THREE.Vector3();
 const _hoodTurn = new THREE.Quaternion();
@@ -57,7 +58,7 @@ const _xAxis = new THREE.Vector3(1, 0, 0);
  * part. A part seat's `geometry` is the platform part the sim measures, not where the style draws its own (`Box3.setFromObject` read it: a
  * pickup's bumper box reached 4.2 m off the bumper, and the bumper was lifted 2.6 m to clear the road under that phantom).
  */
-function growDrawn(o: THREE.Object3D, box: THREE.Box3): void {
+export function growDrawn(o: THREE.Object3D, box: THREE.Box3): void {
   if (!o.visible) return;
   const geometry = o instanceof PartSeat ? o.drawn : o instanceof THREE.Mesh ? (o.geometry as THREE.BufferGeometry) : null;
   if (geometry !== null) {
@@ -558,6 +559,13 @@ export abstract class CarParts extends CarGlass {
   /** The trunk lid's drawn open angle (rad), as `doorAngle`. */
   lidAngle(): number {
     return this.swingAngle(this.lidPart);
+  }
+
+  /** The lowest point (m, car frame) the trunk lid draws at the pose it stands in now. */
+  lidBottom(): number {
+    this.group.updateMatrixWorld(true);
+    growDrawn(this.lidPart.object, _lidBox.makeEmpty());
+    return _lidBox.min.y;
   }
 
   private swingAngle(p: DetachPart): number {
