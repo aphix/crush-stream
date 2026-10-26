@@ -173,6 +173,7 @@ export function solveRows(n: number): void {
   for (let pass = 0; pass < passes; pass++) {
     for (let c = 0; c < n; c++) {
       const nrm = N[c]!;
+      const yaw0 = w.y;
       let jn: number;
       if (SOFT[c]) {
         // A tyre in its springs: once a slice its spring and damper push the body straight up, whatever face its tread meets, the damper
@@ -232,7 +233,11 @@ export function solveRows(n: number): void {
           give(c, v, w, q, dir, surf);
         }
       }
-      if (driven && OWN[c]! < 0) continue;
+      if (driven && OWN[c]! < 0) {
+        // A driven car's heading is its steering's: a tread's push along a bank's normal, at the tread's arm, must not spin it about the vertical.
+        if (TYRE[c]) w.y = yaw0;
+        continue;
+      }
       // Friction against the point's sliding: a tyre grips only across its tread (its axle laid in the contact plane) where it
       // rolls: on the world's ground and under power. A car in flight on another car's top is unpowered with its wheels not
       // turning under it, and a free-rolling tyre slid a car down the 8° of a pickup's bed at 0.38 m/s, for good: it grips both ways.
@@ -861,7 +866,10 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     SHARE[n] = 0.25 * (1 + body.centre.x / frame.wx[i]!) * (1 + body.centre.z / frame.wz[i]!);
     carrier(surf, n, own, mass);
     CLOSING[n] = Math.max(0, -pointVel(n, v, w, _vp).dot(N[n]!));
-    if (own >= 0 && CLOSING[n]! < WALL_CRUSH) surf.touch(own);
+    if (own >= 0) {
+      if (CLOSING[n]! < WALL_CRUSH) surf.touch(own);
+      else surf.strike(own);
+    }
     ROW_WHEEL[n] = i;
     n++;
   }
@@ -887,7 +895,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // `EPICENTER.wreckTops`: a wreck takes no row from another wreck's top (`readPoints`, the belly's edges below drop that answer), so only the tops of cars that are not wrecks make it read every point.
   const oldAll = topsTop(car.slot, centreOfMass.x - bodyReach, centreOfMass.x + bodyReach, centreOfMass.z - bodyReach, centreOfMass.z + bodyReach) > -Infinity;
   const readAll = oldAll && !(wreck && EPICENTER.wreckTops === 1 && !(topsTopLive(car.slot, surf.cars, false, centreOfMass.x - bodyReach, centreOfMass.x + bodyReach, centreOfMass.z - bodyReach, centreOfMass.z + bodyReach) > -Infinity));
-  // Where it flipped, every point still goes through its own test (no whole-body skip): the body-level `allClear` measures a wreck about the car's stock centre, not its masses', and clears a wreck resting on the ground by a millimetre the point test asks.
+  // Where it flipped, every point goes through its own test (no whole-body skip), and `--verify` asks the old way too.
   const flipped = oldAll && !readAll;
   // Every point's slice travel lies within this of the centre of mass: its reach about the body's own centre is at most the stock reach
   // plus that centre's offset from the car's (`readPoints` reads the solids over that square once, if a point needs them).
@@ -903,8 +911,9 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   let allClear = false;
   // Each point's own read is bounded by `centredTop`: the box above for a car, about its masses' centre for a wreck.
   let bodyTop = Infinity;
+  // The points are measured about the body's own centre (`c`, a wreck's masses'), as `armOf` arms them: about the stock centre the gate cleared what the point test asks.
   if (!readAll) {
-    const turn = turnRate * _s[S_POINT_REACH]!;
+    const turn = turnRate * shiftedReach;
     const pad = (hypot2(v.x, v.z) + turn) * dt + CLEAR_ROUND;
     let xMin = Infinity;
     let xMax = -Infinity;
@@ -915,9 +924,9 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     // added), and no builtin call per point while this function runs below TurboFan, where each one boxed its double (1.2 M a
     // 20 s race, 19.5 MB).
     for (let i = 0; i < pointEnd; i++) {
-      const x = POINT_X[i]!;
-      const y = POINT_Y[i]! - stockY;
-      const z = POINT_Z[i]!;
+      const x = POINT_X[i]! - c.x;
+      const y = POINT_Y[i]! - c.y;
+      const z = POINT_Z[i]! - c.z;
       const rx = _e[0]! * x + _e[3]! * y + _e[6]! * z;
       const rz = _e[2]! * x + _e[5]! * y + _e[8]! * z;
       const ry = _e[1]! * x + _e[4]! * y + _e[7]! * z;
