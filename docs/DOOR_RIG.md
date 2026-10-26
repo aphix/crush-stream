@@ -133,20 +133,50 @@ The door is a slab in top view from its hinge to its trailing edge. A free door 
 restitution impulse (e = 0.2) through its effective mass I/k², where k = r·sin θ is its lever
 across the travel. Then the slab is pushed out of the face.
 
-| lane | travel | inner edge \|x\| | width | height (m) | door at start |
+Heights are as the world draws them: the style's own heights over its class's lift (the monster's body rides 0.87 m up). `laneFor`
+adds the lift, `partContact` takes it off the striker's heights before it asks the door, mirror and panel colliders (`bodyEdge` does its
+own), so a head meets a lifted car's door where the door is drawn.
+
+| lane | travel | inner edge \|x\| | width | height (m, over the lift) | door at start |
 |---|---|---|---|---|---|
-| A `mirror` | rear→front | mirror base + 0.03 (`laneFor`; sedan 0.772) | 0.4 | from 2 cm under the drawn mirror's top, 0.6 tall (sedan 0.98–1.58) | shut, latched |
+| A `mirror` | rear→front | mirror base + min(0.03, 0.75 × reach × cos 75°) (`laneFor`; sedan 0.772, muscle 0.722) | 0.4 | from 2 cm under the drawn mirror's top, 0.6 tall (sedan 0.98–1.58) | shut, latched |
 | B `overOpen` | rear→front | 0.95 | 0.6 | 0.30–0.75 (below the mirror) | 55° |
 | C `shut` | front→rear | 1.10 (outside the open door's mirror) | 0.6 | 0.30–0.75 | 55° |
 | D/E `panelPush`, `panelPull` | rear→front, front→rear | body edge at the head's heights + 0.03 (`laneFor`; sedan 0.846) | 0.6 | 0.30–0.75 | panel at hinge 0.45 |
 | F `lidPop` | rear→front, into the tail | centred (x −0.6…0.6) | 1.2 | 0.30–0.90 | lid shut, latched |
-| G `lidTear` | rear→front, into the tail | centred | 1.2 | 0.30–0.90 | lid on its stop |
+| G `lidTear` | rear→front, into the tail | centred | 1.2 | 0.30–0.90, up to 3 cm past the open lid's lowest point (sedan 0.30–1.02) | lid on its stop |
 
-F and G reach the skin: the ram dents the tail through the body contact, and the rear crush drives the lid (Lids, above). The ram
-meets the tail, not the lid, so the two differ only in the lid's starting angle. With a 1500 kg ram, F leaves the lid latched at
+A mirror's lane stands no further out than the cap can fold under: a short mirror (the muscle's 0.105 m bullet, the hatchback's, the SUV's,
+the monster's) clears a face 3 cm out at under 75°, before its stop, and the ram slid past it; the gap is at most 0.75 of the cap's sideways
+reach at the stop, so the cap is still in the lane when the stop takes the ram.
+
+A quarter panel's hit (`hitPanel`) follows the drawn sheet's chord from its hinge to its free end, not the hinge's line along the car: the body
+widens ahead of the tail, so the free end rests outboard of the hinge (`PanelRegion.lean`: the SUV's 0.145 m) and a ram on the body's side
+passed a stretched SUV panel that is drawn 0.14 m into its lane.
+
+F and G reach the skin: the ram dents the tail through the body contact, and the rear crush drives the lid (Lids, above). G's head also
+stands up to the open lid, which hangs above the stock head (a deck lid's lowest point is 0.90–1.00 m up, a liftgate's 1.34 m). With a 1500 kg ram, F leaves the lid latched at
 15 km/h and springs it at 30 km/h on the sedan, hatchback, SUV and pickup; G at 15 km/h leaves the open lid on its stop. A 5000 kg
 ram at 56 km/h (EBS 13.3 m/s, crush past `tearT`) tears the sedan's and pickup's lid off; with 1500 kg the crush rule (0.78) tears
 the pickup's at 68 km/h and the sedan's at 70 km/h, with the right bumper.
+
+### What the lanes meet, per style
+
+Every style's drawn parts, and the lane that meets each (`door-rig.test.ts` fires every lane at every style and checks the head's lane overlaps
+the drawn part by at least 1 cm, the part comes off a hard shot, and nothing comes off that the head never met):
+
+| drawn part | lane | how it breaks | styles |
+|---|---|---|---|
+| mirror on a shut door | A | its cap folds about the base to 75° and snaps off past `MIRROR_BREAK_J` (`hitMirror`) | all seven |
+| mirror on an open door | B, C | rides its door | all seven |
+| front doors | B, C | pushed past the stop or slammed (`hitDoor`) | all seven |
+| quarter panels | D, E | bent back or pulled out, torn past `PANEL_*_J` (`hitPanel`) | all seven |
+| rear bumper, trunk lid, tail lamps | F, G | the tail's crush (`strikeCar`) | all seven |
+
+No lane runs at the front bumper, hood, head lamps and grille, the wheel-arch flares, the police light bar, the wipers or the glass (a hard
+F shatters the panes by the tail's crush, not by a hit on them). Door handles and the chrome trims are skin of the door and the body, not
+parts of their own: they go with the door or follow the dent. The shut door itself is not met (the lanes stay clear of the body); a mirror on
+an open door rides by the A-pillar, behind the slab, and is not a collider.
 
 `fireRam(car, scenario, { kph, kg, side })` runs one shot at 60 Hz the way the engine does
 (`integrate`, `step`, `stepBreakage`, `updateSkin`). It returns:
