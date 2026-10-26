@@ -1,9 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { blankPad, mergeTouch, readPad } from "../vehicle/gamepad.ts";
-import { DEFAULT_TOUCH_SCHEME, discReading, parseMirror, parseTouchScheme, pedalsFor, schemeLayout, sliderSteer, TOUCH_SCHEMES, TOUCH_SCHEME_HINT, TOUCH_SCHEME_LABEL } from "./touch-scheme.ts";
+import { DEFAULT_TOUCH_SCHEME, discReading, EBRAKE_PULL, parseMirror, parseTouchScheme, pedalsFor, pulledDown, schemeLayout, sliderSteer, STRIP, stripReading, TOUCH_SCHEMES, TOUCH_SCHEME_HINT, TOUCH_SCHEME_LABEL } from "./touch-scheme.ts";
 
-const none = { gas: false, brake: false };
+const none = { gas: 0, brake: 0 };
 
 describe("given the stored touch scheme", () => {
   it("when nothing or an unknown value is stored, then it is the driving disc", () => {
@@ -29,40 +29,88 @@ describe("given the stored touch scheme", () => {
 
 describe("given a scheme's pedals", () => {
   const cases = [
-    { it: "when Easy has no finger down, then the gas is on by itself", scheme: "autogas", fingers: none, expected: { gas: 1, brake: 0 } },
-    { it: "when Easy's Brake is held, then the gas lifts and the brake is full", scheme: "autogas", fingers: { gas: false, brake: true }, expected: { gas: 0, brake: 1 } },
-    { it: "when Easy is shown a Gas finger, then there is no Gas pedal to hold and nothing changes", scheme: "autogas", fingers: { gas: true, brake: false }, expected: { gas: 1, brake: 0 } },
-    { it: "when Tilt has no finger down, then the gas is on by itself", scheme: "tilt", fingers: none, expected: { gas: 1, brake: 0 } },
-    { it: "when Tilt's Brake is held, then the gas lifts and the brake is full", scheme: "tilt", fingers: { gas: false, brake: true }, expected: { gas: 0, brake: 1 } },
-    { it: "when Pedals has no finger down, then there is no gas and no brake", scheme: "pedals", fingers: none, expected: { gas: 0, brake: 0 } },
-    { it: "when Pedals' Gas is held, then the gas is full", scheme: "pedals", fingers: { gas: true, brake: false }, expected: { gas: 1, brake: 0 } },
-    { it: "when Pedals' Brake is held, then the brake is full", scheme: "pedals", fingers: { gas: false, brake: true }, expected: { gas: 0, brake: 1 } },
-    { it: "when Pedals has both held, then the brake wins", scheme: "pedals", fingers: { gas: true, brake: true }, expected: { gas: 0, brake: 1 } },
-    { it: "when Stick has fingers on screen, then the pedals stay at zero (the stick owns them)", scheme: "stick", fingers: { gas: true, brake: true }, expected: { gas: 0, brake: 0 } },
+    { it: "when Easy has no finger down, then the gas is on by itself", scheme: "autogas", thumb: none, expected: { gas: 1, brake: 0 } },
+    { it: "when Easy's Brake is held, then the gas lifts and the brake is full", scheme: "autogas", thumb: { gas: 0, brake: 1 }, expected: { gas: 0, brake: 1 } },
+    { it: "when Easy is shown a gas reading, then it is ignored: the gas is its own", scheme: "autogas", thumb: { gas: 0.3, brake: 0 }, expected: { gas: 1, brake: 0 } },
+    { it: "when Tilt's strip is untouched, then there is no gas and no brake", scheme: "tilt", thumb: none, expected: { gas: 0, brake: 0 } },
+    { it: "when Tilt's strip reads half gas, then the gas is a half", scheme: "tilt", thumb: { gas: 0.5, brake: 0 }, expected: { gas: 0.5, brake: 0 } },
+    { it: "when Tilt's strip reads a brake, then the brake is that much and the gas is none", scheme: "tilt", thumb: { gas: 0, brake: 0.6 }, expected: { gas: 0, brake: 0.6 } },
+    { it: "when Pedals' strip is untouched, then there is no gas and no brake", scheme: "pedals", thumb: none, expected: { gas: 0, brake: 0 } },
+    { it: "when Pedals' strip reads full gas, then the gas is full", scheme: "pedals", thumb: { gas: 1, brake: 0 }, expected: { gas: 1, brake: 0 } },
+    { it: "when Pedals is given both, then the brake wins", scheme: "pedals", thumb: { gas: 1, brake: 1 }, expected: { gas: 0, brake: 1 } },
+    { it: "when Stick is given a reading, then the pedals stay at zero (the disc owns them)", scheme: "stick", thumb: { gas: 1, brake: 1 }, expected: { gas: 0, brake: 0 } },
   ] as const;
   for (const testCase of cases) {
     it(testCase.it, () => {
-      const pedals = pedalsFor(testCase.scheme, testCase.fingers, true);
+      const pedals = pedalsFor(testCase.scheme, testCase.thumb, true);
       assert.equal(pedals.gas, testCase.expected.gas, "gas");
       assert.equal(pedals.brake, testCase.expected.brake, "brake");
     });
   }
 
   it("when the car is not the player's to drive, then no scheme writes a pedal", () => {
-    for (const scheme of TOUCH_SCHEMES) assert.deepEqual(pedalsFor(scheme, { gas: true, brake: true }, false), { gas: 0, brake: 0 }, scheme);
+    for (const scheme of TOUCH_SCHEMES) {
+      const pedals = pedalsFor(scheme, { gas: 1, brake: 1 }, false);
+      assert.equal(pedals.gas, 0, `${scheme} gas`);
+      assert.equal(pedals.brake, 0, `${scheme} brake`);
+    }
   });
 });
 
 describe("given each scheme's layout", () => {
-  it("when Easy and Tilt are drawn, then they have a Brake and no Gas pedal, and Pedals has both", () => {
-    assert.deepEqual([schemeLayout("autogas").gasPedal, schemeLayout("autogas").brakePedal], [false, true]);
-    assert.deepEqual([schemeLayout("tilt").gasPedal, schemeLayout("tilt").brakePedal], [false, true]);
-    assert.deepEqual([schemeLayout("pedals").gasPedal, schemeLayout("pedals").brakePedal], [true, true]);
-  });
+  const cases = [
+    { it: "when Easy is drawn, then it has a Brake pad over automatic gas and the e-brake pulled down on the bar", scheme: "autogas", steer: "slider", right: "brake", ebrake: "pull", autoGas: true },
+    { it: "when Pedals is drawn, then it has the pedal strip and the e-brake pulled down on the bar", scheme: "pedals", steer: "slider", right: "strip", ebrake: "pull", autoGas: false },
+    { it: "when Tilt is drawn, then it has the pedal strip and an e-brake pad under the left thumb", scheme: "tilt", steer: "tilt", right: "strip", ebrake: "pad", autoGas: false },
+    { it: "when Stick is drawn, then it keeps the disc with Boost and Handbrake buttons on the right", scheme: "stick", steer: "stick", right: "buttons", ebrake: "button", autoGas: false },
+  ] as const;
+  for (const testCase of cases) {
+    it(testCase.it, () => {
+      const layout = schemeLayout(testCase.scheme);
+      assert.equal(layout.steer, testCase.steer, "steer");
+      assert.equal(layout.right, testCase.right, "right");
+      assert.equal(layout.ebrake, testCase.ebrake, "ebrake");
+      assert.equal(layout.autoGas, testCase.autoGas, "autoGas");
+    });
+  }
+});
 
-  it("when Stick is drawn, then it has the stick and neither pedal", () => {
-    assert.deepEqual(schemeLayout("stick"), { steer: "stick", gasPedal: false, brakePedal: false, autoGas: false });
-  });
+describe("given the pedal strip", () => {
+  const cases = [
+    { it: "when the thumb is at the foot, then the brake is full", position: 0, gas: 0, brake: 1, boost: false },
+    { it: "when the thumb is halfway up the brake zone, then the brake is a half", position: STRIP.brakeTop / 2, gas: 0, brake: 0.5, boost: false },
+    { it: "when the thumb is at the top of the brake zone, then nothing is pressed", position: STRIP.brakeTop, gas: 0, brake: 0, boost: false },
+    { it: "when the thumb is in the coast band, then nothing is pressed", position: (STRIP.brakeTop + STRIP.coastTop) / 2, gas: 0, brake: 0, boost: false },
+    { it: "when the thumb is halfway up the gas zone, then the gas is a half", position: (STRIP.coastTop + STRIP.gasTop) / 2, gas: 0.5, brake: 0, boost: false },
+    { it: "when the thumb enters the cap, then the gas is full and Boost is asked", position: STRIP.gasTop, gas: 1, brake: 0, boost: true },
+    { it: "when the thumb is past either end, then it clamps to the end's reading", position: 1.5, gas: 1, brake: 0, boost: true },
+    { it: "when the thumb is below the foot, then the brake is full", position: -0.5, gas: 0, brake: 1, boost: false },
+  ] as const;
+  for (const testCase of cases) {
+    it(testCase.it, () => {
+      const reading = stripReading(testCase.position);
+      assert.ok(Math.abs(reading.gas - testCase.gas) < 1e-9, `gas ${reading.gas}`);
+      assert.ok(Math.abs(reading.brake - testCase.brake) < 1e-9, `brake ${reading.brake}`);
+      assert.equal(reading.boost, testCase.boost, "boost");
+    });
+  }
+});
+
+describe("given the e-brake pull on the steering bar", () => {
+  const middle = 700;
+  const cases = [
+    { it: "when the thumb rests at the bar's middle, then the e-brake is off", held: false, fingerY: middle, expected: false },
+    { it: "when the thumb is pulled less than the pull distance, then the e-brake is still off", held: false, fingerY: middle + EBRAKE_PULL.on, expected: false },
+    { it: "when the thumb is pulled past the pull distance, then the e-brake is on", held: false, fingerY: middle + EBRAKE_PULL.on + 1, expected: true },
+    { it: "when the e-brake is on and the thumb eases back above the let-go distance, then it stays on", held: true, fingerY: middle + EBRAKE_PULL.off + 1, expected: true },
+    { it: "when the e-brake is on and the thumb comes back past the let-go distance, then it lets go", held: true, fingerY: middle + EBRAKE_PULL.off, expected: false },
+    { it: "when the thumb goes up from the middle, then the e-brake is off", held: false, fingerY: middle - 60, expected: false },
+  ] as const;
+  for (const testCase of cases) {
+    it(testCase.it, () => {
+      assert.equal(pulledDown(testCase.held, testCase.fingerY, middle), testCase.expected);
+    });
+  }
 });
 
 describe("given the steering slider", () => {

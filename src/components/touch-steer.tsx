@@ -1,19 +1,24 @@
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
-import { ChevronDown, ChevronsLeft, ChevronsRight, ChevronUp } from "lucide-react";
+import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { ChevronDown, ChevronsDown, ChevronsLeft, ChevronsRight, ChevronUp, CircleParking } from "lucide-react";
 import type { HudProps } from "@/components/hud";
 import { Button } from "@/components/ui/button";
+import { PadButton } from "@/components/touch-pedals";
 import { requestTiltAccess, useTilt } from "@/components/use-tilt";
 import type { TiltSettings } from "@/game/hud/tilt-steer";
 import { cn } from "@/lib/utils";
-import { discReading, sliderSteer, STEER_SLIDER, type SchemeLayout } from "@/game/hud/touch-scheme";
+import { discReading, pulledDown, sliderSteer, STEER_SLIDER, type SchemeLayout } from "@/game/hud/touch-scheme";
+import { PAD_BUTTON } from "@/game/vehicle/gamepad";
+
+/** The pad's e-brake button (`PAD_BUTTON.west`): held while the thumb is pulled down on the bar, or on the Tilt scheme's pad. */
+const EBRAKE_MASK = 1 << PAD_BUTTON.west;
 
 /** Knob travel (px) at full throw: the 56 px knob just reaches the 128 px base's rim. */
 const STICK_TRAVEL = 36;
 
 /** The slider's knob (px) and how far its centre travels from the bar's centre: the knob stays inside the bar's ends. */
 const SLIDER_KNOB = 56;
-/** The bar's width: 176 px, or less on a narrow screen, where the right thumb's row (the dial's box, Boost and Handbrake: 220 px, with both screen margins and a gap: 256 px) must keep its room. */
-const BAR_WIDTH = `min(${STEER_SLIDER.length}px, calc(100vw - 256px))`;
+/** The bar's width: 176 px, or less on a very narrow screen, where the right thumb's strip (72 px) and both edge margins (20 px) and a gap must keep their room. */
+const BAR_WIDTH = `min(${STEER_SLIDER.length}px, calc(100vw - 144px))`;
 
 /** The tilt level marker (px): a thin tick, so it reads as a level and not as a knob to drag; it keeps a small margin to the bar's ends. */
 const TILT_MARKER_WIDTH = 8;
@@ -22,6 +27,7 @@ const TILT_MARKER_MARGIN = 8;
 const markerTravel = (barWidth: number): number => (barWidth - TILT_MARKER_WIDTH) / 2 - TILT_MARKER_MARGIN;
 
 const BAR_SIZE = { width: BAR_WIDTH, height: STEER_SLIDER.height };
+const TILT_BAR_SIZE = { width: BAR_WIDTH, height: STEER_SLIDER.tiltLevel };
 /** The disc's two words and arrows on its ring, so nobody wonders what up and down do. */
 const DISC_MARK = "pointer-events-none absolute left-1/2 flex -translate-x-1/2 flex-col items-center font-display text-[10px] font-semibold uppercase leading-none tracking-wider text-fg/60";
 const BAR = "relative shrink-0 rounded-full bg-surface/35 ring-1 ring-inset ring-fg/30";
@@ -103,69 +109,99 @@ function Stick({ engine, onArm }: SteerProps) {
   );
 }
 
+/** The e-brake bit of the touch pad, set or cleared. */
+function writeEbrake(engine: SteerProps["engine"], pulled: boolean): void {
+  const t = engine.current?.touch;
+  if (t) t.held = pulled ? t.held | EBRAKE_MASK : t.held & ~EBRAKE_MASK;
+}
+
+/** The mark under the steering bar that says where the e-brake is; it lights (`data-held`) while the thumb holds it. */
+function EbrakeTab({ ref }: { ref: RefObject<HTMLDivElement | null> }) {
+  return (
+    <div
+      ref={ref}
+      className="pointer-events-none mx-auto mt-1 flex items-center justify-center gap-1 rounded-full bg-surface/35 px-3 font-display text-[10px] font-semibold uppercase leading-none tracking-wider text-fg/60 ring-1 ring-inset ring-fg/25 data-[held]:bg-signal-red data-[held]:text-fg"
+      style={{ height: STEER_SLIDER.ebrakeTab - 4 }}
+    >
+      <ChevronsDown aria-hidden className="size-4" />
+      Pull down: e-brake
+    </div>
+  );
+}
+
 /**
- * Left thumb, Easy and Pedals: a bar with a knob. Absolute, not relative to where the finger lands: the knob follows the finger's x
- * from the bar's centre and the offset is the steering, so the thumb always knows where straight ahead is; let go and it springs back.
- * Steering only (x): the pedals are the other thumb's.
+ * Left thumb, Easy and Pedals: a bar with a knob and, under it, the e-brake tab. Absolute, not relative to where the finger lands: the knob follows the finger's x
+ * from the bar's centre and the offset is the steering, so the thumb always knows where straight ahead is; let go and it springs back. Pulling the same thumb
+ * down past the bar (`pulledDown`) holds the e-brake while it steers on, so a drift needs no second finger. The pedals are the other thumb's.
  */
 function Slider({ engine, onArm }: SteerProps) {
+  const bar = useRef<HTMLDivElement>(null);
   const knob = useRef<HTMLDivElement>(null);
-  /** The finger on the bar and the bar centre (screen x) it is measured from. */
-  const finger = useRef({ id: -1, centre: 0, halfTravel: (STEER_SLIDER.length - SLIDER_KNOB) / 2 });
+  const tab = useRef<HTMLDivElement>(null);
+  /** The finger on the bar, the bar centre (screen x) it is measured from, and the height the e-brake pull is measured from. */
+  const finger = useRef({ id: -1, centre: 0, halfTravel: (STEER_SLIDER.length - SLIDER_KNOB) / 2, referenceY: 0, pulled: false });
   const put = (offset: number): void => {
     const t = engine.current?.touch;
     const halfTravel = finger.current.halfTravel;
     if (t) t.x = sliderSteer(offset, halfTravel);
     if (knob.current) knob.current.style.transform = `translateX(${Math.max(-halfTravel, Math.min(halfTravel, offset))}px)`;
   };
+  const holdEbrake = (pulled: boolean): void => {
+    finger.current.pulled = pulled;
+    writeEbrake(engine, pulled);
+    if (!tab.current) return;
+    if (pulled) tab.current.dataset.held = "";
+    else delete tab.current.dataset.held;
+  };
   useEffect(
     () => () => {
       const t = engine.current?.touch;
       if (t) t.x = 0;
+      writeEbrake(engine, false);
     },
     [engine],
   );
   const move = (e: ReactPointerEvent<HTMLDivElement>): void => {
-    if (e.pointerId === finger.current.id) put(e.clientX - finger.current.centre);
+    const f = finger.current;
+    if (e.pointerId !== f.id) return;
+    put(e.clientX - f.centre);
+    const pulled = pulledDown(f.pulled, e.clientY, f.referenceY);
+    if (pulled !== f.pulled) holdEbrake(pulled);
   };
   const release = (e: ReactPointerEvent<HTMLDivElement>): void => {
     if (e.pointerId !== finger.current.id) return;
     finger.current.id = -1;
     // The spring-back is the knob's CSS transition, which is off while a finger drags it.
     if (knob.current) delete knob.current.dataset.drag;
+    holdEbrake(false);
     put(0);
   };
+  const land = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    const f = finger.current;
+    if (f.id !== -1 || !bar.current) return;
+    onArm();
+    const r = bar.current.getBoundingClientRect();
+    f.id = e.pointerId;
+    f.centre = r.left + r.width / 2;
+    f.halfTravel = (r.width - SLIDER_KNOB) / 2;
+    f.referenceY = Math.min(e.clientY, r.top + r.height / 2);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    if (knob.current) knob.current.dataset.drag = "";
+    move(e);
+  };
   return (
-    <div
-      data-touch-control="steer"
-      data-keep-idle
-      className={cn(BAR, "pointer-events-auto relative flex touch-none select-none items-center justify-center")}
-      style={BAR_SIZE}
-      onPointerDown={(e) => {
-        const f = finger.current;
-        if (f.id !== -1) return;
-        onArm();
-        const r = e.currentTarget.getBoundingClientRect();
-        f.id = e.pointerId;
-        f.centre = r.left + r.width / 2;
-        f.halfTravel = (r.width - SLIDER_KNOB) / 2;
-        e.currentTarget.setPointerCapture(e.pointerId);
-        if (knob.current) knob.current.dataset.drag = "";
-        move(e);
-      }}
-      onPointerMove={move}
-      onPointerUp={release}
-      onPointerCancel={release}
-      onLostPointerCapture={release}
-    >
-      {/* The two ends say which way is which, so a bar with a knob reads as a wheel. */}
-      <ChevronsLeft aria-hidden className="pointer-events-none absolute left-2 size-5 text-fg/50" />
-      <ChevronsRight aria-hidden className="pointer-events-none absolute right-2 size-5 text-fg/50" />
-      <div
-        ref={knob}
-        className="pointer-events-none rounded-full bg-accent/60 ring-1 ring-inset ring-fg/40 transition-transform duration-[var(--motion-quick)] data-[drag]:transition-none"
-        style={{ width: SLIDER_KNOB, height: SLIDER_KNOB }}
-      />
+    <div data-touch-control="steer" data-keep-idle className="pointer-events-auto flex touch-none select-none flex-col" onPointerDown={land} onPointerMove={move} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}>
+      <div ref={bar} className={cn(BAR, "flex items-center justify-center")} style={BAR_SIZE}>
+        {/* The two ends say which way is which, so a bar with a knob reads as a wheel. */}
+        <ChevronsLeft aria-hidden className="pointer-events-none absolute left-2 size-5 text-fg/50" />
+        <ChevronsRight aria-hidden className="pointer-events-none absolute right-2 size-5 text-fg/50" />
+        <div
+          ref={knob}
+          className="pointer-events-none rounded-full bg-accent/60 ring-1 ring-inset ring-fg/40 transition-transform duration-[var(--motion-quick)] data-[drag]:transition-none"
+          style={{ width: SLIDER_KNOB, height: SLIDER_KNOB }}
+        />
+      </div>
+      <EbrakeTab ref={tab} />
     </div>
   );
 }
@@ -185,7 +221,7 @@ function TiltBar({ engine, tilt, onArm, steerLive }: SteerProps & { tilt: TiltSe
   });
   if (!available) {
     return (
-      <div data-touch-control="steer" data-keep-idle className={cn(BAR, "pointer-events-none flex items-center justify-center")} style={BAR_SIZE}>
+      <div data-touch-control="steer" data-keep-idle className={cn(BAR, "pointer-events-none flex items-center justify-center")} style={TILT_BAR_SIZE}>
         <Button variant="secondary" className="pointer-events-auto h-11 touch-none select-none px-4" onClick={() => void requestTiltAccess().then(() => recentre())}>
           Enable tilt
         </Button>
@@ -201,7 +237,7 @@ function TiltBar({ engine, tilt, onArm, steerLive }: SteerProps & { tilt: TiltSe
       data-touch-control="steer"
       data-keep-idle
       className={cn(BAR, "pointer-events-auto flex touch-none select-none items-center justify-center")}
-      style={BAR_SIZE}
+      style={TILT_BAR_SIZE}
       onPointerDown={onArm}
       onClick={() => recentre()}
     >
@@ -210,9 +246,21 @@ function TiltBar({ engine, tilt, onArm, steerLive }: SteerProps & { tilt: TiltSe
   );
 }
 
+/** The Tilt scheme's left thumb: the e-brake pad, with the level bar above it (a tap on the bar sets the level). */
+function TiltControls(props: SteerProps & { tilt: TiltSettings; steerLive: () => boolean }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <TiltBar {...props} />
+      <PadButton engine={props.engine} button={PAD_BUTTON.west} name="handbrake" label="E-brake (hold)" caption="E-brake" showCaption className="h-20 w-full flex-row gap-2 [&_svg]:size-7">
+        <CircleParking />
+      </PadButton>
+    </div>
+  );
+}
+
 /** The steering control of a scheme (`schemeLayout(scheme).steer`), drawn where its cluster puts it. */
 export function TouchSteer({ steer, tilt, steerLive, ...rest }: SteerProps & { steer: SchemeLayout["steer"]; tilt: TiltSettings; steerLive: () => boolean }) {
   if (steer === "stick") return <Stick {...rest} />;
-  if (steer === "tilt") return <TiltBar {...rest} tilt={tilt} steerLive={steerLive} />;
+  if (steer === "tilt") return <TiltControls {...rest} tilt={tilt} steerLive={steerLive} />;
   return <Slider {...rest} />;
 }
