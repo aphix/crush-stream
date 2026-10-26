@@ -258,6 +258,8 @@ export class TyreSkin {
   private readonly overFor = new Float64Array(3).fill(NaN);
   /** Per wheel, its axle and hub in the mesh's frame at the last hold. */
   private readonly heldAt = new Float64Array(4 * HELD_ELEMENTS.length).fill(NaN);
+  /** Per wheel, its axle and hub this hold, kept in `heldAt` only when the hold is redone. */
+  private readonly seen = new Float64Array(4 * HELD_ELEMENTS.length);
   /** The skin as last written, which every hold starts from. */
   private readonly written: Float32Array;
   private hasWritten = false;
@@ -351,6 +353,7 @@ export class TyreSkin {
       _wheel.multiplyMatrices(_mesh, matrixIn(group, wheels[w]!, _wheel));
       if (this.noteWheel(w, (gone >> w) & 1 ? null : _wheel.elements)) wheelMoved = true;
     }
+
     const attr = this.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
     const pos = attr.array as Float32Array;
     const fresh = skinWritten || !this.hasWritten;

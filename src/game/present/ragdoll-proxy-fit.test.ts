@@ -150,3 +150,52 @@ for (const b of BODIES.filter((body) => body.style === "pickup" || body.style ==
     });
   });
 }
+
+describe("given a dummy lying 3 m from a sedan whose cage refits every frame", () => {
+  it("when its proxy's leaves are resized 50 times, then each takes its fitted size and no Rapier RawVector is left for the finalizer to free", async () => {
+    const car = carInState("untouched", "sedan", "sedan");
+    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+    await ragdolls.preload();
+    ragdolls.update(FRAME, [], true, true, null);
+    ragdolls["spawn"]({ car: 3, p: new THREE.Vector3(3, 1.2, 0), q: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
+    for (let f = 0; f < 3; f++) ragdolls.update(FRAME, [car], true, true, null);
+    const proxies = ragdolls["proxies"];
+    proxies.cull(0, [], true, FRAME);
+    // A wasm-bindgen object freed by hand unregisters itself; one left to the finalizer stays registered.
+    const pending = new Set<object>();
+    const proto = FinalizationRegistry.prototype;
+    const { register, unregister } = proto;
+    proto.register = function (this: FinalizationRegistry<unknown>, target: object, held: unknown, token?: object) {
+      if (target.constructor.name === "RawVector") pending.add(target);
+      return register.call(this, target, held, token);
+    };
+    proto.unregister = function (this: FinalizationRegistry<unknown>, token: object) {
+      pending.delete(token);
+      return unregister.call(this, token);
+    };
+    try {
+      for (let k = 0; k < 50; k++) {
+        proxies["serial"][0] = -1;
+        proxies.fitProxy(0, car);
+      }
+    } finally {
+      proto.register = register;
+      proto.unregister = unregister;
+    }
+    const shapes = proxies["shapes"];
+    const fits = proxies["leafFits"];
+    let resized = 0;
+    for (let k = 0; k < proxies["shapeN"][0]!; k++) {
+      const c = shapes[k];
+      if (!c) continue;
+      const h = c.halfExtents();
+      const o = k * BOX_FLOATS;
+      assert.equal(h.x, Math.fround(fits[o + 3]!));
+      assert.equal(h.y, Math.fround(fits[o + 4]!));
+      assert.equal(h.z, Math.fround(fits[o + 5]!));
+      resized++;
+    }
+    assert.ok(resized > 0);
+    assert.equal(pending.size, 0);
+  });
+});
