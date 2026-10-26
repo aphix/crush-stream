@@ -2,7 +2,7 @@
  * WebRTC signaling over the app database (PGLite).
  * Only rendezvous traffic passes through here — roster + SDP/ICE relay while a mesh forms; game
  * data then flows peer-to-peer. Mounted at /api/rtc (under the app's base path); the client side
- * lives in `@/lib/multiplayer`. Tables: `migrations/0002_webrtc_signaling.sql`, `0003_webrtc_peer_tokens.sql`,
+ * lives in `p2p.ts`. Tables: `migrations/0002_webrtc_signaling.sql`, `0003_webrtc_peer_tokens.sql`,
  * `0004_webrtc_peer_ip_tag.sql` and `0005_webrtc_peer_meta.sql`, applied by the
  * PGLite fallback before its first query.
  *
