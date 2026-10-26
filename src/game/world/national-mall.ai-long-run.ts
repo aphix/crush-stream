@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Track } from "./track.ts";
 import { TRACKS } from "./tracks/index.ts";
 
-/** The longest the course's ground may take to bake (ms): 0.38 s measured alone (1.4 s with every metre of a street stamped, 2.1 s with every paint polygon tested over the whole ground), held with room for a loaded test machine. */
+/** The longest the course's ground may take to bake (ms): 0.65 s measured alone (1.4 s with every metre of a street stamped, 2.1 s with every paint polygon tested over the whole ground), held with room for a loaded test machine. */
 const BAKE_MS = 1200;
 
 /**

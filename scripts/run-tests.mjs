@@ -57,12 +57,10 @@ const stream = run({
 });
 stream.on("test:summary", (s) => {
   if (s.file === undefined && !s.success) process.exitCode = 1;
+  // A file's own summary carries its whole run: describe-time work (a heat played in a `describe` body) counts too, which
+  // summing its top-level tests' durations missed (derby-ai.ai-long-run read 0 s).
+  if (s.file !== undefined) seconds.set(s.file, s.duration_ms / 1000);
 });
-for (const event of ["test:pass", "test:fail"]) {
-  stream.on(event, (e) => {
-    if (e.nesting === 0 && e.file) seconds.set(e.file, (seconds.get(e.file) ?? 0) + e.details.duration_ms / 1000);
-  });
-}
 stream.on("test:stderr", (e) => {
   stderrByFile.set(e.file, [...(stderrByFile.get(e.file) ?? []), e.message]);
 });

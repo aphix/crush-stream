@@ -8,7 +8,7 @@ import { fleetStyle, layoutDerby } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { DriveInput } from "../vehicle/car-drive.ts";
 import { physicsSlice } from "../contact/sat.ts";
-import { stepWorld } from "../engine/world-step.ts";
+import { settleStep, stepWorld } from "../engine/world-step.ts";
 import { armKill, assignClass, carClass, CLASSES, HANDLING, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { INITIAL_HUD } from "../hud/hud-store.ts";
 import { aggressive, ScootWatch, type ScootShare } from "./derby-scoot.test-util.ts";
@@ -79,7 +79,7 @@ export type FieldWatch = {
 };
 
 /**
- * A derby of `n` AI cars through the engine's stack (`stepWorld` with the derby's hit credit and arena,
+ * A derby of `n` AI cars through the engine's stack (`stepWorld` then `settleStep` each slice, with the derby's hit credit and arena,
  * cars dressed as `dressCar` does at the game's defaults), at the default slider, to the end of the heat.
  * `playerClass` is car 0's class (the HUD's player class, the sedan by default).
  * Spins: turn rate about the vertical (`verticalTurn`) > `SPIN_RATE_BAR` for > 0.2 s in the first 2 min, split by a contact in the 0.5 s before it was counted: a car, or a prop or wall of the arena (a crash's spin, not the AI's own driving).
@@ -203,7 +203,8 @@ function runFieldHeat(n: number, seed: number, playerClass?: VehicleClassId, on?
       if (attacker.deform.drivetrainAlive && aInto + bInto >= 3) out.impacts[face(attacker, pair.contact)]++;
     };
     stepWorld(w, h);
-    for (const c of cars) if (c.deform.massActive && !c.deform.drivetrainAlive) c.deform.cutDrive(h);
+    // No bleed: the engine's derby never starts the crash clock.
+    settleStep(cars, h, false);
     state = match.step(
       h,
       cars.map((c, i) => ({ id: i, name: `c${i}`, alive: c.deform.drivetrainAlive, x: c.group.position.x, z: c.group.position.z })),

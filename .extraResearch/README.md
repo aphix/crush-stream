@@ -58,6 +58,7 @@ Treat model-written prose as leads, not facts; cite the listed sources.
 | `perplexity/2026-10-23-crash-contact-patch-force-distribution.md` | Distributing crush force over a contact patch: per-element penetration × effective area, pressure laws (linear/Hertz), combined compliance, action–reaction pairs conserving momentum (CarCrushFeed) |
 | `perplexity/2026-10-23-vehicle-bump-stop-landing-damping.md` | Bump stops for games: progressive engagement, rate-limited/position-dependent damping, hysteresis, clamping so a landing isn't a dead stop (CarStackCrush8, CarCrest) |
 | `perplexity/2026-10-25-sonos-audio-stutter-webaudio.md` | Web Audio stutter on Sonos/network outputs: buffer underruns under load, `latencyHint: "playback"`, matching the device sample rate, exclusive mode (audio) |
+| `perplexity/2026-10-26-trunk-latch-strength.md` | Trunk and liftgate latch strength: FMVSS 206 / ECE R11 loads (9-11 kN primary, 4.5 kN secondary), why a lid opens by latch misalignment under crush rather than at a set speed (DoorScene) |
 
 ## Papers (`papers/`)
 

@@ -606,8 +606,8 @@ export class TrackGround extends Ground {
   readonly surf: Uint8Array;
   /** The main loop's road + runoff, crease kept (`RoadCrease`). */
   private readonly crease: RoadCrease;
-  /** What the bake did, for the tests that pin its cost: street runs stamped, cells measured against them, cells looked at by the paint polygons. */
-  readonly bakeCounts = { runsStamped: 0, cellsMeasured: 0, paintCellsVisited: 0 };
+  /** What the bake did, for the tests that pin its cost: street runs stamped, cells measured against them, cells looked at by the paint polygons, patches registered and grid cells bounded by the surface store. */
+  readonly bakeCounts = { runsStamped: 0, cellsMeasured: 0, paintCellsVisited: 0, patches: 0, cellsBounded: 0 };
   private readonly terrainHills: TrackJson["environment"]["hills"];
   private readonly terrain: number;
 
@@ -635,6 +635,8 @@ export class TrackGround extends Ground {
     this.bakeCounts.paintCellsVisited = paintGrid(env.paint, this.surf, this.terrain, this.minX, this.minZ, this.nx, CELL);
     raisePlateaus(env.plateaus, this.heights, this.surf, this.minX, this.minZ, this.nx, CELL);
     this.register(track);
+    this.bakeCounts.patches = this.count;
+    this.bakeCounts.cellsBounded = this.cellsBounded;
   }
 
   /**
@@ -686,6 +688,8 @@ export class TrackGround extends Ground {
   /** `side`: a shortcut or traffic street, stamped after the main loop. */
   private stampPath(p: TrackPath, st: Stamp, side: boolean): void {
     const segs = p.closed ? p.count : p.count - 1;
+    const { d2: nearest, gap, level, surf, under, h: heights } = st;
+    const { minX, minZ, nx } = this;
     for (let k = 0; k < segs; k++) {
       // Bridge spans are analytic decks, not terrain: the ground under them stays.
       if (p.deck[k]) continue;
@@ -697,69 +701,84 @@ export class TrackGround extends Ground {
       const openEnd = (!p.closed && b === p.count - 1) || (p.deck[b] === 1 && b < segs);
       const openStart = (!p.closed && k === 0) || p.deck[(k - 1 + p.count) % p.count] === 1;
       this.bakeCounts.runsStamped++;
-      const reach = p.half[k]! + Math.max(p.runL[k]!, p.runR[k]!) + BLEND;
-      const i0 = Math.max(0, Math.floor((Math.min(p.x[k]!, p.x[b]!) - reach - this.minX) / CELL));
-      const i1 = Math.min(this.nx - 1, Math.ceil((Math.max(p.x[k]!, p.x[b]!) + reach - this.minX) / CELL));
-      const j0 = Math.max(0, Math.floor((Math.min(p.z[k]!, p.z[b]!) - reach - this.minZ) / CELL));
-      const j1 = Math.min(this.nz - 1, Math.ceil((Math.max(p.z[k]!, p.z[b]!) + reach - this.minZ) / CELL));
-      const ex = p.x[b]! - p.x[k]!;
-      const ez = p.z[b]! - p.z[k]!;
+      const xk = p.x[k]!;
+      const zk = p.z[k]!;
+      const xb = p.x[b]!;
+      const zb = p.z[b]!;
+      const yk = p.y[k]!;
+      const dy = p.y[b]! - yk;
+      const halfK = p.half[k]!;
+      const dHalf = p.half[b]! - halfK;
+      const bankK = p.bank[k]!;
+      const dBank = p.bank[b]! - bankK;
+      const runL = p.runL[k]!;
+      const runR = p.runR[k]!;
+      const surface = p.surface[k]!;
+      const runSurface = p.runSurface[k]!;
+      const reach = halfK + Math.max(runL, runR) + BLEND;
+      const reach2 = reach * reach;
+      const i0 = Math.max(0, Math.floor((Math.min(xk, xb) - reach - minX) / CELL));
+      const i1 = Math.min(nx - 1, Math.ceil((Math.max(xk, xb) + reach - minX) / CELL));
+      const j0 = Math.max(0, Math.floor((Math.min(zk, zb) - reach - minZ) / CELL));
+      const j1 = Math.min(this.nz - 1, Math.ceil((Math.max(zk, zb) + reach - minZ) / CELL));
+      const ex = xb - xk;
+      const ez = zb - zk;
       const len2 = ex * ex + ez * ez || 1e-12;
       const len = Math.sqrt(len2);
       for (let j = j0; j <= j1; j++) {
-        const z = this.minZ + j * CELL;
+        const z = minZ + j * CELL;
         // Only the row's run inside the segment's reach (a cell wider each way) can be stamped.
-        if (!capsuleRow(p.x[k]!, p.z[k]!, p.x[b]!, p.z[b]!, reach, z, _row)) continue;
-        const r0 = Math.max(i0, Math.floor((_row[0]! - this.minX) / CELL) - 1);
-        const r1 = Math.min(i1, Math.ceil((_row[1]! - this.minX) / CELL) + 1);
+        if (!capsuleRow(xk, zk, xb, zb, reach, z, _row)) continue;
+        const r0 = Math.max(i0, Math.floor((_row[0]! - minX) / CELL) - 1);
+        const r1 = Math.min(i1, Math.ceil((_row[1]! - minX) / CELL) + 1);
         this.bakeCounts.cellsMeasured += r1 - r0 + 1;
         for (let i = r0; i <= r1; i++) {
-          const x = this.minX + i * CELL;
-          let f = ((x - p.x[k]!) * ex + (z - p.z[k]!) * ez) / len2;
+          const x = minX + i * CELL;
+          let f = ((x - xk) * ex + (z - zk) * ez) / len2;
           const beyond = (f > 1 && openEnd) || (f < 0 && openStart);
           f = f < 0 ? 0 : f > 1 ? 1 : f;
-          const cx = p.x[k]! + ex * f;
-          const cz = p.z[k]! + ez * f;
+          const cx = xk + ex * f;
+          const cz = zk + ez * f;
           const d2 = (x - cx) * (x - cx) + (z - cz) * (z - cz);
-          if (d2 > reach * reach) continue;
-          const c = j * this.nx + i;
+          if (d2 > reach2) continue;
+          const c = j * nx + i;
           const perp = ((x - cx) * ez - (z - cz) * ex) / len;
           const lat = beyond ? Math.sign(perp || 1) * Math.sqrt(d2) : perp;
-          const half = p.half[k]! + (p.half[b]! - p.half[k]!) * f;
-          const run = lat > 0 ? p.runL[k]! : p.runR[k]!;
+          const half = halfK + dHalf * f;
+          const run = lat > 0 ? runL : runR;
           const a = Math.abs(lat);
           const out = a - half - run;
           // Nearest centreline wins, except that a side path's blend skirt never replaces the main loop's road or
           // runoff: a shortcut's mouth skirt dented a banked turn's inside edge 0.35 m (stunt's quarry-cut).
-          if (d2 >= st.d2[c]! || (side && out > 0 && st.gap[c] === 0)) continue;
-          st.d2[c] = d2;
-          const yc = p.y[k]! + (p.y[b]! - p.y[k]!) * f;
-          const bank = p.bank[k]! + (p.bank[b]! - p.bank[k]!) * f;
+          if (d2 >= nearest[c]! || (side && out > 0 && gap[c] === 0)) continue;
+          nearest[c] = d2;
+          const yc = yk + dy * f;
+          const bank = bankK + dBank * f;
           const edge = yc - Math.max(-half, Math.min(half, lat)) * Math.tan(bank);
           if (!side) {
-            st.gap[c] = Math.max(0, out);
-            st.level[c] = edge;
+            gap[c] = Math.max(0, out);
+            level[c] = edge;
             this.crease.set(c, out, lat, half, yc, bank);
           }
           let h = edge;
           if (a <= half) {
-            st.surf[c] = p.surface[k]!;
+            surf[c] = surface;
           } else if (out <= 0) {
-            st.surf[c] = p.runSurface[k]!;
+            surf[c] = runSurface;
           } else {
             const t = Math.min(1, out / BLEND);
             const e = t * t * (3 - 2 * t);
-            h = edge + ((side ? st.under[c]! : this.base(x, z)) - edge) * e;
-            st.surf[c] = this.terrain;
+            h = edge + ((side ? under[c]! : this.base(x, z)) - edge) * e;
+            surf[c] = this.terrain;
           }
           if (side) {
             // Its road meets the main loop's road plane, its skirt eases from that plane to the field beneath over `MEET` off its edge.
-            const m = clamp01(1 - st.gap[c]! / MEET);
+            const m = clamp01(1 - gap[c]! / MEET);
             const u = clamp01(out / MEET);
-            const meet = st.level[c]! + (st.under[c]! - st.level[c]!) * u * u * (3 - 2 * u);
+            const meet = level[c]! + (under[c]! - level[c]!) * u * u * (3 - 2 * u);
             h += (meet - h) * m * m * (3 - 2 * m);
           }
-          st.h[c] = h;
+          heights[c] = h;
         }
       }
       if (b > k) k = b - 1;
