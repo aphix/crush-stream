@@ -107,6 +107,23 @@
 }
 
 /*
+ * The thumb controls' edges (every touch scheme but the Disc): wider than the HUD's own, so the first 20 px of the screen, where Android's back gesture and
+ * iOS's edge swipe begin, hold no control, and the bottom keeps clear of the home-indicator swipe.
+ */
+:root {
+  --thumb-edge: 1.25rem;
+}
+@utility thumb-bottom {
+  bottom: max(var(--thumb-edge), env(safe-area-inset-bottom));
+}
+@utility thumb-left {
+  left: max(var(--thumb-edge), env(safe-area-inset-left));
+}
+@utility thumb-right {
+  right: max(var(--thumb-edge), env(safe-area-inset-right));
+}
+
+/*
  * Calm: while the player drives, `.hud-grid` carries `data-calm` once nothing has changed for a few seconds (`hud-collapse.ts`).
  * `calm:` classes fade what is only to be read (read-outs, the title) so the road is all there is; a pass, a lap, a crash or a tap
  * on the top strip clears it. Opacity only, so it is a fade, never a pop; reduced motion makes it instant (the rule below).

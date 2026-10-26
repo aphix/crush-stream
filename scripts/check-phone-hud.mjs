@@ -3,8 +3,8 @@
  * Phone HUD guard. The touch HUD must never cover the road, put a driving control under a panel, hide a control behind the
  * notch, or leave a control smaller than a fingertip. This opens the game in headless Chromium as a phone (Playwright's device
  * descriptors, touch on, the safe-area insets of a notch phone through CDP), walks every place a phone player goes, and checks
- * each screen against the numbers below. Then it drives with real multi-touch (CDP touch points: steer with one finger while
- * another holds Brake or Gas), switches schemes, and tilts the emulated phone.
+ * each screen against the numbers below. Then it drives with real multi-touch (CDP touch points) through a two-thumb script per
+ * control scheme (gas + steer, brake + steer, e-brake mid-steer, a drift, Boost as a tap), and tilts the emulated phone.
  *
  *   node scripts/check-phone-hud.mjs [--url http://127.0.0.1:8109/] [--out DIR] [--only screen,screen] [--devices pixel-7-landscape,...]
  *
@@ -38,7 +38,16 @@ const DEVICES = [
   { id: "pixel-7", descriptor: "Pixel 7", orientation: "portrait" },
   { id: "iphone-14-landscape", descriptor: "iPhone 14 landscape", orientation: "landscape", insets: NOTCH_INSETS },
   { id: "iphone-14", descriptor: "iPhone 14", orientation: "portrait", insets: { top: 47, left: 0, bottom: 34, right: 0 } },
+  // The smallest phone the controls must fit (360 x 740) and a tablet, upright and on its side.
+  { id: "small-360", descriptor: "Pixel 5", viewport: { width: 360, height: 740 }, orientation: "portrait" },
+  { id: "small-360-landscape", descriptor: "Pixel 5 landscape", viewport: { width: 740, height: 360 }, orientation: "landscape" },
+  { id: "ipad-mini", descriptor: "iPad Mini", orientation: "portrait" },
+  { id: "ipad-mini-landscape", descriptor: "iPad Mini landscape", orientation: "landscape" },
 ].filter((device) => !flags.devices || flags.devices.split(",").includes(device.id));
+
+/** The system's edge gestures (Android back, iOS edge swipe) begin in the first 20 px of the screen: a thumb control of the two-thumb schemes keeps clear of them. */
+const GESTURE_EDGE = 20;
+const THUMB_CONTROLS = ["steer", "pedal-strip", "brake", "boost", "handbrake"];
 
 const evaluate = (page, fn, arg) => page.evaluate(fn, arg);
 const settle = (page, ms) => page.waitForTimeout(ms);
@@ -59,6 +68,11 @@ const driveRace = async (page) => {
 const SCREENS = {
   // The default scheme is the driving disc (Boost and Handbrake beside the dial's corner); the fullscreen toggle is one tap from every driving screen.
   "race-drive": { hash: "scene=race", driving: true, setup: driveRace, expect: ["steer", "boost", "pause", "view", "fullscreen"] },
+  // The two-thumb schemes: the left thumb steers (and pulls down for the e-brake), the right holds the pedals; neither may overlap, leave the screen or sit in the gesture edge.
+  "race-pedals": { hash: "scene=race", scheme: "pedals", driving: true, edgeGuard: true, setup: driveRace, expect: ["steer", "pedal-strip", "pause", "view", "fullscreen"], absent: ["boost", "handbrake"] },
+  // Easy's gas is automatic: the pad's handbrake holds the car on the grid, as the other schemes' idle thumbs do, so the moving race's standings do not swamp the control measurement.
+  "race-easy": { hash: "scene=race", scheme: "autogas", driving: true, edgeGuard: true, setup: async (page) => { await startRace(page); await evaluate(page, () => Object.assign(window.__crush.touch, { gas: 0, brake: 0, held: 1 << 2 })); await settle(page, 9000); }, expect: ["steer", "brake", "boost", "pause", "view", "fullscreen"], absent: ["pedal-strip", "handbrake"] },
+  "race-tilt": { hash: "scene=race", scheme: "tilt", driving: true, edgeGuard: true, setup: driveRace, expect: ["steer", "handbrake", "pedal-strip", "pause", "view", "fullscreen"], absent: ["boost"] },
   // Survival says "Chased by N cops" all run long, the one thing it must always say: it may take a little more of the road's top edge.
   "survival-drive": { hash: "scene=survival", driving: true, roadAllowancePct: 5, setup: async (page) => { await evaluate(page, () => window.__crush.raceCommand({ type: "start" })); await settle(page, 8000); }, expect: ["steer", "pause", "fullscreen"] },
   "fleet-drive": { hash: "", driving: true, // Following one of five cars: the cycle has somewhere to go, so Prev and Next show.
@@ -185,7 +199,7 @@ const fail = (context, message) => {
 };
 
 async function open(browser, device, hash, { scheme, query = "" } = {}) {
-  const context = await browser.newContext({ ...devices[device.descriptor], hasTouch: true });
+  const context = await browser.newContext({ ...devices[device.descriptor], ...(device.viewport ? { viewport: device.viewport, screen: device.viewport } : {}), hasTouch: true });
   if (scheme) await context.addInitScript((value) => localStorage.setItem("crush.touch.scheme", value), scheme);
   await context.addInitScript(() => localStorage.setItem("crush.home.seen", "1"));
   const page = await context.newPage();
@@ -213,7 +227,7 @@ const readTouch = (page) => evaluate(page, () => ({ x: window.__crush.touch.x, y
 async function checkScreen(browser, device, name, screen) {
   const context = `${device.id} ${name}`;
   console.log(context);
-  const { context: browserContext, page, errors } = await open(browser, device, screen.hash);
+  const { context: browserContext, page, errors } = await open(browser, device, screen.hash, { scheme: screen.scheme });
   try {
     if (screen.setup) await screen.setup(page);
     const probe = await evaluate(page, PROBE, [GRID_CELL, ROAD_ZONE]);
@@ -229,6 +243,11 @@ async function checkScreen(browser, device, name, screen) {
       for (const expected of screen.expect) if (!probe.names.includes(expected)) fail(context, `control "${expected}" is missing`);
     }
     for (const unwanted of screen.absent ?? []) if (probe.names.includes(unwanted)) fail(context, `control "${unwanted}" is drawn where it means nothing`);
+    if (screen.edgeGuard) {
+      const [vw] = probe.viewport;
+      const inGesture = probe.rects.filter((rect) => THUMB_CONTROLS.includes(rect.name) && (rect.left < GESTURE_EDGE - 1 || rect.right > vw - GESTURE_EDGE + 1));
+      if (inGesture.length > 0) fail(context, `thumb controls in the ${GESTURE_EDGE} px system-gesture edge (screen width ${vw}): ${inGesture.map((rect) => `${rect.name} ${Math.round(rect.left)}..${Math.round(rect.right)}`).join("; ")}`);
+    }
     if (device.insets) {
       const { top, left, bottom, right } = device.insets;
       const [vw, vh] = probe.viewport;
@@ -242,64 +261,103 @@ async function checkScreen(browser, device, name, screen) {
   }
 }
 
-/** Steer with one finger and brake with another, at the same time, as real thumbs do. */
-async function checkTwoFingers(browser, device) {
-  const context = `${device.id} two fingers (Easy)`;
-  console.log(context);
-  const { context: browserContext, page, cdp } = await open(browser, device, "scene=race", { scheme: "autogas" });
-  try {
-    await startRace(page);
-    await settle(page, 9000);
-    const steer = await rectOf(page, "steer");
-    const brake = await rectOf(page, "brake");
-    if (!steer || !brake) return fail(context, "no steer or brake control on the race screen");
-    const idle = await readTouch(page);
-    if (idle.gas !== 1) fail(context, `Easy drives itself: expected gas 1 with no finger down, got ${idle.gas}`);
-    if ((await page.getByRole("status", { name: "Gas: automatic, on" }).count()) === 0) fail(context, "no lit Auto gas indicator while the car pulls by itself");
-    const steerPoint = { id: 1, x: steer.right - 12, y: centre(steer).y };
-    const brakePoint = { id: 2, ...centre(brake) };
-    await touch(cdp, "touchStart", [steerPoint]);
-    await touch(cdp, "touchStart", [steerPoint, brakePoint]);
-    await touch(cdp, "touchMove", [{ ...steerPoint, x: steerPoint.x - 1 }, brakePoint]);
-    await settle(page, 200);
-    const both = await readTouch(page);
-    if (!(both.x > 0.3)) fail(context, `steering finger: expected x > 0.3 (right), got ${both.x}`);
-    if (both.brake !== 1 || both.gas !== 0) fail(context, `brake finger while steering: expected brake 1 and gas 0, got brake ${both.brake} gas ${both.gas}`);
-    await touch(cdp, "touchEnd", [steerPoint]);
-    await settle(page, 200);
-    const brakeOnly = await readTouch(page);
-    if (!(Math.abs(brakeOnly.x) < 0.05 && brakeOnly.brake === 1)) fail(context, `steering finger up: expected x 0 and the brake still held, got x ${brakeOnly.x} brake ${brakeOnly.brake}`);
-    await touch(cdp, "touchEnd", []);
-    await settle(page, 200);
-    const released = await readTouch(page);
-    if (released.gas !== 1 || released.brake !== 0) fail(context, `all fingers up: expected gas 1 brake 0, got gas ${released.gas} brake ${released.brake}`);
-    console.log(`  idle ${JSON.stringify(idle)}  both ${JSON.stringify(both)}  brake-only ${JSON.stringify(brakeOnly)}  released ${JSON.stringify(released)}`);
-  } finally {
-    await browserContext.close();
-  }
+/** Where a scripted finger goes: on its control's rect (the steering bar: offset from the bar's middle; the strip: a share of its height, from the foot). */
+const BAR_HEIGHT = 72;
+const CONTROL_NAME = { steer: "steer", strip: "pedal-strip", brake: "brake", hand: "handbrake", boost: "boost" };
+const EBRAKE_BIT = 1 << 2;
+const BOOST_BIT = 1 << 0;
+const fingerPoint = (rects, { on, dx = 0, dy = 0, at = 0 }) => {
+  const rect = rects[on];
+  if (on === "strip") return { x: centre(rect).x, y: rect.bottom - 1 - at * (rect.bottom - rect.top - 2) };
+  if (on === "steer") return { x: centre(rect).x + dx, y: rect.top + BAR_HEIGHT / 2 + dy };
+  return centre(rect);
+};
+
+/**
+ * One two-thumb script per non-disc scheme, as a BDD table: each row is every finger down at that moment (a finger carried from row to row is a drag) and
+ * what the pad must read then. `x` is the wheel, `gas` and `brake` the pedals, `ebrake` and `boost` the pad's buttons; a key a row leaves out is not checked.
+ */
+const THUMB_SCRIPTS = {
+  pedals: [
+    { it: "no finger down: nothing is pressed", fingers: [], x: [-0.05, 0.05], gas: [0, 0], brake: [0, 0], ebrake: false, boost: false },
+    { it: "gas on the strip while steering right on the bar", fingers: [{ id: 1, on: "steer", dx: 60 }, { id: 2, on: "strip", at: 0.6 }], x: [0.3, 1], gas: [0.3, 1], brake: [0, 0], ebrake: false },
+    { it: "brake at the foot of the strip while still steering right", fingers: [{ id: 1, on: "steer", dx: 60 }, { id: 2, on: "strip", at: 0 }], x: [0.3, 1], gas: [0, 0], brake: [0.9, 1], ebrake: false },
+    { it: "the coast band while steering: neither pedal", fingers: [{ id: 1, on: "steer", dx: 60 }, { id: 2, on: "strip", at: 0.34 }], x: [0.3, 1], gas: [0, 0], brake: [0, 0] },
+    { it: "e-brake mid-steer: the steering thumb pulls down with gas held (a drift)", fingers: [{ id: 1, on: "steer", dx: 60, dy: 60 }, { id: 2, on: "strip", at: 0.6 }], x: [0.3, 1], gas: [0.3, 1], ebrake: true },
+    { it: "the steering thumb comes back up: the e-brake lets go, the wheel and gas stay", fingers: [{ id: 1, on: "steer", dx: 60 }, { id: 2, on: "strip", at: 0.6 }], x: [0.3, 1], gas: [0.3, 1], ebrake: false },
+    { it: "the strip thumb slides into the cap: full gas and a Boost press", fingers: [{ id: 1, on: "steer" }, { id: 2, on: "strip", at: 0.95 }], gas: [1, 1], boost: true },
+    { it: "the thumb slides back to half gas: the Boost burst plays on (a tap, not a hold)", fingers: [{ id: 1, on: "steer" }, { id: 2, on: "strip", at: 0.6 }], gas: [0.3, 1], boost: true },
+    { it: "the thumb eases to the coast band: the burst ends", fingers: [{ id: 1, on: "steer" }, { id: 2, on: "strip", at: 0.34 }], gas: [0, 0], boost: false },
+    { it: "every finger up: nothing is pressed", fingers: [], x: [-0.05, 0.05], gas: [0, 0], brake: [0, 0], ebrake: false, boost: false },
+  ],
+  autogas: [
+    { it: "no finger down: the gas is on by itself", fingers: [], gas: [1, 1], brake: [0, 0], ebrake: false },
+    { it: "brake on the pad while steering right: the gas lifts", fingers: [{ id: 1, on: "steer", dx: 60 }, { id: 2, on: "brake" }], x: [0.3, 1], gas: [0, 0], brake: [1, 1] },
+    { it: "brake lifts, the wheel stays: the gas is back", fingers: [{ id: 1, on: "steer", dx: 60 }], x: [0.3, 1], gas: [1, 1], brake: [0, 0] },
+    { it: "e-brake mid-steer: the steering thumb pulls down under the automatic gas", fingers: [{ id: 1, on: "steer", dx: 60, dy: 60 }], x: [0.3, 1], gas: [1, 1], ebrake: true },
+    { it: "every finger up: the e-brake lets go", fingers: [], ebrake: false },
+    { it: "a tap on Boost: the burst is on with no finger down", fingers: [], tap: "boost", boost: true, gas: [1, 1] },
+    { it: "brake on the pad: the burst ends", fingers: [{ id: 1, on: "brake" }], boost: false, brake: [1, 1] },
+  ],
+  tilt: [
+    { it: "level phone, no finger: nothing steers, nothing is pressed", fingers: [], tilt: "level", x: [-0.05, 0.05], gas: [0, 0], brake: [0, 0], ebrake: false },
+    { it: "phone turned right with gas on the strip: it steers right and pulls", fingers: [{ id: 1, on: "strip", at: 0.6 }], tilt: "right", x: [0.5, 1], gas: [0.3, 1], ebrake: false },
+    { it: "the left thumb holds the e-brake pad while gas and the turn stay: a drift", fingers: [{ id: 1, on: "strip", at: 0.6 }, { id: 2, on: "hand" }], tilt: "right", x: [0.5, 1], gas: [0.3, 1], ebrake: true },
+    { it: "the strip thumb drops to the foot while the phone is still turned: it brakes", fingers: [{ id: 1, on: "strip", at: 0 }], tilt: "right", x: [0.5, 1], gas: [0, 0], brake: [0.9, 1], ebrake: false },
+  ],
+};
+
+const attitudeFor = (device, tilt) => {
+  const landscape = device.orientation === "landscape";
+  if (tilt === "level") return landscape ? { alpha: 0, beta: 0, gamma: -90 } : { alpha: 0, beta: 90, gamma: 0 };
+  return landscape ? { alpha: 0, beta: 20, gamma: -90 } : { alpha: 0, beta: 70, gamma: 89.9 };
+};
+
+/** What a row expects against what the pad read: the mismatches, as text. */
+const mismatches = (row, read) => {
+  const found = [];
+  for (const key of ["x", "gas", "brake"]) if (row[key] && !(read[key] >= row[key][0] - 1e-6 && read[key] <= row[key][1] + 1e-6)) found.push(`${key} ${read[key].toFixed(2)} not in ${row[key].join("..")}`);
+  if (row.ebrake !== undefined && ((read.held & EBRAKE_BIT) !== 0) !== row.ebrake) found.push(`e-brake ${(read.held & EBRAKE_BIT) !== 0}, expected ${row.ebrake}`);
+  if (row.boost !== undefined && ((read.held & BOOST_BIT) !== 0) !== row.boost) found.push(`boost ${(read.held & BOOST_BIT) !== 0}, expected ${row.boost}`);
+  return found;
+};
+
+/** Sends the change from the fingers down to the fingers wanted: a new one is a touchStart, a moved one a touchMove, a gone one a touchEnd. */
+async function moveFingers(cdp, down, wanted) {
+  const gone = down.filter((finger) => !wanted.some((next) => next.id === finger.id));
+  if (gone.length > 0) await touch(cdp, "touchEnd", gone);
+  const added = wanted.filter((next) => !down.some((finger) => finger.id === next.id));
+  if (added.length > 0) await touch(cdp, "touchStart", wanted);
+  else if (wanted.length > 0) await touch(cdp, "touchMove", wanted);
 }
 
-async function checkPedalsScheme(browser, device) {
-  const context = `${device.id} Pedals scheme`;
+/** Drives one scheme's two-thumb script with real CDP touches (and the emulated phone's tilt) and checks the pad after every row. */
+async function checkSchemeTouch(browser, device, scheme) {
+  const context = `${device.id} two thumbs (${scheme})`;
   console.log(context);
-  const { context: browserContext, page, cdp } = await open(browser, device, "scene=race", { scheme: "pedals" });
+  const { context: browserContext, page, cdp } = await open(browser, device, "scene=race", { scheme });
   try {
     await startRace(page);
     await settle(page, 9000);
-    const gas = await rectOf(page, "gas");
-    const steer = await rectOf(page, "steer");
-    if (!gas || !steer) return fail(context, "no gas or steer control in the Pedals scheme");
-    const idle = await readTouch(page);
-    if (idle.gas !== 0) fail(context, `no finger on Gas: expected gas 0, got ${idle.gas}`);
-    const gasPoint = { id: 1, ...centre(gas) };
-    const steerPoint = { id: 2, x: steer.left + 12, y: centre(steer).y };
-    await touch(cdp, "touchStart", [gasPoint]);
-    await touch(cdp, "touchStart", [gasPoint, steerPoint]);
-    await settle(page, 200);
-    const both = await readTouch(page);
-    if (both.gas !== 1 || !(both.x < -0.3)) fail(context, `Gas + steering left: expected gas 1 and x < -0.3, got gas ${both.gas} x ${both.x}`);
-    await touch(cdp, "touchEnd", []);
-    console.log(`  idle ${JSON.stringify(idle)}  both ${JSON.stringify(both)}`);
+    const rects = {};
+    for (const [on, name] of Object.entries(CONTROL_NAME)) rects[on] = (await page.locator(`[data-touch-control=${name}]`).count()) > 0 ? await rectOf(page, name) : null;
+    let down = [];
+    for (const row of THUMB_SCRIPTS[scheme]) {
+      if (row.tilt) await cdp.send("DeviceOrientation.setDeviceOrientationOverride", attitudeFor(device, row.tilt));
+      const wanted = row.fingers.map((finger) => ({ id: finger.id, ...fingerPoint(rects, finger) }));
+      if (row.fingers.some((finger) => !rects[finger.on]) || (row.tap && !rects[row.tap])) return fail(context, `row "${row.it}" needs a control this scheme does not draw`);
+      await moveFingers(cdp, down, wanted);
+      down = wanted;
+      if (row.tap) {
+        const at = { id: 9, ...centre(rects[row.tap]) };
+        await touch(cdp, "touchStart", [...wanted, at]);
+        await touch(cdp, "touchEnd", [at]);
+      }
+      await settle(page, row.tilt ? 450 : 200);
+      const found = mismatches(row, await readTouch(page));
+      if (found.length > 0) fail(context, `${row.it}: ${found.join("; ")}`);
+    }
+    if (down.length > 0) await touch(cdp, "touchEnd", []);
   } finally {
     await browserContext.close();
   }
@@ -373,31 +431,6 @@ async function checkFullscreen(browser, device, { name, hash, query }) {
   }
 }
 
-async function checkTilt(browser, device) {
-  const context = `${device.id} Tilt scheme`;
-  console.log(context);
-  const { context: browserContext, page, cdp } = await open(browser, device, "scene=race", { scheme: "tilt" });
-  try {
-    await startRace(page);
-    await settle(page, 9000);
-    // The attitudes are the ones the unit tests derive: level, then a clockwise turn of the wheel by 20 degrees (landscape, top of the phone to the left).
-    const level = device.orientation === "landscape" ? { alpha: 0, beta: 0, gamma: -90 } : { alpha: 0, beta: 90, gamma: 0 };
-    const turned = device.orientation === "landscape" ? { alpha: 0, beta: 20, gamma: -90 } : { alpha: 0, beta: 70, gamma: 89.9 };
-    await cdp.send("DeviceOrientation.setDeviceOrientationOverride", level);
-    await settle(page, 400);
-    const centred = await readTouch(page);
-    await cdp.send("DeviceOrientation.setDeviceOrientationOverride", turned);
-    await settle(page, 400);
-    const right = await readTouch(page);
-    console.log(`  level ${JSON.stringify(centred)}  turned ${JSON.stringify(right)}`);
-    if (Math.abs(centred.x) > 0.05) fail(context, `level phone: expected x 0, got ${centred.x}`);
-    if (!(right.x > 0.5)) fail(context, `phone turned 20 degrees clockwise: expected x > 0.5, got ${right.x}`);
-    if (right.gas !== 1) fail(context, `Tilt drives itself: expected gas 1, got ${right.gas}`);
-  } finally {
-    await browserContext.close();
-  }
-}
-
 process.env.GALLIUM_DRIVER ??= "d3d12";
 const chromePath = process.env.CHROME_PATH ?? newestChromium();
 function newestChromium() {
@@ -419,7 +452,7 @@ try {
       }
     }
     if (only && !only.includes("touch")) continue;
-    for (const check of [checkDisc, checkTwoFingers, checkPedalsScheme, checkTilt, (b, d) => checkFullscreen(b, d, { name: "race", hash: "scene=race", query: "" }), (b, d) => checkFullscreen(b, d, { name: "bench page", hash: "", query: "&bench=city" })]) {
+    for (const check of [checkDisc, (b, d) => checkSchemeTouch(b, d, "pedals"), (b, d) => checkSchemeTouch(b, d, "autogas"), (b, d) => checkSchemeTouch(b, d, "tilt"), (b, d) => checkFullscreen(b, d, { name: "race", hash: "scene=race", query: "" }), (b, d) => checkFullscreen(b, d, { name: "bench page", hash: "", query: "&bench=city" })]) {
       try {
         await check(browser, device);
       } catch (error) {
