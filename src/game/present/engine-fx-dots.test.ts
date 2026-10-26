@@ -1,8 +1,10 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { FRAME_HZ } from "../kernel/constants.ts";
-import { DebrisSystem, FountainSystem, GlassDotSystem, SparkSystem, TireSmokeSystem } from "./engine-fx.ts";
+import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
+import { DebrisSystem, GlassDotSystem, SparkSystem, TireSmokeSystem } from "./engine-fx.ts";
+import { sparkLives } from "./fountain-sparks.test-util.ts";
+import { FountainSystem, JET_FADE_S, REBASE_S } from "./fountain-system.ts";
 
 /** A point sprite never draws under one pixel however far it is, so the dot pools must hand the GPU only their live dots; every crash FX pool uploads only those. */
 
@@ -28,7 +30,7 @@ const PUFFS = 10;
 const MATRIX_FLOATS = 16;
 const RGB = 3;
 
-type Dots = SparkSystem | GlassDotSystem | FountainSystem;
+type Dots = SparkSystem | GlassDotSystem;
 type Pool = { name: string; make: (scene: THREE.Scene) => { sys: Dots; shower: () => void } };
 
 const POOLS: readonly Pool[] = [
@@ -46,13 +48,6 @@ const POOLS: readonly Pool[] = [
       return { sys, shower: () => sys.burst(ORIGIN, STILL, 40) };
     },
   },
-  {
-    name: "fountain",
-    make: (scene) => {
-      const sys = new FountainSystem(scene);
-      return { sys, shower: () => sys.jet(0, 0, 0, 0, 0.5) };
-    },
-  },
 ];
 
 before(() => {
@@ -62,7 +57,7 @@ after(() => {
   Reflect.deleteProperty(globalThis, "document");
 });
 
-const run = (sys: Dots, seconds: number): void => {
+const run = (sys: { update(dt: number): void }, seconds: number): void => {
   for (let i = 0; i < Math.round(seconds / STEP); i++) sys.update(STEP);
 };
 const alive = (sys: Dots): number => sys["life"].filter((life) => life > 0).length;
@@ -86,6 +81,13 @@ for (const { name, make } of POOLS) {
     it("when nothing has been thrown, then the GPU draws no dot", () => {
       const { sys } = make(new THREE.Scene());
       assert.equal(drawn(sys), 0);
+    });
+
+    it("when the pool is made, then its material reads vertex colours exactly when it has a colour attribute", () => {
+      const { sys } = make(new THREE.Scene());
+      const material = sys["points"].material;
+      assert.ok(material instanceof THREE.PointsMaterial);
+      assert.equal(material.vertexColors, sys["geo"].getAttribute("color") !== undefined);
     });
 
     it("when a shower is in the air, then the GPU draws exactly its live dots, all near the world", () => {
@@ -123,18 +125,134 @@ for (const { name, make } of POOLS) {
   });
 }
 
-describe("given a fountain pool whose first jet is spent", () => {
-  it("when a spark has died among live ones, then every drawn dot is lit", () => {
-    const scene = new THREE.Scene();
-    const sys = new FountainSystem(scene);
-    sys.jet(0, 0, 0, 0, 0.5);
+/** A fountain's sparks are not packed by the CPU: each slot's launch is written once at spawn and the vertex shader flies it, so what the GPU is sent is the spawned slots. */
+const ITEM_SIZE = { position: 3, aVel: 3, aSpan: 2, color: 3 } as const;
+
+function fountainRanges(sys: FountainSystem): { name: string; attr: THREE.BufferAttribute; item: number }[] {
+  return Object.entries(ITEM_SIZE).map(([name, item]) => {
+    const attr = sys["geo"].getAttribute(name);
+    assert.ok(attr instanceof THREE.BufferAttribute, `${name} is a plain buffer`);
+    return { name, attr, item };
+  });
+}
+
+/** The shader the pool compiles, from a stand-in carrying the three.js chunks it edits. */
+function compiledVertex(sys: FountainSystem): { vertexShader: string; uniforms: Record<string, { value: number }> } {
+  const shader = { vertexShader: "#include <common>\n#include <color_vertex>\n#include <begin_vertex>\n#include <project_vertex>", uniforms: {} };
+  // The material's hook takes three's whole program-parameters type, of which it reads these two fields.
+  (sys["points"].material as THREE.PointsMaterial).onBeforeCompile(shader as unknown as THREE.WebGLProgramParametersWithUniforms, null as unknown as THREE.WebGLRenderer);
+  return shader;
+}
+
+describe("given a fountain pool", () => {
+  it("when nothing has been thrown, then it draws no spark and is not drawn", () => {
+    const sys = new FountainSystem(new THREE.Scene());
+    assert.equal(sys["geo"].drawRange.count, 0);
+    assert.equal(sys["points"].visible, false);
+  });
+
+  it("when it is made, then its material reads vertex colours and the geometry carries each spark's colour", () => {
+    const sys = new FountainSystem(new THREE.Scene());
+    const material = sys["points"].material;
+    assert.ok(material instanceof THREE.PointsMaterial);
+    assert.equal(material.vertexColors, true);
+    assert.ok(sys["geo"].getAttribute("color") !== undefined);
+  });
+
+  it("when a jet has thrown for a frame, then each attribute queues exactly the slots it spawned and the draw reaches them", () => {
+    const sys = new FountainSystem(new THREE.Scene());
+    sys.jet(0, 0, 0, 0, 5);
+    run(sys, STEP);
+    const spawned = sys["cursor"];
+    assert.ok(spawned > 0, "the jet threw");
+    for (const { name, attr, item } of fountainRanges(sys)) {
+      assert.equal(attr.usage, THREE.DynamicDrawUsage, `${name} usage`);
+      assert.equal(attr.updateRanges.length, 1, `${name} ranges`);
+      assert.equal(attr.updateRanges[0]!.start, 0, `${name} range start`);
+      assert.equal(attr.updateRanges[0]!.count, spawned * item, `${name} range count`);
+    }
+    assert.equal(sys["geo"].drawRange.count, spawned);
+    run(sys, STEP);
+    const second = sys["cursor"] - spawned;
+    assert.ok(second > 0, "the jet threw again");
+    for (const { name, attr, item } of fountainRanges(sys)) {
+      assert.equal(attr.updateRanges[0]!.start, spawned * item, `${name} second range start`);
+      assert.equal(attr.updateRanges[0]!.count, second * item, `${name} second range count`);
+    }
+    assert.equal(sys["geo"].drawRange.count, spawned + second);
+  });
+
+  it("when a frame spawns nothing, then no attribute is sent to the GPU", () => {
+    const sys = new FountainSystem(new THREE.Scene());
+    sys.jet(0, 0, 0, 1, 5);
+    const before = fountainRanges(sys).map(({ attr }) => attr.version);
     run(sys, 0.5);
+    for (const [i, { name, attr }] of fountainRanges(sys).entries()) assert.equal(attr.version, before[i], `${name} was sent`);
+  });
+
+  it("when the ring wraps, then the spawn that crosses its end sends every slot and the draw stays inside the ring", () => {
+    const ring = 21;
+    const sys = new FountainSystem(new THREE.Scene(), ring);
+    sys.jet(0, 0, 0, 0, 5);
+    let sentWhole = false;
+    for (let f = 0; f < 30; f++) {
+      sys.update(STEP);
+      const position = sys["geo"].getAttribute("position") as THREE.BufferAttribute;
+      if (position.updateRanges[0]!.count === ring * ITEM_SIZE.position && position.updateRanges[0]!.start === 0) sentWhole = true;
+      assert.ok(sys["geo"].drawRange.count <= ring, "the draw stays inside the ring");
+    }
+    assert.ok(sentWhole, "a frame sent the whole ring");
+  });
+
+  it("when update runs at slow-mo or not at all, then the shader's clock advances by exactly the FX time it was given", () => {
+    const sys = new FountainSystem(new THREE.Scene());
+    sys.update(STEP / 4);
+    sys.update(STEP / 4);
+    sys.update(0);
+    assert.ok(Math.abs(sys["clock"].value - STEP / 2) < 1e-12, `the clock reads ${sys["clock"].value}`);
+  });
+
+  it("when every spark has landed, then the pool is not drawn", () => {
+    const sys = new FountainSystem(new THREE.Scene());
     sys.jet(0, 0, 0, 0, 0.5);
-    run(sys, 2.2);
-    const tint = sys["geo"].getAttribute("color");
-    const live = alive(sys);
-    assert.ok(live > 0 && drawn(sys) === live, "some sparks are up and the first jet's are gone");
-    for (let k = 0; k < drawn(sys); k++) assert.ok(Math.max(tint.getX(k), tint.getY(k), tint.getZ(k)) > 0, `drawn dot ${k} carries its own spark's colour`);
+    run(sys, 0.2);
+    assert.equal(sys["points"].visible, true);
+    run(sys, ALL_DEAD_S);
+    assert.equal(sys["points"].visible, false);
+    assert.ok(sparkLives(sys).every((life) => life <= 0));
+  });
+
+  it("when the pool is reset in mid-air, then the GPU draws none and every spark is gone", () => {
+    const sys = new FountainSystem(new THREE.Scene());
+    sys.jet(0, 0, 0, 0, 2);
+    run(sys, 0.2);
+    sys.reset();
+    assert.equal(sys["geo"].drawRange.count, 0);
+    assert.equal(sys["points"].visible, false);
+    assert.ok(sparkLives(sys).every((life) => life <= 0));
+  });
+
+  it("when the clock passes the rebase, then every spark in flight keeps the time it had left", () => {
+    const sys = new FountainSystem(new THREE.Scene());
+    sys.jet(0, 0, 0, 0, 1000);
+    while (sys["clock"].value + STEP < REBASE_S) sys.update(STEP);
+    const before = sparkLives(sys);
+    assert.ok(before.some((life) => life > 0), "the control: sparks are in flight");
+    sys.update(STEP);
+    assert.ok(sys["clock"].value < 1, `the clock restarted at ${sys["clock"].value}`);
+    for (const [k, life] of sparkLives(sys).entries()) {
+      if (before[k]! > STEP * 2) assert.ok(Math.abs(life - (before[k]! - STEP)) < 1e-3, `slot ${k} had ${before[k]} s and has ${life} s a frame later`);
+    }
+  });
+
+  it("when the vertex shader is built, then it flies each spark by the clock uniform, fades it over its last JET_FADE_S and culls a slot not in flight", () => {
+    const sys = new FountainSystem(new THREE.Scene());
+    const shader = compiledVertex(sys);
+    assert.equal(shader.uniforms.uFxTime, sys["clock"], "the pool's own clock is the uniform");
+    assert.ok(shader.vertexShader.includes("uniform float uFxTime"));
+    assert.ok(shader.vertexShader.includes(`/ ${JET_FADE_S.toFixed(6)}`), "the fade runs over JET_FADE_S");
+    assert.ok(shader.vertexShader.includes(`${(GRAVITY / 2).toFixed(6)} * fxAge * fxAge`), "the arc falls at GRAVITY");
+    assert.ok(/if \(fxAge < 0\.0 \|\| fxAge >= aSpan\.y\) gl_Position/.test(shader.vertexShader), "a slot outside its flight is clipped");
   });
 });
 

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { FountainSystem } from "../present/engine-fx.ts";
+import { FountainSystem } from "../present/fountain-system.ts";
 import type { FxTier } from "../present/engine-post.ts";
 import {
   APPROACH_RUN_S,

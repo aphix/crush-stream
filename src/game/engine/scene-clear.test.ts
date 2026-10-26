@@ -6,7 +6,9 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { armKill, assignClass, DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
 import { paint } from "../vehicle/test-support.ts";
-import { DebrisSystem, FountainSystem, GlassDotSystem, SparkSystem, TireSmokeSystem } from "../present/engine-fx.ts";
+import { DebrisSystem, GlassDotSystem, SparkSystem, TireSmokeSystem } from "../present/engine-fx.ts";
+import { FountainSystem } from "../present/fountain-system.ts";
+import { sparkLives } from "../present/fountain-sparks.test-util.ts";
 import { SkidMarks } from "../present/engine-marks.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { RangeRun } from "../scenes/range.ts";
@@ -114,7 +116,7 @@ const ROWS: Record<keyof Transients, Row> = {
       r.fountains.jet(5, 0, 0, 9, 3);
       r.fountains.update(0.3);
     },
-    left: (r) => alive(r.fountains["life"]) + r.fountains.jets,
+    left: (r) => sparkLives(r.fountains).filter((life) => life > 0).length + r.fountains.jets,
   },
   glassDots: { label: "glass chips", seed: (r) => r.glassDots.burst(V, UP, 40), left: (r) => alive(r.glassDots["life"]) },
   smoke: { label: "tyre smoke plumes", seed: (r) => r.smoke.plume(V, UP, 40), left: (r) => alive(r.smoke["life"]) },

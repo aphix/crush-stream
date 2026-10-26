@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { hypot3, round4, snapshotPoints } from "../deform/physics-util.ts";
 import { GRAVITY } from "../kernel/constants.ts";
 import { store3f } from "../kernel/store.ts";
+import { BASIS_SIZE, cameraBasis, float32Of, writeBillboard } from "./fx-matrix.ts";
 import { landOn } from "../vehicle/loose-step.ts";
 
 const _pv = new THREE.Vector3();
@@ -26,18 +27,24 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 const MATRIX_FLOATS = 16;
 
 /** Each attribute's one reused update range: `addUpdateRange` builds a new one per call, so a running pool would allocate every frame. */
-const FRONT_RANGES = new WeakMap<THREE.BufferAttribute, { start: number; count: number }>();
+const UPLOAD_RANGES = new WeakMap<THREE.BufferAttribute, { start: number; count: number }>();
 
-/** Upload only the first `floats` floats of `attr` this frame: a pool packs what it draws at the front. */
-function uploadFront(attr: THREE.BufferAttribute, floats: number): void {
-  let range = FRONT_RANGES.get(attr);
-  if (!range) FRONT_RANGES.set(attr, (range = { start: 0, count: 0 }));
+/** Upload only `floats` floats of `attr` from float `start` this frame. */
+export function uploadRange(attr: THREE.BufferAttribute, start: number, floats: number): void {
+  let range = UPLOAD_RANGES.get(attr);
+  if (!range) UPLOAD_RANGES.set(attr, (range = { start: 0, count: 0 }));
+  range.start = start;
   range.count = floats;
   if (attr.updateRanges[0] !== range) {
     attr.clearUpdateRanges();
     attr.updateRanges[0] = range;
   }
   attr.needsUpdate = true;
+}
+
+/** Upload only the first `floats` floats of `attr` this frame: a pool packs what it draws at the front. */
+function uploadFront(attr: THREE.BufferAttribute, floats: number): void {
+  uploadRange(attr, 0, floats);
 }
 
 /** Instanced metal bits. Slots come from a ring; each piece owns its position, spin and size; a spent slot draws at scale 0. */
@@ -176,7 +183,7 @@ export class DebrisSystem {
   }
 }
 
-function makeDotTexture(color: string, glow: string): THREE.CanvasTexture {
+export function makeDotTexture(color: string, glow: string): THREE.CanvasTexture {
   const c = document.createElement("canvas");
   c.width = 64;
   c.height = 64;
@@ -201,13 +208,11 @@ type DotLook = {
   gravity: number;
   /** Collision radius the bit meets the world with (`landBit`). */
   radius: number;
-  /** False: the bit is a free arc that lives out its `life` and never meets the world (`FountainSystem`: its life is its flight time). Default true. */
-  lands?: boolean;
-  /** True: a per-dot colour attribute (`tint`) multiplies the look, so a dot can fade by brightness. Default false. */
-  tinted?: boolean;
+  /** True: `packExtra` runs for each packed dot. Default false. */
+  hooked?: boolean;
 };
 
-/** Ring buffer of additive billboard dots that fall and land on the world (`landBit`). The GPU draws only the live ones, packed from slot 0 (`publish`): a dead dot is no pixel, a point sprite never draws smaller than one. */
+/** Ring buffer of additive billboard dots that fall and land on the world (`landBit`). The GPU draws only the live ones, packed from slot 0 by `step`: a dead dot is no pixel, a point sprite never draws smaller than one. */
 class DotPoints {
   protected readonly pos: Float32Array;
   protected readonly vx: Float32Array;
@@ -217,24 +222,24 @@ class DotPoints {
   protected readonly n: number;
   protected readonly points: THREE.Points;
   protected readonly geo: THREE.BufferGeometry;
-  /** Per-dot RGB multiplier (present when the look is `tinted`), by ring slot. */
-  protected readonly tint: Float32Array | null;
-  /** What the GPU reads: the live dots' positions (and tints) packed from the front, `publish` fills them. */
-  private readonly drawPos: Float32Array;
-  private readonly drawTint: Float32Array | null;
+  /** What the GPU reads: the live dots' positions packed from the front by `step`. */
+  protected readonly drawPos: Float32Array;
+  private readonly posAttr: THREE.BufferAttribute;
+  /** Dots the last `step` packed. */
+  protected liveCount = 0;
+  /** Whether `step` calls `packExtra` for each packed dot. */
+  private readonly hooked: boolean;
   private tmp = new THREE.Vector3();
   private vel = new THREE.Vector3();
   private cursor = 0;
   protected anyAlive = false;
   private gravity: number;
   private radius: number;
-  private lands: boolean;
 
   constructor(scene: THREE.Scene, n: number, look: DotLook) {
     this.n = n;
     this.gravity = look.gravity;
     this.radius = look.radius;
-    this.lands = look.lands ?? true;
     this.pos = new Float32Array(n * 3);
     this.vx = new Float32Array(n);
     this.vy = new Float32Array(n);
@@ -242,15 +247,13 @@ class DotPoints {
     this.life = new Float32Array(n);
     this.geo = new THREE.BufferGeometry();
     this.drawPos = new Float32Array(n * 3);
-    this.geo.setAttribute("position", new THREE.BufferAttribute(this.drawPos, 3).setUsage(THREE.DynamicDrawUsage));
-    this.tint = look.tinted ? new Float32Array(n * 3) : null;
-    this.drawTint = this.tint ? new Float32Array(n * 3) : null;
-    if (this.drawTint) this.geo.setAttribute("color", new THREE.BufferAttribute(this.drawTint, 3).setUsage(THREE.DynamicDrawUsage));
+    this.posAttr = new THREE.BufferAttribute(this.drawPos, 3).setUsage(THREE.DynamicDrawUsage);
+    this.geo.setAttribute("position", this.posAttr);
+    this.hooked = look.hooked ?? false;
     this.geo.setDrawRange(0, 0);
     const mat = new THREE.PointsMaterial({
       map: makeDotTexture(look.core, look.glow),
       color: 0xffffff,
-      vertexColors: this.tint !== null,
       size: look.size,
       transparent: true,
       opacity: look.opacity,
@@ -267,7 +270,8 @@ class DotPoints {
     this.life.fill(0);
     this.cursor = 0;
     this.anyAlive = false;
-    this.publish();
+    this.liveCount = 0;
+    this.geo.setDrawRange(0, 0);
   }
 
   /** Oldest ring slot; the caller fills pos/vel/life for it. */
@@ -277,54 +281,31 @@ class DotPoints {
     return k;
   }
 
-  /** Publish `spawned` freshly claimed slots to the GPU. */
+  /** `spawned` freshly claimed slots join the next `update`'s pass. */
   protected commit(spawned: number): void {
     if (spawned > 0) this.anyAlive = true;
-    this.publish();
-  }
-
-  /** Pack the live dots (positions, tints) into what the GPU draws and draw exactly them. */
-  protected publish(): void {
-    let live = 0;
-    for (let i = 0; i < this.n; i++) {
-      if (this.life[i]! <= 0) continue;
-      this.drawPos[live * 3] = this.pos[i * 3]!;
-      this.drawPos[live * 3 + 1] = this.pos[i * 3 + 1]!;
-      this.drawPos[live * 3 + 2] = this.pos[i * 3 + 2]!;
-      if (this.tint && this.drawTint) {
-        this.drawTint[live * 3] = this.tint[i * 3]!;
-        this.drawTint[live * 3 + 1] = this.tint[i * 3 + 1]!;
-        this.drawTint[live * 3 + 2] = this.tint[i * 3 + 2]!;
-      }
-      live++;
-    }
-    this.geo.setDrawRange(0, live);
-    if (live === 0) return;
-    uploadFront(this.geo.getAttribute("position") as THREE.BufferAttribute, live * 3);
-    if (this.drawTint) uploadFront(this.geo.getAttribute("color") as THREE.BufferAttribute, live * 3);
   }
 
   update(dt: number): void {
     if (!this.anyAlive) return;
     this.step(dt);
-    this.publish();
   }
 
-  /** Age every live dot by `dt` and move it; `anyAlive` says whether any was alive going in. */
+  /** A subclass's per-dot row (`hooked`): called with the ring slot `i` of a surviving dot and the packed row `live` it was just written to. */
+  protected packExtra(_i: number, _live: number): void {}
+
+  /**
+   * Age every live dot by `dt`, move it and pack the survivors (positions, tints, `packExtra`'s rows) from the front in ring order, as the GPU
+   * draws them: the one pass over the ring a frame. `anyAlive` says whether any dot was alive going in.
+   */
   protected step(dt: number): void {
     let any = false;
+    let live = 0;
     for (let i = 0; i < this.n; i++) {
       if (this.life[i]! <= 0) continue;
       any = true;
       this.life[i]! -= dt;
       if (this.life[i]! <= 0) continue;
-      if (!this.lands) {
-        this.pos[i * 3]! += this.vx[i]! * dt;
-        this.pos[i * 3 + 1]! += this.vy[i]! * dt;
-        this.pos[i * 3 + 2]! += this.vz[i]! * dt;
-        this.vy[i]! -= this.gravity * dt;
-        continue;
-      }
       this.tmp.set(this.pos[i * 3]!, this.pos[i * 3 + 1]!, this.pos[i * 3 + 2]!);
       this.vel.set(this.vx[i]!, this.vy[i]!, this.vz[i]!);
       this.tmp.addScaledVector(this.vel, dt);
@@ -336,8 +317,17 @@ class DotPoints {
       this.vx[i] = this.vel.x;
       this.vy[i] = this.vel.y;
       this.vz[i] = this.vel.z;
+      this.drawPos[live * 3] = this.pos[i * 3]!;
+      this.drawPos[live * 3 + 1] = this.pos[i * 3 + 1]!;
+      this.drawPos[live * 3 + 2] = this.pos[i * 3 + 2]!;
+      if (this.hooked) this.packExtra(i, live);
+      live++;
     }
     this.anyAlive = any;
+    this.liveCount = live;
+    this.geo.setDrawRange(0, live);
+    if (live === 0) return;
+    uploadFront(this.posAttr, live * 3);
   }
 
   /** HDR colour multiplier: above 1 the dots feed the bloom pass (cinematic tiers); 1 is the plain look. */
@@ -359,6 +349,8 @@ const STREAK_S = 0.045;
 export class SparkSystem extends DotPoints {
   private readonly streakPos: Float32Array;
   private readonly streakCol: Float32Array;
+  private readonly streakPosAttr: THREE.BufferAttribute;
+  private readonly streakColAttr: THREE.BufferAttribute;
   private readonly streakGeo = new THREE.BufferGeometry();
   private readonly streaks: THREE.LineSegments;
 
@@ -370,11 +362,14 @@ export class SparkSystem extends DotPoints {
       opacity: 0.95,
       gravity: 6.5,
       radius: 0.025,
+      hooked: true,
     });
     this.streakPos = new Float32Array(n * 6);
     this.streakCol = new Float32Array(n * 6);
-    this.streakGeo.setAttribute("position", new THREE.BufferAttribute(this.streakPos, 3).setUsage(THREE.DynamicDrawUsage));
-    this.streakGeo.setAttribute("color", new THREE.BufferAttribute(this.streakCol, 3).setUsage(THREE.DynamicDrawUsage));
+    this.streakPosAttr = new THREE.BufferAttribute(this.streakPos, 3).setUsage(THREE.DynamicDrawUsage);
+    this.streakColAttr = new THREE.BufferAttribute(this.streakCol, 3).setUsage(THREE.DynamicDrawUsage);
+    this.streakGeo.setAttribute("position", this.streakPosAttr);
+    this.streakGeo.setAttribute("color", this.streakColAttr);
     this.streaks = new THREE.LineSegments(
       this.streakGeo,
       new THREE.LineBasicMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }),
@@ -392,35 +387,33 @@ export class SparkSystem extends DotPoints {
   override update(dt: number): void {
     super.update(dt);
     if (!this.streaks.visible) return;
+    this.streakGeo.setDrawRange(0, this.liveCount * 2);
+    if (this.liveCount === 0) return;
+    uploadFront(this.streakPosAttr, this.liveCount * 6);
+    uploadFront(this.streakColAttr, this.liveCount * 6);
+  }
+
+  protected override packExtra(i: number, live: number): void {
+    if (!this.streaks.visible) return;
     const p = this.streakPos;
     const c = this.streakCol;
-    let live = 0;
-    for (let i = 0; i < this.n; i++) {
-      const life = this.life[i]!;
-      if (life <= 0) continue;
-      const o = live * 6;
-      const x = this.pos[i * 3]!;
-      const y = this.pos[i * 3 + 1]!;
-      const z = this.pos[i * 3 + 2]!;
-      p[o] = x;
-      p[o + 1] = y;
-      p[o + 2] = z;
-      p[o + 3] = x - this.vx[i]! * STREAK_S;
-      p[o + 4] = Math.max(0.02, y - this.vy[i]! * STREAK_S);
-      p[o + 5] = z - this.vz[i]! * STREAK_S;
-      const hot = Math.min(1, life * 4) * 3.2;
-      c[o] = hot;
-      c[o + 1] = hot * 0.62;
-      c[o + 2] = hot * 0.24;
-      c[o + 3] = 0;
-      c[o + 4] = 0;
-      c[o + 5] = 0;
-      live++;
-    }
-    this.streakGeo.setDrawRange(0, live * 2);
-    if (live === 0) return;
-    uploadFront(this.streakGeo.attributes.position as THREE.BufferAttribute, live * 6);
-    uploadFront(this.streakGeo.attributes.color as THREE.BufferAttribute, live * 6);
+    const o = live * 6;
+    const x = this.pos[i * 3]!;
+    const y = this.pos[i * 3 + 1]!;
+    const z = this.pos[i * 3 + 2]!;
+    p[o] = x;
+    p[o + 1] = y;
+    p[o + 2] = z;
+    p[o + 3] = x - this.vx[i]! * STREAK_S;
+    p[o + 4] = Math.max(0.02, y - this.vy[i]! * STREAK_S);
+    p[o + 5] = z - this.vz[i]! * STREAK_S;
+    const hot = Math.min(1, this.life[i]! * 4) * 3.2;
+    c[o] = hot;
+    c[o + 1] = hot * 0.62;
+    c[o + 2] = hot * 0.24;
+    c[o + 3] = 0;
+    c[o + 4] = 0;
+    c[o + 5] = 0;
   }
 
   override reset(): void {
@@ -456,176 +449,6 @@ export class SparkSystem extends DotPoints {
 
   snapshot() {
     return snapshotPoints(this.pos, null, null, this.life, true);
-  }
-}
-
-/** Jets a `FountainSystem` runs at once: a race's finish line at its fullest (2 sides x 4 rows) with room to spare for a podium's. */
-export const JET_SLOTS = 16;
-/** Sparks a power-1 jet throws each second at density 1 (set by eye from shots at ultra: thick enough to read as a fountain at 50 m, not a sprinkler). */
-export const JET_RATE = 120;
-/** Launch speed (m/s, up) of a power-1 spark: apexes from 6.3 to 13.3 m at `GRAVITY`, above the stands and the gantry; a stronger jet scales it by the root of its power (height goes with the power). */
-const JET_UP_MIN = 11;
-export const JET_UP_MAX = 16;
-/** A spark's sideways launch speed as a share of its upward speed (a cone of about 19 degrees: a fountain's bell, not a column). */
-const JET_SPREAD = 0.35;
-/** Radius (m) of a jet's nozzle: sparks start scattered over it. */
-const JET_NOZZLE = 0.18;
-/** Seconds a spark is at full brightness before it fades out to nothing as it lands. */
-export const JET_FADE_S = 0.7;
-/** The most sparks one jet spawns in a single update (a stalled frame's dt must not dump a second's worth at once). */
-const JET_BURST_MAX = 24;
-/**
- * Each spark's launch scatter is read from a table drawn once at construction (`Math.random` boxes a number on every call, a collection
- * every few thousand sparks): LOT_ENTRIES prime so the pattern of directions repeats only after that many sparks, LOT_STRIDE floats an
- * entry: a unit direction (x, z), two radii in the unit disc (square roots of uniforms: the nozzle's and the cone's), and a speed share.
- */
-const LOT_ENTRIES = 4099;
-const LOT_STRIDE = 5;
-/** The pool: a full ultra race (2 jets at power 1.5, 6 at 1: about 600 and 340 live sparks each) holds about 3200; the ring overwrites its oldest past 3600 (a density near 1.1). */
-const FOUNTAIN_DOTS = 3600;
-const JET_GOLD = new THREE.Color(1, 0.86, 0.55);
-
-/**
- * Ground-mounted spark fountains: a scheduled jet (`jet`) throws bright sparks up in a bell-shaped arc from a nozzle point, they fall back
- * under gravity and fade, each one gone as it is back at the nozzle's height (its life is its flight time: no world query). Pooled like
- * the crash sparks (one ring of dots, jets in a fixed table, nothing allocated in a frame). Cosmetic: nothing reads it back.
- */
-export class FountainSystem extends DotPoints {
-  /** Share of the full spray every jet throws: the FX tier and the density knob set it (0: nothing spawns; sparks in the air still finish). */
-  density = 1;
-  private readonly jx = new Float32Array(JET_SLOTS);
-  private readonly jy = new Float32Array(JET_SLOTS);
-  private readonly jz = new Float32Array(JET_SLOTS);
-  /** Seconds until the jet starts; then seconds it still runs (a spent jet has `run` 0 and its slot is free). */
-  private readonly wait = new Float32Array(JET_SLOTS);
-  private readonly run = new Float32Array(JET_SLOTS);
-  private readonly power = new Float32Array(JET_SLOTS);
-  private readonly hue = new Float32Array(JET_SLOTS * 3);
-  /** Fractional sparks owed to each jet: its rate is per second, a frame spawns whole sparks. */
-  private readonly owed = new Float32Array(JET_SLOTS);
-  /** Each live dot's own colour, which its fade scales into `tint`. */
-  private readonly base: Float32Array;
-  /** The launch scatter (`LOT_ENTRIES` x `LOT_STRIDE`) and the entry the next spark reads. */
-  private readonly lot = new Float32Array(LOT_ENTRIES * LOT_STRIDE);
-  private lotAt = 0;
-  /** Each jet's lift: the square root of its power, worked out when the jet is set. */
-  private readonly lift = new Float32Array(JET_SLOTS);
-
-  constructor(scene: THREE.Scene, n = FOUNTAIN_DOTS) {
-    super(scene, n, {
-      core: "rgba(255,248,220,1)",
-      glow: "rgba(255,170,70,0.7)",
-      size: 0.6,
-      opacity: 1,
-      gravity: GRAVITY,
-      radius: 0,
-      lands: false,
-      tinted: true,
-    });
-    this.base = new Float32Array(n * 3);
-    for (let e = 0; e < LOT_ENTRIES; e++) {
-      const around = Math.random() * Math.PI * 2;
-      this.lot[e * LOT_STRIDE] = Math.cos(around);
-      this.lot[e * LOT_STRIDE + 1] = Math.sin(around);
-      this.lot[e * LOT_STRIDE + 2] = Math.sqrt(Math.random());
-      this.lot[e * LOT_STRIDE + 3] = Math.sqrt(Math.random());
-      this.lot[e * LOT_STRIDE + 4] = Math.random();
-    }
-    this.points.visible = false;
-  }
-
-  /**
-   * A jet at (x, y, z), the ground under it: it starts `startIn` s from now (0: at once), throws for `runFor` s, and its last sparks land
-   * a flight time later. `power` 1 is the plain jet; a bigger one throws more and higher. `color` tints it (default hot gold).
-   * A full table (`JET_SLOTS` running jets) drops the new jet.
-   */
-  jet(x: number, y: number, z: number, startIn: number, runFor: number, power = 1, color: THREE.Color = JET_GOLD): void {
-    let s = 0;
-    while (s < JET_SLOTS && this.run[s]! > 0) s++;
-    if (s === JET_SLOTS || runFor <= 0) return;
-    this.jx[s] = x;
-    this.jy[s] = y;
-    this.jz[s] = z;
-    this.wait[s] = Math.max(0, startIn);
-    this.run[s] = runFor;
-    this.power[s] = power;
-    this.lift[s] = Math.sqrt(power);
-    this.hue[s * 3] = color.r;
-    this.hue[s * 3 + 1] = color.g;
-    this.hue[s * 3 + 2] = color.b;
-    this.owed[s] = 0;
-  }
-
-  /** Jets scheduled or running (a spent jet is not counted; sparks still in the air are not jets). */
-  get jets(): number {
-    let count = 0;
-    for (let s = 0; s < JET_SLOTS; s++) if (this.run[s]! > 0) count++;
-    return count;
-  }
-
-  override update(dt: number): void {
-    for (let s = 0; s < JET_SLOTS; s++) {
-      if (this.run[s]! <= 0) continue;
-      if (this.wait[s]! > 0) {
-        this.wait[s]! -= dt;
-        continue;
-      }
-      const on = Math.min(dt, this.run[s]!);
-      this.run[s]! -= dt;
-      this.owed[s]! += on * JET_RATE * this.power[s]! * this.density;
-      const count = Math.min(JET_BURST_MAX, Math.floor(this.owed[s]!));
-      this.owed[s]! -= count;
-      if (count > 0) this.spray(s, count);
-    }
-    if (!this.anyAlive) return;
-    this.step(dt);
-    const tint = this.tint!;
-    for (let i = 0; i < this.n; i++) {
-      const life = this.life[i]!;
-      if (life <= 0) continue;
-      const fade = Math.min(1, life / JET_FADE_S);
-      tint[i * 3] = this.base[i * 3]! * fade;
-      tint[i * 3 + 1] = this.base[i * 3 + 1]! * fade;
-      tint[i * 3 + 2] = this.base[i * 3 + 2]! * fade;
-    }
-    this.publish();
-    this.points.visible = this.anyAlive;
-  }
-
-  override reset(): void {
-    super.reset();
-    this.run.fill(0);
-    this.wait.fill(0);
-    this.points.visible = false;
-  }
-
-  private spray(s: number, count: number): void {
-    const lift = this.lift[s]!;
-    const x = this.jx[s]!;
-    const y = this.jy[s]!;
-    const z = this.jz[s]!;
-    for (let i = 0; i < count; i++) {
-      const k = this.claim();
-      const e = this.lotAt * LOT_STRIDE;
-      this.lotAt = this.lotAt + 1 === LOT_ENTRIES ? 0 : this.lotAt + 1;
-      const dirX = this.lot[e]!;
-      const dirZ = this.lot[e + 1]!;
-      const up = (JET_UP_MIN + this.lot[e + 4]! * (JET_UP_MAX - JET_UP_MIN)) * lift;
-      const out = up * JET_SPREAD * this.lot[e + 2]!;
-      const nozzle = JET_NOZZLE * this.lot[e + 3]!;
-      this.pos[k * 3] = x + dirX * nozzle;
-      this.pos[k * 3 + 1] = y;
-      this.pos[k * 3 + 2] = z + dirZ * nozzle;
-      this.vx[k] = dirX * out;
-      this.vy[k] = up;
-      this.vz[k] = dirZ * out;
-      this.life[k] = (2 * up) / GRAVITY;
-      this.base[k * 3] = this.hue[s * 3]!;
-      this.base[k * 3 + 1] = this.hue[s * 3 + 1]!;
-      this.base[k * 3 + 2] = this.hue[s * 3 + 2]!;
-    }
-    this.commit(count);
-    this.points.visible = true;
   }
 }
 
@@ -690,7 +513,9 @@ export class TireSmokeSystem {
   private life: Float32Array;
   private maxLife: Float32Array;
   private size: Float32Array;
-  private dummy = new THREE.Object3D();
+  /** The camera's rotation, read once a frame (`cameraBasis`). */
+  private readonly basis = new Float64Array(BASIS_SIZE);
+  private readonly matrices: Float32Array;
   private n: number;
   private cursor = 0;
   private anyAlive = false;
@@ -728,6 +553,7 @@ export class TireSmokeSystem {
     });
     this.mesh = new THREE.InstancedMesh(geo, mat, n);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    this.matrices = float32Of(this.mesh.instanceMatrix);
     this.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3).setUsage(THREE.DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     scene.add(this.mesh);
@@ -810,6 +636,9 @@ export class TireSmokeSystem {
   update(dt: number, camera: THREE.Camera): void {
     if (!this.anyAlive) return;
     const damp = Math.exp(-0.7 * dt);
+    const basis = this.basis;
+    cameraBasis(camera.quaternion, basis);
+    const matrices = this.matrices;
     let live = 0;
     for (let i = 0; i < this.n; i++) {
       if (this.life[i]! <= 0) continue;
@@ -825,12 +654,8 @@ export class TireSmokeSystem {
       this.vy[i]! += 0.55 * dt;
       this.vx[i]! *= damp;
       this.vz[i]! *= damp;
-      this.dummy.position.set(this.px[i]!, this.py[i]!, this.pz[i]!);
-      this.dummy.scale.setScalar(this.size[i]! * (0.7 + (1 - fade) * this.grow));
-      this.dummy.quaternion.copy(camera.quaternion);
-      this.dummy.updateMatrix();
       // Packed in slot order, the order the ring drew them in: the alpha-blended puffs composite as before.
-      this.mesh.setMatrixAt(live, this.dummy.matrix);
+      writeBillboard(matrices, live * MATRIX_FLOATS, basis, this.size[i]! * (0.7 + (1 - fade) * this.grow), this.px[i]!, this.py[i]!, this.pz[i]!);
       const g = (0.55 + fade * 0.4) * this.shade;
       this.mesh.setColorAt(live, _smokeColor.setRGB(g * this.tint[i * 3]!, g * this.tint[i * 3 + 1]!, g * 0.96 * this.tint[i * 3 + 2]!));
       live++;

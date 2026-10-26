@@ -18,6 +18,10 @@ const _hit = new Float64Array(HIT_SIZE);
 
 /** Height above its rest (m) at which a free body still slides on what is under it. */
 const GROUND_BAND = 0.005;
+/** A point `landOn` asks the far answer of (`pointContact`: height alone) rests at least this far above its floor, twice the band so the far test's rounding never meets the band's edge, where `landOn` reads the surface's grip. */
+const FAR_GAP = 2 * GROUND_BAND;
+/** `pointContact`'s `travel2` for a caller that reads no normal of a point the far answer covers. */
+const NO_NORMAL = -1;
 /** Share of a free body's fall speed it bounces back up with off what it lands on. */
 const LAND_BOUNCE = 0.28;
 /** Share of a free body's spin that is left after a second in the air: its spin dies as it always did. */
@@ -43,7 +47,7 @@ export function landOn(pos: THREE.Vector3, vel: THREE.Vector3, floor: number, mu
   _q[PQ_VX] = vel.x;
   _q[PQ_VY] = vel.y;
   _q[PQ_VZ] = vel.z;
-  pointContact(_q, skip, _hit);
+  pointContact(_q, skip, _hit, NO_NORMAL, floor + FAR_GAP);
   if (_hit[C_H] === NO_FLOOR && _hit[C_DEPTH]! > 0) {
     const nx = _hit[C_NX]!;
     const nz = _hit[C_NZ]!;
@@ -57,7 +61,7 @@ export function landOn(pos: THREE.Vector3, vel: THREE.Vector3, floor: number, mu
     }
     _q[PQ_X] = pos.x;
     _q[PQ_Z] = pos.z;
-    pointContact(_q, skip, _hit);
+    pointContact(_q, skip, _hit, NO_NORMAL, floor + FAR_GAP);
   }
   const ground = _hit[C_H]!;
   if (ground === NO_FLOOR) return Infinity;
