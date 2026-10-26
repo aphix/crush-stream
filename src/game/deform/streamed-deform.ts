@@ -644,10 +644,10 @@ export class StreamedDeformation extends DeformSolve {
     this.skinnedThisFrame = true;
   }
 
-  /** The solver arrays and vectors outside the scalar fields, `masses`, `beams` and `clusters` (the cage corners and the sensors' positions too: the next step's contacts read them before the structure step moves them) that one step leaves for the next to read (built with the car: a recorder's steady state allocates nothing). `massPos`: where the last skin bake had each mass, which the next step's `SKIN_DRIFT` test reads (left out, a restored wreck baked or kept a bake the live one did not). */
+  /** The solver arrays and vectors outside the scalar fields, `masses`, `beams` and `clusters` (the cage corners and the sensors' positions too: the next step's contacts read them before the structure step moves them) that one step leaves for the next to read (built with the car: a recorder's steady state allocates nothing). `massPos`: where the last skin bake had each mass, which the next step's `SKIN_DRIFT` test reads (left out, a restored wreck baked or kept a bake the live one did not). `keptTurn`: the wreck's kept turn (`keptSpin`), which its `yawRate` and so its doors' swing drive read (left out, a restored wreck's open door swung 1e-11 rad off and slowed the next striker differently). */
   private readonly simTables = {
     vecs: [this.impactLocal, this.impactInward, this.bodyC, this.bodyRestC, this.frameUp, ...this.cages.flatMap((c) => c.corners), ...this.sensors.map((x) => x.pos), ...this.skinRest],
-    arrays: [this.endEbs2, this.floorPre, this.floorPost, this.gripPost, this.pose, this.hubStand, this.massPos],
+    arrays: [this.endEbs2, this.floorPre, this.floorPost, this.gripPost, this.pose, this.hubStand, this.massPos, this.keptTurn],
   };
 
   private simBlocks(): { vecs: THREE.Vector3[]; arrays: Float64Array[] } {
