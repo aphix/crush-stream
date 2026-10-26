@@ -9,11 +9,13 @@ const FILE_PATTERN = /^[a-z0-9]+(-[a-z0-9]+)*\.mp3$/;
 const LINK_PATTERN = /^https?:\/\/\S+$/;
 
 /** The radio stations, in the order the HUD lists them; a track plays only on its own station. */
-export const STATION_IDS = ["high", "calm"] as const;
+export const STATION_IDS = ["calm", "high"] as const;
 export type StationId = (typeof STATION_IDS)[number];
 const STATION_NAMES: Record<StationId, string> = { high: "High Energy", calm: "Calm" };
-/** The station of a track the manifest gives none, and of a browser that has not picked one. */
-export const DEFAULT_STATION: StationId = "high";
+/** The station a browser that has not picked one plays (owner: calm by default). */
+export const DEFAULT_STATION: StationId = "calm";
+/** The station of a track the manifest gives none. */
+const UNTAGGED_STATION: StationId = "high";
 
 /** A stored or typed text as a station id; anything else is the default station. */
 export function stationIdOrDefault(text: string): StationId {
@@ -45,7 +47,7 @@ export type MusicTrack = z.infer<typeof trackSchema>;
 
 /** The station a track plays on. */
 export function stationOf(track: MusicTrack): StationId {
-  return track.station ?? DEFAULT_STATION;
+  return track.station ?? UNTAGGED_STATION;
 }
 
 /** The parts of Vite's `import.meta.env` the music base reads (undefined where there is no Vite, e.g. node tests). */

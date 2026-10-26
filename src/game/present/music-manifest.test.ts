@@ -56,18 +56,18 @@ describe("given a manifest served by the music folder", () => {
     const { outcome } = await load({ tracks: [] });
     assert.equal(((await outcome) as unknown[]).length, 0);
   });
-  it("when a track names the calm station and another names none, then the first is calm and the second is on the default station", async () => {
+  it("when a track names the calm station and another names none, then the first is calm and the second is on High Energy", async () => {
     const { outcome } = await load({ tracks: [{ ...TRACK, station: "calm" }, { ...TRACK, file: "syntact-ego.mp3" }] });
     const tracks = (await outcome) as MusicTrack[];
     assert.equal(stationOf(tracks[0]!), "calm", "named calm");
-    assert.equal(stationOf(tracks[1]!), "high", "no station: the default");
-    assert.equal(DEFAULT_STATION, "high", "the default station");
+    assert.equal(stationOf(tracks[1]!), "high", "no station: High Energy");
+    assert.equal(DEFAULT_STATION, "calm", "a browser that has picked none plays Calm (owner, 2026-10-26)");
   });
   const stationTexts = [
     { it: "a stored calm", text: "calm", expected: "calm" },
     { it: "a stored high", text: "high", expected: "high" },
-    { it: "nothing stored", text: "", expected: "high" },
-    { it: "an id this build does not know", text: "polka", expected: "high" },
+    { it: "nothing stored", text: "", expected: "calm" },
+    { it: "an id this build does not know", text: "polka", expected: "calm" },
   ] as const;
   for (const c of stationTexts) {
     it(`when the saved station is ${c.it}, then the station is ${c.expected}`, () => {
