@@ -92,6 +92,7 @@ export function laneFor(scenario: DoorScenario, car: DeformableCar, side: -1 | 1
     lane = { ...lane, inner: car.mirrorBaseX + mirrorLaneGap(car), bottom, top: bottom + MIRROR_LANE_TALL };
   }
   if (scenario === "lidTear") lane = { ...lane, ...hangingLidHeights(car, lift) };
+  if (scenario === "lidPop") lane = { ...lane, top: Math.max(lane.top, shutLidLowest(car) + lift + LID_LANE_BITE) };
   if (shape) lane = { ...lane, ...shape };
   if (scenario !== "mirror" && lane.part !== "panel") return lane;
   const clear = bodyEdge(car, side, lane.bottom, lane.top) + BODY_LANE_GAP;
@@ -114,6 +115,12 @@ function hangingLidHeights(car: DeformableCar, lift: number): Pick<RamLane, "bot
   const deck = Math.max(shut.hingeY, shut.edgeY) + LID_LANE_DECK_CLEAR;
   const bottom = (hinge.dir > 0 ? Math.max(lowest, deck) : lowest) + lift;
   return { bottom, top: bottom + LID_LANE_TALL };
+}
+
+/** The lowest point (m) of the shut trunk lid's chord: a flat deck lid sits above the stock head, which F's head is raised to reach. */
+function shutLidLowest(car: DeformableCar): number {
+  const shut = car.lidProfile(_lidShut, 0);
+  return Math.min(shut.hingeY, shut.edgeY);
 }
 
 export const RAM_DEFAULTS = { kph: 12, kg: 300 } as const;

@@ -154,11 +154,14 @@ A quarter panel's hit (`hitPanel`) follows the drawn sheet's chord from its hing
 widens ahead of the tail, so the free end rests outboard of the hinge (`PanelRegion.lean`: the SUV's 0.145 m) and a ram on the body's side
 passed a stretched SUV panel that is drawn 0.14 m into its lane.
 
-F reaches the skin: the ram dents the tail through the body contact, and the rear crush drives the lid (Lids, above). The latch is sprung
-by crush, which takes about 30–50 kJ and carries the car with it (it ends 3–6 m on): F's hard shot is 30 km/h with 1000 kg (the hatchback, whose
-short tail would take the head past its rear seat back at that energy, 32 km/h with 700 kg; the monster, whose latch holds at 30/1000, 35 km/h with 1200 kg).
-A gentle F (6 km/h with 30 kg, 12 km/h with 300 kg) crushes the tail and leaves the lid latched. The head stops against the tail's crush short
-of the drawn rear seat's back (`CarParts.rearSeatBackZ`) in every shot of the rows.
+F's head runs at the shut lid's heights (a flat deck lid sits above the stock head: the coupe's top is raised to it) and knocks the lid at its
+latch, through the tail it is latched to (`hitLid`): the face meets the tail's rearmost point, and a head carrying `LID_LATCH_J` there (60 J, guessed:
+a striker plate and latch that give ~2 kN over ~3 cm) springs the latch, pays that energy, and the lid swings open on its struts. A head carrying
+less is stopped by the tail's crush, which the body contact meets, and the lid stays latched. F's hard shot is 12 km/h with 20 kg (111 J, 67 N·s:
+the car moves under 10 cm), its gentle one 6 km/h with 20 kg (28 J); a drop gate has no struts (its `lift` is 0), so a sprung gate is off its
+latch and stands a few hundredths of a radian open. These replace the headless-pickup pins (15 km/h latched, 30 km/h sprung with 1500 kg): there
+only the tail's crush, 30-50 kJ that carried the car 3-6 m, could spring a lid. A heavy head still crushes the tail and shoves the car (12 km/h with
+300 kg moves it 0.07 m parked), and stops short of the drawn rear seat's back (`CarParts.rearSeatBackZ`) in every shot of the rows.
 
 G's head runs over the deck, level with the open lid, and meets the lid (`hitLid`): the lid hangs on its stop and the strap takes the head's
 closing energy, as a door pushed past its stop does. Under the hinge's `tearJ` (trunk lid 150 J, hatch 200 J, liftgate 300 J, drop gate 450 J) the

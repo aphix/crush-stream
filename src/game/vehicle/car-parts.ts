@@ -484,6 +484,15 @@ export abstract class CarParts extends CarGlass {
     return this.lidPart.detached;
   }
 
+  /** A blow on the shut trunk lid's latch springs it: the lid is off its latch at rest and swings on its struts or weight, to its stop (`swingHinges`). */
+  springLidLatch(): void {
+    const hinge = this.lidPart.swing!;
+    if (this.lidPart.detached || !hinge.latched) return;
+    hinge.latched = false;
+    hinge.omega = 0;
+    this.sampleMotion();
+  }
+
   /** Whether the trunk lid hangs unlatched on its stop (a hatch, an SUV gate or a deck lid up; a drop gate level on its cables), still on the car. */
   lidHangsOnStop(): boolean {
     const hinge = this.lidPart.swing!;

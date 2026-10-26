@@ -93,12 +93,15 @@ const GENTLE_SHOTS = [
 ] as const;
 
 /** F springs the latch through the tail's crush, which takes ~50 kJ; G's head tears the open lid off its strap in a few hundred J. */
-/** The shot that springs the latch through the tail's crush with the head still short of the rear seat back: the monster's latch holds at the 30 km/h 1000 kg most bodies' spring at, and a hatch's short tail takes the head to its seat back at that energy, so it takes it faster and lighter. */
-const fHard = (id: string): { kph: number; kg: number } => (id === "monster" ? { kph: 35, kg: 1200 } : id === "hatch" ? { kph: 32, kg: 700 } : { kph: 30, kg: 1000 });
+/** F's blow carries 111 J through the tail to the latch (`LID_LATCH_J` is 60 J) with a 20 kg head: 67 N·s, which a parked car takes without moving 10 cm. */
+const F_HARD = { kph: 12, kg: 20 } as const;
+/** 28 J: the same head under the latch's energy. */
+const F_GENTLE = { kph: 6, kg: 20 } as const;
 const G_HARD = { kph: 12, kg: 100 } as const;
 const TAIL_SHOTS = [
-  { lane: "lidPop", kph: 6, kg: 30 },
+  { lane: "lidPop", ...F_GENTLE },
   { lane: "lidPop", kph: 12, kg: 300 },
+  { lane: "lidPop", ...F_HARD },
   { lane: "lidTear", kph: 6, kg: 30 },
   { lane: "lidTear", kph: 12, kg: 300 },
   { lane: "lidTear", ...G_HARD },
@@ -129,11 +132,18 @@ describe("given the real engine in the Doors scene, every lane's button pressed 
       });
     }
 
-    it(`when lidPop is fired on the ${id} at ${fHard(id).kph} km/h and ${fHard(id).kg} kg, then the lid is sprung past its latch, still on the car`, () => {
+    it(`when lidPop is fired on the ${id} at ${F_HARD.kph} km/h and ${F_HARD.kg} kg, then the head springs the lid past its latch by contact, still on the car, and the car moves under ${CAR_MOVED_MAX_M} m`, () => {
       bench.park(id);
-      const fired = bench.fire("lidPop", fHard(id).kph, fHard(id).kg);
+      const fired = bench.fire("lidPop", F_HARD.kph, F_HARD.kg);
       assert.ok(!fired.lidLatched && !fired.shot.detached.includes("trunk"), `lid latched ${fired.lidLatched}, off [${fired.shot.detached}]`);
-      assert.ok(fired.lidRad > 0.05, `the lid stands ${fired.lidRad} rad open`);
+      assert.ok(fired.carMoved < CAR_MOVED_MAX_M, `the car moved ${fired.carMoved} m`);
+    });
+
+    it(`when lidPop is fired on the ${id} at ${F_GENTLE.kph} km/h and ${F_GENTLE.kg} kg, then the lid stays latched and the car moves under ${CAR_MOVED_MAX_M} m`, () => {
+      bench.park(id);
+      const fired = bench.fire("lidPop", F_GENTLE.kph, F_GENTLE.kg);
+      assert.ok(fired.lidLatched && fired.shot.detached.length === 0, `lid latched ${fired.lidLatched}, off [${fired.shot.detached}]`);
+      assert.ok(fired.carMoved < CAR_MOVED_MAX_M, `the car moved ${fired.carMoved} m`);
     });
 
     for (const g of GENTLE_SHOTS) {
@@ -147,7 +157,7 @@ describe("given the real engine in the Doors scene, every lane's button pressed 
 
 describe("given the real engine in the Doors scene, a tail lane's button pressed twice in a row on every car", () => {
   for (const id of STYLES) {
-    for (const tail of [...TAIL_SHOTS, { lane: "lidPop", ...fHard(id) } as const]) {
+    for (const tail of TAIL_SHOTS) {
       it(`when ${tail.lane} is fired twice on the ${id} at ${tail.kph} km/h and ${tail.kg} kg, then the second shot meets what the first did and neither head passes the rear seat back`, () => {
         bench.park(id);
         const first = bench.fire(tail.lane, tail.kph, tail.kg);
@@ -166,7 +176,7 @@ describe("given the real engine in the Doors scene, a tail lane's button pressed
   it("when F is fired after G on the muscle, then the head stops at the rear seat back and springs the lid, as a single F does", () => {
     bench.park("muscle");
     bench.fire("lidTear", G_HARD.kph, G_HARD.kg);
-    const second = bench.fire("lidPop", fHard("muscle").kph, fHard("muscle").kg);
+    const second = bench.fire("lidPop", F_HARD.kph, F_HARD.kg);
     assert.ok(second.shot.ramStopped && second.furthest <= second.wall + 1e-6, `F after G: furthest z ${second.furthest}, wall ${second.wall}`);
     assert.ok(!second.lidLatched, "F after G left the lid latched");
   });

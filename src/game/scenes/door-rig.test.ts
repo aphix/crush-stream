@@ -135,19 +135,23 @@ describe("given a car driven at 64 km/h head-on into a wall", () => {
   });
 });
 
-/** The heavy ram the lid lanes are pinned with (kg): a car's mass, so the tail crushes as a rear-ender's does. */
-const LID_RAM_KG = 1500;
+/**
+ * F's head knocks the shut lid at its latch (`LID_LATCH_J`, 60 J) through the tail: 28 J leaves it latched, 111 J springs it. These replace the
+ * rows that pinned 15 km/h latched and 30 km/h sprung with a 1500 kg ram: those were measured on the headless pickup, when only the tail's crush
+ * (30-50 kJ, which carried the car 3-6 m) could spring a lid; the owner's ruling is that a lane knocks its part and does not push the car.
+ */
+const LATCH_GENTLE = { kph: 6, kg: 20 } as const;
+const LATCH_HARD = { kph: 12, kg: 20 } as const;
 
 describe("given a rear ram square into the tail of a parked car (F lidPop: lid shut; G lidTear: lid on its stop; docs/DOOR_RIG.md, Lids)", () => {
-  for (const id of ["sedan", "hatchback", "wagon", "pickup"] as const) {
-    it(`when F hits the ${id} at 15 and then 30 km/h, then the first leaves the lid latched and the second springs it, still on the car`, (t) => {
+  for (const id of CAR_STYLE_IDS) {
+    it(`when F hits the ${id} with 28 J and then 111 J, then the first leaves the lid latched and the second springs it, still on the car`, () => {
       const soft = parkedStyle(id);
-      fireRam(soft, "lidPop", { kph: 15, kg: LID_RAM_KG });
+      fireRam(soft, "lidPop", LATCH_GENTLE);
       const hard = parkedStyle(id);
-      fireRam(hard, "lidPop", { kph: 30, kg: LID_RAM_KG });
-      t.diagnostic(`${id}: 15 km/h latched ${soft.lidHinge().latched}, 30 km/h latched ${hard.lidHinge().latched} at ${hard.lidAngle().toFixed(3)} rad`);
-      assert.ok(soft.lidHinge().latched && !soft.lidOff(), `${id} lid sprang at 15 km/h`);
-      assert.ok(!hard.lidHinge().latched && !hard.lidOff(), `${id} lid at 30 km/h: latched ${hard.lidHinge().latched}, off ${hard.lidOff()}`);
+      fireRam(hard, "lidPop", LATCH_HARD);
+      assert.ok(soft.lidHinge().latched && !soft.lidOff(), `${id} lid sprang at ${LATCH_GENTLE.kph} km/h`);
+      assert.ok(!hard.lidHinge().latched && !hard.lidOff(), `${id} lid at ${LATCH_HARD.kph} km/h: latched ${hard.lidHinge().latched}, off ${hard.lidOff()}`);
     });
   }
 
@@ -220,7 +224,7 @@ const HARD_SHOTS = [
   { scenario: "shut", kph: 40, kg: 300 },
   { scenario: "panelPush", kph: 30, kg: 1500 },
   { scenario: "panelPull", kph: 30, kg: 1500 },
-  { scenario: "lidPop", kph: 40, kg: 1000 },
+  { scenario: "lidPop", kph: 12, kg: 20 },
   { scenario: "lidTear", kph: 12, kg: 100 },
 ] as const satisfies readonly { scenario: DoorScenario; kph: number; kg: number }[];
 
