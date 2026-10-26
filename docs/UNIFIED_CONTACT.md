@@ -550,7 +550,18 @@ ground can stand on at some pitch.
   `VERTICAL_CLEAR` with the other's cell column (65°-75° within 0.04 m, was 0.253 m at 70°); the pitched rows keep the graze-counting
   oracle and record the outline's old graze over-read (27°, 1 m up, 3.6 m back: 0.750 m) as a todo.
 - **Rolled-pair cost** (worker, shadow pile: 9 cars, 14 pairs tilted past 30°, identical trajectories, only the rolled read added): 17.2 → 20.9 ms
-  a frame (+21 %); a touching pair reads 150-260 µs against 17-35 µs. A perf pass follows the landing.
+  a frame (+21 %); a touching pair reads 150-260 µs against 17-35 µs. **Perf pass 1 (bit-identical, whole-digest and 5 derby heats unchanged):** the time is in
+  the scan of every covered node of the lattice rectangle B's box lands on, each with a middle placement, up to four end placements and
+  their re-placements (~60 ns per placement, 2-3 per node, 700-1300 nodes a touching pair). Cuts: `columnSpan` narrows each lattice row to the columns
+  whose column can cross the box (the three slabs on the row's own heights, 2500-3000 nodes visited → 1000-1100); the row-envelope test
+  stops at the first row that decides it; `roundHalfUp` for `Math.round` (V8 calls the runtime for it) and nine stores for `TypedArray.set` in
+  `copyMeet`. A touching rolled pair 113-160 → 89-132 µs, a 9-car pile pass of 30 pairs 1613 → 1059 µs (all rolled; upright 163) and 1836 → 1504 µs
+  (half rolled). The rest is the placements themselves; a further 2x would need fewer nodes (a semantic cut).
+  **Perf pass 2 (REPLAY 162):** in a 9-car derby heat the cage refits 110-190 times a sim-second at ~0.5 ms (rasterise 12-16 % of the sim, plan field 3-5 %, outline
+  refresh 2-3 %); 97 % of the vertices change by a bit between fits, so nothing is incremental or lazy. 44 % of the fits fired on a panel pose changing, 26 a second
+  for panes that are gone and whose pose `skinCage` ignores: `movedSince` skips those. A 1 cm / 0.01 rad tolerance on the other poses was tried and dropped: it cut
+  the fits further but moved `fleet-tyres` (pickup tyre -42 mm under its hood) and `fleet-rest-sleep` (median 2.84-3.21 s, seeds never sleeping) even at 0.5 mm: those rows
+  are lotteries of the refit timing, and the exact poses keep them green.
 - **Cost** (worker, `ab-stage/stepw.mjs`: 16 cars, identical state in both arms, only `stepWorld` timed): cruising −0.7 / +1.5 %,
   parked +0.5 / −2.3 %, so flat. City16 races, seeds 1-3, both arm orders: mean 0.999 (0.969-1.032), each run tracking its arm's wreck
   count. Sixteen wrecks each with a front wheel popped: 0.67-0.72 ms a step against 2.07, because all 16 sleep on their lips

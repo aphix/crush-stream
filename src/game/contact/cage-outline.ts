@@ -161,6 +161,12 @@ export function outlineOf(car: DeformableCar): CageOutline {
   return outline.refresh(cage);
 }
 
+/** `Math.round` (half up) as a floor and a half test: V8 compiles `Math.round` to a runtime call, several times slower in the per-node lattice lookups. */
+export function roundHalfUp(v: number): number {
+  const below = Math.floor(v);
+  return v - below >= 0.5 ? below + 1 : below;
+}
+
 /** `field` bilinear at frame (x, z); NaN outside the lattice. Off the hot path: `sampleAt` is the one that boxes nothing. */
 export function sampleField(field: Float32Array, style: CageStyle, x: number, z: number): number {
   SAMPLE[0] = x;

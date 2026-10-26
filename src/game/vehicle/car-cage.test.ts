@@ -324,6 +324,28 @@ describe("given a fitted car whose masses have not moved", () => {
   });
 });
 
+describe("given a fitted car whose panel poses are moved", () => {
+  const POSE = 7;
+  const testCases = [
+    { it: "when an attached panel's pivot moves 1 mm, then the cage is refitted", off: false, expectedRefit: true },
+    { it: "when a torn-off panel's pose moves 1 m, then nothing is refitted, the cage never read it", off: true, expectedRefit: false },
+  ] as const;
+
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const car = carInState("loaded", "sedan", "sedan");
+      const cage = cageOf(car);
+      const live = cageLiveOf(car);
+      const panel = Array.from(cage.style.panelGlass).findIndex((glass) => glass === 0);
+      assert.ok(panel >= 0, "fixture: the style has a panel that is no glass");
+      live.panelOn[panel] = testCase.off ? 0 : 1;
+      cage.refit(live);
+      live.panelPose[panel * POSE] += testCase.off ? 1 : 0.001;
+      assert.equal(cage.refit(live), testCase.expectedRefit, "refitted");
+    });
+  }
+});
+
 describe("given a crushed car refitted over and over", () => {
   it("when its masses move each time, then the cage's own buffers are the ones written, never new ones", () => {
     const car = carInState("loaded", "sedan", "sedan");

@@ -6,7 +6,7 @@ import { PLATFORM_HALF } from "../vehicle/car-rig.ts";
 import { hypot2 } from "../deform/physics-util.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { FINE_HZ } from "../kernel/constants.ts";
-import { OUTLINE_REACH, outlineOf, VERTICAL_CLEAR, type CageOutline } from "./cage-outline.ts";
+import { OUTLINE_REACH, outlineOf, roundHalfUp, VERTICAL_CLEAR, type CageOutline } from "./cage-outline.ts";
 import { activeGround } from "../world/ground.ts";
 
 export const BARRIER_HALF = { x: 0.38, z: 1.96 };
@@ -152,8 +152,9 @@ const I_YC = 14;
 const I_AT = 15;
 const I_HANG = 16;
 const I_ROLLED = 17;
+const M_SIZE = 9;
 /** What the last `meet` found: the node's depth in `b`'s plan, its place (x, z) in `b`'s frame, the heights the two bodies share there in `b`'s frame (the node's own where `b` has no band), whether `b` has one there (1), the heights `b` stands at there, and whether those are its own column's (1) or its band's. */
-const _meet = new Float64Array(9);
+const _meet = new Float64Array(M_SIZE);
 const M_DEPTH = 0;
 const M_X = 1;
 const M_Z = 2;
@@ -163,10 +164,23 @@ const M_BANDED = 5;
 const M_STAND_LOW = 6;
 const M_STAND_HIGH = 7;
 const M_COLUMN = 8;
+/** `to` ← `from`, both `_meet`-shaped: V8 runs `TypedArray.set` as a runtime call, slower than nine stores. */
+function copyMeet(to: Float64Array, from: Float64Array): void {
+  to[0] = from[0]!;
+  to[1] = from[1]!;
+  to[2] = from[2]!;
+  to[3] = from[3]!;
+  to[4] = from[4]!;
+  to[5] = from[5]!;
+  to[6] = from[6]!;
+  to[7] = from[7]!;
+  to[8] = from[8]!;
+}
+
 /** `_meet` of the end of a slanted band `deepestIn` placed first, while it places the other. */
-const _deeper = new Float64Array(9);
+const _deeper = new Float64Array(M_SIZE);
 /** `_meet` of an end first placed past its cell's column, while `endAt` places it again at that column's end. */
-const _again = new Float64Array(9);
+const _again = new Float64Array(M_SIZE);
 /** How far (m) inside the heights two bands share their ends are sampled: on an end itself, whether the cell it lands in holds it is rounding. */
 const BAND_INSET = VERTICAL_CLEAR / 4;
 /** An end's own cell's end this close (m) to where the end was placed is the same place: no second placement. */
@@ -186,6 +200,40 @@ const ANY_HEIGHT = 1e3;
 const _clip = new Float64Array(2);
 /** What the rows' envelope (`CageOutline.rowLows`, kept in 32 bits) may round by (m). */
 const ROW_SLACK = 1e-5;
+
+/** The lattice columns of `a`'s row `j` (`_span`: first and last, relative to `colFrom`; first past last when none) whose columns can cross `_lim`, read from the row's own heights: a skipped node is one `segmentMisses` would skip. */
+const _span = new Float64Array(2);
+/** How far (m) a column may stand outside `_lim` and still be read: the rounding of placing a row's first node and stepping from it. */
+const SPAN_SLACK = 1e-6;
+
+function columnSpan(styleA: CageStyle, outline: CageOutline, j: number, liftA: number, colFrom: number, cols: number): void {
+  _span[0] = 0;
+  _span[1] = cols - 1;
+  const low = outline.rowLows[j]! + liftA;
+  const high = outline.rowHighs[j]! + liftA;
+  const step = styleA.step;
+  const x0 = styleA.u0 + colFrom * step;
+  const z = styleA.v0 + j * step;
+  for (let axis = 0; axis < 3; axis++) {
+    const o = axis * 4;
+    const base = _ab[o]! + _ab[o + 1]! * x0 + _ab[o + 3]! * z;
+    const slope = _ab[o + 1]! * step;
+    const e0 = _ab[o + 2]! * low;
+    const e1 = _ab[o + 2]! * high;
+    const from = _lim[axis * 2]! - SPAN_SLACK - Math.max(e0, e1);
+    const to = _lim[axis * 2 + 1]! + SPAN_SLACK - Math.min(e0, e1);
+    if (!(low <= high) || (slope === 0 && (base < from || base > to))) {
+      _span[0] = cols;
+      _span[1] = -1;
+      return;
+    }
+    if (slope === 0) continue;
+    const a = (from - base) / slope;
+    const b = (to - base) / slope;
+    _span[0] = Math.max(_span[0]!, Math.ceil(Math.min(a, b)) - 1);
+    _span[1] = Math.min(_span[1]!, Math.floor(Math.max(a, b)) + 1);
+  }
+}
 
 /** Whether the segment in `_seg` stays out of the box in `_lim`: its parameter range clipped by each axis's slab is empty. */
 function segmentMisses(): boolean {
@@ -256,8 +304,8 @@ function meet(plan: Float32Array, style: CageStyle, outlineB: CageOutline, field
   sampleAt(plan, style);
   _meet[M_DEPTH] = _in[I_REACH]! - SAMPLE[2]!;
   if (!(_meet[M_DEPTH]! > -margin)) return;
-  const i = Math.round((bx - style.u0) / style.step) | 0;
-  const j = Math.round((bz - style.v0) / style.step) | 0;
+  const i = roundHalfUp((bx - style.u0) / style.step) | 0;
+  const j = roundHalfUp((bz - style.v0) / style.step) | 0;
   outlineB.band(i, j, _band);
   const lift = _in[I_LIFT_B]!;
   // A node of a car standing wholly under the heights of a lifted body that stands on its wheels meets it at its own heights.
@@ -283,8 +331,8 @@ function meetAt(plan: Float32Array, style: CageStyle, outlineB: CageOutline, fie
     // A rolled placement past the end of the own column of the covered cell it lands in reads -Infinity there, and leaves that column for a re-placement: its plan depth and band need not be read.
     const bx = _ab[0]! + _ab[1]! * _in[I_X]! + _ab[2]! * _in[I_Y]! + _ab[3]! * _in[I_Z]!;
     const bz = _ab[8]! + _ab[9]! * _in[I_X]! + _ab[10]! * _in[I_Y]! + _ab[11]! * _in[I_Z]!;
-    const i = Math.round((bx - style.u0) / style.step) | 0;
-    const j = Math.round((bz - style.v0) / style.step) | 0;
+    const i = roundHalfUp((bx - style.u0) / style.step) | 0;
+    const j = roundHalfUp((bz - style.v0) / style.step) | 0;
     if (i >= 0 && j >= 0 && i < style.nu && j < style.nv) {
       const k = j * style.nu + i;
       const lift = _in[I_LIFT_B]!;
@@ -323,23 +371,23 @@ function deeperEnd(plan: Float32Array, style: CageStyle, outlineB: CageOutline, 
   _in[I_MARGIN] = 0;
   if (ends) {
     endAt(low + inset, -1, plan, style, outlineB, fields);
-    _deeper.set(_meet);
+    copyMeet(_deeper, _meet);
     endAt(high - inset, 1, plan, style, outlineB, fields);
-    if (_deeper[M_DEPTH]! > _meet[M_DEPTH]!) _meet.set(_deeper);
+    if (_deeper[M_DEPTH]! > _meet[M_DEPTH]!) copyMeet(_meet, _deeper);
   }
   if (!rolled) return;
   const aLow = _in[I_A_LOW]!;
   const aHigh = _in[I_A_HIGH]!;
   if (aHigh - aLow <= 2 * inset) return;
   if (!ends || Math.abs(aLow - low) > END_MOVED) {
-    _deeper.set(_meet);
+    copyMeet(_deeper, _meet);
     endAt(aLow + inset, -1, plan, style, outlineB, fields);
-    if (_deeper[M_DEPTH]! > _meet[M_DEPTH]!) _meet.set(_deeper);
+    if (_deeper[M_DEPTH]! > _meet[M_DEPTH]!) copyMeet(_meet, _deeper);
   }
   if (!ends || Math.abs(aHigh - high) > END_MOVED) {
-    _deeper.set(_meet);
+    copyMeet(_deeper, _meet);
     endAt(aHigh - inset, 1, plan, style, outlineB, fields);
-    if (_deeper[M_DEPTH]! > _meet[M_DEPTH]!) _meet.set(_deeper);
+    if (_deeper[M_DEPTH]! > _meet[M_DEPTH]!) copyMeet(_meet, _deeper);
   }
 }
 
@@ -371,7 +419,7 @@ function endAt(at: number, dir: number, plan: Float32Array, style: CageStyle, ou
     const end = dir > 0 ? high - inset : low + inset;
     const back = (here - end) * dir;
     if (rolled ? Math.abs(back) <= END_MOVED : back <= END_MOVED) break;
-    if (!replaced) _again.set(_meet);
+    if (!replaced) copyMeet(_again, _meet);
     replaced = true;
     here = end;
     _in[I_AT] = end;
@@ -379,10 +427,10 @@ function endAt(at: number, dir: number, plan: Float32Array, style: CageStyle, ou
     meetAt(plan, style, outlineB, fields);
     if (!rolled) break;
     // A climb that no longer deepens a valid reading has reached the crossing.
-    if (_meet[M_DEPTH]! > _again[M_DEPTH]!) _again.set(_meet);
+    if (_meet[M_DEPTH]! > _again[M_DEPTH]!) copyMeet(_again, _meet);
     else if (_again[M_DEPTH]! > -Infinity) break;
   }
-  if (replaced && _again[M_DEPTH]! > _meet[M_DEPTH]!) _meet.set(_again);
+  if (replaced && _again[M_DEPTH]! > _meet[M_DEPTH]!) copyMeet(_meet, _again);
 }
 
 /** Whether lifted car `b`'s origin stands within `STANDS_WITHIN` of the ground under it. */
@@ -457,16 +505,26 @@ function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look
       if (az < loZ) loZ = az;
       if (az > hiZ) hiZ = az;
     }
-    colFrom = Math.max(0, Math.floor((loX - styleA.u0) / styleA.step));
-    rowFrom = Math.max(0, Math.floor((loZ - styleA.v0) / styleA.step));
-    cols = Math.max(0, Math.min(styleA.nu - 1, Math.ceil((hiX - styleA.u0) / styleA.step)) - colFrom + 1);
-    count = cols * Math.max(0, Math.min(styleA.nv - 1, Math.ceil((hiZ - styleA.v0) / styleA.step)) - rowFrom + 1);
+    colFrom = Math.max(0, Math.floor((loX - styleA.u0) / styleA.step)) | 0;
+    rowFrom = Math.max(0, Math.floor((loZ - styleA.v0) / styleA.step)) | 0;
+    cols = Math.max(0, Math.min(styleA.nu - 1, Math.ceil((hiX - styleA.u0) / styleA.step)) - colFrom + 1) | 0;
+    count = cols * (Math.max(0, Math.min(styleA.nv - 1, Math.ceil((hiZ - styleA.v0) / styleA.step)) - rowFrom + 1) | 0);
   }
-  for (let m = 0; m < count; m++) {
+  let col = 0;
+  let row = -1;
+  for (let m = 0; m < count; m++, col++) {
     let x: number, z: number, yl: number, yh: number;
     if (rolled) {
-      const i = colFrom + (m % cols);
-      const n = (rowFrom + (m - (m % cols)) / cols) * styleA.nu + i;
+      if (col === cols) col = 0;
+      if (col === 0) columnSpan(styleA, outline, rowFrom + ++row, liftA, colFrom, cols);
+      if (col < _span[0]! || col > _span[1]!) {
+        const skip = (col < _span[0]! && _span[0]! <= _span[1]! ? _span[0]! : cols) - col - 1;
+        m += skip;
+        col += skip;
+        continue;
+      }
+      const i = colFrom + col;
+      const n = (rowFrom + row) * styleA.nu + i;
       if (fieldsA.covered[n] === 0) continue;
       x = styleA.u0 + i * styleA.step;
       z = styleA.v0 + ((n - i) / styleA.nu) * styleA.step;
@@ -489,14 +547,16 @@ function deepestIn(a: DeformableCar, b: DeformableCar, found: Float64Array, look
         const dy = _seg[3]! - _seg[2]!;
         const zA = _seg[4]! + _clip[0]! * dz, zB = _seg[4]! + _clip[1]! * dz;
         const yA = _seg[2]! + _clip[0]! * dy, yB = _seg[2]! + _clip[1]! * dy;
-        const rFrom = Math.max(0, Math.round((Math.min(zA, zB) - style.v0) / style.step) - 1);
-        const rTo = Math.min(style.nv - 1, Math.round((Math.max(zA, zB) - style.v0) / style.step) + 1);
-        let under = Infinity, over = -Infinity;
-        for (let r = rFrom; r <= rTo; r++) {
-          if (outlineB.rowLows[r]! < under) under = outlineB.rowLows[r]!;
-          if (outlineB.rowHighs[r]! > over) over = outlineB.rowHighs[r]!;
+        const rFrom = Math.max(0, roundHalfUp((Math.min(zA, zB) - style.v0) / style.step) - 1);
+        const rTo = Math.min(style.nv - 1, roundHalfUp((Math.max(zA, zB) - style.v0) / style.step) + 1);
+        const yLow = Math.min(yA, yB);
+        const yHigh = Math.max(yA, yB);
+        let over = true, under = true;
+        for (let r = rFrom; r <= rTo && (over || under); r++) {
+          if (!(yLow > outlineB.rowHighs[r]! + _in[I_LIFT_B]! + ROW_SLACK)) over = false;
+          if (!(yHigh < outlineB.rowLows[r]! + _in[I_LIFT_B]! - ROW_SLACK)) under = false;
         }
-        if (Math.min(yA, yB) > over + _in[I_LIFT_B]! + ROW_SLACK || Math.max(yA, yB) < under + _in[I_LIFT_B]! - ROW_SLACK) continue;
+        if (over || under) continue;
       }
     } else {
       x = outline.xs[m]!;
