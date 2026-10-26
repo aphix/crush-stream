@@ -37,6 +37,8 @@ const SAG_PASSES = 4;
 const REST_SLACK = 1e-3;
 /** The elements of a wheel's matrix that place its tyre: the axle (first column) and the hub (last). */
 const HELD_ELEMENTS = [0, 1, 2, 12, 13, 14] as const;
+/** How far (m, and in the axle's unit components) a wheel may move from where the last hold read it before the lift is found again: a millimetre of the tyre's 5 mm clearance under the skin. */
+const WHEEL_SLACK = 1e-3;
 /** How far (m) the skin stands over a part under it (`liftOverParts`): the 5 mm the drawn skin keeps over a tyre. */
 const PART_CLEAR = 0.005;
 /** A part's top is read at its highest vertex in each plan cell this wide (m): a skin over the part clears every vertex of the cell to within its tilt over 5 cm. */
@@ -49,6 +51,13 @@ let _partSkin = new Float64Array(0);
 let _partCorner = new Int32Array(0);
 const _seat = new THREE.Matrix4();
 const _top = new THREE.Vector3();
+const NO_PARTS: readonly PartSeat[] = [];
+
+/** Whether any point of `skin` stands more than `PART_CLEAR` off `rest`: a crush that may have folded the skin onto what is under it. */
+function movedOffRest(skin: Float32Array, rest: Float32Array): boolean {
+  for (let i = 0; i < skin.length; i++) if (Math.abs(skin[i]! - rest[i]!) > PART_CLEAR) return true;
+  return false;
+}
 
 /** `geometry`'s highest vertex (own frame, x y z each) in each `TOP_CELL` plan cell: what a skin over it must clear. */
 function topSamples(geometry: THREE.BufferGeometry): Float32Array {
@@ -200,6 +209,17 @@ export class TyreSkin {
   /** The skin as last written, which every hold starts from. */
   private readonly written: Float32Array;
   private hasWritten = false;
+  /** Whether the last hold moved any drawn point: until one does, the drawn skin is `written` as it stands, and nothing need be put back, re-shaded or re-uploaded. */
+  private held = false;
+  /** Each shown part's pose in the mesh's frame at the last hold (16 elements a part), and how many were shown. */
+  private partPoseAt = new Float64Array(0);
+  private partsShown = 0;
+  /** Per welded rest point, the lift (m) that keeps the skin as last written over the parts under it (`liftOverParts`): every hold's tyre lift starts from it. */
+  private readonly partFloor: Float32Array;
+  /** Per wheel, its axle and hub as this hold read them; `heldAt` takes them when the lift is found again. */
+  private readonly wheelNow = new Float64Array(4 * HELD_ELEMENTS.length).fill(NaN);
+  /** Whether the skin as last written stands off its rest anywhere (`movedOffRest`): only then may anything under it stand through it. */
+  private crushed = false;
 
   /** Whether a vertex beside a tyre's end leaves by the tyre's side (the body paint) rather than over its top (a bonnet's chords need the top). */
   private readonly pushSide: boolean;
@@ -214,6 +234,7 @@ export class TyreSkin {
     this.lift = new Float32Array(this.edges.order.length);
     this.push = new Float32Array(this.edges.order.length);
     this.bump = new Float32Array(this.edges.order.length);
+    this.partFloor = new Float32Array(this.edges.order.length);
     this.pushDir = new Float32Array(this.edges.order.length * 3);
     this.written = new Float32Array(rest.length);
   }
@@ -273,14 +294,22 @@ export class TyreSkin {
       _wheel.multiplyMatrices(_mesh, matrixIn(group, wheels[w]!, _wheel));
       if (this.noteWheel(w, (gone >> w) & 1 ? null : _wheel.elements)) wheelMoved = true;
     }
-    if (!skinWritten && !wheelMoved && this.hasWritten) return;
     const attr = this.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
     const pos = attr.array as Float32Array;
-    if (skinWritten || !this.hasWritten) {
+    const fresh = skinWritten || !this.hasWritten;
+    if (fresh) {
       this.written.set(pos);
       this.hasWritten = true;
-    } else pos.set(this.written);
-    this.lift.fill(0);
+      this.crushed = movedOffRest(this.written, this.rest);
+    }
+    // An uncrushed skin has nothing crushed under it to stand over.
+    const partsMoved = this.notePartPoses(group, this.crushed ? under : NO_PARTS);
+    // The lift is a function of the skin, the wheels and the parts: none changed, the drawn skin already carries it.
+    if (!fresh && !wheelMoved && !partsMoved) return;
+    this.heldAt.set(this.wheelNow);
+    if (!fresh && this.held) pos.set(this.written);
+    if (fresh || partsMoved) this.findPartFloor(pos, this.partsShown > 0 ? this.partSamples(group, under) : 0);
+    this.lift.set(this.partFloor);
     this.push.fill(0);
     for (let w = 0; w < wheels.length; w++) {
       if ((gone >> w) & 1) continue;
@@ -293,27 +322,73 @@ export class TyreSkin {
       this.needOver(pos, this.over[w]!, this.restUp[w]!, scale);
     }
     this.carryLift();
-    const parts = this.partSamples(group, under);
     for (let pass = 0; pass < SAG_PASSES; pass++) {
       let sagged = false;
       for (let w = 0; w < wheels.length; w++) {
         if ((gone >> w) & 1) continue;
         if (this.liftSaggingTriangles(pos, w)) sagged = true;
       }
-      if (parts > 0 && this.liftOverParts(pos, parts)) sagged = true;
       if (!sagged) break;
       this.carryLift();
     }
+    // A resting skin's points read lifts of a nanometre (the rest clearance's rounding), under a float's step: held is a drawn position changed.
+    let held = false;
     const { weld } = this.edges;
     for (let v = 0; v < weld.length; v++) {
       const p = weld[v]!;
       const up = this.lift[p]!;
-      if (up > 0) pos[v * 3 + 1] = pos[v * 3 + 1]! + up;
+      if (up > 0) {
+        const y = pos[v * 3 + 1]!;
+        pos[v * 3 + 1] = y + up;
+        if (pos[v * 3 + 1] !== y) held = true;
+      }
       const out = this.push[p]!;
-      if (out > 0) for (let k = 0; k < 3; k++) pos[v * 3 + k] = pos[v * 3 + k]! + out * this.pushDir[p * 3 + k]!;
+      if (out > 0)
+        for (let k = 0; k < 3; k++) {
+          const x = pos[v * 3 + k]!;
+          pos[v * 3 + k] = x + out * this.pushDir[p * 3 + k]!;
+          if (pos[v * 3 + k] !== x) held = true;
+        }
     }
+    const wasHeld = this.held;
+    this.held = held;
+    if (!held && !wasHeld && !fresh) return;
     attr.needsUpdate = true;
     computeNormalsFast(this.mesh.geometry);
+  }
+
+  /** Records the poses of the shown parts of `under` in the mesh's frame (`partsShown` of them); true when any moved, or one came or went, since the last hold. */
+  private notePartPoses(group: THREE.Object3D, under: readonly PartSeat[]): boolean {
+    let n = 0;
+    let moved = false;
+    for (const seat of under) {
+      if (seat.showIf && !seat.showIf()) continue;
+      if (this.partPoseAt.length < (n + 1) * 16) {
+        const grown = new Float64Array(2 * (n + 1) * 16);
+        grown.set(this.partPoseAt);
+        this.partPoseAt = grown;
+        moved = true;
+      }
+      const e = _seat.multiplyMatrices(_mesh, matrixIn(group, seat, _seat)).elements;
+      for (let k = 0; k < 16; k++) {
+        if (this.partPoseAt[n * 16 + k] !== e[k]) moved = true;
+        this.partPoseAt[n * 16 + k] = e[k]!;
+      }
+      n++;
+    }
+    if (n !== this.partsShown) moved = true;
+    this.partsShown = n;
+    return moved;
+  }
+
+  /** The part lift of the skin as last written (`pos`) over the `count` part samples, carried up the mesh and read again until none is short, into `partFloor`. */
+  private findPartFloor(pos: Float32Array, count: number): void {
+    this.lift.fill(0);
+    for (let pass = 0; pass < SAG_PASSES && count > 0; pass++) {
+      if (!this.liftOverParts(pos, count)) break;
+      this.carryLift();
+    }
+    this.partFloor.set(this.lift);
   }
 
   /** Fills `_parts` with the top samples (`topSamples`) of the shown parts of `under` in the mesh's frame, each raised by `PART_CLEAR`; returns their count. */
@@ -504,14 +579,15 @@ export class TyreSkin {
     return true;
   }
 
-  /** Records wheel `w`'s axle and hub (`e`, null for a wheel gone, NaN); true when they changed since the last hold. */
+  /** Records wheel `w`'s axle and hub (`e`, null for a wheel gone, NaN) in `wheelNow`; true when they moved past `WHEEL_SLACK` (or came or went) since the hold that last read them (`heldAt`). */
   private noteWheel(w: number, e: ArrayLike<number> | null): boolean {
     let moved = false;
     for (let k = 0; k < HELD_ELEMENTS.length; k++) {
       const v = e ? e[HELD_ELEMENTS[k]!]! : NaN;
       const at = w * HELD_ELEMENTS.length + k;
-      if (!Object.is(this.heldAt[at], v)) moved = true;
-      this.heldAt[at] = v;
+      const was = this.heldAt[at]!;
+      if (Number.isNaN(v) !== Number.isNaN(was) || Math.abs(v - was) > WHEEL_SLACK) moved = true;
+      this.wheelNow[at] = v;
     }
     return moved;
   }

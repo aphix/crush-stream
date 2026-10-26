@@ -1,11 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { runWall } from "../contact/crash-scenarios.test-util.ts";
+import { type CrashWorld, FREEWHEEL, launch, makeWorld, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 import type { DeformableCar } from "./car.ts";
+import type { DriveInput } from "./car-drive.ts";
 import { LID } from "./constants.ts";
 import { buildCar } from "./drawn-body.test-util.ts";
-import { PART_KIND } from "./part-geometry.ts";
+import { PART_KIND, type PartSeat } from "./part-geometry.ts";
 import { TyreSkin } from "./car-tyre-skin.ts";
 import { tyreClearance } from "./tyre-clearance.test-util.ts";
 import { CLASSES, carClass } from "./vehicle-classes.ts";
@@ -113,7 +115,7 @@ describe(`given a hatchback driven into a wall with ${HOOD_COVER_OVERLAP * 100} 
       car.group.updateMatrixWorld(true);
       const hood = car["hood"] as THREE.Mesh;
       const covers = [carTriangles(car, car.body, car.deform.restSkin, ROOF_REST_Y)];
-      if (!car.parts.some((p) => p.detached && p.name === LID.hood)) covers.push(carTriangles(car, hood, null, -Infinity));
+      if (!car["parts"].some((p) => p.detached && p.name === LID.hood)) covers.push(carTriangles(car, hood, null, -Infinity));
       const toCar = new THREE.Matrix4();
       const place = new THREE.Vector3();
       let worst = 0;
@@ -134,4 +136,96 @@ describe(`given a hatchback driven into a wall with ${HOOD_COVER_OVERLAP * 100} 
       assert.equal(worst, 0, `${kph} km/h: the ${where} stands ${(worst * 1000).toFixed(1)} mm over the drawn skin over it`);
     });
   }
+});
+
+/** The hold finds its lift again only when the skin is written, a part under it moves or a wheel moves past its slack; between, the drawn skin stands as the full hold drew it to within this (m). */
+const DRAWN_SLACK_M = 0.002;
+const FRAME = 1 / FRAME_HZ;
+const FRAMES = 150;
+/** A slalom: the steer swept through a full lock each second, so the front wheels turn under the skin every frame. */
+const SLALOM_HZ = 1;
+const MESHES = ["body", "hood"] as const;
+
+type Pair = { fast: CrashWorld; full: CrashWorld; fastCar: DeformableCar; fullCar: DeformableCar };
+
+/** Every tyre hold `car` has made from now on finds its lift and redraws whole, every frame, as before the hold kept its lift. */
+function forceFullHold(car: DeformableCar): void {
+  for (const skin of [car["bodyTyres"], car["hoodTyres"]]) {
+    if (!skin || Object.getOwnPropertyDescriptor(skin, "held")?.get) continue;
+    const noteWheel = skin["noteWheel"].bind(skin);
+    const notePartPoses = skin["notePartPoses"].bind(skin);
+    Object.assign(skin, { noteWheel: (w: number, e: ArrayLike<number> | null) => noteWheel(w, e) || true, notePartPoses: (group: THREE.Object3D, under: readonly PartSeat[]) => notePartPoses(group, under) || true });
+    for (const flag of ["held", "crushed"]) Object.defineProperty(skin, flag, { get: () => true, set: () => undefined });
+  }
+}
+
+/** Per mesh, the frames the fast hold left the skin alone where the full one redrew it, and the furthest (m) a drawn point of the two stood apart; `drives` slalom once the car is crashed. */
+function compare(p: Pair, drives: readonly DriveInput[] = []): { skipped: Record<(typeof MESHES)[number], number>; apart: number } {
+  const skipped = { body: 0, hood: 0 };
+  let apart = 0;
+  const version = (car: DeformableCar, mesh: (typeof MESHES)[number]): number => {
+    const attr = car[mesh].geometry.getAttribute("position");
+    assert.ok(attr instanceof THREE.BufferAttribute);
+    return attr.version;
+  };
+  for (let f = 0; f < FRAMES; f++) {
+    for (const d of drives) {
+      d.throttle = p.fastCar.crashed ? 0.5 : 0;
+      d.steer = p.fastCar.crashed ? Math.sin((2 * Math.PI * SLALOM_HZ * f) / FRAME_HZ) : 0;
+    }
+    const before = MESHES.map((m) => [version(p.fastCar, m), version(p.fullCar, m)]);
+    tickWorld(p.fast, FRAME);
+    tickWorld(p.full, FRAME);
+    forceFullHold(p.fullCar);
+    for (const [k, mesh] of MESHES.entries()) {
+      if (version(p.fastCar, mesh) === before[k]![0] && version(p.fullCar, mesh) !== before[k]![1]) skipped[mesh]++;
+      const a = p.fastCar[mesh].geometry.getAttribute("position").array;
+      const b = p.fullCar[mesh].geometry.getAttribute("position").array;
+      for (let i = 0; i < a.length; i++) apart = Math.max(apart, Math.abs(a[i]! - b[i]!));
+    }
+  }
+  assert.ok(p.fastCar["bodyTyres"] && p.fastCar["hoodTyres"], "the car held its skin over its tyres");
+  return { skipped, apart };
+}
+
+describe("given a wreck's skin held over its tyres and the parts under its bonnet, the lift found again only when what it stands on moves", () => {
+  it(`when a sedan is hit in its flank at 25 km/h and drives on in a slalom, then its drawn body and bonnet stand within ${DRAWN_SLACK_M * 1000} mm of the full hold's every frame, and the hold leaves its clear bonnet alone`, () => {
+    const drives: DriveInput[] = [];
+    const pair = (): { w: CrashWorld; car: DeformableCar } => {
+      const car = buildCar("sedan", "sedan");
+      const hitter = buildCar("sedan", "sedan");
+      const w = makeWorld([car, hitter], false, false);
+      const drive: DriveInput = { throttle: 0.5, steer: 0, brake: 0, ebrake: false, boost: false };
+      drives.push(drive);
+      w.pedals.set(car, drive);
+      w.pedals.set(hitter, FREEWHEEL);
+      launch(car, 0, 0, 0, 0, 0);
+      launch(hitter, -5, 0, Math.PI / 2, 25 / 3.6, 0);
+      return { w, car };
+    };
+    const [fast, full] = [pair(), pair()];
+    const seen = compare({ fast: fast.w, full: full.w, fastCar: fast.car, fullCar: full.car }, drives);
+    assert.ok(fast.car.crashed, "the sedan was crashed");
+    assert.ok(seen.apart <= DRAWN_SLACK_M, `drawn ${(seen.apart * 1000).toFixed(2)} mm off the full hold`);
+    assert.ok(seen.skipped.hood > FRAMES / 2, `the bonnet's hold skipped ${seen.skipped.hood} of ${FRAMES} frames`);
+  });
+
+  it(`when a pickup meets another head-on at 50 km/h, then its drawn body and bonnet stand within ${DRAWN_SLACK_M * 1000} mm of the full hold's every frame through the crush and after`, () => {
+    const crushable = (): DeformableCar => {
+      const car = buildCar("pickup", "truck");
+      car.deform.squash = 0.32;
+      car.deform.buckle = 0.45;
+      return car;
+    };
+    const [fastCar, fastOther, fullCar, fullOther] = [crushable(), crushable(), crushable(), crushable()];
+    const fast = makeWorld([fastCar, fastOther], false, false);
+    const full = makeWorld([fullCar, fullOther], false, false);
+    for (const w of [fast, full]) for (const car of w.cars) w.pedals.set(car, FREEWHEEL);
+    launch(fastCar, -5, 0, Math.PI / 2, 50 / 3.6, 0);
+    launch(fastOther, 5, 0, -Math.PI / 2, -50 / 3.6, 0);
+    launch(fullCar, -5, 0, Math.PI / 2, 50 / 3.6, 0);
+    launch(fullOther, 5, 0, -Math.PI / 2, -50 / 3.6, 0);
+    const seen = compare({ fast, full, fastCar, fullCar });
+    assert.ok(seen.apart <= DRAWN_SLACK_M, `drawn ${(seen.apart * 1000).toFixed(2)} mm off the full hold`);
+  });
 });
