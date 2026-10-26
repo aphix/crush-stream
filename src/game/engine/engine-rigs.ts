@@ -41,18 +41,11 @@ export abstract class EngineRigs extends EngineScenes {
     this.emitHud();
   }
 
-  /** Fire a sketch scene (A/B/C: door and mirror; D/E: quarter panel; F/G: trunk lid) on the selected side; a car missing the part it needs is parked fresh first. */
+  /** Fire a sketch scene (A/B/C: door and mirror; D/E: quarter panel; F/G: trunk lid) on the selected side, on a car parked fresh: a lane starts from its own start state, never from the last shot's. */
   fireDoorRam(scenario: DoorScenario): void {
     if (!this.showDoors || this.doorRig.phase === "run") return;
     const side = this.doorRig.side;
-    const part = DOOR_LANES[scenario].part;
-    const gone =
-      part === "panel"
-        ? this.carA.partOff(side < 0 ? "quarterL" : "quarterR")
-        : part === "lid"
-          ? this.carA.lidOff()
-          : this.carA.partOff(side < 0 ? "doorL" : "doorR") || this.carA.partOff(side < 0 ? "mirrorL" : "mirrorR");
-    if (gone) this.randomizeAndReset();
+    this.randomizeAndReset();
     this.doorShot = null;
     this.doorFx = false;
     this.doorRig.fire(scenario, side);

@@ -210,9 +210,10 @@ Thresholds from a 1 km/h sweep:
 
 To open the scene, pick **Doors** in the scene picker or press **N**. The panel has:
 
-- **A** / **B** / **C** / **D** / **E** / **F** / **G** buttons (keys 1–3, 6, 7, 8, 9). Firing sets the door shut or open for that scene
-  (D and E: the door shut, the panel at hinge 0.45; F and G: the lid shut or on its stop) and re-parks the car if it already
-  lost the part it needs.
+- **A** / **B** / **C** / **D** / **E** / **F** / **G** buttons (keys 1–3, 6, 7, 8, 9). Every click re-parks the car and the rig
+  (`fireDoorRam` runs the scene's reset first, the camera kept), then sets the door shut or open for that scene (D and E: the door
+  shut, the panel at hinge 0.45; F and G: the lid shut or on its stop). A second click never starts from the first shot's state: a
+  sprung lid, a crushed tail, a torn part or a pushed car.
 - **Left/Right door** (key 5) and **Door open/shut** (key 4).
 - Speed and mass sliders.
 - The last shot's outcome, including the body Δ.

@@ -568,6 +568,14 @@ export abstract class CarParts extends CarGlass {
     return _lidBox.min.y;
   }
 
+  /** The rearmost point (m, car frame) the rear seat's back draws at: the cabin's rear wall, which nothing striking the tail may pass. */
+  rearSeatBackZ(): number {
+    this.group.updateMatrixWorld(true);
+    const seat = this.partSeats[PART_KIND.seatRear]!;
+    if (seat.drawn.boundingBox === null) seat.drawn.computeBoundingBox();
+    return _lidBox.copy(seat.drawn.boundingBox!).applyMatrix4(seat.matrixWorld).min.z;
+  }
+
   private swingAngle(p: DetachPart): number {
     return p.detached ? 0 : Math.max(p.hingeT * p.swing!.spec.jam, p.swing!.theta);
   }
