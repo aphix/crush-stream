@@ -471,7 +471,7 @@ export abstract class CarCore {
   /** The cabin's pose, holding its shell, seats and wheel (`CarCabin`): `fitInterior` moves it with the crushed cell. */
   readonly interior: THREE.Group;
   /** The interior kit, the engine bay and the crash bars, placed by the style. */
-  protected readonly cabin: CarCabin;
+  readonly cabin: CarCabin;
   /** The lifted truck's frame and axles (`BodyStyle.underbody`); null on other styles. */
   readonly underbody: CarUnderbody | null;
   private mirrorL: PartSeat;

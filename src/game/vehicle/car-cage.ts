@@ -248,6 +248,8 @@ export interface CageStyle {
   /** The interior's rest positions as `fitInterior` places them with the masses at rest, x, y, z each. */
   readonly interiorRest: Float32Array;
   readonly interiorMass: Int32Array;
+  /** The cell mass's rest y and z (car space): `interiorPose` takes its travel off them. */
+  readonly cellRest: readonly [y: number, z: number];
   /** The fields of a pristine car, shared by every car of the style. */
   readonly pristine: CageFields;
 }
@@ -387,7 +389,8 @@ const _pose = new Float64Array(4);
 function placeInterior(style: CageStyle, massPos: ArrayLike<number>, out: CageFields): void {
   const { interiorMass, interiorRest, interiorCount } = style;
   const vertexCount = style.vertexCount + style.sillCount;
-  interiorPose(massPos[interiorMass[0]!]!, massPos[interiorMass[1]!]!, massPos[interiorMass[2]! + 1]!, massPos[interiorMass[2]! + 2]!, _pose);
+  const cell = interiorMass[2]!;
+  interiorPose(massPos[interiorMass[0]!]!, massPos[interiorMass[1]!]!, massPos[cell + 1]! - style.cellRest[0], massPos[cell + 2]! - style.cellRest[1], _pose);
   for (let i = 0, r = vertexCount * 3; i < interiorCount; i++, r += 3) {
     out.pos[r] = interiorRest[i * 3]! * _pose[0]! + _pose[1]!;
     out.pos[r + 1] = interiorRest[i * 3 + 1]! + _pose[2]!;
@@ -839,6 +842,7 @@ function buildStyle(src: CageSource, step: number): CageStyle {
     interiorCount: ni,
     interiorRest,
     interiorMass: src.interiorMass,
+    cellRest: [src.massRest[src.interiorMass[2]! + 1]!, src.massRest[src.interiorMass[2]! + 2]!],
     panelsOn: new Uint8Array(src.panelCount).fill(1),
     panelGlass: src.panelGlass,
     panelOrigin: src.panelOrigin,
