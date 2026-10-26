@@ -5,6 +5,7 @@ import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
 import { DebrisSystem, GlassDotSystem, SparkSystem, TireSmokeSystem } from "./engine-fx.ts";
 import { sparkLives } from "./fountain-sparks.test-util.ts";
 import { FountainSystem, JET_FADE_S, REBASE_S } from "./fountain-system.ts";
+import { drawQueued } from "./fx-uploads.test-util.ts";
 
 /** A point sprite never draws under one pixel however far it is, so the dot pools must hand the GPU only their live dots; every crash FX pool uploads only those. */
 
@@ -57,8 +58,12 @@ after(() => {
   Reflect.deleteProperty(globalThis, "document");
 });
 
-const run = (sys: { update(dt: number): void }, seconds: number): void => {
-  for (let i = 0; i < Math.round(seconds / STEP); i++) sys.update(STEP);
+/** `seconds` of frames, each drawn but the last (three sends and clears a drawn frame's queued uploads): the last frame's queue is what a row reads. */
+const run = (sys: Dots | FountainSystem, seconds: number): void => {
+  for (let i = 0; i < Math.round(seconds / STEP); i++) {
+    if (i > 0) drawQueued(sys["points"]);
+    sys.update(STEP);
+  }
 };
 const alive = (sys: Dots): number => sys["life"].filter((life) => life > 0).length;
 const drawn = (sys: Dots): number => sys["geo"].drawRange.count;
@@ -172,6 +177,7 @@ describe("given a fountain pool", () => {
       assert.equal(attr.updateRanges[0]!.count, spawned * item, `${name} range count`);
     }
     assert.equal(sys["geo"].drawRange.count, spawned);
+    drawQueued(sys["points"]);
     run(sys, STEP);
     const second = sys["cursor"] - spawned;
     assert.ok(second > 0, "the jet threw again");
@@ -257,7 +263,10 @@ describe("given a fountain pool", () => {
 });
 
 const runSmoke = (smoke: TireSmokeSystem, seconds: number): void => {
-  for (let i = 0; i < Math.round(seconds / STEP); i++) smoke.update(STEP, CAMERA);
+  for (let i = 0; i < Math.round(seconds / STEP); i++) {
+    if (i > 0) drawQueued(smoke["mesh"]);
+    smoke.update(STEP, CAMERA);
+  }
 };
 const liveSlots = (life: Float32Array): number[] => Array.from(life.keys()).filter((i) => life[i]! > 0);
 
