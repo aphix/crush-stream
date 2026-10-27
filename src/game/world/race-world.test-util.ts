@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { setGround } from "./ground.ts";
 import { parseTrack } from "./track-schema.ts";
 import { Track, blankPoint, blankProjection } from "./track.ts";
-import { TRACKS } from "./tracks/index.ts";
+import { OFF_MENU, TRACKS } from "./tracks/index.ts";
 import { AI_EVERY_SLICE, type AiDifficulty } from "../ai/constants.ts";
 import { DEFAULT_RACE_OPTIONS, type CarRecord, type RaceResultRow, type RaceSnapshot } from "../match/types.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -33,6 +33,40 @@ import { ViewDistance } from "../present/player-quality.ts";
 export const COURSE_IDS: readonly string[] = TRACKS.map((j) => parseTrack(j).id);
 
 export const FRAME = 1 / FRAME_HZ;
+
+const SHIPPED = new Map<string, unknown>([...TRACKS, ...OFF_MENU].map((j) => [parseTrack(j).id, j]));
+const BUILT = new Map<string, Track>();
+
+/** A shipped course's Track, built (and its ground baked) once per process: a course is read-only once built, so every world and test shares it. */
+export function course(id: string): Track {
+  let t = BUILT.get(id);
+  if (!t) {
+    const json = SHIPPED.get(id);
+    if (json === undefined) throw new Error(`no shipped course ${id}`);
+    t = new Track(json);
+    BUILT.set(id, t);
+  }
+  return t;
+}
+
+/** The director's course cache: shipped courses come from `course`, except a Survival variant's own id and any other course (a bench strip), which stay per world. */
+class CourseCache extends Map<string, Track> {
+  private readonly own: string | null;
+  constructor(own: string | null) {
+    super();
+    this.own = own;
+  }
+  private shared(id: string): boolean {
+    return id !== this.own && SHIPPED.has(id);
+  }
+  override get(id: string): Track | undefined {
+    return this.shared(id) ? course(id) : super.get(id);
+  }
+  override set(id: string, t: Track): this {
+    if (!this.shared(id)) super.set(id, t);
+    return this;
+  }
+}
 export type World = {
   cars: DeformableCar[];
   live: () => DeformableCar[];
@@ -61,11 +95,8 @@ export type World = {
   away: number;
 };
 
-/**
- * `survivalCourse`: a variant of the Survival course file (props added, say); the real one when omitted. `tracks`: the baked courses of
- * other worlds of the same test, so a second director reads the Mall's ground instead of baking it again (a course is read-only once built).
- */
-export function makeWorld(survivalCourse?: unknown, tracks?: Map<string, Track>): World {
+/** `survivalCourse`: a variant of the Survival course file (props added, say); the real one when omitted. */
+export function makeWorld(survivalCourse?: unknown): World {
   const scene = new THREE.Scene();
   const cars: DeformableCar[] = [];
   const liveBuf: DeformableCar[] = [];
@@ -143,7 +174,7 @@ export function makeWorld(survivalCourse?: unknown, tracks?: Map<string, Track>)
     throwPassenger: () => {},
     throwFigure: (strike) => void w.figures.push({ ...strike }),
   }, survivalCourse);
-  if (tracks) Reflect.set(race, "tracks", tracks);
+  Reflect.set(race, "tracks", new CourseCache(survivalCourse === undefined ? null : parseTrack(survivalCourse).id));
   const step = newWorld(liveBuf);
   step.ejection = new EjectionWatch();
   step.collide = (car, i, h) => race.collide(car, i, h);

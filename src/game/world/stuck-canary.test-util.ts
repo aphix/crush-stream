@@ -1,22 +1,12 @@
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { setGround } from "./ground.ts";
-import { FRAME, frame, makeWorld } from "./race-world.test-util.ts";
-import { chase } from "./survival-players.test-util.ts";
-import { runField } from "../ai/derby-field.test-util.ts";
-import { DEFAULT_RACE_OPTIONS } from "../match/types.ts";
-import { parseTrack } from "./track-schema.ts";
-import { Track } from "./track.ts";
-import { TRACKS } from "./tracks/index.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 
 /**
  * The owner's bar (2026-10-09): a car "goes" (can be driven) rather than sits; being stuck for more than 10–20 s is the un-fun
- * case, whatever it sits against (a wall, a kerb, a prop, another car, its own roof). One pooled canary over the game's own
- * AI-driven fields: no live car whose driver asks for drive moves less than `MOVE` m in any `WINDOW` s, unless it is in a pile
- * (`PILE` or more other cars touching it through the whole window). The pools are the fields a player meets: police races on
- * the campaign's four courses, the Survival pursuit on Havana, and a derby heat. Every pool is read by the same watch, so the
- * three scenarios are judged alike.
+ * case, whatever it sits against (a wall, a kerb, a prop, another car, its own roof). The watch: no live car whose driver asks for
+ * drive moves less than `MOVE` m in any `WINDOW` s, unless it is in a pile (`PILE` or more other cars touching it through the whole
+ * window). What makes it hold is staged where it is decided: a race's AI car the director respawns (`race-stall.test.ts`), a cop it
+ * puts away (`police.test.ts`), a hunter that backs off a wedge (`hunter.test.ts`), a derby car's wedge and pocket breakers
+ * (`match/derby.test.ts`, `ai/derby-ai.test.ts`). The watch itself is pinned in `stuck-watch.test.ts`; `survival-chase.ai-long-run.ts` reads it.
  *
  * What the watch reads: the pedals the sim ran (`car.drive.throttle`, which `applyDrive` idles while a car is dead or has no
  * wheel down, plus `car.airThrottle`, the gas winding the wheels of a car in the air or on its roof), the body's position, and
@@ -103,114 +93,4 @@ export class StuckWatch {
     this.partners[i]!.clear();
     this.nextSample[i] = t + SAMPLE;
   }
-}
-
-const RACE_LAPS = 2;
-const RACE_SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
-
-/** A police race on `course` (the default field with the police on, every slot AI-driven, `RACE_LAPS` laps) watched to the flag. */
-function policeRace(course: string, seed: number): string[] {
-  const track = new Track(TRACKS.find((j) => parseTrack(j).id === course));
-  // The grid and countdown, then the laps at 3 × the reference lap (the course at half the sedan's top speed), as the finish sweep bounds a race.
-  const bound = 4.5 + RACE_LAPS * 3 * (track.length / 9);
-  const w = makeWorld();
-  w.race.enter();
-  try {
-    w.race.command({ type: "quit" });
-    w.race.command({ type: "options", options: { ...DEFAULT_RACE_OPTIONS, trackId: course, laps: RACE_LAPS, police: true } });
-    w.race.reseed(seed);
-    w.race.command({ type: "start" });
-    w.seat.mode = "follow";
-    const watch = new StuckWatch(`${course} police race, seed ${seed}`, w.live().length);
-    const hit = w.step.pairHit!;
-    w.step.pairHit = (a, b, contact) => {
-      hit(a, b, contact);
-      watch.pair(a, b);
-    };
-    const state = { acc: 0 };
-    let raced = 0;
-    for (let n = 0; n * FRAME < bound && w.race.phase !== "finished"; n++) {
-      frame(w, state);
-      if (w.race.phase !== "racing") continue;
-      raced += FRAME;
-      const cars = w.live();
-      watch.step(cars, raced, FRAME, (i) => cars[i]!.group.visible && cars[i]!.deform.drivetrainAlive);
-    }
-    return watch.episodes;
-  } finally {
-    w.race.exit();
-    setGround(null);
-  }
-}
-
-const SURVIVAL_T = 120;
-const SURVIVAL_SEEDS = Array.from({ length: 24 }, (_, i) => i + 1);
-
-/** The Survival pursuit on Havana with the evading player, the real pack and rules, for `SURVIVAL_T` s or until the run ends. */
-function pursuit(seed: number): string[] {
-  const watch = new StuckWatch(`Survival pursuit, seed ${seed}`, 32);
-  chase("flee", seed, SURVIVAL_T, undefined, {
-    pair: (a, b) => watch.pair(a, b),
-    each: (w, time) => {
-      if (time <= 0) return;
-      const cars = w.live();
-      watch.step(cars, time, FRAME, (i) => cars[i]!.group.visible && cars[i]!.deform.drivetrainAlive);
-    },
-  });
-  return watch.episodes;
-}
-
-const DERBY_CARS = 9;
-const DERBY_SEEDS = [1];
-
-/** A derby heat of `DERBY_CARS` AI cars to its end. */
-function derby(seed: number): string[] {
-  const watch = new StuckWatch(`${DERBY_CARS}-car derby, seed ${seed}`, DERBY_CARS);
-  runField(DERBY_CARS, seed, undefined, {
-    pair: (a, b) => watch.pair(a, b),
-    step: (cars, t, h, running) => {
-      if (t >= 0) watch.step(cars, t, h, running);
-    },
-  });
-  return watch.episodes;
-}
-
-
-const TITLE = `given the game's own AI-driven fields (police races on the campaign's courses, the Survival pursuit, a derby heat), watched for a live car that asks for drive (mean |throttle| ≥ ${DRIVE}) yet moves under ${MOVE} m in ${WINDOW} s while fewer than ${PILE} other cars touch it`;
-
-/**
- * Measured on main 9b188a4d (Stage 1 landed): city seed 3, car 11 from race second 57.4 at (178.5, −52.0) moved 0.20 m in 10 s at mean
- * throttle 0.79 with one car touching. Measured on lane/uc2-solids (Stage 2, walls and props on the one top/side query): city seeds 1-8
- * 0 stuck windows, and every other course, the pursuit and the derby 0 as well.
- * The stuck-canary `ai-long-run` files share these cases so each runs in a fraction of the whole sweep's time (`npm run test:ai-long-run`; the gate pins the watch itself in `stuck-watch.test.ts`). Not a test file itself.
- */
-export function describeRaceCanary(course: string, seeds: readonly number[] = RACE_SEEDS): void {
-  describe(TITLE, () => {
-    const title = `when the default field races ${course} with the police on, ${RACE_LAPS} laps, field seeds ${seeds[0]}-${seeds[seeds.length - 1]}, then no car is stuck`;
-    it(title, (t) => {
-      const stuck = seeds.flatMap((seed) => policeRace(course, seed));
-      t.diagnostic(`${course}: ${stuck.length} stuck windows${stuck.length ? `\n${stuck.join("\n")}` : ""}`);
-      assert.deepEqual(stuck, []);
-    });
-  });
-}
-
-export function describePursuitCanary(seeds: readonly number[] = SURVIVAL_SEEDS): void {
-  describe(TITLE, () => {
-    it(`when the pack hunts a fleeing player on Havana for ${SURVIVAL_T} s in each of seeds ${seeds[0]}-${seeds[seeds.length - 1]}, then no car is stuck`, (t) => {
-      const stuck = seeds.flatMap((seed) => pursuit(seed));
-      t.diagnostic(`Survival: ${stuck.length} stuck windows${stuck.length ? `\n${stuck.join("\n")}` : ""}`);
-      assert.deepEqual(stuck, []);
-    });
-  });
-}
-
-export function describeDerbyCanary(): void {
-  describe(TITLE, () => {
-    it(`when ${DERBY_CARS} AI cars run a derby heat to its end with seed ${DERBY_SEEDS[0]}, then no car is stuck`, (t) => {
-      const stuck = DERBY_SEEDS.flatMap((seed) => derby(seed));
-      t.diagnostic(`derby: ${stuck.length} stuck windows${stuck.length ? `\n${stuck.join("\n")}` : ""}`);
-      assert.deepEqual(stuck, []);
-    });
-  });
 }

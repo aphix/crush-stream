@@ -1,10 +1,7 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
-import { Track } from "../world/track.ts";
-import { parseTrack } from "../world/track-schema.ts";
-import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
-import { frame, makeWorld, type World } from "../world/race-world.test-util.ts";
+import { course, frame, makeWorld, type World } from "../world/race-world.test-util.ts";
 import { NO_CAR_PICK, NO_PERSON_PICK, CAR_SPRAY, PERSON_SPRAY, SPRAY_PALETTE } from "../match/look-data.ts";
 import type { Ejection } from "../vehicle/ejection.ts";
 import { NetPlay } from "./net-play.ts";
@@ -16,7 +13,7 @@ import { FRAME_MS, Hub } from "./net-hub.test-util.ts";
  * The Havana lobby on the real race stack: a host and a guest, each a `RaceDirector` world (the headless engine minus the renderer),
  * linked through netplay. The host steps its world; the guest only draws the host's snapshots, as a browser guest does.
  */
-const havana = new Track([...TRACKS, ...OFF_MENU].find((j) => parseTrack(j).id === "havana"));
+const havana = course("havana");
 
 /** The engine's `NetGame` seam over a headless world: what `CrashEngine.net` wires, minus the derby, reels, looks and presentation. */
 function worldGame(w: World, name: string) {
@@ -75,15 +72,12 @@ function worldGame(w: World, name: string) {
   return { game, log };
 }
 
-/** The courses every world of this file has baked: a Mall's ground is built once, not once per host, guest and late joiner. */
-const bakedCourses = new Map<string, Track>();
-
 /** A host and one guest in room R, both in the lobby, on one clock. */
 function lobby(opts: { minPlayers?: number; course?: string } = {}) {
   const hub = new Hub();
   let now = 1000;
-  const hw = makeWorld(undefined, bakedCourses);
-  const gw = makeWorld(undefined, bakedCourses);
+  const hw = makeWorld();
+  const gw = makeWorld();
   const hg = worldGame(hw, "Ann");
   const gg = worldGame(gw, "Zed");
   const host = new NetPlay(hg.game, { connect: hub.connect, now: () => now });
@@ -261,7 +255,7 @@ describe("given a host and a guest waiting in the Havana lobby", () => {
   });
 });
 
-const mall = new Track(TRACKS.find((j) => parseTrack(j).id === "national-mall"));
+const mall = course("national-mall");
 const mallStart = mall.survival!.start;
 /** Whether car `car` of world `w` stands on the Mall's Survival start anchor, abreast with the others (`humanSlot`: within 16 m of it). */
 const atMallStart = (w: World, car: number): boolean => Math.hypot(w.live()[car]!.group.position.x - mallStart.x, w.live()[car]!.group.position.z - mallStart.z) < 16;
@@ -313,7 +307,7 @@ describe("given a host and a guest in the lobby of a private room, Survival chos
     s.host.setLobbyCourse("national-mall");
     assert.equal(s.host.go(), true);
     s.step(30);
-    const lw = makeWorld(undefined, bakedCourses);
+    const lw = makeWorld();
     const late = new NetPlay(worldGame(lw, "Yan").game, { connect: s.hub.connect, now: s.now });
     open.push(late);
     late.join("R", "bc");

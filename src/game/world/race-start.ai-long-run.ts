@@ -1,36 +1,25 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { COURSE_IDS } from "./race-world.test-util.ts";
 import { DEFAULT_RACE_OPTIONS } from "../match/types.ts";
+import { COURSES } from "../ai/race-ai.test-util.ts";
+import { kinematicContacts } from "./race-contact.test-util.ts";
 import { startWrecks, WATCH } from "./race-start.test-util.ts";
 
 /**
- * Full-sanity sweep, not a per-commit test: the first ${WATCH} s of racing of every course's grid over several field seeds, watched for any wreck.
- * The per-commit `race-start.test.ts` holds the stunt start (the owner's report) at one seed, with the ramming field as its control.
+ * Full-sanity sweep, not a per-commit test: the first `WATCH` s of racing from every course's full grid, every car at the default aggression
+ * slider (the top of the field's roll), watched for any two cars touching, as the brains decide (the kinematic race). The per-commit
+ * `race-start.test.ts` holds the stunt start (the owner's report; so this sweep does not) with the ramming field as its control.
  */
-describe("given races started from the grid with every slot AI-driven, clean racing", () => {
-  const slider = DEFAULT_RACE_OPTIONS.aggression;
-  for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
-    it(`when 5 rivals race the stunt course (Crossover Canyon) at the default aggression slider with field seed ${seed}, then no car wrecks in the first ${WATCH} s of racing`, () => {
-      assert.deepEqual(startWrecks("stunt", seed, 5, slider), []);
+describe("given races started from the grid with every slot AI-driven, clean racing, as the brains decide (the kinematic race)", () => {
+  for (const track of COURSES.filter((t) => t.id !== "stunt")) {
+    it(`when a full grid of 8 races the ${track.id} course at the default aggression slider, then no two cars touch in the first ${WATCH} s of racing`, () => {
+      assert.deepEqual(kinematicContacts(track, 8, DEFAULT_RACE_OPTIONS.aggression, 2, "hard", WATCH).touches, []);
     });
   }
-  for (const course of COURSE_IDS.filter((id) => id !== "city")) {
-    for (const seed of [1, 2, 3, 4]) {
-      it(`when a full 8-car grid races the ${course} course at the default aggression slider with field seed ${seed}, then no car wrecks in the first ${WATCH} s of racing`, () => {
-        assert.deepEqual(startWrecks(course, seed, 7, slider), []);
-      });
-    }
-  }
-  it("when 5 rivals race the city course with the aggression slider at 0 (a clean field), then the oncoming street traffic round the first corner wrecks nobody", () => {
-    assert.deepEqual(startWrecks("city", 1, 5, 0), []);
-  });
 });
 
-describe("given races of 5 rivals on the stunt course with the aggression slider at the ramming maximum, every slot AI-driven", () => {
-  it("when 8 field seeds race their first seconds, then some car is wrecked in the first seconds, with at least 8 wrecks over the 8 seeds", () => {
-    let wrecks = 0;
-    for (let seed = 1; seed <= 8; seed++) wrecks += startWrecks("stunt", seed, 5, 1).length;
-    assert.ok(wrecks >= 8, `${wrecks} wrecks over 8 seeds`);
+describe("given a race started from the grid of the city course on the real race stack, oncoming street traffic included", () => {
+  it(`when 5 rivals race with the aggression slider at 0 (a clean field), then the oncoming street traffic round the first corner wrecks nobody in the first ${WATCH} s`, () => {
+    assert.deepEqual(startWrecks("city", 1, 5, 0), []);
   });
 });

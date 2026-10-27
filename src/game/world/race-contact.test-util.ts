@@ -1,9 +1,11 @@
-import { AI_EVERY_SLICE, type AiDifficulty } from "../ai/constants.ts";
+import type { AiDifficulty } from "../ai/constants.ts";
 import { DERBY_RULES } from "../ai/derby-ai.ts";
-import { crestSpeed } from "../ai/race-ai.ts";
+import { race } from "../ai/race-ai.test-util.ts";
+import { DRIVE } from "../vehicle/car-drive.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 import type { Track } from "./track.ts";
-import { blankProjection } from "./track.ts";
-import { FRAME, raceOnce, type Outcome, type World } from "./race-world.test-util.ts";
+
+const FRAME = 1 / FRAME_HZ;
 
 /**
  * Who started a racer-racer contact. One car's state per frame (`Sample`), the last frame before the
@@ -47,110 +49,67 @@ export function classifyContact(a: readonly Sample[], b: readonly Sample[]): Ver
   return { a: role(ca, cb), b: role(cb, ca), closing, towardA, towardB };
 }
 
-/** One contact the tracker saw: who, when, where, and the verdict with the evidence behind it. */
-export type ContactEvent = {
-  frame: number;
-  a: number;
-  b: number;
-  /** Car b is a traffic car (a is always a racer). */
-  traffic: boolean;
-  /** Rolled aggression of each car (0 for the AI-driven player slot). */
-  aggA: number;
-  aggB: number;
-  verdict: Verdict;
-  /** Lateral offset (m) of each car from the centreline, and half the road width there. */
-  latA: number;
-  latB: number;
-  half: number;
-  /** The road here is a crest the faster of the two cars would leave (`crestSpeed`): a hit that sends a car off it. */
-  crest: boolean;
-  /** Each car's speed (m/s) at the frame before. */
-  speedA: number;
-  speedB: number;
-  /** The initiator's index when exactly one car closed, else −1. */
-  initiator: number;
-  samplesA: Sample[];
-  samplesB: Sample[];
-};
-
-export type ContactRace = { outcome: Outcome; contacts: ContactEvent[] };
-
 const KEEP = Math.round(KNOCK / FRAME) + 1;
 /** A pair in contact again within this many frames is the same contact (a scrape), not a new one. */
 const SAME = 20;
 
-/** One `raceOnce` with every contact of a racer classified, racer-racer or racer-traffic (`traffic`; police off: `raceOnce` never switches them on). */
-export function contactRace(w: World, track: Track, bound: number, seed: number, slider: number, aiCount = 4, difficulty: AiDifficulty = AI_EVERY_SLICE): ContactRace {
-  const contacts: ContactEvent[] = [];
-  const hist: Sample[][] = [];
-  const lastBump = new Map<number, number>();
+/** The contact guard's car footprint (half length, half width, m): two of them overlapping is a contact in the kinematic race. */
+const HALF_LONG = 2.3;
+const HALF_WIDE = 0.95;
+
+type Footprint = { x: number; z: number; yaw: number };
+
+/** Whether two car footprints overlap, by the separating axes of the two rectangles. */
+function overlaps(a: Footprint, b: Footprint): boolean {
+  for (const f of [a, b]) {
+    const axes = [
+      [Math.sin(f.yaw), Math.cos(f.yaw)],
+      [Math.cos(f.yaw), -Math.sin(f.yaw)],
+    ] as const;
+    for (const [ax, az] of axes) {
+      const reach = (c: Footprint) => HALF_LONG * Math.abs(Math.sin(c.yaw) * ax + Math.cos(c.yaw) * az) + HALF_WIDE * Math.abs(Math.cos(c.yaw) * ax - Math.sin(c.yaw) * az);
+      if (Math.abs((b.x - a.x) * ax + (b.z - a.z) * az) > reach(a) + reach(b)) return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * `n` AI cars, every one at aggression `slider`, racing `laps` laps of `track` (or `limit` s of racing) in the kinematic race (`race`: the real drive
+ * model and brains, cars passing through each other): every first frame two racing cars' footprints overlap (`touches`), and those `classifyContact`
+ * says one car started (`hits`; no car is ever knocked). What the brains decide, without the crush.
+ */
+export function kinematicContacts(track: Track, n: number, slider: number, laps: number, difficulty: AiDifficulty, limit = (laps * track.length) / (DRIVE.maxFwd / 2) + 10): { touches: string[]; hits: string[]; finished: number } {
+  const hist: Sample[][] = Array.from({ length: n }, () => []);
   const lastPair = new Map<number, number>();
-  const pending: [number, number][] = [];
-  const proj = blankProjection();
-  w.onPairContact = (a, b) => pending.push([a, b]);
-  try {
-    const outcome = raceOnce(w, track, bound, seed, slider, (n) => {
-      const cars = w.live();
-      const racers = w.race.racers.length;
-      // Contacts first, from the frames before this one.
-      for (const [a, b] of pending) {
+  const hits: string[] = [];
+  const touches: string[] = [];
+  let step = 0;
+  const run = race(track, n, slider, laps, limit, difficulty, undefined, (cars, session) => {
+    step++;
+    for (let a = 0; a < n; a++) {
+      for (let b = a + 1; b < n; b++) {
+        const ca = cars[a]!;
+        const cb = cars[b]!;
+        if (!overlaps({ x: ca.group.position.x, z: ca.group.position.z, yaw: ca.yaw }, { x: cb.group.position.x, z: cb.group.position.z, yaw: cb.yaw })) continue;
         const key = a * 64 + b;
         const prev = lastPair.get(key);
-        lastPair.set(key, n);
-        if (a >= racers || (prev !== undefined && n - prev <= SAME) || hist[a] === undefined || hist[b] === undefined) continue;
-        const sa = hist[a]!.slice();
-        const sb = hist[b]!.slice();
-        const verdict = classifyContact(sa, sb);
-        const pa = cars[a]!.group.position;
-        const pb = cars[b]!.group.position;
-        const ja = track.project(pa.x, pa.z, -1, proj);
-        const latA = ja.lateral;
-        const half = track.path.half[ja.k]!;
-        const latB = track.project(pb.x, pb.z, -1, proj).lateral;
-        const e = w.race.racers;
-        contacts.push({
-          frame: n,
-          a,
-          b,
-          traffic: b >= racers,
-          aggA: e[a]!.aggression,
-          aggB: e[b]?.aggression ?? 0,
-          verdict,
-          latA,
-          latB,
-          half,
-          crest: Math.max(Math.hypot(sa[sa.length - 1]!.vx, sa[sa.length - 1]!.vz), Math.hypot(sb[sb.length - 1]!.vx, sb[sb.length - 1]!.vz)) > crestSpeed(track.path, ja.s),
-          speedA: Math.hypot(sa[sa.length - 1]!.vx, sa[sa.length - 1]!.vz),
-          speedB: Math.hypot(sb[sb.length - 1]!.vx, sb[sb.length - 1]!.vz),
-          initiator: verdict.a === "initiated" ? a : verdict.b === "initiated" ? b : -1,
-          samplesA: sa,
-          samplesB: sb,
-        });
+        lastPair.set(key, step);
+        // A finished car is held on the brakes where it crossed the line (the kinematic race has no results screen to clear it): not racing.
+        const racing = session.cars[a]!.status === "racing" && session.cars[b]!.status === "racing";
+        if (session.phase !== "racing" || !racing || (prev !== undefined && step - prev <= SAME) || hist[a]!.length === 0) continue;
+        const v = classifyContact(hist[a]!, hist[b]!);
+        const initiator = v.a === "initiated" ? a : v.b === "initiated" ? b : -1;
+        const at = `${session.time.toFixed(2)} s of racing`;
+        touches.push(`${at}: cars ${a} and ${b} (${v.a} / ${v.b}, closing ${v.closing.toFixed(1)} m/s)`);
+        if (initiator >= 0) hits.push(`${at}: car ${initiator} into car ${initiator === a ? b : a} (closing ${v.closing.toFixed(1)} m/s)`);
       }
-      for (const [a, b] of pending) {
-        lastBump.set(a, n);
-        lastBump.set(b, n);
-      }
-      pending.length = 0;
-      for (let i = 0; i < cars.length; i++) {
-        const c = cars[i]!;
-        const h = (hist[i] ??= []);
-        h.push({
-          x: c.group.position.x,
-          z: c.group.position.z,
-          vx: c.velocity.x,
-          vz: c.velocity.z,
-          yaw: c.yaw,
-          throttle: c.drive.throttle,
-          steer: c.drive.steer,
-          brake: c.drive.brake,
-          bumped: lastBump.get(i) === n,
-        });
-        if (h.length > KEEP) h.shift();
-      }
-    }, aiCount, difficulty);
-    return { outcome, contacts };
-  } finally {
-    w.onPairContact = null;
-  }
+    }
+    for (const [i, c] of cars.entries()) {
+      const h = hist[i]!;
+      h.push({ x: c.group.position.x, z: c.group.position.z, vx: c.velocity.x, vz: c.velocity.z, yaw: c.yaw, throttle: c.drive.throttle, steer: c.drive.steer, brake: c.drive.brake, bumped: false });
+      if (h.length > KEEP) h.shift();
+    }
+  });
+  return { touches, hits, finished: run.session.cars.filter((c) => c.status === "finished").length };
 }
