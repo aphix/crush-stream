@@ -22,6 +22,10 @@ const SAME_SKIN_M = 0.005;
 const DENT_M = 0.04;
 /** Sparks within this of the stand's middle (m) are the podium's own jets': the course's finish-line fountains play far below. */
 const PLATFORM_REACH_M = 16;
+/** Ms the pacer's clock moves at each read: no frame is cut at the wall deadline, whatever the box's load. */
+const PACER_TICK_MS = 0.001;
+/** Where each drawn frame sits inside its last step (`SimPacer.alpha`): half way, so the drawn skin is not the sim's. */
+const DRAWN_ALPHA = 0.5;
 
 const bodyOf = (car: DeformableCar): Float32Array => Float32Array.from(car.lookMeshes().body.geometry.getAttribute("position").array);
 
@@ -51,6 +55,8 @@ const CORNER_HIT_EBS = 24;
 const CORNER_Y = 0.4;
 /** A height (m) no road reaches: the car read at it has nothing under it to fit its doors and bumpers to. */
 const CLEAR_OF_ROAD_M = 1000;
+/** The racer that crosses the finish line before the race is closed, and is hit after it. */
+const FINISHER = 0;
 
 type Part = DeformableCar["parts"][number];
 /** A part's place, turn and scale on the car. */
@@ -94,6 +100,8 @@ describe("given the real engine and a race ended with every car dented", () => {
   const lostAtTheFinish = new Map<number, number>();
   const partsAtTheFinish = new Map<number, PartState[]>();
   const wheelSeatsAtTheFinish = new Map<number, (THREE.Vector3 | null)[]>();
+  let skinAtTheLine: Float32Array = new Float32Array(0);
+  let skinAtTheEnd: Float32Array = new Float32Array(0);
 
   before(async () => {
     stubBrowser();
@@ -101,6 +109,16 @@ describe("given the real engine and a race ended with every car dented", () => {
     Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
     await engine.ready;
     engine.fadeScenes = false;
+    // The same run on any machine: the pacer's clock never reaches a deadline and its slice is pinned. Each frame is drawn half way into its last step, so a finish read
+    // inside the drawn frame's pose blend would keep a skin between two steps, not the sim's.
+    let tick = 0;
+    Object.assign(engine.pace, { now: () => (tick += PACER_TICK_MS) });
+    engine.pace.pin = true;
+    const paceRun = engine.pace.run.bind(engine.pace);
+    engine.pace.run = (...args: Parameters<typeof paceRun>) => {
+      paceRun(...args);
+      engine.pace.alpha = DRAWN_ALPHA;
+    };
     engine.toggleRace();
     engine.raceCommand({ type: "program", options: RULES });
     engine.raceCommand({ type: "start" });
@@ -113,20 +131,34 @@ describe("given the real engine and a race ended with every car dented", () => {
     }
     run(1);
     for (const [k, car] of live().slice(0, 4).entries()) wreck(car, k);
-    engine.raceCommand({ type: "end" });
-    // One frame: the podium reads the cars in the frame that sees the race finished.
+    // Car 0 crosses the line (its row finished as `RaceSession.pass` finishes one); the frame reads it. Then it is hit on its tail before the race closes.
+    const session = race()["session"]!;
+    const winner = session.cars.find((c) => c.id === FINISHER)!;
+    winner.status = "finished";
+    winner.finishTime = session.time;
     run(FRAME);
-    results = race().hud().results ?? [];
-    for (const row of results) {
-      const car = live()[row.id]!;
-      skinsAtTheFinish.set(row.id, bodyOf(car));
-      lostAtTheFinish.set(row.id, car["looseWheels"].filter((w) => w.loose).length);
-      partsAtTheFinish.set(row.id, car["parts"].map((p) => partState(car, p)));
+    // What the podium is checked against: a car's skin, lost wheels, parts and wheel seats as read now.
+    const capture = (id: number): void => {
+      const car = live()[id]!;
+      skinsAtTheFinish.set(id, bodyOf(car));
+      lostAtTheFinish.set(id, car["looseWheels"].filter((w) => w.loose).length);
+      partsAtTheFinish.set(id, car["parts"].map((p) => partState(car, p)));
       wheelSeatsAtTheFinish.set(
-        row.id,
+        id,
         car["wheels"].map((_, i) => (car["looseWheels"][i]!.loose ? null : car.deform.massLocal(HUBS[i]!).clone())),
       );
-    }
+    };
+    capture(FINISHER);
+    skinAtTheLine = skinsAtTheFinish.get(FINISHER)!;
+    const late = live()[FINISHER]!;
+    late.applyImpact(late.group.localToWorld(new THREE.Vector3(0, CORNER_Y, late.cage.fields.planBox[2]!)), late.forward.clone(), CORNER_HIT_MPS, CORNER_HIT_EBS);
+    run(1);
+    engine.raceCommand({ type: "end" });
+    // One frame: the podium reads the cars that never finished in the frame that sees the race finished.
+    run(FRAME);
+    skinAtTheEnd = bodyOf(live()[FINISHER]!);
+    results = race().hud().results ?? [];
+    for (const row of results) if (row.id !== FINISHER) capture(row.id);
     // The results reel respawns the field's cars from its clips: stand in for it, so a podium that read the live cars would show none of the damage.
     for (const car of live()) car.spawnFacing(0, 0, 0, 0);
     engine.raceCommand({ type: "podium", on: true });
@@ -156,8 +188,10 @@ describe("given the real engine and a race ended with every car dented", () => {
     assert.equal(first.y, spot.y + PODIUM_BLOCKS[0]!.top);
   });
 
-  it("when each car's skin is read, then it is the dented skin its racer's car had when the race ended, though the field's cars have since been put back", () => {
+  it("when each car's skin is read, then it is the dented skin its racer's car had as it crossed the finish line (or when the race ended, for one that never did), though the field's cars have since been put back", () => {
+    assert.ok(skinGap(skinAtTheEnd, skinAtTheLine) >= DENT_M, `the control: the hit after the line dents the finisher ${skinGap(skinAtTheEnd, skinAtTheLine)} m`);
     const standing = [...engine["podium"].cars()];
+    assert.ok(standing.some((c) => c.group.userData.carIndex === FINISHER), "the control: the finisher is on the podium");
     for (const [k, car] of standing.entries()) {
       const id = results[k]!.id;
       const wanted = skinsAtTheFinish.get(id)!;
