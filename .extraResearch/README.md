@@ -59,6 +59,10 @@ Treat model-written prose as leads, not facts; cite the listed sources.
 | `perplexity/2026-10-23-vehicle-bump-stop-landing-damping.md` | Bump stops for games: progressive engagement, rate-limited/position-dependent damping, hysteresis, clamping so a landing isn't a dead stop (CarStackCrush8, CarCrest) |
 | `perplexity/2026-10-25-sonos-audio-stutter-webaudio.md` | Web Audio stutter on Sonos/network outputs: buffer underruns under load, `latencyHint: "playback"`, matching the device sample rate, exclusive mode (audio) |
 | `perplexity/2026-10-26-trunk-latch-strength.md` | Trunk and liftgate latch strength: FMVSS 206 / ECE R11 loads (9-11 kN primary, 4.5 kN secondary), why a lid opens by latch misalignment under crush rather than at a set speed (DoorScene) |
+| `perplexity/2026-10-27-onfoot-speeds.md` | On-foot speeds in GTA V/IV, RDR2, Watch Dogs, Saints Row, Just Cause, Mafia (community estimates, not datamined): walk 1.3–1.6, run 2.3–3.5, sprint 6–8.5 m/s; humans walk 1.4, jog 2.5, sprint 7.6 (non-athletes) m/s; ~1–2 s to full sprint (OnFoot lane) |
+| `perplexity/2026-10-27-onfoot-camera.md` | Third-person on-foot camera (recreations, not Rockstar values): pivot 1.35–1.55 m, distance 3.5–4.5 m, FOV 60–70° horizontal, separate position/yaw/pitch damping 0.1–0.4 s, recenter after 1–1.5 s idle, vehicle enter/exit staged blends 0.2–0.4 s; touch and gamepad sensitivities (OnFoot lane) |
+| `perplexity/2026-10-27-onfoot-active-ragdoll.md` | Locomotion with physics ragdolls: capsule/kinematic controller driving animation, powered ragdoll on hits (Euphoria), get-up pose matching and ragdoll-to-animation blends with timings (OnFoot lane) |
+| `perplexity/2026-10-27-onfoot-rapier-ragdoll.md` | Rapier specifics: KinematicCharacterController capsule vs motor-driven active ragdoll, switching between them, blending back to standing, motor stiffness/damping and performance notes (OnFoot lane) |
 
 ## Papers (`papers/`)
 
