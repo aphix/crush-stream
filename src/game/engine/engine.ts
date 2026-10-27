@@ -25,6 +25,7 @@ import { PHONE_LEVEL } from "../present/car-detail.ts";
 import { DetailGovernor } from "../present/detail-governor.ts";
 import { DRAW_DISTANCES, knobValue, PlayerQuality, RENDER_SCALES, SHADOW_QUALITIES } from "../present/player-quality.ts";
 import { makeRenderer } from "./engine-renderer.ts";
+import { checkUploads, uploadCheckAsked } from "./upload-check.ts";
 import { DebrisSystem, SparkSystem, GlassDotSystem, TireSmokeSystem } from "../present/engine-fx.ts";
 import { Fountains } from "./engine-fountains.ts";
 import { GameAudio } from "../present/game-audio.ts";
@@ -192,7 +193,8 @@ export class CrashEngine extends EngineGarage {
     this.lab.load(LAB_PRESET.cards);
     this.lab.fx = this.hitFx;
 
-    this.renderer = makeRenderer(canvas);
+    const watchUploads = (gl: WebGL2RenderingContext): void => checkUploads(gl, () => ({ scene: this.scene, tier: this.cine.tier }));
+    this.renderer = makeRenderer(canvas, uploadCheckAsked(window.location.search) ? watchUploads : undefined);
     const gl = this.renderer.getContext();
     const kind = deviceClass(gpuRenderer(gl), window.matchMedia("(pointer: fine)").matches, (navigator as Navigator & { userAgentData?: { mobile: boolean } }).userAgentData?.mobile === true);
     this.deviceClass = kind;

@@ -19,10 +19,11 @@ if (!lightsChunk.includes(SKIP_DARK)) THREE.ShaderChunk.lights_fragment_begin = 
  * take their edges from it. The post tiers draw the scene into their own target, antialiased at the tiers and device pixel ratios
  * `sceneSamples` picks (`engine-post.ts`).
  */
-export function makeRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer {
+export function makeRenderer(canvas: HTMLCanvasElement, onContext?: (gl: WebGL2RenderingContext) => void): THREE.WebGLRenderer {
   // three r186 makes its own context with `alpha: true` whatever its `alpha` option says, compositing a transparent canvas.
   const context = canvas.getContext("webgl2", { alpha: false, antialias: (window.devicePixelRatio || 1) <= 1, powerPreference: "high-performance" });
   if (!context) throw new Error("WebGL2 is not available");
+  onContext?.(context);
   const renderer = new THREE.WebGLRenderer({ canvas, context });
   renderer.setClearColor(0x12141a, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
