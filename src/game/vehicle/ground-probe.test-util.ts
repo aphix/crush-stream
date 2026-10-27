@@ -423,7 +423,7 @@ export function drive(
   const path = track.path;
   const ground = track.ground();
   setGround(ground);
-  const car = makeCar(cls);
+  const car = pooled(cls);
   const pt = blankPoint();
   const lat = o.lateral ?? 0;
   const at = (s: number) => {
@@ -462,7 +462,7 @@ export function drive(
     still = braking && car.speed < 0.05 ? still + 1 : 0;
     if (still > 120) break;
   }
-  car.dispose();
+  // Not disposed: the next drop or drive of this class stands it up again.
   return out;
 }
 
