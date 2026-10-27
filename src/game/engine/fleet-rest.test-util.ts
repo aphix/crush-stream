@@ -5,16 +5,32 @@ import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { stream } from "../present/ragdoll-pose.test-util.ts";
 import { loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
+import { DeformableCar } from "../vehicle/car.ts";
+import { armKill, assignClass, HANDLING, killClass } from "../vehicle/vehicle-classes.ts";
+import { fleetClass, fleetStyle } from "../scenes/fleet.ts";
+import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
+import { INITIAL_HUD } from "../hud/hud-store.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { newWorld, stepWorld, type World } from "./world-step.ts";
 import { satCars } from "../contact/sat.ts";
 
 /**
- * The owner's fleet capture (sedan, hatchback, wagon, coupe, pickup from its seed) replayed on the real engine with a fixed pacer and 60 Hz frames jittered 40 %
- * (`fleet-rest.test.ts`, `fleet-rest-sleep.test.ts`). The crash pops the hatchback's front hubs and leaves its sill 44 mm in the road. Not a test file itself.
+ * The owner's fleet capture (sedan, hatchback, wagon, coupe, pickup), two ways: staged as its two cars that rest side by side (the
+ * hatchback with its front hubs popped and the pickup, each a wreck from one nose hit) on flat ground in a sim-only world (`fleetPair`),
+ * and replayed whole on the real engine with a fixed pacer and 60 Hz frames jittered 40 % (`replay`). Not a test file itself.
  */
-/** Slot of the hatchback in the fleet's style order. */
+export const DT = 1 / FRAME_HZ;
+/** Fleet slots of the two cars. */
 const HATCH = 1;
-/** The sim window (s) the hatchback is read in, and the second from which the crash is over. */
+const PICKUP = 4;
+/** The capture's squash and buckle sliders. */
+const SQUASH = 0.32;
+const BUCKLE = 0.45;
+/** How far ahead of its centre (m) each car's nose is struck to make it a wreck: at its bumper. */
+const HATCH_NOSE = 2.0;
+const PICKUP_NOSE = 2.3;
+const IDLE = idleDrive();
+/** The replay's sim window (s) the hatchback is read in, and the second from which the crash is over. */
 export const FROM = 1.4;
 export const TO = 3.5;
 export const SETTLED = 2;
@@ -22,9 +38,30 @@ export const SETTLED = 2;
 const JITTER = 0.4;
 /** A turn of the hatchback's height under this (mm) is rounding; the rise out of the road moves it 0.2 mm a slice. */
 const TURN_MM = 0.3;
-
 const _n = new THREE.Vector3();
 const _p = new THREE.Vector3();
+
+function wreck(slot: number, x: number, nose: number): DeformableCar {
+  const car = new DeformableCar({ name: `c${slot}`, body: 0x808080, accent: 0 }, new THREE.Scene(), null, fleetStyle(slot));
+  car.deform.squash = SQUASH;
+  car.deform.buckle = BUCKLE;
+  car.deform.setMode(INITIAL_HUD.deformMode);
+  assignClass(car, fleetClass(slot));
+  armKill(car.deform, killClass(car), HANDLING.realism, "default");
+  car.spawnFacing(x, 0, 0, 0);
+  car.group.updateMatrixWorld(true);
+  car.updateSkin();
+  car.applyImpact(car.group.position.clone().addScaledVector(car.forward, nose), car.forward.clone().negate(), 0.5, 0.5);
+  return car;
+}
+
+/** The hatchback wreck at x = 0, its front hubs popped as the capture's crash pops them; and the pickup wreck beside it, its centre `gap` m off along x. */
+export function fleetPair(gap: number): { hatch: DeformableCar; pickup: DeformableCar; world: World } {
+  const hatch = wreck(HATCH, 0, HATCH_NOSE);
+  for (const m of hatch.deform.masses) if (m.name === "hubFL" || m.name === "hubFR") hatch.deform.popHub(m);
+  const pickup = wreck(PICKUP, gap, PICKUP_NOSE);
+  return { hatch, pickup, world: newWorld([hatch, pickup]) };
+}
 
 /** A headless engine for the replays; one per test process (a second one made after the first is disposed never resolves `ready`). */
 export async function makeEngine(): Promise<CrashEngine> {
@@ -95,4 +132,20 @@ export async function replay(engine: CrashEngine, seed: number, onSlice: (t: num
     Reflect.set(engine, "slice", original);
   }
   return { turns, asleepAt, overlap, stirred };
+}
+
+/** One 60 Hz frame of `world`: the idle pedals a wreck nobody drives rolls on, the step, the breakage. */
+export function tick(world: World): void {
+  for (const car of world.cars) applyDrive(car, IDLE, DT);
+  stepWorld(world, DT);
+  for (const car of world.cars) car.stepBreakage(DT);
+}
+
+/** Frames of `world` until `until` holds (its frame count, 1-based) or `limit` frames pass (-1). */
+export function frames(world: World, limit: number, until: () => boolean): number {
+  for (let f = 1; f <= limit; f++) {
+    tick(world);
+    if (until()) return f;
+  }
+  return -1;
 }

@@ -34,7 +34,7 @@ const _zero = new THREE.Vector3();
 const _wantQuaternion = new THREE.Quaternion();
 
 /** A wreck rests this long (s) before it sleeps: a toppling pile pauses on the way over, and a monster settling on a bank creeps to its pose for most of a second after it first slows under `REST_SPEED`. */
-const WRECK_REST_S = 1;
+export const WRECK_REST_S = 1;
 /**
  * How deep (m) a wreck at rest may still stand in the world's ground and sleep. It parts from it at `GROUND_LIFT_V`, under
  * `REST_SPEED`: a monster rolled onto its side (its body's lift fading onto its frame, `cageLift`) slept rising at 5 cm/s with its
