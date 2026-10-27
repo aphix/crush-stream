@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { setGround } from "./ground.ts";
@@ -44,8 +44,8 @@ function skinDrift(before: Float32Array[], car: DeformableCar): number {
 }
 
 describe("given the player's car crashed in a race with a mirror torn off and lying on the road", () => {
-  it("when the reset is held again and again, then the drawn body is the one the car had before the first hold, on the first frame of each", (t) => {
-    t.after(() => setGround(null));
+  afterEach(() => setGround(null));
+  it("when the reset is held again and again, then the drawn body is the one the car had before the first hold, on the first frame of each", () => {
     const { w, car, state } = crashed();
     const skin = car.skinGeometries().map((g) => Float32Array.from(g.getAttribute("position").array));
     assert.ok(car.deform.massActive, "the fixture's crash started");
@@ -56,8 +56,7 @@ describe("given the player's car crashed in a race with a mirror torn off and ly
     }
   });
 
-  it("when only a mirror is torn (no hit: no skin was ever baked) and the reset is held, then the drawn body is the whole, undented one, not collapsed by the net state's zero skin inputs", (t) => {
-    t.after(() => setGround(null));
+  it("when only a mirror is torn (no hit: no skin was ever baked) and the reset is held, then the drawn body is the whole, undented one, not collapsed by the net state's zero skin inputs", () => {
     const { w, car, state } = crashed(false);
     const skin = car.skinGeometries().map((g) => Float32Array.from(g.getAttribute("position").array));
     assert.ok(!car.deform.massActive && car.hasLoosePart(), "the fixture's car has a part off and no crash");
@@ -66,8 +65,7 @@ describe("given the player's car crashed in a race with a mirror torn off and ly
     assert.ok(skinDrift(skin, car) < 0.001, `the drawn body drifted ${skinDrift(skin, car).toFixed(3)} m from the car's own`);
   });
 
-  it("when the reset is held again and again, then the torn mirror stays torn and where it lies, thrown no more", (t) => {
-    t.after(() => setGround(null));
+  it("when the reset is held again and again, then the torn mirror stays torn and where it lies, thrown no more", () => {
     const { w, car, state } = crashed();
     const torn = car["parts"].filter((p) => p.detached);
     assert.ok(torn.length >= 1, "the fixture's crash tore a part off");

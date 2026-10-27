@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { setGround } from "./ground.ts";
@@ -66,14 +66,13 @@ function holdThenTap(seconds: number): void {
 }
 
 describe("given the player's car in a respawn race with a mirror torn off and a crash taken", () => {
-  it("when the reset is held, then the car is back on the road at once at rest with the torn mirror still gone and the wreck state kept, and when it is tapped, then it comes back whole after the pause", (t) => {
-    t.after(() => setGround(null));
+  afterEach(() => setGround(null));
+  it("when the reset is held, then the car is back on the road at once at rest with the torn mirror still gone and the wreck state kept, and when it is tapped, then it comes back whole after the pause", () => {
     // 8 s in the car is on the straight, 2 s short of the wall: the crash is the one the test takes itself.
     holdThenTap(8);
   });
 
-  it("when the car has run flat out into the oval's first wall and the reset is held, then it is back on the road at once with the wreck state kept", { todo: "after the plan: calibrate the crush feed's reach to the cage's corner: the oval's first wall glance packs the engine 0.162 m, 12 mm past the 0.15 m kill, so the driver is thrown out and the run reads respawning (main 0.053 m, Stage 4 items 1-4 (rigs and strikers) alone 0.107 m, Stage 3 alone 0.025 m); the feed's reach was calibrated on the hulls' contact point, now the cage's corner" }, (t) => {
-    t.after(() => setGround(null));
+  it("when the car has run flat out into the oval's first wall and the reset is held, then it is back on the road at once with the wreck state kept", { todo: "after the plan: calibrate the crush feed's reach to the cage's corner: the oval's first wall glance packs the engine 0.162 m, 12 mm past the 0.15 m kill, so the driver is thrown out and the run reads respawning (main 0.053 m, Stage 4 items 1-4 (rigs and strikers) alone 0.107 m, Stage 3 alone 0.025 m); the feed's reach was calibrated on the hulls' contact point, now the cage's corner" }, () => {
     holdThenTap(12);
   });
 });
