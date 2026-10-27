@@ -17,6 +17,9 @@ import { carClass, classStats } from "../vehicle/vehicle-classes.ts";
 
 export type Run = { session: RaceSession; onRoad: number; samples: number; mistakes: number };
 
+/** The race cars of the process, by grid slot: no car is ever hit here, so each is stood up again (`spawnFacing`) for the next race instead of built anew. */
+const carPool: DeformableCar[] = [];
+
 /**
  * Real cars on the real drive model (kinematic, as every car is until it crashes) on the course's
  * ground, no car-to-car contact: the AI alone has to keep them on the road and round the laps. Each car's brain plans with its own class's
@@ -26,7 +29,7 @@ export function race(track: Track, n: number, aggression: number, laps: number, 
   const scene = new THREE.Scene();
   const ground = track.ground();
   setGround(ground);
-  const cars = Array.from({ length: n }, (_, i) => new DeformableCar({ body: 0x808080, accent: 0x404040, name: `ai${i}` }, scene, null, fleetStyle(i)));
+  const cars = Array.from({ length: n }, (_, i) => (carPool[i] ??= new DeformableCar({ body: 0x808080, accent: 0x404040, name: `ai${i}` }, scene, null, fleetStyle(i))));
   const entrants: Entrant[] = cars.map((_, i) => ({ id: i, name: `ai${i}`, kind: "ai", aggression }));
   const session = new RaceSession(track, entrants, { laps, noReset: false });
   const brain = new RaceBrain(track, n);
