@@ -1,9 +1,11 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { bumperMaterial, makePaintMaterial, trimMaterial } from "../vehicle/car-materials.ts";
-import { applyDetailMap, ensureRestFrame, REST_FRAME_ATTRIBUTES } from "../vehicle/car-detail-map.ts";
+import { applyDetailMap, ensureRestFrame, REST_FRAME_ATTRIBUTES, restPositions } from "../vehicle/car-detail-map.ts";
+import { PART_KIND } from "../vehicle/part-geometry.ts";
 import { CAR_SPRAY, carPickText, NO_CAR_PICK, type CarPart, type CarPick } from "../match/look-data.ts";
 import { applySpray, BARE_SPRAY, sprayUniforms, type SprayBitmap } from "./spray.ts";
+import { CAR_SPRAY_DEPTH_BAND, carSprayDepthTexture, type RestTriangles, type SprayCover } from "./spray-depth.ts";
 
 /** What wearing a look changed on a car: its own lid and door paints, the spray's uniforms, and the colours it had before. */
 type Worn = {
@@ -19,6 +21,9 @@ type Worn = {
 type CarBase = { body: number; doors: number; bumpers: number; glass: number };
 
 const worn = new WeakMap<DeformableCar, Worn>();
+/** Per style, its covers' outermost surface (`carSprayDepthTexture`). Shared, never disposed. */
+// ponytail: read off the style's first car to wear a look, as its rest frame is (`ensureRestFrame`).
+const sprayDepths = new WeakMap<DeformableCar["style"], THREE.DataTexture>();
 const DEFAULT_PICK = carPickText(NO_CAR_PICK);
 /** Rims as built: white is the instance tint (`WheelBatch`) that leaves the alloy as toned. */
 const RIMS_AS_BUILT = 0xffffff;
@@ -78,11 +83,32 @@ function baseOf(car: DeformableCar): CarBase {
   };
 }
 
+/**
+ * What comes off over car `car`'s skin, in the car frame as it is now: the bonnet, the boot lid, and each door with its glass and
+ * its card (the part batch draws the cards; only their rest triangles here), in the order of `firstWear`'s torn flags.
+ */
+export function sprayCovers(car: DeformableCar): SprayCover[] {
+  const m = car.lookMeshes();
+  const rest = (object: THREE.Object3D, geometry: THREE.BufferGeometry): RestTriangles => ({ positions: restPositions(object, geometry, car.group), index: geometry.index?.array ?? null });
+  const door = (side: 0 | 1): SprayCover => {
+    const glass = car.glassPanes.find((pane) => pane.name === (side === 0 ? "doorL" : "doorR"))!.mesh;
+    const card = car.partSeats[side === 0 ? PART_KIND.liningL : PART_KIND.liningR]!;
+    return { triangles: [rest(m.doors[side]!, m.doors[side]!.geometry), rest(glass, glass.geometry), rest(card, card.drawn)], flat: false };
+  };
+  return [{ triangles: [rest(m.hood, m.hood.geometry)], flat: true }, { triangles: [rest(m.trunk, m.trunk.geometry)], flat: true }, door(0), door(1)];
+}
+
 function firstWear(car: DeformableCar): Worn {
   const m = car.lookMeshes();
   const base = baseOf(car);
+  for (const mesh of [m.body, m.hood, m.trunk, ...m.doors]) ensureRestFrame(mesh, car.group);
+  let map = sprayDepths.get(car.style);
+  if (!map) sprayDepths.set(car.style, (map = carSprayDepthTexture(sprayCovers(car))));
+  const torn = new THREE.Vector4();
+  // Every paint the spray patches shares these uniforms, and the body draws whenever any of them does.
+  m.body.onBeforeRender = () => torn.set(+car.hoodOff(), +car.lidOff(), +car.partOff("doorL"), +car.partOff("doorR"));
   const w: Worn = {
-    uniforms: sprayUniforms(CAR_SPRAY, BARE_SPRAY, 1),
+    uniforms: sprayUniforms(CAR_SPRAY, BARE_SPRAY, 1, { map, band: CAR_SPRAY_DEPTH_BAND, torn }),
     hood: makePaintMaterial(base.body, car.style.paintFinish),
     trunk: makePaintMaterial(base.body, car.style.paintFinish),
     doors: makePaintMaterial(base.doors, car.style.paintFinish),
@@ -94,8 +120,7 @@ function firstWear(car: DeformableCar): Worn {
   for (const door of m.doors) door.material = w.doors;
   for (const paint of [w.hood, w.trunk, w.doors]) applyDetailMap(paint, car.style);
   for (const paint of [m.bodyPaint, w.hood, w.trunk, w.doors]) {
-    applySpray(paint, w.uniforms, REST_FRAME_ATTRIBUTES, "vSprayP = sprayPos;\nvSprayN = sprayNrm;\nvSprayRow = 0.0;", "car");
+    applySpray(paint, w.uniforms, REST_FRAME_ATTRIBUTES, "vSprayP = sprayPos;\nvSprayN = sprayNrm;\nvSprayRow = 0.0;", "car-depth");
   }
-  for (const mesh of [m.body, m.hood, m.trunk, ...m.doors]) ensureRestFrame(mesh, car.group);
   return w;
 }

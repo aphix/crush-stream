@@ -55,7 +55,7 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     applyDolls(this.material, this.dolls, true);
     // The posed body is wherever its parts are: nothing to cull against, and the instance transforms only hide.
     this.frustumCulled = false;
-    applySpray(this.material, sprayUniforms(PERSON_SPRAY, this.sprayAtlas, this.sprayRgba ? slots : 1, sprayed ? personSprayDepthTexture() : null), "", "vSprayP = position;\nvSprayN = normal;\nvSprayRow = float(gl_InstanceID);", sprayed ? "dummy-depth" : "dummy");
+    applySpray(this.material, sprayUniforms(PERSON_SPRAY, this.sprayAtlas, this.sprayRgba ? slots : 1, sprayed ? { map: personSprayDepthTexture() } : null), "", "vSprayP = position;\nvSprayN = normal;\nvSprayRow = float(gl_InstanceID);", sprayed ? "dummy-depth" : "dummy");
     this.material.addEventListener("dispose", () => {
       if (this.sprayAtlas !== BARE_SPRAY) this.sprayAtlas.dispose();
       this.dolls.dispose();

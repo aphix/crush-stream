@@ -138,15 +138,22 @@ export function colourDistance(a: number, b: number): number {
   return hypot3((a >> 16) - (b >> 16), ((a >> 8) & 0xff) - ((b >> 8) & 0xff), (a & 0xff) - (b & 0xff));
 }
 
-/** The shader's spray uniforms for a bitmap of `layout` sampled from `map`, `rows` bitmaps stacked up it (one per dummy slot); with `outer` (`personSprayDepthTexture`) a fragment under its texel's outermost surface draws no paint. */
-export function sprayUniforms(layout: SprayLayout, map: THREE.Texture, rows: number, outer: THREE.Texture | null = null): Record<string, THREE.IUniform> {
+/**
+ * A spray's depth test: under `map`'s texel's outermost surface by more than `band` m a fragment draws no paint. With `torn` (a car's),
+ * only under a cover the car has lost: `map`'s second byte names the cover (1-4), `torn`'s component for it is 1 once it is off.
+ */
+type SprayDepth = { readonly map: THREE.Texture; readonly band?: number; readonly torn?: THREE.Vector4 };
+
+/** The shader's spray uniforms for a bitmap of `layout` sampled from `map`, `rows` bitmaps stacked up it (one per dummy slot), with `depth`'s test. */
+export function sprayUniforms(layout: SprayLayout, map: THREE.Texture, rows: number, depth: SprayDepth | null = null): Record<string, THREE.IUniform> {
   return {
     sprayMap: { value: map },
     sprayMin: { value: new THREE.Vector3(...layout.min) },
     spraySpan: { value: new THREE.Vector3(layout.max[0] - layout.min[0], layout.max[1] - layout.min[1], layout.max[2] - layout.min[2]) },
     sprayFaces: { value: layout.faces.map(([x, y, w, h]) => new THREE.Vector4(x / layout.w, y / layout.h, w / layout.w, h / layout.h)) },
     sprayRows: { value: rows },
-    ...(outer && { sprayDepth: { value: outer }, sprayBand: { value: SPRAY_DEPTH_BAND } }),
+    ...(depth && { sprayDepth: { value: depth.map }, sprayBand: { value: depth.band ?? SPRAY_DEPTH_BAND } }),
+    ...(depth?.torn && { sprayTorn: { value: depth.torn } }),
   };
 }
 
@@ -160,6 +167,9 @@ uniform float sprayRows;
 #ifdef SPRAY_DEPTH
 uniform sampler2D sprayDepth;
 uniform float sprayBand;
+#endif
+#ifdef SPRAY_TORN
+uniform vec4 sprayTorn;
 #endif
 varying vec3 vSprayP;
 varying vec3 vSprayN;
@@ -178,8 +188,14 @@ vec4 sprayTexel() {
   else { if (n.z > 0.0) { f = sprayFaces[3]; depth = t.z; } else { f = sprayFaces[4]; depth = 1.0 - t.z; } uv = t.xy; axis = spraySpan.z; }
   vec2 st = f.xy + uv * f.zw;
 #ifdef SPRAY_DEPTH
-  float code = floor(texture2D(sprayDepth, st).r * 255.0 + 0.5);
-  if (code > 0.0 && depth < (code - 1.0) / 254.0 - sprayBand / axis) return vec4(0.0);
+  vec4 cover = texture2D(sprayDepth, st);
+  float code = floor(cover.r * 255.0 + 0.5);
+  float under = (code - 1.0) / 254.0 - depth;
+  bool hidden = code > 0.0 && under > sprayBand / axis;
+#ifdef SPRAY_TORN
+  hidden = hidden && dot(sprayTorn, vec4(equal(vec4(floor(cover.g * 255.0 + 0.5)), vec4(1.0, 2.0, 3.0, 4.0)))) > 0.5;
+#endif
+  if (hidden) return vec4(0.0);
 #endif
   return texture2D(sprayMap, vec2(st.x, (vSprayRow + st.y) / sprayRows));
 }`;
@@ -199,7 +215,7 @@ export function applySpray(material: THREE.Material, uniforms: Record<string, TH
       .replace("#include <common>", `#include <common>\n${shader.vertexShader.includes(attributes) ? "" : attributes}\nvarying vec3 vSprayP;\nvarying vec3 vSprayN;\nvarying float vSprayRow;`)
       .replace("#include <begin_vertex>", `#include <begin_vertex>\n${vertex}`);
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", `#include <common>\n${"sprayDepth" in uniforms ? "#define SPRAY_DEPTH\n" : ""}${SPRAY_FRAGMENT}`)
+      .replace("#include <common>", `#include <common>\n${"sprayDepth" in uniforms ? "#define SPRAY_DEPTH\n" : ""}${"sprayTorn" in uniforms ? "#define SPRAY_TORN\n" : ""}${SPRAY_FRAGMENT}`)
       .replace("#include <color_fragment>", "#include <color_fragment>\nvec4 sprayS = sprayTexel();\ndiffuseColor.rgb = diffuseColor.rgb * (1.0 - sprayS.a) + sprayS.rgb;");
   };
   material.customProgramCacheKey = () => `${prevKey.call(material)}|spray-${key}`;

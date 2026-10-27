@@ -717,7 +717,7 @@ export class DeformableCar extends CarParts {
     this.heldPlacements = this.placements;
     this.bodyTyres.hold(this.group, this.wheels, gone, lift, fresh);
     this.underHood ??= this.partSeats.filter((s) => s.kind === PART_KIND.interior || s.kind === PART_KIND.engineBay);
-    if (!this.parts.some((p) => p.detached && p.name === LID.hood)) this.hoodTyres.hold(this.group, this.wheels, gone, lift, fresh, this.underHood);
+    if (!this.hoodOff()) this.hoodTyres.hold(this.group, this.wheels, gone, lift, fresh, this.underHood);
   }
 
   /** Bonnet, boot lid, door skins, the police light bar, the skinned glass and the chrome trims follow the body skin; a door's hinge pose turns its skin after. */
