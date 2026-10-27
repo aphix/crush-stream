@@ -2,9 +2,12 @@ import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import type { DriveInput } from "../vehicle/car-drive.ts";
+import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { cageLift } from "../vehicle/car-cage-rig.ts";
-import { frame, makeCar } from "../vehicle/ground-probe.test-util.ts";
+import { FRAME, makeCar } from "../vehicle/ground-probe.test-util.ts";
+import { energyOf } from "../vehicle/energy.test-util.ts";
+import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
+import { stepWorld } from "../engine/world-step.ts";
 import { armKill, CLASSES, HANDLING, VEHICLE_CLASS_IDS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { INITIAL_HUD } from "../hud/hud-store.ts";
 import type { PropHits } from "../contact/prop-contact.ts";
@@ -37,7 +40,8 @@ const RUN_UP_MARGIN = 4.5;
 const WALL_TOP_MARGIN = 1;
 const WALL_TOUCH_CEILING = wallHeight - WALL_TOP_MARGIN;
 
-type Flight = { maxRadius: number; maxHeightAtWall: number; finalRadius: number };
+/** Where the car's drawn body got and ended, and the most mechanical energy (J/kg) it ever held over what its drive had given it (`excess`, at second `excessAt`, the drive's total then `excessDrive`). */
+export type Flight = { maxRadius: number; maxHeightAtWall: number; finalRadius: number; excess: number; excessAt: number; excessDrive: number };
 
 const vertex = new THREE.Vector3();
 
@@ -78,31 +82,50 @@ export function bodyRadius(car: DeformableCar): number {
   return Math.hypot(centroid.x, centroid.z);
 }
 
-function fly(cls: VehicleClassId, x: number, z: number, yaw: number, speed: number, seconds: number): Flight {
-  const car = carOfClass(cls, x, z, yaw, speed);
+export function fly(cls: VehicleClassId, launch: Launch): Flight {
+  const car = carOfClass(cls, launch.x, launch.z, launch.yaw, launch.speed);
   const hits: PropHits = { knock() {}, fx() {}, wall() {} };
   const { world } = arenaWorld([car], hits);
-  const flight: Flight = { maxRadius: 0, maxHeightAtWall: 0, finalRadius: 0 };
-  const accumulator = { acc: 0 };
-  for (let step = 0; step < seconds * 60; step++) {
-    frame(world, FLAT_OUT, accumulator, () => {
-      const orientation = car.group.quaternion;
-      const lift = cageLift(car);
-      const { pos, panelOn } = car.cage.fields;
-      const { vertexCount, vertexGroup } = car.cage.style;
-      for (let k = 0; k < vertexCount; k++) {
-        // A torn-off lid's points stay parked at its rest on the body; the wall meets the plan box `rasterise` builds without them.
-        const group = vertexGroup[k]!;
-        if (group > 0 && panelOn[group - 1] === 0) continue;
-        vertex.set(pos[k * 3]!, pos[k * 3 + 1]! + lift, pos[k * 3 + 2]!).applyQuaternion(orientation).add(car.group.position);
-        const vertexRadius = Math.hypot(vertex.x, vertex.z);
-        flight.maxRadius = Math.max(flight.maxRadius, vertexRadius);
-        if (vertexRadius >= radius) flight.maxHeightAtWall = Math.max(flight.maxHeightAtWall, vertex.y);
-      }
-    });
+  const flight: Flight = { maxRadius: 0, maxHeightAtWall: 0, finalRadius: 0, excess: -Infinity, excessAt: 0, excessDrive: 0 };
+  const start = energyOf(car);
+  let drive = 0;
+  let acc = 0;
+  for (let step = 0; step < launch.seconds * 60; step++) {
+    acc = Math.min(0.05, acc + FRAME);
+    while (acc > 1e-5) {
+      const h = physicsSlice(acc, sliceSpeed(world.cars));
+      // The drive's energy is measured round `applyDrive` itself, so a retuned engine or boost moves nothing in `excess`.
+      const before = energyOf(car);
+      applyDrive(car, FLAT_OUT, h);
+      drive += energyOf(car) - before;
+      stepWorld(world, h);
+      car.stepBreakage(h);
+      readBody(car, flight);
+      const excess = energyOf(car) - start - drive;
+      if (excess > flight.excess) Object.assign(flight, { excess, excessAt: step * FRAME, excessDrive: drive });
+      acc -= h;
+    }
+    car.updateSkin();
   }
   flight.finalRadius = bodyRadius(car);
   return flight;
+}
+
+/** The drawn body's farthest vertex from the middle into `flight`, and the highest of it at or past the wall's inner face. */
+function readBody(car: DeformableCar, flight: Flight): void {
+  const orientation = car.group.quaternion;
+  const lift = cageLift(car);
+  const { pos, panelOn } = car.cage.fields;
+  const { vertexCount, vertexGroup } = car.cage.style;
+  for (let k = 0; k < vertexCount; k++) {
+    // A torn-off lid's points stay parked at its rest on the body; the wall meets the plan box `rasterise` builds without them.
+    const group = vertexGroup[k]!;
+    if (group > 0 && panelOn[group - 1] === 0) continue;
+    vertex.set(pos[k * 3]!, pos[k * 3 + 1]! + lift, pos[k * 3 + 2]!).applyQuaternion(orientation).add(car.group.position);
+    const vertexRadius = Math.hypot(vertex.x, vertex.z);
+    flight.maxRadius = Math.max(flight.maxRadius, vertexRadius);
+    if (vertexRadius >= radius) flight.maxHeightAtWall = Math.max(flight.maxHeightAtWall, vertex.y);
+  }
 }
 
 /** One launch: where it starts and heads, and what it is (for a failure message). */
@@ -202,20 +225,24 @@ export function sideWedgeLaunches(): Launch[] {
   });
 }
 
+/** Every fourth of the headings across the arena: among them 4.71 rad, where the monster made the worst wall touch any heading has (the wall's height is sized on it). */
+const ACROSS_STRIDE = 4;
+/** The most (J/kg) a car may hold over what its drive gave it: the worst side-wedge launch holds 29 (as it meets the wall: the push-out of its drawn body), the owner's two traces 3.7 and 5.5; the free lift held hundreds. */
+export const ENERGY_ROUNDING = 40;
+
 /**
- * The launches of one class: the open ring in every direction, across the arena at every `stride`th of the headings, each ramp's far entry, and each ramp's outward flights
- * (from the foot of its run, from its crest at top speed). The per-commit suite (`derby-containment.test.ts`) takes every fourth heading across the arena, the full-sanity
- * suite (`derby-containment.ai-long-run.ts`) every one. Not a test file itself.
+ * The launches of one class: the open ring in every direction, across the arena at every `ACROSS_STRIDE`th of the headings, each ramp's far entry, and each ramp's outward flights
+ * (from the foot of its run, from its crest at top speed); and every ramp's side wedges, where the monster's energy is read too. Not a test file itself.
  */
-export function containmentCases(stride: number): void {
+export function containmentCases(): void {
   afterEach(leaveArena);
 
   describe("given a derby car driven flat out at the arena wall", () => {
     for (const cls of VEHICLE_CLASS_IDS) {
-      const launches = [...openFloorLaunches(cls), ...acrossLaunches(stride), ...farEntryLaunches(), ...outwardLaunches(cls)];
-      it(`when the ${cls} is launched from the open ring in every direction, across the arena (${stride === 1 ? "every direction" : `every ${stride}th`}), from each ramp's far entry, its foot and its crest, then no part of it passes the wall's outer face and it ends inside`, () => {
+      const launches = [...openFloorLaunches(cls), ...acrossLaunches(ACROSS_STRIDE), ...farEntryLaunches(), ...outwardLaunches(cls)];
+      it(`when the ${cls} is launched from the open ring in every direction, across the arena (every ${ACROSS_STRIDE}th), from each ramp's far entry, its foot and its crest, then no part of it passes the wall's outer face and it ends inside`, () => {
         for (const launch of launches) {
-          const flight = fly(cls, launch.x, launch.z, launch.yaw, launch.speed, launch.seconds);
+          const flight = fly(cls, launch);
           assert.ok(flight.maxRadius < OUTER_FACE, `${launch.label}: a vertex reached ${flight.maxRadius.toFixed(2)} m, past the outer face at ${OUTER_FACE} m`);
           assert.ok(flight.finalRadius < radius, `${launch.label}: ended at ${flight.finalRadius.toFixed(2)} m, outside the inner face at ${radius} m`);
           assert.ok(flight.maxHeightAtWall <= WALL_TOUCH_CEILING, `${launch.label}: touched the wall ${flight.maxHeightAtWall.toFixed(2)} m up, over ${WALL_TOUCH_CEILING} m of its ${wallHeight} m`);
@@ -224,11 +251,11 @@ export function containmentCases(stride: number): void {
     }
   });
 
-  describe("given a derby car driven flat out from the arena's far side at each bowl ramp's side wedge (the 45° plane beside the ramp), square and slanted", () => {
+  describe("given a derby car driven flat out (throttle and boost) from the arena's far side at each bowl ramp's side wedge (the 45° plane beside the ramp), square and slanted", () => {
     const launches = sideWedgeLaunches();
     for (const cls of VEHICLE_CLASS_IDS) {
       let flights: Flight[] | null = null;
-      const flown = (): Flight[] => (flights ??= launches.map((l) => fly(cls, l.x, l.z, l.yaw, l.speed, l.seconds)));
+      const flown = (): Flight[] => (flights ??= launches.map((l) => fly(cls, l)));
       it(`when the ${cls} meets each ramp's two sides, then no part of it passes the wall's outer face and it ends inside`, () => {
         for (const [i, flight] of flown().entries()) {
           assert.ok(flight.maxRadius < OUTER_FACE, `${launches[i]!.label}: a vertex reached ${flight.maxRadius.toFixed(2)} m, past the outer face at ${OUTER_FACE} m`);
@@ -237,6 +264,13 @@ export function containmentCases(stride: number): void {
       });
       it(`when the ${cls} meets each ramp's two sides, then it touches the wall no higher than ${WALL_TOUCH_CEILING} m of its ${wallHeight} m`, () => {
         const over = flown().flatMap((flight, i) => (flight.maxHeightAtWall > WALL_TOUCH_CEILING ? [`${launches[i]!.label}: ${flight.maxHeightAtWall.toFixed(1)} m`] : []));
+        assert.deepEqual(over, []);
+      });
+      if (cls !== "monster") continue;
+      // The owner's two traces were a boosting monster at these planes: the rigid tyre rows' straight-up push kept the speed it lifted the body on.
+      it("when the monster meets each ramp's two sides, then it never holds more energy than its drive gave it", (t) => {
+        const over = flown().flatMap((flight, i) => (flight.excess > ENERGY_ROUNDING ? [`${launches[i]!.label}: ${flight.excess.toFixed(0)} J/kg over the drive's ${flight.excessDrive.toFixed(0)}, ${flight.excessAt.toFixed(2)} s in`] : []));
+        t.diagnostic(`the worst of ${launches.length} launches holds ${Math.max(...flown().map((f) => f.excess)).toFixed(1)} J/kg over its drive`);
         assert.deepEqual(over, []);
       });
     }

@@ -16,7 +16,7 @@ import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { frame, FRAME } from "../vehicle/ground-probe.test-util.ts";
 
 /**
- * The fleet ramps' headless harness (`fleet-ramps.test.ts` and the neighbourhood sweeps of `fleet-ramps.ai-long-run.ts`): the scene,
+ * The fleet ramps' headless harness (`fleet-ramps.test.ts`): the scene,
  * the engine's frame, two cars head-on up the two ramps, and the ballistic watch of a car's height. Not a test file itself.
  */
 /** The most (m) a slice's resting contact may lift a body that has stopped on its belly: the tolerance of the dy bound below. */
@@ -153,15 +153,15 @@ export function watch(cars: readonly DeformableCar[]): { list: string[]; frame: 
  * its tyres grip) at the +z ramp's side from 3.3 m out, `off` deg off the run (90 = square to the side), aimed so its centre
  * line meets the side wall where the wall stands `wall` m high. Its worst roll about its own nose (deg, the lean of its right
  * side) and highest point while it enters: until its centre passes the ramp's midline, comes within 1 m of the high end (where
- * a jump starts), or `frames` (default 360: 6 s) are up. `dx` moves the spawn along +x (m).
+ * a jump starts), or `frames` (default 360: 6 s) are up.
  */
-export function approachSide(cls: VehicleClassId, off: number, wall: number, { frames = 360, dx = 0 } = {}): { roll: number; high: number; z: number } {
+export function approachSide(cls: VehicleClassId, off: number, wall: number, { frames = 360 } = {}): { roll: number; high: number; z: number } {
   // The class on its own body (`CLASSES[cls].style`): a monster's 2.39 m track, not a sedan's 1.48 under its lift and wheels.
   const { w, car } = scene(false, CLASSES[cls].style);
   assignClass(car, cls);
   const th = off / DEG;
   const zWall = RAMP.start + ((RAMP.top - wall) * RAMP.len) / RAMP.top;
-  car.spawnFacing(RAMP.halfW + 3.3 + dx, zWall + 3.3 / Math.tan(th), Math.PI + th, 0);
+  car.spawnFacing(RAMP.halfW + 3.3, zWall + 3.3 / Math.tan(th), Math.PI + th, 0);
   const q = car.group.quaternion;
   const right = new THREE.Vector3();
   const input = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };

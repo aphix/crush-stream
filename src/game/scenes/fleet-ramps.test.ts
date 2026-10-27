@@ -307,7 +307,7 @@ describe("given two cars driving head-on at each other up the two ramps, with no
     assert.deepEqual(flags.list, []);
   });
 
-  // The cells the neighbourhood sweep (fleet-ramps.ai-long-run.ts: 75 combinations around the case above) caught, each staged alone: the
+  // The cells a neighbourhood sweep (75 combinations around the case above) caught, each staged alone: the
   // 15/8.5/0.5 cell's wreck belly sank 17 cm into a ramp lip between two body points (its tail point entered the end face at 6.2 m/s and the
   // pose took the group 1.1 m back in one frame); the 15/9/0.3 cell's struck car fell at a wedge's high end with its middle under the wedge's top
   // (also staged to its one slice below).
