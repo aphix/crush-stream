@@ -352,13 +352,14 @@ const BRAKE: DriveInput = { throttle: 0, steer: 0, brake: 1, ebrake: true, boost
 /** `slide` is the rigid centre's travel: a lifted body turning about its centre swings its origin without sliding. */
 export type Drop = Fit & { slide: number; speed: number };
 
-/** The car a drop of class `cls` uses: built once and stood up again by `spawnFacing` (the engine's own scene reset, `resetVisual`) for each of a matrix's thousand cells. */
-const dropCars = new Map<VehicleClassId, DeformableCar>();
-function pooled(cls: VehicleClassId): DeformableCar {
-  let car = dropCars.get(cls);
+/** The car of class `cls` (in `slot`, for a world that holds two of a class) a test reuses: built once and stood up again by `spawnFacing` (the engine's own scene reset, `resetVisual`) for each of a matrix's thousand cells. */
+const pooledCars = new Map<string, DeformableCar>();
+export function pooled(cls: VehicleClassId, slot = 0): DeformableCar {
+  const key = `${slot} ${cls}`;
+  let car = pooledCars.get(key);
   if (!car) {
     car = makeCar(cls);
-    dropCars.set(cls, car);
+    pooledCars.set(key, car);
   }
   return car;
 }
@@ -368,9 +369,39 @@ function centreOf(car: DeformableCar, out: THREE.Vector3): THREE.Vector3 {
   return out.copy(rigidCentre(car)).applyQuaternion(car.group.quaternion).add(car.group.position);
 }
 
+/** Frames a car must stand exactly as it did the frame before for a `drop` with `untilStill` to end there. */
+const STILL_FRAMES = 30;
+/** The stance's fixed numbers: the body's, the class body's, the velocity's and the spin's, 3 or 4 apiece, then the crush faces and 6 a wheel. */
+const STANCE_FIXED = 20;
+
+/** Into `out`: where `car` stands and how it rides (its body, its class body `lift`, its motion, its crush faces, each wheel's seat and turn). */
+function readStance(car: DeformableCar, lift: THREE.Object3D, out: Float64Array): void {
+  car.group.position.toArray(out, 0);
+  car.group.quaternion.toArray(out, 3);
+  lift.position.toArray(out, 7);
+  lift.quaternion.toArray(out, 10);
+  car.velocity.toArray(out, 14);
+  car.angular.toArray(out, 17);
+  out.set(car.deform.crush, STANCE_FIXED);
+  let k = STANCE_FIXED + car.deform.crush.length;
+  for (const wheel of car.wheels) {
+    wheel.position.toArray(out, k);
+    out[k + 3] = wheel.rotation.x;
+    out[k + 4] = wheel.rotation.y;
+    out[k + 5] = wheel.rotation.z;
+    k += 6;
+  }
+}
+
+function sameStance(a: Float64Array, b: Float64Array): boolean {
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 /**
  * One car dropped 0.5 m above the ground at (x, z) facing `yaw` and held (brake and handbrake) for `seconds`:
  * where it ends up and how it sits. `brake` false lets it coast instead, `speed` (m/s) sets it rolling along its heading. `ground` is made the active one; the caller restores it.
+ * `untilStill`: ends early once the car has stood bit for bit still for `STILL_FRAMES` (the frames left would repeat that state, so the reading is the full run's); a car creeping down a slope never does and runs its seconds out.
  */
 export function drop(
   ground: Ground,
@@ -378,7 +409,7 @@ export function drop(
   x: number,
   z: number,
   yaw: number,
-  o: { seconds?: number; hint?: number; brake?: boolean; speed?: number; collide?: ((c: DeformableCar, h: number) => unknown) | null } = {},
+  o: { seconds?: number; hint?: number; brake?: boolean; speed?: number; untilStill?: boolean; collide?: ((c: DeformableCar, h: number) => unknown) | null } = {},
 ): Drop {
   setGround(ground);
   const car = pooled(cls);
@@ -388,7 +419,17 @@ export function drop(
   const w = worldOf(car, o.collide ?? null);
   const st = { acc: 0 };
   const input = o.brake === false ? idleDrive() : BRAKE;
-  for (let f = 0; f < (o.seconds ?? 3) / FRAME; f++) frame(w, input, st);
+  const lift = car.group.getObjectByName("classLift") ?? car.group;
+  let before = new Float64Array(STANCE_FIXED + car.deform.crush.length + car.wheels.length * 6);
+  let now = new Float64Array(before.length);
+  let still = 0;
+  for (let f = 0; f < (o.seconds ?? 3) / FRAME && still < STILL_FRAMES; f++) {
+    frame(w, input, st);
+    if (!o.untilStill) continue;
+    readStance(car, lift, now);
+    still = sameStance(before, now) ? still + 1 : 0;
+    [before, now] = [now, before];
+  }
   const r = fit(car, ground);
   centreOf(car, _centre);
   const slide = Math.hypot(_centre.x - _centre0.x, _centre.z - _centre0.z);
