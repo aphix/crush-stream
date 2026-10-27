@@ -1,99 +1,29 @@
 import type { ImpulseJoint, RigidBody, World } from "@dimforge/rapier3d-simd";
 import type { Rapier } from "../kernel/rapier.ts";
-import { hypot2, hypot3 } from "../kernel/physics-core.js";
+import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { GRAVITY } from "../kernel/constants.ts";
+import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import { type Doll, PARTS } from "./ragdoll-body.ts";
 import { joinUp } from "./ragdoll-joints.ts";
 import { chooseRoute, GETUP_ROUTES, type GetUpRoute, smooth, STAGE, stageAt, standingBearing } from "./walker-getup.ts";
-import { GAIT, planGait, writeGait } from "./walker-gait.ts";
-import { nlerp, pitchedQuaternion, spinBetween, turnToward, uprightness, wrapAngle } from "./walker-math.ts";
+import { Gait, GAIT } from "./walker-gait.ts";
+import { Locomotion } from "./walker-locomotion.ts";
+import { ANG, FORCE_BASED, GETUP_GIMBAL, HIP_BACK, HIP_FORWARD, HIP_L, HIP_R, HOLD, LIN, MOTOR_FLOOR, MOTORS, ROLL_IN, ROLL_OUT, STAND_GIMBAL } from "./walker-motors.ts";
+import { leanedQuaternion, nlerp, pitchedQuaternion, spinBetween, uprightness } from "./walker-math.ts";
 
 /**
- * The player's body on foot: a dummy of the ragdoll pool held up and walked by motors. Every limb is a joint motor chasing a gait
- * (`walker-gait.ts`); the torso hangs off a kinematic frame by a joint whose three angular motors are the balance (a virtual gyro: its
- * reaction goes to the frame, which has no mass), and the frame turns to the heading the player asks for. Nothing pushes him along: the legs walk.
- * A hit that changes his speed by more than he can brace for drops his strength, so he stumbles; past a tilt, or struck by a car (`struck`), he
- * goes limp: a ragdoll. Once the player asks to walk again he funnels into a get-up (`walker-getup.ts`): by how he lies he regrounds, rolls onto his
- * stomach first, or pushes up from his hands and knees; the frame leans his torso through the stages while a bounded lift takes most of his weight and
- * the limb motors, ramped up from limp, reach each stage's pose and push on the ground.
+ * The player's body on foot: a dummy of the ragdoll pool held up and walked. His root is driven, not simulated: a kinematic frame moves at the speed
+ * and facing `Locomotion` gives (a run in 0.3 s, a sprint in a second) and holds the torso through stiff linear and angular motors, with the weight and
+ * the push fed forward, while every limb is a joint motor chasing the planted-foot gait of `walker-gait.ts`. The same ten Rapier bodies and nine joints
+ * as a thrown driver, so a hit that changes his speed by more than he can brace for drops his strength (the motors weaken, he stumbles), and past a
+ * tilt, or struck by a car (`struck`), he goes limp: a ragdoll. Once the player asks to walk again he funnels into a get-up (`walker-getup.ts`): by how he
+ * lies he regrounds, rolls onto his stomach first, or pushes up from his hands and knees; the frame leans his torso through the stages while a bounded
+ * lift takes most of his weight and the limb motors, ramped up from limp, reach each stage's pose and push on the ground. Then the root is seeded where
+ * he stands and he walks on.
  */
 
-/** `RawJointAxis` of the angular axes. */
-const ANG = [3, 4, 5] as const;
-/** `RawMotorModel.ForceBased`: stiffness in N·m/rad, damping in N·m·s/rad, so a motor's pull does not depend on the mass it moves. */
-const FORCE_BASED = 1;
-
-/** `JOINTS` order. */
-const NECK = 0;
-const SHOULDER_L = 1;
-const ELBOW_L = 2;
-const SHOULDER_R = 3;
-const ELBOW_R = 4;
-const HIP_L = 5;
-const KNEE_L = 6;
-const HIP_R = 7;
-const KNEE_R = 8;
-
-/** Torque (N·m/rad) and damping ratio of the hips and knees: stiff enough to carry the body, damped under 0.03 s so a stepping leg is not late. */
-const LEG_STIFFNESS = 900;
-const LEG_DAMPING_RATIO = 0.03;
-/** The hips must swing far past the thrown dummy's limits to walk and to kneel: thigh swing (rad) forward and back, and the thigh roll's inward and outward range. */
-const HIP_FORWARD = -1.75;
-const HIP_BACK = 0.8;
-const ROLL_IN = 0.2;
-const ROLL_OUT = 0.5;
-
-/** The balance: torque (N·m/rad) and damping (N·m·s/rad) of the gimbal's angular motors. Without them a 40 N·m·s twist topples the dummy; with them he takes 320 and straightens. */
-const GIMBAL_STIFFNESS = 3000;
-const GIMBAL_DAMPING = 600;
-/** Motors may never be set to zero stiffness and zero damping (the solver locks the axis): the weakest setting. */
-const MOTOR_FLOOR = 1;
-
-/** One motor row: joint, angular axis, the gait target it chases (-1: upright, 0), its stiffness and damping at full strength, and whether the get-up's grip multiplies it. */
-type MotorRow = { joint: number; axis: number; target: number; stiffness: number; damping: number; arm: boolean };
-const LEG = LEG_STIFFNESS;
-const LEG_DAMP = LEG_STIFFNESS * LEG_DAMPING_RATIO;
-const ARM_STIFFNESS = 40;
-const ARM_DAMPING = 8;
-const ELBOW_STIFFNESS = 20;
-const ELBOW_DAMPING = 4;
-const NECK_STIFFNESS = 60;
-const NECK_DAMPING = 10;
-const MOTORS: readonly MotorRow[] = [
-  { joint: HIP_L, axis: ANG[0], target: GAIT.HIP_L, stiffness: LEG, damping: LEG_DAMP, arm: false },
-  { joint: HIP_L, axis: ANG[1], target: -1, stiffness: LEG, damping: LEG_DAMP, arm: false },
-  { joint: HIP_L, axis: ANG[2], target: GAIT.ROLL_L, stiffness: LEG, damping: LEG_DAMP, arm: false },
-  { joint: HIP_R, axis: ANG[0], target: GAIT.HIP_R, stiffness: LEG, damping: LEG_DAMP, arm: false },
-  { joint: HIP_R, axis: ANG[1], target: -1, stiffness: LEG, damping: LEG_DAMP, arm: false },
-  { joint: HIP_R, axis: ANG[2], target: GAIT.ROLL_R, stiffness: LEG, damping: LEG_DAMP, arm: false },
-  { joint: KNEE_L, axis: ANG[0], target: GAIT.KNEE_L, stiffness: LEG, damping: LEG_DAMP, arm: false },
-  { joint: KNEE_R, axis: ANG[0], target: GAIT.KNEE_R, stiffness: LEG, damping: LEG_DAMP, arm: false },
-  { joint: SHOULDER_L, axis: ANG[0], target: GAIT.ARM_L, stiffness: ARM_STIFFNESS, damping: ARM_DAMPING, arm: true },
-  { joint: SHOULDER_L, axis: ANG[1], target: -1, stiffness: ARM_STIFFNESS, damping: ARM_DAMPING, arm: true },
-  { joint: SHOULDER_L, axis: ANG[2], target: -1, stiffness: ARM_STIFFNESS, damping: ARM_DAMPING, arm: true },
-  { joint: SHOULDER_R, axis: ANG[0], target: GAIT.ARM_R, stiffness: ARM_STIFFNESS, damping: ARM_DAMPING, arm: true },
-  { joint: SHOULDER_R, axis: ANG[1], target: -1, stiffness: ARM_STIFFNESS, damping: ARM_DAMPING, arm: true },
-  { joint: SHOULDER_R, axis: ANG[2], target: -1, stiffness: ARM_STIFFNESS, damping: ARM_DAMPING, arm: true },
-  { joint: ELBOW_L, axis: ANG[0], target: GAIT.ELBOW_L, stiffness: ELBOW_STIFFNESS, damping: ELBOW_DAMPING, arm: true },
-  { joint: ELBOW_R, axis: ANG[0], target: GAIT.ELBOW_R, stiffness: ELBOW_STIFFNESS, damping: ELBOW_DAMPING, arm: true },
-  { joint: NECK, axis: ANG[0], target: -1, stiffness: NECK_STIFFNESS, damping: NECK_DAMPING, arm: false },
-  { joint: NECK, axis: ANG[1], target: -1, stiffness: NECK_STIFFNESS, damping: NECK_DAMPING, arm: false },
-  { joint: NECK, axis: ANG[2], target: -1, stiffness: NECK_STIFFNESS, damping: NECK_DAMPING, arm: false },
-];
 /** A limp limb keeps this share of its stiffness, so a fallen body is not a puddle. */
 const LIMP_LIMB_SHARE = 0.08;
-
-/** Turning rate toward the heading (rad/s), and the error (rad) within which he walks: facing first, then going. */
-const TURN_RATE = 4;
-const FACE_BEFORE_WALK = 0.8;
-/** The stride and cadence ease to their plan at this rate (1/s), so legs start and stop smoothly. */
-const GAIT_EASE = 5;
-/** Knees stay this bent at a walk, more with speed up to the ceiling (rad). */
-const KNEE_BASE_AT_REST = 0.1;
-const KNEE_BASE_PER_SPEED = 0.1;
-const KNEE_BASE_MAX = 0.4;
-/** A stride this wide (rad) bends the knees in full; narrower ones in proportion. */
-const KNEE_FULL_STRIDE = 0.2;
 
 /** A frame's change in his speed (m/s) beyond what walking and gravity make is a hit; the strength it costs grows over this span. */
 const HIT_SPEED = 1;
@@ -126,12 +56,17 @@ const STANDING_UPRIGHT = 0.85;
 const STANDING_HEIGHT = 0.95;
 /** The longest control step (s): a hitch does not turn the motors' targets into a jump. */
 const MAX_DT = 0.05;
+/** The torso may lag the root this far (m) before the root is brought back to it (a wall stops the root with him), and he then runs no faster than he is going plus this (m/s). */
+const LEASH = 0.2;
+const BLOCKED_MARGIN = 1;
 
 type WalkState = "stand" | "down" | "getUp";
 
 const _rot = { x: 0, y: 0, z: 0, w: 1 };
 const _spin = { x: 0, y: 0, z: 0 };
+const _linear = { x: 0, y: 0, z: 0 };
 const _force = { x: 0, y: 0, z: 0 };
+const _point = { x: 0, y: 0, z: 0 };
 const ZERO = { x: 0, y: 0, z: 0 };
 const GIMBAL_AXIS = { x: 0, y: 0, z: 1 };
 /** No axis of the gimbal is locked: only its motors act on the torso. */
@@ -149,38 +84,46 @@ export class Walker {
   /** The route and stage the get-up is on. */
   route: GetUpRoute = "reground";
   stage = 0;
+  /** The root's motion and the gait's feet: what he does while he stands. */
+  readonly loco = new Locomotion();
+  readonly gait = new Gait();
   private doll: Doll | null = null;
   private world: World | null = null;
   private rapier: Rapier | null = null;
   private anchor: RigidBody | null = null;
   private gimbal: ImpulseJoint | null = null;
   private yaw = 0;
-  private phase = 0;
-  private stride = 0;
-  private cadence = 0;
   private asking = 0;
   private downFor = 0;
   private getUpFor = 0;
   private stageFor = 0;
-  private hasLastSpeed = false;
-  private lifting = false;
-  private readonly lastVelocity = new Float64Array(3);
+  private framesOnFoot = 0;
+  private forcing = false;
+  private groundLast = 0;
   private readonly reference = new Float64Array(4);
   private readonly next = new Float64Array(4);
   private readonly target = new Float64Array(4);
   private readonly start = new Float64Array(4);
   private readonly spin = new Float64Array(3);
-  private readonly gait = new Float64Array(GAIT.COUNT);
-  private readonly plan = new Float64Array(2);
+  private readonly stagePose = new Float64Array(GAIT.COUNT);
   private readonly stageValues = new Float64Array(STAGE.COUNT);
+  private readonly anchorPos = new Float64Array(3);
+  private readonly anchorVel = new Float64Array(3);
+  private readonly push = new Float64Array(3);
+  /** The ground under (x, z), the last known one where there is none. */
+  private readonly groundAt = (x: number, z: number): number => {
+    const height = activeGround().heightAt(x, z);
+    if (height !== NO_FLOOR) this.groundLast = height;
+    return this.groundLast;
+  };
 
   get active(): boolean {
     return this.doll !== null;
   }
 
-  /** The way he faces (rad about the vertical, 0 along +z) while he stands. */
+  /** The way he faces (rad about the vertical, 0 along +z). */
   get facing(): number {
-    return this.yaw;
+    return this.state === "stand" ? this.loco.yaw : this.yaw;
   }
 
   /** Take over `doll` (standing, facing `yaw`) in `world`: hang its torso off a frame, widen its hips for a stride and set every motor. */
@@ -195,17 +138,15 @@ export class Walker {
     raw.jointSetLimits(doll.joints[HIP_R]!.handle, ANG[2], -ROLL_IN, ROLL_OUT);
     this.anchor = world.createRigidBody(rapier.RigidBodyDesc.kinematicVelocityBased());
     this.gimbal = world.createImpulseJoint(rapier.JointData.generic(ZERO, ZERO, GIMBAL_AXIS, NO_LOCKED_AXES), this.anchor, doll.bodies[0]!, true);
-    for (const axis of ANG) raw.jointConfigureMotorModel(this.gimbal.handle, axis, FORCE_BASED);
+    for (const axis of [...ANG, ...LIN]) raw.jointConfigureMotorModel(this.gimbal.handle, axis, FORCE_BASED);
     for (const row of MOTORS) raw.jointConfigureMotorModel(doll.joints[row.joint]!.handle, row.axis, FORCE_BASED);
-    this.yaw = this.heading = yaw;
+    this.heading = yaw;
     pitchedQuaternion(this.reference, yaw, 0);
     this.setAnchor(this.reference);
-    this.state = "stand";
+    this.enterStand(doll, yaw);
     this.strength = 1;
-    this.stride = this.cadence = this.phase = 0;
     this.downFor = this.getUpFor = this.stageFor = this.asking = 0;
     this.sinceStruck = Infinity;
-    this.hasLastSpeed = false;
   }
 
   /** Let go of the doll: the frame goes and the doll gets its thrown-dummy joints back (limits and motors as the pool built them). */
@@ -218,6 +159,7 @@ export class Walker {
     doll.joints = joinUp(this.rapier!, this.world!, doll.bodies);
     doll.driven = false;
     doll.loose = false;
+    this.forcing = false;
     this.doll = this.world = this.rapier = this.anchor = this.gimbal = null;
   }
 
@@ -240,38 +182,56 @@ export class Walker {
     this.sinceStruck = 0;
   }
 
-  /** One frame of `dt` sim seconds: read where the body is, decide what he can do, and set the frame, the lift and every motor for the steps to come. */
+  /** One frame of `dt` sim seconds: read where the body is, decide what he can do, and set the frame, the forces and every motor for the steps to come. */
   control(dt: number): void {
     const doll = this.doll;
     if (doll === null || dt <= 0) return;
     const step = Math.min(dt, MAX_DT);
     const upright = uprightness(doll.cur, 3);
-    const speed = hypot2(doll.vel[0]!, doll.vel[2]!);
     this.sinceStruck += step;
     this.asking = Math.max(0, this.asking - step);
     doll.bodies[0]!.wakeUp();
     this.feelHits(doll, step);
     this.decideState(doll, upright, doll.cur[1]!, step);
+    if (this.state === "stand") this.walk(doll, step);
     this.steer(step);
     this.driveGimbal(upright);
-    this.driveLegs(speed, step);
-    this.lift(doll);
+    this.driveMotors(step);
+    this.holdUp(doll);
   }
 
-  /** A change in speed over a frame beyond `HIT_SPEED` (gravity and a stride make none) takes strength in proportion; strength comes back over `RECOVER_SECONDS`. */
+  /**
+   * On his feet, his torso moving more than `HIT_SPEED` (m/s) differently from the root that holds it is a blow (the root's own acceleration is no hit, and
+   * neither is being held back along his way by a wall): it takes strength in proportion, past `HIT_SPAN` more it knocks him down, and strength comes back
+   * over `RECOVER_SECONDS`.
+   */
   private feelHits(doll: Doll, dt: number): void {
-    const v = doll.vel;
-    const last = this.lastVelocity;
-    if (this.hasLastSpeed) {
-      const change = hypot3(v[0]! - last[0]!, v[1]! - last[1]!, v[2]! - last[2]!);
-      const hit = Math.max(0, change - HIT_SPEED * Math.max(1, dt * 60));
+    if (this.state !== "stand") return;
+    if (this.framesOnFoot++ > 0) {
+      const hit = Math.max(0, this.blowSpeed(doll) - HIT_SPEED * Math.max(1, dt * 60));
+      if (hit >= HIT_SPAN) {
+        this.drop();
+        return;
+      }
       this.strength = Math.min(this.strength, 1 - HIT_DROP * Math.min(1, hit / HIT_SPAN));
     }
-    last[0] = v[0]!;
-    last[1] = v[1]!;
-    last[2] = v[2]!;
-    this.hasLastSpeed = true;
-    if (this.state === "stand") this.strength = Math.min(1, this.strength + dt / RECOVER_SECONDS);
+    this.strength = Math.min(1, this.strength + dt / RECOVER_SECONDS);
+  }
+
+  /** How far (m/s) his torso moves from the root's velocity, less what a wall ahead takes off his way (the torso slower than the root along his facing). */
+  private blowSpeed(doll: Doll): number {
+    const held = this.anchorVel;
+    let dx = doll.vel[0]! - held[0]!;
+    const dy = doll.vel[1]! - held[1]!;
+    let dz = doll.vel[2]! - held[2]!;
+    const sin = detSin(this.loco.yaw);
+    const cos = detCos(this.loco.yaw);
+    const along = dx * sin + dz * cos;
+    if (along < 0) {
+      dx -= along * sin;
+      dz -= along * cos;
+    }
+    return hypot3(dx, dy, dz);
   }
 
   private decideState(doll: Doll, upright: number, height: number, dt: number): void {
@@ -306,13 +266,12 @@ export class Walker {
     this.setAnchor(this.start);
   }
 
-  /** The last stage has run: standing means he walks on, anything else is a fall to try again. */
+  /** The last stage has run: standing means he walks on from where he stands, anything else is a fall to try again. */
   private finishGetUp(doll: Doll, upright: number, height: number): void {
     if (upright > STANDING_UPRIGHT && height > STANDING_HEIGHT) {
       this.state = "stand";
       this.heading = this.yaw;
-      this.stride = this.cadence = this.phase = 0;
-      this.hasLastSpeed = false;
+      this.enterStand(doll, this.yaw);
       return;
     }
     this.drop();
@@ -320,14 +279,74 @@ export class Walker {
     this.yaw = standingBearing(doll.cur, 3, this.yaw);
   }
 
-  /** The frame: it turns toward the heading while he stands, follows the body while he lies, and leans through the get-up's stages. */
+  /** The root starts from where the torso is, standing still on both feet, facing `yaw`. */
+  private enterStand(doll: Doll, yaw: number): void {
+    const at = doll.bodies[0]!.translation();
+    this.yaw = yaw;
+    this.state = "stand";
+    this.loco.reset(yaw);
+    this.framesOnFoot = 0;
+    this.gait.seed(at.x, at.y, at.z, yaw, this.groundAt);
+    this.anchorPos[0] = at.x;
+    this.anchorPos[1] = at.y;
+    this.anchorPos[2] = at.z;
+    this.anchorVel.fill(0);
+    this.push.fill(0);
+    _point.x = at.x;
+    _point.y = at.y;
+    _point.z = at.z;
+    this.anchor!.setTranslation(_point, false);
+    this.anchor!.setLinvel(ZERO, false);
+  }
+
+  /** On his feet: the root's speed and facing follow the controls, the gait follows the root, and the frame moves to where the gait puts his torso. */
+  private walk(doll: Doll, dt: number): void {
+    this.holdRootToBody(doll);
+    this.loco.update(dt, this.heading, this.command);
+    this.gait.update(dt, this.loco, this.groundAt, doll.cur, 3);
+    this.moveAnchor(dt);
+  }
+
+  /** A torso held back by the world (a wall, a car) brings the root back to within `LEASH` of it, and he goes no faster than he is moving. */
+  private holdRootToBody(doll: Doll): void {
+    const dx = this.anchorPos[0]! - doll.cur[0]!;
+    const dz = this.anchorPos[2]! - doll.cur[2]!;
+    const slip = hypot2(dx, dz);
+    if (slip < LEASH) return;
+    const back = (slip - LEASH) / slip;
+    this.gait.shift(-dx * back, -dz * back);
+    this.anchorPos[0]! -= dx * back;
+    this.anchorPos[2]! -= dz * back;
+    _point.x = this.anchorPos[0]!;
+    _point.y = this.anchorPos[1]!;
+    _point.z = this.anchorPos[2]!;
+    this.anchor!.setTranslation(_point, false);
+    const along = doll.vel[0]! * detSin(this.loco.yaw) + doll.vel[2]! * detCos(this.loco.yaw);
+    this.loco.speed = Math.min(this.loco.speed, Math.max(0, along) + BLOCKED_MARGIN);
+  }
+
+  /** The frame's velocity that takes it to the gait's torso centre over `dt`, and the push (m/s²) that velocity changes by, which `holdUp` feeds forward. */
+  private moveAnchor(dt: number): void {
+    const target = this.gait.anchor;
+    for (let i = 0; i < 3; i++) {
+      const velocity = (target[i]! - this.anchorPos[i]!) / dt;
+      this.push[i] = (velocity - this.anchorVel[i]!) / dt;
+      this.anchorVel[i] = velocity;
+      this.anchorPos[i] = target[i]!;
+    }
+    _linear.x = this.anchorVel[0]!;
+    _linear.y = this.anchorVel[1]!;
+    _linear.z = this.anchorVel[2]!;
+    this.anchor!.setLinvel(_linear, false);
+  }
+
+  /** The frame's turn: the root's lean and facing on his feet, the body's own while he lies, and the get-up's stages. */
   private steer(dt: number): void {
     const doll = this.doll!;
     if (this.state === "down") {
       for (let i = 0; i < 4; i++) this.next[i] = doll.cur[3 + i]!;
     } else if (this.state === "stand") {
-      this.yaw = turnToward(this.yaw, this.heading, TURN_RATE * dt);
-      pitchedQuaternion(this.next, this.yaw, 0);
+      leanedQuaternion(this.next, this.loco.yaw + this.gait.twist, this.loco.pitch, this.loco.roll);
     } else {
       this.stageValuesNow();
       pitchedQuaternion(this.target, this.yaw, this.stageValues[STAGE.PITCH]!);
@@ -357,67 +376,75 @@ export class Walker {
     this.anchor!.setRotation(_rot, false);
   }
 
-  /** The balance's stiffness follows his strength and fades as he tips past recovery; the get-up holds it whatever his tilt, since the frame leans him. */
+  /** The balance and the hold: the gimbal's stiffness follows his strength (his root's hold is linear, the balance angular), and fades as he tips past recovery; the get-up holds it whatever his tilt, since the frame leans him. */
   private driveGimbal(upright: number): void {
     const raw = this.world!.impulseJoints.raw;
     const handle = this.gimbal!.handle;
+    const standing = this.state === "stand";
+    const gimbal = standing ? STAND_GIMBAL : GETUP_GIMBAL;
     const tipped = this.state === "getUp" ? 1 : Math.max(0, Math.min(1, (upright - BALANCE_GONE) / (BALANCE_FULL - BALANCE_GONE)));
-    const k = Math.max(MOTOR_FLOOR, GIMBAL_STIFFNESS * this.strength * tipped);
-    const d = Math.max(MOTOR_FLOOR, GIMBAL_DAMPING * this.strength * tipped);
+    const k = Math.max(MOTOR_FLOOR, gimbal.stiffness * this.strength * tipped);
+    const d = Math.max(MOTOR_FLOOR, gimbal.damping * this.strength * tipped);
     for (let i = 0; i < ANG.length; i++) raw.jointConfigureMotorPosition(handle, ANG[i]!, 0, k, d);
+    const hold = standing ? this.strength : 0;
+    for (let i = 0; i < LIN.length; i++) raw.jointConfigureMotorPosition(handle, LIN[i]!, 0, Math.max(MOTOR_FLOOR, HOLD.stiffness * hold), Math.max(MOTOR_FLOOR, HOLD.damping * hold));
   }
 
-  /** The legs and arms: a walking gait while he stands, the stage's pose in the get-up, each motor at the strength he has. */
-  private driveLegs(speed: number, dt: number): void {
+  /** Every limb motor: the gait's targets on his feet, the stage's pose in the get-up, each at the strength he has. */
+  private driveMotors(dt: number): void {
     const raw = this.world!.impulseJoints.raw;
     const joints = this.doll!.joints;
+    const walking = this.state === "stand";
     if (this.state === "getUp") this.poseFromStage();
-    else this.walkGait(speed, dt);
+    const targets = this.state === "getUp" ? this.stagePose : this.gait.targets;
     const limb = this.state === "down" ? LIMP_LIMB_SHARE : LIMP_LIMB_SHARE + (1 - LIMP_LIMB_SHARE) * this.strength;
     const grip = this.state === "getUp" ? this.stageValues[STAGE.GRIP]! : 1;
     for (let i = 0; i < MOTORS.length; i++) {
       const row = MOTORS[i]!;
-      const target = row.target < 0 ? 0 : this.gait[row.target]!;
+      const target = row.target < 0 ? 0 : targets[row.target]!;
       const share = row.arm ? limb * grip : limb;
-      raw.jointConfigureMotorPosition(joints[row.joint]!.handle, row.axis, target, Math.max(MOTOR_FLOOR, row.stiffness * share), Math.max(MOTOR_FLOOR, row.damping * share));
+      const stiffness = walking ? row.walkStiffness : row.stiffness;
+      const damping = walking ? row.walkDamping : row.damping;
+      const lead = walking && row.target >= 0 ? this.gait.rates[row.target]! : 0;
+      raw.jointConfigureMotor(joints[row.joint]!.handle, row.axis, target - lead * dt * 0.6, lead, Math.max(MOTOR_FLOOR, stiffness * share), Math.max(MOTOR_FLOOR, damping * share));
     }
-  }
-
-  /** The gait's stride and cadence follow the command once he faces the way he is going. */
-  private walkGait(speed: number, dt: number): void {
-    const facing = Math.abs(wrapAngle(this.heading - this.yaw)) < FACE_BEFORE_WALK;
-    planGait(this.state === "stand" && facing ? this.command : 0, this.plan);
-    const ease = Math.min(1, dt * GAIT_EASE);
-    this.stride += (this.plan[0]! - this.stride) * ease;
-    this.cadence += (this.plan[1]! - this.cadence) * ease;
-    this.phase = (this.phase + this.cadence * dt) % 1;
-    const bend = Math.min(KNEE_BASE_MAX, KNEE_BASE_AT_REST + KNEE_BASE_PER_SPEED * speed) * Math.min(1, this.stride / KNEE_FULL_STRIDE);
-    writeGait(this.gait, this.phase, this.stride, bend);
   }
 
   /** Both arms, both legs at the stage's pose. */
   private poseFromStage(): void {
     const s = this.stageValues;
-    const g = this.gait;
+    const g = this.stagePose;
     g[GAIT.HIP_L] = g[GAIT.HIP_R] = s[STAGE.HIP]!;
     g[GAIT.KNEE_L] = g[GAIT.KNEE_R] = s[STAGE.KNEE]!;
     g[GAIT.ARM_L] = g[GAIT.ARM_R] = s[STAGE.ARM]!;
     g[GAIT.ELBOW_L] = g[GAIT.ELBOW_R] = s[STAGE.ELBOW]!;
     g[GAIT.ROLL_L] = g[GAIT.ROLL_R] = 0;
+    g[GAIT.NECK_TURN] = g[GAIT.NECK_NOD] = 0;
   }
 
-  /** In the get-up a bounded force under the torso takes `LIFT_WEIGHT_SHARE` of his weight and pulls him to the stage's height; otherwise none. */
-  private lift(doll: Doll): void {
+  /**
+   * A force on the torso that carries what the root's motion asks of the body: on his feet his weight and the push of the root's acceleration (the
+   * hold then only corrects), in the get-up a bounded lift of `LIFT_WEIGHT_SHARE` of his weight pulling him to the stage's height; otherwise none.
+   */
+  private holdUp(doll: Doll): void {
     const torso = doll.bodies[0]!;
-    if (this.state !== "getUp") {
-      if (this.lifting) torso.resetForces(false);
-      this.lifting = false;
+    if (this.state === "down") {
+      if (this.forcing) torso.resetForces(false);
+      this.forcing = false;
       return;
     }
-    const pull = LIFT_WEIGHT_SHARE * WEIGHT + LIFT_STIFFNESS * (this.stageValues[STAGE.HEIGHT]! - doll.cur[1]!) - LIFT_DAMPING * doll.vel[1]!;
-    _force.y = Math.max(0, Math.min(LIFT_MAX_WEIGHTS * WEIGHT, pull));
+    if (this.state === "stand") {
+      const share = TOTAL_MASS * this.strength;
+      _force.x = share * this.push[0]!;
+      _force.y = share * (GRAVITY + this.push[1]!);
+      _force.z = share * this.push[2]!;
+    } else {
+      const pull = LIFT_WEIGHT_SHARE * WEIGHT + LIFT_STIFFNESS * (this.stageValues[STAGE.HEIGHT]! - doll.cur[1]!) - LIFT_DAMPING * doll.vel[1]!;
+      _force.x = _force.z = 0;
+      _force.y = Math.max(0, Math.min(LIFT_MAX_WEIGHTS * WEIGHT, pull));
+    }
     torso.resetForces(false);
     torso.addForce(_force, true);
-    this.lifting = true;
+    this.forcing = true;
   }
 }

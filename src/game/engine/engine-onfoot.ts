@@ -10,10 +10,12 @@ import type { DriverLook } from "../present/driver-look.ts";
 import { OnFootFlow, type OnFootRefusal, type OnFootSense, type OnFootStep } from "../present/onfoot-flow.ts";
 import type { FootHud } from "../hud/hud-store.ts";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
-import { RUN_SPEED, WALK_SPEED } from "../present/walker-gait.ts";
+import { RUN_SPEED, SPRINT_SPEED, WALK_SPEED } from "../present/walker-locomotion.ts";
+import { BLEND_SECONDS, FOLLOW_PITCH, FOLLOW_RADIUS, FollowFocus, followFov } from "../present/walker-camera.ts";
+import type { Sight } from "../present/spectate-cam.ts";
 import { doorBlocked, doorInReach, doorSpot, inPlay } from "./onfoot-doors.ts";
 import { SEAT_KEYS } from "./engine-keys.ts";
-import { blankWalkIntent, readWalkIntent } from "./engine-walk-input.ts";
+import { blankWalkIntent, readWalkIntent, type WalkIntent } from "./engine-walk-input.ts";
 
 /** What the director needs from the engine: the objects it acts on, and the questions only the engine can answer. */
 interface OnFootHost {
@@ -31,6 +33,8 @@ interface OnFootHost {
   racing(): boolean;
   /** The player's own look, as the garage dresses him. */
   look(): DriverLook;
+  /** The scene's solids the camera keeps its line of sight clear of, or null where there are none. */
+  sight(): Sight | null;
 }
 
 /** The control that gets him out and in: Enter on the keyboard (`SEAT_KEYS.onFoot`), B (Circle) on the pad. Neither drives, steers or switches a scene. */
@@ -40,12 +44,12 @@ const SWALLOWED_KEYS: readonly string[] = ["Space", SEAT_KEYS.reset, SEAT_KEYS.s
 const BACK_BUTTON = 1 << PAD_BUTTON.back;
 const SWALLOWED_BUTTONS = BACK_BUTTON | (1 << PAD_BUTTON.lb) | (1 << PAD_BUTTON.rb) | (1 << PAD_BUTTON.north) | (1 << PAD_BUTTON.down);
 
-/** A stick pushed less than this far does not move him; slower pushes walk slower, down to this speed (m/s). */
+/** A stick pushed less than this far does not move him (research: pad dead zone 0.12-0.18); a push beyond it walks from this speed (m/s) up to a run along this curve (research: 1.5-2). */
 const WALK_DEADZONE = 0.15;
 const CREEP_SPEED = 0.8;
-/** The walk camera: it looks at his chest from this far (m) and pitch (rad), and the wheel may bring it this close. */
-const WALK_SHOT = { lookY: 1.3, radius: 4.8, pitch: 0.34, lookX: 0, lookZ: 0, minRadius: 1.8 };
-const LOOK_OVER_TORSO = 0.2;
+const STICK_CURVE = 1.5;
+/** While he climbs into his car the camera draws back by this share of its distance. */
+const ENTER_PULL_BACK = 1.35;
 /** A car that has just run him down does not do it again for this long (s): the launch carries him through its footprint. */
 const STRIKE_COOLDOWN = 0.6;
 /** Seconds a refusal stays on the prompt. */
@@ -75,6 +79,8 @@ export class OnFootDirector {
   private readonly speed = new Float64Array(1);
   private readonly strike = blankStrike();
   private framed = false;
+  private blendLeft = 0;
+  private readonly follow = new FollowFocus();
   private refusal: OnFootRefusal | null = null;
   private refusalLeft = 0;
   /** Whether his car's door is in reach this frame, for the prompt. */
@@ -226,6 +232,14 @@ export class OnFootDirector {
     }
   }
 
+  /** The speed (m/s) a push of `reach` (0 to 1) asks for: Boost sprints, the walk control holds a walk, else the push walks from a creep up to a run along `STICK_CURVE`. */
+  private pace(intent: WalkIntent, reach: number): number {
+    if (intent.sprint) return SPRINT_SPEED;
+    if (intent.walk) return WALK_SPEED;
+    const push = (Math.min(1, reach) - WALK_DEADZONE) / (1 - WALK_DEADZONE);
+    return CREEP_SPEED + (RUN_SPEED - CREEP_SPEED) * push ** STICK_CURVE;
+  }
+
   /** The stick and keys, relative to the camera, into the walker's heading and speed. */
   private walk(): void {
     const { camera, view, ragdolls, keys, pad, touch } = this.host;
@@ -244,7 +258,7 @@ export class OnFootDirector {
     const x = ahead * intent.forward - side * intent.strafe;
     const z = side * intent.forward + ahead * intent.strafe;
     walker.heading = detAtan2(x, z);
-    walker.command = intent.run ? RUN_SPEED : Math.max(CREEP_SPEED, WALK_SPEED * Math.min(1, reach));
+    walker.command = this.pace(intent, reach);
     walker.ask();
   }
 
@@ -261,20 +275,34 @@ export class OnFootDirector {
     this.reach = false;
   }
 
-  /** The camera: it orbits his chest, with the same drag, stick and mouse look as everywhere. True while it is his. */
+  /**
+   * The camera: it orbits his chest from `FOLLOW_RADIUS`, with the same drag, stick and mouse look as everywhere, its focus following him critically damped (so
+   * the bob never reaches the screen), coming back behind him after a pause in the look, and pulled in by the scene's walls. Taking it over from the car, and
+   * handing it back, blend over `BLEND_SECONDS`. True while it is his.
+   */
   aim(wallDt: number): boolean {
     if (!this.flow.active || !this.host.ragdolls.walkerTorso(_torso)) return false;
-    const view = this.host.view;
-    const camera = this.host.camera;
-    if (!this.framed) {
-      this.framed = true;
-      WALK_SHOT.lookX = _torso.x;
-      WALK_SHOT.lookZ = _torso.z;
-      view.frameReset(true, this.host.cars(), detAtan2(camera.position.x - _torso.x, camera.position.z - _torso.z), WALK_SHOT);
-    }
-    view.look.set(_torso.x, _torso.y + LOOK_OVER_TORSO, _torso.z);
-    view.orbit(wallDt, 0, true, null);
+    const { view, camera, ragdolls } = this.host;
+    const walker = ragdolls.walker;
+    if (!this.framed) this.beginFollow();
+    const entering = this.flow.phase === "entering";
+    const car = this.host.cars()[this.flow.car];
+    if (entering && car) _torso.set(car.group.position.x, _torso.y, car.group.position.z);
+    this.follow.follow(wallDt, _torso.x, _torso.y, _torso.z, walker.loco.speed);
+    view.look.set(this.follow.point[0]!, this.follow.point[1]!, this.follow.point[2]!);
+    view.turnOrbit(this.follow.recenter(wallDt, view.orbitAngle, walker.facing, walker.loco.speed, view.lookingAround));
+    this.blendLeft = Math.max(0, this.blendLeft - wallDt);
+    if (this.blendLeft > 0 || entering) view.easeOrbit(entering ? FOLLOW_RADIUS * ENTER_PULL_BACK : FOLLOW_RADIUS, FOLLOW_PITCH, 1 - Math.exp((-3 * wallDt) / BLEND_SECONDS));
+    view.setLens(entering ? null : followFov(camera.aspect), false);
+    view.orbit(wallDt, 0, true, this.host.sight());
     return true;
+  }
+
+  /** He has just got out: the follow starts on him, the lens, distance and pitch ease to the on-foot shot from the car's. */
+  private beginFollow(): void {
+    this.framed = true;
+    this.blendLeft = BLEND_SECONDS;
+    this.follow.seed(_torso.x, _torso.y, _torso.z);
   }
 
   /** The HUD's read of the trip, or null where the control does nothing: the scene does not offer it, or he neither sits at a wheel he may leave nor is out. */

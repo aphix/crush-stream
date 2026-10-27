@@ -223,11 +223,33 @@ export class ChaseCamera {
     return this.sceneFov ?? this.baseFov;
   }
 
-  /** Set the scene's lens (null: the camera's own) and cut to it: called on a scene switch, under its fade. */
-  setLens(fov: number | null): void {
+  /** Set the scene's lens (null: the camera's own); a scene switch cuts to it under its fade, the on-foot shot lets the orbit ease there. */
+  setLens(fov: number | null, cut = true): void {
     this.sceneFov = fov;
+    if (!cut) return;
     this.camera.fov = this.lens;
     this.camera.updateProjectionMatrix();
+  }
+
+  /** The orbit's yaw (rad): the eye stands at (sin, cos) of it round `look`. */
+  get orbitAngle(): number {
+    return this.angle;
+  }
+
+  /** The player is looking round: a drag, mouse look or the right stick. */
+  get lookingAround(): boolean {
+    return this.dragging || this.locked || this.pad.rx !== 0 || this.pad.ry !== 0;
+  }
+
+  /** Turn the orbit to `angle` (the on-foot follow's recentering); framing flags stay as the player left them. */
+  turnOrbit(angle: number): void {
+    this.angle = angle;
+  }
+
+  /** Ease the orbit's distance and pitch toward `radius` and `pitch` by the share `k` (0 to 1): the on-foot shot taking the camera over from the car's. */
+  easeOrbit(radius: number, pitch: number, k: number): void {
+    this.radius += (THREE.MathUtils.clamp(radius, this.minRadius, ORBIT_RADIUS.max) - this.radius) * k;
+    this.pitch += (pitch - this.pitch) * k;
   }
 
   /**

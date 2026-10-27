@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { detAtan2, hypot2 } from "../kernel/physics-core.js";
 import type { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { SHOWCASE_KNOCK, type ShowcaseArt } from "../present/showcase-art.ts";
-import { WALK_SPEED } from "../present/walker-gait.ts";
+import { WALK_SPEED } from "../present/walker-locomotion.ts";
 import { wrapAngle } from "../present/walker-math.ts";
 
 /** Within this far (m) of his mark he has arrived; he then turns to his old facing, to within this much (rad), and goes back on the set. */

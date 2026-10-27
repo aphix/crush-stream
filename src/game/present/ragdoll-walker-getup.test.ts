@@ -10,7 +10,7 @@ import { PARTS } from "./ragdoll-body.ts";
 import { SLOTS } from "./ragdoll-config.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
 import { chooseRoute, type GetUpRoute, standingBearing } from "./walker-getup.ts";
-import { WALK_SPEED } from "./walker-gait.ts";
+import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -136,8 +136,42 @@ describe("given a walker who has got up", () => {
   });
 });
 
+const timeCases: readonly { it: string; turns: readonly Turn[]; height: number; expectedMaxSeconds: number }[] = [
+  { it: "when he lies on his stomach and the player asks at once, then he is on his feet within 3.8 s of going down", turns: [["x", QUARTER]], height: 0.15, expectedMaxSeconds: 3.8 },
+  { it: "when he lies on his back and the player asks at once, then he is on his feet within 4.6 s of going down", turns: [["x", -QUARTER]], height: 0.15, expectedMaxSeconds: 4.6 },
+  { it: "when he lies on his side and the player asks at once, then he is on his feet within 4.6 s of going down", turns: [["z", QUARTER]], height: 0.2, expectedMaxSeconds: 4.6 },
+  { it: "when he lies on his stomach turned about and the player asks at once, then he is on his feet within 3.8 s of going down", turns: [["x", QUARTER], ["y", 2.4]], height: 0.15, expectedMaxSeconds: 3.8 },
+];
+
+describe("given a limp walker the player asks to get up at once", () => {
+  for (const testCase of timeCases) {
+    it(testCase.it, () => {
+      layDown(testCase.turns, testCase.height);
+      let upAt = Infinity;
+      for (let f = 1; f <= 8 * FRAME_HZ && upAt === Infinity; f++) {
+        system.walker.ask();
+        system.update(FRAME, [], true, true, null);
+        const reading = torsoReading();
+        if (system.walker.state === "stand" && reading.tilt < 20 && reading.y > 1) upAt = f * FRAME;
+      }
+      assert.ok(upAt <= testCase.expectedMaxSeconds, `on his feet after ${upAt.toFixed(2)} s within ${testCase.expectedMaxSeconds}`);
+      system.walker.heading = system.walker.facing;
+      system.walker.command = RUN_SPEED;
+      let running = Infinity;
+      for (let f = 1; f <= 3 * FRAME_HZ && running === Infinity; f++) {
+        system.walker.ask();
+        system.update(FRAME, [], true, true, null);
+        if (system.walker.loco.speed >= 0.9 * RUN_SPEED) running = f * FRAME;
+      }
+      assert.ok(running <= 0.6, `running ${running.toFixed(2)} s after he is up (a movable state, not a wobbling one)`);
+      assert.equal(system.walker.state, "stand", "still on his feet");
+    });
+  }
+});
+
 const strikeCases: readonly { it: string; mps: number; expectedStruck: boolean }[] = [
   { it: "when a car at 3 m/s reaches him, then it does not run him down", mps: 3, expectedStruck: false },
+  { it: "when a car at 4.5 m/s runs him down, then he is knocked down and gets up once the player asks", mps: 4.5, expectedStruck: true },
   { it: "when a car at 10 m/s runs him down, then he is flung and goes ragdoll, and gets up once the player asks", mps: 10, expectedStruck: true },
   { it: "when a car at 18 m/s runs him down, then he is flung and goes ragdoll, and gets up once the player asks", mps: 18, expectedStruck: true },
 ];

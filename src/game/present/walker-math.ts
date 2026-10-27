@@ -10,12 +10,6 @@ export function wrapAngle(angle: number): number {
   return a;
 }
 
-/** `current` turned toward `target` (rad) by at most `maxStep` the short way round. */
-export function turnToward(current: number, target: number, maxStep: number): number {
-  const gap = wrapAngle(target - current);
-  return wrapAngle(current + Math.max(-maxStep, Math.min(maxStep, gap)));
-}
-
 /** The quaternion of a lean by `pitch` about the body's own x axis (positive: chest toward the ground, head toward +z), then a turn by `yaw` about the vertical, into `out` (x, y, z, w). */
 export function pitchedQuaternion(out: Float64Array, yaw: number, pitch: number): void {
   const sy = detSin(yaw / 2);
@@ -26,6 +20,24 @@ export function pitchedQuaternion(out: Float64Array, yaw: number, pitch: number)
   out[1] = cx * sy;
   out[2] = -sy * sx;
   out[3] = cy * cx;
+}
+
+/** The quaternion of a turn by `yaw` about the vertical after a lean by `pitch` about the body's x axis and a bank by `roll` about its z axis (positive roll tilts the head toward -x), into `out` (x, y, z, w). */
+export function leanedQuaternion(out: Float64Array, yaw: number, pitch: number, roll: number): void {
+  const sy = detSin(yaw / 2);
+  const cy = detCos(yaw / 2);
+  const sx = detSin(pitch / 2);
+  const cx = detCos(pitch / 2);
+  const sz = detSin(roll / 2);
+  const cz = detCos(roll / 2);
+  const x = cx * sz * sy + sx * cz * cy;
+  const y = cx * cz * sy - sx * sz * cy;
+  const z = cx * sz * cy - sx * cz * sy;
+  const w = cx * cz * cy + sx * sz * sy;
+  out[0] = x;
+  out[1] = y;
+  out[2] = z;
+  out[3] = w;
 }
 
 /** How upright a body is: the vertical component of its up axis, 1 standing and -1 on its head, from its rotation `(x, y, z, w)` read at `o` in `pose`. */

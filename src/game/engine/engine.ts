@@ -260,6 +260,7 @@ export class CrashEngine extends EngineGarage {
       available: () => this.onFootOffered(),
       racing: () => this.race.active,
       look: () => ownLook(this.looks.mine.person),
+      sight: () => this.chaseSight(true),
     });
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).

@@ -10,12 +10,14 @@ knocks them over ([The showcase](#the-showcase)).
 | Action | Keyboard and mouse | Controller |
 |---|---|---|
 | Get out of your car (driving, stopped or under 3 m/s, driver door clear); get back in (on foot, at your own car's driver door) | Enter | B / Circle |
-| Walk, relative to the camera | W A S D, the arrows | left stick |
-| Run | Shift | A / Cross, or RT past halfway |
+| Walk, relative to the camera (stick: slower for a lighter push, 0.8 m/s to a run, past a 0.15 dead zone, curve 1.5) | W A S D, the arrows | left stick |
+| Run (a key is a full push, the stick walks up to it) | W A S D, the arrows | left stick pushed all the way |
+| Sprint (7 m/s) | Shift | A / Cross, or RT past halfway |
+| Hold to a walk (1.5 m/s) | Space | X / Square |
 | Look round (the same orbit as everywhere) | mouse drag, `;` mouse look, scroll | right stick |
 | Get up after a fall | any walking control | any walking control |
 
-Nothing on foot is a new control: the keys, sticks and triggers that steer, gas and boost the car walk, run and look
+Nothing on foot is a new control: the keys, sticks and buttons that steer, gas, boost and handbrake the car walk, run, sprint and hold to a walk
 (`engine-walk-input.ts` reads the same `DRIVE_KEYS` and `PadState`; its rows pair every walking control with its driving twin).
 Enter and B were free in the driving seat (`SEAT_KEYS.onFoot` in `engine-keys.ts`; `engine-keys.test.ts` keeps it clear of the scene keys).
 While he is out, the seat's own keys (Space, R, Esc, Q, E, V, C, T and the pad's Back, LB, RB, Y and D-pad down) do nothing, so a stray press
@@ -71,32 +73,57 @@ within 1.9 m (`Walk up to your car's driver door`); a press while exiting or ent
 decides: on exit the dummy is placed at the door in the player's own look and facing the car's way and the seat is stepped back (the car is the engine's
 to hold, above); on entry he turns to the car, and after the climb the dummy leaves the pool and the seat takes the wheel (`seat.mode = "drive"`).
 
-## The active ragdoll
+## The walker: a driven root and a powered ragdoll
 
-`present/ragdoll-walker.ts` holds one `Walker` per pool slot; the player's is slot 3.
+`present/ragdoll-walker.ts` holds one `Walker` per pool slot; the player's is slot 3. Friction cannot give a body 12 m/s² (a run in 0.3 s) or 7 m/s, and the old open-loop
+gait reached 1.3 / 2.5 m/s, so his root is driven the way a character controller drives a capsule, and the ragdoll is posed and powered to follow it
+(onfoot-active-ragdoll, onfoot-rapier-ragdoll research):
 
-- **Balance.** The torso hangs off a massless kinematic frame by a joint whose three angular motors are a virtual gyro: stiffness
-  3000 N·m/rad, damping 600 N·m·s/rad, force-based motors, reaction taken by the frame. Standalone Rapier probes (101 kg dummy, 4 s): a
-  40 N·m·s twist, and every one up to 320, straightens him (worst tilt 21° at 320); with the gyro off, 40 topples him. The frame turns to the
-  heading the player asks for (4 rad/s), and he faces before he walks.
-- **Gait.** Limb motors chase a gait from `walker-gait.ts`: thigh swing, knee flex through the swing phase, arms against legs, a lean over
-  the stance foot. Nothing pushes him along: the legs walk. Walk 1.3 m/s, run 2.5 m/s (open-loop; the browser run measured 1.31 and 2.52 m/s
-  commanded, and the test rows take 0.8 to 2 and 1.6 to 3.6). A stick pushed less than all the way walks slower, down to 0.8 m/s.
-- **Hits.** A frame in which his speed changes by more than 1 m/s drops his motors' strength in proportion; past a 60° tilt or under 0.75 m
-  he has fallen and goes limp (8 % of the limb stiffness, no balance). A car at 4 m/s or more that meets him (`runsDown`) throws him with the
-  lawn guards' and the VIP's launch (`fell`, in `scenes/figure-strike.ts`, shared with `lawn-guard.ts` and `people.ts`): the car's velocity
-  with a lift, a kick to the side of its centre line he stood on and a tumble, ignoring that car for 0.35 s.
-- **Getting up.** Once he has lain still for a second and the player presses a walking control, he funnels into one of three routes by
-  how his torso lies (`walker-getup.ts`): *feet down* (torso within 60° of upright) regrounds; *face down* pushes up to hands and knees,
-  kneels, rises; *face up* (and on his side) rolls onto his stomach first and then goes the same way. Each stage is a pose for the limbs, a
-  lean of the torso's frame and a height, eased from the stage before; the limb motors ramp from limp to full over half a second, so the limbs
-  converge on the pose; a bounded lift (70 % of his weight, never more than 1.25 weights) and the frame's lean carry the torso while the
-  hands, knees and feet push on the real ground. He stands facing the way his head pointed. A get-up that ends short of upright drops him
-  again and he retries. The whole thing takes 2.2 s from the stomach and 2.9 s from the back, and it is assisted: the frame and the lift
-  are not limbs, so what you see is an animated-looking recovery driven through real contacts, not a gait the physics discovered.
-- **Cost.** Rapier steps 1/480 s inside the ragdoll system's own world (inline, never the worker's, in every scene); a standing walker is awake,
-  so the world steps while he is out. A car near him is a kinematic proxy of its cage there, so a car that runs him down is the same one the sim
-  moves (`ragdoll-walker-car.test.ts` drives a car through him and holds its sim state bit for bit against the same drive without him).
+- **The root** (`walker-locomotion.ts`). Speed along his facing rises at 12 m/s² to a run (3.5 m/s: 0.3 s) and at 4.5 m/s² on to a sprint (7 m/s: about a second); it falls at 14 / 10 m/s² (a run stops in
+  0.25 s and 0.4 m, a sprint in under a second and 3 m). The facing turns at `10 m/s² / speed`, at most 8 rad/s, so a sprint curves wide and a walk turns on the spot, and he leans with his speed and
+  acceleration and banks into a turn (onfoot-direction-change research): a heading under 30° off curves; 30-75° costs up to 30 % of the speed; past 75° he slows to a pivot's 2 m/s; past 120° he stops and
+  turns; each band has 0.2 rad of hysteresis. A sprint turned 90° faces the new way in 0.8 s, 180° in 1 s, and is back at speed 0.9-1.3 s later.
+- **The frame holds him.** A kinematic frame follows the gait's torso centre; the torso hangs off it by a joint whose three angular motors (60 kN·m/rad on his feet, 3 kN·m/rad in the get-up) and three linear motors
+  (30 kN/m) hold it, with his weight and the root's push fed forward as a force on the torso. A torso held back more than 0.2 m (a wall) brings the root back to it and caps his speed there.
+- **The gait** (`walker-gait.ts`, `walker-leg.ts`). Feet are set down in the world and stay there (a planted foot moves by under 1e-9 m) while the pelvis rides over them, then swing to where it will pass over the
+  next spot; a stance share of 60 % at a walk, 38 % at a run and 25 % at a sprint gives a walk's double support and a run's flight. The pelvis stands as high as its planted legs allow (it bobs 6 cm at a walk, 8 at
+  a run), each leg is a two-bone solve to its foot (hip swing, hip roll, knee), the arms swing fore-aft about the vertical against the legs (the opposite thigh's swing about its own mean, resting back by 0.6 of the lean) with the elbows
+  held near a right angle running and never closing past 100°, so a hand travels from hip to chest height and never above the shoulder; the pelvis turns against the hips, the head levels against the lean (0.9 of it,
+  its neck motors a little soft so it lags), and the motors lead their targets by the target's own rate. The gait reads the torso's actual orientation, not the commanded one, so the legs follow what the torso really does.
+  Lean 4° at a walk, 8° at a run, 15° at a sprint plus the push of an acceleration, and a bank up to 26° in a cut. Cadence 2.6 / 3.4 / 4 steps a second (156 / 204 / 240 a minute; research 100-130 walking, 150-210+ running), steps ahead per speed, and braking steps reach out (natural-gait research).
+  Measured joint ranges per cycle (peak to peak, walk / run / sprint): hip swing 53 / 77 / 95° (research 30-45 walking, 50-70 running: the dummy's 0.84 m legs and a one-box torso with no pelvis tilt or foot rocker take longer swings; a higher cadence is the lever and is already past the research's running range),
+  knee flexion 53 / 79 / 100°, shoulder swing 36 / 52 / 67° (research 20-40 / 35-70), elbow 14-19 / 78-86 / 81-91° bent (research 15-35 variation walking, 70-110 running), pelvis turn 14 / 18 / 20° (research 8-12 / 10-16), head pitch 4 / 6 / 10°.
+  The drawn hands keep the mesh's own shape (no finger bones to curl).
+- **Hits.** His torso moving more than 1 m/s differently from the root that holds it takes strength in proportion (the motors weaken and he stumbles); past 4 m/s he is knocked down, and a wall ahead of him does
+  not count (it only stops him). Past a 60° tilt or under 0.75 m he has fallen and goes limp (8 % of the limb stiffness, no balance). A car at 4 m/s or more that meets him (`runsDown`) throws him with the lawn
+  guards' and the VIP's launch (`fell`, in `scenes/figure-strike.ts`): the car's velocity with a lift, a kick to the side of its centre line and a tumble, ignoring that car for 0.35 s.
+- **Getting up.** Unchanged: once he has lain still for a second and the player presses a walking control, he funnels into one of three routes by how his torso lies (`walker-getup.ts`): *feet down* regrounds; *face down*
+  pushes up to hands and knees, kneels, rises; *face up* (and on his side) rolls onto his stomach first. Stages are poses, a frame lean and a height, the limb motors ramp from limp over half a second, and a bounded
+  lift carries the torso. It takes 2.3 s from the stomach and 3 s from the back after the second's lie, and then the root is seeded where he stands (`enterStand`): he runs at 3.15 m/s within 0.6 s of standing.
+- **Cost.** Rapier steps 1/480 s inside the ragdoll system's own world (inline, never the worker's, in every scene, so the pad and keys reach the motors the frame they are read). Measured on the node probe,
+  60 Hz frames: 0.034 ms a Rapier step and 0.28 ms a frame with the walker out, against 0.039 and 0.34 ms before; the gait and root cost under 0.01 ms a frame. A car near him is a kinematic proxy of its cage there, so a
+  car that runs him down is the same one the sim moves (`ragdoll-walker-car.test.ts` drives a car through him and holds its sim state bit for bit against the same drive without him).
+
+### Measured, before and after (node probe, flat ground)
+
+| | Before | After |
+|---|---|---|
+| Walk / run / sprint (m/s) | 1.33 / 2.50 / none | 1.51 / 3.51 / 7.00 |
+| 90 % of the speed | walk 1.23 s, run 1.40 s | walk 0.3 s, run 0.43 s, sprint 1.03 s |
+| Stop | walk 0.77 s / 0.74 m, run 0.95 s / 1.45 m | walk 0.3 s / 5 cm, run 0.6 s / 0.4 m, sprint 0.8 s / 1.9 m |
+| Drawn root speed, steady (std) | walk 0.27, run 0.42 (20 %, 17 %) | walk 0.12, run 0.24, sprint 0.41 (8 %, 7 %, 6 %) |
+| Pelvis bob (range) | walk 8 cm, run 11 cm | walk 6 cm, run 8 cm, sprint 9 cm |
+| Turn rate | 4.1 rad/s cap, no speed loss | by band; 90° at a sprint 0.82 s, 180° 0.98 s, no fall (tilt under 26°) |
+| Get-up (from the first ask) | stomach 2.3 s, back / side 3.0 s | unchanged |
+| Knocked down by a 1200 N·s blow | down at 0.7 s, up at 5.45 s | down at once, up at 4.4 s |
+| Rapier step / frame | 0.039 / 0.34 ms | 0.034 / 0.28 ms |
+
+## The camera
+
+`OnFootDirector.aim` drives the one `ChaseCamera` orbit (no second camera system): the focus is 1.5 m up his chest (`PIVOT_OVER_TORSO`) and the eye `FOLLOW_RADIUS` 4.2 m back at 17°, with a 66° view across
+(`followFov`), per the onfoot-camera research. The focus follows him critically damped (`walker-camera.ts`: 0.3 s walking, 0.12 s running; his height with 0.35 s, so the pelvis's bob reaches the screen at under a
+quarter), the view comes back behind him after 1.2 s without look input while he moves faster than 1 m/s (0.4 s damped yaw), the scene's solids pull it in at once and let it out slowly (`EyeClear`), and stepping out takes
+the camera from the car's chase over 0.3 s (the orbit adopts its pose; distance, pitch and lens ease). While he climbs back in the focus moves to the car and the camera draws back 35 %, and sitting down hands over to the car's chase cam.
 
 ## The showcase
 
@@ -146,3 +173,7 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
   drawn), `drive-keys.test.ts`, and the lane's rows: `onfoot-flow`, `engine-walk-input`, `ragdoll-walker`, `ragdoll-walker-getup`, `ragdoll-hit`,
   `ragdoll-mesh-pick`, `showcase-walks`.
 - Unmoved by it, and run before and after: `whole-digest`, `replay-fidelity`, the race and derby result rows, the net codec and wire rows.
+- The speed lane's rows, each shown red against a mutant (a 4 m/s² push, no pivot or stop band, a planted foot that rides with the root, an unsmoothed focus and no recenter delay):
+  `walker-locomotion.test.ts` (time to speed, stops, 45 / 90 / 180° cuts at a sprint, hysteresis, lean and bank), `walker-gait.test.ts` (planted feet do not move
+  by 1e-9 m, flight at a run, joint ranges, pelvis steps), `ragdoll-walker-pace.test.ts` (the physical walker: speed, time to 90 %, drawn-speed steadiness, planted-foot slide,
+  stops, cuts), `ragdoll-walker-getup.test.ts` (time to stand from four lying poses, running again within 0.6 s, a car at 4.5 m/s), `walker-camera.test.ts`, `engine-walk-input.test.ts`.
