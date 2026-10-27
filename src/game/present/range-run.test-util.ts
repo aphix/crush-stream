@@ -70,6 +70,8 @@ export type Control = {
   slice?: (car: DeformableCar, h: number) => DriveInput | undefined;
   /** The ground the range is run on, in place of its own (`RANGE_GROUND`). */
   ground?: Ground;
+  /** Ends the run after the engine frame it returns true for: the rest of his life is not read. */
+  until?: (frame: Frame) => boolean;
 };
 
 /** Wall seconds a run may last; wall seconds after the hit with nobody thrown before it is called a no-throw. */
@@ -230,7 +232,9 @@ export async function rangeThrow(type: DriverCar, control: Control = {}, frameDt
       continue;
     }
     control.frame?.(sys, mine.bodies);
-    out.frames.push(sample(sys, mine, wall - wall0));
+    const frame = sample(sys, mine, wall - wall0);
+    out.frames.push(frame);
+    if (control.until?.(frame)) break;
   }
   out.health = car.deform.drivetrainHealth;
   sys.dispose();

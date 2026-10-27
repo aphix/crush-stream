@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { DRIVER_CARS } from "../match/types.ts";
-import { RANGE_GROUND, RangeRun } from "../scenes/range.ts";
+import { RangeRun } from "../scenes/range.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
 import type { ExitPane } from "../vehicle/car-core.ts";
 import { ejectionVelocity } from "../vehicle/ejection.ts";
 import { apexOf, type Carry, type Control, deepest, displayFrames, type DriverCar, inCar, lowest, rangeThrow, type RangeThrow, restOf, speeds, STILL, travel } from "./range-run.test-util.ts";
-import { FLAT_GROUND, type Ground } from "../world/ground.ts";
+import { FLAT_GROUND } from "../world/ground.ts";
 
 /**
  * The ejection range (scenes/range.ts) at its defaults (its own spawn, 100 km/h, the HUD's squash, buckle, mode and
@@ -97,24 +98,36 @@ function unsettled(run: RangeThrow): string[] {
   return bad;
 }
 
-/** A range run and what the range's readout (`RangeRun`) said of each engine frame the dummy was live, fed as the engine feeds it: its LANDED flag and its distance. */
-type Throw = { run: RangeThrow; landed: boolean[]; shown: (number | null)[] };
+/** A range run and what the range's readout (`RangeRun`) said of each engine frame the dummy was live, fed as the engine feeds it: its LANDED flag and its distance; and the car's nose pitch (deg, up +) as he was thrown. */
+type Throw = { run: RangeThrow; landed: boolean[]; shown: (number | null)[]; nosePitch: number };
 
-function throwWithReadout(type: DriverCar, frames: () => number): Promise<Throw> {
+const _nose = new THREE.Vector3();
+const nosePitchOf = (car: DeformableCar): number => THREE.MathUtils.radToDeg(Math.asin(_nose.set(0, 0, 1).applyQuaternion(car.group.quaternion).y));
+
+async function throwWithReadout(type: DriverCar, frames: () => number): Promise<Throw> {
   const range = new RangeRun();
   const landed: boolean[] = [];
   const shown: (number | null)[] = [];
   const torso = new THREE.Vector3();
-  return rangeThrow(type, {
-    frame: (sys) => {
-      range.step(sys.latest(torso) >= 0, sys.latestSettled, torso.x, 1 / FRAME_HZ);
-      landed[landed.length] = range.landed;
-      shown[shown.length] = range.distance;
+  let nosePitch = NaN;
+  const run = await rangeThrow(
+    type,
+    {
+      frame: (sys) => {
+        range.step(sys.latest(torso) >= 0, sys.latestSettled, torso.x, 1 / FRAME_HZ);
+        landed[landed.length] = range.landed;
+        shown[shown.length] = range.distance;
+      },
+      released: (_sys, car) => {
+        nosePitch = nosePitchOf(car);
+      },
     },
-  }, frames).then((run) => ({ run, landed, shown }));
+    frames,
+  );
+  return { run, landed, shown, nosePitch };
 }
 
-/** One run per car type and display, shared by every property of both groups below (a run is deterministic, the readout only reads). */
+/** One run per car type and display, shared by every row that reads a run (a run is deterministic, the readout and the pitch only read). */
 const runs = new Map<string, Promise<Throw>>();
 const runOf = (type: DriverCar, display: string, frames: () => () => number): Promise<Throw> => {
   const key = `${type.id}/${display}`;
@@ -254,27 +267,32 @@ describe(`given the ejection range with a hard handbrake turn ${TURN_AT} m befor
 const NOSE_LIFT_DEG = 0.2;
 /** Metres further his first touch of the sand must be with the lip: measured 0.9 (truck) to 4.1 m (sedan) at 60 Hz. */
 const TOUCHDOWN_GAIN = 0.5;
-const _nose = new THREE.Vector3();
+/** The range at its defaults is the steady 60 Hz run. */
+const [STEADY_DISPLAY, STEADY_FRAMES] = DISPLAYS[0]!;
 
-/** A range throw on `ground` at 60 Hz: the car's nose pitch at the throw (deg, up +), and his torso's x at his first touch of the terrain. */
-async function noseAndTouchdown(type: DriverCar, ground: Ground): Promise<{ pitch: number; touchdown: number }> {
+const touchdownOf = (run: RangeThrow): number => run.frames.find((f) => f.ground > 0)?.p[0] ?? NaN;
+
+/** A steady 60 Hz range throw on the flat, with no lip, ended at his first touch of the terrain: the car's nose pitch at the throw (deg, up +), and his torso's x there. */
+async function flatNoseAndTouchdown(type: DriverCar): Promise<{ pitch: number; touchdown: number }> {
   let pitch = NaN;
   const run = await rangeThrow(type, {
-    ground,
+    ground: FLAT_GROUND,
     released: (_sys, car) => {
-      pitch = THREE.MathUtils.radToDeg(Math.asin(_nose.set(0, 0, 1).applyQuaternion(car.group.quaternion).y));
+      pitch = nosePitchOf(car);
     },
+    until: (frame) => frame.ground > 0,
   });
-  return { pitch, touchdown: run.frames.find((f) => f.ground > 0)?.p[0] ?? NaN };
+  return { pitch, touchdown: touchdownOf(run) };
 }
 
 describe("given the ejection range's lip (a low kicker against the wall's face) against the same range with none, for every car type", () => {
   for (const type of DRIVER_CARS) {
     it(`when a ${type.label} crashes at the range, then its nose is up at the throw and its driver first touches the sand further on than with no lip`, async () => {
-      const lip = await noseAndTouchdown(type, RANGE_GROUND);
-      const flat = await noseAndTouchdown(type, FLAT_GROUND);
-      assert.ok(lip.pitch > flat.pitch + NOSE_LIFT_DEG, `${type.id}: nose ${lip.pitch.toFixed(2)}° at the throw, ${flat.pitch.toFixed(2)}° with no lip`);
-      assert.ok(lip.touchdown > flat.touchdown + TOUCHDOWN_GAIN, `${type.id}: first touch at ${lip.touchdown.toFixed(1)} m, ${flat.touchdown.toFixed(1)} m with no lip`);
+      const lip = await runOf(type, STEADY_DISPLAY, STEADY_FRAMES);
+      const flat = await flatNoseAndTouchdown(type);
+      const lipTouchdown = touchdownOf(lip.run);
+      assert.ok(lip.nosePitch > flat.pitch + NOSE_LIFT_DEG, `${type.id}: nose ${lip.nosePitch.toFixed(2)}° at the throw, ${flat.pitch.toFixed(2)}° with no lip`);
+      assert.ok(lipTouchdown > flat.touchdown + TOUCHDOWN_GAIN, `${type.id}: first touch at ${lipTouchdown.toFixed(1)} m, ${flat.touchdown.toFixed(1)} m with no lip`);
     });
   }
 });
