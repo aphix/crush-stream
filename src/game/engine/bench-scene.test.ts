@@ -26,6 +26,10 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
   const digests: Record<string, string> = {};
   const staged: Record<string, boolean> = {};
   const wrecks: Record<string, number> = {};
+  /** What entering each step left the page: the activation's knob, the Debug knobs but that one off their defaults, and the card's arm label. */
+  const entered: Record<string, { epicenter: boolean; strayKnobs: string[]; armLabel: string | null }> = {};
+  const armElement = { textContent: "" as string | null, style: { cssText: "" } };
+  const badge = new ArmBadge(armElement, epicenterOn);
   /**
    * One step as `runBench` begins it (its adaptive quality reset, its scene entered), the grid run to green on the 1/240 s floor, the quick bench's head-on
    * staged at the start line, then `CRASH_S` of sim; `watched`: with the window's phase clock, counters and per-second series recording (`watchWork`, ticked every frame).
@@ -34,6 +38,12 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
     engine.resetAdaptiveQuality();
     const since = simCounters(engine);
     enterBenchScene(engine, engine.benchParts(), benchPlan(query)!);
+    badge.sync();
+    entered[name] = {
+      epicenter: epicenterOn(),
+      strayKnobs: KNOBS.filter((knob) => knob.id !== "epi.on" && knob.get() !== KNOB_DEFAULTS[knob.id]).map((knob) => knob.id),
+      armLabel: armElement.textContent,
+    };
     engine.pace.pin = false;
     const work = watched ? watchWork(engine.benchParts(), engine.pace) : null;
     const { race } = engine.benchParts();
@@ -69,22 +79,15 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
   });
 
   it("when the page enters the next step, then every Debug knob but the activation is at its default, and the activation is off unless that step asks for it (the default is on)", () => {
-    enterBenchScene(engine, engine.benchParts(), benchPlan("?bench=city&epi=1")!);
-    assert.equal(epicenterOn(), true, "the control: the activation is on in its own arm");
-    enterBenchScene(engine, engine.benchParts(), benchPlan("?bench=city")!);
-    assert.equal(epicenterOn(), false, "off in the next step");
-    for (const knob of KNOBS) if (knob.id !== "epi.on") assert.equal(knob.get(), KNOB_DEFAULTS[knob.id], `${knob.id} at its default`);
+    assert.equal(entered["city with the activation"]!.epicenter, true, "the control: the activation is on in its own arm");
+    for (const [name, page] of Object.entries(entered)) {
+      if (name !== "city with the activation") assert.equal(page.epicenter, false, `${name}: off in the next step`);
+      assert.deepEqual(page.strayKnobs, [], `${name}: every other knob at its default`);
+    }
   });
 
   it("when the loop's steps are entered in turn (city, city with the activation, strip, city), then the card's arm label follows the knob each time: off, ON, off, off", () => {
-    const element = { textContent: "" as string | null, style: { cssText: "" } };
-    const badge = new ArmBadge(element, epicenterOn);
-    const labels: (string | null)[] = [];
-    for (const query of ["?bench=city", "?bench=city&epi=1", "?bench=strip", "?bench=city"]) {
-      enterBenchScene(engine, engine.benchParts(), benchPlan(query)!);
-      badge.sync();
-      labels.push(element.textContent);
-    }
+    const labels = ["city first", "city with the activation", "strip", "city again"].map((name) => entered[name]!.armLabel);
     assert.deepEqual(labels, ["epicenter off", "EPICENTER ON", "epicenter off", "epicenter off"]);
   });
 
