@@ -82,7 +82,7 @@ the tier) and written as a PNG, with one JSON line on stdout. `--hash <share lin
 `--at <s>` sets the sim seconds before the drawn frames. The counts are the last frame whole: the script holds
 `renderer.info.autoReset` off and resets it before each drawn frame, as the bench does.
 
-- **For:** shots and before/after diffs (`--root <other checkout>`: same seed, same clock; two runs of one tree give
+- **For:** shots and before/after diffs (`--root <other checkout>`: same seed, same clock, and three's object uuids draw from a stream of their own, so a tree that builds fewer objects does not move the cosmetic draws of the frame; two runs of one tree give
   byte-identical PNGs, and so do two checkouts of one commit), the frame's counts per tier (`renderer.info`: calls,
   triangles, programs, textures, geometries), and link checks: exit 1 on a program that fails to link or a GL error.
 - **Not for:** frame-time verdicts; the browser is the perf judge ([`PERF_BENCH.md`](PERF_BENCH.md)). `yardstickMs`, a

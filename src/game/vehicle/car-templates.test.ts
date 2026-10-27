@@ -159,6 +159,32 @@ describe("given two cars built of one style", () => {
   }
 });
 
+/** Every mesh and line a car holds, in scene order: the body, lids, doors, panes, trims, bumpers, the light bar and the hull overlay. */
+function geometriesOf(car: DeformableCar): THREE.BufferGeometry[] {
+  const found: THREE.BufferGeometry[] = [];
+  car.group.traverse((object) => {
+    if (object instanceof THREE.Mesh || object instanceof THREE.LineSegments) found.push(object.geometry);
+  });
+  return found;
+}
+
+describe("given a car of each style built with its style's templates retired and a second built from the templates the first made", () => {
+  for (const styleId of CAR_STYLE_IDS) {
+    it(`when every geometry of the two ${styleId} cars is compared, then each equals its twin in attributes, index, groups, draw range, bounds and userData`, () => {
+      const style = CAR_STYLES[styleId];
+      style.door = { ...style.door };
+      const cold = new DeformableCar({ name: "cold", body: 0x808080, accent: 0x404040 }, new THREE.Scene(), null, styleId);
+      const warm = new DeformableCar({ name: "warm", body: 0xc5c8ce, accent: 0x9aa0a8 }, new THREE.Scene(), null, styleId);
+      const [coldGeometries, warmGeometries] = [geometriesOf(cold), geometriesOf(warm)];
+      assert.equal(warmGeometries.length, coldGeometries.length, `${styleId}: geometries held`);
+      assert.ok(coldGeometries.length >= STYLE_PRODUCTS.length, `${styleId}: the cars hold their geometries (${coldGeometries.length})`);
+      for (const [k, geometry] of coldGeometries.entries()) assertSameGeometry(warmGeometries[k]!, geometry, `${styleId} geometry ${k}`);
+      cold.dispose();
+      warm.dispose();
+    });
+  }
+});
+
 describe("given a style whose door field is replaced after its templates were built", () => {
   it("when a car takes the door again, then it follows the new field and not the old template", () => {
     const style = { ...CAR_STYLES.sedan };
