@@ -122,7 +122,7 @@ describe("given a car that hits the wall on the stunt course's kicker 9 m above 
       assert.equal(rec.clips.length, 1, "the wall hit makes a clip");
       const hit = rec.clips[0]!.hits[0]!;
       assert.ok(hit.y > 8, `the hit is ${hit.y.toFixed(1)} m up, not on the kicker's deck`);
-      const views = await reelViews(w, rec.clips, "stunt kicker wall");
+      const views = (await reelViews(w, rec.clips, "stunt kicker wall"))[0]!;
       const out = views.filter((v) => !v.seen).map((v) => `${v.title} ${v.kind} at ${v.at.toFixed(2)} s by ${v.rig}: ndc ${v.ndcX.toFixed(2)},${v.ndcY.toFixed(2)}${v.clear ? "" : " blocked"}, share ${v.share.toFixed(3)}`);
       assert.ok(views.length >= 1, "no moment to see");
       assert.deepEqual(out, [], "moments out of the frame");

@@ -158,11 +158,15 @@ const FLIGHT_MIN = 0.3;
 /** Clip seconds the replay runs past its last moment before it may stop: a car the last hit throws is off the ground by then. */
 const REPLAY_TAIL = 1;
 
+/** One screen the replay is judged on: its own lens camera (posed from the replay's), its moments and, per watched car, its take-off view waiting out `FLIGHT_MIN`. */
+type ScreenRig = { screen: Screen; camera: THREE.PerspectiveCamera; out: MomentView[]; takeoff: (MomentView | null)[] };
+
 /**
- * Every clip of `clips` played through the reel's cameras at 60 Hz on `w`'s cars, on `screen` (its lens as the engine fits
- * it, `coverLens`): each moment judged on the frame it happens in (the first frame whose clip time reaches it).
+ * Every clip of `clips` played through the reel's cameras at 60 Hz on `w`'s cars, once, and judged on each of `screens` (its lens as
+ * the engine fits it, `coverLens`): per screen, each moment judged on the frame it happens in (the first frame whose clip time
+ * reaches it). The cameras' pose and lens never read the screen, so one stack of them serves every screen.
  */
-export async function reelViews(w: World, clips: readonly HighlightClip[], scene: string, screen = DESKTOP, trace?: RigSample[]): Promise<MomentView[]> {
+export async function reelViews(w: World, clips: readonly HighlightClip[], scene: string, screens: readonly Screen[] = [DESKTOP], trace?: RigSample[]): Promise<MomentView[][]> {
   const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
   await ragdolls.preload();
   const crash = new CrashCam(false);
@@ -201,8 +205,11 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
   const reel = new ReelDirector(host);
   reel.stepBudgetMs = Infinity;
   const camera = new THREE.PerspectiveCamera(LENS, 1, 0.1, 900);
-  coverLens(camera, screen.view, screen.covers);
-  const out: MomentView[] = [];
+  const rigs: ScreenRig[] = screens.map((screen) => {
+    const lens = new THREE.PerspectiveCamera(LENS, 1, 0.1, 900);
+    coverLens(lens, screen.view, screen.covers);
+    return { screen, camera: lens, out: [], takeoff: [null, null, null] };
+  });
   const s = course();
   for (const [i, clip] of clips.entries()) {
     crash.reset();
@@ -215,7 +222,8 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
     // The take-offs of the subject and the first impact's cars: judged as each leaves the ground, kept once it has flown `FLIGHT_MIN`.
     const watch = [clip.focus, clip.firstA, clip.firstB];
     const flightAt = [-1, -1, -1];
-    const pending: (MomentView | null)[] = [null, null, null];
+    const pending = [false, false, false];
+    for (const rig of rigs) rig.takeoff.fill(null);
     let last: { cam: string; axis: string; p: THREE.Vector3 } | null = null;
     for (let k = -1; k * FRAME < wall; k++) {
       const dt = reel.frame(FLIGHT_S + k * FRAME) ?? 0;
@@ -223,30 +231,36 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
       rode = false;
       cut = false;
       reel.aim(camera, FRAME, crashDirect);
+      for (const rig of rigs) {
+        rig.camera.position.copy(camera.position);
+        rig.camera.quaternion.copy(camera.quaternion);
+        rig.camera.fov = camera.fov;
+        rig.camera.updateProjectionMatrix();
+      }
       const cur = reel["cur"];
       if (k < 0 || !cur) continue;
       const sim = cur.sim;
       const shot = cur.shots[Math.max(0, reel["shot"])]!;
-      const rig = rode ? "ride" : cut ? "crash" : reel["flying"] ? "flight" : `shot:${shot.kind === "chase" || reel["shotCam"].found ? shot.kind : "chase"}`;
-      trace?.push({ clip: i, wall: k * FRAME, at: sim.time, rig, hold: clock.hold, camT: crash.camT });
+      const rigName = rode ? "ride" : cut ? "crash" : reel["flying"] ? "flight" : `shot:${shot.kind === "chase" || reel["shotCam"].found ? shot.kind : "chase"}`;
+      trace?.push({ clip: i, wall: k * FRAME, at: sim.time, rig: rigName, hold: clock.hold, camT: crash.camT });
       // A crash-cam cut is its held eye on its axis: a later crash moves the axis onto itself (`CrashCam.retarget`).
       const axis = `${crash["camAt"].x.toFixed(1)},${crash["camAt"].z.toFixed(1)}`;
-      const cam = `${rig}|${reel["shot"]}|${crash["held"]}|${axis}`;
-      const view = (kind: MomentKind, at: number, p: THREE.Vector3, car: number): MomentView => ({ scene, title, kind, at, hitAt: clip.firstImpact, rig, x: p.x, y: p.y, z: p.z, ...judge(camera, s, p, screen), cam, back: null, hold: holdAfter(tl, at), wall: (stepOf(tl, at) * wall) / (tl.sim.length - 1), end: wall, fov: camera.fov, note: `${car === clip.focus ? "subject" : "other car"}, hit at ${clip.firstImpact.toFixed(2)} s, eye ${camera.position.toArray().map((v) => v.toFixed(1))}` });
+      const cam = `${rigName}|${reel["shot"]}|${crash["held"]}|${axis}`;
+      const view = (rig: ScreenRig, kind: MomentKind, at: number, p: THREE.Vector3, car: number): MomentView => ({ scene, title, kind, at, hitAt: clip.firstImpact, rig: rigName, x: p.x, y: p.y, z: p.z, ...judge(rig.camera, s, p, rig.screen), cam, back: null, hold: holdAfter(tl, at), wall: (stepOf(tl, at) * wall) / (tl.sim.length - 1), end: wall, fov: camera.fov, note: `${car === clip.focus ? "subject" : "other car"}, hit at ${clip.firstImpact.toFixed(2)} s, eye ${camera.position.toArray().map((v) => v.toFixed(1))}` });
       for (const m of moments) {
         if (m.at > sim.time + 1e-9 || m.at < 0) continue;
         const p = m.point ?? new THREE.Vector3(m.x, sim.cars[m.car]!.group.position.y + 0.55, m.z);
-        const v = view(m.kind, m.at, p, m.car);
-        if (m.kind === "impact" || m.kind === "hit") {
+        for (const rig of rigs) {
+          const v = view(rig, m.kind, m.at, p, m.car);
           if (m.kind === "hit" && last) {
-            const j = judge(camera, s, last.p, screen);
+            const j = judge(rig.camera, s, last.p, rig.screen);
             // The held crash cam keeps the place only when a cut sees the car, the earlier point and the later one (`heldCut`), else a lens that sees the car alone, so it is judged at the frame's edge.
-            const edge = rig === "crash" ? 1 : VIEW.margin;
+            const edge = rigName === "crash" ? 1 : VIEW.margin;
             v.back = { cut: cam !== last.cam, axis: axis !== last.axis, inFrame: j.front && Math.abs(j.ndcX) <= edge && Math.abs(j.ndcY) <= edge && !j.covered, ndcX: j.ndcX, ndcY: j.ndcY };
           }
-          last = { cam, axis, p };
+          rig.out.push(v);
         }
-        out.push(v);
+        if (m.kind === "impact" || m.kind === "hit") last = { cam, axis, p };
         m.at = -1;
       }
       for (let j = 0; j < watch.length; j++) {
@@ -254,25 +268,31 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
         if (!car || watch.indexOf(watch[j]!) < j) continue;
         if (!car.airborne) {
           flightAt[j] = -1;
-          pending[j] = null;
+          pending[j] = false;
+          for (const rig of rigs) rig.takeoff[j] = null;
           continue;
         }
         if (flightAt[j]! < 0) {
           flightAt[j] = sim.time;
-          pending[j] = sim.time > 0.05 ? view("takeoff", sim.time, car.group.position.clone().setY(car.group.position.y + 0.55), watch[j]!) : null;
+          pending[j] = sim.time > 0.05;
+          const p = car.group.position.clone().setY(car.group.position.y + 0.55);
+          for (const rig of rigs) rig.takeoff[j] = pending[j] ? view(rig, "takeoff", sim.time, p, watch[j]!) : null;
         }
         if (pending[j] && sim.time - flightAt[j]! >= FLIGHT_MIN) {
-          out.push(pending[j]!);
-          pending[j] = null;
+          for (const rig of rigs) {
+            rig.out.push(rig.takeoff[j]!);
+            rig.takeoff[j] = null;
+          }
+          pending[j] = false;
         }
       }
       // Every moment judged and every watched car on the ground a while past the last: the rest of the clip judges nothing (a trace wants the whole clip).
-      if (!trace && sim.time > lastAt + REPLAY_TAIL && moments.every((m) => m.at < 0) && pending.every((p) => p === null) && watch.every((c) => !sim.cars[c]?.airborne)) break;
+      if (!trace && sim.time > lastAt + REPLAY_TAIL && moments.every((m) => m.at < 0) && pending.every((p) => !p) && watch.every((c) => !sim.cars[c]?.airborne)) break;
     }
     reel.stop();
   }
   ragdolls.dispose();
-  return out;
+  return rigs.map((rig) => rig.out);
 }
 
 /**

@@ -7,7 +7,7 @@ import type { World } from "../world/race-world.test-util.ts";
 import { hold, survivalWorld } from "../world/survival-run.test-util.ts";
 import type { Track } from "../world/track.ts";
 import type { HighlightClip } from "../match/highlights.ts";
-import { raceOn, recordRace, reelViews, secondsToFirstImpact, STAGED_MEETING_S, VIEW, type Crash, type MomentKind, type MomentView, type Screen } from "./reel-view.test-util.ts";
+import { DESKTOP, raceOn, recordRace, reelViews, secondsToFirstImpact, STAGED_MEETING_S, VIEW, type Crash, type MomentKind, type MomentView, type Screen } from "./reel-view.test-util.ts";
 
 /**
  * The reel view's claims (visible moments, the panels, the place kept, the slow-mo holds), over whichever clips a test file stages:
@@ -107,8 +107,9 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
 
   async function playClips(name: string, w: World, clips: readonly HighlightClip[]): Promise<void> {
     world = w;
-    for (const v of await reelViews(w, clips, name)) views.push(v);
-    for (const [i, { screen }] of LAYOUTS.entries()) for (const v of await reelViews(w, clips, name, screen)) covered[i]!.push(v);
+    const [bare, ...layouts] = await reelViews(w, clips, name, [DESKTOP, ...LAYOUTS.map((layout) => layout.screen)]);
+    for (const v of bare!) views.push(v);
+    for (const [i, list] of layouts.entries()) for (const v of list) covered[i]!.push(v);
     w.race.exit();
     setGround(null);
     world = null;
