@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DerbyMatch, snapshotAiCar } from "./derby.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
-import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
+import { arenaWorld, leaveArena, placeDerby } from "../scenes/derby-arena.test-util.ts";
 import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import { applyAiDrive } from "../ai/input-fade.ts";
 import { fleetStyle, layoutDerby, MAX_CARS } from "../scenes/fleet.ts";
@@ -79,9 +79,7 @@ function sixCarDerby(seconds: number, seed = 7, knobs = ARCADE): DerbyRun {
   return atKnobs(knobs, () => {
     const scene = new THREE.Scene();
     const cars = Array.from({ length: 6 }, (_, i) => new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: `c${i}` }, scene));
-    const rng = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-    const slots = layoutDerby(cars.length, DERBY_RADIUS, rng, DERBY_FREE_PROPS);
-    for (const [i, c] of cars.entries()) c.spawnFacing(slots[i]!.x, slots[i]!.z, slots[i]!.yaw, 0);
+    placeDerby(cars, seed);
     return cars;
   }, seconds);
 }

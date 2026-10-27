@@ -3,10 +3,8 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
-import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
-import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
-import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
-import { fleetStyle, layoutDerby } from "../scenes/fleet.ts";
+import { arenaWorld, leaveArena, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { fleetStyle } from "../scenes/fleet.ts";
 import { resolveCarPair } from "./pair-contact.ts";
 import { partContactPair } from "./external-contact.ts";
 import { physicsSlice, sliceSpeed } from "./sat.ts";
@@ -33,10 +31,7 @@ const CONTROL_VECTORS = 12000;
 function pileUp(): { cars: DeformableCar[]; step: () => void } {
   const scene = new THREE.Scene();
   const cars = Array.from({ length: CARS }, (_, i) => new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: `c${i}` }, scene, null, fleetStyle(i)));
-  let seed = 11;
-  const rng = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-  const slots = layoutDerby(CARS, DERBY_RADIUS, rng, DERBY_FREE_PROPS);
-  for (const [i, c] of cars.entries()) c.spawnFacing(slots[i]!.x, slots[i]!.z, slots[i]!.yaw, 12);
+  placeDerby(cars, 11, 12);
   const inputs: DriveInput[] = cars.map(() => ({ ...idleDrive(), throttle: 1 }));
   const { world } = arenaWorld(cars);
   const step = () => {

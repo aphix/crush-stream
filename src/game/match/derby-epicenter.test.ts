@@ -2,11 +2,8 @@ import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DerbyMatch, snapshotAiCar } from "./derby.ts";
-import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
-import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
-import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
+import { arenaWorld, leaveArena, placeDerby } from "../scenes/derby-arena.test-util.ts";
 import { applyAiDrive } from "../ai/input-fade.ts";
-import { layoutDerby } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { stepWorld } from "../engine/world-step.ts";
@@ -52,10 +49,7 @@ function derbySeed(): { frozenSlices: number; worstHub: number; worstWheel: numb
   try {
     const scene = new THREE.Scene();
     const cars = Array.from({ length: 6 }, (_, i) => new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: `c${i}` }, scene));
-    let s = SEED;
-    const rng = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
-    const slots = layoutDerby(cars.length, DERBY_RADIUS, rng, DERBY_FREE_PROPS);
-    for (const [i, c] of cars.entries()) c.spawnFacing(slots[i]!.x, slots[i]!.z, slots[i]!.yaw, 0);
+    placeDerby(cars, SEED);
     const match = new DerbyMatch();
     match.begin(cars.map((_, i) => ({ id: i, name: `c${i}` })), {});
     const { world: w } = arenaWorld(cars);
