@@ -116,6 +116,53 @@ describe("given a seated driver in a crushed car", () => {
   }
 });
 
+const X_AXIS = new THREE.Vector3(1, 0, 0);
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+/** How far (m) a triangle's footprint may stand off the head's and still be kept: far more than any float error in where a ray meets an edge. */
+const FOOTPRINT_MARGIN = 0.01;
+
+/**
+ * `mesh` cut to the triangles whose footprint, seen along `direction`, overlaps the footprint of `points`: a ray along `direction` from any
+ * of them meets no other. Same material and pose, so every ray finds the same first face for a fraction of the triangle tests. A mesh
+ * `Raycaster` treats specially (instanced, skinned, morphed, several materials) is returned whole.
+ */
+function meshNearRays(mesh: THREE.Mesh, points: readonly THREE.Vector3[], direction: THREE.Vector3): THREE.Mesh {
+  const { geometry } = mesh;
+  if (mesh.constructor !== THREE.Mesh || Array.isArray(mesh.material) || geometry.morphAttributes.position !== undefined) return mesh;
+  const across = new THREE.Vector3().crossVectors(direction, Math.abs(direction.x) < 0.9 ? X_AXIS : Y_AXIS).normalize();
+  const along = new THREE.Vector3().crossVectors(direction, across);
+  const heads = { acrossLo: Infinity, acrossHi: -Infinity, alongLo: Infinity, alongHi: -Infinity };
+  for (const p of points) {
+    heads.acrossLo = Math.min(heads.acrossLo, p.dot(across));
+    heads.acrossHi = Math.max(heads.acrossHi, p.dot(across));
+    heads.alongLo = Math.min(heads.alongLo, p.dot(along));
+    heads.alongHi = Math.max(heads.alongHi, p.dot(along));
+  }
+  const { index, drawRange } = geometry;
+  const position = geometry.getAttribute("position");
+  const corner = new THREE.Vector3();
+  const kept: number[] = [];
+  const end = Math.min(index ? index.count : position.count, drawRange.start + drawRange.count);
+  for (let t = Math.max(0, drawRange.start); t < end; t += 3) {
+    const triangle = { acrossLo: Infinity, acrossHi: -Infinity, alongLo: Infinity, alongHi: -Infinity };
+    for (let k = 0; k < 3; k++) {
+      mesh.getVertexPosition(index ? index.getX(t + k) : t + k, corner).applyMatrix4(mesh.matrixWorld);
+      triangle.acrossLo = Math.min(triangle.acrossLo, corner.dot(across));
+      triangle.acrossHi = Math.max(triangle.acrossHi, corner.dot(across));
+      triangle.alongLo = Math.min(triangle.alongLo, corner.dot(along));
+      triangle.alongHi = Math.max(triangle.alongHi, corner.dot(along));
+    }
+    const overlaps =
+      triangle.acrossHi >= heads.acrossLo - FOOTPRINT_MARGIN && triangle.acrossLo <= heads.acrossHi + FOOTPRINT_MARGIN &&
+      triangle.alongHi >= heads.alongLo - FOOTPRINT_MARGIN && triangle.alongLo <= heads.alongHi + FOOTPRINT_MARGIN;
+    if (overlaps) for (let k = 0; k < 3; k++) kept.push(index ? index.getX(t + k) : t + k);
+  }
+  const near = new THREE.Mesh(new THREE.BufferGeometry().setAttribute("position", position).setIndex(kept), mesh.material);
+  near.matrixWorld.copy(mesh.matrixWorld);
+  near.layers.mask = mesh.layers.mask;
+  return near;
+}
+
 /**
  * The least room (m) between slot 0's head (every build's, hair and cap too) and the drawn roof's inner face over it along the car's
  * up, and where. A head with no roof skin over it is measured from above against everything the car draws outside its cabin (the
@@ -125,29 +172,30 @@ function headRoom(car: DeformableCar, drivers: SeatedDrivers): { least: number; 
   const geo = seatedGeometry();
   const bones = geo.getAttribute(BONES_ATTRIBUTE);
   const shapes = ["position", SHAPE_WOMAN_ATTRIBUTE, SHAPE_PORTLY_ATTRIBUTE].map((name) => geo.getAttribute(name));
-  const shell: THREE.Object3D[] = [];
-  car.group.traverseVisible((o) => {
-    if (o instanceof THREE.Mesh && !car.interior.getObjectById(o.id)) shell.push(o);
-  });
+  const heads: THREE.Vector3[] = [];
+  const rest = new THREE.Vector3();
+  for (let i = 0; i < bones.count; i++) {
+    if (bones.getX(i) !== HEAD_BONE) continue;
+    for (const shape of shapes) heads.push(drivers.mesh.partPoint(0, HEAD_BONE, rest.set(shape.getX(i), shape.getY(i), shape.getZ(i)), new THREE.Vector3()));
+  }
   const e = car.group.matrixWorld.elements;
   const up = new THREE.Vector3(e[4], e[5], e[6]).normalize();
   const down = up.clone().negate();
+  const roofSkin = meshNearRays(car.body, heads, up);
+  const shell: THREE.Object3D[] = [];
+  car.group.traverseVisible((o) => {
+    if (o instanceof THREE.Mesh && !car.interior.getObjectById(o.id)) shell.push(meshNearRays(o, heads, up));
+  });
   const ray = new THREE.Raycaster();
-  const rest = new THREE.Vector3();
-  const v = new THREE.Vector3();
   let least = Infinity;
   let at = "";
-  for (let i = 0; i < bones.count; i++) {
-    if (bones.getX(i) !== HEAD_BONE) continue;
-    for (const shape of shapes) {
-      drivers.mesh.partPoint(0, HEAD_BONE, rest.set(shape.getX(i), shape.getY(i), shape.getZ(i)), v);
-      // Up, the first face met is the headliner's (it faces in).
-      ray.set(v, up);
-      const over = ray.intersectObject(car.body, false)[0];
-      ray.set(v.clone().addScaledVector(up, 3), down);
-      const room = over ? over.distance : 3 - (ray.intersectObjects(shell, false)[0]?.distance ?? Infinity);
-      if (room < least) [least, at] = [room, v.toArray().map((x) => x.toFixed(3)).join()];
-    }
+  for (const v of heads) {
+    // Up, the first face met is the headliner's (it faces in).
+    ray.set(v, up);
+    const over = ray.intersectObject(roofSkin, false)[0];
+    ray.set(v.clone().addScaledVector(up, 3), down);
+    const room = over ? over.distance : 3 - (ray.intersectObjects(shell, false)[0]?.distance ?? Infinity);
+    if (room < least) [least, at] = [room, v.toArray().map((x) => x.toFixed(3)).join()];
   }
   return { least, at };
 }
