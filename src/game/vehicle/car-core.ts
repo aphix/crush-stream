@@ -975,11 +975,12 @@ export abstract class CarCore {
   }
 
   /** Writes lamp `i`'s world seat on the skin and outward axis; returns its kind, or null once broken. Past the body lamps come the light bar's
-   *  sirens (red, blue), lit only while flashing. Via the full parent chain: a class lift (truck, monster) raises the lamps with the body. */
-  lampWorld(i: number, pos: THREE.Vector3, dir: THREE.Vector3): GlowKind | null {
+   *  sirens (red, blue), lit only while flashing. Via the full parent chain: a class lift (truck, monster) raises the lamps with the body.
+   *  `parentsCurrent`: the call for lamp `i - 1` just brought the seats' parents' matrices up to date (a body lamp's call does), so this one leaves them. */
+  lampWorld(i: number, pos: THREE.Vector3, dir: THREE.Vector3, parentsCurrent = false): GlowKind | null {
     const l = this.lamps[i];
     if (!l) return this.sirenWorld(i - this.lamps.length, pos, dir);
-    l.seat.updateWorldMatrix(true, false, true);
+    l.seat.updateWorldMatrix(!parentsCurrent, false, true);
     pos.setFromMatrixPosition(l.seat.matrixWorld);
     dir.setFromMatrixColumn(l.seat.matrixWorld, 2).normalize();
     return l.intact ? l.kind : null;

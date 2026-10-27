@@ -164,8 +164,8 @@ interface LampHost {
   readonly group: THREE.Object3D;
   readonly style: Pick<BodyStyle, "lamps">;
   readonly lampCount: number;
-  /** Writes lamp `i`'s world seat on the skin and outward axis; returns its kind, or null once broken or dark. */
-  lampWorld(i: number, pos: THREE.Vector3, dir: THREE.Vector3): GlowKind | null;
+  /** Writes lamp `i`'s world seat on the skin and outward axis; returns its kind, or null once broken or dark. `parentsCurrent`: the call for lamp `i - 1` just ran. */
+  lampWorld(i: number, pos: THREE.Vector3, dir: THREE.Vector3, parentsCurrent?: boolean): GlowKind | null;
   /** Whether the car is on its brakes: its tail lamps burn bright, not as running lights. */
   readonly braking: boolean;
   /** Advance the siren flash to `now` (s); no-op without sirens on. */
@@ -348,7 +348,7 @@ export class LampLights {
       car.flashSirens(now);
       const bonus = this.bonus(car, followed, highlight);
       for (let i = 0; i < car.lampCount; i++) {
-        const kind = car.lampWorld(i, _pos, _dir);
+        const kind = car.lampWorld(i, _pos, _dir, i > 0);
         // Dark (`!kind`: broken, or a siren not lit just now), or by day a lamp that burns only at night: no glow, light or pool.
         if (!kind || (!this.night && (kind === "head" || (kind === "tail" && !car.braking)))) {
           fade.w[i] = 0;
