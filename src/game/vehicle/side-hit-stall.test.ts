@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { firePiston } from "../scenes/piston-rig.test-util.ts";
 import type { PistonId } from "../scenes/piston-rig.ts";
-import { DRIVE, type DriveInput } from "./car-drive.ts";
+import { DRIVE, type DriveInput, idleDrive } from "./car-drive.ts";
 import { layOnGround } from "./car-air-points.ts";
 import type { DeformableCar } from "./car.ts";
 import { FUEL_CUTOFF_G, STALL_S } from "./constants.ts";
@@ -15,7 +15,6 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const FULL_GAS: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: true };
-const COAST: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
 const FULL_BRAKE: DriveInput = { throttle: 0, steer: 0, brake: 1, ebrake: false, boost: false };
 const HANDBRAKE_AT_LOCK: DriveInput = { throttle: 0, steer: 1, brake: 0, ebrake: true, boost: false };
 
@@ -65,7 +64,7 @@ function slideAfterTBone(bulletKph: number, fuelRestored = false): Slide {
     const at = struckCar.group.position;
     if (since < 0 && struckCar.crashed) {
       since = 0;
-      world.pedals.set(struckCar, COAST);
+      world.pedals.set(struckCar, idleDrive());
     } else if (since >= 0) {
       since += FRAME * world.clock.timeScale;
       metres += Math.hypot(at.x - x, at.z - z);
@@ -178,7 +177,7 @@ describe("given a sedan rolling on flat ground with its fuel cut", () => {
   });
 
   it("when the brake pedal is held, then it slows by the brakes' pull, not just the engine's lift-off braking", () => {
-    const coast = speedLostUnder(60, STALL_S, COAST, 0.5);
+    const coast = speedLostUnder(60, STALL_S, idleDrive(), 0.5);
     const braked = speedLostUnder(60, STALL_S, FULL_BRAKE, 0.5);
     assert.ok(coast > 0, "the lift-off engine braking still acts");
     assert.ok(braked > 0.9 * (coast / DRIVE.coast), `braked ${braked.toFixed(2)} m/s vs coasting ${coast.toFixed(2)} m/s, the brake being 1/${DRIVE.coast} of the lift-off pull`);

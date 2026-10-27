@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { applyDrive, type DriveInput } from "./car-drive.ts";
+import { applyDrive, type DriveInput, idleDrive } from "./car-drive.ts";
 import { layOnGround } from "./car-air-points.ts";
 import { LOAD_FEEL } from "./car-load.ts";
 import { DeformableCar } from "./car.ts";
@@ -15,7 +15,6 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const DEG = 180 / Math.PI;
-const IDLE: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
 
 /** Most the drawn body may pitch (deg) in a launch or a stop, per class: a few degrees, the tall SUV and the truck more, the monster most. */
 const PITCH_MAX: Record<VehicleClassId, number> = { sedan: 3, muscle: 3, police: 3, truck: 4.5, monster: 6, hatch: 3, suv: 4 };
@@ -54,7 +53,7 @@ function drive(cls: VehicleClassId, v0: number, input: (speed: number) => Partia
     acc = Math.min(0.05, acc + FRAME);
     while (acc > 1e-5) {
       const h = physicsSlice(acc, sliceSpeed(w.cars));
-      applyDrive(car, { ...IDLE, ...input(car.speed) }, h);
+      applyDrive(car, { ...idleDrive(), ...input(car.speed) }, h);
       stepWorld(w, h);
       acc -= h;
     }

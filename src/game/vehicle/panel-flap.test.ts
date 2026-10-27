@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
 import { PartSeat } from "./part-geometry.ts";
-import { applyDrive, type DriveInput } from "./car-drive.ts";
+import { applyDrive, idleDrive } from "./car-drive.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { makeShell, panelRegions, type PanelRegion, poseShell, STAND_MAX } from "./car-panels.ts";
 import { CAR_STYLE_IDS, CAR_STYLES } from "./car-variants.ts";
@@ -51,8 +51,6 @@ function crashed(v = 0): Probe {
 /** How far the free end of a quarter panel stands off the body (m) hinged to `t`: its lever turned by the peel angle. */
 const standoff = (r: PanelRegion, t: number): number => r.reach * Math.sin(r.peel * t);
 
-const IDLE: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
-
 /** Frames of the engine's own step: slices, drive held at `v` m/s, structure, skin. */
 function run(car: Probe, frames: number, v: number | null = null): void {
   const w = newWorld([car]);
@@ -61,7 +59,7 @@ function run(car: Probe, frames: number, v: number | null = null): void {
     acc = Math.min(0.05, acc + DT);
     while (acc > 1e-5) {
       const h = physicsSlice(acc, sliceSpeed(w.cars));
-      if (v !== null) applyDrive(car, { ...IDLE, throttle: Math.max(0, Math.min(1, (v - car.speed) * 0.5 + 0.3)) }, h);
+      if (v !== null) applyDrive(car, { ...idleDrive(), throttle: Math.max(0, Math.min(1, (v - car.speed) * 0.5 + 0.3)) }, h);
       stepWorld(w, h);
       car.stepBreakage(h);
       acc -= h;
@@ -182,7 +180,7 @@ function cruise(name: string, t: number, v: number, secs: number): number | null
     acc = Math.min(0.05, acc + DT);
     while (acc > 1e-5) {
       const h = physicsSlice(acc, sliceSpeed(w.cars));
-      applyDrive(car, { ...IDLE, throttle: Math.max(0, Math.min(1, (v - car.speed) * 0.5 + 0.3)) }, h);
+      applyDrive(car, { ...idleDrive(), throttle: Math.max(0, Math.min(1, (v - car.speed) * 0.5 + 0.3)) }, h);
       stepWorld(w, h);
       car.stepBreakage(h);
       acc -= h;

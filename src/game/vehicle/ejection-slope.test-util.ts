@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
+import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { setGround } from "../world/ground.ts";
 import { blankPoint, blankProjection, pointOn, Track } from "../world/track.ts";
 import { parseTrack } from "../world/track-schema.ts";
-import { TRACKS } from "../world/tracks/index.ts";
+import { idleDrive } from "./car-drive.ts";
 import type { DriveInput } from "./car-drive.ts";
 import { layOnGround } from "./car-air-points.ts";
 import type { ExitPane } from "./car-core.ts";
@@ -97,7 +98,7 @@ export function crashedRun(trk: Track, cls: VehicleClassId, pace: number, hit: H
   const watch = new EjectionWatch();
   w.ejection = watch;
   const st = { acc: 0 };
-  const proj = blankProjection();
+  const input = idleDrive();
   const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
   const thrown: ExitPane[] = [];
   const wp = new THREE.Vector3();
@@ -151,7 +152,14 @@ export function loopRun(trk: Track, pace: number): Run {
   return crashedRun(trk, "sedan", pace, "side", LEAD, trk.length - LOOP_TAIL, undefined, true);
 }
 
-/** The most the block may move over ground with nothing touching the car (m): the noise of the lattice settling. */
+const DRIFT = 0.005;
+
+/** `r` got to its end (`end` names it for the failure), its block moved at most `DRIFT`, and its engine lives. */
+export function assertHeld(r: Run, end: string): void {
+  assert.ok(r.reached, `the run stopped at s ${r.endS.toFixed(0)}, short of ${end}`);
+  assert.ok(r.end - r.settled <= DRIFT, `the block moved ${((r.end - r.settled) * 1000).toFixed(1)} mm over the stretch`);
+  assert.ok(r.alive, "the engine died");
+}
 const DRIFT = 0.005;
 
 /** `r` got to its end (`end` names it for the failure), its block moved at most `DRIFT`, and its engine lives. */
