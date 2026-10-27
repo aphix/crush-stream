@@ -23,6 +23,8 @@ describe("given the oval race with 11 AI and police on, where two racers are put
   for (const seed of SEEDS) {
     it(`when seed ${seed}'s kept clips holding a cop put on a spot are replayed, then every car is where the live sim had it at every step`, (t) => {
       const w = makeWorld();
+      // Only the replay skins its cars (`agreement`); the live run's skin pass is unread.
+      w.skin = false;
       w.race.enter();
       const track = new Track(oval);
       const pt = blankPoint();
