@@ -70,8 +70,8 @@ export type GarageHud = { car: Record<CarPart, number>; person: DriverLook; pick
 /** The garage's spray can: on or off, its dot's radius (m), its colour (sRGB) and whether each puff is also painted mirrored left-right (Symmetric). */
 export type SprayTool = { on: boolean; radius: number; colour: number; mirror: boolean };
 
-/** The trip out of the car as the HUD reads it: `out` while he is on foot, and the line under the view (what the control does now, or why it refused). */
-export type FootHud = { out: boolean; prompt: string | null };
+/** The trip out of the car as the HUD reads it: `out` while he is on foot, the line under the view (what the control does now, or why it refused), and `refusal`, that why alone while it shows. */
+export type FootHud = { out: boolean; prompt: string | null; refusal: string | null };
 
 export type CrashHudState = {
   playing: boolean;

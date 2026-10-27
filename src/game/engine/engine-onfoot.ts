@@ -280,12 +280,18 @@ export class OnFootDirector {
   /** The HUD's read of the trip, or null where the control does nothing: the scene does not offer it, or he neither sits at a wheel he may leave nor is out. */
   hud(): FootHud | null {
     if (!this.host.available() || (!this.flow.active && this.carAtWheel() === null)) return null;
-    return { out: this.flow.active, prompt: this.prompt() };
+    return { out: this.flow.active, prompt: this.prompt(), refusal: this.refusalText() };
+  }
+
+  /** Why the control just refused, for `REFUSAL_SECONDS`; null otherwise. */
+  private refusalText(): string | null {
+    return this.refusalLeft > 0 && this.refusal !== null && this.refusal !== "busy" ? REFUSAL_TEXT[this.refusal] : null;
   }
 
   /** The line under the view: what the control does here, or why it just refused. Null when there is nothing to say. */
   prompt(): string | null {
-    if (this.refusalLeft > 0 && this.refusal !== null && this.refusal !== "busy") return REFUSAL_TEXT[this.refusal];
+    const refused = this.refusalText();
+    if (refused !== null) return refused;
     if (!this.host.available()) return null;
     if (this.flow.phase === "onFoot") return this.reach ? "Enter or B: get in" : REFUSAL_TEXT.noCarInReach;
     return this.carAtWheel() !== null ? "Enter or B: get out" : null;
