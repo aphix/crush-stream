@@ -79,8 +79,8 @@ export function growDrawn(o: THREE.Object3D, box: THREE.Box3): void {
   for (let i = 0; i < o.children.length; i++) growDrawn(o.children[i]!, box);
 }
 
-/** The lowest clearance (m) of what `o` and its descendants draw over the ground under each vertex, at their world matrices as they stand; `Infinity` where there is no ground under any. */
-function lowestClearance(o: THREE.Object3D): number {
+/** The lowest clearance (m) of what `o` and its descendants draw over the ground under each vertex, at their world matrices as they stand; `Infinity` where there is no ground under any. Stops at the first clearance under `below`, returning it: enough to say a pose is too low. */
+function lowestClearance(o: THREE.Object3D, below = -Infinity): number {
   if (!o.visible) return Infinity;
   let low = Infinity;
   const geometry = o instanceof PartSeat ? o.drawn : o instanceof THREE.Mesh ? (o.geometry as THREE.BufferGeometry) : null;
@@ -91,9 +91,10 @@ function lowestClearance(o: THREE.Object3D): number {
       _bumpW.fromBufferAttribute(position, k).applyMatrix4(o.matrixWorld);
       const y = ground.heightAt(_bumpW.x, _bumpW.z, _bumpW.y);
       if (y !== NO_FLOOR) low = Math.min(low, _bumpW.y - y);
+      if (low < below) return low;
     }
   }
-  for (let i = 0; i < o.children.length; i++) low = Math.min(low, lowestClearance(o.children[i]!));
+  for (let i = 0; i < o.children.length && low >= below; i++) low = Math.min(low, lowestClearance(o.children[i]!, below));
   return low;
 }
 const _bumpW = new THREE.Vector3();
@@ -418,7 +419,7 @@ export abstract class CarParts extends CarGlass {
     const y0 = o.position.y - p.hingeT * BUMPER_SAG;
     // The ancestors' matrices do not change while the roll is searched: brought up to date once, each probe then poses `o` alone.
     o.parent?.updateWorldMatrix(true, false);
-    if (this.hungLack(o, x0, y0, px, roll) <= 0 || this.group.matrixWorld.elements[5]! < UPRIGHT_UP_Y) return;
+    if (!this.hungLow(o, x0, y0, px, roll) || this.group.matrixWorld.elements[5]! < UPRIGHT_UP_Y) return;
     const flat = this.hungLack(o, x0, y0, px, 0);
     if (flat > 0) {
       o.position.y += flat;
@@ -428,10 +429,10 @@ export abstract class CarParts extends CarGlass {
     let hi = roll;
     for (let i = 0; i < BUMPER_REST_ITER; i++) {
       const mid = (lo + hi) * 0.5;
-      if (this.hungLack(o, x0, y0, px, mid) > 0) hi = mid;
+      if (this.hungLow(o, x0, y0, px, mid)) hi = mid;
       else lo = mid;
     }
-    this.hungLack(o, x0, y0, px, lo);
+    this.poseHung(o, x0, y0, px, lo);
   }
 
   /**
@@ -458,16 +459,30 @@ export abstract class CarParts extends CarGlass {
     o.position.z += lift * e[9]!;
   }
 
-  /** Pose `o` rolled `r` about its corner at `px` from (`x0`, `y0`) and return how far (m) its box is under `BUMPER_CLEAR` above the ground there: positive is too low. */
-  private hungLack(o: THREE.Object3D, x0: number, y0: number, px: number, r: number): number {
+  /** Pose `o` rolled `r` about its corner at `px` from (`x0`, `y0`), its world matrix brought up to date. */
+  private poseHung(o: THREE.Object3D, x0: number, y0: number, px: number, r: number): void {
     o.rotation.z = r;
     o.position.x = x0 + px * (1 - detCos(r));
     o.position.y = y0 - px * detSin(r);
     o.updateWorldMatrix(false, true);
+  }
+
+  /** Pose `o` (`poseHung`); true when its box stands `BUMPER_CLEAR` over the highest ground under it (or there is none), so no vertex can be low. */
+  private hungClear(o: THREE.Object3D, x0: number, y0: number, px: number, r: number): boolean {
+    this.poseHung(o, x0, y0, px, r);
     growDrawn(o, _box.makeEmpty());
     const high = groundUnderBox(_box);
-    if (high === NO_FLOOR || _box.min.y >= high + BUMPER_CLEAR) return 0;
-    return BUMPER_CLEAR - lowestClearance(o);
+    return high === NO_FLOOR || _box.min.y >= high + BUMPER_CLEAR;
+  }
+
+  /** Pose `o` (`poseHung`) and return how far (m) it stands under `BUMPER_CLEAR` above the ground there: positive is too low. */
+  private hungLack(o: THREE.Object3D, x0: number, y0: number, px: number, r: number): number {
+    return this.hungClear(o, x0, y0, px, r) ? 0 : BUMPER_CLEAR - lowestClearance(o);
+  }
+
+  /** Whether `o` posed so (`poseHung`) stands too low (`hungLack` > 0), read only up to its first vertex under the clearance. */
+  private hungLow(o: THREE.Object3D, x0: number, y0: number, px: number, r: number): boolean {
+    return !this.hungClear(o, x0, y0, px, r) && lowestClearance(o, BUMPER_CLEAR) < BUMPER_CLEAR;
   }
 
   /** Door hinge state; `side` −1 is the left door, +1 the right. */
