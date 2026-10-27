@@ -4,10 +4,9 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DriveInput } from "./car-drive.ts";
 import { assignClass } from "./vehicle-classes.ts";
-import { paint } from "./test-support.ts";
+import { DT, paint } from "./test-support.ts";
 import { makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { Ground, setGround } from "../world/ground.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
  * E2 of docs/UNIFIED_CONTACT.md (7.2), as measured on main 5ad7839 (section 10): a settled sedan stack leaves the top car's
@@ -15,7 +14,6 @@ import { FRAME_HZ } from "../kernel/constants.ts";
  * a monster's belly rides 0.48 m over its tyre plane, so on a sedan's roof its tyres stand on the hood and trunk. A car
  * touching only with its belly is resting, not flying, and has no drive (its wheels are free).
  */
-const FRAME = 1 / FRAME_HZ;
 const FULL: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
 
 /** A flat asphalt platform at height `y`, under everything. */
@@ -37,7 +35,7 @@ function car(cls: "sedan" | "monster", y: number, airborne: boolean): Deformable
 }
 
 function settle(w: CrashWorld, seconds: number): void {
-  for (let f = 0; f < seconds / FRAME; f++) tickWorld(w, FRAME);
+  for (let f = 0; f < seconds / DT; f++) tickWorld(w, DT);
 }
 
 /** Full throttle for 1.5 s: the speed after 0.25, 0.5, 1.0 and 1.5 s, the z it has reached, and whether it was ever airborne in its first 0.2 s. */
@@ -46,7 +44,7 @@ function driveOff(w: CrashWorld, c: DeformableCar): { v: number[]; z: number; ai
   let airEarly = false;
   w.pedals.set(c, FULL);
   for (let f = 1; f <= 90; f++) {
-    tickWorld(w, FRAME);
+    tickWorld(w, DT);
     if (f <= 12 && c.airborne) airEarly = true;
     const k = f === 15 ? 0 : f === 30 ? 1 : f === 60 ? 2 : f === 90 ? 3 : -1;
     if (k >= 0) v[k] = Math.hypot(c.velocity.x, c.velocity.z);
@@ -87,11 +85,11 @@ describe("given a sedan resting belly-down on another sedan's roof, its tyres 0.
     const z0 = upper.group.position.z;
     for (let f = 0; f < 120; f++) {
       if (upper.airborne) air++;
-      tickWorld(w, FRAME);
+      tickWorld(w, DT);
     }
     w.pedals.set(upper, FULL);
     for (let f = 0; f < 120; f++) {
-      tickWorld(w, FRAME);
+      tickWorld(w, DT);
       if (upper.airborne) air++;
     }
     const moved = Math.abs(upper.group.position.z - z0);

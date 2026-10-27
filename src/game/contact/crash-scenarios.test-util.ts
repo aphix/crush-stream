@@ -6,13 +6,13 @@ import { beginImpact, easeTimeScale, phaseClock, stepPhase, type PhaseClock } fr
 import { CAGES } from "../kernel/rig-spec.ts";
 import { BARRIER_HALF, physicsSlice, sliceSpeed } from "./sat.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
-import { closedOn, mass, paint } from "../vehicle/test-support.ts";
+import { closedOn, DT, mass, paint } from "../vehicle/test-support.ts";
 import { newWorld, stepWorld, type World } from "../engine/world-step.ts";
 import { EjectionWatch, type Ejection } from "../vehicle/ejection.ts";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
 import type { SimPacer } from "../engine/sim-pace.ts";
-import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
+import { FINE_HZ } from "../kernel/constants.ts";
 import { RigSolids } from "../scenes/rig-solids.ts";
 import { armedSolids, armSolids } from "../world/surfaces.ts";
 
@@ -22,7 +22,6 @@ import { armedSolids, armSolids } from "../world/surfaces.ts";
  * `JerseyBarrier`, held fixed (no slide, no dent). Not a test file itself.
  */
 
-const FRAME = 1 / FRAME_HZ;
 const CELL_SPAN = CAGES.find((c) => c.name === "chassisCell")!;
 
 export type CrashResult = {
@@ -203,7 +202,7 @@ let slabSolids: RigSolids | null = null;
  * frame is stepped as the engine does (`SimPacer`: whole slices of its floor); without it the frame's time is cut into
  * `physicsSlice`s that end exactly on it. A world with a slab arms it as the engine's range does, and puts back what was armed.
  */
-export function tickWorld(w: CrashWorld, wallDt = FRAME, pace?: SimPacer): void {
+export function tickWorld(w: CrashWorld, wallDt = DT, pace?: SimPacer): void {
   easeTimeScale(w.clock, wallDt);
   const simDt = wallDt * w.clock.timeScale;
   const vmax = sliceSpeed(w.cars);
@@ -480,7 +479,7 @@ export function run(w: CrashWorld, probes: Probe[], after: number): void {
   for (let frame = 0; frame < limit; frame++) {
     const before = w.clock.timeScale;
     tickWorld(w);
-    const simDt = FRAME * (before + w.clock.timeScale) * 0.5;
+    const simDt = DT * (before + w.clock.timeScale) * 0.5;
     for (const p of probes) p.sample(simDt, w);
     if (probes.some((p) => p.contact)) sinceContact += simDt;
     if (sinceContact >= after) return;

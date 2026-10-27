@@ -5,6 +5,7 @@ import { stepWorld } from "../engine/world-step.ts";
 import { pushCar } from "./pair-contact.ts";
 import { PushBudget, STEP_CEIL } from "../deform/push-budget.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
+import { massCentroid } from "../vehicle/test-support.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 
 /** The slice a derby steps at (`physicsSlice(1/60, 8)`): 6.9 ms. */
@@ -17,18 +18,6 @@ const STRUCTURE_DRIFT = 0.0122;
 const REFIT_DRIFT = 0.0086;
 /** The bowl clip's translation in that slice (m), across the pushes. */
 const CLIP = 0.015;
-
-function centroid(c: DeformableCar): [number, number] {
-  let x = 0;
-  let z = 0;
-  let m = 0;
-  for (const q of c.deform.masses) {
-    x += q.world.x * q.mass;
-    z += q.world.z * q.mass;
-    m += q.mass;
-  }
-  return [x / m, z / m];
-}
 
 /** A wreck: a bullet's slow head-on, settled 2.5 s, planted (quiet well past 0.35 s). */
 function plantedWreck(): DeformableCar {
@@ -105,13 +94,13 @@ describe("given a slice whose contact corrections (pair pushes, structure step, 
     const limit = Math.max(new PushBudget().take(1, 1, 0, 1, H, TOUCH), STEP_CEIL);
     for (let s = 0; s < 4; s++) {
       pass = 0;
-      const before = centroid(wreck);
+      const before = massCentroid(wreck.deform.masses);
       stepWorld(w, H);
-      const after = centroid(wreck);
+      const after = massCentroid(wreck.deform.masses);
       // The net translation the corrections made: the centroid's move, less the clip (a wall's, not the budget's) and the wreck's own motion.
       const net = Math.hypot(
-        after[0] - before[0] + PUSH_N[1] * CLIP - wreck.velocity.x * H,
-        after[1] - before[1] - PUSH_N[0] * CLIP - wreck.velocity.z * H,
+        after.x - before.x + PUSH_N[1] * CLIP - wreck.velocity.x * H,
+        after.z - before.z - PUSH_N[0] * CLIP - wreck.velocity.z * H,
       );
       assert.ok(net <= limit + 1e-6, `slice ${s}: corrections moved the centroid ${(net * 1000).toFixed(1)} mm, cap ${(limit * 1000).toFixed(1)} mm`);
     }
@@ -143,13 +132,13 @@ describe("given a live wreck pushed by the pair kernel's push (pushCar, the amou
   it("when it is pushed 30 mm and its masses are re-fitted, then the re-fit adds no translation beyond what the push and the cap leave", () => {
     const wreck = plantedWreck();
     stepWorld(makeWorld([wreck], false, false).world, H);
-    const start = centroid(wreck);
+    const start = massCentroid(wreck.deform.masses);
     pushCar(wreck, PUSH_N[0], 0, PUSH_N[1], wreck.deform.takePush(PUSH_N[0], PUSH_N[1], 0.03, H, 0));
-    const shifted = centroid(wreck);
+    const shifted = massCentroid(wreck.deform.masses);
     wreck.deform.followGroup(wreck.group, wreck.velocity, wreck.angular, 0);
-    const end = centroid(wreck);
-    const shift = Math.hypot(shifted[0] - start[0], shifted[1] - start[1]);
-    const total = Math.hypot(end[0] - start[0], end[1] - start[1]);
+    const end = massCentroid(wreck.deform.masses);
+    const shift = Math.hypot(shifted.x - start.x, shifted.z - start.z);
+    const total = Math.hypot(end.x - start.x, end.z - start.z);
     const limit = Math.max(new PushBudget().take(1, 1, 0, 1, H, 0), STEP_CEIL);
     assert.ok(total <= Math.max(shift, limit) + 1e-6, `push ${(shift * 1000).toFixed(1)} mm, then the re-fit: ${(total * 1000).toFixed(1)} mm in all, cap ${(limit * 1000).toFixed(1)} mm`);
   });

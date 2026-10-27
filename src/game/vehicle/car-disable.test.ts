@@ -4,9 +4,7 @@ import { launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenario
 import { carLayout } from "../net/car-pose.ts";
 import { makeCarFrame } from "../net/codec.ts";
 import type { DeformableCar } from "./car.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
-
-const FRAME = 1 / FRAME_HZ;
+import { DT } from "./test-support.ts";
 
 /** `from`'s wreck section (what a highlight keyframe and a netplay snapshot carry of a wreck) laid on `to`, as a replay restores it. */
 function restoreWreck(from: DeformableCar, to: DeformableCar): void {
@@ -22,12 +20,12 @@ describe("given a car whose engine is killed from outside the crash sim (a guard
     const car = makeCar();
     launch(car, 0, 0, 0, 0, 15);
     const w = makeWorld([car], false, false);
-    for (let f = 0; f < 30; f++) tickWorld(w, FRAME);
+    for (let f = 0; f < 30; f++) tickWorld(w, DT);
     const from = car.group.position.clone();
     car.disable();
     let slept = -1;
     for (let f = 0; f < 600 && slept < 0; f++) {
-      tickWorld(w, FRAME);
+      tickWorld(w, DT);
       if (car.asleep) slept = f;
     }
     assert.ok(slept >= 0, "asleep within 10 s");

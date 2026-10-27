@@ -2,7 +2,7 @@ import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { VEHICLE_CLASS_IDS } from "./vehicle-classes.ts";
-import { crashedRun, DRIFT, loopRun, NAMED_LOOPS, track } from "./ejection-slope.test-util.ts";
+import { assertHeld, crashedRun, loopRun, NAMED_LOOPS, track } from "./ejection-slope.test-util.ts";
 
 describe("given a car that was hit once earlier and drives on, which the ground must not kill or throw its driver", () => {
   afterEach(() => setGround(null));
@@ -13,9 +13,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
       it(`when a ${cls} hit on its flank drives over the stunt course's CRUSH crest and down the kicker at ${pace} m/s, then the engine block stays put and nobody is thrown`, (t) => {
         const r = crashedRun(stunt, cls, pace, "side", 860, 960);
         t.diagnostic(`${cls} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm, ended at s ${r.endS.toFixed(0)}`);
-        assert.ok(r.reached, `the run stopped at s ${r.endS.toFixed(0)}, short of s 960`);
-        assert.ok(r.end - r.settled <= DRIFT, `the block moved ${((r.end - r.settled) * 1000).toFixed(0)} mm with nothing touching the car`);
-        assert.ok(r.alive, "the engine died");
+        assertHeld(r, "s 960");
         assert.deepEqual(r.thrown, []);
       });
     }
@@ -31,9 +29,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
       it(`when a ${cls} hit on its flank is touched all the way over the stunt course's CRUSH crest (s 885-902) at ${pace} m/s, then the touch adds under 5 mm of engine-block travel`, (t) => {
         const r = crashedRun(stunt, cls, pace, "side", 860, 960, [885, 902]);
         t.diagnostic(`${cls} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm`);
-        assert.ok(r.reached, `the run stopped at s ${r.endS.toFixed(0)}, short of s 960`);
-        assert.ok(r.end - r.settled <= DRIFT, `the touch moved the block ${((r.end - r.settled) * 1000).toFixed(1)} mm`);
-        assert.ok(r.alive, "the engine died");
+        assertHeld(r, "s 960");
       });
     }
   }
@@ -42,9 +38,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
     for (const cls of ["sedan", "truck"] as const) {
       it(`when a ${cls} hit on its ${hit} drives over the crest at 30 m/s, then the engine block stays put and nobody is thrown`, () => {
         const r = crashedRun(stunt, cls, 30, hit, 860, 960);
-        assert.ok(r.reached, `the run stopped at s ${r.endS.toFixed(0)}, short of s 960`);
-        assert.ok(r.end - r.settled <= DRIFT, `the block moved ${((r.end - r.settled) * 1000).toFixed(0)} mm with nothing touching the car`);
-        assert.ok(r.alive, "the engine died");
+        assertHeld(r, "s 960");
         assert.deepEqual(r.thrown, []);
       });
     }
@@ -59,9 +53,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
       it(`when a sedan hit on its ${hit} is touched all the way up the stunt bowl's banks (s 200-340) at ${pace} m/s, then the touch adds under 5 mm of engine-block travel`, (t) => {
         const r = crashedRun(stunt, "sedan", pace, hit, 200, 345, [200, 340]);
         t.diagnostic(`${hit} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm`);
-        assert.ok(r.reached, `the run stopped at s ${r.endS.toFixed(0)}, short of s 345`);
-        assert.ok(r.end - r.settled <= DRIFT, `the touch moved the block ${((r.end - r.settled) * 1000).toFixed(1)} mm`);
-        assert.ok(r.alive, "the engine died");
+        assertHeld(r, "s 345");
         assert.deepEqual(r.thrown, []);
       });
     }
@@ -74,9 +66,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
         const trk = track(course);
         const r = loopRun(trk, pace);
         t.diagnostic(`${course} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm, ended at s ${r.endS.toFixed(0)} of ${trk.length.toFixed(0)}`);
-        assert.ok(r.reached, `the run stopped at s ${r.endS.toFixed(0)} of ${trk.length.toFixed(0)}, short of its end`);
-        assert.ok(r.end - r.settled <= DRIFT, `the block moved ${((r.end - r.settled) * 1000).toFixed(0)} mm with nothing touching the car`);
-        assert.ok(r.alive, "the engine died");
+        assertHeld(r, `its end, s ${trk.length.toFixed(0)}`);
         assert.deepEqual(r.thrown, []);
       });
     }

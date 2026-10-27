@@ -1,13 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import * as THREE from "three";
 import { FREEWHEEL, launch, makeWorld, runWall, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { pushCar } from "../contact/pair-contact.ts";
 import { DeformableCar } from "../vehicle/car.ts";
-import { assignClass, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
+import type { VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import type { DriveInput } from "../vehicle/car-drive.ts";
-import { paint } from "../vehicle/test-support.ts";
+import { makeCar } from "../vehicle/ground-probe.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { carLayout } from "../net/car-pose.ts";
 import { ensureFrames, makeSnapshot } from "../net/codec.ts";
@@ -35,15 +34,9 @@ const STYLES: [CarStyleId, VehicleClassId][] = [
   ["pickup", "truck"],
 ];
 
-function styled(style: CarStyleId, cls: VehicleClassId): DeformableCar {
-  const car = new DeformableCar(paint(), new THREE.Scene(), null, style);
-  assignClass(car, cls);
-  return car;
-}
-
 /** A car of `style` 1.5 s after a 50 km/h square wall hit: a frozen, nose-crushed wreck. */
 function wreck(style: CarStyleId, cls: VehicleClassId): DeformableCar {
-  const car = styled(style, cls);
+  const car = makeCar(cls);
   runWall(50, 1, "front", { car });
   assert.ok(car.deform.frozen, `${style}: the wreck did not freeze`);
   return car;
@@ -133,7 +126,7 @@ for (const [style, cls] of STYLES) {
     it("when it is restored from a keyframe onto a fresh car of its style and replayed 1 s, then that car draws the nose crush it had", () => {
       const car = wreck(style, cls);
       const before = drawnNose(car);
-      const copy = styled(style, cls);
+      const copy = makeCar(cls);
       restoreInto(car, copy);
       assertKept(`${style} restored`, before, drawnNose(copy));
       ticks(makeWorld([copy], false, false, FREEWHEEL), 1);
@@ -145,7 +138,7 @@ for (const [style, cls] of STYLES) {
     // The pickup still pops 2.1 mm at the freeze step itself (no drift before it: its front masses' car-frame z re-derived from the wall-held world).
     const todo = style === "pickup" ? "the freeze step's own re-derive moves the pickup's nose 2.1 mm" : undefined;
     it("when it settles there 3 s, then its drawn nose never jumps more than 2 mm between frames, its next bake included", { todo }, () => {
-      const car = styled(style, cls);
+      const car = makeCar(cls);
       launch(car, 6.2, 0, -Math.PI / 2, -50 / 3.6, 0);
       const w = makeWorld([car], true, false, FREEWHEEL);
       for (let t = 0; t < 3 && (!car.crashed || car.deform.crushing); t += 1 / FRAME_HZ) tickWorld(w);

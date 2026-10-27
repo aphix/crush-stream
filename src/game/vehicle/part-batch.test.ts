@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { after, describe, test } from "node:test";
 import * as THREE from "three";
-import { CarDetail, DETAIL_LEVELS } from "../present/car-detail.ts";
+import { DETAIL_LEVELS } from "../present/car-detail.ts";
 import { DeformableCar } from "./car.ts";
 import { BUMPER_F, DRIVER_SIDE } from "./constants.ts";
-import { CAR_STYLES, CAR_STYLE_IDS, drawnStyle, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLES, CAR_STYLE_IDS, drawnStyle } from "./car-variants.ts";
 import { windshieldBaseY } from "./car-glass.ts";
 import { applyDents, DENT_MIN_DV, recordDent } from "./loose-dent.ts";
 import { PartBatch } from "./part-batch.ts";
@@ -12,7 +12,7 @@ import { drawnDoorCard } from "./car-door-mesh.ts";
 import { cageInterior } from "./interior-geometry.ts";
 import { PART_KIND, PART_KINDS, PART_PER_CAR, partGeometry, type PartKind } from "./part-geometry.ts";
 import { partBatchGeometries } from "./part-variants.ts";
-import { assertSameNumbers, paint } from "./test-support.ts";
+import { assertSameNumbers, paint, stageBatch } from "./test-support.ts";
 
 /** The instance matrix is float32: a seat's position of a few hundred metres is stored within 1e-4 m. */
 const FLOAT32_SLACK = 1e-4;
@@ -53,27 +53,7 @@ function rowsOf(batch: PartBatch, kind: PartKind): number[] {
   return rows;
 }
 
-/** A 50 degree lens at the origin looking down +z; cars stand on the axis at the given distance. */
-function stage(capacity = 16) {
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, 2, 0.1, 900);
-  camera.lookAt(0, 0, 1);
-  camera.updateMatrixWorld(true);
-  const detail = new CarDetail();
-  const batch = new PartBatch(capacity);
-  const car = (at: number, style: CarStyleId = "sedan") => {
-    const made = new DeformableCar(paint(), scene, null, style);
-    made.spawn(0, at, 0);
-    made.group.updateMatrixWorld(true);
-    return made;
-  };
-  const draw = (cars: DeformableCar[]) => {
-    detail.update(cars, camera, null, null);
-    for (const c of cars) c.group.updateMatrixWorld(true);
-    batch.sync(cars);
-  };
-  return { batch, car, draw };
-}
+const stage = (capacity = 16) => stageBatch(() => new PartBatch(capacity), (b, cars) => b.sync(cars));
 
 const looseMeshes = (seat: THREE.Object3D): THREE.Mesh[] => seat.children.filter((c): c is THREE.Mesh => c instanceof THREE.Mesh);
 

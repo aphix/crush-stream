@@ -6,8 +6,7 @@ import { Ground, setGround } from "../world/ground.ts";
 import type { DeformableCar } from "./car.ts";
 import type { DriveInput } from "./car-drive.ts";
 import { BELLY, buildCar, cellX, cellZ, drawnField, drawnRange, NX, NZ, stepFrames, TOP_PARTS } from "./drawn-body.test-util.ts";
-import { fit } from "./ground-probe.test-util.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import { fit, FRAME } from "./ground-probe.test-util.ts";
 import { C_H, C_NX, C_NY, C_NZ, HIT_SIZE } from "../world/surfaces.ts";
 import { TOUCH } from "./car-air-body.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
@@ -18,7 +17,6 @@ import { UPRIGHT_UP_Y } from "./car-suspension.ts";
  * and boot 7.5-13.6 cm higher, so the tyres sat inside the body), and the car drives off the roof at the speed the same car
  * has on flat ground at that height (E2 of the same document, on a crushed roof).
  */
-const FRAME = 1 / FRAME_HZ;
 const FULL: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
 const SINK_M = 0.05;
 /** How far over the drawn body a tyre may hang and still stand on it: the sim's own `TOUCH` (a tyre within it is down). */

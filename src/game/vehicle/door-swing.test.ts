@@ -7,7 +7,7 @@ import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { DeformableCar } from "./car.ts";
 import { DOOR_AJAR, DOOR_DETENT_ACC, DOOR_OPEN_MAX, SLAM_TEAR_J } from "./car-core.ts";
 import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
-import { applyDrive, type DriveInput } from "./car-drive.ts";
+import { applyDrive, type DriveInput, idleDrive } from "./car-drive.ts";
 import { swingAccel } from "./car-wear.ts";
 import { DT, paint } from "./test-support.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
@@ -174,7 +174,6 @@ describe("given an unlatched open door that swings with the car's acceleration",
 });
 
 describe("given a car driven for real in shape deform mode with its right door open", () => {
-  const IDLE: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
   function drive(v0: number, deg0: number, input: Partial<DriveInput>, seconds: number): DeformableCar {
     const car = new DeformableCar(paint(), new THREE.Scene());
     car.deform.setMode("shape");
@@ -187,7 +186,7 @@ describe("given a car driven for real in shape deform mode with its right door o
       acc = Math.min(0.05, acc + DT);
       while (acc > 1e-5) {
         const h = physicsSlice(acc, sliceSpeed(w.cars));
-        applyDrive(car, { ...IDLE, ...input }, h);
+        applyDrive(car, { ...idleDrive(), ...input }, h);
         stepWorld(w, h);
         car.stepBreakage(h);
         acc -= h;

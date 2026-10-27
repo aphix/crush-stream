@@ -5,10 +5,9 @@ import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { DeformableCar } from "./car.ts";
 import { Ground, setGround } from "../world/ground.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
-import { paint } from "./test-support.ts";
+import { DT, paint } from "./test-support.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { useStiffSprings } from "./stiff-springs.test-util.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
  * The owner's ramp test: a car dropped 0.5 m onto a wedge, brake and handbrake held, must settle with all
@@ -17,7 +16,6 @@ import { FRAME_HZ } from "../kernel/constants.ts";
  */
 const FOOT = -10;
 const RUN = 20;
-const FRAME = 1 / FRAME_HZ;
 const SETTLE_S = 3;
 const BRAKE: DriveInput = { throttle: 0, steer: 0, brake: 1, ebrake: true, boost: false };
 const DEG = Math.PI / 180;
@@ -51,8 +49,8 @@ function settle(deg: number, yaw: number): Settled {
   car.group.position.y = g.heightAt(0, 0) + 0.5;
   const w = newWorld([car]);
   let acc = 0;
-  for (let f = 0; f < SETTLE_S / FRAME; f++) {
-    acc = Math.min(0.05, acc + FRAME);
+  for (let f = 0; f < SETTLE_S / DT; f++) {
+    acc = Math.min(0.05, acc + DT);
     while (acc > 1e-5) {
       const h = physicsSlice(acc, sliceSpeed(w.cars));
       applyDrive(car, BRAKE, h);

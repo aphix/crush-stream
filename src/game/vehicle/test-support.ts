@@ -4,6 +4,9 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { CarPaint } from "./car-core.ts";
 import type { DriveInput } from "./car-drive.ts";
+import { DeformableCar } from "./car.ts";
+import type { CarStyleId } from "./car-variants.ts";
+import { CarDetail } from "../present/car-detail.ts";
 import { blankAiCar, type AiCar, type DerbyBrain } from "../ai/derby-ai.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -39,6 +42,19 @@ type Placed = { local: THREE.Vector3; rest: THREE.Vector3 };
 export function closedOn(m: Placed, cell: Placed, axis: "x" | "y" | "z"): number {
   const restGap = m.rest[axis] - cell.rest[axis];
   return Math.sign(restGap) * (restGap - (m.local[axis] - cell.local[axis]));
+}
+
+/** Mass-weighted centroid (x, z) of `masses`: with a car's masses live, where the car actually is. */
+export function massCentroid(masses: readonly { world: THREE.Vector3; mass: number }[]): { x: number; z: number } {
+  let x = 0;
+  let z = 0;
+  let m = 0;
+  for (const p of masses) {
+    x += p.world.x * p.mass;
+    z += p.world.z * p.mass;
+    m += p.mass;
+  }
+  return { x: x / m, z: z / m };
 }
 
 // node:assert deep-diffs both sides on failure (Myers, O((N+M)·D)); two big float arrays once took 14.7 GB.
@@ -77,4 +93,30 @@ export function aiCar(id: number, extra: Partial<AiCar> = {}): AiCar {
 /** One derby decision with the opening hold already behind us (first call ages the car 2 s), copied out of the scratch. */
 export function decide(brain: DerbyBrain, self: AiCar, others: AiCar[], dt = 2): DriveInput {
   return { ...brain.think(self, others, dt) };
+}
+
+/**
+ * A 50 degree lens at the origin looking down +z, a `CarDetail` and the batch `makeBatch` builds; `car(at)` stands a car on the axis at
+ * `at` m (turned to `yaw` when given), `draw` runs the detail pick and `sync` for those cars.
+ */
+export function stageBatch<B>(makeBatch: (detail: CarDetail) => B, sync: (batch: B, cars: DeformableCar[]) => void, yaw?: number) {
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(50, 2, 0.1, 900);
+  camera.lookAt(0, 0, 1);
+  camera.updateMatrixWorld(true);
+  const detail = new CarDetail();
+  const batch = makeBatch(detail);
+  const car = (at: number, style: CarStyleId = "sedan") => {
+    const made = new DeformableCar(paint(), scene, null, style);
+    made.spawn(0, at, 0);
+    if (yaw !== undefined) made.group.rotation.y = yaw;
+    made.group.updateMatrixWorld(true);
+    return made;
+  };
+  const draw = (cars: DeformableCar[]) => {
+    detail.update(cars, camera, null, null);
+    for (const c of cars) c.group.updateMatrixWorld(true);
+    sync(batch, cars);
+  };
+  return { batch, car, draw };
 }

@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { applyDrive, type DriveInput } from "./car-drive.ts";
+import { applyDrive, idleDrive } from "./car-drive.ts";
 import { beginFakeFall, type DeformableCar } from "./car.ts";
 import { G } from "./car-air-body.ts";
 import { readContact } from "./car-air-points.ts";
@@ -18,7 +18,6 @@ const FLIGHT_S = 1.8;
 const HEIGHT = 100;
 const LAUNCH = new THREE.Vector3(10, 5, 3);
 const SPIN = new THREE.Vector3(0.4, -1.1, 0.7);
-const NO_PEDALS: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
 const AXES = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1)] as const;
 
 function launch(spin: THREE.Vector3) {
@@ -50,7 +49,7 @@ function fly(car: DeformableCar, hz: number, spin: THREE.Vector3): { centreError
   let centreError = 0;
   let axesError = 0;
   for (let k = 1; k <= steps; k++) {
-    applyDrive(car, NO_PEDALS, dt);
+    applyDrive(car, idleDrive(), dt);
     stepWorld(world, dt);
     const t = k * dt;
     want.copy(start).addScaledVector(LAUNCH, t);

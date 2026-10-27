@@ -1,12 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
-import { assignClass, CLASSES, HANDLING, type VehicleClassId } from "./vehicle-classes.ts";
+import { CLASSES, HANDLING, type VehicleClassId } from "./vehicle-classes.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
-import { DT, paint } from "./test-support.ts";
+import { DT } from "./test-support.ts";
+import { makeCar } from "./ground-probe.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 
 /**
@@ -15,9 +15,9 @@ import { FINE_HZ } from "../kernel/constants.ts";
  * wheels turn slower than a sedan's at the same speed. Checked against the distance the car actually moved.
  */
 
-function makeCar(cls: VehicleClassId): DeformableCar {
-  const car = new DeformableCar(paint(), new THREE.Scene(), null, CLASSES[cls].style);
-  assignClass(car, cls);
+/** A car of class `cls` from `makeCar`, stood at the origin facing +z. */
+function parked(cls: VehicleClassId): DeformableCar {
+  const car = makeCar(cls);
   car.spawnFacing(0, 0, 0, 0);
   return car;
 }
@@ -37,22 +37,22 @@ const radius = (cls: VehicleClassId) => carFrame(CAR_STYLES[CLASSES[cls].style])
 for (const cls of ["sedan", "monster"] as const) {
   describe(`given a ${cls} whose drawn wheels turn with the ground (the distance the car moves along its nose over the tyre's drawn radius)`, () => {
     it("when it drives 10 m/s forward and 3 m/s back for 1 s, then the wheel turns +10/r rad forward and −3/r rad back (r is the class's own tyre radius)", () => {
-      const fwd = roll(makeCar(cls), 0, 10, 1);
+      const fwd = roll(parked(cls), 0, 10, 1);
       assert.ok(Math.abs(fwd.angle - 10 / radius(cls)) < 0.02 * (10 / radius(cls)), `forward ${fwd.angle.toFixed(3)} rad vs ${(10 / radius(cls)).toFixed(3)}`);
-      const rev = roll(makeCar(cls), 0, -3, 1);
+      const rev = roll(parked(cls), 0, -3, 1);
       assert.ok(Math.abs(rev.angle + 3 / radius(cls)) < 0.02 * (3 / radius(cls)), `reverse ${rev.angle.toFixed(3)} rad vs ${(-3 / radius(cls)).toFixed(3)}`);
     });
 
     it("when it rolls at 10, −10, −3 and 25 m/s for 1 s, then the wheel's rolled distance is the distance the car moved, signed, within 2 %, not the speed's magnitude", () => {
       for (const v of [10, -10, -3, 25]) {
-        const r = roll(makeCar(cls), 0, v, 1);
+        const r = roll(parked(cls), 0, v, 1);
         assert.ok(Math.abs(r.angle * radius(cls) - r.along) < 0.02 * Math.abs(r.along), `${v} m/s: rolled ${(r.angle * radius(cls)).toFixed(3)} m, moved ${r.along.toFixed(3)} m`);
       }
     });
 
     it("when it slides purely sideways and when it slides at 60° to its nose, then the sideways slide turns the wheel not at all and the 60° slide turns it by its 5 m component along the nose", () => {
-      assert.equal(roll(makeCar(cls), 10, 0, 1).angle, 0);
-      const slant = roll(makeCar(cls), 10 * Math.sin(Math.PI / 3), 10 * Math.cos(Math.PI / 3), 1);
+      assert.equal(roll(parked(cls), 10, 0, 1).angle, 0);
+      const slant = roll(parked(cls), 10 * Math.sin(Math.PI / 3), 10 * Math.cos(Math.PI / 3), 1);
       assert.ok(Math.abs(slant.angle * radius(cls) - 5) < 0.1, `rolled ${(slant.angle * radius(cls)).toFixed(3)} m of a 5 m component`);
     });
   });
@@ -60,7 +60,7 @@ for (const cls of ["sedan", "monster"] as const) {
 
 describe("given a sedan under the real drive with the throttle held in reverse", () => {
   it("when it reverses for 3 s, then the wheels turn back and stay back once it rolls, rolling the distance it moved within 5 %", () => {
-    const car = makeCar("sedan");
+    const car = parked("sedan");
     const z0 = car.group.position.z;
     for (let i = 0; i < 180; i++) {
       applyDrive(car, { throttle: -1, steer: 0, brake: 0, ebrake: false, boost: false }, DT);
@@ -77,7 +77,7 @@ describe("given a sedan under the real drive with the throttle held in reverse",
 describe("given a sedan in the air whose wheels were spun up by driving at 10 m/s", () => {
   it("when it coasts for 0.5 s, then its wheels keep 60 to 85 % of their rate (bearing drag) and are under 20 % after 3 s, while 0.5 s of gas winds them up above the coasting rate and reverse throttle slows them below it", () => {
     const rateAfter = (throttle: number, secs: number): number => {
-      const car = makeCar("sedan");
+      const car = parked("sedan");
       roll(car, 0, 10, 0.5);
       const spun = car.wheelRate[0]!;
       car.group.position.y = 80;
@@ -97,7 +97,7 @@ describe("given a sedan in the air whose wheels were spun up by driving at 10 m/
 
 describe("given a sedan with a wheel that has left the car", () => {
   it("when the car rolls at 10 m/s for 0.5 s, then the loose wheel is not turned by it while a wheel still on the car turns", () => {
-    const car = makeCar("sedan");
+    const car = parked("sedan");
     car["looseWheels"][0]!.loose = true;
     roll(car, 0, 10, 0.5);
     assert.equal(car.wheels[0]!.rotation.x, 0);
@@ -108,7 +108,7 @@ describe("given a sedan with a wheel that has left the car", () => {
 describe("given a crashed sedan with a dead drivetrain", () => {
   it("when it rolls at 10 m/s forward and at 4 m/s back, then its wheels still freewheel at the ground's pace, signed, within 3 % of the distance moved", () => {
     for (const v of [10, -4]) {
-      const car = makeCar("sedan");
+      const car = parked("sedan");
       car.crashed = true;
       car.deform.drivetrainAlive = false;
       const r = roll(car, 0, v, 1);
@@ -120,7 +120,7 @@ describe("given a crashed sedan with a dead drivetrain", () => {
 describe("given a netplay client's sedan, whose velocity comes from a snapshot", () => {
   it("when a frame run turns its wheels for 1 s at 10 m/s forward and at 3 m/s back, then they turn the same way as a driven car's, signed, within 2 % of the snapshot velocity's turn", () => {
     for (const v of [10, -3]) {
-      const car = makeCar("sedan");
+      const car = parked("sedan");
       car.velocity.set(0, 0, v);
       car.refreshBasis();
       for (let i = 0; i < 60; i++) car.netFrame(DT);
@@ -133,7 +133,7 @@ describe("given a netplay client's sedan, whose velocity comes from a snapshot",
 /** Each wheel's drawn roll (m) and the ground its own contact point covered along the nose, over a driven run at the 240 Hz step. */
 function driveRun(cls: VehicleClassId, v0: number, secs: number, input: Partial<DriveInput>): { rolled: number[]; travel: number[]; car: DeformableCar } {
   const h = 1 / FINE_HZ;
-  const car = makeCar(cls);
+  const car = parked(cls);
   car.velocity.set(0, 0, v0);
   const R = radius(cls);
   const at = (i: number) => car.group.localToWorld(car.wheels[i]!.position.clone());

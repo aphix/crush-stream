@@ -164,12 +164,6 @@ describe("given a sedan with its front-left and rear-right wheels popped off", (
     const early = rest("sedan", [0, 3], 0.1);
     assert.ok(early.low > r.low + 0.01, `after 0.1 s the body is already ${(early.low * 100).toFixed(1)} cm over the ground (at rest ${(r.low * 100).toFixed(1)} cm)`);
   });
-
-  // It never comes to rest: read every frame, its corner lows swing 1.4-2.5 mm within each second from the second on (1.88 mm in the
-  // third; 1.86 on CarRig's rig-lip), its rigid body turning up to 16 mdeg in a frame at 0.01-0.03 rad/s, never asleep. The row read only
-  // the second's end against its start, 0.54 mm on union c320f809 (1.18 and 2.47 in the fourth and fifth): under 1 mm by the phase it
-  // was sampled at. A wreck on a tripod of two tyres and a corner that never sleeps is CarRig's wreck-sleep item (post-overhaul).
-  it.todo("when 3 s pass after the wheels go, then the body is still: under 1 mm of movement within the third second, read every frame");
 });
 
 describe("given a sedan with all four wheels on", () => {

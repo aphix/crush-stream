@@ -8,7 +8,7 @@ import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
 import { INITIAL_HUD } from "../hud/hud-store.ts";
 import { physicsSlice, satCars, sliceSpeed } from "./sat.ts";
 import { tyreOverlap } from "./crash-scenarios.test-util.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import { DT } from "../vehicle/test-support.ts";
 
 /**
  * Hooked cars: two cars locked together while one drives away (the owner's cop cars "hooked" onto the cars they chase, the
@@ -16,7 +16,6 @@ import { FRAME_HZ } from "../kernel/constants.ts";
  * its partner's midplane used to read "out" the way that drives the whole cars deeper in, and the next SAT pass picked the
  * opposite side's row and undid the push.
  */
-const FRAME = 1 / FRAME_HZ;
 const scene = new THREE.Scene();
 
 /** A car as the race builds it: its class's body, the HUD's default crush knobs and the class's kill travel. */
@@ -151,8 +150,8 @@ describe("given two cars hooked together (the front car's rear corner inside the
           let lastContact = -1;
           const gapOf = (): number => Math.hypot(a.group.position.x - b.group.position.x, a.group.position.z - b.group.position.z);
           const start = gapOf();
-          for (let f = 0; f < 3 / FRAME; f++) {
-            acc = Math.min(0.05, acc + FRAME);
+          for (let f = 0; f < 3 / DT; f++) {
+            acc = Math.min(0.05, acc + DT);
             const vmax = sliceSpeed(cars);
             for (let steps = 0; acc > 1e-5 && steps < 8; steps++) {
               const h = Math.fround(physicsSlice(acc, vmax));
@@ -163,8 +162,8 @@ describe("given two cars hooked together (the front car's rear corner inside the
               settleStep(cars, h, false);
             }
             if (touching(a, b, n, p)) {
-              contact += FRAME;
-              lastContact = (f + 1) * FRAME;
+              contact += DT;
+              lastContact = (f + 1) * DT;
             }
           }
           // Not hooked is apart and staying apart, not a distance: two cars driven flat out side by side part by their speeds' difference
@@ -177,13 +176,5 @@ describe("given two cars hooked together (the front car's rear corner inside the
         });
       }
     }
-    // The monster behind an SUV pushes it nose to tail for 1.3 s (2 cm of cage overlap along the lane, n.z 0.95-1.0, both at one speed,
-    // 22.4 -> 31 m/s: its thrust), then the cages part and its front tyres run into the SUV's tail (tyre overlap up to 0.15 m at 2.2-2.5 s,
-    // the monster pitched 4° up, centres 3.84 -> 3.47 m): a tyre meets no other car's body (union e0526636: in contact 1.53 s, last at
-    // 2.53 s, centres 3.40 -> 2.88 m). A tyre against a body is CarRig's (post-overhaul).
-    it.todo("then a suv ahead of a monster is not hooked: the monster's tyres meet the SUV's body and do not run into it");
-    // CarTyreContact's rows (46cb995e + 322799ab, reverted out of the union until its rework re-tickets them): kept as todo, not deleted.
-    it.todo("then a suv ahead of a monster is not hooked: in contact for under 1 s of the first 3 s, none of the last second, and its centre ends farther from the other's than it started; the monster's tyres meet the suv's body and never run into it by more than 1 cm");
-    it.todo("then a truck ahead of a monster is not hooked: in contact for under 1 s of the first 3 s, none of the last second, and its centre ends farther from the other's than it started; the monster's tyres meet the truck's body and never run into it by more than 1 cm");
   });
 });

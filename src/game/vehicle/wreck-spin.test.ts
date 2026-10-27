@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { applyDrive, idleDrive } from "./car-drive.ts";
 import { assignClass, CLASSES } from "./vehicle-classes.ts";
-import { paint } from "./test-support.ts";
+import { massCentroid, paint } from "./test-support.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
@@ -23,7 +23,7 @@ function spinning(w: number): DeformableCar {
   c.spawnFacing(0, 0, 0, 8);
   c.deform.armMasses(c.group, c.velocity, c.angular);
   const ms = c.deform.masses;
-  const [cx, cz] = centroid(ms);
+  const { x: cx, z: cz } = massCentroid(ms);
   for (const m of ms) {
     m.vel.x = w * (m.world.z - cz);
     m.vel.z = 8 - w * (m.world.x - cx);
@@ -31,22 +31,10 @@ function spinning(w: number): DeformableCar {
   return c;
 }
 
-function centroid(ms: DeformableCar["deform"]["masses"]): [number, number] {
-  let x = 0;
-  let z = 0;
-  let mass = 0;
-  for (const m of ms) {
-    x += m.world.x * m.mass;
-    z += m.world.z * m.mass;
-    mass += m.mass;
-  }
-  return [x / mass, z / mass];
-}
-
 /** Angular momentum about the masses' centroid (y), and the linear momentum, of the dynamic masses. */
 function momentum(c: DeformableCar): { l: number; px: number; pz: number } {
   const ms = c.deform.masses.filter((m) => m.dynamic);
-  const [cx, cz] = centroid(ms);
+  const { x: cx, z: cz } = massCentroid(ms);
   let px = 0;
   let pz = 0;
   let mass = 0;

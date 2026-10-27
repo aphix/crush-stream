@@ -3,10 +3,8 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { HEAD, LampLights, POOL_HEAD } from "./lamp-lights.ts";
-import { paint } from "./test-support.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import { DT, paint } from "./test-support.ts";
 
-const DT = 1 / FRAME_HZ;
 /** A lamp's pool may change by this much of its full brightness per frame (the fade is 0.3 s, so 1/18 at 60 Hz). */
 const STEP = 0.1;
 const HEADS = [0, 1] as const;

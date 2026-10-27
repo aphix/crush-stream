@@ -8,7 +8,8 @@ import { makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenario
 import { FACE_LEFT, FACE_NOSE, FACE_RIGHT, FACE_TAIL, FACE_TOP, faceMax, faceStrength, IMPRINT_NONE } from "../deform/load-crush.ts";
 import { crownY, keelY } from "./car-cage-rig.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { assignClass, STYLE_CLASS } from "./vehicle-classes.ts";
+import { STYLE_CLASS } from "./vehicle-classes.ts";
+import { makeCar } from "./ground-probe.test-util.ts";
 import type { CarStyleId } from "./car-variants.ts";
 
 /**
@@ -34,12 +35,6 @@ const SETTLE_SINK = 1e-3;
 /** The pair's top car ends every frame under this speed plus spin (a belly rest, not a gravity step short of it). */
 const STILL_SPEED = 1e-3;
 const STILL_S = 0.5;
-
-function makeCar(style: CarStyleId): DeformableCar {
-  const c = new DeformableCar(paint(), new THREE.Scene(), null, style);
-  assignClass(c, STYLE_CLASS[style]);
-  return c;
-}
 
 /** Run `w` until no roof's crush moves `SETTLE_SINK` over `STILL_S`: the stack the claims are about has crushed what it will. One whose roofs keep crushing fails here, not as a wrong number below. */
 function settle(w: CrashWorld, cars: readonly DeformableCar[], hz: number): void {
@@ -78,7 +73,7 @@ function run(w: CrashWorld, seconds: number, hz = 60): void {
 function stack(n: number, hz = 60, rig: StackRig = WAGONS): { cars: DeformableCar[]; w: CrashWorld } {
   const cars: DeformableCar[] = [];
   for (let i = 0; i < n; i++) {
-    const c = makeCar(rig.style);
+    const c = makeCar(STYLE_CLASS[rig.style]);
     c.spawnFacing(0, 0, rig.turn && i % 2 === 1 ? Math.PI : 0, 0);
     if (i > 0) {
       const under = cars[i - 1]!;
@@ -161,7 +156,7 @@ describe("given a stack of cars dropped one on the next on the flat pad, each ro
     assert.ok(live.slice(0, 3).every((c) => c.crashed), "a load-crushed car is not a wreck (it would not ride the replay's and netplay's wreck sections)");
     // The keyframe: pose, flight and solver state of each car (`engine-record` writes the same three), into fresh cars.
     const restored = live.map((src) => {
-      const c = makeCar(WAGONS.style);
+      const c = makeCar(STYLE_CLASS[WAGONS.style]);
       c.spawnFacing(0, 0, 0, 0);
       const sim = new Float64Array(src.solverSize());
       src.solverState(sim, false);

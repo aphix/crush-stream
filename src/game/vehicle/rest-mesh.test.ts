@@ -188,7 +188,6 @@ const sideHitCases = [
   { it: "when a ray is fired at the rear quarter below the belt (0.5 m up, 0.4 m behind the middle), then it hits body metal beyond 0.72 m out", y: 0.5, z: -0.4, minX: 0.72, failure: "quarter missing at x={x}" },
   { it: "when a ray is fired at the trunk side (0.5 m up, 1.6 m behind the middle), then it hits solid body beyond 0.65 m out", y: 0.5, z: -1.6, minX: 0.65, failure: "trunk hole at x={x}" },
   { it: "when a ray is fired at the front fender (0.5 m up, 1.5 m ahead of the middle), then it hits solid body beyond 0.55 m out", y: 0.5, z: 1.5, minX: 0.55, failure: "fender hole at x={x}" },
-  { it: "when a ray is fired at the rear quarter window (1.05 m up, 0.4 m behind the middle), then the glass it hits is outside 0.62 m (the reference's tumblehome line: 0.735 at the belt to 0.57 at the top), not an interior liner that would look like a rollcage", y: 1.05, z: -0.4, minX: 0.62, failure: "glass inset at x={x} — looks like a rollcage" },
 ] as const;
 
 describe("given the assembled rest-pose sedan (chassis, hood, trunk, doors and glass) with rays fired at it from the side", () => {

@@ -52,16 +52,12 @@ const slopeCrashCases = [
   // The sweep leaves out the bullet's final nose: on the flat pad itself it settles after the hit either even (0.20 m
   // both corners) or one corner 4-8 cm deeper, and which one turns on the run-up alone (the bullet launched 5.5 / 6 /
   // 6.5 / 7 / 8 m out flips it at 50 and 51 km/h, on main as well), so a bar on it pinned the mode, not the slope.
-  { it: "when the T-bone speed sweep reaches 46 km/h, then the struck car keeps the flat pad's dents, the bullet its tail and doors, each block travels as on the flat pad and no mass pops past 3·v·h + 5 cm in a slice", kind: "t-bone", kph: 46, carOneDents: BODY_DENTS },
-  { it: "when the T-bone speed sweep reaches 47 km/h, then the struck car keeps the flat pad's dents, the bullet its tail and doors, each block travels as on the flat pad and no mass pops past 3·v·h + 5 cm in a slice", kind: "t-bone", kph: 47, carOneDents: BODY_DENTS },
-  { it: "when the T-bone speed sweep reaches 48 km/h, then the struck car keeps the flat pad's dents, the bullet its tail and doors, each block travels as on the flat pad and no mass pops past 3·v·h + 5 cm in a slice", kind: "t-bone", kph: 48, carOneDents: BODY_DENTS },
-  { it: "when the T-bone speed sweep reaches 49 km/h, then the struck car keeps the flat pad's dents, the bullet its tail and doors, each block travels as on the flat pad and no mass pops past 3·v·h + 5 cm in a slice", kind: "t-bone", kph: 49, carOneDents: BODY_DENTS },
-  { it: "when the T-bone speed sweep reaches 51 km/h, then the struck car keeps the flat pad's dents, the bullet its tail and doors, each block travels as on the flat pad and no mass pops past 3·v·h + 5 cm in a slice", kind: "t-bone", kph: 51, carOneDents: BODY_DENTS },
-  { it: "when the T-bone speed sweep reaches 52 km/h, then the struck car keeps the flat pad's dents, the bullet its tail and doors, each block travels as on the flat pad and no mass pops past 3·v·h + 5 cm in a slice", kind: "t-bone", kph: 52, carOneDents: BODY_DENTS },
-  { it: "when the T-bone speed sweep reaches 53 km/h, then the struck car keeps the flat pad's dents, the bullet its tail and doors, each block travels as on the flat pad and no mass pops past 3·v·h + 5 cm in a slice", kind: "t-bone", kph: 53, carOneDents: BODY_DENTS },
-  { it: "when the T-bone speed sweep reaches 54 km/h, then the struck car keeps the flat pad's dents, the bullet its tail and doors, each block travels as on the flat pad and no mass pops past 3·v·h + 5 cm in a slice", kind: "t-bone", kph: 54, carOneDents: BODY_DENTS },
-  { it: "when the T-bone speed sweep reaches 55 km/h, then the struck car keeps the flat pad's dents, the bullet its tail and doors, each block travels as on the flat pad and no mass pops past 3·v·h + 5 cm in a slice", kind: "t-bone", kph: 55, carOneDents: BODY_DENTS },
-  { it: "when the T-bone speed sweep reaches 56 km/h, then the struck car keeps the flat pad's dents, the bullet its tail and doors, each block travels as on the flat pad and no mass pops past 3·v·h + 5 cm in a slice", kind: "t-bone", kph: 56, carOneDents: BODY_DENTS },
+  ...([46, 47, 48, 49, 51, 52, 53, 54, 55, 56] as const).map((kph) => ({
+    it: `when the T-bone speed sweep reaches ${kph} km/h, then the struck car keeps the flat pad's dents, the bullet its tail and doors, each block travels as on the flat pad and no mass pops past 3·v·h + 5 cm in a slice`,
+    kind: "t-bone" as const,
+    kph,
+    carOneDents: BODY_DENTS,
+  })),
 ] as const;
 
 describe("given two cars crashing on a 6.8° side slope, and the same crash on the flat pad", () => {

@@ -2,16 +2,16 @@
 /**
  * `node --test`, but the slowest files start first.
  *
- *   node scripts/run-tests.mjs [--concurrency=4] [--shard=i/n [--weights=1,0.55]] [--learn] <file or glob>...
+ *   node scripts/run-tests.mjs [--concurrency=4] [--shard=i/n] [--learn] <file or glob>...
  *
  * Same files, same one-process-per-file isolation, same spec output and exit code as the CLI, and every process imports
  * `test-setup.mjs` first (the WASM skin kernel loaded, as in the browser). The CLI sorts the files by
  * path, so a 200 s file near the end of the alphabet (`world/survival-chase`) starts last and sets the wall time; here the
  * files named in `test-cost.json` (seconds, from `--learn`) go first, longest first, and the rest follow in path order.
  * A missing or stale entry only costs speed. `--learn` rewrites `test-cost.json` from this run (files of 2 s and more).
- * `--shard=i/n` (i from 1) runs the i-th of n machines' shares: files go longest first to the share with the least cost per unit of
- * weight (`--weights`, one speed per share: a slower machine gets less), the same split on every machine, so n machines together run each
- * file once. The slowest files of the run print at the end (split any that sets the wall time).
+ * `--shard=i/n` (i from 1) runs the i-th of n machines' shares: files go longest first to the share with the least cost so far, the
+ * same split on every machine, so n machines together run each file once. The slowest files of the run print at the end (split any
+ * that sets the wall time).
  * A test process that writes anything to stderr (a `console.warn`, a library's warning) fails the run, its lines printed under the file's name.
  */
 import { globSync, readFileSync, writeFileSync } from "node:fs";
@@ -35,11 +35,10 @@ files.sort((a, b) => (cost[b] ?? 0) - (cost[a] ?? 0));
 const shard = args.find((a) => a.startsWith("--shard="))?.slice(8);
 if (shard) {
   const [mine, n] = shard.split("/").map(Number);
-  const speed = args.find((a) => a.startsWith("--weights="))?.slice(10).split(",").map(Number) ?? Array(n).fill(1);
   const load = Array(n).fill(0);
   files = files.filter((f) => {
     let k = 0;
-    for (let j = 1; j < n; j++) if (load[j] / speed[j] < load[k] / speed[k]) k = j;
+    for (let j = 1; j < n; j++) if (load[j] < load[k]) k = j;
     load[k] += cost[f] ?? 2;
     return k === mine - 1;
   });

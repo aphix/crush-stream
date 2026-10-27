@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as THREE from "three";
-import { CarDetail, DETAIL_LEVELS } from "../present/car-detail.ts";
+import { DETAIL_LEVELS } from "../present/car-detail.ts";
 import { makeWheelGeometry, RUBBER, treadNormalMap, WHEEL_DESIGNS, type WheelDesign } from "./car-materials.ts";
 import { DeformableCar } from "./car.ts";
-import { assertSameNumbers, paint } from "./test-support.ts";
+import { assertSameNumbers, paint, stageBatch } from "./test-support.ts";
 import { STYLE_WHEELS, WheelBatch } from "./wheel-batch.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
@@ -18,29 +18,13 @@ const FAR_BEYOND = DETAIL_LEVELS[0]!.far;
 const nearOf = (batch: WheelBatch, id: CarStyleId) => batch.meshes[WHEEL_DESIGNS.indexOf(STYLE_WHEELS[id].design)]!;
 const farOf = (batch: WheelBatch) => batch.meshes.at(-2)!;
 
-/** A 50 degree lens at the origin looking down +z; cars stand on the axis at the given distance; the renderer is a shadow pass that records whether the prisms are visible inside it. */
+/** The renderer is a shadow pass that records whether the prisms are visible inside it. */
 function stage() {
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, 2, 0.1, 900);
-  camera.lookAt(0, 0, 1);
-  camera.updateMatrixWorld(true);
-  const detail = new CarDetail();
-  const batch = new WheelBatch(16, (car) => detail.isFar(car));
-  const shadow = batch.meshes.at(-1)!;
   const seen: boolean[] = [];
   const renderer = { shadowMap: { render: () => void seen.push(shadow.visible) } };
-  const car = (at: number) => {
-    const made = new DeformableCar(paint(), scene, null, "sedan");
-    made.spawn(0, at, 0);
-    made.group.updateMatrixWorld(true);
-    return made;
-  };
-  const draw = (cars: DeformableCar[]) => {
-    detail.update(cars, camera, null, null);
-    for (const c of cars) c.group.updateMatrixWorld(true);
-    batch.sync(cars, renderer);
-  };
-  return { batch, car, draw, renderer, seen, shadow };
+  const s = stageBatch((detail) => new WheelBatch(16, (car) => detail.isFar(car)), (b, cars) => b.sync(cars, renderer));
+  const shadow = s.batch.meshes.at(-1)!;
+  return { ...s, renderer, seen, shadow };
 }
 
 const triangles = (mesh: THREE.Mesh): number => mesh.geometry.index!.count / 3;

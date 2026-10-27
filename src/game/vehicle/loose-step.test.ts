@@ -721,8 +721,4 @@ describe("given a torn panel lying flat on the road, sliding into a 0.5 m kerb",
     t.diagnostic(rows.join("; "));
     assert.deepEqual(dead, []);
   });
-  // The arch flare square at 21 m/s, as its box (ticket B): a knife edge in the slice it meets the kerb at. The 0.375 m arch (CarSedan
-  // 20334982) vaults it at exactly 21 m/s (0.05 s on: 7.72 m/s up, 0.14 m/s on toward it, 17.5 rad/s) and bounces back at 19, 20, 20.5,
-  // 21.5, 22 and 23; the 0.405 m arch bounced back at all seven.
-  it.todo("when the arch flare meets it square at 21 m/s, then it bounces back off it at every speed about it, as its drawn U");
 });

@@ -1,21 +1,19 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { applyDrive, type DriveInput } from "./car-drive.ts";
+import { applyDrive, type DriveInput, idleDrive } from "./car-drive.ts";
 import { layOnGround } from "./car-air-points.ts";
 import { LOAD_FEEL } from "./car-load.ts";
 import { DeformableCar } from "./car.ts";
 import { assignClass, CLASSES, gearAt, VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
-import { paint } from "./test-support.ts";
+import { DT, paint } from "./test-support.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { DriveCam } from "../present/drive-cam.ts";
 import { Ground, setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
-const FRAME = 1 / FRAME_HZ;
 const DEG = 180 / Math.PI;
-const IDLE: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
 
 /** Most the drawn body may pitch (deg) in a launch or a stop, per class: a few degrees, the tall SUV and the truck more, the monster most. */
 const PITCH_MAX: Record<VehicleClassId, number> = { sedan: 3, muscle: 3, police: 3, truck: 4.5, monster: 6, hatch: 3, suv: 4 };
@@ -50,11 +48,11 @@ function drive(cls: VehicleClassId, v0: number, input: (speed: number) => Partia
   const body = car.group.getObjectByName("classLift")!;
   const out: Sample[] = [];
   let acc = 0;
-  for (let t = 0; t < seconds; t += FRAME) {
-    acc = Math.min(0.05, acc + FRAME);
+  for (let t = 0; t < seconds; t += DT) {
+    acc = Math.min(0.05, acc + DT);
     while (acc > 1e-5) {
       const h = physicsSlice(acc, sliceSpeed(w.cars));
-      applyDrive(car, { ...IDLE, ...input(car.speed) }, h);
+      applyDrive(car, { ...idleDrive(), ...input(car.speed) }, h);
       stepWorld(w, h);
       acc -= h;
     }
@@ -104,7 +102,7 @@ describe("given a car driven on the road, whose drawn body squats, dives and lea
 
   it("when each class drives down a 5° descent at full throttle or brakes up a 5° climb, then its body never pitches 0.5° or more against the road, and driving up a climb or braking down a descent it still pitches with the road, over 0.8° and within its class limit", () => {
     // After the first 0.8 s: the spawn onto the slope kicks the springs (the pose turns to it).
-    const settled = (s: Sample[]) => s.slice(Math.round(0.8 / FRAME));
+    const settled = (s: Sample[]) => s.slice(Math.round(0.8 / DT));
     for (const cls of VEHICLE_CLASS_IDS) {
       // Driving down a 5° descent squats the body nose up, against the road (the monster 4.3° off it); braking up a climb dives it, likewise.
       const squat = peak(settled(drive(cls, 25, () => ({ throttle: 1 }), 2, 5)), "pitch");
@@ -220,7 +218,7 @@ describe("given a car accelerating through its gears, whose drawn body kicks at 
     try {
       const body = drive(cls, 0, () => ({ throttle: 1 }), 5, 0, (car) => {
         for (const r of [a, b]) {
-          r.drive.update(r.cam, car, "third", FRAME, 0, 0);
+          r.drive.update(r.cam, car, "third", DT, 0, 0);
           r.cam.updateMatrixWorld();
         }
         tilt.push(a.cam.quaternion.angleTo(b.cam.quaternion) * DEG);

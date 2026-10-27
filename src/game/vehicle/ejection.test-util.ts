@@ -1,9 +1,8 @@
-import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { ejectThreshold } from "./ejection.ts";
 import { launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
-import { armKill, assignClass, CLASSES, DEFAULT_REALISM, HANDLING, type VehicleClassId } from "./vehicle-classes.ts";
-import { paint } from "./test-support.ts";
+import { armKill, CLASSES, DEFAULT_REALISM, HANDLING, type VehicleClassId } from "./vehicle-classes.ts";
+import { makeCar as makeClassCar } from "./ground-probe.test-util.ts";
 import { INITIAL_HUD } from "../hud/hud-store.ts";
 
 /** A derby wreck one hit from done: its wear limit is below a single hit's cap (36 m²/s²). */
@@ -30,8 +29,7 @@ export function headOn(mps: number): [DeformableCar, DeformableCar] {
 
 /** A car of class `cls` dressed as a race or fleet car is: its body, the HUD's squash, buckle and mode, the default-realism kill limits. */
 export function classCar(cls: VehicleClassId): DeformableCar {
-  const car = new DeformableCar(paint(), new THREE.Scene(), null, CLASSES[cls].style);
-  assignClass(car, cls);
+  const car = makeClassCar(cls);
   car.deform.squash = INITIAL_HUD.squash;
   car.deform.buckle = INITIAL_HUD.buckle;
   car.deform.setMode(INITIAL_HUD.deformMode);

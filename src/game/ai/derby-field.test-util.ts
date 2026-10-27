@@ -5,6 +5,7 @@ import { setGround } from "../world/ground.ts";
 import { applyAiDrive } from "./input-fade.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
+import { massCentroid } from "../vehicle/test-support.ts";
 import type { DriveInput } from "../vehicle/car-drive.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { settleStep, stepWorld } from "../engine/world-step.ts";
@@ -26,17 +27,6 @@ export type Field = {
   zipMax: number;
 };
 
-function centroid(c: DeformableCar): { x: number; z: number } {
-  let x = 0;
-  let z = 0;
-  let m = 0;
-  for (const p of c.deform.masses) {
-    x += p.world.x * p.mass;
-    z += p.world.z * p.mass;
-    m += p.mass;
-  }
-  return { x: x / m, z: z / m };
-}
 
 /** A watcher on a heat: `step` after every physics slice of `h` s at match time `t` (`running(i)`: car i alive and not out), `pair` on every car pair in contact, `drive` on car i's AI input before it is applied (a control may change it). */
 export type FieldWatch = {
@@ -112,7 +102,7 @@ function runFieldHeat(n: number, seed: number, on: FieldWatch | undefined, until
     let vmax = 8;
     for (const c of cars) vmax = Math.max(vmax, c.speed);
     const h = physicsSlice(1 / FRAME_HZ, vmax);
-    const before = cars.map((c) => (c.deform.massActive ? centroid(c) : null));
+    const before = cars.map((c) => (c.deform.massActive ? massCentroid(c.deform.masses) : null));
     const speed0 = cars.map((c) => Math.hypot(c.velocity.x, c.velocity.z));
     const shove = new Array<number>(n).fill(0);
     const snaps = match.snapshots(n);
@@ -166,7 +156,7 @@ function runFieldHeat(n: number, seed: number, on: FieldWatch | undefined, until
       }
       const a = before[i];
       if (!a || !c.deform.massActive || t >= 120) continue;
-      const b = centroid(c);
+      const b = massCentroid(c.deform.masses);
       const moved = Math.hypot(b.x - a.x, b.z - a.z);
       const vMax = Math.max(speed0[i]!, Math.hypot(c.velocity.x, c.velocity.z), shove[i]!);
       if (moved > zipBound(vMax, h)) {

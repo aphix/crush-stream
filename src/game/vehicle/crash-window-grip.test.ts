@@ -3,13 +3,12 @@ import { describe, it } from "node:test";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { CONTACT_WINDOW } from "../deform/constants.ts";
 import { CRASH, FRICTION_G } from "../deform/physics-util.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import { DT } from "./test-support.ts";
 import type { DeformableCar } from "./car.ts";
 
 // A struck car's tyres give the sliding friction of a locked tyre while it is in contact, and their arcade grip comes back over the contact window
 // after it (`DeformSolve.settledShare`), not in one slice: the hit's sideways exchange is the contact's, whether the engine runs or the fuel is cut.
 
-const FRAME = 1 / FRAME_HZ;
 /** The bullet's speed (km/h) that leaves the struck car's engine running (under the crash sensor), and one that cuts its fuel. */
 const BULLET_KPH = { running: 49, stalled: 55 } as const;
 /** The sliding grip a tyre on flat asphalt gives (m/s²). */
@@ -55,7 +54,7 @@ function driveSlices(bulletKph: number): { slices: Slice[]; struck: DeformableCa
     massesCommonShare = Math.max(massesCommonShare, Math.abs(momentum / mass) / common);
     return out;
   };
-  for (let t = 0; t < WATCH_S; t += FRAME) tickWorld(world);
+  for (let t = 0; t < WATCH_S; t += DT) tickWorld(world);
   return { slices, struck, massesCommonShare };
 }
 
@@ -66,16 +65,16 @@ for (const [engine, kph] of Object.entries(BULLET_KPH)) {
     it(`when it is in contact, then the drive takes no more sideways speed per second than a sliding tyre's grip and the fade's share of one frame`, () => {
       assert.equal(struck.stalledS > 0, engine === "stalled", "the engine is cut as staged");
       // The contact clock moves once a frame: a car touched this frame reads under one frame of quiet, so the grip's return may have begun by that frame's share.
-      const touching = slices.filter((slice) => slice.quiet < FRAME);
+      const touching = slices.filter((slice) => slice.quiet < DT);
       assert.ok(touching.length > 10, `${touching.length} slices in contact with the car sliding sideways`);
       const best = Math.max(...slices.map((slice) => slice.acceleration));
-      const bar = ROLLING_ALLOWANCE * SLIDING_GRIP + (best - SLIDING_GRIP) * (FRAME / CONTACT_WINDOW);
+      const bar = ROLLING_ALLOWANCE * SLIDING_GRIP + (best - SLIDING_GRIP) * (DT / CONTACT_WINDOW);
       const worst = Math.max(...touching.map((slice) => slice.acceleration));
       assert.ok(worst <= bar, `${worst.toFixed(1)} m/s² against the sliding grip ${SLIDING_GRIP.toFixed(1)} (bar ${bar.toFixed(1)})`);
     });
 
     it(`when the contact has ended, then the tyres' grip comes back over the contact window, never in one slice`, () => {
-      const after = slices.filter((slice) => slice.quiet >= FRAME);
+      const after = slices.filter((slice) => slice.quiet >= DT);
       const best = Math.max(...after.map((slice) => slice.acceleration));
       let rise = 0;
       for (let i = 1; i < after.length; i++) rise = Math.max(rise, after[i]!.acceleration - after[i - 1]!.acceleration);

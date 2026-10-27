@@ -3,17 +3,15 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
-import { paint } from "./test-support.ts";
+import { DT, paint } from "./test-support.ts";
 import { FACES, FACE_NOSE, FACE_TOP, SPRING_YIELD } from "../deform/load-crush.ts";
 import { G } from "./car-air-body.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
  * A face a load crushes is a wreck only past its elastic range (docs/LOAD_CRUSH.md, `SPRING_YIELD`): a dent that shallow springs back whole in the
  * structure, so a belly's soft touch on a ramp's edge (1.7 mm) leaves the car as it was. The depth is the face's total over every press, whatever
  * presses: the ground, a wall, or another car's belly on a roof.
  */
-const DT = 1 / FRAME_HZ;
 /** More impulse (per unit mass) than a face carries in a slice (`room`): the contact yields. */
 const MORE_THAN_CARRIED = 100;
 

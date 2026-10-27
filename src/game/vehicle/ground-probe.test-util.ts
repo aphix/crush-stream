@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { applyDrive, type DriveInput } from "./car-drive.ts";
+import { applyDrive, type DriveInput, idleDrive } from "./car-drive.ts";
 import { DeformableCar } from "./car.ts";
 import { sampleField } from "../contact/cage-outline.ts";
 import { layOnGround } from "./car-air-points.ts";
@@ -347,13 +347,7 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   };
 }
 
-/** Largest |gap| of the four tyres (m). */
-export function worstGap(f: Fit): number {
-  return Math.max(...f.gaps.map(Math.abs));
-}
-
 const BRAKE: DriveInput = { throttle: 0, steer: 0, brake: 1, ebrake: true, boost: false };
-const COAST: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
 
 /** `slide` is the rigid centre's travel: a lifted body turning about its centre swings its origin without sliding. */
 export type Drop = Fit & { slide: number; speed: number };
@@ -375,7 +369,7 @@ function centreOf(car: DeformableCar, out: THREE.Vector3): THREE.Vector3 {
 }
 
 /**
- * One car dropped `height` m above the ground at (x, z) facing `yaw` and held (brake and handbrake) for `seconds`:
+ * One car dropped 0.5 m above the ground at (x, z) facing `yaw` and held (brake and handbrake) for `seconds`:
  * where it ends up and how it sits. `brake` false lets it coast instead, `speed` (m/s) sets it rolling along its heading. `ground` is made the active one; the caller restores it.
  */
 export function drop(
@@ -384,16 +378,16 @@ export function drop(
   x: number,
   z: number,
   yaw: number,
-  o: { height?: number; seconds?: number; hint?: number; brake?: boolean; speed?: number; collide?: ((c: DeformableCar, h: number) => unknown) | null } = {},
+  o: { seconds?: number; hint?: number; brake?: boolean; speed?: number; collide?: ((c: DeformableCar, h: number) => unknown) | null } = {},
 ): Drop {
   setGround(ground);
   const car = pooled(cls);
   car.spawnFacing(x, z, yaw, o.speed ?? 0);
-  car.group.position.y = ground.heightAt(x, z, o.hint) + (o.height ?? 0.5);
+  car.group.position.y = ground.heightAt(x, z, o.hint) + 0.5;
   centreOf(car, _centre0);
   const w = worldOf(car, o.collide ?? null);
   const st = { acc: 0 };
-  const input = o.brake === false ? COAST : BRAKE;
+  const input = o.brake === false ? idleDrive() : BRAKE;
   for (let f = 0; f < (o.seconds ?? 3) / FRAME; f++) frame(w, input, st);
   const r = fit(car, ground);
   centreOf(car, _centre);
@@ -406,7 +400,7 @@ export function drop(
 export type Sample = Fit & { s: number; lateral: number; speed: number; y: number };
 
 /**
- * One car driven down `track`'s main loop from `s0` to `s1` (m along it) at `lateral` m left of the centreline, its
+ * One car driven down `track`'s main loop from `s0` to `s1` (m along it) on the centreline, its
  * throttle holding `pace(s)` m/s (a pursuit line steers it), one `Fit` per rendered frame. The car starts `lead` m
  * before `s0` at `pace(s0)` so it arrives in its stride. From `brakeFrom` (m along) on, the throttle is released and
  * the brake held, and the run ends two seconds after the car stops. `ground` is made the active one; the caller
@@ -418,17 +412,16 @@ export function drive(
   s0: number,
   s1: number,
   pace: (s: number) => number,
-  o: { lateral?: number; lead?: number; brakeFrom?: number; each?: (car: DeformableCar, f: Sample) => void } = {},
+  o: { lead?: number; brakeFrom?: number; each?: (car: DeformableCar, f: Sample) => void } = {},
 ): Sample[] {
   const path = track.path;
   const ground = track.ground();
   setGround(ground);
   const car = pooled(cls);
   const pt = blankPoint();
-  const lat = o.lateral ?? 0;
   const at = (s: number) => {
     pointOn(path, s, pt);
-    return [pt.x + pt.tz * lat, pt.z - pt.tx * lat] as const;
+    return [pt.x, pt.z] as const;
   };
   const start = s0 - (o.lead ?? 40);
   const [x0, z0] = at(start);
@@ -438,7 +431,7 @@ export function drive(
   const w = worldOf(car);
   const st = { acc: 0 };
   const proj = blankProjection();
-  const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
+  const input = idleDrive();
   const out: Sample[] = [];
   let still = 0;
   const maxFrames = Math.ceil(((s1 - start) / 4) * 60);

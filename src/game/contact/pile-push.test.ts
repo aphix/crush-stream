@@ -8,22 +8,11 @@ import { stepWorld } from "../engine/world-step.ts";
 import { PUSH_SPEED, PushBudget } from "../deform/push-budget.ts";
 import { satPushCap } from "../deform/physics-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
+import { massCentroid } from "../vehicle/test-support.ts";
 import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 
 /** The slice a slow field steps at (`physicsSlice(1/60, 4)`): the longest, so the loosest per-slice cap. */
 const H = 1 / FRAME_HZ;
-
-function centroid(c: DeformableCar): [number, number] {
-  let x = 0;
-  let z = 0;
-  let m = 0;
-  for (const q of c.deform.masses) {
-    x += q.world.x * q.mass;
-    z += q.world.z * q.mass;
-    m += q.mass;
-  }
-  return [x / m, z / m];
-}
 
 /**
  * A wreck (a bullet's slow head-on, settled 2.5 s) with two plain cars across its flank, `depth` m into it. The pair
@@ -37,7 +26,7 @@ function wedged(depth: number): { wreck: DeformableCar; world: CrashWorld } {
   const settle = makeWorld([wreck, bullet], false, false, FREEWHEEL);
   for (let t = 0; t < 2.5; t += 1 / QUIET_HZ) stepWorld(settle.world, 1 / QUIET_HZ);
   assert.ok(wreck.deform.massActive && wreck.deform.quietTime() > 1, "no settled wreck to wedge");
-  const [wx, wz] = centroid(wreck);
+  const { x: wx, z: wz } = massCentroid(wreck.deform.masses);
   const yaw = wreck.yaw;
   const flank = 0.95 + 2.3 - depth;
   const across = (zl: number): DeformableCar => {
@@ -55,11 +44,11 @@ describe("given a settled wreck with two plain cars wedged 1.4 m into its flank"
   it("when four 1/60 s steps run, then its centre never moves more than 3 × its speed × the step + 5 cm in a step", () => {
     const { wreck, world } = wedged(1.4);
     for (let s = 0; s < 4; s++) {
-      const before = centroid(wreck);
+      const before = massCentroid(wreck.deform.masses);
       const v0 = Math.hypot(wreck.velocity.x, wreck.velocity.z);
       stepWorld(world.world, H);
-      const after = centroid(wreck);
-      const moved = Math.hypot(after[0] - before[0], after[1] - before[1]);
+      const after = massCentroid(wreck.deform.masses);
+      const moved = Math.hypot(after.x - before.x, after.z - before.z);
       const bound = 3 * Math.max(v0, Math.hypot(wreck.velocity.x, wreck.velocity.z)) * H + 0.05;
       assert.ok(moved <= bound, `step ${s}: moved ${moved.toFixed(4)} m, bound ${bound.toFixed(4)} m`);
     }

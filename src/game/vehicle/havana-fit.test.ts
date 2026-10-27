@@ -5,7 +5,7 @@ import { COMPASS, report, type Run, type Site } from "./ground-judge.test-util.t
 import { drop, frame, fit, FRAME, makeCar, worldOf } from "./ground-probe.test-util.ts";
 import { EjectionWatch } from "./ejection.ts";
 import { armKill, CLASSES, HANDLING, killClass, VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
-import type { DriveInput } from "./car-drive.ts";
+import { idleDrive } from "./car-drive.ts";
 import { setGround, type Ground } from "../world/ground.ts";
 import { Track } from "../world/track.ts";
 import { HAVANA } from "../world/tracks/havana.ts";
@@ -85,7 +85,7 @@ function runLine(
   w.ejection = new EjectionWatch();
   armKill(car.deform, killClass(car), HANDLING.realism, "default");
   const st = { acc: 0 };
-  const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
+  const input = idleDrive();
   const out: LineRun = { air: 0, apex: 0, rise: 0, takeoff: null, landing: null, pen: 0, grass: 0, speedAt: null, ejections: 0, killedAt: null, jump: 0, end: { x: 0, z: 0, speed: 0, seconds: 0 } };
   let was = false;
   let begun = 0;
