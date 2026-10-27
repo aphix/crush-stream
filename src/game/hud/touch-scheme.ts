@@ -6,7 +6,7 @@
 
 import { hypot2 } from "../kernel/physics-core.js";
 import { BOOST } from "../vehicle/car-drive.ts";
-import { PAD_DEAD } from "../vehicle/gamepad.ts";
+import { PAD_BUTTON, PAD_DEAD, type TouchPad } from "../vehicle/gamepad.ts";
 
 export const TOUCH_SCHEMES = ["stick", "pedals", "autogas", "tilt"] as const;
 export type TouchScheme = (typeof TOUCH_SCHEMES)[number];
@@ -57,6 +57,13 @@ export function schemeLayout(scheme: TouchScheme): SchemeLayout {
   return LAYOUT[scheme];
 }
 
+const PEDALS: TouchScheme = TOUCH_SCHEMES[1];
+
+/** The scheme the controls draw: on foot the strip is the walk's forward axis, so Easy (automatic gas, no strip) draws Pedals', which steers alike. */
+export function drawnScheme(scheme: TouchScheme, onFoot: boolean): TouchScheme {
+  return onFoot && LAYOUT[scheme].autoGas ? PEDALS : scheme;
+}
+
 /** The stored value as a scheme: anything unknown (and the server render's empty string) is the default. */
 export function parseTouchScheme(stored: string): TouchScheme {
   return TOUCH_SCHEMES.find((scheme) => scheme === stored) ?? DEFAULT_TOUCH_SCHEME;
@@ -99,6 +106,11 @@ export function pulledDown(held: boolean, fingerY: number, referenceY: number): 
 
 /** A Boost tap holds the Boost button for one full meter's burn (seconds): a tap is a burst, the meter says when it is over. */
 export const BOOST_TAP_SECONDS = BOOST.full;
+
+/** The Out / In tap: the pad's B for one poll, never held, so one tap is one get out or get in. */
+export function tapOnFoot(touch: TouchPad): void {
+  touch.tapped |= 1 << PAD_BUTTON.east;
+}
 
 /** How far (a fraction of the disc's radius) the knob must move before the disc reads anything: a resting thumb is not a nudge. */
 const DISC_DEAD = 0.04;

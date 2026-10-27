@@ -123,8 +123,8 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
   as a car with its brakes on does.
 - The get-up is assisted (above) and does not read the ground's slope or lean on a wall; on a ramp he gets up as on the flat.
 - A thrown driver and a person run down elsewhere still use the old, unmotored dummy.
-- The pad: B is the only control that is free on every pad; on a touch screen there is no on-foot control yet (the HUD's prompt shows only on
-  desktop).
+- The pad: B is the only control that is free on every pad. A touch screen has the **Out** / **In** tap beside Boost (`CONTROLS.md`); the HUD's prompt line
+  shows only on desktop, so a refusal there reads only on desktop too.
 
 ## What pins it
 
@@ -133,6 +133,10 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
   racing, `driverOut` null, no respawn, the HUD without DRIVER OUT, Esc the race's pause. The derby row crowns his car while he is on foot. The fleet
   rows add that another car's door is refused. Shown red against: the old fleet-only, offline-only gate (race and derby red), the race never hearing
   he is out (the race AI drives his car to the finish), any car's door letting him in (fleet red).
+- Touch: the fleet rows tap the HUD's Out / In (`tapOnFoot`: out on one poll, the strip's gas walks him, in at his door) and find no button where Enter does
+  nothing (a thrown driver, the seat only following). `engine-walk-input.test.ts` walks each scheme's thumbs forward, back and sideways, and runs only
+  from the strip's Boost cap. Red against: the tap on another pad bit, the HUD's foot read ungated, the touch pedals not read as the forward axis, RT from
+  the touch gas running him, Easy not drawing the strip on foot.
 - `ragdoll-walker-car.test.ts`: a car driven through the spot where his walker stands, and again where nobody does; the car's position, velocity and
   every mass match bit for bit (`assertSameNumbers`). Red against a walker that shoves a car it is near.
 - `ragdoll-walker-ground.test.ts`: starting the walker puts a run the worker held into this thread's world (red without the pin), and his ground patch

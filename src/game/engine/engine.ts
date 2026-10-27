@@ -253,6 +253,7 @@ export class CrashEngine extends EngineGarage {
       camera: this.camera,
       keys: this.keys,
       pad: this.pad.state,
+      touch: this.pad.touch,
       cars: () => this.live(),
       available: () => this.onFootOffered(),
       racing: () => this.race.active,

@@ -12,7 +12,7 @@ import { useTouchScheme } from "@/components/use-touch-scheme";
 import { bailArmed } from "@/game/hud/bail-prompt";
 import { showsPrevNext } from "@/game/hud/watch-cycle";
 import { resetGlow } from "@/game/hud/reset-prompt";
-import { pedalsFor, schemeLayout } from "@/game/hud/touch-scheme";
+import { drawnScheme, pedalsFor, schemeLayout } from "@/game/hud/touch-scheme";
 import { PAD_BUTTON } from "@/game/vehicle/gamepad";
 import { cn } from "@/lib/utils";
 
@@ -175,7 +175,9 @@ function TopStrip({ state, engine }: Pick<HudProps, "state" | "engine">) {
 }
 
 function DriveControls({ state, engine }: HudProps) {
-  const { scheme, mirror, tilt } = useTouchScheme();
+  const touchScheme = useTouchScheme();
+  const { mirror, tilt } = touchScheme;
+  const scheme = drawnScheme(touchScheme.scheme, state.foot?.out === true);
   const layout = schemeLayout(scheme);
   const race = state.race;
   const driving = state.seat === "drive";
@@ -263,6 +265,7 @@ function DriveControls({ state, engine }: HudProps) {
           bail={bail}
           dial={dial}
           gasOn={gasOn}
+          foot={state.foot}
           onThumb={(gas, brake) => {
             fingers.current = { gas, brake };
             setBraking(brake > 0);
