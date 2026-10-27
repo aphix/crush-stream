@@ -1,14 +1,10 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { placeProps, propColliders, type PropCollider } from "../world/placements.ts";
 import { setGround } from "../world/ground.ts";
 import { makeWorld, type World } from "../world/race-world.test-util.ts";
-import { Track } from "../world/track.ts";
-import { parseTrack } from "../world/track-schema.ts";
-import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { bodyPoints } from "../vehicle/body-points.test-util.ts";
-import { makeCar } from "../vehicle/ground-probe.test-util.ts";
+import { makeCar, pooled } from "../vehicle/ground-probe.test-util.ts";
 import { propContact } from "../contact/prop-contact.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { VEHICLE_CLASS_IDS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
@@ -47,8 +43,7 @@ afterEach(() => setGround(null));
 function alley() {
   const w = makeWorld();
   w.race.showLobby("havana");
-  const track = new Track([...TRACKS, ...OFF_MENU].find((j) => parseTrack(j).id === "havana"));
-  const panels = propColliders(placeProps(track)).filter((c: PropCollider) => c.prefab === "wall" && c.top - c.base > 1 && Math.abs(c.x - PANEL.x) < 1e-3);
+  const panels = w.race["colliders"].filter((c) => c.prefab === "wall" && c.top - c.base > 1 && Math.abs(c.x - PANEL.x) < 1e-3);
   assert.equal(panels.length, 5, "the alley wall is five panels in a row");
   return w;
 }
@@ -99,8 +94,8 @@ describe("given a panel of the Havana alley wall (0.44 m thick) and a car with o
  * `hz` > 0 steps the sim at that fixed rate (else the engine's `physicsSlice`).
  */
 function hit(w: World, cls: VehicleClassId, o: { dw: number; alpha: number; vdir: number; speed: number; steer: number; ebrake: boolean }, pinned: boolean, hz = 0) {
-  const car = makeCar(cls);
-  const cop = pinned ? makeCar("police") : null;
+  const car = pooled(cls);
+  const cop = pinned ? pooled("police", 1) : null;
   const cars = cop ? [car, cop] : [car];
   const world = newWorld(cars);
   world.collide = (c, i, h) => w.race.courseHit(c, i, h);
@@ -134,8 +129,6 @@ function hit(w: World, cls: VehicleClassId, o: { dw: number; alpha: number; vdir
       settleStep(world.cars, h, false);
       acc -= h;
     }
-    car.updateSkin();
-    cop?.updateSkin();
     past = Math.max(past, reach(car).past);
     if (restart < 0 && f >= hitEndFrame && car.stalledS <= 0) restart = f;
   }
