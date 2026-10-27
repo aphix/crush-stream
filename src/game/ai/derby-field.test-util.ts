@@ -80,7 +80,7 @@ function runFieldHeat(n: number, seed: number, on: FieldWatch | undefined, until
     },
   });
   placeDerby(cars, seed);
-  for (const [i, c] of cars.entries()) {
+  for (const c of cars) {
     c.deform.squash = INITIAL_HUD.squash;
     c.deform.buckle = INITIAL_HUD.buckle;
     c.deform.setMode(INITIAL_HUD.deformMode);
