@@ -13,7 +13,7 @@ describe("given the derby harness (`runField`) running a two-car heat, seed 1", 
   it("when the cars meet in their opening hits, then parts tear off within the first 10 s, as the engine's slice steps each car's breakage (`settleStep`)", () => {
     let cars: DeformableCar[] = [];
     let tornAt = -1;
-    runField(2, 1, undefined, {
+    runField(2, 1, {
       step: (c, t) => {
         cars = c;
         if (tornAt < 0 && t < 10 && c.some((car) => torn(car).length > 0)) tornAt = t;

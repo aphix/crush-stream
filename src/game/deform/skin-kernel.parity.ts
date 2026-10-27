@@ -5,10 +5,9 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { assignClass } from "../vehicle/vehicle-classes.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
-import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
-import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
-import { fleetClass, fleetStyle, layoutDerby, layoutFleet } from "../scenes/fleet.ts";
+import { arenaWorld, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { setGround } from "../world/ground.ts";
+import { fleetClass, fleetStyle, layoutFleet } from "../scenes/fleet.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
 import { SkinKernel, skinKernel, type SkinDynamic } from "./skin-kernel.ts";
@@ -84,13 +83,10 @@ function play(s: Scenario): Leg {
   const scene = new THREE.Scene();
   const cars = Array.from({ length: s.cars }, (_, i) => new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: `c${i}` }, scene, null, fleetStyle(i)));
   for (const [i, c] of cars.entries()) assignClass(c, fleetClass(i));
-  let seed = 11;
-  const rng = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
-  if (s.derby) {
-    const slots = layoutDerby(s.cars, DERBY_RADIUS, rng, DERBY_FREE_PROPS);
-    for (const [i, c] of cars.entries()) c.spawnFacing(slots[i]!.x, slots[i]!.z, slots[i]!.yaw, 12);
-  } else {
-    const slots = layoutFleet(s.cars, 18, 28, rng);
+  if (s.derby) placeDerby(cars, 11, 12);
+  else {
+    let seed = 11;
+    const slots = layoutFleet(s.cars, 18, 28, () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646);
     for (const [i, c] of cars.entries()) c.spawn(slots[i]!.x, slots[i]!.z, slots[i]!.speed);
   }
   const inputs: DriveInput[] = cars.map(() => ({ ...idleDrive(), throttle: 1 }));
@@ -140,7 +136,7 @@ function play(s: Scenario): Leg {
     digests.push(hash >>> 0);
   }
   const final = cars.flatMap((c) => ["position", "normal"].map((name) => Float32Array.from(c.body.geometry.getAttribute(name).array)));
-  leaveArena();
+  setGround(null);
   return { digests, final, seen };
 }
 

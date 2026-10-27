@@ -159,7 +159,7 @@ export function pieceGrid(pieces: readonly PropCollider[], margin: number): (x: 
 }
 
 /** The farthest (m) of one kind, and where. */
-export type Worst = { d: number; at: string };
+type Worst = { d: number; at: string };
 
 /**
  * A prop's colliders against its drawn geometry, both ways, at `scale` (1: its own size) and yaw 0. `inward`: how far drawn points over the ground

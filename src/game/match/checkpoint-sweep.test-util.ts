@@ -1,6 +1,6 @@
 import { RaceSession } from "./session.ts";
 import { Track, blankProjection, blankPoint, pointOn } from "../world/track.ts";
-import type { CarPose, CarRecord } from "./types.ts";
+import type { CarPose } from "./types.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 
 /** Seconds per rules step (the engine steps its rules at the sim's 1/80 s or 1/240 s). */
@@ -278,12 +278,12 @@ function apexes(c: Cycle): { d: number; turn: number }[] {
 }
 
 /**
- * Drive `laps` laps of one line of `track` (its main loop, or main + shortcut `cut`) through the real race rules with `how`, at
+ * Drive two laps of one line of `track` (its main loop, or main + shortcut `cut`) through the real race rules with `how`, at
  * race speed, and list every way the rules disagree with the line: a checkpoint missed (`missed` set: the HUD says so and the lap
  * stays owed), the wrong-way flag up, a lap not completed. A car that follows its line must produce none.
- * `onStep` sees the record after every rules step (a probe for a debugging run).
  */
-export function driveLine(track: Track, cut: number, how: Swing, laps = 2, onStep?: (car: CarRecord, pose: CarPose, lat: number) => void): Finding[] {
+export function driveLine(track: Track, cut: number, how: Swing): Finding[] {
+  const laps = 2;
   const line = cut < 0 ? "main" : track.shortcuts[cut]!.id;
   const cyc = buildCycle(track, cut);
   const corners = how.knock === 0 ? [] : apexes(cyc);
@@ -303,7 +303,7 @@ export function driveLine(track: Track, cut: number, how: Swing, laps = 2, onSte
   let d = cyc.length - PRE;
   let i = 0;
   /** The car's pose for distance `dist` along the lap and `want` m left of the line, kept inside the walls and the bend. */
-  const place = (dist: number, want: (edgeL: number, edgeR: number) => number): number => {
+  const place = (dist: number, want: (edgeL: number, edgeR: number) => number): void => {
     const m = dist % cyc.length;
     while (!(cyc.cum[i]! <= m && m < cyc.cum[i + 1]!)) i = (i + 1) % cyc.n;
     const f = (m - cyc.cum[i]!) / (cyc.cum[i + 1]! - cyc.cum[i]! || 1);
@@ -317,7 +317,6 @@ export function driveLine(track: Track, cut: number, how: Swing, laps = 2, onSte
     const l = Math.max(-Math.min(lerp(cyc.capR[i]!, cyc.capR[j]!, f), kappa < 0 ? room : Infinity), Math.min(lerp(cyc.capL[i]!, cyc.capL[j]!, f), kappa > 0 ? room : Infinity, lat));
     pose.x = lerp(cyc.x[i]!, cyc.x[j]!, f) + (tz / len) * l;
     pose.z = lerp(cyc.z[i]!, cyc.z[j]!, f) - (tx / len) * l;
-    return l;
   };
   place(d, () => 0);
   const park = { x: pose.x, z: pose.z };
@@ -360,7 +359,7 @@ export function driveLine(track: Track, cut: number, how: Swing, laps = 2, onSte
       const u = (clock - h.at) / KNOCK_T;
       bump += h.amp * u * Math.exp(1 - u);
     }
-    const lat = place(d, (edgeL, edgeR) => {
+    place(d, (edgeL, edgeR) => {
       const base = how.edge
         ? ramp * (how.offset > 0 ? edgeL + how.offset : how.offset < 0 ? -(edgeR - how.offset) : 0) + (how.weave > 0 ? ramp * wave * ((wave > 0 ? edgeL : edgeR) + how.weave) : 0)
         : ramp * (how.offset + how.weave * wave);
@@ -372,7 +371,6 @@ export function driveLine(track: Track, cut: number, how: Swing, laps = 2, onSte
     px = pose.x;
     pz = pose.z;
     session.step(DT, [pose]);
-    onStep?.(car, pose, lat);
     if (car.missed) flag("missed", `owes gate ${car.next}`);
     if (car.wrongWay) flag("wrongWay", `wrong-way timer ${car.wrongFor.toFixed(2)} s on route ${car.route}`);
     if (car.status !== "racing" && car.status !== "finished") flag("status", car.status);

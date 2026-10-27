@@ -15,10 +15,7 @@ import { fieldAggression, mood } from "./ai-aggression.ts";
 import { Track } from "../world/track.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { TRACKS } from "../world/tracks/index.ts";
-import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
-
-const DT = 1 / FRAME_HZ;
+import { assertSameNumbers, DT } from "../vehicle/test-support.ts";
 
 const at = (id: number, x: number, z: number, vz: number): AiCar => ({ ...blankAiCar(id), x, z, vz });
 const oval = new Track(TRACKS[0]);

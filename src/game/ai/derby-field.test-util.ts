@@ -1,28 +1,22 @@
 import * as THREE from "three";
-import { DerbyMatch, heatLimit, snapshotAiCar, type DerbyDecided } from "../match/derby.ts";
-import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
-import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
-import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
+import { DerbyMatch, heatLimit, snapshotAiCar } from "../match/derby.ts";
+import { arenaWorld, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { setGround } from "../world/ground.ts";
 import { applyAiDrive } from "./input-fade.ts";
-import { fleetStyle, layoutDerby } from "../scenes/fleet.ts";
+import { fleetStyle } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { DriveInput } from "../vehicle/car-drive.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { settleStep, stepWorld } from "../engine/world-step.ts";
-import { armKill, assignClass, carClass, CLASSES, HANDLING, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
+import { armKill, assignClass, carClass, HANDLING } from "../vehicle/vehicle-classes.ts";
 import { INITIAL_HUD } from "../hud/hud-store.ts";
-import { aggressive, ScootWatch, type ScootShare } from "./derby-scoot.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { zipBound } from "../contact/zip-bound.test-util.ts";
 import { SPIN_RATE_BAR, verticalTurn } from "./vertical-turn.test-util.ts";
 
 export type Field = {
   seed: number;
-  winner: number | null;
-  decided: DerbyDecided | null;
-  t: number;
   deaths: number[];
-  outs: number[];
   contactSpins: string[];
   freeSpins: string[];
   /** Peak heading rate over any 0.1 s inside 0.5 s of a pair contact, in the first 2 min. */
@@ -30,27 +24,7 @@ export type Field = {
   zips: string[];
   /** Largest zip, in metres (0 when none). */
   zipMax: number;
-  impacts: { front: number; rear: number; side: number };
-  swings: number;
-  jturns: number;
-  sideswipes: number;
-  /** Late-heat car windows (3-5 cars alive) and the ones that scoot (`ScootWatch`). */
-  scoot: ScootShare;
-  /** Pair hits the match credited (closing ≥ 1.8 m/s), and the ones that were aggressive (≥ `DERBY_RULES.hitSpeed`). */
-  hits: number;
-  aggro: number;
-  /** Live car-seconds, to put the hits per car-minute. */
-  carSeconds: number;
 };
-
-function face(c: DeformableCar, p: THREE.Vector3): "front" | "rear" | "side" {
-  const dx = p.x - c.group.position.x;
-  const dz = p.z - c.group.position.z;
-  const along = (dx * c.fwdFlat.x + dz * c.fwdFlat.z) / c.frame.half.z;
-  const across = (dx * c.fwdFlat.z - dz * c.fwdFlat.x) / c.frame.half.x;
-  if (Math.abs(along) * 1.15 < Math.abs(across)) return "side";
-  return along > 0 ? "front" : "rear";
-}
 
 function centroid(c: DeformableCar): { x: number; z: number } {
   let x = 0;
@@ -64,13 +38,6 @@ function centroid(c: DeformableCar): { x: number; z: number } {
   return { x: x / m, z: z / m };
 }
 
-/**
- * One manoeuvre per run of a move: the brain re-picks its tactic every slice, and a J-turn flips in and out
- * of `jturn` slice by slice (main, seeds 1/2/3/11: of 350 entries, 309 came < 0.05 s after the last, 33 more
- * than 5 s after, 8 in between). Counting tactic changes counted those flips, not J-turns.
- */
-const MOVE_GAP = 1;
-
 /** A watcher on a heat: `step` after every physics slice of `h` s at match time `t` (`running(i)`: car i alive and not out), `pair` on every car pair in contact, `drive` on car i's AI input before it is applied (a control may change it). */
 export type FieldWatch = {
   step?: (cars: DeformableCar[], t: number, h: number, running: (i: number) => boolean) => void;
@@ -81,28 +48,20 @@ export type FieldWatch = {
 /**
  * A derby of `n` AI cars through the engine's stack (`stepWorld` then `settleStep` each slice, with the derby's hit credit and arena,
  * cars dressed as `dressCar` does at the game's defaults), at the default slider, to the end of the heat or to match second `until`.
- * `playerClass` is car 0's class (the HUD's player class, the sedan by default).
  * Spins: turn rate about the vertical (`verticalTurn`) > `SPIN_RATE_BAR` for > 0.2 s in the first 2 min, split by a contact in the 0.5 s before it was counted: a car, or a prop or wall of the arena (a crash's spin, not the AI's own driving).
- * Zips: a live mass centroid moving more than 3·v·h + 5 cm in a step. Impacts: AI hits closing ≥ 3 m/s,
- * by the attacker's face. Moves: swings, J-turns and sideswipes, each a manoeuvre (`MOVE_GAP`).
+ * Zips: a live mass centroid moving more than 3·v·h + 5 cm in a step.
  */
-export function runField(n: number, seed: number, playerClass?: VehicleClassId, on?: FieldWatch, until = Infinity): Field {
+export function runField(n: number, seed: number, on?: FieldWatch, until = Infinity): Field {
   try {
-    return runFieldHeat(n, seed, playerClass, on, until);
+    return runFieldHeat(n, seed, on, until);
   } finally {
-    leaveArena();
+    setGround(null);
   }
 }
 
-function runFieldHeat(n: number, seed: number, playerClass: VehicleClassId | undefined, on: FieldWatch | undefined, until: number): Field {
+function runFieldHeat(n: number, seed: number, on: FieldWatch | undefined, until: number): Field {
   const scene = new THREE.Scene();
-  const cars = Array.from(
-    { length: n },
-    (_, i) => new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: `c${i}` }, scene, null, i === 0 && playerClass ? CLASSES[playerClass].style : fleetStyle(i)),
-  );
-  let s = seed;
-  const rng = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
-  const slots = layoutDerby(n, DERBY_RADIUS, rng, DERBY_FREE_PROPS);
+  const cars = Array.from({ length: n }, (_, i) => new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: `c${i}` }, scene, null, fleetStyle(i)));
   const match = new DerbyMatch();
   match.begin(
     cars.map((_, i) => ({ id: i, name: `c${i}` })),
@@ -120,45 +79,30 @@ function runFieldHeat(n: number, seed: number, playerClass: VehicleClassId | und
       struck[car] = t;
     },
   });
-  for (const [i, c] of cars.entries()) {
-    c.spawnFacing(slots[i]!.x, slots[i]!.z, slots[i]!.yaw, 0);
+  placeDerby(cars, seed);
+  for (const c of cars) {
     c.deform.squash = INITIAL_HUD.squash;
     c.deform.buckle = INITIAL_HUD.buckle;
     c.deform.setMode(INITIAL_HUD.deformMode);
-    const cls = i === 0 && playerClass ? playerClass : carClass(c);
+    const cls = carClass(c);
     assignClass(c, cls);
     armKill(c.deform, cls, HANDLING.realism, "derby");
   }
   const out: Field = {
     seed,
-    winner: null,
-    decided: null,
-    t: 0,
     deaths: [],
-    outs: [],
     contactSpins: [],
     freeSpins: [],
     zips: [],
     zipMax: 0,
     contactPeak: { rate: 0, note: "none" },
-    impacts: { front: 0, rear: 0, side: 0 },
-    swings: 0,
-    jturns: 0,
-    sideswipes: 0,
-    scoot: { windows: 0, flagged: 0 },
-    hits: 0,
-    aggro: 0,
-    carSeconds: 0,
   };
-  const watch = new ScootWatch(n);
   /** Per car: its orientation one step ago, and the turn about the vertical it has made since the start (rad, unwrapped). */
   const lastTurn = cars.map((c) => c.group.quaternion.clone());
   const heading = new Array<number>(n).fill(0);
   const spinFor = new Array<number>(n).fill(0);
   /** Per car: [t, heading] pairs spanning about 0.1 s, for the contact peak. */
   const ring = cars.map((): number[] => []);
-  /** Per car, when it was last in each move: back in it within MOVE_GAP s is the same manoeuvre. */
-  const lastIn = { swing: new Array<number>(n).fill(-9), jturn: new Array<number>(n).fill(-9), sideswipe: new Array<number>(n).fill(-9) };
   const alive = new Array<boolean>(n).fill(true);
   // Match time: negative through the start lights, 0 at green.
   let t = match.time;
@@ -177,11 +121,6 @@ function runFieldHeat(n: number, seed: number, playerClass: VehicleClassId | und
       const input = match.think(snaps[i]!, snaps, h);
       on?.drive?.(i, t, input);
       applyAiDrive(c, input, h);
-      const now = match.brain.tacticOf(i);
-      if ((now === "swing" && input.ebrake) || now === "jturn" || now === "sideswipe") {
-        if (t - lastIn[now][i]! > MOVE_GAP) out[now === "swing" ? "swings" : now === "jturn" ? "jturns" : "sideswipes"]++;
-        lastIn[now][i] = t;
-      }
     }
     w.pairHit = (a, b, pair) => {
       on?.pair?.(a, b);
@@ -195,12 +134,7 @@ function runFieldHeat(n: number, seed: number, playerClass: VehicleClassId | und
       shove[b] = Math.max(shove[b]!, speed0[a]!);
       const aInto = -(ca.velocity.x * pair.normal.x + ca.velocity.z * pair.normal.z);
       const bInto = cb.velocity.x * pair.normal.x + cb.velocity.z * pair.normal.z;
-      if (!match.noteHit(a, b, aInto, bInto, pair.impulse)) return;
-      out.hits++;
-      if (aggressive(Math.max(aInto, bInto))) out.aggro++;
-      watch.hit(a, b, t);
-      const attacker = aInto >= bInto ? ca : cb;
-      if (attacker.deform.drivetrainAlive && aInto + bInto >= 3) out.impacts[face(attacker, pair.contact)]++;
+      match.noteHit(a, b, aInto, bInto, pair.impulse);
     };
     stepWorld(w, h);
     // No bleed: the engine's derby never starts the crash clock.
@@ -211,12 +145,9 @@ function runFieldHeat(n: number, seed: number, playerClass: VehicleClassId | und
     );
     const running = (i: number) => cars[i]!.deform.drivetrainAlive && !match.board[i]!.out;
     on?.step?.(cars, t, h, running);
-    if (watch.due(t)) watch.sample(t, cars.map((c, i) => ({ alive: running(i), x: c.group.position.x, z: c.group.position.z, fwd: c.velocity.x * c.fwdFlat.x + c.velocity.z * c.fwdFlat.z })));
     for (const [i, c] of cars.entries()) {
-      if (t >= 0 && running(i)) out.carSeconds += h;
       if (alive[i] && !c.deform.drivetrainAlive) out.deaths.push(+t.toFixed(1));
       alive[i] = c.deform.drivetrainAlive;
-      if (match.board[i]!.out && !out.outs.includes(i)) out.outs.push(i);
       const dyaw = verticalTurn(lastTurn[i]!, c.group.quaternion);
       lastTurn[i]!.copy(c.group.quaternion);
       heading[i]! += dyaw;
@@ -245,9 +176,5 @@ function runFieldHeat(n: number, seed: number, playerClass: VehicleClassId | und
     }
     t += h;
   }
-  out.t = +t.toFixed(1);
-  out.winner = match.winnerId;
-  out.decided = match.decided;
-  out.scoot = watch.share();
   return out;
 }

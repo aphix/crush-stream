@@ -9,7 +9,7 @@ import type { RaceHud } from "../match/types.ts";
 import { FRAME, frame, type World } from "./race-world.test-util.ts";
 import { Track } from "./track.ts";
 import { HAVANA } from "./tracks/havana.ts";
-import { assertDropInsHidden, chaseCam, dropInsAtPoses, hold, leaveSurvival, liveCops, play, survivalWorld, visibleFrom } from "./survival-run.test-util.ts";
+import { assertDropInsHidden, chaseCam, dropInsAtPoses, hold, leaveSurvival, liveCops, play, shortenBustHold, survivalWorld, visibleFrom } from "./survival-run.test-util.ts";
 import { drivers } from "./survival-players.test-util.ts";
 
 const spec = new Track(HAVANA).survival!;
@@ -100,10 +100,9 @@ describe("given a Survival run on the Havana course (the player against a pack o
     }
   });
 
-  it("when the player sits still on its start as the pack closes in, then the run ends, and a bust never comes before the survival hold", () => {
+  it("when the player sits still on its start as the pack closes in, then the run ends, and a bust never comes before the survival hold", (t) => {
     // The hold is shortened (its own constant) so the pack's box-in and the bust fit in seconds; the owner's 12 s is the session test's (`match/survival.test.ts`).
-    const owner = SURVIVAL.bustTime;
-    Reflect.set(SURVIVAL, "bustTime", BUST_HOLD);
+    shortenBustHold(t, BUST_HOLD);
     const w = survivalWorld();
     try {
       const state = { acc: 0 };
@@ -132,7 +131,6 @@ describe("given a Survival run on the Havana course (the player against a pack o
       else assert.equal(h.you?.busted, false);
     } finally {
       leaveSurvival(w);
-      Reflect.set(SURVIVAL, "bustTime", owner);
     }
   });
 

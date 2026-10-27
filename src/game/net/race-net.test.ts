@@ -1,9 +1,12 @@
-import { describe, it, type TestContext } from "node:test";
+import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { FRAME, frame, makeWorld, type World } from "../world/race-world.test-util.ts";
 import { SURVIVAL } from "../match/survival.ts";
+import { shortenBustHold } from "../world/survival-run.test-util.ts";
 import { raceKey, readRace, writeRace } from "./codec.ts";
+
+afterEach(() => setGround(null));
 
 /** Host world with network peers seated on `seats` (car → name), its player named "Ann", an `aiCount`-car AI field, the oval, started. */
 function hostRace(seats: ReadonlyMap<number, string>, aiCount = 3): World {
@@ -32,8 +35,7 @@ function clientOf(host: World, self: number): World {
 }
 
 describe("given a host race on the oval with three AI cars, the host player Ann, and a network peer Zed seated on car 2", () => {
-  it("when a client adopts the host's rules state as car 2, then the host seats Zed as a remote car and the client seats him as its own player, each under the chosen names", (t) => {
-    t.after(() => setGround(null));
+  it("when a client adopts the host's rules state as car 2, then the host seats Zed as a remote car and the client seats him as its own player, each under the chosen names", () => {
     const host = hostRace(new Map([[2, "Zed"]]));
     const hud = host.race.hud();
     assert.deepEqual(
@@ -64,8 +66,7 @@ describe("given a host race on the oval with three AI cars, the host player Ann,
     client.race.exit();
   });
 
-  it("when the peer sends throttle input after the race starts, then its car waits on the grid until then, the peer's input drives it rather than the AI, and its respawn request is honoured while the paused host's own is ignored", (t) => {
-    t.after(() => setGround(null));
+  it("when the peer sends throttle input after the race starts, then its car waits on the grid until then, the peer's input drives it rather than the AI, and its respawn request is honoured while the paused host's own is ignored", () => {
     const host = hostRace(new Map([[2, "Zed"]]));
     const state = { acc: 0 };
     const start = host.live()[2]!.group.position.clone();
@@ -89,8 +90,7 @@ describe("given a host race on the oval with three AI cars, the host player Ann,
 });
 
 describe("given a host race with no network peers seated", () => {
-  it("when a peer joins mid-race as car 4 and adopts the host's state, then it spectates until the next race instead of driving", (t) => {
-    t.after(() => setGround(null));
+  it("when a peer joins mid-race as car 4 and adopts the host's state, then it spectates until the next race instead of driving", () => {
     const host = hostRace(new Map());
     const late = clientOf(host, 4);
     assert.equal(late.race.hud().you, null, "not in this race's field");
@@ -118,17 +118,9 @@ const BUST_HOLD = 1.5;
 /** Race seconds after the green at which one human is wrecked: inside the shortened hold, so that car falls first and the other is busted after it. */
 const WRECK_AT = BUST_HOLD / 3;
 
-/** Run the test with the shortened bust hold; the owner's is back when the test ends. */
-function shortenBustHold(t: TestContext): void {
-  const owner = SURVIVAL.bustTime;
-  Reflect.set(SURVIVAL, "bustTime", BUST_HOLD);
-  t.after(() => Reflect.set(SURVIVAL, "bustTime", owner));
-}
-
 describe("given a hosted Survival run with the host and a peer Zed seated on car 1, both sitting still", () => {
   it("when the run ends and a client adopts the host's state as car 1, then the client reads the run's pack, its time, its team and its cause as the host does", (t) => {
-    t.after(() => setGround(null));
-    shortenBustHold(t);
+    shortenBustHold(t, BUST_HOLD);
     const host = makeWorld();
     host.race.setSeats(new Map([[1, "Zed"]]));
     host.race.enter(true);
@@ -168,8 +160,7 @@ describe("given a hosted Survival run with the host and a peer Zed on car 1 wher
     { wrecks: 0, host: "wrecked", own: "busted" },
   ] as const) {
     it(`when car ${wrecks} is wrecked and the other held until busted and a client adopts the host's state as car 1, then the client's card reads the host's cause (${cause}), not its own car's (${own})`, (t) => {
-      t.after(() => setGround(null));
-      shortenBustHold(t);
+      shortenBustHold(t, BUST_HOLD);
       const host = makeWorld();
       host.race.reseed(2);
       host.race.setSeats(new Map([[1, "Zed"]]));
@@ -204,8 +195,7 @@ describe("given a hosted Survival run with the host and a peer Zed on car 1 wher
 });
 
 describe("given a hosted Survival run that has just begun with a peer Zed seated on car 1", () => {
-  it("when a client that started its own local Survival run adopts the host's first state a few frames in, then it is seated as car 1 and drives instead of spectating", (t) => {
-    t.after(() => setGround(null));
+  it("when a client that started its own local Survival run adopts the host's first state a few frames in, then it is seated as car 1 and drives instead of spectating", () => {
     const host = makeWorld();
     host.race.setSeats(new Map([[1, "Zed"]]));
     host.race.enter(true);
@@ -222,8 +212,7 @@ describe("given a hosted Survival run that has just begun with a peer Zed seated
 });
 
 describe("given a hosted campaign with the host and a peer seated", () => {
-  it("when a client adopts the host's state, then it shows the host's campaign table, round and tracks, and the standings screen follows the host's flag", (t) => {
-    t.after(() => setGround(null));
+  it("when a client adopts the host's state, then it shows the host's campaign table, round and tracks, and the standings screen follows the host's flag", () => {
     const host = makeWorld();
     host.race.setSeats(new Map([[1, "Zed"]]));
     host.race.enter();
@@ -277,8 +266,7 @@ function raceView(w: World) {
 /** The race message over a whole race on the oval (1 lap): what the client shows, and the bytes a second. */
 for (const { aiCount, cars, boundBps } of [{ aiCount: 3, cars: 4, boundBps: 2500 }, { aiCount: 7, cars: 8, boundBps: 6000 }]) {
   describe(`given a ${cars}-car host race run from the grid to its results and a client fed what the host's sender sends`, () => {
-    it("when the host offers its state every 6th snapshot and sends it only when its key changed or on a keyframe, then the client's standings, clock, finish order and results equal the host's at every offer, at a fraction of the bytes", (t) => {
-      t.after(() => setGround(null));
+    it("when the host offers its state every 6th snapshot and sends it only when its key changed or on a keyframe, then the client's standings, clock, finish order and results equal the host's at every offer, at a fraction of the bytes", () => {
       const host = hostRace(new Map([[2, "Zed"]]), aiCount);
       const client = clientOf(host, 2);
       // Both screens watch car 1, an AI car: its distance bar is under test.
@@ -355,8 +343,7 @@ for (const { aiCount, cars, boundBps } of [{ aiCount: 3, cars: 4, boundBps: 2500
 }
 
 describe("given a hosted Survival run in which a peer Zed on car 1 is held still until the police bust it, with the owner's hold", () => {
-  it("when a guest is fed only what the host's sender sends, then its bust gauge matches the host's on every frame of the hold, the frames between messages included", (t) => {
-    t.after(() => setGround(null));
+  it("when a guest is fed only what the host's sender sends, then its bust gauge matches the host's on every frame of the hold, the frames between messages included", () => {
     const host = makeWorld();
     host.race.setSeats(new Map([[1, "Zed"]]));
     host.race.enter(true);

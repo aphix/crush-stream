@@ -22,11 +22,11 @@ const FRAME = 1 / FRAME_HZ;
  *   both close → `converging` (two lines meeting: a shared apex, a head-on, a reverse into a car behind);
  *   neither → `none` (a graze, or both were pushed together).
  */
-export const KNOCK = 0.5;
-export const CLOSE_MIN = 0.5;
+const KNOCK = 0.5;
+const CLOSE_MIN = 0.5;
 /** Reverse pedal (throttle ≤ −this) that makes a car's backward motion its own driving, bump or no bump. */
 const REVERSE_PEDAL = 0.5;
-export const GRAZE = DERBY_RULES.hitSpeed;
+const GRAZE = DERBY_RULES.hitSpeed;
 
 export type Sample = { x: number; z: number; vx: number; vz: number; yaw: number; throttle: number; steer: number; brake: number; bumped: boolean };
 export type Role = "initiated" | "suffered" | "converging" | "none";

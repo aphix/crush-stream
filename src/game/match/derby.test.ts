@@ -5,7 +5,8 @@ import { DerbyBrain, blankAiCar } from "../ai/derby-ai.ts";
 import { personality } from "../ai/personality.ts";
 import { DerbyMatch, HIT_POINTS, DISABLE_POINTS, SCORE_GAP, snapshotAiCar } from "./derby.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
-import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
+import { arenaWorld, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { setGround } from "../world/ground.ts";
 import { DERBY_BOXES, DERBY_FREE_PROPS, DERBY_PROP } from "../scenes/derby-ground.ts";
 import { idleDrive, applyDrive } from "../vehicle/car-drive.ts";
 import { applyAiDrive } from "../ai/input-fade.ts";
@@ -205,7 +206,7 @@ const WALL_CAGE_REACH = 1;
 const OUTWARD_SPEED_LEFT = 2;
 
 describe("given a derby car driven at the arena wall at 25 m/s from 12 m out (the sedan)", () => {
-  afterEach(leaveArena);
+  afterEach(() => setGround(null));
   it("when it has hit it and run on 3 s, then it stays inside the wall (cage reach: car centre hypot < DERBY_RADIUS - 1) and it has lost its outward speed", () => {
     const car = new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" }, new THREE.Scene());
     car.deform.setMode("shape");
@@ -313,17 +314,14 @@ describe("given two cars, each at half the speed of a 50 km/h rigid-wall hit, dr
 });
 
 describe("given a default two-car derby in shape deform mode", () => {
-  afterEach(leaveArena);
+  afterEach(() => setGround(null));
   it("when the AI drives both cars for 5 s after the green light, then both engines still run, the cars are still moving and they met (closest approach under 6.5 m), not parked nose to nose", () => {
     const scene = new THREE.Scene();
     const a = new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" }, scene);
     const b = new DeformableCar({ body: 0x3d8a86, accent: 0x2a6360, name: "Petrol" }, scene);
-    let seed = 7;
-    const slots = layoutDerby(2, DERBY_RADIUS, () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646, DERBY_FREE_PROPS);
-    for (const [i, c] of [a, b].entries()) {
-      c.deform.setMode("shape");
-      c.spawnFacing(slots[i]!.x, slots[i]!.z, slots[i]!.yaw, 0);
-    }
+    a.deform.setMode("shape");
+    b.deform.setMode("shape");
+    placeDerby([a, b], 7);
     const match = new DerbyMatch();
     match.begin([
       { id: 0, name: "Titanium" },

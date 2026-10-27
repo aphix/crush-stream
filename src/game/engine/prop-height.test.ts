@@ -1,7 +1,7 @@
 import { zipBound } from "../contact/zip-bound.test-util.ts";
 import { PUSH_SPEED } from "../deform/push-budget.ts";
 import { launch, makeCar as makeCrashCar } from "../contact/crash-scenarios.test-util.ts";
-import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
+import { arenaWorld } from "../scenes/derby-arena.test-util.ts";
 import { DERBY_BOXES } from "../scenes/derby-ground.ts";
 import { stepWorld } from "./world-step.ts";
 import { afterEach, describe, it } from "node:test";
@@ -307,8 +307,6 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
     };
     return { slice, prism, wreck };
   };
-  afterEach(leaveArena);
-
   const landings = [
     { it: "when it lands on the tyre stack 54 (1.5 m) at 5.5 m/s, 1.6 cm under the top (seed 6, t=98.05, 1.34 m)", id: 54, along: 0.8, inward: 1.4, under: 0.016, v: [0.18, -5.46, 0.34], dt: 0.0026 },
     { it: "when it lands on the tyre stack 55 (2 m) at 9 m/s and 11 m/s sideways, 3.6 cm under the top (seed 1, t=61.10, 0.96 m)", id: 55, along: 0, inward: 1.4, under: 0.036, v: [-10.87, -9.08, -1.7], dt: 0.0042 },

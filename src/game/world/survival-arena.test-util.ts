@@ -6,7 +6,7 @@ import { HAVANA } from "./tracks/havana.ts";
  * course's only road, so every drop-in the pack makes is on it, inside the walls. The player starts on the ring's east straight
  * with the formation behind it, as on Havana's boulevard. Same engine, same pack, same busted and wreck rules; a player cannot leave.
  */
-export const ARENA_HALF = 80;
+const ARENA_HALF = 80;
 /** The stucco block's side (m): the rim stands on the arena's edge, its inner faces at `ARENA_HALF`. */
 const BLOCK = 12;
 
