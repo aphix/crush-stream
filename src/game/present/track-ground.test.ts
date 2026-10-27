@@ -1,15 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { Track } from "../world/track.ts";
-import { SURFACES } from "../world/catalog.ts";
+import { CELL as GROUND_CELL, Track, type TrackGround } from "../world/track.ts";
+import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
 import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
-import { type Mesher, RoadIndex } from "./track-mesh.ts";
+import { FLAT_TOL, type Mesher, RoadIndex } from "./track-mesh.ts";
 import { sections } from "../world/track-sections.ts";
 import { buildGroundLayers, TerrainBatch } from "./track-ground.ts";
 
-/** A course's terrain as `TrackArt` draws it: the near mesh (chunk after chunk, then the far skirt), the chunks and the road index. */
-type Terrain = { near: Mesher; chunks: { coarse: Mesher; box: Float32Array; fineAt: Int32Array; coarseAt: Int32Array }; roads: RoadIndex };
+/** A course's terrain as `TrackArt` draws it: the near mesh (chunk after chunk, then the far skirt), the chunks, the road index, and the ground the mesh was cut from with its terrain's surface index. */
+type Terrain = { near: Mesher; chunks: { coarse: Mesher; box: Float32Array; fineAt: Int32Array; coarseAt: Int32Array }; roads: RoadIndex; ground: TrackGround; terrainSurface: number };
 
 function terrainOf(course: string): Terrain {
   const track = [...TRACKS, ...OFF_MENU].map((raw) => new Track(raw)).find((t) => t.id === course)!;
@@ -18,7 +18,7 @@ function terrainOf(course: string): Terrain {
   const terrain = buildGroundLayers(track, track.ground(), roads, paths, paths.map((p) => sections(p, 0)))[0]!;
   assert.equal(terrain.kind, "terrain");
   assert.ok(terrain.chunks, "the terrain is cut into chunks");
-  return { near: terrain.m, chunks: terrain.chunks, roads };
+  return { near: terrain.m, chunks: terrain.chunks, roads, ground: track.ground(), terrainSurface: SURFACE_IDS.indexOf(track.json.environment.terrain) };
 }
 
 /** Sample offsets inside each 2 m grid cell: 1 mm past each grid line, and the middle. */
@@ -74,9 +74,12 @@ function sampleGround(t: Terrain, far: (chunk: number) => boolean): Sampled {
   return { y, nx, nz };
 }
 
-/** World (x, z) of the corner of the 2 m cell holding sample `s` of a `sampleGround` grid whose first chunk starts at (x0, z0). */
-function sampleCellCorner(g: Sampled, s: number, x0: number, z0: number): [number, number] {
-  return [x0 + Math.floor((s % g.nx) / OFFSETS.length) * CELL, z0 + Math.floor(Math.floor(s / g.nx) / OFFSETS.length) * CELL];
+/** World (x, z) of the corner of the 2 m cell holding sample `s` of a `sampleGround` grid whose first chunk starts at (x0, z0), and the corners of the 1 m cell holding it. */
+function sampleCellCorners(g: Sampled, s: number, x0: number, z0: number): [number, number][] {
+  const [cornerX, cornerZ] = [x0 + Math.floor((s % g.nx) / OFFSETS.length) * CELL, z0 + Math.floor(Math.floor(s / g.nx) / OFFSETS.length) * CELL];
+  const [px, pz] = [cornerX + OFFSETS[(s % g.nx) % OFFSETS.length]!, cornerZ + OFFSETS[Math.floor(s / g.nx) % OFFSETS.length]!];
+  const [unitX, unitZ] = [Math.floor(px), Math.floor(pz)];
+  return [[cornerX, cornerZ], [unitX, unitZ], [unitX + 1, unitZ], [unitX, unitZ + 1], [unitX + 1, unitZ + 1]];
 }
 
 /** The largest height step (m) across a 2 m grid line, between the samples 1 mm either side of it. */
@@ -137,7 +140,7 @@ describe("given a course's terrain drawn in chunks, each with a near mesh and a 
           const a = near.y[s]!;
           const b = far.y[s]!;
           if (Number.isNaN(a) !== Number.isNaN(b)) {
-            if (t.roads.coveredBy(...sampleCellCorner(far, s, box[0]!, box[1]!), ROAD_INSET) >= 0) continue;
+            if (sampleCellCorners(far, s, box[0]!, box[1]!).some(([x, z]) => t.roads.coveredBy(x, z, ROAD_INSET) >= 0)) continue;
             if (Number.isNaN(b)) uncoveredAwayFromRoads++;
             else addedAwayFromRoads++;
             continue;
@@ -185,7 +188,7 @@ const lattice = (x: number, z: number) => `${Math.round(x * 1000)},${Math.round(
  * triangle's edge instead of ending it (the two sides then rasterise the line apart); `splitHeights` the lattice points drawn at
  * more than one height (a step between neighbours, open to the sky from a low camera).
  */
-function seamsOf(drawn: readonly Drawn[]): Seams {
+function seamsOf(drawn: readonly Drawn[], cell: number): Seams {
   const heightAt = new Map<string, number>();
   let splitHeights = 0;
   for (const { mesh, from, to } of drawn) {
@@ -210,7 +213,7 @@ function seamsOf(drawn: readonly Drawn[]): Seams {
       for (const [p, q] of [[a, b], [b, c], [c, a]] as const) {
         const dx = pos[q]! - pos[p]!;
         const dz = pos[q + 2]! - pos[p + 2]!;
-        const cells = Math.round(Math.max(Math.abs(dx), Math.abs(dz)) / CELL);
+        const cells = Math.round(Math.max(Math.abs(dx), Math.abs(dz)) / cell);
         if (cells < 2 || (Math.abs(dx) > 1e-6 && Math.abs(dz) > 1e-6)) continue;
         const edge = `${lattice(pos[p]!, pos[p + 2]!)}|${lattice(pos[q]!, pos[q + 2]!)}`;
         if (edges.has(edge)) continue;
@@ -220,6 +223,60 @@ function seamsOf(drawn: readonly Drawn[]): Seams {
     }
   }
   return { triangles, notFacingUp, tJunctions, splitHeights };
+}
+
+/** The borders between a fine cell and a coarse one that `drawn` draws on the fine side, and of those the ones a triangle edge runs across the middle of (a crack) and the ones whose middle is drawn at two heights. */
+type Borders = { drawn: number; spanned: number; splitHeights: number };
+
+/** Largest gap (m) between two heights drawn at one border middle. */
+const BORDER_HEIGHT_TOLERANCE = 1e-4;
+
+/**
+ * Walks every border between a fine cell and a coarse one of the course's baked cells. Where the fine side draws the border's middle node, the coarse side's edge must end
+ * there too: no triangle edge along the border's line may run from one side of the middle to the other, and every vertex at the middle has one height.
+ */
+function bordersOf(t: Terrain, drawn: readonly Drawn[]): Borders {
+  const { ground } = t;
+  const { cols, rows, fine, fromU, fromV } = ground.terrainCells;
+  const edgesAlong = new Map<string, [number, number][]>();
+  const heightsAt = new Map<string, number[]>();
+  for (const { mesh, from, to } of drawn) {
+    const { pos, idx } = mesh;
+    for (let k = from; k < to; k += 3) {
+      const corners = [idx[k]! * 3, idx[k + 1]! * 3, idx[k + 2]! * 3];
+      for (const v of corners) {
+        const key = lattice(pos[v]!, pos[v + 2]!);
+        heightsAt.set(key, [...(heightsAt.get(key) ?? []), pos[v + 1]!]);
+      }
+      for (const [p, q] of [[corners[0]!, corners[1]!], [corners[1]!, corners[2]!], [corners[2]!, corners[0]!]] as const) {
+        const [dx, dz] = [pos[q]! - pos[p]!, pos[q + 2]! - pos[p + 2]!];
+        if (Math.abs(dx) > 1e-6 && Math.abs(dz) > 1e-6) continue;
+        const along = Math.abs(dx) > 1e-6 ? `h${Math.round(pos[p + 2]! * 1000)}` : `v${Math.round(pos[p]! * 1000)}`;
+        const span: [number, number] = Math.abs(dx) > 1e-6 ? [Math.min(pos[p]!, pos[q]!), Math.max(pos[p]!, pos[q]!)] : [Math.min(pos[p + 2]!, pos[q + 2]!), Math.max(pos[p + 2]!, pos[q + 2]!)];
+        edgesAlong.set(along, [...(edgesAlong.get(along) ?? []), span]);
+      }
+    }
+  }
+  const isFine = (ci: number, cj: number) => ci >= 0 && cj >= 0 && ci < cols && cj < rows && fine[cj * cols + ci] === 1;
+  const result: Borders = { drawn: 0, spanned: 0, splitHeights: 0 };
+  for (let cj = 0; cj < rows; cj++) {
+    for (let ci = 0; ci < cols; ci++) {
+      if (!isFine(ci, cj)) continue;
+      const [x, z] = [ground.minX + fromU + 2 * ci, ground.minZ + fromV + 2 * cj];
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        if (isFine(ci + di, cj + dj) || ci + di < 0 || cj + dj < 0 || ci + di >= cols || cj + dj >= rows) continue;
+        // The middle of the shared edge, and the line it lies on.
+        const [mx, mz] = [x + 1 + di, z + 1 + dj];
+        const heights = heightsAt.get(lattice(mx, mz));
+        if (!heights) continue;
+        result.drawn++;
+        const [line, at] = di !== 0 ? [`v${Math.round(mx * 1000)}`, mz] : [`h${Math.round(mz * 1000)}`, mx];
+        if ((edgesAlong.get(line) ?? []).some(([a, b]) => a < at - 1e-6 && b > at + 1e-6)) result.spanned++;
+        if (Math.max(...heights) - Math.min(...heights) > BORDER_HEIGHT_TOLERANCE) result.splitHeights++;
+      }
+    }
+  }
+  return result;
 }
 
 describe("given every course's terrain, drawn near, far, or a checkerboard of both", () => {
@@ -240,11 +297,96 @@ describe("given every course's terrain, drawn near, far, or a checkerboard of bo
       ];
       for (const testCase of cases) {
         it(`when ${testCase.name} are drawn, then no vertex lies inside another triangle's edge, no lattice point is drawn at two heights, and every triangle faces up`, () => {
-          const { triangles, ...seams } = seamsOf(testCase.drawn);
+          const { triangles, ...seams } = seamsOf(testCase.drawn, GROUND_CELL);
           assert.ok(triangles > 0, "something is drawn");
           assert.deepEqual(seams, { notFacingUp: 0, tJunctions: 0, splitHeights: 0 }, `${triangles} triangles`);
         });
+        it(`when ${testCase.name} are drawn, then every border between a fine cell and a coarse one has its middle drawn as a vertex on both sides, at one height`, () => {
+          const { drawn, spanned, splitHeights } = bordersOf(t, testCase.drawn);
+          assert.deepEqual({ spanned, splitHeights }, { spanned: 0, splitHeights: 0 }, `${drawn} borders drawn`);
+          if (MIXED_COURSES.includes(course) && testCase.name === "every chunk near") assert.ok(drawn >= MIN_POINTS, `${drawn} borders drawn`);
+        });
       }
+    });
+  }
+});
+
+/** Where inside a drawn triangle the ground is read (barycentric weights of its three corners). */
+const INTERIOR_POINTS = [[1 / 3, 1 / 3, 1 / 3], [0.6, 0.3, 0.1], [0.1, 0.2, 0.7]] as const;
+/** Every this-many-th triangle of the near mesh is read, so a course costs a fraction of a second. */
+const SAMPLE_EVERY = 5;
+/** How far (m) a drawn corner may lie from its node's height and still be drawn at it: the arithmetic of a float32 and a double. */
+const ON_NODE = 1e-6;
+
+/** What a drawn single-cell triangle is: a 2 m cell's (coarse), a unit cell of a fine cell (fine), one on a fine cell's edge with a coarse cell, whose middle node lies on the coarse edge (transition), or one with a node on the road's crease (seam). */
+const CELL_KINDS = ["coarse", "fine", "transition", "seam"] as const;
+
+/** The ground read at interior points of drawn triangles: how many points, and the largest |ground - drawn| (m). */
+type Reading = { compared: number; worst: number };
+
+const noReading = (): Reading => ({ compared: 0, worst: 0 });
+
+/**
+ * The ground read at interior points of the near mesh's single-cell triangles (legs of one or two nodes) on the baked grid, where the point's unit cell is not
+ * the road's crease (the ground reads that as the crease). Merged quads and the skirt are not single cells. A triangle whose corners are drawn at the baked
+ * nodes' heights (`TerrainCells.drawn`) is `onNodes`, by what its cell is; one beside a coarser block has a corner eased along that block's edge (`vertexY`), `eased`.
+ */
+function groundAgainstDrawnCells(t: Terrain): { onNodes: Record<(typeof CELL_KINDS)[number], Reading>; eased: Reading } {
+  const { pos, idx } = t.near;
+  const { ground } = t;
+  const { drawn } = ground.terrainCells;
+  const creaseLat = ground.lat[0]!;
+  const onCrease = (node: number) => !Number.isNaN(creaseLat[node]!);
+  const onNodes = { coarse: noReading(), fine: noReading(), transition: noReading(), seam: noReading() };
+  const eased = noReading();
+  for (let k = 0; k < idx.length; k += 3 * SAMPLE_EVERY) {
+    const [a, b, c] = [idx[k]! * 3, idx[k + 1]! * 3, idx[k + 2]! * 3];
+    const area2 = Math.abs((pos[b]! - pos[a]!) * (pos[c + 2]! - pos[a + 2]!) - (pos[b + 2]! - pos[a + 2]!) * (pos[c]! - pos[a]!));
+    const cellX = Math.min(pos[a]!, pos[b]!, pos[c]!);
+    const cellZ = Math.min(pos[a + 2]!, pos[b + 2]!, pos[c + 2]!);
+    const side = Math.round(Math.max(pos[a]!, pos[b]!, pos[c]!) - cellX);
+    const deep = Math.max(pos[a + 2]!, pos[b + 2]!, pos[c + 2]!) - cellZ;
+    if ((side !== 1 && side !== 2) || Math.abs(area2 - side * side) > 1e-6 || Math.abs(Math.max(pos[a]!, pos[b]!, pos[c]!) - cellX - side) > 1e-6 || Math.abs(deep - side) > 1e-6) continue;
+    const gridX = cellX - ground.minX;
+    const gridZ = cellZ - ground.minZ;
+    if (gridX < 0 || gridZ < 0 || gridX + side >= ground.nx || gridZ + side >= ground.nz) continue;
+    const first = gridZ * ground.nx + gridX;
+    const corners = [first, first + side, first + side * ground.nx, first + side * ground.nx + side];
+    const nodeOf = (v: number) => (Math.round(pos[v + 2]!) - ground.minZ) * ground.nx + Math.round(pos[v]!) - ground.minX;
+    const touchesCrease = Array.from({ length: (side + 1) ** 2 }, (_, n) => first + Math.floor(n / (side + 1)) * ground.nx + (n % (side + 1))).some(onCrease);
+    const kind = touchesCrease ? "seam" : side === 2 ? "coarse" : corners.some((n) => drawn[n] !== ground.heights[n]) ? "transition" : "fine";
+    const drawnOnNodes = [a, b, c].every((v) => Math.abs(pos[v + 1]! - drawn[nodeOf(v)]!) <= ON_NODE);
+    const reading = drawnOnNodes ? onNodes[kind] : eased;
+    for (const [wa, wb, wc] of INTERIOR_POINTS) {
+      const x = wa * pos[a]! + wb * pos[b]! + wc * pos[c]!;
+      const z = wa * pos[a + 2]! + wb * pos[b + 2]! + wc * pos[c + 2]!;
+      const unit = (Math.floor(z) - ground.minZ) * ground.nx + Math.floor(x) - ground.minX;
+      if ([unit, unit + 1, unit + ground.nx, unit + ground.nx + 1].every(onCrease)) continue;
+      const height = wa * pos[a + 1]! + wb * pos[b + 1]! + wc * pos[c + 1]!;
+      reading.compared++;
+      reading.worst = Math.max(reading.worst, Math.abs(ground.heightAt(x, z, -Infinity) - height));
+    }
+  }
+  return { onNodes, eased };
+}
+
+/** How far (m) the ground may lie from a drawn triangle on the nodes' heights: the arithmetic of the two readings, not a modelling gap. */
+const GROUND_DRAWN_TOLERANCE = 1e-6;
+/** Courses with hills, crests or a banked road: every kind of cell must be read on them, at least `MIN_POINTS` points each (the others are flat, or a few big quads). */
+const MIXED_COURSES = ["rally", "stunt", "four-count", "dam-spine", "razor-shelf", "havana"];
+const MIN_POINTS = 40;
+
+describe("given every course's terrain, its single-cell triangles drawn in 2 m cells and, where the shape needs them, 1 m cells", () => {
+  for (const raw of [...TRACKS, ...OFF_MENU]) {
+    const course = new Track(raw).id;
+    it(`when the ground is read inside them on ${course}, then it is the height of the drawn triangle there in every kind of cell, to ${FLAT_TOL} m where a corner is eased to a coarser block's edge`, () => {
+      const { onNodes, eased } = groundAgainstDrawnCells(terrainOf(course));
+      for (const kind of CELL_KINDS) {
+        const { compared, worst } = onNodes[kind];
+        if (MIXED_COURSES.includes(course)) assert.ok(compared >= MIN_POINTS, `${compared} ${kind} points read`);
+        assert.ok(worst <= GROUND_DRAWN_TOLERANCE, `${worst} m from the drawn triangle over ${compared} ${kind} points`);
+      }
+      assert.ok(eased.worst <= FLAT_TOL + GROUND_DRAWN_TOLERANCE, `${eased.worst} m from the eased triangle over ${eased.compared} points`);
     });
   }
 });

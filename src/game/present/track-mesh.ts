@@ -8,7 +8,6 @@ import { blankSegment, segmentAt, type TrackPath } from "../world/track.ts";
 
 /** Terrain: 8 m blocks, split into 2 m cells near roads and wherever the ground is not flat. */
 export const BLOCK = 8;
-export const CELL = 2;
 /** A block stays one quad when no cell height is further than this (m) from its corners' bilinear. */
 export const FLAT_TOL = 0.06;
 export const SKIRT_RADIUS = 900;

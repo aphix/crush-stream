@@ -1,5 +1,6 @@
 import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { SURFACE_IDS, SURFACES } from "./catalog.ts";
+import { TERRAIN_SPAN } from "./terrain-cells.ts";
 import { SURFACE } from "./constants.ts";
 import { exitFace, F_DEPTH, F_NX, F_NZ, F_SIZE, F_TIME, IN_SIDE, IN_TOP, PR_BASE, PR_COS, PR_ENDS, PR_GU, PR_GW, PR_HARD, PR_HX, PR_HZ, PR_ID, PR_KNOCK_V, PR_MASS, PR_R, PR_SIN, PR_TOP, PR_VX, PR_VZ, PR_WALL, PR_X, PR_YAW, PR_Z, topAt } from "./prism.ts"
 import { G, GQ, gqEnter, gqLeave } from "./ground-clock.ts";
@@ -11,7 +12,8 @@ import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
  *
  * A `Surface` is the base class every surface extends. It holds no query: a subclass supplies plain data, patches in typed
  * arrays, and a scene activates it (`setGround`). A patch is a bilinear node grid in its own frame (a plane is one cell; the
- * track's field, a ramp face, the corkscrew's floor and a car's roof plate are the same thing; a roof's frame is the car's)
+ * track's field, a ramp face, the corkscrew's floor and a car's roof plate are the same thing; a roof's frame is the car's; the
+ * track's field off its road reads the triangles of the terrain's drawn cells instead: `GridSpec.lattice`)
  * or a bridge deck segment in the road's crease form. The static part is registered once per scene with its spatial index;
  * the dynamic part (`CarSurfaces`) is a fixed set of slots whose frame and world box are rewritten in place every slice.
  *
@@ -113,7 +115,7 @@ const D_RUNR = 11;
 const D_TAN = 12;
 
 /** Patch integers, `Q_STRIDE` each. */
-export const Q_STRIDE = 11;
+export const Q_STRIDE = 13;
 export const Q_KIND = 0;
 export const Q_NU = 1;
 export const Q_NV = 2;
@@ -133,6 +135,9 @@ const Q_DYN = 8;
 const Q_MOVES = 9;
 /** 1: the patch is in `Surface.dyn` (changed since the last step's end). */
 const Q_STIR = 10;
+/** A lattice grid (`GridSpec.lattice`): the first node of a row and of a column on its lattice of drawn cells. */
+const Q_LATTICE_U = 11;
+const Q_LATTICE_V = 12;
 
 /** A patch's slots grow by this many at a time. */
 const GROW = 8;
@@ -203,6 +208,9 @@ type PrismSpec = {
   moves?: boolean;
 };
 
+/** What a grid's non-creased cells read instead of bilinear: the triangles of the drawn cell, `TERRAIN_SPAN` nodes a side with its corners on the nodes `fromU` and `fromV` plus multiples of it, split from its (+u, 0) corner to its (0, +v) one, or of the unit cell itself. `sides` holds each cell's choice, 2 or 1 (row-major, `nu - 1` wide). */
+type Lattice = { fromU: number; fromV: number; sides: Uint8Array };
+
 /** A grid patch's data. `heights` are the nodes' frame y (row-major, `nu` wide); the frame's origin is at world (ox, oy, oz). */
 type GridSpec = {
   nu: number;
@@ -240,6 +248,8 @@ type GridSpec = {
   hmax?: number;
   /** Answers over the whole plan (the track's terrain: hills past its baked grid), not only over its grid's box. */
   unbounded?: boolean;
+  /** Set for the grid of a drawn terrain, so the ground is the surface drawn. */
+  lattice?: Lattice;
 };
 
 export class Surface {
@@ -262,6 +272,8 @@ export class Surface {
   cellTops: Float64Array[] = [];
   /** Per patch whose heights never change: a lower bound on the y of the normal in each cell (`cellNyOf`), in 1/255s; empty otherwise. */
   cellNy: Uint8Array[] = [];
+  /** Per patch of a lattice (`GridSpec.lattice`): each cell's side in nodes of the triangle pair it reads when it is not on the road's crease (`Lattice.sides`); empty: bilinear all over. */
+  latticeCells: Uint8Array[] = [];
   /** The cell index (built by `seal`, read by the query): per cell the patches listed, and the patches every query tests (`always[0 .. nAlways)`). */
   cellStart = new Int32Array(0);
   cellList = new Int32Array(0);
@@ -350,6 +362,7 @@ export class Surface {
     this.hillFar[i] = EMPTY64;
     this.cellTops[i] = EMPTY64;
     this.cellNy[i] = EMPTY8;
+    this.latticeCells[i] = EMPTY8;
     this.sealed = false;
     this.rasterBuilt = false;
     return i;
@@ -368,7 +381,7 @@ export class Surface {
     return false;
   }
 
-  /** A bilinear grid patch; returns its index. */
+  /** A grid patch: bilinear, or on a `lattice` the triangles of the drawn cells; returns its index. */
   addGrid(g: GridSpec): number {
     const i = this.addPatch(GRID);
     const o = i * P_STRIDE;
@@ -389,6 +402,8 @@ export class Surface {
     if (g.hmax === undefined) for (let k = 0; k < g.heights.length; k++) hext = Math.max(hext, Math.abs(g.heights[k]!));
     this.p[o + P_HMAX] = hext;
     this.q[qo + Q_UNB] = g.unbounded ? 1 : 0;
+    this.q[qo + Q_LATTICE_U] = g.lattice?.fromU ?? 0;
+    this.q[qo + Q_LATTICE_V] = g.lattice?.fromV ?? 0;
     if (g.surfs) this.surfs[i] = g.surfs;
     if (g.aux) this.auxs[i] = g.aux;
     if (g.crease) {
@@ -402,9 +417,10 @@ export class Surface {
       const hills = g.outside.hills;
       this.hillFar[i] = Float64Array.from({ length: hills.length / 4 }, (_, k) => (hills[k * 4 + 2]! > HILL_FAR ? hills[k * 4 + 3]! ** 2 * Math.log(hills[k * 4 + 2]! / HILL_FAR) : 0));
     }
+    this.latticeCells[i] = g.lattice?.sides ?? EMPTY8;
     if (g.hmax === undefined) {
-      this.cellTops[i] = cellTopsOf(g.nu, g.nv, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!);
-      this.cellNy[i] = cellNyOf(g.nu, g.nv, g.step, g.stepV, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!);
+      this.cellTops[i] = cellTopsOf(g.nu, g.nv, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!, g.lattice, this.latticeCells[i]!);
+      this.cellNy[i] = cellNyOf(g.nu, g.nv, g.step, g.stepV, g.heights, this.centre[i]!, this.lat[i]!, this.drop[i]!, g.lattice, this.latticeCells[i]!);
       this.cellsBounded += (g.nu - 1) * (g.nv - 1);
     }
     this.setFrame(i, g.ox, g.oy, g.oz, g.axes ?? YAW0);
@@ -784,6 +800,7 @@ export class Surface {
     this.auxs[i] = aux;
     this.cellTops[i] = EMPTY64;
     this.cellNy[i] = EMPTY8;
+    this.latticeCells[i] = EMPTY8;
     this.box(i);
   }
 
@@ -997,11 +1014,11 @@ export function armedSolids(): Surface | null {
 
 /**
  * `offer`'s scratch: the best candidate so far (`S_BEST`..`S_AUX`), the candidate being evaluated (`S_CG0`..`S_CAUX`, its height `S_H`:
- * NaN where it has none), one cell's bilinear partials (per cell unit, `S_PU`, `S_PV`, set by `bil`), `cellHeight`'s cell fractions in
+ * NaN where it has none), one cell's partials (per cell unit, `S_PU`, `S_PV`, set by `bilSlopes` or `triangleSlopes`), `cellHeight`'s cell fractions in
  * (`S_TU`, `S_TV`) and height out (`S_CH`) and, for a best `plainOffer` found, the point in its grid (`S_PFU`, `S_PFV`; `S_PFU` −1 for
  * any other best), its node, factor and partials left to `plainRest`.
  */
-const _s = new Float64Array(24);
+const _s = new Float64Array(27);
 const S_BEST = 0;
 const S_PATCH = 1;
 const S_G0 = 2;
@@ -1029,6 +1046,10 @@ const S_SPATCH = 21;
 const S_CREACH = 22;
 /** The normal's y of the deepest side answer: 0 for a prism's face, a car's flank may lean. */
 const S_SNY = 23;
+/** `drawnCornerOf`'s drawn cell: its side in nodes, and how many nodes the cell lies past its first corner along u and along v. */
+const S_SPAN = 24;
+const S_PAST_U = 25;
+const S_PAST_V = 26;
 /** `Surface.plainOne`: read `Surface.plainCells` per index cell. */
 const PLAIN_BY_CELL = -2;
 /** A `Surface.plainCells` entry: the index cell lists patches besides the one always-tested plain grid (`plainOutside`): `find` reads that grid plain, then offers the cell's patches in list order, as `offerAll` does. */
@@ -1064,16 +1085,65 @@ function creased(lat: Float32Array, c: number, nu: number): boolean {
 }
 
 /**
- * Grid patch `i`'s height in its frame in cell `c` at the cell fractions (`S_TU`, `S_TV`), `nu` nodes wide, into `S_CH`. On the road
- * (`creased`) the crease: centre height less the (clamped) lateral share of the drop, so the bank's edge stays sharp. In and out
- * through the scratch, so no boxed double crosses the call where V8 leaves it out of line.
+ * The node of the first corner of the drawn cell holding cell (`ci`, `cj`) of a lattice, `nu` nodes wide, into the return, its `side` (2: the drawn cell with its
+ * corners on the nodes `fromU` / `fromV` plus multiples of `TERRAIN_SPAN`; 1: the cell itself) into `S_SPAN` and the cell's offset in it into `S_PAST_U`, `S_PAST_V`.
  */
-function cellHeight(s: Surface, i: number, c: number, nu: number): void {
+function drawnCornerOf(ci: number, cj: number, nu: number, side: number, fromU: number, fromV: number): number {
+  const pastU = side === 1 ? 0 : (ci - fromU) % TERRAIN_SPAN;
+  const pastV = side === 1 ? 0 : (cj - fromV) % TERRAIN_SPAN;
+  _s[S_SPAN] = side;
+  _s[S_PAST_U] = pastU;
+  _s[S_PAST_V] = pastV;
+  return (cj - pastV) * nu + ci - pastU;
+}
+
+/** `drawnCornerOf` for lattice grid patch `i` of `s`, read from the patch's own slots. */
+function drawnCornerIn(s: Surface, i: number, ci: number, cj: number, nu: number, side: number): number {
+  const qo = i * Q_STRIDE;
+  return drawnCornerOf(ci, cj, nu, side, s.q[qo + Q_LATTICE_U]!, s.q[qo + Q_LATTICE_V]!);
+}
+
+/** The height at the cell fractions (`S_TU`, `S_TV`) over the drawn cell whose first corner is node `a` (`drawnCornerOf`), `nu` nodes wide: the plane of the triangle the point lies in, into `S_CH`. */
+function triangleHeight(f: Float32Array, a: number, nu: number): void {
+  const side = _s[S_SPAN]!;
+  const fu = (_s[S_PAST_U]! + _s[S_TU]!) / side;
+  const fv = (_s[S_PAST_V]! + _s[S_TV]!) / side;
+  const far = a + side * nu;
+  const h00 = f[a]!;
+  const h10 = f[a + side]!;
+  const h01 = f[far]!;
+  const h11 = f[far + side]!;
+  _s[S_CH] = fu + fv <= 1 ? h00 + (h10 - h00) * fu + (h01 - h00) * fv : h11 + (h01 - h11) * (1 - fu) + (h10 - h11) * (1 - fv);
+}
+
+/** `triangleHeight`'s partials per node step into `S_PU`, `S_PV`: the slopes of the same triangle's plane. */
+function triangleSlopes(f: Float32Array, a: number, nu: number): void {
+  const side = _s[S_SPAN]!;
+  const lower = (_s[S_PAST_U]! + _s[S_TU]! + _s[S_PAST_V]! + _s[S_TV]!) / side <= 1;
+  const far = a + side * nu;
+  const h00 = f[a]!;
+  const h10 = f[a + side]!;
+  const h01 = f[far]!;
+  const h11 = f[far + side]!;
+  _s[S_PU] = (lower ? h10 - h00 : h11 - h01) / side;
+  _s[S_PV] = (lower ? h01 - h00 : h11 - h10) / side;
+}
+
+/**
+ * Grid patch `i`'s height in its frame in cell (`ci`, `cj`) at the cell fractions (`S_TU`, `S_TV`), `nu` nodes wide, into `S_CH`. On the road
+ * (`creased`) the crease: centre height less the (clamped) lateral share of the drop, so the bank's edge stays sharp. Elsewhere bilinear, or
+ * on a lattice the triangle of the drawn cell (or of the unit cell, in a fine one) the point lies in. In and out through the scratch, so no boxed double crosses the call where V8
+ * leaves it out of line.
+ */
+function cellHeight(s: Surface, i: number, ci: number, cj: number, nu: number): void {
+  const c = cj * nu + ci;
   const fu = _s[S_TU];
   const fv = _s[S_TV];
   const lat = s.lat[i]!;
   if (!creased(lat, c, nu)) {
-    _s[S_CH] = bil(s.nodes[i]!, c, nu, fu, fv);
+    const side = s.latticeCells[i]![cj * (nu - 1) + ci];
+    if (side === 1 || side === 2) triangleHeight(s.nodes[i]!, drawnCornerIn(s, i, ci, cj, nu, side), nu);
+    else _s[S_CH] = bil(s.nodes[i]!, c, nu, fu, fv);
     return;
   }
   const k = Math.max(-1, Math.min(1, bil(lat, c, nu, fu, fv)));
@@ -1081,10 +1151,13 @@ function cellHeight(s: Surface, i: number, c: number, nu: number): void {
 }
 
 /** `cellHeight`'s partials per cell unit into `S_PU`, `S_PV`, at the same cell and fractions. */
-function cellSlopes(s: Surface, i: number, c: number, nu: number): void {
+function cellSlopes(s: Surface, i: number, ci: number, cj: number, nu: number): void {
+  const c = cj * nu + ci;
   const lat = s.lat[i]!;
   if (!creased(lat, c, nu)) {
-    bilSlopes(s.nodes[i]!, c, nu);
+    const side = s.latticeCells[i]![cj * (nu - 1) + ci];
+    if (side === 1 || side === 2) triangleSlopes(s.nodes[i]!, drawnCornerIn(s, i, ci, cj, nu, side), nu);
+    else bilSlopes(s.nodes[i]!, c, nu);
     return;
   }
   const fu = _s[S_TU];
@@ -1173,10 +1246,10 @@ function gridAt(s: Surface, i: number, q: Float64Array, need: number): void {
   const slopes = need === NEED_ALL;
   _s[S_TU] = tu;
   _s[S_TV] = tv;
-  cellHeight(s, i, c, nu);
+  cellHeight(s, i, ci | 0, cj | 0, nu);
   let h = _s[S_CH];
   if (slopes) {
-    cellSlopes(s, i, c, nu);
+    cellSlopes(s, i, ci | 0, cj | 0, nu);
     _s[S_CG0] = _s[S_PU] / step;
     _s[S_CG1] = _s[S_PV] / stepV;
   }
@@ -1375,7 +1448,7 @@ function plainOffer(s: Surface, i: number, q: Float64Array): boolean {
   const cj = Math.floor(fv);
   _s[S_TU] = fu - ci;
   _s[S_TV] = fv - cj;
-  cellHeight(s, i, (cj | 0) * nu + (ci | 0), nu);
+  cellHeight(s, i, ci | 0, cj | 0, nu);
   const h = P[o + P_OY]! + (_s[S_CH] - P[o + P_DROP]!);
   if (h !== h || h > q[PQ_Y]! + P[o + P_REACH]!) return true;
   _s[S_BEST] = h;
@@ -1406,7 +1479,7 @@ function plainRest(w: Surface, slopes: boolean): void {
   if (GQ.on) cellCensus(w, i, (cj | 0) * nu + (ci | 0), nu);
   _s[S_TU] = tu;
   _s[S_TV] = tv;
-  cellSlopes(w, i, (cj | 0) * nu + (ci | 0), nu);
+  cellSlopes(w, i, ci | 0, cj | 0, nu);
   _s[S_G0] = _s[S_PU] / w.p[o + P_STEP]!;
   _s[S_G1] = _s[S_PV] / w.p[o + P_STEPV]!;
 }
@@ -2073,10 +2146,10 @@ function hillsTop(hills: Float64Array, far: Float64Array, xMin: number, xMax: nu
 
 /**
  * Per cell of a grid (row-major, `nu - 1` wide) the highest its surface stands in its frame, -Infinity where it has none: its nodes'
- * bilinear (`gridAt`), or the crease where all four corners have a lateral: the centre less the clamped lateral share of the drop,
+ * bilinear (`gridAt`), on a `lattice` the corners of its drawn cell (a triangle's plane stays between them), or the crease where all four corners have a lateral: the centre less the clamped lateral share of the drop,
  * its highest of the four products of the lateral's and the drop's extremes over the cell.
  */
-function cellTopsOf(nu: number, nv: number, nodes: Float32Array, centre: Float32Array, lat: Float32Array, drop: Float32Array): Float64Array {
+function cellTopsOf(nu: number, nv: number, nodes: Float32Array, centre: Float32Array, lat: Float32Array, drop: Float32Array, lattice: Lattice | undefined, cells: Uint8Array): Float64Array {
   const tops = new Float64Array((nu - 1) * (nv - 1));
   for (let cj = 0; cj < nv - 1; cj++) {
     for (let ci = 0; ci < nu - 1; ci++) {
@@ -2095,11 +2168,14 @@ function cellTopsOf(nu: number, nv: number, nodes: Float32Array, centre: Float32
         top = Math.max(centre[c]!, centre[c + 1]!, centre[d]!, centre[d + 1]!);
         top += Math.max(-latLow * dropLow, -latLow * dropHigh, -latHigh * dropLow, -latHigh * dropHigh);
       } else {
+        const side = cells[cj * (nu - 1) + ci] === 2 ? TERRAIN_SPAN : 1;
+        const first = side === 1 ? c : drawnCornerOf(ci, cj, nu, side, lattice!.fromU, lattice!.fromV);
+        const far = first + side * nu;
         // In corner order, a NaN node skipped (not `Math.max`, which would take it).
-        if (nodes[c]! > top) top = nodes[c]!;
-        if (nodes[c + 1]! > top) top = nodes[c + 1]!;
-        if (nodes[d]! > top) top = nodes[d]!;
-        if (nodes[d + 1]! > top) top = nodes[d + 1]!;
+        if (nodes[first]! > top) top = nodes[first]!;
+        if (nodes[first + side]! > top) top = nodes[first + side]!;
+        if (nodes[far]! > top) top = nodes[far]!;
+        if (nodes[far + side]! > top) top = nodes[far + side]!;
       }
       tops[cj * (nu - 1) + ci] = top + TOP_SLACK;
     }
@@ -2114,10 +2190,10 @@ const NY_MARGIN = 1e-6;
 /**
  * Per cell of a static grid (`cellTopsOf`'s layout) a lower bound on the y of the normal `normalOf` answers anywhere in it, in 1/`NY_UNIT`s, 0 where it cannot tell
  * (a NaN node, or a cell steeper than 1/`NY_UNIT`). The normal is (-g0, 1, -g1) over its length, so its y is 1 / sqrt(1 + g0² + g1²), and each partial of the bilinear cell
- * (`bilSlopes`) is a mix of two corner differences, so it stays under the larger of them; on the road (`cellSlopes`) the centre's and the lateral's and the drop's partials
+ * (`bilSlopes`) is a mix of two corner differences, so it stays under the larger of them (a lattice's triangle's, over its drawn cell: `triangleSlopes`); on the road (`cellSlopes`) the centre's and the lateral's and the drop's partials
  * add, the clamped lateral share at most 1 and the drop at most its largest corner. The bound reads only the nodes, so it holds at every point of the cell.
  */
-function cellNyOf(nu: number, nv: number, step: number, stepV: number, nodes: Float32Array, centre: Float32Array, lat: Float32Array, drop: Float32Array): Uint8Array {
+function cellNyOf(nu: number, nv: number, step: number, stepV: number, nodes: Float32Array, centre: Float32Array, lat: Float32Array, drop: Float32Array, lattice: Lattice | undefined, cells: Uint8Array): Uint8Array {
   const bound = new Uint8Array((nu - 1) * (nv - 1));
   for (let cj = 0; cj < nv - 1; cj++) {
     for (let ci = 0; ci < nu - 1; ci++) {
@@ -2126,11 +2202,13 @@ function cellNyOf(nu: number, nv: number, step: number, stepV: number, nodes: Fl
       let sv: number;
       if (creased(lat, c, nu)) {
         const dm = Math.max(Math.abs(drop[c]!), Math.abs(drop[c + 1]!), Math.abs(drop[c + nu]!), Math.abs(drop[c + nu + 1]!));
-        su = (partialU(centre, c, nu) + partialU(drop, c, nu) + partialU(lat, c, nu) * dm) / step;
-        sv = (partialV(centre, c, nu) + partialV(drop, c, nu) + partialV(lat, c, nu) * dm) / stepV;
+        su = (partialU(centre, c, nu, 1) + partialU(drop, c, nu, 1) + partialU(lat, c, nu, 1) * dm) / step;
+        sv = (partialV(centre, c, nu, 1) + partialV(drop, c, nu, 1) + partialV(lat, c, nu, 1) * dm) / stepV;
       } else {
-        su = partialU(nodes, c, nu) / step;
-        sv = partialV(nodes, c, nu) / stepV;
+        const side = cells[cj * (nu - 1) + ci] === 2 ? TERRAIN_SPAN : 1;
+        const first = side === 1 ? c : drawnCornerOf(ci, cj, nu, side, lattice!.fromU, lattice!.fromV);
+        su = partialU(nodes, first, nu, side) / (side * step);
+        sv = partialV(nodes, first, nu, side) / (side * stepV);
       }
       const ny = (1 / Math.sqrt(1 + (su * su + sv * sv) * (1 + NY_MARGIN))) * (1 - NY_MARGIN);
       bound[cj * (nu - 1) + ci] = ny > 0 ? Math.floor(ny * NY_UNIT) : 0;
@@ -2139,14 +2217,16 @@ function cellNyOf(nu: number, nv: number, step: number, stepV: number, nodes: Fl
   return bound;
 }
 
-/** The larger of cell `c`'s two corner differences along the frame's x (`bilSlopes`' PU is a mix of them), NaN with a NaN node. */
-function partialU(f: Float32Array, c: number, nu: number): number {
-  return Math.max(Math.abs(f[c + 1]! - f[c]!), Math.abs(f[c + nu + 1]! - f[c + nu]!));
+/** The larger of the two corner differences along the frame's x of the cell `side` nodes wide from node `c` (`bilSlopes`' PU is a mix of them), NaN with a NaN node. */
+function partialU(f: Float32Array, c: number, nu: number, side: number): number {
+  const far = c + side * nu;
+  return Math.max(Math.abs(f[c + side]! - f[c]!), Math.abs(f[far + side]! - f[far]!));
 }
 
-/** The larger of cell `c`'s two corner differences along the frame's z (`bilSlopes`' PV), NaN with a NaN node. */
-function partialV(f: Float32Array, c: number, nu: number): number {
-  return Math.max(Math.abs(f[c + nu]! - f[c]!), Math.abs(f[c + nu + 1]! - f[c + 1]!));
+/** The larger of the two corner differences along the frame's z of the cell `side` nodes wide from node `c` (`bilSlopes`' PV), NaN with a NaN node. */
+function partialV(f: Float32Array, c: number, nu: number, side: number): number {
+  const far = c + side * nu;
+  return Math.max(Math.abs(f[far]! - f[c]!), Math.abs(f[far + side]! - f[c + side]!));
 }
 
 /**

@@ -200,6 +200,8 @@ export const TrackSchema = z
         fog: z.number().min(0).max(0.05).default(0.0035),
         terrain: surface.default(SURFACE.grass),
         hills: z.array(hill).default([]),
+        /** How far (m) a 2 m terrain cell's triangles may pass one of its own 1 m nodes before the cell is drawn, and driven on, as four 1 m cells: a crest curving a centimetre over a cell, as Havana's does, needs less than the default. */
+        fineMiss: z.number().positive().default(0.1),
         plateaus: z.array(plateau).default([]),
         paint: z.array(paint).default([]),
         /** The race camera's far plane (m): a course whose landmarks stand further off than the default sees them. */

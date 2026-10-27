@@ -2,16 +2,20 @@ import * as THREE from "three";
 import { clamp } from "../kernel/scalar.ts";
 import { SURFACE_IDS, type SurfaceId } from "../world/catalog.ts";
 import { TILE } from "./prefabs.ts";
-import { type Track, type TrackGround, type TrackPath } from "../world/track.ts";
+import { CELL as NODE, type Track, type TrackGround, type TrackPath } from "../world/track.ts";
+import { TERRAIN_SPAN } from "../world/terrain-cells.ts";
 import { sampleStep, surfY } from "../world/track-sections.ts";
 import type { GroundLevel } from "../scenes/ground-stack.ts";
 import {
-  BLACK, BLOCK, CELL, CHEQUER, FLAT_TOL, KERB_CURV, KERB_FILL, KERB_LIFT, KERB_WIDTH, MARK_LIFT, Mesher, PAVED,
+  BLACK, BLOCK, CHEQUER, FLAT_TOL, KERB_CURV, KERB_FILL, KERB_LIFT, KERB_WIDTH, MARK_LIFT, Mesher, PAVED,
   RED, ROAD_LIFT, ROAD_ON_TERRAIN_SHADE, RoadIndex, sampleAt, SKIRT_RADIUS, surfaceHex, texClass, WHITE,
 } from "./track-mesh.ts";
 
 /** How far (m) past the farthest scatter the terrain extends beyond the track's bounds. */
 const SCATTER_PAD = 40;
+
+/** Edge (m) of a drawn terrain cell; a fine cell (`TerrainCells`) is drawn as four of half this edge, one baked node. */
+const CELL = TERRAIN_SPAN * NODE;
 
 /** Track art on the ground: terrain with its far skirt, road / runoff ribbons, markings and kerbs. */
 
@@ -35,6 +39,8 @@ const CHUNK = 16;
 /** A chunk draws its far mesh past this flat distance (m) from the camera to its nearest point, its near one again FAR_HOLD m inside it. */
 const FAR_RING = 240;
 const FAR_HOLD = 16;
+/** Edge (m) of the far mesh's coarse cells: a block that does not fit one quad is drawn in cells this wide when it fits within FAR_TOL. */
+const FAR_CELL = 4;
 /** A far-mesh block's two triangles stay this close (m) to every cell height they cover: about a pixel at FAR_RING on a phone. */
 const FAR_TOL = 0.2;
 
@@ -70,6 +76,9 @@ type TerrainGrid = {
   h: Float32Array;
   col: Uint8Array;
   cov: Int16Array;
+  /** Per cell, indexed like the vertices: 1 where the ground reads it as four unit cells (`TerrainCells.fine`), and how far (m) its two triangles pass its other nodes. */
+  fine: Uint8Array;
+  miss: Float32Array;
 };
 
 function sampleTerrain(track: Track, ground: TrackGround, index: RoadIndex): TerrainGrid {
@@ -85,18 +94,35 @@ function sampleTerrain(track: Track, ground: TrackGround, index: RoadIndex): Ter
   const nz = bz * per + 1;
   const terrain = SURFACE_IDS.indexOf(track.json.environment.terrain);
   const tile = TILE[texClass(terrain)];
+  const cells = ground.terrainCells;
   const h = new Float32Array(nx * nz);
   const surf = new Uint8Array(nx * nz);
   const cov = new Int16Array(nx * nz);
+  const fine = new Uint8Array(nx * nz);
+  const miss = new Float32Array(nx * nz);
+  // This grid's first vertex in the baked nodes and in the baked drawn cells (whole numbers: both start on even metres).
+  const nodeU = (x0 - ground.minX) / NODE;
+  const nodeV = (z0 - ground.minZ) / NODE;
+  const cellU = (nodeU - cells.fromU) / TERRAIN_SPAN;
+  const cellV = (nodeV - cells.fromV) / TERRAIN_SPAN;
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
       const x = x0 + i * CELL;
       const z = z0 + j * CELL;
       const c = j * nx + i;
-      // The ground layer (−∞ hint): bridge decks are drawn as decks, the terrain stays under them.
-      h[c] = ground.heightAt(x, z, -Infinity);
+      const gi = nodeU + i * TERRAIN_SPAN;
+      const gj = nodeV + j * TERRAIN_SPAN;
+      const baked = gi >= 0 && gj >= 0 && gi < ground.nx && gj < ground.nz;
+      // The ground layer (−∞ hint): bridge decks are drawn as decks, the terrain stays under them. On the baked nodes, the heights the ground reads.
+      h[c] = baked ? cells.drawn[gj * ground.nx + gi]! : ground.heightAt(x, z, -Infinity);
       surf[c] = ground.surfaceIndex(x, z, -Infinity);
       cov[c] = index.coveredBy(x, z, 0.5);
+      const ci = i + cellU;
+      const cj = j + cellV;
+      if (ci >= 0 && cj >= 0 && ci < cells.cols && cj < cells.rows) {
+        fine[c] = cells.fine[cj * cells.cols + ci]!;
+        miss[c] = cells.miss[cj * cells.cols + ci]!;
+      }
     }
   }
   const bare = (i: number, j: number) => i < 0 || j < 0 || i >= nx || j >= nz || surf[j * nx + i] === terrain;
@@ -107,16 +133,9 @@ function sampleTerrain(track: Track, ground: TrackGround, index: RoadIndex): Ter
     for (let i = 0; i < nx; i++) {
       const c = j * nx + i;
       col[c] = bare(i - 1, j) || bare(i + 1, j) || bare(i, j - 1) || bare(i, j + 1) ? terrain : surf[c]!;
-      if (surf[c] === terrain) continue;
-      // Under a ribbon: the lowest ground within half a cell, so a triangle never bridges a crease (a banked road's edge) above the ribbon.
-      const x = x0 + i * CELL;
-      const z = z0 + j * CELL;
-      for (let dz = -1; dz <= 1; dz++) {
-        for (let dx = -1; dx <= 1; dx++) h[c] = Math.min(h[c]!, ground.heightAt(x + dx * CELL * 0.5, z + dz * CELL * 0.5, -Infinity));
-      }
     }
   }
-  return { x0, z0, bx, bz, per, nx, terrain, tile, h, col, cov };
+  return { x0, z0, bx, bz, per, nx, terrain, tile, h, col, cov, fine, miss };
 }
 
 /** A cell wholly under one path's ribbon is not drawn. */
@@ -126,16 +145,22 @@ function dropped(g: TerrainGrid, i: number, j: number): boolean {
   return a >= 0 && g.cov[c + 1] === a && g.cov[c + g.nx] === a && g.cov[c + g.nx + 1] === a;
 }
 
-/** Block kind: 0 hidden, 1 one quad (flat, one colour all over: bare terrain or a painted lawn), 2 split into cells. */
+/** Block kind: 0 hidden, 1 one quad (flat, one colour all over: bare terrain or a painted lawn, no fine cell), 2 split into cells. */
 function blockKinds(g: TerrainGrid): Uint8Array {
-  const { bx, bz, per, nx, terrain, h, col, cov } = g;
+  const { bx, bz, per, nx, terrain, h, col, cov, fine } = g;
   const kind = new Uint8Array(bx * bz);
   for (let bj = 0; bj < bz; bj++) {
     for (let bi = 0; bi < bx; bi++) {
       const i0 = bi * per;
       const j0 = bj * per;
       let drops = 0;
-      for (let v = 0; v < per; v++) for (let u = 0; u < per; u++) if (dropped(g, i0 + u, j0 + v)) drops++;
+      let fines = 0;
+      for (let v = 0; v < per; v++) {
+        for (let u = 0; u < per; u++) {
+          if (dropped(g, i0 + u, j0 + v)) drops++;
+          fines += fine[(j0 + v) * nx + i0 + u]!;
+        }
+      }
       if (drops === per * per) continue;
       const h00 = h[j0 * nx + i0]!;
       const blockColour = col[j0 * nx + i0];
@@ -143,7 +168,7 @@ function blockKinds(g: TerrainGrid): Uint8Array {
       const h10 = h[j0 * nx + i0 + per]!;
       const h01 = h[(j0 + per) * nx + i0]!;
       const h11 = h[(j0 + per) * nx + i0 + per]!;
-      let simple = drops === 0;
+      let simple = drops === 0 && fines === 0;
       for (let v = 0; v <= per && simple; v++) {
         for (let u = 0; u <= per && simple; u++) {
           const c = (j0 + v) * nx + i0 + u;
@@ -192,7 +217,7 @@ function planeOf(g: TerrainGrid, bi: number, bj: number): readonly [number, numb
 /** Rectangles of cells drawn as one quad: `width` / `depth` (cells) set at a rectangle's first cell, `covered` on the others (indexed like the grid's vertices). */
 type MergedCells = { width: Uint8Array; depth: Uint8Array; covered: Uint8Array };
 
-/** A mesh's quads as runs of (cell i, cell j, cells wide, cells deep), per chunk, and the lattice points that are a corner of any of them (`wanted`, indexed like the grid's vertices). */
+/** A mesh's quads as runs of (half-cell i, half-cell j, half-cells wide, half-cells deep), per chunk, and the half-cell points that are a corner of any of them (`wanted`, a row of `2 * nx - 1`). */
 type TileLayer = { tiles: number[][]; wanted: Uint8Array };
 
 /** What a block means to `mergeFlatCells`: not joinable, joinable off the chunk rims, or joinable on a chunk rim. */
@@ -207,7 +232,7 @@ const JOINABLE_RIM = 2;
  * one chunk and on the rims or off them. The cells on a rim are told apart by `rimColours` (the near and far meshes'
  * colours in one number), so both meshes merge a rim alike and a near chunk and a far neighbour meet in the same corners.
  */
-function mergeFlatCells(g: TerrainGrid, kinds: Uint8Array, colours: Uint8Array, rimColours: Uint16Array): MergedCells {
+function mergeFlatCells(g: TerrainGrid, kinds: Uint8Array, colours: Uint8Array, rimColours: Uint16Array, fine: Uint8Array): MergedCells {
   const { bx, bz, per, nx, h } = g;
   const cellsX = bx * per;
   const cellsZ = bz * per;
@@ -227,7 +252,7 @@ function mergeFlatCells(g: TerrainGrid, kinds: Uint8Array, colours: Uint8Array, 
     }
   }
   /** The joinable kind of the cell at (i, j), NOT_JOINABLE when a rectangle already covers it. */
-  const freeAt = (i: number, j: number) => (i < cellsX && j < cellsZ && covered[j * nx + i] === 0 ? joinable[Math.floor(j / per) * bx + Math.floor(i / per)]! : NOT_JOINABLE);
+  const freeAt = (i: number, j: number) => (i < cellsX && j < cellsZ && covered[j * nx + i] === 0 && fine[j * nx + i] === 0 ? joinable[Math.floor(j / per) * bx + Math.floor(i / per)]! : NOT_JOINABLE);
   const colourAt = (i: number, j: number, region: number) => (region === JOINABLE_RIM ? rimColours : colours)[j * nx + i]!;
   /** Whether vertex (i, j) lies on the plane of block `b`. */
   const onPlane = (i: number, j: number, b: number) => {
@@ -296,9 +321,11 @@ function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m:
   const m = new Mesher();
   const g = sampleTerrain(track, ground, index);
   const { x0, z0, bx, bz, per, nx, terrain, tile, h, col } = g;
+  const nz = bz * per + 1;
+  const FAR_STEP = FAR_CELL / CELL;
   const kind = blockKinds(g);
-  /** Cells between a block's vertices, by kind: 0 hidden, 1 one quad, 2 split into cells, 3 split into 4 m cells (far mesh only). */
-  const STEP = [0, per, 1, 2];
+  /** Cells between a block's vertices, by kind: 0 hidden, 1 one quad, 2 split into cells, 3 split into `FAR_CELL` m cells (far mesh only). */
+  const STEP = [0, per, 1, FAR_STEP];
   /**
    * Height of the vertex at cell (u, v) of block (bi, bj) as `kinds` draws the blocks: on the edge it shares with a
    * coarser block, that block's edge height (linear between its vertices), so no crack opens.
@@ -349,34 +376,82 @@ function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m:
     }
     return true;
   };
-  // The far mesh: a split block clear of roads draws as one quad, or else in 4 m cells, when that stays within
+  // The far mesh: a split block clear of roads and of fine cells draws as one quad, or else in 4 m cells, when that stays within
   // FAR_TOL of every cell height. Blocks on a chunk's edge keep their kind, so both meshes draw a chunk's seam alike
   // and a near chunk never cracks against a far neighbour. A 4 m block's fit reads its one-quad neighbours' edges.
+  const hasFine = (bi: number, bj: number) => {
+    for (let v = 0; v < per; v++) for (let u = 0; u < per; u++) if (g.fine[(bj * per + v) * nx + bi * per + u]) return true;
+    return false;
+  };
   const farKind = kind.slice();
   for (let bj = 0; bj < bz; bj++) {
     for (let bi = 0; bi < bx; bi++) {
-      if (isChunkEdge(bi, bj) || kind[bj * bx + bi] !== 2 || !clear(bi, bj)) continue;
+      if (isChunkEdge(bi, bj) || kind[bj * bx + bi] !== 2 || !clear(bi, bj) || hasFine(bi, bj)) continue;
       farKind[bj * bx + bi] = fits(farKind, bi, bj, per) ? 1 : 3;
     }
   }
   for (let b = 0; b < bx * bz; b++) {
-    if (farKind[b] === 3 && !fits(farKind, b % bx, Math.floor(b / bx), 2)) farKind[b] = 2;
+    if (farKind[b] === 3 && !fits(farKind, b % bx, Math.floor(b / bx), FAR_STEP)) farKind[b] = 2;
   }
   /** The far mesh's vertex colours: under a ribbon the bare terrain's, since the ribbon covers it, so a block beside a road is one colour. */
   const farCol = col.map((c, k) => (g.cov[k]! >= 0 ? terrain : c));
+  /** Whether a block beside block (bi, bj) is simplified in the far mesh, so (bi, bj)'s edge with it is eased onto that block's edge (`vertexY`). */
+  const besideSimplified = (bi: number, bj: number) =>
+    [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([di, dj]) => {
+      const ni = bi + di!;
+      const nj = bj + dj!;
+      return ni >= 0 && nj >= 0 && ni < bx && nj < bz && (farKind[nj * bx + ni] === 1 || farKind[nj * bx + ni] === 3);
+    });
+  /**
+   * The cells the far mesh draws fine: those on a chunk's rim, where both meshes must draw the seam alike, and inside a chunk those whose miss the far
+   * mesh's tolerance cannot hide (a merged rectangle lies FLAT_TOL off the cell's triangles already) or whose block edge is eased.
+   */
+  const farFine = Uint8Array.from(g.fine, (isFine, c) => {
+    if (!isFine) return 0;
+    const bi = Math.floor((c % nx) / per);
+    const bj = Math.floor(Math.floor(c / nx) / per);
+    return isChunkEdge(bi, bj) || g.miss[c]! > FAR_TOL - FLAT_TOL || besideSimplified(bi, bj) ? 1 : 0;
+  });
   const n = new THREE.Vector3();
-  const vert = (out: Mesher, colours: Uint8Array, i: number, j: number, y: number) => {
-    const x = x0 + i * CELL;
-    const z = z0 + j * CELL;
-    const id = out.v(x, y, z, surfaceHex(colours[j * nx + i]!), x / tile, z / tile);
+  const bakedY = ground.terrainCells.drawn;
+  // The grid's first vertex in the baked nodes (whole numbers: both start on even metres), and a half-cell is one node.
+  const nodeU = (x0 - ground.minX) / NODE;
+  const nodeV = (z0 - ground.minZ) / NODE;
+  const cellFine = (fine: Uint8Array, i: number, j: number) => i >= 0 && j >= 0 && i < nx - 1 && j < nz - 1 && fine[j * nx + i] === 1;
+  /**
+   * Height of the vertex at half-cell (i2, j2), not a cell's corner: a fine cell's centre as baked; the middle of an edge as baked where the
+   * cells on both sides are fine, else on the other cell's edge (the mean of the edge's corners), as `bakeTerrainCells` has it.
+   */
+  const halfY = (kinds: Uint8Array, fine: Uint8Array, i2: number, j2: number) => {
+    const i = i2 >> 1;
+    const j = j2 >> 1;
+    const baked = bakedY[(nodeV + j2) * ground.nx + nodeU + i2]!;
+    if ((i2 & 1) === 1 && (j2 & 1) === 1) return baked;
+    if ((i2 & 1) === 1) return cellFine(fine, i, j - 1) && cellFine(fine, i, j) ? baked : (pointY(kinds, i, j) + pointY(kinds, i + 1, j)) / 2;
+    return cellFine(fine, i - 1, j) && cellFine(fine, i, j) ? baked : (pointY(kinds, i, j) + pointY(kinds, i, j + 1)) / 2;
+  };
+  /** Colour of the vertex at half-cell (i2, j2): its cell's corners' colour where they agree, else the bare terrain's (a ribbon covers the rest). */
+  const colourAt = (colours: Uint8Array, i2: number, j2: number) => {
+    const k = (j2 >> 1) * nx + (i2 >> 1);
+    const a = colours[k]!;
+    const b = colours[k + (i2 & 1)]!;
+    const c = colours[k + (j2 & 1) * nx]!;
+    const d = colours[k + (i2 & 1) + (j2 & 1) * nx]!;
+    return a === b && a === c && a === d ? a : terrain;
+  };
+  const vert = (out: Mesher, colours: Uint8Array, kinds: Uint8Array, fine: Uint8Array, i2: number, j2: number) => {
+    const x = x0 + i2 * NODE;
+    const z = z0 + j2 * NODE;
+    const corner = (i2 & 1) === 0 && (j2 & 1) === 0;
+    const id = out.v(x, corner ? pointY(kinds, i2 >> 1, j2 >> 1) : halfY(kinds, fine, i2, j2), z, surfaceHex(colourAt(colours, i2, j2)), x / tile, z / tile);
     ground.normalAt(x, z, n, -Infinity);
     out.normal(id, n.x, n.y, n.z);
     return id;
   };
   const coarse = new Mesher();
   const rimColours = Uint16Array.from(col, (colour, k) => colour | (farCol[k]! << 8));
-  const nearMerged = mergeFlatCells(g, kind, col, rimColours);
-  const farMerged = mergeFlatCells(g, farKind, farCol, rimColours);
+  const nearMerged = mergeFlatCells(g, kind, col, rimColours, g.fine);
+  const farMerged = mergeFlatCells(g, farKind, farCol, rimColours, farFine);
   /** Height of lattice point (i, j) as `kinds` draws the blocks around it: the finest block decides, since its edge follows the coarser block beside it. */
   const pointY = (kinds: Uint8Array, i: number, j: number) => {
     let finest = -1;
@@ -394,8 +469,25 @@ function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m:
     const bj = Math.floor(finest / bx);
     return vertexY(kinds, bi, bj, i - bi * per, j - bj * per);
   };
-  /** The quads of blocks [bi0, bi1) x [bj0, bj1) as `kinds` and `merged` have them, as runs of (cell i, cell j, cells wide, cells deep): an untouched block in quads STEP wide, a block a merge touched in cells and merged rectangles. */
-  const chunkTiles = (kinds: Uint8Array, merged: MergedCells, bi0: number, bj0: number, bi1: number, bj1: number) => {
+  /** Whether the baked point at half-cell (i2, j2) is under a ribbon, as `index` says (`TerrainGrid.cov` at a cell's corners); read once. */
+  let halfCov: Int16Array | null = null;
+  const covAt = (i2: number, j2: number) => {
+    if ((i2 & 1) === 0 && (j2 & 1) === 0) return g.cov[(j2 >> 1) * nx + (i2 >> 1)]!;
+    halfCov ??= new Int16Array((2 * nx - 1) * (2 * nz - 1)).fill(-2);
+    const k = j2 * (2 * nx - 1) + i2;
+    if (halfCov[k] === -2) halfCov[k] = index.coveredBy(x0 + i2 * NODE, z0 + j2 * NODE, 0.5);
+    return halfCov[k]!;
+  };
+  /** Whether the unit cell at half-cell (i2, j2) is wholly under one path's ribbon (`dropped`, for a fine cell's quarter). */
+  const unitDropped = (i2: number, j2: number) => {
+    const a = covAt(i2, j2);
+    return a >= 0 && covAt(i2 + 1, j2) === a && covAt(i2, j2 + 1) === a && covAt(i2 + 1, j2 + 1) === a;
+  };
+  /**
+   * The quads of blocks [bi0, bi1) x [bj0, bj1) as `kinds`, `merged` and `fine` have them, as runs of (half-cell i, half-cell j, half-cells wide,
+   * half-cells deep): an untouched block in quads STEP wide, a block a merge touched in cells and merged rectangles, a fine cell in its four unit cells.
+   */
+  const chunkTiles = (kinds: Uint8Array, merged: MergedCells, fine: Uint8Array, bi0: number, bj0: number, bi1: number, bj1: number) => {
     const tiles: number[] = [];
     for (let bj = bj0; bj < bj1; bj++) {
       for (let bi = bi0; bi < bi1; bi++) {
@@ -412,8 +504,12 @@ function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m:
           for (let u = 0; u < per; u += step) {
             const c = (j0 + v) * nx + i0 + u;
             if (merged.covered[c]) continue;
-            if (merged.width[c]! > 0) tiles.push(i0 + u, j0 + v, merged.width[c]!, merged.depth[c]!);
-            else if (!dropped(g, i0 + u, j0 + v)) tiles.push(i0 + u, j0 + v, step, step);
+            const i2 = 2 * (i0 + u);
+            const j2 = 2 * (j0 + v);
+            if (merged.width[c]! > 0) tiles.push(i2, j2, 2 * merged.width[c]!, 2 * merged.depth[c]!);
+            else if (fine[c]) {
+              for (let b = 0; b < 2; b++) for (let a = 0; a < 2; a++) if (!unitDropped(i2 + a, j2 + b)) tiles.push(i2 + a, j2 + b, 1, 1);
+            } else if (!dropped(g, i0 + u, j0 + v)) tiles.push(i2, j2, 2 * step, 2 * step);
           }
         }
       }
@@ -446,40 +542,40 @@ function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m:
     const bj0 = Math.floor(c / cx) * CHUNK;
     return [bi0, bj0, Math.min(bx, bi0 + CHUNK), Math.min(bz, bj0 + CHUNK)] as const;
   };
-  /** Every chunk's tiles as `kinds` and `merged` have them, and `wanted`: 1 on each lattice point that is a corner of any tile. */
-  const layerTiles = (kinds: Uint8Array, merged: MergedCells) => {
-    const wanted = new Uint8Array(nx * (bz * per + 1));
-    const tiles = Array.from({ length: cx * cz }, (_, c) => chunkTiles(kinds, merged, ...chunkBlocks(c)));
+  /** Every chunk's tiles as `kinds`, `merged` and `fine` have them, and `wanted`: 1 on each half-cell point that is a corner of any tile. */
+  const layerTiles = (kinds: Uint8Array, merged: MergedCells, fine: Uint8Array) => {
+    const wanted = new Uint8Array((2 * nx - 1) * (2 * bz * per + 1));
+    const tiles = Array.from({ length: cx * cz }, (_, c) => chunkTiles(kinds, merged, fine, ...chunkBlocks(c)));
     for (const run of tiles) {
       for (let k = 0; k < run.length; k += 4) {
-        const first = run[k + 1]! * nx + run[k]!;
-        const last = first + run[k + 3]! * nx + run[k + 2]!;
+        const first = run[k + 1]! * (2 * nx - 1) + run[k]!;
+        const last = first + run[k + 3]! * (2 * nx - 1) + run[k + 2]!;
         wanted[first] = wanted[first + run[k + 2]!] = wanted[last - run[k + 2]!] = wanted[last] = 1;
       }
     }
     return { tiles, wanted };
   };
-  const ids = new Int32Array((CHUNK * per + 1) ** 2);
+  const ids = new Int32Array((2 * CHUNK * per + 1) ** 2);
   /**
-   * Chunk c's tiles into `out`, with no T-junction: a tile's edge runs through every lattice point that is a corner of a tile
-   * beside it, so both sides draw the same segments and a point has one height. A chunk's rim tiles are the same in the near and
+   * Chunk c's tiles into `out`, with no T-junction: a tile's edge runs through every half-cell point that is a corner of a tile
+   * beside it (a coarse cell's edge through a fine neighbour's edge middle), so both sides draw the same segments and a point has one height. A chunk's rim tiles are the same in the near and
    * far meshes (`mergeFlatCells`), so a near chunk and a far neighbour have the same corners along their seam.
    */
-  const addChunk = (out: Mesher, colours: Uint8Array, kinds: Uint8Array, layer: TileLayer, c: number) => {
+  const addChunk = (out: Mesher, colours: Uint8Array, kinds: Uint8Array, fine: Uint8Array, layer: TileLayer, c: number) => {
     const [bi0, bj0] = chunkBlocks(c);
     const tiles = layer.tiles[c]!;
-    const i0 = bi0 * per;
-    const j0 = bj0 * per;
+    const i0 = 2 * bi0 * per;
+    const j0 = 2 * bj0 * per;
     ids.fill(-1);
     const vertexAt = (i: number, j: number) => {
-      const k = (j - j0) * (CHUNK * per + 1) + i - i0;
-      if (ids[k]! < 0) ids[k] = vert(out, colours, i, j, pointY(kinds, i, j));
+      const k = (j - j0) * (2 * CHUNK * per + 1) + i - i0;
+      if (ids[k]! < 0) ids[k] = vert(out, colours, kinds, fine, i, j);
       return ids[k]!;
     };
-    /** The vertex ids from (i, j) `cells` cells on towards (di, dj): every corner of a tile beside the edge on the way, then the end. */
+    /** The vertex ids from (i, j) `cells` half-cells on towards (di, dj): every corner of a tile beside the edge on the way, then the end. */
     const chain = (i: number, j: number, di: number, dj: number, cells: number) => {
       const run: number[] = [];
-      for (let s = 1; s <= cells; s++) if (s === cells || layer.wanted[(j + dj * s) * nx + i + di * s]) run.push(vertexAt(i + di * s, j + dj * s));
+      for (let s = 1; s <= cells; s++) if (s === cells || layer.wanted[(j + dj * s) * (2 * nx - 1) + i + di * s]) run.push(vertexAt(i + di * s, j + dj * s));
       return run;
     };
     for (let k = 0; k < tiles.length; k += 4) {
@@ -489,8 +585,8 @@ function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m:
       addStrip(out, vertexAt(i + w, j + d), chain(i + w, j + d, 0, -1, d), chain(i + w, j + d, -1, 0, w));
     }
   };
-  const nearLayer = layerTiles(kind, nearMerged);
-  const farLayer = layerTiles(farKind, farMerged);
+  const nearLayer = layerTiles(kind, nearMerged, g.fine);
+  const farLayer = layerTiles(farKind, farMerged, farFine);
   const box = new Float32Array(cx * cz * 4);
   const fineAt = new Int32Array(cx * cz * 2 + 2);
   const coarseAt = new Int32Array(cx * cz * 2 + 2);
@@ -504,8 +600,8 @@ function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m:
     mark(c);
     const [bi0, bj0, bi1, bj1] = chunkBlocks(c);
     box.set([x0 + bi0 * BLOCK, z0 + bj0 * BLOCK, x0 + bi1 * BLOCK, z0 + bj1 * BLOCK], c * 4);
-    addChunk(m, col, kind, nearLayer, c);
-    addChunk(coarse, farCol, farKind, farLayer, c);
+    addChunk(m, col, kind, g.fine, nearLayer, c);
+    addChunk(coarse, farCol, farKind, farFine, farLayer, c);
   }
   mark(cx * cz);
   addSkirt(m, ground, x0, z0, bx, bz, surfaceHex(terrain), tile);

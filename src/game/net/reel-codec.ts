@@ -510,9 +510,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * A held reset rests the wreck's shape clusters on the dent it lays (`rebaseShapeRest`), where the reset's rebuilt rest pulled the dent back out in the contact window it opens (a sedan's bumpers 1.8 mm a frame).
  * Every car crushes, tears, touches, throws its driver and comes to rest differently. A clip of 162 or before no longer reads.
  * 164: a derby car whose driver is thrown out takes no pedals, the player's and a peer's too: it coasts (`COAST`) and the rules count it a wreck (`carRuns`), as a race does; and a derby's harness (`DERBY_HARNESS`, 1.5) raises the bar for a hit that leaves the engine running, so the first hard ram no longer throws a driver (a hit that kills the engine throws at the normal bar). A clip of 163 or before no longer reads.
+ * 165: a course's open ground is the surface drawn: each 2 m cell of the terrain is its two triangles (split from the cell's +x, near-z corner to its near-x, +z one), or four 1 m cells of two where the shape needs them (a steep cut face, a crest: the cell's two triangles miss one of its own 1 m nodes by more than the course's `fineMiss`, 0.1 m, or 1.5 cm on the road's crease), where it was a bilinear blend of 1 m nodes, so a car sits on the very ground you see, beside the road's crease too; the road's crease is unchanged. A clip of 164 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 164;
+const REPLAY_VERSION = 165;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

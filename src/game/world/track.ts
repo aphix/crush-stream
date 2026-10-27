@@ -8,6 +8,7 @@ import { checkPlateaus, paintGrid, raisePlateaus } from "./terrain.ts";
 import { capsuleRow, sameRun } from "./ground-stamp.ts";
 import { RoadCrease } from "./road-crease.ts";
 import { nearestOnPath } from "./path-grid.ts";
+import { bakeTerrainCells, type TerrainCells, TERRAIN_SPAN } from "./terrain-cells.ts";
 
 /**
  * A track JSON compiled into arc-length samples (≈1 m apart), gates, the start
@@ -596,6 +597,11 @@ export class Track {
  */
 type Stamp = { d2: Float32Array; h: Float32Array; surf: Uint8Array; gap: Float32Array; under: Float32Array; level: Float32Array };
 
+/** The first node of a row or column starting at world `min` (m) that is a corner of the drawn terrain's cells (even world metres). */
+function nodeOnLattice(min: number): number {
+  return (((-min % TERRAIN_SPAN) + TERRAIN_SPAN) % TERRAIN_SPAN) / CELL;
+}
+
 /** Heightfield + surface grid baked from a track: road plane (banked), shoulders, eased back to the base terrain. */
 export class TrackGround extends Ground {
   readonly minX: number;
@@ -610,6 +616,8 @@ export class TrackGround extends Ground {
   readonly bakeCounts = { runsStamped: 0, cellsMeasured: 0, paintCellsVisited: 0, patches: 0, cellsBounded: 0 };
   private readonly terrainHills: TrackJson["environment"]["hills"];
   private readonly terrain: number;
+  /** The drawn terrain's cells over the baked nodes (`bakeTerrainCells`): which are fine, and the heights the mesh draws; the ground reads their triangles. */
+  readonly terrainCells: TerrainCells;
 
   constructor(track: Track) {
     super();
@@ -634,6 +642,7 @@ export class TrackGround extends Ground {
     for (const p of track.paths()) if (p !== track.path) this.stampPath(p, stamp, true);
     this.bakeCounts.paintCellsVisited = paintGrid(env.paint, this.surf, this.terrain, this.minX, this.minZ, this.nx, CELL);
     raisePlateaus(env.plateaus, this.heights, this.surf, this.minX, this.minZ, this.nx, CELL);
+    this.terrainCells = bakeTerrainCells(this.heights, this.crease.lat, this.nx, this.nz, nodeOnLattice(this.minX), nodeOnLattice(this.minZ), env.fineMiss);
     this.register(track);
     this.bakeCounts.patches = this.count;
     this.bakeCounts.cellsBounded = this.cellsBounded;
@@ -654,11 +663,12 @@ export class TrackGround extends Ground {
       stepV: CELL,
       u0: 0,
       v0: 0,
-      heights: this.heights,
+      heights: this.terrainCells.drawn,
       ox: this.minX,
       oy: 0,
       oz: this.minZ,
       reach: Infinity,
+      lattice: this.terrainCells,
       surface: -1,
       surfs: this.surf,
       crease: [this.crease.centre, this.crease.lat, this.crease.drop],

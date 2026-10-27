@@ -332,6 +332,7 @@
   },
   "environment": {
     "sky": "#a8cfe3",
+    "fineMiss": 0.01,
     "fog": 0.0012,
     "light": { "sun": "#ffd49a", "sunIntensity": 2.9, "hemi": "#bcd3ea", "fill": "#ffe0c2" },
     "terrain": "concrete",
