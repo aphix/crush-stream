@@ -75,6 +75,63 @@ export function hingePose(p: DetachPart, deform: StreamedDeformation, out: Float
   out[o + 6] = detCos(turn / 2);
 }
 
+/** Floats of `DetachPart.poseMemo`: the hinge value and swing a part posed from, then the 13 numbers of the pose it wrote. */
+export const POSE_MEMO_LENGTH = 2 + 13;
+
+/** The swing value, past the hinge value, that a part's pose reads (`posesFromOwnState`). */
+function swingInput(p: DetachPart): number {
+  return p.hinge === "tail" ? p.swing!.theta : p.mirror ? p.swing!.mirrorFold : 0;
+}
+
+/** Whether `p`'s pose is a function of its hinge value and swing alone, with no road, car pose or skin read: the hood, the boot lid, a mirror, a panel at rest. */
+export function posesFromOwnState(p: DetachPart): boolean {
+  return p.hinge === "cowl" || p.hinge === "tail" || p.mirror || (p.region !== null && !p.folding && !p.open);
+}
+
+/** Whether `p` already stands as its last pose from this hinge value and swing left it, so posing it again writes what is there. */
+export function standsAsPosed(p: DetachPart): boolean {
+  const m = p.poseMemo;
+  const { position: pos, quaternion: quat, rotation: euler, scale } = p.object;
+  return (
+    Object.is(m[0], p.hingeT) &&
+    Object.is(m[1], swingInput(p)) &&
+    Object.is(m[2], pos.x) &&
+    Object.is(m[3], pos.y) &&
+    Object.is(m[4], pos.z) &&
+    Object.is(m[5], quat.x) &&
+    Object.is(m[6], quat.y) &&
+    Object.is(m[7], quat.z) &&
+    Object.is(m[8], quat.w) &&
+    Object.is(m[9], euler.x) &&
+    Object.is(m[10], euler.y) &&
+    Object.is(m[11], euler.z) &&
+    Object.is(m[12], scale.x) &&
+    Object.is(m[13], scale.y) &&
+    Object.is(m[14], scale.z)
+  );
+}
+
+/** Records the pose `p` stands in from its hinge value and swing (`standsAsPosed`). */
+export function notePosed(p: DetachPart): void {
+  const m = p.poseMemo;
+  const { position: pos, quaternion: quat, rotation: euler, scale } = p.object;
+  m[0] = p.hingeT;
+  m[1] = swingInput(p);
+  m[2] = pos.x;
+  m[3] = pos.y;
+  m[4] = pos.z;
+  m[5] = quat.x;
+  m[6] = quat.y;
+  m[7] = quat.z;
+  m[8] = quat.w;
+  m[9] = euler.x;
+  m[10] = euler.y;
+  m[11] = euler.z;
+  m[12] = scale.x;
+  m[13] = scale.y;
+  m[14] = scale.z;
+}
+
 /** The masses the cabin interior is placed by (`interiorPose`'s `lx`/`rx`, then the cell's travel `dy`/`dz`). */
 export const INTERIOR_MASSES = ["doorL", "doorR", "cell"] as const;
 

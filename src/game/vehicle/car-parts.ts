@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { BUMPER_F, LID } from "./constants.ts";
 import { bootPivot, lidAccel } from "./hinge-spec.ts";
-import { hingePose, INTERIOR_MASSES, interiorPose } from "./part-pose.ts";
+import { hingePose, INTERIOR_MASSES, interiorPose, notePosed, posesFromOwnState, standsAsPosed } from "./part-pose.ts";
 import { activeGround, groundTopOver, NO_FLOOR } from "../world/ground.ts";
 import type { StirCar } from "../world/surfaces.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
@@ -363,9 +363,11 @@ export abstract class CarParts extends CarGlass {
    * the road under it, where its hinge alone puts it: a torn shell leaves from that pose (`detachPart`), which replays read.
    */
   protected posePart(p: DetachPart, onRoad = true): void {
-    this.partWrites++;
     const t = p.hingeT;
     p.folding = t > foldAt(p);
+    const fromOwnState = posesFromOwnState(p);
+    if (fromOwnState && standsAsPosed(p)) return;
+    this.partWrites++;
     p.object.position.copy(p.restPos);
     p.object.quaternion.copy(p.restQuat);
     p.object.scale.copy(p.restScale);
@@ -416,6 +418,7 @@ export abstract class CarParts extends CarGlass {
         if (a > 0) flutterShell(p.region, p.object, a);
       } else if (p.open) this.closePanel(p);
     }
+    if (fromOwnState) notePosed(p);
   }
 
   /**

@@ -39,6 +39,7 @@ import { newDentState, type DentState } from "./loose-dent.ts";
 import { newLooseShape } from "./loose-step.ts";
 import { carClass, CLASSES, drivenAxles } from "./vehicle-classes.ts";
 import { bootPivot, lidSpec, roofHinged, type HingeSpec } from "./hinge-spec.ts";
+import { POSE_MEMO_LENGTH } from "./part-pose.ts";
 import { restShell } from "./shadow-caster.ts";
 /** What a chrome trim follows in a crush: the cage of the pane it frames, or (`strip`) the body paint's A5 rules about its seat, `cage` then the lattice mode's stand-in; `door` the door it rides. */
 type TrimKind = { cage: BodyPartName; door: 0 | 1 | null; strip: boolean };
@@ -306,6 +307,8 @@ export interface DetachPart {
   shellFlutter: number;
   /** The road held up part of the open arch shell's drop in its last pose (`poseShell`): it is re-posed while it rests there, and torn off it leaves free of the road (`detachPart`). */
   held: boolean;
+  /** What `standsAsPosed` reads: the pose a part that poses from its own state last wrote (NaN before the first). */
+  poseMemo: Float64Array;
   dent: DentState;
   /** The shape it flies as (`stepLoose`), preallocated; measured when it first flies. */
   shape: LooseShape;
@@ -856,6 +859,7 @@ export abstract class CarCore {
         posed: -1,
         shellFlutter: 0,
         held: false,
+        poseMemo: new Float64Array(POSE_MEMO_LENGTH).fill(NaN),
         dent: newDentState(),
         // Every torn part may fly as its drawn shell's own points where its box leaves a corner empty (`boxShape`; ticket B, the owner's:
         // a curved panel's box corners stood 12-73 cm off anything drawn), but the mirrors and the light bar, which fly as their boxes.
