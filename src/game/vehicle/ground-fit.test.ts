@@ -2,13 +2,13 @@ import { after, afterEach, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
-import { ALONG, COMPASS, judge, report, type Heading, type Kind, type Run, type Site } from "./ground-judge.test-util.ts";
+import { COMPASS, judge, report, type Kind, type Run, type Site } from "./ground-judge.test-util.ts";
 import { bodyPointDepth, drive, drop } from "./ground-probe.test-util.ts";
 import { VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
 import { FleetRamps, RAMP } from "../scenes/fleet-ramps.ts";
 import { collideOn } from "../scenes/ramp-collide.test-util.ts";
 import { setGround } from "../world/ground.ts";
-import { blankPoint, pointOn, Track } from "../world/track.ts";
+import { Track } from "../world/track.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { useStiffSprings } from "./stiff-springs.test-util.ts";
@@ -73,81 +73,8 @@ function rampSites(): Site[] {
   return sites;
 }
 
-// (b), (c) The stunt course (CRUSH crest, bank bowl) and the rally hairpin.
-const course = (id: string): Track => new Track(TRACKS.find((j) => parseTrack(j).id === id)!);
-const stunt = course("stunt");
-const rally = course("rally");
-const oval = course("oval");
-const _pt = blankPoint();
-
-/** A braked drop `lat` m left of `track`'s centre at `s`, at each `compass` heading and at each of `along` the road's. */
-function roadSite(
-  track: Track,
-  name: string,
-  s: number,
-  lat: number,
-  compass: readonly Heading[],
-  along: readonly Heading[],
-  classes: readonly VehicleClassId[],
-): Site {
-  const ground = track.ground();
-  const p = pointOn(track.path, s, _pt);
-  const x = p.x + p.tz * lat;
-  const z = p.z - p.tx * lat;
-  const yaw = Math.atan2(p.tx, p.tz);
-  const hint = p.y + 0.5;
-  return {
-    name,
-    kind: "plain",
-    classes,
-    runs: (cls) => [
-      ...compass.map(([h, a]): Run => [h, drop(ground, cls, x, z, a, { hint })]),
-      ...along.map(([h, a]): Run => [h, drop(ground, cls, x, z, yaw + a, { hint })]),
-    ],
-  };
-}
-
-/** The CRUSH billboard crest (apex s ≈ 899) and the descent behind it (-21.5° at s 908); the kicker also every metre. */
-function crestSites(): Site[] {
-  const wide = [890, 896, 899, 902, 905, 908, 911, 915, 920];
-  const sites: Site[] = [];
-  for (const s of [...wide, 906, 907, 909, 910].sort((a, b) => a - b)) {
-    for (const lat of wide.includes(s) ? [0, 3, -3] : [0]) {
-      sites.push(roadSite(stunt, `stunt crest s=${s} lat=${lat}`, s, lat, COMPASS, ALONG, lat === 0 ? SEDAN_MONSTER : SEDAN));
-    }
-  }
-  return sites;
-}
-
-/** The owner's stopped car, braked where it stopped, s 899-905 (899, 902 and 905 are in the crest group), every heading. */
-function stoppedSites(): Site[] {
-  const sites: Site[] = [];
-  for (const s of [900, 901, 903, 904]) {
-    sites.push(roadSite(stunt, `stunt stopped drop s=${s}`, s, 0, COMPASS, ALONG, SEDAN_MONSTER));
-  }
-  return sites;
-}
-
-/** The bank run: stunt bowl (steepest bank at node 6, then its run-out), nodes 14-15 (-8..-12°), the rally hairpin. */
-function bankSites(): Site[] {
-  const spots: [Track, string, number][] = [
-    [stunt, "stunt bowl n5", stunt.nodeS[5]!],
-    [stunt, "stunt bowl n6", stunt.nodeS[6]!],
-    [stunt, "stunt bowl n7", stunt.nodeS[7]!],
-    [stunt, "stunt bowl run-out", (stunt.nodeS[8]! + stunt.nodeS[9]!) / 2],
-    [stunt, "stunt n14", stunt.nodeS[14]!],
-    [stunt, "stunt n15", stunt.nodeS[15]!],
-    [stunt, "stunt n15 run-out", (stunt.nodeS[15]! + stunt.nodeS[16]!) / 2],
-    ...[7, 8, 9, 10].map((n): [Track, string, number] => [rally, `rally hairpin n${n}`, rally.nodeS[n]!]),
-  ];
-  return spots.flatMap(([track, name, s]) => {
-    const half = pointOn(track.path, s, _pt).half;
-    // Across the width, then a shoulder point either side (the crease where the bank's plane meets the runoff).
-    return [-(half - 1), -2, 0, 2, half - 1, half + 1, -(half + 1)].map((lat) =>
-      roadSite(track, `${name} lat=${lat.toFixed(1)}`, s, lat, COMPASS, ALONG, SEDAN),
-    );
-  });
-}
+// (b) The stunt course's crest and banks and the rally hairpin are ground-fit-road.test.ts, run beside this file.
+const oval = new Track(TRACKS.find((j) => parseTrack(j).id === "oval")!);
 
 describe("given a braked car placed at every heading across a matrix of ground sites, on springs so stiff and short that no sag excuses a gap", () => {
   let restoreSprings = (): void => {};
@@ -158,32 +85,6 @@ describe("given a braked car placed at every heading across a matrix of ground s
   afterEach(() => setGround(null));
 
   it("when the car sits on fleet ramp faces, ends, rear lips and straddling the side edges, then it sits on the ground at every heading", (t) => report(t, rampSites()));
-
-  it("when the car brakes on the stunt course's CRUSH crest and descent, then it sits on the ground at every heading", (t) => report(t, crestSites()));
-
-  it("when the car has stopped on the stunt course's CRUSH crest, then it sits on the ground at every heading", (t) => {
-    const rolled: Site[] = [];
-    for (const v of [6, 10, 14]) {
-      for (const stop of [899, 902, 905, 908]) {
-        rolled.push({
-          name: `stunt roll-stop brake@${stop}`,
-          kind: "plain",
-          classes: SEDAN_MONSTER,
-          runs: (cls) => {
-            const out = drive(stunt, cls, stop - 5, stop + 120, () => v, { lead: 35, brakeFrom: stop });
-            const last = out[out.length - 1];
-            if (!last) throw new Error(`v=${v} brake@${stop}: never reached the braking point`);
-            // Heading column: the speed in and how far it rolled; slide: how far it crept in its last two held seconds.
-            const creep = Math.abs(last.s - out[Math.max(0, out.length - 121)]!.s);
-            return [[`v=${v}/${(last.s - stop).toFixed(0)}m`, { ...last, slide: creep }]];
-          },
-        });
-      }
-    }
-    report(t, [...stoppedSites(), ...rolled]);
-  });
-
-  it("when the car sits on banked turns (stunt bowl, stunt nodes 14-15, rally hairpin) across the road's width and its shoulders, then it sits on the ground at every heading", (t) => report(t, bankSites()));
 });
 
 describe("given a car braking on a flat straight", () => {

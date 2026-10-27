@@ -11,7 +11,7 @@ import { raceOn, recordRace, reelViews, secondsToFirstImpact, STAGED_MEETING_S, 
 
 /**
  * The reel view's claims (visible moments, the panels, the place kept, the slow-mo holds), over whichever clips a test file stages:
- * `reel-view.test.ts` (one staged crash of each kind, per commit) and `reel-view.ai-long-run.ts` (the whole sweep of places, full-sanity).
+ * `reel-view.test.ts` (one staged crash of each kind, per commit) and `reel-view-{city,stunt,havana}.ai-long-run.ts` (the whole sweep of places, full-sanity).
  * Not a test file itself.
  *
  * Owner, 2026-10-06: "the impact point (car-car hit) or the launch (driver ejection, car taking off) must actually be visible

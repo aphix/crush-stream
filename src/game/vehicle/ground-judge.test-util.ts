@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import type { TestContext } from "node:test";
-import { DEG, MATRIX_HEAD, matrixRow, type Cell } from "./ground-probe.test-util.ts";
+import { DEG, drop, MATRIX_HEAD, matrixRow, type Cell } from "./ground-probe.test-util.ts";
 import type { VehicleClassId } from "./vehicle-classes.ts";
+import { blankPoint, pointOn, type Track } from "../world/track.ts";
 
 /**
- * The ground-fit drop matrix's judge, shared by every course's matrix (ground-fit.test.ts: ramps, stunt, rally; havana-fit.test.ts):
+ * The ground-fit drop matrix's judge, shared by every course's matrix (ground-fit.test.ts: ramps; ground-fit-road.test.ts: stunt, rally; havana-fit.test.ts):
  * a car dropped 0.5 m onto each site at every heading, brake and handbrake held, must sit ON the ground, whatever the ground is: no
  * tyre sunk in it, some tyre or the hull resting on it (not hanging over it), no underside in it or in a wall, and on a smooth slope or
  * bank the body as tilted as the ground under its hubs. Everything is read through `Ground.heightAt` (ground-probe.test-util.ts
@@ -34,6 +35,35 @@ type Bounds = {
 const PLAIN: Bounds = { gap: 0.02, hull: 0.02, pen: 0.01, overlap: 0.02, pose: 1.5, slide: 0.5 };
 export const BOUNDS = { plain: PLAIN, edge: { ...PLAIN, pose: Infinity } } as const;
 export type Kind = keyof typeof BOUNDS;
+
+const _pt = blankPoint();
+
+/** A braked drop `lat` m left of `track`'s centre at `s`, at each `compass` heading and at each of `along` the road's. */
+export function roadSite(
+  track: Track,
+  name: string,
+  s: number,
+  lat: number,
+  compass: readonly Heading[],
+  along: readonly Heading[],
+  classes: readonly VehicleClassId[],
+): Site {
+  const ground = track.ground();
+  const p = pointOn(track.path, s, _pt);
+  const x = p.x + p.tz * lat;
+  const z = p.z - p.tx * lat;
+  const yaw = Math.atan2(p.tx, p.tz);
+  const hint = p.y + 0.5;
+  return {
+    name,
+    kind: "plain",
+    classes,
+    runs: (cls) => [
+      ...compass.map(([h, a]): Run => [h, drop(ground, cls, x, z, a, { hint })]),
+      ...along.map(([h, a]): Run => [h, drop(ground, cls, x, z, yaw + a, { hint })]),
+    ],
+  };
+}
 
 export type Heading = readonly [label: string, yaw: number];
 export type Run = readonly [heading: string, cell: Cell];

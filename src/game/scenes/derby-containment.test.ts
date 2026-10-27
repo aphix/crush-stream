@@ -1,9 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { DERBY_ARENA } from "./constants.ts";
-import { bodyRadius, carOfClass, containmentCases } from "./derby-containment.test-util.ts";
+import { bodyRadius, carOfClass, wallCases } from "./derby-containment.test-util.ts";
 
-containmentCases();
+// The side wedges are derby-containment-wedge.test.ts, run beside this file.
+wallCases();
 
 const { radius } = DERBY_ARENA;
 /** How far (m) the group origin stands off the inner face in the two poses below: well under the half-height the drawn body of a car on its nose or tail hangs off the origin. */
@@ -11,7 +12,7 @@ const ORIGIN_OFF_FACE = 0.1;
 const STOOD_ON_ITS_NOSE = Math.PI / 2;
 const FACING_THE_WALL = Math.PI / 2;
 
-/** A truck at rest facing the wall, tipped onto its nose (`tilt` +) or its tail (`tilt` -), its group origin at plan (`radius + offFace`, 0): the drawn body (the end `containmentCases` reads) hangs off the origin along the radius. */
+/** A truck at rest facing the wall, tipped onto its nose (`tilt` +) or its tail (`tilt` -), its group origin at plan (`radius + offFace`, 0): the drawn body (the end the containment rows read) hangs off the origin along the radius. */
 function truckOnItsEnd(offFace: number, tilt: number): ReturnType<typeof carOfClass> {
   const car = carOfClass("truck", radius + offFace, 0, FACING_THE_WALL, 0);
   car.group.rotation.set(tilt, FACING_THE_WALL, 0, "YXZ");

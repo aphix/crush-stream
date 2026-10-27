@@ -233,9 +233,9 @@ export const ENERGY_ROUNDING = 40;
 
 /**
  * The launches of one class: the open ring in every direction, across the arena at every `ACROSS_STRIDE`th of the headings, each ramp's far entry, and each ramp's outward flights
- * (from the foot of its run, from its crest at top speed); and every ramp's side wedges, where the monster's energy is read too. Not a test file itself.
+ * (from the foot of its run, from its crest at top speed). Not a test file itself.
  */
-export function containmentCases(): void {
+export function wallCases(): void {
   afterEach(() => setGround(null));
 
   describe("given a derby car driven flat out at the arena wall", () => {
@@ -251,6 +251,11 @@ export function containmentCases(): void {
       });
     }
   });
+}
+
+/** Every ramp's side wedges, where the monster's energy is read too (derby-containment-wedge.test.ts, run beside the wall launches). */
+export function sideWedgeCases(): void {
+  afterEach(() => setGround(null));
 
   describe("given a derby car driven flat out (throttle and boost) from the arena's far side at each bowl ramp's side wedge (the 45° plane beside the ramp), square and slanted", () => {
     const launches = sideWedgeLaunches();

@@ -114,7 +114,7 @@ most of them standing against the wall behind the spawn band. Each is drawn from
 ring-band box is in `DERBY_FREE_PROPS`) and the bearings facing a free-standing prop, leaving about 230° open, where 32 cars keep more than 4 m apart (4.1 m).
 
 `derby-containment.test.ts` drives every class flat out and boosting at the wall: from the open ring in every direction, across the arena from every fourth heading (among them 4.71 rad, the worst wall touch), from
-each ramp's far entry heading up it, outward from each ramp's foot and crest, and at every ramp's side wedges (where the monster's energy over its drive is read too; the owner's two traces stay in `derby-side-wedge.test.ts`). No vertex passes the wall's outer face, and the car touches the wall at least 1 m under its top. The measured worst wall touch is 6.83 m up, so the
+each ramp's far entry heading up it, outward from each ramp's foot and crest, and at every ramp's side wedges (`derby-containment-wedge.test.ts`, run beside it; there the monster's energy over its drive is read too; the owner's two traces stay in `derby-side-wedge.test.ts`). No vertex passes the wall's outer face, and the car touches the wall at least 1 m under its top. The measured worst wall touch is 6.83 m up, so the
 need is 7.83 m with that 1 m margin; the wall was 12 m, above the 10 m the owner asked to exceed, but a monster in play still left over it, so its glass is twice the old 8.5 m (20.5 m wall), drawn at half
 the glass texture's opacity so the taller pane stays easy to see through.
 

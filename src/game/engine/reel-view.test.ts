@@ -10,8 +10,8 @@ import { chain, CREST, crashes, reelViewClaims, survivalOn } from "./reel-view-c
 const CHAIN_SHIFT = 0.45;
 
 /**
- * One staged crash of each kind, each in a race of only its own cars (`reel-view.ai-long-run.ts` walks each kind along the lap and
- * adds a ramming race's own clips): a head-on that throws both drivers on the stunt course and a head-on, a T-bone, a wall hit and a
+ * One staged crash of each kind, each in a race of only its own cars (`reel-view-{city,stunt,havana}.ai-long-run.ts` walk each kind along the lap and
+ * add a ramming race's own clips): a head-on that throws both drivers on the stunt course and a head-on, a T-bone, a wall hit and a
  * chain of three cars among the city's buildings, a jump over the stunt crest onto a car on the landing, and a launch up havana's
  * plaza face for the Survival player. (The sweep's other wall hits make no clip alone: only crashes that rank are here.)
  */

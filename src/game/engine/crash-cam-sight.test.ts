@@ -21,7 +21,7 @@ import { DESKTOP, judge, VIEW } from "./reel-view.test-util.ts";
 /**
  * The crash camera's eye over subject points laid on a grid over each course and the derby arena, densest by the walls and the
  * props, judged by the reel's own claim (`judge`: the subject in the frame, no solid on the line to it, not tiny). The
- * eye picker needs only a point and an axis, so this stands in for the whole-race clips of `reel-view.ai-long-run.ts`
+ * eye picker needs only a point and an axis, so this stands in for the whole-race clips of `reel-view-city.ai-long-run.ts`
  * where the claim is about sight; what needs the clip's motion over time (slow-mo holds, a thrown driver's ride, later hits) stays there.
  */
 
