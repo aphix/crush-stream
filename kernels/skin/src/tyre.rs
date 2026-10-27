@@ -3,7 +3,7 @@
 // Nothing lives here between calls: the caller copies a call's inputs into a scratch arena and its results out.
 
 // car-tyre-skin.ts: `PLAN_CELL`, `SAG_CLEAR`, `SAG_STEP`, `SAG_AHEAD_COUNT`, `SAG_ALONG`, `SAG_LIFTABLE`.
-const PLAN_CELL: f64 = 0.03;
+const PLAN_CELL: f64 = 0.06;
 const SAG_CLEAR: f64 = 0.01;
 const SAG_STEP: f64 = 0.05;
 const SAG_AHEAD_COUNT: usize = 39;

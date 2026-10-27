@@ -31,8 +31,8 @@ const _sampleY = new Float64Array(SAG_COUNT);
 const _sampleSkin = new Float64Array(SAG_COUNT);
 const _sampleCorner = new Int32Array(SAG_COUNT);
 const _sampleShare = new Float64Array(SAG_COUNT);
-/** The plan cell (m) the triangles over a tyre are filed by (`planGrid`): about two sample steps along a tyre, so a sample reads the few triangles of its cell. */
-const PLAN_CELL = 0.03;
+/** The plan cell (m) the triangles over a tyre are filed by (`planGrid`): a sample reads every triangle whose plan box holds it at any width; wider files each triangle in fewer cells (less to build and copy) for more candidates per sample. */
+const PLAN_CELL = 0.06;
 /** The least share of a sample's height that comes from points the hold can lift: below it the triangle sags on points the hold cannot move, and lifting the others would carry them a metre. */
 const SAG_LIFTABLE = 0.5;
 /** A lifted point moves the planes of every triangle it is a corner of, so the samples are read again until none is short: at most this many times. */
