@@ -244,8 +244,8 @@ cel look and black (`SceneFade`); `__crush.fadeScenes = false` skips it for prob
 The HUD calls engine setters and `raceCommand(cmd)`; it never touches sim state.
 
 **Kernels.** `kernel/physics-core.js` and `kernel/shape-match-core.js` are plain JS with `.d.ts` types (TypeScript's emit
-was several times slower on these loops). `deform/skin-kernel.wasm` is the skin and normals loop, built from
-`kernels/skin/` by `npm run build:kernel` and committed; the JS skin stays the reference and the fallback. The skin tables' `skinN` byte packs a point's cluster count (low 3 bits) with its lever share (the other 5 bits, in 31sts: `deform-rig.ts` `SKIN_LEVER_REACH`), and the JS skin, the kernel, `skinPoints`, the cage's `skinCage` and the reference skinner in `skin.test.ts` all read both the same way.
+was several times slower on these loops). `deform/skin-kernel.wasm` is the skin and normals loop and the tyre hold's plan grid and sag pass, built from
+`kernels/skin/` by `npm run build:kernel` and committed; the JS skin and the JS hold stay the reference and the fallback. The skin tables' `skinN` byte packs a point's cluster count (low 3 bits) with its lever share (the other 5 bits, in 31sts: `deform-rig.ts` `SKIN_LEVER_REACH`), and the JS skin, the kernel, `skinPoints`, the cage's `skinCage` and the reference skinner in `skin.test.ts` all read both the same way.
 
 ## 10. Changing these rules
 

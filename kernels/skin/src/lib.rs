@@ -5,6 +5,9 @@
 // `sin` and `exp` are V8's own `Math.sin` / `Math.exp` (imported), so they cannot drift.
 // Build: `npm run build:kernel`. The committed `skin-kernel.wasm` is what the deploy box serves (it has no cargo).
 
+// The tyre hold's plan grid and sag pass (car-tyre-skin.ts).
+mod tyre;
+
 // deform-rig.ts `ARCH_YIELD`: an arch vertex's plan travel (m) off its plant at which the plant has let go.
 const ARCH_YIELD: f64 = 0.15;
 // deform-rig.ts `SKIN_COUNT_BITS`, `SKIN_COUNT_MASK`, `SKIN_LEVER_STEPS`: how `skinN` packs a point's cluster count and lever share.

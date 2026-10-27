@@ -24,7 +24,7 @@ Each row links the document that covers the system; [`docs/ARCHITECTURE.md`](doc
 | System | What it does | Docs |
 |---|---|---|
 | Soft-body skin | Shape-match clusters, eight-corner crush cages per body part and contact sensors; plastic travel builds up over hits. | [`ARCHITECTURE`](docs/ARCHITECTURE.md), [`CRUSH_CALIBRATION`](docs/CRUSH_CALIBRATION.md), [`.extraResearch`](.extraResearch/README.md) |
-| WASM skin kernel | The skin and normals loops run in a 2.7 kB Rust module, 1.5 to 1.9 times faster than the JS loop and bit-identical. The built module is committed. | [`DEPLOY`](docs/DEPLOY.md#the-skin-kernel-rust---wasm) |
+| WASM skin kernel | The skin and normals loops, and the tyre hold's plan grid and sag pass, run in a 13 kB Rust module: 1.5 to 1.9 times faster than the JS skin loop, the tyre hold's two loops about a third cheaper, all bit-identical. The built module is committed. | [`DEPLOY`](docs/DEPLOY.md#the-skin-kernel-rust---wasm) |
 | Unified contact | One contact model for car against car, prop, wall, ground and the rigs; the rigs are held to the same bars as a car-car hit. | [`UNIFIED_CONTACT`](docs/UNIFIED_CONTACT.md), [`CONTACT_PARITY`](docs/CONTACT_PARITY.md) |
 | Parts, glass, panels | Doors hinge, latch and tear off, mirrors break away, glass cracks and bursts, panels stretch and flap, wheels come loose. | [`PANEL_FLAP`](docs/PANEL_FLAP.md), [`DOOR_RIG`](docs/DOOR_RIG.md) |
 | Load crush | A roof or a face crushes under the weight stacked on it; the Stack scene drops cars onto a column. | [`LOAD_CRUSH`](docs/LOAD_CRUSH.md) |
