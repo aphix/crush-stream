@@ -1,10 +1,10 @@
 import { before, after, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { DeformableCar } from "../vehicle/car.ts";
 import type { CrashEngine } from "./engine.ts";
 import { benchRaceEngine, disposeBenchEngine } from "./engine-bench-headless.test-util.ts";
 import { FEEL } from "../vehicle/drive-input.ts";
 import { THROTTLE_STEPS, type DriveInput } from "../vehicle/car-drive.ts";
-import type { DeformableCar } from "../vehicle/car.ts";
 import { standingBite } from "../vehicle/wheel-bite.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 import { blankPoint } from "../world/track.ts";
@@ -95,7 +95,10 @@ describe("given the real engine's AI drivers, one step at the phone's coarse 1/8
   let tally: Map<Kind, Tally>;
   /** The player's car in the race: per step the seat shaped it, the wheel the seat handed the drive, and the wheel the car ran. */
   const player = { asked: [] as number[], ran: [] as number[], fastest: 0 };
+  /** The scenes judge steering, which no drawn skin feeds back into: their cars are not skinned each frame (`updateSkin` writes meshes only). */
+  const skin = DeformableCar.prototype.updateSkin;
   before(async () => {
+    DeformableCar.prototype.updateSkin = () => {};
     engine = await benchRaceEngine();
     engine.pace.pin = true;
     tally = watchSteer(engine);
@@ -111,7 +114,10 @@ describe("given the real engine's AI drivers, one step at the phone's coarse 1/8
     engine.toggleDerby();
     run(engine, DERBY_S);
   });
-  after(() => disposeBenchEngine(engine));
+  after(() => {
+    DeformableCar.prototype.updateSkin = skin;
+    disposeBenchEngine(engine);
+  });
 
   for (const kind of ["racer", "traffic", "police", "hunter", "derby"] as const) {
     it(`when the ${kind} AI drives, then no car's wheel moves faster than a pad player's ${FEEL.steerPad} of lock a second in any step`, (ctx) => {
