@@ -7,18 +7,19 @@ import { pairEta, PRE_IMPACT_LEAD, preImpact } from "../match/phase.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { glassCorners } from "../vehicle/car-glass.ts";
 import { glassOf } from "../vehicle/car-glass.test-util.ts";
-import { houseKnocked, labDollRig, labRig, leaveLab, runLab, throwAt, throwFlatDummyAt, throwLevelAt, type LabRig } from "./engine-lab.test-util.ts";
+import { houseKnocked, labDollRig, labRig, runLab, throwAt, throwFlatDummyAt, throwLevelAt, type LabRig } from "./engine-lab.test-util.ts";
 import { WALL, type LabShot } from "./engine-lab.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
 import { CRASH } from "../kernel/physics-core.js";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
+import { setGround } from "../world/ground.ts";
 
 /**
  * The Lab's throw bench (`Lab`), headless through the engine's own step: the presets stand, a thrown car topples the house
  * of cards, a car-car hit keeps the pair's momentum, and nothing passes through anything at 10, 30 or 55 m/s.
  */
 
-afterEach(leaveLab);
+afterEach(() => setGround(null));
 
 const SEDAN = { cls: "sedan", style: "sedan" } as const;
 const at = (x: number, z: number, yaw: number): LabPose => ({ x, y: 0, z, yaw, pitch: 0, roll: 0 });
@@ -109,14 +110,14 @@ describe("given the house of cards on the bench (two sedans nose to tail, a thir
     assert.ok(Math.max(...roofs) < 0.015, `the roofs under the top car gave ${roofs.map((d) => (d * 1000).toFixed(1)).join(" / ")} mm`);
   });
 
-  const toppleCases = [
+  const toppleCases: { it: string; speed: number; todo?: string }[] = [
     {
       it: "when a sedan is thrown at its top car at 10 m/s, then the top car and both cars under it are knocked down: off their places, or pinned under the thrown car with the roof crushed",
       speed: 10,
       todo: "after the plan: a 10 m/s throw is on the edge between the thrown car staying on the top car (it drives the stack apart: all three knocked off) and riding over it (the top car and at most one under it), which a settled stack 1 mm apart decides. Before every roof moved once per slice (92d7a3c1), all three fell at 9.5, 9.75, 10 and 11 m/s and the top car alone at 10.25 and 10.5; after, all three at 9.5 and 9.75 and two at 10, 10.25, 10.5 and 11 (the near car under it 0.17-0.25 m off its place, the bound 0.3 m)",
     },
-    { it: "when a sedan is thrown at its top car at 25 m/s, then the top car and both cars under it are knocked down: off their places, or pinned under the thrown car with the roof crushed", speed: 25, todo: undefined },
-  ] as const;
+    { it: "when a sedan is thrown at its top car at 25 m/s, then the top car and both cars under it are knocked down: off their places, or pinned under the thrown car with the roof crushed", speed: 25 },
+  ];
   for (const testCase of toppleCases) {
     it(testCase.it, { todo: testCase.todo }, () => {
       const r = labRig("cards");

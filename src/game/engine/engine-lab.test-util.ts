@@ -116,8 +116,3 @@ export function throwFlatDummyAt(r: LabRig, thing: number, target: number, speed
   r.dolls!.place(r.lab.centre(thing, _to), _turn, shot.launch, _still.set(0, 0, 0), Infinity, doll);
   return shot;
 }
-
-/** Put the flat ground back for the next suite. */
-export function leaveLab(): void {
-  setGround(null);
-}
