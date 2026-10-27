@@ -39,8 +39,9 @@ L = 0.98 m, so I = 8.00 kg·m².
 - **Check-strap stop** at θ = 68°. The door's swing energy ½Iω² at the stop goes into `load`. The
   strap's detent then holds it (ω = 0). Once `load` reaches `HINGE_TEAR_J` the door tears off
   with its trailing edge's velocity.
-- **Latch** at θ = 0: a closing door latches (θ = 0, ω = 0). If one slam carries ½Iω² ≥
-  `SLAM_TEAR_J`, the door is wrenched off instead and leaves outward and rearward.
+- **Latch** at θ = 0: a door or lid closing at `LATCH_CATCH_RATE` (0.2 rad/s) or faster latches (θ = 0, ω = 0). One creeping home slower than that
+  rests unlatched against its seal (a real latch needs a push to engage: a sprung drop gate, which has no struts, settled to 0.0001 rad/s and latched again).
+  If one slam carries ½Iω² ≥ `SLAM_TEAR_J`, the door is wrenched off instead and leaves outward and rearward.
 
 The ram calls `loadDoorStop` when it pushes a door that already sits on its stop. The car is rigid
 there, so the strap takes the ram's closing energy ½·m_ram·v².
@@ -144,7 +145,7 @@ own), so a head meets a lifted car's door where the door is drawn.
 | C `shut` | front→rear | 1.10 (outside the open door's mirror) | 0.6 | 0.30–0.75 | 55° |
 | D/E `panelPush`, `panelPull` | rear→front, front→rear | body edge at the head's heights + 0.03 (`laneFor`; sedan 0.846) | 0.6 | 0.30–0.75 | panel at hinge 0.45 |
 | F `lidPop` | rear→front, into the tail | centred (x −0.6…0.6) | 1.2 | 0.30–0.90 | lid shut, latched |
-| G `lidTear` | rear→front, into the tail | centred | 1.2 | 0.30–0.90, up to 3 cm past the open lid's lowest point (sedan 0.30–1.02) | lid on its stop |
+| G `lidTear` | rear→front, over the deck | centred | 1.2 | the open lid's lowest point (3 cm under it) up 0.4 m; a lid that opens up stands over the deck, which the head clears by 2 cm (`hangingLidHeights`; sedan 1.03–1.43, pickup's gate 0.57–0.97) | lid on its stop |
 
 A mirror's lane stands no further out than the cap can fold under: a short mirror (the muscle's 0.105 m bullet, the hatchback's, the SUV's,
 the monster's) clears a face 3 cm out at under 75°, before its stop, and the ram slid past it; the gap is at most 0.75 of the cap's sideways
@@ -154,11 +155,24 @@ A quarter panel's hit (`hitPanel`) follows the drawn sheet's chord from its hing
 widens ahead of the tail, so the free end rests outboard of the hinge (`PanelRegion.lean`: the SUV's 0.145 m) and a ram on the body's side
 passed a stretched SUV panel that is drawn 0.14 m into its lane.
 
-F and G reach the skin: the ram dents the tail through the body contact, and the rear crush drives the lid (Lids, above). G's head also
-stands up to the open lid, which hangs above the stock head (a deck lid's lowest point is 0.90–1.00 m up, a liftgate's 1.34 m). With a 1500 kg ram, F leaves the lid latched at
-15 km/h and springs it at 30 km/h on the sedan, hatchback, SUV and pickup; G at 15 km/h leaves the open lid on its stop. A 5000 kg
-ram at 56 km/h (EBS 13.3 m/s, crush past `tearT`) tears the sedan's and pickup's lid off; with 1500 kg the crush rule (0.78) tears
-the pickup's at 68 km/h and the sedan's at 70 km/h, with the right bumper.
+F's head runs at the shut lid's heights (a flat deck lid sits above the stock head: the coupe's top is raised to it) and hits the tail the lid is
+latched to. A latch holds 9-11 kN fully latched (about 100 J through 10 mm; `.extraResearch/perplexity/2026-10-26-trunk-latch-strength.md`), so a
+blow opens a lid by the tail's intrusion shifting the striker off the latch, not by its own energy: `hitLid` marks the car when a face at the lid's
+heights has passed the tail, and the step's end (`stepBreakage`, never mid-slice: the arming slice throws the tail's masses 3-4 cm past where they
+settle) springs the latch if the rear bumper masses stand `LID_LATCH_CRUSH_M` (2 cm, guessed) forward of their rest; the lid swings open on its struts.
+A tap that dents the tail by millimetres leaves it latched. Measured over derby heats and a race field, 1.2 cm made lids re-spring on wrecks lying
+together (30 springs in one heat) and 2 cm adds a handful of pops to the crush rule's (31 against 29 over four 8-car derbies, 5 against 1 in two
+7-rival races at the ramming slider). F's hard shot is 12 km/h with 100 kg (a 2.2 cm crush, 333 N·s: a parked car moves under 10 cm), its gentle
+one 6 km/h with 20 kg (1.5 cm: the latch stays); a drop gate has no struts (its `lift` is 0), so a sprung gate is off its latch and stands a few
+hundredths of a radian open. These replace the headless-pickup pins (15 km/h latched, 30 km/h sprung with 1500 kg): there only the whole tail's
+crush, 30-50 kJ that carried the car 3-6 m, could spring a lid. The head stops short of the drawn rear seat's back (`CarParts.rearSeatBackZ`) in
+every shot of the rows.
+
+G's head runs over the deck, level with the open lid, and meets the lid (`hitLid`): the lid hangs on its stop and the strap takes the head's
+closing energy, as a door pushed past its stop does. Under the hinge's `tearJ` (trunk lid 150 J, hatch 200 J, liftgate 300 J, drop gate 450 J) the
+lid holds and the head stops on it; past it the lid leaves and the head goes on with the rest. While the lid hangs the body contact waits (its plan
+outline has no heights to tell the tail from the lid over it). G's hard shot is 12 km/h with 100 kg (555 J: every style's lid goes, the car
+moves under 10 cm).
 
 ### What the lanes meet, per style
 
@@ -171,7 +185,8 @@ the drawn part by at least 1 cm, the part comes off a hard shot, and nothing com
 | mirror on an open door | B, C | rides its door | all seven |
 | front doors | B, C | pushed past the stop or slammed (`hitDoor`) | all seven |
 | quarter panels | D, E | bent back or pulled out, torn past `PANEL_*_J` (`hitPanel`) | all seven |
-| rear bumper, trunk lid, tail lamps | F, G | the tail's crush (`strikeCar`) | all seven |
+| rear bumper, tail lamps, the shut trunk lid | F | the tail's crush (`strikeCar`); a crush past the latch's `ajar` springs the lid | all seven |
+| open trunk lid (deck lid, hatch, liftgate, drop gate) | G | on its stop the strap or cables take the head's closing energy and past the hinge's `tearJ` the lid leaves (`hitLid`) | all seven |
 
 No lane runs at the front bumper, hood, head lamps and grille, the wheel-arch flares, the police light bar, the wipers or the glass (a hard
 F shatters the panes by the tail's crush, not by a hit on them). Door handles and the chrome trims are skin of the door and the body, not

@@ -43,8 +43,12 @@ export async function makeEngine(): Promise<CrashEngine> {
   return engine;
 }
 
-/** The capture replayed on `engine` with jitter seed `seed`: the hatchback's height turns, when it fell asleep for good (-1: never) and the deepest two settled cars stood in each other (m). */
-export async function replay(engine: CrashEngine, seed: number): Promise<{ turns: number; asleepAt: number; overlap: number }> {
+/**
+ * The capture replayed on `engine` with jitter seed `seed`: the hatchback's height turns, when it fell asleep for good (-1: never), the
+ * deepest two settled cars stood in each other (m) and the last sim second any other car stood awake and faster than rest (`stirred`:
+ * a neighbour whose `stirNear` reaches the hatchback).
+ */
+export async function replay(engine: CrashEngine, seed: number): Promise<{ turns: number; asleepAt: number; overlap: number; stirred: number }> {
   loadEpicenter(EPICENTER_AT_LOAD);
   engine.setCarCount(5);
   engine.setSpeedRange(10, 32);
@@ -61,6 +65,7 @@ export async function replay(engine: CrashEngine, seed: number): Promise<{ turns
   let lastY = NaN;
   let asleepAt = -1;
   let overlap = 0;
+  let stirred = -1;
   const original = engine["slice"];
   // `slice` is a readonly field the engine's world calls each slice: the replay reads the cars after it.
   Reflect.set(engine, "slice", (h: number) => {
@@ -79,6 +84,7 @@ export async function replay(engine: CrashEngine, seed: number): Promise<{ turns
     lastY = y;
     if (hatch.asleep && asleepAt < 0) asleepAt = t;
     else if (!hatch.asleep) asleepAt = -1;
+    for (let i = 0; i < cars.length; i++) if (i !== HATCH && !cars[i]!.asleep && cars[i]!.moving) stirred = t;
   });
   let state = seed >>> 0;
   const random = (): number => (state = (Math.imul(state, 1664525) + 1013904223) >>> 0) / 4294967296;
@@ -90,5 +96,5 @@ export async function replay(engine: CrashEngine, seed: number): Promise<{ turns
   } finally {
     Reflect.set(engine, "slice", original);
   }
-  return { turns, asleepAt, overlap };
+  return { turns, asleepAt, overlap, stirred };
 }

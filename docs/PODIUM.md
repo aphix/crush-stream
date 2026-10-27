@@ -8,7 +8,7 @@ touches the sim, the recorder or the clip layout (`REPLAY_VERSION` and `NET_VERS
 |---|---|
 | `match/podium.ts` | The stand's numbers: the three blocks (place, x, height, the way the car faces) and `podiumPlaces`, the first three rows of a classification. |
 | `match/campaign-reel.ts` | `CampaignReel`: a campaign's highlights kept round to round, and the best three picked for its finale. |
-| `engine/car-damage.ts` | `CarDamage`, one car's damage; `FinalDamage`, every racer's as the race ended. |
+| `engine/car-damage.ts` | `CarDamage`, one car's damage; `FinalDamage`, every racer's as it crossed the finish line. |
 | `engine/engine-podium.ts` | `PodiumDirector`: raises and lowers the stand, its three cars, the camera swing, the jets. |
 | `present/podium-stage.ts` | `PodiumStage`: the platform, the blocks with their cups and numerals, the name plates, the banner, the poles and bunting. |
 | `engine/engine-reel.ts`, `engine/engine-highlights.ts` | The commands (`podium`, `campaignReel`), and `ReelDirector.showPodium` / `endPodium`: the podium takes the screen over a reel and gives it back. |
@@ -30,8 +30,8 @@ banner (canvas textures; no per-frame cost).
 
 ## The cars
 
-The field's cars are the reel's to respawn (every clip puts its cars back from keyframes), so the podium never uses them. `FinalDamage` reads every racer's damage (`CarDamage.read`: the dents and the packed engine block, the parts torn off,
-the lost wheels, lamps, glass: `DeformableCar.deform.readNetState` and `readPartNetState`, what a netplay host sends) once per race, on the first frame that sees the race finished, before the reel can move a car. The
+The field's cars are the reel's to respawn (every clip puts its cars back from keyframes), so the podium never uses them. `FinalDamage` reads each racer's damage (`CarDamage.read`: the dents and the packed engine block, the parts torn off,
+the lost wheels, lamps, glass: `DeformableCar.deform.readNetState` and `readPartNetState`, what a netplay host sends) once per race, on the frame it crosses the finish line; a racer that never finishes is read when the race ends. The
 podium builds three cars of its own beside the field (the body, class and paint of the racer's: `buildCar` and `dressCar` on the racer's slot, so the player's look and the rivals' spray are right), stands each on its block and lays the damage on it
 (`CarDamage.lay`, the held reset's own path: `RaceField.placeKeeping` uses it too), then seats each wheel it kept at its hub (`DeformableCar.followHubs`). Torn parts and lost wheels are not drawn (`DeformableCar.hideLoose`): the car is missing them, and nothing hangs in the air where they came off. Its body and bonnet are drawn as the finished car drew them (`CarDamage.readDrawn`, `drawOn`), the tyre hold over its wheels as they stood then included, not re-held over the podium car's own seated wheels. The three cars are
 kept between raises while a racer's body and class are the same, and let go with the engine.

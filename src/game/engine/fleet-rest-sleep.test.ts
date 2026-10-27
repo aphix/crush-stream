@@ -17,6 +17,15 @@ const LATE_BY = 3.0;
 /** At most this many of the eight seeds are late: before the skin read a kept dent once, the sill rule's tree had two (seed 6 at 3.31 s, seed 7 never), main before it one (seed 2 never). */
 const LATE_SEEDS = 2;
 
+/**
+ * The seed on which the hatchback falls asleep while the pickup beside it is still tipping across rest speed (asleep 2.32 s; the pickup
+ * stands moving to 3.35 s): every `stirNear` the pickup sends reaches a sleeping hatchback at rest. A stir that leaves the wreck at rest
+ * costs it none of its rest, so it stays asleep through all of them; the rule restarting its rest on each stir woke it and slept it a
+ * second after the last, past the replay's end. (Seed 7 was here too: on 163 its hatchback's own settle ends after the pickup's, so it
+ * takes no stir asleep and tests nothing of this.)
+ */
+const STIRRED_SEED = 6;
+
 let engine: CrashEngine | undefined;
 
 describe("given the owner's fleet capture replayed on a fresh engine over jitter seeds 1 to 8 in turn", () => {
@@ -38,5 +47,12 @@ describe("given the owner's fleet capture replayed on a fresh engine over jitter
     const median = (sleeps[half - 1]! + sleeps[half]!) / 2;
     assert.ok(median <= SLEEPS_BY, `the median seed slept at ${median.toFixed(2)} s (${read})`);
     assert.ok(late <= LATE_SEEDS, `${late} seeds slept after ${LATE_BY} s or never (${read})`);
+  });
+
+  it(`when the pickup beside it tips slowly across rest speed after the hatchback has slept (seed ${STIRRED_SEED}), then the hatchback stays asleep through its stirs`, async () => {
+    const fresh = (engine ??= await makeEngine());
+    const { asleepAt, stirred } = await replay(fresh, STIRRED_SEED);
+    assert.ok(asleepAt >= 0, "the hatchback never slept for good");
+    assert.ok(asleepAt < stirred, `the hatchback slept for good at ${asleepAt.toFixed(3)} s, after the pickup's last stir at ${stirred.toFixed(3)} s: a stir cost it its rest`);
   });
 });

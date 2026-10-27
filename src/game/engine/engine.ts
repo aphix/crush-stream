@@ -693,6 +693,7 @@ export class CrashEngine extends EngineGarage {
     }
     this.renderMs = performance.now() - drawAt;
     this.blend.restore();
+    this.race.readFinish(); // after the restore: the blend draws skins between two steps, and the finish keeps the sim's
     this.hudAcc += wallDt;
     if (this.hudAcc > (this.clock.timeScale < 0.5 ? 0.05 : 0.12)) {
       this.hudAcc = 0;

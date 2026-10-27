@@ -1,3 +1,4 @@
+import { detAcos, hypot3 } from "../kernel/physics-core.js";
 import { IMPRINT_NONE } from "../deform/load-crush.ts";
 import { INF_K } from "../deform/deform-build.ts";
 import { cageAxis } from "../deform/deform-state.ts";
@@ -241,6 +242,8 @@ export interface CageStyle {
   readonly panelsOn: Uint8Array;
   /** Per panel: 1 for a glass pane, 0 for a lid, a bumper or a door (`CageSource.panelGlass`). */
   readonly panelGlass: Uint8Array;
+  /** Per panel: how far (m) its farthest vertex stands from its pivot at rest: what a turn of the panel moves its tip by, per radian. */
+  readonly panelReach: Float64Array;
   /** The interior's vertices follow the sill samples in `pos` (`vertexCount` is the body's alone: the rigid step's hull points are those), and its triangles the body's, in group `panelCount + 1`: never a lid, never cut by the roof imprint. */
   readonly interiorCount: number;
   /** A rest vertex over this height (m) is roof: the skin's roof clamp holds it (the rig's `roofClampY`). */
@@ -248,6 +251,8 @@ export interface CageStyle {
   /** The interior's rest positions as `fitInterior` places them with the masses at rest, x, y, z each. */
   readonly interiorRest: Float32Array;
   readonly interiorMass: Int32Array;
+  /** The cell mass's rest y and z (car space): `interiorPose` takes its travel off them. */
+  readonly cellRest: readonly [y: number, z: number];
   /** The fields of a pristine car, shared by every car of the style. */
   readonly pristine: CageFields;
 }
@@ -387,7 +392,8 @@ const _pose = new Float64Array(4);
 function placeInterior(style: CageStyle, massPos: ArrayLike<number>, out: CageFields): void {
   const { interiorMass, interiorRest, interiorCount } = style;
   const vertexCount = style.vertexCount + style.sillCount;
-  interiorPose(massPos[interiorMass[0]!]!, massPos[interiorMass[1]!]!, massPos[interiorMass[2]! + 1]!, massPos[interiorMass[2]! + 2]!, _pose);
+  const cell = interiorMass[2]!;
+  interiorPose(massPos[interiorMass[0]!]!, massPos[interiorMass[1]!]!, massPos[cell + 1]! - style.cellRest[0], massPos[cell + 2]! - style.cellRest[1], _pose);
   for (let i = 0, r = vertexCount * 3; i < interiorCount; i++, r += 3) {
     out.pos[r] = interiorRest[i * 3]! * _pose[0]! + _pose[1]!;
     out.pos[r + 1] = interiorRest[i * 3 + 1]! + _pose[2]!;
@@ -474,12 +480,14 @@ function unpackInputs(inputs: Float64Array, out: CageLive): void {
 const REFIT_EPSILON = CAGE_STEP / 5;
 /** Per panel in `packInputs`' layout: its pose is a position (x, y, z), then a quaternion (x, y, z, w). */
 const POSE_STRIDE = 7;
+const POSE_QUATERNION = 3;
 
 /**
- * Whether `now` differs from `last` (same layout) enough to refit: a mass or a hub more than `epsilon` away, or any panel flag, the pose of a
- * panel the cage reads, roof clamp or imprint cut at all. A torn-off or shattered pane's pose is none of the cage's (`skinCage` leaves its
- * vertices at rest), so it never counts; with no `epsilon` (an exact fit) every input does. The cluster maps and cage coefficients are fitted
- * from the masses, so they move only when a mass does and are not read here.
+ * Whether `now` differs from `last` (same layout) enough to refit: a mass or a hub more than `epsilon` away, a panel whose tip (its farthest vertex,
+ * `panelReach` from the pivot) has moved more than `epsilon` by its pose's shift and turn together, or any panel flag, roof clamp or imprint cut
+ * at all. A torn-off or shattered pane's pose is none of the cage's (`skinCage` leaves its vertices at rest), so it never counts. With no `epsilon` (an
+ * exact fit) every input counts as it is. The cluster maps and cage coefficients are fitted from the masses, so they move only when a mass does and
+ * are not read here.
  */
 function movedSince(style: CageStyle, last: Float64Array, now: Float64Array, epsilon: number): boolean {
   const massEnd = style.massCount * 3;
@@ -493,9 +501,17 @@ function movedSince(style: CageStyle, last: Float64Array, now: Float64Array, eps
   for (let k = hubStart; k < hubEnd; k++) if (Math.abs(now[k]! - last[k]!) > epsilon) return true;
   for (let k = flagsStart; k < poseStart; k++) if (now[k] !== last[k]) return true;
   for (let panel = 0; panel < panels; panel++) {
-    if (epsilon > 0 && now[flagsStart + panel] === 0 && style.panelGlass[panel] === 0) continue;
     const pose = poseStart + panel * POSE_STRIDE;
-    for (let k = pose; k < pose + POSE_STRIDE; k++) if (now[k] !== last[k]) return true;
+    if (epsilon === 0) {
+      for (let k = pose; k < pose + POSE_STRIDE; k++) if (now[k] !== last[k]) return true;
+      continue;
+    }
+    if (now[flagsStart + panel] === 0 && style.panelGlass[panel] === 0) continue;
+    const shift = hypot3(now[pose]! - last[pose]!, now[pose + 1]! - last[pose + 1]!, now[pose + 2]! - last[pose + 2]!);
+    const q = pose + POSE_QUATERNION;
+    const agree = Math.abs(now[q]! * last[q]! + now[q + 1]! * last[q + 1]! + now[q + 2]! * last[q + 2]! + now[q + 3]! * last[q + 3]!);
+    const turn = 2 * detAcos(Math.min(1, agree));
+    if (shift + turn * style.panelReach[panel]! > epsilon) return true;
   }
   for (let k = poseEnd; k < last.length; k++) if (now[k] !== last[k]) return true;
   return false;
@@ -797,6 +813,18 @@ function appendParts(src: CageSource, end: number, source: number[], tris: numbe
   }
 }
 
+/** Per panel, the farthest distance (m) from its pivot of any of its vertices (`rest`, 3 a vertex; `group`: the panel + 1 of each, 0 for the body). */
+function panelReachOf(panelCount: number, origin: Float64Array, rest: Float64Array, group: Uint8Array): Float64Array {
+  const reach = new Float64Array(panelCount);
+  for (let i = 0; i < group.length; i++) {
+    const g = group[i]!;
+    if (g === 0 || g > panelCount) continue;
+    const o = (g - 1) * 3;
+    reach[g - 1] = Math.max(reach[g - 1]!, hypot3(rest[i * 3]! - origin[o]!, rest[i * 3 + 1]! - origin[o + 1]!, rest[i * 3 + 2]! - origin[o + 2]!));
+  }
+  return reach;
+}
+
 function buildStyle(src: CageSource, step: number): CageStyle {
   const body = hullOf(src);
   const top = upFacing(src.interiorRest, src.interiorIndex);
@@ -839,8 +867,10 @@ function buildStyle(src: CageSource, step: number): CageStyle {
     interiorCount: ni,
     interiorRest,
     interiorMass: src.interiorMass,
+    cellRest: [src.massRest[src.interiorMass[2]! + 1]!, src.massRest[src.interiorMass[2]! + 2]!],
     panelsOn: new Uint8Array(src.panelCount).fill(1),
     panelGlass: src.panelGlass,
+    panelReach: panelReachOf(src.panelCount, src.panelOrigin, tables.rest, Uint8Array.from(source, (v) => src.group[v]!)),
     panelOrigin: src.panelOrigin,
     roofClampY: src.roofClampY,
   };

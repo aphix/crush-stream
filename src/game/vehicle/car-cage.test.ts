@@ -326,9 +326,14 @@ describe("given a fitted car whose masses have not moved", () => {
 
 describe("given a fitted car whose panel poses are moved", () => {
   const POSE = 7;
+  /** A turn about the x axis by `angle` rad as the quaternion component it sets. */
+  const sinHalf = (angle: number) => Math.sin(angle / 2);
   const testCases = [
-    { it: "when an attached panel's pivot moves 1 mm, then the cage is refitted", off: false, expectedRefit: true },
-    { it: "when a torn-off panel's pose moves 1 m, then nothing is refitted, the cage never read it", off: true, expectedRefit: false },
+    { it: "when an attached panel's pivot moves 0.5 cm, then nothing is refitted", off: false, at: 0, by: 0.005, tipCm: 0, expectedRefit: false },
+    { it: "when an attached panel's pivot moves 2 cm, then the cage is refitted", off: false, at: 0, by: 0.02, tipCm: 0, expectedRefit: true },
+    { it: "when an attached panel turns so its tip moves 0.5 cm, then nothing is refitted", off: false, at: 3, by: 0, tipCm: 0.5, expectedRefit: false },
+    { it: "when an attached panel turns so its tip moves 2 cm, then the cage is refitted", off: false, at: 3, by: 0, tipCm: 2, expectedRefit: true },
+    { it: "when a torn-off panel's pose moves 1 m, then nothing is refitted, the cage never read it", off: true, at: 0, by: 1, tipCm: 0, expectedRefit: false },
   ] as const;
 
   for (const testCase of testCases) {
@@ -336,11 +341,16 @@ describe("given a fitted car whose panel poses are moved", () => {
       const car = carInState("loaded", "sedan", "sedan");
       const cage = cageOf(car);
       const live = cageLiveOf(car);
-      const panel = Array.from(cage.style.panelGlass).findIndex((glass) => glass === 0);
-      assert.ok(panel >= 0, "fixture: the style has a panel that is no glass");
+      const panel = Array.from(cage.style.panelGlass).findIndex((glass, k) => glass === 0 && cage.style.panelReach[k]! > 0.3);
+      assert.ok(panel >= 0, "fixture: the style has a panel that is no glass and reaches 30 cm");
       live.panelOn[panel] = testCase.off ? 0 : 1;
       cage.refit(live);
-      live.panelPose[panel * POSE] += testCase.off ? 1 : 0.001;
+      live.panelPose[panel * POSE + testCase.at] += testCase.by;
+      if (testCase.tipCm > 0) {
+        const angle = testCase.tipCm / 100 / cage.style.panelReach[panel]!;
+        live.panelPose[panel * POSE + 3] = sinHalf(angle);
+        live.panelPose[panel * POSE + 6] = Math.cos(angle / 2);
+      }
       assert.equal(cage.refit(live), testCase.expectedRefit, "refitted");
     });
   }

@@ -135,32 +135,37 @@ describe("given a car driven at 64 km/h head-on into a wall", () => {
   });
 });
 
-/** The heavy ram the lid lanes are pinned with (kg): a car's mass, so the tail crushes as a rear-ender's does. */
-const LID_RAM_KG = 1500;
+/**
+ * F's head springs the shut lid's latch by crushing the tail at it `LID_LATCH_CRUSH_M` (2 cm): 6 km/h with 20 kg dents it 1.5 cm and leaves it latched, 12 km/h
+ * with 100 kg dents it 2.2 cm and springs it. These replace the rows that pinned 15 km/h latched and 30 km/h sprung with a 1500 kg ram: those were measured on
+ * the headless pickup, when only the whole tail's crush (30-50 kJ, which carried the car 3-6 m) could spring a lid; the owner's ruling is that a lane knocks its
+ * part and does not push the car.
+ */
+const LATCH_GENTLE = { kph: 6, kg: 20 } as const;
+const LATCH_HARD = { kph: 12, kg: 100 } as const;
 
 describe("given a rear ram square into the tail of a parked car (F lidPop: lid shut; G lidTear: lid on its stop; docs/DOOR_RIG.md, Lids)", () => {
-  for (const id of ["sedan", "hatchback", "wagon", "pickup"] as const) {
-    it(`when F hits the ${id} at 15 and then 30 km/h, then the first leaves the lid latched and the second springs it, still on the car`, (t) => {
+  for (const id of CAR_STYLE_IDS) {
+    it(`when F hits the ${id} with a 1.5 cm and then a 2.2 cm tail crush, then the first leaves the lid latched and the second springs it, still on the car`, () => {
       const soft = parkedStyle(id);
-      fireRam(soft, "lidPop", { kph: 15, kg: LID_RAM_KG });
+      fireRam(soft, "lidPop", LATCH_GENTLE);
       const hard = parkedStyle(id);
-      fireRam(hard, "lidPop", { kph: 30, kg: LID_RAM_KG });
-      t.diagnostic(`${id}: 15 km/h latched ${soft.lidHinge().latched}, 30 km/h latched ${hard.lidHinge().latched} at ${hard.lidAngle().toFixed(3)} rad`);
-      assert.ok(soft.lidHinge().latched && !soft.lidOff(), `${id} lid sprang at 15 km/h`);
-      assert.ok(!hard.lidHinge().latched && !hard.lidOff(), `${id} lid at 30 km/h: latched ${hard.lidHinge().latched}, off ${hard.lidOff()}`);
+      fireRam(hard, "lidPop", LATCH_HARD);
+      assert.ok(soft.lidHinge().latched && !soft.lidOff(), `${id} lid sprang at ${LATCH_GENTLE.kph} km/h`);
+      assert.ok(!hard.lidHinge().latched && !hard.lidOff(), `${id} lid at ${LATCH_HARD.kph} km/h: latched ${hard.lidHinge().latched}, off ${hard.lidOff()}`);
     });
   }
 
-  // The ram meets the tail, not the lid: the lid tears once the crush passes its `tearT` in a hit of `tearMps` EBS or more.
-  for (const id of ["sedan", "pickup"] as const) {
-    it(`when G hits the ${id}'s open lid at 15 km/h and then a 5000 kg ram at 56 km/h, then the first leaves it on its stop and the second tears it off`, () => {
+  // G's head meets the open lid on its strap: under the hinge's tear energy it holds, past it the lid leaves and the tail is left alone.
+  for (const id of CAR_STYLE_IDS) {
+    it(`when G hits the ${id}'s open lid with 35 J and then 555 J, then the first leaves it on its stop and the second tears it off, the tail uncrushed`, () => {
       const open = parkedStyle(id);
-      fireRam(open, "lidTear", { kph: 15, kg: LID_RAM_KG });
+      fireRam(open, "lidTear", { kph: 3, kg: 100 });
       const h = open.lidHinge();
       const hard = parkedStyle(id);
-      const torn = fireRam(hard, "lidTear", { kph: 56, kg: 5000 });
-      assert.ok(!h.latched && h.theta === h.spec.stop && !open.lidOff(), `${id} 15 km/h: latched ${h.latched} at ${h.theta} rad, off ${open.lidOff()}`);
-      assert.ok(torn.detached.includes("trunk") && hard.hasLoosePart(), `${id} 56 km/h lid stayed on: [${torn.detached}]`);
+      const torn = fireRam(hard, "lidTear", { kph: 12, kg: 100 });
+      assert.ok(!h.latched && h.theta === h.spec.stop && !open.lidOff(), `${id} 35 J: latched ${h.latched} at ${h.theta} rad, off ${open.lidOff()}`);
+      assert.ok(torn.detached.includes("trunk") && hard.hasLoosePart(), `${id} 555 J lid stayed on: [${torn.detached}]`);
     });
   }
 });
@@ -220,8 +225,8 @@ const HARD_SHOTS = [
   { scenario: "shut", kph: 40, kg: 300 },
   { scenario: "panelPush", kph: 30, kg: 1500 },
   { scenario: "panelPull", kph: 30, kg: 1500 },
-  { scenario: "lidPop", kph: 60, kg: 3000 },
-  { scenario: "lidTear", kph: 60, kg: 3000 },
+  { scenario: "lidPop", ...LATCH_HARD },
+  { scenario: "lidTear", kph: 12, kg: 100 },
 ] as const satisfies readonly { scenario: DoorScenario; kph: number; kg: number }[];
 
 /** The lighter shots every lane is also fired at, to see what comes off at each. */
@@ -233,7 +238,7 @@ const SOFT_SHOTS = [
 /** How far (m) a head's lane must overlap a part's drawn box, across the car's width and in height, to be said to meet it. */
 const MEETS_M = 0.01;
 
-type DrawnShot = { shot: RamShot; overlap: (name: string) => number };
+type DrawnShot = { shot: RamShot; lidLatched: boolean; overlap: (name: string) => number };
 const drawnShots = new Map<string, DrawnShot>();
 
 /** One shot at the right side of a parked, class-dressed `id`, with how far its head's lane overlaps each part's drawn box as the shot began. */
@@ -252,7 +257,7 @@ function shootDrawn(id: CarStyleId, scenario: DoorScenario, kph: number, kg: num
       for (const part of car["parts"]) overlaps.set(part.name, overlapMetres(lane, drawnBox(car, part.name, new THREE.Box3())));
     },
   });
-  const drawn = { shot, overlap: (name: string) => overlaps.get(name) ?? -Infinity };
+  const drawn = { shot, lidLatched: car.lidHinge().latched, overlap: (name: string) => overlaps.get(name) ?? -Infinity };
   drawnShots.set(key, drawn);
   return drawn;
 }
@@ -266,9 +271,10 @@ describe("given each lane's ram fired at the right side of a parked car of every
       assert.ok(metres >= MEETS_M, `${c.id} ${c.scenario}: the head overlaps the drawn ${c.part} by ${metres} m`);
     });
 
-    it(`when ${c.scenario} is fired at the ${c.id} at ${c.kph} km/h and ${c.kg} kg, then the ${c.part} comes off`, () => {
-      const { detached } = shootDrawn(c.id, c.scenario, c.kph, c.kg).shot;
-      assert.ok(detached.includes(partName(c.part, 1)), `${c.id} ${c.scenario}: off [${detached}]`);
+    it(`when ${c.scenario} is fired at the ${c.id} at ${c.kph} km/h and ${c.kg} kg, then the ${c.part} ${c.scenario === "lidPop" ? "is sprung past its latch" : "comes off"}`, () => {
+      const { shot, lidLatched } = shootDrawn(c.id, c.scenario, c.kph, c.kg);
+      if (c.scenario === "lidPop") assert.ok(!lidLatched && !shot.detached.includes("trunk"), `${c.id} F: lid latched ${lidLatched}, off [${shot.detached}]`);
+      else assert.ok(shot.detached.includes(partName(c.part, 1)), `${c.id} ${c.scenario}: off [${shot.detached}]`);
     });
 
     it(`when ${c.scenario} is fired at the ${c.id} at 6 km/h, 12 km/h and ${c.kph} km/h, then every part that comes off was met by the head`, () => {

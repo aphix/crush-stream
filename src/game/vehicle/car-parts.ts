@@ -2,7 +2,7 @@ import { hypot2, detSin, detCos, PART_FAMILY } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { BUMPER_F } from "./constants.ts";
-import { lidAccel } from "./hinge-spec.ts";
+import { bootPivot, lidAccel } from "./hinge-spec.ts";
 import { hingePose, INTERIOR_MASSES, interiorPose } from "./part-pose.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
 import type { StirCar } from "../world/surfaces.ts";
@@ -17,7 +17,7 @@ import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
 import type { TopMet } from "./car-air-body.ts";
 import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
-import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, type Lamp, type PartNetState } from "./car-core.ts";
+import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, LATCH_CATCH_RATE, LID_LATCH_CRUSH_M, type Lamp, type PartNetState } from "./car-core.ts";
 import {
   DOOR_ACC_MAX,
   DOOR_QUIET_S,
@@ -34,6 +34,16 @@ import { LOOSE_BODIES, looseState, partState, PART_SLOTS } from "./part-state.ts
 import { PART_KIND, PartSeat, looseOnCamera, partGeometry } from "./part-geometry.ts";
 
 const _interior = new Float64Array(4);
+
+/** `CarParts.lidProfile`'s answer. */
+export interface LidProfile {
+  hingeY: number;
+  hingeZ: number;
+  edgeY: number;
+  edgeZ: number;
+  halfWidth: number;
+}
+
 const DOOR_LEFT: GlassPart = "doorLeft";
 const DOOR_RIGHT: GlassPart = "doorRight";
 
@@ -48,6 +58,7 @@ const _c = new THREE.Vector3();
 const _com = new THREE.Vector3();
 const _drawn = new THREE.Box3();
 const _lidBox = new THREE.Box3();
+const _carInverse = new THREE.Matrix4();
 const _hoodHinge = new THREE.Vector3();
 const _hoodSwung = new THREE.Vector3();
 const _hoodTurn = new THREE.Quaternion();
@@ -474,6 +485,68 @@ export abstract class CarParts extends CarGlass {
     return this.lidPart.detached;
   }
 
+  /** A blow on the shut trunk lid's latch springs it: the lid is off its latch at rest and swings on its struts or weight, to its stop (`swingHinges`). */
+  springLidLatch(): void {
+    const hinge = this.lidPart.swing!;
+    if (this.lidPart.detached || !hinge.latched) return;
+    hinge.latched = false;
+    hinge.omega = 0;
+    this.sampleMotion();
+  }
+
+  /** How far (m) the tail's rear bumper masses stand pushed forward of their rest: the crush at the lid's latch end of the car. */
+  tailCrushM(): number {
+    const masses = this.deform.masses;
+    let crush = 0;
+    for (let i = 0; i < masses.length; i++) {
+      const m = masses[i]!;
+      if (m.name === "bumperRL" || m.name === "bumperRR") crush = Math.max(crush, m.local.z - m.rest.z);
+    }
+    return crush;
+  }
+
+  private lidStruck = false;
+
+  /** A striker met the shut lid's tail this slice (`hitLid`): the step's end reads whether it crushed the tail far enough to spring the latch (`settleLidStrike`). */
+  noteLidStruck(): void {
+    this.lidStruck = true;
+  }
+
+  /** Once per step, as the crash rules run (never mid-slice: the arming slice throws the tail's masses 3-4 cm past where they settle): a strike that left the tail crushed `LID_LATCH_CRUSH_M` springs the latch. */
+  settleLidStrike(): void {
+    const struck = this.lidStruck;
+    this.lidStruck = false;
+    if (struck && this.tailCrushM() >= LID_LATCH_CRUSH_M) this.springLidLatch();
+  }
+
+  /** Whether the trunk lid hangs unlatched on its stop (a hatch, an SUV gate or a deck lid up; a drop gate level on its cables), still on the car. */
+  lidHangsOnStop(): boolean {
+    const hinge = this.lidPart.swing!;
+    return !this.lidPart.detached && !hinge.latched && hinge.theta >= hinge.spec.stop - 1e-4;
+  }
+
+  /** The trunk lid as the side view sees it, open `theta` rad (the angle it hangs at now by default; car frame, m): its hinge line (`hingeY`, `hingeZ`), its free edge (`edgeY`, `edgeZ`) and its half width across the car. */
+  lidProfile(out: LidProfile, theta = this.lidPart.swing!.theta): LidProfile {
+    const s = this.lidPart.swing!.spec;
+    const turn = s.dir * theta;
+    const c = detCos(turn);
+    const sn = detSin(turn);
+    const [hingeY, hingeZ] = bootPivot(this.style.boot);
+    out.hingeY = hingeY;
+    out.hingeZ = hingeZ;
+    out.edgeY = hingeY + s.length * (s.uy * c - s.uz * sn);
+    out.edgeZ = hingeZ + s.length * (s.uy * sn + s.uz * c);
+    const geometry = (this.lidPart.object as THREE.Mesh).geometry as THREE.BufferGeometry;
+    if (geometry.boundingBox === null) geometry.computeBoundingBox();
+    out.halfWidth = Math.max(-geometry.boundingBox!.min.x, geometry.boundingBox!.max.x);
+    return out;
+  }
+
+  /** The strap or cables of a lid on its stop take `energy` (J): once the total passes the hinge's `tearJ` it tears off with `push` (car-space m/s). True if it did. */
+  loadLidStop(energy: number, push: THREE.Vector3): boolean {
+    return this.loadStop(this.lidPart, energy, push);
+  }
+
   /** Whether a door, mirror or quarter panel has left the car; a mirror rides off on its torn door. */
   partOff(name: "doorL" | "doorR" | "mirrorL" | "mirrorR" | "quarterL" | "quarterR"): boolean {
     const i = name.endsWith("L") ? 0 : 1;
@@ -561,19 +634,13 @@ export abstract class CarParts extends CarGlass {
     return this.swingAngle(this.lidPart);
   }
 
-  /** The lowest point (m, car frame) the trunk lid draws at the pose it stands in now. */
-  lidBottom(): number {
-    this.group.updateMatrixWorld(true);
-    growDrawn(this.lidPart.object, _lidBox.makeEmpty());
-    return _lidBox.min.y;
-  }
-
-  /** The rearmost point (m, car frame) the rear seat's back draws at: the cabin's rear wall, which nothing striking the tail may pass. */
+  /** The rearmost point (m, in the car's own frame, wherever it stands) the rear seat's back draws at: the cabin's rear wall, which nothing striking the tail may pass. A seat's world matrix is the part batch's, drawn from its own `matrix`, so the car frame is read down that chain (`pose` groups included). */
   rearSeatBackZ(): number {
-    this.group.updateMatrixWorld(true);
     const seat = this.partSeats[PART_KIND.seatRear]!;
     if (seat.drawn.boundingBox === null) seat.drawn.computeBoundingBox();
-    return _lidBox.copy(seat.drawn.boundingBox!).applyMatrix4(seat.matrixWorld).min.z;
+    _carInverse.copy(seat.matrix);
+    for (let o = seat.parent; o !== null && o !== this.group; o = o.parent) _carInverse.premultiply(o.matrix);
+    return _lidBox.copy(seat.drawn.boundingBox!).applyMatrix4(_carInverse).min.z;
   }
 
   private swingAngle(p: DetachPart): number {
@@ -679,7 +746,14 @@ export abstract class CarParts extends CarGlass {
       h.omega = 0;
       return e > 0 && this.loadStop(p, e, _push);
     }
-    if (h.theta <= jam && h.omega < 0) return this.closeSwing(p, jam);
+    if (h.theta <= jam && h.omega < 0) {
+      if (-h.omega < LATCH_CATCH_RATE) {
+        h.theta = jam;
+        h.omega = 0;
+        return false;
+      }
+      return this.closeSwing(p, jam);
+    }
     if (h.theta < jam) h.theta = jam;
     return false;
   }
@@ -848,7 +922,8 @@ export abstract class CarParts extends CarGlass {
     const l = this.deform.massLocal(INTERIOR_MASSES[0]);
     const r = this.deform.massLocal(INTERIOR_MASSES[1]);
     const cell = this.deform.massLocal(INTERIOR_MASSES[2]);
-    interiorPose(l.x, r.x, cell.y, cell.z, _interior);
+    const cellRest = this.deform.massRest(INTERIOR_MASSES[2]);
+    interiorPose(l.x, r.x, cell.y - cellRest.y, cell.z - cellRest.z, _interior);
     this.interior.scale.x = _interior[0]!;
     this.interior.position.set(_interior[1]!, _interior[2]!, _interior[3]!);
     this.cabin.fit(this.deform);

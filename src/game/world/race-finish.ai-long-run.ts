@@ -10,8 +10,8 @@ import city from "./tracks/city.json" with { type: "json" };
  * Full-sanity sweeps, not per-commit tests: whole races of 5 AI cars run on every course and several seeds, watched for a car that does not
  * finish, a cop lead-in that does not line up behind its target or meets its pair. Pinned in the regular suite, on the moment itself:
  * the head-on traffic car edging to its own kerb (`ai/traffic.test.ts`) for the city seed-1 DNF, a stakeout pair nose to nose running its
- * lead-ins without touching (`ai/police-lead-in.test.ts`) for the Dam Spine / Four-Count pairs, one stakeout's lead-in read on its heading
- * and T-bone (`race-finish.test.ts`); the razor-shelf cut mouths by `track.test.ts`.
+ * lead-ins without touching (`ai/police-lead-in.test.ts`, on the oval and on Dam Spine and Four-Count, the long fast courses), one stakeout's
+ * lead-in read on its heading and T-bone (`race-finish.test.ts`); the razor-shelf cut mouths by `track.test.ts`.
  */
 for (const course of COURSE_IDS) finishSweep(course);
 
@@ -97,13 +97,5 @@ describe("given 2-lap Watch races of 4 AI rivals on a course with police cars on
     assert.ok(converged >= 8 && offRoad <= converged, `${converged} lead-in headings checked, ${offRoad} left out for a target off the road (of ${wakes})`);
     assert.ok(diverged.length <= DIVERGED_OF_SEEDS, `${diverged.length} of ${converged + diverged.length} lead-in headings did not converge: ${diverged.join("; ")}`);
     assert.deepEqual(met, [], `lead-in pairs that touched (of ${wakes} lead-ins)`);
-  });
-
-  it("when the long fast courses Dam Spine (seed 1) and Four-Count (seed 6) run, then no two cops touch during their lead-ins, and each cop that pulls away has a racer past its spot", () => {
-    for (const [course, seed] of [["dam-spine", 1], ["four-count", 6]] as const) {
-      const r = leadIns(0, seed, course);
-      assert.ok(r.wakes >= 10, `${course} seed ${seed}: only ${r.wakes} wakes`);
-      assert.equal(r.leadInPairs, 0, `${course} seed ${seed}: lead-in pairs that touched`);
-    }
   });
 });

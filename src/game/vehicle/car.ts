@@ -18,7 +18,7 @@ import { clearShape } from "./loose-step.ts";
 import { REACH, type CarSurfaces } from "./car-surfaces.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CageRig, centreY } from "./car-cage-rig.ts";
-import { PartSeat } from "./part-geometry.ts";
+import { PART_KIND, PartSeat } from "./part-geometry.ts";
 import { setBare } from "./interior.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
 import { HUB_PIN_MAX, HUB_PULL_STEP } from "../deform/constants.ts";
@@ -72,6 +72,21 @@ export class DeformableCar extends CarParts {
     const w = this.angular;
     const r2 = REST_SPEED * REST_SPEED;
     return v.x * v.x + v.y * v.y + v.z * v.z >= r2 || w.x * w.x + w.y * w.y + w.z * w.z >= r2;
+  }
+  /** Set when `stir` woke this car at rest and kept its rest: `stepWorld` clears it before the slice and records the stir (`stirSlice`) when it is set after. */
+  stirred = false;
+
+  /**
+   * Something that moves came within reach of this sleeping wreck (`stirNear`, or a replay's recorded stir). A wreck that itself moves is woken whole (`wake`); one at rest wakes to
+   * take the slice's step with the rest it had: the neighbour that stirred it need not touch it, and a neighbour tipping across rest speed restarted a second of rest on each stir.
+   */
+  stir(): void {
+    if (this.moving) {
+      this.wake();
+      return;
+    }
+    this.asleep = false;
+    this.stirred = true;
   }
   /** Both doors and the trunk lid shut (`swing.latched`; a torn lid is no lid): nothing of the car stands out past its hull and its mirrors; an unlatched door swings out up to its hinge plus its length, a lid past the tail or roof. */
   get hingesLatched(): boolean {
@@ -144,6 +159,8 @@ export class DeformableCar extends CarParts {
   readonly suspension = new Suspension(this.frame);
   private bodyTyres: TyreSkin | null = null;
   private hoodTyres: TyreSkin | null = null;
+  /** The parts the bonnet folds down onto, which its hold keeps under it: the cabin shell (its dash) and the engine bay. */
+  private underHood: readonly PartSeat[] | null = null;
   /** The `placements` count the tyre holds last ran at: a car put on a spot since is held afresh. */
   private heldPlacements = -1;
   private classBody: THREE.Object3D | null = null;
@@ -499,7 +516,7 @@ export class DeformableCar extends CarParts {
         this.stepLooseParts(dt, this.slot, this.surfaces);
         return;
       }
-      this.wake();
+      this.stir();
     }
     if (this.deform.frozenReady) {
       this.integrateFrozen(dt);
@@ -641,6 +658,7 @@ export class DeformableCar extends CarParts {
   stepBreakage(dt: number): void {
     if (this.vaporized || this.falling) return;
     this.deform.stepCrush(dt);
+    this.settleLidStrike();
     if (this.crashed) {
       this.syncAttachedParts(dt);
       this.evaluateBreakage(this.deform.impulseValue, dt);
@@ -660,14 +678,14 @@ export class DeformableCar extends CarParts {
     if (this.vaporized || this.falling) return;
     this.deform.update(this.body.geometry);
     if (this.deform.skinnedThisFrame) this.poseLamps();
+    // A load crushes the roof's skin with the masses at rest: the headliner follows it too. Before the panels: the bonnet's hold reads the shell and the bay.
+    if (this.deform.massActive || this.deform.skinnedThisFrame) this.fitInterior();
     if (this.panelsFollow) {
       if (this.deform.skinnedThisFrame) this.skinPanels();
       this.holdSkinOffTyres(this.deform.skinnedThisFrame);
       if (this.deform.skinnedThisFrame) this.poseOpenShells();
       this.followGlass();
     }
-    // A load crushes the roof's skin with the masses at rest: the headliner follows it too.
-    if (this.deform.massActive || this.deform.skinnedThisFrame) this.fitInterior();
     if (this.hullHelper?.visible) this.updateHullHelper();
     this.settleCasters();
   }
@@ -677,12 +695,12 @@ export class DeformableCar extends CarParts {
     this.deform.skinDeferred = false;
     if (!this.deform.flushSkin(this.body.geometry)) return;
     this.poseLamps();
+    this.fitInterior();
     if (this.panelsFollow) {
       this.skinPanels();
       this.holdSkinOffTyres(true);
       this.poseOpenShells();
     }
-    this.fitInterior();
   }
 
   /** A crushed skin drawn over a standing tyre stands on it (`TyreSkin`); a thrown wheel is the world's. */
@@ -698,7 +716,8 @@ export class DeformableCar extends CarParts {
     const fresh = skinWritten || this.placements !== this.heldPlacements;
     this.heldPlacements = this.placements;
     this.bodyTyres.hold(this.group, this.wheels, gone, lift, fresh);
-    if (!this.parts.some((p) => p.detached && p.name === LID.hood)) this.hoodTyres.hold(this.group, this.wheels, gone, lift, fresh);
+    this.underHood ??= this.partSeats.filter((s) => s.kind === PART_KIND.interior || s.kind === PART_KIND.engineBay);
+    if (!this.parts.some((p) => p.detached && p.name === LID.hood)) this.hoodTyres.hold(this.group, this.wheels, gone, lift, fresh, this.underHood);
   }
 
   /** Bonnet, boot lid, door skins, the police light bar, the skinned glass and the chrome trims follow the body skin; a door's hinge pose turns its skin after. */

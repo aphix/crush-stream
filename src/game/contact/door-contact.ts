@@ -2,6 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { DOOR_OPEN_MAX, HINGE_TEAR_J, MIRROR_BREAK_J, MIRROR_FOLD_MAX } from "../vehicle/car-core.ts";
 import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
+import type { LidProfile } from "../vehicle/car-parts.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";
 import { MIRROR_REACH } from "../vehicle/part-geometry.ts";
 import { PANEL_BEND_NM, PANEL_FRAGILE_J, PANEL_FRAGILE_T, PANEL_PULL_J, PANEL_SLAM_J } from "../vehicle/car-wear.ts";
@@ -203,6 +204,56 @@ export function hitPanel(car: DeformableCar, side: -1 | 1, lane: Lane): void {
   const moved = Math.abs(p.hingeT - t) * r.peel;
   // A panel that cannot go further (full hinge) holds the striker.
   lane.u = moved > 0 ? Math.sqrt(Math.max(0, lane.u * lane.u - (2 * PANEL_BEND_NM * moved) / lane.kg)) : 0;
+}
+
+const _lid: LidProfile = { hingeY: 0, hingeZ: 0, edgeY: 0, edgeZ: 0, halfWidth: 0 };
+
+/**
+ * The rearmost point (m along the car) of the trunk lid as it hangs now that a rear→front face, centred `lx` with half width `ex`, reaches (side
+ * view: a line from its hinge to its free edge, `halfWidth` either side of the car's axis): the line within the face's heights. `Infinity` where the
+ * face's width or heights miss the lid.
+ */
+function lidRearmost(car: DeformableCar, lane: Lane, lx: number, ex: number): number {
+  const lid = car.lidProfile(_lid);
+  if (Math.abs(lx) - ex >= lid.halfWidth) return Infinity;
+  const rise = lid.edgeY - lid.hingeY;
+  const level = Math.abs(rise) < 1e-6;
+  if (level && (lid.hingeY < lane.bottom || lid.hingeY > lane.top)) return Infinity;
+  const at = (y: number): number => (level ? 0 : (y - lid.hingeY) / rise);
+  const t0 = Math.min(Math.max(Math.min(at(lane.bottom), at(lane.top)), 0), 1);
+  const t1 = Math.min(Math.max(Math.max(at(lane.bottom), at(lane.top)), 0), 1);
+  if (!level && t0 === t1) return Infinity;
+  return Math.min(lid.hingeZ + t0 * (lid.edgeZ - lid.hingeZ), lid.hingeZ + t1 * (lid.edgeZ - lid.hingeZ));
+}
+
+/**
+ * The trunk lid against a rear→front face: a lid hanging on its stop has its strap (a drop gate's cables) take the striker's closing energy, as a
+ * door pushed past its stop does (`hitDoor`): past the hinge's tear energy the lid leaves and the striker goes on with what it still carries. A
+ * shut lid is held by its latch, which a blow opens by crushing the tail at it (`LID_LATCH_CRUSH_M`: the striker shifts off the latch), not by
+ * its own energy: a face at the lid's heights that has passed the tail and crushed it that far springs the latch (the lid swings open on its
+ * struts); a lighter blow leaves the lid latched. A lid between (sprung, swinging) is no collider.
+ */
+export function hitLid(car: DeformableCar, lane: Lane, lx: number, ex: number): void {
+  const onStop = car.lidHangsOnStop();
+  if (lane.dir < 0 || !(onStop || car.lidHinge().latched) || car.lidOff()) return;
+  const rearmost = lidRearmost(car, lane, lx, ex);
+  if (rearmost === Infinity) return;
+  const depth = lane.face - (onStop ? rearmost : Math.min(rearmost, car.cage.fields.planBox[2]!));
+  if (depth <= 0) return;
+  if (!onStop) {
+    car.noteLidStruck();
+    return;
+  }
+  if (depth > lane.length) return;
+  partHit.touched = true;
+  strikeLidStrap(car, lane, 0.5 * lane.kg * lane.u * lane.u);
+}
+
+/** The strap of a lid on its stop takes `energy` (J) of a blow; past the hinge's tear energy the lid leaves and the striker keeps what the tear did not cost. */
+function strikeLidStrap(car: DeformableCar, lane: Lane, energy: number): void {
+  const hinge = car.lidHinge();
+  const left = Math.sqrt(Math.max(0, lane.u * lane.u - (2 * Math.max(0, hinge.spec.tearJ - hinge.load)) / lane.kg));
+  lane.u = car.loadLidStop(energy, _push.set(0, 0.8, Math.max(left, 1))) ? left : 0;
 }
 
 /** Plan samples along a door, hinge to trailing edge, a fixed solid is asked about: dense enough that no thin solid (a lamp post) fits between two. */

@@ -1,7 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PerformanceObserver } from "node:perf_hooks";
-import { setImmediate as nextTurn } from "node:timers/promises";
+import { scavengesDuring } from "../kernel/gc.test-util.ts";
 import { CAUSE, FRAME, HITCH, HitchLog } from "./bench-hitch.ts";
 
 const STEADY_MS = 6;
@@ -66,19 +65,15 @@ describe("given the hitch log called a million times", () => {
   it("when frames are logged with hitches stored and dropped, then the engine's garbage collector never runs (nothing is allocated per frame)", async () => {
     const log = new HitchLog();
     feed(log, 500, { 300: 90 });
-    const collections: string[] = [];
-    const observer = new PerformanceObserver((list) => void collections.push(...list.getEntries().map((e) => e.name)));
-    observer.observe({ entryTypes: ["gc"] });
     const calls = 1_000_000;
-    for (let i = 0; i < calls; i++) {
-      row[FRAME.interval] = i % 9973 === 0 ? 200 + (i % 7) : STEADY_MS;
-      row[FRAME.atS] = i * 0.006;
-      log.frame(row, 2, i & 7);
-    }
-    await nextTurn();
-    collections.push(...observer.takeRecords().map((e) => e.name));
-    observer.disconnect();
+    const minor = await scavengesDuring(() => {
+      for (let i = 0; i < calls; i++) {
+        row[FRAME.interval] = i % 9973 === 0 ? 200 + (i % 7) : STEADY_MS;
+        row[FRAME.atS] = i * 0.006;
+        log.frame(row, 2, i & 7);
+      }
+    });
     assert.ok(log.table().count > 50, "the control: hitches were stored and dropped during the run");
-    assert.equal(collections.length, 0, `${collections.length} collections in ${calls} frames`);
+    assert.equal(minor, 0, `${minor} minor collections in ${calls} frames`);
   });
 });

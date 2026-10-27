@@ -126,6 +126,15 @@ export const DOOR_DETENT_ACC = 0.76;
 export const MIRROR_FOLD_MAX = (75 * Math.PI) / 180;
 /** Energy the mirror's fold stop takes before the mirror snaps off (J), guessed. */
 export const MIRROR_BREAK_J = 30;
+/**
+ * Tail crush (m) at the latch that lets a shut trunk lid spring: 2 cm, guessed. The latch itself holds 9-11 kN fully latched (about 100 J through
+ * 10 mm; research note 2026-10-26-trunk-latch-strength), so a blow opens a lid by the tail's intrusion shifting the striker off the latch, not by
+ * its own energy: a tap that dents the tail by millimetres leaves it shut. Measured over derby and race fields, 1.2 cm made lids re-spring over
+ * and over on wrecks lying against each other (30 springs in one heat), 2 cm sprang no lid the crush rule would not.
+ */
+export const LID_LATCH_CRUSH_M = 0.02;
+/** A swinging door or lid must reach its frame at least this fast (rad/s) for the latch to catch: one creeping home (a sprung gate with no struts settling against its seal at 0.0001 rad/s) rests unlatched, as a real latch needs a push to engage; a hand's close is several rad/s, guessed. */
+export const LATCH_CATCH_RATE = 0.2;
 /** A door's drawn angle (rad) per unit of crash hinge value (`hingeT`): the jam that holds a door ajar. */
 const DOOR_JAM = 1.45;
 /** C1: a side hit that raises a door's hinge value past this at `DOOR_TEAR_MPS` tears it off. */
@@ -471,7 +480,7 @@ export abstract class CarCore {
   /** The cabin's pose, holding its shell, seats and wheel (`CarCabin`): `fitInterior` moves it with the crushed cell. */
   readonly interior: THREE.Group;
   /** The interior kit, the engine bay and the crash bars, placed by the style. */
-  protected readonly cabin: CarCabin;
+  readonly cabin: CarCabin;
   /** The lifted truck's frame and axles (`BodyStyle.underbody`); null on other styles. */
   readonly underbody: CarUnderbody | null;
   private mirrorL: PartSeat;
