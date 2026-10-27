@@ -27,11 +27,8 @@ import { sweepSeeds } from "./engine-replay.test-util.ts";
  *   `wheelRate`): `flight-block.test.ts` "pops its front-left wheel".
  * - seed 54 (a car put on a spot while intact came back posed, not respawned: mirrors a brush had folded stayed folded, as the live
  *   placement unfolds them): `engine-replay-placed.test.ts`.
- * Seeds 1 to 8, each its own race (the field piles up in different places: clips that open on wrecks already in motion,
- * wall hits, pile-ups of 3 to 17 cars). `SEEDS=1,2,... node --experimental-strip-types --test src/game/engine/engine-replay.ai-long-run.ts` runs any others.
- *
- * Seed 4 of the natural field once had its flat-out player hit the far wall head-on at 41 m/s and stop; on the one rigid path
- * the player is 1.3 m further left at z 90, is wrecked by something at z 98, slides 60 m along that wall and no crash of the
- * 75 s ranks as a highlight (nothing to replay), so seed 9 is swept in its place.
+ * Seeds 1 and 18 (owner, 2026-10-26: the two races whose clips caught the most kinds of defect: wall hits, pile-ups, bystanders,
+ * knocked props, sleeping wrecks, torn parts); each is its own race. `SEEDS=1,2,... node --experimental-strip-types --test src/game/engine/engine-replay.ai-long-run.ts`
+ * runs any others.
  */
-sweepSeeds([1, 2, 3, 5, 6, 7, 8, 9, 18, 30, 47]);
+sweepSeeds([1, 18]);

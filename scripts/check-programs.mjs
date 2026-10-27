@@ -159,7 +159,7 @@ async function sprayedSwitches(late) {
   }
 }
 
-/** A program key's last field: the material's own key (`customProgramCacheKey`), e.g. "car-paint-primer|finish-paint|spray-car". */
+/** A program key's last field: the material's own key (`customProgramCacheKey`), e.g. "car-paint-primer|finish-paint|spray-car-depth". */
 const customKey = (key) => key.slice(key.lastIndexOf(",") + 1);
 
 try {

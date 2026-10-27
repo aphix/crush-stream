@@ -1,7 +1,7 @@
 import { hypot2, detSin, detCos, PART_FAMILY } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { BUMPER_F } from "./constants.ts";
+import { BUMPER_F, LID } from "./constants.ts";
 import { bootPivot, lidAccel } from "./hinge-spec.ts";
 import { hingePose, INTERIOR_MASSES, interiorPose } from "./part-pose.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
@@ -545,6 +545,11 @@ export abstract class CarParts extends CarGlass {
   /** The strap or cables of a lid on its stop take `energy` (J): once the total passes the hinge's `tearJ` it tears off with `push` (car-space m/s). True if it did. */
   loadLidStop(energy: number, push: THREE.Vector3): boolean {
     return this.loadStop(this.lidPart, energy, push);
+  }
+
+  /** Whether the bonnet has left the car. */
+  hoodOff(): boolean {
+    return this.parts.some((p) => p.detached && p.name === LID.hood);
   }
 
   /** Whether a door, mirror or quarter panel has left the car; a mirror rides off on its torn door. */

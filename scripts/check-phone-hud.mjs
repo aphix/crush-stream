@@ -60,6 +60,16 @@ const driveRace = async (page) => {
   await startRace(page);
   await settle(page, 9000);
 };
+/** Held on the grid by the handbrake until the standings fade after green, then the gas until the car rolls, then Out tapped: refused ("Stop the car first"). */
+const refuseOut = async (page) => {
+  await startRace(page);
+  await evaluate(page, () => Object.assign(window.__crush.touch, { gas: 0, brake: 0, held: 1 << 2 }));
+  await settle(page, 9000);
+  await evaluate(page, () => Object.assign(window.__crush.touch, { gas: 1, held: 0 }));
+  await settle(page, 1200);
+  await page.locator("[data-touch-control=onfoot]").tap();
+  await settle(page, 300);
+};
 
 /**
  * Screens: `driving` screens must keep the road clear and hold the driving controls; `sheet` screens are menus and only get the
@@ -75,6 +85,11 @@ const SCREENS = {
   "race-tilt": { hash: "scene=race", scheme: "tilt", driving: true, edgeGuard: true, setup: driveRace, expect: ["steer", "handbrake", "pedal-strip", "onfoot", "pause", "view", "fullscreen"], absent: ["boost"] },
   // Out tapped on Easy's grid (its handbrake holding the car, as above): on foot Easy draws the Pedals strip, the walk's forward axis, and Out has become In.
   "race-onfoot": { hash: "scene=race", scheme: "autogas", driving: true, edgeGuard: true, setup: async (page) => { await startRace(page); await evaluate(page, () => Object.assign(window.__crush.touch, { gas: 0, brake: 0, held: 1 << 2 })); await settle(page, 9000); await page.locator("[data-touch-control=onfoot]").tap(); await settle(page, 2000); }, expect: ["steer", "pedal-strip", "onfoot", "pause", "fullscreen"], absent: ["brake"], onFoot: true },
+  // A refused Out (the car still rolls): the reason stands beside the button, in the disc's, the strip's and Easy's layouts. It shows for 2 s, one line
+  // beside a two-thumb scheme's Out, level with the road: it may take 4 % more of the zone.
+  "refused-disc": { hash: "scene=race", driving: true, setup: refuseOut, expect: ["steer", "onfoot"], refusal: true },
+  "refused-pedals": { hash: "scene=race", scheme: "pedals", driving: true, edgeGuard: true, roadAllowancePct: 4, setup: refuseOut, expect: ["steer", "pedal-strip", "onfoot"], refusal: true },
+  "refused-easy": { hash: "scene=race", scheme: "autogas", driving: true, edgeGuard: true, roadAllowancePct: 4, setup: refuseOut, expect: ["steer", "brake", "onfoot"], refusal: true },
   // Survival says "Chased by N cops" all run long, the one thing it must always say: it may take a little more of the road's top edge.
   "survival-drive": { hash: "scene=survival", driving: true, roadAllowancePct: 5, setup: async (page) => { await evaluate(page, () => window.__crush.raceCommand({ type: "start" })); await settle(page, 8000); }, expect: ["steer", "onfoot", "pause", "fullscreen"] },
   "fleet-drive": { hash: "", driving: true, // Following one of five cars: the cycle has somewhere to go, so Prev and Next show.
@@ -233,6 +248,7 @@ async function checkScreen(browser, device, name, screen) {
   try {
     if (screen.setup) await screen.setup(page);
     if (screen.onFoot && !/back in/i.test((await page.locator("[data-touch-control=onfoot]").first().getAttribute("aria-label")) ?? "")) fail(context, "the Out tap did not get the player out (the button is not In)");
+    if (screen.refusal && !((await page.locator("[data-onfoot-refusal]").first().textContent()) ?? "").trim()) fail(context, "a refused Out tap shows no reason on the touch HUD");
     const probe = await evaluate(page, PROBE, [GRID_CELL, ROAD_ZONE]);
     if (OUT) await page.screenshot({ path: join(OUT, `${name}.${device.id}.png`), scale: "css" });
     console.log(`  road ${probe.roadCoveredPct}%  controls ${probe.rects.length}  small ${probe.small.length}  crossings ${probe.crossings.length}`);

@@ -15,6 +15,9 @@ const FALL_WITHIN_S = 1.5;
 const TOUCH_WALK_GAS = 0.95;
 const TOUCH_WALK_S = 2;
 const TOUCH_WALK_MIN_M = 1;
+/** A car this fast (m/s) is too fast to leave; the refusal is gone this long (s) after it (`REFUSAL_SECONDS` and a slack). */
+const ROLLING_MPS = 8;
+const REFUSAL_GONE_S = 2.5;
 
 /** The fleet's crash loop rolls the same crash from a seed: this one stops car 0 with its driver in and room at its door, this one throws him out (windshield) before it stops. */
 const LOOP_DRIVER_IN_SEED = 4;
@@ -86,7 +89,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
   });
 
   it("when the touch Out button is tapped at the wheel, then he gets out once, the tap is spent, the pedal strip's gas walks him, and the same button tapped at his door gets him back in", () => {
-    assert.deepEqual(rig.engine["onFoot"].hud(), { out: false, prompt: "Enter or B: get out" }, "at the wheel the button is Out");
+    assert.deepEqual(rig.engine["onFoot"].hud(), { out: false, prompt: "Enter or B: get out", refusal: null }, "at the wheel the button is Out");
     rig.tapOnFoot(1);
     assert.equal(rig.phase(), "onFoot", `he is out (he was told: ${rig.engine["onFoot"].flow.refusal})`);
     assert.equal(rig.engine.touch.tapped, 0, "the tap fired on one poll");
@@ -101,6 +104,18 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     rig.tapOnFoot(1);
     assert.equal(rig.phase(), "inCar", "the tap got him in");
     assert.equal(rig.engine["seat"].mode, "drive", "with the wheel");
+  });
+
+  it("when the touch Out button is tapped while the car still rolls, then he stays in and the touch HUD reads the desktop prompt's reason, which clears", () => {
+    const own = rig.cars()[0]!;
+    own.spawnFacing(0, 0, 0, ROLLING_MPS);
+    rig.tapOnFoot(2 * FRAME);
+    assert.equal(rig.phase(), "inCar", "a rolling car is not left");
+    const foot = rig.engine["onFoot"].hud();
+    assert.equal(foot?.refusal, "Stop the car first", "the touch HUD is told why");
+    assert.equal(foot?.refusal, rig.engine["onFoot"].prompt(), "in the desktop prompt's words");
+    rig.run(REFUSAL_GONE_S);
+    assert.equal(rig.engine["onFoot"].hud()?.refusal, null, "and the reason clears");
   });
 
   it("when the seat only follows his car, not at its wheel, then nothing offers getting out: no Out button, and a tap does nothing", () => {

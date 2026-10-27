@@ -143,14 +143,14 @@ describe("given a spray bitmap wrapped round a car or a driver as a box", () => 
 describe("given the spray patch on a material", () => {
   const patched = (outer: THREE.Texture | null, key: string): THREE.Material => {
     const material = new THREE.MeshStandardMaterial();
-    applySpray(material, sprayUniforms(PERSON_SPRAY, BARE_SPRAY, 1, outer), "", "vSprayP = position;", key);
+    applySpray(material, sprayUniforms(PERSON_SPRAY, BARE_SPRAY, 1, outer && { map: outer }), "", "vSprayP = position;", key);
     return material;
   };
 
-  it("when it is given the dummy's depth map, then its fragment tests the fragment's depth against the texel's outermost surface, and a car's patch (no map) does not", () => {
+  it("when it is given the dummy's depth map, then its fragment tests the fragment's depth against the texel's outermost surface, and a patch with no map does not", () => {
     const dummy = compileHooks(patched(personSprayDepthTexture(), "dummy-depth")).fragmentShader;
-    const car = compileHooks(patched(null, "car")).fragmentShader;
+    const plain = compileHooks(patched(null, "plain")).fragmentShader;
     assert.ok(dummy.includes("#define SPRAY_DEPTH") && dummy.includes("sprayBand"), "the dummy's patch has the depth test");
-    assert.ok(!car.includes("#define SPRAY_DEPTH"), "the car's patch is as it was");
+    assert.ok(!plain.includes("#define SPRAY_DEPTH"), "a patch with no map has none");
   });
 });
