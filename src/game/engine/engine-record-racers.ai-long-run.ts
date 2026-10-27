@@ -16,6 +16,8 @@ const MIN_CLIPS = 3;
 /** A seeded 100 s city race with 8 AI, traffic and police, watched in follow mode: its racer count and the (first car, second car or -1) of each kept clip's first impact. */
 function cityClips(seed: number): { racers: number; firsts: (readonly [number, number])[] } {
   const w = makeWorld();
+  // The recorder reads the sim, never a skin.
+  w.skin = false;
   w.race.enter();
   try {
     w.race.command({ type: "quit" });
