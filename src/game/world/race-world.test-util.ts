@@ -199,11 +199,11 @@ function fixedStep(w: World, dt: number): void {
 }
 
 /**
- * One rendered frame of `CrashEngine.tickInner` (physics part) at 1× time; `slice` sees each step's length before it runs. With `pace`
+ * The physics of one rendered frame of `CrashEngine.tickInner` at 1× time; `slice` sees each step's length before it runs. With `pace`
  * the frame is stepped as the engine does (`SimPacer`: whole slices of its floor, `pace.pin` holding the 1/240 s or the 1/80 s one);
  * without it the frame's time is cut into `physicsSlice`s that end exactly on it.
  */
-export function frame(w: World, state: { acc: number }, slice?: (h: number) => void, pace?: SimPacer): void {
+export function stepFrame(w: World, state: { acc: number }, slice?: (h: number) => void, pace?: SimPacer): void {
   const cars = w.live();
   const vmax = sliceSpeed(cars);
   const step = (h: number): void => {
@@ -223,7 +223,12 @@ export function frame(w: World, state: { acc: number }, slice?: (h: number) => v
       steps++;
     }
   }
-  for (const car of cars) car.updateSkin();
+}
+
+/** One rendered frame of `CrashEngine.tickInner` (physics part) at 1× time: `stepFrame`, then every car's skin and the director's frame. */
+export function frame(w: World, state: { acc: number }, slice?: (h: number) => void, pace?: SimPacer): void {
+  stepFrame(w, state, slice, pace);
+  for (const car of w.live()) car.updateSkin();
   w.race.frame(FRAME);
 }
 
