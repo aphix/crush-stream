@@ -1,7 +1,7 @@
 {
  "src/game/world/survival-chase.test.ts": 204,
  "src/game/engine/reel-view.test.ts": 78,
- "src/game/world/race-finish.test.ts": 74,
+ "src/game/world/race-finish.test.ts": 13,
  "src/game/engine/prop-wall.test.ts": 66,
  "src/game/vehicle/ground-fit.test.ts": 59,
  "src/game/world/race-eject-false.ai-long-run.ts": 83,

@@ -2,9 +2,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { blankAiCar } from "../ai/derby-ai.ts";
 import { RacerSight } from "../ai/cop-sight.ts";
+import type { HunterWorld } from "../ai/cop-brain.ts";
+import { PoliceBrain } from "../ai/police.ts";
+import { RaceBrain } from "../ai/race-ai.ts";
 import { racerSeeing } from "./race-police-sight.test-util.ts";
-import { blankProjection, Track } from "./track.ts";
+import { blankPoint, blankProjection, Track } from "./track.ts";
 import fourCount from "./tracks/four-count.json" with { type: "json" };
+import city from "./tracks/city.json" with { type: "json" };
 
 const track = new Track(fourCount);
 /** A seeded Four-Count police race's racer at 128.26 s: on the skip-city shortcut, 151 m off the main road, driving +x at 52 m/s. */
@@ -16,7 +20,7 @@ const SPOTS = [
 ];
 
 describe("given a racer on Four-Count's skip-city shortcut, off the main road's corridor, and the spots a stakeout put on the road behind it", () => {
-  it("when the long-run's judge reads the spots, then it agrees with the game's sight: an off-road racer sees the ahead range round it, not the main road's arc", () => {
+  it("when the judge reads the spots, then it agrees with the game's sight: an off-road racer sees the ahead range round it, not the main road's arc", () => {
     const sight = new RacerSight(track, 1);
     sight.watch([{ ...blankAiCar(0), ...SHORTCUT_RACER }]);
     const proj = blankProjection();
@@ -28,4 +32,48 @@ describe("given a racer on Four-Count's skip-city shortcut, off the main road's 
     const round = sight.range.ahead - 10;
     assert.equal(racerSeeing(track, [SHORTCUT_RACER], SHORTCUT_RACER.x - round, SHORTCUT_RACER.z).sees, true, "a spot inside the ahead range round it is seen");
   });
+});
+
+/** Racers on the grid: the player's car and seven AI. */
+const FIELD = 8;
+
+/**
+ * The spots one stakeout's two cops are put on, on `on`: the field strung out `gap` m apart behind the leader at `lead` m (racer 7 at `seventh`,
+ * when given), the stakeout for racer `target`, in the first patrol beat.
+ */
+function stakeout(on: Track, lead: number, gap: number, target: number, seed: number, seventh?: { x: number; z: number }) {
+  const pt = blankPoint();
+  const cars = Array.from({ length: FIELD + 2 }, (_, i) => blankAiCar(i));
+  for (let i = 0; i < FIELD; i++) {
+    const p = on.pointAt(lead - i * gap, pt);
+    Object.assign(cars[i]!, { x: p.x, z: p.z });
+  }
+  if (seventh) Object.assign(cars[FIELD - 1]!, seventh);
+  const hunt = new Uint8Array(cars.length);
+  hunt[target] = 1;
+  const parks: { x: number; z: number }[] = [];
+  const world: HunterWorld = { park: (_id, x, _y, z) => parks.push({ x, z }), store: () => {}, down: () => false, speed: () => 0, sirens: () => {}, hidden: () => true };
+  // Past a third of the lap the stakeouts are armed: the first beat parks one.
+  new PoliceBrain(on, new RaceBrain(on, FIELD), FIELD, 2, seed).update(0, 0.25, cars, hunt, on.length / 2, world);
+  return { parks, racers: cars.slice(0, FIELD) };
+}
+
+// Each layout's spots, parked blind to all but the target, are seen by another racer (the shortcut racer, or the pack ahead of the back marker).
+const LAYOUTS = [
+  { course: "four-count", on: track, why: "the stakeout for the leader, racer 7 on the skip-city shortcut", lead: 1904, gap: 20, target: 0, seed: 1, seventh: SHORTCUT_RACER },
+  { course: "four-count", on: track, why: "the stakeout for the back marker of a pack 20 m apart", lead: 1500, gap: 20, target: 6, seed: 2, seventh: SHORTCUT_RACER },
+  { course: "city", on: new Track(city), why: "the stakeout for the back marker of a pack 15 m apart", lead: 200, gap: 15, target: 6, seed: 1 },
+];
+
+describe("given a field of 8 racers strung out on the road and a stakeout of two cops parked for one of them", () => {
+  for (const l of LAYOUTS) {
+    it(`when ${l.course} parks ${l.why}, then both cops are put on the road and no racer sees either spot`, () => {
+      const { parks, racers } = stakeout(l.on, l.lead, l.gap, l.target, l.seed, l.seventh);
+      assert.equal(parks.length, 2, "both cops parked");
+      for (const p of parks) {
+        const seen = racerSeeing(l.on, racers, p.x, p.z);
+        assert.equal(seen.sees, false, `cop put on the road at (${p.x.toFixed(0)}, ${p.z.toFixed(0)}) in sight of ${seen.text}`);
+      }
+    });
+  }
 });
