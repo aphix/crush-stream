@@ -20,7 +20,7 @@ import { highJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS } from "
 import { MinigameGround } from "./minigame-ground.ts";
 import { FRAME_BOX_FLOATS, frameBoxCount, frameMeshOf, withoutFrame } from "./minigame-frame.test-util.ts";
 import { climbFootX, floorHeightAt, lipHeight, stationBackX, stationFrontX, stationStartPose } from "./minigame-profile.ts";
-import { dressedDriverCar, MINIMUM_SPEED, speedAtLine } from "./minigame-profile.test-util.ts";
+import { dressedDriverCar, heldRagdolls, MINIMUM_SPEED, speedAtLine } from "./minigame-profile.test-util.ts";
 import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_CUPS, RING_MESH_STEP, ringBoardMesh, ringHeightAt, ringScore } from "./minigame-ring.ts";
 import { RANGE } from "./range.ts";
 
@@ -334,13 +334,9 @@ function withoutPrism(ground: MinigameGround, prismId: number): MinigameGround {
   return ground;
 }
 
-/** A ragdoll system on `ground` as the range runs it, dummies held lying where they land. */
+/** `heldRagdolls` on `ground`, disposed after the test. */
 async function ragdollOn(ground: Ground): Promise<RagdollSystem> {
-  const system = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  await system.preload();
-  setGround(ground);
-  system.update(RAGDOLL_FRAME, [], true, false, null);
-  system.holdThrown();
+  const system = await heldRagdolls(ground);
   systems.push(system);
   return system;
 }
