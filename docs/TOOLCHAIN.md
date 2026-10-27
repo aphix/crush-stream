@@ -62,14 +62,15 @@ so `--max-old-space-size` does not stop it (measured: heap held at 1315 MB of a 
 - **`scripts/assert-guard.mjs`**, imported first by every test process (`test-setup.mjs`, and `--import` in `test` /
   `test:parity`): when a comparison fails and its sides would print past `MAX_DIFF_LINES` lines (array elements, keys and
   long strings counted), the error carries a bounded print (`util.inspect`, 20 elements, depth 4) as its message, `actual`
-  and `expected`. Covers `assert` and `assert/strict` (default and named imports), `t.assert`, and `throws` / `rejects`
-  with a validation object. Passing comparisons and failures on small values are Node's own: same message, fields and
-  stack (checked on 25 small cases, identical with and without the guard). `scripts/assert-guard.test.mjs` pins it.
+  and `expected`. Covers `strictEqual` / `deepStrictEqual` of `assert/strict` (default and named imports) and `t.assert`;
+  the other comparisons build no diff, and every `throws` / `rejects` in the repo checks a small value. Passing comparisons
+  and failures on small values are Node's own: same message, fields and stack (checked on 25 small cases, identical with
+  and without the guard). `scripts/assert-guard.test.mjs` pins it.
 - **`--max-old-space-size=1536`** on every test process (`run-tests.mjs` `HEAP_MB`, `test`, `test:parity`): a runaway
   held on the heap aborts there. The heaviest of the 400+ suite files peaks at 711 MB of heap (`present/ground-overlap`).
 - Failing compare of two objects holding a 4096² `Float32Array`, under a 2-3 GB memory cap: before, OOM-killed at the cap
-  after 8-10 s on each of `assert.equal`, `deepStrictEqual`, `t.assert.deepStrictEqual` and `assert.throws` with a
-  validation object; after, each fails in 40 ms at 184 MB RSS with a 2.7 KB report.
+  after 8-10 s on each of `assert.equal`, `deepStrictEqual` and `t.assert.deepStrictEqual`; after, each fails in 40 ms at
+  184 MB RSS with a 2.7 KB report.
 
 ## Headless frame (`scripts/headless-frame.mjs`, 2026-10-21)
 

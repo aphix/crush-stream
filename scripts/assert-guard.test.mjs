@@ -43,11 +43,6 @@ describe("given a test process (the guard is imported first by every test runner
     assert.ok(bounded(err), `${err.message.length} message chars, actual ${typeof err.actual}`);
   });
 
-  it("when assert.throws checks a thrown big value against a validation object, then its error is bounded too", () => {
-    const err = caught(() => assert.throws(() => { throw texture(0); }, { image: texture(1).image }));
-    assert.ok(bounded(err), `${err.message.length} message chars, actual ${typeof err.actual}`);
-  });
-
   it("when a compare of small values fails, then the message is Node's own", () => {
     assert.equal(caught(() => assert.equal(1, 2)).message, "Expected values to be strictly equal:\n\n1 !== 2\n");
     assert.equal(caught(() => assert.deepEqual({ a: [1, 2] }, { a: [1, 3] })).message.split("\n")[0], "Expected values to be strictly deep-equal:");
