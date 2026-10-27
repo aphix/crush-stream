@@ -5,14 +5,6 @@ import { FLEET_MIN_SEP, LAMP_POSTS, LAMP_RING_R, MAX_CARS, fleetClass, fleetStyl
 import { scatterRampBalls, type RampBall } from "./engine-props.ts";
 import { mulberry32 } from "../world/placements.ts";
 
-function rngFrom(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => {
-    s = (s * 1664525 + 1013904223) >>> 0;
-    return s / 0x100000000;
-  };
-}
-
 describe("given a player's car pick, hatchback", () => {
   const hatchback = { cls: "sedan", style: "hatchback" } as const;
   it("when a field outside the stack is built, then only slot 0 is the pick and the rest are the fleet's cycle", () => {
@@ -41,18 +33,18 @@ const fixedSpeedCases = [
 
 describe("given a fleet of cars laid out around the arena (where each car spawns and how fast it moves)", () => {
   it("when 1 car and then 2 cars are laid out, then the single car spawns away from the centre and the pair sit opposite each other, more than twice the minimum separation apart", () => {
-    const one = layoutFleet(1, 10, 10, rngFrom(1));
+    const one = layoutFleet(1, 10, 10, mulberry32(1));
     assert.equal(one.length, 1);
     assert.ok(Math.hypot(one[0]!.x, one[0]!.z) > 8);
 
-    const two = layoutFleet(2, 8, 12, rngFrom(2));
+    const two = layoutFleet(2, 8, 12, mulberry32(2));
     assert.equal(two.length, 2);
     const d = Math.hypot(two[0]!.x - two[1]!.x, two[0]!.z - two[1]!.z);
     assert.ok(d > FLEET_MIN_SEP * 2, `head-on pair only ${d.toFixed(2)} m apart`);
   });
 
   it("when 8 cars are laid out, then every pair spawns at least the minimum separation apart (within 5 cm)", () => {
-    const slots = layoutFleet(8, 0, 20, rngFrom(7));
+    const slots = layoutFleet(8, 0, 20, mulberry32(7));
     assert.equal(slots.length, 8);
     for (let i = 0; i < slots.length; i++) {
       for (let j = i + 1; j < slots.length; j++) {
@@ -64,14 +56,14 @@ describe("given a fleet of cars laid out around the arena (where each car spawns
 
   for (const testCase of fixedSpeedCases) {
     it(testCase.it, () => {
-      const slots = layoutFleet(testCase.count, testCase.minSpeed, testCase.maxSpeed, rngFrom(testCase.seed));
+      const slots = layoutFleet(testCase.count, testCase.minSpeed, testCase.maxSpeed, mulberry32(testCase.seed));
       assert.ok(slots.every((s) => s.speed === testCase.expectedSpeed));
     });
   }
 
   it("when 99 cars and then 0 cars are asked for, then the fleet is capped at the maximum car count and never drops below 1 car", () => {
-    assert.equal(layoutFleet(99, 1, 2, rngFrom(4)).length, MAX_CARS);
-    assert.equal(layoutFleet(0, 1, 2, rngFrom(4)).length, 1);
+    assert.equal(layoutFleet(99, 1, 2, mulberry32(4)).length, MAX_CARS);
+    assert.equal(layoutFleet(0, 1, 2, mulberry32(4)).length, 1);
   });
 });
 
