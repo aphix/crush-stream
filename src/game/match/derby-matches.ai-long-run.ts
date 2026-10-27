@@ -75,9 +75,9 @@ function atKnobs(knobs: Knobs, build: () => DeformableCar[], seconds: number, st
   }
 }
 
-/** Six AI cars in the bowl, laid out from `seed`. */
-function sixCarDerby(seconds: number, seed = 7, knobs = ARCADE): DerbyRun {
-  return atKnobs(knobs, () => {
+/** Six AI cars in the bowl at the arcade knobs, laid out from `seed`. */
+function sixCarDerby(seconds: number, seed: number): DerbyRun {
+  return atKnobs(ARCADE, () => {
     const scene = new THREE.Scene();
     const cars = Array.from({ length: 6 }, (_, i) => new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: `c${i}` }, scene));
     placeDerby(cars, seed);
