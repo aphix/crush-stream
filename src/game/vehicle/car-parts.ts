@@ -81,8 +81,8 @@ export function growDrawn(o: THREE.Object3D, box: THREE.Box3): void {
 
 /**
  * The lowest clearance (m) of what `o` and its descendants draw over the ground under each vertex, at their world matrices as they stand; `Infinity` where there is no ground under any.
- * Stops at the first clearance under `below`, returning it: enough to say a pose is too low. A vertex at or over world height `clearAbove` stands over its ground by at least `below`
- * and is not read, so a result at or over `below` is only that: nothing is lower.
+ * Stops at the first clearance under `below`, returning it: enough to say a pose is too low. A vertex at or over world height `clearAbove` (the highest ground under it plus the
+ * clearance the caller asks about) is not read: the result is exact under that clearance, and only "no lower" at or over it.
  */
 function lowestClearance(o: THREE.Object3D, below = -Infinity, clearAbove = Infinity): number {
   if (!o.visible) return Infinity;
@@ -91,9 +91,11 @@ function lowestClearance(o: THREE.Object3D, below = -Infinity, clearAbove = Infi
   if (geometry !== null) {
     const position = geometry.getAttribute("position");
     const ground = activeGround();
+    const e = o.matrixWorld.elements;
     for (let k = 0; k < position.count; k++) {
+      // The world y alone (a world matrix is affine) tells a cleared vertex from one to read.
+      if (e[1]! * position.getX(k) + e[5]! * position.getY(k) + e[9]! * position.getZ(k) + e[13]! >= clearAbove) continue;
       _bumpW.fromBufferAttribute(position, k).applyMatrix4(o.matrixWorld);
-      if (_bumpW.y >= clearAbove) continue;
       const y = ground.heightAt(_bumpW.x, _bumpW.z, _bumpW.y);
       if (y !== NO_FLOOR) low = Math.min(low, _bumpW.y - y);
       if (low < below) return low;
@@ -163,6 +165,12 @@ function groundUnderBox(b: THREE.Box3): number {
   }
   return high;
 }
+
+/** The world height (m) at or over which a point stands `BUMPER_CLEAR` clear of all the ground under the plan of box `b` (`lowestClearance`'s `clearAbove`); `-Infinity` where there is none. */
+function clearOverBox(b: THREE.Box3): number {
+  return staticTop(activeGround(), b.min.x - BOX_PAD, b.max.x + BOX_PAD, b.min.z - BOX_PAD, b.max.z + BOX_PAD) + BUMPER_CLEAR;
+}
+
 /** A hinged part below this hinge value is not worn by the wind (a shell hardly standing). */
 const WEAR_MIN_T = 0.04;
 /** A contact is fresh when the last was over `TOUCH_GAP` s ago and the next lands within `TOUCH_NOW` s. */
@@ -482,16 +490,14 @@ export abstract class CarParts extends CarGlass {
     return high === NO_FLOOR || _box.min.y >= high + BUMPER_CLEAR;
   }
 
-  /** Pose `o` (`poseHung`) and return how far (m) it stands under `BUMPER_CLEAR` above the ground there: positive is too low. */
+  /** Pose `o` (`poseHung`) and return how far (m) it stands under `BUMPER_CLEAR` above the ground there: positive is too low, and exact; at most 0 is not. */
   private hungLack(o: THREE.Object3D, x0: number, y0: number, px: number, r: number): number {
-    return this.hungClear(o, x0, y0, px, r) ? 0 : BUMPER_CLEAR - lowestClearance(o);
+    return this.hungClear(o, x0, y0, px, r) ? 0 : BUMPER_CLEAR - lowestClearance(o, -Infinity, clearOverBox(_box));
   }
 
-  /** Whether `o` posed so (`poseHung`) stands too low (`hungLack` > 0), read only up to its first vertex under the clearance, and only the vertices not over the highest ground under its box by `BUMPER_CLEAR`. */
+  /** Whether `o` posed so (`poseHung`) stands too low (`hungLack` > 0), read only up to its first vertex under the clearance. */
   private hungLow(o: THREE.Object3D, x0: number, y0: number, px: number, r: number): boolean {
-    if (this.hungClear(o, x0, y0, px, r)) return false;
-    const top = staticTop(activeGround(), _box.min.x - BOX_PAD, _box.max.x + BOX_PAD, _box.min.z - BOX_PAD, _box.max.z + BOX_PAD);
-    return lowestClearance(o, BUMPER_CLEAR, top + BUMPER_CLEAR) < BUMPER_CLEAR;
+    return !this.hungClear(o, x0, y0, px, r) && lowestClearance(o, BUMPER_CLEAR, clearOverBox(_box)) < BUMPER_CLEAR;
   }
 
   /** Door hinge state; `side` −1 is the left door, +1 the right. */
