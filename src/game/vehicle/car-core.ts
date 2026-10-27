@@ -8,13 +8,12 @@ import { BUMPER_F, LAMP_SEAT, LID, LIGHT_BAR } from "./constants.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
-import { makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofTopY } from "./car-mesh.ts";
-import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
+import { roofTopY } from "./car-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { cageLift, centreLift } from "./car-cage-rig.ts";
-import { makeChassisGeometry, withGateSurround } from "./car-chassis-mesh.ts";
-import { doorCardFace, doorSkinZ, drawnDoorCard, makeDoorGeometry, mirrorSeatX } from "./car-door-mesh.ts";
-import { DOOR_GLASS_SEAT, makeBodyGlassTrim, makeDoorChromeStrips, makeRearGlass, makeRearSideGlass, makeSideGlass, makeSideGlassFrame, makeWindshield, privacyPane, windshieldPoint } from "./car-glass.ts";
+import { doorCardFace, doorSkinZ, drawnDoorCard, mirrorSeatX } from "./car-door-mesh.ts";
+import { ownGeometry } from "./car-templates.ts";
+import { DOOR_GLASS_SEAT, makeBodyGlassTrim, makeDoorChromeStrips, makeRearGlass, makeSideGlassFrame, privacyPane } from "./car-glass.ts";
 import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
   LIGHT_BAR_FOOT,
@@ -23,16 +22,14 @@ import {
   bumperMaterial,
   glassMaterial,
   type GlassLook,
-  makeLightBar,
   makePaintMaterial,
   makeSirenMaterial,
   type LampKind,
   TRIM_CHROME,
   trimMaterial,
-  withPushBar,
 } from "./car-materials.ts";
 import { carPartSeats, GRILLE_SEAT, MIRROR_REACH, PART_KIND, PartSeat } from "./part-geometry.ts";
-import { drawnLamp, drawnPart, LAMP_PROBE_REACH, lampRest, lampSeatAt, withSeamCover } from "./part-variants.ts";
+import { drawnLamp, drawnPart, LAMP_PROBE_REACH, lampRest, lampSeatAt } from "./part-variants.ts";
 import { bumperBare, CarCabin, CarUnderbody } from "./interior.ts";
 import type { CarCage } from "./car-cage.ts";
 import { CAR_STYLES, drawnStyle, type BodyStyle, type CarStyleId } from "./car-variants.ts";
@@ -512,7 +509,7 @@ export abstract class CarCore {
     const livery = this.style.livery;
     this.bodyMat = makePaintMaterial(livery?.body ?? paint.body, this.style.paintFinish);
     const doorMat = livery ? makePaintMaterial(livery.doors, this.style.paintFinish) : this.bodyMat;
-    const bodyGeo = makeChassisGeometry(drawnStyle(this.style));
+    const bodyGeo = ownGeometry(this.style, "body");
     this.regions = panelRegions(this.style, bodyGeo);
     this.body = new THREE.Mesh(bodyGeo, this.bodyMat);
     this.body.castShadow = true;
@@ -523,19 +520,18 @@ export abstract class CarCore {
     this.cabin = new CarCabin(this.style, this.partSeats, this.group);
     this.interior = this.cabin.pose;
 
-    const drawn = drawnStyle(this.style);
-    this.hood = new THREE.Mesh(withHoodBulge(makeHoodGeometry(drawn), drawn), this.bodyMat);
+    this.hood = new THREE.Mesh(ownGeometry(this.style, "hood"), this.bodyMat);
     this.hood.castShadow = true;
     this.hood.position.set(0, this.style.hood.origin[0], this.style.hood.origin[1]);
     this.group.add(this.hood);
-    this.trunk = new THREE.Mesh(withGateSurround(makeTrunkGeometry(this.style), drawn), this.bodyMat);
+    this.trunk = new THREE.Mesh(ownGeometry(this.style, "trunkLid"), this.bodyMat);
     this.trunk.castShadow = true;
     const [pivotY, pivotZ] = bootPivot(this.style.boot);
     this.trunk.position.set(0, pivotY, pivotZ);
     this.group.add(this.trunk);
     if (this.style.lightBar) {
       this.sirenMat = makeSirenMaterial();
-      this.lightBar = new THREE.Mesh(makeLightBar(), this.sirenMat);
+      this.lightBar = new THREE.Mesh(ownGeometry(this.style, "policeLightBar"), this.sirenMat);
       this.lightBar.name = LIGHT_BAR;
       this.lightBar.castShadow = true;
       // Feet soles on the roof's dome where they stand, not the crown between them (that sank them 0.5–2.3 cm). Over the B-pillars, on
@@ -552,10 +548,10 @@ export abstract class CarCore {
     this.doorR = new THREE.Group();
     this.doorL.position.set(-door.hingeX, door.hingeY, door.hingeZ);
     this.doorR.position.set(door.hingeX, door.hingeY, door.hingeZ);
-    this.doorMeshL = new THREE.Mesh(makeDoorGeometry(-1, this.style), doorMat);
+    this.doorMeshL = new THREE.Mesh(ownGeometry(this.style, "doorLeft"), doorMat);
     this.doorMeshL.position.set(0, 0, doorSkinZ(this.style));
     this.doorMeshL.castShadow = true;
-    this.doorMeshR = new THREE.Mesh(makeDoorGeometry(1, this.style), doorMat);
+    this.doorMeshR = new THREE.Mesh(ownGeometry(this.style, "doorRight"), doorMat);
     this.doorMeshR.position.set(0, 0, doorSkinZ(this.style));
     this.doorMeshR.castShadow = true;
     this.doorL.add(this.doorMeshL);
@@ -651,10 +647,7 @@ export abstract class CarCore {
   private makeBumper(front: boolean, accent: number, body: number): THREE.Group {
     const g = new THREE.Group();
     const spec = front ? this.style.bumpers.front : this.style.bumpers.rear;
-    const fascia = makeBumperGeometry(front, this.style);
-    // A push bar is merged into the front bumper: it follows the bumper's masses and tears off with it (its flying box is the bumper's as drawn); the cage carries its box.
-    const drawn = front ? withFrontBand(this.style.pushBar ? withPushBar(fascia) : fascia, this.style) : withRearFittings(fascia, this.style);
-    const mesh = new THREE.Mesh(withSeamCover(drawn, this.style, front), bumperMaterial(spec.trim, accent, body));
+    const mesh = new THREE.Mesh(ownGeometry(this.style, front ? "bumperFront" : "bumperRear"), bumperMaterial(spec.trim, accent, body));
     this.bumperMeshes.push(mesh);
     mesh.castShadow = true;
     this.flushCasters.push(mesh);
@@ -782,29 +775,23 @@ export abstract class CarCore {
     };
     const glassMat = glassMaterial("fresh");
     const style = drawnStyle(this.style);
-    const windshield = makeWindshield(style);
-    if (style !== this.style) {
-      // The windshield's centre is the thrown driver's exit point (sim): the style's own pane's, wherever its drawn twin stands.
-      const centre = windshieldPoint(this.style, 0, 0.5);
-      windshield.userData.centre = [centre.x, centre.y, centre.z];
-    }
-    addPane("windshield", new THREE.Mesh(windshield, glassMat), this.group, ["roof", "bonnet"], "glassFront");
+    addPane("windshield", new THREE.Mesh(ownGeometry(this.style, "windshield"), glassMat), this.group, ["roof", "bonnet"], "glassFront");
     // A roof-hinged hatch or liftgate carries its glass: the pane rides the lid (origin on its hinge line) at −pivot, so it swings, tears off and resets with it.
-    const rear = new THREE.Mesh(makeRearGlass(style), glassMat);
+    const rear = new THREE.Mesh(ownGeometry(this.style, "rearGlass"), glassMat);
     const inGate = roofHinged(style.boot);
     if (inGate) {
       const [pivotY, pivotZ] = bootPivot(style.boot);
       rear.position.set(0, -pivotY, -pivotZ);
     }
     addPane("rear", rear, inGate ? this.trunk : this.group, ["roof", "boot"], "glassRear");
-    const sideL = new THREE.Mesh(makeSideGlass(-1, style), glassMat);
+    const sideL = new THREE.Mesh(ownGeometry(this.style, "doorGlassLeft"), glassMat);
     sideL.position.set(-DOOR_GLASS_SEAT.x, DOOR_GLASS_SEAT.y, DOOR_GLASS_SEAT.z);
     addPane("doorL", sideL, this.doorL, ["doorLeft", "roof"]);
-    const sideR = new THREE.Mesh(makeSideGlass(1, style), glassMat);
+    const sideR = new THREE.Mesh(ownGeometry(this.style, "doorGlassRight"), glassMat);
     sideR.position.set(DOOR_GLASS_SEAT.x, DOOR_GLASS_SEAT.y, DOOR_GLASS_SEAT.z);
     addPane("doorR", sideR, this.doorR, ["doorRight", "roof"]);
-    addPane("quarterL", new THREE.Mesh(makeRearSideGlass(-1, style), glassMat), this.group, ["roof", "doorLeft"]);
-    addPane("quarterR", new THREE.Mesh(makeRearSideGlass(1, style), glassMat), this.group, ["roof", "doorRight"]);
+    addPane("quarterL", new THREE.Mesh(ownGeometry(this.style, "quarterGlassLeft"), glassMat), this.group, ["roof", "doorLeft"]);
+    addPane("quarterR", new THREE.Mesh(ownGeometry(this.style, "quarterGlassRight"), glassMat), this.group, ["roof", "doorRight"]);
     if (style.windowTrim === "chrome") {
       const chrome = trimMaterial(TRIM_CHROME, "chrome");
       // Drawn only (no shadow, so the detail cut hides it with the glass); each rides its pane's parent at the pane's seat.

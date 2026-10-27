@@ -100,6 +100,8 @@ interface DoorGrid {
   skinLength: number;
   rows: DoorRow[];
   columns: number[];
+  /** The body ring's side points' heights (door space, m) at the door cut's rear end and at its front end (`ringRowY` lerps between them). */
+  cutRingYs: readonly [rear: number[], front: number[]];
 }
 
 /** The door skin's rows and column stations (door space) and the extents they span. */
@@ -120,17 +122,18 @@ function doorGrid(style: BodyStyle): DoorGrid {
   const hingeDrop = d.hingeTop === undefined ? 0 : slopedTop - d.hingeTop;
   const edges = doorStations(h, []);
   const [bottom, top] = [edges.slice(0, DOOR_EDGE_STEPS + 1), edges.slice(DOOR_EDGE_STEPS + 1)];
-  const rolls: DoorGrid = { h, hingeDrop, halfLength, skinLength, rows: edges, columns };
+  const ringYsAtCut = (end: number) => drawnSideRing(d.hingeZ + doorSkinZ(style) + end * (halfLength - DOOR_SKIN_OVERLAP), style).map(([, y]) => y - d.hingeY);
+  const rolls: DoorGrid = { h, hingeDrop, halfLength, skinLength, rows: edges, columns, cutRingYs: [ringYsAtCut(-1), ringYsAtCut(1)] };
   const cuts = [-(halfLength - DOOR_SKIN_OVERLAP), halfLength - DOOR_SKIN_OVERLAP];
   // A ring row stays clear of the bottom roll everywhere and of the top roll at both cuts: one squeezed under the top roll folds the corner.
   const rings = drawnSideRing(0, style)
     .map((_, ring) => ring)
     .filter(
       (ring) =>
-        columns.every((z) => ringRowY(style, rolls, ring, z) >= doorFaceVertex(style, rolls, bottom[DOOR_EDGE_STEPS]!, z).y + DOOR_EDGE_CLEARANCE) &&
-        cuts.every((z) => ringRowY(style, rolls, ring, z) <= doorFaceVertex(style, rolls, top[0]!, z).y - DOOR_EDGE_CLEARANCE),
+        columns.every((z) => ringRowY(rolls, ring, z) >= doorFaceVertex(style, rolls, bottom[DOOR_EDGE_STEPS]!, z).y + DOOR_EDGE_CLEARANCE) &&
+        cuts.every((z) => ringRowY(rolls, ring, z) <= doorFaceVertex(style, rolls, top[0]!, z).y - DOOR_EDGE_CLEARANCE),
     );
-  const topRing = rings.length === 0 ? -h : Math.max(...columns.map((z) => ringRowY(style, rolls, rings[0]!, z)));
+  const topRing = rings.length === 0 ? -h : Math.max(...columns.map((z) => ringRowY(rolls, rings[0]!, z)));
   const warped = Array.from({ length: DOOR_ROWS - 1 }, (_, k) => h * (1 - 2 * (1 - (k + 1) / DOOR_ROWS) ** DOOR_ROW_WARP));
   const shoulder = doorStations(h, warped)
     .slice(DOOR_EDGE_STEPS + 1, -(DOOR_EDGE_STEPS + 1))
@@ -142,11 +145,10 @@ function doorGrid(style: BodyStyle): DoorGrid {
  * The body ring's side point `ring` (`drawnSideRing`)'s height (door space, m) along the door: its height at each cut, lerped between
  * them and held past them.
  */
-function ringRowY(style: BodyStyle, grid: DoorGrid, ring: number, z: number): number {
-  const d = style.door;
+function ringRowY(grid: DoorGrid, ring: number, z: number): number {
   const cut = grid.halfLength - DOOR_SKIN_OVERLAP;
-  const at = (end: number) => drawnSideRing(d.hingeZ + doorSkinZ(style) + end * cut, style)[ring]![1] - d.hingeY;
-  return THREE.MathUtils.lerp(at(-1), at(1), THREE.MathUtils.clamp((z + cut) / (2 * cut), 0, 1));
+  const [rear, front] = grid.cutRingYs;
+  return THREE.MathUtils.lerp(rear[ring]!, front[ring]!, THREE.MathUtils.clamp((z + cut) / (2 * cut), 0, 1));
 }
 
 /** The skin's stand-off (m) over the body side at car height `yCar`, before the cut-end taper: its `proud` (`DOOR_PROUD` default) and, with `door.lowProud`, no less than that easing in below the lowest ring row it carries (`ringY`, car y; undefined: none) to the door's bottom edge. */
@@ -159,7 +161,7 @@ function doorStand(d: BodyStyle["door"], ringY: number | undefined, yCar: number
 /** The lowest body-ring row the skin carries at door-space `z`, as car height (m); undefined where it carries none (the grid's edge-roll pass). */
 function lowestRingY(style: BodyStyle, grid: DoorGrid, z: number): number | undefined {
   const row = grid.rows.find((r): r is { ring: number } => typeof r !== "number");
-  return row === undefined ? undefined : style.door.hingeY + ringRowY(style, grid, row.ring, z);
+  return row === undefined ? undefined : style.door.hingeY + ringRowY(grid, row.ring, z);
 }
 
 /** How far the skin's stand has come up at door-space `z`: 0 at each cut end, easing to 1 over `DOOR_TAPER`. */
@@ -176,11 +178,19 @@ export function doorSkinStand(style: BodyStyle): (z: number, y: number) => numbe
   };
 }
 
+/** A vertex of the door skin's outer face (see `doorFaceVertex`). */
+interface FaceVertex {
+  x: number;
+  y: number;
+  outer: number;
+  station: number;
+}
+
 /**
  * The drawn outer-face vertex on `row` at column `z` (door space): `x` after the edge roll, `y` after the edge rows' end slopes, `outer`
  * before the roll, `station` the row's height before the slopes. A ring row is held `DOOR_EDGE_CLEARANCE` under the top roll's start.
  */
-function doorFaceVertex(style: BodyStyle, grid: DoorGrid, row: DoorRow, z: number) {
+function doorFaceVertex(style: BodyStyle, grid: DoorGrid, row: DoorRow, z: number): FaceVertex {
   const d = style.door;
   const { h, hingeDrop, halfLength } = grid;
   let station: number;
@@ -196,7 +206,7 @@ function doorFaceVertex(style: BodyStyle, grid: DoorGrid, row: DoorRow, z: numbe
     y -= hingeClosing * ((station + h) / (2 * h)) * hingeDrop;
     if (z < -(halfLength - DOOR_REAR_SLOPE.fromEdge)) y += (-(halfLength - DOOR_REAR_SLOPE.fromEdge) - z) * DOOR_REAR_SLOPE.rise;
   } else {
-    station = y = Math.min(ringRowY(style, grid, row.ring, z), doorFaceVertex(style, grid, h - DOOR_EDGE_RADIUS, z).y - DOOR_EDGE_CLEARANCE);
+    station = y = Math.min(ringRowY(grid, row.ring, z), doorFaceVertex(style, grid, h - DOOR_EDGE_RADIUS, z).y - DOOR_EDGE_CLEARANCE);
   }
   const [zCar, yCar] = [d.hingeZ + doorSkinZ(style) + z, d.hingeY + y];
   const sl = sampleSlice(zCar, style.profile);
@@ -209,7 +219,7 @@ function doorFaceVertex(style: BodyStyle, grid: DoorGrid, row: DoorRow, z: numbe
   const proud = doorStand(d, bottom, yCar) * cutTaper(grid, z);
   let side = sideX(yCar, sl.hw, sl.yBelt, rockerY, crestDrop);
   if (bottom !== undefined) {
-    const top = d.hingeY + ringRowY(style, grid, ringRows[ringRows.length - 1]!.ring, z);
+    const top = d.hingeY + ringRowY(grid, ringRows[ringRows.length - 1]!.ring, z);
     const held = THREE.MathUtils.clamp(yCar, bottom, top);
     side += drawnSideX(zCar, held, style) - sideX(held, sl.hw, sl.yBelt, rockerY, crestDrop);
   }
@@ -218,13 +228,21 @@ function doorFaceVertex(style: BodyStyle, grid: DoorGrid, row: DoorRow, z: numbe
   return { x: outer - drop, y, outer, station };
 }
 
+/** The face vertices found so far down each grid column of a grid (`faceXAtHeight`: the door card asks for the same few columns at every one of its vertices). */
+const faceColumns = new WeakMap<DoorGrid, Map<number, (FaceVertex | undefined)[]>>();
+
 /** The drawn outer face's x at height `y` on grid column `z`: the lerp between the two rows whose vertices bracket `y`; NaN off the face. */
 function faceXAtHeight(style: BodyStyle, grid: DoorGrid, z: number, y: number): number {
   const { rows } = grid;
-  let below = doorFaceVertex(style, grid, rows[0]!, z);
+  const byColumn = faceColumns.get(grid) ?? new Map<number, (FaceVertex | undefined)[]>();
+  faceColumns.set(grid, byColumn);
+  const column = byColumn.get(z) ?? new Array<FaceVertex | undefined>(rows.length);
+  byColumn.set(z, column);
+  const vertexOn = (r: number): FaceVertex => (column[r] ??= doorFaceVertex(style, grid, rows[r]!, z));
+  let below = vertexOn(0);
   if (y < below.y) return NaN;
   for (let r = 1; r < rows.length; r++) {
-    const above = doorFaceVertex(style, grid, rows[r]!, z);
+    const above = vertexOn(r);
     if (y <= above.y) return below.x + ((above.x - below.x) * (y - below.y)) / (above.y - below.y);
     below = above;
   }

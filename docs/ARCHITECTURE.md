@@ -236,6 +236,8 @@ level wanders +-4 dB with rpm and ignores its throttle parameter, so `NATURAL_DB
 full load gets gain 1. `MotorSound.driveVoice` aims each voice's fade gain at `MOTOR_OUTPUT_GAIN x engineLawGain` every tick, with the load
 eased by `easeLoad` (0.1 s attack, 0.3 s release time constants); a misfire dip is a share of that level and holds the per-tick level off while it lasts.
 
+**Car geometry** (`vehicle/car-templates.ts`). What a car draws that depends on its style alone (body, lids, doors, bumpers, panes, the light bar) is built once per style, and each car takes a copy (`ownGeometry`) with its own arrays, index, groups, bounds and `userData`: the skin writes positions and normals, `restoreRest` and the panels read the rest. A template is never drawn or uploaded, so it owns no GPU buffer (O4: a car frees its copy); replacing a field of a style after its build (a test swaps `door` or `drawn`) retires its templates, and nested fields are never edited in place. `car-templates.test.ts` pins every copy equal to a fresh build and untouched by the next car's writes.
+
 **Scenes** (`scenes/scene-id.ts` `SCENE_IDS`, one at a time via `setScene`): fleet (default, with the barrier, ramp balls
 and jump ramps as props), press, pistons, doors, corkscrew, stack, derby, race, range, survival. A pick fades through the
 cel look and black (`SceneFade`); `__crush.fadeScenes = false` skips it for probes. Keys: [`CONTROLS.md`](CONTROLS.md).
