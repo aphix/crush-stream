@@ -1,3 +1,4 @@
+// run-tests: solo (a row counts the collector's scavenges, which a starved CPU adds)
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { scavengesDuring } from "../kernel/gc.test-util.ts";
