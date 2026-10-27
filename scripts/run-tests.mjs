@@ -13,6 +13,8 @@
  * same split on every machine, so n machines together run each file once. The slowest files of the run print at the end (split any
  * that sets the wall time).
  * A test process that writes anything to stderr (a `console.warn`, a library's warning) fails the run, its lines printed under the file's name.
+ * A file holding the line `// run-tests: solo` (it asserts a wall-clock budget) runs alone after the others, one at a time: next to
+ * the batch's processes on a shared box its timing measured the box, not the code.
  */
 import { globSync, readFileSync, writeFileSync } from "node:fs";
 import { relative } from "node:path";
@@ -44,37 +46,49 @@ if (shard) {
   });
 }
 
+const solo = files.filter((f) => { try { return readFileSync(f, "utf8").includes("// run-tests: solo"); } catch { return false; } });
+const batch = files.filter((f) => !solo.includes(f));
+
 /** @type {Map<string, number>} */
 const seconds = new Map();
 /** @type {Map<string, string[]>} */
 const stderrByFile = new Map();
-// `--disable-warning=ExperimentalWarning`: Node announces the experimental ESM `.wasm` import that Rapier (the physics engine) loads through; it has no finer code to name.
-const stream = run({
-  files,
-  concurrency,
-  execArgv: ["--disable-warning=ExperimentalWarning", `--max-old-space-size=${HEAP_MB}`, `--import=${new URL("./test-setup.mjs", import.meta.url).href}`],
-});
-stream.on("test:summary", (s) => {
-  if (s.file === undefined && !s.success) process.exitCode = 1;
-  // A file's own summary carries its whole run: describe-time work (a heat played in a `describe` body) counts too, which
-  // summing its top-level tests' durations missed (derby-ai.ai-long-run read 0 s).
-  if (s.file !== undefined) seconds.set(s.file, s.duration_ms / 1000);
-});
-stream.on("test:stderr", (e) => {
-  stderrByFile.set(e.file, [...(stderrByFile.get(e.file) ?? []), e.message]);
-});
-stream.compose(spec).pipe(process.stdout);
-stream.on("end", () => {
-  // A test process that wrote to stderr fails the run: a warning is a defect, the next emitter is a red here.
-  for (const [file, lines] of stderrByFile) {
-    console.log(`\nstderr from ${relative(process.cwd(), file)}:\n${lines.join("")}`);
-    process.exitCode = 1;
-  }
-  const slow = [...seconds].sort((a, b) => b[1] - a[1]).slice(0, 10);
-  console.log(`\nslowest files: ${slow.map(([f, s]) => `${f.slice(process.cwd().length + 1)} ${Math.round(s)} s`).join(", ")}`);
-  if (!learn) return;
+
+/** Runs `list` `n` at a time, printing as the CLI does; resolves when it ends. */
+function runFiles(list, n) {
+  if (list.length === 0) return Promise.resolve();
+  // `--disable-warning=ExperimentalWarning`: Node announces the experimental ESM `.wasm` import that Rapier (the physics engine) loads through; it has no finer code to name.
+  const stream = run({
+    files: list,
+    concurrency: n,
+    execArgv: ["--disable-warning=ExperimentalWarning", `--max-old-space-size=${HEAP_MB}`, `--import=${new URL("./test-setup.mjs", import.meta.url).href}`],
+  });
+  stream.on("test:summary", (s) => {
+    if (s.file === undefined && !s.success) process.exitCode = 1;
+    // A file's own summary carries its whole run: describe-time work (a heat played in a `describe` body) counts too, which
+    // summing its top-level tests' durations missed (derby-ai.ai-long-run read 0 s).
+    if (s.file !== undefined) seconds.set(s.file, s.duration_ms / 1000);
+  });
+  stream.on("test:stderr", (e) => {
+    stderrByFile.set(e.file, [...(stderrByFile.get(e.file) ?? []), e.message]);
+  });
+  const out = stream.compose(spec);
+  out.pipe(process.stdout, { end: false });
+  return new Promise((done) => out.on("end", done));
+}
+
+await runFiles(batch, concurrency);
+await runFiles(solo, 1);
+// A test process that wrote to stderr fails the run: a warning is a defect, the next emitter is a red here.
+for (const [file, lines] of stderrByFile) {
+  console.log(`\nstderr from ${relative(process.cwd(), file)}:\n${lines.join("")}`);
+  process.exitCode = 1;
+}
+const slow = [...seconds].sort((a, b) => b[1] - a[1]).slice(0, 10);
+console.log(`\nslowest files: ${slow.map(([f, s]) => `${f.slice(process.cwd().length + 1)} ${Math.round(s)} s`).join(", ")}`);
+if (learn) {
   const next = { ...cost };
   for (const f of files) delete next[f];
   for (const [f, s] of seconds) if (s >= 2) next[f.slice(process.cwd().length + 1)] = Math.round(s);
   writeFileSync(COST, JSON.stringify(Object.fromEntries(Object.entries(next).sort((a, b) => b[1] - a[1])), null, 1) + "\n");
-});
+}

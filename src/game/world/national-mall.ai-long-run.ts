@@ -1,3 +1,4 @@
+// run-tests: solo (the bake is held to a wall-clock budget)
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { Track } from "./track.ts";

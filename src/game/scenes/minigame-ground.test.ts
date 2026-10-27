@@ -1,3 +1,4 @@
+// run-tests: solo (the ground's build time is held to a wall-clock budget)
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
