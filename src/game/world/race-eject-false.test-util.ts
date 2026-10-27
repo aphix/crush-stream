@@ -25,9 +25,8 @@ function unexplained(w: World, go: () => void): string[] {
   const hits: { car: number; t: number }[] = [];
   const events: Event[] = [];
   const apply = DeformableCar.prototype.applyImpact;
-  const skin = DeformableCar.prototype.updateSkin;
   // The oracle reads hits, kills and throws, never a drawn body.
-  DeformableCar.prototype.updateSkin = () => {};
+  w.skin = false;
   DeformableCar.prototype.applyImpact = function (this: DeformableCar, point: THREE.Vector3, inward: THREE.Vector3, impulse: number, ebs: number): boolean {
     if (impulse >= MIN_HIT) hits.push({ car: w.cars.indexOf(this), t: w.race.time });
     return apply.call(this, point, inward, impulse, ebs);
@@ -55,7 +54,7 @@ function unexplained(w: World, go: () => void): string[] {
     go();
   } finally {
     DeformableCar.prototype.applyImpact = apply;
-    DeformableCar.prototype.updateSkin = skin;
+    w.skin = true;
     watch.take = take;
     w.race.frame = frameOf;
   }
