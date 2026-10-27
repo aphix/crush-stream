@@ -865,7 +865,7 @@ describe("given a device class and the page's ?lamps setting", () => {
 });
 
 describe("given the lamp pool updating a lit car's glows every frame", () => {
-  it("when it stores each lamp's glow and stash, then it never goes through three's shared Vector3.toArray (megamorphic once the cars are built)", () => {
+  it("when it stores each lamp's glow and stash, then it never goes through three's shared Vector3.toArray (megamorphic once the cars are built)", (t) => {
     const scene = new THREE.Scene();
     const car = new DeformableCar(paint(), scene);
     car.spawnFacing(0, 10, 0, 0);
@@ -874,19 +874,10 @@ describe("given the lamp pool updating a lit car's glows every frame", () => {
     camera.position.copy(car.group.position).addScaledVector(car.forward, 8).setY(1.5);
     camera.lookAt(car.group.position);
     const lights = new LampLights(scene, 12, FULL_POOL);
-    const toArray = THREE.Vector3.prototype.toArray;
-    let calls = 0;
-    THREE.Vector3.prototype.toArray = function (this: THREE.Vector3, ...args: Parameters<typeof toArray>) {
-      calls++;
-      return toArray.apply(this, args);
-    } as typeof toArray;
-    try {
-      lights.update([car], camera, car);
-    } finally {
-      THREE.Vector3.prototype.toArray = toArray;
-    }
+    const toArray = t.mock.method(THREE.Vector3.prototype, "toArray");
+    lights.update([car], camera, car);
     assert.ok(lights.glow.geometry.drawRange.count >= 4, `the control: ${lights.glow.geometry.drawRange.count} glows stored`);
-    assert.equal(calls, 0, "Vector3.toArray calls in one update");
+    assert.equal(toArray.mock.callCount(), 0, "Vector3.toArray calls in one update");
   });
 });
 
