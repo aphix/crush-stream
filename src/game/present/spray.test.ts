@@ -143,7 +143,7 @@ describe("given a spray bitmap wrapped round a car or a driver as a box", () => 
 describe("given the spray patch on a material", () => {
   const patched = (outer: THREE.Texture | null, key: string): THREE.Material => {
     const material = new THREE.MeshStandardMaterial();
-    applySpray(material, sprayUniforms(PERSON_SPRAY, BARE_SPRAY, 1, outer), "", "vSprayP = position;", key);
+    applySpray(material, sprayUniforms(PERSON_SPRAY, BARE_SPRAY, 1, outer && { map: outer }), "", "vSprayP = position;", key);
     return material;
   };
 

@@ -56,29 +56,36 @@ const _m = new THREE.Matrix4();
 const _n = new THREE.Matrix3();
 const _v = new THREE.Vector3();
 
-/**
- * The rest frame on `mesh`'s geometry unless it has one: each vertex and its normal in the car frame of the style tables (through its
- * parents up to `group`, the class lift left out), read off the mesh as it is now.
- */
+/** `object`'s matrix into the car frame of the style tables (through its parents up to `group`, the class lift left out) into `out`. */
+function restMatrix(object: THREE.Object3D, group: THREE.Object3D, out: THREE.Matrix4): THREE.Matrix4 {
+  out.identity();
+  for (let o: THREE.Object3D | null = object; o && o !== group; o = o.parent) {
+    if (o.name === CLASS_LIFT) continue;
+    o.updateMatrix();
+    out.premultiply(o.matrix);
+  }
+  return out;
+}
+
+/** `geometry`'s vertices, drawn by `object`, in the car frame (`restMatrix`), read as they are now: xyz each. */
+export function restPositions(object: THREE.Object3D, geometry: THREE.BufferGeometry, group: THREE.Object3D): Float32Array {
+  restMatrix(object, group, _m);
+  const pos = geometry.getAttribute("position");
+  const out = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) _v.fromBufferAttribute(pos, i).applyMatrix4(_m).toArray(out, i * 3);
+  return out;
+}
+
+/** The rest frame on `mesh`'s geometry unless it has one: each vertex and its normal in the car frame (`restMatrix`), read off the mesh as it is now. */
 // ponytail: a car without details is read at its first look (`wearCarLook`); one already dented or with a lid open maps its spray off that shape.
 export function ensureRestFrame(mesh: THREE.Mesh, group: THREE.Object3D): void {
   const geo = mesh.geometry;
   if (geo.hasAttribute(REST_POSITION)) return;
-  _m.identity();
-  for (let o: THREE.Object3D | null = mesh; o && o !== group; o = o.parent) {
-    if (o.name === CLASS_LIFT) continue;
-    o.updateMatrix();
-    _m.premultiply(o.matrix);
-  }
+  const outP = restPositions(mesh, geo, group);
   _n.getNormalMatrix(_m);
-  const pos = geo.getAttribute("position");
   const nrm = geo.getAttribute("normal");
-  const outP = new Float32Array(pos.count * 3);
-  const outN = new Float32Array(pos.count * 3);
-  for (let i = 0; i < pos.count; i++) {
-    _v.fromBufferAttribute(pos, i).applyMatrix4(_m).toArray(outP, i * 3);
-    _v.fromBufferAttribute(nrm, i).applyMatrix3(_n).normalize().toArray(outN, i * 3);
-  }
+  const outN = new Float32Array(nrm.count * 3);
+  for (let i = 0; i < nrm.count; i++) _v.fromBufferAttribute(nrm, i).applyMatrix3(_n).normalize().toArray(outN, i * 3);
   geo.setAttribute(REST_POSITION, new THREE.BufferAttribute(outP, 3));
   geo.setAttribute(REST_NORMAL, new THREE.BufferAttribute(outN, 3));
 }

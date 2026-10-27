@@ -1,20 +1,19 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as THREE from "three";
-import { CAR_SPRAY, NO_CAR_PICK, SPRAY_FACE, sprayFace, sprayPlace } from "../match/look-data.ts";
+import { CAR_SPRAY, NO_CAR_PICK, sprayFace, sprayPlace, SPRAY_FACE } from "../match/look-data.ts";
 import { REST_POSITION } from "../vehicle/car-detail-map.ts";
 import { compileHooks } from "../vehicle/car-detail-map.test-util.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { PRIMER_ATTRIBUTE } from "../vehicle/constants.ts";
 import { paint } from "../vehicle/test-support.ts";
-import { wearCarLook } from "./car-look.ts";
+import { sprayCovers, wearCarLook } from "./car-look.ts";
 import { SprayBitmap } from "./spray.ts";
-import { OUTLINE_KEEP } from "./spray-depth.ts";
+import { CAR_SPRAY_DEPTH_BAND, type RestTriangles } from "./spray-depth.ts";
 
 const INK = 4;
-/** Samples of a triangle (weights of its corners) inside it, a corner or an edge being shared with the next surface: on a grid of sixths (the frame's few triangles), or the middle and half way to each corner (the whole skin's). */
-const FINE_SAMPLES = [1, 2, 3, 4].flatMap((i) => [1, 2, 3, 4].filter((j) => i + j < 6).map((j) => [i / 6, j / 6, (6 - i - j) / 6]));
-const COARSE_SAMPLES = [[1 / 3, 1 / 3, 1 / 3], [2 / 3, 1 / 6, 1 / 6], [1 / 6, 2 / 3, 1 / 6], [1 / 6, 1 / 6, 2 / 3]];
+/** Samples of a triangle (weights of its corners) inside it on a grid of sixths: a corner or an edge is shared with the next surface. */
+const SAMPLES = [1, 2, 3, 4].flatMap((i) => [1, 2, 3, 4].filter((j) => i + j < 6).map((j) => [i / 6, j / 6, (6 - i - j) / 6]));
 /** A painted fragment's `primer` lies within this of 0: past it the bare steel, the well, the black trim or the cabin's take over the spray. */
 const PAINTED = 0.3;
 /** The shader's decode of a depth code: `(code - 1) / DEPTH_STEPS` along the face's axis. */
@@ -22,16 +21,20 @@ const DEPTH_STEPS = 254;
 /** A ray cast from this far (m) out meets its fragment first when it lands within this of it (m). */
 const RAY_START = 3;
 const SURFACE_HIT = 0.005;
-/** A frame fragment stands this far (m) clear of the door's outline in its face's plane: past the texels round an outline that keep the outer skin's depth (`OUTLINE_KEEP`, 6.7 mm each up a flank). */
-const OUTLINE_CLEAR = OUTLINE_KEEP * 0.007;
+/** A frame fragment stands this far (m) clear of the door's outline in its face's plane: past the two texels round an outline that read bare (`OUTLINE_KEEP`), 6.7 mm each up a flank. */
+const OUTLINE_CLEAR = 0.0175;
+/** The skin asked beside the door's outline: within this (m) of the door's box. */
+const BESIDE_DOOR = 0.05;
+/** `sprayCovers`' left door. */
+const LEFT_DOOR = 2;
 const AXES = [new THREE.Vector3(-1, 0, 0), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1)];
 const _uv = new Float64Array(2);
 
 /** A painted point of a part at rest (its rest frame, `sprayPos`), with its normal. */
 type Fragment = { p: THREE.Vector3; n: THREE.Vector3 };
 
-/** `mesh`'s painted fragments (primer, where it has one, near 0 at every corner), sampled at `samples` across each of its triangles in the rest frame. */
-function paintedFragments(mesh: THREE.Mesh, samples: readonly number[][]): Fragment[] {
+/** `mesh`'s painted fragments (primer, where it has one, near 0 at every corner), sampled across each of its triangles in the rest frame. */
+function paintedFragments(mesh: THREE.Mesh): Fragment[] {
   const geometry = mesh.geometry;
   const rest = geometry.getAttribute(REST_POSITION);
   const normal = geometry.getAttribute("sprayNrm");
@@ -43,23 +46,18 @@ function paintedFragments(mesh: THREE.Mesh, samples: readonly number[][]): Fragm
   for (let t = 0; t < index.count; t += 3) {
     const corners = [index.getX(t), index.getX(t + 1), index.getX(t + 2)];
     if (primer && corners.some((v) => Math.abs(primer.getX(v)) > PAINTED)) continue;
-    for (const weights of samples) out.push({ p: at(rest, corners, weights), n: at(normal, corners, weights).normalize() });
+    for (const weights of SAMPLES) out.push({ p: at(rest, corners, weights), n: at(normal, corners, weights).normalize() });
   }
   return out;
 }
 
-/** `mesh` drawn in its rest frame, both sides: what a ray from outside the car meets. */
-function restMesh(mesh: THREE.Mesh): THREE.Mesh {
+/** Triangles in the car frame as a mesh, both sides: what a ray from outside the car meets. */
+function restMesh({ positions, index }: RestTriangles): THREE.Mesh {
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", mesh.geometry.getAttribute(REST_POSITION));
-  geometry.setIndex(mesh.geometry.index);
+  geometry.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(positions), 3));
+  if (index) geometry.setIndex(Array.from(index));
+  geometry.computeBoundingBox();
   return new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
-}
-
-/** The index of the texel at (u, v) across `face` of a map `side` texels square (the faces scale with it), as the shader's nearest sampling reads it. */
-function texelOf(face: number, uv: Float64Array, side: number): number {
-  const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!.map((v) => (v * side) / CAR_SPRAY.w) as [number, number, number, number];
-  return (fy + Math.min(fh - 1, Math.floor(uv[1]! * fh))) * side + fx + Math.min(fw - 1, Math.floor(uv[0]! * fw));
 }
 
 /** `face`'s axis length in the layout's box (m): x on the sides, y on the top, z on the ends. */
@@ -68,71 +66,97 @@ function axisSpan(face: number): number {
   return CAR_SPRAY.max[axis]! - CAR_SPRAY.min[axis]!;
 }
 
-/** Whether fragment `f` shows its texel's paint, the shader's `sprayTexel`: on a painted face and not more than `band` m under the texel's outermost surface (`depth`, null: none). */
-function drawsPaint(f: Fragment, depth: Uint8Array | null, band = 0): boolean {
-  const face = sprayFace(CAR_SPRAY, f.p.x, f.p.y, f.p.z, f.n.x, f.n.y, f.n.z, _uv);
-  if (face < 0) return false;
-  const code = depth?.[texelOf(face, _uv, Math.sqrt(depth.length))] ?? 0;
-  return code === 0 || sprayPlace(CAR_SPRAY, face, f.p.x, f.p.y, f.p.z, _uv) >= (code - 1) / DEPTH_STEPS - band / axisSpan(face);
-}
-
-/** The first hit of a ray from `RAY_START` m out along `axis` through `p`, among `meshes`. */
-function firstHit(ray: THREE.Raycaster, meshes: readonly THREE.Mesh[], p: THREE.Vector3, axis: THREE.Vector3): THREE.Intersection | undefined {
-  ray.set(p.clone().addScaledVector(axis, RAY_START), axis.clone().negate());
+/** The first hit of a ray from `RAY_START` m out along `direction` through `p`, among `meshes`. */
+function firstHit(ray: THREE.Raycaster, meshes: readonly THREE.Mesh[], p: THREE.Vector3, direction: THREE.Vector3): THREE.Intersection | undefined {
+  ray.set(p.clone().addScaledVector(direction, RAY_START), direction.clone().negate());
   return ray.intersectObjects([...meshes], false)[0];
 }
 
-/** The first hits of rays down face `face`'s axis through `f` and `OUTLINE_CLEAR` m from it each way across the face. */
-function hitsAround(ray: THREE.Raycaster, meshes: readonly THREE.Mesh[], f: Fragment, face: number): (THREE.Intersection | undefined)[] {
-  const axis = AXES[face]!;
-  const across = AXES.filter((a) => Math.abs(a.dot(axis)) < 0.5);
-  return [f.p, ...across.map((a) => f.p.clone().addScaledVector(a, OUTLINE_CLEAR))].map((p) => firstHit(ray, meshes, p, axis));
-}
-
-describe("given a police car sprayed all over, its left door torn off", () => {
+/** What the rows read off a police car sprayed all over: its paint's spray uniforms, its body, and its covers at rest (the left door's own). */
+function sprayedPolice() {
   const car = new DeformableCar(paint(), new THREE.Scene(), null, "police");
   const bitmap = new SprayBitmap(CAR_SPRAY);
   bitmap.load({ texels: new Uint8Array(CAR_SPRAY.w * CAR_SPRAY.h).fill(INK), palette: bitmap.palette });
   wearCarLook(car, NO_CAR_PICK, bitmap);
-  const doorL = car["parts"].find((p) => p.name === "doorL")!;
-  car["detachPart"](doorL, 0);
   const m = car.lookMeshes();
-  const painted = [m.body, m.hood, m.trunk, ...m.doors];
-  const rest = painted.map(restMesh);
-  const doorRest = rest[3]!;
   const uniforms = compileHooks(m.bodyPaint).uniforms;
-  const depthMap = uniforms.sprayDepth?.value as THREE.DataTexture | undefined;
-  const depth = depthMap ? (depthMap.image.data as Uint8Array) : null;
-  const band = (uniforms.sprayBand?.value as number | undefined) ?? 0;
+  const covers = sprayCovers(car).map((cover) => cover.triangles.map(restMesh));
+  const body = restMesh({ positions: m.body.geometry.getAttribute(REST_POSITION).array, index: m.body.geometry.index!.array });
+  const leftDoor = covers[LEFT_DOOR]!;
+  const doorBox = new THREE.Box3();
+  for (const mesh of leftDoor) doorBox.union(mesh.geometry.boundingBox!);
+  return { car, m, uniforms, leftDoor, all: [body, ...covers.flat()], doorBox, fragments: paintedFragments(m.body) };
+}
+
+/** Whether fragment `f` shows its texel's paint, the shader's `sprayTexel` with `uniforms` (the depth map, its band and the torn flags, where it has them). */
+function drawsPaint(f: Fragment, uniforms: Record<string, THREE.IUniform>): boolean {
+  const face = sprayFace(CAR_SPRAY, f.p.x, f.p.y, f.p.z, f.n.x, f.n.y, f.n.z, _uv);
+  if (face < 0) return false;
+  const map = uniforms.sprayDepth?.value as THREE.DataTexture | undefined;
+  if (!map) return true;
+  const { data, width } = map.image as { data: Uint8Array; width: number };
+  const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!.map((v) => (v * width) / CAR_SPRAY.w) as [number, number, number, number];
+  const texel = (fy + Math.min(fh - 1, Math.floor(_uv[1]! * fh))) * width + fx + Math.min(fw - 1, Math.floor(_uv[0]! * fw));
+  const code = data[2 * texel]!;
+  const under = ((code - 1) / DEPTH_STEPS - sprayPlace(CAR_SPRAY, face, f.p.x, f.p.y, f.p.z, _uv)) * axisSpan(face);
+  const cover = data[2 * texel + 1]!;
+  const torn = uniforms.sprayTorn?.value as THREE.Vector4 | undefined;
+  return code === 0 || under <= (uniforms.sprayBand!.value as number) || (torn !== undefined && torn.getComponent(cover - 1) < 0.5);
+}
+
+describe("given a police car sprayed all over", () => {
+  const police = sprayedPolice();
   const ray = new THREE.Raycaster();
+  /** The torn flags its body's draw hands the paint now. */
+  const tornNow = (): number[] | undefined => {
+    Reflect.apply(police.m.body.onBeforeRender, police.m.body, []);
+    return (police.uniforms.sprayTorn?.value as THREE.Vector4 | undefined)?.toArray();
+  };
 
-  it("when the frame the door covered is drawn, then its jambs, sill and skin under the door read no livery, where the box projection alone smeared it over them", () => {
-    assert.ok(depth !== null, "the body paint's spray samples the car's depth map");
-    const underDoor = (f: Fragment): boolean => {
-      const face = sprayFace(CAR_SPRAY, f.p.x, f.p.y, f.p.z, f.n.x, f.n.y, f.n.z, _uv);
-      return face >= 0 && f.p.x < 0 && hitsAround(ray, rest, f, face).every((hit) => hit?.object === doorRest && RAY_START - hit.distance > band);
-    };
-    const frame = paintedFragments(m.body, FINE_SAMPLES).filter(underDoor);
-    const smeared = frame.filter((f) => drawsPaint(f, null)).length;
-    const drawn = frame.filter((f) => drawsPaint(f, depth, band));
-    assert.ok(smeared > 30, `control: the box projection alone draws livery on ${smeared} of the frame's ${frame.length} fragments`);
+  it("when it is whole, then no fragment of its paint loses its livery, so it draws as it did", () => {
+    const torn = tornNow();
+    const refused = police.fragments.filter((f) => !drawsPaint(f, police.uniforms) && drawsPaint(f, {}));
+    assert.equal(refused.length, 0, `fragments without their livery: ${refused.length}: ${refused.slice(0, 6).map((f) => f.p.toArray().map((v) => v.toFixed(3))).join("; ")}`);
+    assert.deepEqual(torn, [0, 0, 0, 0], "torn flags of a whole car");
+  });
+
+  it("when its left door is torn off, then the frame it, its glass and its card covered (jambs, sill, the skin under the door) reads no livery, where the box projection alone smeared it over them", () => {
+    police.car["detachPart"](police.car["parts"].find((p) => p.name === "doorL")!, 0);
+    const torn = tornNow();
+    const frame = police.fragments.filter((f) => underLeftDoor(f));
+    const drawn = frame.filter((f) => drawsPaint(f, police.uniforms));
+    assert.ok(frame.some((f) => f.n.y > 0.7), "the sill's top, under the glass and the card, is asked");
+    assert.ok(frame.filter((f) => drawsPaint(f, {})).length > 30, `control: the box projection alone draws livery on the frame's ${frame.length} fragments`);
     assert.equal(drawn.length, 0, `frame fragments drawing livery of ${frame.length}: ${drawn.map((f) => f.p.toArray().map((v) => v.toFixed(3))).join("; ")}`);
+    assert.deepEqual(torn, [0, 0, 1, 0], "torn flags with the left door off");
   });
 
-  it("when its outer skin is drawn, then every fragment a ray down its face's axis meets first, clear of another panel's outline, draws its livery as before", () => {
-    let visible = 0;
-    const refused: string[] = [];
-    for (const [k, mesh] of painted.entries()) {
-      for (const f of paintedFragments(mesh, COARSE_SAMPLES)) {
-        const face = sprayFace(CAR_SPRAY, f.p.x, f.p.y, f.p.z, f.n.x, f.n.y, f.n.z, _uv);
-        if (face < 0) continue;
-        const [hit, ...around] = hitsAround(ray, rest, f, face);
-        if (!hit || Math.abs(hit.distance - RAY_START) > SURFACE_HIT || around.some((h) => h?.object !== rest[k])) continue;
-        visible++;
-        if (!drawsPaint(f, depth, band)) refused.push(`${k}:${face}@${f.p.toArray().map((v) => v.toFixed(3))}`);
-      }
-    }
-    assert.ok(visible > 1000, `outer fragments asked: ${visible}`);
-    assert.equal(refused.length, 0, `outer fragments refused: ${refused.length} of ${visible}: ${refused.slice(0, 12).join(", ")}`);
+  it("when its left door is torn off, then the skin round the opening that a ray down its face's axis meets first keeps its livery", () => {
+    tornNow();
+    const near = police.doorBox.clone().expandByScalar(BESIDE_DOOR);
+    const outer = police.fragments.filter((f) => near.containsPoint(f.p) && seenDownAxis(f));
+    const refused = outer.filter((f) => !drawsPaint(f, police.uniforms));
+    assert.ok(outer.length > 100, `skin fragments asked: ${outer.length}`);
+    assert.equal(refused.length, 0, `skin round the opening without its livery: ${refused.length} of ${outer.length}: ${refused.slice(0, 6).map((f) => f.p.toArray().map((v) => v.toFixed(3))).join("; ")}`);
   });
+
+  /** Whether the left door (skin, glass or card) at rest covers `f` along its face's axis, more than the band out, at it and `OUTLINE_CLEAR` round it. */
+  function underLeftDoor(f: Fragment): boolean {
+    const face = sprayFace(CAR_SPRAY, f.p.x, f.p.y, f.p.z, f.n.x, f.n.y, f.n.z, _uv);
+    if (face < 0 || f.p.x > 0 || !police.doorBox.containsPoint(new THREE.Vector3(police.doorBox.min.x, f.p.y, f.p.z))) return false;
+    const axis = AXES[face]!;
+    const spots = [f.p, ...AXES.filter((a) => Math.abs(a.dot(axis)) < 0.5).map((a) => f.p.clone().addScaledVector(a, OUTLINE_CLEAR))];
+    return spots.every((p) => {
+      const hit = firstHit(ray, police.all, p, axis);
+      return hit !== undefined && police.leftDoor.includes(hit.object as THREE.Mesh) && RAY_START - hit.distance > CAR_SPRAY_DEPTH_BAND;
+    });
+  }
+
+  /** Whether a ray down `f`'s face's axis meets it first on the whole car. */
+  function seenDownAxis(f: Fragment): boolean {
+    const face = sprayFace(CAR_SPRAY, f.p.x, f.p.y, f.p.z, f.n.x, f.n.y, f.n.z, _uv);
+    if (face < 0) return false;
+    const hit = firstHit(ray, police.all, f.p, AXES[face]!);
+    return hit !== undefined && Math.abs(RAY_START - hit.distance) < SURFACE_HIT;
+  }
 });
