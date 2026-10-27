@@ -29,6 +29,7 @@ async function engineOn(search: string): Promise<{ engine: CrashEngine; wrapped:
   const ctx2d = canvas.getContext("2d");
   Object.assign(canvas, { getContext: (kind: string) => (kind === "2d" ? ctx2d : gl) });
   const engine = new CrashEngine(canvas, new HudStore(), element());
+  Object.assign(engine["renderer"], { compileAsync: () => Promise.resolve() }); // the stand-in context lacks KHR_parallel_shader_compile, and three warns on stderr
   await engine.ready;
   engine["renderer"].debug.checkShaderErrors = false;
   return { engine, wrapped };
