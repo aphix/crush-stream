@@ -31,6 +31,9 @@ const REC_YB: usize = 8;
 const REC_YC: usize = 9;
 const REC_YMAX: usize = 10;
 
+// `sag_look` lays the samples out across the tyre, then step by step ahead: this far back is the sample one step back on the same line.
+const SAG_STEP_BACK: usize = SAG_ALONG.len();
+
 // `sag_look`'s return, bit by bit.
 const LOOK_CLEAR: i32 = 1;
 const LOOK_FINITE: i32 = 2;
@@ -323,6 +326,57 @@ unsafe fn fill_record(record: *mut f64, i: usize, pos: *const f32, weld: *const 
     *record.add(REC_YMAX) = js_max(js_max(ya, yb), yc);
 }
 
+// What reading a triangle needs: the skin's points and lift, the plan's boxes and determinants, and the pass's scratch.
+struct Skin {
+    pos: *const f32,
+    weld: *const i32,
+    tris: *const i32,
+    den: *const f64,
+    lift: *const f32,
+    box_: *const f64,
+    records: *mut f64,
+    built: *mut u8,
+}
+
+// A triangle's height at a sample inside it and the sample's weights of its three corners.
+struct Reading {
+    y: f64,
+    l1: f64,
+    l2: f64,
+    l3: f64,
+}
+
+// Triangle `i` read at the sample (x, z): true, with its height there in `out`, when the sample is inside its plan box and the triangle and the height is over `best`.
+#[inline(always)]
+unsafe fn read_triangle(s: &Skin, i: usize, x: f64, z: f64, best: f64, out: &mut Reading) -> bool {
+    if (x < *s.box_.add(i * 4)) | (x > *s.box_.add(i * 4 + 1)) | (z < *s.box_.add(i * 4 + 2)) | (z > *s.box_.add(i * 4 + 3)) {
+        return false;
+    }
+    let record = s.records.add(i * RECORD_LEN);
+    if *s.built.add(i) == 0 {
+        fill_record(record, i, s.pos, s.weld, s.tris, s.den, s.lift);
+        *s.built.add(i) = 1;
+    }
+    // Its blend of the corner heights stands no higher than the highest of them (a rounding's width over): under the best so far, it cannot replace it.
+    if *record.add(REC_YMAX) + SAG_BLEND_SLACK < best {
+        return false;
+    }
+    let to_x = x - *record.add(REC_CX);
+    let to_z = z - *record.add(REC_CZ);
+    let l1 = (*record.add(REC_C1) * to_x + *record.add(REC_C2) * to_z) / *record.add(REC_DEN);
+    let l2 = (*record.add(REC_C3) * to_x + *record.add(REC_C4) * to_z) / *record.add(REC_DEN);
+    let l3 = 1.0 - l1 - l2;
+    if (l1 < 0.0) | (l2 < 0.0) | (l3 < 0.0) {
+        return false;
+    }
+    let y = l1 * *record.add(REC_YA) + l2 * *record.add(REC_YB) + l3 * *record.add(REC_YC);
+    if y <= best {
+        return false;
+    }
+    *out = Reading { y, l1, l2, l3 };
+    true
+}
+
 // `lift` and `dirty` are written when a sample is short; `bump` is zero on entry and on return; `records` is scratch,
 // `RECORD_LEN` f64 a triangle, filled when a sample first reads it (`built`, a byte a triangle, is scratch too). `look` is
 // `sag_look`'s return. Returns 1 when any corner was lifted.
@@ -353,13 +407,25 @@ pub unsafe extern "C" fn sag_pass(
     // height it is not short and no later triangle changes that.
     let settles = look & LOOK_FINITE != 0;
     core::ptr::write_bytes(built, 0, corners / 3);
+    let skin = Skin { pos, weld, tris, den, lift, box_, records, built };
     let mut sample_skin = [f64::NEG_INFINITY; SAG_COUNT];
     let mut sample_corner = [-1i32; SAG_COUNT];
     let mut sample_share = [0.0f64; SAG_COUNT];
+    let mut settled_by = [-1i32; SAG_COUNT];
     let nx = nx_f as usize;
+    let mut r = Reading { y: 0.0, l1: 0.0, l2: 0.0, l3: 0.0 };
     for n in 0..SAG_COUNT {
         let x = *samples.add(n);
         let z = *samples.add(SAG_COUNT + n);
+        let sample_y = *samples.add(2 * SAG_COUNT + n);
+        // The triangle that settled the sample a step back on its line mostly holds this one too. A sample inside a plan box is inside the grid, so no cell is read.
+        if settles && n >= SAG_STEP_BACK && settled_by[n - SAG_STEP_BACK] >= 0 {
+            let i = settled_by[n - SAG_STEP_BACK];
+            if read_triangle(&skin, i as usize, x, z, f64::NEG_INFINITY, &mut r) && r.y >= sample_y {
+                settled_by[n] = i;
+                continue;
+            }
+        }
         let cx = plan_cell(x, x0);
         let cz = plan_cell(z, z0);
         // A NaN cell reads no triangle in the JS (its start entries are undefined), as out of the grid does.
@@ -372,37 +438,17 @@ pub unsafe extern "C" fn sag_pass(
         while j < end {
             let i = *filed.add(j as usize) as usize;
             j += 1;
-            if (x < *box_.add(i * 4)) | (x > *box_.add(i * 4 + 1)) | (z < *box_.add(i * 4 + 2)) | (z > *box_.add(i * 4 + 3)) {
-                continue;
-            }
-            let record = records.add(i * RECORD_LEN);
-            if *built.add(i) == 0 {
-                fill_record(record, i, pos, weld, tris, den, lift);
-                *built.add(i) = 1;
-            }
-            // Its blend of the corner heights stands no higher than the highest of them (a rounding's width over): under the best so far, it cannot replace it.
-            if *record.add(REC_YMAX) + SAG_BLEND_SLACK < sample_skin[n] {
-                continue;
-            }
-            let to_x = x - *record.add(REC_CX);
-            let to_z = z - *record.add(REC_CZ);
-            let l1 = (*record.add(REC_C1) * to_x + *record.add(REC_C2) * to_z) / *record.add(REC_DEN);
-            let l2 = (*record.add(REC_C3) * to_x + *record.add(REC_C4) * to_z) / *record.add(REC_DEN);
-            let l3 = 1.0 - l1 - l2;
-            if (l1 < 0.0) | (l2 < 0.0) | (l3 < 0.0) {
-                continue;
-            }
-            let y = l1 * *record.add(REC_YA) + l2 * *record.add(REC_YB) + l3 * *record.add(REC_YC);
-            if y <= sample_skin[n] {
+            if !read_triangle(&skin, i, x, z, sample_skin[n], &mut r) {
                 continue;
             }
             let t = i * 3;
-            sample_skin[n] = y;
+            sample_skin[n] = r.y;
             sample_corner[n] = t as i32;
-            sample_share[n] = (if *liftable.add(*tris.add(t) as usize) & bit != 0 { l1 } else { 0.0 })
-                + (if *liftable.add(*tris.add(t + 1) as usize) & bit != 0 { l2 } else { 0.0 })
-                + (if *liftable.add(*tris.add(t + 2) as usize) & bit != 0 { l3 } else { 0.0 });
-            if settles && y >= *samples.add(2 * SAG_COUNT + n) {
+            sample_share[n] = (if *liftable.add(*tris.add(t) as usize) & bit != 0 { r.l1 } else { 0.0 })
+                + (if *liftable.add(*tris.add(t + 1) as usize) & bit != 0 { r.l2 } else { 0.0 })
+                + (if *liftable.add(*tris.add(t + 2) as usize) & bit != 0 { r.l3 } else { 0.0 });
+            if settles && r.y >= sample_y {
+                settled_by[n] = i as i32;
                 break;
             }
         }
