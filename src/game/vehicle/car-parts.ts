@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { BUMPER_F, LID } from "./constants.ts";
 import { bootPivot, lidAccel } from "./hinge-spec.ts";
+import { cellIsOver, clearanceCellsOf } from "./clearance-cells.ts";
 import { hingePose, INTERIOR_MASSES, interiorPose, notePosed, posesFromOwnState, standsAsPosed } from "./part-pose.ts";
 import { activeGround, groundTopOver, NO_FLOOR } from "../world/ground.ts";
 import type { StirCar } from "../world/surfaces.ts";
@@ -90,15 +91,21 @@ function lowestClearance(o: THREE.Object3D, below = -Infinity, clearAbove = Infi
   const geometry = o instanceof PartSeat ? o.drawn : o instanceof THREE.Mesh ? (o.geometry as THREE.BufferGeometry) : null;
   if (geometry !== null) {
     const position = geometry.getAttribute("position");
+    const cells = clearanceCellsOf(geometry);
     const ground = activeGround();
     const e = o.matrixWorld.elements;
-    for (let k = 0; k < position.count; k++) {
-      // The world y alone (a world matrix is affine) tells a cleared vertex from one to read.
-      if (e[1]! * position.getX(k) + e[5]! * position.getY(k) + e[9]! * position.getZ(k) + e[13]! >= clearAbove) continue;
-      _bumpW.fromBufferAttribute(position, k).applyMatrix4(o.matrixWorld);
-      const y = ground.heightAt(_bumpW.x, _bumpW.z, _bumpW.y);
-      if (y !== NO_FLOOR) low = Math.min(low, _bumpW.y - y);
-      if (low < below) return low;
+    for (let c = 0; c < cells.cellCount; c++) {
+      // A cell whose box stands wholly over `clearAbove` holds no vertex to read.
+      if (cells.start[c] === cells.start[c + 1] || cellIsOver(cells, c, e, clearAbove)) continue;
+      for (let j = cells.start[c]!; j < cells.start[c + 1]!; j++) {
+        const k = cells.order[j]!;
+        // The world y alone (a world matrix is affine) tells a cleared vertex from one to read.
+        if (e[1]! * position.getX(k) + e[5]! * position.getY(k) + e[9]! * position.getZ(k) + e[13]! >= clearAbove) continue;
+        _bumpW.fromBufferAttribute(position, k).applyMatrix4(o.matrixWorld);
+        const y = ground.heightAt(_bumpW.x, _bumpW.z, _bumpW.y);
+        if (y !== NO_FLOOR) low = Math.min(low, _bumpW.y - y);
+        if (low < below) return low;
+      }
     }
   }
   for (let i = 0; i < o.children.length && low >= below; i++) low = Math.min(low, lowestClearance(o.children[i]!, below, clearAbove));
