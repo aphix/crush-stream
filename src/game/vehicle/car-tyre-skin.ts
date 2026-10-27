@@ -577,7 +577,14 @@ export class TyreSkin {
     const tris = this.overTris[w]!;
     const { weld } = this.edges;
     const read = this.sagRead[w]!;
-    for (let k = 0; k < tris.length; k++) read[k] = this.lift[weld[tris[k]!]!]!;
+    let lowest = Infinity;
+    for (let k = 0; k < tris.length; k++) {
+      const v = tris[k]!;
+      const lift = this.lift[weld[v]!]!;
+      read[k] = lift;
+      lowest = Math.min(lowest, pos[v * 3 + 1]! + lift);
+    }
+    let highest = -Infinity;
     for (let i = 0, n = 0; i < SAG_AHEAD_COUNT; i++) {
       const ahead = (i - (SAG_AHEAD_COUNT - 1) / 2) * SAG_STEP;
       const top = Math.sqrt(1 - ahead * ahead) * r;
@@ -586,8 +593,11 @@ export class TyreSkin {
         _sampleX[n] = _h[0]! + fx * ahead * r + ax * across + ux * top;
         _sampleZ[n] = _h[2]! + fz * ahead * r + az * across + uz * top;
         _sampleY[n] = _h[1]! + ay * across + uy * top + SAG_CLEAR;
+        highest = Math.max(highest, _sampleY[n]!);
       }
     }
+    // A triangle's height inside it is a blend of its corners': with every corner over the highest sample, none can stand short.
+    if (lowest > highest + 1e-9) return false;
     _sampleSkin.fill(-Infinity);
     _sampleCorner.fill(-1);
     const { box, den, x0, z0, nx, nz, start, tris: filed } = this.plans[w]!;
