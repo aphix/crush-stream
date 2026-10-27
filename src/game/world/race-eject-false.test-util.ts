@@ -25,6 +25,9 @@ function unexplained(w: World, go: () => void): string[] {
   const hits: { car: number; t: number }[] = [];
   const events: Event[] = [];
   const apply = DeformableCar.prototype.applyImpact;
+  const skin = DeformableCar.prototype.updateSkin;
+  // The oracle reads hits, kills and throws, never a drawn body.
+  DeformableCar.prototype.updateSkin = () => {};
   DeformableCar.prototype.applyImpact = function (this: DeformableCar, point: THREE.Vector3, inward: THREE.Vector3, impulse: number, ebs: number): boolean {
     if (impulse >= MIN_HIT) hits.push({ car: w.cars.indexOf(this), t: w.race.time });
     return apply.call(this, point, inward, impulse, ebs);
@@ -52,6 +55,7 @@ function unexplained(w: World, go: () => void): string[] {
     go();
   } finally {
     DeformableCar.prototype.applyImpact = apply;
+    DeformableCar.prototype.updateSkin = skin;
     watch.take = take;
     w.race.frame = frameOf;
   }
@@ -60,17 +64,10 @@ function unexplained(w: World, go: () => void): string[] {
     .map((e) => `car ${e.car} at ${e.t.toFixed(1)} s: ${e.what} with no hit in the last ${RECENT} s`);
 }
 
-/** A race world for a run that reads events and hits only: its frames skip the skin pass. */
-function eventWorld(): World {
-  const w = makeWorld();
-  w.skins = false;
-  return w;
-}
-
 /** Six cars (the AI-driven player slot and five rivals) at the default aggression, one lap: every slope, crest and banked turn of the course met once by the whole field. */
 function aiRace(course: string, seed: number): string[] {
   const track = builtCourse(course);
-  const w = eventWorld();
+  const w = makeWorld();
   w.race.enter();
   try {
     w.race.command({ type: "quit" });
@@ -96,7 +93,7 @@ const AI_SEED = 1;
 /** The scripted player (the real seat, full gas) on a lateral line beside five AI rivals: the lines where it meets a wall and drives on damaged. */
 function playerLap(course: string, line: PlayerLine, laps: number): string[] {
   const track = builtCourse(course);
-  const w = eventWorld();
+  const w = makeWorld();
   w.race.enter();
   try {
     return unexplained(w, () => {
