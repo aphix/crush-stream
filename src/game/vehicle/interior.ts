@@ -10,7 +10,7 @@ import type { BodyStyle } from "./car-variants.ts";
 import { BUMPER_F, DRIVER_SIDE, INNER_PANEL, LID, PRIMER_ATTRIBUTE } from "./constants.ts";
 import { AXLE_HALF_SPAN, CRASH_BAR_HALF, FRAME_RAIL_LENGTH, FRAME_RAIL_Z, REF_BAY, REF_CABIN, SEAT_RECLINE, WHEEL_AT, WHEEL_GRIP, WHEEL_TILT } from "./interior-geometry.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
-import { activeGround, NO_FLOOR } from "../world/ground.ts";
+import { activeGround, groundTopOver, NO_FLOOR } from "../world/ground.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 
 /** Gap (m) between a seated head's top and the roof line over it (the roof skin, the headliner its inner face). */
@@ -130,6 +130,7 @@ const _mass = new THREE.Vector3();
 const _corner = new THREE.Vector3();
 const _seatWorld = new THREE.Matrix4();
 const _parentInverse = new THREE.Matrix4();
+const _cornerBox = new THREE.Box3();
 /** A wreck's rigid under-part stands at least this far (m) over the ground under it (`restOnGround`), as a hanging bumper does. */
 const PART_CLEAR = 0.04;
 /** The ground under a part's corner is looked up from this far (m) over it: a corner already in a slope finds no floor under itself. */
@@ -150,15 +151,24 @@ function restOnGround(seat: PartSeat, support: Float32Array | null = null): void
   seat.updateMatrix();
   parent.updateWorldMatrix(true, false);
   _seatWorld.multiplyMatrices(parent.matrixWorld, seat.matrix);
-  const ground = activeGround();
-  let rise = 0;
   const count = support === null ? 8 : support.length / 3;
+  _cornerBox.makeEmpty();
   for (let k = 0; k < count; k++) {
     if (support === null) _corner.set(k & 1 ? box.max.x : box.min.x, k & 2 ? box.max.y : box.min.y, k & 4 ? box.max.z : box.min.z);
     else _corner.set(support[k * 3]!, support[k * 3 + 1]!, support[k * 3 + 2]!);
-    _corner.applyMatrix4(_seatWorld);
-    const floor = ground.heightAt(_corner.x, _corner.z, _corner.y + PART_PROBE);
-    if (floor !== NO_FLOOR) rise = Math.max(rise, floor + PART_CLEAR - _corner.y);
+    _corner.applyMatrix4(_seatWorld).toArray(_cornersWorld, k * 3);
+    _cornerBox.expandByPoint(_corner);
+  }
+  // A corner at or over the highest ground under the corners plus the clearance is not lifted by the ground under it.
+  const clearAbove = groundTopOver(_cornerBox.min.x, _cornerBox.max.x, _cornerBox.min.z, _cornerBox.max.z) + PART_CLEAR;
+  if (_cornerBox.min.y >= clearAbove) return;
+  const ground = activeGround();
+  let rise = 0;
+  for (let k = 0; k < count; k++) {
+    const y = _cornersWorld[k * 3 + 1]!;
+    if (y >= clearAbove) continue;
+    const floor = ground.heightAt(_cornersWorld[k * 3]!, _cornersWorld[k * 3 + 2]!, y + PART_PROBE);
+    if (floor !== NO_FLOOR) rise = Math.max(rise, floor + PART_CLEAR - y);
   }
   if (rise <= 0) return;
   // The world's up in the parent's own coordinates (its scale, a cabin's width, taken out): the inverse's second column.
@@ -168,6 +178,8 @@ function restOnGround(seat: PartSeat, support: Float32Array | null = null): void
 
 /** The directions of a box's faces, edges and corners: the vertices farthest along them bound a body's lowest point at whatever attitude it lies. */
 const SUPPORT_DIRECTIONS: readonly (readonly [number, number, number])[] = [-1, 0, 1].flatMap((x) => [-1, 0, 1].flatMap((y) => [-1, 0, 1].map((z) => [x, y, z] as const))).filter(([x, y, z]) => x !== 0 || y !== 0 || z !== 0);
+/** The world corners `restOnGround` reads, xyz in a row each. */
+const _cornersWorld = new Float64Array(SUPPORT_DIRECTIONS.length * 3);
 
 /** `geometry`'s vertices farthest along each of `SUPPORT_DIRECTIONS`, xyz in a row each. */
 function supportVertices(geometry: THREE.BufferGeometry): Float32Array {

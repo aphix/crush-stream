@@ -4,8 +4,8 @@ import { EPICENTER } from "../deform/epicenter.ts";
 import { BUMPER_F, LID } from "./constants.ts";
 import { bootPivot, lidAccel } from "./hinge-spec.ts";
 import { hingePose, INTERIOR_MASSES, interiorPose } from "./part-pose.ts";
-import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { staticTop, type StirCar } from "../world/surfaces.ts";
+import { activeGround, groundTopOver, NO_FLOOR } from "../world/ground.ts";
+import type { StirCar } from "../world/surfaces.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 import type { MassName } from "../kernel/rig-spec.ts";
 import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox, shellReaches } from "./car-panels.ts";
@@ -150,8 +150,6 @@ const DOOR_CLEAR = 0.04;
 const BUMPER_CLEAR = DOOR_CLEAR;
 /** Halvings that find the roll a hanging bumper rests on the road at (0.6 rad / 2⁸ = 2 mrad, 3 mm of the free end). */
 const BUMPER_REST_ITER = 8;
-/** The plan box a bound is read over grows by this (m): a vertex sits in its mesh's box to the rounding of the transform, not past it. */
-const BOX_PAD = 1e-6;
 /** A hanging arch shell's flap drops no lower than this (m) above the road under it: it rests on the road, not through it. */
 const SHELL_CLEAR = 0.005;
 
@@ -168,7 +166,7 @@ function groundUnderBox(b: THREE.Box3): number {
 
 /** The world height (m) at or over which a point stands `BUMPER_CLEAR` clear of all the ground under the plan of box `b` (`lowestClearance`'s `clearAbove`); `-Infinity` where there is none. */
 function clearOverBox(b: THREE.Box3): number {
-  return staticTop(activeGround(), b.min.x - BOX_PAD, b.max.x + BOX_PAD, b.min.z - BOX_PAD, b.max.z + BOX_PAD) + BUMPER_CLEAR;
+  return groundTopOver(b.min.x, b.max.x, b.min.z, b.max.z) + BUMPER_CLEAR;
 }
 
 /** A hinged part below this hinge value is not worn by the wind (a shell hardly standing). */

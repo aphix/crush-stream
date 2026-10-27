@@ -1,5 +1,5 @@
 import { SURFACE_IDS, type SurfaceId } from "./catalog.ts";
-import { activate, C_GRIP, C_NX, C_NY, C_NZ, C_SURF, contactIn, heightIn, HIT_SIZE, PQ_SIZE, PQ_X, PQ_Y, PQ_Z, Surface } from "./surfaces.ts";
+import { activate, C_GRIP, C_NX, C_NY, C_NZ, C_SURF, contactIn, heightIn, HIT_SIZE, PQ_SIZE, PQ_X, PQ_Y, PQ_Z, staticTop, Surface } from "./surfaces.ts";
 
 /** A surface this far (m) above a body still counts as under it (kerbs, ramp lips, a wreck's dropped hub). */
 export const STEP_UP = 1.2;
@@ -101,6 +101,14 @@ activate(world.ground);
 
 export function activeGround(): Ground {
   return world.ground;
+}
+
+/** A plan box grows by this (m) before the ground's bound is read over it: a vertex sits in its box to the rounding of a transform, not past it. */
+const PLAN_PAD = 1e-6;
+
+/** The highest the active ground stands (m) over the plan box [xMin, xMax] × [zMin, zMax]: no point of it reads a higher height; `NO_FLOOR` where there is none. */
+export function groundTopOver(xMin: number, xMax: number, zMin: number, zMax: number): number {
+  return staticTop(activeGround(), xMin - PLAN_PAD, xMax + PLAN_PAD, zMin - PLAN_PAD, zMax + PLAN_PAD);
 }
 
 /** `null` restores the flat plane. */
