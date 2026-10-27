@@ -18,7 +18,7 @@ import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import { propContact } from "../contact/prop-contact.ts";
 import { frame, makeCar, worldOf } from "../vehicle/ground-probe.test-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { assertSameNumbers } from "../vehicle/test-support.ts";
+import { assertSameNumbers, massCentroid } from "../vehicle/test-support.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 
 /**
@@ -198,15 +198,6 @@ describe("given a sedan flying a ballistic arc at 12 m/s over a wall or palm on 
  */
 describe("given a crushed wreck over a prism of the derby arena, met in slices", () => {
   const SETTLE_STEP = 1 / QUIET_HZ;
-  const centroid = (car: DeformableCar): { x: number; z: number } => {
-    let [x, z, m] = [0, 0, 0];
-    for (const p of car.deform.masses) {
-      x += p.world.x * p.mass;
-      z += p.world.z * p.mass;
-      m += p.mass;
-    }
-    return { x: x / m, z: z / m };
-  };
   /**
    * The wreck of a sedan a 9 m/s head-on bullet hit along the prism's long axis, settled, then set along the prism with its middle
    * `along` m from the prism's middle and `inward` m nearer the arena's middle (clear of the ring wall), its lowest point `above` m
@@ -229,7 +220,7 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
     const reach = Math.hypot(prism.x, prism.z);
     /** The unit from the prism toward the arena's middle. */
     const [ix, iz] = [-prism.x / reach, -prism.z / reach];
-    const from = centroid(wreck);
+    const from = massCentroid(wreck.deform.masses);
     // Square to the prism's long axis, whichever way along it the slide left it facing.
     const off = Math.atan2(Math.sin(prism.yaw - wreck.yaw), Math.cos(prism.yaw - wreck.yaw));
     const turn = Math.abs(off) > Math.PI / 2 ? off - Math.sign(off) * Math.PI : off;
@@ -283,11 +274,11 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
     /** One slice of `dt` s of the arena's contacts: what it did to the wreck. */
     const slice = (dt: number) => {
       walls.length = 0;
-      const [before, speed] = [centroid(wreck), Math.hypot(wreck.velocity.x, wreck.velocity.z)];
+      const [before, speed] = [massCentroid(wreck.deform.masses), Math.hypot(wreck.velocity.x, wreck.velocity.z)];
       wreck.deform.beginSlice(dt);
       ground.contact(wreck, 0, hits, dt);
       wreck.deform.endSlice();
-      const after = centroid(wreck);
+      const after = massCentroid(wreck.deform.masses);
       let massVy = 0;
       let mass = 0;
       for (const m of wreck.deform.masses) {

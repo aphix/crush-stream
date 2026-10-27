@@ -8,6 +8,7 @@ import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import { applyAiDrive } from "../ai/input-fade.ts";
 import { fleetStyle, layoutDerby, MAX_CARS } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
+import { massCentroid } from "../vehicle/test-support.ts";
 import { mayRecoverFlipped, recoverInPlace } from "../vehicle/car-drive.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { stepWorld } from "../engine/world-step.ts";
@@ -37,19 +38,6 @@ function face(car: DeformableCar, p: THREE.Vector3): "front" | "rear" | "side" {
 }
 
 type DerbyRun = { hits: number; noseToNose: number; worstWedge: number; t: number; state: string; deaths: number[]; zips: string[]; pops: string[] };
-
-/** Mass centroid (x, z): with the masses live it is where the car actually is. */
-function centroid(car: DeformableCar): { x: number; z: number } {
-  let x = 0;
-  let z = 0;
-  let m = 0;
-  for (const p of car.deform.masses) {
-    x += p.world.x * p.mass;
-    z += p.world.z * p.mass;
-    m += p.mass;
-  }
-  return { x: x / m, z: z / m };
-}
 
 /**
  * Crush knobs a derby runs at. `rear` is chassisRear's maxCrush; `realism` arms each car's class kill
@@ -152,7 +140,7 @@ function runDerby(cars: DeformableCar[], seconds: number, knobs: Knobs, start?: 
     const zips: string[] = [];
     const pops: string[] = [];
     while (t < seconds && state === "running") {
-      const before = cars.map((c) => (c.deform.massActive ? centroid(c) : null));
+      const before = cars.map((c) => (c.deform.massActive ? massCentroid(c.deform.masses) : null));
       const group0 = cars.map((c) => (c.crashed && c.deform.massActive ? { x: c.group.position.x, z: c.group.position.z } : null));
       const speed0 = cars.map((c) => Math.hypot(c.velocity.x, c.velocity.z));
       const shove = new Array<number>(n).fill(0);
@@ -189,7 +177,7 @@ function runDerby(cars: DeformableCar[], seconds: number, knobs: Knobs, start?: 
       for (const [i, c] of cars.entries()) {
         const a = before[i];
         if (!a || !c.deform.massActive) continue;
-        const b = centroid(c);
+        const b = massCentroid(c.deform.masses);
         const moved = Math.hypot(b.x - a.x, b.z - a.z);
         const v = Math.max(speed0[i]!, Math.hypot(c.velocity.x, c.velocity.z), shove[i]!);
         if (moved > 3 * v * h + 0.05) zips.push(`t=${t.toFixed(2)} ${names[i]} moved ${moved.toFixed(2)} m in ${(h * 1000).toFixed(1)} ms at ${v.toFixed(1)} m/s`);

@@ -44,6 +44,19 @@ export function closedOn(m: Placed, cell: Placed, axis: "x" | "y" | "z"): number
   return Math.sign(restGap) * (restGap - (m.local[axis] - cell.local[axis]));
 }
 
+/** Mass-weighted centroid (x, z) of `masses`: with a car's masses live, where the car actually is. */
+export function massCentroid(masses: readonly { world: THREE.Vector3; mass: number }[]): { x: number; z: number } {
+  let x = 0;
+  let z = 0;
+  let m = 0;
+  for (const p of masses) {
+    x += p.world.x * p.mass;
+    z += p.world.z * p.mass;
+    m += p.mass;
+  }
+  return { x: x / m, z: z / m };
+}
+
 // node:assert deep-diffs both sides on failure (Myers, O((N+M)·D)); two big float arrays once took 14.7 GB.
 // These report one mismatch instead of a diff (ARCHITECTURE C9).
 

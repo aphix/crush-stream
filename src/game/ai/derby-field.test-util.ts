@@ -6,6 +6,7 @@ import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import { applyAiDrive } from "./input-fade.ts";
 import { fleetStyle, layoutDerby } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
+import { massCentroid } from "../vehicle/test-support.ts";
 import type { DriveInput } from "../vehicle/car-drive.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { settleStep, stepWorld } from "../engine/world-step.ts";
@@ -50,18 +51,6 @@ function face(c: DeformableCar, p: THREE.Vector3): "front" | "rear" | "side" {
   const across = (dx * c.fwdFlat.z - dz * c.fwdFlat.x) / c.frame.half.x;
   if (Math.abs(along) * 1.15 < Math.abs(across)) return "side";
   return along > 0 ? "front" : "rear";
-}
-
-function centroid(c: DeformableCar): { x: number; z: number } {
-  let x = 0;
-  let z = 0;
-  let m = 0;
-  for (const p of c.deform.masses) {
-    x += p.world.x * p.mass;
-    z += p.world.z * p.mass;
-    m += p.mass;
-  }
-  return { x: x / m, z: z / m };
 }
 
 /**
@@ -168,7 +157,7 @@ function runFieldHeat(n: number, seed: number, playerClass: VehicleClassId | und
     let vmax = 8;
     for (const c of cars) vmax = Math.max(vmax, c.speed);
     const h = physicsSlice(1 / FRAME_HZ, vmax);
-    const before = cars.map((c) => (c.deform.massActive ? centroid(c) : null));
+    const before = cars.map((c) => (c.deform.massActive ? massCentroid(c.deform.masses) : null));
     const speed0 = cars.map((c) => Math.hypot(c.velocity.x, c.velocity.z));
     const shove = new Array<number>(n).fill(0);
     const snaps = match.snapshots(n);
@@ -235,7 +224,7 @@ function runFieldHeat(n: number, seed: number, playerClass: VehicleClassId | und
       }
       const a = before[i];
       if (!a || !c.deform.massActive || t >= 120) continue;
-      const b = centroid(c);
+      const b = massCentroid(c.deform.masses);
       const moved = Math.hypot(b.x - a.x, b.z - a.z);
       const vMax = Math.max(speed0[i]!, Math.hypot(c.velocity.x, c.velocity.z), shove[i]!);
       if (moved > zipBound(vMax, h)) {

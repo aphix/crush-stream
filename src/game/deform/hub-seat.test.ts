@@ -5,7 +5,7 @@ import { StreamedDeformation } from "./streamed-deform.ts";
 import { PLANT_QUIET } from "./deform-state.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { assignClass, CLASSES } from "../vehicle/vehicle-classes.ts";
-import { dummyGeom, paint } from "../vehicle/test-support.ts";
+import { dummyGeom, massCentroid, paint } from "../vehicle/test-support.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -36,21 +36,9 @@ function wreck(): Seat {
   return d;
 }
 
-function centroid(d: Seat): [number, number] {
-  let x = 0;
-  let z = 0;
-  let m = 0;
-  for (const q of d.masses) {
-    x += q.world.x * q.mass;
-    z += q.world.z * q.mass;
-    m += q.mass;
-  }
-  return [x / m, z / m];
-}
-
 /** Every mass moving as one rigid body turning `w` rad/s about the masses' centroid (v = w (z, −x)), the body they ride: its spin `w` and the velocity of the frame masses' centroid (the one `seatHubs` measures from). */
 function spinRigid(d: Seat, w: number): void {
-  const [cx, cz] = centroid(d);
+  const { x: cx, z: cz } = massCentroid(d.masses);
   let vx = 0;
   let vz = 0;
   let mass = 0;
@@ -68,7 +56,7 @@ function spinRigid(d: Seat, w: number): void {
 
 /** Angular momentum about the centroid (y), all masses. */
 function momentum(d: Seat): number {
-  const [cx, cz] = centroid(d);
+  const { x: cx, z: cz } = massCentroid(d.masses);
   let l = 0;
   for (const q of d.masses) l += q.mass * ((q.world.z - cz) * q.vel.x - (q.world.x - cx) * q.vel.z);
   return l;
@@ -79,7 +67,7 @@ describe("given a wrecked car about to come to rest, whose wheels are freed when
     const d = wreck();
     spinRigid(d, 8);
     const hub = d.masses.find((q) => q.hub)!;
-    const [cx, cz] = centroid(d);
+    const { x: cx, z: cz } = massCentroid(d.masses);
     const arm = Math.hypot(hub.world.x - cx, hub.world.z - cz);
     assert.ok(8 * arm > 8.5, `the wheel rides ${(8 * arm).toFixed(2)} m/s off the centroid: no slip to test`);
     const l0 = momentum(d);
@@ -93,7 +81,7 @@ describe("given a wrecked car about to come to rest, whose wheels are freed when
       const d = wreck();
       spinRigid(d, w);
       const hub = d.masses.find((q) => q.hub)!;
-      const [cx, cz] = centroid(d);
+      const { x: cx, z: cz } = massCentroid(d.masses);
       const bodyX = w * (hub.world.z - cz);
       const bodyZ = -w * (hub.world.x - cx);
       hub.vel.x = bodyX + 20;
@@ -319,7 +307,7 @@ describe("given a wreck quiet past PLANT_QUIET and lying over, with its four hub
     group.updateMatrixWorld();
     d.stepStructure(PLANT_QUIET + 0.05, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), LYING_ROLL));
     assert.ok(d.quietTime() > PLANT_QUIET, `quiet ${d.quietTime().toFixed(3)} s: the wreck is not past its plant time`);
-    const [cx, cz] = centroid(d);
+    const { x: cx, z: cz } = massCentroid(d.masses);
     const hubs = d.masses.filter((q) => q.hub && !q.popped);
     const c = Math.cos(HUBS_TURNED_RAD);
     const s = Math.sin(HUBS_TURNED_RAD);
