@@ -107,6 +107,7 @@ export function fly(cls: VehicleClassId, launch: Launch): Flight {
       if (excess > flight.excess) Object.assign(flight, { excess, excessAt: step * FRAME, excessDrive: drive });
       acc -= h;
     }
+    if (car.asleep && !car.deform.drivetrainAlive) break;
   }
   flight.finalRadius = bodyRadius(car);
   return flight;
