@@ -83,6 +83,7 @@ export function bodyRadius(car: DeformableCar): number {
   return Math.hypot(centroid.x, centroid.z);
 }
 
+/** One launch flown for its seconds. The drawn skin is never read (the cage is), so it is not rebuilt per frame. */
 export function fly(cls: VehicleClassId, launch: Launch): Flight {
   const car = carOfClass(cls, launch.x, launch.z, launch.yaw, launch.speed);
   const hits: PropHits = { knock() {}, fx() {}, wall() {} };
@@ -106,7 +107,6 @@ export function fly(cls: VehicleClassId, launch: Launch): Flight {
       if (excess > flight.excess) Object.assign(flight, { excess, excessAt: step * FRAME, excessDrive: drive });
       acc -= h;
     }
-    car.updateSkin();
   }
   flight.finalRadius = bodyRadius(car);
   return flight;
