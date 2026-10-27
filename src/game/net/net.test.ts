@@ -27,7 +27,7 @@ import {
   type NetLayout,
   type Snapshot,
 } from "./codec.ts";
-import { readCarPose } from "./car-pose.ts";
+import { carLayout, readCarPose } from "./car-pose.ts";
 import { tyreClearance } from "../vehicle/tyre-clearance.test-util.ts";
 import { drawnTriangles } from "../vehicle/drawn-body.test-util.ts";
 import { drawSnapshots } from "./net-view.ts";
@@ -43,21 +43,9 @@ function simSkin(car: DeformableCar): ArrayLike<number> {
 /** The clearance (m) a drawn tyre top keeps under the drawn skin (`tyre-hood.test.ts`). */
 const TYRE_CLEARANCE_M = 0.005;
 
-function maxDiff(a: ArrayLike<number>, b: ArrayLike<number>): number {
-  assert.equal(a.length, b.length);
-  let m = 0;
-  for (let i = 0; i < a.length; i++) m = Math.max(m, Math.abs(a[i]! - b[i]!));
-  return m;
-}
-
-function layoutOf(car: DeformableCar): NetLayout {
-  const p = car.partNetSizes();
-  return { ...car.deform.netSizes(), parts: p.parts, wheels: p.wheels };
-}
-
 /** The host car's frame after a trip through the wire (`writeSnapshot` → `readSnapshot`). */
 function wire(host: DeformableCar): CarFrame {
-  const L = layoutOf(host);
+  const L = carLayout(host);
   const out = makeSnapshot();
   ensureFrames(out, 1, L);
   out.count = 1;
@@ -90,7 +78,7 @@ function apply(client: DeformableCar, g: CarFrame): DeformableCar {
 }
 
 function looseParts(car: DeformableCar): number {
-  const f = makeCarFrame(layoutOf(car));
+  const f = makeCarFrame(carLayout(car));
   car.readPartNetState(f.parts);
   return f.parts.flags.filter((x) => x & 1).length;
 }
@@ -184,20 +172,20 @@ describe("given a two-car network snapshot with every field filled in", () => {
     }
     const a = s.cars[0]!;
     const b = got.cars[0]!;
-    assert.ok(maxDiff(a.deform.local, b.deform.local) <= Q.pos / 2 + 1e-6, "particles within 0.25 mm");
-    assert.ok(maxDiff(a.deform.skinPos, b.deform.skinPos) <= Q.pos / 2 + 1e-6);
-    assert.ok(maxDiff(a.deform.skinXf, b.deform.skinXf) <= Q.xf / 2 + 1e-6);
-    assert.ok(maxDiff(a.deform.sensor, b.deform.sensor) <= Q.fine / 2 + 1e-6);
-    assert.ok(maxDiff(a.deform.impact, b.deform.impact) <= Q.fine / 2 + 1e-6);
+    assertSameNumbers(b.deform.local, a.deform.local, "particles within 0.25 mm", Q.pos / 2 + 1e-6);
+    assertSameNumbers(b.deform.skinPos, a.deform.skinPos, "skinPos", Q.pos / 2 + 1e-6);
+    assertSameNumbers(b.deform.skinXf, a.deform.skinXf, "skinXf", Q.xf / 2 + 1e-6);
+    assertSameNumbers(b.deform.sensor, a.deform.sensor, "sensor", Q.fine / 2 + 1e-6);
+    assertSameNumbers(b.deform.impact, a.deform.impact, "impact", Q.fine / 2 + 1e-6);
     assert.equal(b.deform.popped, a.deform.popped);
     assert.equal(b.deform.skinPopped, a.deform.skinPopped);
     assert.equal(b.deform.flags, a.deform.flags);
     assert.ok(Math.abs(b.deform.engineTravel - 0.123) <= Q.pos / 2 + 1e-6);
     assert.ok(Math.abs(b.deform.killTravel - 0.5) <= Q.pos / 2 + 1e-6);
-    assert.ok(maxDiff(a.deform.crush, b.deform.crush) <= Q.fine / 2 + 1e-6, "face depths within 0.05 mm");
-    assert.ok(maxDiff(a.deform.crushBaked, b.deform.crushBaked) <= Q.fine / 2 + 1e-6);
+    assertSameNumbers(b.deform.crush, a.deform.crush, "face depths within 0.05 mm", Q.fine / 2 + 1e-6);
+    assertSameNumbers(b.deform.crushBaked, a.deform.crushBaked, "crushBaked", Q.fine / 2 + 1e-6);
     assertSameNumbers(b.parts.flags, a.parts.flags, "part flags");
-    assert.ok(maxDiff(a.parts.hinge, b.parts.hinge) <= Q.fine / 2 + 1e-6);
+    assertSameNumbers(b.parts.hinge, a.parts.hinge, "hinge", Q.fine / 2 + 1e-6);
     assert.equal(b.parts.lamps, a.parts.lamps);
     assert.equal(b.parts.glass, a.parts.glass);
     assert.equal(b.parts.wheelLoose, a.parts.wheelLoose);
@@ -213,7 +201,7 @@ describe("given a two-car network snapshot with every field filled in", () => {
 describe("given a host car whose driven wheels spin ahead of the body", () => {
   it("when its pose crosses the wire and a client car draws it, then the client's wheelspin is the host's within a wire step, and one past the byte's range reads as its top", () => {
     const host = makeCar();
-    const layout = layoutOf(host);
+    const layout = carLayout(host);
     const s = makeSnapshot();
     ensureFrames(s, 1, layout);
     s.count = 1;
@@ -288,10 +276,11 @@ describe("given a client car that applies the host car's state from the wire", (
 
     const hv = simSkin(host);
     const cv = simSkin(client);
-    const dent = maxDiff(hv, makeCar(mode).body.geometry.getAttribute("position").array);
+    const rest = makeCar(mode).body.geometry.getAttribute("position").array;
+    const dent = Array.from(hv, (v, i) => Math.abs(v - rest[i]!)).reduce((m, d) => Math.max(m, d), 0);
     assert.ok(dent > 0.05, `the host car is dented (${dent.toFixed(3)} m)`);
     // The client re-skins from the host's baked inputs; only quantization (≤ 0.25 mm per particle) separates them.
-    assert.ok(maxDiff(hv, cv) < 0.002, `skin vertices within 2 mm (${maxDiff(hv, cv).toFixed(4)})`);
+    assertSameNumbers(cv, hv, "skin vertices within 2 mm", 0.002);
     const tris = drawnTriangles(client);
     for (const wheel of [0, 1]) {
       if (client["looseWheels"][wheel]!.loose) continue;
@@ -301,10 +290,10 @@ describe("given a client car that applies the host car's state from the wire", (
 
     host.refitCage();
     client.refitCage();
-    assert.ok(maxDiff(host.cage.fields.planBox, client.cage.fields.planBox) < 0.001, "cage plan box within 1 mm");
+    assertSameNumbers(client.cage.fields.planBox, host.cage.fields.planBox, "cage plan box within 1 mm", 0.001);
 
-    const a = makeCarFrame(layoutOf(host));
-    const b = makeCarFrame(layoutOf(host));
+    const a = makeCarFrame(carLayout(host));
+    const b = makeCarFrame(carLayout(host));
     host.readPartNetState(a.parts);
     client.readPartNetState(b.parts);
     assertSameNumbers(b.parts.flags, a.parts.flags, "part states identical");
@@ -328,7 +317,7 @@ describe("given a client car that applies the host car's state from the wire", (
     assert.ok(host.crashed && looseParts(host) === 0);
     apply(client, wire(host));
     assert.equal(looseParts(client), 0);
-    assert.ok(maxDiff(simSkin(host), simSkin(client)) < 0.002);
+    assertSameNumbers(simSkin(client), simSkin(host), "skin vertices within 2 mm", 0.002);
   });
 
   // todo -> after the plan: recalibrate the off-centre wall hit's crush against the lever's spin. The 58 km/h rear corner hit tears no quarter
@@ -372,7 +361,7 @@ describe("given a client car that applies the host car's state from the wire", (
 
     const client = apply(makeCar(), wire(host));
     for (let i = 0; i < 30; i++) client.netFrame(1 / FRAME_HZ);
-    const f = makeCarFrame(layoutOf(client));
+    const f = makeCarFrame(carLayout(client));
     client.readPartNetState(f.parts);
     assert.equal(f.parts.wheelLoose, 1, "only wheel 0 is loose");
     const clientWheel = client.wheels[0]!.getWorldPosition(client.wheels[0]!.position.clone());
@@ -410,7 +399,7 @@ describe("given a host pickup that met a second pickup head-on at 50 km/h, and a
     for (let f = 0; f < HEAD_ON_S * FRAME_HZ; f++) tickWorld(w, 1 / FRAME_HZ);
     host.updateSkin();
     const client = apply(pickup(), wire(host));
-    assert.ok(maxDiff(simSkin(host), simSkin(client)) < 0.002, `skin vertices within 2 mm (${maxDiff(simSkin(host), simSkin(client)).toFixed(4)})`);
+    assertSameNumbers(simSkin(client), simSkin(host), "skin vertices within 2 mm", 0.002);
     const tris = drawnTriangles(client);
     let kept = 0;
     for (const wheel of [0, 1]) {
@@ -436,10 +425,10 @@ describe("given a host wreck the epicenter freeze holds (the activation on) and 
       const client = apply(makeCar(), wire(host));
       const hv = simSkin(host);
       const cv = simSkin(client);
-      assert.ok(maxDiff(hv, cv) < 0.002, `skin vertices within 2 mm (${maxDiff(hv, cv).toFixed(4)})`);
+      assertSameNumbers(cv, hv, "skin vertices within 2 mm", 0.002);
       host.refitCage();
       client.refitCage();
-      assert.ok(maxDiff(host.cage.fields.planBox, client.cage.fields.planBox) < 0.001, "cage plan box within 1 mm");
+      assertSameNumbers(client.cage.fields.planBox, host.cage.fields.planBox, "cage plan box within 1 mm", 0.001);
       assert.ok(Math.abs(client.deform.drivetrainHealth - host.deform.drivetrainHealth) < 0.01, "graded damage matches");
     } finally {
       loadEpicenter(saved);
