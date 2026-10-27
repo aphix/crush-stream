@@ -59,13 +59,13 @@ export const MINIMUM_SPEED: Readonly<Record<MinigameMode, Readonly<Record<string
 };
 
 /** Seconds the parked car is left alone before the release, to see it hold on the pad. */
-const HOLD_SECONDS = 2;
+export const HOLD_SECONDS = 2;
 /** The car stands still when slower than this (m/s). */
-const STALLED_SPEED = 0.5;
+export const STALLED_SPEED = 0.5;
 /** A run that stands still this long (s) after the release has stalled. */
-const STALL_SECONDS = 2;
+export const STALL_SECONDS = 2;
 /** A run ends at this many seconds after the release. */
-const RUN_SECONDS = 60;
+export const RUN_SECONDS = 60;
 /** How far ahead (m) of the car along the lane the steering aims, and per metre of its speed. */
 const STEER_LOOK_AHEAD = 10;
 const STEER_LOOK_PER_SPEED = 0.4;
@@ -75,6 +75,22 @@ const GOVERNOR_GAIN = 1;
 /** The landing plane reaches this far (m) down the throw and this far to each side, past anything a throw gets to. */
 const LANDING_END_X = 400;
 const LANDING_HALF_WIDTH = 60;
+
+/** Steers `car` down +x along the lane at `laneZ`: it aims `STEER_LOOK_AHEAD` m, and `STEER_LOOK_PER_SPEED` m per m/s of its speed, ahead. */
+export function steerAlongLane(input: DriveInput, car: DeformableCar, laneZ: number): void {
+  const position = car.group.position;
+  const aheadX = position.x + STEER_LOOK_AHEAD + car.speed * STEER_LOOK_PER_SPEED;
+  const error = Math.atan2(aheadX - position.x, laneZ - position.z) - car.yaw;
+  input.steer = Math.max(-1, Math.min(1, STEER_GAIN * Math.atan2(Math.sin(error), Math.cos(error))));
+}
+
+/** Sets the throttle and brake that hold `car`'s horizontal speed to `speedCap` m/s (Infinity: full throttle); returns that speed. */
+export function holdHorizontalSpeed(input: DriveInput, car: DeformableCar, speedCap: number): number {
+  const horizontalSpeed = Math.hypot(car.velocity.x, car.velocity.z);
+  input.throttle = Math.max(0, Math.min(1, GOVERNOR_GAIN * (speedCap - horizontalSpeed)));
+  input.brake = Math.max(0, Math.min(1, GOVERNOR_GAIN * (horizontalSpeed - speedCap)));
+  return horizontalSpeed;
+}
 
 /** The run the test ground stands for: its height at local x, where the grid starts and ends, where the car parks and where the climb's foot is. */
 export type DriveProfile = {
@@ -148,12 +164,29 @@ export function speedAtLine(fromX: number, fromSpeed: number, toX: number, toSpe
 
 const _forward = new THREE.Vector3();
 
+/** `cache`'s value for `key`, made by `make` the first time it is asked for. */
+function cached<K, V>(cache: Map<K, V>, key: K, make: () => V): V {
+  let value = cache.get(key);
+  if (value === undefined) {
+    value = make();
+    cache.set(key, value);
+  }
+  return value;
+}
+
+const climbs = new Map<DriveProfile, Map<string, ClimbRun>>();
+
 /**
  * One car of `type` parked on the profile's pad (laid on the ground, the parked flag set), left alone to see it hold, then released at
  * full throttle (or, under a finite `horizontalSpeedCap` m/s, with the throttle and brake holding its horizontal speed to it) and steered
- * along the lane's middle until its nose reaches the lip's base line (x = 0), it stalls, or time runs out.
+ * along the lane's middle until its nose reaches the lip's base line (x = 0), it stalls, or time runs out. A drive is deterministic: each
+ * (profile, car type, cell, cap) is driven once.
  */
 export function driveToLip(type: DriverCar, profile: DriveProfile, cell: number, horizontalSpeedCap = Infinity): ClimbRun {
+  return cached(cached(climbs, profile, () => new Map()), `${type.id}/${cell}/${horizontalSpeedCap}`, () => climbToLip(type, profile, cell, horizontalSpeedCap));
+}
+
+function climbToLip(type: DriverCar, profile: DriveProfile, cell: number, horizontalSpeedCap: number): ClimbRun {
   const ground = new ProfileGround(profile, cell);
   setGround(ground);
   const car = dressedDriverCar(type);
@@ -175,12 +208,8 @@ export function driveToLip(type: DriverCar, profile: DriveProfile, cell: number,
     for (let n = 0; n < RUN_SECONDS / FRAME; n++) {
       const fromX = position.x;
       const fromSpeed = car.speed;
-      const aheadX = position.x + STEER_LOOK_AHEAD + car.speed * STEER_LOOK_PER_SPEED;
-      const error = Math.atan2(aheadX - position.x, -position.z) - car.yaw;
-      input.steer = Math.max(-1, Math.min(1, STEER_GAIN * Math.atan2(Math.sin(error), Math.cos(error))));
-      const horizontalSpeed = Math.hypot(car.velocity.x, car.velocity.z);
-      input.throttle = Math.max(0, Math.min(1, GOVERNOR_GAIN * (horizontalSpeedCap - horizontalSpeed)));
-      input.brake = Math.max(0, Math.min(1, GOVERNOR_GAIN * (horizontalSpeed - horizontalSpeedCap)));
+      steerAlongLane(input, car, 0);
+      holdHorizontalSpeed(input, car, horizontalSpeedCap);
       frame(world, input, clock);
       run.seconds = (n + 1) * FRAME;
       run.endX = position.x;
@@ -259,23 +288,31 @@ export function lipPitch(mode: MinigameMode): number {
   return Math.atan(Math.tan(RING_FLING_LANE.inclinePitchDegrees * DEGREES_TO_RADIANS) + ((Math.PI / 2) * hopHeight) / RING_FLING_LANE.hopLength);
 }
 
-/** The station `mode` as it ships, as a drive profile. */
+const stationProfiles = new Map<MinigameMode, DriveProfile>();
+
+/** The station `mode` as it ships, as a drive profile (one object a mode, so a drive of it is made once). */
 export function stationDriveProfile(mode: MinigameMode): DriveProfile {
-  return {
+  return cached(stationProfiles, mode, () => ({
     heightAtX: (localX) => floorHeightAt(mode, localX, 0),
     backX: stationBackX(mode),
     frontX: stationFrontX(mode),
     startX: stationStartPose(mode).x,
     footX: climbFootX(mode),
     launchPush: mode === "longJump" ? 0 : LIP_LAUNCH_PUSH[mode],
-  };
+  }));
 }
+
+const highJumpVariants = new Map<string, DriveProfile>();
 
 /**
  * The high jump with its kicker an arc of `radius` m up to `pitchDegrees` (its back face as shipped) and its run-up `runUp` m long: the
  * pad and start hill are the shipped ones moved to meet it. At the shipped radius, pitch and run-up it is the shipped station.
  */
 export function highJumpVariant(radius: number, pitchDegrees: number, runUp: number): DriveProfile {
+  return cached(highJumpVariants, `${radius}/${pitchDegrees}/${runUp}`, () => buildHighJumpVariant(radius, pitchDegrees, runUp));
+}
+
+function buildHighJumpVariant(radius: number, pitchDegrees: number, runUp: number): DriveProfile {
   const shipped = stationDriveProfile("highJump");
   const footX = -radius * Math.sin(pitchDegrees * DEGREES_TO_RADIANS);
   const hillFootX = footX - runUp;
@@ -387,9 +424,7 @@ export async function driveIntoBarrier(type: DriverCar, ground: Ground | null, s
   const input: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
   const inner = world.world.beforeSlice!;
   world.world.beforeSlice = (slice) => {
-    const aheadX = car.group.position.x + STEER_LOOK_AHEAD + car.speed * STEER_LOOK_PER_SPEED;
-    const error = Math.atan2(aheadX - car.group.position.x, -car.group.position.z) - car.yaw;
-    input.steer = Math.max(-1, Math.min(1, STEER_GAIN * Math.atan2(Math.sin(error), Math.cos(error))));
+    steerAlongLane(input, car, 0);
     if (car.group.position.x < run.liftX) world.pedals.set(car, input);
     else world.pedals.delete(car);
     return inner(slice);
@@ -478,12 +513,8 @@ export function driveToBarrier(type: DriverCar, profile: DriveProfile, startOffs
     const input: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
     const inner = world.world.beforeSlice!;
     world.world.beforeSlice = (slice) => {
-      const aheadX = car.group.position.x + STEER_LOOK_AHEAD + car.speed * STEER_LOOK_PER_SPEED;
-      const error = Math.atan2(aheadX - car.group.position.x, -car.group.position.z) - car.yaw;
-      input.steer = Math.max(-1, Math.min(1, STEER_GAIN * Math.atan2(Math.sin(error), Math.cos(error))));
-      const horizontalSpeed = Math.hypot(car.velocity.x, car.velocity.z);
-      input.throttle = Math.max(0, Math.min(1, GOVERNOR_GAIN * (horizontalSpeedCap - horizontalSpeed)));
-      input.brake = Math.max(0, Math.min(1, GOVERNOR_GAIN * (horizontalSpeed - horizontalSpeedCap)));
+      steerAlongLane(input, car, 0);
+      holdHorizontalSpeed(input, car, horizontalSpeedCap);
       world.pedals.set(car, input);
       return inner(slice);
     };

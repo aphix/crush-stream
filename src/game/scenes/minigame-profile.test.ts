@@ -369,7 +369,12 @@ describe("given the long jump's driver in the monster truck, driven at full thro
   /** Where (local x, m) the driver lifts his foot, best of: the range's cars coast into the barrier in neutral. */
   const LIFT_CHOICES = [-30, -15, -8, -4, -2];
   const farthestSign = (distance: number): number => Math.min(RANGE.signs, Math.floor(distance / RANGE.signStep)) * RANGE.signStep;
+  const bestDistances = new Map<string, number>();
+  /** The farthest throw over `LIFT_CHOICES`, driven once for every row that reads it (a drive is deterministic). */
   const bestDistance = async (onStation: boolean, carryVertical: boolean): Promise<number> => {
+    const key = `${onStation}/${carryVertical}`;
+    const known = bestDistances.get(key);
+    if (known !== undefined) return known;
     const profile = stationDriveProfile("longJump");
     let best = 0;
     for (const liftX of LIFT_CHOICES) {
@@ -377,6 +382,7 @@ describe("given the long jump's driver in the monster truck, driven at full thro
       const result = await driveIntoBarrier(monster, onStation ? new ProfileGround(profile, FINE_CELL) : null, profile.startX, run);
       best = Math.max(best, result.distance ?? 0);
     }
+    bestDistances.set(key, best);
     return best;
   };
 
