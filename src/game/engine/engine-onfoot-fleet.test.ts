@@ -11,6 +11,10 @@ const WALK_AWAY_M = 4;
 /** The most a held car creeps on its brakes while he is out (m). */
 const HELD_CREEP_M = 0.5;
 const FALL_WITHIN_S = 1.5;
+/** Gas on the touch strip short of its Boost cap, held this long (s): he walks at least this far (m) and does not run. */
+const TOUCH_WALK_GAS = 0.95;
+const TOUCH_WALK_S = 2;
+const TOUCH_WALK_MIN_M = 1;
 
 /** The fleet's crash loop rolls the same crash from a seed: this one stops car 0 with its driver in and room at its door, this one throws him out (windshield) before it stops. */
 const LOOP_DRIVER_IN_SEED = 4;
@@ -73,12 +77,37 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     assert.equal(rig.engine["onFoot"].prompt(), "Enter or B: get out", "the driver is in: it is offered");
     own.driverOut = "windshield";
     assert.equal(rig.engine["onFoot"].prompt(), null, "a thrown driver has nobody to get out: nothing is offered");
-    assert.equal(rig.engine["onFoot"].hud()?.prompt, null, "nor on the HUD's line");
+    assert.equal(rig.engine["onFoot"].hud(), null, "nor on the HUD: no Out button");
     rig.press("Enter");
     rig.run(1);
     assert.equal(rig.phase(), "inCar", "and the press does nothing");
     own.driverOut = null;
     assert.equal(rig.engine["onFoot"].prompt(), "Enter or B: get out", "the driver back in: offered again");
+  });
+
+  it("when the touch Out button is tapped at the wheel, then he gets out once, the tap is spent, the pedal strip's gas walks him, and the same button tapped at his door gets him back in", () => {
+    assert.deepEqual(rig.engine["onFoot"].hud(), { out: false, prompt: "Enter or B: get out" }, "at the wheel the button is Out");
+    rig.tapOnFoot(1);
+    assert.equal(rig.phase(), "onFoot", `he is out (he was told: ${rig.engine["onFoot"].flow.refusal})`);
+    assert.equal(rig.engine.touch.tapped, 0, "the tap fired on one poll");
+    assert.equal(rig.engine.touch.held, 0, "and holds nothing");
+    assert.equal(rig.engine["onFoot"].hud()?.out, true, "on foot the button is In");
+    const from = rig.torso();
+    rig.engine.touch.gas = TOUCH_WALK_GAS;
+    rig.run(TOUCH_WALK_S);
+    rig.engine.touch.gas = 0;
+    assert.ok(rig.torso().distanceTo(from) > TOUCH_WALK_MIN_M, `the strip's gas walked him ${rig.torso().distanceTo(from).toFixed(2)} m`);
+    rig.walkToDoor(rig.cars()[0]!);
+    rig.tapOnFoot(1);
+    assert.equal(rig.phase(), "inCar", "the tap got him in");
+    assert.equal(rig.engine["seat"].mode, "drive", "with the wheel");
+  });
+
+  it("when the seat only follows his car, not at its wheel, then nothing offers getting out: no Out button, and a tap does nothing", () => {
+    rig.engine["seat"].mode = "follow";
+    assert.equal(rig.engine["onFoot"].hud(), null, "no Out button");
+    rig.tapOnFoot(1);
+    assert.equal(rig.phase(), "inCar", "the tap does nothing");
   });
 
   it("when the fleet's own crash loop (seed 4) leaves car 0 stopped with its driver in and another wreck at his door, then Enter tells him there is no room and he stays in", () => {

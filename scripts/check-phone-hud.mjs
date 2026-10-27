@@ -47,7 +47,7 @@ const DEVICES = [
 
 /** The system's edge gestures (Android back, iOS edge swipe) begin in the first 20 px of the screen: a thumb control of the two-thumb schemes keeps clear of them. */
 const GESTURE_EDGE = 20;
-const THUMB_CONTROLS = ["steer", "pedal-strip", "brake", "boost", "handbrake"];
+const THUMB_CONTROLS = ["steer", "pedal-strip", "brake", "boost", "handbrake", "onfoot"];
 
 const evaluate = (page, fn, arg) => page.evaluate(fn, arg);
 const settle = (page, ms) => page.waitForTimeout(ms);
@@ -66,15 +66,17 @@ const driveRace = async (page) => {
  * target, overlap and clip checks. `setup` runs after load.
  */
 const SCREENS = {
-  // The default scheme is the driving disc (Boost and Handbrake beside the dial's corner); the fullscreen toggle is one tap from every driving screen.
-  "race-drive": { hash: "scene=race", driving: true, setup: driveRace, expect: ["steer", "boost", "pause", "view", "fullscreen"] },
+  // The default scheme is the driving disc (Boost and Handbrake beside the dial's corner, Out over Boost); the fullscreen toggle is one tap from every driving screen.
+  "race-drive": { hash: "scene=race", driving: true, setup: driveRace, expect: ["steer", "boost", "onfoot", "pause", "view", "fullscreen"] },
   // The two-thumb schemes: the left thumb steers (and pulls down for the e-brake), the right holds the pedals; neither may overlap, leave the screen or sit in the gesture edge.
-  "race-pedals": { hash: "scene=race", scheme: "pedals", driving: true, edgeGuard: true, setup: driveRace, expect: ["steer", "pedal-strip", "pause", "view", "fullscreen"], absent: ["boost", "handbrake"] },
+  "race-pedals": { hash: "scene=race", scheme: "pedals", driving: true, edgeGuard: true, setup: driveRace, expect: ["steer", "pedal-strip", "onfoot", "pause", "view", "fullscreen"], absent: ["boost", "handbrake"] },
   // Easy's gas is automatic: the pad's handbrake holds the car on the grid, as the other schemes' idle thumbs do, so the moving race's standings do not swamp the control measurement.
-  "race-easy": { hash: "scene=race", scheme: "autogas", driving: true, edgeGuard: true, setup: async (page) => { await startRace(page); await evaluate(page, () => Object.assign(window.__crush.touch, { gas: 0, brake: 0, held: 1 << 2 })); await settle(page, 9000); }, expect: ["steer", "brake", "boost", "pause", "view", "fullscreen"], absent: ["pedal-strip", "handbrake"] },
-  "race-tilt": { hash: "scene=race", scheme: "tilt", driving: true, edgeGuard: true, setup: driveRace, expect: ["steer", "handbrake", "pedal-strip", "pause", "view", "fullscreen"], absent: ["boost"] },
+  "race-easy": { hash: "scene=race", scheme: "autogas", driving: true, edgeGuard: true, setup: async (page) => { await startRace(page); await evaluate(page, () => Object.assign(window.__crush.touch, { gas: 0, brake: 0, held: 1 << 2 })); await settle(page, 9000); }, expect: ["steer", "brake", "boost", "onfoot", "pause", "view", "fullscreen"], absent: ["pedal-strip", "handbrake"] },
+  "race-tilt": { hash: "scene=race", scheme: "tilt", driving: true, edgeGuard: true, setup: driveRace, expect: ["steer", "handbrake", "pedal-strip", "onfoot", "pause", "view", "fullscreen"], absent: ["boost"] },
+  // Out tapped on Easy's grid (its handbrake holding the car, as above): on foot Easy draws the Pedals strip, the walk's forward axis, and Out has become In.
+  "race-onfoot": { hash: "scene=race", scheme: "autogas", driving: true, edgeGuard: true, setup: async (page) => { await startRace(page); await evaluate(page, () => Object.assign(window.__crush.touch, { gas: 0, brake: 0, held: 1 << 2 })); await settle(page, 9000); await page.locator("[data-touch-control=onfoot]").tap(); await settle(page, 2000); }, expect: ["steer", "pedal-strip", "onfoot", "pause", "fullscreen"], absent: ["brake"], onFoot: true },
   // Survival says "Chased by N cops" all run long, the one thing it must always say: it may take a little more of the road's top edge.
-  "survival-drive": { hash: "scene=survival", driving: true, roadAllowancePct: 5, setup: async (page) => { await evaluate(page, () => window.__crush.raceCommand({ type: "start" })); await settle(page, 8000); }, expect: ["steer", "pause", "fullscreen"] },
+  "survival-drive": { hash: "scene=survival", driving: true, roadAllowancePct: 5, setup: async (page) => { await evaluate(page, () => window.__crush.raceCommand({ type: "start" })); await settle(page, 8000); }, expect: ["steer", "onfoot", "pause", "fullscreen"] },
   "fleet-drive": { hash: "", driving: true, // Following one of five cars: the cycle has somewhere to go, so Prev and Next show.
      setup: async (page) => { await evaluate(page, () => window.__crush.seat.focus(0)); await settle(page, 2500); }, expect: ["steer", "view", "fullscreen", "prev", "next"] },
   // The card with the score and the bail prompt stays up through the run, in the zone's upper left corner: it is what the player is playing for.
@@ -230,6 +232,7 @@ async function checkScreen(browser, device, name, screen) {
   const { context: browserContext, page, errors } = await open(browser, device, screen.hash, { scheme: screen.scheme });
   try {
     if (screen.setup) await screen.setup(page);
+    if (screen.onFoot && !/back in/i.test((await page.locator("[data-touch-control=onfoot]").first().getAttribute("aria-label")) ?? "")) fail(context, "the Out tap did not get the player out (the button is not In)");
     const probe = await evaluate(page, PROBE, [GRID_CELL, ROAD_ZONE]);
     if (OUT) await page.screenshot({ path: join(OUT, `${name}.${device.id}.png`), scale: "css" });
     console.log(`  road ${probe.roadCoveredPct}%  controls ${probe.rects.length}  small ${probe.small.length}  crossings ${probe.crossings.length}`);

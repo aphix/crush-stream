@@ -4,7 +4,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import type { DriverSeat } from "../vehicle/car-drive.ts";
 import { blankStrike, fell, runsDown } from "../scenes/figure-strike.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { PAD_BUTTON, type PadState } from "../vehicle/gamepad.ts";
+import { PAD_BUTTON, type PadState, type TouchPad } from "../vehicle/gamepad.ts";
 import type { ChaseCamera } from "../present/engine-camera.ts";
 import type { DriverLook } from "../present/driver-look.ts";
 import { OnFootFlow, type OnFootRefusal, type OnFootSense, type OnFootStep } from "../present/onfoot-flow.ts";
@@ -23,6 +23,7 @@ interface OnFootHost {
   camera: THREE.PerspectiveCamera;
   keys: ReadonlySet<string>;
   pad: PadState;
+  touch: TouchPad;
   cars(): readonly DeformableCar[];
   /** The game is running a scene with a player's car to leave: free play, a race (not in its menu), a derby, a mini game, a rig; online or off. */
   available(): boolean;
@@ -227,9 +228,9 @@ export class OnFootDirector {
 
   /** The stick and keys, relative to the camera, into the walker's heading and speed. */
   private walk(): void {
-    const { camera, view, ragdolls, keys, pad } = this.host;
+    const { camera, view, ragdolls, keys, pad, touch } = this.host;
     const walker = ragdolls.walker;
-    const intent = readWalkIntent(keys, pad, this.intent);
+    const intent = readWalkIntent(keys, pad, touch, this.intent);
     const reach = hypot2(intent.forward, intent.strafe);
     if (reach < WALK_DEADZONE) {
       walker.command = 0;
@@ -276,9 +277,10 @@ export class OnFootDirector {
     return true;
   }
 
-  /** The HUD's read of the trip, or null where it is not offered. */
+  /** The HUD's read of the trip, or null where the control does nothing: the scene does not offer it, or he neither sits at a wheel he may leave nor is out. */
   hud(): FootHud | null {
-    return this.host.available() ? { out: this.flow.active, prompt: this.prompt() } : null;
+    if (!this.host.available() || (!this.flow.active && this.carAtWheel() === null)) return null;
+    return { out: this.flow.active, prompt: this.prompt() };
   }
 
   /** The line under the view: what the control does here, or why it just refused. Null when there is nothing to say. */

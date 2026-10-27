@@ -1,12 +1,13 @@
 import { useRef, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
-import { ChevronsUp, CircleParking, OctagonX, Zap } from "lucide-react";
+import { Car, ChevronsUp, CircleParking, DoorOpen, OctagonX, Zap } from "lucide-react";
 import type { HudProps } from "@/components/hud";
 import { Button } from "@/components/ui/button";
 import { PedalStrip } from "@/components/touch-strip";
 import { thumbSideClass } from "@/components/thumb-side";
 import { useBoostTap } from "@/components/use-boost-tap";
 import { usePadHold } from "@/components/use-pad-hold";
-import type { SchemeLayout } from "@/game/hud/touch-scheme";
+import type { FootHud } from "@/game/hud/hud-store";
+import { tapOnFoot, type SchemeLayout } from "@/game/hud/touch-scheme";
 import { PAD_BUTTON } from "@/game/vehicle/gamepad";
 import { cn } from "@/lib/utils";
 
@@ -115,13 +116,40 @@ function BoostTap({ boost, bail }: { boost: { tap: () => void }; bail: boolean }
   );
 }
 
+/** Out of the car, or back in once out: a tap, drawn only where the keyboard's Enter would act (`OnFootDirector.hud`). */
+function OnFootTap({ engine, foot, className }: Pick<HudProps, "engine"> & { foot: FootHud | null; className: string }) {
+  if (foot === null) return null;
+  const label = foot.out ? "Get back in the car (tap)" : "Get out and walk (tap)";
+  return (
+    <Button
+      variant="ghost"
+      aria-label={label}
+      title={label}
+      data-touch-control="onfoot"
+      data-keep-idle
+      className={cn(ZONE, "pointer-events-auto touch-none select-none flex-col gap-0.5 px-0 [&_svg]:size-6", className)}
+      onPointerDown={() => {
+        const touch = engine.current?.touch;
+        if (touch) tapOnFoot(touch);
+      }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      {foot.out ? <Car /> : <DoorOpen />}
+      <span className="font-display text-[10px] font-semibold uppercase leading-none tracking-wider">{foot.out ? "In" : "Out"}</span>
+    </Button>
+  );
+}
+
 /** Easy's right thumb: the gas is automatic, so it holds Brake in the corner and taps Boost above it; braking ends a Boost. */
-function BrakeAndBoost({ engine, bail, gasOn, onBrake, onArm }: Pick<HudProps, "engine"> & { bail: boolean; gasOn: boolean; onBrake: (down: boolean) => void; onArm: () => void }) {
+function BrakeAndBoost({ engine, bail, gasOn, foot, onBrake, onArm }: Pick<HudProps, "engine"> & { bail: boolean; gasOn: boolean; foot: FootHud | null; onBrake: (down: boolean) => void; onArm: () => void }) {
   const boost = useBoostTap(engine);
   return (
     <div className="flex flex-col items-end gap-2">
       <AutoGasLight on={gasOn} />
-      <BoostTap boost={boost} bail={bail} />
+      <div className="flex items-end gap-2">
+        <OnFootTap engine={engine} foot={foot} className={SIZE.button} />
+        <BoostTap boost={boost} bail={bail} />
+      </div>
       <Pedal
         name="brake"
         label="Brake (hold)"
@@ -144,6 +172,10 @@ function BrakeAndBoost({ engine, bail, gasOn, onBrake, onArm }: Pick<HudProps, "
 /** Under 380 px the Disc's buttons drop to 48 px: the 128 px disc, both buttons and the dial's slot then fit 360 px side by side. */
 const DISC_BUTTON = cn(SIZE.button, "max-[380px]:size-12");
 
+/** The Disc's Out stands over Boost: past the dial's slot and its gap, as a 360 px row has no room for a third button. */
+const DIAL_ROOM_RIGHT = "mr-25";
+const DIAL_ROOM_LEFT = "ml-25";
+
 /** The Disc's right thumb: Handbrake and Boost, held, beside the dial's slot. */
 function DiscButtons({ engine, bail }: Pick<HudProps, "engine"> & { bail: boolean }) {
   return (
@@ -163,7 +195,7 @@ function DiscButtons({ engine, bail }: Pick<HudProps, "engine"> & { bail: boolea
  * automatic gas (Easy), or the Disc's Handbrake and Boost beside the dial's slot. The bottom row's height is the dial's box (80 px wide) in every scene, dial or
  * not, so the control above stands at one height. `mirror` puts the cluster at the left edge. Fingers go to `onThumb` (gas and brake, 0..1; the caller writes the pad from them).
  */
-export function TouchPedals({ engine, layout, canDrive, driving, mirror, bail, dial, gasOn, onThumb, onArm }: Pick<HudProps, "engine"> & {
+export function TouchPedals({ engine, layout, canDrive, driving, mirror, bail, dial, gasOn, foot, onThumb, onArm }: Pick<HudProps, "engine"> & {
   layout: SchemeLayout;
   /** The seat is the player's to drive (or follows a car one touch would take the wheel of): the pedals are drawn. */
   canDrive: boolean;
@@ -176,14 +208,22 @@ export function TouchPedals({ engine, layout, canDrive, driving, mirror, bail, d
   dial: boolean;
   /** The car is being given gas by itself right now (the "Auto gas" light). */
   gasOn: boolean;
+  /** Where getting out (or back in) is offered: the Out / In tap is drawn. */
+  foot: FootHud | null;
   onThumb: (gas: number, brake: number) => void;
   onArm: () => void;
 }) {
   const disc = layout.right === "buttons";
   return (
     <div role="group" aria-label="Pedals" className={cn("pointer-events-none absolute flex flex-col gap-2", disc ? "hud-bottom" : "thumb-bottom", mirror ? "items-start" : "items-end", thumbSideClass(mirror ? "left" : "right", disc))}>
-      {canDrive && layout.right === "strip" ? <PedalStrip engine={engine} onThumb={onThumb} onArm={onArm} /> : null}
-      {canDrive && layout.right === "brake" ? <BrakeAndBoost engine={engine} bail={bail} gasOn={gasOn} onBrake={(down) => onThumb(0, down ? 1 : 0)} onArm={onArm} /> : null}
+      {canDrive && layout.right === "strip" ? (
+        <div className={cn("flex items-start gap-2", mirror && "flex-row-reverse")}>
+          <OnFootTap engine={engine} foot={foot} className={SIZE.button} />
+          <PedalStrip engine={engine} onThumb={onThumb} onArm={onArm} />
+        </div>
+      ) : null}
+      {canDrive && layout.right === "brake" ? <BrakeAndBoost engine={engine} bail={bail} gasOn={gasOn} foot={foot} onBrake={(down) => onThumb(0, down ? 1 : 0)} onArm={onArm} /> : null}
+      {disc ? <OnFootTap engine={engine} foot={foot} className={cn(DISC_BUTTON, dial && (mirror ? DIAL_ROOM_LEFT : DIAL_ROOM_RIGHT))} /> : null}
       <div className={cn("flex items-end gap-2", mirror && "flex-row-reverse", SIZE.slot, !disc && "phone-landscape:hidden")}>
         {driving && disc ? <DiscButtons engine={engine} bail={bail} /> : null}
         {dial ? <div className={SIZE.dial} aria-hidden /> : null}

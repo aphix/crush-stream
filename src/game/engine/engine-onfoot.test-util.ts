@@ -6,6 +6,7 @@ import { HudStore } from "../hud/hud-store.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { setGround } from "../world/ground.ts";
 import type { Walker } from "../present/ragdoll-walker.ts";
+import { tapOnFoot } from "../hud/touch-scheme.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
 import { doorSpot } from "./onfoot-doors.ts";
@@ -143,6 +144,12 @@ export class OnFootRig {
     this.press("Enter");
     this.run(CLIMB_OUT_S);
     assert.equal(this.phase(), "onFoot", `the climb out is over (he was told: ${this.engine["onFoot"].flow.refusal})`);
+  }
+
+  /** The touch HUD's Out / In button tapped once, and the frames after it. */
+  tapOnFoot(seconds: number): void {
+    tapOnFoot(this.engine.touch);
+    this.run(seconds);
   }
 
   /** A point on the level, `out` m further out from `car`'s driver door (away from its middle) and `along` m ahead of it: somewhere to walk to that is not through the car. */

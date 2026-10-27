@@ -1,8 +1,11 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { blankIntent, readIntent } from "../vehicle/drive-input.ts";
-import { blankPad, PAD_BUTTON } from "../vehicle/gamepad.ts";
+import { blankPad, mergeTouch, PAD_BUTTON, type TouchPad } from "../vehicle/gamepad.ts";
+import { discReading, drawnScheme, pedalsFor, schemeLayout, sliderSteer, stripReading, TOUCH_SCHEMES, type TouchScheme } from "../hud/touch-scheme.ts";
 import { blankWalkIntent, readWalkIntent } from "./engine-walk-input.ts";
+
+const blankTouch = (): TouchPad => ({ x: 0, y: 0, gas: 0, brake: 0, held: 0, tapped: 0 });
 
 type DrivingField = "gas" | "brake" | "wheel" | "boost";
 
@@ -44,7 +47,7 @@ describe("given the controls that drive the car", () => {
     it(testCase.it, () => {
       const pad = { ...blankPad(), connected: testCase.connected, lx: testCase.stickX, ly: testCase.stickY, rt: testCase.triggerRight, held: testCase.southHeld ? 1 << PAD_BUTTON.south : 0 };
       const keys = new Set(testCase.keys);
-      const walk = readWalkIntent(keys, pad, blankWalkIntent());
+      const walk = readWalkIntent(keys, pad, blankTouch(), blankWalkIntent());
       assert.equal(walk.forward, testCase.expectedForward, "forward");
       assert.equal(walk.strafe, testCase.expectedStrafe, "strafe");
       assert.equal(walk.run, testCase.expectedRun, "run");
@@ -53,4 +56,57 @@ describe("given the controls that drive the car", () => {
       assert.equal(driving[testCase.drivingField], testCase.drivingValue, `the same control drives ${testCase.drivingField}`);
     });
   }
+});
+
+/** A thumb on foot: `push` is up (+1) / down (-1) on the strip or the disc, `side` right (+1) / left (-1) on the bar, the tilt or the disc; `cap` the strip's Boost cap. */
+type FootThumbs = { push: number; side: number; cap?: boolean };
+
+const BAR_HALF_TRAVEL = 60;
+
+/** What a scheme's controls write to the pad on foot, through the functions the HUD calls (Boost's cap as the held A it latches), merged as a poll merges it. */
+function walkFor(chosen: TouchScheme, thumbs: FootThumbs) {
+  const scheme = drawnScheme(chosen, true);
+  const layout = schemeLayout(scheme);
+  const touch = blankTouch();
+  if (layout.steer === "stick") {
+    const reading = discReading(thumbs.side, -thumbs.push);
+    touch.x = reading.x;
+    touch.y = reading.y;
+  } else touch.x = layout.steer === "slider" ? sliderSteer(thumbs.side * BAR_HALF_TRAVEL, BAR_HALF_TRAVEL) : thumbs.side;
+  if (layout.right === "strip") {
+    const strip = stripReading(thumbs.cap ? 0.95 : thumbs.push > 0 ? 0.79 : thumbs.push < 0 ? 0 : 0.34);
+    const pedals = pedalsFor(scheme, strip, true);
+    touch.gas = pedals.gas;
+    touch.brake = pedals.brake;
+    if (strip.boost) touch.held |= 1 << PAD_BUTTON.south;
+  }
+  const pad = blankPad();
+  mergeTouch(touch, pad, 0);
+  return readWalkIntent(new Set(), pad, touch, blankWalkIntent());
+}
+
+describe("given each touch scheme with the player on foot", () => {
+  for (const scheme of TOUCH_SCHEMES) {
+    it(`when ${scheme}'s thumbs push up, down and sideways, then he walks forward, back and steps aside, and full gas alone does not run`, () => {
+      const ahead = walkFor(scheme, { push: 1, side: 0 });
+      assert.ok(ahead.forward > 0.9 && Math.abs(ahead.strafe) < 0.05, `forward ${ahead.forward} strafe ${ahead.strafe}`);
+      assert.equal(ahead.run, false, "full gas walks, it does not run");
+      const back = walkFor(scheme, { push: -1, side: 0 });
+      assert.ok(back.forward < -0.9, `back ${back.forward}`);
+      const right = walkFor(scheme, { push: 0, side: 1 });
+      assert.ok(right.strafe > 0.9 && Math.abs(right.forward) < 0.05, `right ${right.strafe} forward ${right.forward}`);
+      const left = walkFor(scheme, { push: 0, side: -1 });
+      assert.ok(left.strafe < -0.9, `left ${left.strafe}`);
+    });
+  }
+  for (const scheme of TOUCH_SCHEMES.filter((s) => schemeLayout(drawnScheme(s, true)).right === "strip")) {
+    it(`when ${scheme}'s strip thumb slides into the Boost cap, then he runs forward`, () => {
+      const run = walkFor(scheme, { push: 1, side: 0, cap: true });
+      assert.ok(run.forward > 0.9 && run.run, `forward ${run.forward} run ${run.run}`);
+    });
+  }
+  it("when Easy's player is on foot, then the controls draw the Pedals strip, and at the wheel Easy's own", () => {
+    assert.equal(drawnScheme("autogas", true), "pedals");
+    assert.equal(drawnScheme("autogas", false), "autogas");
+  });
 });
