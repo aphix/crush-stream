@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { DerbyMatch, heatLimit, snapshotAiCar, type DerbyDecided } from "../match/derby.ts";
-import { arenaWorld, leaveArena, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { arenaWorld, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { setGround } from "../world/ground.ts";
 import { applyAiDrive } from "./input-fade.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -88,7 +89,7 @@ export function runField(n: number, seed: number, playerClass?: VehicleClassId, 
   try {
     return runFieldHeat(n, seed, playerClass, on, until);
   } finally {
-    leaveArena();
+    setGround(null);
   }
 }
 

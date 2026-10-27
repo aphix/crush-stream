@@ -8,17 +8,13 @@ import { layoutDerby } from "./fleet.ts";
 
 const NO_HITS: PropHits = { knock() {}, fx() {}, wall() {} };
 
-/** The derby arena as the engine wires it for `cars`: its ground active, its prisms met at the end of every slice. `leaveArena` puts the flat plane back. */
+/** The derby arena as the engine wires it for `cars`: its ground active, its prisms met at the end of every slice. `setGround(null)` puts the flat plane back. */
 export function arenaWorld(cars: readonly DeformableCar[], hits: PropHits = NO_HITS): { world: World; ground: DerbyGround } {
   const ground = new DerbyGround();
   setGround(ground);
   const world = newWorld(cars);
   world.collide = (car, index, dt) => ground.contact(car, index, hits, dt);
   return { world, ground };
-}
-
-export function leaveArena(): void {
-  setGround(null);
 }
 
 /** Spawns `cars` on the derby layout drawn from a Lehmer generator seeded `seed`, facing their slots at `speed` m/s. */

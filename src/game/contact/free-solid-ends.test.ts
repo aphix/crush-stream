@@ -6,7 +6,8 @@ import { physicsSlice } from "./sat.ts";
 import { zipBound } from "./zip-bound.test-util.ts";
 import { stepWorld } from "../engine/world-step.ts";
 import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
-import { arenaWorld, leaveArena } from "../scenes/derby-arena.test-util.ts";
+import { arenaWorld } from "../scenes/derby-arena.test-util.ts";
+import { setGround } from "../world/ground.ts";
 import type { PropHits } from "./prop-contact.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import * as THREE from "three";
@@ -189,7 +190,7 @@ const holdCases = [
 ] as const;
 
 describe("given a crushed sedan wreck turning at 5 rad/s in the derby arena", () => {
-  afterEach(leaveArena);
+  afterEach(() => setGround(null));
   for (const testCase of holdCases) {
     it(testCase.it, () => {
       const { worstOverBound, solidMeetings } = holdAgainstSolid(testCase.x, testCase.z, testCase.vx);

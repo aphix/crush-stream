@@ -2,7 +2,8 @@ import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DerbyMatch, snapshotAiCar } from "./derby.ts";
-import { arenaWorld, leaveArena, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { arenaWorld, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { setGround } from "../world/ground.ts";
 import { applyAiDrive } from "../ai/input-fade.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { physicsSlice } from "../contact/sat.ts";
@@ -92,7 +93,7 @@ function derbySeed(): { frozenSlices: number; worstHub: number; worstWheel: numb
     return { frozenSlices, worstHub, worstWheel };
   } finally {
     for (const [k, c] of rears.entries()) c.maxCrush = rests[k]!;
-    leaveArena();
+    setGround(null);
   }
 }
 

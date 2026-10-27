@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DerbyMatch, snapshotAiCar } from "./derby.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
-import { arenaWorld, leaveArena, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { arenaWorld, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { setGround } from "../world/ground.ts";
 import { DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import { applyAiDrive } from "../ai/input-fade.ts";
 import { fleetStyle, layoutDerby, MAX_CARS } from "../scenes/fleet.ts";
@@ -70,7 +71,7 @@ function atKnobs(knobs: Knobs, build: () => DeformableCar[], seconds: number, st
     return runDerby(build(), seconds, knobs, start);
   } finally {
     for (const [k, c] of rears.entries()) c.maxCrush = rests[k]!;
-    leaveArena();
+    setGround(null);
   }
 }
 

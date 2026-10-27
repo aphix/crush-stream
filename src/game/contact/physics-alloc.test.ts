@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
-import { arenaWorld, leaveArena, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { arenaWorld, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { setGround } from "../world/ground.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { resolveCarPair } from "./pair-contact.ts";
 import { partContactPair } from "./external-contact.ts";
@@ -91,7 +92,7 @@ function pileUpKbPerFrame(extra: () => void = () => {}): number {
     if (process.env.ALLOC_PRINT) console.log(`physics-alloc: ${kb.toFixed(1)} KB/frame, ${crashed} crashed`);
     return kb;
   } finally {
-    leaveArena();
+    setGround(null);
   }
 }
 

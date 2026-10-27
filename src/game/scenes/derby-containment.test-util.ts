@@ -12,7 +12,8 @@ import { armKill, CLASSES, HANDLING, VEHICLE_CLASS_IDS, type VehicleClassId } fr
 import { INITIAL_HUD } from "../hud/hud-store.ts";
 import type { PropHits } from "../contact/prop-contact.ts";
 import { DERBY_ARENA } from "./constants.ts";
-import { arenaWorld, leaveArena } from "./derby-arena.test-util.ts";
+import { arenaWorld } from "./derby-arena.test-util.ts";
+import { setGround } from "../world/ground.ts";
 import { DERBY_RAMPS, type DerbyRamp } from "./derby-ground.ts";
 
 /**
@@ -235,7 +236,7 @@ export const ENERGY_ROUNDING = 40;
  * (from the foot of its run, from its crest at top speed); and every ramp's side wedges, where the monster's energy is read too. Not a test file itself.
  */
 export function containmentCases(): void {
-  afterEach(leaveArena);
+  afterEach(() => setGround(null));
 
   describe("given a derby car driven flat out at the arena wall", () => {
     for (const cls of VEHICLE_CLASS_IDS) {

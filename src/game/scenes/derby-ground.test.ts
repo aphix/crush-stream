@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
-import { arenaWorld, leaveArena } from "./derby-arena.test-util.ts";
+import { arenaWorld } from "./derby-arena.test-util.ts";
+import { setGround } from "../world/ground.ts";
 import { plateauHeight } from "../world/terrain.ts";
 import { SUNK_CAR_DEPTH, MAX_CARS, layoutDerby } from "./fleet.ts";
 import { DERBY_ARENA } from "./constants.ts";
@@ -307,7 +308,7 @@ describe("given each prop of the arena", () => {
 });
 
 describe("given a wreck that has sunk wholly below the floor beside a solid of the arena", () => {
-  afterEach(leaveArena);
+  afterEach(() => setGround(null));
   const wallPiece = DERBY_BOXES.filter((box) => box.kind === DERBY_PROP.wall).reduce((nearest, piece) => (Math.hypot(piece.x - BARE_WALL.x, piece.z - BARE_WALL.z) < Math.hypot(nearest.x - BARE_WALL.x, nearest.z - BARE_WALL.z) ? piece : nearest));
   const solidCases = [
     { label: "the ring wall", box: wallPiece },

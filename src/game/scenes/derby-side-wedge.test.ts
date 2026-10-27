@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { leaveArena } from "./derby-arena.test-util.ts";
+import { setGround } from "../world/ground.ts";
 import { ENERGY_ROUNDING, fly, type Launch } from "./derby-containment.test-util.ts";
 
 /**
@@ -15,7 +15,7 @@ const TRACES: readonly Launch[] = [
 ];
 
 describe("given a monster driven flat out (throttle and boost) at the 45° plane beside a derby ramp", () => {
-  afterEach(leaveArena);
+  afterEach(() => setGround(null));
 
   for (const trace of TRACES) {
     it(`when it is replayed from ${trace.label}, then it never holds more energy than its drive gave it`, (t) => {

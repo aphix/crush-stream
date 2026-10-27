@@ -5,7 +5,8 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { assignClass } from "../vehicle/vehicle-classes.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { arenaWorld, leaveArena, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { arenaWorld, placeDerby } from "../scenes/derby-arena.test-util.ts";
+import { setGround } from "../world/ground.ts";
 import { fleetClass, fleetStyle, layoutFleet } from "../scenes/fleet.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
@@ -135,7 +136,7 @@ function play(s: Scenario): Leg {
     digests.push(hash >>> 0);
   }
   const final = cars.flatMap((c) => ["position", "normal"].map((name) => Float32Array.from(c.body.geometry.getAttribute(name).array)));
-  leaveArena();
+  setGround(null);
   return { digests, final, seen };
 }
 
