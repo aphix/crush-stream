@@ -20,7 +20,7 @@ import { RANGE } from "./range.ts";
 import { MinigameGround } from "./minigame-ground.ts";
 import { BOX_NET_CLEARANCE, BOX_PILE_TRAIL, HighJumpPeak, highJumpLayout, POSTS_DISTANCE, type HighJumpMeasured } from "./minigame-high-jump.ts";
 import { lipHeight } from "./minigame-profile.ts";
-import { dressedDriverCar, heldRagdolls } from "./minigame-profile.test-util.ts";
+import { dressedDriverCar, heldRagdolls, HOLD_SECONDS, holdHorizontalSpeed, RUN_SECONDS, STALL_SECONDS, STALLED_SPEED, steerAlongLane } from "./minigame-profile.test-util.ts";
 import { withoutFrame } from "./minigame-frame.test-util.ts";
 import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_CUPS, ringScore } from "./minigame-ring.ts";
 
@@ -35,17 +35,6 @@ import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_CUPS, ringScore } from "./miniga
 const FAR_NET = { netX: 400, netHalfWidth: 6, netHeight: 14, frame: highJumpLayout(HIGH_JUMP_MEASURED, lipHeight("highJump")) } as const;
 
 const FRAME = 1 / FRAME_HZ;
-/** How long (s) a parked car is left alone before the release, and how long a run may last. */
-const HOLD_SECONDS = 2;
-const RUN_SECONDS = 60;
-const STALLED_SPEED = 0.5;
-const STALL_SECONDS = 2;
-/** Steering: how far ahead (m) the car aims, per metre of its speed, and its gain. */
-const STEER_LOOK_AHEAD = 10;
-const STEER_LOOK_PER_SPEED = 0.4;
-const STEER_GAIN = 2.5;
-/** Throttle (and brake) per m/s the car is under (over) its horizontal speed cap: the governor of the mid runs. */
-const GOVERNOR_GAIN = 1;
 /**
  * A mid run is governed to this share of the best run's horizontal speed at the lip (the long jump: of its approach speed, the fastest before
  * the barrier). The long jump's is higher because the barrier's hit throws no driver below about 18 m/s (the muscle, truck and monster at 70%
@@ -56,6 +45,12 @@ const MID_RUN_SPEED_SHARE: Readonly<Record<MinigameMode, number>> = { longJump: 
 const THROW_LIMIT_SECONDS = 60;
 /** A ragdoll is not bit-deterministic across runs (the display's frame times change his steps): each shipped throw is made this many times, seeded `0` (steady 60 Hz) up, and the worst is held to the bar. */
 const REPEATS = 3;
+/** How many times each kind of run is thrown: nothing reads a mid run's other seeds but the perfect bail's check, so a shipped measurement throws it once. */
+type Throws = { best: number; mid: number };
+const SHIPPED_THROWS: Throws = { best: REPEATS, mid: 1 };
+const PERFECT_BAIL_THROWS: Throws = { best: REPEATS, mid: REPEATS };
+/** A mutation's bar reads only the best runs' first throw. */
+const BEST_ONCE: Throws = { best: 1, mid: 0 };
 /** His torso has touched down when it is this near (m) the ground under it, after its apex. */
 const TOUCHDOWN_HEIGHT = 1;
 /** The mutations: forward times this must carry the best runs past the high jump's box piles (and Ring Fling's mid cups), upward times this must lift the monster over the apex band. */
@@ -116,6 +111,9 @@ function copyEjection(event: Ejection): Ejection {
 
 const captures = new Map<string, Capture>();
 
+/** The ground of every drive: one instance, so its surface raster is built once. */
+const driveGround = new MinigameGround({ highJump: FAR_NET });
+
 /**
  * One car of `type` parked at the station's start on the real ground, left alone, then released at full throttle (the mid run: its throttle
  * and brake hold its horizontal speed to `speedCap`) and steered down the lane's middle until the sim throws its driver: at the lip on the high
@@ -123,11 +121,10 @@ const captures = new Map<string, Capture>();
  */
 function drive(type: DriverCar, mode: MinigameMode, speedCap: number): Capture {
   const anchor = STATION_ANCHORS[mode];
-  const ground = new MinigameGround({ highJump: FAR_NET });
-  setGround(ground);
+  setGround(driveGround);
   const car = dressedDriverCar(type);
   try {
-    const start = ground.stationStart(mode);
+    const start = driveGround.stationStart(mode);
     car.spawnFacing(start.x, start.z, start.yaw, 0);
     car.group.position.y = start.y;
     layOnGround(car);
@@ -138,7 +135,7 @@ function drive(type: DriverCar, mode: MinigameMode, speedCap: number): Capture {
       barrier.orient(car.group.position, false);
       world.world.barrier = barrier;
     } else {
-      world.world.collide = ground.collideHook([car], world.world.ejection!);
+      world.world.collide = driveGround.collideHook([car], world.world.ejection!);
     }
     const outcome: { capture: Capture | null } = { capture: null };
     world.onEject = (event) => {
@@ -147,17 +144,11 @@ function drive(type: DriverCar, mode: MinigameMode, speedCap: number): Capture {
     for (let step = 0; step < HOLD_SECONDS / FRAME; step++) tickWorld(world);
     const input: DriveInput = { ...idleDrive(), throttle: 1 };
     world.pedals.set(car, input);
-    const position = car.group.position;
     let stalledFor = 0;
     let fastestApproach = 0;
     for (let step = 0; step < RUN_SECONDS / FRAME && outcome.capture === null; step++) {
-      const aheadX = position.x + STEER_LOOK_AHEAD + car.speed * STEER_LOOK_PER_SPEED;
-      const error = Math.atan2(aheadX - position.x, anchor.z - position.z) - car.yaw;
-      input.steer = Math.max(-1, Math.min(1, STEER_GAIN * Math.atan2(Math.sin(error), Math.cos(error))));
-      const horizontalSpeed = Math.hypot(car.velocity.x, car.velocity.z);
-      if (outcome.capture === null) fastestApproach = Math.max(fastestApproach, horizontalSpeed);
-      input.throttle = Math.max(0, Math.min(1, GOVERNOR_GAIN * (speedCap - horizontalSpeed)));
-      input.brake = Math.max(0, Math.min(1, GOVERNOR_GAIN * (horizontalSpeed - speedCap)));
+      steerAlongLane(input, car, anchor.z);
+      fastestApproach = Math.max(fastestApproach, holdHorizontalSpeed(input, car, speedCap));
       tickWorld(world);
       stalledFor = car.speed < STALLED_SPEED ? stalledFor + FRAME : 0;
       if (stalledFor > STALL_SECONDS) break;
@@ -282,29 +273,36 @@ function fly(range: RagdollRange, mode: MinigameMode, thrown: Capture, scale: Re
   return flight;
 }
 
-/** One car type's run on a station with a boost: the drive's throw and every repeat's flight. */
+/** One car type's run on a station with a boost: the drive's throw and every seed's flight. */
 type Measurement = { type: DriverCar; run: RunKind; thrown: Capture; flights: Flight[] };
 
-const measurements = new Map<string, Measurement[]>();
+const flights = new Map<string, Flight>();
 /** The classes the long jump throws: the monster flies its barrier and lands past it, its driver in (`minigame-profile.test.ts`). */
 const LONG_JUMP_CARS = DRIVER_CARS.filter((type) => type.id !== "monster");
+const RUN_KINDS = ["best", "mid"] as const;
 
-/** Every class's best and mid run through `mode` with `scale`, each thrown `repeats` times; on the long jump, every class but the monster. */
-async function measure(mode: MinigameMode, scale: ReleaseScale, repeats: number): Promise<Measurement[]> {
-  const key = `${mode}:${scale.forward}:${scale.upward}:${scale.elevation}:${repeats}`;
-  let cached = measurements.get(key);
-  if (cached === undefined) {
-    const range = await rangeFor(mode);
-    cached = [];
-    for (const type of mode === "longJump" ? LONG_JUMP_CARS : DRIVER_CARS) {
-      for (const run of ["best", "mid"] as const) {
-        const thrown = capture(type, mode, run);
-        cached.push({ type, run, thrown, flights: Array.from({ length: repeats }, (_, seed) => fly(range, mode, thrown, scale, seed)) });
-      }
-    }
-    measurements.set(key, cached);
+/** The flight of `type`'s `run` at `seed` with `scale`, made once: every measurement that reads that seed shares it. */
+function flightOf(range: RagdollRange, mode: MinigameMode, type: DriverCar, run: RunKind, scale: ReleaseScale, seed: number): Flight {
+  const key = `${mode}:${type.id}:${run}:${scale.forward}:${scale.upward}:${scale.elevation}:${seed}`;
+  let flight = flights.get(key);
+  if (flight === undefined) {
+    flight = fly(range, mode, capture(type, mode, run), scale, seed);
+    flights.set(key, flight);
   }
-  return cached;
+  return flight;
+}
+
+/** Every class's best and mid run through `mode` with `scale`, thrown `throws` times each; on the long jump, every class but the monster. */
+async function measure(mode: MinigameMode, scale: ReleaseScale, throws: Throws): Promise<Measurement[]> {
+  const range = await rangeFor(mode);
+  const rows: Measurement[] = [];
+  for (const type of mode === "longJump" ? LONG_JUMP_CARS : DRIVER_CARS) {
+    for (const run of RUN_KINDS) {
+      if (throws[run] === 0) continue;
+      rows.push({ type, run, thrown: capture(type, mode, run), flights: Array.from({ length: throws[run] }, (_, seed) => flightOf(range, mode, type, run, scale, seed)) });
+    }
+  }
+  return rows;
 }
 
 const lowest = (measurement: Measurement, pick: (flight: Flight) => number): number => Math.min(...measurement.flights.map(pick));
@@ -380,7 +378,7 @@ function ringFlingViolations(rows: readonly Measurement[]): string[] {
   return violations;
 }
 
-/** What the perfect bail breaks, from every class's best and mid run: empty when every bar holds. The best class is the one whose best run lands farthest (a rest is a skid lottery on top of the landing). */
+/** What the perfect bail breaks, from every class's best run: empty when every bar holds. The best class is the one whose best run lands farthest (a rest is a skid lottery on top of the landing). */
 function perfectBailViolations(rows: readonly Measurement[]): string[] {
   const violations: string[] = [];
   const bestClass = bestRunsOf(rows).reduce((best, row) => (lowest(row, landingOf) > lowest(best, landingOf) ? row : best));
@@ -390,6 +388,12 @@ function perfectBailViolations(rows: readonly Measurement[]): string[] {
   for (const row of bestRunsOf(rows)) {
     if (lowest(row, landingOf) < LONG_JUMP_CLASS_MINIMUM) violations.push(`the ${row.type.id}'s best run lands at ${metres(lowest(row, landingOf))} m, short of ${LONG_JUMP_CLASS_MINIMUM} m`);
   }
+  return violations;
+}
+
+/** What the mid runs break, with every class's best and mid run: a mid run lands shorter than its class's best run. */
+function midRunViolations(rows: readonly Measurement[]): string[] {
+  const violations: string[] = [];
   for (const best of bestRunsOf(rows)) {
     const mid = midRunsOf(rows).find((row) => row.type.id === best.type.id)!;
     if (lowest(best, landingOf) <= highest(mid, landingOf)) violations.push(`the ${best.type.id}'s mid run lands at ${metres(highest(mid, landingOf))} m, no shorter than its best run's ${metres(lowest(best, landingOf))} m`);
@@ -449,7 +453,7 @@ const TABLE_HEADER = "| class | run | lip h/v (m/s) | release h/v (m/s) | apex (
 
 describe("given the high jump with THROW_BOOST.highJump on the free pad (no frame in the ragdoll's world), with the real car, ground and ragdoll", () => {
   it("when each of the 7 classes' best and mid runs is thrown, then the best class scores 163-174 m, every class's best run is well up the boards and lands in the box field, and every class's 80% run still scores 50 m", async (t) => {
-    const rows = await measure("highJump", THROW_BOOST.highJump, REPEATS);
+    const rows = await measure("highJump", THROW_BOOST.highJump, SHIPPED_THROWS);
     const slowRuns = await slowRunHeights(THROW_BOOST.highJump);
     const layout = highJumpLayout(measuredBest(rows, 0), lipHeight("highJump"));
     const slowLines = [...slowRuns].map(([id, height]) => `${id} ${metres(height)} m`).join(", ");
@@ -459,18 +463,18 @@ describe("given the high jump with THROW_BOOST.highJump on the free pad (no fram
   });
 
   it("when the boost is the identity (the throw as the sim has it), then the bars break: the best class scores far under the band and every landing is far past the net", async () => {
-    const violations = highJumpViolations(await measure("highJump", NO_RELEASE_SCALE, 1));
+    const violations = highJumpViolations(await measure("highJump", NO_RELEASE_SCALE, BEST_ONCE));
     assert.ok(violations.some((violation) => violation.includes("best score")), violations.join("; "));
     assert.ok(violations.some((violation) => violation.includes("past the box piles")), violations.join("; "));
   });
 
   it(`when forward is ${FORWARD_MUTATION_FACTOR} times the chosen, then the best runs land past the box piles' end (the window holds only at the chosen forward)`, async () => {
-    const violations = highJumpViolations(await measure("highJump", scaled(THROW_BOOST.highJump, { forward: FORWARD_MUTATION_FACTOR }), 1));
+    const violations = highJumpViolations(await measure("highJump", scaled(THROW_BOOST.highJump, { forward: FORWARD_MUTATION_FACTOR }), BEST_ONCE));
     assert.ok(violations.some((violation) => violation.includes("past the box piles")), violations.join("; "));
   });
 
   it(`when upward is ${UPWARD_MUTATION_FACTOR} times the chosen, then the best class scores over the band`, async () => {
-    const violations = highJumpViolations(await measure("highJump", scaled(THROW_BOOST.highJump, { upward: UPWARD_MUTATION_FACTOR }), 1));
+    const violations = highJumpViolations(await measure("highJump", scaled(THROW_BOOST.highJump, { upward: UPWARD_MUTATION_FACTOR }), BEST_ONCE));
     assert.ok(violations.some((violation) => violation.includes("best score") && violation.includes("over")), violations.join("; "));
   });
 
@@ -480,7 +484,7 @@ describe("given the high jump with THROW_BOOST.highJump on the free pad (no fram
   });
 
   it("when the best class's best run is thrown again, then HIGH_JUMP_MEASURED is its crossing height and the farthest best landing, within 2%", async () => {
-    const rows = await measure("highJump", THROW_BOOST.highJump, REPEATS);
+    const rows = await measure("highJump", THROW_BOOST.highJump, SHIPPED_THROWS);
     for (let repeat = 0; repeat < REPEATS; repeat++) {
       const measured = measuredBest(rows, repeat);
       for (const key of ["bestHeight", "landingDistance"] as const) {
@@ -516,7 +520,7 @@ function framedViolations(rows: readonly Measurement[]): string[] {
 describe("given the high jump's posts and slats as ragdoll colliders, with the real car and ragdoll", () => {
   it("when each class's best run is thrown at them, then the best class still scores at least 150 m, every best run still scores well up the boards, and the frame costs at least one run some height against the free pad", async (t) => {
     const framed = await framedBestRuns();
-    const free = bestRunsOf(await measure("highJump", THROW_BOOST.highJump, 1));
+    const free = bestRunsOf(await measure("highJump", THROW_BOOST.highJump, BEST_ONCE));
     const cost = framed.map((row) => free.find((candidate) => candidate.type.id === row.type.id)!.flights[0]!.height - row.flights[0]!.height);
     t.diagnostic(`with the frame (score on the free pad minus score with it: ${framed.map((row, index) => `${row.type.id} ${metres(cost[index]!)} m`).join(", ")}; lands NaN: caught on the frame, he falls back short of his apex's distance)\n${TABLE_HEADER}\n${tableOf(framed, (flight) => `scores ${metres(flight.height)} m`)}`);
     assert.deepEqual(framedViolations(framed), []);
@@ -526,18 +530,18 @@ describe("given the high jump's posts and slats as ragdoll colliders, with the r
 
 describe("given Ring Fling with THROW_BOOST.ringFling on the real ground, car and ragdoll", () => {
   it("when each of the 7 classes' best and mid runs is thrown, then the standard classes' full-throttle runs come down in the mid cups and the backstop holds the rest", async (t) => {
-    const rows = await measure("ringFling", THROW_BOOST.ringFling, REPEATS);
+    const rows = await measure("ringFling", THROW_BOOST.ringFling, SHIPPED_THROWS);
     t.diagnostic(`THROW_BOOST.ringFling ${JSON.stringify(THROW_BOOST.ringFling)}\n${TABLE_HEADER}\n${tableOf(rows, (flight) => `cup ${ringScore(flight.restDistance, flight.restLateral)}`)}`);
     assert.deepEqual(ringFlingViolations(rows), []);
   });
 
   it("when the boost is the identity (the throw as the sim has it), then every full-throttle run is carried far past the board", async () => {
-    const violations = ringFlingViolations(await measure("ringFling", NO_RELEASE_SCALE, 1));
+    const violations = ringFlingViolations(await measure("ringFling", NO_RELEASE_SCALE, BEST_ONCE));
     assert.ok(violations.some((violation) => violation.includes("outside the mid cups")), violations.join("; "));
   });
 
   it(`when forward is ${FORWARD_MUTATION_FACTOR} times the chosen, then the standard classes' full-throttle runs overshoot the mid cups`, async () => {
-    const violations = ringFlingViolations(await measure("ringFling", scaled(THROW_BOOST.ringFling, { forward: FORWARD_MUTATION_FACTOR }), 1));
+    const violations = ringFlingViolations(await measure("ringFling", scaled(THROW_BOOST.ringFling, { forward: FORWARD_MUTATION_FACTOR }), BEST_ONCE));
     assert.ok(violations.some((violation) => violation.includes("outside the mid cups")), violations.join("; "));
   });
 
@@ -581,9 +585,12 @@ function bailTable(byOffset: ReadonlyMap<number | null, readonly Measurement[]>)
   return `lands / rests (m), best run\n${header}\n${lines.join("\n")}`;
 }
 
+/** The perfect bail's mid runs are read at every seed (`midRunViolations`) and the no-press runs' best at the worst of `REPEATS`; every other offset is read at its first seed (`fadeViolations`). */
+const throwsAtOffset = (offset: number | null): Throws => (offset === 0 ? PERFECT_BAIL_THROWS : offset === null ? SHIPPED_THROWS : BEST_ONCE);
+
 async function bailMeasurements(): Promise<Map<number | null, Measurement[]>> {
   const byOffset = new Map<number | null, Measurement[]>();
-  for (const offset of BAIL_OFFSETS) byOffset.set(offset, await measure("longJump", releaseAtOffset(offset), offset === 0 || offset === null ? REPEATS : 1));
+  for (const offset of BAIL_OFFSETS) byOffset.set(offset, await measure("longJump", releaseAtOffset(offset), throwsAtOffset(offset)));
   return byOffset;
 }
 
@@ -594,28 +601,29 @@ describe("given the long jump's timed bail with THROW_BOOST.longJump on the real
     const none = byOffset.get(null)!;
     t.diagnostic(`THROW_BOOST.longJump ${JSON.stringify(THROW_BOOST.longJump)}; bail window ${BAIL_WINDOW_SECONDS} s, perfect within ${BAIL_PERFECT_SECONDS} s\n${bailTable(byOffset)}\nperfect, all runs\n${TABLE_HEADER}\n${tableOf(perfect, (flight) => `sign ${Math.min(LONG_JUMP_LAST_SIGN, Math.floor(flight.restDistance / RANGE.signStep) * RANGE.signStep)} m`)}\nno press, all runs\n${TABLE_HEADER}\n${tableOf(none, (flight) => `sign ${Math.min(LONG_JUMP_LAST_SIGN, Math.floor(flight.restDistance / RANGE.signStep) * RANGE.signStep)} m`)}`);
     assert.deepEqual(perfectBailViolations(perfect), [], "the perfect bail");
+    assert.deepEqual(midRunViolations(perfect), [], "the mid runs");
     assert.deepEqual(noBailViolations(none), [], "no bail");
     assert.deepEqual(fadeViolations(byOffset), [], "the fade");
   });
 
   it("when the boost is the identity (the throw as the sim has it), then the perfect bar breaks: the best run is far short of the far end", async () => {
-    const violations = perfectBailViolations(await measure("longJump", NO_RELEASE_SCALE, 1));
+    const violations = perfectBailViolations(await measure("longJump", NO_RELEASE_SCALE, BEST_ONCE));
     assert.ok(violations.some((violation) => violation.includes("best run lands") && violation.includes("short of")), violations.join("; "));
   });
 
   it(`when the perfect elevation is ${LONG_JUMP_ELEVATION_CUT_DEGREES} degrees instead of ${BAIL_ELEVATION_DEGREES.perfect}, then the perfect run falls short of the far end`, async () => {
     const cut = { ...releaseAtOffset(0), elevation: LONG_JUMP_ELEVATION_CUT_DEGREES * (Math.PI / 180) };
-    const violations = perfectBailViolations(await measure("longJump", cut, 1));
+    const violations = perfectBailViolations(await measure("longJump", cut, BEST_ONCE));
     assert.ok(violations.some((violation) => violation.includes("best run lands") && violation.includes("short of")), violations.join("; "));
   });
 
   it(`when forward is ${LONG_JUMP_FORWARD_BOOST} times the chosen, then the perfect run is carried past the far end's band`, async () => {
-    const violations = perfectBailViolations(await measure("longJump", scaled(releaseAtOffset(0), { forward: LONG_JUMP_FORWARD_BOOST }), 1));
+    const violations = perfectBailViolations(await measure("longJump", scaled(releaseAtOffset(0), { forward: LONG_JUMP_FORWARD_BOOST }), BEST_ONCE));
     assert.ok(violations.some((violation) => violation.includes("best run lands") && violation.includes("past")), violations.join("; "));
   });
 
   it("when no bail is pressed but the elevation is the perfect one, then the no-bail bar breaks: the run lands far past mid-field", async () => {
-    const violations = noBailViolations(await measure("longJump", bailRelease(THROW_BOOST.longJump, 1), 1));
+    const violations = noBailViolations(await measure("longJump", bailRelease(THROW_BOOST.longJump, 1), BEST_ONCE));
     assert.ok(violations.some((violation) => violation.includes("past")), violations.join("; "));
   });
 });

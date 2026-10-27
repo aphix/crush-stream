@@ -65,7 +65,7 @@ Unboosted a best long jump rests 16-26 m.
 
 ## 7. Sizing table
 
-Worst of 3 repeats, from `minigame-sizing.test.ts`.
+Best runs: worst of 3 repeats (a mid run: its first seed), from `minigame-sizing.test.ts`.
 
 **High jump** (boost 0.115 / 1.04; best run: score, the highest point above the lip within `SCORE_BAND_HALF_DEPTH` 2 m of the posts / apex @ distance / lands, all m)
 
