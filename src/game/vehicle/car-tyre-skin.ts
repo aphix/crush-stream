@@ -160,6 +160,8 @@ function clearOver(tyre: CarFrame["rig"]["tyre"], pos: ArrayLike<number>, i: num
 
 const _h = new Float64Array(3);
 const _a = new Float64Array(3);
+/** Bytes of `TyreSkin.dirty` read at once to pass the clean ones: few of a hold's points are dirty. */
+const DIRTY_WORD = Uint32Array.BYTES_PER_ELEMENT;
 
 /**
  * The share of two skin points' rest height apart that a lift under the lower one leaves between them: a held point lifts the skin resting above it, less
@@ -169,8 +171,8 @@ const ROW_KEEP = 0.1;
 /** How fast (m per m of rest distance) a carried lift falls off along the skin at least: past the rows above a held point it spreads a hand's width, where a near-flat deck would carry it whole. */
 const SPREAD = 0.5;
 
-/** A mesh's edges between distinct rest points (a crease's copies welded into one), each from its lower end to its higher one, and the points lowest first. */
-type RestEdges = { weld: Int32Array; order: Int32Array; start: Int32Array; to: Int32Array; drop: Float32Array };
+/** A mesh's edges between distinct rest points (a crease's copies welded into one), each from its lower end to its higher one. The points are numbered lowest first, so an edge always leads to a higher number. */
+type RestEdges = { weld: Int32Array; start: Int32Array; to: Int32Array; drop: Float32Array };
 
 /** The upward edges of the mesh over `rest` (`index` its triangles); `drop`: how much of a lift the higher end may stand short of it (`ROW_KEEP`, `SPREAD`). */
 function restEdges(rest: Float32Array, index: THREE.BufferAttribute | null): RestEdges {
@@ -201,22 +203,26 @@ function restEdges(rest: Float32Array, index: THREE.BufferAttribute | null): Res
       else if (yb < ya) up[b]!.push(a);
     }
   }
+  const order = Int32Array.from(points.keys()).sort((p, q) => rest[points[p]! * 3 + 1]! - rest[points[q]! * 3 + 1]!);
+  const rank = new Int32Array(points.length);
+  for (let k = 0; k < order.length; k++) rank[order[k]!] = k;
+  for (let v = 0; v < count; v++) weld[v] = rank[weld[v]!]!;
   const start = new Int32Array(points.length + 1);
-  for (let p = 0; p < points.length; p++) start[p + 1] = start[p]! + up[p]!.length;
+  for (let k = 0; k < order.length; k++) start[k + 1] = start[k]! + up[order[k]!]!.length;
   const to = new Int32Array(start[points.length]!);
   const drop = new Float32Array(to.length);
-  for (let p = 0; p < points.length; p++) {
+  for (let k = 0; k < order.length; k++) {
+    const p = order[k]!;
     const from = points[p]! * 3;
     for (let e = 0; e < up[p]!.length; e++) {
       const q = up[p]![e]!;
       const at = points[q]! * 3;
-      to[start[p]! + e] = q;
+      to[start[k]! + e] = rank[q]!;
       const rise = rest[at + 1]! - rest[from + 1]!;
-      drop[start[p]! + e] = Math.max((1 - ROW_KEEP) * rise, SPREAD * hypot3(rest[at]! - rest[from]!, rise, rest[at + 2]! - rest[from + 2]!));
+      drop[start[k]! + e] = Math.max((1 - ROW_KEEP) * rise, SPREAD * hypot3(rest[at]! - rest[from]!, rise, rest[at + 2]! - rest[from + 2]!));
     }
   }
-  const order = Int32Array.from(points.keys()).sort((p, q) => rest[points[p]! * 3 + 1]! - rest[points[q]! * 3 + 1]!);
-  return { weld, order, start, to, drop };
+  return { weld, start, to, drop };
 }
 
 /**
@@ -266,6 +272,8 @@ export class TyreSkin {
   private readonly partFloor: Float32Array;
   /** Per welded rest point, whether it rose since it last carried its lift and push up the mesh (`carryLift`). */
   private readonly dirty: Uint8Array;
+  /** `dirty`'s bytes a `DIRTY_WORD` at a time (the bytes past the last point stay zero): a word with none dirty is passed in one read. */
+  private readonly dirtyWords: Uint32Array;
   /** Per wheel, its axle and hub as this hold read them; `heldAt` takes them when the lift is found again. */
   private readonly wheelNow = new Float64Array(4 * HELD_ELEMENTS.length).fill(NaN);
   /** Whether the skin as last written stands off its rest anywhere (`movedOffRest`): only then may anything under it stand through it. */
@@ -287,12 +295,15 @@ export class TyreSkin {
     this.mesh = mesh;
     this.rest = rest;
     this.edges = restEdges(rest, mesh.geometry.index);
-    this.lift = new Float32Array(this.edges.order.length);
-    this.push = new Float32Array(this.edges.order.length);
-    this.bump = new Float32Array(this.edges.order.length);
-    this.partFloor = new Float32Array(this.edges.order.length);
-    this.dirty = new Uint8Array(this.edges.order.length);
-    this.pushDir = new Float32Array(this.edges.order.length * 3);
+    const points = this.edges.start.length - 1;
+    this.lift = new Float32Array(points);
+    this.push = new Float32Array(points);
+    this.bump = new Float32Array(points);
+    this.partFloor = new Float32Array(points);
+    const dirtyBytes = new ArrayBuffer(Math.ceil(points / DIRTY_WORD) * DIRTY_WORD);
+    this.dirty = new Uint8Array(dirtyBytes);
+    this.dirtyWords = new Uint32Array(dirtyBytes);
+    this.pushDir = new Float32Array(points * 3);
     this.written = new Float32Array(rest.length);
     this.liftable = new Uint8Array(rest.length / 3);
     this.lifted = new Int32Array(rest.length / 3);
@@ -404,7 +415,6 @@ export class TyreSkin {
       }
       this.needOver(pos, w, scale);
     }
-    this.dirty.fill(1);
     this.carryLift();
     // Bit w: wheel w's last read lifted nothing; until a corner of its triangles rises, reading it again finds the same.
     let quiet = 0;
@@ -724,7 +734,7 @@ export class TyreSkin {
     const over = this.over[w]!;
     const resting = this.overAt[w]!;
     const { weld } = this.edges;
-    const { lift, push, pushDir } = this;
+    const { lift, push, pushDir, dirty } = this;
     const tyre = this.frame.rig.tyre;
     const gapCap = this.pushSide ? BODY_TYRE_GAP : TYRE_GAP;
     const a0 = _a[0]!;
@@ -765,32 +775,36 @@ export class TyreSkin {
           pushDir[p * 3 + 2] = sign * fz;
         }
       } else lift[p] = Math.max(lift[p]!, rise);
+      dirty[p] = 1;
     }
   }
 
   /** Every lift and push carried up the mesh's edges, lowest point first: the higher end of an edge stands at most its `drop` short of the lower end's. Only from points `dirty` (raised since they last carried): lifts only rise within a hold, so a point that has not risen has nothing new to carry. */
   private carryLift(): void {
-    const { order, start, to, drop } = this.edges;
-    const { lift, push, pushDir, dirty } = this;
-    for (let k = 0; k < order.length; k++) {
-      const p = order[k]!;
-      if (dirty[p] === 0) continue;
-      dirty[p] = 0;
-      const up = lift[p]!;
-      const out = push[p]!;
-      if (up <= 0 && out <= 0) continue;
-      for (let e = start[p]!; e < start[p + 1]!; e++) {
-        const q = to[e]!;
-        const carried = up - drop[e]!;
-        if (carried > lift[q]!) {
-          lift[q] = carried;
-          dirty[q] = 1;
-        }
-        const carriedOut = out - drop[e]!;
-        if (carriedOut > push[q]!) {
-          push[q] = carriedOut;
-          dirty[q] = 1;
-          for (let a = 0; a < 3; a++) pushDir[q * 3 + a] = pushDir[p * 3 + a]!;
+    const { start, to, drop } = this.edges;
+    const { lift, push, pushDir, dirty, dirtyWords } = this;
+    for (let word = 0; word < dirtyWords.length; word++) {
+      if (dirtyWords[word] === 0) continue;
+      // A byte set below by an earlier point of this word is read here, after it.
+      for (let p = word * DIRTY_WORD; p < (word + 1) * DIRTY_WORD; p++) {
+        if (dirty[p] === 0) continue;
+        dirty[p] = 0;
+        const up = lift[p]!;
+        const out = push[p]!;
+        if (up <= 0 && out <= 0) continue;
+        for (let e = start[p]!; e < start[p + 1]!; e++) {
+          const q = to[e]!;
+          const carried = up - drop[e]!;
+          if (carried > lift[q]!) {
+            lift[q] = carried;
+            dirty[q] = 1;
+          }
+          const carriedOut = out - drop[e]!;
+          if (carriedOut > push[q]!) {
+            push[q] = carriedOut;
+            dirty[q] = 1;
+            for (let a = 0; a < 3; a++) pushDir[q * 3 + a] = pushDir[p * 3 + a]!;
+          }
         }
       }
     }
