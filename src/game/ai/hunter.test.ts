@@ -5,68 +5,14 @@ import * as THREE from "three";
 import { DRIVE, idleDrive } from "../vehicle/car-drive.ts";
 import { applyAiDrive } from "./input-fade.ts";
 import { DeformableCar } from "../vehicle/car.ts";
-import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { snapshotAiCar } from "../match/derby.ts";
-import { BLOCKABLE, copsWanted, HUNT, HunterBrain, SETTLE } from "./hunter.ts";
-import { ATTACK, attackTarget, type HunterWorld } from "./cop-brain.ts";
+import { BLOCKABLE, copsWanted, HUNT, SETTLE } from "./hunter.ts";
+import { ATTACK, attackTarget } from "./cop-brain.ts";
 import { setGround } from "../world/ground.ts";
 import type { PropCollider } from "../world/placements.ts";
-import { blankProjection, projectPath, Track } from "../world/track.ts";
-import { HAVANA } from "../world/tracks/havana.ts";
+import { blankProjection, projectPath } from "../world/track.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
-import { hypot2 } from "../kernel/physics-core.js";
-
-const track = new Track(HAVANA);
-const spec = track.survival!;
-const FAR = 4000;
-const BEAT = 0.25;
-
-/** The pack on a stub world: car 0 is the quarry on the start line; the units follow from 1; `hidden` and `down` are the test's to set. */
-function rig(opts: { hidden?: (x: number, z: number) => boolean; colliders?: PropCollider[]; seed?: number } = {}) {
-  const first = 1;
-  const count = HUNT.units;
-  const cars: AiCar[] = Array.from({ length: first + count }, (_, i) => ({ ...blankAiCar(i), x: i === 0 ? spec.start.x : FAR, z: i === 0 ? spec.start.z : FAR, yaw: spec.start.yaw }));
-  const hunt = new Uint8Array(32);
-  hunt[0] = 1;
-  const down = new Set<number>();
-  const drops: { t: number; id: number; x: number; z: number; yaw: number; room: number }[] = [];
-  const stored: { t: number; id: number }[] = [];
-  const asked: { x: number; z: number; hidden: boolean }[] = [];
-  let now = 0;
-  const world: HunterWorld = {
-    park: (id, x, _y, z, yaw) => {
-      // The room it found: the nearest other car on the road at that moment.
-      const room = Math.min(...cars.filter((c) => c.id !== id && c.x !== FAR).map((c) => Math.hypot(c.x - x, c.z - z)));
-      Object.assign(cars[id]!, { x, z, yaw, vx: 0, vz: 0 });
-      down.delete(id);
-      drops.push({ t: now, id, x, z, yaw, room });
-    },
-    store: (id) => {
-      Object.assign(cars[id]!, { x: FAR, z: FAR });
-      stored.push({ t: now, id });
-    },
-    hidden: (x, z) => {
-      const h = opts.hidden ? opts.hidden(x, z) : true;
-      asked.push({ x, z, hidden: h });
-      return h;
-    },
-    down: (id) => down.has(id),
-    speed: (id) => hypot2(cars[id]!.vx, cars[id]!.vz),
-    sirens: () => {},
-  };
-  const brain = new HunterBrain(track, opts.colliders ?? [], 1, first, count, opts.seed ?? 5);
-  brain.launch(world);
-  const run = (until: number, each?: (t: number) => void): void => {
-    for (; now < until - 1e-9; now += BEAT) {
-      brain.update(now, BEAT, cars, hunt, 0, world);
-      each?.(now);
-    }
-  };
-  // The run's clock starts at the green: the countdown before it (negative time) holds the formation.
-  now = -4.5;
-  run(0);
-  return { brain, cars, down, drops, stored, asked, world, run, now: () => now };
-}
+import { BEAT, FAR, rig, spec, track } from "./hunter-rig.test-util.ts";
 
 describe("given the Survival schedule of how many cops are wanted as the heat goes on, with a starting formation of cops", () => {
   it("when the wanted count is read at different times, then it starts at the formation size, grows by one every 12 s, stops at the cap of 12 and adds nothing before the green", () => {
