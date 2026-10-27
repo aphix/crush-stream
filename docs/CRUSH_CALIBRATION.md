@@ -72,7 +72,7 @@ cars keep 0.18–0.43 m of maximum crush, median 0.31 (Brumbelow et al. 2015, do
 
 ### Ejection and kill speeds
 
-`vehicle/ejection-matrix.test.ts` pins every striker × struck class pair (sedan, truck, monster) of the head-on, T-bone and
+`vehicle/ejection-matrix.test-util.ts` (one test file per hit: `ejection-matrix.test.ts`, `-tbone`, `-rear`) pins every striker × struck class pair (sedan, truck, monster) of the head-on, T-bone and
 rear-end at a survivable speed (12 m/s each head-on, a 20 m/s striker otherwise: nobody thrown, engines near whole) and a
 lethal one (2×40 m/s head-on throws both drivers; a 55 m/s striker kills and throws its own driver and spares the struck
 car's). `deform/crash-parts.test.ts` holds the head-on nose ladder: from 100 to 200 km/h a faster pair never crushes more
