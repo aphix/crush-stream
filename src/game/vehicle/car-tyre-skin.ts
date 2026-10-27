@@ -155,14 +155,8 @@ function clearOver(tyre: CarFrame["rig"]["tyre"], pos: ArrayLike<number>, i: num
   const along = dx * a[0]! + dy * a[1]! + dz * a[2]!;
   const r = tyre.r * scale;
   const top = Math.sqrt(Math.max(0, r * r - ahead * ahead)) - FALL * (Math.max(0, Math.abs(ahead) - r) + Math.max(0, Math.abs(along) - tyre.halfW * scale));
-  _read.ahead = ahead;
-  _read.fx = fx;
-  _read.fz = fz;
   return up - top - gap;
 }
-
-/** What `clearOver` read last, for its caller: the point's distance along the road from the hub (m) and the road's direction in x and z. */
-const _read = { ahead: 0, fx: 0, fz: 0 };
 
 const _h = new Float64Array(3);
 const _a = new Float64Array(3);
@@ -244,6 +238,8 @@ export class TyreSkin {
   private readonly pushDir: Float32Array;
   /** Per wheel and vertex, how far (m) it rests over the tyre's surface; NaN for one that does not rest over it. */
   private readonly over: Float32Array[] = [];
+  /** Per wheel, the vertices with a point in `over` (not NaN), ascending. */
+  private readonly overAt: Int32Array[] = [];
   /** Per vertex, bit w: it rests over wheel w's tyre (`over[w]` is not NaN). */
   private readonly liftable: Uint8Array;
   /** Per wheel, the corners (vertex ids, three a triangle) of the triangles with a point resting over its tyre. */
@@ -338,12 +334,17 @@ export class TyreSkin {
       _h[1] = _hub.y;
       _h[2] = _hub.z;
       const over = (this.over[w] ??= new Float32Array(this.rest.length / 3));
+      const resting: number[] = [];
       for (let i = 0; i < this.rest.length; i += 3) {
         const c = clearOver(this.frame.rig.tyre, this.rest, i, _h, _a, scale, 0);
         const restsOver = c >= -REST_SLACK && c < REACH;
         over[i / 3] = restsOver ? c : NaN;
-        if (restsOver) this.liftable[i / 3]! |= 1 << w;
+        if (restsOver) {
+          this.liftable[i / 3]! |= 1 << w;
+          resting.push(i / 3);
+        }
       }
+      this.overAt[w] = Int32Array.from(resting);
       this.overTris[w] = this.trianglesOver(over);
       this.sagRead[w] = new Float32Array(this.overTris[w].length);
     }
@@ -401,7 +402,7 @@ export class TyreSkin {
         _a[k] = e[k]! / scale;
         _h[k] = e[3 + k]!;
       }
-      this.needOver(pos, this.over[w]!, scale);
+      this.needOver(pos, w, scale);
     }
     this.dirty.fill(1);
     this.carryLift();
@@ -718,28 +719,52 @@ export class TyreSkin {
     return moved;
   }
 
-  /** Each vertex of `over` standing under the tyre's surface plus its gap (`TYRE_GAP`, or its rest clearance if less: the uncrushed skin never moves): the lift up the mesh onto it, into `lift`, but never to above where it rested over the hub. */
-  private needOver(pos: Float32Array, over: Float32Array, scale: number): void {
-    const uy = hypot2(_a[0]!, _a[2]!);
+  /** Each vertex resting over wheel `w`'s tyre standing under its surface plus its gap (`TYRE_GAP`, or its rest clearance if less: the uncrushed skin never moves): the lift up the mesh onto it, into `lift`, but never to above where it rested over the hub. */
+  private needOver(pos: Float32Array, w: number, scale: number): void {
+    const over = this.over[w]!;
+    const resting = this.overAt[w]!;
     const { weld } = this.edges;
-    for (let v = 0; v < over.length; v++) {
-      const rested = over[v]!;
-      if (Number.isNaN(rested)) continue;
-      const c = clearOver(this.frame.rig.tyre, pos, v * 3, _h, _a, scale, Math.min(this.pushSide ? BODY_TYRE_GAP : TYRE_GAP, rested));
+    const { lift, push, pushDir } = this;
+    const tyre = this.frame.rig.tyre;
+    const gapCap = this.pushSide ? BODY_TYRE_GAP : TYRE_GAP;
+    const a0 = _a[0]!;
+    const a1 = _a[1]!;
+    const a2 = _a[2]!;
+    const h0 = _h[0]!;
+    const h1 = _h[1]!;
+    const h2 = _h[2]!;
+    const flat = hypot2(a0, a2);
+    const fx = -a2 / flat;
+    const fz = a0 / flat;
+    const upX = -fz * a1;
+    const upY = fz * a0 - fx * a2;
+    const upZ = fx * a1;
+    const r = tyre.r * scale;
+    const halfW = tyre.halfW * scale;
+    const endsAhead = ENDS_ZONE * tyre.r * scale;
+    for (let k = 0; k < resting.length; k++) {
+      const v = resting[k]!;
+      const dx = pos[v * 3]! - h0;
+      const dy = pos[v * 3 + 1]! - h1;
+      const dz = pos[v * 3 + 2]! - h2;
+      const ahead = dx * fx + dz * fz;
+      const along = dx * a0 + dy * a1 + dz * a2;
+      const top = Math.sqrt(Math.max(0, r * r - ahead * ahead)) - FALL * (Math.max(0, Math.abs(ahead) - r) + Math.max(0, Math.abs(along) - halfW));
+      const c = upX * dx + upY * dy + upZ * dz - top - Math.min(gapCap, over[v]!);
       if (c >= 0) continue;
       const p = weld[v]!;
-      const up = -c / uy;
+      const rise = -c / flat;
       // A vertex just inside the tyre's end (a lip beside it) leaves along the road, the few mm that clear the steep end, not over the whole tyre (7 mm in took 18 cm of lift): the body skin only.
-      const out = this.frame.rig.tyre.r * scale - Math.abs(_read.ahead) + END_GAP;
-      if (this.pushSide && Math.abs(_read.ahead) > ENDS_ZONE * this.frame.rig.tyre.r * scale && out < up) {
-        if (out > this.push[p]!) {
-          this.push[p] = out;
-          const sign = Math.sign(_read.ahead);
-          this.pushDir[p * 3] = sign * _read.fx;
-          this.pushDir[p * 3 + 1] = 0;
-          this.pushDir[p * 3 + 2] = sign * _read.fz;
+      const out = r - Math.abs(ahead) + END_GAP;
+      if (this.pushSide && Math.abs(ahead) > endsAhead && out < rise) {
+        if (out > push[p]!) {
+          push[p] = out;
+          const sign = Math.sign(ahead);
+          pushDir[p * 3] = sign * fx;
+          pushDir[p * 3 + 1] = 0;
+          pushDir[p * 3 + 2] = sign * fz;
         }
-      } else this.lift[p] = Math.max(this.lift[p]!, up);
+      } else lift[p] = Math.max(lift[p]!, rise);
     }
   }
 
