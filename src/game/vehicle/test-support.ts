@@ -4,6 +4,9 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { CarPaint } from "./car-core.ts";
 import type { DriveInput } from "./car-drive.ts";
+import { DeformableCar } from "./car.ts";
+import type { CarStyleId } from "./car-variants.ts";
+import { CarDetail } from "../present/car-detail.ts";
 import { blankAiCar, type AiCar, type DerbyBrain } from "../ai/derby-ai.ts";
 import type { DeformMode } from "../deform/deform-rig.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -77,4 +80,30 @@ export function aiCar(id: number, extra: Partial<AiCar> = {}): AiCar {
 /** One derby decision with the opening hold already behind us (first call ages the car 2 s), copied out of the scratch. */
 export function decide(brain: DerbyBrain, self: AiCar, others: AiCar[], dt = 2): DriveInput {
   return { ...brain.think(self, others, dt) };
+}
+
+/**
+ * A 50 degree lens at the origin looking down +z, a `CarDetail` and the batch `makeBatch` builds; `car(at)` stands a car on the axis at
+ * `at` m (turned to `yaw` when given), `draw` runs the detail pick and `sync` for those cars.
+ */
+export function stageBatch<B>(makeBatch: (detail: CarDetail) => B, sync: (batch: B, cars: DeformableCar[]) => void, yaw?: number) {
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(50, 2, 0.1, 900);
+  camera.lookAt(0, 0, 1);
+  camera.updateMatrixWorld(true);
+  const detail = new CarDetail();
+  const batch = makeBatch(detail);
+  const car = (at: number, style: CarStyleId = "sedan") => {
+    const made = new DeformableCar(paint(), scene, null, style);
+    made.spawn(0, at, 0);
+    if (yaw !== undefined) made.group.rotation.y = yaw;
+    made.group.updateMatrixWorld(true);
+    return made;
+  };
+  const draw = (cars: DeformableCar[]) => {
+    detail.update(cars, camera, null, null);
+    for (const c of cars) c.group.updateMatrixWorld(true);
+    sync(batch, cars);
+  };
+  return { batch, car, draw };
 }

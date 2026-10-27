@@ -1,11 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import * as THREE from "three";
-import { CarDetail, DETAIL_LEVELS } from "../present/car-detail.ts";
-import { DeformableCar } from "./car.ts";
-import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
+import { DETAIL_LEVELS } from "../present/car-detail.ts";
+import { CAR_STYLE_IDS } from "./car-variants.ts";
 import { CoverBatch } from "./cover-batch.ts";
-import { assertSameNumbers, paint } from "./test-support.ts";
+import { assertSameNumbers, stageBatch } from "./test-support.ts";
 
 /** The batch's matrices are float32: a part a hundred metres out is stored within 1e-4 m. */
 const FLOAT32_SLACK = 1e-4;
@@ -16,28 +15,8 @@ const FAR = DETAIL_LEVELS[0]!.far + 25;
 const CLOSERS = 4;
 const PANES = 6;
 
-/** A 50 degree lens at the origin looking down +z; cars stand on the axis at the given distance, broadside. */
-function stage(capacity = 4) {
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(50, 2, 0.1, 900);
-  camera.lookAt(0, 0, 1);
-  camera.updateMatrixWorld(true);
-  const detail = new CarDetail();
-  const batch = new CoverBatch(capacity);
-  const car = (at: number, style: CarStyleId = "sedan") => {
-    const made = new DeformableCar(paint(), scene, null, style);
-    made.spawn(0, at, 0);
-    made.group.rotation.y = Math.PI / 2;
-    made.group.updateMatrixWorld(true);
-    return made;
-  };
-  const draw = (cars: DeformableCar[]) => {
-    detail.update(cars, camera, null, null);
-    for (const c of cars) c.group.updateMatrixWorld(true);
-    batch.sync(cars);
-  };
-  return { batch, car, draw };
-}
+/** Cars stand broadside. */
+const stage = (capacity = 4) => stageBatch(() => new CoverBatch(capacity), (b, cars) => b.sync(cars), Math.PI / 2);
 
 /** A part a lane draws this frame: its source geometry and where the lane's skinning puts the part's first vertex in the world. */
 type Shown = { source: THREE.BufferGeometry; first: THREE.Vector3 };
