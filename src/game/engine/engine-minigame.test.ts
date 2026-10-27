@@ -590,7 +590,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     type BailRun = { verdict: BailVerdict; score: number; hitRelative: number };
 
     /** A long jump at full throttle with the boost key tapped one frame when `pressRelative` s of presented time have run since the throttle went down (null: never). */
-    const bailRun = (carId: string, pressRelative: number | null): BailRun => {
+    const driveBail = (carId: string, pressRelative: number | null): BailRun => {
       engine.setPlayerCar(carId);
       engine.startMinigame("longJump");
       const origin = engine["elapsedWall"];
@@ -608,16 +608,31 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       return { verdict: minigameHud().bail!.verdict!, score: minigameHud().lastScore!, hitRelative: engine["minigames"]["bail"]["hitAt"]! - origin };
     };
 
-    /** The no-press run every other run of `carId` is read against. A car type's first run after the engine rebuilds it is not the same sim as its later runs (the first is thrown 0.06 s sooner), so the run that counts is the second: after it, every run reaches the barrier at the same moment. */
+    /** A car's first run after the engine seats it is thrown 0.06 s sooner than its later ones, so a newly seated car drives one run that is not read. */
+    const bailRun = (carId: string, pressRelative: number | null): BailRun => {
+      if (engine["playerCar"].id !== carId) driveBail(carId, null);
+      return driveBail(carId, pressRelative);
+    };
+
+    const noPressRuns = new Map<string, BailRun>();
+    const perfectRuns = new Map<string, BailRun>();
+
+    /** The no-press run every other run of `carId` is read against: made once. */
     const baseline = (carId: string): BailRun => {
-      bailRun(carId, null);
-      return bailRun(carId, null);
+      if (!noPressRuns.has(carId)) noPressRuns.set(carId, bailRun(carId, null));
+      return noPressRuns.get(carId)!;
+    };
+
+    /** The run of `carId` with the press on the hit, which the perfect row and the fade rows read against: made once. */
+    const perfectRun = (carId: string): BailRun => {
+      if (!perfectRuns.has(carId)) perfectRuns.set(carId, bailRun(carId, baseline(carId).hitRelative));
+      return perfectRuns.get(carId)!;
     };
 
     for (const driverCar of LONG_JUMP_CARS) {
       it(`when a ${driverCar.id} taps the boost key on the hit, then the bail is perfect and he rests at least ${PERFECT_OVER_NONE_M} m past the same run with no press`, () => {
         const none = baseline(driverCar.id);
-        const perfect = bailRun(driverCar.id, none.hitRelative);
+        const perfect = perfectRun(driverCar.id);
         assert.equal(none.verdict.kind, "none", "no press is no bail");
         assert.equal(perfect.verdict.kind, "perfect", `${driverCar.id}'s press at ${perfect.verdict.offsetSeconds} s from the hit`);
         assert.ok(Math.abs(perfect.hitRelative - none.hitRelative) < PRESS_TOLERANCE_S, `the barrier was reached ${perfect.hitRelative - none.hitRelative} s apart`);
@@ -633,7 +648,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       for (const testCase of offsets) {
         it(`when a ${carId} taps the boost key ${Math.abs(testCase.offset)} s from the hit (${testCase.it} press), then the bail is ${testCase.expectedKind} by that much and he rests between the no-press and the perfect run`, () => {
           const none = baseline(carId);
-          const perfect = bailRun(carId, none.hitRelative);
+          const perfect = perfectRun(carId);
           const run = bailRun(carId, none.hitRelative + testCase.offset);
           assert.equal(run.verdict.kind, testCase.expectedKind, `kind at ${run.verdict.offsetSeconds} s`);
           assert.ok(Math.abs(run.verdict.offsetSeconds! - testCase.offset) < PRESS_TOLERANCE_S, `offset ${run.verdict.offsetSeconds} against ${testCase.offset}`);
