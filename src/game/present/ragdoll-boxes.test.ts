@@ -9,6 +9,7 @@ import { MinigameGround } from "../scenes/minigame-ground.ts";
 import { lipHeight } from "../scenes/minigame-profile.ts";
 import { setGround } from "../world/ground.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
+import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import { NET_HALF_WIDTH } from "./high-jump-art.ts";
 import { BOX_POSE_FLOATS, type BoxPlacement } from "./ragdoll-boxes.ts";
 import { STEP } from "./ragdoll-config.ts";
@@ -50,8 +51,7 @@ const PILE_MAX_Z = Math.max(...PLACEMENTS.map((box) => box.z)) + BOX_CELL_PITCH 
 
 /** A ragdoll system on the real High jump ground as the range runs it, its dummies held lying where they land. */
 async function system(boxes: readonly BoxPlacement[]): Promise<RagdollSystem> {
-  const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  await sys.preload();
+  const sys = await loadedRagdolls();
   setGround(ground);
   sys.update(FRAME, [], true, false, null);
   sys.holdThrown();

@@ -60,7 +60,7 @@ describe("given the engine law", () => {
 describe("given each vehicle class's voice, rendered by the shipped worklet, with the engine law's gain on it", () => {
   for (const cls of VEHICLE_CLASS_IDS) {
     it(`when the ${cls} runs through revs and loads, then its level follows the law and stays inside the caps`, async () => {
-      const levels = await voiceLevels(cls, "healthy", REVS.map((rev) => ({ rev, throttle: 0 })));
+      const levels = await voiceLevels(cls, "healthy", REVS);
       const redline = levels.at(-1)!;
       assert.ok(redline.peak >= REDLINE_PEAK_MIN && redline.peak <= REDLINE_PEAK_MAX, `${cls} redline peak ${redline.peak.toFixed(3)}`);
       for (let i = 0; i < REVS.length; i++) {

@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import * as THREE from "three";
-import { CrashEngine } from "../engine/engine.ts";
-import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
+import type { CrashEngine } from "../engine/engine.ts";
+import { bootEngine, stubBrowser } from "../engine/engine-headless.test-util.ts";
 import "../kernel/rapier-node.test-util.ts";
 import { CAR_SPRAY, NO_CAR_PICK, packSpray, SPRAY_FACE, SPRAY_PALETTE, sprayFace, type SprayLayout, type SprayPaint } from "../match/look-data.ts";
 import { COP_LIVERY } from "../vehicle/car-styles/police.ts";
@@ -93,9 +92,7 @@ describe("given the real engine with every car built as police", () => {
   let engine: CrashEngine;
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
+    engine = await bootEngine({ fades: true });
   });
   after(() => {
     engine.dispose();

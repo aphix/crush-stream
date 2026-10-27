@@ -14,10 +14,16 @@ type Doll = { live: boolean; bodies: Part[] };
 
 export const dollsOf = (sys: RagdollSystem): Doll[] => sys["dolls"];
 
-/** A ragdoll system on open flat ground, no cars. */
-export async function flatSystem(): Promise<RagdollSystem> {
+/** A ragdoll system with no callbacks, its Rapier loaded. */
+export async function loadedRagdolls(): Promise<RagdollSystem> {
   const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
   await sys.preload();
+  return sys;
+}
+
+/** A ragdoll system on open flat ground, no cars. */
+export async function flatSystem(): Promise<RagdollSystem> {
+  const sys = await loadedRagdolls();
   setGround(null);
   sys.update(FRAME, [], true, false, null);
   return sys;
@@ -43,9 +49,8 @@ export async function rangeWall(secs: number): Promise<Pose> {
   launch(car, -RANGE.run, 0, Math.PI / 2, RANGE.kph / 3.6, 0);
   const w = makeWorld([car], true, false, FREEWHEEL);
   w.clock.slomoAt = THROW_ONSET;
-  const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+  const sys = await loadedRagdolls();
   w.onEject = (e) => sys.launch(e, [car]);
-  await sys.preload();
   const out = noPose();
   let out0 = -1;
   for (let wall = 0; wall < 30 && (out0 < 0 || wall - out0 < secs); wall += FRAME) {
@@ -79,9 +84,8 @@ export async function headOn(mps: number, secs: number): Promise<Pose[]> {
   const w = makeWorld([a, b], false, true, FREEWHEEL);
   tickWorld(w);
   w.clock.slomoAt = THROW_ONSET;
-  const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
+  const sys = await loadedRagdolls();
   w.onEject = (e) => sys.launch(e, [a, b]);
-  await sys.preload();
   const outs = [noPose(), noPose()];
   let first = -1;
   for (let wall = 0; wall < 30 && (first < 0 || wall - first < secs); wall += FRAME) {

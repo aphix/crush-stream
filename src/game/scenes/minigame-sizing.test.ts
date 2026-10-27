@@ -20,7 +20,7 @@ import { RANGE } from "./range.ts";
 import { MinigameGround } from "./minigame-ground.ts";
 import { BOX_NET_CLEARANCE, BOX_PILE_TRAIL, HighJumpPeak, highJumpLayout, POSTS_DISTANCE, type HighJumpMeasured } from "./minigame-high-jump.ts";
 import { lipHeight } from "./minigame-profile.ts";
-import { dressedDriverCar } from "./minigame-profile.test-util.ts";
+import { dressedDriverCar, heldRagdolls } from "./minigame-profile.test-util.ts";
 import { withoutFrame } from "./minigame-frame.test-util.ts";
 import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_CUPS, ringScore } from "./minigame-ring.ts";
 
@@ -194,13 +194,9 @@ after(() => {
   launchCar?.dispose();
 });
 
-/** A ragdoll system on `ground` as the range runs it, dummies held lying where they land. */
+/** `heldRagdolls` on `ground`, disposed after the file; the active ground left flat. */
 async function ragdollOn(ground: Ground): Promise<RagdollRange> {
-  const system = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  await system.preload();
-  setGround(ground);
-  system.update(FRAME, [], true, false, null);
-  system.holdThrown();
+  const system = await heldRagdolls(ground);
   systems.push(system);
   setGround(null);
   return { system, ground };

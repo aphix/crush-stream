@@ -6,6 +6,7 @@ import { LANDING_HEIGHT, STATION_HALF_WIDTH } from "../scenes/minigame-constants
 import { FIELD_HALF_WIDTH, highJumpLayout, POST_HALF_SPAN, POST_THICKNESS, SIGN_EVERY_METRES, SLAT_THICKNESS } from "../scenes/minigame-high-jump.ts";
 import { climbFootX, floorHeightAt, stationFrontX } from "../scenes/minigame-profile.ts";
 import { makeHighJumpArt, NET_HALF_WIDTH } from "./high-jump-art.ts";
+import { drawCalls } from "./fx-uploads.test-util.ts";
 
 /** Most draw calls the High jump's whole art may cost: posts, boards, trim, net, with room for the composer's own. */
 const HIGH_JUMP_DRAW_BUDGET = 12;
@@ -97,15 +98,6 @@ function poleSpans(bottoms: THREE.Vector3[]): { centre: number; width: number }[
     return { centre: (box.min.z + box.max.z) / 2, width: box.max.x - box.min.x };
   });
 }
-
-function drawCalls(group: THREE.Group): number {
-  let calls = 0;
-  group.traverse((object) => {
-    if (object instanceof THREE.Mesh) calls += Array.isArray(object.material) ? object.material.length : 1;
-  });
-  return calls;
-}
-
 
 describe("given the High jump's art built from a layout", () => {
   before(() => {

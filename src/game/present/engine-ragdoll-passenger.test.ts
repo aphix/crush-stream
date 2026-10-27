@@ -7,9 +7,9 @@ import type { Ejection } from "../vehicle/ejection.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { armKill, DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { setGround } from "../world/ground.ts";
 import type { DriverLook } from "./driver-look.ts";
 import { RagdollSystem, type Throw } from "./engine-ragdoll.ts";
+import { flatSystem, loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 
 const HEAD_ON_MPS = 20;
 const SETTLE_FRAMES = 60;
@@ -98,8 +98,7 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a dr
 describe("given the dummies' world on this thread (the fallback, and every scene that is not a race course) and a driver thrown from his car", () => {
   it("when his passenger is thrown with him, then two dummies are out in the one world, the second beside the first", async () => {
     const { cars, ejections } = headOnEjections();
-    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await ragdolls.preload();
+    const ragdolls = await loadedRagdolls();
     const e = ejections[0]!;
     ragdolls.launch(e, cars);
     ragdolls.throwPassenger(e.car, PASSENGER);
@@ -122,10 +121,7 @@ function overlap(a: RigidBody[], b: RigidBody[]): number {
 
 describe("given two dummies thrown from two cars straight at each other, both in their first moments out", () => {
   it("when they meet, then they hit (no part sinks 10 cm into the other) and each comes down on his own side, within 1 m of the middle", async () => {
-    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await ragdolls.preload();
-    setGround(null);
-    ragdolls.update(1 / FRAME_HZ, [], true, false, null);
+    const ragdolls = await flatSystem();
     const lying = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
     const facing = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI).multiply(lying);
     for (const [car, side] of [-1, 1].entries()) {
@@ -148,10 +144,7 @@ describe("given two dummies thrown from two cars straight at each other, both in
 
 describe("given two dummies thrown from one car (a driver and his passenger), both in their first moments out, the second straight at the first", () => {
   it("when the second reaches the first, then he hits him (no part sinks 10 cm into him) and his torso stops short of the first's instead of passing through", async (t) => {
-    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await ragdolls.preload();
-    setGround(null);
-    ragdolls.update(1 / FRAME_HZ, [], true, false, null);
+    const ragdolls = await flatSystem();
     const lying = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2);
     ragdolls.spawn({ car: 0, p: new THREE.Vector3(0, 1.2, 0), q: lying, v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
     ragdolls.spawn({ car: 0, p: new THREE.Vector3(-MEET_APART / 2, 1.2, 0), q: lying, v: new THREE.Vector3(MEET_MPS, 0, 0), w: new THREE.Vector3(), age: 0, cop: false, rides: true });

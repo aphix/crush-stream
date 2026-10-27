@@ -14,6 +14,7 @@ import { TRACKS } from "../world/tracks/index.ts";
 import { TUNNEL_GAP, TUNNEL_SIDE } from "./track-mesh.ts";
 import { levelAt, surfY } from "../world/track-sections.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
+import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -29,8 +30,7 @@ const stunt = () => new Track(parseTrack(TRACKS.find((j) => parseTrack(j).id ===
 
 /** A ragdoll system on `ground` (the active one) with `track` as its course, and no cars. */
 async function system(ground: Ground | null, track: Track | null): Promise<RagdollSystem> {
-  const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  await sys.preload();
+  const sys = await loadedRagdolls();
   setGround(ground);
   if (track) sys.setCourse(track, placeProps(track), null);
   sys.update(FRAME, [], true, false, null);

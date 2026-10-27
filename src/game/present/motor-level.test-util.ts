@@ -60,14 +60,8 @@ export interface Level {
   rms: number;
 }
 
-/** One operating point to render: the dial's rev (0..1) and the worklet's throttle parameter (0..1). */
-export interface Point {
-  rev: number;
-  throttle: number;
-}
-
-/** The voice output of `cls` tuned to `stage`, one `Level` per point (in order), after the settle time the generator needs. */
-export async function voiceLevels(cls: VehicleClassId, stage: DamageStage, points: readonly Point[]): Promise<Level[]> {
+/** The voice output of `cls` tuned to `stage` at throttle 0 (the game never sets it), one `Level` per dial rev (0..1, in order), after the settle time the generator needs. */
+export async function voiceLevels(cls: VehicleClassId, stage: DamageStage, revs: readonly number[]): Promise<Level[]> {
   const processor = new Processor({ processorOptions: toneOptions(cls, SAMPLE_RATE) });
   const out = [[new Float32Array(BLOCK)], [new Float32Array(BLOCK)], [new Float32Array(BLOCK)]];
   const idle = { rpm: new Float32Array(BLOCK), throttle: new Float32Array(BLOCK) };
@@ -80,8 +74,8 @@ export async function voiceLevels(cls: VehicleClassId, stage: DamageStage, point
   const tilt = new Float64Array(3);
   channelGains(tilt, cls);
   const levels: Level[] = [];
-  for (const point of points) {
-    const parameters = { rpm: new Float32Array(BLOCK).fill(motorRpm(cls, point.rev, 1)), throttle: new Float32Array(BLOCK).fill(point.throttle) };
+  for (const rev of revs) {
+    const parameters = { rpm: new Float32Array(BLOCK).fill(motorRpm(cls, rev, 1)), throttle: idle.throttle };
     let peak = 0;
     let squares = 0;
     for (let block = 0; block < SETTLE_BLOCKS + MEASURE_BLOCKS; block++) {

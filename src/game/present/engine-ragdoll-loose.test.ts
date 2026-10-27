@@ -5,10 +5,10 @@ import "../kernel/rapier-node.test-util.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { blankEjection, type Ejection } from "../vehicle/ejection.ts";
-import { setGround } from "../world/ground.ts";
-import { RagdollSystem } from "./engine-ragdoll.ts";
+import type { RagdollSystem } from "./engine-ragdoll.ts";
 import { ARM, type Doll, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
 import { hinge } from "./ragdoll-pose.test-util.ts";
+import { flatSystem } from "./ragdoll-throws.test-util.ts";
 import type { ReleaseScale } from "./ragdoll-boxes.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -52,10 +52,7 @@ function ejection(shot: (typeof SHOTS)[number]): Ejection {
 
 /** A ragdoll system on flat sand with no cars, `shot` thrown out of a car (through `launch`, as the sim does); the doll in slot 0. */
 async function thrown(shot: (typeof SHOTS)[number], scale?: ReleaseScale): Promise<{ sys: RagdollSystem; doll: Doll; e: Ejection }> {
-  const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  await sys.preload();
-  setGround(null);
-  sys.update(FRAME, [], true, false, null);
+  const sys = await flatSystem();
   const e = ejection(shot);
   if (scale) sys.launch(e, [makeCar()], true, scale);
   else sys.launch(e, [makeCar()]);
@@ -153,10 +150,7 @@ describe("given a driver thrown out of a car", () => {
 
 describe("given a dummy placed in the scene rather than thrown from a car", () => {
   it("when it is placed moving, then every part leaves at the one rigid velocity as it always has", async () => {
-    const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await sys.preload();
-    setGround(null);
-    sys.update(FRAME, [], true, false, null);
+    const sys = await flatSystem();
     const v = new THREE.Vector3(6, 4, -2);
     const slot = sys.place(new THREE.Vector3(-300, START_HEIGHT, 0), new THREE.Quaternion(), v, new THREE.Vector3(), Infinity, -1);
     const doll = sys["dolls"][slot]!;
@@ -167,10 +161,7 @@ describe("given a dummy placed in the scene rather than thrown from a car", () =
 
   it("when it is placed in a slot a loose driver flew in, then it flies exactly as one placed in a fresh world: the loose driver's joint give is gone", async () => {
     const flight = async (afterLoose: boolean) => {
-      const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-      await sys.preload();
-      setGround(null);
-      sys.update(FRAME, [], true, false, null);
+      const sys = await flatSystem();
       if (afterLoose) {
         sys.launch(ejection(SHOTS[0]!), [makeCar()]);
         for (let f = 0; f < FRAME_HZ; f++) sys.update(FRAME, [], true, false, null);

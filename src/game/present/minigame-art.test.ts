@@ -9,6 +9,7 @@ import { stationBackX, stationFrontX } from "../scenes/minigame-profile.ts";
 import { RING_BACKSTOP, RING_BOARD_BOUNDS } from "../scenes/minigame-ring.ts";
 import { RANGE } from "../scenes/range.ts";
 import { makeHighJumpArt } from "./high-jump-art.ts";
+import { drawCalls } from "./fx-uploads.test-util.ts";
 import { makeLongJumpArt } from "./long-jump-art.ts";
 import { BOXES_MESH_NAME, GROUND_MARGIN, MinigameArt, OUTER_GROUND_NAME, STATION_PLUG_PREFIX } from "./minigame-art.ts";
 import { SURFACE_DRAW_CALL_BUDGET } from "./minigame-surface-art.ts";
@@ -50,14 +51,6 @@ function descendantCount(root: THREE.Object3D): number {
   return count;
 }
 
-function drawCalls(root: THREE.Object3D): number {
-  let calls = 0;
-  root.traverse((object) => {
-    if (object instanceof THREE.Mesh) calls += Array.isArray(object.material) ? object.material.length : 1;
-  });
-  return calls;
-}
-
 function meshVertices(mesh: THREE.Mesh): THREE.Vector3[] {
   const positions = mesh.geometry.getAttribute("position");
   return Array.from({ length: positions.count }, (_, index) => new THREE.Vector3().fromBufferAttribute(positions, index));
@@ -67,15 +60,6 @@ function groundMeshNamed(art: MinigameArt, name: string): THREE.Mesh {
   const mesh = art.group.getObjectByName(name);
   assert.ok(mesh instanceof THREE.Mesh, `the composer has a ground mesh ${name}`);
   return mesh;
-}
-
-/** Draws of the meshes under `root` that show: a hidden mesh, or one under a hidden group, costs none. */
-function visibleDrawCalls(root: THREE.Object3D): number {
-  let calls = 0;
-  root.traverseVisible((object) => {
-    if (object instanceof THREE.Mesh) calls += Array.isArray(object.material) ? object.material.length : 1;
-  });
-  return calls;
 }
 
 /** Where each triangle of `mesh` is on the plan (its centre) and how much ground it covers (m2). */
@@ -258,7 +242,7 @@ describe("given the minigame stations' composer", () => {
       assert.ok(added <= STATION_EXTRA_DRAW_BUDGET[mode], `${mode}: the composer adds ${added} draws`);
       assert.ok(stationDraws <= ownBudgets[mode] + STATION_EXTRA_DRAW_BUDGET[mode], `${mode} draws ${stationDraws}`);
       art.setMode(mode);
-      const groundDraws = visibleDrawCalls(groundMeshNamed(art, OUTER_GROUND_NAME).parent!);
+      const groundDraws = drawCalls(groundMeshNamed(art, OUTER_GROUND_NAME).parent!, "traverseVisible");
       assert.ok(groundDraws >= 1 && groundDraws <= GROUND_DRAW_BUDGET, `${mode} shown: the ground draws ${groundDraws}`);
     }
     art.dispose();

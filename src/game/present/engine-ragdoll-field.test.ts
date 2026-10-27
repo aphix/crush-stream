@@ -7,6 +7,7 @@ import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/cra
 import { blankEjection } from "../vehicle/ejection.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
+import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 
@@ -129,8 +130,7 @@ describe("given 32 cars driving around the middle of an open field and drivers t
     const car = makeCar("shape", 0.32, 0.45);
     launch(car, -40, 0, Math.PI / 2, 0, 0);
     const w = makeWorld([car], false, false, FREEWHEEL);
-    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await ragdolls.preload();
+    const ragdolls = await loadedRagdolls();
     const frame = () => {
       tickWorld(w);
       ragdolls.update(FRAME, [car], true, false, null);

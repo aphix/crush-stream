@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
-import { RagdollSystem } from "./engine-ragdoll.ts";
+import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import { RagdollRemote } from "./ragdoll-remote.ts";
 import { LAG, type FromWorker, type ResultMessage, type ToWorker } from "./ragdoll-wire.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -101,8 +101,7 @@ describe("given the dummies' world has something out and its answer to a frame t
 /** The same scripted strike (the dummies' world reports the windshield of car 0 struck in its first frame) in the main thread's own world: the glass after each frame. */
 async function inlineGlassAfterFrame(frames: number): Promise<{ glass: number[]; digest: string }> {
   Reflect.deleteProperty(globalThis, "Worker");
-  const world = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  await world.preload();
+  const world = await loadedRagdolls();
   const car = makeCar();
   world.place(new THREE.Vector3(40, 3, 40), new THREE.Quaternion(), new THREE.Vector3(), new THREE.Vector3(), 10, 0);
   const glass: number[] = [];

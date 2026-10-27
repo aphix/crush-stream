@@ -14,6 +14,7 @@ import { launchPush } from "./minigame-lip.ts";
 import { climbFootX, floorHeightAt, stationBackX, stationFrontX, stationStartPose } from "./minigame-profile.ts";
 import { holdForThrow, PRE_IMPACT_LEAD, preImpact, type PhaseClock } from "../match/phase.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
+import { loadedRagdolls } from "../present/ragdoll-throws.test-util.ts";
 import { throwComing } from "../present/ragdoll-trigger.ts";
 import { displayFrames, rangeCar } from "../present/range-run.test-util.ts";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
@@ -514,4 +515,13 @@ export function driveToBarrier(type: DriverCar, profile: DriveProfile, startOffs
     car.dispose();
     setGround(null);
   }
+}
+
+/** A ragdoll system on `ground` as the range runs it, dummies held lying where they land; `ground` stays the active ground. */
+export async function heldRagdolls(ground: Ground): Promise<RagdollSystem> {
+  const system = await loadedRagdolls();
+  setGround(ground);
+  system.update(1 / FRAME_HZ, [], true, false, null);
+  system.holdThrown();
+  return system;
 }

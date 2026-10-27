@@ -5,7 +5,7 @@ import "../kernel/rapier-node.test-util.ts";
 import type { GlassName } from "../vehicle/car-core.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { glassOf, paneFrame } from "../vehicle/car-glass.test-util.ts";
-import { RagdollSystem } from "./engine-ragdoll.ts";
+import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -54,8 +54,7 @@ async function strikes(name: GlassName, up: number, along: number, pose: Pose, t
   car.spawnFacing(0, 0, 0, 0);
   car.group.updateMatrixWorld(true);
   const cars = [own, car];
-  const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  await ragdolls.preload();
+  const ragdolls = await loadedRagdolls();
   ragdolls.update(FRAME, cars, true, false, null);
   const { centre, out } = paneFrame(car, name);
   const side = Math.abs(out.x) > 0.5;

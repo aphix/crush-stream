@@ -1,13 +1,276 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import * as THREE from "three";
+import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
+import { DeformableCar } from "../vehicle/car.ts";
 import { carFrame } from "../vehicle/car-rig.ts";
 import { CAR_STYLES } from "../vehicle/car-variants.ts";
-import { FLAT_GROUND, Ground, STEP_UP } from "../world/ground.ts";
+import { fit, frame, makeCar, DEG, FRAME } from "../vehicle/ground-probe.test-util.ts";
+import { newWorld, type World } from "../engine/world-step.ts";
+import { FLAT_GROUND, Ground, setGround, STEP_UP } from "../world/ground.ts";
 import { Corkscrew, CORKSCREW } from "./corkscrew.ts";
 import { FleetRamps, RAMP } from "./fleet-ramps.ts";
 import { collideOn } from "./ramp-collide.test-util.ts";
-import { corkPose, driveOver, shapeCar, skinGap, surfaceInFrame, type DriveSetup, type Held, type Layer, type Run } from "./car-road.test-util.ts";
+
+/**
+ * Cars as the road, a ramp or a platform (docs/UNIFIED_CONTACT.md stage 0): a car pressed into a profile and held, the same
+ * run driven over the real feature and over the cars that stand for it.
+ */
+
+/** The share of a mass's travel the skin takes (about 0.7: strain 0.65 and the cages). */
+const SKIN_FOLLOW = 0.7;
+const FIT_PASSES = 5;
+/** Half the length (m) over which a pressed car's top is the layer's: out to about its bumper masses. */
+const TOP_HALF_M = 2;
+/** Samples per metre of the plane fitted to a layer's top. */
+const PLANE_PER_M = 5;
+
+/** A car's top and bottom surface (car-local y) at car-local z. */
+type Layer = { top: (z: number) => number; bottom: (z: number) => number };
+/** Where a car is held. */
+type Pose = { pos: THREE.Vector3; rot: THREE.Euler };
+type Held = { car: DeformableCar; pose: Pose };
+
+/** Put `car` at `pose`, its masses where its own `local` points say, at rest. */
+function hold(car: DeformableCar, pose: Pose): void {
+  const g = car.group;
+  g.position.copy(pose.pos);
+  g.rotation.copy(pose.rot);
+  g.updateWorldMatrix(false, false);
+  for (const m of car.deform.masses) {
+    m.world.copy(m.local).applyMatrix4(g.matrixWorld);
+    m.vel.set(0, 0, 0);
+  }
+  car.velocity.set(0, 0, 0);
+  car.angular.set(0, 0, 0);
+  car.speed = 0;
+  car.refreshBasis();
+}
+
+/** The drawn skin's highest y (car-local) per 1 / `perM` m of length, keyed by round(z * perM). */
+function skinTops(car: DeformableCar, perM: number): Map<number, number> {
+  const pos = car.body.geometry.getAttribute("position") as THREE.BufferAttribute;
+  const bins = new Map<number, number>();
+  for (let i = 0; i < pos.count; i++) {
+    const k = Math.round(pos.getZ(i) * perM);
+    bins.set(k, Math.max(bins.get(k) ?? -Infinity, pos.getY(i)));
+  }
+  return bins;
+}
+
+/** One re-solve and one write of the skin from the masses as they stand. */
+function reskin(car: DeformableCar): void {
+  car.deform["loadDirty"][0] = 1;
+  car.stepBreakage(FRAME);
+  car.updateSkin();
+}
+
+/**
+ * The plane (height at z 0, rise per metre along z) that fits `layer`'s top over the judged span: the shape a pressed top takes is a plane
+ * in the body frame (`DeformRig.imprint`), and the skin above it is cut down to it, as a roof pressed under another body's is.
+ */
+function pressTop(car: DeformableCar, layer: Layer): void {
+  const zs: number[] = [];
+  for (let k = -PLANE_PER_M * TOP_HALF_M; k <= PLANE_PER_M * TOP_HALF_M; k++) zs.push(k / PLANE_PER_M);
+  const meanTop = zs.reduce((sum, z) => sum + layer.top(z), 0) / zs.length;
+  const spread = zs.reduce((sum, z) => sum + z * z, 0);
+  const rise = zs.reduce((sum, z) => sum + z * (layer.top(z) - meanTop), 0) / spread;
+  car.deform.imprint[0] = meanTop;
+  car.deform.imprint[1] = 0;
+  car.deform.imprint[2] = rise;
+}
+
+/**
+ * A sedan pressed into `layer` and held at `pose`: every mass (the wheels' hubs too) is placed at its rest z along the profile,
+ * its height in proportion to its rest height between its lowest and highest mass, inside the band between the layer's bottom
+ * and top less the pristine skin's own reach under the lowest mass (to the ride height) and over the highest (to the roof line);
+ * the frame may yield (`deepCrush`), or the roof stays within 0.14 m of rest. The skin follows the masses at only `SKIN_FOLLOW`
+ * of their travel and the hood, roof and boot differ, so a few passes then lift or sink every mass by what the drawn top is still
+ * off the layer's top at its z, each held inside the layer at its own z: a mass driven under the ground levers its cluster's far
+ * end up (the tail bumper over a sunk rear axle), which the next pass reads as skin too high and sinks it further.
+ */
+function shapeCar(layer: Layer, pose: Pose): Held {
+  const car = makeCar("sedan");
+  car.spawnFacing(0, 0, 0, 0);
+  car.deform.frameCrush = true;
+  car.deform.deepCrush = true;
+  const restY = car.deform.masses.map((m) => m.rest.y);
+  const massLo = Math.min(...restY);
+  const massHi = Math.max(...restY);
+  const skinBelow = massLo - car.style.dims.rideHeight;
+  const skinAbove = car.style.dims.height - massHi;
+  const bands = car.deform.masses.map((m) => {
+    const top = layer.top(m.rest.z);
+    const lo = Math.min(layer.bottom(m.rest.z), top - skinBelow - skinAbove) + skinBelow;
+    return { lo, hi: top - skinAbove };
+  });
+  for (const [i, m] of car.deform.masses.entries()) {
+    const { lo, hi } = bands[i]!;
+    m.local.set(m.rest.x, lo + ((m.rest.y - massLo) / (massHi - massLo)) * (hi - lo), m.rest.z);
+  }
+  hold(car, pose);
+  reskin(car);
+  for (let pass = 0; pass < FIT_PASSES; pass++) {
+    const tops = skinTops(car, 10);
+    for (const m of car.deform.masses) {
+      // A mass past the judged span (a bumper) is fitted on its edge bin: the skin's rounded end beyond it is no top.
+      const k = THREE.MathUtils.clamp(Math.round(m.local.z * 10), -10 * TOP_HALF_M, 10 * TOP_HALF_M);
+      const y = tops.get(k) ?? tops.get(k - 1) ?? tops.get(k + 1);
+      if (y !== undefined) m.local.y = THREE.MathUtils.clamp(m.local.y - (y - layer.top(k / 10)) / SKIN_FOLLOW, layer.bottom(m.rest.z), layer.top(m.rest.z));
+    }
+    hold(car, pose);
+    reskin(car);
+  }
+  pressTop(car, layer);
+  reskin(car);
+  return { car, pose };
+}
+
+/** The drawn skin's top against the layer's top, per 0.2 m along the car within `TOP_HALF_M` of its middle (past that the nose and tail round off): the largest gap (m). The skin's own tolerance is 0.2 m (`SKIN`), ideally 5 cm. */
+function skinGap(held: Held, layer: Layer): number {
+  let gap = 0;
+  for (const [k, y] of skinTops(held.car, 5)) if (Math.abs(k) <= 5 * TOP_HALF_M) gap = Math.max(gap, Math.abs(y - layer.top(k / 5)));
+  return gap;
+}
+
+/** Hold `bodies` where they are: every slice puts each back (its masses at their `local` points) with no speed, a prop's way. */
+function holdStatic(w: World, bodies: readonly Held[]): void {
+  const at = new Map(bodies.map((b) => [b.car, b.pose]));
+  w.afterCar = (car) => {
+    const pose = at.get(car);
+    if (pose) hold(car, pose);
+  };
+}
+
+/**
+ * The height of `surface` (world y at world x, z) in car-local terms: `y` of the car-local point (0, y, z) that lies on it
+ * when the car is at `pose`, found along the car's own up axis.
+ */
+function surfaceInFrame(surface: (x: number, z: number) => number, pose: Pose): (z: number) => number {
+  const q = new THREE.Quaternion().setFromEuler(pose.rot);
+  const p = new THREE.Vector3();
+  return (z) => {
+    let lo = -3;
+    let hi = 3;
+    for (let i = 0; i < 40; i++) {
+      const mid = (lo + hi) / 2;
+      p.set(0, mid, z).applyQuaternion(q).add(pose.pos);
+      if (p.y > surface(p.x, p.z)) hi = mid;
+      else lo = mid;
+    }
+    return (lo + hi) / 2;
+  };
+}
+
+/** The pose that lays a car on the corkscrew's floor at floor distance `s` along its centreline, flush with it. */
+function corkPose(cork: Corkscrew, s: number): Pose {
+  const hc = (z: number) => cork.heightAt(0, z);
+  let z = CORKSCREW.mouthZ;
+  for (let acc = 0; acc < s; z += 0.005) acc += Math.hypot(0.005, hc(z + 0.005) - hc(z));
+  const t = new THREE.Vector3(0, (hc(z + 0.01) - hc(z - 0.01)) / 0.02, 1).normalize();
+  const n = cork.normalAt(0, z, new THREE.Vector3(), hc(z) + 0.01);
+  n.addScaledVector(t, -n.dot(t)).normalize();
+  const right = new THREE.Vector3().crossVectors(n, t);
+  const rot = new THREE.Euler().setFromRotationMatrix(new THREE.Matrix4().makeBasis(right, n, t), "YXZ");
+  return { pos: new THREE.Vector3(0, hc(z), z), rot };
+}
+
+type DriveSetup = {
+  /** The driven sedan's start: (x, z), speed (m/s). */
+  x: number;
+  z: number;
+  v: number;
+  /** The world's ground and its contact hook (walls). The cars' version of a feature runs on the flat ground. */
+  ground: Ground;
+  collide?: (c: DeformableCar, h: number) => unknown;
+  /** Where wheel gaps are read: the real feature, for both versions of it. */
+  ref: Ground;
+  held: readonly Held[];
+  seconds: number;
+  /** No driver input at all (a driverless coast) instead of throttle holding `v`. */
+  coast?: boolean;
+  /** End the run when the car passes this z, or has been under 0.3 m/s this many frames. */
+  stopZ?: number;
+  stopStill?: number;
+};
+
+type Run = {
+  /** Speed (m/s) at the end and the highest the car's origin rose (m). */
+  speedEnd: number;
+  yMax: number;
+  /** Largest turn of the car's heading from its start (deg). */
+  headingMax: number;
+  crashed: boolean;
+  /** The longest flight (s) and the z it came down at (NaN with none). */
+  airSeconds: number;
+  landZ: number;
+  /** Wheels within 10 cm of the real feature, frame by frame, as a sequence of changes (runs under 3 frames dropped). */
+  wheels: number[];
+};
+
+const MIN_RUN = 3;
+const GROUNDED = 0.1;
+
+function sequence(counts: readonly number[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < counts.length; ) {
+    let j = i;
+    while (j < counts.length && counts[j] === counts[i]) j++;
+    if (j - i >= MIN_RUN && out[out.length - 1] !== counts[i]) out.push(counts[i]!);
+    i = j;
+  }
+  return out;
+}
+
+/** One sedan driven through `o`'s world (held cars and all) at 60 Hz frames, the ground restored after. */
+function driveOver(o: DriveSetup): Run {
+  setGround(o.ground);
+  const car = makeCar("sedan");
+  car.spawnFacing(o.x, o.z, 0, o.v);
+  car.speed = o.v;
+  const w = newWorld([car, ...o.held.map((b) => b.car)], null);
+  holdStatic(w, o.held);
+  if (o.collide) w.collide = (c, _i, h) => void o.collide!(c, h);
+  const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
+  if (!o.coast) {
+    w.beforeSlice = (h) => {
+      input.throttle = Math.max(0, Math.min(1, (o.v - car.speed) / 1.5));
+      applyDrive(car, input, h);
+      return false;
+    };
+  }
+  const fwd = new THREE.Vector3();
+  const heading = () => Math.atan2(fwd.set(0, 0, 1).applyQuaternion(car.group.quaternion).x, fwd.z);
+  const heading0 = heading();
+  const st = { acc: 0 };
+  const counts: number[] = [];
+  const run: Run = { speedEnd: 0, yMax: 0, headingMax: 0, crashed: false, airSeconds: 0, landZ: NaN, wheels: [] };
+  let flight = 0;
+  let still = 0;
+  for (let f = 0; f < o.seconds * 60; f++) {
+    frame(w, null, st);
+    const p = car.group.position;
+    const speed = Math.hypot(car.velocity.x, car.velocity.z);
+    run.yMax = Math.max(run.yMax, p.y);
+    run.headingMax = Math.max(run.headingMax, Math.abs(Math.atan2(Math.sin(heading() - heading0), Math.cos(heading() - heading0))) * DEG);
+    run.crashed ||= car.crashed;
+    counts.push(fit(car, o.ref).gaps.filter((g) => g < GROUNDED).length);
+    if (car.airborne) flight++;
+    else {
+      if (flight * FRAME > run.airSeconds) {
+        run.airSeconds = flight * FRAME;
+        run.landZ = p.z;
+      }
+      flight = 0;
+    }
+    still = speed < 0.3 ? still + 1 : 0;
+    run.speedEnd = speed;
+    if ((o.stopZ !== undefined && p.z > o.stopZ) || (o.stopStill !== undefined && still >= o.stopStill)) break;
+  }
+  run.wheels = sequence(counts);
+  setGround(null);
+  return run;
+}
 
 const SEDAN_HALF = carFrame(CAR_STYLES.sedan).half;
 
