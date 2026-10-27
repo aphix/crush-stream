@@ -2,7 +2,6 @@ import { after, before, describe, it, type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { setGround } from "../world/ground.ts";
 import { placeProps } from "../world/placements.ts";
@@ -14,8 +13,8 @@ import { crashEye, CUTS, heldCut, hitAim } from "../present/engine-cine.ts";
 import { crashAxis } from "../present/engine-cine-courses.test-util.ts";
 import { raceSight, solid, type Occluder, type Sight } from "../present/spectate-cam.ts";
 import { sampleAt } from "../present/track-mesh.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { coverLens } from "./engine-highlights.ts";
 import { DESKTOP, judge, VIEW } from "./reel-view.test-util.ts";
 
@@ -167,10 +166,7 @@ describe("given the real engine's crash camera choosing eyes for a car hit anywh
   let engine: CrashEngine;
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine();
     engine.toggleDerby();
     engine.reset();
   });

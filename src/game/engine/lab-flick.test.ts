@@ -1,12 +1,13 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { houseKnocked, labDollRig, labRig, leaveLab, runLab, throwAt, type LabRig } from "./engine-lab.test-util.ts";
+import { houseKnocked, labDollRig, labRig, runLab, throwAt, type LabRig } from "./engine-lab.test-util.ts";
 import type { LabShot } from "./engine-lab.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { FLICK, LabFlick } from "./lab-flick.ts";
 import { LAB_SHOT, planLabShot } from "./lab-shot.ts";
 import { heldPose } from "../scenes/lab.ts";
+import { setGround } from "../world/ground.ts";
 
 /**
  * The Lab's flick (`LabFlick`), headless: a landscape 844 × 390 screen looking at the house of cards from a bearing off the
@@ -16,7 +17,7 @@ import { heldPose } from "../scenes/lab.ts";
  * shot, fitted to the narrow width): a press off the cars and props is the camera's, and the picks take little of the screen.
  */
 
-afterEach(leaveLab);
+afterEach(() => setGround(null));
 
 const SCREEN = { left: 0, top: 0, width: 844, height: 390 };
 const PHONE_UPRIGHT = { left: 0, top: 0, width: 414, height: 757 };

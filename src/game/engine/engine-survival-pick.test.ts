@@ -1,11 +1,10 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
@@ -19,9 +18,6 @@ describe("given the real engine booted on #scene=survival&track=national-mall", 
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
   const bar: string[] = [];
-  const run = (seconds: number): void => {
-    for (let i = 0; i < seconds * 60; i++) engine.advance(FRAME, { frameDt: FRAME });
-  };
   before(async () => {
     stubBrowser();
     globalThis.location.hash = "#scene=survival&track=national-mall";
@@ -30,12 +26,7 @@ describe("given the real engine booted on #scene=survival&track=national-mall", 
       bar.push(String(url));
       globalThis.location.hash = String(url).slice(String(url).indexOf("#"));
     };
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
-    let tick = 0;
-    Object.assign(engine.pace, { now: () => (tick += 0.001) });
+    engine = await bootEngine({ pacer: true });
   });
   after(() => {
     engine.dispose();
@@ -43,7 +34,7 @@ describe("given the real engine booted on #scene=survival&track=national-mall", 
   });
 
   it("when the page has loaded, then a Survival run is on the Mall at once, with no menu in front of it", () => {
-    run(0.5);
+    runSeconds(engine, 0.5);
     const hud = engine["race"].hud();
     assert.equal(engine["race"].active, true);
     assert.equal(engine["race"].survival, true);
@@ -66,7 +57,7 @@ describe("given the real engine booted on #scene=survival&track=national-mall", 
     engine.raceCommand({ type: "survivalCourse", id: "havana" });
     assert.equal(engine["race"].hud().menu, "survival", "a pick keeps the menu up");
     assert.equal(engine["race"].courseId, "havana", "the course behind the menu follows");
-    run(0.5);
+    runSeconds(engine, 0.5);
     assert.equal(engine["race"].hud().phase, null, "waiting in the menu starts nothing");
     engine.raceCommand({ type: "survivalCourse", id: TRACK_ID.nationalMall });
     engine.raceCommand({ type: "start" });
@@ -77,20 +68,20 @@ describe("given the real engine booted on #scene=survival&track=national-mall", 
   });
 
   it("when Change course is pressed in a run, then Survival's menu is back with the run dropped, and the address names the course picked there", () => {
-    run(1);
+    runSeconds(engine, 1);
     engine.raceCommand({ type: "survivalMenu" });
     const menu = engine["race"].hud();
     assert.equal(menu.menu, "survival");
     assert.equal(menu.survival, null, "the run is dropped");
     engine.raceCommand({ type: "survivalCourse", id: "havana" });
     engine.raceCommand({ type: "start" });
-    run(FRAME);
+    runSeconds(engine, FRAME);
     assert.equal(engine["race"].courseId, "havana");
     assert.match(bar.at(-1)!, /#scene=survival&track=havana$/, "the # follows the run");
   });
 
   it("when the # is edited to name the Mall again, then the run restarts on it", () => {
-    run(1);
+    runSeconds(engine, 1);
     const before = engine["race"].hud().time;
     globalThis.location.hash = "#scene=survival&track=national-mall";
     engine["onShareHash"]();

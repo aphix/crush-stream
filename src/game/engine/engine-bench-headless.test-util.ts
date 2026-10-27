@@ -1,28 +1,19 @@
 import { createHash } from "node:crypto";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
+import type { CrashEngine } from "./engine.ts";
 import { BENCH } from "./bench-measure.ts";
 import { BENCH_RACE, benchPlan, benchRace } from "./engine-bench-plan.ts";
 import { enterBenchScene } from "./bench-scene.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 
 /** One frame at the fine slice: a frame steps once, or more at a speed the 1/240 s slice travels past 7 cm in. */
 export const FRAME_S = 1 / FINE_HZ;
-/** Ms the pacer's clock moves at each read: a step costs next to nothing, so no frame is cut at the wall deadline (a loaded box's clock cut them) and the clock is never blind. */
-const PACER_TICK_MS = 0.001;
 
 async function benchEngine(): Promise<CrashEngine> {
   stubBrowser();
-  const engine = new CrashEngine(element(), new HudStore(), element());
-  Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-  await engine.ready;
-  engine.fadeScenes = false;
-  let tick = 0;
-  Object.assign(engine.pace, { now: () => (tick += PACER_TICK_MS) });
-  return engine;
+  return bootEngine({ pacer: true });
 }
 
 /** The real engine on the city bench's race (`BENCH_RACE`, the bench's seed; with `course` the same field on another course, off-menu ones too), nothing drawn, the pacer pinned to the 1/240 s floor. One per process (a second `CrashEngine` never resolves `ready`). */

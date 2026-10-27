@@ -16,8 +16,8 @@ import { lipHeight } from "../scenes/minigame-profile.ts";
 import { ringScore } from "../scenes/minigame-ring.ts";
 import { MinigameSession, type MinigameHudState } from "../scenes/minigame-session.ts";
 import { BAIL_WINDOW_SECONDS, bailRelease, type BailVerdict } from "../scenes/minigame-bail.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { minigameStore } from "./minigame-store.ts";
 import { BARRIER_HALF } from "../contact/sat.ts";
 
@@ -75,13 +75,10 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
   /** The ground the attract Range plays on, read before any minigame. */
   let attractGround: Ground;
   const launches: Launch[] = [];
-  const run = (seconds: number): void => {
-    for (let i = 0; i < Math.round(seconds * FRAME_HZ); i++) engine.advance(FRAME, { frameDt: FRAME });
-  };
   const minigameHud = () => engine["minigames"].hud();
   const releaseThrottle = (): void => {
     engine["keys"].delete(THROTTLE_KEY);
-    run(2 * FRAME);
+    runSeconds(engine, 2 * FRAME);
   };
   const stationLocal = (mode: MinigameMode, world: THREE.Vector3, still: number): TorsoSample => ({ x: world.x - STATION_ANCHORS[mode].x, y: world.y, z: world.z - STATION_ANCHORS[mode].z, still });
   /** The player holds the throttle to the lip (or the barrier) and every frame's torso is read, until the throw scores or the sim runs out. */
@@ -115,13 +112,8 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     stubBrowser();
     Object.defineProperty(globalThis, "localStorage", { value: memoryStorage(), configurable: true, writable: true });
     hud = new HudStore();
-    engine = new CrashEngine(element(), hud, element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
+    engine = await bootEngine({ hud, pacer: true });
     for (let wait = 0; wait < 200 && engine["ragdolls"]["world"] === null; wait++) await delay(50);
-    engine.fadeScenes = false;
-    let tick = 0;
-    Object.assign(engine.pace, { now: () => (tick += 0.001) });
     const ragdolls = engine["ragdolls"];
     const launch = ragdolls.launch.bind(ragdolls);
     ragdolls.launch = (e, cars, rides, releaseScale) => {
@@ -177,7 +169,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
 
       it("when three seconds pass with no input, then the car has not moved and the attempt is still ready", () => {
         const before = car().group.position.clone();
-        run(IDLE_WAIT_S);
+        runSeconds(engine, IDLE_WAIT_S);
         assert.ok(car().group.position.distanceTo(before) < START_TOLERANCE, `moved ${car().group.position.distanceTo(before)} m`);
         assert.equal(minigameHud().phase, "ready", "ready");
       });
@@ -210,7 +202,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       it("when the throttle is pressed, then the seat takes the wheel, the car drives off and the attempt is running", () => {
         const before = car().group.position.clone();
         engine["keys"].add(THROTTLE_KEY);
-        run(2);
+        runSeconds(engine, 2);
         assert.equal(engine["seat"].mode, "drive", "driving");
         assert.ok(car().group.position.distanceTo(before) > 5, `moved ${car().group.position.distanceTo(before)} m`);
         assert.equal(minigameHud().phase, "running", "running");
@@ -260,7 +252,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       it(`when ${HOLD_CHECK_S} s pass after the throw, then the dummy is alive, the camera still rides him, and nothing reset: no timer, no loop`, () => {
         const generation = engine["clearGen"]();
         const before = JSON.stringify(minigameHud());
-        run(HOLD_CHECK_S);
+        runSeconds(engine, HOLD_CHECK_S);
         const torso = new THREE.Vector3();
         assert.ok(engine["ragdolls"].latest(torso) >= 0, "the dummy is still out");
         assert.ok(engine["ragdolls"].rideAlong, "the ride camera still follows him");
@@ -374,7 +366,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     it("then the attract loop runs again: its car is thrown with no boost and the scene loops", () => {
       launches.length = 0;
       const generation = engine["clearGen"]();
-      run(30);
+      runSeconds(engine, 30);
       assert.ok(launches.length >= 1, "a driver was thrown");
       for (const launch of launches) assert.equal(launch.releaseScale, undefined, "no boost");
       assert.notEqual(engine["clearGen"](), generation, "the loop reset the scene");
@@ -429,7 +421,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
           assert.equal(minigameHud().phase, "ready", "ready");
           launches.length = 0;
           engine["keys"].add(THROTTLE_KEY);
-          run(LONG_JUMP_PAST_S);
+          runSeconds(engine, LONG_JUMP_PAST_S);
           const x = engine["cars"][0]!.group.position.x - STATION_ANCHORS.longJump.x;
           engine["keys"].delete(THROTTLE_KEY);
           let restS = 0;
@@ -524,7 +516,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         const torso = new THREE.Vector3();
         engine["keys"].add(THROTTLE_KEY);
         for (let frame = 0; frame < THROW_TIMEOUT_S * FRAME_HZ && engine["ragdolls"].latest(torso) < 0; frame++) engine.advance(FRAME, { frameDt: FRAME });
-        run(RIDE_SETTLE_S);
+        runSeconds(engine, RIDE_SETTLE_S);
         engine["ragdolls"].latest(torso);
         releaseThrottle();
         assert.ok(engine["ragdolls"].rideAlong, "the ride camera follows him");
@@ -569,7 +561,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         engine["looping"] = false;
         engine["keys"].add(THROTTLE_KEY);
         for (let frame = 0; frame < 20 * FRAME_HZ && ragdolls.latest(new THREE.Vector3()) < 0; frame++) engine.advance(FRAME, { frameDt: FRAME });
-        run(1);
+        runSeconds(engine, 1);
         releaseThrottle();
         ragdolls.frameCamera = original;
         engine["looping"] = true;
@@ -669,7 +661,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       engine.setPlayerCar("sedan");
       engine.startMinigame("longJump");
       engine["keys"].add(BOOST_KEY);
-      run(0.5);
+      runSeconds(engine, 0.5);
       engine["keys"].delete(BOOST_KEY);
       assert.equal(minigameHud().phase, "ready", "still ready");
       assert.equal(minigameHud().bail!.pressed, false, "not pressed");
@@ -681,7 +673,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         engine.startMinigame(mode);
         engine["keys"].add(THROTTLE_KEY);
         engine["keys"].add(BOOST_KEY);
-        run(BOOST_HOLD_S);
+        runSeconds(engine, BOOST_HOLD_S);
         const boosting = engine["carA"].drive.boostK;
         const meter = engine["seat"].boost;
         engine["keys"].delete(BOOST_KEY);

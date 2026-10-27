@@ -1,5 +1,7 @@
 import type * as THREE from "three";
-import type { CrashEngine } from "./engine.ts";
+import { HudStore } from "../hud/hud-store.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
+import { CrashEngine } from "./engine.ts";
 
 /**
  * What the real `CrashEngine` needs to run headless in node: its canvas, WebGL context, 2d contexts, `window` and `document` are
@@ -67,6 +69,39 @@ export function stubBrowser(): void {
     document: { createElement: element, addEventListener() {}, removeEventListener() {}, body: element(), documentElement: element() },
   });
   (globalThis as { window?: unknown }).window = globalThis;
+}
+
+export interface BootOptions {
+  hud?: HudStore;
+  canvas?: HTMLCanvasElement & HTMLElement;
+  /** Keep the engine's scene fades on (off by default, so a scene switch lands at once). */
+  fades?: boolean;
+  /** Advance the pacer's clock 1 µs per read: no frame is cut at the wall deadline, whatever the box's load. */
+  pacer?: boolean;
+}
+
+/** The real engine on the stand-ins (call `stubBrowser` first), nothing drawn, `ready` awaited. One per process: a second `CrashEngine` never resolves `ready`. */
+export async function bootEngine({ hud = new HudStore(), canvas = element(), fades = false, pacer = false }: BootOptions = {}): Promise<CrashEngine> {
+  const engine = new CrashEngine(canvas, hud, element());
+  Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
+  await engine.ready;
+  if (!fades) engine.fadeScenes = false;
+  if (pacer) {
+    let tick = 0;
+    Object.assign(engine.pace, { now: () => (tick += 0.001) });
+  }
+  return engine;
+}
+
+const FRAME = 1 / FRAME_HZ;
+
+/** `seconds` of frames at the frame rate, one `advance` each. */
+export function runSeconds(engine: CrashEngine, seconds: number): void {
+  for (let i = 0; i < seconds * FRAME_HZ; i++) engine.advance(FRAME, { frameDt: FRAME });
+}
+
+export function pressKey(engine: CrashEngine, code: string): void {
+  engine["onKey"](Object.assign(new Event("keydown"), { code, repeat: false, ctrlKey: false, metaKey: false, altKey: false }) as KeyboardEvent);
 }
 
 /**

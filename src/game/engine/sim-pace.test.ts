@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { assignClass } from "../vehicle/vehicle-classes.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
+import { stream } from "../present/ragdoll-pose.test-util.ts";
 import { assertSameNumbers, paint } from "../vehicle/test-support.ts";
 import { newWorld, settleStep, stepWorld } from "./world-step.ts";
 import { PACE_BUDGET_MS, SimPacer } from "./sim-pace.ts";
@@ -12,12 +13,6 @@ import { FINE_HZ, FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 const V = 30;
 const SPIN = 1.2;
 const FAST = 30;
-
-/** A seeded uniform in [0, 1). */
-function rng(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296);
-}
 
 type Drawn = { worst: number; worstYaw: number; steps: number[] };
 
@@ -31,7 +26,7 @@ function drawn(hz: number, jitter: number, blend: boolean, scale = 1): Drawn {
   const pace = new SimPacer();
   const pose = new PoseBlend();
   const cars = [car];
-  const next = rng(7);
+  const next = stream(7);
   let simTime = 0;
   const out: Drawn = { worst: 0, worstYaw: 0, steps: [] };
   for (let f = 0; f < 3 * hz; f++) {

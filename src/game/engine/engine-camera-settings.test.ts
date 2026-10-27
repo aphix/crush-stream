@@ -9,8 +9,8 @@ import { activeCameraPreset, CAMERA_PRESETS, cameraPresetValues } from "../hud/c
 import { EPICENTER, EPICENTER_KNOBS } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 describe("given the real engine and a camera slider of the debug panel", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -23,9 +23,7 @@ describe("given the real engine and a camera slider of the debug panel", () => {
   before(async () => {
     stubBrowser();
     hud = new HudStore();
-    engine = new CrashEngine(element(), hud, element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
+    engine = await bootEngine({ hud, fades: true });
   });
   after(() => {
     engine.dispose();

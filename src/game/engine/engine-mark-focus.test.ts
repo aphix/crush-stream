@@ -3,12 +3,11 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
 import { applyMarkMap } from "../present/engine-marks.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -42,10 +41,7 @@ describe("given the real engine in a race on the National Mall (wider than the m
 
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine();
     engine.toggleRace();
     engine.raceCommand({ type: "program", options: { trackId: TRACK_ID.nationalMall, laps: 1, aiCount: 1, police: false, aggression: 0.5, aiDifficulty: AI_EVERY_SLICE, spectate: false, noReset: false } });
     engine.raceCommand({ type: "start" });

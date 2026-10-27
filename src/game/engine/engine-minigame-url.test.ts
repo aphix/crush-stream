@@ -1,12 +1,11 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { decodeShare } from "../hud/share-url.ts";
 import { MINIGAME_MODES, type MinigameMode } from "../scenes/minigame-constants.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 /** A Ring Fling set length other than the default, so a link that drops it reads back wrong. */
 const PICKED_SET_LENGTH = 7;
@@ -26,10 +25,7 @@ describe("given the real engine on the Range and a browser address bar that reco
       entries.push(hashOf(url));
       globalThis.location.hash = hashOf(url);
     };
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine();
   });
   after(() => {
     engine.dispose();

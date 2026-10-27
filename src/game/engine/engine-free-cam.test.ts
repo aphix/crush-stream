@@ -4,8 +4,8 @@ import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, pressKey, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { FreeCam } from "../present/free-cam.ts";
 
@@ -17,11 +17,8 @@ describe("given the real engine in the fleet, watching a car", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
   let hud: HudStore;
-  const run = (seconds: number): void => {
-    for (let i = 0; i < seconds * FRAME_HZ; i++) engine.advance(FRAME, { frameDt: FRAME });
-  };
   const press = (code: string): void => {
-    engine["onKey"](Object.assign(new Event("keydown"), { code, repeat: false, ctrlKey: false, metaKey: false, altKey: false }) as KeyboardEvent);
+    pressKey(engine, code);
     engine["keys"].delete(code);
   };
   /** The fleet, its first car followed, View pressed until the HUD names the free view (at most one turn of the ring), no key held. */
@@ -31,10 +28,10 @@ describe("given the real engine in the fleet, watching a car", () => {
     engine["setScene"]("fleet");
     engine["seat"].focus(0);
     engine["keys"].clear();
-    run(FRAME);
+    runSeconds(engine, FRAME);
     for (let presses = 0; presses < 10 && hud.get().cam !== "free"; presses++) engine.cycleCamera();
     assert.equal(hud.get().cam, "free", "the free view is in the ring");
-    run(FRAME);
+    runSeconds(engine, FRAME);
   };
   const eye = (): THREE.Vector3 => engine["camera"].position.clone();
   const level = (a: THREE.Vector3, b: THREE.Vector3): number => Math.hypot(a.x - b.x, a.z - b.z);
@@ -42,12 +39,7 @@ describe("given the real engine in the fleet, watching a car", () => {
   before(async () => {
     stubBrowser();
     hud = new HudStore();
-    engine = new CrashEngine(element(), hud, element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
-    let tick = 0;
-    Object.assign(engine.pace, { now: () => (tick += 0.001) });
+    engine = await bootEngine({ hud, pacer: true });
   });
   after(() => {
     engine.dispose();
@@ -58,7 +50,7 @@ describe("given the real engine in the fleet, watching a car", () => {
     flyFree();
     const start = eye();
     engine["keys"].add("KeyW");
-    run(1);
+    runSeconds(engine, 1);
     engine["keys"].clear();
     assert.equal(engine["seat"].mode, "follow", "W flew the camera; it did not take the wheel");
     assert.ok(Math.abs(level(eye(), start) - DISC_CRUISE) < 0.5, `the eye flew ${level(eye(), start).toFixed(2)} m level in a second, cruise ${DISC_CRUISE} m/s`);
@@ -68,14 +60,14 @@ describe("given the real engine in the fleet, watching a car", () => {
     flyFree();
     const playing = engine["playing"];
     const start = eye();
-    engine["onKey"](Object.assign(new Event("keydown"), { code: "Space", repeat: false, ctrlKey: false, metaKey: false, altKey: false }) as KeyboardEvent);
-    run(0.5);
+    pressKey(engine, "Space");
+    runSeconds(engine, 0.5);
     engine["keys"].clear();
     assert.equal(engine["playing"], playing, "Space in the free view left play as it was");
     assert.ok(eye().y - start.y > 1, `Space raised the eye ${(eye().y - start.y).toFixed(2)} m in 0.5 s`);
     engine["view"].leaveFree();
     engine["seat"].esc();
-    run(FRAME);
+    runSeconds(engine, FRAME);
     press("Space");
     assert.notEqual(engine["playing"], playing, "Space out of the free view, nobody driven, toggled play");
     press("Space");
@@ -89,7 +81,7 @@ describe("given the real engine in the fleet, watching a car", () => {
     const w = down("KeyW");
     engine["onKey"](ctrl);
     engine["onKey"](w);
-    run(0.5);
+    runSeconds(engine, 0.5);
     engine["onKeyUp"](Object.assign(new Event("keyup"), { code: "ControlLeft" }) as KeyboardEvent);
     engine["onKeyUp"](Object.assign(new Event("keyup"), { code: "KeyW" }) as KeyboardEvent);
     assert.ok(start.y - eye().y > 1, `Ctrl sank the eye ${(start.y - eye().y).toFixed(2)} m in 0.5 s`);
@@ -104,9 +96,9 @@ describe("given the real engine in the fleet, watching a car", () => {
     engine["view"].spec = null;
     engine["seat"].focus(0);
     engine["keys"].clear();
-    run(FRAME);
+    runSeconds(engine, FRAME);
     engine["keys"].add("KeyW");
-    run(0.1);
+    runSeconds(engine, 0.1);
     engine["keys"].clear();
     assert.equal(engine["seat"].mode, "drive", "W drives in the other views");
     engine["seat"].esc();
@@ -117,7 +109,7 @@ describe("given the real engine in the fleet, watching a car", () => {
     const car = engine["cars"][0]!;
     const start = eye();
     car.group.position.x += 40;
-    run(0.3);
+    runSeconds(engine, 0.3);
     assert.ok(eye().distanceTo(start) < 1e-6, `the eye drifted ${eye().distanceTo(start)} m`);
   });
 
@@ -129,7 +121,7 @@ describe("given the real engine in the fleet, watching a car", () => {
   it("when PageDown is held for five seconds in the free view, then the eye stops above the ground", () => {
     flyFree();
     engine["keys"].add("PageDown");
-    run(5);
+    runSeconds(engine, 5);
     engine["keys"].clear();
     assert.ok(eye().y > 0.5, `the eye sank to ${eye().y.toFixed(2)} m`);
     assert.ok(eye().y < 1.5, `and rests on the clearance, at ${eye().y.toFixed(2)} m`);
@@ -165,7 +157,7 @@ describe("given the real engine in the fleet, watching a car", () => {
   it("when the seat takes the wheel during the free view (a race handing the viewer its car), then the free view ends and the driven views are back", () => {
     flyFree();
     engine["seat"].mode = "drive";
-    run(FRAME);
+    runSeconds(engine, FRAME);
     assert.equal(engine["view"].flying, false, "driving is not spectating");
     engine["emitHud"]();
     assert.equal(hud.get().cam, null, "and the HUD no longer names a spectator view");
@@ -193,11 +185,11 @@ describe("given the real engine in the fleet, watching a car", () => {
     engine["view"].leaveFree();
     engine["seat"].clear();
     engine["setScene"]("fleet");
-    run(FRAME);
+    runSeconds(engine, FRAME);
     assert.equal(hud.get().cam, null, "the whole field shows no camera name");
     engine.cycleCamera();
     assert.equal(hud.get().cam, "free", "View from the whole field");
-    run(FRAME);
+    runSeconds(engine, FRAME);
     assert.equal(engine["view"].flying, true);
     engine.cycleCamera();
     assert.equal(hud.get().cam, null, "and back");

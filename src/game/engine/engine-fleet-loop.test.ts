@@ -4,8 +4,8 @@ import "../kernel/rapier-node.test-util.ts";
 import { HudStore, INITIAL_HUD } from "../hud/hud-store.ts";
 import { FLEET_EMPTY_S } from "../scenes/fleet.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -17,10 +17,7 @@ describe("given the real engine on Fleet's default settings, every car driving s
   before(async () => {
     stubBrowser();
     hud = new HudStore();
-    engine = new CrashEngine(element(), hud, element());
-    // Nothing draws: the renderer's draw entry points do nothing (the sim steps the same).
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
+    engine = await bootEngine({ hud, fades: true });
   });
   after(() => {
     engine.dispose();

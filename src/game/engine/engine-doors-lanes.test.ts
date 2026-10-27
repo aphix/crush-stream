@@ -1,13 +1,12 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import type { DoorScenario, RamShot } from "../scenes/door-rig.ts";
 import { MIRROR_FOLD_MAX } from "../vehicle/car-core.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 const FRAME = 1 / FRAME_HZ;
 /** The least crush (mm) a tail shot must leave: a head that met the tail leaves tens of mm, one that went through leaves none. */
@@ -34,13 +33,7 @@ class DoorsBench {
 
   async start(): Promise<void> {
     stubBrowser();
-    this.engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(this.engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await this.engine.ready;
-    this.engine.fadeScenes = false;
-    // The pacer's wall clock would give a loaded box's late frames up as lost sim time: a clock 1 µs later at each read is never late.
-    let tick = 0;
-    Object.assign(this.engine.pace, { now: () => (tick += 0.001) });
+    this.engine = await bootEngine({ pacer: true });
     this.engine["setScene"]("doors");
   }
 

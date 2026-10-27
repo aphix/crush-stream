@@ -11,7 +11,7 @@ export const COARSE = 1 / QUIET_HZ;
 export const FINE = 1 / FINE_HZ;
 
 /** Car-slices the world has stepped so far (live, wreck and sleeping cars alike). */
-function carSlices(w: World): number {
+export function carSlices(w: World): number {
   const work = w.phases.work;
   return work[WORK.liveCarSlices]! + work[WORK.wreckCarSlices]! + work[WORK.asleepCarSlices]!;
 }

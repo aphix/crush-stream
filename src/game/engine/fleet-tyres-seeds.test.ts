@@ -2,13 +2,11 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { drawnTriangles } from "../vehicle/drawn-body.test-util.ts";
 import { tyreClearance } from "../vehicle/tyre-clearance.test-util.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 /**
  * `fleet-tyres.test.ts`' crash on other seeds of the fleet's layout: on these the car that hits the pickup destroys its nose, and the front tyres stand 50-260 mm through the drawn
@@ -30,9 +28,7 @@ const SEEDS = [4, 6, 11, 12, 13] as const;
 /** The least clearance (m) of the pickup's front tyres under its drawn skin from the first contact to `TO_S`, on a fresh engine seeded `seed`. */
 async function leastClearance(seed: number): Promise<number> {
   stubBrowser();
-  const engine = new CrashEngine(element(), new HudStore(), element());
-  Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-  await engine.ready;
+  const engine = await bootEngine({ fades: true });
   engine.setCarCount(FLEET);
   engine.setSpeedRange(SPEEDS_MS[0], SPEEDS_MS[1]);
   engine.setSquash(SQUASH);

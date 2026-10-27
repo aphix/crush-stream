@@ -4,8 +4,8 @@ import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { CAMERA_PRESETS, cameraPresetValues } from "../hud/camera-presets.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 /**
  * The address bar follows the settings without piling history up (docs/CONTROLS.md): a change inside a scene rewrites the
@@ -47,10 +47,7 @@ describe("given the real engine writing the page's # into a browser history stac
       },
     });
     hud = new HudStore();
-    engine = new CrashEngine(element(), hud, element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine({ hud });
   });
   after(() => {
     engine.dispose();
