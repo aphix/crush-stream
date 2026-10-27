@@ -419,7 +419,8 @@ export class TyreSkin {
     }
     const wasHeld = this.held;
     this.held = held;
-    if (!held && !wasHeld && !fresh) return;
+    // Unheld, the positions are the writer's (fresh) or as they stood: its normals still match.
+    if (!held && (fresh || !wasHeld)) return;
     attr.needsUpdate = true;
     computeNormalsFast(this.mesh.geometry);
   }
