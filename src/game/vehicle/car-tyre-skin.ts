@@ -106,6 +106,20 @@ function planCell(v: number, from: number): number {
   return Math.floor((v - from) / PLAN_CELL);
 }
 
+/** The first corner (index in `tris`) of each distinct welded point among `tris`' corners, ascending. */
+function firstCorners(tris: Int32Array, weld: Int32Array, points: number): Int32Array {
+  const seen = new Uint8Array(points);
+  const firsts: number[] = [];
+  for (let k = 0; k < tris.length; k++) {
+    const p = weld[tris[k]!]!;
+    if (seen[p] === 0) {
+      seen[p] = 1;
+      firsts.push(k);
+    }
+  }
+  return Int32Array.from(firsts);
+}
+
 /** `geometry`'s highest vertex (own frame, x y z each) in each `TOP_CELL` plan cell: what a skin over it must clear. */
 function topSamples(geometry: THREE.BufferGeometry): Float32Array {
   const known = topsOf.get(geometry);
@@ -254,6 +268,8 @@ export class TyreSkin {
   private readonly plans: PlanGrid[] = [];
   /** Per wheel, the lift of each corner of its `overTris` when the sag passes last read it this hold (`cornersRose`). */
   private readonly sagRead: Float32Array[] = [];
+  /** Per wheel, the first corner (an index in its `overTris`) of each distinct welded point among them, ascending. */
+  private readonly sagFirst: Int32Array[] = [];
   /** What the kernel's sag pass reads and writes of this skin (`TyreSagArena.sagPass`). */
   private readonly sagSkin: SagSkin;
   /** The class lift, hub shift and wheel scale `over` was found for. */
@@ -358,6 +374,7 @@ export class TyreSkin {
       this.overAt[w] = Int32Array.from(resting);
       this.overTris[w] = this.trianglesOver(over);
       this.sagRead[w] = new Float32Array(this.overTris[w].length);
+      this.sagFirst[w] = firstCorners(this.overTris[w], this.edges.weld, this.lift.length);
     }
     return true;
   }
@@ -707,12 +724,16 @@ export class TyreSkin {
     return true;
   }
 
-  /** Whether a corner of wheel `w`'s triangles rose since the sag passes last read it (`sagRead`). */
+  /** Whether a corner of wheel `w`'s triangles rose since the sag passes last read it (`sagRead`): a point's corners all read one lift, so one of them stands for the rest. */
   private cornersRose(w: number): boolean {
     const tris = this.overTris[w]!;
     const read = this.sagRead[w]!;
+    const firsts = this.sagFirst[w]!;
     const { weld } = this.edges;
-    for (let k = 0; k < tris.length; k++) if (this.lift[weld[tris[k]!]!] !== read[k]) return true;
+    for (let i = 0; i < firsts.length; i++) {
+      const k = firsts[i]!;
+      if (this.lift[weld[tris[k]!]!] !== read[k]) return true;
+    }
     return false;
   }
 
