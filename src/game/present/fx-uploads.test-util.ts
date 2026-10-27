@@ -21,3 +21,12 @@ export function attributesOf(root: THREE.Object3D): { name: string; attr: THREE.
 export function drawQueued(root: THREE.Object3D): void {
   for (const { attr } of attributesOf(root)) attr.clearUpdateRanges();
 }
+
+/** Draw calls of the meshes under `root` (one per material); `traverseVisible` counts only the ones that show. */
+export function drawCalls(root: THREE.Object3D, walk: "traverse" | "traverseVisible" = "traverse"): number {
+  let calls = 0;
+  root[walk]((object) => {
+    if (object instanceof THREE.Mesh) calls += Array.isArray(object.material) ? object.material.length : 1;
+  });
+  return calls;
+}
