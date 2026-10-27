@@ -5,10 +5,10 @@ import "../kernel/rapier-node.test-util.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { blankEjection, ejectionVelocity } from "../vehicle/ejection.ts";
-import { setGround } from "../world/ground.ts";
-import { RagdollSystem } from "./engine-ragdoll.ts";
+import type { RagdollSystem } from "./engine-ragdoll.ts";
 import { type BoxPlacement, NO_RELEASE_SCALE, type ReleaseScale } from "./ragdoll-boxes.ts";
 import type { Doll } from "./ragdoll-body.ts";
+import { flatSystem } from "./ragdoll-throws.test-util.ts";
 
 const FRAME = 1 / FRAME_HZ;
 /** The default life of a thrown dummy (s): `LIFE` in engine-ragdoll.ts. */
@@ -25,15 +25,6 @@ const ELEVATION_FORWARD = 0.5;
 const ELEVATION_RADIANS = Math.PI / 6;
 const SPEED_TOLERANCE = 1e-5;
 const ONE_BOX: readonly BoxPlacement[] = [{ x: 20, y: 0.5, z: 0, yaw: 0, width: 1, height: 1, depth: 1 }];
-
-/** A ragdoll system on the range's flat sand with no cars. */
-async function system(): Promise<RagdollSystem> {
-  const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  await sys.preload();
-  setGround(null);
-  sys.update(FRAME, [], true, false, null);
-  return sys;
-}
 
 /** An ejection out of the car's windshield, far from the origin: car velocity (7, -1, 5), his own (2, 12, 3). */
 function farEjection() {
@@ -60,7 +51,7 @@ function velocityOf(doll: Doll): THREE.Vector3 {
 
 describe("given a dummy launched through launch() from a car", () => {
   it("when holdThrown() was called and a minute of sim passes, then he is still alive and still, and releaseThrown() removes him", async () => {
-    const sys = await system();
+    const sys = await flatSystem();
     const car = makeCar();
     sys.holdThrown();
     sys.launch(farEjection(), [car]);
@@ -75,7 +66,7 @@ describe("given a dummy launched through launch() from a car", () => {
   });
 
   it("when nothing was held and 11 s of sim pass, then his 10 s life is over and he is gone", async () => {
-    const sys = await system();
+    const sys = await flatSystem();
     const car = makeCar();
     sys.launch(farEjection(), [car]);
     const torso = new THREE.Vector3();
@@ -86,7 +77,7 @@ describe("given a dummy launched through launch() from a car", () => {
   });
 
   it("when he was held and released, then the next dummy lives 10 s again", async () => {
-    const sys = await system();
+    const sys = await flatSystem();
     const car = makeCar();
     sys.holdThrown();
     sys.releaseThrown();
@@ -99,7 +90,7 @@ describe("given a dummy launched through launch() from a car", () => {
   });
 
   it("when reset() is called while a box stands and a dummy is held, then the box is gone and the next dummy lives 10 s", async () => {
-    const sys = await system();
+    const sys = await flatSystem();
     sys.setBoxes(ONE_BOX);
     sys.holdThrown();
     sys.reset();
@@ -115,7 +106,7 @@ describe("given a dummy launched through launch() from a car", () => {
   it("when launched with no scale, with the identity scale and with forward 0.5 and upward 1.2, then his centre of mass moves at the ejection's own velocity, the identity scales equal it bit for bit, and the third has its horizontal halved and its vertical raised by a fifth", async () => {
     const car = makeCar();
     const launched = async (scale: ReleaseScale | null) => {
-      const sys = await system();
+      const sys = await flatSystem();
       const ejection = farEjection();
       if (scale === null) sys.launch(ejection, [car]);
       else sys.launch(ejection, [car], true, scale);
@@ -150,7 +141,7 @@ describe("given a dummy launched through launch() from a car", () => {
   });
 
   it("when launched with forward 0.5 and an elevation of 30 degrees, then his whole speed is half the ejection's horizontal speed, aimed 30 degrees up along its heading, whatever the ejection's own vertical was", async () => {
-    const sys = await system();
+    const sys = await flatSystem();
     const ejection = farEjection();
     sys.launch(ejection, [makeCar()], true, { forward: ELEVATION_FORWARD, upward: 1, elevation: ELEVATION_RADIANS });
     const velocity = velocityOf(dummyOf(sys));

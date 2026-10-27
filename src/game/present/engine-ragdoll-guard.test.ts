@@ -6,6 +6,7 @@ import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { blankStrike, fell, runsDown } from "../scenes/figure-strike.ts";
 import { RagdollSystem, type Throw } from "./engine-ragdoll.ts";
+import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import { PARTS } from "./ragdoll-body.ts";
 import { COP_LOOK, GUARD_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -103,8 +104,7 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a st
 describe("given the dummies' world on this thread (the fallback, and every scene that is not a race course) and a standing figure a car ran down", () => {
   it("when a car at 15 m/s runs him down, then one dummy is out standing with his hands down, flies on past the car's nose, lands to the side clear of its path and lies still", async () => {
     const { car, cars, strike } = struck(0, 15);
-    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await ragdolls.preload();
+    const ragdolls = await loadedRagdolls();
     ragdolls.throwFigure(strike, cars);
     const dolls: { live: boolean; cur: Float32Array }[] = ragdolls["dolls"];
     const out = dolls.filter((d) => d.live);

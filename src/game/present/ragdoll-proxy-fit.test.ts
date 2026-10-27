@@ -4,7 +4,7 @@ import type { RayColliderHit } from "@dimforge/rapier3d-simd";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { BODIES, carInState, drawnField, gapsOver, STATES, TOP_P95_M, TOP_PARTS, TOP_WORST_M, topGapsOff, topParts } from "../vehicle/drawn-body.test-util.ts";
-import { RagdollSystem } from "./engine-ragdoll.ts";
+import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import { BOX_FLOATS } from "./ragdoll-proxy.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -69,8 +69,7 @@ type ProxyCase = (typeof proxyCases)[number];
 async function proxyGaps(t: TestContext, testCase: ProxyCase): Promise<Record<string, string[]>> {
   const car = carInState(testCase.state, testCase.style, testCase.cls);
   const field = drawnField(car);
-  const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  await ragdolls.preload();
+  const ragdolls = await loadedRagdolls();
   ragdolls.update(FRAME, [], true, true, null);
   ragdolls["spawn"]({ car: 3, p: new THREE.Vector3(3, 1.2, 0), q: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
   for (let f = 0; f < 3; f++) ragdolls.update(FRAME, [car], true, true, null);
@@ -131,8 +130,7 @@ for (const b of BODIES.filter((body) => body.style === "pickup" || body.style ==
   describe(`given a dummy lying 3 m from a ${b.body} body untouched`, () => {
     it("when its proxy's leaves are read, then each one over its hood and bed is a column from under the ground, none a roof slab hung over them", async () => {
       const car = carInState("untouched", b.style, b.cls);
-      const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-      await ragdolls.preload();
+      const ragdolls = await loadedRagdolls();
       ragdolls.update(FRAME, [], true, true, null);
       ragdolls["spawn"]({ car: 3, p: new THREE.Vector3(3, 1.2, 0), q: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
       for (let f = 0; f < 3; f++) ragdolls.update(FRAME, [car], true, true, null);
@@ -154,8 +152,7 @@ for (const b of BODIES.filter((body) => body.style === "pickup" || body.style ==
 describe("given a dummy lying 3 m from a sedan whose cage refits every frame", () => {
   it("when its proxy's leaves are resized 50 times, then each takes its fitted size and no Rapier RawVector is left for the finalizer to free", async () => {
     const car = carInState("untouched", "sedan", "sedan");
-    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await ragdolls.preload();
+    const ragdolls = await loadedRagdolls();
     ragdolls.update(FRAME, [], true, true, null);
     ragdolls["spawn"]({ car: 3, p: new THREE.Vector3(3, 1.2, 0), q: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
     for (let f = 0; f < 3; f++) ragdolls.update(FRAME, [car], true, true, null);

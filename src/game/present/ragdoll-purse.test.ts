@@ -7,6 +7,7 @@ import { driverLook } from "./driver-look.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { ROLES } from "./dummy-rig.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
+import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import { Purses, BURST_AT, ITEM_SPEED, ITEMS_MIN, PURSE_SPEED, SPREAD } from "./ragdoll-purse.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { armKill, DEFAULT_REALISM } from "../vehicle/vehicle-classes.ts";
@@ -26,8 +27,7 @@ function seedWhere(woman: boolean): number {
 }
 
 async function system(seed: number): Promise<RagdollSystem> {
-  const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  await ragdolls.preload();
+  const ragdolls = await loadedRagdolls();
   ragdolls.lookSeed = seed;
   return ragdolls;
 }

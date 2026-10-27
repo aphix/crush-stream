@@ -4,6 +4,7 @@ import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { DISC_GROUND, DISC_RADIUS, FLAT_GROUND, setGround } from "../world/ground.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
+import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import type { Sight } from "./spectate-cam.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -16,8 +17,7 @@ const PUT_AWAY_TORSO_Y = -1.5;
 const _torso = new THREE.Vector3();
 
 async function dummies(): Promise<RagdollSystem> {
-  const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  await ragdolls.preload();
+  const ragdolls = await loadedRagdolls();
   ragdolls.update(FRAME, [], true, true, null);
   return ragdolls;
 }

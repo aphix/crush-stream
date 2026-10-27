@@ -5,6 +5,7 @@ import "../kernel/rapier-node.test-util.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
+import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import { GROUND_REACH } from "./ragdoll-step.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -21,8 +22,7 @@ function run(r: RagdollSystem, cars: readonly DeformableCar[], seconds: number):
 
 describe("given the dummies' world, where a car's stand-in is taken out while it is still moving", () => {
   it("when a car rolling beside a dummy is moved off out of his reach and another dummy drops onto the spot the car left, then that dummy comes down to the ground", async () => {
-    const r = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await r.preload();
+    const r = await loadedRagdolls();
     const car = makeCar();
     car.spawnFacing(0, 0, 0, 3);
     assert.equal(r.place(_p.set(0, 0.3, 5), LYING, STILL, STILL, 10, 1), 1);

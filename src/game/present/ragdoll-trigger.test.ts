@@ -10,6 +10,7 @@ import type { GlassName } from "../vehicle/car-core.ts";
 import { glassOf } from "../vehicle/car-glass.test-util.ts";
 import { CAR_STYLES } from "../vehicle/car-variants.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
+import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -178,8 +179,7 @@ function wrongCabinEntries(w: CrashWorld, ragdolls: RagdollSystem, facing: (slot
 describe("given a fleet head-on crash that throws both drivers", () => {
   it("when the dummies fly for 2 s, then each driver flies into the other car and enters its cabin only through a pane already shattered, never through its roof, its lower body, a pillar or standing glass", async () => {
     const cars = headOn(20);
-    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await ragdolls.preload();
+    const ragdolls = await loadedRagdolls();
     const w = makeWorld(cars, false, false, FREEWHEEL);
     w.onEject = (e) => ragdolls.launch(e, cars);
     // Slots fill in car order: car 0's driver first, and each flies at the other car.
@@ -190,8 +190,7 @@ describe("given a fleet head-on crash that throws both drivers", () => {
 describe("given a parked car with its glass whole", () => {
   it("when a dummy drops onto its roof from 1 m over it, then he never enters its cabin", async () => {
     const car = makeCar();
-    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await ragdolls.preload();
+    const ragdolls = await loadedRagdolls();
     const w = makeWorld([car], false, false, FREEWHEEL);
     const over = new THREE.Vector3(0, CABIN.max.y + 1, (CABIN.min.z + CABIN.max.z) / 2);
     ragdolls.place(over, new THREE.Quaternion(), new THREE.Vector3(), new THREE.Vector3(), 2, -1);

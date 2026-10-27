@@ -9,7 +9,8 @@ import { THROW_ONSET } from "../match/phase.ts";
 import { RANGE, RANGE_GROUND } from "../scenes/range.ts";
 import { setGround } from "../world/ground.ts";
 import { EJECT_ROLL, ejectionVelocity } from "../vehicle/ejection.ts";
-import { RagdollSystem } from "./engine-ragdoll.ts";
+import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
+import { stream } from "./ragdoll-pose.test-util.ts";
 import { PARTS, shed } from "./ragdoll-body.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 
@@ -21,12 +22,6 @@ const ROLL_BEFORE_TOUCHDOWN_DEG = 240;
 /** Where (m past the wall) the range's driver lies: rolling, he lands on his limbs and cartwheels on (owner: accepted), past FlatOut's 25–40 m; the range's every car type and display rests 42.9–61.2 m on over the lip. */
 const LANDING_M = [42, 62] as const;
 type Doll = { live: boolean; bodies: RigidBody[] };
-
-/** A deterministic stream in [0, 1). */
-function stream(seed: number): () => number {
-  let s = seed >>> 0;
-  return () => (s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296;
-}
 
 /** Kinetic energy (translation and spin) and kinetic plus gravitational energy of `bodies` (J). */
 function energy(bodies: RigidBody[]): { kinetic: number; total: number } {
@@ -108,8 +103,7 @@ async function rangeThrow(frame: () => number): Promise<Run> {
   const w = makeWorld([car], true, false, FREEWHEEL);
   w.onEject = (e) => ragdolls.launch(e, [car]);
   w.clock.slomoAt = THROW_ONSET;
-  const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-  await ragdolls.preload();
+  const ragdolls = await loadedRagdolls();
   const barrier = new THREE.Group();
   const dolls: Doll[] = ragdolls["dolls"];
   const torso = new THREE.Vector3();
@@ -165,8 +159,7 @@ describe("given the ejection range (a sedan at 100 km/h over the lip into the je
 
   it("when one throw is run at 30–360 Hz and with frames that vary 0.5–1.5×, then it lands in the same place", async () => {
     const land = async (dtOf: () => number): Promise<number> => {
-      const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-      await ragdolls.preload();
+      const ragdolls = await loadedRagdolls();
       ragdolls.update(1 / FRAME_HZ, [], true, true, null);
       ragdolls["spawn"]({ car: 0, p: new THREE.Vector3(0, 1.2, 0), q: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2 + 0.3), v: new THREE.Vector3(27, 3.5, 0), w: new THREE.Vector3(0, 0, -3), age: 0, cop: false, rides: true });
       const torso = new THREE.Vector3();
@@ -195,8 +188,7 @@ describe("given the ejection range (a sedan at 100 km/h over the lip into the je
     launch(car, -RANGE.run, 0, Math.PI / 2, RANGE.kph / 3.6, 0);
     const w = makeWorld([car], true, false, FREEWHEEL);
     w.clock.slomoAt = THROW_ONSET;
-    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await ragdolls.preload();
+    const ragdolls = await loadedRagdolls();
     const spin = new THREE.Vector3();
     const own = new THREE.Vector3();
     let thrown = false;
@@ -230,8 +222,7 @@ describe("given a dummy thrown while time runs at 0.03× (the deepest slow-mo)",
   it("when he is drawn at 60 and at 240 Hz, then every frame from the one after the throw shows him further along, by 0.5–2× the frame before's move", async () => {
     const out: string[] = [];
     for (const hz of [60, 240]) {
-      const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-      await ragdolls.preload();
+      const ragdolls = await loadedRagdolls();
       ragdolls.update(1 / FRAME_HZ, [], true, true, null);
       ragdolls["spawn"]({ car: 0, p: new THREE.Vector3(0, 1.2, 0), q: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), -Math.PI / 2 + 0.3), v: new THREE.Vector3(27, 3.5, 0), w: new THREE.Vector3(0, 0, -3), age: 0, cop: false, rides: true });
       // What the GPU gets: his slot's bone poses (slot 0, the first throw), the throw frame's pose first; each part's centre as drawn.
@@ -282,8 +273,7 @@ describe("given a thrown dummy (the ejected driver's jointed ragdoll)", () => {
   }
 
   it("when a part's motion is shed against another part at any velocities, then it takes kinetic energy out of the pair and keeps their momentum", async () => {
-    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await ragdolls.preload();
+    const ragdolls = await loadedRagdolls();
     ragdolls.update(1 / FRAME_HZ, [], true, true, null);
     ragdolls["spawn"]({ car: 0, p: new THREE.Vector3(0, 1, 0), q: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
     const bodies: RigidBody[] = ragdolls["dolls"][0]!.bodies;
@@ -310,8 +300,7 @@ describe("given a thrown dummy (the ejected driver's jointed ragdoll)", () => {
     launch(car, -30, 0, Math.PI / 2, 0, 0);
     const w = makeWorld([car], false, false, FREEWHEEL);
     w.onEject = (e) => ragdolls.launch(e, [car]);
-    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await ragdolls.preload();
+    const ragdolls = await loadedRagdolls();
     const frame = () => {
       tickWorld(w);
       ragdolls.update(1 / FRAME_HZ, [car], true, true, null);
@@ -329,8 +318,7 @@ describe("given a thrown dummy (the ejected driver's jointed ragdoll)", () => {
   });
 
   it("when every dummy lies asleep and no car is near, then nothing is stepped, and a car coming within reach steps the world again", async () => {
-    const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
-    await ragdolls.preload();
+    const ragdolls = await loadedRagdolls();
     ragdolls.update(1 / FRAME_HZ, [], true, true, null);
     ragdolls["spawn"]({ car: 5, p: new THREE.Vector3(0, 0.3, 0), q: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2), v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
     const world: World = ragdolls["world"]!;
