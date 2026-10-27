@@ -1,13 +1,16 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
 
 /**
- * O4: `renderer.info.memory` and the dummies' Rapier world stay flat across resets and scene switches. A warm-up pass builds what the
- * engine keeps for life (range art, garage, showcase, minigame art, course tiles); every later pass must add nothing.
+ * O4: the geometries and textures three holds and the dummies' Rapier world stay flat across resets and scene switches. A warm-up pass
+ * builds what the engine keeps for life (range art, garage, showcase, minigame art, course tiles); every later pass must add nothing.
+ * The stand-in GL lists no program uniforms, so `renderer.info.memory.textures` never sees a sampler's texture: textures are counted
+ * as made less freed instead (`liveTextures`).
  */
 
 /** A rolled seed would change the counts between passes: every pick of the run derives from this one. */
@@ -81,10 +84,20 @@ describe("given the real engine drawing on the stub GL", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
 
-  const gpu = (): Counts => {
-    const { geometries, textures } = engine["renderer"].info.memory;
-    return { geometries, textures };
+  /** Textures made since the baseline and not disposed (a render target's, when it is). Three numbers every texture from one counter, so a probe's id less the probes taken is how many exist. */
+  let firstId = 0;
+  let probes = 0;
+  const disposed = new Set<number>();
+  const liveTextures = (): number => {
+    const id = new THREE.Texture().id;
+    probes++;
+    return id - firstId - probes - disposed.size;
   };
+  const free = (id: number): void => void (id > firstId && disposed.add(id));
+  const textureDispose = THREE.Texture.prototype.dispose;
+  const targetDispose = THREE.RenderTarget.prototype.dispose;
+
+  const gpu = (): Counts => ({ geometries: engine["renderer"].info.memory.geometries, liveTextures: liveTextures() });
 
   /** Every stop in turn with a driver thrown at each: what the GPU and the Rapier world hold once it has settled. */
   const tour = (): Tour => {
@@ -105,13 +118,24 @@ describe("given the real engine drawing on the stub GL", () => {
     engine = await bootEngine({ pacer: true, draw: true });
     await engine["ragdolls"].preload();
     engine["pinnedSeed"] = SEED;
+    firstId = new THREE.Texture().id;
+    THREE.Texture.prototype.dispose = function (this: THREE.Texture) {
+      free(this.id);
+      textureDispose.call(this);
+    };
+    THREE.RenderTarget.prototype.dispose = function (this: THREE.RenderTarget) {
+      for (const texture of this.textures) free(texture.id);
+      targetDispose.call(this);
+    };
   });
   after(() => {
+    THREE.Texture.prototype.dispose = textureDispose;
+    THREE.RenderTarget.prototype.dispose = targetDispose;
     engine.dispose();
     setGround(null);
   });
 
-  it(`when the sandbox crash is reset ${CRASH_RESETS} times after a warm-up crash, then the geometries and textures held are the same after each`, () => {
+  it(`when the sandbox crash is reset ${CRASH_RESETS} times after a warm-up crash, then the geometries and live textures held are the same after each`, () => {
     const crash = (): Counts => {
       runSeconds(engine, CRASH_S);
       const held = gpu();
@@ -139,7 +163,7 @@ describe("given the real engine drawing on the stub GL", () => {
       }
     };
 
-    it("then each stop holds the same geometries and textures in every tour", () => assertFlat("gpu"));
+    it("then each stop holds the same geometries and live textures in every tour", () => assertFlat("gpu"));
 
     it("then each stop holds the same Rapier bodies, colliders and joints in every tour", () => assertFlat("rapier"));
   });
