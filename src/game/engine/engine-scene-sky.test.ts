@@ -3,18 +3,16 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
-import { HudStore, INITIAL_HUD } from "../hud/hud-store.ts";
+import { INITIAL_HUD } from "../hud/hud-store.ts";
 import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
 import { SKY_DRAWN, SKY_LOOKS } from "../present/sky-dome.ts";
 import { PROCEDURAL_LOOKS, SANDBOX_SKY, type ProceduralLook, type SkyStops } from "../present/sky-procedural.ts";
 import type { SceneId } from "../scenes/scene-id.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import type { CrashEngine } from "./engine.ts";
+import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
-const FRAME = 1 / FRAME_HZ;
 
 /** Race, then the scene picked after it: a race's time of day and night toggle leave the sandbox scene as a fresh page has it. */
 const cases = [
@@ -30,9 +28,6 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
   let engine: CrashEngine;
   const stage = (): CrashEngine["stage"] => engine["stage"];
   const scene = (): THREE.Scene => engine["scene"];
-  const run = (seconds: number): void => {
-    for (let i = 0; i < seconds * 60; i++) engine.advance(FRAME, { frameDt: FRAME });
-  };
   /** What the sandbox's sky is made of: the background and fog, the three lights, the night setting, the dome and the far plane. */
   const sandboxSky = (): Record<string, string | number | boolean> => {
     const fog = scene().fog as THREE.FogExp2;
@@ -55,11 +50,8 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
 
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
-    run(1);
+    engine = await bootEngine();
+    runSeconds(engine, 1);
     fresh = sandboxSky();
     freshDrawn = stage().sky.drawn;
   });
@@ -73,12 +65,12 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
       engine.toggleRace();
       engine.raceCommand({ type: "program", options: { trackId: testCase.trackId, laps: 1, aiCount: 3, police: false, aggression: 0.5, aiDifficulty: AI_EVERY_SLICE, spectate: false, noReset: false, timeOfDay: testCase.timeOfDay } });
       engine.raceCommand({ type: "start" });
-      run(3);
+      runSeconds(engine, 3);
       const racing = sandboxSky();
       assert.notEqual(racing.background, fresh.background, "the race has its own sky (the control: the colours below are not trivially equal)");
       if (testCase.nightToggled) engine.setNight(true);
       engine["setScene"](testCase.next);
-      run(1);
+      runSeconds(engine, 1);
       const after = sandboxSky();
       for (const key of Object.keys(fresh)) assert.equal(after[key], fresh[key], `${key} after the race, in the ${testCase.next}`);
       engine["setScene"]("fleet");
@@ -90,7 +82,7 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     assert.equal(freshDrawn, SKY_DRAWN.off, "no sky on minimal");
     assert.equal(fresh.background, "12141a", "the studio's colour");
     engine.setFxTier("high");
-    run(1);
+    runSeconds(engine, 1);
     const procedural = sandboxSky();
     const horizon = new THREE.Color(SANDBOX_SKY.day.horizon).getHexString();
     assert.equal(stage().sky.drawn, SKY_DRAWN.procedural);
@@ -98,12 +90,12 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
     assert.equal(procedural.background, horizon);
     assert.equal(procedural.fog, horizon);
     stage().setProceduralSky(null);
-    run(1);
+    runSeconds(engine, 1);
     assert.equal(stage().sky.drawn, SKY_DRAWN.off, "the picture: the sandbox has none");
     assert.equal(sandboxSky().background, "12141a", "the picture: the studio's colour");
     stage().setProceduralSky(INITIAL_HUD.proceduralSky);
     engine.setFxTier("minimal");
-    run(1);
+    runSeconds(engine, 1);
     for (const key of Object.keys(fresh)) assert.equal(sandboxSky()[key], fresh[key], key);
   });
 
@@ -126,17 +118,17 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
       engine.toggleRace();
       engine.raceCommand({ type: "program", options: { trackId: TRACK_ID.city, laps: 1, aiCount: 3, police: false, aggression: 0.5, aiDifficulty: AI_EVERY_SLICE, spectate: false, noReset: false, timeOfDay: time } });
       engine.raceCommand({ type: "start" });
-      run(1);
+      runSeconds(engine, 1);
       assertDomeLook({ ...SKY_LOOKS[time], ...PROCEDURAL_LOOKS[time] }, time);
       engine["setScene"]("fleet");
-      run(1);
+      runSeconds(engine, 1);
     }
     assertDomeLook(SANDBOX_SKY.day, "sandbox day");
     engine.setNight(true);
-    run(1);
+    runSeconds(engine, 1);
     assertDomeLook(SANDBOX_SKY.night, "sandbox night");
     engine.setNight(false);
     engine.setFxTier("minimal");
-    run(1);
+    runSeconds(engine, 1);
   });
 });

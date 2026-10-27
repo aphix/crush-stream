@@ -1,14 +1,13 @@
 import { after, before, describe, it, mock } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import type { ContactHit, PredictedHit } from "../scenes/engine-props.ts";
 import { setGround } from "../world/ground.ts";
 import { bodyGap, FUDGE_FULL, FUDGE_NONE, type PhaseClock } from "../match/phase.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import type * as THREE from "three";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -26,10 +25,7 @@ function booted(): () => { engine: CrashEngine; e: Reach } {
   let engine: CrashEngine | null = null;
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine();
     engine["looping"] = false;
   });
   after(() => {

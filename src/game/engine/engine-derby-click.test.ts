@@ -1,13 +1,10 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, frameField as frameDerby, stubBrowser } from "./engine-headless.test-util.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import type { CrashEngine } from "./engine.ts";
+import { runSeconds, bootEngine, element, frameField as frameDerby, stubBrowser } from "./engine-headless.test-util.ts";
 
-const FRAME = 1 / FRAME_HZ;
 const CANVAS_W = 800;
 const CANVAS_H = 600;
 /** How long the button stays down (s): a slow click, long enough for a car at speed to leave the pointer. */
@@ -29,9 +26,6 @@ describe("given the real engine in a running derby, and a canvas that carries po
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
   let canvas: HTMLCanvasElement;
-  const run = (seconds: number): void => {
-    for (let i = 0; i < seconds * 60; i++) engine.advance(FRAME, { frameDt: FRAME });
-  };
   /** The stand-in canvas has no size, so the camera's view offset is NaN: a plain frustum at its aspect, matrices current. */
   const frameCamera = (): void => {
     const camera = engine["camera"];
@@ -63,12 +57,7 @@ describe("given the real engine in a running derby, and a canvas that carries po
   before(async () => {
     stubBrowser();
     canvas = pointerCanvas();
-    engine = new CrashEngine(canvas, new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
-    let tick = 0;
-    Object.assign(engine.pace, { now: () => (tick += 0.001) });
+    engine = await bootEngine({ canvas, pacer: true });
   });
   after(() => {
     engine.dispose();
@@ -85,9 +74,9 @@ describe("given the real engine in a running derby, and a canvas that carries po
     it(`when ${name} and a car is pressed on the canvas, then released ${HOLD} s later with the cars still moving, then the seat follows that car`, () => {
       for (const scene of scenes) {
         engine["setScene"](scene as never);
-        run(0.5);
+        runSeconds(engine, 0.5);
       }
-      run(12);
+      runSeconds(engine, 12);
       assert.equal(engine.derbyMode, true, "the derby is on");
       let clicked = 0;
       for (let index = 0; index < engine["carCount"]; index++) {
@@ -100,7 +89,7 @@ describe("given the real engine in a running derby, and a canvas that carries po
         engine["seat"].mode = "global";
         engine["seat"].carIndex = -1;
         pointer("pointerdown", spot.x, spot.y);
-        run(HOLD);
+        runSeconds(engine, HOLD);
         frameCamera();
         pointer("pointerup", spot.x, spot.y);
         const view = engine["view"];

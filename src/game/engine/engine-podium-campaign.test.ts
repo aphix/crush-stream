@@ -4,14 +4,13 @@ import { setImmediate as nextTurn } from "node:timers/promises";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import { CAMPAIGN_REEL_CLIPS, reelWeight } from "../match/campaign-reel.ts";
-import { CrashEngine } from "./engine.ts";
+import type { CrashEngine } from "./engine.ts";
 import { CRASH_GAP, CRASH_SPEED } from "./engine-bench-replay.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 const FRAME = 1 / FRAME_HZ;
 /** The campaign's rules: three courses, one lap each, three rivals, no police. */
@@ -56,10 +55,7 @@ describe("given a three-course campaign whose every round recorded a head-on", (
 
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine();
     // Every round's clips as the engine's reel start hears them, and every clip the player is then shown.
     const startReel = engine["startReel"].bind(engine);
     engine["startReel"] = (clips, since) => {

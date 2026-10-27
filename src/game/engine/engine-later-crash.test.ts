@@ -1,12 +1,11 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import type { ContactHit } from "../scenes/engine-props.ts";
 import { setGround } from "../world/ground.ts";
 import { impactScale, type PhaseClock } from "../match/phase.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -18,8 +17,6 @@ const SHORT_HOLD = 1;
 const BACK_UP = 0.9;
 /** Frames the second pair has to meet in: the ease holds the slow scale for the last metre, so contact is about 2 s of wall after the send-in, give or take the step's lead. Twice that is "never". */
 const MEET_WITHIN_FRAMES = 240;
-/** Ms the pacer's clock moves at each read: no frame is cut at the wall deadline, whatever the box's load. */
-const PACER_TICK_MS = 0.001;
 
 /** The parts of the engine this file reaches: the private rules it drives are the ones under test. */
 type Reach = {
@@ -33,13 +30,8 @@ describe("given the real engine's fleet sandbox with two cars wrecked head-on an
   let e: Reach;
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine({ pacer: true });
     e = engine as unknown as Reach;
-    let tick = 0;
-    Object.assign(engine.pace, { now: () => (tick += PACER_TICK_MS) });
     engine.pace.pin = true;
   });
   after(() => {

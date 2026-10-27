@@ -1,11 +1,10 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { setGround } from "../world/ground.ts";
 import { DRIVE_KEYS } from "../vehicle/drive-input.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, pressKey, stubBrowser } from "./engine-headless.test-util.ts";
 import { SCENE_KEY_BINDINGS, SEAT_KEYS } from "./engine-keys.ts";
 
 const DRIVING_CODES: string[] = [...Object.values(DRIVE_KEYS).flat(), ...Object.values(SEAT_KEYS).flat()];
@@ -30,9 +29,6 @@ describe("given the key tables the engine reads", () => {
 describe("given the real engine in the sandbox", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
-  const press = (code: string): void => {
-    engine["onKey"](Object.assign(new Event("keydown"), { code, repeat: false, ctrlKey: false, metaKey: false, altKey: false }) as KeyboardEvent);
-  };
   const seatAs = (mode: (typeof SEAT_MODES)[number]): void => {
     engine["seat"].mode = mode;
     engine["seat"].carIndex = mode === "global" ? -1 : 0;
@@ -41,9 +37,7 @@ describe("given the real engine in the sandbox", () => {
   };
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
+    engine = await bootEngine({ fades: true });
   });
   after(() => {
     engine.dispose();
@@ -54,7 +48,7 @@ describe("given the real engine in the sandbox", () => {
   for (const testCase of driveCases) {
     it(testCase.it, () => {
       seatAs(testCase.mode);
-      press(testCase.code);
+      pressKey(engine, testCase.code);
       assert.equal(engine["sceneFade"].pending, null, "the scene is not switched");
     });
   }
@@ -63,7 +57,7 @@ describe("given the real engine in the sandbox", () => {
   for (const testCase of sceneCases) {
     it(testCase.it, () => {
       seatAs(testCase.mode);
-      press(testCase.code);
+      pressKey(engine, testCase.code);
       assert.equal(engine["sceneFade"].pending, testCase.expectedScene, "the picked scene");
     });
   }

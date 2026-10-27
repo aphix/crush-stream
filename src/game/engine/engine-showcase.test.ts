@@ -2,7 +2,6 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
 import { ROLE, ROW_TEXELS } from "../present/dummy-rig.ts";
 import { SHOWCASE_EYE, SHOWCASE_LIGHT } from "../present/showcase-art.ts";
@@ -11,9 +10,8 @@ import { OUTFIT, type DriverLook } from "../present/driver-look.ts";
 import { CAR_STYLE_IDS } from "../vehicle/car-variants.ts";
 import { PART_KIND } from "../vehicle/part-geometry.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import type { CrashEngine } from "./engine.ts";
+import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 /**
  * The showcase (`#scene=showcase`, by link only): every kind of person the game draws standing in rows in one draw, a press on
@@ -21,7 +19,6 @@ import { FRAME_HZ } from "../kernel/constants.ts";
  * lids open, stripped) drawn but never stepped.
  */
 
-const FRAME = 1 / FRAME_HZ;
 const CHEST_Y = 1.2;
 /** Each kind of person the set must show, by what tells him apart; `back` is a figure of the back row. */
 const KINDS: readonly { name: string; is: (f: { cop: boolean; look: DriverLook; back: boolean }) => boolean }[] = [
@@ -36,9 +33,6 @@ const KINDS: readonly { name: string; is: (f: { cop: boolean; look: DriverLook; 
 describe("given the real engine booted on #scene=showcase", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
-  const run = (seconds: number): void => {
-    for (let i = 0; i < seconds * FRAME_HZ; i++) engine.advance(FRAME, { frameDt: FRAME });
-  };
   const art = () => engine["showcase"]!.art;
   const people = (): DummyMesh => art().people["mesh"];
   /** Whether figure `slot` is on the set. */
@@ -58,13 +52,10 @@ describe("given the real engine booted on #scene=showcase", () => {
   before(async () => {
     stubBrowser();
     globalThis.location.hash = "#scene=showcase";
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine();
     // Rapier loads in the background once the engine is ready: this is that load.
     await engine["ragdolls"].preload();
-    run(0.5);
+    runSeconds(engine, 0.5);
   });
   after(() => {
     engine.dispose();
@@ -141,7 +132,7 @@ describe("given the real engine booted on #scene=showcase", () => {
     const torso = new THREE.Vector3();
     assert.equal(engine["ragdolls"].torso(slot, torso, null), true);
     const from = torso.clone();
-    run(1);
+    runSeconds(engine, 1);
     engine["ragdolls"].torso(slot, torso, null);
     assert.ok(torso.z < from.z - 1, `knocked away from the eye: ${from.z.toFixed(2)} to ${torso.z.toFixed(2)} m`);
     engine.reset();

@@ -14,8 +14,8 @@ import type { SprayBitmap } from "../present/spray.ts";
 import { setGround } from "../world/ground.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { PlayerLooks, type SprayTarget } from "./player-looks.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { runSeconds, bootEngine, element, stubBrowser } from "./engine-headless.test-util.ts";
 
 const FRAME = 1 / FRAME_HZ;
 /** The scenes the garage is entered from: the fleet's car driven (its chase cam on), a mini game's followed, a race's field of eight. */
@@ -56,9 +56,6 @@ describe("given the real engine in the garage", () => {
   const canvas = element();
   const events = new EventTarget();
   Object.assign(canvas, { addEventListener: events.addEventListener.bind(events), removeEventListener: events.removeEventListener.bind(events), dispatchEvent: events.dispatchEvent.bind(events), setPointerCapture() {} });
-  const run = (seconds: number): void => {
-    for (let i = 0; i < Math.round(seconds * FRAME_HZ); i++) engine.advance(FRAME, { frameDt: FRAME });
-  };
   /** Into the garage from `from` as the bar goes: through the scene fade, whose switch lands mid-frame, after the input poll. */
   const enter = async (from: (typeof ENTRIES)[number]): Promise<void> => {
     engine["setScene"]("fleet");
@@ -70,18 +67,18 @@ describe("given the real engine in the garage", () => {
     if (from === "driving") {
       engine["seat"].focus(0);
       engine["seat"].mode = "drive";
-      run(1);
+      runSeconds(engine, 1);
     }
-    run(FRAME);
+    runSeconds(engine, FRAME);
     engine.fadeScenes = true;
     engine["setScene"]("garage");
     // The fade holds black while the garage's programs warm: their promises settle between frames.
     for (let i = 0; i < 10 * FRAME_HZ && (engine["sceneId"] !== "garage" || engine["sceneFade"].pending !== null); i++) {
-      run(FRAME);
+      runSeconds(engine, FRAME);
       await setImmediate();
     }
     engine.fadeScenes = false;
-    run(FRAME);
+    runSeconds(engine, FRAME);
   };
   const eye = (): THREE.Vector3 => engine["camera"].position.clone();
   const look = (): THREE.Vector3 => engine["view"].look.clone();
@@ -135,7 +132,7 @@ describe("given the real engine in the garage", () => {
     engine.clearSpray("person");
     engine.frameGarage(edit);
     if (bearing !== undefined) engine["view"]["angle"] = bearing;
-    run(1);
+    runSeconds(engine, 1);
     const [first, ...rest] = over.map(pointOver);
     const garage = engine["garage"]!;
     const sprayed = garage.down(first!.x, first!.y);
@@ -149,10 +146,7 @@ describe("given the real engine in the garage", () => {
   before(async () => {
     stubBrowser();
     hud = new HudStore();
-    engine = new CrashEngine(canvas, hud, element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine({ hud, canvas });
   });
   after(() => {
     engine.dispose();
@@ -168,14 +162,14 @@ describe("given the real engine in the garage", () => {
       const shot = new THREE.Vector3(lookX + Math.sin(GARAGE.angle) * r * Math.cos(pitch), lookY + r * Math.sin(pitch), lookZ + Math.cos(GARAGE.angle) * r * Math.cos(pitch));
       assert.ok(opening.distanceTo(shot) < STILL, `${from}: the eye opens ${opening.distanceTo(shot).toFixed(3)} m off the garage's shot`);
       assert.ok(look().distanceTo(new THREE.Vector3(lookX, lookY, lookZ)) < STILL, `${from}: the orbit circles ${look().toArray().map((v) => v.toFixed(2)).join(", ")}, not the garage's shot`);
-      run(5);
+      runSeconds(engine, 5);
       assert.ok(eye().distanceTo(opening) < STILL, `${from}: the idle eye moved ${eye().distanceTo(opening).toFixed(3)} m in 5 s`);
       engine.watchCar(0);
       engine["keys"].add("KeyW");
-      run(0.5);
+      runSeconds(engine, 0.5);
       engine["keys"].clear();
       engine.cycleCamera();
-      run(0.5);
+      runSeconds(engine, 0.5);
       assert.equal(engine["seat"].mode, "global", `${from}: the seat`);
       assert.equal(engine["view"].flying, false, `${from}: View flew the eye free`);
       assert.equal(hud.get().cam, null, `${from}: the HUD names a camera`);
@@ -187,7 +181,7 @@ describe("given the real engine in the garage", () => {
   it("when the driver is picked, then the orbit circles his torso as he is posed and keeps it there, and the car's pick puts it back on the car's shot", async () => {
     await enter("fleet");
     engine.frameGarage("person");
-    run(1);
+    runSeconds(engine, 1);
     // His torso's bone as drawn (translation, rotation: `DummyMesh.pose`), and the orbit's centre in its frame.
     const rows: Float32Array = engine["garage"]!.art.dummy["rows"];
     const turn = new THREE.Quaternion().fromArray(rows, 4);
@@ -195,10 +189,10 @@ describe("given the real engine in the garage", () => {
     const [hx, hy, hz] = PARTS[0].h;
     assert.ok(Math.abs(local.x) <= hx && Math.abs(local.y) <= hy && Math.abs(local.z) <= hz, `the centre sits ${local.toArray().map((v) => v.toFixed(2)).join(", ")} m off his torso's middle, outside its box`);
     const centre = look();
-    run(5);
+    runSeconds(engine, 5);
     assert.ok(look().distanceTo(centre) < STILL, "the centre went back to the car");
     engine.frameGarage("car");
-    run(FRAME);
+    runSeconds(engine, FRAME);
     assert.ok(look().distanceTo(new THREE.Vector3(GARAGE.shot.lookX, GARAGE.shot.lookY, GARAGE.shot.lookZ)) < STILL, "the car's pick centres on the car's shot");
   });
 
@@ -210,11 +204,11 @@ describe("given the real engine in the garage", () => {
     pinchOut();
     assert.equal(radius(), GARAGE.driverShot.minRadius, "a pinch on the driver's shot");
     engine["setScene"]("race");
-    run(FRAME);
+    runSeconds(engine, FRAME);
     wheelIn();
     assert.equal(radius(), ORBIT_RADIUS.min, "a race's wheel, straight from the driver's shot");
     engine["setScene"]("fleet");
-    run(FRAME);
+    runSeconds(engine, FRAME);
     wheelIn();
     assert.equal(radius(), ORBIT_RADIUS.min, "the fleet's wheel");
   });
@@ -225,7 +219,7 @@ describe("given the real engine in the garage", () => {
     assert.ok(fleet > 1, `the fleet has ${fleet} cars`);
     assert.equal(engine["cars"].length, 1, "cars in the garage");
     engine["setScene"]("fleet");
-    run(FRAME);
+    runSeconds(engine, FRAME);
     assert.equal(engine["cars"].length, fleet, "cars back in the fleet");
     assert.equal(engine["live"]().length, fleet, "and all of them shown");
   });
@@ -239,13 +233,13 @@ describe("given the real engine in the garage", () => {
       return engine["seated"].mesh.count;
     };
     engine["setScene"]("fleet");
-    run(FRAME);
+    runSeconds(engine, FRAME);
     assert.ok(seated() > 0, "control: the fleet's drivers sit in their cars");
     await enter("fleet");
     assert.equal(seated(), 0, "a driver sits in the garage's car");
     assert.ok(engine["garage"]!.art.dummy.visible, "the standing dummy is shown");
     engine["setScene"]("fleet");
-    run(FRAME);
+    runSeconds(engine, FRAME);
     assert.ok(seated() > 0, "the drivers sit again in the fleet");
   });
 
@@ -265,7 +259,7 @@ describe("given the real engine in the garage", () => {
     await enter("fleet");
     engine.setSprayTool({ on: true });
     engine.frameGarage("car");
-    run(1);
+    runSeconds(engine, 1);
     const at = pointOver("carOnly");
     const garage = engine["garage"]!;
     const bitmap = engine["looks"].sprayOf("car");
@@ -321,7 +315,7 @@ describe("given the real engine in the garage", () => {
           engine.setSprayTool({ on: true, mirror });
           engine.clearSpray(edit);
           engine.frameGarage(edit);
-          run(1);
+          runSeconds(engine, 1);
           const at = pointOver(over);
           const garage = engine["garage"]!;
           garage.down(at.x, at.y);
