@@ -12,6 +12,9 @@ import { placeDrop, StackRig, stackLoads, type StackConfig } from "./stack-rig.t
 import { runStack } from "./stack-run.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
+/** One frame of the world step (s): a car's body moves this far at its speed between two `each` calls. */
+const FRAME_S = 1 / FRAME_HZ;
+
 /** The rows read poses, masses and roof sink, never a drawn skin: no car is skinned each frame (`updateSkin` writes meshes only). */
 const skin = DeformableCar.prototype.updateSkin;
 before(() => {
@@ -49,10 +52,10 @@ function makeColumn(config: StackConfig, bodies: Bodies): { cars: DeformableCar[
   return { cars, rig };
 }
 
-/** The column, headless: `makeColumn`'s cars dropped one at a time through `StackRig` and `placeDrop` in the engine's own world step, `seconds` of sim time; `each` after every frame. */
-function column(config: StackConfig, bodies: Bodies, seconds: number, each?: (cars: DeformableCar[]) => void): { cars: DeformableCar[]; rig: StackRig } {
+/** The column, headless: `makeColumn`'s cars dropped one at a time through `StackRig` and `placeDrop` in the engine's own world step, `seconds` of sim time; `each` after every frame, with how many cars have dropped so far. */
+function column(config: StackConfig, bodies: Bodies, seconds: number, each?: (cars: DeformableCar[], dropped: number) => void): { cars: DeformableCar[]; rig: StackRig } {
   const { cars, rig } = makeColumn(config, bodies);
-  runStack(cars, rig, makeWorld(cars, false, false), seconds, { each: () => each?.(cars) });
+  runStack(cars, rig, makeWorld(cars, false, false), seconds, { each: () => each?.(cars, rig.dropped) });
   return { cars, rig };
 }
 
@@ -161,22 +164,33 @@ describe("given the stack scene's defaults (4 cars, 0.02 m, one every 8 s), run 
 describe("given the owner's drops (11 cars, 0.15 m, one a second) of the mixed fleet", () => {
   // The owner's drops of the mixed fleet: after pair pushes a tilted wreck's frame moved 0.35 m in one re-measure and the next
   // timed read wrote −55 m/s into car.velocity.y (c9 −25 m/s against its masses' −4 on this run), which applyImpulse and
-  // brakeInbound then used as real (the Stack HUD read CLOSING 125 mph).
-  it("when the column runs for 12 s, then no car reports a vertical speed 4 m/s or more off the one its own masses have", () => {
+  // brakeInbound then used as real (the Stack HUD read CLOSING 125 mph). The column's cars are rigid bodies (their masses are not
+  // active and carry no velocity of their own), so the reference is how far the body moved over the frame.
+  it("when the column runs for 12 s, then no car reports a vertical speed 4 m/s or more off the one its body moved at over the frame", (t) => {
+    const lastY: number[] = [];
+    const lastPlacements: number[] = [];
+    let judged = 0;
     let worst = 0;
     let at = "";
-    column(OWNER, "fleet", 12, (cs) => {
-      for (const [i, c] of cs.entries()) {
-        if (!c.deform.massActive) continue;
-        const masses = c.deform.masses.reduce((s, m) => s + m.vel.y * m.mass, 0) / c.deform.totalMass;
-        const off = Math.abs(c.velocity.y - masses);
+    column(OWNER, "fleet", 12, (cs, dropped) => {
+      for (let i = 0; i < dropped; i++) {
+        const c = cs[i]!;
+        const sameSpot = lastPlacements[i] === c.placements;
+        const moved = (c.group.position.y - lastY[i]!) / FRAME_S;
+        lastY[i] = c.group.position.y;
+        lastPlacements[i] = c.placements;
+        if (!sameSpot) continue;
+        judged++;
+        const off = Math.abs(c.velocity.y - moved);
         if (off > worst) {
           worst = off;
-          at = `car ${i}: ${c.velocity.y.toFixed(1)} m/s, its masses ${masses.toFixed(1)}`;
+          at = `car ${i}: ${c.velocity.y.toFixed(1)} m/s, its body moved ${moved.toFixed(1)}`;
         }
       }
     });
-    assert.ok(worst < 4, `a car reported ${worst.toFixed(1)} m/s off its masses (${at})`);
+    t.diagnostic(`${judged} car-frames judged; the worst reported ${worst.toFixed(2)} m/s off its body (${at})`);
+    assert.ok(judged > 0, "no car was judged");
+    assert.ok(worst < 4, `a car reported ${worst.toFixed(1)} m/s off its body (${at})`);
   });
 
   it.todo("when the fleet's monster truck (slot 5; tyres on 0.9 m of spring, body 0.48 m up) carries four cars or more, then it rolls 5-30° on the support of its tyres, which has no spring to bring it level, and the column above it falls: 11 fleet cars, 0.15 m, 1 s (after the plan: hold the fleet column on its base so the monster is loaded; measured over 12 s the column slides off its base, car 0 1.0 m off at 3 s and 5.2 m at 12 s, and the monster ends on the ground at 0.0° with 2 cars at most above it, its roll peaking at 34.1° once)");
