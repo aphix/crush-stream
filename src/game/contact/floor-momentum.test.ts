@@ -4,22 +4,7 @@ import * as THREE from "three";
 import { CLASSES } from "../vehicle/vehicle-classes.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { FREEWHEEL, holdThrottle, launch, makeCar, makeWorld, Probe, run, tickWorld, type CrashWorld } from "./crash-scenarios.test-util.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
-
-const FRAME = 1 / FRAME_HZ;
-
-/** Mass-weighted centroid (x, z) of a car's masses: what they have done. */
-function centroid(c: DeformableCar): [number, number] {
-  let x = 0;
-  let z = 0;
-  let m = 0;
-  for (const q of c.deform.masses) {
-    x += q.world.x * q.mass;
-    z += q.world.z * q.mass;
-    m += q.mass;
-  }
-  return [x / m, z / m];
-}
+import { DT, massCentroid } from "../vehicle/test-support.ts";
 
 describe("given a coasting 53 km/h T-bone (a bullet car's nose driven into a resting car's right door)", () => {
   // The calibration's 53 km/h t-bone, coasting: the bullet drives its nose into the resting car's right door.
@@ -31,15 +16,15 @@ describe("given a coasting 53 km/h T-bone (a bullet car's nose driven into a res
     const w = makeWorld([struck, bullet], false, false, FREEWHEEL);
     let travel = 0;
     let reported = 0;
-    let before = centroid(struck);
+    let before = massCentroid(struck.deform.masses);
     let started = false;
     for (let frame = 0; frame < 60 * 4; frame++) {
       const scale = w.clock.timeScale;
       tickWorld(w);
-      const simDt = (FRAME * (scale + w.clock.timeScale)) / 2;
-      const after = centroid(struck);
+      const simDt = (DT * (scale + w.clock.timeScale)) / 2;
+      const after = massCentroid(struck.deform.masses);
       if (started) {
-        travel += Math.hypot(after[0] - before[0], after[1] - before[1]);
+        travel += Math.hypot(after.x - before.x, after.z - before.z);
         reported += struck.velocity.length() * simDt;
       }
       started ||= struck.crashed;

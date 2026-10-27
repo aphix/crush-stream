@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { BufferAttribute } from "three";
 import { type CrashWorld, FREEWHEEL, launch, makeWorld, PARKED, tickWorld } from "../contact/crash-scenarios.test-util.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import { DT } from "./test-support.ts";
 import { buildCar, drawnTriangles } from "./drawn-body.test-util.ts";
 import { tyreClearance } from "./tyre-clearance.test-util.ts";
 import type { DeformableCar } from "./car.ts";
@@ -10,7 +10,6 @@ import type { VehicleClassId } from "./vehicle-classes.ts";
 import type { CarStyleId } from "./car-variants.ts";
 
 /** The drawn tyres stay under the drawn hood and fenders through a landing that drives the tyre up its arch (the owner: "the wheels of the truck pop up through the hood regularly"): the drawn body lifts over the wheel (`archStop`), the sim is not touched. */
-const FRAME = 1 / FRAME_HZ;
 const FRONT_WHEELS = [0, 1] as const;
 /** The clearance (m) every drawn tyre top keeps under the skin. */
 const CLEARANCE_M = 0.005;
@@ -33,7 +32,7 @@ function crashCar(style: CarStyleId, cls: VehicleClassId): DeformableCar {
 function leastClearance(w: CrashWorld, car: DeformableCar, wheels: readonly number[], frames: number): { clearance: number; at: number } {
   let least = { clearance: Infinity, at: 0 };
   for (let f = 0; f < frames; f++) {
-    tickWorld(w, FRAME);
+    tickWorld(w, DT);
     if (f % SEEN_EVERY) continue;
     const tris = drawnTriangles(car);
     for (const wheel of wheels) {
@@ -92,7 +91,7 @@ describe("given a pickup wrecked head-on and lying still, its skin held over its
     const w = makeWorld([a, b], false, false);
     launch(a, -5, 0, Math.PI / 2, 50 / 3.6, 0);
     launch(b, 5, 0, -Math.PI / 2, -50 / 3.6, 0);
-    for (let f = 0; f < 90; f++) tickWorld(w, FRAME);
+    for (let f = 0; f < 90; f++) tickWorld(w, DT);
     assert.ok(a.panelsFollow);
     const skin = a.body.geometry.getAttribute("position") as BufferAttribute;
     a.updateSkin();

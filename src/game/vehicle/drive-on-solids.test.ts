@@ -5,13 +5,12 @@ import { DeformableCar } from "./car.ts";
 import type { DriveInput } from "./car-drive.ts";
 import { assignClass } from "./vehicle-classes.ts";
 import { CONTACT_HZ, G, GROUND_LIFT_V } from "./car-air-body.ts";
-import { paint } from "./test-support.ts";
+import { DT, paint } from "./test-support.ts";
 import { makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { BARRIER_TOP } from "../contact/sat.ts";
 import { FleetRamps, RAMP } from "../scenes/fleet-ramps.ts";
 import { Ground, setGround } from "../world/ground.ts";
 import { armSolids, MU_TYRE, RIG, Surface, WALL } from "../world/surfaces.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
 
 /**
  * Owner, 2026-10-08: "a driver should be able to drive on a box prop, a jersey barrier, a ramp, or a roof, all the same". A sedan
@@ -23,7 +22,6 @@ import { FRAME_HZ } from "../kernel/constants.ts";
  * long as it needs (a slab 0.76 m wide, `BARRIER_HALF`, carries no sedan on its top), at the jersey slab's own height. A ramp's deck
  * rises, so its reference is a height-field ramp of the same slope and height, and the car is on it for the first part of its run.
  */
-const FRAME = 1 / FRAME_HZ;
 const FULL: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
 /** The speed is read after this many seconds of full throttle; on the ramp, whose deck the car leaves sooner, after these. */
 const TIMES = [0.5, 1, 1.5] as const;
@@ -75,7 +73,7 @@ function sedan(x: number, z: number, yaw: number, y: number): DeformableCar {
 }
 
 function settle(w: CrashWorld, seconds: number): void {
-  for (let f = 0; f < seconds / FRAME; f++) tickWorld(w, FRAME);
+  for (let f = 0; f < seconds / DT; f++) tickWorld(w, DT);
 }
 
 type Run = { speeds: number[]; z: number[] };
@@ -88,9 +86,9 @@ function drive(ground: Ground, z: number, yaw: number, y: number, times: readonl
   settle(w, 3);
   w.pedals.set(c, FULL);
   const run: Run = { speeds: [], z: [] };
-  for (let f = 1; f <= times[times.length - 1]! / FRAME; f++) {
-    tickWorld(w, FRAME);
-    if (times.some((t) => Math.round(t / FRAME) === f)) {
+  for (let f = 1; f <= times[times.length - 1]! / DT; f++) {
+    tickWorld(w, DT);
+    if (times.some((t) => Math.round(t / DT) === f)) {
       run.speeds.push(Math.hypot(c.velocity.x, c.velocity.z));
       run.z.push(c.group.position.z);
     }
@@ -152,9 +150,9 @@ function driveOnRoof(cls: "sedan" | "monster", times: readonly number[], under: 
   const rest = upper.group.position.y;
   w.pedals.set(upper, FULL);
   const run: Run = { speeds: [], z: [] };
-  for (let f = 1; f <= times[times.length - 1]! / FRAME; f++) {
-    tickWorld(w, FRAME);
-    if (times.some((t) => Math.round(t / FRAME) === f)) {
+  for (let f = 1; f <= times[times.length - 1]! / DT; f++) {
+    tickWorld(w, DT);
+    if (times.some((t) => Math.round(t / DT) === f)) {
       run.speeds.push(Math.hypot(upper.velocity.x, upper.velocity.z));
       run.z.push(upper.group.position.z);
     }
@@ -225,7 +223,7 @@ function flight(ground: Ground, top: number): { time: number; fell: number; stra
     return inner(h);
   };
   w.pedals.set(c, FULL);
-  for (let f = 0; f < 4 / FRAME && !landed; f++) tickWorld(w, FRAME);
+  for (let f = 0; f < 4 / DT && !landed; f++) tickWorld(w, DT);
   assert.ok(landed, "the sedan never left the top and landed");
   return { time: lastAir, fell, stray, vy0 };
 }
@@ -275,8 +273,8 @@ describe("given a wrecked sedan with no tyres dropped onto a prism's top, no oth
     car.group.position.y = SLAB_TOP + DROP;
     const w = makeWorld([car], false, false);
     let lowest = Infinity;
-    for (let f = 0; f < 2 / FRAME; f++) {
-      tickWorld(w, FRAME);
+    for (let f = 0; f < 2 / DT; f++) {
+      tickWorld(w, DT);
       lowest = Math.min(lowest, centreY(car));
     }
     assert.ok(lowest >= SLAB_TOP + KEEP_OVER, `the centre of mass fell to ${lowest.toFixed(3)} m over a prism top at ${SLAB_TOP} m`);
@@ -326,7 +324,7 @@ describe(`given a monster at full throttle from rest toward a box ${STEP_TOP} m 
       return inner(h);
     };
     w.pedals.set(c, FULL);
-    for (let f = 0; f < 2 / FRAME; f++) tickWorld(w, FRAME);
+    for (let f = 0; f < 2 / DT; f++) tickWorld(w, DT);
     assert.ok(worst <= RISE_SLACK, `a slice rose ${(worst * 1000).toFixed(1)} mm over its climb's bound`);
     assert.ok(climbing >= CLIMB_SLICES, `it climbed over ${climbing} slices`);
     assert.ok(c.group.position.z > STEP_AT + 2 && Math.abs(c.group.position.y - STEP_TOP) < 0.05, `it ended at z ${c.group.position.z.toFixed(2)}, its origin ${c.group.position.y.toFixed(3)} m up`);

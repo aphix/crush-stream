@@ -4,25 +4,10 @@ import { launch, makeCar } from "./crash-scenarios.test-util.ts";
 import { physicsSlice, sliceSpeed } from "./sat.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { applyDrive } from "../vehicle/car-drive.ts";
-import type { DeformableCar } from "../vehicle/car.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import { DT, massCentroid } from "../vehicle/test-support.ts";
 
-const FRAME = 1 / FRAME_HZ;
 /** The pusher's drive speed (m/s): a derby AI's, 8 m/s (29 km/h). */
 const DRIVE = 8;
-
-/** Mass-weighted centroid (x, z) of a car's masses: what they have done. */
-function centroid(c: DeformableCar): [number, number] {
-  let x = 0;
-  let z = 0;
-  let m = 0;
-  for (const q of c.deform.masses) {
-    x += q.world.x * q.mass;
-    z += q.world.z * q.mass;
-    m += q.mass;
-  }
-  return [x / m, z / m];
-}
 
 /**
  * A car driven at `DRIVE` into a resting car's flank, in the engine's frame order (1/60 s frames, each stepped in slices of
@@ -37,9 +22,9 @@ function shoveFlank(seconds: number): { step: number; speed: number }[] {
   const world = newWorld([pusher, victim]);
   const frames: { step: number; speed: number }[] = [];
   let owed = 0;
-  let before = centroid(victim);
-  for (let f = 0; f < seconds / FRAME; f++) {
-    owed += FRAME;
+  let before = massCentroid(victim.deform.masses);
+  for (let f = 0; f < seconds / DT; f++) {
+    owed += DT;
     const vmax = sliceSpeed([pusher, victim]);
     while (owed > 1e-6) {
       const h = physicsSlice(Infinity, vmax);
@@ -48,8 +33,8 @@ function shoveFlank(seconds: number): { step: number; speed: number }[] {
       stepWorld(world, h);
       owed -= h;
     }
-    const after = centroid(victim);
-    if (victim.deform.massActive) frames.push({ step: Math.hypot(after[0] - before[0], after[1] - before[1]), speed: Math.hypot(victim.velocity.x, victim.velocity.z) });
+    const after = massCentroid(victim.deform.masses);
+    if (victim.deform.massActive) frames.push({ step: Math.hypot(after.x - before.x, after.z - before.z), speed: Math.hypot(victim.velocity.x, victim.velocity.z) });
     before = after;
   }
   return frames;
@@ -73,7 +58,7 @@ describe("given a car driven at 8 m/s into a resting car's flank", () => {
   // traded as well: the rest is the wheels' re-fit (`clampLocal`) and a frame's average step against its end speed.
   it("when the shove plays out for 2.5 s, then the struck car's reported speed (after its first second) is at least 70 % of the speed its masses travel at", () => {
     const frames = shoveFlank(2.5).slice(60);
-    const travel = frames.reduce((s, fr) => s + fr.step, 0) / (frames.length * FRAME);
+    const travel = frames.reduce((s, fr) => s + fr.step, 0) / (frames.length * DT);
     const reported = frames.reduce((s, fr) => s + fr.speed, 0) / frames.length;
     assert.ok(reported >= 0.7 * travel, `the shoved car reads ${reported.toFixed(2)} m/s while its masses travel ${travel.toFixed(2)} m/s`);
   });

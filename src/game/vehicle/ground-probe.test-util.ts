@@ -347,7 +347,12 @@ export function fit(car: DeformableCar, ground: Ground, hullOnly = false): Fit {
   };
 }
 
+const BRAKE: DriveInput = { throttle: 0, steer: 0, brake: 1, ebrake: true, boost: false };
 
+/** `slide` is the rigid centre's travel: a lifted body turning about its centre swings its origin without sliding. */
+export type Drop = Fit & { slide: number; speed: number };
+
+/** The car a drop of class `cls` uses: built once and stood up again by `spawnFacing` (the engine's own scene reset, `resetVisual`) for each of a matrix's thousand cells. */
 const dropCars = new Map<VehicleClassId, DeformableCar>();
 function pooled(cls: VehicleClassId): DeformableCar {
   let car = dropCars.get(cls);
@@ -369,7 +374,7 @@ function centreOf(car: DeformableCar, out: THREE.Vector3): THREE.Vector3 {
  */
 export function drop(
   ground: Ground,
- * One car dropped 0.5 m above the ground at (x, z) facing `yaw` and held (brake and handbrake) for `seconds`:
+  cls: VehicleClassId,
   x: number,
   z: number,
   yaw: number,
@@ -378,16 +383,16 @@ export function drop(
   setGround(ground);
   const car = pooled(cls);
   car.spawnFacing(x, z, yaw, o.speed ?? 0);
-  o: { seconds?: number; hint?: number; brake?: boolean; speed?: number; collide?: ((c: DeformableCar, h: number) => unknown) | null } = {},
+  car.group.position.y = ground.heightAt(x, z, o.hint) + 0.5;
   centreOf(car, _centre0);
   const w = worldOf(car, o.collide ?? null);
   const st = { acc: 0 };
-  const input = o.brake === false ? COAST : BRAKE;
-  car.group.position.y = ground.heightAt(x, z, o.hint) + 0.5;
+  const input = o.brake === false ? idleDrive() : BRAKE;
+  for (let f = 0; f < (o.seconds ?? 3) / FRAME; f++) frame(w, input, st);
   const r = fit(car, ground);
   centreOf(car, _centre);
   const slide = Math.hypot(_centre.x - _centre0.x, _centre.z - _centre0.z);
-  const input = o.brake === false ? idleDrive() : BRAKE;
+  const speed = car.velocity.length();
   // Not disposed: the next drop of this class stands it up again.
   return { ...r, slide, speed };
 }
@@ -400,7 +405,7 @@ export type Sample = Fit & { s: number; lateral: number; speed: number; y: numbe
  * before `s0` at `pace(s0)` so it arrives in its stride. From `brakeFrom` (m along) on, the throttle is released and
  * the brake held, and the run ends two seconds after the car stops. `ground` is made the active one; the caller
  * restores it.
- * One car driven down `track`'s main loop from `s0` to `s1` (m along it) on the centreline, its
+ */
 export function drive(
   track: Track,
   cls: VehicleClassId,
@@ -412,26 +417,27 @@ export function drive(
   const path = track.path;
   const ground = track.ground();
   setGround(ground);
-  o: { lead?: number; brakeFrom?: number; each?: (car: DeformableCar, f: Sample) => void } = {},
+  const car = pooled(cls);
   const pt = blankPoint();
   const at = (s: number) => {
     pointOn(path, s, pt);
     return [pt.x, pt.z] as const;
   };
   const start = s0 - (o.lead ?? 40);
+  const [x0, z0] = at(start);
   car.spawnFacing(x0, z0, Math.atan2(pt.tx, pt.tz), pace(start));
   car.group.position.y = ground.heightAt(x0, z0, pt.y + 0.5);
-    return [pt.x, pt.z] as const;
+  layOnGround(car);
   const w = worldOf(car);
   const st = { acc: 0 };
   const proj = blankProjection();
-  const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
+  const input = idleDrive();
   const out: Sample[] = [];
   let still = 0;
   const maxFrames = Math.ceil(((s1 - start) / 4) * 60);
   for (let n = 0; n < maxFrames; n++) {
     const p = car.group.position;
-  const input = idleDrive();
+    const s = track.project(p.x, p.z, proj.k, proj).s;
     if (s > s1 && s < s1 + 100) break;
     const [tx, tz] = at(s + 8 + car.speed * 0.4);
     const err = Math.atan2(tx - p.x, tz - p.z) - car.yaw;

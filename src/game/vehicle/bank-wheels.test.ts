@@ -1,17 +1,16 @@
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { applyDrive, type DriveInput } from "./car-drive.ts";
-import { DeformableCar } from "./car.ts";
+import { applyDrive, idleDrive } from "./car-drive.ts";
 import { layOnGround } from "./car-air-points.ts";
-import { assignClass, CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
-import { paint } from "./test-support.ts";
+import { CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
+import { DT } from "./test-support.ts";
+import { makeCar } from "./ground-probe.test-util.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { setGround } from "../world/ground.ts";
 import { Track, blankPoint, blankProjection, pointOn, type TrackPath } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 
 /**
@@ -20,7 +19,6 @@ import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
  * (stunt) where the 1 m ground grid rounded the road's edge into the runoff.
  */
 const BOUND = 0.02;
-const FRAME = 1 / FRAME_HZ;
 const DEG = 180 / Math.PI;
 /** An edge run drives this far (m) inside the road's edge, or this far (m) past the car's outer tread edge, whichever is farther in: the outer tread stays on the road's flat bank and off the convex crease. */
 const EDGE_INSET = 1;
@@ -62,8 +60,7 @@ function bankRun(track: Track, cls: VehicleClassId, lat: (half: number, inset: n
   const sMax = (kMax / path.count) * path.length;
   const ground = track.ground();
   setGround(ground);
-  const car = new DeformableCar(paint(), new THREE.Scene(), null, CLASSES[cls].style);
-  assignClass(car, cls);
+  const car = makeCar(cls);
   const inset = Math.max(EDGE_INSET, car.frame.halfTrack + car.frame.rig.tyre.halfW * CLASSES[cls].wheelScale + OUTER_TREAD_CLEAR);
   const pt = blankPoint();
   const at = (s: number) => {
@@ -82,12 +79,12 @@ function bankRun(track: Track, cls: VehicleClassId, lat: (half: number, inset: n
   const p = new THREE.Vector3();
   const w = newWorld([car]);
   const proj = blankProjection();
-  const input: DriveInput = { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false };
+  const input = idleDrive();
   let low = Infinity;
   let high = -Infinity;
   let where = "";
   let acc = 0;
-  for (let n = 0; n < 6 / FRAME; n++) {
+  for (let n = 0; n < 6 / DT; n++) {
     const s = track.project(car.group.position.x, car.group.position.z, proj.k, proj).s;
     if (s > sMax + 50) break;
     const [tx, tz] = at(s + 8 + car.speed * 0.4);
@@ -95,7 +92,7 @@ function bankRun(track: Track, cls: VehicleClassId, lat: (half: number, inset: n
     input.steer = Math.max(-1, Math.min(1, 2.5 * Math.atan2(Math.sin(err), Math.cos(err))));
     input.throttle = car.speed < 25 ? 1 : 0;
     input.brake = car.speed > 27 ? 1 : 0;
-    acc = Math.min(0.05, acc + FRAME);
+    acc = Math.min(0.05, acc + DT);
     while (acc > 1e-5) {
       const h = physicsSlice(acc, sliceSpeed(w.cars));
       applyDrive(car, input, h);

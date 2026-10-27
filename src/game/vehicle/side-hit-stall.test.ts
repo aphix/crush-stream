@@ -7,13 +7,12 @@ import { DRIVE, type DriveInput, idleDrive } from "./car-drive.ts";
 import { layOnGround } from "./car-air-points.ts";
 import type { DeformableCar } from "./car.ts";
 import { FUEL_CUTOFF_G, STALL_S } from "./constants.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import { DT } from "./test-support.ts";
 
 // docs/UNIFIED_CONTACT.md stage 4, T-bone fuel cut-off: a side hit hard enough to trip the crash sensor cuts the fuel for a few
 // seconds and the engine restarts; a head-on hit of the same speed, or a side tap under the sensor, does not. The cut removes the
 // gas and the boost only: the tyres, the brakes, the handbrake and the lift-off engine braking run as they do for a running car.
 
-const FRAME = 1 / FRAME_HZ;
 const FULL_GAS: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: true };
 const FULL_BRAKE: DriveInput = { throttle: 0, steer: 0, brake: 1, ebrake: false, boost: false };
 const HANDBRAKE_AT_LOCK: DriveInput = { throttle: 0, steer: 1, brake: 0, ebrake: true, boost: false };
@@ -66,9 +65,9 @@ function slideAfterTBone(bulletKph: number, fuelRestored = false): Slide {
       since = 0;
       world.pedals.set(struckCar, idleDrive());
     } else if (since >= 0) {
-      since += FRAME * world.clock.timeScale;
+      since += DT * world.clock.timeScale;
       metres += Math.hypot(at.x - x, at.z - z);
-    } else assert.ok((waited += FRAME) < MEET_WITHIN_S, `the ${bulletKph} km/h bullet never met the struck sedan in ${MEET_WITHIN_S} s`);
+    } else assert.ok((waited += DT) < MEET_WITHIN_S, `the ${bulletKph} km/h bullet never met the struck sedan in ${MEET_WITHIN_S} s`);
     x = at.x;
     z = at.z;
   }
@@ -128,7 +127,7 @@ function speedLostUnder(kph: number, stalledS: number, pedals: DriveInput, secon
   const { car, world } = rollingCar(kph, stalledS);
   world.pedals.set(car, pedals);
   const before = alongSpeed(car);
-  for (let t = 0; t < seconds; t += FRAME) tickWorld(world);
+  for (let t = 0; t < seconds; t += DT) tickWorld(world);
   return before - alongSpeed(car);
 }
 
@@ -159,7 +158,7 @@ describe("given a sedan rolling on flat ground with its fuel cut", () => {
     world.pedals.set(car, FULL_GAS);
     const before = alongSpeed(car);
     let peak = before;
-    for (let t = 0; t < STALL_S - 0.5; t += FRAME) {
+    for (let t = 0; t < STALL_S - 0.5; t += DT) {
       tickWorld(world);
       peak = Math.max(peak, alongSpeed(car));
       assert.equal(car.drive.throttle, 0, "the gas the drive and a clip see");
@@ -172,7 +171,7 @@ describe("given a sedan rolling on flat ground with its fuel cut", () => {
     const { car, world } = rollingCar(20, 0);
     world.pedals.set(car, FULL_GAS);
     const before = alongSpeed(car);
-    for (let t = 0; t < 1; t += FRAME) tickWorld(world);
+    for (let t = 0; t < 1; t += DT) tickWorld(world);
     assert.ok(alongSpeed(car) > before + 1, `${before.toFixed(2)} -> ${alongSpeed(car).toFixed(2)} m/s`);
   });
 
@@ -186,7 +185,7 @@ describe("given a sedan rolling on flat ground with its fuel cut", () => {
   it("when the handbrake is pulled at full lock, then it grips and kicks the tail out as it does on a running car", () => {
     const { car, world } = rollingCar(60, STALL_S);
     world.pedals.set(car, HANDBRAKE_AT_LOCK);
-    for (let t = 0; t < DRIVE.ebrakeIn * 3; t += FRAME) tickWorld(world);
+    for (let t = 0; t < DRIVE.ebrakeIn * 3; t += DT) tickWorld(world);
     assert.equal(car.drive.ebrakeK, 1, "the handbrake's grip");
     assert.ok(car.drive.drift > 0, `drift ${car.drive.drift.toFixed(2)}`);
   });
@@ -194,10 +193,10 @@ describe("given a sedan rolling on flat ground with its fuel cut", () => {
   it("when the stall time is out, then the fuel is back: stalledS is 0 and the gas pushes again", () => {
     const { car, world } = rollingCar(20, STALL_S);
     world.pedals.set(car, FULL_GAS);
-    for (let t = 0; t < STALL_S + FRAME; t += FRAME) tickWorld(world);
+    for (let t = 0; t < STALL_S + DT; t += DT) tickWorld(world);
     assert.equal(car.stalledS, 0, `still stalled after ${STALL_S} s`);
     const before = alongSpeed(car);
-    for (let t = 0; t < 1; t += FRAME) tickWorld(world);
+    for (let t = 0; t < 1; t += DT) tickWorld(world);
     assert.ok(car.drive.throttle > 0, "the gas is read again");
     assert.ok(alongSpeed(car) > before + 1, `${before.toFixed(2)} -> ${alongSpeed(car).toFixed(2)} m/s after the restart`);
   });
