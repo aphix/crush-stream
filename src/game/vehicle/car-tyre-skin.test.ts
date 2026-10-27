@@ -1,6 +1,7 @@
-import { describe, it } from "node:test";
+import { before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
+import type { PlanGrid } from "../deform/tyre-sag-kernel.ts";
 import { type CrashWorld, FREEWHEEL, launch, makeWorld, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import type { DeformableCar } from "./car.ts";
@@ -9,6 +10,9 @@ import { LID } from "./constants.ts";
 import { buildCar } from "./drawn-body.test-util.ts";
 import { PART_KIND, type PartSeat } from "./part-geometry.ts";
 import { TyreSkin } from "./car-tyre-skin.ts";
+import { skinKernel } from "../deform/skin-kernel.ts";
+import { TyreSagArena } from "../deform/tyre-sag-kernel.ts";
+import { assertSameNumbers } from "./test-support.ts";
 import { tyreClearance } from "./tyre-clearance.test-util.ts";
 import { CLASSES, carClass } from "./vehicle-classes.ts";
 
@@ -227,5 +231,114 @@ describe("given a wreck's skin held over its tyres and the parts under its bonne
     launch(fullOther, 5, 0, -Math.PI / 2, -50 / 3.6, 0);
     const seen = compare({ fast, full, fastCar, fullCar });
     assert.ok(seen.apart <= DRAWN_SLACK_M, `drawn ${(seen.apart * 1000).toFixed(2)} mm off the full hold`);
+  });
+});
+
+/** The wall hit the kernel row crushes a hatchback with: hard enough to fold the bonnet, on the nose's corner so a front tyre sits under the crush. */
+const KERNEL_ROW_KPH = 65;
+
+type HoldOutcome = { lift: Float32Array; positions: Float32Array; normals: Float32Array; plans: PlanGrid[]; held: boolean };
+type KernelCalls = { sagPasses: number; raised: number; planGrids: number };
+type CrushedMesh = { mesh: THREE.Mesh; rest: Float32Array; pushSide: boolean; written: Float32Array; under: readonly PartSeat[] };
+type CrushedHatchback = { car: DeformableCar; meshes: CrushedMesh[] };
+
+/** `run` with the kernel's tyre calls counted, and every sag pass read over tyres `tyreScale` times the car's (1: as they are). */
+function countKernelCalls<T>(tyreScale: number, run: () => T): { calls: KernelCalls; result: T } {
+  const calls: KernelCalls = { sagPasses: 0, raised: 0, planGrids: 0 };
+  const realSag = TyreSagArena.prototype.sagPass;
+  const realPlan = TyreSagArena.prototype.planGrid;
+  TyreSagArena.prototype.sagPass = function (this: TyreSagArena, skin, pos, wheel, tyre) {
+    const raised = realSag.call(this, skin, pos, wheel, { r: tyre.r * tyreScale, halfW: tyre.halfW });
+    calls.sagPasses++;
+    if (raised) calls.raised++;
+    return raised;
+  };
+  TyreSagArena.prototype.planGrid = function (this: TyreSagArena, ...args: Parameters<TyreSagArena["planGrid"]>) {
+    const grid = realPlan.apply(this, args);
+    if (grid) calls.planGrids++;
+    return grid;
+  };
+  try {
+    return { calls, result: run() };
+  } finally {
+    TyreSagArena.prototype.sagPass = realSag;
+    TyreSagArena.prototype.planGrid = realPlan;
+  }
+}
+
+/** A fresh `TyreSkin` over `crushed` holds its written skin over `car`'s tyres, the plan grid and sag pass in the kernel or, with `inKernel` false, in JS. */
+function holdWritten(car: DeformableCar, crushed: CrushedMesh, inKernel: boolean): HoldOutcome {
+  const skin = new TyreSkin(car.frame, crushed.mesh, crushed.rest, crushed.pushSide);
+  if (!inKernel) Object.defineProperty(skin, "kernel", { get: () => null });
+  const positions = crushed.mesh.geometry.getAttribute("position");
+  positions.array.set(crushed.written);
+  skin.hold(car.group, car.wheels, 0, CLASSES[carClass(car)].lift, true, crushed.under);
+  return { lift: skin["lift"].slice(), positions: Float32Array.from(positions.array), normals: Float32Array.from(crushed.mesh.geometry.getAttribute("normal").array), plans: [...skin["plans"]], held: skin["held"] };
+}
+
+/** Every wheel's plan grid in `plans` is `expected`'s, array for array. */
+function assertSamePlans(plans: readonly PlanGrid[], expected: readonly PlanGrid[], label: string): void {
+  assert.equal(plans.length, expected.length, `${label} plan grids`);
+  for (const [wheel, plan] of plans.entries()) {
+    const want = expected[wheel]!;
+    const at = `${label} wheel ${wheel} plan`;
+    assertSameNumbers(plan.box, want.box, `${at} boxes`);
+    assertSameNumbers(plan.den, want.den, `${at} determinants`);
+    assertSameNumbers(plan.start, want.start, `${at} cell starts`);
+    assertSameNumbers(plan.tris, want.tris, `${at} filed triangles`);
+    assertSameNumbers([plan.x0, plan.z0, plan.nx, plan.nz], [want.x0, want.z0, want.nx, want.nz], `${at} extent`);
+  }
+}
+
+/** A hatchback crushed by the wall hit and settled, with its body's and bonnet's skins as the writer left them. */
+function crushedHatchback(): CrushedHatchback {
+  const car = buildCar("hatchback", "hatch");
+  runWall(KERNEL_ROW_KPH, HOOD_COVER_OVERLAP, "front", { car });
+  car.updateSkin();
+  car.group.updateMatrixWorld(true);
+  const underHood = car.partSeats.filter((seat) => seat.kind === PART_KIND.interior || seat.kind === PART_KIND.engineBay);
+  return {
+    car,
+    meshes: [
+      { mesh: car.body, rest: car.deform.restSkin, pushSide: true, written: car["bodyTyres"]!["written"].slice(), under: [] },
+      { mesh: car["hood"], rest: car["hoodRest"], pushSide: false, written: car["hoodTyres"]!["written"].slice(), under: underHood },
+    ],
+  };
+}
+
+describe(`given a hatchback crushed against a wall at ${KERNEL_ROW_KPH} km/h, its body and bonnet skins as the writer left them`, () => {
+  let fixture: CrushedHatchback;
+  before(() => {
+    fixture = crushedHatchback();
+  });
+
+  for (const [which, label, sagLifts] of [
+    [0, "body", true],
+    [1, "bonnet", false],
+  ] as const) {
+    it(`when its ${label} is held in JS and in the kernel, then every lift, drawn position and normal is the same bit for bit`, () => {
+      assert.ok(skinKernel(), "the test preload loaded the kernel");
+      const crushed = fixture.meshes[which]!;
+      const reference = holdWritten(fixture.car, crushed, false);
+      const { calls, result: outcome } = countKernelCalls(1, () => holdWritten(fixture.car, crushed, true));
+      assert.ok(calls.sagPasses > 0 && calls.planGrids > 0, `${calls.sagPasses} sag passes and ${calls.planGrids} plan grids ran in the kernel`);
+      assert.equal(calls.raised > 0, sagLifts, `${calls.raised} of ${calls.sagPasses} sag passes lifted a corner`);
+      assert.ok(reference.held && reference.lift.some((lift) => lift > 0), "the hold lifted the crushed skin: the row compares a hold that moved something");
+      assertSameNumbers(outcome.lift, reference.lift, `${label} lift`);
+      assertSameNumbers(outcome.positions, reference.positions, `${label} positions`);
+      assertSameNumbers(outcome.normals, reference.normals, `${label} normals`);
+      assertSamePlans(outcome.plans, reference.plans, label);
+      assert.equal(outcome.held, reference.held);
+    });
+  }
+
+  it("when the kernel reads the body over tyres a fifth larger than the car's, then its lift is not the JS hold's, so the row can fail", () => {
+    const crushed = fixture.meshes[0]!;
+    const reference = holdWritten(fixture.car, crushed, false);
+    const { result: outcome } = countKernelCalls(1.2, () => holdWritten(fixture.car, crushed, true));
+    assert.ok(
+      outcome.lift.some((lift, point) => lift !== reference.lift[point]),
+      "a sag pass over larger tyres must not match",
+    );
   });
 });

@@ -1,5 +1,7 @@
 import * as THREE from "three";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
+import { skinKernel, type SkinKernel } from "../deform/skin-kernel.ts";
+import type { PlanGrid, SagSkin } from "../deform/tyre-sag-kernel.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import type { CarFrame } from "./car-rig.ts";
 import type { PartSeat } from "./part-geometry.ts";
@@ -58,9 +60,6 @@ function movedOffRest(skin: Float32Array, rest: Float32Array): boolean {
   for (let i = 0; i < skin.length; i++) if (Math.abs(skin[i]! - rest[i]!) > PART_CLEAR) return true;
   return false;
 }
-
-/** Triangles filed by plan cell: per triangle (`overTris` order) its plan box (x low, x high, z low, z high) and plan determinant, and per cell the triangles whose box meets it, in order. */
-type PlanGrid = { box: Float64Array; den: Float64Array; x0: number; z0: number; nx: number; nz: number; start: Int32Array; tris: Int32Array };
 
 /** `tris` (corners, three a triangle) of the skin `pos` by `PLAN_CELL` plan cell; a triangle seen edge-on in plan is left out (it has no height at a point). */
 function planGrid(pos: Float32Array, tris: Int32Array): PlanGrid {
@@ -156,15 +155,14 @@ function clearOver(tyre: CarFrame["rig"]["tyre"], pos: ArrayLike<number>, i: num
   const along = dx * a[0]! + dy * a[1]! + dz * a[2]!;
   const r = tyre.r * scale;
   const top = Math.sqrt(Math.max(0, r * r - ahead * ahead)) - FALL * (Math.max(0, Math.abs(ahead) - r) + Math.max(0, Math.abs(along) - tyre.halfW * scale));
-  _read.up = up;
   _read.ahead = ahead;
   _read.fx = fx;
   _read.fz = fz;
   return up - top - gap;
 }
 
-/** What `clearOver` read last, for its caller: the point's height over the hub (m, up the tyre's frame), its distance along the road from the hub (m) and the road's direction in x and z. */
-const _read = { up: 0, ahead: 0, fx: 0, fz: 0 };
+/** What `clearOver` read last, for its caller: the point's distance along the road from the hub (m) and the road's direction in x and z. */
+const _read = { ahead: 0, fx: 0, fz: 0 };
 
 const _h = new Float64Array(3);
 const _a = new Float64Array(3);
@@ -246,20 +244,20 @@ export class TyreSkin {
   private readonly pushDir: Float32Array;
   /** Per wheel and vertex, how far (m) it rests over the tyre's surface; NaN for one that does not rest over it. */
   private readonly over: Float32Array[] = [];
-  /** Per wheel and vertex, its height over the hub (m, up the tyre's frame) at rest. */
-  private readonly restUp: Float32Array[] = [];
+  /** Per vertex, bit w: it rests over wheel w's tyre (`over[w]` is not NaN). */
+  private readonly liftable: Uint8Array;
   /** Per wheel, the corners (vertex ids, three a triangle) of the triangles with a point resting over its tyre. */
   private readonly overTris: Int32Array[] = [];
   /** Per wheel, its `overTris` by plan cell on the skin as written (`planGrid`): the skin's plan stands still between writes, only its lift changes. */
   private readonly plans: PlanGrid[] = [];
   /** Per wheel, the lift of each corner of its `overTris` when the sag passes last read it this hold (`cornersRose`). */
   private readonly sagRead: Float32Array[] = [];
+  /** What the kernel's sag pass reads and writes of this skin (`TyreSagArena.sagPass`). */
+  private readonly sagSkin: SagSkin;
   /** The class lift, hub shift and wheel scale `over` was found for. */
   private readonly overFor = new Float64Array(3).fill(NaN);
   /** Per wheel, its axle and hub in the mesh's frame at the last hold. */
   private readonly heldAt = new Float64Array(4 * HELD_ELEMENTS.length).fill(NaN);
-  /** Per wheel, its axle and hub this hold, kept in `heldAt` only when the hold is redone. */
-  private readonly seen = new Float64Array(4 * HELD_ELEMENTS.length);
   /** The skin as last written, which every hold starts from. */
   private readonly written: Float32Array;
   private hasWritten = false;
@@ -294,6 +292,18 @@ export class TyreSkin {
     this.dirty = new Uint8Array(this.edges.order.length);
     this.pushDir = new Float32Array(this.edges.order.length * 3);
     this.written = new Float32Array(rest.length);
+    this.liftable = new Uint8Array(rest.length / 3);
+    this.sagSkin = { weld: this.edges.weld, liftable: this.liftable, lift: this.lift, dirty: this.dirty, overTris: this.overTris, plans: this.plans, sagRead: this.sagRead, heldAt: this.heldAt };
+  }
+
+  /** The kernel the plan grid and sag pass run in once it is loaded; null: the JS below, which is its reference. */
+  private get kernel(): SkinKernel | null {
+    return skinKernel();
+  }
+
+  /** Wheel `w`'s `overTris` by plan cell on the skin as written: in the kernel, or in JS when it is not loaded or declines the grid. */
+  private planOver(w: number): PlanGrid {
+    return this.kernel?.tyre.planGrid(this.written, this.overTris[w]!) ?? planGrid(this.written, this.overTris[w]!);
   }
 
   /** The vertices resting over each tyre: the class's lift, hub shift and wheel scale change what that is. True when they were found again. */
@@ -306,6 +316,7 @@ export class TyreSkin {
     f[0] = lift;
     f[1] = hubShift;
     f[2] = scale;
+    this.liftable.fill(0);
     this.mesh.updateMatrix();
     _mesh.makeTranslation(0, this.mesh.parent === group ? 0 : lift, 0).multiply(this.mesh.matrix).invert();
     _a[0] = 1;
@@ -318,11 +329,11 @@ export class TyreSkin {
       _h[1] = _hub.y;
       _h[2] = _hub.z;
       const over = (this.over[w] ??= new Float32Array(this.rest.length / 3));
-      const restUp = (this.restUp[w] ??= new Float32Array(this.rest.length / 3));
       for (let i = 0; i < this.rest.length; i += 3) {
         const c = clearOver(this.frame.rig.tyre, this.rest, i, _h, _a, scale, 0);
-        restUp[i / 3] = _read.up;
-        over[i / 3] = c >= -REST_SLACK && c < REACH ? c : NaN;
+        const restsOver = c >= -REST_SLACK && c < REACH;
+        over[i / 3] = restsOver ? c : NaN;
+        if (restsOver) this.liftable[i / 3]! |= 1 << w;
       }
       this.overTris[w] = this.trianglesOver(over);
       this.sagRead[w] = new Float32Array(this.overTris[w].length);
@@ -362,7 +373,7 @@ export class TyreSkin {
       this.hasWritten = true;
       this.crushed = movedOffRest(this.written, this.rest);
     }
-    if (fresh || overFound) for (let w = 0; w < wheels.length; w++) this.plans[w] = planGrid(this.written, this.overTris[w]!);
+    if (fresh || overFound) for (let w = 0; w < wheels.length; w++) this.plans[w] = this.planOver(w);
     // An uncrushed skin has nothing crushed under it to stand over.
     const partsMoved = this.notePartPoses(group, this.crushed ? under : NO_PARTS);
     // The lift is a function of the skin, the wheels and the parts: none changed, the drawn skin already carries it.
@@ -380,7 +391,7 @@ export class TyreSkin {
         _a[k] = e[k]! / scale;
         _h[k] = e[3 + k]!;
       }
-      this.needOver(pos, this.over[w]!, this.restUp[w]!, scale);
+      this.needOver(pos, this.over[w]!, scale);
     }
     this.dirty.fill(1);
     this.carryLift();
@@ -560,6 +571,8 @@ export class TyreSkin {
    * the points the hold can lift (those resting over the tyre) are lifted by the shortfall over their share of the plane there. True when any is.
    */
   private liftSaggingTriangles(pos: Float32Array, w: number): boolean {
+    const kernel = this.kernel;
+    if (kernel) return kernel.tyre.sagPass(this.sagSkin, pos, w, this.frame.rig.tyre);
     const e = this.heldAt.subarray(w * HELD_ELEMENTS.length, (w + 1) * HELD_ELEMENTS.length);
     const scale = hypot3(e[0]!, e[1]!, e[2]!);
     for (let k = 0; k < 3; k++) _h[k] = e[3 + k]!;
@@ -675,7 +688,7 @@ export class TyreSkin {
   }
 
   /** Each vertex of `over` standing under the tyre's surface plus its gap (`TYRE_GAP`, or its rest clearance if less: the uncrushed skin never moves): the lift up the mesh onto it, into `lift`, but never to above where it rested over the hub. */
-  private needOver(pos: Float32Array, over: Float32Array, restUp: Float32Array, scale: number): void {
+  private needOver(pos: Float32Array, over: Float32Array, scale: number): void {
     const uy = hypot2(_a[0]!, _a[2]!);
     const { weld } = this.edges;
     for (let v = 0; v < over.length; v++) {
