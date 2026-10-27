@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -11,6 +11,15 @@ import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { placeDrop, StackRig, stackLoads, type StackConfig } from "./stack-rig.ts";
 import { runStack } from "./stack-run.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+
+/** The rows read poses, masses and roof sink, never a drawn skin: no car is skinned each frame (`updateSkin` writes meshes only). */
+const skin = DeformableCar.prototype.updateSkin;
+before(() => {
+  DeformableCar.prototype.updateSkin = () => {};
+});
+after(() => {
+  DeformableCar.prototype.updateSkin = skin;
+});
 
 /** Which cars the column is made of: one sedan body, the fleet's slot order (police base) with or without its monster truck. */
 type Bodies = "sedans" | "fleet" | "fleet without the monster" | { selected: CarType };
