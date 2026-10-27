@@ -10,6 +10,8 @@
  * so cars of one style share one set (content-keyed: `skinKey`), a handful of 0.5 MB blocks for the page's life.
  */
 
+import { TyreSagArena, WASM_PAGE_BYTES, type TyreSagExports } from "./tyre-sag-kernel.ts";
+
 /** What `skin_shape` and `normals` read that never changes after a car is built. Copied into WASM memory once. */
 export interface SkinStatic {
   rest: Float32Array;
@@ -37,18 +39,21 @@ export interface SkinDynamic {
   params: Float64Array;
 }
 
-type Exports = {
-  memory: WebAssembly.Memory;
+type Exports = TyreSagExports & {
   skin_shape: (...args: number[]) => void;
   normals: (...args: number[]) => void;
 };
 
 function isExports(e: WebAssembly.Exports): e is Exports {
-  return e.memory instanceof WebAssembly.Memory && typeof e.skin_shape === "function" && typeof e.normals === "function";
+  return (
+    e.memory instanceof WebAssembly.Memory &&
+    typeof e.skin_shape === "function" &&
+    typeof e.normals === "function" &&
+    typeof e.plan_grid === "function" &&
+    typeof e.sag_look === "function" &&
+    typeof e.sag_pass === "function"
+  );
 }
-
-/** WebAssembly page size (bytes): the memory grows in whole pages. */
-const PAGE = 65536;
 
 /** Byte addresses in WASM memory of one placed style's blocks (`skin_shape`'s arguments, then `idx` and `nor`). */
 type Addresses = Record<"rest" | "rC" | "sN" | "sXf" | "sW" | "rJ" | "rW" | "X" | "pos" | "iN" | "iCo" | "iUvw" | "co" | "hub" | "hubs" | "seed" | "params" | "out" | "idx" | "nor", number>;
@@ -97,9 +102,12 @@ export class SkinKernel {
   /** Cars skinned so far (`run` calls) and the vertices they carried: the bench reads the difference over its window, a count free of timer noise. */
   calls = 0;
   verts = 0;
+  /** The tyre hold's plan grid and sag pass (`car-tyre-skin.ts`), over one scratch arena. */
+  readonly tyre: TyreSagArena;
 
   constructor(ex: Exports) {
     this.ex = ex;
+    this.tyre = new TyreSagArena(ex);
   }
 
   /** The style's tables, placed on first use; `build` runs only then. */
@@ -139,7 +147,7 @@ export class SkinKernel {
       idx: place(s.idx.byteLength),
       nor: place(nverts * 12),
     };
-    mem.grow(Math.ceil((end - base) / PAGE));
+    mem.grow(Math.ceil((end - base) / WASM_PAGE_BYTES));
     const bytes = new Uint8Array(mem.buffer);
     const put = (a: Float32Array | Float64Array | Int32Array | Uint8Array | Uint32Array, to: number): void =>
       bytes.set(new Uint8Array(a.buffer, a.byteOffset, a.byteLength), to);
