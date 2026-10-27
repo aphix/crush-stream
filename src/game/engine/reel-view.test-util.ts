@@ -155,6 +155,8 @@ function momentsOf(clip: HighlightClip): Moment[] {
 
 /** A take-off counts once the car has flown this long (clip s): a hop over a kerb does not. */
 const FLIGHT_MIN = 0.3;
+/** Clip seconds the replay runs past its last moment before it may stop: a car the last hit throws is off the ground by then. */
+const REPLAY_TAIL = 1;
 
 /**
  * Every clip of `clips` played through the reel's cameras at 60 Hz on `w`'s cars, on `screen` (its lens as the engine fits
@@ -208,6 +210,7 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
     const tl = reel["clips"][0]!.tl;
     const wall = tl.wall;
     const moments = momentsOf(clip);
+    const lastAt = moments.reduce((a, m) => Math.max(a, m.at), 0);
     const title = clipTitle(clip);
     // The take-offs of the subject and the first impact's cars: judged as each leaves the ground, kept once it has flown `FLIGHT_MIN`.
     const watch = [clip.focus, clip.firstA, clip.firstB];
@@ -263,6 +266,8 @@ export async function reelViews(w: World, clips: readonly HighlightClip[], scene
           pending[j] = null;
         }
       }
+      // Every moment judged and every watched car on the ground a while past the last: the rest of the clip judges nothing (a trace wants the whole clip).
+      if (!trace && sim.time > lastAt + REPLAY_TAIL && moments.every((m) => m.at < 0) && pending.every((p) => p === null) && watch.every((c) => !sim.cars[c]?.airborne)) break;
     }
     reel.stop();
   }
