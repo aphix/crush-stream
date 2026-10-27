@@ -24,7 +24,9 @@ describe(`given ${RACES} city races on one field, seeds 1 to ${RACES}, on cars t
   it(`when the ${RACES} races run in a row on one world, then each plays out exactly as the same race on fresh cars, in outcome, final poses and bodies`, () => {
     const track = new Track(TRACKS.find((j) => parseTrack(j).id === "city"));
     // One world at a time: the active ground is process-wide (`ground.ts`), and leaving a race restores the flat one.
+    // The digest reads sim state alone, not skins.
     const chained = makeWorld();
+    chained.skin = false;
     chained.race.enter();
     const reused: unknown[] = [];
     try {
@@ -35,6 +37,7 @@ describe(`given ${RACES} city races on one field, seeds 1 to ${RACES}, on cars t
     try {
       for (let seed = 1; seed <= RACES; seed++) {
         const fresh = makeWorld();
+        fresh.skin = false;
         fresh.race.enter();
         const expected = raceDigest(fresh, track, seed);
         fresh.race.exit();
