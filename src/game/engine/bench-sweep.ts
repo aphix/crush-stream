@@ -35,7 +35,7 @@ export function setDetailArm(parts: BenchParts, level: number | null): void {
 type SweepHow = "full" | "short" | "quick";
 
 /** What each kind of sweep holds a setting for: seconds, at least these frames, at most these seconds. */
-const HOLD: Record<SweepHow, { seconds: number; minFrames: number; capS: number }> = {
+export const HOLD: Record<SweepHow, { seconds: number; minFrames: number; capS: number }> = {
   full: { seconds: BENCH.sweepS, minFrames: BENCH.sweepMinFrames, capS: BENCH.sweepCapS },
   short: { seconds: BENCH.sweepShortS, minFrames: BENCH.sweepMinFrames, capS: BENCH.sweepCapS },
   quick: { seconds: QUICK.sweepStopS, minFrames: QUICK.sweepStopMinFrames, capS: QUICK.sweepStopCapS },

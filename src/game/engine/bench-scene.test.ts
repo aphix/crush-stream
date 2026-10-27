@@ -12,7 +12,7 @@ import { newBeat } from "./bench-frame.ts";
 import { ArmBadge } from "./bench-badge.ts";
 import { skyPinOf, tap, watchWork } from "./bench-measure.ts";
 import { PHASE_SWEEP } from "./engine-bench-report.ts";
-import { endSweep, sweep } from "./bench-sweep.ts";
+import { endSweep, HOLD, sweep } from "./bench-sweep.ts";
 import type { CrashEngine } from "./engine.ts";
 
 /** Sim seconds each step runs past the staged head-on: the pair meets in 0.2 s, so the wrecks, their contacts and a thrown driver are in it. */
@@ -117,6 +117,9 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
       fetch: async () => ({ ok: true, status: 200, blob: async () => new Blob([]) }),
       createImageBitmap: async () => ({ width: 1, height: 1, close() {} }),
     });
+    // Each stop held its minimum frames, not its 3 s: every stop is still visited and drawn, and the claim is the page after the sweep.
+    const full = HOLD.full;
+    HOLD.full = { ...full, seconds: 0 };
     try {
       // A page without `ultra=1` (its FX tiers are the three; Ultra's look is fetched by the page before the bench, not by the sweep).
       await sweep(engine, parts, plan, ["minimal", "low", "high"], "full", t, beat, { set() {} });
@@ -129,6 +132,7 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
       // A load the step began is still in flight (its decode is a promise chain): let it land on the stand-in.
       await new Promise<void>((resolve) => setImmediate(resolve));
     } finally {
+      HOLD.full = full;
       Object.assign(globalThis, real);
       if (real.createImageBitmap === undefined) Reflect.deleteProperty(globalThis, "createImageBitmap");
     }
