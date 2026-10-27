@@ -90,6 +90,8 @@ export type World = {
   onKnock: ((index: number, car: number, vx: number, vy: number, vz: number) => void) | null;
   /** The car its player left on foot (`RaceHost.afoot`), -1 while he is in it. */
   away: number;
+  /** Whether `frame` writes every car's skin. A run that reads no drawn body (cage, contacts and events only) sets it false: the skin never feeds back into the sim. */
+  skins: boolean;
 };
 
 /** `survivalCourse`: a variant of the Survival course file (props added, say); the real one when omitted. */
@@ -175,7 +177,7 @@ export function makeWorld(survivalCourse?: unknown): World {
   const step = newWorld(liveBuf);
   step.ejection = new EjectionWatch();
   step.collide = (car, i, h) => race.collide(car, i, h);
-  const w: World = { cars, live, race, camera, leaves: 0, seat, onPairContact: null, step, dress, clears: 0, watchCams: 0, ejections: [], figures: [], onKnock: null, away: -1 };
+  const w: World = { cars, live, race, camera, leaves: 0, seat, onPairContact: null, step, dress, clears: 0, watchCams: 0, ejections: [], figures: [], onKnock: null, away: -1, skins: true };
   step.pairHit = (a, b, hit) => {
     race.pairHit(a, b, hit);
     w.onPairContact?.(a, b);
@@ -228,7 +230,7 @@ export function stepFrame(w: World, state: { acc: number }, slice?: (h: number) 
 /** One rendered frame of `CrashEngine.tickInner` (physics part) at 1× time: `stepFrame`, then every car's skin and the director's frame. */
 export function frame(w: World, state: { acc: number }, slice?: (h: number) => void, pace?: SimPacer): void {
   stepFrame(w, state, slice, pace);
-  for (const car of w.live()) car.updateSkin();
+  if (w.skins) for (const car of w.live()) car.updateSkin();
   w.race.frame(FRAME);
 }
 

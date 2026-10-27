@@ -2,10 +2,7 @@ import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type * as THREE from "three";
 import { setGround } from "./ground.ts";
-import { COURSE_IDS, FRAME, frame, makeWorld, playerRace, type PlayerLine, type World } from "./race-world.test-util.ts";
-import { Track } from "./track.ts";
-import { parseTrack } from "./track-schema.ts";
-import { TRACKS } from "./tracks/index.ts";
+import { COURSE_IDS, course as builtCourse, FRAME, frame, makeWorld, playerRace, type PlayerLine, type World } from "./race-world.test-util.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 
 /**
@@ -63,10 +60,17 @@ function unexplained(w: World, go: () => void): string[] {
     .map((e) => `car ${e.car} at ${e.t.toFixed(1)} s: ${e.what} with no hit in the last ${RECENT} s`);
 }
 
+/** A race world for a run that reads events and hits only: its frames skip the skin pass. */
+function eventWorld(): World {
+  const w = makeWorld();
+  w.skins = false;
+  return w;
+}
+
 /** Six cars (the AI-driven player slot and five rivals) at the default aggression, one lap: every slope, crest and banked turn of the course met once by the whole field. */
 function aiRace(course: string, seed: number): string[] {
-  const track = new Track(TRACKS.find((t) => parseTrack(t).id === course));
-  const w = makeWorld();
+  const track = builtCourse(course);
+  const w = eventWorld();
   w.race.enter();
   try {
     w.race.command({ type: "quit" });
@@ -91,8 +95,8 @@ const AI_SEED = 1;
 
 /** The scripted player (the real seat, full gas) on a lateral line beside five AI rivals: the lines where it meets a wall and drives on damaged. */
 function playerLap(course: string, line: PlayerLine, laps: number): string[] {
-  const track = new Track(TRACKS.find((t) => parseTrack(t).id === course));
-  const w = makeWorld();
+  const track = builtCourse(course);
+  const w = eventWorld();
   w.race.enter();
   try {
     return unexplained(w, () => {
