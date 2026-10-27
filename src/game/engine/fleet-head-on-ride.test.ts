@@ -1,10 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
-import { paint } from "../vehicle/test-support.ts";
-import { assignClass, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
-import type { CarStyleId } from "../vehicle/car-variants.ts";
+import type { VehicleClassId } from "../vehicle/vehicle-classes.ts";
+import { makeCar } from "../vehicle/ground-probe.test-util.ts";
 import { makeWorld, PARKED, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { C_OWNER, HIT_SIZE } from "../world/surfaces.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -27,10 +25,9 @@ const BONNET_Y = 0.7;
 const HALF_BASE = 1.34;
 const HUB_Y = 0.32;
 
-/** A `style` car of class `cls` as a wreck at rest at (x, y, z), heading `yaw`, pitched nose-up by `pitch` (rad). */
-function wreckAt(style: CarStyleId, cls: VehicleClassId, x: number, y: number, z: number, yaw: number, pitch: number): DeformableCar {
-  const car = new DeformableCar(paint(), new THREE.Scene(), null, style);
-  assignClass(car, cls);
+/** A car of class `cls` as a wreck at rest at (x, y, z), heading `yaw`, pitched nose-up by `pitch` (rad). */
+function wreckAt(cls: VehicleClassId, x: number, y: number, z: number, yaw: number, pitch: number): DeformableCar {
+  const car = makeCar(cls);
   car.spawnFacing(x, z, yaw, 0);
   car.group.position.y = y;
   car.group.rotation.set(-pitch, yaw, 0, "YXZ");
@@ -43,9 +40,9 @@ function wreckAt(style: CarStyleId, cls: VehicleClassId, x: number, y: number, z
 
 /** The pair of the staging: a sedan wreck parked at the origin, a muscle car's wreck over its bonnet, in a world with idle pedals. */
 function bonnetStaging(): { over: DeformableCar; cars: readonly DeformableCar[]; w: ReturnType<typeof makeWorld> } {
-  const parked = wreckAt("sedan", "sedan", 0, 0, 0, 0, 0);
+  const parked = wreckAt("sedan", 0, 0, 0, 0, 0);
   const pitch = Math.asin(BONNET_Y / (2 * HALF_BASE));
-  const over = wreckAt("coupe", "muscle", 0, HUB_Y + HALF_BASE * Math.sin(pitch) - HUB_Y * Math.cos(pitch), AXLE_OVER_Z + HALF_BASE * Math.cos(pitch), Math.PI, pitch);
+  const over = wreckAt("muscle", 0, HUB_Y + HALF_BASE * Math.sin(pitch) - HUB_Y * Math.cos(pitch), AXLE_OVER_Z + HALF_BASE * Math.cos(pitch), Math.PI, pitch);
   const cars = [parked, over];
   return { over, cars, w: makeWorld(cars, false, false, PARKED) };
 }

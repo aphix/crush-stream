@@ -1,15 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { applyDrive, idleDrive, type DriveInput } from "./car-drive.ts";
-import { assignClass, CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
+import { CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
 import { LOSS_SIZE, WHEEL_RL, WHEEL_RR, wheelLoss } from "./wheel-loss.ts";
 import { blankAiCar, DerbyBrain } from "../ai/derby-ai.ts";
 import { RaceBrain } from "../ai/race-ai.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
-import { aiCar, decide, mass, paint } from "./test-support.ts";
+import { aiCar, decide, mass } from "./test-support.ts";
+import { makeCar } from "./ground-probe.test-util.ts";
 import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 
 /**
@@ -23,8 +23,7 @@ const CLASS_IDS = Object.keys(CLASSES) as VehicleClassId[];
 
 /** A sedan (or `cls`) at `v` m/s along +z with the wheels `lost` (indices into FL FR RL RR) popped off their hubs. */
 function car(lost: readonly number[], cls: VehicleClassId = "sedan", v = 0): DeformableCar {
-  const c = new DeformableCar(paint(), new THREE.Scene(), null, CLASSES[cls].style);
-  assignClass(c, cls);
+  const c = makeCar(cls);
   c.spawnFacing(0, 0, 0, v);
   for (const i of lost) c.deform.popHub(mass(c.deform, HUBS[i]!));
   return c;

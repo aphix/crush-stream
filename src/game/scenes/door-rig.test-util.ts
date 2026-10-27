@@ -4,9 +4,9 @@ import { growDrawn } from "../vehicle/car-parts.ts";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { PartSeat } from "../vehicle/part-geometry.ts";
 import { shellBox } from "../vehicle/car-panels.ts";
-import { assignClass, CLASSES, carClass, STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
+import { CLASSES, carClass, STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
-import { paint } from "../vehicle/test-support.ts";
+import { makeCar } from "../vehicle/ground-probe.test-util.ts";
 import { DoorRig, type DoorScenario, type RamShot } from "./door-rig.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -20,8 +20,7 @@ export function tyresStep(cars: readonly DeformableCar[], dt: number): void {
 
 /** A parked car of style `id` facing +Z, dressed in the class the game gives it (a monster's body rides its lift). */
 export function parkedStyle(id: CarStyleId): DeformableCar {
-  const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
-  assignClass(car, STYLE_CLASS[id]);
+  const car = makeCar(STYLE_CLASS[id]);
   car.spawnFacing(0, 0, 0, 0);
   return car;
 }
