@@ -78,13 +78,17 @@ export interface BootOptions {
   fades?: boolean;
   /** Advance the pacer's clock 1 µs per read: no frame is cut at the wall deadline, whatever the box's load. */
   pacer?: boolean;
+  /** Keep three's own `render` once `ready`, so `renderer.info.memory` counts what a frame uploads (the stub swallows every draw by default). */
+  draw?: boolean;
 }
 
-/** The real engine on the stand-ins (call `stubBrowser` first), nothing drawn, `ready` awaited. One per process: a second `CrashEngine` never resolves `ready`. */
-export async function bootEngine({ hud = new HudStore(), canvas = element(), fades = false, pacer = false }: BootOptions = {}): Promise<CrashEngine> {
+/** The real engine on the stand-ins (call `stubBrowser` first), nothing drawn unless `draw`, `ready` awaited. One per process: a second `CrashEngine` never resolves `ready`. */
+export async function bootEngine({ hud = new HudStore(), canvas = element(), fades = false, pacer = false, draw = false }: BootOptions = {}): Promise<CrashEngine> {
   const engine = new CrashEngine(canvas, hud, element());
+  const { render } = engine["renderer"];
   Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
   await engine.ready;
+  if (draw) engine["renderer"].render = render;
   if (!fades) engine.fadeScenes = false;
   if (pacer) {
     let tick = 0;
