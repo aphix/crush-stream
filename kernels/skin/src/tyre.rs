@@ -31,6 +31,10 @@ const REC_YB: usize = 8;
 const REC_YC: usize = 9;
 const REC_YMAX: usize = 10;
 
+// `sag_look`'s return, bit by bit.
+const LOOK_CLEAR: i32 = 1;
+const LOOK_FINITE: i32 = 2;
+
 const PLAN_OK: i32 = 0;
 const PLAN_SHORT: i32 = 1;
 const PLAN_DECLINED: i32 = 2;
@@ -247,8 +251,8 @@ pub unsafe extern "C" fn plan_grid(
 // ---- liftSaggingTriangles: the tyre's top samples read against the skin's triangles -----------------------------
 // job (f64): the wheel's axle (3) and hub (3) in the mesh's frame, the tyre's radius and half width at scale 1, the plan
 // grid's x0, z0, nx, nz, then the wheel's index (its bit in `liftable`, per vertex: it rests over that tyre).
-// `sag_look` takes each corner's lift into `read` and the samples (x, z, y) into `samples`, and returns 1 when every corner stands
-// over the highest sample: no triangle can stand short, and the caller need not load the plan for `sag_pass`.
+// `sag_look` takes each corner's lift into `read` and the samples (x, z, y) into `samples`, and returns `LOOK_CLEAR` when every corner stands
+// over the highest sample: no triangle can stand short, and the caller need not load the plan for `sag_pass`. `LOOK_FINITE`: every corner height is finite.
 #[no_mangle]
 pub unsafe extern "C" fn sag_look(pos: *const f32, weld: *const i32, tris: *const i32, corners: usize, lift: *const f32, read: *mut f32, samples: *mut f64, job: *const f64) -> i32 {
     let (e0, e1, e2) = (*job, *job.add(1), *job.add(2));
@@ -267,11 +271,14 @@ pub unsafe extern "C" fn sag_look(pos: *const f32, weld: *const i32, tris: *cons
     let r = tyre_r * scale;
     let half_w = tyre_half_w * scale;
     let mut lowest = f64::INFINITY;
+    let mut heights = 0.0;
     for k in 0..corners {
         let v = *tris.add(k) as usize;
         let corner_lift = *lift.add(*weld.add(v) as usize);
         *read.add(k) = corner_lift;
-        lowest = js_min(lowest, load(pos, v * 3 + 1) + corner_lift as f64);
+        let height = load(pos, v * 3 + 1) + corner_lift as f64;
+        lowest = js_min(lowest, height);
+        heights += height;
     }
     let mut highest = f64::NEG_INFINITY;
     let mut n = 0usize;
@@ -289,11 +296,36 @@ pub unsafe extern "C" fn sag_look(pos: *const f32, weld: *const i32, tris: *cons
         }
     }
     // A triangle's height inside it is a blend of its corners': with every corner over the highest sample, none can stand short.
-    (lowest > highest + 1e-9) as i32
+    ((lowest > highest + 1e-9) as i32 * LOOK_CLEAR) | ((heights.is_finite() as i32) * LOOK_FINITE)
+}
+
+// Triangle `i`'s plan terms, corner heights (lift included) and the highest of them, once for the many samples that read it.
+#[inline(always)]
+unsafe fn fill_record(record: *mut f64, i: usize, pos: *const f32, weld: *const i32, tris: *const i32, den: *const f64, lift: *const f32) {
+    let t = i * 3;
+    let va = *tris.add(t) as usize;
+    let vb = *tris.add(t + 1) as usize;
+    let vc = *tris.add(t + 2) as usize;
+    let (a, b, c) = (va * 3, vb * 3, vc * 3);
+    *record.add(REC_DEN) = *den.add(i);
+    *record.add(REC_C1) = load(pos, b + 2) - load(pos, c + 2);
+    *record.add(REC_C2) = load(pos, c) - load(pos, b);
+    *record.add(REC_C3) = load(pos, c + 2) - load(pos, a + 2);
+    *record.add(REC_C4) = load(pos, a) - load(pos, c);
+    *record.add(REC_CX) = load(pos, c);
+    *record.add(REC_CZ) = load(pos, c + 2);
+    let ya = load(pos, a + 1) + *lift.add(*weld.add(va) as usize) as f64;
+    let yb = load(pos, b + 1) + *lift.add(*weld.add(vb) as usize) as f64;
+    let yc = load(pos, c + 1) + *lift.add(*weld.add(vc) as usize) as f64;
+    *record.add(REC_YA) = ya;
+    *record.add(REC_YB) = yb;
+    *record.add(REC_YC) = yc;
+    *record.add(REC_YMAX) = js_max(js_max(ya, yb), yc);
 }
 
 // `lift` and `dirty` are written when a sample is short; `bump` is zero on entry and on return; `records` is scratch,
-// `RECORD_LEN` f64 a triangle. Returns 1 when any corner was lifted.
+// `RECORD_LEN` f64 a triangle, filled when a sample first reads it (`built`, a byte a triangle, is scratch too). `look` is
+// `sag_look`'s return. Returns 1 when any corner was lifted.
 #[no_mangle]
 pub unsafe extern "C" fn sag_pass(
     pos: *const f32,
@@ -309,35 +341,18 @@ pub unsafe extern "C" fn sag_pass(
     bump: *mut f32,
     dirty: *mut u8,
     records: *mut f64,
+    built: *mut u8,
     samples: *const f64,
     job: *const f64,
+    look: i32,
 ) -> i32 {
     let (x0, z0) = (*job.add(8), *job.add(9));
     let (nx_f, nz_f) = (*job.add(10), *job.add(11));
     let bit = 1u8 << (*job.add(12) as u32);
-    // Each triangle's plan terms, corner heights (lift included) and highest of them, once for the many samples that read it.
-    for i in 0..corners / 3 {
-        let t = i * 3;
-        let va = *tris.add(t) as usize;
-        let vb = *tris.add(t + 1) as usize;
-        let vc = *tris.add(t + 2) as usize;
-        let (a, b, c) = (va * 3, vb * 3, vc * 3);
-        let record = records.add(i * RECORD_LEN);
-        *record.add(REC_DEN) = *den.add(i);
-        *record.add(REC_C1) = load(pos, b + 2) - load(pos, c + 2);
-        *record.add(REC_C2) = load(pos, c) - load(pos, b);
-        *record.add(REC_C3) = load(pos, c + 2) - load(pos, a + 2);
-        *record.add(REC_C4) = load(pos, a) - load(pos, c);
-        *record.add(REC_CX) = load(pos, c);
-        *record.add(REC_CZ) = load(pos, c + 2);
-        let ya = load(pos, a + 1) + *lift.add(*weld.add(va) as usize) as f64;
-        let yb = load(pos, b + 1) + *lift.add(*weld.add(vb) as usize) as f64;
-        let yc = load(pos, c + 1) + *lift.add(*weld.add(vc) as usize) as f64;
-        *record.add(REC_YA) = ya;
-        *record.add(REC_YB) = yb;
-        *record.add(REC_YC) = yc;
-        *record.add(REC_YMAX) = js_max(js_max(ya, yb), yc);
-    }
+    // With every corner height finite a blend of them is finite, so a sample's best height only rises: once it stands at the sample's own
+    // height it is not short and no later triangle changes that.
+    let settles = look & LOOK_FINITE != 0;
+    core::ptr::write_bytes(built, 0, corners / 3);
     let mut sample_skin = [f64::NEG_INFINITY; SAG_COUNT];
     let mut sample_corner = [-1i32; SAG_COUNT];
     let mut sample_share = [0.0f64; SAG_COUNT];
@@ -361,6 +376,10 @@ pub unsafe extern "C" fn sag_pass(
                 continue;
             }
             let record = records.add(i * RECORD_LEN);
+            if *built.add(i) == 0 {
+                fill_record(record, i, pos, weld, tris, den, lift);
+                *built.add(i) = 1;
+            }
             // Its blend of the corner heights stands no higher than the highest of them (a rounding's width over): under the best so far, it cannot replace it.
             if *record.add(REC_YMAX) + SAG_BLEND_SLACK < sample_skin[n] {
                 continue;
@@ -383,6 +402,9 @@ pub unsafe extern "C" fn sag_pass(
             sample_share[n] = (if *liftable.add(*tris.add(t) as usize) & bit != 0 { l1 } else { 0.0 })
                 + (if *liftable.add(*tris.add(t + 1) as usize) & bit != 0 { l2 } else { 0.0 })
                 + (if *liftable.add(*tris.add(t + 2) as usize) & bit != 0 { l3 } else { 0.0 });
+            if settles && y >= *samples.add(2 * SAG_COUNT + n) {
+                break;
+            }
         }
     }
     let mut raised = false;

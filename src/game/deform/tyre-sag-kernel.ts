@@ -78,6 +78,8 @@ const PLAN_FILED_TYPICAL = 32768;
 const SAG_RECORD_LENGTH = 11;
 /** The tyre top's samples (`SAG_COUNT`, `tyre.rs`): `sag_look` writes their x, z and y here for `sag_pass`. */
 const SAG_SAMPLE_COUNT = 195;
+/** The bits of `sag_look`'s return (`LOOK_CLEAR`, `LOOK_FINITE`, `tyre.rs`): `sag_pass` reads the whole of it. */
+const SAG_LOOK = { clear: 1, finite: 2 } as const;
 
 export class TyreSagArena {
   private readonly ex: TyreSagExports;
@@ -99,7 +101,9 @@ export class TyreSagArena {
   /** The pass's per-triangle scratch (`SAG_RECORD_LENGTH` numbers each). */
   private readonly records = new Scratch(Float64Array);
   private readonly samples = new Scratch(Float64Array);
-  private readonly blocks = [this.pos, this.weld, this.liftable, this.tris, this.box, this.den, this.start, this.filed, this.lift, this.bump, this.dirty, this.read, this.job, this.records, this.samples];
+  /** Per triangle, whether the pass has filled its record yet (the kernel zeroes it each pass). */
+  private readonly built = new Scratch(Uint8Array);
+  private readonly blocks = [this.pos, this.weld, this.liftable, this.tris, this.box, this.den, this.start, this.filed, this.lift, this.bump, this.dirty, this.read, this.job, this.records, this.built, this.samples];
 
   constructor(ex: TyreSagExports) {
     this.ex = ex;
@@ -154,9 +158,9 @@ export class TyreSagArena {
     for (let k = 0; k < HELD_LENGTH; k++) job[SAG_JOB.held + k] = skin.heldAt[wheel * HELD_LENGTH + k]!;
     job[SAG_JOB.tyreR] = tyre.r;
     job[SAG_JOB.tyreHalfW] = tyre.halfW;
-    const standsClear = this.ex.sag_look(this.pos.at, this.weld.at, this.tris.at, tris.length, this.lift.at, this.read.at, this.samples.at, this.job.at) !== 0;
+    const look = this.ex.sag_look(this.pos.at, this.weld.at, this.tris.at, tris.length, this.lift.at, this.read.at, this.samples.at, this.job.at);
     skin.sagRead[wheel]!.set(this.read.view.subarray(0, tris.length));
-    if (standsClear) return false;
+    if (look & SAG_LOOK.clear) return false;
     this.loadPlan(skin, plan, wheel);
     const raised =
       this.ex.sag_pass(
@@ -173,8 +177,10 @@ export class TyreSagArena {
         this.bump.at,
         this.dirty.at,
         this.records.at,
+        this.built.at,
         this.samples.at,
         this.job.at,
+        look,
       ) !== 0;
     if (!raised) return false;
     skin.lift.set(this.lift.view.subarray(0, skin.lift.length));
@@ -197,6 +203,7 @@ export class TyreSagArena {
     this.want(this.dirty, skin.dirty.length);
     this.want(this.read, tris.length);
     this.want(this.records, (tris.length / 3) * SAG_RECORD_LENGTH);
+    this.want(this.built, tris.length / 3);
     this.settle();
   }
 
