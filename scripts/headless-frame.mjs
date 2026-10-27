@@ -132,8 +132,17 @@ const { PageWorker } = await import("../src/game/engine/page-worker.test-util.ts
 
 const game = (path) => import(pathToFileURL(join(root, "src/game", path)).href);
 const { mulberry32 } = await game("world/placements.ts");
-// Seeded before the engine's modules load: boot's own draws (procedural textures) are then the same in every run.
-Math.random = mulberry32(SEED);
+// Seeded before the engine's modules load: boot's own draws (procedural textures) are then the same in every run. Three's uuids draw from a
+// stream of their own: a tree that creates fewer objects (a cache, a pool) would otherwise shift every later draw, and its frame would differ for that alone.
+const drawRandom = mulberry32(SEED);
+const uuidRandom = mulberry32(SEED + 1);
+Math.random = () => {
+  const limit = Error.stackTraceLimit;
+  Error.stackTraceLimit = 3;
+  const fromUuid = new Error().stack.includes("generateUUID");
+  Error.stackTraceLimit = limit;
+  return fromUuid ? uuidRandom() : drawRandom();
+};
 await (await game("deform/skin-kernel.test-util.ts")).loadSkinKernelForTest();
 await game("kernel/rapier-node.test-util.ts");
 const { element, stubBrowser } = await game("engine/engine-headless.test-util.ts");
