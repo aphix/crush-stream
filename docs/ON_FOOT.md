@@ -124,7 +124,7 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
 - The get-up is assisted (above) and does not read the ground's slope or lean on a wall; on a ramp he gets up as on the flat.
 - A thrown driver and a person run down elsewhere still use the old, unmotored dummy.
 - The pad: B is the only control that is free on every pad. A touch screen has the **Out** / **In** tap beside Boost (`CONTROLS.md`); the HUD's prompt line
-  shows only on desktop, so a refusal there reads only on desktop too.
+  shows only on desktop, and on touch only a refusal's reason shows, beside that tap.
 
 ## What pins it
 
@@ -136,7 +136,8 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
 - Touch: the fleet rows tap the HUD's Out / In (`tapOnFoot`: out on one poll, the strip's gas walks him, in at his door) and find no button where Enter does
   nothing (a thrown driver, the seat only following). `engine-walk-input.test.ts` walks each scheme's thumbs forward, back and sideways, and runs only
   from the strip's Boost cap. Red against: the tap on another pad bit, the HUD's foot read ungated, the touch pedals not read as the forward axis, RT from
-  the touch gas running him, Easy not drawing the strip on foot.
+  the touch gas running him, Easy not drawing the strip on foot. A tap on a rolling car leaves him in with "Stop the car first" as `FootHud.refusal` (the
+  prompt's own words), gone 2.5 s later; red against a HUD read without the refusal.
 - `ragdoll-walker-car.test.ts`: a car driven through the spot where his walker stands, and again where nobody does; the car's position, velocity and
   every mass match bit for bit (`assertSameNumbers`). Red against a walker that shoves a car it is near.
 - `ragdoll-walker-ground.test.ts`: starting the walker puts a run the worker held into this thread's world (red without the pin), and his ground patch
