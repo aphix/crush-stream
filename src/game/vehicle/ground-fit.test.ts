@@ -9,6 +9,7 @@ import { FleetRamps, RAMP } from "../scenes/fleet-ramps.ts";
 import { collideOn } from "../scenes/ramp-collide.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { blankPoint, pointOn, Track } from "../world/track.ts";
+import { parseTrack } from "../world/track-schema.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { useStiffSprings } from "./stiff-springs.test-util.ts";
 
@@ -40,44 +41,43 @@ const collideRamps = collideOn(ramps);
 const collide = (c: DeformableCar, h: number) => collideRamps(c, 0, h);
 const MID = RAMP.start + RAMP.len / 2;
 
+/** The +z ramp: the fleet lays its two ramps as mirror images either side of the run, so the other's cells are these reflected. */
 function rampSites(): Site[] {
   const sites: Site[] = [];
-  for (const side of [1, -1]) {
-    const tag = side > 0 ? "ramp+z" : "ramp-z";
-    const add = (name: string, kind: Kind, x: number, z: number, classes: readonly VehicleClassId[]) =>
-      sites.push({
-        name: `${tag} ${name}`,
-        kind,
-        classes,
-        // 6 s: a car dropped on a ridge or an edge can still be rolling off it at 3 s (it is not at rest to judge).
-        runs: (cls) => COMPASS.map(([h, yaw]): Run => [h, drop(ramps, cls, x, side * z, yaw, { collide, seconds: 6 })]),
-      });
-    add("mid-face", "plain", 0, MID, SEDAN);
-    // The top: the car's tail hangs over the 1.2 m back wall, so there is no level pose to hold it to (edge).
-    add("top (h 1.10)", "edge", 0, RAMP.start + 0.4, SEDAN);
-    add("low end (h 0.08)", "plain", 0, RAMP.start + RAMP.len - 0.3, SEDAN);
-    // Straddling the side edge: left wheels on the slope, right wheels on the flat beside it.
-    for (const [lip, z] of [
-      ["front lip", RAMP.start + RAMP.len - 0.8],
-      ["mid-face", MID],
-      ["rear lip", RAMP.start + 1],
+  const add = (name: string, kind: Kind, x: number, z: number, classes: readonly VehicleClassId[]) =>
+    sites.push({
+      name: `ramp+z ${name}`,
+      kind,
+      classes,
+      // 6 s: a car dropped on a ridge or an edge can still be rolling off it at 3 s (it is not at rest to judge).
+      runs: (cls) => COMPASS.map(([h, yaw]): Run => [h, drop(ramps, cls, x, z, yaw, { collide, seconds: 6 })]),
+    });
+  add("mid-face", "plain", 0, MID, SEDAN);
+  // The top: the car's tail hangs over the 1.2 m back wall, so there is no level pose to hold it to (edge).
+  add("top (h 1.10)", "edge", 0, RAMP.start + 0.4, SEDAN);
+  add("low end (h 0.08)", "plain", 0, RAMP.start + RAMP.len - 0.3, SEDAN);
+  // Straddling the side edge: left wheels on the slope, right wheels on the flat beside it.
+  for (const [lip, z] of [
+    ["front lip", RAMP.start + RAMP.len - 0.8],
+    ["mid-face", MID],
+    ["rear lip", RAMP.start + 1],
+  ] as const) {
+    for (const [where, x] of [
+      ["on edge", RAMP.halfW],
+      ["0.4 in", RAMP.halfW - 0.4],
+      ["0.4 out", RAMP.halfW + 0.4],
     ] as const) {
-      for (const [where, x] of [
-        ["on edge", RAMP.halfW],
-        ["0.4 in", RAMP.halfW - 0.4],
-        ["0.4 out", RAMP.halfW + 0.4],
-      ] as const) {
-        add(`${lip}: ${where}`, "edge", x, z, SEDAN_MONSTER);
-      }
+      add(`${lip}: ${where}`, "edge", x, z, SEDAN_MONSTER);
     }
   }
   return sites;
 }
 
 // (b), (c) The stunt course (CRUSH crest, bank bowl) and the rally hairpin.
-const courses = TRACKS.map((j) => new Track(j));
-const stunt = courses.find((c) => c.id === "stunt")!;
-const rally = courses.find((c) => c.id === "rally")!;
+const course = (id: string): Track => new Track(TRACKS.find((j) => parseTrack(j).id === id)!);
+const stunt = course("stunt");
+const rally = course("rally");
+const oval = course("oval");
 const _pt = blankPoint();
 
 /** A braked drop `lat` m left of `track`'s centre at `s`, at each `compass` heading and at each of `along` the road's. */
@@ -192,7 +192,6 @@ describe("given a car braking on a flat straight", () => {
   // The drawn nose dips under braking (car-load's weight transfer, kept) toward a keel only 3.2 cm over the road: the drawn
   // body bottoms out on the road (`Suspension.bottomOut`) instead of the springs pressing it 3.5 cm in (sedan/muscle/police).
   it("when it brakes from 30 m/s, then every class dips its nose and keeps its drawn keel and bumpers out of the road", () => {
-    const oval = courses.find((c) => c.id === "oval")!;
     for (const cls of VEHICLE_CLASS_IDS) {
       const out = drive(oval, cls, 60, 180, () => 30, { lead: 35, brakeFrom: 100 });
       let pen = 0;

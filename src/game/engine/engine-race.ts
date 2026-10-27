@@ -40,8 +40,8 @@ export class RaceDirector extends RaceHudLayer {
   mirrored = false;
   /** Per car id: the drafting bonuses (`CarRecord.drafts`) already put on a meter. */
   private readonly drafted = new Int32Array(MAX_CARS);
-  /** The AI's hands: every AI driver's input passes through them on its way to the drive. */
-  private readonly hands = new InputFade();
+  /** The AI's hands: every AI driver's input passes through them on its way to the drive. Fresh at each start, as the brain is: they key a slot by its car's `placements`, which a car rebuilt for a new scene counts again from 0. */
+  private hands = new InputFade();
   /** The chasing police units handed to the rules each step (`BUST`; `PoliceBrain.chasers` fills it). */
   private readonly cops: AiCar[] = [];
   private readonly autoCands: Cand[] = [];
@@ -62,6 +62,7 @@ export class RaceDirector extends RaceHudLayer {
     this.auto = false;
     this.free = false;
     this.lobbySeatedFor = -1;
+    this.hands = new InputFade();
     super.start(trackId, grid);
     this.armGuard();
     // A Watch race opens on Auto driver + Auto camera (any manual pick still overrides).

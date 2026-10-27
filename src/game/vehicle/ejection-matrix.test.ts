@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { collide, ejectBar, strikerShare, type Hit, type Outcome } from "./ejection.test-util.ts";
+import { collide as collideOnce, ejectBar, strikerShare, type Hit, type Outcome } from "./ejection.test-util.ts";
 import { VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
 
 /**
@@ -25,6 +25,15 @@ const label = (hit: Hit, a: VehicleClassId, b: VehicleClassId, mps: number): str
 
 /** Health may only fall as the speed rises: a faster hit leaves at most this much more (a tolerance for the sim's own jitter). */
 const HEALTH_JITTER = 0.02;
+
+/** Each hit, pair and speed is played once: the lethal and the sweep rows read the same 40 and 55 m/s crashes. */
+const played = new Map<string, [Outcome, Outcome]>();
+function collide(hit: Hit, a: VehicleClassId, b: VehicleClassId, mps: number): [Outcome, Outcome] {
+  const key = `${hit} ${a} ${b} ${mps}`;
+  let out = played.get(key);
+  if (!out) played.set(key, (out = collideOnce(hit, a, b, mps)));
+  return out;
+}
 
 
 describe("given every striker and struck class pair (police and muscle left out) in a head-on, a T-bone and a rear-end hit, at the HUD's default crush settings", () => {

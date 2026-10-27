@@ -15,28 +15,40 @@ import { PHASE_SWEEP } from "./engine-bench-report.ts";
 import { endSweep, sweep } from "./bench-sweep.ts";
 import type { CrashEngine } from "./engine.ts";
 
-/** Sim seconds each step of the sequence runs: the grid, the start, the first crash and the pile-up that follows it (a wreck phase of about 260 ms a second at 7-11 s). */
-const STEP_S = 14;
-/** Sim seconds the staged window is run for in the quick-start rows: the pair meets in the first seconds, so the wrecks and their contacts are in it. */
-const QUICK_CHECK_S = 6;
+/** Sim seconds each step runs past the staged head-on: the pair meets in 0.2 s, so the wrecks, their contacts and a thrown driver are in it. */
+const CRASH_S = 2;
+/** Frames the grid may take to go green on the 1/240 s floor (a 3 s countdown with the course loaded): a guard, not a wait. */
+const GRID_FRAMES = 4000;
 
 describe("given one page that runs the bench's steps in turn, as the loop does (a second CrashEngine never resolves ready, so one engine for the file)", () => {
   let engine: CrashEngine;
-  /** The sim digest of each step of the sequence, by step name. */
+  /** The sim digest of each step of the sequence, whether its head-on pair was staged, and its wrecks at the end, by step name. */
   const digests: Record<string, string> = {};
-  /** One step as `runBench` begins it (its adaptive quality reset, its scene entered), then `STEP_S` sim seconds on the 1/240 s floor; `watched`: with the window's phase clock, counters and per-second series recording (`watchWork`, ticked every frame). */
+  const staged: Record<string, boolean> = {};
+  const wrecks: Record<string, number> = {};
+  /**
+   * One step as `runBench` begins it (its adaptive quality reset, its scene entered), the grid run to green on the 1/240 s floor, the quick bench's head-on
+   * staged at the start line, then `CRASH_S` of sim; `watched`: with the window's phase clock, counters and per-second series recording (`watchWork`, ticked every frame).
+   */
   const step = (name: string, query: string, watched = false): void => {
     engine.resetAdaptiveQuality();
     const since = simCounters(engine);
     enterBenchScene(engine, engine.benchParts(), benchPlan(query)!);
     engine.pace.pin = false;
     const work = watched ? watchWork(engine.benchParts(), engine.pace) : null;
-    for (let i = 1; i <= STEP_S * FINE_HZ; i++) {
+    const { race } = engine.benchParts();
+    let i = 0;
+    const frame = (): void => {
       runFrames(engine, 1);
+      i++;
       work?.tick(i * FRAME_S, i * FRAME_S);
-    }
+    };
+    while (race.phase !== "racing" && i < GRID_FRAMES) frame();
+    staged[name] = race.crashAtStart(CRASH_GAP, CRASH_SPEED);
+    for (const end = i + CRASH_S * FINE_HZ; i < end; ) frame();
     work?.end();
     digests[name] = simDigest(engine, since);
+    wrecks[name] = engine.benchParts().live().filter((car) => car.crashed).length;
   };
 
   before(async () => {
@@ -76,31 +88,15 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
     assert.deepEqual(labels, ["epicenter off", "EPICENTER ON", "epicenter off", "epicenter off"]);
   });
 
-  /** Frames the grid may take to go green on the 1/240 s floor (a 3 s countdown with the course loaded): a guard, not a wait. */
-  const GRID_FRAMES = 4000;
-  /** The quick bench's start as `runBench` makes it: the scene entered, the grid run to green, the head-on pair staged at the start line, then `seconds` of sim. */
-  const quickStart = (query: string, seconds: number): { staged: boolean; digest: string; wrecks: number } => {
-    engine.resetAdaptiveQuality();
-    enterBenchScene(engine, engine.benchParts(), benchPlan(query)!);
-    engine.pace.pin = false;
-    const { race } = engine.benchParts();
-    for (let guard = 0; race.phase !== "racing" && guard < GRID_FRAMES; guard++) runFrames(engine, 1);
-    const since = simCounters(engine);
-    const staged = race.crashAtStart(CRASH_GAP, CRASH_SPEED);
-    runFrames(engine, seconds * FINE_HZ);
-    return { staged, digest: simDigest(engine, since), wrecks: engine.benchParts().live().filter((car) => car.crashed).length };
-  };
-
-  it("when the quick bench's start is made twice on the city, then the head-on pair is staged both times and the window that follows is bit for bit the same: the arms of a map do identical work", () => {
-    const first = quickStart("?bench=city", QUICK_CHECK_S);
-    const second = quickStart("?bench=city", QUICK_CHECK_S);
-    assert.equal(first.staged, true, "the pair is staged at green");
-    assert.ok(first.wrecks >= 2, `${first.wrecks} wrecks after ${QUICK_CHECK_S} s: the staged pair crashed`);
-    assert.equal(second.digest, first.digest);
+  it("when the quick bench's start is made on the city in two steps, then the head-on pair is staged both times and crashes (the bit-for-bit window is the first row's)", () => {
+    for (const name of ["city first", "city again"]) {
+      assert.equal(staged[name], true, `${name}: the pair is staged at green`);
+      assert.ok(wrecks[name]! >= 2, `${name}: ${wrecks[name]} wrecks ${CRASH_S} s on: the staged pair crashed`);
+    }
   });
 
   it("when the quick bench starts on the strip, then the pair is staged there too", () => {
-    assert.equal(quickStart("?bench=strip", 1).staged, true);
+    assert.equal(staged["strip"], true);
   });
 
   it("when a full warm-up sweep (every FX tier, both pacer pins, every detail rung, the sky, the epicenter on and off) runs on the city and the page is reset as a step does, then the city's sim after it is bit for bit the first one's", async () => {
