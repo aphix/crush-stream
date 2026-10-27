@@ -61,6 +61,8 @@ export function sweepSeeds(list: readonly number[]): void {
   describe(`given highlight replays of the crashes in seeded races, seeds ${seeds[0]} to ${seeds[seeds.length - 1]}`, () => {
     for (const seed of seeds) it(`when seed ${seed}'s race is recorded and each clip it kept is replayed headless, then every car matches the live sim at every step, to the bit`, (t) => {
       const w = makeWorld();
+      // Only the replay skins its cars (`agreement`); the live run's skin pass is unread.
+      w.skin = false;
       w.race.enter();
       try {
         const recs = recordField(w, {
