@@ -1,12 +1,11 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { decodeShare, encodeShare } from "../hud/share-url.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 /** Frames the rows run: enough that a panel fed once per frame has been fed more than once. */
 const FRAMES = 5;
@@ -39,10 +38,7 @@ describe("given the frame-time panel (the Backslash key) up on the real engine",
       .filter((kv) => kv.startsWith("stats="));
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine();
   });
   after(() => {
     engine.dispose();

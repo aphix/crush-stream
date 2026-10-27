@@ -2,12 +2,11 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { CHASE } from "../present/drive-cam.ts";
 import type { ContactHit } from "../scenes/engine-props.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -39,10 +38,7 @@ describe("given the real engine and a hit on the car the camera follows", () => 
   };
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine();
     e = engine as unknown as Reach;
   });
   after(() => {

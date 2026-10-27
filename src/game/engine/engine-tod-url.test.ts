@@ -1,12 +1,11 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { decodeShare } from "../hud/share-url.ts";
 import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 describe("given the real engine and a browser address bar that records every write", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -17,10 +16,7 @@ describe("given the real engine and a browser address bar that records every wri
     globalThis.history.pushState = globalThis.history.replaceState = (_state, _unused, url) => {
       globalThis.location.hash = String(url).slice(String(url).indexOf("#"));
     };
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine();
   });
   after(() => {
     engine.dispose();

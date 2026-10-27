@@ -7,8 +7,8 @@ import { LANDING } from "../present/landing.ts";
 import type { ContactHit } from "../scenes/engine-props.ts";
 import type { Rumble } from "../vehicle/gamepad.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -41,10 +41,7 @@ describe("given the real engine, with a pad that records the effects it is sent"
   before(async () => {
     stubBrowser();
     store = new HudStore();
-    engine = new CrashEngine(element(), store, element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine({ hud: store });
     e = engine as unknown as Reach;
     e.pad.rumble = (r) => {
       sent.push({ ...r });

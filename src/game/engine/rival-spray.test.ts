@@ -4,7 +4,6 @@ import { setImmediate as yieldToLoop } from "node:timers/promises";
 import { createHash } from "node:crypto";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { CAR_SPRAY, NO_CAR_PICK, SPRAY_PALETTE } from "../match/look-data.ts";
 import type { HighlightClip } from "../match/highlights.ts";
 import { readRace, writeRace } from "../net/codec.ts";
@@ -14,12 +13,11 @@ import { RivalLooks } from "../present/rival-look.ts";
 import { BARE_SPRAY } from "../present/spray.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { setGround } from "../world/ground.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
 import { assertSameDigest } from "../vehicle/test-support.ts";
 import { recordFlat, type Spawn } from "./replay-fidelity.test-util.ts";
 import { TRAFFIC_NAME } from "./engine-race-field.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { rivalSeedOf } from "./rival-seed.ts";
 
 /**
@@ -27,7 +25,6 @@ import { rivalSeedOf } from "./rival-seed.ts";
  * saved clip, a car's worn spray is read off the paint's own shader hook, the way the renderer would sample it.
  */
 
-const FRAME = 1 / FRAME_HZ;
 /** Event-loop turns the saved clip's async decode may take before the row calls it stuck. */
 const MAX_TURNS = 5000;
 /** The race the rows run: AI racers on car 1-3, the player on car 0, traffic and police cars after them. */
@@ -99,9 +96,6 @@ describe("given the real engine headless", () => {
   let recorded: HighlightClip;
   let savedText: string;
   const store = new Map<string, string>();
-  const run = (seconds: number): void => {
-    for (let i = 0; i < seconds * FRAME_HZ; i++) engine.advance(FRAME, { frameDt: FRAME });
-  };
   const cars = (): DeformableCar[] => engine["live"]();
   const race = () => engine["race"];
   const wornBy = (slots: readonly number[]): (string | null)[] => slots.map((slot) => sprayOn(cars()[slot]!));
@@ -134,12 +128,7 @@ describe("given the real engine headless", () => {
     savedText = await encodeSaved({ ...recorded, trackId: "oval", look: CLIP_LOOK, cars: recorded.cars.map((c) => (c.slot === 2 ? { ...c, name: TRAFFIC_NAME } : c)) });
     stubBrowser();
     globalThis.localStorage = { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => void store.set(key, value), removeItem: (key: string) => void store.delete(key) } as Storage;
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
-    let tick = 0;
-    Object.assign(engine.pace, { now: () => (tick += 0.001) });
+    engine = await bootEngine({ pacer: true });
   });
   after(() => {
     engine.dispose();
@@ -150,7 +139,7 @@ describe("given the real engine headless", () => {
   it("when a single race starts, then every AI racer wears the rival spray of the field's look, and the player's car, the traffic and the police wear none", () => {
     engine.toggleRace();
     startSingle();
-    run(1);
+    runSeconds(engine, 1);
     assert.ok(cars().length > RACERS, "the city has traffic or police past the racers");
     assertRivals(race().look, "single race");
     assert.equal(sprayOn(cars()[0]!), ownDigest(), "the player's car wears its own (blank) garage spray, no rival's");
@@ -160,12 +149,12 @@ describe("given the real engine headless", () => {
   it("when the player has a garage spray and a race starts, then it stays on car 0 byte for byte while the opponents wear rival sprays, even when car 0 is itself an AI racer (spectating)", () => {
     const own = ownSpray();
     engine.raceCommand({ type: "start" });
-    run(1);
+    runSeconds(engine, 1);
     assert.equal(sprayOn(cars()[0]!), own, "the player's own spray is on car 0");
     assertRivals(race().look, "after the player's spray");
     engine.raceCommand({ type: "options", options: { spectate: true } });
     engine.raceCommand({ type: "start" });
-    run(1);
+    runSeconds(engine, 1);
     assert.equal(race()["entrants"][0]?.kind, "ai", "car 0 is an AI racer in a spectated race");
     assert.equal(sprayOn(cars()[0]!), own, "the player's own spray still wins on car 0");
     engine.raceCommand({ type: "options", options: { spectate: false } });
@@ -176,7 +165,7 @@ describe("given the real engine headless", () => {
     engine.raceCommand({ type: "campaign" });
     const look = race().look;
     const firstGrid = [...race()["grid"]];
-    for (let second = 0; second < MAX_RACING_SECONDS && race().hud().standings.every((row, place) => row.id === firstGrid[place]); second++) run(1);
+    for (let second = 0; second < MAX_RACING_SECONDS && race().hud().standings.every((row, place) => row.id === firstGrid[place]); second++) runSeconds(engine, 1);
     assert.notEqual(
       race().hud().standings.map((row) => row.id).join(","),
       firstGrid.join(","),
@@ -201,7 +190,7 @@ describe("given the real engine headless", () => {
   });
 
   it("when the race is left, then every car is bare again", () => {
-    run(1);
+    runSeconds(engine, 1);
     assert.ok(wornBy(AI_SLOTS).every((spray) => spray !== null), "worn in the race");
     engine.toggleRace();
     assert.equal(race().active, false);
@@ -211,7 +200,7 @@ describe("given the real engine headless", () => {
   it("when the FX tier rises to High during a race and falls back, then the opponents' sprays are redrawn at the garage's size once, keep that size at the lower tier, each the oracle's, and the player's car keeps its own", () => {
     engine.toggleRace();
     startSingle();
-    run(1);
+    runSeconds(engine, 1);
     const own = ownDigest();
     const sides = (): string => AI_SLOTS.map((slot) => wornMap(cars()[slot]!)?.image.width).join(",");
     const sidesOf = (width: number): string => AI_SLOTS.map(() => width).join(",");
@@ -221,14 +210,14 @@ describe("given the real engine headless", () => {
     try {
       engine["cine"].setTier("high");
       rivalsOracle.useTier("high", "desktop");
-      run(0.1);
+      runSeconds(engine, 0.1);
       assert.equal(sides(), sidesOf(CAR_SPRAY.w), "the garage's 256 a side at High");
       assertRivals(race().look, "at High");
       assert.equal(sprayOn(cars()[0]!), own, "the player's own spray is as it was");
     } finally {
       engine["cine"].setTier("minimal");
     }
-    run(0.1);
+    runSeconds(engine, 0.1);
     assert.equal(sides(), sidesOf(CAR_SPRAY.w), "the finer size is kept after the fall: no redraw on a step down");
     assertRivals(race().look, "after falling back");
     assert.equal(sprayOn(cars()[0]!), own, "the player's own spray is still as it was");
@@ -238,7 +227,7 @@ describe("given the real engine headless", () => {
   it("when a netplay client adopts the host's race state, then its AI racers wear the host's sprays on a fresh snapshot, and the player's car and the peers' stay bare", () => {
     engine.toggleRace();
     startSingle();
-    run(1);
+    runSeconds(engine, 1);
     const hostLook = race().look;
     const host = wornBy(AI_SLOTS);
     assertRivals(hostLook, "host");

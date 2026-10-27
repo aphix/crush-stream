@@ -3,17 +3,15 @@ import assert from "node:assert/strict";
 import type * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { TIME_OF_DAY } from "../match/types.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import city from "../world/tracks/city.json" with { type: "json" };
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
-const FRAME = 1 / FRAME_HZ;
 
 /** The sandbox's far plane (m) and fog density as a fresh page builds them (`CrashEngine`'s constructor). */
 const SANDBOX_FAR = 180;
@@ -29,9 +27,6 @@ describe("given the real engine on a page whose URL says ?draw=max&scale=1.5&sha
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
   let hud: HudStore;
-  const run = (seconds: number): void => {
-    for (let i = 0; i < seconds * 60; i++) engine.advance(FRAME, { frameDt: FRAME });
-  };
   /** The far plane (m) and fog density the view is drawn with now. */
   const view = (): string => `${engine["camera"].far} ${(engine["scene"].fog as THREE.FogExp2).density}`;
   /** The sun's shadow map edge (texels) and its box's half width (m). */
@@ -43,10 +38,7 @@ describe("given the real engine on a page whose URL says ?draw=max&scale=1.5&sha
     stubBrowser();
     Object.assign(globalThis, { location: { pathname: "/", search: "?draw=max&scale=1.5&shadow=high", hash: "", href: "http://x/", origin: "http://x" } });
     hud = new HudStore();
-    engine = new CrashEngine(element(), hud, element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine({ hud });
   });
   after(() => {
     engine.dispose();
@@ -75,12 +67,12 @@ describe("given the real engine on a page whose URL says ?draw=max&scale=1.5&sha
     engine.toggleRace();
     engine.raceCommand({ type: "program", options: { trackId: TRACK_ID.city, laps: 1, aiCount: 3, police: false, aggression: 0.5, aiDifficulty: AI_EVERY_SLICE, spectate: false, noReset: false, timeOfDay: TIME_OF_DAY.day } });
     engine.raceCommand({ type: "start" });
-    run(1);
+    runSeconds(engine, 1);
     assert.equal(view(), `${COURSE.far * FAR_REACH} ${COURSE.fog / FAR_REACH}`, "the course at far");
     engine.setDrawDistance("max");
     assert.equal(view(), `${COURSE.far * MAX_REACH} ${COURSE.fog / MAX_REACH}`, "the course at max, mid-race");
     engine["setScene"]("fleet");
-    run(1);
+    runSeconds(engine, 1);
     assert.equal(view(), `${SANDBOX_FAR * MAX_REACH} ${SANDBOX_FOG / MAX_REACH}`, "the sandbox at max, from its authored 180 m and 0.008");
   });
 

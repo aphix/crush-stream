@@ -4,8 +4,8 @@ import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { G } from "../vehicle/car-air-body.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -19,9 +19,6 @@ describe("given the real engine in a rig scene, watching its car", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
   let hud: HudStore;
-  const run = (seconds: number): void => {
-    for (let i = 0; i < seconds * 60; i++) engine.advance(FRAME, { frameDt: FRAME });
-  };
   /** Enter `id` from the fleet (a pick of the scene in play goes back to the fleet), its car watched (Q/E or a click), no key held. */
   const watch = (id: Rig): void => {
     engine["seat"].mode = "global";
@@ -30,7 +27,7 @@ describe("given the real engine in a rig scene, watching its car", () => {
     engine["setScene"](id);
     engine["seat"].focus(0);
     engine["keys"].clear();
-    run(FRAME); // one frame with no key down: the seat's pedal edge starts fresh
+    runSeconds(engine, FRAME); // one frame with no key down: the seat's pedal edge starts fresh
     engine["emitHud"]();
   };
   /**
@@ -46,22 +43,15 @@ describe("given the real engine in a rig scene, watching its car", () => {
   /** W for a moment (the seat takes the wheel), then released. */
   const takeWheel = (): void => {
     engine["keys"].add("KeyW");
-    run(0.1);
+    runSeconds(engine, 0.1);
     engine["keys"].clear();
   };
   before(async () => {
     stubBrowser();
     hud = new HudStore();
-    engine = new CrashEngine(element(), hud, element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine({ hud, pacer: true });
     // The rig car's spawn speed is drawn from the speed range at a random scene seed (10-32 m/s): a slow draw loses more than 10% in a second to rolling drag, which the 0.9 coast bars read as a stall. A fixed 24 m/s coasts the same every run.
     engine.setSpeedRange(24, 24);
-    // The pacer's step timing is wall clock: a loaded box makes a frame run past its deadline and give sim time up (the car coasts slow).
-    // A clock that reads 1 µs later each time (far from the deadline, real now + 8 ms, for any run this long) is not blind, so every frame steps its whole time.
-    let tick = 0;
-    Object.assign(engine.pace, { now: () => (tick += 0.001) });
   });
   after(() => {
     engine.dispose();
@@ -87,11 +77,11 @@ describe("given the real engine in a rig scene, watching its car", () => {
   it("when the chase view is picked on the corkscrew, then the camera sits behind the car within the chase distance, and the view and the run's coast survive a reset", () => {
     watch("corkscrew");
     const car = engine["carA"];
-    run(0.5);
+    runSeconds(engine, 0.5);
     // The orbit's next is Auto, then the free view (V from it comes back to Auto), then the chase.
     for (let presses = 0; presses < 4; presses++) engine.cycleCamera();
     assert.equal(engine["view"].specView(false), "third");
-    run(0.7);
+    runSeconds(engine, 0.7);
     const cam = engine["camera"].position;
     const dx = cam.x - car.group.position.x;
     const dz = cam.z - car.group.position.z;
@@ -102,7 +92,7 @@ describe("given the real engine in a rig scene, watching its car", () => {
     assert.ok(dist <= PLATFORM_CAMERA.third.dist + 1.5, `the camera is ${dist.toFixed(2)} m off, the chase distance is ${PLATFORM_CAMERA.third.dist}`);
     engine.reset();
     assert.equal(engine["view"].specView(false), "third", "the reset keeps the view");
-    run(1);
+    runSeconds(engine, 1);
     assertCoasting(car);
   });
 
@@ -114,7 +104,7 @@ describe("given the real engine in a rig scene, watching its car", () => {
     engine.reset();
     assert.equal(engine["seat"].mode, "follow", "the reset handed the car back to the rig");
     assert.equal(hud.get().seat, "follow", "the HUD says so");
-    run(1);
+    runSeconds(engine, 1);
     assertCoasting(car);
   });
 
@@ -125,7 +115,7 @@ describe("given the real engine in a rig scene, watching its car", () => {
     engine["seat"].esc();
     assert.equal(engine["seat"].mode, "follow");
     engine.reset();
-    run(1);
+    runSeconds(engine, 1);
     assertCoasting(car);
   });
 });

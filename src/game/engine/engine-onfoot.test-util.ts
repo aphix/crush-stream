@@ -2,13 +2,12 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { HudStore } from "../hud/hud-store.ts";
+import { tapOnFoot } from "../hud/touch-scheme.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { setGround } from "../world/ground.ts";
 import type { Walker } from "../present/ragdoll-walker.ts";
-import { tapOnFoot } from "../hud/touch-scheme.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, pressKey, stubBrowser } from "./engine-headless.test-util.ts";
 import { doorSpot } from "./onfoot-doors.ts";
 
 export const FRAME = 1 / FRAME_HZ;
@@ -48,13 +47,8 @@ export class OnFootRig {
 
   static async boot(): Promise<OnFootRig> {
     stubBrowser();
-    const engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    const engine = await bootEngine({ pacer: true });
     engine.autoSlomo = false;
-    let tick = 0;
-    Object.assign(engine.pace, { now: () => (tick += 0.001) });
     await engine["ragdolls"].preload();
     return new OnFootRig(engine);
   }
@@ -64,7 +58,7 @@ export class OnFootRig {
   }
 
   press(code: string): void {
-    this.engine["onKey"](Object.assign(new Event("keydown"), { code, repeat: false, ctrlKey: false, metaKey: false, altKey: false }) as KeyboardEvent);
+    pressKey(this.engine, code);
     this.engine["keys"].delete(code);
   }
 

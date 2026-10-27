@@ -3,11 +3,10 @@ import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 /**
  * The Range's thrown driver in the real engine, watched by the ride-along through the slow-mo: where his head sits in the
@@ -33,13 +32,8 @@ describe("given the real engine in the Range, its thrown driver ridden through t
   before(async () => {
     setGround(null);
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
+    engine = await bootEngine({ pacer: true });
     for (let wait = 0; wait < 200 && engine["ragdolls"]["world"] === null; wait++) await delay(50);
-    engine.fadeScenes = false;
-    let tick = 0;
-    Object.assign(engine.pace, { now: () => (tick += 0.001) });
   });
   after(() => {
     engine.dispose();

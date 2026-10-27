@@ -2,13 +2,12 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { drawnTriangles } from "../vehicle/drawn-body.test-util.ts";
 import { sillInTyre, tyreClearance } from "../vehicle/tyre-clearance.test-util.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 /**
  * The owner's five-car fleet crash (the pickup is the fifth car): its drawn front tyres stay under its drawn hood, and its drawn sill out of
@@ -38,9 +37,7 @@ describe("given the real engine running the owner's five-car fleet crash with th
 
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
+    engine = await bootEngine({ fades: true });
     engine.setCarCount(FLEET);
     engine.setSpeedRange(SPEEDS_MS[0], SPEEDS_MS[1]);
     engine.setSquash(SQUASH);

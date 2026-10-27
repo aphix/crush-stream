@@ -3,15 +3,14 @@ import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { setGround } from "../world/ground.ts";
 import { blankEjection } from "../vehicle/ejection.ts";
 import type { PersonPick } from "../match/look-data.ts";
 import { driverLook, ownLook, type DriverLook } from "../present/driver-look.ts";
 import type { SprayBitmap } from "../present/spray.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 /**
  * The player's saved driver (the garage's picks, over the garage's own driver) on every throw of the player's car, whatever
@@ -40,22 +39,14 @@ describe("given the real engine and a player who customized his driver in the ga
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
   const worn: Worn[] = [];
-  const run = (seconds: number): void => {
-    for (let i = 0; i < Math.round(seconds * FRAME_HZ); i++) engine.advance(FRAME, { frameDt: FRAME });
-  };
   const mine = () => engine["looks"].mine;
 
   before(async () => {
     stubBrowser();
     const store = new Map<string, string>();
     globalThis.localStorage = { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => void store.set(key, value), removeItem: (key: string) => void store.delete(key) } as Storage;
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
+    engine = await bootEngine({ pacer: true });
     for (let wait = 0; wait < 200 && engine["ragdolls"]["world"] === null; wait++) await delay(50);
-    engine.fadeScenes = false;
-    let tick = 0;
-    Object.assign(engine.pace, { now: () => (tick += 0.001) });
     spyDressing(engine, worn);
     engine.setPersonPick(PLAYER);
     const spray = mine().personSpray;
@@ -87,7 +78,7 @@ describe("given the real engine and a player who customized his driver in the ga
     const seeds = new Set<number>();
     for (let loop = 0; loop < 3; loop++) {
       engine["randomizeAndReset"]();
-      run(0.2);
+      runSeconds(engine, 0.2);
       seeds.add(engine["ragdolls"].lookSeed);
       assertPlayer(throwOut(PLAYER_CAR), `loop ${loop}`);
       assertAi(throwOut(AI_CAR), `loop ${loop}`);
@@ -100,7 +91,7 @@ describe("given the real engine and a player who customized his driver in the ga
 
   it("when the long jump is thrown 3 times (a Retry after each score), then each real throw's driver wears the saved look", () => {
     engine["setScene"]("range");
-    run(1);
+    runSeconds(engine, 1);
     engine.startMinigame("longJump");
     assert.equal(engine["minigameMode"], "longJump", "the long jump is on");
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -118,12 +109,12 @@ describe("given the real engine and a player who customized his driver in the ga
     engine.toggleRace();
     engine.raceCommand({ type: "options", options: { trackId: "oval", aiCount: 3, laps: 1, police: false } });
     engine.raceCommand({ type: "start" });
-    run(0.2);
+    runSeconds(engine, 0.2);
     assertPlayer(throwOut(PLAYER_CAR), "race");
     assertAi(throwOut(AI_CAR), "race");
     engine.toggleSurvival();
     engine.raceCommand({ type: "start" });
-    run(0.2);
+    runSeconds(engine, 0.2);
     assertPlayer(throwOut(PLAYER_CAR), "Survival");
   });
 

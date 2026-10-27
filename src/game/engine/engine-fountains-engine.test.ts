@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { JET_SLOTS } from "../present/fountain-system.ts";
 import { sparkLives } from "../present/fountain-sparks.test-util.ts";
@@ -12,8 +11,8 @@ import { MINIGAME_MODES, STATION_ANCHORS, STATION_HALF_WIDTH } from "../scenes/m
 import { RANGE } from "../scenes/range.ts";
 import { blankPoint, pointOn } from "../world/track.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 /**
  * The celebration fountains in the real engine: the Range's car (plain, and in each minigame) is led up its run-up to the lip by rows that
@@ -44,13 +43,8 @@ describe("given the real engine", () => {
     setGround(null);
     stubBrowser();
     globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} } as unknown as Storage;
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
+    engine = await bootEngine({ pacer: true });
     for (let wait = 0; wait < 200 && engine["ragdolls"]["world"] === null; wait++) await delay(50);
-    engine.fadeScenes = false;
-    let tick = 0;
-    Object.assign(engine.pace, { now: () => (tick += 0.001) });
     // The high tier as the fountains read it: the engine's own tier would load the sky (a failed fetch in node, stderr), and Auto moves it.
     const look = fountains().setLook.bind(fountains());
     fountains().setLook = (_tier, density) => look("high", density);

@@ -4,15 +4,14 @@ import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { PODIUM_BLOCKS } from "../match/podium.ts";
 import { sparkAt, sparkLives } from "../present/fountain-sparks.test-util.ts";
 import type { RaceResultRow } from "../match/types.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 const FRAME = 1 / FRAME_HZ;
 /** The race's rules: one lap, three rivals, no police (the field of four is the podium's three and one more). */
@@ -22,8 +21,6 @@ const SAME_SKIN_M = 0.005;
 const DENT_M = 0.04;
 /** Sparks within this of the stand's middle (m) are the podium's own jets': the course's finish-line fountains play far below. */
 const PLATFORM_REACH_M = 16;
-/** Ms the pacer's clock moves at each read: no frame is cut at the wall deadline, whatever the box's load. */
-const PACER_TICK_MS = 0.001;
 /** Where each drawn frame sits inside its last step (`SimPacer.alpha`): half way, so the drawn skin is not the sim's. */
 const DRAWN_ALPHA = 0.5;
 
@@ -105,14 +102,7 @@ describe("given the real engine and a race ended with every car dented", () => {
 
   before(async () => {
     stubBrowser();
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
-    // The same run on any machine: the pacer's clock never reaches a deadline and its slice is pinned. Each frame is drawn half way into its last step, so a finish read
-    // inside the drawn frame's pose blend would keep a skin between two steps, not the sim's.
-    let tick = 0;
-    Object.assign(engine.pace, { now: () => (tick += PACER_TICK_MS) });
+    engine = await bootEngine({ pacer: true });
     engine.pace.pin = true;
     const paceRun = engine.pace.run.bind(engine.pace);
     engine.pace.run = (...args: Parameters<typeof paceRun>) => {

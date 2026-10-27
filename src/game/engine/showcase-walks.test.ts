@@ -2,21 +2,18 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
-import { HudStore } from "../hud/hud-store.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
 import { SHOWCASE_EYE } from "../present/showcase-art.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
-import { FRAME_HZ } from "../kernel/constants.ts";
+import type { CrashEngine } from "./engine.ts";
+import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 /**
  * A press on a showcase figure pushes him at the point it landed, the way the camera faces; he goes limp, gets up and walks back to his
  * mark, and the set takes him back as he stood.
  */
 
-const FRAME = 1 / FRAME_HZ;
 const HOME_WITHIN_SECONDS = 25;
 const HEAD = 1;
 const SHINS = [7, 9];
@@ -25,9 +22,6 @@ const FOREARMS = [3, 5];
 
 describe("given the real engine booted on #scene=showcase", () => {
   let engine: CrashEngine;
-  const run = (seconds: number): void => {
-    for (let i = 0; i < seconds * FRAME_HZ; i++) engine.advance(FRAME, { frameDt: FRAME });
-  };
   const art = () => engine["showcase"]!.art;
   const ragdolls = () => engine["ragdolls"];
   const standing = (slot: number): boolean => ((art().people["mesh"] as DummyMesh)["shown"] >> slot & 1) === 1;
@@ -57,18 +51,15 @@ describe("given the real engine booted on #scene=showcase", () => {
   const settle = (): void => {
     engine.reset();
     lookFrom([SHOWCASE_EYE.x, SHOWCASE_EYE.y, SHOWCASE_EYE.z], [SHOWCASE_EYE.lookX, SHOWCASE_EYE.lookY, SHOWCASE_EYE.lookZ]);
-    run(0.2);
+    runSeconds(engine, 0.2);
   };
 
   before(async () => {
     stubBrowser();
     globalThis.location.hash = "#scene=showcase";
-    engine = new CrashEngine(element(), new HudStore(), element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
-    engine.fadeScenes = false;
+    engine = await bootEngine();
     await ragdolls().preload();
-    run(0.5);
+    runSeconds(engine, 0.5);
   });
   after(() => {
     engine.dispose();
@@ -78,7 +69,7 @@ describe("given the real engine booted on #scene=showcase", () => {
   it("when the set stands for 12 s with the parked car long gone off the rim, then nothing resets the scene under the figures", () => {
     settle();
     const seed = engine["sceneSeed"];
-    run(12);
+    runSeconds(engine, 12);
     assert.equal(engine["sceneSeed"], seed, "the scene was not rerolled");
     assert.equal(engine["cars"][0]!.vaporized, true, "the car did leave the sim, as it always does here");
   });
@@ -138,7 +129,7 @@ describe("given the real engine booted on #scene=showcase", () => {
       const slot = ragdolls()["lastSlot"];
       const from = new THREE.Vector3();
       ragdolls().torso(slot, from, null);
-      run(0.4);
+      runSeconds(engine, 0.4);
       const to = new THREE.Vector3();
       ragdolls().torso(slot, to, null);
       const moved = (to[testCase.axis] - from[testCase.axis]) * testCase.expectedSign;
@@ -163,7 +154,7 @@ describe("given the real engine booted on #scene=showcase", () => {
       const mark = art().markOf(testCase.slot, new THREE.Vector3());
       const torso = new THREE.Vector3();
       for (let t = 0; t < HOME_WITHIN_SECONDS && !standing(testCase.slot); t += 0.1) {
-        run(0.1);
+        runSeconds(engine, 0.1);
         seen.add(walker.state);
         if (ragdolls().walkerTorso(torso, slot)) farthest = Math.max(farthest, Math.hypot(torso.x - mark.x, torso.z - mark.z));
       }
@@ -195,8 +186,8 @@ describe("given the real engine booted on #scene=showcase", () => {
       const slot = ragdolls()["lastSlot"];
       const walker = ragdolls().walkers[slot]!;
       const torso = new THREE.Vector3();
-      run(0.3);
-      for (let t = 0; t < 12 && walker.state !== testCase.waitFor; t += 0.1) run(0.1);
+      runSeconds(engine, 0.3);
+      for (let t = 0; t < 12 && walker.state !== testCase.waitFor; t += 0.1) runSeconds(engine, 0.1);
       assert.equal(walker.state, testCase.waitFor, "he reached the state under test");
       const before = walker.sinceStruck;
       assert.equal(ragdolls().walkerTorso(torso, slot), true, "his dummy is out");
@@ -205,7 +196,7 @@ describe("given the real engine booted on #scene=showcase", () => {
       assert.equal(walker.state, "down", "limp again");
       assert.ok(walker.sinceStruck < before, `struck again: ${walker.sinceStruck.toFixed(2)} s ago, not ${before.toFixed(2)}`);
       assert.equal(standing(3), false, "he is not back on the set yet");
-      for (let t = 0; t < HOME_WITHIN_SECONDS && !standing(3); t += 0.1) run(0.1);
+      for (let t = 0; t < HOME_WITHIN_SECONDS && !standing(3); t += 0.1) runSeconds(engine, 0.1);
       assert.equal(standing(3), true, "he got home after all");
       assert.equal(live(), 0, "and his dummy is gone from the ragdoll world");
     });

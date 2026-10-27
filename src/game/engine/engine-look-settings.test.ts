@@ -8,8 +8,8 @@ import { RIM_LIGHT } from "../present/rim-light.ts";
 import { SKY_DRAWN } from "../present/sky-dome.ts";
 import { settingsOf } from "./bench-measure.ts";
 import { setGround } from "../world/ground.ts";
-import { CrashEngine } from "./engine.ts";
-import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import type { CrashEngine } from "./engine.ts";
+import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 type LookCase = {
   it: string;
@@ -45,9 +45,7 @@ describe("given the real engine and the look sliders under Cel in the Playback s
   before(async () => {
     stubBrowser();
     hud = new HudStore();
-    engine = new CrashEngine(element(), hud, element());
-    Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
-    await engine.ready;
+    engine = await bootEngine({ hud, fades: true });
     // Under auto a fresh page's minimal tier draws no sky.
     engine["stage"].setSkyTier("high");
   });

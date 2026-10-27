@@ -5,8 +5,8 @@ import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.t
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
-import { WORK } from "./sim-phases.ts";
 import { newWorld, stepWorld, type World } from "./world-step.ts";
+import { carSlices } from "./world-step-lone.test-util.ts";
 
 const saved = epicenterValues();
 afterEach(() => loadEpicenter(saved));
@@ -23,11 +23,6 @@ function field(): { cars: DeformableCar[]; w: World } {
   const w = newWorld(cars);
   w.lone = true;
   return { cars, w };
-}
-
-function carSlices(w: World): number {
-  const work = w.phases.work;
-  return work[WORK.liveCarSlices]! + work[WORK.wreckCarSlices]! + work[WORK.asleepCarSlices]!;
 }
 
 describe("given a car the race put away (`stored`) beside a car driving on", () => {
