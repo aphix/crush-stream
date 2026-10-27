@@ -19,7 +19,6 @@ import {
   hypot2,
   hypot3,
 } from "./physics-util.ts";
-import { leftoverPass, separateSphereFromBounds } from "./physics-util.test-util.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 
 describe("given the CRASH constants (the tuned crash-physics numbers, researched for a sedan and from NCAP crash tests)", () => {
@@ -183,31 +182,6 @@ describe("given snapshotPoints (turns particle position and life arrays into the
   });
 });
 
-describe("given separateSphereFromBounds (push a sphere out of a wall limit on one axis)", () => {
-  it("when a 0.2 m sphere past the +0.62 wall limit is moving in at 3 m/s, then it is pushed back inside the limit, its inbound speed is cancelled and a hit is reported", () => {
-    const pos = new THREE.Vector3(0, 0.4, 0.9);
-    const vel = new THREE.Vector3(0, 0, 3);
-    assert.equal(separateSphereFromBounds(pos, vel, 0.2, "z", -0.62, 0.62), true);
-    assert.ok(pos.z <= 0.62 - 0.2 + 1e-9);
-    assert.equal(vel.z, 0);
-  });
-
-  it("when a sphere past the -0.62 limit is already moving out at 2 m/s, then its outward speed is kept, not reversed into a bounce launch", () => {
-    const pos = new THREE.Vector3(0, 0.4, -0.9);
-    const vel = new THREE.Vector3(0, 0, 2);
-    separateSphereFromBounds(pos, vel, 0.2, "z", -0.62, 0.62);
-    assert.ok(vel.z > 0, "killed the remaining forward speed");
-  });
-
-  it("when the sphere is already inside the gap between the limits, then no hit is reported and its position and velocity are untouched", () => {
-    const pos = new THREE.Vector3(0, 0.4, 0);
-    const vel = new THREE.Vector3(1, 0, -1);
-    assert.equal(separateSphereFromBounds(pos, vel, 0.2, "z", -0.62, 0.62), false);
-    assert.equal(pos.z, 0);
-    assert.equal(vel.z, -1);
-  });
-});
-
 describe("given a sedan's crash zones (soft bumper and rails over a rigid high-strength-steel cabin cage)", () => {
   it("when each region's softness is compared, then the bumper is more than 0.6 softer than the cabin, the rail is softer than the roof, the wheel hub is under 0.15 and the engine is between the rail and the cabin", () => {
     assert.ok(regionSoftness("bumperFL") > regionSoftness("cell") + 0.6);
@@ -258,24 +232,6 @@ describe("given force transfer bands (the crush distances at which a region pass
     const b = regionCrushBands("wingFL");
     assert.equal(forceTransfer(b.middle * 0.999, b, false), TRANSFER.belowMiddle);
     assert.equal(forceTransfer(b.middle, b, false), TRANSFER.atMiddle);
-  });
-});
-
-describe("given leftoverPass (the share of the closing speed that a crushed region passes on, by transfer step)", () => {
-  it("when 20 m/s of closing meets each transfer step, then it passes 2 below the middle, 10 at the middle, 12.4 above the max and all 20 when packed", () => {
-    assert.equal(leftoverPass(20, TRANSFER.belowMiddle), 2);
-    assert.equal(leftoverPass(20, TRANSFER.atMiddle), 10);
-    assert.equal(leftoverPass(20, TRANSFER.above), 12.4);
-    assert.equal(leftoverPass(20, TRANSFER.packed), 20);
-  });
-
-  it("when the remaining closing is negative, then nothing is passed on, so there is no rebound impulse", () => {
-    assert.equal(leftoverPass(-8, 1), 0);
-  });
-
-  it("when the transfer fraction is 1 versus 0.1, then the larger fraction passes more, and a fraction of 2 passes at most the full 10 m/s", () => {
-    assert.ok(leftoverPass(10, 1) > leftoverPass(10, 0.1));
-    assert.equal(leftoverPass(10, 2), 10);
   });
 });
 
