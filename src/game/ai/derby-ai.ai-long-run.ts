@@ -21,7 +21,7 @@ const SEED = 1;
 const WINDOW_S = 120;
 
 describe(`given ten AI cars at the default aggression, one fixed heat (seed ${SEED}) played for its first ${WINDOW_S} s`, () => {
-  const r = runField(10, SEED, undefined, undefined, WINDOW_S);
+  const r = runField(10, SEED, undefined, WINDOW_S);
   const row =
     `seed ${r.seed}: deaths [${r.deaths.join(",")}]; spins contact ${r.contactSpins.length} free ${r.freeSpins.length}; ` +
     `zips ${r.zips.length} max ${(r.zipMax * 100).toFixed(1)} cm [${r.zips.join("; ")}]; contact peak ${r.contactPeak.rate.toFixed(2)} rad/s (${r.contactPeak.note})`;
@@ -56,7 +56,6 @@ describe("given a heat in which car 0 is turned over the spin bar for two second
   const forced = runField(
     10,
     SEED,
-    undefined,
     {
       step: (cars, t, h) => {
         const car = cars[0]!;
