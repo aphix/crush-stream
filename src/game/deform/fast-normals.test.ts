@@ -82,6 +82,7 @@ describe("given computeNormalsFast (vertex normals computed faster than the stoc
     let differ = 0;
     for (let i = 0; i < full.length; i++) if (!Object.is(near[i], full[i])) differ++;
     assert.ok(moved.length > 20, "the control: vertices were moved");
+    assert.ok(geo.index, "the control: the body is indexed, so the partial pass runs (an unindexed one takes the full pass)");
     assert.equal(differ, 0, `${differ} normal components differ from the full pass`);
   });
 });
