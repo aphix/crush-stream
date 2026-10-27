@@ -1,7 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { setGround } from "./ground.ts";
-import { leadIns } from "./race-police-leadin.test-util.ts";
 import { FRAME, frame, makeWorld, type World } from "./race-world.test-util.ts";
 import { Track } from "./track.ts";
 import oval from "./tracks/oval.json" with { type: "json" };
@@ -12,8 +11,6 @@ function runOut(w: World, bound: number): void {
   for (let n = 0; w.race.phase !== "finished" && n * FRAME < bound; n++) frame(w, state);
 }
 
-/** Lead-in headings judged (a cop woken, its 1.8 s run) before the per-commit lead-in test stops its race. */
-const LEAD_INS_CHECKED = 2;
 /** Race seconds the first police car may take to come out on the city course (it does at 14 s with field seed 2). */
 const POLICE_BOUND = 40;
 /** Seconds Auto runs among the police and traffic cars (it may switch about once a second). */
@@ -272,14 +269,5 @@ describe("given a 1-lap Watch race of 4 AI rivals on the oval with police cars o
       w.race.exit();
       setGround(null);
     }
-  });
-
-  it("when one stakeout's cop wakes as a racer passes and its lead-in runs its 1.8 s, then it lined up behind the racer on the road (heading converging) without a side T-bone", () => {
-    // The first two lead-in headings judged on the oval (seed 1), then the race stops: the moment is the cops' wake and lead-in, not the 2 laps after it.
-    const r = leadIns(0, 1, "oval", (checked) => checked >= LEAD_INS_CHECKED);
-    assert.ok(r.wakes >= LEAD_INS_CHECKED, `only ${r.wakes} cops woke`);
-    assert.ok(r.converged >= 1, `no lead-in heading converged (${r.converged} did, ${r.diverged.length} did not: ${r.diverged.join("; ")})`);
-    assert.equal(r.diverged.length, 0, `lead-in headings that did not converge: ${r.diverged.join("; ")}`);
-    assert.equal(r.tbones, 0, "a police car T-boned its target during its lead-in");
   });
 });

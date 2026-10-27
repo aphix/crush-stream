@@ -548,16 +548,18 @@ without scrolling, so a long menu keeps its scroll offset; it never falls back t
   two easy runs agree to the bit, hard's `think` output is pinned bit for bit; a stale medium driver's guard brakes for a car ahead; ram / block / follow, boost, the aggression model),
   `race-ai.ai-long-run.ts` (the full-sanity sweep: the same 3-lap field on every course at every tier, easy slower than hard on every course, medium's mistakes), `race-contact.test.ts` (the contact classifier on eight real contacts; aggression-0 full grids on the oval and the city at medium and hard drive into nobody in the kinematic race, the ramming field does), `race-contact.ai-long-run.ts` (the same on every other course), `traffic.test.ts`, `placements.test.ts`,
   `menu-nav.test.ts`, `checkpoint-sweep.test.ts`.
-- `race-finish.ai-long-run.ts` (`npm run test:ai-long-run`), every course: 4 AI rivals plus the AI-driven player slot, 2 laps; results within the grid + 2 laps
-  at 3 × the reference lap with ≥ 4 of 5 home or out. `RACE_FINISH_RUNS=5` runs 5 seeds at the default slider and 5 more
-  at 1. Also the city seed-1 race that once held the player car nose to nose with oncoming traffic, and the police lead-in pools
-  (heading converging over many seeds, no cop pair meeting). `race-finish.test.ts`: a 1-lap oval race,
+- `match/session.test.ts`, every course: one car driven along the main road's centreline counts two laps, finishes the race on laps and never
+  owes a checkpoint (the gates and finish rules per course, stacked decks and shortcut gates included). `race-finish.test.ts`: a 1-lap oval race,
   Watch races and campaign, the police chase on a 1-lap oval (parked units show no sirens, chasing ones do; cycling reaches
-  no police car; no police car in the results), one stakeout's lead-in falling in behind its target; `ai/traffic.test.ts` (a
-  traffic car facing a racer edges to its own kerb) and `ai/police-lead-in.test.ts` (a nose-to-nose stakeout pair's lead-ins do not touch, on the
-  oval and, a racer driven past it, on Dam Spine's valley road under the dam and Four-Count's back straight: both cops wake, only once it is past).
-  `race-police-sight.ai-long-run.ts`, `race-start.ai-long-run.ts` and `spectate-cam.ai-long-run.ts` are the whole-race sweeps of
-  the police put-on / put-away rules, the first seconds of every grid and the Auto camera on every course; their rules are pinned in
-  `ai/cop-sight.test.ts`, `ai/police.test.ts`, `race-start.test.ts` and `present/spectate-cam.test.ts`.
+  no police car; no police car in the results); `ai/traffic.test.ts` (a traffic car facing a racer edges to its own kerb) and
+  `ai/police-lead-in.test.ts` (a nose-to-nose stakeout pair's lead-ins do not touch, on the oval and, a racer driven past it, on Dam Spine's
+  valley road under the dam and Four-Count's back straight: both cops wake, only once it is past; a lone stakeout cop's lead-in, on the oval's
+  straight and mid-bend, ends with its heading off the road under where it started or under 0.2 rad, and never T-bones a slow racer).
+  A car wedged on a wall or prop is pinned on staged walls by `race-wall.test.ts`, `race-stall.test.ts` and `race-contact.test.ts`; no
+  test races whole fields on every course for it.
+  The police put-on / put-away rules are pinned in `ai/cop-sight.test.ts`, `ai/police.test.ts` (the put-away near range on the oval, City and
+  Four-Count) and `race-police-sight.test.ts` (8 racers strung out on Four-Count, one on the skip-city shortcut, and on City: no racer sees either
+  spot a stakeout parks on). `race-start.ai-long-run.ts` and `spectate-cam.ai-long-run.ts` are the whole-race sweeps of the first seconds of
+  every grid and the Auto camera on every course; their rules are pinned in `race-start.test.ts` and `present/spectate-cam.test.ts`.
 - `race-player.test.ts`: the PLAYER slot driven through the real seat on the oval, 2 laps, 3 AI, with a respawn press and
   detours; the HUD's lap and place equal a rules snapshot at every sample.

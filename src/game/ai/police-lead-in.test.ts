@@ -16,6 +16,8 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 const DT = 1 / FRAME_HZ;
 /** The racer's speed past the stakeout (m/s): the long fast courses' pace. */
 const RACER_SPEED = 50;
+/** A racer slow enough (m/s; back on the road after a respawn) that a woken cop reaches it within its lead-in. */
+const SLOW_RACER = 5;
 /** Seconds run from the first cop's wake: the lead-in (1.8 s) and a beat past it. */
 const SECONDS = 3;
 /** How far apart (m) the stakeout pair stands: one cop's nose at the other's. */
@@ -23,6 +25,14 @@ const PAIR_GAP = 12;
 /** A car's half length and half width (m): the footprint two cops must not overlap. */
 const HALF_LENGTH = 2.3;
 const HALF_WIDTH = 0.95;
+/** Seconds of the lead-in (the brain's is 2) whose heading is judged, as the race judge did. */
+const LEAD_IN = 1.8;
+/** A cop slower than this (m/s) has no heading to read. */
+const MOVING = 3;
+/** How far (m, in x and in z) the lone cop's mate is moved off the course. */
+const OFF_COURSE = 1e4;
+/** A lead-in heading that ends under this (rad) off the road is lined up, whether or not it started further off. */
+const LINED_UP = 0.2;
 
 /** Where along the lap the stakeout stands (shares of its length): the oval's near straight and its far one. */
 const SHARES = [0.4, 0.7];
@@ -49,9 +59,15 @@ function overlaps(a: Footprint, b: Footprint): boolean {
 /**
  * The pair's run on `on`: which cops woke, the cops that pulled away without the racer past their spot, the frames the two footprints overlapped,
  * and the first cop's spot (arc, m) with what a blind read of it says. `approach`: both cops still parked and the racer driven up from the lead past them
- * (else the first has just woken with the racer 5 m past it).
+ * (else the first has just woken with the racer 5 m past it). `lone`: the second cop is off the course, so nothing but the road steers the first, and the
+ * racer drives at `SLOW_RACER`; the first cop's lead-in heading against the road under it (`heading`, rad, each frame) and its T-bones of the racer come back too.
  */
-function runPair(leadShare: number, on: Track = track, approach = false): { pulled: boolean[]; bad: string[]; touched: string[]; closest: number; spot: number; blind: number } {
+function runPair(
+  leadShare: number,
+  on: Track = track,
+  approach = false,
+  lone = false,
+): { pulled: boolean[]; bad: string[]; touched: string[]; closest: number; spot: number; blind: number; heading: number[]; tbones: string[] } {
   const r = rig(2, 1, leadShare, 1, on, !approach);
   const ground = on.ground();
   setGround(ground);
@@ -71,8 +87,12 @@ function runPair(leadShare: number, on: Track = track, approach = false): { pull
       Object.assign(r.cars[id]!, { x: q.x + q.tz * lateral, z: q.z - q.tx * lateral, yaw: Math.atan2(q.tx, q.tz) + turn });
     };
     const spotS = [spot0, spot0 + PAIR_GAP];
-    stand(1, spotS[0]!, 0);
-    stand(2, spotS[1]!, Math.PI);
+    // The lone cop keeps the brain's own spot and its nose turned toward the road.
+    if (lone) Object.assign(r.cars[2]!, { x: r.cars[2]!.x + OFF_COURSE, z: r.cars[2]!.z + OFF_COURSE });
+    else {
+      stand(1, spotS[0]!, 0);
+      stand(2, spotS[1]!, Math.PI);
+    }
     for (const [i, car] of fleet.entries()) car.spawnFacing(r.cars[i]!.x, r.cars[i]!.z, r.cars[i]!.yaw, 0);
     const blind = on.project(r.cars[1]!.x, r.cars[1]!.z, -1, proj).s;
     const park = { ...idleDrive(), brake: 1 };
@@ -80,12 +100,16 @@ function runPair(leadShare: number, on: Track = track, approach = false): { pull
     const touched: string[] = [];
     const bad: string[] = [];
     let closest = Infinity;
+    const heading: number[] = [];
+    const tbones: string[] = [];
+    let leadEnd = Infinity;
     const toSpot = (((spot0 - racerS0) % L) + L) % L;
-    const seconds = approach ? toSpot / RACER_SPEED + SECONDS : SECONDS;
+    const racerSpeed = lone ? SLOW_RACER : RACER_SPEED;
+    const seconds = approach ? toSpot / racerSpeed + SECONDS : SECONDS;
     for (let f = 0; f < seconds / DT; f++) {
-      const racerS = (racerS0 + RACER_SPEED * f * DT) % L;
+      const racerS = (racerS0 + racerSpeed * f * DT) % L;
       const p = on.pointAt(racerS, pt);
-      fleet[0]!.spawnFacing(p.x, p.z, Math.atan2(p.tx, p.tz), RACER_SPEED);
+      fleet[0]!.spawnFacing(p.x, p.z, Math.atan2(p.tx, p.tz), racerSpeed);
       for (const [i, car] of fleet.entries()) snapshotAiCar(r.cars[i]!, i, car, true);
       if (f % Math.round(BEAT / DT) === 0) r.beat();
       for (const id of [1, 2]) {
@@ -93,6 +117,7 @@ function runPair(leadShare: number, on: Track = track, approach = false): { pull
         const driving = r.police.drives(id);
         if (driving && !pulled[id - 1]) {
           pulled[id - 1] = true;
+          if (id === 1) leadEnd = f * DT + LEAD_IN;
           const along = racerS - spotS[id - 1]!;
           const ahead = along - L * Math.round(along / L);
           if (ahead < 0) bad.push(`cop ${id} pulled away at ${(f * DT).toFixed(2)} s with the racer ${(-ahead).toFixed(0)} m short of its spot`);
@@ -102,9 +127,23 @@ function runPair(leadShare: number, on: Track = track, approach = false): { pull
         car.integrate(DT);
       }
       closest = Math.min(closest, fleet[1]!.group.position.distanceTo(fleet[2]!.group.position));
+      const cop = fleet[1]!;
+      const v = cop.velocity;
+      if (lone && f * DT < leadEnd && Math.hypot(v.x, v.z) > MOVING) {
+        const road = on.pointAt(on.project(cop.group.position.x, cop.group.position.z, -1, proj).s, pt);
+        heading.push(Math.abs(Math.atan2(v.x * road.tz - v.z * road.tx, v.x * road.tx + v.z * road.tz)));
+        if (overlaps(footprintOf(cop), footprintOf(fleet[0]!))) {
+          // Crossways to the racer and into its flank, not its bumpers.
+          const dx = cop.group.position.x - fleet[0]!.group.position.x;
+          const dz = cop.group.position.z - fleet[0]!.group.position.z;
+          const ty = fleet[0]!.yaw;
+          const alongRacer = Math.abs(dx * Math.sin(ty) + dz * Math.cos(ty)) / Math.hypot(dx, dz);
+          if (alongRacer < 0.5 && Math.abs(Math.cos(cop.yaw - ty)) < 0.5) tbones.push(`${(f * DT).toFixed(2)} s`);
+        }
+      }
       if (overlaps(footprintOf(fleet[1]!), footprintOf(fleet[2]!))) touched.push(`${(f * DT).toFixed(2)} s`);
     }
-    return { pulled, bad, touched, closest, spot: spotS[0]!, blind };
+    return { pulled, bad, touched, closest, spot: spotS[0]!, blind, heading, tbones };
   } finally {
     setGround(null);
   }
@@ -118,6 +157,27 @@ describe("given a stakeout pair of cops standing 12 m apart in one lane of the o
       assert.ok(r.pulled[0] && r.pulled[1], `both cops woke (cop 1 ${r.pulled[0]}, cop 2 ${r.pulled[1]}): the test proves nothing`);
       assert.deepEqual(r.bad, []);
       assert.deepEqual(r.touched, [], "frames in which the two cops' footprints overlapped");
+    });
+  }
+});
+
+/** The lone cop's stakeouts (the racer's lead share): its spot on the straight before the line, and mid-bend, where the error must rise while it turns into the road. */
+const LONE = [
+  { where: "on a straight", share: 0.8 },
+  { where: "on a bend", share: 0.5 },
+];
+
+describe("given one stakeout cop parked by the oval, its nose turned toward the road and no pack-mate near, and a slow racer (5 m/s) just past it", () => {
+  for (const c of LONE) {
+    it(`when the cop wakes into its lead-in ${c.where}, then its heading off the road ends under where it started or under ${LINED_UP} rad, and it never T-bones the racer`, (t) => {
+      const r = runPair(c.share, track, false, true);
+      assert.ok(r.pulled[0] && r.heading.length > 0, "the cop woke and drove its lead-in");
+      const start = r.heading[0]!;
+      const end = r.heading.at(-1)!;
+      t.diagnostic(`spot ${r.spot.toFixed(0)} m, heading ${start.toFixed(2)} → ${end.toFixed(2)} rad`);
+      assert.ok(end < start || end < LINED_UP, `heading ${start.toFixed(2)} → ${end.toFixed(2)} rad off the road`);
+      assert.deepEqual(r.bad, []);
+      assert.deepEqual(r.tbones, [], "frames the cop was crossways into the racer's flank");
     });
   }
 });

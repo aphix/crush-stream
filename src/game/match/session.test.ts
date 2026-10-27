@@ -14,6 +14,8 @@ import type { HunterWorld } from "../ai/cop-brain.ts";
 import { RaceBrain } from "../ai/race-ai.ts";
 import { blankAiCar, type AiCar } from "../ai/derby-ai.ts";
 import { hypot2 } from "../kernel/physics-core.js";
+import { TRACKS } from "../world/tracks/index.ts";
+import { parseTrack } from "../world/track-schema.ts";
 
 const _pt = blankPoint();
 
@@ -657,4 +659,26 @@ describe("given a two-car race on the square track, where one car follows anothe
     assert.ok(!wakes(6, 0, v * Math.sin(60 * rad), v * Math.cos(60 * rad)), "60 degrees off, still over the speed floor along the line");
     assert.ok(!wakes(6, 0, 30, 0), "crossing at right angles");
   });
+});
+
+/** The centreline driver's speed (m/s): a fast lap, every gate still crossed in a few steps. */
+const LAP_SPEED = 40;
+
+describe("given a 1-car 2-lap race on each course, the car driven along the main road's centreline from its grid slot", () => {
+  for (const json of TRACKS) {
+    const id = parseTrack(json).id;
+    it(`when ${id} is driven out, then two laps count, the race finishes won on laps, and no checkpoint is ever owed`, () => {
+      const track = new Track(json);
+      const s = new RaceSession(track, field(1), { laps: 2, noReset: false });
+      let missed = false;
+      const events = runTo(s, [fromGrid(track, 0, LAP_SPEED)], GRID_TIME + COUNTDOWN + (3 * track.length) / LAP_SPEED, () => {
+        missed ||= s.cars[0]!.missed;
+        return false;
+      });
+      assert.equal(missed, false, "a checkpoint was crossed with an earlier one owed");
+      assert.deepEqual(events.filter((e) => e.type === "lap").map((e) => e.lap), [1, 2]);
+      assert.equal(s.phase, "finished");
+      assert.equal(s.winBy, "laps");
+    });
+  }
 });

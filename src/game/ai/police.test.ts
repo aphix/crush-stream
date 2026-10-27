@@ -8,7 +8,9 @@ import type { HunterWorld } from "./cop-brain.ts";
 import { RaceBrain } from "./race-ai.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 import { idleDrive } from "../vehicle/car-drive.ts";
-import { blankProjection } from "../world/track.ts";
+import { blankProjection, Track } from "../world/track.ts";
+import fourCount from "../world/tracks/four-count.json" with { type: "json" };
+import city from "../world/tracks/city.json" with { type: "json" };
 import { BEAT, pt, rig, track } from "./police-rig.test-util.ts";
 
 /** The oval is short, so its racers see a third of the full ranges (`sightRange`). */
@@ -300,13 +302,16 @@ describe("given a pack that has stood down (its racer stopped racing) with a cop
 });
 
 describe("given a stood-down pack's cop that keeps driving in a racer's sight along the road, with no other racer to take up", () => {
-  /** Seconds after the stakeout the cop (kept `ahead` m along from the racer, moving) is put away, or Infinity within `limit` s; the camera looks away from `lookAway` s on. */
-  const goneAfter = (ahead: number, limit: number, lookAway = Infinity): number => {
-    const r = rig();
+  /**
+   * Seconds after the stakeout (`share` of the lap on `on`) the cop (kept `ahead` m along from the racer, moving) is put away, or Infinity within `limit` s;
+   * the camera looks away from `lookAway` s on.
+   */
+  const goneAfter = (on: Track, share: number, ahead: number, limit: number, lookAway = Infinity): number => {
+    const r = rig(2, 1, share, 1, on);
     r.hunt[0] = 0;
-    const s = track.project(r.cars[0]!.x, r.cars[0]!.z, -1, blankProjection()).s;
+    const s = on.project(r.cars[0]!.x, r.cars[0]!.z, -1, blankProjection()).s;
     for (let n = 0; n < limit / BEAT; n++) {
-      const p = track.pointAt(s + ahead, pt);
+      const p = on.pointAt(s + ahead, pt);
       Object.assign(r.cars[1]!, { x: p.x, z: p.z, vx: 0, vz: 10 });
       r.camera.sees = r.clock() < lookAway;
       r.beat();
@@ -315,13 +320,18 @@ describe("given a stood-down pack's cop that keeps driving in a racer's sight al
     return Infinity;
   };
 
-  it("when the camera sees it, then it is never put away, and once the camera looks away, then it is put away within a beat if it is clear of the racers' near range, and never inside it", () => {
-    const clear = SIGHT.near + 20 + 6;
-    assert.equal(goneAfter(clear, 120), Infinity, "a cop the camera sees was put away");
-    const gone = goneAfter(clear, 120, 60);
-    assert.ok(gone > 60 && gone < 60 + 2 * BEAT, `a cop out of the camera's view went at ${gone} s, not as the camera looked away at 60 s`);
-    assert.equal(goneAfter(SIGHT.near, 120, 0), Infinity, "a cop inside the near range was put away");
-  });
+  // The ranges scale with the course: the oval and City (~0.7 km) a third of them, Four-Count (4 km) the full ones. Each racer sits before a straight,
+  // so the cop's straight-line gap is its road gap.
+  for (const [id, on, share] of [["oval", track, 0.4], ["four-count", new Track(fourCount), 0.4], ["city", new Track(city), 0.5]] as const) {
+    it(`when the camera sees it on ${id}, then it is never put away, and once the camera looks away, then it is put away within a beat if it is clear of the racers' near range, and never inside it`, () => {
+      const near = sightRange(on.length).near;
+      const clear = near + 20 + 6;
+      assert.equal(goneAfter(on, share, clear, 120), Infinity, "a cop the camera sees was put away");
+      const gone = goneAfter(on, share, clear, 120, 60);
+      assert.ok(gone > 60 && gone < 60 + 2 * BEAT, `a cop out of the camera's view went at ${gone} s, not as the camera looked away at 60 s`);
+      assert.equal(goneAfter(on, share, near, 120, 0), Infinity, "a cop inside the near range was put away");
+    });
+  }
 
   it("when it is doing 25 m/s, then it eases along the line however long it has been out, never stopping in the racers' path", () => {
     const r = rig();

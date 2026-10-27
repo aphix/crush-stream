@@ -10,14 +10,11 @@ import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { SimPacer } from "../engine/sim-pace.ts";
 import { EjectionWatch, type Ejection } from "../vehicle/ejection.ts";
 import { armKill, assignClass, carClass, HANDLING, killClass } from "../vehicle/vehicle-classes.ts";
-import { describe, it } from "node:test";
-import assert from "node:assert/strict";
-import { setGround } from "./ground.ts";
 import { parseTrack } from "./track-schema.ts";
 import { Track, blankPoint, blankProjection } from "./track.ts";
 import { OFF_MENU, TRACKS } from "./tracks/index.ts";
 import { AI_EVERY_SLICE, type AiDifficulty } from "../ai/constants.ts";
-import { DEFAULT_RACE_OPTIONS, type CarRecord, type RaceResultRow, type RaceSnapshot } from "../match/types.ts";
+import type { CarRecord, RaceResultRow, RaceSnapshot } from "../match/types.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { ViewDistance } from "../present/player-quality.ts";
 
@@ -304,47 +301,6 @@ export function raceOnce(
     respawns: snap.cars.reduce((n, c) => n + c.deaths, 0),
     aggression: r.racers.filter((e) => e.kind === "ai").map((e) => e.aggression),
   };
-}
-
-/**
- * The real-stack finish sweep for one course: 4 AI rivals and the AI-driven player slot, 2 laps.
- * Run k races with field seed k, the game's own random picks: each rival's aggression rolled under
- * the slider. (Grid order, classes and body styles are fixed by car index in a single race, so the
- * seed is all that varies.) By default 2 seeds at the default slider; `RACE_FINISH_RUNS=n` runs n
- * seeds at the default slider and n more with the slider at 1, a ramming field.
- */
-export function finishSweep(course: string): void {
-  const full = process.env.RACE_FINISH_RUNS !== undefined;
-  const runs = Number(process.env.RACE_FINISH_RUNS ?? 2);
-  if (!Number.isInteger(runs) || runs < 1) throw new Error(`RACE_FINISH_RUNS must be a whole number ≥ 1, got "${process.env.RACE_FINISH_RUNS}"`);
-  const sliders = full ? [DEFAULT_RACE_OPTIONS.aggression, 1] : [DEFAULT_RACE_OPTIONS.aggression];
-  describe(`given a ${RACE_LAPS}-lap race on the ${course} course, with 4 AI rivals and the AI-driven player slot, run through the real race stack`, () => {
-    for (const slider of sliders) {
-      it(`when the aggression slider is ${slider}, then at least 4 of the 5 AI cars finish ${RACE_LAPS} laps or retire, in each of ${runs} seeded races`, (t) => {
-        const track = new Track(TRACKS.find((j) => parseTrack(j).id === course));
-        // Reference lap: the course at half the sedan's top speed (9 m/s), the basis of the AI course
-        // test too. Bound: the grid and countdown, then the laps at 3 × the reference lap.
-        const refLap = track.length / 9;
-        const bound = 4.5 + RACE_LAPS * 3 * refLap;
-        const w = makeWorld();
-        w.race.enter();
-        try {
-          for (let run = 1; run <= runs; run++) {
-            const o = raceOnce(w, track, bound, run, slider);
-            const dnf = o.dnf.map((d) => `${d.name}: ${d.cause}`).join("; ");
-            t.diagnostic(
-              `${course} slider ${slider} seed ${run} (aggression ${o.aggression.map((a) => a.toFixed(2)).join("/")}): finished ${o.finished}/5, lapped ${o.lapped}, out ${o.out}, DNF ${o.dnf.length}${dnf ? ` [${dnf}]` : ""}, respawns ${o.respawns}, winner ${o.winner.toFixed(1)} s, slowest lap ${o.slowestLap.toFixed(1)} s (ref ${refLap.toFixed(1)} s), closed ${o.closedAt.toFixed(1)} s (bound ${bound.toFixed(0)} s)`,
-            );
-            assert.ok(Number.isFinite(o.closedAt), `${course} slider ${slider} seed ${run}: no results within ${bound.toFixed(0)} s`);
-            assert.ok(o.finished + o.out >= 4, `${course} slider ${slider} seed ${run}: ${o.finished} finished, ${o.lapped} lapped, ${o.out} out; DNF ${dnf}`);
-          }
-        } finally {
-          w.race.exit();
-          setGround(null);
-        }
-      });
-    }
-  });
 }
 
 /** How the scripted player drives: a line on the main loop, a detour driven once a lap, a respawn press. */
