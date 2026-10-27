@@ -5,7 +5,7 @@ import { BUMPER_F, LID } from "./constants.ts";
 import { bootPivot, lidAccel } from "./hinge-spec.ts";
 import { hingePose, INTERIOR_MASSES, interiorPose } from "./part-pose.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import type { StirCar } from "../world/surfaces.ts";
+import { staticTop, type StirCar } from "../world/surfaces.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 import type { MassName } from "../kernel/rig-spec.ts";
 import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox, shellReaches } from "./car-panels.ts";
@@ -79,8 +79,12 @@ export function growDrawn(o: THREE.Object3D, box: THREE.Box3): void {
   for (let i = 0; i < o.children.length; i++) growDrawn(o.children[i]!, box);
 }
 
-/** The lowest clearance (m) of what `o` and its descendants draw over the ground under each vertex, at their world matrices as they stand; `Infinity` where there is no ground under any. Stops at the first clearance under `below`, returning it: enough to say a pose is too low. */
-function lowestClearance(o: THREE.Object3D, below = -Infinity): number {
+/**
+ * The lowest clearance (m) of what `o` and its descendants draw over the ground under each vertex, at their world matrices as they stand; `Infinity` where there is no ground under any.
+ * Stops at the first clearance under `below`, returning it: enough to say a pose is too low. A vertex at or over world height `clearAbove` stands over its ground by at least `below`
+ * and is not read, so a result at or over `below` is only that: nothing is lower.
+ */
+function lowestClearance(o: THREE.Object3D, below = -Infinity, clearAbove = Infinity): number {
   if (!o.visible) return Infinity;
   let low = Infinity;
   const geometry = o instanceof PartSeat ? o.drawn : o instanceof THREE.Mesh ? (o.geometry as THREE.BufferGeometry) : null;
@@ -89,12 +93,13 @@ function lowestClearance(o: THREE.Object3D, below = -Infinity): number {
     const ground = activeGround();
     for (let k = 0; k < position.count; k++) {
       _bumpW.fromBufferAttribute(position, k).applyMatrix4(o.matrixWorld);
+      if (_bumpW.y >= clearAbove) continue;
       const y = ground.heightAt(_bumpW.x, _bumpW.z, _bumpW.y);
       if (y !== NO_FLOOR) low = Math.min(low, _bumpW.y - y);
       if (low < below) return low;
     }
   }
-  for (let i = 0; i < o.children.length && low >= below; i++) low = Math.min(low, lowestClearance(o.children[i]!, below));
+  for (let i = 0; i < o.children.length && low >= below; i++) low = Math.min(low, lowestClearance(o.children[i]!, below, clearAbove));
   return low;
 }
 const _bumpW = new THREE.Vector3();
@@ -143,6 +148,8 @@ const DOOR_CLEAR = 0.04;
 const BUMPER_CLEAR = DOOR_CLEAR;
 /** Halvings that find the roll a hanging bumper rests on the road at (0.6 rad / 2⁸ = 2 mrad, 3 mm of the free end). */
 const BUMPER_REST_ITER = 8;
+/** The plan box a bound is read over grows by this (m): a vertex sits in its mesh's box to the rounding of the transform, not past it. */
+const BOX_PAD = 1e-6;
 /** A hanging arch shell's flap drops no lower than this (m) above the road under it: it rests on the road, not through it. */
 const SHELL_CLEAR = 0.005;
 
@@ -480,9 +487,11 @@ export abstract class CarParts extends CarGlass {
     return this.hungClear(o, x0, y0, px, r) ? 0 : BUMPER_CLEAR - lowestClearance(o);
   }
 
-  /** Whether `o` posed so (`poseHung`) stands too low (`hungLack` > 0), read only up to its first vertex under the clearance. */
+  /** Whether `o` posed so (`poseHung`) stands too low (`hungLack` > 0), read only up to its first vertex under the clearance, and only the vertices not over the highest ground under its box by `BUMPER_CLEAR`. */
   private hungLow(o: THREE.Object3D, x0: number, y0: number, px: number, r: number): boolean {
-    return !this.hungClear(o, x0, y0, px, r) && lowestClearance(o, BUMPER_CLEAR) < BUMPER_CLEAR;
+    if (this.hungClear(o, x0, y0, px, r)) return false;
+    const top = staticTop(activeGround(), _box.min.x - BOX_PAD, _box.max.x + BOX_PAD, _box.min.z - BOX_PAD, _box.max.z + BOX_PAD);
+    return lowestClearance(o, BUMPER_CLEAR, top + BUMPER_CLEAR) < BUMPER_CLEAR;
   }
 
   /** Door hinge state; `side` −1 is the left door, +1 the right. */
