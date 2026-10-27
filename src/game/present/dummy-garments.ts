@@ -231,9 +231,12 @@ function widestDown(fit: Fit, triangles: readonly number[], from: number, to: nu
   return widest;
 }
 
-/** How far (m, per body vertex: x, y, z) each body vertex of `fit` moves out to where a man's clothes hang (the shader's hang push, cut by the slot's cuts and scaled by its outfit). */
+/** How far (m, per body vertex: x, y, z) each body vertex of `fit` moves out to where a man's clothes hang (the shader's hang push, cut by the slot's cuts and scaled by its outfit). Built once per fit; read only. */
 export function hangOffsets(fit: Fit): Float32Array {
-  const offsets = new Float32Array(BODY_VERTICES * 3);
+  let offsets = hangs.get(fit);
+  if (offsets) return offsets;
+  offsets = new Float32Array(BODY_VERTICES * 3);
+  hangs.set(fit, offsets);
   const step = (2 * Math.PI) / HANG_SIDES;
   for (const hang of HANGS) {
     for (const side of hang.sides) {
@@ -270,6 +273,7 @@ export function hangOffsets(fit: Fit): Float32Array {
   }
   return offsets;
 }
+const hangs = new WeakMap<Fit, Float32Array>();
 
 /**
  * How much of `hang` a suit's and a uniform's torso and sleeves, then trousers, take: a padded, boxy jacket and a bloused
