@@ -32,8 +32,8 @@ export class CarDamage {
 
   /** The car's drawn body and bonnet now (`drawOn` puts them back): the race's last frame, as the player saw it. */
   readDrawn(car: DeformableCar): void {
-    // Read before the frame draws the car: its skin is brought up to this step first, as the frame's draw would.
-    car.updateSkin();
+    // A skin the LoD deferred is written first: `updateSkin` skips it.
+    car.flushDeferredSkin();
     const { body, hood } = car.lookMeshes();
     this.drawnBody = copyOf(body.geometry.getAttribute("position").array as Float32Array, this.drawnBody);
     this.drawnHood = copyOf(hood.geometry.getAttribute("position").array as Float32Array, this.drawnHood);
@@ -80,25 +80,32 @@ function drawInto(mesh: THREE.Mesh, drawn: Float32Array | null): void {
 }
 
 /**
- * Every racer's damage as the race ended, read once a race (the first frame that sees it finished): the cars go on moving afterwards and the results reel respawns them, so the podium
- * (docs/PODIUM.md) shows the cars from this, not from what the field's cars look like when it opens.
+ * Every racer's damage as it crossed the finish line (`finish`, the frame its status reads finished), or for a racer that never finished, as the race ended (`take`): the cars go on moving
+ * afterwards and the results reel respawns them, so the podium (docs/PODIUM.md) shows the cars from this, not from what the field's cars look like when it opens.
  */
 export class FinalDamage {
   private readonly cars: CarDamage[] = [];
+  /** Per racer: its damage was read this race. */
+  private readonly read: boolean[] = [];
   private taken = false;
 
-  /** Read `racers` cars' damage, once until `clear`. */
+  /** Racer `id` crossed the finish line: its damage now, once until `clear`. */
+  finish(id: number, car: DeformableCar): void {
+    if (this.read[id]) return;
+    this.read[id] = true;
+    const damage = (this.cars[id] ??= new CarDamage());
+    damage.read(car);
+    damage.readDrawn(car);
+  }
+
+  /** The race ended: every racer not read at its finish is read as it stands, once until `clear`. */
   take(cars: readonly DeformableCar[], racers: number): void {
     if (this.taken) return;
     this.taken = true;
-    for (let i = 0; i < racers && i < cars.length; i++) {
-      const damage = (this.cars[i] ??= new CarDamage());
-      damage.read(cars[i]!);
-      damage.readDrawn(cars[i]!);
-    }
+    for (let i = 0; i < racers && i < cars.length; i++) this.finish(i, cars[i]!);
   }
 
-  /** Racer `id`'s damage as the race ended; null before one has ended since `clear`. */
+  /** Racer `id`'s damage as it finished; null before a race has ended since `clear`. */
   of(id: number): CarDamage | null {
     return this.taken ? (this.cars[id] ?? null) : null;
   }
@@ -106,5 +113,6 @@ export class FinalDamage {
   /** A race starts: the last one's damage no longer counts. */
   clear(): void {
     this.taken = false;
+    this.read.length = 0;
   }
 }

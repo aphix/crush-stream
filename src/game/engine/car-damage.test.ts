@@ -8,7 +8,7 @@ import { FINE_HZ } from "../kernel/constants.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { makeCarFrame } from "../net/codec.ts";
 import { carLayout } from "../net/car-pose.ts";
-import { CarDamage } from "./car-damage.ts";
+import { CarDamage, FinalDamage } from "./car-damage.ts";
 import { stubBrowser } from "./engine-headless.test-util.ts";
 
 stubBrowser();
@@ -112,5 +112,32 @@ describe("given a damaged car put back on the road keeping its damage (a held re
     assert.equal(now.deform.squash, 1.1);
     assert.equal(now.deform.buckle, 0.3);
     assert.notEqual(now.deform.squash, ENGINE_DRESS.squash, "the control: the dress differs from the car's own");
+  });
+});
+
+describe("given a racer that crosses the finish line dented and is hit again after it", () => {
+  it("when the race ends and its final damage is read, then it is the car as it crossed the line, not as it stood at the end", () => {
+    const scene = new THREE.Scene();
+    const car = damagedCar(scene);
+    const final = new FinalDamage();
+    final.finish(0, car);
+    const atLine = Float32Array.from(car.lookMeshes().body.geometry.getAttribute("position").array);
+    car.applyImpact(new THREE.Vector3(-1, 0.6, 0), new THREE.Vector3(1, 0, 0), 25, 20);
+    for (let i = 0; i < 90; i++) car.step(1 / FINE_HZ);
+    car.updateSkin();
+    final.take([car], 1);
+    const shown = new DeformableCar({ body: 0x808080, accent: 0, name: "podium" }, scene, null, fleetStyle(0));
+    shown.spawnFacing(0, 0, 0, 0);
+    final.of(0)!.drawOn(shown);
+    const drawn = shown.lookMeshes().body.geometry.getAttribute("position").array;
+    const atEnd = car.lookMeshes().body.geometry.getAttribute("position").array;
+    let fromLine = 0;
+    let dentAfter = 0;
+    for (let k = 0; k < drawn.length; k++) {
+      fromLine = Math.max(fromLine, Math.abs(drawn[k]! - atLine[k]!));
+      dentAfter = Math.max(dentAfter, Math.abs(atEnd[k]! - atLine[k]!));
+    }
+    assert.ok(dentAfter > 0.01, `the control: the hit after the line dents it ${dentAfter.toFixed(3)} m`);
+    assert.ok(fromLine < 1e-6, `the podium's car is ${fromLine.toFixed(4)} m from the car at the line`);
   });
 });

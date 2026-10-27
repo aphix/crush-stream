@@ -779,12 +779,14 @@ export abstract class RaceField {
   /**
    * Put a car at (x, z) facing `yaw` at rest with its damage as it is (`CarDamage`). The wreck state that is not damage (velocity, the solver's contacts) starts again, its contact clock too:
    * `spawnFacing` leaves it at a quiet of 10 s and the masses were laid just now, so ridden as a wreck long at rest (`DeformFreeze.ridesBody`) they stood where they were laid, 2 cm off
-   * the drawn body the damage had (`race-reset-skin.test.ts`).
+   * the drawn body the damage had (`race-reset-skin.test.ts`). The contact window that opens runs the shape match, so a wreck's clusters rest on the dent laid (`rebaseShapeRest`): left
+   * on the as-built rest the reset rebuilt, the window pulled the dent back out (a sedan's bumpers 1.8 mm a frame, drawn by the 2 mm skin rebake).
    */
   private placeKeeping(car: DeformableCar, x: number, z: number, yaw: number, y: number): void {
     this.kept.read(car);
     this.place(car, x, z, yaw, y, 0, true);
     this.kept.lay(car);
+    if (car.deform.massActive) car.deform.rebaseShapeRest();
     car.deform.notifyContact();
   }
 

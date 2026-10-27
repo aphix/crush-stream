@@ -151,8 +151,8 @@ export abstract class DeformHit extends DeformRig {
     for (const c of this.clusters) resetCluster(c, this.shapeParticles);
   }
 
-  /** Shape-match rest = the current body-frame shape: Sp folds into the rest and resets to I. */
-  protected rebaseShapeRest(): void {
+  /** Shape-match rest = the current body-frame shape: Sp folds into the rest and resets to I (a held reset lays its kept dent and rests the clusters on it). */
+  rebaseShapeRest(): void {
     this.syncShapeFromMasses();
     for (const c of this.clusters) resetCluster(c, this.shapeParticles);
   }

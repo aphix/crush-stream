@@ -760,7 +760,6 @@ export class RaceDirector extends RaceHudLayer {
       grounds.frame(wallDt, replay ? replay.squad : this.mirrored ? null : this.guard, this.secretOut, this.host.live(), player, this.grounds, replay);
       if (!replay) this.recorder.vipRides(grounds.vipRide);
     }
-    if (s && s.phase === "finished") this.ended.take(this.host.live(), this.entrants.length);
     if (s && s.phase === "finished" && (this.menu == null || this.menu === "dead")) {
       this.overFor += wallDt;
       if (this.overFor >= RESULTS_DELAY) {
@@ -777,6 +776,14 @@ export class RaceDirector extends RaceHudLayer {
       this.watchLeader();
     }
     this.followSun();
+  }
+
+  readFinish(): void {
+    const s = this.session;
+    if (!this.active || !s || (s.phase !== "racing" && s.phase !== "finished")) return;
+    const live = this.host.live();
+    for (let i = 0; i < this.entrants.length; i++) if (s.cars[this.rowOf[i]!]?.status === "finished" && live[i]) this.ended.finish(i, live[i]!);
+    if (s.phase === "finished") this.ended.take(live, this.entrants.length);
   }
 
   /** Keep the sun's shadow box on `car`: the followed car (or the grid), a highlight's subject while the reel plays. */
