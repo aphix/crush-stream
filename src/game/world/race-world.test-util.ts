@@ -357,7 +357,7 @@ export type PlayerLine = {
   respawnAt?: number;
 };
 
-export type PlayerOutcome = {
+type PlayerOutcome = {
   you: RaceResultRow;
   ai: RaceResultRow[];
   /** Samples where the HUD's lap or place differed from the rules' own count. */

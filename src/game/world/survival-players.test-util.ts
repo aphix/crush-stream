@@ -19,8 +19,6 @@ import { HAVANA } from "./tracks/havana.ts";
  *   corner: for the closed arena: runs for the corner opposite its start, round solids, lifting for a wall, then creeps there at 3 m/s for good: a player boxed in with nowhere left to run.
  */
 export type Fleer = "straight" | "flee" | "ring" | "held" | "evade" | "corner";
-/** The scripts of the open map; `evade` and `corner` run in the arena only. */
-export const FLEERS: readonly Fleer[] = ["straight", "flee", "ring", "held"];
 
 /** The player's pedals for one frame. */
 type Driver = (w: World) => void;
@@ -169,7 +167,7 @@ export type CopTamper = (input: DriveInput) => void;
  * Controls on the pack: `tamper` its pedals, and `release` it that many seconds after the green (see `chase`). Watchers: `each` once per
  * frame before the physics with the race clock, `pair` on every car pair the slice's contact passes find touching (the player's and the pack's own).
  */
-export type ChaseOpts = { tamper?: CopTamper; release?: number; each?: (w: World, time: number) => void; pair?: (a: number, b: number) => void };
+type ChaseOpts = { tamper?: CopTamper; release?: number; each?: (w: World, time: number) => void; pair?: (a: number, b: number) => void };
 
 /**
  * One Survival run on `course` (Havana) with `fleer` at the wheel, `seed` pinning the field's dice, for at most `seconds` of game time.
