@@ -46,7 +46,7 @@ const VIEWS: readonly DetailView[] = ["side", "top", "front", "rear", "bottom"];
 type Tile = { a0: number; b0: number; width: number; height: number; x: number; y: number };
 
 /** The rest frame's two attributes: each vertex and its normal in the car frame (`ensureRestFrame`), read by the spray and the detail map. */
-const REST_POSITION = "sprayPos";
+export const REST_POSITION = "sprayPos";
 const REST_NORMAL = "sprayNrm";
 
 /** The rest frame's attribute declarations: a compile hook adds them only where the shader lacks them, so chained hooks declare them once. */

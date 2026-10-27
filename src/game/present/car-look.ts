@@ -4,6 +4,7 @@ import { bumperMaterial, makePaintMaterial, trimMaterial } from "../vehicle/car-
 import { applyDetailMap, ensureRestFrame, REST_FRAME_ATTRIBUTES } from "../vehicle/car-detail-map.ts";
 import { CAR_SPRAY, carPickText, NO_CAR_PICK, type CarPart, type CarPick } from "../match/look-data.ts";
 import { applySpray, BARE_SPRAY, sprayUniforms, type SprayBitmap } from "./spray.ts";
+import { CAR_SPRAY_DEPTH_BAND, carSprayDepthTexture } from "./spray-depth.ts";
 
 /** What wearing a look changed on a car: its own lid and door paints, the spray's uniforms, and the colours it had before. */
 type Worn = {
@@ -19,6 +20,9 @@ type Worn = {
 type CarBase = { body: number; doors: number; bumpers: number; glass: number };
 
 const worn = new WeakMap<DeformableCar, Worn>();
+/** Per style, its painted parts' outermost surface (`carSprayDepthTexture`). Shared, never disposed. */
+// ponytail: read off the style's first car to wear a look, as its rest frame is (`ensureRestFrame`).
+const sprayDepths = new WeakMap<DeformableCar["style"], THREE.DataTexture>();
 const DEFAULT_PICK = carPickText(NO_CAR_PICK);
 /** Rims as built: white is the instance tint (`WheelBatch`) that leaves the alloy as toned. */
 const RIMS_AS_BUILT = 0xffffff;
@@ -81,8 +85,12 @@ function baseOf(car: DeformableCar): CarBase {
 function firstWear(car: DeformableCar): Worn {
   const m = car.lookMeshes();
   const base = baseOf(car);
+  const painted = [m.body, m.hood, m.trunk, ...m.doors];
+  for (const mesh of painted) ensureRestFrame(mesh, car.group);
+  let depth = sprayDepths.get(car.style);
+  if (!depth) sprayDepths.set(car.style, (depth = carSprayDepthTexture(painted)));
   const w: Worn = {
-    uniforms: sprayUniforms(CAR_SPRAY, BARE_SPRAY, 1),
+    uniforms: sprayUniforms(CAR_SPRAY, BARE_SPRAY, 1, depth, CAR_SPRAY_DEPTH_BAND),
     hood: makePaintMaterial(base.body, car.style.paintFinish),
     trunk: makePaintMaterial(base.body, car.style.paintFinish),
     doors: makePaintMaterial(base.doors, car.style.paintFinish),
@@ -94,8 +102,7 @@ function firstWear(car: DeformableCar): Worn {
   for (const door of m.doors) door.material = w.doors;
   for (const paint of [w.hood, w.trunk, w.doors]) applyDetailMap(paint, car.style);
   for (const paint of [m.bodyPaint, w.hood, w.trunk, w.doors]) {
-    applySpray(paint, w.uniforms, REST_FRAME_ATTRIBUTES, "vSprayP = sprayPos;\nvSprayN = sprayNrm;\nvSprayRow = 0.0;", "car");
+    applySpray(paint, w.uniforms, REST_FRAME_ATTRIBUTES, "vSprayP = sprayPos;\nvSprayN = sprayNrm;\nvSprayRow = 0.0;", "car-depth");
   }
-  for (const mesh of [m.body, m.hood, m.trunk, ...m.doors]) ensureRestFrame(mesh, car.group);
   return w;
 }

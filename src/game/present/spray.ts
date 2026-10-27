@@ -138,15 +138,15 @@ export function colourDistance(a: number, b: number): number {
   return hypot3((a >> 16) - (b >> 16), ((a >> 8) & 0xff) - ((b >> 8) & 0xff), (a & 0xff) - (b & 0xff));
 }
 
-/** The shader's spray uniforms for a bitmap of `layout` sampled from `map`, `rows` bitmaps stacked up it (one per dummy slot); with `outer` (`personSprayDepthTexture`) a fragment under its texel's outermost surface draws no paint. */
-export function sprayUniforms(layout: SprayLayout, map: THREE.Texture, rows: number, outer: THREE.Texture | null = null): Record<string, THREE.IUniform> {
+/** The shader's spray uniforms for a bitmap of `layout` sampled from `map`, `rows` bitmaps stacked up it (one per dummy slot); with `outer` (`personSprayDepthTexture`) a fragment more than `band` m under its texel's outermost surface draws no paint. */
+export function sprayUniforms(layout: SprayLayout, map: THREE.Texture, rows: number, outer: THREE.Texture | null = null, band = SPRAY_DEPTH_BAND): Record<string, THREE.IUniform> {
   return {
     sprayMap: { value: map },
     sprayMin: { value: new THREE.Vector3(...layout.min) },
     spraySpan: { value: new THREE.Vector3(layout.max[0] - layout.min[0], layout.max[1] - layout.min[1], layout.max[2] - layout.min[2]) },
     sprayFaces: { value: layout.faces.map(([x, y, w, h]) => new THREE.Vector4(x / layout.w, y / layout.h, w / layout.w, h / layout.h)) },
     sprayRows: { value: rows },
-    ...(outer && { sprayDepth: { value: outer }, sprayBand: { value: SPRAY_DEPTH_BAND } }),
+    ...(outer && { sprayDepth: { value: outer }, sprayBand: { value: band } }),
   };
 }
 
