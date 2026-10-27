@@ -213,12 +213,6 @@ describe("given a car dropped onto its left or right flank on the flat pad, from
       }
     });
   }
-
-  // A sedan's rest on a flank is one of two poses by the drop's height (swept 1.8-2.2 m, union 9d49c86f): its body 2.6-3.8 cm over the
-  // ground and its lamps 4 cm, or its body 1.4-3.0 cm in it (its drawn flank stands proud of the cage, which carries the ground) and its
-  // lamps 0.2-2.3 cm in. Its mirrors drawn at their own reach (89399471) moved the 2 m right drop into the second pose (lamps -2.3 cm);
-  // at their platform reach 1.8 and 2.2 m read -2.2 and -2.1. The flank's gap is CarRig's to attribute.
-  it.todo("when a car is dropped on its left or right flank from any height and left to rest, then its lamps are out of the ground");
 });
 
 describe("given any class dropped onto its left or right flank on the flat pad from 0.5 m, and left to rest", () => {
