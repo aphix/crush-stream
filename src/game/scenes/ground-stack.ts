@@ -22,7 +22,7 @@ import { GROUND_LEVEL } from "./constants.ts";
  *
  * Bridge decks are the one place ground lies over ground at another height; their top surface is an ordinary depth-writing
  * mesh ("deck" level) that the roads under it lose to by depth, not by order.
- * `ground-overlap.test-util.ts` scans every course for overlaps this leaves ambiguous.
+ * `ground-overlap.test.ts` scans every course for overlaps this leaves ambiguous.
  */
 const GROUND_STACK = [
   GROUND_LEVEL.terrain,
