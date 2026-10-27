@@ -12,9 +12,9 @@ const REDLINE_PEAK_MIN = 0.12;
 const REDLINE_PEAK_MAX = 0.4;
 /** A voice is never inaudibly thin: its RMS at any rev stays above -34 dBFS. */
 const VOICE_RMS_MIN = 0.02;
-/** The voice output of `cls` tuned to `stage`, per rev of `REVS` at throttle 0 (the game never sets the worklet's throttle). */
+/** The voice output of `cls` tuned to `stage`, per rev of `REVS`. */
 function revLevels(cls: VehicleClassId, stage: DamageStage): Promise<Level[]> {
-  return voiceLevels(cls, stage, REVS.map((rev) => ({ rev, throttle: 0 })));
+  return voiceLevels(cls, stage, REVS);
 }
 
 describe("given each vehicle class's voice, rendered by the shipped worklet at every damage stage", () => {
