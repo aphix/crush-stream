@@ -11,15 +11,16 @@ import { CrashEngine } from "./engine.ts";
  * Auto stays on `minimal` and never loads what a lifted tier would (the sky, in node), whatever the stand-in pointer says.
  */
 const ctx2d: object = new Proxy(function () {}, { get: () => () => ctx2d, apply: () => ctx2d });
-/** The extensions the context has: three warns when it asks for one a render target needs and finds it missing. The engine's own optional ones (timer queries, renderer info) stay absent. */
-const GL_EXTENSIONS = ["EXT_color_buffer_float"];
+/** The extensions the context has: three warns when it asks for one a render target or a `BatchedMesh` draw needs and finds it missing. The engine's own optional ones (timer queries, renderer info) stay absent. */
+const GL_EXTENSIONS = ["EXT_color_buffer_float", "WEBGL_multi_draw"];
 const GL_CONSTANTS = new Map<string, number>();
 const GL_ANSWERS: Record<string, (...args: unknown[]) => unknown> = {
   getParameter: (name) => (name === GL_CONSTANTS.get("RENDERER") ? "SwiftShader (headless test stand-in)" : Object.assign(new String("WebGL 2.0"), { valueOf: () => 16 })),
   getShaderPrecisionFormat: () => ({ rangeMin: 127, rangeMax: 127, precision: 23 }),
   getContextAttributes: () => ({ alpha: false, antialias: false }),
   getSupportedExtensions: () => GL_EXTENSIONS,
-  getExtension: (name) => (GL_EXTENSIONS.includes(name as string) ? {} : null),
+  // An extension's calls answer as the context's own do.
+  getExtension: (name) => (GL_EXTENSIONS.includes(name as string) ? gl : null),
   getShaderInfoLog: () => "",
   getProgramInfoLog: () => "",
   getProgramParameter: () => 0,
