@@ -14,6 +14,8 @@ const STEP = 1 / QUIET_HZ;
 const RACE_S = 20;
 const SURVIVAL_S = 15;
 const DERBY_S = 20;
+/** The derby's field seed: a derby rolls a random one otherwise, which moved its judged steps from run to run. */
+const DERBY_SEED = 1;
 /** The fewest car-steps a kind must be judged on: a second of one car. */
 const FEWEST = QUIET_HZ;
 
@@ -111,7 +113,9 @@ describe("given the real engine's AI drivers, one step at the phone's coarse 1/8
     untilGreen(engine);
     run(engine, SURVIVAL_S);
     engine["seat"].mode = "global";
+    engine["pinnedSeed"] = DERBY_SEED;
     engine.toggleDerby();
+    engine["pinnedSeed"] = null;
     run(engine, DERBY_S);
   });
   after(() => {
