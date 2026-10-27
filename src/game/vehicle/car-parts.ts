@@ -66,6 +66,29 @@ const _hoodTurn = new THREE.Quaternion();
 const _xAxis = new THREE.Vector3(1, 0, 0);
 
 /**
+ * Grows `box` by `local` under world matrix `m`, the corners as `Box3.applyMatrix4` puts them; an affine `m` leaves that divisor at exactly 1, so none is taken.
+ */
+function growByTransformed(box: THREE.Box3, local: THREE.Box3, m: THREE.Matrix4): void {
+  const e = m.elements;
+  if (e[3] !== 0 || e[7] !== 0 || e[11] !== 0 || e[15] !== 1) {
+    box.union(_drawn.copy(local).applyMatrix4(m));
+    return;
+  }
+  if (local.isEmpty()) return;
+  const { min, max } = local;
+  for (let k = 0; k < 8; k++) {
+    const x = k & 1 ? max.x : min.x;
+    const y = k & 2 ? max.y : min.y;
+    const z = k & 4 ? max.z : min.z;
+    const wx = e[0]! * x + e[4]! * y + e[8]! * z + e[12]!;
+    const wy = e[1]! * x + e[5]! * y + e[9]! * z + e[13]!;
+    const wz = e[2]! * x + e[6]! * y + e[10]! * z + e[14]!;
+    box.min.set(Math.min(box.min.x, wx), Math.min(box.min.y, wy), Math.min(box.min.z, wz));
+    box.max.set(Math.max(box.max.x, wx), Math.max(box.max.y, wy), Math.max(box.max.z, wz));
+  }
+}
+
+/**
  * Grows `box` by what `o` and its descendants draw, at their world matrices as they stand: a visible mesh's geometry, a part seat's `drawn`
  * part. A part seat's `geometry` is the platform part the sim measures, not where the style draws its own (`Box3.setFromObject` read it: a
  * pickup's bumper box reached 4.2 m off the bumper, and the bumper was lifted 2.6 m to clear the road under that phantom).
@@ -75,7 +98,7 @@ export function growDrawn(o: THREE.Object3D, box: THREE.Box3): void {
   const geometry = o instanceof PartSeat ? o.drawn : o instanceof THREE.Mesh ? (o.geometry as THREE.BufferGeometry) : null;
   if (geometry !== null) {
     if (geometry.boundingBox === null) geometry.computeBoundingBox();
-    box.union(_drawn.copy(geometry.boundingBox!).applyMatrix4(o.matrixWorld));
+    growByTransformed(box, geometry.boundingBox!, o.matrixWorld);
   }
   for (let i = 0; i < o.children.length; i++) growDrawn(o.children[i]!, box);
 }
