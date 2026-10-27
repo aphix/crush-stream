@@ -3,6 +3,7 @@ import { after, afterEach, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { COMPASS, report, type Run, type Site } from "./ground-judge.test-util.ts";
 import { drop, frame, fit, FRAME, makeCar, worldOf } from "./ground-probe.test-util.ts";
+import type { DeformableCar } from "./car.ts";
 import { EjectionWatch } from "./ejection.ts";
 import { armKill, CLASSES, HANDLING, killClass, VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
 import { idleDrive } from "./car-drive.ts";
@@ -61,6 +62,17 @@ type LineRun = {
 const _hub = new THREE.Vector3();
 const SETTLE = 60;
 
+/** The wheels (bit i: `car.wheels[i]`) whose hub stands over grass. */
+function wheelsOnGrass(car: DeformableCar, ground: Ground): number {
+  car.group.updateWorldMatrix(true, true);
+  let wheels = 0;
+  for (const [i, wheel] of car.wheels.entries()) {
+    wheel.getWorldPosition(_hub);
+    if (ground.surfaceAt(_hub.x, _hub.z) === "grass") wheels |= 1 << i;
+  }
+  return wheels;
+}
+
 /**
  * `cls` driven along `line` from `lead` m before its point, at `speed` m/s held (it starts at that speed), or from rest with the
  * throttle full when `speed` is "top". Ends after `seconds`, or when it passes `stopZ` (heading −z) or stands still for 2 s.
@@ -111,8 +123,9 @@ function runLine(
       out.pen = Math.max(out.pen, g.pen - g.crush);
     };
     frame(w, input, st, o.slices ? slice : undefined);
-    // The tyres' gaps are read only past the spawn's settle and not in flight (the grass check below).
-    const f = fit(car, ground, n < SETTLE || car.airborne);
+    // The tyres' gaps are read only past the spawn's settle, not in flight, and on grass (the check below): the scan runs for no other frame.
+    const grassWheels = n >= SETTLE && !car.airborne ? wheelsOnGrass(car, ground) : 0;
+    const f = fit(car, ground, grassWheels === 0);
     // The first second is the spawn's 0.5 m drop settling, not the line.
     if (n >= SETTLE) out.pen = Math.max(out.pen, f.pen - f.crush);
     out.ejections += w.ejection.take().length;
@@ -120,12 +133,7 @@ function runLine(
     out.jump = Math.max(out.jump, Math.hypot(p.x - prev.x, p.y - prev.y, p.z - prev.z) - car.velocity.length() * FRAME * 1.5 - 0.1);
     prev.copy(p);
     if (o.at !== undefined && out.speedAt === null && p.z <= o.at) out.speedAt = car.speed;
-    if (n >= SETTLE && !car.airborne) {
-      for (const [i, wh] of car.wheels.entries()) {
-        wh.getWorldPosition(_hub);
-        if (ground.surfaceAt(_hub.x, _hub.z) === "grass") out.grass = Math.max(out.grass, -f.gaps[i]!);
-      }
-    }
+    for (let i = 0; i < car.wheels.length; i++) if (grassWheels & (1 << i)) out.grass = Math.max(out.grass, -f.gaps[i]!);
     const below = p.y - ground.heightAt(p.x, p.z);
     if (car.airborne) {
       if (!was) {
@@ -161,7 +169,7 @@ function sites(group: readonly (readonly [name: string, x: number, z: number])[]
     name,
     kind: "plain",
     classes: VEHICLE_CLASS_IDS,
-    runs: (cls) => COMPASS.map(([h, yaw]): Run => [h, drop(ground, cls, x, z, yaw, { hint: ground.heightAt(x, z) + 0.5 })]),
+    runs: (cls) => COMPASS.map(([h, yaw]): Run => [h, drop(ground, cls, x, z, yaw, { hint: ground.heightAt(x, z) + 0.5, untilStill: true })]),
   }));
 }
 
