@@ -1,33 +1,25 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import { gzipSync } from "node:zlib";
-import { PGlite } from "@electric-sql/pglite";
 import type { Sql } from "@/lib/db";
+import { migratedPg, sqlOf } from "../test-db.test-util.ts";
 import { LIMITS } from "../multiplayer/rate-limit.ts";
 import { KINDS, MAX_JSON_BYTES, MAX_WIRE_BYTES, RECEIPT_PATTERN, type Envelope, type Kind } from "./kinds.ts";
 import { handleSubmissions, STORE_MAX_BYTES, STORE_MAX_ROWS } from "./submissions.server.ts";
 
-const MIGRATIONS = new URL("../../../migrations/", import.meta.url);
 const OWNER_TOKEN = "owner-token-".padEnd(40, "x");
 /** The clock every request is handled at: address buckets neither refill nor drain between a test's requests. */
 const NOW = 1_800_000_000_000;
 
 /** The migrated in-memory database, built once: starting PGlite costs about a second. */
-const migrated: Promise<PGlite> = (async () => {
-  const pg = new PGlite({ parsers: { 20: Number } }); // int8 as db.ts parses it
-  for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()) {
-    await pg.exec(readFileSync(new URL(file, MIGRATIONS), "utf8"));
-  }
-  return pg;
-})();
+const migrated = migratedPg();
 
 /** The database with `migrations/*.sql` applied and no submissions, as the relay's tests build theirs. */
 async function freshDb(): Promise<Sql> {
   const pg = await migrated;
   await pg.exec("TRUNCATE submissions");
-  return { query: async (text: string, params?: unknown[]) => (await pg.query(text, params)).rows } as unknown as Sql;
+  return sqlOf(pg);
 }
 
 const CLIP_TEXT = "U0NITAAqIAAAAAAAAAAA".repeat(40);

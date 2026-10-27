@@ -1,21 +1,16 @@
 import { before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
-import { PGlite } from "@electric-sql/pglite";
+import type { PGlite } from "@electric-sql/pglite";
 import type { Sql } from "@/lib/db";
+import { migratedPg, sqlOf } from "../test-db.test-util.ts";
 import { handleSignaling } from "./signaling.server.ts";
 import { ROOM_MAX, TOKEN_HEADER } from "./rooms.ts";
 
-const MIGRATIONS = new URL("../../../migrations/", import.meta.url);
-
 /** An in-memory relay database with `migrations/*.sql` applied; `legacy` writes rows between 0002 and the later files. */
 async function relayDb(legacy?: (pg: PGlite) => Promise<void>): Promise<Sql> {
-  const pg = new PGlite({ parsers: { 20: Number } }); // int8 as db.ts parses it
-  for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort()) {
-    await pg.exec(readFileSync(new URL(file, MIGRATIONS), "utf8"));
+  return sqlOf(await migratedPg(async (file, pg) => {
     if (file.startsWith("0002") && legacy) await legacy(pg);
-  }
-  return { query: async (text: string, params?: unknown[]) => (await pg.query(text, params)).rows } as unknown as Sql;
+  }));
 }
 
 interface Reply {
