@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { computeNormalsFast } from "../deform/fast-normals.ts";
+import { computeNormalsNear } from "../deform/fast-normals.ts";
 import { skinKernel, type SkinKernel } from "../deform/skin-kernel.ts";
 import type { PlanGrid, SagSkin } from "../deform/tyre-sag-kernel.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
@@ -274,6 +274,12 @@ export class TyreSkin {
   private readonly wheelNow = new Float64Array(4 * HELD_ELEMENTS.length).fill(NaN);
   /** Whether the skin as last written stands off its rest anywhere (`movedOffRest`): only then may anything under it stand through it. */
   private crushed = false;
+  /** The vertices the last `applyLift` moved (`liftedCount` of them), the hold's before (`liftedBefore`), and the scratch `changedSince` lists into. */
+  private lifted: Int32Array;
+  private liftedCount = 0;
+  private liftedBefore: Int32Array;
+  private liftedBeforeCount = 0;
+  private readonly near: Int32Array;
 
   /** Whether a vertex beside a tyre's end leaves by the tyre's side (the body paint) rather than over its top (a bonnet's chords need the top). */
   private readonly pushSide: boolean;
@@ -293,6 +299,9 @@ export class TyreSkin {
     this.pushDir = new Float32Array(this.edges.order.length * 3);
     this.written = new Float32Array(rest.length);
     this.liftable = new Uint8Array(rest.length / 3);
+    this.lifted = new Int32Array(rest.length / 3);
+    this.liftedBefore = new Int32Array(rest.length / 3);
+    this.near = new Int32Array((2 * rest.length) / 3);
     this.sagSkin = { weld: this.edges.weld, liftable: this.liftable, lift: this.lift, dirty: this.dirty, overTris: this.overTris, plans: this.plans, sagRead: this.sagRead, heldAt: this.heldAt };
   }
 
@@ -379,7 +388,8 @@ export class TyreSkin {
     // The lift is a function of the skin, the wheels and the parts: none changed, the drawn skin already carries it.
     if (!fresh && !wheelMoved && !partsMoved) return;
     this.heldAt.set(this.wheelNow);
-    if (!fresh && this.held) pos.set(this.written);
+    const reset = !fresh && this.held;
+    if (reset) pos.set(this.written);
     if (fresh || partsMoved) this.findPartFloor(pos, this.partsShown > 0 ? this.partSamples(group, under) : 0);
     this.lift.set(this.partFloor);
     this.push.fill(0);
@@ -409,18 +419,31 @@ export class TyreSkin {
       if (!sagged) break;
       this.carryLift();
     }
-    // A resting skin's points read lifts of a nanometre (the rest clearance's rounding), under a float's step: held is a drawn position changed.
+    const held = this.applyLift(pos);
+    const changed = this.changedSince(reset);
+    const wasHeld = this.held;
+    this.held = held;
+    // Unheld, the positions are the writer's (fresh) or as they stood: its normals still match.
+    if (!held && (fresh || !wasHeld)) return;
+    attr.needsUpdate = true;
+    computeNormalsNear(this.mesh.geometry, this.near, changed);
+  }
+
+  /** Adds each welded point's lift and push to its vertices in `pos`, listing those vertices (`lifted`); true when a drawn position changed (a resting skin's points read lifts of a nanometre, the rest clearance's rounding, under a float's step). */
+  private applyLift(pos: Float32Array): boolean {
     let held = false;
+    let n = 0;
     const { weld } = this.edges;
     for (let v = 0; v < weld.length; v++) {
       const p = weld[v]!;
       const up = this.lift[p]!;
+      const out = this.push[p]!;
+      if (up > 0 || out > 0) this.lifted[n++] = v;
       if (up > 0) {
         const y = pos[v * 3 + 1]!;
         pos[v * 3 + 1] = y + up;
         if (pos[v * 3 + 1] !== y) held = true;
       }
-      const out = this.push[p]!;
       if (out > 0)
         for (let k = 0; k < 3; k++) {
           const x = pos[v * 3 + k]!;
@@ -428,12 +451,20 @@ export class TyreSkin {
           if (pos[v * 3 + k] !== x) held = true;
         }
     }
-    const wasHeld = this.held;
-    this.held = held;
-    // Unheld, the positions are the writer's (fresh) or as they stood: its normals still match.
-    if (!held && (fresh || !wasHeld)) return;
-    attr.needsUpdate = true;
-    computeNormalsFast(this.mesh.geometry);
+    this.liftedCount = n;
+    return held;
+  }
+
+  /** Lists in `near` the vertices whose positions may differ from those the normals were last made for: this hold's lifted ones, and the last hold's when `reset` put the written skin back under them; returns how many. This hold's become the last's. */
+  private changedSince(reset: boolean): number {
+    let n = 0;
+    for (let k = 0; k < this.liftedCount; k++) this.near[n++] = this.lifted[k]!;
+    if (reset) for (let k = 0; k < this.liftedBeforeCount; k++) this.near[n++] = this.liftedBefore[k]!;
+    const before = this.liftedBefore;
+    this.liftedBefore = this.lifted;
+    this.lifted = before;
+    this.liftedBeforeCount = this.liftedCount;
+    return n;
   }
 
   /** Reads the poses of the shown parts of `under` in the mesh's frame (`partsShown` of them); true when any moved past `WHEEL_SLACK` from `partPoseAt`, or one came or went, and then keeps them there. */

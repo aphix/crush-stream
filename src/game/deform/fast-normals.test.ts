@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { computeNormalsFast } from "./fast-normals.ts";
+import { computeNormalsFast, computeNormalsNear } from "./fast-normals.ts";
 import { makeHoodGeometry } from "../vehicle/car-mesh.ts";
 import { makeChassisGeometry } from "../vehicle/car-chassis-mesh.ts";
 import { CAR_STYLES } from "../vehicle/car-variants.ts";
@@ -62,5 +62,26 @@ describe("given computeNormalsFast (vertex normals computed faster than the stoc
     for (let k = 3; k < 9; k++) a[k] = a[k % 3]!;
     geo.deleteAttribute("normal");
     assert.ok(compare(geo) < 1e-6);
+  });
+
+  it("when a few of a crushed body's vertices move after its normals were computed and only the normals near them are computed again, then every normal equals a full pass's to the bit", () => {
+    const geo = makeChassisGeometry(CAR_STYLES.sedan);
+    crumple(geo, 0.04);
+    computeNormalsFast(geo);
+    const pos = geo.getAttribute("position").array as Float32Array;
+    // Lift a scattered few, as the tyre hold lifts a crushed arch's points.
+    const moved: number[] = [];
+    for (let v = 7; v < pos.length / 3; v += 53) {
+      pos[v * 3 + 1]! += 0.013 + (v % 5) * 0.001;
+      moved.push(v);
+    }
+    computeNormalsNear(geo, moved, moved.length);
+    const near = Float32Array.from(geo.getAttribute("normal").array);
+    computeNormalsFast(geo);
+    const full = geo.getAttribute("normal").array as Float32Array;
+    let differ = 0;
+    for (let i = 0; i < full.length; i++) if (!Object.is(near[i], full[i])) differ++;
+    assert.ok(moved.length > 20, "the control: vertices were moved");
+    assert.equal(differ, 0, `${differ} normal components differ from the full pass`);
   });
 });
