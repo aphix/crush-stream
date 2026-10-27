@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { setGround } from "../world/ground.ts";
@@ -151,7 +152,14 @@ export function loopRun(trk: Track, pace: number): Run {
 }
 
 /** The most the block may move over ground with nothing touching the car (m): the noise of the lattice settling. */
-export const DRIFT = 0.005;
+const DRIFT = 0.005;
+
+/** `r` got to its end (`end` names it for the failure), its block moved at most `DRIFT`, and its engine lives. */
+export function assertHeld(r: Run, end: string): void {
+  assert.ok(r.reached, `the run stopped at s ${r.endS.toFixed(0)}, short of ${end}`);
+  assert.ok(r.end - r.settled <= DRIFT, `the block moved ${((r.end - r.settled) * 1000).toFixed(1)} mm over the stretch`);
+  assert.ok(r.alive, "the engine died");
+}
 
 /** The courses whose whole loop the per-commit suite drives (the ones the owner's report named); every other course's is in ejection-slope.ai-long-run.ts. */
 export const NAMED_LOOPS = ["oval", "rally", "stunt"] as const;
