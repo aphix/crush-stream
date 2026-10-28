@@ -73,6 +73,9 @@ export type SprayTool = { on: boolean; radius: number; colour: number; mirror: b
 /** The trip out of the car as the HUD reads it: `out` while he is on foot, the line under the view (what the control does now, or why it refused), and `refusal`, that why alone while it shows. */
 export type FootHud = { out: boolean; prompt: string | null; refusal: string | null };
 
+/** The tether as the HUD reads it: cables out, whether the second fire is awaited (a first cable's player end can still be moved), and the aim (`AIM` in `present/tether-art.ts`: 0 nothing, 1 in reach, 2 out of reach). */
+export type TetherHud = { count: number; pending: boolean; aim: number };
+
 export type CrashHudState = {
   playing: boolean;
   looping: boolean;
@@ -189,6 +192,8 @@ export type CrashHudState = {
   seat: "global" | "follow" | "drive";
   /** The trip out of the car (offline free play only), null where it is not offered: `out` is he is on foot, `prompt` what the control does now or why it just refused. */
   foot: FootHud | null;
+  /** The tether (a fire, retract and cut on a touch screen), null where it is not on offer. */
+  tether: TetherHud | null;
   boost: number;
   /** The seat's slide while driving, `NO_DRIFT` otherwise: the free-drive boost bar's charge cue (a race and a derby read `RaceView.drift`). */
   drift: DriftView;
@@ -328,6 +333,7 @@ export const INITIAL_HUD: CrashHudState = {
   race: null,
   seat: "global",
   foot: null,
+  tether: null,
   boost: 1,
   drift: NO_DRIFT,
   view: "third",

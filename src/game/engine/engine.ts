@@ -33,6 +33,7 @@ import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { VIP_LOOK } from "../present/dummy-dress.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
+import { TetherDirector } from "./engine-tether.ts";
 import { ownLook } from "../present/driver-look.ts";
 import { throwComing } from "../present/ragdoll-trigger.ts";
 import { ChaseCamera, centroid, SHAKE_DECAY_PER_S, type SpecScene } from "../present/engine-camera.ts";
@@ -262,6 +263,14 @@ export class CrashEngine extends EngineGarage {
       look: () => ownLook(this.looks.mine.person),
       sight: () => this.chaseSight(true),
     });
+    this.tether = new TetherDirector({
+      tethers: this.world.tethers,
+      camera: this.camera,
+      cars: () => this.live(),
+      playerCar: () => this.tetherSource(),
+      offered: () => this.tetherOffered(),
+    });
+    this.scene.add(this.tether.art.group);
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
     // `?fx=off|minimal|low|high|ultra` picks the tier for the session (bench A/B); the auto tier otherwise. Ultra loads after boot (below).
     const fxParam = FX_TIERS.find((t) => t === new URLSearchParams(window.location.search).get(SETTING_KEY.fx));
@@ -471,6 +480,7 @@ export class CrashEngine extends EngineGarage {
     this.looks.dispose();
     this.rivals.dispose();
     for (const batch of [this.wheels, this.lampBatch, this.partBatch, this.seated, this.coverBatch]) batch.dispose();
+    this.tether.dispose();
     this.sparks.dispose();
     this.fountains.dispose();
     this.debris.dispose();
@@ -680,6 +690,7 @@ export class CrashEngine extends EngineGarage {
     const focus = this.highlights.playing ? this.highlights.focus() : null;
     if (focus) this.race.followSun(focus);
     this.updateCamera(wallDt);
+    this.tether.frame(wallDt);
     this.rumbleFrame(this.playing && !held ? wallDt : 0);
     this.flushVisibleSkins();
     this.detail.update(this.cars, this.camera, this.followedCar(), this.highlights.playing ? this.highlights.focus() : null);
@@ -810,6 +821,17 @@ export class CrashEngine extends EngineGarage {
     this.net.sendEject(e);
   }
 
+  /** The player's cable is on offer: what the walk is, less the walker's own trip and a netplay client's mirrored sim (a client has no cable to draw or solve). */
+  private tetherOffered(): boolean {
+    return !this.net.client && !this.onFoot.active && this.onFootOffered();
+  }
+
+  /** The car the player's cable starts from: the driven or followed car, else a race's own; -1 when there is none. */
+  private tetherSource(): number {
+    const index = this.followedCar() ? this.seat.carIndex : this.race.active ? this.race.self : -1;
+    return index >= 0 && index < this.carCount ? index : -1;
+  }
+
   /** The on-foot control is offered: the game is running a scene with a player's car to leave (not the garage, the lab or the showcase), and no reel, fade, boot warm-up or race menu holds it. Online or off. */
   private onFootOffered(): boolean {
     if (this.highlights.playing || !this.playing || this.warming || this.sceneFade.pending !== null) return false;
@@ -871,6 +893,7 @@ export class CrashEngine extends EngineGarage {
     this.ejection.minigame = this.minigameMode !== null;
     w.fine = this.pace.fine;
     lap(w.phases, PHASE.drive);
+    if (w.tethers.count > 0 && this.race.active) this.race.recorder.tethered();
     stepWorld(w, dt);
     // The slab names no car: a hit it took from the watched one, at the step's hardest contact next to that car.
     const watched = this.seat.mode !== "global" ? cars[this.seat.carIndex] : undefined;

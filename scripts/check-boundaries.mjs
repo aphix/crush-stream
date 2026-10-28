@@ -84,6 +84,7 @@ const HOT = {
   "src/game/present/motor-voices.ts": ["assign"],
   "src/game/present/motor-tone.ts": ["motorRev", "accelLoad", "motorLoad", "motorRpm", "channelGains"],
   "src/game/present/game-audio.ts": ["frame"],
+  "src/game/contact/tether.ts": ["solveTethers", "prepare", "holds", "wanted", "pull", "tensionAfter", "wear", "push", "pointVelocity", "inverseMassAt", "placeEnd", "anchor"],
 };
 const KNOB_CONTEXTS = new Set(["kernel", "world", "deform", "vehicle", "contact", "scenes", "ai"]);
 const MAX_FILE_LINES = 800;

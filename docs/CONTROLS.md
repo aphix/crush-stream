@@ -72,6 +72,18 @@ A tap shorter than one frame still registers (the press is latched until the nex
 | Zoom | scroll | | two-finger pinch |
 | Impact shake: any hit on the followed or driven car shakes the chase, far chase and hood views (the hood at 0.4 of the amount) in every mode, by how hard it hit (none under 2 m/s, full at 20). Debug views → Camera → **Impact**: **Shake strength** (`cam.shake`, 0 is off) and **Gear-change kick** (`cam.shiftKick`: the body's slight pitch at each gear change). Reduced motion never shakes | | | |
 
+## Tether (grappling cable, spike)
+
+A Just Cause-style cable. Aim with the camera's centre: a ring there is white with nothing to hook, green with a target in reach (80 m of your car; a small ring marks the exact point), red out of reach. It hooks a car under the ring or near it (within 10 degrees), else the ground.
+
+| Action | Keyboard | Controller | Touch |
+|---|---|---|---|
+| Hook: the first fire ties the target to your car, as long as they stand apart now; fire again aimed at something else and your end moves there (object to object); a third fire starts another cable (two at most, the oldest goes) | ' (Quote) | D-pad ↑ | Hook |
+| Reel in while held: the cable shortens at 15 m/s to 3 m, pulling with at most 30 kN, so a light car comes and a heavy one barely moves | ] (right bracket) | D-pad → (held) | Reel |
+| Cut every cable | Delete | D-pad ← | Cut |
+
+A taut cable holds its length and a slack one pulls on nothing; a shock past 200 kN snaps it. Cars and ground points only: a walker, a dummy or a prop cannot be hooked. Nothing here is recorded: a race highlight that holds a step with a cable out is not saved, and a netplay client has no cable (the host's cars are pulled and show no line). The keys are `TETHER_KEYS` in `src/game/engine/engine-keys.ts`; the solver is `contact/tether.ts` (`solveTethers`, after the pair contact pass of each slice).
+
 ## Racing (no menu open)
 
 | Action | Keyboard | Controller | Touch |

@@ -103,6 +103,11 @@ export class TetherSet {
     return true;
   }
 
+  /** The car index (or `WORLD`) cable `slot`'s end `end` is on. */
+  endCar(slot: number, end: number): number {
+    return this.rows[slot * ROW + R_CAR + end]!;
+  }
+
   length(slot: number): number {
     return this.rows[slot * ROW + R_LENGTH]!;
   }
@@ -235,7 +240,7 @@ function prepare(set: TetherSet, slot: number, cars: readonly DeformableCar[], h
   axis.divideScalar(span);
   const inverse = inverseMassAt(a, axis) + inverseMassAt(b, axis);
   if (inverse <= 0) return false;
-  // The winch reels from where the cable stands, so a slack or overstretched cable has no length to catch up on.
+  // The winch takes up slack at once: it reels from where the ends stand, and never lets the cable out.
   if (set.reeling) set.rows[o + R_LENGTH] = Math.min(set.rows[o + R_LENGTH]!, Math.max(Math.min(MIN_LENGTH, set.rows[o + R_LENGTH]!), span - RETRACT_SPEED * h));
   const stretch = span - set.rows[o + R_LENGTH]!;
   const w = slot * W_STRIDE;

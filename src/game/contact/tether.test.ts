@@ -124,11 +124,15 @@ describe("given a car rolling 8 m/s away from a world anchor 6 m behind it", () 
     assertSameNumbers(stateOf(tied.cars), stateOf(free.cars), "a slack cable's car against a free one", 0);
   });
 
-  it("when the cable is only 8 m long, then it comes taut and the car no longer moves as a free one does", () => {
+  it("when the cable is only 8 m long, then it comes taut at speed with under 0.5 % stretch and the car no longer moves as a free one does", () => {
     const tied = slackStage(8);
     const free = stage([[8, 0, EAST, 8, 0]]);
-    run(tied, 1);
+    let worst = 0;
+    run(tied, 1, () => {
+      worst = Math.max(worst, span(tied, 0) / 8 - 1);
+    });
     run(free, 1);
+    assert.ok(worst < 0.005, `stretch ${(worst * 100).toFixed(3)} %`);
     assert.ok(Math.abs(tied.cars[0]!.group.position.x - free.cars[0]!.group.position.x) > 1, "the short cable changed nothing");
   });
 });
