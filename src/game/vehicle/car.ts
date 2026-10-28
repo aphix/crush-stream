@@ -749,6 +749,7 @@ export class DeformableCar extends CarParts {
       if (t.paint) this.deform.skinPoints(t.mesh.geometry, t.rest, t.paint, t.cage, t.origin);
       else this.deform.skinPanel(t.mesh.geometry, t.rest, t.cage, t.origin);
     }
+    this.poseLidFittings();
   }
 
   /** Each hinged panel's shell, posed on the body skin as the tyres hold it (`holdSkinOffTyres`): posed on the skin before the hold, an arch flare's lip stood in its tyre. */

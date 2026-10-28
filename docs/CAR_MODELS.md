@@ -172,7 +172,7 @@ panel, and blacked-out pillars, are drawn dark by the paint's `primer` attribute
 no part adds a draw call. Every style's mirror, grille and tail trim is one variant in the part batch's one styled draw (`SeatDraw`):
 a seat draws its own variant and paints its body-colour share from its seat's tint, so styled parts stay at one draw for any fleet.
 The lamps are one draw too: each lamp seat carries its look (lit, running, braking, dark, broken) in the seat texture, so a brake
-tap or a broken lamp re-colours a seat without rebuilding the draw's geometry. No `BatchedMesh`: Firefox lacks WEBGL_multi_draw.
+tap or a broken lamp re-colours a seat without rebuilding the draw's geometry. A lamp's seat stands on a facet of the skin it shows on: a body lamp on the body's, a head's share on the hood, a tail's on the boot lid and a gate's high brake lamp on that lid's own, so each follows its panel's dent. No `BatchedMesh`: Firefox lacks WEBGL_multi_draw.
 
 ## Interior, engine bay and bare metal
 

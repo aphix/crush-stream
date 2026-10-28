@@ -47,6 +47,7 @@ type TrimKind = { cage: BodyPartName; door: 0 | 1 | null; strip: boolean };
 type TrimFollow = Pick<TrimKind, "cage" | "door"> & { mesh: THREE.Mesh; rest: Float32Array; origin: THREE.Vector3; paint: PointSkin | null };
 const _inv = new THREE.Quaternion();
 const _lampQ = new THREE.Quaternion();
+const _pivot = new THREE.Vector3();
 const _up = new THREE.Vector3(0, 1, 0);
 /** The brake lamp's probe meets the rear glass from either face: a cab's brake lamp sits on its back glass, which the body skin doesn't hold. */
 const GLASS_PROBE = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
@@ -243,13 +244,17 @@ export interface Lamp {
 
 /**
  * A drawn-only lamp, no light of its own: on the skin (`lamps.brake`, `lamps.sideMarkers`; seated and lifted as a lamp, never broken), or
- * a head's share on the hood / a tail's on the boot lid (`hood` / `boot`: riding that lid, `anchor` null), drawn broken once its lamp
- * breaks or its lid tears off; a roof-hinged gate's `lamps.brake` rides the gate (`anchor` null, no lamp) and goes dark when it tears off.
+ * a head's share on the hood / a tail's on the boot lid (`hood` / `boot`), drawn broken once its lamp breaks or its lid tears off; a
+ * roof-hinged gate's `lamps.brake` rides the gate and goes dark when it tears off. A lid's fittings ride that lid's own skin (`lid`).
  */
 interface LampFitting {
   seat: THREE.Object3D;
   kind: "brake" | "marker" | "hood" | "boot";
-  anchor: SkinAnchor | null;
+  anchor: SkinAnchor;
+  /** The lid whose skin `anchor` is on, in the lid's own frame; null: the body's skin. */
+  lid: THREE.Mesh | null;
+  /** A share's drawn geometry is built about its lid's origin: this is where its anchor stands in that frame (null: the geometry is built about the seat). */
+  pivot: THREE.Vector3 | null;
   /** Its variant in the lamp batch (`drawnLamp`); 0 for the shared brake and marker units. */
   variant: number;
   /** A share's lamp on the body and its lid's part (set once the parts are registered); a hatch's high brake lamp on its gate has no lamp, only the lid; null on the other brake lamps and the markers. */
@@ -690,7 +695,9 @@ export abstract class CarCore {
         const seat = this.lampSeat();
         seat.parent = lid;
         const lamp = this.lamps.find((l) => l.kind === (kind === "hood" ? "head" : "tail") && l.side === side)!;
-        this.lampFittings.push({ seat, kind, anchor: null, variant: share.variant, share: { lamp, lid: null }, tint: null });
+        const pivot = new THREE.Box3().setFromBufferAttribute(share.geometry.getAttribute("position") as THREE.BufferAttribute).getCenter(new THREE.Vector3());
+        const anchor = anchorOnSkin(lid.geometry, pivot, _lampQ.identity());
+        this.lampFittings.push({ seat, kind, anchor, lid, pivot, variant: share.variant, share: { lamp, lid: null }, tint: null });
       }
     }
     this.addLampFittings();
@@ -721,16 +728,14 @@ export abstract class CarCore {
       const point = inset ? hit.point.clone().addScaledVector(toward, inset) : hit.point;
       const color = tint === undefined ? null : new THREE.Color(tint);
       if (hit.object === gate) {
-        // On the gate's spoiler: seated in the lid's frame, so it opens and tears with the gate.
+        // On the gate's spoiler: seated in the lid's frame on its skin, so it opens, dents and tears with the gate.
         seat.parent = this.trunk;
-        seat.position.copy(point).sub(this.trunk.position);
-        seat.quaternion.setFromAxisAngle(_up, yaw);
-        seat.updateMatrix();
-        this.lampFittings.push({ seat, kind, anchor: null, variant: 0, share: { lamp: null, lid: null }, tint: color });
+        const anchor = anchorOnSkin(this.trunk.geometry, point.clone().sub(this.trunk.position), _lampQ.setFromAxisAngle(_up, yaw));
+        this.lampFittings.push({ seat, kind, anchor, lid: this.trunk, pivot: null, variant: 0, share: { lamp: null, lid: null }, tint: color });
         return;
       }
       const anchor = anchorOnSkin(this.body.geometry, point, _lampQ.setFromAxisAngle(_up, yaw));
-      this.lampFittings.push({ seat, kind, anchor, variant: 0, share: null, tint: color });
+      this.lampFittings.push({ seat, kind, anchor, lid: null, pivot: null, variant: 0, share: null, tint: color });
     };
     if (brake) {
       const glass = new THREE.Mesh(makeRearGlass(this.style), GLASS_PROBE);
@@ -950,6 +955,7 @@ export abstract class CarCore {
   protected resetLamps(): void {
     for (const lamp of this.lamps) lamp.intact = true;
     this.poseLamps();
+    this.poseLidFittings();
   }
 
   protected poseLamps(): void {
@@ -959,8 +965,18 @@ export abstract class CarCore {
       l.seat.updateMatrix();
     }
     for (const f of this.lampFittings) {
-      if (!f.anchor) continue;
+      if (f.lid !== null) continue;
       poseOnSkin(f.anchor, pos, f.seat.position, f.seat.quaternion);
+      f.seat.updateMatrix();
+    }
+  }
+
+  /** After the lids' skins are written: each lid fitting stands on its facet of its lid's dented skin. */
+  protected poseLidFittings(): void {
+    for (const f of this.lampFittings) {
+      if (f.lid === null) continue;
+      poseOnSkin(f.anchor, (f.lid.geometry.getAttribute("position") as THREE.BufferAttribute).array, f.seat.position, f.seat.quaternion);
+      if (f.pivot !== null) f.seat.position.sub(_pivot.copy(f.pivot).applyQuaternion(f.seat.quaternion));
       f.seat.updateMatrix();
     }
   }
