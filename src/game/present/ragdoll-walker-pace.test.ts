@@ -7,6 +7,8 @@ import { PARTS } from "./ragdoll-body.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
 import { SLOTS } from "./ragdoll-config.ts";
 import { RUN_SPEED, SPRINT_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
+import { wrapAngle } from "./walker-math.ts";
+import { hypot2 } from "../kernel/physics-core.js";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -16,7 +18,7 @@ const FEET = [10, 11] as const;
 /** A walker slower than this (m/s) has stopped for the eye. */
 const STOPPED_SPEED = 0.3;
 
-type Sample = { t: number; speed: number; drawnSpeed: number; tilt: number; facing: number; torsoY: number; planted: number[]; pivot: number[]; feet: number[]; standing: boolean; thighSwing: number };
+type Sample = { t: number; speed: number; drawnSpeed: number; tilt: number; facing: number; torsoY: number; strength: number; planted: number[]; pivot: number[]; feet: number[]; standing: boolean; thighSwing: number };
 
 /** The left thigh's part (`PARTS`). */
 const THIGH = 6;
@@ -78,6 +80,7 @@ function run(seconds: number): Sample[] {
       tilt: (Math.acos(Math.max(-1, Math.min(1, 1 - 2 * (q.x * q.x + q.z * q.z)))) * 180) / Math.PI,
       facing: Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y)),
       torsoY: p.y,
+      strength: system.walker.strength,
       planted: Array.from(system.walker.gait["planted"]),
       pivot: Array.from(system.walker.gait.pivot),
       feet: feetNow(),
@@ -236,6 +239,56 @@ describe("given a walker at speed along +z", () => {
       }
       const lean = mean(leans);
       assert.ok(lean >= testCase.expectedMinLean && lean <= testCase.expectedMaxLean, `lean ${lean.toFixed(1)} degrees within ${testCase.expectedMinLean}-${testCase.expectedMaxLean}`);
+    });
+  }
+});
+
+const FOOT = 0.3048;
+/** How long (s) the walker is watched after the stick is pulled back: the turn and a few seconds after. */
+const REVERSAL_SECONDS = 3.5;
+/** A near fall: his strength (0-1) never falls under this (a hit of 4 m/s knocks him down, 2 m/s takes it to 0.7), his torso never sinks under this height (m) or tilts past this (degrees); he faces the new way to within this (rad) at the end. */
+const NO_STUMBLE_STRENGTH = 0.3;
+const NO_SINK_HEIGHT = 0.9;
+const NO_TIP_TILT = 35;
+const FACED_BACK = 0.35;
+const WOMAN = { ...driverLook(0, 0), woman: true };
+
+const reverseCases: readonly { it: string; woman: boolean; metres: number; degrees: number }[] = [
+  { it: "when a woman runs 10 feet and the stick is pulled straight back, then she turns about and runs back without falling", woman: true, metres: 10 * FOOT, degrees: 180 },
+  { it: "when a woman runs 9 feet and the stick is pulled straight back, then she turns about and runs back without falling", woman: true, metres: 9 * FOOT, degrees: 180 },
+  { it: "when a woman runs 11 feet and the stick is pulled straight back, then she turns about and runs back without falling", woman: true, metres: 11 * FOOT, degrees: 180 },
+  { it: "when a woman runs 10 feet and turns about the other way, then she runs back without falling", woman: true, metres: 10 * FOOT, degrees: -180 },
+  { it: "when a man runs 10 feet and the stick is pulled straight back, then he turns about and runs back without falling", woman: false, metres: 10 * FOOT, degrees: 180 },
+];
+
+describe("given a walker running along +z", () => {
+  for (const testCase of reverseCases) {
+    it(testCase.it, () => {
+      system.stopWalker(WALKER);
+      assert.equal(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: testCase.woman ? WOMAN : driverLook(0, 0) }, WALKER), WALKER, "the walker is placed in his slot");
+      const heading = (testCase.degrees * Math.PI) / 180;
+      system.walker.heading = 0;
+      system.walker.command = RUN_SPEED;
+      const samples: Sample[] = [];
+      let turnedAfter = Infinity;
+      for (let f = 0; f < 4 * FRAME_HZ && turnedAfter === Infinity; f++) {
+        samples.push(...run(FRAME));
+        const at = bodies()[0]!.translation();
+        if (hypot2(at.x, at.z) >= testCase.metres) turnedAfter = samples.length * FRAME;
+      }
+      assert.ok(turnedAfter < Infinity, "the walker ran the distance");
+      system.walker.heading = heading;
+      samples.push(...run(REVERSAL_SECONDS));
+      const turned = samples.slice(Math.round(turnedAfter * FRAME_HZ));
+      const fallen = turned.find((s) => !s.standing);
+      assert.equal(fallen, undefined, `fell ${(turned.findIndex((s) => !s.standing) * FRAME).toFixed(2)} s after the stick was pulled back, torso ${fallen?.torsoY.toFixed(2)} m, tilt ${fallen?.tilt.toFixed(0)} degrees`);
+      const weakest = Math.min(...turned.map((s) => s.strength));
+      const lowest = Math.min(...turned.map((s) => s.torsoY));
+      const tipped = Math.max(...turned.map((s) => s.tilt));
+      assert.ok(weakest >= NO_STUMBLE_STRENGTH, `stumbled: strength fell to ${weakest.toFixed(2)}`);
+      assert.ok(lowest >= NO_SINK_HEIGHT, `torso sank to ${lowest.toFixed(2)} m`);
+      assert.ok(tipped <= NO_TIP_TILT, `torso tipped ${tipped.toFixed(0)} degrees`);
+      assert.ok(Math.abs(wrapAngle(turned[turned.length - 1]!.facing - heading)) < FACED_BACK, "faces the way the stick points");
     });
   }
 });

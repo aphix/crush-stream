@@ -65,6 +65,8 @@ const PUSH_OFF_LIFT = 0.3;
 const VAULT_FADE = 0.08;
 /** A foot this near (m) over the spot it lands on already carries the pelvis. */
 const NEAR_GROUND = 0.03;
+/** A swing foot near the ground carries the pelvis only within this far (m) of the hip: past it the leg is stretched for a landing not yet made, and holding the pelvis at its reach would fold the planted leg under him. */
+const LANDING_REACH = 0.5;
 /** The leg is never asked to reach under this share of its stance length down (a foot almost under the hip). */
 const MIN_DROP_SHARE = 0.4;
 /** Torso turn (rad) per rad of difference between the thighs' swings (a walking pelvis turns about 10° peak to peak), and the neck turning back against it and levelling against the lean. */
@@ -412,10 +414,11 @@ export class Gait {
     let landing = Infinity;
     for (let f = 0; f < 2; f++) {
       const hipHeight = this.hipOf(f, hipX, hipZ);
-      if (this.planted[f]! === 1 || this.aboveLanding[f]! <= NEAR_GROUND) {
-        const dx = this.foot[f * 3]! - this.spot[0]!;
-        const dz = this.foot[f * 3 + 2]! - this.spot[1]!;
-        supported = Math.min(supported, this.foot[f * 3 + 1]! - (1 - vaulting(1 - f)) * this.rise[f]! + this.dropFor(length, dx * dx + dz * dz) + this.hipY - hipHeight);
+      const dx = this.foot[f * 3]! - this.spot[0]!;
+      const dz = this.foot[f * 3 + 2]! - this.spot[1]!;
+      const span2 = dx * dx + dz * dz;
+      if (this.planted[f]! === 1 || (this.aboveLanding[f]! <= NEAR_GROUND && span2 <= LANDING_REACH * LANDING_REACH)) {
+        supported = Math.min(supported, this.foot[f * 3 + 1]! - (1 - vaulting(1 - f)) * this.rise[f]! + this.dropFor(length, span2) + this.hipY - hipHeight);
       } else {
         landing = Math.min(landing, this.landY[f]! + this.dropFor(length, this.landSpan[f]! ** 2) + this.hipY - hipHeight);
       }

@@ -22,7 +22,7 @@ const PIVOTS = [
 
 /**
  * A planted foot is held where the gait set it down: a kinematic anchor at the point the foot turns on, joined to that point of the foot's sole (its
- * heel, then its toe as the foot rolls) by three stiff linear motors that come on over `FOOT_LOCK.rampSeconds` after the touchdown and let go the moment
+ * heel, then its toe as the foot rolls) by three linear motors (softer than the torso's hold, so the locks never drag the torso) that come on over `FOOT_LOCK.rampSeconds` after the touchdown and let go the moment
  * the gait lifts the foot. The motors, not the ground, hold the foot (it hovers a hair over the floor, the frame carries his weight), so a leg's motors
  * chasing the gait cannot make it skate, and the foot turns freely about the vertical and tips about the ankle. The heel is held where the gait put it;
  * the toe where the foot's own toe is when the weight rolls onto it (the foot has turned with his torso since the touchdown, and the gait's guess

@@ -10,6 +10,7 @@ import { PARTS } from "./ragdoll-body.ts";
 import { SLOTS } from "./ragdoll-config.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
 import { chooseRoute, type GetUpRoute, standingBearing } from "./walker-getup.ts";
+import { wrapAngle } from "./walker-math.ts";
 import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
@@ -202,6 +203,92 @@ describe("given a car coming at a walker standing on open ground", () => {
       const end = torsoReading();
       assert.equal(system.walker.state, "stand", "on his feet again");
       assert.ok(end.tilt < 20 && end.y > 1, `upright at the end: tilt ${end.tilt.toFixed(1)} deg, height ${end.y.toFixed(2)} m`);
+    });
+  }
+});
+
+/** The feet's parts, left then right (`PARTS`). */
+const FEET = [10, 11] as const;
+/** A press on a standing figure's chest from in front: the showcase's push (6 m/s along the camera, lifted 0.3) with the camera `yaw` round him. */
+const PUSH_SPEED = 6;
+const PUSH_LIFT = 0.3;
+/** He lies this long (s) before the player asks him up and the way his feet point is read; then he walks this long (s) once he stands. */
+const LIE_SECONDS = 1.5;
+const WALK_SECONDS = 3;
+/** The last stretch (s) of that walk his way is read over, and how far (rad) it may be from the way his feet pointed: his pelvis twists him about 0.1 rad either side of it. */
+const HEADING_SECONDS = 1.5;
+const HEADING_TOLERANCE = 0.25;
+/** The strength (0-1) he never falls under once he stands: a hit of 4 m/s knocks him down and one of 2 m/s takes him to 0.7, so under 0.3 is a near fall. */
+const NO_STUMBLE_STRENGTH = 0.3;
+const WOMAN = { ...driverLook(0, 0), woman: true };
+
+const pushedCases: readonly { it: string; woman: boolean; yaw: number; height: number }[] = [
+  { it: "when a man is pushed squarely onto his back, then he rolls over, stands and walks off the way his feet pointed without a stumble", woman: false, yaw: 0, height: 1.15 },
+  { it: "when a man is pushed from a little to one side, then he rolls over, stands and walks off the way his feet pointed without a stumble", woman: false, yaw: 0.8, height: 1.3 },
+  { it: "when a man is pushed from the side low on the chest, then he rolls over, stands and walks off the way his feet pointed without a stumble", woman: false, yaw: 1, height: 1.15 },
+  { it: "when a man is pushed from the near side, then he rolls over, stands and walks off the way his feet pointed without a stumble", woman: false, yaw: 1.4, height: 1.15 },
+  { it: "when a woman is pushed squarely onto her back, then she rolls over, stands and walks off the way her feet pointed without a stumble", woman: true, yaw: 0, height: 1.15 },
+  { it: "when a woman is pushed from a little to one side, then she rolls over, stands and walks off the way her feet pointed without a stumble", woman: true, yaw: 0.8, height: 1.3 },
+  { it: "when a woman is pushed from the side low on the chest, then she rolls over, stands and walks off the way her feet pointed without a stumble", woman: true, yaw: 1, height: 1.15 },
+  { it: "when a woman is pushed from the near side, then she rolls over, stands and walks off the way her feet pointed without a stumble", woman: true, yaw: 1.4, height: 1.15 },
+];
+
+/** The way (rad about the vertical, 0 along +z) the feet lie from the torso: the way he would face if he sat up and walked on. */
+function feetBearing(): number {
+  const torso = walkerBodies()[0]!.translation();
+  let x = 0;
+  let z = 0;
+  for (const k of FEET) {
+    const foot = walkerBodies()[k]!.translation();
+    x += foot.x - torso.x;
+    z += foot.z - torso.z;
+  }
+  return Math.atan2(x, z);
+}
+
+/** The walker's state now (read fresh: an assertion on `walker.state` narrows its type for the rest of a test). */
+function walkerState() {
+  return system.walker.state;
+}
+
+describe("given a standing walker pushed onto his back", () => {
+  for (const testCase of pushedCases) {
+    it(testCase.it, () => {
+      system.stopWalker(WALKER);
+      assert.equal(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: testCase.woman ? WOMAN : driverLook(0, 0) }, WALKER), WALKER, "the walker is placed in his slot");
+      frames(FRAME);
+      const direction = new THREE.Vector3(-Math.sin(testCase.yaw), PUSH_LIFT, -Math.cos(testCase.yaw)).normalize();
+      system.strikeWalker(WALKER, new THREE.Vector3(Math.sin(testCase.yaw) * 0.1, testCase.height, Math.cos(testCase.yaw) * 0.1), direction, PUSH_SPEED);
+      frames(LIE_SECONDS);
+      assert.equal(walkerState(), "down", "lying");
+      const aim = feetBearing();
+      let route = "";
+      let standingAt = Infinity;
+      let walkedFrom = { x: 0, z: 0 };
+      let walkedTo = { x: 0, z: 0 };
+      let minStrength = 1;
+      let fellAfter = Infinity;
+      for (let f = 1; f <= 8 * FRAME_HZ && f * FRAME < standingAt + WALK_SECONDS + FRAME; f++) {
+        system.walker.ask();
+        system.walker.heading = aim;
+        system.walker.command = WALK_SPEED;
+        system.update(FRAME, [], true, true, null);
+        const t = f * FRAME;
+        if (route === "" && walkerState() === "getUp") route = system.walker.route;
+        if (standingAt === Infinity && walkerState() === "stand") standingAt = t;
+        if (standingAt === Infinity) continue;
+        const reading = torsoReading();
+        minStrength = Math.min(minStrength, system.walker.strength);
+        if (walkerState() !== "stand" && fellAfter === Infinity) fellAfter = t - standingAt;
+        if (t < standingAt + WALK_SECONDS - HEADING_SECONDS) walkedFrom = reading;
+        walkedTo = reading;
+      }
+      assert.equal(route, "faceUp", "he landed on his back");
+      assert.ok(standingAt < Infinity, "he stood up");
+      assert.equal(fellAfter, Infinity, `he fell ${fellAfter.toFixed(2)} s after standing`);
+      assert.ok(minStrength >= NO_STUMBLE_STRENGTH, `he stumbled: strength fell to ${minStrength.toFixed(2)} within ${WALK_SECONDS} s of standing`);
+      const walked = Math.atan2(walkedTo.x - walkedFrom.x, walkedTo.z - walkedFrom.z);
+      assert.ok(Math.abs(wrapAngle(walked - aim)) < HEADING_TOLERANCE, `he walked ${walked.toFixed(2)} rad, his feet pointed ${aim.toFixed(2)}`);
     });
   }
 });
