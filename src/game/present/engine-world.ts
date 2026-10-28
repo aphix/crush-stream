@@ -137,7 +137,8 @@ const lampPool = groundMaterial(
   "decal",
 );
 
-export function makeLamp(): THREE.Group {
+/** `withPool` false leaves off the painted ground pool, for posts that carry a real light. */
+export function makeLamp(withPool = true): THREE.Group {
   const g = new THREE.Group();
   const pole = new THREE.Mesh(
     new THREE.CylinderGeometry(0.08, 0.1, 5.2, 8),
@@ -147,12 +148,14 @@ export function makeLamp(): THREE.Group {
   pole.castShadow = true;
   const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.22), lampHead);
   head.position.set(0, 5.15, 0.15);
+  g.add(pole, head);
+  if (!withPool) return g;
   lampPool.map ??= makePoolTexture();
   const pool = groundMesh(new THREE.PlaneGeometry(9, 9), lampPool, "decal");
   pool.name = LAMP_POOL;
   pool.rotation.x = -Math.PI / 2;
   pool.position.set(0, 0.025, 0.15);
-  g.add(pole, head, pool);
+  g.add(pool);
   return g;
 }
 

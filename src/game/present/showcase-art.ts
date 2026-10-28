@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { LAB_LIGHT } from "./lab-art.ts";
-import { STAGE_DIAMETER } from "./engine-world.ts";
+import { makeLamp, STAGE_DIAMETER } from "./engine-world.ts";
 import { GROUND_LEVEL } from "../scenes/constants.ts";
 import { groundMesh } from "../scenes/ground-stack.ts";
 import { ELDER_LOOK, VIP_LOOK } from "./dummy-dress.ts";
@@ -77,6 +77,16 @@ export const SHOWCASE_LIGHT = { ...LAB_LIGHT, sunIntensity: 1.6, sunAt: [-5, 14,
 /** The reference's floor: a matte mid-grey (sRGB, tuned to its lightness under the showcase's light) over the sandbox's asphalt, under its grid and rings; matte so the back light does not glint off it at the eye's grazing angle. */
 const STUDIO_FLOOR = 0x3f3c39;
 
+/** The light posts' feet (x, z; m) and where each spot aims (x, z; m): the front pair flank the people (out of the opening frame), the back pair the car rows. */
+const POSTS: readonly { x: number; z: number; aimX: number; aimZ: number }[] = [
+  { x: -11, z: -3, aimX: 1, aimZ: -1 },
+  { x: 11, z: -3, aimX: -1, aimZ: -1 },
+  { x: -19, z: -13, aimX: -3, aimZ: -17 },
+  { x: 19, z: -13, aimX: 3, aimZ: -17 },
+];
+/** A post's spot at night: warm, wide enough that its cone's edge still lights the next row, and aimed at chest height. No post casts a shadow: a shadow pass is a whole extra draw of every caster. */
+const POST_LIGHT = { color: 0xffe2b0, intensity: 260, distance: 55, angle: 0.8, penumbra: 0.6, decay: 2, headY: 5.1, aimY: 1 };
+
 const _mark = new THREE.Vector3();
 
 export class ShowcaseArt {
@@ -85,15 +95,36 @@ export class ShowcaseArt {
   readonly slots = SLOTS;
   readonly carSlots = CAR_ROWS.length * CAR_STYLES.length;
   private readonly floor = groundMesh(new THREE.CircleGeometry(STAGE_DIAMETER / 2, 64), new THREE.MeshLambertMaterial({ color: STUDIO_FLOOR }), GROUND_LEVEL.runoff);
+  /** The posts' spots, in the set whenever it stands (a light shown or hidden relinks every lit shader) and dark by day (`setNight`). */
+  private readonly postLights: THREE.SpotLight[] = [];
 
   constructor() {
     this.group.name = "showcase";
     this.group.visible = false;
     this.group.add(this.floor, this.people.group);
+    this.erectPosts();
     this.floor.rotation.x = -Math.PI / 2;
     this.floor.receiveShadow = true;
     for (let slot = 0; slot < SLOTS; slot++) this.people.dress(slot, this.figureOf(slot).cop, this.figureOf(slot).look);
     this.stand();
+  }
+
+  /** The posts' spots at their full strength at night, out by day. */
+  setNight(on: boolean): void {
+    for (const light of this.postLights) light.intensity = on ? POST_LIGHT.intensity : 0;
+  }
+
+  private erectPosts(): void {
+    for (const post of POSTS) {
+      const pole = makeLamp(false);
+      pole.traverse((part) => (part.castShadow = false));
+      pole.position.set(post.x, 0, post.z);
+      const light = new THREE.SpotLight(POST_LIGHT.color, 0, POST_LIGHT.distance, POST_LIGHT.angle, POST_LIGHT.penumbra, POST_LIGHT.decay);
+      light.position.set(post.x, POST_LIGHT.headY, post.z);
+      light.target.position.set(post.aimX, POST_LIGHT.aimY, post.aimZ);
+      this.postLights.push(light);
+      this.group.add(pole, light, light.target);
+    }
   }
 
   /** Every figure back on his mark (a reset). */
@@ -147,5 +178,6 @@ export class ShowcaseArt {
     this.floor.geometry.dispose();
     this.floor.material.dispose();
     this.people.dispose();
+    for (const light of this.postLights) light.dispose();
   }
 }
