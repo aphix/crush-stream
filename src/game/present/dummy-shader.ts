@@ -118,7 +118,7 @@ vec3 dollCut(int slot, vec3 p, vec4 region, out int pick) {
   bool scooped = p.y > (p.z > ${glslFloat(SCOOP_FRONT_Z)} ? neckline : max(neckline, ${glslFloat(BACK_NECKLINE)}));
   ivec4 picks = ivec4(p.y < cuts.z ? ${PICK.PANTS} : (scooped ? ${PICK.BARE} : ${PICK.TOP}), p.y < cuts.x ? ${PICK.BARE} : ${PICK.TOP}, p.y < cuts.y ? ${PICK.BARE} : ${PICK.PANTS}, p.y < cuts.w ? ${PICK.SHOES} : ${PICK.BARE});
   int strongest = region.x >= max(region.y, max(region.z, region.w)) ? 0 : (region.y >= max(region.z, region.w) ? 1 : (region.z >= region.w ? 2 : 3));
-  pick = picks[strongest];
+  pick = region.x + region.y + region.z + region.w > 0.0 ? picks[strongest] : ${PICK.BARE}; // no region weight (a hand, a shell): never a garment picked by rest height alone
   vec4 share = region / max(region.x + region.y + region.z + region.w, 0.0001);
   return share.x * dollPicked(slot, picks.x) + share.y * dollPicked(slot, picks.y) + share.z * dollPicked(slot, picks.z) + share.w * dollPicked(slot, picks.w);
 }`;
