@@ -146,7 +146,7 @@ export type CrashHudState = {
   rimLight: number | null;
   /** Material classes' strength (0 = the old uniform reflections and no grain, 1 = the default look, up to 2); scales every class's reflection cut and grain. */
   materialStrength: number;
-  /** Car contour smoothing (0 = off, 1 = the default, 2 = a second pass): how round a crushed body's facets are drawn; creases and panel edges stay. */
+  /** Car contour smoothing (0 = off, 1 = the default, 2 = twice the passes): how round a car's facets are drawn, intact or crushed; creases and panel edges stay. */
   contourStrength: number;
   /** Candy paint on car exteriors (0 = the plain paint, 1 = the default, up to 2): deeper colour, a full sharp clear coat and, on high and ultra, a thin-film hue shift. Scaled by Materials strength. */
   candyStrength: number;

@@ -724,11 +724,16 @@ export abstract class DeformState extends DeformHit {
     return true;
   }
 
-  restoreRest(geometry: THREE.BufferGeometry): void {
+  /** The rest skin back in the mesh, with `normals` (the drawn rest normals, `bakeRestNormals`) as its normals, else the sim's own. */
+  restoreRest(geometry: THREE.BufferGeometry, normals: Float32Array | null = null): void {
     const attr = geometry.getAttribute("position") as THREE.BufferAttribute;
     (attr.array as Float32Array).set(this.restPos);
     attr.needsUpdate = true;
-    computeNormalsFast(geometry);
+    if (normals) {
+      const drawn = geometry.getAttribute("normal") as THREE.BufferAttribute;
+      (drawn.array as Float32Array).set(normals);
+      drawn.needsUpdate = true;
+    } else computeNormalsFast(geometry);
     this.skinOwed = false;
   }
 

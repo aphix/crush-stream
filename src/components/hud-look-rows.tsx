@@ -102,7 +102,7 @@ export function LookRows({ state, engine }: Pick<HudProps, "state" | "engine">) 
         label="Contour"
         changed={isChanged(state, "contours")}
         name="Car contour"
-        title="How round a crushed car's facets are drawn (its normals pulled toward their neighbours', creases and panel edges kept): 0 is off, 100% the default, 200% a second pass"
+        title="How round a car's facets are drawn, crushed or not (its normals pulled toward their neighbours', creases and panel edges kept): 0 is the faceted original, 100% the default, 200% twice the passes"
         value={state.contourStrength}
         min={KNOB_RANGES.contour.min}
         max={KNOB_RANGES.contour.max}

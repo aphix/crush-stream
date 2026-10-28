@@ -260,7 +260,7 @@ export abstract class EngineInput extends EngineRigs {
     this.emitHud();
   }
 
-  /** The HUD's car contour smoothing (0 = off, 1 = default, 2 = a second pass): how round a crushed body's facets are drawn. */
+  /** The HUD's car contour smoothing (0 = off, 1 = default, 2 = twice the passes): how round a car's facets are drawn, intact or crushed. */
   setContourStrength(value: number): void {
     this.contourStrength = THREE.MathUtils.clamp(value, KNOB_RANGES.contour.min, KNOB_RANGES.contour.max);
     CONTOUR_SMOOTHING.value = this.contourStrength;

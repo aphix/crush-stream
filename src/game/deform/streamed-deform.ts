@@ -743,7 +743,7 @@ export class StreamedDeformation extends DeformSolve {
    * solved from the baked inputs exactly as the host's last skin was, then `local` is set to the
    * host's current particles (the hulls) and `world` follows `group`. Allocation-free.
    */
-  writeNetState(src: DeformNetState, group: THREE.Object3D, geometry: THREE.BufferGeometry): void {
+  writeNetState(src: DeformNetState, group: THREE.Object3D, geometry: THREE.BufferGeometry, restNormals: Float32Array | null = null): void {
     const f = src.flags;
     this.massActive = (f & 1) !== 0;
     this.drivetrainAlive = (f & 2) !== 0;
@@ -793,7 +793,7 @@ export class StreamedDeformation extends DeformSolve {
       this.solveCages();
       this.cageExact = true;
       this.flushSkin(geometry, true);
-    } else this.restoreRest(geometry);
+    } else this.restoreRest(geometry, restNormals);
     this.skinOwed = false;
     group.updateWorldMatrix(false, false);
     for (let i = 0, r = 0; i < this.masses.length; i++, r += 3) {

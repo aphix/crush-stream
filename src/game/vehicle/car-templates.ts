@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { bakeRestNormals, passesFor } from "./normal-smooth.ts";
 import { makeChassisGeometry, withGateSurround } from "./car-chassis-mesh.ts";
 import { makeDoorGeometry } from "./car-door-mesh.ts";
 import { withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
@@ -66,6 +67,8 @@ export function freshGeometry(style: BodyStyle, product: StyleProduct): THREE.Bu
 interface Template {
   geometry: THREE.BufferGeometry;
   userData: THREE.BufferGeometry["userData"];
+  /** The rest normals last baked, and the relax passes they were baked at. */
+  baked?: { passes: number; normals: Float32Array | null };
 }
 
 interface StyleTemplates {
@@ -89,8 +92,7 @@ function templatesOf(style: BodyStyle): StyleTemplates {
   return fresh;
 }
 
-/** A copy of `product` of `style` to own: its own attribute and index arrays, groups, bounds and `userData`, equal to `freshGeometry`'s. */
-export function ownGeometry(style: BodyStyle, product: StyleProduct): THREE.BufferGeometry {
+function templateOf(style: BodyStyle, product: StyleProduct): Template {
   const { built } = templatesOf(style);
   let template = built.get(product);
   if (template === undefined) {
@@ -99,7 +101,21 @@ export function ownGeometry(style: BodyStyle, product: StyleProduct): THREE.Buff
     geometry.userData = { shared: true };
     built.set(product, template);
   }
+  return template;
+}
+
+/** A copy of `product` of `style` to own: its own attribute and index arrays, groups, bounds and `userData`, equal to `freshGeometry`'s. */
+export function ownGeometry(style: BodyStyle, product: StyleProduct): THREE.BufferGeometry {
+  const template = templateOf(style, product);
   const own = template.geometry.clone();
   own.userData = structuredClone(template.userData);
   return own;
+}
+
+/** `product`'s built normals relaxed at `strength` (`bakeRestNormals`), once per style and pass count and shared by every car of the style: read them, never write them. */
+export function restNormalsOf(style: BodyStyle, product: StyleProduct, strength: number): Float32Array | null {
+  const template = templateOf(style, product);
+  const passes = passesFor(strength);
+  if (template.baked?.passes !== passes) template.baked = { passes, normals: bakeRestNormals(template.geometry, strength) };
+  return template.baked.normals;
 }

@@ -12,7 +12,8 @@ import { roofTopY } from "./car-mesh.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { cageLift, centreLift } from "./car-cage-rig.ts";
 import { doorCardFace, doorSkinZ, drawnDoorCard, mirrorSeatX } from "./car-door-mesh.ts";
-import { ownGeometry } from "./car-templates.ts";
+import { ownGeometry, restNormalsOf } from "./car-templates.ts";
+import { smoothingNow } from "./normal-smooth.ts";
 import { DOOR_GLASS_SEAT, makeBodyGlassTrim, makeDoorChromeStrips, makeRearGlass, makeSideGlassFrame, privacyPane } from "./car-glass.ts";
 import { applyDetailMap, ensureRestFrame } from "./car-detail-map.ts";
 import {
@@ -53,6 +54,10 @@ const _up = new THREE.Vector3(0, 1, 0);
 const GLASS_PROBE = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
 /** Each style's decimated rest caster (body + flush parts), shared by its cars and drawn by `PartBatch.casters`; never disposed. */
 const casterByStyle = new WeakMap<BodyStyle, THREE.BufferGeometry>();
+
+/** The meshes the contour smoothing draws round: a car's body, bonnet, boot lid and door skins. */
+export type ShellName = "body" | "hood" | "trunk" | "doorL" | "doorR";
+export const SHELLS: readonly ShellName[] = ["body", "hood", "trunk", "doorL", "doorR"];
 
 const PANEL_SEATS: Record<PanelName, readonly [DetachPart["cage"], number, number]> = {
   quarterL: ["wingRL", 10, 8],
@@ -471,6 +476,10 @@ export abstract class CarCore {
   protected trunkRest: Float32Array;
   protected doorLRest: Float32Array;
   protected doorRRest: Float32Array;
+  /** The Car contour strength the rest shells' normals were last baked at (`bakeRestNormals`). */
+  protected smoothedWith = 0;
+  /** The body, bonnet, boot lid and door skins' rest normals at `smoothedWith`: shared with the style's other cars, read only. */
+  protected bakedRest: Record<ShellName, Float32Array | null> = { body: null, hood: null, trunk: null, doorL: null, doorR: null };
   protected hoodOrigin: THREE.Vector3;
   protected trunkOrigin: THREE.Vector3;
   /** Each door skin's rest seat in the car frame (hinge + `doorSkinZ`), and its A5 tables there: it skins as the body paint does, the hinge pose turning it after. */
@@ -627,6 +636,9 @@ export abstract class CarCore {
     }
     this.underbody = this.style.underbody ? new CarUnderbody(this.style, this.partSeats, this.group, this.wheels) : null;
     this.group.castShadow = true;
+    const strength = smoothingNow();
+    this.bakeRestNormals(strength);
+    if (strength > 0) this.paintRestNormals(SHELLS);
   }
 
   private copyRest(geo: THREE.BufferGeometry): Float32Array {
@@ -634,11 +646,49 @@ export abstract class CarCore {
     return new Float32Array(pos.array as Float32Array);
   }
 
-  protected restoreRest(geo: THREE.BufferGeometry, rest: Float32Array): void {
+  /** Bakes (once per style) the shells' rest normals at `strength`: the style's built ones at 0. They reach a shell through `paintRestNormals`. */
+  protected bakeRestNormals(strength: number): void {
+    this.smoothedWith = strength;
+    this.bakedRest.body = restNormalsOf(this.style, "body", strength);
+    this.bakedRest.hood = restNormalsOf(this.style, "hood", strength);
+    this.bakedRest.trunk = restNormalsOf(this.style, "trunkLid", strength);
+    this.bakedRest.doorL = restNormalsOf(this.style, "doorLeft", strength);
+    this.bakedRest.doorR = restNormalsOf(this.style, "doorRight", strength);
+  }
+
+  /** The baked rest normals onto the named shells (a shell with none baked keeps its own). */
+  protected paintRestNormals(shells: readonly ShellName[]): void {
+    for (const name of shells) {
+      const baked = this.bakedRest[name];
+      if (baked) this.paintNormals(this.shellGeometry(name), baked);
+    }
+  }
+
+  private paintNormals(geo: THREE.BufferGeometry, normals: Float32Array): void {
+    const attr = geo.getAttribute("normal") as THREE.BufferAttribute;
+    (attr.array as Float32Array).set(normals);
+    attr.needsUpdate = true;
+  }
+
+  protected shellGeometry(name: ShellName): THREE.BufferGeometry {
+    if (name === "body") return this.body.geometry;
+    if (name === "hood") return this.hood.geometry;
+    if (name === "trunk") return this.trunk.geometry;
+    return (name === "doorL" ? this.doorMeshL : this.doorMeshR).geometry;
+  }
+
+  /** A shell's baked rest normals while the car draws round (`smoothedWith` above 0), else null: the sim's own. */
+  protected drawnRest(name: ShellName): Float32Array | null {
+    return this.smoothedWith > 0 ? this.bakedRest[name] : null;
+  }
+
+  /** The shell's rest skin back in `geo`, its normals the drawn rest ones (`normals`) or, with none, computed. */
+  protected restoreRest(geo: THREE.BufferGeometry, rest: Float32Array, normals: Float32Array | null = null): void {
     const pos = geo.getAttribute("position") as THREE.BufferAttribute;
     (pos.array as Float32Array).set(rest);
     pos.needsUpdate = true;
-    computeNormalsFast(geo);
+    if (normals) this.paintNormals(geo, normals);
+    else computeNormalsFast(geo);
   }
 
   /** The style's rest caster (body + hood, boot lid, doors, bumpers in the car frame, decimated), built by its first car. */
