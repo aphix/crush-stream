@@ -2,26 +2,26 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { rigidCentre } from "../vehicle/car-air.ts";
 import { TETHER_RANGE, WORLD, type TetherSet } from "../contact/tether.ts";
-import { AIM, TetherArt, type AimState, type ReticleView } from "../present/tether-art.ts";
-import { activeGround, NO_FLOOR, type Ground } from "../world/ground.ts";
+import { AIM, TetherArt, type ReticleView } from "../present/tether-art.ts";
+import { DummyMesh } from "../present/ragdoll-mesh.ts";
 import type { TetherHud } from "../hud/hud-store.ts";
 
-/** Half angle (degrees) of the cone round the reticle that snaps to a car it does not quite cover: the 10° the research gives for a player on foot, a little under what a driver gets. */
-const SNAP_DEG = 10;
-const SNAP_TAN = Math.tan(THREE.MathUtils.degToRad(SNAP_DEG));
 /** Seconds between two reads of the aim while no fire is waiting: the reticle's colour lags a tenth of a second, and a fire always reads it fresh. */
 const AIM_PERIOD_S = 0.1;
-/** The ground search walks the sight line in steps of this many metres, then bisects the step that crossed (`BISECT_STEPS`). */
-const GROUND_STEP_M = 0.5;
-const BISECT_STEPS = 8;
-/** A car is never aimed at from inside this distance (m) of the eye: the player's own chase camera sits at it. */
+/** How far (m) the sight line is cast, so a surface past the hook's reach still reads red instead of nothing. */
+const SIGHT_M = 400;
+/** Nothing nearer than this (m) to the eye is hit: the player's own chase camera sits inside its car. */
 const NEAR_CLIP_M = 0.5;
 
 /** What the director reads of the engine. */
 interface TetherHost {
   readonly tethers: TetherSet;
   readonly camera: THREE.Camera;
+  /** The scene whose drawn meshes the sight line meets. */
+  readonly scene: THREE.Object3D;
   cars(): readonly DeformableCar[];
+  /** Drawn things that move and are not a car (the wheel, lamp and part batches, the balls): a cable cannot hook the place they were drawn at. */
+  movers(): readonly THREE.Object3D[];
   /** The car the player's cable starts from (the driven or followed one): its index, -1 for none. */
   playerCar(): number;
   /** Whether the tether is on offer now: a scene is running, nothing (a menu, the garage, a reel, the walker) holds it, and this browser runs the sim. */
@@ -31,7 +31,6 @@ interface TetherHost {
 const _eye = new THREE.Vector3();
 const _look = new THREE.Vector3();
 const _point = new THREE.Vector3();
-const _step = new THREE.Vector3();
 const _origin = new THREE.Vector3();
 
 /**
@@ -104,7 +103,7 @@ export class TetherDirector {
     this.art.dispose();
   }
 
-  /** The aim from the camera's centre, read as the last frame drew it: a car under the sight line, else a car near it, else the ground. */
+  /** The aim from the camera's centre, read as the last frame drew it: the first surface the one sight line meets. */
   private aim(): void {
     const cars = this.host.cars();
     const player = this.host.playerCar();
@@ -115,83 +114,41 @@ export class TetherDirector {
     _eye.setFromMatrixPosition(matrix);
     _look.set(0, 0, -1).transformDirection(matrix);
     _origin.copy(cars[player]!.group.position);
-    if (this.castCar(cars, player) || this.snapCar(cars, player) || this.castGround()) this.view.state = this.reach(_origin);
+    if (this.firstSurface(cars, player)) this.view.state = this.view.point.distanceTo(_origin) <= TETHER_RANGE ? AIM.valid : AIM.far;
   }
 
-  /** In reach of `from` (m) or not. */
-  private reach(from: THREE.Vector3): AimState {
-    return this.view.point.distanceTo(from) <= TETHER_RANGE ? AIM.valid : AIM.far;
-  }
-
-  /** The nearest car, but the player's, the sight line crosses: its car-frame point under the view's point. */
-  private castCar(cars: readonly DeformableCar[], player: number): boolean {
+  /**
+   * The first drawn surface along the sight line, the player's own car and what moves aside: a car's body is hooked at that point of its frame, anything else at
+   * the world point. The same sight line and meshes as picking a car (`carAt`), the garage's spray and the showcase's shove, over the whole scene.
+   */
+  private firstSurface(cars: readonly DeformableCar[], player: number): boolean {
     this.raycaster.set(_eye, _look);
+    this.raycaster.camera = this.host.camera;
     this.raycaster.near = NEAR_CLIP_M;
-    this.raycaster.far = TETHER_RANGE + _eye.distanceTo(_origin);
-    const groups: THREE.Object3D[] = [];
-    for (let i = 0; i < cars.length; i++) if (i !== player && cars[i]!.group.visible && !cars[i]!.stored) groups.push(cars[i]!.group);
-    for (const hit of this.raycaster.intersectObjects(groups, true)) {
-      for (let obj: THREE.Object3D | null = hit.object; obj; obj = obj.parent) {
-        const index: unknown = obj.userData.carIndex;
-        if (typeof index !== "number" || cars[index]?.group !== obj) continue;
-        this.view.point.copy(hit.point);
-        this.aimCar = index;
-        this.aimAt.copy(obj.worldToLocal(_point.copy(hit.point)));
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** The car whose centre lies nearest the sight line, within `SNAP_DEG` of it: hooked at its centre of mass. */
-  private snapCar(cars: readonly DeformableCar[], player: number): boolean {
-    let best = Infinity;
-    for (let i = 0; i < cars.length; i++) {
-      const car = cars[i]!;
-      if (i === player || !car.group.visible || car.stored) continue;
-      _step.copy(car.group.position).sub(_eye);
-      const along = _step.dot(_look);
-      if (along <= NEAR_CLIP_M) continue;
-      const offAxis = Math.sqrt(Math.max(0, _step.lengthSq() - along * along)) / along;
-      if (offAxis > SNAP_TAN || offAxis >= best) continue;
-      best = offAxis;
-      this.aimCar = i;
-    }
-    if (this.aimCar === WORLD) return false;
-    const car = cars[this.aimCar]!;
-    this.aimAt.copy(rigidCentre(car));
-    this.view.point.copy(this.aimAt).applyQuaternion(car.group.quaternion).add(car.group.position);
-    return true;
-  }
-
-  /** Where the sight line first goes under the active ground within reach of the eye, as a world point. */
-  private castGround(): boolean {
-    const ground = activeGround();
-    const reach = TETHER_RANGE + _eye.distanceTo(_origin);
-    let near = 0;
-    for (let far = GROUND_STEP_M; far <= reach; far += GROUND_STEP_M) {
-      if (!this.under(ground, far)) {
-        near = far;
-        continue;
-      }
-      for (let i = 0; i < BISECT_STEPS; i++) {
-        const mid = (near + far) / 2;
-        if (this.under(ground, mid)) far = mid;
-        else near = mid;
-      }
-      this.under(ground, far);
-      this.view.point.copy(_point);
-      this.aimAt.copy(_point);
+    this.raycaster.far = SIGHT_M;
+    const movers = this.host.movers();
+    for (const hit of this.raycaster.intersectObject(this.host.scene, true)) {
+      const owner = this.solidOwner(hit.object, movers, cars);
+      if (owner === undefined || owner === player) continue;
+      this.view.point.copy(hit.point);
+      this.aimCar = owner === null ? WORLD : owner;
+      if (owner === null) this.aimAt.copy(hit.point);
+      else this.aimAt.copy(cars[owner]!.group.worldToLocal(_point.copy(hit.point)));
       return true;
     }
     return false;
   }
 
-  /** Whether the sight line's point `t` m from the eye is under the ground, `_point` left on it. */
-  private under(ground: Ground, t: number): boolean {
-    _point.copy(_eye).addScaledVector(_look, t);
-    const floor = ground.heightAt(_point.x, _point.z, _point.y);
-    return floor !== NO_FLOOR && _point.y <= floor;
+  /** What `object` is a surface of: a car's index, null for the static world, undefined where the sight line passes through (not drawn, not a mesh, a mover, a dummy or the tether's own art). */
+  private solidOwner(object: THREE.Object3D, movers: readonly THREE.Object3D[], cars: readonly DeformableCar[]): number | null | undefined {
+    if (!(object instanceof THREE.Mesh)) return undefined;
+    let owner: number | null = null;
+    for (let o: THREE.Object3D | null = object; o; o = o.parent) {
+      if (!o.visible || o === this.art.group || o instanceof DummyMesh || movers.includes(o)) return undefined;
+      const index: unknown = o.userData.carIndex;
+      if (typeof index === "number" && cars[index]?.group === o) owner = index;
+    }
+    return owner;
   }
 
   /** A waiting fire: the first hooks the target to the player's car; the second moves the player's end to the new target. */

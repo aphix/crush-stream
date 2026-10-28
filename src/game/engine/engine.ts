@@ -266,6 +266,8 @@ export class CrashEngine extends EngineGarage {
     this.tether = new TetherDirector({
       tethers: this.world.tethers,
       camera: this.camera,
+      scene: this.scene,
+      movers: () => [this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.coverBatch.group, ...this.balls.map((ball) => ball.mesh)],
       cars: () => this.live(),
       playerCar: () => this.tetherSource(),
       offered: () => this.tetherOffered(),

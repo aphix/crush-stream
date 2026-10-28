@@ -74,7 +74,7 @@ A tap shorter than one frame still registers (the press is latched until the nex
 
 ## Tether (grappling cable, spike)
 
-A Just Cause-style cable. Aim with the camera's centre: a ring there is white with nothing to hook, green with a target in reach (80 m of your car; a small ring marks the exact point), red out of reach. It hooks a car under the ring or near it (within 10 degrees), else the ground.
+A Just Cause-style cable. Aim with the camera's centre: one ray from there hooks the first surface it touches, a car's drawn body (hooked at that exact point of the car), a wall, prop, kerb or the ground (a world point). A ring there is white with nothing hit, green with a surface in reach (80 m of your car; a small ring marks the exact point), red when the first surface is farther. Your own car and what moves loose (wheels, torn parts, balls, dummies) are passed through.
 
 | Action | Keyboard | Controller | Touch |
 |---|---|---|---|

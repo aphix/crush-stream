@@ -4,7 +4,7 @@ import { MAX_TETHERS, R_STRENGTH, ROW, type TetherSet } from "../contact/tether.
 
 /** What the reticle says about the aim: nothing to hook, a target in reach, a target out of reach. */
 export const AIM = { none: 0, valid: 1, far: 2 } as const;
-export type AimState = (typeof AIM)[keyof typeof AIM];
+type AimState = (typeof AIM)[keyof typeof AIM];
 
 /** The reticle's state and the world point it would hook (read only when `state` is not `AIM.none`). */
 export interface ReticleView {
