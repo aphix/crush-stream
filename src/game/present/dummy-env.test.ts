@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { MATERIAL_STRENGTH } from "../vehicle/material-class.ts";
 import { FABRIC, FABRIC_ENV } from "./dummy-cloth.ts";
 import { ROLE } from "./dummy-rig.ts";
+import { SKIN_SSS } from "./dummy-shader.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 
 function compileShader(material: THREE.Material, chunks: { vertexShader: string; fragmentShader: string }): THREE.WebGLProgramParametersWithUniforms {
@@ -44,6 +45,10 @@ describe("given the people's lit material", () => {
     const shader = compileShader(mesh.material, THREE.ShaderLib.standard);
     assert.equal(shader.uniforms.materialStrength, MATERIAL_STRENGTH, "the uniform object");
     assert.equal(shader.fragmentShader.split("uniform float materialStrength;").length - 1, 1, "declared once");
+  });
+
+  it("when it compiles, then its skin look reads the one shared switch uniform object", () => {
+    assert.equal(compileShader(mesh.material, THREE.ShaderLib.standard).uniforms.uSkinSss, SKIN_SSS);
   });
 
   it("when its fabric table is read, then it has a row per fabric, bare 'none' last", () => {

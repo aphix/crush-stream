@@ -13,6 +13,7 @@ import { SkidMarks } from "./engine-marks.ts";
 import { PostFX, type FxTier } from "./engine-post.ts";
 import { boostZoomStrength, stepBoostZoom } from "./boost-zoom.ts";
 import { GpuTimer } from "./gpu-timer.ts";
+import { SKIN_SSS } from "./dummy-shader.ts";
 import { fovFor, inFrame } from "./highlight-cam.ts";
 import { camUsable, type Sight } from "./spectate-cam.ts";
 import type { Ultra } from "./ultra/ultra.ts";
@@ -589,6 +590,7 @@ export class Cinematics {
     else if (was === "ultra") this.ultra?.disable();
     this.dressCarFinish(tier);
     MATERIAL_GRAIN.value = finishForTier(tier) ? 1 : 0;
+    SKIN_SSS.value = finishForTier(tier) ? 1 : 0;
     SMOOTHING_TIER.value = finishForTier(tier) ? 1 : 0;
     CANDY_TIER.value = tier === "off" || tier === "minimal" ? 0 : 1;
     CANDY_FILM.value = finishForTier(tier) ? 1 : 0;

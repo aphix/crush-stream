@@ -129,6 +129,7 @@ uniform sampler2D dolls;
 uniform sampler2D prints;
 uniform sampler2D faceRelief;
 uniform float uRim;
+uniform float uSkinSss;
 uniform highp sampler2DArray fabrics;
 uniform highp sampler2DArray decals;
 varying vec4 vPrint;
@@ -226,6 +227,41 @@ if (vPrint.w > 0.0) {
   if (vPrint.z < ${glslFloat(PRINT_CELL.BADGE - 0.5)}) dollHeight += ${glslFloat(FACE_RELIEF)} * (texture2D(faceRelief, printUv).r * 2.0 - 1.0) * ink.a * vPrint.w;
 }`;
 
+/** 1 on the tiers that draw the skin's subsurface look (high, ultra), 0 elsewhere: the one switch every dummy material shares (a uniform, so no program changes). */
+export const SKIN_SSS = { value: 0 };
+
+/** After a plain skin shader's fresnel look (three.js forum, "Skin shader WIP"): blood under the edge, deeper albedo at grazing angles, a soft warm rim. */
+const SKIN_BLOOD = [0.15, 0.02, 0.03] as const;
+/** The albedo's edge: how far it goes toward its square (saturated, same luma), how much darker, and the colour-to-luma ratio's cap (a blue texel of the face print has a ratio near 14: unbounded it flared); the rim's share is of the albedo itself. Tuned from shots: the forum's full square and 0.5 added rim glowed orange at game distances. */
+const SKIN_EDGE_SATURATION = 0.5;
+const SKIN_EDGE_DEPTH = 0.9;
+const SKIN_TONE_RATIO_MAX = 2.0;
+const SKIN_RIM = 0.1;
+/** The dark-shade blood tint's share, and the albedo luma (linear) under which it fades to the dark skin's share: a flat add of blood on dark skin glows red. */
+const SKIN_SHADE_TINT = 0.25;
+const SKIN_DARK_SHARE = 0.3;
+const SKIN_DARK_LUMA_FROM = 0.04;
+const SKIN_DARK_LUMA_TO = 0.3;
+
+/** Skin fragments' albedo: deeper, more saturated and bloodied toward the edge, plus a rim; arithmetic on the view normal, no fetch. The print's varying is extrapolated at a silhouette sample, so its albedo can be negative there: clamped before the colour-to-luma ratio, which blew it up to a bright sparkle. Declares `skinBlood` (the tint with its edge share) for the shade after the lights. */
+const SKIN_FRAGMENT = /* glsl */ `
+float skinSss = uSkinSss * float(dollFabric == ${FABRIC.SKIN});
+vec3 skinBlood = vec3(0.0);
+if (skinSss > 0.0) {
+  float skinFresnel = skinSss * (1.0 - clamp(dot(normalize(vNormal), normalize(vViewPosition)), 0.0, 1.0));
+  float skinSublit = skinFresnel * skinFresnel;
+  vec3 skinAlbedo = max(diffuseColor.rgb, vec3(0.0));
+  float skinLuma = dot(skinAlbedo, vec3(0.2126, 0.7152, 0.0722));
+  vec3 skinDeep = skinAlbedo * mix(vec3(1.0), min(skinAlbedo / max(skinLuma, 0.0001), vec3(${glslFloat(SKIN_TONE_RATIO_MAX)})), ${glslFloat(SKIN_EDGE_SATURATION)}) * ${glslFloat(SKIN_EDGE_DEPTH)};
+  skinDeep *= vec3(1.0) + vec3(${SKIN_BLOOD.map(glslFloat).join(", ")});
+  diffuseColor.rgb = mix(skinAlbedo, skinDeep, skinSublit);
+  diffuseColor.rgb *= 1.0 + pow(skinFresnel, 4.0) * ${glslFloat(SKIN_RIM)};
+  skinBlood = skinSublit * vec3(${SKIN_BLOOD.map(glslFloat).join(", ")}) * ${glslFloat(SKIN_SHADE_TINT)} * mix(${glslFloat(SKIN_DARK_SHARE)}, 1.0, smoothstep(${glslFloat(SKIN_DARK_LUMA_FROM)}, ${glslFloat(SKIN_DARK_LUMA_TO)}, skinLuma));
+}`;
+
+/** The lit skin's shade takes a red tint where it is dark and near an edge, after the forum's `outgoingLight += (1 - length) * blood * fresnel`. */
+const SKIN_SHADE_FRAGMENT = "outgoingLight += max(1.0 - length(outgoingLight), 0.0) * skinBlood;";
+
 /** Every outfit's decals, one layer each (`DRESS_DECALS`), baked once for every dummy. */
 const DECALS = decalMap(DRESS_DECALS);
 
@@ -245,7 +281,7 @@ export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: 
       shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvec3 dollP;\nvec3 dollN;\ndollSkin(dollP, dollN);\ntransformed = dollP;");
       return;
     }
-    Object.assign(shader.uniforms, { prints: { value: prints }, faceRelief: { value: faceReliefMap() }, fabrics: { value: FABRIC_MAP }, decals: { value: DECALS }, uRim: RIM_LIGHT, materialStrength: MATERIAL_STRENGTH });
+    Object.assign(shader.uniforms, { prints: { value: prints }, faceRelief: { value: faceReliefMap() }, fabrics: { value: FABRIC_MAP }, decals: { value: DECALS }, uRim: RIM_LIGHT, uSkinSss: SKIN_SSS, materialStrength: MATERIAL_STRENGTH });
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
@@ -267,11 +303,12 @@ transformed = dollP;`,
       );
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", `#include <common>\n${MATERIAL_STRENGTH_GLSL}\n${DOLL_FRAGMENT_COMMON}`)
-      .replace("#include <map_fragment>", `#include <map_fragment>\n${CLOTH_FRAGMENT}\n${PRINT_FRAGMENT}`)
+      .replace("#include <map_fragment>", `#include <map_fragment>\n${CLOTH_FRAGMENT}\n${PRINT_FRAGMENT}\n${SKIN_FRAGMENT}`)
       .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\nroughnessFactor = dollRoughness;")
       .replace("#include <metalnessmap_fragment>", "#include <metalnessmap_fragment>\nmetalnessFactor = dollMetalness;")
       .replace("#include <normal_fragment_maps>", "#include <normal_fragment_maps>\nnormal = dollBump(-vViewPosition, normal, vec2(dFdx(dollHeight), dFdy(dollHeight)), faceDirection);")
-      .replace("#include <lights_fragment_end>", `#include <lights_fragment_end>\n${RIM_FRAGMENT}\nreflectedLight.indirectSpecular *= materialSpecular(dollEnv);`);
+      .replace("#include <lights_fragment_end>", `#include <lights_fragment_end>\n${RIM_FRAGMENT}\nreflectedLight.indirectSpecular *= materialSpecular(dollEnv);`)
+      .replace("#include <opaque_fragment>", `${SKIN_SHADE_FRAGMENT}\n#include <opaque_fragment>`);
   };
   material.vertexColors = false;
   material.customProgramCacheKey = () => `${prevKey.call(material)}|dolls-${lit}`;
