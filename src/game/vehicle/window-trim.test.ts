@@ -100,6 +100,33 @@ describe("given a coupe whose chrome window trim frames its glass and runs along
   }
 });
 
+/** A trim point back at its built place after a reset (m): the repaired body and glass are exact, so is the chrome that frames them. */
+const RESET_BAR_M = 0.001;
+
+const rawPoints = (mesh: THREE.Mesh): Float32Array => (mesh.geometry.getAttribute("position").array as Float32Array).slice();
+const largestMove = (a: Float32Array, b: Float32Array): number => a.reduce((worst, value, i) => Math.max(worst, Math.abs(value - b[i]!)), 0);
+
+describe("given a coupe crushed, then reset", () => {
+  for (const [approach, kph] of HITS) {
+    it(`when it is crushed ${approach} on at ${kph} km/h and reset, then every trim point is back within ${RESET_BAR_M * 1000} mm of the built trim`, () => {
+      const car = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
+      car.deform.setMode("shape");
+      const pristine = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
+      const built = pristine["trims"].map((t) => rawPoints(t.mesh));
+      runWall(kph, 1, approach, { car });
+      car.flushDeferredSkin();
+      car.updateSkin();
+      const crushedBy = car["trims"].reduce((worst, t, n) => Math.max(worst, largestMove(rawPoints(t.mesh), built[n]!)), 0);
+      assert.ok(crushedBy > DENT_M, `the control: the crush moved a trim point ${(crushedBy * 100).toFixed(1)} cm`);
+      car.resetVisual();
+      for (const [n, t] of car["trims"].entries()) {
+        const off = largestMove(rawPoints(t.mesh), built[n]!);
+        assert.ok(off <= RESET_BAR_M, `trim ${n} (${t.cage}) stands ${(off * 1000).toFixed(1)} mm off its built place after the reset`);
+      }
+    });
+  }
+});
+
 /**
  * Where the windshield stands when a front hit has played out must not step with the speed by more than the hit's own change does. The pane rides the
  * cabin's roof mass, and the roof rests at its permanent set (`clampMass`: sheet metal keeps its set, and the roof stands on it once the contact lets

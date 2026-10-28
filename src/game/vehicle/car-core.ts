@@ -932,6 +932,11 @@ export abstract class CarCore {
     this.wearGlass(g, "clear");
   }
 
+  /** The followed chrome trims back at their built shape: a reset repairs the body they stand on, and only a skin pass moves them. */
+  protected resetTrims(): void {
+    for (const t of this.trims) this.restoreRest(t.mesh.geometry, t.rest);
+  }
+
   protected wearGlass(g: GlassPane, look: GlassLook): void {
     g.look = look;
     g.mesh.material = glassMaterial(look, g.tint);
