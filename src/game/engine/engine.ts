@@ -655,7 +655,7 @@ export class CrashEngine extends EngineGarage {
       if (this.trace.due(wallDt, this.captureTrace)) this.trace.sample(this.traceSetup(), cars, this.traceClock());
       this.stepDerby(simDt);
       this.seat.step(simDt);
-      this.cine.update(wallDt, simDt, cars, this.followedCar(), this.seat.mode === "drive", this.fxDensity, this.net.client, this.boostZoom && reelDt === null);
+      this.cine.update(wallDt, simDt, cars, this.followedCar(), this.seat.mode === "drive", this.fxDensity, this.net.client, this.boostZoom ? this.watchedCar() : null);
       if (this.derbyMode) {
         const boosts = this.derby.consumeBoosts();
         for (let k = 0; k < boosts.length; k++) this.takedownBoost(boosts[k]!);
@@ -973,10 +973,15 @@ export class CrashEngine extends EngineGarage {
     },
   };
 
-  /** What the shot watches, for the tyre-mark window: the crash cam's hit while it cuts, else the reel's or the seat's car, else the eye. */
+  /** The car the shot watches: the reel's focus car while a clip plays (null in its flights), else the seat's. */
+  private watchedCar(): DeformableCar | null {
+    return this.highlights.playing ? this.highlights.focus() : this.followedCar();
+  }
+
+  /** What the shot watches, for the tyre-mark window: the crash cam's hit while it cuts, else the watched car, else the eye. */
   private markFocus(): THREE.Vector3 {
     if (this.cine.cutting) return this.cine.crash.hit;
-    const car = this.highlights.playing ? this.highlights.focus() : this.followedCar();
+    const car = this.watchedCar();
     return car ? car.group.position : this.camera.position;
   }
 

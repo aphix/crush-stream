@@ -12,7 +12,7 @@ import type { FountainSystem } from "./fountain-system.ts";
 import { setWaterTier } from "./water-look.ts";
 import { SkidMarks } from "./engine-marks.ts";
 import { PostFX, type FxTier } from "./engine-post.ts";
-import { boostZoomStrength, stepBoostZoom } from "./boost-zoom.ts";
+import { boostZoomStrength, easeBoostZoomSpeed, stepBoostZoom } from "./boost-zoom.ts";
 import { GpuTimer } from "./gpu-timer.ts";
 import { SKIN_SSS } from "./dummy-shader.ts";
 import { fovFor, inFrame } from "./highlight-cam.ts";
@@ -544,6 +544,8 @@ export class Cinematics {
   private punch = 0;
   /** 0..1, linear in time: how far the boost zoom has eased in (`stepBoostZoom`). */
   private zoomProgress = 0;
+  /** The speed (m/s) the boost zoom scales by: eased toward the watched car's, held when no car is watched (`easeBoostZoomSpeed`). */
+  private zoomSpeed = 0;
   /** The crash cam (the camera half of the crash): `impact` starts it, `direct` runs it. */
   readonly crash: CrashCam;
   private gpu: GpuTimer | null;
@@ -627,6 +629,7 @@ export class Cinematics {
     this.post.punch = 0;
     this.post.radial = 0;
     this.zoomProgress = 0;
+    this.zoomSpeed = 0;
     this.post.letterbox = 0;
     this.smokeAcc.fill(0);
     this.sparkAcc.fill(0);
@@ -656,10 +659,10 @@ export class Cinematics {
 
   /**
    * After the physics and FX steps: hits from each car's velocity jump, tyre marks / smoke / scrape sparks
-   * from wheel slip, boost blur for the driven car, and the decay of every punch value. `velocityHits`: the world's own
+   * from wheel slip, the boost zoom of `zoomCar` (the car the shot watches; null: none, or the setting off), and the decay of every punch value. `velocityHits`: the world's own
    * contacts are not running here (a netplay client mirrors the host's cars), so the followed car's velocity jump also shakes its view.
    */
-  update(wallDt: number, simDt: number, cars: readonly DeformableCar[], followed: DeformableCar | null, driving: boolean, fxDensity: number, velocityHits: boolean, boostZoom: boolean): void {
+  update(wallDt: number, simDt: number, cars: readonly DeformableCar[], followed: DeformableCar | null, driving: boolean, fxDensity: number, velocityHits: boolean, zoomCar: DeformableCar | null): void {
     if (this.tierNow === "off") return;
     this.hitStop = Math.max(0, this.hitStop - wallDt);
     if (simDt > MIN_SIM_DT) this.detectHits(cars, followed, driving, wallDt, velocityHits);
@@ -673,9 +676,10 @@ export class Cinematics {
     const calm = this.reduceMotion;
     this.post.flash = calm ? 0 : this.flash;
     this.post.punch = calm ? 0 : this.punch;
-    const boosting = !calm && boostZoom && driving && followed !== null && followed.drive.boostK > 0;
+    const boosting = !calm && zoomCar !== null && zoomCar.drive.boostK > 0;
     this.zoomProgress = stepBoostZoom(this.zoomProgress, boosting, wallDt);
-    this.post.radial = boostZoomStrength(this.zoomProgress, followed === null ? 0 : followed.speed);
+    if (zoomCar !== null) this.zoomSpeed = easeBoostZoomSpeed(this.zoomSpeed, zoomCar.speed, wallDt);
+    this.post.radial = boostZoomStrength(this.zoomProgress, this.zoomSpeed);
   }
 
   /** The crash cam is on a cut (not just letterboxing in or out): it holds the camera this frame. */

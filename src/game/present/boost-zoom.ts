@@ -12,12 +12,22 @@ export const BOOST_ZOOM_FULL_RADIUS = Math.SQRT1_2;
 export const BOOST_ZOOM_FULL_SPEED = DRIVE.maxFwd * 0.5;
 /** Progress within this of an end of its range lands on it, so the ease ends at exactly 0 (the blur skipped) or 1 and float residue never holds the pass on. */
 const BOOST_ZOOM_SNAP = 1e-6;
+/** Rate (1/s of wall) at which the speed the zoom scales by follows the watched car's: a switch to another car moves the strength over about a quarter second, never a jump. */
+const BOOST_ZOOM_SPEED_RATE = 12;
+/** The held speed lands on the car's once within this (m/s), so a settled zoom is exactly the car's own and a zero strength stays exactly zero. */
+const BOOST_ZOOM_SPEED_SNAP = 0.01;
 
 /** `progress` (0..1, linear in time) one frame of `dt` wall s on: up at `BOOST_ZOOM_IN_S` while `boosting`, down at `BOOST_ZOOM_OUT_S` after. */
 export function stepBoostZoom(progress: number, boosting: boolean, dt: number): number {
   const next = boosting ? progress + dt / BOOST_ZOOM_IN_S : progress - dt / BOOST_ZOOM_OUT_S;
   if (next < BOOST_ZOOM_SNAP) return 0;
   return next > 1 - BOOST_ZOOM_SNAP ? 1 : next;
+}
+
+/** The speed (m/s) `boostZoomStrength` scales by, one frame of `dt` wall s on: `held` eased toward the watched car's `speed`. */
+export function easeBoostZoomSpeed(held: number, speed: number, dt: number): number {
+  const next = held + (speed - held) * (1 - Math.exp(-dt * BOOST_ZOOM_SPEED_RATE));
+  return Math.abs(speed - next) < BOOST_ZOOM_SPEED_SNAP ? speed : next;
 }
 
 /** The zoom's strength (0..1): `progress` through a smoothstep, scaled by the car's speed up to `BOOST_ZOOM_FULL_SPEED`, so a standing-start boost barely blurs. */

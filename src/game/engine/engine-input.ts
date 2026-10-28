@@ -424,7 +424,7 @@ export abstract class EngineInput extends EngineRigs {
     this.emitHud();
   }
 
-  /** The boost zoom blur on or off (a boost of the driven car, at the FX tiers that draw it); an ease already running plays out. */
+  /** The boost zoom blur on or off (a boost of the car the view follows, driven or watched, at the FX tiers that draw it); an ease already running plays out. */
   setBoostZoom(on: boolean): void {
     this.boostZoom = on;
     this.emitHud();

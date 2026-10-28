@@ -16,7 +16,7 @@ type Reach = {
   seat: { mode: string; carIndex: number; view: string };
   view: { trauma: number };
   clock: { phase: string };
-  cine: { update(wallDt: number, simDt: number, cars: unknown[], followed: unknown, driving: boolean, fxDensity: number, velocityHits: boolean, boostZoom: boolean): void };
+  cine: { update(wallDt: number, simDt: number, cars: unknown[], followed: unknown, driving: boolean, fxDensity: number, velocityHits: boolean, zoomCar: null): void };
   pairHit(a: number, b: number, hit: ContactHit): void;
   race: { grid: number[]; propHits: { wall(index: number, car: number, closing: number, x: number, z: number, nx: number, nz: number): void } };
   derbyHits: { wall(index: number, car: number, closing: number, x: number, z: number, nx: number, nz: number): void };
@@ -129,9 +129,9 @@ describe("given the real engine and a hit on the car the camera follows", () => 
     const jump = (velocityHits: boolean): number => {
       e.view.trauma = 0;
       // Past the last hit's 0.3 s cool-down.
-      for (let f = 0; f < 25; f++) e.cine.update(FRAME, FRAME, cars, followed, false, 1, velocityHits, false);
+      for (let f = 0; f < 25; f++) e.cine.update(FRAME, FRAME, cars, followed, false, 1, velocityHits, null);
       followed.velocity.x += 12;
-      e.cine.update(FRAME, FRAME, cars, followed, false, 1, velocityHits, false);
+      e.cine.update(FRAME, FRAME, cars, followed, false, 1, velocityHits, null);
       return e.view.trauma;
     };
     assert.equal(jump(false), 0, "contacts running: the contact hooks own the shake");

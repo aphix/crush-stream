@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { DRIVE } from "../vehicle/car-drive.ts";
-import { BOOST_ZOOM_FULL_SPEED as FULL_SPEED, boostZoomStrength, stepBoostZoom } from "./boost-zoom.ts";
+import { BOOST_ZOOM_FULL_SPEED as FULL_SPEED, boostZoomStrength, easeBoostZoomSpeed, stepBoostZoom } from "./boost-zoom.ts";
 
 const FRAME = 1 / FRAME_HZ;
 
@@ -72,4 +72,22 @@ describe("given the boost zoom fully eased in, and a car at some speed", () => {
       assert.ok(Math.abs(boostZoomStrength(1, testCase.speed) - testCase.expected) < 1e-9, `${boostZoomStrength(1, testCase.speed)} vs ${testCase.expected}`);
     });
   }
+});
+
+describe("given the speed the boost zoom scales by, following a watched car's", () => {
+  it("when the watched car's speed jumps by 20 m/s, then each frame moves the held speed part of the way, never backwards, and it lands exactly on the car's", () => {
+    let held = 0;
+    let frames = 0;
+    for (; held !== 20 && frames < 600; frames++) {
+      const next = easeBoostZoomSpeed(held, 20, FRAME);
+      assert.ok(next >= held && next - held <= 20 * 0.2, `a frame moved the speed ${held} -> ${next}`);
+      held = next;
+    }
+    assert.equal(held, 20, "lands exactly");
+    assert.ok(frames * FRAME > 0.15 && frames * FRAME < 0.8, `took ${(frames * FRAME).toFixed(2)} s`);
+  });
+
+  it("when the watched car and the held speed are both 0, then the held speed stays exactly 0", () => {
+    assert.equal(easeBoostZoomSpeed(0, 0, FRAME), 0);
+  });
 });

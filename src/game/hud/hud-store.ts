@@ -211,7 +211,7 @@ export type CrashHudState = {
   realism: number;
   /** Gamepad rumble on hits, hard landings and slides (a setting; on by default). */
   rumble: boolean;
-  /** The radial zoom blur at the screen's edge while the driver boosts (a setting; on by default). */
+  /** The radial zoom blur at the screen's edge while the car the view follows, driven or watched, boosts (a setting; on by default). */
   boostZoom: boolean;
   /** The player's car type (slot 0; every car in the Stack): a `DRIVER_CARS` id. */
   playerCar: string;
