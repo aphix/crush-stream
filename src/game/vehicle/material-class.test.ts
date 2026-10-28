@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import * as THREE from "three";
 import { makeGlassMaterial, makePaintMaterial, makeWheelGeometry, makeWheelMaterial, partsMaterial, trimMaterial } from "./car-materials.ts";
 import { CANDY_FILM, CANDY_STRENGTH, CANDY_TIER } from "./car-candy.ts";
-import { MATERIAL, MATERIAL_ATTRIBUTE, MATERIAL_GRAIN, MATERIAL_STRENGTH, tagLike, tagMaterial } from "./material-class.ts";
+import { MATERIAL, MATERIAL_ATTRIBUTE, MATERIAL_DETAIL, MATERIAL_DETAIL_READY, MATERIAL_GRAIN, MATERIAL_STRENGTH, tagLike, tagMaterial } from "./material-class.ts";
 import { PART_KIND, partGeometry } from "./part-geometry.ts";
 
 /** The program build's input for `material`: three's physical template, includes unresolved, patched by the material's compile hook. */
@@ -188,7 +188,6 @@ describe("given the sliders' two shared strength uniforms", () => {
     assert.ok(shader.fragmentShader.includes("*= materialSpecular(MATERIAL_ENV[materialClass]);"), "the scaled env line");
     assert.ok(shader.fragmentShader.includes("MATERIAL_SLOPE[materialClass] * materialStrength"), "the scaled grain");
   });
-
 });
 
 describe("given the candy paint on the car's exterior paint", () => {
@@ -211,5 +210,73 @@ describe("given the candy paint on the car's exterior paint", () => {
 
   it("when the trim, parts, wheel and glass compile, then none carries candy", () => {
     for (const name of ["trim", "parts", "wheel", "glass"] as const) assert.equal(compile(CAR_MATERIALS[name]()).fragmentShader.includes("candyW"), false, name);
+  });
+});
+
+function glslTable(fragment: string, name: string): number[] {
+  const match = new RegExp(`const float ${name}\\[\\d+\\] = float\\[\\d+\\]\\(([^)]*)\\)`).exec(fragment);
+  assert.ok(match, `${name} table`);
+  return match[1]!.split(",").map(Number);
+}
+
+const detailCases = [
+  { it: "concrete", materialClass: "CONCRETE", expectedOn: 1 },
+  { it: "stone", materialClass: "STONE", expectedOn: 1 },
+  { it: "asphalt", materialClass: "ASPHALT", expectedOn: 1 },
+  { it: "rubber", materialClass: "RUBBER", expectedOn: 0 },
+  { it: "wood", materialClass: "WOOD", expectedOn: 0 },
+  { it: "glass", materialClass: "GLASS", expectedOn: 0 },
+  { it: "generic", materialClass: "GENERIC", expectedOn: 0 },
+] as const;
+
+describe("given the worn-concrete detail map shared by the concrete family", () => {
+  const shader = compile(tagMaterial(new THREE.MeshStandardMaterial(), MATERIAL.CONCRETE));
+
+  it("when a world material compiles, then it reads the one shared map and switch objects, each declared once, and fetches the map once behind the switch", () => {
+    assert.equal(shader.uniforms.materialDetailMap, MATERIAL_DETAIL, "shared map object");
+    assert.equal(shader.uniforms.materialDetailReady, MATERIAL_DETAIL_READY, "shared switch object");
+    assert.equal(countOf(shader.fragmentShader, "uniform sampler2D materialDetailMap;"), 1, "map declaration");
+    assert.equal(countOf(shader.fragmentShader, "uniform float materialDetailReady;"), 1, "switch declaration");
+    assert.equal(countOf(shader.fragmentShader, "textureGrad(materialDetailMap"), 1, "one fetch");
+    assert.ok(shader.fragmentShader.includes("if (materialDetailOn > 0.0) materialDetail = textureGrad"), "behind the switch and the class's own flag");
+    assert.ok(shader.fragmentShader.includes("float materialDetailOn = materialDetailReady * MATERIAL_DETAIL_ON[materialClass];"), "the switch gates every use");
+  });
+
+  it("when no finish tier has loaded the map, then the switch is off and the map is the image-less stand-in", () => {
+    assert.equal(MATERIAL_DETAIL_READY.value, 0, "switch");
+    assert.equal(MATERIAL_DETAIL.value.image, null, "no picture");
+  });
+
+  it("when the detail is read, then the normal, tone and roughness use the map's channels the packer writes them to", () => {
+    assert.ok(shader.fragmentShader.includes("materialDetail.rg * 2.0 - 1.0"), "normal in red and green");
+    assert.ok(shader.fragmentShader.includes("materialDetail.b * 2.0"), "lightness in blue");
+    assert.ok(shader.fragmentShader.includes("(0.5 - materialDetail.b)"), "roughness opposite the lightness");
+  });
+
+  for (const testCase of detailCases) {
+    it(`when the ${testCase.it} class is read from the detail table, then it takes the map: ${testCase.expectedOn === 1}`, () => {
+      assert.equal(glslTable(shader.fragmentShader, "MATERIAL_DETAIL_ON")[MATERIAL[testCase.materialClass]], testCase.expectedOn, "flag");
+    });
+  }
+
+  it("when the asphalt row is read, then it takes the map darker than the concrete and never smoother (a smoother road mirrors more sky at grazing angles and comes out brighter)", () => {
+    const tint = glslTable(shader.fragmentShader, "MATERIAL_TINT");
+    const smooth = glslTable(shader.fragmentShader, "MATERIAL_SMOOTH");
+    assert.ok(tint[MATERIAL.ASPHALT]! < tint[MATERIAL.CONCRETE]!, "darker");
+    assert.ok(smooth[MATERIAL.ASPHALT]! >= 1, "no smoothing");
+  });
+
+  it("when a material has a normal map of its own, then the class's darkening is cut to a small share, and a plain one takes all of it", () => {
+    const mapped = compile(tagMaterial(new THREE.MeshStandardMaterial(), MATERIAL.ASPHALT)).fragmentShader;
+    const guard = mapped.indexOf("#ifdef USE_NORMALMAP\nfloat materialTintBlend = materialBlend * ");
+    const plain = mapped.indexOf("#else\nfloat materialTintBlend = materialBlend;");
+    assert.ok(guard >= 0 && guard < plain, `scaled under the normal map ${guard}, whole otherwise ${plain}`);
+    const share = Number(/materialTintBlend = materialBlend \* ([\d.]+);/.exec(mapped)?.[1]);
+    assert.ok(share > 0 && share < 0.5, `share ${share}`);
+  });
+
+  it("when the stone row is read, then it takes a weaker normal than the concrete", () => {
+    const normal = glslTable(shader.fragmentShader, "MATERIAL_NORMAL");
+    assert.ok(normal[MATERIAL.STONE]! < normal[MATERIAL.CONCRETE]!, "weaker");
   });
 });

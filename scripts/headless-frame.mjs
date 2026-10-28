@@ -233,8 +233,8 @@ async function servePublic(input) {
 }
 
 /**
- * A decoded picture as a canvas (headless GL uploads a canvas), turned upside down when asked as `createImageBitmap` would. Its
- * `close` has nothing to free early: the garbage collector takes the canvas.
+ * A decoded picture as an `ImageData` (headless GL uploads its pixels; a canvas bitmap uploads as black), turned upside down when
+ * asked as `createImageBitmap` would. Its `close` has nothing to free early: the garbage collector takes the pixels.
  */
 async function decodeBitmap(blob, options) {
   const image = await loadImage(Buffer.from(await blob.arrayBuffer()));
@@ -242,7 +242,7 @@ async function decodeBitmap(blob, options) {
   const ctx = bitmap.getContext("2d");
   if (options?.imageOrientation === "flipY") ctx.setTransform(1, 0, 0, -1, 0, image.height);
   ctx.drawImage(image, 0, 0);
-  return Object.assign(bitmap, { close() {} });
+  return Object.assign(ctx.getImageData(0, 0, image.width, image.height), { close() {} });
 }
 
 const bootAt = performance.now();

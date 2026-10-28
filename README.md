@@ -175,6 +175,7 @@ The papers behind the solver, each with an analysis note and the cross-paper fin
 - Engine sound: the [engine-sound-generator](https://github.com/Antonio-R1/EngineSoundGenerator) worklet, MIT
   ([`kernels/motor/LICENSE`](kernels/motor/LICENSE)).
 - Ultra textures and sky: [Poly Haven](https://polyhaven.com/license), CC0; the four sets are named in `src/game/present/ultra/ultra.ts`.
+- Worn-concrete detail map on High and Ultra: "Concrete Floor Worn 02" by Dimitrios Savva, [Poly Haven](https://polyhaven.com/a/concrete_floor_worn_02), CC0; packed by `scripts/pack-concrete-detail.mjs` into `public/materials/concrete-detail.webp`.
 - Ragdolls: the approach of [rapierjs-ragdoll](https://github.com/mattvb91/rapierjs-ragdoll), MIT, rewritten for this engine.
 - People's bodies: edited from [BaseMesh3d](https://basemesh3d.com/)'s slender man, slender woman and obese man base meshes (TurboSquid Standard
   License), credited in the game's Credits dialog. The source OBJs are not in this repository (the licence covers using them in the game, not

@@ -97,7 +97,7 @@ export class TrackArt {
         // Markings and kerbs: vertex colour only, one material per level.
         let mat = sharedMarkMat.get(layer.level);
         if (!mat) {
-          mat = groundMaterial(tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0 }), MATERIAL.ASPHALT), layer.level);
+          mat = groundMaterial(tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0 }), MATERIAL.PLASTIC), layer.level);
           sharedMarkMat.set(layer.level, mat);
         }
         if (!layer.m.empty) this.add(groundMesh(layer.m.geometry(layer.smooth), mat, layer.level), { kind: layer.kind }, false);
