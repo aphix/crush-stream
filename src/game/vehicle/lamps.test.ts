@@ -12,6 +12,7 @@ import { lampEmissiveMap } from "./car-materials.ts";
 import { assignClass, STYLE_CLASS, type VehicleClassId } from "./vehicle-classes.ts";
 import { CLASS_LIFT, INTERIOR_MESH, LID } from "./constants.ts";
 import { PartSeat } from "./part-geometry.ts";
+import { headGlowOf } from "./lamp-glow.test-util.ts";
 import { DT, forModes, paint } from "./test-support.ts";
 
 /** A seat has no `raycast`; a mesh of what it draws (`drawn`: a style's own grille or mirror) at its world pose stands in for it. */
@@ -340,23 +341,6 @@ describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, hal
     for (let i = 0; i < n; i++) best = Math.max(best, rgb[i * 3 + 2]! / Math.max(rgb[i * 3]!, 1e-6));
     return best;
   };
-  /** The glow colours a lone car in `style` gets from the pool, head L and head R first, seen from ahead (a glow shows its lens's side only). */
-  const glowOf = (style: BodyStyle): { rgb: ArrayLike<number>; n: number } => {
-    const scene = new THREE.Scene();
-
-    const car = new DeformableCar(paint(), scene, null, "hatchback");
-    const restyled: { style: BodyStyle } = car; // `style` is readonly only to game code; the glow reads it per update
-    restyled.style = style;
-    car.spawnFacing(0, 10, 0, 0);
-    car.group.updateMatrixWorld(true);
-    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 200);
-    camera.position.copy(car.group.position).addScaledVector(car.forward, 8).setY(1.5);
-    camera.lookAt(car.group.position);
-    const lights = new LampLights(scene, 12, FULL_POOL);
-    lights.update([car], camera, car);
-    return { rgb: lights.glow.geometry.getAttribute("color").array, n: lights.glow.geometry.drawRange.count };
-  };
-
   /** Each bulb's lit lens texels as `[r, g, b]` triples read off the emissive map where its drawn head lens samples it. */
   const litTexels = (bulb: (typeof BULBS)[number]): number[] => {
     const map = lampEmissiveMap().image.data as Float32Array;
@@ -386,7 +370,7 @@ describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, hal
 
   it("when the pool lights it, then its head glow is bluer from halogen to the neutral white to LED", () => {
     const ratios = BULBS.map((bulb) => {
-      const { rgb, n } = glowOf(styled(bulb));
+      const { rgb, n } = headGlowOf(styled(bulb));
       return bluest(rgb, n);
     });
     assert.ok(ratios[1]! < ratios[0]! && ratios[0]! < ratios[2]!, `head glow blue/red, none/halogen/led: ${ratios.map((r) => r.toFixed(3)).join("/")}`);
@@ -396,7 +380,7 @@ describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, hal
     const lit = CAR_STYLES.hatchback;
     const head = lit.lamps.shapes!.head!;
     const dark: BodyStyle = { ...lit, lamps: { ...lit.lamps, shapes: { ...lit.lamps.shapes, head: { ...head, lens: "dark" } } } };
-    const [a, b] = [glowOf(lit).rgb, glowOf(dark).rgb];
+    const [a, b] = [headGlowOf(lit).rgb, headGlowOf(dark).rgb];
     assert.ok(b[0]! < 0.5 * a[0]!, `head L glow red channel: lit lens ${a[0]!.toFixed(3)}, dark lens ${b[0]!.toFixed(3)}`);
   });
 });

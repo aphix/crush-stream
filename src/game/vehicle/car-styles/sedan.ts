@@ -27,8 +27,9 @@ const SEDAN_LAMP_SHAPES = {
         ],
       },
     ],
-    // The reference's lamp reads dark inside (front iso): a smoked lens under its lit DRL strip, in a bright rim, not a white-filled eye.
+    // The reference's lamp reads dark inside by day (front iso): a smoked lens under its lit DRL strip, in a bright rim, not a white-filled eye; at night the lens lights as every car's does.
     lens: "smoked",
+    lensGlows: true,
     bezel: "chrome",
     recess: 0.012,
     strips: [

@@ -165,6 +165,8 @@ type LampTone = "lit" | "clear" | "red" | "amber" | "smoked" | "dark" | "black" 
 interface LampShape {
   loops: readonly LampLoop[];
   lens: LampTone;
+  /** A head lens whose `lens` tone is its look by day but which lights white at night as a `lit` one does (a smoked or dark lens under a DRL: the reference's by day, lit like every car's at night). */
+  lensGlows?: true;
   bezel?: "chrome" | "black";
   recess?: number;
   cells?: readonly { loop: LampLoop; tone: LampTone }[];

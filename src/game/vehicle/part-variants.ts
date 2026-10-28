@@ -338,12 +338,16 @@ export function lampRest(kind: LampKind, style: BodyStyle, out: THREE.Quaternion
 /** The end face's z a `kind` lamp seats on (the profile's nose or tail station). */
 const lampEndZ = (kind: LampKind, style: BodyStyle): number => (kind === "head" ? style.profile[style.profile.length - 1]!.z : style.profile[0]!.z);
 
-/** `geo` in lamp `tone`; a lit head lens under its `bulb` samples that bulb's emissive texel instead of the plain white. */
-function lampTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind, bulb?: BodyStyle["lamps"]["bulb"]): THREE.BufferGeometry {
+/** Whether `shape`'s head lens lights at night as a plain lit one does: no shape (the unit lamp), a `lit` tone, or a `lensGlows` tone. */
+export const lensLights = (shape: LampShape | undefined): boolean => shape === undefined || shape.lens === "lit" || shape.lensGlows === true;
+
+/** `geo` in lamp `tone`; a lit head lens (or one that `glows` over its tone) under its `bulb` samples that bulb's emissive texel instead of the plain white. */
+function lampTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind, bulb?: BodyStyle["lamps"]["bulb"], glows = false): THREE.BufferGeometry {
+  const lit = tone === "lit" || glows;
   toned(geo, tone === "lit" ? LAMP_TONE[kind] : SHAPE_TONE[tone], 0, 0);
   const uv = geo.getAttribute("uv").array as Float32Array;
-  uv.fill(tone === "lit" ? LAMP_TEXEL.lens : LAMP_TEXEL.housing);
-  if (tone === "lit" && kind === "head" && bulb) for (let i = 0; i < uv.length; i += 2) uv.set(LAMP_BULB_UV[bulb], i);
+  uv.fill(lit ? LAMP_TEXEL.lens : LAMP_TEXEL.housing);
+  if (lit && kind === "head" && bulb) for (let i = 0; i < uv.length; i += 2) uv.set(LAMP_BULB_UV[bulb], i);
   return geo;
 }
 
@@ -618,17 +622,17 @@ interface BuiltLamp {
   lid: THREE.BufferGeometry;
 }
 
-type Piece = [Patch, number, LampTone];
+type Piece = [Patch, number, LampTone, glows?: boolean];
 
-/** `shape` met on `skin`: its lens loops filled, a bezel lip round each, its cells, strips and rounds, each in its tone (`tone`). */
-function buildShape(shape: LampShape, skin: LampSkin, zEnd: number, tone: (geo: THREE.BufferGeometry, t: LampTone) => THREE.BufferGeometry): BuiltLamp {
+/** `shape` met on `skin`: its lens loops filled, a bezel lip round each, its cells, strips and rounds, each in its tone (`tone`; `glows` for a lens that lights over its tone). */
+function buildShape(shape: LampShape, skin: LampSkin, zEnd: number, tone: (geo: THREE.BufferGeometry, t: LampTone, glows?: boolean) => THREE.BufferGeometry): BuiltLamp {
   const meet = (l: LampLoop) => l.points.map((p) => skin.at(p, l.side));
   const [loops, cells, strips] = [shape.loops.map(meet), (shape.cells ?? []).map((c) => meet(c.loop)), (shape.strips ?? []).map((s) => meet(s.line))];
   const rounds = (shape.rounds ?? []).map((r) => skin.at(r.at, r.side));
   skin.narrow([...loops.flat(), ...cells.flat(), ...strips.flat(), ...rounds]);
   const rings = loops.map((l) => skin.densify(l, true));
   const pieces: Piece[] = [
-    ...rings.map((r): Piece => [lampFill(skin, r, zEnd, shape.fill), LAMP_SHAPE.lens, shape.lens]),
+    ...rings.map((r): Piece => [lampFill(skin, r, zEnd, shape.fill), LAMP_SHAPE.lens, shape.lens, shape.lensGlows === true]),
     ...cells.map((c, i): Piece => [lampFill(skin, skin.densify(c, true), zEnd, shape.fill), LAMP_SHAPE.cell, shape.cells![i]!.tone]),
     ...strips.map((s, i): Piece => {
       const { width, tone: t } = shape.strips![i]!;
@@ -642,10 +646,10 @@ function buildShape(shape: LampShape, skin: LampSkin, zEnd: number, tone: (geo: 
   }
   const body: THREE.BufferGeometry[] = [];
   const lid: THREE.BufferGeometry[] = [];
-  for (const [patch, up, t] of pieces) {
+  for (const [patch, up, t, glows] of pieces) {
     const [b, l] = patchGeometry(patch, up);
-    body.push(tone(b, t));
-    lid.push(tone(l, t));
+    body.push(tone(b, t, glows));
+    lid.push(tone(l, t, glows));
   }
   return { body: mergeToned(body, "style lamp"), lid: mergeToned(lid, "style lamp on the lid") };
 }
@@ -695,7 +699,7 @@ function builtLamp(style: BodyStyle, which: keyof LampShapes, side = 1): BuiltLa
     ? [{ geo: makeBumperGeometry(front, style), offset: new THREE.Vector3(0, seat.y, front ? seat.z : -seat.z), lid: false, mirror }, ...(shape.onBody ? [body] : [])]
     : [{ geo: front ? makeHoodGeometry(style) : makeTrunkGeometry(style), offset: new THREE.Vector3(0, ...(front ? style.hood.origin : bootPivot(style.boot))), lid: true, mirror }, body];
   const skin = new LampSkin(sources, zEnd, front ? 1 : -1, `${style.id} ${which} lamp${mirror ? " (left)" : ""}`);
-  const built = buildShape(shape, skin, zEnd, (geo, t) => (bumper ? bumperTone(geo, t, kind) : lampTone(geo, t, kind, style.lamps.bulb)));
+  const built = buildShape(shape, skin, zEnd, (geo, t, glows) => (bumper ? bumperTone(geo, t, kind) : lampTone(geo, t, kind, style.lamps.bulb, glows)));
   if (!BUILT.has(style)) BUILT.set(style, new Map());
   BUILT.get(style)!.set(id, built);
   return built;

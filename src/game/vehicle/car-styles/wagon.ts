@@ -13,6 +13,7 @@ const WAGON_LAMP_SHAPES = {
       { side: true, points: [[1.92, 0.795], [1.75, 0.82], [1.6, 0.845], [1.575, 0.858], [1.62, 0.864], [1.75, 0.85], [1.86, 0.83], [1.92, 0.81]] },
     ],
     lens: "dark",
+    lensGlows: true,
     bezel: "black",
     recess: 0.01,
     cells: [
@@ -170,7 +171,8 @@ export const WAGON: BodyStyle = {
   rearDoorSeam: -1.23,
   // The liftgate carries its share of each D-post when it opens or tears, as the reference's popped gates.
   boot: { kind: "tailgate", y0: 0.66, origin: [1.1, -2.07], z0: -2.125, pivot: [1.47, -1.79], swing: LIFTGATE, edgeRoll: 0.02, postShare: [0.6, 0.6] },
-  lamps: { head: [0.57, 0.828], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES, bulb: "led" },
+  // The head seat (glow and beam) sits on the slim lens's centre, not on its upper edge over the hood's.
+  lamps: { head: [0.58, 0.783], tail: [0.62, 0.955], shapes: WAGON_LAMP_SHAPES, bulb: "led" },
   // The reference's wide diamond mesh: about nine across and four rows down.
   grille: { y: 0.723, z: 2.025, size: [0.76, 0.152], bottom: 0.6, round: 0.03, kind: "hex", count: 11, angle: 0.37, finish: "black", rim: "chrome", lean: 0.387 },
   seats: { front: [0.37, 0.52, -0.15], rear: [0.54, -0.8] },

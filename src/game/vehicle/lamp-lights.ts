@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { hypot2 } from "../kernel/physics-core.js";
 import { store3f } from "../kernel/store.ts";
 import { lampEmissiveMap, makeLampUnit, type LampKind } from "./car-materials.ts";
-import { brakeLampUnit, lampBatchGeometries, sideMarkerUnit } from "./part-variants.ts";
+import { brakeLampUnit, lampBatchGeometries, lensLights, sideMarkerUnit } from "./part-variants.ts";
 import { SeatDraw } from "./seat-draw.ts";
 import type { BodyStyle } from "./car-variants.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
@@ -359,8 +359,7 @@ export class LampLights {
         store3f(gp, n * 3, _e.copy(_pos).addScaledVector(_dir, GLOW_OUT));
         const c = kind === "head" ? GLOW_HEAD[car.style.lamps.bulb ?? "neutral"] : kind === "tail" ? GLOW_TAIL : kind === "red" ? GLOW_RED : GLOW_BLUE;
         const bright = kind === "tail" && !car.braking ? TAIL_RUNNING : 1;
-        const lens = kind === "head" ? car.style.lamps.shapes?.head?.lens : undefined;
-        const dark = lens === undefined || lens === "lit" ? 1 : GLOW_DARK_LENS;
+        const dark = kind === "head" && !lensLights(car.style.lamps.shapes?.head) ? GLOW_DARK_LENS : 1;
         // A body lamp's glow shows only on the side its lens faces: seen from behind the lens (past the body, through the cabin's glass)
         // it is dark. A siren shows all round.
         const shown = (kind === "head" || kind === "tail" ? THREE.MathUtils.smoothstep(_e.subVectors(_cam, _pos).normalize().dot(_dir), GLOW_FACE[0], GLOW_FACE[1]) : 1) * bright * dark;
