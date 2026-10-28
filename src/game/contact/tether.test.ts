@@ -2,7 +2,8 @@ import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { makeCar, launch, FREEWHEEL } from "./crash-scenarios.test-util.ts";
-import { MAX_TETHERS, R_STRENGTH, ROW, TetherSet, WORLD } from "./tether.ts";
+import { R_STRENGTH, ROW, TetherSet, WORLD } from "./tether.ts";
+import { MAX_TETHERS } from "../kernel/constants.ts";
 import { newWorld, settleStep, stepWorld, type World } from "../engine/world-step.ts";
 import { applyDrive } from "../vehicle/car-drive.ts";
 import { assignClass } from "../vehicle/vehicle-classes.ts";
@@ -34,13 +35,13 @@ function stage(placements: readonly (readonly [number, number, number, number, n
 }
 
 /** A cable from the world point `at` to car `car`'s centre of mass, as long as they stand apart now. */
-function tieToWorld(s: Staged, car: number, at: THREE.Vector3, strength = UNBREAKABLE): number {
+function tieToWorld(s: Staged, car: number, at: THREE.Vector3, strength: number | null = UNBREAKABLE): number {
   const slot = s.set.open();
   const centre = s.cars[car]!.frame.centre;
   s.set.setEnd(slot, 0, WORLD, at.x, at.y, at.z);
   s.set.setEnd(slot, 1, car, centre.x, centre.y, centre.z);
   s.set.fit(slot, s.cars);
-  s.set.rows[slot * ROW + R_STRENGTH] = strength;
+  if (strength !== null) s.set.rows[slot * ROW + R_STRENGTH] = strength;
   return slot;
 }
 
@@ -86,8 +87,8 @@ function stateOf(cars: readonly DeformableCar[]): number[] {
 }
 
 describe("given a car running away from a world anchor 10 m behind it at 12 m/s", () => {
-  const stretchOf = (tethered: boolean): { worst: number; reach: number } => {
-    const s = stage([[10, 0, EAST, 12, 0]]);
+  const stretchOf = (tethered: boolean, speed = 12): { worst: number; reach: number } => {
+    const s = stage([[10, 0, EAST, speed, 0]]);
     const slot = tethered ? tieToWorld(s, 0, ORIGIN) : -1;
     let worst = 0;
     run(s, 3, () => {
@@ -100,6 +101,11 @@ describe("given a car running away from a world anchor 10 m behind it at 12 m/s"
     const { worst, reach } = stretchOf(true);
     assert.ok(worst < 0.02, `stretch ${(worst * 100).toFixed(2)} %`);
     assert.ok(reach < 10.5, `car at ${reach.toFixed(2)} m`);
+  });
+
+  it("when the cable is fitted to a car already at 25 m/s, then it stretches under 2 % from the first slice on", () => {
+    const { worst } = stretchOf(true, 25);
+    assert.ok(worst < 0.02, `stretch ${(worst * 100).toFixed(2)} %`);
   });
 
   it("when it has no cable, then it runs far past that length", () => {
@@ -172,10 +178,10 @@ describe("given a sedan and a monster truck 30 m apart on one cable", () => {
     return { sedan: s.cars[0]!.group.position.x, truck: 30 - s.cars[1]!.group.position.x };
   };
 
-  it("when the retract is held for 1 s, then the light sedan comes at least 1.5 times as far as the heavy truck", () => {
+  it("when the retract is held for 1 s, then the light sedan comes at least 1.8 times as far as the heavy truck", () => {
     const { sedan, truck } = travelled(true);
     assert.ok(truck > 0.3, `the truck moved ${truck.toFixed(2)} m: the retract did nothing`);
-    assert.ok(sedan > 1.5 * truck, `sedan ${sedan.toFixed(2)} m, truck ${truck.toFixed(2)} m`);
+    assert.ok(sedan > 1.8 * truck, `sedan ${sedan.toFixed(2)} m, truck ${truck.toFixed(2)} m`);
   });
 
   it("when the retract is not held, then neither car moves", () => {
@@ -232,6 +238,70 @@ describe("given a car running away at 15 m/s on a cable that holds 20 kN", () =>
     const { alive, reach } = afterRun(UNBREAKABLE);
     assert.equal(alive, 1, "cables alive");
     assert.ok(reach < 10.5, `car at ${reach.toFixed(2)} m`);
+  });
+});
+
+describe("given a sedan on a cable of the strength a new cable has", () => {
+  const afterRun = (speed: number): { alive: number; reach: number } => {
+    const s = stage([[10, 0, EAST, speed, 0]]);
+    tieToWorld(s, 0, ORIGIN, null);
+    run(s, 1.5);
+    return { alive: s.set.count, reach: s.cars[0]!.group.position.x };
+  };
+
+  it("when it drives off at 20 m/s, then the yank snaps the cable and it runs on past the cable's length", () => {
+    const { alive, reach } = afterRun(20);
+    assert.equal(alive, 0, "cables alive");
+    assert.ok(reach > 20, `car at ${reach.toFixed(2)} m`);
+  });
+
+  it("when it drives off at 6 m/s, then the cable holds and the car stays within its length", () => {
+    const { alive, reach } = afterRun(6);
+    assert.equal(alive, 1, "cables alive");
+    assert.ok(reach < 10.5, `car at ${reach.toFixed(2)} m`);
+  });
+
+  it("when it swings down from level with an anchor 20 m up, then the cable holds the whole swing", () => {
+    const s = stage([[15, 0, EAST, 0, 0]]);
+    s.cars[0]!.group.position.y = 20 - s.cars[0]!.frame.centre.y;
+    tieToWorld(s, 0, new THREE.Vector3(0, 20, 0), null);
+    run(s, 4);
+    assert.equal(s.set.count, 1, "cables alive");
+  });
+
+  it("when it is reeled in from 40 m, then the cable holds the whole reel", () => {
+    const s = stage([[40, 0, EAST, 0, 0]]);
+    tieToWorld(s, 0, ORIGIN, null);
+    s.set.reeling = true;
+    run(s, 3);
+    assert.equal(s.set.count, 1, "cables alive");
+  });
+});
+
+describe("given a car on a cable to a wall 40 m off, the retract held", () => {
+  const NEAR_WALL = 4.5;
+  /** Seconds until the car is within `NEAR_WALL` m of the wall, or Infinity. */
+  const arrival = (monster: boolean): number => {
+    const s = stage([[40, 0, EAST, 0, 0]]);
+    if (monster) assignClass(s.cars[0]!, "monster");
+    const slot = tieToWorld(s, 0, ORIGIN);
+    s.set.reeling = true;
+    for (let i = 0; i < 4 * QUIET_HZ; i++) {
+      step(s);
+      if (span(s, slot) < NEAR_WALL) return (i + 1) * H;
+    }
+    return Infinity;
+  };
+
+  it("when the car is a sedan, then it arrives in 1.5 to 2 s", () => {
+    const seconds = arrival(false);
+    assert.ok(seconds >= 1.5 && seconds <= 2, `sedan arrived in ${seconds.toFixed(2)} s`);
+  });
+
+  it("when the car is a monster truck, then it arrives at least 15 % later than the sedan", () => {
+    const sedan = arrival(false);
+    const truck = arrival(true);
+    assert.ok(truck >= 1.15 * sedan, `sedan ${sedan.toFixed(2)} s, truck ${truck.toFixed(2)} s`);
   });
 });
 

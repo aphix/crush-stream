@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { RigidBody, World } from "@dimforge/rapier3d-simd";
 import type { Rapier } from "../kernel/rapier.ts";
+import { hypot3 } from "../kernel/physics-core.js";
 import { readPose } from "./ragdoll-body.ts";
 import { knockedGroups } from "./ragdoll-config.ts";
 
@@ -114,6 +115,17 @@ export class BoxPile {
   copyPoses(out: Float32Array): number {
     out.set(this.poses);
     return this.bodies.length;
+  }
+
+  /** Box `i`'s body, or null when there is no such box. */
+  bodyAt(i: number): RigidBody | null {
+    return this.bodies[i] ?? null;
+  }
+
+  /** The farthest (m) a point of box `i` lies from its middle: half its diagonal. */
+  reachOf(i: number): number {
+    const { width, height, depth } = this.placements[i]!;
+    return hypot3(width, height, depth) / 2;
   }
 
   /** The world is being freed with its bodies: forget them. */

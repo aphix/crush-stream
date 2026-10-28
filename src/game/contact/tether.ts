@@ -3,19 +3,14 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { rigidCentre } from "../vehicle/car-air.ts";
 import { invInertia } from "../vehicle/car-air-body.ts";
 import { carClass, CLASSES } from "../vehicle/vehicle-classes.ts";
+import { MAX_TETHERS, WINCH_MIN_LENGTH, WINCH_SPEED } from "../kernel/constants.ts";
 
-/** Cables alive at once: Just Cause 3's base tether capacity. */
-export const MAX_TETHERS = 2;
 /** The farthest (m) a hook reaches: Just Cause 4's grapple range. */
 export const TETHER_RANGE = 80;
-/** The shortest (m) a retract reels a cable to: a cable already shorter than this is left as it is. */
-const MIN_LENGTH = 3;
-/** The retract's reeling speed (m/s): the middle of the 12 to 25 m/s the research gives for a vehicle winch. */
-const RETRACT_SPEED = 15;
-/** The most pull (N) a retract gives: about 2 g on a 1.4 t sedan, so a monster truck (2.9 t) comes at half the rate. Guessed, to be tuned by play. */
-const RETRACT_FORCE = 30_000;
-/** What a new cable holds (N) before it snaps: about a 20 t tow cable's breaking load. Guessed, to be tuned by play. */
-const BREAK_FORCE = 200_000;
+/** The most pull (N) a retract gives: it takes a sedan (1.4 t) to `WINCH_SPEED` in 0.7 s and a monster truck (2.9 t) in 1.5, so the heavy one arrives later and a cable between the two moves the sedan twice as far. */
+const RETRACT_FORCE = 55_000;
+/** What a new cable holds (N) before it snaps: above the retract (55 kN) and a sedan swinging 15 m below its anchor (40 kN), below a sedan yanked at 12 m/s (150 kN). */
+const BREAK_FORCE = 140_000;
 /** The window (s) a cable's tension is averaged over before it is compared to its strength, so the break does not depend on the slice length. */
 const BREAK_SMOOTH_S = 0.1;
 /** Share of a cable's stretch the solver pulls back in one slice: under Baumgarte's 0.1 to 0.3, since a cable that is already taut only ever stretches by a step's rounding. */
@@ -27,17 +22,36 @@ const PASSES = 4;
 /** Anchors nearer than this (m) have no direction to pull along. */
 const MIN_SPAN = 1e-6;
 
-/** A cable end is a point of a car (its car-frame coordinates) or of the world. */
+/** A cable end is a point of a car (its car-frame coordinates), of the world, or of a thing in the dummies' world (a dummy, a prop, a box: `RAPIER`, its coordinates the world point the dummies' world last put it at). */
 export const WORLD = -1;
+export const RAPIER = -2;
 
-/** One cable's numbers in `TetherSet.rows`: alive, the two ends' car index, the two ends' coordinates, its length (m), its averaged tension (N) and its strength (N). */
-export const ROW = 12;
+/** What a `RAPIER` end is, in `TetherSet.thing`: a kind and its index, one number. */
+export const THING = { doll: 1, prop: 2, box: 3 } as const;
+const THING_RADIX = 1 << 16;
+
+/** One cable's numbers in `TetherSet.rows`: alive, the two ends' car index, the two ends' coordinates, its length (m), its averaged tension (N), its strength (N) and the two ends' things. */
+export const ROW = 14;
 const R_ALIVE = 0;
 const R_CAR = 1;
 const R_POS = 3;
 const R_LENGTH = 9;
 const R_TENSION = 10;
 export const R_STRENGTH = 11;
+const R_THING = 12;
+
+/** A thing's `THING` kind and index as the one number `TetherSet.setEnd` keeps, and back. */
+export function thingCode(kind: number, index: number): number {
+  return kind * THING_RADIX + index;
+}
+
+export function thingKind(code: number): number {
+  return Math.floor(code / THING_RADIX);
+}
+
+export function thingIndex(code: number): number {
+  return code % THING_RADIX;
+}
 
 /** The cables of a world: at most `MAX_TETHERS`, each held in a row of numbers so a step with none costs one read of `count`. */
 export class TetherSet {
@@ -75,13 +89,14 @@ export class TetherSet {
     return slot;
   }
 
-  /** End `end` (0 or 1) of cable `slot`: car `car` (or `WORLD`) at (x, y, z), a car-frame point for a car. */
-  setEnd(slot: number, end: number, car: number, x: number, y: number, z: number): void {
+  /** End `end` (0 or 1) of cable `slot`: car `car` (or `WORLD`, or `RAPIER` with its `thing`) at (x, y, z), a car-frame point for a car. */
+  setEnd(slot: number, end: number, car: number, x: number, y: number, z: number, thing = 0): void {
     const o = slot * ROW;
     this.rows[o + R_CAR + end] = car;
     this.rows[o + R_POS + 3 * end] = x;
     this.rows[o + R_POS + 3 * end + 1] = y;
     this.rows[o + R_POS + 3 * end + 2] = z;
+    this.rows[o + R_THING + end] = thing;
   }
 
   /** The cable is as long as its ends stand apart now (slack from here on when they come closer). False, and no change, where a car is gone. */
@@ -96,7 +111,7 @@ export class TetherSet {
     const o = slot * ROW;
     const car = this.rows[o + R_CAR + end]!;
     out.set(this.rows[o + R_POS + 3 * end]!, this.rows[o + R_POS + 3 * end + 1]!, this.rows[o + R_POS + 3 * end + 2]!);
-    if (car === WORLD) return true;
+    if (car === WORLD || car === RAPIER) return true;
     const body = cars[car];
     if (body === undefined) return false;
     out.applyQuaternion(body.group.quaternion).add(body.group.position);
@@ -106,6 +121,38 @@ export class TetherSet {
   /** The car index (or `WORLD`) cable `slot`'s end `end` is on. */
   endCar(slot: number, end: number): number {
     return this.rows[slot * ROW + R_CAR + end]!;
+  }
+
+  /** The thing (`thingCode` of its `THING` kind and index) on cable `slot`'s `RAPIER` end `end`. */
+  thing(slot: number, end: number): number {
+    return this.rows[slot * ROW + R_THING + end]!;
+  }
+
+  /** End `end` of cable `slot` as it was set (a car end's car-frame point, else a world point) into `out`. */
+  point(slot: number, end: number, out: THREE.Vector3): THREE.Vector3 {
+    const o = slot * ROW + R_POS + 3 * end;
+    return out.set(this.rows[o]!, this.rows[o + 1]!, this.rows[o + 2]!);
+  }
+
+  /** Cable `slot` has an end in the dummies' world: that world holds it, the sim's solver leaves it alone. */
+  isRapier(slot: number): boolean {
+    return this.endCar(slot, 0) === RAPIER || this.endCar(slot, 1) === RAPIER;
+  }
+
+  /** Some cable the sim solves is out (not only ones the dummies' world holds). */
+  get sim(): boolean {
+    if (this.count === 0) return false;
+    for (let i = 0; i < MAX_TETHERS; i++) if (this.isAlive(i) && !this.isRapier(i)) return true;
+    return false;
+  }
+
+  /** Where the dummies' world has `RAPIER` end `end` of cable `slot` now, and how long its rope is. */
+  setPlace(slot: number, end: number, x: number, y: number, z: number, length: number): void {
+    const o = slot * ROW;
+    this.rows[o + R_POS + 3 * end] = x;
+    this.rows[o + R_POS + 3 * end + 1] = y;
+    this.rows[o + R_POS + 3 * end + 2] = z;
+    this.rows[o + R_LENGTH] = length;
   }
 
   length(slot: number): number {
@@ -241,7 +288,7 @@ function prepare(set: TetherSet, slot: number, cars: readonly DeformableCar[], h
   const inverse = inverseMassAt(a, axis) + inverseMassAt(b, axis);
   if (inverse <= 0) return false;
   // The winch takes up slack at once: it reels from where the ends stand, and never lets the cable out.
-  if (set.reeling) set.rows[o + R_LENGTH] = Math.min(set.rows[o + R_LENGTH]!, Math.max(Math.min(MIN_LENGTH, set.rows[o + R_LENGTH]!), span - RETRACT_SPEED * h));
+  if (set.reeling) set.rows[o + R_LENGTH] = Math.min(set.rows[o + R_LENGTH]!, Math.max(Math.min(WINCH_MIN_LENGTH, set.rows[o + R_LENGTH]!), span - WINCH_SPEED * h));
   const stretch = span - set.rows[o + R_LENGTH]!;
   const w = slot * W_STRIDE;
   _work[w + W_LIVE] = 1;
@@ -259,7 +306,7 @@ function prepare(set: TetherSet, slot: number, cars: readonly DeformableCar[], h
 export function solveTethers(set: TetherSet, cars: readonly DeformableCar[], h: number): void {
   _work.fill(0);
   for (let slot = 0; slot < MAX_TETHERS; slot++) {
-    if (set.isAlive(slot) && !holds(set, slot, cars, h)) {
+    if (set.isAlive(slot) && !set.isRapier(slot) && !holds(set, slot, cars, h)) {
       set.release(slot);
       _work[slot * W_STRIDE + W_LIVE] = 0;
     }

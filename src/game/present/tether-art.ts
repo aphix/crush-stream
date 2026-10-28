@@ -1,14 +1,16 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { MAX_TETHERS, R_STRENGTH, ROW, type TetherSet } from "../contact/tether.ts";
+import { MAX_TETHERS } from "../kernel/constants.ts";
+import { R_STRENGTH, ROW, type TetherSet } from "../contact/tether.ts";
 
 /** What the reticle says about the aim: nothing to hook, a target in reach, a target out of reach. */
 export const AIM = { none: 0, valid: 1, far: 2 } as const;
 type AimState = (typeof AIM)[keyof typeof AIM];
 
-/** The reticle's state and the world point it would hook (read only when `state` is not `AIM.none`). */
+/** The reticle's state, the way the sight line runs from the camera (the ring is drawn on it) and the world point it would hook (read only when `state` is not `AIM.none`). */
 export interface ReticleView {
   state: AimState;
+  readonly dir: THREE.Vector3;
   readonly point: THREE.Vector3;
 }
 
@@ -117,7 +119,7 @@ export class TetherArt {
     this.reticle.visible = view !== null;
     this.marker.visible = view !== null && view.state !== AIM.none;
     if (view === null) return;
-    camera.getWorldDirection(_look);
+    _look.copy(view.dir);
     camera.getWorldPosition(_eye);
     camera.getWorldQuaternion(_turn);
     this.reticle.position.copy(_eye).addScaledVector(_look, RING_DISTANCE);

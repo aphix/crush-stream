@@ -17,6 +17,8 @@ import { CarProxies, PROP_BAND_HIGH, PROP_BAND_LOW } from "./ragdoll-cars.ts";
 import { dollGroups, FIXED_GROUPS, knockedGroups, propGroups, SLOTS, STEP, thrownGroups } from "./ragdoll-config.ts";
 import { RagdollDebug } from "./ragdoll-debug.ts";
 import { RagdollRemote, type PostTraffic } from "./ragdoll-remote.ts";
+import { Ropes } from "./ragdoll-ropes.ts";
+import { ROPE_FLOATS } from "./ragdoll-wire.ts";
 import { RideAlong } from "./ragdoll-ride.ts";
 import { AIR_ANGULAR, AIR_LINEAR, ARM, blendPose, type Doll, JOINTS, limp, PARTS, readPose, SHOULDER_Y } from "./ragdoll-body.ts";
 import { brace, joinUp, loosen } from "./ragdoll-joints.ts";
@@ -24,7 +26,7 @@ import { Walker } from "./ragdoll-walker.ts";
 import { groundColliders, PATCH_AHEAD, PATCH_HALF, type Pole } from "./ragdoll-ground.ts";
 import { courseSolids, type Solid } from "./ragdoll-solids.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
-import { GRAVITY } from "../kernel/constants.ts";
+import { GRAVITY, MAX_TETHERS } from "../kernel/constants.ts";
 
 const _q = new THREE.Quaternion();
 const _qb = new THREE.Quaternion();
@@ -161,6 +163,9 @@ export abstract class RagdollPool {
   protected lastSlot = 0;
   /** The cars' proxies in the dummies' world. */
   protected readonly proxies = new CarProxies(this.dolls);
+  /** The tether's cables that end in this world (`Ropes`), and where they stood after the last frame (`command`: how many rope commands this world has heard). */
+  protected readonly ropes = new Ropes(this.dolls, this.props, this.boxes);
+  readonly ropeReport = { command: 0, floats: new Float32Array(MAX_TETHERS * ROPE_FLOATS) };
   /** The ride-along camera over the dummies (`follow`, `frameCamera`). */
   protected readonly ride = new RideAlong();
   /** One walker per pool slot: a dummy of the pool (`startWalker`) held up and walked by motors, in this world with the cars and the ground. The player on foot is the one in `WALKER_SLOT`. */
@@ -223,12 +228,13 @@ export abstract class RagdollPool {
         return body;
       });
       const joints = joinUp(R, world, bodies);
-      this.dolls.push({ bodies, joints, loose: false, braced: false, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3), driven: false });
+      this.dolls.push({ bodies, joints, loose: false, braced: false, live: false, age: 0, life: LIFE, still: 0, patch: [], car: -1, rides: false, prev: new Float32Array(PARTS.length * 7), cur: new Float32Array(PARTS.length * 7), ground: false, settled: false, calm: 0, speed: 0, vel: new Float32Array(3), driven: false, ropes: 0 });
     }
     // A child of the dummies' mesh, so the scene root keeps its one `ragdolls` child and the props draw only while a dummy is out.
     this.mesh.add((this.purses = this.proxies.purses = new Purses(R, world, SLOTS, propGroups, GRACE)).mesh);
     this.props.load(R, world);
     this.boxes.load(R, world);
+    this.ropes.load(R, world);
     // One step with a dummy out, far below the world: links the step path before a crash needs it.
     const d = this.dolls[0]!;
     for (const b of d.bodies) b.setEnabled(true);
@@ -445,6 +451,7 @@ export abstract class RagdollPool {
 
   protected despawn(s: number): void {
     const d = this.dolls[s]!;
+    this.ropes.drop("doll", s);
     if (d.driven) this.walkers[s]!.detach();
     if (d.live) this.live--;
     d.live = false;

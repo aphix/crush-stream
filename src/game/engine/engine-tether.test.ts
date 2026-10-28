@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
-import { WORLD } from "../contact/tether.ts";
+import { RAPIER, WORLD } from "../contact/tether.ts";
 import { AIM } from "../present/tether-art.ts";
+import { ROPE_JOINED, ROPE_NONE, ROPE_STATE } from "../present/ragdoll-wire.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, element, pressKey, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
@@ -123,6 +124,7 @@ describe("given the real engine in the fleet with the player at the wheel of car
       releasePointerCapture() {},
     });
     engine = await bootEngine({ pacer: true, canvas });
+    await engine["ragdolls"].preload();
   });
   after(() => {
     for (const mesh of built) {
@@ -245,6 +247,43 @@ describe("given the real engine in the fleet with the player at the wheel of car
     engine["keys"].delete(TETHER_KEYS.retract);
     engine.advance(FRAME, { frameDt: FRAME });
     assert.equal(tethers().reeling, false, "reeling after the release");
+  });
+
+  it("when fire is pressed with a dummy under the ray, then the cable is a rope tied to him in the dummies' world, the drawn cable ends on him, and the cut key unties it", () => {
+    stage();
+    const s = sight();
+    const spot = along(s, 0.5 * reach(s));
+    const ragdolls = engine["ragdolls"];
+    ragdolls.place(spot, new THREE.Quaternion(), new THREE.Vector3(), new THREE.Vector3(), 30, 0);
+    engine.advance(FRAME, { frameDt: FRAME });
+    scene().updateMatrixWorld(true);
+    press(TETHER_KEYS.fire);
+    assert.equal(tethers().count, 1, "cables out");
+    assert.equal(tethers().endCar(0, 0), RAPIER, "the first end is a thing of the dummies' world");
+    runSeconds(engine, 0.5);
+    assert.equal(ragdolls.ropeReport.floats[ROPE_STATE], ROPE_JOINED, "the rope's state in the dummies' world");
+    const torso = new THREE.Vector3();
+    assert.ok(ragdolls.torso(0, torso, null), "he is still out");
+    assert.ok(endPoint(0).distanceTo(torso) < 1.5, `the drawn cable ends ${endPoint(0).distanceTo(torso).toFixed(2)} m from his torso`);
+    press(TETHER_KEYS.cut);
+    runSeconds(engine, 0.2);
+    assert.equal(ragdolls.ropeReport.floats[ROPE_STATE], ROPE_NONE, "the rope's state after the cut");
+  });
+
+  it("when the camera is a chase camera, then the reticle is 38 % from the top and the cable hooks the ground farther out than the middle of the view looks", () => {
+    stage();
+    engine["seat"].view = "third";
+    runSeconds(engine, 1);
+    scene().updateMatrixWorld(true);
+    const s = sight();
+    assert.ok(Number.isFinite(s.ground), "the chase camera's middle looks at the ground");
+    press(TETHER_KEYS.fire);
+    assert.equal(engine.tether.hud()?.sight, 0.38, "the reticle's height");
+    assert.equal(tethers().count, 1, "cables out");
+    assert.ok(endPoint(0).distanceTo(s.eye) > 1.5 * s.ground, `hooked ${endPoint(0).distanceTo(s.eye).toFixed(1)} m out; the middle of the view meets the ground at ${s.ground.toFixed(1)} m`);
+    engine["seat"].view = "first";
+    runSeconds(engine, 0.3);
+    assert.equal(engine.tether.hud()?.sight, 0.5, "the reticle's height in first person");
   });
 
   /** The free camera flying over the same two cars: no car of the player's. */

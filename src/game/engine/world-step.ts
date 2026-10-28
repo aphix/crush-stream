@@ -309,7 +309,7 @@ export function stepWorld(w: World, dt: number): void {
     slices = contact ? cut : quiet;
     if (dt * hz > slices + 1e-6) slices = Math.min(8, Math.ceil(dt * hz - 1e-6));
     // A lone car's one slice is the step: with every car lone nothing is in contact and the step is the quiet one.
-    if (w.lone && !barrier && slices > 1 && w.tethers.count === 0) {
+    if (w.lone && !barrier && slices > 1 && !w.tethers.sim) {
       mask = loneCars(cars, dt);
       if (allLone(mask, n)) {
         mask = 0;
@@ -346,6 +346,8 @@ export function stepWorld(w: World, dt: number): void {
       continue;
     }
     work[WORK.slices] = work[WORK.slices]! + 1;
+    // Before the integrate, so a cable sees the motion this slice is about to make and holds a car already moving from the first slice.
+    if (w.tethers.count > 0) solveTethers(w.tethers, cars, h);
     w.surfaces.cars = cars;
     w.surfaces.met = w.partTouch;
     w.surfaces.partMet = w.partMet;
@@ -443,7 +445,6 @@ export function stepWorld(w: World, dt: number): void {
     // from them now, before the structure step reads them, as the second pass's start did (the mixed fleet's column read a wreck at
     // -7.4 m/s against its masses' -2.8 without it: stack-column 'owner's drops').
     for (let ci = 0; ci < n; ci++) if (cars[ci]!.deform.massActive && !cars[ci]!.deform.ridesBody(rideQuiet(cars[ci]!)) && (i === 0 || !lonely.flag[ci])) cars[ci]!.syncPose(0);
-    if (w.tethers.count > 0) solveTethers(w.tethers, cars, h);
     armCrushRows(h);
     lap(ph, PHASE.pairs);
 

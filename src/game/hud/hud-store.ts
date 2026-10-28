@@ -73,8 +73,8 @@ export type SprayTool = { on: boolean; radius: number; colour: number; mirror: b
 /** The trip out of the car as the HUD reads it: `out` while he is on foot, the line under the view (what the control does now, or why it refused), and `refusal`, that why alone while it shows. */
 export type FootHud = { out: boolean; prompt: string | null; refusal: string | null };
 
-/** The tether as the HUD reads it: cables out, whether a second fire is awaited, the aim (`AIM` in `present/tether-art.ts`: 0 nothing, 1 in reach, 2 out of reach), and `free`: no car of the player's to cable from (the free camera: two fires hook two objects). */
-export type TetherHud = { count: number; pending: boolean; aim: number; free: boolean };
+/** The tether as the HUD reads it: cables out, whether a second fire is awaited, the aim (`AIM` in `present/tether-art.ts`: 0 nothing, 1 in reach, 2 out of reach), `free`: no car of the player's to cable from (the free camera: two fires hook two objects), and `sight`: how far down the view (0 top, 1 bottom) the aim passes. */
+export type TetherHud = { count: number; pending: boolean; aim: number; free: boolean; sight: number };
 
 export type CrashHudState = {
   playing: boolean;

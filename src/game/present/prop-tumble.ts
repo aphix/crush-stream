@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import type { PrefabId } from "../world/catalog.ts";
+import { PREFABS, type PrefabId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
 import type { PrefabMaterials, PrefabPart } from "./prefab-pieces.ts";
 import { prefabParts } from "./prefabs.ts";
@@ -59,6 +59,7 @@ export class PropTumble {
     const parts: Partial<Record<PrefabId, PrefabPart[]>> = {};
     for (const list of byCell.values()) {
       const id = placed[list[0]!]!.prefab;
+      const knockOf = Int32Array.from(list, (idx) => (PREFABS[id].body === "knock" ? idx : -1));
       const group = this.meshes.length;
       this.meshes.push(
         (parts[id] ??= prefabParts(id, mats)).map((part, pi) => {
@@ -70,6 +71,7 @@ export class PropTumble {
             if (pi === 0 && tint(id, idx, col)) mesh.setColorAt(s, col);
           }
           mesh.computeBoundingSphere();
+          mesh.userData.knockOf = knockOf;
           add(mesh, id, part.shared ? part.material : null);
           return mesh;
         }),

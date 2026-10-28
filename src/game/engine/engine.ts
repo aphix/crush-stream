@@ -268,10 +268,12 @@ export class CrashEngine extends EngineGarage {
       camera: this.camera,
       canvas: this.canvas,
       scene: this.scene,
+      ropes: this.ragdolls,
       movers: () => [this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.coverBatch.group, ...this.balls.map((ball) => ball.mesh)],
       cars: () => this.live(),
       playerCar: () => this.tetherSource(),
       offered: () => this.tetherOffered(),
+      chase: () => this.tetherChase(),
     });
     this.scene.add(this.tether.art.group);
     this.cine = new Cinematics(this.renderer, this.scene, this.view, { sparks: this.sparks, fountains: this.fountains.jets, glass: this.glassDots, witness: this.witness }, MAX_CARS, this.clock.reduceMotion, () => this.queueWarm());
@@ -836,6 +838,11 @@ export class CrashEngine extends EngineGarage {
     return index >= 0 && index < this.carCount ? index : -1;
   }
 
+  /** The camera is a chase camera, not the free camera, first person or the field's orbit: the tether's aim passes through a point above the middle of its view. */
+  private tetherChase(): boolean {
+    return !this.view.flying && this.seat.mode !== "global" && this.seat.view !== "first";
+  }
+
   /** The on-foot control is offered: the game is running a scene with a player's car to leave (not the garage, the lab or the showcase), and no reel, fade, boot warm-up or race menu holds it. Online or off. */
   private onFootOffered(): boolean {
     if (this.highlights.playing || !this.playing || this.warming || this.sceneFade.pending !== null) return false;
@@ -897,7 +904,7 @@ export class CrashEngine extends EngineGarage {
     this.ejection.minigame = this.minigameMode !== null;
     w.fine = this.pace.fine;
     lap(w.phases, PHASE.drive);
-    if (w.tethers.count > 0 && this.race.active) this.race.recorder.tethered();
+    if (w.tethers.sim && this.race.active) this.race.recorder.tethered();
     stepWorld(w, dt);
     // The slab names no car: a hit it took from the watched one, at the step's hardest contact next to that car.
     const watched = this.seat.mode !== "global" ? cars[this.seat.carIndex] : undefined;
