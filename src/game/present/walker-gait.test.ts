@@ -97,9 +97,9 @@ const jointCases: readonly {
   expectedTwistPP: readonly [number, number];
   expectedBobCm: readonly [number, number];
 }[] = [
-  { it: "when he walks, then his hips swing 30-58 degrees, knees flex 40-70, arms 20-60, elbows stay open, the pelvis turns 8-18 and bobs 2-10 cm", command: WALK_SPEED, expectedHipPP: [30, 58], expectedKneePeak: [40, 70], expectedShoulderPP: [20, 60], expectedElbowPeak: [10, 50], expectedTwistPP: [8, 18], expectedBobCm: [2, 10] },
-  { it: "when he runs, then his hips swing 50-85 degrees, knees flex 70-110, arms 35-80, elbows are held bent 70-100, the pelvis turns 10-25 and bobs 4-14 cm", command: RUN_SPEED, expectedHipPP: [50, 85], expectedKneePeak: [70, 110], expectedShoulderPP: [35, 80], expectedElbowPeak: [70, 100], expectedTwistPP: [10, 25], expectedBobCm: [4, 14] },
-  { it: "when he sprints, then his hips swing 80-105 degrees, knees flex 90-130, arms 50-100, elbows are held bent 70-110, the pelvis turns 15-35 and bobs 4-16 cm", command: SPRINT_SPEED, expectedHipPP: [80, 105], expectedKneePeak: [90, 130], expectedShoulderPP: [50, 100], expectedElbowPeak: [70, 110], expectedTwistPP: [15, 35], expectedBobCm: [4, 16] },
+  { it: "when he walks, then his hips swing 30-45 degrees, knees flex 40-70, arms 20-60, elbows stay open, the pelvis turns 8-18 and bobs 2-10 cm", command: WALK_SPEED, expectedHipPP: [30, 45], expectedKneePeak: [40, 70], expectedShoulderPP: [20, 60], expectedElbowPeak: [10, 50], expectedTwistPP: [8, 18], expectedBobCm: [2, 10] },
+  { it: "when he runs, then his hips swing 50-70 degrees, knees flex 70-110, arms 35-80, elbows are held bent 70-100, the pelvis turns 10-25 and bobs 4-14 cm", command: RUN_SPEED, expectedHipPP: [50, 70], expectedKneePeak: [70, 110], expectedShoulderPP: [35, 80], expectedElbowPeak: [70, 100], expectedTwistPP: [10, 25], expectedBobCm: [4, 14] },
+  { it: "when he sprints, then his hips swing 50-70 degrees, knees flex 90-130, arms 50-100, elbows are held bent 70-110, the pelvis turns 15-35 and bobs 4-16 cm", command: SPRINT_SPEED, expectedHipPP: [50, 70], expectedKneePeak: [90, 130], expectedShoulderPP: [50, 100], expectedElbowPeak: [70, 110], expectedTwistPP: [15, 35], expectedBobCm: [4, 16] },
 ];
 
 describe("given a gait at each speed", () => {

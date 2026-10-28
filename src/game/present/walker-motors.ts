@@ -33,8 +33,10 @@ export const MOTOR_FLOOR = 1;
  */
 export const GETUP_GIMBAL = { stiffness: 3000, damping: 600 } as const;
 export const STAND_GIMBAL = { stiffness: 60000, damping: 1000 } as const;
-/** The frame holds the torso's centre through the gimbal's linear motors on his feet (N/m, N·s/m): 30 kN/m sags a 100 kg body 3 cm, and the weight and push are fed forward. */
-export const HOLD = { stiffness: 30000, damping: 3000 } as const;
+/** The frame holds the torso's centre through the gimbal's linear motors on his feet (N/m, N·s/m): stiff (150 kN/m would sag a 100 kg body 0.7 cm) so the legs' locked feet find the hip where the gait put it, yet a blow still shows as speed; the weight and push are fed forward. */
+export const HOLD = { stiffness: 150000, damping: 7500 } as const;
+/** A planted foot's lock to its spot (N/m, N·s/m), critically damped for a leg's ~20 kg; it comes on over this many seconds after a touchdown. */
+export const FOOT_LOCK = { stiffness: 1000000, damping: 9000, rampSeconds: 0.034 } as const;
 
 /** One motor row: joint, angular axis, the target it chases (a `GAIT` index, -1: upright, 0), its stiffness and damping in the get-up and on his feet at full strength, and whether the get-up's grip multiplies it. */
 type MotorRow = { joint: number; axis: number; target: number; stiffness: number; damping: number; walkStiffness: number; walkDamping: number; arm: boolean };

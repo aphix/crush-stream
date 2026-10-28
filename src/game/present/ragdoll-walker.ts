@@ -7,6 +7,7 @@ import { type Doll, PARTS } from "./ragdoll-body.ts";
 import { joinUp } from "./ragdoll-joints.ts";
 import { chooseRoute, GETUP_ROUTES, type GetUpRoute, smooth, STAGE, stageAt, standingBearing } from "./walker-getup.ts";
 import { Gait, GAIT } from "./walker-gait.ts";
+import { FootLocks } from "./walker-feet.ts";
 import { Locomotion } from "./walker-locomotion.ts";
 import { ANG, FORCE_BASED, GETUP_GIMBAL, HIP_BACK, HIP_FORWARD, HIP_L, HIP_R, HOLD, LIN, MOTOR_FLOOR, MOTORS, ROLL_IN, ROLL_OUT, STAND_GIMBAL } from "./walker-motors.ts";
 import { leanedQuaternion, nlerp, pitchedQuaternion, spinBetween, uprightness } from "./walker-math.ts";
@@ -59,6 +60,8 @@ const MAX_DT = 0.05;
 /** The torso may lag the root this far (m) before the root is brought back to it (a wall stops the root with him), and he then runs no faster than he is going plus this (m/s). */
 const LEASH = 0.2;
 const BLOCKED_MARGIN = 1;
+/** The hold's spring rate (rad/s) on his whole mass: displacement times it is the speed a displaced torso springs back at. */
+const HOLD_RATE = Math.sqrt(HOLD.stiffness / TOTAL_MASS);
 
 type WalkState = "stand" | "down" | "getUp";
 
@@ -87,6 +90,7 @@ export class Walker {
   /** The root's motion and the gait's feet: what he does while he stands. */
   readonly loco = new Locomotion();
   readonly gait = new Gait();
+  private readonly feet = new FootLocks();
   private doll: Doll | null = null;
   private world: World | null = null;
   private rapier: Rapier | null = null;
@@ -139,6 +143,7 @@ export class Walker {
     this.anchor = world.createRigidBody(rapier.RigidBodyDesc.kinematicVelocityBased());
     this.gimbal = world.createImpulseJoint(rapier.JointData.generic(ZERO, ZERO, GIMBAL_AXIS, NO_LOCKED_AXES), this.anchor, doll.bodies[0]!, true);
     for (const axis of [...ANG, ...LIN]) raw.jointConfigureMotorModel(this.gimbal.handle, axis, FORCE_BASED);
+    this.feet.attach(rapier, world, doll.bodies);
     for (const row of MOTORS) raw.jointConfigureMotorModel(doll.joints[row.joint]!.handle, row.axis, FORCE_BASED);
     this.heading = yaw;
     pitchedQuaternion(this.reference, yaw, 0);
@@ -155,6 +160,7 @@ export class Walker {
     if (doll === null) return;
     doll.bodies[0]!.resetForces(false);
     this.world!.removeRigidBody(this.anchor!);
+    this.feet.detach();
     for (const joint of doll.joints) this.world!.removeImpulseJoint(joint, false);
     doll.joints = joinUp(this.rapier!, this.world!, doll.bodies);
     doll.driven = false;
@@ -197,6 +203,7 @@ export class Walker {
     this.steer(step);
     this.driveGimbal(upright);
     this.driveMotors(step);
+    this.feet.update(step, this.gait, this.state === "stand", this.strength);
     this.holdUp(doll);
   }
 
@@ -218,12 +225,15 @@ export class Walker {
     this.strength = Math.min(1, this.strength + dt / RECOVER_SECONDS);
   }
 
-  /** How far (m/s) his torso moves from the root's velocity, less what a wall ahead takes off his way (the torso slower than the root along his facing). */
+  /**
+   * How hard (m/s) his torso is moved off the root: its speed relative to the root plus the hold's spring speed for how far it is displaced (a stiff hold takes a
+   * blow's speed out of the torso inside a frame and leaves a displacement), less what a wall ahead takes off his way (the torso behind the root along his facing).
+   */
   private blowSpeed(doll: Doll): number {
     const held = this.anchorVel;
-    let dx = doll.vel[0]! - held[0]!;
-    const dy = doll.vel[1]! - held[1]!;
-    let dz = doll.vel[2]! - held[2]!;
+    let dx = doll.vel[0]! - held[0]! + HOLD_RATE * (doll.cur[0]! - this.anchorPos[0]!);
+    const dy = doll.vel[1]! - held[1]! + HOLD_RATE * (doll.cur[1]! - this.anchorPos[1]!);
+    let dz = doll.vel[2]! - held[2]! + HOLD_RATE * (doll.cur[2]! - this.anchorPos[2]!);
     const sin = detSin(this.loco.yaw);
     const cos = detCos(this.loco.yaw);
     const along = dx * sin + dz * cos;

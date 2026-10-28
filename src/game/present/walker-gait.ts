@@ -9,11 +9,13 @@ export const GAIT = { HIP_L: 0, HIP_R: 1, ROLL_L: 2, ROLL_R: 3, KNEE_L: 4, KNEE_
 /** The gait's numbers at standing, a walk, a run and a sprint, between which it blends linearly (natural-gait research: cadence 100-130 steps/min walking, 150-210 running; stance 60 % walking, 35-50 % running; knee 20° in walking stance, 40°+ running). */
 const SPEED_STOPS = [0, WALK_SPEED, RUN_SPEED, SPRINT_SPEED] as const;
 /** Gait cycles a second (two steps each). */
-const CADENCE = [1.3, 1.3, 1.7, 2.0] as const;
+const CADENCE = [1.45, 1.45, 1.7, 2.2] as const;
 /** The share of the cycle a foot is on the ground: past a half the feet overlap (a walk), under it there is a flight phase (a run). */
-const STANCE = [0.6, 0.58, 0.38, 0.25] as const;
+const STANCE = [0.6, 0.575, 0.38, 0.22] as const;
 /** The foot's most lift (m) in swing. */
-const CLEARANCE = [0.04, 0.06, 0.12, 0.17] as const;
+const CLEARANCE = [0.04, 0.06, 0.17, 0.29] as const;
+/** The lift peaks early in the swing (at 1 - 0.5^(1/n) of it, a fifth for 3): the heel kicks up behind the body and the foot passes under the hip low, so a swinging thigh needs far less flexion for the same clearance. */
+const LIFT_EARLINESS = 3;
 /** The leg's length (m) from hip to ankle in stance: shorter bends the knee more (a jogging stance flexes 35°+). */
 const STANCE_LEG = [0.835, 0.833, 0.83, 0.828] as const;
 /** The elbow's bend (rad, negative: forward): hanging at a walk, held near a right angle running. */
@@ -53,7 +55,7 @@ const NEAR_GROUND = 0.03;
 /** The leg is never asked to reach under this share of its stance length down (a foot almost under the hip). */
 const MIN_DROP_SHARE = 0.4;
 /** Torso turn (rad) per rad of difference between the thighs' swings (a walking pelvis turns about 10° peak to peak), and the neck turning back against it and levelling against the lean. */
-const TWIST_GAIN = 0.3;
+const TWIST_GAIN = 0.36;
 const NECK_COUNTER_TURN = 0.8;
 const NECK_LEVEL = 0.9;
 /** Sideways sway (m) toward the stance foot. */
@@ -68,6 +70,8 @@ const ARM_BACK_BIAS = [0, 0.05, 0.3, 0.2] as const;
 const ARM_MEAN_EASE = 2;
 /** The elbow closes no further (rad, negative: forward): the hand stays under the shoulder. */
 const ELBOW_MOST = -1.75;
+/** The rate (1/s) a knee's target follows the leg's reach at: near a straight leg a few mm of reach swing the knee tens of degrees in one frame. */
+const KNEE_EASE = 30;
 /** Rates (1/s) at which the twist and the stance weights follow their targets. */
 const TWIST_EASE = 20;
 const WEIGHT_EASE = 12;
@@ -115,11 +119,12 @@ export class Gait {
   private sway = 0;
   private phase = 0;
   private cadence = 0;
-  private readonly planted = new Uint8Array(2).fill(1);
+  /** 1 while foot `f` (left, right) is set down at its `plant` spot (x, y, z, per foot), 0 in its swing. */
+  readonly planted = new Uint8Array(2).fill(1);
   private readonly liftAt = new Float64Array(2).fill(LIFT_AT_STANDING);
   private readonly cycle = new Float64Array(2);
   private readonly weight = new Float64Array(2).fill(1);
-  private readonly plant = new Float64Array(6);
+  readonly plant = new Float64Array(6);
   private readonly start = new Float64Array(6);
   private readonly foot = new Float64Array(6);
   private readonly legs = new Float64Array(6);
@@ -288,7 +293,7 @@ export class Gait {
     const o = f * 3;
     this.foot[o] = this.start[o]! + (targetX - this.start[o]!) * e;
     this.foot[o + 2] = this.start[o + 2]! + (targetZ - this.start[o + 2]!) * e;
-    this.foot[o + 1] = this.start[o + 1]! + (targetY - this.start[o + 1]!) * e + atSpeed(speed, CLEARANCE) * detSin(Math.PI * s);
+    this.foot[o + 1] = this.start[o + 1]! + (targetY - this.start[o + 1]!) * e + atSpeed(speed, CLEARANCE) * detSin(Math.PI * (1 - (1 - s) ** LIFT_EARLINESS));
     this.aboveLanding[f] = this.foot[o + 1]! - targetY;
     this.landY[f] = targetY;
     this.landSpan[f] = Math.sqrt(ahead * ahead + across * across);
@@ -341,8 +346,9 @@ export class Gait {
     t[GAIT.HIP_R] = this.legs[3 + LEG.SWING]!;
     t[GAIT.ROLL_L] = this.legs[LEG.ROLL]!;
     t[GAIT.ROLL_R] = this.legs[3 + LEG.ROLL]!;
-    t[GAIT.KNEE_L] = this.legs[LEG.KNEE]!;
-    t[GAIT.KNEE_R] = this.legs[3 + LEG.KNEE]!;
+    const kneeEase = this.needsBaseline ? 1 : Math.min(1, dt * KNEE_EASE);
+    t[GAIT.KNEE_L]! += (this.legs[LEG.KNEE]! - t[GAIT.KNEE_L]!) * kneeEase;
+    t[GAIT.KNEE_R]! += (this.legs[3 + LEG.KNEE]! - t[GAIT.KNEE_R]!) * kneeEase;
     const elbow = atSpeed(speed, ELBOW_BASE);
     const mean = this.hipMean;
     const meanEase = Math.min(1, dt * ARM_MEAN_EASE);

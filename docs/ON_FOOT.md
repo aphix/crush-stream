@@ -84,18 +84,22 @@ gait reached 1.3 / 2.5 m/s, so his root is driven the way a character controller
   acceleration and banks into a turn (onfoot-direction-change research): a heading under 30° off curves; 30-75° costs up to 30 % of the speed; past 75° he slows to a pivot's 2 m/s; past 120° he stops and
   turns; each band has 0.2 rad of hysteresis. A sprint turned 90° faces the new way in 0.8 s, 180° in 1 s, and is back at speed 0.9-1.3 s later.
 - **The frame holds him.** A kinematic frame follows the gait's torso centre; the torso hangs off it by a joint whose three angular motors (60 kN·m/rad on his feet, 3 kN·m/rad in the get-up) and three linear motors
-  (30 kN/m) hold it, with his weight and the root's push fed forward as a force on the torso. A torso held back more than 0.2 m (a wall) brings the root back to it and caps his speed there.
-- **The gait** (`walker-gait.ts`, `walker-leg.ts`). Feet are set down in the world and stay there (a planted foot moves by under 1e-9 m) while the pelvis rides over them, then swing to where it will pass over the
-  next spot; a stance share of 60 % at a walk, 38 % at a run and 25 % at a sprint gives a walk's double support and a run's flight. The pelvis stands as high as its planted legs allow (it bobs 6 cm at a walk, 8 at
-  a run), each leg is a two-bone solve to its foot (hip swing, hip roll, knee), the arms swing fore-aft about the vertical against the legs (the opposite thigh's swing about its own mean, resting back by 0.6 of the lean) with the elbows
+  (150 kN/m: a planted foot is locked, so the hip must be where the gait put it) hold it, with his weight and the root's push fed forward as a force on the torso. A torso held back more than 0.2 m (a wall) brings the root back to it and caps his speed there.
+- **The gait** (`walker-gait.ts`, `walker-leg.ts`). Feet are set down in the world and stay there (a planted foot's target moves by under 1e-9 m) while the pelvis rides over them, then swing to where it will pass over the
+  next spot; a stance share of 57.5 % at a walk, 38 % at a run and 22 % at a sprint gives a walk's double support (15 %) and a run's flight. The pelvis stands as high as its planted legs allow (the drawn torso bobs 2.4 cm at a walk, 4.4 at
+  a run), each leg is a two-bone solve to its foot (hip swing, hip roll, knee; the knee's target follows the solve at 30/s, since near a straight leg a few mm of reach swing it tens of degrees), the arms swing fore-aft about the vertical against the legs (the opposite thigh's swing about its own mean, resting back by 0.6 of the lean) with the elbows
   held near a right angle running and never closing past 100°, so a hand travels from hip to chest height and never above the shoulder; the pelvis turns against the hips, the head levels against the lean (0.9 of it,
   its neck motors a little soft so it lags), and the motors lead their targets by the target's own rate. The gait reads the torso's actual orientation, not the commanded one, so the legs follow what the torso really does.
-  Lean 4° at a walk, 8° at a run, 15° at a sprint plus the push of an acceleration, and a bank up to 26° in a cut. Cadence 2.6 / 3.4 / 4 steps a second (156 / 204 / 240 a minute; research 100-130 walking, 150-210+ running), steps ahead per speed, and braking steps reach out (natural-gait research).
-  Measured joint ranges per cycle (peak to peak, walk / run / sprint): hip swing 53 / 77 / 95° (research 30-45 walking, 50-70 running: the dummy's 0.84 m legs and a one-box torso with no pelvis tilt or foot rocker take longer swings; a higher cadence is the lever and is already past the research's running range),
-  knee flexion 53 / 79 / 100°, shoulder swing 36 / 52 / 67° (research 20-40 / 35-70), elbow 14-19 / 78-86 / 81-91° bent (research 15-35 variation walking, 70-110 running), pelvis turn 14 / 18 / 20° (research 8-12 / 10-16), head pitch 4 / 6 / 10°.
+  Lean 4° at a walk, 8° at a run, 15° at a sprint plus the push of an acceleration, and a bank up to 26° in a cut. Cadence 2.9 / 3.4 / 4.4 steps a second (174 / 204 / 264 a minute; research 100-130 walking, 150-210+ running), steps ahead per speed, and braking steps reach out (natural-gait research).
+  The swing's lift peaks in its first fifth (the heel kicks up behind, then the foot passes under the hip low): the dummy has no foot rocker and no pelvis tilt that could take part of a stride (its hips are 0.18 m apart, so a pelvis turn of 15° moves a hip fore-aft by 2 cm, about 2° of swing, and a tilt moves both thighs together), so the swing's
+  thigh flexion was where the excess lay. Measured joint ranges per cycle (peak to peak, walk / run / sprint): hip swing 44 / 64 / 65° (research 30-45 walking, 50-70 running; measured on the physical thigh seen from the torso 42 / 61 / 66°),
+  knee flexion 45 / 75 / 95°, shoulder swing 38 / 62 / 67° (research 20-40 / 35-70), elbow 14-19 / 78-86 / 81-91° bent (research 15-35 variation walking, 70-110 running), pelvis turn 13 / 17 / 16° (research 8-12 / 10-16), head pitch 4 / 6 / 10°.
   The drawn hands keep the mesh's own shape (no finger bones to curl).
+- **Planted feet are locked** (`walker-feet.ts`). A foot the gait has set down is held at its spot by a kinematic anchor and three linear motors (1 MN/m, 9 kN·s/m) that come on over 2 frames after the touchdown and let go the moment the gait lifts it, in every state but standing (the get-up and a fall free both).
+  The foot hangs a few cm over the floor (the frame carries his weight), so the motors, not friction, keep it still: the leg's own motors chasing the gait made it slide 0.22 / 0.47 / 1.06 m/s at a walk, run and sprint, and with the lock it slides 0.024 / 0.052 / 0.077 m/s (mean planted shin-end speed; nearly all of
+  it is the touchdown frame).
 - **Hits.** His torso moving more than 1 m/s differently from the root that holds it takes strength in proportion (the motors weaken and he stumbles); past 4 m/s he is knocked down, and a wall ahead of him does
-  not count (it only stops him). Past a 60° tilt or under 0.75 m he has fallen and goes limp (8 % of the limb stiffness, no balance). A car at 4 m/s or more that meets him (`runsDown`) throws him with the lawn
+  not count (it only stops him). The stiff hold takes a blow's speed out of the torso within a frame, so the read is the torso's speed relative to the root plus the hold's spring rate (√(150 kN/m / 100 kg) = 39/s) times how far it is displaced. Past a 60° tilt or under 0.75 m he has fallen and goes limp (8 % of the limb stiffness, no balance). A car at 4 m/s or more that meets him (`runsDown`) throws him with the lawn
   guards' and the VIP's launch (`fell`, in `scenes/figure-strike.ts`): the car's velocity with a lift, a kick to the side of its centre line and a tumble, ignoring that car for 0.35 s.
 - **Getting up.** Unchanged: once he has lain still for a second and the player presses a walking control, he funnels into one of three routes by how his torso lies (`walker-getup.ts`): *feet down* regrounds; *face down*
   pushes up to hands and knees, kneels, rises; *face up* (and on his side) rolls onto his stomach first. Stages are poses, a frame lean and a height, the limb motors ramp from limp over half a second, and a bounded
@@ -111,8 +115,10 @@ gait reached 1.3 / 2.5 m/s, so his root is driven the way a character controller
 | Walk / run / sprint (m/s) | 1.33 / 2.50 / none | 1.51 / 3.51 / 7.00 |
 | 90 % of the speed | walk 1.23 s, run 1.40 s | walk 0.3 s, run 0.43 s, sprint 1.03 s |
 | Stop | walk 0.77 s / 0.74 m, run 0.95 s / 1.45 m | walk 0.3 s / 5 cm, run 0.6 s / 0.4 m, sprint 0.8 s / 1.9 m |
-| Drawn root speed, steady (std) | walk 0.27, run 0.42 (20 %, 17 %) | walk 0.12, run 0.24, sprint 0.41 (8 %, 7 %, 6 %) |
-| Pelvis bob (range) | walk 8 cm, run 11 cm | walk 6 cm, run 8 cm, sprint 9 cm |
+| Drawn root speed, steady (std) | walk 0.27, run 0.42 (20 %, 17 %) | walk 0.08, run 0.12, sprint 0.11 (5 %, 3 %, 2 %) |
+| Pelvis bob (range) | walk 8 cm, run 11 cm | walk 2.4 cm, run 4.4 cm, sprint 4.0 cm |
+| Planted foot's speed over the ground (mean) | not planted-locked: walk 0.22, run 0.47, sprint 1.06 m/s | walk 0.024, run 0.052, sprint 0.077 m/s |
+| Hip swing, peak to peak (gait target / physical thigh) | walk 54 / run 77 / sprint 96° | walk 44 / 42, run 64 / 61, sprint 65 / 66° (research 30-45 / 50-70) |
 | Turn rate | 4.1 rad/s cap, no speed loss | by band; 90° at a sprint 0.82 s, 180° 0.98 s, no fall (tilt under 26°) |
 | Get-up (from the first ask) | stomach 2.3 s, back / side 3.0 s | unchanged |
 | Knocked down by a 1200 N·s blow | down at 0.7 s, up at 5.45 s | down at once, up at 4.4 s |
@@ -177,3 +183,4 @@ at once. A reset (R) stands everyone up as before. The scene's old self-reset (i
   `walker-locomotion.test.ts` (time to speed, stops, 45 / 90 / 180° cuts at a sprint, hysteresis, lean and bank), `walker-gait.test.ts` (planted feet do not move
   by 1e-9 m, flight at a run, joint ranges, pelvis steps), `ragdoll-walker-pace.test.ts` (the physical walker: speed, time to 90 %, drawn-speed steadiness, planted-foot slide,
   stops, cuts), `ragdoll-walker-getup.test.ts` (time to stand from four lying poses, running again within 0.6 s, a car at 4.5 m/s), `walker-camera.test.ts`, `engine-walk-input.test.ts`.
+- The foot-lock and stride lane's rows (`ragdoll-walker-pace.test.ts`: planted-foot slide under 0.1 / 0.1 / 0.2 m/s on average at a walk, run and sprint, red with the lock's stiffness at its floor; the physical thigh's swing 30-45 / 50-70 / 50-70°; `walker-gait.test.ts`: the gait's hip swing in the same ranges, red against the old lift shape and cadence; the knee-step rows, red without the knee's ease; `ragdoll-walker.test.ts`'s car blow, red with a stiff hold and the old velocity-only hit read).

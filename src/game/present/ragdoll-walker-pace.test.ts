@@ -16,7 +16,10 @@ const SHINS = [7, 9] as const;
 /** A walker slower than this (m/s) has stopped for the eye. */
 const STOPPED_SPEED = 0.3;
 
-type Sample = { t: number; speed: number; drawnSpeed: number; tilt: number; facing: number; torsoY: number; planted: number[]; feet: number[]; standing: boolean };
+type Sample = { t: number; speed: number; drawnSpeed: number; tilt: number; facing: number; torsoY: number; planted: number[]; feet: number[]; standing: boolean; thighSwing: number };
+
+/** The left thigh's part (`PARTS`). */
+const THIGH = 6;
 
 let system: RagdollSystem;
 const drawn = new THREE.Vector3();
@@ -45,6 +48,15 @@ function feetNow(): number[] {
   return out;
 }
 
+/** The left thigh's swing (degrees, positive: the knee forward) about the torso's own side axis: where the thigh points, seen from the torso. */
+function thighSwingDegrees(): number {
+  const torso = bodies()[0]!.rotation();
+  const thigh = bodies()[THIGH]!.rotation();
+  const down = new THREE.Vector3(0, -1, 0).applyQuaternion(new THREE.Quaternion(thigh.x, thigh.y, thigh.z, thigh.w));
+  down.applyQuaternion(new THREE.Quaternion(torso.x, torso.y, torso.z, torso.w).invert());
+  return (Math.atan2(-down.z, -down.y) * -180) / Math.PI;
+}
+
 /** `seconds` of frames with the control held: one sample a frame (speeds from how far the torso, and the drawn torso, moved). */
 function run(seconds: number): Sample[] {
   const samples: Sample[] = [];
@@ -68,6 +80,7 @@ function run(seconds: number): Sample[] {
       planted: Array.from(system.walker.gait["planted"]),
       feet: feetNow(),
       standing: system.walker.state === "stand",
+      thighSwing: thighSwingDegrees(),
     });
     last = p;
     lastDrawn = drawn.clone();
@@ -103,9 +116,9 @@ const goCases: readonly {
   expectedMaxFootSlide: number;
   expectedMaxFootSlide95: number;
 }[] = [
-  { it: "when he is asked to walk, then he walks at 1.5 m/s in a third of a second, his drawn speed steady to 0.2 m/s", command: WALK_SPEED, expectedMinSpeed: 1.35, expectedMaxSpeed: 1.65, expectedMaxSecondsTo90: 0.5, expectedMaxJitter: 0.2, expectedMaxTilt: 15, expectedMaxFootSlide: 0.5, expectedMaxFootSlide95: 1.2 },
-  { it: "when he is asked to run, then he runs at 3.5 m/s in half a second, his drawn speed steady to 0.25 m/s", command: RUN_SPEED, expectedMinSpeed: 3.3, expectedMaxSpeed: 3.7, expectedMaxSecondsTo90: 0.65, expectedMaxJitter: 0.25, expectedMaxTilt: 25, expectedMaxFootSlide: 0.5, expectedMaxFootSlide95: 1.2 },
-  { it: "when he is asked to sprint, then he sprints at 7 m/s inside 1.3 s without tipping past 30 degrees, his drawn speed steady to 0.6 m/s", command: SPRINT_SPEED, expectedMinSpeed: 6.6, expectedMaxSpeed: 7.4, expectedMaxSecondsTo90: 1.3, expectedMaxJitter: 0.6, expectedMaxTilt: 30, expectedMaxFootSlide: 1.2, expectedMaxFootSlide95: 2.8 },
+  { it: "when he is asked to walk, then he walks at 1.5 m/s in a third of a second, his drawn speed steady to 0.15 m/s", command: WALK_SPEED, expectedMinSpeed: 1.35, expectedMaxSpeed: 1.65, expectedMaxSecondsTo90: 0.5, expectedMaxJitter: 0.15, expectedMaxTilt: 15, expectedMaxFootSlide: 0.1, expectedMaxFootSlide95: 0.2 },
+  { it: "when he is asked to run, then he runs at 3.5 m/s in half a second, his drawn speed steady to 0.18 m/s", command: RUN_SPEED, expectedMinSpeed: 3.3, expectedMaxSpeed: 3.7, expectedMaxSecondsTo90: 0.65, expectedMaxJitter: 0.18, expectedMaxTilt: 25, expectedMaxFootSlide: 0.1, expectedMaxFootSlide95: 0.5 },
+  { it: "when he is asked to sprint, then he sprints at 7 m/s inside 1.3 s without tipping past 30 degrees, his drawn speed steady to 0.2 m/s", command: SPRINT_SPEED, expectedMinSpeed: 6.6, expectedMaxSpeed: 7.4, expectedMaxSecondsTo90: 1.3, expectedMaxJitter: 0.2, expectedMaxTilt: 30, expectedMaxFootSlide: 0.2, expectedMaxFootSlide95: 0.5 },
 ];
 
 describe("given a walker standing on open ground", () => {
@@ -128,6 +141,25 @@ describe("given a walker standing on open ground", () => {
       assert.ok(Math.max(...samples.map((s) => s.tilt)) <= testCase.expectedMaxTilt, `worst tilt ${Math.max(...samples.map((s) => s.tilt)).toFixed(1)} degrees`);
       assert.ok(slide.count > 20, `${slide.count} planted-foot readings (a gait that never plants proves nothing)`);
       assert.ok(slide.mean <= testCase.expectedMaxFootSlide && slide.p95 <= testCase.expectedMaxFootSlide95, `a planted foot slides ${slide.mean.toFixed(2)} m/s on average, ${slide.p95.toFixed(2)} at the 95th percentile`);
+    });
+  }
+});
+
+const swingCases: readonly { it: string; command: number; expectedMinSwing: number; expectedMaxSwing: number }[] = [
+  { it: "when he walks, then his thigh swings 30-45 degrees peak to peak seen from the torso, as a person's does", command: WALK_SPEED, expectedMinSwing: 30, expectedMaxSwing: 45 },
+  { it: "when he runs, then his thigh swings 50-70 degrees peak to peak seen from the torso", command: RUN_SPEED, expectedMinSwing: 50, expectedMaxSwing: 70 },
+  { it: "when he sprints, then his thigh swings 50-70 degrees peak to peak seen from the torso", command: SPRINT_SPEED, expectedMinSwing: 50, expectedMaxSwing: 70 },
+];
+
+describe("given a walker going at a steady pace", () => {
+  for (const testCase of swingCases) {
+    it(testCase.it, () => {
+      run(1);
+      system.walker.heading = 0;
+      system.walker.command = testCase.command;
+      const swing = run(8).slice(-240).map((s) => s.thighSwing);
+      const peakToPeak = Math.max(...swing) - Math.min(...swing);
+      assert.ok(peakToPeak >= testCase.expectedMinSwing && peakToPeak <= testCase.expectedMaxSwing, `thigh swing ${peakToPeak.toFixed(1)} degrees within ${testCase.expectedMinSwing}-${testCase.expectedMaxSwing}`);
     });
   }
 });
