@@ -19,6 +19,8 @@ const RING_DEG = 1.1;
 const RING_DISTANCE = 2;
 /** The marker at the point the hook would take: its ring's half angle (degrees), from the camera. */
 const MARKER_DEG = 0.9;
+/** The ring on the first object hooked in the free camera, while the second is awaited: a little wider than the aim's marker. */
+const HELD_DEG = 1.4;
 const RING_SEGMENTS = 24;
 /** A slack cable shorter than this share of its length under its span draws straight. */
 const SLACK_DRAWN = 0.02;
@@ -56,6 +58,7 @@ export class TetherArt {
   private readonly cables: THREE.Line<THREE.BufferGeometry, THREE.LineBasicMaterial>[];
   private readonly reticle: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>;
   private readonly marker: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>;
+  private readonly holdMarker: THREE.LineLoop<THREE.BufferGeometry, THREE.LineBasicMaterial>;
   private readonly ring = ringGeometry();
 
   constructor() {
@@ -69,18 +72,27 @@ export class TetherArt {
     });
     this.reticle = new THREE.LineLoop(this.ring, overlayMaterial());
     this.marker = new THREE.LineLoop(this.ring, overlayMaterial());
-    for (const overlay of [this.reticle, this.marker]) {
+    this.holdMarker = new THREE.LineLoop(this.ring, overlayMaterial());
+    this.holdMarker.material.color.copy(CABLE_SLACK);
+    for (const overlay of [this.reticle, this.marker, this.holdMarker]) {
       overlay.frustumCulled = false;
       overlay.renderOrder = 999;
       overlay.visible = false;
     }
-    this.group.add(...this.cables, this.reticle, this.marker);
+    this.group.add(...this.cables, this.reticle, this.marker, this.holdMarker);
   }
 
-  /** Draws the cables of `set` between its anchors as the cars stand now (the frame's drawn poses), and the reticle when `view` is given. */
-  update(set: TetherSet, cars: readonly DeformableCar[], camera: THREE.Camera, view: ReticleView | null): void {
+  /** Draws the cables of `set` between its anchors as the cars stand now (the frame's drawn poses), the reticle when `view` is given, and a ring on `held`, the first object hooked while the second is awaited. */
+  update(set: TetherSet, cars: readonly DeformableCar[], camera: THREE.Camera, view: ReticleView | null, held: THREE.Vector3 | null): void {
     for (let slot = 0; slot < MAX_TETHERS; slot++) this.drawCable(set, slot, cars);
     this.drawReticle(camera, view);
+    this.holdMarker.visible = held !== null;
+    if (held === null) return;
+    camera.getWorldPosition(_eye);
+    camera.getWorldQuaternion(_turn);
+    this.holdMarker.position.copy(held);
+    this.holdMarker.quaternion.copy(_turn);
+    this.holdMarker.scale.setScalar(_eye.distanceTo(held) * Math.tan(THREE.MathUtils.degToRad(HELD_DEG)));
   }
 
   private drawCable(set: TetherSet, slot: number, cars: readonly DeformableCar[]): void {
@@ -126,6 +138,7 @@ export class TetherArt {
       line.material.dispose();
     }
     this.reticle.material.dispose();
+    this.holdMarker.material.dispose();
     this.marker.material.dispose();
   }
 }

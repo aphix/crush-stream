@@ -7,7 +7,7 @@ import { WORLD } from "../contact/tether.ts";
 import { AIM } from "../present/tether-art.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import type { CrashEngine } from "./engine.ts";
-import { bootEngine, pressKey, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
+import { bootEngine, element, pressKey, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
 import { TETHER_KEYS } from "./engine-keys.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -17,6 +17,10 @@ const OTHER = 1;
 const GROUND_DECAL_M = 1;
 /** Where the second car waits (m to the side of the player's), on the fleet disc and off the sight line. */
 const ASIDE_M = 40;
+const RIGHT = 2;
+const MIDDLE = 1;
+/** Frames a button is held for the hold to count (the hold is a quarter of a second). */
+const HOLD_FRAMES = 20;
 /** How close (m) a cable's end is to the point the sight line first touches. */
 const HIT_TOLERANCE_M = 0.02;
 
@@ -92,6 +96,10 @@ describe("given the real engine in the fleet with the player at the wheel of car
     assert.ok(tethers().anchor(0, end, engine["live"](), point), "the cable's end has a car");
     return point;
   };
+  /** A pointer event of `button` and pointer `id` on the canvas at (x, y). */
+  const mouse = (type: string, button: number, id: number, x: number, y: number): void => {
+    engine["canvas"].dispatchEvent(Object.assign(new Event(type, { cancelable: true }), { button, pointerId: id, clientX: x, clientY: y }));
+  };
   /** A car at (x, z) at rest, drawn. */
   const place = (car: number, x: number, z: number): void => {
     engine["live"]()[car]!.spawnFacing(x, z, 0, 0);
@@ -106,7 +114,15 @@ describe("given the real engine in the fleet with the player at the wheel of car
 
   before(async () => {
     stubBrowser();
-    engine = await bootEngine({ pacer: true });
+    const events = new EventTarget();
+    const canvas = Object.assign(element(), {
+      addEventListener: events.addEventListener.bind(events),
+      removeEventListener: events.removeEventListener.bind(events),
+      dispatchEvent: events.dispatchEvent.bind(events),
+      setPointerCapture() {},
+      releasePointerCapture() {},
+    });
+    engine = await bootEngine({ pacer: true, canvas });
   });
   after(() => {
     for (const mesh of built) {
@@ -229,5 +245,141 @@ describe("given the real engine in the fleet with the player at the wheel of car
     engine["keys"].delete(TETHER_KEYS.retract);
     engine.advance(FRAME, { frameDt: FRAME });
     assert.equal(tethers().reeling, false, "reeling after the release");
+  });
+
+  /** The free camera flying over the same two cars: no car of the player's. */
+  const stageFree = (): void => {
+    stage();
+    engine["seat"].mode = "follow";
+    engine["view"].enterFree();
+    runSeconds(engine, 0.3);
+    scene().updateMatrixWorld(true);
+    assert.equal(engine["view"].flying, true, "the free camera is flying");
+  };
+
+  it("when the free camera fires at one car, then no cable is made yet and the object is held; fired at a second car, a cable ties the two", () => {
+    stageFree();
+    const s = sight();
+    const spot = bodySpot(s);
+    place(PLAYER, spot.x, spot.z);
+    press(TETHER_KEYS.fire);
+    assert.equal(tethers().count, 0, "cables out after the first fire");
+    assert.equal(engine.tether.hud()?.pending, true, "the second fire is awaited");
+    assert.equal(engine.tether.hud()?.free, true, "the HUD knows there is no player's car");
+    place(PLAYER, ASIDE_M, -10);
+    place(OTHER, spot.x, spot.z);
+    press(TETHER_KEYS.fire);
+    assert.equal(tethers().count, 1, "cables out after the second fire");
+    assert.equal(tethers().endCar(0, 0), PLAYER, "the first end is the first car");
+    assert.equal(tethers().endCar(0, 1), OTHER, "the second end is the second car");
+  });
+
+  it("when the free camera fires at a wall and then at a car, then the cable runs from the wall's world point to the car", () => {
+    stageFree();
+    const s = sight();
+    const front = wall(s, along(s, 0.6 * reach(s)), 8);
+    scene().updateMatrixWorld(true);
+    press(TETHER_KEYS.fire);
+    scene().remove(front);
+    const spot = bodySpot(s);
+    place(OTHER, spot.x, spot.z);
+    press(TETHER_KEYS.fire);
+    assert.equal(tethers().count, 1, "cables out");
+    assert.equal(tethers().endCar(0, 0), WORLD, "the first end is the wall's world point");
+    assert.equal(tethers().endCar(0, 1), OTHER, "the second end is the car");
+  });
+
+  it("when the free camera fires twice at the same car, then the second fire makes no cable", () => {
+    stageFree();
+    const s = sight();
+    const spot = bodySpot(s);
+    place(OTHER, spot.x, spot.z);
+    press(TETHER_KEYS.fire);
+    press(TETHER_KEYS.fire);
+    assert.equal(tethers().count, 0, "cables out");
+  });
+
+  it("when the free camera's second object is beyond 80 m of it, then no cable is made, the reach counting from the camera", () => {
+    stageFree();
+    studio(false);
+    const s = sight();
+    const near = wall(s, along(s, 20), 30);
+    scene().updateMatrixWorld(true);
+    press(TETHER_KEYS.fire);
+    scene().remove(near);
+    const far = wall(s, along(s, 120), 60);
+    scene().updateMatrixWorld(true);
+    press(TETHER_KEYS.fire);
+    studio(true);
+    scene().remove(far);
+    assert.equal(tethers().count, 0, "cables out");
+    assert.equal(engine.tether.hud()?.aim, AIM.far, "the reticle's state");
+  });
+
+  it("when the right mouse button is clicked in place, then it hooks as the fire key does", () => {
+    stage();
+    const s = sight();
+    const spot = bodySpot(s);
+    place(OTHER, spot.x, spot.z);
+    scene().updateMatrixWorld(true);
+    mouse("pointerdown", RIGHT, 5, 100, 100);
+    mouse("pointerup", RIGHT, 5, 100, 100);
+    engine.advance(FRAME, { frameDt: FRAME });
+    assert.equal(tethers().count, 1, "cables out");
+    assert.equal(tethers().endCar(0, 0), OTHER, "the first end is the car under the ray");
+  });
+
+  it("when the right button drags across the view, then it fires nothing", () => {
+    stage();
+    const s = sight();
+    const spot = bodySpot(s);
+    place(OTHER, spot.x, spot.z);
+    scene().updateMatrixWorld(true);
+    mouse("pointerdown", RIGHT, 5, 100, 100);
+    mouse("pointermove", RIGHT, 5, 160, 120);
+    mouse("pointerup", RIGHT, 5, 160, 120);
+    engine.advance(FRAME, { frameDt: FRAME });
+    assert.equal(tethers().count, 0, "cables out");
+  });
+
+  it("when the left button clicks or drags the view, then it fires nothing: it orbits and picks", () => {
+    stage();
+    const s = sight();
+    const spot = bodySpot(s);
+    place(OTHER, spot.x, spot.z);
+    scene().updateMatrixWorld(true);
+    mouse("pointerdown", 0, 5, 100, 100);
+    mouse("pointerup", 0, 5, 100, 100);
+    mouse("pointerdown", 0, 6, 100, 100);
+    mouse("pointermove", 0, 6, 160, 120);
+    mouse("pointerup", 0, 6, 160, 120);
+    engine.advance(FRAME, { frameDt: FRAME });
+    assert.equal(tethers().count, 0, "cables out");
+  });
+
+  it("when the right button is held still with a cable out, then the cable reels and the release is no second fire", () => {
+    stage();
+    press(TETHER_KEYS.fire);
+    assert.equal(tethers().count, 1, "cables out before the hold");
+    mouse("pointerdown", RIGHT, 5, 100, 100);
+    engine.advance(HOLD_FRAMES * FRAME, { frameDt: FRAME });
+    assert.equal(tethers().reeling, true, "reeling while held");
+    mouse("pointerup", RIGHT, 5, 100, 100);
+    engine.advance(FRAME, { frameDt: FRAME });
+    assert.equal(tethers().reeling, false, "reeling after the release");
+    assert.equal(tethers().endCar(0, 1), PLAYER, "the release did not move the player's end");
+  });
+
+  it("when the middle button is held, then the cable reels, and when it is clicked, then every cable is cut", () => {
+    stage();
+    press(TETHER_KEYS.fire);
+    mouse("pointerdown", MIDDLE, 7, 100, 100);
+    engine.advance(HOLD_FRAMES * FRAME, { frameDt: FRAME });
+    assert.equal(tethers().reeling, true, "reeling while held");
+    mouse("pointerup", MIDDLE, 7, 100, 100);
+    assert.equal(tethers().count, 1, "a hold is no cut");
+    mouse("pointerdown", MIDDLE, 8, 100, 100);
+    mouse("pointerup", MIDDLE, 8, 100, 100);
+    assert.equal(tethers().count, 0, "cables out after the middle click");
   });
 });

@@ -74,15 +74,15 @@ A tap shorter than one frame still registers (the press is latched until the nex
 
 ## Tether (grappling cable, spike)
 
-A Just Cause-style cable. Aim with the camera's centre: one ray from there hooks the first surface it touches, a car's drawn body (hooked at that exact point of the car), a wall, prop, kerb or the ground (a world point). A ring there is white with nothing hit, green with a surface in reach (80 m of your car; a small ring marks the exact point), red when the first surface is farther. Your own car and what moves loose (wheels, torn parts, balls, dummies) are passed through.
+A Just Cause-style cable. Aim with the camera's centre: one ray from there hooks the first surface it touches, a car's drawn body (hooked at that exact point of the car), a wall, prop, kerb or the ground (a world point). A ring there is white with nothing hit, green with a surface in reach (80 m of your car, or of the camera in the free view; a small ring marks the exact point), red when the first surface is farther. Your own car and what moves loose (wheels, torn parts, balls, dummies) are passed through. A hint under the ring names the buttons (the mouse first, then the keys; a pad's D-pad) while the tether is on offer.
 
-| Action | Keyboard | Controller | Touch |
-|---|---|---|---|
-| Hook: the first fire ties the target to your car, as long as they stand apart now; fire again aimed at something else and your end moves there (object to object); a third fire starts another cable (two at most, the oldest goes) | ' (Quote) | D-pad ↑ | Hook |
-| Reel in while held: the cable shortens at 15 m/s to 3 m, pulling with at most 30 kN, so a light car comes and a heavy one barely moves | ] (right bracket) | D-pad → (held) | Reel |
-| Cut every cable | Delete | D-pad ← | Cut |
+| Action | Mouse | Keyboard | Controller | Touch |
+|---|---|---|---|---|
+| Hook: at the wheel or following, the first fire ties the target to your car, as long as they stand apart now; fire again aimed at something else and your end moves there (object to object); a third fire starts another cable (two at most, the oldest goes). **In the free view** there is no car of yours: the first fire hooks an object (a ring marks it) and the second a different one, and the cable forms between them | right click: a press that stays within 8 px, and is let go inside a quarter of a second (or any still press while no cable is out) | ' (Quote) | D-pad ↑ | Hook |
+| Reel in while held: the cable shortens at 15 m/s to 3 m, pulling with at most 30 kN, so a light car comes and a heavy one barely moves | hold the right button still for a quarter of a second with a cable out, or hold the middle button | ] (right bracket) | D-pad → (held) | Reel |
+| Cut every cable | middle click (a press shorter than a quarter of a second) | Delete | D-pad ← | Cut |
 
-A taut cable holds its length and a slack one pulls on nothing; a shock past 200 kN snaps it. Cars and ground points only: a walker, a dummy or a prop cannot be hooked. Nothing here is recorded: a race highlight that holds a step with a cable out is not saved, and a netplay client has no cable (the host's cars are pulled and show no line). The keys are `TETHER_KEYS` in `src/game/engine/engine-keys.ts`; the solver is `contact/tether.ts` (`solveTethers`, after the pair contact pass of each slice).
+The mouse uses the right and middle buttons only: the left button orbits the view and picks a car as before, so a drag that orbits never fires, and a right drag does nothing. The browser's context menu stays off the view while the tether is on offer. A taut cable holds its length and a slack one pulls on nothing; a shock past 200 kN snaps it. Cars and static surfaces only: a walker, a dummy or a prop that moves cannot be hooked. Nothing here is recorded: a race highlight that holds a step with a cable out is not saved, and a netplay client has no cable (the host's cars are pulled and show no line). The keys are `TETHER_KEYS` in `src/game/engine/engine-keys.ts`, the mouse is `engine/tether-pointer.ts`; the solver is `contact/tether.ts` (`solveTethers`, after the pair contact pass of each slice).
 
 ## Racing (no menu open)
 

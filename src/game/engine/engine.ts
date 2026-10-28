@@ -266,6 +266,7 @@ export class CrashEngine extends EngineGarage {
     this.tether = new TetherDirector({
       tethers: this.world.tethers,
       camera: this.camera,
+      canvas: this.canvas,
       scene: this.scene,
       movers: () => [this.wheels.group, ...this.lampBatch.meshes, ...this.partBatch.meshes, this.partBatch.looseWarm, this.coverBatch.group, ...this.balls.map((ball) => ball.mesh)],
       cars: () => this.live(),
@@ -828,8 +829,9 @@ export class CrashEngine extends EngineGarage {
     return !this.net.client && !this.onFoot.active && this.onFootOffered();
   }
 
-  /** The car the player's cable starts from: the driven or followed car, else a race's own; -1 when there is none. */
+  /** The car the player's cable starts from: the driven or followed car, else a race's own; -1 when there is none or the free camera is flying (it hooks two objects instead). */
   private tetherSource(): number {
+    if (this.view.flying) return -1;
     const index = this.followedCar() ? this.seat.carIndex : this.race.active ? this.race.self : -1;
     return index >= 0 && index < this.carCount ? index : -1;
   }
