@@ -102,6 +102,8 @@ export type CrashHudState = {
   lab: LabHud | null;
   /** The garage (null in every other scene). */
   garage: GarageHud | null;
+  /** The showcase (by link only) is the scene: the scene buttons name it as the scene in play, so Fleet is a pick away from it. */
+  showcase: boolean;
   /** The scene a pick is fading to (the switch comes at the transition's black), else null; the scene buttons light it. */
   pendingScene: SceneId | null;
   /** This browser is in a netplay room (hosting or joined): the single-player scenes are not offered. */
@@ -279,6 +281,7 @@ export const INITIAL_HUD: CrashHudState = {
   stack: null,
   lab: null,
   garage: null,
+  showcase: false,
   pendingScene: null,
   inRoom: false,
   autoRotate: true,

@@ -1,4 +1,6 @@
 import { decodeShare, followShare, isShareableRoom, joinsRoom, type ShareState } from "../hud/share-url.ts";
+import type { FreeCam } from "../present/free-cam.ts";
+import { camOf } from "../present/free-cam-pose.ts";
 import { DEFAULT_RACE_OPTIONS } from "../match/types.ts";
 import { NET_TX } from "../net/net-ports.ts";
 import { MINIGAME_MODE, THROWS_PER_SET } from "../scenes/minigame-constants.ts";
@@ -105,6 +107,7 @@ export abstract class EngineShare extends EngineReel {
       stats: this.statsPanel(),
       mg: this.minigameMode,
       mgset: this.minigameMode === MINIGAME_MODE.ringFling ? this.minigames.setLength : THROWS_PER_SET.default,
+      cam: sc === "showcase" ? this.showcaseCam : null,
       seed: SEEDED_SCENES[sc] ? this.sceneSeed : null,
       ...knobValues(),
     };
@@ -126,6 +129,14 @@ export abstract class EngineShare extends EngineReel {
     // No reload either way (and the router's history.state stays; a pushed entry takes the next index of its stack, which is how the router tells Back from Forward).
     if (decodeShare(frag).scene === decodeShare(bar).scene) window.history.replaceState(state, "", url);
     else window.history.pushState({ ...state, [ROUTER_INDEX]: (typeof state?.[ROUTER_INDEX] === "number" ? state[ROUTER_INDEX] : 0) + 1 }, "", url);
+  }
+
+  /** Every frame the showcase's free eye flies: once it has stood still a moment at a new pose, that pose goes into the URL (`cam=`), never per frame. */
+  protected followShowcaseEye(free: FreeCam, wallDt: number): void {
+    const stopped = this.eyeStop.frame(camOf(free), wallDt);
+    if (stopped === null) return;
+    this.showcaseCam = stopped;
+    this.syncShareUrl();
   }
 
   /**
@@ -211,6 +222,10 @@ export abstract class EngineShare extends EngineReel {
     }
     if (t.scene === "survival") this.raceCommand({ type: "options", options: { timeOfDay: t.tod } });
     if (t.scene === "range") this.applySharedMinigame(t);
+    if (t.scene === "showcase") {
+      if (t.cam === null) this.showcaseCam = null;
+      else if (t.cam.join() !== this.showcaseCam?.join()) this.placeShowcaseEye(t.cam);
+    }
   }
 
   /** The Range's mini game a link names (none: the attract loop), then Ring Fling's set length, which only a running Ring Fling takes. */

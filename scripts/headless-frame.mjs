@@ -18,7 +18,8 @@
  * show what is under them (the engine bay, the crash bars, the bare metal). `--open doorL,doorR,trunk,quarterL,quarterR` swings those
  * doors and the lid to their stops and peels those quarter panels as the Doors scene does, on every car, to show their inner faces.
  * `--state` poses the hash's cars (`showPose`); `--camera r,pitch,angle[,x,y,z]` in a free-eye scene (the showcase) sets the eye about
- * the point x,y,z (default the origin), looking at it.
+ * the point x,y,z (default the origin), looking at it. The showcase's own `cam=` (the owner's link, the same six numbers) in `--hash`
+ * puts the eye there with no `--camera`, which wins when both are given.
  * `--sirens` flashes every light bar (with `night=1` in the hash: the lamps as seen in a night pursuit). `--break headL,headR,tailL,tailR`
  * breaks those lamps on every car, as a corner crush does. `--brake` holds every car's brake pedal down (its brake lamps lit).
  * `--view side|top|iso|rear-iso` draws the hash's car through the camera spec trace-car writes for that view (`--camera-out`,

@@ -12,6 +12,8 @@ import { LabFlick } from "./lab-flick.ts";
 import { Garage } from "./garage.ts";
 import { GARAGE } from "../present/garage-art.ts";
 import { Showcase } from "./showcase.ts";
+import { EyeStop } from "./showcase-eye.ts";
+import { eyeOf } from "../present/free-cam-pose.ts";
 import { SHOWCASE_CAR, SHOWCASE_CAR_YAW, SHOWCASE_EYE, SHOWCASE_LIGHT, type ShowcaseArt } from "../present/showcase-art.ts";
 import { STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
 import { ownLook } from "../present/driver-look.ts";
@@ -47,6 +49,10 @@ export abstract class EngineScenes extends EngineMinigames {
   abstract readonly pace: SimPacer;
   /** The corkscrew's car this run: not yet flown, in the air, or down again (`EngineRigs.watchCorkscrew`). */
   protected corkFlight: "ground" | "air" | "down" = "ground";
+  /** Tells when the showcase's free eye has come to rest (`followShowcaseEye`). */
+  protected readonly eyeStop = new EyeStop();
+  /** The showcase eye's pose the URL carries (`cam=`): set when the eye comes to rest or a link names one, gone when the scene is entered anew. */
+  protected showcaseCam: readonly number[] | null = null;
 
   /** The fleet props are the host's (netplay), and ignored while the press, a rig, the range, the Lab or the race owns the pad (the HUD locks them too). */
   private get fleetPropsLocked(): boolean {
@@ -530,6 +536,18 @@ export abstract class EngineScenes extends EngineMinigames {
     this.camera.position.set(SHOWCASE_EYE.x, SHOWCASE_EYE.y, SHOWCASE_EYE.z);
     this.camera.lookAt(SHOWCASE_EYE.lookX, SHOWCASE_EYE.lookY, SHOWCASE_EYE.lookZ);
     this.view.enterFree();
+    this.eyeStop.reset();
+    this.showcaseCam = null;
+  }
+
+  /** The showcase's free eye at a link's `cam=` pose: the camera moves and the free view takes it up from there. */
+  protected placeShowcaseEye(cam: readonly number[]): void {
+    const { eye, look } = eyeOf(cam);
+    this.camera.position.set(...eye);
+    this.camera.lookAt(...look);
+    this.view.free.begun = false;
+    this.eyeStop.reset();
+    this.showcaseCam = cam;
   }
 
   private spawnDerby(): void {

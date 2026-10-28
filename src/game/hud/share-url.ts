@@ -59,6 +59,17 @@ const orNull = <T>(f: Field<T>): Field<T | null> => ({ def: null, parse: (raw) =
 const PICTURE = "picture";
 /** The procedural sky's cover, defaulting to `f`'s; null, the time of day's picture, is written `picture`. */
 const coverOrPicture = (f: Field<number>): Field<number | null> => ({ def: f.def, parse: (raw) => (raw === PICTURE ? null : f.parse(raw)), fmt: (v) => (v === null ? PICTURE : f.fmt(v)) });
+/** Numbers separated by commas, each clamped to its own [min, max] and written to 3 decimals; any other count or shape is malformed. */
+const list = (ranges: readonly (readonly [number, number])[]): Field<readonly number[]> => ({
+  def: [],
+  parse: (raw) => {
+    const parts = raw.split(",");
+    return parts.length === ranges.length && parts.every((n) => /^-?\d+(\.\d+)?$/.test(n)) ? parts.map((n, i) => clamp(Number(n), ranges[i]![0], ranges[i]![1])) : undefined;
+  },
+  fmt: (v) => v.map((n) => Math.round(n * 1e3) / 1e3).join(","),
+});
+/** The showcase eye's `radius,pitch,angle,x,y,z` ranges: pitch within the free eye's limit, the eye within 3 x the scene's 144 m of the middle. */
+const CAM_RANGES = [[0.1, 100], [-1.5, 1.5], [-7, 7], [-500, 500], [-500, 500], [-500, 500]] as const;
 /**
  * A private room code as the Room field takes it (`[A-Z0-9]`, ≤ 12, uppercased here as the field does); "" is no room. A
  * public room (`pub-…`) is never accepted, so a crafted link cannot send a visitor into one, or into polling a dead code (docs/MULTIPLAYER.md).
@@ -160,6 +171,8 @@ const BASE_FIELDS = {
   spectate: flag(O.spectate),
   // null = the frame-time panel is down; a number is the panel it shows (0 frames per second, 1 ms per frame, 2 heap: `Stats`' own order).
   stats: orNull(num(0, STATS_PANEL_LAST, 0, true)),
+  // null = the showcase eye is not pinned; else its pose (`showcase-eye.ts`), the `--camera` of `headless-frame.mjs`.
+  cam: orNull(list(CAM_RANGES)),
   seed: hex,
 };
 

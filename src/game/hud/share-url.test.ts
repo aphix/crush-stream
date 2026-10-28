@@ -421,3 +421,13 @@ describe("given a page load, where the # alone decides what it starts as", () =>
     }
   });
 });
+
+describe("given the showcase eye's pose (cam=)", () => {
+  it("when it is unset, set, or decoded from a short, long, unreadable or out-of-range value, then unset writes nothing, a pose is written to 3 decimals before the seed, a wrong shape is dropped and numbers clamp to the ranges", () => {
+    assert.equal(DEFAULTS.cam, null);
+    assert.equal(encodeShare({ ...DEFAULTS, scene: "showcase", cam: [1, -0.2, 2.5, 10.12345, 3, 20], seed: 0xab }), "scene=showcase&cam=1,-0.2,2.5,10.123,3,20&seed=ab");
+    assert.deepEqual(decodeShare("cam=1,-0.2,2.5,10,3,20").cam, [1, -0.2, 2.5, 10, 3, 20]);
+    for (const bad of ["1,2,3,4,5", "1,2,3,4,5,6,7", "1,2,3,4,5,x", "", "1,2,3,4,5,"]) assert.equal(decodeShare(`cam=${bad}`).cam, null, `"${bad}"`);
+    assert.deepEqual(decodeShare("cam=500,9,99,9999,-9999,0").cam, [100, 1.5, 7, 500, -500, 0]);
+  });
+});

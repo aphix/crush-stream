@@ -84,6 +84,7 @@ export abstract class EngineHud extends EngineWarm {
       stack: this.showStack ? { ...this.stack.config, dropped: this.stack.dropped, ...stackLoads(cars, this.stack.dropped) } : null,
       lab: this.showLab ? { preset: this.lab.preset ?? LAB_PRESET.cards, shot: this.labShotHud() } : null,
       garage: this.showGarage && this.garage ? this.garageHud(this.garage) : null,
+      showcase: this.showShowcase,
       pendingScene: this.sceneFade.pending,
       inRoom: this.net.role !== "off",
       doors: {

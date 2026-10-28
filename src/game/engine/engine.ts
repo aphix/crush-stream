@@ -997,6 +997,7 @@ export class CrashEngine extends EngineGarage {
   private flyFree(wallDt: number): void {
     sceneExtent(this.view.free.extent, this.derbyMode, this.race.active ? this.race.courseBounds() : this.showRange ? this.minigames.bounds() : null);
     this.view.frameFree(readFreeInput(this.keys, this.pad.state, this.race.menuOpen, this.freeInput), wallDt);
+    if (this.showShowcase) this.followShowcaseEye(this.view.free, wallDt);
   }
 
   private aimRigs(wallDt: number): void {

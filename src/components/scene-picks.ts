@@ -1,7 +1,7 @@
 import type { RefObject } from "react";
 import type { CrashEngine } from "@/game/engine/engine";
 import type { CrashHudState } from "@/game/hud/hud-store";
-import { SCENE, SOLO_SCENES, type SceneId } from "@/game/scenes/scene-id";
+import { SCENE, SOLO_SCENES, type SceneId } from "../game/scenes/scene-id.ts";
 
 /** `tone`: the mode's accent (a `--tone` variable), so the richer game modes carry a ring and a tinted fill; `quiet`: a test rig, muted until picked. */
 type SceneDef = { id: SceneId; label: string; aria: string; tone?: string; quiet?: boolean };
@@ -9,7 +9,7 @@ type SceneDef = { id: SceneId; label: string; aria: string; tone?: string; quiet
 /**
  * Every scene the player can pick, the one list behind the desktop dock's chips and the phone's Home sheet. Fleet is "none of the others":
  * the engine keeps derby, race, press, pistons, doors, corkscrew, stack, range, the Lab and the garage mutually exclusive. The showcase (by
- * link only) has no button: the bar lights Fleet there. Richer game modes first, then the test rigs.
+ * link only) has no button: no chip is lit there, and any pick, Fleet included, leaves it. Richer game modes first, then the test rigs.
  */
 const SCENES: SceneDef[] = [
   { id: SCENE.fleet, label: "Fleet", aria: "Fleet scene" },
@@ -51,6 +51,7 @@ export function sceneInPlay(state: CrashHudState): SceneId {
   if (state.range) return SCENE.range;
   if (state.showCorkscrew) return SCENE.corkscrew;
   if (state.stack) return SCENE.stack;
+  if (state.showcase) return SCENE.showcase;
   if (state.garage) return SCENE.garage;
   return state.lab ? SCENE.lab : SCENE.fleet;
 }
