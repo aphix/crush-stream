@@ -31,6 +31,8 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
   private readonly bust: BustSprings;
   /** The wall clock (s) at the last jiggle. */
   private clock = 0;
+  /** The sim's share of wall time (the engine sets it each frame): in slow-mo the bust moves as slowly as the body. */
+  timeScale = 1;
   private readonly dolls: THREE.DataTexture;
   /** Every slot's spray (`PERSON_SPRAY`), one bitmap's rows per slot, slot 0 lowest; null on a mesh whose slots wear none, which samples `BARE_SPRAY`. */
   private readonly sprayRgba: Uint8Array | null;
@@ -73,8 +75,9 @@ export class DummyMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.M
     };
   }
 
-  /** Every woman out stepped `dt` s: her bust's two particles chase her torso's pose; the rows upload only when a lag moved. */
+  /** Every woman out stepped `dt` wall seconds, slowed by `timeScale`: her bust's two particles chase her torso's pose; the rows upload only when a lag moved. */
   jiggle(dt: number): void {
+    dt *= this.timeScale;
     let moved = false;
     for (let s = 0; s < this.count; s++) {
       if (((this.shown >> s) & 1) === 0 || (this.flagsOf(s) & BUILD.WOMAN) === 0) continue;

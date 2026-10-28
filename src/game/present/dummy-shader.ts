@@ -180,7 +180,8 @@ vec3 dollCloth = mix(vDollColour, dollCutColour, dollOnBody);
 vec4 dollCuts = dollRow(${CUTS_AT}, vDollSlot);
 int dollKit = int(dollRow(${CUTS_AT + 1}, vDollSlot).w + 0.5);
 int dollRoleHere = vDollRole & ${ON_BODY_MESH - 1};
-int dollFabric = dollOnBody > 0.5 ? dollPickFabric(dollPick, dollKit) : dollRoleFabric(dollRoleHere, dollKit, int(dollRow(${FLAGS_AT}, vDollSlot).x + 0.5));
+// Any region weight takes the pick's fabric: switching to the role's at 0.5 made a wrist's relief jump (an arm's role fabric is the top's) and glint.
+int dollFabric = dollOnBody > 0.0 ? dollPickFabric(dollPick, dollKit) : dollRoleFabric(dollRoleHere, dollKit, int(dollRow(${FLAGS_AT}, vDollSlot).x + 0.5));
 int dollWeaveAt = min(dollFabric, ${FABRIC.NONE - 1});
 vec3 dollPlanes = pow(abs(dollN), vec3(4.0));
 dollPlanes /= dollPlanes.x + dollPlanes.y + dollPlanes.z;

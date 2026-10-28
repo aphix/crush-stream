@@ -32,6 +32,7 @@ import { GameAudio } from "../present/game-audio.ts";
 import { FX_REACH } from "../present/witness.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
 import { VIP_LOOK } from "../present/dummy-dress.ts";
+import { presentedRate } from "../present/dummy-jiggle.ts";
 import { OnFootDirector } from "./engine-onfoot.ts";
 import { ownLook } from "../present/driver-look.ts";
 import { throwComing } from "../present/ragdoll-trigger.ts";
@@ -629,6 +630,10 @@ export class CrashEngine extends EngineGarage {
       this.ragdolls.lookSeed = this.highlights.look ?? (this.race.active ? this.race.look : this.derbyMode ? this.derbyRound : this.sceneSeed);
       this.onFoot.frame(wallDt);
       if (this.showShowcase) this.showcase!.step(wallDt);
+      // The busts jiggle at the presented rate: the eased slow-mo and warp (smooth), or the reel's own step against the wall (a clip's speed).
+      const rate = presentedRate(reelDt, wallDt, this.clock.timeScale, this.cine.timeWarp);
+      this.ragdolls.pickMesh.timeScale = rate;
+      this.seated.mesh.timeScale = rate;
       this.ragdolls.update(simDt, cars, !this.net.client, sandbox, this.barrierUp ? this.barrier.group : null);
       for (let i = 0; i < cars.length; i++) {
         const car = cars[i]!;

@@ -104,10 +104,15 @@ const CHEST_SIDE = 0.16;
 /** The chest wall is the sternum: the most forward chest vertex within `MIDLINE` of x = 0 and `WALL_BAND` of the peak's height. */
 const MIDLINE = 0.005;
 const WALL_BAND = 0.03;
-/** The tip stands this far out of the wall (m): the second reference's full fitted top, well past the baked body's 3 cm. */
-const PROJECTION = 0.078;
-/** The orb's footprint (m): its weight on the chest is gone this far from its centre, past the bust's own half width. */
-const FOOTPRINT = 0.13;
+/** The owner's "about 25-30%" bigger, still round bust: volume 1.28x, so the dome's rise and its footprint each grow by the cube root (a cone came of growing the rise alone). */
+const BUST_VOLUME = 1.28;
+const BUST_SIZE = BUST_VOLUME ** (1 / 3);
+/** The tip stands this far out of the wall (m): the second reference's full fitted top, well past the baked body's 3 cm, times `BUST_SIZE`. */
+const PROJECTION = 0.078 * BUST_SIZE;
+/** Where gravity lets her orbs hang when standing: this far (m) under her measured breast peak, in the baked shape and the live spring alike (half the first 12 mm). */
+const BUST_SAG = 0.006;
+/** The orb's footprint (m): its weight on the chest is gone this far from its centre, past the bust's own half width, times `BUST_SIZE`. */
+const FOOTPRINT = 0.13 * BUST_SIZE;
 
 const isChest = (fit: Fit, i: number) => fit.shoulderWeight[i] === 0 && fit.hipWeight[i] === 0 && fit.neckWeight[i] === 0;
 
@@ -124,17 +129,17 @@ export function bustOf(fit: Fit): Bust {
   for (let i = 0; i < fit.shoulderWeight.length; i++) {
     if (isChest(fit, i) && Math.abs(rest[i * 3]!) <= MIDLINE && Math.abs(rest[i * 3 + 1]! - y) <= WALL_BAND) wall = Math.max(wall, rest[i * 3 + 2]!);
   }
-  return { x, y, wall, tip: wall + PROJECTION, r: FOOTPRINT };
+  return { x, y: y - BUST_SAG, wall, tip: wall + PROJECTION, r: FOOTPRINT };
 }
 
 /**
  * Each dome's footprint on the chest (m) about its orb's centre: `BUST_ABOVE` over it, `BUST_BELOW` under it, `BUST_INNER`
  * toward the cleavage (past the midline, so the two meet and the top bridges them) and `BUST_OUTER` toward the armpit.
  */
-const BUST_ABOVE = 0.13;
-const BUST_BELOW = 0.092;
-const BUST_INNER = 0.1;
-const BUST_OUTER = 0.06;
+const BUST_ABOVE = 0.13 * BUST_SIZE;
+const BUST_BELOW = 0.092 * BUST_SIZE;
+const BUST_INNER = 0.1 * BUST_SIZE;
+const BUST_OUTER = 0.06 * BUST_SIZE;
 /** A dome's height share is (1 - d²)^p over the footprint's normalised distance d: flatter above, rounder underneath. */
 const BUST_POWER_ACROSS = 1;
 const BUST_POWER_UP = 1.5;
