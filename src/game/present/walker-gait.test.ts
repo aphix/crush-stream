@@ -84,6 +84,37 @@ describe("given a gait over flat ground", () => {
   }
 });
 
+const settleCases: readonly { it: string; command: number; expectedMaxSettleSeconds: number }[] = [
+  { it: "when he walks and stops, then he stands still within 1 s", command: WALK_SPEED, expectedMaxSettleSeconds: 1 },
+  { it: "when he runs and stops, then he stands still within 1 s", command: RUN_SPEED, expectedMaxSettleSeconds: 1 },
+  { it: "when he sprints and stops, then he stands still within 1.5 s", command: SPRINT_SPEED, expectedMaxSettleSeconds: 1.5 },
+];
+
+describe("given a gait that has walked and been asked to stop", () => {
+  for (const testCase of settleCases) {
+    it(testCase.it, () => {
+      const loco = new Locomotion();
+      const gait = new Gait();
+      loco.reset(0);
+      gait.seed(0, STANDING_TORSO, 0, 0, flat);
+      for (let f = 0; f < 3 * FRAME_HZ; f++) {
+        loco.update(FRAME, 0, testCase.command);
+        gait.update(FRAME, loco, flat);
+      }
+      let settledAt = Infinity;
+      let liftedAfter = 0;
+      for (let f = 0; f < 5 * FRAME_HZ; f++) {
+        loco.update(FRAME, 0, 0);
+        gait.update(FRAME, loco, flat);
+        if (gait.standing && settledAt === Infinity) settledAt = f * FRAME;
+        if (settledAt < Infinity && !gait.standing) liftedAfter++;
+      }
+      assert.ok(settledAt <= testCase.expectedMaxSettleSeconds, `stood still after ${settledAt.toFixed(2)} s within ${testCase.expectedMaxSettleSeconds}`);
+      assert.equal(liftedAfter, 0, `${liftedAfter} frames of stepping after he stood still`);
+    });
+  }
+});
+
 /** Peak-to-peak (degrees) of target `index` over frames, one value per cycle's worth (the whole watch: several cycles of the same). */
 const spread = (frames: Frame[], index: number) => range(frames.map((frame) => frame.targets[index]! * DEGREES));
 

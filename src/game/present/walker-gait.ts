@@ -35,6 +35,10 @@ const MOVING_SPEED = 0.15;
 const MOVING_TURN = 0.4;
 /** Under this speed (m/s) a foot out of reach lifts even while the other is in the air: a pivot on the spot steps round, with no flight to fall in. */
 const PIVOT_FREE_SPEED = 2.5;
+/** Standing still, a foot that is not home lifts at this share of the cycle, so its swing takes the rest of it at the settle cadence (0.4 s) wherever the cycle stood. */
+const SETTLE_LIFT_AT = 0.4;
+/** A toe-pivoted foot lying this near flat (rad) turns on its heel again. */
+const FLAT_ENOUGH = 0.02;
 /** A foot within this far (m) of where a standing foot goes is home. */
 const HOME_RADIUS = 0.05;
 /** Where the swing foot stops, beside the hip: the hip's width times this, so the feet do not cross in a turn. */
@@ -143,6 +147,8 @@ export class Gait {
   private sway = 0;
   private phase = 0;
   private cadence = 0;
+  /** Neither moving nor turning (`MOVING_SPEED`, `MOVING_TURN`): a foot that is not home steps in, one that is stays put. */
+  private still = true;
   /** 1 while foot `f` (left, right) is set down, 0 in its swing. */
   readonly planted = new Uint8Array(2).fill(1);
   private readonly liftAt = new Float64Array(2).fill(LIFT_AT_STANDING);
@@ -183,6 +189,9 @@ export class Gait {
     this.dirX = detSin(yaw);
     this.dirZ = detCos(yaw);
     this.park();
+    this.pivot.fill(HEEL);
+    this.pitch.fill(0);
+    this.liftPitch.fill(0);
     ankleFromPivot(this.rock, HEEL, 0);
     for (let f = 0; f < 2; f++) {
       this.weight[f] = 1;
@@ -218,7 +227,8 @@ export class Gait {
   /** One step of `dt` s with the root at `loc`'s speed and facing, over `ground`; `observed` (rotation x, y, z, w at `at`) is the torso as it really lies, null: as the root asks. */
   update(dt: number, loc: Locomotion, ground: GroundAt, observed: ArrayLike<number> | null = null, at = 0): void {
     const speed = loc.speed;
-    const moving = speed > MOVING_SPEED || Math.abs(loc.turnRate) > MOVING_TURN || !this.standing;
+    this.still = speed <= MOVING_SPEED && Math.abs(loc.turnRate) <= MOVING_TURN;
+    const moving = !this.still || !this.standing;
     this.pathX += detSin(loc.yaw) * speed * dt;
     this.pathZ += detCos(loc.yaw) * speed * dt;
     this.orient(loc, observed, at);
@@ -289,13 +299,16 @@ export class Gait {
     this.local[2] = r[2]! * dx + r[5]! * dy + r[8]! * dz;
   }
 
-  /** The foot's cycle moves on: it lifts when its stance is up or it is out of reach, swings to where the pelvis will pass over, lands, and rolls over the ground while it is down. */
+  /** The foot's cycle moves on: it lifts when its stance is up or it is out of reach (standing still: when it is not home), swings to where the pelvis will pass over, lands, and rolls over the ground while it is down. */
   private stepFoot(f: number, loc: Locomotion, hipX: number, hipZ: number, ground: GroundAt, dt: number): void {
+    const mustStep = this.still && this.planted[f]! === 1 && this.planted[1 - f]! === 1 && this.awayFromHome(f, loc.yaw, hipX, hipZ);
+    if (mustStep) this.phase = (SETTLE_LIFT_AT - CYCLE_OFFSET[f]! + 1) % 1;
     const before = this.cycle[f]!;
     const now = (this.phase + CYCLE_OFFSET[f]!) % 1;
     this.cycle[f] = now;
     const wrapped = now < before;
-    if (this.planted[f]! === 1 && (now >= this.liftAt[f]! || ((this.planted[1 - f]! === 1 || loc.speed < PIVOT_FREE_SPEED) && this.outOfReach(f, hipX, hipZ)))) this.liftOff(f, now);
+    const due = this.still ? mustStep : now >= this.liftAt[f]!;
+    if (this.planted[f]! === 1 && (due || ((this.planted[1 - f]! === 1 || loc.speed < PIVOT_FREE_SPEED) && this.outOfReach(f, hipX, hipZ)))) this.liftOff(f, now);
     if (this.planted[f]! === 0) {
       this.swingFoot(f, wrapped ? 1 : Math.min(1, (now - this.liftAt[f]!) / (1 - this.liftAt[f]!)), now, loc, hipX, hipZ, ground);
       if (wrapped) this.land(f, loc.speed, ground);
@@ -313,15 +326,20 @@ export class Gait {
     this.dirZ = length > 1e-6 ? z / length : detCos(yaw);
   }
 
-  /** A planted foot `now` of the way through its cycle rolls: heel down onto its sole, flat, then up onto its toe, the point it turns on held still. */
+  /** A planted foot `now` of the way through its cycle rolls: heel down onto its sole, flat, then up onto its toe, the point it turns on held still. Standing still it lies flat on its heel instead. */
   private rollFoot(f: number, now: number, speed: number, dt: number, ground: GroundAt): void {
     const roll = rollAt(speed);
-    const u = this.standing ? 0 : Math.min(1, now / this.liftAt[f]!);
-    const aim = this.standing ? 0 : stancePitch(u, roll);
+    const flat = this.standing || this.still;
+    const u = flat ? 0 : Math.min(1, now / this.liftAt[f]!);
+    const aim = flat ? 0 : stancePitch(u, roll);
     const step = PITCH_RATE * dt;
     this.pitch[f]! += Math.max(-step, Math.min(step, aim - this.pitch[f]!));
     this.ankleAt(f);
-    if (this.pivot[f]! !== HEEL || this.standing || u < roll.heelUp) return;
+    if (flat) {
+      if (this.pivot[f]! === TOE && Math.abs(this.pitch[f]!) < FLAT_ENOUGH) this.plantOnHeel(f, ground);
+      return;
+    }
+    if (this.pivot[f]! !== HEEL || u < roll.heelUp) return;
     this.toToe(f, ground);
     this.ankleAt(f);
   }
@@ -351,11 +369,16 @@ export class Gait {
 
   /** The swing foot touches down heel first at `strike` pitch: the ankle where the swing put it, the heel's point on the ground behind it. */
   private land(f: number, speed: number, ground: GroundAt): void {
-    const o = f * 3;
     this.planted[f] = 1;
-    this.pivot[f] = HEEL;
     this.liftAt[f] = atSpeed(speed, STANCE);
     this.pitch[f] = rollAt(speed).strike;
+    this.plantOnHeel(f, ground);
+  }
+
+  /** Foot `f` turns on its heel from now: the ankle where it is, the heel's point on the ground behind it. */
+  private plantOnHeel(f: number, ground: GroundAt): void {
+    const o = f * 3;
+    this.pivot[f] = HEEL;
     ankleFromPivot(this.rock, HEEL, this.pitch[f]!);
     this.plant[o] = this.foot[o]! - this.dirX * this.rock[0]!;
     this.plant[o + 2] = this.foot[o + 2]! - this.dirZ * this.rock[0]!;
@@ -454,7 +477,7 @@ export class Gait {
     this.pointFeet();
     const elbow = atSpeed(speed, ELBOW_BASE);
     const mean = this.hipMean;
-    const meanEase = Math.min(1, dt * ARM_MEAN_EASE);
+    const meanEase = this.needsBaseline ? 1 : Math.min(1, dt * ARM_MEAN_EASE);
     mean[0]! += (t[GAIT.HIP_L]! - mean[0]!) * meanEase;
     mean[1]! += (t[GAIT.HIP_R]! - mean[1]!) * meanEase;
     const rest = ARM_REST_PER_LEAN * loc.pitch + atSpeed(speed, ARM_BACK_BIAS);
@@ -501,15 +524,18 @@ export class Gait {
     this.sway += (SWAY * (this.weight[1]! - this.weight[0]!) - this.sway) * ease;
   }
 
-  /** Both feet home (flat, on their heels) and he is not moving: the cycle is parked at its start. */
+  /** Foot `f`'s ankle is more than `HOME_RADIUS` from where it stands when he does, beside the pelvis at (`hipX`, `hipZ`) facing `yaw`. */
+  private awayFromHome(f: number, yaw: number, hipX: number, hipZ: number): boolean {
+    this.homeSpot(f, yaw, hipX, hipZ);
+    const dx = this.foot[f * 3]! - this.spot[0]!;
+    const dz = this.foot[f * 3 + 2]! - this.spot[1]!;
+    return dx * dx + dz * dz >= HOME_RADIUS * HOME_RADIUS;
+  }
+
+  /** Both feet home (planted on their heels) and he is not moving: the cycle is parked at its start. */
   private checkStanding(loc: Locomotion, hipX: number, hipZ: number): void {
-    let home = loc.speed <= MOVING_SPEED && Math.abs(loc.turnRate) <= MOVING_TURN;
-    for (let f = 0; f < 2 && home; f++) {
-      this.homeSpot(f, loc.yaw, hipX, hipZ);
-      const dx = this.foot[f * 3]! - this.spot[0]!;
-      const dz = this.foot[f * 3 + 2]! - this.spot[1]!;
-      home = this.planted[f]! === 1 && this.pivot[f]! === HEEL && dx * dx + dz * dz < HOME_RADIUS * HOME_RADIUS;
-    }
+    let home = this.still;
+    for (let f = 0; f < 2 && home; f++) home = this.planted[f]! === 1 && this.pivot[f]! === HEEL && !this.awayFromHome(f, loc.yaw, hipX, hipZ);
     if (home) this.park();
     else this.standing = false;
   }
