@@ -9,6 +9,7 @@ import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monument
 import { PREFAB } from "../world/constants.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
+import { applyWaterLook } from "./water-look.ts";
 
 /**
  * Prefab meshes and the race's shared procedural textures. A prefab is one or a few parts (geometry
@@ -229,12 +230,14 @@ export const raceTextures = once((): RaceTextures => {
 });
 
 export function makePrefabMaterials(tex: RaceTextures): PrefabMaterials {
+  const water = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.2 });
+  applyWaterLook(water);
   return {
     plain: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0.05 }),
     concrete: new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.concrete, color: tex.concreteGain, roughness: 0.92, metalness: 0.04 }),
     building: new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.windows, roughness: 0.8, metalness: 0.05 }),
     billboard: new THREE.MeshStandardMaterial({ map: tex.billboard, emissiveMap: tex.billboard, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.6 }),
-    water: new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.2 }),
+    water,
   };
 }
 
