@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { RAM, type DoorRig } from "../scenes/door-rig.ts";
+import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
 
 const HEAD = 0;
 const POST = 1;
@@ -16,7 +17,7 @@ export class DoorRam {
   private readonly mesh: THREE.InstancedMesh;
 
   constructor(scene: THREE.Scene) {
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, metalness: 0.45 });
+    const mat = tagMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, metalness: 0.45 }), MATERIAL.PAINTED_METAL);
     this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, 3);
     this.mesh.setColorAt(HEAD, new THREE.Color(0xe8a21b));
     this.mesh.setColorAt(POST, new THREE.Color(0x5d636b));

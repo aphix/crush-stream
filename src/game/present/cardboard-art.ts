@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { canvasTexture } from "./lab-art.ts";
 import { BOX_POSE_FLOATS, type BoxPlacement } from "./ragdoll-boxes.ts";
+import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
 
 const CARDBOARD_TEXTURE_PX = 256;
 const KRAFT_COLOR = "#b98f5a";
@@ -81,6 +82,7 @@ export class CardboardBoxes {
     this.capacity = capacity;
     const material = new THREE.MeshStandardMaterial({ map: canvasTexture(CARDBOARD_TEXTURE_PX, CARDBOARD_TEXTURE_PX, paintCardboard), roughness: 0.9 });
     tileTexturePerMetre(material);
+    tagMaterial(material, MATERIAL.PLASTIC);
     this.mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), material, capacity);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.count = 0;

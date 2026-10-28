@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { PISTON, PISTON_IDS, type PistonRig } from "../scenes/piston-rig.ts";
 import { wrapPiClosed } from "../kernel/scalar.ts";
+import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
 
 /** Orbit rate (rad/s) held in the piston scene, so one hop is a fixed eighth of a turn: 2π / 0.12 / 8 ≈ 6.5 s. */
 export const PISTON_ORBIT_RATE = 0.12;
@@ -68,11 +69,11 @@ export class PistonBank {
       this.group.add(mesh);
       return mesh;
     };
-    this.housing = make(cyl, new THREE.MeshStandardMaterial({ color: 0xd9a21b, roughness: 0.5, metalness: 0.35 }));
-    this.rod = make(cyl, new THREE.MeshStandardMaterial({ color: 0xd0d4da, roughness: 0.18, metalness: 0.95 }));
-    this.head = make(box, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45, metalness: 0.7 }));
-    this.honey = make(box, new THREE.MeshStandardMaterial({ color: 0xc9d1d6, roughness: 0.85, metalness: 0.25 }));
-    this.stand = make(box, new THREE.MeshStandardMaterial({ color: 0x2c2f33, roughness: 0.8, metalness: 0.2 }));
+    this.housing = make(cyl, tagMaterial(new THREE.MeshStandardMaterial({ color: 0xd9a21b, roughness: 0.5, metalness: 0.35 }), MATERIAL.PAINTED_METAL));
+    this.rod = make(cyl, tagMaterial(new THREE.MeshStandardMaterial({ color: 0xd0d4da, roughness: 0.18, metalness: 0.95 }), MATERIAL.METAL));
+    this.head = make(box, tagMaterial(new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.45, metalness: 0.7 }), MATERIAL.PAINTED_METAL));
+    this.honey = make(box, tagMaterial(new THREE.MeshStandardMaterial({ color: 0xc9d1d6, roughness: 0.85, metalness: 0.25 }), MATERIAL.PLASTIC));
+    this.stand = make(box, tagMaterial(new THREE.MeshStandardMaterial({ color: 0x2c2f33, roughness: 0.8, metalness: 0.2 }), MATERIAL.PAINTED_METAL));
     this.yaw = Float32Array.from(rig.heads, (h) => Math.atan2(h.nx, h.nz));
     for (let i = 0; i < n; i++) this.head.setColorAt(i, HEAD_COLOR);
     this.group.visible = false;

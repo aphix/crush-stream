@@ -272,6 +272,19 @@ vec3 finishKeep(vec3 albedo) {
   return vec3(1.0);
 }`;
 
+/** Mikkelsen's screen-space bump as a GLSL function `name(surfaceNormal, heightSlope, faceDirection)`; the car finish and the world's surface grain share it. */
+export function perturbedNormalGlsl(name: string): string {
+  return /* glsl */ `vec3 ${name}(vec3 surfaceNormal, vec2 heightSlope, float faceDirection) {
+  vec3 stepX = dFdx(-vViewPosition);
+  vec3 stepY = dFdy(-vViewPosition);
+  vec3 crossY = cross(stepY, surfaceNormal);
+  vec3 crossX = cross(surfaceNormal, stepX);
+  float determinant = dot(stepX, crossY) * faceDirection;
+  vec3 surfaceGradient = sign(determinant) * (heightSlope.x * crossY + heightSlope.y * crossX);
+  return normalize(abs(determinant) * surfaceNormal - surfaceGradient);
+}`;
+}
+
 /**
  * Mikkelsen's screen-space bump (three's `perturbNormalArb`, bump_pars_fragment) on `surfaceNormal` (view space): the height
  * slopes `heightSlope` are the height's steps over one pixel right and down. Unlike three's it does not normalise the surface
@@ -290,15 +303,7 @@ vec3 finishPlaneWeights(vec3 objectSpaceNormal) {
   vec3 w = pow(abs(objectSpaceNormal), vec3(${glslFloat(PLANE_BLEND_SHARPNESS)}));
   return w / max(w.x + w.y + w.z, 0.0001);
 }
-vec3 finishPerturbedNormal(vec3 surfaceNormal, vec2 heightSlope, float faceDirection) {
-  vec3 stepX = dFdx(-vViewPosition);
-  vec3 stepY = dFdy(-vViewPosition);
-  vec3 crossY = cross(stepY, surfaceNormal);
-  vec3 crossX = cross(surfaceNormal, stepX);
-  float determinant = dot(stepX, crossY) * faceDirection;
-  vec3 surfaceGradient = sign(determinant) * (heightSlope.x * crossY + heightSlope.y * crossX);
-  return normalize(abs(determinant) * surfaceNormal - surfaceGradient);
-}`;
+${perturbedNormalGlsl("finishPerturbedNormal")}`;
 
 /**
  * After the clear coat's normal is declared, unless every layer has faded on every pixel of the draw: each layer's height step one
@@ -322,10 +327,13 @@ if (finishMeshNear() < max(finishFadeEnd.x, max(finishFadeEnd.y, finishFadeEnd.z
   vec2 baseSlope = coatSlope + vec2(finishStepX.z, finishStepY.z);
   normal = finishPerturbedNormal(normal, baseSlope, faceDirection);`;
 
+/** How much of the orange peel and waviness a candy coat's mirror-sharp clear coat shows: a coat that sharp turns the peel's 0.5 mm slopes into speckle along seams and sills, so the candy coat is the smooth one (the base layer keeps its flake and the shut lines keep theirs). */
+const CANDY_COAT_FLATTEN = 0.9;
+
 /** The clear coat's share of `FINISH_NORMALS`: only the paint has a clear coat. */
 const FINISH_COAT_NORMAL = /* glsl */ `
   #ifdef USE_CLEARCOAT
-  clearcoatNormal = finishPerturbedNormal(clearcoatNormal, coatSlope, faceDirection);
+  clearcoatNormal = finishPerturbedNormal(clearcoatNormal, coatSlope * (1.0 - ${glslFloat(CANDY_COAT_FLATTEN)} * min(candyW, 1.0)), faceDirection);
   #endif`;
 
 /** What a car material has to say about the finish: switched on or off by `applyCarFinish`, read by its compile hook and program key. */

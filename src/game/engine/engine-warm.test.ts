@@ -12,8 +12,8 @@ import { element, stubBrowser } from "./engine-headless.test-util.ts";
 const FINISH_KEY_MARK = "|finish-";
 /** Every output the car finish must be linked and drawn for: plain paint on both, the finish into the HDR target only (it draws only at the post tiers). */
 const FINISH_PASSES = "canvas plain,hdr finish,hdr plain";
-/** The purse pool's program key (`Purses`): one program per output, the canvas and the HDR target. */
-const PURSE_KEY = "purse-shapes";
+/** The purse pool's program key (`Purses`) and the material class suffix every lit world material's key ends with: one program per output, the canvas and the HDR target. */
+const PURSE_KEY = "purse-shapes|surf";
 const OUTPUTS = 2;
 /** One frame longer than any load window's settle: the window under way is past it. */
 const PAST_SETTLE_MS = 60_000;

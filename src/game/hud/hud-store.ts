@@ -142,6 +142,12 @@ export type CrashHudState = {
   hatching: number | null;
   /** Rim light on people (0-1 strength); null = off. */
   rimLight: number | null;
+  /** Material classes' strength (0 = the old uniform reflections and no grain, 1 = the default look, up to 2); scales every class's reflection cut and grain. */
+  materialStrength: number;
+  /** Car contour smoothing (0 = off, 1 = the default, 2 = a second pass): how round a crushed body's facets are drawn; creases and panel edges stay. */
+  contourStrength: number;
+  /** Candy paint on car exteriors (0 = the plain paint, 1 = the default, up to 2): deeper colour, a full sharp clear coat and, on high and ultra, a thin-film hue shift. Scaled by Materials strength. */
+  candyStrength: number;
   /** Night lighting (H) and wet asphalt (X). */
   night: boolean;
   wet: boolean;
@@ -246,6 +252,9 @@ export const KNOB_RANGES = {
   dots: { min: 0, max: 1 },
   hatch: { min: 0, max: 1 },
   rim: { min: 0, max: 1 },
+  material: { min: 0, max: 2 },
+  contour: { min: 0, max: 2 },
+  candy: { min: 0, max: 2 },
   timeScale: { min: 0.02, max: 2 },
   musicVolume: { min: 0, max: MUSIC_MAX_GAIN },
   engineVolume: { min: 0, max: 1 },
@@ -293,6 +302,9 @@ export const INITIAL_HUD: CrashHudState = {
   halftone: null,
   hatching: null,
   rimLight: null,
+  materialStrength: 1,
+  contourStrength: 1,
+  candyStrength: 1,
   night: false,
   wet: false,
   sky: "auto",

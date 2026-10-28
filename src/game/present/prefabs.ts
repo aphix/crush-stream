@@ -4,12 +4,13 @@ import { once } from "../kernel/scalar.ts";
 import { makeAsphalt, makeJerseyBarrier, makeLamp } from "./engine-world.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
 import { CHEVRON, FENCE, MARBLE, OBELISK, obeliskHalf, STAR_INNER, type PrefabId } from "../world/catalog.ts";
-import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, squareFrustum } from "./prefab-pieces.ts";
+import { box, classedPieces, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, squareFrustum } from "./prefab-pieces.ts";
 import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monumentPieces, pool, whiteHouse } from "./prefabs-mall.ts";
 import { PREFAB } from "../world/constants.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { applyWaterLook } from "./water-look.ts";
+import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
 
 /**
  * Prefab meshes and the race's shared procedural textures. A prefab is one or a few parts (geometry
@@ -233,11 +234,11 @@ export function makePrefabMaterials(tex: RaceTextures): PrefabMaterials {
   const water = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.2 });
   applyWaterLook(water);
   return {
-    plain: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0.05 }),
-    concrete: new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.concrete, color: tex.concreteGain, roughness: 0.92, metalness: 0.04 }),
-    building: new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.windows, roughness: 0.8, metalness: 0.05 }),
-    billboard: new THREE.MeshStandardMaterial({ map: tex.billboard, emissiveMap: tex.billboard, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.6 }),
-    water,
+    plain: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0.05 }), MATERIAL.GENERIC),
+    concrete: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.concrete, color: tex.concreteGain, roughness: 0.92, metalness: 0.04 }), MATERIAL.CONCRETE),
+    building: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.windows, roughness: 0.8, metalness: 0.05 }), MATERIAL.CONCRETE),
+    billboard: tagMaterial(new THREE.MeshStandardMaterial({ map: tex.billboard, emissiveMap: tex.billboard, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.6 }), MATERIAL.PLASTIC),
+    water: tagMaterial(water, MATERIAL.GLASS),
   };
 }
 
@@ -252,9 +253,9 @@ function cone(): Piece[] {
   // Body radius at height y, for the reflective band hugging it.
   const r = (y: number) => 0.165 - ((y - 0.04) / 0.66) * 0.14;
   return [
-    [box(0.4, 0.04, 0.4, 0, 0.02, 0), C.black],
-    [cyl(0.025, 0.165, 0.04, 0.7, 8, true), C.orange],
-    [cyl(r(0.44) + 0.006, r(0.3) + 0.006, 0.3, 0.44, 8, true), C.white],
+    [box(0.4, 0.04, 0.4, 0, 0.02, 0), C.black, MATERIAL.RUBBER],
+    [cyl(0.025, 0.165, 0.04, 0.7, 8, true), C.orange, MATERIAL.PLASTIC],
+    [cyl(r(0.44) + 0.006, r(0.3) + 0.006, 0.3, 0.44, 8, true), C.white, MATERIAL.PLASTIC],
   ];
 }
 
@@ -262,23 +263,23 @@ function tyreStack(): Piece[] {
   const out: Piece[] = [];
   for (let i = 0; i < 4; i++) {
     const g = new THREE.TorusGeometry(0.25, 0.125, 5, 10).rotateX(Math.PI / 2).translate(0, 0.125 + i * 0.25, 0);
-    out.push([g, i % 2 ? C.white : C.black]);
+    out.push([g, i % 2 ? C.white : C.black, MATERIAL.RUBBER]);
   }
   return out;
 }
 
 function hayBale(): Piece[] {
   return [
-    [box(1.2, 0.9, 0.9, 0, 0.45, 0), C.hay],
-    [box(0.06, 0.92, 0.92, -0.3, 0.45, 0), C.twine],
-    [box(0.06, 0.92, 0.92, 0.3, 0.45, 0), C.twine],
+    [box(1.2, 0.9, 0.9, 0, 0.45, 0), C.hay, MATERIAL.SOIL],
+    [box(0.06, 0.92, 0.92, -0.3, 0.45, 0), C.twine, MATERIAL.SOIL],
+    [box(0.06, 0.92, 0.92, 0.3, 0.45, 0), C.twine, MATERIAL.SOIL],
   ];
 }
 
 function crate(): Piece[] {
-  const out: Piece[] = [[box(0.96, 0.96, 0.96, 0, 0.5, 0), C.wood]];
-  for (const y of [0.06, 0.94]) out.push([box(1, 0.12, 1, 0, y, 0), C.woodDark]);
-  for (const x of [-0.45, 0.45]) for (const z of [-0.45, 0.45]) out.push([box(0.1, 0.76, 0.1, x, 0.5, z), C.woodDark]);
+  const out: Piece[] = [[box(0.96, 0.96, 0.96, 0, 0.5, 0), C.wood, MATERIAL.WOOD]];
+  for (const y of [0.06, 0.94]) out.push([box(1, 0.12, 1, 0, y, 0), C.woodDark, MATERIAL.WOOD]);
+  for (const x of [-0.45, 0.45]) for (const z of [-0.45, 0.45]) out.push([box(0.1, 0.76, 0.1, x, 0.5, z), C.woodDark, MATERIAL.WOOD]);
   return out;
 }
 
@@ -300,14 +301,14 @@ function rock(): Piece[] {
   g.scale(2.4 / (b.max.x - b.min.x), 1.85 / (b.max.y - b.min.y), 2.2 / (b.max.z - b.min.z));
   g.translate(0, -0.25, 0);
   g.computeVertexNormals();
-  return [[g, C.rock]];
+  return [[g, C.rock, MATERIAL.CONCRETE]];
 }
 
 function tree(): Piece[] {
   return [
-    [cyl(0.15, 0.24, -0.2, 2.0, 5, true), C.trunk],
-    [new THREE.ConeGeometry(1.6, 3.8, 6).translate(0, 3.3, 0), C.leaf[0]!],
-    [new THREE.ConeGeometry(1.05, 3.0, 6).translate(0, 5.5, 0), C.leaf[1]!],
+    [cyl(0.15, 0.24, -0.2, 2.0, 5, true), C.trunk, MATERIAL.WOOD],
+    [new THREE.ConeGeometry(1.6, 3.8, 6).translate(0, 3.3, 0), C.leaf[0]!, MATERIAL.FOLIAGE],
+    [new THREE.ConeGeometry(1.05, 3.0, 6).translate(0, 5.5, 0), C.leaf[1]!, MATERIAL.FOLIAGE],
   ];
 }
 
@@ -347,69 +348,81 @@ function star(R: number, y0: number, y1: number): THREE.BufferGeometry {
 /** The Plaza de la Revolución memorial: a stone tower in star-plan steps, tapering to a spire. */
 function monument(): Piece[] {
   const steps = [[6.2, -0.8, 1.4], [5.7, 1.4, 4.2], [5.1, 4.2, 9], [4.5, 9, 15], [3.9, 15, 22], [3.3, 22, 30], [2.8, 30, 38], [2.3, 38, 45], [1.8, 45, 50]] as const;
-  const out = steps.map(([R, y0, y1], i): Piece => [star(R, y0, y1), i % 2 ? 0xd9d3c3 : 0xc4bdab]);
-  out.push([new THREE.ConeGeometry(0.8, 5, 5).translate(0, 52.5, 0), 0xb4ad9b]);
+  const out = steps.map(([R, y0, y1], i): Piece => [star(R, y0, y1), i % 2 ? 0xd9d3c3 : 0xc4bdab, MATERIAL.STONE]);
+  out.push([new THREE.ConeGeometry(0.8, 5, 5).translate(0, 52.5, 0), 0xb4ad9b, MATERIAL.STONE]);
   return out;
 }
 
 /** A royal palm: a leaning trunk and a crown of eight drooping fronds. */
 function palm(): Piece[] {
   const lean = -0.08;
-  const out: Piece[] = [[cyl(0.15, 0.27, 0, 8.2, 6).rotateZ(lean), C.trunk]];
+  const out: Piece[] = [[cyl(0.15, 0.27, 0, 8.2, 6).rotateZ(lean), C.trunk, MATERIAL.WOOD]];
   const top = new THREE.Vector3(0, 8.2, 0).applyAxisAngle(new THREE.Vector3(0, 0, 1), lean);
   for (let k = 0; k < 8; k++) {
     const frond = new THREE.BoxGeometry(0.5, 0.05, 3.4).translate(0, 0, 1.8).rotateX(0.5).rotateY((k * Math.PI) / 4).translate(top.x, top.y, 0);
-    out.push([frond, C.leaf[k % 2]!]);
+    out.push([frond, C.leaf[k % 2]!, MATERIAL.FOLIAGE]);
   }
   return out;
 }
 
 /** A stucco wall 10 m long (tinted per placement), a cap and a weathered footing. */
 function wall(): Piece[] {
-  return [
-    [box(0.4, 3, 10, 0, 1.5, 0), 0xffffff],
-    [box(0.6, 0.2, 10, 0, 3.1, 0), C.concrete],
-    [box(0.44, 0.5, 10.02, 0, 0.25, 0), C.rock],
-  ];
+  return classedPieces(
+    [
+      [box(0.4, 3, 10, 0, 1.5, 0), 0xffffff],
+      [box(0.6, 0.2, 10, 0, 3.1, 0), C.concrete],
+      [box(0.44, 0.5, 10.02, 0, 0.25, 0), C.rock],
+    ],
+    MATERIAL.CONCRETE,
+  );
 }
 
 /** The Washington Monument: the shaft in its two shades of marble, then the pyramidion. */
 function obelisk(): Piece[] {
   const { seam, shaft, tip, shoulder } = OBELISK;
-  return [
-    [squareFrustum(obeliskHalf(0), obeliskHalf(seam), 0, seam), MARBLE_SHADE.low],
-    [squareFrustum(obeliskHalf(seam), shoulder, seam, shaft), MARBLE_SHADE.high],
-    [squareFrustum(shoulder, 0, shaft, tip), MARBLE_SHADE.high],
-  ];
+  return classedPieces(
+    [
+      [squareFrustum(obeliskHalf(0), obeliskHalf(seam), 0, seam), MARBLE_SHADE.low],
+      [squareFrustum(obeliskHalf(seam), shoulder, seam, shaft), MARBLE_SHADE.high],
+      [squareFrustum(shoulder, 0, shaft, tip), MARBLE_SHADE.high],
+    ],
+    MATERIAL.STONE,
+  );
 }
 
 /** A plain neoclassical block: footing, body, projecting cornice, parapet. */
 function marble(): Piece[] {
   const { footing, body, cornice, parapet } = MARBLE;
-  return [
-    [box(footing.half * 2, footing.y1, footing.half * 2, 0, footing.y1 / 2, 0), MARBLE_SHADE.trim],
-    [box(body.half * 2, body.y1 - footing.y1, body.half * 2, 0, (footing.y1 + body.y1) / 2, 0), MARBLE_SHADE.wall],
-    [box(cornice.half * 2, cornice.y1 - body.y1, cornice.half * 2, 0, (body.y1 + cornice.y1) / 2, 0), MARBLE_SHADE.trim],
-    [box(parapet.half * 2, parapet.y1 - cornice.y1, parapet.half * 2, 0, (cornice.y1 + parapet.y1) / 2, 0), MARBLE_SHADE.wall],
-  ];
+  return classedPieces(
+    [
+      [box(footing.half * 2, footing.y1, footing.half * 2, 0, footing.y1 / 2, 0), MARBLE_SHADE.trim],
+      [box(body.half * 2, body.y1 - footing.y1, body.half * 2, 0, (footing.y1 + body.y1) / 2, 0), MARBLE_SHADE.wall],
+      [box(cornice.half * 2, cornice.y1 - body.y1, cornice.half * 2, 0, (body.y1 + cornice.y1) / 2, 0), MARBLE_SHADE.trim],
+      [box(parapet.half * 2, parapet.y1 - cornice.y1, parapet.half * 2, 0, (cornice.y1 + parapet.y1) / 2, 0), MARBLE_SHADE.wall],
+    ],
+    MATERIAL.STONE,
+  );
 }
 
 function fence(): Piece[] {
   const { kerb, rails, post } = FENCE;
   return [
-    [box(kerb.hx * 2, kerb.y1, kerb.hz * 2, 0, kerb.y1 / 2, 0), C.concrete],
-    [box(rails.hx * 2, rails.y1 - kerb.y1, rails.hz * 2, 0, (kerb.y1 + rails.y1) / 2, 0), C.black],
-    ...[-1, 1].map((s): Piece => [box(post.half * 2, post.y1 - kerb.y1, post.half * 2, s * post.x, (kerb.y1 + post.y1) / 2, 0), C.black]),
+    [box(kerb.hx * 2, kerb.y1, kerb.hz * 2, 0, kerb.y1 / 2, 0), C.concrete, MATERIAL.CONCRETE],
+    [box(rails.hx * 2, rails.y1 - kerb.y1, rails.hz * 2, 0, (kerb.y1 + rails.y1) / 2, 0), C.black, MATERIAL.PAINTED_METAL],
+    ...[-1, 1].map((s): Piece => [box(post.half * 2, post.y1 - kerb.y1, post.half * 2, s * post.x, (kerb.y1 + post.y1) / 2, 0), C.black, MATERIAL.PAINTED_METAL]),
   ];
 }
 
 function dumpster(): Piece[] {
-  return [
-    [box(1.9, 1.05, 1.1, 0, 0.7, 0), 0x2f5d3a],
-    [box(2, 0.1, 1.25, 0, 1.3, 0), C.black],
-    [box(0.12, 0.3, 1.1, -0.82, 0.15, 0), C.metal],
-    [box(0.12, 0.3, 1.1, 0.82, 0.15, 0), C.metal],
-  ];
+  return classedPieces(
+    [
+      [box(1.9, 1.05, 1.1, 0, 0.7, 0), 0x2f5d3a],
+      [box(2, 0.1, 1.25, 0, 1.3, 0), C.black],
+      [box(0.12, 0.3, 1.1, -0.82, 0.15, 0), C.metal],
+      [box(0.12, 0.3, 1.1, 0.82, 0.15, 0), C.metal],
+    ],
+    MATERIAL.PAINTED_METAL,
+  );
 }
 
 function grandstand(): Piece[] {
@@ -418,12 +431,12 @@ function grandstand(): Piece[] {
   for (let i = 0; i < 5; i++) {
     const top = 0.6 + 0.8 * i;
     const x = 3.5 - (i + 0.5) * depth;
-    out.push([box(depth, top + 0.5, 29.6, x, (top - 0.5) / 2, 0), i % 2 ? C.concreteDark : C.concrete]);
-    out.push([box(0.45, 0.4, 29, x - depth / 2 + 0.35, top + 0.2, 0), i === 2 ? C.seatRed : C.seatBlue]);
+    out.push([box(depth, top + 0.5, 29.6, x, (top - 0.5) / 2, 0), i % 2 ? C.concreteDark : C.concrete, MATERIAL.CONCRETE]);
+    out.push([box(0.45, 0.4, 29, x - depth / 2 + 0.35, top + 0.2, 0), i === 2 ? C.seatRed : C.seatBlue, MATERIAL.PLASTIC]);
   }
-  out.push([box(1, 6.25, 30, -3, 2.625, 0), C.concrete]);
-  out.push([box(6.1, 0.25, 30, -0.45, 5.875, 0), C.light]);
-  for (const z of [-14, -4.7, 4.7, 14]) out.push([box(0.2, 5.75, 0.2, 2.4, 2.875, z), C.metal]);
+  out.push([box(1, 6.25, 30, -3, 2.625, 0), C.concrete, MATERIAL.CONCRETE]);
+  out.push([box(6.1, 0.25, 30, -0.45, 5.875, 0), C.light, MATERIAL.PAINTED_METAL]);
+  for (const z of [-14, -4.7, 4.7, 14]) out.push([box(0.2, 5.75, 0.2, 2.4, 2.875, z), C.metal, MATERIAL.PAINTED_METAL]);
   return out;
 }
 
@@ -450,7 +463,7 @@ function pylon(): Piece[] {
     }
   }
   out.push([box(1, 0.12, 1, 0, 5.94, 0), C.metal]);
-  return out;
+  return classedPieces(out, MATERIAL.PAINTED_METAL);
 }
 
 /**
@@ -469,10 +482,10 @@ function chevron(): Piece[] {
   const { run, rise, stroke, proud, post } = CHEVRON_DRAW;
   const centre = top - height / 2;
   const slope = Math.atan2(rise, run);
-  const arm = (side: 1 | -1): Piece => [new THREE.BoxGeometry(thick, stroke, hypot2(run, rise)).rotateX(-side * slope).translate(0, centre + (side * rise) / 2, 0), C.yellow];
+  const arm = (side: 1 | -1): Piece => [new THREE.BoxGeometry(thick, stroke, hypot2(run, rise)).rotateX(-side * slope).translate(0, centre + (side * rise) / 2, 0), C.yellow, MATERIAL.PLASTIC];
   return [
-    [box(thick - 2 * proud, height, width, 0, centre, 0), C.black],
-    [box(thick - 2 * proud, top - height, post, 0, (top - height) / 2, 0), C.metal],
+    [box(thick - 2 * proud, height, width, 0, centre, 0), C.black, MATERIAL.PLASTIC],
+    [box(thick - 2 * proud, top - height, post, 0, (top - height) / 2, 0), C.metal, MATERIAL.PAINTED_METAL],
     arm(1),
     arm(-1),
   ];
@@ -507,7 +520,7 @@ function lamp(plain: THREE.Material): PrefabPart[] {
     const m = o.material as THREE.MeshStandardMaterial;
     const geo = (o.geometry as THREE.BufferGeometry).clone().applyMatrix4(o.matrixWorld).applyMatrix4(fit);
     if (o.name === LAMP_POOL || m.emissive?.getHex()) shared.push({ geometry: geo, material: m, shared: true });
-    else pole.push([geo, m.color.getHex()]);
+    else pole.push([geo, m.color.getHex(), MATERIAL.PAINTED_METAL]);
   });
   disposeGroup(
     g,

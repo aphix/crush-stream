@@ -23,9 +23,10 @@ import { SceneFade } from "../present/scene-fade.ts";
 import { ParkingScene } from "../present/parking-scene.ts";
 import { drawnStyle, type CarStyleId } from "../vehicle/car-variants.ts";
 import { armKill, assignClass, carClass, HANDLING, killClass, STYLE_CLASS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
-import { DRIVER_CARS, type DriverCar } from "../match/types.ts";
+import { DRIVER_CARS, TIME_OF_DAY, TIMES_OF_DAY, type DriverCar } from "../match/types.ts";
 import { WorldStage, makeLamp } from "../present/engine-world.ts";
 import { Cinematics } from "../present/engine-cine.ts";
+import { DaylightEnv } from "../present/daylight-env.ts";
 import { loadHdrEnv, STUDIO_ENV_URL } from "../present/look-env.ts";
 import { CarDetail } from "../present/car-detail.ts";
 import { addCars, withCars, type Occluder, type Sight } from "../present/spectate-cam.ts";
@@ -239,6 +240,10 @@ export abstract class EngineCore {
   protected quality!: PlayerQuality;
   protected impactLightLife = 0;
   protected envMap: THREE.Texture | null = null;
+  /** The outdoor sky-over-ground environments the cars reflect (`chooseEnvironment`), built once a look. */
+  protected daylight: DaylightEnv | null = null;
+  /** What `chooseEnvironment` last chose: -2 none yet (the studio's load or a scene change asks again), -1 Ultra's own, 0 the studio's, 1 + a look the daylight's. */
+  protected envChoice = -2;
   protected debris!: DebrisSystem;
   protected readonly wheels = new WheelBatch(MAX_CARS * 4, (car) => this.detail.isFar(car));
   protected readonly lampBatch = new LampBatch(MAX_CARS * 2);
@@ -307,6 +312,9 @@ export abstract class EngineCore {
   protected halftone = INITIAL_HUD.halftone;
   protected hatching = INITIAL_HUD.hatching;
   protected rimLight = INITIAL_HUD.rimLight;
+  protected materialStrength = INITIAL_HUD.materialStrength;
+  protected contourStrength = INITIAL_HUD.contourStrength;
+  protected candyStrength = INITIAL_HUD.candyStrength;
   protected speedMin = INITIAL_HUD.speedMin;
   protected speedMax = INITIAL_HUD.speedMax;
   protected balls: RampBall[] = [];
@@ -865,6 +873,25 @@ export abstract class EngineCore {
     this.scene.environmentIntensity = this.stage.envIntensity;
     this.envMap?.dispose();
     this.envMap = env;
+    this.envChoice = -2;
+  }
+
+  /** Scenes that stand in a studio, not outdoors: they keep the studio environment. */
+  private studioScene(): boolean {
+    return this.sceneId === "garage" || this.sceneId === "showcase" || this.sceneId === "lab";
+  }
+
+  /** Once a frame (a compare of two small integers): the environment follows the scene and the time of day, outdoors the sky over the ground, in a studio scene the studio's, under Ultra its own. */
+  protected chooseEnvironment(): void {
+    if (!this.envMap) return;
+    const look = this.stage.night ? TIME_OF_DAY.night : (this.stage.time ?? TIME_OF_DAY.day);
+    const choice = this.cine.tier === "ultra" ? -1 : this.studioScene() ? 0 : 1 + TIMES_OF_DAY.indexOf(look);
+    if (choice === this.envChoice) return;
+    this.envChoice = choice;
+    if (choice === -1) return;
+    this.daylight ??= new DaylightEnv(this.renderer);
+    this.scene.environment = choice === 0 ? this.envMap : this.daylight.get(look, this.stage.sunOffset);
+    this.scene.environmentIntensity = this.stage.envIntensity;
   }
 
   protected buildWorld(): void {

@@ -6,6 +6,7 @@ import { climbFootX, floorHeightAt, stationFrontX } from "../scenes/minigame-pro
 import { FIELD_HALF_WIDTH, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS, type HighJumpLayout } from "../scenes/minigame-high-jump.ts";
 import { CANVAS_WHITE, canvasTexture } from "./lab-art.ts";
 import { signAtlas, signFace } from "./range-art.ts";
+import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
 
 const HIGH_JUMP = MINIGAME_MODE.highJump;
 
@@ -236,7 +237,7 @@ function lipFasciaGeometry(): THREE.BufferGeometry {
 }
 
 function timberMaterial(): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ map: canvasTexture(TIMBER_TEXTURE_PX, TIMBER_TEXTURE_PX, paintTimber), roughness: 0.9 });
+  return tagMaterial(new THREE.MeshStandardMaterial({ map: canvasTexture(TIMBER_TEXTURE_PX, TIMBER_TEXTURE_PX, paintTimber), roughness: 0.9 }), MATERIAL.WOOD);
 }
 
 /** One slat between the posts per layout board, in board order: the major ones bright, the rest timber. */
@@ -253,7 +254,7 @@ function heightPlatesMesh(layout: HighJumpLayout): THREE.Mesh {
   const faces = layout.signs.flatMap((sign, index) =>
     [-1, 1].map((side) => signFace(HEIGHT_PLATE.width, HEIGHT_PLATE.height, x, sign.y + SLAT_THICKNESS / 2 + HEIGHT_PLATE.height / 2, side * outboard, index, labels.length)),
   );
-  const mesh = mergedMesh("height-plates", faces, new THREE.MeshStandardMaterial({ map: signAtlas(labels), roughness: 0.8, side: THREE.DoubleSide }));
+  const mesh = mergedMesh("height-plates", faces, tagMaterial(new THREE.MeshStandardMaterial({ map: signAtlas(labels), roughness: 0.8, side: THREE.DoubleSide }), MATERIAL.PLASTIC));
   mesh.castShadow = true;
   return mesh;
 }
@@ -351,15 +352,18 @@ function netMesh(layout: HighJumpLayout): THREE.Mesh {
   weave.repeat.set(width / (NET_MESH_SIZE * scale), height / (NET_MESH_SIZE * scale));
   const mesh = new THREE.Mesh(
     new THREE.PlaneGeometry(width, height).rotateY(-Math.PI / 2).translate(layout.netX, LANDING_HEIGHT + height / 2, 0),
-    new THREE.MeshStandardMaterial({
-      map: weave,
-      color: NET_COLOR,
-      roughness: 1,
-      transparent: true,
-      alphaTest: NET_ALPHA_CUTOFF,
-      side: THREE.DoubleSide,
-      forceSinglePass: true,
-    }),
+    tagMaterial(
+      new THREE.MeshStandardMaterial({
+        map: weave,
+        color: NET_COLOR,
+        roughness: 1,
+        transparent: true,
+        alphaTest: NET_ALPHA_CUTOFF,
+        side: THREE.DoubleSide,
+        forceSinglePass: true,
+      }),
+      MATERIAL.PLASTIC,
+    ),
   );
   mesh.name = "high-jump:net";
   return mesh;
@@ -374,7 +378,7 @@ export function makeHighJumpArt(layout: HighJumpLayout, lipY: number): THREE.Gro
   const group = new THREE.Group();
   group.name = "high-jump";
   const woodMaterial = timberMaterial();
-  const posts = mergedMesh("posts", postGeometry(layout, lipY), new THREE.MeshStandardMaterial({ color: POST_COLOR, roughness: POST_ROUGHNESS }));
+  const posts = mergedMesh("posts", postGeometry(layout, lipY), tagMaterial(new THREE.MeshStandardMaterial({ color: POST_COLOR, roughness: POST_ROUGHNESS }), MATERIAL.WOOD));
   posts.castShadow = true;
   const netFrame = mergedMesh("net-frame", netFrameGeometry(layout), woodMaterial);
   netFrame.castShadow = true;
@@ -385,10 +389,10 @@ export function makeHighJumpArt(layout: HighJumpLayout, lipY: number): THREE.Gro
   const trim = mergedMesh(
     "trim",
     [...frameTrim(layout), ...lipLine(layout, lipY), ...barrels(), ...chevrons(), ...stopBlock(lipY)],
-    new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.15 }),
+    tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.15 }), MATERIAL.PLASTIC),
   );
   trim.castShadow = true;
-  const boards = mergedMesh("boards", slatGeometry(layout), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+  const boards = mergedMesh("boards", slatGeometry(layout), tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }), MATERIAL.WOOD));
   boards.castShadow = true;
   group.add(posts, netFrame, kicker, fascia, boards, heightPlatesMesh(layout), trim, netMesh(layout));
   return group;

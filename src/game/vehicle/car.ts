@@ -22,6 +22,7 @@ import { PART_KIND, PartSeat } from "./part-geometry.ts";
 import { setBare } from "./interior.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
 import { HUB_PIN_MAX, HUB_PULL_STEP } from "../deform/constants.ts";
+import { smoothingNow, smoothNormals } from "./normal-smooth.ts";
 
 const _p = new THREE.Vector3();
 const _m = new THREE.Matrix4();
@@ -158,6 +159,9 @@ export class DeformableCar extends CarParts {
   /** The drawn body's load transfer over the physics body, and its wheels' seats (drawn only). */
   readonly suspension = new Suspension(this.frame);
   private bodyTyres: TyreSkin | null = null;
+  /** The Car contour strength the drawn normals were last smoothed at (`followContourStrength`). */
+  private smoothedWith = smoothingNow();
+  private nearView = true;
   private hoodTyres: TyreSkin | null = null;
   /** The parts the bonnet folds down onto, which its hold keeps under it: the cabin shell (its dash) and the engine bay. */
   private underHood: readonly PartSeat[] | null = null;
@@ -676,6 +680,7 @@ export class DeformableCar extends CarParts {
   /** Per rendered frame: the mesh follows the solve (skin, lamps, panels, glass, interior); nothing here changes the sim. */
   updateSkin(): void {
     if (this.vaporized || this.falling) return;
+    this.followContourStrength();
     this.deform.update(this.body.geometry);
     if (this.deform.skinnedThisFrame) this.poseLamps();
     // A load crushes the roof's skin with the masses at rest: the headliner follows it too. Before the panels: the bonnet's hold reads the shell and the bay.
@@ -683,9 +688,12 @@ export class DeformableCar extends CarParts {
     if (this.panelsFollow) {
       if (this.deform.skinnedThisFrame) this.skinPanels();
       this.holdSkinOffTyres(this.deform.skinnedThisFrame);
-      if (this.deform.skinnedThisFrame) this.poseOpenShells();
-      this.followGlass();
     }
+    if (this.deform.skinnedThisFrame) {
+      this.smoothDrawnSkin();
+      if (this.panelsFollow) this.poseOpenShells();
+    }
+    if (this.panelsFollow) this.followGlass();
     if (this.hullHelper?.visible) this.updateHullHelper();
     this.settleCasters();
   }
@@ -699,8 +707,24 @@ export class DeformableCar extends CarParts {
     if (this.panelsFollow) {
       this.skinPanels();
       this.holdSkinOffTyres(true);
-      this.poseOpenShells();
     }
+    this.smoothDrawnSkin();
+    if (this.panelsFollow) this.poseOpenShells();
+  }
+
+  /** The engine's LoD verdict: only a car skinned every frame (near or big on screen) is drawn round; one coming into that range is re-skinned once so it arrives smoothed. */
+  setNearView(near: boolean): void {
+    if (near === this.nearView) return;
+    this.nearView = near;
+    if (near && this.crashed) this.deform.skinOwed = true;
+  }
+
+  /** A new Car contour strength re-skins the crashed cars once, so their drawn normals follow the slider. */
+  private followContourStrength(): void {
+    const strength = smoothingNow();
+    if (strength === this.smoothedWith) return;
+    this.smoothedWith = strength;
+    if (this.crashed) this.deform.skinOwed = true;
   }
 
   /** A crushed skin drawn over a standing tyre stands on it (`TyreSkin`); a thrown wheel is the world's. */
@@ -718,6 +742,24 @@ export class DeformableCar extends CarParts {
     this.bodyTyres.hold(this.group, this.wheels, gone, lift, fresh);
     this.underHood ??= this.partSeats.filter((s) => s.kind === PART_KIND.interior || s.kind === PART_KIND.engineBay);
     if (!this.hoodOff()) this.hoodTyres.hold(this.group, this.wheels, gone, lift, fresh, this.underHood);
+  }
+
+  /** The body, bonnet, boot lid and door skins, just skinned and held off the tyres, drawn round: their normals pulled toward their neighbours' (`smoothNormals`). A lid or door that is off the car keeps its own. */
+  private smoothDrawnSkin(): void {
+    const strength = this.nearView ? smoothingNow() : 0;
+    smoothNormals(this.body.geometry, this.deform.restSkin, strength);
+    if (!this.panelsFollow) return;
+    let hood = true;
+    let trunk = true;
+    for (const p of this.parts) {
+      if (!p.detached) continue;
+      if (p.name === LID.hood) hood = false;
+      else if (p.name === LID.trunk) trunk = false;
+    }
+    if (hood) smoothNormals(this.hood.geometry, this.hoodRest, strength);
+    if (trunk) smoothNormals(this.trunk.geometry, this.trunkRest, strength);
+    if (!this.doorParts[0]!.detached) smoothNormals(this.doorMeshL.geometry, this.doorLRest, strength);
+    if (!this.doorParts[1]!.detached) smoothNormals(this.doorMeshR.geometry, this.doorRRest, strength);
   }
 
   /** Bonnet, boot lid, door skins, the police light bar, the skinned glass and the chrome trims follow the body skin; a door's hinge pose turns its skin after. */
@@ -903,6 +945,7 @@ export class DeformableCar extends CarParts {
     if (this.deform.skinnedThisFrame) {
       this.poseLamps();
       this.skinPanels();
+      this.smoothDrawnSkin();
     }
     this.followGlass();
     this.fitInterior();

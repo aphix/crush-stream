@@ -53,7 +53,7 @@ describe("given the dynamic box piles' drawing", () => {
   it("when the shader program is built, then the texture's uvs are scaled by each instance's own size in metres and centred on the face, once per tile, so a big box is not stretched", () => {
     const boxes = new CardboardBoxes(placements.length);
     const material = boxes.mesh.material as THREE.MeshStandardMaterial;
-    const shader = { vertexShader: "void main() {\n#include <uv_vertex>\n}" } as THREE.WebGLProgramParametersWithUniforms;
+    const shader = { uniforms: {}, vertexShader: "void main() {\n#include <uv_vertex>\n}", fragmentShader: "" } as THREE.WebGLProgramParametersWithUniforms;
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
     assert.match(shader.vertexShader, /#include <uv_vertex>\n#ifdef USE_INSTANCING/, "after the stock uv chunk, for instanced draws");
     assert.match(shader.vertexShader, /length\(instanceMatrix\[0\]\.xyz\)/, "the instance's own x size");

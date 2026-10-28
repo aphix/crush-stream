@@ -7,7 +7,7 @@ import { isChanged } from "@/game/hud/settings-changes";
 /** `off` for an unset look, else its strength as a percentage. */
 const strengthText = (v: number | null): string => (v === null ? "off" : `${Math.round(v * 100)}%`);
 
-/** The looks under Cel in the Playback section: the procedural sky, the two print looks (post tiers only) and the people's rim light. */
+/** The looks under Cel in the Playback section: the procedural sky, the two print looks (post tiers only), the people's rim light, and the material and car contour strengths. */
 export function LookRows({ state, engine }: Pick<HudProps, "state" | "engine">) {
   const noPost = state.fxTier === "off" || state.fxTier === "minimal";
   return (
@@ -73,6 +73,42 @@ export function LookRows({ state, engine }: Pick<HudProps, "state" | "engine">) 
         step={0.01}
         shown={strengthText(state.rimLight)}
         onValue={(v) => engine.current?.setRimLight(v)}
+      />
+      <RangeRow
+        label="Materials"
+        changed={isChanged(state, "materials")}
+        name="Material strength"
+        title="How much each surface class cuts the studio's reflection and how coarse its grain is: 0 is the old uniform shine, 100% the default"
+        value={state.materialStrength}
+        min={KNOB_RANGES.material.min}
+        max={KNOB_RANGES.material.max}
+        step={0.01}
+        shown={strengthText(state.materialStrength)}
+        onValue={(v) => engine.current?.setMaterialStrength(v)}
+      />
+      <RangeRow
+        label="Candy"
+        changed={isChanged(state, "candy")}
+        name="Candy paint"
+        title="Car exteriors: deeper saturated colour under a full, sharp clear coat, and on FX high and ultra a thin-film hue shift in its reflection. Scaled by Materials; 0 is the plain paint, 100% the default"
+        value={state.candyStrength}
+        min={KNOB_RANGES.candy.min}
+        max={KNOB_RANGES.candy.max}
+        step={0.01}
+        shown={strengthText(state.candyStrength)}
+        onValue={(v) => engine.current?.setCandyStrength(v)}
+      />
+      <RangeRow
+        label="Contour"
+        changed={isChanged(state, "contours")}
+        name="Car contour"
+        title="How round a crushed car's facets are drawn (its normals pulled toward their neighbours', creases and panel edges kept): 0 is off, 100% the default, 200% a second pass"
+        value={state.contourStrength}
+        min={KNOB_RANGES.contour.min}
+        max={KNOB_RANGES.contour.max}
+        step={0.01}
+        shown={strengthText(state.contourStrength)}
+        onValue={(v) => engine.current?.setContourStrength(v)}
       />
     </>
   );

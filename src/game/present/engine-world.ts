@@ -3,6 +3,7 @@ import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { applyMarkMap } from "./engine-marks.ts";
 import { groundMaterial, groundMesh } from "../scenes/ground-stack.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
+import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { rowElevation, SKY_LOOKS, SkyDome, skyDetailFor, type SkyDetail, type SkyMode } from "./sky-dome.ts";
 import { SANDBOX_SKY } from "./sky-procedural.ts";
@@ -74,23 +75,23 @@ export function makeJerseyBarrier(): THREE.Group {
   shape.closePath();
 
   const concreteTex = makeConcrete();
-  const concrete = new THREE.MeshStandardMaterial({
+  const concrete = tagMaterial(new THREE.MeshStandardMaterial({
     color: 0xc4bfb3,
     roughness: 0.94,
     metalness: 0.05,
     map: concreteTex,
-  });
-  const weathered = new THREE.MeshStandardMaterial({
+  }), MATERIAL.CONCRETE);
+  const weathered = tagMaterial(new THREE.MeshStandardMaterial({
     color: 0xaea99d,
     roughness: 0.96,
     metalness: 0.04,
     map: concreteTex,
-  });
-  const jointMat = new THREE.MeshStandardMaterial({
+  }), MATERIAL.CONCRETE);
+  const jointMat = tagMaterial(new THREE.MeshStandardMaterial({
     color: 0x5c5852,
     roughness: 0.8,
     metalness: 0.2,
-  });
+  }), MATERIAL.CONCRETE);
 
   const segLen = 1.78;
   for (const [zOff, mat] of [
@@ -119,12 +120,12 @@ export function makeJerseyBarrier(): THREE.Group {
 }
 
 /** One head material for every lamp pole, so night mode lights them all at once. */
-const lampHead = new THREE.MeshStandardMaterial({
+const lampHead = tagMaterial(new THREE.MeshStandardMaterial({
   color: 0xf0e6c8,
   emissive: 0xf0e6c8,
   emissiveIntensity: 1.4,
   roughness: 0.4,
-});
+}), MATERIAL.GLASS);
 /** Fake light pool under each lamp: an additive ground decal, drawn only at night. */
 const lampPool = groundMaterial(
   new THREE.MeshBasicMaterial({
@@ -142,7 +143,7 @@ export function makeLamp(withPool = true): THREE.Group {
   const g = new THREE.Group();
   const pole = new THREE.Mesh(
     new THREE.CylinderGeometry(0.08, 0.1, 5.2, 8),
-    new THREE.MeshStandardMaterial({ color: 0x2a2c32, roughness: 0.7, metalness: 0.4 }),
+    tagMaterial(new THREE.MeshStandardMaterial({ color: 0x2a2c32, roughness: 0.7, metalness: 0.4 }), MATERIAL.PAINTED_METAL),
   );
   pole.position.y = 2.6;
   pole.castShadow = true;
@@ -334,12 +335,12 @@ export class WorldStage {
     this.fill.position.fromArray(DEFAULT_FILL_AT);
     scene.add(this.fill);
 
-    this.groundMat = new THREE.MeshStandardMaterial({
+    this.groundMat = tagMaterial(new THREE.MeshStandardMaterial({
       color: 0x2a2c34,
       roughness: 0.88,
       metalness: 0.06,
       map: tagSurface(makeAsphalt(), "asphalt", STAGE_DIAMETER),
-    });
+    }), MATERIAL.ASPHALT);
     applyMarkMap(this.groundMat);
     this.ground = groundMesh(new THREE.CircleGeometry(STAGE_DIAMETER / 2, 64), this.groundMat, "terrain");
     this.ground.rotation.x = -Math.PI / 2;

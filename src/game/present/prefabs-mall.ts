@@ -6,7 +6,8 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { BASIN, FOUNTAIN, LINCOLN, lincolnColumns, POOL, WHITE_HOUSE, type Slab } from "../world/catalog.ts";
-import { box, circleOutline, cyl, MARBLE_SHADE, type Piece, type PrefabMaterials, type PrefabPart, painted, poolStone, squareFrustum } from "./prefab-pieces.ts";
+import { box, circleOutline, classedPieces, cyl, MARBLE_SHADE, type Piece, type PrefabMaterials, type PrefabPart, painted, poolStone, squareFrustum } from "./prefab-pieces.ts";
+import { MATERIAL, type MaterialClass } from "../vehicle/material-class.ts";
 import { type Brick, CAPITOL, CAPITOL_POOL, FLAGPOLE, capitolBalustrades, capitolPool, capitolWestStair, domeRing, figure } from "../world/landmarks.ts";
 
 /** The White House's whitewashed sandstone, its trim, the grey roof, dark glass and door, and the flag's colours. */
@@ -31,8 +32,8 @@ function gable(b: WhBlock): THREE.BufferGeometry {
  * Dark panes across a face: `bays` x centres (or z, `onX` false) on a wall face at `face`, each `w` wide from `y0` to `y1`,
  * standing `WH_PROUD` out of it.
  */
-function panes(bays: readonly number[], face: number, onX: boolean, w: number, y0: number, y1: number, hex = WH_SHADE.glass): Piece[] {
-  return bays.map((c): Piece => [onX ? box(w, y1 - y0, WH_PROUD * 2, c, (y0 + y1) / 2, face) : box(WH_PROUD * 2, y1 - y0, w, face, (y0 + y1) / 2, c), hex]);
+function panes(bays: readonly number[], face: number, onX: boolean, w: number, y0: number, y1: number, hex = WH_SHADE.glass, materialClass: MaterialClass = MATERIAL.GLASS): Piece[] {
+  return bays.map((c): Piece => [onX ? box(w, y1 - y0, WH_PROUD * 2, c, (y0 + y1) / 2, face) : box(WH_PROUD * 2, y1 - y0, w, face, (y0 + y1) / 2, c), hex, materialClass]);
 }
 
 /** `n` evenly spaced centres across `span` either side of 0. */
@@ -40,7 +41,7 @@ const bays = (n: number, span: number): number[] => Array.from({ length: n }, (_
 
 export function whiteHouse(): Piece[] {
   const w = WHITE_HOUSE;
-  const out: Piece[] = [
+  const out: Piece[] = classedPieces([
     [whBox(w.footing), WH_SHADE.trim],
     [whBox(w.walls), WH_SHADE.wall],
     [whBox(w.cornice), WH_SHADE.trim],
@@ -59,7 +60,7 @@ export function whiteHouse(): Piece[] {
     [whDrum(w.southBalustrade, WH_SEGMENTS.bow), WH_SHADE.wall],
     ...[...w.colonnades, ...w.wings].map((b): Piece => [whBox(b), WH_SHADE.wall]),
     ...w.wingCornices.map((b): Piece => [whBox(b), WH_SHADE.trim]),
-  ];
+  ], MATERIAL.STONE);
   // Eleven bays to a long front, five to an end: the State Floor's tall windows, the upper floor's, and on the south (where the
   // lawn falls away) the ground floor's; the bow hides the middle three bays of the south front.
   const { hx, hz } = w.walls;
@@ -68,16 +69,16 @@ export function whiteHouse(): Piece[] {
   for (const [face, xs] of [[-hz, front], [hz, south]] as const) out.push(...panes(xs, face, true, 1.5, 4.6, 7.8), ...panes(xs, face, true, 1.4, 11.2, 13.6));
   out.push(...panes(south, hz, true, 1.3, 2.2, 3.8));
   for (const s of [-1, 1]) out.push(...panes(bays(5, 8.4), s * hx, false, 1.5, 6.2, 9.2), ...panes(bays(5, 8.4), s * hx, false, 1.4, 11.2, 13.6));
-  out.push(...panes([0], -hz, true, 2.4, w.northFloor.y1, 5.4, WH_SHADE.door));
+  out.push(...panes([0], -hz, true, 2.4, w.northFloor.y1, 5.4, WH_SHADE.door, MATERIAL.WOOD));
   // The colonnades' arches on their south side and a row of windows down each wing's fronts.
   for (const c of w.colonnades) out.push(...panes(bays(7, c.hx - 2.5).map((x) => x + c.x), c.z + c.hz, true, 2.2, 1, 3.8));
   for (const g of w.wings) for (const s of [-1, 1]) out.push(...panes(bays(8, g.hx - 3).map((x) => x + g.x), g.z + s * g.hz, true, 1.4, 4.2, 6.8));
   // The flag flies to +x from the top of the pole: thirteen stripes and the canton over the top seven.
   const { pole, fly, drop } = w.flag;
-  out.push([cyl(pole.r * 0.6, pole.r, pole.y0, pole.y1, 8), WH_SHADE.pole]);
+  out.push([cyl(pole.r * 0.6, pole.r, pole.y0, pole.y1, 8), WH_SHADE.pole, MATERIAL.METAL]);
   const stripe = drop / 13;
-  for (let i = 0; i < 13; i++) out.push([box(fly, stripe, 0.08, pole.r + fly / 2, pole.y1 - stripe * (i + 0.5), 0), i % 2 ? WH_SHADE.white : WH_SHADE.red]);
-  out.push([box(fly * 0.4, stripe * 7, 0.1, pole.r + fly * 0.2, pole.y1 - stripe * 3.5, 0), WH_SHADE.blue]);
+  for (let i = 0; i < 13; i++) out.push([box(fly, stripe, 0.08, pole.r + fly / 2, pole.y1 - stripe * (i + 0.5), 0), i % 2 ? WH_SHADE.white : WH_SHADE.red, MATERIAL.PLASTIC]);
+  out.push([box(fly * 0.4, stripe * 7, 0.1, pole.r + fly * 0.2, pole.y1 - stripe * 3.5, 0), WH_SHADE.blue, MATERIAL.PLASTIC]);
   return out;
 }
 
@@ -90,10 +91,10 @@ export function fountain(): Piece[] {
   const { basin, water, pedestal, jet, spray } = FOUNTAIN;
   return [
     ...poolStone(circleOutline(basin.r, FOUNTAIN_SEGMENTS), circleOutline(water.r, FOUNTAIN_SEGMENTS), water.y0, basin.y1, FOUNTAIN_SHADE.stone),
-    [cyl(water.r, water.r, water.y0, basin.y1 + POOL.brim, FOUNTAIN_SEGMENTS), FOUNTAIN_SHADE.water],
-    [cyl(pedestal.r, pedestal.r, basin.y1, pedestal.y1, 24), FOUNTAIN_SHADE.stone],
-    [cyl(jet.r, jet.r, pedestal.y1, jet.y1, 12), FOUNTAIN_SHADE.spray],
-    [cyl(jet.r, spray.r, spray.y0, jet.y1, 24), FOUNTAIN_SHADE.spray],
+    [cyl(water.r, water.r, water.y0, basin.y1 + POOL.brim, FOUNTAIN_SEGMENTS), FOUNTAIN_SHADE.water, MATERIAL.GLASS],
+    [cyl(pedestal.r, pedestal.r, basin.y1, pedestal.y1, 24), FOUNTAIN_SHADE.stone, MATERIAL.STONE],
+    [cyl(jet.r, jet.r, pedestal.y1, jet.y1, 12), FOUNTAIN_SHADE.spray, MATERIAL.GLASS],
+    [cyl(jet.r, spray.r, spray.y0, jet.y1, 24), FOUNTAIN_SHADE.spray, MATERIAL.GLASS],
   ];
 }
 
@@ -184,15 +185,15 @@ export function lincoln(): Piece[] {
   }
   const bowl = L.bowl;
   const io = LINCOLN_IONIC;
-  return [
-    // The terrace, the grand stair and its cheek blocks with their braziers.
+  const bronze = [-1, 1].flatMap((s): Piece[] => [
+    [cyl(bowl.foot, bowl.foot, bowl.y0, bowl.y0 + 0.6, 12).translate(s * L.cheeks[0].x, 0, bowl.z), LINCOLN_SHADE.bronze, MATERIAL.METAL],
+    [cyl(bowl.r, bowl.foot, bowl.y0 + 0.6, bowl.y1, 16).translate(s * L.cheeks[0].x, 0, bowl.z), LINCOLN_SHADE.bronze, MATERIAL.METAL],
+  ]);
+  const stone: Piece[] = [
+    // The terrace, the grand stair and its cheek blocks.
     [slab(L.terrace), LINCOLN_SHADE.granite],
     ...L.stair.map((b): Piece => [slab(b), MARBLE_SHADE.trim]),
     ...L.cheeks.flatMap((b): Piece[] => [[slab(b), LINCOLN_SHADE.granite], [slab({ ...b, x: -b.x }), LINCOLN_SHADE.granite]]),
-    ...[-1, 1].flatMap((s): Piece[] => [
-      [cyl(bowl.foot, bowl.foot, bowl.y0, bowl.y0 + 0.6, 12).translate(s * L.cheeks[0].x, 0, bowl.z), LINCOLN_SHADE.bronze],
-      [cyl(bowl.r, bowl.foot, bowl.y0 + 0.6, bowl.y1, 16).translate(s * L.cheeks[0].x, 0, bowl.z), LINCOLN_SHADE.bronze],
-    ]),
     // The great steps, the flight up through them, the stylobate.
     ...L.crepidoma.map((b): Piece => [slab(b), MARBLE_SHADE.trim]),
     ...L.upper.map((b): Piece => [slab(b), MARBLE_SHADE.low]),
@@ -220,6 +221,7 @@ export function lincoln(): Piece[] {
     [slab(L.atticCornice), MARBLE_SHADE.trim],
     [slab(L.roof), MARBLE_SHADE.high],
   ];
+  return [...classedPieces(stone, MATERIAL.STONE), ...bronze];
 }
 
 
@@ -239,7 +241,7 @@ function brickGeometry(b: Brick): THREE.BufferGeometry {
 
 /** A monument of bricks: its marble ones white, the rest bronze. */
 export function monumentPieces(bricks: readonly Brick[]): Piece[] {
-  return bricks.map((b): Piece => [brickGeometry(b), b.stone ? MARBLE_SHADE.high : BRONZE]);
+  return bricks.map((b): Piece => [brickGeometry(b), b.stone ? MARBLE_SHADE.high : BRONZE, b.stone ? MATERIAL.STONE : MATERIAL.METAL]);
 }
 
 /** The Capitol Reflecting Pool: its stone rim, and its water a centimetre over the rim inside it. */
@@ -249,7 +251,7 @@ export function capitolPoolParts(mats: PrefabMaterials): PrefabPart[] {
   const shape = new THREE.Shape(water.map(([x, z]) => new THREE.Vector2(x, -z)));
   const sheet = new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2).translate(0, CAPITOL_POOL.y1 + CAPITOL_POOL.brim, 0);
   return [
-    { geometry: painted(rim.map((b): Piece => [brickGeometry(b), POOL_SHADE.stone])), material: mats.plain, shared: false },
+    { geometry: painted(rim.map((b): Piece => [brickGeometry(b), POOL_SHADE.stone, MATERIAL.STONE])), material: mats.plain, shared: false },
     { geometry: painted([[sheet, POOL_SHADE.water]]), material: mats.water, shared: false },
   ];
 }
@@ -267,6 +269,7 @@ function capitolWindows(): Piece[] {
   const pane = (onX: boolean, face: number, at: number, y0: number, y1: number): Piece => [
     onX ? box(proud * 2, y1 - y0, width, face, (y0 + y1) / 2, at) : box(width, y1 - y0, proud * 2, at, (y0 + y1) / 2, face),
     CAPITOL_GLASS,
+    MATERIAL.GLASS,
   ];
   for (const [y0, y1] of floors) {
     // The central block's west front (its east is behind the portico); each wing's west and east fronts and its far end.
@@ -302,7 +305,7 @@ function domeRibs(): Piece[] {
       const r = (lo.r + hi.r) / 2 + (dy / len) * (ribOut / 2);
       const y = (lo.y + hi.y) / 2 - (dr / len) * (ribOut / 2);
       const slab = new THREE.BoxGeometry(rib, len, ribOut).rotateX(detAtan2(dr, dy)).rotateY(a).translate(detSin(a) * r, y, detCos(a) * r);
-      out.push([slab, MARBLE_SHADE.dome]);
+      out.push([slab, MARBLE_SHADE.dome, MATERIAL.STONE]);
     }
   }
   return out;
@@ -312,38 +315,38 @@ function domeRibs(): Piece[] {
 export function capitol(): Piece[] {
   const { blocks, colonnades, entablatures, pediments, attic, columns, drum, entablature, dome, lantern, freedom } = CAPITOL;
   const block = (b: { hx: number; hz: number; x: number; z: number; y0: number; y1: number }): THREE.BufferGeometry => box(b.hx * 2, b.y1 - b.y0, b.hz * 2, b.x, (b.y0 + b.y1) / 2, b.z);
-  const out: Piece[] = blocks.map((b): Piece => [block(b), b.y0 === 0 ? MARBLE_SHADE.trim : MARBLE_SHADE.wall]);
-  out.push(...capitolWestStair().map((b): Piece => [block(b), MARBLE_SHADE.trim]));
-  out.push(...capitolBalustrades().map((b): Piece => [block(b), MARBLE_SHADE.trim]));
+  const out: Piece[] = blocks.map((b): Piece => [block(b), b.y0 === 0 ? MARBLE_SHADE.trim : MARBLE_SHADE.wall, MATERIAL.STONE]);
+  out.push(...capitolWestStair().map((b): Piece => [block(b), MARBLE_SHADE.trim, MATERIAL.STONE]));
+  out.push(...capitolBalustrades().map((b): Piece => [block(b), MARBLE_SHADE.trim, MATERIAL.STONE]));
   for (const c of colonnades) {
     for (const at of spread(c.count, (c.to - c.from) / 2)) {
       const mid = (c.from + c.to) / 2 + at;
-      out.push([cyl(c.r * 0.9, c.r, c.y0, c.y1, COLUMN_SIDES).translate(c.alongX ? mid : c.at, 0, c.alongX ? c.at : mid), MARBLE_SHADE.dome]);
+      out.push([cyl(c.r * 0.9, c.r, c.y0, c.y1, COLUMN_SIDES).translate(c.alongX ? mid : c.at, 0, c.alongX ? c.at : mid), MARBLE_SHADE.dome, MATERIAL.STONE]);
     }
   }
-  out.push(...entablatures.map((e): Piece => [block(e), MARBLE_SHADE.trim]));
-  out.push(...pediments.map((p): Piece => [pedimentGeometry(p), MARBLE_SHADE.wall]));
+  out.push(...entablatures.map((e): Piece => [block(e), MARBLE_SHADE.trim, MATERIAL.STONE]));
+  out.push(...pediments.map((p): Piece => [pedimentGeometry(p), MARBLE_SHADE.wall, MATERIAL.STONE]));
   out.push(...capitolWindows());
-  out.push([cyl(attic.r, attic.r, attic.y0, attic.y1, CAPITOL_SEGMENTS), MARBLE_SHADE.wall]);
-  out.push([cyl(drum.r, drum.r, drum.y0, drum.y1, CAPITOL_SEGMENTS), MARBLE_SHADE.trim]);
+  out.push([cyl(attic.r, attic.r, attic.y0, attic.y1, CAPITOL_SEGMENTS), MARBLE_SHADE.wall, MATERIAL.STONE]);
+  out.push([cyl(drum.r, drum.r, drum.y0, drum.y1, CAPITOL_SEGMENTS), MARBLE_SHADE.trim, MATERIAL.STONE]);
   for (let i = 0; i < columns.count; i++) {
     const a = (i * 2 * Math.PI) / columns.count;
-    out.push([cyl(columns.r, columns.r, columns.y0, columns.y1, 8).translate(detSin(a) * columns.ring, 0, detCos(a) * columns.ring), MARBLE_SHADE.dome]);
+    out.push([cyl(columns.r, columns.r, columns.y0, columns.y1, 8).translate(detSin(a) * columns.ring, 0, detCos(a) * columns.ring), MARBLE_SHADE.dome, MATERIAL.STONE]);
     // The drum's tall windows, one behind each gap of the colonnade.
     const b = a + Math.PI / columns.count;
-    out.push([box(1.4, 6, 0.1, 0, 0, 0).rotateY(b).translate(detSin(b) * drum.r, 42.5, detCos(b) * drum.r), CAPITOL_GLASS]);
+    out.push([box(1.4, 6, 0.1, 0, 0, 0).rotateY(b).translate(detSin(b) * drum.r, 42.5, detCos(b) * drum.r), CAPITOL_GLASS, MATERIAL.GLASS]);
   }
-  out.push([cyl(entablature.r, entablature.r, entablature.y0, entablature.y1, CAPITOL_SEGMENTS), MARBLE_SHADE.wall]);
+  out.push([cyl(entablature.r, entablature.r, entablature.y0, entablature.y1, CAPITOL_SEGMENTS), MARBLE_SHADE.wall, MATERIAL.STONE]);
   // The sphere's own latitude rings are the ones `domeRing` names, so the colliders' steps meet the drawn dome on a ring.
   const shell = new THREE.SphereGeometry(dome.r, CAPITOL_SEGMENTS, dome.rings, 0, Math.PI * 2, 0, Math.PI / 2);
-  out.push([shell.scale(1, (dome.crown - dome.spring) / dome.r, 1).translate(0, dome.spring, 0), MARBLE_SHADE.dome]);
+  out.push([shell.scale(1, (dome.crown - dome.spring) / dome.r, 1).translate(0, dome.spring, 0), MARBLE_SHADE.dome, MATERIAL.STONE]);
   out.push(...domeRibs());
-  out.push([cyl(lantern.r, lantern.r, lantern.y0, lantern.y1, 16), MARBLE_SHADE.dome]);
+  out.push([cyl(lantern.r, lantern.r, lantern.y0, lantern.y1, 16), MARBLE_SHADE.dome, MATERIAL.STONE]);
   for (let i = 0; i < lantern.columns; i++) {
     const a = (i * 2 * Math.PI) / lantern.columns;
-    out.push([cyl(lantern.columnR, lantern.columnR, lantern.y0, lantern.y1, 8).translate(detSin(a) * lantern.ring, 0, detCos(a) * lantern.ring), MARBLE_SHADE.dome]);
+    out.push([cyl(lantern.columnR, lantern.columnR, lantern.y0, lantern.y1, 8).translate(detSin(a) * lantern.ring, 0, detCos(a) * lantern.ring), MARBLE_SHADE.dome, MATERIAL.STONE]);
   }
-  out.push([cyl(0.9, lantern.r, lantern.y1, lantern.spire, 16), MARBLE_SHADE.trim]);
+  out.push([cyl(0.9, lantern.r, lantern.y1, lantern.spire, 16), MARBLE_SHADE.trim, MATERIAL.STONE]);
   out.push(...monumentPieces(figure(0, 0, lantern.spire, freedom.scale)));
   return out;
 }
@@ -357,11 +360,11 @@ const CANTON_PROUD = 0.004;
 export function flagpole(): Piece[] {
   const { r, top, flag } = FLAGPOLE;
   const stripe = flag.height / flag.stripes;
-  const out: Piece[] = [[cyl(r, r, 0, top, 12), FLAG_SHADE.pole]];
+  const out: Piece[] = [[cyl(r, r, 0, top, 12), FLAG_SHADE.pole, MATERIAL.METAL]];
   for (let i = 0; i < flag.stripes; i++) {
-    out.push([box(flag.length, stripe, flag.thick, r + flag.length / 2, top - stripe * (i + 0.5), 0), i % 2 ? FLAG_SHADE.white : FLAG_SHADE.red]);
+    out.push([box(flag.length, stripe, flag.thick, r + flag.length / 2, top - stripe * (i + 0.5), 0), i % 2 ? FLAG_SHADE.white : FLAG_SHADE.red, MATERIAL.PLASTIC]);
   }
   const canton = flag.length * 0.4;
-  out.push([box(canton, stripe * 4, flag.thick + CANTON_PROUD * 2, r + canton / 2, top - stripe * 2, 0), FLAG_SHADE.blue]);
+  out.push([box(canton, stripe * 4, flag.thick + CANTON_PROUD * 2, r + canton / 2, top - stripe * 2, 0), FLAG_SHADE.blue, MATERIAL.PLASTIC]);
   return out;
 }

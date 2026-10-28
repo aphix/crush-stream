@@ -1,9 +1,10 @@
 import type * as THREE from "three";
-import { DECAL_FACE_AT, DECAL_FLAT, DECAL_H, DECAL_HALF_X, DECAL_HALF_Z, DECAL_NO_PAINT, DECAL_RAISE_STEP, DECAL_W, DECAL_Y, decalMap, FABRIC, FABRIC_CONTRAST, FABRIC_MAP, FABRIC_RELIEF, FABRIC_ROUGHNESS, FABRIC_TILE } from "./dummy-cloth.ts";
+import { DECAL_FACE_AT, DECAL_FLAT, DECAL_H, DECAL_HALF_X, DECAL_HALF_Z, DECAL_NO_PAINT, DECAL_RAISE_STEP, DECAL_W, DECAL_Y, decalMap, FABRIC, FABRIC_CONTRAST, FABRIC_ENV, FABRIC_MAP, FABRIC_RELIEF, FABRIC_ROUGHNESS, FABRIC_TILE } from "./dummy-cloth.ts";
 import { DRESS_DECALS } from "./dummy-dress.ts";
 import { CAPPED, CUTS_AT, FLAGS_AT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, OPTIONAL, ORBS_AT, PALETTE_AT, PRINT_ATTRIBUTE, ROLE, ROLES, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE } from "./dummy-rig.ts";
 import { FACE_RELIEF, faceReliefMap, PRINT_CELL, PRINT_CELLS, PRINT_TEXELS, printMap } from "./dummy-texture.ts";
 import { RIM_FRAGMENT, RIM_LIGHT } from "./rim-light.ts";
+import { MATERIAL_STRENGTH, MATERIAL_STRENGTH_GLSL } from "../vehicle/material-class.ts";
 
 /**
  * The dummies' shader patch: GLSL skinning from the slot's pose row; in the fragment the slot's garment cuts over the body
@@ -90,6 +91,8 @@ const ROLE_FABRIC: Record<keyof typeof ROLE, number> = {
 /** A role's own roughness, over its fabric's (-1: the fabric's): metal, glass and rubber. */
 const ROLE_ROUGHNESS: Partial<Record<keyof typeof ROLE, number>> = { BADGE: 0.3, BUCKLE: 0.3, EYES: 0.1, SOLE: 0.8 };
 const ROLE_METAL: Partial<Record<keyof typeof ROLE, number>> = { BADGE: 1, BUCKLE: 1 };
+/** A role's own env share over its fabric's (-1: the fabric's): the metal and the eyes mirror the studio, a rubber sole barely. */
+const ROLE_ENV: Partial<Record<keyof typeof ROLE, number>> = { BADGE: 1, BUCKLE: 1, EYES: 1, SOLE: 0.25 };
 
 const glslFloat = (value: number): string => value.toFixed(6);
 const byRole = (table: Partial<Record<keyof typeof ROLE, number>>, absent: number): number[] =>
@@ -138,9 +141,11 @@ ${DOLL_CUTS}
 const float DOLL_RELIEF[${FABRIC.NONE}] = float[${FABRIC.NONE}](${FABRIC_RELIEF.map(glslFloat).join(", ")});
 const float DOLL_CONTRAST[${FABRIC.NONE}] = float[${FABRIC.NONE}](${FABRIC_CONTRAST.map(glslFloat).join(", ")});
 const float DOLL_FABRIC_ROUGHNESS[${FABRIC.NONE + 1}] = float[${FABRIC.NONE + 1}](${FABRIC_ROUGHNESS.map(glslFloat).join(", ")});
+const float DOLL_FABRIC_ENV[${FABRIC.NONE + 1}] = float[${FABRIC.NONE + 1}](${FABRIC_ENV.map(glslFloat).join(", ")});
 const int DOLL_ROLE_FABRIC[${ROLES}] = int[${ROLES}](${byRole(ROLE_FABRIC, FABRIC.NONE).join(", ")});
 const float DOLL_ROLE_ROUGHNESS[${ROLES}] = float[${ROLES}](${byRole(ROLE_ROUGHNESS, -1).map(glslFloat).join(", ")});
 const float DOLL_ROLE_METAL[${ROLES}] = float[${ROLES}](${byRole(ROLE_METAL, 0).map(glslFloat).join(", ")});
+const float DOLL_ROLE_ENV[${ROLES}] = float[${ROLES}](${byRole(ROLE_ENV, -1).map(glslFloat).join(", ")});
 int dollPickFabric(int pick, int kit) { return pick == ${PICK.BARE} ? ${FABRIC.SKIN} : (kit >> (4 * (pick - 1))) & 15; }
 int dollRoleFabric(int role, int kit, int flags) {
   int fabric = DOLL_ROLE_FABRIC[role];
@@ -205,7 +210,8 @@ dollHeight += dollOnCloth * (dollDecal.g * 255.0 - ${glslFloat(DECAL_FLAT)}) * $
 if (dollPaint < ${glslFloat(DECAL_NO_PAINT - 0.5)}) dollCloth = mix(dollCloth, dollRow(${PALETTE_AT} + int(dollPaint + 0.5), vDollSlot).rgb, dollDecal.a * dollDecalOn);
 diffuseColor.rgb *= dollCloth;
 float dollRoughness = DOLL_ROLE_ROUGHNESS[dollRoleHere] >= 0.0 ? DOLL_ROLE_ROUGHNESS[dollRoleHere] : DOLL_FABRIC_ROUGHNESS[min(dollFabric, ${FABRIC.NONE})];
-float dollMetalness = DOLL_ROLE_METAL[dollRoleHere];`;
+float dollMetalness = DOLL_ROLE_METAL[dollRoleHere];
+float dollEnv = DOLL_ROLE_ENV[dollRoleHere] >= 0.0 ? DOLL_ROLE_ENV[dollRoleHere] : DOLL_FABRIC_ENV[min(dollFabric, ${FABRIC.NONE})];`;
 
 /**
  * The print over a fragment: the atlas cell's texel at the vertex's (u, v), held inside the cell, over the cloth by its
@@ -239,7 +245,7 @@ export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: 
       shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvec3 dollP;\nvec3 dollN;\ndollSkin(dollP, dollN);\ntransformed = dollP;");
       return;
     }
-    Object.assign(shader.uniforms, { prints: { value: prints }, faceRelief: { value: faceReliefMap() }, fabrics: { value: FABRIC_MAP }, decals: { value: DECALS }, uRim: RIM_LIGHT });
+    Object.assign(shader.uniforms, { prints: { value: prints }, faceRelief: { value: faceReliefMap() }, fabrics: { value: FABRIC_MAP }, decals: { value: DECALS }, uRim: RIM_LIGHT, materialStrength: MATERIAL_STRENGTH });
     shader.vertexShader = shader.vertexShader
       .replace(
         "#include <common>",
@@ -260,12 +266,12 @@ vDollSlot = gl_InstanceID;
 transformed = dollP;`,
       );
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", `#include <common>\n${DOLL_FRAGMENT_COMMON}`)
+      .replace("#include <common>", `#include <common>\n${MATERIAL_STRENGTH_GLSL}\n${DOLL_FRAGMENT_COMMON}`)
       .replace("#include <map_fragment>", `#include <map_fragment>\n${CLOTH_FRAGMENT}\n${PRINT_FRAGMENT}`)
       .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\nroughnessFactor = dollRoughness;")
       .replace("#include <metalnessmap_fragment>", "#include <metalnessmap_fragment>\nmetalnessFactor = dollMetalness;")
       .replace("#include <normal_fragment_maps>", "#include <normal_fragment_maps>\nnormal = dollBump(-vViewPosition, normal, vec2(dFdx(dollHeight), dFdy(dollHeight)), faceDirection);")
-      .replace("#include <lights_fragment_end>", `#include <lights_fragment_end>\n${RIM_FRAGMENT}`);
+      .replace("#include <lights_fragment_end>", `#include <lights_fragment_end>\n${RIM_FRAGMENT}\nreflectedLight.indirectSpecular *= materialSpecular(dollEnv);`);
   };
   material.vertexColors = false;
   material.customProgramCacheKey = () => `${prevKey.call(material)}|dolls-${lit}`;

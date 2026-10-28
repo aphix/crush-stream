@@ -73,7 +73,7 @@ const MIRROR_GLASS = { share: [0.82, 0.74], proud: 0.002 } as const;
 /** The cap's centre over the seat (m), as the platform mirror's. */
 const MIRROR_CAP_Y = 0.01;
 /** Mirror feet and stalks: black plastic, unless the mirror is chrome. */
-const MIRROR_FITTING = [0x1c1e22, 0.5, 0.3] as const;
+const MIRROR_FITTING = [0x1c1e22, 0.5, 0.05] as const;
 
 /** A tear cap's section at its rear face (a nose cap's at its front face) as a share of the full section: the sedan's mirror sweeps in toward its glass, the hatch's and SUV's toward their noses. */
 const MIRROR_TEAR = 0.6;

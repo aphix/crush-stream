@@ -2,6 +2,9 @@ import { hypot2 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { applyCarFinish, finishForTier } from "../vehicle/car-finish.ts";
+import { CANDY_FILM, CANDY_TIER } from "../vehicle/car-candy.ts";
+import { MATERIAL_GRAIN } from "../vehicle/material-class.ts";
+import { SMOOTHING_TIER } from "../vehicle/normal-smooth.ts";
 import type { ChaseCamera } from "./engine-camera.ts";
 import { TireSmokeSystem, type GlassDotSystem, type SparkSystem } from "./engine-fx.ts";
 import type { FountainSystem } from "./fountain-system.ts";
@@ -585,6 +588,10 @@ export class Cinematics {
     if (tier === "ultra") this.ultra!.enable();
     else if (was === "ultra") this.ultra?.disable();
     this.dressCarFinish(tier);
+    MATERIAL_GRAIN.value = finishForTier(tier) ? 1 : 0;
+    SMOOTHING_TIER.value = finishForTier(tier) ? 1 : 0;
+    CANDY_TIER.value = tier === "off" || tier === "minimal" ? 0 : 1;
+    CANDY_FILM.value = finishForTier(tier) ? 1 : 0;
     if (!on) this.reset();
   }
 

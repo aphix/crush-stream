@@ -14,6 +14,7 @@ import {
   makeTyreStackTexture,
   WALL_HEIGHT_METRES,
 } from "./derby-textures.ts";
+import { MATERIAL, tagMaterial, type MaterialClass } from "../vehicle/material-class.ts";
 import { groundMesh } from "./ground-stack.ts";
 
 /** Inner face of the ring wall (m from the middle): the AI's keep-in radius. */
@@ -214,7 +215,7 @@ function cellTriangles(nearLow: number, farLow: number, nearHigh: number, farHig
 }
 
 function makeFloor(ground: DerbyGround): THREE.Mesh {
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: FLOOR_ROUGHNESS, metalness: FLOOR_METALNESS, map: makeDirtTexture() });
+  const material = tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: FLOOR_ROUGHNESS, metalness: FLOOR_METALNESS, map: makeDirtTexture() }), MATERIAL.SOIL);
   const floor = groundMesh(makeFloorGeometry(ground), material, "terrain");
   floor.name = "derby-floor";
   floor.receiveShadow = true;
@@ -277,7 +278,7 @@ function makeDeckGeometry(ground: DerbyGround): THREE.BufferGeometry {
 }
 
 function makeRampDecks(ground: DerbyGround): THREE.Mesh {
-  const material = new THREE.MeshStandardMaterial({ map: makePlankTexture(), color: DECK_TINT, roughness: DECK_ROUGHNESS, metalness: DECK_METALNESS });
+  const material = tagMaterial(new THREE.MeshStandardMaterial({ map: makePlankTexture(), color: DECK_TINT, roughness: DECK_ROUGHNESS, metalness: DECK_METALNESS }), MATERIAL.WOOD);
   const decks = groundMesh(makeDeckGeometry(ground), material, "decal");
   decks.name = "derby-ramp-decks";
   decks.receiveShadow = true;
@@ -288,7 +289,7 @@ function makeOuterGround(): THREE.Mesh {
   const geometry = new THREE.RingGeometry(DERBY_ARENA.radius - OUTER_INNER_OVERLAP, OUTER_RADIUS, OUTER_SEGMENTS);
   geometry.rotateX(-Math.PI / 2);
   geometry.translate(0, OUTER_HEIGHT, 0);
-  const outer = groundMesh(geometry, new THREE.MeshStandardMaterial({ color: OUTER_COLOUR, roughness: 1, metalness: 0 }), "terrain");
+  const outer = groundMesh(geometry, tagMaterial(new THREE.MeshStandardMaterial({ color: OUTER_COLOUR, roughness: 1, metalness: 0 }), MATERIAL.SOIL), "terrain");
   outer.name = "derby-outer-ground";
   outer.receiveShadow = true;
   return outer;
@@ -348,13 +349,13 @@ function makeInstancedBoxes(name: string, boxes: readonly PlacedBox[], base: num
 }
 
 function makeProps(): THREE.InstancedMesh[] {
-  const solid = (map: THREE.Texture, metalness = PROP_METALNESS) => new THREE.MeshStandardMaterial({ map, roughness: PROP_ROUGHNESS, metalness });
+  const solid = (map: THREE.Texture, materialClass: MaterialClass, metalness = PROP_METALNESS) => tagMaterial(new THREE.MeshStandardMaterial({ map, roughness: PROP_ROUGHNESS, metalness }), materialClass);
   const looks: Record<DerbyPropKind, PropLook> = {
-    [DERBY_PROP.wall]: { material: solid(makeConcreteWallTexture()), colours: WALL_COLOURS, tile: WALL_TILE },
-    [DERBY_PROP.container]: { material: solid(makeCorrugatedTexture(), CONTAINER_METALNESS), colours: CONTAINER_COLOURS, tile: CONTAINER_TILE },
-    [DERBY_PROP.rail]: { material: solid(makeBarrierTexture()), colours: RAIL_COLOURS, tile: RAIL_TILE },
-    [DERBY_PROP.pad]: { material: solid(makeRubberTexture()), colours: PAD_COLOURS, tile: PAD_TILE },
-    [DERBY_PROP.tyres]: { material: solid(makeTyreStackTexture()), colours: TYRE_COLOURS, tile: TYRE_TILE },
+    [DERBY_PROP.wall]: { material: solid(makeConcreteWallTexture(), MATERIAL.CONCRETE), colours: WALL_COLOURS, tile: WALL_TILE },
+    [DERBY_PROP.container]: { material: solid(makeCorrugatedTexture(), MATERIAL.PAINTED_METAL, CONTAINER_METALNESS), colours: CONTAINER_COLOURS, tile: CONTAINER_TILE },
+    [DERBY_PROP.rail]: { material: solid(makeBarrierTexture(), MATERIAL.CONCRETE), colours: RAIL_COLOURS, tile: RAIL_TILE },
+    [DERBY_PROP.pad]: { material: solid(makeRubberTexture(), MATERIAL.RUBBER), colours: PAD_COLOURS, tile: PAD_TILE },
+    [DERBY_PROP.tyres]: { material: solid(makeTyreStackTexture(), MATERIAL.RUBBER), colours: TYRE_COLOURS, tile: TYRE_TILE },
   };
   return Object.values(DERBY_PROP).flatMap((kind) => {
     const listed = DERBY_BOXES.filter((box) => box.kind === kind);
@@ -376,7 +377,7 @@ function makeGlass(): THREE.InstancedMesh {
     hz: wall.hz - DERBY_ARENA.wallMitre,
     height: glassHeight,
   }));
-  const material = new THREE.MeshStandardMaterial({
+  const material = tagMaterial(new THREE.MeshStandardMaterial({
     map: makeGlassTexture(),
     transparent: true,
     // Half the texture's alpha: the doubled glass stands between the stands' cameras and the field, so it stays easy to see through.
@@ -386,7 +387,7 @@ function makeGlass(): THREE.InstancedMesh {
     depthWrite: false,
     roughness: GLASS_ROUGHNESS,
     metalness: GLASS_METALNESS,
-  });
+  }), MATERIAL.GLASS);
   const glass = makeInstancedBoxes(GLASS_MESH_NAME, panes, DERBY_ARENA.concreteHeight, { material, colours: [WHITE], tile: { across: PANEL_METRES, up: glassHeight } });
   glass.castShadow = false;
   glass.receiveShadow = false;
@@ -398,7 +399,7 @@ const lerp = (range: readonly [number, number], share: number): number => range[
 /** Low rounded hills round the plain, outside the wall and out of reach. */
 function makeMounds(): THREE.InstancedMesh {
   const dome = new THREE.SphereGeometry(1, MOUND_RADIAL_SEGMENTS, MOUND_HEIGHT_SEGMENTS, 0, Math.PI * 2, 0, Math.PI / 2);
-  const mounds = new THREE.InstancedMesh(dome, new THREE.MeshStandardMaterial({ color: MOUND_COLOUR, roughness: 1, metalness: 0 }), MOUND_COUNT);
+  const mounds = new THREE.InstancedMesh(dome, tagMaterial(new THREE.MeshStandardMaterial({ color: MOUND_COLOUR, roughness: 1, metalness: 0 }), MATERIAL.SOIL), MOUND_COUNT);
   mounds.name = "mounds";
   const random = makeSeededRandom(MOUND_SEED);
   const placement = new THREE.Object3D();
@@ -420,13 +421,13 @@ function makeMounds(): THREE.InstancedMesh {
 function makeFloodlights(): THREE.InstancedMesh[] {
   const poles = new THREE.InstancedMesh(
     new THREE.CylinderGeometry(TOWER_RADIUS, TOWER_RADIUS, TOWER_HEIGHT, TOWER_SEGMENTS),
-    new THREE.MeshStandardMaterial({ color: TOWER_COLOUR, roughness: 0.7, metalness: 0.5 }),
+    tagMaterial(new THREE.MeshStandardMaterial({ color: TOWER_COLOUR, roughness: 0.7, metalness: 0.5 }), MATERIAL.PAINTED_METAL),
     TOWER_COUNT,
   );
   poles.name = "floodlight-poles";
   const heads = new THREE.InstancedMesh(
     new THREE.BoxGeometry(TOWER_HEAD.width, TOWER_HEAD.height, TOWER_HEAD.length),
-    new THREE.MeshStandardMaterial({ color: TOWER_LAMP_BODY, emissive: TOWER_LAMP_GLOW, emissiveIntensity: TOWER_LAMP_INTENSITY }),
+    tagMaterial(new THREE.MeshStandardMaterial({ color: TOWER_LAMP_BODY, emissive: TOWER_LAMP_GLOW, emissiveIntensity: TOWER_LAMP_INTENSITY }), MATERIAL.GLASS),
     TOWER_COUNT,
   );
   heads.name = "floodlight-heads";

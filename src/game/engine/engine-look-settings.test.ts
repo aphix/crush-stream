@@ -5,6 +5,8 @@ import { HudStore, INITIAL_HUD, type CrashHudState } from "../hud/hud-store.ts";
 import { isChanged, type SettingId } from "../hud/settings-changes.ts";
 import { decodeShare, encodeShare, type ShareState } from "../hud/share-url.ts";
 import { RIM_LIGHT } from "../present/rim-light.ts";
+import { CONTOUR_SMOOTHING } from "../vehicle/normal-smooth.ts";
+import { MATERIAL_STRENGTH } from "../vehicle/material-class.ts";
 import { SKY_DRAWN } from "../present/sky-dome.ts";
 import { settingsOf } from "./bench-measure.ts";
 import { setGround } from "../world/ground.ts";
@@ -35,6 +37,20 @@ const cases = [
   { it: "the pencil hatching", id: "hatch", key: "hatch", field: "hatching", set: (e, v) => e.setHatching(v), sink: (e) => e["cine"].post.hatch, sinkOn: 0.6, sinkDefault: 0, nullKey: "", atZero: null },
   { it: "the rim light", id: "rim", key: "rim", field: "rimLight", set: (e, v) => e.setRimLight(v), sink: () => RIM_LIGHT.value, sinkOn: 0.6, sinkDefault: 0, nullKey: "", atZero: null },
 ] as const satisfies readonly LookCase[];
+
+type StrengthCase = {
+  it: string;
+  id: SettingId;
+  key: keyof ShareState;
+  field: keyof CrashHudState;
+  set: (e: CrashEngine, v: number) => void;
+  uniform: { value: number };
+};
+
+const strengthCases = [
+  { it: "material strength", id: "materials", key: "mat", field: "materialStrength", set: (e, v) => e.setMaterialStrength(v), uniform: MATERIAL_STRENGTH },
+  { it: "car contour strength", id: "contours", key: "cont", field: "contourStrength", set: (e, v) => e.setContourStrength(v), uniform: CONTOUR_SMOOTHING },
+] as const satisfies readonly StrengthCase[];
 
 describe("given the real engine and the look sliders under Cel in the Playback section", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -98,6 +114,29 @@ describe("given the real engine and the look sliders under Cel in the Playback s
     }
     for (const c of cases) assert.deepEqual(keyOf(c.key), [], `Defaults: no ${c.key} key`);
   });
+
+  for (const c of strengthCases) {
+    it(`when the ${c.it} is set, then the HUD, the shared shader uniform, the changed dot and the share key follow, a value past the range clamps to 2, and its reset puts the default back`, () => {
+      assert.equal(hud.get()[c.field], 1, "the default is full strength");
+      assert.equal(c.uniform.value, 1, "the uniform at the start");
+      c.set(engine, 0.6);
+      assert.equal(hud.get()[c.field], 0.6, "the HUD field");
+      assert.equal(c.uniform.value, 0.6, "the shader's uniform");
+      assert.equal(isChanged(hud.get(), c.id), true, "the dot and the reset chip");
+      assert.equal(keyOf(c.key).join("&"), `${c.key}=0.6`, "the share key");
+      c.set(engine, 7);
+      assert.equal(c.uniform.value, 2, "past the range");
+      c.set(engine, 0);
+      assert.equal(c.uniform.value, 0, "0 is a real value: the effect off");
+      engine["applyShare"](decodeShare(`#${c.key}=1.5`), false);
+      assert.equal(c.uniform.value, 1.5, "a link's value reaches the uniform");
+      engine.resetSetting(c.id);
+      assert.equal(c.uniform.value, 1, "reset: the uniform");
+      assert.equal(hud.get()[c.field], 1, "reset: the HUD field");
+      assert.equal(isChanged(hud.get(), c.id), false, "reset: not changed");
+      assert.deepEqual(keyOf(c.key), [], "reset: the key is dropped");
+    });
+  }
 
   it("when the Sky is set off under the default procedural sky, then the dome draws nothing, and auto brings the procedural sky back", () => {
     assert.equal(engine["stage"].sky.drawn, SKY_DRAWN.procedural, "the default");

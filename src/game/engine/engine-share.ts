@@ -60,6 +60,9 @@ export abstract class EngineShare extends EngineReel {
       dots: this.halftone,
       hatch: this.hatching,
       rim: this.rimLight,
+      mat: this.materialStrength,
+      cont: this.contourStrength,
+      candy: this.candyStrength,
       squash: this.squash,
       buckle: this.buckle,
       loop: this.looping,
@@ -154,6 +157,9 @@ export abstract class EngineShare extends EngineReel {
       if (differs("dots")) this.setHalftone(t.dots);
       if (differs("hatch")) this.setHatching(t.hatch);
       if (differs("rim")) this.setRimLight(t.rim);
+      if (differs("mat")) this.setMaterialStrength(t.mat);
+      if (differs("cont")) this.setContourStrength(t.cont);
+      if (differs("candy")) this.setCandyStrength(t.candy);
       if (differs("squash")) this.setSquash(t.squash);
       if (differs("buckle")) this.setBuckle(t.buckle);
       for (const k of KNOBS) if (differs(k.id)) this.setKnob(k.id, t[k.id]);

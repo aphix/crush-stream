@@ -18,6 +18,8 @@ export const FABRIC_RELIEF = [0.00008, 0.0003, 0.0002, 0.00025, 0.0002, 0.00012,
 export const FABRIC_CONTRAST = [0.04, 0.22, 0.1, 0.16, 0.08, 0.08, 0.05, 0.12, 0.32] as const;
 /** Each fabric's roughness, by `FABRIC` index, NONE last: leather a soft sheen (the reference's pumps and dress shoes read near their dark colour, not lit grey), hair a soft sheen, canvas and denim none. */
 export const FABRIC_ROUGHNESS = [0.55, 0.9, 0.88, 0.92, 0.75, 0.85, 0.8, 0.75, 0.62, 0.3] as const;
+/** Each fabric's share of the studio's specular reflection, by `FABRIC` index, NONE last (a role that names no fabric sets its own): skin and cloth are matte, leather keeps a sheen. */
+export const FABRIC_ENV = [0.35, 0.2, 0.2, 0.2, 0.6, 0.2, 0.2, 0.2, 0.4, 1] as const;
 
 /** A hash of lattice point (i, j) under `seed` into [0, 1). */
 function hash(i: number, j: number, seed: number): number {

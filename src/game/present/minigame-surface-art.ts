@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { LANDING_HEIGHT, START_HILL, STATION_HALF_WIDTH, type MinigameMode } from "../scenes/minigame-constants.ts";
 import { floorHeightAt, stationBackX, stationFrontX } from "../scenes/minigame-profile.ts";
 import { groundMesh } from "../scenes/ground-stack.ts";
+import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
 
 /**
  * A station's whole band (the lane's `STATION_HALF_WIDTH` either side, the part of the sim ground that follows `floorHeightAt`) is one
@@ -164,7 +165,7 @@ function terrainMesh(soup: TriangleSoup): THREE.Mesh {
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(soup.positions, 3));
   geometry.setAttribute("color", new THREE.Float32BufferAttribute(soup.colours, 3));
   geometry.computeVertexNormals();
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: SURFACE_ROUGHNESS, metalness: 0 });
+  const material = tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: SURFACE_ROUGHNESS, metalness: 0 }), MATERIAL.SOIL);
   const mesh = groundMesh(geometry, material, "terrain");
   mesh.receiveShadow = true;
   return mesh;

@@ -5,7 +5,9 @@ import { once } from "../kernel/scalar.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { applyFinish, glslFloat } from "./car-finish.ts";
 import { BARE_METAL_FRAGMENT, BARE_METAL_VERTEX } from "./bare-metal.ts";
+import { CANDY_COAT_GLSL, CANDY_COLOR_GLSL, CANDY_FILM, CANDY_FILM_GLSL, CANDY_METALNESS_GLSL, CANDY_PARS_GLSL, CANDY_ROUGHNESS_GLSL, CANDY_STRENGTH, CANDY_TIER } from "./car-candy.ts";
 import { FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE } from "./constants.ts";
+import { CAR_MATERIAL_ENV_GLSL, MATERIAL_STRENGTH, MATERIAL_STRENGTH_GLSL } from "./material-class.ts";
 import type { BodySource } from "./car-mesh.ts";
 import type { BodyStyle } from "./car-variants.ts";
 
@@ -52,7 +54,12 @@ material.clearcoatRoughness = min( sqrt( sqrt( pow2( specAaAlpha ) + min( ${SPEC
 
 function capHighlights<T extends THREE.MeshStandardMaterial>(m: T): T {
   m.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace("#include <opaque_fragment>", HIGHLIGHT_CAP).replace("#include <lights_physical_fragment>", SPECULAR_AA);
+    shader.uniforms.materialStrength = MATERIAL_STRENGTH;
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", `#include <common>${MATERIAL_STRENGTH_GLSL}`)
+      .replace("#include <opaque_fragment>", HIGHLIGHT_CAP)
+      .replace("#include <lights_physical_fragment>", SPECULAR_AA)
+      .replace("#include <lights_fragment_end>", `#include <lights_fragment_end>${CAR_MATERIAL_ENV_GLSL}`);
   };
   m.customProgramCacheKey = () => "car-highlight-cap";
   return m;
@@ -71,13 +78,17 @@ function withPrimer<T extends THREE.MeshStandardMaterial>(m: T): T {
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", `#include <common>\nattribute float primer;\nvarying float vPrimer;\n${BARE_METAL_VERTEX.pars}`)
       .replace("#include <begin_vertex>", `#include <begin_vertex>\nvPrimer = primer;\n${BARE_METAL_VERTEX.main}`);
+    shader.uniforms.candyStrength = CANDY_STRENGTH;
+    shader.uniforms.candyTier = CANDY_TIER;
+    shader.uniforms.candyFilm = CANDY_FILM;
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", `#include <common>\nvarying float vPrimer;\n${BARE_METAL_FRAGMENT.pars}`)
+      .replace("#include <common>", `#include <common>\nvarying float vPrimer;\n${CANDY_PARS_GLSL}\n${BARE_METAL_FRAGMENT.pars}`)
       .replace("#include <map_fragment>", `#include <map_fragment>\ndiffuseColor.rgb *= vec3(${PAINT_COLOR_TONE.r}, ${PAINT_COLOR_TONE.g}, ${PAINT_COLOR_TONE.b});`)
-      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>\nroughnessFactor *= ${PAINT_ROUGHNESS_TONE};\n${BARE_METAL_FRAGMENT.roughness}\n${GLOSS_BLACK.roughness}`)
-      .replace("#include <metalnessmap_fragment>", `#include <metalnessmap_fragment>\n${BARE_METAL_FRAGMENT.metalness}\n${GLOSS_BLACK.metalness}`)
-      .replace("#include <color_fragment>", `#include <color_fragment>\n${BARE_METAL_FRAGMENT.color}\n${GLOSS_BLACK.color}`)
-      .replace("#include <lights_physical_fragment>", `#include <lights_physical_fragment>\n${BARE_METAL_FRAGMENT.clearcoat}\n${GLOSS_BLACK.clearcoat}`);
+      .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>\nroughnessFactor *= ${PAINT_ROUGHNESS_TONE};\n${BARE_METAL_FRAGMENT.roughness}\n${GLOSS_BLACK.roughness}\n${CANDY_ROUGHNESS_GLSL}`)
+      .replace("#include <metalnessmap_fragment>", `#include <metalnessmap_fragment>\n${BARE_METAL_FRAGMENT.metalness}\n${GLOSS_BLACK.metalness}\n${CANDY_METALNESS_GLSL}`)
+      .replace("#include <color_fragment>", `#include <color_fragment>\n${BARE_METAL_FRAGMENT.color}\n${GLOSS_BLACK.color}\n${CANDY_COLOR_GLSL}`)
+      .replace("#include <lights_physical_fragment>", `#include <lights_physical_fragment>\n${BARE_METAL_FRAGMENT.clearcoat}\n${GLOSS_BLACK.clearcoat}\n${CANDY_COAT_GLSL}`)
+      .replace("#include <lights_fragment_end>", `#include <lights_fragment_end>${CANDY_FILM_GLSL}`);
   };
   m.customProgramCacheKey = () => "car-paint-primer";
   return m;
@@ -176,7 +187,7 @@ const trimByKey = new Map<string, THREE.MeshStandardMaterial>();
 export const TRIM_FINISH = {
   satin: { metalness: 0.55, roughness: 0.38 },
   chrome: { metalness: 0.95, roughness: 0.16 },
-  plastic: { metalness: 0.3, roughness: 0.6 },
+  plastic: { metalness: 0.05, roughness: 0.6 },
   gloss: { metalness: 0.05, roughness: 0.14 },
   paint: { metalness: 0.2, roughness: 0.42 },
 } as const;

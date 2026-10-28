@@ -480,6 +480,7 @@ export class CrashEngine extends EngineGarage {
     this.ragdolls.dispose();
     this.lampLights.dispose();
     this.audio.dispose();
+    this.daylight?.dispose();
     this.envMap?.dispose();
     this.envMap = null;
     this.scene.environment = null;
@@ -719,6 +720,7 @@ export class CrashEngine extends EngineGarage {
       const car = cars[i]!;
       const stride = car === followed ? 1 : this.skinStride(car);
       this.lodStride[i] = stride;
+      car.setNearView(stride === 1);
       car.deform.skinDeferred = stride === 0 || (this.lodFrame + i) % stride !== 0;
     }
   }
@@ -736,6 +738,7 @@ export class CrashEngine extends EngineGarage {
       if (!car.deform.skinOwed) continue;
       if (followed === undefined) followed = this.followedCar();
       const stride = car === followed ? 1 : this.skinStride(car);
+      car.setNearView(stride === 1);
       if (stride === 1 || (stride > 1 && this.lodStride[i] === 0)) car.flushDeferredSkin();
       this.lodStride[i] = stride;
     }

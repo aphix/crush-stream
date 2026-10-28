@@ -4,6 +4,7 @@ import { BENCH, BOARD, BOARD_T, BRACKET_T, FLOOR, LAB_BACK, LAB_LAYOUTS, LAB_SCA
 import { makePrefabMaterials, raceTextures } from "./prefabs.ts";
 import { PropTumble } from "./prop-tumble.ts";
 import { DEPTH_INSTANCED, DEPTH_INSTANCED_COLOR } from "./track-mesh.ts";
+import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
 
 /** The bench top's thickness (m): a 1¾ in butcher block. */
 const TOP_T = 0.0445 * LAB_SCALE;
@@ -339,7 +340,7 @@ export class LabArt {
     block.repeat.set(benchW / 12, benchD / 12);
     const top = new THREE.Mesh(
       new THREE.BoxGeometry(benchW, TOP_T, benchD).translate(0, -TOP_T / 2, (BOARD.z + BENCH.front) / 2),
-      new THREE.MeshStandardMaterial({ map: block, roughness: 0.62, metalness: 0 }),
+      tagMaterial(new THREE.MeshStandardMaterial({ map: block, roughness: 0.62, metalness: 0 }), MATERIAL.WOOD),
     );
     top.receiveShadow = true;
     top.castShadow = true;
@@ -351,7 +352,7 @@ export class LabArt {
     }
     // A stretcher rail a foot off the floor along each side.
     for (const z of [BOARD.z + LEG, BENCH.front - LEG]) legs.push(new THREE.BoxGeometry(benchW - LEG * 2, LEG * 0.7, LEG * 0.5).translate(0, FLOOR + 0.3 * LAB_SCALE, z));
-    const frame = new THREE.Mesh(mergeGeometries(legs)!, new THREE.MeshStandardMaterial({ color: 0x6b4a2c, roughness: 0.8 }));
+    const frame = new THREE.Mesh(mergeGeometries(legs)!, tagMaterial(new THREE.MeshStandardMaterial({ color: 0x6b4a2c, roughness: 0.8 }), MATERIAL.WOOD));
     frame.castShadow = true;
     frame.receiveShadow = true;
     for (const g of legs) g.dispose();
@@ -362,7 +363,7 @@ export class LabArt {
     peg.offset.set(0.5 - ((BOARD.halfW / PEG) % 1), 0.5);
     const board = new THREE.Mesh(
       new THREE.BoxGeometry(BOARD.halfW * 2, BOARD.h, BOARD_T).translate(0, BOARD.h / 2, BOARD.z - BOARD_T / 2),
-      new THREE.MeshStandardMaterial({ map: peg, roughness: 0.85, metalness: 0 }),
+      tagMaterial(new THREE.MeshStandardMaterial({ map: peg, roughness: 0.85, metalness: 0 }), MATERIAL.PLASTIC),
     );
     board.receiveShadow = true;
 
@@ -374,19 +375,19 @@ export class LabArt {
       new THREE.PlaneGeometry(ROOM_HALF_W * 2, ROOM_H).rotateY(-Math.PI / 2).translate(ROOM_HALF_W, FLOOR + ROOM_H / 2, LAB_BACK + ROOM_HALF_W),
       new THREE.PlaneGeometry(ROOM_HALF_W * 2, ROOM_H).rotateY(Math.PI / 2).translate(-ROOM_HALF_W, FLOOR + ROOM_H / 2, LAB_BACK + ROOM_HALF_W),
     ];
-    const walls = new THREE.Mesh(mergeGeometries(sides)!, new THREE.MeshStandardMaterial({ map: blocks, roughness: 0.95, metalness: 0 }));
+    const walls = new THREE.Mesh(mergeGeometries(sides)!, tagMaterial(new THREE.MeshStandardMaterial({ map: blocks, roughness: 0.95, metalness: 0 }), MATERIAL.CONCRETE));
     for (const g of sides) g.dispose();
     walls.receiveShadow = true;
     const slab = canvasTexture(512, 512, concrete);
     slab.repeat.set(400 / (3 * S), 400 / (3 * S));
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2).translate(0, FLOOR, 60),
-      new THREE.MeshStandardMaterial({ map: slab, roughness: 0.9, metalness: 0 }),
+      tagMaterial(new THREE.MeshStandardMaterial({ map: slab, roughness: 0.9, metalness: 0 }), MATERIAL.CONCRETE),
     );
     floor.receiveShadow = true;
     const rule = canvasTexture(2048, 64, steelRule);
     rule.wrapS = rule.wrapT = THREE.ClampToEdgeWrapping;
-    const ruler = new THREE.Mesh(new THREE.BoxGeometry(1 * S, 0.0012 * S, 0.03 * S), new THREE.MeshStandardMaterial({ map: rule, roughness: 0.4, metalness: 0.7 }));
+    const ruler = new THREE.Mesh(new THREE.BoxGeometry(1 * S, 0.0012 * S, 0.03 * S), tagMaterial(new THREE.MeshStandardMaterial({ map: rule, roughness: 0.4, metalness: 0.7 }), MATERIAL.METAL));
     ruler.position.set(-14, 0.0006 * S, BENCH.front - 0.05 * S);
     ruler.receiveShadow = true;
     this.group.add(top, frame, board, walls, floor, ruler);
@@ -412,13 +413,13 @@ export class LabArt {
     );
     tubes.castShadow = false;
     this.group.add(
-      merged(steelParts, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.85 })),
-      merged(paintParts, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0 })),
+      merged(steelParts, tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.85 }), MATERIAL.METAL)),
+      merged(paintParts, tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0 }), MATERIAL.GENERIC)),
       tubes,
     );
 
     const mats = makePrefabMaterials(raceTextures());
-    const steel = new THREE.MeshStandardMaterial({ color: 0x9aa2ab, roughness: 0.45, metalness: 0.6 });
+    const steel = tagMaterial(new THREE.MeshStandardMaterial({ color: 0x9aa2ab, roughness: 0.45, metalness: 0.6 }), MATERIAL.PAINTED_METAL);
     const set = (id: LabPresetId): LabSet => {
       const layout = LAB_LAYOUTS[id];
       const group = new THREE.Group();

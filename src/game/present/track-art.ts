@@ -6,6 +6,7 @@ import { SURFACE_IDS, type PrefabId, type SurfaceId } from "../world/catalog.ts"
 import type { Placed } from "../world/placements.ts";
 import { PREFAB } from "../world/constants.ts";
 import { box, painted, type Piece } from "./prefab-pieces.ts";
+import { MATERIAL, tagLike, tagMaterial } from "../vehicle/material-class.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 import { blankPoint, type Track } from "../world/track.ts";
 import { sections } from "../world/track-sections.ts";
@@ -74,13 +75,16 @@ export class TrackArt {
     // Ground materials (one per mesh) also darken under the tyre-mark map.
     const textured = (sid: number) => {
       const t = texClass(sid);
-      const mat = new THREE.MeshStandardMaterial({
-        vertexColors: true,
-        map: t === "asphalt" ? tex.asphalt : t === "concrete" ? tex.concrete : tex.detail,
-        color: t === "asphalt" ? tex.asphaltGain : t === "concrete" ? tex.concreteGain : tex.detailGain,
-        roughness: t === "asphalt" ? 0.9 : 0.95,
-        metalness: 0.02,
-      });
+      const mat = tagMaterial(
+        new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          map: t === "asphalt" ? tex.asphalt : t === "concrete" ? tex.concrete : tex.detail,
+          color: t === "asphalt" ? tex.asphaltGain : t === "concrete" ? tex.concreteGain : tex.detailGain,
+          roughness: t === "asphalt" ? 0.9 : 0.95,
+          metalness: 0.02,
+        }),
+        t === "asphalt" ? MATERIAL.ASPHALT : t === "concrete" ? MATERIAL.CONCRETE : MATERIAL.SOIL,
+      );
       applyMarkMap(mat);
       return mat;
     };
@@ -93,7 +97,7 @@ export class TrackArt {
         // Markings and kerbs: vertex colour only, one material per level.
         let mat = sharedMarkMat.get(layer.level);
         if (!mat) {
-          mat = groundMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0 }), layer.level);
+          mat = groundMaterial(tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0 }), MATERIAL.ASPHALT), layer.level);
           sharedMarkMat.set(layer.level, mat);
         }
         if (!layer.m.empty) this.add(groundMesh(layer.m.geometry(layer.smooth), mat, layer.level), { kind: layer.kind }, false);
@@ -142,13 +146,13 @@ export class TrackArt {
     const pylon = prefabParts("gantry", mats)[0]!.geometry;
     for (const lat of [latL, latR]) {
       const foot = ground.heightAt(pt.x + pt.tz * lat, pt.z - pt.tx * lat, pt.y) - roadY;
-      pieces.push([pylon.clone().scale(1, (GANTRY_BEAM - 0.4 - foot) / 6, 1).translate(lat, foot, 0), 0xc8cbd0]);
+      pieces.push([pylon.clone().scale(1, (GANTRY_BEAM - 0.4 - foot) / 6, 1).translate(lat, foot, 0), 0xc8cbd0, MATERIAL.PAINTED_METAL]);
     }
     pylon.dispose();
-    pieces.push([box(latL - latR + 1, 0.8, 0.9, (latL + latR) / 2, GANTRY_BEAM, 0), 0x2a2c32]);
-    pieces.push([box(latL - latR + 1, 0.12, 0.92, (latL + latR) / 2, GANTRY_BEAM + 0.46, 0), RED]);
+    pieces.push([box(latL - latR + 1, 0.8, 0.9, (latL + latR) / 2, GANTRY_BEAM, 0), 0x2a2c32, MATERIAL.PAINTED_METAL]);
+    pieces.push([box(latL - latR + 1, 0.12, 0.92, (latL + latR) / 2, GANTRY_BEAM + 0.46, 0), RED, MATERIAL.PAINTED_METAL]);
     const panelX = [pt.half * 0.45, -pt.half * 0.45];
-    for (const x of panelX) pieces.push([box(3.3, 1.3, 0.3, x, GANTRY_BEAM - 1.05, 0), BLACK]);
+    for (const x of panelX) pieces.push([box(3.3, 1.3, 0.3, x, GANTRY_BEAM - 1.05, 0), BLACK, MATERIAL.GLASS]);
     this.add(new THREE.Mesh(painted(pieces).applyMatrix4(frame), mats.plain), { kind: "prop", prefab: PREFAB.gantry }, true);
 
     const disc = new THREE.CircleGeometry(0.42, 20).rotateY(Math.PI);
@@ -262,7 +266,7 @@ export class TrackArt {
       copies = { [kind]: m };
       this.byKind.set(m, copies);
     }
-    return (copies[kind] ??= m.clone());
+    return (copies[kind] ??= tagLike(m.clone(), m));
   }
 
   /** Per-instance tint for natural / building variety (deterministic by placement index); false = none. */

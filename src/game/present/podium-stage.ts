@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { BLOCK_DEPTH, BLOCK_WIDTH, PODIUM_BLOCKS, type PodiumPlace } from "../match/podium.ts";
 import { canvasTexture } from "./lab-art.ts";
 import { BANNER_FRAME_PX, BANNER_PX, bannerLayout, DECAL_PX, decalLayout } from "./podium-layout.ts";
+import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
 
 /** The floating platform's top radius (m): the three blocks and the aprons in front of them stand on it with room to spare. */
 const PLATFORM_RADIUS = 11.5;
@@ -148,7 +149,7 @@ function buntingStrand(z: number, x0: number, x1: number, y0: number): THREE.Buf
 
 /** A plane with `tex` on it (transparent where the texture is), `w` × `h` m, facing +z, glowing a little of its own colour. */
 function sign(tex: THREE.CanvasTexture, w: number, h: number, transparent: boolean): THREE.Mesh {
-  const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: GLOW, roughness: 0.7, metalness: 0, transparent, depthWrite: !transparent });
+  const mat = tagMaterial(new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: GLOW, roughness: 0.7, metalness: 0, transparent, depthWrite: !transparent }), MATERIAL.GLASS);
   if (transparent) {
     mat.polygonOffset = true;
     mat.polygonOffsetFactor = -2;
@@ -171,10 +172,10 @@ export class PodiumStage {
   constructor() {
     const g = this.group;
     g.visible = false;
-    const stone = new THREE.MeshStandardMaterial({ color: 0xdad6cc, roughness: 0.8 });
-    const rock = new THREE.MeshStandardMaterial({ color: 0x5b5649, roughness: 1, flatShading: true });
-    const rim = new THREE.MeshStandardMaterial({ color: GOLD, roughness: 0.35, metalness: 0.8 });
-    const pole = new THREE.MeshStandardMaterial({ color: 0xe9e9ee, roughness: 0.4, metalness: 0.6 });
+    const stone = tagMaterial(new THREE.MeshStandardMaterial({ color: 0xdad6cc, roughness: 0.8 }), MATERIAL.STONE);
+    const rock = tagMaterial(new THREE.MeshStandardMaterial({ color: 0x5b5649, roughness: 1, flatShading: true }), MATERIAL.STONE);
+    const rim = tagMaterial(new THREE.MeshStandardMaterial({ color: GOLD, roughness: 0.35, metalness: 0.8 }), MATERIAL.METAL);
+    const pole = tagMaterial(new THREE.MeshStandardMaterial({ color: 0xe9e9ee, roughness: 0.4, metalness: 0.6 }), MATERIAL.METAL);
     const platform = new THREE.Mesh(new THREE.CylinderGeometry(PLATFORM_RADIUS, PLATFORM_RADIUS * 0.92, PLATFORM_THICKNESS, 56), stone);
     platform.position.y = -PLATFORM_THICKNESS / 2;
     platform.receiveShadow = true;
@@ -187,7 +188,7 @@ export class PodiumStage {
 
     for (const block of PODIUM_BLOCKS) {
       const paint = PLACE_HEX[block.place - 1]!;
-      const body = new THREE.Mesh(new THREE.BoxGeometry(BLOCK_WIDTH, block.top, BLOCK_DEPTH), new THREE.MeshStandardMaterial({ color: paint, roughness: 0.45, metalness: 0.55 }));
+      const body = new THREE.Mesh(new THREE.BoxGeometry(BLOCK_WIDTH, block.top, BLOCK_DEPTH), tagMaterial(new THREE.MeshStandardMaterial({ color: paint, roughness: 0.45, metalness: 0.55 }), MATERIAL.PLASTIC));
       body.position.set(block.x, block.top / 2, 0);
       body.castShadow = true;
       body.receiveShadow = true;

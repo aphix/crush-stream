@@ -282,6 +282,27 @@ for (const c of LOOK_KEYS) {
   });
 }
 
+const STRENGTH_KEYS = [
+  { it: "the material strength", key: "mat", range: KNOB_RANGES.material, fallback: INITIAL_HUD.materialStrength },
+  { it: "the car contour strength", key: "cont", range: KNOB_RANGES.contour, fallback: INITIAL_HUD.contourStrength },
+] as const;
+
+for (const c of STRENGTH_KEYS) {
+  describe(`given ${c.it} (${c.key}), which is full strength by default`, () => {
+    it("when it is at its default, moved, or decoded from an out-of-range or unreadable value, then the default writes nothing, a strength is written after the rim key, 0 is a real value, and out-of-range values clamp", () => {
+      assert.equal(DEFAULTS[c.key], c.fallback);
+      assert.equal(c.fallback, 1, "the default is the current look");
+      assert.equal(encodeShare(DEFAULTS), "");
+      assert.equal(encodeShare({ ...DEFAULTS, [c.key]: 0.5 }), `${c.key}=0.5`);
+      assert.equal(encodeShare({ ...DEFAULTS, rim: 0.4, [c.key]: 1.5 }), `rim=0.4&${c.key}=1.5`);
+      assert.equal(decodeShare(`${c.key}=0`)[c.key], 0);
+      assert.equal(decodeShare(`${c.key}=7`)[c.key], c.range.max);
+      assert.equal(decodeShare(`${c.key}=-1`)[c.key], c.range.min);
+      assert.equal(decodeShare(`${c.key}=abc`)[c.key], c.fallback);
+    });
+  });
+}
+
 describe("given a random seed in a share link", () => {
   it("when it is written and read, then it is written in hex, read in either case, holds 32 bits and no more", () => {
     assert.equal(encodeShare({ ...DEFAULTS, seed: 0xab }), "seed=ab");

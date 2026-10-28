@@ -4,6 +4,7 @@ import type { Collider, RigidBody, World } from "@dimforge/rapier3d-simd";
 import { disable, type Rapier } from "../kernel/rapier.ts";
 import { activeGround } from "../world/ground.ts";
 import { mulberry32 } from "../world/placements.ts";
+import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
 import { AIR_ANGULAR, AIR_LINEAR, blendPose, readPose } from "./ragdoll-body.ts";
 
 /**
@@ -99,6 +100,7 @@ class PropMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.MeshStand
     };
     this.material.onBeforeCompile = (shader) => pick(shader);
     this.material.customProgramCacheKey = () => "purse-shapes";
+    tagMaterial(this.material, MATERIAL.LEATHER);
     this.customDepthMaterial = new THREE.MeshDepthMaterial();
     this.customDepthMaterial.onBeforeCompile = (shader) => pick(shader);
     this.customDepthMaterial.customProgramCacheKey = () => "purse-shapes-depth";

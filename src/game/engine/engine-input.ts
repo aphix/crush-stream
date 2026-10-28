@@ -11,6 +11,9 @@ import { cleanName, DRIVER_CARS, type DriverCar, type SubmitContext } from "../m
 import { driverCarApplies } from "../match/driver-pick.ts";
 import { FX_TIERS, type FxTier } from "../present/engine-post.ts";
 import { RIM_LIGHT } from "../present/rim-light.ts";
+import { CONTOUR_SMOOTHING } from "../vehicle/normal-smooth.ts";
+import { MATERIAL_STRENGTH } from "../vehicle/material-class.ts";
+import { CANDY_STRENGTH } from "../vehicle/car-candy.ts";
 import type { SkyMode } from "../present/sky-dome.ts";
 import type { DrawDistance, RenderScale, ShadowQuality } from "../present/player-quality.ts";
 import { stationIdOrDefault } from "../present/music-manifest.ts";
@@ -250,11 +253,33 @@ export abstract class EngineInput extends EngineRigs {
     this.emitHud();
   }
 
+  /** The HUD's material strength (0 = old uniform reflections, 1 = default, 2 = twice): every class's reflection cut and grain. */
+  setMaterialStrength(value: number): void {
+    this.materialStrength = THREE.MathUtils.clamp(value, KNOB_RANGES.material.min, KNOB_RANGES.material.max);
+    MATERIAL_STRENGTH.value = this.materialStrength;
+    this.emitHud();
+  }
+
+  /** The HUD's car contour smoothing (0 = off, 1 = default, 2 = a second pass): how round a crushed body's facets are drawn. */
+  setContourStrength(value: number): void {
+    this.contourStrength = THREE.MathUtils.clamp(value, KNOB_RANGES.contour.min, KNOB_RANGES.contour.max);
+    CONTOUR_SMOOTHING.value = this.contourStrength;
+    this.emitHud();
+  }
+
+  /** The HUD's candy paint (0 = plain, 1 = default, 2 = twice) on car exteriors. */
+  setCandyStrength(value: number): void {
+    this.candyStrength = THREE.MathUtils.clamp(value, KNOB_RANGES.candy.min, KNOB_RANGES.candy.max);
+    CANDY_STRENGTH.value = this.candyStrength;
+    this.emitHud();
+  }
+
   /** The pacer's `lost` at the last frame: what a frame gave up is the difference. */
   private lostSeen = 0;
 
   /** Per frame after boot: the auto FX tier and, while it is automatic, a running match's distance-detail rung and Auto render scale's rung, from how full the frame is; `lostSimS` is the pacer's running total of sim time given up (s). */
   protected fxFrame(wallDt: number, lostSimS: number): void {
+    this.chooseEnvironment();
     this.stage.setSkyTier(this.cine.tier);
     const p = this.race.phase;
     const matchTime = p === "grid" || p === "countdown" || p === "racing" ? this.race.time : this.derbyMode && this.derby.active && this.derby.winnerId === null ? this.derby.time : null;
@@ -547,6 +572,15 @@ export abstract class EngineInput extends EngineRigs {
         break;
       case "rim":
         this.setRimLight(D.rimLight);
+        break;
+      case "materials":
+        this.setMaterialStrength(D.materialStrength);
+        break;
+      case "contours":
+        this.setContourStrength(D.contourStrength);
+        break;
+      case "candy":
+        this.setCandyStrength(D.candyStrength);
         break;
       case "ts":
         this.setTimeScale(D.userTimeScale);
