@@ -199,6 +199,17 @@ describe("given the pad rumble setting in a share link (rumble)", () => {
   });
 });
 
+describe("given the boost zoom setting in a share link (bzoom)", () => {
+  it("when boost zoom is on, the default, then nothing is written; when it is off, then bzoom=0 is, and it reads back off, while a junk value reads as on", () => {
+    assert.equal(INITIAL_HUD.boostZoom, true);
+    assert.equal(encodeShare({ ...DEFAULTS, bzoom: true }), "");
+    const s: ShareState = { ...DEFAULTS, bzoom: false };
+    assert.equal(encodeShare(s), "bzoom=0");
+    assert.equal(decodeShare(`#${encodeShare(s)}`).bzoom, false);
+    assert.equal(decodeShare("bzoom=maybe").bzoom, true);
+  });
+});
+
 describe("given a camera slider in a share link, keyed cam.<chase path>", () => {
   it("when one slider is off its default, then only its key is written, one at its default is dropped even when set explicitly, and the fragment reads back", () => {
     assert.equal(encodeShare({ ...DEFAULTS, "cam.pos.lon": 9.5 }), "cam.pos.lon=9.5");

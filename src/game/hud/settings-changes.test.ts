@@ -82,6 +82,7 @@ describe("given the settings menu, where each setting is a group of HUD fields w
       playerCar: "truck",
       realism: 0.9,
       rumble: false,
+      boostZoom: false,
       carCount: 9,
       speedMin: 3,
       speedMax: 40,

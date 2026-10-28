@@ -5,6 +5,7 @@ import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { makeRenderer } from "../engine/engine-renderer.ts";
 import { easeFade, FX_TIERS, PostFX } from "./engine-post.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { BOOST_ZOOM_CAP, BOOST_ZOOM_FULL_RADIUS } from "./boost-zoom.ts";
 
 stubBrowser();
 
@@ -66,6 +67,48 @@ describe("given the post chain on a headless renderer and a print look's strengt
       }
     }
   });
+});
+
+/** `uRadial` is the blur's length at the screen corner (screen UV): the strength × the cap, whatever the strength a caller writes. */
+const ZOOM_UNIFORM_CASES = [
+  { it: "when the strength is 0, then the blur is 0", radial: 0, expected: 0 },
+  { it: "when the strength is half, then the blur is half the cap", radial: 0.5, expected: BOOST_ZOOM_CAP / 2 },
+  { it: "when the strength is full, then the blur is exactly the cap", radial: 1, expected: BOOST_ZOOM_CAP },
+  { it: "when a caller writes a strength of 9, then the blur still stops at the cap", radial: 9, expected: BOOST_ZOOM_CAP },
+  { it: "when a caller writes a negative strength, then the blur is 0", radial: -3, expected: 0 },
+] as const;
+/** The samples the boost zoom takes per tier while it blurs: none at low (a phone's tier pays no extra fetches), 12 at high and ultra. */
+const ZOOM_TAPS = { low: undefined, high: "12", ultra: "12" } as const;
+
+describe("given the post chain on a headless renderer with its strengths settled, at each post tier", () => {
+  const renderer = new THREE.WebGLRenderer({ canvas: element() });
+  const post = new PostFX(renderer, 1);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera();
+  for (const tier of ["low", "high", "ultra"] as const) {
+    for (const testCase of ZOOM_UNIFORM_CASES) {
+      it(`at ${tier}: ${testCase.it}`, () => {
+        post.setTier(tier);
+        post.radial = testCase.radial;
+        for (let f = 0; f < 2 * FRAME_HZ; f++) post.render(scene, camera, 1 / FRAME_HZ);
+        const blur = post["composites"][tier].uniforms.uRadial!.value;
+        assert.ok(Math.abs(blur - testCase.expected) < 1e-12, `uRadial ${blur} vs ${testCase.expected}`);
+        post.radial = 0;
+      });
+    }
+
+    it(`at ${tier}: when its composite is built, then the taps are ${ZOOM_TAPS[tier] ?? "absent"}, and the blur sits behind the zero-strength skip, ramping from 0 at the centre to the cap at the corner`, () => {
+      const composite = post["composites"][tier];
+      const frag = composite.fragmentShader;
+      assert.equal(composite.defines.ZOOM_TAPS, ZOOM_TAPS[tier], "ZOOM_TAPS");
+      assert.equal(composite.defines.RADIAL === undefined, ZOOM_TAPS[tier] === undefined, "RADIAL");
+      const skip = frag.indexOf("if (uRadial > 0.0) {");
+      const loop = frag.indexOf("for (int i = 1; i < ZOOM_TAPS; i++)");
+      assert.ok(skip >= 0 && loop > skip, `the tap loop (${loop}) follows the zero-strength skip (${skip})`);
+      assert.ok(frag.includes("uRadial * smoothstep(0.0, ZOOM_FULL_RADIUS, r)"), "the blur is the cap × a smoothstep from the centre");
+      assert.ok(frag.includes(`const float ZOOM_FULL_RADIUS = ${BOOST_ZOOM_FULL_RADIUS.toFixed(4)};`), "the ramp ends at the corner's distance");
+    });
+  }
 });
 
 describe("given the post chain on a headless renderer, on a device of pixel ratio 1 and one of 2", () => {

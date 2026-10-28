@@ -642,6 +642,8 @@ export abstract class EngineCore {
 
   /** Gamepad rumble on hits, hard landings and slides (the HUD's Rumble setting). */
   protected rumble = INITIAL_HUD.rumble;
+  /** The boost zoom blur while the driver boosts (the HUD's Boost zoom setting). */
+  protected boostZoom = INITIAL_HUD.boostZoom;
   private readonly rumbleFx: Rumble = { weak: 0, strong: 0, ms: 0 };
   /** Seconds until the slide's buzz may play again: it waits out a hit's or a landing's longer effect, which a new effect would cut short. */
   private slideClock = 0;

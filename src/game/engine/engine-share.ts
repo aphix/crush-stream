@@ -51,6 +51,7 @@ export abstract class EngineShare extends EngineReel {
       sky: this.stage.skyMode,
       real: HANDLING.realism,
       rumble: this.rumble,
+      bzoom: this.boostZoom,
       // Automatic: the machine chose the tier (`AutoFx`), so the URL does not pin it.
       fx: this.autoFx.auto ? null : this.cine.tier,
       fxd: this.fxDensity,
@@ -146,6 +147,7 @@ export abstract class EngineShare extends EngineReel {
       if (differs("sky")) this.setSky(t.sky);
       if (differs("real")) this.setRealism(t.real);
       if (differs("rumble")) this.setRumble(t.rumble);
+      if (differs("bzoom")) this.setBoostZoom(t.bzoom);
       if (differs("fxd")) this.setFxDensity(t.fxd);
       if (differs("cel")) this.setCelLook(t.cel);
       if (differs("psky")) this.setProceduralSky(t.psky);

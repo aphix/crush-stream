@@ -654,7 +654,7 @@ export class CrashEngine extends EngineGarage {
       if (this.trace.due(wallDt, this.captureTrace)) this.trace.sample(this.traceSetup(), cars, this.traceClock());
       this.stepDerby(simDt);
       this.seat.step(simDt);
-      this.cine.update(wallDt, simDt, cars, this.followedCar(), this.seat.mode === "drive", this.fxDensity, this.net.client);
+      this.cine.update(wallDt, simDt, cars, this.followedCar(), this.seat.mode === "drive", this.fxDensity, this.net.client, this.boostZoom && reelDt === null);
       if (this.derbyMode) {
         const boosts = this.derby.consumeBoosts();
         for (let k = 0; k < boosts.length; k++) this.takedownBoost(boosts[k]!);

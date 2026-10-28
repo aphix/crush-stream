@@ -16,6 +16,7 @@ import {
   VibrateOff,
   Volume2,
   VolumeX,
+  Zap,
 } from "lucide-react";
 import type { HudProps } from "@/components/hud";
 import { ControlsSection } from "@/components/controls-section";
@@ -205,6 +206,10 @@ function PlaybackSection({ state, engine }: HudProps) {
         <Toggle on={state.wet} changed={ch("wet")} label="Toggle wet asphalt" onClick={() => engine.current?.setWet(!state.wet)}>
           <CloudRain />
           Wet
+        </Toggle>
+        <Toggle on={state.boostZoom} changed={ch("bzoom")} label="Toggle boost zoom blur" onClick={() => engine.current?.setBoostZoom(!state.boostZoom)}>
+          <Zap />
+          Boost zoom
         </Toggle>
       </div>
       <div className="flex items-center gap-2">

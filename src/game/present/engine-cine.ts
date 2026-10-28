@@ -1,7 +1,6 @@
 import { hypot2 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { DRIVE } from "../vehicle/car-drive.ts";
 import { applyCarFinish, finishForTier } from "../vehicle/car-finish.ts";
 import type { ChaseCamera } from "./engine-camera.ts";
 import { TireSmokeSystem, type GlassDotSystem, type SparkSystem } from "./engine-fx.ts";
@@ -9,6 +8,7 @@ import type { FountainSystem } from "./fountain-system.ts";
 import { setWaterTier } from "./water-look.ts";
 import { SkidMarks } from "./engine-marks.ts";
 import { PostFX, type FxTier } from "./engine-post.ts";
+import { boostZoomStrength, stepBoostZoom } from "./boost-zoom.ts";
 import { GpuTimer } from "./gpu-timer.ts";
 import { fovFor, inFrame } from "./highlight-cam.ts";
 import { camUsable, type Sight } from "./spectate-cam.ts";
@@ -537,6 +537,8 @@ export class Cinematics {
   private warp = 1;
   private flash = 0;
   private punch = 0;
+  /** 0..1, linear in time: how far the boost zoom has eased in (`stepBoostZoom`). */
+  private zoomProgress = 0;
   /** The crash cam (the camera half of the crash): `impact` starts it, `direct` runs it. */
   readonly crash: CrashCam;
   private gpu: GpuTimer | null;
@@ -613,6 +615,7 @@ export class Cinematics {
     this.post.flash = 0;
     this.post.punch = 0;
     this.post.radial = 0;
+    this.zoomProgress = 0;
     this.post.letterbox = 0;
     this.smokeAcc.fill(0);
     this.sparkAcc.fill(0);
@@ -645,7 +648,7 @@ export class Cinematics {
    * from wheel slip, boost blur for the driven car, and the decay of every punch value. `velocityHits`: the world's own
    * contacts are not running here (a netplay client mirrors the host's cars), so the followed car's velocity jump also shakes its view.
    */
-  update(wallDt: number, simDt: number, cars: readonly DeformableCar[], followed: DeformableCar | null, driving: boolean, fxDensity: number, velocityHits: boolean): void {
+  update(wallDt: number, simDt: number, cars: readonly DeformableCar[], followed: DeformableCar | null, driving: boolean, fxDensity: number, velocityHits: boolean, boostZoom: boolean): void {
     if (this.tierNow === "off") return;
     this.hitStop = Math.max(0, this.hitStop - wallDt);
     if (simDt > MIN_SIM_DT) this.detectHits(cars, followed, driving, wallDt, velocityHits);
@@ -659,11 +662,9 @@ export class Cinematics {
     const calm = this.reduceMotion;
     this.post.flash = calm ? 0 : this.flash;
     this.post.punch = calm ? 0 : this.punch;
-    let radial = 0;
-    if (!calm && driving && followed) {
-      radial = THREE.MathUtils.clamp((followed.speed - DRIVE.maxFwd * 1.02) / (DRIVE.maxFwd * 0.4), 0, 1) * 0.05;
-    }
-    this.post.radial += (radial - this.post.radial) * Math.min(1, wallDt * 6);
+    const boosting = !calm && boostZoom && driving && followed !== null && followed.drive.boostK > 0;
+    this.zoomProgress = stepBoostZoom(this.zoomProgress, boosting, wallDt);
+    this.post.radial = boostZoomStrength(this.zoomProgress, followed === null ? 0 : followed.speed);
   }
 
   /** The crash cam is on a cut (not just letterboxing in or out): it holds the camera this frame. */

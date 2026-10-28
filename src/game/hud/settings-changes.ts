@@ -27,6 +27,7 @@ const BASE_SETTINGS = {
   orbit: { section: "playback", label: "Orbit", defaults: { autoRotate: D.autoRotate } },
   night: { section: "playback", label: "Night", defaults: { night: D.night } },
   wet: { section: "playback", label: "Wet", defaults: { wet: D.wet } },
+  bzoom: { section: "playback", label: "Boost zoom", defaults: { boostZoom: D.boostZoom } },
   sky: { section: "playback", label: "Sky", defaults: { sky: D.sky } },
   fx: { section: "playback", label: "FX", defaults: { fxAuto: true } },
   cel: { section: "playback", label: "Cel look", defaults: { celLook: D.celLook } },

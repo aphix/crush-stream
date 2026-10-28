@@ -399,6 +399,12 @@ export abstract class EngineInput extends EngineRigs {
     this.emitHud();
   }
 
+  /** The boost zoom blur on or off (a boost of the driven car, at the FX tiers that draw it); an ease already running plays out. */
+  setBoostZoom(on: boolean): void {
+    this.boostZoom = on;
+    this.emitHud();
+  }
+
   /** The Debug slider `id` (`KNOBS`) to `value`, clamped to its range; the camera and the solver read it live, the HUD and the share URL follow. */
   setKnob(id: KnobId, value: number): void {
     const knob = KNOBS.find((k) => k.id === id);
@@ -553,6 +559,9 @@ export abstract class EngineInput extends EngineRigs {
         break;
       case "rumble":
         this.setRumble(D.rumble);
+        break;
+      case "bzoom":
+        this.setBoostZoom(D.boostZoom);
         break;
       case "cars":
         this.setCarCount(D.carCount);

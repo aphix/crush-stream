@@ -104,6 +104,7 @@ const BASE_FIELDS = {
   sky: pick(SKY_MODES, D.sky),
   real: num(R.realism.min, R.realism.max, D.realism),
   rumble: flag(D.rumble),
+  bzoom: flag(D.boostZoom),
   // null = automatic: `AutoFx` picks the tier, so the URL pins it only after a manual pick.
   fx: orNull(pick(FX_TIERS, D.fxTier)),
   fxd: num(R.fxDensity.min, R.fxDensity.max, D.fxDensity),

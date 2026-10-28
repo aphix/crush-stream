@@ -8,7 +8,7 @@
  *
  *   node --disable-warning=ExperimentalWarning scripts/headless-frame.mjs [--tier high] [--out screenshots/headless-frame-high.png]
  *     [--frames 60] [--size 1280x800] [--root <checkout>] [--hash scene=garage&car=sedan] [--camera 2.4,0.12,2.1] [--view hood] [--at 8] [--tear hood,bumperF]
- *     [--view side|top|iso|rear-iso --view-camera <json>] [--backdrop '#ffffff'] [--detail 2] [--paint '#8b8a8d' | --paint coupe=#2a313e,...] [--state intact|open|stripped]
+ *     [--view side|top|iso|rear-iso --view-camera <json>] [--backdrop '#ffffff'] [--detail 2] [--paint '#8b8a8d' | --paint coupe=#2a313e,...] [--state intact|open|stripped] [--boost 1.5]
  *
  * `--root` draws another checkout's game on its own node_modules (same seed, same clock): two trees give a before/after pair.
  * `--hash` boots the page on a share link's `#` (the scene, the car, the settings) instead of the derby; `--camera radius,pitch,angle`
@@ -30,6 +30,8 @@
  * `--paint <colour>` paints the hash's car that colour, `--paint <style>=<colour>,...` every car of those styles (a livery, the
  * police's, stays): the landing shots and lineup sheets in each reference's colour.
  * `--draw`, `--scale` and `--shadow` pin the quality knobs (`?draw=`, `?scale=`, `?shadow=`). A numeric `--scale` keeps the shot's size and shrinks the CSS box (`--size` over the scale), so the drawing buffer stays `--size`.
+ * `--boost <seconds>` takes the driver's seat and holds its gas for that many sim seconds, then the Boost button too (the touch pad's) through the drawn frames
+ * (`--gas-only` leaves the Boost button up: the same drive camera without the boost). The JSON's `boostZoom` is the seat's mode and the zoom strength the director then reads.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -89,6 +91,8 @@ const { values } = parseArgs({
     sirens: { type: "boolean" },
     break: { type: "string" },
     brake: { type: "boolean" },
+    "gas-only": { type: "boolean" },
+    boost: { type: "string" },
     draw: { type: "string" },
     scale: { type: "string" },
     shadow: { type: "string" },
@@ -150,6 +154,7 @@ const { CrashEngine } = await game("engine/engine.ts");
 const { HudStore } = await game("hud/hud-store.ts");
 const { FX_TIERS } = await game("present/engine-post.ts");
 const { FRAME_HZ } = await game("kernel/constants.ts");
+const { PAD_BUTTON } = await game("vehicle/gamepad.ts");
 const { DRIVER_CARS } = await game("match/types.ts");
 /** The body style the hash's `car=` boots (a car-menu id: a class, e.g. `muscle` for the coupe body), or null; any other id would boot the default sedan unnoticed. */
 const hashStyle = (() => {
@@ -331,6 +336,16 @@ if (seatView !== undefined) {
   engine.advance(VIEW_S, { frameDt: FRAME });
   await settle();
 }
+if (values.boost !== undefined) {
+  const boostS = Number(values.boost);
+  if (!(boostS >= 0)) throw new Error(`--boost ${values.boost}: sim seconds, 0 or more`);
+  const { touch } = engine["pad"];
+  Object.assign(engine.seat, { mode: "drive", carIndex: 0 });
+  touch.gas = 1;
+  engine.advance(boostS, { frameDt: FRAME });
+  await settle();
+  if (!values["gas-only"]) touch.held |= 1 << PAD_BUTTON.south;
+}
 if (values.paint !== undefined) paintCars(values.paint);
 const shooting = landingView !== null || values.backdrop !== undefined ? await shootAs(landingView, values.backdrop) : null;
 const notDrawn = new Set();
@@ -365,9 +380,10 @@ shot.getContext("2d").putImageData(new ImageData(rows, w, h), 0, 0);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, await shot.encode("png"));
 const wheelsPx = shooting?.camera ? wheelMarks(shooting, w, h) : null;
+const boostZoom = values.boost === undefined ? null : { seat: engine.seat.mode, strength: engine.cine.post.radial, boostK: engine.followedCar()?.drive.boostK ?? null, kph: Math.round((engine.followedCar()?.speed ?? 0) * 3.6) };
 engine.dispose();
 const result = { root, tier, draw: values.draw ?? null, scale: values.scale ?? null, shadow: values.shadow ?? null, hash: values.hash ?? null, camera: camera ?? null, view: values.view ?? null, viewCamera: values["view-camera"] ?? null, backdrop: values.backdrop ?? null, detail: detail === null ? null : engine.detail.level, farCars, paint: values.paint ?? null, size: `${w}x${h}`, frame: "engine", renderer, yardstickMs, readyMs, ...counts, linkFailures, builtinQuirk, notDrawn: [...notDrawn], glError, wheelsPx, png: out };
-process.stdout.write(`${JSON.stringify(result)}\n`);
+process.stdout.write(`${JSON.stringify({ ...result, boostZoom })}\n`);
 process.exitCode = linkFailures.length > 0 || glError !== gl.NO_ERROR ? 1 : 0;
 
 /**

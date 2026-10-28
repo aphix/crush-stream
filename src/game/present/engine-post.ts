@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { BLUE_NOISE } from "./blue-noise.ts";
+import { BOOST_ZOOM_CAP, BOOST_ZOOM_FULL_RADIUS } from "./boost-zoom.ts";
 import { GlErrors } from "./gl-errors.ts";
 
 /**
@@ -106,6 +107,7 @@ const float DOT_BLACK_RADIUS = ${DOT_BLACK_RADIUS.toFixed(4)};
 const float HATCH_PITCH = ${HATCH_PITCH.toFixed(1)};
 const vec3 PAPER = vec3(${PAPER.map((v) => v.toFixed(3)).join(", ")});
 const vec3 INK = vec3(${INK.map((v) => v.toFixed(3)).join(", ")});
+const float ZOOM_FULL_RADIUS = ${BOOST_ZOOM_FULL_RADIUS.toFixed(4)};
 float celL(vec2 p) {
   float l = dot(texture2D(tScene, p).rgb, vec3(0.2126, 0.7152, 0.0722));
   return l / (1.0 + l);
@@ -125,12 +127,17 @@ float filteredStripes(float x, float w) {
 }
 void main() {
   vec2 uv = vUv;
+  // Blue-noise dither / grain: the shared 64x64 table, rotated by the golden ratio each frame so it stays blue in space and decorrelates in time.
+  float n = fract(texelFetch(tNoise, ivec2(gl_FragCoord.xy) & 63, 0).r + 0.5 / 255.0 + uPhase);
   vec3 c = texture2D(tScene, uv).rgb;
 #ifdef RADIAL
-  if (uRadial > 0.001) {
-    vec2 d = (uv - uCenter) * uRadial;
-    for (int i = 1; i < 8; i++) c += texture2D(tScene, uv - d * (float(i) / 7.0)).rgb;
-    c *= 0.125;
+  if (uRadial > 0.0) {
+    // Boost zoom: ZOOM_TAPS samples toward the centre, the blur's length rising from 0 there to uRadial (the cap) at ZOOM_FULL_RADIUS; the noise offsets the taps so a few of them read as a smear, not ghosts.
+    vec2 d = uv - uCenter;
+    float r = length(d);
+    vec2 tap = d * (uRadial * smoothstep(0.0, ZOOM_FULL_RADIUS, r) / (max(r, 1e-4) * float(ZOOM_TAPS)));
+    for (int i = 1; i < ZOOM_TAPS; i++) c += texture2D(tScene, uv - tap * (float(i) - n)).rgb;
+    c /= float(ZOOM_TAPS);
   }
 #endif
   if (uPunch > 0.001) {
@@ -181,8 +188,6 @@ void main() {
   vec2 q = uv - 0.5;
   g *= clamp(1.0 - dot(q, q) * (uVignette + uPunch * 0.9), 0.0, 1.0);
   g *= 1.0 - step(0.5 - uLetterbox * 0.128, abs(q.y));
-  // Blue-noise dither / grain: the shared 64x64 table, rotated by the golden ratio each frame so it stays blue in space and decorrelates in time.
-  float n = fract(texelFetch(tNoise, ivec2(gl_FragCoord.xy) & 63, 0).r + 0.5 / 255.0 + uPhase);
   gl_FragColor.rgb = g + (n - 0.5) * uGrain;
 }`;
 
@@ -190,14 +195,15 @@ void main() {
  * Bloom runs over `mips` targets of the shared chain starting at `mip0` (the chain halves from ½ canvas res).
  * `grain` is the blue-noise amplitude (display units, peak to peak): one 8-bit step dithers away banding, the high tier adds visible film grain.
  */
-type TierSpec = { mip0: number; mips: number; radial: boolean; grain: number };
+type TierSpec = { mip0: number; mips: number; zoomTaps: number; grain: number };
 const DITHER = 1 / 255;
 /** The per-frame step of the noise's phase: the golden ratio's fraction, which never repeats and spreads the offsets evenly. */
 const GOLDEN = 0.6180339887;
+/** `zoomTaps`: the boost zoom's samples per pixel while it blurs (0: the tier has none: the phone-class low tier pays no extra fetches). */
 const TIER: Record<PostTier, TierSpec> = {
-  low: { mip0: 1, mips: 3, radial: false, grain: DITHER },
-  high: { mip0: 0, mips: 5, radial: true, grain: 0.03 },
-  ultra: { mip0: 0, mips: 5, radial: true, grain: 0.03 },
+  low: { mip0: 1, mips: 3, zoomTaps: 0, grain: DITHER },
+  high: { mip0: 0, mips: 5, zoomTaps: 12, grain: 0.03 },
+  ultra: { mip0: 0, mips: 5, zoomTaps: 12, grain: 0.03 },
 };
 /** Length of the shared bloom chain: ½, ¼, ⅛, 1/16, 1/32 of the canvas. */
 const CHAIN = 5;
@@ -215,7 +221,7 @@ export function easeFade(fade: number, dt: number): number {
 export function describePost(tier: FxTier): string {
   if (tier === "off" || tier === "minimal") return "none: the scene draws straight to the canvas (no HDR target, bloom, grade, vignette or grain)";
   const s = TIER[tier];
-  const radial = s.radial ? ", radial blur" : "";
+  const radial = s.zoomTaps > 0 ? ", radial blur" : "";
   const grain = s.grain >= DITHER * 2 ? `, grain ${s.grain} (blue noise)` : ", blue-noise dither";
   const chain = `HDR half-float scene target, bloom (${s.mips} mips from 1/${2 ** (s.mip0 + 1)} res, threshold ${GRADE.threshold}, ${GRADE.bloom} strength), one composite pass: tone map, grade, vignette${radial}${grain}`;
   return tier === "ultra" ? `${chain}; ultra look: HDRI daylight lighting, soft sun shadows, PBR ground textures` : chain;
@@ -262,7 +268,7 @@ export class PostFX {
   flash = 0;
   /** 0–1: chromatic split and vignette squeeze. */
   punch = 0;
-  /** 0–0.06: radial blur length toward `center` (high tier only). */
+  /** 0–1: the boost zoom's strength (`boostZoomStrength`); the composite's blur is this × `BOOST_ZOOM_CAP` at the screen corner (tiers with `zoomTaps` only). */
   radial = 0;
   readonly center = new THREE.Vector2(0.5, 0.5);
   /** 0–1: 2.39:1 letterbox bars for the crash cam. */
@@ -336,7 +342,7 @@ export class PostFX {
           uDots: { value: 0 },
           uHatch: { value: 0 },
         },
-        defines: spec.radial ? { BLOOM: "", RADIAL: "" } : { BLOOM: "" },
+        defines: spec.zoomTaps > 0 ? { BLOOM: "", RADIAL: "", ZOOM_TAPS: String(spec.zoomTaps) } : { BLOOM: "" },
         depthTest: false,
         depthWrite: false,
       });
@@ -489,7 +495,7 @@ export class PostFX {
     u.uGrain!.value = this.grain;
     u.uFlash!.value = this.flash;
     u.uPunch!.value = this.punch;
-    u.uRadial!.value = this.radial * k;
+    u.uRadial!.value = Math.min(1, Math.max(0, this.radial)) * k * BOOST_ZOOM_CAP;
     u.uLetterbox!.value = this.letterbox;
     u.uCel!.value = this.cel;
     u.uDots!.value = this.dots;

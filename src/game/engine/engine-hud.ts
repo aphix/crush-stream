@@ -177,6 +177,7 @@ export abstract class EngineHud extends EngineWarm {
       padFamily: this.pad.family,
       realism: HANDLING.realism,
       rumble: this.rumble,
+      boostZoom: this.boostZoom,
       playerCar: this.playerCar.id,
       mouseLook: this.view.locked,
       ...knobValues(),
