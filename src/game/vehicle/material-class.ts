@@ -3,9 +3,9 @@ import { glslFloat, perturbedNormalGlsl } from "./car-finish.ts";
 
 /**
  * The material classes the drawn world is tagged with. A class sets how much of the environment's reflection a surface keeps
- * (`specular`, a share of the specular IBL: three's `envMapIntensity` is overwritten with the scene's, so only the shader can scale it), a
- * procedural grain (`slope` the normal's tilt, `freq` features a metre) that costs no texture fetch and, for the concrete family, a
- * worn-concrete detail from one shared map (`detail`). Ids index the GLSL table.
+ * (`specular`, a share of the specular IBL: three's `envMapIntensity` is overwritten with the scene's, so only the shader can scale it) and of
+ * the lights' own specular (`direct`), a procedural grain (`slope` the normal's tilt, `freq` features a metre) that costs no texture fetch and, for
+ * the concrete family, a worn-concrete detail from one shared map (`detail`). Ids index the GLSL table; a vertex's class (`MATERIAL_ATTRIBUTE`) wins over the material's.
  */
 export const MATERIAL = { GENERIC: 0, PAINTED_METAL: 1, PLASTIC: 2, RUBBER: 3, CONCRETE: 4, ASPHALT: 5, SOIL: 6, WOOD: 7, FOLIAGE: 8, GLASS: 9, STONE: 10, LEATHER: 11, METAL: 12 } as const;
 export type MaterialClass = (typeof MATERIAL)[keyof typeof MATERIAL];
@@ -14,21 +14,31 @@ export type MaterialClass = (typeof MATERIAL)[keyof typeof MATERIAL];
 type Detail = { tile: number; normal: number; luma: number; rough: number; tint: number; smooth: number };
 const NO_DETAIL: Detail = { tile: 1, normal: 0, luma: 0, rough: 0, tint: 1, smooth: 1 };
 
-/** specular: the share of the specular IBL kept; slope, freq: the grain (none at 0); detail: the worn-concrete map. Starting values tuned from headless shots; a rough dielectric under a bright studio env reads grey and wet at env 1. */
-const MATERIAL_TUNE: Record<MaterialClass, { specular: number; slope: number; freq: number; detail: Detail }> = {
-  [MATERIAL.GENERIC]: { specular: 1, slope: 0, freq: 1, detail: NO_DETAIL },
-  [MATERIAL.PAINTED_METAL]: { specular: 0.8, slope: 0, freq: 1, detail: NO_DETAIL },
-  [MATERIAL.PLASTIC]: { specular: 0.55, slope: 0, freq: 1, detail: NO_DETAIL },
-  [MATERIAL.RUBBER]: { specular: 0.25, slope: 0.2, freq: 60, detail: NO_DETAIL },
-  [MATERIAL.CONCRETE]: { specular: 0.45, slope: 0, freq: 24, detail: { tile: 0.7, normal: 0.6, luma: 0.6, rough: 0.4, tint: 1, smooth: 1 } },
-  [MATERIAL.ASPHALT]: { specular: 0.8, slope: 0, freq: 50, detail: { tile: 1, normal: 0.12, luma: 0.3, rough: 0, tint: 0.55, smooth: 1 } },
-  [MATERIAL.SOIL]: { specular: 0.2, slope: 0.25, freq: 18, detail: NO_DETAIL },
-  [MATERIAL.WOOD]: { specular: 0.35, slope: 0.25, freq: 20, detail: NO_DETAIL },
-  [MATERIAL.FOLIAGE]: { specular: 0.25, slope: 0.2, freq: 25, detail: NO_DETAIL },
-  [MATERIAL.GLASS]: { specular: 1, slope: 0, freq: 1, detail: NO_DETAIL },
-  [MATERIAL.STONE]: { specular: 0.6, slope: 0, freq: 30, detail: { tile: 0.9, normal: 0.5, luma: 0.5, rough: 0.3, tint: 1, smooth: 1 } },
-  [MATERIAL.LEATHER]: { specular: 0.6, slope: 0, freq: 1, detail: NO_DETAIL },
-  [MATERIAL.METAL]: { specular: 1, slope: 0, freq: 1, detail: NO_DETAIL },
+/** The share of a light's specular soil and foliage keep: a rough surface still returns nearly all of a grazing sun (Fresnel reaches 1), a sheet of gold across a lawn. */
+const SOFT_GROUND_DIRECT = 0.2;
+/** The share of a photograph's normal relief a soil or foliage fragment keeps when the material's own class is another (a lawn cell on a paved terrain's concrete scan): its cracks stop reading on grass. */
+const SOFT_GROUND_RELIEF = 0.3;
+
+/**
+ * specular: the share of the specular IBL kept; direct: the share of the lights' specular kept; relief: the share of a photograph's normal kept on
+ * a fragment whose class is not the material's own; slope, freq: the grain (none at 0); detail: the worn-concrete map.
+ * Starting values tuned from headless shots; a rough dielectric under a bright studio env reads grey and wet at env 1.
+ */
+type Tune = { specular: number; direct: number; relief: number; slope: number; freq: number; detail: Detail };
+const MATERIAL_TUNE: Record<MaterialClass, Tune> = {
+  [MATERIAL.GENERIC]: { specular: 1, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL },
+  [MATERIAL.PAINTED_METAL]: { specular: 0.8, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL },
+  [MATERIAL.PLASTIC]: { specular: 0.55, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL },
+  [MATERIAL.RUBBER]: { specular: 0.25, direct: 1, relief: 1, slope: 0.2, freq: 60, detail: NO_DETAIL },
+  [MATERIAL.CONCRETE]: { specular: 0.45, direct: 1, relief: 1, slope: 0, freq: 24, detail: { tile: 0.7, normal: 0.6, luma: 0.6, rough: 0.4, tint: 1, smooth: 1 } },
+  [MATERIAL.ASPHALT]: { specular: 0.8, direct: 1, relief: 1, slope: 0, freq: 50, detail: { tile: 1, normal: 0.12, luma: 0.3, rough: 0, tint: 0.55, smooth: 1 } },
+  [MATERIAL.SOIL]: { specular: 0.2, direct: SOFT_GROUND_DIRECT, relief: SOFT_GROUND_RELIEF, slope: 0.25, freq: 18, detail: NO_DETAIL },
+  [MATERIAL.WOOD]: { specular: 0.35, direct: 1, relief: 1, slope: 0.25, freq: 20, detail: NO_DETAIL },
+  [MATERIAL.FOLIAGE]: { specular: 0.25, direct: SOFT_GROUND_DIRECT, relief: SOFT_GROUND_RELIEF, slope: 0.2, freq: 25, detail: NO_DETAIL },
+  [MATERIAL.GLASS]: { specular: 1, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL },
+  [MATERIAL.STONE]: { specular: 0.6, direct: 1, relief: 1, slope: 0, freq: 30, detail: { tile: 0.9, normal: 0.5, luma: 0.5, rough: 0.3, tint: 1, smooth: 1 } },
+  [MATERIAL.LEATHER]: { specular: 0.6, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL },
+  [MATERIAL.METAL]: { specular: 1, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL },
 };
 
 /** 1 on the tiers that draw the finish (high, ultra), 0 elsewhere: the grain's and the detail's one switch, shared by every tagged material (a uniform, so no program changes). */
@@ -76,7 +86,7 @@ const hasDetail = (id: MaterialClass): number => (MATERIAL_TUNE[id].detail.norma
 
 const MATERIAL_VERTEX_PARS = /* glsl */ `
 attribute float ${MATERIAL_ATTRIBUTE};
-varying float vMaterialAttribute;
+flat varying float vMaterialAttribute;
 varying vec3 vMaterialPoint;
 varying vec3 vMaterialNormal;`;
 
@@ -97,10 +107,12 @@ uniform float materialGrain;
 uniform float materialDetailReady;
 uniform sampler2D materialDetailMap;
 ${MATERIAL_STRENGTH_GLSL}
-varying float vMaterialAttribute;
+flat varying float vMaterialAttribute;
 varying vec3 vMaterialPoint;
 varying vec3 vMaterialNormal;
 ${glslTable("MATERIAL_ENV", (id) => MATERIAL_TUNE[id].specular)}
+${glslTable("MATERIAL_DIRECT", (id) => MATERIAL_TUNE[id].direct)}
+${glslTable("MATERIAL_RELIEF", (id) => MATERIAL_TUNE[id].relief)}
 ${glslTable("MATERIAL_SLOPE", (id) => MATERIAL_TUNE[id].slope)}
 ${glslTable("MATERIAL_FREQ", (id) => MATERIAL_TUNE[id].freq)}
 ${glslTable("MATERIAL_DETAIL_ON", hasDetail)}
@@ -164,9 +176,9 @@ const MATERIAL_ROUGHNESS_FRAGMENT = /* glsl */ `
 roughnessFactor = clamp(roughnessFactor * mix(1.0, MATERIAL_SMOOTH[materialClass], materialBlend) + (0.5 - materialDetail.b) * 2.0 * MATERIAL_ROUGH[materialClass] * materialDetailOn * materialStrength, 0.04, 1.0);`;
 
 /**
- * After `<normal_fragment_maps>`, where the material has no normal map of its own (Ultra's photographs win): the class's procedural grain
- * (the height in metres: slope over the feature size), then the detail map's tilt in the surface's own tangent frame (zero for a class
- * without detail, so the normal is unchanged).
+ * After `<normal_fragment_maps>`: with a normal map of its own (Ultra's photographs), a fragment whose class is not the material's (a vertex
+ * class, `MATERIAL_ATTRIBUTE`) keeps the class's share of that relief; without one, the class's procedural grain (the height in metres: slope
+ * over the feature size), then the detail map's tilt in the surface's own tangent frame (zero for a class without detail, so the normal is unchanged).
  */
 const MATERIAL_NORMAL_FRAGMENT = /* glsl */ `
 #ifndef USE_NORMALMAP
@@ -180,6 +192,9 @@ if (materialGrain > 0.0) {
   normal = normalize(materialFrame(materialQ0, materialQ1, materialDx, materialDy, normal) * materialTangentNormal);
 
 }
+#endif
+#ifdef USE_NORMALMAP
+if (materialClass != int(materialId + 0.5)) normal = normalize(mix(nonPerturbedNormal, normal, MATERIAL_RELIEF[materialClass]));
 #endif`;
 
 /**
@@ -207,7 +222,7 @@ export function tagMaterial<T extends THREE.MeshStandardMaterial>(material: T, m
       .replace("#include <color_fragment>", `#include <color_fragment>${MATERIAL_COLOR_FRAGMENT}`)
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>${MATERIAL_ROUGHNESS_FRAGMENT}`)
       .replace("#include <normal_fragment_maps>", `#include <normal_fragment_maps>${MATERIAL_NORMAL_FRAGMENT}`)
-      .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\nreflectedLight.indirectSpecular *= materialSpecular(MATERIAL_ENV[materialClass]);");
+      .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\nreflectedLight.directSpecular *= materialSpecular(MATERIAL_DIRECT[materialClass]);\nreflectedLight.indirectSpecular *= materialSpecular(MATERIAL_ENV[materialClass]);");
   };
   material.customProgramCacheKey = () => `${previousKey.call(material)}|surf`;
   return material;

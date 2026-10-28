@@ -8,7 +8,7 @@ import { sampleStep, surfY } from "../world/track-sections.ts";
 import type { GroundLevel } from "../scenes/ground-stack.ts";
 import {
   BLACK, BLOCK, CHEQUER, FLAT_TOL, KERB_CURV, KERB_FILL, KERB_LIFT, KERB_WIDTH, MARK_LIFT, Mesher, PAVED,
-  RED, ROAD_LIFT, ROAD_ON_TERRAIN_SHADE, RoadIndex, sampleAt, SKIRT_RADIUS, surfaceHex, texClass, WHITE,
+  RED, ROAD_LIFT, ROAD_ON_TERRAIN_SHADE, RoadIndex, sampleAt, SKIRT_RADIUS, surfaceClass, surfaceHex, texClass, WHITE,
 } from "./track-mesh.ts";
 
 /** How far (m) past the farthest scatter the terrain extends beyond the track's bounds. */
@@ -318,7 +318,7 @@ function mergeFlatCells(g: TerrainGrid, kinds: Uint8Array, colours: Uint8Array, 
 }
 
 function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m: Mesher; chunks: TerrainChunks } {
-  const m = new Mesher();
+  const m = new Mesher(true);
   const g = sampleTerrain(track, ground, index);
   const { x0, z0, bx, bz, per, nx, terrain, tile, h, col } = g;
   const nz = bz * per + 1;
@@ -443,12 +443,13 @@ function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m:
     const x = x0 + i2 * NODE;
     const z = z0 + j2 * NODE;
     const corner = (i2 & 1) === 0 && (j2 & 1) === 0;
-    const id = out.v(x, corner ? pointY(kinds, i2 >> 1, j2 >> 1) : halfY(kinds, fine, i2, j2), z, surfaceHex(colourAt(colours, i2, j2)), x / tile, z / tile);
+    const surface = colourAt(colours, i2, j2);
+    const id = out.v(x, corner ? pointY(kinds, i2 >> 1, j2 >> 1) : halfY(kinds, fine, i2, j2), z, surfaceHex(surface), x / tile, z / tile, 1, surfaceClass(surface));
     ground.normalAt(x, z, n, -Infinity);
     out.normal(id, n.x, n.y, n.z);
     return id;
   };
-  const coarse = new Mesher();
+  const coarse = new Mesher(true);
   const rimColours = Uint16Array.from(col, (colour, k) => colour | (farCol[k]! << 8));
   const nearMerged = mergeFlatCells(g, kind, col, rimColours, g.fine);
   const farMerged = mergeFlatCells(g, farKind, farCol, rimColours, farFine);
@@ -604,12 +605,12 @@ function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m:
     addChunk(coarse, farCol, farKind, farFine, farLayer, c);
   }
   mark(cx * cz);
-  addSkirt(m, ground, x0, z0, bx, bz, surfaceHex(terrain), tile);
+  addSkirt(m, ground, x0, z0, bx, bz, terrain, tile);
   return { m, chunks: { coarse, box, fineAt, coarseAt } };
 }
 
 /** Far skirt: an annulus under the terrain grid's edge out to the horizon, just below the base terrain. */
-function addSkirt(m: Mesher, ground: TrackGround, x0: number, z0: number, bx: number, bz: number, hex: number, tile: number): void {
+function addSkirt(m: Mesher, ground: TrackGround, x0: number, z0: number, bx: number, bz: number, surface: number, tile: number): void {
   const cx = x0 + (bx * BLOCK) / 2;
   const cz = z0 + (bz * BLOCK) / 2;
   const inner = (Math.min(bx, bz) * BLOCK) / 2;
@@ -622,7 +623,7 @@ function addSkirt(m: Mesher, ground: TrackGround, x0: number, z0: number, bx: nu
       const a = (s / seg) * Math.PI * 2;
       const x = cx + Math.sin(a) * rad;
       const z = cz + Math.cos(a) * rad;
-      m.v(x, ground.base(x, z) - 0.25, z, hex, x / tile, z / tile);
+      m.v(x, ground.base(x, z) - 0.25, z, surfaceHex(surface), x / tile, z / tile, 1, surfaceClass(surface));
     }
   }
   for (let r = 0; r < rings; r++) {

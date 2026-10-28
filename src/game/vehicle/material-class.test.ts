@@ -225,6 +225,8 @@ const detailCases = [
   { it: "asphalt", materialClass: "ASPHALT", expectedOn: 1 },
   { it: "rubber", materialClass: "RUBBER", expectedOn: 0 },
   { it: "wood", materialClass: "WOOD", expectedOn: 0 },
+  { it: "soil", materialClass: "SOIL", expectedOn: 0 },
+  { it: "foliage", materialClass: "FOLIAGE", expectedOn: 0 },
   { it: "glass", materialClass: "GLASS", expectedOn: 0 },
   { it: "generic", materialClass: "GENERIC", expectedOn: 0 },
 ] as const;
@@ -278,5 +280,36 @@ describe("given the worn-concrete detail map shared by the concrete family", () 
   it("when the stone row is read, then it takes a weaker normal than the concrete", () => {
     const normal = glslTable(shader.fragmentShader, "MATERIAL_NORMAL");
     assert.ok(normal[MATERIAL.STONE]! < normal[MATERIAL.CONCRETE]!, "weaker");
+  });
+});
+
+const softGround = [
+  { it: "soil", materialClass: "SOIL" },
+  { it: "foliage", materialClass: "FOLIAGE" },
+] as const;
+const hardSurfaces = ["ASPHALT", "CONCRETE", "STONE", "GLASS", "METAL", "PAINTED_METAL", "GENERIC"] as const;
+
+describe("given the share of a light's specular each class keeps", () => {
+  const fragment = compile(tagMaterial(new THREE.MeshStandardMaterial(), MATERIAL.SOIL)).fragmentShader;
+  const direct = glslTable(fragment, "MATERIAL_DIRECT");
+  const relief = glslTable(fragment, "MATERIAL_RELIEF");
+
+  for (const testCase of softGround) {
+    it(`when the ${testCase.it} class is read, then a low sun keeps at most a quarter of its specular there, so a lawn does not shine like wet ground`, () => {
+      assert.ok(direct[MATERIAL[testCase.materialClass]]! <= 0.25, `share ${direct[MATERIAL[testCase.materialClass]]}`);
+      assert.ok(relief[MATERIAL[testCase.materialClass]]! < 1, "a photograph's relief is cut where the class is not the material's own");
+    });
+  }
+
+  it("when the roads, walls, glass, metal and paint are read, then their lights' specular and photographs' relief are whole", () => {
+    for (const name of hardSurfaces) {
+      assert.equal(direct[MATERIAL[name]], 1, `${name} specular`);
+      assert.equal(relief[MATERIAL[name]], 1, `${name} relief`);
+    }
+  });
+
+  it("when its tables are read, then each has one row per class", () => {
+    assert.equal(direct.length, Object.keys(MATERIAL).length, "direct rows");
+    assert.equal(relief.length, Object.keys(MATERIAL).length, "relief rows");
   });
 });

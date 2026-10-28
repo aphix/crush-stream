@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { CELL as GROUND_CELL, Track, type TrackGround } from "../world/track.ts";
 import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
+import { MATERIAL } from "../vehicle/material-class.ts";
 import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
-import { FLAT_TOL, type Mesher, RoadIndex } from "./track-mesh.ts";
+import { FLAT_TOL, type Mesher, RoadIndex, surfaceClass } from "./track-mesh.ts";
 import { sections } from "../world/track-sections.ts";
 import { buildGroundLayers, TerrainBatch } from "./track-ground.ts";
 
@@ -472,4 +473,29 @@ describe("given Razor Shelf, whose inside cut is a dirt road across dirt terrain
     const paved = brightest("road", "asphalt");
     assert.ok(Math.abs(paved - 1) < 1e-6, `asphalt drawn at ${paved.toFixed(3)} of its colour`);
   });
+});
+
+describe("given the National Mall, whose lawns are painted on a concrete terrain drawn in one material", () => {
+  const t = terrainOf("national-mall");
+  const surfaceAt = (m: Mesher, v: number): number => SURFACE_IDS.findIndex((id) => {
+    const c = new THREE.Color(SURFACES[id].color);
+    return Math.abs(m.col[v * 3]! - c.r) + Math.abs(m.col[v * 3 + 1]! - c.g) + Math.abs(m.col[v * 3 + 2]! - c.b) < 1e-4;
+  });
+
+  for (const [name, mesher] of [["near", t.near], ["far", t.chunks.coarse]] as const) {
+    it(`when its ${name} mesh is built, then a vertex coloured as grass is classed as soil and one coloured as concrete as concrete, so the lawn takes no concrete's shine or detail`, () => {
+      assert.equal(mesher.cls?.length, mesher.pos.length / 3, "a class per vertex");
+      const seen = new Set<number>();
+      for (let v = 0; v < mesher.pos.length / 3; v++) {
+        const surface = surfaceAt(mesher, v);
+        if (surface < 0) continue;
+        assert.equal(mesher.cls![v], surfaceClass(surface), `vertex ${v} of surface ${SURFACE_IDS[surface]}`);
+        seen.add(surface);
+      }
+      assert.ok(seen.has(SURFACE_IDS.indexOf("grass")), "lawn vertices exist");
+      assert.ok(seen.has(SURFACE_IDS.indexOf("concrete")), "concrete vertices exist");
+      assert.equal(surfaceClass(SURFACE_IDS.indexOf("grass")), MATERIAL.SOIL, "grass is soil");
+      assert.equal(surfaceClass(SURFACE_IDS.indexOf("concrete")), MATERIAL.CONCRETE, "concrete is concrete");
+    });
+  }
 });

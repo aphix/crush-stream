@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { clamp } from "../kernel/scalar.ts";
 import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
+import { SURFACE } from "../world/constants.ts";
+import { MATERIAL, MATERIAL_ATTRIBUTE, type MaterialClass } from "../vehicle/material-class.ts";
 import { blankSegment, segmentAt, type TrackPath } from "../world/track.ts";
 
 /** Track art building blocks: sizes, colours, the `Mesher` vertex list, path sampling and the `RoadIndex` every piece shares. */
@@ -80,11 +82,17 @@ export class Mesher {
   readonly col: number[] = [];
   readonly uv: number[] = [];
   readonly idx: number[] = [];
+  /** Per vertex material class (`MATERIAL_ATTRIBUTE`), kept only by a mesher made `classed`: a mesh of mixed surfaces under one material. */
+  readonly cls: number[] | null;
   private readonly c = new THREE.Color();
   /** The colour `c` holds, so a run of vertices in one colour converts it once. */
   private hex = -1;
 
-  v(x: number, y: number, z: number, hex: number, u = 0, w = 0, shade = 1): number {
+  constructor(classed = false) {
+    this.cls = classed ? [] : null;
+  }
+
+  v(x: number, y: number, z: number, hex: number, u = 0, w = 0, shade = 1, materialClass: MaterialClass = MATERIAL.GENERIC): number {
     if (hex !== this.hex) {
       this.c.setHex(hex);
       this.hex = hex;
@@ -93,6 +101,7 @@ export class Mesher {
     this.nrm.push(0, 1, 0);
     this.col.push(this.c.r * shade, this.c.g * shade, this.c.b * shade);
     this.uv.push(u, w);
+    this.cls?.push(materialClass);
     return this.pos.length / 3 - 1;
   }
 
@@ -167,6 +176,7 @@ export class Mesher {
     g.setAttribute("normal", new THREE.Float32BufferAttribute(this.nrm.slice(v0 * 3, v1 * 3), 3));
     g.setAttribute("color", new THREE.Float32BufferAttribute(this.col.slice(v0 * 3, v1 * 3), 3));
     g.setAttribute("uv", new THREE.Float32BufferAttribute(this.uv.slice(v0 * 2, v1 * 2), 2));
+    if (this.cls) g.setAttribute(MATERIAL_ATTRIBUTE, new THREE.Float32BufferAttribute(this.cls.slice(v0, v1), 1));
     g.setIndex(this.idx.slice(i0, i1).map((i) => i - v0));
     g.computeBoundingSphere();
     return g;
@@ -181,6 +191,12 @@ export function surfaceHex(index: number): number {
 export function texClass(index: number): "asphalt" | "concrete" | "detail" {
   const id = SURFACE_IDS[index]!;
   return id === "asphalt" ? "asphalt" : id === "concrete" ? "concrete" : "detail";
+}
+
+/** The material class a surface's cells are drawn in: the terrain is one material whose painted cells (a lawn on a paved plaza's terrain) must not take its class. */
+export function surfaceClass(index: number): MaterialClass {
+  const id = SURFACE_IDS[index]!;
+  return id === SURFACE.asphalt ? MATERIAL.ASPHALT : id === SURFACE.concrete ? MATERIAL.CONCRETE : id === SURFACE.cobble ? MATERIAL.STONE : MATERIAL.SOIL;
 }
 
 /** Deterministic 0..1 per (i, salt). */

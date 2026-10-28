@@ -100,28 +100,39 @@ describe("given a coupe whose chrome window trim frames its glass and runs along
   }
 });
 
-/** A trim point back at its built place after a reset (m): the repaired body and glass are exact, so is the chrome that frames them. */
+/** A trim point or glass vertex back at its built place after a reset (m), and a pane's built turn (degrees): the repaired body is exact, so is the glass and the chrome that frames it. */
 const RESET_BAR_M = 0.001;
+const RESET_TURN_DEG = 0.5;
 
 const rawPoints = (mesh: THREE.Mesh): Float32Array => (mesh.geometry.getAttribute("position").array as Float32Array).slice();
 const largestMove = (a: Float32Array, b: Float32Array): number => a.reduce((worst, value, i) => Math.max(worst, Math.abs(value - b[i]!)), 0);
 
 describe("given a coupe crushed, then reset", () => {
   for (const [approach, kph] of HITS) {
-    it(`when it is crushed ${approach} on at ${kph} km/h and reset, then every trim point is back within ${RESET_BAR_M * 1000} mm of the built trim`, () => {
+    it(`when it is crushed ${approach} on at ${kph} km/h and reset, then every trim point and glass pane is back within ${RESET_BAR_M * 1000} mm and ${RESET_TURN_DEG} degrees of the built one`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
       car.deform.setMode("shape");
       const pristine = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
-      const built = pristine["trims"].map((t) => rawPoints(t.mesh));
+      const builtTrims = pristine["trims"].map((t) => rawPoints(t.mesh));
       runWall(kph, 1, approach, { car });
       car.flushDeferredSkin();
       car.updateSkin();
-      const crushedBy = car["trims"].reduce((worst, t, n) => Math.max(worst, largestMove(rawPoints(t.mesh), built[n]!)), 0);
-      assert.ok(crushedBy > DENT_M, `the control: the crush moved a trim point ${(crushedBy * 100).toFixed(1)} cm`);
+      const trimsCrushedBy = car["trims"].reduce((worst, t, n) => Math.max(worst, largestMove(rawPoints(t.mesh), builtTrims[n]!)), 0);
+      assert.ok(trimsCrushedBy > DENT_M, `the control: the crush moved a trim point ${(trimsCrushedBy * 100).toFixed(1)} cm`);
+      const panesHit = car.glassPanes.filter((g, n) => g.state !== "intact" || g.mesh.position.distanceTo(pristine.glassPanes[n]!.mesh.position) > DENT_M || largestMove(rawPoints(g.mesh), rawPoints(pristine.glassPanes[n]!.mesh)) > DENT_M);
+      assert.ok(panesHit.length > 0, "the control: the crush cracked, shattered or moved some pane");
       car.resetVisual();
       for (const [n, t] of car["trims"].entries()) {
-        const off = largestMove(rawPoints(t.mesh), built[n]!);
+        const off = largestMove(rawPoints(t.mesh), builtTrims[n]!);
         assert.ok(off <= RESET_BAR_M, `trim ${n} (${t.cage}) stands ${(off * 1000).toFixed(1)} mm off its built place after the reset`);
+      }
+      for (const [n, g] of car.glassPanes.entries()) {
+        const built = pristine.glassPanes[n]!.mesh;
+        const moved = g.mesh.position.distanceTo(built.position);
+        const turned = (2 * Math.acos(Math.min(1, Math.abs(g.mesh.quaternion.dot(built.quaternion)))) * 180) / Math.PI;
+        const bent = largestMove(rawPoints(g.mesh), rawPoints(built));
+        assert.ok(g.state === "intact" && g.mesh.visible, `pane ${g.name} is whole and drawn after the reset`);
+        assert.ok(moved <= RESET_BAR_M && turned <= RESET_TURN_DEG && bent <= RESET_BAR_M, `pane ${g.name}: ${(moved * 1000).toFixed(1)} mm, ${turned.toFixed(2)} degrees, vertices ${(bent * 1000).toFixed(1)} mm off built`);
       }
     });
   }
