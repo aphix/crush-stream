@@ -1,7 +1,8 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
-import { makePrefabMaterials } from "./prefabs.ts";
+import { makePrefabMaterials, prefabParts } from "./prefabs.ts";
+import { PREFAB } from "../world/constants.ts";
 import { setWaterTier } from "./water-look.ts";
 
 /** Compile `material` against three's own standard chunks and return the patched shader. */
@@ -30,6 +31,12 @@ describe("given the prefab materials", () => {
     const water = compiled(mats.water);
     mats.water.onBeforeRender({} as THREE.WebGLRenderer, {} as THREE.Scene, {} as THREE.Camera, {} as THREE.BufferGeometry, {} as THREE.Object3D, {} as THREE.Group);
     assert.ok((water.uniforms.uWaterTime as THREE.IUniform<number>).value > 0);
+  });
+
+  it("when a lawn fountain is built, then its inner water is drawn with the water material and the stone is not", () => {
+    const parts = prefabParts(PREFAB.fountain, mats);
+    assert.equal(parts[0]!.material, mats.plain);
+    assert.equal(parts[1]!.material, mats.water);
   });
 
   for (const [tier, look] of [["minimal", 0], ["off", 0], ["low", 1], ["high", 1], ["ultra", 1]] as const) {

@@ -87,14 +87,18 @@ const FOUNTAIN_SHADE = { stone: 0xe6e1d6, water: 0x6f9fb8, spray: 0xe8f4fa };
 /** Sides of a lawn fountain's round basin and its water. */
 const FOUNTAIN_SEGMENTS = 48;
 
-export function fountain(): Piece[] {
+export function fountain(mats: PrefabMaterials): PrefabPart[] {
   const { basin, water, pedestal, jet, spray } = FOUNTAIN;
-  return [
+  const dry: Piece[] = [
     ...poolStone(circleOutline(basin.r, FOUNTAIN_SEGMENTS), circleOutline(water.r, FOUNTAIN_SEGMENTS), water.y0, basin.y1, FOUNTAIN_SHADE.stone),
-    [cyl(water.r, water.r, water.y0, basin.y1 + POOL.brim, FOUNTAIN_SEGMENTS), FOUNTAIN_SHADE.water, MATERIAL.GLASS],
     [cyl(pedestal.r, pedestal.r, basin.y1, pedestal.y1, 24), FOUNTAIN_SHADE.stone, MATERIAL.STONE],
     [cyl(jet.r, jet.r, pedestal.y1, jet.y1, 12), FOUNTAIN_SHADE.spray, MATERIAL.GLASS],
     [cyl(jet.r, spray.r, spray.y0, jet.y1, 24), FOUNTAIN_SHADE.spray, MATERIAL.GLASS],
+  ];
+  const wet: Piece = [cyl(water.r, water.r, water.y0, basin.y1 + POOL.brim, FOUNTAIN_SEGMENTS), FOUNTAIN_SHADE.water, MATERIAL.GLASS];
+  return [
+    { geometry: painted(dry), material: mats.plain, shared: false },
+    { geometry: painted([wet]), material: mats.water, shared: false },
   ];
 }
 

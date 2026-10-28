@@ -577,7 +577,7 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials): PrefabPart[] {
     case PREFAB.whiteHouse:
       return one(whiteHouse(), mats.plain);
     case PREFAB.fountain:
-      return one(fountain(), mats.plain);
+      return fountain(mats);
     case PREFAB.fence:
       return one(fence(), mats.plain);
     case PREFAB.pool:
