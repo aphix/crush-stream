@@ -1,10 +1,11 @@
 import type * as THREE from "three";
-import { DECAL_FACE_AT, DECAL_FLAT, DECAL_H, DECAL_HALF_X, DECAL_HALF_Z, DECAL_NO_PAINT, DECAL_RAISE_STEP, DECAL_W, DECAL_Y, decalMap, FABRIC, FABRIC_CONTRAST, FABRIC_ENV, FABRIC_MAP, FABRIC_RELIEF, FABRIC_ROUGHNESS, FABRIC_TILE } from "./dummy-cloth.ts";
+import { DECAL_FACE_AT, DECAL_FLAT, DECAL_H, DECAL_HALF_X, DECAL_HALF_Z, DECAL_NO_PAINT, DECAL_RAISE_STEP, DECAL_W, DECAL_Y, decalMap, FABRIC, FABRIC_CONTRAST, FABRIC_ENV, FABRIC_MAP, FABRIC_MATERIAL, FABRIC_RELIEF, FABRIC_ROUGHNESS, FABRIC_TILE } from "./dummy-cloth.ts";
 import { DRESS_DECALS } from "./dummy-dress.ts";
 import { CAPPED, CUTS_AT, FLAGS_AT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, OPTIONAL, ORBS_AT, PALETTE_AT, PRINT_ATTRIBUTE, ROLE, ROLES, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE } from "./dummy-rig.ts";
 import { FACE_RELIEF, faceReliefMap, PRINT_CELL, PRINT_CELLS, PRINT_TEXELS, printMap } from "./dummy-texture.ts";
 import { RIM_FRAGMENT, RIM_LIGHT } from "./rim-light.ts";
 import { MATERIAL_STRENGTH, MATERIAL_STRENGTH_GLSL } from "../vehicle/material-class.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 
 /**
  * The dummies' shader patch: GLSL skinning from the slot's pose row; in the fragment the slot's garment cuts over the body
@@ -88,6 +89,8 @@ const ROLE_FABRIC: Record<keyof typeof ROLE, number> = {
   SHIRT: OUTFIT_TOP, SKIN: FABRIC.SKIN, LEGS: OUTFIT_PANTS, HAIR: CROWN, SHOE: OUTFIT_SHOES, BRIM: FABRIC.TWILL, BADGE: FABRIC.NONE, EYES: FABRIC.NONE, LOCKS: FABRIC.HAIR,
   MUSTACHE: FABRIC.HAIR, TIE: FABRIC.TWILL, COLLAR: FABRIC.COTTON, ARM: OUTFIT_TOP, BELT: FABRIC.LEATHER, BUCKLE: FABRIC.NONE, SOLE: FABRIC.NONE, PATCH: FABRIC.TWILL,
 };
+/** The registry material of the roles that are not their fabric's (metal, glass, rubber; `FABRIC_MATERIAL` names the rest). */
+const ROLE_MATERIAL: Partial<Record<keyof typeof ROLE, MaterialId>> = { BADGE: MAT.BADGE_METAL, BUCKLE: MAT.BUCKLE_METAL, EYES: MAT.EYE_GLASS, SOLE: MAT.SOLE_RUBBER };
 /** A role's own roughness, over its fabric's (-1: the fabric's): metal, glass and rubber. */
 const ROLE_ROUGHNESS: Partial<Record<keyof typeof ROLE, number>> = { BADGE: 0.3, BUCKLE: 0.3, EYES: 0.1, SOLE: 0.8 };
 const ROLE_METAL: Partial<Record<keyof typeof ROLE, number>> = { BADGE: 1, BUCKLE: 1 };
@@ -271,6 +274,7 @@ const DECALS = decalMap(DRESS_DECALS);
  * decals and prints in the fragment, the fabric's relief as a bump, each role's roughness and metal, and the rim light (`RIM_LIGHT`).
  */
 export function applyDolls(material: THREE.Material, dolls: THREE.Texture, lit: boolean): void {
+  if (lit) material.userData.materialIds = { fabric: FABRIC_MATERIAL, role: ROLE_MATERIAL };
   const prev = material.onBeforeCompile;
   const prevKey = material.customProgramCacheKey;
   const prints = printMap();

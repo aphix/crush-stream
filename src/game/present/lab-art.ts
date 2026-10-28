@@ -4,7 +4,8 @@ import { BENCH, BOARD, BOARD_T, BRACKET_T, FLOOR, LAB_BACK, LAB_LAYOUTS, LAB_SCA
 import { makePrefabMaterials, raceTextures } from "./prefabs.ts";
 import { PropTumble } from "./prop-tumble.ts";
 import { DEPTH_INSTANCED, DEPTH_INSTANCED_COLOR } from "./track-mesh.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { MATERIAL_ATTRIBUTE, tagMaterial } from "../vehicle/material-class.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 
 /** The bench top's thickness (m): a 1¾ in butcher block. */
 const TOP_T = 0.0445 * LAB_SCALE;
@@ -116,8 +117,8 @@ const _e = new THREE.Euler();
 const _one = new THREE.Vector3(1, 1, 1);
 const _c = new THREE.Color();
 
-/** `geo` turned by (rx, ry, rz), moved to (x, y, z) and painted `hex` (sRGB): one part of a merged, vertex-coloured mesh. */
-function part(geo: THREE.BufferGeometry, hex: number, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0): THREE.BufferGeometry {
+/** `geo` turned by (rx, ry, rz), moved to (x, y, z), painted `hex` (sRGB) and stamped registry id `material` (0: the mesh material's own): one part of a merged, vertex-coloured mesh. */
+function part(geo: THREE.BufferGeometry, hex: number, material: MaterialId, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0): THREE.BufferGeometry {
   geo.applyMatrix4(_m.compose(_p.set(x, y, z), _q.setFromEuler(_e.set(rx, ry, rz)), _one));
   _c.setHex(hex);
   const n = geo.getAttribute("position").count;
@@ -128,6 +129,7 @@ function part(geo: THREE.BufferGeometry, hex: number, x: number, y: number, z: n
     rgb[i * 3 + 2] = _c.b;
   }
   geo.setAttribute("color", new THREE.BufferAttribute(rgb, 3));
+  geo.setAttribute(MATERIAL_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(n).fill(material), 1));
   return geo;
 }
 
@@ -147,7 +149,7 @@ const onBoard = (depth: number): number => BOARD.z + (depth / 2) * S;
 function hook(u: number, v: number): THREE.BufferGeometry {
   const x = Math.round((u * S) / PEG) * PEG;
   const y = Math.round((v * S) / PEG) * PEG;
-  return part(new THREE.CylinderGeometry(0.0028 * S, 0.0028 * S, 0.05 * S, 6), CHROME, x, y, onBoard(0.05), Math.PI / 2);
+  return part(new THREE.CylinderGeometry(0.0028 * S, 0.0028 * S, 0.05 * S, 6), CHROME, MAT.TOOL_CHROME, x, y, onBoard(0.05), Math.PI / 2);
 }
 
 /** A combination wrench `len` real m long hung ring up on a hook, its ring's middle at board point (u, v). */
@@ -160,10 +162,10 @@ function wrench(len: number, u: number, v: number): THREE.BufferGeometry[] {
   const tube = L * 0.022;
   const jaw = top - L * 0.85;
   return [
-    part(new THREE.TorusGeometry(ring, tube, 6, 18), CHROME, x, top, z),
-    part(new THREE.BoxGeometry(L * 0.07, L * 0.85 - 2 * ring, tube * 1.2), CHROME, x, (top + jaw) / 2, z),
+    part(new THREE.TorusGeometry(ring, tube, 6, 18), CHROME, MAT.TOOL_CHROME, x, top, z),
+    part(new THREE.BoxGeometry(L * 0.07, L * 0.85 - 2 * ring, tube * 1.2), CHROME, MAT.TOOL_CHROME, x, (top + jaw) / 2, z),
     // The open end: a C whose gap faces down.
-    part(new THREE.TorusGeometry(ring, tube, 6, 14, Math.PI * 1.3), CHROME, x, jaw, z, 0, 0, -Math.PI * 0.15),
+    part(new THREE.TorusGeometry(ring, tube, 6, 14, Math.PI * 1.3), CHROME, MAT.TOOL_CHROME, x, jaw, z, 0, 0, -Math.PI * 0.15),
     hook(u, v + 0.004),
   ];
 }
@@ -175,15 +177,15 @@ function hammer(u: number, v: number): { steel: THREE.BufferGeometry[]; paint: T
   const z = onBoard(0.034);
   return {
     steel: [
-      part(new THREE.BoxGeometry(0.1 * S, 0.034 * S, 0.03 * S), DARK_STEEL, x, y, z),
-      part(new THREE.CylinderGeometry(0.017 * S, 0.017 * S, 0.03 * S, 12), DARK_STEEL, x - 0.06 * S, y, z, 0, 0, Math.PI / 2),
-      part(new THREE.BoxGeometry(0.06 * S, 0.016 * S, 0.024 * S), DARK_STEEL, x + 0.075 * S, y - 0.012 * S, z, 0, 0, -0.45),
+      part(new THREE.BoxGeometry(0.1 * S, 0.034 * S, 0.03 * S), DARK_STEEL, MAT.TOOL_STEEL, x, y, z),
+      part(new THREE.CylinderGeometry(0.017 * S, 0.017 * S, 0.03 * S, 12), DARK_STEEL, MAT.TOOL_STEEL, x - 0.06 * S, y, z, 0, 0, Math.PI / 2),
+      part(new THREE.BoxGeometry(0.06 * S, 0.016 * S, 0.024 * S), DARK_STEEL, MAT.TOOL_STEEL, x + 0.075 * S, y - 0.012 * S, z, 0, 0, -0.45),
       hook(u - 0.03, v - 0.03),
       hook(u + 0.03, v - 0.03),
     ],
     paint: [
-      part(new THREE.CylinderGeometry(0.014 * S, 0.016 * S, 0.3 * S, 10), 0xcf9e5f, x, y - 0.16 * S, z),
-      part(new THREE.CylinderGeometry(0.019 * S, 0.019 * S, 0.11 * S, 10), 0x26282b, x, y - 0.26 * S, z),
+      part(new THREE.CylinderGeometry(0.014 * S, 0.016 * S, 0.3 * S, 10), 0xcf9e5f, MAT.TOOL_WOOD, x, y - 0.16 * S, z),
+      part(new THREE.CylinderGeometry(0.019 * S, 0.019 * S, 0.11 * S, 10), 0x26282b, MAT.TOOL_RUBBER, x, y - 0.26 * S, z),
     ],
   };
 }
@@ -195,10 +197,10 @@ function screwdrivers(u: number, v: number): { steel: THREE.BufferGeometry[]; pa
   const z = onBoard(0.05);
   return {
     steel: [
-      part(new THREE.BoxGeometry(0.17 * S, 0.012 * S, 0.05 * S), DARK_STEEL, u * S, y, z),
-      ...handles.map((_, i) => part(new THREE.CylinderGeometry(0.0035 * S, 0.0035 * S, 0.13 * S, 6), CHROME, (u - 0.05 + i * 0.05) * S, y - 0.065 * S, z)),
+      part(new THREE.BoxGeometry(0.17 * S, 0.012 * S, 0.05 * S), DARK_STEEL, MAT.TOOL_STEEL, u * S, y, z),
+      ...handles.map((_, i) => part(new THREE.CylinderGeometry(0.0035 * S, 0.0035 * S, 0.13 * S, 6), CHROME, MAT.TOOL_CHROME, (u - 0.05 + i * 0.05) * S, y - 0.065 * S, z)),
     ],
-    paint: handles.map((c, i) => part(new THREE.CylinderGeometry(0.015 * S, 0.012 * S, 0.1 * S, 8), c, (u - 0.05 + i * 0.05) * S, y + 0.056 * S, z)),
+    paint: handles.map((c, i) => part(new THREE.CylinderGeometry(0.015 * S, 0.012 * S, 0.1 * S, 8), c, MAT.TOOL_PLASTIC, (u - 0.05 + i * 0.05) * S, y + 0.056 * S, z)),
   };
 }
 
@@ -206,8 +208,8 @@ function screwdrivers(u: number, v: number): { steel: THREE.BufferGeometry[]; pa
 function saw(u: number, v: number): { steel: THREE.BufferGeometry[]; paint: THREE.BufferGeometry[] } {
   const z = onBoard(0.025);
   return {
-    steel: [part(new THREE.BoxGeometry(0.46 * S, 0.1 * S, 0.0015 * S), 0xd9dde1, u * S, v * S, onBoard(0.0015)), hook(u + 0.12, v + 0.06), hook(u - 0.12, v + 0.06)],
-    paint: [part(new THREE.BoxGeometry(0.12 * S, 0.12 * S, 0.025 * S), 0x8f5428, (u + 0.29) * S, (v + 0.005) * S, z)],
+    steel: [part(new THREE.BoxGeometry(0.46 * S, 0.1 * S, 0.0015 * S), 0xd9dde1, MAT.TOOL_CHROME, u * S, v * S, onBoard(0.0015)), hook(u + 0.12, v + 0.06), hook(u - 0.12, v + 0.06)],
+    paint: [part(new THREE.BoxGeometry(0.12 * S, 0.12 * S, 0.025 * S), 0x8f5428, MAT.TOOL_WOOD, (u + 0.29) * S, (v + 0.005) * S, z)],
   };
 }
 
@@ -217,9 +219,9 @@ function level(u: number, v: number): { steel: THREE.BufferGeometry[]; paint: TH
   return {
     steel: [hook(u - 0.2, v - 0.03), hook(u + 0.2, v - 0.03)],
     paint: [
-      part(new THREE.BoxGeometry(0.6 * S, 0.06 * S, 0.028 * S), 0xe5b628, u * S, v * S, z),
-      part(new THREE.BoxGeometry(0.05 * S, 0.02 * S, 0.006 * S), 0x86d46e, u * S, v * S, z + 0.016 * S),
-      part(new THREE.BoxGeometry(0.05 * S, 0.02 * S, 0.006 * S), 0x86d46e, (u - 0.2) * S, v * S, z + 0.016 * S),
+      part(new THREE.BoxGeometry(0.6 * S, 0.06 * S, 0.028 * S), 0xe5b628, MAT.TOOL_PLASTIC, u * S, v * S, z),
+      part(new THREE.BoxGeometry(0.05 * S, 0.02 * S, 0.006 * S), 0x86d46e, MAT.VIAL_GLASS, u * S, v * S, z + 0.016 * S),
+      part(new THREE.BoxGeometry(0.05 * S, 0.02 * S, 0.006 * S), 0x86d46e, MAT.VIAL_GLASS, (u - 0.2) * S, v * S, z + 0.016 * S),
     ],
   };
 }
@@ -231,14 +233,14 @@ function pliers(u: number, v: number): { steel: THREE.BufferGeometry[]; paint: T
   const z = onBoard(0.014);
   return {
     steel: [
-      part(new THREE.BoxGeometry(0.016 * S, 0.05 * S, 0.012 * S), DARK_STEEL, x - 0.003 * S, y + 0.027 * S, z, 0, 0, 0.06),
-      part(new THREE.BoxGeometry(0.016 * S, 0.05 * S, 0.012 * S), DARK_STEEL, x + 0.003 * S, y + 0.027 * S, z, 0, 0, -0.06),
-      part(new THREE.CylinderGeometry(0.009 * S, 0.009 * S, 0.018 * S, 10), CHROME, x, y, z, Math.PI / 2),
+      part(new THREE.BoxGeometry(0.016 * S, 0.05 * S, 0.012 * S), DARK_STEEL, MAT.TOOL_STEEL, x - 0.003 * S, y + 0.027 * S, z, 0, 0, 0.06),
+      part(new THREE.BoxGeometry(0.016 * S, 0.05 * S, 0.012 * S), DARK_STEEL, MAT.TOOL_STEEL, x + 0.003 * S, y + 0.027 * S, z, 0, 0, -0.06),
+      part(new THREE.CylinderGeometry(0.009 * S, 0.009 * S, 0.018 * S, 10), CHROME, MAT.TOOL_CHROME, x, y, z, Math.PI / 2),
       hook(u, v + 0.06),
     ],
     paint: [
-      part(new THREE.BoxGeometry(0.018 * S, 0.13 * S, 0.013 * S), 0xb8322a, x - 0.012 * S, y - 0.07 * S, z, 0, 0, -0.13),
-      part(new THREE.BoxGeometry(0.018 * S, 0.13 * S, 0.013 * S), 0xb8322a, x + 0.012 * S, y - 0.07 * S, z, 0, 0, 0.13),
+      part(new THREE.BoxGeometry(0.018 * S, 0.13 * S, 0.013 * S), 0xb8322a, MAT.TOOL_RUBBER, x - 0.012 * S, y - 0.07 * S, z, 0, 0, -0.13),
+      part(new THREE.BoxGeometry(0.018 * S, 0.13 * S, 0.013 * S), 0xb8322a, MAT.TOOL_RUBBER, x + 0.012 * S, y - 0.07 * S, z, 0, 0, 0.13),
     ],
   };
 }
@@ -248,20 +250,20 @@ function mug(x: number, z: number): THREE.BufferGeometry[] {
   const wall = [new THREE.Vector2(0.0001, 0), new THREE.Vector2(0.04, 0), new THREE.Vector2(0.042, 0.095), new THREE.Vector2(0.037, 0.095), new THREE.Vector2(0.035, 0.012), new THREE.Vector2(0.0001, 0.012)];
   for (const p of wall) p.multiplyScalar(S);
   return [
-    part(new THREE.LatheGeometry(wall, 28), 0xa8322b, x, 0, z),
-    part(new THREE.CylinderGeometry(0.036 * S, 0.036 * S, 0.002 * S, 24), 0x2b1a10, x, 0.075 * S, z),
-    part(new THREE.TorusGeometry(0.026 * S, 0.0075 * S, 8, 16, Math.PI), 0xa8322b, x + 0.041 * S, 0.05 * S, z, 0, 0, -Math.PI / 2),
+    part(new THREE.LatheGeometry(wall, 28), 0xa8322b, MAT.MUG_CERAMIC, x, 0, z),
+    part(new THREE.CylinderGeometry(0.036 * S, 0.036 * S, 0.002 * S, 24), 0x2b1a10, MAT.MUG_COFFEE, x, 0.075 * S, z),
+    part(new THREE.TorusGeometry(0.026 * S, 0.0075 * S, 8, 16, Math.PI), 0xa8322b, MAT.MUG_CERAMIC, x + 0.041 * S, 0.05 * S, z, 0, 0, -Math.PI / 2),
   ];
 }
 
 /** A tape measure lying on the bench at (x, z) (m), its tape run out 15 cm along +x. */
 function tape(x: number, z: number): { steel: THREE.BufferGeometry[]; paint: THREE.BufferGeometry[] } {
   return {
-    steel: [part(new THREE.BoxGeometry(0.002 * S, 0.012 * S, 0.019 * S), CHROME, x + 0.19 * S, 0.006 * S, z)],
+    steel: [part(new THREE.BoxGeometry(0.002 * S, 0.012 * S, 0.019 * S), CHROME, MAT.TOOL_CHROME, x + 0.19 * S, 0.006 * S, z)],
     paint: [
-      part(new THREE.BoxGeometry(0.075 * S, 0.075 * S, 0.04 * S), 0xf2c230, x, 0.0375 * S, z),
-      part(new THREE.CylinderGeometry(0.03 * S, 0.03 * S, 0.042 * S, 20), 0x1f2124, x, 0.0375 * S, z, Math.PI / 2),
-      part(new THREE.BoxGeometry(0.15 * S, 0.0015 * S, 0.019 * S), 0xf2c230, x + 0.115 * S, 0.00075 * S, z),
+      part(new THREE.BoxGeometry(0.075 * S, 0.075 * S, 0.04 * S), 0xf2c230, MAT.TOOL_PLASTIC, x, 0.0375 * S, z),
+      part(new THREE.CylinderGeometry(0.03 * S, 0.03 * S, 0.042 * S, 20), 0x1f2124, MAT.TOOL_PLASTIC, x, 0.0375 * S, z, Math.PI / 2),
+      part(new THREE.BoxGeometry(0.15 * S, 0.0015 * S, 0.019 * S), 0xf2c230, MAT.LAB_PAINTED_STEEL, x + 0.115 * S, 0.00075 * S, z),
     ],
   };
 }
@@ -270,21 +272,21 @@ function tape(x: number, z: number): { steel: THREE.BufferGeometry[]; paint: THR
 function pencil(x: number, z: number): THREE.BufferGeometry[] {
   const r = 0.0035 * S;
   return [
-    part(new THREE.CylinderGeometry(r, r, 0.15 * S, 6), 0xf0c419, x - 0.095 * S, r, z, 0, 0, Math.PI / 2),
-    part(new THREE.ConeGeometry(r, 0.02 * S, 6), 0xe3bf8f, x - 0.01 * S, r, z, 0, 0, -Math.PI / 2),
-    part(new THREE.CylinderGeometry(r * 1.05, r * 1.05, 0.012 * S, 8), 0xb9bec4, x - 0.176 * S, r, z, 0, 0, Math.PI / 2),
-    part(new THREE.CylinderGeometry(r, r, 0.01 * S, 8), 0xe58a96, x - 0.187 * S, r, z, 0, 0, Math.PI / 2),
+    part(new THREE.CylinderGeometry(r, r, 0.15 * S, 6), 0xf0c419, MAT.TOOL_WOOD, x - 0.095 * S, r, z, 0, 0, Math.PI / 2),
+    part(new THREE.ConeGeometry(r, 0.02 * S, 6), 0xe3bf8f, MAT.TOOL_WOOD, x - 0.01 * S, r, z, 0, 0, -Math.PI / 2),
+    part(new THREE.CylinderGeometry(r * 1.05, r * 1.05, 0.012 * S, 8), 0xb9bec4, MAT.LAB_PAINTED_STEEL, x - 0.176 * S, r, z, 0, 0, Math.PI / 2),
+    part(new THREE.CylinderGeometry(r, r, 0.01 * S, 8), 0xe58a96, MAT.TOOL_RUBBER, x - 0.187 * S, r, z, 0, 0, Math.PI / 2),
   ];
 }
 
 /** Three hex nuts and a bolt on the bench around (x, z) (m). */
 function hardware(x: number, z: number): THREE.BufferGeometry[] {
   return [
-    part(new THREE.CylinderGeometry(0.012 * S, 0.012 * S, 0.01 * S, 6), CHROME, x, 0.005 * S, z),
-    part(new THREE.CylinderGeometry(0.012 * S, 0.012 * S, 0.01 * S, 6), CHROME, x + 0.05 * S, 0.005 * S, z + 0.02 * S, 0, 0.4),
-    part(new THREE.CylinderGeometry(0.009 * S, 0.009 * S, 0.008 * S, 6), CHROME, x + 0.02 * S, 0.004 * S, z - 0.035 * S, 0, 0.9),
-    part(new THREE.CylinderGeometry(0.006 * S, 0.006 * S, 0.07 * S, 10), CHROME, x - 0.06 * S, 0.006 * S, z + 0.01 * S, 0, 0.5, Math.PI / 2),
-    part(new THREE.CylinderGeometry(0.011 * S, 0.011 * S, 0.007 * S, 6), CHROME, x - 0.098 * S, 0.011 * S, z + 0.032 * S, 0, 0.5, Math.PI / 2),
+    part(new THREE.CylinderGeometry(0.012 * S, 0.012 * S, 0.01 * S, 6), CHROME, MAT.TOOL_CHROME, x, 0.005 * S, z),
+    part(new THREE.CylinderGeometry(0.012 * S, 0.012 * S, 0.01 * S, 6), CHROME, MAT.TOOL_CHROME, x + 0.05 * S, 0.005 * S, z + 0.02 * S, 0, 0.4),
+    part(new THREE.CylinderGeometry(0.009 * S, 0.009 * S, 0.008 * S, 6), CHROME, MAT.TOOL_CHROME, x + 0.02 * S, 0.004 * S, z - 0.035 * S, 0, 0.9),
+    part(new THREE.CylinderGeometry(0.006 * S, 0.006 * S, 0.07 * S, 10), CHROME, MAT.TOOL_CHROME, x - 0.06 * S, 0.006 * S, z + 0.01 * S, 0, 0.5, Math.PI / 2),
+    part(new THREE.CylinderGeometry(0.011 * S, 0.011 * S, 0.007 * S, 6), CHROME, MAT.TOOL_CHROME, x - 0.098 * S, 0.011 * S, z + 0.032 * S, 0, 0.5, Math.PI / 2),
   ];
 }
 
@@ -295,10 +297,10 @@ function garageDoor(z: number): THREE.BufferGeometry[] {
   const x = ROOM_HALF_W - 0.02 * S;
   const panel = h / 4;
   const out: THREE.BufferGeometry[] = new Array<THREE.BufferGeometry>(4 + 3 + 8 + 2);
-  for (let i = 0; i < 4; i++) out[i] = part(new THREE.BoxGeometry(0.04 * S, panel - 0.01 * S, w), 0xe9e7e2, x, FLOOR + panel * (i + 0.5), z);
-  for (let i = 0; i < 3; i++) out[4 + i] = part(new THREE.BoxGeometry(0.045 * S, 0.012 * S, w), 0x8f9296, x, FLOOR + panel * (i + 1), z);
-  for (let i = 0; i < 8; i++) out[7 + i] = part(new THREE.BoxGeometry(0.05 * S, panel * 0.45, w / 10), 0x2b3440, x, FLOOR + panel * 3.5, z - w / 2 + (w / 8) * (i + 0.5));
-  for (let i = 0; i < 2; i++) out[15 + i] = part(new THREE.BoxGeometry(0.1 * S, h + 0.1 * S, 0.06 * S), 0x9ea3a8, x - 0.03 * S, FLOOR + h / 2, z + (i ? 1 : -1) * (w / 2 + 0.03 * S));
+  for (let i = 0; i < 4; i++) out[i] = part(new THREE.BoxGeometry(0.04 * S, panel - 0.01 * S, w), 0xe9e7e2, MAT.LAB_PAINTED_STEEL, x, FLOOR + panel * (i + 0.5), z);
+  for (let i = 0; i < 3; i++) out[4 + i] = part(new THREE.BoxGeometry(0.045 * S, 0.012 * S, w), 0x8f9296, MAT.LAB_PAINTED_STEEL, x, FLOOR + panel * (i + 1), z);
+  for (let i = 0; i < 8; i++) out[7 + i] = part(new THREE.BoxGeometry(0.05 * S, panel * 0.45, w / 10), 0x2b3440, MAT.LAB_WINDOW, x, FLOOR + panel * 3.5, z - w / 2 + (w / 8) * (i + 0.5));
+  for (let i = 0; i < 2; i++) out[15 + i] = part(new THREE.BoxGeometry(0.1 * S, h + 0.1 * S, 0.06 * S), 0x9ea3a8, MAT.LAB_PAINTED_STEEL, x - 0.03 * S, FLOOR + h / 2, z + (i ? 1 : -1) * (w / 2 + 0.03 * S));
   return out;
 }
 
@@ -308,13 +310,13 @@ function shopLight(x: number, z: number): { paint: THREE.BufferGeometry[]; tubes
   const chain = FLOOR + 2.75 * S - y;
   return {
     paint: [
-      part(new THREE.BoxGeometry(1.22 * S, 0.05 * S, 0.16 * S), 0xdfe2e5, x, y, z),
-      part(new THREE.CylinderGeometry(0.003 * S, 0.003 * S, chain, 4), 0x7a7e83, x - 0.5 * S, y + chain / 2, z),
-      part(new THREE.CylinderGeometry(0.003 * S, 0.003 * S, chain, 4), 0x7a7e83, x + 0.5 * S, y + chain / 2, z),
+      part(new THREE.BoxGeometry(1.22 * S, 0.05 * S, 0.16 * S), 0xdfe2e5, MAT.SHOP_LIGHT, x, y, z),
+      part(new THREE.CylinderGeometry(0.003 * S, 0.003 * S, chain, 4), 0x7a7e83, MAT.LAB_CHAIN, x - 0.5 * S, y + chain / 2, z),
+      part(new THREE.CylinderGeometry(0.003 * S, 0.003 * S, chain, 4), 0x7a7e83, MAT.LAB_CHAIN, x + 0.5 * S, y + chain / 2, z),
     ],
     tubes: [
-      part(new THREE.CylinderGeometry(0.013 * S, 0.013 * S, 1.18 * S, 8), 0xffffff, x, y - 0.035 * S, z - 0.04 * S, 0, 0, Math.PI / 2),
-      part(new THREE.CylinderGeometry(0.013 * S, 0.013 * S, 1.18 * S, 8), 0xffffff, x, y - 0.035 * S, z + 0.04 * S, 0, 0, Math.PI / 2),
+      part(new THREE.CylinderGeometry(0.013 * S, 0.013 * S, 1.18 * S, 8), 0xffffff, MAT.GENERIC, x, y - 0.035 * S, z - 0.04 * S, 0, 0, Math.PI / 2),
+      part(new THREE.CylinderGeometry(0.013 * S, 0.013 * S, 1.18 * S, 8), 0xffffff, MAT.GENERIC, x, y - 0.035 * S, z + 0.04 * S, 0, 0, Math.PI / 2),
     ],
   };
 }
@@ -340,7 +342,7 @@ export class LabArt {
     block.repeat.set(benchW / 12, benchD / 12);
     const top = new THREE.Mesh(
       new THREE.BoxGeometry(benchW, TOP_T, benchD).translate(0, -TOP_T / 2, (BOARD.z + BENCH.front) / 2),
-      tagMaterial(new THREE.MeshStandardMaterial({ map: block, roughness: 0.62, metalness: 0 }), MATERIAL.WOOD),
+      tagMaterial(new THREE.MeshStandardMaterial({ map: block, roughness: 0.62, metalness: 0 }), MAT.BENCH_MAPLE),
     );
     top.receiveShadow = true;
     top.castShadow = true;
@@ -352,7 +354,7 @@ export class LabArt {
     }
     // A stretcher rail a foot off the floor along each side.
     for (const z of [BOARD.z + LEG, BENCH.front - LEG]) legs.push(new THREE.BoxGeometry(benchW - LEG * 2, LEG * 0.7, LEG * 0.5).translate(0, FLOOR + 0.3 * LAB_SCALE, z));
-    const frame = new THREE.Mesh(mergeGeometries(legs)!, tagMaterial(new THREE.MeshStandardMaterial({ color: 0x6b4a2c, roughness: 0.8 }), MATERIAL.WOOD));
+    const frame = new THREE.Mesh(mergeGeometries(legs)!, tagMaterial(new THREE.MeshStandardMaterial({ color: 0x6b4a2c, roughness: 0.8 }), MAT.LAB_TIMBER));
     frame.castShadow = true;
     frame.receiveShadow = true;
     for (const g of legs) g.dispose();
@@ -363,7 +365,7 @@ export class LabArt {
     peg.offset.set(0.5 - ((BOARD.halfW / PEG) % 1), 0.5);
     const board = new THREE.Mesh(
       new THREE.BoxGeometry(BOARD.halfW * 2, BOARD.h, BOARD_T).translate(0, BOARD.h / 2, BOARD.z - BOARD_T / 2),
-      tagMaterial(new THREE.MeshStandardMaterial({ map: peg, roughness: 0.85, metalness: 0 }), MATERIAL.PLASTIC),
+      tagMaterial(new THREE.MeshStandardMaterial({ map: peg, roughness: 0.85, metalness: 0 }), MAT.PEGBOARD),
     );
     board.receiveShadow = true;
 
@@ -375,19 +377,19 @@ export class LabArt {
       new THREE.PlaneGeometry(ROOM_HALF_W * 2, ROOM_H).rotateY(-Math.PI / 2).translate(ROOM_HALF_W, FLOOR + ROOM_H / 2, LAB_BACK + ROOM_HALF_W),
       new THREE.PlaneGeometry(ROOM_HALF_W * 2, ROOM_H).rotateY(Math.PI / 2).translate(-ROOM_HALF_W, FLOOR + ROOM_H / 2, LAB_BACK + ROOM_HALF_W),
     ];
-    const walls = new THREE.Mesh(mergeGeometries(sides)!, tagMaterial(new THREE.MeshStandardMaterial({ map: blocks, roughness: 0.95, metalness: 0 }), MATERIAL.INTERIOR));
+    const walls = new THREE.Mesh(mergeGeometries(sides)!, tagMaterial(new THREE.MeshStandardMaterial({ map: blocks, roughness: 0.95, metalness: 0 }), MAT.BLOCK_WALL));
     for (const g of sides) g.dispose();
     walls.receiveShadow = true;
     const slab = canvasTexture(512, 512, concrete);
     slab.repeat.set(400 / (3 * S), 400 / (3 * S));
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2).translate(0, FLOOR, 60),
-      tagMaterial(new THREE.MeshStandardMaterial({ map: slab, roughness: 0.9, metalness: 0 }), MATERIAL.INTERIOR),
+      tagMaterial(new THREE.MeshStandardMaterial({ map: slab, roughness: 0.9, metalness: 0 }), MAT.INDOOR_CONCRETE),
     );
     floor.receiveShadow = true;
     const rule = canvasTexture(2048, 64, steelRule);
     rule.wrapS = rule.wrapT = THREE.ClampToEdgeWrapping;
-    const ruler = new THREE.Mesh(new THREE.BoxGeometry(1 * S, 0.0012 * S, 0.03 * S), tagMaterial(new THREE.MeshStandardMaterial({ map: rule, roughness: 0.4, metalness: 0.7 }), MATERIAL.METAL));
+    const ruler = new THREE.Mesh(new THREE.BoxGeometry(1 * S, 0.0012 * S, 0.03 * S), tagMaterial(new THREE.MeshStandardMaterial({ map: rule, roughness: 0.4, metalness: 0.7 }), MAT.STEEL_RULE));
     ruler.position.set(-14, 0.0006 * S, BENCH.front - 0.05 * S);
     ruler.receiveShadow = true;
     this.group.add(top, frame, board, walls, floor, ruler);
@@ -413,13 +415,13 @@ export class LabArt {
     );
     tubes.castShadow = false;
     this.group.add(
-      merged(steelParts, tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.85 }), MATERIAL.METAL)),
-      merged(paintParts, tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0 }), MATERIAL.GENERIC)),
+      merged(steelParts, tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.32, metalness: 0.85 }), MAT.TOOL_STEEL)),
+      merged(paintParts, tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.62, metalness: 0 }), MAT.GENERIC)),
       tubes,
     );
 
     const mats = makePrefabMaterials(raceTextures());
-    const steel = tagMaterial(new THREE.MeshStandardMaterial({ color: 0x9aa2ab, roughness: 0.45, metalness: 0.6 }), MATERIAL.PAINTED_METAL);
+    const steel = tagMaterial(new THREE.MeshStandardMaterial({ color: 0x9aa2ab, roughness: 0.45, metalness: 0.6 }), MAT.BRACKET_STEEL);
     const set = (id: LabPresetId): LabSet => {
       const layout = LAB_LAYOUTS[id];
       const group = new THREE.Group();

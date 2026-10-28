@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { RANGE, RANGE_LIP_FOOT } from "../scenes/range.ts";
 import { groundMesh } from "../scenes/ground-stack.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { tagMaterial } from "../vehicle/material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
 
 /** The sign boards' paint: scuffed yellow with a brown edge and black ink, shared by every station's height and distance boards. */
 const SIGN_BOARD_PAINT = { fill: "#e3b93f", edge: "#6b5419", ink: "#16130c" } as const;
@@ -67,7 +68,7 @@ export function makeRangeArt(): THREE.Group {
   const { length: L, halfWidth: W } = RANGE;
   const sand = groundMesh(
     new THREE.PlaneGeometry(L, W * 2).rotateX(-Math.PI / 2).translate(L / 2, 0.012, 0),
-    tagMaterial(new THREE.MeshStandardMaterial({ color: 0xc8a466, roughness: 1, metalness: 0 }), MATERIAL.SOIL),
+    tagMaterial(new THREE.MeshStandardMaterial({ color: 0xc8a466, roughness: 1, metalness: 0 }), MAT.RANGE_SAND),
     "runoff",
   );
   sand.receiveShadow = true;
@@ -76,13 +77,13 @@ export function makeRangeArt(): THREE.Group {
     new THREE.BoxGeometry(L, 0.12, 0.4).translate(L / 2, 0.06, W + 0.2),
     new THREE.BoxGeometry(0.4, 0.12, W * 2 + 0.8).translate(L + 0.2, 0.06, 0),
   ];
-  const kerb = new THREE.Mesh(mergeGeometries(kerbs)!, tagMaterial(new THREE.MeshStandardMaterial({ color: 0xe8e4da, roughness: 0.85 }), MATERIAL.CONCRETE));
+  const kerb = new THREE.Mesh(mergeGeometries(kerbs)!, tagMaterial(new THREE.MeshStandardMaterial({ color: 0xe8e4da, roughness: 0.85 }), MAT.RANGE_KERB));
   kerb.receiveShadow = true;
   const { height, length, halfWidth } = RANGE.lip;
   const wedge = new THREE.Shape([new THREE.Vector2(RANGE_LIP_FOOT, 0), new THREE.Vector2(RANGE_LIP_FOOT + length, 0), new THREE.Vector2(RANGE_LIP_FOOT + length, height)]);
   const lip = new THREE.Mesh(
     new THREE.ExtrudeGeometry(wedge, { depth: 2 * halfWidth, bevelEnabled: false }).translate(0, 0, -halfWidth),
-    tagMaterial(new THREE.MeshStandardMaterial({ color: 0xb08850, roughness: 0.85, metalness: 0.02 }), MATERIAL.PLASTIC),
+    tagMaterial(new THREE.MeshStandardMaterial({ color: 0xb08850, roughness: 0.85, metalness: 0.02 }), MAT.RANGE_LIP_TIMBER),
   );
   lip.name = RANGE_LIP_ART;
   lip.receiveShadow = true;
@@ -96,9 +97,9 @@ export function makeRangeArt(): THREE.Group {
     const postH = BOARD_Y - BOARD_H / 2;
     for (const dz of [-BOARD_W * 0.35, BOARD_W * 0.35]) posts.push(new THREE.BoxGeometry(0.1, postH, 0.1).translate(d + 0.06, postH / 2, z + dz));
   }
-  const signs = new THREE.Mesh(mergeGeometries(boards)!, tagMaterial(new THREE.MeshStandardMaterial({ map: signAtlas(distances.map(String)), roughness: 0.8, side: THREE.DoubleSide }), MATERIAL.PLASTIC));
+  const signs = new THREE.Mesh(mergeGeometries(boards)!, tagMaterial(new THREE.MeshStandardMaterial({ map: signAtlas(distances.map(String)), roughness: 0.8, side: THREE.DoubleSide }), MAT.SIGN_BOARD));
   signs.castShadow = true;
-  const stakes = new THREE.Mesh(mergeGeometries(posts)!, tagMaterial(new THREE.MeshStandardMaterial({ color: 0x5a4a32, roughness: 0.9 }), MATERIAL.WOOD));
+  const stakes = new THREE.Mesh(mergeGeometries(posts)!, tagMaterial(new THREE.MeshStandardMaterial({ color: 0x5a4a32, roughness: 0.9 }), MAT.SIGN_STAKE));
   stakes.castShadow = true;
   for (const geo of [...kerbs, ...boards, ...posts]) geo.dispose();
   g.add(sand, kerb, lip, signs, stakes);

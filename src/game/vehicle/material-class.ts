@@ -1,14 +1,13 @@
 import * as THREE from "three";
 import { glslFloat, perturbedNormalGlsl } from "./car-finish.ts";
+import { MAT, MATERIALS, type MaterialFamily, type MaterialId } from "../kernel/material-ids.ts";
 
 /**
  * The material classes the drawn world is tagged with. A class sets how much of the environment's reflection a surface keeps
  * (`specular`, a share of the specular IBL: three's `envMapIntensity` is overwritten with the scene's, so only the shader can scale it) and of
  * the lights' own specular (`direct`), a procedural grain (`slope` the normal's tilt, `freq` features a metre) that costs no texture fetch and, for
- * the concrete family, a worn-concrete detail from one shared map (`detail`). Ids index the GLSL table; a vertex's class (`MATERIAL_ATTRIBUTE`) wins over the material's.
+ * the concrete family, a worn-concrete detail from one shared map (`detail`). A registry id (`kernel/material-ids.ts`) resolves to the one of these 14 families it is shaded with, which indexes the GLSL tables; a vertex's id (`MATERIAL_ATTRIBUTE`) wins over the material's.
  */
-export const MATERIAL = { GENERIC: 0, PAINTED_METAL: 1, PLASTIC: 2, RUBBER: 3, CONCRETE: 4, ASPHALT: 5, SOIL: 6, WOOD: 7, FOLIAGE: 8, GLASS: 9, STONE: 10, LEATHER: 11, METAL: 12, INTERIOR: 13 } as const;
-export type MaterialClass = (typeof MATERIAL)[keyof typeof MATERIAL];
 
 /** The shared detail map's use by a class: world metres one tile spans, the normal's tilt, how much of the map's lightness and roughness variation shows, the albedo's darkening, and the roughness multiplier. */
 type Detail = { tile: number; normal: number; luma: number; rough: number; tint: number; smooth: number };
@@ -27,21 +26,21 @@ const SOFT_GROUND_RELIEF = 0.3;
  * Starting values tuned from headless shots; a rough dielectric under a bright studio env reads grey and wet at env 1.
  */
 type Tune = { specular: number; direct: number; relief: number; slope: number; freq: number; detail: Detail; wet: number; dark: number };
-const MATERIAL_TUNE: Record<MaterialClass, Tune> = {
-  [MATERIAL.GENERIC]: { specular: 1, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL, wet: 0, dark: 0 },
-  [MATERIAL.PAINTED_METAL]: { specular: 0.8, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL, wet: 0, dark: 0 },
-  [MATERIAL.PLASTIC]: { specular: 0.55, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL, wet: 0, dark: 0 },
-  [MATERIAL.RUBBER]: { specular: 0.25, direct: 1, relief: 1, slope: 0.2, freq: 60, detail: NO_DETAIL, wet: 0, dark: 0 },
-  [MATERIAL.CONCRETE]: { specular: 0.45, direct: 1, relief: 1, slope: 0, freq: 24, detail: CONCRETE_DETAIL, wet: 0.7, dark: 0 },
-  [MATERIAL.ASPHALT]: { specular: 0.8, direct: 1, relief: 1, slope: 0, freq: 50, detail: { tile: 1, normal: 0.12, luma: 0.3, rough: 0, tint: 0.55, smooth: 1 }, wet: 1, dark: 0 },
-  [MATERIAL.SOIL]: { specular: 0.2, direct: SOFT_GROUND_DIRECT, relief: SOFT_GROUND_RELIEF, slope: 0.25, freq: 18, detail: NO_DETAIL, wet: 0.8, dark: 0.35 },
-  [MATERIAL.WOOD]: { specular: 0.35, direct: 1, relief: 1, slope: 0.25, freq: 20, detail: NO_DETAIL, wet: 0, dark: 0 },
-  [MATERIAL.FOLIAGE]: { specular: 0.25, direct: SOFT_GROUND_DIRECT, relief: SOFT_GROUND_RELIEF, slope: 0.2, freq: 25, detail: NO_DETAIL, wet: 0, dark: 0 },
-  [MATERIAL.GLASS]: { specular: 1, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL, wet: 0, dark: 0 },
-  [MATERIAL.STONE]: { specular: 0.6, direct: 1, relief: 1, slope: 0, freq: 30, detail: { tile: 0.9, normal: 0.5, luma: 0.5, rough: 0.3, tint: 1, smooth: 1 }, wet: 0.6, dark: 0 },
-  [MATERIAL.LEATHER]: { specular: 0.6, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL, wet: 0, dark: 0 },
-  [MATERIAL.METAL]: { specular: 1, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL, wet: 0, dark: 0 },
-  [MATERIAL.INTERIOR]: { specular: 0.45, direct: 1, relief: 1, slope: 0, freq: 24, detail: CONCRETE_DETAIL, wet: 0, dark: 0 },
+const MATERIAL_TUNE: Record<number, Tune> = {
+  [MAT.GENERIC]: { specular: 1, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL, wet: 0, dark: 0 },
+  [MAT.PAINTED_METAL]: { specular: 0.8, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL, wet: 0, dark: 0 },
+  [MAT.PLASTIC]: { specular: 0.55, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL, wet: 0, dark: 0 },
+  [MAT.RUBBER]: { specular: 0.25, direct: 1, relief: 1, slope: 0.2, freq: 60, detail: NO_DETAIL, wet: 0, dark: 0 },
+  [MAT.CONCRETE]: { specular: 0.45, direct: 1, relief: 1, slope: 0, freq: 24, detail: CONCRETE_DETAIL, wet: 0.7, dark: 0 },
+  [MAT.ASPHALT]: { specular: 0.8, direct: 1, relief: 1, slope: 0, freq: 50, detail: { tile: 1, normal: 0.12, luma: 0.3, rough: 0, tint: 0.55, smooth: 1 }, wet: 1, dark: 0 },
+  [MAT.SOIL]: { specular: 0.2, direct: SOFT_GROUND_DIRECT, relief: SOFT_GROUND_RELIEF, slope: 0.25, freq: 18, detail: NO_DETAIL, wet: 0.8, dark: 0.35 },
+  [MAT.WOOD]: { specular: 0.35, direct: 1, relief: 1, slope: 0.25, freq: 20, detail: NO_DETAIL, wet: 0, dark: 0 },
+  [MAT.FOLIAGE]: { specular: 0.25, direct: SOFT_GROUND_DIRECT, relief: SOFT_GROUND_RELIEF, slope: 0.2, freq: 25, detail: NO_DETAIL, wet: 0, dark: 0 },
+  [MAT.GLASS]: { specular: 1, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL, wet: 0, dark: 0 },
+  [MAT.STONE]: { specular: 0.6, direct: 1, relief: 1, slope: 0, freq: 30, detail: { tile: 0.9, normal: 0.5, luma: 0.5, rough: 0.3, tint: 1, smooth: 1 }, wet: 0.6, dark: 0 },
+  [MAT.LEATHER]: { specular: 0.6, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL, wet: 0, dark: 0 },
+  [MAT.METAL]: { specular: 1, direct: 1, relief: 1, slope: 0, freq: 1, detail: NO_DETAIL, wet: 0, dark: 0 },
+  [MAT.INTERIOR]: { specular: 0.45, direct: 1, relief: 1, slope: 0, freq: 24, detail: CONCRETE_DETAIL, wet: 0, dark: 0 },
 };
 
 /** The Wet toggle (0 dry, 1 wet), one uniform object every classed material shares: no recompile. */
@@ -72,7 +71,7 @@ export const MATERIAL_STRENGTH_GLSL = /* glsl */ `
 uniform float materialStrength;
 float materialSpecular(float share) { return max(1.0 + (share - 1.0) * materialStrength, 0.0); }`;
 
-/** The per-vertex class of a merged prefab (0: the material's own); `painted()` writes it. */
+/** The per-vertex registry id of a merged prefab (0: the material's own); `painted()` writes it. */
 export const MATERIAL_ATTRIBUTE = "materialClass";
 
 /** A car material's env share by its final roughness and metalness: a rough dielectric keeps `CAR_ENV_FLOOR` of it, a metal all. */
@@ -93,10 +92,10 @@ const GRAIN_FADE_TO = 0.5;
 /** The share of a class's detail darkening a surface with its own normal map (Ultra's photographs) takes: they are already as dark as they should be, and the full tint took Ultra's road 11 px under main's. */
 const PHOTOGRAPH_TINT_SHARE = 0.15;
 
-const MATERIAL_IDS = Object.values(MATERIAL);
-const table = (pick: (id: MaterialClass) => number): string => MATERIAL_IDS.map((id) => glslFloat(pick(id))).join(", ");
-const glslTable = (name: string, pick: (id: MaterialClass) => number): string => `const float ${name}[${MATERIAL_IDS.length}] = float[${MATERIAL_IDS.length}](${table(pick)});`;
-const hasDetail = (id: MaterialClass): number => (MATERIAL_TUNE[id].detail.normal + MATERIAL_TUNE[id].detail.luma + MATERIAL_TUNE[id].detail.rough > 0 ? 1 : 0);
+const MATERIAL_IDS = MATERIALS.slice(0, 14).map((_, id) => id as MaterialFamily);
+const table = (pick: (id: MaterialFamily) => number): string => MATERIAL_IDS.map((id) => glslFloat(pick(id))).join(", ");
+const glslTable = (name: string, pick: (id: MaterialFamily) => number): string => `const float ${name}[${MATERIAL_IDS.length}] = float[${MATERIAL_IDS.length}](${table(pick)});`;
+const hasDetail = (id: MaterialFamily): number => (MATERIAL_TUNE[id].detail.normal + MATERIAL_TUNE[id].detail.luma + MATERIAL_TUNE[id].detail.rough > 0 ? 1 : 0);
 
 const MATERIAL_VERTEX_PARS = /* glsl */ `
 attribute float ${MATERIAL_ATTRIBUTE};
@@ -140,6 +139,7 @@ ${glslTable("MATERIAL_TINT", (id) => MATERIAL_TUNE[id].detail.tint)}
 ${glslTable("MATERIAL_SMOOTH", (id) => MATERIAL_TUNE[id].detail.smooth)}
 ${glslTable("MATERIAL_WET", (id) => MATERIAL_TUNE[id].wet)}
 ${glslTable("MATERIAL_DARK", (id) => MATERIAL_TUNE[id].dark)}
+const int MATERIAL_FAMILY[${MATERIALS.length}] = int[${MATERIALS.length}](${MATERIALS.map((row) => row[1]).join(", ")});
 const float WET_ROUGHNESS = ${glslFloat(WET_ROUGHNESS)};
 float worldEnvShare(float share, float roughness, float wetK) { return mix(mix(share, 1.0, 1.0 - smoothstep(${glslFloat(GLOSS_FROM)}, ${glslFloat(GLOSS_TO)}, roughness)), 1.0, wetK); }
 float materialHash(vec3 p) {
@@ -166,12 +166,13 @@ mat3 materialFrame(vec3 q0, vec3 q1, vec2 st0, vec2 st1, vec3 surfaceNormal) {
 ${perturbedNormalGlsl("materialPerturbedNormal")}`;
 
 /**
- * After `<color_fragment>`: the fragment's class (its vertex's, else the material's), the detail map's texel where the class takes it (a
+ * After `<color_fragment>`: the fragment's family (its vertex id's, else the material's), the detail map's texel where the family takes it (a
  * plane picked by the object normal's largest axis, the map tiled by the class's metres; one fetch, none on a class without detail), and the
  * class's darkening and lightness variation on the albedo. The screen-space steps the normal pass needs are taken here, outside any branch.
  */
 const MATERIAL_COLOR_FRAGMENT = /* glsl */ `
-int materialClass = int(vMaterialAttribute + 0.5) > 0 ? int(vMaterialAttribute + 0.5) : int(materialId + 0.5);
+int materialVertex = int(vMaterialAttribute + 0.5);
+int materialClass = materialVertex > 0 ? MATERIAL_FAMILY[materialVertex] : int(materialId + 0.5);
 vec3 materialAxis = abs(vMaterialNormal);
 vec2 materialPlane = materialAxis.x > max(materialAxis.y, materialAxis.z) ? vMaterialPoint.zy : (materialAxis.y > materialAxis.z ? vMaterialPoint.xz : vMaterialPoint.xy);
 vec2 materialUv = materialPlane / MATERIAL_TILE[materialClass];
@@ -222,16 +223,16 @@ if (materialClass != int(materialId + 0.5)) normal = normalize(mix(nonPerturbedN
 #endif`;
 
 /**
- * Tag `material` with `materialClass`: its specular IBL scales by the class's env share, and on the finish tiers its normal takes the
- * class's grain or detail. `wetShare` (0-1) is how much of its class's wetness this one material takes (a studio floor wets less than a street). Chains the earlier compile hook and key like `applyMarkMap`; the class is a number in `userData`, so a `clone()` keeps it.
+ * Tag `material` with registry id `id`: its specular IBL scales by the shading family's env share, and on the finish tiers its normal takes the
+ * family's grain or detail. `wetShare` (0-1) is how much of its family's wetness this one material takes (a studio floor wets less than a street). Chains the earlier compile hook and key like `applyMarkMap`; the id is a number in `userData`, so a `clone()` keeps it.
  * Tag every lit world material, or the untagged ones link a program of their own.
  */
-export function tagMaterial<T extends THREE.MeshStandardMaterial>(material: T, materialClass: MaterialClass, wetShare = 1): T {
+export function tagMaterial<T extends THREE.MeshStandardMaterial>(material: T, id: MaterialId, wetShare = 1): T {
   const previousHook = material.onBeforeCompile;
   const previousKey = material.customProgramCacheKey;
-  const materialId = { value: materialClass };
+  const materialId = { value: MATERIALS[id][1] as number };
   const materialWetShare = { value: wetShare };
-  material.userData.materialClass = materialClass;
+  material.userData.materialClass = id;
   material.userData.wetShare = wetShare;
   material.onBeforeCompile = (shader, renderer) => {
     previousHook.call(material, shader, renderer);
@@ -256,8 +257,8 @@ export function tagMaterial<T extends THREE.MeshStandardMaterial>(material: T, m
   return material;
 }
 
-function isMaterialClass(value: unknown): value is MaterialClass {
-  return MATERIAL_IDS.some((id) => id === value);
+function isMaterialClass(value: unknown): value is MaterialId {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < MATERIALS.length;
 }
 
 /** `copy`, a `clone()` of a tagged material (which keeps `userData` but not the compile hook), tagged like `original`. */

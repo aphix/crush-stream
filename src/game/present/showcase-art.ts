@@ -3,7 +3,15 @@ import { LAB_LIGHT } from "./lab-art.ts";
 import { makeLamp, STAGE_DIAMETER } from "./engine-world.ts";
 import { GROUND_LEVEL } from "../scenes/constants.ts";
 import { groundMesh } from "../scenes/ground-stack.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { tagMaterial } from "../vehicle/material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
+import { PREFABS, type PrefabId } from "../world/catalog.ts";
+import { PREFAB } from "../world/constants.ts";
+import type { Placed } from "../world/placements.ts";
+import { makePrefabMaterials, raceTextures } from "./prefabs.ts";
+import type { PrefabMaterials } from "./prefab-pieces.ts";
+import { PropTumble } from "./prop-tumble.ts";
+import { DEPTH_INSTANCED } from "./track-mesh.ts";
 import { ELDER_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { FACE } from "./dummy-faces.ts";
 import { JEANS, OUTFIT, type DriverLook } from "./driver-look.ts";
@@ -15,7 +23,7 @@ import type { CarStyleId } from "../vehicle/car-variants.ts";
  * The showcase's set: every kind of person the game draws, standing in rows (`ROWS`) on the sandbox's disc so the owner can
  * survey how each looks and moves, and behind them three rows of cars (`CAR_ROWS`), one of every style in each, as built, with
  * every door and lid open, and stripped to the cabin. A row is data: how its figures stand and where; the next kind of thing
- * (props, prefabs) gets a row of its own beside these.
+ * (props, prefabs) gets a row of its own beside these: `SHOWCASE_GALLERY` holds the prefabs, look-only, behind the eye.
  */
 
 /** One figure: its dress (`cop`: a uniform, else a civilian `look`), and whether he stands `square` to the line instead of turned to the eye. */
@@ -80,6 +88,36 @@ const STUDIO_FLOOR = 0x2e2c2a;
 /** The share of a street's wetness the studio floor takes: at full the low back light shone a white hot spot across the people's feet. */
 const FLOOR_WET_SHARE = 0.6;
 
+/** A prefab's front is +X, so a quarter turn puts it toward -z, where a free cam standing near the eye and looking +z sees it. */
+const FACE_EYE_SIDE = Math.PI / 2;
+/** Prefabs whose long side already runs along x at yaw 0: turned a quarter they would stand end-on. */
+const LONG_SIDE_ALONG_X: ReadonlySet<PrefabId> = new Set([PREFAB.fence, PREFAB.dumpster]);
+
+/** `ids` at scale 1 in a row at `z`, `gap` m apart, centred on x 0 and laid left to right by each one's x extent after its turn. */
+function galleryRow(z: number, ids: readonly PrefabId[], gap: number): Placed[] {
+  const cells = ids.map((prefab) => {
+    const alongX = LONG_SIDE_ALONG_X.has(prefab);
+    return { prefab, yaw: alongX ? 0 : FACE_EYE_SIDE, width: PREFABS[prefab].size[alongX ? 0 : 2] };
+  });
+  let left = -(cells.reduce((sum, c) => sum + c.width, 0) + gap * (cells.length - 1)) / 2;
+  return cells.map(({ prefab, yaw, width }) => {
+    const x = left + width / 2;
+    left += width + gap;
+    return { prefab, x, y: 0, z, yaw, sx: 1, sy: 1, sz: 1 };
+  });
+}
+
+/**
+ * Every prefab that is not a unique landmark, in rows by size behind the eye (the opening frame looks -z). Rows are spaced so no
+ * footprint touches another or crosses the rim, and the tall ones stand far enough back that their shadows end behind the eye.
+ */
+export const SHOWCASE_GALLERY: readonly Placed[] = [
+  ...galleryRow(15, [PREFAB.cone, PREFAB.tyreStack, PREFAB.hayBale, PREFAB.crate, PREFAB.barrierBlock, PREFAB.rock, PREFAB.dumpster, PREFAB.chevron], 1.5),
+  ...galleryRow(19, [PREFAB.lamp, PREFAB.gantry, PREFAB.flagpole, PREFAB.billboard, PREFAB.fence, PREFAB.wall, PREFAB.tree, PREFAB.palm], 2),
+  ...galleryRow(28, [PREFAB.grandstand, PREFAB.fountain], 9),
+  ...galleryRow(38, [PREFAB.building, PREFAB.stucco], 2),
+];
+
 /** The light posts' feet (x, z; m) and where each spot aims (x, z; m): the front pair flank the people (out of the opening frame), the back pair the car rows. */
 const POSTS: readonly { x: number; z: number; aimX: number; aimZ: number }[] = [
   { x: -11, z: -3, aimX: 1, aimZ: -1 },
@@ -97,14 +135,23 @@ export class ShowcaseArt {
   readonly people = new People(SLOTS);
   readonly slots = SLOTS;
   readonly carSlots = CAR_ROWS.length * CAR_STYLES.length;
-  private readonly floor = groundMesh(new THREE.CircleGeometry(STAGE_DIAMETER / 2, 64), tagMaterial(new THREE.MeshStandardMaterial({ color: STUDIO_FLOOR, roughness: 1, metalness: 0 }), MATERIAL.ASPHALT, FLOOR_WET_SHARE), GROUND_LEVEL.runoff);
+  private readonly gallery = new THREE.Group();
+  private readonly galleryMaterials: PrefabMaterials;
+  private readonly floor = groundMesh(new THREE.CircleGeometry(STAGE_DIAMETER / 2, 64), tagMaterial(new THREE.MeshStandardMaterial({ color: STUDIO_FLOOR, roughness: 1, metalness: 0 }), MAT.STUDIO_FLOOR, FLOOR_WET_SHARE), GROUND_LEVEL.runoff);
   /** The posts' spots, in the set whenever it stands (a light shown or hidden relinks every lit shader) and dark by day (`setNight`). */
   private readonly postLights: THREE.SpotLight[] = [];
 
   constructor() {
     this.group.name = "showcase";
     this.group.visible = false;
-    this.group.add(this.floor, this.people.group);
+    this.group.add(this.floor, this.people.group, this.gallery);
+    this.galleryMaterials = makePrefabMaterials(raceTextures());
+    new PropTumble(SHOWCASE_GALLERY, this.galleryMaterials, (mesh, _id, shared) => {
+      mesh.castShadow = !shared;
+      mesh.receiveShadow = true;
+      mesh.customDepthMaterial = DEPTH_INSTANCED;
+      this.gallery.add(mesh);
+    });
     this.erectPosts();
     this.floor.rotation.x = -Math.PI / 2;
     this.floor.receiveShadow = true;
@@ -181,6 +228,13 @@ export class ShowcaseArt {
     this.floor.geometry.dispose();
     this.floor.material.dispose();
     this.people.dispose();
+    this.gallery.traverse((o) => {
+      if (o instanceof THREE.InstancedMesh) {
+        o.geometry.dispose();
+        o.dispose();
+      }
+    });
+    for (const material of Object.values(this.galleryMaterials)) material.dispose();
     for (const light of this.postLights) light.dispose();
   }
 }

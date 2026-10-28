@@ -2,11 +2,12 @@ import * as THREE from "three";
 import { detAtan2 } from "../kernel/physics-core.js";
 import { applyMarkMap } from "./engine-marks.ts";
 import type { WorldStage } from "./engine-world.ts";
-import { SURFACE_IDS, type PrefabId, type SurfaceId } from "../world/catalog.ts";
+import { SURFACE_IDS, SURFACES, type PrefabId, type SurfaceId } from "../world/catalog.ts";
 import type { Placed } from "../world/placements.ts";
 import { PREFAB } from "../world/constants.ts";
 import { box, painted, type Piece } from "./prefab-pieces.ts";
-import { MATERIAL, tagLike, tagMaterial } from "../vehicle/material-class.ts";
+import { tagLike, tagMaterial } from "../vehicle/material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 import { blankPoint, type Track } from "../world/track.ts";
 import { sections } from "../world/track-sections.ts";
@@ -83,7 +84,7 @@ export class TrackArt {
           roughness: t === "asphalt" ? 0.9 : 0.95,
           metalness: 0.02,
         }),
-        t === "asphalt" ? MATERIAL.ASPHALT : t === "concrete" ? MATERIAL.CONCRETE : MATERIAL.SOIL,
+        SURFACES[SURFACE_IDS[sid]!].ribbon,
       );
       applyMarkMap(mat);
       return mat;
@@ -97,7 +98,7 @@ export class TrackArt {
         // Markings and kerbs: vertex colour only, one material per level.
         let mat = sharedMarkMat.get(layer.level);
         if (!mat) {
-          mat = groundMaterial(tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0 }), MATERIAL.PLASTIC), layer.level);
+          mat = groundMaterial(tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0 }), MAT.PLASTIC), layer.level);
           sharedMarkMat.set(layer.level, mat);
         }
         if (!layer.m.empty) this.add(groundMesh(layer.m.geometry(layer.smooth), mat, layer.level), { kind: layer.kind }, false);
@@ -113,9 +114,9 @@ export class TrackArt {
     // The painted ribbons write no depth: their depth copy hides what a crest of road or run-off stands in front of.
     this.group.add(depthProxy(layers));
 
-    const walls = new Mesher();
-    const decks = new Mesher();
-    const tunnels = new Mesher();
+    const walls = new Mesher(MAT.TRACK_WALL);
+    const decks = new Mesher(MAT.DECK_CONCRETE);
+    const tunnels = new Mesher(MAT.TUNNEL_SHELL);
     const tunnelLights = new Mesher();
     const pillars: Piece[] = [];
     for (const [i, p] of paths.entries()) {
@@ -146,13 +147,13 @@ export class TrackArt {
     const pylon = prefabParts("gantry", mats)[0]!.geometry;
     for (const lat of [latL, latR]) {
       const foot = ground.heightAt(pt.x + pt.tz * lat, pt.z - pt.tx * lat, pt.y) - roadY;
-      pieces.push([pylon.clone().scale(1, (GANTRY_BEAM - 0.4 - foot) / 6, 1).translate(lat, foot, 0), 0xc8cbd0, MATERIAL.PAINTED_METAL]);
+      pieces.push([pylon.clone().scale(1, (GANTRY_BEAM - 0.4 - foot) / 6, 1).translate(lat, foot, 0), 0xc8cbd0, MAT.GANTRY_LATTICE]);
     }
     pylon.dispose();
-    pieces.push([box(latL - latR + 1, 0.8, 0.9, (latL + latR) / 2, GANTRY_BEAM, 0), 0x2a2c32, MATERIAL.PAINTED_METAL]);
-    pieces.push([box(latL - latR + 1, 0.12, 0.92, (latL + latR) / 2, GANTRY_BEAM + 0.46, 0), RED, MATERIAL.PAINTED_METAL]);
+    pieces.push([box(latL - latR + 1, 0.8, 0.9, (latL + latR) / 2, GANTRY_BEAM, 0), 0x2a2c32, MAT.GANTRY_STEEL]);
+    pieces.push([box(latL - latR + 1, 0.12, 0.92, (latL + latR) / 2, GANTRY_BEAM + 0.46, 0), RED, MAT.GANTRY_STEEL]);
     const panelX = [pt.half * 0.45, -pt.half * 0.45];
-    for (const x of panelX) pieces.push([box(3.3, 1.3, 0.3, x, GANTRY_BEAM - 1.05, 0), BLACK, MATERIAL.GLASS]);
+    for (const x of panelX) pieces.push([box(3.3, 1.3, 0.3, x, GANTRY_BEAM - 1.05, 0), BLACK, MAT.SIGNAL_HOUSING]);
     this.add(new THREE.Mesh(painted(pieces).applyMatrix4(frame), mats.plain), { kind: "prop", prefab: PREFAB.gantry }, true);
 
     const disc = new THREE.CircleGeometry(0.42, 20).rotateY(Math.PI);

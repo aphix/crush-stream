@@ -6,7 +6,8 @@ import { climbFootX, floorHeightAt, stationFrontX } from "../scenes/minigame-pro
 import { FIELD_HALF_WIDTH, POST_HALF_SPAN, POST_THICKNESS, SLAT_THICKNESS, type HighJumpLayout } from "../scenes/minigame-high-jump.ts";
 import { CANVAS_WHITE, canvasTexture } from "./lab-art.ts";
 import { signAtlas, signFace } from "./range-art.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { MATERIAL_ATTRIBUTE, tagMaterial } from "../vehicle/material-class.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 
 const HIGH_JUMP = MINIGAME_MODE.highJump;
 
@@ -116,13 +117,14 @@ const BARREL = { radius: 0.45, height: 1.1, bandRadiusExtra: 0.02, bandHeight: 0
 const CHEVRON = { count: 3, pitch: 3, firstSetback: 4, armLength: 3.2, armWidth: 0.55, halfAngle: (35 * Math.PI) / 180, lift: 0.03 } as const;
 const STOP_BLOCK = { depth: 0.3, height: 0.5, stripes: 8 } as const;
 
-/** `geometry` with every vertex coloured `hex` (the trim's material reads vertex colours, so one draw carries every colour). */
-function painted(geometry: THREE.BufferGeometry, hex: number): THREE.BufferGeometry {
+/** `geometry` with every vertex coloured `hex` and stamped registry id `material` (the trim's material reads both per vertex, so one draw carries every colour and look). */
+function painted(geometry: THREE.BufferGeometry, hex: number, material: MaterialId): THREE.BufferGeometry {
   const color = new THREE.Color(hex);
   const vertexCount = geometry.getAttribute("position").count;
   const colors = new Float32Array(vertexCount * 3);
   for (let vertexIndex = 0; vertexIndex < vertexCount; vertexIndex++) colors.set([color.r, color.g, color.b], vertexIndex * 3);
   geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute(MATERIAL_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(vertexCount).fill(material), 1));
   return geometry;
 }
 
@@ -237,13 +239,13 @@ function lipFasciaGeometry(): THREE.BufferGeometry {
 }
 
 function timberMaterial(): THREE.MeshStandardMaterial {
-  return tagMaterial(new THREE.MeshStandardMaterial({ map: canvasTexture(TIMBER_TEXTURE_PX, TIMBER_TEXTURE_PX, paintTimber), roughness: 0.9 }), MATERIAL.WOOD);
+  return tagMaterial(new THREE.MeshStandardMaterial({ map: canvasTexture(TIMBER_TEXTURE_PX, TIMBER_TEXTURE_PX, paintTimber), roughness: 0.9 }), MAT.HJ_TIMBER);
 }
 
 /** One slat between the posts per layout board, in board order: the major ones bright, the rest timber. */
 function slatGeometry(layout: HighJumpLayout): THREE.BufferGeometry[] {
   const span = 2 * POST_HALF_SPAN - POST_THICKNESS;
-  return layout.boards.map((board) => painted(boxAt(SLAT_THICKNESS, SLAT_THICKNESS, span, layout.postsX, board.y, 0), board.major ? SLAT_COLOR.major : SLAT_COLOR.minor));
+  return layout.boards.map((board) => painted(boxAt(SLAT_THICKNESS, SLAT_THICKNESS, span, layout.postsX, board.y, 0), board.major ? SLAT_COLOR.major : SLAT_COLOR.minor, MAT.HJ_SLAT));
 }
 
 /** A numbered plate on each post at every height mark, the same number on both, facing the run-up: inner edge flush with the post's inner face, so the opening stays clear. */
@@ -254,7 +256,7 @@ function heightPlatesMesh(layout: HighJumpLayout): THREE.Mesh {
   const faces = layout.signs.flatMap((sign, index) =>
     [-1, 1].map((side) => signFace(HEIGHT_PLATE.width, HEIGHT_PLATE.height, x, sign.y + SLAT_THICKNESS / 2 + HEIGHT_PLATE.height / 2, side * outboard, index, labels.length)),
   );
-  const mesh = mergedMesh("height-plates", faces, tagMaterial(new THREE.MeshStandardMaterial({ map: signAtlas(labels), roughness: 0.8, side: THREE.DoubleSide }), MATERIAL.PLASTIC));
+  const mesh = mergedMesh("height-plates", faces, tagMaterial(new THREE.MeshStandardMaterial({ map: signAtlas(labels), roughness: 0.8, side: THREE.DoubleSide }), MAT.HJ_PLATE));
   mesh.castShadow = true;
   return mesh;
 }
@@ -269,11 +271,11 @@ function frameTrim(layout: HighJumpLayout): THREE.BufferGeometry[] {
     ...Array.from({ length: Math.ceil(layout.netHeight / NET_CABLE_SPACING) - 1 }, (_, cableIndex) =>
       boxAt(cable, cable, 2 * net.halfWidth, layout.netX, LANDING_HEIGHT + (cableIndex + 1) * NET_CABLE_SPACING, 0),
     ),
-  ].map((part) => painted(part, STEEL_COLOR));
+  ].map((part) => painted(part, STEEL_COLOR, MAT.STEEL_CABLE));
   const marked = new Set(layout.signs.map((sign) => sign.heightAboveLip));
   const plates = layout.boards
     .filter((board) => !marked.has(board.heightAboveLip))
-    .flatMap((board) => [-1, 1].map((side) => painted(boxAt(PLATE.thickness, PLATE.height, POST_THICKNESS * PLATE.widthShare, plateX, board.y, side * POST_HALF_SPAN), BRASS_COLOR)));
+    .flatMap((board) => [-1, 1].map((side) => painted(boxAt(PLATE.thickness, PLATE.height, POST_THICKNESS * PLATE.widthShare, plateX, board.y, side * POST_HALF_SPAN), BRASS_COLOR, MAT.BRASS_PLATE)));
   return [...cables, ...plates];
 }
 
@@ -283,7 +285,7 @@ function lipLine(layout: HighJumpLayout, lipY: number): THREE.BufferGeometry[] {
   const dashCount = Math.floor(layout.postsX / (DASH.length + DASH.gap));
   return [-1, 1].flatMap((side) =>
     Array.from({ length: dashCount }, (_, dashIndex) =>
-      painted(boxAt(DASH.length, DASH.thickness, DASH.thickness, dashIndex * (DASH.length + DASH.gap) + DASH.length / 2, lipY, side * POST_HALF_SPAN), DASH_COLOR),
+      painted(boxAt(DASH.length, DASH.thickness, DASH.thickness, dashIndex * (DASH.length + DASH.gap) + DASH.length / 2, lipY, side * POST_HALF_SPAN), DASH_COLOR, MAT.PAINT_YELLOW),
     ),
   );
 }
@@ -294,7 +296,7 @@ function barrels(): THREE.BufferGeometry[] {
   const floorY = floorHeightAt(HIGH_JUMP, x, 0);
   const z = LANE_HALF_WIDTH + BARREL.radius * 2;
   return [-1, 1].flatMap((side) => [
-    painted(new THREE.CylinderGeometry(BARREL.radius, BARREL.radius, BARREL.height, BARREL.sides).translate(x, floorY + BARREL.height / 2, side * z), BARREL_RUST_COLOR),
+    painted(new THREE.CylinderGeometry(BARREL.radius, BARREL.radius, BARREL.height, BARREL.sides).translate(x, floorY + BARREL.height / 2, side * z), BARREL_RUST_COLOR, MAT.BARREL_RUSTED),
     painted(
       new THREE.CylinderGeometry(BARREL.radius + BARREL.bandRadiusExtra, BARREL.radius + BARREL.bandRadiusExtra, BARREL.bandHeight, BARREL.sides).translate(
         x,
@@ -302,6 +304,7 @@ function barrels(): THREE.BufferGeometry[] {
         side * z,
       ),
       BARREL_BAND_COLOR,
+      MAT.PAINT_YELLOW,
     ),
   ]);
 }
@@ -320,6 +323,7 @@ function chevrons(): THREE.BufferGeometry[] {
           .rotateY(side * CHEVRON.halfAngle)
           .translate(tipX - halfLengthAlong, floorY, side * halfLengthAcross),
         CHEVRON_COLOR,
+        MAT.PAINT_YELLOW,
       ),
     );
   }).flat();
@@ -332,6 +336,7 @@ function stopBlock(lipY: number): THREE.BufferGeometry[] {
     painted(
       boxAt(STOP_BLOCK.depth, STOP_BLOCK.height, stripeWidth, 0, lipY + STOP_BLOCK.height / 2, -LANE_HALF_WIDTH + (stripeIndex + 0.5) * stripeWidth),
       stripeIndex % 2 === 0 ? STOP_RED_COLOR : STOP_WHITE_COLOR,
+      MAT.FOAM_BLOCK,
     ),
   );
 }
@@ -362,7 +367,7 @@ function netMesh(layout: HighJumpLayout): THREE.Mesh {
         side: THREE.DoubleSide,
         forceSinglePass: true,
       }),
-      MATERIAL.PLASTIC,
+      MAT.NET_NYLON,
     ),
   );
   mesh.name = "high-jump:net";
@@ -378,7 +383,7 @@ export function makeHighJumpArt(layout: HighJumpLayout, lipY: number): THREE.Gro
   const group = new THREE.Group();
   group.name = "high-jump";
   const woodMaterial = timberMaterial();
-  const posts = mergedMesh("posts", postGeometry(layout, lipY), tagMaterial(new THREE.MeshStandardMaterial({ color: POST_COLOR, roughness: POST_ROUGHNESS }), MATERIAL.WOOD));
+  const posts = mergedMesh("posts", postGeometry(layout, lipY), tagMaterial(new THREE.MeshStandardMaterial({ color: POST_COLOR, roughness: POST_ROUGHNESS }), MAT.HJ_POST));
   posts.castShadow = true;
   const netFrame = mergedMesh("net-frame", netFrameGeometry(layout), woodMaterial);
   netFrame.castShadow = true;
@@ -389,10 +394,10 @@ export function makeHighJumpArt(layout: HighJumpLayout, lipY: number): THREE.Gro
   const trim = mergedMesh(
     "trim",
     [...frameTrim(layout), ...lipLine(layout, lipY), ...barrels(), ...chevrons(), ...stopBlock(lipY)],
-    tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.15 }), MATERIAL.PLASTIC),
+    tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.15 }), MAT.PAINT_YELLOW),
   );
   trim.castShadow = true;
-  const boards = mergedMesh("boards", slatGeometry(layout), tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }), MATERIAL.WOOD));
+  const boards = mergedMesh("boards", slatGeometry(layout), tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }), MAT.HJ_SLAT));
   boards.castShadow = true;
   group.add(posts, netFrame, kicker, fascia, boards, heightPlatesMesh(layout), trim, netMesh(layout));
   return group;

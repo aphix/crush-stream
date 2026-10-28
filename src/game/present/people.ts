@@ -7,7 +7,8 @@ import { cageLift, crownY, keelY } from "../vehicle/car-cage-rig.ts";
 import { SAMPLE, sampleAt } from "../vehicle/car-cage.ts";
 import { DRIVER_SIDE } from "../vehicle/constants.ts";
 import { driverSeat } from "../vehicle/interior.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { tagMaterial } from "../vehicle/material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
 import type { Ground } from "../world/ground.ts";
 import { insidePolygon } from "../world/terrain.ts";
 import type { GuardSpec } from "../world/track-schema.ts";
@@ -166,7 +167,7 @@ export class People {
     this.mesh = new DummyMesh(slots);
     this.mesh.castShadow = true;
     this.mesh.frustumCulled = false;
-    this.guns = new THREE.InstancedMesh(new THREE.BoxGeometry(GUN.w, GUN.len, GUN.depth), tagMaterial(new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.5, metalness: 0.6 }), MATERIAL.PAINTED_METAL), slots);
+    this.guns = new THREE.InstancedMesh(new THREE.BoxGeometry(GUN.w, GUN.len, GUN.depth), tagMaterial(new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.5, metalness: 0.6 }), MAT.GUN_STEEL), slots);
     this.flashes = new THREE.InstancedMesh(new THREE.OctahedronGeometry(FLASH_R), new THREE.MeshBasicMaterial({ color: FLASH_RGB, toneMapped: false }), slots);
     for (const m of [this.guns, this.flashes]) {
       m.frustumCulled = false;

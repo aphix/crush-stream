@@ -6,8 +6,8 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { BASIN, FOUNTAIN, LINCOLN, lincolnColumns, POOL, WHITE_HOUSE, type Slab } from "../world/catalog.ts";
-import { box, circleOutline, classedPieces, cyl, MARBLE_SHADE, type Piece, type PrefabMaterials, type PrefabPart, painted, poolStone, squareFrustum } from "./prefab-pieces.ts";
-import { MATERIAL, type MaterialClass } from "../vehicle/material-class.ts";
+import { box, circleOutline, cyl, MARBLE_SHADE, type Piece, type PrefabMaterials, type PrefabPart, painted, poolStone, squareFrustum } from "./prefab-pieces.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { type Brick, CAPITOL, CAPITOL_POOL, FLAGPOLE, capitolBalustrades, capitolPool, capitolWestStair, domeRing, figure } from "../world/landmarks.ts";
 
 /** The White House's whitewashed sandstone, its trim, the grey roof, dark glass and door, and the flag's colours. */
@@ -32,8 +32,8 @@ function gable(b: WhBlock): THREE.BufferGeometry {
  * Dark panes across a face: `bays` x centres (or z, `onX` false) on a wall face at `face`, each `w` wide from `y0` to `y1`,
  * standing `WH_PROUD` out of it.
  */
-function panes(bays: readonly number[], face: number, onX: boolean, w: number, y0: number, y1: number, hex = WH_SHADE.glass, materialClass: MaterialClass = MATERIAL.GLASS): Piece[] {
-  return bays.map((c): Piece => [onX ? box(w, y1 - y0, WH_PROUD * 2, c, (y0 + y1) / 2, face) : box(WH_PROUD * 2, y1 - y0, w, face, (y0 + y1) / 2, c), hex, materialClass]);
+function panes(bays: readonly number[], face: number, onX: boolean, w: number, y0: number, y1: number, hex = WH_SHADE.glass, id: MaterialId = MAT.WINDOW_PANE): Piece[] {
+  return bays.map((c): Piece => [onX ? box(w, y1 - y0, WH_PROUD * 2, c, (y0 + y1) / 2, face) : box(WH_PROUD * 2, y1 - y0, w, face, (y0 + y1) / 2, c), hex, id]);
 }
 
 /** `n` evenly spaced centres across `span` either side of 0. */
@@ -41,26 +41,27 @@ const bays = (n: number, span: number): number[] => Array.from({ length: n }, (_
 
 export function whiteHouse(): Piece[] {
   const w = WHITE_HOUSE;
-  const out: Piece[] = classedPieces([
-    [whBox(w.footing), WH_SHADE.trim],
-    [whBox(w.walls), WH_SHADE.wall],
-    [whBox(w.cornice), WH_SHADE.trim],
-    [whBox(w.balustrade), WH_SHADE.wall],
-    [squareFrustum(1, w.roof.top, w.roof.y0, w.roof.y1).scale(w.roof.hx, 1, w.roof.hz), WH_SHADE.roof],
-    ...w.chimneys.map((c): Piece => [whBox(c), WH_SHADE.trim]),
-    [whBox(w.northFloor), WH_SHADE.trim],
-    ...w.northColumns.map((c): Piece => [whDrum(c, WH_SEGMENTS.column), WH_SHADE.wall]),
-    [whBox(w.northEntablature), WH_SHADE.trim],
-    [gable(w.pediment), WH_SHADE.wall],
-    [whDrum(w.bow, WH_SEGMENTS.bow), WH_SHADE.wall],
-    [whDrum(w.southTerrace, WH_SEGMENTS.bow), WH_SHADE.trim],
-    ...w.southColumns.map((c): Piece => [whDrum(c, WH_SEGMENTS.column), WH_SHADE.wall]),
-    [whDrum(w.balcony, WH_SEGMENTS.bow), WH_SHADE.trim],
-    [whDrum(w.southEntablature, WH_SEGMENTS.bow), WH_SHADE.trim],
-    [whDrum(w.southBalustrade, WH_SEGMENTS.bow), WH_SHADE.wall],
-    ...[...w.colonnades, ...w.wings].map((b): Piece => [whBox(b), WH_SHADE.wall]),
-    ...w.wingCornices.map((b): Piece => [whBox(b), WH_SHADE.trim]),
-  ], MATERIAL.STONE);
+  const sandstone = MAT.PAINTED_SANDSTONE;
+  const out: Piece[] = [
+    [whBox(w.footing), WH_SHADE.trim, sandstone],
+    [whBox(w.walls), WH_SHADE.wall, sandstone],
+    [whBox(w.cornice), WH_SHADE.trim, sandstone],
+    [whBox(w.balustrade), WH_SHADE.wall, sandstone],
+    [squareFrustum(1, w.roof.top, w.roof.y0, w.roof.y1).scale(w.roof.hx, 1, w.roof.hz), WH_SHADE.roof, MAT.ROOF_SLATE],
+    ...w.chimneys.map((c): Piece => [whBox(c), WH_SHADE.trim, sandstone]),
+    [whBox(w.northFloor), WH_SHADE.trim, sandstone],
+    ...w.northColumns.map((c): Piece => [whDrum(c, WH_SEGMENTS.column), WH_SHADE.wall, sandstone]),
+    [whBox(w.northEntablature), WH_SHADE.trim, sandstone],
+    [gable(w.pediment), WH_SHADE.wall, sandstone],
+    [whDrum(w.bow, WH_SEGMENTS.bow), WH_SHADE.wall, sandstone],
+    [whDrum(w.southTerrace, WH_SEGMENTS.bow), WH_SHADE.trim, sandstone],
+    ...w.southColumns.map((c): Piece => [whDrum(c, WH_SEGMENTS.column), WH_SHADE.wall, sandstone]),
+    [whDrum(w.balcony, WH_SEGMENTS.bow), WH_SHADE.trim, sandstone],
+    [whDrum(w.southEntablature, WH_SEGMENTS.bow), WH_SHADE.trim, sandstone],
+    [whDrum(w.southBalustrade, WH_SEGMENTS.bow), WH_SHADE.wall, sandstone],
+    ...[...w.colonnades, ...w.wings].map((b): Piece => [whBox(b), WH_SHADE.wall, sandstone]),
+    ...w.wingCornices.map((b): Piece => [whBox(b), WH_SHADE.trim, sandstone]),
+  ];
   // Eleven bays to a long front, five to an end: the State Floor's tall windows, the upper floor's, and on the south (where the
   // lawn falls away) the ground floor's; the bow hides the middle three bays of the south front.
   const { hx, hz } = w.walls;
@@ -69,16 +70,16 @@ export function whiteHouse(): Piece[] {
   for (const [face, xs] of [[-hz, front], [hz, south]] as const) out.push(...panes(xs, face, true, 1.5, 4.6, 7.8), ...panes(xs, face, true, 1.4, 11.2, 13.6));
   out.push(...panes(south, hz, true, 1.3, 2.2, 3.8));
   for (const s of [-1, 1]) out.push(...panes(bays(5, 8.4), s * hx, false, 1.5, 6.2, 9.2), ...panes(bays(5, 8.4), s * hx, false, 1.4, 11.2, 13.6));
-  out.push(...panes([0], -hz, true, 2.4, w.northFloor.y1, 5.4, WH_SHADE.door, MATERIAL.WOOD));
+  out.push(...panes([0], -hz, true, 2.4, w.northFloor.y1, 5.4, WH_SHADE.door, MAT.DOOR_WOOD));
   // The colonnades' arches on their south side and a row of windows down each wing's fronts.
   for (const c of w.colonnades) out.push(...panes(bays(7, c.hx - 2.5).map((x) => x + c.x), c.z + c.hz, true, 2.2, 1, 3.8));
   for (const g of w.wings) for (const s of [-1, 1]) out.push(...panes(bays(8, g.hx - 3).map((x) => x + g.x), g.z + s * g.hz, true, 1.4, 4.2, 6.8));
   // The flag flies to +x from the top of the pole: thirteen stripes and the canton over the top seven.
   const { pole, fly, drop } = w.flag;
-  out.push([cyl(pole.r * 0.6, pole.r, pole.y0, pole.y1, 8), WH_SHADE.pole, MATERIAL.METAL]);
+  out.push([cyl(pole.r * 0.6, pole.r, pole.y0, pole.y1, 8), WH_SHADE.pole, MAT.FLAGPOLE]);
   const stripe = drop / 13;
-  for (let i = 0; i < 13; i++) out.push([box(fly, stripe, 0.08, pole.r + fly / 2, pole.y1 - stripe * (i + 0.5), 0), i % 2 ? WH_SHADE.white : WH_SHADE.red, MATERIAL.PLASTIC]);
-  out.push([box(fly * 0.4, stripe * 7, 0.1, pole.r + fly * 0.2, pole.y1 - stripe * 3.5, 0), WH_SHADE.blue, MATERIAL.PLASTIC]);
+  for (let i = 0; i < 13; i++) out.push([box(fly, stripe, 0.08, pole.r + fly / 2, pole.y1 - stripe * (i + 0.5), 0), i % 2 ? WH_SHADE.white : WH_SHADE.red, MAT.FLAG_CLOTH]);
+  out.push([box(fly * 0.4, stripe * 7, 0.1, pole.r + fly * 0.2, pole.y1 - stripe * 3.5, 0), WH_SHADE.blue, MAT.FLAG_CLOTH]);
   return out;
 }
 
@@ -90,12 +91,12 @@ const FOUNTAIN_SEGMENTS = 48;
 export function fountain(mats: PrefabMaterials): PrefabPart[] {
   const { basin, water, pedestal, jet, spray } = FOUNTAIN;
   const dry: Piece[] = [
-    ...poolStone(circleOutline(basin.r, FOUNTAIN_SEGMENTS), circleOutline(water.r, FOUNTAIN_SEGMENTS), water.y0, basin.y1, FOUNTAIN_SHADE.stone),
-    [cyl(pedestal.r, pedestal.r, basin.y1, pedestal.y1, 24), FOUNTAIN_SHADE.stone, MATERIAL.STONE],
-    [cyl(jet.r, jet.r, pedestal.y1, jet.y1, 12), FOUNTAIN_SHADE.spray, MATERIAL.GLASS],
-    [cyl(jet.r, spray.r, spray.y0, jet.y1, 24), FOUNTAIN_SHADE.spray, MATERIAL.GLASS],
+    ...poolStone(circleOutline(basin.r, FOUNTAIN_SEGMENTS), circleOutline(water.r, FOUNTAIN_SEGMENTS), water.y0, basin.y1, FOUNTAIN_SHADE.stone, MAT.FOUNTAIN_STONE),
+    [cyl(pedestal.r, pedestal.r, basin.y1, pedestal.y1, 24), FOUNTAIN_SHADE.stone, MAT.FOUNTAIN_STONE],
+    [cyl(jet.r, jet.r, pedestal.y1, jet.y1, 12), FOUNTAIN_SHADE.spray, MAT.WATER_SPRAY],
+    [cyl(jet.r, spray.r, spray.y0, jet.y1, 24), FOUNTAIN_SHADE.spray, MAT.WATER_SPRAY],
   ];
-  const wet: Piece = [cyl(water.r, water.r, water.y0, basin.y1 + POOL.brim, FOUNTAIN_SEGMENTS), FOUNTAIN_SHADE.water, MATERIAL.GLASS];
+  const wet: Piece = [cyl(water.r, water.r, water.y0, basin.y1 + POOL.brim, FOUNTAIN_SEGMENTS), FOUNTAIN_SHADE.water, MAT.WATER];
   return [
     { geometry: painted(dry), material: mats.plain, shared: false },
     { geometry: painted([wet]), material: mats.water, shared: false },
@@ -114,7 +115,7 @@ export function pool(mats: PrefabMaterials): PrefabPart[] {
   const [hx, hz] = half;
   const rectangle = (x: number, z: number): [number, number][] => [[-x, -z], [x, -z], [x, z], [-x, z]];
   return [
-    { geometry: painted(poolStone(rectangle(hx, hz), rectangle(hx - rim, hz - rim), y1 - WATER_DEPTH, y1, POOL_SHADE.stone)), material: mats.plain, shared: false },
+    { geometry: painted(poolStone(rectangle(hx, hz), rectangle(hx - rim, hz - rim), y1 - WATER_DEPTH, y1, POOL_SHADE.stone, MAT.POOL_COPING)), material: mats.plain, shared: false },
     { geometry: painted([[box((hx - rim) * 2, WATER_DEPTH + brim, (hz - rim) * 2, 0, y1 + (brim - WATER_DEPTH) / 2, 0), POOL_SHADE.water]]), material: mats.water, shared: false },
   ];
 }
@@ -122,7 +123,7 @@ export function pool(mats: PrefabMaterials): PrefabPart[] {
 export function basin(mats: PrefabMaterials): PrefabPart[] {
   const { r, rim, y1 } = BASIN;
   return [
-    { geometry: painted(poolStone(circleOutline(r, BASIN_SEGMENTS), circleOutline(r - rim, BASIN_SEGMENTS), y1 - WATER_DEPTH, y1, POOL_SHADE.stone)), material: mats.plain, shared: false },
+    { geometry: painted(poolStone(circleOutline(r, BASIN_SEGMENTS), circleOutline(r - rim, BASIN_SEGMENTS), y1 - WATER_DEPTH, y1, POOL_SHADE.stone, MAT.POOL_COPING)), material: mats.plain, shared: false },
     { geometry: painted([[cyl(r - rim, r - rim, y1 - WATER_DEPTH, y1 + POOL.brim, BASIN_SEGMENTS), POOL_SHADE.water]]), material: mats.water, shared: false },
   ];
 }
@@ -142,19 +143,19 @@ function lincolnStatue(): Piece[] {
   const chair = MARBLE_SHADE.high;
   const at = (w: number, h: number, d: number, x: number, y0: number, dz: number): THREE.BufferGeometry => box(w, h, d, x, y0 + h / 2, z + dz);
   return [
-    [box(p.hx * 2, p.y1 - p.y0, p.hz * 2, 0, (p.y0 + p.y1) / 2, z), MARBLE_SHADE.trim],
+    [box(p.hx * 2, p.y1 - p.y0, p.hz * 2, 0, (p.y0 + p.y1) / 2, z), MARBLE_SHADE.trim, MAT.MARBLE],
     // The chair: its seat, its high back, its arms (fasces under his hands).
-    [at(4.6, 2.2, 3.8, 0, top, -0.3), chair],
-    [at(4.6, 3.8, 0.6, 0, top + 2.2, -1.9), chair],
-    ...[-1, 1].map((s): Piece => [at(0.6, 0.5, 3.4, s * 2, top + 2.2, -0.3), chair]),
+    [at(4.6, 2.2, 3.8, 0, top, -0.3), chair, MAT.MARBLE],
+    [at(4.6, 3.8, 0.6, 0, top + 2.2, -1.9), chair, MAT.MARBLE],
+    ...[-1, 1].map((s): Piece => [at(0.6, 0.5, 3.4, s * 2, top + 2.2, -0.3), chair, MAT.MARBLE]),
     // The figure: thighs forward over the seat, the shins down to the feet on the pedestal, the body, the shoulders, the hands.
-    [at(2.2, 0.8, 2.4, 0, top + 2.2, 1.1), white],
-    ...[-1, 1].map((s): Piece => [at(0.8, 2.3, 0.8, s * 0.6, top, 2), white]),
-    ...[-1, 1].map((s): Piece => [at(0.8, 0.4, 1.2, s * 0.6, top, 2.1), white]),
-    [at(2.4, 2.6, 1.6, 0, top + 2.2, -0.8), white],
-    [at(2.8, 0.6, 1.5, 0, top + 4.6, -0.8), white],
-    ...[-1, 1].map((s): Piece => [at(0.5, 0.4, 0.6, s * 2, top + 2.7, 1), white]),
-    [new THREE.SphereGeometry(0.5, 12, 8).translate(0, top + 5.75, z - 0.6), white],
+    [at(2.2, 0.8, 2.4, 0, top + 2.2, 1.1), white, MAT.MARBLE],
+    ...[-1, 1].map((s): Piece => [at(0.8, 2.3, 0.8, s * 0.6, top, 2), white, MAT.MARBLE]),
+    ...[-1, 1].map((s): Piece => [at(0.8, 0.4, 1.2, s * 0.6, top, 2.1), white, MAT.MARBLE]),
+    [at(2.4, 2.6, 1.6, 0, top + 2.2, -0.8), white, MAT.MARBLE],
+    [at(2.8, 0.6, 1.5, 0, top + 4.6, -0.8), white, MAT.MARBLE],
+    ...[-1, 1].map((s): Piece => [at(0.5, 0.4, 0.6, s * 2, top + 2.7, 1), white, MAT.MARBLE]),
+    [new THREE.SphereGeometry(0.5, 12, 8).translate(0, top + 5.75, z - 0.6), white, MAT.MARBLE],
   ];
 }
 
@@ -173,59 +174,59 @@ export function lincoln(): Piece[] {
   const fz = L.frieze;
   const panels = columns.map(([x, z]): Piece => {
     const y = (fz.y0 + fz.y1) / 2;
-    if (Math.abs(z) === c.hz) return [box(1.8, 0.9, 0.06, x, y, Math.sign(z) * (fz.hz + 0.03)), LINCOLN_SHADE.panel];
-    return [box(0.06, 0.9, 1.8, Math.sign(x) * (fz.hx + 0.03), y, z), LINCOLN_SHADE.panel];
+    if (Math.abs(z) === c.hz) return [box(1.8, 0.9, 0.06, x, y, Math.sign(z) * (fz.hz + 0.03)), LINCOLN_SHADE.panel, MAT.MARBLE_CARVED];
+    return [box(0.06, 0.9, 1.8, Math.sign(x) * (fz.hx + 0.03), y, z), LINCOLN_SHADE.panel, MAT.MARBLE_CARVED];
   });
   const f = L.festoon;
   const a = L.attic;
   const festoons: Piece[] = [];
   for (let i = 0; i < f.alongX; i++) {
     const x = -a.hx + ((i + 0.5) * 2 * a.hx) / f.alongX;
-    for (const s of [-1, 1]) festoons.push([box(f.w, f.h, f.proud, x, f.y, s * (a.hz + f.proud / 2)), LINCOLN_SHADE.festoon]);
+    for (const s of [-1, 1]) festoons.push([box(f.w, f.h, f.proud, x, f.y, s * (a.hz + f.proud / 2)), LINCOLN_SHADE.festoon, MAT.MARBLE_CARVED]);
   }
   for (let i = 0; i < f.alongZ; i++) {
     const z = -a.hz + ((i + 0.5) * 2 * a.hz) / f.alongZ;
-    for (const s of [-1, 1]) festoons.push([box(f.proud, f.h, f.w, s * (a.hx + f.proud / 2), f.y, z), LINCOLN_SHADE.festoon]);
+    for (const s of [-1, 1]) festoons.push([box(f.proud, f.h, f.w, s * (a.hx + f.proud / 2), f.y, z), LINCOLN_SHADE.festoon, MAT.MARBLE_CARVED]);
   }
   const bowl = L.bowl;
   const io = LINCOLN_IONIC;
   const bronze = [-1, 1].flatMap((s): Piece[] => [
-    [cyl(bowl.foot, bowl.foot, bowl.y0, bowl.y0 + 0.6, 12).translate(s * L.cheeks[0].x, 0, bowl.z), LINCOLN_SHADE.bronze, MATERIAL.METAL],
-    [cyl(bowl.r, bowl.foot, bowl.y0 + 0.6, bowl.y1, 16).translate(s * L.cheeks[0].x, 0, bowl.z), LINCOLN_SHADE.bronze, MATERIAL.METAL],
+    [cyl(bowl.foot, bowl.foot, bowl.y0, bowl.y0 + 0.6, 12).translate(s * L.cheeks[0].x, 0, bowl.z), LINCOLN_SHADE.bronze, MAT.BRONZE],
+    [cyl(bowl.r, bowl.foot, bowl.y0 + 0.6, bowl.y1, 16).translate(s * L.cheeks[0].x, 0, bowl.z), LINCOLN_SHADE.bronze, MAT.BRONZE],
   ]);
   const stone: Piece[] = [
     // The terrace, the grand stair and its cheek blocks.
-    [slab(L.terrace), LINCOLN_SHADE.granite],
-    ...L.stair.map((b): Piece => [slab(b), MARBLE_SHADE.trim]),
-    ...L.cheeks.flatMap((b): Piece[] => [[slab(b), LINCOLN_SHADE.granite], [slab({ ...b, x: -b.x }), LINCOLN_SHADE.granite]]),
+    [slab(L.terrace), LINCOLN_SHADE.granite, MAT.GRANITE],
+    ...L.stair.map((b): Piece => [slab(b), MARBLE_SHADE.trim, MAT.MARBLE_STEPS]),
+    ...L.cheeks.flatMap((b): Piece[] => [[slab(b), LINCOLN_SHADE.granite, MAT.GRANITE], [slab({ ...b, x: -b.x }), LINCOLN_SHADE.granite, MAT.GRANITE]]),
     // The great steps, the flight up through them, the stylobate.
-    ...L.crepidoma.map((b): Piece => [slab(b), MARBLE_SHADE.trim]),
-    ...L.upper.map((b): Piece => [slab(b), MARBLE_SHADE.low]),
-    [slab(L.stylobate), MARBLE_SHADE.trim],
+    ...L.crepidoma.map((b): Piece => [slab(b), MARBLE_SHADE.trim, MAT.MARBLE_STEPS]),
+    ...L.upper.map((b): Piece => [slab(b), MARBLE_SHADE.low, MAT.MARBLE_STEPS]),
+    [slab(L.stylobate), MARBLE_SHADE.trim, MAT.MARBLE],
     // The cella: its back (shadowed inside), its ends, the east wall either side of the open door; the chamber's Ionic rows.
-    [box(w.hx * 2, h, w.wall, 0, mid, -w.hz + w.wall / 2), MARBLE_SHADE.high],
-    [box((w.hx - w.wall) * 2, h - 0.5, 0.1, 0, mid - 0.25, -w.hz + w.wall + 0.05), LINCOLN_SHADE.shadow],
-    ...[-1, 1].map((s): Piece => [box(w.wall, h, w.hz * 2, s * (w.hx - w.wall / 2), mid, 0), MARBLE_SHADE.high]),
-    ...[-1, 1].map((s): Piece => [box(leaf, h, w.wall, s * (w.door + leaf / 2), mid, w.hz - w.wall / 2), MARBLE_SHADE.high]),
-    ...[-1, 1].flatMap((s) => io.zs.map((z): Piece => [cyl(io.r * 0.9, io.r, w.y0, io.y1, 16).translate(s * io.x, 0, z), MARBLE_SHADE.wall])),
+    [box(w.hx * 2, h, w.wall, 0, mid, -w.hz + w.wall / 2), MARBLE_SHADE.high, MAT.MARBLE],
+    [box((w.hx - w.wall) * 2, h - 0.5, 0.1, 0, mid - 0.25, -w.hz + w.wall + 0.05), LINCOLN_SHADE.shadow, MAT.MARBLE],
+    ...[-1, 1].map((s): Piece => [box(w.wall, h, w.hz * 2, s * (w.hx - w.wall / 2), mid, 0), MARBLE_SHADE.high, MAT.MARBLE]),
+    ...[-1, 1].map((s): Piece => [box(leaf, h, w.wall, s * (w.door + leaf / 2), mid, w.hz - w.wall / 2), MARBLE_SHADE.high, MAT.MARBLE]),
+    ...[-1, 1].flatMap((s) => io.zs.map((z): Piece => [cyl(io.r * 0.9, io.r, w.y0, io.y1, 16).translate(s * io.x, 0, z), MARBLE_SHADE.wall, MAT.MARBLE])),
     ...lincolnStatue(),
     // The peristyle: tapered shafts, each under its echinus and abacus.
     ...columns.flatMap(([x, z]): Piece[] => [
-      [cyl(c.r1, c.r0, c.y0, shaftTop, 20).translate(x, 0, z), MARBLE_SHADE.wall],
-      [cyl(cap.flare, c.r1, shaftTop, shaftTop + cap.echinus, 20).translate(x, 0, z), MARBLE_SHADE.wall],
-      [box(cap.half * 2, cap.abacus, cap.half * 2, x, c.y1 - cap.abacus / 2, z), MARBLE_SHADE.trim],
+      [cyl(c.r1, c.r0, c.y0, shaftTop, 20).translate(x, 0, z), MARBLE_SHADE.wall, MAT.MARBLE],
+      [cyl(cap.flare, c.r1, shaftTop, shaftTop + cap.echinus, 20).translate(x, 0, z), MARBLE_SHADE.wall, MAT.MARBLE],
+      [box(cap.half * 2, cap.abacus, cap.half * 2, x, c.y1 - cap.abacus / 2, z), MARBLE_SHADE.trim, MAT.MARBLE],
     ]),
     // The entablature, its panels, the attic and its festoons, the attic's cornice, the roof.
-    [slab(L.architrave), MARBLE_SHADE.wall],
-    [slab(L.frieze), MARBLE_SHADE.high],
+    [slab(L.architrave), MARBLE_SHADE.wall, MAT.MARBLE],
+    [slab(L.frieze), MARBLE_SHADE.high, MAT.MARBLE],
     ...panels,
-    [slab(L.cornice), MARBLE_SHADE.trim],
-    [slab(L.attic), MARBLE_SHADE.wall],
+    [slab(L.cornice), MARBLE_SHADE.trim, MAT.MARBLE],
+    [slab(L.attic), MARBLE_SHADE.wall, MAT.MARBLE],
     ...festoons,
-    [slab(L.atticCornice), MARBLE_SHADE.trim],
-    [slab(L.roof), MARBLE_SHADE.high],
+    [slab(L.atticCornice), MARBLE_SHADE.trim, MAT.MARBLE],
+    [slab(L.roof), MARBLE_SHADE.high, MAT.MARBLE],
   ];
-  return [...classedPieces(stone, MATERIAL.STONE), ...bronze];
+  return [...stone, ...bronze];
 }
 
 
@@ -245,7 +246,7 @@ function brickGeometry(b: Brick): THREE.BufferGeometry {
 
 /** A monument of bricks: its marble ones white, the rest bronze. */
 export function monumentPieces(bricks: readonly Brick[]): Piece[] {
-  return bricks.map((b): Piece => [brickGeometry(b), b.stone ? MARBLE_SHADE.high : BRONZE, b.stone ? MATERIAL.STONE : MATERIAL.METAL]);
+  return bricks.map((b): Piece => [brickGeometry(b), b.stone ? MARBLE_SHADE.high : BRONZE, b.stone ? MAT.MARBLE : MAT.BRONZE]);
 }
 
 /** The Capitol Reflecting Pool: its stone rim, and its water a centimetre over the rim inside it. */
@@ -255,7 +256,7 @@ export function capitolPoolParts(mats: PrefabMaterials): PrefabPart[] {
   const shape = new THREE.Shape(water.map(([x, z]) => new THREE.Vector2(x, -z)));
   const sheet = new THREE.ShapeGeometry(shape).rotateX(-Math.PI / 2).translate(0, CAPITOL_POOL.y1 + CAPITOL_POOL.brim, 0);
   return [
-    { geometry: painted(rim.map((b): Piece => [brickGeometry(b), POOL_SHADE.stone, MATERIAL.STONE])), material: mats.plain, shared: false },
+    { geometry: painted(rim.map((b): Piece => [brickGeometry(b), POOL_SHADE.stone, MAT.POOL_COPING])), material: mats.plain, shared: false },
     { geometry: painted([[sheet, POOL_SHADE.water]]), material: mats.water, shared: false },
   ];
 }
@@ -273,7 +274,7 @@ function capitolWindows(): Piece[] {
   const pane = (onX: boolean, face: number, at: number, y0: number, y1: number): Piece => [
     onX ? box(proud * 2, y1 - y0, width, face, (y0 + y1) / 2, at) : box(width, y1 - y0, proud * 2, at, (y0 + y1) / 2, face),
     CAPITOL_GLASS,
-    MATERIAL.GLASS,
+    MAT.WINDOW_PANE,
   ];
   for (const [y0, y1] of floors) {
     // The central block's west front (its east is behind the portico); each wing's west and east fronts and its far end.
@@ -309,7 +310,7 @@ function domeRibs(): Piece[] {
       const r = (lo.r + hi.r) / 2 + (dy / len) * (ribOut / 2);
       const y = (lo.y + hi.y) / 2 - (dr / len) * (ribOut / 2);
       const slab = new THREE.BoxGeometry(rib, len, ribOut).rotateX(detAtan2(dr, dy)).rotateY(a).translate(detSin(a) * r, y, detCos(a) * r);
-      out.push([slab, MARBLE_SHADE.dome, MATERIAL.STONE]);
+      out.push([slab, MARBLE_SHADE.dome, MAT.PAINTED_IRON_DOME]);
     }
   }
   return out;
@@ -319,38 +320,38 @@ function domeRibs(): Piece[] {
 export function capitol(): Piece[] {
   const { blocks, colonnades, entablatures, pediments, attic, columns, drum, entablature, dome, lantern, freedom } = CAPITOL;
   const block = (b: { hx: number; hz: number; x: number; z: number; y0: number; y1: number }): THREE.BufferGeometry => box(b.hx * 2, b.y1 - b.y0, b.hz * 2, b.x, (b.y0 + b.y1) / 2, b.z);
-  const out: Piece[] = blocks.map((b): Piece => [block(b), b.y0 === 0 ? MARBLE_SHADE.trim : MARBLE_SHADE.wall, MATERIAL.STONE]);
-  out.push(...capitolWestStair().map((b): Piece => [block(b), MARBLE_SHADE.trim, MATERIAL.STONE]));
-  out.push(...capitolBalustrades().map((b): Piece => [block(b), MARBLE_SHADE.trim, MATERIAL.STONE]));
+  const out: Piece[] = blocks.map((b): Piece => [block(b), b.y0 === 0 ? MARBLE_SHADE.trim : MARBLE_SHADE.wall, MAT.MARBLE]);
+  out.push(...capitolWestStair().map((b): Piece => [block(b), MARBLE_SHADE.trim, MAT.MARBLE_STEPS]));
+  out.push(...capitolBalustrades().map((b): Piece => [block(b), MARBLE_SHADE.trim, MAT.MARBLE]));
   for (const c of colonnades) {
     for (const at of spread(c.count, (c.to - c.from) / 2)) {
       const mid = (c.from + c.to) / 2 + at;
-      out.push([cyl(c.r * 0.9, c.r, c.y0, c.y1, COLUMN_SIDES).translate(c.alongX ? mid : c.at, 0, c.alongX ? c.at : mid), MARBLE_SHADE.dome, MATERIAL.STONE]);
+      out.push([cyl(c.r * 0.9, c.r, c.y0, c.y1, COLUMN_SIDES).translate(c.alongX ? mid : c.at, 0, c.alongX ? c.at : mid), MARBLE_SHADE.dome, MAT.MARBLE]);
     }
   }
-  out.push(...entablatures.map((e): Piece => [block(e), MARBLE_SHADE.trim, MATERIAL.STONE]));
-  out.push(...pediments.map((p): Piece => [pedimentGeometry(p), MARBLE_SHADE.wall, MATERIAL.STONE]));
+  out.push(...entablatures.map((e): Piece => [block(e), MARBLE_SHADE.trim, MAT.MARBLE]));
+  out.push(...pediments.map((p): Piece => [pedimentGeometry(p), MARBLE_SHADE.wall, MAT.MARBLE]));
   out.push(...capitolWindows());
-  out.push([cyl(attic.r, attic.r, attic.y0, attic.y1, CAPITOL_SEGMENTS), MARBLE_SHADE.wall, MATERIAL.STONE]);
-  out.push([cyl(drum.r, drum.r, drum.y0, drum.y1, CAPITOL_SEGMENTS), MARBLE_SHADE.trim, MATERIAL.STONE]);
+  out.push([cyl(attic.r, attic.r, attic.y0, attic.y1, CAPITOL_SEGMENTS), MARBLE_SHADE.wall, MAT.MARBLE]);
+  out.push([cyl(drum.r, drum.r, drum.y0, drum.y1, CAPITOL_SEGMENTS), MARBLE_SHADE.trim, MAT.MARBLE]);
   for (let i = 0; i < columns.count; i++) {
     const a = (i * 2 * Math.PI) / columns.count;
-    out.push([cyl(columns.r, columns.r, columns.y0, columns.y1, 8).translate(detSin(a) * columns.ring, 0, detCos(a) * columns.ring), MARBLE_SHADE.dome, MATERIAL.STONE]);
+    out.push([cyl(columns.r, columns.r, columns.y0, columns.y1, 8).translate(detSin(a) * columns.ring, 0, detCos(a) * columns.ring), MARBLE_SHADE.dome, MAT.MARBLE]);
     // The drum's tall windows, one behind each gap of the colonnade.
     const b = a + Math.PI / columns.count;
-    out.push([box(1.4, 6, 0.1, 0, 0, 0).rotateY(b).translate(detSin(b) * drum.r, 42.5, detCos(b) * drum.r), CAPITOL_GLASS, MATERIAL.GLASS]);
+    out.push([box(1.4, 6, 0.1, 0, 0, 0).rotateY(b).translate(detSin(b) * drum.r, 42.5, detCos(b) * drum.r), CAPITOL_GLASS, MAT.WINDOW_PANE]);
   }
-  out.push([cyl(entablature.r, entablature.r, entablature.y0, entablature.y1, CAPITOL_SEGMENTS), MARBLE_SHADE.wall, MATERIAL.STONE]);
+  out.push([cyl(entablature.r, entablature.r, entablature.y0, entablature.y1, CAPITOL_SEGMENTS), MARBLE_SHADE.wall, MAT.MARBLE]);
   // The sphere's own latitude rings are the ones `domeRing` names, so the colliders' steps meet the drawn dome on a ring.
   const shell = new THREE.SphereGeometry(dome.r, CAPITOL_SEGMENTS, dome.rings, 0, Math.PI * 2, 0, Math.PI / 2);
-  out.push([shell.scale(1, (dome.crown - dome.spring) / dome.r, 1).translate(0, dome.spring, 0), MARBLE_SHADE.dome, MATERIAL.STONE]);
+  out.push([shell.scale(1, (dome.crown - dome.spring) / dome.r, 1).translate(0, dome.spring, 0), MARBLE_SHADE.dome, MAT.PAINTED_IRON_DOME]);
   out.push(...domeRibs());
-  out.push([cyl(lantern.r, lantern.r, lantern.y0, lantern.y1, 16), MARBLE_SHADE.dome, MATERIAL.STONE]);
+  out.push([cyl(lantern.r, lantern.r, lantern.y0, lantern.y1, 16), MARBLE_SHADE.dome, MAT.PAINTED_IRON_DOME]);
   for (let i = 0; i < lantern.columns; i++) {
     const a = (i * 2 * Math.PI) / lantern.columns;
-    out.push([cyl(lantern.columnR, lantern.columnR, lantern.y0, lantern.y1, 8).translate(detSin(a) * lantern.ring, 0, detCos(a) * lantern.ring), MARBLE_SHADE.dome, MATERIAL.STONE]);
+    out.push([cyl(lantern.columnR, lantern.columnR, lantern.y0, lantern.y1, 8).translate(detSin(a) * lantern.ring, 0, detCos(a) * lantern.ring), MARBLE_SHADE.dome, MAT.PAINTED_IRON_DOME]);
   }
-  out.push([cyl(0.9, lantern.r, lantern.y1, lantern.spire, 16), MARBLE_SHADE.trim, MATERIAL.STONE]);
+  out.push([cyl(0.9, lantern.r, lantern.y1, lantern.spire, 16), MARBLE_SHADE.trim, MAT.PAINTED_IRON_DOME]);
   out.push(...monumentPieces(figure(0, 0, lantern.spire, freedom.scale)));
   return out;
 }
@@ -364,11 +365,11 @@ const CANTON_PROUD = 0.004;
 export function flagpole(): Piece[] {
   const { r, top, flag } = FLAGPOLE;
   const stripe = flag.height / flag.stripes;
-  const out: Piece[] = [[cyl(r, r, 0, top, 12), FLAG_SHADE.pole, MATERIAL.METAL]];
+  const out: Piece[] = [[cyl(r, r, 0, top, 12), FLAG_SHADE.pole, MAT.FLAGPOLE]];
   for (let i = 0; i < flag.stripes; i++) {
-    out.push([box(flag.length, stripe, flag.thick, r + flag.length / 2, top - stripe * (i + 0.5), 0), i % 2 ? FLAG_SHADE.white : FLAG_SHADE.red, MATERIAL.PLASTIC]);
+    out.push([box(flag.length, stripe, flag.thick, r + flag.length / 2, top - stripe * (i + 0.5), 0), i % 2 ? FLAG_SHADE.white : FLAG_SHADE.red, MAT.FLAG_CLOTH]);
   }
   const canton = flag.length * 0.4;
-  out.push([box(canton, stripe * 4, flag.thick + CANTON_PROUD * 2, r + canton / 2, top - stripe * 2, 0), FLAG_SHADE.blue, MATERIAL.PLASTIC]);
+  out.push([box(canton, stripe * 4, flag.thick + CANTON_PROUD * 2, r + canton / 2, top - stripe * 2, 0), FLAG_SHADE.blue, MAT.FLAG_CLOTH]);
   return out;
 }

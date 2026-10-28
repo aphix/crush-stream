@@ -249,6 +249,17 @@ The HUD calls engine setters and `raceCommand(cmd)`; it never touches sim state.
 was several times slower on these loops). `deform/skin-kernel.wasm` is the skin and normals loop and the tyre hold's plan grid and sag pass, built from
 `kernels/skin/` by `npm run build:kernel` and committed; the JS skin and the JS hold stay the reference and the fallback. The skin tables' `skinN` byte packs a point's cluster count (low 3 bits) with its lever share (the other 5 bits, in 31sts: `deform-rig.ts` `SKIN_LEVER_REACH`), and the JS skin, the kernel, `skinPoints`, the cage's `skinCage` and the reference skinner in `skin.test.ts` all read both the same way.
 
+**Material registry** (`kernel/material-ids.ts`, no imports). The one integer registry of every distinct material the game draws (and later hears): `MATERIALS` is a table of rows `[name, family, role]`, and `MAT.NAME` is a row's index. Ids are append-only: never reorder a row and never reuse an id, because they are written into geometry (and later into saved data). Ids 0-13 are the legacy 14 shading families (`GENERIC` ... `INTERIOR`), the rows `vehicle/material-class.ts` keeps a tune row for. A fine id's family names the tune row it is shaded with, the one its mesh drew with before it had a fine id (mistags kept on purpose), so tagging a mesh never changes a pixel: the shader maps a vertex's id to its family through `MATERIAL_FAMILY`, and the per-material uniform carries the family. The role (sheet-metal, concrete, dirt, wood, ...) is what a collision or roll sound will read; nothing reads it yet. A vertex id of 0 means "inherit the material's". Ids are stamped at:
+
+- `tagMaterial(material, MAT.X)` in `vehicle/material-class.ts`: one id per material (`userData.materialClass`).
+- The per-vertex `materialClass` attribute: the prefab pieces' third element (`prefab-pieces.ts` `painted`), the terrain, marking, wall, deck and tunnel meshers (`track-mesh.ts` `Mesher`, `cellMaterial`), the derby floor and the minigame station surfaces.
+- Car parts: `carTone(MAT.X)` in `vehicle/car-tones.ts` (`CAR_TONE`, id to tone), the one place a car part's look is edited. No car vertex attribute.
+- `userData.materialIds` on materials whose existing per-vertex codes need ids: the car primer, fitting and glass-tone codes (`PRIMER_MATERIAL`, `car-materials.ts`) and the dummy's fabrics and roles (`FABRIC_MATERIAL`, `ROLE_MATERIAL`).
+- `world/catalog.ts`: `SURFACES[*].ribbon`, `.terrain` and `.patch` and `PrefabSpec.material`. Pure data: nothing in physics, contact or replay reads them, so the sim, `REPLAY_VERSION` and `NET_VERSION` are unchanged.
+- `WINDOW_BAY` (`world/catalog.ts`): the building window texture's rectangles in canvas pixels; `present/prefabs.ts` `makeWindows` paints from it. It is data only so far; the shader does not read it.
+
+Adding a material: append a row (never insert), give it the family it shades with today, and stamp it at one of the sites above. `kernel/material-ids.test.ts` pins unique names, the legacy rows' own-index families and the role set.
+
 ## 10. Changing these rules
 
 A rule changes by editing this file and `scripts/check-boundaries.mjs` in the same commit, with the reason in the commit

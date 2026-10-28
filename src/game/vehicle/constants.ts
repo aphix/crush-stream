@@ -1,3 +1,5 @@
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
+
 /** The two lids' part names (`DetachPart.name`): what the breakage, the skinning and a player's colour picks call them. */
 export const LID = { hood: "hood", trunk: "trunk" } as const;
 /** The names a car's meshes carry in the scene graph (`Object3D.name`) and its parts carry in `DetachPart.name`: found by name from the cage, the ragdoll, the suspension and the class lift. */
@@ -28,6 +30,16 @@ export const DECK_RISE = 0.012;
 export const CABIN_TRIM = -2;
 /** `PRIMER_ATTRIBUTE` of a matte blacked-out part (`blackout` "matte"): the gloss black at black plastic's roughness, its clear coat off (`car-materials.ts`). */
 export const MATTE_BLACKOUT = -1.25;
+/** The material id each `PRIMER_ATTRIBUTE` value draws as (0 paint, 1 a torn panel's bare steel): `withPrimer` tags the paint material with it. */
+export const PRIMER_MATERIAL: readonly (readonly [code: number, id: MaterialId])[] = [
+  [0, MAT.CAR_PAINT],
+  [1, MAT.CAR_BARE_STEEL],
+  [INNER_PANEL, MAT.CAR_INNER_PANEL],
+  [WELL_PANEL, MAT.CAR_WELL_LINER],
+  [BLACKOUT, MAT.CAR_GLOSS_BLACK],
+  [MATTE_BLACKOUT, MAT.CAR_MATTE_BLACKOUT],
+  [CABIN_TRIM, MAT.CAR_CABIN_TRIM],
+];
 /** A bumper's per-vertex trim attribute: 0 the bumper's own trim, `FITTING_TONE` black or chrome (its exhaust tips and tow hitch, drawn in its one mesh). */
 export const FITTING_ATTRIBUTE = "fitting";
 export const FITTING_TONE = { black: 1, chrome: 2 } as const;

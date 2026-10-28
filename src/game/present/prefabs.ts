@@ -3,14 +3,15 @@ import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { once } from "../kernel/scalar.ts";
 import { makeAsphalt, makeJerseyBarrier, makeLamp } from "./engine-world.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
-import { CHEVRON, FENCE, MARBLE, OBELISK, obeliskHalf, STAR_INNER, type PrefabId } from "../world/catalog.ts";
-import { box, classedPieces, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, squareFrustum } from "./prefab-pieces.ts";
+import { CHEVRON, FENCE, MARBLE, OBELISK, obeliskHalf, STAR_INNER, WINDOW_BAY, type PrefabId } from "../world/catalog.ts";
+import { box, cyl, MARBLE_SHADE, painted, type Piece, type PrefabMaterials, type PrefabPart, squareFrustum } from "./prefab-pieces.ts";
 import { basin, capitol, capitolPoolParts, flagpole, fountain, lincoln, monumentPieces, pool, whiteHouse } from "./prefabs-mall.ts";
 import { PREFAB } from "../world/constants.ts";
 import { GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT } from "../world/landmarks.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { applyWaterLook } from "./water-look.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { tagMaterial } from "../vehicle/material-class.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 
 /**
  * Prefab meshes and the race's shared procedural textures. A prefab is one or a few parts (geometry
@@ -157,7 +158,7 @@ function makeConcrete(): HTMLCanvasElement {
 }
 
 function makeWindows(): HTMLCanvasElement {
-  const S = 256;
+  const { px: S, glass: [x0, y0, x1, y1], frame, mullion, sillOut, sillGap, sillHeight } = WINDOW_BAY;
   const [c, ctx] = canvas(S, S);
   ctx.fillStyle = "#dcd7cd";
   ctx.fillRect(0, 0, S, S);
@@ -166,15 +167,11 @@ function makeWindows(): HTMLCanvasElement {
     ctx.fillRect(Math.random() * S, Math.random() * S, 2, 2);
   }
   // Window: canvas y runs down, so the sill (bottom of the bay) is at high y.
-  const x0 = 38;
-  const x1 = 218;
-  const y0 = 48;
-  const y1 = 190;
   const glass = ctx.createLinearGradient(0, y0, 0, y1);
   glass.addColorStop(0, "#3e5266");
   glass.addColorStop(1, "#1f2933");
   ctx.fillStyle = WINDOW_FRAME;
-  ctx.fillRect(x0 - 6, y0 - 6, x1 - x0 + 12, y1 - y0 + 12);
+  ctx.fillRect(x0 - frame, y0 - frame, x1 - x0 + 2 * frame, y1 - y0 + 2 * frame);
   ctx.fillStyle = glass;
   ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
   ctx.fillStyle = "rgba(255,255,255,0.14)";
@@ -186,9 +183,9 @@ function makeWindows(): HTMLCanvasElement {
   ctx.lineTo(x0, y0 + 60);
   ctx.fill();
   ctx.fillStyle = WINDOW_FRAME;
-  ctx.fillRect((x0 + x1) / 2 - 3, y0, 6, y1 - y0);
+  ctx.fillRect((x0 + x1) / 2 - mullion / 2, y0, mullion, y1 - y0);
   ctx.fillStyle = "#b9b3a8";
-  ctx.fillRect(x0 - 10, y1 + 6, x1 - x0 + 20, 10);
+  ctx.fillRect(x0 - sillOut, y1 + sillGap, x1 - x0 + 2 * sillOut, sillHeight);
   return c;
 }
 
@@ -234,11 +231,11 @@ export function makePrefabMaterials(tex: RaceTextures): PrefabMaterials {
   const water = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.05, metalness: 0.2 });
   applyWaterLook(water);
   return {
-    plain: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0.05 }), MATERIAL.GENERIC),
-    concrete: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.concrete, color: tex.concreteGain, roughness: 0.92, metalness: 0.04 }), MATERIAL.CONCRETE),
-    building: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.windows, roughness: 0.8, metalness: 0.05 }), MATERIAL.CONCRETE),
-    billboard: tagMaterial(new THREE.MeshStandardMaterial({ map: tex.billboard, emissiveMap: tex.billboard, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.6 }), MATERIAL.PLASTIC),
-    water: tagMaterial(water, MATERIAL.GLASS),
+    plain: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, metalness: 0.05 }), MAT.GENERIC),
+    concrete: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.concrete, color: tex.concreteGain, roughness: 0.92, metalness: 0.04 }), MAT.CONCRETE),
+    building: tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, map: tex.windows, roughness: 0.8, metalness: 0.05 }), MAT.CONCRETE),
+    billboard: tagMaterial(new THREE.MeshStandardMaterial({ map: tex.billboard, emissiveMap: tex.billboard, emissive: 0xffffff, emissiveIntensity: 0.25, roughness: 0.6 }), MAT.BILLBOARD_FACE),
+    water: tagMaterial(water, MAT.WATER),
   };
 }
 
@@ -253,9 +250,9 @@ function cone(): Piece[] {
   // Body radius at height y, for the reflective band hugging it.
   const r = (y: number) => 0.165 - ((y - 0.04) / 0.66) * 0.14;
   return [
-    [box(0.4, 0.04, 0.4, 0, 0.02, 0), C.black, MATERIAL.RUBBER],
-    [cyl(0.025, 0.165, 0.04, 0.7, 8, true), C.orange, MATERIAL.PLASTIC],
-    [cyl(r(0.44) + 0.006, r(0.3) + 0.006, 0.3, 0.44, 8, true), C.white, MATERIAL.PLASTIC],
+    [box(0.4, 0.04, 0.4, 0, 0.02, 0), C.black, MAT.CONE_BASE],
+    [cyl(0.025, 0.165, 0.04, 0.7, 8, true), C.orange, MAT.CONE_BODY],
+    [cyl(r(0.44) + 0.006, r(0.3) + 0.006, 0.3, 0.44, 8, true), C.white, MAT.CONE_BAND],
   ];
 }
 
@@ -263,23 +260,23 @@ function tyreStack(): Piece[] {
   const out: Piece[] = [];
   for (let i = 0; i < 4; i++) {
     const g = new THREE.TorusGeometry(0.25, 0.125, 5, 10).rotateX(Math.PI / 2).translate(0, 0.125 + i * 0.25, 0);
-    out.push([g, i % 2 ? C.white : C.black, MATERIAL.RUBBER]);
+    out.push([g, i % 2 ? C.white : C.black, i % 2 ? MAT.TYRE_STACK_PAINTED : MAT.TYRE_STACK]);
   }
   return out;
 }
 
 function hayBale(): Piece[] {
   return [
-    [box(1.2, 0.9, 0.9, 0, 0.45, 0), C.hay, MATERIAL.SOIL],
-    [box(0.06, 0.92, 0.92, -0.3, 0.45, 0), C.twine, MATERIAL.SOIL],
-    [box(0.06, 0.92, 0.92, 0.3, 0.45, 0), C.twine, MATERIAL.SOIL],
+    [box(1.2, 0.9, 0.9, 0, 0.45, 0), C.hay, MAT.HAY],
+    [box(0.06, 0.92, 0.92, -0.3, 0.45, 0), C.twine, MAT.TWINE],
+    [box(0.06, 0.92, 0.92, 0.3, 0.45, 0), C.twine, MAT.TWINE],
   ];
 }
 
 function crate(): Piece[] {
-  const out: Piece[] = [[box(0.96, 0.96, 0.96, 0, 0.5, 0), C.wood, MATERIAL.WOOD]];
-  for (const y of [0.06, 0.94]) out.push([box(1, 0.12, 1, 0, y, 0), C.woodDark, MATERIAL.WOOD]);
-  for (const x of [-0.45, 0.45]) for (const z of [-0.45, 0.45]) out.push([box(0.1, 0.76, 0.1, x, 0.5, z), C.woodDark, MATERIAL.WOOD]);
+  const out: Piece[] = [[box(0.96, 0.96, 0.96, 0, 0.5, 0), C.wood, MAT.CRATE_WOOD]];
+  for (const y of [0.06, 0.94]) out.push([box(1, 0.12, 1, 0, y, 0), C.woodDark, MAT.CRATE_WOOD]);
+  for (const x of [-0.45, 0.45]) for (const z of [-0.45, 0.45]) out.push([box(0.1, 0.76, 0.1, x, 0.5, z), C.woodDark, MAT.CRATE_WOOD]);
   return out;
 }
 
@@ -301,14 +298,14 @@ function rock(): Piece[] {
   g.scale(2.4 / (b.max.x - b.min.x), 1.85 / (b.max.y - b.min.y), 2.2 / (b.max.z - b.min.z));
   g.translate(0, -0.25, 0);
   g.computeVertexNormals();
-  return [[g, C.rock, MATERIAL.CONCRETE]];
+  return [[g, C.rock, MAT.ROCK]];
 }
 
 function tree(): Piece[] {
   return [
-    [cyl(0.15, 0.24, -0.2, 2.0, 5, true), C.trunk, MATERIAL.WOOD],
-    [new THREE.ConeGeometry(1.6, 3.8, 6).translate(0, 3.3, 0), C.leaf[0]!, MATERIAL.FOLIAGE],
-    [new THREE.ConeGeometry(1.05, 3.0, 6).translate(0, 5.5, 0), C.leaf[1]!, MATERIAL.FOLIAGE],
+    [cyl(0.15, 0.24, -0.2, 2.0, 5, true), C.trunk, MAT.TREE_BARK],
+    [new THREE.ConeGeometry(1.6, 3.8, 6).translate(0, 3.3, 0), C.leaf[0]!, MAT.CONIFER_FOLIAGE],
+    [new THREE.ConeGeometry(1.05, 3.0, 6).translate(0, 5.5, 0), C.leaf[1]!, MAT.CONIFER_FOLIAGE],
   ];
 }
 
@@ -321,14 +318,15 @@ function facade(w: number): THREE.BufferGeometry {
   return g;
 }
 
-function building(): Piece[] {
+/** The four facades and the roof slab of a city block; `wall` is the facade's material id. */
+function building(wall: MaterialId): Piece[] {
   const half = 5.9;
   const out: Piece[] = [];
   for (let i = 0; i < 4; i++) {
-    out.push([facade(half * 2).translate(0, 0, half).rotateY((i * Math.PI) / 2), 0xffffff]);
+    out.push([facade(half * 2).translate(0, 0, half).rotateY((i * Math.PI) / 2), 0xffffff, wall]);
   }
   // Roof slab and parapet sample the plain wall at the tile's bottom-left corner.
-  out.push([uvAt(box(12, 0.5, 12, 0, 13.75, 0), 0.05, 0.05), C.roof]);
+  out.push([uvAt(box(12, 0.5, 12, 0, 13.75, 0), 0.05, 0.05), C.roof, MAT.BUILDING_ROOF]);
   return out;
 }
 
@@ -348,81 +346,69 @@ function star(R: number, y0: number, y1: number): THREE.BufferGeometry {
 /** The Plaza de la Revolución memorial: a stone tower in star-plan steps, tapering to a spire. */
 function monument(): Piece[] {
   const steps = [[6.2, -0.8, 1.4], [5.7, 1.4, 4.2], [5.1, 4.2, 9], [4.5, 9, 15], [3.9, 15, 22], [3.3, 22, 30], [2.8, 30, 38], [2.3, 38, 45], [1.8, 45, 50]] as const;
-  const out = steps.map(([R, y0, y1], i): Piece => [star(R, y0, y1), i % 2 ? 0xd9d3c3 : 0xc4bdab, MATERIAL.STONE]);
-  out.push([new THREE.ConeGeometry(0.8, 5, 5).translate(0, 52.5, 0), 0xb4ad9b, MATERIAL.STONE]);
+  const out = steps.map(([R, y0, y1], i): Piece => [star(R, y0, y1), i % 2 ? 0xd9d3c3 : 0xc4bdab, MAT.LIMESTONE]);
+  out.push([new THREE.ConeGeometry(0.8, 5, 5).translate(0, 52.5, 0), 0xb4ad9b, MAT.LIMESTONE]);
   return out;
 }
 
 /** A royal palm: a leaning trunk and a crown of eight drooping fronds. */
 function palm(): Piece[] {
   const lean = -0.08;
-  const out: Piece[] = [[cyl(0.15, 0.27, 0, 8.2, 6).rotateZ(lean), C.trunk, MATERIAL.WOOD]];
+  const out: Piece[] = [[cyl(0.15, 0.27, 0, 8.2, 6).rotateZ(lean), C.trunk, MAT.PALM_TRUNK]];
   const top = new THREE.Vector3(0, 8.2, 0).applyAxisAngle(new THREE.Vector3(0, 0, 1), lean);
   for (let k = 0; k < 8; k++) {
     const frond = new THREE.BoxGeometry(0.5, 0.05, 3.4).translate(0, 0, 1.8).rotateX(0.5).rotateY((k * Math.PI) / 4).translate(top.x, top.y, 0);
-    out.push([frond, C.leaf[k % 2]!, MATERIAL.FOLIAGE]);
+    out.push([frond, C.leaf[k % 2]!, MAT.PALM_FROND]);
   }
   return out;
 }
 
 /** A stucco wall 10 m long (tinted per placement), a cap and a weathered footing. */
 function wall(): Piece[] {
-  return classedPieces(
-    [
-      [box(0.4, 3, 10, 0, 1.5, 0), 0xffffff],
-      [box(0.6, 0.2, 10, 0, 3.1, 0), C.concrete],
-      [box(0.44, 0.5, 10.02, 0, 0.25, 0), C.rock],
-    ],
-    MATERIAL.CONCRETE,
-  );
+  return [
+    [box(0.4, 3, 10, 0, 1.5, 0), 0xffffff, MAT.GARDEN_WALL],
+    [box(0.6, 0.2, 10, 0, 3.1, 0), C.concrete, MAT.WALL_CAP],
+    [box(0.44, 0.5, 10.02, 0, 0.25, 0), C.rock, MAT.WALL_FOOTING],
+  ];
 }
 
 /** The Washington Monument: the shaft in its two shades of marble, then the pyramidion. */
 function obelisk(): Piece[] {
   const { seam, shaft, tip, shoulder } = OBELISK;
-  return classedPieces(
-    [
-      [squareFrustum(obeliskHalf(0), obeliskHalf(seam), 0, seam), MARBLE_SHADE.low],
-      [squareFrustum(obeliskHalf(seam), shoulder, seam, shaft), MARBLE_SHADE.high],
-      [squareFrustum(shoulder, 0, shaft, tip), MARBLE_SHADE.high],
-    ],
-    MATERIAL.STONE,
-  );
+  return [
+    [squareFrustum(obeliskHalf(0), obeliskHalf(seam), 0, seam), MARBLE_SHADE.low, MAT.MARBLE],
+    [squareFrustum(obeliskHalf(seam), shoulder, seam, shaft), MARBLE_SHADE.high, MAT.MARBLE],
+    [squareFrustum(shoulder, 0, shaft, tip), MARBLE_SHADE.high, MAT.MARBLE],
+  ];
 }
 
 /** A plain neoclassical block: footing, body, projecting cornice, parapet. */
 function marble(): Piece[] {
   const { footing, body, cornice, parapet } = MARBLE;
-  return classedPieces(
-    [
-      [box(footing.half * 2, footing.y1, footing.half * 2, 0, footing.y1 / 2, 0), MARBLE_SHADE.trim],
-      [box(body.half * 2, body.y1 - footing.y1, body.half * 2, 0, (footing.y1 + body.y1) / 2, 0), MARBLE_SHADE.wall],
-      [box(cornice.half * 2, cornice.y1 - body.y1, cornice.half * 2, 0, (body.y1 + cornice.y1) / 2, 0), MARBLE_SHADE.trim],
-      [box(parapet.half * 2, parapet.y1 - cornice.y1, parapet.half * 2, 0, (cornice.y1 + parapet.y1) / 2, 0), MARBLE_SHADE.wall],
-    ],
-    MATERIAL.STONE,
-  );
+  return [
+    [box(footing.half * 2, footing.y1, footing.half * 2, 0, footing.y1 / 2, 0), MARBLE_SHADE.trim, MAT.MARBLE_TRIM],
+    [box(body.half * 2, body.y1 - footing.y1, body.half * 2, 0, (footing.y1 + body.y1) / 2, 0), MARBLE_SHADE.wall, MAT.MARBLE],
+    [box(cornice.half * 2, cornice.y1 - body.y1, cornice.half * 2, 0, (body.y1 + cornice.y1) / 2, 0), MARBLE_SHADE.trim, MAT.MARBLE_TRIM],
+    [box(parapet.half * 2, parapet.y1 - cornice.y1, parapet.half * 2, 0, (cornice.y1 + parapet.y1) / 2, 0), MARBLE_SHADE.wall, MAT.MARBLE],
+  ];
 }
 
 function fence(): Piece[] {
   const { kerb, rails, post } = FENCE;
   return [
-    [box(kerb.hx * 2, kerb.y1, kerb.hz * 2, 0, kerb.y1 / 2, 0), C.concrete, MATERIAL.CONCRETE],
-    [box(rails.hx * 2, rails.y1 - kerb.y1, rails.hz * 2, 0, (kerb.y1 + rails.y1) / 2, 0), C.black, MATERIAL.PAINTED_METAL],
-    ...[-1, 1].map((s): Piece => [box(post.half * 2, post.y1 - kerb.y1, post.half * 2, s * post.x, (kerb.y1 + post.y1) / 2, 0), C.black, MATERIAL.PAINTED_METAL]),
+    [box(kerb.hx * 2, kerb.y1, kerb.hz * 2, 0, kerb.y1 / 2, 0), C.concrete, MAT.FENCE_KERB],
+    [box(rails.hx * 2, rails.y1 - kerb.y1, rails.hz * 2, 0, (kerb.y1 + rails.y1) / 2, 0), C.black, MAT.IRON_FENCE],
+    ...[-1, 1].map((s): Piece => [box(post.half * 2, post.y1 - kerb.y1, post.half * 2, s * post.x, (kerb.y1 + post.y1) / 2, 0), C.black, MAT.IRON_FENCE]),
   ];
 }
 
 function dumpster(): Piece[] {
-  return classedPieces(
-    [
-      [box(1.9, 1.05, 1.1, 0, 0.7, 0), 0x2f5d3a],
-      [box(2, 0.1, 1.25, 0, 1.3, 0), C.black],
-      [box(0.12, 0.3, 1.1, -0.82, 0.15, 0), C.metal],
-      [box(0.12, 0.3, 1.1, 0.82, 0.15, 0), C.metal],
-    ],
-    MATERIAL.PAINTED_METAL,
-  );
+  return [
+    [box(1.9, 1.05, 1.1, 0, 0.7, 0), 0x2f5d3a, MAT.DUMPSTER_STEEL],
+    [box(2, 0.1, 1.25, 0, 1.3, 0), C.black, MAT.DUMPSTER_LID],
+    [box(0.12, 0.3, 1.1, -0.82, 0.15, 0), C.metal, MAT.DUMPSTER_STEEL],
+    [box(0.12, 0.3, 1.1, 0.82, 0.15, 0), C.metal, MAT.DUMPSTER_STEEL],
+  ];
 }
 
 function grandstand(): Piece[] {
@@ -431,12 +417,12 @@ function grandstand(): Piece[] {
   for (let i = 0; i < 5; i++) {
     const top = 0.6 + 0.8 * i;
     const x = 3.5 - (i + 0.5) * depth;
-    out.push([box(depth, top + 0.5, 29.6, x, (top - 0.5) / 2, 0), i % 2 ? C.concreteDark : C.concrete, MATERIAL.CONCRETE]);
-    out.push([box(0.45, 0.4, 29, x - depth / 2 + 0.35, top + 0.2, 0), i === 2 ? C.seatRed : C.seatBlue, MATERIAL.PLASTIC]);
+    out.push([box(depth, top + 0.5, 29.6, x, (top - 0.5) / 2, 0), i % 2 ? C.concreteDark : C.concrete, MAT.GRANDSTAND_CONCRETE]);
+    out.push([box(0.45, 0.4, 29, x - depth / 2 + 0.35, top + 0.2, 0), i === 2 ? C.seatRed : C.seatBlue, MAT.GRANDSTAND_SEAT]);
   }
-  out.push([box(1, 6.25, 30, -3, 2.625, 0), C.concrete, MATERIAL.CONCRETE]);
-  out.push([box(6.1, 0.25, 30, -0.45, 5.875, 0), C.light, MATERIAL.PAINTED_METAL]);
-  for (const z of [-14, -4.7, 4.7, 14]) out.push([box(0.2, 5.75, 0.2, 2.4, 2.875, z), C.metal, MATERIAL.PAINTED_METAL]);
+  out.push([box(1, 6.25, 30, -3, 2.625, 0), C.concrete, MAT.GRANDSTAND_CONCRETE]);
+  out.push([box(6.1, 0.25, 30, -0.45, 5.875, 0), C.light, MAT.GRANDSTAND_STEEL]);
+  for (const z of [-14, -4.7, 4.7, 14]) out.push([box(0.2, 5.75, 0.2, 2.4, 2.875, z), C.metal, MAT.GRANDSTAND_STEEL]);
   return out;
 }
 
@@ -446,24 +432,24 @@ function billboard(): Piece[] {
   const uv = panel.getAttribute("uv") as THREE.BufferAttribute;
   for (let i = 0; i < uv.count; i++) uv.setY(i, s0 + uv.getY(i) * (1 - s0));
   return [
-    [uvAt(box(0.15, 2.2, 0.15, 0, 1, -2.2), 0.5, s0 / 2), 0xffffff],
-    [uvAt(box(0.15, 2.2, 0.15, 0, 1, 2.2), 0.5, s0 / 2), 0xffffff],
-    [panel, 0xffffff],
+    [uvAt(box(0.15, 2.2, 0.15, 0, 1, -2.2), 0.5, s0 / 2), 0xffffff, MAT.BILLBOARD_POST],
+    [uvAt(box(0.15, 2.2, 0.15, 0, 1, 2.2), 0.5, s0 / 2), 0xffffff, MAT.BILLBOARD_POST],
+    [panel, 0xffffff, MAT.BILLBOARD_FACE],
   ];
 }
 
 /** Lattice pylon (also the legs of the start gantry). */
 function pylon(): Piece[] {
   const out: Piece[] = [];
-  for (const x of [-0.44, 0.44]) for (const z of [-0.44, 0.44]) out.push([box(0.12, 6, 0.12, x, 3, z), C.truss]);
+  for (const x of [-0.44, 0.44]) for (const z of [-0.44, 0.44]) out.push([box(0.12, 6, 0.12, x, 3, z), C.truss, MAT.GANTRY_LATTICE]);
   for (let y = 0.75; y < 6; y += 1.5) {
     for (const s of [-0.44, 0.44]) {
-      out.push([box(0.88, 0.07, 0.07, 0, y, s), C.truss]);
-      out.push([box(0.07, 0.07, 0.88, s, y, 0), C.truss]);
+      out.push([box(0.88, 0.07, 0.07, 0, y, s), C.truss, MAT.GANTRY_LATTICE]);
+      out.push([box(0.07, 0.07, 0.88, s, y, 0), C.truss, MAT.GANTRY_LATTICE]);
     }
   }
-  out.push([box(1, 0.12, 1, 0, 5.94, 0), C.metal]);
-  return classedPieces(out, MATERIAL.PAINTED_METAL);
+  out.push([box(1, 0.12, 1, 0, 5.94, 0), C.metal, MAT.GANTRY_LATTICE]);
+  return out;
 }
 
 /**
@@ -482,10 +468,10 @@ function chevron(): Piece[] {
   const { run, rise, stroke, proud, post } = CHEVRON_DRAW;
   const centre = top - height / 2;
   const slope = Math.atan2(rise, run);
-  const arm = (side: 1 | -1): Piece => [new THREE.BoxGeometry(thick, stroke, hypot2(run, rise)).rotateX(-side * slope).translate(0, centre + (side * rise) / 2, 0), C.yellow, MATERIAL.PLASTIC];
+  const arm = (side: 1 | -1): Piece => [new THREE.BoxGeometry(thick, stroke, hypot2(run, rise)).rotateX(-side * slope).translate(0, centre + (side * rise) / 2, 0), C.yellow, MAT.CHEVRON_BOARD];
   return [
-    [box(thick - 2 * proud, height, width, 0, centre, 0), C.black, MATERIAL.PLASTIC],
-    [box(thick - 2 * proud, top - height, post, 0, (top - height) / 2, 0), C.metal, MATERIAL.PAINTED_METAL],
+    [box(thick - 2 * proud, height, width, 0, centre, 0), C.black, MAT.CHEVRON_BOARD],
+    [box(thick - 2 * proud, top - height, post, 0, (top - height) / 2, 0), C.metal, MAT.CHEVRON_POST],
     arm(1),
     arm(-1),
   ];
@@ -520,7 +506,7 @@ function lamp(plain: THREE.Material): PrefabPart[] {
     const m = o.material as THREE.MeshStandardMaterial;
     const geo = (o.geometry as THREE.BufferGeometry).clone().applyMatrix4(o.matrixWorld).applyMatrix4(fit);
     if (o.name === LAMP_POOL || m.emissive?.getHex()) shared.push({ geometry: geo, material: m, shared: true });
-    else pole.push([geo, m.color.getHex(), MATERIAL.PAINTED_METAL]);
+    else pole.push([geo, m.color.getHex(), MAT.LAMP_POLE]);
   });
   disposeGroup(
     g,
@@ -535,7 +521,7 @@ function barrierBlock(): Piece[] {
   const seg = g.children.find((o): o is THREE.Mesh => o instanceof THREE.Mesh && o.geometry instanceof THREE.ExtrudeGeometry)!;
   const geometry = (seg.geometry as THREE.BufferGeometry).clone().scale(0.64 / 0.61, 1, 2 / 1.78);
   disposeGroup(g);
-  return [[geometry, C.barrier]];
+  return [[geometry, C.barrier, MAT.JERSEY_CONCRETE]];
 }
 
 /** Prefab `id` at scale 1 as drawable parts (one for most; the lamp adds its head and night pool). */
@@ -557,9 +543,9 @@ export function prefabParts(id: PrefabId, mats: PrefabMaterials): PrefabPart[] {
     case PREFAB.tree:
       return one(tree(), mats.plain);
     case PREFAB.building:
-      return one(building(), mats.building);
+      return one(building(MAT.BUILDING_WALL), mats.building);
     case PREFAB.stucco:
-      return one(building(), mats.building);
+      return one(building(MAT.STUCCO_WALL), mats.building);
     case PREFAB.monument:
       return one(monument(), mats.plain);
     case PREFAB.palm:

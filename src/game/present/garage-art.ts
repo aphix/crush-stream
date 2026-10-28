@@ -5,7 +5,8 @@ import { PARTS } from "./ragdoll-body.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 import type { DriverLook } from "./driver-look.ts";
 import type { SprayBitmap } from "./spray.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { tagMaterial } from "../vehicle/material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
 
 /** The garage (m): the room's half width, its back wall, its height; where the driver stands; and what the camera circles. */
 export const GARAGE = {
@@ -57,19 +58,19 @@ export class GarageArt {
       new THREE.PlaneGeometry(halfW * 2, height).rotateY(-Math.PI / 2).translate(halfW, height / 2, back + halfW),
       new THREE.PlaneGeometry(halfW * 2, height).rotateY(Math.PI / 2).translate(-halfW, height / 2, back + halfW),
     ];
-    const walls = new THREE.Mesh(mergeGeometries(sides)!, tagMaterial(new THREE.MeshStandardMaterial({ map: blocks, roughness: 0.95, metalness: 0 }), MATERIAL.INTERIOR));
+    const walls = new THREE.Mesh(mergeGeometries(sides)!, tagMaterial(new THREE.MeshStandardMaterial({ map: blocks, roughness: 0.95, metalness: 0 }), MAT.BLOCK_WALL));
     for (const g of sides) g.dispose();
     walls.receiveShadow = true;
     const slab = canvasTexture(512, 512, concrete);
     slab.repeat.set((halfW * 2) / SLAB_TILE, (halfW * 2) / SLAB_TILE);
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(halfW * 2, halfW * 2).rotateX(-Math.PI / 2).translate(0, 0.002, back + halfW),
-      tagMaterial(new THREE.MeshStandardMaterial({ map: slab, roughness: 0.9, metalness: 0 }), MATERIAL.INTERIOR),
+      tagMaterial(new THREE.MeshStandardMaterial({ map: slab, roughness: 0.9, metalness: 0 }), MAT.INDOOR_CONCRETE),
     );
     floor.receiveShadow = true;
     const turntable = new THREE.Mesh(
       new THREE.CylinderGeometry(GARAGE.turntableR, GARAGE.turntableR, 0.01, 48).translate(0, 0.005, 0),
-      tagMaterial(new THREE.MeshStandardMaterial({ color: TURNTABLE_STEEL, roughness: 0.5, metalness: 0.6 }), MATERIAL.METAL),
+      tagMaterial(new THREE.MeshStandardMaterial({ color: TURNTABLE_STEEL, roughness: 0.5, metalness: 0.6 }), MAT.TURNTABLE_STEEL),
     );
     turntable.receiveShadow = true;
     const lamp = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.06, 0.3).translate(0, height - 0.25, 0), new THREE.MeshBasicMaterial({ color: 0xfff6e0 }));

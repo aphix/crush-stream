@@ -15,7 +15,8 @@ import {
 import { MINIGAME_MODE } from "../scenes/minigame-constants.ts";
 import { CANVAS_WHITE, canvasTexture } from "./lab-art.ts";
 import { makeStationSurface, STATION_SURFACE_STYLES } from "./minigame-surface-art.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { tagMaterial } from "../vehicle/material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
 
 /**
  * The Ring Fling station in station-local coordinates (+x throw, x = 0 the lip, z = 0 the lane centre, y from the pad): the dark
@@ -355,7 +356,7 @@ function meshOf(name: string, geometry: THREE.BufferGeometry, material: THREE.Ma
 function makeBackboard(): THREE.Mesh[] {
   const width = RING_BOARD_BOUNDS.maxZ - RING_BOARD_BOUNDS.minZ + 2 * RING_RAIL_PROFILE.height;
   const frontX = RING_BOARD_BOUNDS.maxX + RING_BACKSTOP.distancePastBoard;
-  const blackMaterial = tagMaterial(new THREE.MeshStandardMaterial({ color: BACKBOARD_COLOUR, roughness: 0.6, metalness: 0 }), MATERIAL.PLASTIC);
+  const blackMaterial = tagMaterial(new THREE.MeshStandardMaterial({ color: BACKBOARD_COLOUR, roughness: 0.6, metalness: 0 }), MAT.RF_BACKBOARD);
   const slab = meshOf(
     "ring-backboard",
     new THREE.BoxGeometry(RING_BACKSTOP.thickness, RING_BACKSTOP.height, width).translate(frontX + RING_BACKSTOP.thickness / 2, RING_BACKSTOP.height / 2, 0),
@@ -385,7 +386,7 @@ function makeBackboard(): THREE.Mesh[] {
   const face = meshOf(
     "ring-backboard-face",
     new THREE.PlaneGeometry(width, RING_BACKSTOP.height).rotateY(-Math.PI / 2).translate(frontX - FACE_LIFT, RING_BACKSTOP.height / 2, 0),
-    tagMaterial(new THREE.MeshStandardMaterial({ map: faceTexture, emissiveMap: faceTexture, emissive: 0xffffff, roughness: 0.5, metalness: 0 }), MATERIAL.GLASS),
+    tagMaterial(new THREE.MeshStandardMaterial({ map: faceTexture, emissiveMap: faceTexture, emissive: 0xffffff, roughness: 0.5, metalness: 0 }), MAT.SIGN_EMISSIVE),
     { cast: false, receive: false },
   );
   return [slab, wings, face];
@@ -395,10 +396,10 @@ export function makeRingFlingArt(): THREE.Group {
   const art = new THREE.Group();
   art.name = "ring-fling";
   art.add(makeStationSurface(MINIGAME_MODE.ringFling, STATION_SURFACE_STYLES.ringFling));
-  art.add(meshOf("ring-board-wood", makeWoodGeometry(), tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: WOOD_ROUGHNESS, metalness: 0, side: THREE.DoubleSide }), MATERIAL.WOOD), { cast: false, receive: true }));
-  art.add(meshOf("ring-board-white", makeWhiteGeometry(), tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: GLOSSY_WHITE_ROUGHNESS, metalness: 0 }), MATERIAL.PLASTIC), { cast: true, receive: true }));
+  art.add(meshOf("ring-board-wood", makeWoodGeometry(), tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: WOOD_ROUGHNESS, metalness: 0, side: THREE.DoubleSide }), MAT.RF_BOARD), { cast: false, receive: true }));
+  art.add(meshOf("ring-board-white", makeWhiteGeometry(), tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: GLOSSY_WHITE_ROUGHNESS, metalness: 0 }), MAT.RF_CUP), { cast: true, receive: true }));
   const numeralTexture = clamped(canvasTexture(NUMERAL_CELL_SIZE * NUMERAL_ATLAS_COLUMNS, NUMERAL_CELL_SIZE * NUMERAL_ATLAS_ROWS, drawNumeralAtlas));
-  art.add(meshOf("ring-numerals", makeNumeralGeometry(), tagMaterial(new THREE.MeshStandardMaterial({ map: numeralTexture, alphaTest: NUMERAL_ALPHA_TEST, roughness: WOOD_ROUGHNESS, metalness: 0 }), MATERIAL.PLASTIC), { cast: false, receive: true }));
+  art.add(meshOf("ring-numerals", makeNumeralGeometry(), tagMaterial(new THREE.MeshStandardMaterial({ map: numeralTexture, alphaTest: NUMERAL_ALPHA_TEST, roughness: WOOD_ROUGHNESS, metalness: 0 }), MAT.RF_DECAL), { cast: false, receive: true }));
   for (const piece of makeBackboard()) art.add(piece);
   let draws = 0;
   art.traverse((object) => {

@@ -3,18 +3,9 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { once } from "../kernel/scalar.ts";
 import { detCos, detSin, hypot2 } from "../kernel/physics-core.js";
-import {
-  LAMP_BULB_UV,
-  makeLampUnit,
-  mergeToned,
-  PAINT_COLOR_TONE,
-  PAINTED_ATTRIBUTE,
-  toned,
-  TRIM_BLACK,
-  TRIM_CHROME,
-  TRIM_FINISH,
-  type LampKind,
-} from "./car-materials.ts";
+import { LAMP_BULB_UV, makeLampUnit, mergeToned, PAINTED_ATTRIBUTE, toned, type LampKind } from "./car-materials.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
+import { carTone } from "./car-tones.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, drawnStyle, type BodyStyle } from "./car-variants.ts";
 import { GRILLE_SEAT, MIRROR_REACH, MIRROR_ROOT, PART_KIND, partGeometry, PLATE_RISE, type PartKind } from "./part-geometry.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
@@ -30,26 +21,21 @@ import { windshieldPoint } from "./car-glass.ts";
 
 type Finish = "black" | "chrome" | "body";
 
-/** A finish's tone [sRGB, roughness, metalness] and its `painted` flag (body: the paint tone, the instance colour multiplies in). */
-function finishTone(finish: Finish): { color: number; roughness: number; metalness: number; painted: number } {
-  if (finish === "chrome") return { color: TRIM_CHROME, ...TRIM_FINISH.chrome, painted: 0 };
-  if (finish === "black") return { color: TRIM_BLACK, ...TRIM_FINISH.plastic, painted: 0 };
-  return { color: PAINT_COLOR_TONE.getHex(), ...TRIM_FINISH.paint, painted: 1 };
+/** A part's registry id by finish: the body finish draws the paint tone and is `painted` (the instance colour multiplies in). */
+type FinishIds = Readonly<Record<Finish, MaterialId>>;
+
+/** `geo` in `id`'s car tone, `painted` 1 where the instance colour multiplies in. */
+function tonedAs(geo: THREE.BufferGeometry, id: MaterialId, painted = 0): THREE.BufferGeometry {
+  return withPainted(toned(geo, ...carTone(id)), painted);
 }
 
-function finished(geo: THREE.BufferGeometry, finish: Finish): THREE.BufferGeometry {
-  const t = finishTone(finish);
-  return withPainted(toned(geo, t.color, t.roughness, t.metalness), t.painted);
+function finished(geo: THREE.BufferGeometry, ids: FinishIds, finish: Finish): THREE.BufferGeometry {
+  return tonedAs(geo, ids[finish], finish === "body" ? 1 : 0);
 }
 
 function withPainted(geo: THREE.BufferGeometry, painted: number): THREE.BufferGeometry {
   geo.setAttribute(PAINTED_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(geo.getAttribute("position").count).fill(painted), 1));
   return geo;
-}
-
-/** A dark unpainted piece: mirror feet and stalks, grille backing. */
-function dark(geo: THREE.BufferGeometry, color: number, roughness: number, metalness: number): THREE.BufferGeometry {
-  return withPainted(toned(geo, color, roughness, metalness), 0);
 }
 
 // ---- mirrors ---------------------------------------------------------------------------------------------------------------
@@ -72,8 +58,8 @@ const MIRROR_STALK = [0.028, 0.034] as const;
 const MIRROR_GLASS = { share: [0.82, 0.74], proud: 0.002 } as const;
 /** The cap's centre over the seat (m), as the platform mirror's. */
 const MIRROR_CAP_Y = 0.01;
-/** Mirror feet and stalks: black plastic, unless the mirror is chrome. */
-const MIRROR_FITTING = [0x1c1e22, 0.5, 0.05] as const;
+/** The mirror cap's id by finish: a black housing is gloss (the references' piano black), not the grilles' and bumpers' satin plastic. */
+const MIRROR_CAP_IDS: FinishIds = { black: MAT.MIRROR_HOUSING_GLOSS_BLACK, chrome: MAT.MIRROR_HOUSING_CHROME, body: MAT.MIRROR_HOUSING };
 
 /** A tear cap's section at its rear face (a nose cap's at its front face) as a share of the full section: the sedan's mirror sweeps in toward its glass, the hatch's and SUV's toward their noses. */
 const MIRROR_TEAR = 0.6;
@@ -124,12 +110,11 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const lift = spec.lift ?? 0;
   const small = spec.taper ?? MIRROR_TEAR;
   const capY = MIRROR_CAP_Y + lift;
-  const fitting = (geo: THREE.BufferGeometry) => (spec.finish === "chrome" ? finished(geo, "chrome") : dark(geo, ...MIRROR_FITTING));
+  const fitting = (geo: THREE.BufferGeometry) => tonedAs(geo, spec.finish === "chrome" ? MAT.MIRROR_HOUSING_CHROME : MAT.MIRROR_FOOT);
   // RoundedBoxGeometry comes unindexed; the other pieces are indexed, and a merge takes one kind.
   const rounded = spec.cap === "box" ? null : withoutRearFace(mergeVertices(new RoundedBoxGeometry(w, h, d, 2, (spec.round ?? MIRROR_CAP_ROUND) * Math.min(w, h, d))), d);
   const capShape = rounded ? (spec.cap === "tear" ? taperCap(rounded, sign, w, d, -1, small) : spec.cap === "nose" ? taperCap(rounded, sign, w, d, 1, small) : rounded) : new THREE.BoxGeometry(w, h, d);
-  // A black housing is gloss (the references' piano black), not the grilles' and bumpers' satin plastic.
-  const cap = spec.finish === "black" ? dark(capShape, TRIM_BLACK, TRIM_FINISH.gloss.roughness, TRIM_FINISH.gloss.metalness) : finished(capShape, spec.finish);
+  const cap = finished(capShape, MIRROR_CAP_IDS, spec.finish);
   const parts = [cap.translate(sign * (reach - w / 2), capY, 0)];
   const footOut = MIRROR_FOOT.out + MIRROR_FOOT_SINK;
   const footRows = spec.mount === "glass" ? GLASS_FOOT_ROWS : 1;
@@ -142,7 +127,7 @@ function styleMirror(style: BodyStyle, sign: number): THREE.BufferGeometry {
   const tear = spec.cap === "tear";
   const [glassW, glassH] = tear ? [w * small * MIRROR_GLASS.share[0], h * small * MIRROR_GLASS.share[1]] : [w * MIRROR_GLASS.share[0], h * MIRROR_GLASS.share[1]];
   const glassCx = tear ? sign * (reach - w / 2) - sign * (w / 2) * (1 - small) : sign * (reach - w / 2);
-  const glass = dark(new THREE.PlaneGeometry(glassW, glassH), 0x9aa8b4, 0.08, 0.7).rotateY(Math.PI);
+  const glass = tonedAs(new THREE.PlaneGeometry(glassW, glassH), MAT.MIRROR_GLASS).rotateY(Math.PI);
   parts.push(glass.translate(glassCx, capY, -d / 2 - MIRROR_GLASS.proud));
   return mergeToned(parts, "style mirror").scale(1 / scaleX, 1, 1);
 }
@@ -179,7 +164,8 @@ const HEX_ANGLE = Math.PI / 3;
 /** The platform grille's depth (m): a style grille without its own `z` puts its face where the platform box's was. */
 const PLATFORM_GRILLE_DEPTH = 0.06;
 /** The grille's dark backing: almost black, matte. */
-export const GRILLE_BACKING = [0x0b0c0e, 0.85, 0.1] as const;
+export const GRILLE_BACKING = carTone(MAT.GRILLE_BACKING);
+const GRILLE_IDS: FinishIds = { black: MAT.GRILLE_BLACK, chrome: MAT.GRILLE_CHROME, body: MAT.GRILLE_PAINTED };
 
 /** `geo` with a trivial index where it has none: merged variants are all indexed. */
 function indexed(geo: THREE.BufferGeometry): THREE.BufferGeometry {
@@ -254,16 +240,16 @@ function styleGrille(style: BodyStyle): THREE.BufferGeometry {
   const fill = angles.flatMap((a) => (fine ? grilleBars(inner, a, g.count, g.bar ?? GRILLE.meshBar, GRILLE.meshPitch, GRILLE.barDepth) : grilleBars(inner, a, g.count, g.bar ?? GRILLE.bar, GRILLE.pitch, GRILLE.barDepth)));
   const barZ = face - GRILLE.inset - GRILLE.barDepth / 2;
   const parts = [
-    dark(new THREE.ShapeGeometry(new THREE.Shape(inner)), ...GRILLE_BACKING).translate(0, 0, face - GRILLE.backingSet),
-    finished(surround, g.rim ?? g.finish),
-    ...fill.map((f) => finished(f.translate(0, 0, barZ), g.finish)),
+    tonedAs(new THREE.ShapeGeometry(new THREE.Shape(inner)), MAT.GRILLE_BACKING).translate(0, 0, face - GRILLE.backingSet),
+    finished(surround, GRILLE_IDS, g.rim ?? g.finish),
+    ...fill.map((f) => finished(f.translate(0, 0, barZ), GRILLE_IDS, g.finish)),
   ];
-  if (g.badge) parts.push(finished(new THREE.CylinderGeometry(g.badge, g.badge, GRILLE.badge, 24).rotateX(Math.PI / 2).translate(0, 0, face), "chrome"));
+  if (g.badge) parts.push(finished(new THREE.CylinderGeometry(g.badge, g.badge, GRILLE.badge, 24).rotateX(Math.PI / 2).translate(0, 0, face), GRILLE_IDS, "chrome"));
   if (g.bezel) {
     // ponytail: a uniform offset is exact for a rectangle; a trapezoid's slanted sides widen by sec(slope) of it, under 1 mm at a 3 cm bezel.
     const frame = new THREE.Shape(grilleOutline(w + 2 * g.bezel, bottom + 2 * g.bezel, h + 2 * g.bezel, round > 0 ? round + g.bezel : 0));
     frame.holes.push(new THREE.Path(grilleOutline(w, bottom, h, round)));
-    parts.push(finished(indexed(new THREE.ExtrudeGeometry(frame, { depth: GRILLE.rimDepth + GRILLE.bezelProud, bevelEnabled: false })).translate(0, 0, face - GRILLE.rimDepth), "chrome"));
+    parts.push(finished(indexed(new THREE.ExtrudeGeometry(frame, { depth: GRILLE.rimDepth + GRILLE.bezelProud, bevelEnabled: false })).translate(0, 0, face - GRILLE.rimDepth), GRILLE_IDS, "chrome"));
   }
   const geo = mergeToned(parts, "style grille");
   if (g.lean) geo.translate(0, 0, -face).rotateX(-g.lean).translate(0, 0, face);
@@ -281,13 +267,13 @@ function frontFittings(style: BodyStyle): THREE.BufferGeometry {
 /** The platform plate's rear face (m) behind its seat: `tailTrim`'s centre 0.08 back plus half its 0.02 depth. */
 const PLATFORM_PLATE_OUT = 0.09;
 /** The platform plate's roughness and metalness: a recoloured plate keeps its sheen. */
-const PLATE_SHEEN = [0.6, 0.1] as const;
+const [, PLATE_ROUGHNESS, PLATE_METALNESS] = carTone(MAT.LICENCE_PLATE);
 
 /** The rear bumper's drawn trim in its space: the plate (at the bumper's `plate` height, its face and colour seated by `plateFace`; none on a `plateless` bumper) and the style's rear bumper lamps. */
 function rearFittings(style: BodyStyle): THREE.BufferGeometry {
   const { seat, plate, plateFace, plateless } = style.bumpers.rear;
   const trim = withPainted(partGeometry(PART_KIND.tailTrim).clone(), 0).translate(0, plate === undefined ? 0 : plate - seat.y - PLATE_RISE, plateFace?.out === undefined ? 0 : PLATFORM_PLATE_OUT - plateFace.out);
-  if (plateFace?.color !== undefined) toned(trim, plateFace.color, ...PLATE_SHEEN);
+  if (plateFace?.color !== undefined) toned(trim, plateFace.color, PLATE_ROUGHNESS, PLATE_METALNESS);
   if (!style.lamps.shapes?.rear) return trim;
   const lamps = bothSides(builtLamp(style, "rear").body).translate(0, -seat.y, seat.z);
   return plateless ? lamps : mergeToned([trim, lamps], "rear bumper fittings");
@@ -322,9 +308,19 @@ const LAMP_FACE_DEPTH = 0.25;
 const LAMP_SEAM_NUDGE = [0, 0.01, -0.01, 0.02, -0.02, 0.03, -0.03, 0.04, -0.04] as const;
 /** Edge-splitting passes a lens fill gets at most: each halves its longest edges, a lens 1 m long reaches `LAMP_FILL_STEP` in five. */
 const LAMP_REFINE_PASSES = 8;
-/** The lit lenses (sRGB): head white, tail red; the other tones (`SHAPE_TONE`) never glow. */
-const LAMP_TONE = { head: 0xf4f1e8, tail: 0xc4121c } as const;
-const SHAPE_TONE: Record<Exclude<LampTone, "lit">, number> = { clear: 0xd8dde2, red: 0x8a0c12, amber: 0xff9a1a, smoked: 0x2a1a1c, dark: 0x0e0f11, black: TRIM_BLACK, chrome: TRIM_CHROME, cavity: GRILLE_BACKING[0] };
+/** The lamp tones' registry ids: the lit lenses (head white, tail red) and the other tones (`SHAPE_ID`) that never glow. */
+const LAMP_LIT_ID: Readonly<Record<LampKind, MaterialId>> = { head: MAT.LAMP_LENS_HEAD, tail: MAT.LAMP_LENS_TAIL };
+const SHAPE_ID: Readonly<Record<Exclude<LampTone, "lit">, MaterialId>> = {
+  clear: MAT.LAMP_LENS_CLEAR,
+  red: MAT.LAMP_LENS_RED,
+  amber: MAT.LAMP_LENS_AMBER,
+  smoked: MAT.LAMP_LENS_SMOKED,
+  dark: MAT.LAMP_HOUSING_DARK,
+  black: MAT.LAMP_BEZEL_BLACK,
+  chrome: MAT.LAMP_BEZEL_CHROME,
+  cavity: MAT.LAMP_CAVITY,
+};
+const lampId = (tone: LampTone, kind: LampKind): MaterialId => (tone === "lit" ? LAMP_LIT_ID[kind] : SHAPE_ID[tone]);
 /** u on the lamp emissive mask (`lampEmissiveMap`): the dark housing texel and the lit lens texel. */
 const LAMP_TEXEL = { housing: 0.25, lens: 0.75 } as const;
 /** How far out (m) a lamp point's ray starts to meet the skin: past any body. */
@@ -344,7 +340,7 @@ export const lensLights = (shape: LampShape | undefined): boolean => shape === u
 /** `geo` in lamp `tone`; a lit head lens (or one that `glows` over its tone) under its `bulb` samples that bulb's emissive texel instead of the plain white. */
 function lampTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind, bulb?: BodyStyle["lamps"]["bulb"], glows = false): THREE.BufferGeometry {
   const lit = tone === "lit" || glows;
-  toned(geo, tone === "lit" ? LAMP_TONE[kind] : SHAPE_TONE[tone], 0, 0);
+  toned(geo, ...carTone(lampId(tone, kind)));
   const uv = geo.getAttribute("uv").array as Float32Array;
   uv.fill(lit ? LAMP_TEXEL.lens : LAMP_TEXEL.housing);
   if (lit && kind === "head" && bulb) for (let i = 0; i < uv.length; i += 2) uv.set(LAMP_BULB_UV[bulb], i);
@@ -353,9 +349,7 @@ function lampTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind, bul
 
 /** A bumper lamp's tone in the part batch (never lit): chrome and black in the trim's finishes, a cavity as the grille's backing, the rest glossy in their colour. */
 function bumperTone(geo: THREE.BufferGeometry, tone: LampTone, kind: LampKind): THREE.BufferGeometry {
-  if (tone === "chrome" || tone === "black") return finished(geo, tone);
-  if (tone === "cavity") return dark(geo, ...GRILLE_BACKING);
-  return dark(geo, tone === "lit" ? LAMP_TONE[kind] : SHAPE_TONE[tone], 0.3, 0.1);
+  return tonedAs(geo, lampId(tone, kind));
 }
 
 /** A lamp point met on the skin: where, the skin's outward normal there, and whether it lies on the boot lid. */
@@ -923,18 +917,15 @@ function styleWipers(style: BodyStyle): THREE.BufferGeometry {
     const lifted = (lift: number, upTo = 1) => at.slice(0, Math.round(WIPER_STATIONS * upTo) + 1).map((p, i) => p.clone().addScaledVector(ns[i]!, lift));
     const rubber = lifted(WIPER_BLADE.gap + WIPER_BLADE.h / 2);
     const arm = lifted(WIPER_BLADE.gap + WIPER_BLADE.h + WIPER_ARM.h / 2, WIPER_ARM.reach);
-    parts.push(sweptBar(rubber, ws, ns, WIPER_BLADE.w, WIPER_BLADE.h), sweptBar(arm, ws, ns, WIPER_ARM.w, WIPER_ARM.h));
+    parts.push(tonedAs(sweptBar(rubber, ws, ns, WIPER_BLADE.w, WIPER_BLADE.h), MAT.WIPER_BLADE), tonedAs(sweptBar(arm, ws, ns, WIPER_ARM.w, WIPER_ARM.h), MAT.WIPER_ARM));
     const alongBlade = ns[0]!.clone().cross(ws[0]!);
     const capCentres = [0, 1].map((k) => at[0]!.clone().addScaledVector(ns[0]!, WIPER_BLADE.gap + WIPER_BLADE.h + k * WIPER_PIVOT.h));
-    parts.push(sweptBar(capCentres, [ws[0]!, ws[0]!], [alongBlade, alongBlade], WIPER_PIVOT.w, WIPER_PIVOT.w, "last"));
+    parts.push(tonedAs(sweptBar(capCentres, [ws[0]!, ws[0]!], [alongBlade, alongBlade], WIPER_PIVOT.w, WIPER_PIVOT.w, "last"), MAT.WIPER_ARM));
     const [pivot, tip] = [at[0]!, at[WIPER_STATIONS]!];
     // Not `toArray()`: growing a fresh array through that shared three function sends its stores megamorphic for every per-frame caller.
     blades.push({ pivot: [pivot.x, pivot.y, pivot.z], tip: [tip.x, tip.y, tip.z] });
   }
-  const geo = mergeToned(
-    parts.map((g) => dark(g, TRIM_BLACK, TRIM_FINISH.plastic.roughness, TRIM_FINISH.plastic.metalness)),
-    "style wipers",
-  );
+  const geo = mergeToned(parts, "style wipers");
   geo.userData.blades = blades;
   return geo;
 }

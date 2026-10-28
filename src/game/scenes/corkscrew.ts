@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { crownY, keelY } from "../vehicle/car-cage-rig.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { tagMaterial } from "../vehicle/material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
 import { Ground, STEP_UP } from "../world/ground.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 
@@ -242,8 +243,8 @@ export class Corkscrew extends Ground {
         support.push(_p.x, _p.y, _p.z, _p.x, 0, _p.z);
       }
     }
-    const red = tagMaterial(new THREE.MeshStandardMaterial({ color: 0xb8402e, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide }), MATERIAL.PLASTIC);
-    const wood = tagMaterial(new THREE.MeshStandardMaterial({ color: 0xc9a46a, roughness: 0.9, side: THREE.DoubleSide }), MATERIAL.WOOD);
+    const red = tagMaterial(new THREE.MeshStandardMaterial({ color: 0xb8402e, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide }), MAT.STUNT_TRACK);
+    const wood = tagMaterial(new THREE.MeshStandardMaterial({ color: 0xc9a46a, roughness: 0.9, side: THREE.DoubleSide }), MAT.CORKSCREW_TIMBER);
     // Floor: one quad per step across (left, right); walls and support: one quad per step per side (edge, far edge).
     this.strip(floor, n, 2, [[0, 1]], red);
     this.strip(walls, n, 4, [[0, 1], [2, 3]], red);

@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { cageLift, keelY } from "../vehicle/car-cage-rig.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { tagMaterial } from "../vehicle/material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
 import { applyGroundFriction, leftoverCrumple } from "../deform/physics-util.ts";
 import { C_PY, HIT_SIZE } from "../world/surfaces.ts";
 import { BARRIER_HALF, BARRIER_MASS, BARRIER_TOP, clipCarToBarrier } from "../contact/sat.ts";
@@ -365,7 +366,7 @@ export function buildRampBalls(scene: THREE.Scene, balls: RampBall[]): void {
     color: 0xb7bcc6,
     roughness: 0.52,
     metalness: 0.1,
-  }), MATERIAL.PLASTIC);
+  }), MAT.RAMP_BALL);
   for (let i = 0; i < 3; i++) {
     const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 22, 16), mat);
     mesh.castShadow = true;
@@ -418,7 +419,7 @@ export class CompactorPress {
       color: 0x6a6e76,
       roughness: 0.48,
       metalness: 0.72,
-    }), MATERIAL.PAINTED_METAL);
+    }), MAT.PRESS_PLATE);
     const geo = new THREE.BoxGeometry(3.6, 2.05, 0.48);
     this.front = new THREE.Mesh(geo, mat);
     this.rear = new THREE.Mesh(geo, mat);

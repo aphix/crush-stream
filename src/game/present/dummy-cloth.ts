@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { MAT } from "../kernel/material-ids.ts";
 import type { Decal } from "./dummy-rig.ts";
 
 /**
@@ -8,6 +9,8 @@ import type { Decal } from "./dummy-rig.ts";
 
 /** Fabrics by index: layer `index >> 2`, channel `index & 3`. HAIR is strands running down; NONE is smooth: rubber, metal, polished leather. */
 export const FABRIC = { SKIN: 0, DENIM: 1, JERSEY: 2, CANVAS: 3, LEATHER: 4, WOOL: 5, COTTON: 6, TWILL: 7, HAIR: 8, NONE: 9 } as const;
+/** Each fabric's registry material, by `FABRIC` index (NONE has none: a role that names no fabric names its own, `ROLE_MATERIAL`). */
+export const FABRIC_MATERIAL = [MAT.DUMMY_SKIN, MAT.DENIM, MAT.KNIT, MAT.CANVAS, MAT.SHOE_LEATHER, MAT.WOOL, MAT.COTTON, MAT.TWILL, MAT.HAIR] as const;
 /** Texels on a side of a fabric's tile. */
 const TILE = 128;
 /** Metres one tile spans on the body: denim's 16 twill lines a tile are then 2.5 mm apart, twice real, so they read at a metre. */

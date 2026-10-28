@@ -3,6 +3,7 @@
  * `prefabs.ts` builds the meshes and must cover every `PrefabId`.
  */
 import { hypot2, detSin, detCos } from "../kernel/physics-core.js";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { PREFAB, SURFACE } from "./constants.ts";
 import { brickCollider, bricksTop, CAPITOL, CAPITOL_POOL, CAPITOL_TOP, capitolPlan, capitolPool, FLAGPOLE, flagpolePlan, GARFIELD_MONUMENT, GRANT_MEMORIAL, PEACE_MONUMENT, type Brick, type Collider } from "./landmarks.ts";
 
@@ -20,18 +21,24 @@ export type Surface = {
    * speed on a surface is `power / ((Crr − asphalt's) · g)` (`terminalSpeed`).
    */
   roll: number;
+  /** The ribbon's material id when this surface is a road, run-off, shortcut or deck top. */
+  ribbon: MaterialId;
+  /** The terrain cell's id when this is the course's own terrain. */
+  terrain: MaterialId;
+  /** The terrain cell's id when this surface is painted over another terrain. */
+  patch: MaterialId;
   /** Ground colour (sRGB hex) for the road / terrain mesh. */
   color: number;
 };
 
 export const SURFACES: Record<SurfaceId, Surface> = {
-  asphalt: { grip: 1, roll: 0.015, color: 0x2b2d33 }, // ToolBox: ordinary car tyres on concrete / new asphalt 0.01–0.015
-  concrete: { grip: 1, roll: 0.015, color: 0x8d8a84 }, // the same row
-  cobble: { grip: 0.85, roll: 0.03, color: 0x5d5a56 }, // ToolBox: cobbles, large worn 0.03
-  dirt: { grip: 0.72, roll: 0.05, color: 0x6e5640 }, // Bosch: unpaved road 0.05
-  gravel: { grip: 0.62, roll: 0.06, color: 0x8a7d68 }, // ToolBox: gravel loose worn 0.04–0.08 (mid)
-  grass: { grip: 0.5, roll: 0.35, color: 0x3f5a34 }, // Bosch: field 0.1–0.35 (the top of the range)
-  sand: { grip: 0.45, roll: 0.4, color: 0xc2ad84 }, // ToolBox: car tyre on loose sand 0.2–0.4 (the top of the range)
+  asphalt: { grip: 1, roll: 0.015, color: 0x2b2d33, ribbon: MAT.ROAD_ASPHALT, terrain: MAT.TERRAIN_ASPHALT, patch: MAT.PATCH_ASPHALT }, // ToolBox: ordinary car tyres on concrete / new asphalt 0.01–0.015
+  concrete: { grip: 1, roll: 0.015, color: 0x8d8a84, ribbon: MAT.ROAD_CONCRETE, terrain: MAT.TERRAIN_CONCRETE, patch: MAT.PATCH_CONCRETE }, // the same row
+  cobble: { grip: 0.85, roll: 0.03, color: 0x5d5a56, ribbon: MAT.ROAD_COBBLE, terrain: MAT.TERRAIN_COBBLE, patch: MAT.PATCH_COBBLE }, // ToolBox: cobbles, large worn 0.03
+  dirt: { grip: 0.72, roll: 0.05, color: 0x6e5640, ribbon: MAT.ROAD_DIRT, terrain: MAT.TERRAIN_DIRT, patch: MAT.PATCH_DIRT }, // Bosch: unpaved road 0.05
+  gravel: { grip: 0.62, roll: 0.06, color: 0x8a7d68, ribbon: MAT.ROAD_GRAVEL, terrain: MAT.TERRAIN_GRAVEL, patch: MAT.PATCH_GRAVEL }, // ToolBox: gravel loose worn 0.04–0.08 (mid)
+  grass: { grip: 0.5, roll: 0.35, color: 0x3f5a34, ribbon: MAT.ROAD_GRASS, terrain: MAT.TERRAIN_GRASS, patch: MAT.PATCH_GRASS }, // Bosch: field 0.1–0.35 (the top of the range)
+  sand: { grip: 0.45, roll: 0.4, color: 0xc2ad84, ribbon: MAT.ROAD_SAND, terrain: MAT.TERRAIN_SAND, patch: MAT.PATCH_SAND }, // ToolBox: car tyre on loose sand 0.2–0.4 (the top of the range)
 };
 
 export const PREFAB_IDS = [
@@ -70,6 +77,8 @@ export const PREFAB_IDS = [
 ] as const;
 export type PrefabId = (typeof PREFAB_IDS)[number];
 
+/** The window texture's bay in canvas pixels (y down): `present/prefabs.ts` paints these rects and a sound or shader test reads the same ones. */
+export const WINDOW_BAY = { px: 256, glass: [38, 48, 218, 190], frame: 6, mullion: 6, sillOut: 10, sillGap: 6, sillHeight: 10 } as const;
 
 /** A star plan's valley radius over its tip radius: the one number `present/prefabs.ts`'s `star` draws and `starPlan` bounds. */
 export const STAR_INNER = 0.45;
@@ -316,6 +325,8 @@ type PrefabSpec = {
   size: [number, number, number];
   /** kg, for knock bodies. */
   mass: number;
+  /** What a hit lands on: the main body's registry id (read by nothing in the sim). */
+  material: MaterialId;
   /** Share of a hit's crush energy the struck car takes (`ContactBox.hardness`): 1 when omitted, a rigid solid; `SOFT_WOOD` for a trunk that gives. */
   hardness?: number;
 };
@@ -335,7 +346,7 @@ const WALL_FOOTING_HALF = 0.22;
 function monumentSpec(bricks: readonly Brick[]): PrefabSpec {
   const hx = Math.max(...bricks.map((b) => Math.abs(b.x) + b.hx));
   const hz = Math.max(...bricks.map((b) => Math.abs(b.z) + b.hz));
-  return { body: "solid", collider: bricks.map(brickCollider), foot: hypot2(hx, hz), size: [2 * hx, bricksTop(bricks), 2 * hz], mass: 0 };
+  return { body: "solid", collider: bricks.map(brickCollider), foot: hypot2(hx, hz), size: [2 * hx, bricksTop(bricks), 2 * hz], mass: 0, material: MAT.MARBLE };
 }
 
 export const PREFABS: Record<PrefabId, PrefabSpec> = {
@@ -349,10 +360,11 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: 0.28,
     size: [0.4, 0.7, 0.4],
     mass: 4,
+    material: MAT.CONE_BODY,
   },
-  [PREFAB.tyreStack]: { body: "knock", collider: [{ kind: "circle", r: 0.375 }], foot: 0.4, size: [0.75, 1, 0.75], mass: 60 },
-  [PREFAB.hayBale]: { body: "knock", collider: [{ kind: "box", hx: 0.6, hz: 0.45 }], foot: 0.75, size: [1.2, 0.9, 0.9], mass: 180 },
-  crate: { body: "knock", collider: [{ kind: "box", hx: 0.5, hz: 0.5 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 30 },
+  [PREFAB.tyreStack]: { body: "knock", collider: [{ kind: "circle", r: 0.375 }], foot: 0.4, size: [0.75, 1, 0.75], mass: 60, material: MAT.TYRE_STACK },
+  [PREFAB.hayBale]: { body: "knock", collider: [{ kind: "box", hx: 0.6, hz: 0.45 }], foot: 0.75, size: [1.2, 0.9, 0.9], mass: 180, material: MAT.HAY },
+  crate: { body: "knock", collider: [{ kind: "box", hx: 0.5, hz: 0.5 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 30, material: MAT.CRATE_WOOD },
   [PREFAB.barrierBlock]: {
     body: "solid",
     collider: [
@@ -363,6 +375,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: hypot2(0.32, 1),
     size: [0.64, 0.81, 2],
     mass: 0,
+    material: MAT.JERSEY_CONCRETE,
   },
   // An icosphere dome with its foot 0.25 m under the ground: four rings, each as wide as the dome at its foot.
   rock: {
@@ -376,6 +389,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: 1.1,
     size: [2.4, 1.6, 2.2],
     mass: 0,
+    material: MAT.ROCK,
   },
   tree: {
     body: "solid",
@@ -391,9 +405,10 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: 0.35,
     size: [3.2, 7, 3.2],
     mass: 0,
+    material: MAT.TREE_BARK,
     hardness: SOFT_WOOD,
   },
-  building: { body: "solid", collider: [{ kind: "box", hx: 5.95, hz: 5.95 }], foot: hypot2(6, 6), size: [12, 14, 12], mass: 0 },
+  building: { body: "solid", collider: [{ kind: "box", hx: 5.95, hz: 5.95 }], foot: hypot2(6, 6), size: [12, 14, 12], mass: 0, material: MAT.BUILDING_WALL },
   grandstand: {
     body: "solid",
     collider: [
@@ -413,6 +428,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: hypot2(3.5, 15),
     size: [7, 6, 30],
     mass: 0,
+    material: MAT.GRANDSTAND_CONCRETE,
   },
   billboard: {
     body: "solid",
@@ -425,6 +441,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: hypot2(0.2, 3),
     size: [0.4, 4.5, 6],
     mass: 0,
+    material: MAT.BILLBOARD_POST,
   },
   lamp: {
     body: "solid",
@@ -435,9 +452,10 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: 0.14,
     size: [0.3, 4.4, 0.3],
     mass: 0,
+    material: MAT.LAMP_POLE,
   },
-  gantry: { body: "none", collider: [], foot: 0, size: [1, 6, 1], mass: 0 },
-  chevron: { body: "none", collider: [], foot: 0, size: [CHEVRON.thick, CHEVRON.top, CHEVRON.width], mass: 0 },
+  gantry: { body: "none", collider: [], foot: 0, size: [1, 6, 1], mass: 0, material: MAT.GANTRY_LATTICE },
+  chevron: { body: "none", collider: [], foot: 0, size: [CHEVRON.thick, CHEVRON.top, CHEVRON.width], mass: 0, material: MAT.CHEVRON_BOARD },
   // The Havana course: a stepped star-plan tower, pastel flat-roofed blocks (the building's shape), palms, stucco walls (long axis +Z), a dumpster (long axis +X).
   monument: {
     body: "solid",
@@ -459,8 +477,9 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: 5.8,
     size: [13, 55, 13],
     mass: 0,
+    material: MAT.LIMESTONE,
   },
-  stucco: { body: "solid", collider: [{ kind: "box", hx: 5.95, hz: 5.95 }], foot: hypot2(6, 6), size: [12, 14, 12], mass: 0 },
+  stucco: { body: "solid", collider: [{ kind: "box", hx: 5.95, hz: 5.95 }], foot: hypot2(6, 6), size: [12, 14, 12], mass: 0, material: MAT.STUCCO_WALL },
   palm: {
     body: "solid",
     // The leaning trunk (lean 0.08 rad: its axis moves 0.08 m east per metre up, 0.27 m wide at the foot, 0.15 m at the top) as three drums
@@ -474,6 +493,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: 0.3,
     size: [4.4, 8.5, 4.4],
     mass: 0,
+    material: MAT.PALM_TRUNK,
     hardness: SOFT_WOOD,
   },
   wall: {
@@ -486,18 +506,20 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: hypot2(0.3, 5),
     size: [0.6, 3.2, 10],
     mass: 0,
+    material: MAT.GARDEN_WALL,
   },
-  dumpster: { body: "solid", collider: [{ kind: "box", hx: 1, hz: 0.62 }], foot: hypot2(1, 0.62), size: [2, 1.4, 1.25], mass: 0 },
+  dumpster: { body: "solid", collider: [{ kind: "box", hx: 1, hz: 0.62 }], foot: hypot2(1, 0.62), size: [2, 1.4, 1.25], mass: 0, material: MAT.DUMPSTER_STEEL },
   // The National Mall course's landmarks and its museum blocks.
-  obelisk: { body: "solid", collider: obeliskPlan(), foot: OBELISK.foot * Math.SQRT2, size: [OBELISK.foot * 2, OBELISK.tip, OBELISK.foot * 2], mass: 0 },
+  obelisk: { body: "solid", collider: obeliskPlan(), foot: OBELISK.foot * Math.SQRT2, size: [OBELISK.foot * 2, OBELISK.tip, OBELISK.foot * 2], mass: 0, material: MAT.MARBLE },
   // To the foot of the west front's stair, the farthest corner from the middle.
-  capitol: { body: "solid", collider: capitolPlan(), foot: hypot2(CAPITOL.blocks[0].hx + CAPITOL.westStair.count * CAPITOL.westStair.run, CAPITOL.blocks[0].hz), size: [120, CAPITOL_TOP, 240], mass: 0 },
+  capitol: { body: "solid", collider: capitolPlan(), foot: hypot2(CAPITOL.blocks[0].hx + CAPITOL.westStair.count * CAPITOL.westStair.run, CAPITOL.blocks[0].hz), size: [120, CAPITOL_TOP, 240], mass: 0, material: MAT.MARBLE },
   [PREFAB.capitolPool]: {
     body: "solid",
     collider: capitolPool().rim.map(brickCollider),
     foot: hypot2(CAPITOL_POOL.halfLength + CAPITOL_POOL.westBulge, CAPITOL_POOL.westHalf),
     size: [2 * (CAPITOL_POOL.halfLength + CAPITOL_POOL.westBulge), CAPITOL_POOL.y1, 2 * CAPITOL_POOL.westHalf],
     mass: 0,
+    material: MAT.POOL_COPING,
   },
   [PREFAB.grantMemorial]: monumentSpec(GRANT_MEMORIAL),
   [PREFAB.peaceMonument]: monumentSpec(PEACE_MONUMENT),
@@ -508,6 +530,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: FLAGPOLE.r + FLAGPOLE.flag.length,
     size: [2 * (FLAGPOLE.r + FLAGPOLE.flag.length), FLAGPOLE.top, 2 * (FLAGPOLE.r + FLAGPOLE.flag.length)],
     mass: 0,
+    material: MAT.FLAGPOLE,
   },
   marble: {
     body: "solid",
@@ -520,6 +543,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: hypot2(MARBLE.cornice.half, MARBLE.cornice.half),
     size: [MARBLE.cornice.half * 2, MARBLE.parapet.y1, MARBLE.cornice.half * 2],
     mass: 0,
+    material: MAT.MARBLE,
   },
   [PREFAB.whiteHouse]: {
     body: "solid",
@@ -527,6 +551,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: hypot2(100.5, 25.4),
     size: [201, WHITE_HOUSE.flag.pole.y1, 50.9],
     mass: 0,
+    material: MAT.PAINTED_SANDSTONE,
   },
   fountain: {
     body: "solid",
@@ -539,6 +564,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: FOUNTAIN.basin.r,
     size: [FOUNTAIN.basin.r * 2, FOUNTAIN.jet.y1, FOUNTAIN.basin.r * 2],
     mass: 0,
+    material: MAT.FOUNTAIN_STONE,
   },
   [PREFAB.pool]: {
     body: "solid",
@@ -546,8 +572,9 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: hypot2(POOL.half[0], POOL.half[1]),
     size: [POOL.half[0] * 2, POOL.y1, POOL.half[1] * 2],
     mass: 0,
+    material: MAT.POOL_COPING,
   },
-  basin: { body: "solid", collider: [{ kind: "circle", r: BASIN.r, y1: BASIN.y1 }], foot: BASIN.r, size: [BASIN.r * 2, BASIN.y1, BASIN.r * 2], mass: 0 },
+  basin: { body: "solid", collider: [{ kind: "circle", r: BASIN.r, y1: BASIN.y1 }], foot: BASIN.r, size: [BASIN.r * 2, BASIN.y1, BASIN.r * 2], mass: 0, material: MAT.POOL_COPING },
   lincoln: {
     body: "solid",
     collider: lincolnPlan(),
@@ -555,6 +582,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: Math.max(hypot2(LINCOLN.terrace.hx, LINCOLN.terrace.hz), hypot2(GRAND_STAIR.hx, LINCOLN_REACH)),
     size: [LINCOLN.terrace.hx * 2, LINCOLN.roof.y1, LINCOLN_REACH * 2],
     mass: 0,
+    material: MAT.MARBLE,
   },
   fence: {
     body: "solid",
@@ -566,5 +594,6 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
     foot: hypot2(FENCE.kerb.hx, FENCE.kerb.hz),
     size: [FENCE.kerb.hx * 2, FENCE.post.y1, FENCE.kerb.hz * 2],
     mass: 0,
+    material: MAT.IRON_FENCE,
   },
 };

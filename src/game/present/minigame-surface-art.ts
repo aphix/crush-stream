@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { LANDING_HEIGHT, START_HILL, STATION_HALF_WIDTH, type MinigameMode } from "../scenes/minigame-constants.ts";
 import { floorHeightAt, stationBackX, stationFrontX } from "../scenes/minigame-profile.ts";
 import { groundMesh } from "../scenes/ground-stack.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { MATERIAL_ATTRIBUTE, tagMaterial } from "../vehicle/material-class.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 
 /**
  * A station's whole band (the lane's `STATION_HALF_WIDTH` either side, the part of the sim ground that follows `floorHeightAt`) is one
@@ -35,10 +36,11 @@ const PAD_BAR_LENGTH = 1;
 export const SURFACE_TERRAIN_COLOUR = 0x696c70;
 const SURFACE_ROUGHNESS = 0.9;
 
-/** A station surface's look: lane half width (m, within the station's), its paint, each paint absent as null. */
+/** A station surface's look: lane half width (m, within the station's), its base and the base's material, its paint, each paint absent as null. */
 type StationSurfaceStyle = {
   laneHalfWidth: number;
   baseColour: number;
+  baseMaterial: MaterialId;
   centreDashColour: number | null;
   edgeLineColour: number | null;
   startPadBarColour: number | null;
@@ -46,9 +48,9 @@ type StationSurfaceStyle = {
 
 /** The three stations' surfaces: grey asphalt with white lines and a yellow-barred pad, the red run-up strip, the dark lane. */
 export const STATION_SURFACE_STYLES: Readonly<Record<MinigameMode, StationSurfaceStyle>> = {
-  longJump: { laneHalfWidth: 5, baseColour: 0x4d5056, centreDashColour: 0xe9e9e2, edgeLineColour: 0xe9e9e2, startPadBarColour: 0xe3b61f },
-  highJump: { laneHalfWidth: 4, baseColour: 0x9b2c24, centreDashColour: 0xf2f2ec, edgeLineColour: 0xf2f2ec, startPadBarColour: null },
-  ringFling: { laneHalfWidth: 3, baseColour: 0x25282d, centreDashColour: null, edgeLineColour: 0xcfd3d8, startPadBarColour: null },
+  longJump: { laneHalfWidth: 5, baseColour: 0x4d5056, baseMaterial: MAT.STATION_ASPHALT, centreDashColour: 0xe9e9e2, edgeLineColour: 0xe9e9e2, startPadBarColour: 0xe3b61f },
+  highJump: { laneHalfWidth: 4, baseColour: 0x9b2c24, baseMaterial: MAT.RUNUP_TARTAN, centreDashColour: 0xf2f2ec, edgeLineColour: 0xf2f2ec, startPadBarColour: null },
+  ringFling: { laneHalfWidth: 3, baseColour: 0x25282d, baseMaterial: MAT.LANE_DARK, centreDashColour: null, edgeLineColour: 0xcfd3d8, startPadBarColour: null },
 };
 
 /** A rectangle on the ground plan (m). */
@@ -56,20 +58,21 @@ export type GroundRectangle = { minX: number; maxX: number; minZ: number; maxZ: 
 
 /** A point (x, y, z). */
 type Corner = readonly [number, number, number];
-/** Triangles written out one after the other: three corners each, and the colour of each corner. */
-type TriangleSoup = { positions: number[]; colours: number[] };
+/** Triangles written out one after the other: three corners each, and the colour and registry id of each corner. */
+type TriangleSoup = { positions: number[]; colours: number[]; materials: number[] };
 
-function addTriangle(soup: TriangleSoup, paint: THREE.Color, first: Corner, second: Corner, third: Corner): void {
+function addTriangle(soup: TriangleSoup, paint: THREE.Color, material: MaterialId, first: Corner, second: Corner, third: Corner): void {
   for (const corner of [first, second, third]) {
     soup.positions.push(...corner);
     soup.colours.push(paint.r, paint.g, paint.b);
+    soup.materials.push(material);
   }
 }
 
 /** The quad of corners `a`, `b` (down the first edge) and `c`, `d` (down the opposite one) as two triangles: (a, b, c) and (c, b, d). */
-function addQuad(soup: TriangleSoup, paint: THREE.Color, a: Corner, b: Corner, c: Corner, d: Corner): void {
-  addTriangle(soup, paint, a, b, c);
-  addTriangle(soup, paint, c, b, d);
+function addQuad(soup: TriangleSoup, paint: THREE.Color, material: MaterialId, a: Corner, b: Corner, c: Corner, d: Corner): void {
+  addTriangle(soup, paint, material, a, b, c);
+  addTriangle(soup, paint, material, c, b, d);
 }
 
 /** The station's band in its own frame: from the back of the pad to the front of the back drop, `STATION_HALF_WIDTH` either side of the lane's middle. */
@@ -109,30 +112,31 @@ function isInDash(centreX: number): boolean {
   return (((stepIndex % DASH_PERIOD_STEPS) + DASH_PERIOD_STEPS) % DASH_PERIOD_STEPS) < DASH_ON_STEPS;
 }
 
-/** The colour (hex) of the cell centred at (`centreX`, `centreZ`): terrain beside the strip, the strip's paint on it. */
-function cellColour(mode: MinigameMode, style: StationSurfaceStyle, centreX: number, centreZ: number): number {
+/** The colour (hex) and registry id of the cell centred at (`centreX`, `centreZ`): terrain beside the strip, the strip's base or paint on it. */
+function cellLook(mode: MinigameMode, style: StationSurfaceStyle, centreX: number, centreZ: number): readonly [number, MaterialId] {
   const acrossLane = Math.abs(centreZ);
-  if (acrossLane > style.laneHalfWidth) return SURFACE_TERRAIN_COLOUR;
+  if (acrossLane > style.laneHalfWidth) return [SURFACE_TERRAIN_COLOUR, MAT.STATION_CONCRETE];
   const edgeLineOuter = style.laneHalfWidth - EDGE_LINE_INSET;
-  if (style.centreDashColour !== null && acrossLane < CENTRE_LINE_WIDTH / 2 && isInDash(centreX)) return style.centreDashColour;
-  if (style.edgeLineColour !== null && acrossLane > edgeLineOuter - EDGE_LINE_WIDTH && acrossLane < edgeLineOuter) return style.edgeLineColour;
+  if (style.centreDashColour !== null && acrossLane < CENTRE_LINE_WIDTH / 2 && isInDash(centreX)) return [style.centreDashColour, MAT.LANE_PAINT];
+  if (style.edgeLineColour !== null && acrossLane > edgeLineOuter - EDGE_LINE_WIDTH && acrossLane < edgeLineOuter) return [style.edgeLineColour, MAT.LANE_PAINT];
   const intoPad = centreX - stationBackX(mode);
   const isOnPadBar = intoPad < START_HILL.padLength && Math.floor(intoPad / PAD_BAR_LENGTH) % 2 === 0;
-  if (style.startPadBarColour !== null && isOnPadBar) return style.startPadBarColour;
-  return style.baseColour;
+  if (style.startPadBarColour !== null && isOnPadBar) return [style.startPadBarColour, MAT.LANE_PAINT];
+  return [style.baseColour, style.baseMaterial];
 }
 
-/** The floor's cells: a quad per boundary pair, its corners on `heights[column][row]`, painted by `cellColour`. */
+/** The floor's cells: a quad per boundary pair, its corners on `heights[column][row]`, painted by `cellLook`. */
 function addFloorCells(soup: TriangleSoup, mode: MinigameMode, style: StationSurfaceStyle, xs: readonly number[], zs: readonly number[], heights: readonly (readonly number[])[]): void {
   const paint = new THREE.Color();
   for (let column = 0; column < xs.length - 1; column++) {
     for (let row = 0; row < zs.length - 1; row++) {
-      paint.setHex(cellColour(mode, style, (xs[column]! + xs[column + 1]!) / 2, (zs[row]! + zs[row + 1]!) / 2));
+      const [colour, material] = cellLook(mode, style, (xs[column]! + xs[column + 1]!) / 2, (zs[row]! + zs[row + 1]!) / 2);
+      paint.setHex(colour);
       const nearLeft: Corner = [xs[column]!, heights[column]![row]!, zs[row]!];
       const nearRight: Corner = [xs[column]!, heights[column]![row + 1]!, zs[row + 1]!];
       const farLeft: Corner = [xs[column + 1]!, heights[column + 1]![row]!, zs[row]!];
       const farRight: Corner = [xs[column + 1]!, heights[column + 1]![row + 1]!, zs[row + 1]!];
-      addQuad(soup, paint, nearLeft, nearRight, farLeft, farRight);
+      addQuad(soup, paint, material, nearLeft, nearRight, farLeft, farRight);
     }
   }
 }
@@ -154,8 +158,8 @@ function addSideWalls(soup: TriangleSoup, xs: readonly number[], zs: readonly nu
       const farTop: Corner = [xs[column + 1]!, topFar, z];
       const foot: Corner = [xs[column]!, LANDING_HEIGHT, z];
       const farFoot: Corner = [xs[column + 1]!, LANDING_HEIGHT, z];
-      if (side === 1) addQuad(soup, paint, top, foot, farTop, farFoot);
-      else addQuad(soup, paint, top, farTop, foot, farFoot);
+      if (side === 1) addQuad(soup, paint, MAT.STATION_CONCRETE, top, foot, farTop, farFoot);
+      else addQuad(soup, paint, MAT.STATION_CONCRETE, top, farTop, foot, farFoot);
     }
   }
 }
@@ -164,8 +168,9 @@ function terrainMesh(soup: TriangleSoup): THREE.Mesh {
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(soup.positions, 3));
   geometry.setAttribute("color", new THREE.Float32BufferAttribute(soup.colours, 3));
+  geometry.setAttribute(MATERIAL_ATTRIBUTE, new THREE.Float32BufferAttribute(soup.materials, 1));
   geometry.computeVertexNormals();
-  const material = tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: SURFACE_ROUGHNESS, metalness: 0 }), MATERIAL.SOIL);
+  const material = tagMaterial(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: SURFACE_ROUGHNESS, metalness: 0 }), MAT.STATION_CONCRETE);
   const mesh = groundMesh(geometry, material, "terrain");
   mesh.receiveShadow = true;
   return mesh;
@@ -181,7 +186,7 @@ export function makeStationSurface(mode: MinigameMode, style: StationSurfaceStyl
   // ponytail: columns are the paint's edges only, since the floor is the same across the lane; add a lateral step if a floor ever banks.
   const zs = acrossBandBreakpoints(style);
   const heights = xs.map((x) => zs.map((z) => floorHeightAt(mode, x, z)));
-  const soup: TriangleSoup = { positions: [], colours: [] };
+  const soup: TriangleSoup = { positions: [], colours: [], materials: [] };
   addFloorCells(soup, mode, style, xs, zs, heights);
   addSideWalls(soup, xs, zs, heights);
   const group = new THREE.Group();
@@ -219,12 +224,13 @@ export function flatGroundTiles(extent: GroundRectangle, holes: readonly GroundR
 
 /** One mesh of flat terrain at the pad's level over `tiles`, in world coordinates, one draw. */
 export function makeFlatGround(name: string, tiles: readonly GroundRectangle[]): THREE.Mesh {
-  const soup: TriangleSoup = { positions: [], colours: [] };
+  const soup: TriangleSoup = { positions: [], colours: [], materials: [] };
   const paint = new THREE.Color(SURFACE_TERRAIN_COLOUR);
   for (const tile of tiles) {
     addQuad(
       soup,
       paint,
+      MAT.STATION_CONCRETE,
       [tile.minX, LANDING_HEIGHT, tile.minZ],
       [tile.minX, LANDING_HEIGHT, tile.maxZ],
       [tile.maxX, LANDING_HEIGHT, tile.minZ],

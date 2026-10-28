@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { detAtan2, detCos, detSin, hypot2 } from "../kernel/physics-core.js";
 import { clamp } from "../kernel/scalar.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { box, type Piece } from "./prefab-pieces.ts";
 import { TILE } from "./prefabs.ts";
 import { blankPoint, pointOn, type TrackGround, type TrackPath } from "../world/track.ts";
@@ -25,7 +26,7 @@ function frameOf(p: TrackPath, k: number): Frame {
  * pairs). Front faces follow the profile's left-hand normal: a profile running clockwise (seen
  * with + lateral to the right, y up) faces out of the solid it bounds.
  */
-function stripJ(m: Mesher, fa: Frame, A: readonly number[], fb: Frame, B: readonly number[], j: number, hex: number, tile: number, v0: number): void {
+function stripJ(m: Mesher, fa: Frame, A: readonly number[], fb: Frame, B: readonly number[], j: number, hex: number, tile: number, v0: number, material?: MaterialId): void {
   const ids: number[] = [];
   for (const [f, P] of [
     [fa, A],
@@ -36,7 +37,7 @@ function stripJ(m: Mesher, fa: Frame, A: readonly number[], fb: Frame, B: readon
     const len = hypot2(dl, dy) || 1;
     for (let q = 0; q < 2; q++) {
       const l = P[(j + q) * 2]!;
-      const id = m.v(f.x + f.tz * l, P[(j + q) * 2 + 1]!, f.z - f.tx * l, hex, f.s / tile, (v0 + q * len) / tile);
+      const id = m.v(f.x + f.tz * l, P[(j + q) * 2 + 1]!, f.z - f.tx * l, hex, f.s / tile, (v0 + q * len) / tile, 1, material);
       m.normal(id, (f.tz * -dy) / len, dl / len, (-f.tx * -dy) / len);
       ids.push(id);
     }
@@ -45,11 +46,11 @@ function stripJ(m: Mesher, fa: Frame, A: readonly number[], fb: Frame, B: readon
 }
 
 /** Flat polygon (convex, (lateral, y) pairs) in the section plane, facing +s (`facing` 1) or −s (−1). */
-function face(m: Mesher, f: Frame, P: readonly number[], facing: number, hex: number, tile: number): void {
+function face(m: Mesher, f: Frame, P: readonly number[], facing: number, hex: number, tile: number, material?: MaterialId): void {
   const ids: number[] = [];
   for (let i = 0; i < P.length; i += 2) {
     const l = P[i]!;
-    const id = m.v(f.x + f.tz * l, P[i + 1]!, f.z - f.tx * l, hex, l / tile, P[i + 1]! / tile);
+    const id = m.v(f.x + f.tz * l, P[i + 1]!, f.z - f.tx * l, hex, l / tile, P[i + 1]! / tile, 1, material);
     m.normal(id, f.tx * facing, 0, f.tz * facing);
     ids.push(id);
   }
@@ -90,7 +91,7 @@ export function addWalls(m: Mesher, p: TrackPath, ground: TrackGround, wallHeigh
       for (let q = 0; q < prof.length - 1; q++) {
         const j = side > 0 ? q : prof.length - 2 - q;
         const hex = j === 1 ? stripe : j < 1 ? CONCRETE : CONCRETE_DARK;
-        stripJ(m, fa, A, fb, B, q, hex, TILE.concrete, side > 0 ? vlen[q]! : vlen[prof.length - 1]! - vlen[prof.length - 1 - q]!);
+        stripJ(m, fa, A, fb, B, q, hex, TILE.concrete, side > 0 ? vlen[q]! : vlen[prof.length - 1]! - vlen[prof.length - 1 - q]!, j === 1 ? MAT.WALL_TOP_PAINT : undefined);
       }
     }
     face(m, frameOf(p, ks[0]!), at(ks[0]!), -1, CONCRETE_DARK, TILE.concrete);
@@ -161,13 +162,13 @@ export function pillarPieces(p: TrackPath, secs: readonly number[], ground: Trac
       if (legs.length !== lats.length) continue;
       const yaw = detAtan2(pt.tx, pt.tz);
       for (const g of legs) {
-        out.push([new THREE.CylinderGeometry(PILLAR_R, PILLAR_R * 1.15, g.top - g.foot + 0.3, 8, 1, true).translate(g.x, (g.top + g.foot - 0.3) / 2, g.z), DECK_COL]);
+        out.push([new THREE.CylinderGeometry(PILLAR_R, PILLAR_R * 1.15, g.top - g.foot + 0.3, 8, 1, true).translate(g.x, (g.top + g.foot - 0.3) / 2, g.z), DECK_COL, MAT.PILLAR_CONCRETE]);
       }
       // Pier cap: 0.6 m deep, flush under the slab, across the bent.
       const capTop = Math.max(...legs.map((g) => g.top)) + 0.6;
       const span = lats.length > 1 ? Math.abs(lats[0]! - lats[1]!) : 0;
       const capGeo = box(span + PILLAR_R * 2 + 1.2, 0.6, 1.3, 0, 0, 0).rotateY(yaw).translate(pt.x, capTop - 0.3, pt.z);
-      out.push([capGeo, CONCRETE_DARK]);
+      out.push([capGeo, CONCRETE_DARK, MAT.PILLAR_CONCRETE]);
     }
   }
   return out;
@@ -211,7 +212,7 @@ export function addTunnels(m: Mesher, lights: Mesher, p: TrackPath, secs: readon
         const B = shape(k2, outer);
         for (let j = 0; j < P - 1; j++) {
           const side = j === 0 || j === P - 2;
-          stripJ(m, fa, A, fb, B, j, outer ? CONCRETE_DARK : side ? TUNNEL_TILE : TUNNEL_IN, TILE.concrete, j * 2);
+          stripJ(m, fa, A, fb, B, j, outer ? CONCRETE_DARK : side ? TUNNEL_TILE : TUNNEL_IN, TILE.concrete, j * 2, outer ? undefined : side ? MAT.TUNNEL_TILE : MAT.TUNNEL_LINING);
         }
       }
     }
@@ -234,8 +235,8 @@ export function addTunnels(m: Mesher, lights: Mesher, p: TrackPath, secs: readon
         const lift = (l: number, y: number, q: number) => (q === 0 || q === P - 1 ? [l + Math.sign(l) * wide, y] : [l + Math.sign(l) * wide * (Math.abs(l) / Math.max(1, Math.abs(O[0]!))), crown]);
         const head = [O[o0 * 2]!, O[o0 * 2 + 1]!, O[o1 * 2]!, O[o1 * 2 + 1]!, ...lift(O[o1 * 2]!, O[o1 * 2 + 1]!, o1), ...lift(O[o0 * 2]!, O[o0 * 2 + 1]!, o0)];
         for (const dir of [facing, -facing]) {
-          face(m, f, ring, dir, CONCRETE, TILE.concrete);
-          face(m, f, head, dir, CONCRETE, TILE.concrete);
+          face(m, f, ring, dir, CONCRETE, TILE.concrete, MAT.TUNNEL_PORTAL);
+          face(m, f, head, dir, CONCRETE, TILE.concrete, MAT.TUNNEL_PORTAL);
         }
       }
     }

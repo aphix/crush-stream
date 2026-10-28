@@ -4,7 +4,8 @@ import { GRAVITY } from "../kernel/constants.ts";
 import { store3f } from "../kernel/store.ts";
 import { BASIS_SIZE, cameraBasis, float32Of, writeBillboard } from "./fx-matrix.ts";
 import { landOn } from "../vehicle/loose-step.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { tagMaterial } from "../vehicle/material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
 
 const _pv = new THREE.Vector3();
 const STILL = new THREE.Vector3();
@@ -79,7 +80,7 @@ export class DebrisSystem {
       color: 0x6a6e74,
       metalness: 0.72,
       roughness: 0.4,
-    }), MATERIAL.PAINTED_METAL);
+    }), MAT.DEBRIS_STEEL);
     this.mesh = new THREE.InstancedMesh(geo, mat, n);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.mesh.castShadow = true;

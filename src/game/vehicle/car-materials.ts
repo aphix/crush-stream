@@ -2,22 +2,24 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { once } from "../kernel/scalar.ts";
+import { MAT } from "../kernel/material-ids.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { applyFinish, glslFloat } from "./car-finish.ts";
 import { BARE_METAL_FRAGMENT, BARE_METAL_VERTEX } from "./bare-metal.ts";
 import { CANDY_COAT_GLSL, CANDY_COLOR_GLSL, CANDY_FILM, CANDY_FILM_GLSL, CANDY_METALNESS_GLSL, CANDY_PARS_GLSL, CANDY_ROUGHNESS_GLSL, CANDY_STRENGTH, CANDY_TIER } from "./car-candy.ts";
-import { FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE } from "./constants.ts";
+import { FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE, PRIMER_MATERIAL } from "./constants.ts";
 import { CAR_MATERIAL_ENV_GLSL, MATERIAL_STRENGTH, MATERIAL_STRENGTH_GLSL } from "./material-class.ts";
 import type { BodySource } from "./car-mesh.ts";
 import type { BodyStyle } from "./car-variants.ts";
+import { carTone, type Tone } from "./car-tones.ts";
 
 /** The shared car textures and materials (paint, tone grid, glass, crack map, lamp mask) and the multi-tone part helpers; the small parts built on them are in `part-geometry.ts`. */
 
 /**
- * What the paint's colour (sRGB 0xf2f2f0, linear here) and roughness multiply in where its two 1 x 1 maps were sampled, those maps'
+ * What the paint's colour (`CAR_PAINT`'s tone, linear here) and roughness multiply in where its two 1 x 1 maps were sampled, those maps'
  * texels: every car's paint stays what it was, and no paint pixel fetches a texture for a constant.
  */
-export const PAINT_COLOR_TONE = new THREE.Color(0xf2f2f0);
+export const PAINT_COLOR_TONE = new THREE.Color(carTone(MAT.CAR_PAINT)[0]);
 const PAINT_ROUGHNESS_TONE = 0x8a / 0xff;
 
 /**
@@ -91,6 +93,7 @@ function withPrimer<T extends THREE.MeshStandardMaterial>(m: T): T {
       .replace("#include <lights_fragment_end>", `#include <lights_fragment_end>${CANDY_FILM_GLSL}`);
   };
   m.customProgramCacheKey = () => "car-paint-primer";
+  m.userData.materialIds = PRIMER_MATERIAL;
   return m;
 }
 
@@ -184,17 +187,21 @@ const trimByKey = new Map<string, THREE.MeshStandardMaterial>();
  * Trim finishes: the accent trim's satin, chrome, black plastic, gloss black (blacked-out trim and black mirror housings: piano black,
  * crisp highlights), and a painted bumper's (the paint's metalness and roughness, no clear coat).
  */
+/** The material id that draws each finish, whose base tone gives its roughness and metalness (`trimMaterial` tags its material with it). */
+const FINISH_MATERIAL = { satin: MAT.BUMPER_SATIN, chrome: MAT.BUMPER_CHROME, plastic: MAT.BUMPER_BLACK, gloss: MAT.MIRROR_HOUSING_GLOSS_BLACK, paint: MAT.BUMPER_PAINTED } as const;
+const finishOf = ([, roughness, metalness]: Tone) => ({ metalness, roughness });
 export const TRIM_FINISH = {
+  // The satin trim wears the car's accent colour, so no base tone carries its finish.
   satin: { metalness: 0.55, roughness: 0.38 },
-  chrome: { metalness: 0.95, roughness: 0.16 },
-  plastic: { metalness: 0.05, roughness: 0.6 },
-  gloss: { metalness: 0.05, roughness: 0.14 },
-  paint: { metalness: 0.2, roughness: 0.42 },
-} as const;
+  chrome: finishOf(carTone(FINISH_MATERIAL.chrome)),
+  plastic: finishOf(carTone(FINISH_MATERIAL.plastic)),
+  gloss: finishOf(carTone(FINISH_MATERIAL.gloss)),
+  paint: finishOf(carTone(FINISH_MATERIAL.paint)),
+};
 
 /** Black plastic and chrome (sRGB): a black or chrome bumper or mirror, and the fittings drawn in any bumper (`FITTING_TONE`). */
-export const TRIM_BLACK = 0x121316;
-export const TRIM_CHROME = 0xd2d6db;
+export const TRIM_BLACK = carTone(MAT.BUMPER_BLACK)[0];
+export const TRIM_CHROME = carTone(MAT.BUMPER_CHROME)[0];
 
 /** A `vec3` literal of sRGB `hex` in the shader's linear space. */
 function glslTone(hex: number): string {
@@ -202,8 +209,8 @@ function glslTone(hex: number): string {
   return `vec3(${c.r}, ${c.g}, ${c.b})`;
 }
 
-/** A `CABIN_TRIM` vertex's tone [sRGB, roughness, metalness]: the drawn cabin's own matte trim (`interior-geometry.ts`). */
-const CABIN_TONE = [0x16191d, 0.85, 0.05] as const;
+/** A `CABIN_TRIM` vertex's tone [sRGB, roughness, metalness]: the drawn cabin's own matte trim. */
+const CABIN_TONE = carTone(MAT.CAR_CABIN_TRIM);
 
 /**
  * A `BLACKOUT` vertex (primer -1) on the paint: the black trim's colour, as smooth as gloss trim, under the paint's own clear coat: the
@@ -224,6 +231,9 @@ const GLOSS_BLACK = {
   clearcoat: "#ifdef USE_CLEARCOAT\nmaterial.clearcoat *= (1.0 - cabinW) * (1.0 - matteW);\n#endif",
 };
 
+/** The material id of each `FITTING_TONE`: `withFittings` tags the trim material with it. */
+const FITTING_MATERIAL = [[FITTING_TONE.black, MAT.FITTING_BLACK], [FITTING_TONE.chrome, MAT.EXHAUST_TIP]] as const;
+
 /** Fittings drawn in the trim's one mesh: a `FITTING_ATTRIBUTE` vertex (0 on a mesh without one) of a `FITTING_TONE` takes that tone's colour and finish. Wraps `capHighlights`' compile hook. */
 function withFittings<T extends THREE.MeshStandardMaterial>(m: T): T {
   const cap = m.onBeforeCompile;
@@ -242,6 +252,7 @@ function withFittings<T extends THREE.MeshStandardMaterial>(m: T): T {
       .replace("#include <metalnessmap_fragment>", `#include <metalnessmap_fragment>\nif (${fitted}) metalnessFactor = ${chrome} ? ${shine.metalness} : ${plastic.metalness};`);
   };
   m.customProgramCacheKey = () => "car-trim-fittings";
+  m.userData.materialIds = FITTING_MATERIAL;
   return m;
 }
 
@@ -255,6 +266,7 @@ export function trimMaterial(color: number, finish: keyof typeof TRIM_FINISH = "
   if (m === undefined) {
     m = classed(applyFinish(withFittings(capHighlights(new THREE.MeshStandardMaterial({ color, ...TRIM_FINISH[finish] }))), "trim"), DRAW_CLASS.trim);
     m.userData.shared = true;
+    m.userData.materialId = FINISH_MATERIAL[finish];
     trimByKey.set(key, m);
   }
   return m;
@@ -377,6 +389,9 @@ const PRIVACY_OPACITY = 0.93;
 /** A matte privacy pane's roughness: the reference SUV's quarter glass reads a dark blur, not the sky's sharp mirror. */
 const MATTE_GLASS_ROUGHNESS = 0.4;
 
+/** The material id of a glass pane (`base`) and of each `GLASS_ATTRIBUTE` tone: `withGlassTone` tags the pane material with it. */
+const GLASS_MATERIAL = { base: MAT.GLASS_CLEAR, frit: MAT.GLASS_FRIT, privacy: MAT.GLASS_PRIVACY, matte: MAT.GLASS_MATTE } as const;
+
 /** Per-vertex glass tone (`GLASS_ATTRIBUTE`): x 1 black frit, y 1 privacy (darker by `PRIVACY_SHADE`, opacity floored before the crack map multiplies alpha, as `material.opacity` was), y `MATTE_PRIVACY` matte privacy (rougher too); 0 on a mesh without one. */
 function withGlassTone<T extends THREE.MeshStandardMaterial>(m: T): T {
   m.onBeforeCompile = (shader) => {
@@ -395,6 +410,7 @@ function withGlassTone<T extends THREE.MeshStandardMaterial>(m: T): T {
       );
   };
   m.customProgramCacheKey = () => "car-glass-tone";
+  m.userData.materialIds = GLASS_MATERIAL;
   return m;
 }
 
@@ -472,8 +488,8 @@ const LAMP_HOUSING: Readonly<Record<LampKind, readonly [number, number]>> = { he
 export function makeLampUnit(kind: LampKind): THREE.BufferGeometry {
   const head = kind === "head";
   const [w, h] = LAMP_HOUSING[kind];
-  const housing = toned(new THREE.BoxGeometry(w, h, 0.05), head ? 0x1a1c20 : 0x15171a, 0, 0);
-  const lens = toned(new THREE.BoxGeometry(w - 0.04, h * 0.72, 0.03), head ? 0xf4f1e8 : 0xc4121c, 0, 0);
+  const housing = toned(new THREE.BoxGeometry(w, h, 0.05), ...carTone(head ? MAT.LAMP_UNIT_HOUSING_HEAD : MAT.LAMP_UNIT_HOUSING_TAIL));
+  const lens = toned(new THREE.BoxGeometry(w - 0.04, h * 0.72, 0.03), ...carTone(head ? MAT.LAMP_LENS_HEAD : MAT.LAMP_LENS_TAIL));
   (housing.getAttribute("uv").array as Float32Array).fill(0.25);
   (lens.getAttribute("uv").array as Float32Array).fill(0.75);
   return mergeToned([housing.translate(0, 0, 0.015), lens.translate(0, 0, 0.03)], "lamp unit");
@@ -803,14 +819,15 @@ function flatPart(g: THREE.BufferGeometry, tone: readonly [number, number, numbe
 }
 
 /** The tyre's tone: its vertices are the wheel's only ones this colour. */
-export const RUBBER = [0x121214, 0.92, 0.05] as const;
-const ALLOY = [0xc9cdd4, 0.28, 0.92] as const;
-const DARK_DISC = [0x1c1d20, 0.7, 0.3] as const;
-const HUB = [0x8a909a, 0.35, 0.8] as const;
+export const RUBBER = carTone(MAT.TYRE);
+const LUG = carTone(MAT.TYRE_LUG);
+const ALLOY = carTone(MAT.RIM_ALLOY);
+const DARK_DISC = carTone(MAT.RIM_DISC);
+const HUB = carTone(MAT.RIM_HUB);
 /** A black-painted centre (the pickup's alloy). */
-const DARK_HUB = [0x232428, 0.55, 0.45] as const;
+const DARK_HUB = carTone(MAT.RIM_HUB_PAINTED);
 /** A polished rim lip (muscle, monster). */
-const CHROME = [0xeef0f3, 0.12, 1] as const;
+const CHROME = carTone(MAT.RIM_LIP_CHROME);
 /** The muscle car's mag centre cap (reference: a big grey dome): 7.8 cm in radius, standing 4 cm over the dish ([r, x] m, lathed). */
 const MAG_CAP = [[0, -0.1], [0.05, -0.092], [0.078, -0.07], [0.078, 0.07], [0.05, 0.092], [0, 0.1]] as const;
 
@@ -920,7 +937,7 @@ function monsterTyre(): THREE.BufferGeometry[] {
   for (let k2 = 0; k2 < MONSTER_LUGS; k2++) {
     for (const s of [1, -1]) {
       const lug = new THREE.BoxGeometry(...LUG_SIZE).rotateY(s * LUG_CHEVRON).translate((s * LUG_SIZE[0]) / 2, ROAD_TYRE[1] - LUG_SIZE[1] / 2, 0);
-      parts.push(smeared(flatPart(lug.rotateX(((k2 + (s > 0 ? 0 : 0.5)) * 2 * Math.PI) / MONSTER_LUGS), RUBBER), 0, [bead, ROAD_TYRE[1]]));
+      parts.push(smeared(flatPart(lug.rotateX(((k2 + (s > 0 ? 0 : 0.5)) * 2 * Math.PI) / MONSTER_LUGS), LUG), 0, [bead, ROAD_TYRE[1]]));
     }
   }
   return parts;
@@ -965,7 +982,7 @@ export function makeWheelGeometry(design: WheelDesign = "five"): THREE.BufferGeo
 /** Which of `TYRE_PROFILE`'s nine points the far wheel keeps: bead, shoulder, crown, shoulder, bead. */
 const FAR_TYRE_POINTS = [0, 2, 4, 6, 8] as const;
 /** The far wheel's disc where the near one has spokes over a dark disc: their average at rest, and the blur tone once smeared. */
-const FAR_DISC = [0x4a4d53, 0.5, 0.6] as const;
+const FAR_DISC = carTone(MAT.RIM_DISC_FAR);
 
 /**
  * The wheel of a car the distance detail has cut to its body (`present/car-detail.ts`): the same tyre silhouette and width

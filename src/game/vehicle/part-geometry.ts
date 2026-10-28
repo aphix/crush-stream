@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import { once } from "../kernel/scalar.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
+import { MAT } from "../kernel/material-ids.ts";
 import { INTERIOR_MESH, SMALL_PART_SEAT, UNDERBODY_SEAT } from "./constants.ts";
 import { loosePartsMaterial, mergeToned, PAINTED_ATTRIBUTE, toned } from "./car-materials.ts";
+import { carTone } from "./car-tones.ts";
 import { cabinGeometry, crashBarGeometry, doorCardGeometry, engineBayGeometry, frontSeatGeometry, ladderFrameGeometry, rearSeatGeometry, solidAxleGeometry, wheelGeometry } from "./interior-geometry.ts";
 
 /** A car's static parts, in `PartBatch.meshes` order: the cabin shell, door cards, mirrors, grille, tail trim, then the interior kit and the bay set (`CarCabin`), then a lifted truck's undercarriage (`CarUnderbody`), then the wipers on the windshield. */
@@ -41,11 +43,11 @@ export const MIRROR_REACH = 0.21;
 export const GRILLE_SEAT = { y: 0.1, z: 0.06 } as const;
 
 function mirror(sign: number): THREE.BufferGeometry {
-  const arm = toned(new THREE.BoxGeometry(0.12, 0.04, 0.05), 0x2a2c32, 0.5, 0.05);
+  const arm = toned(new THREE.BoxGeometry(0.12, 0.04, 0.05), ...carTone(MAT.PLATFORM_MIRROR_ARM));
   arm.translate(sign * (MIRROR_ROOT + 0.06), 0, 0);
-  const cap = toned(new THREE.BoxGeometry(0.1, 0.08, 0.16), 0x1c1e22, 0.35, 0.1);
+  const cap = toned(new THREE.BoxGeometry(0.1, 0.08, 0.16), ...carTone(MAT.PLATFORM_MIRROR_CAP));
   cap.translate(sign * 0.16, 0.01, 0);
-  const glass = toned(new THREE.PlaneGeometry(0.08, 0.06), 0x9aa8b4, 0.08, 0.7);
+  const glass = toned(new THREE.PlaneGeometry(0.08, 0.06), ...carTone(MAT.MIRROR_GLASS));
   glass.rotateY(sign * Math.PI * 0.5);
   glass.translate(sign * 0.212, 0.01, 0);
   return mergeToned([arm, cap, glass], PART_FAMILY.mirror);
@@ -53,7 +55,7 @@ function mirror(sign: number): THREE.BufferGeometry {
 
 /** The platform grille in front-bumper space; the headlamps sit on the body (`makeLampUnit`). A style's own grille: `part-variants.ts`. */
 function grille(): THREE.BufferGeometry {
-  return toned(new THREE.BoxGeometry(0.72, 0.16, 0.06, 4, 2, 1), 0x1a1c20, 0.55, 0.05);
+  return toned(new THREE.BoxGeometry(0.72, 0.16, 0.06, 4, 2, 1), ...carTone(MAT.PLATFORM_GRILLE));
 }
 
 /** The plate's centre over the rear bumper's seat (m) where the bumper sets no `plate` height. */
@@ -63,12 +65,12 @@ export const PLATE_RISE = 0.03;
  * The bumper's seat is 0.05 m inside the body's tail station, so the plate stands 8 cm behind the seat, 2 cm proud of the tail face.
  */
 function tailTrim(): THREE.BufferGeometry {
-  return toned(new THREE.BoxGeometry(0.36, 0.11, 0.02), 0xd8d4cc, 0.6, 0.1).translate(0, PLATE_RISE, -0.08);
+  return toned(new THREE.BoxGeometry(0.36, 0.11, 0.02), ...carTone(MAT.LICENCE_PLATE)).translate(0, PLATE_RISE, -0.08);
 }
 
 /** The platform wipers: two black blades 0.55 m long side by side at the seat; every style draws its own, laid on its windshield (`styleWipers`). */
 function wipers(): THREE.BufferGeometry {
-  return mergeToned([-0.3, 0.3].map((x) => toned(new THREE.BoxGeometry(0.55, 0.012, 0.022), 0x121316, 0.6, 0.05).translate(x, 0, 0)), "platform wipers");
+  return mergeToned([-0.3, 0.3].map((x) => toned(new THREE.BoxGeometry(0.55, 0.012, 0.022), ...carTone(MAT.WIPER_BLADE)).translate(x, 0, 0)), "platform wipers");
 }
 
 /** Built once, shared by every car; a car's dispose skips it (engine teardown frees only its GPU copy). */

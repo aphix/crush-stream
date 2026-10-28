@@ -2,9 +2,10 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
-import { MATERIAL, MATERIAL_WET, tagMaterial, type MaterialClass } from "../vehicle/material-class.ts";
+import { MATERIAL_WET, tagMaterial } from "../vehicle/material-class.ts";
+import { MAT, MATERIALS, type MaterialId } from "../kernel/material-ids.ts";
 import { SURFACE_IDS } from "../world/catalog.ts";
-import { surfaceClass } from "./track-mesh.ts";
+import { cellMaterial } from "./track-mesh.ts";
 import { WorldStage } from "./engine-world.ts";
 import { GarageArt } from "./garage-art.ts";
 import { ShowcaseArt } from "./showcase-art.ts";
@@ -47,12 +48,13 @@ function upLine(fragment: string): { from: number; to: number } {
   return { from: Number(match[1]), to: Number(match[2]) };
 }
 
-/** What the shader's own text draws a `materialClass` surface of `roughness` with at wetness `wet` (0-1), its normal's up component `up`: the roughness it ends on and the share of the specular IBL it keeps. */
-function effective(fragment: string, materialClass: MaterialClass, roughness: number, wet: number, up = 1): { roughness: number; share: number } {
+/** What the shader's own text draws a `materialClass` surface of `roughness` with at wetness `wet` (0-1), its normal's up component `up`: the roughness it ends on and the share of the specular IBL it keeps. The tables are read at the id's shading family. */
+function effective(fragment: string, materialClass: MaterialId, roughness: number, wet: number, up = 1): { roughness: number; share: number } {
+  const family = MATERIALS[materialClass][1];
   const facing = step(upLine(fragment).from, upLine(fragment).to, up);
-  const wetK = wet * tableOf(fragment, "MATERIAL_WET")[materialClass]! * facing;
+  const wetK = wet * tableOf(fragment, "MATERIAL_WET")[family]! * facing;
   const final = roughness + (Math.min(roughness, constantOf(fragment, "WET_ROUGHNESS")) - roughness) * wetK;
-  const share = tableOf(fragment, "MATERIAL_ENV")[materialClass]!;
+  const share = tableOf(fragment, "MATERIAL_ENV")[family]!;
   const { from, to } = glossLine(fragment);
   const glossy = share + (1 - share) * (1 - step(from, to, final));
   return { roughness: final, share: glossy + (1 - glossy) * wetK };
@@ -65,67 +67,68 @@ function assertSame(actual: { roughness: number; share: number }, expected: { ro
 }
 
 /** A class's fragment program at a typical dry road roughness. */
-const programOf = (materialClass: MaterialClass): string => compile(tagMaterial(new THREE.MeshStandardMaterial({ roughness: 0.9 }), materialClass)).fragmentShader;
+const programOf = (materialClass: MaterialId): string => compile(tagMaterial(new THREE.MeshStandardMaterial({ roughness: 0.9 }), materialClass)).fragmentShader;
 
 const DRY_ROAD_ROUGHNESS = 0.9;
 /** The dry roughness a class's share is tuned at: no lift from here up. */
 const TUNED_FROM = 0.8;
+const FAMILY_COUNT = 14;
 
 describe("given a world material tagged with a class", () => {
   it("when it compiles, then it reads the one shared wet uniform", () => {
-    const shader = compile(tagMaterial(new THREE.MeshStandardMaterial(), MATERIAL.ASPHALT));
+    const shader = compile(tagMaterial(new THREE.MeshStandardMaterial(), MAT.ASPHALT));
     assert.equal(shader.uniforms.materialWet, MATERIAL_WET, "the shared uniform object");
   });
 
   it("when every surface a terrain paints is read wet, then the class its cell is drawn in wets, a lawn as soil on a paved terrain", () => {
-    const fragment = programOf(MATERIAL.CONCRETE);
+    const fragment = programOf(MAT.CONCRETE);
     for (let index = 0; index < SURFACE_IDS.length; index++) {
-      const cell = surfaceClass(index);
+      const cell = MATERIALS[cellMaterial(index, index)]![1];
       assert.ok(tableOf(fragment, "MATERIAL_WET")[cell]! > 0, `${SURFACE_IDS[index]} is drawn in class ${cell}`);
     }
   });
 
   it("when wet soil and a lawn are read, then they keep a fifth of the sun's specular and only the sky's reflection comes back with the wetness", () => {
-    const fragment = programOf(MATERIAL.SOIL);
-    assert.ok(tableOf(fragment, "MATERIAL_DIRECT")[MATERIAL.SOIL]! <= 0.25, "soil's direct share");
-    assert.ok(effective(fragment, MATERIAL.SOIL, 1, 1).share > 0.8, "the sky's reflection is back");
+    const fragment = programOf(MAT.SOIL);
+    assert.ok(tableOf(fragment, "MATERIAL_DIRECT")[MAT.SOIL]! <= 0.25, "soil's direct share");
+    assert.ok(effective(fragment, MAT.SOIL, 1, 1).share > 0.8, "the sky's reflection is back");
   });
 
   it("when the classes that stay dry are read wet, then their roughness and reflection do not change", () => {
-    for (const materialClass of [MATERIAL.RUBBER, MATERIAL.WOOD, MATERIAL.FOLIAGE, MATERIAL.INTERIOR]) {
+    for (const materialClass of [MAT.RUBBER, MAT.WOOD, MAT.FOLIAGE, MAT.INTERIOR]) {
       const fragment = programOf(materialClass);
       assertSame(effective(fragment, materialClass, DRY_ROAD_ROUGHNESS, 1), effective(fragment, materialClass, DRY_ROAD_ROUGHNESS, 0), `class ${materialClass}`);
     }
   });
 
   it("when a class is dry and rough, then it keeps exactly its tuned share", () => {
-    for (const materialClass of Object.values(MATERIAL)) {
+    for (const materialClass of MATERIALS.slice(0, FAMILY_COUNT).map((_, id) => id)) {
       const fragment = programOf(materialClass);
       assert.equal(effective(fragment, materialClass, TUNED_FROM, 0).share, tableOf(fragment, "MATERIAL_ENV")[materialClass], `class ${materialClass}`);
     }
   });
 
   it("when a cut class is glossy and dry, then it keeps more of the reflection than the same class rough", () => {
-    const fragment = programOf(MATERIAL.PLASTIC);
-    const rough = effective(fragment, MATERIAL.PLASTIC, DRY_ROAD_ROUGHNESS, 0).share;
-    assert.ok(effective(fragment, MATERIAL.PLASTIC, 0.25, 0).share > rough + 0.3, `rough ${rough}`);
+    const fragment = programOf(MAT.PLASTIC);
+    const rough = effective(fragment, MAT.PLASTIC, DRY_ROAD_ROUGHNESS, 0).share;
+    assert.ok(effective(fragment, MAT.PLASTIC, 0.25, 0).share > rough + 0.3, `rough ${rough}`);
   });
 
   it("when the albedo darkening is read, then wet soil loses some and wet asphalt none", () => {
-    const dark = tableOf(programOf(MATERIAL.SOIL), "MATERIAL_DARK");
-    assert.ok(dark[MATERIAL.SOIL]! > 0.2, "soil");
-    assert.equal(dark[MATERIAL.ASPHALT], 0, "asphalt");
+    const dark = tableOf(programOf(MAT.SOIL), "MATERIAL_DARK");
+    assert.ok(dark[MAT.SOIL]! > 0.2, "soil");
+    assert.equal(dark[MAT.ASPHALT], 0, "asphalt");
   });
 
   const pavements = [
-    { it: "asphalt", materialClass: MATERIAL.ASPHALT, expectedMinShare: 0.99 },
-    { it: "concrete", materialClass: MATERIAL.CONCRETE, expectedMinShare: 0.8 },
-    { it: "stone", materialClass: MATERIAL.STONE, expectedMinShare: 0.8 },
-    { it: "soil", materialClass: MATERIAL.SOIL, expectedMinShare: 0.8 },
+    { it: "asphalt", materialClass: MAT.ASPHALT, expectedMinShare: 0.99 },
+    { it: "concrete", materialClass: MAT.CONCRETE, expectedMinShare: 0.8 },
+    { it: "stone", materialClass: MAT.STONE, expectedMinShare: 0.8 },
+    { it: "soil", materialClass: MAT.SOIL, expectedMinShare: 0.8 },
   ] as const;
 
   it("when a wall faces sideways, then Wet leaves it dry whatever its class", () => {
-    for (const materialClass of [MATERIAL.ASPHALT, MATERIAL.CONCRETE, MATERIAL.STONE]) {
+    for (const materialClass of [MAT.ASPHALT, MAT.CONCRETE, MAT.STONE]) {
       const fragment = programOf(materialClass);
       assertSame(effective(fragment, materialClass, DRY_ROAD_ROUGHNESS, 1, 0), effective(fragment, materialClass, DRY_ROAD_ROUGHNESS, 0, 0), `class ${materialClass}`);
     }
@@ -146,7 +149,7 @@ describe("given a world material tagged with a class", () => {
 function dryAndWet(material: THREE.MeshStandardMaterial) {
   const shader = compile(material);
   assert.equal(shader.uniforms.materialWet, MATERIAL_WET, "reads the shared wet object");
-  const materialClass = material.userData.materialClass as MaterialClass;
+  const materialClass = material.userData.materialClass as MaterialId;
   const wetShare = Number(shader.uniforms.materialWetShare?.value);
   return { dry: effective(shader.fragmentShader, materialClass, material.roughness, 0), wet: effective(shader.fragmentShader, materialClass, material.roughness, wetShare) };
 }

@@ -3,7 +3,8 @@ import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { applyMarkMap } from "./engine-marks.ts";
 import { groundMaterial, groundMesh } from "../scenes/ground-stack.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
-import { MATERIAL, MATERIAL_WET, tagMaterial } from "../vehicle/material-class.ts";
+import { MATERIAL_WET, tagMaterial } from "../vehicle/material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { rowElevation, SKY_LOOKS, SkyDome, skyDetailFor, type SkyDetail, type SkyMode } from "./sky-dome.ts";
 import { SANDBOX_SKY } from "./sky-procedural.ts";
@@ -80,18 +81,18 @@ export function makeJerseyBarrier(): THREE.Group {
     roughness: 0.94,
     metalness: 0.05,
     map: concreteTex,
-  }), MATERIAL.CONCRETE);
+  }), MAT.JERSEY_CONCRETE);
   const weathered = tagMaterial(new THREE.MeshStandardMaterial({
     color: 0xaea99d,
     roughness: 0.96,
     metalness: 0.04,
     map: concreteTex,
-  }), MATERIAL.CONCRETE);
+  }), MAT.JERSEY_CONCRETE);
   const jointMat = tagMaterial(new THREE.MeshStandardMaterial({
     color: 0x5c5852,
     roughness: 0.8,
     metalness: 0.2,
-  }), MATERIAL.CONCRETE);
+  }), MAT.JERSEY_PIN);
 
   const segLen = 1.78;
   for (const [zOff, mat] of [
@@ -125,7 +126,7 @@ const lampHead = tagMaterial(new THREE.MeshStandardMaterial({
   emissive: 0xf0e6c8,
   emissiveIntensity: 1.4,
   roughness: 0.4,
-}), MATERIAL.GLASS);
+}), MAT.LAMP_LENS);
 /** Fake light pool under each lamp: an additive ground decal, drawn only at night. */
 const lampPool = groundMaterial(
   new THREE.MeshBasicMaterial({
@@ -143,7 +144,7 @@ export function makeLamp(withPool = true): THREE.Group {
   const g = new THREE.Group();
   const pole = new THREE.Mesh(
     new THREE.CylinderGeometry(0.08, 0.1, 5.2, 8),
-    tagMaterial(new THREE.MeshStandardMaterial({ color: 0x2a2c32, roughness: 0.7, metalness: 0.4 }), MATERIAL.PAINTED_METAL),
+    tagMaterial(new THREE.MeshStandardMaterial({ color: 0x2a2c32, roughness: 0.7, metalness: 0.4 }), MAT.LAMP_POLE),
   );
   pole.position.y = 2.6;
   pole.castShadow = true;
@@ -343,7 +344,7 @@ export class WorldStage {
       roughness: GROUND_ROUGHNESS,
       metalness: GROUND_METALNESS,
       map: tagSurface(makeAsphalt(), "asphalt", STAGE_DIAMETER),
-    }), MATERIAL.ASPHALT);
+    }), MAT.STAGE_ASPHALT);
     applyMarkMap(this.groundMat);
     this.ground = groundMesh(new THREE.CircleGeometry(STAGE_DIAMETER / 2, 64), this.groundMat, "terrain");
     this.ground.rotation.x = -Math.PI / 2;

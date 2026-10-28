@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { clamp } from "../kernel/scalar.ts";
+import { MAT } from "../kernel/material-ids.ts";
 import { SURFACE_IDS, type SurfaceId } from "../world/catalog.ts";
 import { TILE } from "./prefabs.ts";
 import { CELL as NODE, type Track, type TrackGround, type TrackPath } from "../world/track.ts";
@@ -8,7 +9,7 @@ import { sampleStep, surfY } from "../world/track-sections.ts";
 import type { GroundLevel } from "../scenes/ground-stack.ts";
 import {
   BLACK, BLOCK, CHEQUER, FLAT_TOL, KERB_CURV, KERB_FILL, KERB_LIFT, KERB_WIDTH, MARK_LIFT, Mesher, PAVED,
-  RED, ROAD_LIFT, ROAD_ON_TERRAIN_SHADE, RoadIndex, sampleAt, SKIRT_RADIUS, surfaceClass, surfaceHex, texClass, WHITE,
+  RED, ROAD_LIFT, ROAD_ON_TERRAIN_SHADE, RoadIndex, sampleAt, SKIRT_RADIUS, cellMaterial, surfaceHex, texClass, WHITE,
 } from "./track-mesh.ts";
 
 /** How far (m) past the farthest scatter the terrain extends beyond the track's bounds. */
@@ -318,7 +319,7 @@ function mergeFlatCells(g: TerrainGrid, kinds: Uint8Array, colours: Uint8Array, 
 }
 
 function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m: Mesher; chunks: TerrainChunks } {
-  const m = new Mesher(true);
+  const m = new Mesher(0);
   const g = sampleTerrain(track, ground, index);
   const { x0, z0, bx, bz, per, nx, terrain, tile, h, col } = g;
   const nz = bz * per + 1;
@@ -444,12 +445,12 @@ function buildTerrain(track: Track, ground: TrackGround, index: RoadIndex): { m:
     const z = z0 + j2 * NODE;
     const corner = (i2 & 1) === 0 && (j2 & 1) === 0;
     const surface = colourAt(colours, i2, j2);
-    const id = out.v(x, corner ? pointY(kinds, i2 >> 1, j2 >> 1) : halfY(kinds, fine, i2, j2), z, surfaceHex(surface), x / tile, z / tile, 1, surfaceClass(surface));
+    const id = out.v(x, corner ? pointY(kinds, i2 >> 1, j2 >> 1) : halfY(kinds, fine, i2, j2), z, surfaceHex(surface), x / tile, z / tile, 1, cellMaterial(surface, terrain));
     ground.normalAt(x, z, n, -Infinity);
     out.normal(id, n.x, n.y, n.z);
     return id;
   };
-  const coarse = new Mesher(true);
+  const coarse = new Mesher(0);
   const rimColours = Uint16Array.from(col, (colour, k) => colour | (farCol[k]! << 8));
   const nearMerged = mergeFlatCells(g, kind, col, rimColours, g.fine);
   const farMerged = mergeFlatCells(g, farKind, farCol, rimColours, farFine);
@@ -623,7 +624,7 @@ function addSkirt(m: Mesher, ground: TrackGround, x0: number, z0: number, bx: nu
       const a = (s / seg) * Math.PI * 2;
       const x = cx + Math.sin(a) * rad;
       const z = cz + Math.cos(a) * rad;
-      m.v(x, ground.base(x, z) - 0.25, z, surfaceHex(surface), x / tile, z / tile, 1, surfaceClass(surface));
+      m.v(x, ground.base(x, z) - 0.25, z, surfaceHex(surface), x / tile, z / tile, 1, cellMaterial(surface, surface));
     }
   }
   for (let r = 0; r < rings; r++) {
@@ -889,13 +890,13 @@ export function buildGroundLayers(track: Track, ground: TrackGround, index: Road
     const surface = SURFACE_IDS[r.surface]!;
     out.push({ kind: r.kind, surface, level: r.deck ? "deck" : r.kind === "road" ? surface : "runoff", m: r.m, smooth: true, chunks: null });
   }
-  const marks = new Mesher();
-  const deckMarks = new Mesher();
+  const marks = new Mesher(MAT.ROAD_MARKING);
+  const deckMarks = new Mesher(MAT.ROAD_MARKING);
   for (const [i, p] of paths.entries()) addMarkings(marks, deckMarks, i, new RibbonSurface(p, secs[i]!, ground), secs[i]!, index);
   out.push({ kind: "marking", surface: null, level: "marking", m: marks, smooth: true, chunks: null });
   if (!deckMarks.empty) out.push({ kind: "marking", surface: null, level: "deck", m: deckMarks, smooth: true, chunks: null });
-  const kerbs = new Mesher();
-  const deckKerbs = new Mesher();
+  const kerbs = new Mesher(MAT.KERB_PAINT);
+  const deckKerbs = new Mesher(MAT.KERB_PAINT);
   addKerbs(kerbs, deckKerbs, new RibbonSurface(paths[0]!, secs[0]!, ground), index);
   if (!kerbs.empty) out.push({ kind: "kerb", surface: null, level: "kerb", m: kerbs, smooth: true, chunks: null });
   if (!deckKerbs.empty) out.push({ kind: "kerb", surface: null, level: "deck", m: deckKerbs, smooth: true, chunks: null });

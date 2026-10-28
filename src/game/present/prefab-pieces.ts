@@ -5,7 +5,8 @@
 import * as THREE from "three";
 import { detCos, detSin } from "../kernel/physics-core.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { MATERIAL, MATERIAL_ATTRIBUTE, type MaterialClass } from "../vehicle/material-class.ts";
+import { MATERIAL_ATTRIBUTE } from "../vehicle/material-class.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 
 /** Materials the prefabs draw with (shared with the track art where it says so). */
 export type PrefabMaterials = {
@@ -22,13 +23,8 @@ export type PrefabMaterials = {
 /** One drawable part of a prefab: its geometry, its material, and whether the material is shared with the track art. */
 export type PrefabPart = { geometry: THREE.BufferGeometry; material: THREE.Material; shared: boolean };
 
-/** A coloured piece: geometry already in prefab space, its sRGB colour and, where the prefab's material is shared by several classes, its `MaterialClass` (unset: the material's own). */
-export type Piece = [THREE.BufferGeometry, number, MaterialClass?];
-
-/** `pieces` all of one surface class. */
-export function classedPieces(pieces: readonly Piece[], materialClass: MaterialClass): Piece[] {
-  return pieces.map(([geometry, hex]): Piece => [geometry, hex, materialClass]);
-}
+/** A coloured piece: geometry already in prefab space, its sRGB colour and its `MaterialId` (unset: the material's own). */
+export type Piece = [THREE.BufferGeometry, number, MaterialId?];
 
 /** Merge pieces into one non-indexed geometry with position, normal, uv (zero when a piece has none), a per-vertex `color` and, when any piece names a class, `materialClass`. */
 export function painted(pieces: readonly Piece[]): THREE.BufferGeometry {
@@ -46,7 +42,7 @@ export function painted(pieces: readonly Piece[]): THREE.BufferGeometry {
     const c = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) col.toArray(c, i * 3);
     n.setAttribute("color", new THREE.BufferAttribute(c, 3));
-    if (classed) n.setAttribute(MATERIAL_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(count).fill(materialClass ?? MATERIAL.GENERIC), 1));
+    if (classed) n.setAttribute(MATERIAL_ATTRIBUTE, new THREE.BufferAttribute(new Float32Array(count).fill(materialClass ?? MAT.GENERIC), 1));
     return n;
   });
   const merged = mergeGeometries(parts, false);
@@ -82,12 +78,12 @@ function prism(outline: Outline, hole: Outline | null, y0: number, y1: number): 
 }
 
 /**
- * The stone of a pool, in `hex`: a floor from the ground to `floorTop` under all of `outer`, and the kerb between `outer` and `water`
+ * The stone of a pool, in `hex` and material `id`: a floor from the ground to `floorTop` under all of `outer`, and the kerb between `outer` and `water`
  * from the floor up to `kerbTop`. The water's footprint is then bare floor, well under the water's surface: stone filled up to the kerb
  * would put its top face a centimetre under the water's, and the depth buffer cannot tell the two apart from overhead (they flicker).
  */
-export function poolStone(outer: Outline, water: Outline, floorTop: number, kerbTop: number, hex: number): Piece[] {
-  return [[prism(outer, null, 0, floorTop), hex, MATERIAL.STONE], [prism(outer, water, floorTop, kerbTop), hex, MATERIAL.STONE]];
+export function poolStone(outer: Outline, water: Outline, floorTop: number, kerbTop: number, hex: number, id: MaterialId): Piece[] {
+  return [[prism(outer, null, 0, floorTop), hex, id], [prism(outer, water, floorTop, kerbTop), hex, id]];
 }
 
 export const MARBLE_SHADE = { low: 0xe9e2d3, high: 0xd9d0bf, wall: 0xece7dc, dome: 0xf3f1ea, trim: 0xc9c2b2 };

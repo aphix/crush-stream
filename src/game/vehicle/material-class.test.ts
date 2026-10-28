@@ -3,7 +3,8 @@ import { describe, it } from "node:test";
 import * as THREE from "three";
 import { makeGlassMaterial, makePaintMaterial, makeWheelGeometry, makeWheelMaterial, partsMaterial, trimMaterial } from "./car-materials.ts";
 import { CANDY_FILM, CANDY_STRENGTH, CANDY_TIER } from "./car-candy.ts";
-import { MATERIAL, MATERIAL_ATTRIBUTE, MATERIAL_DETAIL, MATERIAL_DETAIL_READY, MATERIAL_GRAIN, MATERIAL_STRENGTH, tagLike, tagMaterial } from "./material-class.ts";
+import { MATERIAL_ATTRIBUTE, MATERIAL_DETAIL, MATERIAL_DETAIL_READY, MATERIAL_GRAIN, MATERIAL_STRENGTH, tagLike, tagMaterial } from "./material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
 import { PART_KIND, partGeometry } from "./part-geometry.ts";
 
 /** The program build's input for `material`: three's physical template, includes unresolved, patched by the material's compile hook. */
@@ -14,6 +15,8 @@ function compile(material: THREE.Material) {
 }
 
 const countOf = (text: string, needle: string): number => text.split(needle).length - 1;
+
+const FAMILY_COUNT = 14;
 
 const CAR_ENV_LINE = "float carEnvShare = mix(mix(1.0, ";
 
@@ -119,15 +122,15 @@ function envTable(fragment: string): number[] {
 }
 
 describe("given a world material tagged with a class", () => {
-  const first = tagMaterial(new THREE.MeshStandardMaterial({ roughness: 0.9 }), MATERIAL.RUBBER);
-  const second = tagMaterial(new THREE.MeshStandardMaterial({ roughness: 0.9 }), MATERIAL.CONCRETE);
+  const first = tagMaterial(new THREE.MeshStandardMaterial({ roughness: 0.9 }), MAT.RUBBER);
+  const second = tagMaterial(new THREE.MeshStandardMaterial({ roughness: 0.9 }), MAT.CONCRETE);
   const shader = compile(first);
 
   it("when two materials of the same parameters carry different classes, then they share one program key and each names its own class", () => {
     assert.equal(first.customProgramCacheKey(), second.customProgramCacheKey(), "program key");
     assert.ok(first.customProgramCacheKey().endsWith("|surf"), "key suffix");
-    assert.equal(shader.uniforms.materialId!.value, MATERIAL.RUBBER, "first class");
-    assert.equal(compile(second).uniforms.materialId!.value, MATERIAL.CONCRETE, "second class");
+    assert.equal(shader.uniforms.materialId!.value, MAT.RUBBER, "first class");
+    assert.equal(compile(second).uniforms.materialId!.value, MAT.CONCRETE, "second class");
   });
 
   it("when it compiles, then its grain follows the one shared switch and yields to a normal map", () => {
@@ -142,25 +145,25 @@ describe("given a world material tagged with a class", () => {
     const bare = first.clone();
     const copy = tagLike(first.clone(), first);
     assert.equal("materialId" in compile(bare).uniforms, false, "bare clone");
-    assert.equal(compile(copy).uniforms.materialId!.value, MATERIAL.RUBBER, "tagged copy");
+    assert.equal(compile(copy).uniforms.materialId!.value, MAT.RUBBER, "tagged copy");
   });
 
   const table = envTable(shader.fragmentShader);
 
   it("when its table is read, then it has one row per class", () => {
-    assert.equal(table.length, Object.keys(MATERIAL).length, "rows");
+    assert.equal(table.length, FAMILY_COUNT, "rows");
   });
 
   for (const testCase of CLASS_BOUNDS) {
     it(`when the ${testCase.it} class is read from the table, then it keeps a share of the reflection no larger than ${testCase.expectedMaxShare}`, () => {
-      assert.ok(table[MATERIAL[testCase.materialClass]]! <= testCase.expectedMaxShare, `share ${table[MATERIAL[testCase.materialClass]]}`);
+      assert.ok(table[MAT[testCase.materialClass]]! <= testCase.expectedMaxShare, `share ${table[MAT[testCase.materialClass]]}`);
     });
   }
 
   it("when the glass, metal and untagged rows are read, then they keep the whole reflection", () => {
-    assert.equal(table[MATERIAL.GLASS], 1, "glass");
-    assert.equal(table[MATERIAL.METAL], 1, "metal");
-    assert.equal(table[MATERIAL.GENERIC], 1, "generic");
+    assert.equal(table[MAT.GLASS], 1, "glass");
+    assert.equal(table[MAT.METAL], 1, "metal");
+    assert.equal(table[MAT.GENERIC], 1, "generic");
   });
 });
 
@@ -182,7 +185,7 @@ describe("given the sliders' two shared strength uniforms", () => {
   }
 
   it("when a world material compiles, then its reflection share and its grain both go through the shared Material strength", () => {
-    const shader = compile(tagMaterial(new THREE.MeshStandardMaterial(), MATERIAL.CONCRETE));
+    const shader = compile(tagMaterial(new THREE.MeshStandardMaterial(), MAT.CONCRETE));
     assert.equal(shader.uniforms.materialStrength, MATERIAL_STRENGTH, "the shared uniform object");
     assert.equal(countOf(shader.fragmentShader, "uniform float materialStrength;"), 1, "declaration");
     assert.ok(shader.fragmentShader.includes("*= materialSpecular(worldEnvShare(MATERIAL_ENV[materialClass], roughnessFactor, materialWetK));"), "the scaled env line");
@@ -232,7 +235,7 @@ const detailCases = [
 ] as const;
 
 describe("given the worn-concrete detail map shared by the concrete family", () => {
-  const shader = compile(tagMaterial(new THREE.MeshStandardMaterial(), MATERIAL.CONCRETE));
+  const shader = compile(tagMaterial(new THREE.MeshStandardMaterial(), MAT.CONCRETE));
 
   it("when a world material compiles, then it reads the one shared map and switch objects, each declared once, and fetches the map once behind the switch", () => {
     assert.equal(shader.uniforms.materialDetailMap, MATERIAL_DETAIL, "shared map object");
@@ -257,19 +260,19 @@ describe("given the worn-concrete detail map shared by the concrete family", () 
 
   for (const testCase of detailCases) {
     it(`when the ${testCase.it} class is read from the detail table, then it takes the map: ${testCase.expectedOn === 1}`, () => {
-      assert.equal(glslTable(shader.fragmentShader, "MATERIAL_DETAIL_ON")[MATERIAL[testCase.materialClass]], testCase.expectedOn, "flag");
+      assert.equal(glslTable(shader.fragmentShader, "MATERIAL_DETAIL_ON")[MAT[testCase.materialClass]], testCase.expectedOn, "flag");
     });
   }
 
   it("when the asphalt row is read, then it takes the map darker than the concrete and never smoother (a smoother road mirrors more sky at grazing angles and comes out brighter)", () => {
     const tint = glslTable(shader.fragmentShader, "MATERIAL_TINT");
     const smooth = glslTable(shader.fragmentShader, "MATERIAL_SMOOTH");
-    assert.ok(tint[MATERIAL.ASPHALT]! < tint[MATERIAL.CONCRETE]!, "darker");
-    assert.ok(smooth[MATERIAL.ASPHALT]! >= 1, "no smoothing");
+    assert.ok(tint[MAT.ASPHALT]! < tint[MAT.CONCRETE]!, "darker");
+    assert.ok(smooth[MAT.ASPHALT]! >= 1, "no smoothing");
   });
 
   it("when a material has a normal map of its own, then the class's darkening is cut to a small share, and a plain one takes all of it", () => {
-    const mapped = compile(tagMaterial(new THREE.MeshStandardMaterial(), MATERIAL.ASPHALT)).fragmentShader;
+    const mapped = compile(tagMaterial(new THREE.MeshStandardMaterial(), MAT.ASPHALT)).fragmentShader;
     const guard = mapped.indexOf("#ifdef USE_NORMALMAP\nfloat materialTintBlend = materialBlend * ");
     const plain = mapped.indexOf("#else\nfloat materialTintBlend = materialBlend;");
     assert.ok(guard >= 0 && guard < plain, `scaled under the normal map ${guard}, whole otherwise ${plain}`);
@@ -279,7 +282,7 @@ describe("given the worn-concrete detail map shared by the concrete family", () 
 
   it("when the stone row is read, then it takes a weaker normal than the concrete", () => {
     const normal = glslTable(shader.fragmentShader, "MATERIAL_NORMAL");
-    assert.ok(normal[MATERIAL.STONE]! < normal[MATERIAL.CONCRETE]!, "weaker");
+    assert.ok(normal[MAT.STONE]! < normal[MAT.CONCRETE]!, "weaker");
   });
 });
 
@@ -290,26 +293,26 @@ const softGround = [
 const hardSurfaces = ["ASPHALT", "CONCRETE", "STONE", "GLASS", "METAL", "PAINTED_METAL", "GENERIC"] as const;
 
 describe("given the share of a light's specular each class keeps", () => {
-  const fragment = compile(tagMaterial(new THREE.MeshStandardMaterial(), MATERIAL.SOIL)).fragmentShader;
+  const fragment = compile(tagMaterial(new THREE.MeshStandardMaterial(), MAT.SOIL)).fragmentShader;
   const direct = glslTable(fragment, "MATERIAL_DIRECT");
   const relief = glslTable(fragment, "MATERIAL_RELIEF");
 
   for (const testCase of softGround) {
     it(`when the ${testCase.it} class is read, then a low sun keeps at most a quarter of its specular there, so a lawn does not shine like wet ground`, () => {
-      assert.ok(direct[MATERIAL[testCase.materialClass]]! <= 0.25, `share ${direct[MATERIAL[testCase.materialClass]]}`);
-      assert.ok(relief[MATERIAL[testCase.materialClass]]! < 1, "a photograph's relief is cut where the class is not the material's own");
+      assert.ok(direct[MAT[testCase.materialClass]]! <= 0.25, `share ${direct[MAT[testCase.materialClass]]}`);
+      assert.ok(relief[MAT[testCase.materialClass]]! < 1, "a photograph's relief is cut where the class is not the material's own");
     });
   }
 
   it("when the roads, walls, glass, metal and paint are read, then their lights' specular and photographs' relief are whole", () => {
     for (const name of hardSurfaces) {
-      assert.equal(direct[MATERIAL[name]], 1, `${name} specular`);
-      assert.equal(relief[MATERIAL[name]], 1, `${name} relief`);
+      assert.equal(direct[MAT[name]], 1, `${name} specular`);
+      assert.equal(relief[MAT[name]], 1, `${name} relief`);
     }
   });
 
   it("when its tables are read, then each has one row per class", () => {
-    assert.equal(direct.length, Object.keys(MATERIAL).length, "direct rows");
-    assert.equal(relief.length, Object.keys(MATERIAL).length, "relief rows");
+    assert.equal(direct.length, FAMILY_COUNT, "direct rows");
+    assert.equal(relief.length, FAMILY_COUNT, "relief rows");
   });
 });

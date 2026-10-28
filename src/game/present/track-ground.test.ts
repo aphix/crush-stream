@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import * as THREE from "three";
 import { CELL as GROUND_CELL, Track, type TrackGround } from "../world/track.ts";
 import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
-import { MATERIAL } from "../vehicle/material-class.ts";
+import { MAT, MATERIALS } from "../kernel/material-ids.ts";
+import { MATERIAL_ATTRIBUTE } from "../vehicle/material-class.ts";
 import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
-import { FLAT_TOL, type Mesher, RoadIndex, surfaceClass } from "./track-mesh.ts";
+import { cellMaterial, FLAT_TOL, Mesher, RoadIndex } from "./track-mesh.ts";
 import { sections } from "../world/track-sections.ts";
 import { buildGroundLayers, TerrainBatch } from "./track-ground.ts";
 
@@ -483,19 +484,54 @@ describe("given the National Mall, whose lawns are painted on a concrete terrain
   });
 
   for (const [name, mesher] of [["near", t.near], ["far", t.chunks.coarse]] as const) {
-    it(`when its ${name} mesh is built, then a vertex coloured as grass is classed as soil and one coloured as concrete as concrete, so the lawn takes no concrete's shine or detail`, () => {
-      assert.equal(mesher.cls?.length, mesher.pos.length / 3, "a class per vertex");
+    it(`when its ${name} mesh is built, then a vertex coloured as grass takes the grass patch's id and one coloured as concrete the concrete terrain's, so the lawn takes no concrete's shine or detail`, () => {
+      assert.equal(mesher.cls?.length, mesher.pos.length / 3, "an id per vertex");
       const seen = new Set<number>();
       for (let v = 0; v < mesher.pos.length / 3; v++) {
         const surface = surfaceAt(mesher, v);
         if (surface < 0) continue;
-        assert.equal(mesher.cls![v], surfaceClass(surface), `vertex ${v} of surface ${SURFACE_IDS[surface]}`);
+        assert.equal(mesher.cls![v], cellMaterial(surface, t.terrainSurface), `vertex ${v} of surface ${SURFACE_IDS[surface]}`);
         seen.add(surface);
       }
       assert.ok(seen.has(SURFACE_IDS.indexOf("grass")), "lawn vertices exist");
       assert.ok(seen.has(SURFACE_IDS.indexOf("concrete")), "concrete vertices exist");
-      assert.equal(surfaceClass(SURFACE_IDS.indexOf("grass")), MATERIAL.SOIL, "grass is soil");
-      assert.equal(surfaceClass(SURFACE_IDS.indexOf("concrete")), MATERIAL.CONCRETE, "concrete is concrete");
+      assert.equal(cellMaterial(SURFACE_IDS.indexOf("grass"), t.terrainSurface), MAT.PATCH_GRASS, "a lawn on the concrete terrain is a patch");
+      assert.equal(cellMaterial(SURFACE_IDS.indexOf("concrete"), t.terrainSurface), MAT.TERRAIN_CONCRETE, "the bare terrain is the terrain's own");
+      assert.equal(MATERIALS[cellMaterial(SURFACE_IDS.indexOf("grass"), t.terrainSurface)]![1], MAT.SOIL, "the lawn shades as soil");
+      assert.equal(MATERIALS[cellMaterial(SURFACE_IDS.indexOf("concrete"), t.terrainSurface)]![1], MAT.CONCRETE, "the paved ground shades as concrete");
     });
   }
+});
+
+describe("given the cobble surface, drawn as a ribbon and as terrain cells", () => {
+  it("when its ids are read, then the ribbon is ROAD_COBBLE shaded as soil (the detail texture) and a terrain cell is TERRAIN_COBBLE shaded as stone", () => {
+    assert.equal(SURFACES.cobble.ribbon, MAT.ROAD_COBBLE);
+    assert.equal(MATERIALS[SURFACES.cobble.ribbon]![1], MAT.SOIL);
+    assert.equal(MATERIALS[cellMaterial(SURFACE_IDS.indexOf("cobble"), SURFACE_IDS.indexOf("cobble"))]![1], MAT.STONE);
+  });
+});
+
+describe("given a classed mesher cut into draw cells", () => {
+  const triangle = (m: Mesher, id?: number) => {
+    m.v(0, 0, 0, 0xffffff);
+    m.v(1, 0, 0, 0xffffff);
+    m.v(0, 0, 1, 0xffffff, 0, 0, 1, id);
+    m.idx.push(0, 1, 2);
+  };
+
+  it("when it is cut, then every cell keeps each vertex's id, the mesher's default filling the ones that named none", () => {
+    const m = new Mesher(MAT.TRACK_WALL);
+    triangle(m, MAT.WALL_TOP_PAINT);
+    const [g] = m.cellGeometries();
+    const ids = g!.getAttribute(MATERIAL_ATTRIBUTE)!.array;
+    assert.equal(ids[0], MAT.TRACK_WALL);
+    assert.equal(ids[1], MAT.TRACK_WALL);
+    assert.equal(ids[2], MAT.WALL_TOP_PAINT);
+  });
+
+  it("when an unclassed mesher is cut, then its cells carry no id attribute", () => {
+    const m = new Mesher();
+    triangle(m);
+    assert.equal(m.cellGeometries()[0]!.getAttribute(MATERIAL_ATTRIBUTE), undefined);
+  });
 });

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { DISC_RADIUS, Ground, STEP_UP } from "../world/ground.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { tagMaterial } from "../vehicle/material-class.ts";
+import { MAT } from "../kernel/material-ids.ts";
 import type { JerseyBarrier } from "./engine-props.ts";
 import { BARRIER_HALF, BARRIER_TOP } from "../contact/sat.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
@@ -41,7 +42,7 @@ export class FleetRamps extends Ground {
     const shape = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(RAMP.len, 0), new THREE.Vector2(0, RAMP.top)]);
     const geo = new THREE.ExtrudeGeometry(shape, { depth: RAMP.halfW * 2, bevelEnabled: false });
     geo.translate(0, 0, -RAMP.halfW);
-    const mat = tagMaterial(new THREE.MeshStandardMaterial({ color: 0xb08850, roughness: 0.85, metalness: 0.02 }), MATERIAL.WOOD);
+    const mat = tagMaterial(new THREE.MeshStandardMaterial({ color: 0xb08850, roughness: 0.85, metalness: 0.02 }), MAT.FLEET_RAMP_WOOD);
     for (const side of [1, -1]) {
       const m = new THREE.Mesh(geo, mat);
       // Local +x (up the run, away from the slab) along side × axis; the slab's yaw is added in `place`.

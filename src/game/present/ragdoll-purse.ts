@@ -4,7 +4,8 @@ import type { Collider, RigidBody, World } from "@dimforge/rapier3d-simd";
 import { disable, type Rapier } from "../kernel/rapier.ts";
 import { activeGround } from "../world/ground.ts";
 import { mulberry32 } from "../world/placements.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { tagMaterial } from "../vehicle/material-class.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { AIR_ANGULAR, AIR_LINEAR, blendPose, readPose } from "./ragdoll-body.ts";
 
 /**
@@ -48,6 +49,12 @@ const ITEMS = [
 /** Gold clasp on the strap's top bar. */
 const CLASP = 0xd4a84b;
 const ITEMS_MAX = ITEMS.length;
+/** What each `shapeId` is made of (the bag 0, the strap bars 1, the items from 2), as `[shapeId, material id]` rows for the sound pass; the clasp is a colour on a strap bar, so it has no shape of its own. */
+const SHAPE_MATERIAL: readonly (readonly [number, MaterialId])[] = [
+  [0, MAT.PURSE_LEATHER],
+  [1, MAT.PURSE_LEATHER],
+  ...ITEMS.map((_, j) => [2 + j, MAT.PURSE_ITEM] as const),
+];
 /** Bodies per set (the purse, then each item) and drawn pieces per set (the purse, its strap, each item). */
 const BODIES = 1 + ITEMS_MAX;
 /** Most things one set holds out at once (`Purses.points`). */
@@ -100,7 +107,7 @@ class PropMesh extends THREE.InstancedMesh<THREE.BufferGeometry, THREE.MeshStand
     };
     this.material.onBeforeCompile = (shader) => pick(shader);
     this.material.customProgramCacheKey = () => "purse-shapes";
-    tagMaterial(this.material, MATERIAL.LEATHER);
+    tagMaterial(this.material, MAT.PURSE_LEATHER).userData.materialIds = SHAPE_MATERIAL;
     this.customDepthMaterial = new THREE.MeshDepthMaterial();
     this.customDepthMaterial.onBeforeCompile = (shader) => pick(shader);
     this.customDepthMaterial.customProgramCacheKey = () => "purse-shapes-depth";

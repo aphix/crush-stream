@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { clamp } from "../kernel/scalar.ts";
 import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
-import { SURFACE } from "../world/constants.ts";
-import { MATERIAL, MATERIAL_ATTRIBUTE, type MaterialClass } from "../vehicle/material-class.ts";
+import { MATERIAL_ATTRIBUTE } from "../vehicle/material-class.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { blankSegment, segmentAt, type TrackPath } from "../world/track.ts";
 
 /** Track art building blocks: sizes, colours, the `Mesher` vertex list, path sampling and the `RoadIndex` every piece shares. */
@@ -82,17 +82,21 @@ export class Mesher {
   readonly col: number[] = [];
   readonly uv: number[] = [];
   readonly idx: number[] = [];
-  /** Per vertex material class (`MATERIAL_ATTRIBUTE`), kept only by a mesher made `classed`: a mesh of mixed surfaces under one material. */
+  /** Per vertex material id (`MATERIAL_ATTRIBUTE`), kept only by a classed mesher: a mesh of mixed materials under one shared `Material`. */
   readonly cls: number[] | null;
+  /** The id a vertex takes when `v` is not given one (0 on a mesher whose every vertex names its own). */
+  private readonly fill: MaterialId;
   private readonly c = new THREE.Color();
   /** The colour `c` holds, so a run of vertices in one colour converts it once. */
   private hex = -1;
 
-  constructor(classed = false) {
-    this.cls = classed ? [] : null;
+  /** `classed`: the default vertex id (0 = none, every vertex names its own); `false` keeps no per-vertex id. */
+  constructor(classed: MaterialId | false = false) {
+    this.cls = classed === false ? null : [];
+    this.fill = classed === false ? MAT.GENERIC : classed;
   }
 
-  v(x: number, y: number, z: number, hex: number, u = 0, w = 0, shade = 1, materialClass: MaterialClass = MATERIAL.GENERIC): number {
+  v(x: number, y: number, z: number, hex: number, u = 0, w = 0, shade = 1, materialClass: MaterialId = this.fill): number {
     if (hex !== this.hex) {
       this.c.setHex(hex);
       this.hex = hex;
@@ -146,7 +150,7 @@ export class Mesher {
     const at = new Int32Array(p.length / 3);
     const out: THREE.BufferGeometry[] = [];
     for (const tris of byCell.values()) {
-      const m = new Mesher();
+      const m = new Mesher(this.cls ? this.fill : false);
       for (const t of tris) {
         for (let k = t; k < t + 3; k++) {
           const v = idx[k]!;
@@ -157,6 +161,7 @@ export class Mesher {
             m.nrm.push(this.nrm[v * 3]!, this.nrm[v * 3 + 1]!, this.nrm[v * 3 + 2]!);
             m.col.push(this.col[v * 3]!, this.col[v * 3 + 1]!, this.col[v * 3 + 2]!);
             m.uv.push(this.uv[v * 2]!, this.uv[v * 2 + 1]!);
+            if (this.cls) m.cls!.push(this.cls[v]!);
           }
           m.idx.push(at[v]!);
         }
@@ -193,10 +198,10 @@ export function texClass(index: number): "asphalt" | "concrete" | "detail" {
   return id === "asphalt" ? "asphalt" : id === "concrete" ? "concrete" : "detail";
 }
 
-/** The material class a surface's cells are drawn in: the terrain is one material whose painted cells (a lawn on a paved plaza's terrain) must not take its class. */
-export function surfaceClass(index: number): MaterialClass {
-  const id = SURFACE_IDS[index]!;
-  return id === SURFACE.asphalt ? MATERIAL.ASPHALT : id === SURFACE.concrete ? MATERIAL.CONCRETE : id === SURFACE.cobble ? MATERIAL.STONE : MATERIAL.SOIL;
+/** The id of a terrain cell of `surface` on a course whose terrain is `terrain`: the terrain is one material whose painted cells (a lawn on a paved plaza's terrain) keep their own look. */
+export function cellMaterial(surface: number, terrain: number): MaterialId {
+  const row = SURFACES[SURFACE_IDS[surface]!];
+  return surface === terrain ? row.terrain : row.patch;
 }
 
 /** Deterministic 0..1 per (i, salt). */

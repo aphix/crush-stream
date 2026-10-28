@@ -8,10 +8,11 @@ import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { servePublic } from "./page-files.test-util.ts";
 import { PageWorker } from "./page-worker.test-util.ts";
 
-/** Event-loop turns the map's stubbed decode may take before a row calls the load stuck. */
-const MAX_TURNS = 500;
 const DETAIL_FILE = "materials/concrete-detail.webp";
 const PICTURE = { width: 512, height: 512, close() {} };
+/** Resolves when the map's (stubbed) decode is asked for: everything after it is microtasks, drained by one loop turn. */
+let decoded: () => void = () => {};
+const decodeAsked = new Promise<void>((resolve) => (decoded = resolve));
 
 stubBrowser();
 Object.assign(globalThis, { Worker: PageWorker });
@@ -24,11 +25,16 @@ Object.assign(globalThis, {
     if (url.endsWith(DETAIL_FILE)) detailRequests.push(url);
     return Reflect.apply(servedFetch, undefined, [input]);
   },
-  createImageBitmap: async () => PICTURE,
+  createImageBitmap: async () => {
+    decoded();
+    return PICTURE;
+  },
 });
 
-async function untilReady(on: number): Promise<void> {
-  for (let turn = 0; turn < MAX_TURNS && MATERIAL_DETAIL_READY.value !== on; turn++) await yieldToLoop();
+/** The map's load: its decode is asked for, then the rest of the chain (three's loader, the texture) settles within one loop turn. */
+async function mapLoaded(): Promise<void> {
+  await decodeAsked;
+  await yieldToLoop();
 }
 
 describe("given the engine's FX tiers and the worn-concrete detail map", () => {
@@ -49,7 +55,7 @@ describe("given the engine's FX tiers and the worn-concrete detail map", () => {
 
   it("when the tier becomes high, then the map is fetched once and the detail comes on, and off again on low", async () => {
     engine["cine"].setTier("high");
-    await untilReady(1);
+    await mapLoaded();
     assert.equal(MATERIAL_DETAIL_READY.value, 1, "high switch");
     assert.equal(detailRequests.length, 1, "fetches");
     engine["cine"].setTier("low");
