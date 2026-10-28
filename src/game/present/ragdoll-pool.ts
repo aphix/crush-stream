@@ -18,7 +18,7 @@ import { dollGroups, FIXED_GROUPS, knockedGroups, propGroups, SLOTS, STEP, throw
 import { RagdollDebug } from "./ragdoll-debug.ts";
 import { RagdollRemote, type PostTraffic } from "./ragdoll-remote.ts";
 import { RideAlong } from "./ragdoll-ride.ts";
-import { AIR_ANGULAR, AIR_LINEAR, ARM, blendPose, type Doll, JOINTS, limp, PARTS, readPose, SHOULDER_Y } from "./ragdoll-body.ts";
+import { AIR_ANGULAR, AIR_LINEAR, ARM, blendPose, type Doll, JOINTS, limp, PARTS, partDensity, readPose, SHOULDER_Y } from "./ragdoll-body.ts";
 import { brace, joinUp, loosen } from "./ragdoll-joints.ts";
 import { Walker } from "./ragdoll-walker.ts";
 import { groundColliders, PATCH_AHEAD, PATCH_HALF, type Pole } from "./ragdoll-ground.ts";
@@ -206,13 +206,13 @@ export abstract class RagdollPool {
     world.integrationParameters.numInternalPgsIterations = INTERNAL_PASSES;
     this.proxies.load(R, world);
     for (let s = 0; s < SLOTS; s++) {
-      const bodies = PARTS.map((p) => {
+      const bodies = PARTS.map((p, k) => {
         const body = world.createRigidBody(
           R.RigidBodyDesc.dynamic().setTranslation(p.c[0], p.c[1] - 200, p.c[2]).setLinearDamping(AIR_LINEAR).setAngularDamping(AIR_ANGULAR).setEnabled(false),
         );
         world.createCollider(
           R.ColliderDesc.cuboid(p.h[0], p.h[1], p.h[2])
-            .setDensity(1000)
+            .setDensity(partDensity(k))
             .setFriction(SLIDE)
             .setFrictionCombineRule(R.CoefficientCombineRule.Min)
             .setRestitution(0)

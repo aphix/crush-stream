@@ -17,6 +17,8 @@ export const HIP_L = 5;
 const KNEE_L = 6;
 export const HIP_R = 7;
 const KNEE_R = 8;
+const ANKLE_L = 9;
+const ANKLE_R = 10;
 
 /** The hips must swing far past the thrown dummy's limits to walk and to kneel: thigh swing (rad) forward and back, and the thigh roll's inward and outward range. */
 export const HIP_FORWARD = -1.75;
@@ -56,6 +58,9 @@ const NECK_DAMPING = 10;
 const ARM_WALK = { stiffness: 120, damping: 12 } as const;
 const ELBOW_WALK = { stiffness: 90, damping: 9 } as const;
 const NECK_WALK = { stiffness: 160, damping: 14 } as const;
+/** An ankle turns a foot of about 2 kg (0.04 kg m² about the ankle): on his feet it holds the sole to the gait's pitch, in the get-up it lets the foot lie flat. */
+const ANKLE_GETUP = { stiffness: 40, damping: 2 } as const;
+const ANKLE_WALK = { stiffness: 4000, damping: 40 } as const;
 
 function leg(joint: number, axis: number, target: number): MotorRow {
   return { joint, axis, target, stiffness: LEG_GETUP, damping: LEG_GETUP_DAMPING, walkStiffness: LEG_WALK, walkDamping: LEG_WALK_DAMPING, arm: false };
@@ -73,6 +78,10 @@ function neck(axis: number, target: number): MotorRow {
   return { joint: NECK, axis, target, stiffness: NECK_STIFFNESS, damping: NECK_DAMPING, walkStiffness: NECK_WALK.stiffness, walkDamping: NECK_WALK.damping, arm: false };
 }
 
+function ankle(joint: number, target: number): MotorRow {
+  return { joint, axis: ANG[0], target, stiffness: ANKLE_GETUP.stiffness, damping: ANKLE_GETUP.damping, walkStiffness: ANKLE_WALK.stiffness, walkDamping: ANKLE_WALK.damping, arm: false };
+}
+
 export const MOTORS: readonly MotorRow[] = [
   leg(HIP_L, ANG[0], GAIT.HIP_L),
   leg(HIP_L, ANG[1], -1),
@@ -82,6 +91,8 @@ export const MOTORS: readonly MotorRow[] = [
   leg(HIP_R, ANG[2], GAIT.ROLL_R),
   leg(KNEE_L, ANG[0], GAIT.KNEE_L),
   leg(KNEE_R, ANG[0], GAIT.KNEE_R),
+  ankle(ANKLE_L, GAIT.ANKLE_L),
+  ankle(ANKLE_R, GAIT.ANKLE_R),
   arm(SHOULDER_L, ANG[0], GAIT.ARM_L),
   arm(SHOULDER_L, ANG[1], -1),
   arm(SHOULDER_L, ANG[2], -1),

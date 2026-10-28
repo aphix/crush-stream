@@ -463,7 +463,9 @@ export class Lab {
     if (dt < DOLL_READ_S) return;
     _d.copy(_u).sub(this.vRef);
     _d.y += G * dt;
-    const off = this.thingDoll >= 0 ? _p.y - this.ground.heightAt(_p.x, _p.z, _p.y) > GROUND_REACH : _d.y < PROP_LAND * _d.length();
+    // Flung from lying he flies low: a push less steep than PROP_LAND is a hit at any height.
+    const level = _d.y < PROP_LAND * _d.length();
+    const off = this.thingDoll >= 0 ? level || _p.y - this.ground.heightAt(_p.x, _p.z, _p.y) > GROUND_REACH : level;
     if (_d.length() > HIT_DV && off) {
       s.contactS = this.t;
       s.contactAt.copy(_p);

@@ -301,6 +301,8 @@ export abstract class RagdollStepper extends RagdollPool {
     // At his own height: under a bridge the road is his ground, not the deck over him.
     const g = activeGround().heightAt(t.x, t.z, t.y);
     if (t.y - (Number.isFinite(g) ? g : 0) >= GROUND_REACH) return;
+    // Flung from lying, his torso starts under GROUND_REACH: ground damping waits until he comes down.
+    if (d.bodies[0]!.linvel().y > 0) return;
     d.ground = true;
     for (const body of d.bodies) {
       body.setLinearDamping(GROUND_LINEAR);

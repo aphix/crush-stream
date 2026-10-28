@@ -11,7 +11,7 @@ import type { FigureStrike } from "../scenes/figure-strike.ts";
 import type { PropDraw } from "./ragdoll-props.ts";
 import { NO_RELEASE_SCALE, type ReleaseScale } from "./ragdoll-boxes.ts";
 import { SLOTS, thrownGroups } from "./ragdoll-config.ts";
-import { ARM, blendPose, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
+import { ARM, blendPose, MASS, PARTS, SHOULDER_Y } from "./ragdoll-body.ts";
 import { strikeAt } from "./ragdoll-hit.ts";
 import type { Solid } from "./ragdoll-solids.ts";
 import { hypot2 } from "../kernel/physics-core.js";
@@ -36,12 +36,11 @@ const _roll = new THREE.Vector3();
 const _com = new THREE.Vector3();
 const NO_MOTION = new THREE.Vector3();
 
-/** A thrown driver's centre of mass from his torso, standing, arms raised (`spawn`'s layout; the parts' masses go as their volumes): his roll turns about it. */
+/** A thrown driver's centre of mass from his torso, standing, arms raised (`spawn`'s layout, each part at its own mass): his roll turns about it. */
 const RAISED_COM = PARTS.reduce((sum, p, k) => {
-  const m = p.h[0] * p.h[1] * p.h[2];
   const y = ARM(k) ? 2 * SHOULDER_Y - p.c[1] : p.c[1];
-  return sum.add(_r.set(p.c[0] - PARTS[0].c[0], y - PARTS[0].c[1], p.c[2] - PARTS[0].c[2]).multiplyScalar(m));
-}, new THREE.Vector3()).divideScalar(PARTS.reduce((sum, p) => sum + p.h[0] * p.h[1] * p.h[2], 0));
+  return sum.add(_r.set(p.c[0] - PARTS[0].c[0], y - PARTS[0].c[1], p.c[2] - PARTS[0].c[2]).multiplyScalar(MASS[k]!));
+}, new THREE.Vector3()).divideScalar(MASS.reduce((sum, m) => sum + m, 0));
 
 /** `velocity`'s horizontal speed becomes its whole speed, aimed `elevation` rad above its horizontal heading (a standing-still release stays still). */
 function turnToElevation(velocity: THREE.Vector3, elevation: number): void {

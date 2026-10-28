@@ -1,5 +1,5 @@
 import { fitted, legOf, LIMB_SIDES, TORSO_SIDES, torsoOf, TUCK, type Take } from "./dummy-garments.ts";
-import { BUILD, HEELS, LEFT_ARM, LEFT_LEG, RIGHT_ARM, RIGHT_LEG, ROLE, SHORT_SLEEVES, TORSO, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
+import { BUILD, HEELS, LEFT_ARM, LEFT_FOOT, LEFT_LEG, RIGHT_ARM, RIGHT_FOOT, RIGHT_LEG, ROLE, SHORT_SLEEVES, TORSO, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
 
 /** The woman's wear on her fitted body (her bust is her body's own: `sculptBust`): her top's short sleeves, her cut-offs, and stiletto heels under her arched feet. */
 
@@ -13,7 +13,7 @@ const HEEL_TIP = 0.004;
 const HEEL_RAKE = 0.008;
 const HEEL_SIDES = 8;
 
-/** Her stiletto on side `side` (-1: x < 0): from inside her raised heel down to the floor, on her shin. */
+/** Her stiletto on side `side` (-1: x < 0): from inside her raised heel down to the floor, on her foot. */
 function stiletto(fit: Fit, side: number): Shell {
   const rest = fit.rest;
   let back = Infinity;
@@ -28,7 +28,7 @@ function stiletto(fit: Fit, side: number): Shell {
     [underside + HEEL_SINK, HEEL_TOP, HEEL_TOP, heelZ, ROLE.SHOE],
     [HEEL_TIP, HEEL_TIP, HEEL_TIP, heelZ + HEEL_RAKE, ROLE.SHOE],
   ];
-  return { x: heelX, sides: HEEL_SIDES, kinds: BUILD.WOMAN, bone: (side < 0 ? LEFT_LEG : RIGHT_LEG) + 1, rings, bottom: HEEL_TIP };
+  return { x: heelX, sides: HEEL_SIDES, kinds: BUILD.WOMAN, bone: side < 0 ? LEFT_FOOT : RIGHT_FOOT, rings, bottom: HEEL_TIP };
 }
 
 /** Her top's short sleeve ends at her armpit, as the reference's (m; also the cut's sleeve end): the hem lip flares out from under the skin. */

@@ -408,8 +408,7 @@ export type Recording = { clips: HighlightClip[]; stagedAt: number[] };
 
 /**
  * Race `w` (entered, its field started) on `track` for `seconds`, or until its recording ends (the race over and its last
- * thrown driver's hold recorded), or until every staged crash has a clip kept, or until all are staged, none is still open in the
- * ledger and the last has had `STAGED_MEETING_S` to meet (a crash that makes no clip, its post-roll over, adds nothing to wait for;
+ * thrown driver's hold recorded), or until every staged crash has a clip kept (a crash that makes none runs the whole `seconds`;
  * no staged crash: the whole `seconds`), staging `crashes` (each at its own race second from 1 on, on its `cars` or cars 1, 2, 3, … in pairs); the clips its recorder kept.
  */
 export function recordRace(w: World, track: Track, crashes: readonly Crash[], seconds: number): Recording {
@@ -417,7 +416,7 @@ export function recordRace(w: World, track: Track, crashes: readonly Crash[], se
   const state = { acc: 0 };
   const stagedAt: number[] = [];
   let next = 0;
-  for (let n = 0; n * FRAME < seconds && r.recorder.on && (crashes.length === 0 || next < crashes.length || (r.recorder.ledger.kept.length < crashes.length && !(r.recorder.ledger.open.length === 0 && r.recorder.now >= stagedAt[next - 1]! + STAGED_MEETING_S))); n++) {
+  for (let n = 0; n * FRAME < seconds && r.recorder.on && (crashes.length === 0 || next < crashes.length || r.recorder.ledger.kept.length < crashes.length); n++) {
     if (next < crashes.length && r.time >= 1 + next * 2.5) {
       const cars = w.live();
       const c = crashes[next]!;

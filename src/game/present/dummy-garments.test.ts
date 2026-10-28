@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { BODY_VERTICES, bodyIndex } from "./dummy-bodies.ts";
 import { restFits } from "./dummy-fit.ts";
 import { armOf, casualWear, fitted, hangAttribute, hangOffsets, legOf, torsoOf, type Take } from "./dummy-garments.ts";
+import { loft, type Lofted } from "./dummy-loft.ts";
 import { BONES_ATTRIBUTE, BUILD, ROLE, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
 import { dummyGeometry } from "./dummy-skin.ts";
 import { PRINT_CELL } from "./dummy-texture.ts";
@@ -61,8 +62,36 @@ function crossings(fit: Fit, taken: Take, y: number): [number, number][] {
   return points;
 }
 
-/** Whether body vertex `i` rides `bone` alone: whole on it, no blend toward another. */
-const ridesAlone = (i: number, bone: number): boolean => bones.getX(i) === bone && bones.getY(i) === bone;
+/** Whether body vertex `i` rides only `shell`'s bones: its bone, and a shoe's shin too. */
+const ridesOn = (i: number, shell: Shell): boolean => [bones.getX(i), bones.getY(i)].every((b) => b === shell.bone || b === shell.shin);
+
+/** How far (0..1) a body vertex's foot share may stand from its shoe's at its height: the shoe's rings are a few centimetres apart across the 8 cm ankle band. */
+const SHARE_SLACK = 0.15;
+
+/** Each ring of `shell` as lofted: its height and its vertices' bones (first, second, the second's share). */
+function ringBones(shell: Shell): { y: number; first: number; second: number; share: number }[] {
+  const mesh: Lofted = { position: [], bones: [], roleKind: [], print: [], index: [], coarse: [] };
+  loft(shell, mesh);
+  return shell.rings.map((ring, r) => {
+    const v = r * shell.sides * 3;
+    return { y: ring[0], first: mesh.bones[v]!, second: mesh.bones[v + 1]!, share: mesh.bones[v + 2]! };
+  });
+}
+
+/** The foot share of bone pair (first, second, share) toward `bone`: 1 riding it alone, 0 riding the other alone. */
+const shareOf = (first: number, second: number, share: number, bone: number): number => (first === bone && second === bone ? 1 : second === bone ? share : first === bone ? 1 - share : 0);
+
+/** Whether body vertex `i`, at height `y`, rides what `shell` rides there: its bones, and the share the shell's two rings around `y` give between them. */
+function ridesWith(i: number, y: number, shell: Shell, rings: ReturnType<typeof ringBones>): boolean {
+  const [first, second] = [bones.getX(i), bones.getY(i)];
+  const allowed = new Set(rings.flatMap((ring) => [ring.first, ring.second]));
+  if (!allowed.has(first) || !allowed.has(second)) return false;
+  const below = rings.findIndex((ring) => ring.y <= y);
+  const [a, b] = [rings[Math.max(0, below - 1)]!, rings[Math.max(0, below)]!];
+  const t = a.y === b.y ? 0 : (a.y - y) / (a.y - b.y);
+  const expected = shareOf(a.first, a.second, a.share, shell.bone) * (1 - t) + shareOf(b.first, b.second, b.share, shell.bone) * t;
+  return Math.abs(shareOf(first, second, bones.getZ(i), shell.bone) - expected) <= SHARE_SLACK;
+}
 
 const TAKES = { torso: () => torsoOf(man), rightArm: () => armOf(man, 1), leftLeg: () => legOf(man, -1), rightLeg: () => legOf(man, 1) } as const;
 
@@ -94,7 +123,7 @@ describe("given the casual man's clothes (belt, tee hem, sleeve hems, cuffs, jea
     for (const shell of shells) {
       for (const ring of shell.rings.slice(1, -1)) {
         const polygon = corners(shell, ring);
-        const under = crossings(hung, (i) => ridesAlone(i, shell.bone), ring[0]);
+        const under = crossings(hung, (i) => ridesOn(i, shell), ring[0]);
         const near = under.filter(([x]) => shell.x === 0 || Math.sign(x) === Math.sign(shell.x));
         for (const [x, z] of near) {
           checked++;
@@ -106,9 +135,10 @@ describe("given the casual man's clothes (belt, tee hem, sleeve hems, cuffs, jea
     assert.equal(poked, "", `the body pokes through: ${poked}`);
   });
 
-  it("when the body inside each garment is read, then it rides that garment's bone alone, so no pose can pull it through", () => {
+  it("when the body inside each garment is read, then it rides what that garment rides at its height (its bone alone, or a shoe's own shin-to-foot share over the ankle), so no pose can pull it through", () => {
     let [checked, loose] = [0, ""];
     for (const shell of shells) {
+      const rings = ringBones(shell);
       const ys = shell.rings.map((ring) => ring[0]);
       const [low, high] = [Math.min(...ys), Math.max(...ys)];
       for (let i = 0; i < BODY_VERTICES; i++) {
@@ -117,7 +147,7 @@ describe("given the casual man's clothes (belt, tee hem, sleeve hems, cuffs, jea
         const nearest = shell.rings.reduce((best, ring) => (Math.abs(ring[0] - y) < Math.abs(best[0] - y) ? ring : best));
         if (!inside(corners(shell, nearest), x, z)) continue;
         checked++;
-        if (!ridesAlone(i, shell.bone) && loose === "") loose = `vertex ${i} at (${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)}) rides ${bones.getX(i)}/${bones.getY(i)}, its garment bone ${shell.bone}`;
+        if (!ridesWith(i, y, shell, rings) && loose === "") loose = `vertex ${i} at (${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)}) rides ${bones.getX(i)}/${bones.getY(i)} at ${bones.getZ(i).toFixed(2)}, its garment bone ${shell.bone}${shell.shin === undefined ? "" : ` from shin ${shell.shin}`}`;
       }
     }
     assert.ok(checked > 200, `${checked} body vertices inside garments`);

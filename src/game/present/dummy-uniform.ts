@@ -2,7 +2,7 @@ import { BODY_VERTICES } from "./dummy-bodies.ts";
 import { HAND_LENGTH } from "./dummy-fit.ts";
 import { armOf, BELT_BOTTOM, BELT_OUT, BELT_TOP, fitted, FOOTPRINT_AT, hangingFit, legOf, LIMB_SIDES, SUIT_HANG, TORSO_SIDES, torsoOf, trouserHem, TUCK, UNIFORM_HANG, type Take } from "./dummy-garments.ts";
 import { box, BOX_SIDES, surfaceY, surfaceZ, TUBE_SIDES } from "./dummy-loft.ts";
-import { BUILD, DRESS_SHOES, LEFT_ARM, LEFT_LEG, POLICE, RIGHT_ARM, RIGHT_LEG, ROLE, SUITED, TORSO, UNIFORM, type Decal, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
+import { BUILD, DRESS_SHOES, LEFT_ARM, LEFT_FOOT, LEFT_LEG, POLICE, RIGHT_ARM, RIGHT_FOOT, RIGHT_LEG, ROLE, SUITED, TORSO, UNIFORM, type Decal, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
 import { PRINT_CELL } from "./dummy-texture.ts";
 
 /**
@@ -214,12 +214,12 @@ function tie(fit: Fit, kinds: number): Shell {
   return { x: 0, sides: BOX_SIDES, kinds, bone: TORSO, rings, bottom: 0 };
 }
 
-/** Each leg's dress shoe lofted about the ankle's middle, under the hem of `trousered`'s hung trouser leg closing onto it. */
+/** Each leg's dress shoe lofted about the ankle's middle on the foot, under the hem of `trousered`'s hung trouser leg closing onto it from the shin. */
 function dressShoes(fit: Fit, trousered: Fit, kinds: number): Shell[] {
   const shells: Shell[] = [];
-  for (const [side, thigh] of [
-    [-1, LEFT_LEG],
-    [1, RIGHT_LEG],
+  for (const [side, thigh, foot] of [
+    [-1, LEFT_LEG, LEFT_FOOT],
+    [1, RIGHT_LEG, RIGHT_FOOT],
   ] as const) {
     const leg = legOf(fit, side);
     const ankle = sectionOf(fit, leg, SHOE_COLLAR);
@@ -227,7 +227,7 @@ function dressShoes(fit: Fit, trousered: Fit, kinds: number): Shell[] {
     const upper = [SHOE_COLLAR, ...SHOE_UPPER].map((y) => ({ y, out: SHOE_OUT, role: SHOE }));
     shells.push(
       trouserHem(trousered, side, fitting, DRESS_HEM, SHOE_OUT),
-      fitted(fit, leg, [{ y: SHOE_COLLAR, out: TUCK, role: SHOE }, ...upper, { y: SHOE_SOLE_TOP, out: SHOE_SOLE_OUT, role: SOLE }, { y: SHOE_SOLE_BOTTOM, out: SHOE_SOLE_OUT, role: SOLE, at: FOOTPRINT_AT }], { ...fitting, bottom: 0 }),
+      fitted(fit, leg, [{ y: SHOE_COLLAR, out: TUCK, role: SHOE }, ...upper, { y: SHOE_SOLE_TOP, out: SHOE_SOLE_OUT, role: SOLE }, { y: SHOE_SOLE_BOTTOM, out: SHOE_SOLE_OUT, role: SOLE, at: FOOTPRINT_AT }], { ...fitting, bone: foot, shin: thigh + 1, bottom: 0 }),
     );
   }
   return shells;

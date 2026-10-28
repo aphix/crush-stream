@@ -88,6 +88,7 @@ export const TORSO = 0;
 export const HEAD = 1;
 export const [LEFT_ARM, RIGHT_ARM] = [2, 4];
 export const [LEFT_LEG, RIGHT_LEG] = [6, 8];
+export const [LEFT_FOOT, RIGHT_FOOT] = [10, 11];
 
 /** Smoothstep from `from` (0) to `to` (1), either way round. */
 export function smooth(from: number, to: number, value: number): number {
@@ -125,8 +126,8 @@ export type Ring = readonly [y: number, halfWidth: number, halfDepth: number, mi
  * where the depth toward the viewer (z, or -x) reaches `from` (m), so it never shows through on the shell's far side.
  */
 type Print = { cell: number; centre: readonly [number, number]; size: readonly [number, number]; along: "z" | "x"; from?: number };
-/** A lofted shell: rings top to bottom around the vertical axis at `x`, riding one `bone`, closed at an end by a pole `top` above the first ring or `bottom` below the last (open when absent). `frontPower` narrows a brim so only the centre of the face half sticks out. */
-export type Shell = { x: number; sides: number; kinds: number; bone: number; rings: readonly Ring[]; top?: number; bottom?: number; frontPower?: number; print?: Print };
+/** A lofted shell: rings top to bottom around the vertical axis at `x`, riding one `bone` (or, with `shin`, blending from `shin` above the ankle to `bone` below it, as the leg under a shoe does), closed at an end by a pole `top` above the first ring or `bottom` below the last (open when absent). `frontPower` narrows a brim so only the centre of the face half sticks out. */
+export type Shell = { x: number; sides: number; kinds: number; bone: number; shin?: number; rings: readonly Ring[]; top?: number; bottom?: number; frontPower?: number; print?: Print };
 /** A vertex's print (u, v, atlas cell, weight): the slot's face row is cell -1; weight 0 shows no print. */
 export const NO_PRINT = [0, 0, -1, 0] as const;
 

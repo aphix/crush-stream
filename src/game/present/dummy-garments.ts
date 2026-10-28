@@ -1,7 +1,7 @@
 import { BODY_VERTICES } from "./dummy-bodies.ts";
 import { HAND_LENGTH } from "./dummy-fit.ts";
 import { BODY_INDEX, box, surfaceZ } from "./dummy-loft.ts";
-import { BELTED, BUILD, LEFT_ARM, LEFT_LEG, LONG_SLEEVES, RIGHT_ARM, RIGHT_LEG, ROLE, SHORT_SLEEVES, smooth, SNEAKERS, TORSO, type Decal, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
+import { BELTED, BUILD, LEFT_ARM, LEFT_FOOT, LEFT_LEG, LONG_SLEEVES, RIGHT_ARM, RIGHT_FOOT, RIGHT_LEG, ROLE, SHORT_SLEEVES, smooth, SNEAKERS, TORSO, type Decal, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
 import { LACES_SIZE, PRINT_CELL, TOE_CAP_SIZE } from "./dummy-texture.ts";
 
 /**
@@ -24,7 +24,7 @@ type Step = { y: number; out: number | readonly number[]; role: number; at?: num
  * A fitted shell's bone, kinds and sides; `axis` (x, z) its centre line (default: the middle of the first ring's section), or
  * with `centred` each ring about its own section's middle (a foot: a ring's front sides face the toe, not the ankle's front).
  */
-type Fitting = { bone: number; kinds: number; sides: number; axis?: readonly [number, number]; centred?: boolean; bottom?: number };
+type Fitting = { bone: number; shin?: number; kinds: number; sides: number; axis?: readonly [number, number]; centred?: boolean; bottom?: number };
 
 /** Points sampled along each triangle's crossing of a ring's height: a 6 cm edge leaves no gap past 1 cm. */
 const SECTION_SAMPLES = 6;
@@ -128,7 +128,7 @@ export function fitted(fit: Fit, taken: Take, steps: readonly Step[], fitting: F
     const radii = own.map((radius, k) => Math.max(radius, held[k]!) + (typeof step.out === "number" ? step.out : step.out[k]!));
     return [step.y, 1, 1, middleZ, step.role, 1, radii, middleX - x];
   });
-  return { x, sides, kinds: fitting.kinds, bone: fitting.bone, rings, bottom: fitting.bottom };
+  return { x, sides, kinds: fitting.kinds, bone: fitting.bone, shin: fitting.shin, rings, bottom: fitting.bottom };
 }
 
 const { SHIRT, LEGS, SHOE, BELT, BUCKLE, SOLE } = ROLE;
@@ -361,14 +361,15 @@ export function trouserHem(hanging: Fit, side: number, fitting: Fitting, hem: nu
   ], fitting);
 }
 
-/** Each leg's sneaker (its laces printed over the instep's front half), the band round its toe the cap is printed on, and the hung jeans' hem over it, all on the shin about the ankle's middle. */
+/** Each leg's sneaker (its laces printed over the instep's front half), the band round its toe the cap is printed on, both on the foot, and the hung jeans' hem over it on the shin, about the ankle's middle. */
 function feet(build: number, fit: Fit, hanging: Fit): Shell[] {
   const shells: Shell[] = [];
   const kinds = build | SNEAKERS;
-  for (const [side, thigh] of [[-1, LEFT_LEG], [1, RIGHT_LEG]] as const) {
+  for (const [side, thigh, foot] of [[-1, LEFT_LEG, LEFT_FOOT], [1, RIGHT_LEG, RIGHT_FOOT]] as const) {
     const leg = legOf(fit, side);
     const axis = sectionMiddle(fit, takenTriangles(leg), SNEAKER_COLLAR);
     const fitting = { bone: thigh + 1, kinds, sides: LIMB_SIDES, axis };
+    const shoe = { ...fitting, bone: foot, shin: thigh + 1 };
     const laces = { cell: PRINT_CELL.LACES, centre: [axis[0] + side * LACES_OUT, LACES_MIDDLE], size: LACES_SIZE, along: "z", from: axis[1] } as const;
     const toeCap = { cell: PRINT_CELL.TOE_CAP, centre: [axis[0] + side * TOE_OUT, SOLE_TOP + TOE_CAP_SIZE[1] / 2], size: TOE_CAP_SIZE, along: "z", from: axis[1] } as const;
     shells.push(
@@ -380,7 +381,7 @@ function feet(build: number, fit: Fit, hanging: Fit): Shell[] {
           ...SNEAKER_UPPER.map((y) => ({ y, out: SNEAKER_OUT, role: SHOE })),
           { y: SOLE_TOP, out: SOLE_OUT, role: SOLE },
           { y: SOLE_BOTTOM, out: SOLE_OUT, role: SOLE, at: FOOTPRINT_AT },
-        ], { ...fitting, centred: true, bottom: 0 }),
+        ], { ...shoe, centred: true, bottom: 0 }),
         print: laces,
       },
       {
@@ -389,7 +390,7 @@ function feet(build: number, fit: Fit, hanging: Fit): Shell[] {
           { y: SOLE_TOP + TOE_CAP_SIZE[1], out: TOE_CAP_OUT, role: SHOE },
           ...SNEAKER_UPPER.filter((y) => y < SOLE_TOP + TOE_CAP_SIZE[1]).map((y) => ({ y, out: TOE_CAP_OUT, role: SHOE })),
           { y: SOLE_TOP, out: TOE_CAP_OUT, role: SHOE },
-        ], { ...fitting, centred: true }),
+        ], { ...shoe, centred: true }),
         print: toeCap,
       },
     );

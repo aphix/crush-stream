@@ -20,11 +20,15 @@ const SHOULDER = JOINTS[1]!;
 const ELBOW = JOINTS[2]!;
 const HIP = JOINTS[5]!;
 const KNEE = JOINTS[6]!;
-/** Body parts (`PARTS`) by limb: upper and lower arm, thigh and shin, for the figure's right side (-x) and left (+x). */
+const ANKLE = JOINTS[9]!;
+/** Body parts (`PARTS`) by limb: upper and lower arm, thigh, shin and foot, for the figure's right side (-x) and left (+x). */
 const ARM_UPPER = [2, 4] as const;
 const ARM_LOWER = [3, 5] as const;
 const THIGH = [6, 8] as const;
 const SHIN = [7, 9] as const;
+const FOOT = [10, 11] as const;
+/** A foot tips with its shin by this share of the shin's swing: toes up as the leg reaches out, down as it trails. */
+const FOOT_FOLLOW = 0.5;
 /** The side the gun is held on (index into the limb tables): his right hand. */
 const GUN_SIDE = 0;
 /** A handgun (m): across, along the arm, and how far its muzzle stands past the hand. */
@@ -196,7 +200,7 @@ export class People {
     for (let side = 0; side < 2; side++) {
       const sign = side * 2 - 1;
       this.limb(slot, root, turn, sign, SHOULDER, ELBOW, ARM_UPPER[side], ARM_LOWER[side], stance.arm[side]!, stance.elbow[side]!, armed ? 0 : ARM_OUT);
-      this.limb(slot, root, turn, sign, HIP, KNEE, THIGH[side], SHIN[side], stance.thigh[side]!, stance.knee[side]!, 0);
+      this.limb(slot, root, turn, sign, HIP, KNEE, THIGH[side], SHIN[side], stance.thigh[side]!, stance.knee[side]!, 0, FOOT[side]);
     }
     if (!armed) return this.holster(slot);
     // The hand at the forearm's far end, the gun along it, its muzzle past the hand.
@@ -282,8 +286,8 @@ export class People {
     this.mesh.pose(slot, k, _p, _q.copy(turn).multiply(local));
   }
 
-  /** A two-part limb from joint `top` through joint `mid`, its upper part swung `a` and its lower `a + b` about his x axis, both turned `out` (rad) away from his middle. */
-  private limb(slot: number, root: THREE.Vector3, turn: THREE.Quaternion, side: number, top: readonly number[], mid: readonly number[], upper: number, lower: number, a: number, b: number, out: number): void {
+  /** A two-part limb from joint `top` through joint `mid`, its upper part swung `a` and its lower `a + b` about his x axis, both turned `out` (rad) away from his middle; a leg's `foot` part rides the lower part's end, tipped with it. */
+  private limb(slot: number, root: THREE.Vector3, turn: THREE.Quaternion, side: number, top: readonly number[], mid: readonly number[], upper: number, lower: number, a: number, b: number, out: number, foot = -1): void {
     _j.set(side * Math.abs(top[2]!), top[3]!, top[4]!);
     _out.setFromAxisAngle(Z, side * out);
     _qa.setFromAxisAngle(X, a).premultiply(_out);
@@ -295,6 +299,14 @@ export class People {
     const cl = PARTS[lower]!.c;
     _r.set(cl[0] - side * Math.abs(mid[2]!), cl[1] - mid[3]!, cl[2] - mid[4]!).applyQuaternion(_qb).add(_k);
     this.part(slot, lower, root, turn, _r, _qb);
+    if (foot < 0) return;
+    _j.set(side * Math.abs(mid[2]!), mid[3]!, mid[4]!);
+    _s.set(side * Math.abs(ANKLE[2]!), ANKLE[3]!, ANKLE[4]!);
+    const cf = PARTS[foot]!.c;
+    _r.set(cf[0] - _s.x, cf[1] - _s.y, cf[2] - _s.z);
+    _s.sub(_j).applyQuaternion(_qb).add(_k);
+    _qa.setFromAxisAngle(X, FOOT_FOLLOW * (a + b));
+    this.part(slot, foot, root, turn, _r.applyQuaternion(_qa).add(_s), _qa);
   }
 
   /** The gun hand's place (world): the gun arm's elbow, then the forearm's length on. */

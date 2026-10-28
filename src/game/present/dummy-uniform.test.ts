@@ -8,7 +8,7 @@ import { restFits } from "./dummy-fit.ts";
 import { BELT_BOTTOM, hangingFit, SUIT_HANG } from "./dummy-garments.ts";
 import { surfaceZ } from "./dummy-loft.ts";
 import { drawnRows as drawn, posture, turn, type Drawn } from "./dummy-pose.test-util.ts";
-import { LEFT_ARM, LEFT_LEG, RIGHT_LEG, ROLE, type Fit } from "./dummy-rig.ts";
+import { LEFT_ARM, LEFT_FOOT, LEFT_LEG, RIGHT_FOOT, RIGHT_LEG, ROLE, type Fit } from "./dummy-rig.ts";
 
 /** A holster's vertices hang this far (m) under the belt's bottom; the belt and its pouches end above it. */
 const UNDER_BELT = 0.03;
@@ -44,12 +44,12 @@ describe("given the uniformed kinds' wear", () => {
   });
 
   it("when the cop raises his right arm and bends both knees, then the patch stays on his sleeve and each dress shoe on its own foot", () => {
-    const raised = drawn(true, COP_LOOK, posture({ [LEFT_ARM]: turn(new THREE.Vector3(0, 0, 1), -80), [LEFT_LEG + 1]: turn(new THREE.Vector3(1, 0, 0), 70), [RIGHT_LEG + 1]: turn(new THREE.Vector3(1, 0, 0), 70) })).rows;
+    const raised = drawn(true, COP_LOOK, posture({ [LEFT_ARM]: turn(new THREE.Vector3(0, 0, 1), -80), [LEFT_LEG + 1]: turn(new THREE.Vector3(1, 0, 0), 70), [RIGHT_LEG + 1]: turn(new THREE.Vector3(1, 0, 0), 70), [LEFT_FOOT]: turn(new THREE.Vector3(1, 0, 0), 70), [RIGHT_FOOT]: turn(new THREE.Vector3(1, 0, 0), 70) })).rows;
     assert.ok(furthestOff(ofRole(raised, ROLE.PATCH), raised, LEFT_ARM) < ON_BODY, `the patch is ${furthestOff(ofRole(raised, ROLE.PATCH), raised, LEFT_ARM).toFixed(3)} m off the raised arm`);
-    for (const shin of [LEFT_LEG + 1, RIGHT_LEG + 1]) {
-      const shoe = [...ofRole(raised, ROLE.SHOE), ...ofRole(raised, ROLE.SOLE)].filter((row) => row.bone === shin);
-      assert.ok(shoe.length > 0, `a shoe rides shin ${shin}`);
-      assert.ok(furthestOff(shoe, raised, shin) < ON_BODY, `the shoe on shin ${shin} is ${furthestOff(shoe, raised, shin).toFixed(3)} m off its foot`);
+    for (const foot of [LEFT_FOOT, RIGHT_FOOT]) {
+      const shoe = [...ofRole(raised, ROLE.SHOE), ...ofRole(raised, ROLE.SOLE)].filter((row) => row.bone === foot);
+      assert.ok(shoe.length > 0, `a shoe rides foot ${foot}`);
+      assert.ok(furthestOff(shoe, raised, foot) < ON_BODY, `the shoe on foot ${foot} is ${furthestOff(shoe, raised, foot).toFixed(3)} m off its foot`);
     }
   });
 

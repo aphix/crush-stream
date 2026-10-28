@@ -1,6 +1,6 @@
 import type { ImpulseJoint, RevoluteImpulseJoint, RigidBody, World } from "@dimforge/rapier3d-simd";
 import type { Rapier } from "../kernel/rapier.ts";
-import { JOINTS, PARTS } from "./ragdoll-body.ts";
+import { ANKLE_TOES_DOWN, ANKLE_TOES_UP, JOINTS, PARTS } from "./ragdoll-body.ts";
 
 /**
  * The dummy's joints and what each may do (a crash-test dummy's neck does not fold into its chest). Rapier 0.19.3 takes
@@ -22,13 +22,15 @@ type Limit = { hinge: readonly [number, number] } | { euler: Euler } | null;
 /** An elbow bends forward 120°, a knee back 120°; neither bends the wrong way at all. */
 const ELBOW: Limit = { hinge: [-120 * DEG, 0] };
 const KNEE: Limit = { hinge: [0, 120 * DEG] };
+/** An ankle brings the toes up and down (`ANKLE_TOES_UP`, `ANKLE_TOES_DOWN`); the hinge's angle grows toes down. */
+const ANKLE: Limit = { hinge: [-ANKLE_TOES_UP, ANKLE_TOES_DOWN] };
 /** Neck: nods 45° either way, tilts 40° to a side (together at most 60°), turns 55°. */
 const NECK: Limit = { euler: [[-45 * DEG, 45 * DEG], [-55 * DEG, 55 * DEG], [-40 * DEG, 40 * DEG]] };
 /** Hip: a thigh swings forward 35° and back 10°, out 30° and across 5°, and turns 40°. Left and right mirror in roll. */
 const HIP_L: Limit = { euler: [[-35 * DEG, 10 * DEG], [-40 * DEG, 40 * DEG], [-30 * DEG, 5 * DEG]] };
 const HIP_R: Limit = { euler: [[-35 * DEG, 10 * DEG], [-40 * DEG, 40 * DEG], [-5 * DEG, 30 * DEG]] };
-/** `JOINTS` order: neck, shoulder, elbow, shoulder, elbow, hip, knee, hip, knee. */
-const LIMITS: readonly Limit[] = [NECK, null, ELBOW, null, ELBOW, HIP_L, KNEE, HIP_R, KNEE];
+/** `JOINTS` order: neck, shoulder, elbow, shoulder, elbow, hip, knee, hip, knee, ankle, ankle. */
+const LIMITS: readonly Limit[] = [NECK, null, ELBOW, null, ELBOW, HIP_L, KNEE, HIP_R, KNEE, ANKLE, ANKLE];
 /**
  * The joints whose two parts also touch: the head on the chest (the neck's swing stops where the boxes meet, so the
  * head is never inside) and the arms on the chest (the shoulders have no limit of their own). The head sits `0.1` m

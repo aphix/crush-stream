@@ -11,12 +11,12 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const WALKER = SLOTS - 1;
-/** The shins' parts, left then right (`PARTS`): where a foot is. */
-const SHINS = [7, 9] as const;
+/** The feet's parts, left then right (`PARTS`): where a foot is. */
+const FEET = [10, 11] as const;
 /** A walker slower than this (m/s) has stopped for the eye. */
 const STOPPED_SPEED = 0.3;
 
-type Sample = { t: number; speed: number; drawnSpeed: number; tilt: number; facing: number; torsoY: number; planted: number[]; feet: number[]; standing: boolean; thighSwing: number };
+type Sample = { t: number; speed: number; drawnSpeed: number; tilt: number; facing: number; torsoY: number; planted: number[]; pivot: number[]; feet: number[]; standing: boolean; thighSwing: number };
 
 /** The left thigh's part (`PARTS`). */
 const THIGH = 6;
@@ -37,13 +37,14 @@ function bodies() {
   return system["dolls"][WALKER]!.bodies;
 }
 
+/** Where each foot's sole turns on the ground (x, y, z per foot): its heel's back edge, then its toe's front edge once the weight has rolled onto it. */
 function feetNow(): number[] {
   const out: number[] = [];
-  for (const k of SHINS) {
+  for (const [f, k] of FEET.entries()) {
     const t = bodies()[k]!.translation();
     const q = bodies()[k]!.rotation();
-    const end = new THREE.Vector3(0, -PARTS[k].h[1], 0).applyQuaternion(new THREE.Quaternion(q.x, q.y, q.z, q.w));
-    out.push(t.x + end.x, t.y + end.y, t.z + end.z);
+    const edge = new THREE.Vector3(0, -PARTS[k].h[1], (system.walker.gait.pivot[f] === 0 ? -1 : 1) * PARTS[k].h[2]).applyQuaternion(new THREE.Quaternion(q.x, q.y, q.z, q.w));
+    out.push(t.x + edge.x, t.y + edge.y, t.z + edge.z);
   }
   return out;
 }
@@ -78,6 +79,7 @@ function run(seconds: number): Sample[] {
       facing: Math.atan2(2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y)),
       torsoY: p.y,
       planted: Array.from(system.walker.gait["planted"]),
+      pivot: Array.from(system.walker.gait.pivot),
       feet: feetNow(),
       standing: system.walker.state === "stand",
       thighSwing: thighSwingDegrees(),
@@ -97,7 +99,7 @@ function plantedFootSpeeds(samples: Sample[]): { mean: number; p95: number; coun
   const speeds: number[] = [];
   for (let i = 1; i < samples.length; i++) {
     for (let f = 0; f < 2; f++) {
-      if (!samples[i]!.planted[f] || !samples[i - 1]!.planted[f]) continue;
+      if (!samples[i]!.planted[f] || !samples[i - 1]!.planted[f] || samples[i]!.pivot[f] !== samples[i - 1]!.pivot[f]) continue;
       speeds.push(Math.hypot(samples[i]!.feet[f * 3]! - samples[i - 1]!.feet[f * 3]!, samples[i]!.feet[f * 3 + 2]! - samples[i - 1]!.feet[f * 3 + 2]!) / FRAME);
     }
   }

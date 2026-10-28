@@ -10,6 +10,12 @@ export function wrapAngle(angle: number): number {
   return a;
 }
 
+/** Smoothstep of `s` (0 to 1, held at its ends). */
+export function smoothstep(s: number): number {
+  const c = Math.max(0, Math.min(1, s));
+  return c * c * (3 - 2 * c);
+}
+
 /** The quaternion of a lean by `pitch` about the body's own x axis (positive: chest toward the ground, head toward +z), then a turn by `yaw` about the vertical, into `out` (x, y, z, w). */
 export function pitchedQuaternion(out: Float64Array, yaw: number, pitch: number): void {
   const sy = detSin(yaw / 2);

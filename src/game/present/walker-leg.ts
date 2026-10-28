@@ -1,11 +1,13 @@
 import { detAcos, detAsin, detAtan2, detCos, detSin } from "../kernel/physics-core.js";
+import { ANKLE_Y, JOINTS } from "./ragdoll-body.ts";
 
-/** The dummy's leg (`PARTS`): thigh and shin each 0.42 m, the hip joint 0.09 m either side of the torso's middle and 0.27 m under its centre. */
-const THIGH = 0.42;
+/** The dummy's leg (`PARTS`): a thigh from the hip joint to the knee joint and a shin from there to the ankle joint, the hip joint 0.09 m either side of the torso's middle and 0.27 m under its centre. */
+const THIGH = JOINTS[5][3] - JOINTS[6][3];
+const SHIN = JOINTS[6][3] - ANKLE_Y;
 export const HIP_HALF = 0.09;
 export const HIP_DROP = 0.27;
 /** The leg may stretch this far (m): a hair under straight, so the knee never locks. */
-const LEG_MAX = 2 * THIGH * 0.998;
+export const LEG_MAX = (THIGH + SHIN) * 0.998;
 const LEG_MIN = 0.15;
 
 /** `JOINTS` hip limits the walker widens to (`attach`): the thigh swings this far (rad) forward (-) and back (+), and rolls this far outward (-/+ by side) and inward. */
@@ -34,7 +36,7 @@ function thighToward(reach: number, ux: number, uy: number, uz: number): void {
     ky /= kLength;
     kz /= kLength;
   }
-  const offset = detAcos(reach / (2 * THIGH));
+  const offset = detAcos((THIGH * THIGH + reach * reach - SHIN * SHIN) / (2 * THIGH * reach));
   const c = detCos(offset);
   const s = detSin(offset);
   _thigh[0] = c * ux + s * kx;
@@ -56,5 +58,5 @@ export function solveLeg(out: Float64Array, o: number, dx: number, dy: number, d
   const rollHigh = side < 0 ? ROLL_IN_LIMIT : ROLL_OUT_LIMIT;
   out[o + LEG.ROLL] = Math.max(rollLow, Math.min(rollHigh, detAsin(Math.max(-1, Math.min(1, _thigh[0]!)))));
   out[o + LEG.SWING] = Math.max(HIP_SWING_FORWARD, Math.min(HIP_SWING_BACK, detAtan2(-_thigh[2]!, -_thigh[1]!)));
-  out[o + LEG.KNEE] = Math.PI - detAcos(1 - (reach * reach) / (2 * THIGH * THIGH));
+  out[o + LEG.KNEE] = Math.PI - detAcos((THIGH * THIGH + SHIN * SHIN - reach * reach) / (2 * THIGH * SHIN));
 }

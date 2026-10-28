@@ -1,6 +1,7 @@
 import { bodyIndex } from "./dummy-bodies.ts";
 import { headAt, type Head } from "./dummy-head.ts";
 import { printAt, type Fit, type Ring, type Shell } from "./dummy-rig.ts";
+import { ankleShare } from "./dummy-fit.ts";
 
 /** Wear as lofted shells: rings of cross-sections joined into a closed skin riding one bone, seated on the fitted body's surface. */
 
@@ -87,7 +88,10 @@ export function loft(shell: Shell, mesh: Lofted): void {
   }
   const phase = Math.PI / sides;
   const addVertex = (y: number, x: number, z: number, role: number): number => {
-    mesh.bones.push(shell.bone, shell.bone, 0);
+    const foot = shell.shin === undefined ? 1 : ankleShare(y);
+    if (foot >= 1) mesh.bones.push(shell.bone, shell.bone, 0);
+    else if (foot <= 0) mesh.bones.push(shell.shin!, shell.shin!, 0);
+    else mesh.bones.push(shell.shin!, shell.bone, foot);
     mesh.roleKind.push(role, shell.kinds);
     mesh.print.push(...printAt(shell.print, x, y, z));
     mesh.position.push(x, y, z);

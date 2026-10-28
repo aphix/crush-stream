@@ -17,10 +17,8 @@ import type { CrashEngine } from "./engine.ts";
 
 /** Sim seconds each step runs past the staged head-on: the pair meets in 0.2 s, so the wrecks, their contacts and a thrown driver are in it. */
 const CRASH_S = 2;
-/** Frames the grid may take to go green on the 1/240 s floor: a guard, not a wait. */
+/** Frames the grid may take to go green on the 1/240 s floor (a 3 s countdown with the course loaded): a guard, not a wait. */
 const GRID_FRAMES = 4000;
-/** Race seconds left to green when a step skips the countdown (0.25 s of grid frames settle the cars): the 4.5 s countdown is not what the rows claim. */
-const GRID_SETTLE_S = 0.25;
 
 describe("given one page that runs the bench's steps in turn, as the loop does (a second CrashEngine never resolves ready, so one engine for the file)", () => {
   let engine: CrashEngine;
@@ -40,7 +38,6 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
     engine.resetAdaptiveQuality();
     const since = simCounters(engine);
     enterBenchScene(engine, engine.benchParts(), benchPlan(query)!);
-    engine["race"]["session"]!.time = -GRID_SETTLE_S;
     badge.sync();
     entered[name] = {
       epicenter: epicenterOn(),

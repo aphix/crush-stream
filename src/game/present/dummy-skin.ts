@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { BODY_VERTICES, bodyIndex } from "./dummy-bodies.ts";
-import { HAND_LENGTH, KNEE_HALF_BAND, restFits, RIG_KNEE_Y } from "./dummy-fit.ts";
+import { ankleShare, HAND_LENGTH, KNEE_HALF_BAND, restFits, RIG_KNEE_Y } from "./dummy-fit.ts";
 import { FACE_FRONT_FROM, FACE_FRONT_TO, FACE_HALF_WIDTH, FACE_SPAN, headAt, measureHead, RIM_AT } from "./dummy-head.ts";
 import { scalpHairline } from "./dummy-hair.ts";
 import { loft, type Lofted } from "./dummy-loft.ts";
-import { BONES_ATTRIBUTE, BUILD, EVERY_BUILD, FLAGS_AT, HEAD, isDrawn, KINDS_ATTRIBUTE, LEFT_ARM, LEFT_LEG, NO_PRINT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, PRINT_ATTRIBUTE, RIGHT_ARM, RIGHT_LEG, ROLE, ROW_TEXELS, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, smooth, TORSO, type Fit } from "./dummy-rig.ts";
+import { BONES_ATTRIBUTE, BUILD, EVERY_BUILD, FLAGS_AT, HEAD, isDrawn, KINDS_ATTRIBUTE, LEFT_ARM, LEFT_FOOT, LEFT_LEG, NO_PRINT, NORMAL_PORTLY_ATTRIBUTE, NORMAL_WOMAN_ATTRIBUTE, PRINT_ATTRIBUTE, RIGHT_ARM, RIGHT_FOOT, RIGHT_LEG, ROLE, ROW_TEXELS, SHAPE_PORTLY_ATTRIBUTE, SHAPE_WOMAN_ATTRIBUTE, smooth, TORSO, type Fit } from "./dummy-rig.ts";
 import { dressRow } from "./dummy-dress.ts";
 import { BELT_BOTTOM, hangAttribute } from "./dummy-garments.ts";
 import { wearFor } from "./dummy-wear.ts";
@@ -14,7 +14,7 @@ import { decimate } from "../vehicle/cage-mesh.ts";
 
 /**
  * The dummy's one continuous body: `dummyGeometry` takes the three fitted bodies (one topology, three rest position sets), gives
- * every vertex two of the ten `PARTS` as bones with a blend between them and a colour role, and lofts each build's wear after.
+ * every vertex two of the twelve `PARTS` as bones with a blend between them and a colour role, and lofts each build's wear after.
  * `DummyMesh` (`ragdoll-mesh.ts`) poses it in the vertex shader; `skinPoint` is that skinning in TS.
  */
 
@@ -46,9 +46,11 @@ function paintBody(fit: Fit): { bones: number[]; roleKind: number[]; print: numb
     const isLeft = fit.tpose[i * 3]! < 0;
     const upperArm = isLeft ? LEFT_ARM : RIGHT_ARM;
     const thigh = isLeft ? LEFT_LEG : RIGHT_LEG;
+    const foot = isLeft ? LEFT_FOOT : RIGHT_FOOT;
     const kneeWeight = smooth(RIG_KNEE_Y + KNEE_HALF_BAND, RIG_KNEE_Y - KNEE_HALF_BAND, y);
+    const ankleWeight = ankleShare(y);
     if (fit.shoulderWeight[i]! > 0) bones.push(...(fit.shoulderWeight[i]! < 1 ? blendOf(TORSO, upperArm, fit.shoulderWeight[i]!) : blendOf(upperArm, upperArm + 1, fit.elbowWeight[i]!)));
-    else if (fit.hipWeight[i]! > 0) bones.push(...(fit.hipWeight[i]! < 1 ? blendOf(TORSO, thigh, fit.hipWeight[i]!) : blendOf(thigh, thigh + 1, kneeWeight)));
+    else if (fit.hipWeight[i]! > 0) bones.push(...(fit.hipWeight[i]! < 1 ? blendOf(TORSO, thigh, fit.hipWeight[i]!) : kneeWeight < 1 ? blendOf(thigh, thigh + 1, kneeWeight) : blendOf(thigh + 1, foot, ankleWeight)));
     else bones.push(...blendOf(TORSO, HEAD, fit.neckWeight[i]!));
     const isHand = fit.shoulderWeight[i]! >= 1 && y < wrist;
     const isSkin = isHand || fit.neckWeight[i]! >= 1;
@@ -125,8 +127,8 @@ const dummy = once(buildDummy);
 /** The one body every DummyMesh draws, built on first use and shared: only engine teardown disposes it. */
 export const dummyGeometry = (): THREE.BufferGeometry => dummy().geometry;
 
-/** Thigh and shin bones (`PARTS` 6-9): a seated driver's legs are under the dash, and so is the bare torso under the belt. */
-const LEG_BONES = [LEFT_LEG, LEFT_LEG + 1, RIGHT_LEG, RIGHT_LEG + 1];
+/** Thigh, shin and foot bones (`PARTS` 6-11): a seated driver's legs are under the dash, and so is the bare torso under the belt. */
+const LEG_BONES = [LEFT_LEG, LEFT_LEG + 1, RIGHT_LEG, RIGHT_LEG + 1, LEFT_FOOT, RIGHT_FOOT];
 /** The vertices the seated driver's body keeps: about 0.9k triangles, the most of a seated figure's budget. */
 const SEATED_BODY_VERTICES = 450;
 

@@ -95,7 +95,7 @@ afterEach(() => {
 const lyingCases: readonly { it: string; turns: readonly Turn[]; height: number; expectedRoute: GetUpRoute }[] = [
   { it: "when he lies on his stomach and the player asks to walk, then he pushes up and stands", turns: [["x", QUARTER]], height: 0.15, expectedRoute: "faceDown" },
   { it: "when he lies on his back and the player asks to walk, then he rolls over, pushes up and stands", turns: [["x", -QUARTER]], height: 0.15, expectedRoute: "faceUp" },
-  { it: "when he lies on his side and the player asks to walk, then he gets up", turns: [["z", QUARTER]], height: 0.2, expectedRoute: "faceUp" },
+  { it: "when he lies on his side and the player asks to walk, then he gets up", turns: [["z", QUARTER]], height: 0.2, expectedRoute: "faceDown" },
   { it: "when he lies on his stomach turned about, then he gets up facing the way his head pointed", turns: [["x", QUARTER], ["y", 2.4]], height: 0.15, expectedRoute: "faceDown" },
   { it: "when he lies on his back turned about, then he rolls over and gets up", turns: [["x", -QUARTER], ["y", -1.2]], height: 0.15, expectedRoute: "faceUp" },
 ];

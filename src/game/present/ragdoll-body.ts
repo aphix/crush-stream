@@ -1,4 +1,4 @@
-import { hypot3 } from "../kernel/physics-core.js";
+import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import type { Collider, ImpulseJoint, RigidBody } from "@dimforge/rapier3d-simd";
 
@@ -11,6 +11,7 @@ import type { Collider, ImpulseJoint, RigidBody } from "@dimforge/rapier3d-simd"
  * Dummy parts standing (feet at y = 0): centre, half extents (m). Torso first: the throw places it.
  * A 1.62 m crash-test dummy, about 100 kg at water's density. The drawn hands hang past the forearm boxes' ends (see the
  * hand allowance in ragdoll-mesh.test.ts): the boxes are the physics, and they stay as they were.
+ * The shins end at the ankles, `ANKLE_Y` up; the feet (parts 10 and 11, the -x leg's first) are 0.25 m from heel to toe, the heel 0.03 m behind the ankle.
  */
 export const PARTS = [
   { c: [0, 1.11, 0], h: [0.18, 0.27, 0.11] },
@@ -20,12 +21,23 @@ export const PARTS = [
   { c: [0.24, 1.21, 0], h: [0.05, 0.14, 0.05] },
   { c: [0.24, 0.93, 0], h: [0.05, 0.14, 0.05] },
   { c: [-0.09, 0.63, 0], h: [0.075, 0.21, 0.075] },
-  { c: [-0.09, 0.21, 0], h: [0.075, 0.21, 0.075] },
+  { c: [-0.09, 0.25, 0], h: [0.075, 0.17, 0.075] },
   { c: [0.09, 0.63, 0], h: [0.075, 0.21, 0.075] },
-  { c: [0.09, 0.21, 0], h: [0.075, 0.21, 0.075] },
+  { c: [0.09, 0.25, 0], h: [0.075, 0.17, 0.075] },
+  { c: [-0.09, 0.04, 0.095], h: [0.05, 0.04, 0.125] },
+  { c: [0.09, 0.04, 0.095], h: [0.05, 0.04, 0.125] },
 ] as const;
-/** Each part's mass (kg, water's density) and largest principal inertia (kg m²): `isCalm`'s kinetic energy. */
-const MASS = PARTS.map((p) => 8000 * p.h[0] * p.h[1] * p.h[2]);
+/** Water's density (kg/m³): every part's but the lower legs'. */
+const DENSITY = 1000;
+/** A foot's (parts 10 and 11, 5 kg): one of water under a shin four times its mass is pressed into the ground by the solver's few passes (5-6 cm at the Range's landings), and lighter ones than this left a throw at the high jump's net sitting up against it. */
+const FOOT_DENSITY = 2500;
+/** The footless shin's mass (kg: its 0.42 m box at water's density). Shin and foot together keep it, so a throw carries the mass, and the leg the inertia, it was tuned on. */
+const LOWER_LEG_KG = DENSITY * 8 * 0.075 * 0.21 * 0.075;
+const volume = (k: number): number => 8 * PARTS[k]!.h[0] * PARTS[k]!.h[1] * PARTS[k]!.h[2];
+const SHIN_DENSITY = (LOWER_LEG_KG - FOOT_DENSITY * volume(10)) / volume(7);
+export const partDensity = (k: number): number => (k >= 10 ? FOOT_DENSITY : k === 7 || k === 9 ? SHIN_DENSITY : DENSITY);
+/** Each part's mass (kg) and largest principal inertia (kg m²): `isCalm`'s kinetic energy. */
+export const MASS = PARTS.map((p, k) => 8 * partDensity(k) * p.h[0] * p.h[1] * p.h[2]);
 const INERTIA = PARTS.map((p, k) => {
   const [a, b] = [p.h[0] ** 2, p.h[1] ** 2, p.h[2] ** 2].sort((x, y) => y - x);
   return (MASS[k]! * (a! + b!)) / 3;
@@ -33,7 +45,11 @@ const INERTIA = PARTS.map((p, k) => {
 /** Arms (parts 2–5) start raised over the head: the superman dive out of the car. */
 export const ARM = (k: number) => k >= 2 && k <= 5;
 export const SHOULDER_Y = 1.35;
-/** Spherical joints: parent, child, the joint point standing. Neck, shoulders, elbows, hips, knees. */
+/** The ankle joints' height (m) over the sole, and how far (rad) an ankle brings the toes up and down: the joint's range. */
+export const ANKLE_Y = 0.08;
+export const ANKLE_TOES_UP = (20 * Math.PI) / 180;
+export const ANKLE_TOES_DOWN = (30 * Math.PI) / 180;
+/** Spherical joints: parent, child, the joint point standing. Neck, shoulders, elbows, hips, knees, ankles. */
 export const JOINTS = [
   [0, 1, 0, 1.39, 0],
   [0, 2, -0.24, SHOULDER_Y, 0],
@@ -44,6 +60,8 @@ export const JOINTS = [
   [6, 7, -0.09, 0.42, 0],
   [0, 8, 0.09, 0.84, 0],
   [8, 9, 0.09, 0.42, 0],
+  [7, 10, -0.09, ANKLE_Y, 0],
+  [9, 11, 0.09, ANKLE_Y, 0],
 ] as const;
 
 /** Dummy damping (per s) in the air, and from his first touch of the ground on: he lies down and stays down. */
@@ -163,8 +181,11 @@ export function shed(a: RigidBody, b: RigidBody, lin: number, spin: number): voi
  */
 const ARM_DROP = 10;
 const ELBOW_FOLD = 3;
-const KNEE_BEND = 8;
-const LIMP = [0, ARM_DROP, -ELBOW_FOLD, ARM_DROP, -ELBOW_FOLD, 0, KNEE_BEND, 0, KNEE_BEND] as const;
+/** Knees bend at 8 rad/s on the footless leg (its 9.45 kg 0.21 m below the knee). The feet put the lower leg's mass farther down, so the rate shrinks by as much and the kick carries the momentum it was tuned at. */
+const KNEE_Y = JOINTS[6][3];
+const LOWER_LEG_MOMENT = MASS[7]! * (KNEE_Y - PARTS[7].c[1]) + MASS[10]! * hypot2(KNEE_Y - PARTS[10].c[1], PARTS[10].c[2]);
+const KNEE_BEND = (8 * LOWER_LEG_KG * 0.21) / LOWER_LEG_MOMENT;
+const LIMP = [0, ARM_DROP, -ELBOW_FOLD, ARM_DROP, -ELBOW_FOLD, 0, KNEE_BEND, 0, KNEE_BEND, 0, 0] as const;
 /** Each joint's child and everything below it: what turns when that joint does. */
 const SUBTREE = JOINTS.map(([, b]) => {
   const parts: number[] = [b];

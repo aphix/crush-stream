@@ -12,6 +12,7 @@ const RIG_SHOULDER = new THREE.Vector3(JOINTS[3][2], JOINTS[3][3], JOINTS[3][4])
 const RIG_ELBOW_Y = JOINTS[4][3];
 const RIG_HIP = new THREE.Vector3(JOINTS[7][2], JOINTS[7][3], JOINTS[7][4]);
 export const RIG_KNEE_Y = JOINTS[8][3];
+const RIG_ANKLE_Y = JOINTS[10][3];
 export const RIG_NECK_Y = JOINTS[0][3];
 
 /** Rig head top (m): head centre plus its half height. The baked bodies are scaled to this. */
@@ -44,6 +45,10 @@ const CROTCH_LIFT = 0.06;
 const CROTCH_WIDTH = 0.1;
 /** The knee's blend half width (m): the shin's weight climbs across it. */
 export const KNEE_HALF_BAND = 0.05;
+/** The ankle's blend half width (m): the shoe's weight climbs across it; the trouser hem over the shoe rides it. */
+const ANKLE_HALF_BAND = 0.04;
+/** The foot's share (0..1) of a point at height `y` (m) on the leg, the shin's the rest: the body and a shoe over the ankle blend alike, so no ankle bend pulls one through the other. */
+export const ankleShare = (y: number): number => smooth(RIG_ANKLE_Y + ANKLE_HALF_BAND, RIG_ANKLE_Y - ANKLE_HALF_BAND, y);
 /**
  * The head's weight climbs over `NECK_FROM`..`NECK_TO` (m) in a height that sheds `NECK_SLANT` m per metre of |x| beyond the
  * neck's half width `NECK_HALF_WIDTH`, so the trapezius beside the neck never rides the head while the jaw is rigid on it.

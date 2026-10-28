@@ -6,31 +6,31 @@ import { copDriver } from "../vehicle/ejection.ts";
 import { driverSeat, HEAD } from "../vehicle/interior.ts";
 import { PART_KIND } from "../vehicle/part-geometry.ts";
 import type { DriverLook } from "./driver-look.ts";
-import { JOINTS, PARTS } from "./ragdoll-body.ts";
+import { ANKLE_Y, JOINTS, PARTS } from "./ragdoll-body.ts";
 import { LEFT_LEG } from "./dummy-rig.ts";
 import { seatedGeometry } from "./dummy-skin.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 
-/** Standing joints (`JOINTS` rows): [shoulder, elbow, hip, knee] per side, his right (-x) first; and his hips' middle. */
+/** Standing joints (`JOINTS` rows): [shoulder, elbow, hip, knee, ankle] per side, his right (-x) first; and his hips' middle. */
 const LIMB_JOINTS = [
-  [1, 2, 5, 6],
-  [3, 4, 7, 8],
+  [1, 2, 5, 6, 9],
+  [3, 4, 7, 8, 10],
 ] as const;
-/** Body parts per side: upper arm, forearm, thigh, shin (`PARTS`). */
+/** Body parts per side: upper arm, forearm, thigh, shin, foot (`PARTS`). */
 const LIMB_PARTS = [
-  [2, 3, 6, 7],
-  [4, 5, 8, 9],
+  [2, 3, 6, 7, 10],
+  [4, 5, 8, 9, 11],
 ] as const;
 const HIP_MID = new THREE.Vector3(0, JOINTS[5]![3], 0);
 /** Elbow to the palm's grip on the rim (m): the forearm's 0.28 and the hand's root. */
 const FOREARM_GRIP = 0.35;
-/** The knee to the sole (m): the shin's whole length. */
-const SHIN_SOLE = JOINTS[6]![3];
+/** The knee to the ankle (m): the shin's whole length. */
+const SHIN_LENGTH = JOINTS[6]![3] - JOINTS[9]![3];
 /** Elbows bend out and down, knees up and a little ahead. */
 const ELBOW_POLE = [0.6, -1, 0] as const;
 const KNEE_POLE = new THREE.Vector3(0, 1, 0.3).normalize();
 
-/** A seated driver's ten parts (`PARTS` order) in car space: each part's centre and turn from standing. */
+/** A seated driver's twelve parts (`PARTS` order) in car space: each part's centre and turn from standing. */
 interface SeatedPose {
   readonly p: readonly THREE.Vector3[];
   readonly q: readonly THREE.Quaternion[];
@@ -77,8 +77,8 @@ function seatedPose(style: BodyStyle): SeatedPose {
     p[k]!.copy(stand(k).sub(rest).applyQuaternion(q[k]!).add(at));
   };
   for (let side = 0; side < 2; side++) {
-    const [shoulderJ, elbowJ, hipJ, kneeJ] = LIMB_JOINTS[side]!;
-    const [upper, fore, thigh, shin] = LIMB_PARTS[side]!;
+    const [shoulderJ, elbowJ, hipJ, kneeJ, ankleJ] = LIMB_JOINTS[side]!;
+    const [upper, fore, thigh, shin, foot] = LIMB_PARTS[side]!;
     const out = side === 0 ? -1 : 1;
     const shoulder = onTorso(joint(shoulderJ));
     const upperLen = joint(shoulderJ).distanceTo(joint(elbowJ));
@@ -88,10 +88,11 @@ function seatedPose(style: BodyStyle): SeatedPose {
     hang(fore, joint(elbowJ), elbow, grip.clone().sub(elbow).normalize());
     const hip = onTorso(joint(hipJ));
     const thighLen = joint(hipJ).distanceTo(joint(kneeJ));
-    const foot = seat.feet[side]!;
-    const knee = bend(new THREE.Vector3(), hip, foot, thighLen, SHIN_SOLE, KNEE_POLE);
+    const ankle = seat.feet[side]!.clone().setY(seat.feet[side]!.y + ANKLE_Y);
+    const knee = bend(new THREE.Vector3(), hip, ankle, thighLen, SHIN_LENGTH, KNEE_POLE);
     hang(thigh, joint(hipJ), hip, knee.clone().sub(hip).normalize());
-    hang(shin, joint(kneeJ), knee, foot.clone().sub(knee).normalize());
+    hang(shin, joint(kneeJ), knee, ankle.clone().sub(knee).normalize());
+    p[foot]!.copy(stand(foot).sub(joint(ankleJ)).add(ankle));
   }
   const pose = { p, q };
   poses.set(style, pose);

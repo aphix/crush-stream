@@ -10,7 +10,7 @@ const flat = () => 0;
 /** The torso's centre height standing (m): the gait seeds from it. */
 const STANDING_TORSO = 1.11;
 
-type Frame = { planted: number[]; feet: number[]; hipY: number; targets: number[]; twist: number; anchorY: number };
+type Frame = { planted: number[]; pivot: number[]; feet: number[]; contact: number[]; hipY: number; targets: number[]; twist: number; anchorY: number };
 
 /** A walker asked for `command` along +z for `warm` s, then watched for `seconds` more (`turnTo` rad: the heading asked for at the watch's start). */
 function watch(command: number, seconds: number, turnTo = 0): Frame[] {
@@ -23,22 +23,22 @@ function watch(command: number, seconds: number, turnTo = 0): Frame[] {
   for (let f = 0; f < warm + Math.round(seconds * FRAME_HZ); f++) {
     loco.update(FRAME, f < warm ? 0 : turnTo, command);
     gait.update(FRAME, loco, flat);
-    if (f >= warm) frames.push({ planted: Array.from(gait["planted"]), feet: Array.from(gait["foot"]), hipY: gait["hipY"], targets: Array.from(gait.targets), twist: gait.twist, anchorY: gait.anchor[1]! });
+    if (f >= warm) frames.push({ planted: Array.from(gait["planted"]), pivot: Array.from(gait["pivot"]), feet: Array.from(gait["foot"]), contact: Array.from(gait["plant"]), hipY: gait["hipY"], targets: Array.from(gait.targets), twist: gait.twist, anchorY: gait.anchor[1]! });
   }
   return frames;
 }
 
 const range = (values: number[]) => Math.max(...values) - Math.min(...values);
 
-/** The worst a planted foot moved between two frames (m) over `frames`, and how many frames found a foot planted in both. */
+/** The worst a planted foot's pivot (the heel, then the toe it rolls onto: the ankle rides over it) moved between two frames (m) over `frames`, and how many frames found a foot planted on the same pivot in both. */
 function plantedSlide(frames: Frame[]): { worst: number; samples: number } {
   let worst = 0;
   let samples = 0;
   for (let i = 1; i < frames.length; i++) {
     for (let f = 0; f < 2; f++) {
-      if (!frames[i]!.planted[f] || !frames[i - 1]!.planted[f]) continue;
+      if (!frames[i]!.planted[f] || !frames[i - 1]!.planted[f] || frames[i]!.pivot[f] !== frames[i - 1]!.pivot[f]) continue;
       samples++;
-      worst = Math.max(worst, Math.hypot(frames[i]!.feet[f * 3]! - frames[i - 1]!.feet[f * 3]!, frames[i]!.feet[f * 3 + 2]! - frames[i - 1]!.feet[f * 3 + 2]!));
+      worst = Math.max(worst, Math.hypot(frames[i]!.contact[f * 3]! - frames[i - 1]!.contact[f * 3]!, frames[i]!.contact[f * 3 + 2]! - frames[i - 1]!.contact[f * 3 + 2]!));
     }
   }
   return { worst, samples };
