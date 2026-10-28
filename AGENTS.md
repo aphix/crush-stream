@@ -35,7 +35,7 @@ are in `docs/ARCHITECTURE.md` and enforced by `npm run check:boundaries`.
 | `node scripts/run-tests.mjs <files or globs> [--concurrency=2]` | the same runner on just the files named (one process per file); `--concurrency=` also works after `test:app` |
 | `npm run test:ai-long-run` | the long suite, `src/game/**/*.ai-long-run.ts`: AI-driven runs (whole fields watched for stuck cars, false ejections). Not in the per-commit gate; part of `test:all`. Linted, typechecked and boundary-checked like tests |
 | `npm run test:all` | `test:app` and `test:ai-long-run` in one pass, longest files first across both: what a landing on `main` must pass (`--concurrency=` as above) |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run typecheck` | `tsrs --noEmit --fast`, oxc's Rust port of the TypeScript checker (`docs/TOOLCHAIN.md`) |
 | `npm run check:boundaries` | the structural rules, ratcheted against `scripts/boundary-caps.json` |
 | `npm run lint` | `oxlint` (`docs/TOOLCHAIN.md`) |
 | `npm run build:node` | the self-hosted server build into `.output/` |

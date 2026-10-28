@@ -5,10 +5,15 @@ Measured on WSL2 (14 cores, 23 GB), with the box shared with another project's c
 | Tool | Before | After | Wall before → after | Peak RSS before → after | Decision |
 |---|---|---|---|---|---|
 | Lint | `eslint .` 9.39 | `oxlint` 1.86 | 7.8 s (25.4 s under heavier load) → 1.2 s | 606 MB → 239 MB | **Cut over** |
+| Typecheck | `tsc --noEmit` 5.7 | `tsrs --noEmit --fast` 0.20.0 (oxc-project, Rust) | cold 10.6-11.2 s → 0.26-0.35 s; warm (tsc's incremental cache) 2.2-3.1 s → 0.10-0.25 s | cold 1,338-1,359 MB, warm 937-941 MB → 242-417 MB | **Cut over** (2026-10-28) |
 
 ## oxlint (replaces ESLint)
 
-`npm run lint` runs `oxlint` with `.oxlintrc.json`; it replaced ESLint with the same rule set. Two things the config does on purpose: `no-undef` for `.js`/`.mjs` files comes from `oxlint-plugin-eslint` (tsc covers TS files), and `.js` files get `no-warning-comments` and `eslint-js/no-restricted-syntax` where oxlint's `ban-ts-comment` and `no-this-alias` run on TS only. No rule is type-aware, so `oxlint-tsgolint` is not needed.
+`npm run lint` runs `oxlint` with `.oxlintrc.json`; it replaced ESLint with the same rule set. Two things the config does on purpose: `no-undef` for `.js`/`.mjs` files comes from `oxlint-plugin-eslint` (the typecheck covers TS files), and `.js` files get `no-warning-comments` and `eslint-js/no-restricted-syntax` where oxlint's `ban-ts-comment` and `no-this-alias` run on TS only. No rule is type-aware, so `oxlint-tsgolint` is not needed.
+
+## tsrs (replaces tsc for the typecheck)
+
+`npm run typecheck` runs `tsrs`, oxc-project's Rust port of the TypeScript 7 checker, pinned at `0.20.0-ts7.1.0-beta` (2 days old when added, so it clears pnpm's release-age check without an exclusion). Both checkers list the same 1,743 files under `src`; seeded errors came out identical from both, file, line, column and code: five across three TS files (TS2322, TS2339, TS2344, one a `.tsx`), a `checkJs` error in `scripts/migration-plan.mjs` (reached through `src/lib/db.ts`) and a missing `@/` import (TS2307); main checks clean under both. TypeScript 7 removed `baseUrl`, so `tsconfig.json` drops it (`paths` were already relative; tsc 5.7 checks clean without it, and Vite's `resolve.tsconfigPaths` resolves `@/` without it). `typescript` 5.x stays installed: `scripts/check-boundaries.mjs` and `scripts/dup-scan.mjs` parse with its compiler API, and editors' language service uses it.
 
 ## Speed audit (2026-10-07)
 
@@ -30,7 +35,7 @@ and interleaved where the effect is small; "n" is the number of pairs.
 | Item | Result | Verdict |
 |---|---|---|
 | Cache headers on `assets/**` | Nitro's Vite integration already sends `Cache-Control: public, max-age=31536000, immutable` on every file under `assets/` (the unmodified baseline build, 25 requests in a production browser run: all 25 carry it; the second visit takes 20 of 23 requests from the cache) | nothing to add |
-| tsgo (`@typescript/native-preview` 7.0.0-dev.20260707.2) and `oxlint-tsgolint` | tsgo 1.0-1.1 s wall, 4.2 s CPU vs tsc 6.4-9.3 s, 11-14 s CPU (n = 5 pairs, load 14); same 4 diagnostics on 4 seeded errors; needed `baseUrl` out of tsconfig (TS 7 removed it). `oxlint --type-aware` finds nothing new (no type-aware rule is enabled); `--type-check` adds 2 false positives | both are Go (microsoft/typescript-go): the repo allows no Go. Incremental `tsc` is the fast check |
+| tsgo (`@typescript/native-preview` 7.0.0-dev.20260707.2) and `oxlint-tsgolint` | tsgo 1.0-1.1 s wall, 4.2 s CPU vs tsc 6.4-9.3 s, 11-14 s CPU (n = 5 pairs, load 14); same 4 diagnostics on 4 seeded errors; needed `baseUrl` out of tsconfig (TS 7 removed it). `oxlint --type-aware` finds nothing new (no type-aware rule is enabled); `--type-check` adds 2 false positives | both are Go (microsoft/typescript-go): the repo allows no Go. Superseded 2026-10-28 by tsrs (Rust; see above) |
 | Node compile cache for the test children | user CPU of the 174 files' imports 184.8 -> 142.9 s warm (-23%); a cache filled from one worktree hits from another (209.9 -> 148.3 s); 15 MB | `capped` exports `NODE_COMPILE_CACHE` now, so nothing to add |
 | Startup of a test file | 0.7-1.4 s CPU per file, 145-196 CPU-s per suite (11-13% of all test CPU). In a profile: amaro's type strip 21-24%, V8 module compile 10-12%, `new Track(...)` at module level 15-25% in track-heavy files | a strip cache would save about 35 CPU-s (9 s wall): not worth a loader hook |
 | Why the slow files are slow | CPU profiles of `race-eject-false` and `reel-view`: `world/track.ts` ground queries are 30% / 16% of self time (`heightAt` 9.4%, `stampPath` 7%, `projectPath` 6%, `deckAt` 3%), `ai/race-ai.ts` `plan` 9%, Rapier-in-wasm 15% in reel-view; GC 1-1.5% | the cost is the sim itself, which is also the game's per-step cost: a sim-perf item, not a toolchain flag. GC is so small that `--max-semi-space-size` cannot help |
