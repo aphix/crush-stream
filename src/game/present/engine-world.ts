@@ -3,7 +3,7 @@ import { detAtan2, detCos, detSin } from "../kernel/physics-core.js";
 import { applyMarkMap } from "./engine-marks.ts";
 import { groundMaterial, groundMesh } from "../scenes/ground-stack.ts";
 import { tagSurface } from "./ultra/surface-tag.ts";
-import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
+import { MATERIAL, MATERIAL_WET, tagMaterial } from "../vehicle/material-class.ts";
 import { LAMP_POOL } from "./constants.ts";
 import { rowElevation, SKY_LOOKS, SkyDome, skyDetailFor, type SkyDetail, type SkyMode } from "./sky-dome.ts";
 import { SANDBOX_SKY } from "./sky-procedural.ts";
@@ -230,6 +230,9 @@ const MOON_ELEVATION = { min: THREE.MathUtils.degToRad(20), max: THREE.MathUtils
 const DEFAULT_FILL_AT = [10, 12, -14] as const;
 /** The sky light's colour from below: what the dark asphalt bounces back up. */
 const GROUND_BOUNCE = 0x1a1816;
+/** The stage ground's dry surface, set again on every `apply`; wet is the classed shader's (`MATERIAL_WET`). */
+const GROUND_ROUGHNESS = 0.88;
+const GROUND_METALNESS = 0.06;
 
 /** The sun's elevation (rad) for `time`: the default day's, or where the picture's disc is (sunset not under `LOW_SUN`). */
 export function sunElevation(time: TimeOfDay | null): number {
@@ -337,8 +340,8 @@ export class WorldStage {
 
     this.groundMat = tagMaterial(new THREE.MeshStandardMaterial({
       color: 0x2a2c34,
-      roughness: 0.88,
-      metalness: 0.06,
+      roughness: GROUND_ROUGHNESS,
+      metalness: GROUND_METALNESS,
       map: tagSurface(makeAsphalt(), "asphalt", STAGE_DIAMETER),
     }), MATERIAL.ASPHALT);
     applyMarkMap(this.groundMat);
@@ -512,11 +515,9 @@ export class WorldStage {
     if (this.scene.environment) this.scene.environmentIntensity = this.envIntensity;
     lampHead.emissiveIntensity = this.night ? NIGHT.lamp : day.lamp;
     lampPool.visible = this.night;
-    // Wet is a satin sheen on the dry albedo. The old mirror (roughness 0.2, env 1.8, darker albedo) laid a
-    // bright glare band over the ground: ground luminance +35 % vs dry; this one +16 %, car/ground contrast 2.67
-    // (dry 2.47, old wet 2.56).
-    const m = this.groundMat;
-    m.roughness = this.wet ? 0.38 : 0.88;
-    m.metalness = this.wet ? 0 : 0.06;
+    // Wet is a satin sheen on the dry albedo, not the old mirror whose glare band lit the ground 35 % over dry: the classed shaders read this one uniform.
+    MATERIAL_WET.value = this.wet ? 1 : 0;
+    this.groundMat.roughness = GROUND_ROUGHNESS;
+    this.groundMat.metalness = GROUND_METALNESS;
   }
 }

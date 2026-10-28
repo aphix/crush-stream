@@ -57,14 +57,14 @@ export class GarageArt {
       new THREE.PlaneGeometry(halfW * 2, height).rotateY(-Math.PI / 2).translate(halfW, height / 2, back + halfW),
       new THREE.PlaneGeometry(halfW * 2, height).rotateY(Math.PI / 2).translate(-halfW, height / 2, back + halfW),
     ];
-    const walls = new THREE.Mesh(mergeGeometries(sides)!, tagMaterial(new THREE.MeshStandardMaterial({ map: blocks, roughness: 0.95, metalness: 0 }), MATERIAL.CONCRETE));
+    const walls = new THREE.Mesh(mergeGeometries(sides)!, tagMaterial(new THREE.MeshStandardMaterial({ map: blocks, roughness: 0.95, metalness: 0 }), MATERIAL.INTERIOR));
     for (const g of sides) g.dispose();
     walls.receiveShadow = true;
     const slab = canvasTexture(512, 512, concrete);
     slab.repeat.set((halfW * 2) / SLAB_TILE, (halfW * 2) / SLAB_TILE);
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(halfW * 2, halfW * 2).rotateX(-Math.PI / 2).translate(0, 0.002, back + halfW),
-      tagMaterial(new THREE.MeshStandardMaterial({ map: slab, roughness: 0.9, metalness: 0 }), MATERIAL.CONCRETE),
+      tagMaterial(new THREE.MeshStandardMaterial({ map: slab, roughness: 0.9, metalness: 0 }), MATERIAL.INTERIOR),
     );
     floor.receiveShadow = true;
     const turntable = new THREE.Mesh(

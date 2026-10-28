@@ -185,7 +185,7 @@ describe("given the sliders' two shared strength uniforms", () => {
     const shader = compile(tagMaterial(new THREE.MeshStandardMaterial(), MATERIAL.CONCRETE));
     assert.equal(shader.uniforms.materialStrength, MATERIAL_STRENGTH, "the shared uniform object");
     assert.equal(countOf(shader.fragmentShader, "uniform float materialStrength;"), 1, "declaration");
-    assert.ok(shader.fragmentShader.includes("*= materialSpecular(MATERIAL_ENV[materialClass]);"), "the scaled env line");
+    assert.ok(shader.fragmentShader.includes("*= materialSpecular(worldEnvShare(MATERIAL_ENV[materialClass], roughnessFactor, materialWetK));"), "the scaled env line");
     assert.ok(shader.fragmentShader.includes("MATERIAL_SLOPE[materialClass] * materialStrength"), "the scaled grain");
   });
 });

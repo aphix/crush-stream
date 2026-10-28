@@ -3,6 +3,7 @@ import { LAB_LIGHT } from "./lab-art.ts";
 import { makeLamp, STAGE_DIAMETER } from "./engine-world.ts";
 import { GROUND_LEVEL } from "../scenes/constants.ts";
 import { groundMesh } from "../scenes/ground-stack.ts";
+import { MATERIAL, tagMaterial } from "../vehicle/material-class.ts";
 import { ELDER_LOOK, VIP_LOOK } from "./dummy-dress.ts";
 import { FACE } from "./dummy-faces.ts";
 import { JEANS, OUTFIT, type DriverLook } from "./driver-look.ts";
@@ -74,8 +75,10 @@ export const SHOWCASE_CAR = { x: 60, z: 60 };
 export const SHOWCASE_KNOCK = { speed: 6, lift: 0.3 };
 /** The reference's studio: a key from the eye's upper left (42° up, 20° round), so each front falls off to its right side as the reference's do, a cool sky light filling with its grey floor's bounce from below, and the fill as a low back light behind the rows so their backs are not left in the dark (low, so it lights no cap or hair top). */
 export const SHOWCASE_LIGHT = { ...LAB_LIGHT, sunIntensity: 1.6, sunAt: [-5, 14, 14] as const, hemi: "#bcc2cc", hemiIntensity: 1.4, ground: "#7a7a7a", fillIntensity: 1.1, fillAt: [0, 3, -14] as const };
-/** The reference's floor: a matte mid-grey (sRGB, tuned to its lightness under the showcase's light) over the sandbox's asphalt, under its grid and rings; matte so the back light does not glint off it at the eye's grazing angle. */
-const STUDIO_FLOOR = 0x3f3c39;
+/** The reference's floor: a matte mid-grey (sRGB, tuned to hold the lightness its unlit Lambert had under the showcase's light, now that the studio env lights it) over the sandbox's asphalt, under its grid and rings. Wet drops its roughness as the ground's does. */
+const STUDIO_FLOOR = 0x2e2c2a;
+/** The share of a street's wetness the studio floor takes: at full the low back light shone a white hot spot across the people's feet. */
+const FLOOR_WET_SHARE = 0.6;
 
 /** The light posts' feet (x, z; m) and where each spot aims (x, z; m): the front pair flank the people (out of the opening frame), the back pair the car rows. */
 const POSTS: readonly { x: number; z: number; aimX: number; aimZ: number }[] = [
@@ -94,7 +97,7 @@ export class ShowcaseArt {
   readonly people = new People(SLOTS);
   readonly slots = SLOTS;
   readonly carSlots = CAR_ROWS.length * CAR_STYLES.length;
-  private readonly floor = groundMesh(new THREE.CircleGeometry(STAGE_DIAMETER / 2, 64), new THREE.MeshLambertMaterial({ color: STUDIO_FLOOR }), GROUND_LEVEL.runoff);
+  private readonly floor = groundMesh(new THREE.CircleGeometry(STAGE_DIAMETER / 2, 64), tagMaterial(new THREE.MeshStandardMaterial({ color: STUDIO_FLOOR, roughness: 1, metalness: 0 }), MATERIAL.ASPHALT, FLOOR_WET_SHARE), GROUND_LEVEL.runoff);
   /** The posts' spots, in the set whenever it stands (a light shown or hidden relinks every lit shader) and dark by day (`setNight`). */
   private readonly postLights: THREE.SpotLight[] = [];
 

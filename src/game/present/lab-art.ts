@@ -375,14 +375,14 @@ export class LabArt {
       new THREE.PlaneGeometry(ROOM_HALF_W * 2, ROOM_H).rotateY(-Math.PI / 2).translate(ROOM_HALF_W, FLOOR + ROOM_H / 2, LAB_BACK + ROOM_HALF_W),
       new THREE.PlaneGeometry(ROOM_HALF_W * 2, ROOM_H).rotateY(Math.PI / 2).translate(-ROOM_HALF_W, FLOOR + ROOM_H / 2, LAB_BACK + ROOM_HALF_W),
     ];
-    const walls = new THREE.Mesh(mergeGeometries(sides)!, tagMaterial(new THREE.MeshStandardMaterial({ map: blocks, roughness: 0.95, metalness: 0 }), MATERIAL.CONCRETE));
+    const walls = new THREE.Mesh(mergeGeometries(sides)!, tagMaterial(new THREE.MeshStandardMaterial({ map: blocks, roughness: 0.95, metalness: 0 }), MATERIAL.INTERIOR));
     for (const g of sides) g.dispose();
     walls.receiveShadow = true;
     const slab = canvasTexture(512, 512, concrete);
     slab.repeat.set(400 / (3 * S), 400 / (3 * S));
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2).translate(0, FLOOR, 60),
-      tagMaterial(new THREE.MeshStandardMaterial({ map: slab, roughness: 0.9, metalness: 0 }), MATERIAL.CONCRETE),
+      tagMaterial(new THREE.MeshStandardMaterial({ map: slab, roughness: 0.9, metalness: 0 }), MATERIAL.INTERIOR),
     );
     floor.receiveShadow = true;
     const rule = canvasTexture(2048, 64, steelRule);
