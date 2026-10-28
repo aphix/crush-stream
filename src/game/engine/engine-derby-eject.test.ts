@@ -11,6 +11,8 @@ const RUN_TO_S = 3;
 const WATCH_S = 2;
 /** A car this fast (m/s) is driving when its driver goes out. */
 const ROLLING_MPS = 2;
+/** The derby's field seed: unpinned, `toggleDerby` rolls one, and some fields have no rival rolling when the second row starts. */
+const DERBY_SEED = 1;
 
 describe("given the real engine in a derby, past the green light, the player at the wheel among AI rivals", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -51,6 +53,7 @@ describe("given the real engine in a derby, past the green light, the player at 
   before(async () => {
     rig = await OnFootRig.boot();
     rig.engine["looping"] = false;
+    rig.engine["pinnedSeed"] = DERBY_SEED;
     rig.engine.toggleDerby();
     rig.run(0.5);
     assert.ok(rig.engine.derbyMode, "the derby is on");
