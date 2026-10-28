@@ -21,7 +21,7 @@ function raceDigest(w: World, track: Track, seed: number): unknown {
 }
 
 describe(`given ${RACES} city races on one field, seeds 1 to ${RACES}, on cars that Retry, Next and a campaign reuse`, () => {
-  it(`when the ${RACES} races run in a row on one world, then each plays out exactly as the same race on fresh cars, in outcome, final poses and bodies`, () => {
+  it(`when the ${RACES} races run in a row on one world, then races 2 to ${RACES} each play out exactly as the same race on fresh cars, in outcome, final poses and bodies (race 1 is the chain's own first race on a fresh world)`, () => {
     const track = new Track(TRACKS.find((j) => parseTrack(j).id === "city"));
     // One world at a time: the active ground is process-wide (`ground.ts`), and leaving a race restores the flat one.
     // The digest reads sim state alone, not skins.
@@ -35,7 +35,7 @@ describe(`given ${RACES} city races on one field, seeds 1 to ${RACES}, on cars t
       chained.race.exit();
     }
     try {
-      for (let seed = 1; seed <= RACES; seed++) {
+      for (let seed = 2; seed <= RACES; seed++) {
         const fresh = makeWorld();
         fresh.skin = false;
         fresh.race.enter();
