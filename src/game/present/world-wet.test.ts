@@ -74,8 +74,8 @@ const DRY_ROAD_ROUGHNESS = 0.9;
 const TUNED_FROM = 0.8;
 const FAMILY_COUNT = 14;
 
-describe("given a world material tagged with a class", () => {
-  it("when it compiles, then it reads the one shared wet uniform", () => {
+describe("given a world surface shaded by its material kind (asphalt, soil, wood...) when the Wet setting is on", () => {
+  it("when the surface is drawn, then it reads the one shared wetness every world surface follows", () => {
     const shader = compile(tagMaterial(new THREE.MeshStandardMaterial(), MAT.ASPHALT));
     expect(shader.uniforms.materialWet, "the shared uniform object").toBe(MATERIAL_WET);
   });

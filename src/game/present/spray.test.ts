@@ -61,7 +61,7 @@ describe("given a spray bitmap on the wire", () => {
     bitmap.dispose();
   });
 
-  it("when a painted bitmap is cleared with load(null), then every texel and rgba byte is zero and the inks are the presets, as loading an all-bare paint writes them", () => {
+  it("when a painted bitmap is cleared (loaded with no paint), then every texel and rgba byte is zero and the inks are the presets, as loading an all-bare paint writes them", () => {
     const cleared = new SprayBitmap(CAR_SPRAY);
     cleared.spray(new THREE.Vector3(-0.9, 0.8, 0), new THREE.Vector3(-1, 0, 0), 0.15, cleared.inkOf(0x123456), () => 0);
     expect(cleared.painted(), "something to clear").toBeTruthy();

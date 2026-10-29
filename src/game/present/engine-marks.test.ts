@@ -260,14 +260,14 @@ describe("given a wheel laying a stamp every frame round a 6 m turn", () => {
   const at = (i: number): [number, number] => [6 * Math.sin(i * 0.08), 6 - 6 * Math.cos(i * 0.08)];
   for (let i = 1; i <= STAMPS; i++) marks["queue"](0, ...at(i - 1), ...at(i), TYRE_W, 0, 1);
 
-  it("when its quads are read, then each starts exactly on the edge the one before ended on (one strip, no wedge gaps)", () => {
+  it("when its stamps are laid, then each starts exactly on the edge the one before ended on (one strip, no wedge gaps)", () => {
     for (let q = 1; q < STAMPS; q++) {
       expect(cornerText(marks, q, 0), `quad ${q} start left`).toBe(cornerText(marks, q - 1, 3));
       expect(cornerText(marks, q, 1), `quad ${q} start right`).toBe(cornerText(marks, q - 1, 2));
     }
   });
 
-  it("when its quads are read, then every edge is a tyre wide", () => {
+  it("when its stamps are laid, then every edge is a tyre wide", () => {
     for (let q = 0; q < STAMPS; q++) {
       expect(Math.abs(edgeLength(corner(marks, q, 0), corner(marks, q, 1)) - TYRE_W), `quad ${q} start edge`).toBeLessThan(1e-6);
       expect(Math.abs(edgeLength(corner(marks, q, 3), corner(marks, q, 2)) - TYRE_W), `quad ${q} end edge`).toBeLessThan(1e-6);

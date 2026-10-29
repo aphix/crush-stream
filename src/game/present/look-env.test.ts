@@ -29,7 +29,7 @@ function uprightPixels(file: Buffer): string {
 }
 
 describe("given the studio environment's RGBE file", () => {
-  it("when loadHdrEnv loads it, then the main thread never parses it, and the equirect it prefilters holds three's HDRLoader pixels with the rows top first", async () => {
+  it("when the page loads it, then the main thread never parses it, and the environment map it prefilters holds the file's decoded pixels with the rows top first", async () => {
     const want = uprightPixels(await readFile(new URL(STUDIO_ENV_URL.slice(1), PUBLIC)));
     const prefiltered: string[] = [];
     const fromEquirectangular = THREE.PMREMGenerator.prototype.fromEquirectangular;

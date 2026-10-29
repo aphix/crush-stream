@@ -3,8 +3,8 @@ import * as THREE from "three";
 import { camOf, eyeOf } from "./free-cam-pose.ts";
 import { FreeCam } from "./free-cam.ts";
 
-describe("given the free eye's pose as `cam=` writes it", () => {
-  it("when a pose is written and read back, then the eye and the heading are the same, and the eye is where headless-frame's --camera puts it", () => {
+describe("given a free camera's pose saved as the shareable camera setting", () => {
+  it("when a pose is written and read back, then the eye and the heading are the same, and the eye is where the headless screenshot camera puts it", () => {
     const free = new FreeCam();
     free.eye.set(12, 3.5, -7);
     free.yaw = 2.1;

@@ -34,10 +34,10 @@ describe("given the engine bus gain (the slider, linear to unity: the 0.25 defau
 });
 
 describe("given the master limiter", () => {
-  it("when its ratio is read, then it limits (at least 10:1) instead of the old 4:1 squeeze", () => {
+  it("when the limiter is set up, then it limits (at least 10:1) instead of the old 4:1 squeeze", () => {
     expect(MASTER_LIMITER.ratio).toBeGreaterThanOrEqual(10);
   });
-  it("when its attack and release are read, then it grabs a peak within 5 ms and lets go within a quarter second", () => {
+  it("when the limiter is set up, then it grabs a peak within 5 ms and lets go within a quarter second", () => {
     expect(MASTER_LIMITER.attack <= 0.005 && MASTER_LIMITER.release <= 0.25).toBeTruthy();
   });
 });

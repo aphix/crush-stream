@@ -67,7 +67,7 @@ describe("given the National Mall's VIP and the player's car parked on the White
     expect(vip.ridingIn, "no longer riding").toBe(-1);
   });
 
-  it("when he rides, then his hips are on the passenger seat from the style's seats (the driver's H-point mirrored across the car), and they ride a crushed cabin", () => {
+  it("when he rides, then his hips are on the passenger seat (the driver's seat mirrored across the car), and they ride a crushed cabin", () => {
     const { vip, car, cars, throwPassenger, throwFigure, boardedAt } = escort(true, 40);
     expect(boardedAt, "control: he boarded").toBeGreaterThan(0);
     const mesh: DummyMesh = vip["people"]["mesh"];
@@ -90,29 +90,34 @@ describe("given the National Mall's VIP and the player's car parked on the White
     expect(escort(true, 40).boardedAt, "with the secret out he boards").toBeGreaterThan(0);
   });
 
-  const strikeCases = [
-    { it: "when a car at 15 m/s is on him as he walks, then he is thrown once where he stood by the car, and is drawn no more", mps: 15, expectedFigures: 1 },
-    { it: "when a car at 2 m/s is on him as he walks, then he is left standing", mps: 2, expectedFigures: 0 },
-  ] as const;
-  for (const testCase of strikeCases) {
-    it(testCase.it, () => {
-      const { vip, cars, throwPassenger, throwFigure, figures } = escort(true, 3);
-      const where = { x: vip["x"], z: vip["z"] };
-      expect(vip["phase"], "he is out on his walk").toBe("walking");
-      const bullet = makeCar();
-      launch(bullet, where.x, where.z, 0, 0, testCase.mps);
-      cars.push(bullet);
-      vip.frame(FRAME, true, 0, cars, throwPassenger, throwFigure);
-      vip.frame(FRAME, true, 0, cars, throwPassenger, throwFigure);
-      expect(figures.length, "figures thrown").toBe(testCase.expectedFigures);
-      expect(vip["phase"], "his phase").toBe(testCase.expectedFigures === 1 ? "thrown" : "walking");
-      if (testCase.expectedFigures === 0) return;
-      expect(figures[0]!.guard, "the VIP, not a guard").toBe(-1);
-      expect(figures[0]!.car, "struck by the second car").toBe(1);
-      expect(Math.abs(figures[0]!.x - where.x) < 1e-3 && Math.abs(figures[0]!.z - where.z) < 1e-3, "where he stood").toBeTruthy();
-      expect((vip["people"]["mesh"]["shown"] >> 0) & 1, "his figure is hidden").toBe(0);
-    });
+  /** A second car at `mps` runs into the VIP two seconds into his walk; returns where he stood and what was thrown. */
+  function runDownAt(mps: number) {
+    const { vip, cars, throwPassenger, throwFigure, figures } = escort(true, 3);
+    const where = { x: vip["x"], z: vip["z"] };
+    expect(vip["phase"], "he is out on his walk").toBe("walking");
+    const bullet = makeCar();
+    launch(bullet, where.x, where.z, 0, 0, mps);
+    cars.push(bullet);
+    vip.frame(FRAME, true, 0, cars, throwPassenger, throwFigure);
+    vip.frame(FRAME, true, 0, cars, throwPassenger, throwFigure);
+    return { vip, figures, where };
   }
+
+  it("when a car at 15 m/s is on him as he walks, then he is thrown once where he stood by the car, and is drawn no more", () => {
+    const { vip, figures, where } = runDownAt(15);
+    expect(figures.length, "figures thrown").toBe(1);
+    expect(vip["phase"], "his phase").toBe("thrown");
+    expect(figures[0]!.guard, "the VIP, not a guard").toBe(-1);
+    expect(figures[0]!.car, "struck by the second car").toBe(1);
+    expect(Math.abs(figures[0]!.x - where.x) < 1e-3 && Math.abs(figures[0]!.z - where.z) < 1e-3, "where he stood").toBeTruthy();
+    expect((vip["people"]["mesh"]["shown"] >> 0) & 1, "his figure is hidden").toBe(0);
+  });
+
+  it("when a car at 2 m/s is on him as he walks, then he is left standing", () => {
+    const { vip, figures } = runDownAt(2);
+    expect(figures.length, "figures thrown").toBe(0);
+    expect(vip["phase"], "his phase").toBe("walking");
+  });
 });
 
 /** A guard squad over the National Mall's lawn, its people's meshes, the car it fires on and a second car off the grounds. */
@@ -259,7 +264,7 @@ describe("given the VIP riding with the squad inside", () => {
     expect(local, `the VIP sits on the car's right (-x), across from the driver: car-local x ${local.toFixed(2)}`).toBeLessThan(-0.2);
   });
 
-  it("when the next race starts (`GroundsArt.reset`), then he is back inside: no figure is drawn and, the secret in again, he does not come out", () => {
+  it("when the next race starts, then he is back inside: no figure is drawn and, the secret in again, he does not come out", () => {
     const art = new GroundsArt(spec, ground, new THREE.Group());
     const car = makeCar();
     launch(car, NORTH_LAWN.x, NORTH_LAWN.z, 0, 0, 0);

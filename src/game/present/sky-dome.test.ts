@@ -48,28 +48,28 @@ describe("given the race's times of day: the sky pictures and the light", () => 
 });
 
 describe("given the Sky setting and the FX tier", () => {
-  const rows: [SkyMode, FxTier, SkyDetail][] = [
-    ["auto", "minimal", "off"],
-    ["auto", "off", "off"],
-    ["auto", "low", "half"],
-    ["auto", "high", "full"],
-    ["auto", "ultra", "full"],
-    ["on", "minimal", "gradient"],
-    ["on", "off", "gradient"],
-    ["on", "low", "half"],
-    ["on", "high", "full"],
-    ["full", "minimal", "full"],
-    ["full", "off", "full"],
-    ["full", "low", "full"],
-    ["full", "ultra", "full"],
-    ["off", "minimal", "off"],
-    ["off", "low", "off"],
-    ["off", "high", "off"],
-    ["off", "ultra", "off"],
+  const rows: { mode: SkyMode; tier: FxTier; detail: SkyDetail }[] = [
+    { mode: "auto", tier: "minimal", detail: "off" },
+    { mode: "auto", tier: "off", detail: "off" },
+    { mode: "auto", tier: "low", detail: "half" },
+    { mode: "auto", tier: "high", detail: "full" },
+    { mode: "auto", tier: "ultra", detail: "full" },
+    { mode: "on", tier: "minimal", detail: "gradient" },
+    { mode: "on", tier: "off", detail: "gradient" },
+    { mode: "on", tier: "low", detail: "half" },
+    { mode: "on", tier: "high", detail: "full" },
+    { mode: "full", tier: "minimal", detail: "full" },
+    { mode: "full", tier: "off", detail: "full" },
+    { mode: "full", tier: "low", detail: "full" },
+    { mode: "full", tier: "ultra", detail: "full" },
+    { mode: "off", tier: "minimal", detail: "off" },
+    { mode: "off", tier: "low", detail: "off" },
+    { mode: "off", tier: "high", detail: "off" },
+    { mode: "off", tier: "ultra", detail: "off" },
   ];
-  for (const [mode, tier, detail] of rows) {
-    it(`when the sky is ${mode} on the ${tier} tier, then it draws ${detail}`, () => {
-      expect(skyDetailFor(mode, tier)).toBe(detail);
+  for (const row of rows) {
+    it(`when the sky is ${row.mode} on the ${row.tier} tier, then it draws ${row.detail}`, () => {
+      expect(skyDetailFor(row.mode, row.tier)).toBe(row.detail);
     });
   }
 });

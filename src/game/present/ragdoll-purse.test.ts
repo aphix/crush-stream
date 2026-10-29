@@ -115,7 +115,7 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
     r.dispose();
   });
 
-  it("when the same throw is run twice with Math.random forbidden, then the handbag and items end up in exactly the same places", async () => {
+  it("when the same throw is run twice with no randomness allowed, then the handbag and items end up in exactly the same places", async () => {
     const seed = seedWhere(true);
     const real = Math.random;
     const poses: number[][] = [];

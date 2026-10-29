@@ -12,13 +12,13 @@ function compiled(material: THREE.Material, chunks: { vertexShader: string; frag
 
 const mesh = new DummyMesh(1);
 const CASES = [
-  { it: "the lit material", material: mesh.material, chunks: THREE.ShaderLib.standard, rim: true },
-  { it: "the shadow's depth material", material: mesh.customDepthMaterial!, chunks: THREE.ShaderLib.depth, rim: false },
+  { it: "the lit material", then: "it shares the one rim light and adds the rim right after the lights", material: mesh.material, chunks: THREE.ShaderLib.standard, rim: true },
+  { it: "the shadow's depth material", then: "it carries no rim", material: mesh.customDepthMaterial!, chunks: THREE.ShaderLib.depth, rim: false },
 ] as const;
 
-describe("given the people's materials patched by applyDolls", () => {
+describe("given the dummies' materials patched to glow at their edges (a rim light)", () => {
   for (const c of CASES) {
-    it(`when ${c.it} is compiled, then it ${c.rim ? "shares RIM_LIGHT as uRim and adds the rim after the lights" : "carries no rim"}`, () => {
+    it(`when ${c.it} is compiled, then ${c.then}`, () => {
       const shader = compiled(c.material, c.chunks);
       expect(shader.uniforms.uRim === RIM_LIGHT, "the shared uniform object").toBe(c.rim);
       expect(shader.fragmentShader.includes("uniform float uRim;"), "the uniform's declaration").toBe(c.rim);

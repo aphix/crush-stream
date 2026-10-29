@@ -51,7 +51,7 @@ describe("given two cars swinging past each other in front of a held priority ca
   it("when the pool has its hysteresis, then the free slot never swaps after the first frame", () => {
     expect(swapsOfTwoNearCars(new VoicePool(2))).toBe(0);
   });
-  it("when the hysteresis is off (ratio 1, no hold), then the free slot swaps more than ten times", () => {
+  it("when the hysteresis is off, then the free slot swaps more than ten times", () => {
     expect(swapsOfTwoNearCars(new VoicePool(2, 1, 0))).toBeGreaterThan(10);
   });
 });

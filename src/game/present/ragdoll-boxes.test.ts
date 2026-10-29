@@ -260,7 +260,7 @@ describe("given a held dummy dropped on the pile's five tallest stacks, 3 boxes 
 });
 
 describe("given boxes a dummy has scattered", () => {
-  it("when restackBoxes() is called, then every box is within 1 cm of its placement and asleep, and a second dummy scatters them again", async () => {
+  it("when the boxes are restacked, then every box is within 1 cm of its placement and asleep, and a second dummy scatters them again", async () => {
     const sys = await system(PLACEMENTS);
     dropOnStack(sys, SCATTER_STACK, SCATTER_SPEED);
     const first = runUntilStill(sys, REST_HOLD, REST_WITHIN);
@@ -343,8 +343,8 @@ describe("given two cartons on the flat ground beside the pile, one with its air
   });
 });
 
-describe("given the boxes a ragdoll system draws from and the bodies it holds", () => {
-  it("when 48 boxes are set before and after Rapier is in, then none exist before and every one after, in placement order with the pose layout position xyz, rotation xyzw", async () => {
+describe("given the pile of 48 boxes handed to the dummies' world", () => {
+  it("when 48 boxes are set before and after the physics world loads, then none exist before and every one after, in placement order, and replacing or clearing the pile removes the old bodies", async () => {
     const sys = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
     sys.setBoxes(PLACEMENTS);
     const out = new Float32Array(BOX_COUNT * BOX_POSE_FLOATS);
@@ -372,7 +372,7 @@ describe("given the boxes a ragdoll system draws from and the bodies it holds", 
     expect(bodiesBefore - bodiesCleared, "every box's body is removed from the world").toBe(BOX_COUNT);
   });
 
-  it("when a dummy has scattered them, then copyBoxPoses reads where the bodies are", async () => {
+  it("when a dummy has scattered them, then the drawn boxes sit where their bodies are", async () => {
     const sys = await system(PLACEMENTS);
     dropOnStack(sys, SCATTER_STACK, SCATTER_SPEED);
     runUntilStill(sys, REST_HOLD, REST_WITHIN);

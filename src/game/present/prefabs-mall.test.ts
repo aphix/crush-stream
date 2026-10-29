@@ -17,7 +17,11 @@ const SAME_HEIGHT = 1e-5;
 /** Barycentric samples along a triangle's edge when asking which part of it lies in the water's footprint. */
 const SAMPLES = 6;
 
-type Pond = { id: PrefabId; waterTop: number; inside: (x: number, z: number) => boolean };
+type Pond = { id: PrefabId; waterTop: number } & (
+  | { shape: "rectangle"; halfX: number; halfZ: number }
+  | { shape: "circle"; radius: number }
+  | { shape: "polygon"; polygon: readonly (readonly [number, number])[] }
+);
 
 /** Whether (x, z) is inside a polygon (even-odd). */
 function inPolygon(polygon: readonly (readonly [number, number])[], x: number, z: number): boolean {
@@ -30,21 +34,26 @@ function inPolygon(polygon: readonly (readonly [number, number])[], x: number, z
   return inside;
 }
 
-const CAPITOL_WATER = capitolPool().water;
-
 const PONDS: Pond[] = [
-  { id: "reflecting-pool", waterTop: POOL.y1 + POOL.brim, inside: (x, z) => Math.abs(x) < POOL.half[0] - POOL.rim && Math.abs(z) < POOL.half[1] - POOL.rim },
-  { id: "basin", waterTop: BASIN.y1 + POOL.brim, inside: (x, z) => Math.hypot(x, z) < BASIN.r - BASIN.rim },
-  { id: "fountain", waterTop: FOUNTAIN.basin.y1 + POOL.brim, inside: (x, z) => Math.hypot(x, z) < FOUNTAIN.water.r },
-  { id: "capitol-pool", waterTop: CAPITOL_POOL.y1 + CAPITOL_POOL.brim, inside: (x, z) => inPolygon(CAPITOL_WATER, x, z) },
+  { id: "reflecting-pool", waterTop: POOL.y1 + POOL.brim, shape: "rectangle", halfX: POOL.half[0] - POOL.rim, halfZ: POOL.half[1] - POOL.rim },
+  { id: "basin", waterTop: BASIN.y1 + POOL.brim, shape: "circle", radius: BASIN.r - BASIN.rim },
+  { id: "fountain", waterTop: FOUNTAIN.basin.y1 + POOL.brim, shape: "circle", radius: FOUNTAIN.water.r },
+  { id: "capitol-pool", waterTop: CAPITOL_POOL.y1 + CAPITOL_POOL.brim, shape: "polygon", polygon: capitolPool().water },
 ];
 
-/** The heights (m) of every upward-facing horizontal triangle of a prefab with a point inside the footprint: the faces an overhead camera sees. */
-function horizontalFacesInside(id: PrefabId, inside: Pond["inside"]): number[] {
+/** Whether (x, z) is inside the pond's water footprint. */
+function inFootprint(pond: Pond, x: number, z: number): boolean {
+  if (pond.shape === "rectangle") return Math.abs(x) < pond.halfX && Math.abs(z) < pond.halfZ;
+  if (pond.shape === "circle") return Math.hypot(x, z) < pond.radius;
+  return inPolygon(pond.polygon, x, z);
+}
+
+/** The heights (m) of every upward-facing horizontal triangle of a pond's prefab with a point inside the footprint: the faces an overhead camera sees. */
+function horizontalFacesInside(pond: Pond): number[] {
   const plain = new THREE.MeshBasicMaterial();
   const mats = { plain, concrete: plain, building: plain, billboard: plain, water: plain };
   const heights: number[] = [];
-  for (const part of prefabParts(id, mats)) {
+  for (const part of prefabParts(pond.id, mats)) {
     const t = triangles(part.geometry);
     for (let i = 0; i < t.length; i += 9) {
       const y = t[i + 1]!;
@@ -53,7 +62,7 @@ function horizontalFacesInside(id: PrefabId, inside: Pond["inside"]): number[] {
       if (!facingUp) continue;
       const sampled = [];
       for (let a = 1; a < SAMPLES; a++) for (let b = 1; a + b < SAMPLES; b++) sampled.push([a / SAMPLES, b / SAMPLES, (SAMPLES - a - b) / SAMPLES] as const);
-      const touchesFootprint = sampled.some(([u, v, w]) => inside(t[i]! * u + t[i + 3]! * v + t[i + 6]! * w, t[i + 2]! * u + t[i + 5]! * v + t[i + 8]! * w));
+      const touchesFootprint = sampled.some(([u, v, w]) => inFootprint(pond, t[i]! * u + t[i + 3]! * v + t[i + 6]! * w, t[i + 2]! * u + t[i + 5]! * v + t[i + 8]! * w));
       if (touchesFootprint) heights.push(y);
     }
   }
@@ -63,7 +72,7 @@ function horizontalFacesInside(id: PrefabId, inside: Pond["inside"]): number[] {
 describe("given the Mall's four ponds (reflecting pool, round basin, lawn fountain, Capitol Reflecting Pool) drawn at scale 1", () => {
   for (const pond of PONDS) {
     it(`when the ${pond.id}'s upward faces over its water are listed, then its water's top is among them and no other face lies within ${OVERHEAD_DEPTH_GAP} m under it`, () => {
-      const heights = horizontalFacesInside(pond.id, pond.inside);
+      const heights = horizontalFacesInside(pond);
       expect(heights.some((y) => Math.abs(y - pond.waterTop) < SAME_HEIGHT), `the ${pond.id} draws no water top at ${pond.waterTop} m`).toBeTruthy();
       const flickering = heights.filter((y) => y < pond.waterTop - SAME_HEIGHT && y > pond.waterTop - OVERHEAD_DEPTH_GAP);
       expect(flickering, `${flickering.length} faces of the ${pond.id} lie under its water top (${pond.waterTop} m) at ${[...new Set(flickering)].join(", ")} m`).toHaveLength(0);

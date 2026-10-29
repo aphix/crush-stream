@@ -51,8 +51,8 @@ function systemWithWorker() {
   return { ragdolls, sent };
 }
 
-describe("given the dummies' world in the ragdoll worker (race courses) and a driver thrown from his car", () => {
-  it("when his passenger is thrown with him, then the worker is sent a second dummy beside the driver at the driver's own velocity, dressed as the passenger", () => {
+describe("given a race course's dummies simulated off the main thread and a driver thrown from his car", () => {
+  it("when his passenger is thrown with him, then a second dummy is thrown beside the driver at the driver's own velocity, dressed as the passenger", () => {
     const { cars, ejections } = headOnEjections();
     expect(ejections.length, "a driver was thrown in the head-on").toBeGreaterThanOrEqual(1);
     const { ragdolls, sent } = systemWithWorker();
@@ -69,7 +69,7 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a dr
     expect(ragdolls["dressing"].get(FIRST_WORKER_ID + 1)?.look.portly, "the worker's slot for him is dressed as the passenger").toBe(true);
   });
 
-  it("when a passenger is thrown with a car whose driver was not thrown, then nothing is sent", () => {
+  it("when a passenger is thrown with a car whose driver was not thrown, then no second dummy is thrown", () => {
     const { cars, ejections } = headOnEjections();
     const { ragdolls, sent } = systemWithWorker();
     const e = ejections[0]!;
@@ -94,7 +94,7 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a dr
   });
 });
 
-describe("given the dummies' world on this thread (the fallback, and every scene that is not a race course) and a driver thrown from his car", () => {
+describe("given the dummies simulated on the main thread (the fallback, and every scene that is not a race course) and a driver thrown from his car", () => {
   it("when his passenger is thrown with him, then two dummies are out in the one world, the second beside the first", async () => {
     const { cars, ejections } = headOnEjections();
     const ragdolls = await loadedRagdolls();

@@ -35,20 +35,23 @@ function shoot(mesh: DummyMesh, at: THREE.Vector3): { slot: number | undefined; 
   return { slot: hit?.instanceId, off: hit ? hit.point.distanceTo(at) : Infinity };
 }
 
-const cases: readonly { it: string; raise: number; aimAt: "where the hand is now" | "where the hand hangs at his side"; expectedSlot: number | undefined }[] = [
-  { it: "when the forearm hangs and a press is aimed at the hand, then it lands on him", raise: 0, aimAt: "where the hand is now", expectedSlot: 0 },
-  { it: "when the forearm is raised and a press is aimed at the hand where it is now, then it lands on him", raise: QUARTER, aimAt: "where the hand is now", expectedSlot: 0 },
-  { it: "when the forearm is raised and a press is aimed where the hand hung before, then it misses: the arm is not there", raise: QUARTER, aimAt: "where the hand hangs at his side", expectedSlot: undefined },
-];
+const hitCases = [
+  { it: "when the forearm hangs and a press is aimed at the hand, then it lands on him", raise: 0 },
+  { it: "when the forearm is raised and a press is aimed at the hand where it is now, then it lands on him", raise: QUARTER },
+] as const;
 
 describe("given a dummy with one forearm raised or hanging", () => {
-  for (const testCase of cases) {
+  for (const testCase of hitCases) {
     it(testCase.it, () => {
       const mesh = dummy(testCase.raise);
-      const aim = testCase.aimAt === "where the hand is now" ? carried(mesh, HAND_STANDING) : HAND_STANDING.clone();
-      const { slot, off } = shoot(mesh, aim);
-      expect(slot, "slot hit").toBe(testCase.expectedSlot);
-      if (testCase.expectedSlot !== undefined) expect(off, `the first hit is ${off.toFixed(3)} m from the hand`).toBeLessThan(0.1);
+      const { slot, off } = shoot(mesh, carried(mesh, HAND_STANDING));
+      expect(slot, "slot hit").toBe(0);
+      expect(off, `the first hit is ${off.toFixed(3)} m from the hand`).toBeLessThan(0.1);
     });
   }
+
+  it("when the forearm is raised and a press is aimed where the hand hung before, then it misses: the arm is not there", () => {
+    const { slot } = shoot(dummy(QUARTER), HAND_STANDING.clone());
+    expect(slot, "slot hit").toBe(undefined);
+  });
 });

@@ -171,7 +171,7 @@ describe("given the ejection range (a sedan at 100 km/h over the lip into the je
     expect(Math.max(...xs) - Math.min(...xs), `landings ${xs.map((x) => x.toFixed(2)).join(", ")} m`).toBeLessThanOrEqual(0.1);
   });
 
-  it("when the driver leaves, then his torso spins EJECT_ROLL about his line of flight past the ejection's own spin, and no more, and the roll turns him about his centre of mass: it moves none of him along", async () => {
+  it("when the driver leaves, then his torso spins the barrel-roll rate about his line of flight past the ejection's own spin, and no more, and the roll turns him about his centre of mass: it moves none of him along", async () => {
     const car = makeCar("shape", 0.32, 0.45);
     armKill(car.deform, "sedan", DEFAULT_REALISM, "default");
     launch(car, -RANGE.run, 0, Math.PI / 2, RANGE.kph / 3.6, 0);
@@ -247,8 +247,14 @@ describe("given a dummy thrown while time runs at 0.03× (the deepest slow-mo)",
 
 describe("given a thrown dummy (the ejected driver's jointed ragdoll)", () => {
   // 240 Hz is the owner's display: frames of 0.5–1.5× with an occasional 5× hitch (main: one such run landed 58 m out).
-  for (const [hz, seed] of [[240, 3], [240, 4], [240, 16], [60, 3]] as const) {
-    it(`when the range throw is run at ${hz} Hz (frames of 0.5–1.5×, seed ${seed}), then after his first ground contact energy never rises, he is at rest in 3 s, and no joint comes 3 cm apart`, async () => {
+  const hitchCases = [
+    { it: "when the range throw is run at 240 Hz (frames of 0.5–1.5×, seed 3), then after his first ground contact energy never rises, he is at rest in 3 s, and no joint comes 3 cm apart", hz: 240, seed: 3 },
+    { it: "when the range throw is run at 240 Hz (frames of 0.5–1.5×, seed 4), then after his first ground contact energy never rises, he is at rest in 3 s, and no joint comes 3 cm apart", hz: 240, seed: 4 },
+    { it: "when the range throw is run at 240 Hz (frames of 0.5–1.5×, seed 16), then after his first ground contact energy never rises, he is at rest in 3 s, and no joint comes 3 cm apart", hz: 240, seed: 16 },
+    { it: "when the range throw is run at 60 Hz (frames of 0.5–1.5×, seed 3), then after his first ground contact energy never rises, he is at rest in 3 s, and no joint comes 3 cm apart", hz: 60, seed: 3 },
+  ] as const;
+  for (const { it: title, hz, seed } of hitchCases) {
+    it(title, async () => {
       const r = stream(seed);
       const run = await rangeThrow(() => (0.5 + r() + (r() < 0.02 ? 4 : 0)) / hz);
       // Kinetic plus gravitational energy: a part falling gains kinetic energy for free, so only the rest is counted. The
@@ -261,7 +267,7 @@ describe("given a thrown dummy (the ejected driver's jointed ragdoll)", () => {
     });
   }
 
-  it("when a part's motion is shed against another part at any velocities, then it takes kinetic energy out of the pair and keeps their momentum", async () => {
+  it("when a part's speed is bled off against another part at any velocities, then it takes kinetic energy out of the pair and keeps their momentum", async () => {
     const ragdolls = await loadedRagdolls();
     ragdolls.update(1 / FRAME_HZ, [], true, true, null);
     ragdolls["spawn"]({ car: 0, p: new THREE.Vector3(0, 1, 0), q: new THREE.Quaternion(), v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: true });

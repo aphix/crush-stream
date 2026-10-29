@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { backdropGeometry, PANEL } from "./sky-backdrop.ts";
 
-describe("given the sky backdrop's panel (`environment.backdrop`)", () => {
+describe("given the painted backdrop panel behind the horizon", () => {
   for (const bearing of [0, 90, 280]) {
     it(`when it is built round a bearing of ${bearing}°, then its middle points that way (−z north, +x east) and it reaches from under the horizon to above it`, () => {
       const g = backdropGeometry(bearing);
@@ -24,7 +24,7 @@ describe("given the sky backdrop's panel (`environment.backdrop`)", () => {
     });
   }
 
-  it("when it is built, then u runs with the bearing: the left edge of the painting is the anticlockwise one, as seen facing it", () => {
+  it("when it is built, then the painting's left edge is the anticlockwise one, as seen facing it (west of north on the left, east on the right)", () => {
     const g = backdropGeometry(0);
     const pos = g.getAttribute("position");
     const uv = g.getAttribute("uv");

@@ -14,7 +14,7 @@ function cam(): THREE.PerspectiveCamera {
 
 const at = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
-describe("given a Witness (the camera view cone that decides whether a purely cosmetic effect is seen and needs playing, or is out of view and can be skipped)", () => {
+describe("given the camera's view cone, which decides whether a purely cosmetic effect is seen and needs playing, or is out of view and can be skipped", () => {
   it("when a 1 m ball is centred 0.5 m outside the view's edge, then it is witnessed because it still pokes in, and when it is far clear of the edge plus the margin, it is not", () => {
     const w = new Witness();
     w.aim(cam());
@@ -47,7 +47,7 @@ describe("given a Witness (the camera view cone that decides whether a purely co
     expect(w.mayWitness(at(0, 0, 500), 1)).toBe(true);
   });
 
-  it("when the camera moves and the Witness is aimed at it again, then the view cone follows the camera it last read", () => {
+  it("when the camera moves and the view cone is aimed at it again, then the cone follows the camera it last read", () => {
     const w = new Witness();
     const c = cam();
     w.aim(c);

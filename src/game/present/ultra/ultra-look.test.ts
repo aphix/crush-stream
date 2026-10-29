@@ -8,7 +8,7 @@ const turn = (a: number, b: number): number => Math.atan2(Math.sin(b - a), Math.
 describe("given the sky's sun disc and a sun light (the stage's, a course's) at any azimuth", () => {
   const lights = [new THREE.Vector3(-10, 22, 9), new THREE.Vector3(1, 5, 0), new THREE.Vector3(0.3, 1, -4), new THREE.Vector3(0, 3, 0.01), new THREE.Vector3(7, 2, -7)];
   for (const sun of lights) {
-    it(`when the environment is turned by envYaw for a light at (${sun.x}, ${sun.y}, ${sun.z}), then three's environment rotation takes the sky's sun to the light's azimuth`, () => {
+    it(`when the environment is turned to face a light at (${sun.x}, ${sun.y}, ${sun.z}), then three's environment rotation takes the sky's sun to the light's azimuth`, () => {
       const el = THREE.MathUtils.degToRad(45);
       const skySun = new THREE.Vector3(Math.cos(el) * Math.cos(LOOK.skySunAzimuth), Math.sin(el), Math.cos(el) * Math.sin(LOOK.skySunAzimuth));
       // A material samples the environment at the inverse of this rotation, so the world direction of the sky's sun is the rotation applied to it.

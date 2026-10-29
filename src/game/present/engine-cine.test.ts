@@ -164,7 +164,7 @@ describe("given a crash camera begun at a hit with the sandbox's slow-motion hol
     return cam;
   };
 
-  it("when the cam steps from its hit through its hand-back, then it holds from the hit to `crashCamEnd`, through the lead-in before its first cut, and not before or after", () => {
+  it("when the cam steps from its hit through its hand-back, then it holds from the hit to the end of the crash cam, through the lead-in before its first cut, and not before or after", () => {
     const idle = new CrashCam(false);
     expect(idle.holding, "not begun").toBe(false);
     const cam = begin();
@@ -282,17 +282,17 @@ describe("given the crash camera aiming at a hit on the stunt course's road", ()
     expect(Math.abs(aimHeight(carHeight) - want), `aims ${aimHeight(carHeight).toFixed(3)} m, not ${want.toFixed(3)} m, for a car ${carHeight.toFixed(3)} m up`).toBeLessThan(1e-9);
   };
 
-  it("when the car is on the road at the hit, then the camera aims the same rise over the road as over a car on flat ground", () => {
-    assertAimsAt(roadHeight, roadHeight + riseOverCar);
-  });
+  const testCases = [
+    { it: "when the car is on the road at the hit, then the camera aims the same rise over the road as over a car on flat ground", carAbove: 0, aimAbove: 0 },
+    { it: `when the car is ${FLIGHT_HEIGHT} m above the road at the hit, then the camera aims that rise over the car, not over the road under it`, carAbove: FLIGHT_HEIGHT, aimAbove: FLIGHT_HEIGHT },
+    { it: `when the car is ${SUNK_DEPTH} m into the road at the hit, then the camera aims that rise over the road, not over the car`, carAbove: -SUNK_DEPTH, aimAbove: 0 },
+  ];
 
-  it(`when the car is ${FLIGHT_HEIGHT} m above the road at the hit, then the camera aims that rise over the car, not over the road under it`, () => {
-    assertAimsAt(roadHeight + FLIGHT_HEIGHT, roadHeight + FLIGHT_HEIGHT + riseOverCar);
-  });
-
-  it(`when the car is ${SUNK_DEPTH} m into the road at the hit, then the camera aims that rise over the road, not over the car`, () => {
-    assertAimsAt(roadHeight - SUNK_DEPTH, roadHeight + riseOverCar);
-  });
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      assertAimsAt(roadHeight + testCase.carAbove, roadHeight + testCase.aimAbove + riseOverCar);
+    });
+  }
 });
 
 describe("given a crash in an open field and the cars of the pile standing about the hit", () => {
@@ -379,7 +379,7 @@ describe("given a crash in an open field and the cars of the pile standing about
     expect(carsBlock(s, camera.position, b), "its eye is in a car or has one on its line to the later crash").toBe(false);
   });
 
-  it("when a 3-hit pile-up's later crashes come with a car standing between an eye and the second, then the crash cam holds the camera at each of them and to the last slow-mo's hand-back, so a thrown driver's ride-along (it waits on `holding`) starts only after it", () => {
+  it("when a 3-hit pile-up's later crashes come with a car standing between an eye and the second, then the crash cam holds the camera at each of them and to the last slow-mo's hand-back, so a thrown driver's ride-along starts only after it", () => {
     const hits = [3.313, 3.946, 4.133];
     const tl = clipTimeline(hits[0]!, 6, [], hits.slice(1));
     const stepOf = (t: number): number => {

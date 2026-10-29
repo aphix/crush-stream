@@ -118,7 +118,7 @@ describe("given the Ring Fling station's art in station-local coordinates", () =
     return { height: hit.point.y, colour: new THREE.Color(colours.getX(hit.face.a), colours.getY(hit.face.a), colours.getZ(hit.face.a)) };
   }
 
-  it("when the board is read on a grid over its whole plan, then its surface stands on ringHeightAt within 2 cm everywhere", () => {
+  it("when the board is read on a grid over its whole plan, then its surface stands on the model's height within 2 cm everywhere", () => {
     const { minX, maxX, minZ, maxZ } = RING_BOARD_BOUNDS;
     let probes = 0;
     for (let x = minX + GRID_STEP_X / 2; x < maxX; x += GRID_STEP_X) {
@@ -304,16 +304,16 @@ describe("given the Ring Fling station's art in station-local coordinates", () =
   });
 });
 
-describe("given the Ring Fling backstop's constant", () => {
+describe("given the Ring Fling backboard's design dimensions", () => {
   const boardTop = Math.max(...RING_CUPS.map((cup) => cup.rimHeight), ...RING_POCKETS.map((pocket) => pocket.rimHeight));
 
-  it("when it is read, then it is the real machine's 50 in backboard and 1 in thickness at the board's scale, with a positive gap", () => {
+  it("when the dimensions are compared with the real machine's, then the backboard is 50 in tall and 1 in thick at the board's scale, with a positive gap behind the board", () => {
     expect(RING_BACKSTOP.distancePastBoard, "gap past the board").toBeGreaterThan(0);
     expect(Math.abs(RING_BACKSTOP.height - REAL_BACKBOARD_HEIGHT_INCHES * REAL_INCH_SCALED), "height").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
     expect(Math.abs(RING_BACKSTOP.thickness - REAL_INCH_SCALED), "thickness").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
   });
 
-  it("when it is read against the board, then it stands over every rim and is at least 3 x the 50 cup's rim height", () => {
+  it("when the backboard is compared with the board, then it stands over every rim and is at least 3 x the 50 cup's rim height", () => {
     expect(RING_BACKSTOP.height, "above the highest rim").toBeGreaterThan(boardTop);
     expect(RING_BACKSTOP.height, `${RING_BACKSTOP.height} m is less than ${BACKSTOP_RIM_CLEARANCE_FACTOR} x the 50 cup's rim (${RING_CUPS[4]!.rimHeight} m)`).toBeGreaterThanOrEqual(BACKSTOP_RIM_CLEARANCE_FACTOR * RING_CUPS[4]!.rimHeight);
   });

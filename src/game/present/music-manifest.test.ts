@@ -93,7 +93,7 @@ describe("given a manifest served by the music folder", () => {
   }
 });
 
-describe("given the committed reference manifest (public/music/manifest.json)", () => {
+describe("given the soundtrack manifest shipped with the game", () => {
   it("when it is loaded, then it validates with the four soundtrack files", async () => {
     const { outcome } = await load(REFERENCE);
     const tracks = (await outcome) as (typeof TRACK)[];
@@ -125,7 +125,7 @@ describe("given a track's credit lines, as the attribution text gives them", () 
       expect(read.join("\n")).toBe(c.lines.join("\n"));
     });
   }
-  it("when a line is a link, then only the label lines carry a url", () => {
+  it("when a track has a link, then its text line has no url and its link line carries the url", () => {
     const lines = creditLines(TRACK);
     expect(lines[0]!.url).toBe(null);
     expect(lines[1]!.url).toBe("http://ncs.io/A_Overdrive");

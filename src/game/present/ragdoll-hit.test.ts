@@ -61,7 +61,7 @@ describe("given a figure standing facing +z that is pushed at a point", () => {
         const v = bodies[k]!.linvel();
         return v.x * direction.x + v.y * direction.y + v.z * direction.z;
       };
-      expect(along(testCase.expectedPart === TORSO ? TORSO : testCase.expectedPart), `part ${testCase.expectedPart} sent at ${along(testCase.expectedPart).toFixed(1)} m/s`).toBeGreaterThan(SPEED * 0.9);
+      expect(along(testCase.expectedPart), `part ${testCase.expectedPart} sent at ${along(testCase.expectedPart).toFixed(1)} m/s`).toBeGreaterThan(SPEED * 0.9);
       expect(along(TORSO) > SPEED * 0.9, `the torso moves ${along(TORSO).toFixed(1)} m/s`).toBe(testCase.expectedTorsoPush === "pushed");
       const spin = bodies[TORSO]!.angvel();
       expect(sign(spin.y), `turn about the vertical ${spin.y.toFixed(1)} rad/s`).toBe(testCase.expectedTurn.y);

@@ -27,39 +27,44 @@ function simState(cars: readonly DeformableCar[]): number[] {
   ]);
 }
 
+/** The two cars of a named crash: a 2×56 km/h head-on that kills both engines, or a fleet 2×72 km/h head-on whose cars run on. */
+function crashPair(crash: "engine-killing head-on" | "fleet head-on"): DeformableCar[] {
+  if (crash === "fleet head-on") return headOn(20);
+  const [a, b] = [makeCar(), makeCar()];
+  launch(a, -5, 0, Math.PI / 2, 56 / 3.6, 0);
+  launch(b, 5, 0, -Math.PI / 2, -56 / 3.6, 0);
+  return [a, b];
+}
+
+const thrownDriverCases = [
+  { it: "when the sandbox runs a 2×56 km/h head-on that kills both engines and both drivers are thrown, then both dummies fly, the cars move as they do without dummies, and the ride-along slow-mo is asked for both drivers", crash: "engine-killing head-on", sandbox: true, expectedRideAlong: "0,1" },
+  { it: "when a race or a derby runs a 2×56 km/h head-on that kills both engines and both drivers are thrown, then both dummies fly, the cars move as they do without dummies, and no ride-along slow-mo is asked", crash: "engine-killing head-on", sandbox: false, expectedRideAlong: "" },
+  { it: "when the sandbox runs a fleet 2×72 km/h head-on whose cars run on and both drivers are thrown, then both dummies fly, the cars move as they do without dummies, and the ride-along slow-mo is asked for both drivers", crash: "fleet head-on", sandbox: true, expectedRideAlong: "0,1" },
+  { it: "when a race or a derby runs a fleet 2×72 km/h head-on whose cars run on and both drivers are thrown, then both dummies fly, the cars move as they do without dummies, and no ride-along slow-mo is asked", crash: "fleet head-on", sandbox: false, expectedRideAlong: "" },
+] as const;
+
 describe("given thrown drivers (dummies that are cosmetic: the cars move the same with or without them)", () => {
-  const crashes = [
-    { label: "a 2×56 km/h head-on that kills both engines", pair: () => {
-      const [a, b] = [makeCar(), makeCar()];
-      launch(a, -5, 0, Math.PI / 2, 56 / 3.6, 0);
-      launch(b, 5, 0, -Math.PI / 2, -56 / 3.6, 0);
-      return [a, b];
-    } },
-    { label: "a fleet 2×72 km/h head-on whose cars run on", pair: () => headOn(20) },
-  ];
-  for (const { label, pair } of crashes) {
-    for (const sandbox of [true, false]) {
-      it(`when ${sandbox ? "the sandbox" : "a race or a derby"} runs ${label} and both drivers are thrown, then both dummies fly, the cars move as they do without dummies, and ${sandbox ? "the ride-along slow-mo is asked for both drivers" : "no ride-along slow-mo is asked"}`, async () => {
-        const cars = pair();
-        const plain = pair();
-        const scene = new THREE.Scene();
-        const rideAlong: number[] = [];
-        const ragdolls = new RagdollSystem(scene, (i) => rideAlong.push(i), () => {});
-        await ragdolls.preload();
-        const w = makeWorld(cars, false, false, FREEWHEEL);
-        w.onEject = (e) => ragdolls.launch(e, cars);
-        const wPlain = makeWorld(plain, false, false, FREEWHEEL);
-        for (let f = 0; f < 240; f++) {
-          tickWorld(w);
-          tickWorld(wPlain);
-          ragdolls.update(FRAME, cars, true, sandbox, null);
-        }
-        expect(scene.getObjectByName("ragdolls")!.visible, "the dummies fly in every mode").toBeTruthy();
-        ragdolls.dispose();
-        assertSameDigest(simState(cars), simState(plain), "every car's sim state with dummies vs without");
-        expect(rideAlong.join(), "ride-along / slow-mo requests").toBe(sandbox ? "0,1" : "");
-      });
-    }
+  for (const testCase of thrownDriverCases) {
+    it(testCase.it, async () => {
+      const cars = crashPair(testCase.crash);
+      const plain = crashPair(testCase.crash);
+      const scene = new THREE.Scene();
+      const rideAlong: number[] = [];
+      const ragdolls = new RagdollSystem(scene, (i) => rideAlong.push(i), () => {});
+      await ragdolls.preload();
+      const w = makeWorld(cars, false, false, FREEWHEEL);
+      w.onEject = (e) => ragdolls.launch(e, cars);
+      const wPlain = makeWorld(plain, false, false, FREEWHEEL);
+      for (let f = 0; f < 240; f++) {
+        tickWorld(w);
+        tickWorld(wPlain);
+        ragdolls.update(FRAME, cars, true, testCase.sandbox, null);
+      }
+      expect(scene.getObjectByName("ragdolls")!.visible, "the dummies fly in every mode").toBeTruthy();
+      ragdolls.dispose();
+      assertSameDigest(simState(cars), simState(plain), "every car's sim state with dummies vs without");
+      expect(rideAlong.join(), "ride-along / slow-mo requests").toBe(testCase.expectedRideAlong);
+    });
   }
 });
 

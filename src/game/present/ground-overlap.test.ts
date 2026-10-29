@@ -249,7 +249,7 @@ describe("given a 24-bit depth buffer over 0.1 to 900 m and flat ground seen fro
   }
 });
 
-describe("given the scan for ground layers that z-fight (are drawn at the same depth)", () => {
+describe("given ground layers that may be drawn at the same depth as one another (z-fighting)", () => {
   it("when two painted layers of different levels share a plane, then none is found whichever is listed first: the higher level is painted over the lower", () => {
     expect(scanOverlaps([quad("road.dirt", 0.015, "dirt"), quad("road.asphalt", 0.015, "asphalt")])).toHaveLength(0);
     expect(scanOverlaps([quad("road.asphalt", 0.015, "asphalt"), quad("road.dirt", 0.015, "dirt")])).toHaveLength(0);
@@ -292,7 +292,7 @@ describe("given the scan for ground layers that z-fight (are drawn at the same d
   });
 });
 
-describe("given the ground stack", () => {
+describe("given the layers the ground is drawn in, bottom to top", () => {
   it("when its levels are listed bottom to top, then they draw in that order before the rest of the scene, and only the terrain and a bridge's top write depth", () => {
     const order = (["terrain", "deck", "runoff", "concrete", "asphalt", "cobble", "marking", "kerb", "dirt", "gravel", "grass", "sand", "decal", "glow"] as const).map(levelOrder);
     for (let i = 1; i < order.length; i++) expect(order[i]!, `level ${i} draws at ${order[i]}, not after ${order[i - 1]}`).toBeGreaterThan(order[i - 1]!);

@@ -30,10 +30,10 @@ const QUARTER = Math.PI / 2;
 const routeCases: readonly { it: string; turns: readonly Turn[]; expectedRoute: GetUpRoute; expectedBearing: number }[] = [
   { it: "when he stands, then there is no get-up to do, he regrounds", turns: [], expectedRoute: "reground", expectedBearing: 0 },
   { it: "when he leans 40 degrees with his feet under him, then he regrounds", turns: [["x", 0.7]], expectedRoute: "reground", expectedBearing: 0 },
-  { it: "when he lies on his stomach, head toward +z, then it is the face-down route and he will stand facing +z", turns: [["x", QUARTER]], expectedRoute: "faceDown", expectedBearing: 0 },
-  { it: "when he lies on his back, head toward -z, then it is the face-up route and he will stand facing -z", turns: [["x", -QUARTER]], expectedRoute: "faceUp", expectedBearing: Math.PI },
+  { it: "when he lies on his stomach, head toward +z, then he gets up face-down and will stand facing +z", turns: [["x", QUARTER]], expectedRoute: "faceDown", expectedBearing: 0 },
+  { it: "when he lies on his back, head toward -z, then he gets up face-up and will stand facing -z", turns: [["x", -QUARTER]], expectedRoute: "faceUp", expectedBearing: Math.PI },
   { it: "when he lies on his stomach turned 90 degrees, then he will stand facing the way his head points", turns: [["x", QUARTER], ["y", QUARTER]], expectedRoute: "faceDown", expectedBearing: QUARTER },
-  { it: "when he lies on his side, then he takes the face-up route", turns: [["z", QUARTER]], expectedRoute: "faceUp", expectedBearing: -QUARTER },
+  { it: "when he lies on his side, then he gets up face-up", turns: [["z", QUARTER]], expectedRoute: "faceUp", expectedBearing: -QUARTER },
 ];
 
 describe("given a torso lying at a rotation", () => {
@@ -169,11 +169,10 @@ describe("given a limp walker the player asks to get up at once", () => {
   }
 });
 
-const strikeCases: readonly { it: string; mps: number; expectedStruck: boolean }[] = [
-  { it: "when a car at 3 m/s reaches him, then it does not run him down", mps: 3, expectedStruck: false },
-  { it: "when a car at 4.5 m/s runs him down, then he is knocked down and gets up once the player asks", mps: 4.5, expectedStruck: true },
-  { it: "when a car at 10 m/s runs him down, then he is flung and goes ragdoll, and gets up once the player asks", mps: 10, expectedStruck: true },
-  { it: "when a car at 18 m/s runs him down, then he is flung and goes ragdoll, and gets up once the player asks", mps: 18, expectedStruck: true },
+const struckCases: readonly { it: string; mps: number }[] = [
+  { it: "when a car at 4.5 m/s runs him down, then he is knocked down and gets up once the player asks", mps: 4.5 },
+  { it: "when a car at 10 m/s runs him down, then he is flung and goes ragdoll, and gets up once the player asks", mps: 10 },
+  { it: "when a car at 18 m/s runs him down, then he is flung and goes ragdoll, and gets up once the player asks", mps: 18 },
 ];
 
 /** A sedan at `mps` m/s along +z, its nose 0.25 m short of the walker's feet, and the strike it makes on him. */
@@ -184,12 +183,17 @@ function carAt(mps: number) {
 }
 
 describe("given a car coming at a walker standing on open ground", () => {
-  for (const testCase of strikeCases) {
+  it("when a car at 3 m/s reaches him, then it does not run him down", () => {
+    frames(1);
+    const car = carAt(3);
+    expect(runsDown(car, 0, 0, 0), "the car's footprint meets him at this speed").toBe(false);
+  });
+
+  for (const testCase of struckCases) {
     it(testCase.it, () => {
       frames(1);
       const car = carAt(testCase.mps);
-      expect(runsDown(car, 0, 0, 0), "the car's footprint meets him at this speed").toBe(testCase.expectedStruck);
-      if (!testCase.expectedStruck) return;
+      expect(runsDown(car, 0, 0, 0), "the car's footprint meets him at this speed").toBe(true);
       system.knockWalker(fell(car, 0, -1, 0, 0, 0, 0, 1, blankStrike()));
       expect(system.walker.state, "limp at once").toBe("down");
       expect(system.walker.sinceStruck, "marked as struck").toBeLessThan(0.1);
@@ -220,16 +224,17 @@ const HEADING_TOLERANCE = 0.25;
 /** The strength (0-1) he never falls under once he stands: a hit of 4 m/s knocks him down and one of 2 m/s takes him to 0.7, so under 0.3 is a near fall. */
 const NO_STUMBLE_STRENGTH = 0.3;
 const WOMAN = { ...driverLook(0, 0), woman: true };
+const LOOKS = { man: driverLook(0, 0), woman: WOMAN } as const;
 
-const pushedCases: readonly { it: string; woman: boolean; yaw: number; height: number }[] = [
-  { it: "when a man is pushed squarely onto his back, then he rolls over, stands and walks off the way his feet pointed without a stumble", woman: false, yaw: 0, height: 1.15 },
-  { it: "when a man is pushed from a little to one side, then he rolls over, stands and walks off the way his feet pointed without a stumble", woman: false, yaw: 0.8, height: 1.3 },
-  { it: "when a man is pushed from the side low on the chest, then he rolls over, stands and walks off the way his feet pointed without a stumble", woman: false, yaw: 1, height: 1.15 },
-  { it: "when a man is pushed from the near side, then he rolls over, stands and walks off the way his feet pointed without a stumble", woman: false, yaw: 1.4, height: 1.15 },
-  { it: "when a woman is pushed squarely onto her back, then she rolls over, stands and walks off the way her feet pointed without a stumble", woman: true, yaw: 0, height: 1.15 },
-  { it: "when a woman is pushed from a little to one side, then she rolls over, stands and walks off the way her feet pointed without a stumble", woman: true, yaw: 0.8, height: 1.3 },
-  { it: "when a woman is pushed from the side low on the chest, then she rolls over, stands and walks off the way her feet pointed without a stumble", woman: true, yaw: 1, height: 1.15 },
-  { it: "when a woman is pushed from the near side, then she rolls over, stands and walks off the way her feet pointed without a stumble", woman: true, yaw: 1.4, height: 1.15 },
+const pushedCases: readonly { it: string; build: keyof typeof LOOKS; yaw: number; height: number }[] = [
+  { it: "when a man is pushed squarely onto his back, then he rolls over, stands and walks off the way his feet pointed without a stumble", build: "man", yaw: 0, height: 1.15 },
+  { it: "when a man is pushed from a little to one side, then he rolls over, stands and walks off the way his feet pointed without a stumble", build: "man", yaw: 0.8, height: 1.3 },
+  { it: "when a man is pushed from the side low on the chest, then he rolls over, stands and walks off the way his feet pointed without a stumble", build: "man", yaw: 1, height: 1.15 },
+  { it: "when a man is pushed from the near side, then he rolls over, stands and walks off the way his feet pointed without a stumble", build: "man", yaw: 1.4, height: 1.15 },
+  { it: "when a woman is pushed squarely onto her back, then she rolls over, stands and walks off the way her feet pointed without a stumble", build: "woman", yaw: 0, height: 1.15 },
+  { it: "when a woman is pushed from a little to one side, then she rolls over, stands and walks off the way her feet pointed without a stumble", build: "woman", yaw: 0.8, height: 1.3 },
+  { it: "when a woman is pushed from the side low on the chest, then she rolls over, stands and walks off the way her feet pointed without a stumble", build: "woman", yaw: 1, height: 1.15 },
+  { it: "when a woman is pushed from the near side, then she rolls over, stands and walks off the way her feet pointed without a stumble", build: "woman", yaw: 1.4, height: 1.15 },
 ];
 
 /** The way (rad about the vertical, 0 along +z) the feet lie from the torso: the way he would face if he sat up and walked on. */
@@ -254,7 +259,7 @@ describe("given a standing walker pushed onto his back", () => {
   for (const testCase of pushedCases) {
     it(testCase.it, () => {
       system.stopWalker(WALKER);
-      expect(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: testCase.woman ? WOMAN : driverLook(0, 0) }, WALKER), "the walker is placed in his slot").toBe(WALKER);
+      expect(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: LOOKS[testCase.build] }, WALKER), "the walker is placed in his slot").toBe(WALKER);
       frames(FRAME);
       const direction = new THREE.Vector3(-Math.sin(testCase.yaw), PUSH_LIFT, -Math.cos(testCase.yaw)).normalize();
       system.strikeWalker(WALKER, new THREE.Vector3(Math.sin(testCase.yaw) * 0.1, testCase.height, Math.cos(testCase.yaw) * 0.1), direction, PUSH_SPEED);

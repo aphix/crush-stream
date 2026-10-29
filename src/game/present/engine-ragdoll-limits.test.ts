@@ -39,13 +39,16 @@ describe("given a thrown crash-test dummy whose joints must keep to human anatom
     expect(w.knee, `knee hyperextended ${w.knee.toFixed(1)}°: ${report}`).toBeLessThanOrEqual(HYPER);
   });
 
-  for (const [name, tilt, spin] of [
-    ["face first, tumbling forward", 135, 6],
-    ["head first, straight down", 180, 0],
-  ] as const) {
-    it(`when a dummy is dropped ${name} at 10 m/s, then its head stays out of its chest through the fall, the landing and the rest, and its neck stays within the swing limit`, async () => {
+  const dropCases = [
+    { it: "when a dummy is dropped face first, tumbling forward, at 10 m/s, then its head stays out of its chest through the fall, the landing and the rest, and its neck stays within the swing limit", tilt: 135, spin: 6 },
+    { it: "when a dummy is dropped head first, straight down, at 10 m/s, then its head stays out of its chest through the fall, the landing and the rest, and its neck stays within the swing limit", tilt: 180, spin: 0 },
+  ] as const;
+
+  for (const testCase of dropCases) {
+    it(testCase.it, async () => {
       const sys = await flatSystem();
       // Turned `tilt` degrees about x (90 lies him face down, 180 stands him on his head), thrown straight down, spinning forward at `spin` rad/s.
+      const { tilt, spin } = testCase;
       const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), (tilt * Math.PI) / 180);
       const w = flatThrow(sys, { p: new THREE.Vector3(0, 1.5, 0), q, v: new THREE.Vector3(0, -10, 0), w: new THREE.Vector3(spin, 0, 0) }, 4);
       sys.dispose();

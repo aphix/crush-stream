@@ -97,9 +97,15 @@ describe("given every style's seated driver", () => {
 });
 
 describe("given a seated driver in a crushed car", () => {
-  const crushes = [["loaded", "sedan"], ["loaded", "pickup"], ["loaded", "monster"], ["headon", "pickup"], ["headon", "monster"]] as const;
-  for (const [state, id] of crushes) {
-    test(`when the ${id} is ${state === "loaded" ? "under a load that crushes its roof 0.40 m" : "out of a 50 km/h head-on"}, then his head stays under its drawn roof`, () => {
+  const crushes = [
+    { it: "when the sedan is under a load that crushes its roof 0.40 m, then his head stays under its drawn roof", state: "loaded", id: "sedan" },
+    { it: "when the pickup is under a load that crushes its roof 0.40 m, then his head stays under its drawn roof", state: "loaded", id: "pickup" },
+    { it: "when the monster is under a load that crushes its roof 0.40 m, then his head stays under its drawn roof", state: "loaded", id: "monster" },
+    { it: "when the pickup is out of a 50 km/h head-on, then his head stays under its drawn roof", state: "headon", id: "pickup" },
+    { it: "when the monster is out of a 50 km/h head-on, then his head stays under its drawn roof", state: "headon", id: "monster" },
+  ] as const;
+  for (const { it: title, state, id } of crushes) {
+    test(title, () => {
       const car = carInState(state, id, STYLE_CLASS[id]);
       car.flushDeferredSkin();
       car.updateSkin();
@@ -199,15 +205,15 @@ function headRoom(car: DeformableCar, drivers: SeatedDrivers): { least: number; 
   return { least, at };
 }
 
-describe("given the seated driver's geometry", () => {
+describe("given the seated driver's drawn figure", () => {
   const index = Array.from(seatedGeometry().index!.array);
   const bones = seatedGeometry().getAttribute(BONES_ATTRIBUTE);
 
-  test("when it is built, then every build's figure in it fits a seated driver's triangle budget at once", () => {
+  test("when the figure is drawn, then every build's figure in it fits a seated driver's triangle budget at once", () => {
     expect(index.length / 3, `${index.length / 3} triangles`).toBeLessThanOrEqual(SEATED_TRIANGLES);
   });
 
-  test("when it is built, then no vertex rides a thigh or a shin: no leg or foot is drawn", () => {
+  test("when the figure is drawn, then no vertex rides a thigh or a shin: no leg or foot is drawn", () => {
     const legs = index.filter((v) => bones.getX(v) >= LEFT_LEG || bones.getY(v) >= LEFT_LEG);
     expect(legs.length, `${legs.length} corners on the legs`).toBe(0);
   });
@@ -277,7 +283,7 @@ describe("given the seated drivers' batch and two cars, one of whose players has
 });
 
 describe("given the seated drivers fed by the ragdoll system's driver looks", () => {
-  test("when the seated drivers sync twice with nothing changed, then each car's driver look is the same object, and a new look seed rebuilds it", () => {
+  test("when the seated drivers are redrawn twice with nothing changed, then each car's driver look is the same object, and a new look seed rebuilds it", () => {
     const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
     car.spawn(0, 0, 0);
     car.group.updateMatrixWorld(true);

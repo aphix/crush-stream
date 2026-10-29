@@ -38,10 +38,17 @@ describe("given the prefab materials", () => {
     expect(parts[1]!.material).toBe(mats.water);
   });
 
-  for (const [tier, look] of [["minimal", 0], ["off", 0], ["low", 1], ["high", 1], ["ultra", 1]] as const) {
-    it(`when the tier is ${tier}, then the cartoon look is ${look ? "on" : "off"}`, () => {
-      setWaterTier(tier);
-      expect((compiled(mats.water).uniforms.uWaterLook as THREE.IUniform<number>).value).toBe(look);
+  const tierCases = [
+    { tier: "minimal", look: 0, expectedLookState: "off" },
+    { tier: "off", look: 0, expectedLookState: "off" },
+    { tier: "low", look: 1, expectedLookState: "on" },
+    { tier: "high", look: 1, expectedLookState: "on" },
+    { tier: "ultra", look: 1, expectedLookState: "on" },
+  ] as const;
+  for (const testCase of tierCases) {
+    it(`when the effects tier is ${testCase.tier}, then the water's cartoon look is ${testCase.expectedLookState}`, () => {
+      setWaterTier(testCase.tier);
+      expect((compiled(mats.water).uniforms.uWaterLook as THREE.IUniform<number>).value).toBe(testCase.look);
     });
   }
 });

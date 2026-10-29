@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, type TestContext } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -103,29 +103,50 @@ const show = (throws: readonly Strike[]): string => JSON.stringify(throws.map((s
 const doorTooShort =
   "after the overhaul: a door strike that fits the window (end first, or a smaller aim); the reference sedan's door window is 0.356 m tall against the torso's 0.36 m, so a chest-first torso meets the door skin or the A-pillar (the windshield's slab past its header) with the glass";
 
+type TorsoStrikeCase = {
+  it: string;
+  pane: "windshield" | "doorL";
+  up: number;
+  along: number;
+  speeds: readonly number[];
+  expected: "cracked" | "shattered" | "intact";
+  todo: string | false;
+};
+
+/** Fires the case's torsos at its pane, checks every pane's glass state and that the last torso came in at speed; returns that last strike. */
+async function torsoStrike(t: TestContext, testCase: TorsoStrikeCase): Promise<Strike> {
+  const { throws, glass } = await strikes(testCase.pane, testCase.up, testCase.along, "chest", true, testCase.speeds);
+  t.annotate(`glass ${JSON.stringify(glass)}; throws ${show(throws)}`);
+  for (const [name, state] of Object.entries(glass)) expect(state, `${name}'s state`).toBe(name === testCase.pane ? testCase.expected : "intact");
+  const last = throws.at(-1)!;
+  expect(last.before, `the torso came at the pane at ${(-last.before).toFixed(2)} m/s`).toBeLessThan(-0.9 * testCase.speeds.at(-1)!);
+  return last;
+}
+
 describe("given a parked car's glass (each pane intact, then cracked, then shattered) and a thrown dummy whose head and limbs touch nothing, so his torso alone meets the car", () => {
-  const torsoStrikeCases = [
-    { it: "when his torso strikes the windshield once at 10 m/s, then the windshield cracks and holds, and he bounces back off it", pane: "windshield", up: 0.1, along: 0, speeds: [10], expected: "cracked", goesThrough: false },
-    { it: "when torsos strike the windshield twice at 10 m/s, then the second strike shatters it and that torso goes on through into the cabin", pane: "windshield", up: 0.1, along: 0, speeds: [10, 10], expected: "shattered", goesThrough: true },
-    { it: "when his torso strikes the windshield at 3 m/s, under the 4 m/s that breaks glass, then the windshield stays intact and he bounces back off it", pane: "windshield", up: 0.1, along: 0, speeds: [3], expected: "intact", goesThrough: false },
-    { it: "when his torso strikes the left door window once at 10 m/s, then the window cracks and holds, and he bounces back off it", pane: "doorL", up: DOOR_UP, along: 0, speeds: [10], expected: "cracked", goesThrough: false },
-    { it: "when torsos strike the left door window twice at 10 m/s, then the second strike shatters it and that torso goes on through into the cabin", pane: "doorL", up: DOOR_UP, along: 0, speeds: [10, 10], expected: "shattered", goesThrough: true },
-    { it: "when his torso strikes the left door window at 3 m/s, under the 4 m/s that breaks glass, then the window stays intact and he bounces back off it", pane: "doorL", up: DOOR_UP, along: 0, speeds: [3], expected: "intact", goesThrough: false },
-  ] as const;
-  for (const testCase of torsoStrikeCases) {
-    todoRow(testCase.it, testCase.pane === "doorL" ? doorTooShort : false, async (t) => {
-      const { throws, glass } = await strikes(testCase.pane, testCase.up, testCase.along, "chest", true, testCase.speeds);
-      t.annotate(`glass ${JSON.stringify(glass)}; throws ${show(throws)}`);
-      for (const [name, state] of Object.entries(glass)) expect(state, `${name}'s state`).toBe(name === testCase.pane ? testCase.expected : "intact");
-      const last = throws.at(-1)!;
-      expect(last.before, `the torso came at the pane at ${(-last.before).toFixed(2)} m/s`).toBeLessThan(-0.9 * testCase.speeds.at(-1)!);
-      if (testCase.goesThrough) {
-        expect(last.next, `the step after the pane went it moved in at ${(-last.next).toFixed(2)} m/s`).toBeLessThan(-0.9 * testCase.speeds.at(-1)!);
-        expect(last.through, `its centre got ${last.through.toFixed(3)} m past the glass, not its whole depth`).toBeGreaterThan(LEAD.chest);
-      } else {
-        expect(last.peakOut, `it never moved back out: at most ${last.peakOut.toFixed(2)} m/s out after the strike`).toBeGreaterThan(0);
-        expect(last.through, `its centre got ${last.through.toFixed(3)} m past the glass`).toBeLessThan(0);
-      }
+  const bounceCases: readonly TorsoStrikeCase[] = [
+    { it: "when his torso strikes the windshield once at 10 m/s, then the windshield cracks and holds, and he bounces back off it", pane: "windshield", up: 0.1, along: 0, speeds: [10], expected: "cracked", todo: false },
+    { it: "when his torso strikes the windshield at 3 m/s, under the 4 m/s that breaks glass, then the windshield stays intact and he bounces back off it", pane: "windshield", up: 0.1, along: 0, speeds: [3], expected: "intact", todo: false },
+    { it: "when his torso strikes the left door window once at 10 m/s, then the window cracks and holds, and he bounces back off it", pane: "doorL", up: DOOR_UP, along: 0, speeds: [10], expected: "cracked", todo: doorTooShort },
+    { it: "when his torso strikes the left door window at 3 m/s, under the 4 m/s that breaks glass, then the window stays intact and he bounces back off it", pane: "doorL", up: DOOR_UP, along: 0, speeds: [3], expected: "intact", todo: doorTooShort },
+  ];
+  for (const testCase of bounceCases) {
+    todoRow(testCase.it, testCase.todo, async (t) => {
+      const last = await torsoStrike(t, testCase);
+      expect(last.peakOut, `it never moved back out: at most ${last.peakOut.toFixed(2)} m/s out after the strike`).toBeGreaterThan(0);
+      expect(last.through, `its centre got ${last.through.toFixed(3)} m past the glass`).toBeLessThan(0);
+    });
+  }
+
+  const throughCases: readonly TorsoStrikeCase[] = [
+    { it: "when torsos strike the windshield twice at 10 m/s, then the second strike shatters it and that torso goes on through into the cabin", pane: "windshield", up: 0.1, along: 0, speeds: [10, 10], expected: "shattered", todo: false },
+    { it: "when torsos strike the left door window twice at 10 m/s, then the second strike shatters it and that torso goes on through into the cabin", pane: "doorL", up: DOOR_UP, along: 0, speeds: [10, 10], expected: "shattered", todo: doorTooShort },
+  ];
+  for (const testCase of throughCases) {
+    todoRow(testCase.it, testCase.todo, async (t) => {
+      const last = await torsoStrike(t, testCase);
+      expect(last.next, `the step after the pane went it moved in at ${(-last.next).toFixed(2)} m/s`).toBeLessThan(-0.9 * testCase.speeds.at(-1)!);
+      expect(last.through, `its centre got ${last.through.toFixed(3)} m past the glass, not its whole depth`).toBeGreaterThan(LEAD.chest);
     });
   }
 });

@@ -25,7 +25,7 @@ const FACE_SIDE_MARGIN_M = 0.2;
 /** The clear space between a decal's cup and the numeral beside it (px). */
 const NUMERAL_GAP_PX = 14;
 
-describe("given the podium's stage drawn on recording canvases", () => {
+describe("given a podium lettered for Ayla, Bo and Cy on Brickyard Oval", () => {
   const canvases: Drawn[] = [];
   const realCreate = doc.createElement;
   let stage: PodiumStage;
@@ -92,7 +92,7 @@ describe("given the podium's stage drawn on recording canvases", () => {
     }
   });
 
-  it("when the decal's cups are placed by their boxes, then each is inside the canvas by the edge margin and clear of the numeral between them", () => {
+  it("when the decal's cups are laid out, then each is inside the canvas by the edge margin and clear of the numeral between them", () => {
     const { cupSize, cupY, leftX, rightX, numeralHalfWidth } = decalLayout();
     const left = cupBox(leftX, cupY, cupSize);
     const right = cupBox(rightX, cupY, cupSize);

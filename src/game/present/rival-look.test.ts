@@ -159,7 +159,7 @@ function faceShares(bitmap: SprayBitmap): number[] {
 const SHARE_TOLERANCE = 0.02;
 
 describe("given the rivals' bitmaps follow the FX tier", () => {
-  it("when the tier is below High, High or Ultra, then the bitmap is 128, the garage's CAR_SPRAY (256) or 512 texels a side, the finer two with a mip chain, every face where the garage's is", () => {
+  it("when the tier is below High, High or Ultra, then the bitmap is 128, the garage's 256 or 512 texels a side, the finer two with a mip chain, every face where the garage's is", () => {
     const expected = [
       { tier: "off", side: 128 },
       { tier: "minimal", side: 128 },

@@ -68,7 +68,7 @@ function assertSame(actual: readonly number[], expected: readonly number[], labe
 }
 
 describe("given the dummies' world in a worker whose answer to frame 1 struck a car's windshield", () => {
-  it("when the answer arrives at different times, then the pane is struck on the car at the same frame, LAG frames after the one struck in", () => {
+  it("when the answer arrives at different times, then the pane is struck on the car at the same frame, a fixed lag after the frame struck in", () => {
     const early = glassAfterFrame(0, 5);
     const justInTime = glassAfterFrame(LAG - 1, 5);
     const sim = glassAfterFrame(-1, 5);

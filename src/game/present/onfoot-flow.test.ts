@@ -76,7 +76,7 @@ describe("given a player part way round the cycle", () => {
 });
 
 describe("given a player who got out and wants to drive on", () => {
-  it("when he walks back and gets in, then the car he left is the car he is in and the control is free again", () => {
+  it("when he walks back and gets in, then he is in the car with no car left to enter and the control gets him out again", () => {
     const flow = flowAt("onFoot");
     flow.press({ car: 0, speed: 0, doorBlocked: false });
     flow.tick(5);

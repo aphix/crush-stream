@@ -34,10 +34,10 @@ describe("given the player's walker starting where the run's dummies were in the
   });
 });
 
-describe("given the player's walker standing where his ground patch was built", () => {
+describe("given the player's walker standing where the ground beneath him was built", () => {
   const cases: readonly { it: string; movedM: number; expectedPatchX: number }[] = [
-    { it: "when he has walked 10 m from it, then the patch stays where it is (a heightfield reaches 48 m round it)", movedM: 10, expectedPatchX: 0 },
-    { it: "when he has walked 30 m from it, then the patch is built again round him there", movedM: 30, expectedPatchX: 30 },
+    { it: "when he has walked 10 m from it, then the ground stays where it was built (it reaches 48 m round it)", movedM: 10, expectedPatchX: 0 },
+    { it: "when he has walked 30 m from it, then the ground is built again round him there", movedM: 30, expectedPatchX: 30 },
   ];
   for (const testCase of cases) {
     it(testCase.it, async () => {

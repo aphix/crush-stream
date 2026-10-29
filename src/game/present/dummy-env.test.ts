@@ -22,11 +22,11 @@ function tableOf(fragment: string, name: string): number[] {
 }
 
 const fabricCases = [
-  { it: "skin", fabric: FABRIC.SKIN, expectedMax: 0.5 },
-  { it: "denim", fabric: FABRIC.DENIM, expectedMax: 0.3 },
-  { it: "cotton", fabric: FABRIC.COTTON, expectedMax: 0.3 },
-  { it: "hair", fabric: FABRIC.HAIR, expectedMax: 0.5 },
-  { it: "leather", fabric: FABRIC.LEATHER, expectedMax: 0.7 },
+  { it: "when the skin row is read, then it keeps no more than 0.5 of the reflection", fabric: FABRIC.SKIN, expectedMax: 0.5 },
+  { it: "when the denim row is read, then it keeps no more than 0.3 of the reflection", fabric: FABRIC.DENIM, expectedMax: 0.3 },
+  { it: "when the cotton row is read, then it keeps no more than 0.3 of the reflection", fabric: FABRIC.COTTON, expectedMax: 0.3 },
+  { it: "when the hair row is read, then it keeps no more than 0.5 of the reflection", fabric: FABRIC.HAIR, expectedMax: 0.5 },
+  { it: "when the leather row is read, then it keeps no more than 0.7 of the reflection", fabric: FABRIC.LEATHER, expectedMax: 0.7 },
 ] as const;
 
 describe("given the people's lit material", () => {
@@ -41,13 +41,13 @@ describe("given the people's lit material", () => {
     expect(depth.includes("dollEnv"), "depth shader").toBe(false);
   });
 
-  it("when it compiles, then its reflection scale reads the shared Material strength uniform object", () => {
+  it("when it compiles, then its reflection scale follows the shared Material strength setting", () => {
     const shader = compileShader(mesh.material, THREE.ShaderLib.standard);
     expect(shader.uniforms.materialStrength, "the uniform object").toBe(MATERIAL_STRENGTH);
     expect(shader.fragmentShader.split("uniform float materialStrength;").length - 1, "declared once").toBe(1);
   });
 
-  it("when it compiles, then its skin look reads the one shared switch uniform object", () => {
+  it("when it compiles, then its skin look follows the one shared skin-scatter switch", () => {
     expect(compileShader(mesh.material, THREE.ShaderLib.standard).uniforms.uSkinSss).toBe(SKIN_SSS);
   });
 
@@ -58,7 +58,7 @@ describe("given the people's lit material", () => {
   });
 
   for (const testCase of fabricCases) {
-    it(`when the ${testCase.it} row is read, then it keeps no more than ${testCase.expectedMax} of the reflection`, () => {
+    it(testCase.it, () => {
       expect(fabrics[testCase.fabric]!, `share ${fabrics[testCase.fabric]}`).toBeLessThanOrEqual(testCase.expectedMax);
     });
   }

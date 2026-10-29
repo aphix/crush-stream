@@ -17,7 +17,7 @@ const POSES = [
 
 for (const { name, angles, s, at } of POSES) {
   describe(`given ${name}`, () => {
-    it("when a billboard is written on the camera's basis, then it is the matrix compose gives for the camera's quaternion", () => {
+    it("when a billboard is written for the camera, then it is the matrix the standard transform stack gives for the camera's turn, position and scale", () => {
       const camera = new THREE.Object3D();
       camera.rotation.set(angles[0], angles[1], angles[2]);
       const basis = new Float64Array(BASIS_SIZE);
@@ -37,8 +37,8 @@ for (const { name, angles, s, at } of POSES) {
   });
 }
 
-describe("given a basis written for a turned camera", () => {
-  it("when its three columns are read, then they are unit and at right angles", () => {
+describe("given a camera turned through three axes", () => {
+  it("when the billboard's three axes are read, then they are unit and at right angles", () => {
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.8, -1.9, 0.3));
     const basis = new Float64Array(BASIS_SIZE);
     cameraBasis(q, basis);

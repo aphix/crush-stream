@@ -217,7 +217,7 @@ describe("given the orbit kept clear of the scene's solids round a look that is 
   /** A ramp's 1.6 m block (a prop's box) the followed car has run into: the look is inside it. */
   const ramp: Sight = { ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ: [occluder(0, 0, 0, 2, 3, false, 0, 1.6)] };
 
-  it("when the orbit goes a whole turn round a car under an overpass, at the foot of a rising slope and inside a ramp, then the eye stands outside every solid and never within CINE.stop of the look", () => {
+  it("when the orbit goes a whole turn round a car under an overpass, at the foot of a rising slope and inside a ramp, then the eye stands outside every solid and never within the cinematic stop distance of the look", () => {
     const look = carLook();
     const cases: [string, Sight, THREE.Vector3][] = [
       ["overpass", overpass(look), look],
@@ -536,7 +536,7 @@ describe("given the chase camera and a hit on the car it follows", () => {
     return camera.position.distanceTo(rest);
   };
 
-  it("when the car is hit at 1, 4, 15 and 40 m/s, then a nudge adds nothing, a hard hit raises trauma by a straight ramp from 2 to 20 m/s, and trauma never passes 1", () => {
+  it("when the car is hit at 1, 4, 15 and 40 m/s, then a nudge adds no shake, a hard hit raises the shake along a straight ramp from 2 to 20 m/s, and the shake never passes full", () => {
     const { view } = make();
     view.jolt(1);
     expect(view.trauma, "1 m/s").toBe(0);
@@ -618,7 +618,7 @@ describe("given the chase camera and a hit on the car it follows", () => {
     }
   });
 
-  it("when the shake runs in the chase, far chase and hood views, then each moves the eye, and the hood by CHASE.shakeHood of the chase's amount", () => {
+  it("when the shake runs in the chase, far chase and hood views, then each moves the eye, and the hood moves it by the hood's set share of the chase's amount", () => {
     vi.spyOn(performance, "now").mockImplementation(() => 5000);
     const chase = shaken("third", 0.7);
     const far = shaken("far", 0.7);
@@ -661,7 +661,7 @@ describe("given the driven car's chase and far chase eye beside a course wall an
     }
   });
 
-  it("when the ground rises behind the car above the chase height, then the eye stays CHASE.floor above the ground under it on every frame", () => {
+  it("when the ground rises behind the car above the chase height, then the eye stays the chase's floor clearance above the ground under it on every frame", () => {
     // A hill face behind the car: 0.5 m up per metre toward -z, so the eye 6 m behind would sit 3 m up in the rock at the chase's 2 m.
     const hill = new Ground();
     hill.addFace(-50, -50, 0, 100, 100, 25, 25, -25, -25, Infinity);

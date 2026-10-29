@@ -165,16 +165,20 @@ describe("given a course's terrain drawn in chunks, each with a near mesh and a 
 
 describe("given the National Mall's terrain, its lawns painted over a flat concrete ground", () => {
   const t = terrainOf("national-mall");
-  const nearTriangles = t.chunks.fineAt[(t.chunks.box.length / 4) * 2 + 1]! / 3;
-  const farTriangles = t.chunks.coarseAt[(t.chunks.box.length / 4) * 2 + 1]! / 3;
+  const triangles = {
+    near: t.chunks.fineAt[(t.chunks.box.length / 4) * 2 + 1]! / 3,
+    far: t.chunks.coarseAt[(t.chunks.box.length / 4) * 2 + 1]! / 3,
+  };
+  const budgets = [
+    { it: "when the chunks are built, then flat and gently sloping lawn and road verge are merged into large quads and a colour's straight edge into strips: the near mesh stays under 76 000 triangles", mesh: "near", limit: 76_000 },
+    { it: "when the chunks are built, then the far mesh stays under 62 000 triangles", mesh: "far", limit: 62_000 },
+  ] as const;
 
-  it("when the chunks are built, then flat and gently sloping lawn and road verge are merged into large quads and a colour's straight edge into strips: the near mesh stays under 76 000 triangles", () => {
-    expect(nearTriangles, `${nearTriangles} near triangles`).toBeLessThan(76_000);
-  });
-
-  it("when the chunks are built, then the far mesh stays under 62 000 triangles", () => {
-    expect(farTriangles, `${farTriangles} far triangles`).toBeLessThan(62_000);
-  });
+  for (const testCase of budgets) {
+    it(testCase.it, () => {
+      expect(triangles[testCase.mesh], `${triangles[testCase.mesh]} ${testCase.mesh} triangles`).toBeLessThan(testCase.limit);
+    });
+  }
 });
 
 /** What stops a terrain being watertight: its triangles' count, those not facing up, and the seams the rasteriser can open into a line of sky. */
@@ -396,7 +400,7 @@ describe("given every course's terrain, its single-cell triangles drawn in 2 m c
   }
 });
 
-describe("given a course's terrain batch (four-count)", () => {
+describe("given the four-count course's terrain chunks seen from a moving camera", () => {
   const t = terrainOf("four-count");
   const batch = new TerrainBatch(t.near, t.chunks, new THREE.MeshBasicMaterial());
   const camera = new THREE.PerspectiveCamera();
@@ -486,7 +490,11 @@ describe("given the National Mall, whose lawns are painted on a concrete terrain
     return Math.abs(m.col[v * 3]! - c.r) + Math.abs(m.col[v * 3 + 1]! - c.g) + Math.abs(m.col[v * 3 + 2]! - c.b) < 1e-4;
   });
 
-  for (const [name, mesher] of [["near", t.near], ["far", t.chunks.coarse]] as const) {
+  const meshes = [
+    { name: "near", mesher: t.near },
+    { name: "far", mesher: t.chunks.coarse },
+  ] as const;
+  for (const { name, mesher } of meshes) {
     it(`when its ${name} mesh is built, then a vertex coloured as grass takes the grass patch's id and one coloured as concrete the concrete terrain's, so the lawn takes no concrete's shine or detail`, () => {
       expect(mesher.cls?.length, "an id per vertex").toBe(mesher.pos.length / 3);
       const seen = new Set<number>();
@@ -507,7 +515,7 @@ describe("given the National Mall, whose lawns are painted on a concrete terrain
 });
 
 describe("given the cobble surface, drawn as a ribbon and as terrain cells", () => {
-  it("when its ids are read, then the ribbon is ROAD_COBBLE shaded as soil (the detail texture) and a terrain cell is TERRAIN_COBBLE shaded as stone", () => {
+  it("when its materials are read, then the ribbon is shaded as soil (the detail texture) and a terrain cell is shaded as stone", () => {
     expect(SURFACES.cobble.ribbon).toBe(MAT.ROAD_COBBLE);
     expect(MATERIALS[SURFACES.cobble.ribbon]![1]).toBe(MAT.SOIL);
     expect(MATERIALS[cellMaterial(SURFACE_IDS.indexOf("cobble"), SURFACE_IDS.indexOf("cobble"))]![1]).toBe(MAT.STONE);

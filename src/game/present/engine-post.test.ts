@@ -42,7 +42,7 @@ describe("given the post chain on a headless renderer and a print look's strengt
   const camera = new THREE.PerspectiveCamera();
   for (const look of PRINT_LOOKS) {
     for (const tier of POST_TIERS) {
-      it(`when ${look.it} is set at the ${tier} tier and a frame renders, then the tier's composite carries it in ${look.uniform}, inside a branch after the cel look and before the vignette`, () => {
+      it(`when ${look.it} is set at the ${tier} tier and a frame renders, then the final image carries that strength, applied after the cel look and before the vignette`, () => {
         post.setTier(tier);
         post[look.field] = STRENGTH;
         post.render(scene, camera, 1 / FRAME_HZ);
@@ -56,7 +56,7 @@ describe("given the post chain on a headless renderer and a print look's strengt
       });
     }
   }
-  it("leaves renderer.info's reset to whoever counts the frame", () => {
+  it("when a frame renders at either post tier, then the renderer's per-frame statistics reset is left to whoever counts the frame", () => {
     for (const tier of POST_TIERS) {
       post.setTier(tier);
       for (const hold of [false, true]) {
@@ -96,7 +96,7 @@ describe("given the post chain on a headless renderer with its strengths settled
       });
     }
 
-    it(`at ${tier}: when its composite is built, then the taps are ${ZOOM_TAPS[tier] ?? "absent"}, and the blur sits behind the zero-strength skip, ramping from 0 at the centre to the cap at the corner`, () => {
+    it(`at ${tier}: when the boost zoom is set up, then it samples the scene ${ZOOM_TAPS[tier] ?? "no"} times per pixel, skips the blur at zero strength, and ramps it from 0 at the centre to the cap at the corner`, () => {
       const composite = post["composites"][tier];
       const frag = composite.fragmentShader;
       expect(composite.defines.ZOOM_TAPS, "ZOOM_TAPS").toBe(ZOOM_TAPS[tier]);
@@ -117,7 +117,7 @@ describe("given the post chain on a headless renderer, on a device of pixel rati
   /** The samples each tier's scene target is drawn with per device pixel ratio: 4 at high and ultra; at low only on a ratio-1 device (the owner's call: it kept the canvas's 4x there); none at the plain tiers. */
   const WANT = "dpr 1: off 0, minimal 0, low 4, high 4, ultra 4; dpr 2: off 0, minimal 0, low 0, high 4, ultra 4";
 
-  it(`when each FX tier is set and a frame renders, then the HDR scene target is drawn with that tier's MSAA samples on that device (${WANT})`, () => {
+  it(`when each FX tier is set and a frame renders, then the scene is drawn with that tier's antialiasing samples on that device (${WANT})`, () => {
     const read = [1, 2].map((dpr) => {
       const post = new PostFX(renderer, dpr);
       const tiers = FX_TIERS.map((tier) => {
@@ -131,7 +131,7 @@ describe("given the post chain on a headless renderer, on a device of pixel rati
     expect(read.join("; ")).toBe(WANT);
   });
 
-  it("when the tier steps down from high to low and back on a device of ratio 2, then the one scene target loses and regains its samples in place and keeps its size", () => {
+  it("when the tier steps down from high to low and back on a device of ratio 2, then the scene's antialiasing samples go and return without its buffer being replaced or resized", () => {
     const post = new PostFX(renderer, 2);
     const target = post.sceneRT;
     post.setTier("high");

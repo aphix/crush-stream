@@ -165,7 +165,7 @@ for (const mode of MINIGAME_MODES) {
     const walls = triangles.filter(isSideWall);
     const floorCorners = cornersOf(floor);
 
-    it("when every floor vertex is compared with the floor function, then its height is the floor's at its x and z to a millimetre", () => {
+    it("when every floor vertex is checked against the station's floor shape, then its height is the floor's at its x and z to a millimetre", () => {
       for (const corner of floorCorners) {
         const expected = floorHeightAt(mode, corner.x, corner.z);
         expect(Math.abs(corner.y - expected), `at (${corner.x}, ${corner.z}) height ${corner.y}, floor ${expected}`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);

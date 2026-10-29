@@ -120,16 +120,22 @@ const spread = (frames: Frame[], index: number) => range(frames.map((frame) => f
 const jointCases: readonly {
   it: string;
   command: number;
-  expectedHipPP: readonly [number, number];
-  expectedKneePeak: readonly [number, number];
-  expectedShoulderPP: readonly [number, number];
-  expectedElbowPeak: readonly [number, number];
-  expectedTwistPP: readonly [number, number];
-  expectedBobCm: readonly [number, number];
+  expectedHipPPMin: number;
+  expectedHipPPMax: number;
+  expectedKneePeakMin: number;
+  expectedKneePeakMax: number;
+  expectedShoulderPPMin: number;
+  expectedShoulderPPMax: number;
+  expectedElbowPeakMin: number;
+  expectedElbowPeakMax: number;
+  expectedTwistPPMin: number;
+  expectedTwistPPMax: number;
+  expectedBobCmMin: number;
+  expectedBobCmMax: number;
 }[] = [
-  { it: "when he walks, then his hips swing 30-45 degrees, knees flex 40-70, arms 20-60, elbows stay open, the pelvis turns 8-18 and bobs 2-10 cm", command: WALK_SPEED, expectedHipPP: [30, 45], expectedKneePeak: [40, 70], expectedShoulderPP: [20, 60], expectedElbowPeak: [10, 50], expectedTwistPP: [8, 18], expectedBobCm: [2, 10] },
-  { it: "when he runs, then his hips swing 50-70 degrees, knees flex 70-110, arms 35-80, elbows are held bent 70-100, the pelvis turns 10-25 and bobs 4-14 cm", command: RUN_SPEED, expectedHipPP: [50, 70], expectedKneePeak: [70, 110], expectedShoulderPP: [35, 80], expectedElbowPeak: [70, 100], expectedTwistPP: [10, 25], expectedBobCm: [4, 14] },
-  { it: "when he sprints, then his hips swing 50-70 degrees, knees flex 90-130, arms 50-100, elbows are held bent 70-110, the pelvis turns 15-35 and bobs 4-16 cm", command: SPRINT_SPEED, expectedHipPP: [50, 70], expectedKneePeak: [90, 130], expectedShoulderPP: [50, 100], expectedElbowPeak: [70, 110], expectedTwistPP: [15, 35], expectedBobCm: [4, 16] },
+  { it: "when he walks, then his hips swing 30-45 degrees, knees flex 40-70, arms 20-60, elbows stay open, the pelvis turns 8-18 and bobs 2-10 cm", command: WALK_SPEED, expectedHipPPMin: 30, expectedHipPPMax: 45, expectedKneePeakMin: 40, expectedKneePeakMax: 70, expectedShoulderPPMin: 20, expectedShoulderPPMax: 60, expectedElbowPeakMin: 10, expectedElbowPeakMax: 50, expectedTwistPPMin: 8, expectedTwistPPMax: 18, expectedBobCmMin: 2, expectedBobCmMax: 10 },
+  { it: "when he runs, then his hips swing 50-70 degrees, knees flex 70-110, arms 35-80, elbows are held bent 70-100, the pelvis turns 10-25 and bobs 4-14 cm", command: RUN_SPEED, expectedHipPPMin: 50, expectedHipPPMax: 70, expectedKneePeakMin: 70, expectedKneePeakMax: 110, expectedShoulderPPMin: 35, expectedShoulderPPMax: 80, expectedElbowPeakMin: 70, expectedElbowPeakMax: 100, expectedTwistPPMin: 10, expectedTwistPPMax: 25, expectedBobCmMin: 4, expectedBobCmMax: 14 },
+  { it: "when he sprints, then his hips swing 50-70 degrees, knees flex 90-130, arms 50-100, elbows are held bent 70-110, the pelvis turns 15-35 and bobs 4-16 cm", command: SPRINT_SPEED, expectedHipPPMin: 50, expectedHipPPMax: 70, expectedKneePeakMin: 90, expectedKneePeakMax: 130, expectedShoulderPPMin: 50, expectedShoulderPPMax: 100, expectedElbowPeakMin: 70, expectedElbowPeakMax: 110, expectedTwistPPMin: 15, expectedTwistPPMax: 35, expectedBobCmMin: 4, expectedBobCmMax: 16 },
 ];
 
 describe("given a gait at each speed", () => {
@@ -142,13 +148,13 @@ describe("given a gait at each speed", () => {
       const elbow = Math.abs(Math.min(...frames.map((frame) => frame.targets[GAIT.ELBOW_L]! * DEGREES)));
       const twist = range(frames.map((frame) => frame.twist * DEGREES));
       const bob = range(frames.map((frame) => frame.anchorY)) * 100;
-      const within = (value: number, [low, high]: readonly [number, number], name: string) => expect(value >= low && value <= high, `${name} ${value.toFixed(1)} within ${low}-${high}`).toBeTruthy();
-      within(hip, testCase.expectedHipPP, "hip swing");
-      within(knee, testCase.expectedKneePeak, "knee flexion");
-      within(shoulder, testCase.expectedShoulderPP, "shoulder swing");
-      within(elbow, testCase.expectedElbowPeak, "elbow bend");
-      within(twist, testCase.expectedTwistPP, "pelvis turn");
-      within(bob, testCase.expectedBobCm, "pelvis bob (cm)");
+      const within = (value: number, low: number, high: number, name: string) => expect(value >= low && value <= high, `${name} ${value.toFixed(1)} within ${low}-${high}`).toBeTruthy();
+      within(hip, testCase.expectedHipPPMin, testCase.expectedHipPPMax, "hip swing");
+      within(knee, testCase.expectedKneePeakMin, testCase.expectedKneePeakMax, "knee flexion");
+      within(shoulder, testCase.expectedShoulderPPMin, testCase.expectedShoulderPPMax, "shoulder swing");
+      within(elbow, testCase.expectedElbowPeakMin, testCase.expectedElbowPeakMax, "elbow bend");
+      within(twist, testCase.expectedTwistPPMin, testCase.expectedTwistPPMax, "pelvis turn");
+      within(bob, testCase.expectedBobCmMin, testCase.expectedBobCmMax, "pelvis bob (cm)");
     });
   }
 

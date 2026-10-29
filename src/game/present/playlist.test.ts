@@ -37,12 +37,12 @@ describe("given a shuffle bag over a station's tracks", () => {
       for (let loop = 1; loop < 20; loop++) expect(plays[loop * 3], `seed ${seed} loop ${loop}`).not.toBe(plays[loop * 3 - 1]);
     }
   });
-  it("when the dice would open the next loop with the track that just ended, then that entry swaps out", () => {
+  it("when a shuffle would open the next loop with the track that just ended, then a different track opens it", () => {
     expect(shuffledOrder(4, -1, () => 0).join(), "the dice's order with no track to avoid").toBe("1,2,3,0");
     expect(shuffledOrder(4, 3, () => 0).join(), "a different track just ended: no swap").toBe("1,2,3,0");
     expect(shuffledOrder(4, 1, () => 0).join(), "track 1 just ended and would open: it swaps with the next entry").toBe("2,1,3,0");
   });
-  it("when the order is shuffled, then different dice give different first tracks (every track can open a session)", () => {
+  it("when the order is shuffled with different seeds, then every track can open a session", () => {
     const openers = new Set<number>();
     for (let seed = 0; seed < 100; seed++) openers.add(new ShuffleBag(4, mulberry32(seed)).next());
     expect([...openers].sort().join()).toBe("0,1,2,3");
@@ -77,7 +77,7 @@ describe("given a radio over tracks on two stations and one with no station", ()
     expect(["a", "c", "e"].includes(radio.next("high")!.title), "high plays a high track").toBeTruthy();
     expect(["b", "d"].includes(radio.next("calm")!.title), "calm plays a calm track").toBeTruthy();
   });
-  it("when a station has no track, then it deals none and counts zero", () => {
+  it("when a station has no track, then it deals none and counts zero while the station with a track counts one", () => {
     const onlyHigh = new Radio([track("a")], mulberry32(1));
     expect(onlyHigh.next("calm")).toBe(null);
     expect(onlyHigh.trackCount("calm")).toBe(0);

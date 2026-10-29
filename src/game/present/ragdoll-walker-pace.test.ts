@@ -251,20 +251,21 @@ const NO_SINK_HEIGHT = 0.9;
 const NO_TIP_TILT = 35;
 const FACED_BACK = 0.35;
 const WOMAN = { ...driverLook(0, 0), woman: true };
+const LOOKS = { man: driverLook(0, 0), woman: WOMAN } as const;
 
-const reverseCases: readonly { it: string; woman: boolean; metres: number; degrees: number }[] = [
-  { it: "when a woman runs 10 feet and the stick is pulled straight back, then she turns about and runs back without falling", woman: true, metres: 10 * FOOT, degrees: 180 },
-  { it: "when a woman runs 9 feet and the stick is pulled straight back, then she turns about and runs back without falling", woman: true, metres: 9 * FOOT, degrees: 180 },
-  { it: "when a woman runs 11 feet and the stick is pulled straight back, then she turns about and runs back without falling", woman: true, metres: 11 * FOOT, degrees: 180 },
-  { it: "when a woman runs 10 feet and turns about the other way, then she runs back without falling", woman: true, metres: 10 * FOOT, degrees: -180 },
-  { it: "when a man runs 10 feet and the stick is pulled straight back, then he turns about and runs back without falling", woman: false, metres: 10 * FOOT, degrees: 180 },
+const reverseCases: readonly { it: string; build: keyof typeof LOOKS; metres: number; degrees: number }[] = [
+  { it: "when a woman runs 10 feet and the stick is pulled straight back, then she turns about and runs back without falling", build: "woman", metres: 10 * FOOT, degrees: 180 },
+  { it: "when a woman runs 9 feet and the stick is pulled straight back, then she turns about and runs back without falling", build: "woman", metres: 9 * FOOT, degrees: 180 },
+  { it: "when a woman runs 11 feet and the stick is pulled straight back, then she turns about and runs back without falling", build: "woman", metres: 11 * FOOT, degrees: 180 },
+  { it: "when a woman runs 10 feet and turns about the other way, then she runs back without falling", build: "woman", metres: 10 * FOOT, degrees: -180 },
+  { it: "when a man runs 10 feet and the stick is pulled straight back, then he turns about and runs back without falling", build: "man", metres: 10 * FOOT, degrees: 180 },
 ];
 
 describe("given a walker running along +z", () => {
   for (const testCase of reverseCases) {
     it(testCase.it, () => {
       system.stopWalker(WALKER);
-      expect(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: testCase.woman ? WOMAN : driverLook(0, 0) }, WALKER), "the walker is placed in his slot").toBe(WALKER);
+      expect(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: LOOKS[testCase.build] }, WALKER), "the walker is placed in his slot").toBe(WALKER);
       const heading = (testCase.degrees * Math.PI) / 180;
       system.walker.heading = 0;
       system.walker.command = RUN_SPEED;

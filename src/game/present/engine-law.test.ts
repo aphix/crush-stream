@@ -11,7 +11,7 @@ const REDLINE_PEAK_MAX = 0.4;
 const VOICE_PEAK_LIMIT = 0.5;
 const db = (x: number): number => 20 * Math.log10(x);
 
-describe("given the engine law", () => {
+describe("given an engine's loudness over its whole rev and pedal range", () => {
   it("when the pedal is up versus wide open at the same revs, then coast sits 6-10 dB under full load (the lift is heard, the lifted engine is not lost)", () => {
     for (const rev of REVS) {
       const gap = engineLawDb(rev, 1) - engineLawDb(rev, 0);
@@ -25,7 +25,7 @@ describe("given the engine law", () => {
     expect(engineLawDb(1, 1)).toBe(0);
   });
 
-  it("when the revs climb at any load, then the level never falls, and the load term never falls at any revs", () => {
+  it("when the revs climb at any pedal load, then the loudness never falls, and a deeper pedal never makes it quieter at any revs", () => {
     for (const load of LOADS) {
       for (let i = 1; i < REVS.length; i++) expect(engineLawDb(REVS[i]!, load), `load ${load}, rev ${REVS[i]}`).toBeGreaterThan(engineLawDb(REVS[i - 1]!, load));
     }
@@ -34,7 +34,7 @@ describe("given the engine law", () => {
     }
   });
 
-  it("when the load is low versus high, then the M5 shape holds: flat under 0.15, a third of the span at half load", () => {
+  it("when the pedal is barely pressed versus half down, then the loudness stays flat under 0.15 load and gains a third of its span at half load", () => {
     expect(engineLawDb(0.6, 0.1)).toBe(engineLawDb(0.6, 0));
     const half = (engineLawDb(0.6, 0.5) - engineLawDb(0.6, 0)) / (engineLawDb(0.6, 1) - engineLawDb(0.6, 0));
     expect(Math.abs(half - 8 / 22), `half load is ${half.toFixed(3)} of the span`).toBeLessThan(1e-9);
@@ -56,7 +56,7 @@ describe("given the engine law", () => {
   });
 });
 
-describe("given each vehicle class's voice, rendered by the shipped worklet, with the engine law's gain on it", () => {
+describe("given each vehicle class's engine voice at every rev and pedal position, with the engine's loudness law applied", () => {
   for (const cls of VEHICLE_CLASS_IDS) {
     it(`when the ${cls} runs through revs and loads, then its level follows the law and stays inside the caps`, async () => {
       const levels = await voiceLevels(cls, "healthy", REVS);

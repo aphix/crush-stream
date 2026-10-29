@@ -16,26 +16,25 @@ function jump(watch: LandingWatch, air: number, vy: number, wheelsDown = 15): nu
   return watch.step(body(false, 0, wheelsDown), dt);
 }
 
-describe("given a landing watch (the camera's wobble and the audio's thud share it)", () => {
-  it("when the car falls fast after a long flight and lands on four wheels, then it reports the fall speed", () => {
-    expect(jump(new LandingWatch(), LANDING.minAir + 0.2, -9)).toBe(9);
-  });
-  it("when the flight was a hop shorter than the minimum, then it reports nothing", () => {
-    expect(jump(new LandingWatch(), LANDING.minAir / 2, -9)).toBe(0);
-  });
-  it("when the fall was gentler than the threshold, then it reports nothing", () => {
-    expect(jump(new LandingWatch(), 1, -(LANDING.fall - 1))).toBe(0);
-  });
-  it("when a wheel is still off the ground, then it reports nothing", () => {
-    expect(jump(new LandingWatch(), 1, -9, 7)).toBe(0);
-  });
+describe("given a car's landings (the camera's wobble and the audio's thud share them)", () => {
+  const testCases = [
+    { it: "when the car falls fast after a long flight and lands on four wheels, then it reports the fall speed", air: LANDING.minAir + 0.2, vy: -9, wheelsDown: 15, expectedReport: 9 },
+    { it: "when the flight was a hop shorter than the minimum, then it reports nothing", air: LANDING.minAir / 2, vy: -9, wheelsDown: 15, expectedReport: 0 },
+    { it: "when the fall was gentler than the threshold, then it reports nothing", air: 1, vy: -(LANDING.fall - 1), wheelsDown: 15, expectedReport: 0 },
+    { it: "when a wheel is still off the ground, then it reports nothing", air: 1, vy: -9, wheelsDown: 7, expectedReport: 0 },
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      expect(jump(new LandingWatch(), testCase.air, testCase.vy, testCase.wheelsDown), "landing report").toBe(testCase.expectedReport);
+    });
+  }
   it("when the car drives on the ground, then it reports nothing and one landing is one report", () => {
     const watch = new LandingWatch();
     expect(watch.step(body(false, 0), 1 / FRAME_HZ)).toBe(0);
     expect(jump(watch, 1, -9)).toBe(9);
     expect(watch.step(body(false, 0), 1 / FRAME_HZ)).toBe(0);
   });
-  it("when the watch is reset in flight, then the air clock restarts and a short remainder reports nothing", () => {
+  it("when a flight is reset in mid-air, then its air time restarts and a short remainder reports nothing", () => {
     const watch = new LandingWatch();
     for (let t = 0; t < 1; t += 1 / FRAME_HZ) watch.step(body(true, -9), 1 / FRAME_HZ);
     watch.reset();

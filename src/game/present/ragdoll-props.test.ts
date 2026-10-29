@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, type TestContext } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -120,46 +120,53 @@ describe("given a knockable prop standing in the infield of a course", () => {
   // can touch is when its centre of mass has come down to its reach (0.542 m, to the cone's tip): t = 0.834 s, 5.0 m on;
   // its middle can be 0.192 m behind its centre of mass, so it comes down at least 4.8 m on. Over 128 knocks (16 headings,
   // 4 spots, 2 yaws) it rested 6.01-10.19 m on.
-  const tumbleCases = [
-    { it: "when a cone is knocked at 11 m/s, then it tumbles, lands on the ground and comes to rest lying on it", prefab: "cone", tips: true, on: 4.8 },
-    { it: "when a tyre stack is knocked at 11 m/s, then it tumbles, lands on the ground and comes to rest lying on it", prefab: "tyre-stack", tips: true, on: 5 },
-    { it: "when a crate is knocked at 11 m/s, then it tumbles, lands on the ground and comes to rest lying on it", prefab: "crate", tips: true, on: 5 },
-    { it: "when a hay bale is knocked at 11 m/s, then it lands upright, slides on and comes to rest on the ground", prefab: "hay-bale", tips: false, on: 5 },
+  const tipOverCases = [
+    { it: "when a cone is knocked at 11 m/s, then it tumbles, lands on the ground and comes to rest lying on it", prefab: "cone", on: 4.8 },
+    { it: "when a tyre stack is knocked at 11 m/s, then it tumbles, lands on the ground and comes to rest lying on it", prefab: "tyre-stack", on: 5 },
+    { it: "when a crate is knocked at 11 m/s, then it tumbles, lands on the ground and comes to rest lying on it", prefab: "crate", on: 5 },
   ] as const;
-  for (const testCase of tumbleCases) {
+  /** Knocks the prop standing at (60, 60) at 11 m/s, runs it 10 s and checks it never sinks past the landing slop, rests still on the ground at least `on` m from its spot; returns the most it tilted (rad). */
+  async function knockedToRest(t: TestContext, prefab: PrefabId, on: number): Promise<number> {
+    const track = course(prefab, 60, 60);
+    const ground = track.ground();
+    const sys = await system(track);
+    sys.knockProp(0, 0, 11, 4.5, 0);
+    let tilt = 0;
+    let sink = Infinity;
+    const end = new THREE.Vector3();
+    run(sys, 10, [], (p, up) => {
+      tilt = Math.max(tilt, Math.acos(Math.min(1, Math.abs(up.y))));
+      sink = Math.min(sink, lowestPoint(prefab, bodyOf(sys)) - ground.heightAt(p.x, p.z, p.y));
+      end.copy(p);
+    });
+    const body = bodyOf(sys);
+    const v = body.linvel();
+    const w = body.angvel();
+    const speed = Math.hypot(v.x, v.y, v.z);
+    const spin = Math.hypot(w.x, w.y, w.z);
+    const asleep = body.isSleeping();
+    const rise = end.y - ground.heightAt(end.x, end.z, end.y);
+    const gap = lowestPoint(prefab, body) - ground.heightAt(end.x, end.z, end.y);
+    const [sx, sy, sz] = PREFABS[prefab].size;
+    sys.dispose();
+    t.annotate(`tilted ${((tilt * 180) / Math.PI).toFixed(0)}°, rests ${(end.x - 60).toFixed(1)} m on, middle ${rise.toFixed(2)} m up, lowest point ${(gap * 1000).toFixed(1)} mm off the ground (deepest ${(sink * 1000).toFixed(1)}), ${speed.toFixed(3)} m/s, ${spin.toFixed(3)} rad/s, asleep ${asleep}`);
+    expect(sink, `its lowest point went ${(-sink * 1000).toFixed(1)} mm under the ground`).toBeGreaterThan(-LANDING_SLOP);
+    expect(Math.abs(gap), `it rests with its lowest point ${(gap * 1000).toFixed(1)} mm off the ground`).toBeLessThan(REST_SLOP);
+    expect(end.x - 60, `it came down ${(end.x - 60).toFixed(1)} m from its spot`).toBeGreaterThan(on);
+    expect(rise, `it rests with its middle ${rise.toFixed(2)} m up: not on the ground`).toBeLessThan(Math.max(sx, sy, sz) / 2 + 0.05);
+    expect(speed < 0.05 && spin < 0.1 && asleep, `still moving at ${speed.toFixed(3)} m/s, ${spin.toFixed(3)} rad/s (asleep: ${asleep})`).toBeTruthy();
+    return tilt;
+  }
+  for (const testCase of tipOverCases) {
     it(testCase.it, async (t) => {
-      const track = course(testCase.prefab, 60, 60);
-      const ground = track.ground();
-      const sys = await system(track);
-      sys.knockProp(0, 0, 11, 4.5, 0);
-      let tilt = 0;
-      let sink = Infinity;
-      const end = new THREE.Vector3();
-      run(sys, 10, [], (p, up) => {
-        tilt = Math.max(tilt, Math.acos(Math.min(1, Math.abs(up.y))));
-        sink = Math.min(sink, lowestPoint(testCase.prefab, bodyOf(sys)) - ground.heightAt(p.x, p.z, p.y));
-        end.copy(p);
-      });
-      const body = bodyOf(sys);
-      const v = body.linvel();
-      const w = body.angvel();
-      const speed = Math.hypot(v.x, v.y, v.z);
-      const spin = Math.hypot(w.x, w.y, w.z);
-      const asleep = body.isSleeping();
-      const rise = end.y - ground.heightAt(end.x, end.z, end.y);
-      const gap = lowestPoint(testCase.prefab, body) - ground.heightAt(end.x, end.z, end.y);
-      const [sx, sy, sz] = PREFABS[testCase.prefab].size;
-      sys.dispose();
-      t.annotate(`tilted ${((tilt * 180) / Math.PI).toFixed(0)}°, rests ${(end.x - 60).toFixed(1)} m on, middle ${rise.toFixed(2)} m up, lowest point ${(gap * 1000).toFixed(1)} mm off the ground (deepest ${(sink * 1000).toFixed(1)}), ${speed.toFixed(3)} m/s, ${spin.toFixed(3)} rad/s, asleep ${asleep}`);
-      if (testCase.tips) expect(tilt, `it never tipped past 45° (${((tilt * 180) / Math.PI).toFixed(0)}°)`).toBeGreaterThan(Math.PI / 4);
-      else expect(tilt, `it tipped ${((tilt * 180) / Math.PI).toFixed(0)}°`).toBeLessThan((5 * Math.PI) / 180);
-      expect(sink, `its lowest point went ${(-sink * 1000).toFixed(1)} mm under the ground`).toBeGreaterThan(-LANDING_SLOP);
-      expect(Math.abs(gap), `it rests with its lowest point ${(gap * 1000).toFixed(1)} mm off the ground`).toBeLessThan(REST_SLOP);
-      expect(end.x - 60, `it came down ${(end.x - 60).toFixed(1)} m from its spot`).toBeGreaterThan(testCase.on);
-      expect(rise, `it rests with its middle ${rise.toFixed(2)} m up: not on the ground`).toBeLessThan(Math.max(sx, sy, sz) / 2 + 0.05);
-      expect(speed < 0.05 && spin < 0.1 && asleep, `still moving at ${speed.toFixed(3)} m/s, ${spin.toFixed(3)} rad/s (asleep: ${asleep})`).toBeTruthy();
+      const tilt = await knockedToRest(t, testCase.prefab, testCase.on);
+      expect(tilt, `it never tipped past 45° (${((tilt * 180) / Math.PI).toFixed(0)}°)`).toBeGreaterThan(Math.PI / 4);
     });
   }
+  it("when a hay bale is knocked at 11 m/s, then it lands upright, slides on and comes to rest on the ground", async (t) => {
+    const tilt = await knockedToRest(t, "hay-bale", 5);
+    expect(tilt, `it tipped ${((tilt * 180) / Math.PI).toFixed(0)}°`).toBeLessThan((5 * Math.PI) / 180);
+  });
   // Knocked across the infield (a tyre stack knocked that way rolls on for seconds; knocked 5° off the other way it stops).
   const restCases = [
     { it: "when a cone is knocked at 11 m/s and comes to rest, then it lies asleep within half a second of stopping", prefab: "cone", kick: [11, 4.5, 0] },
@@ -422,20 +429,25 @@ describe("given a crate knocked off its spot on a course's infield, still in the
     { it: "when it was tossed straight up at 3 m/s and a dummy is out, then its world steps 480 times a second", kick: [0, 3, 0], dummy: true, perSecond: 480 },
     { it: "when it was knocked at 11 m/s and no dummy is out, then its world steps 480 times a second while it flies that fast", kick: [11, 4.5, 0], dummy: false, perSecond: 480 },
   ] as const;
+  /** Knocks the crate with `kick` (a dummy out 20 m off when `dummy`), runs it 0.5 s; returns the crate's middle height and the world's steps over the last 0.4 s. */
+  async function crateRate(kick: readonly [number, number, number], dummy: boolean): Promise<{ height: number; steps: number }> {
+    const sys = await system(course("crate", 60, 60));
+    const [vx, vy, vz] = kick;
+    sys.knockProp(0, -1, vx, vy, vz);
+    if (dummy) sys.place(new THREE.Vector3(40, 3, 40), new THREE.Quaternion(), new THREE.Vector3(), new THREE.Vector3(), 10, 0);
+    run(sys, 0.1, [], () => {});
+    const tick = sys["tick"];
+    run(sys, 0.4, [], () => {});
+    const steps = sys["tick"] - tick;
+    const up = new THREE.Vector3();
+    sys.propAt(0, up, new THREE.Vector3());
+    sys.dispose();
+    return { height: up.y, steps };
+  }
   for (const testCase of rateCases) {
     it(testCase.it, async () => {
-      const sys = await system(course("crate", 60, 60));
-      const [vx, vy, vz] = testCase.kick;
-      sys.knockProp(0, -1, vx, vy, vz);
-      if (testCase.dummy) sys.place(new THREE.Vector3(40, 3, 40), new THREE.Quaternion(), new THREE.Vector3(), new THREE.Vector3(), 10, 0);
-      run(sys, 0.1, [], () => {});
-      const tick = sys["tick"];
-      run(sys, 0.4, [], () => {});
-      const steps = sys["tick"] - tick;
-      const up = new THREE.Vector3();
-      sys.propAt(0, up, new THREE.Vector3());
-      sys.dispose();
-      expect(up.y, `the crate was down by 0.5 s after its knock (middle ${up.y.toFixed(2)} m up)`).toBeGreaterThan(0.55);
+      const { height, steps } = await crateRate(testCase.kick, testCase.dummy);
+      expect(height, `the crate was down by 0.5 s after its knock (middle ${height.toFixed(2)} m up)`).toBeGreaterThan(0.55);
       expect(steps / 0.4, `${steps} steps in 0.4 s`).toBe(testCase.perSecond);
     });
   }
@@ -444,30 +456,34 @@ describe("given a crate knocked off its spot on a course's infield, still in the
 describe("given a prop standing on a course's flat infield, slid off its spot along the ground with nothing tipping it", () => {
   // Friction 0.85 (the prop's 0.8 and the ground's 0.9, averaged) stops a slide from 11 m/s about 7 m on. Under it a prop
   // tips only if its half width is under 0.85 of its middle's height: not a crate (1) or a hay bale (1.33), a tyre stack (0.75).
-  const slideCases = [
-    { it: "when a crate is slid at 11 m/s, then it slides to rest upright about 7 m on", prefab: "crate", tips: false },
-    { it: "when a hay bale is slid at 11 m/s, then it slides to rest upright about 7 m on", prefab: "hay-bale", tips: false },
-    { it: "when a tyre stack is slid at 11 m/s, then, narrower than it is tall, it tips over", prefab: "tyre-stack", tips: true },
+  const uprightSlideCases = [
+    { it: "when a crate is slid at 11 m/s, then it slides to rest upright about 7 m on", prefab: "crate" },
+    { it: "when a hay bale is slid at 11 m/s, then it slides to rest upright about 7 m on", prefab: "hay-bale" },
   ] as const;
-  for (const testCase of slideCases) {
+  /** Slides the prop standing at (60, 60) off at 11 m/s for 5 s; returns the most it tilted (degrees) and where it ended. */
+  async function slid(prefab: PrefabId): Promise<{ deg: number; end: THREE.Vector3 }> {
+    const sys = await system(course(prefab, 60, 60));
+    sys.knockProp(0, -1, 11, 0, 0);
+    let tilt = 0;
+    const end = new THREE.Vector3();
+    run(sys, 5, [], (p, up) => {
+      tilt = Math.max(tilt, Math.acos(Math.min(1, Math.abs(up.y))));
+      end.copy(p);
+    });
+    sys.dispose();
+    return { deg: (tilt * 180) / Math.PI, end };
+  }
+  for (const testCase of uprightSlideCases) {
     it(testCase.it, async () => {
-      const sys = await system(course(testCase.prefab, 60, 60));
-      sys.knockProp(0, -1, 11, 0, 0);
-      let tilt = 0;
-      const end = new THREE.Vector3();
-      run(sys, 5, [], (p, up) => {
-        tilt = Math.max(tilt, Math.acos(Math.min(1, Math.abs(up.y))));
-        end.copy(p);
-      });
-      sys.dispose();
-      const deg = (tilt * 180) / Math.PI;
-      if (testCase.tips) expect(deg, `it never tipped past 45° (${deg.toFixed(0)}°)`).toBeGreaterThan(45);
-      else {
-        expect(deg, `it tipped ${deg.toFixed(0)}°`).toBeLessThan(5);
-        expect(Math.abs(end.x - 60 - 7.2), `it came to rest ${(end.x - 60).toFixed(1)} m on`).toBeLessThan(0.5);
-      }
+      const { deg, end } = await slid(testCase.prefab);
+      expect(deg, `it tipped ${deg.toFixed(0)}°`).toBeLessThan(5);
+      expect(Math.abs(end.x - 60 - 7.2), `it came to rest ${(end.x - 60).toFixed(1)} m on`).toBeLessThan(0.5);
     });
   }
+  it("when a tyre stack is slid at 11 m/s, then, narrower than it is tall, it tips over", async () => {
+    const { deg } = await slid("tyre-stack");
+    expect(deg, `it never tipped past 45° (${deg.toFixed(0)}°)`).toBeGreaterThan(45);
+  });
 });
 
 describe("given a cone standing on a course's infield, knocked off by a car's bumper (above its centre of mass)", () => {
@@ -548,13 +564,13 @@ describe("given a cone knocked over by a car's bumper, lying asleep where it cam
   const coneRestsOnItsOtherSide =
     "after the plan: derive the rest bound from the cone's collider and its ground patch instead of one tolerance: which side the cone lies on is decided by the order its contacts are solved in, and the car proxies' colliders now being built only where a dummy or prop is near (`RagdollSystem.cull`) changed that order (building them all, as at 4212c3d7, gives back -1.8 mm): this offset rests -5.1 mm off the ground, 2.1 mm past the 3 mm bound, while 13 of the 14 offsets from 0.7 to 0.95 m rest at -0.9 to -2.5 mm (14 of 14 at 4212c3d7)";
   const runOverCases = [
-    { it: "when a car drives into it at 30 m/s, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 30, acrossM: 0, headingDeg: 287 },
-    { it: "when a car drives into it at 40 m/s, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 40, acrossM: 0, headingDeg: 287 },
-    { it: "when a car drives into it at 40 m/s with its middle line 0.4 m to one side, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 40, acrossM: 0.4, headingDeg: 107 },
+    { it: "when a car drives into it at 30 m/s, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 30, acrossM: 0, headingDeg: 287, todo: false },
+    { it: "when a car drives into it at 40 m/s, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 40, acrossM: 0, headingDeg: 287, todo: false },
+    { it: "when a car drives into it at 40 m/s with its middle line 0.4 m to one side, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 40, acrossM: 0.4, headingDeg: 107, todo: false },
     { it: "when a car drives into it at 40 m/s with its middle line 0.8 m to one side, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 40, acrossM: 0.8, headingDeg: 107, todo: coneRestsOnItsOtherSide },
   ] as const;
   for (const testCase of runOverCases) {
-    todoRow(testCase.it, "todo" in testCase ? testCase.todo : false, async (t) => {
+    todoRow(testCase.it, testCase.todo, async (t) => {
       const track = course("cone", 60, 60);
       const ground = track.ground();
       const sys = await system(track);

@@ -184,18 +184,19 @@ describe("given the damage stages", () => {
     expect(damageTone("limping").cutoffHz).toBeLessThan(damageTone("damaged").cutoffHz);
     expect(damageTone("damaged").cutoffHz).toBeLessThan(damageTone("healthy").cutoffHz);
   });
+  const ignitionFactors = [
+    { stage: "limping", factor: 1.6 },
+    { stage: "damaged", factor: 1.25 },
+  ] as const;
   for (const cls of VEHICLE_CLASS_IDS) {
-    it(`when ${cls} limps, then its ignition time is 1.6 x the healthy one`, () => {
-      const limping = toneMessage(cls, "limping", SAMPLE_RATE).ignition_time;
-      const healthy = toneMessage(cls, "healthy", SAMPLE_RATE).ignition_time;
-      expect(Math.abs(limping - 1.6 * healthy)).toBeLessThan(EPS);
-    });
-    it(`when ${cls} is damaged, then its ignition time is 1.25 x the healthy one`, () => {
-      const damaged = toneMessage(cls, "damaged", SAMPLE_RATE).ignition_time;
-      const healthy = toneMessage(cls, "healthy", SAMPLE_RATE).ignition_time;
-      expect(Math.abs(damaged - 1.25 * healthy)).toBeLessThan(EPS);
-    });
-    it(`when ${cls} limps, then the message ignition time stays inside the generator's range`, () => {
+    for (const c of ignitionFactors) {
+      it(`when ${cls} is ${c.stage}, then its ignition time is ${c.factor} x the healthy one`, () => {
+        const stageIgnition = toneMessage(cls, c.stage, SAMPLE_RATE).ignition_time;
+        const healthy = toneMessage(cls, "healthy", SAMPLE_RATE).ignition_time;
+        expect(Math.abs(stageIgnition - c.factor * healthy)).toBeLessThan(EPS);
+      });
+    }
+    it(`when ${cls} limps, then its ignition time stays inside the generator's range`, () => {
       const ignition = toneMessage(cls, "limping", SAMPLE_RATE).ignition_time;
       expect(ignition >= 0.01 && ignition <= 0.5).toBeTruthy();
     });
@@ -205,10 +206,10 @@ describe("given the damage stages", () => {
       expect(Math.abs(toneMessage(cls, "limping", SAMPLE_RATE).action - 0.6 * healthy)).toBeLessThan(EPS);
     });
   }
-  it("when a message is built, then its keys are the processor's port.onmessage keys", () => {
+  it("when a tone message is built, then it carries exactly the settings the engine-sound worklet reads", () => {
     expect(Object.keys(toneMessage(SEDAN, "healthy", SAMPLE_RATE)).sort().join()).toBe(processorMessageKeys().join());
   });
-  it("when a message is built, then its lengths match the class options", () => {
+  it("when a tone message is built, then its cylinder count and waveguide and muffler lengths match the class tuning", () => {
     const o = toneOptions("muscle", SAMPLE_RATE);
     const m = toneMessage("muscle", "healthy", SAMPLE_RATE);
     expect(m.cylinder_count).toBe(o.cylinders);
@@ -227,7 +228,7 @@ describe("given the damage stages", () => {
       expect(damageTone(c.stage).toneIndex).toBe(c.toneIndex);
     });
   }
-  it("when every tuning message is prebuilt, then there are TONE_COUNT per class in class order and each matches its stage", () => {
+  it("when every tuning message is prebuilt, then each class has one per tuning in class order and each matches its stage", () => {
     const all = toneMessages(SAMPLE_RATE);
     expect(all.length).toBe(VEHICLE_CLASS_IDS.length * TONE_COUNT);
     for (const [c, cls] of VEHICLE_CLASS_IDS.entries()) {

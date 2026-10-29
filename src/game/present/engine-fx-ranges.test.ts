@@ -49,73 +49,61 @@ function overrun(root: THREE.Object3D): string | null {
   return null;
 }
 
-type Drive = { name: string; make: (scene: THREE.Scene) => (frame: number) => void };
+type DriveName = "debris" | "spark" | "glass" | "fountain" | "tyre smoke";
 
-const DRIVES: readonly Drive[] = [
-  {
-    name: "debris",
-    make: (scene) => {
-      const sys = new DebrisSystem(scene, RING);
-      return (f) => {
-        if (f % 5 === 0) sys.burst(ORIGIN, UP, 11 + (f % 40));
-        sys.update(STEP);
-      };
-    },
-  },
-  {
-    name: "spark",
-    make: (scene) => {
-      const sys = new SparkSystem(scene, RING);
-      return (f) => {
-        // A tier change turns the streaks on and off (`Cinematics.setTier`).
-        if (f % 45 === 0) sys.streaked = (f / 45) % 2 === 0;
-        if (f % 3 === 0) sys.poof(ORIGIN, UP, 7 + (f % 50));
-        sys.update(STEP);
-      };
-    },
-  },
-  {
-    name: "glass",
-    make: (scene) => {
-      const sys = new GlassDotSystem(scene, RING);
-      const q = new THREE.Quaternion();
-      return (f) => {
-        if (f % 4 === 0) sys.burst(ORIGIN, STILL, 9 + (f % 30));
-        if (f % 50 === 0) sys.shatter(ORIGIN, q, PANE, STILL, 2 * RING);
-        sys.update(STEP);
-      };
-    },
-  },
-  {
-    name: "fountain",
-    make: (scene) => {
-      const sys = new FountainSystem(scene, RING);
-      for (let j = 0; j < 8; j++) sys.jet(j * 2, 0, 0, j * 0.1, 1000, j < 2 ? 1.5 : 1);
-      return (f) => {
-        // A tier change sets the spray (`Fountains.setLook`), from nothing to the ultra show.
-        if (f % 30 === 0) sys.density = FOUNTAIN_TIER[TIERS[(f / 30) % TIERS.length]!].spray * (1 + (f % 3));
-        sys.update(f % 97 === 0 ? 0.25 : STEP);
-      };
-    },
-  },
-  {
-    name: "tyre smoke",
-    make: (scene) => {
-      const sys = new TireSmokeSystem(scene, RING, true);
-      return (f) => {
-        if (f % 2 === 0) sys.emitAt(ORIGIN, UP, 3 + (f % 9));
-        if (f % 60 === 0) sys.plume(ORIGIN, UP, 2 * RING);
-        sys.update(STEP, CAMERA);
-      };
-    },
-  },
-];
+const DRIVE_CASES: readonly { name: DriveName }[] = [{ name: "debris" }, { name: "spark" }, { name: "glass" }, { name: "fountain" }, { name: "tyre smoke" }];
 
-for (const { name, make } of DRIVES) {
+/** Each pool's frame driver: spawns on its own cadence, then the pool's update. */
+const DRIVES: Record<DriveName, (scene: THREE.Scene) => (frame: number) => void> = {
+  debris: (scene) => {
+    const sys = new DebrisSystem(scene, RING);
+    return (f) => {
+      if (f % 5 === 0) sys.burst(ORIGIN, UP, 11 + (f % 40));
+      sys.update(STEP);
+    };
+  },
+  spark: (scene) => {
+    const sys = new SparkSystem(scene, RING);
+    return (f) => {
+      // A tier change turns the streaks on and off (`Cinematics.setTier`).
+      if (f % 45 === 0) sys.streaked = (f / 45) % 2 === 0;
+      if (f % 3 === 0) sys.poof(ORIGIN, UP, 7 + (f % 50));
+      sys.update(STEP);
+    };
+  },
+  glass: (scene) => {
+    const sys = new GlassDotSystem(scene, RING);
+    const q = new THREE.Quaternion();
+    return (f) => {
+      if (f % 4 === 0) sys.burst(ORIGIN, STILL, 9 + (f % 30));
+      if (f % 50 === 0) sys.shatter(ORIGIN, q, PANE, STILL, 2 * RING);
+      sys.update(STEP);
+    };
+  },
+  fountain: (scene) => {
+    const sys = new FountainSystem(scene, RING);
+    for (let j = 0; j < 8; j++) sys.jet(j * 2, 0, 0, j * 0.1, 1000, j < 2 ? 1.5 : 1);
+    return (f) => {
+      // A tier change sets the spray (`Fountains.setLook`), from nothing to the ultra show.
+      if (f % 30 === 0) sys.density = FOUNTAIN_TIER[TIERS[(f / 30) % TIERS.length]!].spray * (1 + (f % 3));
+      sys.update(f % 97 === 0 ? 0.25 : STEP);
+    };
+  },
+  "tyre smoke": (scene) => {
+    const sys = new TireSmokeSystem(scene, RING, true);
+    return (f) => {
+      if (f % 2 === 0) sys.emitAt(ORIGIN, UP, 3 + (f % 9));
+      if (f % 60 === 0) sys.plume(ORIGIN, UP, 2 * RING);
+      sys.update(STEP, CAMERA);
+    };
+  },
+};
+
+for (const { name } of DRIVE_CASES) {
   describe(`given a ${name} pool driven past its ring's wrap and across tier changes`, () => {
     it("when every frame is drawn, then every upload it queues lies inside its attribute's array", () => {
       const scene = new THREE.Scene();
-      const frame = make(scene);
+      const frame = DRIVES[name](scene);
       for (let f = 0; f < FRAMES; f++) {
         frame(f);
         const bad = overrun(scene);
@@ -126,7 +114,7 @@ for (const { name, make } of DRIVES) {
 
     it("when it runs undrawn for stretches, then the uploads waiting for the next draw still lie inside its arrays", () => {
       const scene = new THREE.Scene();
-      const frame = make(scene);
+      const frame = DRIVES[name](scene);
       for (let f = 0; f < FRAMES; f++) {
         frame(f);
         const bad = overrun(scene);

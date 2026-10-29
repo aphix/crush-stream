@@ -125,7 +125,7 @@ describe("given a dummy thrown up the High jump's path (release 4, 58, 0 m/s) fi
     expect(flight.outsideAfterWindshield, "frames outside after the windshield shot").toBe(0);
   });
 
-  it("when the aim is led by MINIGAME_AIM_LEAD, then the ride opens on the follow shot and not one frame of the flight, the first included, has him outside the central 95%", () => {
+  it("when the aim is led by the minigames' aim lead, then the ride opens on the follow shot and not one frame of the flight, the first included, has him outside the central 95%", () => {
     const flight = filmFlight(HIGH_JUMP_RELEASE, { aimLead: MINIGAME_AIM_LEAD });
     expect(flight.frames, "frames").toBeGreaterThan(600);
     expect(flight.windshieldFrames, "no windshield shot").toBe(0);
@@ -140,7 +140,7 @@ const LED_RELEASES = [
   { it: "the long jump's flat throw (23, 16, 0)", release: LONG_JUMP_RELEASE },
 ] as const;
 
-describe("given other throws filmed at the default 50° lens with the aim led by MINIGAME_AIM_LEAD", () => {
+describe("given other throws filmed at the default 50° lens with the aim led by the minigames' aim lead", () => {
   for (const testCase of LED_RELEASES) {
     it(`when ${testCase.it} is filmed, then not one frame of the flight, the first included, has him outside the central 95%`, () => {
       const flight = filmFlight(testCase.release, { aimLead: MINIGAME_AIM_LEAD });
@@ -156,7 +156,7 @@ describe("given other throws filmed at the default 50° lens with the aim led by
   });
 });
 
-describe("given the long jump's throw filmed in the engine's slow-mo (the sim at 0.032 of the wall's time for 300 frames) with the aim led by MINIGAME_AIM_LEAD", () => {
+describe("given the long jump's throw filmed in the engine's slow-mo (the sim at 0.032 of the wall's time for 300 frames) with the aim led by the minigames' aim lead", () => {
   const timeScale = (wallFrame: number): number => (wallFrame < SLOWMO_FRAMES ? SLOWMO_SCALE : 1);
 
   it("when he is filmed, then not one frame, the first included, has him outside the central 95%, and the aim never strays from his head by more than the lead's share of what the slow-mo shows", () => {
@@ -248,7 +248,7 @@ describe("given a dummy lying still in a cup's bowl with a rim wall round it, th
     expect(groundBlocksLine(bowlGround(), eye, head), `the eye at ${eye.toArray()} sees him over the rim`).toBeTruthy();
   });
 
-  it("when the aim is led by MINIGAME_AIM_LEAD, then the line from the eye to him is clear of the rim, the eye stands above it and no nearer to him than the follow standoff", () => {
+  it("when the aim is led by the minigames' aim lead, then the line from the eye to him is clear of the rim, the eye stands above it and no nearer to him than the follow standoff", () => {
     const eye = restingEye(MINIGAME_AIM_LEAD);
     expect(!groundBlocksLine(bowlGround(), eye, head), `the eye at ${eye.toArray()} is behind the rim`).toBe(true);
     expect(eye.y, `the eye is ${eye.y} m up`).toBeGreaterThan(CUP_RIM_HEIGHT);
@@ -291,7 +291,7 @@ function framesOutsideAfterCutToClimber(aimLead: number | undefined): number {
 }
 
 describe("given the ride cam resting on one dummy, and a second thrown up fast from 10 m away that it cuts to", () => {
-  it("when the aim is led by MINIGAME_AIM_LEAD, then not one of the 90 frames after the cut has him outside the central 95% (the ease from the old pose is a cut)", () => {
+  it("when the aim is led by the minigames' aim lead, then not one of the 90 frames after the cut has him outside the central 95% (the ease from the old pose is a cut)", () => {
     expect(framesOutsideAfterCutToClimber(MINIGAME_AIM_LEAD), "frames outside").toBe(0);
   });
 
@@ -346,7 +346,7 @@ describe("given a driver thrown from a car on the High jump's lip, filmed for th
     expect(hidden, `${hidden} of ${FIRST_SECOND_FRAMES} frames hidden`).toBeGreaterThan(0);
   });
 
-  it("when the aim is led by MINIGAME_AIM_LEAD, then the car's box hides him on none of the frames after the first of that second (the first is the old camera's own view) and he is inside the central 95% on every frame of the flight", () => {
+  it("when the aim is led by the minigames' aim lead, then the car's box hides him on none of the frames after the first of that second (the first is the old camera's own view) and he is inside the central 95% on every frame of the flight", () => {
     const flight = filmFlight(release, options(MINIGAME_AIM_LEAD));
     let hidden = 0;
     for (let frame = 1; frame < FIRST_SECOND_FRAMES; frame++) if (carBoxHidesLine(flight.eyes[frame]!, flight.heads[frame]!)) hidden++;
@@ -374,7 +374,7 @@ const FRAME_BOARD = occluder(POSTS_PLANE_X, 0, 0, BOARD_HALF_THICKNESS, BOARD_HA
 describe("given a dummy thrown up past the High jump's frame (release 7, 58, 0 m/s), its board across the lane at the posts' plane", () => {
   const boardSight = (): Sight => ({ ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ: [FRAME_BOARD] });
 
-  it("when the aim is led by MINIGAME_AIM_LEAD, then the eye crosses the posts' plane and stands within the board's padded box on none of the frames", () => {
+  it("when the aim is led by the minigames' aim lead, then the eye crosses the posts' plane and stands within the board's padded box on none of the frames", () => {
     const flight = filmFlight(BOARD_CROSSING_RELEASE, { aimLead: MINIGAME_AIM_LEAD, sight: boardSight });
     const eyeXs = flight.eyes.map((eye) => eye.x);
     let pressed = 0;
@@ -385,7 +385,7 @@ describe("given a dummy thrown up past the High jump's frame (release 7, 58, 0 m
   });
 });
 
-describe("given a dummy thrown up the High jump's path (release 4, 58, 0 m/s) filmed with the aim led by MINIGAME_AIM_LEAD", () => {
+describe("given a dummy thrown up the High jump's path (release 4, 58, 0 m/s) filmed with the aim led by the minigames' aim lead", () => {
   it("when he climbs, then on every frame after the opening ease the eye is at least a quarter second of his speed (at most 12 m) from him", () => {
     const flight = filmFlight(HIGH_JUMP_RELEASE, { aimLead: MINIGAME_AIM_LEAD });
     let nearest = Infinity;
@@ -432,7 +432,7 @@ describe("given a dummy lying still in a field of cardboard stacks, a 2.6 m stac
     expect(stackBlocksLine(eye, head), `the eye at ${eye.toArray()} sees him past the stack`).toBeTruthy();
   });
 
-  it("when the aim is led by MINIGAME_AIM_LEAD, then the eye stands at least 6 m over his head and 8 m back, and the stack does not block the line to him", () => {
+  it("when the aim is led by the minigames' aim lead, then the eye stands at least 6 m over his head and 8 m back, and the stack does not block the line to him", () => {
     const eye = restingEye(MINIGAME_AIM_LEAD, [STACK]);
     expect(eye.y, `the eye is ${eye.y - head.y} m over him`).toBeGreaterThanOrEqual(head.y + AT_REST_HEIGHT);
     expect(Math.hypot(eye.x - head.x, eye.z - head.z), `the eye is ${Math.hypot(eye.x - head.x, eye.z - head.z)} m back`).toBeGreaterThanOrEqual(AT_REST_STANDOFF);

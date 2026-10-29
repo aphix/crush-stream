@@ -48,8 +48,8 @@ function velocityOf(doll: Doll): THREE.Vector3 {
   return sum.divideScalar(mass);
 }
 
-describe("given a dummy launched through launch() from a car", () => {
-  it("when holdThrown() was called and a minute of sim passes, then he is still alive and still, and releaseThrown() removes him", async () => {
+describe("given a dummy thrown out of a car", () => {
+  it("when he is held and a minute of sim passes, then he is still alive and still, and releasing him removes him", async () => {
     const sys = await flatSystem();
     const car = makeCar();
     sys.holdThrown();
@@ -88,7 +88,7 @@ describe("given a dummy launched through launch() from a car", () => {
     expect(gone, "the default life is back").toBe(-1);
   });
 
-  it("when reset() is called while a box stands and a dummy is held, then the box is gone and the next dummy lives 10 s", async () => {
+  it("when the range is reset while a box stands and a dummy is held, then the box is gone and the next dummy lives 10 s", async () => {
     const sys = await flatSystem();
     sys.setBoxes(ONE_BOX);
     sys.holdThrown();

@@ -120,11 +120,13 @@ describe("given a driver thrown out of a car", () => {
     }
   });
 
-  for (const [name, scale] of [
-    ["unscaled", undefined],
-    ["on the range minigames' release scale", { forward: 0.4, upward: 0.7, elevation: null }],
-  ] as const) {
-    it(`when he is thrown ${name}, then his loosened limbs carry the momentum of the rigid launch (his velocity plus spin times each part's offset, all ten parts) within ${MOMENTUM_TOLERANCE * 100}%`, async () => {
+  const momentumCases = [
+    { it: `when he is thrown unscaled, then his loosened limbs carry the momentum of the rigid launch (his velocity plus spin times each part's offset, all ten parts) within ${MOMENTUM_TOLERANCE * 100}%`, scale: undefined },
+    { it: `when he is thrown on the range minigames' release scale, then his loosened limbs carry the momentum of the rigid launch (his velocity plus spin times each part's offset, all ten parts) within ${MOMENTUM_TOLERANCE * 100}%`, scale: { forward: 0.4, upward: 0.7, elevation: null } },
+  ] as const;
+
+  for (const { it: title, scale } of momentumCases) {
+    it(title, async () => {
       for (const shot of SHOTS) {
         const { sys, doll, e } = await thrown(shot, scale);
         const launched = new THREE.Vector3().copy(e.carVel).add(e.rel);

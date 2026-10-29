@@ -125,7 +125,7 @@ const LOW_PARTS = [TOP_PARTS.hood, TOP_PARTS.deck] as const;
 
 for (const b of BODIES.filter((body) => body.style === "pickup" || body.style === "monster")) {
   describe(`given a dummy lying 3 m from a ${b.body} body untouched`, () => {
-    it("when its proxy's leaves are read, then each one over its hood and bed is a column from under the ground, none a roof slab hung over them", async () => {
+    it("when the car's collision shapes over its hood and bed are read, then each is a column from under the ground, none a roof slab hung over them", async () => {
       const car = carInState("untouched", b.style, b.cls);
       const ragdolls = await loadedRagdolls();
       ragdolls.update(FRAME, [], true, true, null);
@@ -147,7 +147,7 @@ for (const b of BODIES.filter((body) => body.style === "pickup" || body.style ==
 }
 
 describe("given a dummy lying 3 m from a sedan whose cage refits every frame", () => {
-  it("when its proxy's leaves are resized 50 times, then each takes its fitted size and no Rapier RawVector is left for the finalizer to free", async () => {
+  it("when its collision shapes are resized 50 times, then each takes its fitted size and no physics-engine memory is left for garbage collection to free", async () => {
     const car = carInState("untouched", "sedan", "sedan");
     const ragdolls = await loadedRagdolls();
     ragdolls.update(FRAME, [], true, true, null);

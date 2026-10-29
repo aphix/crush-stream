@@ -54,12 +54,12 @@ function fly(ragdolls: RagdollSystem, car: DeformableCar, mps: number, seconds: 
 }
 
 const workerCases = [
-  { it: "when a navy-uniformed guard is run down at 15 m/s, then the worker is sent one dummy standing where he stood in his uniform, hands at his sides, flying with the car", guard: 0, expectedCop: true, expectedLook: COP_LOOK },
+  { it: "when a navy-uniformed guard is run down at 15 m/s, then one dummy is thrown from where he stood in his uniform, hands at his sides, flying with the car", guard: 0, expectedCop: true, expectedLook: COP_LOOK },
   { it: "when a black-suited guard is run down, then he is dressed as an agent", guard: 1, expectedCop: false, expectedLook: GUARD_LOOK },
   { it: "when the VIP is run down, then he is dressed as the portly man in the blue suit", guard: -1, expectedCop: false, expectedLook: VIP_LOOK },
 ] as const;
 
-describe("given the dummies' world in the ragdoll worker (race courses) and a standing figure a car ran down", () => {
+describe("given a race course's dummies simulated off the main thread and a standing figure a car ran down", () => {
   for (const testCase of workerCases) {
     it(testCase.it, () => {
       const { cars, strike } = struck(testCase.guard, 15);
@@ -78,7 +78,7 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a st
     });
   }
 
-  it("when a figure is thrown after a driver, then the driver's own throw record is untouched", () => {
+  it("when a figure is run down right after a driver is thrown, then the driver's launch is left as set, with no hanging arms", () => {
     const { cars, strike } = struck(0, 15);
     const { ragdolls } = systemWithWorker();
     const before = ragdolls["next"].rides;
@@ -87,7 +87,7 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a st
     expect(ragdolls["next"].armsDown, "no hanging arms on it").toBe(undefined);
   });
 
-  it("when a figure is run down, then he leaves at the strike's own spin: none of a thrown driver's EJECT_ROLL about his line of flight", () => {
+  it("when a figure is run down, then he leaves at the strike's own spin: none of the extra roll a thrown driver gets about his line of flight", () => {
     const { cars, strike } = struck(0, 15);
     const { ragdolls, sent } = systemWithWorker();
     ragdolls.throwFigure(strike, cars);
@@ -100,7 +100,7 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a st
   });
 });
 
-describe("given the dummies' world on this thread (the fallback, and every scene that is not a race course) and a standing figure a car ran down", () => {
+describe("given the dummies simulated on the main thread (the fallback, and every scene that is not a race course) and a standing figure a car ran down", () => {
   it("when a car at 15 m/s runs him down, then one dummy is out standing with his hands down, flies on past the car's nose, lands to the side clear of its path and lies still", async () => {
     const { car, cars, strike } = struck(0, 15);
     const ragdolls = await loadedRagdolls();
@@ -116,7 +116,7 @@ describe("given the dummies' world on this thread (the fallback, and every scene
     expect(speed, `still, at ${speed.toFixed(2)} m/s`).toBeLessThan(0.2);
   });
 
-  it("when Rapier is not in yet, then he is thrown once it is, in the dress he was thrown in", async () => {
+  it("when the physics engine is not loaded yet, then he is thrown once it is, in the dress he was thrown in", async () => {
     const { car, cars, strike } = struck(1, 15);
     const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
     ragdolls.throwFigure(strike, cars);

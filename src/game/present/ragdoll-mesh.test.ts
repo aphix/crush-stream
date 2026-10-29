@@ -474,7 +474,7 @@ describe("given the dummy bent at its joints", () => {
     expect(stretches(mesh, false).every((r) => Math.abs(r.ratio - 1) < 1e-4)).toBeTruthy();
   });
 
-  it("when a slot flags whiskers and builds, then each build draws only its own vertices", () => {
+  it("when a moustache or another build is chosen, then each build draws only its own vertices and the moustache adds some", () => {
     const mesh = new DummyMesh(1);
     const probe = new THREE.Vector3();
     const count = (flags: number) => {
@@ -530,46 +530,53 @@ const HANGS_BELOW = 1.57;
 /** The peak's rim is the crown's own ring: at least this many of its vertices lie on a crown vertex (within a millimetre). */
 const PEAK_ATTACHED = 10;
 
-const HEADS = [
+const BARE_HEADS = [
   { name: "bare man", look: MAN, cop: false },
   { name: "woman with long hair", look: WOMAN, cop: false },
   { name: "portly man", look: { ...MAN, portly: true }, cop: false },
-  { name: "man in a cap", look: { ...MAN, hat: 0x2255aa }, cop: false },
 ] as const;
+const CAPPED_LOOK: DriverLook = { ...MAN, hat: 0x2255aa };
+
+/** Draws a head in `look` and checks every hair, locks and peak vertex rides the head bone and stands within its bound of the skull's skin; returns the peak's and the crown's vertices. */
+function headWear(look: DriverLook, cop: boolean): { peak: THREE.Vector3[]; crown: THREE.Vector3[] } {
+  const mesh = new DummyMesh(1);
+  mesh.dress(0, cop, look);
+  show(mesh, posture({}));
+  const skin = skinTriangles(mesh);
+  expect(skin.length, `${skin.length} skin triangles on the head`).toBeGreaterThan(60);
+  const geo = mesh.geometry;
+  const [kinds, bones] = [geo.getAttribute(KINDS_ATTRIBUTE), geo.getAttribute(BONES_ATTRIBUTE)];
+  const at = new THREE.Vector3();
+  const near = new THREE.Vector3();
+  const peak: THREE.Vector3[] = [];
+  const crown: THREE.Vector3[] = [];
+  for (let i = 0; i < kinds.count; i++) {
+    const role = kinds.getX(i);
+    if (![ROLE.HAIR, ROLE.LOCKS, ROLE.BRIM].includes(role as never) || !mesh.posed(0, i, at) || at.y < HANGS_BELOW) continue;
+    expect(bones.getX(i) === 1 && bones.getY(i) === 1, `vertex ${i} of the head wear rides the head bone alone`).toBeTruthy();
+    let best = Infinity;
+    for (const tri of skin) best = Math.min(best, tri.closestPointToPoint(at, near).distanceTo(at));
+    const bound = role === ROLE.BRIM ? PEAK_BOUND : WEAR_BOUND;
+    expect(best, `vertex ${i} (role ${role}) floats ${best.toFixed(3)} m off the skull, bound ${bound} m`).toBeLessThanOrEqual(bound);
+    if (role === ROLE.BRIM) peak.push(at.clone());
+    if (role === ROLE.HAIR) crown.push(at.clone());
+  }
+  return { peak, crown };
+}
 
 describe("given the dummy's head", () => {
-  for (const head of HEADS) {
-    it(`when the ${head.name} is drawn, then every hair, cap and peak vertex stands within a bound of the skull's skin, and a drawn peak is fastened to its crown`, () => {
-      const mesh = new DummyMesh(1);
-      mesh.dress(0, head.cop, head.look);
-      show(mesh, posture({}));
-      const skin = skinTriangles(mesh);
-      expect(skin.length, `${skin.length} skin triangles on the head`).toBeGreaterThan(60);
-      const geo = mesh.geometry;
-      const [kinds, bones] = [geo.getAttribute(KINDS_ATTRIBUTE), geo.getAttribute(BONES_ATTRIBUTE)];
-      const at = new THREE.Vector3();
-      const near = new THREE.Vector3();
-      const peak: THREE.Vector3[] = [];
-      const crown: THREE.Vector3[] = [];
-      let checked = 0;
-      for (let i = 0; i < kinds.count; i++) {
-        const role = kinds.getX(i);
-        if (![ROLE.HAIR, ROLE.LOCKS, ROLE.BRIM].includes(role as never) || !mesh.posed(0, i, at) || at.y < HANGS_BELOW) continue;
-        expect(bones.getX(i) === 1 && bones.getY(i) === 1, `vertex ${i} of the head wear rides the head bone alone`).toBeTruthy();
-        let best = Infinity;
-        for (const tri of skin) best = Math.min(best, tri.closestPointToPoint(at, near).distanceTo(at));
-        const bound = role === ROLE.BRIM ? PEAK_BOUND : WEAR_BOUND;
-        expect(best, `vertex ${i} (role ${role}) floats ${best.toFixed(3)} m off the skull, bound ${bound} m`).toBeLessThanOrEqual(bound);
-        if (role === ROLE.BRIM) peak.push(at.clone());
-        if (role === ROLE.HAIR) crown.push(at.clone());
-        checked++;
-      }
-      if (head.look.hat !== null) {
-        const fastened = peak.filter((p) => crown.some((c) => c.distanceTo(p) < 1e-3)).length;
-        expect(fastened, `${fastened} of ${peak.length} peak vertices lie on the crown, at least ${PEAK_ATTACHED} must`).toBeGreaterThanOrEqual(PEAK_ATTACHED);
-      } else expect(peak.length, "no peak without a cap").toBe(0);
+  for (const head of BARE_HEADS) {
+    it(`when the ${head.name} is drawn, then every hair vertex stands within a bound of the skull's skin and no peak is drawn`, () => {
+      const { peak } = headWear(head.look, head.cop);
+      expect(peak.length, "no peak without a cap").toBe(0);
     });
   }
+
+  it("when the man in a cap is drawn, then every hair, cap and peak vertex stands within a bound of the skull's skin, and the peak is fastened to its crown", () => {
+    const { peak, crown } = headWear(CAPPED_LOOK, false);
+    const fastened = peak.filter((p) => crown.some((c) => c.distanceTo(p) < 1e-3)).length;
+    expect(fastened, `${fastened} of ${peak.length} peak vertices lie on the crown, at least ${PEAK_ATTACHED} must`).toBeGreaterThanOrEqual(PEAK_ATTACHED);
+  });
 
   it("when a man is dressed with shades and without, then the shaded man has lens vertices on his face and the bare one has none", () => {
     const lenses = (rows: Drawn[]) => ofRole(rows, ROLE.EYES).filter((r) => r.at.z > 0.05 && r.at.y > 1.55);

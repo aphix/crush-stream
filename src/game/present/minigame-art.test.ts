@@ -92,7 +92,7 @@ function builtArt(): MinigameArt {
   return art;
 }
 
-describe("given the minigame stations' composer", () => {
+describe("given the three minigame stations' art laid out together on one ground", () => {
   beforeAll(stubBrowser);
 
   it("when it is built, then it starts invisible, and each station group sits at its anchor's x and z on the ground", () => {
@@ -239,7 +239,7 @@ describe("given the minigame stations' composer", () => {
     art.dispose();
   });
 
-  it("when poses are written, then the boxes' instance matrices equal the poses at the world origin, scaled to the layout's sizes", () => {
+  it("when box poses arrive from the sim, then the boxes drawn sit at those poses at the world origin, scaled to the layout's sizes", () => {
     const art = new MinigameArt();
     const placements = art.setHighJumpLayout(layout, LIP_Y);
     const poses = new Float32Array(placements.length * BOX_POSE_FLOATS);

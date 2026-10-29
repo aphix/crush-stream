@@ -109,7 +109,7 @@ describe("given the High jump's art built from a layout", () => {
   for (const { name, measured } of CASES) {
     const layout = highJumpLayout(measured, LIP_Y);
 
-    it(`when it is built for ${name}, then each post stands at postsX and one side of the lane, from the pad up to the frame's top (lip + frameTop), ${POST_THICKNESS} m square whatever the height`, () => {
+    it(`when it is built for ${name}, then each post stands at the frame's x on one side of the lane, from the pad up to the frame's top (lip height plus the frame's height), ${POST_THICKNESS} m square whatever the height`, () => {
       const posts = vertices(meshNamed(makeHighJumpArt(layout, LIP_Y), "posts"));
       for (const side of [-1, 1]) {
         const shaft = boundsOf(
@@ -131,7 +131,7 @@ describe("given the High jump's art built from a layout", () => {
       expect(material.map, "no wood grain on a black post").toBe(null);
     });
 
-    it(`when it is built for ${name}, then the boards mesh is one slat per layout board, centred between the posts at its y, the major ones painted apart`, () => {
+    it(`when it is built for ${name}, then the boards are one slat per layout board, centred between the posts at its height, the major ones painted apart`, () => {
       const boards = meshNamed(makeHighJumpArt(layout, LIP_Y), "boards");
       const points = vertices(boards);
       expect(points.length, "one slat per board and nothing else").toBe(layout.boards.length * VERTICES_PER_BOX);
@@ -195,7 +195,7 @@ describe("given the High jump's art built from a layout", () => {
       }
     });
 
-    it(`when it is built for ${name}, then the net is netHeight tall at netX, a light alpha-tested single-pass weave with lines wide enough to read, between two end poles that reach its top`, () => {
+    it(`when it is built for ${name}, then the net is as tall as the layout says at the net's x, a light alpha-tested single-pass weave with lines wide enough to read, between two end poles that reach its top`, () => {
       const art = makeHighJumpArt(layout, LIP_Y);
       const net = meshNamed(art, "net");
       const box = boundsOf(vertices(net));
@@ -297,7 +297,7 @@ describe("given the High jump's art built from a layout", () => {
       expect(calls, `${calls} draws, budget ${HIGH_JUMP_DRAW_BUDGET}`).toBeLessThanOrEqual(HIGH_JUMP_DRAW_BUDGET);
     });
 
-    it(`when it is built for ${name}, then there is no pane between the posts: no back-board mesh and nothing translucent but the net`, () => {
+    it(`when it is built for ${name}, then there is no pane between the posts: no back-board and nothing translucent but the net`, () => {
       const art = makeHighJumpArt(layout, LIP_Y);
       expect(art.getObjectByName("high-jump:backboard"), "the forcefield-looking back-board is gone").toBe(undefined);
       const translucent: string[] = [];

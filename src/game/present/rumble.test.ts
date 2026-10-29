@@ -9,7 +9,7 @@ const near = (a: number, b: number, msg: string): void => expect(Math.abs(a - b)
 const fx = (): Rumble => ({ weak: 0, strong: 0, ms: 0 });
 
 describe("given a hit's closing speed", () => {
-  it("when it is under the camera's jolt floor (2 m/s), then there is no effect and `out` is untouched", () => {
+  it("when it is under the camera's jolt floor (2 m/s), then there is no effect and the effect buffer is untouched", () => {
     const out = fx();
     expect(impactRumble(1.9, out)).toBe(false);
     expect(out.weak, "weak").toBe(0);
@@ -113,7 +113,7 @@ describe("given a pad's haptic actuator", () => {
   });
 });
 
-describe("given the engine's gamepad reader", () => {
+describe("given gamepads plugged in and out of the browser's pad list", () => {
   const real = Object.getOwnPropertyDescriptor(globalThis, "navigator");
   const stub = (pads: unknown[]): void => {
     Object.defineProperty(globalThis, "navigator", { value: { getGamepads: () => pads }, configurable: true });

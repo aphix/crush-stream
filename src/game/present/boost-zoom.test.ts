@@ -8,14 +8,14 @@ const FRAME = 1 / FRAME_HZ;
 /** The strength after one step of `seconds` wall s, boosting or not, from the ease's progress `from`: the spec's 0.25 s in and 0.4 s out. */
 const EASE_CASES = [
   { it: "when the boost has run 0 s, then the strength is 0", from: 0, boosting: true, seconds: 0, expected: 0 },
-  { it: "when the boost has run 1/16 s of its 0.25 s ease-in, then the smoothstep of a quarter, 0.15625", from: 0, boosting: true, seconds: 0.0625, expected: 0.15625 },
+  { it: "when the boost has run 1/16 s of its 0.25 s ease-in, then the strength is the smoothstep of a quarter, 0.15625", from: 0, boosting: true, seconds: 0.0625, expected: 0.15625 },
   { it: "when the boost has run half its ease-in, 0.125 s, then the strength is half", from: 0, boosting: true, seconds: 0.125, expected: 0.5 },
-  { it: "when the boost has run 0.1875 s, then the smoothstep of three quarters, 0.84375", from: 0, boosting: true, seconds: 0.1875, expected: 0.84375 },
+  { it: "when the boost has run 0.1875 s, then the strength is the smoothstep of three quarters, 0.84375", from: 0, boosting: true, seconds: 0.1875, expected: 0.84375 },
   { it: "when the boost has run 0.25 s, then the strength is full", from: 0, boosting: true, seconds: 0.25, expected: 1 },
   { it: "when the boost has run 2 s, then the strength stays at full", from: 0, boosting: true, seconds: 2, expected: 1 },
-  { it: "when the boost has ended 0.1 s of the 0.4 s ease-out, then the smoothstep of three quarters, 0.84375", from: 1, boosting: false, seconds: 0.1, expected: 0.84375 },
+  { it: "when the boost has ended 0.1 s of the 0.4 s ease-out, then the strength is the smoothstep of three quarters, 0.84375", from: 1, boosting: false, seconds: 0.1, expected: 0.84375 },
   { it: "when the boost has ended half the ease-out, 0.2 s, then the strength is half", from: 1, boosting: false, seconds: 0.2, expected: 0.5 },
-  { it: "when the boost has ended 0.3 s, then the smoothstep of a quarter, 0.15625", from: 1, boosting: false, seconds: 0.3, expected: 0.15625 },
+  { it: "when the boost has ended 0.3 s, then the strength is the smoothstep of a quarter, 0.15625", from: 1, boosting: false, seconds: 0.3, expected: 0.15625 },
   { it: "when the boost has ended 0.4 s, then the strength is 0", from: 1, boosting: false, seconds: 0.4, expected: 0 },
   { it: "when the boost has ended 3 s, then the strength stays at 0", from: 1, boosting: false, seconds: 3, expected: 0 },
 ] as const;

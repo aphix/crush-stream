@@ -32,24 +32,18 @@ const MATRIX_FLOATS = 16;
 const RGB = 3;
 
 type Dots = SparkSystem | GlassDotSystem;
-type Pool = { name: string; make: (scene: THREE.Scene) => { sys: Dots; shower: () => void } };
+type PoolName = "spark" | "glass chip";
 
-const POOLS: readonly Pool[] = [
-  {
-    name: "spark",
-    make: (scene) => {
-      const sys = new SparkSystem(scene);
-      return { sys, shower: () => sys.poof(ORIGIN, UP, 48) };
-    },
-  },
-  {
-    name: "glass chip",
-    make: (scene) => {
-      const sys = new GlassDotSystem(scene);
-      return { sys, shower: () => sys.burst(ORIGIN, STILL, 40) };
-    },
-  },
-];
+const POOLS: readonly { name: PoolName }[] = [{ name: "spark" }, { name: "glass chip" }];
+
+function makePool(name: PoolName, scene: THREE.Scene): { sys: Dots; shower: () => void } {
+  if (name === "spark") {
+    const sys = new SparkSystem(scene);
+    return { sys, shower: () => sys.poof(ORIGIN, UP, 48) };
+  }
+  const sys = new GlassDotSystem(scene);
+  return { sys, shower: () => sys.burst(ORIGIN, STILL, 40) };
+}
 
 beforeAll(() => {
   Object.defineProperty(globalThis, "document", { value: CANVAS, configurable: true });
@@ -81,22 +75,22 @@ function assertFrontUpload(attr: THREE.BufferAttribute | THREE.InterleavedBuffer
   expect(attr.updateRanges[0]!.count, `${label} range count`).toBe(floats);
 }
 
-for (const { name, make } of POOLS) {
+for (const { name } of POOLS) {
   describe(`given a ${name} pool`, () => {
     it("when nothing has been thrown, then the GPU draws no dot", () => {
-      const { sys } = make(new THREE.Scene());
+      const { sys } = makePool(name, new THREE.Scene());
       expect(drawn(sys)).toBe(0);
     });
 
     it("when the pool is made, then its material reads vertex colours exactly when it has a colour attribute", () => {
-      const { sys } = make(new THREE.Scene());
+      const { sys } = makePool(name, new THREE.Scene());
       const material = sys["points"].material;
       must(material instanceof THREE.PointsMaterial, "the pool's material is a points material");
       expect(material.vertexColors).toBe(sys["geo"].getAttribute("color") !== undefined);
     });
 
     it("when a shower is in the air, then the GPU draws exactly its live dots, all near the world", () => {
-      const { sys, shower } = make(new THREE.Scene());
+      const { sys, shower } = makePool(name, new THREE.Scene());
       shower();
       run(sys, 0.2);
       const live = alive(sys);
@@ -106,7 +100,7 @@ for (const { name, make } of POOLS) {
     });
 
     it("when a shower is in the air, then only the live dots' floats are queued for the GPU, into dynamic buffers", () => {
-      const { sys, shower } = make(new THREE.Scene());
+      const { sys, shower } = makePool(name, new THREE.Scene());
       shower();
       run(sys, 0.2);
       const live = alive(sys);
@@ -114,14 +108,14 @@ for (const { name, make } of POOLS) {
     });
 
     it("when every dot of the shower has died, then the GPU draws none", () => {
-      const { sys, shower } = make(new THREE.Scene());
+      const { sys, shower } = makePool(name, new THREE.Scene());
       shower();
       run(sys, ALL_DEAD_S);
       expect(drawn(sys)).toBe(0);
     });
 
     it("when the pool is reset in mid-air, then the GPU draws none", () => {
-      const { sys, shower } = make(new THREE.Scene());
+      const { sys, shower } = makePool(name, new THREE.Scene());
       shower();
       run(sys, 0.2);
       sys.reset();
@@ -210,7 +204,7 @@ describe("given a fountain pool", () => {
     expect(sentWhole, "a frame sent the whole ring").toBeTruthy();
   });
 
-  it("when update runs at slow-mo or not at all, then the shader's clock advances by exactly the FX time it was given", () => {
+  it("when the fountain is stepped at slow-mo rates or not at all, then the shader's clock advances by exactly the FX time it was given", () => {
     const sys = new FountainSystem(new THREE.Scene());
     sys.update(STEP / 4);
     sys.update(STEP / 4);
@@ -251,7 +245,7 @@ describe("given a fountain pool", () => {
     }
   });
 
-  it("when the vertex shader is built, then it flies each spark by the clock uniform, fades it over its last JET_FADE_S and culls a slot not in flight", () => {
+  it("when the vertex shader is built, then it flies each spark by the pool's clock, fades it over the end of its flight and culls a slot not in flight", () => {
     const sys = new FountainSystem(new THREE.Scene());
     const shader = compiledVertex(sys);
     expect(shader.uniforms.uFxTime, "the pool's own clock is the uniform").toBe(sys["clock"]);
