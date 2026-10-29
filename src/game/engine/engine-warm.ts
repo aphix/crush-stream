@@ -30,8 +30,12 @@ export abstract class EngineWarm extends EngineCore {
   protected warmsInFlight = 0;
   /** Until the boot warm-up resolves (`ready`), the loop reads input only; after it, new scene content warms through `queueWarm`. */
   protected warming = true;
-  /** Frames the engine has drawn. */
+  /** Frames the engine has drawn (`frameDrawn`). */
   protected framesDrawn = 0;
+  /** Callers of `warmsIdle` parked until the last in-flight warm ends. */
+  private readonly idleWaiters: (() => void)[] = [];
+  /** Callers of `framesPass` parked until the frame count they wait for is drawn. */
+  private readonly frameWaiters: { until: number; resolve: () => void }[] = [];
   /** True once a loop draws the frames (the page's animation loop, then the bench's own); tests and headless-frame draw theirs by hand. */
   protected loopDraws = false;
   /** Whether the WASM skin is loaded (else every car skins in JS). The probes read it from `window.__crush`. */
@@ -222,8 +226,19 @@ export abstract class EngineWarm extends EngineCore {
       this.cine.ultra?.dress();
       this.warmScene()
         .catch((err: unknown) => console.error("Crush Stream program warm-up failed", err))
-        .finally(() => this.warmsInFlight--);
+        .finally(() => this.warmEnded());
     });
+  }
+
+  /** Resolves once no warm is queued or running (at once when none is): the event the scene fade, the probes and the tests wait on. */
+  warmsIdle(): Promise<void> {
+    if (this.warmsInFlight === 0) return Promise.resolve();
+    return new Promise((resolve) => this.idleWaiters.push(resolve));
+  }
+
+  private warmEnded(): void {
+    if (--this.warmsInFlight > 0) return;
+    for (const resolve of this.idleWaiters.splice(0)) resolve();
   }
 
   /**
@@ -236,7 +251,7 @@ export abstract class EngineWarm extends EngineCore {
     this.warmsInFlight++;
     await this.warmUltraSteps(ultra, () => wanted() && this.cine.ultra === ultra && !this.disposed)
       .catch((err: unknown) => console.error("Crush Stream Ultra warm-up failed", err))
-      .finally(() => this.warmsInFlight--);
+      .finally(() => this.warmEnded());
   }
 
   private async warmUltraSteps(ultra: Ultra, going: () => boolean): Promise<void> {
@@ -289,8 +304,25 @@ export abstract class EngineWarm extends EngineCore {
   }
 
   /** Resolves once the loop has drawn `frames` more frames; at once where no loop draws them. */
-  private async framesPass(frames: number): Promise<void> {
+  private framesPass(frames: number): Promise<void> {
+    if (!this.loopDraws || this.disposed) return Promise.resolve();
     const until = this.framesDrawn + frames;
-    while (this.loopDraws && !this.disposed && this.framesDrawn < until) await sleep(LINK_POLL_MS);
+    return new Promise((resolve) => this.frameWaiters.push({ until, resolve }));
+  }
+
+  /** One more frame drawn: counts it and releases the `framesPass` waiters whose frames are in. */
+  protected frameDrawn(): void {
+    this.framesDrawn++;
+    for (let w = this.frameWaiters.length - 1; w >= 0; w--) {
+      const waiter = this.frameWaiters[w]!;
+      if (waiter.until > this.framesDrawn) continue;
+      this.frameWaiters.splice(w, 1);
+      waiter.resolve();
+    }
+  }
+
+  /** The engine is disposed: no frame will come for the `framesPass` waiters, so they end. */
+  protected releaseFrameWaiters(): void {
+    for (const waiter of this.frameWaiters.splice(0)) waiter.resolve();
   }
 }

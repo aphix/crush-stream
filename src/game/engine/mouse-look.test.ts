@@ -14,7 +14,7 @@ function stage(refuse: "none" | "reject" | "error" = "none") {
   const canvas: LockCanvas = {
     ownerDocument: doc,
     requestPointerLock() {
-      if (refuse === "reject") return Promise.reject(new Error("exited lock recently"));
+      if (refuse === "reject") return (rejected = Promise.reject(new Error("exited lock recently")));
       if (refuse === "error") doc.dispatchEvent(new Event("pointerlockerror"));
       else {
         doc.pointerLockElement = canvas;
@@ -24,20 +24,21 @@ function stage(refuse: "none" | "reject" | "error" = "none") {
     },
   };
   const calls = { lost: 0, changed: 0, moves: [] as [number, number][] };
+  /** The promise `requestPointerLock` last rejected with (the "reject" refusal), which the mode's own `catch` was attached to first. */
+  let rejected: Promise<never> | null = null;
   const look = new MouseLook({ move: (dx, dy) => calls.moves.push([dx, dy]), changed: () => calls.changed++, lost: () => calls.lost++ });
   const browserDrops = (): void => {
     doc.pointerLockElement = null;
     doc.dispatchEvent(new Event("pointerlockchange"));
   };
   const mouse = (dx: number, dy: number): void => void doc.dispatchEvent(Object.assign(new Event("mousemove"), { movementX: dx, movementY: dy }));
-  return { doc, canvas, calls, look, browserDrops, mouse };
+  return { doc, canvas, calls, look, browserDrops, mouse, refusal: () => rejected };
 }
 
 describe("given mouse look (the pointer-lock camera control), where losing the lock by the browser's doing pauses the game once", () => {
-  it("when the browser grants the lock, then the mode turns on and raw mouse movement reaches the camera", async () => {
+  it("when the browser grants the lock, then the mode turns on and raw mouse movement reaches the camera", () => {
     const s = stage();
     s.look.request(s.canvas);
-    await Promise.resolve();
     assert.equal(s.look.on, true);
     s.mouse(3, -2);
     assert.deepEqual(s.calls.moves, [[3, -2]]);
@@ -77,7 +78,8 @@ describe("given mouse look (the pointer-lock camera control), where losing the l
     for (const how of ["reject", "error"] as const) {
       const s = stage(how);
       s.look.request(s.canvas);
-      for (let i = 0; i < 5; i++) await Promise.resolve(); // the rejected promise's catch runs on a microtask
+      const refusal = s.refusal();
+      if (refusal !== null) await assert.rejects(refusal, /exited lock recently/, how);
       assert.equal(s.look.on, false, how);
       assert.equal(s.calls.lost, 0, how);
       s.look.request(s.canvas); // asking again after the refusal is allowed

@@ -8,6 +8,7 @@ type Listener = () => void;
 function stubPage(options: { supported?: boolean; refuse?: boolean } = {}): {
   requests: number;
   sentinels: { released: boolean; release(): Promise<void>; fire(): void }[];
+  lastRequest: Promise<unknown>;
   show(hidden: boolean): void;
 } {
   const listeners = new Set<Listener>();
@@ -15,6 +16,7 @@ function stubPage(options: { supported?: boolean; refuse?: boolean } = {}): {
   const page = {
     requests: 0,
     sentinels: [] as { released: boolean; release(): Promise<void>; fire(): void }[],
+    lastRequest: Promise.resolve() as Promise<unknown>,
     show(hidden: boolean): void {
       state.hidden = hidden;
       if (hidden) for (const sentinel of page.sentinels) if (!sentinel.released) sentinel.fire();
@@ -25,27 +27,26 @@ function stubPage(options: { supported?: boolean; refuse?: boolean } = {}): {
     value: { get hidden() { return state.hidden; }, addEventListener: (_type: string, l: Listener) => void listeners.add(l), removeEventListener: (_type: string, l: Listener) => void listeners.delete(l) },
     configurable: true,
   });
-  const wakeLock = {
-    request: async () => {
-      page.requests++;
-      if (options.refuse) throw new Error("NotAllowedError");
-      const release = new Set<Listener>();
-      const sentinel = {
-        released: false,
-        addEventListener: (_type: string, l: Listener) => void release.add(l),
-        release: async () => {
-          sentinel.released = true;
-          for (const l of release) l();
-        },
-        fire: () => {
-          sentinel.released = true;
-          for (const l of release) l();
-        },
-      };
-      page.sentinels.push(sentinel);
-      return sentinel;
-    },
+  const grant = async () => {
+    page.requests++;
+    if (options.refuse) throw new Error("NotAllowedError");
+    const release = new Set<Listener>();
+    const sentinel = {
+      released: false,
+      addEventListener: (_type: string, l: Listener) => void release.add(l),
+      release: async () => {
+        sentinel.released = true;
+        for (const l of release) l();
+      },
+      fire: () => {
+        sentinel.released = true;
+        for (const l of release) l();
+      },
+    };
+    page.sentinels.push(sentinel);
+    return sentinel;
   };
+  const wakeLock = { request: () => (page.lastRequest = grant()) };
   Object.defineProperty(globalThis, "navigator", { value: options.supported === false ? {} : { wakeLock }, configurable: true });
   return page;
 }
@@ -76,8 +77,7 @@ describe("given a loop that holds the screen wake lock", () => {
     page.show(true);
     assert.equal(hold.held, false, "released with the hidden page");
     page.show(false);
-    await Promise.resolve();
-    await Promise.resolve();
+    await page.lastRequest;
     assert.equal(page.requests, 2, "asked again on show");
     assert.equal(hold.held, true, "held again");
     await hold.release();
@@ -92,7 +92,6 @@ describe("given a loop that holds the screen wake lock", () => {
     assert.equal(page.sentinels[0]!.released, true, "the sentinel was released");
     page.show(true);
     page.show(false);
-    await Promise.resolve();
     assert.equal(page.requests, 1, "no ask after the end");
   });
 

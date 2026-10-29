@@ -45,7 +45,7 @@ test("a signal-killed command is never reported as success", async () => {
       WRAPPER,
       process.execPath,
       "-e",
-      "process.kill(process.pid, 'SIGTERM');setTimeout(() => {}, 1000);",
+      "process.kill(process.pid, 'SIGTERM');process.stdin.resume();",
     ]),
     (err) => err.signal === "SIGTERM" || err.code !== 0,
   );

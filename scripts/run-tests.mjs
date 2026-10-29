@@ -13,8 +13,6 @@
  * same split on every machine, so n machines together run each file once. The slowest files of the run print at the end (split any
  * that sets the wall time).
  * A test process that writes anything to stderr (a `console.warn`, a library's warning) fails the run, its lines printed under the file's name.
- * A file holding the line `// run-tests: solo` (it asserts a wall-clock budget) runs alone after the others, one at a time: next to
- * the batch's processes on a shared box its timing measured the box, not the code.
  */
 import { globSync, readFileSync, writeFileSync } from "node:fs";
 import { relative } from "node:path";
@@ -46,9 +44,6 @@ if (shard) {
   });
 }
 
-const solo = files.filter((f) => { try { return readFileSync(f, "utf8").includes("// run-tests: solo"); } catch { return false; } });
-const batch = files.filter((f) => !solo.includes(f));
-
 /** @type {Map<string, number>} */
 const seconds = new Map();
 /** @type {Map<string, string[]>} */
@@ -77,8 +72,7 @@ function runFiles(list, n) {
   return new Promise((done) => out.on("end", done));
 }
 
-await runFiles(batch, concurrency);
-await runFiles(solo, 1);
+await runFiles(files, concurrency);
 // A test process that wrote to stderr fails the run: a warning is a defect, the next emitter is a red here.
 for (const [file, lines] of stderrByFile) {
   console.log(`\nstderr from ${relative(process.cwd(), file)}:\n${lines.join("")}`);

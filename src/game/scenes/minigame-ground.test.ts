@@ -1,4 +1,3 @@
-// run-tests: solo (the ground's build time is held to a wall-clock budget)
 import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
@@ -37,8 +36,8 @@ const COARSEST_CELL_ERROR_FLOOR = 0.001;
 /** Metres between the floor samples, an irrational-ish step so the samples fall at every phase of a cell, and the lateral offsets sampled (across the lane, from its middle). */
 const SAMPLE_STEP = 0.0137;
 const SAMPLE_LATERAL_OFFSETS = [-STATION_HALF_WIDTH + 1, 0, 7] as const;
-/** A ground must build well within this many milliseconds. */
-const BUILD_BUDGET_MILLISECONDS = 1000;
+/** A ground lays no more nodes than this (its build costs per node): the lanes at `GRID_CELL` and the ring board at `RING_MESH_STEP` come to about 12 600, so a finer cell shows. */
+const NODE_BUDGET = 16_000;
 
 /** A parked car on the start hill's pad slides no further than this (m) in `HOLD_SECONDS`. */
 const PARKED_SLIDE_LIMIT = 0.5;
@@ -97,12 +96,12 @@ function buildGround(): MinigameGround {
 }
 
 describe("given the minigame ground", () => {
-  it("when it is built, then it takes well under a second", (t) => {
-    const before = performance.now();
+  it("when it is built, then it lays no more nodes than the budget", (t) => {
     const ground = buildGround();
-    const elapsed = performance.now() - before;
-    t.diagnostic(`built in ${elapsed.toFixed(1)} ms: ${ground.count} patches, ${ground.meshes.length} meshes`);
-    assert.ok(elapsed < BUILD_BUDGET_MILLISECONDS, `${elapsed} ms`);
+    let nodes = 0;
+    for (const mesh of ground.meshes) nodes += mesh.vertices.length / 3;
+    t.diagnostic(`${nodes} nodes: ${ground.count} patches, ${ground.meshes.length} meshes`);
+    assert.ok(nodes <= NODE_BUDGET, `${nodes} nodes`);
   });
 
   it("when it is set as the active ground and then cleared, then the flat plane is back everywhere the lanes were", () => {

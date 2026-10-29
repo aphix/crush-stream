@@ -11,6 +11,8 @@ import { handleSubmissions, STORE_MAX_BYTES, STORE_MAX_ROWS } from "./submission
 const OWNER_TOKEN = "owner-token-".padEnd(40, "x");
 /** The clock every request is handled at: address buckets neither refill nor drain between a test's requests. */
 const NOW = 1_800_000_000_000;
+/** The receipt time is stored to the whole second. */
+const SECOND_MS = 1000;
 
 /** The migrated in-memory database, built once: starting PGlite costs about a second. */
 const migrated = migratedPg();
@@ -121,6 +123,7 @@ describe("given the submissions endpoint on a freshly migrated database", () => 
       it(`when a ${kind} submission is posted${gzip ? " gzipped, as a browser sends it" : ""}, then it answers with a receipt id and the owner fetching that id gets back the same build, device, settings and payload`, async () => {
         const sql = await freshDb();
         const sent = envelope(kind);
+        const secondOfPost = Math.floor(Date.now() / SECOND_MS) * SECOND_MS;
         const receipt = await post(sql, sent, { gzip });
         assert.equal(receipt.status, 201);
         assert.match(receipt.body.id!, RECEIPT_PATTERN);
@@ -129,7 +132,8 @@ describe("given the submissions endpoint on a freshly migrated database", () => 
         assert.equal(got.body.id, receipt.body.id);
         assert.equal(got.body.kind, kind);
         assert.equal(got.body.sha, "3295bad");
-        assert.ok(Math.abs(Date.now() - Date.parse(got.body.receivedAt!)) < 60_000, "the receipt time is the server's, now");
+        const receivedAt = Date.parse(got.body.receivedAt!);
+        assert.ok(receivedAt >= secondOfPost && receivedAt <= Date.now(), `the receipt time ${receivedAt} is the server's, inside the post's own window`);
         assert.deepEqual(got.body.submission, sent);
       });
     }

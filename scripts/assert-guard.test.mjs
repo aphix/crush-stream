@@ -4,8 +4,6 @@ import { describe, it } from "node:test";
 /** Past the guard's diff budget, yet one differing entry keeps Node's own diff cheap if the guard is missing. */
 const BIG = 100_000;
 const MAX_REPORT_CHARS = 5000;
-/** A guarded failure is one bounded print; Node's own diff of these sides takes tens of ms, a full-texture one minutes. */
-const MAX_FAIL_MS = 500;
 
 /** @param {number} at the one entry that differs */
 const texture = (at) => {
@@ -16,13 +14,10 @@ const texture = (at) => {
 
 /** @param {() => unknown} fail */
 function caught(fail) {
-  const t0 = performance.now();
   try {
     fail();
   } catch (err) {
     if (!(err instanceof assert.AssertionError)) throw err;
-    const ms = performance.now() - t0;
-    assert.ok(ms < MAX_FAIL_MS, `the failure took ${Math.round(ms)} ms`);
     return err;
   }
   assert.fail("the comparison passed");

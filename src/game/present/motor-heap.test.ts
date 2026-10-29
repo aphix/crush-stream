@@ -1,7 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { setImmediate as nextTurn } from "node:timers/promises";
 import vm from "node:vm";
 import { VEHICLE_CLASS_IDS } from "../vehicle/vehicle-classes.ts";
 import { toneMessages, toneOptions } from "./motor-tone.ts";
@@ -27,9 +26,12 @@ interface WasmModule {
   HEAPU8: Uint8Array;
 }
 
-/** Runs the shipped worklet file in a stub of an AudioWorkletGlobalScope: every voice of a context shares its one wasm heap. */
-function loadWorklet(): { Processor: ProcessorClass; wasm: WasmModule } {
+/** Runs the shipped worklet file in a stub of an AudioWorkletGlobalScope: every voice of a context shares its one wasm heap. `ready` resolves when the wasm runtime is in (emscripten's `onRuntimeInitialized`). */
+function loadWorklet(): { Processor: ProcessorClass; wasm: WasmModule; ready: Promise<void> } {
   let registered: ProcessorClass | null = null;
+  let runtimeIn: () => void = () => {};
+  const ready = new Promise<void>((resolve) => (runtimeIn = resolve));
+  const seed: unknown = { onRuntimeInitialized: () => runtimeIn() };
   const scope = {
     AudioWorkletProcessor: class {
       port = { onmessage: null };
@@ -46,27 +48,26 @@ function loadWorklet(): { Processor: ProcessorClass; wasm: WasmModule } {
     setTimeout,
     performance,
     URL,
-    Module: undefined as unknown,
+    Module: seed,
   };
   vm.createContext(scope);
   vm.runInContext(WORKLET, scope);
   if (!registered) throw new Error("the worklet registered no processor");
-  return { Processor: registered, wasm: scope.Module as WasmModule };
+  return { Processor: registered, wasm: scope.Module as WasmModule, ready };
 }
 
 describe("given six voices re-tuned over and over, as every pool swap, class change and damage stage does", () => {
   it(`when they post ${POSTS} tones from the ${VEHICLE_CLASS_IDS.length * 3} tunings, then the shared 16 MB heap neither aborts nor grows once every tuning is built`, async () => {
-    const { Processor, wasm } = loadWorklet();
+    const { Processor, wasm, ready } = loadWorklet();
     const tones = toneMessages(SAMPLE_RATE);
     const voices = Array.from({ length: VOICES }, () => new Processor({ processorOptions: toneOptions(VEHICLE_CLASS_IDS[0]!, SAMPLE_RATE) }));
     const out = [[new Float32Array(BLOCK)], [new Float32Array(BLOCK)], [new Float32Array(BLOCK)]];
     const params = { rpm: new Float32Array(BLOCK).fill(3000), throttle: new Float32Array(BLOCK) };
+    await ready;
+    // A processor builds its generator on the first block after the runtime is in.
     for (const voice of voices) {
-      // The wasm initialises asynchronously: a processor builds its generator on the first block after it.
-      while (voice.soundGenerator === null) {
-        await nextTurn();
-        voice.process([], out, params);
-      }
+      voice.process([], out, params);
+      assert.notEqual(voice.soundGenerator, null, "the voice built its generator");
     }
     // A big malloc comes off the top of the heap (no hole is that large), and a leak only ever moves the top up.
     const heapTop = (): number => {

@@ -138,17 +138,16 @@ export abstract class EngineInput extends EngineRigs {
 
   /**
    * Cinematic FX quality (`FX_TIERS`): off and minimal draw straight to the canvas; minimal adds tyre marks and the crash cam, low / high / ultra the
-   * post chain. The user's pick turns the auto tier off. A pick of Ultra switches once it is loaded and warmed (`pickUltra`), a few frames later.
+   * post chain. The user's pick turns the auto tier off. A pick of Ultra switches once it is loaded and warmed (`pickUltra`), a few frames later:
+   * the promise resolves then (at once for the other tiers).
    */
-  setFxTier(tier: FxTier): void {
+  setFxTier(tier: FxTier): Promise<void> {
     this.ultraWanted = tier === "ultra";
-    if (tier === "ultra" && this.cine.tier !== "ultra") {
-      void this.pickUltra();
-      return;
-    }
+    if (tier === "ultra" && this.cine.tier !== "ultra") return this.pickUltra();
     this.autoFx.auto = false;
     this.cine.setTier(tier);
     this.emitHud();
+    return Promise.resolve();
   }
 
   /** The auto tier back on (the HUD's "auto"): the next frame applies its tier. */

@@ -1,6 +1,5 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { setTimeout as delay } from "node:timers/promises";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { RANGE_LIP_ART } from "../present/range-art.ts";
@@ -113,7 +112,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     Object.defineProperty(globalThis, "localStorage", { value: memoryStorage(), configurable: true, writable: true });
     hud = new HudStore();
     engine = await bootEngine({ hud, pacer: true });
-    for (let wait = 0; wait < 200 && engine["ragdolls"]["world"] === null; wait++) await delay(50);
+    await engine["ragdolls"].preload();
     const ragdolls = engine["ragdolls"];
     const launch = ragdolls.launch.bind(ragdolls);
     ragdolls.launch = (e, cars, rides, releaseScale) => {

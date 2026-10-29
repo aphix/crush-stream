@@ -781,10 +781,19 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     const t = { now: start };
     return { t, opts: { now: () => t.now, sleep: async (ms: number) => void (t.now += ms), random: () => 0 } };
   };
-  /** Lets a search a frame loop started (not awaited) run to its end. */
-  const settle = async (np: NetPlay) => {
-    for (let k = 0; k < 50 && np.status().finding; k++) await new Promise((resolve) => setImmediate(resolve));
+  /** The searches `np`'s frame loop starts without awaiting them (`void this.search`), recorded as they begin. */
+  const recordSearches = (np: NetPlay): Promise<void>[] => {
+    const searches: Promise<void>[] = [];
+    const search = np["search"].bind(np);
+    np["search"] = (kind) => {
+      const started = search(kind);
+      searches.push(started);
+      return started;
+    };
+    return searches;
   };
+  /** Lets the searches a frame loop started run to their end. */
+  const settle = async (searches: Promise<void>[]) => void (await Promise.all(searches.splice(0)));
   /** `ms` of the guests' frame time, the hub moving messages between steps. */
   const run = (hub: Hub, t: { now: number }, ms: number, who: NetPlay[]) => {
     for (let k = 0; k < ms / FRAME_MS; k++) {
@@ -806,12 +815,13 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
       ...v.opts,
     });
     open.push(client);
+    const searches = recordSearches(client);
     t.mock.method(globalThis, "fetch", listing(names.map((room) => ({ room, players: 1, meta: "lobby.oval" }))));
     await client.publicMatch("race");
     /** Waits out the silence that makes the guest give up on its room, and the search that follows. */
     const dwell = async () => {
       run(hub, v.t, 7000, [client]);
-      await settle(client);
+      await settle(searches);
     };
     return { hub, v, client, linked, dwell };
   };
@@ -822,6 +832,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     const host = new NetPlay(fakeGame(), { connect: hub.connect, now: v.opts.now });
     const client = new NetPlay(fakeGame(), { connect: hub.connect, ...v.opts });
     open.push(host, client);
+    const searches = recordSearches(client);
     host.host(dead, "rtc");
     t.mock.method(globalThis, "fetch", listing([{ room: dead, players: 1, meta: "lobby.oval" }]));
     await client.publicMatch("race");
@@ -837,7 +848,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     assert.equal(client.status().car, 1);
     host.leave();
     step(7000 / FRAME_MS, [client]);
-    await settle(client);
+    await settle(searches);
     const st = client.status();
     assert.equal(st.role, "host", "the stranded guest hosts instead");
     assert.equal(st.public, "race");
@@ -1004,15 +1015,20 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
 
   it("given a public host on the real WebRTC transport against a stubbed relay, when it makes its first relay poll, then that poll already carries the lobby tag", async (t) => {
     const polls: string[] = [];
+    let polled: () => void = () => {};
+    const firstPoll = new Promise<void>((resolve) => (polled = resolve));
     t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method !== "POST") polls.push(String(input));
+      if (init?.method !== "POST") {
+        polls.push(String(input));
+        polled();
+      }
       return new Response(JSON.stringify({ token: "t", peers: [], signals: [] }));
     });
     // The default link: the real `RtcTransport`, whose room polls the stubbed relay.
     const np = new NetPlay(fakeGame([]), virtual().opts);
     open.push(np);
     np.publicHost("race", false);
-    await new Promise((resolve) => setImmediate(resolve));
+    await firstPoll;
     assert.equal(polls.length, 1);
     assert.equal(new URL(polls[0]!, "http://relay.test").searchParams.get("meta"), "lobby.oval");
   });

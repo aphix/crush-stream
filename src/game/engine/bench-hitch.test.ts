@@ -1,11 +1,12 @@
-// run-tests: solo (a row counts the collector's scavenges, which a starved CPU adds)
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { scavengesDuring } from "../kernel/gc.test-util.ts";
+import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 import { CAUSE, FRAME, HITCH, HitchLog } from "./bench-hitch.ts";
 
 const STEADY_MS = 6;
 const row = new Float64Array(FRAME.fields);
+/** Bytes a frame may allocate: the sampling profiler's read of a loop that allocates nothing is zero, and one boxed double a frame is 16 (as the other allocation rows hold). */
+const BOUND_B = 16;
 
 /** One frame of `intervalMs` (the engine's ms in it 2, sim 1, draw 1, `atS` seconds into the stretch) into `log`, phase `phase`. */
 function push(log: HitchLog, atS: number, phase: number, intervalMs: number, causes: number): void {
@@ -63,18 +64,22 @@ describe("given a run of frames at 6 ms with a few long ones", () => {
 });
 
 describe("given the hitch log called a million times", () => {
-  it("when frames are logged with hitches stored and dropped, then the engine's garbage collector never runs (nothing is allocated per frame)", async () => {
+  it("when frames are logged with hitches stored and dropped, then a frame allocates no more than the bound (nothing is allocated per frame)", () => {
     const log = new HitchLog();
     feed(log, 500, { 300: 90 });
     const calls = 1_000_000;
-    const minor = await scavengesDuring(() => {
-      for (let i = 0; i < calls; i++) {
-        row[FRAME.interval] = i % 9973 === 0 ? 200 + (i % 7) : STEADY_MS;
-        row[FRAME.atS] = i * 0.006;
-        log.frame(row, 2, i & 7);
-      }
-    });
+    const bytesPerFrame = untilQuiet(
+      () =>
+        allocatedBytes(() => {
+          for (let i = 0; i < calls; i++) {
+            row[FRAME.interval] = i % 9973 === 0 ? 200 + (i % 7) : STEADY_MS;
+            row[FRAME.atS] = i * 0.006;
+            log.frame(row, 2, i & 7);
+          }
+        }) / calls,
+      BOUND_B,
+    );
     assert.ok(log.table().count > 50, "the control: hitches were stored and dropped during the run");
-    assert.equal(minor, 0, `${minor} minor collections in ${calls} frames`);
+    assert.ok(bytesPerFrame <= BOUND_B, `${bytesPerFrame.toFixed(1)} B a frame, over ${BOUND_B} B`);
   });
 });

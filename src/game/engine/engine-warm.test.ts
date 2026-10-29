@@ -1,6 +1,5 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { setImmediate as yieldToLoop } from "node:timers/promises";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
@@ -44,9 +43,6 @@ describe("given the engine warming its programs before the loop starts", () => {
   const paintKey = (): string => engine["live"]()[0]!.lookMeshes().bodyPaint.customProgramCacheKey();
   /** The output the renderer is on and whether car 0's paint wears the finish now, e.g. "hdr finish". */
   const pass = (): string => `${engine["renderer"].getRenderTarget() === null ? "canvas" : "hdr"} ${paintKey().includes(FINISH_KEY_MARK) ? "finish" : "plain"}`;
-  const warmsDone = async (): Promise<void> => {
-    while (engine["warmsInFlight"] > 0) await yieldToLoop();
-  };
   const render = (scene: THREE.Scene): void => {
     const main = scene === engine["scene"];
     if (main) drawnPasses.add(pass());
@@ -89,7 +85,7 @@ describe("given the engine warming its programs before the loop starts", () => {
 
   it("when Rapier is in after boot, then the purse pool its world adds is linked for both outputs and drawn before any throw", async () => {
     await engine["ragdolls"].preload();
-    await warmsDone();
+    await engine.warmsIdle();
     const purses = engine["ragdolls"]["purses"];
     assert.ok(purses, "the purse pool was never built");
     const keys = (engine["renderer"].info.programs ?? []).map((p) => String(p.cacheKey)).filter((k) => k.endsWith(PURSE_KEY));
@@ -104,7 +100,7 @@ describe("given the engine warming its programs before the loop starts", () => {
     engine["scene"].add(late);
     drawnMaterials.clear();
     engine["queueWarm"]();
-    await warmsDone();
+    await engine.warmsIdle();
     engine["scene"].remove(late);
     assert.equal([...drawnMaterials].map((m) => (m === material ? "late" : m.name || m.type)).join(), "late");
   });
@@ -112,7 +108,7 @@ describe("given the engine warming its programs before the loop starts", () => {
   it("when the FX tier rises to High after boot, then the switch queues the warm-up, which links plain paint for both outputs and the finish for the HDR target only, and the paint keeps the finish after", async () => {
     compiledPasses.clear();
     engine.setFxTier("high");
-    await yieldToLoop();
+    await engine.warmsIdle();
     assert.equal([...compiledPasses].sort().join(), FINISH_PASSES);
     assert.ok(paintKey().includes(FINISH_KEY_MARK), `key ${paintKey()}`);
   });
@@ -125,11 +121,11 @@ describe("given the engine warming its programs before the loop starts", () => {
     engine.setShadows("high");
     const knobs = (): string => `${engine["camera"].far} ${engine["renderer"].getPixelRatio()} ${engine["sun"].shadow.mapSize.x}`;
     const knobsBefore = knobs();
-    await warmsDone();
+    await engine.warmsIdle();
     drawnMaterials.clear();
     fire("webglcontextlost");
     fire("webglcontextrestored");
-    await warmsDone();
+    await engine.warmsIdle();
     assert.equal(drawnMaterials.has(engine["live"]()[0]!.lookMeshes().bodyPaint), true, "car paint was not drawn again");
     assert.equal(windows.map((win) => win.settling).join(), "true,true,true");
     assert.equal(knobsBefore, "270 2 2048", "the knobs were put in force");

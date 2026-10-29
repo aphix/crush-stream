@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import type { HudStore } from "@/game/hud/hud-store";
-import { NOW_PLAYING_FADE_MS, NOW_PLAYING_MS, nowPlayingCorner, type NowPlayingCorner } from "@/game/hud/now-playing";
+import { NOW_PLAYING_MS, nowPlayingCorner, type NowPlayingCorner } from "@/game/hud/now-playing";
+import { prefersReducedMotion } from "@/lib/utils";
 
 /** A phone in portrait: Tailwind's `sm` breakpoint is 640 px. */
 const NARROW_QUERY = "(max-width: 639px)";
@@ -20,7 +21,7 @@ function subscribeNarrow(notify: () => void): () => void {
 type Phase = "hidden" | "shown" | "fading";
 
 /**
- * "♪ Artist – Title" for `NOW_PLAYING_MS` each time a song starts (`trackSerial` changes), then a fade of `NOW_PLAYING_FADE_MS`
+ * "♪ Artist – Title" for `NOW_PLAYING_MS` each time a song starts (`trackSerial` changes), then a fade that ends on its `transitionend`
  * (none under reduced motion: it simply goes). It sits in the corner the screen leaves free (`nowPlayingCorner`).
  */
 export function NowPlaying({ store }: { store: HudStore }) {
@@ -31,12 +32,8 @@ export function NowPlaying({ store }: { store: HudStore }) {
   useEffect(() => {
     if (serial === 0) return;
     setPhase("shown");
-    const fade = window.setTimeout(() => setPhase("fading"), NOW_PLAYING_MS);
-    const gone = window.setTimeout(() => setPhase("hidden"), NOW_PLAYING_MS + NOW_PLAYING_FADE_MS);
-    return () => {
-      window.clearTimeout(fade);
-      window.clearTimeout(gone);
-    };
+    const fade = window.setTimeout(() => setPhase(prefersReducedMotion() ? "hidden" : "fading"), NOW_PLAYING_MS);
+    return () => window.clearTimeout(fade);
   }, [serial]);
   if (phase === "hidden") return null;
   const race = hud.race;
@@ -50,6 +47,9 @@ export function NowPlaying({ store }: { store: HudStore }) {
     <div
       role="status"
       aria-live="polite"
+      onTransitionEnd={(event) => {
+        if (phase === "fading" && event.target === event.currentTarget && event.propertyName === "opacity") setPhase("hidden");
+      }}
       className={`pointer-events-none fixed z-[60] max-w-[min(20rem,calc(100vw-1rem))] truncate rounded-full bg-surface/80 px-3 py-1 text-xs text-fg shadow-[var(--shadow-border)] transition-opacity duration-[600ms] motion-reduce:transition-none ${CORNER_CLASS[corner]} ${phase === "shown" ? "opacity-100" : "opacity-0"}`}
     >
       ♪ {hud.nowPlaying}

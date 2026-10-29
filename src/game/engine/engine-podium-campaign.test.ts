@@ -27,17 +27,24 @@ describe("given a three-course campaign whose every round recorded a head-on", (
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
   const race = () => engine["race"];
-  /** `seconds` of frames, then a turn of the event loop: the warm-ups a new course or car starts (`queueWarm`) finish between chunks, as in the browser's loop. */
+  /** `seconds` of frames, then the warm-ups a new course or car starts (`queueWarm`) end, as between the browser's frames. */
   const run = async (seconds: number): Promise<void> => {
     engine.advance(seconds, { frameDt: FRAME });
-    await nextTurn();
+    await engine.warmsIdle();
   };
+  /** Set when a reel clip's view ends: the promise that starts the next clip then resolves within one loop turn. */
+  let clipEnded = false;
   /**
    * Frames until `done`, `step` seconds at a time, at most `limit` seconds: whether it came. A chunk's synthetic clock starts at the real one (`advance`), so what plays on a clock
-   * (a reel's clip) needs a chunk as long as it lasts, and the event loop turns between chunks (a promise that starts the next clip resolves there).
+   * (a reel's clip) needs a chunk as long as it lasts.
    */
   const runUntil = async (done: () => boolean, limit: number, step = 0.25): Promise<boolean> => {
-    for (let s = 0; s < limit && !done(); s += step) await run(step);
+    for (let s = 0; s < limit && !done(); s += step) {
+      await run(step);
+      if (!clipEnded) continue;
+      clipEnded = false;
+      await nextTurn();
+    }
     return done();
   };
   const noted: HighlightClip[] = [];
@@ -66,7 +73,10 @@ describe("given a three-course campaign whose every round recorded a head-on", (
     const viewSaved = highlights.viewSaved.bind(highlights);
     highlights.viewSaved = (clip, now, back, passes) => {
       viewed.push(clip);
-      viewSaved(clip, now, back, passes);
+      viewSaved(clip, now, (ended) => {
+        clipEnded = true;
+        back(ended);
+      }, passes);
     };
     highlights.stepBudgetMs = Infinity;
     engine.toggleRace();

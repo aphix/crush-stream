@@ -1,5 +1,4 @@
 import { readFileSync } from "node:fs";
-import { setImmediate as nextTurn } from "node:timers/promises";
 import vm from "node:vm";
 import type { DamageStage, VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { channelGains, motorRpm, MOTOR_OUTPUT_GAIN, toneMessage, toneOptions } from "./motor-tone.ts";
@@ -25,9 +24,12 @@ interface Processor {
 }
 type ProcessorClass = new (options: { processorOptions: unknown }) => Processor;
 
-/** Runs the shipped worklet file in a stub of an AudioWorkletGlobalScope: the real wasm synthesis, block by block. */
-function loadProcessor(): { Processor: ProcessorClass; scope: { currentFrame: number } } {
+/** Runs the shipped worklet file in a stub of an AudioWorkletGlobalScope: the real wasm synthesis, block by block. `ready` resolves when the wasm runtime is in (emscripten's `onRuntimeInitialized`). */
+function loadProcessor(): { Processor: ProcessorClass; scope: { currentFrame: number }; ready: Promise<void> } {
   let registered: ProcessorClass | null = null;
+  let runtimeIn: () => void = () => {};
+  const ready = new Promise<void>((resolve) => (runtimeIn = resolve));
+  const seed: unknown = { onRuntimeInitialized: () => runtimeIn() };
   const scope = {
     AudioWorkletProcessor: class {
       port = { onmessage: null };
@@ -45,14 +47,15 @@ function loadProcessor(): { Processor: ProcessorClass; scope: { currentFrame: nu
     performance,
     URL,
     Date: { now: () => NOISE_CLOCK_MS },
+    Module: seed,
   };
   vm.createContext(scope);
   vm.runInContext(WORKLET, scope);
   if (!registered) throw new Error("the worklet registered no processor");
-  return { Processor: registered, scope };
+  return { Processor: registered, scope, ready };
 }
 
-const { Processor, scope } = loadProcessor();
+const { Processor, scope, ready } = loadProcessor();
 
 export interface Level {
   /** Peak and RMS of the voice's output (the class-tilted sum x `MOTOR_OUTPUT_GAIN`), 0..1 = full scale. */
@@ -65,11 +68,9 @@ export async function voiceLevels(cls: VehicleClassId, stage: DamageStage, revs:
   const processor = new Processor({ processorOptions: toneOptions(cls, SAMPLE_RATE) });
   const out = [[new Float32Array(BLOCK)], [new Float32Array(BLOCK)], [new Float32Array(BLOCK)]];
   const idle = { rpm: new Float32Array(BLOCK), throttle: new Float32Array(BLOCK) };
-  // The wasm initialises asynchronously: the processor is silent and builds its generator on the first block after it.
-  while (processor.soundGenerator === null) {
-    await nextTurn();
-    processor.process([], out, idle);
-  }
+  // The processor is silent until the wasm runtime is in, and builds its generator on the first block after it.
+  await ready;
+  processor.process([], out, idle);
   processor.port.onmessage?.({ data: toneMessage(cls, stage, SAMPLE_RATE) });
   const tilt = new Float64Array(3);
   channelGains(tilt, cls);

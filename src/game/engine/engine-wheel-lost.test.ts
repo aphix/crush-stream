@@ -1,6 +1,5 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { setImmediate as nextTurn } from "node:timers/promises";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
@@ -133,7 +132,7 @@ describe("given the real engine and an offset head-on at the start line that thr
   const race = () => engine["race"];
   const run = async (seconds: number): Promise<void> => {
     engine.advance(seconds, { frameDt: FRAME, render: true });
-    await nextTurn();
+    await engine.warmsIdle();
   };
   const runUntil = async (done: () => boolean, limit: number): Promise<boolean> => {
     for (let s = 0; s < limit && !done(); s += 0.25) await run(0.25);

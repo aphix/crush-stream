@@ -1,6 +1,5 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { setTimeout as delay } from "node:timers/promises";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -46,7 +45,7 @@ describe("given the real engine and a player who customized his driver in the ga
     const store = new Map<string, string>();
     globalThis.localStorage = { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => void store.set(key, value), removeItem: (key: string) => void store.delete(key) } as Storage;
     engine = await bootEngine({ pacer: true });
-    for (let wait = 0; wait < 200 && engine["ragdolls"]["world"] === null; wait++) await delay(50);
+    await engine["ragdolls"].preload();
     spyDressing(engine, worn);
     engine.setPersonPick(PLAYER);
     const spray = mine().personSpray;

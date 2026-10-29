@@ -32,7 +32,7 @@ export function CrashLab() {
   const driver = useDriver();
   const quality = useQualityPrefs();
   const station = useStation();
-  useDeepLinkJoin(engineRef);
+  useDeepLinkJoin(engineRef, booted);
   const newer = useUpdateCheck();
   const benchPage = useSyncExternalStore(subscribeNever, () => isBenchPage(window.location.search), () => false);
   // Only whether the update notice shows is read off the HUD here, so a HUD change re-renders the root only when that flips.

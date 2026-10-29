@@ -1,4 +1,3 @@
-// run-tests: solo (the pile's added step cost is held to a wall-clock budget)
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
@@ -390,108 +389,50 @@ describe("given the boxes a ragdoll system draws from and the bodies it holds", 
   });
 });
 
-/** Wall ms of the world steps taken since step number `stepsBefore` (`RagdollStats.log`). */
-function stepMilliseconds(sys: RagdollSystem, stepsBefore: number): number {
-  const { steps, log } = sys.stats;
-  let milliseconds = 0;
-  for (let step = stepsBefore; step < steps; step++) milliseconds += log[step % log.length]!;
-  return milliseconds;
-}
-
-/** One render frame of `sys`, and the wall ms its world steps took. */
-function frameCost(sys: RagdollSystem): number {
-  const stepsBefore = sys.stats.steps;
+/** One render frame of `sys`; how many boxes are awake after it. A sleeping body costs the solver nothing, so this count is the pile's added work. */
+function awakeBoxesAfterFrame(sys: RagdollSystem): number {
   sys.update(FRAME, [], true, false, null);
-  return stepMilliseconds(sys, stepsBefore);
+  return sys["boxes"]["awake"];
 }
 
-const median = (values: readonly number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]!;
-const percentile95 = (values: readonly number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length * 0.95)]!;
-
-/** Per frame, the wall ms of one world's steps with the pile and of the same dummy's world without it (a loaded machine slows both alike: the frames alternate which runs first). */
-type Costs = { withPile: number[]; without: number[]; awakeBoxes: number[] };
-type CostWindow = { name: string; budgetMs: number; costs: Costs };
-
-const newCosts = (): Costs => ({ withPile: [], without: [], awakeBoxes: [] });
-const addedMedian = (costs: Costs) => median(costs.withPile) - median(costs.without);
-
-function pairedFrame(withPile: RagdollSystem, without: RagdollSystem, frame: number, into: Costs): void {
-  const pileFirst = frame % 2 === 0;
-  const first = frameCost(pileFirst ? withPile : without);
-  const second = frameCost(pileFirst ? without : withPile);
-  into.withPile.push(pileFirst ? first : second);
-  into.without.push(pileFirst ? second : first);
-  into.awakeBoxes.push(withPile["boxes"]["awake"]);
-}
-
-/** The same 70 m/s upward throw far away in a world with the pile and one without: the pile asleep, then every box woken and left to settle. */
-async function measureFlightWindows(): Promise<CostWindow[]> {
-  const withPile = await system(PLACEMENTS);
-  const without = await system([]);
-  flyFarAway(withPile);
-  flyFarAway(without);
-  for (let frame = 0; frame < COST_WARMUP_FRAMES; frame++) pairedFrame(withPile, without, frame, newCosts());
-  const asleep = newCosts();
-  for (let frame = 0; frame < COST_FRAMES; frame++) pairedFrame(withPile, without, frame, asleep);
-  for (const body of boxBodiesOf(withPile)) body.wakeUp();
-  const awake = newCosts();
-  for (let frame = 0; frame < COST_FRAMES; frame++) {
-    pairedFrame(withPile, without, frame, awake);
-    if (withPile["boxes"]["awake"] === 0) break;
-  }
-  withPile.dispose();
-  without.dispose();
-  return [
-    { name: "pile asleep", budgetMs: ASLEEP_BUDGET_MS, costs: asleep },
-    { name: "every box woken, settling", budgetMs: AWAKE_BUDGET_MS, costs: awake },
-  ];
-}
-
-/** The same 60 m/s drop on the tallest stack in a world with the pile and one without (he lands on the pad there): every frame until the pile lies asleep again. */
-async function measureHitWindow(): Promise<CostWindow> {
-  const withPile = await system(PLACEMENTS);
-  const without = await system([]);
-  for (const sys of [withPile, without]) dropOnStack(sys, SCATTER_STACK, SCATTER_SPEED);
-  const hit = newCosts();
-  for (let frame = 0; frame < HIT_WINDOW_FRAMES; frame++) {
-    pairedFrame(withPile, without, frame, hit);
-    if (frame > FRAME_HZ && withPile["boxes"]["awake"] === 0) break;
-  }
-  withPile.dispose();
-  without.dispose();
-  return { name: "dummy dropped through the pile", budgetMs: AWAKE_BUDGET_MS, costs: hit };
-}
-
-/** Frames measured (well inside the 14 s flight of a 70 m/s throw), frames discarded first (JIT, the first steps), and the longest hit window (frames). */
-const COST_FRAMES = 240;
-const COST_WARMUP_FRAMES = 60;
+/** Frames of the flight window (well inside the 14 s flight of a 70 m/s throw), and the longest hit window. */
+const FLIGHT_FRAMES = 240;
 const HIT_WINDOW_FRAMES = 10 * FRAME_HZ;
-/** Added Rapier step cost per render frame (ms): the budget for 48 boxes, on the machine that measured it. */
-const ASLEEP_BUDGET_MS = 0.5;
-const AWAKE_BUDGET_MS = 3;
-/** Independent measurements of each window; the lowest added cost counts (a noisy machine only ever adds to a timing). */
-const COST_ATTEMPTS = 3;
 
 describe("given the real pile of 48 boxes in the dummies' world and a dummy flying far from it or dropped through it", () => {
-  it("when the render frame's 8 steps run with the pile asleep, with every box awake and with a dummy dropped through it, then each adds less than its budget over the same world without boxes", async () => {
-    const attempts: CostWindow[][] = [];
-    for (let attempt = 0; attempt < COST_ATTEMPTS; attempt++) attempts.push([...(await measureFlightWindows()), await measureHitWindow()]);
-    console.log(`Rapier step cost per ${FRAME_HZ} Hz frame (${STEPS_PER_FRAME} steps of ${STEP.toFixed(5)} s), ${BOX_COUNT} boxes; median over the frames of each window, ${COST_ATTEMPTS} attempts:`);
-    const best: number[] = [];
-    for (let window = 0; window < attempts[0]!.length; window++) {
-      const name = attempts[0]![window]!.name;
-      const budgetMs = attempts[0]![window]!.budgetMs;
-      const addedPerAttempt = attempts.map((windows) => addedMedian(windows[window]!.costs));
-      const last = attempts[attempts.length - 1]![window]!.costs;
-      console.log(
-        `  ${name}: ${last.withPile.length} frames, median ${median(last.withPile).toFixed(3)} ms with / ${median(last.without).toFixed(3)} ms without, 95th percentile ${percentile95(last.withPile).toFixed(3)} / ${percentile95(last.without).toFixed(3)} ms, most boxes awake ${Math.max(...last.awakeBoxes)}; added per attempt ${addedPerAttempt.map((added) => added.toFixed(3)).join(", ")} ms (budget ${budgetMs} ms)`,
-      );
-      best.push(Math.min(...addedPerAttempt));
+  it("when a dummy flies far from the pile, then no box is awake in any frame, and when every box is woken they are awake for over half a second and then sleep again", async () => {
+    const sys = await system(PLACEMENTS);
+    flyFarAway(sys);
+    let mostAwakeWhileAsleep = 0;
+    for (let frame = 0; frame < FLIGHT_FRAMES; frame++) mostAwakeWhileAsleep = Math.max(mostAwakeWhileAsleep, awakeBoxesAfterFrame(sys));
+    for (const body of boxBodiesOf(sys)) body.wakeUp();
+    let awakeFrames = 0;
+    let mostAwakeWhenWoken = 0;
+    while (awakeFrames < FLIGHT_FRAMES) {
+      const awake = awakeBoxesAfterFrame(sys);
+      mostAwakeWhenWoken = Math.max(mostAwakeWhenWoken, awake);
+      if (awake === 0) break;
+      awakeFrames++;
     }
-    for (let window = 0; window < best.length; window++) {
-      const { name, budgetMs } = attempts[0]![window]!;
-      assert.ok(best[window]! < budgetMs, `${name}: the pile added ${best[window]!.toFixed(3)} ms a frame at best, over its ${budgetMs} ms budget`);
+    sys.dispose();
+    assert.equal(mostAwakeWhileAsleep, 0, "boxes awake while the dummy flew far away");
+    assert.equal(mostAwakeWhenWoken, BOX_COUNT, "the control: every box woken counts as awake");
+    assert.ok(awakeFrames > FRAME_HZ / 2, `the woken boxes slept again after ${awakeFrames} frames: too soon to have been awake`);
+    assert.ok(awakeFrames < FLIGHT_FRAMES, "the woken boxes never slept again within the window");
+  });
+
+  it("when a dummy is dropped through the pile, then boxes wake and the whole pile lies asleep again within the window", async () => {
+    const sys = await system(PLACEMENTS);
+    dropOnStack(sys, SCATTER_STACK, SCATTER_SPEED);
+    let mostAwake = 0;
+    let frame = 0;
+    for (; frame < HIT_WINDOW_FRAMES; frame++) {
+      const awake = awakeBoxesAfterFrame(sys);
+      mostAwake = Math.max(mostAwake, awake);
+      if (frame > FRAME_HZ && awake === 0) break;
     }
-    assert.ok(attempts[0]![1]!.costs.withPile.length > FRAME_HZ / 2, "the settling window has frames to measure");
+    sys.dispose();
+    assert.ok(mostAwake > 0, "the control: the dummy woke boxes");
+    assert.ok(frame < HIT_WINDOW_FRAMES, "the pile was still awake at the end of the window");
   });
 });

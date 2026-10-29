@@ -37,7 +37,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -66,8 +65,6 @@ void main() { vec2 u = gl_FragCoord.xy / 800.; float v = 0.; for (int i = 0; i <
 const YARDSTICK_VS = "#version 300 es\nlayout(location = 0) in vec2 a; void main() { gl_Position = vec4(a, 0., 1.); }";
 /** The vertex built-ins headless GL's ANGLE (2.1.24078) counts as attributes; Chrome's newer ANGLE does not. */
 const BUILTIN_IDS = /\bgl_(VertexID|InstanceID)\b/g;
-/** How often `settle` looks again: three checks an async compile every 10 ms where `KHR_parallel_shader_compile` is missing (here). */
-const SETTLE_POLL_MS = 5;
 /** A wheel-batch instance centred this near (m) one of the shot car's wheels is that wheel (another car's stands metres off). */
 const WHEEL_MATCH_M = 0.5;
 
@@ -265,9 +262,8 @@ three.debug.onShaderError = (context, program, vertex, fragment) => {
 await engine.ready;
 const readyMs = Math.round(performance.now() - bootAt);
 if (tier === "ultra" && !(await engine.loadUltra())) throw new Error("headless-frame: the Ultra look did not load (see the console)");
-engine.setFxTier(tier);
-// A pick of Ultra switches once its warm-up has linked the look (`pickUltra`).
-while (engine.cine.tier !== tier) await sleep(SETTLE_POLL_MS);
+// A pick of Ultra switches once its warm-up has linked the look (`pickUltra`): the promise ends then.
+await engine.setFxTier(tier);
 if (detail !== null) {
   if (detail === "off") engine.detail.setDistances(Infinity, Infinity);
   else engine.detail.setLevel(detail);
@@ -483,9 +479,12 @@ async function shootAs(spec, backdrop) {
   return { THREE, car, camera: shotCamera };
 }
 
-/** Waits out the page's file loads and the engine's program warms, so every run draws its frames over the same state. */
+/** Waits out the page's file loads and the engine's program warms, so every run draws its frames over the same state. A settled load can start another, so it looks again. */
 async function settle() {
-  while (loads.size > 0 || engine.warmsInFlight > 0) await sleep(SETTLE_POLL_MS);
+  while (loads.size > 0 || engine.warmsInFlight > 0) {
+    await Promise.allSettled([...loads]);
+    await engine.warmsIdle();
+  }
 }
 
 /** True when the failed program links once its vertex shader reads gl_VertexID and gl_InstanceID as 0: the ANGLE quirk, not the game. */

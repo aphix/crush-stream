@@ -7,10 +7,7 @@ import { useReelCover } from "@/components/use-reel-cover";
 import { FOCUS } from "@/components/race-menu-styles";
 import { setOnlineSlot } from "@/components/online-slot";
 import type { RaceCommand } from "@/game/match/types";
-import { cn } from "@/lib/utils";
-
-/** The sheet's slide (`duration-200`) and a margin: how long after it starts sliding back in its box has settled. */
-const SLIDE_MS = 240;
+import { cn, prefersReducedMotion } from "@/lib/utils";
 
 /** Opaque card for centre-screen moments and menus (the translucent `hud-panel` lets panels behind bleed through). */
 export const CARD = "rounded-2xl bg-surface shadow-[var(--shadow-border)]";
@@ -70,12 +67,11 @@ export function MenuShell({
   const ref = useRef<HTMLDivElement>(null);
   const touch = useCoarsePointer();
   const [hidden, setHidden] = useState(false);
-  // The panel's box moves while it slides back in: report it as the cover only once it has settled.
+  // The panel's box moves while it slides back in: report it as the cover only once the slide has ended (`onTransitionEnd`; under reduced motion there is none).
   const [settled, setSettled] = useState(true);
   useEffect(() => {
-    if (hidden) return setSettled(false);
-    const t = setTimeout(() => setSettled(true), SLIDE_MS);
-    return () => clearTimeout(t);
+    if (hidden) setSettled(false);
+    else if (prefersReducedMotion()) setSettled(true);
   }, [hidden]);
   const toggle = sheet ? () => setHidden((h) => !h) : null;
   usePadMenu(ref, id, { onBack, onStart, onToggle: toggle, hidden });
@@ -94,6 +90,9 @@ export function MenuShell({
       )}
     >
       <div
+        onTransitionEnd={(event) => {
+          if (!hidden && event.target === event.currentTarget && event.propertyName === "transform") setSettled(true);
+        }}
         className={cn(
           "relative flex w-full flex-col transition-transform duration-200 ease-out motion-reduce:transition-none",
           sheet

@@ -1,7 +1,6 @@
-// run-tests: solo (a row counts the collector's scavenges, which a starved CPU adds)
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { scavengesDuring } from "../kernel/gc.test-util.ts";
+import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 import * as THREE from "three";
 import { FRAME_HZ, GRAVITY, KPH_PER_MS } from "../kernel/constants.ts";
 import { FountainSystem, JET_FADE_S, JET_RATE, JET_SLOTS, JET_UP_MAX } from "../present/fountain-system.ts";
@@ -30,6 +29,9 @@ const TIERS: readonly FxTier[] = ["off", "minimal", "low", "high", "ultra"];
 /** What each tier throws, as the brief reads: off none, minimal a single thin pair, ultra the full show; stated here, not read back from the plan's table. */
 const RACE_JETS: Readonly<Record<FxTier, number>> = { off: 0, minimal: 2, low: 4, high: 6, ultra: 8 };
 const RANGE_JETS: Readonly<Record<FxTier, number>> = { off: 0, minimal: 2, low: 4, high: 6, ultra: 6 };
+/** Frames of eight running jets one allocation read spans, and the bytes a frame may allocate: the sampling profiler's read of code that allocates nothing is zero, one boxed double a frame is 16. */
+const ALLOC_SECONDS = 600;
+const BOUND_B = 16;
 
 let scene: THREE.Scene;
 before(() => {
@@ -166,12 +168,13 @@ describe("given a fountain jet", () => {
     assert.equal(pool()["points"].visible, false);
   });
 
-  it("when eight jets run at 60 Hz, then no frame allocates (no minor collection runs)", async () => {
+  it("when eight jets run at 60 Hz, then no frame allocates more than the bound", () => {
     const sys = pool();
     for (let k = 0; k < 8; k++) sys.jet(k * 4, 0, 0, 0, 1000, k < 2 ? LINE_POWER : 1);
     run(sys, 120);
-    const minor = await scavengesDuring(() => run(sys, 600));
-    assert.equal(minor, 0, "a minor collection ran inside 36000 frames of eight running jets");
+    const frames = Math.round(ALLOC_SECONDS / STEP);
+    const bytesPerFrame = untilQuiet(() => allocatedBytes(() => run(sys, ALLOC_SECONDS)) / frames, BOUND_B);
+    assert.ok(bytesPerFrame <= BOUND_B, `${bytesPerFrame.toFixed(1)} B a frame over ${frames} frames of eight running jets, over ${BOUND_B} B`);
   });
 });
 

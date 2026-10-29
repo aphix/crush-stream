@@ -1,6 +1,5 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { setImmediate } from "node:timers/promises";
 import * as THREE from "three";
 import { TIME_OF_DAY, TIMES_OF_DAY } from "../match/types.ts";
 import { courseDay, sunElevation, sunOffset } from "./engine-world.ts";
@@ -142,18 +141,19 @@ describe("given a race dome holding its strip", () => {
   it("when the procedural sky is asked for, then the strip is let go and no picture is loaded", async () => {
     const dome = new SkyDome();
     const loads: string[] = [];
+    let loaded: Promise<unknown> = Promise.resolve();
     Object.assign(dome, {
-      load: async (file: string) => {
+      load: (file: string) => {
         loads.push(file);
-        return new THREE.Texture({ width: 64, height: 16, close() {} });
+        loaded = Promise.resolve(new THREE.Texture({ width: 64, height: 16, close() {} }));
+        return loaded;
       },
     });
     dome.show(TIME_OF_DAY.day, 0);
     dome.setDetail("full");
-    await setImmediate();
+    await loaded;
     assert.ok(dome.textureBytes > 0, "the control: the strip is held");
     dome.setDetail("procedural");
-    await setImmediate();
     assert.equal(dome.textureBytes, 0);
     assert.equal(dome.drawn, SKY_DRAWN.procedural);
     assert.equal(loads.join(), TIME_OF_DAY.day, "the one load, the strip's");

@@ -1,6 +1,5 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { setImmediate as yieldToLoop } from "node:timers/promises";
 import { createHash } from "node:crypto";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -25,8 +24,8 @@ import { rivalSeedOf } from "./rival-seed.ts";
  * saved clip, a car's worn spray is read off the paint's own shader hook, the way the renderer would sample it.
  */
 
-/** Event-loop turns the saved clip's async decode may take before the row calls it stuck. */
-const MAX_TURNS = 5000;
+/** A saved clip that never reaches the highlight player ends its row here and not the run: no deadline waits for it, only this guard. */
+const HANG_GUARD_MS = 30_000;
 /** The race the rows run: AI racers on car 1-3, the player on car 0, traffic and police cars after them. */
 const AI_COUNT = 3;
 const AI_SLOTS = [1, 2, 3];
@@ -107,6 +106,17 @@ describe("given the real engine headless", () => {
     mine.load({ texels: new Uint8Array(mine.texels.length).fill(OWN_INK), palette: SPRAY_PALETTE });
     return digestOf(mine.rgba);
   };
+  /** Resolves when the engine hands the saved clip, once decoded, to the highlight player (`viewSaved`), which then holds it as the solo view. */
+  const viewSavedAsked = (): Promise<void> =>
+    new Promise((resolve) => {
+      const highlights = engine["highlights"];
+      const viewSaved = highlights.viewSaved.bind(highlights);
+      highlights.viewSaved = (clip, now, back, passes) => {
+        Reflect.deleteProperty(highlights, "viewSaved");
+        viewSaved(clip, now, back, passes);
+        resolve();
+      };
+    });
   const startSingle = (): void => {
     engine.raceCommand({ type: "options", options: { trackId: "city", aiCount: AI_COUNT, laps: 1, police: true, campaign: ["oval", "rally"] } });
     engine.raceCommand({ type: "start" });
@@ -271,15 +281,16 @@ describe("given the real engine headless", () => {
     assert.ok(wornBy([1, 3]).every((spray) => spray === null), "the fleet's cars are bare");
   });
 
-  it("when a saved clip is played alone from the setup menu, then its racers wear the sprays of the clip's look, the traffic and the player's own car do not, and bare paint is back when the clip ends", async () => {
+  it("when a saved clip is played alone from the setup menu, then its racers wear the sprays of the clip's look, the traffic and the player's own car do not, and bare paint is back when the clip ends", { timeout: HANG_GUARD_MS }, async () => {
     // The clip is the head-on of car 0 (this browser's own) and car 1 beside bystander 2, recorded in `before` by the engine's own recorder.
     assert.deepEqual(recorded.cars.map((c) => c.slot), [0, 1, 2], "the clip holds all three cars");
     const [racer, bystander] = [1, 2];
     store.set("crush.highlight.rival", savedText);
     engine.toggleRace();
     assert.equal(race().menu, "setup", "the race menu is up on its setup screen");
+    const clipUp = viewSavedAsked();
     engine.raceCommand({ type: "savedPlay", key: "rival" });
-    for (let turns = 0; turns < MAX_TURNS && engine["highlights"]["solo"] === null; turns++) await yieldToLoop();
+    await clipUp;
     assert.notEqual(engine["highlights"]["solo"], null, "the saved clip is up alone");
     const car = (slot: number): DeformableCar => engine["cars"][slot]!;
     assert.equal(sprayOn(car(racer)), rivalSprayOf(CLIP_LOOK, racer, car(racer)), "the clip's racer wears the clip's look");
@@ -289,7 +300,7 @@ describe("given the real engine headless", () => {
     assert.equal(sprayOn(car(racer)), null, "the racer is bare once the clip is over");
   });
 
-  it("when a saved clip is played alone on the high tier, then its racer's new paints carry the finish, as a live dress gives them", async () => {
+  it("when a saved clip is played alone on the high tier, then its racer's new paints carry the finish, as a live dress gives them", { timeout: HANG_GUARD_MS }, async () => {
     store.set("crush.highlight.rival", savedText);
     engine.setSky("off");
     engine["cine"].setTier("high");
@@ -297,8 +308,9 @@ describe("given the real engine headless", () => {
     const clipCar = recorded.cars.find((c) => c.slot === 1)!;
     engine.matchCar(1, clipCar.style === "pickup" ? "sedan" : "pickup", clipCar.cls);
     try {
+      const clipUp = viewSavedAsked();
       engine.raceCommand({ type: "savedPlay", key: "rival" });
-      for (let turns = 0; turns < MAX_TURNS && engine["highlights"]["solo"] === null; turns++) await yieldToLoop();
+      await clipUp;
       assert.notEqual(engine["highlights"]["solo"], null, "the saved clip is up alone");
       const paintKeys: string[] = [];
       engine["cars"][1]!.group.traverse((object) => {

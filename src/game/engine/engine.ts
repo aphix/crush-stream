@@ -455,6 +455,7 @@ export class CrashEngine extends EngineGarage {
   dispose(): void {
     this.mouseLook.exit();
     this.disposed = true;
+    this.releaseFrameWaiters();
     this.renderer.setAnimationLoop(null);
     window.removeEventListener("keydown", this.onKey);
     window.removeEventListener("keyup", this.onKeyUp);
@@ -698,7 +699,7 @@ export class CrashEngine extends EngineGarage {
     if (!this.skipDraw) {
       this.scene.sync(this.warmsInFlight === 0);
       this.cine.render(this.scene, this.camera, wallDt, this.markFocus());
-      this.framesDrawn++;
+      this.frameDrawn();
     }
     this.renderMs = performance.now() - drawAt;
     this.blend.restore();

@@ -9,8 +9,8 @@ import { PHASE_NAMES, WORK_NAMES } from "./sim-phases.ts";
 const WARM_FRAMES = 2400;
 const WINDOW_FRAMES = 960;
 
-/** The most of the window's sim ms the phases may leave unattributed: the pacer's loop and the pose blend between steps (measured 0.7 %). */
-const MAX_UNATTRIBUTED = 0.08;
+/** The clock reads the window leaves outside a phase, per step: the pacer's own read after each step and the wrapper's that sums `simMs` (the clock the test runs counts reads, one tick each). */
+const MAX_UNATTRIBUTED_READS_PER_STEP = 2;
 
 /** The head-on sent into the window: the second racer's speed (m/s) and its distance (m) ahead of the first, who comes on at his race speed: contact within a quarter of a second, too soon for a driver to dodge. */
 const STAGED_SPEED = 20;
@@ -76,7 +76,9 @@ describe("given the real engine on the city bench's race, headless", () => {
     assert.equal(engine["world"].phases.on, false, "a window left the phase clock on");
   });
 
-  it("when a window is watched, then its phases plus the unattributed equal the sim ms it cost, no phase is negative, the unattributed is under 8 % of it, and the phases a race always runs each hold time", () => {
+  it("when a window is watched on a clock that ticks once per read, then its phases plus the unattributed equal the sim's reads, no phase is negative, the unattributed is only the pacer's own reads, and the phases a race always runs each hold time", (t) => {
+    let reads = 0;
+    t.mock.method(performance, "now", () => ++reads);
     const parts = engine.benchParts();
     const pace = engine.pace;
     const run = pace.run;
@@ -119,7 +121,9 @@ describe("given the real engine on the city bench's race, headless", () => {
     const headline = simMs / clockS;
     assert.ok(Math.abs(sum - headline) <= 1e-9 * headline, `phases + unattributed ${sum} against the sim's ${headline} ms per sim-second`);
     assert.ok(card.unattributedMsPerSimS >= 0, "the phases cannot exceed the sim's own time");
-    assert.ok(card.unattributedMsPerSimS <= MAX_UNATTRIBUTED * headline, `${card.unattributedMsPerSimS} of ${headline} ms per sim-second unattributed`);
+    const unattributedReads = card.unattributedMsPerSimS * clockS;
+    const steps = pace.total - stepsBefore;
+    assert.ok(unattributedReads <= MAX_UNATTRIBUTED_READS_PER_STEP * steps, `${unattributedReads} clock reads outside a phase over ${steps} steps`);
     for (const name of ["drive", "plan", "integrate", "pairs", "structure", "course", "rules", "settle"] as const) assert.ok(card.msPerSimS[name]! > 0, `${name} timed nothing`);
     if (card.workPerSimS["wreckCarSlices"]! > 0) assert.ok(card.msPerSimS["wreck"]! > 0, "wrecks stepped but the wreck phase timed nothing");
     assert.equal(counts[COUNTER_NAMES.indexOf("steps")], pace.total - stepsBefore, "the window's steps are the pacer's");

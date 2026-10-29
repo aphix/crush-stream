@@ -1,6 +1,5 @@
-/** How long the "now playing" toast stays fully shown, then how long its fade-out takes (ms). */
+/** How long the "now playing" toast stays fully shown (ms); its fade-out is the toast's CSS transition, which ends the toast. */
 export const NOW_PLAYING_MS = 4000;
-export const NOW_PLAYING_FADE_MS = 600;
 
 /** What on screen decides where the toast sits: the plain facts the HUD state and the viewport give. */
 export type NowPlayingContext = {

@@ -1,6 +1,5 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { setImmediate as nextTurn } from "node:timers/promises";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
@@ -23,11 +22,11 @@ describe("given the real engine drawing a city race and then the derby", () => {
   /** Per wheel-batch draw (`WheelBatch.meshes`, the shadow prisms last): whether the graph the renderer last drew held it. */
   let wheelDrawsInGraph = "";
   const scene = (): CrashEngine["scene"] => engine["scene"];
-  /** Frames with the event loop turning between them, as the browser's loop does: the warm-ups `queueWarm` starts finish. */
+  /** Frames with the warm-ups `queueWarm` starts ended between them, as the browser's loop lets them. */
   const run = async (seconds: number): Promise<void> => {
     for (let i = 0; i < seconds * FRAME_HZ; i++) {
       engine.advance(FRAME, { frameDt: FRAME });
-      await nextTurn();
+      await engine.warmsIdle();
     }
   };
 

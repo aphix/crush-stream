@@ -81,9 +81,6 @@ so `--max-old-space-size` does not stop it (measured: heap held at 1315 MB of a 
 - Failing compare of two objects holding a 4096² `Float32Array`, under a 2-3 GB memory cap: before, OOM-killed at the cap
   after 8-10 s on each of `assert.equal`, `deepStrictEqual` and `t.assert.deepStrictEqual`; after, each fails in 40 ms at
   184 MB RSS with a 2.7 KB report.
-- **`// run-tests: solo`**: a file holding that line asserts a wall-clock budget, so `run-tests.mjs` runs it alone after
-  the parallel batch. Inside an 8-wide batch on a shared box the ragdoll box pile read 3.004 ms against its 3 ms budget and the
-  Mall's bake 1.2 s against 1.2 s; alone, 1.8 ms and 0.65 s. A new wall-clock row takes the line too.
 
 ## Headless frame (`scripts/headless-frame.mjs`, 2026-10-21)
 

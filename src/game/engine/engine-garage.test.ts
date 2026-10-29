@@ -1,4 +1,3 @@
-import { setImmediate } from "node:timers/promises";
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
@@ -75,7 +74,7 @@ describe("given the real engine in the garage", () => {
     // The fade holds black while the garage's programs warm: their promises settle between frames.
     for (let i = 0; i < 10 * FRAME_HZ && (engine["sceneId"] !== "garage" || engine["sceneFade"].pending !== null); i++) {
       runSeconds(engine, FRAME);
-      await setImmediate();
+      await engine.warmsIdle();
     }
     engine.fadeScenes = false;
     runSeconds(engine, FRAME);

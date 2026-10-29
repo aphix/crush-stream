@@ -4,9 +4,10 @@ import { setImmediate as yieldToLoop } from "node:timers/promises";
 import { MATERIAL_DETAIL, MATERIAL_DETAIL_READY } from "../vehicle/material-class.ts";
 import { setConcreteDetailTier } from "./concrete-detail.ts";
 
-/** Event-loop turns the stubbed fetch and decode may take before a row calls the load stuck. */
-const MAX_TURNS = 200;
 const PICTURE = { width: 512, height: 512, close() {} };
+/** Resolves when the map's (stubbed) decode is asked for: everything after it is microtasks, drained by one loop turn. */
+let decoded: () => void = () => {};
+const decodeAsked = new Promise<void>((resolve) => (decoded = resolve));
 
 const requested: string[] = [];
 const realFetch = globalThis.fetch;
@@ -18,7 +19,10 @@ before(() => {
       requested.push(String(url));
       return { ok: true, status: 200, blob: async () => new Blob([]) };
     },
-    createImageBitmap: async () => PICTURE,
+    createImageBitmap: async () => {
+      decoded();
+      return PICTURE;
+    },
   });
 });
 
@@ -26,8 +30,9 @@ after(() => {
   Object.assign(globalThis, { fetch: realFetch, createImageBitmap: realCreateImageBitmap });
 });
 
-async function untilLoaded(): Promise<void> {
-  for (let turn = 0; turn < MAX_TURNS && MATERIAL_DETAIL.value.image === null; turn++) await yieldToLoop();
+async function mapLoaded(): Promise<void> {
+  await decodeAsked;
+  await yieldToLoop();
 }
 
 describe("given the detail map's finish-tier switch", () => {
@@ -41,7 +46,7 @@ describe("given the detail map's finish-tier switch", () => {
   it("when a finish tier is set, then the map is fetched once, bound to the shared uniform, and the switch comes on when it arrives", async () => {
     setConcreteDetailTier(true);
     assert.equal(MATERIAL_DETAIL_READY.value, 0, "off until the picture arrives");
-    await untilLoaded();
+    await mapLoaded();
     assert.equal(requested.length, 1, "fetches");
     assert.ok(requested[0]!.endsWith("materials/concrete-detail.webp"), `url ${requested[0]}`);
     assert.equal(MATERIAL_DETAIL.value.image, PICTURE, "the decoded picture");

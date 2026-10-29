@@ -1,11 +1,17 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { PerformanceObserver } from "node:perf_hooks";
-import { setImmediate as nextTurn } from "node:timers/promises";
+import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 import { analyzeFrames, BUCKET_MS, FRAME_COLUMNS, FrameRecord, SERIES_COLUMNS, SPIKE_CAP, type FrameSources } from "./bench-frames.ts";
 import { FRAME } from "./bench-hitch.ts";
 import { PHASE, PHASE_COUNT, WORK, WORK_COUNT } from "./sim-phases.ts";
 import { tabulate, wireCard } from "./bench-card.ts";
+
+/** Bytes a recorded frame may allocate: the sampling profiler's read of code that allocates nothing is zero, one boxed double a frame is 16. */
+const BOUND_B = 16;
+
+/** A block of frames the recorder, the rig and the profiler are warm on, and the blocks one allocation read spans. */
+const BLOCK_FRAMES = 10_000;
+const READ_BLOCKS = 100;
 
 /** A bench whose frames a test writes: the frame row, the pacer, the phase clock and counters, the ragdoll posts, the wrecks. */
 function source(): { from: FrameSources; row: Float64Array; work: Float64Array; ms: Float64Array; traffic: { messages: number }; pace: { steps: number }; wrecks: { n: number } } {
@@ -50,27 +56,26 @@ describe("given the frames of a window recorded as the bench runs them", () => {
     assert.equal(small.n, 100, "capacity");
   });
 
-  it("when a million frames are recorded, then no garbage is collected: the recorder allocates nothing in a frame", async () => {
+  it("when a million frames are recorded, then a frame allocates no more than the bound: the recorder allocates nothing in a frame", () => {
     const s = source();
-    const rec = new FrameRecord(10_000, s.from);
-    // A block first, so the recorder and the rig are warm and nothing of the test's own set-up is collected inside the watched loop.
-    rec.begin();
-    for (let i = 0; i < 10_000; i++) rec.push();
-    let collections = 0;
-    const observer = new PerformanceObserver((list) => void (collections += list.getEntries().length));
-    observer.observe({ entryTypes: ["gc"] });
-    for (let block = 0; block < 100; block++) {
-      rec.begin();
-      for (let i = 0; i < 10_000; i++) {
-        s.row[FRAME.interval] = 10 + (i % 7);
-        s.work[WORK.pairContacts] = s.work[WORK.pairContacts]! + 3.5;
-        s.ms[PHASE.wreck] = s.ms[PHASE.wreck]! + 0.25;
-        rec.push();
-      }
-    }
-    await nextTurn();
-    observer.disconnect();
-    assert.equal(collections, 0, "gc events across a million pushes");
+    const rec = new FrameRecord(BLOCK_FRAMES, s.from);
+    const bytesPerFrame = untilQuiet(
+      () =>
+        allocatedBytes(() => {
+          for (let block = 0; block < READ_BLOCKS; block++) {
+            rec.begin();
+            for (let i = 0; i < BLOCK_FRAMES; i++) {
+              s.row[FRAME.interval] = 10 + (i % 7);
+              s.work[WORK.pairContacts] = s.work[WORK.pairContacts]! + 3.5;
+              s.ms[PHASE.wreck] = s.ms[PHASE.wreck]! + 0.25;
+              rec.push();
+            }
+          }
+        }) /
+        (READ_BLOCKS * BLOCK_FRAMES),
+      BOUND_B,
+    );
+    assert.ok(bytesPerFrame <= BOUND_B, `${bytesPerFrame.toFixed(1)} B a recorded frame, over ${BOUND_B} B`);
   });
 
   it("when 1000 frames of 10 ms hold ten of 50 ms, then the median, percentiles, lows and spike count are those frames'", () => {

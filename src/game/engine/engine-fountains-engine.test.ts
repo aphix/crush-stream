@@ -1,6 +1,5 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { setTimeout as delay } from "node:timers/promises";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -44,7 +43,7 @@ describe("given the real engine", () => {
     stubBrowser();
     globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} } as unknown as Storage;
     engine = await bootEngine({ pacer: true });
-    for (let wait = 0; wait < 200 && engine["ragdolls"]["world"] === null; wait++) await delay(50);
+    await engine["ragdolls"].preload();
     // The high tier as the fountains read it: the engine's own tier would load the sky (a failed fetch in node, stderr), and Auto moves it.
     const look = fountains().setLook.bind(fountains());
     fountains().setLook = (_tier, density) => look("high", density);
