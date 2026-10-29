@@ -19,8 +19,8 @@ const GRAVITY = 9.6;
 const COM_TOLERANCE = 1e-4;
 /** The owner's barrel roll: at least two thirds of a turn (deg) of the torso before he first touches down. */
 const ROLL_BEFORE_TOUCHDOWN_DEG = 240;
-/** Where (m past the wall) the range's driver lies: rolling, he lands on his limbs and cartwheels on (owner: accepted), past FlatOut's 25–40 m; the range's every car type and display rests 42.9–61.2 m on over the lip. */
-const LANDING_M = [42, 62] as const;
+/** Where (m past the wall) the range's driver lies once he lands rolling on his limbs and cartwheels on (owner: accepted): 41.3–41.5 m at 60 and 240 Hz, pinned within 1 m. */
+const LANDING_M = [40.5, 42.5] as const;
 type Doll = { live: boolean; bodies: RigidBody[] };
 
 /** Kinetic energy (translation and spin) and kinetic plus gravitational energy of `bodies` (J). */
@@ -144,7 +144,7 @@ async function rangeThrow(frame: () => number): Promise<Run> {
 }
 
 describe("given the ejection range (a sedan at 100 km/h over the lip into the jersey barrier, the driver thrown over it onto sand)", () => {
-  it(`when the throw is run at ${FRAME_HZ} and ${FINE_HZ} Hz display rates, then he lands within 1 m of the same spot, ${LANDING_M[0]}–${LANDING_M[1]} m on`, { todo: "49.9 m at 60 Hz, 53.5 m at 240 Hz: the cartwheel landing accepted by the owner 2026-10-19 (EJECT_ROLL 16 + airborne brace), on sand at the dummies' ground grip (0.6, not 3), over the lip since 2026-10-20" }, async () => {
+  it(`when the throw is run at ${FRAME_HZ} and ${FINE_HZ} Hz display rates, then he lands within 1 m of the same spot, ${LANDING_M[0]}–${LANDING_M[1]} m on`, async () => {
     const slow = await rangeThrow(() => 1 / FRAME_HZ);
     const fast = await rangeThrow(() => 1 / FINE_HZ);
     assert.ok(slow.landing >= LANDING_M[0] && slow.landing <= LANDING_M[1], `${FRAME_HZ} Hz landing ${slow.landing.toFixed(1)} m`);
