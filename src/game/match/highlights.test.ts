@@ -110,17 +110,17 @@ describe("given cars A (0) and B (1) colliding, and another crash that starts ne
     expect(far.hitCars, "the far pair, its thrown driver the subject: mask").toBe(0b1100);
   });
 
-  const reach = [
-    { m: 8, ejects: [1], it: "8 m from the A-B hit" },
-    { m: 12, ejects: [0, 1], it: "12 m from the A-B hit (the old 30 m rule claimed it)" },
-    { m: 25, ejects: [0, 1], it: "25 m from the A-B hit (the old 30 m rule claimed it)" },
-  ];
-  for (const r of reach) {
-    it(`when an unrelated driver is thrown out ${r.it}, then the clusters' ejections are ${JSON.stringify(r.ejects)}`, () => {
+  const testCases = [
+    { distance: 8, expectedEjects: [1], it: "8 m from the A-B hit" },
+    { distance: 12, expectedEjects: [0, 1], it: "12 m from the A-B hit (the old 30 m rule claimed it)" },
+    { distance: 25, expectedEjects: [0, 1], it: "25 m from the A-B hit (the old 30 m rule claimed it)" },
+  ] as const;
+  for (const testCase of testCases) {
+    it(`when an unrelated driver is thrown out ${testCase.it}, then the clusters' ejections are ${JSON.stringify(testCase.expectedEjects)}`, () => {
       const l = new HighlightLedger();
       hit(l, 10, 0, 1, kph(80));
-      l.eject(10.2, 2, r.m, 0);
-      expect(l.open.map((c) => c.ejects).join()).toBe(r.ejects.join());
+      l.eject(10.2, 2, testCase.distance, 0);
+      expect(l.open.map((c) => c.ejects).join(), "ejections per open cluster").toBe(testCase.expectedEjects.join());
     });
   }
 
@@ -187,16 +187,16 @@ describe("given the owner's example, a 2 m total crush at 30 km/h against a 1 m 
 });
 
 describe("given a head-on between a car driving at 50 km/h and one at 20 km/h (closing 70 km/h), or one car into a parked one", () => {
-  const rows = [
-    { it: "the faster car is the lower-numbered one (50 and 20 km/h)", a: 50, b: 20, kph: 50 },
-    { it: "the faster car is the higher-numbered one (20 and 50 km/h)", a: 20, b: 50, kph: 50 },
-    { it: "one car at 70 km/h hits a parked one", a: 70, b: 0, kph: 70 },
-  ];
-  for (const r of rows) {
-    it(`when ${r.it}, then the cluster's hit speed is the main car's own ${r.kph} km/h, not the 70 km/h closing`, () => {
+  const testCases = [
+    { it: "the faster car is the lower-numbered one (50 and 20 km/h)", speedA: 50, speedB: 20, expectedKph: 50 },
+    { it: "the faster car is the higher-numbered one (20 and 50 km/h)", speedA: 20, speedB: 50, expectedKph: 50 },
+    { it: "one car at 70 km/h hits a parked one", speedA: 70, speedB: 0, expectedKph: 70 },
+  ] as const;
+  for (const testCase of testCases) {
+    it(`when ${testCase.it}, then the cluster's hit speed is the main car's own ${testCase.expectedKph} km/h, not the 70 km/h closing`, () => {
       const l = new HighlightLedger();
-      const c = hit(l, 10, 0, 1, kph(70), 0, kph(r.a), kph(r.b));
-      expect(Math.abs(c.hitMps * 3.6 - r.kph), `${(c.hitMps * 3.6).toFixed(2)} km/h`).toBeLessThan(1e-9);
+      const c = hit(l, 10, 0, 1, kph(70), 0, kph(testCase.speedA), kph(testCase.speedB));
+      expect(Math.abs(c.hitMps * 3.6 - testCase.expectedKph), `${(c.hitMps * 3.6).toFixed(2)} km/h`).toBeLessThan(1e-9);
       expect(Math.abs(c.peak * 3.6 - 70), "the closing speed stays the peak the impact's flash uses").toBeLessThan(1e-9);
     });
   }

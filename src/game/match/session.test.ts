@@ -351,7 +351,7 @@ describe("given a two-lap race of four cars on the square track: a winner, a car
 });
 
 describe("given a three-lap race of two cars on the square track, where the second car crosses the line 4 s before the winner finishes and then runs a long slow lap", () => {
-  it("when the winner finishes, then the slow car is allowed LAP_SLACK (a multiple of its own lap time) to reach the line, beyond the fixed finish grace, and is flagged finished at its next crossing after the grace", () => {
+  it("when the winner finishes, then the slow car is allowed extra time (a multiple of its own lap time) to reach the line, beyond the fixed finish grace, and is flagged finished at its next crossing after the grace", () => {
     const L = square.length;
     const dist = (i: number) => {
       const slot = square.gridSlot(i);
@@ -373,7 +373,7 @@ describe("given a three-lap race of two cars on the square track, where the seco
 });
 
 describe("given a three-lap race of two cars on the square track, where the second car's best lap was a shortcut and its loop laps are 1.7 times slower", () => {
-  it("when the winner finishes, then the second car is allowed LAP_SLACK (a multiple of its own lap time) times its slowest lap rather than its best, and still finishes, crossing after the fixed finish grace", () => {
+  it("when the winner finishes, then the second car is allowed extra time (a multiple of its own lap time) based on its slowest lap rather than its best, and still finishes, crossing after the fixed finish grace", () => {
     const L = square.length;
     const p1 = blankProjection();
     const slot = square.gridSlot(1);
@@ -460,16 +460,16 @@ describe("given a three-lap race of two cars on the oval where a police car ride
   });
 
   it("when the car is stopped 3.9 s, or stopped 8 s but 21 m from the police car, or at 21 km/h, then it is not busted and its stopped timer is back at 0 once it drives on", () => {
-    const cases: [[number, number][], number, string][] = [
-      [[[3.9, 0]], 10, "3.9 s"],
-      [[[8, 0]], 21, "21 m"],
-      [[[8, 21]], 10, "21 km/h"],
-    ];
-    for (const [legs, gap, why] of cases) {
-      const s = bust(legs, gap, GREEN + 10);
-      expect(s.cars[0]!.status, why).toBe("racing");
-      expect(s.cars[0]!.bustedAt, why).toBe(null);
-      expect(s.cars[0]!.stopped, `${why}: the timer is back at 0 once it drives on`).toBe(0);
+    const testCases = [
+      { why: "3.9 s", legs: [[3.9, 0]], gap: 10 },
+      { why: "21 m", legs: [[8, 0]], gap: 21 },
+      { why: "21 km/h", legs: [[8, 21]], gap: 10 },
+    ] as const;
+    for (const testCase of testCases) {
+      const s = bust(testCase.legs.map(([seconds, kph]): [number, number] => [seconds, kph]), testCase.gap, GREEN + 10);
+      expect(s.cars[0]!.status, testCase.why).toBe("racing");
+      expect(s.cars[0]!.bustedAt, testCase.why).toBe(null);
+      expect(s.cars[0]!.stopped, `${testCase.why}: the timer is back at 0 once it drives on`).toBe(0);
     }
   });
 
@@ -592,7 +592,7 @@ describe("given a two-car race on the square track, where one car follows anothe
   const leader = straight(0, 20, 30);
   const race = () => new RaceSession(square, field(2), { laps: 9, noReset: false });
 
-  it("when a car is held in a leader's trail, then it earns one bonus per DRAFT.every (the drafting interval) seconds, none before the first interval, and the leader earns none", () => {
+  it("when a car is held in a leader's trail, then it earns one bonus per drafting interval, none before the first interval, and the leader earns none", () => {
     const s = race();
     const follower = straight(0.5, 12, 30);
     runTo(s, [leader, follower], DRAFT.every - 0.1);
@@ -607,21 +607,24 @@ describe("given a two-car race on the square track, where one car follows anothe
   });
 
   it("when the follower is 4 m off the leader's line at 8 m back (outside the cone), 20 m back, 1 m back, both at 12 m/s (under the speed floor) or on a broken run, then it earns no draft bonus and, the broken run aside, is never counted as drafting", () => {
-    const cases: [string, Driver, Driver][] = [
-      ["4 m off its line, 8 m back", leader, straight(4, 12, 30)],
-      ["20 m back", leader, straight(0, 0, 30)],
-      ["1 m back", leader, straight(0, 19, 30)],
-      ["both at 12 m/s", straight(0, 20, 12), straight(0, 12, 12)],
-      // In the trail 1.5 s, out 0.5 s, back for the rest: no stretch reaches DRAFT.every.
-      ["a broken run", leader, (t) => ({ ...straight(0, 12, 30)(t), x: t > 1.5 && t < 2 ? 4 : 0 })],
-    ];
-    for (const [name, lead, follower] of cases) {
+    const testCases = [
+      { name: "4 m off its line, 8 m back", leaderSpeed: 30, followerX: 4, followerZ0: 12, followerSpeed: 30 },
+      { name: "20 m back", leaderSpeed: 30, followerX: 0, followerZ0: 0, followerSpeed: 30 },
+      { name: "1 m back", leaderSpeed: 30, followerX: 0, followerZ0: 19, followerSpeed: 30 },
+      { name: "both at 12 m/s", leaderSpeed: 12, followerX: 0, followerZ0: 12, followerSpeed: 12 },
+    ] as const;
+    for (const testCase of testCases) {
       const s = race();
-      runTo(s, [lead, follower], 3.4);
-      expect(s.cars[1]!.drafts, name).toBe(0);
-      expect(s.cars[0]!.drafts, name).toBe(0);
-      if (name !== "a broken run") expect(s.cars[1]!.draft, `${name}: counted as drafting`).toBe(0);
+      runTo(s, [straight(0, 20, testCase.leaderSpeed), straight(testCase.followerX, testCase.followerZ0, testCase.followerSpeed)], 3.4);
+      expect(s.cars[1]!.drafts, testCase.name).toBe(0);
+      expect(s.cars[0]!.drafts, testCase.name).toBe(0);
+      expect(s.cars[1]!.draft, `${testCase.name}: counted as drafting`).toBe(0);
     }
+    // In the trail 1.5 s, out 0.5 s, back for the rest: no stretch reaches DRAFT.every.
+    const broken = race();
+    runTo(broken, [leader, (t) => ({ ...straight(0, 12, 30)(t), x: t > 1.5 && t < 2 ? 4 : 0 })], 3.4);
+    expect(broken.cars[1]!.drafts, "a broken run").toBe(0);
+    expect(broken.cars[0]!.drafts, "a broken run").toBe(0);
   });
 
   /** Whether the second car is counted as drafting after half a second, `x` m behind the leader's rear bumper (CG offset `FLEET_HALF.z`) and `side` m off its line. */

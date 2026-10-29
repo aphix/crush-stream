@@ -26,16 +26,23 @@ describe("given a player's look picks as the URL and the look message carry them
     expect(back.mustache, "moustache").toBe(true);
   });
 
-  const refused = [
-    { it: "when a car pick has one slot too few, then it is refused", car: "ff0000.....00ff00", person: null },
-    { it: "when a car pick's colour is not 6 hex digits, then it is refused", car: "ff00.......", person: null },
-    { it: "when a driver pick's build is neither w nor m, then it is refused", car: null, person: "x....." },
-    { it: "when a driver pick's moustache slot is not 1, then it is refused", car: null, person: "m.....yes" },
+  const refusedCarPicks = [
+    { it: "when a car pick has one slot too few, then it is refused", pick: "ff0000.....00ff00" },
+    { it: "when a car pick's colour is not 6 hex digits, then it is refused", pick: "ff00......." },
   ] as const;
-  for (const testCase of refused) {
+  for (const testCase of refusedCarPicks) {
     it(testCase.it, () => {
-      if (testCase.car !== null) expect(parseCarPick(testCase.car)).toBe(null);
-      if (testCase.person !== null) expect(parsePersonPick(testCase.person)).toBe(null);
+      expect(parseCarPick(testCase.pick), "parsed car pick").toBe(null);
+    });
+  }
+
+  const refusedPersonPicks = [
+    { it: "when a driver pick's build is neither w nor m, then it is refused", pick: "x....." },
+    { it: "when a driver pick's moustache slot is not 1, then it is refused", pick: "m.....yes" },
+  ] as const;
+  for (const testCase of refusedPersonPicks) {
+    it(testCase.it, () => {
+      expect(parsePersonPick(testCase.pick), "parsed driver pick").toBe(null);
     });
   }
 

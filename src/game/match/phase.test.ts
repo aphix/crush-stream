@@ -132,7 +132,7 @@ function biggestStep(c: PhaseClock, frames: number, act: () => void): number {
   return big;
 }
 
-describe("given the time scale's changes (masterclass 23:34: fade, never switch)", () => {
+describe("given a game clock whose slow-mo must fade in and out, never switch (masterclass 23:34)", () => {
   /** One frame at 60 Hz may move the scale at most this far (a ramp of ≥ 0.19 s to 95 %: 23 % of a gap of at most 1). */
   const BOUND = 0.25;
 
@@ -171,7 +171,7 @@ describe("given the time scale's changes (masterclass 23:34: fade, never switch)
   });
 });
 
-describe("given a slow-mo held until the driver is thrown (SLOMO_HELD)", () => {
+describe("given a slow-mo held back until the driver is thrown", () => {
   /** Wall seconds a held clock is stepped through its approach and the hit's aftermath, far longer than the slow-mo's own 6.5 s hold. */
   const HELD_WALL_S = 12;
 
@@ -198,7 +198,7 @@ describe("given a slow-mo held until the driver is thrown (SLOMO_HELD)", () => {
     expect(c.phase, "no slow-mo phase while held").toBe("impact");
   });
 
-  it("when the driver is thrown, then the slow-mo is scheduled THROW_ONSET on, comes on after it, and holds the scale at 1× until then", () => {
+  it("when the driver is thrown, then the slow-mo is scheduled a short onset delay later, comes on after it, and holds the scale at 1× until then", () => {
     const c = phaseClock();
     c.slomoAt = SLOMO_HELD;
     beginImpact(c, true);
@@ -211,7 +211,7 @@ describe("given a slow-mo held until the driver is thrown (SLOMO_HELD)", () => {
       stepPhase(c, FRAME);
       if (Number.isNaN(scaleAtOnsetHalf) && c.wallSinceImpact >= c.slomoAt - THROW_ONSET / 2) scaleAtOnsetHalf = c.timeScale;
     }
-    expect(scaleAtOnsetHalf, "still 1× half THROW_ONSET after the throw").toBe(1);
+    expect(scaleAtOnsetHalf, "still 1× half the onset delay after the throw").toBe(1);
     expect(c.timeScale, "the slow-mo came on").toBe(impactScale(c));
   });
 

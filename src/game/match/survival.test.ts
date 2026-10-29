@@ -92,17 +92,17 @@ describe("given one player car on the Havana track, busted when held under 20 km
 });
 
 describe("given a survival run's recorded best time", () => {
-  it("when a first run, a longer run and an equal run settle against it, then only a longer run is a new best", () => {
-    const cases = [
-      { run: settleRun(null, 12.5), best: 12.5, isNew: true },
-      { run: settleRun(12.5, 30), best: 30, isNew: true },
-      { run: settleRun(30, 12.5), best: 30, isNew: false },
-      { run: settleRun(30, 30), best: 30, isNew: false },
-    ];
-    for (let i = 0; i < cases.length; i++) {
-      const { run, best, isNew } = cases[i]!;
-      expect(run.best, `settle ${i} best`).toBe(best);
-      expect(run.isNew, `settle ${i} isNew`).toBe(isNew);
+  it("when a first run, a longer run, a shorter run and an equal run settle against it, then only the first and the longer run are a new best", () => {
+    const testCases = [
+      { name: "a first run", previousBest: null, seconds: 12.5, expectedBest: 12.5, expectedIsNew: true },
+      { name: "a longer run", previousBest: 12.5, seconds: 30, expectedBest: 30, expectedIsNew: true },
+      { name: "a shorter run", previousBest: 30, seconds: 12.5, expectedBest: 30, expectedIsNew: false },
+      { name: "an equal run", previousBest: 30, seconds: 30, expectedBest: 30, expectedIsNew: false },
+    ] as const;
+    for (const testCase of testCases) {
+      const run = settleRun(testCase.previousBest, testCase.seconds);
+      expect(run.best, `${testCase.name}: best`).toBe(testCase.expectedBest);
+      expect(run.isNew, `${testCase.name}: isNew`).toBe(testCase.expectedIsNew);
     }
   });
 });

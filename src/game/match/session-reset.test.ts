@@ -117,7 +117,7 @@ describe("given a one-lap race on the oval whose service road is a shortcut from
   });
 });
 
-describe("given a car racing on the square track that is held at reset", () => {
+describe("given a car racing on the square track whose reset can be held", () => {
   const raceAt = (opts: { noReset: boolean } = { noReset: false }) => {
     const s = new RaceSession(square, field(2), { laps: 3, noReset: opts.noReset });
     const { pts, tDie } = crossedInfield();
@@ -125,7 +125,7 @@ describe("given a car racing on the square track that is held at reset", () => {
     return s;
   };
 
-  it("when the car is racing, then it goes back at once to the spot a reset would put it, with no wait and no death, the damage kept (keep), the race state as it was", () => {
+  it("when the reset is held, then the car goes back at once to the spot a reset would put it, with no wait and no death, its damage kept, the race state as it was", () => {
     const s = raceAt();
     const c = s.cars[0]!;
     const next = c.next;
@@ -143,7 +143,7 @@ describe("given a car racing on the square track that is held at reset", () => {
     expect(at.s >= 165 && at.s <= 185, `at ${at.s.toFixed(1)} m`).toBeTruthy();
   });
 
-  it("when the race is a no-reset race, then a tap is refused but the hold works, the car is not put out and nobody is revived", () => {
+  it("when a tap and a hold of the reset are tried in a no-reset race, then the tap is refused but the hold works, the car is not put out and nobody is revived", () => {
     const s = raceAt({ noReset: true });
     expect(s.requestRespawn(0)).toBe(false);
     expect(s.holdReset(0)).toBe(true);
@@ -151,7 +151,7 @@ describe("given a car racing on the square track that is held at reset", () => {
     expect(firstMismatch(s.events().map((e) => e.type), ["respawn"])).toBeUndefined();
   });
 
-  it("when the car is out, respawning, finished or the race is not on, then the hold does nothing", () => {
+  it("when the reset is held while the car is out, respawning, finished or the race is not on, then nothing happens", () => {
     const s = new RaceSession(square, field(1), { laps: 3, noReset: false });
     expect(s.holdReset(0), "grid").toBe(false);
     const pts = centreline(square, L - 6, L + 190);
@@ -170,7 +170,7 @@ describe("given a car racing on the square track that is held at reset", () => {
     expect(done.holdReset(0), "finished").toBe(false);
   });
 
-  it("when the run is endless (a Survival run: no checkpoints, no road to go back to), then the hold does nothing", () => {
+  it("when the reset is held in an endless run (a Survival run: no checkpoints, no road to go back to), then nothing happens", () => {
     const s = new RaceSession(square, field(1), { laps: 3, noReset: true, survival: { bustTime: 5 } });
     runTo(s, [along(square, L - 6, 20)], 3);
     expect(s.holdReset(0)).toBe(false);
