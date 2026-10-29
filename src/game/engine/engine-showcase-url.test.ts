@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -67,11 +66,11 @@ describe("given the real engine booted on #scene=showcase with a cam= pose, writ
 
   it("when the page opens with a cam= pose, then the eye is there within rounding, looking along the pose's heading, and the bar keeps it", () => {
     const flat = Math.cos(-0.2);
-    assert.ok(eye().distanceTo(new THREE.Vector3(10 + Math.sin(2.5) * flat, 3 - Math.sin(0.2), 20 + Math.cos(2.5) * flat)) < ROUND, `the eye is at ${eye().toArray()}`);
+    expect(eye().distanceTo(new THREE.Vector3(10 + Math.sin(2.5) * flat, 3 - Math.sin(0.2), 20 + Math.cos(2.5) * flat)), `the eye is at ${eye().toArray()}`).toBeLessThan(ROUND);
     const look = engine["camera"].getWorldDirection(new THREE.Vector3());
-    assert.ok(look.distanceTo(new THREE.Vector3(-Math.sin(2.5) * flat, Math.sin(0.2), -Math.cos(2.5) * flat)) < ROUND, `the view looks along ${look.toArray()}`);
-    assert.equal(decodeShare(bar()).cam?.join(), LINK_CAM.split(",").join(), "a loaded link's pose stays in the bar");
-    assert.equal(camWrites(), 0, `loading writes no pose: ${camChanges}`);
+    expect(look.distanceTo(new THREE.Vector3(-Math.sin(2.5) * flat, Math.sin(0.2), -Math.cos(2.5) * flat)), `the view looks along ${look.toArray()}`).toBeLessThan(ROUND);
+    expect(decodeShare(bar()).cam?.join(), "a loaded link's pose stays in the bar").toBe(LINK_CAM.split(",").join());
+    expect(camWrites(), `loading writes no pose: ${camChanges}`).toBe(0);
   });
 
   it("when the eye turns for a second without resting, then nothing is written; once it rests it is written once, and never again while it stays, as a pose that reads back to the same eye", () => {
@@ -79,21 +78,21 @@ describe("given the real engine booted on #scene=showcase with a cam= pose, writ
       turn(4);
       runSeconds(engine, 1 / FRAME_HZ);
     }
-    assert.equal(camWrites(), 0, "nothing is written while the eye moves");
+    expect(camWrites(), "nothing is written while the eye moves").toBe(0);
     runSeconds(engine, REST_S);
-    assert.equal(camWrites(), 1, "one write as it rests");
+    expect(camWrites(), "one write as it rests").toBe(1);
     runSeconds(engine, 2);
-    assert.equal(camWrites(), 1, "none while it stays");
+    expect(camWrites(), "none while it stays").toBe(1);
     const resting = camOf(engine["view"].free).map((n) => Math.round(n * 1e3) / 1e3);
-    assert.equal(decodeShare(bar()).cam?.join(), resting.join(), "the bar holds the eye as it rests");
+    expect(decodeShare(bar()).cam?.join(), "the bar holds the eye as it rests").toBe(resting.join());
   });
 
   it("when the Fleet button is pressed in the showcase, then the scene is the fleet and the bar has no cam=", () => {
-    assert.equal(sceneInPlay(hud.get()), "showcase", "the buttons know the showcase is in play");
-    assert.ok(bar().includes("cam="));
+    expect(sceneInPlay(hud.get()), "the buttons know the showcase is in play").toBe("showcase");
+    expect(bar().includes("cam=")).toBeTruthy();
     pickScene({ current: engine }, sceneInPlay(hud.get()), "fleet");
-    assert.equal(engine["sceneId"], "fleet");
-    assert.ok(!bar().includes("cam="), `the bar is ${bar()}`);
+    expect(engine["sceneId"]).toBe("fleet");
+    expect(!bar().includes("cam="), `the bar is ${bar()}`).toBe(true);
   });
 
   it("when the showcase is entered anew and another button is pressed after the eye rested, then that scene opens and the bar has no cam=", () => {
@@ -101,9 +100,9 @@ describe("given the real engine booted on #scene=showcase with a cam= pose, writ
     runSeconds(engine, 0.1);
     turn(200);
     runSeconds(engine, REST_S);
-    assert.ok(bar().includes("cam="), "the new visit's rest is written");
+    expect(bar().includes("cam="), "the new visit's rest is written").toBeTruthy();
     pickScene({ current: engine }, sceneInPlay(hud.get()), "garage");
-    assert.equal(engine["sceneId"], "garage");
-    assert.ok(!bar().includes("cam="), `the bar is ${bar()}`);
+    expect(engine["sceneId"]).toBe("garage");
+    expect(!bar().includes("cam="), `the bar is ${bar()}`).toBe(true);
   });
 });

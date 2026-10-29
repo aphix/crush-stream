@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { launch, makeCar, relaunchDamaged, runWall } from "./crash-scenarios.test-util.ts";
 import { faceDepth, faceExit, makeBox, solidFace, type ContactBox } from "./external-contact.ts";
 import { wallBounce } from "./pair-contact.ts";
@@ -31,14 +30,14 @@ describe("given a running sedan touching a wall face lightly, its tyres holding 
     const along = 3e-4;
     const moved = bounce(2.3, -along, -1e-5, 1, 0.015);
     // `along0 · pen / closing` put a stopped cop 0.45 m a frame along a wall into its stakeout partner (Dam Spine seed 1).
-    assert.ok(Math.abs(moved) <= along * H * (1 + 1e-9), `moved ${moved.toExponential(3)} m along the face; it moved ${(along * H).toExponential(3)} m along it in the slice`);
+    expect(Math.abs(moved), `moved ${moved.toExponential(3)} m along the face; it moved ${(along * H).toExponential(3)} m along it in the slice`).toBeLessThanOrEqual(along * H * (1 + 1e-9));
   });
 
   it("when it drove into the face at 30° and 10 m/s this slice, then it is put back along the face by exactly the slice's move along it", () => {
     const vx = -10 * Math.sin(Math.PI / 3);
     const vz = -10 * Math.cos(Math.PI / 3);
     const moved = bounce(2.3, vx, vz, 20, -vz * H);
-    assert.ok(Math.abs(moved - -vx * H) < 1e-9, `moved ${moved.toExponential(4)} m back along the face, the slice moved it ${(vx * H).toExponential(4)}`);
+    expect(Math.abs(moved - -vx * H), `moved ${moved.toExponential(4)} m back along the face, the slice moved it ${(vx * H).toExponential(4)}`).toBeLessThan(1e-9);
   });
 });
 
@@ -138,17 +137,17 @@ describe("given a side-hit sedan wreck driving at 15 m/s into the open end of a 
     const { car, face } = wreckAtOpenEnd();
     const endX = face.x + SOLID_HALF_SPAN;
     const massLead = Math.min(...car.deform.masses.filter((m) => m.dynamic).map((m) => m.world.x - m.radius * 0.5));
-    assert.ok(massLead > endX, `a mass's face sphere reaches ${(endX - massLead).toFixed(3)} m past the end`);
+    expect(massLead, `a mass's face sphere reaches ${(endX - massLead).toFixed(3)} m past the end`).toBeGreaterThan(endX);
     const depth = faceDepth(car, face);
-    assert.ok(Math.abs(depth - PAST_END) < 1e-6 && Math.abs(faceExit.nx - END_NX) < 1e-9, `drawn body ${depth.toFixed(3)} m in, out along (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`);
+    expect(Math.abs(depth - PAST_END) < 1e-6 && Math.abs(faceExit.nx - END_NX) < 1e-9, `drawn body ${depth.toFixed(3)} m in, out along (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`).toBeTruthy();
     const x0 = car.group.position.x;
     wallBounce(car, face, END_NX, 0, PAST_END, H, false);
-    assert.equal(car.deform.faceContacts, 0, "a mass met the solid: its exchange held the wreck");
-    assert.ok(car.group.position.x > x0, "the slice shoved the wreck out round the end");
+    expect(car.deform.faceContacts, "a mass met the solid: its exchange held the wreck").toBe(0);
+    expect(car.group.position.x, "the slice shoved the wreck out round the end").toBeGreaterThan(x0);
     // `strikeCar` reads no closing on the end (square to the face's normal): the shove alone holds the wreck.
     const worstMass = Math.min(...car.deform.masses.filter((m) => m.dynamic).map((m) => m.vel.x * END_NX));
-    assert.ok(car.velocity.x * END_NX >= -1e-9, `body ${car.velocity.x.toFixed(2)} m/s into the end`);
-    assert.ok(worstMass >= -1e-9, `a mass ${worstMass.toFixed(2)} m/s into the end`);
+    expect(car.velocity.x * END_NX, `body ${car.velocity.x.toFixed(2)} m/s into the end`).toBeGreaterThanOrEqual(-1e-9);
+    expect(worstMass, `a mass ${worstMass.toFixed(2)} m/s into the end`).toBeGreaterThanOrEqual(-1e-9);
   });
 });
 
@@ -156,17 +155,17 @@ describe(`given a side-hit sedan wreck turning on the spot at ${TURN_RAD_S} rad/
   it("when the slice shoves it out through the face, then the face takes the turn's sweep of the door into it", () => {
     const { car, face } = turningWreckAtFace();
     const massLead = Math.min(...car.deform.masses.filter((m) => m.dynamic).map((m) => m.world.x - m.radius * 0.5));
-    assert.ok(massLead > face.x + SOLID_HALF_THICK, `a mass's face sphere reaches ${(face.x + SOLID_HALF_THICK - massLead).toFixed(3)} m into the solid`);
+    expect(massLead, `a mass's face sphere reaches ${(face.x + SOLID_HALF_THICK - massLead).toFixed(3)} m into the solid`).toBeGreaterThan(face.x + SOLID_HALF_THICK);
     const depth = faceDepth(car, face);
-    assert.ok(Math.abs(depth - PAST_END) < 1e-6 && !faceExit.atEnd, `drawn body ${depth.toFixed(3)} m in, ${faceExit.atEnd ? "round the end" : "through the face"}`);
+    expect(Math.abs(depth - PAST_END) < 1e-6 && !faceExit.atEnd, `drawn body ${depth.toFixed(3)} m in, ${faceExit.atEnd ? "round the end" : "through the face"}`).toBeTruthy();
     const closingBefore = vertexAlong(car, END_NX, 0);
-    assert.ok(closingBefore < 0, `the turn moves the door out of the face at ${closingBefore.toFixed(2)} m/s`);
+    expect(closingBefore, `the turn moves the door out of the face at ${closingBefore.toFixed(2)} m/s`).toBeLessThan(0);
     const x0 = car.group.position.x;
     wallBounce(car, face, END_NX, 0, PAST_END, H, false);
-    assert.equal(car.deform.faceContacts, 0, "a mass met the solid: its exchange held the wreck");
-    assert.ok(car.group.position.x > x0, "the slice shoved the wreck out through the face");
+    expect(car.deform.faceContacts, "a mass met the solid: its exchange held the wreck").toBe(0);
+    expect(car.group.position.x, "the slice shoved the wreck out through the face").toBeGreaterThan(x0);
     const closingAfter = vertexAlong(car, END_NX, 0);
-    assert.ok(closingAfter >= SWEEP_LEFT * closingBefore, `the door's deepest vertex still closes on the face at ${(-closingAfter).toFixed(2)} m/s (${(-closingBefore).toFixed(2)} before the slice)`);
+    expect(closingAfter, `the door's deepest vertex still closes on the face at ${(-closingAfter).toFixed(2)} m/s (${(-closingBefore).toFixed(2)} before the slice)`).toBeGreaterThanOrEqual(SWEEP_LEFT * closingBefore);
   });
 });
 
@@ -176,10 +175,10 @@ describe(`given an undamaged sedan turning on the spot at ${TURN_RAD_S} rad/s, i
     const depth = faceDepth(car, face);
     const closingBefore = vertexAlong(car, END_NX, 0);
     wallBounce(car, face, END_NX, 0, depth, BIG_STEP, false);
-    assert.ok(car.deform.faceContacts > 0, "no mass met the solid: the staging has none on the face");
+    expect(car.deform.faceContacts, "no mass met the solid: the staging has none on the face").toBeGreaterThan(0);
     const closingAfter = vertexAlong(car, END_NX, 0);
-    assert.ok(depth > MASS_IN && closingBefore < 0 && !faceExit.atEnd, `the door is ${depth.toFixed(3)} m through the face, closing at ${(-closingBefore).toFixed(2)} m/s`);
-    assert.ok(closingAfter >= SWEEP_LEFT * closingBefore, `the door's deepest vertex still closes on the face at ${(-closingAfter).toFixed(2)} m/s (${(-closingBefore).toFixed(2)} before the slice)`);
+    expect(depth > MASS_IN && closingBefore < 0 && !faceExit.atEnd, `the door is ${depth.toFixed(3)} m through the face, closing at ${(-closingBefore).toFixed(2)} m/s`).toBeTruthy();
+    expect(closingAfter, `the door's deepest vertex still closes on the face at ${(-closingAfter).toFixed(2)} m/s (${(-closingBefore).toFixed(2)} before the slice)`).toBeGreaterThanOrEqual(SWEEP_LEFT * closingBefore);
   });
 });
 
@@ -198,7 +197,7 @@ describe(`given the side-hit wreck turning at ${TURN_RAD_S} rad/s with its drawn
   it("when the slice shoves it out, then it moves no further than that point is in, where the plan box's whole depth moves it further", () => {
     const whole = shovedBy(Infinity);
     const capped = shovedBy(SIDE_POINT_IN);
-    assert.ok(whole > SIDE_POINT_IN, `the plan box's depth shoves it only ${whole.toFixed(4)} m: the staging cannot tell the cap from none`);
-    assert.ok(capped > 0 && capped <= SIDE_POINT_IN, `shoved ${capped.toFixed(4)} m for a point ${SIDE_POINT_IN} m in the face`);
+    expect(whole, `the plan box's depth shoves it only ${whole.toFixed(4)} m: the staging cannot tell the cap from none`).toBeGreaterThan(SIDE_POINT_IN);
+    expect(capped > 0 && capped <= SIDE_POINT_IN, `shoved ${capped.toFixed(4)} m for a point ${SIDE_POINT_IN} m in the face`).toBeTruthy();
   });
 });

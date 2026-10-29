@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
 import { GUARD_AT_POST, GUARD_DEPLOY_S, GUARD_DOWN, GUARD_IN } from "../scenes/lawn-guard.ts";
 import { KILL_WINDOW_S } from "../scenes/lawn-guard.test-util.ts";
@@ -43,7 +42,7 @@ describe("given a National Mall race, its player's car parked on the White House
     r.command({ type: "start" });
     const state = { acc: 0 };
     for (let n = 0; n < 60 * 12 && r.phase !== "racing"; n++) tick(state);
-    assert.equal(r.phase, "racing", "the race is on");
+    expect(r.phase, "the race is on").toBe("racing");
     const car = w.cars[PLAYER]!;
     car.spawnFacing(NORTH_LAWN.x, NORTH_LAWN.z, 0, 0);
     const t0 = r.time;
@@ -54,10 +53,10 @@ describe("given a National Mall race, its player's car parked on the White House
       if (died < 0 && !car.deform.drivetrainAlive) died = r.time - t0;
       if (died >= 0 && rec(PLAYER).status === "racing" && car.deform.drivetrainAlive) back = r.time - t0;
     }
-    assert.ok(died > GUARD_DEPLOY_S && died < GUARD_DEPLOY_S + KILL_WINDOW_S, `the engine died ${died.toFixed(2)} s after the car stopped on the lawn`);
-    assert.ok(back > died, `reset ${(back - died).toFixed(2)} s after it died`);
-    assert.ok(Math.hypot(car.group.position.x - NORTH_LAWN.x, car.group.position.z - NORTH_LAWN.z) > 150, "back on the course, off the grounds");
-    assert.equal(rec(PLAYER).deaths, 1, "one wreck");
+    expect(died > GUARD_DEPLOY_S && died < GUARD_DEPLOY_S + KILL_WINDOW_S, `the engine died ${died.toFixed(2)} s after the car stopped on the lawn`).toBeTruthy();
+    expect(back, `reset ${(back - died).toFixed(2)} s after it died`).toBeGreaterThan(died);
+    expect(Math.hypot(car.group.position.x - NORTH_LAWN.x, car.group.position.z - NORTH_LAWN.z), "back on the course, off the grounds").toBeGreaterThan(150);
+    expect(rec(PLAYER).deaths, "one wreck").toBe(1);
   });
 });
 
@@ -76,16 +75,16 @@ describe("given a National Mall race in which the Konami code was typed and the 
       w.cars[PLAYER]!.spawnFacing(NORTH_LAWN.x, NORTH_LAWN.z, 0, 0);
     };
     toLawn();
-    assert.equal(r.revealSecret(overlay), true, "the code brings the secret out");
-    assert.equal(r.revealSecret(overlay), false, "once");
+    expect(r.revealSecret(overlay), "the code brings the secret out").toBe(true);
+    expect(r.revealSecret(overlay), "once").toBe(false);
     for (let n = 0; n < 60 * 12; n++) tick(state);
-    assert.ok(w.cars[PLAYER]!.deform.drivetrainAlive, "the guards stand down: the car sits on the lawn untouched");
+    expect(w.cars[PLAYER]!.deform.drivetrainAlive, "the guards stand down: the car sits on the lawn untouched").toBeTruthy();
 
     r.command({ type: "retry" });
     toLawn();
     for (let n = 0; n < 60 * 12 && w.cars[PLAYER]!.deform.drivetrainAlive; n++) tick(state);
-    assert.ok(!w.cars[PLAYER]!.deform.drivetrainAlive, "the guards fire on the restarted race's lawn");
-    assert.equal(r.revealSecret(overlay), true, "the code works again");
+    expect(!w.cars[PLAYER]!.deform.drivetrainAlive, "the guards fire on the restarted race's lawn").toBe(true);
+    expect(r.revealSecret(overlay), "the code works again").toBe(true);
   });
 });
 
@@ -101,15 +100,15 @@ describe("given a National Mall race with the squad out at its posts round the p
     car.spawnFacing(NORTH_LAWN.x, NORTH_LAWN.z, 0, 0);
     for (let n = 0; n < 60 * 3; n++) tick(state);
     const guard = r["guard"]!;
-    assert.equal(guard.mode[0], GUARD_AT_POST, "guard 0 at his post");
-    assert.equal(w.figures.length, 0, "nobody thrown while the car sat");
+    expect(guard.mode[0], "guard 0 at his post").toBe(GUARD_AT_POST);
+    expect(w.figures.length, "nobody thrown while the car sat").toBe(0);
     car.spawnFacing(guard.guardX[0]!, guard.guardZ[0]! - 8, 0, 15);
     for (let n = 0; n < 60; n++) tick(state);
-    assert.equal(guard.mode[0], GUARD_DOWN, "the squad has him down");
+    expect(guard.mode[0], "the squad has him down").toBe(GUARD_DOWN);
     const mine = w.figures.filter((f) => f.guard === 0);
-    assert.equal(mine.length, 1, "thrown once");
-    assert.equal(mine[0]!.car, PLAYER, "by the player's car");
+    expect(mine.length, "thrown once").toBe(1);
+    expect(mine[0]!.car, "by the player's car").toBe(PLAYER);
     r.command({ type: "start" });
-    for (let i = 0; i < guard.mode.length; i++) assert.equal(guard.mode[i], GUARD_IN, `guard ${i} back inside`);
+    for (let i = 0; i < guard.mode.length; i++) expect(guard.mode[i], `guard ${i} back inside`).toBe(GUARD_IN);
   });
 });

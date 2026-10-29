@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import { PAIR_MU } from "./constants.ts";
 import { ownerHit, rigidExchange } from "./off-centre-hit.test-util.ts";
 
@@ -30,22 +29,19 @@ describe("given a hatchback at 98 km/h driving across a coupe's path, its nose m
       todoRow("then the coupe turns at the rate a rigid body's impulse at that lever gives, in the same direction", middleTurnTodo, () => {
         const got = b1.yawRate - b0.yawRate;
         const lever = Math.hypot(hit.point.x - b0.x, hit.point.z - b0.z);
-        assert.ok(
-          Math.abs(got - rigid.dwB) <= Math.max(0.5, TOLERANCE * Math.abs(rigid.dwB)),
-          `coupe yaw rate change ${got.toFixed(2)} rad/s vs rigid ${rigid.dwB.toFixed(2)} rad/s (lever ${lever.toFixed(2)} m)`,
-        );
+        expect(Math.abs(got - rigid.dwB), `coupe yaw rate change ${got.toFixed(2)} rad/s vs rigid ${rigid.dwB.toFixed(2)} rad/s (lever ${lever.toFixed(2)} m)`).toBeLessThanOrEqual(Math.max(0.5, TOLERANCE * Math.abs(rigid.dwB)));
       });
 
       it("then the hatchback loses the speed the rigid exchange takes, no more", () => {
         const lost = Math.hypot(a1.vx - a0.vx, a1.vz - a0.vz);
         const expected = Math.hypot(rigid.dvA.x, rigid.dvA.z);
-        assert.ok(Math.abs(lost - expected) <= TOLERANCE * expected, `hatchback speed change ${lost.toFixed(2)} m/s vs rigid ${expected.toFixed(2)} m/s`);
+        expect(Math.abs(lost - expected), `hatchback speed change ${lost.toFixed(2)} m/s vs rigid ${expected.toFixed(2)} m/s`).toBeLessThanOrEqual(TOLERANCE * expected);
       });
 
       it("then the coupe gains the speed the rigid exchange gives it, no more", () => {
         const gained = Math.hypot(b1.vx - b0.vx, b1.vz - b0.vz);
         const expected = Math.hypot(rigid.dvB.x, rigid.dvB.z);
-        assert.ok(Math.abs(gained - expected) <= TOLERANCE * expected, `coupe speed change ${gained.toFixed(2)} m/s vs rigid ${expected.toFixed(2)} m/s`);
+        expect(Math.abs(gained - expected), `coupe speed change ${gained.toFixed(2)} m/s vs rigid ${expected.toFixed(2)} m/s`).toBeLessThanOrEqual(TOLERANCE * expected);
       });
 
       // todo -> Stage 4 item 6 (wreck split) (the wreck is one rigid body: the contact lasts one step, not the lattice's 29 ms crush). Measured (kernel per slice,
@@ -55,10 +51,7 @@ describe("given a hatchback at 98 km/h driving across a coupe's path, its nose m
       // per 0.1 m of either. Owner's clip: 1.98 against 0.88 rad/s, the same mechanism. The speeds and the coupe's spin rows pass.
       todoRow("then the hatchback is turned by the reaction at its own corner, in the same direction", "hatchback's turn is the crush's friction torque over 29 ms against the instant rigid answer (1.98 vs 0.88, 0.88 vs 0.13 rad/s): Stage 4 item 6 (wreck split)", () => {
         const got = a1.yawRate - a0.yawRate;
-        assert.ok(
-          Math.abs(got - rigid.dwA) <= Math.max(0.5, TOLERANCE * Math.abs(rigid.dwA)),
-          `hatchback yaw rate change ${got.toFixed(2)} rad/s vs rigid ${rigid.dwA.toFixed(2)} rad/s`,
-        );
+        expect(Math.abs(got - rigid.dwA), `hatchback yaw rate change ${got.toFixed(2)} rad/s vs rigid ${rigid.dwA.toFixed(2)} rad/s`).toBeLessThanOrEqual(Math.max(0.5, TOLERANCE * Math.abs(rigid.dwA)));
       });
     });
   }

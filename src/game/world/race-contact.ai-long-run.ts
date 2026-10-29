@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { AI_DIFFICULTIES } from "../ai/constants.ts";
 import { COURSES } from "../ai/race-ai.test-util.ts";
 import { kinematicContacts } from "./race-contact.test-util.ts";
@@ -19,8 +18,8 @@ for (const difficulty of AI_DIFFICULTIES.slice(1)) {
       it(`when a full grid of 8 races 2 laps of the ${track.id} course, then no racer drives into another car`, (t) => {
         const r = kinematicContacts(track, 8, 0, 2, difficulty);
         t.annotate(`${track.id}: ${r.touches.length} contacts, ${r.hits.length} racer-initiated, finished ${r.finished}/8`);
-        assert.equal(r.finished, 8, "every car finished: the field raced");
-        assert.deepEqual(r.hits, []);
+        expect(r.finished, "every car finished: the field raced").toBe(8);
+        expect(r.hits).toHaveLength(0);
       });
     }
   });

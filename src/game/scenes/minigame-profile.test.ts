@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import { DRIVER_CARS } from "../match/types.ts";
 import {
   DEGREES_TO_RADIANS,
@@ -79,9 +78,9 @@ describe("given each station's floor read every 5 cm from the back of its pad to
       const allowed = READ_STEP * Math.tan(testCase.steepestDegrees * DEGREES_TO_RADIANS) * 1.001;
       let tallest = 0;
       for (let i = 1; i < heights.length; i++) tallest = Math.max(tallest, Math.abs(heights[i]! - heights[i - 1]!));
-      assert.ok(heights.length >= Math.floor((stationFrontX(testCase.mode) - stationBackX(testCase.mode)) / READ_STEP), `${heights.length} samples`);
-      assert.ok(tallest <= allowed, `tallest step ${tallest} m against ${allowed} m`);
-      assert.ok(tallest >= allowed * 0.1, `tallest step ${tallest} m: the floor is not flat`);
+      expect(heights.length, `${heights.length} samples`).toBeGreaterThanOrEqual(Math.floor((stationFrontX(testCase.mode) - stationBackX(testCase.mode)) / READ_STEP));
+      expect(tallest, `tallest step ${tallest} m against ${allowed} m`).toBeLessThanOrEqual(allowed);
+      expect(tallest, `tallest step ${tallest} m: the floor is not flat`).toBeGreaterThanOrEqual(allowed * 0.1);
     });
   }
 });
@@ -97,23 +96,23 @@ describe("given each station's lip", () => {
       const height = lipHeight(testCase.mode);
       const pitchDegrees = lipPitch(testCase.mode) / DEGREES_TO_RADIANS;
       const lastCentimetre = Math.atan((floorHeightAt(testCase.mode, 0, 0) - floorHeightAt(testCase.mode, -0.01, 0)) / 0.01) / DEGREES_TO_RADIANS;
-      assert.equal(height, floorHeightAt(testCase.mode, 0, 0), "lip height is the floor's at x = 0");
-      assert.ok(height >= testCase.lipHeightMin && height <= testCase.lipHeightMax, `lip height ${height}`);
-      assert.ok(pitchDegrees >= testCase.lipPitchMinDegrees && pitchDegrees <= testCase.lipPitchMaxDegrees, `lip pitch ${pitchDegrees} deg`);
-      assert.ok(Math.abs(pitchDegrees - lastCentimetre) < 0.1, `lip pitch ${pitchDegrees} deg against the floor's last centimetre ${lastCentimetre} deg`);
+      expect(height, "lip height is the floor's at x = 0").toBe(floorHeightAt(testCase.mode, 0, 0));
+      expect(height >= testCase.lipHeightMin && height <= testCase.lipHeightMax, `lip height ${height}`).toBeTruthy();
+      expect(pitchDegrees >= testCase.lipPitchMinDegrees && pitchDegrees <= testCase.lipPitchMaxDegrees, `lip pitch ${pitchDegrees} deg`).toBeTruthy();
+      expect(Math.abs(pitchDegrees - lastCentimetre), `lip pitch ${pitchDegrees} deg against the floor's last centimetre ${lastCentimetre} deg`).toBeLessThan(0.1);
     });
   }
 
   it("when the long jump's last metres are read, then the floor is exactly level with the pad from the flat tail on, where the barrier stands", () => {
-    for (let localX = -LONG_JUMP_INCLINE.flatTail; localX <= 1; localX += 0.1) assert.equal(floorHeightAt("longJump", localX, 0), 0, `x = ${localX}`);
-    assert.ok(floorHeightAt("longJump", -LONG_JUMP_INCLINE.flatTail - LONG_JUMP_INCLINE.length - 20, 0) < -1, "the run-up before the incline lies below the pad");
+    for (let localX = -LONG_JUMP_INCLINE.flatTail; localX <= 1; localX += 0.1) expect(floorHeightAt("longJump", localX, 0), `x = ${localX}`).toBe(0);
+    expect(floorHeightAt("longJump", -LONG_JUMP_INCLINE.flatTail - LONG_JUMP_INCLINE.length - 20, 0), "the run-up before the incline lies below the pad").toBeLessThan(-1);
   });
 
   it("when the high jump's and Ring Fling's lips are compared, then the high jump's floor climbs at least 8 degrees steeper than Ring Fling's and than the long jump's incline", () => {
     const STEEPER_BY_DEGREES = 8;
     const highJumpDegrees = lipPitch("highJump") / DEGREES_TO_RADIANS;
-    assert.ok(highJumpDegrees >= lipPitch("ringFling") / DEGREES_TO_RADIANS + STEEPER_BY_DEGREES, `high jump ${highJumpDegrees} deg against Ring Fling ${lipPitch("ringFling") / DEGREES_TO_RADIANS}`);
-    assert.ok(highJumpDegrees >= LONG_JUMP_INCLINE.pitchDegrees + STEEPER_BY_DEGREES, `high jump ${highJumpDegrees} deg against the long jump's incline ${LONG_JUMP_INCLINE.pitchDegrees}`);
+    expect(highJumpDegrees, `high jump ${highJumpDegrees} deg against Ring Fling ${lipPitch("ringFling") / DEGREES_TO_RADIANS}`).toBeGreaterThanOrEqual(lipPitch("ringFling") / DEGREES_TO_RADIANS + STEEPER_BY_DEGREES);
+    expect(highJumpDegrees, `high jump ${highJumpDegrees} deg against the long jump's incline ${LONG_JUMP_INCLINE.pitchDegrees}`).toBeGreaterThanOrEqual(LONG_JUMP_INCLINE.pitchDegrees + STEEPER_BY_DEGREES);
   });
 
   it("when Ring Fling's hop is read, then it is the machine's 3.35 in on a 120 in lane scaled to this lane", () => {
@@ -121,15 +120,15 @@ describe("given each station's lip", () => {
     const hopStartX = -RING_FLING_LANE.hopLength;
     const hopHeight = floorHeightAt("ringFling", 0, 0) - floorHeightAt("ringFling", hopStartX, 0);
     const expected = (laneLength * RING_FLING_LANE.machineHopInches) / RING_FLING_LANE.machineLaneInches + RING_FLING_LANE.hopLength * Math.tan(RING_FLING_LANE.inclinePitchDegrees * DEGREES_TO_RADIANS);
-    assert.ok(Math.abs(hopHeight - expected) < 0.01, `hop ${hopHeight} m against ${expected} m`);
+    expect(Math.abs(hopHeight - expected), `hop ${hopHeight} m against ${expected} m`).toBeLessThan(0.01);
   });
 
   it("when the high jump's and Ring Fling's lips are passed, then the floor falls away behind them at the back face's pitch to the landing's level", () => {
     for (const mode of ["highJump", "ringFling"] as const) {
       const run = stationFrontX(mode);
       const fall = lipHeight(mode) - floorHeightAt(mode, run / 2, 0);
-      assert.ok(Math.abs(Math.atan(fall / (run / 2)) / DEGREES_TO_RADIANS - LIP_BACK_FACE_PITCH_DEGREES) < 0.01, `${mode} back face`);
-      assert.equal(floorHeightAt(mode, run + 0.5, 0), 0, `${mode} landing`);
+      expect(Math.abs(Math.atan(fall / (run / 2)) / DEGREES_TO_RADIANS - LIP_BACK_FACE_PITCH_DEGREES), `${mode} back face`).toBeLessThan(0.01);
+      expect(floorHeightAt(mode, run + 0.5, 0), `${mode} landing`).toBe(0);
     }
   });
 });
@@ -139,25 +138,25 @@ describe("given each station's start", () => {
     it(`when the ${mode} start is read, then the car stands on the flat pad facing the throw and the hill from it falls no steeper than a parked car holds on`, () => {
       const start = stationStartPose(mode);
       const backX = stationBackX(mode);
-      assert.equal(start.yaw, THROW_YAW, "faces the throw");
-      assert.equal(start.z, 0, "on the lane's middle");
-      assert.ok(start.x >= backX + 1 && start.x <= backX + START_HILL.padLength - 1, `start x ${start.x} on the pad from ${backX}`);
-      for (let localX = backX; localX <= backX + START_HILL.padLength; localX += 0.5) assert.equal(floorHeightAt(mode, localX, 0), 0, `pad at ${localX}`);
+      expect(start.yaw, "faces the throw").toBe(THROW_YAW);
+      expect(start.z, "on the lane's middle").toBe(0);
+      expect(start.x >= backX + 1 && start.x <= backX + START_HILL.padLength - 1, `start x ${start.x} on the pad from ${backX}`).toBeTruthy();
+      for (let localX = backX; localX <= backX + START_HILL.padLength; localX += 0.5) expect(floorHeightAt(mode, localX, 0), `pad at ${localX}`).toBe(0);
       let steepest = 0;
       for (let localX = backX; localX <= climbFootX(mode) - RUN_UP_LENGTH[mode]; localX += 0.1) {
         steepest = Math.max(steepest, Math.abs(floorHeightAt(mode, localX + 0.1, 0) - floorHeightAt(mode, localX, 0)) / 0.1);
       }
-      assert.ok(steepest > 0.05, `the start hill's steepest slope ${steepest}: there is a hill`);
-      assert.ok(steepest <= Math.tan(PARKED_HOLD_DEGREES * DEGREES_TO_RADIANS), `start hill slope ${steepest}`);
+      expect(steepest, `the start hill's steepest slope ${steepest}: there is a hill`).toBeGreaterThan(0.05);
+      expect(steepest, `start hill slope ${steepest}`).toBeLessThanOrEqual(Math.tan(PARKED_HOLD_DEGREES * DEGREES_TO_RADIANS));
     });
   }
 
   it("when the stations' anchors are read, then each lane's strip is clear of the others and of the range's landing field", () => {
     const strips = MINIGAME_MODES.map((mode) => ({ low: STATION_ANCHORS[mode].z - STATION_HALF_WIDTH, high: STATION_ANCHORS[mode].z + STATION_HALF_WIDTH }));
-    assert.equal(STATION_ANCHORS.longJump.z, 0, "the long jump's lip is the world origin, where the jersey barrier is");
-    assert.equal(STATION_ANCHORS.longJump.x, 0, "the long jump's lip is the world origin, where the jersey barrier is");
-    for (const next of [strips[1]!, strips[2]!]) assert.ok(next.low > RANGE.halfWidth, `strip from z = ${next.low} clear of the range's field to ${RANGE.halfWidth}`);
-    assert.ok(strips[2]!.low > strips[1]!.high, "the high jump's and Ring Fling's strips do not overlap");
+    expect(STATION_ANCHORS.longJump.z, "the long jump's lip is the world origin, where the jersey barrier is").toBe(0);
+    expect(STATION_ANCHORS.longJump.x, "the long jump's lip is the world origin, where the jersey barrier is").toBe(0);
+    for (const next of [strips[1]!, strips[2]!]) expect(next.low, `strip from z = ${next.low} clear of the range's field to ${RANGE.halfWidth}`).toBeGreaterThan(RANGE.halfWidth);
+    expect(strips[2]!.low, "the high jump's and Ring Fling's strips do not overlap").toBeGreaterThan(strips[1]!.high);
   });
 });
 
@@ -181,9 +180,9 @@ describe("given a grid of cell 5 cm laid over each station's floor", () => {
         return result;
       };
       const fine = worst(FINE_CELL);
-      assert.ok(fine.smooth <= GRID_TOLERANCE, `fine grid ${fine.smooth} m off`);
-      assert.ok(fine.crease <= FINE_CELL * Math.tan(LIP_BACK_FACE_PITCH_DEGREES * DEGREES_TO_RADIANS), `fine grid ${fine.crease} m off at a crease`);
-      if (mode === "highJump") assert.ok(worst(COARSE_CELL).smooth > GRID_TOLERANCE, "a coarse grid is more than 2 mm off the arc");
+      expect(fine.smooth, `fine grid ${fine.smooth} m off`).toBeLessThanOrEqual(GRID_TOLERANCE);
+      expect(fine.crease, `fine grid ${fine.crease} m off at a crease`).toBeLessThanOrEqual(FINE_CELL * Math.tan(LIP_BACK_FACE_PITCH_DEGREES * DEGREES_TO_RADIANS));
+      if (mode === "highJump") expect(worst(COARSE_CELL).smooth, "a coarse grid is more than 2 mm off the arc").toBeGreaterThan(GRID_TOLERANCE);
     });
   }
 });
@@ -196,11 +195,11 @@ describe("given each of the 7 car types parked on the pad of each station and re
         const run = driveToLip(type, stationDriveProfile(mode), FINE_CELL);
         const minimum = MINIMUM_SPEED[mode][type.id]!;
         rows.push([type.id, run]);
-        assert.ok(run.heldSlide <= PARKED_SLIDE_LIMIT, `${type.id} slid ${run.heldSlide} m parked`);
-        assert.ok(run.reachedLip, `${type.id} reached the lip (stopped at x = ${run.endX})`);
-        assert.ok(run.footSpeed >= minimum.foot, `${type.id} at the foot ${run.footSpeed} against ${minimum.foot}`);
-        assert.ok(run.lipCentreSpeed >= minimum.lip, `${type.id} at the lip ${run.lipCentreSpeed} against ${minimum.lip}`);
-        assert.ok(run.slowestOnClimb >= minimum.lip / (1 + LIP_LAUNCH_PUSH.highJump) - CLIMB_STALL_ALLOWANCE - 1e-9 || mode !== "highJump", `${type.id} slowest ${run.slowestOnClimb}`);
+        expect(run.heldSlide, `${type.id} slid ${run.heldSlide} m parked`).toBeLessThanOrEqual(PARKED_SLIDE_LIMIT);
+        expect(run.reachedLip, `${type.id} reached the lip (stopped at x = ${run.endX})`).toBeTruthy();
+        expect(run.footSpeed, `${type.id} at the foot ${run.footSpeed} against ${minimum.foot}`).toBeGreaterThanOrEqual(minimum.foot);
+        expect(run.lipCentreSpeed, `${type.id} at the lip ${run.lipCentreSpeed} against ${minimum.lip}`).toBeGreaterThanOrEqual(minimum.lip);
+        expect(run.slowestOnClimb >= minimum.lip / (1 + LIP_LAUNCH_PUSH.highJump) - CLIMB_STALL_ALLOWANCE - 1e-9 || mode !== "highJump", `${type.id} slowest ${run.slowestOnClimb}`).toBeTruthy();
       }
       t.annotate(`${mode}, speeds in m/s:\n${table(rows)}`);
     });
@@ -212,8 +211,8 @@ describe("given each of the 7 car types parked on the pad of each station and re
       for (const type of DRIVER_CARS) {
         const run = driveToLip(type, stationDriveProfile("highJump"), cell);
         rows.push([type.id, run]);
-        assert.ok(run.reachedLip, `${type.id} at cell ${cell}`);
-        assert.ok(run.lipCentreSpeed >= MINIMUM_SPEED.highJump[type.id]!.lip, `${type.id} at cell ${cell}: ${run.lipCentreSpeed}`);
+        expect(run.reachedLip, `${type.id} at cell ${cell}`).toBeTruthy();
+        expect(run.lipCentreSpeed, `${type.id} at cell ${cell}: ${run.lipCentreSpeed}`).toBeGreaterThanOrEqual(MINIMUM_SPEED.highJump[type.id]!.lip);
       }
       t.annotate(`high jump, cell ${cell} m:\n${table(rows)}`);
     }
@@ -242,34 +241,34 @@ describe("given the high jump's kicker made steeper, an arc of the shipped radiu
       for (const type of DRIVER_CARS) {
         const run = driveToLip(type, highJumpVariant(HIGH_JUMP_KICKER.radius, pitch, RUN_UP_LENGTH.highJump), FINE_CELL);
         rows.push([type.id, run]);
-        assert.ok(run.reachedLip, `${type.id} at ${pitch} deg stopped at x = ${run.endX}`);
+        expect(run.reachedLip, `${type.id} at ${pitch} deg stopped at x = ${run.endX}`).toBeTruthy();
         if (type.id === "sedan") sedanCentre.push(run.lipCentreSpeed);
       }
       t.annotate(`arc radius ${HIGH_JUMP_KICKER.radius} m to ${pitch} deg:\n${table(rows)}`);
     }
-    for (let i = 1; i < sedanCentre.length; i++) assert.ok(sedanCentre[i]! <= sedanCentre[i - 1]! + LIP_SPEED_RISE_ALLOWED, `sedan lip speeds ${sedanCentre.join(", ")}`);
-    assert.ok(sedanCentre[0]! >= LIP_SPEED_FLOOR, `the sedan's lip speed at the shipped pitch ${sedanCentre[0]}: the climb has no wall at the pitch the station ships`);
+    for (let i = 1; i < sedanCentre.length; i++) expect(sedanCentre[i]!, `sedan lip speeds ${sedanCentre.join(", ")}`).toBeLessThanOrEqual(sedanCentre[i - 1]! + LIP_SPEED_RISE_ALLOWED);
+    expect(sedanCentre[0]!, `the sedan's lip speed at the shipped pitch ${sedanCentre[0]}: the climb has no wall at the pitch the station ships`).toBeGreaterThanOrEqual(LIP_SPEED_FLOOR);
   });
 
   it("when the shipped radius is swept one 5° step past the steepest pitch, then the sedan's lip speed is under the floor: the floor row can fail", () => {
     const past = SWEEP_DEGREES[SWEEP_DEGREES.length - 1]! + 5;
     const run = driveToLip(sedan, highJumpVariant(HIGH_JUMP_KICKER.radius, past, RUN_UP_LENGTH.highJump), FINE_CELL);
-    assert.ok(run.reachedLip && run.lipCentreSpeed < LIP_SPEED_FLOOR, `sedan at ${past} deg: ${run.lipCentreSpeed}, reached ${run.reachedLip}`);
+    expect(run.reachedLip && run.lipCentreSpeed < LIP_SPEED_FLOOR, `sedan at ${past} deg: ${run.lipCentreSpeed}, reached ${run.reachedLip}`).toBeTruthy();
   });
 
   it(`when the shipped radius is given a pitch of ${STEEP_DEGREES}°, then the sedan reaches the lip under the speed the shipped kicker gives it: the climb row can fail`, () => {
     const shipped = driveToLip(sedan, stationDriveProfile("highJump"), FINE_CELL);
     const steeper = driveToLip(sedan, highJumpVariant(HIGH_JUMP_KICKER.radius, STEEP_DEGREES, RUN_UP_LENGTH.highJump), FINE_CELL);
-    assert.ok(shipped.lipCentreSpeed >= MINIMUM_SPEED.highJump.sedan!.lip, "shipped meets its bar");
-    assert.ok(steeper.reachedLip && steeper.lipCentreSpeed < MINIMUM_SPEED.highJump.sedan!.lip, `a ${STEEP_DEGREES}° pitch gives ${steeper.lipCentreSpeed}, reached ${steeper.reachedLip}`);
+    expect(shipped.lipCentreSpeed, "shipped meets its bar").toBeGreaterThanOrEqual(MINIMUM_SPEED.highJump.sedan!.lip);
+    expect(steeper.reachedLip && steeper.lipCentreSpeed < MINIMUM_SPEED.highJump.sedan!.lip, `a ${STEEP_DEGREES}° pitch gives ${steeper.lipCentreSpeed}, reached ${steeper.reachedLip}`).toBeTruthy();
   });
 
   it("when the sweep's builder is given the shipped numbers, then its floor is the shipped floor", () => {
     const shipped = stationDriveProfile("highJump");
     const rebuilt = highJumpVariant(HIGH_JUMP_KICKER.radius, HIGH_JUMP_KICKER.lipPitchDegrees, RUN_UP_LENGTH.highJump);
-    assert.ok(Math.abs(rebuilt.backX - shipped.backX) < 1e-9 && Math.abs(rebuilt.startX - shipped.startX) < 1e-9, "same station extent");
+    expect(Math.abs(rebuilt.backX - shipped.backX) < 1e-9 && Math.abs(rebuilt.startX - shipped.startX) < 1e-9, "same station extent").toBeTruthy();
     for (let localX = shipped.backX; localX <= shipped.frontX; localX += 0.37) {
-      assert.ok(Math.abs(rebuilt.heightAtX(localX) - shipped.heightAtX(localX)) < 1e-9, `x = ${localX}`);
+      expect(Math.abs(rebuilt.heightAtX(localX) - shipped.heightAtX(localX)), `x = ${localX}`).toBeLessThan(1e-9);
     }
   });
 });
@@ -279,7 +278,7 @@ describe("given each of the 7 car types released at full throttle from the high 
   const flightsOn = (profile: DriveProfile): { id: string; flight: LipFlight }[] =>
     DRIVER_CARS.map((type) => {
       const run = driveToLip(type, profile, FINE_CELL);
-      assert.ok(run.reachedLip, `${type.id} reached the lip (stopped at x = ${run.endX})`);
+      expect(run.reachedLip, `${type.id} reached the lip (stopped at x = ${run.endX})`).toBeTruthy();
       return { id: type.id, flight: lipFlight(run, profile.heightAtX(0)) };
     });
   const flightTable = (rows: readonly { id: string; flight: LipFlight }[]): string =>
@@ -306,18 +305,18 @@ describe("given each of the 7 car types released at full throttle from the high 
 
   it("when each is thrown at the shipped kicker's lip, then every class's unboosted apex is at least the minimum", (t) => {
     t.annotate(`shipped kicker (radius ${HIGH_JUMP_KICKER.radius} m, ${HIGH_JUMP_KICKER.lipPitchDegrees} deg, run-up ${RUN_UP_LENGTH.highJump} m), full throttle, minimum apex ${HIGH_JUMP_MIN_APEX} m, best over worst ${spreadOf(shipped).toFixed(2)}:\n${flightTable(shipped)}`);
-    for (const { id, flight } of shipped) assert.ok(flight.apexHeight >= HIGH_JUMP_MIN_APEX, `${id} apex ${flight.apexHeight} under the minimum`);
+    for (const { id, flight } of shipped) expect(flight.apexHeight, `${id} apex ${flight.apexHeight} under the minimum`).toBeGreaterThanOrEqual(HIGH_JUMP_MIN_APEX);
   });
 
   it("when the best apex is read against the worst, then the ratio is at most 4", () => {
-    assert.ok(spreadOf(shipped) <= MOST_SPREAD, `best over worst apex ${spreadOf(shipped)}`);
+    expect(spreadOf(shipped), `best over worst apex ${spreadOf(shipped)}`).toBeLessThanOrEqual(MOST_SPREAD);
   });
 
   it("when the shipped radius is given a shallow pitch, then a class is under the minimum apex; and when a 3 m radius is given 85 degrees, then the ratio is over 4: the apex rows can fail", () => {
     const shallow = flightsOn(highJumpVariant(HIGH_JUMP_KICKER.radius, SHALLOW_DEGREES, RUN_UP_LENGTH.highJump));
     const cliffed = flightsOn(highJumpVariant(CLIFF_RADIUS, CLIFF_DEGREES, RUN_UP_LENGTH.highJump));
-    assert.ok(Math.min(...apexesOf(shallow)) < HIGH_JUMP_MIN_APEX, `${SHALLOW_DEGREES} degrees: ${apexesOf(shallow).join(", ")}`);
-    assert.ok(spreadOf(cliffed) > MOST_SPREAD, `a ${CLIFF_RADIUS} m radius at ${CLIFF_DEGREES} degrees: ratio ${spreadOf(cliffed)}`);
+    expect(Math.min(...apexesOf(shallow)), `${SHALLOW_DEGREES} degrees: ${apexesOf(shallow).join(", ")}`).toBeLessThan(HIGH_JUMP_MIN_APEX);
+    expect(spreadOf(cliffed), `a ${CLIFF_RADIUS} m radius at ${CLIFF_DEGREES} degrees: ratio ${spreadOf(cliffed)}`).toBeGreaterThan(MOST_SPREAD);
   });
 
   it("when each is governed to about 70 percent of its full-throttle lip speed, then it still reaches the lip, at that speed, and flies lower and shorter than at full throttle", (t) => {
@@ -326,11 +325,11 @@ describe("given each of the 7 car types released at full throttle from the high 
       const full = shipped[index]!.flight;
       const cap = capForLipSpeed(type, stationDriveProfile("highJump"), FINE_CELL, MID_SHARE * full.horizontalSpeed);
       const run = driveToLip(type, stationDriveProfile("highJump"), FINE_CELL, cap);
-      assert.ok(run.reachedLip, `${type.id} governed to ${cap} reached the lip`);
+      expect(run.reachedLip, `${type.id} governed to ${cap} reached the lip`).toBeTruthy();
       const flight = lipFlight(run, lipHeight("highJump"));
       middle.push({ id: type.id, flight });
-      assert.ok(Math.abs(flight.horizontalSpeed / full.horizontalSpeed - MID_SHARE) <= MID_SHARE_TOLERANCE, `${type.id} lip speed ${flight.horizontalSpeed} of ${full.horizontalSpeed}`);
-      assert.ok(flight.apexHeight < full.apexHeight && flight.landingDistance < full.landingDistance, `${type.id} mid run ${flight.apexHeight} m / ${flight.landingDistance} m against full ${full.apexHeight} m / ${full.landingDistance} m`);
+      expect(Math.abs(flight.horizontalSpeed / full.horizontalSpeed - MID_SHARE), `${type.id} lip speed ${flight.horizontalSpeed} of ${full.horizontalSpeed}`).toBeLessThanOrEqual(MID_SHARE_TOLERANCE);
+      expect(flight.apexHeight < full.apexHeight && flight.landingDistance < full.landingDistance, `${type.id} mid run ${flight.apexHeight} m / ${flight.landingDistance} m against full ${full.apexHeight} m / ${full.landingDistance} m`).toBeTruthy();
     }
     t.annotate(`governed to ${MID_SHARE} of the full-throttle lip speed:\n${flightTable(middle)}`);
   });
@@ -356,12 +355,12 @@ describe("given the high jump's run-up made shorter", () => {
       best.push(Math.max(...feet));
       t.annotate(`run-up ${runUp} m:\n${table(rows)}`);
       if (runUp === RUN_UP_LENGTH.highJump) {
-        assert.ok(Math.max(...feet) >= BEST_FOOT_SPEED_MIN && Math.max(...feet) <= BEST_FOOT_SPEED_MAX, `best at the foot ${Math.max(...feet)}`);
-        assert.ok(Math.min(...feet) >= SLOWEST_FOOT_SPEED_MIN, `slowest at the foot ${Math.min(...feet)}`);
+        expect(Math.max(...feet) >= BEST_FOOT_SPEED_MIN && Math.max(...feet) <= BEST_FOOT_SPEED_MAX, `best at the foot ${Math.max(...feet)}`).toBeTruthy();
+        expect(Math.min(...feet), `slowest at the foot ${Math.min(...feet)}`).toBeGreaterThanOrEqual(SLOWEST_FOOT_SPEED_MIN);
       }
     }
-    for (let i = 1; i < best.length; i++) assert.ok(best[i]! > best[i - 1]!, `best foot speeds ${best.join(", ")}`);
-    assert.ok(best[0]! < BEST_FOOT_SPEED_MIN, "with no run-up the fastest car is under 30 m/s");
+    for (let i = 1; i < best.length; i++) expect(best[i]!, `best foot speeds ${best.join(", ")}`).toBeGreaterThan(best[i - 1]!);
+    expect(best[0]!, "with no run-up the fastest car is under 30 m/s").toBeLessThan(BEST_FOOT_SPEED_MIN);
   });
 });
 
@@ -399,15 +398,15 @@ describe("given the long jump's driver in the monster truck, driven at full thro
     const incline = await bestDistance(true, false);
     const inclineWithCarry = await bestDistance(true, true);
     t.annotate(`long jump, best of lifts at ${LIFT_CHOICES.join(", ")}: flat ${flat.toFixed(1)} m (sign ${farthestSign(flat)}), incline ${incline.toFixed(1)} m, incline with the vertical carry ${inclineWithCarry.toFixed(1)} m`);
-    assert.ok(flat > 0 && farthestSign(flat) <= FARTHEST_SIGN_FLAT, `flat ${flat.toFixed(1)} m, sign ${farthestSign(flat)}`);
-    assert.equal(incline, 0, `incline: thrown ${incline.toFixed(1)} m`);
-    assert.equal(inclineWithCarry, 0, `incline with the carry: thrown ${inclineWithCarry.toFixed(1)} m`);
+    expect(flat > 0 && farthestSign(flat) <= FARTHEST_SIGN_FLAT, `flat ${flat.toFixed(1)} m, sign ${farthestSign(flat)}`).toBeTruthy();
+    expect(incline, `incline: thrown ${incline.toFixed(1)} m`).toBe(0);
+    expect(inclineWithCarry, `incline with the carry: thrown ${inclineWithCarry.toFixed(1)} m`).toBe(0);
   });
 
   todoRow("when he is thrown from the flat range and from the incline, then the incline throws him over 3 m farther", "after the overhaul: the monster flies the incline's barrier (nobody thrown), so the incline's throw is the best class thrown there; union f2a8062d: flat 51.9 m, incline 49.4 m (the monster's flat throw kept, Main)", async () => {
     const flat = await bestDistance(false, false);
     const incline = await bestDistance(true, false);
-    assert.ok(incline > flat + 3, `incline ${incline} against flat ${flat}`);
+    expect(incline, `incline ${incline} against flat ${flat}`).toBeGreaterThan(flat + 3);
   });
 });
 
@@ -460,9 +459,9 @@ describe("given each of the 7 car types released at full throttle from the long 
     t.annotate(`shipped approach (hill ${shipped.hillLength} m, run-up ${shipped.runUp} m, incline ${shipped.inclineLength} m, crest radius ${shipped.crestRadius} m), window ${floorOf("sedan")} (the monster ${floorOf("monster")}) to ${ARRIVAL_CEILING.toFixed(1)} m/s:\n${hitTable(shippedHits)}`);
     for (const { id, hits } of shippedHits) {
       for (const [index, hit] of hits.entries()) {
-        assert.ok(asPinned(id, hit), `${id} at phase ${START_PHASES[index]}: ${hit.ejections} throws, at x ${hit.endX.toFixed(1)} (arrival ${hit.arrivalSpeed})`);
-        assert.ok(hit.arrivalSpeed >= floorOf(id), `${id} arrives at ${hit.arrivalSpeed}, under ${floorOf(id)}`);
-        assert.ok(hit.arrivalSpeed <= ARRIVAL_CEILING, `${id} arrives at ${hit.arrivalSpeed}, over ${ARRIVAL_CEILING}`);
+        expect(asPinned(id, hit), `${id} at phase ${START_PHASES[index]}: ${hit.ejections} throws, at x ${hit.endX.toFixed(1)} (arrival ${hit.arrivalSpeed})`).toBeTruthy();
+        expect(hit.arrivalSpeed, `${id} arrives at ${hit.arrivalSpeed}, under ${floorOf(id)}`).toBeGreaterThanOrEqual(floorOf(id));
+        expect(hit.arrivalSpeed, `${id} arrives at ${hit.arrivalSpeed}, over ${ARRIVAL_CEILING}`).toBeLessThanOrEqual(ARRIVAL_CEILING);
       }
     }
   });
@@ -470,37 +469,37 @@ describe("given each of the 7 car types released at full throttle from the long 
   it("when the approach is the pre-retune one, then every class but the monster is thrown once at every phase, its truck at 31.4 m/s too, the monster flies the barrier, but the fastest arrives over the ceiling", (t) => {
     const old = hitsOf(longJumpVariant(PRE_RETUNE), Infinity);
     t.annotate(`pre-retune approach:\n${hitTable(old)}`);
-    assert.ok(allAsPinned(old), "a class not thrown once, or the monster not flying the barrier, on the old approach");
-    assert.ok(fastest(old) > ARRIVAL_CEILING, `the old fastest arrival ${fastest(old)}`);
+    expect(allAsPinned(old), "a class not thrown once, or the monster not flying the barrier, on the old approach").toBeTruthy();
+    expect(fastest(old), `the old fastest arrival ${fastest(old)}`).toBeGreaterThan(ARRIVAL_CEILING);
   });
 
   it("when the monster is held to 22.4 m/s and to 23.2 m/s on the shipped approach, then it arrives under its old flying speed at the first and at 22.7-22.85 m/s at the second, and is thrown once at every phase at both: its flying speed now lies over 22.85 m/s (a stiffer damper there, 0.42 against 0.35)", () => {
     const slow = START_PHASES.map((phase) => driveToBarrier(monsterCar, longJumpVariant(shipped), phase, MONSTER_SLOW_CAP));
     const fast = START_PHASES.map((phase) => driveToBarrier(monsterCar, longJumpVariant(shipped), phase, MONSTER_FAST_CAP));
     const read = (hits: readonly BarrierHit[]): string => hits.map((hit) => `${hit.arrivalSpeed.toFixed(2)}/${hit.ejections} at x ${hit.endX.toFixed(1)}`).join(" ");
-    assert.ok(slow.every((hit) => hit.arrivalSpeed < MONSTER_FLYING_ARRIVAL && hit.ejections === 1), `held to ${MONSTER_SLOW_CAP}: ${read(slow)}`);
-    assert.ok(fast.every((hit) => hit.arrivalSpeed >= MONSTER_HELD_ARRIVAL.low && hit.arrivalSpeed <= MONSTER_HELD_ARRIVAL.high && hit.ejections === 1), `held to ${MONSTER_FAST_CAP}: ${read(fast)}`);
+    expect(slow.every((hit) => hit.arrivalSpeed < MONSTER_FLYING_ARRIVAL && hit.ejections === 1), `held to ${MONSTER_SLOW_CAP}: ${read(slow)}`).toBeTruthy();
+    expect(fast.every((hit) => hit.arrivalSpeed >= MONSTER_HELD_ARRIVAL.low && hit.arrivalSpeed <= MONSTER_HELD_ARRIVAL.high && hit.ejections === 1), `held to ${MONSTER_FAST_CAP}: ${read(fast)}`).toBeTruthy();
   });
 
   it("when the truck is held to 17 m/s and to 18.5 m/s on the shipped approach, then it is not thrown at any phase under the slowest ejecting speed and is thrown once at every phase over it", () => {
     const slow = START_PHASES.map((phase) => driveToBarrier(truck, longJumpVariant(shipped), phase, SLOW_CAP));
     const fast = START_PHASES.map((phase) => driveToBarrier(truck, longJumpVariant(shipped), phase, FAST_ENOUGH_CAP));
-    assert.ok(slow.every((hit) => hit.arrivalSpeed < MINIMUM_EJECTING_ARRIVAL && hit.ejections === 0), `held to ${SLOW_CAP}: ${slow.map((hit) => `${hit.arrivalSpeed.toFixed(2)}/${hit.ejections}`).join(" ")}`);
-    assert.ok(fast.every((hit) => hit.arrivalSpeed >= MINIMUM_EJECTING_ARRIVAL && hit.ejections === 1), `held to ${FAST_ENOUGH_CAP}: ${fast.map((hit) => `${hit.arrivalSpeed.toFixed(2)}/${hit.ejections}`).join(" ")}`);
-    assert.ok(slowest(shippedHits) >= floorOf("sedan"), "the slowest class on the shipped approach is over the floor");
+    expect(slow.every((hit) => hit.arrivalSpeed < MINIMUM_EJECTING_ARRIVAL && hit.ejections === 0), `held to ${SLOW_CAP}: ${slow.map((hit) => `${hit.arrivalSpeed.toFixed(2)}/${hit.ejections}`).join(" ")}`).toBeTruthy();
+    expect(fast.every((hit) => hit.arrivalSpeed >= MINIMUM_EJECTING_ARRIVAL && hit.ejections === 1), `held to ${FAST_ENOUGH_CAP}: ${fast.map((hit) => `${hit.arrivalSpeed.toFixed(2)}/${hit.ejections}`).join(" ")}`).toBeTruthy();
+    expect(slowest(shippedHits), "the slowest class on the shipped approach is over the floor").toBeGreaterThanOrEqual(floorOf("sedan"));
   });
 
   it("when the truck is held to 32 m/s at start phase 0.55 on the pre-retune approach, then it arrives at the old lowest failing speed and is thrown: the barrier hit throws by the speed it lost, its block packed or not", () => {
     const FAILING_CAP = 32;
     const FAILING_PHASE = 0.55;
     const hit = driveToBarrier(truck, longJumpVariant(PRE_RETUNE), FAILING_PHASE, FAILING_CAP);
-    assert.ok(Math.abs(hit.arrivalSpeed - LOWEST_FAILING_ARRIVAL) <= 0.1 && hit.ejections === 1, `arrival ${hit.arrivalSpeed}, ${hit.ejections} throws`);
+    expect(Math.abs(hit.arrivalSpeed - LOWEST_FAILING_ARRIVAL) <= 0.1 && hit.ejections === 1, `arrival ${hit.arrivalSpeed}, ${hit.ejections} throws`).toBeTruthy();
   });
 
   it("when the builder is given the shipped numbers, then its floor is the shipped floor", () => {
     const built = longJumpVariant(shipped);
     const station = stationDriveProfile("longJump");
-    assert.ok(Math.abs(built.backX - station.backX) < 1e-9 && Math.abs(built.startX - station.startX) < 1e-9 && Math.abs(built.footX - station.footX) < 1e-9, "same station extent");
-    for (let localX = station.backX; localX <= station.frontX + 1; localX += 0.37) assert.ok(Math.abs(built.heightAtX(localX) - station.heightAtX(localX)) < 1e-9, `x = ${localX}`);
+    expect(Math.abs(built.backX - station.backX) < 1e-9 && Math.abs(built.startX - station.startX) < 1e-9 && Math.abs(built.footX - station.footX) < 1e-9, "same station extent").toBeTruthy();
+    for (let localX = station.backX; localX <= station.frontX + 1; localX += 0.37) expect(Math.abs(built.heightAtX(localX) - station.heightAtX(localX)), `x = ${localX}`).toBeLessThan(1e-9);
   });
 });

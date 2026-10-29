@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { blankIntent, readIntent } from "../vehicle/drive-input.ts";
 import { blankPad, mergeTouch, PAD_BUTTON, type TouchPad } from "../vehicle/gamepad.ts";
 import { discReading, drawnScheme, pedalsFor, schemeLayout, sliderSteer, stripReading, TOUCH_SCHEMES, type TouchScheme } from "../hud/touch-scheme.ts";
@@ -51,13 +50,13 @@ describe("given the controls that drive the car", () => {
       const pad = { ...blankPad(), connected: testCase.connected, lx: testCase.stickX, ly: testCase.stickY, rt: testCase.triggerRight, held: testCase.heldButton };
       const keys = new Set(testCase.keys);
       const walk = readWalkIntent(keys, pad, blankTouch(), blankWalkIntent());
-      assert.equal(walk.forward, testCase.expectedForward, "forward");
-      assert.equal(walk.strafe, testCase.expectedStrafe, "strafe");
-      assert.equal(walk.sprint, testCase.expectedSprint, "sprint");
-      assert.equal(walk.walk, testCase.expectedWalk, "walk");
+      expect(walk.forward, "forward").toBe(testCase.expectedForward);
+      expect(walk.strafe, "strafe").toBe(testCase.expectedStrafe);
+      expect(walk.sprint, "sprint").toBe(testCase.expectedSprint);
+      expect(walk.walk, "walk").toBe(testCase.expectedWalk);
       if (testCase.drivingField === null) return;
       const driving = readIntent(keys, pad, blankIntent());
-      assert.equal(driving[testCase.drivingField], testCase.drivingValue, `the same control drives ${testCase.drivingField}`);
+      expect(driving[testCase.drivingField], `the same control drives ${testCase.drivingField}`).toBe(testCase.drivingValue);
     });
   }
 });
@@ -93,24 +92,24 @@ describe("given each touch scheme with the player on foot", () => {
   for (const scheme of TOUCH_SCHEMES) {
     it(`when ${scheme}'s thumbs push up, down and sideways, then he goes forward, back and steps aside, and full gas alone does not sprint`, () => {
       const ahead = walkFor(scheme, { push: 1, side: 0 });
-      assert.ok(ahead.forward > 0.9 && Math.abs(ahead.strafe) < 0.05, `forward ${ahead.forward} strafe ${ahead.strafe}`);
-      assert.equal(ahead.sprint, false, "full gas runs, it does not sprint");
+      expect(ahead.forward > 0.9 && Math.abs(ahead.strafe) < 0.05, `forward ${ahead.forward} strafe ${ahead.strafe}`).toBeTruthy();
+      expect(ahead.sprint, "full gas runs, it does not sprint").toBe(false);
       const back = walkFor(scheme, { push: -1, side: 0 });
-      assert.ok(back.forward < -0.9, `back ${back.forward}`);
+      expect(back.forward, `back ${back.forward}`).toBeLessThan(-0.9);
       const right = walkFor(scheme, { push: 0, side: 1 });
-      assert.ok(right.strafe > 0.9 && Math.abs(right.forward) < 0.05, `right ${right.strafe} forward ${right.forward}`);
+      expect(right.strafe > 0.9 && Math.abs(right.forward) < 0.05, `right ${right.strafe} forward ${right.forward}`).toBeTruthy();
       const left = walkFor(scheme, { push: 0, side: -1 });
-      assert.ok(left.strafe < -0.9, `left ${left.strafe}`);
+      expect(left.strafe, `left ${left.strafe}`).toBeLessThan(-0.9);
     });
   }
   for (const scheme of TOUCH_SCHEMES.filter((s) => schemeLayout(drawnScheme(s, true)).right === "strip")) {
     it(`when ${scheme}'s strip thumb slides into the Boost cap, then he sprints forward`, () => {
       const sprint = walkFor(scheme, { push: 1, side: 0, cap: true });
-      assert.ok(sprint.forward > 0.9 && sprint.sprint, `forward ${sprint.forward} sprint ${sprint.sprint}`);
+      expect(sprint.forward > 0.9 && sprint.sprint, `forward ${sprint.forward} sprint ${sprint.sprint}`).toBeTruthy();
     });
   }
   it("when Easy's player is on foot, then the controls draw the Pedals strip, and at the wheel Easy's own", () => {
-    assert.equal(drawnScheme("autogas", true), "pedals");
-    assert.equal(drawnScheme("autogas", false), "autogas");
+    expect(drawnScheme("autogas", true)).toBe("pedals");
+    expect(drawnScheme("autogas", false)).toBe("autogas");
   });
 });

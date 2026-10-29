@@ -1,5 +1,4 @@
-import { describe, test } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, test } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -73,26 +72,26 @@ describe("given every style's seated driver", () => {
       const hip = carried(style, 0, joint(5).add(joint(7)).multiplyScalar(0.5));
       const ray = new THREE.Raycaster(hip.clone().setY(hip.y + 0.3), new THREE.Vector3(0, -1, 0));
       const hit = ray.intersectObject(drawnSeat(id))[0];
-      assert.ok(hit, `no cushion under the ${id}'s hips at ${hip.toArray().join()}`);
+      expect(hit, `no cushion under the ${id}'s hips at ${hip.toArray().join()}`).toBeTruthy();
       const high = hip.y - hit.point.y;
-      assert.ok(high >= SIT_HIGH.min && high <= SIT_HIGH.max, `hips ${high.toFixed(3)} m over the cushion`);
-      assert.ok(hip.distanceTo(driverSeat(style).hip) < 1e-3, "hips on the seat's H-point");
+      expect(high >= SIT_HIGH.min && high <= SIT_HIGH.max, `hips ${high.toFixed(3)} m over the cushion`).toBeTruthy();
+      expect(hip.distanceTo(driverSeat(style).hip), "hips on the seat's H-point").toBeLessThan(1e-3);
     });
 
     test(`when the ${id}'s driver sits, then both hands hold the wheel's grips and his head clears the roof`, () => {
       const seat = driverSeat(style);
       for (const [side, fore, elbow] of [[0, 3, 2], [1, 5, 4]] as const) {
         const grip = carried(style, fore, joint(elbow).sub(new THREE.Vector3(0, 0.35, 0)));
-        assert.ok(grip.distanceTo(seat.grips[side]) < GRIP_MISS, `hand ${side} misses its grip by ${grip.distanceTo(seat.grips[side]).toFixed(3)} m`);
+        expect(grip.distanceTo(seat.grips[side]), `hand ${side} misses its grip by ${grip.distanceTo(seat.grips[side]).toFixed(3)} m`).toBeLessThan(GRIP_MISS);
       }
       const head = carried(style, 1, new THREE.Vector3(...PARTS[1]!.c).setY(PARTS[1]!.c[1] + PARTS[1]!.h[1]));
-      assert.ok(head.y <= roofAt(head.z, style).y - HEAD_ROOM, `crown ${head.y.toFixed(3)} under a roof at ${roofAt(head.z, style).y.toFixed(3)}`);
+      expect(head.y, `crown ${head.y.toFixed(3)} under a roof at ${roofAt(head.z, style).y.toFixed(3)}`).toBeLessThanOrEqual(roofAt(head.z, style).y - HEAD_ROOM);
     });
 
     test(`when the ${id}'s driver sits, then every build's crown, cap and hair stand at least ${ROOF_CLEAR * 100} cm under the drawn roof's inner face`, () => {
       const s = seated(style);
       const room = headRoom(s.car, s.drivers);
-      assert.ok(room.least >= ROOF_CLEAR, `the head at ${room.at} stands ${(room.least * 100).toFixed(1)} cm under the drawn roof`);
+      expect(room.least, `the head at ${room.at} stands ${(room.least * 100).toFixed(1)} cm under the drawn roof`).toBeGreaterThanOrEqual(ROOF_CLEAR);
     });
   }
 });
@@ -110,7 +109,7 @@ describe("given a seated driver in a crushed car", () => {
       const drivers = new SeatedDrivers(() => false);
       drivers.sync([car], (c) => driverLook(1, c));
       const room = headRoom(car, drivers);
-      assert.ok(room.least >= 0, `the head at ${room.at} stands ${(-room.least * 100).toFixed(1)} cm through the crushed roof`);
+      expect(room.least, `the head at ${room.at} stands ${(-room.least * 100).toFixed(1)} cm through the crushed roof`).toBeGreaterThanOrEqual(0);
       drivers.dispose();
     });
   }
@@ -205,12 +204,12 @@ describe("given the seated driver's geometry", () => {
   const bones = seatedGeometry().getAttribute(BONES_ATTRIBUTE);
 
   test("when it is built, then every build's figure in it fits a seated driver's triangle budget at once", () => {
-    assert.ok(index.length / 3 <= SEATED_TRIANGLES, `${index.length / 3} triangles`);
+    expect(index.length / 3, `${index.length / 3} triangles`).toBeLessThanOrEqual(SEATED_TRIANGLES);
   });
 
   test("when it is built, then no vertex rides a thigh or a shin: no leg or foot is drawn", () => {
     const legs = index.filter((v) => bones.getX(v) >= LEFT_LEG || bones.getY(v) >= LEFT_LEG);
-    assert.equal(legs.length, 0, `${legs.length} corners on the legs`);
+    expect(legs.length, `${legs.length} corners on the legs`).toBe(0);
   });
 });
 
@@ -223,18 +222,18 @@ describe("given the seated drivers' batch and one car", () => {
     const drivers = new SeatedDrivers(() => glassCut);
     const look = (car: number) => driverLook(1, car);
     drivers.sync([car], look);
-    assert.equal(drivers.mesh.count, 1);
+    expect(drivers.mesh.count).toBe(1);
     glassCut = true;
     drivers.sync([car], look);
-    assert.equal(drivers.mesh.count, 0, "cut with the glass at mid distance");
+    expect(drivers.mesh.count, "cut with the glass at mid distance").toBe(0);
     glassCut = false;
     car.driverOut = "windshield";
     drivers.sync([car], look);
-    assert.equal(drivers.mesh.count, 0, "the thrown driver is the ragdoll now");
+    expect(drivers.mesh.count, "the thrown driver is the ragdoll now").toBe(0);
     car.driverOut = null;
     car.partSeats[PART_KIND.seatFront]!.layers.disable(0);
     drivers.sync([car], look);
-    assert.equal(drivers.mesh.count, 0, "cut with the cabin");
+    expect(drivers.mesh.count, "cut with the cabin").toBe(0);
     drivers.dispose();
   });
 });
@@ -250,10 +249,10 @@ describe("given the seated drivers' batch and two cars", () => {
     const drivers = new SeatedDrivers(() => false);
     const look = (car: number) => driverLook(1, car);
     drivers.sync(cars, look);
-    assert.equal(drivers.mesh.count, 2);
+    expect(drivers.mesh.count).toBe(2);
     cars[0]!.driverOut = "windshield";
     drivers.sync(cars, look);
-    assert.equal(drivers.mesh.count, 1, "the thrown driver's slot is still drawn");
+    expect(drivers.mesh.count, "the thrown driver's slot is still drawn").toBe(1);
     drivers.dispose();
   });
 });
@@ -269,10 +268,10 @@ describe("given the seated drivers' batch and two cars, one of whose players has
     const drivers = new SeatedDrivers(() => false);
     const look = (car: number) => driverLook(1, car);
     drivers.sync(cars, look, 0);
-    assert.equal(drivers.mesh.count, 1, "the other car's driver alone");
+    expect(drivers.mesh.count, "the other car's driver alone").toBe(1);
     drivers.sync(cars, look);
-    assert.equal(drivers.mesh.count, 2, "both with none named");
-    assert.equal(cars[0]!.driverOut, null, "and nothing is written to the car");
+    expect(drivers.mesh.count, "both with none named").toBe(2);
+    expect(cars[0]!.driverOut, "and nothing is written to the car").toBe(null);
     drivers.dispose();
   });
 });
@@ -296,13 +295,13 @@ describe("given the seated drivers fed by the ragdoll system's driver looks", ()
     ragdolls.lookSeed = 1;
     drivers.sync([car], look);
     drivers.sync([car], look);
-    assert.equal(seen.length, 2, "each sync asked for the one shown car's look");
-    assert.ok(seen[0] === seen[1], "the same look object while nothing changed");
-    assert.equal(tag(seen[0]!), tag(driverLook(1, 0)), "the look of seed 1");
+    expect(seen.length, "each sync asked for the one shown car's look").toBe(2);
+    expect(seen[0], "the same look object while nothing changed").toBe(seen[1]);
+    expect(tag(seen[0]!), "the look of seed 1").toBe(tag(driverLook(1, 0)));
     ragdolls.lookSeed = other;
     drivers.sync([car], look);
-    assert.ok(seen[2] !== seen[0], "a new seed rebuilds the look");
-    assert.equal(tag(seen[2]!), tag(driverLook(other, 0)), "the look of the new seed");
+    expect(seen[2], "a new seed rebuilds the look").not.toBe(seen[0]);
+    expect(tag(seen[2]!), "the look of the new seed").toBe(tag(driverLook(other, 0)));
     drivers.dispose();
   });
 });

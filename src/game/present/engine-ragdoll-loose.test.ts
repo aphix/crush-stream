@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
@@ -97,9 +96,9 @@ describe("given a driver thrown out of a car", () => {
       const flight = fly(sys, doll);
       sys.dispose();
       const seen = `${shot.name}: elbow ${flight.elbow.toFixed(0)}°, knee ${flight.knee.toFixed(0)}°, arms down at ${flight.armsDownAt.toFixed(2)} s`;
-      assert.ok(flight.elbow >= BEND_MIN_DEGREES, `elbows stayed straight (${seen})`);
-      assert.ok(flight.knee >= BEND_MIN_DEGREES, `knees stayed straight (${seen})`);
-      assert.ok(flight.armsDownAt <= ARMS_DOWN_BY_SECONDS, `arms stayed up (${seen})`);
+      expect(flight.elbow, `elbows stayed straight (${seen})`).toBeGreaterThanOrEqual(BEND_MIN_DEGREES);
+      expect(flight.knee, `knees stayed straight (${seen})`).toBeGreaterThanOrEqual(BEND_MIN_DEGREES);
+      expect(flight.armsDownAt, `arms stayed up (${seen})`).toBeLessThanOrEqual(ARMS_DOWN_BY_SECONDS);
     }
   });
 
@@ -109,13 +108,13 @@ describe("given a driver thrown out of a car", () => {
       for (const [k, body] of doll.bodies.entries()) {
         const at = offset(k, e.quat, _r).add(e.pos);
         const was = body.translation();
-        assert.ok(_p.set(was.x, was.y, was.z).distanceTo(at) < POSE_TOLERANCE, `${shot.name}: part ${k} is ${_p.distanceTo(at).toFixed(4)} m from the dive's layout`);
+        expect(_p.set(was.x, was.y, was.z).distanceTo(at), `${shot.name}: part ${k} is ${_p.distanceTo(at).toFixed(4)} m from the dive's layout`).toBeLessThan(POSE_TOLERANCE);
         const turned = new THREE.Quaternion().copy(e.quat);
         if (ARM(k)) turned.multiply(ARM_OVER);
         const r = body.rotation();
         const sign = turned.dot(_q.set(r.x, r.y, r.z, r.w)) < 0 ? -1 : 1;
         const off = Math.max(Math.abs(turned.x - sign * r.x), Math.abs(turned.y - sign * r.y), Math.abs(turned.z - sign * r.z), Math.abs(turned.w - sign * r.w));
-        assert.ok(off < POSE_TOLERANCE, `${shot.name}: part ${k} is turned ${off.toFixed(5)} off the dive's layout`);
+        expect(off, `${shot.name}: part ${k} is turned ${off.toFixed(5)} off the dive's layout`).toBeLessThan(POSE_TOLERANCE);
       }
       sys.dispose();
     }
@@ -142,7 +141,7 @@ describe("given a driver thrown out of a car", () => {
         }
         sys.dispose();
         const off = got.distanceTo(expected);
-        assert.ok(off <= MOMENTUM_TOLERANCE * expected.length(), `${shot.name}: momentum off by ${off.toFixed(4)} of ${expected.length().toFixed(1)} kg m/s`);
+        expect(off, `${shot.name}: momentum off by ${off.toFixed(4)} of ${expected.length().toFixed(1)} kg m/s`).toBeLessThanOrEqual(MOMENTUM_TOLERANCE * expected.length());
       }
     });
   }
@@ -156,7 +155,7 @@ describe("given a dummy placed in the scene rather than thrown from a car", () =
     const doll = sys["dolls"][slot]!;
     const speeds = doll.bodies.map((b) => new THREE.Vector3().copy(b.linvel() as THREE.Vector3).distanceTo(v));
     sys.dispose();
-    assert.ok(Math.max(...speeds) < 1e-5, `a part leaves ${Math.max(...speeds)} m/s from the placed velocity`);
+    expect(Math.max(...speeds), `a part leaves ${Math.max(...speeds)} m/s from the placed velocity`).toBeLessThan(1e-5);
   });
 
   it("when it is placed in a slot a loose driver flew in, then it flies exactly as one placed in a fresh world: the loose driver's joint give is gone", async () => {
@@ -177,6 +176,6 @@ describe("given a dummy placed in the scene rather than thrown from a car", () =
     const fresh = await flight(false);
     const reused = await flight(true);
     const off = Math.max(...fresh.map((x, k) => Math.abs(x - reused[k]!)));
-    assert.ok(off === 0, `a part flew ${off.toFixed(4)} m off the fresh world's`);
+    expect(off, `a part flew ${off.toFixed(4)} m off the fresh world's`).toBe(0);
   });
 });

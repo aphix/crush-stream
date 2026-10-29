@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
 import { DISC_GROUND, DISC_RADIUS, FLAT_GROUND, Ground, setGround } from "../world/ground.ts";
@@ -37,8 +36,8 @@ describe("given a free eye begun from the camera's pose", () => {
     free.begin(camera);
     fly(free, camera, {}, 1);
     const after = camera.getWorldDirection(new THREE.Vector3());
-    assert.ok(camera.position.distanceTo(new THREE.Vector3(3, 7, -4)) < 1e-9, `the eye moved to ${camera.position.toArray().join(", ")}`);
-    assert.ok(after.distanceTo(before) < 1e-6, `the view turned by ${after.distanceTo(before)}`);
+    expect(camera.position.distanceTo(new THREE.Vector3(3, 7, -4)), `the eye moved to ${camera.position.toArray().join(", ")}`).toBeLessThan(1e-9);
+    expect(after.distanceTo(before), `the view turned by ${after.distanceTo(before)}`).toBeLessThan(1e-6);
   });
 
   const moves = [
@@ -54,9 +53,9 @@ describe("given a free eye begun from the camera's pose", () => {
     it(testCase.it, () => {
       const { camera, free } = begun();
       fly(free, camera, testCase.held, 1);
-      assert.ok(Math.abs(camera.position.x - testCase.expectedX) < 1e-6, `x ${camera.position.x}`);
-      assert.ok(Math.abs(camera.position.y - testCase.expectedY) < 1e-6, `y ${camera.position.y}`);
-      assert.ok(Math.abs(camera.position.z - testCase.expectedZ) < 1e-6, `z ${camera.position.z}`);
+      expect(Math.abs(camera.position.x - testCase.expectedX), `x ${camera.position.x}`).toBeLessThan(1e-6);
+      expect(Math.abs(camera.position.y - testCase.expectedY), `y ${camera.position.y}`).toBeLessThan(1e-6);
+      expect(Math.abs(camera.position.z - testCase.expectedZ), `z ${camera.position.z}`).toBeLessThan(1e-6);
     });
   }
 
@@ -64,16 +63,16 @@ describe("given a free eye begun from the camera's pose", () => {
     const { camera, free } = begun();
     free.lookBy(-Math.PI / 2 / YAW_PER_PX, 0);
     fly(free, camera, { forward: 1 }, 1);
-    assert.ok(Math.abs(camera.position.x + DISC_CRUISE) < 1e-6, `x ${camera.position.x} (a left turn from -z faces -x)`);
-    assert.ok(Math.abs(camera.position.z) < 1e-6, `z ${camera.position.z}`);
+    expect(Math.abs(camera.position.x + DISC_CRUISE), `x ${camera.position.x} (a left turn from -z faces -x)`).toBeLessThan(1e-6);
+    expect(Math.abs(camera.position.z), `z ${camera.position.z}`).toBeLessThan(1e-6);
   });
 
   it("when the view looks a radian down and forward is held, then the eye moves level, in the look plane", () => {
     const { camera, free } = begun();
     free.lookBy(0, 1 / PITCH_PER_PX);
     fly(free, camera, { forward: 1 }, 1);
-    assert.ok(Math.abs(camera.position.y - 30) < 1e-6, `height ${camera.position.y}`);
-    assert.ok(Math.abs(camera.position.z + DISC_CRUISE) < 1e-6, `z ${camera.position.z}`);
+    expect(Math.abs(camera.position.y - 30), `height ${camera.position.y}`).toBeLessThan(1e-6);
+    expect(Math.abs(camera.position.z + DISC_CRUISE), `z ${camera.position.z}`).toBeLessThan(1e-6);
   });
 
   const looks = [
@@ -88,16 +87,16 @@ describe("given a free eye begun from the camera's pose", () => {
       free.lookBy(testCase.dx, testCase.dy);
       fly(free, camera, {}, DT);
       const view = camera.getWorldDirection(new THREE.Vector3());
-      assert.ok(Math.abs(free.yaw - testCase.expectedYaw) < 1e-9, `yaw ${free.yaw}`);
-      assert.ok(Math.abs(free.pitch - testCase.expectedPitch) < 1e-9, `pitch ${free.pitch}`);
-      assert.ok(Math.abs(view.y - Math.sin(testCase.expectedPitch)) < 1e-6, `the camera's own view has the pitch (${view.y})`);
+      expect(Math.abs(free.yaw - testCase.expectedYaw), `yaw ${free.yaw}`).toBeLessThan(1e-9);
+      expect(Math.abs(free.pitch - testCase.expectedPitch), `pitch ${free.pitch}`).toBeLessThan(1e-9);
+      expect(Math.abs(view.y - Math.sin(testCase.expectedPitch)), `the camera's own view has the pitch (${view.y})`).toBeLessThan(1e-6);
     });
   }
 
   it("when the right stick is held right for a second, then the view turns right by the pad's yaw rate", () => {
     const { camera, free } = begun();
     fly(free, camera, { lookX: 1 }, 1);
-    assert.ok(Math.abs(free.yaw + PAD_YAW_RATE) < 1e-6, `yaw ${free.yaw}`);
+    expect(Math.abs(free.yaw + PAD_YAW_RATE), `yaw ${free.yaw}`).toBeLessThan(1e-6);
   });
 
   const wheels = [
@@ -110,7 +109,7 @@ describe("given a free eye begun from the camera's pose", () => {
       const { camera, free } = begun();
       free.speedBy(testCase.deltaY);
       fly(free, camera, { forward: 1 }, 0.1);
-      assert.ok(Math.abs(-camera.position.z - testCase.expectedAhead) < 1e-6, `${-camera.position.z} m ahead in 0.1 s, expected ${testCase.expectedAhead}`);
+      expect(Math.abs(-camera.position.z - testCase.expectedAhead), `${-camera.position.z} m ahead in 0.1 s, expected ${testCase.expectedAhead}`).toBeLessThan(1e-6);
     });
   }
 
@@ -118,7 +117,7 @@ describe("given a free eye begun from the camera's pose", () => {
     const { camera, free } = begun();
     free.panBy(100, 0);
     fly(free, camera, {}, DT);
-    assert.ok(Math.abs(camera.position.x + (100 * DISC_REACH) / 400) < 1e-6, `x ${camera.position.x} (${DISC_REACH} m of reach over 400 px)`);
+    expect(Math.abs(camera.position.x + (100 * DISC_REACH) / 400), `x ${camera.position.x} (${DISC_REACH} m of reach over 400 px)`).toBeLessThan(1e-6);
   });
 
   it("when a pinch widens by 40 px, then the eye goes a tenth of the reach forward along the view, and closing it comes back", () => {
@@ -127,11 +126,11 @@ describe("given a free eye begun from the camera's pose", () => {
     free.dollyBy(40);
     fly(free, camera, {}, DT);
     const ahead = new THREE.Vector3(0, 30, 0).sub(camera.position).length();
-    assert.ok(Math.abs(ahead - DISC_REACH / 10) < 1e-6, `${ahead} m along the look`);
-    assert.ok(camera.position.y < 30 - 5, `the eye went down the view's slope (${camera.position.y})`);
+    expect(Math.abs(ahead - DISC_REACH / 10), `${ahead} m along the look`).toBeLessThan(1e-6);
+    expect(camera.position.y, `the eye went down the view's slope (${camera.position.y})`).toBeLessThan(30 - 5);
     free.dollyBy(-40);
     fly(free, camera, {}, DT);
-    assert.ok(camera.position.distanceTo(new THREE.Vector3(0, 30, 0)) < 1e-6, "closing the fingers returns it");
+    expect(camera.position.distanceTo(new THREE.Vector3(0, 30, 0)), "closing the fingers returns it").toBeLessThan(1e-6);
   });
 });
 
@@ -144,8 +143,8 @@ describe("given the free eye over the ground", () => {
       free.step(camera, { ...blankFreeInput(), rise: -1 }, DT);
       lowest = Math.min(lowest, camera.position.y);
     }
-    assert.ok(lowest > 0.5, `the eye reached ${lowest.toFixed(2)} m over the ground`);
-    assert.ok(Math.abs(camera.position.y - lowest) < 1e-6, "and rests there");
+    expect(lowest, `the eye reached ${lowest.toFixed(2)} m over the ground`).toBeGreaterThan(0.5);
+    expect(Math.abs(camera.position.y - lowest), "and rests there").toBeLessThan(1e-6);
   });
 
   it("when it flies into a hill, then it stays above the hill's surface under it on every frame", () => {
@@ -160,16 +159,16 @@ describe("given the free eye over the ground", () => {
       const p = camera.position;
       worst = Math.min(worst, p.y - hill.heightAt(p.x, p.z, p.y));
     }
-    assert.ok(camera.position.z < -20, `the eye flew ${-camera.position.z} m up the hill (the test needs it deep in the slope)`);
-    assert.ok(worst > 0.5, `the eye came within ${worst.toFixed(2)} m of the ground`);
+    expect(camera.position.z, `the eye flew ${-camera.position.z} m up the hill (the test needs it deep in the slope)`).toBeLessThan(-20);
+    expect(worst, `the eye came within ${worst.toFixed(2)} m of the ground`).toBeGreaterThan(0.5);
   });
 
   it("when it flies past the fleet disc's rim where there is no floor, then it still stands above y 0, not below it", () => {
     setGround(DISC_GROUND);
     const { camera, free } = begun(new THREE.Vector3(DISC_RADIUS + 20, 10, 0));
     fly(free, camera, { rise: -1 }, 3);
-    assert.ok(camera.position.y > 0.5, `the eye is ${camera.position.y} m up past the rim`);
-    assert.ok(Number.isFinite(camera.position.y), "and finite");
+    expect(camera.position.y, `the eye is ${camera.position.y} m up past the rim`).toBeGreaterThan(0.5);
+    expect(Number.isFinite(camera.position.y), "and finite").toBeTruthy();
   });
 });
 
@@ -183,19 +182,19 @@ describe("given the free eye's bounds", () => {
       const { camera, free } = begun();
       sceneExtent(free.extent, testCase.derby, null);
       fly(free, camera, { forward: 1, fast: true }, 10);
-      assert.ok(Math.abs(Math.hypot(camera.position.x, camera.position.z) - testCase.expectedReach) < 1e-6, `${Math.hypot(camera.position.x, camera.position.z)} m out`);
+      expect(Math.abs(Math.hypot(camera.position.x, camera.position.z) - testCase.expectedReach), `${Math.hypot(camera.position.x, camera.position.z)} m out`).toBeLessThan(1e-6);
     });
   }
 
   it("when it climbs for ten seconds, then it stops at the reach's height", () => {
     const { camera, free } = begun();
     fly(free, camera, { rise: 1, fast: true }, 10);
-    assert.ok(Math.abs(camera.position.y - DISC_REACH) < 1e-6, `${camera.position.y} m up`);
+    expect(Math.abs(camera.position.y - DISC_REACH), `${camera.position.y} m up`).toBeLessThan(1e-6);
   });
 
   it("when the eye is over the fleet disc, then its reach is three disc radii and its cruise crosses that in six seconds", () => {
-    assert.equal(DISC_REACH, 3 * DISC_RADIUS, "reach");
-    assert.equal(DISC_CRUISE, DISC_REACH / 6, "cruise");
+    expect(DISC_REACH, "reach").toBe(3 * DISC_RADIUS);
+    expect(DISC_CRUISE, "cruise").toBe(DISC_REACH / 6);
   });
 
   const extents = [
@@ -206,9 +205,9 @@ describe("given the free eye's bounds", () => {
   for (const testCase of extents) {
     it(testCase.it, () => {
       const out = sceneExtent({ x: 9, z: 9, radius: 9 }, testCase.derby, testCase.course);
-      assert.equal(out.x, testCase.expectedX, "x");
-      assert.equal(out.z, testCase.expectedZ, "z");
-      assert.equal(out.radius, testCase.expectedRadius, "radius");
+      expect(out.x, "x").toBe(testCase.expectedX);
+      expect(out.z, "z").toBe(testCase.expectedZ);
+      expect(out.radius, "radius").toBe(testCase.expectedRadius);
     });
   }
 
@@ -217,6 +216,6 @@ describe("given the free eye's bounds", () => {
     sceneExtent(free.extent, false, { minX: 0, maxX: 4000, minZ: 0, maxZ: 300 });
     free.eye.set(2000, 30, 150);
     fly(free, camera, { forward: 1 }, 1);
-    assert.ok(Math.abs(camera.position.z - 150 + 60) < 1e-6, `${150 - camera.position.z} m ahead in a second (60 m/s)`);
+    expect(Math.abs(camera.position.z - 150 + 60), `${150 - camera.position.z} m ahead in a second (60 m/s)`).toBeLessThan(1e-6);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FREEWHEEL, launch, makeWorld, relaunchDamaged, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { buildCar, skinGap, stepFrames } from "./drawn-body.test-util.ts";
@@ -68,12 +67,12 @@ for (const testCase of meetings) {
         tickWorld(met.world, 1 / FRAME_HZ);
         if (met.second.velocity.distanceTo(free[f]!) > FIRST_CONTACT_MPS || met.parked.velocity.length() > FIRST_CONTACT_MPS) onset = f;
       }
-      assert.ok(onset > 0, `the cars never touched in ${FRAMES / 60} s`);
+      expect(onset, `the cars never touched in ${FRAMES / 60} s`).toBeGreaterThan(0);
       const before = scene(testCase.damaged, testCase.meeting, true);
       for (let f = 0; f < onset; f++) tickWorld(before.world, 1 / FRAME_HZ);
       const gap = skinGap(before.parked, before.second);
       t.annotate(`contact first acts in frame ${onset}, with the drawn bodies ${gap.toFixed(3)} m apart (negative: overlapping)`);
-      assert.ok(Math.abs(gap) <= GAP_M, `contact first acts with the drawn bodies ${gap.toFixed(3)} m apart`);
+      expect(Math.abs(gap), `contact first acts with the drawn bodies ${gap.toFixed(3)} m apart`).toBeLessThanOrEqual(GAP_M);
     });
   });
 }

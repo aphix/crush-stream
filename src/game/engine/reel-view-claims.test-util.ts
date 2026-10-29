@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { fleetClass } from "../scenes/fleet.ts";
 import { headOnThrowsBoth } from "../vehicle/ejection.test-util.ts";
@@ -119,11 +118,11 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
     async scene(name, w, track, staged, seconds) {
       world = w;
       const recording = recordRace(w, track, staged, seconds);
-      assert.ok(recording.clips.length >= 1, `${name}: no clip`);
+      expect(recording.clips.length, `${name}: no clip`).toBeGreaterThanOrEqual(1);
       const lone = staged.length === 1 ? staged[0] : undefined;
       if (lone && lone.kind !== "jump" && lone.kind !== "ramp") {
         const opensAfter = secondsToFirstImpact(recording);
-        assert.ok(opensAfter <= STAGED_MEETING_S, `${name}: the first clip opens ${opensAfter.toFixed(2)} s after the ${lone.kind} was staged: its cars missed each other`);
+        expect(opensAfter, `${name}: the first clip opens ${opensAfter.toFixed(2)} s after the ${lone.kind} was staged: its cars missed each other`).toBeLessThanOrEqual(STAGED_MEETING_S);
       }
       await playClips(name, w, recording.clips);
     },
@@ -137,7 +136,7 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
         setGround(null);
         world = null;
       }
-      assert.fail(`${name}: none of ${FIELD_SEEDS.length} ramming fields kept a clip`);
+      expect.fail(`${name}: none of ${FIELD_SEEDS.length} ramming fields kept a clip`);
     },
   };
 
@@ -153,7 +152,7 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
     });
     const staged = (): void => {
       if (stagingError) throw stagingError;
-      assert.ok(views.length > 0, "the staging played no clip: nothing to judge");
+      expect(views.length, "the staging played no clip: nothing to judge").toBeGreaterThan(0);
     };
 
     it("when each clip plays through the reel's cameras, then at every first impact, later hit of its scope, thrown driver and take-off the moment's point is inside the frame with a margin, no wall or building stands on the line to it, and the subject is not tiny", (t) => {
@@ -171,8 +170,8 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
         t.annotate(`${v.scene} "${v.title}" ${v.kind} at ${v.at.toFixed(2)} s by ${v.rig}: ndc ${v.ndcX.toFixed(2)},${v.ndcY.toFixed(2)}${v.front ? "" : " behind"}, ${v.clear ? "clear" : "BLOCKED"}, share ${v.share.toFixed(3)} (${v.note})`);
       }
       const count = (kind: string): number => kinds.get(kind)?.[1] ?? 0;
-      assert.ok(count("impact") >= bars.impact && count("hit") >= bars.hit && count("throw") >= bars.throw && count("takeoff") >= bars.takeoff, `too few moments to test: ${[...kinds].map(([k, [, n]]) => `${k} ${n}`).join(", ")}`);
-      assert.equal(missed.length, 0, `${missed.length} of ${views.length} moments not visible (margin ${VIEW.margin}, share ${VIEW.share.toFixed(3)})`);
+      expect(count("impact") >= bars.impact && count("hit") >= bars.hit && count("throw") >= bars.throw && count("takeoff") >= bars.takeoff, `too few moments to test: ${[...kinds].map(([k, [, n]]) => `${k} ${n}`).join(", ")}`).toBeTruthy();
+      expect(missed.length, `${missed.length} of ${views.length} moments not visible (margin ${VIEW.margin}, share ${VIEW.share.toFixed(3)})`).toBe(0);
     });
 
     it("when each clip plays behind the results sheet and the standings list (a desktop side panel, a phone's side panel in landscape, its bottom sheet in portrait), then at every first impact, later hit, thrown driver and take-off the moment's point is in the frame with the margin and clear of both panels by it, unblocked, and not tiny", (t) => {
@@ -186,8 +185,8 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
         }
       }
       for (const m of missed) t.annotate(m);
-      assert.ok(covered.every((c) => c.length === views.length), "every layout plays the same moments");
-      assert.equal(missed.length, 0, `${missed.length} moments not visible beside the panels`);
+      expect(covered.every((c) => c.length === views.length), "every layout plays the same moments").toBeTruthy();
+      expect(missed.length, `${missed.length} moments not visible beside the panels`).toBe(0);
     });
 
     // Owner 2026-10-19 ("new angle per crash"): a later crash's own crash-cam axis may lose the wreck before it; any other cut keeps the place.
@@ -199,8 +198,8 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
       const lost = cuts.filter((v) => !v.back!.inFrame && !v.back!.axis);
       t.annotate(`${later.length} later hits, ${cuts.length} after a camera change (${own.length} onto the crash's own axis, ${own.filter((v) => !v.back!.inFrame).length} of them losing the earlier point), the earlier point lost at ${lost.length} other cuts`);
       for (const v of cuts) t.annotate(`${v.scene} "${v.title}" hit at ${v.at.toFixed(2)} s by ${v.cam}${v.back!.axis ? " (own axis)" : ""}: the earlier point at ndc ${v.back!.ndcX.toFixed(2)},${v.back!.ndcY.toFixed(2)}${v.back!.inFrame ? "" : " LOST"} (${v.note})`);
-      assert.ok(later.length >= bars.hit && cuts.length >= bars.cut, `too few later hits to test: ${later.length} hits, ${cuts.length} after a camera change`);
-      assert.deepEqual(lost.map((v) => `${v.scene} ${v.at.toFixed(2)}`), []);
+      expect(later.length >= bars.hit && cuts.length >= bars.cut, `too few later hits to test: ${later.length} hits, ${cuts.length} after a camera change`).toBeTruthy();
+      expect(lost.map((v) => `${v.scene} ${v.at.toFixed(2)}`)).toHaveLength(0);
     });
 
     it("when each clip plays, then its slow-mo holds 6.3 s of wall clock past the cars meeting and past each later hit, 6.13 s past each driver thrown while it runs, every hold plays out in full before the clip ends, it hands back to 1× when the last of those is up, a later hit after that has a slow-mo of its own, and a driver thrown with none running plays at 1×", (t) => {
@@ -236,8 +235,8 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
         }
       }
       t.annotate(`mean hold (wall s): impact ${(sums.impact[0]! / sums.impact[1]!).toFixed(2)} over ${sums.impact[1]}, later hit ${(sums.hit[0]! / sums.hit[1]!).toFixed(2)} over ${sums.hit[1]}, throw ${(sums.throw[0]! / sums.throw[1]!).toFixed(2)} over ${sums.throw[1]}; ${late} throws after the hand-back`);
-      assert.ok(sums.impact[1]! >= bars.impact && sums.throw[1]! >= bars.throw, `too few holds to test: ${sums.impact[1]} impacts, ${sums.throw[1]} throws`);
-      assert.deepEqual(bad, []);
+      expect(sums.impact[1]! >= bars.impact && sums.throw[1]! >= bars.throw, `too few holds to test: ${sums.impact[1]} impacts, ${sums.throw[1]} throws`).toBeTruthy();
+      expect(bad).toHaveLength(0);
     });
   });
 }

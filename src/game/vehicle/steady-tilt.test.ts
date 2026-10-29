@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { G } from "./car-air-body.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
@@ -59,10 +58,10 @@ describe("given a driven car on flat ground with stiff, short springs, knocked i
         roll.push(car.roll);
       }
       const { halfBase, halfTrack } = car.frame;
-      assert.ok(largest(pitch) <= STATIC_SAG / halfBase, `pitch ${(largest(pitch) * 1000).toFixed(3)} mrad over the sag's ${((STATIC_SAG / halfBase) * 1000).toFixed(3)}`);
-      assert.ok(largest(roll) <= STATIC_SAG / halfTrack, `roll ${(largest(roll) * 1000).toFixed(3)} mrad over the sag's ${((STATIC_SAG / halfTrack) * 1000).toFixed(3)}`);
-      assert.equal(reversals(pitch), 0, "pitch reversals");
-      assert.equal(reversals(roll), 0, "roll reversals");
+      expect(largest(pitch), `pitch ${(largest(pitch) * 1000).toFixed(3)} mrad over the sag's ${((STATIC_SAG / halfBase) * 1000).toFixed(3)}`).toBeLessThanOrEqual(STATIC_SAG / halfBase);
+      expect(largest(roll), `roll ${(largest(roll) * 1000).toFixed(3)} mrad over the sag's ${((STATIC_SAG / halfTrack) * 1000).toFixed(3)}`).toBeLessThanOrEqual(STATIC_SAG / halfTrack);
+      expect(reversals(pitch), "pitch reversals").toBe(0);
+      expect(reversals(roll), "roll reversals").toBe(0);
     });
   }
 });

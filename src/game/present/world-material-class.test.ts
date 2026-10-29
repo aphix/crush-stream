@@ -1,5 +1,4 @@
-import { beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DERBY_PROP, DerbyGround } from "../scenes/derby-ground.ts";
 import { GLASS_MESH_NAME, makeDerbyArena } from "../scenes/derby-arena.ts";
@@ -10,6 +9,7 @@ import { PREFAB } from "../world/constants.ts";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { makePrefabMaterials, prefabParts, raceTextures } from "./prefabs.ts";
 import type { PrefabMaterials, PrefabPart } from "./prefab-pieces.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const familyOf = (id: MaterialId): MaterialId => MATERIALS[id]![1];
 
@@ -39,8 +39,8 @@ describe("given the derby arena", () => {
   for (const testCase of arenaCases) {
     it(`when ${testCase.it}, then its mesh's material says so`, () => {
       const mesh = arena.getObjectByName(testCase.mesh);
-      assert.ok(mesh instanceof THREE.Mesh, `${testCase.mesh} mesh`);
-      assert.equal(taggedClass(mesh.material as THREE.Material), testCase.expected, "class");
+      must(mesh instanceof THREE.Mesh, `${testCase.mesh} mesh`);
+      expect(taggedClass(mesh.material as THREE.Material), "class").toBe(testCase.expected);
     });
   }
 
@@ -50,7 +50,7 @@ describe("given the derby arena", () => {
       if (!(object instanceof THREE.Mesh) || !(object.material instanceof THREE.MeshStandardMaterial)) return;
       if (taggedClass(object.material) === undefined || !object.material.customProgramCacheKey().includes("|surf")) untagged.push(object.name);
     });
-    assert.equal(untagged.length, 0, `untagged: ${untagged.join(", ")}`);
+    expect(untagged.length, `untagged: ${untagged.join(", ")}`).toBe(0);
   });
 });
 
@@ -71,8 +71,8 @@ const prefabCases = [
 /** The registry ids written on a geometry's vertices. */
 function idsOf(geometry: THREE.BufferGeometry): Set<MaterialId> {
   const attribute = geometry.getAttribute(MATERIAL_ATTRIBUTE);
-  assert.ok(attribute, "per-vertex class");
-  assert.equal(attribute.count, geometry.getAttribute("position").count, "one class per vertex");
+  expect(attribute, "per-vertex class").toBeTruthy();
+  expect(attribute.count, "one class per vertex").toBe(geometry.getAttribute("position").count);
   const found = new Set<MaterialId>();
   for (let i = 0; i < attribute.count; i++) found.add(attribute.getX(i));
   return found;
@@ -110,8 +110,8 @@ describe("given the prefabs drawn on the shared per-vertex materials", () => {
       const found = new Set<number>();
       for (const part of prefabParts(testCase.prefab, materials).filter(onPerVertexMaterial)) for (const family of classesOf(part.geometry)) found.add(family);
       const expected: readonly MaterialId[] = testCase.expected;
-      assert.equal(found.size, expected.length, `classes ${[...found].join(",")}`);
-      for (const id of expected) assert.ok(found.has(id), `class ${id}`);
+      expect(found.size, `classes ${[...found].join(",")}`).toBe(expected.length);
+      for (const id of expected) expect(found.has(id), `class ${id}`).toBeTruthy();
     });
   }
 
@@ -122,21 +122,21 @@ describe("given the prefabs drawn on the shared per-vertex materials", () => {
         if ([...idsOf(part.geometry)].some((id) => id < FIRST_FINE_ID)) coarse.push(name);
       }
     }
-    assert.equal(coarse.length, 0, `prefabs with a family or GENERIC id: ${coarse.join(", ")}`);
+    expect(coarse.length, `prefabs with a family or GENERIC id: ${coarse.join(", ")}`).toBe(0);
   });
 
   it("when the shared materials are listed, then each carries its registry id", () => {
-    assert.equal(materials.concrete.userData.materialClass, MAT.CONCRETE, "concrete");
-    assert.equal(materials.building.userData.materialClass, MAT.CONCRETE, "building");
-    assert.equal(materials.water.userData.materialClass, MAT.WATER, "water");
-    assert.equal(materials.billboard.userData.materialClass, MAT.BILLBOARD_FACE, "billboard");
-    for (const [name, material] of Object.entries(materials)) assert.ok(material.userData.materialClass !== undefined, `${name} tagged`);
+    expect(materials.concrete.userData.materialClass, "concrete").toBe(MAT.CONCRETE);
+    expect(materials.building.userData.materialClass, "building").toBe(MAT.CONCRETE);
+    expect(materials.water.userData.materialClass, "water").toBe(MAT.WATER);
+    expect(materials.billboard.userData.materialClass, "billboard").toBe(MAT.BILLBOARD_FACE);
+    for (const [name, material] of Object.entries(materials)) expect(material.userData.materialClass, `${name} tagged`).not.toBe(undefined);
   });
 
   it("when a point of the window texture is looked up, then the bay's rectangles name it", () => {
-    assert.equal(bayPart(0.3, 0.6), "glass");
-    assert.equal(bayPart(0.5, 0.6), "mullion");
-    assert.equal(bayPart(0.5, 0.215), "sill");
-    assert.equal(bayPart(0.02, 0.95), "wall");
+    expect(bayPart(0.3, 0.6)).toBe("glass");
+    expect(bayPart(0.5, 0.6)).toBe("mullion");
+    expect(bayPart(0.5, 0.215)).toBe("sill");
+    expect(bayPart(0.02, 0.95)).toBe("wall");
   });
 });

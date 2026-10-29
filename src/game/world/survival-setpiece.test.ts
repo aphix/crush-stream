@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { hash01 } from "../kernel/scalar.ts";
 import { holdLine, leaveSurvival, play, survivalWorld } from "./survival-run.test-util.ts";
 import type { World } from "./race-world.test-util.ts";
@@ -81,17 +80,17 @@ describe(`given Survival's opening scene on the Havana course (five cops in a st
   it("when the player holds the boulevard line at full throttle, then three cops reach the embankment's foot within half a second of each other and leave the ground at the crest", (t) => {
     const p = setPiece(SEED, false);
     t.annotate(`foot ${p.foot.map((x) => x.toFixed(2)).join(" ")}; ${together(p.foot)} within ${WINDOW} s; ${p.takeoffs.length} took off; the player strayed ${p.stray.toFixed(1)} m, clean ${p.clean}`);
-    assert.equal(p.foot.length, 5, "the pack never reached the foot");
-    assert.ok(together(p.foot) >= 3, `only ${together(p.foot)} cops within ${WINDOW} s at the foot (${p.foot.map((x) => x.toFixed(2)).join(" ")})`);
-    assert.ok(p.takeoffs.length >= 3, `only ${p.takeoffs.length} cops left the ground at the crest`);
-    assert.ok(p.stray < 6, `the pack shoved the player ${p.stray.toFixed(1)} m off his line`);
-    assert.ok(p.clean, "the pack touched the player before the foot");
+    expect(p.foot.length, "the pack never reached the foot").toBe(5);
+    expect(together(p.foot), `only ${together(p.foot)} cops within ${WINDOW} s at the foot (${p.foot.map((x) => x.toFixed(2)).join(" ")})`).toBeGreaterThanOrEqual(3);
+    expect(p.takeoffs.length, `only ${p.takeoffs.length} cops left the ground at the crest`).toBeGreaterThanOrEqual(3);
+    expect(p.stray, `the pack shoved the player ${p.stray.toFixed(1)} m off his line`).toBeLessThan(6);
+    expect(p.clean, "the pack touched the player before the foot").toBeTruthy();
   });
 
   it("when the player brakes hard near the crest's left, then the cops overshoot and fly past", (t) => {
     const p = setPiece(SEED, true);
     t.annotate(`${p.passed} passed the player; ${p.takeoffs.length} took off at the crest`);
-    assert.ok(p.passed >= 3, `only ${p.passed} cops overshot the braking player`);
-    assert.ok(p.takeoffs.length >= 3, `only ${p.takeoffs.length} cops flew off the crest`);
+    expect(p.passed, `only ${p.passed} cops overshot the braking player`).toBeGreaterThanOrEqual(3);
+    expect(p.takeoffs.length, `only ${p.takeoffs.length} cops flew off the crest`).toBeGreaterThanOrEqual(3);
   });
 });

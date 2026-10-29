@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import type { RigidBody } from "@dimforge/rapier3d-simd";
@@ -111,8 +110,8 @@ describe("given 32 cars driving around the middle of an open field and drivers t
       const rig = await flightRig(testCase.thrown);
       const kb = untilQuiet(() => rig.kbPerFrame(), testCase.boundKb);
       rig.dispose();
-      assert.ok(rig.lowestTorso() > 1.5, `the dummies were down to ${rig.lowestTorso().toFixed(2)} m: not a flight`);
-      assert.ok(kb <= testCase.boundKb, `${kb.toFixed(1)} KB per frame > ${testCase.boundKb} in every flight for ${COMPILE_WAIT_S} s`);
+      expect(rig.lowestTorso(), `the dummies were down to ${rig.lowestTorso().toFixed(2)} m: not a flight`).toBeGreaterThan(1.5);
+      expect(kb, `${kb.toFixed(1)} KB per frame > ${testCase.boundKb} in every flight for ${COMPILE_WAIT_S} s`).toBeLessThanOrEqual(testCase.boundKb);
     });
   }
 
@@ -123,7 +122,7 @@ describe("given 32 cars driving around the middle of an open field and drivers t
       for (let i = 0; i < CONTROL_VECTORS; i++) kept[i % 8] = new THREE.Vector3();
     });
     rig.dispose();
-    assert.ok(kb > Math.max(...flightAllocCases.map((c) => c.boundKb)), `${kb.toFixed(0)} KB per frame for ${CONTROL_VECTORS} vectors a frame: the measure sees nothing`);
+    expect(kb, `${kb.toFixed(0)} KB per frame for ${CONTROL_VECTORS} vectors a frame: the measure sees nothing`).toBeGreaterThan(Math.max(...flightAllocCases.map((c) => c.boundKb)));
   });
 
   it("when a car comes at a dummy lying 40 m ahead of it at 25 m/s, then it strikes him and shoves him at least 3 m", async () => {
@@ -143,6 +142,6 @@ describe("given 32 cars driving around the middle of an open field and drivers t
     for (let f = 0; f < 180; f++) frame();
     const x = torso.translation().x;
     ragdolls.dispose();
-    assert.ok(x > 3, `the car shoved him ${x.toFixed(1)} m`);
+    expect(x, `the car shoved him ${x.toFixed(1)} m`).toBeGreaterThan(3);
   });
 });

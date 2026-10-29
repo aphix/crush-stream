@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { VOICE_FULL_RANGE_M, VOICE_MAX_RANGE_M, VOICE_RESUME_RANGE_M, voiceGain, voiceSendOpen } from "./voice-range.ts";
 
 /** The Web Audio linear distance model with rolloff 1 (the spec's formula), the curve the owner asked for. */
@@ -21,8 +20,8 @@ describe("given a listener and a speaker some distance apart", () => {
   for (const testCase of gainCases) {
     it(testCase.it, () => {
       const gain = voiceGain(testCase.distance);
-      assert.ok(Math.abs(gain - specLinearGain(testCase.distance)) < 1e-12, `gain ${gain} follows the linear distance model`);
-      assert.ok(Math.abs(gain - testCase.measuredGain) < 0.01, `gain ${gain} matches the measured panner's ${testCase.measuredGain}`);
+      expect(Math.abs(gain - specLinearGain(testCase.distance)), `gain ${gain} follows the linear distance model`).toBeLessThan(1e-12);
+      expect(Math.abs(gain - testCase.measuredGain), `gain ${gain} matches the measured panner's ${testCase.measuredGain}`).toBeLessThan(0.01);
     });
   }
 
@@ -30,7 +29,7 @@ describe("given a listener and a speaker some distance apart", () => {
     let previous = voiceGain(0);
     for (let distance = 0.5; distance <= 40; distance += 0.5) {
       const gain = voiceGain(distance);
-      assert.ok(gain <= previous, `gain at ${distance} m (${gain}) is no more than the gain before it (${previous})`);
+      expect(gain, `gain at ${distance} m (${gain}) is no more than the gain before it (${previous})`).toBeLessThanOrEqual(previous);
       previous = gain;
     }
   });
@@ -51,7 +50,7 @@ const gateCases = [
 describe("given a speaker whose browser sends to a listener only while within range", () => {
   for (const testCase of gateCases) {
     it(testCase.it, () => {
-      assert.equal(voiceSendOpen(testCase.distance, testCase.wasOpen), testCase.expectedOpen, "sending");
+      expect(voiceSendOpen(testCase.distance, testCase.wasOpen), "sending").toBe(testCase.expectedOpen);
     });
   }
 
@@ -61,12 +60,12 @@ describe("given a speaker whose browser sends to a listener only while within ra
     let open = false;
     for (let step = 0; step < path.length; step++) {
       open = voiceSendOpen(path[step]!, open);
-      assert.equal(open, expectedOpen[step], `step ${step} at ${path[step]} m`);
+      expect(open, `step ${step} at ${path[step]} m`).toBe(expectedOpen[step]);
     }
   });
 
   it("when the resume range is read against the maximum range, then the resume range is the nearer, so the gate has a band that cannot flicker", () => {
-    assert.ok(VOICE_RESUME_RANGE_M < VOICE_MAX_RANGE_M, "resume range is inside the maximum range");
-    assert.ok(VOICE_FULL_RANGE_M < VOICE_RESUME_RANGE_M, "full-strength range is inside the resume range");
+    expect(VOICE_RESUME_RANGE_M, "resume range is inside the maximum range").toBeLessThan(VOICE_MAX_RANGE_M);
+    expect(VOICE_FULL_RANGE_M, "full-strength range is inside the resume range").toBeLessThan(VOICE_RESUME_RANGE_M);
   });
 });

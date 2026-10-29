@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import type { ContactHit } from "../scenes/engine-props.ts";
 import { setGround } from "../world/ground.ts";
@@ -54,7 +53,7 @@ describe("given the real engine's fleet sandbox with two cars wrecked head-on an
   it("when two other cars then meet head-on at 24 m/s, then the time scale has dropped back to the slow scale by their contact", () => {
     engine["looping"] = false;
     const cars = e.live();
-    assert.ok(cars.length >= 4, `${cars.length} cars`);
+    expect(cars.length, `${cars.length} cars`).toBeGreaterThanOrEqual(4);
     for (const [k, car] of cars.entries()) {
       car.spawnFacing(8 * k - 16, 60 + 8 * k, 0, 0);
       car.speed = 0;
@@ -63,10 +62,10 @@ describe("given the real engine's fleet sandbox with two cars wrecked head-on an
     headOn(0, 0, 12);
     let f = 0;
     for (; f < 300 && e.clock.phase === "approach"; f++) engine.advance(FRAME, { frameDt: FRAME });
-    assert.notEqual(e.clock.phase, "approach", "the first pair never crashed");
+    expect(e.clock.phase, "the first pair never crashed").not.toBe("approach");
     e.clock.hold = SHORT_HOLD;
     for (; f < 900 && !(e.clock.phase === "aftermath" && e.clock.timeScale > BACK_UP); f++) engine.advance(FRAME, { frameDt: FRAME });
-    assert.ok(e.clock.timeScale > BACK_UP, `the slow-mo never handed back: scale ${e.clock.timeScale.toFixed(3)} ${e.clock.phase}`);
+    expect(e.clock.timeScale, `the slow-mo never handed back: scale ${e.clock.timeScale.toFixed(3)} ${e.clock.phase}`).toBeGreaterThan(BACK_UP);
     const met: number[] = [];
     const pairHit = e.pairHit;
     e.pairHit = (a, b, hit) => {
@@ -79,8 +78,8 @@ describe("given the real engine's fleet sandbox with two cars wrecked head-on an
     } finally {
       e.pairHit = pairHit;
     }
-    assert.equal(met.length, 1, "the second pair never met");
+    expect(met.length, "the second pair never met").toBe(1);
     const slow = impactScale(e.clock);
-    assert.ok(met[0]! <= slow * REACHED_CANARY, `time scale ${met[0]!.toFixed(3)} as the second pair met, slow scale ${slow}`);
+    expect(met[0]!, `time scale ${met[0]!.toFixed(3)} as the second pair met, slow scale ${slow}`).toBeLessThanOrEqual(slow * REACHED_CANARY);
   });
 });

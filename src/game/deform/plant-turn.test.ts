@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
 import { DT, dummyGeom, mass } from "../vehicle/test-support.ts";
@@ -22,7 +21,7 @@ function planted(): WreckRig {
   d.beginCrush(new THREE.Vector3(0, 0.36, 2.06), new THREE.Vector3(0, 0, -1), 0, 0, group, vel, omega);
   const rig = { d, group, vel, omega };
   for (let i = 0; i < 20; i++) stepWreck(rig, DT);
-  assert.ok(d.quietTime() > 0.25, `quiet ${d.quietTime().toFixed(2)} s: not planted`);
+  expect(d.quietTime(), `quiet ${d.quietTime().toFixed(2)} s: not planted`).toBeGreaterThan(0.25);
   return rig;
 }
 
@@ -94,10 +93,10 @@ describe("given a wreck that has sat still on its wheels for over 0.2 s, whose f
     const l0 = momentum(p0, velocities(), ms);
     d.followGroup(rig.group, new THREE.Vector3(), new THREE.Vector3(), 0);
     const w = turnBetween(p0, positions(), ms);
-    assert.ok(Math.abs(w) > 0.1, `the write-back turned the masses ${w.toFixed(3)} rad: the setup no longer turns them`);
+    expect(Math.abs(w), `the write-back turned the masses ${w.toFixed(3)} rad: the setup no longer turns them`).toBeGreaterThan(0.1);
     const l1 = momentum(positions(), velocities(), ms);
-    assert.ok(Math.abs(l0) > 1000, `no momentum to keep: ${l0.toFixed(0)} kg·m²/s`);
-    assert.ok(Math.abs(l1 / l0 - 1) < 1e-3, `the write-back moved the angular momentum ${l0.toFixed(1)} → ${l1.toFixed(1)} kg·m²/s (it turned the masses ${w.toFixed(2)} rad)`);
+    expect(Math.abs(l0), `no momentum to keep: ${l0.toFixed(0)} kg·m²/s`).toBeGreaterThan(1000);
+    expect(Math.abs(l1 / l0 - 1), `the write-back moved the angular momentum ${l0.toFixed(1)} → ${l1.toFixed(1)} kg·m²/s (it turned the masses ${w.toFixed(2)} rad)`).toBeLessThan(1e-3);
   });
 
   it("when the re-alignment swings the engine block by 0.5 rad, then the car's spin velocity carries only the parts' own momentum spin, not the re-alignment's snap, and the shown spin adds that kept turn to within 25 %", () => {
@@ -116,7 +115,7 @@ describe("given a wreck that has sat still on its wheels for over 0.2 s, whose f
     const omega = rig.omega;
     stepWreck(rig, DT);
     const w = turnBetween(p0, d.masses.map((q): P => [q.world.x, q.world.z]), ms);
-    assert.ok(Math.abs(w) > 0.03, `the write-back turned the masses ${w.toFixed(3)} rad: the setup no longer turns them`);
+    expect(Math.abs(w), `the write-back turned the masses ${w.toFixed(3)} rad: the setup no longer turns them`).toBeGreaterThan(0.03);
     const total = ms.reduce((t, x) => t + x, 0);
     const cx = d.masses.reduce((t, q) => t + q.world.x * q.mass, 0) / total;
     const cz = d.masses.reduce((t, q) => t + q.world.z * q.mass, 0) / total;
@@ -131,9 +130,9 @@ describe("given a wreck that has sat still on its wheels for over 0.2 s, whose f
     const spin = l / inertia;
     // What the sim reads (`car.angular`: a fake fall seeded from a replay/netplay pose, a flight) is the momentum's spin alone: a
     // 0.1 rad snap of this step's write-back is a position correction, and at 240 Hz it would read 24 rad/s of spin that is not there.
-    assert.ok(Math.abs(omega.y - spin) < 0.02 + 0.02 * Math.abs(spin), `angular.y ${omega.y.toFixed(3)} rad/s, the masses' L/I ${spin.toFixed(3)} (the kept turn ${(w / DT).toFixed(1)} rad/s leaked into it)`);
+    expect(Math.abs(omega.y - spin), `angular.y ${omega.y.toFixed(3)} rad/s, the masses' L/I ${spin.toFixed(3)} (the kept turn ${(w / DT).toFixed(1)} rad/s leaked into it)`).toBeLessThan(0.02 + 0.02 * Math.abs(spin));
     // What is shown (HUD, spin metrics): that spin plus the turn the write-back kept, as the drawn heading turned.
     const shown = (omega.y + d.keptSpin) * DT;
-    assert.ok(Math.abs(shown - (spin * DT + w)) < 0.25 * Math.abs(w), `shown ${shown.toFixed(4)} rad over the step, the masses made ${(spin * DT + w).toFixed(4)}`);
+    expect(Math.abs(shown - (spin * DT + w)), `shown ${shown.toFixed(4)} rad over the step, the masses made ${(spin * DT + w).toFixed(4)}`).toBeLessThan(0.25 * Math.abs(w));
   });
 });

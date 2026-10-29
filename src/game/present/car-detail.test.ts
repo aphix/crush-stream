@@ -1,5 +1,4 @@
-import { describe, test } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, test } from "vitest";
 import * as THREE from "three";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -56,13 +55,13 @@ describe("given a car and the farthest rung (small parts beyond 35 m, only the b
       const probe = car(c.at);
       detail.update([probe], camera, null, null);
       const meshes = drawn(probe, camera);
-      if (c.what === "everything") assert.equal(meshes.length, full.length);
+      if (c.what === "everything") expect(meshes.length).toBe(full.length);
       else if (c.what === "its casters and fewer others") {
-        assert.equal(casters(meshes), casters(full));
-        assert.ok(meshes.length < full.length, `${meshes.length} of ${full.length} meshes`);
+        expect(casters(meshes)).toBe(casters(full));
+        expect(meshes.length, `${meshes.length} of ${full.length} meshes`).toBeLessThan(full.length);
       } else {
-        assert.equal(meshes.length, 1);
-        assert.equal(meshes[0], probe.body);
+        expect(meshes.length).toBe(1);
+        expect(meshes[0]).toBe(probe.body);
       }
     });
   }
@@ -72,11 +71,11 @@ describe("given a car and the farthest rung (small parts beyond 35 m, only the b
     const probe = car(60);
     detail.update([probe], camera, null, null);
     const meshes = drawn(probe, camera);
-    assert.equal(casters(meshes), 0, "nothing of its own drawn casts: its flush shadow is the style's batched caster");
+    expect(casters(meshes), "nothing of its own drawn casts: its flush shadow is the style's batched caster").toBe(0);
     const batch = new PartBatch(1);
     batch.sync([probe]);
-    assert.equal(batch.casters.reduce((n, m) => n + m.count, 0), 1, "its shadow caster stays in the batch");
-    for (const part of probe.flushCasters) assert.ok(meshes.includes(part), "a flush part left the camera");
+    expect(batch.casters.reduce((n, m) => n + m.count, 0), "its shadow caster stays in the batch").toBe(1);
+    for (const part of probe.flushCasters) expect(meshes.includes(part), "a flush part left the camera").toBeTruthy();
   });
 });
 
@@ -88,9 +87,9 @@ describe("given a car 100 m away", () => {
     const other = car(100);
     const full = drawn(car(1), camera).length;
     detail.update([a, b, other], camera, a, b);
-    assert.equal(drawn(a, camera).length, full);
-    assert.equal(drawn(b, camera).length, full);
-    assert.equal(drawn(other, camera).length, 1);
+    expect(drawn(a, camera).length).toBe(full);
+    expect(drawn(b, camera).length).toBe(full);
+    expect(drawn(other, camera).length).toBe(1);
   });
 
   test("when the lens narrows to 25 degrees (a zoom), then the car counts as 55 m away: the near cut and not the far one", () => {
@@ -99,8 +98,8 @@ describe("given a car 100 m away", () => {
     const full = drawn(car(1), camera);
     detail.update([probe], camera, null, null);
     const meshes = drawn(probe, camera);
-    assert.equal(casters(meshes), casters(full), "every caster still drawn");
-    assert.ok(meshes.length < full.length, "small parts out");
+    expect(casters(meshes), "every caster still drawn").toBe(casters(full));
+    expect(meshes.length, "small parts out").toBeLessThan(full.length);
   });
 
   test("when it is a wreck (a hood torn off, a door folding), then the far cut takes it too: the body alone, while the torn hood flies in view", () => {
@@ -111,11 +110,11 @@ describe("given a car 100 m away", () => {
     probe["parts"].find((p) => p.name === "doorL")!.folding = true;
     detail.update([probe], camera, null, null);
     const meshes = drawn(probe, camera);
-    assert.equal(meshes.length, 1);
-    assert.equal(meshes[0], probe.body);
+    expect(meshes.length).toBe(1);
+    expect(meshes[0]).toBe(probe.body);
     let loose = 0;
     hood.object.traverse((o) => void ((o as THREE.Mesh).isMesh && o.layers.test(camera.layers) && loose++));
-    assert.ok(loose >= 1, "the loose hood is not the car's mesh: it keeps drawing");
+    expect(loose, "the loose hood is not the car's mesh: it keeps drawing").toBeGreaterThanOrEqual(1);
   });
 
   test("when a hood tears off a car already in the far cut, then its meshes are drawn on that same frame, flying in view", () => {
@@ -128,12 +127,12 @@ describe("given a car 100 m away", () => {
       hood.object.traverse((o) => void ((o as THREE.Mesh).isMesh && o.layers.test(camera.layers) && n++));
       return n;
     };
-    assert.equal(visible(), 0, "a whole hood is not drawn at 100 m");
+    expect(visible(), "a whole hood is not drawn at 100 m").toBe(0);
     probe["detachPart"](hood, 10);
-    assert.ok(visible() >= 1, "the torn hood is the world's: drawn at once, before the next update");
+    expect(visible(), "the torn hood is the world's: drawn at once, before the next update").toBeGreaterThanOrEqual(1);
     detail.update([probe], camera, null, null);
-    assert.ok(visible() >= 1, "and the next update leaves it be");
-    assert.equal(drawn(probe, camera).length, 1, "the car itself stays the body alone");
+    expect(visible(), "and the next update leaves it be").toBeGreaterThanOrEqual(1);
+    expect(drawn(probe, camera).length, "the car itself stays the body alone").toBe(1);
   });
 
   test("when it is a police car, then the light bar stays drawn with the body", () => {
@@ -141,8 +140,8 @@ describe("given a car 100 m away", () => {
     const probe = car(100, "police");
     detail.update([probe], camera, null, null);
     const names = drawn(probe, camera).map((m) => m.name);
-    assert.equal(names.length, 2);
-    assert.ok(names.includes("lightBar"));
+    expect(names.length).toBe(2);
+    expect(names.includes("lightBar")).toBeTruthy();
   });
 
   test("when it is a lifted monster truck past the far cut, then the batch still draws its ladder frame and both axles under the body; a sedan there has none", () => {
@@ -150,12 +149,12 @@ describe("given a car 100 m away", () => {
     const monster = car(100, "monster");
     const sedan = car(100);
     detail.update([monster, sedan], camera, null, null);
-    assert.equal(drawn(monster, camera).length, 1, "the far cut is in force: the body alone");
+    expect(drawn(monster, camera).length, "the far cut is in force: the body alone").toBe(1);
     const batch = new PartBatch(2);
     batch.sync([monster, sedan]);
-    assert.equal(batch.drawn(PART_KIND.ladderFrame), 1, "the frame the lifted body stands on");
-    assert.equal(batch.drawn(PART_KIND.axle), 2, "front and rear axle between the wheels");
-    assert.equal(batch.drawn(PART_KIND.crashBar), 0, "the small parts stay cut");
+    expect(batch.drawn(PART_KIND.ladderFrame), "the frame the lifted body stands on").toBe(1);
+    expect(batch.drawn(PART_KIND.axle), "front and rear axle between the wheels").toBe(2);
+    expect(batch.drawn(PART_KIND.crashBar), "the small parts stay cut").toBe(0);
   });
 });
 
@@ -170,11 +169,11 @@ describe("given a car that crosses the far distance", () => {
       detail.update([probe], camera, null, null);
       return isFar();
     };
-    assert.equal(stepTo(80), true);
-    assert.equal(stepTo(72), true, "inside 75 m but not yet inside 69 m");
-    assert.equal(stepTo(68), false, "inside 69 m: the small parts are still out (mid cut) but the body is not alone");
-    assert.equal(stepTo(74), false, "75 m not yet crossed again");
-    assert.equal(stepTo(76), true);
+    expect(stepTo(80)).toBe(true);
+    expect(stepTo(72), "inside 75 m but not yet inside 69 m").toBe(true);
+    expect(stepTo(68), "inside 69 m: the small parts are still out (mid cut) but the body is not alone").toBe(false);
+    expect(stepTo(74), "75 m not yet crossed again").toBe(false);
+    expect(stepTo(76)).toBe(true);
   });
 
   test("when it has been far and comes back to 10 m, then every mesh it had is drawn again", () => {
@@ -183,10 +182,10 @@ describe("given a car that crosses the far distance", () => {
     const full = drawn(probe, camera).length;
     probe.group.position.z = 150;
     detail.update([probe], camera, null, null);
-    assert.equal(drawn(probe, camera).length, 1);
+    expect(drawn(probe, camera).length).toBe(1);
     probe.group.position.z = 10;
     detail.update([probe], camera, null, null);
-    assert.equal(drawn(probe, camera).length, full);
+    expect(drawn(probe, camera).length).toBe(full);
   });
 
   test("when it comes from the far cut to between the two, then the small parts stay out and the rest returns: 40 m draws the same meshes whether it arrived from 150 m or from 20 m", () => {
@@ -199,8 +198,8 @@ describe("given a car that crosses the far distance", () => {
     fromNear.group.updateMatrixWorld(true);
     detail.update([fromFar, fromNear], camera, null, null);
     const arrived = drawn(fromFar, camera).length;
-    assert.equal(arrived, drawn(fromNear, camera).length);
-    assert.ok(arrived > 1, "more than the body");
+    expect(arrived).toBe(drawn(fromNear, camera).length);
+    expect(arrived, "more than the body").toBeGreaterThan(1);
   });
 });
 
@@ -213,29 +212,29 @@ describe("given a car's batched part seats", () => {
     const interior = probe.partSeats.filter((s) => s.name === INTERIOR_MESH);
     const small = probe.partSeats.filter((s) => s.name === SMALL_PART_SEAT);
     const under = probe.partSeats.filter((s) => s.name === UNDERBODY_SEAT);
-    assert.equal(interior.map((s) => s.kind).join(), [PART_KIND.interior, PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.engineBay, PART_KIND.seatFront].join(), "the cabin, both front seats, the rear bench, the wheel and the bay go with the far cut");
-    assert.equal(under.map((s) => s.kind).join(), [PART_KIND.ladderFrame, PART_KIND.axle, PART_KIND.axle].join(), "a lifted truck's frame and two axles are the undercarriage seats no cut takes");
-    assert.equal(small.length + interior.length + under.length, probe.partSeats.length, "every seat is one of the three");
-    assert.equal(small.length, 9, "door cards, mirrors, grille, tail trim, the two crash bars and the wipers are the small-part seats the mid cut takes by name");
+    expect(interior.map((s) => s.kind).join(), "the cabin, both front seats, the rear bench, the wheel and the bay go with the far cut").toBe([PART_KIND.interior, PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.engineBay, PART_KIND.seatFront].join());
+    expect(under.map((s) => s.kind).join(), "a lifted truck's frame and two axles are the undercarriage seats no cut takes").toBe([PART_KIND.ladderFrame, PART_KIND.axle, PART_KIND.axle].join());
+    expect(small.length + interior.length + under.length, "every seat is one of the three").toBe(probe.partSeats.length);
+    expect(small.length, "door cards, mirrors, grille, tail trim, the two crash bars and the wipers are the small-part seats the mid cut takes by name").toBe(9);
     const move = (at: number): void => {
       probe.group.position.z = at;
       probe.group.updateMatrixWorld(true);
       detail.update([probe], camera, null, null);
     };
     move(10);
-    assert.ok(enabled(small).every(Boolean) && enabled(interior).every(Boolean), "whole at 10 m");
+    expect(enabled(small).every(Boolean) && enabled(interior).every(Boolean), "whole at 10 m").toBeTruthy();
     move(50);
-    assert.ok(enabled(small).every((on) => !on), "the small seats are cut at 50 m");
+    expect(enabled(small).every((on) => !on), "the small seats are cut at 50 m").toBeTruthy();
     const glass = interior.filter((s) => BEHIND_GLASS.has(s.kind));
-    assert.equal(glass.map((s) => s.kind).join(), [PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.seatFront].join(), "the front seats, the bench and the wheel are seen through the glass");
-    assert.ok(enabled(glass).every((on) => !on), "the kit behind the glass goes with it at 50 m");
-    assert.ok(enabled(interior.filter((s) => !glass.includes(s))).every(Boolean), "the cabin and the bay stay until the far cut");
+    expect(glass.map((s) => s.kind).join(), "the front seats, the bench and the wheel are seen through the glass").toBe([PART_KIND.seatFront, PART_KIND.seatRear, PART_KIND.wheel, PART_KIND.seatFront].join());
+    expect(enabled(glass).every((on) => !on), "the kit behind the glass goes with it at 50 m").toBeTruthy();
+    expect(enabled(interior.filter((s) => !glass.includes(s))).every(Boolean), "the cabin and the bay stay until the far cut").toBeTruthy();
     move(80);
-    assert.ok(enabled(interior).every((on) => !on), "the far cut takes the interior kit");
-    assert.ok(enabled(small).every((on) => !on));
-    assert.ok(enabled(under).every(Boolean), "the undercarriage is never cut");
+    expect(enabled(interior).every((on) => !on), "the far cut takes the interior kit").toBeTruthy();
+    expect(enabled(small).every((on) => !on)).toBeTruthy();
+    expect(enabled(under).every(Boolean), "the undercarriage is never cut").toBeTruthy();
     move(10);
-    assert.ok(enabled(small).every(Boolean) && enabled(interior).every(Boolean), "give puts them all back");
+    expect(enabled(small).every(Boolean) && enabled(interior).every(Boolean), "give puts them all back").toBeTruthy();
   });
 });
 
@@ -243,32 +242,32 @@ describe("given the detail ladder", () => {
   test("when the rungs are read, then each is nearer than the one before and its small-parts distance is inside its far distance", () => {
     for (let i = 0; i < DETAIL_LEVELS.length; i++) {
       const l = DETAIL_LEVELS[i]!;
-      assert.ok(l.mid < l.far, `rung ${i}`);
+      expect(l.mid, `rung ${i}`).toBeLessThan(l.far);
       if (i > 0) {
-        assert.ok(l.mid < DETAIL_LEVELS[i - 1]!.mid, `rung ${i} small parts nearer`);
-        assert.ok(l.far < DETAIL_LEVELS[i - 1]!.far, `rung ${i} far nearer`);
+        expect(l.mid, `rung ${i} small parts nearer`).toBeLessThan(DETAIL_LEVELS[i - 1]!.mid);
+        expect(l.far, `rung ${i} far nearer`).toBeLessThan(DETAIL_LEVELS[i - 1]!.far);
       }
     }
-    assert.ok(PHONE_LEVEL >= 0 && PHONE_LEVEL < DETAIL_LEVELS.length);
-    assert.equal(DETAIL_LEVELS[0]!.far, 75);
+    expect(PHONE_LEVEL >= 0 && PHONE_LEVEL < DETAIL_LEVELS.length).toBeTruthy();
+    expect(DETAIL_LEVELS[0]!.far).toBe(75);
   });
 
   test("when the phone's rung is in force, then a car 55 m away draws the body alone and one 45 m away does not; and with no cuts at all, a car 500 m away is whole", () => {
     const { camera, car } = stage();
     const detail = new CarDetail(PHONE_LEVEL);
-    assert.equal(detail.level, PHONE_LEVEL);
+    expect(detail.level).toBe(PHONE_LEVEL);
     const far = car(55);
     const mid = car(45);
     detail.update([far, mid], camera, null, null);
-    assert.equal(drawn(far, camera).length, 1);
-    assert.ok(drawn(mid, camera).length > 1);
+    expect(drawn(far, camera).length).toBe(1);
+    expect(drawn(mid, camera).length).toBeGreaterThan(1);
     detail.setDistances(Infinity, Infinity);
-    assert.equal(detail.level, -1);
+    expect(detail.level).toBe(-1);
     detail.update([far, mid], camera, null, null);
     const full = drawn(car(1), camera).length;
-    assert.equal(drawn(far, camera).length, full);
-    assert.equal(drawn(mid, camera).length, full);
+    expect(drawn(far, camera).length).toBe(full);
+    expect(drawn(mid, camera).length).toBe(full);
     detail.setLevel(99);
-    assert.equal(detail.level, DETAIL_LEVELS.length - 1);
+    expect(detail.level).toBe(DETAIL_LEVELS.length - 1);
   });
 });

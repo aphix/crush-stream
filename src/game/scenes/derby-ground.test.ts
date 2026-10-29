@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
@@ -10,6 +9,7 @@ import { SUNK_CAR_DEPTH, MAX_CARS, layoutDerby } from "./fleet.ts";
 import { DERBY_ARENA } from "./constants.ts";
 import { DERBY_BOXES, DERBY_FREE_PROPS, DERBY_PLATEAUS, DERBY_PROP, DERBY_RAMPS, DERBY_TABLE_TOP, DerbyGround, SPAWN_CLEARANCE, type DerbyBox } from "./derby-ground.ts";
 import { DERBY_RADIUS } from "./derby-arena.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * The arena's ground is laid out so that a full field spawns on open level floor, and so that what is a prism stands on level ground clear
@@ -89,7 +89,7 @@ function hullCorners(x: number, z: number, yaw: number): [number, number][] {
 
 function rampNamed(name: string) {
   const found = DERBY_RAMPS.find((entry) => entry.name === name);
-  assert.ok(found, `no ramp named ${name}`);
+  must(found, `no ramp named ${name}`);
   return found;
 }
 
@@ -106,9 +106,9 @@ describe("given the arena's ground and the full field's spawn ring", () => {
       for (const [slotIndex, slot] of layoutDerby(count, DERBY_RADIUS, () => 0.37, DERBY_FREE_PROPS).entries()) {
         for (const [x, z] of hullCorners(slot.x, slot.z, slot.yaw)) {
           const label = `${count} cars, slot ${slotIndex} corner (${x.toFixed(1)}, ${z.toFixed(1)})`;
-          assert.ok(Math.hypot(x, z) < radius, `${label} is in the wall`);
-          assert.ok(ground.heightAt(x, z) < LEVEL, `${label} is not on level floor`);
-          for (const prop of props) assert.ok(!isWithin(prop, x, z, SPAWN_CLEARANCE), `${label} is within ${SPAWN_CLEARANCE} m of a ${prop.kind}`);
+          expect(Math.hypot(x, z), `${label} is in the wall`).toBeLessThan(radius);
+          expect(ground.heightAt(x, z), `${label} is not on level floor`).toBeLessThan(LEVEL);
+          for (const prop of props) expect(!isWithin(prop, x, z, SPAWN_CLEARANCE), `${label} is within ${SPAWN_CLEARANCE} m of a ${prop.kind}`).toBe(true);
         }
       }
     }
@@ -125,12 +125,12 @@ describe("given the arena's ground and the full field's spawn ring", () => {
             for (const [propIndex, prop] of DERBY_FREE_PROPS.entries()) {
               const local = localOf(prop, x, z);
               const gap = Math.hypot(Math.max(0, Math.abs(local.across) - prop.hx), Math.max(0, Math.abs(local.along) - prop.hz));
-              assert.ok(gap >= FLEET_HALF.z, `${count} cars at spin ${spin.toFixed(2)}: slot ${slotIndex} heads at free prop ${propIndex} (${gap.toFixed(2)} m)`);
+              expect(gap, `${count} cars at spin ${spin.toFixed(2)}: slot ${slotIndex} heads at free prop ${propIndex} (${gap.toFixed(2)} m)`).toBeGreaterThanOrEqual(FLEET_HALF.z);
             }
           }
         }
         if (count === MAX_CARS) {
-          for (const [i, a] of slots.entries()) for (const b of slots.slice(i + 1)) assert.ok(Math.hypot(a.x - b.x, a.z - b.z) > 4, "two of 32 cars stand within 4 m");
+          for (const [i, a] of slots.entries()) for (const b of slots.slice(i + 1)) expect(Math.hypot(a.x - b.x, a.z - b.z), "two of 32 cars stand within 4 m").toBeGreaterThan(4);
         }
       }
     }
@@ -142,7 +142,7 @@ describe("given the arena's ground and the full field's spawn ring", () => {
         for (const [slotIndex, slot] of layoutDerby(count, DERBY_RADIUS, () => spin, DERBY_FREE_PROPS).entries()) {
           for (const [x, z] of hullCorners(slot.x, slot.z, slot.yaw)) {
             for (const entry of DERBY_RAMPS) {
-              assert.ok(plateauHeight(entry.plateau, x, z) < LEVEL, `${count} cars at spin ${spin.toFixed(2)}: slot ${slotIndex} stands on the ${entry.name} ramp at (${x.toFixed(1)}, ${z.toFixed(1)})`);
+              expect(plateauHeight(entry.plateau, x, z), `${count} cars at spin ${spin.toFixed(2)}: slot ${slotIndex} stands on the ${entry.name} ramp at (${x.toFixed(1)}, ${z.toFixed(1)})`).toBeLessThan(LEVEL);
             }
           }
         }
@@ -159,7 +159,7 @@ describe("given the arena's ground and the full field's spawn ring", () => {
         const x = i - gridHalf;
         const z = j - gridHalf;
         const onRamp = DERBY_RAMPS.some((entry) => plateauHeight(entry.plateau, x, z) > 0);
-        if (!onRamp && ground.heights[j * nodes + i]! > LEVEL) assert.ok(Math.hypot(x, z) <= innerEdgeOfSpawns, `a rise at (${x}, ${z}) is in the spawn ring`);
+        if (!onRamp && ground.heights[j * nodes + i]! > LEVEL) expect(Math.hypot(x, z), `a rise at (${x}, ${z}) is in the spawn ring`).toBeLessThanOrEqual(innerEdgeOfSpawns);
       }
     }
   });
@@ -182,8 +182,8 @@ describe("given the design's rises", () => {
   for (const { label, dx, dz, atLeast, atMost } of tableCases) {
     it(`when the table-top is read from the ground at ${label}, then it is a 12 m wide top at 2.2 m`, () => {
       const height = ground.heightAt(DERBY_TABLE_TOP.x + dx, DERBY_TABLE_TOP.z + dz, 0);
-      assert.ok(height >= atLeast, `${height} is under ${atLeast}`);
-      assert.ok(height <= atMost, `${height} is over ${atMost}`);
+      expect(height, `${height} is under ${atLeast}`).toBeGreaterThanOrEqual(atLeast);
+      expect(height, `${height} is over ${atMost}`).toBeLessThanOrEqual(atMost);
     });
   }
 
@@ -195,8 +195,8 @@ describe("given the design's rises", () => {
         for (let along = -DESIGN_CREST_HALF_DEPTH; along <= DESIGN_CREST_HALF_DEPTH; along += SAMPLE_STEP / 2) {
           peak = Math.max(peak, ground.heightAt(plateau.x + toward.x * along, plateau.z + toward.z * along, 0));
         }
-        assert.ok(peak >= design.height - PEAK_SLACK, `the deck peaks at ${peak}`);
-        assert.ok(peak <= design.height + HEIGHT_TOLERANCE, `the deck peaks at ${peak}`);
+        expect(peak, `the deck peaks at ${peak}`).toBeGreaterThanOrEqual(design.height - PEAK_SLACK);
+        expect(peak, `the deck peaks at ${peak}`).toBeLessThanOrEqual(design.height + HEIGHT_TOLERANCE);
       });
 
       it("when its long run is read from the ground by its slope, then it is the design length", () => {
@@ -205,7 +205,7 @@ describe("given the design's rises", () => {
         const near = ground.heightAt(nearPoint.x, nearPoint.z, 0);
         const far = ground.heightAt(farPoint.x, farPoint.z, 0);
         const run = (design.height * (design.length - 2 * RUN_PROBE_INSET)) / (near - far);
-        assert.ok(Math.abs(run - design.length) < 0.1, `the long run is ${run.toFixed(2)} m`);
+        expect(Math.abs(run - design.length), `the long run is ${run.toFixed(2)} m`).toBeLessThan(0.1);
       });
 
       for (const { label, across, atLeast, atMost } of DECK_SECTION_CASES) {
@@ -213,8 +213,8 @@ describe("given the design's rises", () => {
           const { plateau, toward } = rampNamed(design.name);
           for (const side of [-1, 1]) {
             const height = ground.heightAt(plateau.x - toward.z * side * across, plateau.z + toward.x * side * across, 0);
-            assert.ok(height >= atLeast * design.height, `${height} is under ${atLeast} of the design height`);
-            assert.ok(height <= atMost * design.height, `${height} is over ${atMost} of the design height`);
+            expect(height, `${height} is under ${atLeast} of the design height`).toBeGreaterThanOrEqual(atLeast * design.height);
+            expect(height, `${height} is over ${atMost} of the design height`).toBeLessThanOrEqual(atMost * design.height);
           }
         });
       }
@@ -224,9 +224,9 @@ describe("given the design's rises", () => {
         const wallSide = onAxis(design.name, RAMP_PROBE);
         const middleSide = onAxis(design.name, -RAMP_PROBE);
         const foot = { x: plateau.x - toward.x * (design.length + DESIGN_CREST_HALF_DEPTH), z: plateau.z - toward.z * (design.length + DESIGN_CREST_HALF_DEPTH) };
-        assert.ok(ground.heightAt(wallSide.x, wallSide.z, 0) < LEVEL, "the wall side of the crest is not level");
-        assert.ok(ground.heightAt(middleSide.x, middleSide.z, 0) > design.height / 2, "the middle side of the crest is not climbing");
-        assert.ok(Math.hypot(plateau.x, plateau.z) > Math.hypot(foot.x, foot.z), "the foot is nearer the wall than the deck");
+        expect(ground.heightAt(wallSide.x, wallSide.z, 0), "the wall side of the crest is not level").toBeLessThan(LEVEL);
+        expect(ground.heightAt(middleSide.x, middleSide.z, 0), "the middle side of the crest is not climbing").toBeGreaterThan(design.height / 2);
+        expect(Math.hypot(plateau.x, plateau.z), "the foot is nearer the wall than the deck").toBeGreaterThan(Math.hypot(foot.x, foot.z));
       });
     });
   }
@@ -236,7 +236,7 @@ describe("given the design's rises", () => {
       for (const sx of [-1, 1]) {
         for (const sz of [-1, 1]) {
           const reach = Math.hypot(p.x + sx * p.halfX, p.z + sz * p.halfZ);
-          assert.ok(reach <= radius - DESIGN_SETBACK, `rise ${index}: a corner of its top is ${(radius - reach).toFixed(2)} m from the wall`);
+          expect(reach, `rise ${index}: a corner of its top is ${(radius - reach).toFixed(2)} m from the wall`).toBeLessThanOrEqual(radius - DESIGN_SETBACK);
         }
       }
     }
@@ -247,7 +247,7 @@ describe("given the design's rises", () => {
     for (let z = -MIDDLE_RADIUS; z <= MIDDLE_RADIUS; z += SAMPLE_STEP) {
       for (let x = -MIDDLE_RADIUS; x <= MIDDLE_RADIUS; x += SAMPLE_STEP) {
         if (Math.hypot(x, z) >= MIDDLE_RADIUS) continue;
-        for (const [index, p] of rises.entries()) assert.ok(plateauHeight(p, x, z) <= FEATURE_HEIGHT, `rise ${index} lifts the middle at (${x}, ${z})`);
+        for (const [index, p] of rises.entries()) expect(plateauHeight(p, x, z), `rise ${index} lifts the middle at (${x}, ${z})`).toBeLessThanOrEqual(FEATURE_HEIGHT);
       }
     }
   });
@@ -263,7 +263,7 @@ describe("given the design's rises", () => {
         if (j <= i) continue;
         let nearest = Infinity;
         for (const [ax, az] of a) for (const [bx, bz] of b) nearest = Math.min(nearest, Math.hypot(ax - bx, az - bz));
-        assert.ok(nearest >= FEATURE_GAP, `rises ${i} and ${j} stand ${nearest.toFixed(2)} m apart`);
+        expect(nearest, `rises ${i} and ${j} stand ${nearest.toFixed(2)} m apart`).toBeGreaterThanOrEqual(FEATURE_GAP);
       }
     }
   });
@@ -279,7 +279,7 @@ describe("given each prop of the arena", () => {
           if (isWithin(prop, x, z, LEVEL_MARGIN)) heights.push(ground.heightAt(x, z, 0));
         }
       }
-      assert.ok(Math.max(...heights) - Math.min(...heights) < LEVEL, `the ${prop.kind} at (${prop.x}, ${prop.z}) has a rise within ${LEVEL_MARGIN} m of it`);
+      expect(Math.max(...heights) - Math.min(...heights), `the ${prop.kind} at (${prop.x}, ${prop.z}) has a rise within ${LEVEL_MARGIN} m of it`).toBeLessThan(LEVEL);
     }
   });
 
@@ -291,18 +291,18 @@ describe("given each prop of the arena", () => {
   ];
   for (const { kind, height } of heightCases) {
     it(`when the ${kind} boxes are read, then one stands ${height} m high`, () => {
-      assert.ok(DERBY_BOXES.some((box) => box.kind === kind && box.height === height));
+      expect(DERBY_BOXES.some((box) => box.kind === kind && box.height === height)).toBeTruthy();
     });
   }
 
   it("when the walls are read, then the ring is closed: every wall piece overlaps the next one's face", () => {
     const wall = DERBY_BOXES.filter((box) => box.kind === DERBY_PROP.wall);
-    assert.equal(wall.length, DERBY_ARENA.wallPieces);
+    expect(wall.length).toBe(DERBY_ARENA.wallPieces);
     for (const [index, piece] of wall.entries()) {
       const next = wall[(index + 1) % wall.length]!;
       const along = piece.hz + 0.01;
       const end = { x: piece.x + Math.sin(piece.yaw) * along, z: piece.z + Math.cos(piece.yaw) * along };
-      assert.ok(isWithin(next, end.x, end.z, 0), `wall piece ${index} ends in a gap`);
+      expect(isWithin(next, end.x, end.z, 0), `wall piece ${index} ends in a gap`).toBeTruthy();
     }
   });
 });
@@ -325,8 +325,8 @@ describe("given a wreck that has sunk wholly below the floor beside a solid of t
       let meetings = 0;
       const hits = { knock() {}, fx() {}, wall: () => (meetings += 1) };
       arenaWorld([car], hits).ground.contact(car, 0, hits, SLICE_SECONDS);
-      assert.ok(meetings > 0, `the sunk car met nothing of ${label}`);
-      assert.ok(car.velocity.x * outward.x + car.velocity.z * outward.z < DRIVE_MPS, "its speed into the solid was not cut");
+      expect(meetings, `the sunk car met nothing of ${label}`).toBeGreaterThan(0);
+      expect(car.velocity.x * outward.x + car.velocity.z * outward.z, "its speed into the solid was not cut").toBeLessThan(DRIVE_MPS);
     });
   }
 });

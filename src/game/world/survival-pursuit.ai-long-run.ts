@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { chase } from "./survival-players.test-util.ts";
 import { ARENA } from "./survival-arena.test-util.ts";
 import { miss, release } from "./survival-pack.test-util.ts";
@@ -20,18 +19,18 @@ describe(`given the closed arena (Havana's plaza inside a square of its own stuc
     const held = chase("evade", 1, release(1) + 5, ARENA, { release: release(1) });
     const open = chase("evade", 1, 5, ARENA);
     t.annotate(`nearest cop at the release: ${held.gap.toFixed(0)} m held to ${release(1).toFixed(1)} s, ${open.gap.toFixed(0)} m held only to the green`);
-    assert.ok(held.gap >= ARENA_GAP, `the nearest cop is ${held.gap.toFixed(0)} m off at the release`);
-    assert.ok(open.gap > 0 && open.gap < ARENA_GAP / 2, `held only to the green the nearest cop is ${open.gap.toFixed(1)} m off (−1: no cop up by 5 s): the control cannot tell a hold from none`);
+    expect(held.gap, `the nearest cop is ${held.gap.toFixed(0)} m off at the release`).toBeGreaterThanOrEqual(ARENA_GAP);
+    expect(open.gap > 0 && open.gap < ARENA_GAP / 2, `held only to the green the nearest cop is ${open.gap.toFixed(1)} m off (−1: no cop up by 5 s): the control cannot tell a hold from none`).toBeTruthy();
   });
   it(`when an evading player flees from the pack released at ${release(SEED).toFixed(1)} s, then the pack ends the run within ${CATCH_T} s, busted or wrecked, with a cop in contact`, (t) => {
     const c = chase("evade", SEED, release(SEED) + CATCH_T, ARENA, { release: release(SEED) });
     t.annotate(`ended ${c.cause} at ${c.time.toFixed(1)} s, ${c.touches} cop contacts, the last at ${c.lastTouch.toFixed(1)} s`);
-    assert.equal(miss(c, true, CATCH_T), null);
+    expect(miss(c, true, CATCH_T)).toBe(null);
   });
   it("when the same chase runs with hunters that never steer, then the pack does not end it", (t) => {
     const c = chase("evade", SEED, release(SEED) + CATCH_T, ARENA, { release: release(SEED), tamper: (input) => void (input.steer = 0) });
     const why = miss(c, true, CATCH_T);
     t.annotate(`not ended by the pack: ${why}`);
-    assert.notEqual(why, null, `hunters that never steer ended the run (${c.cause} at ${c.time.toFixed(1)} s): the row above is met without steering`);
+    expect(why, `hunters that never steer ended the run (${c.cause} at ${c.time.toFixed(1)} s): the row above is met without steering`).not.toBe(null);
   });
 });

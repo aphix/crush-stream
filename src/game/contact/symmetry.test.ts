@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { launch, makeCar, makeWorld, Probe, run, type CrashResult } from "./crash-scenarios.test-util.ts";
 
@@ -24,10 +23,10 @@ describe("given two identical cars in a mirror-symmetric head-on", () => {
       for (const bFirst of [false, true]) {
         const [a, b] = headOn(kph, bFirst);
         const label = `${kph} km/h, ${bFirst ? "B" : "A"} first`;
-        assert.ok(Math.abs(a.noseShortL - b.noseShortL) <= 0.01, `${label}: nose A ${a.noseShortL.toFixed(3)} m against B ${b.noseShortL.toFixed(3)} m`);
-        assert.ok(Math.abs(a.noseShortR - b.noseShortR) <= 0.01, `${label}: nose (R) A ${a.noseShortR.toFixed(3)} m against B ${b.noseShortR.toFixed(3)} m`);
-        assert.ok(Math.abs(a.engineTravel - b.engineTravel) <= 0.005, `${label}: engine block A ${a.engineTravel.toFixed(3)} m against B ${b.engineTravel.toFixed(3)} m`);
-        assert.equal(a.hubsPopped.join(), b.hubsPopped.join(), `${label}: hubs popped A [${a.hubsPopped}] against B [${b.hubsPopped}]`);
+        expect(Math.abs(a.noseShortL - b.noseShortL), `${label}: nose A ${a.noseShortL.toFixed(3)} m against B ${b.noseShortL.toFixed(3)} m`).toBeLessThanOrEqual(0.01);
+        expect(Math.abs(a.noseShortR - b.noseShortR), `${label}: nose (R) A ${a.noseShortR.toFixed(3)} m against B ${b.noseShortR.toFixed(3)} m`).toBeLessThanOrEqual(0.01);
+        expect(Math.abs(a.engineTravel - b.engineTravel), `${label}: engine block A ${a.engineTravel.toFixed(3)} m against B ${b.engineTravel.toFixed(3)} m`).toBeLessThanOrEqual(0.005);
+        expect(a.hubsPopped.join(), `${label}: hubs popped A [${a.hubsPopped}] against B [${b.hubsPopped}]`).toBe(b.hubsPopped.join());
       }
     });
   }

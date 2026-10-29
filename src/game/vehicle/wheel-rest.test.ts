@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { assignClass, armKill, killClass, CLASSES, HANDLING, VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
@@ -13,6 +12,7 @@ import { HIT_SIZE } from "../world/surfaces.ts";
 import { REST_SPEED } from "./car-air-body.ts";
 import { applyDrive, idleDrive } from "./car-drive.ts";
 import { PLATFORM_DIMS } from "./car-styles/platform.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const IDLE = idleDrive();
 const SEDAN = carFrame(CAR_STYLES.sedan);
@@ -138,20 +138,20 @@ describe("given a parked car of each vehicle class, hit once so it is a wreck, w
         const bound = diagonal && rise > PLATFORM_DIMS.rideHeight ? tipped : 0.1 + 0.2 * rise + (diagonal ? 0.2 : 0);
         const down = 0.03 + 0.12 * rise;
         t.annotate(`${tag}: body low ${(r.low * 100).toFixed(1)} cm, empty corners ${r.corners.map((c) => (c * 100).toFixed(1)).join("/")} cm (bound ${(bound * 100).toFixed(1)}), wheels down ${r.down.toString(2)}, speed ${r.speed.toFixed(3)} m/s`);
-        assert.ok(r.speed < 0.05, `${tag}: still moving at ${r.speed.toFixed(3)} m/s`);
+        expect(r.speed, `${tag}: still moving at ${r.speed.toFixed(3)} m/s`).toBeLessThan(0.05);
         // The drawn body leans on its resting rigid body's slice-to-slice jitter, with a gain of cg / (track · ω²) (`car-load.ts`): up to
         // 1 cm on a body riding higher than the platform by more than the platform's own ride (the pickup's own 0.34 m: its drawn corner
         // 5.0 mm a second on the same vertex while its rigid body moved 0.04-0.08 mm; the monster lifted 0.87 m on it), a fraction of a
         // millimetre on the others.
         const still = rise > PLATFORM_DIMS.rideHeight ? 0.01 : 0.003;
-        assert.ok(r.drift < still, `${tag}: body still settling after 4 s, moved ${(r.drift * 1000).toFixed(1)} mm in the last second`);
-        assert.ok(r.low > -0.02, `${tag}: body ${(-r.low * 100).toFixed(1)} cm into the ground`);
+        expect(r.drift, `${tag}: body still settling after 4 s, moved ${(r.drift * 1000).toFixed(1)} mm in the last second`).toBeLessThan(still);
+        expect(r.low, `${tag}: body ${(-r.low * 100).toFixed(1)} cm into the ground`).toBeGreaterThan(-0.02);
         // One wheel lost, the body may stand on the other three: each of them down and the empty corner sagged near the ground.
         const standing = 15 & ~lost.reduce((m, i) => m | (1 << i), 0);
         const onThree = lost.length === 1 && (r.down & standing) === standing && r.corners[0]! < THREE_TYRE_CORNER;
-        assert.ok(r.low < touch || onThree, `${tag}: body hovers ${(r.low * 100).toFixed(1)} cm over the ground (wheels down ${r.down.toString(2)}, empty corner ${(r.corners[0]! * 100).toFixed(1)} cm)`);
-        if (diagonal) assert.ok(low < down, `${tag}: no empty corner down, the lower at ${(low * 100).toFixed(1)} cm`);
-        assert.ok(hover < bound, `${tag}: an empty corner hovers ${(hover * 100).toFixed(1)} cm (bound ${(bound * 100).toFixed(1)} cm)`);
+        expect(r.low < touch || onThree, `${tag}: body hovers ${(r.low * 100).toFixed(1)} cm over the ground (wheels down ${r.down.toString(2)}, empty corner ${(r.corners[0]! * 100).toFixed(1)} cm)`).toBeTruthy();
+        if (diagonal) expect(low, `${tag}: no empty corner down, the lower at ${(low * 100).toFixed(1)} cm`).toBeLessThan(down);
+        expect(hover, `${tag}: an empty corner hovers ${(hover * 100).toFixed(1)} cm (bound ${(bound * 100).toFixed(1)} cm)`).toBeLessThan(bound);
       }
     });
   }
@@ -162,14 +162,14 @@ describe("given a sedan with its front-left and rear-right wheels popped off", (
     const r = rest("sedan", [0, 3], 3);
     t.annotate(`the third second's end against its start: ${(r.drift * 1000).toFixed(2)} mm`);
     const early = rest("sedan", [0, 3], 0.1);
-    assert.ok(early.low > r.low + 0.01, `after 0.1 s the body is already ${(early.low * 100).toFixed(1)} cm over the ground (at rest ${(r.low * 100).toFixed(1)} cm)`);
+    expect(early.low, `after 0.1 s the body is already ${(early.low * 100).toFixed(1)} cm over the ground (at rest ${(r.low * 100).toFixed(1)} cm)`).toBeGreaterThan(r.low + 0.01);
   });
 });
 
 describe("given a sedan with all four wheels on", () => {
   it("when it settles for 5 s after one hit, then each corner's lowest point stays within 4 mm of the same corner on the fresh car, with no sag where nothing is missing", () => {
     const r = rest("sedan", []);
-    for (let i = 0; i < 4; i++) assert.ok(Math.abs(r.all[i]! - r.fresh[i]!) < 0.004, `${NAMES[i]} corner ${(r.all[i]! * 100).toFixed(1)} cm, fresh ${(r.fresh[i]! * 100).toFixed(1)} cm`);
+    for (let i = 0; i < 4; i++) expect(Math.abs(r.all[i]! - r.fresh[i]!), `${NAMES[i]} corner ${(r.all[i]! * 100).toFixed(1)} cm, fresh ${(r.fresh[i]! * 100).toFixed(1)} cm`).toBeLessThan(0.004);
   });
 });
 
@@ -177,7 +177,7 @@ describe("given all four wheels on, for the suspension's sag offsets (how far ea
   it("when the sag offsets are computed, then every corner's offset is zero, so nothing sags where nothing is missing", () => {
     const o = new Float64Array(4).fill(7);
     sagOffsets(SEDAN, 0, 0.065, 0, o);
-    assert.deepEqual([...o], [0, 0, 0, 0]);
+    expect(firstMismatch([...o], [0, 0, 0, 0])).toBeUndefined();
   });
 });
 
@@ -187,8 +187,8 @@ describe("given a missing front-left wheel at each class lift (0, 0.08 and 0.48 
       const o = new Float64Array(4);
       sagOffsets(SEDAN, lift, 0.065 + lift, 1, o);
       const drop = (0.75 * o[0]! + 0.25 * o[1]! + 0.25 * o[2]! - 0.25 * o[3]!);
-      assert.ok(drop < -0.03, `lift ${lift}: front-left corner ${drop.toFixed(3)} m`);
-      assert.ok(o[3]! > o[0]!, `lift ${lift}: diagonal corner ${o[3]!.toFixed(3)} not above ${o[0]!.toFixed(3)}`);
+      expect(drop, `lift ${lift}: front-left corner ${drop.toFixed(3)} m`).toBeLessThan(-0.03);
+      expect(o[3]!, `lift ${lift}: diagonal corner ${o[3]!.toFixed(3)} not above ${o[0]!.toFixed(3)}`).toBeGreaterThan(o[0]!);
     }
   });
 });
@@ -223,25 +223,25 @@ describe("given a sedan hit once so it is a wreck, on level ground", () => {
     const w = newWorld([car]);
     const rested = (): boolean => car.velocity.length() < REST_SPEED && car.angular.length() < REST_SPEED;
     const still = frames(w, [car], 10 * 60, () => rested() && car.contacts >= 3 && !car.deform.crushing);
-    assert.ok(still > 0, "the wreck never came to rest");
+    expect(still, "the wreck never came to rest").toBeGreaterThan(0);
     const slept = frames(w, [car], 2 * 60, () => car.asleep);
-    assert.ok(slept > 0, `awake 2 s after it came to rest (frame ${still}, speed ${car.velocity.length().toFixed(3)} m/s)`);
+    expect(slept, `awake 2 s after it came to rest (frame ${still}, speed ${car.velocity.length().toFixed(3)} m/s)`).toBeGreaterThan(0);
     car.velocity.x = 2;
     tick(w, [car]);
-    assert.ok(!car.asleep, "a 2 m/s velocity write did not wake it");
-    assert.ok(car.group.position.x > 0, "it did not move on the push");
+    expect(!car.asleep, "a 2 m/s velocity write did not wake it").toBe(true);
+    expect(car.group.position.x, "it did not move on the push").toBeGreaterThan(0);
     const stopped = frames(w, [car], 10 * 60, () => rested());
-    assert.ok(stopped > 0, "the pushed wreck never came to rest");
-    assert.ok(frames(w, [car], 2 * 60, () => car.asleep) > 0, "awake 2 s after the push stopped");
+    expect(stopped, "the pushed wreck never came to rest").toBeGreaterThan(0);
+    expect(frames(w, [car], 2 * 60, () => car.asleep), "awake 2 s after the push stopped").toBeGreaterThan(0);
   });
 
   it("when two wrecks rest 3 m apart, then both sleep and both stay asleep for 2 s", () => {
     const cars = [struck("sedan", 0), struck("sedan", 3)];
     const w = newWorld(cars);
-    assert.ok(frames(w, cars, 10 * 60, () => cars[0]!.asleep && cars[1]!.asleep) > 0, "the pair never both slept");
+    expect(frames(w, cars, 10 * 60, () => cars[0]!.asleep && cars[1]!.asleep), "the pair never both slept").toBeGreaterThan(0);
     for (let f = 0; f < 2 * 60; f++) {
       tick(w, cars);
-      assert.ok(cars[0]!.asleep && cars[1]!.asleep, `a wreck woke ${f} frames after both slept`);
+      expect(cars[0]!.asleep && cars[1]!.asleep, `a wreck woke ${f} frames after both slept`).toBeTruthy();
     }
   });
 
@@ -254,10 +254,10 @@ describe("given a sedan hit once so it is a wreck, on level ground", () => {
     }
     const done = (): boolean => cars.every((c) => c.asleep);
     const slept = frames(w, cars, 3 * 60, done);
-    assert.ok(slept > 0, `asleep ${cars.map((c) => c.asleep).join("/")} 3 s after the last shove (restS ${cars.map((c) => c.restS.toFixed(2)).join("/")})`);
+    expect(slept, `asleep ${cars.map((c) => c.asleep).join("/")} 3 s after the last shove (restS ${cars.map((c) => c.restS.toFixed(2)).join("/")})`).toBeGreaterThan(0);
     for (let f = 0; f < 2 * 60; f++) {
       tick(w, cars);
-      assert.ok(done(), `a wreck woke ${f} frames after all slept`);
+      expect(done(), `a wreck woke ${f} frames after all slept`).toBeTruthy();
     }
   });
 
@@ -273,10 +273,10 @@ describe("given a sedan hit once so it is a wreck, on level ground", () => {
     };
     for (let f = 0; f < 10 * 60; f++) rock();
     const far = (): boolean => cars[1]!.asleep && cars[2]!.asleep;
-    assert.ok(far(), `far wrecks asleep ${cars.map((c) => c.asleep).join("/")} 10 s on (restS ${cars.map((c) => c.restS.toFixed(2)).join("/")})`);
+    expect(far(), `far wrecks asleep ${cars.map((c) => c.asleep).join("/")} 10 s on (restS ${cars.map((c) => c.restS.toFixed(2)).join("/")})`).toBeTruthy();
     for (let f = 0; f < 2 * 60; f++) {
       rock();
-      assert.ok(far(), `a far wreck woke ${f} frames after both slept (asleep ${cars.map((c) => c.asleep).join("/")})`);
+      expect(far(), `a far wreck woke ${f} frames after both slept (asleep ${cars.map((c) => c.asleep).join("/")})`).toBeTruthy();
     }
   });
 
@@ -286,34 +286,34 @@ describe("given a sedan hit once so it is a wreck, on level ground", () => {
     const w = newWorld(cars);
     cars[1]!.velocity.z = -12;
     const both = (): boolean => cars[0]!.asleep && cars[1]!.asleep;
-    assert.ok(frames(w, cars, 10 * 60, both) > 0, `asleep ${cars.map((c) => c.asleep).join("/")} after 10 s (restS ${cars.map((c) => c.restS.toFixed(2)).join("/")})`);
+    expect(frames(w, cars, 10 * 60, both), `asleep ${cars.map((c) => c.asleep).join("/")} after 10 s (restS ${cars.map((c) => c.restS.toFixed(2)).join("/")})`).toBeGreaterThan(0);
     for (let f = 0; f < 2 * 60; f++) {
       tick(w, cars);
-      assert.ok(both(), `a wreck woke ${f} frames after both slept`);
+      expect(both(), `a wreck woke ${f} frames after both slept`).toBeTruthy();
     }
   });
 
   it("when a wreck slides into a sleeping one, then the sleeper wakes and is shoved along", () => {
     const cars = [struck("sedan", 0), struck("sedan", 0, 2.05, 6)];
     const w = newWorld(cars);
-    assert.ok(frames(w, cars, 10 * 60, () => cars[0]!.asleep && cars[1]!.asleep) > 0, "the pair never both slept");
+    expect(frames(w, cars, 10 * 60, () => cars[0]!.asleep && cars[1]!.asleep), "the pair never both slept").toBeGreaterThan(0);
     const z0 = cars[0]!.group.position.z;
     cars[1]!.velocity.z = -10;
-    assert.ok(frames(w, cars, 3 * 60, () => !cars[0]!.asleep) > 0, "the sleeper stayed asleep under the slider");
+    expect(frames(w, cars, 3 * 60, () => !cars[0]!.asleep), "the sleeper stayed asleep under the slider").toBeGreaterThan(0);
     for (let f = 0; f < 2 * 60; f++) tick(w, cars);
-    assert.ok(cars[0]!.group.position.z < z0 - 0.05, `the sleeper was not shoved: moved ${(cars[0]!.group.position.z - z0).toFixed(3)} m`);
+    expect(cars[0]!.group.position.z, `the sleeper was not shoved: moved ${(cars[0]!.group.position.z - z0).toFixed(3)} m`).toBeLessThan(z0 - 0.05);
   });
 
   it("when a sleeping wreck lies beside the roof of a car the list then drops (survival takes a cop out), then the step does not throw and the sleeper stays asleep for 2 s", () => {
     // Slot 2's roof is patch 2: a list cut to two cars synced nothing past slot 1, so that roof kept its last box, and the sleeper's `stirNear` indexed `cars[2]`.
     const cars = [struck("sedan", 0), struck("sedan", 20), struck("sedan", 3)];
     const w = newWorld(cars);
-    assert.ok(frames(w, cars, 10 * 60, () => cars.every((c) => c.asleep)) > 0, `the three never all slept (${cars.map((c) => c.asleep).join("/")})`);
+    expect(frames(w, cars, 10 * 60, () => cars.every((c) => c.asleep)), `the three never all slept (${cars.map((c) => c.asleep).join("/")})`).toBeGreaterThan(0);
     const kept = cars.slice(0, 2);
     w.cars = kept;
     for (let f = 0; f < 2 * 60; f++) {
       tick(w, kept);
-      assert.ok(kept[0]!.asleep, `the sleeper woke ${f} frames after the car beside it left`);
+      expect(kept[0]!.asleep, `the sleeper woke ${f} frames after the car beside it left`).toBeTruthy();
     }
   });
 });

@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FREEWHEEL } from "../contact/crash-scenarios.test-util.ts";
@@ -101,17 +100,17 @@ describe("given the minigame ground", () => {
     let nodes = 0;
     for (const mesh of ground.meshes) nodes += mesh.vertices.length / 3;
     t.annotate(`${nodes} nodes: ${ground.count} patches, ${ground.meshes.length} meshes`);
-    assert.ok(nodes <= NODE_BUDGET, `${nodes} nodes`);
+    expect(nodes, `${nodes} nodes`).toBeLessThanOrEqual(NODE_BUDGET);
   });
 
   it("when it is set as the active ground and then cleared, then the flat plane is back everywhere the lanes were", () => {
     const ground = buildGround();
     setGround(ground);
-    assert.equal(activeGround(), ground);
+    expect(activeGround()).toBe(ground);
     setGround(null);
-    assert.equal(activeGround(), FLAT_GROUND);
+    expect(activeGround()).toBe(FLAT_GROUND);
     for (const mode of MINIGAME_MODES) {
-      assert.equal(FLAT_GROUND.heightAt(STATION_ANCHORS[mode].x + stationBackX(mode) + 60, STATION_ANCHORS[mode].z), 0, `${mode} lane`);
+      expect(FLAT_GROUND.heightAt(STATION_ANCHORS[mode].x + stationBackX(mode) + 60, STATION_ANCHORS[mode].z), `${mode} lane`).toBe(0);
     }
   });
 });
@@ -132,31 +131,31 @@ describe("given each station's lane read between the nodes of the grid", () => {
 
   for (const mode of MINIGAME_MODES) {
     it(`when the ${mode} lane is sampled, then its height is within 2 mm of the profile's floor at its anchor`, () => {
-      assert.ok(worstError(buildGround(), mode) <= HEIGHT_TOLERANCE);
+      expect(worstError(buildGround(), mode)).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
     });
 
     it(`when the ${mode} lane is sampled against a floor read at another z, then it is not within 2 mm: the grid sits at the anchor's z`, () => {
-      assert.ok(worstError(buildGround(), mode, STATION_ANCHORS[mode].z + 40) > HEIGHT_TOLERANCE);
+      expect(worstError(buildGround(), mode, STATION_ANCHORS[mode].z + 40)).toBeGreaterThan(HEIGHT_TOLERANCE);
     });
   }
 
   it("when the high jump's kicker, the lane that bends most, is sampled, then the grid's worst error is within 1 to 2 mm: the cell is the coarsest that keeps the bar", (t) => {
     const worst = worstError(buildGround(), "highJump");
     t.annotate(`high jump worst error ${(worst * 1000).toFixed(2)} mm`);
-    assert.ok(worst <= HEIGHT_TOLERANCE, `${worst} m: too coarse`);
-    assert.ok(worst >= COARSEST_CELL_ERROR_FLOOR, `${worst} m: a finer cell than the bar needs`);
+    expect(worst, `${worst} m: too coarse`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
+    expect(worst, `${worst} m: a finer cell than the bar needs`).toBeGreaterThanOrEqual(COARSEST_CELL_ERROR_FLOOR);
   });
 
   it("when the long jump's last 5 m before its barrier are read, then the floor is exactly the pad's level", () => {
     const ground = buildGround();
-    for (let localX = -5; localX <= 0; localX += 0.1) assert.equal(ground.heightAt(localX, STATION_ANCHORS.longJump.z), 0, `x = ${localX}`);
+    for (let localX = -5; localX <= 0; localX += 0.1) expect(ground.heightAt(localX, STATION_ANCHORS.longJump.z), `x = ${localX}`).toBe(0);
   });
 
   it("when the long jump's incline foot is read, then it lies below the pad as the profile has it (negative heights are real)", () => {
     const ground = buildGround();
     const footHeight = floorHeightAt("longJump", climbFootX("longJump"), 0);
-    assert.ok(footHeight < -1, `the profile's foot ${footHeight}`);
-    assert.ok(Math.abs(ground.heightAt(STATION_ANCHORS.longJump.x + climbFootX("longJump"), STATION_ANCHORS.longJump.z, 0.5) - footHeight) <= HEIGHT_TOLERANCE);
+    expect(footHeight, `the profile's foot ${footHeight}`).toBeLessThan(-1);
+    expect(Math.abs(ground.heightAt(STATION_ANCHORS.longJump.x + climbFootX("longJump"), STATION_ANCHORS.longJump.z, 0.5) - footHeight)).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
   });
 });
 
@@ -165,13 +164,13 @@ describe("given the ground away from the lanes", () => {
     const ground = buildGround();
     const betweenLanes = [(STATION_ANCHORS.longJump.z + STATION_ANCHORS.highJump.z) / 2, (STATION_ANCHORS.highJump.z + STATION_ANCHORS.ringFling.z) / 2];
     for (const z of [-300, ...betweenLanes, 400]) {
-      for (const x of [-500, -60, 0, 60, 300]) assert.equal(ground.heightAt(x, z), 0, `(${x}, ${z})`);
+      for (const x of [-500, -60, 0, 60, 300]) expect(ground.heightAt(x, z), `(${x}, ${z})`).toBe(0);
     }
     for (const mode of MINIGAME_MODES) {
       const anchor = STATION_ANCHORS[mode];
-      assert.equal(ground.heightAt(anchor.x + stationBackX(mode) - 3, anchor.z), 0, `${mode} behind the pad`);
-      assert.equal(ground.heightAt(anchor.x + stationFrontX(mode) + 3, anchor.z), 0, `${mode} landing`);
-      assert.equal(ground.heightAt(anchor.x + climbFootX(mode), anchor.z + STATION_HALF_WIDTH + 0.5), 0, `${mode} beside the lane`);
+      expect(ground.heightAt(anchor.x + stationBackX(mode) - 3, anchor.z), `${mode} behind the pad`).toBe(0);
+      expect(ground.heightAt(anchor.x + stationFrontX(mode) + 3, anchor.z), `${mode} landing`).toBe(0);
+      expect(ground.heightAt(anchor.x + climbFootX(mode), anchor.z + STATION_HALF_WIDTH + 0.5), `${mode} beside the lane`).toBe(0);
     }
   });
 });
@@ -183,10 +182,10 @@ describe("given each station's start", () => {
       const start = ground.stationStart(mode);
       const pose = stationStartPose(mode);
       const anchor = STATION_ANCHORS[mode];
-      assert.equal(start.x, anchor.x + pose.x);
-      assert.equal(start.z, anchor.z + pose.z);
-      assert.equal(start.yaw, pose.yaw);
-      assert.equal(start.y, floorHeightAt(mode, pose.x, pose.z));
+      expect(start.x).toBe(anchor.x + pose.x);
+      expect(start.z).toBe(anchor.z + pose.z);
+      expect(start.yaw).toBe(pose.yaw);
+      expect(start.y).toBe(floorHeightAt(mode, pose.x, pose.z));
     });
   }
 
@@ -194,10 +193,10 @@ describe("given each station's start", () => {
     const bounds = buildGround().minigameBounds();
     for (const mode of MINIGAME_MODES) {
       const anchor = STATION_ANCHORS[mode];
-      assert.ok(bounds.minX <= anchor.x + stationBackX(mode) && bounds.minZ <= anchor.z - STATION_HALF_WIDTH && bounds.maxZ >= anchor.z + STATION_HALF_WIDTH, mode);
+      expect(bounds.minX <= anchor.x + stationBackX(mode) && bounds.minZ <= anchor.z - STATION_HALF_WIDTH && bounds.maxZ >= anchor.z + STATION_HALF_WIDTH, mode).toBeTruthy();
     }
     const backstopFar = STATION_ANCHORS.ringFling.x + RING_BOARD_BOUNDS.maxX + RING_BACKSTOP.distancePastBoard + RING_BACKSTOP.thickness;
-    assert.ok(bounds.maxX >= RANGE.length && bounds.maxX >= backstopFar && bounds.maxX >= STATION_ANCHORS.highJump.x + NET.netX, `${bounds.maxX}`);
+    expect(bounds.maxX >= RANGE.length && bounds.maxX >= backstopFar && bounds.maxX >= STATION_ANCHORS.highJump.x + NET.netX, `${bounds.maxX}`).toBeTruthy();
   });
 });
 
@@ -294,13 +293,13 @@ describe("given each of the 7 car types parked at each station's start on the re
         const drive = driveFromStart(type, mode);
         const minimum = MINIMUM_SPEED[mode][type.id]!;
         rows.push(`${type.id.padEnd(9)} slid ${drive.heldSlide.toFixed(2)} foot ${drive.footSpeed.toFixed(1)} lip ${drive.lipSpeed.toFixed(1)} slowest ${drive.slowestOnClimb.toFixed(1)} m/s ejections ${drive.ejections}`);
-        assert.ok(drive.heldSlide <= PARKED_SLIDE_LIMIT, `${type.id} slid ${drive.heldSlide} m parked`);
-        assert.ok(drive.reachedLip, `${type.id} reached the lip`);
-        assert.ok(drive.footSpeed >= minimum.foot, `${type.id} at the foot ${drive.footSpeed} against ${minimum.foot}`);
-        assert.ok(drive.lipSpeed >= minimum.lip, `${type.id} at the lip ${drive.lipSpeed} against ${minimum.lip}`);
-        assert.ok(drive.slowestOnClimb >= minimum.lip / (1 + LIP_LAUNCH_PUSH.highJump) - CLIMB_STALL_ALLOWANCE - 1e-9 || mode !== "highJump", `${type.id} slowest ${drive.slowestOnClimb}`);
-        if (mode === "longJump") assert.ok(drive.reachedLongJumpBar, `${type.id} reached x = ${LONG_JUMP_REACH_X}`);
-        else assert.equal(drive.ejections, 1, `${type.id}: ${drive.ejections} ejections`);
+        expect(drive.heldSlide, `${type.id} slid ${drive.heldSlide} m parked`).toBeLessThanOrEqual(PARKED_SLIDE_LIMIT);
+        expect(drive.reachedLip, `${type.id} reached the lip`).toBeTruthy();
+        expect(drive.footSpeed, `${type.id} at the foot ${drive.footSpeed} against ${minimum.foot}`).toBeGreaterThanOrEqual(minimum.foot);
+        expect(drive.lipSpeed, `${type.id} at the lip ${drive.lipSpeed} against ${minimum.lip}`).toBeGreaterThanOrEqual(minimum.lip);
+        expect(drive.slowestOnClimb >= minimum.lip / (1 + LIP_LAUNCH_PUSH.highJump) - CLIMB_STALL_ALLOWANCE - 1e-9 || mode !== "highJump", `${type.id} slowest ${drive.slowestOnClimb}`).toBeTruthy();
+        if (mode === "longJump") expect(drive.reachedLongJumpBar, `${type.id} reached x = ${LONG_JUMP_REACH_X}`).toBeTruthy();
+        else expect(drive.ejections, `${type.id}: ${drive.ejections} ejections`).toBe(1);
       }
       t.annotate(`${mode}:\n${rows.join("\n")}`);
     });
@@ -310,8 +309,8 @@ describe("given each of the 7 car types parked at each station's start on the re
     const sedan = DRIVER_CARS.find((type) => type.id === "sedan")!;
     for (const mode of ["highJump", "ringFling"] as const) {
       const drive = driveFromStart(sedan, mode, false);
-      assert.ok(drive.reachedLip, `${mode} reached`);
-      assert.equal(drive.ejections, 0, `${mode} thrown without the hook`);
+      expect(drive.reachedLip, `${mode} reached`).toBeTruthy();
+      expect(drive.ejections, `${mode} thrown without the hook`).toBe(0);
     }
   });
 });
@@ -401,26 +400,26 @@ describe("given a dummy thrown from the Ring Fling lip at the design speeds on t
       if (result.still >= REST_HOLD && score > 0) cupsHeld.add(score);
     }
     t.annotate(`lip speed -> where the dummy rests:\n${rows.join("\n")}`);
-    for (const cup of RING_CUPS) assert.ok(cupsHeld.has(cup.score), `no throw rested in the ${cup.score} cup: ${[...cupsHeld].join(", ")}`);
+    for (const cup of RING_CUPS) expect(cupsHeld.has(cup.score), `no throw rested in the ${cup.score} cup: ${[...cupsHeld].join(", ")}`).toBeTruthy();
   });
 
   it("when the dummy rests on the board, then he is on the ground (the board is in the height grid the settle reads, and without it he is not)", async () => {
     const result = throwAtSpeed(await ragdollOn(buildGround()), LOW_DESIGN_SPEED);
-    assert.ok(result.torso.y >= GROUND_REACH, `his torso rests ${result.torso.y} m up: the pad alone could not tell he landed`);
-    assert.ok(result.still >= REST_HOLD && result.onGround, "he is on the ground");
+    expect(result.torso.y, `his torso rests ${result.torso.y} m up: the pad alone could not tell he landed`).toBeGreaterThanOrEqual(GROUND_REACH);
+    expect(result.still >= REST_HOLD && result.onGround, "he is on the ground").toBeTruthy();
     disposeSystems();
     const without = buildGround();
     for (const patch of patchesOf(without, GRID, (candidate) => without.p[candidate * P_STRIDE + P_OX] === anchor.x + RING_BOARD_BOUNDS.minX)) without.disable(patch);
     const control = throwAtSpeed(await ragdollOn(without), LOW_DESIGN_SPEED);
-    assert.ok(control.torso.y >= GROUND_REACH, `his torso rests ${control.torso.y} m up`);
-    assert.equal(control.onGround, false, "without the board in the height grid he never reads as on the ground");
+    expect(control.torso.y, `his torso rests ${control.torso.y} m up`).toBeGreaterThanOrEqual(GROUND_REACH);
+    expect(control.onGround, "without the board in the height grid he never reads as on the ground").toBe(false);
   });
 
   it("when the board is read, then it starts past where the lane's cars reach (nothing drives there) and its height is the board's at the cups' centres", () => {
     const ground = buildGround();
-    assert.ok(RING_BOARD_BOUNDS.minX > stationFrontX("ringFling"));
+    expect(RING_BOARD_BOUNDS.minX).toBeGreaterThan(stationFrontX("ringFling"));
     for (const cup of RING_CUPS) {
-      assert.ok(Math.abs(ground.heightAt(anchor.x + cup.centreX, anchor.z + cup.centreZ) - ringHeightAt(cup.centreX, cup.centreZ)) <= HEIGHT_TOLERANCE, `${cup.score} cup`);
+      expect(Math.abs(ground.heightAt(anchor.x + cup.centreX, anchor.z + cup.centreZ) - ringHeightAt(cup.centreX, cup.centreZ)), `${cup.score} cup`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
     }
   });
 
@@ -428,11 +427,11 @@ describe("given a dummy thrown from the Ring Fling lip at the design speeds on t
     const board = ringBoardMesh(RING_MESH_STEP);
     const ground = buildGround();
     const placed = ground.meshes.find((mesh) => mesh.vertices.length === board.vertices.length && mesh.indices.length === board.indices.length)!;
-    assert.ok(placed, "the board's mesh is among the ground's");
+    expect(placed, "the board's mesh is among the ground's").toBeTruthy();
     for (let at = 0; at < board.vertices.length; at += 3) {
-      assert.equal(placed.vertices[at], Math.fround(board.vertices[at]! + anchor.x));
-      assert.equal(placed.vertices[at + 1], board.vertices[at + 1]);
-      assert.equal(placed.vertices[at + 2], Math.fround(board.vertices[at + 2]! + anchor.z));
+      expect(placed.vertices[at]).toBe(Math.fround(board.vertices[at]! + anchor.x));
+      expect(placed.vertices[at + 1]).toBe(board.vertices[at + 1]);
+      expect(placed.vertices[at + 2]).toBe(Math.fround(board.vertices[at + 2]! + anchor.z));
     }
   });
 });
@@ -444,11 +443,11 @@ describe("given a dummy thrown far past the Ring Fling board", () => {
     const velocity = new THREE.Vector3(OVERSHOOT_SPEED * Math.cos(RING_THROW_PITCH), OVERSHOOT_SPEED * Math.sin(RING_THROW_PITCH), 0);
     const backFaceX = anchor.x + RING_BOARD_BOUNDS.maxX + RING_BACKSTOP.distancePastBoard + RING_BACKSTOP.thickness;
     const stopped = throwDummy(await ragdollOn(buildGround()), seat, velocity);
-    assert.ok(stopped.furthestPartX <= backFaceX + SOAK, `a part reached x ${stopped.furthestPartX - anchor.x} past the backstop's back face at ${backFaceX - anchor.x}`);
-    assert.ok(stopped.still >= REST_HOLD, `still ${stopped.still}`);
+    expect(stopped.furthestPartX, `a part reached x ${stopped.furthestPartX - anchor.x} past the backstop's back face at ${backFaceX - anchor.x}`).toBeLessThanOrEqual(backFaceX + SOAK);
+    expect(stopped.still, `still ${stopped.still}`).toBeGreaterThanOrEqual(REST_HOLD);
     disposeSystems();
     const control = throwDummy(await ragdollOn(withoutPrism(buildGround(), BACKSTOP_PRISM_ID)), seat, velocity);
-    assert.ok(control.furthestPartX > backFaceX + 5, `without the backstop he got to x ${control.furthestPartX - anchor.x}`);
+    expect(control.furthestPartX, `without the backstop he got to x ${control.furthestPartX - anchor.x}`).toBeGreaterThan(backFaceX + 5);
   });
 });
 
@@ -460,13 +459,13 @@ describe("given a dummy thrown at the high jump's net", () => {
   it("when he is thrown at the net, then it stops him and he ends on the ground (and without the net he flies on)", async () => {
     const netBackFaceX = anchor.x + NET.netX + NET_FACE_ALLOWANCE;
     const caught = throwDummy(await ragdollOn(buildGround()), seat, velocity);
-    assert.ok(caught.furthestPartX <= netBackFaceX, `a part reached x ${caught.furthestPartX - anchor.x} past the net at ${NET.netX}`);
-    assert.ok(caught.still >= REST_HOLD, `still ${caught.still}`);
-    assert.ok(caught.torso.y <= LYING_TORSO_HEIGHT, `his torso rests ${caught.torso.y} m up`);
-    assert.ok(caught.onGround, "he is on the ground");
+    expect(caught.furthestPartX, `a part reached x ${caught.furthestPartX - anchor.x} past the net at ${NET.netX}`).toBeLessThanOrEqual(netBackFaceX);
+    expect(caught.still, `still ${caught.still}`).toBeGreaterThanOrEqual(REST_HOLD);
+    expect(caught.torso.y, `his torso rests ${caught.torso.y} m up`).toBeLessThanOrEqual(LYING_TORSO_HEIGHT);
+    expect(caught.onGround, "he is on the ground").toBeTruthy();
     disposeSystems();
     const control = throwDummy(await ragdollOn(withoutPrism(buildGround(), NET_PRISM_ID)), seat, velocity);
-    assert.ok(control.furthestPartX > netBackFaceX + 3, `without the net he got to x ${control.furthestPartX - anchor.x}`);
+    expect(control.furthestPartX, `without the net he got to x ${control.furthestPartX - anchor.x}`).toBeGreaterThan(netBackFaceX + 3);
   });
 });
 
@@ -483,32 +482,32 @@ describe("given the high jump's posts and slats", () => {
   it("when the frame's solids are read, then two posts stand 0.25 m square from the pad to the frame's top and a slat thinner than a post stands between them at every board, every 5 m up the frame", () => {
     const boxes = frameBoxes(buildGround());
     const size = new THREE.Vector3();
-    assert.equal(boxes.length, frameBoxCount(FRAME));
+    expect(boxes.length).toBe(frameBoxCount(FRAME));
     for (const [side, post] of [-1, 1].map((sign, index) => [sign, boxes[index]!] as const)) {
       post.getSize(size);
-      assert.ok(Math.abs(size.x - POST_THICKNESS) < HEIGHT_TOLERANCE && Math.abs(size.z - POST_THICKNESS) < HEIGHT_TOLERANCE, `post ${side} is ${size.x} x ${size.z}`);
-      assert.equal(POST_THICKNESS, 0.25);
-      assert.ok(Math.abs(post.min.y - LANDING_HEIGHT) < HEIGHT_TOLERANCE && Math.abs(post.max.y - (lipHeight("highJump") + FRAME.frameTop)) < HEIGHT_TOLERANCE, `post ${side} spans ${post.min.y}..${post.max.y}`);
-      assert.ok(Math.abs(post.getCenter(new THREE.Vector3()).x - (anchor.x + FRAME.postsX)) < HEIGHT_TOLERANCE && Math.abs(post.getCenter(new THREE.Vector3()).z - (anchor.z + side * POST_HALF_SPAN)) < HEIGHT_TOLERANCE, `post ${side} stands at its place`);
+      expect(Math.abs(size.x - POST_THICKNESS) < HEIGHT_TOLERANCE && Math.abs(size.z - POST_THICKNESS) < HEIGHT_TOLERANCE, `post ${side} is ${size.x} x ${size.z}`).toBeTruthy();
+      expect(POST_THICKNESS).toBe(0.25);
+      expect(Math.abs(post.min.y - LANDING_HEIGHT) < HEIGHT_TOLERANCE && Math.abs(post.max.y - (lipHeight("highJump") + FRAME.frameTop)) < HEIGHT_TOLERANCE, `post ${side} spans ${post.min.y}..${post.max.y}`).toBeTruthy();
+      expect(Math.abs(post.getCenter(new THREE.Vector3()).x - (anchor.x + FRAME.postsX)) < HEIGHT_TOLERANCE && Math.abs(post.getCenter(new THREE.Vector3()).z - (anchor.z + side * POST_HALF_SPAN)) < HEIGHT_TOLERANCE, `post ${side} stands at its place`).toBeTruthy();
     }
     for (const [index, board] of FRAME.boards.entries()) {
       const slat = boxes[2 + index]!;
       slat.getSize(size);
-      assert.ok(size.x < POST_THICKNESS && size.y < POST_THICKNESS, `slat ${index} is ${size.x} x ${size.y}, thinner than a post`);
-      assert.ok(Math.abs(slat.getCenter(new THREE.Vector3()).y - board.y) < HEIGHT_TOLERANCE, `slat ${index} at ${slat.getCenter(new THREE.Vector3()).y}, board ${board.y}`);
-      assert.ok(Math.abs(slat.min.z - gapBetweenPosts.min) < HEIGHT_TOLERANCE && Math.abs(slat.max.z - gapBetweenPosts.max) < HEIGHT_TOLERANCE, `slat ${index} spans the gap between the posts`);
-      if (index > 0) assert.ok(Math.abs(board.y - FRAME.boards[index - 1]!.y - 5) < HEIGHT_TOLERANCE, `slat ${index} is 5 m over the one below`);
+      expect(size.x < POST_THICKNESS && size.y < POST_THICKNESS, `slat ${index} is ${size.x} x ${size.y}, thinner than a post`).toBeTruthy();
+      expect(Math.abs(slat.getCenter(new THREE.Vector3()).y - board.y), `slat ${index} at ${slat.getCenter(new THREE.Vector3()).y}, board ${board.y}`).toBeLessThan(HEIGHT_TOLERANCE);
+      expect(Math.abs(slat.min.z - gapBetweenPosts.min) < HEIGHT_TOLERANCE && Math.abs(slat.max.z - gapBetweenPosts.max) < HEIGHT_TOLERANCE, `slat ${index} spans the gap between the posts`).toBeTruthy();
+      if (index > 0) expect(Math.abs(board.y - FRAME.boards[index - 1]!.y - 5), `slat ${index} is 5 m over the one below`).toBeLessThan(HEIGHT_TOLERANCE);
     }
   });
 
   it("when the frame's solids are read, then the opening between the posts holds nothing but the slats: no sign or plate collides", () => {
     const boxes = frameBoxes(buildGround());
     const size = new THREE.Vector3();
-    assert.equal(boxes.length, 2 + FRAME.boards.length, "the posts and one slat per board, nothing else");
+    expect(boxes.length, "the posts and one slat per board, nothing else").toBe(2 + FRAME.boards.length);
     for (const [index, box] of boxes.entries()) {
       if (box.max.z <= gapBetweenPosts.min || box.min.z >= gapBetweenPosts.max) continue;
       box.getSize(size);
-      assert.ok(size.y <= SLAT_THICKNESS + HEIGHT_TOLERANCE, `box ${index} in the opening is ${size.y} m tall at ${box.getCenter(new THREE.Vector3()).y}: only a slat may be there`);
+      expect(size.y, `box ${index} in the opening is ${size.y} m tall at ${box.getCenter(new THREE.Vector3()).y}: only a slat may be there`).toBeLessThanOrEqual(SLAT_THICKNESS + HEIGHT_TOLERANCE);
     }
   });
 });
@@ -543,23 +542,23 @@ describe("given a dummy flung into the high jump's frame", () => {
   it("when he is flung at a slat, then it stops him at its back face and catches him short of where he lands without the frame", async (t) => {
     const { caught, control } = await flung(seatAt(0, slat.y));
     t.annotate(`slat at ${slat.y} m: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
-    assert.ok(caught.furthestPartX <= anchor.x + FRAME.postsX + SLAT_THICKNESS / 2 + SOAK, `a part reached x ${caught.furthestPartX - anchor.x} past the slat's back face at ${FRAME.postsX + SLAT_THICKNESS / 2}`);
-    assert.ok(control.torso.x - caught.torso.x >= FRAME_STOPS_BY, `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`);
+    expect(caught.furthestPartX, `a part reached x ${caught.furthestPartX - anchor.x} past the slat's back face at ${FRAME.postsX + SLAT_THICKNESS / 2}`).toBeLessThanOrEqual(anchor.x + FRAME.postsX + SLAT_THICKNESS / 2 + SOAK);
+    expect(control.torso.x - caught.torso.x, `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`).toBeGreaterThanOrEqual(FRAME_STOPS_BY);
   });
 
   it("when he is flung at a post between two slats, then it stops him at its back face and catches him short of where he lands without the frame", async (t) => {
     const { caught, control } = await flung(seatAt(POST_HALF_SPAN, slat.y + FRAME_SHOT.gapOffset));
     t.annotate(`post: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
-    assert.ok(caught.furthestPartX <= anchor.x + FRAME.postsX + POST_THICKNESS / 2 + SOAK, `a part reached x ${caught.furthestPartX - anchor.x} past the post's back face at ${FRAME.postsX + POST_THICKNESS / 2}`);
-    assert.ok(control.torso.x - caught.torso.x >= FRAME_STOPS_BY, `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`);
+    expect(caught.furthestPartX, `a part reached x ${caught.furthestPartX - anchor.x} past the post's back face at ${FRAME.postsX + POST_THICKNESS / 2}`).toBeLessThanOrEqual(anchor.x + FRAME.postsX + POST_THICKNESS / 2 + SOAK);
+    expect(control.torso.x - caught.torso.x, `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`).toBeGreaterThanOrEqual(FRAME_STOPS_BY);
   });
 
   it("when he is flung through the middle half way between two slats at a height mark, then nothing stops him: he lands where he lands without the frame", async (t) => {
     const mark = FRAME.signs.find((candidate) => candidate.heightAboveLip === FRAME_SHOT.markMetresOverLip)!;
     const { caught, control } = await flung(seatAt(0, mark.y + FRAME_SHOT.gapOffset));
     t.annotate(`between the ${mark.heightAboveLip} m and the next slat: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
-    assert.ok(caught.furthestPartX > anchor.x + FRAME.postsX + FRAME_STOPS_BY, `he got only to x ${caught.furthestPartX - anchor.x}: something between the posts stopped him`);
-    assert.ok(Math.abs(caught.torso.x - control.torso.x) < PASSED_UNTOUCHED, `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`);
+    expect(caught.furthestPartX, `he got only to x ${caught.furthestPartX - anchor.x}: something between the posts stopped him`).toBeGreaterThan(anchor.x + FRAME.postsX + FRAME_STOPS_BY);
+    expect(Math.abs(caught.torso.x - control.torso.x), `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`).toBeLessThan(PASSED_UNTOUCHED);
   });
 });
 
@@ -569,13 +568,13 @@ describe("given a dummy dropped over the back face of the high jump's lip", () =
     const atX = stationFrontX("highJump") / 2;
     const seat = new THREE.Vector3(anchor.x + atX, floorHeightAt("highJump", atX, 0) + 2, anchor.z);
     const landed = throwDummy(await ragdollOn(buildGround()), seat, new THREE.Vector3(0.5, 0, 0));
-    assert.ok(landed.lowestPartY >= -SOAK, `lowest part ${landed.lowestPartY}`);
-    assert.ok(landed.still >= REST_HOLD, `still ${landed.still}`);
+    expect(landed.lowestPartY, `lowest part ${landed.lowestPartY}`).toBeGreaterThanOrEqual(-SOAK);
+    expect(landed.still, `still ${landed.still}`).toBeGreaterThanOrEqual(REST_HOLD);
     disposeSystems();
     const hollow = buildGround();
     hollow.meshes.length = 0;
     const fell = throwDummy(await ragdollOn(hollow), seat, new THREE.Vector3(0.5, 0, 0));
-    assert.ok(fell.lowestPartY < -SOAK || fell.torso.y < floorHeightAt("highJump", atX, 0) - 1, `without the meshes his lowest part was ${fell.lowestPartY}`);
+    expect(fell.lowestPartY < -SOAK || fell.torso.y < floorHeightAt("highJump", atX, 0) - 1, `without the meshes his lowest part was ${fell.lowestPartY}`).toBeTruthy();
   });
 });
 
@@ -585,17 +584,17 @@ describe("given a dummy thrown from the long jump's barrier", () => {
 
   it("when he is thrown at the barrier's release, then he lands on the sand past the lip and rests, never below it", async () => {
     const result = throwDummy(await ragdollOn(buildGround()), seat, new THREE.Vector3(LONG_JUMP_RELEASE.speed, LONG_JUMP_RELEASE.up, 0));
-    assert.ok(result.still >= REST_HOLD, `still ${result.still}`);
-    assert.ok(result.torso.x > anchor.x + 10 && result.torso.x < anchor.x + RANGE.length, `rested at x ${result.torso.x}`);
-    assert.ok(result.torso.y <= LYING_TORSO_HEIGHT, `his torso rests ${result.torso.y} m up`);
-    assert.ok(result.lowestPartY >= -SOAK, `lowest part ${result.lowestPartY}`);
+    expect(result.still, `still ${result.still}`).toBeGreaterThanOrEqual(REST_HOLD);
+    expect(result.torso.x > anchor.x + 10 && result.torso.x < anchor.x + RANGE.length, `rested at x ${result.torso.x}`).toBeTruthy();
+    expect(result.torso.y, `his torso rests ${result.torso.y} m up`).toBeLessThanOrEqual(LYING_TORSO_HEIGHT);
+    expect(result.lowestPartY, `lowest part ${result.lowestPartY}`).toBeGreaterThanOrEqual(-SOAK);
   });
 
   it("when he is thrown so that he flies 100 m and more, then no part of him goes below the sand anywhere along the field", async () => {
     const pitch = (LONG_JUMP_FAR_THROW.pitchDegrees * Math.PI) / 180;
     const result = throwDummy(await ragdollOn(buildGround()), seat, new THREE.Vector3(LONG_JUMP_FAR_THROW.speed * Math.cos(pitch), LONG_JUMP_FAR_THROW.speed * Math.sin(pitch), 0));
-    assert.ok(result.furthestPartX > anchor.x + 100, `he got to x ${result.furthestPartX}`);
-    assert.ok(result.lowestPartY >= -SOAK, `lowest part ${result.lowestPartY}`);
-    assert.ok(result.still >= REST_HOLD, `still ${result.still}`);
+    expect(result.furthestPartX, `he got to x ${result.furthestPartX}`).toBeGreaterThan(anchor.x + 100);
+    expect(result.lowestPartY, `lowest part ${result.lowestPartY}`).toBeGreaterThanOrEqual(-SOAK);
+    expect(result.still, `still ${result.still}`).toBeGreaterThanOrEqual(REST_HOLD);
   });
 });

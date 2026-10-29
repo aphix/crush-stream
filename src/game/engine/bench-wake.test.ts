@@ -1,5 +1,4 @@
-import { afterEach, describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WakeHold } from "./bench-wake.ts";
 
 type Listener = () => void;
@@ -65,8 +64,8 @@ describe("given a loop that holds the screen wake lock", () => {
     const hold = new WakeHold();
     await hold.acquire();
     await hold.acquire();
-    assert.equal(page.requests, 1, "requests");
-    assert.equal(hold.held, true, "held");
+    expect(page.requests, "requests").toBe(1);
+    expect(hold.held, "held").toBe(true);
     await hold.release();
   });
 
@@ -75,11 +74,11 @@ describe("given a loop that holds the screen wake lock", () => {
     const hold = new WakeHold();
     await hold.acquire();
     page.show(true);
-    assert.equal(hold.held, false, "released with the hidden page");
+    expect(hold.held, "released with the hidden page").toBe(false);
     page.show(false);
     await page.lastRequest;
-    assert.equal(page.requests, 2, "asked again on show");
-    assert.equal(hold.held, true, "held again");
+    expect(page.requests, "asked again on show").toBe(2);
+    expect(hold.held, "held again").toBe(true);
     await hold.release();
   });
 
@@ -88,20 +87,20 @@ describe("given a loop that holds the screen wake lock", () => {
     const hold = new WakeHold();
     await hold.acquire();
     await hold.release();
-    assert.equal(hold.held, false, "held");
-    assert.equal(page.sentinels[0]!.released, true, "the sentinel was released");
+    expect(hold.held, "held").toBe(false);
+    expect(page.sentinels[0]!.released, "the sentinel was released").toBe(true);
     page.show(true);
     page.show(false);
-    assert.equal(page.requests, 1, "no ask after the end");
+    expect(page.requests, "no ask after the end").toBe(1);
   });
 
   it("when the browser has no wake lock, then nothing is requested and held stays false", async () => {
     const page = stubPage({ supported: false });
     const hold = new WakeHold();
     await hold.acquire();
-    assert.equal(hold.supported, false, "supported");
-    assert.equal(hold.held, false, "held");
-    assert.equal(page.requests, 0, "requests");
+    expect(hold.supported, "supported").toBe(false);
+    expect(hold.held, "held").toBe(false);
+    expect(page.requests, "requests").toBe(0);
     await hold.release();
   });
 
@@ -110,8 +109,8 @@ describe("given a loop that holds the screen wake lock", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const hold = new WakeHold();
     await hold.acquire();
-    assert.equal(hold.held, false, "held");
-    assert.equal(warn.mock.calls.length, 1, "logged");
+    expect(hold.held, "held").toBe(false);
+    expect(warn.mock.calls.length, "logged").toBe(1);
     await hold.release();
   });
 });

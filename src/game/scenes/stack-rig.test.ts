@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { paint } from "../vehicle/test-support.ts";
@@ -34,28 +33,28 @@ describe("given the stack scene dropping cars one at a time at its defaults", ()
         load.push(r.loadKn[0]!);
       },
     });
-    assert.equal(rig.step(loopAt), "loop", "the finished stack never settled into its loop restart");
+    expect(rig.step(loopAt), "the finished stack never settled into its loop restart").toBe("loop");
     const end = stackLoads(cars, rig.dropped);
     bottom.push(end.crushMm[0]!);
     load.push(end.loadKn[0]!);
     // One, two, three and four cars in the stack: the bottom roof's crush and load, read before each next drop and at the end.
     for (let i = 1; i < bottom.length; i++) {
-      assert.ok(bottom[i]! > bottom[i - 1]! + RATE_SPREAD_MM, `bottom roof ${bottom.map((m) => m.toFixed(0)).join(" / ")} mm: not increasing with a car added at step ${i}`);
-      assert.ok(load[i]! > load[i - 1]! + 1, `bottom load ${load.map((m) => m.toFixed(1)).join(" / ")} kN: not increasing at step ${i}`);
+      expect(bottom[i]!, `bottom roof ${bottom.map((m) => m.toFixed(0)).join(" / ")} mm: not increasing with a car added at step ${i}`).toBeGreaterThan(bottom[i - 1]! + RATE_SPREAD_MM);
+      expect(load[i]!, `bottom load ${load.map((m) => m.toFixed(1)).join(" / ")} kN: not increasing at step ${i}`).toBeGreaterThan(load[i - 1]! + 1);
     }
-    assert.ok(end.loadKn[rig.dropped - 1] === 0 && end.crushMm[rig.dropped - 1]! < 2, `the top car carries ${end.loadKn[rig.dropped - 1]!.toFixed(1)} kN and its roof reads ${end.crushMm[rig.dropped - 1]!.toFixed(1)} mm`);
+    expect(end.loadKn[rig.dropped - 1] === 0 && end.crushMm[rig.dropped - 1]! < 2, `the top car carries ${end.loadKn[rig.dropped - 1]!.toFixed(1)} kN and its roof reads ${end.crushMm[rig.dropped - 1]!.toFixed(1)} mm`).toBeTruthy();
     // The base car stays on its spot; every other car stands on the roof under it: the top car reading a load of 0 above is the whole column standing (`stackLoads`' `stands`: within `COLUMN_OFFSET` of that roof's middle).
-    assert.ok(Math.hypot(cars[0]!.group.position.x, cars[0]!.group.position.z) < 0.05, "the base car slid off its spot");
+    expect(Math.hypot(cars[0]!.group.position.x, cars[0]!.group.position.z), "the base car slid off its spot").toBeLessThan(0.05);
     // A car that has left the column (slid off, or rolled on its side) carries and reads no load, and the cars under it lose its weight.
     const standing = stackLoads(cars, rig.dropped);
     cars[2]!.group.position.x += 3;
     cars[2]!.group.updateMatrixWorld(true);
     const slid = stackLoads(cars, rig.dropped);
-    assert.ok(slid.loadKn[2] === null && slid.loadKn[3] === null, "a car off the column still reads a load");
-    assert.ok(Math.abs(slid.loadKn[0]! - (standing.loadKn[0]! - standing.loadKn[1]!)) < 1e-6 && slid.loadKn[1] === 0, `a stack cut above car 1 reads ${slid.loadKn.map((v) => v?.toFixed(1)).join("/")} kN, was ${standing.loadKn.map((v) => v?.toFixed(1)).join("/")}`);
+    expect(slid.loadKn[2] === null && slid.loadKn[3] === null, "a car off the column still reads a load").toBeTruthy();
+    expect(Math.abs(slid.loadKn[0]! - (standing.loadKn[0]! - standing.loadKn[1]!)) < 1e-6 && slid.loadKn[1] === 0, `a stack cut above car 1 reads ${slid.loadKn.map((v) => v?.toFixed(1)).join("/")} kN, was ${standing.loadKn.map((v) => v?.toFixed(1)).join("/")}`).toBeTruthy();
     cars[2]!.group.position.x -= 3;
     cars[2]!.group.rotation.z = Math.PI / 2;
     cars[2]!.group.updateMatrixWorld(true);
-    assert.ok(stackLoads(cars, rig.dropped).loadKn[2] === null, "a car on its side still reads a load");
+    expect(stackLoads(cars, rig.dropped).loadKn[2], "a car on its side still reads a load").toBe(null);
   });
 });

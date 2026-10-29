@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
@@ -81,8 +80,8 @@ describe("given two cars hooked together (the front car's rear corner inside the
       }
     }
     t.annotate(`cage ${length.toFixed(3)} x ${width.toFixed(3)} m: ${hits} of ${GAP_SHARES.length * LATERAL_SHARES.length * YAWS.length} poses overlap`);
-    assert.ok(hits > MIN_OVERLAPPING_POSES, `only ${hits} overlapping poses: the grid missed the cars`);
-    assert.equal(together, 0, `${together} of ${hits} contact axes pushed the cars' centres together, first at ${first}`);
+    expect(hits, `only ${hits} overlapping poses: the grid missed the cars`).toBeGreaterThan(MIN_OVERLAPPING_POSES);
+    expect(together, `${together} of ${hits} contact axes pushed the cars' centres together, first at ${first}`).toBe(0);
   });
 
   it(`when two cars lie stacked in one lane, their cages overlapping ${LANE_OVERLAP} m along it, and one moves 4 mm across the other's axis, then the contact axis does not turn`, () => {
@@ -97,11 +96,11 @@ describe("given two cars hooked together (the front car's rear corner inside the
     for (const lat of [-0.002, 0.002]) {
       b.spawnFacing(0, 0, 0, 0);
       a.spawnFacing(lat, apart, 0, 0);
-      assert.ok(satCars(a, b, n, p) !== null, `no contact at lat ${lat}`);
+      expect(satCars(a, b, n, p), `no contact at lat ${lat}`).not.toBe(null);
       axes.push(n.clone());
     }
     const turn = axes[0]!.dot(axes[1]!);
-    assert.ok(turn > 0.9, `the axis turned: cos ${turn.toFixed(2)} between (${axes[0]!.x.toFixed(2)}, ${axes[0]!.z.toFixed(2)}) and (${axes[1]!.x.toFixed(2)}, ${axes[1]!.z.toFixed(2)})`);
+    expect(turn, `the axis turned: cos ${turn.toFixed(2)} between (${axes[0]!.x.toFixed(2)}, ${axes[0]!.z.toFixed(2)}) and (${axes[1]!.x.toFixed(2)}, ${axes[1]!.z.toFixed(2)})`).toBeGreaterThan(0.9);
   });
 
   it("when two cars lie side by side, 1 to 2.5 m apart along the lane and overlapping 5 cm across it, then the contact axis points apart across the lane", () => {
@@ -120,9 +119,9 @@ describe("given two cars hooked together (the front car's rear corner inside the
       lat -= 0.05;
       b.spawnFacing(0, 0, 0, 0);
       a.spawnFacing(side * lat, off, 0, 0);
-      assert.ok(satCars(a, b, n, p) !== null, `no contact at lat ${lat}`);
+      expect(satCars(a, b, n, p), `no contact at lat ${lat}`).not.toBe(null);
       const cos = (n.x * side) / Math.hypot(n.x, n.z);
-      assert.ok(cos > Math.cos((20 * Math.PI) / 180), `side ${side} lat ${lat.toFixed(3)}: axis (${n.x.toFixed(2)}, ${n.z.toFixed(2)}) is ${((Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI).toFixed(0)}° off the lateral`);
+      expect(cos, `side ${side} lat ${lat.toFixed(3)}: axis (${n.x.toFixed(2)}, ${n.z.toFixed(2)}) is ${((Math.acos(Math.max(-1, Math.min(1, cos))) * 180) / Math.PI).toFixed(0)}° off the lateral`).toBeGreaterThan(Math.cos((20 * Math.PI) / 180));
     }
   });
 
@@ -170,9 +169,9 @@ describe("given two cars hooked together (the front car's rear corner inside the
           // alone (a truck ahead of a muscle: 3.4 m at the start, 5.85 m at 3 s after 0.15 s of contact, the muscle 3.6 m/s faster).
           const gap = gapOf();
           t.annotate(`contact ${contact.toFixed(2)} s, last at ${lastContact.toFixed(2)} s; centres ${start.toFixed(2)} -> ${gap.toFixed(2)} m`);
-          assert.ok(contact < 1, `in contact ${contact.toFixed(2)} s of 3 s, centres ${gap.toFixed(1)} m apart: hooked`);
-          assert.ok(lastContact < 2, `still in contact at ${lastContact.toFixed(2)} s: hooked`);
-          assert.ok(gap > start, `centres ${start.toFixed(2)} -> ${gap.toFixed(2)} m apart after 3 s: held together`);
+          expect(contact, `in contact ${contact.toFixed(2)} s of 3 s, centres ${gap.toFixed(1)} m apart: hooked`).toBeLessThan(1);
+          expect(lastContact, `still in contact at ${lastContact.toFixed(2)} s: hooked`).toBeLessThan(2);
+          expect(gap, `centres ${start.toFixed(2)} -> ${gap.toFixed(2)} m apart after 3 s: held together`).toBeGreaterThan(start);
         });
       }
     }

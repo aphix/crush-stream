@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
@@ -23,7 +22,7 @@ const AHEAD = 0.25;
 function struck(guard: number, mps: number) {
   const car = makeCar();
   launch(car, 0.3, -car.cage.fields.planBox[3]! - AHEAD, 0, 0, mps);
-  assert.ok(runsDown(car, 0, 0, 0), "the car meets the figure");
+  expect(runsDown(car, 0, 0, 0), "the car meets the figure").toBeTruthy();
   return { car, cars: [car], strike: fell(car, 0, guard, 0, 0, 0, 0, 1, blankStrike()) };
 }
 
@@ -66,16 +65,16 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a st
       const { cars, strike } = struck(testCase.guard, 15);
       const { ragdolls, sent } = systemWithWorker();
       ragdolls.throwFigure(strike, cars);
-      assert.equal(sent.length, 1, "one throw reached the worker");
+      expect(sent.length, "one throw reached the worker").toBe(1);
       const { t, purse } = sent[0]!;
-      assert.equal(t.cop, testCase.expectedCop, "the navy uniform");
-      assert.equal(t.armsDown, true, "arms hanging, not raised over his head");
-      assert.equal(t.car, 0, "he ignores the car that struck him at first");
-      assert.equal(t.rides, false, "the ride-along never frames him");
-      assert.equal(purse, false, "no purse");
-      assert.ok(Math.abs(t.p.y - TORSO_STANDING) < 1e-6 && Math.abs(t.p.x) < 1e-6 && Math.abs(t.p.z) < 1e-6, "his torso where he stood");
-      assert.ok(Math.abs(t.v.x - strike.vx) < 1e-6 && Math.abs(t.v.y - strike.vy) < 1e-6 && Math.abs(t.v.z - strike.vz) < 1e-6, "the strike's velocity");
-      assert.equal(ragdolls["dressing"].get(FIRST_WORKER_ID)!.look, testCase.expectedLook, "dressed from his own table: the cop's, the agent's or the VIP's");
+      expect(t.cop, "the navy uniform").toBe(testCase.expectedCop);
+      expect(t.armsDown, "arms hanging, not raised over his head").toBe(true);
+      expect(t.car, "he ignores the car that struck him at first").toBe(0);
+      expect(t.rides, "the ride-along never frames him").toBe(false);
+      expect(purse, "no purse").toBe(false);
+      expect(Math.abs(t.p.y - TORSO_STANDING) < 1e-6 && Math.abs(t.p.x) < 1e-6 && Math.abs(t.p.z) < 1e-6, "his torso where he stood").toBeTruthy();
+      expect(Math.abs(t.v.x - strike.vx) < 1e-6 && Math.abs(t.v.y - strike.vy) < 1e-6 && Math.abs(t.v.z - strike.vz) < 1e-6, "the strike's velocity").toBeTruthy();
+      expect(ragdolls["dressing"].get(FIRST_WORKER_ID)!.look, "dressed from his own table: the cop's, the agent's or the VIP's").toBe(testCase.expectedLook);
     });
   }
 
@@ -84,8 +83,8 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a st
     const { ragdolls } = systemWithWorker();
     const before = ragdolls["next"].rides;
     ragdolls.throwFigure(strike, cars);
-    assert.equal(ragdolls["next"].rides, before, "the latest driver's record");
-    assert.equal(ragdolls["next"].armsDown, undefined, "no hanging arms on it");
+    expect(ragdolls["next"].rides, "the latest driver's record").toBe(before);
+    expect(ragdolls["next"].armsDown, "no hanging arms on it").toBe(undefined);
   });
 
   it("when a figure is run down, then he leaves at the strike's own spin: none of a thrown driver's EJECT_ROLL about his line of flight", () => {
@@ -94,10 +93,10 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a st
     ragdolls.throwFigure(strike, cars);
     const { t } = sent[0]!;
     const added = t.w.clone().sub(new THREE.Vector3(strike.wx, strike.wy, strike.wz));
-    assert.ok(t.v.length() > 1, "the control: he flies");
+    expect(t.v.length(), "the control: he flies").toBeGreaterThan(1);
     const roll = added.dot(t.v) / t.v.length();
-    assert.ok(Math.abs(roll) < 1e-9, `${roll} rad/s about his line of flight`);
-    assert.equal(added.length(), 0, "spin past the strike's (rad/s)");
+    expect(Math.abs(roll), `${roll} rad/s about his line of flight`).toBeLessThan(1e-9);
+    expect(added.length(), "spin past the strike's (rad/s)").toBe(0);
   });
 });
 
@@ -108,24 +107,24 @@ describe("given the dummies' world on this thread (the fallback, and every scene
     ragdolls.throwFigure(strike, cars);
     const dolls: { live: boolean; cur: Float32Array }[] = ragdolls["dolls"];
     const out = dolls.filter((d) => d.live);
-    assert.equal(out.length, 1, "one dummy out");
-    assert.ok(Math.abs(out[0]!.cur[7 * 2 + 1]! - ARM_HANGING) < 1e-3, "his upper arm hangs at his side");
+    expect(out.length, "one dummy out").toBe(1);
+    expect(Math.abs(out[0]!.cur[7 * 2 + 1]! - ARM_HANGING), "his upper arm hangs at his side").toBeLessThan(1e-3);
     const { p, speed } = fly(ragdolls, car, 15, 3);
-    assert.ok(p.z > 12 && p.z < 25, `he lies ${p.z.toFixed(1)} m along the car's way`);
-    assert.ok(Math.abs(p.x) > 1.2, `${Math.abs(p.x).toFixed(1)} m off the car's centre line, clear of its path`);
-    assert.ok(p.y < 0.3, `lying on the ground at ${p.y.toFixed(2)} m`);
-    assert.ok(speed < 0.2, `still, at ${speed.toFixed(2)} m/s`);
+    expect(p.z > 12 && p.z < 25, `he lies ${p.z.toFixed(1)} m along the car's way`).toBeTruthy();
+    expect(Math.abs(p.x), `${Math.abs(p.x).toFixed(1)} m off the car's centre line, clear of its path`).toBeGreaterThan(1.2);
+    expect(p.y, `lying on the ground at ${p.y.toFixed(2)} m`).toBeLessThan(0.3);
+    expect(speed, `still, at ${speed.toFixed(2)} m/s`).toBeLessThan(0.2);
   });
 
   it("when Rapier is not in yet, then he is thrown once it is, in the dress he was thrown in", async () => {
     const { car, cars, strike } = struck(1, 15);
     const ragdolls = new RagdollSystem(new THREE.Scene(), () => {}, () => {});
     ragdolls.throwFigure(strike, cars);
-    assert.equal(ragdolls["pending"].length, 1, "waiting for Rapier");
+    expect(ragdolls["pending"].length, "waiting for Rapier").toBe(1);
     await ragdolls.preload();
     fly(ragdolls, car, 15, FRAME);
     const dolls: { live: boolean }[] = ragdolls["dolls"];
-    assert.equal(dolls.filter((d) => d.live).length, 1, "thrown");
-    assert.equal(ragdolls["pending"].length, 0, "nothing left waiting");
+    expect(dolls.filter((d) => d.live).length, "thrown").toBe(1);
+    expect(ragdolls["pending"].length, "nothing left waiting").toBe(0);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { NET_VERSION } from "./codec.ts";
 import {
   BACKOFF_MS,
@@ -18,6 +17,7 @@ import {
 } from "./matchmaking.ts";
 import type { PublicKind } from "./net-ports.ts";
 import { mulberry32 } from "../world/placements.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** A room name without its kind and build: "A" for `publicRoomName("race", "A")`, so expectations read as literals. */
 const codeOf = (name: string): string => name.replace(/^pub-(race|campaign|survival|derby)-v\d+-/, "");
@@ -84,47 +84,48 @@ describe("given the room list a relay returns to a player looking for a race roo
       room("E", 8),
       room("F", 2),
     ];
-    assert.deepEqual(openRooms(list, "race", [publicRoomName("race", "F")]).map((r) => codeOf(r.room)), ["A"]);
+    expect(firstMismatch(openRooms(list, "race", [publicRoomName("race", "F")]).map((r) => codeOf(r.room)), ["A"])).toBeUndefined();
   });
 
   it("when the open rooms differ in stage and size, then a match not yet started ranks before a running one, then the most addresses, then the first name", () => {
     const list = [room("A", 7, "running.oval"), room("B", 2), room("C", 5, "over.rally"), room("D", 5), room("E", 3, "")];
-    assert.deepEqual(
-      openRooms(list, "race").map((r) => r.room.slice(-1)),
-      ["C", "D", "E", "B", "A"],
-    );
+    expect(firstMismatch(openRooms(list, "race").map((r) => r.room.slice(-1)), ["C", "D", "E", "B", "A"])).toBeUndefined();
   });
 
   it("when a room is padded with idle peers from one address, then it does not outrank a real 3-address room", () => {
     const list = [room("AAAAPAD", 7, "lobby.oval", "race", 1), room("ZZREAL", 3), room("MMLONE", 1)];
-    assert.deepEqual(
-      openRooms(list, "race").map((r) => codeOf(r.room)),
-      ["ZZREAL", "AAAAPAD", "MMLONE"],
-    );
+    expect(firstMismatch(openRooms(list, "race").map((r) => codeOf(r.room)), ["ZZREAL", "AAAAPAD", "MMLONE"])).toBeUndefined();
   });
 
   it("when rooms carry the host's stage and course tag, then the stage and course are read from it, and a relay without tags lists rooms unstaged", () => {
-    assert.deepEqual(
-      openRooms([room("A", 1, "over.rally"), room("B", 1, ""), room("C", 1, "bogus.x")], "race").map((r) => [r.stage, r.course]),
-      [["over", "rally"], [null, ""], [null, "x"]],
-    );
+    const rooms = openRooms([room("A", 1, "over.rally"), room("B", 1, ""), room("C", 1, "bogus.x")], "race");
+    const want = [["over", "rally"], [null, ""], [null, "x"]] as const;
+    expect(rooms, "rooms listed").toHaveLength(want.length);
+    for (let i = 0; i < want.length; i++) {
+      expect(rooms[i]?.stage, `room ${i} stage`).toBe(want[i]?.[0]);
+      expect(rooms[i]?.course, `room ${i} course`).toBe(want[i]?.[1]);
+    }
   });
 
   it("when the list holds public rooms of all four games, then no filter lists every one of this build with its game and course tag, and a game's filter lists only that game's rooms", () => {
     const list = [room("A", 2, "lobby.oval", "race"), room("B", 3, "lobby.3", "campaign"), room("C", 2, "running.havana", "survival"), room("D", 2, "lobby", "derby")];
-    assert.deepEqual(
-      openRooms(list, null).map((r) => [r.kind, codeOf(r.room), r.course]).sort(),
-      [["campaign", "B", "3"], ["derby", "D", ""], ["race", "A", "oval"], ["survival", "C", "havana"]],
-    );
-    for (const [kind, code] of [["race", "A"], ["campaign", "B"], ["survival", "C"], ["derby", "D"]] as const) assert.equal(openRooms(list, kind).map((r) => codeOf(r.room)).join(), code, kind);
+    const all = openRooms(list, null).map((r) => [r.kind, codeOf(r.room), r.course] as const).sort();
+    const wantAll = [["campaign", "B", "3"], ["derby", "D", ""], ["race", "A", "oval"], ["survival", "C", "havana"]] as const;
+    expect(all, "rooms of all four games").toHaveLength(wantAll.length);
+    for (let i = 0; i < wantAll.length; i++) {
+      expect(all[i]?.[0], `room ${i} kind`).toBe(wantAll[i]?.[0]);
+      expect(all[i]?.[1], `room ${i} code`).toBe(wantAll[i]?.[1]);
+      expect(all[i]?.[2], `room ${i} course`).toBe(wantAll[i]?.[2]);
+    }
+    for (const [kind, code] of [["race", "A"], ["campaign", "B"], ["survival", "C"], ["derby", "D"]] as const) expect(openRooms(list, kind).map((r) => codeOf(r.room)).join(), kind).toBe(code);
   });
 });
 
 describe("given a room's kind, build and course name", () => {
   it("when the room name and its tag are made, then the name carries kind and build, and tags are lowercase, relay-safe and length-capped", () => {
-    assert.equal(publicRoomName("derby", "AB12"), `pub-derby-v${NET_VERSION}-AB12`);
-    assert.equal(publicMeta("lobby", "Harbour Streets!"), "lobby.harbourstreets");
-    assert.match(publicMeta("running", "x".repeat(60)), /^running\.x{24}$/);
+    expect(publicRoomName("derby", "AB12")).toBe(`pub-derby-v${NET_VERSION}-AB12`);
+    expect(publicMeta("lobby", "Harbour Streets!")).toBe("lobby.harbourstreets");
+    expect(publicMeta("running", "x".repeat(60))).toMatch(/^running\.x{24}$/);
   });
 });
 
@@ -132,7 +133,9 @@ describe("given a device able to host a full field pressing Play online", () => 
   it("when open rooms exist, then it joins the best one at once without hosting", async () => {
     const h = harness(() => [room("A", 1), room("B", 3, "running.oval"), room("C", 2)]);
     await findMatch("race", true, h.deps);
-    assert.deepEqual(h.log, [{ at: 0, what: "join C" }]);
+    expect(h.log, "one action").toHaveLength(1);
+    expect(h.log[0]?.at, "joined at once").toBe(0);
+    expect(h.log[0]?.what, "joined the best room").toBe("join C");
   });
 
   it("when the only rooms are one of another build and a full one, then it skips both and hosts", async () => {
@@ -140,7 +143,7 @@ describe("given a device able to host a full field pressing Play online", () => 
     const done = findMatch("race", true, h.deps);
     await h.clock.drain();
     await done;
-    assert.equal(h.log[0]!.what, "host");
+    expect(h.log[0]!.what).toBe("host");
   });
 
   it("when no room is open, then it hosts after a random pause of up to 0.6 s and one more look at the list, not before", async () => {
@@ -148,9 +151,9 @@ describe("given a device able to host a full field pressing Play online", () => 
     const done = findMatch("race", true, h.deps);
     await h.clock.drain();
     await done;
-    assert.deepEqual(h.log.map((l) => l.what), ["host"]);
-    assert.equal(h.log[0]!.at, BACKOFF_MS * 0.5);
-    assert.equal(h.calls() >= 2, true, "it looked again before creating");
+    expect(firstMismatch(h.log.map((l) => l.what), ["host"])).toBeUndefined();
+    expect(h.log[0]!.at).toBe(BACKOFF_MS * 0.5);
+    expect(h.calls() >= 2, "it looked again before creating").toBe(true);
   });
 
   it("when a room appears during its pause, then it joins that room instead of hosting", async () => {
@@ -158,7 +161,9 @@ describe("given a device able to host a full field pressing Play online", () => 
     const done = findMatch("race", true, h.deps);
     await h.clock.drain();
     await done;
-    assert.deepEqual(h.log, [{ at: 0, what: "join A" }]);
+    expect(h.log, "one action").toHaveLength(1);
+    expect(h.log[0]?.at, "joined at once").toBe(0);
+    expect(h.log[0]?.what, "joined the room that appeared").toBe("join A");
   });
 });
 
@@ -170,8 +175,8 @@ describe("given a weak device pressing Play online", () => {
     await done;
     const hosted = h.log.find((l) => l.what === "host weak")!;
     // Polls at 0, 2.5, 5, … ; the first one at or past the patience hosts.
-    assert.equal(hosted.at, Math.ceil(WEAK_WAIT_MS / SEARCH_POLL_MS) * SEARCH_POLL_MS);
-    assert.ok(hosted.at >= 10_000 && hosted.at <= 15_000, `hosts between 10 and 15 s (${hosted.at} ms)`);
+    expect(hosted.at).toBe(Math.ceil(WEAK_WAIT_MS / SEARCH_POLL_MS) * SEARCH_POLL_MS);
+    expect(hosted.at >= 10_000 && hosted.at <= 15_000, `hosts between 10 and 15 s (${hosted.at} ms)`).toBeTruthy();
   });
 
   it("when the random jitter is at its lowest and at its highest, then it hosts no sooner than 12 s and before 12 s plus 3 s of jitter plus one 2.5 s poll step", async () => {
@@ -181,7 +186,7 @@ describe("given a weak device pressing Play online", () => {
       await h.clock.drain();
       await done;
       const at = h.log.find((l) => l.what === "host weak")!.at;
-      assert.ok(at >= WEAK_WAIT_MS && at < WEAK_WAIT_MS + WEAK_JITTER_MS + SEARCH_POLL_MS, `${at}`);
+      expect(at >= WEAK_WAIT_MS && at < WEAK_WAIT_MS + WEAK_JITTER_MS + SEARCH_POLL_MS, `${at}`).toBeTruthy();
     }
   });
 
@@ -190,8 +195,8 @@ describe("given a weak device pressing Play online", () => {
     const done = findMatch("race", false, h.deps);
     await h.clock.drain();
     await done;
-    assert.deepEqual(h.log.map((l) => l.what), ["join A"]);
-    assert.equal(h.log[0]!.at, 3 * SEARCH_POLL_MS);
+    expect(firstMismatch(h.log.map((l) => l.what), ["join A"])).toBeUndefined();
+    expect(h.log[0]!.at).toBe(3 * SEARCH_POLL_MS);
   });
 });
 
@@ -202,9 +207,9 @@ describe("given an unreachable relay", () => {
       const done = findMatch("race", fit, h.deps);
       await h.clock.drain();
       await done;
-      assert.equal(h.log.length, 1);
-      assert.equal(h.log[0]!.what, fit ? "host" : "host weak");
-      assert.equal(h.log[0]!.at, 0);
+      expect(h.log.length).toBe(1);
+      expect(h.log[0]!.what).toBe(fit ? "host" : "host weak");
+      expect(h.log[0]!.at).toBe(0);
     }
   });
 });
@@ -215,7 +220,7 @@ describe("given a search cancelled while a room list is in flight", () => {
     const deps: MatchDeps = { ...h.deps, live: () => false };
     await findMatch("race", true, deps);
     await h.clock.drain();
-    assert.deepEqual(h.log, []);
+    expect(h.log).toHaveLength(0);
   });
 });
 
@@ -225,7 +230,7 @@ describe("given the caller asks to skip the room whose host just died", () => {
     const done = findMatch("race", true, h.deps, [publicRoomName("race", "A")]);
     await h.clock.drain();
     await done;
-    assert.equal(h.log[0]!.what, "host");
+    expect(h.log[0]!.what).toBe("host");
   });
 });
 
@@ -236,7 +241,7 @@ describe("given a lone host already running its own room", () => {
       const done = findMatch("race", true, h.deps);
       await h.clock.drain();
       await done;
-      assert.equal(h.log.map((l) => l.what).join(", "), joins ? `host, join ${codeOf(other.room)}` : "host", codeOf(other.room));
+      expect(h.log.map((l) => l.what).join(", "), codeOf(other.room)).toBe(joins ? `host, join ${codeOf(other.room)}` : "host");
     }
   });
 });
@@ -316,7 +321,7 @@ describe("given searchers pressing Play online together, with simulated relay de
       const r = await crowd(seed, [0, 0], [true, true]);
       if (r.rooms.length !== 1 || r.rooms[0] !== 2 || r.restarts > 0) bad.push(seed);
     }
-    assert.deepEqual(bad, [], "seeds that ended in two rooms or needed a restart");
+    expect(bad, "seeds that ended in two rooms or needed a restart").toHaveLength(0);
   });
 
   it("when five players, some able to host and some weak, press within 300 ms, then over 200 seeds no player is left alone, nobody's host leaves under them, and at least 97% of seeds end in one room", async () => {
@@ -331,15 +336,15 @@ describe("given searchers pressing Play online together, with simulated relay de
       const r = await crowd(seed, starts, fits);
       if (r.rooms.some((players) => players < 2)) loners.push(seed);
       if (r.rooms.length !== 1) split.push(seed);
-      assert.equal(r.restarts, 0, `seed ${seed}: nobody's host left under them`);
+      expect(r.restarts, `seed ${seed}: nobody's host left under them`).toBe(0);
     }
-    assert.deepEqual(loners, []);
-    assert.ok(split.length <= 6, `${split.length} of 200 seeds ended in two rooms (${split})`);
+    expect(loners).toHaveLength(0);
+    expect(split.length, `${split.length} of 200 seeds ended in two rooms (${split})`).toBeLessThanOrEqual(6);
   });
 
   it("when a player presses 2 s after another's room is up, then it joins that room instead of making a second one", async () => {
     const r = await crowd(5, [0, 2000], [true, true]);
-    assert.deepEqual(r.rooms, [2]);
+    expect(firstMismatch(r.rooms, [2])).toBeUndefined();
   });
 });
 
@@ -387,7 +392,7 @@ describe("given the live-rooms indicator polling the relay for open rooms", () =
     const h = pollerHarness(() => []);
     h.poller.start();
     await h.advance(35_000);
-    assert.deepEqual(h.fetchedAt, [0, 10_000, 20_000, 30_000]);
+    expect(firstMismatch(h.fetchedAt, [0, 10_000, 20_000, 30_000])).toBeUndefined();
     h.poller.stop();
   });
 
@@ -397,10 +402,10 @@ describe("given the live-rooms indicator polling the relay for open rooms", () =
     await h.advance(1000);
     h.poller.setExpanded(true);
     await h.advance(9000);
-    assert.deepEqual(h.fetchedAt, [0, 1000, 5000, 9000]);
+    expect(firstMismatch(h.fetchedAt, [0, 1000, 5000, 9000])).toBeUndefined();
     h.poller.setExpanded(false);
     await h.advance(20_000);
-    assert.deepEqual(h.fetchedAt.slice(4), [13_000, 23_000]);
+    expect(firstMismatch(h.fetchedAt.slice(4), [13_000, 23_000])).toBeUndefined();
     h.poller.stop();
   });
 
@@ -409,8 +414,8 @@ describe("given the live-rooms indicator polling the relay for open rooms", () =
     h.poller.start();
     await h.advance(400_000);
     const gaps = h.fetchedAt.slice(1).map((t, i) => t - h.fetchedAt[i]!);
-    assert.deepEqual(gaps.slice(0, 5), [20_000, 40_000, 60_000, 60_000, 60_000]);
-    assert.equal(gaps[5], POLL_COLLAPSED_MS, "back to the slow rate after one success");
+    expect(firstMismatch(gaps.slice(0, 5), [20_000, 40_000, 60_000, 60_000, 60_000])).toBeUndefined();
+    expect(gaps[5], "back to the slow rate after one success").toBe(POLL_COLLAPSED_MS);
     h.poller.stop();
   });
 
@@ -419,15 +424,15 @@ describe("given the live-rooms indicator polling the relay for open rooms", () =
     const h = pollerHarness(() => [], () => shown);
     h.poller.start();
     await h.advance(60_000);
-    assert.deepEqual(h.fetchedAt, []);
+    expect(h.fetchedAt).toHaveLength(0);
     shown = true;
     await h.advance(POLL_COLLAPSED_MS);
-    assert.equal(h.fetchedAt.length, 1);
+    expect(h.fetchedAt.length).toBe(1);
     h.poller.stop();
     const n = h.fetchedAt.length;
     await h.advance(120_000);
-    assert.equal(h.fetchedAt.length, n);
-    assert.equal(h.timers(), 0);
-    assert.ok(POLL_EXPANDED_MS < POLL_COLLAPSED_MS);
+    expect(h.fetchedAt.length).toBe(n);
+    expect(h.timers()).toBe(0);
+    expect(POLL_EXPANDED_MS).toBeLessThan(POLL_COLLAPSED_MS);
   });
 });

@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { CAGE_STEP } from "../vehicle/car-cage.ts";
@@ -121,14 +120,14 @@ describe("given a monster truck pitched 27° nose-up and a level cop facing its 
       worst = `${(NOSE_IN - s * 0.1).toFixed(1)} m back: SAT ${sat.toFixed(3)} m against ${overlap.toFixed(3)} m`;
     }
     // The oracle reads as the SAT does; a step is the window of heights (`bandAround`) a node's band takes from its neighbours.
-    assert.ok(worstOff <= CAGE_STEP, worst);
+    expect(worstOff, worst).toBeLessThanOrEqual(CAGE_STEP);
   });
 
   it("when the tail is raised 1.5 m over the cop's cab, no part of either in the other, then the plan SAT finds no contact", () => {
     stage(monster, cop, 1.5, 3);
-    assert.equal(overlapOf(), 0, "the cages overlap");
+    expect(overlapOf(), "the cages overlap").toBe(0);
     const sat = satCars(cop, monster, normal, contact, 0);
-    assert.equal(sat, null, `SAT ${sat?.toFixed(3)} m`);
+    expect(sat, `SAT ${sat?.toFixed(3)} m`).toBe(null);
   });
 
   it("when its centre stands 0.5, 1.0 or 1.5 m up and the cop 2.5 to 4.8 m back, then the plan SAT never reads the cages a lattice step deeper in each other than they stand (a raised tail over the cab is no contact)", () => {
@@ -144,7 +143,7 @@ describe("given a monster truck pitched 27° nose-up and a level cop facing its 
         worst = `${rise} m up, ${back.toFixed(1)} m back: SAT ${sat.toFixed(3)} m against ${overlap.toFixed(3)} m`;
       }
     }
-    assert.ok(worstOver <= CAGE_STEP, worst);
+    expect(worstOver, worst).toBeLessThanOrEqual(CAGE_STEP);
   });
 });
 
@@ -161,7 +160,7 @@ describe("given a monster truck pitched 28° to 32° nose-up, either side of the
         worstOff = Math.abs(sat - overlap);
         worst = `${degrees}° pitched, ${(NOSE_IN - s * 0.1).toFixed(1)} m back: SAT ${sat.toFixed(3)} m against ${overlap.toFixed(3)} m`;
       }
-      assert.ok(worstOff <= CAGE_STEP, worst);
+      expect(worstOff, worst).toBeLessThanOrEqual(CAGE_STEP);
     });
   }
 });
@@ -181,8 +180,8 @@ describe("given a monster truck lying rolled 65°, 70° or 75° over (its body l
         worstOff = Math.abs(sat - overlap);
         worst = `${roll}° over, ${back.toFixed(1)} m back: SAT ${sat.toFixed(3)} m against ${overlap.toFixed(3)} m`;
       }
-      assert.ok(deepest > 0.3, `${roll}° over: the sweep never gets the cop's nose into the roof (deepest ${deepest.toFixed(3)} m)`);
-      assert.ok(worstOff <= CAGE_STEP, worst);
+      expect(deepest, `${roll}° over: the sweep never gets the cop's nose into the roof (deepest ${deepest.toFixed(3)} m)`).toBeGreaterThan(0.3);
+      expect(worstOff, worst).toBeLessThanOrEqual(CAGE_STEP);
     });
   }
 });
@@ -213,9 +212,9 @@ describe("given two sedans, one standing with its keel a little into the other's
       upper.refreshBasis();
       return [Math.max(cageDepthIn(upper, lower, true), cageDepthIn(lower, upper, true)), Math.max(cageDepthIn(upper, lower, false), cageDepthIn(lower, upper, false))] as const;
     });
-    assert.equal(reads[0]![0], 0, `${KEEL_INTO[0]! * 100} cm into: the oracle reads ${reads[0]![0].toFixed(3)} m`);
-    assert.ok(reads[1]![0] > 0.5, `${KEEL_INTO[1]! * 100} cm into: the oracle reads ${reads[1]![0].toFixed(3)} m`);
-    assert.ok(reads[0]![1] > 0.5, `without the rule the ${KEEL_INTO[0]! * 100} cm graze reads ${reads[0]![1].toFixed(3)} m: the rule is what the row pins`);
+    expect(reads[0]![0], `${KEEL_INTO[0]! * 100} cm into: the oracle reads ${reads[0]![0].toFixed(3)} m`).toBe(0);
+    expect(reads[1]![0], `${KEEL_INTO[1]! * 100} cm into: the oracle reads ${reads[1]![0].toFixed(3)} m`).toBeGreaterThan(0.5);
+    expect(reads[0]![1], `without the rule the ${KEEL_INTO[0]! * 100} cm graze reads ${reads[0]![1].toFixed(3)} m: the rule is what the row pins`).toBeGreaterThan(0.5);
   });
 
   it("when its flank edge is over the roof, then the plan SAT reads no contact at a lattice step less 1 cm and the plan overlap at a step plus 1 cm, whichever car is asked first", () => {
@@ -228,10 +227,10 @@ describe("given two sedans, one standing with its keel a little into the other's
       upper.refreshBasis();
       return [satCars(upper, lower, normal, contact, 0), satCars(lower, upper, normal, contact, 0)] as const;
     });
-    assert.equal(reads[0]![0], null, `${KEEL_INTO[0]! * 100} cm into, upper first: SAT ${reads[0]![0]?.toFixed(3)}`);
-    assert.equal(reads[0]![1], null, `${KEEL_INTO[0]! * 100} cm into, lower first: SAT ${reads[0]![1]?.toFixed(3)}`);
-    assert.ok((reads[1]![0] ?? 0) > 0.5, `${KEEL_INTO[1]! * 100} cm into, upper first: SAT ${reads[1]![0]?.toFixed(3)}`);
-    assert.equal(reads[1]![1], reads[1]![0], "the two orders read the same depth");
+    expect(reads[0]![0], `${KEEL_INTO[0]! * 100} cm into, upper first: SAT ${reads[0]![0]?.toFixed(3)}`).toBe(null);
+    expect(reads[0]![1], `${KEEL_INTO[0]! * 100} cm into, lower first: SAT ${reads[0]![1]?.toFixed(3)}`).toBe(null);
+    expect((reads[1]![0] ?? 0), `${KEEL_INTO[1]! * 100} cm into, upper first: SAT ${reads[1]![0]?.toFixed(3)}`).toBeGreaterThan(0.5);
+    expect(reads[1]![1], "the two orders read the same depth").toBe(reads[1]![0]);
   });
 });
 
@@ -240,6 +239,6 @@ describe("given a monster truck pitched 27° nose-up with its centre 1 m up and 
     stage(monster, cop, 1, 3.6);
     const sat = satCars(cop, monster, normal, contact, 0) ?? 0;
     const overlap = Math.max(cageDepthIn(cop, monster, true), cageDepthIn(monster, cop, true));
-    assert.ok(sat - overlap <= CAGE_STEP, `SAT ${sat.toFixed(3)} m against ${overlap.toFixed(3)} m`);
+    expect(sat - overlap, `SAT ${sat.toFixed(3)} m against ${overlap.toFixed(3)} m`).toBeLessThanOrEqual(CAGE_STEP);
   });
 });

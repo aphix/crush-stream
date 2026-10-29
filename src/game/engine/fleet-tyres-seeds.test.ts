@@ -1,6 +1,5 @@
-import { afterAll, beforeAll, describe } from "vitest";
+import { afterAll, beforeAll, describe, expect } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -72,7 +71,7 @@ describe("given the owner's five-car fleet crash on seeds where the pickup's nos
       `when the cars hit and settle for ${TO_S} s on seed ${seed}, then the pickup's front tyres keep 5 mm under its drawn skin in every frame`, "after the plan: a destroyed nose leaves the tyre standing through the arch liner: the crushed hood and fender must buckle around the tyre, not pass it",
       () => {
         const { least, endsAt } = leastClearance(engine, seed);
-        assert.ok(least >= CLEARANCE_M, `first frame under the 5 mm bar: ${(least * 1000).toFixed(1)} mm at sim ${endsAt.toFixed(2)} s`);
+        expect(least, `first frame under the 5 mm bar: ${(least * 1000).toFixed(1)} mm at sim ${endsAt.toFixed(2)} s`).toBeGreaterThanOrEqual(CLEARANCE_M);
       },
     );
   }

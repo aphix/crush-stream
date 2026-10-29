@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { driverLook } from "./driver-look.ts";
@@ -23,15 +22,15 @@ async function standing(mode: "inline" | "remote" | null): Promise<RagdollSystem
   const sys = await flatSystem();
   system = sys;
   sys["mode"] = mode;
-  assert.ok(sys.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: driverLook(0, 0) }) >= 0, "the walker is placed");
+  expect(sys.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: driverLook(0, 0) }), "the walker is placed").toBeGreaterThanOrEqual(0);
   return sys;
 }
 
 describe("given the player's walker starting where the run's dummies were in the worker's world (a track's)", () => {
   it("when he starts, then the run is in this thread's world, where he is stepped, and not the worker's", async () => {
     const sys = await standing("remote");
-    assert.equal(sys["mode"], "inline");
-    assert.equal(sys.walker.active, true);
+    expect(sys["mode"]).toBe("inline");
+    expect(sys.walker.active).toBe(true);
   });
 });
 
@@ -45,7 +44,7 @@ describe("given the player's walker standing where his ground patch was built", 
       const sys = await standing(null);
       sys["dolls"][WALKER]!.cur[0] = testCase.movedM;
       sys.update(FRAME, [], true, false, null);
-      assert.equal(sys["walkerPatchX"], testCase.expectedPatchX);
+      expect(sys["walkerPatchX"]).toBe(testCase.expectedPatchX);
     });
   }
 });

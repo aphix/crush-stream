@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { fleetClass, fleetStyle, MAX_CARS } from "../scenes/fleet.ts";
@@ -71,8 +70,8 @@ describe(`given the highlight recorder fed a ${MAX_CARS}-car race with a third o
     for (let s = 0; s < WARM; s++) step();
     const perStep = untilQuiet(() => windowPerStep(step), BOUND_B);
     if (process.env.ALLOC_PRINT) console.log(`recorder: ${perStep.toFixed(1)} B/step`);
-    assert.equal(rec.ledger.open.length, 0, "no cluster opened: this measures the steady state");
-    assert.ok(perStep <= BOUND_B, `${perStep.toFixed(1)} B per recorded step > ${BOUND_B} in every window for ${COMPILE_WAIT_S} s: the recorder allocates in steady state`);
+    expect(rec.ledger.open.length, "no cluster opened: this measures the steady state").toBe(0);
+    expect(perStep, `${perStep.toFixed(1)} B per recorded step > ${BOUND_B} in every window for ${COMPILE_WAIT_S} s: the recorder allocates in steady state`).toBeLessThanOrEqual(BOUND_B);
   });
 });
 
@@ -95,7 +94,7 @@ describe("given the allocation measure on a recorded step", () => {
     read(false);
     const plain = read(false);
     const withVector = read(true);
-    assert.ok(withVector - plain > BOUND_B, `${(withVector - plain).toFixed(1)} B per step more for a vector a step: the measure sees nothing`);
+    expect(withVector - plain, `${(withVector - plain).toFixed(1)} B per step more for a vector a step: the measure sees nothing`).toBeGreaterThan(BOUND_B);
   });
 });
 
@@ -164,15 +163,15 @@ describe("given an eleven-car flat field where traffic and police cars crash amo
     // Control: with every car a racer the same field records the cop pair, the traffic pair, a cop on traffic and a wall hit.
     const both = firstImpacts([MAX_CARS, RACERS]);
     const every = both[0]!;
-    assert.ok(every.some((c) => c.includes(7) && c.includes(8)), `the cop pair is no moment even with every car a racer: ${JSON.stringify(every)}`);
-    assert.ok(every.some((c) => c.includes(2) && c.includes(3)), "the traffic pair is no moment even with every car a racer");
-    assert.ok(every.some((c) => c.includes(9) && c.includes(4)), "the cop-on-traffic hit is no moment even with every car a racer");
-    assert.ok(every.some((c) => c.length === 1 && c[0] === WALLER), "the traffic car's wall hit is no moment even with every car a racer");
-    assert.ok(every.some((c) => c.includes(RACER_HIT[0]) && c.includes(RACER_HIT[1])), "the cop's hit on the racer is no moment even with every car a racer");
+    expect(every.some((c) => c.includes(7) && c.includes(8)), `the cop pair is no moment even with every car a racer: ${JSON.stringify(every)}`).toBeTruthy();
+    expect(every.some((c) => c.includes(2) && c.includes(3)), "the traffic pair is no moment even with every car a racer").toBeTruthy();
+    expect(every.some((c) => c.includes(9) && c.includes(4)), "the cop-on-traffic hit is no moment even with every car a racer").toBeTruthy();
+    expect(every.some((c) => c.length === 1 && c[0] === WALLER), "the traffic car's wall hit is no moment even with every car a racer").toBeTruthy();
+    expect(every.some((c) => c.includes(RACER_HIT[0]) && c.includes(RACER_HIT[1])), "the cop's hit on the racer is no moment even with every car a racer").toBeTruthy();
     const field = both[1]!;
-    assert.equal(field.length, 2, `the racer's T-bone and the cop's hit on the racer are the only moments: ${JSON.stringify(field)}`);
-    assert.ok(field.some((c) => c.includes(TBONE[0]) && c.includes(TBONE[1])), `the T-bone is a moment: ${JSON.stringify(field)}`);
-    assert.ok(field.some((c) => c.includes(RACER_HIT[0]) && c.includes(RACER_HIT[1])), `the cop's hit on the racer is a moment: ${JSON.stringify(field)}`);
+    expect(field.length, `the racer's T-bone and the cop's hit on the racer are the only moments: ${JSON.stringify(field)}`).toBe(2);
+    expect(field.some((c) => c.includes(TBONE[0]) && c.includes(TBONE[1])), `the T-bone is a moment: ${JSON.stringify(field)}`).toBeTruthy();
+    expect(field.some((c) => c.includes(RACER_HIT[0]) && c.includes(RACER_HIT[1])), `the cop's hit on the racer is a moment: ${JSON.stringify(field)}`).toBeTruthy();
   });
 });
 
@@ -186,9 +185,9 @@ describe("given a city race with 8 AI, traffic and police", () => {
       w.race.reseed(5);
       w.race.command({ type: "start" });
       const racers = w.race.racers.length;
-      assert.equal(racers, 9, "the player and the 8 AI are the entrants");
-      assert.ok(w.live().length > racers, `${w.live().length} cars on the road: no traffic or police beyond the ${racers} racers`);
-      assert.equal(w.race.recorder["racers"], racers);
+      expect(racers, "the player and the 8 AI are the entrants").toBe(9);
+      expect(w.live().length, `${w.live().length} cars on the road: no traffic or police beyond the ${racers} racers`).toBeGreaterThan(racers);
+      expect(w.race.recorder["racers"]).toBe(racers);
     } finally {
       w.race.exit();
       setGround(null);
@@ -215,9 +214,13 @@ describe("given a racer that hits a cop, and the cop being destroyed later", () 
       return { open: rec.ledger.open.length, kills: rec.ledger.open.reduce((n, c) => n + c.kills, 0) };
     };
     // Control: 1 s after the racer's hit on the cop (inside QUIET_GAP) the cop's death joins the racer's cluster.
-    assert.deepEqual(run(1), { open: 1, kills: 1 }, "a kill inside QUIET_GAP joins the cluster");
+    const inside = run(1);
+    expect(inside.open, "a kill inside QUIET_GAP joins the cluster: open clusters").toBe(1);
+    expect(inside.kills, "a kill inside QUIET_GAP joins the cluster: kills").toBe(1);
     // 2 s after: the cluster is still open (POST_ROLL) but an impact would not join it, so neither does the kill.
-    assert.deepEqual(run(2), { open: 1, kills: 0 }, "a kill past QUIET_GAP opened a cluster of its own: a clip starting on a non-crash");
+    const past = run(2);
+    expect(past.open, "a kill past QUIET_GAP opened a cluster of its own: a clip starting on a non-crash: open clusters").toBe(1);
+    expect(past.kills, "a kill past QUIET_GAP opened a cluster of its own: a clip starting on a non-crash: kills").toBe(0);
   });
 });
 
@@ -254,13 +257,13 @@ describe("given a car the recorder read while crashed, then respawned with the r
     rec["readStrain"](car, rowA, 0, 0);
     const serialA = car.deform.cornerSerial;
     car.spawn(0, 0, 0);
-    assert.equal(car.deform.massActive, false, "the respawn left no wreck");
+    expect(car.deform.massActive, "the respawn left no wreck").toBe(false);
     car.group.updateMatrixWorld(true);
     const hit = car.group.position.clone().addScaledVector(car.forward, 2.05);
     hit.y = 0.4;
     car.applyImpact(hit, car.forward.clone().negate(), 15, 15);
     for (let s = 0; s < 2400 && car.deform.cornerSerial < serialA; s++) car.step(H);
-    assert.ok(car.deform.massActive && car.deform.cornerSerial >= serialA, "the gentle crash reached the cached serial");
+    expect(car.deform.massActive && car.deform.cornerSerial >= serialA, "the gentle crash reached the cached serial").toBeTruthy();
     return { rec, car, rowA };
   }
 
@@ -270,8 +273,8 @@ describe("given a car the recorder read while crashed, then respawned with the r
     const rowB = new Float32Array(CAGES.length);
     rec["readStrain"](car, rowB, 0, 0);
     const plain = plainStrain(car);
-    for (let k = 0; k < CAGES.length; k++) assert.ok(Math.abs(rowB[k]! - plain[k]!) < 1e-6, `cage ${CAGES[k]!.name}: ${rowB[k]} != ${plain[k]}`);
-    assert.ok(rowB.some((v, k) => v !== rowA[k]), "the second crash's row differs from the first's");
+    for (let k = 0; k < CAGES.length; k++) expect(Math.abs(rowB[k]! - plain[k]!), `cage ${CAGES[k]!.name}: ${rowB[k]} != ${plain[k]}`).toBeLessThan(1e-6);
+    expect(rowB.some((v, k) => v !== rowA[k]), "the second crash's row differs from the first's").toBeTruthy();
   });
 
   it("when a step starts after the respawn without a new begin, then the step's strain row is the second crash's", () => {
@@ -279,8 +282,8 @@ describe("given a car the recorder read while crashed, then respawned with the r
     rec.startStep([car]);
     const rowB = rec["strainPre"].subarray(0, CAGES.length);
     const plain = plainStrain(car);
-    for (let k = 0; k < CAGES.length; k++) assert.ok(Math.abs(rowB[k]! - plain[k]!) < 1e-6, `cage ${CAGES[k]!.name}: ${rowB[k]} != ${plain[k]}`);
-    assert.ok(rowB.some((v, k) => v !== rowA[k]), "the second crash's row differs from the first's");
+    for (let k = 0; k < CAGES.length; k++) expect(Math.abs(rowB[k]! - plain[k]!), `cage ${CAGES[k]!.name}: ${rowB[k]} != ${plain[k]}`).toBeLessThan(1e-6);
+    expect(rowB.some((v, k) => v !== rowA[k]), "the second crash's row differs from the first's").toBeTruthy();
   });
 });
 
@@ -298,8 +301,8 @@ describe("given a crashed car the recorder tracks, whose engine is then killed f
       rec.startStep(cars);
       rec.endStep(cars, H, 0, 0);
     }
-    assert.equal(rec["strainCar"][0], cars[0], "the wreck's strain baseline is held");
-    assert.equal(rec["keyCount"], 1, "one keyframe (the first step's)");
+    expect(rec["strainCar"][0], "the wreck's strain baseline is held").toBe(cars[0]);
+    expect(rec["keyCount"], "one keyframe (the first step's)").toBe(1);
     return { rec, cars, firstKey: rec["keyStep"][0]! };
   }
 
@@ -307,10 +310,10 @@ describe("given a crashed car the recorder tracks, whose engine is then killed f
     const { rec, cars, firstKey } = setup();
     cars[0]!.disable();
     rec.startStep(cars);
-    assert.equal(rec["keyCount"], 2, "the kill step is keyed");
-    assert.equal(rec["strainCar"][0], cars[0], "the strain baseline survives (the car was not put anywhere)");
-    assert.equal(rec["keyPlaced"][1], 0, "no car was put on a spot in the kill step's keyframe");
-    assert.equal(rec["keyShot"][1], 1, "the shot car is the keyframe's");
-    assert.equal(rec["arrivedAt"](0, Infinity, 0), firstKey, "the shot car arrived at its first keyframe, not at the kill");
+    expect(rec["keyCount"], "the kill step is keyed").toBe(2);
+    expect(rec["strainCar"][0], "the strain baseline survives (the car was not put anywhere)").toBe(cars[0]);
+    expect(rec["keyPlaced"][1], "no car was put on a spot in the kill step's keyframe").toBe(0);
+    expect(rec["keyShot"][1], "the shot car is the keyframe's").toBe(1);
+    expect(rec["arrivedAt"](0, Infinity, 0), "the shot car arrived at its first keyframe, not at the kill").toBe(firstKey);
   });
 });

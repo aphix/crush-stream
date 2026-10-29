@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Ground } from "./ground.ts";
 import { BAKE, staticTop } from "./surfaces.ts";
 
@@ -31,22 +30,22 @@ describe("given a grid with gaussian hills past its edge", () => {
           for (const [dx, dz] of [[-1, -1], [-1, 1], [1, -1], [1, 1], [0, 0], [0.5, -0.3]] as const) {
             const h = g.heightAt(x + dx * half, z + dz * half);
             worst = Math.min(worst, top - h);
-            assert.ok(top >= h, `bound ${top} under the terrain ${h} at ${x + dx * half}, ${z + dz * half} (box half ${half})`);
+            expect(top, `bound ${top} under the terrain ${h} at ${x + dx * half}, ${z + dz * half} (box half ${half})`).toBeGreaterThanOrEqual(h);
           }
         }
       }
     }
-    assert.ok(worst >= 0 && worst < 1e-3, `the bound is tight somewhere (least slack ${worst})`);
+    expect(worst >= 0 && worst < 1e-3, `the bound is tight somewhere (least slack ${worst})`).toBeTruthy();
   });
 
   it("when a box lies far from every hill, then the bound is far under the sum of the hills' heights, and with the bake off it is that sum", () => {
     const g = terrain();
     const sum = 4 + 9;
-    assert.ok(staticTop(g, FAR, FAR + 1, FAR, FAR + 1) < 1e-6, "the terrain 2 km from every hill is flat to a micrometre");
+    expect(staticTop(g, FAR, FAR + 1, FAR, FAR + 1), "the terrain 2 km from every hill is flat to a micrometre").toBeLessThan(1e-6);
     BAKE.on = false;
     try {
       const g2 = terrain();
-      assert.ok(staticTop(g2, FAR, FAR + 1, FAR, FAR + 1) >= sum, "with the bake off the bound is the hills' whole height");
+      expect(staticTop(g2, FAR, FAR + 1, FAR, FAR + 1), "with the bake off the bound is the hills' whole height").toBeGreaterThanOrEqual(sum);
     } finally {
       BAKE.on = true;
     }

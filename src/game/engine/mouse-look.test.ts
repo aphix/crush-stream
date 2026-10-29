@@ -1,6 +1,6 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { MouseLook, type LockCanvas, type LockDoc } from "./mouse-look.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** A document whose pointer lock the test drives: the browser grants it, or takes it away (Esc, tab hide, alt-tab). */
 function stage(refuse: "none" | "reject" | "error" = "none") {
@@ -39,30 +39,31 @@ describe("given mouse look (the pointer-lock camera control), where losing the l
   it("when the browser grants the lock, then the mode turns on and raw mouse movement reaches the camera", () => {
     const s = stage();
     s.look.request(s.canvas);
-    assert.equal(s.look.on, true);
+    expect(s.look.on).toBe(true);
     s.mouse(3, -2);
-    assert.deepEqual(s.calls.moves, [[3, -2]]);
+    expect(s.calls.moves, "moves reaching the camera").toHaveLength(1);
+    expect(firstMismatch(s.calls.moves[0], [3, -2]), "the move reaching the camera").toBeUndefined();
   });
 
   it("when the browser drops the lock (Esc, tab hide, alt-tab), then the lock-lost report fires exactly once, the mode turns off, and later movement and stray repeat events do nothing", () => {
     const s = stage();
     s.look.request(s.canvas);
     s.browserDrops();
-    assert.equal(s.calls.lost, 1);
-    assert.equal(s.look.on, false);
+    expect(s.calls.lost).toBe(1);
+    expect(s.look.on).toBe(false);
     s.browserDrops(); // a stray repeat of the event: nothing listens any more
-    assert.equal(s.calls.lost, 1);
+    expect(s.calls.lost).toBe(1);
     s.mouse(5, 5);
-    assert.equal(s.calls.moves.length, 0, "movement after the drop does not look round");
+    expect(s.calls.moves.length, "movement after the drop does not look round").toBe(0);
   });
 
   it("when the player leaves on purpose (toggle, menu, scene change), then no lock-lost report fires, so the game never pauses, the mode is off and the lock is released", () => {
     const s = stage();
     s.look.request(s.canvas);
     s.look.exit();
-    assert.equal(s.calls.lost, 0);
-    assert.equal(s.look.on, false);
-    assert.equal(s.doc.pointerLockElement, null);
+    expect(s.calls.lost).toBe(0);
+    expect(s.look.on).toBe(false);
+    expect(s.doc.pointerLockElement).toBe(null);
   });
 
   it("when the player exits with Esc and the mode asks again and the lock is dropped again, then each drop gives its own lock-lost report (one Esc, one report)", () => {
@@ -70,7 +71,7 @@ describe("given mouse look (the pointer-lock camera control), where losing the l
     for (let i = 1; i <= 2; i++) {
       s.look.request(s.canvas);
       s.browserDrops();
-      assert.equal(s.calls.lost, i);
+      expect(s.calls.lost).toBe(i);
     }
   });
 
@@ -79,9 +80,9 @@ describe("given mouse look (the pointer-lock camera control), where losing the l
       const s = stage(how);
       s.look.request(s.canvas);
       const refusal = s.refusal();
-      if (refusal !== null) await assert.rejects(refusal, /exited lock recently/, how);
-      assert.equal(s.look.on, false, how);
-      assert.equal(s.calls.lost, 0, how);
+      if (refusal !== null) await expect(refusal, how).rejects.toThrow(/exited lock recently/);
+      expect(s.look.on, how).toBe(false);
+      expect(s.calls.lost, how).toBe(0);
       s.look.request(s.canvas); // asking again after the refusal is allowed
     }
   });
@@ -91,6 +92,6 @@ describe("given mouse look (the pointer-lock camera control), where losing the l
     s.look.request(s.canvas);
     s.look.request(s.canvas);
     s.browserDrops();
-    assert.equal(s.calls.lost, 1);
+    expect(s.calls.lost).toBe(1);
   });
 });

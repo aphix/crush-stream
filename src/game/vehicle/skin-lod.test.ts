@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import { DT } from "./test-support.ts";
 
@@ -21,13 +20,13 @@ function meshPositions(c: DeformableCar): Float32Array[] {
   return out;
 }
 
-/** Every pane's state, one string (assert.equal: a bounded compare, no deep diff). */
+/** Every pane's state, one string (a bounded compare, no deep diff). */
 const glassStates = (c: DeformableCar) => c["glassPanes"].map((g) => g.state).join();
 
 const bodyPositions = (c: DeformableCar) => c.body.geometry.getAttribute("position").array as Float32Array;
 
 function maxDiff(a: Float32Array[], b: Float32Array[]): number {
-  assert.equal(a.length, b.length);
+  expect(a.length).toBe(b.length);
   let d = 0;
   for (let k = 0; k < a.length; k++) for (let i = 0; i < a[k]!.length; i++) d = Math.max(d, Math.abs(a[k]![i]! - b[k]![i]!));
   return d;
@@ -62,14 +61,14 @@ describe("given a car whose dents are drawn late while it is off-screen (deferre
     crashFront(ref, false, CONTACT);
     crashFront(lod, true, CONTACT);
 
-    assert.ok(maxDiff([bodyPositions(ref)], rest) > 0.05, "reference car never dented");
-    assert.equal(maxDiff([bodyPositions(lod)], rest), 0, "deferred car's body moved while off-screen");
-    assert.equal(lod.deform.skinOwed, true);
+    expect(maxDiff([bodyPositions(ref)], rest), "reference car never dented").toBeGreaterThan(0.05);
+    expect(maxDiff([bodyPositions(lod)], rest), "deferred car's body moved while off-screen").toBe(0);
+    expect(lod.deform.skinOwed).toBe(true);
 
     lod.flushDeferredSkin();
-    assert.equal(lod.deform.skinOwed, false);
-    assert.equal(glassStates(lod), glassStates(ref), "deferred car's glass broke differently");
-    assert.ok(maxDiff(meshPositions(lod), meshPositions(ref)) < 1e-6, "catch-up pose differs from the always-skinned car");
+    expect(lod.deform.skinOwed).toBe(false);
+    expect(glassStates(lod), "deferred car's glass broke differently").toBe(glassStates(ref));
+    expect(maxDiff(meshPositions(lod), meshPositions(ref)), "catch-up pose differs from the always-skinned car").toBeLessThan(1e-6);
   });
 
   it("when the deferral is lifted in the middle of the crush, then the next skin update settles what was owed and the car matches its always-drawn twin", () => {
@@ -80,9 +79,9 @@ describe("given a car whose dents are drawn late while it is off-screen (deferre
     lod.deform.skinDeferred = false;
     lod.updateSkin();
     ref.updateSkin();
-    assert.equal(lod.deform.skinOwed, false);
-    assert.equal(glassStates(lod), glassStates(ref));
-    assert.ok(maxDiff(meshPositions(lod), meshPositions(ref)) < 1e-6);
+    expect(lod.deform.skinOwed).toBe(false);
+    expect(glassStates(lod)).toBe(glassStates(ref));
+    expect(maxDiff(meshPositions(lod), meshPositions(ref))).toBeLessThan(1e-6);
   });
 
   it("when the crush window closes while the drawing is still deferred, then once caught up nothing is left owed and the car shows the same final dents and glass as its twin", () => {
@@ -91,9 +90,9 @@ describe("given a car whose dents are drawn late while it is off-screen (deferre
     crashFront(ref, false, SETTLED);
     crashFront(lod, true, SETTLED);
     lod.flushDeferredSkin();
-    assert.equal(lod.deform.skinOwed, false);
-    assert.equal(glassStates(lod), glassStates(ref), "deferred car's glass broke differently");
-    assert.ok(maxDiff(meshPositions(lod), meshPositions(ref)) < 1e-6, "caught-up car shows a different dent");
+    expect(lod.deform.skinOwed).toBe(false);
+    expect(glassStates(lod), "deferred car's glass broke differently").toBe(glassStates(ref));
+    expect(maxDiff(meshPositions(lod), meshPositions(ref)), "caught-up car shows a different dent").toBeLessThan(1e-6);
   });
 
   it("when the car is visually reset with drawing still owed, then nothing is left owed and the rebuilt car is not dented again", () => {
@@ -101,9 +100,9 @@ describe("given a car whose dents are drawn late while it is off-screen (deferre
     const rest = [bodyPositions(lod).slice()];
     crashFront(lod, true, CONTACT);
     lod.resetVisual();
-    assert.equal(lod.deform.skinOwed, false);
+    expect(lod.deform.skinOwed).toBe(false);
     lod.deform.skinDeferred = false;
     lod.updateSkin();
-    assert.ok(maxDiff([bodyPositions(lod)], rest) < 1e-6);
+    expect(maxDiff([bodyPositions(lod)], rest)).toBeLessThan(1e-6);
   });
 });

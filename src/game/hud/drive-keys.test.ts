@@ -1,8 +1,8 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { driveKeys, footKeys } from "./drive-keys.ts";
 import { boostPadButton } from "../vehicle/drive-input.ts";
 import { padButtonName } from "../vehicle/gamepad.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 describe("given the driven car's key line", () => {
   const cases = [
@@ -13,7 +13,7 @@ describe("given the driven car's key line", () => {
   ] as const;
   for (const testCase of cases) {
     it(testCase.it, () => {
-      assert.equal(driveKeys(testCase.pad, testCase.boostable), testCase.expectedKeys);
+      expect(driveKeys(testCase.pad, testCase.boostable)).toBe(testCase.expectedKeys);
     });
   }
 });
@@ -26,7 +26,7 @@ describe("given the walker's key line", () => {
   ] as const;
   for (const testCase of cases) {
     it(testCase.it, () => {
-      assert.equal(footKeys(testCase.pad, testCase.prompt), testCase.expectedKeys);
+      expect(footKeys(testCase.pad, testCase.prompt)).toBe(testCase.expectedKeys);
     });
   }
 });
@@ -34,8 +34,8 @@ describe("given the walker's key line", () => {
 describe("given the pad button the drive input binds to Boost", () => {
   it("when a controller drives a car that may boost, then the line names that button as boost", () => {
     const button = boostPadButton();
-    assert.ok(button !== null, "a pad button boosts");
+    must(button !== null, "a pad button boosts");
     const name = padButtonName("generic", button);
-    assert.ok(driveKeys(true, true).split(" · ").includes(`${name} boost`), `no "${name} boost" in: ${driveKeys(true, true)}`);
+    expect(driveKeys(true, true).split(" · ").includes(`${name} boost`), `no "${name} boost" in: ${driveKeys(true, true)}`).toBeTruthy();
   });
 });

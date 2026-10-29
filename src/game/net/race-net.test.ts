@@ -1,10 +1,11 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { FRAME, frame, makeWorld, type World } from "../world/race-world.test-util.ts";
+import type { RaceHudRow } from "../match/types.ts";
 import { SURVIVAL } from "../match/survival.ts";
 import { shortenBustHold } from "../world/survival-run.test-util.ts";
 import { raceKey, readRace, writeRace } from "./codec.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 afterEach(() => setGround(null));
 
@@ -27,41 +28,36 @@ function clientOf(host: World, self: number): World {
   c.race.command({ type: "options", options: { trackId: "oval", aiCount: host.live().length - 1 } });
   host.race.look = 0xcafe1234;
   const wire = readRace(writeRace({ lobby: null, trackId: "oval", look: host.race.look, gate: null, next: null, snap: host.race.snapshot() }));
-  assert.ok(wire?.snap, "the host's race state passes the client's checks");
-  assert.equal(wire.look, 0xcafe1234, "the field's driver-look seed crosses the wire");
+  must(wire?.snap, "the host's race state passes the client's checks");
+  must(wire.look === 0xcafe1234, "the field's driver-look seed crosses the wire");
   c.race.look = wire.look;
   c.race.applySnapshot(wire.snap, self);
   return c;
+}
+
+/** The standings rows sorted by car, each as [car, name, you], field by field. */
+function expectStandings(standings: readonly RaceHudRow[], want: readonly (readonly [number, string, boolean])[], label: string): void {
+  const rows = standings.map((r) => [r.id, r.name, r.you] as const).sort((a, b) => Number(a[0]) - Number(b[0]));
+  expect(rows, `${label}: rows`).toHaveLength(want.length);
+  for (const [i, w] of want.entries()) {
+    expect(rows[i]?.[0], `${label}: row ${i} car`).toBe(w[0]);
+    expect(rows[i]?.[1], `${label}: row ${i} name`).toBe(w[1]);
+    expect(rows[i]?.[2], `${label}: row ${i} you`).toBe(w[2]);
+  }
 }
 
 describe("given a host race on the oval with three AI cars, the host player Ann, and a network peer Zed seated on car 2", () => {
   it("when a client adopts the host's rules state as car 2, then the host seats Zed as a remote car and the client seats him as its own player, each under the chosen names", () => {
     const host = hostRace(new Map([[2, "Zed"]]));
     const hud = host.race.hud();
-    assert.deepEqual(
-      hud.standings.map((r) => [r.id, r.name, r.you]).sort((a, b) => Number(a[0]) - Number(b[0])),
-      [
-        [0, "Ann", true],
-        [1, "Car1", false],
-        [2, "Zed", false],
-        [3, "Car3", false],
-      ],
-    );
+    expectStandings(hud.standings, [[0, "Ann", true], [1, "Car1", false], [2, "Zed", false], [3, "Car3", false]], "the host's table");
 
     const client = clientOf(host, 2);
     const ch = client.race.hud();
-    assert.equal(ch.you?.id, 2, "the client's own row is its car");
-    assert.deepEqual(
-      ch.standings.map((r) => [r.id, r.name, r.you]).sort((a, b) => Number(a[0]) - Number(b[0])),
-      [
-        [0, "Ann", false],
-        [1, "Car1", false],
-        [2, "Zed", true],
-        [3, "Car3", false],
-      ],
-    );
-    assert.equal(client.seat.mode, "drive");
-    assert.equal(client.seat.carIndex, 2);
+    expect(ch.you?.id, "the client's own row is its car").toBe(2);
+    expectStandings(ch.standings, [[0, "Ann", false], [1, "Car1", false], [2, "Zed", true], [3, "Car3", false]], "the client's table");
+    expect(client.seat.mode).toBe("drive");
+    expect(client.seat.carIndex).toBe(2);
     host.race.exit();
     client.race.exit();
   });
@@ -71,20 +67,20 @@ describe("given a host race on the oval with three AI cars, the host player Ann,
     const state = { acc: 0 };
     const start = host.live()[2]!.group.position.clone();
     for (let k = 0; k < 60 * 6 && host.race.phase !== "racing"; k++) frame(host, state);
-    assert.equal(host.race.phase, "racing");
+    expect(host.race.phase).toBe("racing");
     // No input yet: the seat is held, it never falls back to the AI.
     for (let k = 0; k < 60; k++) frame(host, state);
-    assert.ok(host.live()[2]!.group.position.distanceTo(start) < 1, "an unseated remote car waits on the grid");
+    expect(host.live()[2]!.group.position.distanceTo(start), "an unseated remote car waits on the grid").toBeLessThan(1);
     host.race.setRemoteInput(2, { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false });
     for (let k = 0; k < 120; k++) frame(host, state);
-    assert.ok(host.live()[2]!.velocity.length() > 5, "the peer's throttle drives its car");
+    expect(host.live()[2]!.velocity.length(), "the peer's throttle drives its car").toBeGreaterThan(5);
     // The host's own menu (pause) gates only the host's respawn, never a peer's.
     host.race.command({ type: "pause" });
     host.race.requestRespawn(0);
     host.race.requestRespawn(2);
     const snap = host.race.snapshot()!;
-    assert.equal(snap.cars.find((c) => c.id === 2)!.status, "respawning", "the peer's respawn request reached the rules");
-    assert.equal(snap.cars.find((c) => c.id === 0)!.status, "racing", "the paused host's own request is ignored");
+    expect(snap.cars.find((c) => c.id === 2)!.status, "the peer's respawn request reached the rules").toBe("respawning");
+    expect(snap.cars.find((c) => c.id === 0)!.status, "the paused host's own request is ignored").toBe("racing");
     host.race.exit();
   });
 });
@@ -93,9 +89,9 @@ describe("given a host race with no network peers seated", () => {
   it("when a peer joins mid-race as car 4 and adopts the host's state, then it spectates until the next race instead of driving", () => {
     const host = hostRace(new Map());
     const late = clientOf(host, 4);
-    assert.equal(late.race.hud().you, null, "not in this race's field");
-    assert.notEqual(late.seat.carIndex, 4);
-    assert.notEqual(late.seat.mode, "drive");
+    expect(late.race.hud().you, "not in this race's field").toBe(null);
+    expect(late.seat.carIndex).not.toBe(4);
+    expect(late.seat.mode).not.toBe("drive");
     host.race.exit();
     late.race.exit();
   });
@@ -106,8 +102,8 @@ function survivalClientOf(host: World, self: number): World {
   const c = makeWorld();
   c.race.enter(true);
   const wire = readRace(writeRace({ lobby: null, trackId: host.race.snapshot()!.trackId, look: 0, gate: null, next: null, snap: host.race.snapshot() }));
-  assert.ok(wire?.snap, "the host's Survival state passes the client's checks");
-  assert.ok(wire.snap.survival, "the snapshot says Survival");
+  must(wire?.snap, "the host's Survival state passes the client's checks");
+  must(wire.snap.survival, "the snapshot says Survival");
   c.race.applySnapshot(wire.snap, self);
   return c;
 }
@@ -135,20 +131,20 @@ describe("given a hosted Survival run with the host and a peer Zed seated on car
       host.race.setRemoteInput(1, sit);
       frame(host, state);
     }
-    assert.equal(host.race.phase, "finished", "both humans were held and busted");
+    expect(host.race.phase, "both humans were held and busted").toBe("finished");
     const hostHud = host.race.hud();
     const client = survivalClientOf(host, 1);
     const hud = client.race.hud();
-    assert.equal(hud.phase, "finished");
-    assert.equal(hud.team!.humans, hostHud.team!.humans);
-    assert.equal(hud.team!.free, hostHud.team!.free);
-    assert.equal(hud.team!.won, hostHud.team!.won);
-    assert.equal(hud.survival!.cops, hostHud.survival!.cops, "the pack's cops ride the snapshot");
-    assert.equal(hud.survival!.wrecked, hostHud.survival!.wrecked);
-    assert.ok(Math.abs(hud.survival!.result!.time - hostHud.survival!.result!.time) <= 0.0005, "the team's time, as a message keeps it (to the millisecond)");
+    expect(hud.phase).toBe("finished");
+    expect(hud.team!.humans).toBe(hostHud.team!.humans);
+    expect(hud.team!.free).toBe(hostHud.team!.free);
+    expect(hud.team!.won).toBe(hostHud.team!.won);
+    expect(hud.survival!.cops, "the pack's cops ride the snapshot").toBe(hostHud.survival!.cops);
+    expect(hud.survival!.wrecked).toBe(hostHud.survival!.wrecked);
+    expect(Math.abs(hud.survival!.result!.time - hostHud.survival!.result!.time), "the team's time, as a message keeps it (to the millisecond)").toBeLessThanOrEqual(0.0005);
     const hostCause = hostHud.survival!.result!.cause;
-    assert.equal(hud.survival!.result!.cause, hostCause, "the host's cause");
-    assert.ok(hostCause === "busted" || hostCause === "wrecked", `two held humans end the run busted or wrecked, not ended (${hostCause})`);
+    expect(hud.survival!.result!.cause, "the host's cause").toBe(hostCause);
+    expect(hostCause === "busted" || hostCause === "wrecked", `two held humans end the run busted or wrecked, not ended (${hostCause})`).toBeTruthy();
     host.race.exit();
     client.race.exit();
   });
@@ -181,13 +177,13 @@ describe("given a hosted Survival run with the host and a peer Zed on car 1 wher
           wrecked = true;
         }
       }
-      assert.equal(host.race.phase, "finished", "both humans fell");
+      expect(host.race.phase, "both humans fell").toBe("finished");
       const hostCause = host.race.hud().survival!.result!.cause;
-      assert.equal(hostCause, cause, "the host's own car's cause");
+      expect(hostCause, "the host's own car's cause").toBe(cause);
       const peer = host.race.snapshot()!.cars.find((c) => c.id === 1)!;
-      assert.equal(peer.bustedAt != null ? "busted" : "wrecked", own, "the peer's own car fell the other way");
+      expect(peer.bustedAt != null ? "busted" : "wrecked", "the peer's own car fell the other way").toBe(own);
       const client = survivalClientOf(host, 1);
-      assert.equal(client.race.hud().survival!.result!.cause, hostCause, "the client's card carries the host's cause, not its own car's");
+      expect(client.race.hud().survival!.result!.cause, "the client's card carries the host's cause, not its own car's").toBe(hostCause);
       host.race.exit();
       client.race.exit();
     });
@@ -201,11 +197,11 @@ describe("given a hosted Survival run that has just begun with a peer Zed seated
     host.race.enter(true);
     const state = { acc: 0 };
     for (let n = 0; n < 10; n++) frame(host, state);
-    assert.ok(host.race.time < 0, "the run has not turned green yet");
+    expect(host.race.time, "the run has not turned green yet").toBeLessThan(0);
     const client = survivalClientOf(host, 1);
-    assert.notEqual(client.race.hud().you, null, "car 1 is in the host's field");
-    assert.equal(client.seat.mode, "drive", "the client drives its car from the first state");
-    assert.equal(client.seat.carIndex, 1);
+    expect(client.race.hud().you, "car 1 is in the host's field").not.toBe(null);
+    expect(client.seat.mode, "the client drives its car from the first state").toBe("drive");
+    expect(client.seat.carIndex).toBe(1);
     host.race.exit();
     client.race.exit();
   });
@@ -221,22 +217,22 @@ describe("given a hosted campaign with the host and a peer seated", () => {
     const client = clientOf(host, 1);
     const hostTable = host.race.hud().campaign!;
     const table = client.race.hud().campaign!;
-    assert.equal(table.round, hostTable.round);
-    assert.equal(table.tracks.join(), hostTable.tracks.join());
-    assert.equal(table.standings.map((r) => `${r.id} ${r.name}`).join(), hostTable.standings.map((r) => `${r.id} ${r.name}`).join());
-    assert.equal(table.standings.find((r) => r.kind === "player")?.id, 1, "the table marks this browser's own car as the player, the host's as remote");
-    assert.equal(client.race.hud().mode, "campaign");
+    expect(table.round).toBe(hostTable.round);
+    expect(table.tracks.join()).toBe(hostTable.tracks.join());
+    expect(table.standings.map((r) => `${r.id} ${r.name}`).join()).toBe(hostTable.standings.map((r) => `${r.id} ${r.name}`).join());
+    expect(table.standings.find((r) => r.kind === "player")?.id, "the table marks this browser's own car as the player, the host's as remote").toBe(1);
+    expect(client.race.hud().mode).toBe("campaign");
     // Host on its standings screen: a client whose results are up follows; one still racing does not.
     const snap = host.race.snapshot()!;
-    assert.equal(snap.standings, false);
+    expect(snap.standings).toBe(false);
     client.race.applySnapshot({ ...structuredClone(snap), standings: true }, 1);
-    assert.equal(client.race.hud().menu, null, "a client not yet at its results stays where it is");
+    expect(client.race.hud().menu, "a client not yet at its results stays where it is").toBe(null);
     const over = { ...structuredClone(snap), phase: "finished" as const };
     client.race.applySnapshot(over, 1);
     for (let n = 0; n < 200 && client.race.hud().menu !== "results"; n++) client.race.frame(FRAME);
-    assert.equal(client.race.hud().menu, "results", "its own results come first");
+    expect(client.race.hud().menu, "its own results come first").toBe("results");
     client.race.applySnapshot({ ...structuredClone(over), standings: true }, 1);
-    assert.equal(client.race.hud().menu, "standings", "then it follows the host to the standings");
+    expect(client.race.hud().menu, "then it follows the host to the standings").toBe("standings");
     host.race.exit();
     client.race.exit();
   });
@@ -244,9 +240,9 @@ describe("given a hosted campaign with the host and a peer seated", () => {
 
 /** `a` and `b` equal, numbers within `tol` (a message keeps a fraction to the millimetre). */
 function nearlyEqual(a: unknown, b: unknown, tol: number, path = "hud"): void {
-  if (typeof a === "number" && typeof b === "number") return assert.ok(Math.abs(a - b) <= tol, `${path}: ${a} vs ${b}`);
-  if (typeof a !== "object" || a === null || typeof b !== "object" || b === null) return assert.equal(a, b, path);
-  assert.equal(Object.keys(a).join(), Object.keys(b).join(), path);
+  if (typeof a === "number" && typeof b === "number") return expect(Math.abs(a - b), `${path}: ${a} vs ${b}`).toBeLessThanOrEqual(tol);
+  if (typeof a !== "object" || a === null || typeof b !== "object" || b === null) return expect(a, path).toBe(b);
+  expect(Object.keys(a).join(), path).toBe(Object.keys(b).join());
   for (const k of Object.keys(a)) nearlyEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], tol, `${path}.${k}`);
 }
 
@@ -320,13 +316,13 @@ for (const { aiCount, cars, boundBps } of [{ aiCount: 3, cars: 4, boundBps: 2500
         lastHostBar = hostBar;
         lastBar = bar;
       }
-      assert.equal(host.race.phase, "finished", "the race ran to its results");
-      assert.ok(statuses.has("finished") && (statuses.has("dnf") || statuses.has("out")), `finishers and a car that did not finish: ${[...statuses]}`);
-      assert.ok(barError < 0.02, `the guest's distance bar is within ${barError.toFixed(4)} of the host's (of the race's length)`);
-      assert.ok(quiet > 600 && moved >= 0.95 * quiet, `the bar moved on ${moved} of ${quiet} frames the guest heard nothing`);
+      expect(host.race.phase, "the race ran to its results").toBe("finished");
+      expect(statuses.has("finished") && (statuses.has("dnf") || statuses.has("out")), `finishers and a car that did not finish: ${[...statuses]}`).toBeTruthy();
+      expect(barError, `the guest's distance bar is within ${barError.toFixed(4)} of the host's (of the race's length)`).toBeLessThan(0.02);
+      expect(quiet > 600 && moved >= 0.95 * quiet, `the bar moved on ${moved} of ${quiet} frames the guest heard nothing`).toBeTruthy();
       const seconds = (n + 1) / 60;
       console.log(`race message, ${cars} cars: ${sent} of ${offers} offers sent, ${(bytes / seconds).toFixed(0)} B/s (${(unrounded / seconds).toFixed(0)} B/s as the array-of-objects JSON offered every time); distance bar worst ${barError.toFixed(4)} off the host's, moved on ${moved} of ${quiet} quiet frames`);
-      assert.ok(bytes / seconds < boundBps, `${(bytes / seconds).toFixed(0)} B/s of race messages with ${cars} cars`);
+      expect(bytes / seconds, `${(bytes / seconds).toFixed(0)} B/s of race messages with ${cars} cars`).toBeLessThan(boundBps);
       // A bust and a DNF in the final state cross the codec as they were.
       const snap = host.race.snapshot()!;
       snap.cars[1]!.status = "dnf";
@@ -334,7 +330,7 @@ for (const { aiCount, cars, boundBps } of [{ aiCount: 3, cars: 4, boundBps: 2500
       client.race.applySnapshot(structuredClone(snap), 2);
       const direct = raceView(client);
       client.race.applySnapshot(readRace(writeRace({ lobby: null, trackId: "oval", look: 0, gate: null, next: null, snap }))!.snap!, 2);
-      assert.ok(direct.results!.some((r) => r.busted), "the bust shows in the results");
+      expect(direct.results!.some((r) => r.busted), "the bust shows in the results").toBeTruthy();
       nearlyEqual(raceView(client), direct, 0.0015);
       host.race.exit();
       client.race.exit();
@@ -381,10 +377,10 @@ describe("given a hosted Survival run in which a peer Zed on car 1 is held still
       if (!heard) quiet++;
       worst = Math.max(worst, Math.abs(chase.left - Math.max(0, SURVIVAL.bustTime - hostCar.stopped)));
     }
-    assert.equal(host.race.phase, "finished", "the held humans were busted");
-    assert.ok(quiet > 60, `the gauge was compared on ${quiet} frames the guest heard nothing (${compared} in all)`);
+    expect(host.race.phase, "the held humans were busted").toBe("finished");
+    expect(quiet, `the gauge was compared on ${quiet} frames the guest heard nothing (${compared} in all)`).toBeGreaterThan(60);
     console.log(`bust gauge: ${compared} frames compared (${quiet} with nothing heard), worst ${worst.toFixed(4)} s off the host's`);
-    assert.ok(worst < 0.02, `the guest's gauge is ${worst.toFixed(4)} s from the host's at worst`);
+    expect(worst, `the guest's gauge is ${worst.toFixed(4)} s from the host's at worst`).toBeLessThan(0.02);
     host.race.exit();
     client.race.exit();
   });

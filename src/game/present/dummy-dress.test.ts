@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { dressRow } from "./dummy-dress.ts";
 import { OUTFIT, type DriverLook } from "./driver-look.ts";
 import { FLAGS_AT, ROW_TEXELS } from "./dummy-rig.ts";
@@ -23,8 +22,8 @@ describe("given a slot dressed for its look", () => {
   for (const testCase of testCases) {
     it(testCase.it, () => {
       const [upper, legs] = hangOf(testCase.look, testCase.cop);
-      assert.equal(upper, testCase.hang[0], "torso and sleeves");
-      assert.equal(legs, testCase.hang[1], "trousers");
+      expect(upper, "torso and sleeves").toBe(testCase.hang[0]);
+      expect(legs, "trousers").toBe(testCase.hang[1]);
     });
   }
 });

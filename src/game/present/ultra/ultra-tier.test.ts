@@ -1,8 +1,8 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { AutoFx } from "../auto-fx.ts";
 import { describePost, FX_TIERS, type FxTier } from "../engine-post.ts";
 import { benchPlan } from "../../engine/engine-bench-plan.ts";
+import { firstMismatch } from "../../kernel/compare-arrays.test-util.ts";
 
 /** A nearly idle main thread (ms per frame) and no GPU timer, as in `auto-fx.test.ts`: only the wall rate varies. */
 const LIGHT_WORK_MS = 3;
@@ -28,13 +28,13 @@ function feed(fx: AutoFx, seconds: number, matchTime: (t: number) => number | nu
 
 describe("given the effects tiers a player can pick", () => {
   it("when the list is read, then Ultra is the top tier, above high", () => {
-    assert.deepEqual([...FX_TIERS], ["off", "minimal", "low", "high", "ultra"]);
+    expect(firstMismatch([...FX_TIERS], ["off", "minimal", "low", "high", "ultra"])).toBeUndefined();
   });
 
   it("when the post chain is described for Ultra, then the line names the high chain and what Ultra adds", () => {
     const line = describePost("ultra");
-    assert.ok(line.includes(describePost("high")), line);
-    assert.match(line, /ultra/i);
+    expect(line.includes(describePost("high")), line).toBeTruthy();
+    expect(line).toMatch(/ultra/i);
   });
 });
 
@@ -48,31 +48,31 @@ describe("given the automatic tier on a hardware desktop that holds 60 fps", () 
       races.push(feed(fx, 20, () => null));
     }
     const raced = races.flat();
-    assert.ok(idle.includes("high"), "the check never lifted the desktop to high");
-    assert.ok(![...idle, ...raced].includes("ultra"), `asked for ${[...idle, ...raced].join(", ")}`);
-    for (let m = 0; m < 3; m++) assert.equal(races[2 * m]!.at(-1), "high", `race ${m + 1} never climbed back to the top of the ladder: asked for ${races[2 * m]!.join(", ")}`);
+    expect(idle.includes("high"), "the check never lifted the desktop to high").toBeTruthy();
+    expect(![...idle, ...raced].includes("ultra"), `asked for ${[...idle, ...raced].join(", ")}`).toBe(true);
+    for (let m = 0; m < 3; m++) expect(races[2 * m]!.at(-1), `race ${m + 1} never climbed back to the top of the ladder: asked for ${races[2 * m]!.join(", ")}`).toBe("high");
   });
 
   it("when the player picks Ultra by hand and then turns Auto back on, then the next frame leaves Ultra for the tier that held", () => {
     const fx = new AutoFx(true, true);
-    assert.deepEqual(feed(fx, 4, () => null), ["high"]);
+    expect(firstMismatch(feed(fx, 4, () => null), ["high"])).toBeUndefined();
     fx.auto = false;
-    assert.deepEqual(feed(fx, 30, () => null), [], "Ultra is a manual pick: the policy leaves it alone");
+    expect(feed(fx, 30, () => null), "Ultra is a manual pick: the policy leaves it alone").toHaveLength(0);
     fx.resume("ultra");
-    assert.deepEqual(feed(fx, 0.05, () => null), ["high"]);
+    expect(firstMismatch(feed(fx, 0.05, () => null), ["high"])).toBeUndefined();
   });
 });
 
 describe("given the bench page's query", () => {
   it("when it asks for a bench with ultra=1, then the plan has the Ultra arm, for the city, the strip and the Lab", () => {
     for (const bench of ["city", "strip", "lab"]) {
-      assert.equal(benchPlan(`?bench=${bench}&ultra=1`)!.ultra, true, bench);
+      expect(benchPlan(`?bench=${bench}&ultra=1`)!.ultra, bench).toBe(true);
     }
   });
 
   it("when ultra is absent, 0 or not 1, then the plan has no Ultra arm", () => {
     for (const q of ["?bench=city", "?bench=city&ultra=0", "?bench=city&ultra=yes", "?bench=strip&ultra="]) {
-      assert.equal(benchPlan(q)!.ultra, false, q);
+      expect(benchPlan(q)!.ultra, q).toBe(false);
     }
   });
 });

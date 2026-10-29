@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import {
   BOARD_STEP,
@@ -72,12 +71,12 @@ describe("given a torso flying a ballistic arc over the posts, sampled once per 
 
   it("when the apex falls half way between two frames inside the band, then the highest point is the analytic apex to under a millimetre", () => {
     const peak = peakOf(overThePosts);
-    assert.ok(Math.abs(peak.height - analyticApexHeight) < MILLIMETRE, `peak ${peak.height} vs analytic ${analyticApexHeight}`);
+    expect(Math.abs(peak.height - analyticApexHeight), `peak ${peak.height} vs analytic ${analyticApexHeight}`).toBeLessThan(MILLIMETRE);
   });
 
   it("when he has fallen back well below the apex, then the score is still the apex, not where he is now", () => {
-    assert.ok(overThePosts.at(-1)!.y - LIP_Y < analyticApexHeight - 10, "the last frame is far below the apex");
-    assert.ok(peakOf(overThePosts).height > analyticApexHeight - MILLIMETRE);
+    expect(overThePosts.at(-1)!.y - LIP_Y, "the last frame is far below the apex").toBeLessThan(analyticApexHeight - 10);
+    expect(peakOf(overThePosts).height).toBeGreaterThan(analyticApexHeight - MILLIMETRE);
   });
 
   it("when the frames are read in order, then the running value never drops and each answer is the highest so far", () => {
@@ -85,8 +84,8 @@ describe("given a torso flying a ballistic arc over the posts, sampled once per 
     let previous = 0;
     for (const [index, frame] of overThePosts.entries()) {
       const answer = peak.step(frame, POSTS_DISTANCE, LIP_Y);
-      assert.ok(answer >= previous, `frame ${index}: ${answer} after ${previous}`);
-      assert.equal(peak.height, answer, "the getter reads the same");
+      expect(answer, `frame ${index}: ${answer} after ${previous}`).toBeGreaterThanOrEqual(previous);
+      expect(peak.height, "the getter reads the same").toBe(answer);
       previous = answer;
     }
   });
@@ -94,17 +93,17 @@ describe("given a torso flying a ballistic arc over the posts, sampled once per 
   it("when he peaks well before the band and drops, then he scores only the height he had inside the band", () => {
     const early = arcFrames(apexY, 300.5, POSTS_DISTANCE - 9, 500);
     const score = peakOf(early).height;
-    assert.equal(score, bandMaximum(early), "the highest frame inside the band");
-    assert.ok(score > 0, "he is still above the lip when he enters the band");
-    assert.ok(score < analyticApexHeight - 10, `scored ${score}: far under the apex ${analyticApexHeight} he reached before the band`);
+    expect(score, "the highest frame inside the band").toBe(bandMaximum(early));
+    expect(score, "he is still above the lip when he enters the band").toBeGreaterThan(0);
+    expect(score, `scored ${score}: far under the apex ${analyticApexHeight} he reached before the band`).toBeLessThan(analyticApexHeight - 10);
   });
 
   it("when he peaks well past the band, then he scores the height he had as he left it, not the apex beyond", () => {
     const late = arcFrames(apexY, 300.5, POSTS_DISTANCE + 9, 500);
     const score = peakOf(late).height;
-    assert.equal(score, bandMaximum(late), "the highest frame inside the band");
-    assert.ok(score > 0, "he was above the lip as he climbed through the band");
-    assert.ok(score < analyticApexHeight - 10, `scored ${score}: far under the apex ${analyticApexHeight} he reached beyond the band`);
+    expect(score, "the highest frame inside the band").toBe(bandMaximum(late));
+    expect(score, "he was above the lip as he climbed through the band").toBeGreaterThan(0);
+    expect(score, `scored ${score}: far under the apex ${analyticApexHeight} he reached beyond the band`).toBeLessThan(analyticApexHeight - 10);
   });
 });
 
@@ -118,15 +117,15 @@ describe("given a dummy that taps a post and falls back", () => {
 
   it("when he is thrown back out of the band, then he scores the height he reached at the post, not 0", () => {
     const peak = peakOf(tapped);
-    assert.equal(peak.height, bandMaximum(tapped), "the highest frame inside the band");
-    assert.ok(peak.height > 95, `scored ${peak.height}: the tap's height`);
-    assert.ok(Math.min(...tapped.map((frame) => Math.abs(frame.x - POSTS_DISTANCE))) > 0.25, "he never reached the plane: nothing crossed it");
+    expect(peak.height, "the highest frame inside the band").toBe(bandMaximum(tapped));
+    expect(peak.height, `scored ${peak.height}: the tap's height`).toBeGreaterThan(95);
+    expect(Math.min(...tapped.map((frame) => Math.abs(frame.x - POSTS_DISTANCE))), "he never reached the plane: nothing crossed it").toBeGreaterThan(0.25);
   });
 });
 
 describe("given the score band's width", () => {
   it("when it is read, then it is a meter or two either side of the bars, as the owner asked", () => {
-    assert.ok(SCORE_BAND_HALF_DEPTH >= 1 && SCORE_BAND_HALF_DEPTH <= 2, `${SCORE_BAND_HALF_DEPTH} m`);
+    expect(SCORE_BAND_HALF_DEPTH >= 1 && SCORE_BAND_HALF_DEPTH <= 2, `${SCORE_BAND_HALF_DEPTH} m`).toBeTruthy();
   });
 });
 
@@ -141,34 +140,34 @@ describe("given torso samples at the band's edges and beside it", () => {
   ] as const;
   for (const testCase of edgeCases) {
     it(testCase.it, () => {
-      assert.equal(new HighJumpPeak().step(torso(testCase.x, LIP_Y + 12), POSTS_DISTANCE, LIP_Y), testCase.counts ? 12 : 0);
+      expect(new HighJumpPeak().step(torso(testCase.x, LIP_Y + 12), POSTS_DISTANCE, LIP_Y)).toBe(testCase.counts ? 12 : 0);
     });
   }
 
   it("when he is in the band anywhere across the lane or between, beside or past the posts, then the height counts", () => {
     for (const z of [0, POST_HALF_SPAN, FIELD_HALF_WIDTH + 40, -FIELD_HALF_WIDTH - 40]) {
-      assert.equal(new HighJumpPeak().step(torso(POSTS_DISTANCE + 1, LIP_Y + 12, z), POSTS_DISTANCE, LIP_Y), 12, `at z ${z}`);
+      expect(new HighJumpPeak().step(torso(POSTS_DISTANCE + 1, LIP_Y + 12, z), POSTS_DISTANCE, LIP_Y), `at z ${z}`).toBe(12);
     }
   });
 
   it("when he stays below the lip inside the band, then the score is 0, not negative", () => {
     const peak = new HighJumpPeak();
-    assert.equal(peak.step(torso(POSTS_DISTANCE, LIP_Y - 3), POSTS_DISTANCE, LIP_Y), 0, "below the lip");
-    assert.equal(peak.height, 0, "the getter");
+    expect(peak.step(torso(POSTS_DISTANCE, LIP_Y - 3), POSTS_DISTANCE, LIP_Y), "below the lip").toBe(0);
+    expect(peak.height, "the getter").toBe(0);
   });
 
   it("when he never comes inside the band, then the score is 0 whatever his height", () => {
     const peak = new HighJumpPeak();
     for (const x of [2, POSTS_DISTANCE - 5, POSTS_DISTANCE + 20]) peak.step(torso(x, LIP_Y + 50), POSTS_DISTANCE, LIP_Y);
-    assert.equal(peak.height, 0);
+    expect(peak.height).toBe(0);
   });
 
   it("when the peak is reset, then it starts from nothing again", () => {
     const peak = new HighJumpPeak();
     peak.step(torso(POSTS_DISTANCE, LIP_Y + 20), POSTS_DISTANCE, LIP_Y);
     peak.reset();
-    assert.equal(peak.height, 0, "cleared");
-    assert.equal(peak.step(torso(POSTS_DISTANCE, LIP_Y + 4), POSTS_DISTANCE, LIP_Y), 4, "the next throw's own highest");
+    expect(peak.height, "cleared").toBe(0);
+    expect(peak.step(torso(POSTS_DISTANCE, LIP_Y + 4), POSTS_DISTANCE, LIP_Y), "the next throw's own highest").toBe(4);
   });
 });
 
@@ -199,60 +198,60 @@ for (const layoutCase of LAYOUT_CASES) {
     const layout = highJumpLayout(measured, LIP_Y);
 
     it("when the layout is made, then the posts stand POSTS_DISTANCE past the lip whatever was measured, and the net 30 m behind them", () => {
-      assert.equal(POSTS_DISTANCE, 11, "the posts' distance");
-      assert.equal(layout.postsX, POSTS_DISTANCE, "postsX");
-      assert.equal(layout.netX, POSTS_DISTANCE + 30, "netX is the posts plus 30 m");
+      expect(POSTS_DISTANCE, "the posts' distance").toBe(11);
+      expect(layout.postsX, "postsX").toBe(POSTS_DISTANCE);
+      expect(layout.netX, "netX is the posts plus 30 m").toBe(POSTS_DISTANCE + 30);
     });
 
     it("when the layout is made, then the frame top is the best height times the headroom, rounded up to a board", () => {
-      assert.equal(layout.frameTop, layoutCase.expectedFrameTop, "frame top");
-      assert.ok(layout.frameTop >= measured.bestHeight * FRAME_HEADROOM_FACTOR, "headroom factor kept");
-      assert.equal(layout.frameTop % BOARD_STEP, 0, `frame top ${layout.frameTop} stands on a board height`);
-      assert.ok(layout.frameTop >= measured.bestHeight + BOARD_STEP, "at least one board above the best height");
+      expect(layout.frameTop, "frame top").toBe(layoutCase.expectedFrameTop);
+      expect(layout.frameTop, "headroom factor kept").toBeGreaterThanOrEqual(measured.bestHeight * FRAME_HEADROOM_FACTOR);
+      expect(layout.frameTop % BOARD_STEP, `frame top ${layout.frameTop} stands on a board height`).toBe(0);
+      expect(layout.frameTop, "at least one board above the best height").toBeGreaterThanOrEqual(measured.bestHeight + BOARD_STEP);
     });
 
     it("when the layout is made, then a board stands every BOARD_STEP (5) m from the lip up to under the frame top", () => {
-      assert.equal(layout.boards.length, layoutCase.expectedBoardCount, "board count");
-      assert.equal(layout.boards[0].heightAboveLip, 0, "the first board is the lip line");
+      expect(layout.boards.length, "board count").toBe(layoutCase.expectedBoardCount);
+      expect(layout.boards[0].heightAboveLip, "the first board is the lip line").toBe(0);
       for (let index = 0; index < layout.boards.length; index++) {
         const board = layout.boards[index];
-        assert.equal(board.y, LIP_Y + board.heightAboveLip, `board ${index} height above the pad`);
+        expect(board.y, `board ${index} height above the pad`).toBe(LIP_Y + board.heightAboveLip);
         const nextHeight = layout.boards.at(index + 1)?.heightAboveLip ?? layout.frameTop;
-        assert.equal(nextHeight - board.heightAboveLip, BOARD_STEP, `board ${index} is ${BOARD_STEP} m under the next board or the frame top`);
+        expect(nextHeight - board.heightAboveLip, `board ${index} is ${BOARD_STEP} m under the next board or the frame top`).toBe(BOARD_STEP);
       }
     });
 
     it("when the layout is made, then the big boards stand every 50 m from the lip and no other board is big", () => {
       const bigHeights = layout.boards.filter((board) => board.major).map((board) => board.heightAboveLip);
-      assert.equal(bigHeights.length, layoutCase.expectedMajorHeights.length, "big board count");
+      expect(bigHeights.length, "big board count").toBe(layoutCase.expectedMajorHeights.length);
       for (let index = 0; index < bigHeights.length; index++) {
-        assert.equal(bigHeights[index], layoutCase.expectedMajorHeights[index], `big board ${index} height`);
-        assert.equal(bigHeights[index] % MAJOR_BOARD_EVERY_METRES, 0, `big board ${index} is a multiple of ${MAJOR_BOARD_EVERY_METRES} m`);
+        expect(bigHeights[index], `big board ${index} height`).toBe(layoutCase.expectedMajorHeights[index]);
+        expect(bigHeights[index] % MAJOR_BOARD_EVERY_METRES, `big board ${index} is a multiple of ${MAJOR_BOARD_EVERY_METRES} m`).toBe(0);
       }
-      assert.ok(layout.boards.length > bigHeights.length, "small boards exist between them");
+      expect(layout.boards.length, "small boards exist between them").toBeGreaterThan(bigHeights.length);
     });
 
     it("when the layout is made, then a height mark stands at every SIGN_EVERY_METRES from the lip, at its slat's height", () => {
       const expectedHeights = layout.boards.filter((board) => board.heightAboveLip % SIGN_EVERY_METRES === 0).map((board) => board.heightAboveLip);
-      assert.equal(JSON.stringify(layout.signs.map((sign) => sign.heightAboveLip)), JSON.stringify(expectedHeights), "the marks' heights");
-      assert.equal(layout.signs.length, Math.ceil(layout.frameTop / SIGN_EVERY_METRES), "one per SIGN_EVERY_METRES below the frame top");
-      assert.equal(layout.signs[0]!.heightAboveLip, 0, "the lip line has the first");
-      for (const sign of layout.signs) assert.equal(sign.y, LIP_Y + sign.heightAboveLip, `the ${sign.heightAboveLip} m mark`);
+      expect(JSON.stringify(layout.signs.map((sign) => sign.heightAboveLip)), "the marks' heights").toBe(JSON.stringify(expectedHeights));
+      expect(layout.signs.length, "one per SIGN_EVERY_METRES below the frame top").toBe(Math.ceil(layout.frameTop / SIGN_EVERY_METRES));
+      expect(layout.signs[0]!.heightAboveLip, "the lip line has the first").toBe(0);
+      for (const sign of layout.signs) expect(sign.y, `the ${sign.heightAboveLip} m mark`).toBe(LIP_Y + sign.heightAboveLip);
     });
 
     it("when the layout is made, then the net is as tall as the larger of its minimum and half the best height", () => {
-      assert.equal(layout.netHeight, layoutCase.expectedNetHeight, "net height");
+      expect(layout.netHeight, "net height").toBe(layoutCase.expectedNetHeight);
     });
 
     it("when the layout is made, then BOX_COUNT boxes come back with sizes in range", () => {
-      assert.equal(layout.boxes.length, BOX_COUNT, "box count");
+      expect(layout.boxes.length, "box count").toBe(BOX_COUNT);
       for (const box of layout.boxes) {
         for (const side of [box.width, box.height, box.depth]) {
-          assert.ok(side >= BOX_SIZE_MIN && side <= BOX_SIZE_MAX, `side ${side} within ${BOX_SIZE_MIN}-${BOX_SIZE_MAX}`);
+          expect(side >= BOX_SIZE_MIN && side <= BOX_SIZE_MAX, `side ${side} within ${BOX_SIZE_MIN}-${BOX_SIZE_MAX}`).toBeTruthy();
         }
       }
       const distinctWidths = new Set(layout.boxes.map((box) => box.width));
-      assert.ok(distinctWidths.size > BOX_COUNT / 2, `box widths vary (${distinctWidths.size} distinct)`);
+      expect(distinctWidths.size, `box widths vary (${distinctWidths.size} distinct)`).toBeGreaterThan(BOX_COUNT / 2);
     });
 
     it("when the boxes are laid out, then no box stands over a post (a post is a ragdoll collider: a box laid on it would be shoved out of the world)", () => {
@@ -260,7 +259,7 @@ for (const layoutCase of LAYOUT_CASES) {
         for (const side of [-1, 1]) {
           const nearestX = Math.min(Math.max(box.x, layout.postsX - POST_THICKNESS / 2), layout.postsX + POST_THICKNESS / 2);
           const nearestZ = Math.min(Math.max(box.z, side * POST_HALF_SPAN - POST_THICKNESS / 2), side * POST_HALF_SPAN + POST_THICKNESS / 2);
-          assert.ok(Math.hypot(box.x - nearestX, box.z - nearestZ) >= boundingRadius(box) - 1e-9, `box ${boxIndex} reaches the ${side} post`);
+          expect(Math.hypot(box.x - nearestX, box.z - nearestZ), `box ${boxIndex} reaches the ${side} post`).toBeGreaterThanOrEqual(boundingRadius(box) - 1e-9);
         }
       }
     });
@@ -275,21 +274,21 @@ for (const layoutCase of LAYOUT_CASES) {
           if (centreDistance >= boundingRadius(lower) + boundingRadius(upper)) continue;
           const verticalOverlap =
             Math.min(lower.y + lower.height / 2, upper.y + upper.height / 2) - Math.max(lower.y - lower.height / 2, upper.y - upper.height / 2);
-          assert.ok(verticalOverlap <= BOX_OVERLAP_TOLERANCE, `boxes ${first} and ${second} overlap by ${verticalOverlap}`);
+          expect(verticalOverlap, `boxes ${first} and ${second} overlap by ${verticalOverlap}`).toBeLessThanOrEqual(BOX_OVERLAP_TOLERANCE);
           stackedPairs++;
         }
       }
-      assert.ok(stackedPairs > 0, "some boxes are stacked, so the pair check had something to test");
+      expect(stackedPairs, "some boxes are stacked, so the pair check had something to test").toBeGreaterThan(0);
     });
 
     it("when the boxes are laid out, then they rest on or above the pad, the bottom ones on it", () => {
       let boxesOnPad = 0;
       for (const box of layout.boxes) {
         const bottom = box.y - box.height / 2;
-        assert.ok(bottom >= -BOX_OVERLAP_TOLERANCE, `bottom ${bottom} is above the pad`);
+        expect(bottom, `bottom ${bottom} is above the pad`).toBeGreaterThanOrEqual(-BOX_OVERLAP_TOLERANCE);
         if (Math.abs(bottom) <= BOX_OVERLAP_TOLERANCE) boxesOnPad++;
       }
-      assert.ok(boxesOnPad > 0, "some boxes stand on the pad");
+      expect(boxesOnPad, "some boxes stand on the pad").toBeGreaterThan(0);
     });
 
     it("when the boxes are laid out, then all lie within the pile footprint and short of the net", () => {
@@ -297,26 +296,26 @@ for (const layoutCase of LAYOUT_CASES) {
       const endX = pileEndX(measured);
       for (const box of layout.boxes) {
         const radius = boundingRadius(box);
-        assert.ok(box.x - radius >= startX - BOX_OVERLAP_TOLERANCE, `box at ${box.x} starts at or after ${startX}`);
-        assert.ok(box.x + radius <= endX + BOX_OVERLAP_TOLERANCE, `box at ${box.x} ends at or before ${endX}`);
-        assert.ok(box.x + radius <= layout.netX - BOX_NET_CLEARANCE + BOX_OVERLAP_TOLERANCE, `box at ${box.x} stops short of the net`);
-        assert.ok(Math.abs(box.z) + radius <= BOX_PILE_HALF_WIDTH + BOX_OVERLAP_TOLERANCE, `box at z ${box.z} within the pile's width`);
+        expect(box.x - radius, `box at ${box.x} starts at or after ${startX}`).toBeGreaterThanOrEqual(startX - BOX_OVERLAP_TOLERANCE);
+        expect(box.x + radius, `box at ${box.x} ends at or before ${endX}`).toBeLessThanOrEqual(endX + BOX_OVERLAP_TOLERANCE);
+        expect(box.x + radius, `box at ${box.x} stops short of the net`).toBeLessThanOrEqual(layout.netX - BOX_NET_CLEARANCE + BOX_OVERLAP_TOLERANCE);
+        expect(Math.abs(box.z) + radius, `box at z ${box.z} within the pile's width`).toBeLessThanOrEqual(BOX_PILE_HALF_WIDTH + BOX_OVERLAP_TOLERANCE);
       }
     });
 
     it("when the layout is made twice, then every box is the same", () => {
       const again = highJumpLayout(measured, LIP_Y);
-      assert.equal(again.boxes.length, layout.boxes.length, "box count");
+      expect(again.boxes.length, "box count").toBe(layout.boxes.length);
       for (let index = 0; index < layout.boxes.length; index++) {
         const box = layout.boxes[index];
         const copy = again.boxes[index];
-        assert.equal(copy.x, box.x, `box ${index} x`);
-        assert.equal(copy.y, box.y, `box ${index} y`);
-        assert.equal(copy.z, box.z, `box ${index} z`);
-        assert.equal(copy.yaw, box.yaw, `box ${index} yaw`);
-        assert.equal(copy.width, box.width, `box ${index} width`);
-        assert.equal(copy.height, box.height, `box ${index} height`);
-        assert.equal(copy.depth, box.depth, `box ${index} depth`);
+        expect(copy.x, `box ${index} x`).toBe(box.x);
+        expect(copy.y, `box ${index} y`).toBe(box.y);
+        expect(copy.z, `box ${index} z`).toBe(box.z);
+        expect(copy.yaw, `box ${index} yaw`).toBe(box.yaw);
+        expect(copy.width, `box ${index} width`).toBe(box.width);
+        expect(copy.height, `box ${index} height`).toBe(box.height);
+        expect(copy.depth, `box ${index} depth`).toBe(box.depth);
       }
     });
   });
@@ -325,7 +324,7 @@ for (const layoutCase of LAYOUT_CASES) {
 describe("given a landing so near the posts that the piles cannot hold one cell", () => {
   it("when the layout is made, then it refuses with a RangeError naming the footprint", () => {
     const measured = { bestHeight: 12, landingDistance: POSTS_DISTANCE - BOX_PILE_LEAD - BOX_PILE_TRAIL + BOX_CELL_PITCH / 2 };
-    assert.throws(() => highJumpLayout(measured, LIP_Y), RangeError);
+    expect(() => highJumpLayout(measured, LIP_Y)).toThrow(RangeError);
   });
 });
 
@@ -333,10 +332,10 @@ describe("given the layout's boards for a different lip height", () => {
   it("when the lip is raised, then the boards' heights above the lip stay and their heights above the pad follow", () => {
     const low = highJumpLayout(SYNTHETIC_MEASURED, 0);
     const high = highJumpLayout(SYNTHETIC_MEASURED, 4);
-    assert.equal(high.boards.length, low.boards.length, "board count");
+    expect(high.boards.length, "board count").toBe(low.boards.length);
     for (let index = 0; index < low.boards.length; index++) {
-      assert.equal(high.boards[index].heightAboveLip, low.boards[index].heightAboveLip, `board ${index} above the lip`);
-      assert.equal(high.boards[index].y, low.boards[index].y + 4, `board ${index} above the pad`);
+      expect(high.boards[index].heightAboveLip, `board ${index} above the lip`).toBe(low.boards[index].heightAboveLip);
+      expect(high.boards[index].y, `board ${index} above the pad`).toBe(low.boards[index].y + 4);
     }
   });
 });
@@ -351,7 +350,7 @@ describe("given the sizing measurement's landing, where the piles are narrow", (
 
   it("when the boxes are laid out, then every box has an edge about as long as the lying dummy, so he lands among boxes", () => {
     for (const box of boxes) {
-      assert.ok(Math.max(box.width, box.height, box.depth) >= DUMMY_LYING_LENGTH * 0.8, `box ${box.width} x ${box.height} x ${box.depth} is dummy-sized`);
+      expect(Math.max(box.width, box.height, box.depth), `box ${box.width} x ${box.height} x ${box.depth} is dummy-sized`).toBeGreaterThanOrEqual(DUMMY_LYING_LENGTH * 0.8);
     }
   });
 
@@ -361,7 +360,7 @@ describe("given the sizing measurement's landing, where the piles are narrow", (
       const stackKey = `${Math.round(box.x / BOX_CELL_PITCH)}:${Math.round(box.z / BOX_CELL_PITCH)}`;
       stackTops.set(stackKey, Math.max(stackTops.get(stackKey) ?? 0, box.y + box.height / 2));
     }
-    assert.equal(boxes.length, BOX_COUNT, "box count");
-    assert.ok(Math.max(...stackTops.values()) <= LAYERS_AT_SIZING_LANDING * BOX_SIZE_MAX, `tallest stack ${Math.max(...stackTops.values())} m`);
+    expect(boxes.length, "box count").toBe(BOX_COUNT);
+    expect(Math.max(...stackTops.values()), `tallest stack ${Math.max(...stackTops.values())} m`).toBeLessThanOrEqual(LAYERS_AT_SIZING_LANDING * BOX_SIZE_MAX);
   });
 });

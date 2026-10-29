@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { DERBY_ARENA } from "./constants.ts";
 import { bodyRadius, carOfClass, wallCases } from "./derby-containment.test-util.ts";
 
@@ -24,14 +23,14 @@ describe("given the end the containment rows read (where the car's drawn body re
   it("when a truck on its end has its origin inside the inner face and its body outside it, then it ends outside", () => {
     const [nose, tail] = [truckOnItsEnd(-ORIGIN_OFF_FACE, STOOD_ON_ITS_NOSE), truckOnItsEnd(-ORIGIN_OFF_FACE, -STOOD_ON_ITS_NOSE)];
     const outer = bodyRadius(nose) > bodyRadius(tail) ? nose : tail;
-    assert.ok(outer.group.position.x < radius, `the origin stands at ${outer.group.position.x.toFixed(2)} m, inside the inner face at ${radius} m`);
-    assert.ok(bodyRadius(outer) >= radius, `the body rests at ${bodyRadius(outer).toFixed(2)} m, which the row reads as outside the inner face at ${radius} m`);
+    expect(outer.group.position.x, `the origin stands at ${outer.group.position.x.toFixed(2)} m, inside the inner face at ${radius} m`).toBeLessThan(radius);
+    expect(bodyRadius(outer), `the body rests at ${bodyRadius(outer).toFixed(2)} m, which the row reads as outside the inner face at ${radius} m`).toBeGreaterThanOrEqual(radius);
   });
 
   it("when the same truck has its origin outside the inner face and its body inside it, then it ends inside", () => {
     const [nose, tail] = [truckOnItsEnd(ORIGIN_OFF_FACE, STOOD_ON_ITS_NOSE), truckOnItsEnd(ORIGIN_OFF_FACE, -STOOD_ON_ITS_NOSE)];
     const inner = bodyRadius(nose) < bodyRadius(tail) ? nose : tail;
-    assert.ok(inner.group.position.x >= radius, `the origin stands at ${inner.group.position.x.toFixed(2)} m, outside the inner face at ${radius} m`);
-    assert.ok(bodyRadius(inner) < radius, `the body rests at ${bodyRadius(inner).toFixed(2)} m, which the row reads as inside the inner face at ${radius} m`);
+    expect(inner.group.position.x, `the origin stands at ${inner.group.position.x.toFixed(2)} m, outside the inner face at ${radius} m`).toBeGreaterThanOrEqual(radius);
+    expect(bodyRadius(inner), `the body rests at ${bodyRadius(inner).toFixed(2)} m, which the row reads as inside the inner face at ${radius} m`).toBeLessThan(radius);
   });
 });

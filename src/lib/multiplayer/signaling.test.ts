@@ -1,10 +1,10 @@
-import { beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { beforeAll, describe, expect, it } from "vitest";
 import type { PGlite } from "@electric-sql/pglite";
 import type { Sql } from "@/lib/db";
 import { migratedPg, sqlOf } from "../test-db.test-util.ts";
 import { handleSignaling } from "./signaling.server.ts";
 import { ROOM_MAX, TOKEN_HEADER } from "./rooms.ts";
+import { firstMismatch } from "../../game/kernel/compare-arrays.test-util.ts";
 
 /** An in-memory relay database with `migrations/*.sql` applied; `legacy` writes rows between 0002 and the later files. */
 async function relayDb(legacy?: (pg: PGlite) => Promise<void>): Promise<Sql> {
@@ -52,24 +52,24 @@ describe("given the signaling relay running on a freshly migrated database, with
   it("when another tab claims a peer's id, then reading its inbox, signalling as it and removing it are refused with 403, and the peer's own tab still gets its signals and peers and can remove itself", async () => {
     const host = tab(sql, "AUTH1", "aaaa0001", "host");
     const guest = tab(sql, "AUTH1", "bbbb0002");
-    assert.equal((await host.poll()).status, 200);
-    assert.equal((await guest.poll()).status, 200);
-    assert.equal((await guest.offer(host.id)).status, 200);
+    expect((await host.poll()).status).toBe(200);
+    expect((await guest.poll()).status).toBe(200);
+    expect((await guest.offer(host.id)).status).toBe(200);
 
     const forger = tab(sql, "AUTH1", host.id, "host");
     const read = await forger.poll();
-    assert.equal(read.status, 403);
-    assert.equal(read.body.signals, undefined);
-    assert.equal((await forger.offer(guest.id)).status, 403);
-    assert.equal((await forger.post({ op: "leave", peer: host.id })).status, 403);
+    expect(read.status).toBe(403);
+    expect(read.body.signals).toBe(undefined);
+    expect((await forger.offer(guest.id)).status).toBe(403);
+    expect((await forger.post({ op: "leave", peer: host.id })).status).toBe(403);
 
     const inbox = await host.poll();
-    assert.deepEqual(inbox.body.signals?.map((s) => s.from), ["bbbb0002"]);
-    assert.deepEqual(inbox.body.peers?.map((p) => p.id), ["aaaa0001", "bbbb0002"]);
-    assert.equal((await guest.poll()).body.signals?.length, 0);
+    expect(firstMismatch(inbox.body.signals?.map((s) => s.from), ["bbbb0002"])).toBeUndefined();
+    expect(firstMismatch(inbox.body.peers?.map((p) => p.id), ["aaaa0001", "bbbb0002"])).toBeUndefined();
+    expect((await guest.poll()).body.signals?.length).toBe(0);
 
-    assert.equal((await host.post({ op: "leave", peer: host.id })).status, 200);
-    assert.deepEqual((await guest.poll()).body.peers?.map((p) => p.id), ["bbbb0002"]);
+    expect((await host.post({ op: "leave", peer: host.id })).status).toBe(200);
+    expect(firstMismatch((await guest.poll()).body.peers?.map((p) => p.id), ["bbbb0002"])).toBeUndefined();
   });
 
   it("when a joined guest later polls with the host role tag, then it stays registered as a client, and another tab claiming host is refused with 409 host taken", async () => {
@@ -79,12 +79,14 @@ describe("given the signaling relay running on a freshly migrated database, with
     await guest.poll();
     guest.name = "host";
     await guest.poll();
-    assert.deepEqual((await host.poll()).body.peers, [
-      { id: "aaaa0001", name: "host" },
-      { id: "bbbb0002", name: "client" },
-    ]);
+    const peers = (await host.poll()).body.peers;
+    expect(peers, "the host sees both tabs").toHaveLength(2);
+    expect(peers?.[0]?.id, "first peer id").toBe("aaaa0001");
+    expect(peers?.[0]?.name, "first peer name").toBe("host");
+    expect(peers?.[1]?.id, "second peer id").toBe("bbbb0002");
+    expect(peers?.[1]?.name, "second peer name").toBe("client");
     const second = await tab(sql, "ROLE1", "cccc0003", "host").poll();
-    assert.deepEqual([second.status, second.body.error], [409, "host taken"]);
+    expect(firstMismatch([second.status, second.body.error], [409, "host taken"])).toBeUndefined();
   });
 
   it("when as many fake peer ids as a room holds poll it at once, then only the places the two members left are taken and both members stay seated in a full room", async () => {
@@ -96,11 +98,11 @@ describe("given the signaling relay running on a freshly migrated database, with
     const statuses = (await Promise.all(fakes.map((f) => f.poll()))).map((r) => r.status);
     for (const member of [host, guest]) {
       const res = await member.poll();
-      assert.equal(res.status, 200);
-      assert.equal(res.body.peers?.length, ROOM_MAX);
-      assert.ok(res.body.peers?.some((p) => p.id === host.id) && res.body.peers.some((p) => p.id === guest.id));
+      expect(res.status).toBe(200);
+      expect(res.body.peers?.length).toBe(ROOM_MAX);
+      expect(res.body.peers?.some((p) => p.id === host.id) && res.body.peers.some((p) => p.id === guest.id)).toBeTruthy();
     }
-    assert.equal(statuses.filter((s) => s === 200).length, ROOM_MAX - 2);
+    expect(statuses.filter((s) => s === 200).length).toBe(ROOM_MAX - 2);
   });
 
   it("when one member has already queued 400 signals in the host's inbox, then its next offer to the host is refused with 429 while another member's offer to the host is accepted", async () => {
@@ -113,8 +115,8 @@ describe("given the signaling relay running on a freshly migrated database, with
        SELECT 'FLOOD1', $1, $2, 'ice', '{}' FROM generate_series(1, 400)`,
       [host.id, flooder.id],
     );
-    assert.equal((await flooder.offer(host.id)).status, 429);
-    assert.equal((await late.offer(host.id)).status, 200);
+    expect((await flooder.offer(host.id)).status).toBe(429);
+    expect((await late.offer(host.id)).status).toBe(200);
   });
 
   it("when attackers on one subscriber's address pad two public rooms and a room of real players is listed, then the real room is listed first and a third public room from that address is refused with 429", async () => {
@@ -122,8 +124,8 @@ describe("given the signaling relay running on a freshly migrated database, with
     let n = 0;
     const attacker = (room: string, id: string, name?: string) => tab(sql, room, id, name, `2001:db8:0:1::${(++n).toString(16)}`);
     for (const [k, room] of ["pub-race-AAAA01", "pub-race-AAAA02"].entries()) {
-      assert.equal((await attacker(room, `a${k}h`, "host").poll()).status, 200);
-      for (let c = 0; c < ROOM_MAX - 2; c++) assert.equal((await attacker(room, `a${k}c${c}`).poll()).status, 200);
+      expect((await attacker(room, `a${k}h`, "host").poll()).status).toBe(200);
+      for (let c = 0; c < ROOM_MAX - 2; c++) expect((await attacker(room, `a${k}c${c}`).poll()).status).toBe(200);
     }
     await tab(sql, "pub-race-ZZZZ01", "realhost", "host").poll();
     await tab(sql, "pub-race-ZZZZ01", "realguest").poll();
@@ -132,12 +134,12 @@ describe("given the signaling relay running on a freshly migrated database, with
       async () => sql,
     );
     const listed: { rooms: { room: string; players: number; addrs: number }[] } = await list.json();
-    assert.equal(listed.rooms[0]?.room, "pub-race-ZZZZ01");
+    expect(listed.rooms[0]?.room).toBe("pub-race-ZZZZ01");
     // `players` counts every peer, `addrs` the distinct addresses the order uses: clients rank by it too.
-    assert.equal(listed.rooms.map((r) => `${r.players}/${r.addrs}`).join(" "), `2/2 ${ROOM_MAX - 1}/1 ${ROOM_MAX - 1}/1`);
+    expect(listed.rooms.map((r) => `${r.players}/${r.addrs}`).join(" ")).toBe(`2/2 ${ROOM_MAX - 1}/1 ${ROOM_MAX - 1}/1`);
 
     const third = await attacker("pub-race-AAAA03", "a2h", "host").poll();
-    assert.deepEqual([third.status, third.body.error], [429, "too many public rooms"]);
+    expect(firstMismatch([third.status, third.body.error], [429, "too many public rooms"])).toBeUndefined();
   });
 
   it("when one public room's host stalls for 9 s between polls and another's has been silent for 20 s, then the stalled host's room is still listed and the silent host's room is dropped", async () => {
@@ -152,7 +154,7 @@ describe("given the signaling relay running on a freshly migrated database, with
       async () => sql,
     );
     const listed: { rooms: { room: string }[] } = await list.json();
-    assert.deepEqual(listed.rooms.map((r) => r.room), ["pub-derby-STALL1"]);
+    expect(firstMismatch(listed.rooms.map((r) => r.room), ["pub-derby-STALL1"])).toBeUndefined();
   });
 
   it("when public rooms are listed, then each shows its host's match tag: set at joining, replaced by the next poll, kept by a poll without a tag, never taken from a guest, and a malformed tag is refused", async () => {
@@ -169,18 +171,23 @@ describe("given the signaling relay running on a freshly migrated database, with
       );
       return ((await list.json()) as { rooms: { room: string; players: number; addrs: number; meta: string }[] }).rooms.filter((r) => r.room === "pub-race-META01");
     };
-    assert.deepEqual(await listed(), [{ room: "pub-race-META01", players: 2, addrs: 2, meta: "lobby.oval" }]);
+    const rooms = await listed();
+    expect(rooms, "the room is listed").toHaveLength(1);
+    expect(rooms[0]?.room, "room name").toBe("pub-race-META01");
+    expect(rooms[0]?.players, "players").toBe(2);
+    expect(rooms[0]?.addrs, "addresses").toBe(2);
+    expect(rooms[0]?.meta, "meta").toBe("lobby.oval");
     host.meta = "running.oval";
     await host.poll();
-    assert.equal((await listed())[0]!.meta, "running.oval");
+    expect((await listed())[0]!.meta).toBe("running.oval");
     host.meta = "";
     await host.poll();
-    assert.equal((await listed())[0]!.meta, "running.oval", "a poll with no tag leaves the last one");
+    expect((await listed())[0]!.meta, "a poll with no tag leaves the last one").toBe("running.oval");
     const bad = tab(sql, "pub-race-META02", "badhost", "host");
     bad.meta = "Lobby Oval!";
-    assert.equal((await bad.poll()).status, 400);
+    expect((await bad.poll()).status).toBe(400);
     bad.meta = "x".repeat(33);
-    assert.equal((await bad.poll()).status, 400);
+    expect((await bad.poll()).status).toBe(400);
   });
 
   it("when public rooms of all four games and a private room are up, then the list of every game shows the public ones with their tags, a game's filter shows only its rooms, an unknown game is refused with 400, and the private room is never listed", async () => {
@@ -193,10 +200,10 @@ describe("given the signaling relay running on a freshly migrated database, with
     for (const [game, room, meta] of games) {
       const host = tab(sql, room, `kindhost-${game}`, "host");
       host.meta = meta;
-      assert.equal((await host.poll()).status, 200, game);
+      expect((await host.poll()).status, game).toBe(200);
     }
     // A private room: its code is what keeps it unlisted; it polls like any other.
-    assert.equal((await tab(sql, "SECRET77", "privhost", "host").poll()).status, 200);
+    expect((await tab(sql, "SECRET77", "privhost", "host").poll()).status).toBe(200);
     interface Listed {
       rooms?: { room: string; meta: string }[];
     }
@@ -206,14 +213,10 @@ describe("given the signaling relay running on a freshly migrated database, with
       return { status: res.status, rooms: body.rooms ?? [] };
     };
     const mine = (rooms: { room: string; meta: string }[]) => rooms.filter((r) => r.room.endsWith("-ALLK01"));
-    assert.equal(
-      mine((await list("")).rooms).map((r) => `${r.room} ${r.meta}`).sort().join(", "),
-      "pub-campaign-ALLK01 lobby.3, pub-derby-ALLK01 lobby, pub-race-ALLK01 lobby.oval, pub-survival-ALLK01 running.havana",
-      "every game's room is listed with its host's tag",
-    );
-    for (const [game, room] of games) assert.equal(mine((await list(`&kind=${game}`)).rooms).map((r) => r.room).join(), room, `kind=${game} lists only ${game}`);
-    assert.equal((await list("")).rooms.some((r) => r.room === "SECRET77"), false, "a private room is not listed");
-    assert.equal((await list("&kind=tournament")).status, 400);
+    expect(mine((await list("")).rooms).map((r) => `${r.room} ${r.meta}`).sort().join(", "), "every game's room is listed with its host's tag").toBe("pub-campaign-ALLK01 lobby.3, pub-derby-ALLK01 lobby, pub-race-ALLK01 lobby.oval, pub-survival-ALLK01 running.havana");
+    for (const [game, room] of games) expect(mine((await list(`&kind=${game}`)).rooms).map((r) => r.room).join(), `kind=${game} lists only ${game}`).toBe(room);
+    expect((await list("")).rooms.some((r) => r.room === "SECRET77"), "a private room is not listed").toBe(false);
+    expect((await list("&kind=tournament")).status).toBe(400);
   });
 });
 
@@ -226,7 +229,9 @@ describe("given a relay database holding a full room written before peer tokens 
     });
     const fresh = tab(legacy, "OLD1", "aaaa0001", "host");
     const res = await fresh.poll();
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body.peers, [{ id: "aaaa0001", name: "host" }]);
+    expect(res.status).toBe(200);
+    expect(res.body.peers, "the new host sees only itself").toHaveLength(1);
+    expect(res.body.peers?.[0]?.id, "its id").toBe("aaaa0001");
+    expect(res.body.peers?.[0]?.name, "its name").toBe("host");
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { BARRIER_HALF, BARRIER_TOP, physicsSlice } from "../contact/sat.ts";
@@ -42,7 +41,7 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
       for (const kph of [20, 25, 30, 35, 40, 43]) {
         const car = makeCar("shape", squash);
         runWall(kph, 1, "front", { car });
-        if (noseGap(car) > car.frame.rig.packGap + 0.02) assert.ok(blockTravel(car) <= 0.045, `squash ${squash}, ${kph} km/h: block moved ${blockTravel(car).toFixed(4)} m with ${noseGap(car).toFixed(3)} m of nose left`);
+        if (noseGap(car) > car.frame.rig.packGap + 0.02) expect(blockTravel(car), `squash ${squash}, ${kph} km/h: block moved ${blockTravel(car).toFixed(4)} m with ${noseGap(car).toFixed(3)} m of nose left`).toBeLessThanOrEqual(0.045);
       }
     }
   });
@@ -56,10 +55,10 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
       runWall(52, 1, "front", { car });
       const gap = noseGap(car);
       const block = blockTravel(car);
-      assert.ok(gap <= car.frame.rig.packGap + 0.005, `squash ${squash} fixture: 52 km/h left ${gap.toFixed(3)} m of nose, not packed to ${car.frame.rig.packGap.toFixed(3)}`);
+      expect(gap, `squash ${squash} fixture: 52 km/h left ${gap.toFixed(3)} m of nose, not packed to ${car.frame.rig.packGap.toFixed(3)}`).toBeLessThanOrEqual(car.frame.rig.packGap + 0.005);
       runWall(35, 1, "front", { car });
-      assert.ok(gap - noseGap(car) < 0.02, `squash ${squash}: the packed nose shortened ${(gap - noseGap(car)).toFixed(3)} m more`);
-      assert.ok(blockTravel(car) - block > 0.04, `squash ${squash}: the block took ${(blockTravel(car) - block).toFixed(3)} m of the second hit`);
+      expect(gap - noseGap(car), `squash ${squash}: the packed nose shortened ${(gap - noseGap(car)).toFixed(3)} m more`).toBeLessThan(0.02);
+      expect(blockTravel(car) - block, `squash ${squash}: the block took ${(blockTravel(car) - block).toFixed(3)} m of the second hit`).toBeGreaterThan(0.04);
     }
   });
 
@@ -77,8 +76,8 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
         if (!car.deform.drivetrainAlive && !killedAt) killedAt = k;
       }
       const row = travel.map((t) => t.toFixed(3)).join(" ");
-      for (let k = 1; k < travel.length; k++) assert.ok(travel[k]! >= travel[k - 1]! - 0.005, `squash ${squash}: block travel by hit ${row}`);
-      assert.equal(killedAt, 3, `squash ${squash}: killed at hit ${killedAt || "never"}; block travel by hit ${row}`);
+      for (let k = 1; k < travel.length; k++) expect(travel[k]!, `squash ${squash}: block travel by hit ${row}`).toBeGreaterThanOrEqual(travel[k - 1]! - 0.005);
+      expect(killedAt, `squash ${squash}: killed at hit ${killedAt || "never"}; block travel by hit ${row}`).toBe(3);
     }
   });
 
@@ -90,7 +89,7 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
         return car.deform.drivetrainAlive;
       };
       const [a, b] = [alive(TWO_HITS_KPH), alive(THREE_HITS_KPH)];
-      assert.ok(a && !b, `squash ${squash}: ${TWO_HITS_KPH.toFixed(1)} km/h alive ${a}, ${THREE_HITS_KPH.toFixed(1)} km/h alive ${b}`);
+      expect(a && !b, `squash ${squash}: ${TWO_HITS_KPH.toFixed(1)} km/h alive ${a}, ${THREE_HITS_KPH.toFixed(1)} km/h alive ${b}`).toBeTruthy();
     }
   });
 
@@ -103,7 +102,7 @@ describe("given a car driving front-first into a rigid wall in shape deform mode
     runWall(48, 1, "front", { car });
     for (const name of ["hubFL", "hubFR", "hubRL", "hubRR"]) {
       const at = mass(car.deform, name).world;
-      assert.ok(Math.abs(at.x) >= BARRIER_HALF.x || Math.abs(at.z) >= BARRIER_HALF.z || at.y >= BARRIER_TOP, `${name} at (${at.x.toFixed(2)}, ${at.y.toFixed(2)}, ${at.z.toFixed(2)}) inside the slab`);
+      expect(Math.abs(at.x) >= BARRIER_HALF.x || Math.abs(at.z) >= BARRIER_HALF.z || at.y >= BARRIER_TOP, `${name} at (${at.x.toFixed(2)}, ${at.y.toFixed(2)}, ${at.z.toFixed(2)}) inside the slab`).toBeTruthy();
     }
   });
 });
@@ -145,8 +144,8 @@ describe("given a car driving into the face of a jersey barrier (a thin concrete
     it(testCase.it, () => {
       const car = spawnAtBarrier(0, 22, "shape");
       runFor(car, 0.55, testCase.frameDt);
-      assert.ok(car.group.position.x > 0.45, `${testCase.tunnelledMessage} to x=${car.group.position.x.toFixed(3)}`);
-      assert.equal(car.crashed, true);
+      expect(car.group.position.x, `${testCase.tunnelledMessage} to x=${car.group.position.x.toFixed(3)}`).toBeGreaterThan(0.45);
+      expect(car.crashed).toBe(true);
     });
   }
 
@@ -155,12 +154,12 @@ describe("given a car driving into the face of a jersey barrier (a thin concrete
     const slow = spawnAtBarrier(0, 22, "shape");
     runFor(fast, 0.5, 1 / FRAME_HZ);
     runFor(slow, 0.5, 1 / FINE_HZ);
-    assert.ok(fast.group.position.x > 0.45 && slow.group.position.x > 0.45);
+    expect(fast.group.position.x > 0.45 && slow.group.position.x > 0.45).toBeTruthy();
     const dz = Math.abs(
       mass(fast.deform, "bumperFL").local.z + mass(fast.deform, "bumperFR").local.z
         - (mass(slow.deform, "bumperFL").local.z + mass(slow.deform, "bumperFR").local.z),
     );
-    assert.ok(dz < 0.55, `slomo/full crush diverged Δz=${dz.toFixed(3)}`);
+    expect(dz, `slomo/full crush diverged Δz=${dz.toFixed(3)}`).toBeLessThan(0.55);
   });
 
   it("when it hits at 20 m/s with the car 1.88 m off the slab's middle, then the front-left corner on the slab crushes more than the front-right corner hanging off its end, and the contact is on the car's left side", () => {
@@ -170,19 +169,16 @@ describe("given a car driving into the face of a jersey barrier (a thin concrete
     const fr = mass(car.deform, "bumperFR").local.z;
     const hit = car.deform.impactLocal;
     // yaw=-π/2: right is +Z, so FR hangs off the +Z end of the jersey; FL is on the slab.
-    assert.ok(
-      fl < fr - 0.04,
-      `wrong corner FL.z=${fl.toFixed(3)} FR.z=${fr.toFixed(3)} impactLocal=(${hit.x.toFixed(2)},${hit.z.toFixed(2)})`,
-    );
+    expect(fl, `wrong corner FL.z=${fl.toFixed(3)} FR.z=${fr.toFixed(3)} impactLocal=(${hit.x.toFixed(2)},${hit.z.toFixed(2)})`).toBeLessThan(fr - 0.04);
     // The contact is the pressure centre of the hulls on the face (`faceOverlap`: the mean of the hulls about as deep as the deepest),
     // and the hit is half on the face: it lies on the car's left, 0.17 m off the centre line (the old SAT gave the hull's own centre).
-    assert.ok(hit.x < 0, `contact sat on the right of the centerline x=${hit.x.toFixed(2)}`);
+    expect(hit.x, `contact sat on the right of the centerline x=${hit.x.toFixed(2)}`).toBeLessThan(0);
   });
 
   it("when a car in lattice deform mode hits at 22 m/s at full speed, then it does not tunnel through the slab either", () => {
     const car = spawnAtBarrier(0, 22, "lattice");
     runFor(car, 0.55, 1 / FRAME_HZ);
-    assert.ok(car.group.position.x > 0.4, `lattice tunneled x=${car.group.position.x.toFixed(3)}`);
+    expect(car.group.position.x, `lattice tunneled x=${car.group.position.x.toFixed(3)}`).toBeGreaterThan(0.4);
   });
 });
 
@@ -229,7 +225,7 @@ describe("given the top speed any driven car can reach (every class's top speed 
     for (const mode of ["shape", "lattice"] as const) {
       const car = spawnAtBarrier(0, DRIVEN_TOP, mode);
       runFor(car, 0.55, 1 / FRAME_HZ);
-      assert.ok(car.group.position.x > 0.4, `${mode} tunneled to x=${car.group.position.x.toFixed(3)}`);
+      expect(car.group.position.x, `${mode} tunneled to x=${car.group.position.x.toFixed(3)}`).toBeGreaterThan(0.4);
     }
   });
 
@@ -258,8 +254,8 @@ describe("given the top speed any driven car can reach (every class's top speed 
             held = closest === worst ? held + 1 : 0;
             worst = closest;
           }
-          if (kind === "head-on") assert.ok(worst > 0, `${v.toFixed(1)} m/s from x=${start.toFixed(3)}: b's origin crossed a's along the hit by ${(-worst).toFixed(2)} m`);
-          else assert.ok(worst <= 0, `${v.toFixed(1)} m/s from x=${start.toFixed(3)}: b's nose came out ${worst.toFixed(2)} m past a's far side`);
+          if (kind === "head-on") expect(worst, `${v.toFixed(1)} m/s from x=${start.toFixed(3)}: b's origin crossed a's along the hit by ${(-worst).toFixed(2)} m`).toBeGreaterThan(0);
+          else expect(worst, `${v.toFixed(1)} m/s from x=${start.toFixed(3)}: b's nose came out ${worst.toFixed(2)} m past a's far side`).toBeLessThanOrEqual(0);
         }
       }
     });
@@ -284,7 +280,7 @@ describe("given a car hitting a rigid wall in shape deform mode, which kills the
     it(testCase.it, () => {
       const car = spawnAtBarrier(0, FRONT_DISABLE_MPS * testCase.speedFactor, "shape");
       runFor(car, testCase.simSec, 1 / FRAME_HZ);
-      assert.equal(car.deform.drivetrainAlive, testCase.expectedAlive, testCase.message);
+      expect(car.deform.drivetrainAlive, testCase.message).toBe(testCase.expectedAlive);
     });
   }
 
@@ -297,7 +293,7 @@ describe("given a car hitting a rigid wall in shape deform mode, which kills the
     car.velocity.set(-speed, 0, 0);
     car.deform.bindKinematic(car.group, car.velocity, car.angular);
     runFor(car, 1.3, 1 / FRAME_HZ);
-    assert.equal(car.deform.drivetrainAlive, true, "40 km/h tail-first wall should still drive");
+    expect(car.deform.drivetrainAlive, "40 km/h tail-first wall should still drive").toBe(true);
   });
 });
 
@@ -307,49 +303,49 @@ describe("given a sedan hitting a rigid wall (NCAP/IIHS full-frontal sedan targe
 
   it("when it hits square-on at 56 km/h, then both front corners are left with 0.25–0.50 m of permanent crush", () => {
     for (const short of [wall56.noseShortL, wall56.noseShortR]) {
-      assert.ok(short >= 0.25 && short <= 0.5, `nose L=${wall56.noseShortL.toFixed(3)} R=${wall56.noseShortR.toFixed(3)}`);
+      expect(short >= 0.25 && short <= 0.5, `nose L=${wall56.noseShortL.toFixed(3)} R=${wall56.noseShortR.toFixed(3)}`).toBeTruthy();
     }
   });
 
   it("when it hits square-on at 56 km/h, then no point of the car's crush model ends up more than 5 cm past the wall's face", () => {
-    assert.ok(wall56.maxCentrePastFace <= 0.05, `mass centre ${wall56.maxCentrePastFace.toFixed(3)} m past the face`);
+    expect(wall56.maxCentrePastFace, `mass centre ${wall56.maxCentrePastFace.toFixed(3)} m past the face`).toBeLessThanOrEqual(0.05);
   });
 
   it("when it hits square-on at 56 km/h, then the car travels 0.35–0.60 m after contact and the impact pulse lasts 60–150 ms", () => {
-    assert.ok(wall56.comTravel >= 0.35 && wall56.comTravel <= 0.6, `COM travel ${wall56.comTravel.toFixed(3)}`);
-    assert.ok(wall56.pulseMs >= 60 && wall56.pulseMs <= 150, `pulse ${wall56.pulseMs.toFixed(0)} ms`);
+    expect(wall56.comTravel >= 0.35 && wall56.comTravel <= 0.6, `COM travel ${wall56.comTravel.toFixed(3)}`).toBeTruthy();
+    expect(wall56.pulseMs >= 60 && wall56.pulseMs <= 150, `pulse ${wall56.pulseMs.toFixed(0)} ms`).toBeTruthy();
   });
 
   it("when it hits square-on at 56 km/h, then it stays centred: the front-left and front-right corners shorten to within 25 % of each other", () => {
     const lo = Math.min(wall56.noseShortL, wall56.noseShortR);
     const hi = Math.max(wall56.noseShortL, wall56.noseShortR);
-    assert.ok(lo >= hi * 0.75, `FL=${wall56.noseShortL.toFixed(3)} FR=${wall56.noseShortR.toFixed(3)}`);
+    expect(lo, `FL=${wall56.noseShortL.toFixed(3)} FR=${wall56.noseShortR.toFixed(3)}`).toBeGreaterThanOrEqual(hi * 0.75);
   });
 
   it("when it hits at 35, 56 and 80 km/h, then the distance the car travels after contact grows with speed", () => {
     const t35 = runWall(35).comTravel;
     const t80 = runWall(80).comTravel;
-    assert.ok(t35 < wall56.comTravel && wall56.comTravel < t80, `35=${t35.toFixed(3)} 56=${wall56.comTravel.toFixed(3)} 80=${t80.toFixed(3)}`);
+    expect(t35 < wall56.comTravel && wall56.comTravel < t80, `35=${t35.toFixed(3)} 56=${wall56.comTravel.toFixed(3)} 80=${t80.toFixed(3)}`).toBeTruthy();
   });
 
   it("when it reverses into the wall at 50 km/h, then the tail crushes by at least 0.15 m and the nose by at most 3 cm", () => {
     const r = runWall(50, 1, "rear");
-    assert.ok(r.tailShort >= 0.15, `tail ${r.tailShort.toFixed(3)}`);
-    assert.ok(Math.max(r.noseShortL, r.noseShortR) <= 0.03, `nose L=${r.noseShortL.toFixed(3)} R=${r.noseShortR.toFixed(3)}`);
+    expect(r.tailShort, `tail ${r.tailShort.toFixed(3)}`).toBeGreaterThanOrEqual(0.15);
+    expect(Math.max(r.noseShortL, r.noseShortR), `nose L=${r.noseShortL.toFixed(3)} R=${r.noseShortR.toFixed(3)}`).toBeLessThanOrEqual(0.03);
   });
 
   it("when it reverses into the wall at 50 km/h, then the tail crushes 0.6–1.0× as far as the nose does in a 50 km/h front hit, and the cabin moves in by under 6 cm", () => {
     const front = runWall(50);
     const rear = runWall(50, 1, "rear");
     const nose = Math.max(front.noseShortL, front.noseShortR);
-    assert.ok(rear.tailShort >= 0.6 * nose && rear.tailShort <= nose, `tail ${rear.tailShort.toFixed(3)} vs nose ${nose.toFixed(3)}`);
-    assert.ok(rear.cabinIntrusion < 0.06, `cabin intrusion ${rear.cabinIntrusion.toFixed(3)}`);
+    expect(rear.tailShort >= 0.6 * nose && rear.tailShort <= nose, `tail ${rear.tailShort.toFixed(3)} vs nose ${nose.toFixed(3)}`).toBeTruthy();
+    expect(rear.cabinIntrusion, `cabin intrusion ${rear.cabinIntrusion.toFixed(3)}`).toBeLessThan(0.06);
   });
 
   it("when it slides sideways into the wall at 50 km/h, then the door dents 0.12–0.28 m, the nose and tail each crush under 10 cm and the cabin shifts under 12 cm", () => {
     const s = runWall(50, 1, "side");
-    assert.ok(s.doorMaxL >= 0.12 && s.doorMaxL <= 0.28, `doorL ${s.doorMaxL.toFixed(3)}`);
-    assert.ok(Math.max(s.noseShortL, s.noseShortR) < 0.1 && s.tailShort < 0.1, `nose L=${s.noseShortL.toFixed(3)} R=${s.noseShortR.toFixed(3)} tail=${s.tailShort.toFixed(3)}`);
-    assert.ok(s.cellShift < 0.12, `cell moved ${s.cellShift.toFixed(3)}`);
+    expect(s.doorMaxL >= 0.12 && s.doorMaxL <= 0.28, `doorL ${s.doorMaxL.toFixed(3)}`).toBeTruthy();
+    expect(Math.max(s.noseShortL, s.noseShortR) < 0.1 && s.tailShort < 0.1, `nose L=${s.noseShortL.toFixed(3)} R=${s.noseShortR.toFixed(3)} tail=${s.tailShort.toFixed(3)}`).toBeTruthy();
+    expect(s.cellShift, `cell moved ${s.cellShift.toFixed(3)}`).toBeLessThan(0.12);
   });
 });

@@ -1,5 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import { COMPASS, judge, report, type Kind, type Run, type Site } from "./ground-judge.test-util.ts";
@@ -102,8 +101,8 @@ describe("given a car braking on a flat straight", () => {
         pen = Math.max(pen, f.pen);
         dive = Math.min(dive, f.pitch - f.groundPitch);
       }
-      assert.ok(pen <= 0.01, `${cls}: the drawn underside is ${(pen * 100).toFixed(1)} cm in the road while braking`);
-      assert.ok(dive <= -0.5, `${cls}: the drawn nose dips only ${(-dive).toFixed(2)}° (the dive look is gone)`);
+      expect(pen, `${cls}: the drawn underside is ${(pen * 100).toFixed(1)} cm in the road while braking`).toBeLessThanOrEqual(0.01);
+      expect(dive, `${cls}: the drawn nose dips only ${(-dive).toFixed(2)}° (the dive look is gone)`).toBeLessThanOrEqual(-0.5);
     }
   });
 });
@@ -114,8 +113,8 @@ describe("given a car with its brakes off on the fleet ramp's face", () => {
   // The control for the judge's slide measure (the rigid centre's travel): a car that really rolls down the face reads as a slide.
   it("when a sedan is rolling down the face at 3 m/s with its brakes off for 3 s, then its centre has travelled past the slide bound and the judge flags it", () => {
     const r = drop(ramps, "sedan", 0, MID, 0, { collide, seconds: 3, brake: false, speed: 3 });
-    assert.ok(r.slide > 0.5, `the centre slid only ${r.slide.toFixed(2)} m down the face`);
-    assert.ok(judge("plain", r).includes("slide"), "the judge does not flag the slide");
+    expect(r.slide, `the centre slid only ${r.slide.toFixed(2)} m down the face`).toBeGreaterThan(0.5);
+    expect(judge("plain", r).includes("slide"), "the judge does not flag the slide").toBeTruthy();
   });
 });
 
@@ -131,20 +130,20 @@ describe("given the judge's reading of a hull point in the fleet ramp", () => {
     setGround(ramps);
     const top = ramps.heightAt(RAMP.halfW - IN, MID, undefined);
     const { depth, side } = bodyPointDepth(RAMP.halfW - IN, top - 0.1, MID);
-    assert.ok(side && Math.abs(depth - IN) < 1e-6, `${side ? "side" : "floor"} ${(depth * 100).toFixed(2)} cm in`);
+    expect(side && Math.abs(depth - IN) < 1e-6, `${side ? "side" : "floor"} ${(depth * 100).toFixed(2)} cm in`).toBeTruthy();
   });
 
   it("when a point stands 1 mm inside the side face and 10 cm under the top, then it reads 1 mm in, not 10 cm", () => {
     setGround(ramps);
     const top = ramps.heightAt(RAMP.halfW - 0.001, MID, undefined);
     const { depth, side } = bodyPointDepth(RAMP.halfW - 0.001, top - 0.1, MID);
-    assert.ok(side && Math.abs(depth - 0.001) < 1e-6, `${side ? "side" : "floor"} ${(depth * 100).toFixed(2)} cm in`);
+    expect(side && Math.abs(depth - 0.001) < 1e-6, `${side ? "side" : "floor"} ${(depth * 100).toFixed(2)} cm in`).toBeTruthy();
   });
 
   it("when a point stands 5 cm under the ramp's top, in the middle of its face, then it reads 5 cm in under it", () => {
     setGround(ramps);
     const top = ramps.heightAt(0, MID, undefined);
     const { depth, side } = bodyPointDepth(0, top - IN, MID);
-    assert.ok(!side && Math.abs(depth - IN) < 1e-6, `${side ? "side" : "floor"} ${(depth * 100).toFixed(2)} cm in`);
+    expect(!side && Math.abs(depth - IN) < 1e-6, `${side ? "side" : "floor"} ${(depth * 100).toFixed(2)} cm in`).toBeTruthy();
   });
 });

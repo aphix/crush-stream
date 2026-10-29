@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { DerbyBrain, DERBY_RULES, type AiCar } from "./derby-ai.ts";
 import { DerbyMatch } from "../match/derby.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
@@ -7,6 +6,7 @@ import { DerbyGround, DERBY_FREE_PROPS } from "../scenes/derby-ground.ts";
 import { layoutDerby, type DerbySlot } from "../scenes/fleet.ts";
 import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { aiCar as car, decide } from "../vehicle/test-support.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 describe("given an AI derby driver and a rival car close beside or ahead of it", () => {
   it("when a rival's nose sits 1.8 m to its left, level with its rear wheel and pointing at its side, then the driver handbrakes into a swing that whips its tail into that nose", () => {
@@ -15,9 +15,9 @@ describe("given an AI derby driver and a rival car close beside or ahead of it",
     // Its nose (1.7 m ahead of it) sits 1.8 m left of us, level with our rear wheel, pointing at our side.
     const foe = car(1, { x: 3.5, z: -1.8, yaw: -Math.PI / 2, vz: 0 });
     const input = decide(brain, me, [me, foe]);
-    assert.equal(brain.tacticOf(0), "swing");
+    expect(brain.tacticOf(0)).toBe("swing");
     // Steering right swings the tail left, into it.
-    assert.ok(input.ebrake && input.throttle === 0 && input.steer < -0.5, JSON.stringify(input));
+    expect(input.ebrake && input.throttle === 0 && input.steer < -0.5, JSON.stringify(input)).toBeTruthy();
   });
 
   it("when an oncoming car passes 2.6 m to its right, then the driver sideswipes it, steering right with the throttle on, but does not when the car shows its driver's door instead", () => {
@@ -26,13 +26,13 @@ describe("given an AI derby driver and a rival car close beside or ahead of it",
     // Oncoming, 2.6 m to our right: we pass its passenger side.
     const passenger = car(1, { x: -2.6, z: 1, yaw: Math.PI, vz: -8 });
     const input = decide(brain, me, [me, passenger]);
-    assert.equal(brain.tacticOf(0), "sideswipe");
-    assert.ok(input.steer < -0.3 && input.throttle > 0.5, JSON.stringify(input));
+    expect(brain.tacticOf(0)).toBe("sideswipe");
+    expect(input.steer < -0.3 && input.throttle > 0.5, JSON.stringify(input)).toBeTruthy();
     // Mirror it: now its driver's door (the steering-wheel side) is the side we'd rub.
     const doorBrain = new DerbyBrain();
     const driverSide = car(1, { x: 2.6, z: 1, yaw: Math.PI, vz: -8 });
     decide(doorBrain, me, [me, driverSide]);
-    assert.notEqual(doorBrain.tacticOf(0), "sideswipe");
+    expect(doorBrain.tacticOf(0)).not.toBe("sideswipe");
   });
 
   it("when the driver backs toward a car parked broadside 16 m off, then it reverses and steers its tail toward that car's nose, the same turn whichever side the car shows, so the field's play does not hang on the seat's side", () => {
@@ -40,9 +40,9 @@ describe("given an AI derby driver and a rival car close beside or ahead of it",
     const me = car(0, { z: -16, yaw: Math.PI, vz: 0 });
     const doorSide = decide(new DerbyBrain(), me, [me, car(1, { yaw: Math.PI / 2, vz: 0 })]);
     const passengerSide = decide(new DerbyBrain(), me, [me, car(1, { yaw: -Math.PI / 2, vz: 0 })]);
-    assert.ok(doorSide.throttle < 0 && passengerSide.throttle < 0, "not backing in");
-    assert.ok(doorSide.steer > 0 && passengerSide.steer < 0, `${doorSide.steer} / ${passengerSide.steer}`);
-    assert.ok(Math.abs(doorSide.steer + passengerSide.steer) < 1e-6, `door side ${doorSide.steer} vs passenger side ${passengerSide.steer}`);
+    expect(doorSide.throttle < 0 && passengerSide.throttle < 0, "not backing in").toBeTruthy();
+    expect(doorSide.steer > 0 && passengerSide.steer < 0, `${doorSide.steer} / ${passengerSide.steer}`).toBeTruthy();
+    expect(Math.abs(doorSide.steer + passengerSide.steer), `door side ${doorSide.steer} vs passenger side ${passengerSide.steer}`).toBeLessThan(1e-6);
   });
 });
 
@@ -65,21 +65,21 @@ describe("given derby drivers on the shared aggression slider, a parked rival 8 
   }
 
   it("when aggression is 0 and the hit clock (time since its last aggressive hit) is long past, then it keeps clear of every hit", () => {
-    assert.equal(tactic(0, { idle: 1000 }), "layback");
+    expect(tactic(0, { idle: 1000 })).toBe("layback");
   });
 
   it("when aggression is 0.5, then it keeps clear of an equal car, hits a more wrecked one, and hits anyway when its hit clock runs low", () => {
-    assert.equal(tactic(0.5, {}), "layback");
-    assert.notEqual(tactic(0.5, {}, { front: 0.6, damage: 0.6 }), "layback");
-    assert.notEqual(tactic(0.5, { idle: DERBY_RULES.hitClock * 0.62 }), "layback");
+    expect(tactic(0.5, {})).toBe("layback");
+    expect(tactic(0.5, {}, { front: 0.6, damage: 0.6 })).not.toBe("layback");
+    expect(tactic(0.5, { idle: DERBY_RULES.hitClock * 0.62 })).not.toBe("layback");
   });
 
   it("when aggression is full and the driver is itself badly damaged, then it still goes in for a hit", () => {
-    assert.notEqual(tactic(1, { front: 0.8, damage: 0.8 }), "layback");
+    expect(tactic(1, { front: 0.8, damage: 0.8 })).not.toBe("layback");
   });
 
   it("when only one rival is left alive at aggression 0.3, then the driver goes in for a hit instead of waiting for the others to soften it up", () => {
-    assert.notEqual(tactic(0.3, {}, {}, false), "layback");
+    expect(tactic(0.3, {}, {}, false)).not.toBe("layback");
   });
 
   it("when a cautious driver (aggression 0.5) keeps clear of an equal car but paces inside one 9 m pocket, then the deadlock breaker drops its caution within 9 s (its dwell is 6 s × its 0.5-1.5 roll) and it attacks", () => {
@@ -89,14 +89,14 @@ describe("given derby drivers on the shared aggression slider, a parked rival 8 
     brain.setAggression(0, 0.5);
     const cars = field({ vz: 2 });
     decide(brain, cars[0]!, cars);
-    assert.equal(brain.tacticOf(0), "layback", "it starts out keeping clear");
+    expect(brain.tacticOf(0), "it starts out keeping clear").toBe("layback");
     const ATTACKS = ["reverse", "jturn", "nose"];
     let boldAt = -1;
     for (let t = 0.1; t <= 9.05 && boldAt < 0; t += 0.1) {
       decide(brain, cars[0]!, cars, 0.1);
       if (ATTACKS.includes(brain.tacticOf(0))) boldAt = t;
     }
-    assert.ok(boldAt > 0, "the driver kept clear for 9 s in one pocket: the deadlock breaker never fired");
+    expect(boldAt, "the driver kept clear for 9 s in one pocket: the deadlock breaker never fired").toBeGreaterThan(0);
   });
 });
 
@@ -108,20 +108,20 @@ describe("given a derby whose rules count a car out after 60 s without an aggres
     m.begin(names, { seed: 1 });
     const step = () => m.step(0.1, [0, 1, 2, 3].map((id) => ({ id, name: `c${id}`, alive: true, x: m.time * 3 + id * 10, z: 0 })));
     while (m.time < 50) step();
-    assert.equal(m.noteHit(0, 1, 5, 0, 6), true, "car 0 rams car 1 at 5 m/s");
-    assert.equal(m.noteHit(3, 2, 5, 0, 6), true, "car 3 rams car 2 at 5 m/s");
-    assert.equal(m.noteHit(2, 1, 1, 0, 6), true, "car 2 leans on car 1 at 1 m/s");
+    expect(m.noteHit(0, 1, 5, 0, 6), "car 0 rams car 1 at 5 m/s").toBe(true);
+    expect(m.noteHit(3, 2, 5, 0, 6), "car 3 rams car 2 at 5 m/s").toBe(true);
+    expect(m.noteHit(2, 1, 1, 0, 6), "car 2 leans on car 1 at 1 m/s").toBe(true);
     while (m.time < DERBY_RULES.hitClock - 0.2) step();
-    assert.deepEqual(m.board.map((r) => r.out), [false, false, false, false]);
+    expect(firstMismatch(m.board.map((r) => r.out), [false, false, false, false])).toBeUndefined();
     while (m.time < DERBY_RULES.hitClock + 0.2) step();
-    assert.deepEqual(m.board.map((r) => r.out), [false, true, true, false]);
-    assert.equal(m.winnerId, null);
+    expect(firstMismatch(m.board.map((r) => r.out), [false, true, true, false])).toBeUndefined();
+    expect(m.winnerId).toBe(null);
     // Counted out: no more input of its own, and no longer a target for anyone.
     const snaps = [car(0, { z: -6 }), car(1, { vz: 0 }), car(2, { x: 1, vz: 0 }), car(3, { x: 14, z: 14, vz: 0 })];
     const idle = m.think(snaps[1]!, snaps, 0.1);
-    assert.ok(idle.throttle === 0 && idle.steer === 0, "a counted-out car still drives");
+    expect(idle.throttle === 0 && idle.steer === 0, "a counted-out car still drives").toBeTruthy();
     m.think(snaps[0]!, snaps, 0.1);
-    assert.deepEqual([m.brain.huntersOf(1), m.brain.huntersOf(2), m.brain.huntersOf(3)], [0, 0, 1]);
+    expect(firstMismatch([m.brain.huntersOf(1), m.brain.huntersOf(2), m.brain.huntersOf(3)], [0, 0, 1])).toBeUndefined();
   });
 
   it("when one car rocks in place without getting 2 m from where it stopped while another drives about, then the rocking car is counted out when the still clock runs out and the driving car wins", () => {
@@ -134,8 +134,8 @@ describe("given a derby whose rules count a car out after 60 s without an aggres
         { id: 1, name: "c1", alive: true, x: Math.sin(m.time * 4), z: 20 },
       ]);
     }
-    assert.equal(m.row(1)!.out, true);
-    assert.equal(m.winnerId, 0);
+    expect(m.row(1)!.out).toBe(true);
+    expect(m.winnerId).toBe(0);
   });
 
   it("when the time limit arrives, then the top scorer among the cars still running is crowned and the win is marked as decided on points", () => {
@@ -143,8 +143,8 @@ describe("given a derby whose rules count a car out after 60 s without an aggres
     m.begin(names, { seed: 1, timeLimit: 10, hitClock: Infinity });
     m.noteHit(2, 0, 5, 0, 6);
     while (m.winnerId == null) m.step(0.1, [0, 1, 2].map((id) => ({ id, name: `c${id}`, alive: true, x: m.time * 3, z: id })));
-    assert.equal(m.winnerId, 2);
-    assert.equal(m.decided, "time");
+    expect(m.winnerId).toBe(2);
+    expect(m.decided).toBe("time");
   });
 });
 
@@ -168,18 +168,18 @@ describe("given derby fields of 2 to 32 cars laid out in the one fixed arena", (
     const ground = new DerbyGround();
     for (let n = 2; n <= 32; n++) {
     const slots = layoutDerby(n, DERBY_RADIUS, () => 0.37, DERBY_FREE_PROPS);
-      assert.equal(slots.length, n);
+      expect(slots.length).toBe(n);
       for (let i = 0; i < n; i++) {
         const s = slots[i]!;
-        assert.ok(Math.hypot(s.x, s.z) + FLEET_HALF.z < DERBY_RADIUS, `${n} cars: car ${i} spawns in the wall`);
+        expect(Math.hypot(s.x, s.z) + FLEET_HALF.z, `${n} cars: car ${i} spawns in the wall`).toBeLessThan(DERBY_RADIUS);
         for (const lengthSide of [-1, 1]) {
           for (const widthSide of [-1, 1]) {
             const cornerX = s.x + lengthSide * FLEET_HALF.z * Math.sin(s.yaw) + widthSide * FLEET_HALF.x * Math.cos(s.yaw);
             const cornerZ = s.z + lengthSide * FLEET_HALF.z * Math.cos(s.yaw) - widthSide * FLEET_HALF.x * Math.sin(s.yaw);
-            assert.equal(ground.heightAt(cornerX, cornerZ), 0, `${n} cars: car ${i} spawns on a rise`);
+            expect(ground.heightAt(cornerX, cornerZ), `${n} cars: car ${i} spawns on a rise`).toBe(0);
           }
         }
-        for (let j = i + 1; j < n; j++) assert.ok(!hullsOverlap(s, slots[j]!), `${n} cars: ${i} and ${j} spawn on top of each other`);
+        for (let j = i + 1; j < n; j++) expect(!hullsOverlap(s, slots[j]!), `${n} cars: ${i} and ${j} spawn on top of each other`).toBe(true);
       }
     }
   });

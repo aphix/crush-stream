@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { expect, test } from "vitest";
 import { execFile } from "node:child_process";
 import { mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,7 +17,7 @@ test("the wrapped command inherits the process env", async () => {
     [WRAPPER, process.execPath, "-e", PRINT_FLAG],
     { env: { ...process.env, WRAP_FLAG: "true" } },
   );
-  assert.equal(stdout, "true");
+  expect(stdout).toBe("true");
 });
 
 test("a leading NAME=value arg wins over the process env and is not run as the command", async () => {
@@ -27,28 +26,38 @@ test("a leading NAME=value arg wins over the process env and is not run as the c
     [WRAPPER, "WRAP_FLAG=cli", "OTHER=a=b", process.execPath, "-e", `${PRINT_FLAG}process.stdout.write(","+process.env.OTHER);`],
     { env: { ...process.env, WRAP_FLAG: "true" } },
   );
-  assert.equal(stdout, "cli,a=b");
+  expect(stdout).toBe("cli,a=b");
 });
 
+async function rejection(promise) {
+  try {
+    await promise;
+  } catch (error) {
+    return error;
+  }
+  return undefined;
+}
+
 test("the wrapper propagates the command's exit code", async () => {
-  await assert.rejects(
-    execFileAsync(process.execPath, [WRAPPER, process.execPath, "-e", "process.exit(3)"]),
-    (err) => err.code === 3,
-  );
+  const error = await rejection(execFileAsync(process.execPath, [WRAPPER, process.execPath, "-e", "process.exit(3)"]));
+  expect(error, "the wrapper rejected").toBeDefined();
+  if (error === undefined) throw new Error("the wrapper rejected");
+  expect(error.code, "exit code").toBe(3);
 });
 
 test("a signal-killed command is never reported as success", async () => {
-  // The wrapper's own SIGTERM handler must not swallow the re-raised signal:
-  // a cancelled build reporting exit 0 is a silently passing gate.
-  await assert.rejects(
+  // The wrapper's own SIGTERM handler must not swallow the re-raised signal.
+  const error = await rejection(
     execFileAsync(process.execPath, [
       WRAPPER,
       process.execPath,
       "-e",
       "process.kill(process.pid, 'SIGTERM');process.stdin.resume();",
     ]),
-    (err) => err.signal === "SIGTERM" || err.code !== 0,
   );
+  expect(error, "the wrapper rejected").toBeDefined();
+  if (error === undefined) throw new Error("the wrapper rejected");
+  expect(error.signal === "SIGTERM" || error.code !== 0, "killed by SIGTERM or a non-zero exit").toBe(true);
 });
 
 test("the CLI still runs when invoked through a symlinked path", async () => {
@@ -63,5 +72,5 @@ test("the CLI still runs when invoked through a symlinked path", async () => {
     "-e",
     PRINT_FLAG,
   ]);
-  assert.equal(stdout, "linked");
+  expect(stdout).toBe("linked");
 });

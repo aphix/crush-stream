@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -144,7 +143,7 @@ function record(speed: number, passer: { x: number; z: number } | null): Recorde
   }
   rec.end();
   for (const open of lying) if (open) rests.push(open);
-  assert.ok(rec.ledger.kept.length >= 1, "the head-on crash did not rank as a highlight");
+  expect(rec.ledger.kept.length, "the head-on crash did not rank as a highlight").toBeGreaterThanOrEqual(1);
   const kept = rec.ledger.kept[0]!;
   const w = new Writer(clipBytes(kept));
   writeClip(w, kept);
@@ -202,7 +201,7 @@ function stage(): { speed: number; passer: { x: number; z: number } } {
     const passer = passerBy(record(speed, { x: IMPACT_X + PASSER_AHEAD, z: FAR_LANE }));
     if (passer) return { speed, passer };
   }
-  assert.fail(`no torn part or popped wheel lies asleep clear of both wrecks within the clip, the passer's nearest on its way, at ${HEAD_ON_SPEEDS.join(", ")} m/s`);
+  expect.fail(`no torn part or popped wheel lies asleep clear of both wrecks within the clip, the passer's nearest on its way, at ${HEAD_ON_SPEEDS.join(", ")} m/s`);
 }
 
 const STAGED = stage();
@@ -245,24 +244,26 @@ describe("given a head-on recorded as a highlight, its torn parts lying asleep o
     // A saved clip is the deflated bytes in base64 (3 bytes to 4 characters).
     const [withRuns, without] = await Promise.all([encodeSaved(clip), encodeSaved({ ...clip, partStirs: [] })]);
     t.annotate(`head-on at ${STAGED.speed} m/s; clip cars ${clip.cars.map((c) => c.slot).join(",")}, steps ${s0} to ${s0 + clip.h.length}; passer nearest at step ${run.closest.step} (${run.closest.gap.toFixed(2)} m); ${clip.partStirs.length} part stirs over ${slices} slices cost ${bytes} bytes raw of ${clipBytes(clip)}, ${Math.round(((withRuns.length - without.length) * 3) / 4)} deflated of ${Math.round((withRuns.length * 3) / 4)}`);
-    assert.ok(clip.cars.some((c) => c.slot === A) && clip.cars.some((c) => c.slot === B), "the pair is in the clip");
-    assert.ok(!clip.cars.some((c) => c.slot === PASSER), "the car that joined the field after the clip began is left out");
-    assert.ok(s0 + clip.h.length > run.closest.step, "the passer comes by inside the clip");
-    assert.ok(clip.partStirs.length >= 1, "no torn part was recorded woken");
+    expect(clip.cars.some((c) => c.slot === A) && clip.cars.some((c) => c.slot === B), "the pair is in the clip").toBeTruthy();
+    expect(!clip.cars.some((c) => c.slot === PASSER), "the car that joined the field after the clip began is left out").toBe(true);
+    expect(s0 + clip.h.length, "the passer comes by inside the clip").toBeGreaterThan(run.closest.step);
+    expect(clip.partStirs.length, "no torn part was recorded woken").toBeGreaterThanOrEqual(1);
     const { reached } = run;
-    assert.ok(reached.gap < run.cars[PASSER]!.frame.half.x + reached.reach, `the passer came within ${reached.gap.toFixed(2)} m of a resting part, not within its reach`);
+    expect(reached.gap, `the passer came within ${reached.gap.toFixed(2)} m of a resting part, not within its reach`).toBeLessThan(run.cars[PASSER]!.frame.half.x + reached.reach);
     const wakes = clip.partStirs.filter((x) => clip.cars[x.car]!.slot === reached.car && x.body === reached.body && s0 + x.step >= JOIN_STEP);
-    assert.ok(wakes.length > 0 && s0 + wakes[0]!.step <= reached.step, `the part the passer reached was woken at ${wakes.map((x) => s0 + x.step).join(",") || "no step"}, the passer nearest it at ${reached.step}`);
+    expect(wakes.length > 0 && s0 + wakes[0]!.step <= reached.step, `the part the passer reached was woken at ${wakes.map((x) => s0 + x.step).join(",") || "no step"}, the passer nearest it at ${reached.step}`).toBeTruthy();
   });
 
   it("when the clip is replayed with its part stirs, then every torn part of its cars is where the live sim had it at every step, to the bit", () => {
-    assert.deepEqual(replayLooseBodies(run, clip), { firstOff: -1, worst: 0 });
+    const worst = replayLooseBodies(run, clip);
+    expect(worst.firstOff, "first clip step a torn part is off").toBe(-1);
+    expect(worst.worst, "worst torn-part distance (m)").toBe(0);
   });
 
   it("when the same clip is replayed without its part stirs, then the parts the passer woke lie still while the live ones settled, so the replay strays (the case holds what it is for)", (t) => {
     const strayed = replayLooseBodies(run, { ...clip, partStirs: [] });
     t.annotate(`without the part stirs the replay is first off at clip step ${strayed.firstOff} (race step ${s0 + strayed.firstOff}), worst ${strayed.worst.toExponential(2)} m`);
-    assert.ok(strayed.firstOff >= 0, `without the part stirs the replay stays exact: ${JSON.stringify(strayed)}`);
+    expect(strayed.firstOff, `without the part stirs the replay stays exact: ${JSON.stringify(strayed)}`).toBeGreaterThanOrEqual(0);
   });
 });
 
@@ -270,6 +271,8 @@ describe("given the same head-on recorded with no car outside the clip", () => {
   it("when it is replayed without part stirs, then every torn part is where the live sim had it, to the bit (the passer is what the stirs are for)", (t) => {
     const run = record(STAGED.speed, null);
     t.annotate(`its own cars' wrecks alone stir ${run.clip.partStirs.length} part runs over ${run.clip.partStirs.reduce((n, x) => n + x.slices, 0)} slices`);
-    assert.deepEqual(replayLooseBodies(run, { ...run.clip, partStirs: [] }), { firstOff: -1, worst: 0 });
+    const alone = replayLooseBodies(run, { ...run.clip, partStirs: [] });
+    expect(alone.firstOff, "first clip step a torn part is off").toBe(-1);
+    expect(alone.worst, "worst torn-part distance (m)").toBe(0);
   });
 });

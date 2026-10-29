@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -92,7 +91,7 @@ function record() {
     for (const [i, car] of cars.entries()) noteOff(car, firstOff[i]!, s);
   }
   rec.end();
-  assert.ok(rec.ledger.kept.length >= 1, "the head-on did not rank as a highlight");
+  expect(rec.ledger.kept.length, "the head-on did not rank as a highlight").toBeGreaterThanOrEqual(1);
   const kept = rec.ledger.kept[0]!;
   const w = new Writer(clipBytes(kept));
   writeClip(w, kept);
@@ -115,8 +114,8 @@ describe("given a head-on that pops a wheel and tears the front bumper off both 
 
   it("when the clip is filed, then bodies leave the cars after its keyframe, and by the run's end one lies asleep and one is dented", () => {
     const list = r.torn.map((t) => `${t.name}@${t.step}${t.asleep ? " asleep" : ""} dents ${t.dents}`).join(", ");
-    assert.ok(r.clip.cars.length === 2, `the clip's cars: ${r.clip.cars.length}`);
-    assert.ok(r.torn.some((t) => t.asleep) && r.torn.some((t) => t.dents > 0), `torn after the keyframe at step ${r.keyStep}: ${list}`);
+    expect(r.clip.cars.length, `the clip's cars: ${r.clip.cars.length}`).toBe(2);
+    expect(r.torn.some((t) => t.asleep) && r.torn.some((t) => t.dents > 0), `torn after the keyframe at step ${r.keyStep}: ${list}`).toBeTruthy();
   });
 
   it("when the clip is replayed on freshly built cars, then at every step their poses, parts and loose bodies are the recording's to the bit", () => {

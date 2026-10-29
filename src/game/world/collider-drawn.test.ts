@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { loadRapier } from "../kernel/rapier.ts";
 import { colliderSolids, courseSolids } from "../present/ragdoll-solids.ts";
@@ -12,6 +11,7 @@ import { Track } from "./track.ts";
 import { parseTrack } from "./track-schema.ts";
 import { wallColliders } from "./track-sections.ts";
 import { OFF_MENU, TRACKS } from "./tracks/index.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * What a car meets is what is drawn, in both directions: a collider standing out of the drawn shape is a wall you hit in the
@@ -104,7 +104,7 @@ describe("given each course's drawn walls (`addWalls`) and its wall colliders (`
         for (const c of near(tris[i]!, tris[i + 2]!)) if (Math.hypot(c.x - tris[i]!, c.z - tris[i + 2]!) < c.r + WALL_IN) d = Math.min(d, gap(c, tris[i]!, tris[i + 1]!, tris[i + 2]!));
         if (d !== Infinity && d > worst.d) worst = { d, at: `(${tris[i]!.toFixed(2)}, ${tris[i + 1]!.toFixed(2)}, ${tris[i + 2]!.toFixed(2)})` };
       }
-      assert.ok(worst.d <= WALL_IN, `a drawn wall vertex at ${worst.at} is ${worst.d.toFixed(3)} m outside every collider`);
+      expect(worst.d, `a drawn wall vertex at ${worst.at} is ${worst.d.toFixed(3)} m outside every collider`).toBeLessThanOrEqual(WALL_IN);
     });
 
     it(`when points over the faces of the ${course.id} course's wall colliders are measured against the drawn walls, then none stands more than ${WALL_OUT} m off them`, () => {
@@ -122,7 +122,7 @@ describe("given each course's drawn walls (`addWalls`) and its wall colliders (`
           }
         }
       }
-      assert.ok(worst.d <= WALL_OUT, `a wall collider point at ${worst.at} is ${worst.d.toFixed(3)} m off the drawn wall`);
+      expect(worst.d, `a wall collider point at ${worst.at} is ${worst.d.toFixed(3)} m off the drawn wall`).toBeLessThanOrEqual(WALL_OUT);
     });
   }
 });
@@ -134,11 +134,11 @@ describe("given every solid and knock prefab at scale 1: the colliders the game 
     const tol = KIND_TOL[id] ?? 0;
 
     it(`when the ${id}'s drawn points are measured against its ${pieces} collider pieces, then none stands more than ${tol} m out of them`, () => {
-      assert.ok(inward.d <= tol, `the ${id} is drawn ${inward.d.toFixed(3)} m outside its colliders at ${inward.at}`);
+      expect(inward.d, `the ${id} is drawn ${inward.d.toFixed(3)} m outside its colliders at ${inward.at}`).toBeLessThanOrEqual(tol);
     });
 
     it(`when points over the faces of the ${id}'s collider pieces, up to ${BAND} m, are measured against the drawn shape, then none stands more than ${tol} m off it`, () => {
-      assert.ok(outward.d <= tol, `a ${id} collider point at ${outward.at} is ${outward.d.toFixed(3)} m off the drawn shape`);
+      expect(outward.d, `a ${id} collider point at ${outward.at} is ${outward.d.toFixed(3)} m off the drawn shape`).toBeLessThanOrEqual(tol);
     });
   }
 });
@@ -163,12 +163,12 @@ describe("given every solid and knock prop a course places at uneven scales, as 
     const tol = (KIND_TOL[id] ?? 0) + STRETCHED_TOL;
 
     it(`when a ${key} (scale x y z) is measured as placed, then its drawn points stand no more than ${tol} m out of its colliders and its collider faces no more than ${tol} m off the drawn shape`, () => {
-      assert.ok(inward.d <= tol, `the ${id} is drawn ${inward.d.toFixed(3)} m outside its colliders at ${inward.at}`);
-      assert.ok(outward.d <= tol, `a ${id} collider point at ${outward.at} is ${outward.d.toFixed(3)} m off the drawn shape`);
+      expect(inward.d, `the ${id} is drawn ${inward.d.toFixed(3)} m outside its colliders at ${inward.at}`).toBeLessThanOrEqual(tol);
+      expect(outward.d, `a ${id} collider point at ${outward.at} is ${outward.d.toFixed(3)} m off the drawn shape`).toBeLessThanOrEqual(tol);
     });
   }
   it("when the courses' placements are scanned, then at least one circle-collider prop stretched unevenly is measured (the Mall's basin): the rows above are not empty", () => {
-    assert.ok([...stretched.values()].some((s) => PREFABS[s.id].collider.some((c) => c.kind === "circle") && s.scale[0] !== s.scale[2]), "no stretched circle prop in any course");
+    expect([...stretched.values()].some((s) => PREFABS[s.id].collider.some((c) => c.kind === "circle") && s.scale[0] !== s.scale[2]), "no stretched circle prop in any course").toBeTruthy();
   });
 });
 
@@ -180,21 +180,21 @@ describe("given the colliders the cars meet and the solids the cosmetic Rapier w
       const placed = placeProps(track);
       const colliders = [...wallColliders(track), ...propColliders(placed).filter((c) => c.body === "solid")];
       const solids = courseSolids(track, placed);
-      assert.ok(solids.length >= colliders.length, `${solids.length} solids for ${colliders.length} colliders`);
+      expect(solids.length, `${solids.length} solids for ${colliders.length} colliders`).toBeGreaterThanOrEqual(colliders.length);
       for (const [k, c] of colliders.entries()) {
         const desc = solids[k]!.make(R)!;
         const h = (c.top - c.base) / 2;
         const t = desc.translation;
-        assert.ok(Math.abs(t.x - c.x) < SAME && Math.abs(t.y - (c.base + h)) < SAME && Math.abs(t.z - c.z) < SAME, `solid ${k} stands at (${t.x}, ${t.y}, ${t.z}), its collider at (${c.x}, ${c.base + h}, ${c.z})`);
+        expect(Math.abs(t.x - c.x) < SAME && Math.abs(t.y - (c.base + h)) < SAME && Math.abs(t.z - c.z) < SAME, `solid ${k} stands at (${t.x}, ${t.y}, ${t.z}), its collider at (${c.x}, ${c.base + h}, ${c.z})`).toBeTruthy();
         const s = desc.shape;
         if (c.kind === "circle") {
-          assert.ok(s instanceof R.Cylinder, `solid ${k} is a cylinder`);
-          assert.ok(Math.abs(s.radius - c.r) < SAME && Math.abs(s.halfHeight - h) < SAME, `solid ${k}: cylinder ${s.radius} × ${s.halfHeight}, collider ${c.r} × ${h}`);
+          must(s instanceof R.Cylinder, `solid ${k} is a cylinder`);
+          expect(Math.abs(s.radius - c.r) < SAME && Math.abs(s.halfHeight - h) < SAME, `solid ${k}: cylinder ${s.radius} × ${s.halfHeight}, collider ${c.r} × ${h}`).toBeTruthy();
         } else {
-          assert.ok(s instanceof R.Cuboid, `solid ${k} is a box`);
-          assert.ok(Math.abs(s.halfExtents.x - c.hx) < SAME && Math.abs(s.halfExtents.y - h) < SAME && Math.abs(s.halfExtents.z - c.hz) < SAME, `solid ${k}: box ${JSON.stringify(s.halfExtents)}, collider ${c.hx} × ${h} × ${c.hz}`);
+          must(s instanceof R.Cuboid, `solid ${k} is a box`);
+          expect(Math.abs(s.halfExtents.x - c.hx) < SAME && Math.abs(s.halfExtents.y - h) < SAME && Math.abs(s.halfExtents.z - c.hz) < SAME, `solid ${k}: box ${JSON.stringify(s.halfExtents)}, collider ${c.hx} × ${h} × ${c.hz}`).toBeTruthy();
           const turn = 2 * Math.atan2(desc.rotation.y, desc.rotation.w) - c.yaw;
-          assert.ok(Math.abs(Math.sin(turn)) < 1e-6 && Math.cos(turn) > 0, `solid ${k} is turned ${turn} rad off its collider`);
+          expect(Math.abs(Math.sin(turn)) < 1e-6 && Math.cos(turn) > 0, `solid ${k} is turned ${turn} rad off its collider`).toBeTruthy();
         }
       }
     });
@@ -204,7 +204,7 @@ describe("given the colliders the cars meet and the solids the cosmetic Rapier w
 describe("given the Rapier solids of a prop piece list", () => {
   it("when colliderSolids is given a store holding knock pieces, then it builds none of them (a knocked prop is a body of its own)", () => {
     const pieces = propColliders([{ prefab: "cone", x: 0, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, sz: 1 }]);
-    assert.equal(pieces.length, 3);
-    assert.deepEqual(colliderSolids(solidsOf([], pieces), []), []);
+    expect(pieces.length).toBe(3);
+    expect(colliderSolids(solidsOf([], pieces), [])).toHaveLength(0);
   });
 });

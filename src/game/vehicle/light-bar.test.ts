@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
@@ -70,7 +69,7 @@ class Probe extends DeformableCar {
         if (u < 0 || w < 0 || u + w > 1) continue;
         top = Math.max(top, u * a.y + w * b.y + (1 - u - w) * c.y);
       }
-      assert.ok(top > -Infinity, `no roof skin under the sole at ${v.x.toFixed(2)}, ${v.z.toFixed(2)}`);
+      expect(top, `no roof skin under the sole at ${v.x.toFixed(2)}, ${v.z.toFixed(2)}`).toBeGreaterThan(-Infinity);
       (z > 0 ? out.hinge : out.free).push(v.y - top);
     }
     return out;
@@ -105,23 +104,23 @@ describe("given the police light bar on its base hinge", () => {
           const q = new THREE.Quaternion(pose[3], pose[4], pose[5], pose[6]);
           const at = new THREE.Vector3(pose[0], pose[1], pose[2]);
           const label = `${state}, inward z ${inwardZ}, hinge ${t}`;
-          assert.ok(pose[4] === 0 && pose[5] === 0, `${label}: the turn has a y or z part`);
-          assert.ok(Math.abs(2 * Math.atan2(pose[3], pose[6]) - side * t * BAR_FOLD) < 1e-6, `${label}: turned ${2 * Math.atan2(pose[3], pose[6])} rad`);
+          expect(pose[4] === 0 && pose[5] === 0, `${label}: the turn has a y or z part`).toBeTruthy();
+          expect(Math.abs(2 * Math.atan2(pose[3], pose[6]) - side * t * BAR_FOLD), `${label}: turned ${2 * Math.atan2(pose[3], pose[6])} rad`).toBeLessThan(1e-6);
           // Any point of the bar keeps its x: the axis runs across the car.
           for (const p of [new THREE.Vector3(0.4, -0.03, 0.09), new THREE.Vector3(-0.3, 0.1, -0.12), new THREE.Vector3(0.1, 0.04, 0.2)]) {
             const x = p.clone().applyQuaternion(q).add(at).x;
-            assert.ok(Math.abs(x - (car.bar.restPos.x + p.x)) < 1e-6, `${label}: the point ${p.x} moved along the hinge axis`);
+            expect(Math.abs(x - (car.bar.restPos.x + p.x)), `${label}: the point ${p.x} moved along the hinge axis`).toBeLessThan(1e-6);
           }
           // The hinge edge stays where the roof puts it, whatever the turn.
           const moved = hinge.clone().applyQuaternion(q).add(at).sub(car.bar.restPos).sub(hinge).length();
-          assert.ok(moved < 1e-6, `${label}: the hinge edge moved ${moved} m`);
+          expect(moved, `${label}: the hinge edge moved ${moved} m`).toBeLessThan(1e-6);
           // The other edge rises as a point `free − hinge` turned about x does (a lift of its depth times the sine of the turn, as the roof carries the two apart).
           const rise = free.clone().applyQuaternion(q).add(at).sub(car.bar.restPos).y - free.y;
           const turn = side * t * BAR_FOLD;
           const wanted = (free.y - hinge.y) * (Math.cos(turn) - 1) - (free.z - hinge.z) * Math.sin(turn);
-          assert.ok(Math.abs(rise - wanted) < 1e-6 && rise >= -1e-6, `${label}: the free edge rose ${rise} m, ${wanted} wanted`);
+          expect(Math.abs(rise - wanted) < 1e-6 && rise >= -1e-6, `${label}: the free edge rose ${rise} m, ${wanted} wanted`).toBeTruthy();
           const top = new THREE.Vector3(0, 0.1, 0).applyQuaternion(q).add(at).sub(car.bar.restPos);
-          assert.ok(t === 0 || Math.sign(top.z) === side, `${label}: the bar's top went ${top.z}, not toward the hinge side`);
+          expect(t === 0 || Math.sign(top.z) === side, `${label}: the bar's top went ${top.z}, not toward the hinge side`).toBeTruthy();
         }
       }
     }
@@ -130,34 +129,34 @@ describe("given the police light bar on its base hinge", () => {
   it("when a police car hits a wall nose first at 56 km/h, then the bar's hinge edge stays within 3 cm of the roof skin under it all through the crush, its free edge lifts no more than its fold gives, and it does not shear off", () => {
     const car = cop();
     const r = runWall(56, 1, "front", { car });
-    assert.ok(!r.detached.includes("lightBar"), "the bar sheared off");
-    assert.ok(car.bar.hingeT > 0.3 && car.bar.hingeT < 0.95, `bar hinge ${car.bar.hingeT}`);
-    assert.ok(car.samples.length > 10, `${car.samples.length} samples`);
+    expect(!r.detached.includes("lightBar"), "the bar sheared off").toBe(true);
+    expect(car.bar.hingeT > 0.3 && car.bar.hingeT < 0.95, `bar hinge ${car.bar.hingeT}`).toBeTruthy();
+    expect(car.samples.length, `${car.samples.length} samples`).toBeGreaterThan(10);
     let seat = 0;
     let free = -Infinity;
     for (const s of car.samples) {
       for (const g of s.hinge) seat = Math.max(seat, Math.abs(g));
       for (const g of s.free) free = Math.max(free, g);
     }
-    assert.ok(seat <= SEAT_M, `the hinge edge stood ${seat.toFixed(3)} m off the roof skin`);
-    assert.ok(free <= FREE_M, `the free edge stood ${free.toFixed(3)} m over the roof skin (bar ${FREE_M.toFixed(3)})`);
-    assert.ok(Math.abs(car.bar.object.rotation.x) > 0.05 && car.bar.object.rotation.z === 0 && car.bar.object.rotation.y === 0, "the bar did not turn about x alone");
+    expect(seat, `the hinge edge stood ${seat.toFixed(3)} m off the roof skin`).toBeLessThanOrEqual(SEAT_M);
+    expect(free, `the free edge stood ${free.toFixed(3)} m over the roof skin (bar ${FREE_M.toFixed(3)})`).toBeLessThanOrEqual(FREE_M);
+    expect(Math.abs(car.bar.object.rotation.x) > 0.05 && car.bar.object.rotation.z === 0 && car.bar.object.rotation.y === 0, "the bar did not turn about x alone").toBeTruthy();
   });
 
   it("when the roof mass sinks to just under and just over the shear depth, then the bar stays on and then goes, with its sirens dark", () => {
     const car = cop();
     runWall(30, 1, "front", { car });
-    assert.ok(!car.bar.detached, "the bar went at 30 km/h");
+    expect(!car.bar.detached, "the bar went at 30 km/h").toBe(true);
     car.sinkRoof(TEAR_SINK - 0.005);
-    assert.ok(!car.bar.detached, "the bar sheared before its depth");
+    expect(!car.bar.detached, "the bar sheared before its depth").toBe(true);
     car.setSirens(true);
     car.flashSirens(0.1);
     const lit = car.lampWorld(car.lampCount - 2, new THREE.Vector3(), new THREE.Vector3());
-    assert.equal(lit, "red", "the siren was dark on an attached, hinged bar");
+    expect(lit, "the siren was dark on an attached, hinged bar").toBe("red");
     car.sinkRoof(TEAR_SINK + 0.005);
-    assert.ok(car.bar.detached, "the bar held past its depth");
+    expect(car.bar.detached, "the bar held past its depth").toBeTruthy();
     car.flashSirens(0.1);
-    for (let i = car.lampCount - 2; i < car.lampCount; i++) assert.equal(car.lampWorld(i, new THREE.Vector3(), new THREE.Vector3()), null, `siren ${i} lit off a torn bar`);
+    for (let i = car.lampCount - 2; i < car.lampCount; i++) expect(car.lampWorld(i, new THREE.Vector3(), new THREE.Vector3()), `siren ${i} lit off a torn bar`).toBe(null);
   });
 
   it("when the same 56 km/h hit and the same 64 km/h hit run twice, then the bar's hinge, its pose and its loose body agree to the bit", () => {
@@ -168,9 +167,9 @@ describe("given the police light bar on its base hinge", () => {
       const o = car.bar.object;
       return bits([car.bar.hingeT, o.position.x, o.position.y, o.position.z, o.quaternion.x, o.quaternion.y, o.quaternion.z, o.quaternion.w, car.bar.velocity.x, car.bar.velocity.y, car.bar.velocity.z, car.bar.angular.x, car.bar.angular.y, car.bar.angular.z, r.detached.includes("lightBar") ? 1 : 0]);
     };
-    assert.equal(digest(56), digest(56), "an attached bar differs between two runs of one crash");
-    assert.equal(digest(64), digest(64), "a torn bar differs between two runs of one crash");
-    assert.notEqual(digest(56), digest(64), "the two crashes read alike");
+    expect(digest(56), "an attached bar differs between two runs of one crash").toBe(digest(56));
+    expect(digest(64), "a torn bar differs between two runs of one crash").toBe(digest(64));
+    expect(digest(56), "the two crashes read alike").not.toBe(digest(64));
   });
 });
 
@@ -186,8 +185,8 @@ describe("given the light bar and the push bar as the reference cruiser wears th
   it("when the light bar is built, then its red lens stands on the car's left (+x) and its blue on its right, a clear module between", () => {
     const bar = makeLightBar();
     const [[redFirst, redCount], [blueFirst, blueCount]] = LIGHT_BAR_LENS;
-    assert.ok(meanX(bar, redFirst, redCount) > 0.2, `red lens at x ${meanX(bar, redFirst, redCount)}`);
-    assert.ok(meanX(bar, blueFirst, blueCount) < -0.2, `blue lens at x ${meanX(bar, blueFirst, blueCount)}`);
+    expect(meanX(bar, redFirst, redCount), `red lens at x ${meanX(bar, redFirst, redCount)}`).toBeGreaterThan(0.2);
+    expect(meanX(bar, blueFirst, blueCount), `blue lens at x ${meanX(bar, blueFirst, blueCount)}`).toBeLessThan(-0.2);
   });
 
   it("when the light bar is built, then each lens is domed, its top falling over its front and back edges, with a white lamp cell at its centre standing proud of its faces, as the reference's", () => {
@@ -208,13 +207,13 @@ describe("given the light bar and the push bar as the reference cruiser wears th
         if (Math.abs(pos.getZ(v)) > depth - EDGE_RUN) edgeTop = Math.max(edgeTop, pos.getY(v));
       }
       const x = meanX(bar, first, count);
-      assert.ok(top - edgeTop >= DOME_DROP, `lens at x ${x.toFixed(2)}: its top falls ${((top - edgeTop) * 1000).toFixed(1)} mm over its edges, want ${DOME_DROP * 1000} or more`);
+      expect(top - edgeTop, `lens at x ${x.toFixed(2)}: its top falls ${((top - edgeTop) * 1000).toFixed(1)} mm over its edges, want ${DOME_DROP * 1000} or more`).toBeGreaterThanOrEqual(DOME_DROP);
       let proud = -Infinity;
       for (let v = 0; v < pos.count; v++) {
         if (Math.abs(pos.getX(v) - x) > 0.05 || color.getX(v) < WHITE || color.getY(v) < WHITE || color.getZ(v) < WHITE) continue;
         proud = Math.max(proud, Math.abs(pos.getZ(v)) - depth);
       }
-      assert.ok(proud > 0, `lens at x ${x.toFixed(2)}: no white cell stands proud of its faces at its centre`);
+      expect(proud, `lens at x ${x.toFixed(2)}: no white cell stands proud of its faces at its centre`).toBeGreaterThan(0);
     }
   });
 
@@ -227,13 +226,13 @@ describe("given the light bar and the push bar as the reference cruiser wears th
     guarded.computeBoundingBox();
     const after = guarded.boundingBox!;
     // The reference cruiser's guard: its tubes 4 cm ahead of the face (their pads' face 9 cm), its top bar ~18 cm over the bumper's top (y ~0.62).
-    assert.ok(after.max.z - before.max.z > 0.08 && after.max.z - before.max.z < 0.1, `face ${before.max.z} -> ${after.max.z}`);
-    assert.ok(after.max.y - before.max.y > 0.15 && after.max.y - before.max.y < 0.21, `top ${before.max.y} -> ${after.max.y}`);
-    assert.ok(after.min.y >= before.min.y - 1e-6, "the bar reaches below the bumper");
+    expect(after.max.z - before.max.z > 0.08 && after.max.z - before.max.z < 0.1, `face ${before.max.z} -> ${after.max.z}`).toBeTruthy();
+    expect(after.max.y - before.max.y > 0.15 && after.max.y - before.max.y < 0.21, `top ${before.max.y} -> ${after.max.y}`).toBeTruthy();
+    expect(after.min.y, "the bar reaches below the bumper").toBeGreaterThanOrEqual(before.min.y - 1e-6);
     const now = guarded.getAttribute("position").array;
     let moved = 0;
     for (let i = 0; i < rest.length; i++) moved = Math.max(moved, Math.abs(now[i]! - rest[i]!));
-    assert.equal(moved, 0, "the bumper's own vertices moved");
+    expect(moved, "the bumper's own vertices moved").toBe(0);
   });
 
   it("when a police and a sedan are built, then the police's front bumper mesh carries its push bar and the sedan's is its bare fascia with its seam cover, and each rear bumper is its own fascia (the sedan's with its cover)", () => {
@@ -251,11 +250,11 @@ describe("given the light bar and the push bar as the reference cruiser wears th
     const bare = geoBox(makeBumperGeometry(true, CAR_STYLES.sedan));
     const covered = geoBox(withSeamCover(makeBumperGeometry(true, CAR_STYLES.sedan), CAR_STYLES.sedan, true));
     const [cop, plain] = [box(police!, 0), box(sedan!, 0)];
-    assert.ok(plain.equals(covered), `sedan front bumper face ${plain.max.z}, top ${plain.max.y}: its fascia's with its seam cover`);
-    assert.ok(cop.max.z - bare.max.z > 0.08 && cop.max.y - bare.max.y > 0.15, `police front bumper face ${cop.max.z} (bare fascia ${bare.max.z}), top ${cop.max.y} (bare fascia ${bare.max.y})`);
+    expect(plain.equals(covered), `sedan front bumper face ${plain.max.z}, top ${plain.max.y}: its fascia's with its seam cover`).toBeTruthy();
+    expect(cop.max.z - bare.max.z > 0.08 && cop.max.y - bare.max.y > 0.15, `police front bumper face ${cop.max.z} (bare fascia ${bare.max.z}), top ${cop.max.y} (bare fascia ${bare.max.y})`).toBeTruthy();
     const [copRear, plainRear] = [box(police!, 1), box(sedan!, 1)];
     const copFascia = geoBox(withRearFittings(makeBumperGeometry(false, CAR_STYLES.police), CAR_STYLES.police));
     const sedanDrawn = geoBox(withSeamCover(withRearFittings(makeBumperGeometry(false, CAR_STYLES.sedan), CAR_STYLES.sedan), CAR_STYLES.sedan, false));
-    assert.ok(copRear.equals(copFascia) && plainRear.equals(sedanDrawn), "each rear bumper is its own fascia, the sedan's with its seam cover");
+    expect(copRear.equals(copFascia) && plainRear.equals(sedanDrawn), "each rear bumper is its own fascia, the sedan's with its seam cover").toBeTruthy();
   });
 });

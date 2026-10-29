@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { RagdollSystem } from "../present/engine-ragdoll.ts";
@@ -77,10 +76,10 @@ describe("given a car driven down city's road through two cones", () => {
   it("when the knocked props tumble in the dummies' physics, then the car knocks the same props at the same steps and ends exactly where it does with no such physics", async () => {
     const bare = await drive(false);
     const tumbling = await drive(true);
-    assert.equal(bare.knocked, 2, `the car knocked ${bare.knocked} props, not the two cones`);
-    assert.equal(tumbling.flying, tumbling.knocked, "every knocked prop is out in the dummies' physics");
+    expect(bare.knocked, `the car knocked ${bare.knocked} props, not the two cones`).toBe(2);
+    expect(tumbling.flying, "every knocked prop is out in the dummies' physics").toBe(tumbling.knocked);
     assertSameNumbers(tumbling.knocks, bare.knocks, "the knocks: frame, prop and car");
-    assert.equal(tumbling.knocked, bare.knocked, "the knocked count");
+    expect(tumbling.knocked, "the knocked count").toBe(bare.knocked);
     assertSameNumbers(tumbling.state, bare.state, "the car's pose and velocity");
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Track, blankPoint } from "./track.ts";
 import { square } from "./track.test-util.ts";
 import { OFF_MENU, TRACKS } from "./tracks/index.ts";
@@ -37,7 +36,7 @@ for (const json of [...TRACKS, ...OFF_MENU]) {
     it("when the ground is read across the start/finish line along the centre and both edges, then its height has no step or kink there", () => {
       for (const side of [-1, 0, 1]) {
         const { bend, s } = worstBend(t, side);
-        assert.ok(bend <= BEND, `${t.id}: the road bends ${(bend * 1000).toFixed(1)} mm at s = ${s.toFixed(2)} m on lateral ${side} × half`);
+        expect(bend, `${t.id}: the road bends ${(bend * 1000).toFixed(1)} mm at s = ${s.toFixed(2)} m on lateral ${side} × half`).toBeLessThanOrEqual(BEND);
       }
     });
   });
@@ -47,6 +46,6 @@ describe("given a loop whose start node is banked over unbanked neighbours", () 
   it("when the course is built, then it refuses the buckle at the start line", () => {
     const json = square();
     json.nodes![0]!.bank = 8;
-    assert.throws(() => new Track(json), /start line/);
+    expect(() => new Track(json)).toThrow(/start line/);
   });
 });

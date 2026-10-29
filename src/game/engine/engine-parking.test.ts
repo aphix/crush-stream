@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
@@ -59,36 +58,36 @@ describe("given the real engine drawing a city race and then the derby", () => {
   });
 
   it("when the race has run, then the scene the renderer draws holds no hidden child", () => {
-    assert.deepEqual(hiddenWhenDrawn, []);
+    expect(hiddenWhenDrawn).toHaveLength(0);
   });
 
   it("when the scene is walked, then the arena the race hides is still the scene's own", () => {
     let found = false;
     scene().traverse((object) => void (found ||= object === engine["arena"]));
-    assert.equal(found, true);
+    expect(found).toBe(true);
   });
 
   it("when the race has run, then every wheel draw is in the graph the renderer draws, the shadow prisms hidden outside the shadow pass and the designs no car uses included", () => {
-    assert.equal(wheelDrawsInGraph, engine["wheels"].meshes.map(() => true).join());
+    expect(wheelDrawsInGraph).toBe(engine["wheels"].meshes.map(() => true).join());
   });
 
   it("when the derby is picked, then the arena is drawn in the scene again", async () => {
-    assert.equal(arenaDrawn, false, "the control: the race did not draw it");
+    expect(arenaDrawn, "the control: the race did not draw it").toBe(false);
     engine["setScene"]("derby");
     await run(1);
-    assert.equal(arenaDrawn, true);
+    expect(arenaDrawn).toBe(true);
   });
 
   it("when no car is cut at the scene's parking pass, then the cover draws stay in the graph for the frame a cut car shows them", () => {
     const covers = engine["coverBatch"];
     covers.sync([]);
-    assert.equal(covers.meshes.map((mesh) => mesh.visible).join(), "false,false", "the control: hidden at the pass");
+    expect(covers.meshes.map((mesh) => mesh.visible).join(), "the control: hidden at the pass").toBe("false,false");
     scene().sync(true);
     const inGraph = (mesh: THREE.Object3D): boolean => {
       let p: THREE.Object3D | null = mesh;
       while (p && p !== scene()) p = p.parent;
       return p === scene();
     };
-    assert.equal(covers.meshes.map(inGraph).join(), "true,true");
+    expect(covers.meshes.map(inGraph).join()).toBe("true,true");
   });
 });

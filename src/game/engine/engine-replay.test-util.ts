@@ -1,10 +1,10 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { makeWorld } from "../world/race-world.test-util.ts";
 import { clipBytes } from "../net/reel-codec.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { agreement, recordField } from "./replay-fidelity.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * A recorded race crash replayed headless (docs/HIGHLIGHTS.md), over many seeded races: the harness of
@@ -42,7 +42,7 @@ function ram(cars: readonly DeformableCar[]): void {
     if (c === player || Math.hypot(c.velocity.x, c.velocity.z) < RAM_MOVING) continue;
     if (!target || Math.hypot(c.group.position.x - x, c.group.position.z - z) < Math.hypot(target.group.position.x - x, target.group.position.z - z)) target = c;
   }
-  assert.ok(target, `no car drives at ${RAM_MOVING} m/s or more at ${SCRIPTED_AT} s for the player to ram`);
+  must(target, `no car drives at ${RAM_MOVING} m/s or more at ${SCRIPTED_AT} s for the player to ram`);
   const v = Math.hypot(target.velocity.x, target.velocity.z);
   const dx = target.velocity.x / v;
   const dz = target.velocity.z / v;
@@ -79,7 +79,7 @@ export function sweepSeeds(list: readonly number[]): void {
           done: () => w.race.recorder.ledger.kept.length >= CLIPS,
           maxFrames: RACE_S * 60,
         });
-        assert.ok(recs.length >= 1, `seed ${seed}: no clip in ${RACE_S} s of a ramming field and a flat-out player: the recorder or the ledger saw no crash`);
+        expect(recs.length, `seed ${seed}: no clip in ${RACE_S} s of a ramming field and a flat-out player: the recorder or the ledger saw no crash`).toBeGreaterThanOrEqual(1);
         const rows: string[] = [];
         for (const rec of recs) {
           const { clip } = rec;
@@ -89,8 +89,12 @@ export function sweepSeeds(list: readonly number[]): void {
               `${a.steps} steps, worst pose ${a.pose.max} m, velocity ${a.vel.max} m/s, crush ${a.crush.max} m, wreck flags differ ${a.wreckMismatch}`,
           );
           total.steps += a.steps;
-          assert.ok(a.steps >= 100, `seed ${seed}: only ${a.steps} steps compared\n${rows.join("\n")}`);
-          assert.deepEqual({ pose: a.pose.max, vel: a.vel.max, crush: a.crush.max, wreck: a.wreckMismatch }, { pose: 0, vel: 0, crush: 0, wreck: 0 }, `seed ${seed}: a car strays from the live sim\n${rows.join("\n")}`);
+          expect(a.steps, `seed ${seed}: only ${a.steps} steps compared\n${rows.join("\n")}`).toBeGreaterThanOrEqual(100);
+          const strays = `seed ${seed}: a car strays from the live sim\n${rows.join("\n")}`;
+          expect(a.pose.max, `${strays}\npose`).toBe(0);
+          expect(a.vel.max, `${strays}\nvel`).toBe(0);
+          expect(a.crush.max, `${strays}\ncrush`).toBe(0);
+          expect(a.wreckMismatch, `${strays}\nwreck`).toBe(0);
         }
         total.clips += recs.length;
         t.annotate(rows.join("\n"));
@@ -100,7 +104,7 @@ export function sweepSeeds(list: readonly number[]): void {
       }
     });
     it(`when all the seeds have been replayed, then they together produced at least one clip per seed and compared some steps`, () => {
-      assert.ok(total.clips >= seeds.length && total.steps > 0, `${total.clips} clips and ${total.steps} steps over ${seeds.length} seeds`);
+      expect(total.clips >= seeds.length && total.steps > 0, `${total.clips} clips and ${total.steps} steps over ${seeds.length} seeds`).toBeTruthy();
     });
   });
 }

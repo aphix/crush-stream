@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { envYaw, LOOK } from "./ultra-look.ts";
 
@@ -14,8 +13,8 @@ describe("given the sky's sun disc and a sun light (the stage's, a course's) at 
       const skySun = new THREE.Vector3(Math.cos(el) * Math.cos(LOOK.skySunAzimuth), Math.sin(el), Math.cos(el) * Math.sin(LOOK.skySunAzimuth));
       // A material samples the environment at the inverse of this rotation, so the world direction of the sky's sun is the rotation applied to it.
       const world = skySun.clone().applyEuler(new THREE.Euler(0, envYaw(sun), 0));
-      assert.ok(Math.abs(turn(Math.atan2(sun.z, sun.x), Math.atan2(world.z, world.x))) < 1e-9, `azimuth off by ${turn(Math.atan2(sun.z, sun.x), Math.atan2(world.z, world.x))} rad`);
-      assert.ok(Math.abs(world.y - skySun.y) < 1e-12, "the rotation moved the sun's height");
+      expect(Math.abs(turn(Math.atan2(sun.z, sun.x), Math.atan2(world.z, world.x))), `azimuth off by ${turn(Math.atan2(sun.z, sun.x), Math.atan2(world.z, world.x))} rad`).toBeLessThan(1e-9);
+      expect(Math.abs(world.y - skySun.y), "the rotation moved the sun's height").toBeLessThan(1e-12);
     });
   }
 });

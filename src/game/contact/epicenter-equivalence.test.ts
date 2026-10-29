@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { EPICENTER,  loadEpicenter, epicenterValues } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
@@ -67,29 +66,29 @@ describe("given a staged hit run once per activation mode", () => {
     it(`when the ${kind} is run in epicenter mode, then every car's crush per region is the whole solve's within 10 % or 1 cm, the same parts are off and wheels popped, and the wreck was frozen for most of it`, () => {
       const whole = stage(kind, false);
       const epi = stage(kind, true);
-      assert.equal(whole.frozenCarSlices, 0, "whole mode froze a car");
-      assert.equal(epi.breaches, 0, "a frozen car was written to without a thaw");
-      assert.ok(epi.frozenCarSlices > (kind === "re-hit" ? 0.25 : 0.5) * AFTER * 240 * epi.results.length, `epicenter froze only ${epi.frozenCarSlices} car-slices (a vacuous row otherwise)`);
-      assert.ok(epi.freezes >= epi.results.length && epi.freezes - epi.thaws <= epi.results.length, `freezes ${epi.freezes} thaws ${epi.thaws}`);
-      if (kind === "re-hit") assert.ok(epi.thaws >= 1, "the third car's hit never thawed the frozen wreck");
+      expect(whole.frozenCarSlices, "whole mode froze a car").toBe(0);
+      expect(epi.breaches, "a frozen car was written to without a thaw").toBe(0);
+      expect(epi.frozenCarSlices, `epicenter froze only ${epi.frozenCarSlices} car-slices (a vacuous row otherwise)`).toBeGreaterThan((kind === "re-hit" ? 0.25 : 0.5) * AFTER * 240 * epi.results.length);
+      expect(epi.freezes >= epi.results.length && epi.freezes - epi.thaws <= epi.results.length, `freezes ${epi.freezes} thaws ${epi.thaws}`).toBeTruthy();
+      if (kind === "re-hit") expect(epi.thaws, "the third car's hit never thawed the frozen wreck").toBeGreaterThanOrEqual(1);
       for (const [i, w] of whole.results.entries()) {
         const e = epi.results[i]!;
-        for (const key of REGIONS) assert.ok(Math.abs(e[key] - w[key]) <= tolerance(w[key]), `car ${i} ${key}: epicenter ${e[key].toFixed(4)} against whole ${w[key].toFixed(4)}`);
+        for (const key of REGIONS) expect(Math.abs(e[key] - w[key]), `car ${i} ${key}: epicenter ${e[key].toFixed(4)} against whole ${w[key].toFixed(4)}`).toBeLessThanOrEqual(tolerance(w[key]));
         // Where each car ended up: the body within 1 cm (a frozen wreck takes no seat step toward its cell: measured 7.4 mm after 5 s for the owner's head-on, under 2 mm for the T-bone, wall and re-hit), every body mass within 1 cm of its place in the frame once the whole car's shift (the cell's: that same seat step) is taken out (measured 7.4 mm at the head-on's nose: the relaxation the whole path still does after the window, the clamp's springback; the others under 1 mm), every mass (the planted hubs' stand included) within 1.2 cm in the world.
         const cw = whole.cars[i]!;
         const ce = epi.cars[i]!;
-        assert.ok(cw.group.position.distanceTo(ce.group.position) <= 0.01, `car ${i} body ${cw.group.position.distanceTo(ce.group.position)} m apart`);
+        expect(cw.group.position.distanceTo(ce.group.position), `car ${i} body ${cw.group.position.distanceTo(ce.group.position)} m apart`).toBeLessThanOrEqual(0.01);
         const cell = cw.deform.masses.findIndex((m) => m.name === "cell");
         const shift = cw.deform.masses[cell]!.local.clone().sub(ce.deform.masses[cell]!.local);
         for (const [k, m] of cw.deform.masses.entries()) {
           const o = ce.deform.masses[k]!;
-          if (!m.hub) assert.ok(m.local.clone().sub(o.local).sub(shift).length() <= 0.01, `car ${i} ${m.name} local ${m.local.clone().sub(o.local).sub(shift).length()} m apart beyond the whole car's shift`);
-          assert.ok(m.world.distanceTo(o.world) <= 0.012, `car ${i} ${m.name} world ${m.world.distanceTo(o.world)} m apart`);
+          if (!m.hub) expect(m.local.clone().sub(o.local).sub(shift).length(), `car ${i} ${m.name} local ${m.local.clone().sub(o.local).sub(shift).length()} m apart beyond the whole car's shift`).toBeLessThanOrEqual(0.01);
+          expect(m.world.distanceTo(o.world), `car ${i} ${m.name} world ${m.world.distanceTo(o.world)} m apart`).toBeLessThanOrEqual(0.012);
         }
-        assert.equal(e.detached.join(), w.detached.join(), `car ${i} torn parts`);
-        assert.equal(e.hubsPopped.join(), w.hubsPopped.join(), `car ${i} popped wheels`);
-        assert.equal(e.drivetrainAlive, w.drivetrainAlive, `car ${i} drivetrain`);
-        assert.equal(e.lampsOut.join(), w.lampsOut.join(), `car ${i} lamps`);
+        expect(e.detached.join(), `car ${i} torn parts`).toBe(w.detached.join());
+        expect(e.hubsPopped.join(), `car ${i} popped wheels`).toBe(w.hubsPopped.join());
+        expect(e.drivetrainAlive, `car ${i} drivetrain`).toBe(w.drivetrainAlive);
+        expect(e.lampsOut.join(), `car ${i} lamps`).toBe(w.lampsOut.join());
       }
     });
   }
@@ -102,7 +101,7 @@ describe("given the same staged hits run twice in whole mode, one with a car's m
       const nudged = stage(kind, false, 1e-6);
       let worst = 0;
       for (const [i, c] of plain.cars.entries()) for (const [k, m] of c.deform.masses.entries()) worst = Math.max(worst, m.world.distanceTo(nudged.cars[i]!.deform.masses[k]!.world));
-      assert.ok(worst <= 0.001, `a 1 um nudge moved a mass ${(worst * 1000).toFixed(3)} mm`);
+      expect(worst, `a 1 um nudge moved a mass ${(worst * 1000).toFixed(3)} mm`).toBeLessThanOrEqual(0.001);
     });
   }
 });

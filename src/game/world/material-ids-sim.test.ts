@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { MAT, MATERIALS } from "../kernel/material-ids.ts";
 import { PREFABS, PREFAB_IDS, SURFACES, SURFACE_IDS, type SurfaceId } from "./catalog.ts";
 import { ROLLS } from "./surfaces.ts";
@@ -29,25 +28,25 @@ describe("given each surface's material ids", () => {
   for (const id of SURFACE_IDS) {
     it(`when ${id}'s ribbon, terrain and patch ids are shaded, then they use the family it drew with before ids`, () => {
       const s = SURFACES[id];
-      assert.equal(family(s.ribbon), FAMILIES[id].ribbon);
-      assert.equal(family(s.terrain), FAMILIES[id].cell);
-      assert.equal(family(s.patch), FAMILIES[id].cell);
+      expect(family(s.ribbon)).toBe(FAMILIES[id].ribbon);
+      expect(family(s.terrain)).toBe(FAMILIES[id].cell);
+      expect(family(s.patch)).toBe(FAMILIES[id].cell);
     });
   }
 
   it("when the three id sets are compared, then every surface has its own ids, none a legacy family row", () => {
     const ids = SURFACE_IDS.flatMap((id) => [SURFACES[id].ribbon, SURFACES[id].terrain, SURFACES[id].patch]);
-    assert.equal(new Set(ids).size, ids.length);
-    assert.ok(ids.every((m) => m >= MAT.INTERIOR + 1));
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.every((m) => m >= MAT.INTERIOR + 1)).toBeTruthy();
   });
 });
 
 describe("given the sim's surface table", () => {
   it("when grips and rolling resistances are read in surface order, then they are the recorded literals", () => {
     for (const [i, id] of SURFACE_IDS.entries()) {
-      assert.equal(SURFACES[id].grip, SIM_GRIP[i], `${id} grip`);
-      assert.equal(SURFACES[id].roll, SIM_ROLL[i], `${id} roll`);
-      assert.equal(ROLLS[i], SIM_ROLL[i], `${id} ROLLS`);
+      expect(SURFACES[id].grip, `${id} grip`).toBe(SIM_GRIP[i]);
+      expect(SURFACES[id].roll, `${id} roll`).toBe(SIM_ROLL[i]);
+      expect(ROLLS[i], `${id} ROLLS`).toBe(SIM_ROLL[i]);
     }
   });
 });
@@ -56,7 +55,7 @@ describe("given the prefab catalogue", () => {
   it("when each prefab's material is read, then it is a registered fine id", () => {
     for (const id of PREFAB_IDS) {
       const m = PREFABS[id].material;
-      assert.ok(Number.isInteger(m) && m > MAT.INTERIOR && m < MATERIALS.length, `${id} material ${m}`);
+      expect(Number.isInteger(m) && m > MAT.INTERIOR && m < MATERIALS.length, `${id} material ${m}`).toBeTruthy();
     }
   });
 
@@ -66,7 +65,7 @@ describe("given the prefab catalogue", () => {
     const kept = PREFAB_IDS.map((id) => PREFABS[id].material);
     try {
       for (const id of PREFAB_IDS) PREFABS[id].material = 0;
-      for (const [i, t] of tracks.entries()) assert.ok(JSON.stringify(propColliders(t.placed)) === before[i], `${t.id} colliders read a prefab material`);
+      for (const [i, t] of tracks.entries()) expect(JSON.stringify(propColliders(t.placed)), `${t.id} colliders read a prefab material`).toBe(before[i]);
     } finally {
       for (const [i, id] of PREFAB_IDS.entries()) PREFABS[id].material = kept[i]!;
     }

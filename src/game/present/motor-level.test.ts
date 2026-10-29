@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { REV_IDLE, VEHICLE_CLASS_IDS, type DamageStage, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { voiceLevels, type Level } from "./motor-level.test-util.ts";
 
@@ -22,13 +21,13 @@ describe("given each vehicle class's voice, rendered by the shipped worklet at e
     for (const stage of STAGES) {
       it(`when the ${cls} runs ${stage} from idle to redline, then no moment passes -6 dBFS and it is never thin`, async () => {
         const levels = await revLevels(cls, stage);
-        assert.ok(Math.max(...levels.map((l) => l.peak)) <= VOICE_PEAK_LIMIT, `${cls} ${stage} peaks ${levels.map((l) => l.peak.toFixed(3)).join(" ")}`);
-        assert.ok(Math.min(...levels.map((l) => l.rms)) >= VOICE_RMS_MIN, `${cls} ${stage} rms ${levels.map((l) => l.rms.toFixed(3)).join(" ")}`);
+        expect(Math.max(...levels.map((l) => l.peak)), `${cls} ${stage} peaks ${levels.map((l) => l.peak.toFixed(3)).join(" ")}`).toBeLessThanOrEqual(VOICE_PEAK_LIMIT);
+        expect(Math.min(...levels.map((l) => l.rms)), `${cls} ${stage} rms ${levels.map((l) => l.rms.toFixed(3)).join(" ")}`).toBeGreaterThanOrEqual(VOICE_RMS_MIN);
       });
     }
     it(`when the ${cls} is at its redline healthy, then its peak sits in the -18 to -8 dBFS band around -12`, async () => {
       const redline = (await revLevels(cls, "healthy")).at(-1)!;
-      assert.ok(redline.peak >= REDLINE_PEAK_MIN && redline.peak <= REDLINE_PEAK_MAX, `${cls} redline peak ${redline.peak.toFixed(3)}`);
+      expect(redline.peak >= REDLINE_PEAK_MIN && redline.peak <= REDLINE_PEAK_MAX, `${cls} redline peak ${redline.peak.toFixed(3)}`).toBeTruthy();
     });
   }
 });

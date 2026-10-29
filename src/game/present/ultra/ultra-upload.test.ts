@@ -1,5 +1,4 @@
-import { beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { beforeAll, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import * as THREE from "three";
@@ -46,10 +45,10 @@ describe("given Ultra's nine photographs, KTX2 files transcoded by three's Basis
   it("when Ultra loads, then each photograph's mips are uploaded once and dropped after, so no transcoded copy stays in memory", () => {
     const textures = Object.values(ultra["sets"]).flatMap((s) => [s.diff, s.nor, s.arm]);
     const spaces = [THREE.SRGBColorSpace, THREE.LinearSRGBColorSpace, THREE.LinearSRGBColorSpace];
-    assert.equal(textures.length, PHOTOS);
-    assert.equal(uploads, PHOTOS * MIP_LEVELS, "mip uploads");
-    assert.equal(textures.filter((t) => t.mipmaps.length === 0 && t.source.dataReady === false).length, PHOTOS, "photographs with their mips dropped");
-    assert.equal(textures.map((t) => t.colorSpace).join(), [...spaces, ...spaces, ...spaces].join(), "colour spaces");
+    expect(textures.length).toBe(PHOTOS);
+    expect(uploads, "mip uploads").toBe(PHOTOS * MIP_LEVELS);
+    expect(textures.filter((t) => t.mipmaps.length === 0 && t.source.dataReady === false).length, "photographs with their mips dropped").toBe(PHOTOS);
+    expect(textures.map((t) => t.colorSpace).join(), "colour spaces").toBe([...spaces, ...spaces, ...spaces].join());
   });
 
   it("when a course's surface is dressed after the drop and its textures are bound as a draw binds them, then its tiling sets up from the uploaded photographs without uploading or building mips again", () => {
@@ -61,9 +60,9 @@ describe("given Ultra's nine photographs, KTX2 files transcoded by three's Basis
     const mipmapsBefore = mipmapRuns;
     // The headless context reports no active uniforms, so a draw binds no sampler: bind them the way its uniform setters do.
     for (const tex of new Set([material.map!, material.normalMap!, material.aoMap!, material.roughnessMap!])) renderer.initTexture(tex);
-    assert.ok(material.map!.source === ultra["sets"].asphalt.diff.source, "the surface wears the asphalt photograph");
-    assert.equal(uploads - uploadsBefore, 0, "uploads by the bind");
-    assert.equal(mipmapRuns - mipmapsBefore, 0, "mip builds by the bind");
+    expect(material.map!.source, "the surface wears the asphalt photograph").toBe(ultra["sets"].asphalt.diff.source);
+    expect(uploads - uploadsBefore, "uploads by the bind").toBe(0);
+    expect(mipmapRuns - mipmapsBefore, "mip builds by the bind").toBe(0);
   });
 });
 
@@ -73,7 +72,7 @@ describe("given three's Basis transcoder in public/basis/", () => {
     for (const name of ["basis_transcoder.js", "basis_transcoder.wasm"]) {
       const ours = await digest(new URL(`../../../../public/basis/${name}`, import.meta.url));
       const threes = await digest(new URL(`../../../../node_modules/three/examples/jsm/libs/basis/${name}`, import.meta.url));
-      assert.equal(ours, threes, name);
+      expect(ours, name).toBe(threes);
     }
   });
 });

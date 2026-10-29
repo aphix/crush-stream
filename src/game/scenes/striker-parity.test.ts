@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
@@ -95,13 +94,13 @@ describe("given a sedan meeting a hard flat face head-on at a closing speed that
   const reference = healthAfter(REFERENCE, 50);
 
   it("when the static slab is the face, then the drivetrain is neither whole nor dead, so the band can tell a wrong striker", () => {
-    assert.ok(reference > HEALTH_BAND && reference < 1 - HEALTH_BAND, `reference health ${reference.toFixed(3)}`);
+    expect(reference > HEALTH_BAND && reference < 1 - HEALTH_BAND, `reference health ${reference.toFixed(3)}`).toBeTruthy();
   });
 
   for (const striker of STRIKERS.slice(1)) {
     it(`when the ${striker} is the face at 50 km/h, then the drivetrain health is within ${HEALTH_BAND} of the static slab's`, () => {
       const got = healthAfter(striker, 50);
-      assert.ok(Math.abs(got - reference) <= HEALTH_BAND, `${striker}: ${got.toFixed(3)} against the static slab's ${reference.toFixed(3)}`);
+      expect(Math.abs(got - reference), `${striker}: ${got.toFixed(3)} against the static slab's ${reference.toFixed(3)}`).toBeLessThanOrEqual(HEALTH_BAND);
     });
   }
 });
@@ -112,7 +111,7 @@ describe("given the same sedan meeting the face at 40 km/h (a hurt drivetrain) a
       it(`when the ${striker} is the face at ${kph} km/h, then the drivetrain health is within ${HEALTH_BAND} of the static slab's`, () => {
         const want = healthAfter(REFERENCE, kph);
         const got = healthAfter(striker, kph);
-        assert.ok(Math.abs(got - want) <= HEALTH_BAND, `${striker} at ${kph} km/h: ${got.toFixed(3)} against ${want.toFixed(3)}`);
+        expect(Math.abs(got - want), `${striker} at ${kph} km/h: ${got.toFixed(3)} against ${want.toFixed(3)}`).toBeLessThanOrEqual(HEALTH_BAND);
       });
     }
   }

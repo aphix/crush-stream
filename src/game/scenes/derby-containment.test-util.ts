@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -245,9 +244,9 @@ export function wallCases(): void {
       it(`when the ${cls} is launched from the open ring in every direction, across the arena (every ${ACROSS_STRIDE}th), from each ramp's far entry, its foot and its crest, then no part of it passes the wall's outer face and it ends inside`, () => {
         for (const launch of launches) {
           const flight = fly(cls, launch);
-          assert.ok(flight.maxRadius < OUTER_FACE, `${launch.label}: a vertex reached ${flight.maxRadius.toFixed(2)} m, past the outer face at ${OUTER_FACE} m`);
-          assert.ok(flight.finalRadius < radius, `${launch.label}: ended at ${flight.finalRadius.toFixed(2)} m, outside the inner face at ${radius} m`);
-          assert.ok(flight.maxHeightAtWall <= WALL_TOUCH_CEILING, `${launch.label}: touched the wall ${flight.maxHeightAtWall.toFixed(2)} m up, over ${WALL_TOUCH_CEILING} m of its ${wallHeight} m`);
+          expect(flight.maxRadius, `${launch.label}: a vertex reached ${flight.maxRadius.toFixed(2)} m, past the outer face at ${OUTER_FACE} m`).toBeLessThan(OUTER_FACE);
+          expect(flight.finalRadius, `${launch.label}: ended at ${flight.finalRadius.toFixed(2)} m, outside the inner face at ${radius} m`).toBeLessThan(radius);
+          expect(flight.maxHeightAtWall, `${launch.label}: touched the wall ${flight.maxHeightAtWall.toFixed(2)} m up, over ${WALL_TOUCH_CEILING} m of its ${wallHeight} m`).toBeLessThanOrEqual(WALL_TOUCH_CEILING);
         }
       });
     }
@@ -265,20 +264,20 @@ export function sideWedgeCases(): void {
       const flown = (): Flight[] => (flights ??= launches.map((l) => fly(cls, l)));
       it(`when the ${cls} meets each ramp's two sides, then no part of it passes the wall's outer face and it ends inside`, () => {
         for (const [i, flight] of flown().entries()) {
-          assert.ok(flight.maxRadius < OUTER_FACE, `${launches[i]!.label}: a vertex reached ${flight.maxRadius.toFixed(2)} m, past the outer face at ${OUTER_FACE} m`);
-          assert.ok(flight.finalRadius < radius, `${launches[i]!.label}: ended at ${flight.finalRadius.toFixed(2)} m, outside the inner face at ${radius} m`);
+          expect(flight.maxRadius, `${launches[i]!.label}: a vertex reached ${flight.maxRadius.toFixed(2)} m, past the outer face at ${OUTER_FACE} m`).toBeLessThan(OUTER_FACE);
+          expect(flight.finalRadius, `${launches[i]!.label}: ended at ${flight.finalRadius.toFixed(2)} m, outside the inner face at ${radius} m`).toBeLessThan(radius);
         }
       });
       it(`when the ${cls} meets each ramp's two sides, then it touches the wall no higher than ${WALL_TOUCH_CEILING} m of its ${wallHeight} m`, () => {
         const over = flown().flatMap((flight, i) => (flight.maxHeightAtWall > WALL_TOUCH_CEILING ? [`${launches[i]!.label}: ${flight.maxHeightAtWall.toFixed(1)} m`] : []));
-        assert.deepEqual(over, []);
+        expect(over).toHaveLength(0);
       });
       if (cls !== "monster") continue;
       // The owner's two traces were a boosting monster at these planes: the rigid tyre rows' straight-up push kept the speed it lifted the body on.
       it("when the monster meets each ramp's two sides, then it never holds more energy than its drive gave it", (t) => {
         const over = flown().flatMap((flight, i) => (flight.excess > ENERGY_ROUNDING ? [`${launches[i]!.label}: ${flight.excess.toFixed(0)} J/kg over the drive's ${flight.excessDrive.toFixed(0)}, ${flight.excessAt.toFixed(2)} s in`] : []));
         t.annotate(`the worst of ${launches.length} launches holds ${Math.max(...flown().map((f) => f.excess)).toFixed(1)} J/kg over its drive`);
-        assert.deepEqual(over, []);
+        expect(over).toHaveLength(0);
       });
     }
   });

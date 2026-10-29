@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import * as THREE from "three";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
@@ -73,28 +72,28 @@ describe("given a sedan crushed by a 64 km/h wall hit, drawn at three Car contou
   it("when the soft facet steps are measured, then the default's mean angle across them is under 80% of the off value and strength 2's lower still", () => {
     const soft = meanOver(angles.off, angles.normal, SOFT_FROM, SOFT_TO);
     const softTwice = meanOver(angles.off, angles.twice, SOFT_FROM, SOFT_TO);
-    assert.ok(soft.edges > 500, `the crush leaves ${soft.edges} soft edges to round`);
-    assert.ok(soft.after < soft.before * 0.8, `strength 1: ${soft.after.toFixed(1)} against ${soft.before.toFixed(1)} degrees`);
-    assert.ok(softTwice.after < soft.after, `strength 2: ${softTwice.after.toFixed(1)} against ${soft.after.toFixed(1)} degrees`);
+    expect(soft.edges, `the crush leaves ${soft.edges} soft edges to round`).toBeGreaterThan(500);
+    expect(soft.after, `strength 1: ${soft.after.toFixed(1)} against ${soft.before.toFixed(1)} degrees`).toBeLessThan(soft.before * 0.8);
+    expect(softTwice.after, `strength 2: ${softTwice.after.toFixed(1)} against ${soft.after.toFixed(1)} degrees`).toBeLessThan(soft.after);
   });
 
   it("when the hard edges are measured, then the default keeps at least 70% of their mean angle", () => {
     const hard = meanOver(angles.off, angles.normal, HARD_FROM, 181);
-    assert.ok(hard.edges > 100, `the body has ${hard.edges} hard edges`);
-    assert.ok(hard.after > hard.before * 0.7, `hard edges ${hard.after.toFixed(1)} against ${hard.before.toFixed(1)} degrees`);
+    expect(hard.edges, `the body has ${hard.edges} hard edges`).toBeGreaterThan(100);
+    expect(hard.after, `hard edges ${hard.after.toFixed(1)} against ${hard.before.toFixed(1)} degrees`).toBeGreaterThan(hard.before * 0.7);
   });
 
   it("when every smoothed normal is read, then it is finite and unit length", () => {
     const nor = normal.body.geometry.getAttribute("normal");
     for (let v = 0; v < nor.count; v++) {
       const length = Math.hypot(nor.getX(v), nor.getY(v), nor.getZ(v));
-      assert.ok(Number.isFinite(length) && Math.abs(length - 1) < 1e-4, `vertex ${v}: length ${length}`);
+      expect(Number.isFinite(length) && Math.abs(length - 1) < 1e-4, `vertex ${v}: length ${length}`).toBeTruthy();
     }
   });
 
   it("when the sim's state is hashed at each strength, then it is the same: smoothing only touches what is drawn", () => {
-    assert.equal(simHash(normal), simHash(off), "strength 1 against off");
-    assert.equal(simHash(twice), simHash(off), "strength 2 against off");
+    expect(simHash(normal), "strength 1 against off").toBe(simHash(off));
+    expect(simHash(twice), "strength 2 against off").toBe(simHash(off));
   });
 
   it("when the slider moves after the crash, then the crashed car's normals follow it on the next skin", () => {
@@ -106,7 +105,7 @@ describe("given a sedan crushed by a 64 km/h wall hit, drawn at three Car contou
     off.updateSkin();
     off.flushDeferredSkin();
     const followed = meanOver(angles.off, edgeAngles(off.body.geometry), SOFT_FROM, SOFT_TO);
-    assert.ok(followed.after < flat.after * 0.85, `after the slider went to 1: ${followed.after.toFixed(1)} against ${flat.after.toFixed(1)} degrees`);
+    expect(followed.after, `after the slider went to 1: ${followed.after.toFixed(1)} against ${flat.after.toFixed(1)} degrees`).toBeLessThan(flat.after * 0.85);
   });
 });
 
@@ -149,9 +148,9 @@ describe("given two flat faces meeting at a right angle with noisy normals", () 
     const after = normals.array;
     const dot = (a: ArrayLike<number>, i: number, j: number) => a[i * 3]! * a[j * 3]! + a[i * 3 + 1]! * a[j * 3 + 1]! + a[i * 3 + 2]! * a[j * 3 + 2]!;
     const [flat, bent, step, face] = [row + 1, row + 2, row + 3, row + 4];
-    assert.ok(dot(after, bent, flat) > dot(before, bent, flat), "the tilted vertex moves toward its flat neighbour");
-    assert.ok(dot(after, bent, step) <= dot(before, bent, step) + 1e-6, "the step across the 70 degree edge never closes");
-    assert.ok(Math.abs(after[face * 3]! - 1) < 1e-6 && Math.abs(after[face * 3 + 2]!) < 1e-6, "the side face's normal, with no neighbour inside the angle but its own face, is untouched");
+    expect(dot(after, bent, flat), "the tilted vertex moves toward its flat neighbour").toBeGreaterThan(dot(before, bent, flat));
+    expect(dot(after, bent, step), "the step across the 70 degree edge never closes").toBeLessThanOrEqual(dot(before, bent, step) + 1e-6);
+    expect(Math.abs(after[face * 3]! - 1) < 1e-6 && Math.abs(after[face * 3 + 2]!) < 1e-6, "the side face's normal, with no neighbour inside the angle but its own face, is untouched").toBeTruthy();
   });
 });
 
@@ -194,22 +193,22 @@ for (const style of INTACT_STYLES) {
     it("when the body's soft facet steps are measured, then the default's mean angle across them is under 80% of off's and strength 2's lower still", () => {
       const soft = meanOver(angles.off[0]!, angles.normal[0]!, SOFT_FROM, SOFT_TO);
       const softTwice = meanOver(angles.off[0]!, angles.twice[0]!, SOFT_FROM, SOFT_TO);
-      assert.ok(soft.edges > 1000, `the body has ${soft.edges} soft edges to round`);
-      assert.ok(soft.after < soft.before * 0.8, `strength 1: ${soft.after.toFixed(1)} against ${soft.before.toFixed(1)} degrees`);
-      assert.ok(softTwice.after < soft.after * 0.95, `strength 2: ${softTwice.after.toFixed(1)} against ${soft.after.toFixed(1)} degrees`);
+      expect(soft.edges, `the body has ${soft.edges} soft edges to round`).toBeGreaterThan(1000);
+      expect(soft.after, `strength 1: ${soft.after.toFixed(1)} against ${soft.before.toFixed(1)} degrees`).toBeLessThan(soft.before * 0.8);
+      expect(softTwice.after, `strength 2: ${softTwice.after.toFixed(1)} against ${soft.after.toFixed(1)} degrees`).toBeLessThan(soft.after * 0.95);
     });
 
     it("when each shell's soft facet steps are measured, then the default rounds every one of them", () => {
       for (let shell = 0; shell < SHELL_COUNT; shell++) {
         const soft = meanOver(angles.off[shell]!, angles.normal[shell]!, SOFT_FROM, SOFT_TO);
-        assert.ok(soft.edges > 0 && soft.after < soft.before * 0.95, `shell ${shell}: ${soft.after.toFixed(1)} against ${soft.before.toFixed(1)} degrees over ${soft.edges} edges`);
+        expect(soft.edges > 0 && soft.after < soft.before * 0.95, `shell ${shell}: ${soft.after.toFixed(1)} against ${soft.before.toFixed(1)} degrees over ${soft.edges} edges`).toBeTruthy();
       }
     });
 
     it("when the body's hard edges are measured, then the default keeps at least 70% of their mean angle", () => {
       const hard = meanOver(angles.off[0]!, angles.normal[0]!, HARD_FROM, 181);
-      assert.ok(hard.edges > 100, `the body has ${hard.edges} hard edges`);
-      assert.ok(hard.after > hard.before * 0.7, `hard edges ${hard.after.toFixed(1)} against ${hard.before.toFixed(1)} degrees`);
+      expect(hard.edges, `the body has ${hard.edges} hard edges`).toBeGreaterThan(100);
+      expect(hard.after, `hard edges ${hard.after.toFixed(1)} against ${hard.before.toFixed(1)} degrees`).toBeGreaterThan(hard.before * 0.7);
     });
 
     it("when every drawn normal is read, then it is finite and unit length", () => {
@@ -217,29 +216,29 @@ for (const style of INTACT_STYLES) {
         const nor = geometry.getAttribute("normal");
         for (let v = 0; v < nor.count; v++) {
           const length = Math.hypot(nor.getX(v), nor.getY(v), nor.getZ(v));
-          assert.ok(Number.isFinite(length) && Math.abs(length - 1) < 1e-4, `vertex ${v}: length ${length}`);
+          expect(Number.isFinite(length) && Math.abs(length - 1) < 1e-4, `vertex ${v}: length ${length}`).toBeTruthy();
         }
       }
     });
 
     it("when the sim's state is hashed at each strength, then it is the same", () => {
-      assert.equal(simHash(normal), simHash(off));
-      assert.equal(simHash(twice), simHash(off));
+      expect(simHash(normal)).toBe(simHash(off));
+      expect(simHash(twice)).toBe(simHash(off));
     });
 
     it("when a car is built after smoothed ones, then its normals are the built ones to the bit: the baked arrays are never written through", () => {
-      assert.equal(largestGap(shellsOf(laterOff).map(normalsOf), builtNormals), 0);
+      expect(largestGap(shellsOf(laterOff).map(normalsOf), builtNormals)).toBe(0);
     });
 
     it("when the slider goes up and back to 0 on the built car, then the normals follow it and return to the built ones", () => {
       CONTOUR_SMOOTHING.value = 1;
       off.updateSkin();
       const rounded = meanOver(angles.off[0]!, edgeAngles(off.body.geometry), SOFT_FROM, SOFT_TO);
-      assert.ok(rounded.after < rounded.before * 0.8, `after the slider went to 1: ${rounded.after.toFixed(1)} against ${rounded.before.toFixed(1)} degrees`);
+      expect(rounded.after, `after the slider went to 1: ${rounded.after.toFixed(1)} against ${rounded.before.toFixed(1)} degrees`).toBeLessThan(rounded.before * 0.8);
       CONTOUR_SMOOTHING.value = 0;
       off.updateSkin();
       CONTOUR_SMOOTHING.value = 1;
-      assert.equal(largestGap(shellsOf(off).map(normalsOf), builtNormals), 0);
+      expect(largestGap(shellsOf(off).map(normalsOf), builtNormals)).toBe(0);
     });
   });
 }
@@ -264,14 +263,14 @@ describe(`given a sedan built round and then crushed by a ${GENTLE_KPH} km/h wal
     for (let v = 0; v < crushed.body.geometry.getAttribute("normal").count; v++) {
       if (!unmoved(v)) continue;
       still++;
-      for (let k = 0; k < 3; k++) assert.ok(Math.abs(crushedNormals[v * 3 + k]! - intactNormals[v * 3 + k]!) < 1e-6, `vertex ${v} component ${k}`);
+      for (let k = 0; k < 3; k++) expect(Math.abs(crushedNormals[v * 3 + k]! - intactNormals[v * 3 + k]!), `vertex ${v} component ${k}`).toBeLessThan(1e-6);
     }
-    assert.ok(still > 500 && still < crushed.body.geometry.getAttribute("normal").count - 500, `${still} vertices stayed in place`);
+    expect(still > 500 && still < crushed.body.geometry.getAttribute("normal").count - 500, `${still} vertices stayed in place`).toBeTruthy();
   });
 
   it("when the crashed car is reset, then it is drawn with the intact car's normals again", () => {
     crushed.resetVisual();
-    assert.equal(largestGap(shellsOf(crushed).map(normalsOf), shellsOf(intact).map(normalsOf)), 0);
+    expect(largestGap(shellsOf(crushed).map(normalsOf), shellsOf(intact).map(normalsOf))).toBe(0);
   });
 });
 
@@ -282,9 +281,9 @@ describe("given a skin with its border at rest and its interior moved, and rest 
     smoothNormals(geometry, positions.map((value, i) => (interior.includes(Math.floor(i / 3)) ? value + 1 : value)), 1, restNormals);
     const after = geometry.getAttribute("normal").array;
     const [first, second] = [interior[0]!, interior[1]!];
-    assert.equal(largestGap([after.slice(0, 3)], [UP]), 0, "vertex 0 stayed: its rest normal");
-    assert.ok(after[first * 3]! < SIDEWAYS[0] && after[first * 3 + 2]! > SIDEWAYS[2], "an interior vertex moved: relaxed toward the rest normals around it");
-    assert.ok(after[second * 3]! < SIDEWAYS[0], "and so did the next");
+    expect(largestGap([after.slice(0, 3)], [UP]), "vertex 0 stayed: its rest normal").toBe(0);
+    expect(after[first * 3]! < SIDEWAYS[0] && after[first * 3 + 2]! > SIDEWAYS[2], "an interior vertex moved: relaxed toward the rest normals around it").toBeTruthy();
+    expect(after[second * 3]!, "and so did the next").toBeLessThan(SIDEWAYS[0]);
   });
 });
 
@@ -296,9 +295,9 @@ describe("given a patch whose border is an open edge and noisy normals everywher
     smoothNormals(geometry, positions.map((value) => value + 1), 1);
     const after = geometry.getAttribute("normal").array;
     const border = Array.from({ length: 25 }, (_, v) => v).filter((v) => !interior.includes(v));
-    assert.equal(largestGap(border.map((v) => after.slice(v * 3, v * 3 + 3)), border.map((v) => before.slice(v * 3, v * 3 + 3))), 0, `${border.length} border vertices untouched`);
+    expect(largestGap(border.map((v) => after.slice(v * 3, v * 3 + 3)), border.map((v) => before.slice(v * 3, v * 3 + 3))), `${border.length} border vertices untouched`).toBe(0);
     const spread = (a: ArrayLike<number>) => Math.max(...interior.map((v) => Math.hypot(a[v * 3]!, a[v * 3 + 1]!)));
-    assert.ok(spread(after) < spread(before) * 0.7, `the interior's tilt fell from ${spread(before).toFixed(3)} to ${spread(after).toFixed(3)}`);
+    expect(spread(after), `the interior's tilt fell from ${spread(before).toFixed(3)} to ${spread(after).toFixed(3)}`).toBeLessThan(spread(before) * 0.7);
   });
 });
 
@@ -332,12 +331,12 @@ describe("given each style's body, bonnet, boot lid and door skins baked at the 
         const open = new Set(openEdgeVertices(built));
         for (let v = 0; v < builtNormals.length / 3; v++) {
           const gap = largestGap([baked.subarray(v * 3, v * 3 + 3)], [builtNormals.subarray(v * 3, v * 3 + 3)]);
-          if (open.has(v)) assert.equal(gap, 0, `${product} vertex ${v} on an open edge moved ${gap}`);
+          if (open.has(v)) expect(gap, `${product} vertex ${v} on an open edge moved ${gap}`).toBe(0);
           else if (gap > 1e-3) rounded++;
         }
         opened += open.size;
       }
-      assert.ok(opened > 0 && rounded > 500, `${opened} open-edge vertices held and ${rounded} others rounded`);
+      expect(opened > 0 && rounded > 500, `${opened} open-edge vertices held and ${rounded} others rounded`).toBeTruthy();
     });
   }
 });
@@ -350,11 +349,11 @@ describe("given a style whose door is replaced by a taller one after its first c
     for (const product of SHELL_PRODUCTS) {
       const own = ownGeometry(style, product);
       const baked = restNormalsOf(style, product, 1)!;
-      assert.equal(baked.length, own.getAttribute("normal").array.length, `${product}: one baked normal for each vertex of its own geometry`);
-      assert.equal(largestGap([baked], [bakeRestNormals(freshGeometry(style, product), 1)!]), 0, `${product}: baked from its own geometry`);
+      expect(baked.length, `${product}: one baked normal for each vertex of its own geometry`).toBe(own.getAttribute("normal").array.length);
+      expect(largestGap([baked], [bakeRestNormals(freshGeometry(style, product), 1)!]), `${product}: baked from its own geometry`).toBe(0);
     }
     const second = restNormalsOf(style, "doorLeft", 1)!;
-    assert.ok(second.length !== first.length || largestGap([second], [first]) > 1e-3, "the control: the taller door has other normals");
+    expect(second.length !== first.length || largestGap([second], [first]) > 1e-3, "the control: the taller door has other normals").toBeTruthy();
   });
 
   it("when a car is built of it, then its door skin is drawn with its own baked normals", () => {
@@ -366,7 +365,7 @@ describe("given a style whose door is replaced by a taller one after its first c
       CAR_STYLES.sedan.door = { ...original, halfHeight: original.halfHeight + 0.05 };
       const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
       const expected = bakeRestNormals(freshGeometry(CAR_STYLES.sedan, "doorLeft"), 1)!;
-      assert.equal(largestGap([car["doorMeshL"].geometry.getAttribute("normal").array], [expected]), 0);
+      expect(largestGap([car["doorMeshL"].geometry.getAttribute("normal").array], [expected])).toBe(0);
     } finally {
       CAR_STYLES.sedan.door = original;
     }

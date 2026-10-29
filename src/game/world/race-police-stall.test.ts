@@ -1,10 +1,10 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld } from "./race-world.test-util.ts";
 import { PoliceBrain } from "../ai/police.ts";
 import { DEFAULT_RACE_OPTIONS } from "../match/types.ts";
 import { TRACK_ID } from "./constants.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** The race's stall rule: a police car out driving that gains under 25 m in 8 s with nothing touching it is put away (`RaceField.copStalls`). */
 const WINDOW = 8;
@@ -23,7 +23,7 @@ function frozenCops(seed: number): number[] {
     w.race.command({ type: "start" });
     w.seat.mode = "follow";
     const brain = Reflect.get(w.race, "police");
-    assert.ok(brain instanceof PoliceBrain, "the race has a police brain");
+    must(brain instanceof PoliceBrain, "the race has a police brain");
     const think = brain.think.bind(brain);
     brain.think = (self, snaps, dt) => {
       const input = think(self, snaps, dt);
@@ -61,7 +61,7 @@ describe("given a police race on the oval whose cops have their drive cut from t
   it("when a woken cop sits in place with nothing touching it, then it is put away once its stall window has run out: none stays out driving longer", (t) => {
     const spent = frozenCops(1);
     t.annotate(`seconds out driving: ${spent.map((s) => s.toFixed(2)).join(", ")}`);
-    assert.ok(spent.length > 0, "a cop woke");
-    assert.ok(Math.max(...spent) < WINDOW + 1, `a cop sat in place for ${Math.max(...spent).toFixed(2)} s, past its ${WINDOW} s window`);
+    expect(spent.length, "a cop woke").toBeGreaterThan(0);
+    expect(Math.max(...spent), `a cop sat in place for ${Math.max(...spent).toFixed(2)} s, past its ${WINDOW} s window`).toBeLessThan(WINDOW + 1);
   });
 });

@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { expect } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { setGround } from "../world/ground.ts";
@@ -156,9 +156,9 @@ const DRIFT = 0.005;
 
 /** `r` got to its end (`end` names it for the failure), its block moved at most `DRIFT`, and its engine lives. */
 export function assertHeld(r: Run, end: string): void {
-  assert.ok(r.reached, `the run stopped at s ${r.endS.toFixed(0)}, short of ${end}`);
-  assert.ok(r.end - r.settled <= DRIFT, `the block moved ${((r.end - r.settled) * 1000).toFixed(1)} mm over the stretch`);
-  assert.ok(r.alive, "the engine died");
+  expect(r.reached, `the run stopped at s ${r.endS.toFixed(0)}, short of ${end}`).toBeTruthy();
+  expect(r.end - r.settled, `the block moved ${((r.end - r.settled) * 1000).toFixed(1)} mm over the stretch`).toBeLessThanOrEqual(DRIFT);
+  expect(r.alive, "the engine died").toBeTruthy();
 }
 
 /** The courses whose whole loop the per-commit suite drives (the ones the owner's report named); every other course's is in ejection-slope.ai-long-run.ts. */

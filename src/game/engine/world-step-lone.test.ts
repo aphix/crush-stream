@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -27,14 +26,14 @@ describe("given a head-on pair and two cars alone, 300 m off, stepped at the pac
     const { cars, w } = headOnField(true);
     const rows = run(w, 120, COARSE);
     const cut = rows.filter((r) => r.slices > 1);
-    assert.ok(cut.length > 3, `${cut.length} steps cut for the crash`);
+    expect(cut.length, `${cut.length} steps cut for the crash`).toBeGreaterThan(3);
     for (const r of cut) {
-      assert.equal(r.carSlices, 2 * r.slices + 2, `a step of ${r.slices} slices stepped ${r.carSlices} car-slices`);
-      assert.equal(r.loners, 0b1100, "the lone cars are 2 and 3 and nobody else");
+      expect(r.carSlices, `a step of ${r.slices} slices stepped ${r.carSlices} car-slices`).toBe(2 * r.slices + 2);
+      expect(r.loners, "the lone cars are 2 and 3 and nobody else").toBe(0b1100);
     }
     for (const r of rows.filter((x) => x.slices === 1)) {
-      assert.equal(r.loners, 0, "an uncut step has no lone car (every car's one slice is the step)");
-      assert.equal(r.carSlices, 4);
+      expect(r.loners, "an uncut step has no lone car (every car's one slice is the step)").toBe(0);
+      expect(r.carSlices).toBe(4);
     }
     dispose(cars);
   });
@@ -43,10 +42,10 @@ describe("given a head-on pair and two cars alone, 300 m off, stepped at the pac
     const { cars, w } = headOnField(false);
     const rows = run(w, 120, COARSE);
     const cut = rows.filter((r) => r.slices > 1);
-    assert.ok(cut.length > 3);
+    expect(cut.length).toBeGreaterThan(3);
     for (const r of cut) {
-      assert.equal(r.carSlices, 4 * r.slices);
-      assert.equal(r.loners, 0);
+      expect(r.carSlices).toBe(4 * r.slices);
+      expect(r.loners).toBe(0);
     }
     dispose(cars);
   });
@@ -65,9 +64,9 @@ describe("given two cars alone, 300 m apart", () => {
       a.nearHit = true;
     });
     for (const r of rows) {
-      assert.equal(r.slices, SLICES_PER_STEP);
-      assert.equal(r.loners, 0b10);
-      assert.equal(r.carSlices, SLICES_PER_STEP + 1);
+      expect(r.slices).toBe(SLICES_PER_STEP);
+      expect(r.loners).toBe(0b10);
+      expect(r.carSlices).toBe(SLICES_PER_STEP + 1);
     }
     dispose([a, b]);
   });
@@ -80,10 +79,10 @@ describe("given two cars alone, 300 m apart", () => {
     w.fine = FINE;
     w.lone = true;
     const rows = run(w, 5, COARSE);
-    assert.ok(rows.every((r) => r.slices === SLICES_PER_STEP && r.loners === 0b100), "the parked pair holds the step cut and the far car is alone");
+    expect(rows.every((r) => r.slices === SLICES_PER_STEP && r.loners === 0b100), "the parked pair holds the step cut and the far car is alone").toBeTruthy();
     far.deform.crushing = true;
     const crushing = run(w, 1, COARSE);
-    assert.equal(crushing[0]!.loners & 0b100, 0, "a car whose crush runs on stays in its slices");
+    expect(crushing[0]!.loners & 0b100, "a car whose crush runs on stays in its slices").toBe(0);
     dispose([a!, b!, far]);
   });
 
@@ -96,8 +95,8 @@ describe("given two cars alone, 300 m apart", () => {
     w.lone = true;
     far.hardTouch = true;
     const rows = run(w, 1, COARSE);
-    assert.equal(rows[0]!.loners & 0b100, 0, "a car whose body touches stays in its slices");
-    assert.ok(rows[0]!.slices > 1);
+    expect(rows[0]!.loners & 0b100, "a car whose body touches stays in its slices").toBe(0);
+    expect(rows[0]!.slices).toBeGreaterThan(1);
     dispose([a!, b!, far]);
   });
 
@@ -108,12 +107,12 @@ describe("given two cars alone, 300 m apart", () => {
     launch(sleeper, 0, 0, 0, 0, 0);
     launch(mover, 7.5, 0, 0, 0, 10);
     sleeper.asleep = true;
-    assert.ok(7.5 > CONTACT_REACH + LONE_MARGIN + 10 / QUIET_HZ, "outside the contact reach, so only the wake reach holds them");
+    expect(7.5, "outside the contact reach, so only the wake reach holds them").toBeGreaterThan(CONTACT_REACH + LONE_MARGIN + 10 / QUIET_HZ);
     const w = newWorld([a!, b!, sleeper, mover]);
     w.fine = FINE;
     w.lone = true;
     const rows = run(w, 1, COARSE);
-    assert.equal(rows[0]!.loners & 0b1100, 0, "neither the sleeper nor the car near it is lone");
+    expect(rows[0]!.loners & 0b1100, "neither the sleeper nor the car near it is lone").toBe(0);
     dispose([a!, b!, sleeper, mover]);
   });
 });
@@ -140,8 +139,8 @@ describe("given a car at 60 m/s and a parked one ahead of it on the same line, t
   }
 
   it("when it starts 5 cm outside the reach its travel over the step, the contact reach and the margin make, then both cars are lone; 5 cm inside it, neither is", () => {
-    assert.equal(firstMask(REACH_AT_60 + 0.05), 0b11);
-    assert.equal(firstMask(REACH_AT_60 - 0.05), 0);
+    expect(firstMask(REACH_AT_60 + 0.05)).toBe(0b11);
+    expect(firstMask(REACH_AT_60 - 0.05)).toBe(0);
   });
 
   /** A hit at 150 m/s on a parked car: the mover starts `offset` m outside the reach its 150 m/s make (negative: inside it). The sliced run is the reference (no car lone). */
@@ -169,10 +168,10 @@ describe("given a car at 60 m/s and a parked one ahead of it on the same line, t
     it(`when it is driven at the parked car at 150 m/s from 5 cm ${where} that reach (a hit 1.9 m a step), then it is stopped by the parked car as without lone cars: it never passes the parked car's centre, and its pose agrees with the sliced run's to 5 cm`, () => {
       const sliced = finalPose(false, offset);
       const lone = finalPose(true, offset);
-      assert.ok(lone.crashed && sliced.crashed, "the hit crashed both cars in both runs");
-      assert.ok(lone.trail < 0, `the mover's centre got ${lone.trail.toFixed(2)} m past the parked car's`);
-      assert.ok(Math.abs(lone.x - sliced.x) < 0.05, `mover ${lone.x.toFixed(3)} against ${sliced.x.toFixed(3)} m`);
-      assert.ok(Math.abs(lone.px - sliced.px) < 0.05, `parked car ${lone.px.toFixed(3)} against ${sliced.px.toFixed(3)} m`);
+      expect(lone.crashed && sliced.crashed, "the hit crashed both cars in both runs").toBeTruthy();
+      expect(lone.trail, `the mover's centre got ${lone.trail.toFixed(2)} m past the parked car's`).toBeLessThan(0);
+      expect(Math.abs(lone.x - sliced.x), `mover ${lone.x.toFixed(3)} against ${sliced.x.toFixed(3)} m`).toBeLessThan(0.05);
+      expect(Math.abs(lone.px - sliced.px), `parked car ${lone.px.toFixed(3)} against ${sliced.px.toFixed(3)} m`).toBeLessThan(0.05);
     });
   }
 });
@@ -191,8 +190,8 @@ describe("given a car driven for 5 s at the pacer's coarse step in a world whose
       input.steer = 0.4 * Math.sin((s * COARSE * 2 * Math.PI) / 2.5);
       applyDrive(car, input, COARSE);
     });
-    assert.ok(rows.every((r) => r.slices === SLICES_PER_STEP), "every step was cut");
-    assert.equal(rows.every((r) => (r.loners & 1) === (lone ? 1 : 0)), true, "the car was lone in every step of the lone run and in none of the other");
+    expect(rows.every((r) => r.slices === SLICES_PER_STEP), "every step was cut").toBeTruthy();
+    expect(rows.every((r) => (r.loners & 1) === (lone ? 1 : 0)), "the car was lone in every step of the lone run and in none of the other").toBe(true);
     const out = { x: car.group.position.x, z: car.group.position.z, speed: car.velocity.length(), yaw: car.group.rotation.y };
     dispose([car, ...far]);
     return out;
@@ -201,10 +200,10 @@ describe("given a car driven for 5 s at the pacer's coarse step in a world whose
   it("when it runs one slice a step against three, then it ends 5 s later within 0.15 m of where the sliced car does, at the same speed within 0.1 m/s and the same heading within 0.01 rad", () => {
     const sliced = drive(false);
     const lone = drive(true);
-    assert.ok(Math.hypot(sliced.x, sliced.z) > 100, "the car drove");
-    assert.ok(Math.hypot(lone.x - sliced.x, lone.z - sliced.z) < 0.15, `${Math.hypot(lone.x - sliced.x, lone.z - sliced.z).toFixed(3)} m apart`);
-    assert.ok(Math.abs(lone.speed - sliced.speed) < 0.1, `${lone.speed.toFixed(3)} against ${sliced.speed.toFixed(3)} m/s`);
-    assert.ok(Math.abs(lone.yaw - sliced.yaw) < 0.01, `${lone.yaw.toFixed(4)} against ${sliced.yaw.toFixed(4)} rad`);
+    expect(Math.hypot(sliced.x, sliced.z), "the car drove").toBeGreaterThan(100);
+    expect(Math.hypot(lone.x - sliced.x, lone.z - sliced.z), `${Math.hypot(lone.x - sliced.x, lone.z - sliced.z).toFixed(3)} m apart`).toBeLessThan(0.15);
+    expect(Math.abs(lone.speed - sliced.speed), `${lone.speed.toFixed(3)} against ${sliced.speed.toFixed(3)} m/s`).toBeLessThan(0.1);
+    expect(Math.abs(lone.yaw - sliced.yaw), `${lone.yaw.toFixed(4)} against ${sliced.yaw.toFixed(4)} rad`).toBeLessThan(0.01);
   });
 });
 
@@ -223,7 +222,7 @@ describe("given a field run live with lone cars, its recorded schedule and lone 
       stepWorld(first.w, COARSE);
       record.push({ shape: first.w.shape, loners: first.w.loners });
     }
-    assert.ok(record.some((r) => r.loners !== 0 && r.shape > 0), "the record holds steps with lone cars in them");
+    expect(record.some((r) => r.loners !== 0 && r.shape > 0), "the record holds steps with lone cars in them").toBeTruthy();
     const replay = (masks: boolean): string => {
       const field = headOnField(false);
       for (const r of record) {
@@ -236,8 +235,8 @@ describe("given a field run live with lone cars, its recorded schedule and lone 
       return out;
     };
     const want = stateOf(first.cars);
-    assert.equal(replay(true), want);
-    assert.notEqual(replay(false), want, "the lone masks change nothing: the row cannot tell a replay that drops them");
+    expect(replay(true)).toBe(want);
+    expect(replay(false), "the lone masks change nothing: the row cannot tell a replay that drops them").not.toBe(want);
     dispose(first.cars);
   });
 });

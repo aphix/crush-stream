@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { launch, makeCar } from "./crash-scenarios.test-util.ts";
 import { carRow, takeRow } from "./external-contact.ts";
 import { BODY_HARD, BODY_I, BODY_M, BODY_SIZE, BODY_VX, BODY_VZ, BODY_W, BODY_X, BODY_Z, bodyContact, CT_DEPTH, CT_E, CT_JMAX, CT_MU, CT_NX, CT_NZ, CT_SIZE, CT_X, CT_Z, OUT_SIZE } from "./body-contact.ts";
@@ -67,20 +66,20 @@ function spinMessage(l: Landed): string {
 }
 
 function assertTextbook(l: Landed): void {
-  assert.ok(Math.abs(l.spin - l.textbook) <= TEXTBOOK_TOLERANCE * l.textbook, `the body turns ${spinMessage(l)}`);
-  assert.ok(Math.abs(l.spinOfMasses - l.textbook) <= TEXTBOOK_TOLERANCE * l.textbook, `the masses turn ${spinMessage(l)}`);
+  expect(Math.abs(l.spin - l.textbook), `the body turns ${spinMessage(l)}`).toBeLessThanOrEqual(TEXTBOOK_TOLERANCE * l.textbook);
+  expect(Math.abs(l.spinOfMasses - l.textbook), `the masses turn ${spinMessage(l)}`).toBeLessThanOrEqual(TEXTBOOK_TOLERANCE * l.textbook);
 }
 
 describe("given a resting sedan struck by a face at a lever of 1 m ahead of its middle", () => {
   it("when no mass is on the face yet (all of it takes the impulse), then it spins as the impulse at that lever turns a body of its inertia", () => {
     const l = landExchange(() => false);
-    assert.ok(l.taken > 0.99 * l.kernelJ, `the masses took ${l.taken.toFixed(0)} of the kernel's ${l.kernelJ.toFixed(0)} N·s`);
+    expect(l.taken, `the masses took ${l.taken.toFixed(0)} of the kernel's ${l.kernelJ.toFixed(0)} N·s`).toBeGreaterThan(0.99 * l.kernelJ);
     assertTextbook(l);
   });
 
   it("when the masses along its near flank (most of its mass) already stand on the face, then it spins as the impulse its masses took turns it, not the kernel's whole", () => {
     const l = landExchange((dx) => dx < NEAR_FLANK_M);
-    assert.ok(l.taken < 0.5 * l.kernelJ, `the masses took ${l.taken.toFixed(0)} of the kernel's ${l.kernelJ.toFixed(0)} N·s: the cut no longer binds`);
+    expect(l.taken, `the masses took ${l.taken.toFixed(0)} of the kernel's ${l.kernelJ.toFixed(0)} N·s: the cut no longer binds`).toBeLessThan(0.5 * l.kernelJ);
     assertTextbook(l);
   });
 

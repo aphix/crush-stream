@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { LampLights } from "./lamp-lights.ts";
@@ -53,11 +52,11 @@ describe("given 1 to 3 still cars side by side, all facing the same way, and a c
             const on = lit(lights, cars[c]!, i);
             const k = c * 2 + i;
             if (f === 0) first[k] = on;
-            else assert.equal(on, first[k], `car ${c} headlamp ${i === 0 ? "L" : "R"} turned ${on ? "on" : "off"} at ${f} deg of the orbit`);
+            else expect(on, `car ${c} headlamp ${i === 0 ? "L" : "R"} turned ${on ? "on" : "off"} at ${f} deg of the orbit`).toBe(first[k]);
           }
         }
       }
-      for (let k = 0; k < first.length; k++) assert.ok(first[k], `car ${k >> 1} headlamp ${k & 1 ? "R" : "L"} has no light at all`);
+      for (let k = 0; k < first.length; k++) expect(first[k], `car ${k >> 1} headlamp ${k & 1 ? "R" : "L"} has no light at all`).toBeTruthy();
     });
   }
 });
@@ -78,7 +77,7 @@ describe("given a fixed camera looking across a road and one car driving through
         car.spawnFacing(x, 0, yaw, 0);
         car.group.updateMatrixWorld(true);
         lights.update([car], cam, null, 0);
-        for (const i of HEADS) assert.ok(lit(lights, car, i), `headlamp ${i === 0 ? "L" : "R"} dark at x=${x.toFixed(2)} (frame ${f})`);
+        for (const i of HEADS) expect(lit(lights, car, i), `headlamp ${i === 0 ? "L" : "R"} dark at x=${x.toFixed(2)} (frame ${f})`).toBeTruthy();
       }
     });
   }

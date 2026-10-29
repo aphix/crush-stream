@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { carFrame } from "../vehicle/car-rig.ts";
 import { CAR_STYLES } from "../vehicle/car-variants.ts";
@@ -81,13 +80,13 @@ describe("given the dirt texture", () => {
     for (let index = ALPHA_INDEX; index < dirtPixels.length; index += CHANNELS) {
       if (dirtPixels[index] < OPAQUE) translucentTexels++;
     }
-    assert.equal(dirt.image.width, 1024, "width");
-    assert.equal(dirt.image.height, 1024, "height");
-    assert.equal(dirt.wrapS, THREE.ClampToEdgeWrapping, "wrapS");
-    assert.equal(dirt.wrapT, THREE.ClampToEdgeWrapping, "wrapT");
-    assert.equal(dirt.colorSpace, THREE.SRGBColorSpace, "colour space");
-    assert.equal(dirt.generateMipmaps, true, "mipmaps");
-    assert.equal(translucentTexels, 0, "translucent texels");
+    expect(dirt.image.width, "width").toBe(1024);
+    expect(dirt.image.height, "height").toBe(1024);
+    expect(dirt.wrapS, "wrapS").toBe(THREE.ClampToEdgeWrapping);
+    expect(dirt.wrapT, "wrapT").toBe(THREE.ClampToEdgeWrapping);
+    expect(dirt.colorSpace, "colour space").toBe(THREE.SRGBColorSpace);
+    expect(dirt.generateMipmaps, "mipmaps").toBe(true);
+    expect(translucentTexels, "translucent texels").toBe(0);
   });
 
   it("when it is built twice, then no texel differs (first mismatch index -1)", () => {
@@ -96,21 +95,21 @@ describe("given the dirt texture", () => {
     for (let index = 0; index < dirtPixels.length && firstMismatch === -1; index++) {
       if (dirtPixels[index] !== rebuiltPixels[index]) firstMismatch = index;
     }
-    assert.equal(firstMismatch, -1, "first mismatching byte index");
+    expect(firstMismatch, "first mismatching byte index").toBe(-1);
   });
 
   it("keeps every byte of the dirt the per-texel closure painted", () => {
     let hash = FNV_OFFSET;
     for (let index = 0; index < dirtPixels.length; index++) hash = Math.imul(hash ^ dirtPixels[index]!, FNV_PRIME) >>> 0;
-    assert.equal(hash, DIRT_BYTES_HASH, "FNV-1a of every byte");
+    expect(hash, "FNV-1a of every byte").toBe(DIRT_BYTES_HASH);
   });
 
   it("when its mean luminance is taken, then it is pale and warm: 0.80 to 0.90 of white", () => {
     const LEAST = 0.8;
     const MOST = 0.9;
     const mean = meanLuminanceWhere(() => true) / OPAQUE;
-    assert.ok(mean >= LEAST, "mean luminance at least 0.80");
-    assert.ok(mean <= MOST, "mean luminance at most 0.90");
+    expect(mean, "mean luminance at least 0.80").toBeGreaterThanOrEqual(LEAST);
+    expect(mean, "mean luminance at most 0.90").toBeLessThanOrEqual(MOST);
   });
 
   it("when the ring where cars circle (24-36 m) meets the square's far corners (beyond 46 m), then the ring is at least 7% darker", () => {
@@ -120,14 +119,14 @@ describe("given the dirt texture", () => {
     const RING_SHARE_MOST = 0.93;
     const ring = meanLuminanceWhere((distance) => distance >= RING_LEAST && distance <= RING_MOST);
     const corners = meanLuminanceWhere((distance) => distance > CORNER_FROM);
-    assert.ok(ring < corners * RING_SHARE_MOST, "ring mean luminance under corner mean luminance");
+    expect(ring, "ring mean luminance under corner mean luminance").toBeLessThan(corners * RING_SHARE_MOST);
   });
 
   it("when the darkest texel is found, then it is at least half the base grey (the tracks never stack to black)", () => {
     let darkest = OPAQUE;
     for (let index = 0; index < dirtPixels.length; index += CHANNELS) darkest = Math.min(darkest, dirtPixels[index]);
     const BASE_SHARE_LEAST = 0.5;
-    assert.ok(darkest >= DIRT_BASE_GREY * BASE_SHARE_LEAST, "darkest texel level");
+    expect(darkest, "darkest texel level").toBeGreaterThanOrEqual(DIRT_BASE_GREY * BASE_SHARE_LEAST);
   });
 
   it("when the middle (under 12 m) meets the far corners, then the middle is at least 80% as bright (the bowl centre is not a blob)", () => {
@@ -136,7 +135,7 @@ describe("given the dirt texture", () => {
     const MIDDLE_SHARE_LEAST = 0.8;
     const middle = meanLuminanceWhere((distance) => distance < MIDDLE_MOST);
     const corners = meanLuminanceWhere((distance) => distance > CORNER_FROM);
-    assert.ok(middle >= corners * MIDDLE_SHARE_LEAST, "middle mean luminance over corner mean luminance");
+    expect(middle, "middle mean luminance over corner mean luminance").toBeGreaterThanOrEqual(corners * MIDDLE_SHARE_LEAST);
   });
 
   it("when each texel is compared with its 5 x 5 neighbourhood, then 2.5% to 12% differ by over 20 levels (pebbles and grit, not smooth parchment, not noise)", () => {
@@ -156,8 +155,8 @@ describe("given the dirt texture", () => {
         texels++;
       }
     }
-    assert.ok(deviating / texels >= LEAST_SHARE, "deviating share at least 2.5%");
-    assert.ok(deviating / texels <= MOST_SHARE, "deviating share at most 12%");
+    expect(deviating / texels, "deviating share at least 2.5%").toBeGreaterThanOrEqual(LEAST_SHARE);
+    expect(deviating / texels, "deviating share at most 12%").toBeLessThanOrEqual(MOST_SHARE);
   });
 });
 
@@ -172,20 +171,20 @@ describe("given the generated tyre track paths", () => {
   for (const testCase of familyCases) {
     it(testCase.it, () => {
       const matching = DIRT_TRACK_PATHS.filter((path) => path.shape === testCase.shape && path.radiusX >= testCase.radiusLeast && path.radiusX <= testCase.radiusMost);
-      assert.ok(matching.length >= testCase.leastCount, "matching path count");
+      expect(matching.length, "matching path count").toBeGreaterThanOrEqual(testCase.leastCount);
     });
   }
 
   it("when the paths are counted, then there are 40 to 60", () => {
-    assert.ok(DIRT_TRACK_PATHS.length >= 40, "at least 40 paths");
-    assert.ok(DIRT_TRACK_PATHS.length <= 60, "at most 60 paths");
+    expect(DIRT_TRACK_PATHS.length, "at least 40 paths").toBeGreaterThanOrEqual(40);
+    expect(DIRT_TRACK_PATHS.length, "at most 60 paths").toBeLessThanOrEqual(60);
   });
 
   it("when the paths that come within 12 m of the middle are counted (donuts apart), then there are at most 16: a third of them are thinned out", () => {
     const MOST_CROSSING = 16;
     const donutRadiusMost = 6;
     const crossing = DIRT_TRACK_PATHS.filter((path) => (path.shape !== "ellipse" || path.radiusX > donutRadiusMost) && nearestApproachToMiddle(path) < MIDDLE_THINNING_RADIUS);
-    assert.ok(crossing.length <= MOST_CROSSING, "paths crossing the middle");
+    expect(crossing.length, "paths crossing the middle").toBeLessThanOrEqual(MOST_CROSSING);
   });
 
   it("when open paths are checked at both ends, then each end is outside r = 38 or has faded to under 5% strength, and there are open paths ending inside to prove it", () => {
@@ -201,19 +200,19 @@ describe("given the generated tyre track paths", () => {
         if (endFadeAt(path, fraction) >= FADED) freeEnds++;
       }
     }
-    assert.ok(endsInside >= 40, "open path ends inside the arena");
-    assert.equal(freeEnds, 0, "ends inside the arena still at 5% strength or more");
+    expect(endsInside, "open path ends inside the arena").toBeGreaterThanOrEqual(40);
+    expect(freeEnds, "ends inside the arena still at 5% strength or more").toBe(0);
   });
 
   it("when open paths are checked, then every one feathers over at least 5 m (or half its length)", () => {
     const FEATHER_LEAST = 5;
     const shortest = Math.min(...DIRT_TRACK_PATHS.filter((path) => path.shape === "line").map((path) => 2 * path.radiusX));
-    assert.ok(Math.min(...DIRT_TRACK_PATHS.map((path) => path.feather)) >= FEATHER_LEAST, "least feather (m)");
-    assert.ok(shortest >= 2 * FEATHER_LEAST - 2, "the shortest skid (m) still tapers to a point over its half length");
+    expect(Math.min(...DIRT_TRACK_PATHS.map((path) => path.feather)), "least feather (m)").toBeGreaterThanOrEqual(FEATHER_LEAST);
+    expect(shortest, "the shortest skid (m) still tapers to a point over its half length").toBeGreaterThanOrEqual(2 * FEATHER_LEAST - 2);
   });
 
   it("when the gauge is read, then it is the slot-0 sedan's body width", () => {
-    assert.equal(TRACK_GAUGE, 2 * carFrame(CAR_STYLES.sedan).half.x, "gauge");
+    expect(TRACK_GAUGE, "gauge").toBe(2 * carFrame(CAR_STYLES.sedan).half.x);
   });
 });
 
@@ -232,30 +231,30 @@ describe("given one straight skid laid alone", () => {
   for (const testCase of fieldCases) {
     it(testCase.it, () => {
       const read = testCase.read === "lane" ? lane : rut;
-      assert.ok(read(testCase.centre) >= testCase.leastCentre, "value at the centre");
-      assert.ok(read(testCase.away) <= testCase.mostAway, "value away from it");
+      expect(read(testCase.centre), "value at the centre").toBeGreaterThanOrEqual(testCase.leastCentre);
+      expect(read(testCase.away), "value away from it").toBeLessThanOrEqual(testCase.mostAway);
     });
   }
 
   it("when the lane is read across, then it is soft and 2.4 m wide: over half its strength at 0.6 m, under 2% at 1.4 m", () => {
-    assert.ok(lane(0.6) >= lane(0) * 0.5, "lane at 0.6 m");
-    assert.ok(lane(TRACK_LANE_WIDTH / 2 + 0.2) <= lane(0) * 0.02, "lane at 1.4 m");
+    expect(lane(0.6), "lane at 0.6 m").toBeGreaterThanOrEqual(lane(0) * 0.5);
+    expect(lane(TRACK_LANE_WIDTH / 2 + 0.2), "lane at 1.4 m").toBeLessThanOrEqual(lane(0) * 0.02);
   });
 
   it("when a rut is read across, then it is 0.55 m wide: 30% of its strength 0.2 m off its middle on both sides, nothing 0.45 m off", () => {
     const INSIDE = 0.2;
     const OUTSIDE = 0.45;
-    assert.ok(rut(RUT_CENTRE - INSIDE) >= rut(RUT_CENTRE) * 0.3, "inside, lane side");
-    assert.ok(rut(RUT_CENTRE + INSIDE) >= rut(RUT_CENTRE) * 0.3, "inside, outer side");
-    assert.ok(rut(RUT_CENTRE - OUTSIDE) <= rut(RUT_CENTRE) * 0.02, "outside, lane side");
-    assert.ok(rut(RUT_CENTRE + OUTSIDE) <= rut(RUT_CENTRE) * 0.02, "outside, outer side");
+    expect(rut(RUT_CENTRE - INSIDE), "inside, lane side").toBeGreaterThanOrEqual(rut(RUT_CENTRE) * 0.3);
+    expect(rut(RUT_CENTRE + INSIDE), "inside, outer side").toBeGreaterThanOrEqual(rut(RUT_CENTRE) * 0.3);
+    expect(rut(RUT_CENTRE - OUTSIDE), "outside, lane side").toBeLessThanOrEqual(rut(RUT_CENTRE) * 0.02);
+    expect(rut(RUT_CENTRE + OUTSIDE), "outside, outer side").toBeLessThanOrEqual(rut(RUT_CENTRE) * 0.02);
   });
 
   it("when the ridge is read, then it stands just outside the lane (1.35 m), not in it and not far away", () => {
     const BESIDE_LANE = TRACK_LANE_WIDTH / 2 + 0.15;
-    assert.ok(ridge(BESIDE_LANE) >= 0.05, "ridge beside the lane");
-    assert.ok(ridge(0) < ridge(BESIDE_LANE), "ridge in the lane under ridge beside it");
-    assert.ok(ridge(PLAIN) <= 0.001, "ridge far away");
+    expect(ridge(BESIDE_LANE), "ridge beside the lane").toBeGreaterThanOrEqual(0.05);
+    expect(ridge(0), "ridge in the lane under ridge beside it").toBeLessThan(ridge(BESIDE_LANE));
+    expect(ridge(PLAIN), "ridge far away").toBeLessThanOrEqual(0.001);
   });
 
   it("when tread chevrons are counted, then they are pressed into the ruts and not between them", () => {
@@ -271,8 +270,8 @@ describe("given one straight skid laid alone", () => {
         else if (Math.abs(worldZ) < RUT_CENTRE - WIDTH) between++;
       }
     }
-    assert.ok(inRuts >= 100, "tread texels in the ruts");
-    assert.equal(between, 0, "tread texels between the ruts");
+    expect(inRuts, "tread texels in the ruts").toBeGreaterThanOrEqual(100);
+    expect(between, "tread texels between the ruts").toBe(0);
   });
 });
 
@@ -280,8 +279,8 @@ describe("given tracks laid more than once, fading and feathering", () => {
   it("when two identical skids overlap, then the lane darkens more but less than twice (it saturates)", () => {
     const single = laneAt(paintTracks([pathNamed({})]), 0, 0);
     const double = laneAt(paintTracks([pathNamed({}), pathNamed({})]), 0, 0);
-    assert.ok(double > single, "two passes over one");
-    assert.ok(double < single * 2, "two passes under twice one");
+    expect(double, "two passes over one").toBeGreaterThan(single);
+    expect(double, "two passes under twice one").toBeLessThan(single * 2);
   });
 
   it("when an open arc is read at its ends and its middle, then it feathers to under 20% of the middle at both ends", () => {
@@ -292,9 +291,9 @@ describe("given tracks laid more than once, fading and feathering", () => {
       const point = pointOnPath(arc, fraction);
       return laneAt(fields, point.x, point.z);
     };
-    assert.ok(at(0.5) >= 0.1, "lane at the middle");
-    assert.ok(at(ENDS) <= at(0.5) * 0.2, "lane near the start");
-    assert.ok(at(1 - ENDS) <= at(0.5) * 0.2, "lane near the end");
+    expect(at(0.5), "lane at the middle").toBeGreaterThanOrEqual(0.1);
+    expect(at(ENDS), "lane near the start").toBeLessThanOrEqual(at(0.5) * 0.2);
+    expect(at(1 - ENDS), "lane near the end").toBeLessThanOrEqual(at(0.5) * 0.2);
   });
 
   it("when a full loop is read in 48 steps, then its strength varies by at least 0.15 (it fades in and out)", () => {
@@ -306,6 +305,6 @@ describe("given tracks laid more than once, fading and feathering", () => {
       const point = pointOnPath(loop, step / STEPS);
       return laneAt(fields, point.x, point.z);
     });
-    assert.ok(Math.max(...readings) - Math.min(...readings) >= FADE_RANGE_LEAST, "range of lane strength round the loop");
+    expect(Math.max(...readings) - Math.min(...readings), "range of lane strength round the loop").toBeGreaterThanOrEqual(FADE_RANGE_LEAST);
   });
 });

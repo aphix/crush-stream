@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { CLASSES } from "../vehicle/vehicle-classes.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -31,8 +30,8 @@ describe("given a coasting 53 km/h T-bone (a bullet car's nose driven into a res
       started ||= struck.crashed;
       before = after;
     }
-    assert.ok(travel > 2, `the struck car did not travel (${travel.toFixed(2)} m): the scene is not the shove`);
-    assert.ok(reported >= 0.7 * travel, `the struck car travelled ${travel.toFixed(2)} m at a reported ${reported.toFixed(2)} m of speed`);
+    expect(travel, `the struck car did not travel (${travel.toFixed(2)} m): the scene is not the shove`).toBeGreaterThan(2);
+    expect(reported, `the struck car travelled ${travel.toFixed(2)} m at a reported ${reported.toFixed(2)} m of speed`).toBeGreaterThanOrEqual(0.7 * travel);
   });
 });
 
@@ -56,9 +55,9 @@ describe("given two 30 km/h cars driving head-on at each other", () => {
     const coast = headOn(0);
     const held = headOn(0.12);
     const thrust = CLASSES.sedan.launch[0];
-    for (const dv of held.added) assert.ok(dv > 0 && dv <= thrust * 0.12 * 1.01, `the drive added ${dv.toFixed(2)} m/s over 0.12 s (the launch pull ${thrust} m/s²)`);
-    assert.ok(Math.abs(held.nose - coast.nose) <= Math.max(0.03, 0.15 * coast.nose), `nose ${held.nose.toFixed(3)} m held, ${coast.nose.toFixed(3)} m coasting`);
-    assert.ok(Math.abs(held.engine - coast.engine) <= 0.005, `engine block ${held.engine.toFixed(3)} m held, ${coast.engine.toFixed(3)} m coasting`);
+    for (const dv of held.added) expect(dv > 0 && dv <= thrust * 0.12 * 1.01, `the drive added ${dv.toFixed(2)} m/s over 0.12 s (the launch pull ${thrust} m/s²)`).toBeTruthy();
+    expect(Math.abs(held.nose - coast.nose), `nose ${held.nose.toFixed(3)} m held, ${coast.nose.toFixed(3)} m coasting`).toBeLessThanOrEqual(Math.max(0.03, 0.15 * coast.nose));
+    expect(Math.abs(held.engine - coast.engine), `engine block ${held.engine.toFixed(3)} m held, ${coast.engine.toFixed(3)} m coasting`).toBeLessThanOrEqual(0.005);
   });
 });
 
@@ -97,8 +96,8 @@ describe("given the coasting 53 km/h T-bone, where the two cars should only be h
       return inner(h);
     };
     for (let frame = 0; frame < 60; frame++) tickWorld(w);
-    assert.ok(used >= 0, "the struck car never took the pair's speed: the scene is not the exchange");
-    assert.ok(used >= 0.8, `the struck car's masses took the pair's speed with the more crushed face at ${(used * 100).toFixed(0)} % of its stroke`);
+    expect(used, "the struck car never took the pair's speed: the scene is not the exchange").toBeGreaterThanOrEqual(0);
+    expect(used, `the struck car's masses took the pair's speed with the more crushed face at ${(used * 100).toFixed(0)} % of its stroke`).toBeGreaterThanOrEqual(0.8);
   });
 
   /** The t-bone's final dents with the bullet holding the throttle for `hold` s from first contact. */
@@ -118,12 +117,12 @@ describe("given the coasting 53 km/h T-bone, where the two cars should only be h
     for (const hold of [0.12, Infinity]) {
       const held = dents(hold);
       const where = `${hold} s of throttle`;
-      assert.ok(Math.abs(held.bulletNose - coast.bulletNose) <= Math.max(0.03, 0.15 * coast.bulletNose), `${where}: bullet nose ${held.bulletNose.toFixed(3)} m, ${coast.bulletNose.toFixed(3)} m coasting`);
-      assert.ok(Math.abs(held.door - coast.door) <= Math.max(0.03, 0.15 * coast.door), `${where}: struck door ${held.door.toFixed(3)} m, ${coast.door.toFixed(3)} m coasting`);
-      assert.ok(Math.abs(held.engine - coast.engine) <= 0.005, `${where}: struck engine block ${held.engine.toFixed(3)} m, ${coast.engine.toFixed(3)} m coasting`);
+      expect(Math.abs(held.bulletNose - coast.bulletNose), `${where}: bullet nose ${held.bulletNose.toFixed(3)} m, ${coast.bulletNose.toFixed(3)} m coasting`).toBeLessThanOrEqual(Math.max(0.03, 0.15 * coast.bulletNose));
+      expect(Math.abs(held.door - coast.door), `${where}: struck door ${held.door.toFixed(3)} m, ${coast.door.toFixed(3)} m coasting`).toBeLessThanOrEqual(Math.max(0.03, 0.15 * coast.door));
+      expect(Math.abs(held.engine - coast.engine), `${where}: struck engine block ${held.engine.toFixed(3)} m, ${coast.engine.toFixed(3)} m coasting`).toBeLessThanOrEqual(0.005);
     }
     // The struck nose is no dent: the full-throttle shove accelerates the struck car for seconds and its nose lags (7 cm), so the pulse only.
     const pulse = dents(0.12);
-    assert.ok(Math.abs(pulse.struckNose - coast.struckNose) <= 0.03, `struck nose ${pulse.struckNose.toFixed(3)} m driven, ${coast.struckNose.toFixed(3)} m coasting`);
+    expect(Math.abs(pulse.struckNose - coast.struckNose), `struck nose ${pulse.struckNose.toFixed(3)} m driven, ${coast.struckNose.toFixed(3)} m coasting`).toBeLessThanOrEqual(0.03);
   });
 });

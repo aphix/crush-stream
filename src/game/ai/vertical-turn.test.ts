@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { SPIN_RATE_BAR, verticalTurn } from "./vertical-turn.test-util.ts";
@@ -21,9 +20,9 @@ describe("given a car airborne and pitched 70° up, rolling, one 240 Hz step apa
     const to = quaternion(TUMBLING_TO);
     const eulerRate = Math.abs(eulerYaw(to) - eulerYaw(from)) / STEP_S;
     const verticalRate = Math.abs(verticalTurn(from, to)) / STEP_S;
-    assert.ok(eulerRate > SPIN_RATE_BAR, `Euler yaw ${eulerRate.toFixed(2)} rad/s: the pose no longer separates the two readings`);
-    assert.ok(Math.abs(verticalRate - 3.7) < 0.2, `vertical turn ${verticalRate.toFixed(2)} rad/s`);
-    assert.ok(verticalRate < SPIN_RATE_BAR, `vertical turn ${verticalRate.toFixed(2)} rad/s is past the spin bar`);
+    expect(eulerRate, `Euler yaw ${eulerRate.toFixed(2)} rad/s: the pose no longer separates the two readings`).toBeGreaterThan(SPIN_RATE_BAR);
+    expect(Math.abs(verticalRate - 3.7), `vertical turn ${verticalRate.toFixed(2)} rad/s`).toBeLessThan(0.2);
+    expect(verticalRate, `vertical turn ${verticalRate.toFixed(2)} rad/s is past the spin bar`).toBeLessThan(SPIN_RATE_BAR);
   });
 });
 
@@ -37,7 +36,7 @@ describe("given a car level on its wheels", () => {
     it(testCase.it, () => {
       const from = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.4, 0, EULER_ORDER));
       const to = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.4 + testCase.yawRate * STEP_S, 0, EULER_ORDER));
-      assert.ok(Math.abs(verticalTurn(from, to) / STEP_S - testCase.yawRate) < RATE_TOLERANCE, `read ${(verticalTurn(from, to) / STEP_S).toFixed(3)} rad/s`);
+      expect(Math.abs(verticalTurn(from, to) / STEP_S - testCase.yawRate), `read ${(verticalTurn(from, to) / STEP_S).toFixed(3)} rad/s`).toBeLessThan(RATE_TOLERANCE);
     });
   }
 });

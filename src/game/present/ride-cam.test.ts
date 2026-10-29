@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
 import { FLAT_GROUND, Ground } from "../world/ground.ts";
@@ -121,16 +120,16 @@ function filmFlight(release: THREE.Vector3, options: FlightOptions = {}): Flight
 describe("given a dummy thrown up the High jump's path (release 4, 58, 0 m/s) filmed at the default 50° lens", () => {
   it("when the aim is not led, then the eased change from the windshield shot orbits the heads and no frame after the windshield shot has him outside the central 95% (the fault was 11.96%)", () => {
     const flight = filmFlight(HIGH_JUMP_RELEASE);
-    assert.ok(flight.windshieldFrames > 0, "the windshield shot opens the ride");
-    assert.ok(flight.frames - flight.windshieldFrames > 600, "frames after the windshield shot");
-    assert.equal(flight.outsideAfterWindshield, 0, "frames outside after the windshield shot");
+    expect(flight.windshieldFrames, "the windshield shot opens the ride").toBeGreaterThan(0);
+    expect(flight.frames - flight.windshieldFrames, "frames after the windshield shot").toBeGreaterThan(600);
+    expect(flight.outsideAfterWindshield, "frames outside after the windshield shot").toBe(0);
   });
 
   it("when the aim is led by MINIGAME_AIM_LEAD, then the ride opens on the follow shot and not one frame of the flight, the first included, has him outside the central 95%", () => {
     const flight = filmFlight(HIGH_JUMP_RELEASE, { aimLead: MINIGAME_AIM_LEAD });
-    assert.ok(flight.frames > 600, "frames");
-    assert.equal(flight.windshieldFrames, 0, "no windshield shot");
-    assert.equal(flight.outsideAnywhere, 0, "frames outside");
+    expect(flight.frames, "frames").toBeGreaterThan(600);
+    expect(flight.windshieldFrames, "no windshield shot").toBe(0);
+    expect(flight.outsideAnywhere, "frames outside").toBe(0);
   });
 });
 
@@ -145,15 +144,15 @@ describe("given other throws filmed at the default 50° lens with the aim led by
   for (const testCase of LED_RELEASES) {
     it(`when ${testCase.it} is filmed, then not one frame of the flight, the first included, has him outside the central 95%`, () => {
       const flight = filmFlight(testCase.release, { aimLead: MINIGAME_AIM_LEAD });
-      assert.ok(flight.frames > 60, "frames");
-      assert.equal(flight.windshieldFrames, 0, "no windshield shot");
-      assert.equal(flight.outsideAnywhere, 0, "frames outside");
+      expect(flight.frames, "frames").toBeGreaterThan(60);
+      expect(flight.windshieldFrames, "no windshield shot").toBe(0);
+      expect(flight.outsideAnywhere, "frames outside").toBe(0);
     });
   }
 
   it("when the Ring Fling throw is filmed with the aim not led, then the frames outside show the control can fail", () => {
     const flight = filmFlight(RING_FLING_RELEASE);
-    assert.ok(flight.outsideAnywhere > 0, "the unled control loses frames");
+    expect(flight.outsideAnywhere, "the unled control loses frames").toBeGreaterThan(0);
   });
 });
 
@@ -163,9 +162,9 @@ describe("given the long jump's throw filmed in the engine's slow-mo (the sim at
   it("when he is filmed, then not one frame, the first included, has him outside the central 95%, and the aim never strays from his head by more than the lead's share of what the slow-mo shows", () => {
     const flight = filmFlight(LONG_JUMP_RELEASE, { aimLead: MINIGAME_AIM_LEAD, timeScale });
     const slowMotion = flight.aimOffsets.slice(0, SLOWMO_FRAMES);
-    assert.equal(flight.outsideAnywhere, 0, "frames outside");
-    assert.ok(slowMotion.length === SLOWMO_FRAMES, "slow-mo frames");
-    assert.ok(Math.max(...slowMotion) < SLOWMO_AIM_OFFSET_LIMIT, `the aim strayed ${Math.max(...slowMotion)} m from his head`);
+    expect(flight.outsideAnywhere, "frames outside").toBe(0);
+    expect(slowMotion.length, "slow-mo frames").toBe(SLOWMO_FRAMES);
+    expect(Math.max(...slowMotion), `the aim strayed ${Math.max(...slowMotion)} m from his head`).toBeLessThan(SLOWMO_AIM_OFFSET_LIMIT);
   });
 });
 
@@ -178,14 +177,14 @@ const UNCHANGED_POSES = [
 
 describe("given a ride cam whose framing has no lead set", () => {
   it("when it is built, then the lead is 0", () => {
-    assert.equal(new RideCam().framing.lead, 0, "lead");
+    expect(new RideCam().framing.lead, "lead").toBe(0);
   });
 
   for (const testCase of UNCHANGED_POSES) {
     it(`when it films ${testCase.it}, then the camera stands exactly at its pinned pose`, () => {
       const pose = filmFlight(testCase.release).poses[testCase.frame]!;
       for (let index = 0; index < testCase.pose.length; index++) {
-        assert.ok(Math.abs(pose[index]! - testCase.pose[index]!) < TOLERANCE, `pose[${index}] ${pose[index]} against ${testCase.pose[index]}`);
+        expect(Math.abs(pose[index]! - testCase.pose[index]!), `pose[${index}] ${pose[index]} against ${testCase.pose[index]}`).toBeLessThan(TOLERANCE);
       }
     });
   }
@@ -246,14 +245,14 @@ describe("given a dummy lying still in a cup's bowl with a rim wall round it, th
 
   it("when the aim is not led, then the rim blocks the line from the eye to him (the fault)", () => {
     const eye = restingEye(undefined);
-    assert.ok(groundBlocksLine(bowlGround(), eye, head), `the eye at ${eye.toArray()} sees him over the rim`);
+    expect(groundBlocksLine(bowlGround(), eye, head), `the eye at ${eye.toArray()} sees him over the rim`).toBeTruthy();
   });
 
   it("when the aim is led by MINIGAME_AIM_LEAD, then the line from the eye to him is clear of the rim, the eye stands above it and no nearer to him than the follow standoff", () => {
     const eye = restingEye(MINIGAME_AIM_LEAD);
-    assert.ok(!groundBlocksLine(bowlGround(), eye, head), `the eye at ${eye.toArray()} is behind the rim`);
-    assert.ok(eye.y > CUP_RIM_HEIGHT, `the eye is ${eye.y} m up`);
-    assert.ok(eye.distanceTo(head) >= FOLLOW_STANDOFF, `the eye is ${eye.distanceTo(head)} m from him`);
+    expect(!groundBlocksLine(bowlGround(), eye, head), `the eye at ${eye.toArray()} is behind the rim`).toBe(true);
+    expect(eye.y, `the eye is ${eye.y} m up`).toBeGreaterThan(CUP_RIM_HEIGHT);
+    expect(eye.distanceTo(head), `the eye is ${eye.distanceTo(head)} m from him`).toBeGreaterThanOrEqual(FOLLOW_STANDOFF);
   });
 });
 
@@ -293,11 +292,11 @@ function framesOutsideAfterCutToClimber(aimLead: number | undefined): number {
 
 describe("given the ride cam resting on one dummy, and a second thrown up fast from 10 m away that it cuts to", () => {
   it("when the aim is led by MINIGAME_AIM_LEAD, then not one of the 90 frames after the cut has him outside the central 95% (the ease from the old pose is a cut)", () => {
-    assert.equal(framesOutsideAfterCutToClimber(MINIGAME_AIM_LEAD), 0, "frames outside");
+    expect(framesOutsideAfterCutToClimber(MINIGAME_AIM_LEAD), "frames outside").toBe(0);
   });
 
   it("when the aim is not led, then the ease from the old pose loses him on some of those frames (the control can fail)", () => {
-    assert.ok(framesOutsideAfterCutToClimber(undefined) > 0, "frames outside");
+    expect(framesOutsideAfterCutToClimber(undefined), "frames outside").toBeGreaterThan(0);
   });
 });
 
@@ -344,15 +343,15 @@ describe("given a driver thrown from a car on the High jump's lip, filmed for th
     const flight = filmFlight(release, options(undefined));
     let hidden = 0;
     for (let frame = 0; frame < FIRST_SECOND_FRAMES; frame++) if (carBoxHidesLine(flight.eyes[frame]!, flight.heads[frame]!)) hidden++;
-    assert.ok(hidden > 0, `${hidden} of ${FIRST_SECOND_FRAMES} frames hidden`);
+    expect(hidden, `${hidden} of ${FIRST_SECOND_FRAMES} frames hidden`).toBeGreaterThan(0);
   });
 
   it("when the aim is led by MINIGAME_AIM_LEAD, then the car's box hides him on none of the frames after the first of that second (the first is the old camera's own view) and he is inside the central 95% on every frame of the flight", () => {
     const flight = filmFlight(release, options(MINIGAME_AIM_LEAD));
     let hidden = 0;
     for (let frame = 1; frame < FIRST_SECOND_FRAMES; frame++) if (carBoxHidesLine(flight.eyes[frame]!, flight.heads[frame]!)) hidden++;
-    assert.equal(hidden, 0, "frames hidden by the car after the first");
-    assert.equal(flight.outsideAnywhere, 0, "frames outside");
+    expect(hidden, "frames hidden by the car after the first").toBe(0);
+    expect(flight.outsideAnywhere, "frames outside").toBe(0);
   });
 });
 
@@ -380,9 +379,9 @@ describe("given a dummy thrown up past the High jump's frame (release 7, 58, 0 m
     const eyeXs = flight.eyes.map((eye) => eye.x);
     let pressed = 0;
     for (const eye of flight.eyes) if (inside(FRAME_BOARD, eye.x, eye.y, eye.z, BOARD_PADDING)) pressed++;
-    assert.ok(Math.min(...eyeXs) < POSTS_PLANE_X && Math.max(...eyeXs) > POSTS_PLANE_X, "the eye crosses the posts' plane");
-    assert.equal(pressed, 0, "frames the eye is in or against the board");
-    assert.equal(flight.outsideAnywhere, 0, "frames outside");
+    expect(Math.min(...eyeXs) < POSTS_PLANE_X && Math.max(...eyeXs) > POSTS_PLANE_X, "the eye crosses the posts' plane").toBeTruthy();
+    expect(pressed, "frames the eye is in or against the board").toBe(0);
+    expect(flight.outsideAnywhere, "frames outside").toBe(0);
   });
 });
 
@@ -401,8 +400,8 @@ describe("given a dummy thrown up the High jump's path (release 4, 58, 0 m/s) fi
       nearest = Math.min(nearest, distance - wanted);
       if (distance < wanted - STANDOFF_TOLERANCE) shortfall++;
     }
-    assert.ok(nearest > -STANDOFF_TOLERANCE, `the eye was ${-nearest} m short of the standoff at its worst`);
-    assert.equal(shortfall, 0, "frames nearer than the standoff");
+    expect(nearest, `the eye was ${-nearest} m short of the standoff at its worst`).toBeGreaterThan(-STANDOFF_TOLERANCE);
+    expect(shortfall, "frames nearer than the standoff").toBe(0);
   });
 });
 
@@ -430,20 +429,20 @@ describe("given a dummy lying still in a field of cardboard stacks, a 2.6 m stac
 
   it("when the aim is not led, then the stack blocks the line from the eye to him (the fault)", () => {
     const eye = restingEye(undefined, [STACK]);
-    assert.ok(stackBlocksLine(eye, head), `the eye at ${eye.toArray()} sees him past the stack`);
+    expect(stackBlocksLine(eye, head), `the eye at ${eye.toArray()} sees him past the stack`).toBeTruthy();
   });
 
   it("when the aim is led by MINIGAME_AIM_LEAD, then the eye stands at least 6 m over his head and 8 m back, and the stack does not block the line to him", () => {
     const eye = restingEye(MINIGAME_AIM_LEAD, [STACK]);
-    assert.ok(eye.y >= head.y + AT_REST_HEIGHT, `the eye is ${eye.y - head.y} m over him`);
-    assert.ok(Math.hypot(eye.x - head.x, eye.z - head.z) >= AT_REST_STANDOFF, `the eye is ${Math.hypot(eye.x - head.x, eye.z - head.z)} m back`);
-    assert.ok(!stackBlocksLine(eye, head), `the eye at ${eye.toArray()} is behind the stack`);
+    expect(eye.y, `the eye is ${eye.y - head.y} m over him`).toBeGreaterThanOrEqual(head.y + AT_REST_HEIGHT);
+    expect(Math.hypot(eye.x - head.x, eye.z - head.z), `the eye is ${Math.hypot(eye.x - head.x, eye.z - head.z)} m back`).toBeGreaterThanOrEqual(AT_REST_STANDOFF);
+    expect(!stackBlocksLine(eye, head), `the eye at ${eye.toArray()} is behind the stack`).toBe(true);
   });
 
   it("when the aim is led and no stack stands near him, then the eye still stands at least 6 m over his head and 8 m back", () => {
     const eye = restingEye(MINIGAME_AIM_LEAD);
-    assert.ok(eye.y >= head.y + AT_REST_HEIGHT, `the eye is ${eye.y - head.y} m over him`);
-    assert.ok(Math.hypot(eye.x - head.x, eye.z - head.z) >= AT_REST_STANDOFF, `the eye is ${Math.hypot(eye.x - head.x, eye.z - head.z)} m back`);
+    expect(eye.y, `the eye is ${eye.y - head.y} m over him`).toBeGreaterThanOrEqual(head.y + AT_REST_HEIGHT);
+    expect(Math.hypot(eye.x - head.x, eye.z - head.z), `the eye is ${Math.hypot(eye.x - head.x, eye.z - head.z)} m back`).toBeGreaterThanOrEqual(AT_REST_STANDOFF);
   });
 });
 
@@ -458,9 +457,9 @@ describe("given a driver thrown from the High jump's lip with the drive cam behi
     const flight = filmFlight(release, options);
     let largestJump = 0;
     for (let frame = 1; frame < flight.frames; frame++) largestJump = Math.max(largestJump, flight.eyes[frame]!.distanceTo(flight.eyes[frame - 1]!));
-    assert.ok(flight.eyes[0]!.distanceTo(DRIVE_CAM_EYE) < OPEN_FIRST_FRAME_LIMIT, `the first frame's eye is ${flight.eyes[0]!.distanceTo(DRIVE_CAM_EYE)} m from the drive cam`);
-    assert.ok(largestJump < OPEN_JUMP_LIMIT, `an eye jumped ${largestJump} m between two frames`);
-    assert.equal(flight.outsideAnywhere, 0, "frames outside");
+    expect(flight.eyes[0]!.distanceTo(DRIVE_CAM_EYE), `the first frame's eye is ${flight.eyes[0]!.distanceTo(DRIVE_CAM_EYE)} m from the drive cam`).toBeLessThan(OPEN_FIRST_FRAME_LIMIT);
+    expect(largestJump, `an eye jumped ${largestJump} m between two frames`).toBeLessThan(OPEN_JUMP_LIMIT);
+    expect(flight.outsideAnywhere, "frames outside").toBe(0);
   });
 });
 
@@ -509,12 +508,12 @@ describe("given two dummies climbing together, 0.5 m apart in height, the sim ru
   it("when the ride is framed with no lead passed, then the aim trails the heads' centre by their shown velocity's share of the ease", () => {
     const aim = aimOffsetAfterSettling(undefined);
     const expected = meanVelocity.clone().multiplyScalar(-shownScale * AIM_LAG_SECONDS);
-    assert.ok(aim.distanceTo(expected) < AIM_TOLERANCE, `aim offset ${aim.toArray()} against ${expected.toArray()}`);
+    expect(aim.distanceTo(expected), `aim offset ${aim.toArray()} against ${expected.toArray()}`).toBeLessThan(AIM_TOLERANCE);
   });
 
   it("when the ride is framed with a lead of 0.1 s, then the aim settles where the lead and the ease's trail leave it, by the shown and not the sim's velocity", () => {
     const aim = aimOffsetAfterSettling(MINIGAME_AIM_LEAD);
     const expected = meanVelocity.clone().multiplyScalar(shownScale * (MINIGAME_AIM_LEAD - AIM_LAG_SECONDS));
-    assert.ok(aim.distanceTo(expected) < AIM_TOLERANCE, `aim offset ${aim.toArray()} against ${expected.toArray()}`);
+    expect(aim.distanceTo(expected), `aim offset ${aim.toArray()} against ${expected.toArray()}`).toBeLessThan(AIM_TOLERANCE);
   });
 });

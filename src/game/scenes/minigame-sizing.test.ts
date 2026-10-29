@@ -1,5 +1,4 @@
-import { afterAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FREEWHEEL, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -23,6 +22,7 @@ import { lipHeight } from "./minigame-profile.ts";
 import { dressedDriverCar, heldRagdolls, HOLD_SECONDS, holdHorizontalSpeed, RUN_SECONDS, STALL_SECONDS, STALLED_SPEED, steerAlongLane } from "./minigame-profile.test-util.ts";
 import { withoutFrame } from "./minigame-frame.test-util.ts";
 import { RING_BACKSTOP, RING_BOARD_BOUNDS, RING_CUPS, ringScore } from "./minigame-ring.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * Sizing of `THROW_BOOST` and `HIGH_JUMP_MEASURED`: every number here is measured with the real pieces. The car is driven from its parked
@@ -153,7 +153,7 @@ function drive(type: DriverCar, mode: MinigameMode, speedCap: number): Capture {
       stalledFor = car.speed < STALLED_SPEED ? stalledFor + FRAME : 0;
       if (stalledFor > STALL_SECONDS) break;
     }
-    assert.ok(outcome.capture !== null, `${type.id} on ${mode} at cap ${speedCap}: nobody was thrown`);
+    must(outcome.capture !== null, `${type.id} on ${mode} at cap ${speedCap}: nobody was thrown`);
     outcome.capture.approachSpeed = mode === "longJump" ? fastestApproach : outcome.capture.horizontalSpeed;
     return outcome.capture;
   } finally {
@@ -458,29 +458,29 @@ describe("given the high jump with THROW_BOOST.highJump on the free pad (no fram
     const layout = highJumpLayout(measuredBest(rows, 0), lipHeight("highJump"));
     const slowLines = [...slowRuns].map(([id, height]) => `${id} ${metres(height)} m`).join(", ");
     t.annotate(`THROW_BOOST.highJump ${JSON.stringify(THROW_BOOST.highJump)}; posts ${layout.postsX} m, net ${layout.netX} m, box piles end ${metres(layout.boxes.reduce((end, box) => Math.max(end, box.x), 0))} m, frame top ${layout.frameTop} m\nscore of a run at ${SLOW_RUN_SHARE * 100}% of full lip speed: ${slowLines}\n${TABLE_HEADER}\n${tableOf(rows, (flight) => `scores ${metres(flight.height)} m, crosses the posts' plane at ${metres(flight.crossingHeight)} m`)}`);
-    assert.deepEqual(highJumpViolations(rows), []);
-    assert.deepEqual(slowRunViolations(slowRuns), []);
+    expect(highJumpViolations(rows)).toHaveLength(0);
+    expect(slowRunViolations(slowRuns)).toHaveLength(0);
   });
 
   it("when the boost is the identity (the throw as the sim has it), then the bars break: the best class scores far under the band and every landing is far past the net", async () => {
     const violations = highJumpViolations(await measure("highJump", NO_RELEASE_SCALE, BEST_ONCE));
-    assert.ok(violations.some((violation) => violation.includes("best score")), violations.join("; "));
-    assert.ok(violations.some((violation) => violation.includes("past the box piles")), violations.join("; "));
+    expect(violations.some((violation) => violation.includes("best score")), violations.join("; ")).toBeTruthy();
+    expect(violations.some((violation) => violation.includes("past the box piles")), violations.join("; ")).toBeTruthy();
   });
 
   it(`when forward is ${FORWARD_MUTATION_FACTOR} times the chosen, then the best runs land past the box piles' end (the window holds only at the chosen forward)`, async () => {
     const violations = highJumpViolations(await measure("highJump", scaled(THROW_BOOST.highJump, { forward: FORWARD_MUTATION_FACTOR }), BEST_ONCE));
-    assert.ok(violations.some((violation) => violation.includes("past the box piles")), violations.join("; "));
+    expect(violations.some((violation) => violation.includes("past the box piles")), violations.join("; ")).toBeTruthy();
   });
 
   it(`when upward is ${UPWARD_MUTATION_FACTOR} times the chosen, then the best class scores over the band`, async () => {
     const violations = highJumpViolations(await measure("highJump", scaled(THROW_BOOST.highJump, { upward: UPWARD_MUTATION_FACTOR }), BEST_ONCE));
-    assert.ok(violations.some((violation) => violation.includes("best score") && violation.includes("over")), violations.join("; "));
+    expect(violations.some((violation) => violation.includes("best score") && violation.includes("over")), violations.join("; ")).toBeTruthy();
   });
 
   it(`when upward is ${UPWARD_CUT_FACTOR} times the chosen, then the 80% runs no longer score ${SLOW_RUN_HEIGHT_MINIMUM} m`, async () => {
     const violations = slowRunViolations(await slowRunHeights(scaled(THROW_BOOST.highJump, { upward: UPWARD_CUT_FACTOR })));
-    assert.ok(violations.length > 0);
+    expect(violations.length).toBeGreaterThan(0);
   });
 
   it("when the best class's best run is thrown again, then HIGH_JUMP_MEASURED is its crossing height and the farthest best landing, within 2%", async () => {
@@ -488,7 +488,7 @@ describe("given the high jump with THROW_BOOST.highJump on the free pad (no fram
     for (let repeat = 0; repeat < REPEATS; repeat++) {
       const measured = measuredBest(rows, repeat);
       for (const key of ["bestHeight", "landingDistance"] as const) {
-        assert.ok(Math.abs(measured[key] - HIGH_JUMP_MEASURED[key]) <= MEASURED_TOLERANCE * HIGH_JUMP_MEASURED[key], `${key}: measured ${metres(measured[key])} against pinned ${HIGH_JUMP_MEASURED[key]}`);
+        expect(Math.abs(measured[key] - HIGH_JUMP_MEASURED[key]), `${key}: measured ${metres(measured[key])} against pinned ${HIGH_JUMP_MEASURED[key]}`).toBeLessThanOrEqual(MEASURED_TOLERANCE * HIGH_JUMP_MEASURED[key]);
       }
     }
   });
@@ -523,8 +523,8 @@ describe("given the high jump's posts and slats as ragdoll colliders, with the r
     const free = bestRunsOf(await measure("highJump", THROW_BOOST.highJump, BEST_ONCE));
     const cost = framed.map((row) => free.find((candidate) => candidate.type.id === row.type.id)!.flights[0]!.height - row.flights[0]!.height);
     t.annotate(`with the frame (score on the free pad minus score with it: ${framed.map((row, index) => `${row.type.id} ${metres(cost[index]!)} m`).join(", ")}; lands NaN: caught on the frame, he falls back short of his apex's distance)\n${TABLE_HEADER}\n${tableOf(framed, (flight) => `scores ${metres(flight.height)} m`)}`);
-    assert.deepEqual(framedViolations(framed), []);
-    assert.ok(Math.max(...cost) >= FRAME_COSTS_BY, `no best run scores ${FRAME_COSTS_BY} m less with the frame: ${cost.map((gap) => metres(gap)).join(", ")}`);
+    expect(framedViolations(framed)).toHaveLength(0);
+    expect(Math.max(...cost), `no best run scores ${FRAME_COSTS_BY} m less with the frame: ${cost.map((gap) => metres(gap)).join(", ")}`).toBeGreaterThanOrEqual(FRAME_COSTS_BY);
   });
 });
 
@@ -532,17 +532,17 @@ describe("given Ring Fling with THROW_BOOST.ringFling on the real ground, car an
   it("when each of the 7 classes' best and mid runs is thrown, then the standard classes' full-throttle runs come down in the mid cups and the backstop holds the rest", async (t) => {
     const rows = await measure("ringFling", THROW_BOOST.ringFling, SHIPPED_THROWS);
     t.annotate(`THROW_BOOST.ringFling ${JSON.stringify(THROW_BOOST.ringFling)}\n${TABLE_HEADER}\n${tableOf(rows, (flight) => `cup ${ringScore(flight.restDistance, flight.restLateral)}`)}`);
-    assert.deepEqual(ringFlingViolations(rows), []);
+    expect(ringFlingViolations(rows)).toHaveLength(0);
   });
 
   it("when the boost is the identity (the throw as the sim has it), then every full-throttle run is carried far past the board", async () => {
     const violations = ringFlingViolations(await measure("ringFling", NO_RELEASE_SCALE, BEST_ONCE));
-    assert.ok(violations.some((violation) => violation.includes("outside the mid cups")), violations.join("; "));
+    expect(violations.some((violation) => violation.includes("outside the mid cups")), violations.join("; ")).toBeTruthy();
   });
 
   it(`when forward is ${FORWARD_MUTATION_FACTOR} times the chosen, then the standard classes' full-throttle runs overshoot the mid cups`, async () => {
     const violations = ringFlingViolations(await measure("ringFling", scaled(THROW_BOOST.ringFling, { forward: FORWARD_MUTATION_FACTOR }), BEST_ONCE));
-    assert.ok(violations.some((violation) => violation.includes("outside the mid cups")), violations.join("; "));
+    expect(violations.some((violation) => violation.includes("outside the mid cups")), violations.join("; ")).toBeTruthy();
   });
 
   it("when the sedan's best run is slowed from full throttle down to 60% of its speed, then the 10, 20 and 30 cups each hold a rest at some speed", async (t) => {
@@ -558,7 +558,7 @@ describe("given Ring Fling with THROW_BOOST.ringFling on the real ground, car an
       if (cup > 0) cupsHeld.add(cup);
     }
     t.annotate(`lip speed share -> where the sedan's dummy lands:\n${sweepRows.join("\n")}`);
-    for (const cup of [10, 20, 30]) assert.ok(cupsHeld.has(cup), `no run in the sweep rested in the ${cup} cup: ${[...cupsHeld].join(", ")}`);
+    for (const cup of [10, 20, 30]) expect(cupsHeld.has(cup), `no run in the sweep rested in the ${cup} cup: ${[...cupsHeld].join(", ")}`).toBeTruthy();
   });
 });
 
@@ -600,30 +600,30 @@ describe("given the long jump's timed bail with THROW_BOOST.longJump on the real
     const perfect = byOffset.get(0)!;
     const none = byOffset.get(null)!;
     t.annotate(`THROW_BOOST.longJump ${JSON.stringify(THROW_BOOST.longJump)}; bail window ${BAIL_WINDOW_SECONDS} s, perfect within ${BAIL_PERFECT_SECONDS} s\n${bailTable(byOffset)}\nperfect, all runs\n${TABLE_HEADER}\n${tableOf(perfect, (flight) => `sign ${Math.min(LONG_JUMP_LAST_SIGN, Math.floor(flight.restDistance / RANGE.signStep) * RANGE.signStep)} m`)}\nno press, all runs\n${TABLE_HEADER}\n${tableOf(none, (flight) => `sign ${Math.min(LONG_JUMP_LAST_SIGN, Math.floor(flight.restDistance / RANGE.signStep) * RANGE.signStep)} m`)}`);
-    assert.deepEqual(perfectBailViolations(perfect), [], "the perfect bail");
-    assert.deepEqual(midRunViolations(perfect), [], "the mid runs");
-    assert.deepEqual(noBailViolations(none), [], "no bail");
-    assert.deepEqual(fadeViolations(byOffset), [], "the fade");
+    expect(perfectBailViolations(perfect), "the perfect bail").toHaveLength(0);
+    expect(midRunViolations(perfect), "the mid runs").toHaveLength(0);
+    expect(noBailViolations(none), "no bail").toHaveLength(0);
+    expect(fadeViolations(byOffset), "the fade").toHaveLength(0);
   });
 
   it("when the boost is the identity (the throw as the sim has it), then the perfect bar breaks: the best run is far short of the far end", async () => {
     const violations = perfectBailViolations(await measure("longJump", NO_RELEASE_SCALE, BEST_ONCE));
-    assert.ok(violations.some((violation) => violation.includes("best run lands") && violation.includes("short of")), violations.join("; "));
+    expect(violations.some((violation) => violation.includes("best run lands") && violation.includes("short of")), violations.join("; ")).toBeTruthy();
   });
 
   it(`when the perfect elevation is ${LONG_JUMP_ELEVATION_CUT_DEGREES} degrees instead of ${BAIL_ELEVATION_DEGREES.perfect}, then the perfect run falls short of the far end`, async () => {
     const cut = { ...releaseAtOffset(0), elevation: LONG_JUMP_ELEVATION_CUT_DEGREES * (Math.PI / 180) };
     const violations = perfectBailViolations(await measure("longJump", cut, BEST_ONCE));
-    assert.ok(violations.some((violation) => violation.includes("best run lands") && violation.includes("short of")), violations.join("; "));
+    expect(violations.some((violation) => violation.includes("best run lands") && violation.includes("short of")), violations.join("; ")).toBeTruthy();
   });
 
   it(`when forward is ${LONG_JUMP_FORWARD_BOOST} times the chosen, then the perfect run is carried past the far end's band`, async () => {
     const violations = perfectBailViolations(await measure("longJump", scaled(releaseAtOffset(0), { forward: LONG_JUMP_FORWARD_BOOST }), BEST_ONCE));
-    assert.ok(violations.some((violation) => violation.includes("best run lands") && violation.includes("past")), violations.join("; "));
+    expect(violations.some((violation) => violation.includes("best run lands") && violation.includes("past")), violations.join("; ")).toBeTruthy();
   });
 
   it("when no bail is pressed but the elevation is the perfect one, then the no-bail bar breaks: the run lands far past mid-field", async () => {
     const violations = noBailViolations(await measure("longJump", bailRelease(THROW_BOOST.longJump, 1), BEST_ONCE));
-    assert.ok(violations.some((violation) => violation.includes("past")), violations.join("; "));
+    expect(violations.some((violation) => violation.includes("past")), violations.join("; ")).toBeTruthy();
   });
 });

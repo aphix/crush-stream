@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Ground } from "./ground.ts";
 import { activate, BAKE, C_ARG, C_H, C_NY, C_OWNER, HIT_SIZE, KNOCK, pointContact, PQ_SIZE, PQ_X, PQ_Y, PQ_Z } from "./surfaces.ts";
 
@@ -57,18 +56,18 @@ function sweep(g: Ground): { far: number; whole: number; byProp: number } {
             const live = ask(q, travel2);
             BAKE.on = true;
             const baked = ask(q, travel2);
-            assert.equal(live.far, false, "the layered path never answers far");
+            expect(live.far, "the layered path never answers far").toBe(false);
             if (live.out[C_H]! >= PROP_TOP - 1e-9) byProp++;
             if (!baked.far) {
               whole++;
-              for (let k = 0; k < HIT_SIZE; k++) assert.ok(Object.is(baked.out[k], live.out[k]), `entry ${k} at ${x}, ${z}, +${dy}: baked ${baked.out[k]} live ${live.out[k]}`);
+              for (let k = 0; k < HIT_SIZE; k++) expect(Object.is(baked.out[k], live.out[k]), `entry ${k} at ${x}, ${z}, +${dy}: baked ${baked.out[k]} live ${live.out[k]}`).toBeTruthy();
               continue;
             }
             far++;
-            for (const k of [C_H, C_OWNER, C_ARG]) assert.ok(Object.is(baked.out[k], live.out[k]), `far entry ${k} at ${x}, ${z}, +${dy}`);
+            for (const k of [C_H, C_OWNER, C_ARG]) expect(Object.is(baked.out[k], live.out[k]), `far entry ${k} at ${x}, ${z}, +${dy}`).toBeTruthy();
             const height = live.out[C_H]! - q[PQ_Y]!;
-            assert.ok(height < -GAP, "a far point is more than the gap above");
-            if (travel2 >= 0) assert.ok(Math.sqrt(travel2) < -height * live.out[C_NY]!, `travel ${Math.sqrt(travel2)} reaches height ${-height} along the normal ${live.out[C_NY]}`);
+            expect(height, "a far point is more than the gap above").toBeLessThan(-GAP);
+            if (travel2 >= 0) expect(Math.sqrt(travel2), `travel ${Math.sqrt(travel2)} reaches height ${-height} along the normal ${live.out[C_NY]}`).toBeLessThan(-height * live.out[C_NY]!);
           }
         }
       }
@@ -83,8 +82,8 @@ function sweep(g: Ground): { far: number; whole: number; byProp: number } {
 describe("given a sloped grid with a tying prism, a knockable prop, a movable prop, filler prisms and a NaN node", () => {
   it("when every point of the lattice is asked with the bake on and off, then each answer is the same bits, and both far and whole answers occur", () => {
     const { far, whole, byProp } = sweep(ground().g);
-    assert.ok(far > 1000 && whole > 1000, `both kinds of answer are exercised (far ${far}, whole ${whole})`);
-    assert.ok(byProp > 100, `points are answered by an ordinary prop's top (${byProp})`);
+    expect(far > 1000 && whole > 1000, `both kinds of answer are exercised (far ${far}, whole ${whole})`).toBeTruthy();
+    expect(byProp, `points are answered by an ordinary prop's top (${byProp})`).toBeGreaterThan(100);
   });
 
   it("when a knockable prop is in the cell, then a point over it is answered the grid's, as a knockable prop never answers a point query, baked and live alike", () => {
@@ -99,8 +98,8 @@ describe("given a sloped grid with a tying prism, a knockable prop, a movable pr
       const live = ask(q, NaN);
       BAKE.on = true;
       const baked = ask(q, NaN);
-      assert.ok(Object.is(baked.out[C_H], live.out[C_H]), "baked and live agree");
-      assert.equal(baked.out[C_H], g.heightAt(10, 10), "the grid's height, not the prop's top");
+      expect(Object.is(baked.out[C_H], live.out[C_H]), "baked and live agree").toBeTruthy();
+      expect(baked.out[C_H], "the grid's height, not the prop's top").toBe(g.heightAt(10, 10));
     } finally {
       BAKE.on = true;
       activate(null);
@@ -113,17 +112,17 @@ describe("given a sloped grid with a tying prism, a knockable prop, a movable pr
     g.disable(ordinary);
     g.movePrism(mover, 8, 20, 0, 0, 0);
     const { whole, byProp } = sweep(g);
-    assert.ok(whole > 1000 && byProp > 100, `the moved prop is among the answers (whole ${whole}, by a prop ${byProp})`);
+    expect(whole > 1000 && byProp > 100, `the moved prop is among the answers (whole ${whole}, by a prop ${byProp})`).toBeTruthy();
     activate(g);
     try {
       const q = new Float64Array(PQ_SIZE);
       q[PQ_X] = 8;
       q[PQ_Z] = 20;
       q[PQ_Y] = 5;
-      assert.equal(ask(q, NaN).out[C_H], PROP_TOP, "a point over the moved prop's new place is answered its top");
+      expect(ask(q, NaN).out[C_H], "a point over the moved prop's new place is answered its top").toBe(PROP_TOP);
       q[PQ_X] = 12;
       q[PQ_Z] = 4;
-      assert.notEqual(ask(q, NaN).out[C_H], PROP_TOP, "and none over the old place");
+      expect(ask(q, NaN).out[C_H], "and none over the old place").not.toBe(PROP_TOP);
     } finally {
       activate(null);
     }

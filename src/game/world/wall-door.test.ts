@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { setGround } from "./ground.ts";
 import { solidsOf, type PropCollider } from "./placements.ts";
@@ -127,9 +126,9 @@ describe("given a sedan with its left door hanging open, driving past the end of
       const wall = endOfWall();
       const { car, deepest } = driveBy(testCase.jam, testCase.speed, wall, { walls: [wall], props: [] });
       const note = `the door was drawn up to ${deepest.toFixed(3)} m into the wall, ${car.partOff("doorL") ? "and tore off" : `and ended open at ${car.doorHinge(-1).theta.toFixed(2)} rad`}`;
-      assert.ok(car.group.position.z >= WALL.cornerAhead + 3, `the car drove past the wall's end (it stopped ${car.group.position.z.toFixed(1)} m along)`);
-      assert.ok(deepest <= DOOR_IN, note);
-      assert.equal(car.partOff("doorL"), testCase.torn, note);
+      expect(car.group.position.z, `the car drove past the wall's end (it stopped ${car.group.position.z.toFixed(1)} m along)`).toBeGreaterThanOrEqual(WALL.cornerAhead + 3);
+      expect(deepest, note).toBeLessThanOrEqual(DOOR_IN);
+      expect(car.partOff("doorL"), note).toBe(testCase.torn);
     });
   }
 });
@@ -141,9 +140,9 @@ describe("given the same open door passing a wall piece, and passing a placed so
       const prop: PropCollider = { ...piece, prefab: "stucco" };
       const againstWall = driveBy(testCase.jam, testCase.speed, piece, { walls: [piece], props: [] });
       const againstProp = driveBy(testCase.jam, testCase.speed, prop, { walls: [], props: [prop] });
-      assert.equal(againstProp.car.partOff("doorL"), againstWall.car.partOff("doorL"), "the door was off against one and on against the other");
+      expect(againstProp.car.partOff("doorL"), "the door was off against one and on against the other").toBe(againstWall.car.partOff("doorL"));
       assertSameDigest({ ...againstProp.car.doorHinge(-1) }, { ...againstWall.car.doorHinge(-1) }, "the door's hinge");
-      assert.equal(againstProp.deepest, againstWall.deepest, "the door was drawn to different depths");
+      expect(againstProp.deepest, "the door was drawn to different depths").toBe(againstWall.deepest);
       assertSameDigest(againstProp.car.snapshot(), againstWall.car.snapshot(), "the car's state");
     });
   }
@@ -171,8 +170,8 @@ describe("given a parked sedan with its left door swinging free at its stop, and
     const post: PropCollider = { index: 0, prefab: "lamp", body: "solid", x: tip.x, z: tip.z, yaw: 0, kind: "circle", r: POST_RADIUS, hx: POST_RADIUS, hz: POST_RADIUS, mass: 0, base: -1, top: 3, ends: 3 };
     propContact(car, 0, solidsOf([], [post]), new Uint8Array(0), NO_HITS, FRAME);
     const shut = doorTip(car, -1);
-    assert.ok(car.doorAngle(-1) < open, `the door stayed open at ${car.doorAngle(-1).toFixed(2)} rad`);
-    assert.ok(Math.hypot(shut.x - post.x, shut.z - post.z) >= POST_RADIUS, `the door's tip is ${Math.hypot(shut.x - post.x, shut.z - post.z).toFixed(3)} m from the post's middle, inside its ${POST_RADIUS} m radius`);
-    assert.ok(!car.partOff("doorL"), "the door tore off");
+    expect(car.doorAngle(-1), `the door stayed open at ${car.doorAngle(-1).toFixed(2)} rad`).toBeLessThan(open);
+    expect(Math.hypot(shut.x - post.x, shut.z - post.z), `the door's tip is ${Math.hypot(shut.x - post.x, shut.z - post.z).toFixed(3)} m from the post's middle, inside its ${POST_RADIUS} m radius`).toBeGreaterThanOrEqual(POST_RADIUS);
+    expect(!car.partOff("doorL"), "the door tore off").toBe(true);
   });
 });

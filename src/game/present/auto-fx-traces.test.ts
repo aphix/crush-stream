@@ -1,8 +1,9 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
+import { expectMoves } from "./auto-fx-moves.test-util.ts";
 import { readFileSync } from "node:fs";
 import type { FxTier } from "./engine-post.ts";
 import { AutoFx } from "./auto-fx.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * Recorded frames (`auto-fx-traces.json`, from the bench page's own measurements on a desktop and on a 4x-throttled phone view): per
@@ -59,7 +60,7 @@ describe("given recorded frames of a race that opens on a burst of load (the fir
   for (const testCase of raceStartCases) {
     it(testCase.it, () => {
       const moves = replay(new AutoFx(true, true), [{ trace: testCase.trace, seconds: testCase.seconds }], { timer: testCase.timer, race: true });
-      assert.equal(moves.join(" "), testCase.expected.join(" "));
+      expectMoves(moves, testCase.expected, testCase.trace);
     });
   }
 });
@@ -67,19 +68,19 @@ describe("given recorded frames of a race that opens on a burst of load (the fir
 describe("given recorded frames of a phone view whose main thread alone takes 20 ms a frame (4x CPU throttle)", () => {
   it("when it runs a race with a capable-desktop policy, then it never lifts above minimal, however long, because there is no room", () => {
     const moves = replay(new AutoFx(true, true), [{ trace: "overloaded-phone-4x-60hz", seconds: 90 }], { timer: true, race: true });
-    assert.deepEqual(moves, []);
+    expect(moves).toHaveLength(0);
   });
 
   it("when it is on high after a calm start and the load then arrives, then it steps down to low and to minimal and stays there", () => {
     const moves = replay(new AutoFx(true, true), [{ trace: "calm-desktop-60hz", seconds: 6 }, { trace: "overloaded-phone-4x-60hz", seconds: 30 }], { timer: true, race: false });
-    assert.deepEqual(moves, [[2.5, "high"], [9.1, "low"], [13.6, "minimal"]]);
+    expectMoves(moves, [[2.5, "high"], [9.1, "low"], [13.6, "minimal"]], "calm then overloaded");
   });
 });
 
 describe("given a desktop that falls to minimal under a spell of load and then recovers", () => {
   it("when the spell lasts 8 s in the middle of 90 s of calm frames, then it drops during the spell and climbs back to high afterwards, one tier at a time", () => {
     const moves = replay(new AutoFx(true, true), [{ trace: "calm-desktop-60hz", seconds: 20 }, { trace: "overloaded-phone-4x-60hz", seconds: 8 }, { trace: "calm-desktop-60hz", seconds: 90 }], { timer: true, race: false });
-    assert.deepEqual(moves, [[2.5, "high"], [23.1, "low"], [27.6, "minimal"], [49.1, "low"], [58.6, "high"]]);
+    expectMoves(moves, [[2.5, "high"], [23.1, "low"], [27.6, "minimal"], [49.1, "low"], [58.6, "high"]], "spell of load in calm frames");
   });
 });
 
@@ -89,6 +90,6 @@ describe("given the automatic tier on a desktop that holds high for minutes", ()
     const asked = new Set<FxTier>();
     for (const m of replay(fx, [{ trace: "calm-desktop-60hz", seconds: 60 }], { timer: true, race: false })) asked.add(m[1]);
     for (let r = 0; r < 3; r++) for (const m of replay(fx, [{ trace: "calm-desktop-60hz", seconds: 60 }], { timer: true, race: true })) asked.add(m[1]);
-    assert.deepEqual([...asked].sort(), ["high"]);
+    expect(firstMismatch([...asked].sort(), ["high"])).toBeUndefined();
   });
 });

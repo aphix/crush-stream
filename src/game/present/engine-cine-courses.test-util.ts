@@ -1,5 +1,4 @@
-import { describe, it, type TestContext } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it, type TestContext } from "vitest";
 import * as THREE from "three";
 import { placeProps } from "../world/placements.ts";
 import { parseTrack } from "../world/track-schema.ts";
@@ -110,15 +109,15 @@ function wallCensus(t: TestContext, track: Track, sight: Sight, all: readonly Sp
   }
   t.annotate(`${track.id}: ${spots} wall spots, ${blindAsHit} blind on the hit's own axis, ${blind.length} left a cut with no eye after the turn, ${lost.length} of ${eyes} eyes lose room or sight during their cut`);
   if (spots === 0) return;
-  assert.ok(blindAsHit > 0, "the fixture puts no eye behind a wall: it tests nothing");
+  expect(blindAsHit, "the fixture puts no eye behind a wall: it tests nothing").toBeGreaterThan(0);
   // A cut with no usable eye (`CLEAR.radius` m of room and sight of the hit, at the cut's start, middle and end) is left to the chase / reel camera (`direct`),
   // never filmed from inside a wall's margin. Tight stunt walls leave the most: 55/272 (20%); rally 14/186 (8%); oval and city none.
   const most = track.id === "stunt" ? 0.22 : 0.08;
-  assert.ok(blind.length <= spots * most, `${track.id}: ${blind.length}/${spots} wall hits leave a crash-cam cut with no usable eye: ${blind.slice(0, 5).join(", ")}`);
+  expect(blind.length, `${track.id}: ${blind.length}/${spots} wall hits leave a crash-cam cut with no usable eye: ${blind.slice(0, 5).join(", ")}`).toBeLessThanOrEqual(spots * most);
   // The eye pans (long lens), creeps (bumper) and turns (crane) through its cut: one the pick calls usable keeps its room and
   // sight all the way. A middle-only pick lost them for 36 of 549 eyes on rally, 75 of 432 on city and 61 of 761 on stunt (0 on oval);
   // a sliver of a post beside the car between two checked times (stunt: 1 of 730) is all that is left.
-  assert.ok(lost.length <= eyes * 0.002, `${track.id}: ${lost.length}/${eyes} crash-cam eyes lose their room or sight during their cut: ${lost.slice(0, 5).join(", ")}`);
+  expect(lost.length, `${track.id}: ${lost.length}/${eyes} crash-cam eyes lose their room or sight during their cut: ${lost.slice(0, 5).join(", ")}`).toBeLessThanOrEqual(eyes * 0.002);
 }
 
 function queryIndependence(track: Track, sight: Sight, all: readonly Spot[]): void {
@@ -138,7 +137,7 @@ function queryIndependence(track: Track, sight: Sight, all: readonly Spot[]): vo
       if (answers.some((a) => a !== answers[0])) differ.push(`s ${s} side ${side} t ${time}`);
     }
   }
-  assert.deepEqual(differ, [], `${track.id}: eyes whose answer depends on the previous query`);
+  expect(differ, `${track.id}: eyes whose answer depends on the previous query`).toHaveLength(0);
 }
 
 function slicedPick(track: Track, sight: Sight, all: readonly Spot[]): void {
@@ -157,11 +156,11 @@ function slicedPick(track: Track, sight: Sight, all: readonly Spot[]): void {
     runs += mine;
     longest = Math.max(longest, mine);
     assertSameNumbers(slicedReach, whole.reach, `${track.id} s ${spot.s} side ${spot.side}: reach`);
-    assert.ok(slicedAxis.distanceTo(whole.n) < 1e-9, `${track.id} s ${spot.s} side ${spot.side}: axis`);
+    expect(slicedAxis.distanceTo(whole.n), `${track.id} s ${spot.s} side ${spot.side}: axis`).toBeLessThan(1e-9);
   }
   // 1000 calls a second (`PICK_RATE`) must finish inside the lead-in before the first cut (`CUTS[0]` 1.3 s, less 0.05 s).
-  assert.ok(longest * 5 <= 1000 * (CUTS[0] - 0.05), `${track.id}: the longest pick needs ${longest * 5}+ calls`);
-  assert.ok(all.length === 0 || runs > 0, "no pick took more than one run: the slicing is untested");
+  expect(longest * 5, `${track.id}: the longest pick needs ${longest * 5}+ calls`).toBeLessThanOrEqual(1000 * (CUTS[0] - 0.05));
+  expect(all.length === 0 || runs > 0, "no pick took more than one run: the slicing is untested").toBeTruthy();
 }
 
 export function courseCensus(tracks: typeof TRACKS): void {

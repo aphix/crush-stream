@@ -1,9 +1,9 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { buildCar } from "./drawn-body.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** How long (s) the dropped car is followed: it lands, bounces and settles on its roof well within it. */
 const DROP_S = 6;
@@ -33,6 +33,6 @@ describe("given a sedan dropped onto its roof from 2 m", () => {
     const states = car.glassPanes.map((g) => `${g.name} ${g.state}, peak ${(peak.get(g.name) ?? 0).toFixed(4)} m`).join("; ");
     t.annotate(states);
     const shattered = car.glassPanes.filter((g) => g.state === "shattered").map((g) => g.name).sort();
-    assert.deepEqual(shattered, ["doorL", "doorR", "quarterL", "quarterR", "windshield"], states);
+    expect(firstMismatch(shattered, ["doorL", "doorR", "quarterL", "quarterR", "windshield"]), states).toBeUndefined();
   });
 });

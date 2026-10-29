@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { HEAD, LampLights, POOL_HEAD } from "./lamp-lights.ts";
@@ -53,16 +52,16 @@ describe("given 4 cars in a row and a camera orbiting them slowly at night", () 
       cam.lookAt(0, 0.5, 0);
       cam.updateMatrixWorld(true);
       lights.update(cars, cam, null, f * DT, undefined, DT);
-      assert.equal(lightCount(scene), lit, `the light count changed at frame ${f}`);
-      assert.equal(lights.spots.length + lights.tailSpots.length, 8);
+      expect(lightCount(scene), `the light count changed at frame ${f}`).toBe(lit);
+      expect(lights.spots.length + lights.tailSpots.length).toBe(8);
       for (let c = 0; c < 4; c++) {
         for (const i of HEADS) {
           const s = shares(lights, cars[c]!, i);
           const k = c * 2 + i;
-          assert.ok(Math.abs(s.real + s.painted - 1) < 0.02, `car ${c} head ${i} shows ${(s.real + s.painted).toFixed(3)} of a pool at frame ${f}`);
+          expect(Math.abs(s.real + s.painted - 1), `car ${c} head ${i} shows ${(s.real + s.painted).toFixed(3)} of a pool at frame ${f}`).toBeLessThan(0.02);
           if (f > 0) {
-            assert.ok(Math.abs(s.real - prev[k]!.real) <= STEP, `car ${c} head ${i} real light jumped ${prev[k]!.real.toFixed(2)} -> ${s.real.toFixed(2)} at frame ${f}`);
-            assert.ok(Math.abs(s.painted - prev[k]!.painted) <= STEP, `car ${c} head ${i} decal jumped ${prev[k]!.painted.toFixed(2)} -> ${s.painted.toFixed(2)} at frame ${f}`);
+            expect(Math.abs(s.real - prev[k]!.real), `car ${c} head ${i} real light jumped ${prev[k]!.real.toFixed(2)} -> ${s.real.toFixed(2)} at frame ${f}`).toBeLessThanOrEqual(STEP);
+            expect(Math.abs(s.painted - prev[k]!.painted), `car ${c} head ${i} decal jumped ${prev[k]!.painted.toFixed(2)} -> ${s.painted.toFixed(2)} at frame ${f}`).toBeLessThanOrEqual(STEP);
           }
           prev[k] = s;
           lo = Math.min(lo, s.real);
@@ -70,7 +69,7 @@ describe("given 4 cars in a row and a camera orbiting them slowly at night", () 
         }
       }
     }
-    assert.ok(lo < 0.05 && hi > 0.95, `the orbit never took a lamp across the whole scale (${lo.toFixed(2)}..${hi.toFixed(2)})`);
+    expect(lo < 0.05 && hi > 0.95, `the orbit never took a lamp across the whole scale (${lo.toFixed(2)}..${hi.toFixed(2)})`).toBeTruthy();
   });
 });
 
@@ -91,16 +90,16 @@ describe("given a fixed camera and one car driving across the frame", () => {
         car.group.updateMatrixWorld(true);
         lights.update([car], cam, null, f * DT, undefined, DT);
         const s = shares(lights, car, 0);
-        assert.ok(Math.abs(s.real + s.painted - 1) < 0.02, `a pool of ${(s.real + s.painted).toFixed(3)} at frame ${f}`);
+        expect(Math.abs(s.real + s.painted - 1), `a pool of ${(s.real + s.painted).toFixed(3)} at frame ${f}`).toBeLessThan(0.02);
         real.push(s.real);
       }
       const peak = real.indexOf(Math.max(...real));
-      assert.ok(real[peak]! > 0.95, `the lamp only reached ${real[peak]!.toFixed(2)} real in the middle`);
-      assert.ok(real[0]! < 0.01 && real[400]! < 0.01, "the lamp was real at the edge of the frame");
+      expect(real[peak]!, `the lamp only reached ${real[peak]!.toFixed(2)} real in the middle`).toBeGreaterThan(0.95);
+      expect(real[0]! < 0.01 && real[400]! < 0.01, "the lamp was real at the edge of the frame").toBeTruthy();
       for (let f = 1; f <= 400; f++) {
-        assert.ok(Math.abs(real[f]! - real[f - 1]!) <= STEP, `real light jumped ${real[f - 1]!.toFixed(2)} -> ${real[f]!.toFixed(2)} at frame ${f}`);
-        if (f <= peak) assert.ok(real[f]! >= real[f - 1]! - 1e-6, `real light dipped on the way in at frame ${f}`);
-        else assert.ok(real[f]! <= real[f - 1]! + 1e-6, `real light rose again on the way out at frame ${f}`);
+        expect(Math.abs(real[f]! - real[f - 1]!), `real light jumped ${real[f - 1]!.toFixed(2)} -> ${real[f]!.toFixed(2)} at frame ${f}`).toBeLessThanOrEqual(STEP);
+        if (f <= peak) expect(real[f]!, `real light dipped on the way in at frame ${f}`).toBeGreaterThanOrEqual(real[f - 1]! - 1e-6);
+        else expect(real[f]!, `real light rose again on the way out at frame ${f}`).toBeLessThanOrEqual(real[f - 1]! + 1e-6);
       }
     });
   }

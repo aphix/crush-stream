@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { CRASH } from "../deform/physics-util.ts";
 import { DEG, FRAME, frame, makeCar as probeCar, worldOf } from "./ground-probe.test-util.ts";
 import { makeCar, makeWorld, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -89,8 +88,8 @@ describe("given the wreck of a 64 km/h, 40 % overlap wall hit (a popped front hu
       }
       const model50 = (0.5 * l0) / tau;
       const model95 = (0.95 * l0) / tau;
-      assert.ok(t50 >= 0.7 * model50 - FRAME && t50 <= 1.3 * model50 + FRAME, `L halved at ${t50.toFixed(2)} s, model ${model50.toFixed(2)} s (τ ${tau.toFixed(0)} N·m)`);
-      assert.ok(t95 >= 0.5 * model95 - FRAME && t95 <= 1.6 * model95 + FRAME, `L gone at ${t95.toFixed(2)} s, model ${model95.toFixed(2)} s (τ ${tau.toFixed(0)} N·m)`);
+      expect(t50 >= 0.7 * model50 - FRAME && t50 <= 1.3 * model50 + FRAME, `L halved at ${t50.toFixed(2)} s, model ${model50.toFixed(2)} s (τ ${tau.toFixed(0)} N·m)`).toBeTruthy();
+      expect(t95 >= 0.5 * model95 - FRAME && t95 <= 1.6 * model95 + FRAME, `L gone at ${t95.toFixed(2)} s, model ${model95.toFixed(2)} s (τ ${tau.toFixed(0)} N·m)`).toBeTruthy();
     });
   }
 
@@ -102,8 +101,8 @@ describe("given the wreck of a 64 km/h, 40 % overlap wall hit (a popped front hu
     const l0 = momentum(car);
     const w = makeWorld([car], false, false);
     for (let f = 0; f < 27; f++) tickWorld(w, FRAME);
-    assert.ok(car.deform.quietTime() > 0.4, `quiet ${car.deform.quietTime().toFixed(2)} s: the setup no longer passes the quiet rule`);
-    assert.ok(Math.abs(momentum(car)) > 0.2 * l0, `L ${momentum(car).toFixed(0)} of ${l0.toFixed(0)} after the quiet rule`);
+    expect(car.deform.quietTime(), `quiet ${car.deform.quietTime().toFixed(2)} s: the setup no longer passes the quiet rule`).toBeGreaterThan(0.4);
+    expect(Math.abs(momentum(car)), `L ${momentum(car).toFixed(0)} of ${l0.toFixed(0)} after the quiet rule`).toBeGreaterThan(0.2 * l0);
   });
 });
 
@@ -135,7 +134,7 @@ describe("given a sedan wreck, spun at 6 rad/s after a hit, on flat ground and o
       const fw = car.forward;
       car.applyImpact(car.group.position.clone().addScaledVector(fw, 2).setY(car.group.position.y + 0.5), fw.clone().negate(), 20, 12);
       for (let n = 0; n < 60; n++) frame(w, null, st);
-      assert.ok(car.crashed && car.deform.massActive, "the hit did not make a wreck");
+      expect(car.crashed && car.deform.massActive, "the hit did not make a wreck").toBeTruthy();
       car.deform.drivetrainAlive = false;
       spinUp(car, 6);
       const l0 = momentum(car);
@@ -146,8 +145,8 @@ describe("given a sedan wreck, spun at 6 rad/s after a hit, on flat ground and o
       const creep = car.group.position.distanceTo(at);
       const l = momentum(car);
       car.dispose();
-      assert.ok(Math.abs(l) < 0.01 * l0, `L ${l.toFixed(0)} of ${l0.toFixed(0)} after 5 s`);
-      assert.ok(creep < 0.01, `crept ${(creep * 100).toFixed(1)} cm in the last second`);
+      expect(Math.abs(l), `L ${l.toFixed(0)} of ${l0.toFixed(0)} after 5 s`).toBeLessThan(0.01 * l0);
+      expect(creep, `crept ${(creep * 100).toFixed(1)} cm in the last second`).toBeLessThan(0.01);
     });
   }
 });

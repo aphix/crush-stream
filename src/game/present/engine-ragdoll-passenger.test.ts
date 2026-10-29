@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import type { RigidBody } from "@dimforge/rapier3d-simd";
@@ -55,19 +54,19 @@ function systemWithWorker() {
 describe("given the dummies' world in the ragdoll worker (race courses) and a driver thrown from his car", () => {
   it("when his passenger is thrown with him, then the worker is sent a second dummy beside the driver at the driver's own velocity, dressed as the passenger", () => {
     const { cars, ejections } = headOnEjections();
-    assert.ok(ejections.length >= 1, "a driver was thrown in the head-on");
+    expect(ejections.length, "a driver was thrown in the head-on").toBeGreaterThanOrEqual(1);
     const { ragdolls, sent } = systemWithWorker();
     const e = ejections[0]!;
     ragdolls.launch(e, cars);
     ragdolls.throwPassenger(e.car, PASSENGER);
-    assert.equal(sent.length, 2, "the driver's and his passenger's throws reached the worker");
+    expect(sent.length, "the driver's and his passenger's throws reached the worker").toBe(2);
     const driver = sent[0]!;
     const passenger = sent[1]!;
     const apart = driver.t.p.distanceTo(passenger.t.p);
-    assert.ok(apart > 0.5 && apart < 1, `the passenger starts ${apart.toFixed(2)} m from the driver`);
-    assert.ok(driver.t.v.distanceTo(passenger.t.v) < 1e-9, "he leaves at the driver's velocity");
-    assert.equal(passenger.purse, false, "no purse for him");
-    assert.equal(ragdolls["dressing"].get(FIRST_WORKER_ID + 1)?.look.portly, true, "the worker's slot for him is dressed as the passenger");
+    expect(apart > 0.5 && apart < 1, `the passenger starts ${apart.toFixed(2)} m from the driver`).toBeTruthy();
+    expect(driver.t.v.distanceTo(passenger.t.v), "he leaves at the driver's velocity").toBeLessThan(1e-9);
+    expect(passenger.purse, "no purse for him").toBe(false);
+    expect(ragdolls["dressing"].get(FIRST_WORKER_ID + 1)?.look.portly, "the worker's slot for him is dressed as the passenger").toBe(true);
   });
 
   it("when a passenger is thrown with a car whose driver was not thrown, then nothing is sent", () => {
@@ -76,22 +75,22 @@ describe("given the dummies' world in the ragdoll worker (race courses) and a dr
     const e = ejections[0]!;
     ragdolls.launch(e, cars);
     ragdolls.throwPassenger(1 - e.car, PASSENGER);
-    assert.equal(sent.length, 1, "only the driver's own throw");
+    expect(sent.length, "only the driver's own throw").toBe(1);
   });
 
   it("when the other car's driver is thrown after his in the same frame, then his passenger is still thrown with him, beside him", () => {
     const { cars, ejections } = headOnEjections();
-    assert.ok(ejections.length >= 2, "both drivers are thrown in the head-on");
+    expect(ejections.length, "both drivers are thrown in the head-on").toBeGreaterThanOrEqual(2);
     const { ragdolls, sent } = systemWithWorker();
     for (const e of ejections) ragdolls.launch(e, cars);
     const first = ejections[0]!;
     ragdolls.throwPassenger(first.car, PASSENGER);
-    assert.equal(sent.length, ejections.length + 1, "every driver's throw and the passenger's reached the worker");
+    expect(sent.length, "every driver's throw and the passenger's reached the worker").toBe(ejections.length + 1);
     const driver = sent[0]!;
     const passenger = sent[ejections.length]!;
     const apart = driver.t.p.distanceTo(passenger.t.p);
-    assert.ok(apart > 0.5 && apart < 1, `the passenger starts ${apart.toFixed(2)} m from his own driver, not the later one`);
-    assert.ok(driver.t.v.distanceTo(passenger.t.v) < 1e-9, "he leaves at his driver's velocity");
+    expect(apart > 0.5 && apart < 1, `the passenger starts ${apart.toFixed(2)} m from his own driver, not the later one`).toBeTruthy();
+    expect(driver.t.v.distanceTo(passenger.t.v), "he leaves at his driver's velocity").toBeLessThan(1e-9);
   });
 });
 
@@ -104,11 +103,11 @@ describe("given the dummies' world on this thread (the fallback, and every scene
     ragdolls.throwPassenger(e.car, PASSENGER);
     const dolls: { live: boolean; bodies: { translation(): THREE.Vector3Like }[] }[] = ragdolls["dolls"];
     const out = dolls.filter((d) => d.live);
-    assert.equal(out.length, 2, "the driver and his passenger");
+    expect(out.length, "the driver and his passenger").toBe(2);
     const a = out[0]!.bodies[0]!.translation();
     const b = out[1]!.bodies[0]!.translation();
     const apart = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
-    assert.ok(apart > 0.5 && apart < 1, `the passenger starts ${apart.toFixed(2)} m from the driver`);
+    expect(apart > 0.5 && apart < 1, `the passenger starts ${apart.toFixed(2)} m from the driver`).toBeTruthy();
   });
 });
 
@@ -137,8 +136,8 @@ describe("given two dummies thrown from two cars straight at each other, both in
     const xa = a!.bodies[0]!.translation().x;
     const xb = b!.bodies[0]!.translation().x;
     ragdolls.dispose();
-    assert.ok(deepest < 0.1, `a part sank ${(deepest * 100).toFixed(0)} cm into the other dummy`);
-    assert.ok(xa > -1 && xa < 0 && xb > 0 && xb < 1, `they came down at x ${xa.toFixed(2)} and ${xb.toFixed(2)} m (thrown from ∓${MEET_APART / 2})`);
+    expect(deepest, `a part sank ${(deepest * 100).toFixed(0)} cm into the other dummy`).toBeLessThan(0.1);
+    expect(xa > -1 && xa < 0 && xb > 0 && xb < 1, `they came down at x ${xa.toFixed(2)} and ${xb.toFixed(2)} m (thrown from ∓${MEET_APART / 2})`).toBeTruthy();
   });
 });
 
@@ -158,7 +157,7 @@ describe("given two dummies thrown from one car (a driver and his passenger), bo
     }
     ragdolls.dispose();
     t.annotate(`deepest ${(deepest * 100).toFixed(1)} cm; the second torso got to ${ahead.toFixed(2)} m of the first's`);
-    assert.ok(deepest < 0.1, `a part sank ${(deepest * 100).toFixed(0)} cm into the other dummy`);
-    assert.ok(ahead < 0, `the second torso got ${ahead.toFixed(2)} m past the first's`);
+    expect(deepest, `a part sank ${(deepest * 100).toFixed(0)} cm into the other dummy`).toBeLessThan(0.1);
+    expect(ahead, `the second torso got ${ahead.toFixed(2)} m past the first's`).toBeLessThan(0);
   });
 });

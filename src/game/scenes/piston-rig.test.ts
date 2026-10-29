@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { PISTON, PISTON_IDS, PistonRig, type PistonId } from "./piston-rig.ts";
 import { regionCrushBands } from "../kernel/physics-core.js";
@@ -125,8 +124,8 @@ describe("given the piston rig attached to a parked car (eight impactors, one at
     const rig = new PistonRig(STANDARD);
     rig.attach(car);
     for (const h of rig.heads) {
-      assert.ok(Math.abs(h.skinS - h.face(rig.honey) - PISTON.restGap) < 1e-9, `${h.id} rest gap`);
-      assert.ok(Math.abs(h.pad) < 0.1, `${h.id} particles sit ${f3(h.pad)} m off the paint`);
+      expect(Math.abs(h.skinS - h.face(rig.honey) - PISTON.restGap), `${h.id} rest gap`).toBeLessThan(1e-9);
+      expect(Math.abs(h.pad), `${h.id} particles sit ${f3(h.pad)} m off the paint`).toBeLessThan(0.1);
     }
   });
 
@@ -135,23 +134,23 @@ describe("given the piston rig attached to a parked car (eight impactors, one at
     for (const h of rig.heads) {
       const deg = (Math.atan2(Math.abs(h.nx), Math.abs(h.nz)) * 180) / Math.PI;
       const want = isCorner(h.id) ? 45 : isSide(h.id) ? 90 : 0;
-      assert.ok(Math.abs(deg - want) < 1e-6, `${h.id} at ${deg.toFixed(1)}°`);
+      expect(Math.abs(deg - want), `${h.id} at ${deg.toFixed(1)}°`).toBeLessThan(1e-6);
     }
   });
 
   it("when the front piston fires a soft honeycomb face (hardness 0.5), then the honeycomb crushes by over 5 cm and the car receives half the energy of a rigid shot, within 1 J", () => {
     const soft = shoot("front", { ...STANDARD, hardness: 0.5 });
-    assert.ok(soft.faceSet > 0.05, `honeycomb crushed ${f3(soft.faceSet)} m`);
-    assert.ok(Math.abs(soft.energy - shoot("front").energy * 0.5) < 1, `car energy ${soft.energy.toFixed(0)} J`);
+    expect(soft.faceSet, `honeycomb crushed ${f3(soft.faceSet)} m`).toBeGreaterThan(0.05);
+    expect(Math.abs(soft.energy - shoot("front").energy * 0.5), `car energy ${soft.energy.toFixed(0)} J`).toBeLessThan(1);
   });
 
   it("when the car is held in the rig instead of free to be shoved, then it slides under 0.5 m and under a fifth of the free slide, takes over twice the energy and crushes deeper", () => {
     const held = shoot("front", { ...STANDARD, holdCar: true });
     const free = shoot("front");
-    assert.ok(held.shove < 0.5, `held car slid ${f3(held.shove)} m`);
-    assert.ok(free.shove > held.shove * 5, `free car slid ${f3(free.shove)} m vs held ${f3(held.shove)} m`);
-    assert.ok(held.energy > free.energy * 2, `held ${held.energy.toFixed(0)} J vs free ${free.energy.toFixed(0)} J`);
-    assert.ok(crushOf(held) > crushOf(free), `held crush ${f3(crushOf(held))} vs free ${f3(crushOf(free))}`);
+    expect(held.shove, `held car slid ${f3(held.shove)} m`).toBeLessThan(0.5);
+    expect(free.shove, `free car slid ${f3(free.shove)} m vs held ${f3(held.shove)} m`).toBeGreaterThan(held.shove * 5);
+    expect(held.energy, `held ${held.energy.toFixed(0)} J vs free ${free.energy.toFixed(0)} J`).toBeGreaterThan(free.energy * 2);
+    expect(crushOf(held), `held crush ${f3(crushOf(held))} vs free ${f3(crushOf(free))}`).toBeGreaterThan(crushOf(free));
   });
 });
 
@@ -159,22 +158,22 @@ describe("given a parked car and any one piston firing the standard shot (1500 k
   for (const id of PISTON_IDS) {
     todoRow(`when the ${id} piston fires, then the struck particles go in by the depth expected for that piston (corner bumper at least 0.12 m and the wing behind it neither pushed out nor deeper, doors at least 0.12 m, front and rear even left to right)`, TODO[`${id}:struck`], () => {
       const r = shoot(id);
-      assert.ok(r.contacted, "never touched");
+      expect(r.contacted, "never touched").toBeTruthy();
       const got = r.struck.map((s) => `${s.name}=${f3(s.inward)}`).join(" ");
       if (isCorner(id)) {
         // A flat face crushes a point d behind the struck tip by max(0, travel − d); the wing sits 0.44 m back along the hit, past
         // this shot's travel, so it is neither pushed out (beyond the fit frame's LOCAL_TOL) nor in deeper. Rear corners have no wing.
         const [bumper, wing] = r.struck;
-        assert.ok(bumper!.inward >= 0.12, `${got}: corner bumper < 0.12 m`);
-        if (wing) assert.ok(wing.inward > -LOCAL_TOL && wing.inward < bumper!.inward, `${got}: wing pushed out or in deeper than the bumper`);
+        expect(bumper!.inward, `${got}: corner bumper < 0.12 m`).toBeGreaterThanOrEqual(0.12);
+        if (wing) expect(wing.inward > -LOCAL_TOL && wing.inward < bumper!.inward, `${got}: wing pushed out or in deeper than the bumper`).toBeTruthy();
       } else if (isSide(id)) {
-        assert.ok(r.struck[0]!.inward >= 0.12, `${got}: door < 0.12 m (IIHS band scaled to 40 km/h)`);
+        expect(r.struck[0]!.inward, `${got}: door < 0.12 m (IIHS band scaled to 40 km/h)`).toBeGreaterThanOrEqual(0.12);
       } else {
         const [l, rr] = r.struck;
         const min = id === "front" ? 0.14 : 0.11;
-        assert.ok(l!.inward >= min && rr!.inward >= min, `${got}: < ${min} m`);
-        assert.ok(l!.inward <= 0.31 && rr!.inward <= 0.31, `${got}: past the 0.31 m dynamic bound`);
-        assert.ok(Math.abs(l!.inward - rr!.inward) <= 0.03, `${got}: L/R lopsided`);
+        expect(l!.inward >= min && rr!.inward >= min, `${got}: < ${min} m`).toBeTruthy();
+        expect(l!.inward <= 0.31 && rr!.inward <= 0.31, `${got}: past the 0.31 m dynamic bound`).toBeTruthy();
+        expect(Math.abs(l!.inward - rr!.inward), `${got}: L/R lopsided`).toBeLessThanOrEqual(0.03);
       }
     });
 
@@ -182,20 +181,20 @@ describe("given a parked car and any one piston firing the standard shot (1500 k
       const l = pistonLocality(shoot(id), shoot(id, TAP));
       // Corner floor re-pinned to 0.04 after the yaw-frame fix (0.046 measured; 0.05 was set on the ratcheting frame).
       const floor = isCorner(id) ? 0.04 : 0.05;
-      assert.ok(l.dent >= floor, `paint within 0.3 m went in ${f3(l.dent)} m`);
+      expect(l.dent, `paint within 0.3 m went in ${f3(l.dent)} m`).toBeGreaterThanOrEqual(floor);
     });
   }
 
   it("when the mirrored pistons fire (frontLeft and frontRight, rearLeft and rearRight, left and right), then each pair crushes the car by the same depth within 5 mm", () => {
     for (const [a, b] of [["frontLeft", "frontRight"], ["rearLeft", "rearRight"], ["left", "right"]] as const) {
-      assert.ok(Math.abs(crushOf(shoot(a)) - crushOf(shoot(b))) < 0.005, `${a} ${f3(crushOf(shoot(a)))} vs ${b} ${f3(crushOf(shoot(b)))}`);
+      expect(Math.abs(crushOf(shoot(a)) - crushOf(shoot(b))), `${a} ${f3(crushOf(shoot(a)))} vs ${b} ${f3(crushOf(shoot(b)))}`).toBeLessThan(0.005);
     }
   });
 
   it(`when the left and right pistons fire 1500 kg at 50 km/h (the IIHS side-impact test), then each dents the door by ${IIHS_SIDE_CRUSH[0]}–${IIHS_SIDE_CRUSH[1]} m`, () => {
     for (const id of ["left", "right"] as const) {
       const door = shoot(id, { ...STANDARD, speedKph: 50 }).struck[0]!.inward;
-      assert.ok(door >= IIHS_SIDE_CRUSH[0] && door <= IIHS_SIDE_CRUSH[1], `${id} door ${f3(door)} m`);
+      expect(door >= IIHS_SIDE_CRUSH[0] && door <= IIHS_SIDE_CRUSH[1], `${id} door ${f3(door)} m`).toBeTruthy();
     }
   });
 });
@@ -205,20 +204,20 @@ describe(`given a parked car and any one piston firing the standard shot, judged
     const loc = () => pistonLocality(shoot(id), shoot(id, TAP));
     todoRow(`when the ${id} piston fires, then the far particles stay put`, TODO[`${id}:far-particles`], () => {
       const l = loc();
-      assert.ok(l.farParticle <= LOCAL_TOL, `${l.farParticleName} moved ${f3(l.farParticle)} m`);
+      expect(l.farParticle, `${l.farParticleName} moved ${f3(l.farParticle)} m`).toBeLessThanOrEqual(LOCAL_TOL);
     });
     todoRow(`when the ${id} piston fires, then the far skin stays put`, TODO[`${id}:far-skin`], () => {
-      assert.ok(loc().farSkin <= LOCAL_TOL, `far skin moved ${f3(loc().farSkin)} m`);
+      expect(loc().farSkin, `far skin moved ${f3(loc().farSkin)} m`).toBeLessThanOrEqual(LOCAL_TOL);
     });
     todoRow(`when the ${id} piston fires, then the half of the car opposite the piston stays put`, TODO[`${id}:opposite-half`], () => {
       const l = loc();
-      assert.ok(l.oppositeParticle <= LOCAL_TOL && l.oppositeSkin <= LOCAL_TOL, `particle ${f3(l.oppositeParticle)} skin ${f3(l.oppositeSkin)}`);
+      expect(l.oppositeParticle <= LOCAL_TOL && l.oppositeSkin <= LOCAL_TOL, `particle ${f3(l.oppositeParticle)} skin ${f3(l.oppositeSkin)}`).toBeTruthy();
     });
     todoRow(`when the ${id} piston fires, then cabin intrusion stays under ${CABIN_TOL} m, except at the struck door`, TODO[`${id}:cabin`], () => {
       const r = shoot(id);
       const doors = id === "left" ? [r.doorR] : id === "right" ? [r.doorL] : [r.doorL, r.doorR];
-      for (const d of doors) assert.ok(d <= CABIN_TOL, `door ${f3(d)} m (target < ${CABIN_TOL} m)`);
-      assert.ok(r.roof <= CABIN_TOL, `roof ${f3(r.roof)} m (target < ${CABIN_TOL} m)`);
+      for (const d of doors) expect(d, `door ${f3(d)} m (target < ${CABIN_TOL} m)`).toBeLessThanOrEqual(CABIN_TOL);
+      expect(r.roof, `roof ${f3(r.roof)} m (target < ${CABIN_TOL} m)`).toBeLessThanOrEqual(CABIN_TOL);
     });
   }
 });
@@ -227,13 +226,13 @@ describe("given a parked car and any one piston fired as a 3 km/h tap (0.2 kJ) t
   for (const id of PISTON_IDS) {
     todoRow(`when the ${id} piston taps, then no body particle moves`, TODO[`${id}:tap-particles`], () => {
       const r = shoot(id, TAP);
-      assert.ok(r.farParticle <= LOCAL_TOL, `${r.farParticleName} moved ${f3(r.farParticle)} m`);
-      for (const s of r.struck) assert.ok(Math.abs(s.inward) <= LOCAL_TOL, `${s.name} ${f3(s.inward)} m`);
+      expect(r.farParticle, `${r.farParticleName} moved ${f3(r.farParticle)} m`).toBeLessThanOrEqual(LOCAL_TOL);
+      for (const s of r.struck) expect(Math.abs(s.inward), `${s.name} ${f3(s.inward)} m`).toBeLessThanOrEqual(LOCAL_TOL);
     });
     todoRow(`when the ${id} piston taps, then no skin moves`, TODO[`${id}:tap-skin`], () => {
       const r = shoot(id, TAP);
-      assert.ok(r.farSkin <= LOCAL_TOL, `far skin moved ${f3(r.farSkin)} m (panels ${f3(r.farBodySkin)} m)`);
-      assert.ok(Math.abs(r.skinInward) <= LOCAL_TOL, `struck paint moved ${f3(r.skinInward)} m`);
+      expect(r.farSkin, `far skin moved ${f3(r.farSkin)} m (panels ${f3(r.farBodySkin)} m)`).toBeLessThanOrEqual(LOCAL_TOL);
+      expect(Math.abs(r.skinInward), `struck paint moved ${f3(r.skinInward)} m`).toBeLessThanOrEqual(LOCAL_TOL);
     });
   }
 });
@@ -271,20 +270,20 @@ describe("given a parked car and pistons firing 1500 kg rigid shots of growing s
       if (side) {
         const doors = speeds.map((kph) => doorCrush(id, kph));
         const dmsg = `door crush against the cell by speed ${doors.map((d) => d.toFixed(4)).join(" ")} (never shrinks, caps at ${DOOR_CAP.toFixed(4)})`;
-        for (let i = 1; i < doors.length; i++) assert.ok(doors[i]! >= doors[i - 1]! - EXACT, dmsg);
+        for (let i = 1; i < doors.length; i++) expect(doors[i]!, dmsg).toBeGreaterThanOrEqual(doors[i - 1]! - EXACT);
         // Once the door has spent its stroke it sits at its cap; the fit row is a rigid-fit reading over the far particles, so
         // it is held to IIHS side intrusion (≥ 0.20 m) there and not asserted monotonic.
         const plateauAt = doors.findIndex((d) => d >= DOOR_CAP - EXACT);
         if (plateauAt >= 0) {
           strictEnd = plateauAt + 1;
           for (let i = plateauAt; i < doors.length; i++) {
-            assert.ok(Math.abs(doors[i]! - DOOR_CAP) <= EXACT, dmsg);
-            assert.ok(row[i]! >= 0.2, msg);
+            expect(Math.abs(doors[i]! - DOOR_CAP), dmsg).toBeLessThanOrEqual(EXACT);
+            expect(row[i]!, msg).toBeGreaterThanOrEqual(0.2);
           }
         }
-        assert.ok(plateauAt >= 0, dmsg);
+        expect(plateauAt, dmsg).toBeGreaterThanOrEqual(0);
       }
-      for (let i = 1; i < strictEnd; i++) assert.ok(row[i]! >= row[i - 1]! - 0.005, msg);
+      for (let i = 1; i < strictEnd; i++) expect(row[i]!, msg).toBeGreaterThanOrEqual(row[i - 1]! - 0.005);
     });
   }
 
@@ -292,7 +291,7 @@ describe("given a parked car and pistons firing 1500 kg rigid shots of growing s
     it(`when the ${id} piston fires a honeycomb face (hardness 0.5) instead of steel at the same speed, then it crushes the car at least 2 cm less`, () => {
       const steel = crushOf(shoot(id));
       const soft = crushOf(shoot(id, { ...STANDARD, hardness: 0.5 }));
-      assert.ok(soft < steel - 0.02, `soft ${f3(soft)} vs steel ${f3(steel)}`);
+      expect(soft, `soft ${f3(soft)} vs steel ${f3(steel)}`).toBeLessThan(steel - 0.02);
     });
   }
 
@@ -308,19 +307,19 @@ describe("given a parked car and pistons firing 1500 kg rigid shots of growing s
 
   it("when the front piston's speed is raised in steps up to 150 km/h, then a hard enough shot kills the drivetrain", () => {
     const k = killSpeed("front");
-    assert.ok(k != null, "front-middle never killed it up to 150 km/h");
+    expect(k != null, "front-middle never killed it up to 150 km/h").toBeTruthy();
   });
 
   todoRow("when the front piston's kill speed is found, then it sits at the barrier path's kill equivalent speed (alive at 56 km/h, dead at 64 km/h)", TODO["front:kill-ebs"], () => {
     const k = killSpeed("front")!;
     const ebsKph = shoot("front", { ...STANDARD, speedKph: k }).ebs * 3.6;
-    assert.ok(ebsKph > 56 && ebsKph <= 64, `kills at ${k} km/h = EBS ${ebsKph.toFixed(1)} km/h`);
+    expect(ebsKph > 56 && ebsKph <= 64, `kills at ${k} km/h = EBS ${ebsKph.toFixed(1)} km/h`).toBeTruthy();
   });
 
   for (const id of ["rear", "left", "right", "rearLeft", "rearRight"] as const) {
     it(`when the ${id} piston fires at the front piston's kill speed, then the drivetrain is still alive`, () => {
       const k = killSpeed("front")!;
-      assert.equal(shoot(id, { ...STANDARD, speedKph: k }).drivetrainAlive, true, `dead at ${k} km/h`);
+      expect(shoot(id, { ...STANDARD, speedKph: k }).drivetrainAlive, `dead at ${k} km/h`).toBe(true);
     });
   }
 
@@ -328,7 +327,7 @@ describe("given a parked car and pistons firing 1500 kg rigid shots of growing s
     todoRow(`when the ${id} piston's kill speed is found, then a corner needs at least the front piston's kill speed to kill the drivetrain`, TODO[`${id}:corner-kill`], () => {
       const front = killSpeed("front")!;
       const corner = killSpeed(id);
-      assert.ok(corner == null || corner >= front, `corner kills at ${corner} km/h, front-middle at ${front} km/h`);
+      expect(corner == null || corner >= front, `corner kills at ${corner} km/h, front-middle at ${front} km/h`).toBeTruthy();
     });
   }
 });
@@ -337,11 +336,11 @@ describe("given a car in lattice deform mode and any one piston firing the stand
   for (const id of PISTON_IDS) {
     it(`when the ${id} piston fires the standard shot, then the struck particles go in by at least 0.11 m`, () => {
       const r = shoot(id, STANDARD, "lattice");
-      for (const s of r.struck.slice(0, isCorner(id) ? 1 : 2)) assert.ok(s.inward >= 0.11, `${s.name} ${f3(s.inward)} m`);
+      for (const s of r.struck.slice(0, isCorner(id) ? 1 : 2)) expect(s.inward, `${s.name} ${f3(s.inward)} m`).toBeGreaterThanOrEqual(0.11);
     });
     todoRow(`when the ${id} piston fires a 3 km/h tap, then no skin moves`, TODO[`${id}:lattice-tap-skin`], () => {
       const r = shoot(id, TAP, "lattice");
-      assert.ok(r.farSkin <= LOCAL_TOL, `far skin moved ${f3(r.farSkin)} m (panels ${f3(r.farBodySkin)} m)`);
+      expect(r.farSkin, `far skin moved ${f3(r.farSkin)} m (panels ${f3(r.farBodySkin)} m)`).toBeLessThanOrEqual(LOCAL_TOL);
     });
   }
 });
@@ -349,7 +348,7 @@ describe("given a car in lattice deform mode and any one piston firing the stand
 describe("given the piston rig's table of which particles each piston strikes", () => {
   it("when it is checked against the particle names of a front shot, then every particle it names for every piston is a real particle of the car", () => {
     const names = new Set(shoot("front").names);
-    for (const id of PISTON_IDS) for (const n of PISTON_STRUCK[id]) assert.ok(names.has(n), `${id}: ${n}`);
+    for (const id of PISTON_IDS) for (const n of PISTON_STRUCK[id]) expect(names.has(n), `${id}: ${n}`).toBeTruthy();
   });
 });
 
@@ -394,8 +393,8 @@ describe("given a shape-deform-mode car at squash setting 0.32 and at 0.4, struc
           }
         }
       }
-      assert.ok(at, `squash ${squash}: the heads never ${touched ? "left" : "touched"}`);
-      assert.ok(drop <= 0.08, `squash ${squash}: ${worst} after the heads left`);
+      expect(at, `squash ${squash}: the heads never ${touched ? "left" : "touched"}`).toBeTruthy();
+      expect(drop, `squash ${squash}: ${worst} after the heads left`).toBeLessThanOrEqual(0.08);
     }
   });
 });

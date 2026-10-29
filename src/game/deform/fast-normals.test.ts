@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import assert from "node:assert/strict";
 import { computeNormalsFast, computeNormalsNear } from "./fast-normals.ts";
 import { makeHoodGeometry } from "../vehicle/car-mesh.ts";
 import { makeChassisGeometry } from "../vehicle/car-chassis-mesh.ts";
@@ -19,7 +18,7 @@ function maxAngle(a: Float32Array, b: Float32Array): number {
     const la = Math.hypot(a[i]!, a[i + 1]!, a[i + 2]!);
     const lb = Math.hypot(b[i]!, b[i + 1]!, b[i + 2]!);
     if (la === 0 || lb === 0) {
-      assert.equal(la, lb, `vertex ${i / 3}: one side has a zero normal`);
+      expect(la, `vertex ${i / 3}: one side has a zero normal`).toBe(lb);
       continue;
     }
     const dot = (a[i]! * b[i]! + a[i + 1]! * b[i + 1]! + a[i + 2]! * b[i + 2]!) / (la * lb);
@@ -34,7 +33,7 @@ function compare(geo: THREE.BufferGeometry): number {
   computeNormalsFast(geo);
   const fast = geo.getAttribute("normal").array as Float32Array;
   const want = ref.getAttribute("normal").array as Float32Array;
-  assert.equal(fast.length, want.length);
+  expect(fast.length).toBe(want.length);
   return maxAngle(fast, want);
 }
 
@@ -43,7 +42,7 @@ describe("given computeNormalsFast (vertex normals computed faster than the stoc
     it(`when a ${id} body is crushed by dent-like noise, then its normals match THREE's computeVertexNormals to within 1e-6 rad`, () => {
       const geo = makeChassisGeometry(CAR_STYLES[id]);
       crumple(geo, 0.04);
-      assert.ok(compare(geo) < 1e-6);
+      expect(compare(geo)).toBeLessThan(1e-6);
     });
   }
 
@@ -51,7 +50,7 @@ describe("given computeNormalsFast (vertex normals computed faster than the stoc
     const geo = makeHoodGeometry();
     computeNormalsFast(geo);
     crumple(geo, 0.02);
-    assert.ok(compare(geo) < 1e-6);
+    expect(compare(geo)).toBeLessThan(1e-6);
   });
 
   it("when a non-indexed box with a collapsed triangle is crumpled, then its normals match computeVertexNormals to within 1e-6 rad and the collapsed triangle's zero normals stay zero in both", () => {
@@ -61,7 +60,7 @@ describe("given computeNormalsFast (vertex normals computed faster than the stoc
     // Collapse the first triangle to a point: three leaves its normals at exactly zero.
     for (let k = 3; k < 9; k++) a[k] = a[k % 3]!;
     geo.deleteAttribute("normal");
-    assert.ok(compare(geo) < 1e-6);
+    expect(compare(geo)).toBeLessThan(1e-6);
   });
 
   it("when a few of a crushed body's vertices move after its normals were computed and only the normals near them are computed again, then every normal equals a full pass's to the bit", () => {
@@ -81,8 +80,8 @@ describe("given computeNormalsFast (vertex normals computed faster than the stoc
     const full = geo.getAttribute("normal").array as Float32Array;
     let differ = 0;
     for (let i = 0; i < full.length; i++) if (!Object.is(near[i], full[i])) differ++;
-    assert.ok(moved.length > 20, "the control: vertices were moved");
-    assert.ok(geo.index, "the control: the body is indexed, so the partial pass runs (an unindexed one takes the full pass)");
-    assert.equal(differ, 0, `${differ} normal components differ from the full pass`);
+    expect(moved.length, "the control: vertices were moved").toBeGreaterThan(20);
+    expect(geo.index, "the control: the body is indexed, so the partial pass runs (an unindexed one takes the full pass)").toBeTruthy();
+    expect(differ, `${differ} normal components differ from the full pass`).toBe(0);
   });
 });

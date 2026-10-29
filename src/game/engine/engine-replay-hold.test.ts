@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { makeWorld } from "../world/race-world.test-util.ts";
 import { Track, blankPoint } from "../world/track.ts";
@@ -58,9 +57,9 @@ describe("given a race on the oval where the player's car is driven flat out int
           done: () => holdAt >= 0 && w.race.recorder.now > holdAt + 6,
           maxFrames: 40 * 60,
         });
-        assert.ok(placed, `seed ${seed}: the crash was never scripted`);
-        assert.ok(wreckAt >= 0, `seed ${seed}: the player's car never became a wreck with a running engine, so no hold could act`);
-        assert.ok(recs.length >= 1, `seed ${seed}: the scripted crash kept no clip`);
+        expect(placed, `seed ${seed}: the crash was never scripted`).toBeTruthy();
+        expect(wreckAt, `seed ${seed}: the player's car never became a wreck with a running engine, so no hold could act`).toBeGreaterThanOrEqual(0);
+        expect(recs.length, `seed ${seed}: the scripted crash kept no clip`).toBeGreaterThanOrEqual(1);
         // Not vacuous: a kept clip must carry the player's car put on a spot at the hold's step (a keyframe), or the replay never meets a held reset.
         const stepTime = (clip: (typeof recs)[number]["clip"], step: number): number => {
           let at = clip.t0;
@@ -69,15 +68,15 @@ describe("given a race on the oval where the player's car is driven flat out int
         };
         const carriesHold = (clip: (typeof recs)[number]["clip"]): boolean =>
           clip.keyStep.some((step, k) => k > 0 && clip.cars.some((c, j) => c.slot === 0 && ((clip.keyCars[k]! >>> j) & 1) === 1) && Math.abs(stepTime(clip, step) - holdAt) < 0.1);
-        assert.ok(recs.some((rec) => carriesHold(rec.clip)), `seed ${seed}: no kept clip carries the player's placement at the hold (${holdAt.toFixed(2)} s); clips start at ${recs.map((r) => r.clip.t0.toFixed(1)).join(", ")} s`);
+        expect(recs.some((rec) => carriesHold(rec.clip)), `seed ${seed}: no kept clip carries the player's placement at the hold (${holdAt.toFixed(2)} s); clips start at ${recs.map((r) => r.clip.t0.toFixed(1)).join(", ")} s`).toBeTruthy();
         const rows: string[] = [];
         for (const rec of recs) {
           const a = agreement(rec, () => w.race.resetProps());
           rows.push(`${rec.clip.cars.length} cars, score ${rec.clip.score.toFixed(1)}, ${a.steps} steps, worst pose ${a.pose.max} m, velocity ${a.vel.max} m/s, crush ${a.crush.max} m, wreck flags differ ${a.wreckMismatch}`);
-          assert.equal(a.pose.max, 0, `seed ${seed}: a car's pose strays from the live sim\n${rows.join("\n")}`);
-          assert.equal(a.vel.max, 0, `seed ${seed}: a car's velocity strays from the live sim\n${rows.join("\n")}`);
-          assert.equal(a.crush.max, 0, `seed ${seed}: a car's crush strays from the live sim\n${rows.join("\n")}`);
-          assert.equal(a.wreckMismatch, 0, `seed ${seed}: a car's wreck flags differ from the live sim\n${rows.join("\n")}`);
+          expect(a.pose.max, `seed ${seed}: a car's pose strays from the live sim\n${rows.join("\n")}`).toBe(0);
+          expect(a.vel.max, `seed ${seed}: a car's velocity strays from the live sim\n${rows.join("\n")}`).toBe(0);
+          expect(a.crush.max, `seed ${seed}: a car's crush strays from the live sim\n${rows.join("\n")}`).toBe(0);
+          expect(a.wreckMismatch, `seed ${seed}: a car's wreck flags differ from the live sim\n${rows.join("\n")}`).toBe(0);
         }
         t.annotate(rows.join("\n"));
       } finally {

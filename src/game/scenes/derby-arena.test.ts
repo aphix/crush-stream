@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FLEET_HALF } from "../vehicle/car-rig.ts";
 import { PR_BASE, PR_HX, PR_HZ, PR_TOP, PR_X, PR_YAW, PR_Z } from "../world/prism.ts";
@@ -9,6 +8,7 @@ import { DERBY_ARENA } from "./constants.ts";
 import { GLASS_MESH_NAME, makeDerbyArena } from "./derby-arena.ts";
 import { DERBY_BOXES, DERBY_PLATEAUS, DERBY_PROP, DERBY_RAMPS, DERBY_TABLE_TOP, DerbyGround } from "./derby-ground.ts";
 import { SUNK_CAR_DEPTH } from "./fleet.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** Metres (and radians) two drawn numbers may differ by and still be one: the instance matrices are Float32. */
 const TOLERANCE = 1e-4;
@@ -55,7 +55,7 @@ const drawnBoxes = listedBoxes.map((box) => (box.kind === DERBY_PROP.wall ? { ..
 
 /** Every instance of a drawn box mesh, read back from its matrix and its box geometry. */
 function placementsOf(mesh: THREE.InstancedMesh): Placement[] {
-  assert.ok(mesh.geometry instanceof THREE.BoxGeometry, `${mesh.name} is drawn from a box`);
+  must(mesh.geometry instanceof THREE.BoxGeometry, `${mesh.name} is drawn from a box`);
   const { width, height, depth } = mesh.geometry.parameters;
   const matrix = new THREE.Matrix4();
   const position = new THREE.Vector3();
@@ -79,7 +79,7 @@ function placementsOf(mesh: THREE.InstancedMesh): Placement[] {
 
 function boxMesh(kind: string): THREE.InstancedMesh {
   const found = arena.children.find((child) => child instanceof THREE.InstancedMesh && child.name === kind);
-  assert.ok(found instanceof THREE.InstancedMesh, `the arena draws ${kind} boxes`);
+  must(found instanceof THREE.InstancedMesh, `the arena draws ${kind} boxes`);
   return found;
 }
 
@@ -127,27 +127,27 @@ describe("derby arena", () => {
     it(`given the drawn arena, when every ${kind} instance is read back, then each is exactly one box of the list and each box is drawn once`, () => {
       const expected = drawnBoxes.filter((box) => box.kind === kind);
       const mesh = boxMesh(kind);
-      assert.equal(mesh.count, expected.length, `${kind} instance count`);
+      expect(mesh.count, `${kind} instance count`).toBe(expected.length);
       const { missing, extra } = leftOvers(expected, placementsOf(mesh));
-      assert.deepEqual(extra, [], `${kind} instances that are no listed box`);
-      assert.deepEqual(missing, [], `${kind} boxes that are not drawn`);
+      expect(extra, `${kind} instances that are no listed box`).toHaveLength(0);
+      expect(missing, `${kind} boxes that are not drawn`).toHaveLength(0);
     });
   }
 
   it("given the ground built from the list, when its prism patches are read, then each is sunk deep enough, each is a listed box and each box is a prism", () => {
     const prisms = prismPlacements();
-    for (const prism of prisms) assert.ok(prism.base <= DEEPEST_REACHED_BASE, `prism at (${prism.x}, ${prism.z}) has base ${prism.base}, above ${DEEPEST_REACHED_BASE}`);
+    for (const prism of prisms) expect(prism.base, `prism at (${prism.x}, ${prism.z}) has base ${prism.base}, above ${DEEPEST_REACHED_BASE}`).toBeLessThanOrEqual(DEEPEST_REACHED_BASE);
     const { missing, extra } = leftOvers(
       listedBoxes,
       prisms.map((prism) => ({ ...prism, base: 0 })),
     );
-    assert.deepEqual(extra, [], "prisms that are no listed box");
-    assert.deepEqual(missing, [], "boxes that are no prism");
+    expect(extra, "prisms that are no listed box").toHaveLength(0);
+    expect(missing, "boxes that are no prism").toHaveLength(0);
   });
 
   it("given the drawn floor, when each vertex is compared with the ground's height query, then it is the surface a car meets", () => {
     const floor = arena.getObjectByName("derby-floor");
-    assert.ok(floor instanceof THREE.Mesh, "the arena draws a floor");
+    must(floor instanceof THREE.Mesh, "the arena draws a floor");
     const positions = floor.geometry.getAttribute("position");
     let compared = 0;
     for (let vertex = 0; vertex < positions.count; vertex++) {
@@ -155,9 +155,9 @@ describe("derby arena", () => {
       const z = positions.getZ(vertex);
       if (listedBoxes.some((box) => isUnderBox(x, z, box))) continue;
       compared++;
-      assert.ok(Math.abs(positions.getY(vertex) - ground.heightAt(x, z)) < TOLERANCE, `floor vertex (${x}, ${z}) is at the ground's height`);
+      expect(Math.abs(positions.getY(vertex) - ground.heightAt(x, z)), `floor vertex (${x}, ${z}) is at the ground's height`).toBeLessThan(TOLERANCE);
     }
-    assert.ok(compared > positions.count * LEAST_COMPARED_SHARE, `${compared} of ${positions.count} vertices compared`);
+    expect(compared, `${compared} of ${positions.count} vertices compared`).toBeGreaterThan(positions.count * LEAST_COMPARED_SHARE);
   });
 
   it("given the drawn arena, when its draw calls are counted, then there are at most twelve and it is hidden until the engine shows it", () => {
@@ -165,19 +165,19 @@ describe("derby arena", () => {
     arena.traverse((object) => {
       if (object instanceof THREE.Mesh) drawCalls++;
     });
-    assert.ok(drawCalls <= DRAW_CALL_LIMIT, `${drawCalls} draw calls`);
-    assert.equal(arena.name, "derby-arena");
-    assert.equal(arena.visible, false);
+    expect(drawCalls, `${drawCalls} draw calls`).toBeLessThanOrEqual(DRAW_CALL_LIMIT);
+    expect(arena.name).toBe("derby-arena");
+    expect(arena.visible).toBe(false);
   });
 
   it("given the wall boxes as drawn, when each is read back, then its long axis runs along the wall and its inner face stands on the arena radius", () => {
     const pieces = placementsOf(boxMesh(DERBY_PROP.wall));
-    assert.equal(pieces.length, DERBY_ARENA.wallPieces);
+    expect(pieces.length).toBe(DERBY_ARENA.wallPieces);
     for (const piece of pieces) {
       const centreRadius = Math.hypot(piece.x, piece.z);
       const radialAlongLongAxis = (piece.x * Math.sin(piece.yaw) + piece.z * Math.cos(piece.yaw)) / centreRadius;
-      assert.ok(Math.abs(radialAlongLongAxis) < TANGENT_LIMIT, `wall piece at (${piece.x}, ${piece.z}) lies along the wall`);
-      assert.ok(Math.abs(centreRadius - piece.hx - DERBY_ARENA.radius) < WALL_FACE_TOLERANCE, `wall piece at (${piece.x}, ${piece.z}) has its inner face on the radius`);
+      expect(Math.abs(radialAlongLongAxis), `wall piece at (${piece.x}, ${piece.z}) lies along the wall`).toBeLessThan(TANGENT_LIMIT);
+      expect(Math.abs(centreRadius - piece.hx - DERBY_ARENA.radius), `wall piece at (${piece.x}, ${piece.z}) has its inner face on the radius`).toBeLessThan(WALL_FACE_TOLERANCE);
     }
   });
 });
@@ -187,12 +187,12 @@ const INDICES_PER_CELL = 6;
 
 function meshNamed(name: string): THREE.Mesh {
   const found = arena.getObjectByName(name);
-  assert.ok(found instanceof THREE.Mesh, `the arena draws ${name}`);
+  must(found instanceof THREE.Mesh, `the arena draws ${name}`);
   return found;
 }
 
 function standardMaterialOf(mesh: THREE.Mesh): THREE.MeshStandardMaterial {
-  assert.ok(mesh.material instanceof THREE.MeshStandardMaterial, `${mesh.name} has a standard material`);
+  must(mesh.material instanceof THREE.MeshStandardMaterial, `${mesh.name} has a standard material`);
   return mesh.material;
 }
 
@@ -212,7 +212,7 @@ function isOnDeck(ramp: (typeof DERBY_RAMPS)[number], x: number, z: number): boo
 function cellsOf(mesh: THREE.Mesh): Map<string, string> {
   const positions = mesh.geometry.getAttribute("position");
   const indices = mesh.geometry.getIndex();
-  assert.ok(indices, `${mesh.name} is indexed`);
+  must(indices, `${mesh.name} is indexed`);
   const cells = new Map<string, string>();
   for (let start = 0; start < indices.count; start += INDICES_PER_CELL) {
     const corners = Array.from({ length: INDICES_PER_CELL }, (_unused, offset) => {
@@ -240,7 +240,7 @@ describe("derby arena floor colour", () => {
       const mean = total / colours.count;
       let darkest = Infinity;
       for (let vertex = 0; vertex < colours.count; vertex++) darkest = Math.min(darkest, read(vertex));
-      assert.ok(darkest >= mean * LEAST_FLOOR_SHARE, `darkest ${darkest} of mean ${mean}`);
+      expect(darkest, `darkest ${darkest} of mean ${mean}`).toBeGreaterThanOrEqual(mean * LEAST_FLOOR_SHARE);
     });
   }
 });
@@ -266,7 +266,7 @@ describe("derby arena rise colour", () => {
       total += colours.getX(vertex);
       count++;
     }
-    assert.ok(count > 0, "some vertices were compared");
+    expect(count, "some vertices were compared").toBeGreaterThan(0);
     return total / count;
   };
   const level = (vertex: number) => positions.getY(vertex) === 0 && Math.hypot(positions.getX(vertex), positions.getZ(vertex)) <= LEVEL_FLOOR_REACH;
@@ -277,7 +277,7 @@ describe("derby arena rise colour", () => {
   };
   const shareBetween = (rise: Plateau, vertex: number, from: number, to: number) => onRise(rise, vertex) && positions.getY(vertex) / rise.height >= from && positions.getY(vertex) / rise.height <= to;
   const pit = DERBY_PLATEAUS.find((plateau) => plateau.height === PIT_HEIGHT);
-  assert.ok(pit, "the arena has a pit plateau");
+  must(pit, "the arena has a pit plateau");
   const riseCases = [
     { name: "table-top's flat top", rise: DERBY_TABLE_TOP, from: TOP_FROM_SHARE, to: 1, least: 1.5, most: Infinity },
     { name: "pit plateau's flat top", rise: pit, from: TOP_FROM_SHARE, to: 1, least: 1.5, most: Infinity },
@@ -290,8 +290,8 @@ describe("derby arena rise colour", () => {
   for (const { name, rise, from, to, least, most } of riseCases) {
     it(`given the drawn floor, when the ${name} is compared with the level floor, then its mean red is ${least} to ${most} times the floor's`, () => {
       const ratio = meanRed((vertex) => shareBetween(rise, vertex, from, to)) / meanRed(level);
-      assert.ok(ratio >= least, `${name} ratio ${ratio} under ${least}`);
-      assert.ok(ratio <= most, `${name} ratio ${ratio} over ${most}`);
+      expect(ratio, `${name} ratio ${ratio} under ${least}`).toBeGreaterThanOrEqual(least);
+      expect(ratio, `${name} ratio ${ratio} over ${most}`).toBeLessThanOrEqual(most);
     });
   }
 });
@@ -302,11 +302,11 @@ describe("derby arena ramp decks", () => {
 
   it("given the drawn decks, when each vertex is compared with the ground's height query, then it lies on the surface a car meets", () => {
     const positions = decks.geometry.getAttribute("position");
-    assert.ok(positions.count > 0, "the decks have vertices");
+    expect(positions.count, "the decks have vertices").toBeGreaterThan(0);
     for (let vertex = 0; vertex < positions.count; vertex++) {
       const x = positions.getX(vertex);
       const z = positions.getZ(vertex);
-      assert.ok(Math.abs(positions.getY(vertex) - ground.heightAt(x, z)) < TOLERANCE, `deck vertex (${x}, ${z}) is at the ground's height`);
+      expect(Math.abs(positions.getY(vertex) - ground.heightAt(x, z)), `deck vertex (${x}, ${z}) is at the ground's height`).toBeLessThan(TOLERANCE);
     }
   });
 
@@ -319,14 +319,14 @@ describe("derby arena ramp decks", () => {
     }
     const missing = [...expected].filter((key) => !deckCells.has(key));
     const extra = [...deckCells.keys()].filter((key) => !expected.has(key));
-    assert.equal(missing.length, 0, `deck cells not drawn: ${missing.slice(0, 5).join(" | ")}`);
-    assert.equal(extra.length, 0, `drawn cells on no deck: ${extra.slice(0, 5).join(" | ")}`);
-    assert.ok(expected.size > 0, "the ramps have deck cells");
+    expect(missing.length, `deck cells not drawn: ${missing.slice(0, 5).join(" | ")}`).toBe(0);
+    expect(extra.length, `drawn cells on no deck: ${extra.slice(0, 5).join(" | ")}`).toBe(0);
+    expect(expected.size, "the ramps have deck cells").toBeGreaterThan(0);
   });
 
   it("given the floor's cells and the deck's, when a cell is in both, then both split it into the same two triangles", () => {
     const floorCells = cellsOf(meshNamed("derby-floor"));
-    for (const [key, split] of deckCells) assert.equal(split, floorCells.get(key), `cell ${key} is split like the floor's`);
+    for (const [key, split] of deckCells) expect(split, `cell ${key} is split like the floor's`).toBe(floorCells.get(key));
   });
 });
 
@@ -336,23 +336,20 @@ describe("derby arena glass", () => {
   const wallPieces = listedBoxes.filter((box) => box.kind === DERBY_PROP.wall);
 
   it("given the drawn glass, when its instances are counted, then there is one pane per wall piece", () => {
-    assert.equal(glass.count, DERBY_ARENA.wallPieces);
+    expect(glass.count).toBe(DERBY_ARENA.wallPieces);
   });
 
   it("given each glass pane, when its base and top are read back, then it spans the concrete's top to the wall's top", () => {
     for (const pane of panes) {
-      assert.ok(Math.abs(pane.base - DERBY_ARENA.concreteHeight) < TOLERANCE, `pane at (${pane.x}, ${pane.z}) starts at the concrete's top`);
-      assert.ok(Math.abs(pane.base + pane.height - DERBY_ARENA.wallHeight) < TOLERANCE, `pane at (${pane.x}, ${pane.z}) ends at the wall's top`);
+      expect(Math.abs(pane.base - DERBY_ARENA.concreteHeight), `pane at (${pane.x}, ${pane.z}) starts at the concrete's top`).toBeLessThan(TOLERANCE);
+      expect(Math.abs(pane.base + pane.height - DERBY_ARENA.wallHeight), `pane at (${pane.x}, ${pane.z}) ends at the wall's top`).toBeLessThan(TOLERANCE);
     }
   });
 
   it("given each glass pane, when its place is read back, then it stands over a wall piece with its inner face on the arena radius", () => {
     for (const pane of panes) {
-      assert.ok(
-        wallPieces.some((piece) => isUnderBox(pane.x, pane.z, piece)),
-        `pane at (${pane.x}, ${pane.z}) is over a wall piece`,
-      );
-      assert.ok(Math.abs(Math.hypot(pane.x, pane.z) - pane.hx - DERBY_ARENA.radius) < WALL_FACE_TOLERANCE, `pane at (${pane.x}, ${pane.z}) has its inner face on the radius`);
+      expect(wallPieces.some((piece) => isUnderBox(pane.x, pane.z, piece)), `pane at (${pane.x}, ${pane.z}) is over a wall piece`).toBeTruthy();
+      expect(Math.abs(Math.hypot(pane.x, pane.z) - pane.hx - DERBY_ARENA.radius), `pane at (${pane.x}, ${pane.z}) has its inner face on the radius`).toBeLessThan(WALL_FACE_TOLERANCE);
     }
   });
 
@@ -365,14 +362,14 @@ describe("derby arena glass", () => {
   ];
   for (const { field, read, expected, then } of glassCases) {
     it(`given the glass draw, when its ${field} is read, then ${then}`, () => {
-      assert.equal(read(), expected);
+      expect(read()).toBe(expected);
     });
   }
 });
 
 describe("derby arena materials", () => {
   const floorMap = standardMaterialOf(meshNamed("derby-floor")).map;
-  assert.ok(floorMap instanceof THREE.DataTexture, "the floor's map is a painted texture");
+  must(floorMap instanceof THREE.DataTexture, "the floor's map is a painted texture");
   const floorMapImage = floorMap.image;
   const deckMaterial = standardMaterialOf(meshNamed("derby-ramp-decks"));
   const mapCases = [
@@ -385,7 +382,7 @@ describe("derby arena materials", () => {
   ];
   for (const { name, read, expected, then } of mapCases) {
     it(`given the drawn arena, when the ${name} is read, then ${then}`, () => {
-      assert.equal(read(), expected);
+      expect(read()).toBe(expected);
     });
   }
 });
@@ -404,13 +401,13 @@ describe("derby arena metric uv", () => {
   for (const { name, across, up } of tileCases) {
     it(`given the ${name} box, when its side face's uv is read, then it spans that face's metres over the texture's tile`, () => {
       const { geometry } = boxMesh(name);
-      assert.ok(geometry instanceof THREE.BoxGeometry, `${name} is drawn from a box`);
+      must(geometry instanceof THREE.BoxGeometry, `${name} is drawn from a box`);
       const uv = geometry.getAttribute("uv");
       const sideFaceVertices = [0, 1, 2, 3];
       const reachU = Math.max(...sideFaceVertices.map((vertex) => uv.getX(vertex)));
       const reachV = Math.max(...sideFaceVertices.map((vertex) => uv.getY(vertex)));
-      assert.ok(Math.abs(reachU - geometry.parameters.depth / across) < TOLERANCE, `${name} u reach`);
-      assert.ok(Math.abs(reachV - geometry.parameters.height / up) < TOLERANCE, `${name} v reach`);
+      expect(Math.abs(reachU - geometry.parameters.depth / across), `${name} u reach`).toBeLessThan(TOLERANCE);
+      expect(Math.abs(reachV - geometry.parameters.height / up), `${name} v reach`).toBeLessThan(TOLERANCE);
     });
   }
 });

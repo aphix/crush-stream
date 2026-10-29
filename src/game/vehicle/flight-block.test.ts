@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { applyDrive, idleDrive, type DriveInput } from "./car-drive.ts";
 import type { DeformableCar } from "./car.ts";
 import { FLIGHT } from "./car-flight.ts";
@@ -74,12 +73,12 @@ describe("given a car and a twin rebuilt from its flight block, driven on with t
         stepWorld(warm, SLICE_S);
       }
     });
-    assert.deepEqual(bad, []);
+    expect(bad).toHaveLength(0);
   });
 
   it("when the car was just placed facing a yaw a full turn past its heading (its Euler angles are not the quaternion's derived copy), at every heading, then both take every next slice to the bit", () => {
     const bad = headingsWhereTheyDiffer((car, heading) => car.spawnFacing(3, -5, heading + FULL_TURN, SPAWN_SPEED));
-    assert.deepEqual(bad, []);
+    expect(bad).toHaveLength(0);
   });
 });
 
@@ -102,7 +101,7 @@ function wreckUntil(until: (car: DeformableCar) => boolean): DeformableCar {
     car.stepBreakage(SLICE_S);
     car.updateSkin();
   }
-  assert.ok(until(car), `the wreck never reached the state (restS ${car.restS}, asleep ${car.asleep})`);
+  expect(until(car), `the wreck never reached the state (restS ${car.restS}, asleep ${car.asleep})`).toBeTruthy();
   return car;
 }
 
@@ -110,10 +109,10 @@ describe("given a wreck at rest and a twin rebuilt from its flight block", () =>
   it("when the wreck is asleep, then the twin is asleep with its rest timer and the plan position it sleeps at", () => {
     const car = wreckUntil((c) => c.asleep);
     const twin = twinFromFlightBlock(car);
-    assert.ok(twin.asleep, "the twin woke");
-    assert.equal(twin.restS, car.restS);
-    assert.equal(twin.sleepX, car.sleepX);
-    assert.equal(twin.sleepZ, car.sleepZ);
+    expect(twin.asleep, "the twin woke").toBeTruthy();
+    expect(twin.restS).toBe(car.restS);
+    expect(twin.sleepX).toBe(car.sleepX);
+    expect(twin.sleepZ).toBe(car.sleepZ);
   });
 
   it("when the wreck asleep has been turned where it lies by a steer (a race gives its AI wrecks pedals), then the twin sleeps at the spot the wreck fell asleep at, not where the turn left its body", () => {
@@ -122,18 +121,18 @@ describe("given a wreck at rest and a twin rebuilt from its flight block", () =>
       applyDrive(car, STEER, SLICE_S);
       car.integrate(SLICE_S);
     }
-    assert.ok(car.asleep, "the steer woke the wreck: nothing moved its body off its sleep spot");
-    assert.ok(car.group.position.x !== car.sleepX || car.group.position.z !== car.sleepZ, "the steer did not move the body off its sleep spot");
+    expect(car.asleep, "the steer woke the wreck: nothing moved its body off its sleep spot").toBeTruthy();
+    expect(car.group.position.x !== car.sleepX || car.group.position.z !== car.sleepZ, "the steer did not move the body off its sleep spot").toBeTruthy();
     const twin = twinFromFlightBlock(car);
-    assert.equal(twin.sleepX, car.sleepX);
-    assert.equal(twin.sleepZ, car.sleepZ);
+    expect(twin.sleepX).toBe(car.sleepX);
+    expect(twin.sleepZ).toBe(car.sleepZ);
   });
 
   it("when the wreck is resting but not yet asleep, then the twin is awake with the wreck's rest timer, not zero", () => {
     const car = wreckUntil((c) => c.restS > 0.2 && !c.asleep);
     const twin = twinFromFlightBlock(car);
-    assert.ok(!twin.asleep, "the twin sleeps early");
-    assert.equal(twin.restS, car.restS);
+    expect(!twin.asleep, "the twin sleeps early").toBe(true);
+    expect(twin.restS).toBe(car.restS);
   });
 });
 
@@ -158,7 +157,7 @@ describe("given a car whose drawn wheels a drive turned, flying, and a twin rebu
       applyDrive(car, IDLE, SLICE_S);
       stepWorld(live, SLICE_S);
     }
-    assert.ok(car.airborne, "the car flies when its block is taken");
+    expect(car.airborne, "the car flies when its block is taken").toBeTruthy();
     const twin = twinFromFlightBlock(car);
     const rebuilt = newWorld([twin], null);
     for (let slice = 0; slice < AIR_SLICES; slice++) {
@@ -167,7 +166,7 @@ describe("given a car whose drawn wheels a drive turned, flying, and a twin rebu
       applyDrive(twin, IDLE, SLICE_S);
       stepWorld(rebuilt, SLICE_S);
     }
-    assert.ok(car.airborne && car["wheelSpin"][0] !== 0, "the car flies with its wheels turned");
+    expect(car.airborne && car["wheelSpin"][0] !== 0, "the car flies with its wheels turned").toBeTruthy();
     car["dropWheel"](0, "hubFL");
     twin["dropWheel"](0, "hubFL");
     const [carWheel, twinWheel] = [car, twin].map((c) => [...c["looseWheels"][0]!.object.position.toArray(), ...c["looseWheels"][0]!.object.quaternion.toArray()]);

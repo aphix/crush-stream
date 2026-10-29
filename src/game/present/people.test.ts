@@ -1,5 +1,4 @@
-import { describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
@@ -53,24 +52,24 @@ function escort(secretOut: boolean, seconds: number) {
 describe("given the National Mall's VIP and the player's car parked on the White House's North Lawn", () => {
   it("when the course's secret is out, then he walks out of the house to the passenger door and gets in, and when the driver is thrown out he is thrown with him, once: a portly blond man in a blue suit", () => {
     const { vip, car, cars, throws, throwPassenger, throwFigure, boardedAt } = escort(true, 40);
-    assert.ok(boardedAt > 5 && boardedAt < 35, `boarded ${boardedAt.toFixed(1)} s after the car stopped (a walk of some 40 m)`);
-    assert.equal(throws.length, 0, "nobody thrown while the car is whole");
+    expect(boardedAt > 5 && boardedAt < 35, `boarded ${boardedAt.toFixed(1)} s after the car stopped (a walk of some 40 m)`).toBeTruthy();
+    expect(throws.length, "nobody thrown while the car is whole").toBe(0);
     car.driverOut = "windshield";
     vip.frame(FRAME, true, 0, cars, throwPassenger, throwFigure);
     vip.frame(FRAME, true, 0, cars, throwPassenger, throwFigure);
-    assert.equal(throws.length, 1, "thrown once with the driver");
-    assert.equal(throws[0]!.car, 0, "out of the player's car");
-    assert.equal(throws[0]!.look.woman, false, "a man");
-    assert.equal(throws[0]!.look.hair, VIP_LOOK.hair, "his swept blond hair");
-    assert.equal(throws[0]!.look.shirt, VIP_LOOK.shirt, "his navy jacket");
-    assert.equal(throws[0]!.look.pants, VIP_LOOK.pants, "his navy trousers");
-    assert.equal(throws[0]!.look.portly, true, "portly");
-    assert.equal(vip.ridingIn, -1, "no longer riding");
+    expect(throws.length, "thrown once with the driver").toBe(1);
+    expect(throws[0]!.car, "out of the player's car").toBe(0);
+    expect(throws[0]!.look.woman, "a man").toBe(false);
+    expect(throws[0]!.look.hair, "his swept blond hair").toBe(VIP_LOOK.hair);
+    expect(throws[0]!.look.shirt, "his navy jacket").toBe(VIP_LOOK.shirt);
+    expect(throws[0]!.look.pants, "his navy trousers").toBe(VIP_LOOK.pants);
+    expect(throws[0]!.look.portly, "portly").toBe(true);
+    expect(vip.ridingIn, "no longer riding").toBe(-1);
   });
 
   it("when he rides, then his hips are on the passenger seat from the style's seats (the driver's H-point mirrored across the car), and they ride a crushed cabin", () => {
     const { vip, car, cars, throwPassenger, throwFigure, boardedAt } = escort(true, 40);
-    assert.ok(boardedAt > 0, "control: he boarded");
+    expect(boardedAt, "control: he boarded").toBeGreaterThan(0);
     const mesh: DummyMesh = vip["people"]["mesh"];
     const joint = (j: number) => new THREE.Vector3(JOINTS[j]![2], JOINTS[j]![3], JOINTS[j]![4]);
     const hips = () => mesh.partPoint(0, 6, joint(5), new THREE.Vector3()).add(mesh.partPoint(0, 8, joint(7), new THREE.Vector3())).multiplyScalar(0.5);
@@ -79,16 +78,16 @@ describe("given the National Mall's VIP and the player's car parked on the White
       car.interior.updateWorldMatrix(true, false);
       return new THREE.Vector3(-h.x, h.y, h.z).applyMatrix4(car.interior.matrixWorld);
     };
-    assert.ok(hips().distanceTo(seat()) < 1e-3, `hips ${hips().distanceTo(seat()).toFixed(3)} m off the passenger H-point`);
+    expect(hips().distanceTo(seat()), `hips ${hips().distanceTo(seat()).toFixed(3)} m off the passenger H-point`).toBeLessThan(1e-3);
     car.interior.scale.x = 0.8;
     car.interior.position.set(0.05, -0.03, 0.02);
     vip.frame(FRAME, true, 0, cars, throwPassenger, throwFigure);
-    assert.ok(hips().distanceTo(seat()) < 1e-3, `crushed cabin: hips ${hips().distanceTo(seat()).toFixed(3)} m off the passenger H-point`);
+    expect(hips().distanceTo(seat()), `crushed cabin: hips ${hips().distanceTo(seat()).toFixed(3)} m off the passenger H-point`).toBeLessThan(1e-3);
   });
 
   it("when the secret is still in, then he never comes out, though the same car would draw him once it is", () => {
-    assert.equal(escort(false, 40).boardedAt, -1, "never boards");
-    assert.ok(escort(true, 40).boardedAt > 0, "with the secret out he boards");
+    expect(escort(false, 40).boardedAt, "never boards").toBe(-1);
+    expect(escort(true, 40).boardedAt, "with the secret out he boards").toBeGreaterThan(0);
   });
 
   const strikeCases = [
@@ -99,19 +98,19 @@ describe("given the National Mall's VIP and the player's car parked on the White
     it(testCase.it, () => {
       const { vip, cars, throwPassenger, throwFigure, figures } = escort(true, 3);
       const where = { x: vip["x"], z: vip["z"] };
-      assert.equal(vip["phase"], "walking", "he is out on his walk");
+      expect(vip["phase"], "he is out on his walk").toBe("walking");
       const bullet = makeCar();
       launch(bullet, where.x, where.z, 0, 0, testCase.mps);
       cars.push(bullet);
       vip.frame(FRAME, true, 0, cars, throwPassenger, throwFigure);
       vip.frame(FRAME, true, 0, cars, throwPassenger, throwFigure);
-      assert.equal(figures.length, testCase.expectedFigures, "figures thrown");
-      assert.equal(vip["phase"], testCase.expectedFigures === 1 ? "thrown" : "walking", "his phase");
+      expect(figures.length, "figures thrown").toBe(testCase.expectedFigures);
+      expect(vip["phase"], "his phase").toBe(testCase.expectedFigures === 1 ? "thrown" : "walking");
       if (testCase.expectedFigures === 0) return;
-      assert.equal(figures[0]!.guard, -1, "the VIP, not a guard");
-      assert.equal(figures[0]!.car, 1, "struck by the second car");
-      assert.ok(Math.abs(figures[0]!.x - where.x) < 1e-3 && Math.abs(figures[0]!.z - where.z) < 1e-3, "where he stood");
-      assert.equal((vip["people"]["mesh"]["shown"] >> 0) & 1, 0, "his figure is hidden");
+      expect(figures[0]!.guard, "the VIP, not a guard").toBe(-1);
+      expect(figures[0]!.car, "struck by the second car").toBe(1);
+      expect(Math.abs(figures[0]!.x - where.x) < 1e-3 && Math.abs(figures[0]!.z - where.z) < 1e-3, "where he stood").toBeTruthy();
+      expect((vip["people"]["mesh"]["shown"] >> 0) & 1, "his figure is hidden").toBe(0);
     });
   }
 });
@@ -145,40 +144,40 @@ describe("given the National Mall's guard squad, inside the house until the alar
   it("when nobody is out, then nothing of theirs is drawn; when the alarm sends them out, they are drawn; when it stands down and they are back inside, they are not", () => {
     const { people, frames } = lawn();
     frames(1, true);
-    assert.equal(people.group.visible, false, "a quiet lawn draws nothing");
+    expect(people.group.visible, "a quiet lawn draws nothing").toBe(false);
     frames(4, false);
-    assert.equal(people.group.visible, true, "the squad out on the lawn is drawn");
+    expect(people.group.visible, "the squad out on the lawn is drawn").toBe(true);
     frames(20, true);
-    assert.equal(people.group.visible, false, "the squad back inside draws nothing");
+    expect(people.group.visible, "the squad back inside draws nothing").toBe(false);
   });
 
   it("when a car at speed runs guard 0 down, then he is drawn no more while the rest of the squad still is, and after a restart he stands in the ranks again", () => {
     const { people, squad, guard, bullet, frames } = lawn();
     frames(3, false);
-    assert.ok(standing(people, 1) && standing(people, 2), "guards 0 and 1 stand at their posts");
+    expect(standing(people, 1) && standing(people, 2), "guards 0 and 1 stand at their posts").toBeTruthy();
     launch(bullet, guard.guardX[0]!, guard.guardZ[0]!, 0, 0, 15);
     frames(2 * FRAME, false);
-    assert.equal(guard.mode[0], GUARD_DOWN, "the sim has him down");
-    assert.ok(!standing(people, 1), "he is no longer drawn");
-    assert.ok(standing(people, 2), "the next guard still is");
+    expect(guard.mode[0], "the sim has him down").toBe(GUARD_DOWN);
+    expect(!standing(people, 1), "he is no longer drawn").toBe(true);
+    expect(standing(people, 2), "the next guard still is").toBeTruthy();
     launch(bullet, OFF_GROUNDS.x, OFF_GROUNDS.z, 0, 0, 0);
     squad.reset();
     guard.reset(1);
     frames(3, false);
-    assert.ok(standing(people, 1), "after the restart he stands again");
+    expect(standing(people, 1), "after the restart he stands again").toBeTruthy();
   });
 
   it("when a gun fires with nobody else out, then its flash goes out first, its tracer a moment later, and then nothing is drawn", () => {
     const { people } = lawn();
     people.fire(0, 0, 1, 0);
     people.update(FRAME);
-    assert.equal(people.group.visible, true, "the shot shows");
-    assert.ok(people["flashes"].visible && people["tracers"].visible, "flash and tracer both show");
+    expect(people.group.visible, "the shot shows").toBe(true);
+    expect(people["flashes"].visible && people["tracers"].visible, "flash and tracer both show").toBeTruthy();
     people.update(0.04);
-    assert.ok(!people["flashes"].visible && people["tracers"].visible, "the flash is out, the tracer still runs");
+    expect(!people["flashes"].visible && people["tracers"].visible, "the flash is out, the tracer still runs").toBeTruthy();
     people.update(0.2);
-    assert.equal(people.group.visible, false, "the shot is out");
-    assert.ok(!people["tracers"].visible, "the tracer is out");
+    expect(people.group.visible, "the shot is out").toBe(false);
+    expect(!people["tracers"].visible, "the tracer is out").toBe(true);
   });
 
   /** The squad out and aiming at the parked car, then one shot of guard 0's at it drawn on its own frame: where its tracer ended and the sparks asked for. */
@@ -223,24 +222,24 @@ describe("given the National Mall's guard squad, inside the house until the alar
 
   it("when a hit shot lands on a car, then the sparks start on the car's surface facing the shooter, where its tracer ends, not inside the body", () => {
     const { car, sparked, muzzle, tracerEnd } = shotAtCar(true);
-    assert.equal(sparked.length, 1, "one shower for the hit");
+    expect(sparked.length, "one shower for the hit").toBe(1);
     const { at, normal } = sparked[0]!;
     const inside = car.group.position.clone().add(new THREE.Vector3(0, 0.7, 0));
-    assert.ok(muzzle.distanceTo(at) < muzzle.distanceTo(inside) - 0.5, `the point is ${(muzzle.distanceTo(inside) - muzzle.distanceTo(at)).toFixed(2)} m nearer the shooter than the car's middle`);
-    assert.ok(normal.dot(muzzle.clone().sub(at)) > 0 && Math.abs(normal.length() - 1) < 1e-6, "the face's unit normal points at the shooter");
+    expect(muzzle.distanceTo(at), `the point is ${(muzzle.distanceTo(inside) - muzzle.distanceTo(at)).toFixed(2)} m nearer the shooter than the car's middle`).toBeLessThan(muzzle.distanceTo(inside) - 0.5);
+    expect(normal.dot(muzzle.clone().sub(at)) > 0 && Math.abs(normal.length() - 1) < 1e-6, "the face's unit normal points at the shooter").toBeTruthy();
     // On the body: a ray from 5 cm off the point straight back at the car meets a drawn triangle of its body within a few cm of that.
     const turn = car.group.quaternion.clone().invert();
     const from = at.clone().addScaledVector(normal, 0.05).sub(car.group.position).applyQuaternion(turn);
     const way = normal.clone().negate().applyQuaternion(turn);
     const t = firstTriangle(drawnTriangles(car), from, way);
-    assert.ok(Math.abs(t - 0.05) < 0.05, `the body is ${t.toFixed(3)} m along the ray from 5 cm off the point`);
-    assert.ok(tracerEnd.distanceTo(at) < 1e-4, "the tracer ends where the sparks start");
+    expect(Math.abs(t - 0.05), `the body is ${t.toFixed(3)} m along the ray from 5 cm off the point`).toBeLessThan(0.05);
+    expect(tracerEnd.distanceTo(at), "the tracer ends where the sparks start").toBeLessThan(1e-4);
   });
 
   it("when a shot misses the car, then its tracer flies past and no sparks fly", () => {
     const { sparked, tracerEnd, car } = shotAtCar(false);
-    assert.equal(sparked.length, 0, "no sparks");
-    assert.ok(tracerEnd.distanceTo(car.group.position) > 2, "the tracer ends wide of the car");
+    expect(sparked.length, "no sparks").toBe(0);
+    expect(tracerEnd.distanceTo(car.group.position), "the tracer ends wide of the car").toBeGreaterThan(2);
   });
 });
 
@@ -253,11 +252,11 @@ describe("given the VIP riding with the squad inside", () => {
     for (let t = 0; t < 40; t += FRAME) art.frame(FRAME, null, true, [car], 0, host);
     const drawn = art["people"].group.children.find((c): c is DummyMesh => c instanceof DummyMesh)!;
     const slots = spec.count + 1;
-    assert.equal(drawn.count, drawn.instanceMatrix.count / slots, "the draw ends after slot 0");
+    expect(drawn.count, "the draw ends after slot 0").toBe(drawn.instanceMatrix.count / slots);
     // The slot is the instance, so his place is the torso part's pose (`DummyMesh.partPoint` of its rest centre), not an instance matrix.
     const torso = drawn.partPoint(VIP_SLOT, 0, new THREE.Vector3().fromArray(PARTS[0]!.c), new THREE.Vector3());
     const local = torso.x - car.group.position.x;
-    assert.ok(local < -0.2, `the VIP sits on the car's right (-x), across from the driver: car-local x ${local.toFixed(2)}`);
+    expect(local, `the VIP sits on the car's right (-x), across from the driver: car-local x ${local.toFixed(2)}`).toBeLessThan(-0.2);
   });
 
   it("when the next race starts (`GroundsArt.reset`), then he is back inside: no figure is drawn and, the secret in again, he does not come out", () => {
@@ -267,10 +266,10 @@ describe("given the VIP riding with the squad inside", () => {
     const host = { sparks: () => {}, throwPassenger: () => {}, throwFigure: () => {} };
     for (let t = 0; t < 40; t += FRAME) art.frame(FRAME, null, true, [car], 0, host);
     const drawn = art["people"].group.children.find((c): c is DummyMesh => c instanceof DummyMesh)!;
-    assert.equal(drawn.count, drawn.instanceMatrix.count / (spec.count + 1), "riding: his one figure is drawn");
+    expect(drawn.count, "riding: his one figure is drawn").toBe(drawn.instanceMatrix.count / (spec.count + 1));
     art.reset();
     for (let t = 0; t < 40; t += FRAME) art.frame(FRAME, null, false, [car], 0, host);
-    assert.equal(drawn.count, 0, "nobody drawn");
+    expect(drawn.count, "nobody drawn").toBe(0);
   });
 });
 
@@ -287,7 +286,7 @@ describe("given the secret's flash over a view", () => {
     const stop = nukeFlash({ appendChild: (node) => node }, () => void (peaked = true));
     stop();
     vi.advanceTimersByTime(10_000);
-    assert.equal(peaked, false, "the picture's moment never comes");
-    assert.ok(glare.removed && glare.cancelled, "the glare is taken down");
+    expect(peaked, "the picture's moment never comes").toBe(false);
+    expect(glare.removed && glare.cancelled, "the glare is taken down").toBeTruthy();
   });
 });

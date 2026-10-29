@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { makeWorld } from "../world/race-world.test-util.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -84,14 +83,14 @@ describe("given a sedan driven at 40 m/s at Havana's alley wall from 40 m, in co
   it("when lone cars run, then it is lone until its nose is within a step's travel of the wall, from there on every step takes all the slices, and it never gets a mass past the wall's far face", () => {
     const run = drive(true);
     const far = run.rows.slice(SETTLE_STEPS).filter((r) => r.gap > NEAR_STEP_GAP + 1);
-    assert.ok(far.length > 20, `${far.length} steps well clear of the wall`);
+    expect(far.length, `${far.length} steps well clear of the wall`).toBeGreaterThan(20);
     const bad = far.find((r) => !r.lone || r.slices !== SLICES_PER_STEP);
-    assert.equal(bad, undefined, `a step well clear of the wall is a lone car's: ${JSON.stringify(bad)} of ${JSON.stringify(far.slice(0, 3))}`);
+    expect(bad, `a step well clear of the wall is a lone car's: ${JSON.stringify(bad)} of ${JSON.stringify(far.slice(0, 3))}`).toBe(undefined);
     const first = run.rows.findIndex((r, s) => s >= SETTLE_STEPS && !r.lone);
-    assert.ok(first > SETTLE_STEPS, "the car left the lone steps");
-    assert.ok(run.rows[first]!.gap > 0.5 && run.rows[first]!.gap <= NEAR_STEP_GAP + 1, `the first sliced step starts ${run.rows[first]!.gap.toFixed(2)} m from the wall`);
-    assert.ok(run.rows.slice(first, first + HIT_STEPS).every((r) => !r.lone && r.slices === SLICES_PER_STEP), "the hit's steps take all the slices");
-    assert.equal(run.past, 0, "no mass past the far face");
+    expect(first, "the car left the lone steps").toBeGreaterThan(SETTLE_STEPS);
+    expect(run.rows[first]!.gap > 0.5 && run.rows[first]!.gap <= NEAR_STEP_GAP + 1, `the first sliced step starts ${run.rows[first]!.gap.toFixed(2)} m from the wall`).toBeTruthy();
+    expect(run.rows.slice(first, first + HIT_STEPS).every((r) => !r.lone && r.slices === SLICES_PER_STEP), "the hit's steps take all the slices").toBeTruthy();
+    expect(run.past, "no mass past the far face").toBe(0);
   });
 });
 
@@ -99,10 +98,10 @@ describe("given a sedan driven at 40 m/s at Havana's alley wall from 11 m, on th
   it("when lone cars run and when they do not, then the sedan ends the 3 s within 5 cm of the same place with the same drivetrain health", () => {
     const lone = drive(true, FLAT_GAP);
     const sliced = drive(false, FLAT_GAP);
-    assert.ok(lone.rows.slice(0, 10).every((r) => r.lone), "it runs lone before the hit");
-    assert.ok(sliced.rows.every((r) => !r.lone));
-    assert.ok(Math.abs(lone.x - sliced.x) < 0.05, `${lone.x.toFixed(3)} against ${sliced.x.toFixed(3)} m`);
-    assert.equal(lone.alive, sliced.alive);
+    expect(lone.rows.slice(0, 10).every((r) => r.lone), "it runs lone before the hit").toBeTruthy();
+    expect(sliced.rows.every((r) => !r.lone)).toBeTruthy();
+    expect(Math.abs(lone.x - sliced.x), `${lone.x.toFixed(3)} against ${sliced.x.toFixed(3)} m`).toBeLessThan(0.05);
+    expect(lone.alive).toBe(sliced.alive);
   });
 });
 
@@ -171,13 +170,13 @@ describe("given a sedan leaning into Havana's alley wall below a crash's speed, 
     it(`when they drive on at ${speed} m/s, then the pair is lone while the wall's push can not reach the other car, no overlap of the pair is missed, and the first contact and the end poses agree with the sliced run's`, () => {
       const on = graze(speed, true);
       const off = graze(speed, false);
-      assert.equal(on.missed, 0, "pairs with a lone car that overlap at a step's end");
-      assert.equal(on.first, off.first, "first pair contact");
-      assert.ok(on.depth <= off.depth + 0.02, `deepest overlap ${on.depth.toFixed(3)} m against ${off.depth.toFixed(3)} m`);
-      assert.ok(Math.abs(on.end[1] - off.end[1]) < 0.05, `the neighbour ends ${on.end[1].toFixed(3)} m against ${off.end[1].toFixed(3)} m`);
-      assert.ok(on.clear.some(Boolean), "the pair was clear in some step");
-      assert.ok(on.nearest < 1 && off.nearest < 1, `the car pressed on the wall (its centre ${on.nearest.toFixed(2)} / ${off.nearest.toFixed(2)} m from the face, a body half 0.9 m wide)`);
-      assert.ok(on.wallward > 0.2 && on.wallward < 5.5, `its fastest speed toward the wall (read after the wall's push) was ${on.wallward.toFixed(2)} m/s`);
+      expect(on.missed, "pairs with a lone car that overlap at a step's end").toBe(0);
+      expect(on.first, "first pair contact").toBe(off.first);
+      expect(on.depth, `deepest overlap ${on.depth.toFixed(3)} m against ${off.depth.toFixed(3)} m`).toBeLessThanOrEqual(off.depth + 0.02);
+      expect(Math.abs(on.end[1] - off.end[1]), `the neighbour ends ${on.end[1].toFixed(3)} m against ${off.end[1].toFixed(3)} m`).toBeLessThan(0.05);
+      expect(on.clear.some(Boolean), "the pair was clear in some step").toBeTruthy();
+      expect(on.nearest < 1 && off.nearest < 1, `the car pressed on the wall (its centre ${on.nearest.toFixed(2)} / ${off.nearest.toFixed(2)} m from the face, a body half 0.9 m wide)`).toBeTruthy();
+      expect(on.wallward > 0.2 && on.wallward < 5.5, `its fastest speed toward the wall (read after the wall's push) was ${on.wallward.toFixed(2)} m/s`).toBeTruthy();
     });
   }
 });
@@ -189,12 +188,12 @@ describe("given a sedan driven at 40 m/s into Havana's alley wall from 40 m, its
       const { rows } = drive(lone);
       let last = -1;
       for (let s = 0; s < rows.length; s++) if (rows[s]!.quiet <= CONTACT_HOLD) last = s;
-      assert.ok(last > 0 && last + 1 < rows.length, `the last step in a loading contact's hold: ${last} of ${rows.length}`);
+      expect(last > 0 && last + 1 < rows.length, `the last step in a loading contact's hold: ${last} of ${rows.length}`).toBeTruthy();
       const kept = rows[last + 1]!.set;
       const grown = rows.at(-1)!.set - kept;
       if (grown > 0) grew.push(`${lone ? "lone" : "sliced"}: ${grown.toFixed(3)} m over ${kept.toFixed(3)} m after step ${last + 1}`);
     }
-    assert.deepEqual(grew, [], "the sets grew");
+    expect(grew, "the sets grew").toHaveLength(0);
   });
 });
 
@@ -214,7 +213,7 @@ function restingOnFace(): { gap: number; runs: { lone: boolean; moves: number[] 
     const runs = [true, false].map((lone) => ({ lone, moves: freeMoves(drive(lone, gap).rows) }));
     if (runs.every((r) => r.moves.length > MIN_FREE_STEPS)) return { gap, runs };
   }
-  assert.fail(`no start gap of ${RESTING_GAPS.join(", ")} m leaves the nose resting on the face for more than ${MIN_FREE_STEPS} free steps, lone and sliced`);
+  expect.fail(`no start gap of ${RESTING_GAPS.join(", ")} m leaves the nose resting on the face for more than ${MIN_FREE_STEPS} free steps, lone and sliced`);
 }
 
 describe("given a sedan driven at 40 m/s into Havana's alley wall from the flat at its foot, its nose left resting on the wall's face", () => {
@@ -228,7 +227,7 @@ describe("given a sedan driven at 40 m/s into Havana's alley wall from the flat 
       t.annotate(`from ${gap} m, ${lone ? "lone" : "sliced"}: ${perStep.toFixed(2)} mm a step away from the wall over ${moves.length} free steps`);
       if (perStep < 0) walks.push(`${lone ? "lone" : "sliced"}: ${(-perStep).toFixed(2)} mm a step toward the wall over ${moves.length} steps from ${gap} m`);
     }
-    assert.deepEqual(walks, [], "the frame walked toward the face it rests on");
+    expect(walks, "the frame walked toward the face it rests on").toHaveLength(0);
   });
 });
 
@@ -238,15 +237,15 @@ describe("given a sedan driven at 20 m/s into Havana's alley wall from 11 m with
     for (const lone of [true, false]) {
       const { rows } = drive(lone, FLAT_GAP, BACK_OFF_SPEED, -1);
       const first = rows.findIndex((r) => r.face > 0);
-      assert.ok(first >= 0, `${lone ? "lone" : "sliced"}: no step with masses on the face`);
+      expect(first, `${lone ? "lone" : "sliced"}: no step with masses on the face`).toBeGreaterThanOrEqual(0);
       const rest = rows[first]!.near;
       const on = rows.filter((r) => r.face > 0).length;
       const off = rows.slice(first).filter((r) => r.near > rest + OFF_FACE);
       const stale = off.filter((r) => r.face > 0).length;
       t.annotate(`${lone ? "lone" : "sliced"}: ${on} steps with masses on the face, ${off.length} clear of it, ${stale} of those counting masses on it`);
-      assert.ok(on > 0 && off.length > 0, `${lone ? "lone" : "sliced"}: ${on} steps on the face, ${off.length} clear of it`);
+      expect(on > 0 && off.length > 0, `${lone ? "lone" : "sliced"}: ${on} steps on the face, ${off.length} clear of it`).toBeTruthy();
       if (stale > 0) counted.push(`${lone ? "lone" : "sliced"}: ${stale} of ${off.length} steps clear of the face`);
     }
-    assert.deepEqual(counted, [], "steps clear of the face that count masses on it");
+    expect(counted, "steps clear of the face that count masses on it").toHaveLength(0);
   });
 });

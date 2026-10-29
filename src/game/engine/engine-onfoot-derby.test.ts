@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 
 const FALL_WITHIN_S = 1.5;
@@ -24,10 +23,10 @@ describe("given the real engine in a derby, the player at the wheel of his car o
     rig.engine["looping"] = false;
     rig.engine.toggleDerby();
     rig.run(0.5);
-    assert.ok(rig.engine.derbyMode, "the derby is on");
+    expect(rig.engine.derbyMode, "the derby is on").toBeTruthy();
     rig.sit(0);
     rig.run(FRAME);
-    assert.equal(rig.engine["seat"].mode, "drive", "the player has the wheel");
+    expect(rig.engine["seat"].mode, "the player has the wheel").toBe("drive");
   });
   afterAll(() => rig.dispose());
 
@@ -36,11 +35,11 @@ describe("given the real engine in a derby, the player at the wheel of his car o
     const own = rig.cars()[self]!;
     const rival = rig.cars().find((_, i) => i !== self)!;
     rig.getOut();
-    assert.equal(rig.away(), self, "his car is the one he left");
+    expect(rig.away(), "his car is the one he left").toBe(self);
     rig.walkTo(rig.beside(own, 2, 3), 1.5, 15);
     rig.runDownBy(rival, own, "ahead", GRID_HIT_MPS, GRID_RUN_UP_M);
     for (let t = 0; t < FALL_WITHIN_S && rig.walker().state === "stand"; t += FRAME) rig.run(FRAME);
-    assert.notEqual(rig.walker().state, "stand", "the rival knocked him down");
+    expect(rig.walker().state, "the rival knocked him down").not.toBe("stand");
     // Every rival's engine dies, each on the far side of the arena (a wreck stopping at his door would be in his way).
     for (const [i, car] of rig.cars().entries()) {
       if (i === self) continue;
@@ -48,13 +47,13 @@ describe("given the real engine in a derby, the player at the wheel of his car o
       car.disable();
     }
     for (let t = 0; t < CROWNED_WITHIN_S && derby().winnerId == null; t += FRAME) rig.run(FRAME);
-    assert.equal(derby().winnerId, self, "the last car alive won");
-    assert.equal(derby().decided, "wreck", "by the rivals' wrecks");
-    assert.notEqual(rig.phase(), "inCar", "he was on foot when it was decided");
+    expect(derby().winnerId, "the last car alive won").toBe(self);
+    expect(derby().decided, "by the rivals' wrecks").toBe("wreck");
+    expect(rig.phase(), "he was on foot when it was decided").not.toBe("inCar");
     rig.getUp();
     rig.getIn();
     const driven = own.group.position.clone();
     rig.hold("KeyW", 2);
-    assert.ok(own.group.position.distanceTo(driven) > DRIVES_OFF_M, `he drove his car again: ${own.group.position.distanceTo(driven).toFixed(1)} m`);
+    expect(own.group.position.distanceTo(driven), `he drove his car again: ${own.group.position.distanceTo(driven).toFixed(1)} m`).toBeGreaterThan(DRIVES_OFF_M);
   });
 });

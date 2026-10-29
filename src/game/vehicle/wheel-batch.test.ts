@@ -1,5 +1,4 @@
-import { describe, test } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, test } from "vitest";
 import * as THREE from "three";
 import { DETAIL_LEVELS } from "../present/car-detail.ts";
 import { makeWheelGeometry, RUBBER, treadNormalMap, WHEEL_DESIGNS, type WheelDesign } from "./car-materials.ts";
@@ -9,6 +8,7 @@ import { STYLE_WHEELS, WheelBatch } from "./wheel-batch.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { detCos, detSin } from "../kernel/physics-core.js";
+import { must } from "../kernel/must.test-util.ts";
 
 /** The instance matrix is float32: a wheel's position of a few hundred metres is stored within 1e-4 m. */
 const FLOAT32_SLACK = 1e-4;
@@ -37,8 +37,8 @@ describe("given the wheel batch and cars at two distances from the camera", () =
     draw(cars);
     const full = nearOf(batch, "sedan");
     const far = farOf(batch);
-    assert.equal(full.count, 4);
-    assert.equal(far.count, 4);
+    expect(full.count).toBe(4);
+    expect(far.count).toBe(4);
     const matrix = new THREE.Matrix4();
     far.getMatrixAt(0, matrix);
     // The one wheel mesh is the platform tyre: the drawn matrix is the wheel group's, scaled to the style's own tyre.
@@ -53,22 +53,22 @@ describe("given the wheel batch and cars at two distances from the camera", () =
     draw(cars);
     cars[1]!.group.position.z = 12;
     draw(cars);
-    assert.equal(nearOf(batch, "sedan").count, 8);
-    assert.equal(farOf(batch).count, 0);
+    expect(nearOf(batch, "sedan").count).toBe(8);
+    expect(farOf(batch).count).toBe(0);
   });
 
   test("when every design's full wheel is compared with the far wheel, then the far wheel has at most a fifth of its triangles and the same attributes", () => {
     const { batch } = stage();
     const far = farOf(batch);
     for (const full of batch.meshes.slice(0, WHEEL_DESIGNS.length)) {
-      assert.ok(triangles(far) * 5 <= triangles(full), `${triangles(far)} of ${triangles(full)}`);
-      assert.equal(Object.keys(far.geometry.attributes).sort().join(), Object.keys(full.geometry.attributes).sort().join());
+      expect(triangles(far) * 5, `${triangles(far)} of ${triangles(full)}`).toBeLessThanOrEqual(triangles(full));
+      expect(Object.keys(far.geometry.attributes).sort().join()).toBe(Object.keys(full.geometry.attributes).sort().join());
     }
   });
 
   test("when the batch is built, then every wheel draw's material uses the one shared tread normal map", () => {
     const { batch } = stage();
-    for (const mesh of batch.meshes.slice(0, -1)) assert.equal((mesh.material as THREE.MeshStandardMaterial).normalMap, treadNormalMap());
+    for (const mesh of batch.meshes.slice(0, -1)) expect((mesh.material as THREE.MeshStandardMaterial).normalMap).toBe(treadNormalMap());
   });
 });
 
@@ -76,20 +76,20 @@ describe("given the wheel batch synced for a renderer's shadow pass", () => {
   test("when the shadow pass runs, then the prisms are shown during it and hidden before and after, and the wheel draws cast nothing", () => {
     const { batch, car, draw, renderer, seen, shadow } = stage();
     draw([car(10)]);
-    assert.equal(shadow.visible, false, "hidden while the main pass builds its list");
+    expect(shadow.visible, "hidden while the main pass builds its list").toBe(false);
     passRuns(renderer);
-    assert.equal(seen.length, 1);
-    assert.equal(seen[0], true, "visible inside the pass");
-    assert.equal(shadow.visible, false, "hidden again once the pass is done");
-    assert.equal(shadow.castShadow, true);
-    assert.equal(batch.meshes.slice(0, -1).some((m) => m.castShadow), false);
+    expect(seen.length).toBe(1);
+    expect(seen[0], "visible inside the pass").toBe(true);
+    expect(shadow.visible, "hidden again once the pass is done").toBe(false);
+    expect(shadow.castShadow).toBe(true);
+    expect(batch.meshes.slice(0, -1).some((m) => m.castShadow)).toBe(false);
   });
 
   test("when a near car and a far car are drawn, then one prism stands at each of the eight wheels and each prism is at most a tenth of a full wheel's triangles", () => {
     const { batch, car, draw, shadow } = stage();
     draw([car(10), car(FAR_BEYOND + 20)]);
-    assert.equal(shadow.count, 8);
-    for (const full of batch.meshes.slice(0, WHEEL_DESIGNS.length)) assert.ok(triangles(shadow) * 10 <= triangles(full), `${triangles(shadow)} of ${triangles(full)}`);
+    expect(shadow.count).toBe(8);
+    for (const full of batch.meshes.slice(0, WHEEL_DESIGNS.length)) expect(triangles(shadow) * 10, `${triangles(shadow)} of ${triangles(full)}`).toBeLessThanOrEqual(triangles(full));
   });
 
   test("when the batch is synced twice, then the shadow pass is wrapped once", () => {
@@ -98,7 +98,7 @@ describe("given the wheel batch synced for a renderer's shadow pass", () => {
     draw(cars);
     draw(cars);
     passRuns(renderer);
-    assert.equal(seen.length, 1);
+    expect(seen.length).toBe(1);
   });
 
   test("when the batch is disposed, then the renderer's own shadow pass is back", () => {
@@ -106,7 +106,7 @@ describe("given the wheel batch synced for a renderer's shadow pass", () => {
     draw([car(10)]);
     batch.dispose();
     passRuns(renderer);
-    assert.equal(seen[0], false);
+    expect(seen[0]).toBe(false);
   });
 });
 
@@ -180,7 +180,7 @@ function outwardFaceDark(g: THREE.BufferGeometry): (y: number, z: number) => boo
       const l1 = ((z2 - z0) * (y - y2) + (y0 - y2) * (z - z2)) / det;
       if (l0 >= -EDGE_TOL && l1 >= -EDGE_TOL && l0 + l1 <= 1 + EDGE_TOL && (!top || f.x > top.x)) top = f;
     }
-    assert.ok(top, `no +x face over y ${y.toFixed(3)} z ${z.toFixed(3)}`);
+    must(top, `no +x face over y ${y.toFixed(3)} z ${z.toFixed(3)}`);
     return top.dark;
   };
 }
@@ -190,7 +190,7 @@ describe("given the reference cars' rim designs", () => {
     test(`when a ${id} alone is drawn, then its four wheels are all in its reference design's draw and no other wheel draw holds any`, () => {
       const { batch } = drawnAlone(id);
       const counts = batch.meshes.slice(0, WHEEL_DESIGNS.length).map((m, k) => `${WHEEL_DESIGNS[k]}:${m.count}`);
-      assert.equal(counts.filter((c) => !c.endsWith(":0")).join(), `${REFERENCE_RIMS[id]}:4`);
+      expect(counts.filter((c) => !c.endsWith(":0")).join()).toBe(`${REFERENCE_RIMS[id]}:4`);
     });
   }
 
@@ -202,15 +202,15 @@ describe("given the reference cars' rim designs", () => {
       for (let i = 0; i < p.count; i++) sum += Math.abs(p.getX(i)) + Math.abs(p.getY(i)) * 3 + Math.abs(p.getZ(i)) * 7;
       return `${p.count}/${sum.toFixed(3)}`;
     });
-    assert.equal(new Set(shapes).size, WHEEL_DESIGNS.length, shapes.join(" "));
-    assert.ok(STYLE_WHEELS.wagon.tint.getHex() === STYLE_WHEELS.sedan.tint.getHex(), `SUV rim ${STYLE_WHEELS.wagon.tint.getHexString()} against the sedan's silver`);
+    expect(new Set(shapes).size, shapes.join(" ")).toBe(WHEEL_DESIGNS.length);
+    expect(STYLE_WHEELS.wagon.tint.getHex(), `SUV rim ${STYLE_WHEELS.wagon.tint.getHexString()} against the sedan's silver`).toBe(STYLE_WHEELS.sedan.tint.getHex());
   });
 
   test("when the monster's rims are drawn, then they are the reference's dark gunmetal: their tint takes the alloy under a third of its light", () => {
     /** The most of the alloy's linear light the monster's tint keeps (its side plate's rims read ~0x3a-0x64 against the alloy's 0xc9). */
     const GUNMETAL_SHARE = 1 / 3;
     const { r, g, b } = STYLE_WHEELS.monster.tint;
-    assert.ok(Math.max(r, g, b) < GUNMETAL_SHARE, `monster rim tint ${STYLE_WHEELS.monster.tint.getHexString()}`);
+    expect(Math.max(r, g, b), `monster rim tint ${STYLE_WHEELS.monster.tint.getHexString()}`).toBeLessThan(GUNMETAL_SHARE);
   });
 
   test("when the SUV's rim is built, then its lip reaches the reference's share of the tyre and its tyre's bead sits inside the lip, the sedan's rim unchanged", () => {
@@ -227,8 +227,8 @@ describe("given the reference cars' rim designs", () => {
       return [lip / PLATFORM_TYRE.r, bead];
     };
     const [[suvLip, suvBead], [sedanLip]] = [reach("split10l"), reach("split10")];
-    assert.ok(suvLip >= SUV_RIM_LIP && suvBead < suvLip * PLATFORM_TYRE.r, `SUV lip ${suvLip.toFixed(3)} of the crown, bead ${suvBead.toFixed(4)} m`);
-    assert.ok(Math.abs(sedanLip - 0.216 / PLATFORM_TYRE.r) < 1e-6, `sedan lip ${sedanLip.toFixed(4)} of the crown`);
+    expect(suvLip >= SUV_RIM_LIP && suvBead < suvLip * PLATFORM_TYRE.r, `SUV lip ${suvLip.toFixed(3)} of the crown, bead ${suvBead.toFixed(4)} m`).toBeTruthy();
+    expect(Math.abs(sedanLip - 0.216 / PLATFORM_TYRE.r), `sedan lip ${sedanLip.toFixed(4)} of the crown`).toBeLessThan(1e-6);
   });
 
   test("when the monster's beadlock is built, then its whole rim stands inboard of its tyre's bead and its dish shades as a bowl, tilting toward the axle at its edge", () => {
@@ -244,17 +244,17 @@ describe("given the reference cars' rim designs", () => {
     }
     // The dish is the face nearest the hub plane (its windows 1 mm proud of it); the hub's stub ends far outboard of both.
     for (let i = 0; i < pos.count; i++) if (Math.abs(Math.abs(pos.getX(i)) - dishX) < 0.002) dishTilt = Math.max(dishTilt, Math.acos(Math.min(1, Math.abs(nrm.getX(i)))));
-    assert.ok(rimOut < beadX, `the rim reaches x ${rimOut.toFixed(4)}, the tyre's bead stands at ${beadX.toFixed(4)}`);
-    assert.ok(dishTilt > 0.45, `the dish's normals tilt at most ${dishTilt.toFixed(3)} rad`);
+    expect(rimOut, `the rim reaches x ${rimOut.toFixed(4)}, the tyre's bead stands at ${beadX.toFixed(4)}`).toBeLessThan(beadX);
+    expect(dishTilt, `the dish's normals tilt at most ${dishTilt.toFixed(3)} rad`).toBeGreaterThan(0.45);
   });
 
   test("when the coupe's slotted mag is built, then its outward face is solid all round between its windows and its lip, and dark only in five windows inside", () => {
     const dark = outwardFaceDark(makeWheelGeometry("mag5"));
     const round = (r: number) => Array.from({ length: RING_SAMPLES }, (_, k) => dark(r * detCos((2 * Math.PI * k) / RING_SAMPLES), r * detSin((2 * Math.PI * k) / RING_SAMPLES)));
-    for (const r of DISH_RADII) assert.equal(round(r).filter(Boolean).length, 0, `dark samples round r ${r}`);
+    for (const r of DISH_RADII) expect(round(r).filter(Boolean).length, `dark samples round r ${r}`).toBe(0);
     const windows = round(WINDOW_RADIUS);
     const runs = windows.filter((d, k) => d && !windows[(k + 1) % RING_SAMPLES]).length;
-    assert.equal(runs, 5, `${windows.filter(Boolean).length} of ${RING_SAMPLES} samples dark round r ${WINDOW_RADIUS}`);
+    expect(runs, `${windows.filter(Boolean).length} of ${RING_SAMPLES} samples dark round r ${WINDOW_RADIUS}`).toBe(5);
   });
 });
 
@@ -290,9 +290,9 @@ describe("given a car standing on its wheels, its tyres loaded with its class's 
     const [, , flat, bulge] = squashAt(mesh, 0);
     const patch = 2 * r * Math.sqrt((1 + flat) ** 2 - 1);
     const reading = `flatten ${(flat * r).toFixed(4)} m, patch ${patch.toFixed(3)} m, bulge ${((bulge * halfW) / PLATFORM_TYRE.halfW).toFixed(4)} m`;
-    assert.ok(flat * r >= 0.012 && flat * r <= 0.018, reading);
-    assert.ok(patch >= 0.17 && patch <= 0.2, reading);
-    assert.ok((bulge * halfW) / PLATFORM_TYRE.halfW >= 0.008 && (bulge * halfW) / PLATFORM_TYRE.halfW <= 0.015, reading);
+    expect(flat * r >= 0.012 && flat * r <= 0.018, reading).toBeTruthy();
+    expect(patch >= 0.17 && patch <= 0.2, reading).toBeTruthy();
+    expect((bulge * halfW) / PLATFORM_TYRE.halfW >= 0.008 && (bulge * halfW) / PLATFORM_TYRE.halfW <= 0.015, reading).toBeTruthy();
   });
 
   test("when a sedan, a pickup and a monster are drawn, then the heavier class's tyre is flattened further", () => {
@@ -300,13 +300,13 @@ describe("given a car standing on its wheels, its tyres loaded with its class's 
       const { car, mesh } = drawnAlone(id);
       return squashAt(mesh, 0)[2] * car.frame.rig.tyre.r * car.wheels[0]!.scale.y;
     });
-    assert.ok(flattened[0]! < flattened[1]! && flattened[1]! < flattened[2]!, flattened.map((f) => f.toFixed(4)).join(" < "));
+    expect(flattened[0]! < flattened[1]! && flattened[1]! < flattened[2]!, flattened.map((f) => f.toFixed(4)).join(" < ")).toBeTruthy();
   });
 
   test("when a wheel leaves the ground, then its tyre is drawn round and the others stay loaded", () => {
     const { car, sync, mesh } = drawnAlone("sedan");
     car.wheelsDown = 0b1101;
     sync();
-    assert.equal([0, 1, 2, 3].map((k) => (squashAt(mesh, k)[2] > 0 ? "loaded" : "round")).join(), "loaded,round,loaded,loaded");
+    expect([0, 1, 2, 3].map((k) => (squashAt(mesh, k)[2] > 0 ? "loaded" : "round")).join()).toBe("loaded,round,loaded,loaded");
   });
 });

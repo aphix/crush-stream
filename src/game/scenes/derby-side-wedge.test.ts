@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { ENERGY_ROUNDING, fly, type Launch } from "./derby-containment.test-util.ts";
 
@@ -21,7 +20,7 @@ describe("given a monster driven flat out (throttle and boost) at the 45° plane
     it(`when it is replayed from ${trace.label}, then it never holds more energy than its drive gave it`, (t) => {
       const f = fly("monster", trace);
       t.annotate(`${trace.label}: at most ${f.excess.toFixed(1)} J/kg over the drive's ${f.excessDrive.toFixed(0)} (at ${f.excessAt.toFixed(2)} s)`);
-      assert.ok(f.excess <= ENERGY_ROUNDING, `${f.excess.toFixed(0)} J/kg over what the drive gave it, ${f.excessAt.toFixed(2)} s in (drive ${f.excessDrive.toFixed(0)} J/kg)`);
+      expect(f.excess, `${f.excess.toFixed(0)} J/kg over what the drive gave it, ${f.excessAt.toFixed(2)} s in (drive ${f.excessDrive.toFixed(0)} J/kg)`).toBeLessThanOrEqual(ENERGY_ROUNDING);
     });
   }
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
 import { frame, makeWorld } from "./race-world.test-util.ts";
 import { placeProps, propColliders } from "./placements.ts";
@@ -70,7 +69,7 @@ function play(speed: number, coarse: boolean, phase: number): Hit {
     pace.pin = coarse;
     const state = { acc: 0 };
     for (let n = 0; w.race.phase !== "racing" && n < 60 * 30; n++) frame(w, state, undefined, pace);
-    assert.equal(w.race.phase, "racing");
+    expect(w.race.phase).toBe("racing");
     const car = w.cars[0]!;
     const back = WALL.run - (phase * speed) / 80;
     car.spawnFacing(WALL.fx - WALL.ox * back, WALL.fz - WALL.oz * back, Math.atan2(WALL.ox, WALL.oz), speed);
@@ -110,7 +109,7 @@ describe(`given a sedan flat out into the oval's straight wall at 30 to 66 m/s, 
           if (!h.killed || !h.thrown) missed.push(`${speed} m/s phase ${phase}: block ${h.travel.toFixed(3)} m, killed ${h.killed}, thrown ${h.thrown}`);
         }
       }
-      assert.deepEqual(missed, []);
+      expect(missed).toHaveLength(0);
     });
   }
 
@@ -126,8 +125,8 @@ describe(`given a sedan flat out into the oval's straight wall at 30 to 66 m/s, 
         if (gap > SAME_WORST) apart.push(`${speed} m/s phase ${phase}: ${fine.travel.toFixed(3)} m at 1/240 s, ${coarse.travel.toFixed(3)} m at 1/80 s`);
       }
     }
-    assert.deepEqual(apart, []);
+    expect(apart).toHaveLength(0);
     const mean = sum / (SPEEDS.length * PHASES.length);
-    assert.ok(mean <= SAME_MEAN, `mean gap ${mean.toFixed(4)} m over ${SPEEDS.length * PHASES.length} hits`);
+    expect(mean, `mean gap ${mean.toFixed(4)} m over ${SPEEDS.length * PHASES.length} hits`).toBeLessThanOrEqual(SAME_MEAN);
   });
 });

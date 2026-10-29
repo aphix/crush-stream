@@ -1,9 +1,9 @@
-import { afterAll, afterEach, beforeAll, describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { COUNTER_NAMES, phaseCard, readBattery, watchLongTasks, watchWork, type WorkSeries } from "./bench-measure.ts";
 import { benchRaceEngine, disposeBenchEngine, FRAME_S, runFrames } from "./engine-bench-headless.test-util.ts";
 import type { CrashEngine } from "./engine.ts";
 import { PHASE_NAMES, WORK_NAMES } from "./sim-phases.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** Frames the race runs unmeasured first (10 s of sim: the grid's first crashes are in), then the measured stretch (4 s: the skin kernel's calls come in bursts when a car deforms, and a 2 s window can read none). */
 const WARM_FRAMES = 2400;
@@ -21,7 +21,7 @@ const emptySeries = (): WorkSeries => ({ seconds: 0, wallS: new Float64Array(0),
 /** Sends the second racer head-on at the first, so the window holds a crash (the skin kernel only runs on a deforming car) whatever the race does in it. */
 function stageHeadOn(engine: CrashEngine): void {
   const racers = engine["live"]().filter((car) => !car.crashed);
-  assert.ok(racers.length >= 2, `${racers.length} racers left to stage a crash between`);
+  expect(racers.length, `${racers.length} racers left to stage a crash between`).toBeGreaterThanOrEqual(2);
   const first = racers[0]!;
   const second = racers[1]!;
   first.refreshBasis();
@@ -36,31 +36,31 @@ describe("given a phase table made of a window's phase ms and counter difference
 
   it("when the window covered 2 sim seconds and cost 250 ms, then each phase and counter is per sim second and what the phases leave over is unattributed", () => {
     const card = phaseCard(phaseMs, counts, 250, 2, emptySeries());
-    for (const name of PHASE_NAMES) assert.equal(card.msPerSimS[name], 5, `${name} ms per sim-second`);
-    assert.equal(card.unattributedMsPerSimS, 75, "(250 - 10 phases of 10) / 2");
-    for (const name of COUNTER_NAMES) assert.equal(card.workPerSimS[name], 25, `${name} per sim-second`);
+    for (const name of PHASE_NAMES) expect(card.msPerSimS[name], `${name} ms per sim-second`).toBe(5);
+    expect(card.unattributedMsPerSimS, "(250 - 10 phases of 10) / 2").toBe(75);
+    for (const name of COUNTER_NAMES) expect(card.workPerSimS[name], `${name} per sim-second`).toBe(25);
   });
 
   it("when the window stepped 50 of each unit and each phase cost 10 ms, then a unit costs the phase's ms over the units it stepped, in us, and a car-slice of any class divides by all three classes", () => {
     const card = phaseCard(phaseMs, counts, 250, 2, emptySeries());
-    assert.equal(card.unitUs["wreck us/wreck slice"], 200, "10 ms over 50 wreck slices");
-    assert.ok(Math.abs(card.unitUs["integrate us/car slice"]! - 1000 * 10 / 150) < 1e-9, "10 ms over live + wreck + asleep slices");
+    expect(card.unitUs["wreck us/wreck slice"], "10 ms over 50 wreck slices").toBe(200);
+    expect(Math.abs(card.unitUs["integrate us/car slice"]! - 1000 * 10 / 150), "10 ms over live + wreck + asleep slices").toBeLessThan(1e-9);
   });
 
   it("when the window stepped no wreck, then the wreck units have no entry rather than an infinite cost", () => {
     const noWrecks = counts.slice();
     noWrecks[COUNTER_NAMES.indexOf("wreckCarSlices")] = 0;
     const card = phaseCard(phaseMs, noWrecks, 250, 2, emptySeries());
-    assert.equal("wreck us/wreck slice" in card.unitUs, false, "no wreck units");
-    assert.equal("structure us/wreck slice" in card.unitUs, false, "no wreck units");
-    assert.ok(card.unitUs["integrate us/live slice"]! > 0, "the live units remain");
+    expect("wreck us/wreck slice" in card.unitUs, "no wreck units").toBe(false);
+    expect("structure us/wreck slice" in card.unitUs, "no wreck units").toBe(false);
+    expect(card.unitUs["integrate us/live slice"]!, "the live units remain").toBeGreaterThan(0);
   });
 
   it("when the window covered no sim time, then every figure is zero rather than infinite", () => {
     const card = phaseCard(phaseMs, counts, 250, 0, emptySeries());
-    assert.equal(card.unattributedMsPerSimS, 0, "unattributed");
-    assert.equal(Object.values(card.msPerSimS).every((ms) => ms === 0), true, "phases");
-    assert.equal(Object.values(card.workPerSimS).every((n) => n === 0), true, "counters");
+    expect(card.unattributedMsPerSimS, "unattributed").toBe(0);
+    expect(Object.values(card.msPerSimS).every((ms) => ms === 0), "phases").toBe(true);
+    expect(Object.values(card.workPerSimS).every((n) => n === 0), "counters").toBe(true);
   });
 });
 
@@ -73,7 +73,7 @@ describe("given the real engine on the city bench's race, headless", () => {
   });
   afterAll(() => disposeBenchEngine(engine));
   afterEach(() => {
-    assert.equal(engine["world"].phases.on, false, "a window left the phase clock on");
+    expect(engine["world"].phases.on, "a window left the phase clock on").toBe(false);
   });
 
   it("when a window is watched on a clock that ticks once per read, then its phases plus the unattributed equal the sim's reads, no phase is negative, the unattributed is only the pacer's own reads, and the phases a race always runs each hold time", () => {
@@ -100,42 +100,42 @@ describe("given the real engine on the city bench's race, headless", () => {
     const clockS = WINDOW_FRAMES * FRAME_S;
     const card = phaseCard(phaseMs, counts, simMs, clockS, series);
     const windowS = WINDOW_FRAMES * FRAME_S;
-    assert.ok(series.seconds >= windowS - 1 && series.seconds <= windowS, `one entry a whole second the window crossed (${windowS} s of frames), got ${series.seconds}`);
+    expect(series.seconds >= windowS - 1 && series.seconds <= windowS, `one entry a whole second the window crossed (${windowS} s of frames), got ${series.seconds}`).toBeTruthy();
     for (let k = 0; k < PHASE_NAMES.length; k++) {
       let seconds = 0;
       for (let i = 0; i < series.seconds; i++) seconds += series.phaseMs[i * PHASE_NAMES.length + k]!;
-      assert.ok(seconds <= phaseMs[k]! + 1e-9, `${PHASE_NAMES[k]}: the seconds' ms cannot exceed the window's`);
+      expect(seconds, `${PHASE_NAMES[k]}: the seconds' ms cannot exceed the window's`).toBeLessThanOrEqual(phaseMs[k]! + 1e-9);
     }
     for (let k = 0; k < COUNTER_NAMES.length; k++) {
       let seconds = 0;
       for (let i = 0; i < series.seconds; i++) seconds += series.counts[i * COUNTER_NAMES.length + k]!;
-      assert.ok(seconds <= counts[k]!, `${COUNTER_NAMES[k]}: the seconds' counts cannot exceed the window's`);
+      expect(seconds, `${COUNTER_NAMES[k]}: the seconds' counts cannot exceed the window's`).toBeLessThanOrEqual(counts[k]!);
     }
-    assert.equal(card.perSecond.wallS.length, series.seconds, "the card carries one entry a second");
-    assert.equal(card.perSecond.workPerSimS["steps"]!.length, series.seconds, "each counter has an entry each second");
+    expect(card.perSecond.wallS.length, "the card carries one entry a second").toBe(series.seconds);
+    expect(card.perSecond.workPerSimS["steps"]!.length, "each counter has an entry each second").toBe(series.seconds);
     let sum = card.unattributedMsPerSimS;
     for (const name of PHASE_NAMES) {
-      assert.ok(card.msPerSimS[name]! >= 0, `${name} is negative`);
+      expect(card.msPerSimS[name]!, `${name} is negative`).toBeGreaterThanOrEqual(0);
       sum += card.msPerSimS[name]!;
     }
     const headline = simMs / clockS;
-    assert.ok(Math.abs(sum - headline) <= 1e-9 * headline, `phases + unattributed ${sum} against the sim's ${headline} ms per sim-second`);
-    assert.ok(card.unattributedMsPerSimS >= 0, "the phases cannot exceed the sim's own time");
+    expect(Math.abs(sum - headline), `phases + unattributed ${sum} against the sim's ${headline} ms per sim-second`).toBeLessThanOrEqual(1e-9 * headline);
+    expect(card.unattributedMsPerSimS, "the phases cannot exceed the sim's own time").toBeGreaterThanOrEqual(0);
     const unattributedReads = card.unattributedMsPerSimS * clockS;
     const steps = pace.total - stepsBefore;
-    assert.ok(unattributedReads <= MAX_UNATTRIBUTED_READS_PER_STEP * steps, `${unattributedReads} clock reads outside a phase over ${steps} steps`);
-    for (const name of ["drive", "plan", "integrate", "pairs", "structure", "course", "rules", "settle"] as const) assert.ok(card.msPerSimS[name]! > 0, `${name} timed nothing`);
-    if (card.workPerSimS["wreckCarSlices"]! > 0) assert.ok(card.msPerSimS["wreck"]! > 0, "wrecks stepped but the wreck phase timed nothing");
-    assert.equal(counts[COUNTER_NAMES.indexOf("steps")], pace.total - stepsBefore, "the window's steps are the pacer's");
-    for (const name of WORK_NAMES) assert.ok(card.workPerSimS[name]! >= 0, `${name} is negative`);
-    for (const name of ["slices", "liveCarSlices", "pairTests", "prismQueries", "prismsVisited", "skins", "skinVerts"] as const) assert.ok(card.workPerSimS[name]! > 0, `${name} counted nothing`);
+    expect(unattributedReads, `${unattributedReads} clock reads outside a phase over ${steps} steps`).toBeLessThanOrEqual(MAX_UNATTRIBUTED_READS_PER_STEP * steps);
+    for (const name of ["drive", "plan", "integrate", "pairs", "structure", "course", "rules", "settle"] as const) expect(card.msPerSimS[name]!, `${name} timed nothing`).toBeGreaterThan(0);
+    if (card.workPerSimS["wreckCarSlices"]! > 0) expect(card.msPerSimS["wreck"]!, "wrecks stepped but the wreck phase timed nothing").toBeGreaterThan(0);
+    expect(counts[COUNTER_NAMES.indexOf("steps")], "the window's steps are the pacer's").toBe(pace.total - stepsBefore);
+    for (const name of WORK_NAMES) expect(card.workPerSimS[name]!, `${name} is negative`).toBeGreaterThanOrEqual(0);
+    for (const name of ["slices", "liveCarSlices", "pairTests", "prismQueries", "prismsVisited", "skins", "skinVerts"] as const) expect(card.workPerSimS[name]!, `${name} counted nothing`).toBeGreaterThan(0);
   });
 
   it("when the sim then runs unwatched, then the phase clock reads nothing", () => {
     const phases = engine["world"].phases;
     const before = phases.ms.slice();
     runFrames(engine, 60);
-    for (const [i, name] of PHASE_NAMES.entries()) assert.equal(phases.ms[i], before[i], `${name} moved with the clock off`);
+    for (const [i, name] of PHASE_NAMES.entries()) expect(phases.ms[i], `${name} moved with the clock off`).toBe(before[i]);
   });
 });
 
@@ -161,15 +161,15 @@ describe("given a browser with long-task entries, or without", () => {
   it("when the browser lists longtask, then the count, total and longest of the tasks seen, and the ones still pending at stop, are returned", () => {
     Object.defineProperty(globalThis, "PerformanceObserver", { value: Supported, configurable: true });
     const found = watchLongTasks().stop();
-    assert.ok(found !== null, "long tasks are supported");
-    assert.equal(found.count, 3, "count");
-    assert.equal(found.totalMs, 222.5, "total ms");
-    assert.equal(found.maxMs, 110.5, "longest ms");
+    must(found !== null, "long tasks are supported");
+    must(found.count === 3, "count");
+    must(found.totalMs === 222.5, "total ms");
+    expect(found.maxMs, "longest ms").toBe(110.5);
   });
 
   it("when the browser does not list longtask, then there is no reading at all (null, not zero)", () => {
     Object.defineProperty(globalThis, "PerformanceObserver", { value: class { static supportedEntryTypes = ["mark"]; }, configurable: true });
-    assert.equal(watchLongTasks().stop(), null);
+    expect(watchLongTasks().stop()).toBe(null);
   });
 });
 
@@ -181,21 +181,21 @@ describe("given a browser with a battery, without one, or that refuses it", () =
   it("when getBattery answers, then the charging flag and level are read", async () => {
     withNavigator({ getBattery: async () => ({ charging: true, level: 0.62, chargingTime: 5, dischargingTime: Infinity }) });
     const battery = await readBattery();
-    assert.ok(battery !== null, "a battery");
-    assert.equal(battery.charging, true, "charging");
-    assert.equal(battery.level, 0.62, "level");
-    assert.equal(Object.keys(battery).length, 2, "only the two fields a card keeps");
+    must(battery !== null, "a battery");
+    must(battery.charging, "charging");
+    must(battery.level === 0.62, "level");
+    expect(Object.keys(battery).length, "only the two fields a card keeps").toBe(2);
   });
 
   it("when the browser has no getBattery, then there is no reading (null)", async () => {
     withNavigator({});
-    assert.equal(await readBattery(), null);
+    expect(await readBattery()).toBe(null);
   });
 
   it("when getBattery is refused, then the refusal is logged and the reading is none", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     withNavigator({ getBattery: async () => Promise.reject(new Error("blocked by permissions policy")) });
-    assert.equal(await readBattery(), null);
-    assert.equal(warn.mock.calls.length, 1, "the refusal was logged");
+    expect(await readBattery()).toBe(null);
+    expect(warn.mock.calls.length, "the refusal was logged").toBe(1);
   });
 });

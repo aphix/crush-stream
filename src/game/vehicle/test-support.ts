@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { CarPaint } from "./car-core.ts";
 import type { DriveInput } from "./car-drive.ts";
@@ -37,7 +36,7 @@ export function paint(): CarPaint {
 /** Named control particle; fails the test when the rig lacks it. */
 export function mass<M extends { name: string }>(d: { masses: readonly M[] }, name: string): M {
   const m = d.masses.find((n) => n.name === name);
-  assert.ok(m, name);
+  if (m === undefined) throw new Error(`no mass named ${name}`);
   return m;
 }
 
@@ -62,12 +61,11 @@ export function massCentroid(masses: readonly { world: THREE.Vector3; mass: numb
   return { x: x / m, z: z / m };
 }
 
-// node:assert deep-diffs both sides on failure (Myers, O((N+M)·D)); two big float arrays once took 14.7 GB.
-// These report one mismatch instead of a diff (ARCHITECTURE C9).
+// A deep diff of both sides on failure is O((N+M)·D); two big float arrays once took 14.7 GB. These report one mismatch instead.
 
 /** Element-wise equality within `tol`: length, then the first mismatching index and the max |diff| (NaN mismatches). */
 export function assertSameNumbers(actual: ArrayLike<number>, expected: ArrayLike<number>, label: string, tol = 0): void {
-  assert.equal(actual.length, expected.length, `${label}: length`);
+  expect(actual.length, `${label}: length`).toBe(expected.length);
   let first = -1;
   let max = 0;
   for (let i = 0; i < actual.length; i++) {
@@ -76,7 +74,7 @@ export function assertSameNumbers(actual: ArrayLike<number>, expected: ArrayLike
     if (first < 0) first = i;
     max = Number.isNaN(d) || d > max ? d : max;
   }
-  if (first >= 0) assert.fail(`${label}: first mismatch at [${first}] ${actual[first]} vs ${expected[first]}, max |diff| ${max}`);
+  if (first >= 0) expect.fail(`${label}: first mismatch at [${first}] ${actual[first]} vs ${expected[first]}, max |diff| ${max}`);
 }
 
 /** Same sha-256 of `JSON.stringify`; on mismatch names the first differing top-level index or key. */
@@ -87,7 +85,7 @@ export function assertSameDigest(a: unknown, b: unknown, label: string): void {
   const at = (o: unknown) => (o !== null && typeof o === "object" ? (o as Record<string, unknown>) : {});
   const keys = [...new Set([...Object.keys(at(a)), ...Object.keys(at(b))])];
   const first = keys.find((k) => json(at(a)[k]) !== json(at(b)[k]));
-  assert.fail(`${label}: sha-256 ${ha!.slice(0, 12)} vs ${hb!.slice(0, 12)}, first difference at [${first ?? "top level"}]`);
+  expect.fail(`${label}: sha-256 ${ha!.slice(0, 12)} vs ${hb!.slice(0, 12)}, first difference at [${first ?? "top level"}]`);
 }
 
 /** A derby AI snapshot for the brain suites: blank car `id` rolling at 8 m/s, then `extra`. */

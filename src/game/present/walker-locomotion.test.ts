@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { Locomotion, RUN_SPEED, SPRINT_SPEED, WALK_SPEED, type TurnBand } from "./walker-locomotion.ts";
 
@@ -52,7 +51,7 @@ describe("given a walker standing still", () => {
   for (const testCase of speedCases) {
     it(testCase.it, () => {
       const { seconds } = timeToSpeed(testCase.command, 0.98);
-      assert.ok(seconds >= testCase.expectedMinSeconds && seconds <= testCase.expectedMaxSeconds, `${seconds.toFixed(2)} s within ${testCase.expectedMinSeconds}-${testCase.expectedMaxSeconds}`);
+      expect(seconds >= testCase.expectedMinSeconds && seconds <= testCase.expectedMaxSeconds, `${seconds.toFixed(2)} s within ${testCase.expectedMinSeconds}-${testCase.expectedMaxSeconds}`).toBeTruthy();
     });
   }
 });
@@ -66,8 +65,8 @@ describe("given a walker at speed", () => {
   for (const testCase of stopCases) {
     it(testCase.it, () => {
       const { seconds, distance } = stopFrom(testCase.command);
-      assert.ok(seconds <= testCase.expectedMaxSeconds, `stopped in ${seconds.toFixed(2)} s within ${testCase.expectedMaxSeconds}`);
-      assert.ok(distance >= testCase.expectedMinMetres && distance <= testCase.expectedMaxMetres, `stopped in ${distance.toFixed(2)} m within ${testCase.expectedMinMetres}-${testCase.expectedMaxMetres}`);
+      expect(seconds, `stopped in ${seconds.toFixed(2)} s within ${testCase.expectedMaxSeconds}`).toBeLessThanOrEqual(testCase.expectedMaxSeconds);
+      expect(distance >= testCase.expectedMinMetres && distance <= testCase.expectedMaxMetres, `stopped in ${distance.toFixed(2)} m within ${testCase.expectedMinMetres}-${testCase.expectedMaxMetres}`).toBeTruthy();
     });
   }
 });
@@ -104,19 +103,19 @@ describe("given a walker sprinting along +z", () => {
   for (const testCase of cutCases) {
     it(testCase.it, () => {
       const cut = cutAt(SPRINT_SPEED, testCase.degrees);
-      assert.ok(cut.secondsToFace <= testCase.expectedMaxFace, `facing in ${cut.secondsToFace.toFixed(2)} s within ${testCase.expectedMaxFace}`);
-      assert.ok(cut.minSpeed > testCase.expectedMinSpeedAbove && cut.minSpeed < testCase.expectedMinSpeedBelow, `slowest ${cut.minSpeed.toFixed(2)} m/s within ${testCase.expectedMinSpeedAbove}-${testCase.expectedMinSpeedBelow}`);
-      assert.ok(cut.secondsToSpeedAgain - cut.secondsToFace <= testCase.expectedMaxRegain, `back to speed ${(cut.secondsToSpeedAgain - cut.secondsToFace).toFixed(2)} s after facing, within ${testCase.expectedMaxRegain}`);
-      assert.ok(cut.worstLateral <= LATERAL_ACCEL_BAR, `sideways acceleration ${cut.worstLateral.toFixed(1)} m/s² within ${LATERAL_ACCEL_BAR}`);
+      expect(cut.secondsToFace, `facing in ${cut.secondsToFace.toFixed(2)} s within ${testCase.expectedMaxFace}`).toBeLessThanOrEqual(testCase.expectedMaxFace);
+      expect(cut.minSpeed > testCase.expectedMinSpeedAbove && cut.minSpeed < testCase.expectedMinSpeedBelow, `slowest ${cut.minSpeed.toFixed(2)} m/s within ${testCase.expectedMinSpeedAbove}-${testCase.expectedMinSpeedBelow}`).toBeTruthy();
+      expect(cut.secondsToSpeedAgain - cut.secondsToFace, `back to speed ${(cut.secondsToSpeedAgain - cut.secondsToFace).toFixed(2)} s after facing, within ${testCase.expectedMaxRegain}`).toBeLessThanOrEqual(testCase.expectedMaxRegain);
+      expect(cut.worstLateral, `sideways acceleration ${cut.worstLateral.toFixed(1)} m/s² within ${LATERAL_ACCEL_BAR}`).toBeLessThanOrEqual(LATERAL_ACCEL_BAR);
     });
   }
 
   it("when a sprint is turned 90 degrees toward +x, then he banks toward the inside of the turn, 6 to 26 degrees", () => {
     const left = cutAt(SPRINT_SPEED, 90);
     const right = cutAt(SPRINT_SPEED, -90);
-    assert.ok(left.worstRoll > 0.1 && left.worstRoll <= 0.45, `banked ${left.worstRoll.toFixed(2)} rad`);
-    assert.equal(left.rollSign, -right.rollSign, "banks the other way for the other turn");
-    assert.equal(left.rollSign, -1, "roll about +z by a negative angle leans the head toward +x, the inside of a turn toward +x");
+    expect(left.worstRoll > 0.1 && left.worstRoll <= 0.45, `banked ${left.worstRoll.toFixed(2)} rad`).toBeTruthy();
+    expect(left.rollSign, "banks the other way for the other turn").toBe(-right.rollSign);
+    expect(left.rollSign, "roll about +z by a negative angle leans the head toward +x, the inside of a turn toward +x").toBe(-1);
   });
 });
 
@@ -128,8 +127,8 @@ describe("given a heading that hovers at the edge of a band", () => {
       loco.update(FRAME, loco.yaw + 1.3 + (f % 2 === 0 ? 0.04 : -0.04), RUN_SPEED);
       if (bands[bands.length - 1] !== loco.band) bands.push(loco.band);
     }
-    assert.ok(bands.length <= 3, `bands ${bands.join(" ")}`);
-    assert.ok(bands.includes("pivot"), "the pivot band was entered (a flat run never leaves the curve)");
+    expect(bands.length, `bands ${bands.join(" ")}`).toBeLessThanOrEqual(3);
+    expect(bands.includes("pivot"), "the pivot band was entered (a flat run never leaves the curve)").toBeTruthy();
   });
 });
 
@@ -138,8 +137,8 @@ describe("given a walker at each speed", () => {
     const walk = atSpeed(WALK_SPEED).pitch;
     const run = atSpeed(RUN_SPEED).pitch;
     const sprint = atSpeed(SPRINT_SPEED).pitch;
-    assert.ok(walk < run && run < sprint, `lean ${walk.toFixed(2)} < ${run.toFixed(2)} < ${sprint.toFixed(2)}`);
-    assert.ok(run >= 0.087 && run <= 0.26, `run lean ${run.toFixed(2)} rad`);
-    assert.ok(sprint >= 0.17 && sprint <= 0.3, `sprint lean ${sprint.toFixed(2)} rad`);
+    expect(walk < run && run < sprint, `lean ${walk.toFixed(2)} < ${run.toFixed(2)} < ${sprint.toFixed(2)}`).toBeTruthy();
+    expect(run >= 0.087 && run <= 0.26, `run lean ${run.toFixed(2)} rad`).toBeTruthy();
+    expect(sprint >= 0.17 && sprint <= 0.3, `sprint lean ${sprint.toFixed(2)} rad`).toBeTruthy();
   });
 });

@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
@@ -30,7 +29,7 @@ describe("given the real engine in the fleet, watching a car", () => {
     engine["keys"].clear();
     runSeconds(engine, FRAME);
     for (let presses = 0; presses < 10 && hud.get().cam !== "free"; presses++) engine.cycleCamera();
-    assert.equal(hud.get().cam, "free", "the free view is in the ring");
+    expect(hud.get().cam, "the free view is in the ring").toBe("free");
     runSeconds(engine, FRAME);
   };
   const eye = (): THREE.Vector3 => engine["camera"].position.clone();
@@ -52,8 +51,8 @@ describe("given the real engine in the fleet, watching a car", () => {
     engine["keys"].add("KeyW");
     runSeconds(engine, 1);
     engine["keys"].clear();
-    assert.equal(engine["seat"].mode, "follow", "W flew the camera; it did not take the wheel");
-    assert.ok(Math.abs(level(eye(), start) - DISC_CRUISE) < 0.5, `the eye flew ${level(eye(), start).toFixed(2)} m level in a second, cruise ${DISC_CRUISE} m/s`);
+    expect(engine["seat"].mode, "W flew the camera; it did not take the wheel").toBe("follow");
+    expect(Math.abs(level(eye(), start) - DISC_CRUISE), `the eye flew ${level(eye(), start).toFixed(2)} m level in a second, cruise ${DISC_CRUISE} m/s`).toBeLessThan(0.5);
   });
 
   it("when Space is pressed and held in the free view, then the eye rises and the game does not pause; out of the free view the same Space pauses", () => {
@@ -63,13 +62,13 @@ describe("given the real engine in the fleet, watching a car", () => {
     pressKey(engine, "Space");
     runSeconds(engine, 0.5);
     engine["keys"].clear();
-    assert.equal(engine["playing"], playing, "Space in the free view left play as it was");
-    assert.ok(eye().y - start.y > 1, `Space raised the eye ${(eye().y - start.y).toFixed(2)} m in 0.5 s`);
+    expect(engine["playing"], "Space in the free view left play as it was").toBe(playing);
+    expect(eye().y - start.y, `Space raised the eye ${(eye().y - start.y).toFixed(2)} m in 0.5 s`).toBeGreaterThan(1);
     engine["view"].leaveFree();
     engine["seat"].esc();
     runSeconds(engine, FRAME);
     press("Space");
-    assert.notEqual(engine["playing"], playing, "Space out of the free view, nobody driven, toggled play");
+    expect(engine["playing"], "Space out of the free view, nobody driven, toggled play").not.toBe(playing);
     press("Space");
   });
 
@@ -84,11 +83,11 @@ describe("given the real engine in the fleet, watching a car", () => {
     runSeconds(engine, 0.5);
     engine["onKeyUp"](Object.assign(new Event("keyup"), { code: "ControlLeft" }) as KeyboardEvent);
     engine["onKeyUp"](Object.assign(new Event("keyup"), { code: "KeyW" }) as KeyboardEvent);
-    assert.ok(start.y - eye().y > 1, `Ctrl sank the eye ${(start.y - eye().y).toFixed(2)} m in 0.5 s`);
-    assert.ok(level(eye(), start) > 1, `Ctrl+W still flew it forward ${level(eye(), start).toFixed(2)} m`);
-    assert.equal(ctrl.defaultPrevented, true, "the Ctrl keydown is the game's");
-    assert.equal(w.defaultPrevented, true, "Ctrl+W is the game's, not the browser's");
-    assert.equal(engine["keys"].size, 0, "both released");
+    expect(start.y - eye().y, `Ctrl sank the eye ${(start.y - eye().y).toFixed(2)} m in 0.5 s`).toBeGreaterThan(1);
+    expect(level(eye(), start), `Ctrl+W still flew it forward ${level(eye(), start).toFixed(2)} m`).toBeGreaterThan(1);
+    expect(ctrl.defaultPrevented, "the Ctrl keydown is the game's").toBe(true);
+    expect(w.defaultPrevented, "Ctrl+W is the game's, not the browser's").toBe(true);
+    expect(engine["keys"].size, "both released").toBe(0);
   });
 
   it("when the same W is held without the free view, then the seat takes the wheel (the control for the test above)", () => {
@@ -100,7 +99,7 @@ describe("given the real engine in the fleet, watching a car", () => {
     engine["keys"].add("KeyW");
     runSeconds(engine, 0.1);
     engine["keys"].clear();
-    assert.equal(engine["seat"].mode, "drive", "W drives in the other views");
+    expect(engine["seat"].mode, "W drives in the other views").toBe("drive");
     engine["seat"].esc();
   });
 
@@ -110,12 +109,12 @@ describe("given the real engine in the fleet, watching a car", () => {
     const start = eye();
     car.group.position.x += 40;
     runSeconds(engine, 0.3);
-    assert.ok(eye().distanceTo(start) < 1e-6, `the eye drifted ${eye().distanceTo(start)} m`);
+    expect(eye().distanceTo(start), `the eye drifted ${eye().distanceTo(start)} m`).toBeLessThan(1e-6);
   });
 
   it("when the free view is on, then the camera's own rig is the free one", () => {
     flyFree();
-    assert.equal(engine["cameraRig"](), "free");
+    expect(engine["cameraRig"]()).toBe("free");
   });
 
   it("when PageDown is held for five seconds in the free view, then the eye stops above the ground", () => {
@@ -123,24 +122,24 @@ describe("given the real engine in the fleet, watching a car", () => {
     engine["keys"].add("PageDown");
     runSeconds(engine, 5);
     engine["keys"].clear();
-    assert.ok(eye().y > 0.5, `the eye sank to ${eye().y.toFixed(2)} m`);
-    assert.ok(eye().y < 1.5, `and rests on the clearance, at ${eye().y.toFixed(2)} m`);
+    expect(eye().y, `the eye sank to ${eye().y.toFixed(2)} m`).toBeGreaterThan(0.5);
+    expect(eye().y, `and rests on the clearance, at ${eye().y.toFixed(2)} m`).toBeLessThan(1.5);
   });
 
   it("when Esc is pressed in the free view, then the view before it comes back with the seat still following, and a second Esc steps out to the whole field", () => {
     flyFree();
     press("Escape");
-    assert.equal(engine["view"].flying, false, "the free view ended");
-    assert.equal(hud.get().cam, "auto", "the HUD names the view it came from (Auto, just before the free one in the ring)");
-    assert.equal(engine["seat"].mode, "follow", "the first Esc did not step out");
+    expect(engine["view"].flying, "the free view ended").toBe(false);
+    expect(hud.get().cam, "the HUD names the view it came from (Auto, just before the free one in the ring)").toBe("auto");
+    expect(engine["seat"].mode, "the first Esc did not step out").toBe("follow");
     press("Escape");
-    assert.equal(engine["seat"].mode, "global", "the second Esc steps out as before");
+    expect(engine["seat"].mode, "the second Esc steps out as before").toBe("global");
   });
 
   it("when View is pressed in the free view, then it goes back to the view before it", () => {
     flyFree();
     engine.cycleCamera();
-    assert.equal(hud.get().cam, "auto", "back to Auto, the view before the free one in the ring");
+    expect(hud.get().cam, "back to Auto, the view before the free one in the ring").toBe("auto");
   });
 
   it("when the seat is driven, then View cycles the car's own views and never reaches the free view", () => {
@@ -149,7 +148,7 @@ describe("given the real engine in the fleet, watching a car", () => {
     engine["seat"].carIndex = 0;
     for (let presses = 0; presses < 8; presses++) {
       engine.cycleCamera();
-      assert.equal(engine["view"].flying, false, `press ${presses + 1}`);
+      expect(engine["view"].flying, `press ${presses + 1}`).toBe(false);
     }
     engine["seat"].esc();
   });
@@ -158,9 +157,9 @@ describe("given the real engine in the fleet, watching a car", () => {
     flyFree();
     engine["seat"].mode = "drive";
     runSeconds(engine, FRAME);
-    assert.equal(engine["view"].flying, false, "driving is not spectating");
+    expect(engine["view"].flying, "driving is not spectating").toBe(false);
     engine["emitHud"]();
-    assert.equal(hud.get().cam, null, "and the HUD no longer names a spectator view");
+    expect(hud.get().cam, "and the HUD no longer names a spectator view").toBe(null);
     engine["seat"].esc();
   });
 
@@ -173,8 +172,8 @@ describe("given the real engine in the fleet, watching a car", () => {
     reel.aim = (camera) => camera.position.set(500, 60, -400);
     try {
       engine["aimRigs"](FRAME);
-      assert.ok(eye().distanceTo(start) < 1e-6, `the camera is at ${eye().toArray().join(", ")}, the reel's shot is at 500, 60, -400`);
-      assert.equal(engine["cameraRig"](), "free", "and the trace names the free rig");
+      expect(eye().distanceTo(start), `the camera is at ${eye().toArray().join(", ")}, the reel's shot is at 500, 60, -400`).toBeLessThan(1e-6);
+      expect(engine["cameraRig"](), "and the trace names the free rig").toBe("free");
     } finally {
       reel.playing = false;
       reel.aim = reelAim;
@@ -186,20 +185,20 @@ describe("given the real engine in the fleet, watching a car", () => {
     engine["seat"].clear();
     engine["setScene"]("fleet");
     runSeconds(engine, FRAME);
-    assert.equal(hud.get().cam, null, "the whole field shows no camera name");
+    expect(hud.get().cam, "the whole field shows no camera name").toBe(null);
     engine.cycleCamera();
-    assert.equal(hud.get().cam, "free", "View from the whole field");
+    expect(hud.get().cam, "View from the whole field").toBe("free");
     runSeconds(engine, FRAME);
-    assert.equal(engine["view"].flying, true);
+    expect(engine["view"].flying).toBe(true);
     engine.cycleCamera();
-    assert.equal(hud.get().cam, null, "and back");
-    assert.equal(engine["view"].flying, false);
+    expect(hud.get().cam, "and back").toBe(null);
+    expect(engine["view"].flying).toBe(false);
   });
 
   it("when a scene is picked in the free view, then the free view ends", () => {
     flyFree();
     engine["setScene"]("derby");
-    assert.equal(engine["view"].flying, false);
+    expect(engine["view"].flying).toBe(false);
     engine["setScene"]("derby");
   });
 });

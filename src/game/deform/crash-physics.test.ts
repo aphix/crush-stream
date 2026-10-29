@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
 import { ENGINE_KILL_TRAVEL, PLATFORM_RIG, type DeformMode } from "./deform-rig.ts";
@@ -10,6 +9,7 @@ import { holdOnFace } from "../contact/external-contact.ts";
 import { warmCrashPath } from "../engine/world-step.ts";
 import { stepWreck, type WreckRig } from "./physics-util.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** ~50 km/h NCAP-style rigid barrier. */
 const FRONTAL_MPS = 14;
@@ -85,10 +85,10 @@ function alongZ(d: StreamedDeformation, name: string): number {
 
 describe("given the crash constants (the researched sedan barrier numbers every crash uses)", () => {
   it("when the pulse time, crush distance and friction values are read, then the pulse lasts 0.09 to 0.16 s, the crush is 0.4 to 0.85 m, sliding friction exceeds scuffing friction and peak friction is at least sliding friction", () => {
-    assert.ok(CRASH.pulseSec >= 0.09 && CRASH.pulseSec <= 0.16);
-    assert.ok(CRASH.crushMeters >= 0.4 && CRASH.crushMeters <= 0.85);
-    assert.ok(CRASH.muSlide > CRASH.muScuff);
-    assert.ok(CRASH.muPeak >= CRASH.muSlide);
+    expect(CRASH.pulseSec >= 0.09 && CRASH.pulseSec <= 0.16).toBeTruthy();
+    expect(CRASH.crushMeters >= 0.4 && CRASH.crushMeters <= 0.85).toBeTruthy();
+    expect(CRASH.muSlide).toBeGreaterThan(CRASH.muScuff);
+    expect(CRASH.muPeak).toBeGreaterThanOrEqual(CRASH.muSlide);
   });
 });
 
@@ -107,32 +107,32 @@ forModes("given a car hit at the front, where the hit point snaps to the centre 
   for (const testCase of centredImpactCases) {
     it(testCase.it, () => {
       const { d } = spawn(testCase.impactX);
-      assert.ok(Math.abs(d.impactLocal.x) < 0.22, `x=${testCase.impactX} snapped off-centre to ${d.impactLocal.x}`);
+      expect(Math.abs(d.impactLocal.x), `x=${testCase.impactX} snapped off-centre to ${d.impactLocal.x}`).toBeLessThan(0.22);
     });
   }
 
   for (const testCase of rightImpactCases) {
     it(testCase.it, () => {
       const { d } = spawn(testCase.impactX);
-      assert.ok(d.impactLocal.x > testCase.minSnappedX, `x=${testCase.impactX} should snap right but landed at x=${d.impactLocal.x}`);
+      expect(d.impactLocal.x, `x=${testCase.impactX} should snap right but landed at x=${d.impactLocal.x}`).toBeGreaterThan(testCase.minSnappedX);
     });
   }
 
   it("when the hit lands at the left-front corner (0.62 m left of the centreline), then the hit point stays on the left, more than 0.28 m from the centreline", () => {
     const { d } = spawn(-0.62);
-    assert.ok(d.impactLocal.x < -0.28, `left hit flipped to x=${d.impactLocal.x}`);
+    expect(d.impactLocal.x, `left hit flipped to x=${d.impactLocal.x}`).toBeLessThan(-0.28);
   });
 
   it("when the hit lands dead centre and both front bumpers are equally far away, then the hit point is not pulled to the left-front corner (it stays right of -0.15 m), as it would be if ties went to the first bumper", () => {
     const { d } = spawn(0);
-    assert.ok(d.impactLocal.x > -0.15, `head-on became a left-corner at x=${d.impactLocal.x}`);
+    expect(d.impactLocal.x, `head-on became a left-corner at x=${d.impactLocal.x}`).toBeGreaterThan(-0.15);
   });
 
   it("when the hit lands from 0.18 m to 0.32 m right of the centreline in 1 cm steps, then its point never moves more than 5 cm between neighbours: a step at 0.2 m sent a hit 1 cm either side of it 0.2 m apart, and a sedan's T-bone crushed its nose 0.45 m or 0.74 m with the step phase", () => {
     let last = spawn(0.18).d.impactLocal.x;
     for (let cm = 19; cm <= 32; cm++) {
       const x = spawn(cm / 100).d.impactLocal.x;
-      assert.ok(Math.abs(x - last) <= 0.05, `${cm} cm: the hit point moved ${(x - last).toFixed(3)} m from ${last.toFixed(3)}`);
+      expect(Math.abs(x - last), `${cm} cm: the hit point moved ${(x - last).toFixed(3)} m from ${last.toFixed(3)}`).toBeLessThanOrEqual(0.05);
       last = x;
     }
   });
@@ -140,11 +140,11 @@ forModes("given a car hit at the front, where the hit point snaps to the centre 
   it("when a hit armed at the right-front corner finds the pair's patch on the centreline within 15 ms, then its centre follows it to within 0.22 m of the centreline, and after 15 ms it stays at the corner", () => {
     const early = spawn(0.62).d;
     early.aimHit(new THREE.Vector3(0, 0.36, 2.06));
-    assert.ok(Math.abs(early.impactLocal.x) < 0.22, `followed to x=${early.impactLocal.x}`);
+    expect(Math.abs(early.impactLocal.x), `followed to x=${early.impactLocal.x}`).toBeLessThan(0.22);
     const late = spawn(0.62).d;
     late.stepStructure(0.02);
     late.aimHit(new THREE.Vector3(0, 0.36, 2.06));
-    assert.ok(late.impactLocal.x > 0.28, `moved to x=${late.impactLocal.x} after the window`);
+    expect(late.impactLocal.x, `moved to x=${late.impactLocal.x} after the window`).toBeGreaterThan(0.28);
   });
 
   it("when a hit armed at 10 m/s meets squarely at 13 m/s within 15 ms, then the pair's contact takes it over (the hit speed is 13, not the two summed), whereas a wall's contact then, or the pair's after 15 ms, is under 1.5 times the hit's and changes nothing", () => {
@@ -152,15 +152,15 @@ forModes("given a car hit at the front, where the hit point snaps to the centre 
     const squarely = new THREE.Vector3(0, 0.36, 2.06);
     const early = spawn(0, 10).d;
     early.stepStructure(0.004);
-    assert.ok(early.rearmHit(squarely, aslant, 13, 13, true), "taken over within 15 ms");
-    assert.ok(Math.abs(early.hitSpeedValue - 13) < 1e-9, `hit speed ${early.hitSpeedValue}`);
+    expect(early.rearmHit(squarely, aslant, 13, 13, true), "taken over within 15 ms").toBeTruthy();
+    expect(Math.abs(early.hitSpeedValue - 13), `hit speed ${early.hitSpeedValue}`).toBeLessThan(1e-9);
     const wall = spawn(0, 10).d;
     wall.stepStructure(0.004);
-    assert.equal(wall.rearmHit(squarely, aslant, 13, 13), false, "a wall's contact is refused");
+    expect(wall.rearmHit(squarely, aslant, 13, 13), "a wall's contact is refused").toBe(false);
     const late = spawn(0, 10).d;
     late.stepStructure(0.02);
-    assert.equal(late.rearmHit(squarely, aslant, 13, 13, true), false, "refused after 15 ms");
-    assert.equal(late.hitSpeedValue, 10);
+    expect(late.rearmHit(squarely, aslant, 13, 13, true), "refused after 15 ms").toBe(false);
+    expect(late.hitSpeedValue).toBe(10);
   });
 
   it("when a car's solver state is restored into another inside that window (a replay's keyframe), then the pair's contact takes the hit over there as it does on the live car (the hit speed is the base's and the new contact's, not all three summed) and every number of the two states is the same after", () => {
@@ -168,17 +168,17 @@ forModes("given a car hit at the front, where the hit point snaps to the centre 
     const squarely = new THREE.Vector3(0, 0.36, 2.06);
     const live = spawn(0, 10).d;
     live.stepStructure(0.35);
-    assert.ok(live.rearmHit(squarely, aslant, 12, 12, true), "the wreck's second hit armed after 0.3 s quiet");
+    expect(live.rearmHit(squarely, aslant, 12, 12, true), "the wreck's second hit armed after 0.3 s quiet").toBeTruthy();
     live.stepStructure(0.004);
     const state = new Float64Array(live.simSize());
     live.simState(state, false);
     const restored = spawn(0, 10).d;
     restored.simState(state, true);
-    assert.ok(live.rearmHit(squarely, aslant, 14, 14, true), "taken over on the live car");
-    assert.ok(restored.rearmHit(squarely, aslant, 14, 14, true), "taken over on the restored one");
-    assert.ok(Math.abs(live.hitSpeedValue - Math.sqrt(10 * 10 + 14 * 14)) < 1e-9, `live hit speed ${live.hitSpeedValue}`);
-    assert.equal(restored.hitSpeedValue, live.hitSpeedValue, "hit speed");
-    for (const field of ["armedAt", "armedEbs", "armedEnd", "armedEnd2", "armedWear"] as const) assert.equal(restored[field], live[field], field);
+    expect(live.rearmHit(squarely, aslant, 14, 14, true), "taken over on the live car").toBeTruthy();
+    expect(restored.rearmHit(squarely, aslant, 14, 14, true), "taken over on the restored one").toBeTruthy();
+    expect(Math.abs(live.hitSpeedValue - Math.sqrt(10 * 10 + 14 * 14)), `live hit speed ${live.hitSpeedValue}`).toBeLessThan(1e-9);
+    expect(restored.hitSpeedValue, "hit speed").toBe(live.hitSpeedValue);
+    for (const field of ["armedAt", "armedEbs", "armedEnd", "armedEnd2", "armedWear"] as const) expect(restored[field], field).toBe(live[field]);
     const after = (d: StreamedDeformation): Float64Array => {
       const out = new Float64Array(d.simSize());
       d.simState(out, false);
@@ -193,20 +193,20 @@ forModes("given a car meeting a wall at 20 m/s or more for the first time, where
     const s = spawn(0, 20);
     for (let i = 0; i < 10; i++) stepWall(s, DT, 0.25);
     for (const m of s.d.masses) {
-      assert.ok(Number.isFinite(m.world.x + m.vel.x), `${m.name} went NaN [${mode}]`);
-      assert.ok(m.vel.length() < CRASH.maxMassMps + 0.1, `${m.name} vel ${m.vel.length().toFixed(1)} [${mode}]`);
-      assert.ok(Math.abs(m.world.x) < 8 && Math.abs(m.world.z) < 12 && m.world.y < 4, `${m.name} at ${m.world.x.toFixed(1)},${m.world.y.toFixed(1)},${m.world.z.toFixed(1)}`);
+      expect(Number.isFinite(m.world.x + m.vel.x), `${m.name} went NaN [${mode}]`).toBeTruthy();
+      expect(m.vel.length(), `${m.name} vel ${m.vel.length().toFixed(1)} [${mode}]`).toBeLessThan(CRASH.maxMassMps + 0.1);
+      expect(Math.abs(m.world.x) < 8 && Math.abs(m.world.z) < 12 && m.world.y < 4, `${m.name} at ${m.world.x.toFixed(1)},${m.world.y.toFixed(1)},${m.world.z.toFixed(1)}`).toBeTruthy();
     }
-    assert.ok(s.group.position.length() < 6, `group flew to ${s.group.position.toArray()} [${mode}]`);
-    assert.ok(s.vel.length() < CRASH.maxMassMps + 0.1, `group vel ${s.vel.length()} [${mode}]`);
+    expect(s.group.position.length(), `group flew to ${s.group.position.toArray()} [${mode}]`).toBeLessThan(6);
+    expect(s.vel.length(), `group vel ${s.vel.length()} [${mode}]`).toBeLessThan(CRASH.maxMassMps + 0.1);
   });
 
   it("when the wall hits it 0.7 m off centre at 22 m/s with a 30 cm overlap for twelve steps, then its passenger cell (the stiff middle of the car) stays within 10 m of the start and under the maximum particle speed", () => {
     const s = spawn(0.7, 22);
     for (let i = 0; i < 12; i++) stepWall(s, DT, 0.3, mass(s.d, "bumperFR").world.x);
     const cell = mass(s.d, "cell");
-    assert.ok(cell.world.length() < 10, `cell ${cell.world.toArray()} [${mode}]`);
-    assert.ok(cell.vel.length() < CRASH.maxMassMps + 0.1);
+    expect(cell.world.length(), `cell ${cell.world.toArray()} [${mode}]`).toBeLessThan(10);
+    expect(cell.vel.length()).toBeLessThan(CRASH.maxMassMps + 0.1);
   });
 });
 
@@ -220,14 +220,14 @@ forModes("given a car driving straight into a rigid wall at about 50 km/h (14 m/
     }
     if (mode === "shape") {
       const moved = (travel(s.d, "bumperFL") + travel(s.d, "bumperFR")) * 0.5;
-      assert.ok(moved > 0.04, `shape nose never moved ${moved}`);
+      expect(moved, `shape nose never moved ${moved}`).toBeGreaterThan(0.04);
     } else {
-      assert.ok(samples[2]! > 0.02, "should have started folding by ~50ms");
-      assert.ok(samples[2]! > samples[0]!, "crush should grow across the pulse, not pop");
+      expect(samples[2]!, "should have started folding by ~50ms").toBeGreaterThan(0.02);
+      expect(samples[2]!, "crush should grow across the pulse, not pop").toBeGreaterThan(samples[0]!);
       // B1: a 14 m/s hit crushes to its equivalent-barrier stroke, then holds — no spring-back.
-      assert.ok(samples[11]! >= samples[2]! - 0.01, `nose sprang back: ${samples[2]} → ${samples[11]}`);
-      assert.ok(samples[11]! > 0.12, `nose crush too small: ${samples[11]}`);
-      assert.ok(samples[11]! <= crushStroke(FRONTAL_MPS, 0.4) + 0.01, `crush past the 14 m/s stroke: ${samples[11]}`);
+      expect(samples[11]!, `nose sprang back: ${samples[2]} → ${samples[11]}`).toBeGreaterThanOrEqual(samples[2]! - 0.01);
+      expect(samples[11]!, `nose crush too small: ${samples[11]}`).toBeGreaterThan(0.12);
+      expect(samples[11]!, `crush past the 14 m/s stroke: ${samples[11]}`).toBeLessThanOrEqual(crushStroke(FRONTAL_MPS, 0.4) + 0.01);
     }
   });
 
@@ -235,8 +235,8 @@ forModes("given a car driving straight into a rigid wall at about 50 km/h (14 m/
     const s = spawn(0);
     for (let i = 0; i < 24; i++) stepWall(s, DT, 0.1);
     const rear = (alongZ(s.d, "bumperRL") + alongZ(s.d, "bumperRR")) * 0.5;
-    assert.ok(rear > -0.16, `rear extruded backward by ${-rear}m`);
-    assert.ok(rear < 0.2, `rear sucked forward by ${rear}m`);
+    expect(rear, `rear extruded backward by ${-rear}m`).toBeGreaterThan(-0.16);
+    expect(rear, `rear sucked forward by ${rear}m`).toBeLessThan(0.2);
   });
 
   it("when 3 steps (50 ms) of the impact have passed, then the rear axle is still moving at least 1.5 m/s faster than the bumpers and above 35 % of the impact speed, so the rear keeps piling into the stopped nose", () => {
@@ -244,8 +244,8 @@ forModes("given a car driving straight into a rigid wall at about 50 km/h (14 m/
     for (let i = 0; i < 3; i++) stepWall(s, DT, 0.12);
     const rear = mass(s.d, "axleR").vel.z;
     const nose = (mass(s.d, "bumperFL").vel.z + mass(s.d, "bumperFR").vel.z) * 0.5;
-    assert.ok(rear > nose + 1.5, `rear ${rear.toFixed(2)} should still be piling into nose ${nose.toFixed(2)}`);
-    assert.ok(rear > FRONTAL_MPS * 0.35, `rear lost all speed too fast: ${rear}`);
+    expect(rear, `rear ${rear.toFixed(2)} should still be piling into nose ${nose.toFixed(2)}`).toBeGreaterThan(nose + 1.5);
+    expect(rear, `rear lost all speed too fast: ${rear}`).toBeGreaterThan(FRONTAL_MPS * 0.35);
   });
 
   it("when the wall crushes the front for 18 steps, then the bumper crushes most, the frame rail less than the bumper but at least 40 % as far as the passenger cell (the stiff middle of the car), and the cell less than the bumper (shape mode: the bumper moves over 4 cm and the cell at most 8 cm more than it)", () => {
@@ -255,12 +255,12 @@ forModes("given a car driving straight into a rigid wall at about 50 km/h (14 m/
     const rail = travel(s.d, "railL");
     const cell = travel(s.d, "cell");
     if (mode === "shape") {
-      assert.ok(nose > 0.04, `shape bumper never crushed ${nose}`);
-      assert.ok(cell <= nose + 0.08, "passenger cell collapsed more than the bumper");
+      expect(nose, `shape bumper never crushed ${nose}`).toBeGreaterThan(0.04);
+      expect(cell, "passenger cell collapsed more than the bumper").toBeLessThanOrEqual(nose + 0.08);
     } else {
-      assert.ok(nose > rail, `bumper ${nose} should crush more than rail ${rail}`);
-      assert.ok(rail >= cell * 0.4, `rails disconnected from crush (rail ${rail}, cell ${cell})`);
-      assert.ok(cell < nose, "passenger cell should not collapse as much as the bumper");
+      expect(nose, `bumper ${nose} should crush more than rail ${rail}`).toBeGreaterThan(rail);
+      expect(rail, `rails disconnected from crush (rail ${rail}, cell ${cell})`).toBeGreaterThanOrEqual(cell * 0.4);
+      expect(cell, "passenger cell should not collapse as much as the bumper").toBeLessThan(nose);
     }
   });
 
@@ -271,16 +271,16 @@ forModes("given a car driving straight into a rigid wall at about 50 km/h (14 m/
       stepWall(s, DT, 0.12);
       maxY = Math.max(maxY, s.group.position.y, mass(s.d, "cell").world.y);
     }
-    assert.ok(s.group.position.y < 0.22, `group lofted to ${s.group.position.y.toFixed(3)}`);
-    assert.ok(maxY < 1.15, `cabin world.y climbed to ${maxY.toFixed(3)}`);
-    assert.ok(mass(s.d, "cell").vel.y > -8, `cell slammed down at ${mass(s.d, "cell").vel.y.toFixed(2)}`);
+    expect(s.group.position.y, `group lofted to ${s.group.position.y.toFixed(3)}`).toBeLessThan(0.22);
+    expect(maxY, `cabin world.y climbed to ${maxY.toFixed(3)}`).toBeLessThan(1.15);
+    expect(mass(s.d, "cell").vel.y, `cell slammed down at ${mass(s.d, "cell").vel.y.toFixed(2)}`).toBeGreaterThan(-8);
   });
 
   it("when it has not been crushed yet, then its whole crumple zone is still left (over 1.2 m of remaining crush travel) and the leftover-crumple share reads 1, not 0", () => {
     const { d } = spawn(0);
     const travelLeft = d.crumpleTravel();
-    assert.ok(travelLeft > 1.2, `rest crumpleTravel ${travelLeft} looks like already-crushed`);
-    assert.equal(leftoverCrumple(travelLeft), 1);
+    expect(travelLeft, `rest crumpleTravel ${travelLeft} looks like already-crushed`).toBeGreaterThan(1.2);
+    expect(leftoverCrumple(travelLeft)).toBe(1);
   });
 
   it("when it closes on the wall at the graze speed (a scrape, not a crash) for 10 steps, then the crush stays under 35 cm instead of being treated as a crash (shape mode: the car does not lift above 22 cm)", () => {
@@ -288,9 +288,9 @@ forModes("given a car driving straight into a rigid wall at about 50 km/h (14 m/
     for (let i = 0; i < 10; i++) stepWall(s, DT, 0.02);
     const crush = -alongZ(s.d, "bumperFL");
     if (mode === "shape") {
-      assert.ok(s.group.position.y < 0.22, `graze lofted to ${s.group.position.y}`);
+      expect(s.group.position.y, `graze lofted to ${s.group.position.y}`).toBeLessThan(0.22);
     } else {
-      assert.ok(crush < 0.35, `graze crushed ${crush}m — treated as a crash`);
+      expect(crush, `graze crushed ${crush}m — treated as a crash`).toBeLessThan(0.35);
     }
   });
 
@@ -305,7 +305,7 @@ forModes("given a car driving straight into a rigid wall at about 50 km/h (14 m/
     }
     const a = -alongZ(lo.d, "bumperFL");
     const b = -alongZ(hi.d, "bumperFL");
-    assert.ok(b > a * 1.12, `squash 0.9 crushed ${b.toFixed(3)} vs 0.2 → ${a.toFixed(3)}`);
+    expect(b, `squash 0.9 crushed ${b.toFixed(3)} vs 0.2 → ${a.toFixed(3)}`).toBeGreaterThan(a * 1.12);
   });
 });
 
@@ -318,9 +318,9 @@ forModes("given a car whose front corner hits a rigid wall 0.62 m off the centre
     if (mode === "shape") {
       const rMove = travel(s.d, "bumperFR");
       const lMove = travel(s.d, "bumperFL");
-      assert.ok(rMove >= lMove * 0.9 || rMove > 0.04, `expected right-front to move more, R=${rMove.toFixed(3)} L=${lMove.toFixed(3)}`);
+      expect(rMove >= lMove * 0.9 || rMove > 0.04, `expected right-front to move more, R=${rMove.toFixed(3)} L=${lMove.toFixed(3)}`).toBeTruthy();
     } else {
-      assert.ok(right > left * 1.25 && right > 0.08, `expected right-front crush, got R=${right.toFixed(3)} L=${left.toFixed(3)}`);
+      expect(right > left * 1.25 && right > 0.08, `expected right-front crush, got R=${right.toFixed(3)} L=${left.toFixed(3)}`).toBeTruthy();
     }
   });
 
@@ -329,7 +329,7 @@ forModes("given a car whose front corner hits a rigid wall 0.62 m off the centre
     for (let i = 0; i < 22; i++) stepWall(s, DT, 0.12, mass(s.d, "bumperFR").world.x);
     const r = mass(s.d, "bumperFR").local.x;
     const l = mass(s.d, "bumperFL").local.x;
-    assert.ok(r > l + 0.7, `no banana: FL.x=${l.toFixed(3)} FR.x=${r.toFixed(3)}`);
+    expect(r, `no banana: FL.x=${l.toFixed(3)} FR.x=${r.toFixed(3)}`).toBeGreaterThan(l + 0.7);
   });
 
   it("when the left-front corner takes the hit for 20 steps, then it crushes more than the right-front corner, not the other way round (lattice mode: over 1.2 times as far; shape mode: at least 90 % as far)", () => {
@@ -340,9 +340,9 @@ forModes("given a car whose front corner hits a rigid wall 0.62 m off the centre
     if (mode === "shape") {
       const lMove = travel(s.d, "bumperFL");
       const rMove = travel(s.d, "bumperFR");
-      assert.ok(lMove >= rMove * 0.9, `inverted: L=${lMove.toFixed(3)} R=${rMove.toFixed(3)}`);
+      expect(lMove, `inverted: L=${lMove.toFixed(3)} R=${rMove.toFixed(3)}`).toBeGreaterThanOrEqual(rMove * 0.9);
     } else {
-      assert.ok(left > right * 1.2, `inverted: L=${left.toFixed(3)} R=${right.toFixed(3)}`);
+      expect(left, `inverted: L=${left.toFixed(3)} R=${right.toFixed(3)}`).toBeGreaterThan(right * 1.2);
     }
   });
 
@@ -354,11 +354,11 @@ forModes("given a car whose front corner hits a rigid wall 0.62 m off the centre
     if (mode === "shape") {
       const hitM = travel(s.d, "bumperFR");
       const oppM = travel(s.d, "bumperFL");
-      assert.ok(hitM > 0.03);
-      assert.ok(oppM <= hitM * 1.05, `opposite leaked ${oppM.toFixed(3)} vs hit ${hitM.toFixed(3)}`);
+      expect(hitM).toBeGreaterThan(0.03);
+      expect(oppM, `opposite leaked ${oppM.toFixed(3)} vs hit ${hitM.toFixed(3)}`).toBeLessThanOrEqual(hitM * 1.05);
     } else {
-      assert.ok(hit > 0.05);
-      assert.ok(opp < hit * 0.4, `opposite leaked ${opp.toFixed(3)} vs hit ${hit.toFixed(3)} — 0.22 floor on impactWeight?`);
+      expect(hit).toBeGreaterThan(0.05);
+      expect(opp, `opposite leaked ${opp.toFixed(3)} vs hit ${hit.toFixed(3)} — 0.22 floor on impactWeight?`).toBeLessThan(hit * 0.4);
     }
   });
 });
@@ -379,8 +379,8 @@ forModes("given a car receiving an impulse (a sudden change of momentum) from a 
     b.d.applyImpulse(0, 0, 1, j);
     const dA = momentumZ(a.d) - pA0;
     const dB = momentumZ(b.d) - pB0;
-    assert.ok(Math.abs(dA + dB) < 8, `ΔP not opposite: ${dA} vs ${dB}`);
-    assert.ok(dA < -200 && dB > 200, `impulse signs wrong dA=${dA} dB=${dB}`);
+    expect(Math.abs(dA + dB), `ΔP not opposite: ${dA} vs ${dB}`).toBeLessThan(8);
+    expect(dA < -200 && dB > 200, `impulse signs wrong dA=${dA} dB=${dB}`).toBeTruthy();
   });
 
   it("when an 800 N·s impulse hits the front, then the bumper's speed drops at least 0.4 m/s more than the passenger cell's (the stiff middle of the car), so the impulse lands on the crumple face and the cabin keeps coming", () => {
@@ -390,18 +390,18 @@ forModes("given a car receiving an impulse (a sudden change of momentum) from a 
     s.d.applyImpulse(0, 0, -1, 800);
     const dBumper = mass(s.d, "bumperFL").vel.z - bumper0;
     const dCell = mass(s.d, "cell").vel.z - cell0;
-    assert.ok(dBumper < dCell - 0.4, `cabin took the hit (bumper Δv ${dBumper.toFixed(3)}, cell ${dCell.toFixed(3)})`);
+    expect(dBumper, `cabin took the hit (bumper Δv ${dBumper.toFixed(3)}, cell ${dCell.toFixed(3)})`).toBeLessThan(dCell - 0.4);
   });
 
   it("when a zero impulse is applied, and then (after a reset, before any new crash starts) a 900 N·s impulse is applied, then neither changes the bumper's speed", () => {
     const s = spawn(0, 10);
     const z0 = mass(s.d, "bumperFL").vel.z;
     s.d.applyImpulse(0, 0, -1, 0);
-    assert.equal(mass(s.d, "bumperFL").vel.z, z0);
+    expect(mass(s.d, "bumperFL").vel.z).toBe(z0);
     s.d.reset();
     mass(s.d, "bumperFL").vel.z = 10;
     s.d.applyImpulse(0, 0, -1, 900);
-    assert.equal(mass(s.d, "bumperFL").vel.z, 10, "impulse applied while massActive=false");
+    expect(mass(s.d, "bumperFL").vel.z, "impulse applied while massActive=false").toBe(10);
   });
 
   it("when a 700 N·s impulse is applied along a horizontal wall normal (the direction the wall pushes), then it adds no vertical momentum to the car (below 0.000001)", () => {
@@ -409,7 +409,7 @@ forModes("given a car receiving an impulse (a sudden change of momentum) from a 
     const y0 = s.d.masses.reduce((sum, m) => sum + m.vel.y * m.mass, 0);
     s.d.applyImpulse(0, 0, -1, 700);
     const y1 = s.d.masses.reduce((sum, m) => sum + m.vel.y * m.mass, 0);
-    assert.ok(Math.abs(y1 - y0) < 1e-6, `planar impulse leaked ΔPy=${y1 - y0}`);
+    expect(Math.abs(y1 - y0), `planar impulse leaked ΔPy=${y1 - y0}`).toBeLessThan(1e-6);
   });
 
   it("when a 500 N·s impulse is applied along the axis, then the car's total momentum changes by exactly that amount (within 0.001 N·s), however the impulse is shared between its parts", () => {
@@ -418,7 +418,7 @@ forModes("given a car receiving an impulse (a sudden change of momentum) from a 
     const j = 500;
     s.d.applyImpulse(0, 0, -1, j);
     const dp = momentumZ(s.d) - p0;
-    assert.ok(Math.abs(dp + j) < 1e-3, `ΔP ${dp} vs -j ${-j} — weights not unit-sum`);
+    expect(Math.abs(dp + j), `ΔP ${dp} vs -j ${-j} — weights not unit-sum`).toBeLessThan(1e-3);
   });
 });
 
@@ -427,15 +427,15 @@ forModes("given a car receiving an impulse (a sudden change of momentum) from a 
 forModes("given a car whose drivetrain (engine and driven wheels) is working", (spawn) => {
   it("when a 25 m/s wall hit has pushed the engine block back past the distance that kills it (forced 5 cm past it if the crash fell short), then the drivetrain is dead", () => {
     const s = spawn(0, 25);
-    assert.equal(s.d.drivetrainAlive, true);
+    expect(s.d.drivetrainAlive).toBe(true);
     for (let i = 0; i < 24; i++) stepWall(s, DT, 0.14);
     const eng = Math.max(travel(s.d, "engineL"), travel(s.d, "engineR"));
     if (eng > ENGINE_KILL_TRAVEL) {
-      assert.equal(s.d.drivetrainAlive, false);
+      expect(s.d.drivetrainAlive).toBe(false);
     } else {
       mass(s.d, "engineL").local.z -= ENGINE_KILL_TRAVEL + 0.05;
       s.d.updateDrivetrain();
-      assert.equal(s.d.drivetrainAlive, false);
+      expect(s.d.drivetrainAlive).toBe(false);
     }
   });
 
@@ -445,16 +445,16 @@ forModes("given a car whose drivetrain (engine and driven wheels) is working", (
     const cell0 = mass(s.d, "cell").vel.z;
     const hub0 = mass(s.d, "hubFL").vel.z;
     s.d.cutDrive(0.05);
-    assert.equal(mass(s.d, "cell").vel.z, cell0);
-    assert.ok(mass(s.d, "hubFL").vel.z < hub0, "hubs should lose driven traction");
+    expect(mass(s.d, "cell").vel.z).toBe(cell0);
+    expect(mass(s.d, "hubFL").vel.z, "hubs should lose driven traction").toBeLessThan(hub0);
   });
 
   it("when the drive is cut for 0.05 s while the drivetrain is still alive, then the wheel hubs keep their speed", () => {
     const s = spawn(0, 14);
-    assert.equal(s.d.drivetrainAlive, true);
+    expect(s.d.drivetrainAlive).toBe(true);
     const hub0 = mass(s.d, "hubFL").vel.z;
     s.d.cutDrive(0.05);
-    assert.equal(mass(s.d, "hubFL").vel.z, hub0);
+    expect(mass(s.d, "hubFL").vel.z).toBe(hub0);
   });
 
   it("when the engine block is pushed back 1 cm short of the distance that kills it and then 1 cm past it, then the drivetrain is still alive at first and dead after", () => {
@@ -463,10 +463,10 @@ forModes("given a car whose drivetrain (engine and driven wheels) is working", (
     eng.local.copy(eng.rest);
     eng.local.z -= ENGINE_KILL_TRAVEL - 0.01;
     s.d.updateDrivetrain();
-    assert.equal(s.d.drivetrainAlive, true, `${(ENGINE_KILL_TRAVEL - 0.01).toFixed(3)} m is not yet wrecked`);
+    expect(s.d.drivetrainAlive, `${(ENGINE_KILL_TRAVEL - 0.01).toFixed(3)} m is not yet wrecked`).toBe(true);
     eng.local.z = eng.rest.z - (ENGINE_KILL_TRAVEL + 0.01);
     s.d.updateDrivetrain();
-    assert.equal(s.d.drivetrainAlive, false);
+    expect(s.d.drivetrainAlive).toBe(false);
   });
 
   // CrushCalibration's seed-7 derby: live cars ran with the block 0.25 m back, because a side- or
@@ -478,8 +478,8 @@ forModes("given a car whose drivetrain (engine and driven wheels) is working", (
       eng.local.z = eng.rest.z - (ENGINE_KILL_TRAVEL + 0.03);
       s.d.impactInward.copy(inward);
       s.d.updateDrivetrain();
-      assert.equal(s.d.drivetrainAlive, false, `block ${(ENGINE_KILL_TRAVEL + 0.03).toFixed(2)} m back survived a hit along ${inward.toArray().join(",")}`);
-      assert.equal(s.d.drivetrainHealth, 0);
+      expect(s.d.drivetrainAlive, `block ${(ENGINE_KILL_TRAVEL + 0.03).toFixed(2)} m back survived a hit along ${inward.toArray().join(",")}`).toBe(false);
+      expect(s.d.drivetrainHealth).toBe(0);
     }
   });
 
@@ -491,7 +491,7 @@ forModes("given a car whose drivetrain (engine and driven wheels) is working", (
       eng.local.z += 0.35;
     }
     s.d.updateDrivetrain();
-    assert.equal(s.d.drivetrainAlive, true, "forward stretch is not a dead block");
+    expect(s.d.drivetrainAlive, "forward stretch is not a dead block").toBe(true);
   });
 });
 
@@ -516,7 +516,7 @@ describe("given a car whose body is a lattice of spring beams, in lattice deform
         q.push(k);
       }
     }
-    assert.equal(seen.size, d.masses.length, `disconnected: ${d.masses.map((m) => m.name).filter((n) => !seen.has(n))}`);
+    expect(seen.size, `disconnected: ${d.masses.map((m) => m.name).filter((n) => !seen.has(n))}`).toBe(d.masses.length);
   });
 
   it("when the engine block is pushed 12 cm back toward the cabin and one physics step runs, then the squeezed beams push it forward again (its forward speed rises)", () => {
@@ -527,7 +527,7 @@ describe("given a car whose body is a lattice of spring beams, in lattice deform
     a.world.z -= 0.12;
     const vz0 = a.vel.z;
     s.d.stepStructure(DT);
-    assert.ok(a.vel.z > vz0, `no restoring spring (vz ${a.vel.z} vs ${vz0}), rest was ${rest}`);
+    expect(a.vel.z, `no restoring spring (vz ${a.vel.z} vs ${vz0}), rest was ${rest}`).toBeGreaterThan(vz0);
   });
 
   it("when the squeezed engine block is already separating from its neighbouring rail (its own speed set to 2 m/s), then the beams still push on it: after one physics step its speed has changed and stays above half of 2 m/s", () => {
@@ -538,8 +538,8 @@ describe("given a car whose body is a lattice of spring beams, in lattice deform
     a.vel.z = 2;
     const vz0 = a.vel.z;
     s.d.stepStructure(DT);
-    assert.ok(a.vel.z > vz0 * 0.5, "separating compressed beam went slack");
-    assert.ok(a.vel.z !== vz0, "no force at all while separating");
+    expect(a.vel.z, "separating compressed beam went slack").toBeGreaterThan(vz0 * 0.5);
+    expect(a.vel.z, "no force at all while separating").not.toBe(vz0);
   });
 });
 
@@ -548,12 +548,12 @@ forModes("given a car set up for a head-on crash into a wall", (spawn, mode) => 
     const s = spawn(0);
     for (let i = 0; i < 20; i++) stepWall(s, DT, 0.12);
     const rearTravel = (travel(s.d, "bumperRL") + travel(s.d, "bumperRR")) * 0.5;
-    assert.ok(rearTravel < (mode === "shape" ? 0.28 : 0.18), `rear crumpled ${rearTravel.toFixed(3)} [${mode}]`);
+    expect(rearTravel, `rear crumpled ${rearTravel.toFixed(3)} [${mode}]`).toBeLessThan((mode === "shape" ? 0.28 : 0.18));
     if (mode === "lattice") {
       const snap = s.d.snapshot() as { beams: { a: string; b: string; rest: number; plastic: number }[] };
       const rear = snap.beams.find((b) => b.a === "bumperRL" && b.b === "bumperRR");
-      assert.ok(rear);
-      assert.ok(Math.abs(rear!.plastic - rear!.rest) < 0.02, `rear bar plastic ${rear!.plastic} vs rest ${rear!.rest}`);
+      expect(rear).toBeTruthy();
+      expect(Math.abs(rear!.plastic - rear!.rest), `rear bar plastic ${rear!.plastic} vs rest ${rear!.rest}`).toBeLessThan(0.02);
     }
   });
 
@@ -568,9 +568,9 @@ forModes("given a car set up for a head-on crash into a wall", (spawn, mode) => 
     stepWreck(s, DT);
     if (mode === "shape") {
       // Plastic shape-matching holds the dent; it must not explode outward past rest.
-      assert.ok(a.local.z < z0 + 0.2, `shape exploded past rest ${a.local.z} vs ${z0}`);
+      expect(a.local.z, `shape exploded past rest ${a.local.z} vs ${z0}`).toBeLessThan(z0 + 0.2);
     } else {
-      assert.ok(a.local.z > z0 - 0.18 + 0.004, `no restore [${mode}] z ${a.local.z} from ${z0 - 0.18}`);
+      expect(a.local.z, `no restore [${mode}] z ${a.local.z} from ${z0 - 0.18}`).toBeGreaterThan(z0 - 0.18 + 0.004);
     }
   });
 });
@@ -580,23 +580,23 @@ forModes("given a car and kickNearestHub (the call that hops only the wheel hub 
     const s = spawn(0);
     const p = mass(s.d, "hubFL").world.clone();
     const name = s.d.kickNearestHub(p, 26);
-    assert.equal(name, "hubFL");
-    assert.ok(mass(s.d, "hubFL").vel.y > 0.8);
-    assert.ok(Math.abs(mass(s.d, "hubFR").vel.y) < 1e-6);
-    assert.ok(Math.abs(mass(s.d, "cell").vel.y) < 1e-6);
+    expect(name).toBe("hubFL");
+    expect(mass(s.d, "hubFL").vel.y).toBeGreaterThan(0.8);
+    expect(Math.abs(mass(s.d, "hubFR").vel.y)).toBeLessThan(1e-6);
+    expect(Math.abs(mass(s.d, "cell").vel.y)).toBeLessThan(1e-6);
   });
 
   it("when the point is on the engine block and the kick strength is 26, then a wheel hub is still kicked (the returned name starts with hub), never the engine", () => {
     const s = spawn(0);
     const name = s.d.kickNearestHub(mass(s.d, "engineL").world.clone(), 26);
-    assert.ok(name && name.startsWith("hub"), `kicked ${name}`);
+    expect(name && name.startsWith("hub"), `kicked ${name}`).toBeTruthy();
   });
 
   it("when the kick strength is 0, then it returns null and the hub's vertical speed does not change", () => {
     const s = spawn(0);
     const y0 = mass(s.d, "hubFL").vel.y;
-    assert.equal(s.d.kickNearestHub(mass(s.d, "hubFL").world.clone(), 0), null);
-    assert.equal(mass(s.d, "hubFL").vel.y, y0);
+    expect(s.d.kickNearestHub(mass(s.d, "hubFL").world.clone(), 0)).toBe(null);
+    expect(mass(s.d, "hubFL").vel.y).toBe(y0);
   });
 
   it("when the point is on the engine block, which is closer than any hub, and the kick strength is 52, then exactly one wheel hub is kicked up and the engine block itself is not", () => {
@@ -605,10 +605,10 @@ forModes("given a car and kickNearestHub (the call that hops only the wheel hub 
     // but the API is hubs-only.
     const eng = mass(s.d, "engineL").world.clone();
     s.d.kickNearestHub(eng, 52);
-    assert.ok(Math.abs(mass(s.d, "engineL").vel.y) < 1e-6, "engine got the hub kick");
+    expect(Math.abs(mass(s.d, "engineL").vel.y), "engine got the hub kick").toBeLessThan(1e-6);
     const hubs = ["hubFL", "hubFR", "hubRL", "hubRR"] as const;
     const kicked = hubs.filter((h) => mass(s.d, h).vel.y > 0.1);
-    assert.equal(kicked.length, 1, `kicked ${kicked.join(",")}`);
+    expect(kicked.length, `kicked ${kicked.join(",")}`).toBe(1);
   });
 });
 
@@ -616,7 +616,7 @@ forModes("given a car whose right-front corner is crushed against a wall 0.62 m 
   it("when the right-front corner is crushed for 18 steps, then the right-front wing's damage sensor reads over twice the left-front wing's", () => {
     const s = spawn(0.62);
     for (let i = 0; i < 18; i++) stepWall(s, DT, 0.12, mass(s.d, "bumperFR").world.x);
-    assert.ok(s.d.sensorCompression(5) > s.d.sensorCompression(4) * 2, "wingFR sensor should dominate wingFL");
+    expect(s.d.sensorCompression(5), "wingFR sensor should dominate wingFL").toBeGreaterThan(s.d.sensorCompression(4) * 2);
   });
 
   it("when the right-front corner is crushed for 18 steps, then the front bumper as a whole reads crushed (over 0.05) while the right bumper sensor reads over 1.5 times the left one's, so a corner nick does not break both headlamps", () => {
@@ -625,15 +625,15 @@ forModes("given a car whose right-front corner is crushed against a wall 0.62 m 
     const shared = s.d.partCompression("bumperFront");
     const leftBumper = s.d.sensorCompression(1);
     const rightBumper = s.d.sensorCompression(2);
-    assert.ok(shared > 0.05, "front bumper did crush");
-    assert.ok(rightBumper > leftBumper * 1.5, `left bumper sensor ${leftBumper} rode the shared part (${shared})`);
+    expect(shared, "front bumper did crush").toBeGreaterThan(0.05);
+    expect(rightBumper, `left bumper sensor ${leftBumper} rode the shared part (${shared})`).toBeGreaterThan(leftBumper * 1.5);
   });
 
   it("when the right-front corner is crushed for 16 steps, then the left headlamp's own corner sensor stays at a graze (under 0.25, or under half the right one's) whatever the centre bumper sensor reads", () => {
     const s = spawn(0.62);
     for (let i = 0; i < 16; i++) stepWall(s, DT, 0.14, mass(s.d, "bumperFR").world.x);
     // Right-hit: sensor 0 (center) may be mid, sensor 1 (left) must stay a graze.
-    assert.ok(s.d.sensorCompression(1) < 0.25 || s.d.sensorCompression(1) < s.d.sensorCompression(2) * 0.5);
+    expect(s.d.sensorCompression(1) < 0.25 || s.d.sensorCompression(1) < s.d.sensorCompression(2) * 0.5).toBeTruthy();
   });
 });
 
@@ -647,7 +647,7 @@ forModes("given a car hit from behind at 14 m/s", (spawn) => {
     }
     const tail = (travel(s.d, "bumperRL") + travel(s.d, "bumperRR")) * 0.5;
     const nose = (travel(s.d, "bumperFL") + travel(s.d, "bumperFR")) * 0.5;
-    assert.ok(tail > nose + 0.04, `rear hit crushed nose ${nose.toFixed(3)} more than tail ${tail.toFixed(3)}`);
+    expect(tail, `rear hit crushed nose ${nose.toFixed(3)} more than tail ${tail.toFixed(3)}`).toBeGreaterThan(nose + 0.04);
   });
 });
 
@@ -670,9 +670,9 @@ forModes("given a car whose right side is pushed in at 10 m/s", (spawn) => {
     const L = travel(s.d, "doorL") + travel(s.d, "wingFL");
     const R = travel(s.d, "doorR") + travel(s.d, "wingFR");
     if (s.d.mode === "shape") {
-      assert.ok(R > 0.06, `right side never moved R=${R.toFixed(3)}`);
+      expect(R, `right side never moved R=${R.toFixed(3)}`).toBeGreaterThan(0.06);
     } else {
-      assert.ok(R > L * 1.05, `side hit not local L=${L.toFixed(3)} R=${R.toFixed(3)}`);
+      expect(R, `side hit not local L=${L.toFixed(3)} R=${R.toFixed(3)}`).toBeGreaterThan(L * 1.05);
     }
   });
 });
@@ -685,7 +685,7 @@ forModes("given a car struck at its nose or its tail", (spawn) => {
     s.d.applyImpulse(0, 0, -1, 600);
     const dDoor = Math.abs(mass(s.d, "doorL").vel.z - door0);
     const dBump = Math.abs(mass(s.d, "bumperFL").vel.z - bump0);
-    assert.ok(dBump > dDoor * 2, `doors ate the frontal impulse (door ${dDoor.toFixed(3)} bumper ${dBump.toFixed(3)})`);
+    expect(dBump, `doors ate the frontal impulse (door ${dDoor.toFixed(3)} bumper ${dBump.toFixed(3)})`).toBeGreaterThan(dDoor * 2);
   });
 
   // A frontal hit's far end is the tail: its bumpers are not the facing crumple zone, so a push along the struck line
@@ -703,8 +703,8 @@ forModes("given a car struck at its nose or its tail", (spawn) => {
       s.d.separateAlong(0, 0, nz, 0.02, 2);
       for (const [i, n] of far.entries()) {
         const m = mass(s.d, n);
-        assert.ok(Math.abs(m.world.z - was[i]!.z - (cell.world.z - cell0.z)) < 1e-9, `${n} moved ${((m.world.z - was[i]!.z) * 1000).toFixed(2)} mm, cabin ${((cell.world.z - cell0.z) * 1000).toFixed(2)} mm`);
-        assert.ok(Math.abs(m.vel.z - was[i]!.v - (cell.vel.z - cell0.v)) < 1e-9, `${n} dv ${(m.vel.z - was[i]!.v).toFixed(3)} m/s, cabin ${(cell.vel.z - cell0.v).toFixed(3)} m/s`);
+        expect(Math.abs(m.world.z - was[i]!.z - (cell.world.z - cell0.z)), `${n} moved ${((m.world.z - was[i]!.z) * 1000).toFixed(2)} mm, cabin ${((cell.world.z - cell0.z) * 1000).toFixed(2)} mm`).toBeLessThan(1e-9);
+        expect(Math.abs(m.vel.z - was[i]!.v - (cell.vel.z - cell0.v)), `${n} dv ${(m.vel.z - was[i]!.v).toFixed(3)} m/s, cabin ${(cell.vel.z - cell0.v).toFixed(3)} m/s`).toBeLessThan(1e-9);
       }
     });
   }
@@ -713,11 +713,11 @@ forModes("given a car struck at its nose or its tail", (spawn) => {
 forModes("given a car set up for a wall crash", (spawn) => {
   it("when 0.4 s of simulation pass and then a contact is reported, then its quiet time (seconds since it was last touched) is 0 at the start, 0.4 s after the wait and 0 again right after the touch", () => {
     const s = spawn(0);
-    assert.equal(s.d.quietTime(), 0);
+    expect(s.d.quietTime()).toBe(0);
     s.d.stepStructure(0.4);
-    assert.ok(Math.abs(s.d.quietTime() - 0.4) < 1e-6);
+    expect(Math.abs(s.d.quietTime() - 0.4)).toBeLessThan(1e-6);
     s.d.notifyContact();
-    assert.equal(s.d.quietTime(), 0);
+    expect(s.d.quietTime()).toBe(0);
   });
 });
 
@@ -730,9 +730,9 @@ forModes("given a car that has never been crashed (its body simulation is idle)"
     d.mode = mode;
     const untouched = d.quietTime();
     d.notifyContact();
-    assert.equal(d.massActive, false);
-    assert.equal(d.quietTime(), untouched, `an idle car touched reads ${d.quietTime()} s quiet, untouched ${untouched} s`);
-    assert.ok(d.quietTime() > 1, `an idle car is not in a contact window: ${d.quietTime()} s`);
+    expect(d.massActive).toBe(false);
+    expect(d.quietTime(), `an idle car touched reads ${d.quietTime()} s quiet, untouched ${untouched} s`).toBe(untouched);
+    expect(d.quietTime(), `an idle car is not in a contact window: ${d.quietTime()} s`).toBeGreaterThan(1);
   });
 });
 
@@ -741,11 +741,11 @@ forModes("given a car that has been crushed against a wall for 12 steps", (spawn
     const s = spawn(0);
     for (let i = 0; i < 12; i++) stepWall(s, DT, 0.12);
     s.d.reset();
-    assert.equal(s.d.drivetrainAlive, true);
-    assert.equal(s.d.massActive, false);
-    assert.equal(travel(s.d, "bumperFL"), 0);
-    assert.ok(s.d.sensorCompression(0) === 0, `sensor 0 still compressed ${s.d.sensorCompression(0)}`);
-    assert.equal(s.d.crushElapsed, 0);
+    expect(s.d.drivetrainAlive).toBe(true);
+    expect(s.d.massActive).toBe(false);
+    expect(travel(s.d, "bumperFL")).toBe(0);
+    expect(s.d.sensorCompression(0), `sensor 0 still compressed ${s.d.sensorCompression(0)}`).toBe(0);
+    expect(s.d.crushElapsed).toBe(0);
   });
 });
 
@@ -756,10 +756,10 @@ forModes("given a freshly built car whose body simulation is idle", (spawn, mode
     d.mode = mode;
     const group = new THREE.Group();
     d.armMasses(group, new THREE.Vector3(0, 0, 8), new THREE.Vector3());
-    assert.equal(d.massActive, true);
-    assert.equal(d.drivetrainAlive, true);
-    assert.equal(d.crushElapsed, 0);
-    assert.ok(Math.abs(d.impactLocal.x) < 0.01);
+    expect(d.massActive).toBe(true);
+    expect(d.drivetrainAlive).toBe(true);
+    expect(d.crushElapsed).toBe(0);
+    expect(Math.abs(d.impactLocal.x)).toBeLessThan(0.01);
   });
 
   it("when a crash begins with an impulse of 2 and then again with 400, then the stored impulse is raised to the minimum of 4 for the first and capped at 70 for the second", () => {
@@ -768,9 +768,9 @@ forModes("given a freshly built car whose body simulation is idle", (spawn, mode
     d.mode = mode;
     const group = new THREE.Group();
     d.beginCrush(new THREE.Vector3(0, 0.36, 2.06), new THREE.Vector3(0, 0, -1), 2, 2, group, new THREE.Vector3(), new THREE.Vector3());
-    assert.equal(d.impulseValue, 4);
+    expect(d.impulseValue).toBe(4);
     d.beginCrush(new THREE.Vector3(0, 0.36, 2.06), new THREE.Vector3(0, 0, -1), 400, 400, group, new THREE.Vector3(), new THREE.Vector3());
-    assert.equal(d.impulseValue, 70);
+    expect(d.impulseValue).toBe(70);
   });
 });
 
@@ -778,8 +778,8 @@ forModes("given feedOverlap (the call that turns the wall's overlap into crush a
   it("when a car crashing at 14 m/s is fed 8 cm of wall overlap at 14 m/s closing speed, then the leftover closing speed is between 0 and 14 m/s and below 14, because the crush absorbs some", () => {
     const s = spawn(0, 14);
     const remain = s.d.feedOverlap(mass(s.d, "bumperFL").world, new THREE.Vector3(0, 0, -1), 0.08, 14, DT);
-    assert.ok(remain >= 0 && remain <= 14);
-    assert.ok(remain < 14, "should absorb some closing");
+    expect(remain >= 0 && remain <= 14).toBeTruthy();
+    expect(remain, "should absorb some closing").toBeLessThan(14);
   });
 
   it("when a car with no crash set up is fed 20 m/s of closing speed, then the call returns the 20 m/s unchanged because nothing is absorbed", () => {
@@ -787,7 +787,7 @@ forModes("given feedOverlap (the call that turns the wall's overlap into crush a
     const d = new StreamedDeformation(geom);
     d.mode = mode;
     const r = d.feedOverlap(new THREE.Vector3(), new THREE.Vector3(0, 0, -1), 1, 20, DT);
-    assert.equal(r, 20);
+    expect(r).toBe(20);
   });
 
   it("when a car crashing at 14 m/s is fed only 1 cm of overlap, then the bumper moves less than 5 cm: a nibble is not a teleport", () => {
@@ -795,7 +795,7 @@ forModes("given feedOverlap (the call that turns the wall's overlap into crush a
     const z0 = mass(s.d, "bumperFL").world.z;
     s.d.feedOverlap(mass(s.d, "bumperFL").world.clone(), new THREE.Vector3(0, 0, -1), 0.01, 14, DT);
     const dz = Math.abs(mass(s.d, "bumperFL").world.z - z0);
-    assert.ok(dz < 0.05, `nibble was a teleport (${dz}m)`);
+    expect(dz, `nibble was a teleport (${dz}m)`).toBeLessThan(0.05);
   });
 
   it("when one car is fed a 1/60 s step and another car two 1/120 s steps with the same overlap, then the two half steps move the bumper less than 1.7 times as far as the one full step, because feeds scale with time, not with the number of calls", () => {
@@ -810,7 +810,7 @@ forModes("given feedOverlap (the call that turns the wall's overlap into crush a
     twice.d.feedOverlap(p, new THREE.Vector3(0, 0, -1), 0.1, 14, DT / 2);
     twice.d.feedOverlap(mass(twice.d, "bumperFL").world.clone(), new THREE.Vector3(0, 0, -1), 0.1, 14, DT / 2);
     const d2 = Math.abs(mass(twice.d, "bumperFL").world.z - z1);
-    assert.ok(d2 < d1 * 1.7, `half-dt×2 crushed ${d2.toFixed(4)} vs full ${d1.toFixed(4)} — per-call teleport`);
+    expect(d2, `half-dt×2 crushed ${d2.toFixed(4)} vs full ${d1.toFixed(4)} — per-call teleport`).toBeLessThan(d1 * 1.7);
   });
 });
 
@@ -818,9 +818,9 @@ forModes("given a car with its total mass, the sum of the masses of all its body
   it("when the wall crushes it for 10 steps, then its total mass is the lumped sum of its parts (between 600 and 1200 kg, not 1) and the crush does not change it", () => {
     const s = spawn(0);
     const m0 = s.d.totalMass;
-    assert.ok(m0 > 600 && m0 < 1200, `sedan mass ${m0}`);
+    expect(m0 > 600 && m0 < 1200, `sedan mass ${m0}`).toBeTruthy();
     for (let i = 0; i < 10; i++) stepWall(s, DT, 0.1);
-    assert.equal(s.d.totalMass, m0);
+    expect(s.d.totalMass).toBe(m0);
   });
 });
 
@@ -832,9 +832,9 @@ forModes("given a car whose wheels stay on until a hard enough hit knocks them o
       const h = mass(s.d, name);
       const xz = Math.hypot(h.local.x - h.rest.x, h.local.z - h.rest.z);
       if (!h.popped) {
-        assert.ok(xz < 0.08, `${name} slid ${xz.toFixed(3)} without popping [${mode}]`);
+        expect(xz, `${name} slid ${xz.toFixed(3)} without popping [${mode}]`).toBeLessThan(0.08);
       } else {
-        assert.ok(xz >= h.radius * 0.5 * 0.9, `${name} popped but barely moved`);
+        expect(xz, `${name} popped but barely moved`).toBeGreaterThanOrEqual(h.radius * 0.5 * 0.9);
       }
     }
   });
@@ -857,12 +857,12 @@ forModes("given a car whose wheels stay on until a hard enough hit knocks them o
   const popped = (s: ReturnType<typeof spawn>) => (["hubFL", "hubFR", "hubRL", "hubRR"] as const).filter((n) => mass(s.d, n).popped);
 
   it("when a 64 km/h hit on the right-front corner has crushed that corner onto the tyre, then only the right-front wheel pops off", () => {
-    assert.deepEqual(popped(crushCorner(64 / 3.6, 0.62)), ["hubFR"]);
+    expect(firstMismatch(popped(crushCorner(64 / 3.6, 0.62)), ["hubFR"])).toBeUndefined();
   });
 
   it("when the same corner crush happens at 50 km/h, or square on (centred) at 64 km/h, then every wheel stays on", () => {
-    assert.deepEqual(popped(crushCorner(50 / 3.6, 0.62)), [], "50 km/h corner");
-    assert.deepEqual(popped(crushCorner(64 / 3.6, 0)), [], "64 km/h square");
+    expect(popped(crushCorner(50 / 3.6, 0.62)), "50 km/h corner").toHaveLength(0);
+    expect(popped(crushCorner(64 / 3.6, 0)), "64 km/h square").toHaveLength(0);
   });
 
   it("when a deep crush (walls past both wheel midpoints, so the cage may yield) is switched on and the front-left hub is moved 10 cm forward of its rest position, then the wheel stays on and the hub is not pinned back to rest (it stays over 4 cm away)", () => {
@@ -873,8 +873,8 @@ forModes("given a car whose wheels stay on until a hard enough hit knocks them o
     h.local.z = h.rest.z + 0.1;
     h.world.copy(h.local);
     s.d.followGroup(s.group, s.vel, s.omega, DT);
-    assert.equal(h.popped, false);
-    assert.ok(Math.abs(h.local.z - h.rest.z) > 0.04, "deepCrush pinned the hub anyway");
+    expect(h.popped).toBe(false);
+    expect(Math.abs(h.local.z - h.rest.z), "deepCrush pinned the hub anyway").toBeGreaterThan(0.04);
   });
 
   // A planted wreck's frame sits on the mean of its hubs, each held at its pin (`rest` + shove) in the car frame while its
@@ -889,19 +889,19 @@ forModes("given a car whose wheels stay on until a hard enough hit knocks them o
       }
     };
     settle(60);
-    assert.ok(s.d.quietTime() > 0.5, "not planted");
+    expect(s.d.quietTime(), "not planted").toBeGreaterThan(0.5);
     const fl = mass(s.d, "hubFL");
     fl.world.x -= 0.3;
     settle(30);
-    assert.equal(fl.popped, false);
+    expect(fl.popped).toBe(false);
     const before = s.d.masses.map((m) => m.world.clone());
     const frame = s.group.position.clone();
     s.d.popHub(fl);
     settle(1);
-    assert.equal(fl.popped, true);
-    assert.ok(s.group.position.distanceTo(frame) < 0.01, `frame jumped ${s.group.position.distanceTo(frame).toFixed(3)} m at the pop`);
+    expect(fl.popped).toBe(true);
+    expect(s.group.position.distanceTo(frame), `frame jumped ${s.group.position.distanceTo(frame).toFixed(3)} m at the pop`).toBeLessThan(0.01);
     for (const [i, m] of s.d.masses.entries()) {
-      if (m !== fl) assert.ok(m.world.distanceTo(before[i]!) < 0.01, `${m.name} jumped ${m.world.distanceTo(before[i]!).toFixed(3)} m at the pop`);
+      if (m !== fl) expect(m.world.distanceTo(before[i]!), `${m.name} jumped ${m.world.distanceTo(before[i]!).toFixed(3)} m at the pop`).toBeLessThan(0.01);
     }
   });
 
@@ -913,43 +913,43 @@ forModes("given a car whose wheels stay on until a hard enough hit knocks them o
     const face = h.world.z + PLATFORM_RIG.tyre.r - 0.1;
     holdOnFace(s.d, h.world.x, face + 0.5, 0.5, 0.06, Math.PI / 2, true);
     stepWreck(s, DT);
-    assert.ok(h.local.z - h.rest.z < -0.09, `hub held at ${(h.local.z - h.rest.z).toFixed(3)} m: the face is inside the tyre`);
+    expect(h.local.z - h.rest.z, `hub held at ${(h.local.z - h.rest.z).toFixed(3)} m: the face is inside the tyre`).toBeLessThan(-0.09);
     stepWreck(s, DT);
-    assert.ok(h.local.z - h.rest.z < -0.09, "the pin pulled the hub back into the face");
-    assert.equal(h.popped, false);
+    expect(h.local.z - h.rest.z, "the pin pulled the hub back into the face").toBeLessThan(-0.09);
+    expect(h.popped).toBe(false);
   });
 
   it("when a wall face shoves a standing car's front-right wheel back more than one wheel diameter, then the wheel tears off, whereas with wheel detaching switched off it stays on and moves at most one wheel diameter", () => {
     const on = spawn(0, 0);
     on.d.shoveHub(mass(on.d, "hubFR"), 0, -(2 * PLATFORM_RIG.tyre.r + 0.01));
     stepWreck(on, DT);
-    assert.equal(mass(on.d, "hubFR").popped, true, "a wheel diameter of shove left the wheel on");
+    expect(mass(on.d, "hubFR").popped, "a wheel diameter of shove left the wheel on").toBe(true);
     const held = spawn(0, 0);
     held.d.wheelsDetach = false;
     held.d.shoveHub(mass(held.d, "hubFR"), 0, -1);
     stepWreck(held, DT);
     const hub = mass(held.d, "hubFR");
-    assert.equal(hub.popped, false, "wheelsDetach off still popped the wheel");
-    assert.ok(Math.abs(hub.local.z - hub.rest.z) <= 2 * PLATFORM_RIG.tyre.r + 1e-6, `shoved ${(hub.local.z - hub.rest.z).toFixed(3)} m past a diameter`);
+    expect(hub.popped, "wheelsDetach off still popped the wheel").toBe(false);
+    expect(Math.abs(hub.local.z - hub.rest.z), `shoved ${(hub.local.z - hub.rest.z).toFixed(3)} m past a diameter`).toBeLessThanOrEqual(2 * PLATFORM_RIG.tyre.r + 1e-6);
   });
 
   it("when three wheels have popped off and then the fourth does too, then the drivetrain is still alive with three gone and dead once all four are gone, like a dead engine", () => {
     const s = spawn(0, 0);
     for (const name of ["hubFL", "hubFR", "hubRL"] as const) s.d.popHub(mass(s.d, name));
     stepWreck(s, DT);
-    assert.equal(s.d.drivetrainAlive, true, "three wheels gone already killed it");
+    expect(s.d.drivetrainAlive, "three wheels gone already killed it").toBe(true);
     s.d.popHub(mass(s.d, "hubRR"));
     stepWreck(s, DT);
-    assert.equal(s.d.drivetrainAlive, false, "no wheels and still driving");
+    expect(s.d.drivetrainAlive, "no wheels and still driving").toBe(false);
   });
 
   it("when frame crushing is switched off (race mode) and a deep crush is requested, then deep crush reads off, and switching frame crushing back on makes the requested deep crush read on", () => {
     const s = spawn(0);
     s.d.frameCrush = false;
     s.d.deepCrush = true;
-    assert.equal(s.d.deepCrush, false);
+    expect(s.d.deepCrush).toBe(false);
     s.d.frameCrush = true;
-    assert.equal(s.d.deepCrush, true, "the squeeze was forgotten while the frame was held");
+    expect(s.d.deepCrush, "the squeeze was forgotten while the frame was held").toBe(true);
   });
 });
 
@@ -962,7 +962,7 @@ describe("given a wreck that has just stopped being touched, in shape deform mod
     const s = spawn(0, 0, undefined, undefined, "shape");
     const step = () => stepWreck(s, DT);
     for (let i = 0; i < 6; i++) step();
-    assert.ok(s.d.quietTime() < 0.2, "already planted");
+    expect(s.d.quietTime(), "already planted").toBeLessThan(0.2);
     const mean = new Float64Array(4);
     s.d.motion(mean);
     const before = mean[0]!;
@@ -970,15 +970,15 @@ describe("given a wreck that has just stopped being touched, in shape deform mod
     s.d.motion(mean);
     s.vel.x += mean[0]! - before;
     for (let i = 0; i < 12; i++) step();
-    assert.ok(s.d.quietTime() > 0.25, "never planted");
-    for (const m of s.d.masses) if (m.hub) assert.ok(m.vel.x - s.vel.x <= 8 + 1e-9, `${m.name} freed at ${(m.vel.x - s.vel.x).toFixed(2)} m/s off the body`);
+    expect(s.d.quietTime(), "never planted").toBeGreaterThan(0.25);
+    for (const m of s.d.masses) if (m.hub) expect(m.vel.x - s.vel.x, `${m.name} freed at ${(m.vel.x - s.vel.x).toFixed(2)} m/s off the body`).toBeLessThanOrEqual(8 + 1e-9);
     let worst = 0;
     for (let i = 0; i < 6; i++) {
       const before = s.group.position.clone();
       step();
       worst = Math.max(worst, s.group.position.distanceTo(before));
     }
-    assert.ok(worst < 8 * DT, `the frame followed the wheels ${worst.toFixed(3)} m in one 1/60 s step (8 m/s: ${(8 * DT).toFixed(3)})`);
+    expect(worst, `the frame followed the wheels ${worst.toFixed(3)} m in one 1/60 s step (8 m/s: ${(8 * DT).toFixed(3)})`).toBeLessThan(8 * DT);
   });
 });
 
@@ -993,13 +993,13 @@ forModes("given a wreck that has settled in place with its passenger cell 0.11 m
     const cell = mass(s.d, "cell");
     cell.world.x += 0.11;
     stepWreck(s, 0);
-    assert.ok(s.d.quietTime() > 2, "not planted");
-    assert.ok(cell.local.distanceTo(cell.rest) > 0.05, `the cell stands ${cell.local.distanceTo(cell.rest).toFixed(3)} m off its rest: nothing to drag`);
+    expect(s.d.quietTime(), "not planted").toBeGreaterThan(2);
+    expect(cell.local.distanceTo(cell.rest), `the cell stands ${cell.local.distanceTo(cell.rest).toFixed(3)} m off its rest: nothing to drag`).toBeGreaterThan(0.05);
     const before = s.d.masses.map((m) => m.world.clone());
-    assert.equal(s.d.rearmHit(new THREE.Vector3(-0.95, 0.36, 0), new THREE.Vector3(1, 0, 0), 20, 6), true);
+    expect(s.d.rearmHit(new THREE.Vector3(-0.95, 0.36, 0), new THREE.Vector3(1, 0, 0), 20, 6)).toBe(true);
     stepWreck(s, 0);
     for (const [i, m] of s.d.masses.entries()) {
-      if (!m.hub) assert.ok(m.world.distanceTo(before[i]!) < 0.03, `${m.name} jumped ${m.world.distanceTo(before[i]!).toFixed(3)} m at the touch`);
+      if (!m.hub) expect(m.world.distanceTo(before[i]!), `${m.name} jumped ${m.world.distanceTo(before[i]!).toFixed(3)} m at the touch`).toBeLessThan(0.03);
     }
   });
 });
@@ -1010,22 +1010,22 @@ forModes("given a car whose hit armed at a low barrier speed, touched again befo
   it("when a contact at 40 m/s comes 0.1 s after a 5.3 m/s nose hit, then it re-arms the hit at its own barrier speed", () => {
     const s = spawn(0, 5.3, new THREE.Vector3(0.24, 0, -0.95).normalize());
     for (let i = 0; i < 6; i++) stepWreck(s, DT);
-    assert.ok(s.d.quietTime() < 0.3, `quiet ${s.d.quietTime().toFixed(3)} s: the quiet time re-arms it anyway`);
-    assert.equal(s.d.rearmHit(new THREE.Vector3(0.5, 0.36, 2.0), new THREE.Vector3(-0.3, 0, -0.93).normalize(), 40, 40), true);
-    assert.ok(s.d.hitSpeedValue >= 40, `hit speed ${s.d.hitSpeedValue.toFixed(2)} m/s`);
+    expect(s.d.quietTime(), `quiet ${s.d.quietTime().toFixed(3)} s: the quiet time re-arms it anyway`).toBeLessThan(0.3);
+    expect(s.d.rearmHit(new THREE.Vector3(0.5, 0.36, 2.0), new THREE.Vector3(-0.3, 0, -0.93).normalize(), 40, 40)).toBe(true);
+    expect(s.d.hitSpeedValue, `hit speed ${s.d.hitSpeedValue.toFixed(2)} m/s`).toBeGreaterThanOrEqual(40);
   });
 
   it("when a contact at 30.3 m/s from the front-left comes in the same slice as a 7.6 m/s hit on the right door, then it re-arms the hit on the nose at 30.3 m/s", () => {
     const s = spawn(0, 7.6, new THREE.Vector3(-0.9, 0, 0.02).normalize(), new THREE.Vector3(0.95, 0.36, 0));
-    assert.equal(s.d.rearmHit(new THREE.Vector3(-0.7, 0.36, 2.0), new THREE.Vector3(0.69, 0, -0.67).normalize(), 30.3, 30.3), true);
-    assert.ok(Math.abs(s.d.hitSpeedValue - 30.3) < 1e-9, `hit speed ${s.d.hitSpeedValue.toFixed(2)} m/s`);
+    expect(s.d.rearmHit(new THREE.Vector3(-0.7, 0.36, 2.0), new THREE.Vector3(0.69, 0, -0.67).normalize(), 30.3, 30.3)).toBe(true);
+    expect(Math.abs(s.d.hitSpeedValue - 30.3), `hit speed ${s.d.hitSpeedValue.toFixed(2)} m/s`).toBeLessThan(1e-9);
   });
 
   it("when a contact reads 1.4 times the armed barrier speed, then it stays the armed hit's: a hit's own slices read within a few % of its first", () => {
     const s = spawn(0, 14);
     stepWreck(s, DT);
-    assert.equal(s.d.rearmHit(new THREE.Vector3(0, 0.36, 2.06), new THREE.Vector3(0, 0, -1), 14, 14 * 1.4), false);
-    assert.equal(s.d.hitSpeedValue, 14);
+    expect(s.d.rearmHit(new THREE.Vector3(0, 0.36, 2.06), new THREE.Vector3(0, 0, -1), 14, 14 * 1.4)).toBe(false);
+    expect(s.d.hitSpeedValue).toBe(14);
   });
 });
 
@@ -1038,7 +1038,7 @@ forModes("given a wreck settled after a 7.6 m/s side hit, its wear counted again
     const worn = (contacts: readonly number[]): string => {
       const s = spawn(0, 7.6, new THREE.Vector3(-0.9, 0, 0.02).normalize(), door);
       for (let i = 0; i < 121; i++) stepWreck(s, DT);
-      assert.ok(s.d.quietTime() > 0.3, `quiet ${s.d.quietTime().toFixed(3)} s: nothing to re-arm`);
+      expect(s.d.quietTime(), `quiet ${s.d.quietTime().toFixed(3)} s: nothing to re-arm`).toBeGreaterThan(0.3);
       s.d.wreckEnergy = 250;
       s.d.killTravel = Infinity;
       for (const ebs of contacts) {
@@ -1048,9 +1048,9 @@ forModes("given a wreck settled after a 7.6 m/s side hit, its wear counted again
       return `wear share ${(1 - s.d.drivetrainHealth).toFixed(6)}, hit speed ${s.d.hitSpeedValue.toFixed(4)} m/s`;
     };
     const face = worn([6.8]);
-    assert.equal(worn([3, 6.8]), face, "the graze touched first");
-    assert.equal(worn([6.8, 3]), face, "the face touched first");
-    assert.equal(worn([2.7, 6.8]), face, "a graze under the re-arm floor touched first");
+    expect(worn([3, 6.8]), "the graze touched first").toBe(face);
+    expect(worn([6.8, 3]), "the face touched first").toBe(face);
+    expect(worn([2.7, 6.8]), "a graze under the re-arm floor touched first").toBe(face);
   });
 });
 
@@ -1060,8 +1060,8 @@ forModes("given a car driving hard into a rigid wall (16 to 20 m/s)", (spawn, mo
     for (let i = 0; i < 24; i++) stepWall(s, DT, 0.16, mass(s.d, "bumperFR").world.x);
     const fl = travel(s.d, "bumperFL");
     const fr = travel(s.d, "bumperFR");
-    assert.ok(fr > fl * (mode === "shape" ? 1.15 : 1.25), `corners tied FL=${fl.toFixed(3)} FR=${fr.toFixed(3)} [${mode}]`);
-    assert.ok(fr > 0.08, `right corner never crushed ${fr.toFixed(3)}`);
+    expect(fr, `corners tied FL=${fl.toFixed(3)} FR=${fr.toFixed(3)} [${mode}]`).toBeGreaterThan(fl * (mode === "shape" ? 1.15 : 1.25));
+    expect(fr, `right corner never crushed ${fr.toFixed(3)}`).toBeGreaterThan(0.08);
   });
 
   it("when a car-to-car-sized bite (18 cm of wall overlap per step) is taken head-on at 20 m/s for 18 steps, then the nose actually shortens by over 12 cm", () => {
@@ -1069,7 +1069,7 @@ forModes("given a car driving hard into a rigid wall (16 to 20 m/s)", (spawn, mo
     const z0 = (mass(s.d, "bumperFL").local.z + mass(s.d, "bumperFR").local.z) * 0.5;
     for (let i = 0; i < 18; i++) stepWall(s, DT, 0.18);
     const z1 = (mass(s.d, "bumperFL").local.z + mass(s.d, "bumperFR").local.z) * 0.5;
-    assert.ok(z0 - z1 > 0.12, `skin/lattice did not eat overlap Δz=${(z0 - z1).toFixed(3)} [${mode}]`);
+    expect(z0 - z1, `skin/lattice did not eat overlap Δz=${(z0 - z1).toFixed(3)} [${mode}]`).toBeGreaterThan(0.12);
   });
 });
 
@@ -1082,7 +1082,7 @@ forModes("given a car driving into a rigid wall at 16 m/s (about 58 km/h)", (spa
     for (let i = 0; i < 18; i++) stepWall(s, DT, 0.16);
     const crush = z0 - mass(s.d, "bumperFL").local.z;
     if (mode === "shape") {
-      assert.ok(crush < 0.58, `squash=0 still ate ${crush.toFixed(3)}m [${mode}]`);
+      expect(crush, `squash=0 still ate ${crush.toFixed(3)}m [${mode}]`).toBeLessThan(0.58);
     }
   });
 
@@ -1097,7 +1097,7 @@ forModes("given a car driving into a rigid wall at 16 m/s (about 58 km/h)", (spa
     }
     const a = -alongZ(lo.d, "bumperFL");
     const b = -alongZ(hi.d, "bumperFL");
-    assert.ok(b > a + 0.08, `slider dead 0→${a.toFixed(3)} 1→${b.toFixed(3)} [${mode}]`);
+    expect(b, `slider dead 0→${a.toFixed(3)} 1→${b.toFixed(3)} [${mode}]`).toBeGreaterThan(a + 0.08);
   });
 
   it("when the right-front corner is crushed 0.62 m off centre for 22 steps, then the leftover-crumple share (how much of the crumple zone is unused) drops below 1, or the struck corner has crushed over 90 % as far as the left-front one", () => {
@@ -1106,14 +1106,14 @@ forModes("given a car driving into a rigid wall at 16 m/s (about 58 km/h)", (spa
     const left = leftoverCrumple(s.d.crumpleTravelCorner());
     const fr = travel(s.d, "bumperFR");
     const fl = travel(s.d, "bumperFL");
-    assert.ok(fr > fl * 0.9 || left < 1, `corner leftover ${left.toFixed(3)} FR=${fr.toFixed(3)} FL=${fl.toFixed(3)} [${mode}]`);
+    expect(fr > fl * 0.9 || left < 1, `corner leftover ${left.toFixed(3)} FR=${fr.toFixed(3)} FL=${fl.toFixed(3)} [${mode}]`).toBeTruthy();
   });
 
   it("when the wall crushes it for 30 steps, then neither the passenger cell (the stiff middle of the car) nor the car as a whole is falling faster than 4.5 m/s, so it does not free-fall after the pulse", () => {
     const s = spawn(0, 16);
     for (let i = 0; i < 30; i++) stepWall(s, DT, 0.12);
-    assert.ok(mass(s.d, "cell").vel.y > -4.5, `cell vy ${mass(s.d, "cell").vel.y.toFixed(2)} [${mode}]`);
-    assert.ok(s.vel.y > -4.5, `car vy ${s.vel.y.toFixed(2)} [${mode}]`);
+    expect(mass(s.d, "cell").vel.y, `cell vy ${mass(s.d, "cell").vel.y.toFixed(2)} [${mode}]`).toBeGreaterThan(-4.5);
+    expect(s.vel.y, `car vy ${s.vel.y.toFixed(2)} [${mode}]`).toBeGreaterThan(-4.5);
   });
 
   it("when the wall crushes it for 20 steps, then the roof does not sag more than 12 cm below its rest height", () => {
@@ -1121,7 +1121,7 @@ forModes("given a car driving into a rigid wall at 16 m/s (about 58 km/h)", (spa
     const y0 = mass(s.d, "roof").rest.y;
     for (let i = 0; i < 20; i++) stepWall(s, DT, 0.14);
     const y = mass(s.d, "roof").local.y;
-    assert.ok(y > y0 - 0.12, `roof sagged to ${y.toFixed(3)} from ${y0} [${mode}]`);
+    expect(y, `roof sagged to ${y.toFixed(3)} from ${y0} [${mode}]`).toBeGreaterThan(y0 - 0.12);
   });
 });
 
@@ -1141,14 +1141,14 @@ forModes("given a car driving into a rigid wall at a chosen speed", (spawn, mode
       }
       const a = travel(slow.d, "bumperFL");
       const b = travel(fast.d, "bumperFL");
-      assert.ok(b > a + testCase.minExtraCrush, `${testCase.fastMps} m/s crushed ${b.toFixed(3)} vs ${testCase.slowMps} m/s ${a.toFixed(3)} [${mode}]`);
+      expect(b, `${testCase.fastMps} m/s crushed ${b.toFixed(3)} vs ${testCase.slowMps} m/s ${a.toFixed(3)} [${mode}]`).toBeGreaterThan(a + testCase.minExtraCrush);
     });
   }
 
   it("when a 5 m/s car takes 18 steps of wall overlap, then the passenger cell (the stiff middle of the car) moves less than 12 cm, so a 5 m/s bump does not fold the cabin", () => {
     const s = spawn(0, 5);
     for (let i = 0; i < 18; i++) stepWall(s, DT, 0.12);
-    assert.ok(travel(s.d, "cell") < 0.12, `cabin budged ${travel(s.d, "cell").toFixed(3)} at 5 m/s [${mode}]`);
+    expect(travel(s.d, "cell"), `cabin budged ${travel(s.d, "cell").toFixed(3)} at 5 m/s [${mode}]`).toBeLessThan(0.12);
   });
 });
 
@@ -1171,27 +1171,27 @@ forModes("given a car crashing into a rigid wall at 14 to 16 m/s", (spawn, mode)
     }
     const vs = mass(slow.d, "bumperFL").vel.length();
     const vf = mass(fast.d, "bumperFL").vel.length();
-    assert.ok(vs < vf + 8, `slomo rocket ${vs.toFixed(2)} vs 1/60 ${vf.toFixed(2)} [${mode}]`);
-    assert.ok(vs < 40, `slomo bumper ${vs.toFixed(2)} m/s [${mode}]`);
+    expect(vs, `slomo rocket ${vs.toFixed(2)} vs 1/60 ${vf.toFixed(2)} [${mode}]`).toBeLessThan(vf + 8);
+    expect(vs, `slomo bumper ${vs.toFixed(2)} m/s [${mode}]`).toBeLessThan(40);
   });
 
   it("when the crush plays out for 24 steps and the car then coasts 12 more steps with no wall contact, then its speed stays under 16 m/s, so it does not rebound above its 14 m/s impact speed", () => {
     const s = spawn(0, 14);
     for (let i = 0; i < 24; i++) stepWall(s, DT, 0.12);
     for (let i = 0; i < 12; i++) stepWreck(s, DT);
-    assert.ok(s.vel.length() < 16, `rebound ${s.vel.length().toFixed(2)} m/s [${mode}]`);
+    expect(s.vel.length(), `rebound ${s.vel.length().toFixed(2)} m/s [${mode}]`).toBeLessThan(16);
   });
 });
 
 forModes("given a car crashing at 14 m/s whose front bumper hands a share of each stopping impulse on to the passenger cell (the stiff middle of the car), depending on how far it is crushed", (spawn, mode) => {
   it("when the bumper is not crushed, then the front passes on at most 0.12 of the impulse, and when it is crushed 5 % past its maximum travel it counts as packed and passes on all of it", () => {
     const s = spawn(0, 14);
-    assert.ok(s.d.frontTransfer() <= 0.12, `rest transfer ${s.d.frontTransfer()}`);
+    expect(s.d.frontTransfer(), `rest transfer ${s.d.frontTransfer()}`).toBeLessThanOrEqual(0.12);
     const fl = mass(s.d, "bumperFL");
     fl.local.z = fl.rest.z - fl.bands.max * 1.05;
     fl.world.copy(fl.local);
-    assert.ok(s.d.nodePacked(fl), "travel past max should pack");
-    assert.equal(s.d.nodeTransfer(fl), 1);
+    expect(s.d.nodePacked(fl), "travel past max should pack").toBeTruthy();
+    expect(s.d.nodeTransfer(fl)).toBe(1);
   });
 
   it("when the bumper is crushed to the middle of its travel and then to its maximum band, then it passes on exactly 0.5 of the impulse at the middle (not 0.1 or 0.62) and 0.62, or counts as packed, at the maximum", () => {
@@ -1199,10 +1199,10 @@ forModes("given a car crashing at 14 m/s whose front bumper hands a share of eac
     const fl = mass(s.d, "bumperFL");
     fl.local.z = fl.rest.z - fl.bands.middle;
     fl.world.copy(fl.local);
-    assert.equal(s.d.nodeTransfer(fl), 0.5);
+    expect(s.d.nodeTransfer(fl)).toBe(0.5);
     fl.local.z = fl.rest.z - fl.bands.max;
     fl.world.copy(fl.local);
-    assert.ok(s.d.nodeTransfer(fl) === 0.62 || s.d.nodePacked(fl), `max band ${s.d.nodeTransfer(fl)}`);
+    expect(s.d.nodeTransfer(fl) === 0.62 || s.d.nodePacked(fl), `max band ${s.d.nodeTransfer(fl)}`).toBeTruthy();
   });
 
   it("when both front bumper corners are crushed 5 % past their maximum travel and a 4000 N·s impulse hits, then the packed car's cabin speed changes more than twice as much as an uncrushed car's, because a packed face dumps the stopping impulse onto the cabin", () => {
@@ -1219,14 +1219,14 @@ forModes("given a car crashing at 14 m/s whose front bumper hands a share of eac
     packed.d.applyImpulse(0, 0, -1, 4000);
     const dRest = Math.abs(mass(rest.d, "cell").vel.z - cell0);
     const dPack = Math.abs(mass(packed.d, "cell").vel.z - cell0);
-    assert.ok(dPack > dRest * 2, `rest cabin ${dRest.toFixed(3)} packed ${dPack.toFixed(3)} [${mode}]`);
+    expect(dPack, `rest cabin ${dRest.toFixed(3)} packed ${dPack.toFixed(3)} [${mode}]`).toBeGreaterThan(dRest * 2);
   });
 });
 
 describe("given the crash path's boot warm-up (a pre-run that compiles the crush path before the first real crash, see docs/PERF_HITCH.md)", () => {
   it("when two cars crash head-on at 48 km/h, the warm-up hits are run and the head-on is run again, then every warm-up hit crashes both cars and the second head-on is bit-identical to the first", () => {
     const before = runPair(48, 48, "head-on");
-    assert.ok(warmCrashPath(), "a warm-up hit no longer crashes both cars, so it no longer compiles the crush path");
+    expect(warmCrashPath(), "a warm-up hit no longer crashes both cars, so it no longer compiles the crush path").toBeTruthy();
     assertSameDigest(runPair(48, 48, "head-on"), before, "48 km/h head-on after the warm-up");
   });
 });

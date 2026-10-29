@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { FREEWHEEL, launch, makeWorld, PARKED, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -146,10 +145,10 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
       it(`when ${hit.name} on ${site}, then no point of either wreck is drawn more than 3 cm in the ground under it`, () => {
         const ground = pitch === 0 ? FLAT_GROUND : new Slope(pitch);
         const wrecks = wrecksAtRest(hit, ground);
-        assert.ok(wrecks.length > 0, "the hit left no wreck");
+        expect(wrecks.length, "the hit left no wreck").toBeGreaterThan(0);
         for (const wreck of wrecks) {
           const { clearance, mesh } = lowestDrawn(wreck, ground);
-          assert.ok(clearance >= -SINK_M, `lowest drawn point ${(clearance * 100).toFixed(1)} cm over the ground (negative: in it), on ${mesh}; asleep ${wreck.asleep}`);
+          expect(clearance, `lowest drawn point ${(clearance * 100).toFixed(1)} cm over the ground (negative: in it), on ${mesh}; asleep ${wreck.asleep}`).toBeGreaterThanOrEqual(-SINK_M);
         }
       });
     }
@@ -164,7 +163,7 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
         const upY = 1 - 2 * (wreck.group.quaternion.x ** 2 + wreck.group.quaternion.z ** 2);
         if (upY >= UPRIGHT_UP_Y) continue;
         const speed = wreck.velocity.length();
-        assert.ok(speed < REST_SPEED, `a wreck lying over (up ${upY.toFixed(2)}) still moves at ${speed.toFixed(2)} m/s after ${SETTLE_MAX_S} s`);
+        expect(speed, `a wreck lying over (up ${upY.toFixed(2)}) still moves at ${speed.toFixed(2)} m/s after ${SETTLE_MAX_S} s`).toBeLessThan(REST_SPEED);
       }
     });
   }
@@ -178,10 +177,10 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
         it(`when ${hit.name}, ${scale < 1 ? "10 % slower" : "10 % faster"}, on a ${pitch}° slope, then no point of either wreck is drawn more than 3 cm in the ground under it`, () => {
           const ground = new Slope(pitch);
           const wrecks = wrecksAtRest(hit, ground, scale);
-          assert.ok(wrecks.length > 0, "the hit left no wreck");
+          expect(wrecks.length, "the hit left no wreck").toBeGreaterThan(0);
           for (const wreck of wrecks) {
             const { clearance, mesh } = lowestDrawn(wreck, ground);
-            assert.ok(clearance >= -SINK_M, `lowest drawn point ${(clearance * 100).toFixed(1)} cm over the ground (negative: in it), on ${mesh}; asleep ${wreck.asleep}`);
+            expect(clearance, `lowest drawn point ${(clearance * 100).toFixed(1)} cm over the ground (negative: in it), on ${mesh}; asleep ${wreck.asleep}`).toBeGreaterThanOrEqual(-SINK_M);
           }
         });
       }
@@ -196,10 +195,10 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
   for (const hit of HITS.filter((h) => h.a !== "truck")) {
     it(`when ${hit.name} leaves wrecks, then the cage's points under each reach within 3 cm of its drawn body's skin whichever way it lies`, () => {
       const wrecks = wrecksAtRest(hit, new Slope(15), 1);
-      assert.ok(wrecks.length > 0, "the hit left no wreck");
+      expect(wrecks.length, "the hit left no wreck").toBeGreaterThan(0);
       for (const wreck of wrecks) {
         const { gap, at } = skinReachPastCage(wreck);
-        assert.ok(gap <= SINK_M, `${wreck.style.id}: the drawn body reaches ${(gap * 100).toFixed(1)} cm past the cage's points at ${at}`);
+        expect(gap, `${wreck.style.id}: the drawn body reaches ${(gap * 100).toFixed(1)} cm past the cage's points at ${at}`).toBeLessThanOrEqual(SINK_M);
       }
     });
   }

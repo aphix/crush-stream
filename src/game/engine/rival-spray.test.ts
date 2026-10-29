@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -18,6 +17,8 @@ import { TRAFFIC_NAME } from "./engine-race-field.ts";
 import type { CrashEngine } from "./engine.ts";
 import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { rivalSeedOf } from "./rival-seed.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * AI opponents wear rival sprays (docs/CINEMATIC.md, driver looks): through the real engine, race, campaign, netplay client, derby and
@@ -48,7 +49,7 @@ const CLIP_LOOK = 0x5eed1234;
 const rivalsOracle = new RivalLooks();
 
 /**
- * A spray's identity: the digest of its texels (a failed `assert.deepEqual` on two 256 KiB arrays prints a diff that eats the machine).
+ * A spray's identity: the digest of its texels (a failed compare of two 256 KiB arrays prints a diff that eats the machine).
  * Premultiplied rgba, hashed as the bitmap holds it.
  */
 const digestOf = (texels: Uint8Array): string => createHash("sha1").update(texels).digest("hex");
@@ -77,15 +78,15 @@ describe("given pure seeds for a derby and a race", () => {
   const seated = new Set([2]);
 
   it("when no derby is on, then the race decides: its seed for an AI racer, none for the rest", () => {
-    assert.equal(rivalSeedOf(1, race, null), 77);
-    assert.equal(rivalSeedOf(0, race, null), null);
+    expect(rivalSeedOf(1, race, null)).toBe(77);
+    expect(rivalSeedOf(0, race, null)).toBe(null);
   });
 
   it("when a derby is on, then every car but a seated peer's wears the derby's round, whatever the race says", () => {
-    assert.equal(rivalSeedOf(0, race, { round: 5, seated }), 5);
-    assert.equal(rivalSeedOf(1, race, { round: 5, seated }), 5);
-    assert.equal(rivalSeedOf(3, race, { round: 5, seated }), 5);
-    assert.equal(rivalSeedOf(2, race, { round: 5, seated }), null);
+    expect(rivalSeedOf(0, race, { round: 5, seated })).toBe(5);
+    expect(rivalSeedOf(1, race, { round: 5, seated })).toBe(5);
+    expect(rivalSeedOf(3, race, { round: 5, seated })).toBe(5);
+    expect(rivalSeedOf(2, race, { round: 5, seated })).toBe(null);
   });
 });
 
@@ -125,8 +126,8 @@ describe("given the real engine headless", () => {
   const assertRivals = (seed: number, why: string): void => {
     for (const slot of AI_SLOTS) {
       const worn = sprayOn(cars()[slot]!);
-      assert.notEqual(worn, null, `${why}: car ${slot} wears a spray`);
-      assert.equal(worn, rivalSprayOf(seed, slot, cars()[slot]!), `${why}: car ${slot} wears its rival look`);
+      expect(worn, `${why}: car ${slot} wears a spray`).not.toBe(null);
+      expect(worn, `${why}: car ${slot} wears its rival look`).toBe(rivalSprayOf(seed, slot, cars()[slot]!));
     }
   };
 
@@ -150,23 +151,23 @@ describe("given the real engine headless", () => {
     engine.toggleRace();
     startSingle();
     runSeconds(engine, 1);
-    assert.ok(cars().length > RACERS, "the city has traffic or police past the racers");
+    expect(cars().length, "the city has traffic or police past the racers").toBeGreaterThan(RACERS);
     assertRivals(race().look, "single race");
-    assert.equal(sprayOn(cars()[0]!), ownDigest(), "the player's car wears its own (blank) garage spray, no rival's");
-    for (let slot = RACERS; slot < cars().length; slot++) assert.equal(sprayOn(cars()[slot]!), null, `car ${slot} (traffic or police) stays bare`);
+    expect(sprayOn(cars()[0]!), "the player's car wears its own (blank) garage spray, no rival's").toBe(ownDigest());
+    for (let slot = RACERS; slot < cars().length; slot++) expect(sprayOn(cars()[slot]!), `car ${slot} (traffic or police) stays bare`).toBe(null);
   });
 
   it("when the player has a garage spray and a race starts, then it stays on car 0 byte for byte while the opponents wear rival sprays, even when car 0 is itself an AI racer (spectating)", () => {
     const own = ownSpray();
     engine.raceCommand({ type: "start" });
     runSeconds(engine, 1);
-    assert.equal(sprayOn(cars()[0]!), own, "the player's own spray is on car 0");
+    expect(sprayOn(cars()[0]!), "the player's own spray is on car 0").toBe(own);
     assertRivals(race().look, "after the player's spray");
     engine.raceCommand({ type: "options", options: { spectate: true } });
     engine.raceCommand({ type: "start" });
     runSeconds(engine, 1);
-    assert.equal(race()["entrants"][0]?.kind, "ai", "car 0 is an AI racer in a spectated race");
-    assert.equal(sprayOn(cars()[0]!), own, "the player's own spray still wins on car 0");
+    expect(race()["entrants"][0]?.kind, "car 0 is an AI racer in a spectated race").toBe("ai");
+    expect(sprayOn(cars()[0]!), "the player's own spray still wins on car 0").toBe(own);
     engine.raceCommand({ type: "options", options: { spectate: false } });
     engine["looks"].mine.carSpray.load(null);
   });
@@ -176,35 +177,31 @@ describe("given the real engine headless", () => {
     const look = race().look;
     const firstGrid = [...race()["grid"]];
     for (let second = 0; second < MAX_RACING_SECONDS && race().hud().standings.every((row, place) => row.id === firstGrid[place]); second++) runSeconds(engine, 1);
-    assert.notEqual(
-      race().hud().standings.map((row) => row.id).join(","),
-      firstGrid.join(","),
-      "the field's order changed on the road",
-    );
+    expect(race().hud().standings.map((row) => row.id).join(","), "the field's order changed on the road").not.toBe(firstGrid.join(","));
     const roundOne = wornBy(AI_SLOTS);
     assertRivals(look, "campaign round one");
     engine.raceCommand({ type: "end" });
     engine.raceCommand({ type: "next" });
-    assert.equal(race().menu, "standings", "the round is scored");
+    expect(race().menu, "the round is scored").toBe("standings");
     engine.raceCommand({ type: "next" });
-    assert.equal(race().menu, null, "round two is racing");
-    assert.notEqual(race()["grid"].join(","), firstGrid.join(","), "the grid reordered by the standings");
-    assert.equal(race().look, look, "the field's look is the campaign's");
+    expect(race().menu, "round two is racing").toBe(null);
+    expect(race()["grid"].join(","), "the grid reordered by the standings").not.toBe(firstGrid.join(","));
+    expect(race().look, "the field's look is the campaign's").toBe(look);
     assertSameDigest(wornBy(AI_SLOTS), roundOne, "round two's opponents wear what they wore in round one");
     engine.raceCommand({ type: "retry" });
     assertSameDigest(wornBy(AI_SLOTS), roundOne, "a retry keeps them");
     engine.raceCommand({ type: "quit" });
     engine.raceCommand({ type: "start" });
-    assert.notEqual(race().look, look, "a new field rolls a new look");
-    assert.notEqual(wornBy(AI_SLOTS).join("|"), roundOne.join("|"), "and the opponents change with it");
+    expect(race().look, "a new field rolls a new look").not.toBe(look);
+    expect(wornBy(AI_SLOTS).join("|"), "and the opponents change with it").not.toBe(roundOne.join("|"));
   });
 
   it("when the race is left, then every car is bare again", () => {
     runSeconds(engine, 1);
-    assert.ok(wornBy(AI_SLOTS).every((spray) => spray !== null), "worn in the race");
+    expect(wornBy(AI_SLOTS).every((spray) => spray !== null), "worn in the race").toBeTruthy();
     engine.toggleRace();
-    assert.equal(race().active, false);
-    assert.ok(wornBy(AI_SLOTS).every((spray) => spray === null), "bare in the fleet");
+    expect(race().active).toBe(false);
+    expect(wornBy(AI_SLOTS).every((spray) => spray === null), "bare in the fleet").toBeTruthy();
   });
 
   it("when the FX tier rises to High during a race and falls back, then the opponents' sprays are redrawn at the garage's size once, keep that size at the lower tier, each the oracle's, and the player's car keeps its own", () => {
@@ -214,23 +211,23 @@ describe("given the real engine headless", () => {
     const own = ownDigest();
     const sides = (): string => AI_SLOTS.map((slot) => wornMap(cars()[slot]!)?.image.width).join(",");
     const sidesOf = (width: number): string => AI_SLOTS.map(() => width).join(",");
-    assert.equal(sides(), sidesOf(128), "128 a side at Minimal");
+    expect(sides(), "128 a side at Minimal").toBe(sidesOf(128));
     // The Sky setting off, so the High tier fetches no sky texture (the headless page has none to give).
     engine.setSky("off");
     try {
       engine["cine"].setTier("high");
       rivalsOracle.useTier("high", "desktop");
       runSeconds(engine, 0.1);
-      assert.equal(sides(), sidesOf(CAR_SPRAY.w), "the garage's 256 a side at High");
+      expect(sides(), "the garage's 256 a side at High").toBe(sidesOf(CAR_SPRAY.w));
       assertRivals(race().look, "at High");
-      assert.equal(sprayOn(cars()[0]!), own, "the player's own spray is as it was");
+      expect(sprayOn(cars()[0]!), "the player's own spray is as it was").toBe(own);
     } finally {
       engine["cine"].setTier("minimal");
     }
     runSeconds(engine, 0.1);
-    assert.equal(sides(), sidesOf(CAR_SPRAY.w), "the finer size is kept after the fall: no redraw on a step down");
+    expect(sides(), "the finer size is kept after the fall: no redraw on a step down").toBe(sidesOf(CAR_SPRAY.w));
     assertRivals(race().look, "after falling back");
-    assert.equal(sprayOn(cars()[0]!), own, "the player's own spray is still as it was");
+    expect(sprayOn(cars()[0]!), "the player's own spray is still as it was").toBe(own);
     engine.toggleRace();
   });
 
@@ -242,14 +239,14 @@ describe("given the real engine headless", () => {
     const host = wornBy(AI_SLOTS);
     assertRivals(hostLook, "host");
     const wire = readRace(writeRace({ lobby: null, trackId: "city", look: hostLook, gate: null, next: null, snap: race().snapshot() }));
-    assert.ok(wire?.snap, "the host's race state passes the client's checks");
+    must(wire?.snap, "the host's race state passes the client's checks");
     engine.raceCommand({ type: "quit" });
-    assert.ok(wornBy(AI_SLOTS).every((spray) => spray === null), "the client's setup field is bare");
-    assert.notEqual(race().look, hostLook, "the client's own field has its own look");
+    expect(wornBy(AI_SLOTS).every((spray) => spray === null), "the client's setup field is bare").toBeTruthy();
+    expect(race().look, "the client's own field has its own look").not.toBe(hostLook);
     race().look = wire.look;
     race().applySnapshot(wire.snap, RACERS + 1);
     assertSameDigest(wornBy(AI_SLOTS), host, "the client's opponents wear the host's sprays");
-    assert.equal(sprayOn(cars()[0]!), ownDigest(), "the host's player is a peer here: no rival spray");
+    expect(sprayOn(cars()[0]!), "the host's player is a peer here: no rival spray").toBe(ownDigest());
     engine.toggleRace();
   });
 
@@ -259,9 +256,9 @@ describe("given the real engine headless", () => {
     engine["ensureCars"](RACERS);
     engine.toggleDerby();
     const round = engine["derbyRound"];
-    for (const slot of [1, 3]) assert.equal(sprayOn(cars()[slot]!), rivalSprayOf(round, slot, cars()[slot]!), `derby car ${slot} wears round ${round}'s rival look`);
-    assert.equal(sprayOn(cars()[PEER_SLOT]!), null, "the seated peer's car wears nothing of ours");
-    assert.equal(sprayOn(cars()[0]!), own, "the player's own spray wins on car 0");
+    for (const slot of [1, 3]) expect(sprayOn(cars()[slot]!), `derby car ${slot} wears round ${round}'s rival look`).toBe(rivalSprayOf(round, slot, cars()[slot]!));
+    expect(sprayOn(cars()[PEER_SLOT]!), "the seated peer's car wears nothing of ours").toBe(null);
+    expect(sprayOn(cars()[0]!), "the player's own spray wins on car 0").toBe(own);
     engine["looks"].mine.carSpray.load(null);
   });
 
@@ -272,32 +269,32 @@ describe("given the real engine headless", () => {
     engine["netSeats"] = new Map();
     engine.toggleDerby();
     engine.toggleDerby();
-    assert.notEqual(engine["derbyRound"], hostRound, "the client's own derby is a round on");
-    assert.notEqual(wornBy([1, 3]).join("|"), host.join("|"), "and its cars wear that round's sprays");
+    expect(engine["derbyRound"], "the client's own derby is a round on").not.toBe(hostRound);
+    expect(wornBy([1, 3]).join("|"), "and its cars wear that round's sprays").not.toBe(host.join("|"));
     engine["applyNetDerby"](state, -1);
-    assert.equal(engine["derbyRound"], hostRound);
+    expect(engine["derbyRound"]).toBe(hostRound);
     assertSameDigest(wornBy([1, 3]), host, "the client's AI cars wear the host's round");
     engine.toggleDerby();
-    assert.ok(wornBy([1, 3]).every((spray) => spray === null), "the fleet's cars are bare");
+    expect(wornBy([1, 3]).every((spray) => spray === null), "the fleet's cars are bare").toBeTruthy();
   });
 
   it("when a saved clip is played alone from the setup menu, then its racers wear the sprays of the clip's look, the traffic and the player's own car do not, and bare paint is back when the clip ends", { timeout: HANG_GUARD_MS }, async () => {
     // The clip is the head-on of car 0 (this browser's own) and car 1 beside bystander 2, recorded in `before` by the engine's own recorder.
-    assert.deepEqual(recorded.cars.map((c) => c.slot), [0, 1, 2], "the clip holds all three cars");
+    expect(firstMismatch(recorded.cars.map((c) => c.slot), [0, 1, 2]), "the clip holds all three cars").toBeUndefined();
     const [racer, bystander] = [1, 2];
     store.set("crush.highlight.rival", savedText);
     engine.toggleRace();
-    assert.equal(race().menu, "setup", "the race menu is up on its setup screen");
+    expect(race().menu, "the race menu is up on its setup screen").toBe("setup");
     const clipUp = viewSavedAsked();
     engine.raceCommand({ type: "savedPlay", key: "rival" });
     await clipUp;
-    assert.notEqual(engine["highlights"]["solo"], null, "the saved clip is up alone");
+    expect(engine["highlights"]["solo"], "the saved clip is up alone").not.toBe(null);
     const car = (slot: number): DeformableCar => engine["cars"][slot]!;
-    assert.equal(sprayOn(car(racer)), rivalSprayOf(CLIP_LOOK, racer, car(racer)), "the clip's racer wears the clip's look");
-    assert.equal(sprayOn(car(bystander)), null, "its bystander stays bare");
-    assert.equal(sprayOn(car(0)), ownDigest(), "this browser's own car keeps its own spray");
+    expect(sprayOn(car(racer)), "the clip's racer wears the clip's look").toBe(rivalSprayOf(CLIP_LOOK, racer, car(racer)));
+    expect(sprayOn(car(bystander)), "its bystander stays bare").toBe(null);
+    expect(sprayOn(car(0)), "this browser's own car keeps its own spray").toBe(ownDigest());
     engine.raceCommand({ type: "reelBack" });
-    assert.equal(sprayOn(car(racer)), null, "the racer is bare once the clip is over");
+    expect(sprayOn(car(racer)), "the racer is bare once the clip is over").toBe(null);
   });
 
   it("when a saved clip is played alone on the high tier, then its racer's new paints carry the finish, as a live dress gives them", { timeout: HANG_GUARD_MS }, async () => {
@@ -311,13 +308,13 @@ describe("given the real engine headless", () => {
       const clipUp = viewSavedAsked();
       engine.raceCommand({ type: "savedPlay", key: "rival" });
       await clipUp;
-      assert.notEqual(engine["highlights"]["solo"], null, "the saved clip is up alone");
+      expect(engine["highlights"]["solo"], "the saved clip is up alone").not.toBe(null);
       const paintKeys: string[] = [];
       engine["cars"][1]!.group.traverse((object) => {
         if (object instanceof THREE.Mesh) for (const material of [object.material].flat()) if (material.userData.carFinish !== undefined) paintKeys.push(material.customProgramCacheKey());
       });
-      assert.ok(paintKeys.length > 0, "the racer carries finish-capable materials");
-      for (const key of paintKeys) assert.ok(key.includes("|finish-"), `key ${key}`);
+      expect(paintKeys.length, "the racer carries finish-capable materials").toBeGreaterThan(0);
+      for (const key of paintKeys) expect(key.includes("|finish-"), `key ${key}`).toBeTruthy();
     } finally {
       engine.raceCommand({ type: "reelBack" });
       engine.matchCar(1, clipCar.style, clipCar.cls);

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { CAGE_PART_VERTICES, CAGE_STEP, CAGE_VERTICES, type CageLive, type CageSource, CarCage } from "./car-cage.ts";
 import { CageRig, cageLift, cageOf, cageSourceOf } from "./car-cage-rig.ts";
@@ -146,7 +145,7 @@ for (const body of BODIES) {
           if (cliffs.some((c) => c.part === part)) continue;
           wrong.push(...topGapsOff(part, g));
         }
-        assert.deepEqual(wrong, []);
+        expect(wrong).toHaveLength(0);
       });
       for (const cliff of cliffs) it.todo(`the cage's ${cliff.part} within the bars (measured ${cliff.measured}: ${cliff.cause})`);
     });
@@ -166,7 +165,7 @@ describe("given a pickup truck and a monster pickup after head-ons at 40 to 52 k
         fitToDrawn(car, cage);
         wrong.push(...topGapsOff("hood", cageGaps(car, cage, drawnField(car), topParts(body.style).hood)).map((off) => `${kph} km/h: ${off}`));
       }
-      assert.deepEqual(wrong, []);
+      expect(wrong).toHaveLength(0);
     });
   }
 });
@@ -215,7 +214,7 @@ describe("given a crushed pickup's cage with its hood moved forward along its le
       const at = front + mm / 1000;
       if (!(last > at && last <= at + style.step + 1e-9)) wrong.push(`front at z ${at.toFixed(3)}: the last node with a height is at ${last.toFixed(3)}, not in (${at.toFixed(3)}, ${(at + style.step).toFixed(3)}]`);
     }
-    assert.deepEqual(wrong, []);
+    expect(wrong).toHaveLength(0);
   });
 
   it("when the cage's coverage and plan box are read, then they are the triangles' own: the nodes inside a triangle and the vertices' extent, whatever the lids' reach", () => {
@@ -229,12 +228,12 @@ describe("given a crushed pickup's cage with its hood moved forward along its le
         if (inside !== (fields.covered[j * style.nu + i] === 1)) wrong.push(`node (${(style.u0 + i * style.step).toFixed(2)}, ${(style.v0 + j * style.step).toFixed(2)}) ${inside ? "is inside a triangle and not covered" : "is covered and in no triangle"}`);
       }
     }
-    assert.deepEqual(wrong.slice(0, 5), []);
+    expect(wrong.slice(0, 5)).toHaveLength(0);
     let zMax = -Infinity;
     for (let t = 0; t < style.triCount * 3; t++) {
       if (style.triGroup[Math.floor(t / 3)] !== style.panelCount + 1) zMax = Math.max(zMax, fields.pos[style.tris[t]! * 3 + 2]!);
     }
-    assert.ok(Math.abs(fields.planBox[3]! - zMax) < 1e-9, `the plan box ends at z ${fields.planBox[3]!.toFixed(3)}, the triangles' vertices at ${zMax.toFixed(3)}`);
+    expect(Math.abs(fields.planBox[3]! - zMax), `the plan box ends at z ${fields.planBox[3]!.toFixed(3)}, the triangles' vertices at ${zMax.toFixed(3)}`).toBeLessThan(1e-9);
   });
 });
 
@@ -252,10 +251,10 @@ describe("given the cage's vertex budget", () => {
     let partTris = 0;
     for (let k = 0; k < tris.length; k += 3) if (tris[k]! >= vertexCount - parts && tris[k]! < vertexCount) partTris++;
     t.annotate(`${vertexCount} vertices (${heldCount} of them the underside held over the ${CAGE_VERTICES}, ${kept} the C-post's kept points, ${parts} the bumpers' and doors'), ${triCount} triangles (${partTris} theirs)`);
-    assert.equal(apart.length, 4, "two bumpers and two front doors, each decimated alone");
-    assert.ok(vertexCount - parts <= CAGE_VERTICES + heldCount + kept + 2 && vertexCount - parts >= CAGE_VERTICES / 2, `${vertexCount - parts} hull vertices, ${heldCount} held, ${kept} kept`);
-    assert.ok(triCount - partTris >= 150 && triCount - partTris <= 330 + 2 * (heldCount + kept), `${triCount - partTris} hull triangles`);
-    assert.ok(parts > 0 && parts <= CAGE_PART_VERTICES && partTris <= 2 * CAGE_PART_VERTICES, `${parts} part vertices, ${partTris} triangles`);
+    expect(apart.length, "two bumpers and two front doors, each decimated alone").toBe(4);
+    expect(vertexCount - parts <= CAGE_VERTICES + heldCount + kept + 2 && vertexCount - parts >= CAGE_VERTICES / 2, `${vertexCount - parts} hull vertices, ${heldCount} held, ${kept} kept`).toBeTruthy();
+    expect(triCount - partTris >= 150 && triCount - partTris <= 330 + 2 * (heldCount + kept), `${triCount - partTris} hull triangles`).toBeTruthy();
+    expect(parts > 0 && parts <= CAGE_PART_VERTICES && partTris <= 2 * CAGE_PART_VERTICES, `${parts} part vertices, ${partTris} triangles`).toBeTruthy();
   });
 });
 
@@ -276,7 +275,7 @@ describe("given every body style's cage and the bottom corners of its drawn bump
         t.annotate(`${corner}: nearest cage vertex ${(nearest * 100).toFixed(1)} cm`);
         if (nearest > TOP_P95_M) far.push(`${corner} ${(nearest * 100).toFixed(1)} cm`);
       }
-      assert.deepEqual(far, []);
+      expect(far).toHaveLength(0);
     });
   }
 });
@@ -292,7 +291,7 @@ describe("given a cruiser with its push bar", () => {
     let face = -Infinity;
     for (let i = 2; i < drawn.length; i += 3) face = Math.max(face, drawn[i]!);
     t.annotate(`cage nose ${nose.toFixed(3)} m, drawn nose ${face.toFixed(3)} m`);
-    assert.ok(face - nose <= NOSE_REACH_M, `the cage's nose stands ${(face - nose).toFixed(3)} m behind the bar`);
+    expect(face - nose, `the cage's nose stands ${(face - nose).toFixed(3)} m behind the bar`).toBeLessThanOrEqual(NOSE_REACH_M);
   });
 });
 
@@ -373,22 +372,22 @@ describe("given a cruiser after an 18 km/h head-on crash that leaves its front b
   it("when its cage's nose and bumper are read, then the bumper is on and crushed, so the bar is read where a crash puts it", (t) => {
     const { car, cage, rest } = barAfterCrash();
     t.annotate(`cage nose ${cage.fields.planBox[3]!.toFixed(3)} m at ${cage.style.pristine.planBox[3]!.toFixed(3)} at rest`);
-    assert.ok(car.crashed && !car["parts"].some((p) => p.bumper && p.cage === "bumperFront" && p.detached), "the cruiser is crashed with its front bumper on");
-    assert.ok(cage.fields.planBox[3]! < cage.style.pristine.planBox[3]! - 0.1, `the cage's nose stands ${cage.fields.planBox[3]!.toFixed(3)} m`);
-    assert.ok(Math.abs(rest.ahead - PUSH_BAR_REACH) < 1e-3, `the bar's rest face stands ${rest.ahead.toFixed(3)} m ahead of its bumper's, not its reach ${PUSH_BAR_REACH}`);
+    expect(car.crashed && !car["parts"].some((p) => p.bumper && p.cage === "bumperFront" && p.detached), "the cruiser is crashed with its front bumper on").toBeTruthy();
+    expect(cage.fields.planBox[3]!, `the cage's nose stands ${cage.fields.planBox[3]!.toFixed(3)} m`).toBeLessThan(cage.style.pristine.planBox[3]! - 0.1);
+    expect(Math.abs(rest.ahead - PUSH_BAR_REACH), `the bar's rest face stands ${rest.ahead.toFixed(3)} m ahead of its bumper's, not its reach ${PUSH_BAR_REACH}`).toBeLessThan(1e-3);
   });
 
   it("when the bar is read against its bumper, then its pads stand as far ahead of the bumper's face as the drawn bar's, within 1 cm", (t) => {
     const { car, crashed } = barAfterCrash();
     const drawn = drawnBarAhead(car);
     t.annotate(`cage ${crashed.ahead.toFixed(3)} m ahead of its bumper's face, drawn ${drawn.toFixed(3)} m`);
-    assert.ok(Math.abs(crashed.ahead - drawn) <= BAR_FOLLOW_M, `the cage's bar face stands ${crashed.ahead.toFixed(3)} m ahead of its bumper's, the drawn bar's ${drawn.toFixed(3)} m`);
+    expect(Math.abs(crashed.ahead - drawn), `the cage's bar face stands ${crashed.ahead.toFixed(3)} m ahead of its bumper's, the drawn bar's ${drawn.toFixed(3)} m`).toBeLessThanOrEqual(BAR_FOLLOW_M);
   });
 
   it("when the bar is read against its bumper, then its top stands as high over the bumper's top as at rest, within 1 cm", (t) => {
     const { rest, crashed } = barAfterCrash();
     t.annotate(`cage ${crashed.over.toFixed(3)} m over its bumper's top, ${rest.over.toFixed(3)} m at rest`);
-    assert.ok(Math.abs(crashed.over - rest.over) <= BAR_FOLLOW_M, `the cage's bar top stands ${crashed.over.toFixed(3)} m over its bumper's, ${rest.over.toFixed(3)} m at rest`);
+    expect(Math.abs(crashed.over - rest.over), `the cage's bar top stands ${crashed.over.toFixed(3)} m over its bumper's, ${rest.over.toFixed(3)} m at rest`).toBeLessThanOrEqual(BAR_FOLLOW_M);
   });
 });
 
@@ -400,11 +399,11 @@ describe("given a pristine car and a crushed car of one style", () => {
     const b = cageOf(crushed);
     fitToDrawn(pristine, a);
     fitToDrawn(crushed, b);
-    assert.equal(a.pristine, true);
-    assert.equal(b.pristine, false);
-    assert.equal(a.fields, a.style.pristine);
-    assert.notEqual(b.fields, b.style.pristine);
-    assert.equal(cageOf(pristine).style, a.style);
+    expect(a.pristine).toBe(true);
+    expect(b.pristine).toBe(false);
+    expect(a.fields).toBe(a.style.pristine);
+    expect(b.fields).not.toBe(b.style.pristine);
+    expect(cageOf(pristine).style).toBe(a.style);
   });
 });
 
@@ -412,12 +411,12 @@ describe("given a fitted car whose masses have not moved", () => {
   it("when it is fitted again, then nothing is refitted and the fields stay where they are", () => {
     const car = carInState("loaded", "sedan", "sedan");
     const cage = cageOf(car);
-    assert.equal(fitToDrawn(car, cage), true);
+    expect(fitToDrawn(car, cage)).toBe(true);
     const fields = cage.fields;
     const serial = cage.serial;
-    assert.equal(cage.refit(cageLiveOf(car)), false);
-    assert.equal(cage.fields, fields);
-    assert.equal(cage.serial, serial);
+    expect(cage.refit(cageLiveOf(car))).toBe(false);
+    expect(cage.fields).toBe(fields);
+    expect(cage.serial).toBe(serial);
   });
 });
 
@@ -439,7 +438,7 @@ describe("given a fitted car whose panel poses are moved", () => {
       const cage = cageOf(car);
       const live = cageLiveOf(car);
       const panel = Array.from(cage.style.panelGlass).findIndex((glass, k) => glass === 0 && cage.style.panelReach[k]! > 0.3);
-      assert.ok(panel >= 0, "fixture: the style has a panel that is no glass and reaches 30 cm");
+      expect(panel, "fixture: the style has a panel that is no glass and reaches 30 cm").toBeGreaterThanOrEqual(0);
       live.panelOn[panel] = testCase.off ? 0 : 1;
       cage.refit(live);
       live.panelPose[panel * POSE + testCase.at] += testCase.by;
@@ -448,7 +447,7 @@ describe("given a fitted car whose panel poses are moved", () => {
         live.panelPose[panel * POSE + 3] = sinHalf(angle);
         live.panelPose[panel * POSE + 6] = Math.cos(angle / 2);
       }
-      assert.equal(cage.refit(live), testCase.expectedRefit, "refitted");
+      expect(cage.refit(live), "refitted").toBe(testCase.expectedRefit);
     });
   }
 });
@@ -465,9 +464,9 @@ describe("given a crushed car refitted over and over", () => {
       car.deform.masses[0]!.local.y += 0.01 * k;
       car.deform["loadDirty"][0] = 1;
       fitToDrawn(car, cage);
-      assert.equal(cage.fields, own);
-      assert.equal(cage.fields.top, top);
-      assert.equal(cage.fields.pos, pos);
+      expect(cage.fields).toBe(own);
+      expect(cage.fields.top).toBe(top);
+      expect(cage.fields.pos).toBe(pos);
     }
   });
 });
@@ -483,8 +482,8 @@ describe("given two cages asked for one style key", () => {
     };
     const a = CarCage.shared(key, source);
     const b = CarCage.shared(key, source);
-    assert.equal(reads, 1);
-    assert.equal(a.style, b.style);
+    expect(reads).toBe(1);
+    expect(a.style).toBe(b.style);
   });
 });
 
@@ -495,9 +494,9 @@ describe("given a pristine sedan's cage", () => {
     const { nu, step, u0, v0 } = cage.style;
     const plan = cage.planField();
     const row = Math.round((0 - v0) / step) * nu;
-    assert.ok(plan[row + Math.round((0 - u0) / step)]! < 0, `centre ${plan[row + Math.round((0 - u0) / step)]}`);
-    assert.ok(plan[row]! > 0 && plan[row + nu - 1]! > 0, `edges ${plan[row]} ${plan[row + nu - 1]}`);
-    for (let i = 1; i < nu; i++) assert.ok(Math.abs(plan[row + i]! - plan[row + i - 1]!) <= step + 1e-6, `node ${i}: ${plan[row + i - 1]} to ${plan[row + i]}`);
+    expect(plan[row + Math.round((0 - u0) / step)]!, `centre ${plan[row + Math.round((0 - u0) / step)]}`).toBeLessThan(0);
+    expect(plan[row]! > 0 && plan[row + nu - 1]! > 0, `edges ${plan[row]} ${plan[row + nu - 1]}`).toBeTruthy();
+    for (let i = 1; i < nu; i++) expect(Math.abs(plan[row + i]! - plan[row + i - 1]!), `node ${i}: ${plan[row + i - 1]} to ${plan[row + i]}`).toBeLessThanOrEqual(step + 1e-6);
   });
 });
 
@@ -512,7 +511,7 @@ describe("given a car dropped on its roof, whose glass is gone and whose crushed
     fitToDrawn(car, off);
     const live = cageLiveOf(car);
     const gone = Array.from(live.panelOn, (on, k) => (on === 0 && off.style.panelGlass[k] === 1 ? k + 1 : 0)).filter((g) => g > 0);
-    assert.ok(gone.length > 0, "fixture: the drop must have shattered a pane");
+    expect(gone.length, "fixture: the drop must have shattered a pane").toBeGreaterThan(0);
     live.panelOn.fill(1);
     const on = new CarCage(off.style);
     on.refit(live);
@@ -542,8 +541,8 @@ describe("given a car dropped on its roof, whose glass is gone and whose crushed
         if (!boxes.some((q) => x >= q.x0 - 2 * step && x <= q.x1 + 2 * step && z >= q.z0 - 2 * step && z <= q.z1 + 2 * step)) outside.push(`(${x.toFixed(2)}, ${z.toFixed(2)}): ${a} against ${b}`);
       }
     }
-    assert.ok(differ > 0, "the opening read the same as the pane");
-    assert.deepEqual(outside, []);
+    expect(differ, "the opening read the same as the pane").toBeGreaterThan(0);
+    expect(outside).toHaveLength(0);
   });
 });
 
@@ -578,6 +577,6 @@ describe("given a parked car of each body with its doors shut and latched, and i
         }
       }
     }
-    assert.deepEqual(wrong, []);
+    expect(wrong).toHaveLength(0);
   });
 });

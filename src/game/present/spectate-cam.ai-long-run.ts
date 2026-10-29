@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { COURSE_IDS } from "../world/race-world.test-util.ts";
 import { courseSolids, pickLap, watchRace } from "./spectate-cam.test-util.ts";
 
@@ -16,8 +15,8 @@ describe("given the trackside cinematic camera (a fixed eye beside the course th
     it(`when a lap is driven on ${id}, then every spot the camera picks stands clear of every solid and sees the car`, (t) => {
       const lap = pickLap(courseSolids(id));
       t.annotate(`${id}: ${lap.found}/${lap.spots} spots framed, pick ${lap.meanMs.toFixed(2)} ms mean, ${lap.worstMs.toFixed(2)} ms worst`);
-      assert.deepEqual(lap.bad, []);
-      assert.ok(lap.found >= lap.spots * FOUND_SHARE, `${id}: only ${lap.found}/${lap.spots} spots found a clear eye`);
+      expect(lap.bad).toHaveLength(0);
+      expect(lap.found, `${id}: only ${lap.found}/${lap.spots} spots found a clear eye`).toBeGreaterThanOrEqual(lap.spots * FOUND_SHARE);
     });
   }
 });
@@ -27,10 +26,10 @@ describe("given the Auto spectator camera (the shot director that cuts between s
     it(`when a race is watched on ${id}, then every trackside or high cut stands clear and sees the car, and the cuts mix shot kinds`, (t) => {
       const race = watchRace(id, courseSolids(id), WATCHED_S);
       t.annotate(`${id}: ${race.cuts} cuts in ${WATCHED_S} s (${[...race.kinds].join(", ")}), ${race.checked} searched spots checked`);
-      assert.deepEqual(race.bad, []);
-      assert.ok(race.cuts >= 8, `${race.cuts} cuts in ${WATCHED_S} s`);
-      assert.ok(race.kinds.size >= 3, `only ${[...race.kinds].join(", ")}`);
-      assert.ok(race.checked >= 3, `${race.checked} searched spots`);
+      expect(race.bad).toHaveLength(0);
+      expect(race.cuts, `${race.cuts} cuts in ${WATCHED_S} s`).toBeGreaterThanOrEqual(8);
+      expect(race.kinds.size, `only ${[...race.kinds].join(", ")}`).toBeGreaterThanOrEqual(3);
+      expect(race.checked, `${race.checked} searched spots`).toBeGreaterThanOrEqual(3);
     });
   }
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
@@ -32,8 +31,8 @@ describe("given a crashed car on its wheels with its masses at rest and its driv
       const fresh = throttleSpeed(cls, false);
       const wreck = throttleSpeed(cls, true);
       t.annotate(`${cls}: fresh ${fresh.toFixed(3)} m/s, crashed ${wreck.toFixed(3)} m/s`);
-      assert.ok(fresh > 1, `the fresh ${cls} reached only ${fresh.toFixed(3)} m/s`);
-      assert.ok(wreck >= 0.5 * fresh, `the crashed ${cls} reached ${wreck.toFixed(3)} m/s against the fresh car's ${fresh.toFixed(3)}`);
+      expect(fresh, `the fresh ${cls} reached only ${fresh.toFixed(3)} m/s`).toBeGreaterThan(1);
+      expect(wreck, `the crashed ${cls} reached ${wreck.toFixed(3)} m/s against the fresh car's ${fresh.toFixed(3)}`).toBeGreaterThanOrEqual(0.5 * fresh);
     });
   }
 });

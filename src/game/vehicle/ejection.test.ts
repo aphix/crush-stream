@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import type { ExitPane } from "./car-core.ts";
@@ -10,6 +9,7 @@ import { ejectionVelocity, ejectThreshold, killSpeed, THROW_OUT, type Ejection }
 import { collide, fleetCar, headOn, worn } from "./ejection.test-util.ts";
 import { RANGE } from "../scenes/range.ts";
 import { assignClass, armKill, DEFAULT_REALISM, killClass, killTravel, VEHICLE_CLASS_IDS } from "./vehicle-classes.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** Run the crash 2.5 s through the engine's frame: each throw as [car, exit, pre-hit speed]. */
 function throws(cars: DeformableCar[], barrier = false): [number, ExitPane, number][] {
@@ -24,6 +24,12 @@ function throws(cars: DeformableCar[], barrier = false): [number, ExitPane, numb
     .sort((a, b) => a[0] - b[0]);
 }
 
+/** The throws as [car, exit] rows, compared row by row. */
+function expectThrown(out: [number, ExitPane, number][], expected: [number, ExitPane][]) {
+  expect(out, "throws").toHaveLength(expected.length);
+  for (let i = 0; i < expected.length; i++) expect(firstMismatch([out[i]![0], out[i]![1]], expected[i]!), `throw ${i} [car, exit]`).toBeUndefined();
+}
+
 describe("given two cars crashing, where a disabling head-on or side hit, or a door slammed into a hit at a frontal kill's speed, throws a driver out", () => {
   it("when two cars drive head-on at 56 km/h each, then both engines die and both drivers are thrown out through the windshield at their pre-hit speed", () => {
     const a = makeCar();
@@ -31,11 +37,11 @@ describe("given two cars crashing, where a disabling head-on or side hit, or a d
     launch(a, -5, 0, Math.PI / 2, 56 / 3.6, 0);
     launch(b, 5, 0, -Math.PI / 2, -56 / 3.6, 0);
     const out = throws([a, b]);
-    assert.ok(!a.deform.drivetrainAlive && !b.deform.drivetrainAlive, "the head-on disabled both");
-    assert.deepEqual(out.map(([i, exit]) => [i, exit]), [[0, "windshield"], [1, "windshield"]]);
-    for (const [, , speed] of out) assert.ok(Math.abs(speed - 56 / 3.6) < 0.5, `thrown from ${speed.toFixed(2)} m/s`);
-    assert.equal(a.driverOut, "windshield", "the car carries the flag");
-    assert.equal(b.driverOut, "windshield");
+    expect(!a.deform.drivetrainAlive && !b.deform.drivetrainAlive, "the head-on disabled both").toBeTruthy();
+    expectThrown(out, [[0, "windshield"], [1, "windshield"]]);
+    for (const [, , speed] of out) expect(Math.abs(speed - 56 / 3.6), `thrown from ${speed.toFixed(2)} m/s`).toBeLessThan(0.5);
+    expect(a.driverOut, "the car carries the flag").toBe("windshield");
+    expect(b.driverOut).toBe("windshield");
   });
 
   it("when a T-bone finishes a worn-out car, then its driver is thrown out of the struck side's window (doorR: +x, the car's left and the driver's own door) and the striking car's driver stays in", () => {
@@ -44,9 +50,9 @@ describe("given two cars crashing, where a disabling head-on or side hit, or a d
     launch(struck, 0, 0, 0, 0, 0);
     launch(bullet, 6, 0, -Math.PI / 2, -50 / 3.6, 0);
     const out = throws([struck, bullet]);
-    assert.ok(!struck.deform.drivetrainAlive, "the T-bone disabled the worn car");
-    assert.deepEqual(out.map(([i, exit]) => [i, exit]), [[0, "doorR"]]);
-    assert.equal(bullet.driverOut, null, "the bullet's driver stays in");
+    expect(!struck.deform.drivetrainAlive, "the T-bone disabled the worn car").toBe(true);
+    expectThrown(out, [[0, "doorR"]]);
+    expect(bullet.driverOut, "the bullet's driver stays in").toBe(null);
   });
 
   it("when two cars drive head-on at 28 km/h each and both engines keep running, then nobody is thrown out", () => {
@@ -55,16 +61,16 @@ describe("given two cars crashing, where a disabling head-on or side hit, or a d
     launch(a, -5, 0, Math.PI / 2, 28 / 3.6, 0);
     launch(b, 5, 0, -Math.PI / 2, -28 / 3.6, 0);
     const out = throws([a, b]);
-    assert.ok(a.deform.drivetrainAlive && b.deform.drivetrainAlive, "the hit did not disable");
-    assert.deepEqual(out, []);
-    assert.equal(a.driverOut, null);
+    expect(a.deform.drivetrainAlive && b.deform.drivetrainAlive, "the hit did not disable").toBeTruthy();
+    expect(out).toHaveLength(0);
+    expect(a.driverOut).toBe(null);
   });
 
   it("when a fleet car meets another head-on at 72 km/h each (the HUD's 0–32 m/s launch range) at the default realism, then neither car dies yet both drivers are thrown out", () => {
     const [a, b] = headOn(20);
     const out = throws([a, b]);
-    assert.ok(a.deform.drivetrainAlive && b.deform.drivetrainAlive, "the default realism leaves both engines running");
-    assert.deepEqual(out.map(([i, exit]) => [i, exit]), [[0, "windshield"], [1, "windshield"]]);
+    expect(a.deform.drivetrainAlive && b.deform.drivetrainAlive, "the default realism leaves both engines running").toBeTruthy();
+    expectThrown(out, [[0, "windshield"], [1, "windshield"]]);
   });
 
   // todo -> after the plan: recalibrate the off-centre scrape's crush against the lever's spin. The 12 deg scrape at 80 km/h leaves the worn
@@ -78,19 +84,19 @@ describe("given two cars crashing, where a disabling head-on or side hit, or a d
     const t = 0.3 / (v * Math.sin(a));
     launch(car, BARRIER_HALF.x + 1.2, -v * Math.cos(a) * t - 2.2, -a, -v * Math.sin(a), v * Math.cos(a));
     const out = throws([car], true);
-    assert.ok(!car.deform.drivetrainAlive, "the scrape finished the worn car");
-    assert.ok(Math.abs(car.deform.impactInward.x) > 4 * Math.abs(car.deform.impactInward.z), "struck along its flank");
-    assert.deepEqual(out, []);
-    assert.equal(car.driverOut, null);
+    expect(!car.deform.drivetrainAlive, "the scrape finished the worn car").toBe(true);
+    expect(Math.abs(car.deform.impactInward.x), "struck along its flank").toBeGreaterThan(4 * Math.abs(car.deform.impactInward.z));
+    expect(out).toHaveLength(0);
+    expect(car.driverOut).toBe(null);
   });
 
   it("when a 50 km/h rear hit finishes a worn-out car, then nobody is thrown out", () => {
     const car = worn(makeCar());
     launch(car, BARRIER_HALF.x + 6.2, 0, Math.PI / 2, -50 / 3.6, 0);
     const out = throws([car], true);
-    assert.ok(!car.deform.drivetrainAlive, "the rear hit disabled the worn car");
-    assert.ok(car.deform.impactInward.z > Math.abs(car.deform.impactInward.x), "it was struck from behind");
-    assert.deepEqual(out, []);
+    expect(!car.deform.drivetrainAlive, "the rear hit disabled the worn car").toBe(true);
+    expect(car.deform.impactInward.z, "it was struck from behind").toBeGreaterThan(Math.abs(car.deform.impactInward.x));
+    expect(out).toHaveLength(0);
   });
 
   it("when a fleet sedan slides sideways into the barrier at 22 m/s, then its engine keeps running and its driver is thrown out of the door window that met the barrier", () => {
@@ -98,8 +104,8 @@ describe("given two cars crashing, where a disabling head-on or side hit, or a d
     // Facing +z, sliding along +x: its right side (car-local +x) leads into the barrier's -x face.
     launch(car, -BARRIER_HALF.x - 2.4, 0, 0, 22, 0);
     const out = throws([car], true);
-    assert.ok(car.deform.drivetrainAlive, "the side blow left the engine running");
-    assert.deepEqual(out.map(([i, exit]) => [i, exit]), [[0, "doorR"]]);
+    expect(car.deform.drivetrainAlive, "the side blow left the engine running").toBeTruthy();
+    expectThrown(out, [[0, "doorR"]]);
   });
 
   it("when two fleet sedans slide sideways together, 10 and 18 m/s across their run, and the faster one's door meets the other's at 8 m/s, then nobody is thrown out", () => {
@@ -109,8 +115,8 @@ describe("given two cars crashing, where a disabling head-on or side hit, or a d
     launch(a, 0, 0, Math.PI / 2, 30, 10);
     launch(b, 0, -2.3, Math.PI / 2, 30, 18);
     const out = throws([a, b]);
-    assert.ok(a.crashed && b.crashed, "their doors met hard enough to dent");
-    assert.deepEqual(out, []);
+    expect(a.crashed && b.crashed, "their doors met hard enough to dent").toBeTruthy();
+    expect(out).toHaveLength(0);
   });
 });
 
@@ -131,12 +137,12 @@ describe("given a throw (the ejection event: everything a dummy needs to be laun
       const car = w.cars[e.car]!;
       // The car-local position is the world one in the car's frame, at the step he left in.
       p.copy(e.local).applyQuaternion(q.copy(car.group.quaternion)).add(car.group.position);
-      assert.ok(p.distanceTo(e.pos) < 1e-4, `local ${e.local.toArray()} is not world ${e.pos.toArray()} in the car's frame (${p.distanceTo(e.pos)} m)`);
+      expect(p.distanceTo(e.pos), `local ${e.local.toArray()} is not world ${e.pos.toArray()} in the car's frame (${p.distanceTo(e.pos)} m)`).toBeLessThan(1e-4);
       // Out of the pane: unit, and level for a windshield exit.
-      assert.ok(Math.abs(e.dir.length() - 1) < 1e-6, "unit direction");
+      expect(Math.abs(e.dir.length() - 1), "unit direction").toBeLessThan(1e-6);
       // His own velocity is the car's plus the relative one: the car's own, as the sim has it that step, is in the event.
-      assert.ok(e.carVel.distanceTo(car.velocity) < 1e-5, "the car's own velocity rides along");
-      assert.equal(e.cop, false);
+      expect(e.carVel.distanceTo(car.velocity), "the car's own velocity rides along").toBeLessThan(1e-5);
+      expect(e.cop).toBe(false);
       checked++;
     };
     for (let f = 0; f < 150; f++) tickWorld(w);
@@ -145,22 +151,22 @@ describe("given a throw (the ejection event: everything a dummy needs to be laun
 
   it("when two cars crash head-on at 56 km/h each, then each throw's car-local and world exit agree in the car's frame, its direction is a unit vector and its numbers are exact in 32-bit floats", () => {
     const { seen, checked } = observed();
-    assert.equal(checked, 2);
+    expect(checked).toBe(2);
     for (const e of seen) {
-      for (const v of [e.pos, e.local, e.dir, e.rel, e.carVel, e.spin]) for (const x of v.toArray()) assert.equal(Math.fround(x), x, "f32-exact");
-      for (const x of e.quat.toArray()) assert.equal(Math.fround(x), x, "f32-exact");
+      for (const v of [e.pos, e.local, e.dir, e.rel, e.carVel, e.spin]) for (const x of v.toArray()) expect(Math.fround(x), "f32-exact").toBe(x);
+      for (const x of e.quat.toArray()) expect(Math.fround(x), "f32-exact").toBe(x);
     }
   });
 
   it("when two cars crash head-on at 56 km/h each, then each driver leaves the windshield on his own side, the car's left (+x), where the steering wheel is", () => {
     const { seen } = observed();
-    assert.equal(seen.length, 2);
-    for (const e of seen) assert.ok(e.exit === "windshield" && e.local.x > 0.15, `out of ${e.exit} at car-local x ${e.local.x.toFixed(2)}`);
+    expect(seen.length).toBe(2);
+    for (const e of seen) expect(e.exit === "windshield" && e.local.x > 0.15, `out of ${e.exit} at car-local x ${e.local.x.toFixed(2)}`).toBeTruthy();
   });
 
   it("when the same crash is run twice, then it gives the very same throws, since the decision is deterministic simulation state", () => {
     const run = (): string => JSON.stringify(observed().seen);
-    assert.equal(run(), run());
+    expect(run()).toBe(run());
   });
 
   it("when a later hit lands on a car whose driver is already out, then that driver is not thrown again but the other car's driver is", () => {
@@ -171,14 +177,14 @@ describe("given a throw (the ejection event: everything a dummy needs to be laun
     a.driverOut = "windshield";
     const w = makeWorld([a, b], false, false, FREEWHEEL);
     for (let f = 0; f < 150; f++) tickWorld(w);
-    assert.deepEqual(w.ejections.map((e) => e.car), [1]);
+    expect(firstMismatch(w.ejections.map((e) => e.car), [1])).toBeUndefined();
   });
 
   it("when the car is put back (a respawn), then its driver is back in", () => {
     const a = fleetCar();
     a.driverOut = "doorL";
     a.spawnFacing(0, 0, 0, 0);
-    assert.equal(a.driverOut, null);
+    expect(a.driverOut).toBe(null);
   });
 });
 
@@ -198,7 +204,7 @@ describe("given a fleet sedan driving at 30 m/s on open road, struck once on its
       if (f >= frames - 30) for (const m of car.deform.masses) m.vel.set(0, 0, 30);
       tickWorld(w);
     }
-    assert.ok(car.deform.drivetrainAlive, "the hit left the engine running");
+    expect(car.deform.drivetrainAlive, "the hit left the engine running").toBeTruthy();
     if (touch) car.deform.notifyContact();
     car.deform.drivetrainAlive = false;
     for (let f = 0; f < 3; f++) tickWorld(w);
@@ -206,16 +212,16 @@ describe("given a fleet sedan driving at 30 m/s on open road, struck once on its
   }
 
   it("when the drivetrain dies 0.1 s after the flank hit, then the driver is thrown out of the struck side", () => {
-    assert.deepEqual(killedAfter(0.1).map((e) => e.exit), ["doorL"]);
+    expect(firstMismatch(killedAfter(0.1).map((e) => e.exit), ["doorL"])).toBeUndefined();
   });
 
   it("when the drivetrain dies 1.5 s or 20 s after the last contact (a damaged car over a crest, a last wheel gone), then nobody is thrown out", () => {
-    assert.deepEqual(killedAfter(1.5), []);
-    assert.deepEqual(killedAfter(20), []);
+    expect(killedAfter(1.5)).toHaveLength(0);
+    expect(killedAfter(20)).toHaveLength(0);
   });
 
   it("when a graze touches the car hit 5 s before, on the very step its drivetrain dies (a block already at the edge, a crest under it), then nobody is thrown out", () => {
-    assert.deepEqual(killedAfter(5, true), []);
+    expect(killedAfter(5, true)).toHaveLength(0);
   });
 });
 
@@ -234,11 +240,11 @@ describe("given the ejection range: a straight head-on into the barrier, at yaw 
           const w = makeWorld([car], true, false, FREEWHEEL);
           for (let f = 0; f < 150; f++) tickWorld(w);
           const where = `yaw ${yawDeg}° z ${z}`;
-          if (yawDeg === 0 && z === 0) assert.equal(w.ejections.length, 1, `${where}: the square hit throws the driver`);
+          if (yawDeg === 0 && z === 0) expect(w.ejections.length, `${where}: the square hit throws the driver`).toBe(1);
           for (const e of w.ejections) {
-            assert.equal(e.exit, "windshield", `${where}: thrown out of the ${e.exit}`);
+            expect(e.exit, `${where}: thrown out of the ${e.exit}`).toBe("windshield");
             const out = ejectionVelocity(e, new THREE.Vector3());
-            assert.ok(Math.abs(out.z) <= out.x * lateral, `${where}: launched ${out.toArray().map((x) => x.toFixed(1))} m/s, ${((Math.atan2(Math.abs(out.z), out.x) * 180) / Math.PI).toFixed(1)}° off the run-up`);
+            expect(Math.abs(out.z), `${where}: launched ${out.toArray().map((x) => x.toFixed(1))} m/s, ${((Math.atan2(Math.abs(out.z), out.x) * 180) / Math.PI).toFixed(1)}° off the run-up`).toBeLessThanOrEqual(out.x * lateral);
           }
           car.dispose();
         }
@@ -257,8 +263,8 @@ describe("given a car placed so close to the barrier that its kill lands before 
       car.dispose();
       return w.ejections;
     };
-    assert.equal(run(15).length, 1, "from 0.5 s back the hit throws him");
-    assert.equal(run(-0.3).length, 1, "the same hit straight after placement throws him too");
+    expect(run(15).length, "from 0.5 s back the hit throws him").toBe(1);
+    expect(run(-0.3).length, "the same hit straight after placement throws him too").toBe(1);
   });
 });
 
@@ -306,72 +312,72 @@ describe("given a fleet sedan hit on its nose (its engine block packed past the 
   }
 
   it("when its block is packed past the kill at 12 m/s and its drivetrain dies with it, then the driver is thrown out of the windshield", () => {
-    assert.deepEqual(noseHit(12, true, true).map((e) => e.exit), ["windshield"]);
+    expect(firstMismatch(noseHit(12, true, true).map((e) => e.exit), ["windshield"])).toBeUndefined();
   });
 
   it("when its block is packed past the kill just under, and then just over, the alive threshold, then the driver stays in and is thrown", () => {
     const threshold = ejectThreshold(fleetCar(), false, false);
-    assert.deepEqual(noseHit(threshold - NEAR, true), [], "just under");
-    assert.deepEqual(noseHit(threshold + NEAR, true).map((e) => e.exit), ["windshield"], "just over");
+    expect(noseHit(threshold - NEAR, true), "just under").toHaveLength(0);
+    expect(firstMismatch(noseHit(threshold + NEAR, true).map((e) => e.exit), ["windshield"]), "just over").toBeUndefined();
   });
 
   it("when its block stops short of the kill and its drivetrain runs, its share of the closing just under and then just over the alive threshold, then the driver stays in and is thrown out of the windshield", () => {
     const threshold = ejectThreshold(fleetCar(), false, false);
-    assert.deepEqual(noseHit((threshold - NEAR) / SHARE, false), [], "just under");
-    assert.deepEqual(noseHit((threshold + NEAR) / SHARE, false).map((e) => e.exit), ["windshield"], "just over");
+    expect(noseHit((threshold - NEAR) / SHARE, false), "just under").toHaveLength(0);
+    expect(firstMismatch(noseHit((threshold + NEAR) / SHARE, false).map((e) => e.exit), ["windshield"]), "just over").toBeUndefined();
   });
 
   it("when its block is packed past the kill between the mini games' bar and the alive threshold, then a mini game throws the driver and anywhere else he stays in", () => {
     const between = (ejectThreshold(fleetCar(), true, false) + ejectThreshold(fleetCar(), false, false)) / 2;
-    assert.deepEqual(noseHit(between, true, false, true).map((e) => e.exit), ["windshield"], "mini game");
-    assert.deepEqual(noseHit(between, true), [], "anywhere else");
+    expect(firstMismatch(noseHit(between, true, false, true).map((e) => e.exit), ["windshield"]), "mini game").toBeUndefined();
+    expect(noseHit(between, true), "anywhere else").toHaveLength(0);
   });
 
   it("when its block is packed past the kill with the drivetrain running at 1.0375 x its killSpeed, between the tuned 1.025 bar and the old 1.05 one, then the driver is thrown out of the windshield", () => {
-    assert.deepEqual(noseHit(1.0375 * killSpeed(fleetCar()), true).map((e) => e.exit), ["windshield"]);
+    expect(firstMismatch(noseHit(1.0375 * killSpeed(fleetCar()), true).map((e) => e.exit), ["windshield"])).toBeUndefined();
   });
 
   it("when it slides sideways into the barrier just under, and then just over, the alive threshold, then the driver stays in and goes out of the door", () => {
     const threshold = ejectThreshold(fleetCar(), false, false);
-    assert.deepEqual(slammed(threshold - NEAR), [], "just under");
-    assert.deepEqual(slammed(threshold + NEAR).map((e) => e.exit), ["doorR"], "just over");
+    expect(slammed(threshold - NEAR), "just under").toHaveLength(0);
+    expect(firstMismatch(slammed(threshold + NEAR).map((e) => e.exit), ["doorR"]), "just over").toBeUndefined();
   });
 
   it("when it slides its door into the barrier at 7.5 m/s, as the replay's police car slid into a car, then the driver stays in", () => {
-    assert.deepEqual(slammed(7.5), []);
+    expect(slammed(7.5)).toHaveLength(0);
   });
 
   /** A derby ram between the alive threshold and the derby's harnessed one (m/s): it throws a running car's driver in a race, not in a derby. */
   const derbyRam = (): number => (ejectThreshold(fleetCar(), false, false) + ejectThreshold(fleetCar(), false, true)) / 2;
 
   it("when it slides its door into the barrier at a derby ram's speed with the engine running on, then a race throws the driver out of the door and a derby's harness keeps him in", () => {
-    assert.deepEqual(slammed(derbyRam()).map((e) => e.exit), ["doorR"], "race");
-    assert.deepEqual(slammed(derbyRam(), "derby"), [], "derby");
+    expect(firstMismatch(slammed(derbyRam()).map((e) => e.exit), ["doorR"]), "race").toBeUndefined();
+    expect(slammed(derbyRam(), "derby"), "derby").toHaveLength(0);
   });
 
   it("when it slides its door into the barrier in a derby just under, and then just over, the harnessed threshold, then the driver stays in and a severe slam still throws him out of the door", () => {
     const harnessed = ejectThreshold(fleetCar(), false, true);
-    assert.deepEqual(slammed(harnessed - NEAR, "derby"), [], "just under");
-    assert.deepEqual(slammed(harnessed + NEAR, "derby").map((e) => e.exit), ["doorR"], "just over");
+    expect(slammed(harnessed - NEAR, "derby"), "just under").toHaveLength(0);
+    expect(firstMismatch(slammed(harnessed + NEAR, "derby").map((e) => e.exit), ["doorR"]), "just over").toBeUndefined();
   });
 
   it("when a derby nose hit takes its share of a derby ram, then a hit that kills the engine (block packed past the derby's kill, drivetrain dead) throws the driver and one that leaves it running keeps him in, where a race throws him", () => {
     const mps = derbyRam() / SHARE;
-    assert.deepEqual(noseHit(mps, true, true, false, "derby").map((e) => e.exit), ["windshield"], "engine killed");
-    assert.deepEqual(noseHit(mps, false, false, false, "derby"), [], "engine runs on");
-    assert.deepEqual(noseHit(mps, false).map((e) => e.exit), ["windshield"], "race");
+    expect(firstMismatch(noseHit(mps, true, true, false, "derby").map((e) => e.exit), ["windshield"]), "engine killed").toBeUndefined();
+    expect(noseHit(mps, false, false, false, "derby"), "engine runs on").toHaveLength(0);
+    expect(firstMismatch(noseHit(mps, false).map((e) => e.exit), ["windshield"]), "race").toBeUndefined();
   });
 });
 
 describe("given the hits of the owner's Survival replay staged on a flat field: a police car nose-first at 46 m/s into a parked muscle car's door, and a 30 km/h tap", () => {
   it("when the police car T-bones the parked muscle car, then both drivers are thrown", () => {
     const [striker, struck] = collide("t-bone", "police", "muscle", 46);
-    assert.equal(striker.thrown, true, `striker (block ${striker.travel.toFixed(3)} m)`);
-    assert.equal(struck.thrown, true, `struck (block ${struck.travel.toFixed(3)} m)`);
+    expect(striker.thrown, `striker (block ${striker.travel.toFixed(3)} m)`).toBe(true);
+    expect(struck.thrown, `struck (block ${struck.travel.toFixed(3)} m)`).toBe(true);
   });
 
   it("when a sedan taps a parked sedan's tail at 30 km/h, then nobody is thrown", () => {
     const [striker, struck] = collide("rear-end", "sedan", "sedan", 30 / 3.6);
-    assert.deepEqual([striker.thrown, struck.thrown], [false, false]);
+    expect(firstMismatch([striker.thrown, struck.thrown], [false, false])).toBeUndefined();
   });
 });

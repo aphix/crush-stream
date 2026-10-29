@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import { restSink, strike, strikeSink, type Outcome, type Target } from "./solid-parity.test-util.ts";
 import { PREFABS } from "./catalog.ts";
 import type { VehicleClassId } from "../vehicle/vehicle-classes.ts";
@@ -28,14 +27,14 @@ const SURVIVABLE = 8;
  * band of the kill line may fall either side of it.
  */
 function matches(label: string, solid: readonly Outcome[], slab: readonly Outcome[]): void {
-  assert.equal(solid.length, slab.length);
+  expect(solid.length).toBe(slab.length);
   for (const [k, o] of solid.entries()) {
     const ref = slab[k]!;
     const at = `${label}, hit ${k + 1}: ${JSON.stringify(o)} against the slab's ${JSON.stringify(ref)}`;
-    assert.equal(o.ejected, ref.ejected, `driver: ${at}`);
-    assert.ok(Math.abs(o.health - ref.health) <= HEALTH_BAND, `crush: ${at}`);
-    assert.ok(o.speed <= ref.speed + 1, `speed after the hit: ${at}`);
-    if (Math.max(o.health, ref.health) >= HEALTH_BAND) assert.equal(o.alive, ref.alive, `drivetrain: ${at}`);
+    expect(o.ejected, `driver: ${at}`).toBe(ref.ejected);
+    expect(Math.abs(o.health - ref.health), `crush: ${at}`).toBeLessThanOrEqual(HEALTH_BAND);
+    expect(o.speed, `speed after the hit: ${at}`).toBeLessThanOrEqual(ref.speed + 1);
+    if (Math.max(o.health, ref.health) >= HEALTH_BAND) expect(o.alive, `drivetrain: ${at}`).toBe(ref.alive);
   }
 }
 
@@ -44,9 +43,9 @@ describe("given the jersey barrier (the range's slab, the reference every other 
   for (const cls of ["sedan", "truck", "monster"] as const) {
     it(`when a ${cls} hits it at ${SURVIVABLE} m/s and then at ${LETHAL} m/s, then the slow hit dents it and leaves the engine and driver alone, and the fast hit packs the crush block past the realistic kill and throws the driver`, () => {
       const [easy] = strike("barrier", cls, SURVIVABLE);
-      assert.ok(easy!.alive && easy!.health > 0.95 && !easy!.ejected, JSON.stringify(easy));
+      expect(easy!.alive && easy!.health > 0.95 && !easy!.ejected, JSON.stringify(easy)).toBeTruthy();
       const [hard] = strike("barrier", cls, LETHAL);
-      assert.ok(hard!.ejected && hard!.health < 0.5, JSON.stringify(hard));
+      expect(hard!.ejected && hard!.health < 0.5, JSON.stringify(hard)).toBeTruthy();
     });
   }
 });
@@ -96,7 +95,7 @@ describe("given a fixed solid (a course wall, a solid box prop, the flank of a m
     for (const cls of ["sedan", "truck"] as const) {
       it(`when a ${cls} taps the palm at ${SURVIVABLE} m/s, then the crush block stays where it was, as the slab's does, and the car's health and driver are untouched`, () => {
         const [tap] = strike("palm", cls, SURVIVABLE);
-        assert.ok(tap!.travel < 0.002 && tap!.health > 0.99 && !tap!.ejected, JSON.stringify(tap));
+        expect(tap!.travel < 0.002 && tap!.health > 0.99 && !tap!.ejected, JSON.stringify(tap)).toBeTruthy();
       });
     }
   });
@@ -115,9 +114,9 @@ describe("given a sedan at 55 m/s square into each hard surface and the slab as 
     it(`when it hits the ${target}, then its health and block travel are the slab's within the band, and it stops`, () => {
       const o = strike(target, "sedan", LETHAL)[0]!;
       const at = `${JSON.stringify(o)} against the slab's ${JSON.stringify(slab)}`;
-      assert.ok(Math.abs(o.health - slab.health) <= HEALTH_BAND, `health: ${at}`);
-      assert.ok(Math.abs(o.travel - slab.travel) <= HEALTH_BAND * KILL_TRAVEL, `block travel: ${at}`);
-      assert.ok(o.speed <= slab.speed + 1, `speed after: ${at}`);
+      expect(Math.abs(o.health - slab.health), `health: ${at}`).toBeLessThanOrEqual(HEALTH_BAND);
+      expect(Math.abs(o.travel - slab.travel), `block travel: ${at}`).toBeLessThanOrEqual(HEALTH_BAND * KILL_TRAVEL);
+      expect(o.speed, `speed after: ${at}`).toBeLessThanOrEqual(slab.speed + 1);
     });
   }
 });
@@ -143,25 +142,25 @@ describe("given a sedan hitting a flat solid at the clip's 113 km/h and the jers
         // No further inside than the barrier leaves it, or than the wall suite's own allowance past a face (`LEFT_IN`): the strike now
         // leaves a car resting 0.25 m clear of the face where the slab's rebound leaves it 0.57 m clear (mesh past the face -0.247 against
         // -0.570, stucco), which is outside the face and so inside the allowance. A car left 0.10 m inside the face fails both.
-        assert.ok(solid <= Math.max(ref + REST_SLACK, LEFT_IN), `${solid.toFixed(3)} m past the ${target}'s face, the barrier's ${ref.toFixed(3)} m`);
+        expect(solid, `${solid.toFixed(3)} m past the ${target}'s face, the barrier's ${ref.toFixed(3)} m`).toBeLessThanOrEqual(Math.max(ref + REST_SLACK, LEFT_IN));
       });
     }
   }
   it(`when a sedan hits the stucco for the first time, then it stands at most ${LEFT_IN} m inside it when the hit has played out`, () => {
     const { rest } = restSink("stucco", "sedan", CLIP_SPEED);
-    assert.ok(rest.mesh <= LEFT_IN, `${rest.mesh.toFixed(3)} m`);
+    expect(rest.mesh, `${rest.mesh.toFixed(3)} m`).toBeLessThanOrEqual(LEFT_IN);
   });
   // Measured (sedan, stucco, second hit): the drawn body's deepest reach past the face is 0.164 m since the wreck split (0.279 m before it, 0.58 m when
   // first measured, the clip's 0.95 m). Limiting a slice's wall shoves to one reach in total took it under 5 cm but reshuffled the derby rows (derby.test's
   // pops todo has the numbers).
   todoRow("when a wreck is sent back at 113 km/h into the stucco, then its drawn body never goes more than 5 cm past the face (0.164 m deep today, the clip's 0.95 m; after the plan, with the wall shoves of a slice limited in total)", true, () => {
     const { peak } = strikeSink("stucco", "sedan", CLIP_SPEED, 1);
-    assert.ok(peak.mesh <= LEFT_IN, `${peak.mesh.toFixed(3)} m`);
+    expect(peak.mesh, `${peak.mesh.toFixed(3)} m`).toBeLessThanOrEqual(LEFT_IN);
   });
   // After a tap at 8 m/s (the drawn nose 0.111 m short of the face) the rigid hull points stand within 1 cm of the face: the hull points are the drawn body's cage.
   it("when a sedan taps the stucco at 8 m/s, then its rigid hull points stand no further than 1 cm past the face", () => {
     const { rest } = restSink("stucco", "sedan", SURVIVABLE);
-    assert.ok(rest.hull <= 0.01, `${rest.hull.toFixed(3)} m`);
+    expect(rest.hull, `${rest.hull.toFixed(3)} m`).toBeLessThanOrEqual(0.01);
   });
 });
 
@@ -177,7 +176,7 @@ describe("given a palm's trunk that gives (its hardness share of the energy) and
       it(`when a ${cls} drives into the palm at ${speed} m/s, then the crush block travels as far as at the wall at ${speed} times the square root of the palm's hardness, with health within ${HEALTH_BAND}`, () => {
         const [palm] = strike("palm", cls, speed);
         const [wall] = strike("wall", cls, speed * share);
-        assert.ok(Math.abs(palm!.health - wall!.health) <= HEALTH_BAND, `palm ${JSON.stringify(palm)} against the wall at ${(speed * share).toFixed(1)} m/s ${JSON.stringify(wall)}`);
+        expect(Math.abs(palm!.health - wall!.health), `palm ${JSON.stringify(palm)} against the wall at ${(speed * share).toFixed(1)} m/s ${JSON.stringify(wall)}`).toBeLessThanOrEqual(HEALTH_BAND);
       });
     }
   }
@@ -185,6 +184,6 @@ describe("given a palm's trunk that gives (its hardness share of the energy) and
   it("when a sedan hits a palm's trunk 0.6 m off its middle at 30 m/s, then its heading turns toward the trunk, further than the wall at the same offset turns it", () => {
     const [palm] = strike("palm", "sedan", 30, 1, 0.6);
     const [wall] = strike("wall", "sedan", 30, 1, 0.6);
-    assert.ok(palm!.turn > wall!.turn, `palm ${palm!.turn.toFixed(3)} rad, wall ${wall!.turn.toFixed(3)} rad`);
+    expect(palm!.turn, `palm ${palm!.turn.toFixed(3)} rad, wall ${wall!.turn.toFixed(3)} rad`).toBeGreaterThan(wall!.turn);
   });
 });

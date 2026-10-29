@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
@@ -35,11 +34,11 @@ describe("given a car the race put away (`stored`) beside a car driving on", () 
     const z = parked.group.position.z;
     const y = parked.group.position.y;
     for (let s = 0; s < 80; s++) stepWorld(w, STEP);
-    assert.equal(carSlices(w), 80, "one car-slice a step: the driving car's");
-    assert.equal(parked.group.position.x, x, "the put-away car stands where it was (x)");
-    assert.equal(parked.group.position.y, y, "(y)");
-    assert.equal(parked.group.position.z, z, "(z)");
-    assert.ok(cars[0]!.group.position.z > 20, "the driving car drove on");
+    expect(carSlices(w), "one car-slice a step: the driving car's").toBe(80);
+    expect(parked.group.position.x, "the put-away car stands where it was (x)").toBe(x);
+    expect(parked.group.position.y, "(y)").toBe(y);
+    expect(parked.group.position.z, "(z)").toBe(z);
+    expect(cars[0]!.group.position.z, "the driving car drove on").toBeGreaterThan(20);
     for (const car of cars) car.dispose();
   });
 
@@ -48,7 +47,7 @@ describe("given a car the race put away (`stored`) beside a car driving on", () 
     EPICENTER.storedSkip = 0;
     const { cars, w } = field();
     for (let s = 0; s < 80; s++) stepWorld(w, STEP);
-    assert.equal(carSlices(w), 160, "two car-slices a step");
+    expect(carSlices(w), "two car-slices a step").toBe(160);
     for (const car of cars) car.dispose();
   });
 
@@ -59,11 +58,11 @@ describe("given a car the race put away (`stored`) beside a car driving on", () 
     stepWorld(w, STEP);
     const surfaces = w.surfaces;
     surfaces.borneState(1, Float64Array.of(0, -0.05, 0, 0, 0, 0), 0, true);
-    assert.equal(w.surfaces.cars.length, 2, "the world's roofs hold both cars");
+    expect(w.surfaces.cars.length, "the world's roofs hold both cars").toBe(2);
     stepWorld(w, STEP);
     const left = new Float64Array(6);
     surfaces.borneState(1, left, 0, false);
-    assert.equal(left.some((v) => v !== 0), false, "the put-away car's slot holds no borne weight after a step");
+    expect(left.some((v) => v !== 0), "the put-away car's slot holds no borne weight after a step").toBe(false);
     for (const car of cars) car.dispose();
   });
 
@@ -88,6 +87,6 @@ describe("given a car the race put away (`stored`) beside a car driving on", () 
     const off = run(0);
     const on = run(1);
     const differ = off.filter((v, i) => !Object.is(v, on[i]!)).length;
-    assert.equal(differ, 0, `${differ} of ${off.length} numbers differ between the stepped and the skipped put-away car's world`);
+    expect(differ, `${differ} of ${off.length} numbers differ between the stepped and the skipped put-away car's world`).toBe(0);
   });
 });

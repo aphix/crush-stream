@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { SimPacer } from "../engine/sim-pace.ts";
 import { FINE_HZ, FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 import { stepWorld } from "../engine/world-step.ts";
@@ -55,7 +54,7 @@ describe("given a sedan driving its nose into a parked sedan's right door at 20 
         }
       }
     }
-    assert.deepEqual(apart, []);
+    expect(apart).toHaveLength(0);
   });
 });
 
@@ -70,9 +69,9 @@ describe("given a sedan driving its nose into a parked sedan's right door at 30 
     const spread = (xs: number[]): number => Math.max(...xs) - Math.min(...xs);
     const nose = hits.map((h) => h.strikerNose);
     const door = hits.map((h) => h.struckDoor);
-    assert.ok(spread(nose) <= TOUCH_NOSE, `nose ${nose.map((v) => v.toFixed(2)).join(" ")} m over ${TOUCH_MM.join(" ")} mm back`);
-    assert.ok(spread(door) <= TOUCH_DOOR, `door ${door.map((v) => v.toFixed(2)).join(" ")} m over ${TOUCH_MM.join(" ")} mm back`);
-    assert.equal(new Set(hits.map((h) => `${h.strikerThrown} ${h.struckThrown}`)).size, 1, "one driver thrown at every touch");
+    expect(spread(nose), `nose ${nose.map((v) => v.toFixed(2)).join(" ")} m over ${TOUCH_MM.join(" ")} mm back`).toBeLessThanOrEqual(TOUCH_NOSE);
+    expect(spread(door), `door ${door.map((v) => v.toFixed(2)).join(" ")} m over ${TOUCH_MM.join(" ")} mm back`).toBeLessThanOrEqual(TOUCH_DOOR);
+    expect(new Set(hits.map((h) => `${h.strikerThrown} ${h.struckThrown}`)).size, "one driver thrown at every touch").toBe(1);
   });
 });
 
@@ -101,7 +100,7 @@ describe("given a sedan driving into the rigid wall at 56 km/h in coarse steps",
   it("when the hit is cut into the fine slice or into slices finer still, then the nose crumples the same to within 1 cm", () => {
     const coarse = wallNose(1 / FINE_HZ);
     const fine = wallNose(1 / FINER_HZ);
-    assert.ok(Math.abs(coarse - fine) <= 0.01, `nose ${coarse.toFixed(3)} m in 1/${FINE_HZ} s slices, ${fine.toFixed(3)} m in 1/${FINER_HZ} s ones`);
+    expect(Math.abs(coarse - fine), `nose ${coarse.toFixed(3)} m in 1/${FINE_HZ} s slices, ${fine.toFixed(3)} m in 1/${FINER_HZ} s ones`).toBeLessThanOrEqual(0.01);
   });
 });
 
@@ -136,8 +135,8 @@ describe("given a sedan's nose closing on a parked sedan's right door, read 1 mm
       striker.dispose();
       struck.dispose();
       t.annotate(`first touch at ${first} mm, the largest step ${worst.toFixed(4)} m at ${worstAt} mm in`);
-      assert.ok(first > 0, "the sweep never met the contact");
-      assert.ok(worst <= PATCH_STEP, `the patch's centre moved ${worst.toFixed(4)} m in 1 mm of closing, ${worstAt} mm into the contact`);
+      expect(first, "the sweep never met the contact").toBeGreaterThan(0);
+      expect(worst, `the patch's centre moved ${worst.toFixed(4)} m in 1 mm of closing, ${worstAt} mm into the contact`).toBeLessThanOrEqual(PATCH_STEP);
     });
   }
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { flatSystem, flatThrow, headOn, rangeWall } from "./ragdoll-throws.test-util.ts";
 import { noPose, type Pose, POSE_KEYS, throwSet, worst } from "./ragdoll-pose.test-util.ts";
@@ -23,7 +22,7 @@ async function worstOfThrows(): Promise<Pose> {
   // The wall and the head-ons must really throw a dummy, or their zeros prove nothing.
   const scenes = [await rangeWall(5), ...(await headOn(20, 4))];
   for (const p of scenes) {
-    assert.ok(p.swing > 10, "the scene threw a dummy whose neck moved");
+    expect(p.swing, "the scene threw a dummy whose neck moved").toBeGreaterThan(10);
     worst(all, p);
   }
   return all;
@@ -33,11 +32,11 @@ describe("given a thrown crash-test dummy whose joints must keep to human anatom
   it("when it is thrown 60 times on flat ground, against the range wall and in a head-on, then the neck swings at most 65° + 5° and turns at most 70° + 5°, the head box sinks at most 2 cm into the chest, and no elbow or knee bends backward past 10°", async () => {
     const w = await worstOfThrows();
     const report = POSE_KEYS.map((k) => `${k} ${w[k].toFixed(3)}`).join(", ");
-    assert.ok(w.swing <= SWING + SLACK, `neck swing ${w.swing.toFixed(1)}°: ${report}`);
-    assert.ok(w.twist <= TWIST + SLACK, `neck twist ${w.twist.toFixed(1)}°: ${report}`);
-    assert.ok(w.headChest <= HEAD_IN, `head in chest ${(w.headChest * 100).toFixed(1)} cm: ${report}`);
-    assert.ok(w.elbow <= HYPER, `elbow hyperextended ${w.elbow.toFixed(1)}°: ${report}`);
-    assert.ok(w.knee <= HYPER, `knee hyperextended ${w.knee.toFixed(1)}°: ${report}`);
+    expect(w.swing, `neck swing ${w.swing.toFixed(1)}°: ${report}`).toBeLessThanOrEqual(SWING + SLACK);
+    expect(w.twist, `neck twist ${w.twist.toFixed(1)}°: ${report}`).toBeLessThanOrEqual(TWIST + SLACK);
+    expect(w.headChest, `head in chest ${(w.headChest * 100).toFixed(1)} cm: ${report}`).toBeLessThanOrEqual(HEAD_IN);
+    expect(w.elbow, `elbow hyperextended ${w.elbow.toFixed(1)}°: ${report}`).toBeLessThanOrEqual(HYPER);
+    expect(w.knee, `knee hyperextended ${w.knee.toFixed(1)}°: ${report}`).toBeLessThanOrEqual(HYPER);
   });
 
   for (const [name, tilt, spin] of [
@@ -50,8 +49,8 @@ describe("given a thrown crash-test dummy whose joints must keep to human anatom
       const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), (tilt * Math.PI) / 180);
       const w = flatThrow(sys, { p: new THREE.Vector3(0, 1.5, 0), q, v: new THREE.Vector3(0, -10, 0), w: new THREE.Vector3(spin, 0, 0) }, 4);
       sys.dispose();
-      assert.ok(w.headChest <= HEAD_IN, `head sank ${(w.headChest * 100).toFixed(1)} cm into the chest`);
-      assert.ok(w.swing <= SWING + SLACK, `neck swing ${w.swing.toFixed(1)}°`);
+      expect(w.headChest, `head sank ${(w.headChest * 100).toFixed(1)} cm into the chest`).toBeLessThanOrEqual(HEAD_IN);
+      expect(w.swing, `neck swing ${w.swing.toFixed(1)}°`).toBeLessThanOrEqual(SWING + SLACK);
     });
   }
 });

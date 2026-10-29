@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { propContact, type PropHits } from "../contact/prop-contact.ts";
@@ -7,6 +6,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { armSolids } from "../world/surfaces.ts";
 import type { LampPole, RampBall } from "./engine-props.ts";
 import { BALL_BREAK_CLOSING, foldPole, POLE_FOLD_CLOSING, RIG_BALL_FIRST, RIG_BALLS, RIG_POLE_FIRST, RIG_POLES, RigSolids, shatterBall } from "./rig-solids.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * The fleet's lamp posts and ramp balls as prisms of the rigs' store, hit by a car launched at them: the post's fold speed and the ball's
@@ -68,23 +68,23 @@ describe("given a lamp post standing in the way of a car (a prism of the rigs' s
 
   it("when the car closes on it at 0.5 m/s under its fold speed, then the post stands and the car does not pass it", () => {
     const { scene, car } = hit("pole", POLE_FOLD_CLOSING - 0.5);
-    assert.deepEqual(scene.folded, [], "the post folded under its fold speed");
-    assert.ok(scene.poles[0]!.intact);
-    assert.ok(car.group.position.z < TARGET_Z, `the car's origin passed the post (z ${car.group.position.z.toFixed(2)} m)`);
+    expect(scene.folded, "the post folded under its fold speed").toHaveLength(0);
+    expect(scene.poles[0]!.intact).toBeTruthy();
+    expect(car.group.position.z, `the car's origin passed the post (z ${car.group.position.z.toFixed(2)} m)`).toBeLessThan(TARGET_Z);
   });
 
   it("when the car closes on it at 0.5 m/s over its fold speed, then the post folds over", () => {
     const { scene } = hit("pole", POLE_FOLD_CLOSING + 0.5);
-    assert.equal(scene.folded.length, 1);
-    assert.equal(scene.folded[0], RIG_POLE_FIRST);
-    assert.ok(!scene.poles[0]!.intact);
+    expect(scene.folded.length).toBe(1);
+    expect(scene.folded[0]).toBe(RIG_POLE_FIRST);
+    expect(!scene.poles[0]!.intact).toBe(true);
   });
 
   it("when the car closes on it 0.6 m off its middle, then the same speeds stand and fold it", () => {
-    assert.deepEqual(hit("pole", POLE_FOLD_CLOSING - 0.5, 0.6).scene.folded, []);
+    expect(hit("pole", POLE_FOLD_CLOSING - 0.5, 0.6).scene.folded).toHaveLength(0);
     const folded = hit("pole", POLE_FOLD_CLOSING + 0.5, 0.6).scene.folded;
-    assert.equal(folded.length, 1);
-    assert.equal(folded[0], RIG_POLE_FIRST);
+    expect(folded.length).toBe(1);
+    expect(folded[0]).toBe(RIG_POLE_FIRST);
   });
 });
 
@@ -93,19 +93,19 @@ describe("given a half-buried ramp ball in the way of a car (a prism of the rigs
 
   it("when the car closes on it 1 m/s under the break speed, then the ball stays whole and no hub pops", () => {
     const { scene } = hit("ball", BALL_BREAK_CLOSING - 1);
-    assert.deepEqual(scene.shattered, []);
-    assert.deepEqual(scene.popped, []);
+    expect(scene.shattered).toHaveLength(0);
+    expect(scene.popped).toHaveLength(0);
   });
 
   it("when the car closes on it 0.5 m/s over the break speed, then the ball shatters and the hub nearest the hit pops (the middle: front left, as main's)", () => {
     const { scene } = hit("ball", BALL_BREAK_CLOSING + 0.5);
-    assert.equal(scene.shattered.length, 1);
-    assert.equal(scene.shattered[0], RIG_BALL_FIRST);
-    assert.deepEqual(scene.popped, ["hubFL"]);
+    expect(scene.shattered.length).toBe(1);
+    expect(scene.shattered[0]).toBe(RIG_BALL_FIRST);
+    expect(firstMismatch(scene.popped, ["hubFL"])).toBeUndefined();
   });
 
   it("when the car closes on it over the break speed 0.7 m to the right of its middle, then the front right hub pops", () => {
     const { scene } = hit("ball", BALL_BREAK_CLOSING + 0.5, 0.7);
-    assert.deepEqual(scene.popped, ["hubFR"]);
+    expect(firstMismatch(scene.popped, ["hubFR"])).toBeUndefined();
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { DRIVE } from "../vehicle/car-drive.ts";
 import { BOOST_ZOOM_FULL_SPEED as FULL_SPEED, boostZoomStrength, easeBoostZoomSpeed, stepBoostZoom } from "./boost-zoom.ts";
@@ -25,7 +24,7 @@ describe("given the boost zoom's ease at full speed", () => {
   for (const testCase of EASE_CASES) {
     it(testCase.it, () => {
       const strength = boostZoomStrength(stepBoostZoom(testCase.from, testCase.boosting, testCase.seconds), FULL_SPEED);
-      assert.ok(Math.abs(strength - testCase.expected) < 1e-9, `strength ${strength} vs ${testCase.expected}`);
+      expect(Math.abs(strength - testCase.expected), `strength ${strength} vs ${testCase.expected}`).toBeLessThan(1e-9);
     });
   }
 
@@ -36,25 +35,25 @@ describe("given the boost zoom's ease at full speed", () => {
     for (; boostZoomStrength(progress, FULL_SPEED) < 1 && frames < 600; frames++) {
       progress = stepBoostZoom(progress, true, FRAME);
       const strength = boostZoomStrength(progress, FULL_SPEED);
-      assert.ok(strength >= last && strength - last <= 0.2, `a frame rose ${last} -> ${strength}`);
+      expect(strength >= last && strength - last <= 0.2, `a frame rose ${last} -> ${strength}`).toBeTruthy();
       last = strength;
     }
-    assert.equal(frames, Math.ceil(0.25 * FRAME_HZ - 1e-9), "frames to full");
+    expect(frames, "frames to full").toBe(Math.ceil(0.25 * FRAME_HZ - 1e-9));
     frames = 0;
     for (; boostZoomStrength(progress, FULL_SPEED) > 0 && frames < 600; frames++) {
       progress = stepBoostZoom(progress, false, FRAME);
       const strength = boostZoomStrength(progress, FULL_SPEED);
-      assert.ok(strength <= last && last - strength <= 0.2, `a frame fell ${last} -> ${strength}`);
+      expect(strength <= last && last - strength <= 0.2, `a frame fell ${last} -> ${strength}`).toBeTruthy();
       last = strength;
     }
-    assert.equal(frames, Math.ceil(0.4 * FRAME_HZ - 1e-9), "frames to zero");
+    expect(frames, "frames to zero").toBe(Math.ceil(0.4 * FRAME_HZ - 1e-9));
   });
 
   it("when the boost is released half way up, then the ease turns round from where it stood and never jumps", () => {
     const up = stepBoostZoom(0, true, 0.125);
     const down = stepBoostZoom(up, false, FRAME);
-    assert.ok(up - down > 0 && up - down < 0.1, `progress ${up} -> ${down}`);
-    assert.ok(Math.abs(boostZoomStrength(up, FULL_SPEED) - 0.5) < 1e-9, "the turn starts at the half-way strength");
+    expect(up - down > 0 && up - down < 0.1, `progress ${up} -> ${down}`).toBeTruthy();
+    expect(Math.abs(boostZoomStrength(up, FULL_SPEED) - 0.5), "the turn starts at the half-way strength").toBeLessThan(1e-9);
   });
 });
 
@@ -69,7 +68,7 @@ const SPEED_CASES = [
 describe("given the boost zoom fully eased in, and a car at some speed", () => {
   for (const testCase of SPEED_CASES) {
     it(testCase.it, () => {
-      assert.ok(Math.abs(boostZoomStrength(1, testCase.speed) - testCase.expected) < 1e-9, `${boostZoomStrength(1, testCase.speed)} vs ${testCase.expected}`);
+      expect(Math.abs(boostZoomStrength(1, testCase.speed) - testCase.expected), `${boostZoomStrength(1, testCase.speed)} vs ${testCase.expected}`).toBeLessThan(1e-9);
     });
   }
 });
@@ -80,14 +79,14 @@ describe("given the speed the boost zoom scales by, following a watched car's", 
     let frames = 0;
     for (; held !== 20 && frames < 600; frames++) {
       const next = easeBoostZoomSpeed(held, 20, FRAME);
-      assert.ok(next >= held && next - held <= 20 * 0.2, `a frame moved the speed ${held} -> ${next}`);
+      expect(next >= held && next - held <= 20 * 0.2, `a frame moved the speed ${held} -> ${next}`).toBeTruthy();
       held = next;
     }
-    assert.equal(held, 20, "lands exactly");
-    assert.ok(frames * FRAME > 0.15 && frames * FRAME < 0.8, `took ${(frames * FRAME).toFixed(2)} s`);
+    expect(held, "lands exactly").toBe(20);
+    expect(frames * FRAME > 0.15 && frames * FRAME < 0.8, `took ${(frames * FRAME).toFixed(2)} s`).toBeTruthy();
   });
 
   it("when the watched car and the held speed are both 0, then the held speed stays exactly 0", () => {
-    assert.equal(easeBoostZoomSpeed(0, 0, FRAME), 0);
+    expect(easeBoostZoomSpeed(0, 0, FRAME)).toBe(0);
   });
 });

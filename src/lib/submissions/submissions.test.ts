@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import { gzipSync } from "node:zlib";
 import type { Sql } from "@/lib/db";
@@ -7,6 +6,8 @@ import { migratedPg, sqlOf } from "../test-db.test-util.ts";
 import { LIMITS } from "../multiplayer/rate-limit.ts";
 import { KINDS, MAX_JSON_BYTES, MAX_WIRE_BYTES, RECEIPT_PATTERN, type Envelope, type Kind } from "./kinds.ts";
 import { handleSubmissions, STORE_MAX_BYTES, STORE_MAX_ROWS } from "./submissions.server.ts";
+import { firstMismatch } from "../../game/kernel/compare-arrays.test-util.ts";
+import { must } from "../../game/kernel/must.test-util.ts";
 
 const OWNER_TOKEN = "owner-token-".padEnd(40, "x");
 /** The clock every request is handled at: address buckets neither refill nor drain between a test's requests. */
@@ -25,11 +26,10 @@ async function freshDb(): Promise<Sql> {
 }
 
 const CLIP_TEXT = "U0NITAAqIAAAAAAAAAAA".repeat(40);
-const PAYLOADS: Record<Kind, unknown> = {
-  bench: { at: "2026-10-07T10:00:00.000Z", result: { fps: 58.5, build: "3295bad" }, hud: { carCount: 16 } },
-  capture: { version: 1, captureTrace: true, samples: [{ t: 0.25, cars: [{ x: 1 }] }, { t: 0.5, cars: [{ x: 2 }] }] },
-  flag: { title: "Head-on at the bridge", course: "City", from: "reel", clip: CLIP_TEXT },
-};
+const BENCH_PAYLOAD = { at: "2026-10-07T10:00:00.000Z", result: { fps: 58.5, build: "3295bad" }, hud: { carCount: 16 } };
+const CAPTURE_PAYLOAD = { version: 1, captureTrace: true, samples: [{ t: 0.25, cars: [{ x: 1 }] }, { t: 0.5, cars: [{ x: 2 }] }] };
+const FLAG_PAYLOAD = { title: "Head-on at the bridge", course: "City", from: "reel", clip: CLIP_TEXT };
+const PAYLOADS: Record<Kind, unknown> = { bench: BENCH_PAYLOAD, capture: CAPTURE_PAYLOAD, flag: FLAG_PAYLOAD };
 
 function envelope(kind: Kind, over: Record<string, unknown> = {}): Envelope & Record<string, unknown> {
   return {
@@ -103,18 +103,76 @@ function listedIds(reply: Reply): string[] {
   return reply.body.submissions!.map((s) => s.id);
 }
 
-/** A capture of `samples` samples of numbers that do not repeat, about 1.6 kB each. */
-function bigCapture(samples: number): Envelope {
-  const rows = Array.from({ length: samples }, (_, i) => ({ t: i / 4, cars: Array.from({ length: 8 }, (_, c) => ({ x: Math.sin(i * 7 + c) * 100, y: Math.cos(i * 3 + c), z: (i * 31 + c * 17) % 977 / 7 })) }));
+interface CaptureRow {
+  t: number;
+  cars: { x: number; y: number; z: number }[];
+}
+
+/** `samples` rows of numbers that do not repeat, about 1.6 kB each. */
+function captureRows(samples: number): CaptureRow[] {
+  return Array.from({ length: samples }, (_, i) => ({ t: i / 4, cars: Array.from({ length: 8 }, (_, c) => ({ x: Math.sin(i * 7 + c) * 100, y: Math.cos(i * 3 + c), z: (i * 31 + c * 17) % 977 / 7 })) }));
+}
+
+/** A capture of `rows`. */
+function bigCapture(rows: CaptureRow[]): Envelope {
   return envelope("capture", { payload: { version: 1, samples: rows } }) as Envelope;
 }
 
 /** The value at `path` under `value`, each step an object's own member; fails where a step is not an object. */
 function member(value: unknown, ...path: string[]): unknown {
   return path.reduce((at, key) => {
-    assert.ok(typeof at === "object" && at !== null, `${key} is not under an object`);
+    must(typeof at === "object" && at !== null, `${key} is not under an object`);
     return Reflect.get(at, key);
   }, value);
+}
+
+/** The sorted member names of an object. */
+function keysOf(value: unknown, what: string): string[] {
+  if (typeof value !== "object" || value === null) throw new Error(`${what} is not an object`);
+  return Object.keys(value).sort();
+}
+
+/** The array under `path`; fails where it is not one. */
+function arrayAt(value: unknown, ...path: string[]): unknown[] {
+  const at = member(value, ...path);
+  if (!Array.isArray(at)) throw new Error(`${path.join(".")} is not an array`);
+  return at;
+}
+
+/** What the owner reads back for `sent`, apart from the payload: the envelope's own fields, one expect each. */
+function expectEnvelopeBack(got: unknown, sent: Envelope): void {
+  expect(firstMismatch(keysOf(got, "the submission"), Object.keys(sent).sort()), "submission fields").toBeUndefined();
+  expect(member(got, "kind"), "kind").toBe(sent.kind);
+  expect(member(got, "sha"), "sha").toBe(sent.sha);
+  expect(member(got, "at"), "at").toBe(sent.at);
+  expect(member(got, "ua"), "ua").toBe(sent.ua);
+  expect(member(got, "scene"), "scene").toBe(sent.scene);
+  expect(member(got, "screen", "w"), "screen.w").toBe(sent.screen.w);
+  expect(member(got, "screen", "h"), "screen.h").toBe(sent.screen.h);
+  expect(member(got, "screen", "dpr"), "screen.dpr").toBe(sent.screen.dpr);
+  expect(firstMismatch(keysOf(member(got, "settings"), "settings"), Object.keys(sent.settings).sort()), "settings keys").toBeUndefined();
+  for (const key of Object.keys(sent.settings)) expect(member(got, "settings", key), `settings.${key}`).toBe(sent.settings[key]);
+}
+
+/** The capture rows the owner reads back, each number of each car. */
+function expectRowsBack(got: unknown, rows: CaptureRow[]): void {
+  const samples = arrayAt(got, "payload", "samples");
+  expect(samples, "sample count").toHaveLength(rows.length);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row) throw new Error(`no row ${i}`);
+    const back = samples[i];
+    expect(member(back, "t"), `sample ${i} t`).toBe(row.t);
+    const cars = arrayAt(back, "cars");
+    expect(cars, `sample ${i} car count`).toHaveLength(row.cars.length);
+    for (let c = 0; c < row.cars.length; c++) {
+      const car = row.cars[c];
+      if (!car) throw new Error(`no car ${c} in row ${i}`);
+      expect(member(cars[c], "x"), `sample ${i} car ${c} x`).toBe(car.x);
+      expect(member(cars[c], "y"), `sample ${i} car ${c} y`).toBe(car.y);
+      expect(member(cars[c], "z"), `sample ${i} car ${c} z`).toBe(car.z);
+    }
+  }
 }
 
 describe("given the submissions endpoint on a freshly migrated database", () => {
@@ -125,16 +183,39 @@ describe("given the submissions endpoint on a freshly migrated database", () => 
         const sent = envelope(kind);
         const secondOfPost = Math.floor(Date.now() / SECOND_MS) * SECOND_MS;
         const receipt = await post(sql, sent, { gzip });
-        assert.equal(receipt.status, 201);
-        assert.match(receipt.body.id!, RECEIPT_PATTERN);
+        expect(receipt.status).toBe(201);
+        expect(receipt.body.id!).toMatch(RECEIPT_PATTERN);
         const got = await owner(sql, `?id=${receipt.body.id}`);
-        assert.equal(got.status, 200);
-        assert.equal(got.body.id, receipt.body.id);
-        assert.equal(got.body.kind, kind);
-        assert.equal(got.body.sha, "3295bad");
+        expect(got.status).toBe(200);
+        expect(got.body.id).toBe(receipt.body.id);
+        expect(got.body.kind).toBe(kind);
+        expect(got.body.sha).toBe("3295bad");
         const receivedAt = Date.parse(got.body.receivedAt!);
-        assert.ok(receivedAt >= secondOfPost && receivedAt <= Date.now(), `the receipt time ${receivedAt} is the server's, inside the post's own window`);
-        assert.deepEqual(got.body.submission, sent);
+        expect(receivedAt >= secondOfPost && receivedAt <= Date.now(), `the receipt time ${receivedAt} is the server's, inside the post's own window`).toBeTruthy();
+        expectEnvelopeBack(got.body.submission, sent);
+        if (kind === "bench") {
+          expect(firstMismatch(keysOf(member(got.body.submission, "payload"), "payload"), Object.keys(BENCH_PAYLOAD).sort()), "payload fields").toBeUndefined();
+          expect(member(got.body.submission, "payload", "at"), "payload.at").toBe(BENCH_PAYLOAD.at);
+          expect(member(got.body.submission, "payload", "result", "fps"), "payload.result.fps").toBe(BENCH_PAYLOAD.result.fps);
+          expect(member(got.body.submission, "payload", "result", "build"), "payload.result.build").toBe(BENCH_PAYLOAD.result.build);
+          expect(member(got.body.submission, "payload", "hud", "carCount"), "payload.hud.carCount").toBe(BENCH_PAYLOAD.hud.carCount);
+        } else if (kind === "capture") {
+          expect(firstMismatch(keysOf(member(got.body.submission, "payload"), "payload"), Object.keys(CAPTURE_PAYLOAD).sort()), "payload fields").toBeUndefined();
+          expect(member(got.body.submission, "payload", "version"), "payload.version").toBe(CAPTURE_PAYLOAD.version);
+          expect(member(got.body.submission, "payload", "captureTrace"), "payload.captureTrace").toBe(CAPTURE_PAYLOAD.captureTrace);
+          const samples = arrayAt(got.body.submission, "payload", "samples");
+          expect(samples, "payload.samples").toHaveLength(CAPTURE_PAYLOAD.samples.length);
+          for (let i = 0; i < CAPTURE_PAYLOAD.samples.length; i++) {
+            expect(member(samples[i], "t"), `sample ${i} t`).toBe(CAPTURE_PAYLOAD.samples[i]?.t);
+            expect(member(samples[i], "cars", "0", "x"), `sample ${i} car 0 x`).toBe(CAPTURE_PAYLOAD.samples[i]?.cars[0]?.x);
+          }
+        } else {
+          expect(firstMismatch(keysOf(member(got.body.submission, "payload"), "payload"), Object.keys(FLAG_PAYLOAD).sort()), "payload fields").toBeUndefined();
+          expect(member(got.body.submission, "payload", "title"), "payload.title").toBe(FLAG_PAYLOAD.title);
+          expect(member(got.body.submission, "payload", "course"), "payload.course").toBe(FLAG_PAYLOAD.course);
+          expect(member(got.body.submission, "payload", "from"), "payload.from").toBe(FLAG_PAYLOAD.from);
+          expect(member(got.body.submission, "payload", "clip"), "payload.clip").toBe(FLAG_PAYLOAD.clip);
+        }
       });
     }
   }
@@ -152,46 +233,49 @@ describe("given the submissions endpoint on a freshly migrated database", () => 
     };
     const sent = envelope("bench", { payload: { at: "2026-10-17T10:00:00.000Z", result: { fps: 10, build: "3e214dff", ...added }, hud: { carCount: 16 } } });
     const receipt = await post(sql, sent);
-    assert.equal(receipt.status, 201);
+    expect(receipt.status).toBe(201);
     const old = await post(sql, envelope("bench"));
-    assert.equal(old.status, 201, "a card from before the phase table is accepted");
+    expect(old.status, "a card from before the phase table is accepted").toBe(201);
     const card = (await owner(sql, `?id=${receipt.body.id}`)).body.submission;
-    assert.equal(member(card, "payload", "result", "phases", "msPerSimS", "drive"), 30.25, "a phase's ms");
-    assert.equal(member(card, "payload", "result", "phases", "unattributedMsPerSimS"), 5, "the unattributed ms");
-    assert.equal(member(card, "payload", "result", "phases", "workPerSimS", "skinVerts"), 2_400_000, "a work counter");
-    assert.equal(member(card, "payload", "result", "phases", "workPerSimS", "ragdollBytes"), 38_400, "the ragdoll bytes");
-    assert.equal(member(card, "payload", "result", "longTasks", "maxMs"), 120.25, "the longest task");
-    assert.equal(member(card, "payload", "result", "device", "battery", "end", "charging"), true, "the battery at the end");
+    expect(member(card, "payload", "result", "phases", "msPerSimS", "drive"), "a phase's ms").toBe(30.25);
+    expect(member(card, "payload", "result", "phases", "unattributedMsPerSimS"), "the unattributed ms").toBe(5);
+    expect(member(card, "payload", "result", "phases", "workPerSimS", "skinVerts"), "a work counter").toBe(2_400_000);
+    expect(member(card, "payload", "result", "phases", "workPerSimS", "ragdollBytes"), "the ragdoll bytes").toBe(38_400);
+    expect(member(card, "payload", "result", "longTasks", "maxMs"), "the longest task").toBe(120.25);
+    expect(member(card, "payload", "result", "device", "battery", "end", "charging"), "the battery at the end").toBe(true);
     const oldCard = (await owner(sql, `?id=${old.body.id}`)).body.submission;
-    assert.equal(member(oldCard, "payload", "result", "fps"), 58.5, "the older card is read back as it was sent");
-    assert.equal(member(oldCard, "payload", "result", "phases"), undefined, "and has no phase table");
+    expect(member(oldCard, "payload", "result", "fps"), "the older card is read back as it was sent").toBe(58.5);
+    expect(member(oldCard, "payload", "result", "phases"), "and has no phase table").toBe(undefined);
     const addedBytes = Buffer.byteLength(JSON.stringify(added));
-    assert.ok(addedBytes < 2048, `the new fields are ${addedBytes} bytes`);
+    expect(addedBytes, `the new fields are ${addedBytes} bytes`).toBeLessThan(2048);
   });
 
   it("when a capture of 300 samples of non-repeating numbers is posted gzipped, then the owner reads back every sample, and the store holds less than half its bytes", async () => {
     const sql = await freshDb();
-    const sent = bigCapture(300);
+    const rows = captureRows(300);
+    const sent = bigCapture(rows);
     const receipt = await post(sql, sent, { gzip: true });
-    assert.equal(receipt.status, 201);
+    expect(receipt.status).toBe(201);
     const got = await owner(sql, `?id=${receipt.body.id}`);
-    assert.deepEqual(got.body.submission, sent);
+    expectEnvelopeBack(got.body.submission, sent);
+    expect(member(got.body.submission, "payload", "version"), "payload.version").toBe(1);
+    expectRowsBack(got.body.submission, rows);
     const [listed] = (await owner(sql)).body.submissions!;
-    assert.ok(listed!.size < JSON.stringify(sent).length / 2, `${listed!.size} stored bytes for ${JSON.stringify(sent).length} sent`);
+    expect(listed!.size, `${listed!.size} stored bytes for ${JSON.stringify(sent).length} sent`).toBeLessThan(JSON.stringify(sent).length / 2);
   });
 
   it("when two submissions are posted, then their receipt ids differ", async () => {
     const sql = await freshDb();
     const a = await post(sql, envelope("bench"));
     const b = await post(sql, envelope("bench"));
-    assert.notEqual(a.body.id, b.body.id);
+    expect(a.body.id).not.toBe(b.body.id);
   });
 
   it("when a submission carries a field the endpoint does not know, then the owner never sees that field", async () => {
     const sql = await freshDb();
     const receipt = await post(sql, envelope("bench", { admin: true }));
     const got = await owner(sql, `?id=${receipt.body.id}`);
-    assert.equal("admin" in got.body.submission!, false);
+    expect("admin" in got.body.submission!).toBe(false);
   });
 });
 
@@ -230,56 +314,56 @@ describe("given the submissions endpoint refusing what it must refuse", () => {
     it(`when ${testCase.it}, then it answers ${testCase.status} and stores nothing`, async () => {
       const sql = await freshDb();
       const refused = await post(sql, testCase.body);
-      assert.equal(refused.status, testCase.status);
-      assert.equal(refused.body.id, undefined);
-      assert.deepEqual((await owner(sql)).body.submissions, []);
+      expect(refused.status).toBe(testCase.status);
+      expect(refused.body.id).toBe(undefined);
+      expect((await owner(sql)).body.submissions).toHaveLength(0);
     });
   }
 
   it("when a gzipped bench card inflates past the bench cap (a few kB claiming 8 MB), then it answers 413 and stores nothing", async () => {
     const sql = await freshDb();
     const bomb = envelope("bench", { payload: { filler: "x".repeat(MAX_JSON_BYTES.bench + 1024) } });
-    assert.ok(gzipSync(JSON.stringify(bomb)).length < 100 * 1024, "the bomb is small on the wire");
+    expect(gzipSync(JSON.stringify(bomb)).length, "the bomb is small on the wire").toBeLessThan(100 * 1024);
     const refused = await post(sql, bomb, { gzip: true });
-    assert.equal(refused.status, 413);
-    assert.deepEqual((await owner(sql)).body.submissions, []);
+    expect(refused.status).toBe(413);
+    expect((await owner(sql)).body.submissions).toHaveLength(0);
   });
 
   it("when a gzipped bench card of over a megabyte of JSON (far bigger than the cards of 2026-10-07) is posted, then it is stored", async () => {
     const sql = await freshDb();
     const big = envelope("bench", { payload: { series: Array.from({ length: 400_000 }, (_, i) => i % 97) } });
     const receipt = await post(sql, big, { gzip: true });
-    assert.equal(receipt.status, 201);
-    assert.ok(JSON.stringify(big).length > 1_000_000, "over a megabyte of JSON");
+    expect(receipt.status).toBe(201);
+    expect(JSON.stringify(big).length, "over a megabyte of JSON").toBeGreaterThan(1_000_000);
   });
 
   it("when a gzipped capture inflates past the capture cap (a few kB claiming 40 MB), then it answers 413 and stores nothing", async () => {
     const sql = await freshDb();
     const bomb = envelope("capture", { payload: { samples: [{ filler: "x".repeat(MAX_JSON_BYTES.capture + 8 * 1024 * 1024) }] } });
     const wire = gzipSync(JSON.stringify(bomb));
-    assert.ok(wire.length < 100 * 1024, `the bomb is ${wire.length} bytes on the wire`);
+    expect(wire.length, `the bomb is ${wire.length} bytes on the wire`).toBeLessThan(100 * 1024);
     const refused = await post(sql, bomb, { gzip: true });
-    assert.equal(refused.status, 413);
-    assert.deepEqual((await owner(sql)).body.submissions, []);
+    expect(refused.status).toBe(413);
+    expect((await owner(sql)).body.submissions).toHaveLength(0);
   });
 
   it("when a body that is not gzip claims to be, then it answers 400", async () => {
     const sql = await freshDb();
     const refused = await send(sql, { method: "POST", headers: { "content-type": "application/json", "content-encoding": "gzip" }, body: JSON.stringify(envelope("bench")) });
-    assert.equal(refused.status, 400);
+    expect(refused.status).toBe(400);
   });
 
   it("when the body claims an encoding the endpoint does not read, then it answers 415", async () => {
     const sql = await freshDb();
     const refused = await post(sql, envelope("bench"), { headers: { "content-encoding": "br" } });
-    assert.equal(refused.status, 415);
+    expect(refused.status).toBe(415);
   });
 
   it("when the request is not declared as JSON, then it answers 415 and stores nothing", async () => {
     const sql = await freshDb();
     const refused = await post(sql, envelope("bench"), { headers: { "content-type": "text/plain" } });
-    assert.equal(refused.status, 415);
-    assert.deepEqual((await owner(sql)).body.submissions, []);
+    expect(refused.status).toBe(415);
+    expect((await owner(sql)).body.submissions).toHaveLength(0);
   });
 
   it("when a body past the wire cap arrives as a stream that declares no length, then it answers 413 after taking no more than a chunk or two past the cap", async () => {
@@ -294,14 +378,14 @@ describe("given the submissions endpoint refusing what it must refuse", () => {
       },
     });
     const refused = await send(sql, { method: "POST", headers: { "content-type": "application/json" }, body, duplex: "half" } as RequestInit);
-    assert.equal(refused.status, 413);
-    assert.ok(sent <= MAX_WIRE_BYTES + 2 * chunk.length, `${sent} bytes were taken for a cap of ${MAX_WIRE_BYTES}`);
+    expect(refused.status).toBe(413);
+    expect(sent, `${sent} bytes were taken for a cap of ${MAX_WIRE_BYTES}`).toBeLessThanOrEqual(MAX_WIRE_BYTES + 2 * chunk.length);
   });
 
   for (const method of ["PUT", "DELETE", "PATCH"]) {
     it(`when the method is ${method}, then it answers 405`, async () => {
       const sql = await freshDb();
-      assert.equal((await send(sql, { method })).status, 405);
+      expect((await send(sql, { method })).status).toBe(405);
     });
   }
 });
@@ -323,8 +407,8 @@ describe("given more posts at once than the server works through", () => {
     await nextTurn();
     release();
     const statuses = (await Promise.all(all)).map((r) => r.status).sort();
-    assert.deepEqual(statuses, [201, 201, 201, 201, 201, 201, 503, 503, 503, 503, 503, 503]);
-    assert.equal((await owner(sql)).body.submissions!.length, 6);
+    expect(firstMismatch(statuses, [201, 201, 201, 201, 201, 201, 503, 503, 503, 503, 503, 503])).toBeUndefined();
+    expect((await owner(sql)).body.submissions!.length).toBe(6);
   });
 });
 
@@ -334,9 +418,9 @@ describe("given one address posting submissions", () => {
     const ip = freshIp();
     const statuses: number[] = [];
     for (let i = 0; i < LIMITS.submit.burst + 3; i++) statuses.push((await post(sql, envelope("bench"), { ip })).status);
-    assert.deepEqual(statuses, [...Array<number>(LIMITS.submit.burst).fill(201), 429, 429, 429]);
-    assert.equal((await post(sql, envelope("bench"))).status, 201);
-    assert.equal((await owner(sql)).body.submissions!.length, LIMITS.submit.burst + 1);
+    expect(firstMismatch(statuses, [...Array<number>(LIMITS.submit.burst).fill(201), 429, 429, 429]), "statuses of the burst").toBeUndefined();
+    expect((await post(sql, envelope("bench"))).status).toBe(201);
+    expect((await owner(sql)).body.submissions!.length).toBe(LIMITS.submit.burst + 1);
   });
 
   it("when malformed posts have spent its burst, then a valid post answers 429 without touching the database", async () => {
@@ -345,21 +429,21 @@ describe("given one address posting submissions", () => {
     const ip = freshIp();
     for (let i = 0; i < LIMITS.submit.burst; i++) await post(sql, "{not json", { ip });
     const refused = await post(sql, envelope("bench"), { ip });
-    assert.equal(refused.status, 429);
-    assert.equal(touched, 0);
+    expect(refused.status).toBe(429);
+    expect(touched).toBe(0);
   });
 });
 
 describe("given the owner reading submissions back", () => {
   it("when no owner token is configured on the server, then reads answer 503 even with a bearer header", async () => {
     const sql = await freshDb();
-    assert.equal((await owner(sql, "", null)).status, 503);
+    expect((await owner(sql, "", null)).status).toBe(503);
   });
 
   it("when the configured token is shorter than 24 characters, then reads answer 503, whatever the bearer header says", async () => {
     const sql = await freshDb();
     const reply = await send(sql, { token: "short", headers: { authorization: "Bearer short" } });
-    assert.equal(reply.status, 503);
+    expect(reply.status).toBe(503);
   });
 
   const unauthorizedCases: { it: string; headers: Record<string, string> }[] = [
@@ -374,9 +458,9 @@ describe("given the owner reading submissions back", () => {
       const receipt = await post(sql, envelope("bench"));
       const list = await send(sql, { headers: testCase.headers });
       const one = await send(sql, { search: `?id=${receipt.body.id}`, headers: testCase.headers });
-      assert.equal(list.status, 401);
-      assert.equal(one.status, 401);
-      assert.equal(JSON.stringify([list.body, one.body]).includes("3295bad"), false);
+      expect(list.status).toBe(401);
+      expect(one.status).toBe(401);
+      expect(JSON.stringify([list.body, one.body]).includes("3295bad")).toBe(false);
     });
   }
 
@@ -385,10 +469,10 @@ describe("given the owner reading submissions back", () => {
     const ids: string[] = [];
     for (const kind of ["bench", "flag", "bench", "capture"] as const) ids.push((await post(sql, envelope(kind))).body.id!);
     const all = await owner(sql);
-    assert.deepEqual(listedIds(all), [...ids].reverse());
-    assert.deepEqual(Object.keys(all.body.submissions![0]!).sort(), ["id", "kind", "receivedAt", "sha", "size"]);
-    assert.deepEqual(listedIds(await owner(sql, "?kind=bench")), [ids[2], ids[0]]);
-    assert.equal((await owner(sql, "?limit=2")).body.submissions!.length, 2);
+    expect(firstMismatch(listedIds(all), [...ids].reverse()), "listed ids, newest first").toBeUndefined();
+    expect(firstMismatch(Object.keys(all.body.submissions![0]!).sort(), ["id", "kind", "receivedAt", "sha", "size"])).toBeUndefined();
+    expect(firstMismatch(listedIds(await owner(sql, "?kind=bench")), [ids[2], ids[0]]), "listed ids of kind bench").toBeUndefined();
+    expect((await owner(sql, "?limit=2")).body.submissions!.length).toBe(2);
   });
 
   const badQueryCases = [
@@ -402,7 +486,7 @@ describe("given the owner reading submissions back", () => {
   for (const testCase of badQueryCases) {
     it(`when ${testCase.it}, then the owner gets ${testCase.status}`, async () => {
       const sql = await freshDb();
-      assert.equal((await owner(sql, testCase.search)).status, testCase.status);
+      expect((await owner(sql, testCase.search)).status).toBe(testCase.status);
     });
   }
 
@@ -411,7 +495,7 @@ describe("given the owner reading submissions back", () => {
     const ip = freshIp();
     const statuses: number[] = [];
     for (let i = 0; i < LIMITS.read.burst + 5; i++) statuses.push((await send(sql, { ip, headers: { authorization: "Bearer wrong" } })).status);
-    assert.deepEqual(statuses, [...Array<number>(LIMITS.read.burst).fill(401), 429, 429, 429, 429, 429]);
+    expect(firstMismatch(statuses, [...Array<number>(LIMITS.read.burst).fill(401), 429, 429, 429, 429, 429]), "statuses of the bad-token burst").toBeUndefined();
   });
 });
 
@@ -424,13 +508,13 @@ describe("given the store is at its size cap", () => {
       [STORE_MAX_ROWS],
     );
     const refused = await post(sql, envelope("bench"));
-    assert.equal(refused.status, 507);
-    assert.equal((await owner(sql, "?limit=1")).body.submissions!.length, 1);
+    expect(refused.status).toBe(507);
+    expect((await owner(sql, "?limit=1")).body.submissions!.length).toBe(1);
   });
 
   it("when it holds the most bytes it keeps, then a post answers 507", async () => {
     const sql = await freshDb();
     await sql.query(`INSERT INTO submissions (id, kind, sha, size, body) VALUES ('BIG', 'bench', 'abc1234', $1, '{}')`, [STORE_MAX_BYTES]);
-    assert.equal((await post(sql, envelope("bench"))).status, 507);
+    expect((await post(sql, envelope("bench"))).status).toBe(507);
   });
 });

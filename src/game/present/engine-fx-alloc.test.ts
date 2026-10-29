@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
@@ -95,7 +94,7 @@ function kbPerFrame(mutate?: PoolName): number {
 describe("given a warmed FX scene of eight fountain jets, sparks, glass, debris and smoke", () => {
   it(`when 300 frames are stepped, then the pools allocate at most ${BOUND_KB} KB per frame`, () => {
     const kb = untilQuiet(() => kbPerFrame(), BOUND_KB);
-    assert.ok(kb <= BOUND_KB, `${kb.toFixed(2)} KB per frame > ${BOUND_KB} in every run for ${COMPILE_WAIT_S} s: an FX pool allocates again`);
+    expect(kb, `${kb.toFixed(2)} KB per frame > ${BOUND_KB} in every run for ${COMPILE_WAIT_S} s: an FX pool allocates again`).toBeLessThanOrEqual(BOUND_KB);
   });
 });
 
@@ -104,7 +103,7 @@ for (const name of POOL_NAMES) {
   describe(`given the allocation measure on the ${name} pool`, () => {
     it("when its update also makes two hundred vectors a frame, then the scene reads over the bar", () => {
       const kb = kbPerFrame(name);
-      assert.ok(kb > BOUND_KB, `${kb.toFixed(2)} KB per frame for ${CONTROL_VECTORS} vectors a frame: the measure sees nothing`);
+      expect(kb, `${kb.toFixed(2)} KB per frame for ${CONTROL_VECTORS} vectors a frame: the measure sees nothing`).toBeGreaterThan(BOUND_KB);
     });
   });
 }

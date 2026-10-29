@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { activeGround, setGround } from "../world/ground.ts";
 import { CHASE } from "../present/drive-cam.ts";
@@ -43,7 +42,7 @@ describe("given the real engine in a 10-car derby, watched from the orbit (no ca
           at = f;
         }
       }
-      assert.ok(worst >= CHASE.floor, `seed ${seed}: the eye stood ${worst.toFixed(2)} m over the sand at frame ${at}`);
+      expect(worst, `seed ${seed}: the eye stood ${worst.toFixed(2)} m over the sand at frame ${at}`).toBeGreaterThanOrEqual(CHASE.floor);
     }
   });
 });

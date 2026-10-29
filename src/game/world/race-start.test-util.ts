@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { expect } from "vitest";
 import { setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld } from "./race-world.test-util.ts";
 
@@ -40,7 +40,7 @@ export function startWrecks(course: string, seed: number, aiCount: number, slide
         out.push(`car ${i} at ${raced.toFixed(2)} s, ${car.velocity.length().toFixed(1)} m/s, ${touching || "wall, prop or traffic"}`);
       }
     }
-    assert.ok(raced >= WATCH, `${course} seed ${seed}: the race never got going`);
+    expect(raced, `${course} seed ${seed}: the race never got going`).toBeGreaterThanOrEqual(WATCH);
     return out;
   } finally {
     w.race.exit();

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { makeWorld } from "../world/race-world.test-util.ts";
 import { blankPoint, blankProjection, Track } from "../world/track.ts";
@@ -68,11 +67,11 @@ describe("given the oval race with 11 AI and police on, where two racers are put
           done: () => armed && w.race.recorder.ledger.kept.some((k) => k.cars.some((c) => placed.includes(c.slot))),
           maxFrames: (WAIT_S + 30) * 60,
         });
-        assert.ok(cop >= 0, `seed ${seed}: no cop was put on a spot in ${WAIT_S} s of the police race`);
-        assert.equal(headOn.length, 2, `seed ${seed}: two racers to stage head-on beside cop ${cop}`);
+        expect(cop, `seed ${seed}: no cop was put on a spot in ${WAIT_S} s of the police race`).toBeGreaterThanOrEqual(0);
+        expect(headOn.length, `seed ${seed}: two racers to stage head-on beside cop ${cop}`).toBe(2);
         // Which cop a kept clip holds depends on the whole race (a torn part's flight moves which crashes rank), so the row takes every clip holding one the race put on a spot.
         const withCop = recs.filter((r) => r.clip.cars.some((c) => placed.includes(c.slot)));
-        assert.ok(withCop.length > 0, `seed ${seed}: no kept clip holds a cop put on a spot (${placed.join(",")}; clips: ${recs.map((r) => r.clip.cars.map((c) => c.slot).join(",")).join(" | ")})`);
+        expect(withCop.length, `seed ${seed}: no kept clip holds a cop put on a spot (${placed.join(",")}; clips: ${recs.map((r) => r.clip.cars.map((c) => c.slot).join(",")).join(" | ")})`).toBeGreaterThan(0);
         for (const rec of withCop) {
           const { clip } = rec;
           const held = clip.cars.filter((c) => placed.includes(c.slot)).map((c) => c.slot);
@@ -81,8 +80,12 @@ describe("given the oval race with 11 AI and police on, where two racers are put
             `cops ${held.join(",")} put on a spot (the head-on staged beside ${cop}) of ${clip.cars.length} clip cars, ${(clipBytes(clip) / 1024).toFixed(0)} KB, ${clip.keyStep.length} keyframes, impact at ${clip.firstImpact.toFixed(2)} s: ` +
               `${a.steps} steps, worst pose ${a.pose.max} m, velocity ${a.vel.max} m/s, crush ${a.crush.max} m, wreck flags differ ${a.wreckMismatch}`,
           );
-          assert.ok(a.steps >= 500, `${a.steps} steps compared`);
-          assert.deepEqual({ pose: a.pose.max, vel: a.vel.max, crush: a.crush.max, wreck: a.wreckMismatch }, { pose: 0, vel: 0, crush: 0, wreck: 0 }, `seed ${seed}: a car strays from the live sim (m, m/s, m)`);
+          expect(a.steps, `${a.steps} steps compared`).toBeGreaterThanOrEqual(500);
+          const strays = `seed ${seed}: a car strays from the live sim (m, m/s, m)`;
+          expect(a.pose.max, `${strays} pose`).toBe(0);
+          expect(a.vel.max, `${strays} vel`).toBe(0);
+          expect(a.crush.max, `${strays} crush`).toBe(0);
+          expect(a.wreckMismatch, `${strays} wreck`).toBe(0);
         }
       } finally {
         w.race.exit();

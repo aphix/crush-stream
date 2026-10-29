@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { m3, m3Id, m3Mul, m3Det, m3Polar, quatId, rebuildAqqWeighted } from "../kernel/shape-match-core.js";
 import { m3RotationAngle, transformNormal, transformSkinPointInto } from "./shape-match.test-util.ts";
@@ -62,7 +61,7 @@ function crashRig(impact: THREE.Vector3, inward: THREE.Vector3, speed: number, y
 
 function node(d: StreamedDeformation, name: string): StreamedDeformation["masses"][number] {
   const m = d.masses.find((n) => n.name === name);
-  assert.ok(m, name);
+  if (m === undefined) throw new Error(`no mass named ${name}`);
   return m;
 }
 
@@ -111,9 +110,9 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     const R = m3();
     const S = m3();
     m3Polar(A, quatId(), R, S);
-    assert.ok(Math.abs(R[0]! - A[0]!) < 1e-5);
-    assert.ok(m3FrobeniusI(S) < 1e-4);
-    assert.ok(Math.abs(m3Det(R) - 1) < 1e-4);
+    expect(Math.abs(R[0]! - A[0]!)).toBeLessThan(1e-5);
+    expect(m3FrobeniusI(S)).toBeLessThan(1e-4);
+    expect(Math.abs(m3Det(R) - 1)).toBeLessThan(1e-4);
   });
 
   it("when A is a stretch of 0.5 along x and 1.4 along z followed by a 0.4 rad rotation, then S recovers both stretches to within 0.04", () => {
@@ -125,8 +124,8 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     const R = m3();
     const S = m3();
     m3Polar(A, quatId(), R, S);
-    assert.ok(Math.abs(S[0]! - 0.5) < 0.04, `Sxx ${S[0]}`);
-    assert.ok(Math.abs(S[8]! - 1.4) < 0.04, `Szz ${S[8]}`);
+    expect(Math.abs(S[0]! - 0.5), `Sxx ${S[0]}`).toBeLessThan(0.04);
+    expect(Math.abs(S[8]! - 1.4), `Szz ${S[8]}`).toBeLessThan(0.04);
   });
 
   it("when A mirrors the x axis, then R still has a positive determinant, so it is a rotation and not a reflection", () => {
@@ -135,7 +134,7 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     const R = m3();
     const S = m3();
     m3Polar(A, quatId(), R, S);
-    assert.ok(m3Det(R) > 0.5, `det(R)=${m3Det(R)}`);
+    expect(m3Det(R), `det(R)=${m3Det(R)}`).toBeGreaterThan(0.5);
   });
 
   it("when A is a 180° yaw, then R is clamped to under 1 rad and stays a true rotation, rather than applied as an inside-out mesh", () => {
@@ -143,8 +142,8 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     const R = m3();
     const S = m3();
     m3Polar(A, quatId(), R, S);
-    assert.ok(m3RotationAngle(R) < 1.0, `R still flipped ${m3RotationAngle(R)}`);
-    assert.ok(m3Det(R) > 0.5);
+    expect(m3RotationAngle(R), `R still flipped ${m3RotationAngle(R)}`).toBeLessThan(1.0);
+    expect(m3Det(R)).toBeGreaterThan(0.5);
   });
 
   it("when A holds huge values or NaN, then R and S stay finite and small (below 5), and a NaN A yields the identity R and S", () => {
@@ -155,13 +154,13 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     const S = m3();
     m3Polar(A, quatId(), R, S);
     for (let i = 0; i < 9; i++) {
-      assert.ok(Number.isFinite(R[i]!) && Math.abs(R[i]!) < 5, `R[${i}]=${R[i]}`);
-      assert.ok(Number.isFinite(S[i]!) && Math.abs(S[i]!) < 5, `S[${i}]=${S[i]}`);
+      expect(Number.isFinite(R[i]!) && Math.abs(R[i]!) < 5, `R[${i}]=${R[i]}`).toBeTruthy();
+      expect(Number.isFinite(S[i]!) && Math.abs(S[i]!) < 5, `S[${i}]=${S[i]}`).toBeTruthy();
     }
     A[0] = Number.NaN;
     m3Polar(A, quatId(), R, S);
-    assert.equal(R[0], 1);
-    assert.equal(S[0], 1);
+    expect(R[0]).toBe(1);
+    expect(S[0]).toBe(1);
   });
 
   it("when the previous frame's rotation estimate is 0.5 rad off about another axis, then R and S still converge to the exact 0.6 rad rotation and the exact stretch", () => {
@@ -178,8 +177,8 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     const S = m3();
     m3Polar(A, q, R, S);
     const Rt = rotY(0.6);
-    for (let i = 0; i < 9; i++) assert.ok(Math.abs(R[i]! - Rt[i]!) < 1e-6, `R[${i}]=${R[i]} vs ${Rt[i]}`);
-    for (let i = 0; i < 9; i++) assert.ok(Math.abs(S[i]! - S0[i]!) < 1e-6, `S[${i}]=${S[i]} vs ${S0[i]}`);
+    for (let i = 0; i < 9; i++) expect(Math.abs(R[i]! - Rt[i]!), `R[${i}]=${R[i]} vs ${Rt[i]}`).toBeLessThan(1e-6);
+    for (let i = 0; i < 9; i++) expect(Math.abs(S[i]! - S0[i]!), `S[${i}]=${S[i]} vs ${S0[i]}`).toBeLessThan(1e-6);
   });
 
   it("when A turns 1.2 rad, then the output rotation is clamped to between 0.8 and 0.9 rad about the same axis, while the estimate kept for the next frame holds the full 1.2 rad", () => {
@@ -188,10 +187,10 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     const S = m3();
     m3Polar(rotY(1.2), q, R, S);
     const ang = m3RotationAngle(R);
-    assert.ok(ang > 0.8 && ang < 0.9, `clamped angle ${ang}`);
-    assert.ok(R[2]! > 0 && Math.abs(R[1]!) < 1e-9 && Math.abs(R[5]!) < 1e-9, "clamp left the yaw axis or reversed it");
+    expect(ang > 0.8 && ang < 0.9, `clamped angle ${ang}`).toBeTruthy();
+    expect(R[2]! > 0 && Math.abs(R[1]!) < 1e-9 && Math.abs(R[5]!) < 1e-9, "clamp left the yaw axis or reversed it").toBeTruthy();
     const qAng = 2 * Math.acos(Math.min(1, Math.abs(q[3]!)));
-    assert.ok(Math.abs(qAng - 1.2) < 1e-6, `warm start stored the clamped turn ${qAng}`);
+    expect(Math.abs(qAng - 1.2), `warm start stored the clamped turn ${qAng}`).toBeLessThan(1e-6);
   });
 
   it("when A collapses to all zeros while the previous rotation was 0.5 rad, then R and S stay finite and the rotation holds at 0.5 rad instead of snapping or going NaN", () => {
@@ -201,8 +200,8 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     const R = m3();
     const S = m3();
     m3Polar(m3(), q, R, S);
-    for (let i = 0; i < 9; i++) assert.ok(Number.isFinite(R[i]!) && Number.isFinite(S[i]!), `R/S[${i}] not finite`);
-    assert.ok(Math.abs(m3RotationAngle(R) - 0.5) < 1e-9, `rotation snapped to ${m3RotationAngle(R)}`);
+    for (let i = 0; i < 9; i++) expect(Number.isFinite(R[i]!) && Number.isFinite(S[i]!), `R/S[${i}] not finite`).toBeTruthy();
+    expect(Math.abs(m3RotationAngle(R) - 0.5), `rotation snapped to ${m3RotationAngle(R)}`).toBeLessThan(1e-9);
   });
 });
 
@@ -236,7 +235,7 @@ describe("given the shape-matching solver (it pulls a cluster of particles towar
       ];
       err += Math.hypot(gx - P[i]!.x, gy - P[i]!.y, gz - P[i]!.z);
     }
-    assert.ok(err < 0.05, `rigid match error ${err}`);
+    expect(err, `rigid match error ${err}`).toBeLessThan(0.05);
   });
 
   it("when the particles are squashed to 0.4 in z, then the matched stretch along z is below 0.7", () => {
@@ -252,13 +251,13 @@ describe("given the shape-matching solver (it pulls a cluster of particles towar
     rebuildAqqWeighted(c, P);
     for (const p of P) p.z *= 0.4;
     matchCluster(c, P, 1);
-    assert.ok(c.S[8]! < 0.7, `expected squash, Szz=${c.S[8]}`);
+    expect(c.S[8]!, `expected squash, Szz=${c.S[8]}`).toBeLessThan(0.7);
   });
 
   it("when the squash setting rises from 0.2 to 0.9, then the share of the squash the shape keeps rises, the goal pull falls and the solver uses no more iterations", () => {
-    assert.ok(deformBeta(0.2) < deformBeta(0.9));
-    assert.ok(goalAlpha(0.2) > goalAlpha(0.9));
-    assert.ok(stiffnessIters(0.2) >= stiffnessIters(0.9));
+    expect(deformBeta(0.2)).toBeLessThan(deformBeta(0.9));
+    expect(goalAlpha(0.2)).toBeGreaterThan(goalAlpha(0.9));
+    expect(stiffnessIters(0.2)).toBeGreaterThanOrEqual(stiffnessIters(0.9));
   });
 });
 
@@ -280,10 +279,10 @@ describe("given a cluster of particles that can yield plastically (keep a perman
       matchCluster(c, P, 0.9);
       flow(c, P, 1 / 30, 0.8);
     }
-    assert.ok(m3FrobeniusI(c.Sp) > 0.08, `Sp never yielded ${m3FrobeniusI(c.Sp)}`);
+    expect(m3FrobeniusI(c.Sp), `Sp never yielded ${m3FrobeniusI(c.Sp)}`).toBeGreaterThan(0.08);
     const qz = Math.hypot(c.qx[0]!, c.qy[0]!, c.qz[0]!);
     const q0 = Math.hypot(c.q0x[0]!, c.q0y[0]!, c.q0z[0]!);
-    assert.ok(qz < q0 * 0.95 || m3FrobeniusI(c.Sp) > 0.15, "plastic rest did not shorten");
+    expect(qz < q0 * 0.95 || m3FrobeniusI(c.Sp) > 0.15, "plastic rest did not shorten").toBeTruthy();
   });
 
   it("when one particle is dented 0.2 m in and its rest takes that set, then every goal sits on the dented shape, where without the set the dented particle's goal is over 0.1 m out", () => {
@@ -316,8 +315,8 @@ describe("given a cluster of particles that can yield plastically (keep a perman
       }
       return worst;
     };
-    assert.ok(worstPull(true) < 1e-9, `a goal ${worstPull(true)} m off the set shape`);
-    assert.ok(worstPull(false) > 0.1, `the dent's goal only ${worstPull(false).toFixed(3)} m out without the set`);
+    expect(worstPull(true), `a goal ${worstPull(true)} m off the set shape`).toBeLessThan(1e-9);
+    expect(worstPull(false), `the dent's goal only ${worstPull(false).toFixed(3)} m out without the set`).toBeGreaterThan(0.1);
   });
 
   it("when a squash to 0.3 is held for 8 steps, then the permanent deformation keeps the volume (its determinant stays between 0.25 and 2.8)", () => {
@@ -338,7 +337,7 @@ describe("given a cluster of particles that can yield plastically (keep a perman
       flow(c, P, 1 / 30, 0.7);
     }
     const det = m3Det(c.Sp);
-    assert.ok(det > 0.25 && det < 2.8, `volume vanished det=${det}`);
+    expect(det > 0.25 && det < 2.8, `volume vanished det=${det}`).toBeTruthy();
   });
 
   it("when a turned, strained contact is held, then the plastic rest shape equals the permanent deformation applied to the rest shape (the shape the skin is built from)", () => {
@@ -368,7 +367,7 @@ describe("given a cluster of particles that can yield plastically (keep a perman
       matchCluster(c, P, 0.2);
       flow(c, P, 1 / FINE_HZ, 0.4, 0.45);
     }
-    assert.ok(m3FrobeniusI(c.Sp) > 0.05, `Sp never yielded ${m3FrobeniusI(c.Sp)}`);
+    expect(m3FrobeniusI(c.Sp), `Sp never yielded ${m3FrobeniusI(c.Sp)}`).toBeGreaterThan(0.05);
     const Sp = c.Sp;
     let err = 0,
       size = 0,
@@ -382,7 +381,7 @@ describe("given a cluster of particles that can yield plastically (keep a perman
       size += Math.hypot(c.qx[i]!, c.qz[i]!);
       size0 += Math.hypot(gx, gz);
     }
-    assert.ok(err < 1e-9, `plastic rest is ${err.toFixed(4)} m off Sp·rest (turn-plane size ×${(size / size0).toFixed(3)})`);
+    expect(err, `plastic rest is ${err.toFixed(4)} m off Sp·rest (turn-plane size ×${(size / size0).toFixed(3)})`).toBeLessThan(1e-9);
   });
 });
 
@@ -407,8 +406,8 @@ describe("given a skin fit to a cluster whose particles are squashed to half in 
       1,
     );
     const n = transformNormal(c, 0, 0, 1);
-    assert.ok(Math.abs(n.x) < 0.2 && Math.abs(n.y) < 0.2, `n xy ${n.x},${n.y}`);
-    assert.ok(n.z > 1.5, `n_z ${n.z} (a 0.5 squash scales the normal by 2)`);
+    expect(Math.abs(n.x) < 0.2 && Math.abs(n.y) < 0.2, `n xy ${n.x},${n.y}`).toBeTruthy();
+    expect(n.z, `n_z ${n.z} (a 0.5 squash scales the normal by 2)`).toBeGreaterThan(1.5);
   });
 });
 
@@ -432,7 +431,7 @@ describe("given a skin fit to a cluster by the per-cell (local) skin fit", () =>
       0.8,
     );
     const p = transformSkinPointInto(c, 0.4, 0.2, 0.3);
-    assert.ok(Math.hypot(p.x - 0.4, p.y - 0.2, p.z - 0.3) < 0.04, `identity drifted to ${p.x},${p.y},${p.z}`);
+    expect(Math.hypot(p.x - 0.4, p.y - 0.2, p.z - 0.3), `identity drifted to ${p.x},${p.y},${p.z}`).toBeLessThan(0.04);
   });
 
   it("when the particles are squashed to 0.6 in z, then a skin point at z=1 moves to between 0.4 and 0.85", () => {
@@ -455,8 +454,8 @@ describe("given a skin fit to a cluster by the per-cell (local) skin fit", () =>
       1,
     );
     const { z } = transformSkinPointInto(c, 0, 0, 1);
-    assert.ok(z < 0.85, `skin did not squash z=${z}`);
-    assert.ok(z > 0.4, `skin collapsed z=${z}`);
+    expect(z, `skin did not squash z=${z}`).toBeLessThan(0.85);
+    expect(z, `skin collapsed z=${z}`).toBeGreaterThan(0.4);
   });
 
   it("when the front face is held 0.45 in until it yields and is then released, then a skin vertex on the dented face moves at least 80% of the particles' permanent dent", () => {
@@ -487,10 +486,10 @@ describe("given a skin fit to a cluster by the per-cell (local) skin fit", () =>
       }
     }
     const dent = 1 - (P[0]!.z + P[1]!.z) / 2;
-    assert.ok(dent > 0.15, `fixture: plastic dent only ${dent.toFixed(3)} m`);
+    expect(dent, `fixture: plastic dent only ${dent.toFixed(3)} m`).toBeGreaterThan(0.15);
     matchSkinLocal(c, rest.map(([x, y, z]) => ({ x, y, z })), P, P.map((p) => p.mass), 1);
     const v = transformSkinPointInto(c, 0, 0.3, 1);
-    assert.ok(1 - v.z >= 0.8 * dent, `skin vertex at the dented face moved ${(1 - v.z).toFixed(3)} m of the particles' ${dent.toFixed(3)}`);
+    expect(1 - v.z, `skin vertex at the dented face moved ${(1 - v.z).toFixed(3)} m of the particles' ${dent.toFixed(3)}`).toBeGreaterThanOrEqual(0.8 * dent);
   });
 
   it("when a particle is shoved through the far edge so the flat cluster's triangle is mirrored, then the cluster holds its last rotation (under 0.05 rad) instead of flipping", () => {
@@ -504,7 +503,7 @@ describe("given a skin fit to a cluster by the per-cell (local) skin fit", () =>
     P[0]!.x = -1.0;
     P[0]!.z = 0.7;
     matchCluster(c, P, 0.2);
-    assert.ok(m3RotationAngle(c.R) < 0.05, `folded triangle swung R by ${m3RotationAngle(c.R).toFixed(3)} rad`);
+    expect(m3RotationAngle(c.R), `folded triangle swung R by ${m3RotationAngle(c.R).toFixed(3)} rad`).toBeLessThan(0.05);
   });
 
   it("when the skin is fitted to a squashed cluster, then the cluster's rotation and previous-frame rotation are left exactly as they were", () => {
@@ -531,8 +530,8 @@ describe("given a skin fit to a cluster by the per-cell (local) skin fit", () =>
       0.3,
     );
     for (let i = 0; i < 9; i++) {
-      assert.equal(c.R[i], r0[i], `R[${i}] poisoned by skin polar`);
-      assert.equal(c.Rprev[i], rp0[i], `Rprev[${i}] poisoned by skin polar`);
+      expect(c.R[i], `R[${i}] poisoned by skin polar`).toBe(r0[i]);
+      expect(c.Rprev[i], `Rprev[${i}] poisoned by skin polar`).toBe(rp0[i]);
     }
   });
 });
@@ -540,7 +539,7 @@ describe("given a skin fit to a cluster by the per-cell (local) skin fit", () =>
 describe("given a car's crash deformation (StreamedDeformation, the object that dents a car's body)", () => {
   it("when it is created, then it starts in shape-matching mode", () => {
     const d = new StreamedDeformation(new THREE.BoxGeometry(1.7, 1.3, 4.3, 2, 2, 4));
-    assert.equal(d.mode, "shape");
+    expect(d.mode).toBe("shape");
   });
 
   it("when a 16 m/s frontal pulse hits it in shape-matching mode, then the nose shortens by over 0.05, no vertex strays past radius 4.2 and the mesh nose stays within 0.55 of the nose mass", () => {
@@ -563,7 +562,7 @@ describe("given a car's crash deformation (StreamedDeformation, the object that 
       d.stepCrush(1 / FRAME_HZ);
       d.update(geom);
     }
-    assert.ok(z0 - fl.local.z > 0.05, `shape mode did not crush ${z0} → ${fl.local.z}`);
+    expect(z0 - fl.local.z, `shape mode did not crush ${z0} → ${fl.local.z}`).toBeGreaterThan(0.05);
     d.stepCrush(1 / FRAME_HZ);
     d.update(geom);
     const attr = geom.getAttribute("position") as THREE.BufferAttribute;
@@ -573,14 +572,14 @@ describe("given a car's crash deformation (StreamedDeformation, the object that 
       max = Math.max(max, Math.hypot(attr.getX(i), attr.getY(i), attr.getZ(i)));
       maxZ = Math.max(maxZ, attr.getZ(i));
     }
-    assert.ok(max < 4.2, `shape skin exploded, vertex radius ${max}`);
-    assert.ok(Math.abs(maxZ - fl.local.z) < 0.55, `mesh nose ${maxZ.toFixed(3)} drifted from particle ${fl.local.z.toFixed(3)}`);
+    expect(max, `shape skin exploded, vertex radius ${max}`).toBeLessThan(4.2);
+    expect(Math.abs(maxZ - fl.local.z), `mesh nose ${maxZ.toFixed(3)} drifted from particle ${fl.local.z.toFixed(3)}`).toBeLessThan(0.55);
   });
 
   it("when the mode is switched to lattice, then it reports lattice mode, so lattice stays available as a toggle", () => {
     const d = new StreamedDeformation(new THREE.BoxGeometry(1.7, 1.3, 4.3, 2, 2, 4));
     d.setMode("lattice");
-    assert.equal(d.mode, "lattice");
+    expect(d.mode).toBe("lattice");
   });
 
   it("when its shape clusters are listed, then there are at least 8 and every mass except the hub ones belongs to at least one", () => {
@@ -590,18 +589,18 @@ describe("given a car's crash deformation (StreamedDeformation, the object that 
     for (const c of snap.clusters) for (const n of c.names) seen.add(n);
     for (const m of d.masses) {
       if (m.name.startsWith("hub")) continue;
-      assert.ok(seen.has(m.name), `${m.name} is in no cluster`);
+      expect(seen.has(m.name), `${m.name} is in no cluster`).toBeTruthy();
     }
-    assert.ok(snap.clusters.length >= 8, `too few clusters ${snap.clusters.length}`);
+    expect(snap.clusters.length, `too few clusters ${snap.clusters.length}`).toBeGreaterThanOrEqual(8);
   });
 
   it("when the shape cluster table is read, then it is mirror-symmetric, has no duplicate clusters and each cluster is owned by a real cage", () => {
     const key = (names: readonly string[]) => [...names].sort().join(",");
     const sets = SHAPE_CLUSTERS.map((c) => key(c.masses));
-    assert.equal(new Set(sets).size, sets.length, "two clusters share a mass set");
+    expect(new Set(sets).size, "two clusters share a mass set").toBe(sets.length);
     for (const c of SHAPE_CLUSTERS) {
-      assert.ok(sets.includes(key(c.masses.map(mirrorName))), `${c.owner} [${c.masses.join(" ")}] has no mirror`);
-      assert.ok(CAGES.some((g) => g.name === c.owner), `${c.owner} is not a cage`);
+      expect(sets.includes(key(c.masses.map(mirrorName))), `${c.owner} [${c.masses.join(" ")}] has no mirror`).toBeTruthy();
+      expect(CAGES.some((g) => g.name === c.owner), `${c.owner} is not a cage`).toBeTruthy();
     }
   });
 
@@ -619,7 +618,7 @@ describe("given a car's crash deformation (StreamedDeformation, the object that 
       const o = node(right, mirrorName(m.name)).local;
       sum += Math.hypot(m.local.x + o.x, m.local.y - o.y, m.local.z - o.z);
     }
-    assert.ok(sum < 0.02, `left/right mirror error ${sum.toFixed(3)} m`);
+    expect(sum, `left/right mirror error ${sum.toFixed(3)} m`).toBeLessThan(0.02);
   });
 
   it("when every shape cluster of the rig is rotated rigidly by 0.3 rad about each axis, then it recovers that rotation to within 0.02 rad", () => {
@@ -639,7 +638,7 @@ describe("given a car's crash deformation (StreamedDeformation, the object that 
         const E = m3();
         for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) E[i * 3 + j] = c.R[i]! * e[j * 4]! + c.R[3 + i]! * e[j * 4 + 1]! + c.R[6 + i]! * e[j * 4 + 2]!;
         const err = m3RotationAngle(E);
-        assert.ok(err < 0.02, `${spec.owner} [${spec.masses.join(" ")}] turn error ${err.toFixed(3)} rad about ${axis.toArray()}`);
+        expect(err, `${spec.owner} [${spec.masses.join(" ")}] turn error ${err.toFixed(3)} rad about ${axis.toArray()}`).toBeLessThan(0.02);
       }
     }
   });
@@ -661,7 +660,7 @@ describe("given a car's crash deformation (StreamedDeformation, the object that 
       return fl.local.z;
     };
     const z = [0, Math.PI / 2, Math.PI, -Math.PI / 2].map(noseZ);
-    assert.ok(Math.max(...z) - Math.min(...z) < 0.03, `bumperFL local z by heading ${z.map((v) => v.toFixed(3)).join(" / ")}`);
+    expect(Math.max(...z) - Math.min(...z), `bumperFL local z by heading ${z.map((v) => v.toFixed(3)).join(" / ")}`).toBeLessThan(0.03);
   });
 
   it("when an undamaged car is turned 0.3 rad instead of 0 and its structure settles for 10 steps, then the distances between its masses differ by under 0.01", () => {
@@ -680,7 +679,7 @@ describe("given a car's crash deformation (StreamedDeformation, the object that 
     const still = settle(0);
     const turned = settle(0.3);
     const worst = Math.max(...still.map((v, i) => Math.abs(v - turned[i]!)));
-    assert.ok(worst < 0.01, `a 0.3 rad heading distorts the body by ${worst.toFixed(3)} m`);
+    expect(worst, `a 0.3 rad heading distorts the body by ${worst.toFixed(3)} m`).toBeLessThan(0.01);
   });
 
   it("when the same contact is fed with the structure step sliced into 1, 4 and 8 sub-steps, then the side rail's travel differs by at most 30% between slicings", () => {
@@ -702,7 +701,7 @@ describe("given a car's crash deformation (StreamedDeformation, the object that 
     const t = [1, 4, 8].map(railTravel);
     const lo = Math.min(...t);
     const hi = Math.max(...t);
-    assert.ok(hi <= lo * 1.3, `railL travel at 1/4/8 sub-slices ${t.map((v) => v.toFixed(3)).join(" / ")}`);
+    expect(hi, `railL travel at 1/4/8 sub-slices ${t.map((v) => v.toFixed(3)).join(" / ")}`).toBeLessThanOrEqual(lo * 1.3);
   });
 });
 
@@ -724,9 +723,9 @@ describe("given a car crushed by a 50 km/h front wall hit", () => {
   }
   it("when a 30 km/h wall then hits its rear 2.5 s later, then the nose crush keeps at least 80% of its depth", () => {
     const { front, rear } = rearHit();
-    assert.ok(nose(front) > 0.25, `fixture: front crush only ${nose(front).toFixed(3)} m`);
-    assert.ok(rear.tailMax > 0.1, `fixture: rear hit crushed the tail only ${rear.tailMax.toFixed(3)} m`);
-    assert.ok(nose(rear) >= 0.8 * nose(front), `nose crush ${nose(front).toFixed(3)} → ${nose(rear).toFixed(3)} m`);
+    expect(nose(front), `fixture: front crush only ${nose(front).toFixed(3)} m`).toBeGreaterThan(0.25);
+    expect(rear.tailMax, `fixture: rear hit crushed the tail only ${rear.tailMax.toFixed(3)} m`).toBeGreaterThan(0.1);
+    expect(nose(rear), `nose crush ${nose(front).toFixed(3)} → ${nose(rear).toFixed(3)} m`).toBeGreaterThanOrEqual(0.8 * nose(front));
   });
   // todo -> Stage 4 item 6 (wreck split): the roof mass slides forward against the cell during the rear hit and stays there
   // (engineL–roof 1.499 → 1.429 m, bar 0.05: the roof is the pair's moving end, the engine mass does not move). The same run, the
@@ -746,7 +745,7 @@ describe("given a car crushed by a 50 km/h front wall hit", () => {
       which = `${pairs[k]!.join("–")} ${first[k]!.toFixed(3)} → ${second[k]!.toFixed(3)}`;
     }
     // The struck tail is 1.5 m away: the solver must not pull the dented front toward its old rest.
-    assert.ok(worst < 0.05, `front structure moved ${worst.toFixed(3)} m during the rear hit (${which})`);
+    expect(worst, `front structure moved ${worst.toFixed(3)} m during the rear hit (${which})`).toBeLessThan(0.05);
   });
 });
 
@@ -763,17 +762,17 @@ describe("given a car hit side-on by a 50 km/h wall", () => {
       if (j === undefined) first.set(key, i);
       else pairs.push([j, i]);
     }
-    assert.ok(pairs.length > 100, `fixture: only ${pairs.length} split vertices`);
+    expect(pairs.length, `fixture: only ${pairs.length} split vertices`).toBeGreaterThan(100);
     runWall(50, 1, "side", { car });
     let gap = 0;
     for (const [a, b] of pairs) gap = Math.max(gap, Math.hypot(pos[a * 3]! - pos[b * 3]!, pos[a * 3 + 1]! - pos[b * 3 + 1]!, pos[a * 3 + 2]! - pos[b * 3 + 2]!));
-    assert.ok(gap < 1e-3, `seam opened ${(gap * 1000).toFixed(2)} mm`);
+    expect(gap, `seam opened ${(gap * 1000).toFixed(2)} mm`).toBeLessThan(1e-3);
   });
 });
 
 describe("given a car hitting a wall at 56 km/h", () => {
   it("when the hit is over, then the skin over the cabin section intrudes no more than 0.05", () => {
     const r = runWall(56);
-    assert.ok(r.skinCabin <= 0.05, `cabin skin intrudes ${r.skinCabin.toFixed(3)} m`);
+    expect(r.skinCabin, `cabin skin intrudes ${r.skinCabin.toFixed(3)} m`).toBeLessThanOrEqual(0.05);
   });
 });

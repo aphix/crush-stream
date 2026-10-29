@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
@@ -37,8 +36,8 @@ describe("given the real engine in a derby match past its green light, nobody se
   });
 
   it("when each car on screen is clicked, then the seat follows that car, and a pedal press takes its wheel", () => {
-    assert.equal(engine.derbyMode, true, "the derby is on");
-    assert.ok(engine["derby"].time > 0, "past the green light");
+    expect(engine.derbyMode, "the derby is on").toBe(true);
+    expect(engine["derby"].time, "past the green light").toBeGreaterThan(0);
     let clicked = 0;
     for (let index = 0; index < engine["carCount"]; index++) {
       engine["seat"].mode = "global";
@@ -50,15 +49,15 @@ describe("given the real engine in a derby match past its green light, nobody se
       // A car drawn over another's centre is the one a press there picks: that car's turn, not this one's.
       if (spot === null || engine["carAt"](spot.x, spot.y) !== index) continue;
       engine["watchCar"](engine["carAt"](spot.x, spot.y));
-      assert.equal(engine["seat"].mode, "follow", `a click on car ${index} follows it`);
-      assert.equal(engine["seat"].carIndex, index, `a click on car ${index} follows that car`);
+      expect(engine["seat"].mode, `a click on car ${index} follows it`).toBe("follow");
+      expect(engine["seat"].carIndex, `a click on car ${index} follows that car`).toBe(index);
       engine["keys"].add("KeyW");
       runSeconds(engine, 0.1);
       engine["keys"].clear();
-      assert.equal(engine["seat"].mode, "drive", `W takes the wheel of car ${index}`);
-      assert.equal(engine["seat"].carIndex, index, `W drives car ${index}`);
+      expect(engine["seat"].mode, `W takes the wheel of car ${index}`).toBe("drive");
+      expect(engine["seat"].carIndex, `W drives car ${index}`).toBe(index);
       clicked++;
     }
-    assert.ok(clicked >= 2, `at least two of the five cars were on screen to click (saw ${clicked})`);
+    expect(clicked, `at least two of the five cars were on screen to click (saw ${clicked})`).toBeGreaterThanOrEqual(2);
   });
 });

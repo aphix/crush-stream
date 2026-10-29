@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setImmediate as yieldToLoop } from "node:timers/promises";
 import "../kernel/rapier-node.test-util.ts";
 import { MATERIAL_DETAIL, MATERIAL_DETAIL_READY } from "../vehicle/material-class.ts";
@@ -47,21 +46,21 @@ describe("given the engine's FX tiers and the worn-concrete detail map", () => {
   it("when the engine runs on the plain tiers, then the map is never fetched and the detail stays off", () => {
     for (const tier of ["off", "minimal", "low"] as const) {
       engine["cine"].setTier(tier);
-      assert.equal(MATERIAL_DETAIL_READY.value, 0, `${tier} switch`);
+      expect(MATERIAL_DETAIL_READY.value, `${tier} switch`).toBe(0);
     }
-    assert.equal(detailRequests.length, 0, "fetches");
-    assert.equal(MATERIAL_DETAIL.value.image, null, "stand-in");
+    expect(detailRequests.length, "fetches").toBe(0);
+    expect(MATERIAL_DETAIL.value.image, "stand-in").toBe(null);
   });
 
   it("when the tier becomes high, then the map is fetched once and the detail comes on, and off again on low", async () => {
     engine["cine"].setTier("high");
     await mapLoaded();
-    assert.equal(MATERIAL_DETAIL_READY.value, 1, "high switch");
-    assert.equal(detailRequests.length, 1, "fetches");
+    expect(MATERIAL_DETAIL_READY.value, "high switch").toBe(1);
+    expect(detailRequests.length, "fetches").toBe(1);
     engine["cine"].setTier("low");
-    assert.equal(MATERIAL_DETAIL_READY.value, 0, "low switch");
+    expect(MATERIAL_DETAIL_READY.value, "low switch").toBe(0);
     engine["cine"].setTier("high");
-    assert.equal(MATERIAL_DETAIL_READY.value, 1, "high again");
-    assert.equal(detailRequests.length, 1, "fetches after the return");
+    expect(MATERIAL_DETAIL_READY.value, "high again").toBe(1);
+    expect(detailRequests.length, "fetches after the return").toBe(1);
   });
 });

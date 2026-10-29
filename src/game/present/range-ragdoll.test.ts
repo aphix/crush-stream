@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { DRIVER_CARS } from "../match/types.ts";
@@ -9,6 +8,7 @@ import type { ExitPane } from "../vehicle/car-core.ts";
 import { ejectionVelocity } from "../vehicle/ejection.ts";
 import { apexOf, type Carry, type Control, deepest, displayFrames, type DriverCar, inCar, lowest, rangeThrow, type RangeThrow, restOf, speeds, STILL, travel } from "./range-run.test-util.ts";
 import { FLAT_GROUND } from "../world/ground.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * The ejection range (scenes/range.ts) at its defaults (its own spawn, 100 km/h, the HUD's squash, buckle, mode and
@@ -138,15 +138,15 @@ const runOf = (type: DriverCar, display: string, frames: () => () => number): Pr
 describe("given the ejection range (the test course where one car crashes at 100 km/h into a barrier and throws its driver) at its defaults, for every car type, at 60 and 240 Hz steady and jittered with stalls", () => {
   for (const type of DRIVER_CARS) {
     it(`when a ${type.label} crashes at the range, then exactly one driver is thrown and exactly one dummy comes out`, async () => {
-      for (const [display, frames] of DISPLAYS) assert.deepEqual(threwOne((await runOf(type, display, frames)).run), [], `${type.id} at ${display}`);
+      for (const [display, frames] of DISPLAYS) expect(threwOne((await runOf(type, display, frames)).run), `${type.id} at ${display}`).toHaveLength(0);
     });
 
     it(`when a ${type.label} crashes at the range, then the dummy goes more forward than up or to a side at the release, the first step, the apex and the rest`, async () => {
-      for (const [display, frames] of DISPLAYS) assert.deepEqual(astray((await runOf(type, display, frames)).run), [], `${type.id} at ${display}`);
+      for (const [display, frames] of DISPLAYS) expect(astray((await runOf(type, display, frames)).run), `${type.id} at ${display}`).toHaveLength(0);
     });
 
     it(`when a ${type.label} crashes at the range, then the dummy ends up lying still, on the terrain`, async () => {
-      for (const [display, frames] of DISPLAYS) assert.deepEqual(unsettled((await runOf(type, display, frames)).run), [], `${type.id} at ${display}`);
+      for (const [display, frames] of DISPLAYS) expect(unsettled((await runOf(type, display, frames)).run), `${type.id} at ${display}`).toHaveLength(0);
     });
   }
 });
@@ -178,7 +178,7 @@ const LANDED_TOL = 0.05;
 describe("given the ejection range at its defaults, for every car type, at 60 and 240 Hz steady and jittered with stalls, with the readout counting the throw", () => {
   for (const type of DRIVER_CARS) {
     it(`when the ${type.label}'s thrown driver comes to rest on the ground, then the readout says LANDED at once, at the distance where he lies`, async () => {
-      for (const [display, frames] of DISPLAYS) assert.deepEqual(readoutAtRest(await runOf(type, display, frames)), [], `${type.id} at ${display}`);
+      for (const [display, frames] of DISPLAYS) expect(readoutAtRest(await runOf(type, display, frames)), `${type.id} at ${display}`).toHaveLength(0);
     });
   }
 });
@@ -246,18 +246,18 @@ describe(`given the ejection range with a hard handbrake turn ${TURN_AT} m befor
         it(`when a ${type.label} swings its nose ${side} and slides into the barrier, then its tyres meet the slab as a wall (its 0.81 m top stands over their 0.614 m hubs, and a side a tyre came in by within the entry window is a wall), it trips on them and rolls over the slab, and nobody is thrown`, async (t) => {
           const s = await slideIn(type, steer);
           t.annotate(`${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s, rose to ${s.top.toFixed(2)} m, leant ${s.lean.toFixed(0)}° at most, ${s.run.ejections} throws`);
-          assert.ok(s.heading >= 60 && s.speed >= 20, `${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s`);
-          assert.ok(s.lean >= ON_ITS_SIDE_DEG, `${type.id}: leant ${s.lean.toFixed(0)}° at most, rose to ${s.top.toFixed(2)} m`);
-          assert.equal(s.run.ejections, 0, `${type.id}: ${s.run.ejections} throws`);
+          expect(s.heading >= 60 && s.speed >= 20, `${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s`).toBeTruthy();
+          expect(s.lean, `${type.id}: leant ${s.lean.toFixed(0)}° at most, rose to ${s.top.toFixed(2)} m`).toBeGreaterThanOrEqual(ON_ITS_SIDE_DEG);
+          expect(s.run.ejections, `${type.id}: ${s.run.ejections} throws`).toBe(0);
         });
         continue;
       }
       it(`when a ${type.label} swings its nose ${side} and slides into the barrier, then its driver is thrown once, out of the side window that met the barrier, facing it, not out of the windshield`, async () => {
         const s = await slideIn(type, steer);
-        assert.ok(s.heading >= 60 && s.speed >= 20, `${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s`);
-        assert.equal(s.run.ejections, 1, `${type.id}: ${s.run.ejections} throws`);
-        assert.equal(s.exit, pane, `${type.id}: thrown out of the ${s.exit}`);
-        assert.ok(s.out.dot(s.run.runUp) > 0.7, `${type.id}: the way out faces ${s.out.dot(s.run.runUp).toFixed(2)} along the run-up`);
+        expect(s.heading >= 60 && s.speed >= 20, `${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s`).toBeTruthy();
+        expect(s.run.ejections, `${type.id}: ${s.run.ejections} throws`).toBe(1);
+        expect(s.exit, `${type.id}: thrown out of the ${s.exit}`).toBe(pane);
+        expect(s.out.dot(s.run.runUp), `${type.id}: the way out faces ${s.out.dot(s.run.runUp).toFixed(2)} along the run-up`).toBeGreaterThan(0.7);
       });
     }
   }
@@ -291,8 +291,8 @@ describe("given the ejection range's lip (a low kicker against the wall's face) 
       const lip = await runOf(type, STEADY_DISPLAY, STEADY_FRAMES);
       const flat = await flatNoseAndTouchdown(type);
       const lipTouchdown = touchdownOf(lip.run);
-      assert.ok(lip.nosePitch > flat.pitch + NOSE_LIFT_DEG, `${type.id}: nose ${lip.nosePitch.toFixed(2)}° at the throw, ${flat.pitch.toFixed(2)}° with no lip`);
-      assert.ok(lipTouchdown > flat.touchdown + TOUCHDOWN_GAIN, `${type.id}: first touch at ${lipTouchdown.toFixed(1)} m, ${flat.touchdown.toFixed(1)} m with no lip`);
+      expect(lip.nosePitch, `${type.id}: nose ${lip.nosePitch.toFixed(2)}° at the throw, ${flat.pitch.toFixed(2)}° with no lip`).toBeGreaterThan(flat.pitch + NOSE_LIFT_DEG);
+      expect(lipTouchdown, `${type.id}: first touch at ${lipTouchdown.toFixed(1)} m, ${flat.touchdown.toFixed(1)} m with no lip`).toBeGreaterThan(flat.touchdown + TOUCHDOWN_GAIN);
     });
   }
 });
@@ -319,19 +319,19 @@ describe("given a sedan thrown at the ejection range with one thing deliberately
   };
 
   it("when the throw is bent 60° up, then the forward-throw check reports the release, first step and apex, and when bent 80° up it reports the rest too", async () => {
-    assert.deepEqual(names(astray(await rangeThrow(sedan, bent(toSide, 60)))), ["release", "first step", "apex"]);
-    assert.deepEqual(names(astray(await rangeThrow(sedan, bent(toSide, 80)))), ["release", "first step", "apex", "rest"]);
+    expect(firstMismatch(names(astray(await rangeThrow(sedan, bent(toSide, 60)))), ["release", "first step", "apex"])).toBeUndefined();
+    expect(firstMismatch(names(astray(await rangeThrow(sedan, bent(toSide, 80)))), ["release", "first step", "apex", "rest"])).toBeUndefined();
   });
 
   it("when the throw is bent 60° to a side, then the forward-throw check reports the release, first step, apex and rest", async () => {
-    assert.deepEqual(names(astray(await rangeThrow(sedan, bent(vertical, 60)))), ["release", "first step", "apex", "rest"]);
+    expect(firstMismatch(names(astray(await rangeThrow(sedan, bent(vertical, 60)))), ["release", "first step", "apex", "rest"])).toBeUndefined();
   });
 
   it("when a second dummy is launched with the first, or nobody is thrown at all, then the one-driver check reports the thrown count wrong", async () => {
     const run = await rangeThrow(sedan, { released: (sys, car, e) => sys.launch(e, [car]) });
-    assert.equal(run.peakLive, 2);
-    assert.deepEqual(names(threwOne(run)), ["thrown"]);
-    assert.deepEqual(threwOne({ ...run, ejections: 0, peakLive: 0, frames: [], gone: null }).length, 3);
+    expect(run.peakLive).toBe(2);
+    expect(firstMismatch(names(threwOne(run)), ["thrown"])).toBeUndefined();
+    expect(threwOne({ ...run, ejections: 0, peakLive: 0, frames: [], gone: null }), "checks failed for nobody thrown").toHaveLength(3);
   });
 
   it("when the ground is removed, then the dummy falls through it and the settled-on-terrain check reports that it never lies still and that a part is under the terrain", async () => {
@@ -340,7 +340,7 @@ describe("given a sedan thrown at the ejection range with one thing deliberately
         for (const c of sys["statics"]) sys["world"]!.removeCollider(c, false);
       },
     });
-    assert.deepEqual(names(unsettled(run)), ["still", "ground"]);
+    expect(firstMismatch(names(unsettled(run)), ["still", "ground"])).toBeUndefined();
   });
 
   it("when an invisible floor 10 cm up holds the dummy, then the settled-on-terrain check reports it floating above the ground and supported by something that is not the terrain", async () => {
@@ -350,7 +350,7 @@ describe("given a sedan thrown at the ejection range with one thing deliberately
       },
     });
     const bad = names(unsettled(run));
-    assert.ok(bad.includes("ground") && bad.includes("supported"), unsettled(run).join("; "));
+    expect(bad.includes("ground") && bad.includes("supported"), unsettled(run).join("; ")).toBeTruthy();
   });
 
   it("when the floor is frictionless and the dummy has no damping, then it slides on and the settled-on-terrain check reports that it never lies still", async () => {
@@ -363,12 +363,12 @@ describe("given a sedan thrown at the ejection range with one thing deliberately
         }
       },
     });
-    assert.deepEqual(names(unsettled(run)), ["still"]);
+    expect(firstMismatch(names(unsettled(run)), ["still"])).toBeUndefined();
   });
 
   it("when the torso keeps turning at 1 rad/s, then the settled-on-terrain check reports that it never lies still", async () => {
     const run = await rangeThrow(sedan, { frame: (_sys, bodies) => bodies[0]!.setAngvel({ x: 0, y: 1, z: 0 }, true) });
-    assert.deepEqual(names(unsettled(run)), ["still"]);
+    expect(firstMismatch(names(unsettled(run)), ["still"])).toBeUndefined();
   });
 
   it("when a sleeping dummy is crept along 5 mm a frame, so Rapier (the physics engine) reads zero speed, then the settled-on-terrain check still reports that it never lies still", async () => {
@@ -381,7 +381,7 @@ describe("given a sedan thrown at the ejection range with one thing deliberately
         }
       },
     });
-    assert.ok(Math.max(...run.frames.at(-1)!.v.map(Math.abs)) < 1e-9, "Rapier reads the creeping dummy at rest");
-    assert.deepEqual(names(unsettled(run)), ["still"]);
+    expect(Math.max(...run.frames.at(-1)!.v.map(Math.abs)), "Rapier reads the creeping dummy at rest").toBeLessThan(1e-9);
+    expect(firstMismatch(names(unsettled(run)), ["still"])).toBeUndefined();
   });
 });

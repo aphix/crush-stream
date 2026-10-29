@@ -1,6 +1,5 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { paint } from "../vehicle/test-support.ts";
@@ -111,17 +110,17 @@ describe("given the owner's drops (11 cars, 0.15 m, one a second), run for 8 s a
       // The first frame a car is 0.1 m off the column ends the run: nothing later can bring it back under the bar.
       const { cars, rig } = column(OWNER, bodies, OWNER_S, (cs) => {
         worst = Math.max(worst, spread(cs).off);
-        assert.ok(worst < 0.1, `a car left the column by ${worst.toFixed(2)} m on the way`);
+        expect(worst, `a car left the column by ${worst.toFixed(2)} m on the way`).toBeLessThan(0.1);
       });
       const { off, lean } = spread(cars);
-      assert.ok(off < 0.05 && lean < 3, `the column ends ${off.toFixed(2)} m off its axis, leaning ${lean.toFixed(1)}°`);
+      expect(off < 0.05 && lean < 3, `the column ends ${off.toFixed(2)} m off its axis, leaning ${lean.toFixed(1)}°`).toBeTruthy();
       // Read the way the Stack panel reads it: every car still carries its load, the roof sink grows toward the bottom.
       const { crushMm, loadKn } = stackLoads(cars, rig.dropped);
-      assert.ok(loadKn.every((l) => l !== null), `a car reads off the column: ${loadKn.map((l) => l?.toFixed(0)).join("/")} kN`);
+      expect(loadKn.every((l) => l !== null), `a car reads off the column: ${loadKn.map((l) => l?.toFixed(0)).join("/")} kN`).toBeTruthy();
       const sink = crushMm.map((m) => m.toFixed(0)).join("/");
-      assert.ok(crushMm[crushMm.length - 1]! < 5, `the top car's roof sank ${crushMm[crushMm.length - 1]!.toFixed(0)} mm with nothing on it (${sink} mm)`);
-      for (let i = 1; i < crushMm.length; i++) assert.ok(crushMm[i - 1]! >= crushMm[i]! - 5, `roof sink bottom to top ${sink} mm: not decreasing at car ${i}`);
-      assert.ok(crushMm[0]! > 300, `the bottom roof sank only ${crushMm[0]!.toFixed(0)} mm under ten cars (${sink} mm)`);
+      expect(crushMm[crushMm.length - 1]!, `the top car's roof sank ${crushMm[crushMm.length - 1]!.toFixed(0)} mm with nothing on it (${sink} mm)`).toBeLessThan(5);
+      for (let i = 1; i < crushMm.length; i++) expect(crushMm[i - 1]!, `roof sink bottom to top ${sink} mm: not decreasing at car ${i}`).toBeGreaterThanOrEqual(crushMm[i]! - 5);
+      expect(crushMm[0]!, `the bottom roof sank only ${crushMm[0]!.toFixed(0)} mm under ten cars (${sink} mm)`).toBeGreaterThan(300);
     });
   }
 });
@@ -137,8 +136,8 @@ describe("given the stack scene's defaults (4 cars, 0.02 m, one every 8 s), run 
   todoRow("when the column is made of sedans, then each roof is crushed more than the roof above it by over 20 mm, and the top roof under 2 mm", "after the plan: recalibrate the roof strength law's constants and SKIN_STRAIN with their sources; the roofs read 159/112/94/0 mm bottom to top, the 112 -> 94 step 18 mm against the bar's 20 mm (the top roof at 0 mm passes)", () => {
     const { cars, rig } = column(DEFAULTS, "sedans", DEFAULTS_S);
     const { crushMm } = stackLoads(cars, rig.dropped);
-    assert.ok(crushMm[3]! < 2, `top ${crushMm[3]!.toFixed(1)} mm`);
-    for (let i = 0; i < 3; i++) assert.ok(crushMm[i]! > crushMm[i + 1]! + 20, `bottom to top ${crushMm.map((m) => m.toFixed(0)).join("/")} mm`);
+    expect(crushMm[3]!, `top ${crushMm[3]!.toFixed(1)} mm`).toBeLessThan(2);
+    for (let i = 0; i < 3; i++) expect(crushMm[i]!, `bottom to top ${crushMm.map((m) => m.toFixed(0)).join("/")} mm`).toBeGreaterThan(crushMm[i + 1]! + 20);
   });
 
   // Judged only on a column that stands: one that fell to the ground has nothing left to move. The outcome is chaotic: with the police base,
@@ -151,12 +150,12 @@ describe("given the stack scene's defaults (4 cars, 0.02 m, one every 8 s), run 
     () => {
       const { cars } = column(DEFAULTS, "fleet", DEFAULTS_S);
       const { off } = spread(cars);
-      assert.ok(off < ON_AXIS_M, `the column fell before the rest: a car stands ${off.toFixed(2)} m off its axis`);
+      expect(off, `the column fell before the rest: a car stands ${off.toFixed(2)} m off its axis`).toBeLessThan(ON_AXIS_M);
       const at = cars.map((c) => c.group.position.clone());
       const w = makeWorld(cars, false, false);
       for (let f = 0; f < 5 * FRAME_HZ; f++) tickWorld(w, 1 / FRAME_HZ);
       const moved = Math.max(...cars.map((c, i) => c.group.position.distanceTo(at[i]!)));
-      assert.ok(moved < 0.005, `a car moved ${(moved * 1000).toFixed(1)} mm in 5 s at rest`);
+      expect(moved, `a car moved ${(moved * 1000).toFixed(1)} mm in 5 s at rest`).toBeLessThan(0.005);
     },
   );
 });
@@ -189,8 +188,8 @@ describe("given the owner's drops (11 cars, 0.15 m, one a second) of the mixed f
       }
     });
     t.annotate(`${judged} car-frames judged; the worst reported ${worst.toFixed(2)} m/s off its body (${at})`);
-    assert.ok(judged > 0, "no car was judged");
-    assert.ok(worst < 4, `a car reported ${worst.toFixed(1)} m/s off its body (${at})`);
+    expect(judged, "no car was judged").toBeGreaterThan(0);
+    expect(worst, `a car reported ${worst.toFixed(1)} m/s off its body (${at})`).toBeLessThan(4);
   });
 
   it.todo("when the fleet's monster truck (slot 5; tyres on 0.9 m of spring, body 0.48 m up) carries four cars or more, then it rolls 5-30° on the support of its tyres, which has no spring to bring it level, and the column above it falls: 11 fleet cars, 0.15 m, 1 s (after the plan: hold the fleet column on its base so the monster is loaded; measured over 12 s the column slides off its base, car 0 1.0 m off at 3 s and 5.2 m at 12 s, and the monster ends on the ground at 0.0° with 2 cars at most above it, its roll peaking at 34.1° once)");
@@ -202,10 +201,10 @@ describe("given the player picked a car type in the settings", () => {
       // Which car each drop is does not depend on the physics: the rig's clock is stepped through its four drops with nothing simulated.
       const { cars, rig } = makeColumn({ cars: 4, drop: 0.02, gap: 1 }, { selected: type });
       for (let f = 0; f < (1 + 3 + 1) * 60; f++) if (rig.step(f / 60) === "drop") placeDrop(cars, rig.dropped - 1, rig.config.drop);
-      assert.equal(rig.dropped, 4, "every car has dropped");
+      expect(rig.dropped, "every car has dropped").toBe(4);
       for (const [i, c] of cars.entries()) {
-        assert.equal(c.style.id, type.style, `car ${i} body`);
-        assert.equal(carClass(c), type.cls, `car ${i} class`);
+        expect(c.style.id, `car ${i} body`).toBe(type.style);
+        expect(carClass(c), `car ${i} class`).toBe(type.cls);
       }
     });
   }

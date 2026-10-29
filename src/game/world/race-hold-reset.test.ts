@@ -1,6 +1,5 @@
-import { afterEach, describe, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { setGround } from "./ground.ts";
 import { TRACKS } from "./tracks/index.ts";
@@ -49,21 +48,21 @@ function damaged(seconds: number): { w: World; state: { acc: number } } {
 function holdThenTap(seconds: number): void {
   const { w, state } = damaged(seconds);
   const before = lost(w);
-  assert.ok(before.parts >= 1, "a part is off");
-  assert.ok(before.massActive, "the crash started");
+  expect(before.parts, "a part is off").toBeGreaterThanOrEqual(1);
+  expect(before.massActive, "the crash started").toBeTruthy();
   w.race.holdReset();
   for (let n = 0; n < 5; n++) frame(w, state);
   const held = lost(w);
-  assert.equal(held.parts, before.parts, "the torn parts stay torn");
-  assert.equal(held.wheels, before.wheels, "the wheels off stay off");
-  assert.equal(held.massActive, true, "the wreck state is kept");
-  assert.ok(w.live()[0]!.velocity.length() < 3, `the car starts again from rest (${w.live()[0]!.velocity.length().toFixed(1)} m/s)`);
-  assert.equal(w.race.hud().you!.status, "racing");
+  expect(held.parts, "the torn parts stay torn").toBe(before.parts);
+  expect(held.wheels, "the wheels off stay off").toBe(before.wheels);
+  expect(held.massActive, "the wreck state is kept").toBe(true);
+  expect(w.live()[0]!.velocity.length(), `the car starts again from rest (${w.live()[0]!.velocity.length().toFixed(1)} m/s)`).toBeLessThan(3);
+  expect(w.race.hud().you!.status).toBe("racing");
   w.race.requestRespawn();
   for (let n = 0; n < (RESPAWN_REQUEST_DELAY + 0.5) / FRAME; n++) frame(w, state);
   const whole = lost(w);
-  assert.equal(whole.parts, 0, "a tap repairs");
-  assert.equal(whole.massActive, false);
+  expect(whole.parts, "a tap repairs").toBe(0);
+  expect(whole.massActive).toBe(false);
 }
 
 describe("given the player's car in a respawn race with a mirror torn off and a crash taken", () => {

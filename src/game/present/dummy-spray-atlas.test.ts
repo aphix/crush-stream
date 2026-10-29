@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
@@ -26,16 +25,16 @@ describe("given every dummy mesh the game builds", () => {
     const meshes = { "thrown drivers": ragdolls["mesh"], garage: garage.dummy, showcase: showcase.people["mesh"], grounds: grounds["mesh"] };
     for (const [name, mesh] of Object.entries(meshes)) {
       const { width, height } = atlasOf(mesh);
-      assert.ok(width <= WEBGL2_MIN_TEXTURE && height <= WEBGL2_MIN_TEXTURE, `${name}: atlas ${width} x ${height}`);
+      expect(width <= WEBGL2_MIN_TEXTURE && height <= WEBGL2_MIN_TEXTURE, `${name}: atlas ${width} x ${height}`).toBeTruthy();
     }
     for (const name of ["showcase", "grounds"] as const) {
       const { width, height } = atlasOf(meshes[name]);
-      assert.equal(width * height, 1, `${name}: the bare stub, ${width} x ${height}`);
+      expect(width * height, `${name}: the bare stub, ${width} x ${height}`).toBe(1);
     }
     garage.dispose();
   });
 
   it("when a mesh of more sprayed slots than a 2048 atlas stacks is made, then it refuses", () => {
-    assert.throws(() => new DummyMesh(9, true), /past 2048/);
+    expect(() => new DummyMesh(9, true)).toThrow(/past 2048/);
   });
 });

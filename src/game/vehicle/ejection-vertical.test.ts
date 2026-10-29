@@ -1,5 +1,4 @@
-import { afterAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FREEWHEEL, launch, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { propContact, type PropHits } from "../contact/prop-contact.ts";
@@ -126,13 +125,13 @@ describe("given a car climbing a wedge into a wall that kills it (a ramp's flat-
       const top = wedge.heightAt(WALL_X, 0);
       const car = climbing(testCase.cls, wedge, testCase.mps, LEAD_START_X);
       const run = runIntoWall(car, wallPrism(WALL_X, top - 3, top + 12));
-      assert.ok(run.history.length > WATCH_LOOKBACK_FRAMES, "the throw comes after the look-back has passed the placement sample");
+      expect(run.history.length, "the throw comes after the look-back has passed the placement sample").toBeGreaterThan(WATCH_LOOKBACK_FRAMES);
       const climbSpeed = hitVerticalSpeed(run.history);
       car.dispose();
-      assert.equal(run.events.length, 1, "one throw");
-      assert.equal(run.events[0]!.exit, "windshield", "thrown out of the windshield");
-      assert.ok(climbSpeed > 2 * FLAT_THROW_UP, `the car was climbing at ${climbSpeed.toFixed(2)} m/s`);
-      assert.ok(Math.abs(run.launched.y - expectedLaunchY(climbSpeed, run.events[0]!)) <= CARRY_TOLERANCE, `launched ${run.launched.y.toFixed(2)} m/s up, the climb ${climbSpeed.toFixed(2)}, out ${(run.events[0]!.dir.y * THROW_OUT).toFixed(2)} + ${FLAT_THROW_UP}`);
+      expect(run.events.length, "one throw").toBe(1);
+      expect(run.events[0]!.exit, "thrown out of the windshield").toBe("windshield");
+      expect(climbSpeed, `the car was climbing at ${climbSpeed.toFixed(2)} m/s`).toBeGreaterThan(2 * FLAT_THROW_UP);
+      expect(Math.abs(run.launched.y - expectedLaunchY(climbSpeed, run.events[0]!)), `launched ${run.launched.y.toFixed(2)} m/s up, the climb ${climbSpeed.toFixed(2)}, out ${(run.events[0]!.dir.y * THROW_OUT).toFixed(2)} + ${FLAT_THROW_UP}`).toBeLessThanOrEqual(CARRY_TOLERANCE);
     });
   }
 });
@@ -146,10 +145,10 @@ describe("given a car driving off a ledge and falling into a wall that kills it"
     const run = runIntoWall(car, wallPrism(LEDGE_WALL_X, 0, LEDGE_HEIGHT + 3));
     const fallSpeed = hitVerticalSpeed(run.history);
     car.dispose();
-    assert.equal(run.events.length, 1, "one throw");
-    assert.ok(fallSpeed < -FLAT_THROW_UP, `the car was falling at ${fallSpeed.toFixed(2)} m/s`);
-    assert.ok(Math.abs(run.launched.y - expectedLaunchY(fallSpeed, run.events[0]!)) <= CARRY_TOLERANCE, `launched ${run.launched.y.toFixed(2)} m/s, the fall ${fallSpeed.toFixed(2)}, out ${(run.events[0]!.dir.y * THROW_OUT).toFixed(2)} + ${FLAT_THROW_UP}`);
-    assert.ok(run.launched.y < 0, "he leaves the car still going down");
+    expect(run.events.length, "one throw").toBe(1);
+    expect(fallSpeed, `the car was falling at ${fallSpeed.toFixed(2)} m/s`).toBeLessThan(-FLAT_THROW_UP);
+    expect(Math.abs(run.launched.y - expectedLaunchY(fallSpeed, run.events[0]!)), `launched ${run.launched.y.toFixed(2)} m/s, the fall ${fallSpeed.toFixed(2)}, out ${(run.events[0]!.dir.y * THROW_OUT).toFixed(2)} + ${FLAT_THROW_UP}`).toBeLessThanOrEqual(CARRY_TOLERANCE);
+    expect(run.launched.y, "he leaves the car still going down").toBeLessThan(0);
   });
 });
 
@@ -163,9 +162,9 @@ describe("given the ejection range: a straight head-on into the barrier on flat 
       const world = makeWorld([car], true, false, FREEWHEEL);
       for (let f = 0; f < FRAMES; f++) tickWorld(world);
       car.dispose();
-      assert.equal(world.ejections.length, 1, "one throw");
+      expect(world.ejections.length, "one throw").toBe(1);
       const launched = ejectionVelocity(world.ejections[0]!, new THREE.Vector3());
-      assert.ok(Math.abs(launched.y - FLAT_THROW_UP) <= FLAT_TOLERANCE, `launched ${launched.y.toFixed(3)} m/s up`);
+      expect(Math.abs(launched.y - FLAT_THROW_UP), `launched ${launched.y.toFixed(3)} m/s up`).toBeLessThanOrEqual(FLAT_TOLERANCE);
     });
   }
 
@@ -177,12 +176,12 @@ describe("given the ejection range: a straight head-on into the barrier on flat 
       const world = makeWorld([car], true, false, FREEWHEEL);
       for (let f = 0; f < FRAMES; f++) tickWorld(world);
       car.dispose();
-      assert.equal(world.ejections.length, 1, "one throw");
+      expect(world.ejections.length, "one throw").toBe(1);
       return ejectionVelocity(world.ejections[0]!, new THREE.Vector3()).y;
     };
     const lip = up(RANGE_GROUND);
     const flat = up(null);
-    assert.ok(lip > flat + LIP_LIFT, `${lip.toFixed(2)} m/s up over the lip, ${flat.toFixed(2)} off the flat`);
+    expect(lip, `${lip.toFixed(2)} m/s up over the lip, ${flat.toFixed(2)} off the flat`).toBeGreaterThan(flat + LIP_LIFT);
   });
 });
 
@@ -194,9 +193,9 @@ describe("given a car thrown on the throw's own step with no velocity sample yet
     const car = climbing("sedan", wedge, FLEET_CLIMB_MPS);
     const run = runIntoWall(car, wallPrism(SEED_WALL_X, top - 3, top + 12));
     car.dispose();
-    assert.equal(run.events.length, 1, "one throw");
-    assert.equal(run.history.length, SEED_FRAMES, "killed on its first frames");
-    assert.ok(Math.abs(run.launched.y - expectedLaunchY(FLEET_CLIMB_MPS * Math.sin(KILLING_WEDGE_DEG * RAD), run.events[0]!)) <= CARRY_TOLERANCE, `launched ${run.launched.y.toFixed(2)} m/s up`);
+    expect(run.events.length, "one throw").toBe(1);
+    expect(run.history.length, "killed on its first frames").toBe(SEED_FRAMES);
+    expect(Math.abs(run.launched.y - expectedLaunchY(FLEET_CLIMB_MPS * Math.sin(KILLING_WEDGE_DEG * RAD), run.events[0]!)), `launched ${run.launched.y.toFixed(2)} m/s up`).toBeLessThanOrEqual(CARRY_TOLERANCE);
   });
 });
 
@@ -208,14 +207,14 @@ describe("given the sim throwing a driver out on demand (a ramp's lip), whatever
     const watch = new EjectionWatch();
     watch.throwDriverNow([car], 0);
     const events = watch.take();
-    assert.equal(events.length, 1, "one event");
-    assert.equal(events[0]!.exit, "windshield", "windshield");
-    assert.equal(car.driverOut, "windshield", "the car's driver is out");
+    expect(events.length, "one event").toBe(1);
+    expect(events[0]!.exit, "windshield").toBe("windshield");
+    expect(car.driverOut, "the car's driver is out").toBe("windshield");
     const launched = ejectionVelocity(events[0]!, new THREE.Vector3());
     const dir = events[0]!.dir;
-    assert.ok(Math.abs(launched.x - (car.velocity.x + dir.x * THROW_OUT)) <= F32_TOLERANCE, `x ${launched.x}`);
-    assert.ok(Math.abs(launched.y - (car.velocity.y + dir.y * THROW_OUT + FLAT_THROW_UP)) <= F32_TOLERANCE, `y ${launched.y} against the car's ${car.velocity.y}`);
-    assert.ok(Math.abs(launched.z - (car.velocity.z + dir.z * THROW_OUT)) <= F32_TOLERANCE, `z ${launched.z}`);
+    expect(Math.abs(launched.x - (car.velocity.x + dir.x * THROW_OUT)), `x ${launched.x}`).toBeLessThanOrEqual(F32_TOLERANCE);
+    expect(Math.abs(launched.y - (car.velocity.y + dir.y * THROW_OUT + FLAT_THROW_UP)), `y ${launched.y} against the car's ${car.velocity.y}`).toBeLessThanOrEqual(F32_TOLERANCE);
+    expect(Math.abs(launched.z - (car.velocity.z + dir.z * THROW_OUT)), `z ${launched.z}`).toBeLessThanOrEqual(F32_TOLERANCE);
     car.dispose();
   });
 
@@ -224,9 +223,9 @@ describe("given the sim throwing a driver out on demand (a ramp's lip), whatever
     const car = climbing("sedan", new Wedge(LIP_WEDGE_DEG), LIP_SPEED);
     const watch = new EjectionWatch();
     watch.throwDriverNow([car], 0);
-    assert.equal(watch.take().length, 1, "the first call throws him");
+    expect(watch.take().length, "the first call throws him").toBe(1);
     watch.throwDriverNow([car], 0);
-    assert.equal(watch.take().length, 0, "the second call gives nothing");
+    expect(watch.take().length, "the second call gives nothing").toBe(0);
     car.dispose();
   });
 
@@ -244,8 +243,8 @@ describe("given the sim throwing a driver out on demand (a ramp's lip), whatever
       car.driverOut = testCase.driverOut;
       const watch = new EjectionWatch();
       watch.throwDriverNow([car], 0);
-      assert.equal(watch.take().length, 0, "no event");
-      assert.equal(car.driverOut, testCase.driverOut, "the car's driver state is unchanged");
+      expect(watch.take().length, "no event").toBe(0);
+      expect(car.driverOut, "the car's driver state is unchanged").toBe(testCase.driverOut);
       car.dispose();
     });
   }

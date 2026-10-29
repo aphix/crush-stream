@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import * as THREE from "three";
@@ -48,8 +47,8 @@ describe("given the studio environment's RGBE file", () => {
     const env = await loadHdrEnv(new THREE.WebGLRenderer({ canvas: element() }));
     HDRLoader.prototype.parse = parse;
     THREE.PMREMGenerator.prototype.fromEquirectangular = fromEquirectangular;
-    assert.ok(env !== null, "an environment came back");
-    assert.equal(mainThreadParses, 0, "parses on the main thread");
-    assert.equal(prefiltered.join(","), want, "equirect pixels prefiltered");
+    expect(env, "an environment came back").not.toBe(null);
+    expect(mainThreadParses, "parses on the main thread").toBe(0);
+    expect(prefiltered.join(","), "equirect pixels prefiltered").toBe(want);
   });
 });

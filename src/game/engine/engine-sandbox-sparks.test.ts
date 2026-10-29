@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import type { ContactHit, PredictedHit } from "../scenes/engine-props.ts";
 import { setGround } from "../world/ground.ts";
@@ -85,10 +84,10 @@ function watch(engine: CrashEngine, e: Reach, gaps: (x: number, z: number) => [n
 
 /** The slow-mo began with the farthest body `FUDGE_NONE` or more off the point; no burst came before the touch with it that far, and one came as it reached the point. */
 function assertGated(seen: Watched): void {
-  assert.ok(seen.widest >= FUDGE_NONE, `the farther body was only ${seen.widest.toFixed(2)} m off the predicted point while the slow-mo eased in: nothing for the gate to hold back`);
-  assert.ok(seen.early.length >= 1, "no burst as the cars reached the point");
+  expect(seen.widest, `the farther body was only ${seen.widest.toFixed(2)} m off the predicted point while the slow-mo eased in: nothing for the gate to hold back`).toBeGreaterThanOrEqual(FUDGE_NONE);
+  expect(seen.early.length, "no burst as the cars reached the point").toBeGreaterThanOrEqual(1);
   const far = seen.early.filter((g) => g >= FUDGE_NONE);
-  assert.equal(far.length, 0, `${far.length} of ${seen.early.length} bursts before the touch with the farther drawn body ${far.map((g) => g.toFixed(2)).join(", ")} m off (none from ${FUDGE_NONE} m)`);
+  expect(far.length, `${far.length} of ${seen.early.length} bursts before the touch with the farther drawn body ${far.map((g) => g.toFixed(2)).join(", ")} m off (none from ${FUDGE_NONE} m)`).toBe(0);
 }
 
 describe("given the real engine's fleet sandbox with auto slow-mo on, a car parked and another sent at it at 24 m/s from 16 m off", () => {
@@ -117,8 +116,8 @@ describe("given the real engine's fleet sandbox with auto slow-mo on, a car park
     } finally {
       e.pairHit = pairHit;
     }
-    assert.ok(touched, "the pair never touched");
-    assert.ok(seen.lopsided, `no moment with the parked car on the predicted point and the other ${FUDGE_NONE} m or more off: the case is not staged`);
+    expect(touched, "the pair never touched").toBeTruthy();
+    expect(seen.lopsided, `no moment with the parked car on the predicted point and the other ${FUDGE_NONE} m or more off: the case is not staged`).toBeTruthy();
     assertGated(seen);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { beginImpact, easeTimeScale, holdForThrow, impactScale, pairEta, phaseClock, PRE_IMPACT_LEAD, preImpact, SLOMO_HELD, stepPhase, THROW_ONSET, type PhaseClock } from "./phase.ts";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -59,16 +58,16 @@ function approach(a: Approach, wallS: number): Seen {
 describe("given a pair on course to meet 1 s of sim from now, with the automatic slow-mo on", () => {
   it("when they meet on time, then the slow-mo comes on just before the hit and is still on 3 s of wall later", () => {
     const seen = approach({ meetS: 1, clearsS: Infinity, throwing: false, hits: true }, 3);
-    assert.ok(seen.slowedAt >= 1 - LEAD - FRAME && seen.slowedAt < 1, `slow-mo came on at sim ${seen.slowedAt.toFixed(3)} s`);
-    assert.ok(Number.isNaN(seen.freedAt), `time went back to 1x at sim ${seen.freedAt.toFixed(3)} s`);
-    assert.ok(seen.clock.timeScale <= impactScale(seen.clock) * 1.2, `time scale ${seen.clock.timeScale}`);
+    expect(seen.slowedAt >= 1 - LEAD - FRAME && seen.slowedAt < 1, `slow-mo came on at sim ${seen.slowedAt.toFixed(3)} s`).toBeTruthy();
+    expect(Number.isNaN(seen.freedAt), `time went back to 1x at sim ${seen.freedAt.toFixed(3)} s`).toBeTruthy();
+    expect(seen.clock.timeScale, `time scale ${seen.clock.timeScale}`).toBeLessThanOrEqual(impactScale(seen.clock) * 1.2);
   });
 
   it("when they meet on time, then the slow-mo starts a driver's reaction time of game time before the hit, has eased down to the slow scale as they meet, and does not crawl through the lead", () => {
     const seen = approach({ meetS: 1, clearsS: Infinity, throwing: false, hits: true }, 4);
-    assert.ok(1 - seen.slowedAt >= PRE_IMPACT_LEAD - 2 * FRAME && 1 - seen.slowedAt <= PRE_IMPACT_LEAD, `${(1 - seen.slowedAt).toFixed(3)} game s of slow-mo before the hit, not ${PRE_IMPACT_LEAD}`);
-    assert.ok(seen.scaleAtHit <= impactScale(seen.clock) * REACHED_CANARY, `time scale ${seen.scaleAtHit.toFixed(4)} as the cars met, slow scale ${impactScale(seen.clock)}`);
-    assert.ok(seen.hitWall - seen.slowedWall < EASE_WALL_CANARY, `${(seen.hitWall - seen.slowedWall).toFixed(2)} wall s from the slow-mo's start to the hit`);
+    expect(1 - seen.slowedAt >= PRE_IMPACT_LEAD - 2 * FRAME && 1 - seen.slowedAt <= PRE_IMPACT_LEAD, `${(1 - seen.slowedAt).toFixed(3)} game s of slow-mo before the hit, not ${PRE_IMPACT_LEAD}`).toBeTruthy();
+    expect(seen.scaleAtHit, `time scale ${seen.scaleAtHit.toFixed(4)} as the cars met, slow scale ${impactScale(seen.clock)}`).toBeLessThanOrEqual(impactScale(seen.clock) * REACHED_CANARY);
+    expect(seen.hitWall - seen.slowedWall, `${(seen.hitWall - seen.slowedWall).toFixed(2)} wall s from the slow-mo's start to the hit`).toBeLessThan(EASE_WALL_CANARY);
   });
 
   const missCases = [
@@ -79,19 +78,19 @@ describe("given a pair on course to meet 1 s of sim from now, with the automatic
   for (const testCase of missCases) {
     it(testCase.it, () => {
       const seen = approach({ ...testCase, hits: false }, 15);
-      assert.ok(seen.slowedAt < testCase.meetS, `the slow-mo never came on (${seen.slowedAt})`);
-      assert.ok(seen.freedAt > testCase.meetS + STEP && seen.freedAt <= testCase.meetS + STEP + RAMP_BACK, `back to 1x at sim ${seen.freedAt.toFixed(4)} s`);
-      assert.ok(Number.isNaN(seen.slowedAgainAt), `the slow-mo came back on at sim ${seen.slowedAgainAt.toFixed(3)} s`);
-      assert.equal(seen.clock.timeScale, 1);
-      assert.equal(seen.clock.slomoAt, 0);
-      assert.equal(seen.clock.phase, "approach");
+      expect(seen.slowedAt, `the slow-mo never came on (${seen.slowedAt})`).toBeLessThan(testCase.meetS);
+      expect(seen.freedAt > testCase.meetS + STEP && seen.freedAt <= testCase.meetS + STEP + RAMP_BACK, `back to 1x at sim ${seen.freedAt.toFixed(4)} s`).toBeTruthy();
+      expect(Number.isNaN(seen.slowedAgainAt), `the slow-mo came back on at sim ${seen.slowedAgainAt.toFixed(3)} s`).toBeTruthy();
+      expect(seen.clock.timeScale).toBe(1);
+      expect(seen.clock.slomoAt).toBe(0);
+      expect(seen.clock.phase).toBe("approach");
     });
   }
 
   it("when they miss, part, and later close again for a meeting at 3 s, then the slow-mo comes on again just before that one", () => {
     const seen = approach({ meetS: 1, clearsS: 1.6, throwing: false, hits: false, closesAgainS: 2.5, againS: 3 }, 15);
-    assert.ok(seen.freedAt > 1 + STEP && seen.freedAt <= 1 + STEP + RAMP_BACK, `back to 1x at sim ${seen.freedAt.toFixed(4)} s`);
-    assert.ok(seen.slowedAgainAt >= 3 - LEAD - FRAME && seen.slowedAgainAt < 3, `the slow-mo came back on at sim ${seen.slowedAgainAt.toFixed(3)} s`);
+    expect(seen.freedAt > 1 + STEP && seen.freedAt <= 1 + STEP + RAMP_BACK, `back to 1x at sim ${seen.freedAt.toFixed(4)} s`).toBeTruthy();
+    expect(seen.slowedAgainAt >= 3 - LEAD - FRAME && seen.slowedAgainAt < 3, `the slow-mo came back on at sim ${seen.slowedAgainAt.toFixed(3)} s`).toBeTruthy();
   });
 });
 
@@ -108,15 +107,15 @@ describe("given two cars on the same line closing on each other", () => {
     const parked = carAt(10, 0);
     const eta = pairEta([carAt(-10, 20), parked], hit);
     const near = 10 - parked.frame.half.z;
-    assert.ok(Math.abs(hit.x - near) < 1e-9, `hit at x ${hit.x}, the parked car's near face is ${near}`);
-    assert.ok(Math.abs(hit.z) < 1e-9 && hit.nx === 1 && hit.nz === 0, `hit at z ${hit.z}, line ${hit.nx},${hit.nz}`);
-    assert.ok(Math.abs(eta - (20 - 2 * parked.frame.half.z) / 20) < 1e-9, `eta ${eta}`);
+    expect(Math.abs(hit.x - near), `hit at x ${hit.x}, the parked car's near face is ${near}`).toBeLessThan(1e-9);
+    expect(Math.abs(hit.z) < 1e-9 && hit.nx === 1 && hit.nz === 0, `hit at z ${hit.z}, line ${hit.nx},${hit.nz}`).toBeTruthy();
+    expect(Math.abs(eta - (20 - 2 * parked.frame.half.z) / 20), `eta ${eta}`).toBeLessThan(1e-9);
   });
 
   it("when both drive at 10 m/s from either side of x = 0, then the predicted hit lies where they meet, x = 0", () => {
     const hit = { x: NaN, y: NaN, z: NaN, nx: NaN, nz: NaN, a: null, b: null };
     pairEta([carAt(-10, 10), carAt(10, -10)], hit);
-    assert.ok(Math.abs(hit.x) < 1e-9, `hit at x ${hit.x}`);
+    expect(Math.abs(hit.x), `hit at x ${hit.x}`).toBeLessThan(1e-9);
   });
 });
 
@@ -139,8 +138,8 @@ describe("given the time scale's changes (masterclass 23:34: fade, never switch)
 
   it("when a hit nobody saw coming starts the slow-mo from 1×, then no frame moves the scale more than the bound and it settles on the slow scale", () => {
     const c = phaseClock();
-    assert.ok(biggestStep(c, 60, () => beginImpact(c, true)) <= BOUND);
-    assert.equal(c.timeScale, impactScale(c));
+    expect(biggestStep(c, 60, () => beginImpact(c, true))).toBeLessThanOrEqual(BOUND);
+    expect(c.timeScale).toBe(impactScale(c));
   });
   it("when a throw holds the slow-mo up to 1× and then drops it again, then no frame moves the scale more than the bound", () => {
     const c = phaseClock();
@@ -150,25 +149,25 @@ describe("given the time scale's changes (masterclass 23:34: fade, never switch)
       easeTimeScale(c, FRAME);
       stepPhase(c, FRAME);
     }
-    assert.ok(biggestStep(c, 60, () => holdForThrow(c)) <= BOUND);
-    assert.equal(c.timeScale, impactScale(c), "the slow-mo came back");
+    expect(biggestStep(c, 60, () => holdForThrow(c))).toBeLessThanOrEqual(BOUND);
+    expect(c.timeScale, "the slow-mo came back").toBe(impactScale(c));
   });
   it("when the hit goes by with no slow-mo after an ease had begun, then the scale climbs back to 1× in bounded steps", () => {
     const c = phaseClock();
     c.targetScale = impactScale(c);
     for (let f = 0; f < 6; f++) easeTimeScale(c, FRAME);
-    assert.ok(c.timeScale < 1);
-    assert.ok(biggestStep(c, 60, () => beginImpact(c, false)) <= BOUND);
-    assert.equal(c.timeScale, 1);
+    expect(c.timeScale).toBeLessThan(1);
+    expect(biggestStep(c, 60, () => beginImpact(c, false))).toBeLessThanOrEqual(BOUND);
+    expect(c.timeScale).toBe(1);
   });
   it("when a missed hit's pre-impact slow-mo is given up, then the scale climbs back to 1× in bounded steps", () => {
     const c = phaseClock();
     preImpact(c, 0.1, 0, LEAD, STEP, () => false);
     for (let f = 0; f < 6; f++) easeTimeScale(c, FRAME);
     const slow = c.timeScale;
-    assert.ok(slow < 1);
-    assert.ok(biggestStep(c, 60, () => preImpact(c, Infinity, 1, LEAD, STEP, () => false)) <= BOUND);
-    assert.equal(c.timeScale, 1);
+    expect(slow).toBeLessThan(1);
+    expect(biggestStep(c, 60, () => preImpact(c, Infinity, 1, LEAD, STEP, () => false))).toBeLessThanOrEqual(BOUND);
+    expect(c.timeScale).toBe(1);
   });
 });
 
@@ -183,8 +182,8 @@ describe("given a slow-mo held until the driver is thrown (SLOMO_HELD)", () => {
       preImpact(c, 0.1, f * STEP, LEAD, STEP, () => false);
       easeTimeScale(c, FRAME);
     }
-    assert.equal(c.timeScale, 1, "the scale");
-    assert.equal(c.targetScale, 1, "the target");
+    expect(c.timeScale, "the scale").toBe(1);
+    expect(c.targetScale, "the target").toBe(1);
   });
 
   it(`when the hit lands and ${HELD_WALL_S} s pass with no throw, then the clock is still at 1× in the impact phase`, () => {
@@ -195,8 +194,8 @@ describe("given a slow-mo held until the driver is thrown (SLOMO_HELD)", () => {
       easeTimeScale(c, FRAME);
       stepPhase(c, FRAME);
     }
-    assert.equal(c.timeScale, 1, "the scale");
-    assert.equal(c.phase, "impact", "no slow-mo phase while held");
+    expect(c.timeScale, "the scale").toBe(1);
+    expect(c.phase, "no slow-mo phase while held").toBe("impact");
   });
 
   it("when the driver is thrown, then the slow-mo is scheduled THROW_ONSET on, comes on after it, and holds the scale at 1× until then", () => {
@@ -205,15 +204,15 @@ describe("given a slow-mo held until the driver is thrown (SLOMO_HELD)", () => {
     beginImpact(c, true);
     for (let f = 0; f < 6; f++) stepPhase(c, FRAME);
     holdForThrow(c);
-    assert.ok(Math.abs(c.slomoAt - (c.wallSinceImpact + THROW_ONSET)) < 1e-9, `slomoAt ${c.slomoAt}`);
+    expect(Math.abs(c.slomoAt - (c.wallSinceImpact + THROW_ONSET)), `slomoAt ${c.slomoAt}`).toBeLessThan(1e-9);
     let scaleAtOnsetHalf = NaN;
     for (let f = 0; f < 120; f++) {
       easeTimeScale(c, FRAME);
       stepPhase(c, FRAME);
       if (Number.isNaN(scaleAtOnsetHalf) && c.wallSinceImpact >= c.slomoAt - THROW_ONSET / 2) scaleAtOnsetHalf = c.timeScale;
     }
-    assert.equal(scaleAtOnsetHalf, 1, "still 1× half THROW_ONSET after the throw");
-    assert.equal(c.timeScale, impactScale(c), "the slow-mo came on");
+    expect(scaleAtOnsetHalf, "still 1× half THROW_ONSET after the throw").toBe(1);
+    expect(c.timeScale, "the slow-mo came on").toBe(impactScale(c));
   });
 
   it("when the user fixed the time scale, then the hit takes it and a throw schedules nothing", () => {
@@ -222,7 +221,7 @@ describe("given a slow-mo held until the driver is thrown (SLOMO_HELD)", () => {
     c.userTimeScale = 0.5;
     beginImpact(c, true);
     holdForThrow(c);
-    assert.equal(c.slomoAt, 0, "nothing pending");
-    assert.equal(c.targetScale, 0.5, "the user's scale");
+    expect(c.slomoAt, "nothing pending").toBe(0);
+    expect(c.targetScale, "the user's scale").toBe(0.5);
   });
 });

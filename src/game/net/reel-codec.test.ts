@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import type { HighlightClip } from "../match/highlights.ts";
 import { blankStrike } from "../scenes/figure-strike.ts";
 import { NET_VERSION, Reader, Writer } from "./codec.ts";
@@ -14,16 +13,16 @@ describe("given a recorded highlight clip and the codec that sends and saves it"
     const { clip, car } = makeClip();
     const msg = await packReel({ seed: 0xdeadbeef, clips: [clip, clip] }, 1234.5);
     const got = await unpackReel(msg, carLayout(car));
-    assert.equal(got.reel.seed, 0xdeadbeef);
-    assert.equal(got.startAt, 1234.5);
-    assert.equal(got.reel.clips.length, 2);
+    expect(got.reel.seed).toBe(0xdeadbeef);
+    expect(got.startAt).toBe(1234.5);
+    expect(got.reel.clips.length).toBe(2);
     sameClip(got.reel.clips[1]!, clip);
   });
 
   it("when a saved clip is encoded and decoded, then it decodes to the same clip", async () => {
     const { clip, car } = makeClip();
     const got = await decodeSaved(await encodeSaved(clip), carLayout(car));
-    assert.notEqual(typeof got, "string", `decoded as ${String(got)}`);
+    expect(typeof got, `decoded as ${String(got)}`).not.toBe("string");
     sameClip(got as HighlightClip, clip);
   });
 
@@ -37,12 +36,12 @@ describe("given a recorded highlight clip and the codec that sends and saves it"
       b[at] = v;
       return recode(b);
     };
-    assert.equal(await decodeSaved(edited(4, bytes[4]! + 1), L), "version", "another REPLAY_VERSION");
-    assert.equal(await decodeSaved(edited(6, NET_VERSION + 1), L), "version", "another NET_VERSION");
-    assert.equal(await decodeSaved(edited(7, bytes[7]! ^ 0xff), L), "version", "another sim fingerprint");
-    assert.equal(await decodeSaved(edited(0, 0), L), "corrupt", "not a clip");
-    assert.equal(await decodeSaved(recode(bytes.subarray(0, bytes.length - 40)), L), "corrupt", "truncated");
-    assert.equal(await decodeSaved("%%%", L), "corrupt", "not base64");
+    expect(await decodeSaved(edited(4, bytes[4]! + 1), L), "another REPLAY_VERSION").toBe("version");
+    expect(await decodeSaved(edited(6, NET_VERSION + 1), L), "another NET_VERSION").toBe("version");
+    expect(await decodeSaved(edited(7, bytes[7]! ^ 0xff), L), "another sim fingerprint").toBe("version");
+    expect(await decodeSaved(edited(0, 0), L), "not a clip").toBe("corrupt");
+    expect(await decodeSaved(recode(bytes.subarray(0, bytes.length - 40)), L), "truncated").toBe("corrupt");
+    expect(await decodeSaved("%%%", L), "not base64").toBe("corrupt");
   });
 
   it("when a saved clip's header is checked alone, then this build's passes and every other version, fingerprint or damage fails, whatever follows the 11 header bytes", async () => {
@@ -55,15 +54,15 @@ describe("given a recorded highlight clip and the codec that sends and saves it"
       b[at] = v;
       return recode(b);
     };
-    assert.equal(savedPlayable(text), true);
-    assert.equal(savedPlayable(recode(bytes.subarray(0, 11))), true, "the header alone is enough");
-    assert.equal(savedPlayable(edited(4, bytes[4]! + 1)), false, "another REPLAY_VERSION");
-    assert.equal(savedPlayable(edited(6, NET_VERSION + 1)), false, "another NET_VERSION");
-    assert.equal(savedPlayable(edited(7, bytes[7]! ^ 0xff)), false, "another sim fingerprint");
-    assert.equal(savedPlayable(edited(0, 0)), false, "not a clip");
-    assert.equal(savedPlayable(recode(bytes.subarray(0, 6))), false, "truncated inside the header");
-    assert.equal(savedPlayable("%%%"), false, "not base64");
-    assert.equal(savedPlayable(""), false);
+    expect(savedPlayable(text)).toBe(true);
+    expect(savedPlayable(recode(bytes.subarray(0, 11))), "the header alone is enough").toBe(true);
+    expect(savedPlayable(edited(4, bytes[4]! + 1)), "another REPLAY_VERSION").toBe(false);
+    expect(savedPlayable(edited(6, NET_VERSION + 1)), "another NET_VERSION").toBe(false);
+    expect(savedPlayable(edited(7, bytes[7]! ^ 0xff)), "another sim fingerprint").toBe(false);
+    expect(savedPlayable(edited(0, 0)), "not a clip").toBe(false);
+    expect(savedPlayable(recode(bytes.subarray(0, 6))), "truncated inside the header").toBe(false);
+    expect(savedPlayable("%%%"), "not base64").toBe(false);
+    expect(savedPlayable("")).toBe(false);
   });
 });
 
@@ -80,10 +79,10 @@ describe("given a clip that lists the figures its cars ran down", () => {
     const { clip, car } = makeClip();
     const w = new Writer(clipBytes(clip));
     writeClip(w, clip);
-    assert.equal(w.off, clipBytes(clip), "bytes written");
+    expect(w.off, "bytes written").toBe(clipBytes(clip));
     const got = readClip(new Reader().reset(w.done()), carLayout(car));
-    assert.equal(got.strikes.length, 2, "strikes decoded");
-    assert.equal(got.strikes[1]!.s.guard, -1, "the VIP's guard index");
+    expect(got.strikes.length, "strikes decoded").toBe(2);
+    expect(got.strikes[1]!.s.guard, "the VIP's guard index").toBe(-1);
     sameClip(got, clip);
   });
 
@@ -93,7 +92,7 @@ describe("given a clip that lists the figures its cars ran down", () => {
       const strikes = testCase.strikes.map((x) => ({ step: x.step, s: { ...blankStrike(), car: x.car, x: x.x } }));
       const w = new Writer(clipBytes({ ...clip, strikes }));
       writeClip(w, { ...clip, strikes });
-      assert.throws(() => readClip(new Reader().reset(w.done()), carLayout(car)), { name: "RangeError", message: testCase.expectedMessage });
+      expect(() => readClip(new Reader().reset(w.done()), carLayout(car))).toThrow(expect.objectContaining({ name: "RangeError", message: testCase.expectedMessage }));
     });
   }
 });
@@ -115,9 +114,9 @@ describe("given a clip that carries the guard squad", () => {
     const { clip, car } = makeClip();
     const w = new Writer(clipBytes(clip));
     writeClip(w, clip);
-    assert.equal(w.off, clipBytes(clip), "bytes written");
+    expect(w.off, "bytes written").toBe(clipBytes(clip));
     const got = readClip(new Reader().reset(w.done()), carLayout(car));
-    assert.equal(got.squad!.events.length, 4, "decisions decoded");
+    expect(got.squad!.events.length, "decisions decoded").toBe(4);
     sameClip(got, clip);
   });
 
@@ -126,8 +125,8 @@ describe("given a clip that carries the guard squad", () => {
     const bare = { ...clip, squad: null };
     const w = new Writer(clipBytes(bare));
     writeClip(w, bare);
-    assert.equal(w.off, clipBytes(bare), "bytes written");
-    assert.equal(readClip(new Reader().reset(w.done()), carLayout(car)).squad, null);
+    expect(w.off, "bytes written").toBe(clipBytes(bare));
+    expect(readClip(new Reader().reset(w.done()), carLayout(car)).squad).toBe(null);
   });
 
   for (const testCase of refusedSquads) {
@@ -136,7 +135,7 @@ describe("given a clip that carries the guard squad", () => {
       const bad = { ...clip, squad: testCase.squad as HighlightClip["squad"] };
       const w = new Writer(clipBytes(bad));
       writeClip(w, bad);
-      assert.throws(() => readClip(new Reader().reset(w.done()), carLayout(car)), { name: "RangeError", message: testCase.expectedMessage });
+      expect(() => readClip(new Reader().reset(w.done()), carLayout(car))).toThrow(expect.objectContaining({ name: "RangeError", message: testCase.expectedMessage }));
     });
   }
 });
@@ -147,7 +146,7 @@ describe("given a clip recorded with the epicenter activation on", () => {
     const on = { ...clip, epicenter: epicenterValues() };
     const w = new Writer(clipBytes(on));
     writeClip(w, on);
-    assert.equal(w.off, clipBytes(on), "bytes written");
+    expect(w.off, "bytes written").toBe(clipBytes(on));
     sameClip(readClip(new Reader().reset(w.done()), carLayout(car)), on);
   });
 
@@ -156,7 +155,7 @@ describe("given a clip recorded with the epicenter activation on", () => {
     const bad = { ...clip, epicenter: epicenterValues().map((v, i) => (i === 1 ? Number.NaN : v)) };
     const w = new Writer(clipBytes(bad));
     writeClip(w, bad);
-    assert.throws(() => readClip(new Reader().reset(w.done()), carLayout(car)), { name: "RangeError", message: "clip epicenter" });
+    expect(() => readClip(new Reader().reset(w.done()), carLayout(car))).toThrow(expect.objectContaining({ name: "RangeError", message: "clip epicenter" }));
   });
 
   it("when the clip carries fewer values than the object has knobs (recorded before the last knob existed), then it reads, and loading it sets the knobs it lacks to their defaults", () => {
@@ -165,14 +164,14 @@ describe("given a clip recorded with the epicenter activation on", () => {
     const w = new Writer(clipBytes(shorter));
     writeClip(w, shorter);
     const back = readClip(new Reader().reset(w.done()), carLayout(car));
-    assert.equal(back.epicenter?.length, 7, "the values it carries");
+    expect(back.epicenter?.length, "the values it carries").toBe(7);
     const saved = epicenterValues();
     try {
       loadEpicenter(back.epicenter!);
-      assert.equal(EPICENTER.on, 1);
-      assert.equal(EPICENTER.relockHold, 0.5);
-      assert.equal(EPICENTER.thawHold, 0, "a knob the clip lacks is off");
-      assert.equal(EPICENTER.feedMin, 0, "a knob the clip lacks is off");
+      expect(EPICENTER.on).toBe(1);
+      expect(EPICENTER.relockHold).toBe(0.5);
+      expect(EPICENTER.thawHold, "a knob the clip lacks is off").toBe(0);
+      expect(EPICENTER.feedMin, "a knob the clip lacks is off").toBe(0);
     } finally {
       loadEpicenter(saved);
     }
@@ -183,7 +182,7 @@ describe("given a clip recorded with the epicenter activation on", () => {
     const longer = { ...clip, epicenter: [...epicenterValues(), 0.5] };
     const w = new Writer(clipBytes(longer));
     writeClip(w, longer);
-    assert.throws(() => readClip(new Reader().reset(w.done()), carLayout(car)), { name: "RangeError", message: "clip epicenter knobs" });
+    expect(() => readClip(new Reader().reset(w.done()), carLayout(car))).toThrow(expect.objectContaining({ name: "RangeError", message: "clip epicenter knobs" }));
   });
 });
 
@@ -200,10 +199,14 @@ describe("given a clip that lists the car the course's VIP rides in", () => {
     const { clip, car } = makeClip();
     const w = new Writer(clipBytes(clip));
     writeClip(w, clip);
-    assert.equal(w.off, clipBytes(clip), "bytes written");
+    expect(w.off, "bytes written").toBe(clipBytes(clip));
     const got = readClip(new Reader().reset(w.done()), carLayout(car));
-    assert.equal(got.vip.start, 255, "out of the car at the start");
-    assert.deepEqual(got.vip.events, [{ step: 90, car: 1 }, { step: 330, car: 255 }]);
+    expect(got.vip.start, "out of the car at the start").toBe(255);
+    expect(got.vip.events, "the VIP's changes").toHaveLength(2);
+    expect(got.vip.events[0]?.step, "gets in at step").toBe(90);
+    expect(got.vip.events[0]?.car, "gets in car").toBe(1);
+    expect(got.vip.events[1]?.step, "thrown out at step").toBe(330);
+    expect(got.vip.events[1]?.car, "thrown out of car").toBe(255);
   });
 
   for (const testCase of refusedVips) {
@@ -212,7 +215,7 @@ describe("given a clip that lists the car the course's VIP rides in", () => {
       const bad = { ...clip, vip: testCase.vip };
       const w = new Writer(clipBytes(bad));
       writeClip(w, bad);
-      assert.throws(() => readClip(new Reader().reset(w.done()), carLayout(car)), { name: "RangeError", message: testCase.expectedMessage });
+      expect(() => readClip(new Reader().reset(w.done()), carLayout(car))).toThrow(expect.objectContaining({ name: "RangeError", message: testCase.expectedMessage }));
     });
   }
 });

@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import type { Collider, RigidBody, World } from "@dimforge/rapier3d-simd";
@@ -152,13 +151,13 @@ describe("given a knockable prop standing in the infield of a course", () => {
       const [sx, sy, sz] = PREFABS[testCase.prefab].size;
       sys.dispose();
       t.annotate(`tilted ${((tilt * 180) / Math.PI).toFixed(0)}°, rests ${(end.x - 60).toFixed(1)} m on, middle ${rise.toFixed(2)} m up, lowest point ${(gap * 1000).toFixed(1)} mm off the ground (deepest ${(sink * 1000).toFixed(1)}), ${speed.toFixed(3)} m/s, ${spin.toFixed(3)} rad/s, asleep ${asleep}`);
-      if (testCase.tips) assert.ok(tilt > Math.PI / 4, `it never tipped past 45° (${((tilt * 180) / Math.PI).toFixed(0)}°)`);
-      else assert.ok(tilt < (5 * Math.PI) / 180, `it tipped ${((tilt * 180) / Math.PI).toFixed(0)}°`);
-      assert.ok(sink > -LANDING_SLOP, `its lowest point went ${(-sink * 1000).toFixed(1)} mm under the ground`);
-      assert.ok(Math.abs(gap) < REST_SLOP, `it rests with its lowest point ${(gap * 1000).toFixed(1)} mm off the ground`);
-      assert.ok(end.x - 60 > testCase.on, `it came down ${(end.x - 60).toFixed(1)} m from its spot`);
-      assert.ok(rise < Math.max(sx, sy, sz) / 2 + 0.05, `it rests with its middle ${rise.toFixed(2)} m up: not on the ground`);
-      assert.ok(speed < 0.05 && spin < 0.1 && asleep, `still moving at ${speed.toFixed(3)} m/s, ${spin.toFixed(3)} rad/s (asleep: ${asleep})`);
+      if (testCase.tips) expect(tilt, `it never tipped past 45° (${((tilt * 180) / Math.PI).toFixed(0)}°)`).toBeGreaterThan(Math.PI / 4);
+      else expect(tilt, `it tipped ${((tilt * 180) / Math.PI).toFixed(0)}°`).toBeLessThan((5 * Math.PI) / 180);
+      expect(sink, `its lowest point went ${(-sink * 1000).toFixed(1)} mm under the ground`).toBeGreaterThan(-LANDING_SLOP);
+      expect(Math.abs(gap), `it rests with its lowest point ${(gap * 1000).toFixed(1)} mm off the ground`).toBeLessThan(REST_SLOP);
+      expect(end.x - 60, `it came down ${(end.x - 60).toFixed(1)} m from its spot`).toBeGreaterThan(testCase.on);
+      expect(rise, `it rests with its middle ${rise.toFixed(2)} m up: not on the ground`).toBeLessThan(Math.max(sx, sy, sz) / 2 + 0.05);
+      expect(speed < 0.05 && spin < 0.1 && asleep, `still moving at ${speed.toFixed(3)} m/s, ${spin.toFixed(3)} rad/s (asleep: ${asleep})`).toBeTruthy();
     });
   }
   // Knocked across the infield (a tyre stack knocked that way rolls on for seconds; knocked 5° off the other way it stops).
@@ -189,8 +188,8 @@ describe("given a knockable prop standing in the infield of a course", () => {
         else if (stopped < 0) stopped = f * FRAME;
       }
       sys.dispose();
-      assert.ok(slept > 0, "it never slept in 10 s");
-      assert.ok(stopped > 0 && slept - stopped <= 0.5, `it lay still ${(slept - stopped).toFixed(2)} s before it slept (stopped at ${stopped.toFixed(2)} s)`);
+      expect(slept, "it never slept in 10 s").toBeGreaterThan(0);
+      expect(stopped > 0 && slept - stopped <= 0.5, `it lay still ${(slept - stopped).toFixed(2)} s before it slept (stopped at ${stopped.toFixed(2)} s)`).toBeTruthy();
     });
   }
 });
@@ -211,8 +210,8 @@ describe("given a prop on the middle of a course's road, 7 m from the wall's fac
       let farthest = -Infinity;
       run(sys, 3, [], (p) => (farthest = Math.max(farthest, (p.x - ROAD.x) * ROAD.left.x + (p.z - ROAD.z) * ROAD.left.z)));
       sys.dispose();
-      assert.ok(farthest > WALL_OFF - 1, `it never reached the wall (${farthest.toFixed(2)} m across)`);
-      assert.ok(farthest < WALL_OFF, `its middle got ${(farthest - WALL_OFF).toFixed(2)} m past the wall's face`);
+      expect(farthest, `it never reached the wall (${farthest.toFixed(2)} m across)`).toBeGreaterThan(WALL_OFF - 1);
+      expect(farthest, `its middle got ${(farthest - WALL_OFF).toFixed(2)} m past the wall's face`).toBeLessThan(WALL_OFF);
     });
   }
 
@@ -225,8 +224,8 @@ describe("given a prop on the middle of a course's road, 7 m from the wall's fac
     run(sys, 3, [car], (p) => (farthest = Math.max(farthest, (p.x - ROAD.x) * ROAD.left.x + (p.z - ROAD.z) * ROAD.left.z)));
     sys.dispose();
     // The car's side is 0.86 m from its middle line; the crate is 0.5 m to its middle.
-    assert.ok(farthest > 2, `it never reached the car (${farthest.toFixed(2)} m across)`);
-    assert.ok(farthest < 4 - 0.86 - 0.35, `its middle got ${farthest.toFixed(2)} m across, into the car's side at ${(4 - 0.86).toFixed(2)} m`);
+    expect(farthest, `it never reached the car (${farthest.toFixed(2)} m across)`).toBeGreaterThan(2);
+    expect(farthest, `its middle got ${farthest.toFixed(2)} m across, into the car's side at ${(4 - 0.86).toFixed(2)} m`).toBeLessThan(4 - 0.86 - 0.35);
   });
 });
 
@@ -237,12 +236,12 @@ describe("given a course whose props a car knocks before the dummies' physics ha
     const p = new THREE.Vector3();
     const v = new THREE.Vector3();
     sys.update(FRAME, [], true, false, null);
-    assert.equal(sys.propAt(0, p, v), false, "it flew before the physics was in");
+    expect(sys.propAt(0, p, v), "it flew before the physics was in").toBe(false);
     await sys.preload();
     let farthest = -Infinity;
     run(sys, 2, [], (at) => (farthest = Math.max(farthest, at.x)));
     sys.dispose();
-    assert.ok(farthest - 60 > 5, `it went ${(farthest - 60).toFixed(1)} m`);
+    expect(farthest - 60, `it went ${(farthest - 60).toFixed(1)} m`).toBeGreaterThan(5);
   });
 });
 
@@ -256,10 +255,10 @@ describe("given a course with a knocked prop lying where it fell", () => {
     sys.reset();
     const p = new THREE.Vector3();
     const v = new THREE.Vector3();
-    assert.equal(sys.propAt(0, p, v), false, "still out after the reset");
+    expect(sys.propAt(0, p, v), "still out after the reset").toBe(false);
     const at = bodyOf(sys).translation();
     const spot = placeProps(track)[0]!;
-    assert.ok(Math.hypot(at.x - spot.x, at.y - spot.y - PREFABS.crate.size[1] / 2, at.z - spot.z) < 1e-4, `it stands at ${at.x}, ${at.y}, ${at.z}`);
+    expect(Math.hypot(at.x - spot.x, at.y - spot.y - PREFABS.crate.size[1] / 2, at.z - spot.z), `it stands at ${at.x}, ${at.y}, ${at.z}`).toBeLessThan(1e-4);
     setGround(null);
     sys.update(FRAME, [], true, false, null);
     const away = sys["world"]!.colliders.len();
@@ -267,8 +266,8 @@ describe("given a course with a knocked prop lying where it fell", () => {
     sys.update(FRAME, [], true, false, null);
     const back = sys["world"]!.colliders.len();
     sys.dispose();
-    assert.ok(away < standing, `the props stayed in the physics off their course (${away} colliders, ${standing} on it)`);
-    assert.equal(back, standing, "back on the course");
+    expect(away, `the props stayed in the physics off their course (${away} colliders, ${standing} on it)`).toBeLessThan(standing);
+    expect(back, "back on the course").toBe(standing);
   });
 });
 
@@ -298,7 +297,7 @@ describe("given a crate knocked over in a course's infield, lying asleep where i
     drive(sys, makeCar(), at.x + 5, at.z - 15, 0, 1, 20, 1.5);
     const steps = sys["tick"] - tick;
     sys.dispose();
-    assert.equal(steps, 0, `the world took ${steps} steps for a car that never came within reach`);
+    expect(steps, `the world took ${steps} steps for a car that never came within reach`).toBe(0);
   });
 
   it("when a car drives into it at 10 m/s, then the crate is shoved on over a metre", async () => {
@@ -307,7 +306,7 @@ describe("given a crate knocked over in a course's infield, lying asleep where i
     const now = new THREE.Vector3();
     sys.propAt(0, now, new THREE.Vector3());
     sys.dispose();
-    assert.ok(now.distanceTo(at) > 1, `it moved ${now.distanceTo(at).toFixed(2)} m`);
+    expect(now.distanceTo(at), `it moved ${now.distanceTo(at).toFixed(2)} m`).toBeGreaterThan(1);
   });
 });
 
@@ -348,9 +347,9 @@ describe("given a cone lying asleep against the foot of a course's road wall, wh
       const end = new THREE.Vector3();
       sys.propAt(0, end, new THREE.Vector3());
       sys.dispose();
-      assert.ok(lying > -0.05, `it came to rest ${(-lying).toFixed(2)} m off the wall, not at its foot`);
-      assert.ok(end.distanceTo(lay) > 1, `the car never shoved it (it moved ${end.distanceTo(lay).toFixed(2)} m)`);
-      assert.ok(deepest < REST_SLOP, `it went ${(deepest * 1000).toFixed(1)} mm into the wall`);
+      expect(lying, `it came to rest ${(-lying).toFixed(2)} m off the wall, not at its foot`).toBeGreaterThan(-0.05);
+      expect(end.distanceTo(lay), `the car never shoved it (it moved ${end.distanceTo(lay).toFixed(2)} m)`).toBeGreaterThan(1);
+      expect(deepest, `it went ${(deepest * 1000).toFixed(1)} mm into the wall`).toBeLessThan(REST_SLOP);
     });
   }
 });
@@ -384,9 +383,9 @@ describe("given 24 crates knocked over where they stood, lying asleep in a row",
     const steps = sys["tick"] - tick;
     const awake = bodies.filter((b) => !b!.isSleeping()).length;
     sys.dispose();
-    assert.ok(steps > 0, "the world never stepped: nothing here reads the crates");
-    assert.equal(awake, 0, `${awake} crates woke`);
-    assert.ok(kb <= CRATE_BOUND_KB, `${kb.toFixed(2)} KB per frame > ${CRATE_BOUND_KB} in every pass for ${COMPILE_WAIT_S} s`);
+    expect(steps, "the world never stepped: nothing here reads the crates").toBeGreaterThan(0);
+    expect(awake, `${awake} crates woke`).toBe(0);
+    expect(kb, `${kb.toFixed(2)} KB per frame > ${CRATE_BOUND_KB} in every pass for ${COMPILE_WAIT_S} s`).toBeLessThanOrEqual(CRATE_BOUND_KB);
   });
 
   it("when vectors are made each frame under the dummies' update, then the allocation reads over the bar, and made outside it, it does not", async () => {
@@ -410,8 +409,8 @@ describe("given 24 crates knocked over where they stood, lying asleep in a row",
     const inside = kbOf((frame) => frame());
     props.here = here;
     sys.dispose();
-    assert.ok(outside < CRATE_BOUND_KB, `${outside.toFixed(2)} KB per frame: vectors made outside the dummies' update must not count`);
-    assert.ok(inside > CRATE_BOUND_KB, `${inside.toFixed(2)} KB per frame for ${CONTROL_VECTORS} vectors a frame under update: the measure sees nothing`);
+    expect(outside, `${outside.toFixed(2)} KB per frame: vectors made outside the dummies' update must not count`).toBeLessThan(CRATE_BOUND_KB);
+    expect(inside, `${inside.toFixed(2)} KB per frame for ${CONTROL_VECTORS} vectors a frame under update: the measure sees nothing`).toBeGreaterThan(CRATE_BOUND_KB);
   });
 });
 
@@ -436,8 +435,8 @@ describe("given a crate knocked off its spot on a course's infield, still in the
       const up = new THREE.Vector3();
       sys.propAt(0, up, new THREE.Vector3());
       sys.dispose();
-      assert.ok(up.y > 0.55, `the crate was down by 0.5 s after its knock (middle ${up.y.toFixed(2)} m up)`);
-      assert.equal(steps / 0.4, testCase.perSecond, `${steps} steps in 0.4 s`);
+      expect(up.y, `the crate was down by 0.5 s after its knock (middle ${up.y.toFixed(2)} m up)`).toBeGreaterThan(0.55);
+      expect(steps / 0.4, `${steps} steps in 0.4 s`).toBe(testCase.perSecond);
     });
   }
 });
@@ -462,10 +461,10 @@ describe("given a prop standing on a course's flat infield, slid off its spot al
       });
       sys.dispose();
       const deg = (tilt * 180) / Math.PI;
-      if (testCase.tips) assert.ok(deg > 45, `it never tipped past 45° (${deg.toFixed(0)}°)`);
+      if (testCase.tips) expect(deg, `it never tipped past 45° (${deg.toFixed(0)}°)`).toBeGreaterThan(45);
       else {
-        assert.ok(deg < 5, `it tipped ${deg.toFixed(0)}°`);
-        assert.ok(Math.abs(end.x - 60 - 7.2) < 0.5, `it came to rest ${(end.x - 60).toFixed(1)} m on`);
+        expect(deg, `it tipped ${deg.toFixed(0)}°`).toBeLessThan(5);
+        expect(Math.abs(end.x - 60 - 7.2), `it came to rest ${(end.x - 60).toFixed(1)} m on`).toBeLessThan(0.5);
       }
     });
   }
@@ -495,9 +494,9 @@ describe("given a cone standing on a course's infield, knocked off by a car's bu
       const asleep = bodyOf(sys).isSleeping();
       sys.dispose();
       const rise = end.y - ground.heightAt(end.x, end.z, end.y);
-      assert.ok(tilt > Math.PI / 4, `it never tipped past 45° (${((tilt * 180) / Math.PI).toFixed(0)}°)`);
-      assert.ok(endTilt > Math.PI / 4 && rise < 0.25, `it rests tilted ${((endTilt * 180) / Math.PI).toFixed(0)}° with its middle ${rise.toFixed(2)} m up: not lying down`);
-      assert.ok(asleep, "it never came to rest");
+      expect(tilt, `it never tipped past 45° (${((tilt * 180) / Math.PI).toFixed(0)}°)`).toBeGreaterThan(Math.PI / 4);
+      expect(endTilt > Math.PI / 4 && rise < 0.25, `it rests tilted ${((endTilt * 180) / Math.PI).toFixed(0)}° with its middle ${rise.toFixed(2)} m up: not lying down`).toBeTruthy();
+      expect(asleep, "it never came to rest").toBeTruthy();
     });
   }
 });
@@ -537,8 +536,8 @@ describe("given a cone standing on a course's infield, knocked off by a car's bu
       });
       sys.dispose();
       const lift = (vy * vy) / (2 * G);
-      assert.ok(sink >= 0, `its lowest point went ${(-sink * 1000).toFixed(1)} mm into the ground as it left`);
-      assert.ok(peak - start <= lift + TIP, `its middle rose ${(peak - start).toFixed(2)} m; the knock's lift throws it ${lift.toFixed(2)} m (+ ${TIP.toFixed(3)} tipping)`);
+      expect(sink, `its lowest point went ${(-sink * 1000).toFixed(1)} mm into the ground as it left`).toBeGreaterThanOrEqual(0);
+      expect(peak - start, `its middle rose ${(peak - start).toFixed(2)} m; the knock's lift throws it ${lift.toFixed(2)} m (+ ${TIP.toFixed(3)} tipping)`).toBeLessThanOrEqual(lift + TIP);
     });
   }
 });
@@ -584,8 +583,8 @@ describe("given a cone knocked over by a car's bumper, lying asleep where it cam
       const asleep = body.isSleeping();
       sys.dispose();
       t.annotate(`deepest ${(sink * 1000).toFixed(1)} mm, rests ${(gap * 1000).toFixed(1)} mm off the ground, asleep ${asleep}`);
-      assert.ok(sink > -LANDING_SLOP, `its lowest point went ${(-sink * 1000).toFixed(1)} mm under the ground`);
-      assert.ok(Math.abs(gap) < REST_SLOP && asleep, `it rests with its lowest point ${(gap * 1000).toFixed(1)} mm off the ground (asleep: ${asleep})`);
+      expect(sink, `its lowest point went ${(-sink * 1000).toFixed(1)} mm under the ground`).toBeGreaterThan(-LANDING_SLOP);
+      expect(Math.abs(gap) < REST_SLOP && asleep, `it rests with its lowest point ${(gap * 1000).toFixed(1)} mm off the ground (asleep: ${asleep})`).toBeTruthy();
     });
   }
 });

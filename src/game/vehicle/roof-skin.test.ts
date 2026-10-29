@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { BODIES, carInState, cellI, cellJ, drawnField, NX } from "./drawn-body.test-util.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 
@@ -21,7 +20,7 @@ function slowestTenth(before: Float32Array, after: Float32Array, roofZ: readonly
       if (Number.isFinite(y0) && Number.isFinite(y1) && y0 > ROOF_Y_M) drops.push(y0 - y1);
     }
   }
-  assert.ok(drops.length > 50, `the roof's cells read: ${drops.length}`);
+  expect(drops.length, `the roof's cells read: ${drops.length}`).toBeGreaterThan(50);
   drops.sort((p, q) => p - q);
   return drops[Math.floor(drops.length * TENTH)]!;
 }
@@ -32,7 +31,7 @@ describe("given a body whose roof a load crushes 0.40 m", () => {
       const before = drawnField(carInState("untouched", b.style, b.cls)).top;
       const after = drawnField(carInState("loaded", b.style, b.cls)).top;
       const drop = slowestTenth(before, after, CAR_STYLES[b.style].roofZ);
-      assert.ok(drop >= FOLLOW_MIN_M, `${b.body}: the roof's slowest tenth dropped ${drop.toFixed(3)} m (bar ${FOLLOW_MIN_M} m)`);
+      expect(drop, `${b.body}: the roof's slowest tenth dropped ${drop.toFixed(3)} m (bar ${FOLLOW_MIN_M} m)`).toBeGreaterThanOrEqual(FOLLOW_MIN_M);
     });
   }
 });

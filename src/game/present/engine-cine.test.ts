@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FLAT_GROUND } from "../world/ground.ts";
 import { parseTrack } from "../world/track-schema.ts";
@@ -15,6 +14,7 @@ import { TIMELINE_HZ } from "../engine/constants.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { SLOMO_HOLD } from "../match/phase.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const STILL = { x: 0, y: 0, z: 0 };
 
@@ -27,7 +27,7 @@ describe("given a reel's crash camera in an open field where every cut has its f
     const n = new THREE.Vector3(1, 0, 0);
     const reach = new Float32Array(3);
     crashAxis(open, at, n, reach);
-    assert.deepEqual([...reach], [1, 1, 1], "an open field leaves every cut its full eye");
+    expect(firstMismatch([...reach], [1, 1, 1]), "an open field leaves every cut its full eye").toBeUndefined();
     // The car after each of three hits: shoved a few metres about the impact, all on the near side of the wall below.
     const walk = [[0, 0], [-3, 1], [2, -2], [-4, 4], [-6, -2], [-1, 3]];
     const target = new THREE.Vector3();
@@ -42,8 +42,10 @@ describe("given a reel's crash camera in an open field where every cut has its f
       return { cut, cuts };
     };
     const first = heldCut(open, at, n, reach, target.set(0, 0.55, 0), -1);
-    assert.equal(first, 1, "the crane is the first choice");
-    assert.deepEqual(run(open, first), { cut: 1, cuts: 0 }, "no cut through the hits");
+    expect(first, "the crane is the first choice").toBe(1);
+    const calm = run(open, first);
+    expect(calm.cut, "no cut through the hits: held cut").toBe(1);
+    expect(calm.cuts, "no cut through the hits: cuts").toBe(0);
     // A tall wall across the crane eye's sight line to the car where the hits start.
     const eye = new THREE.Vector3();
     crashEye(eye, 2.9, at, n, 0, 1);
@@ -51,9 +53,11 @@ describe("given a reel's crash camera in an open field where every cut has its f
     const dz = eye.z - at.z;
     const d = Math.hypot(dx, dz);
     const walled: Sight = { ...open, occ: [occluder(at.x + (dx / d) * 3.3, at.z + (dz / d) * 3.3, Math.atan2(dx, dz), 8, 0.5, false, 0, 30)] };
-    assert.deepEqual(run(walled, first), { cut: 2, cuts: 1 }, "the long lens takes over from the blocked crane, once, and keeps the shot through the hits");
-    assert.equal(heldCut(open, at, n, reach, target.set(0, 0.55, 0), 2), 2, "it holds once the way is clear again");
-    assert.equal(heldCut(walled, at, n, new Float32Array(3), target, first), -1, "no eye on any cut: the reel's own camera");
+    const blocked = run(walled, first);
+    expect(blocked.cut, "the long lens takes over from the blocked crane and keeps the shot through the hits: held cut").toBe(2);
+    expect(blocked.cuts, "the long lens takes over from the blocked crane once: cuts").toBe(1);
+    expect(heldCut(open, at, n, reach, target.set(0, 0.55, 0), 2), "it holds once the way is clear again").toBe(2);
+    expect(heldCut(walled, at, n, new Float32Array(3), target, first), "no eye on any cut: the reel's own camera").toBe(-1);
   });
 });
 
@@ -84,10 +88,10 @@ describe("given a reel's crash camera in an open field and a later impact of its
 
   it("when the crane's eye sees the car but a wall hides the later impact from it, and the long lens has the first hit in line with it, then the cam leaves the crane for the long lens until the impact has passed, and keeps the crane after it", () => {
     const shadowed = shadow(beyond.at[0]!);
-    assert.equal(heldCut(shadowed, at, n, reach, target, 1), 1, "the wall hides only the later impact: the car alone, the crane holds");
-    assert.equal(camUsable(shadowed, crane, beyond.at[0]!, still, 0), false, "the crane cannot see the later impact");
-    assert.equal(heldCut(shadowed, at, n, reach, target, 1, beyond, 0), 2, "the long lens sees the car and the later impact, with the first hit in its frame as it turns to it");
-    assert.equal(heldCut(shadowed, at, n, reach, target, 1, beyond, 1), 1, "the impact has passed: the crane holds again");
+    expect(heldCut(shadowed, at, n, reach, target, 1), "the wall hides only the later impact: the car alone, the crane holds").toBe(1);
+    expect(camUsable(shadowed, crane, beyond.at[0]!, still, 0), "the crane cannot see the later impact").toBe(false);
+    expect(heldCut(shadowed, at, n, reach, target, 1, beyond, 0), "the long lens sees the car and the later impact, with the first hit in its frame as it turns to it").toBe(2);
+    expect(heldCut(shadowed, at, n, reach, target, 1, beyond, 1), "the impact has passed: the crane holds again").toBe(1);
   });
 
   it("when a wall hides the later impact beside the first hit from the crane, and the cuts that see it cannot keep the first hit in frame as they turn to it, then the crane that sees the car holds, so the viewer keeps the place", () => {
@@ -97,15 +101,15 @@ describe("given a reel's crash camera in an open field and a later impact of its
       crashEye(eye, CUTS[cut]!, at, n, 0, 1);
       return camUsable(shadowed, eye, target, still, 0) && camUsable(shadowed, eye, beside.at[0]!, still, 0);
     });
-    assert.ok(sees.length >= 1, "another cut sees the car and the later impact");
-    assert.equal(camUsable(shadowed, crane, beside.at[0]!, still, 0), false, "the crane cannot see the later impact");
-    assert.equal(heldCut(shadowed, at, n, reach, target, 1, beside, 0), 1, "no cut that sees the later impact keeps the first hit in frame: the crane holds");
+    expect(sees.length, "another cut sees the car and the later impact").toBeGreaterThanOrEqual(1);
+    expect(camUsable(shadowed, crane, beside.at[0]!, still, 0), "the crane cannot see the later impact").toBe(false);
+    expect(heldCut(shadowed, at, n, reach, target, 1, beside, 0), "no cut that sees the later impact keeps the first hit in frame: the crane holds").toBe(1);
   });
 
   it("when a wall box round the later impact hides it from every cut, then the cam keeps the cut that sees the car alone, as it did before it knew the impacts", () => {
     const a = beside.at[0]!;
     const box: Sight = { ...open, occ: [occluder(a.x + 3, a.z, 0, 0.5, 4, false, 0, 30), occluder(a.x - 3, a.z, 0, 0.5, 4, false, 0, 30), occluder(a.x, a.z + 3, 0, 4, 0.5, false, 0, 30), occluder(a.x, a.z - 3, 0, 4, 0.5, false, 0, 30)] };
-    assert.equal(heldCut(box, at, n, reach, target, 1, beside, 0), 1, "no cut sees the impact: the crane that sees the car holds");
+    expect(heldCut(box, at, n, reach, target, 1, beside, 0), "no cut sees the impact: the crane that sees the car holds").toBe(1);
   });
 
   it("when the held cam reaches a later crash's look, then its eyes stand round that crash from then on, and at a thrown driver's look they stay round the first hit", () => {
@@ -127,8 +131,8 @@ describe("given a reel's crash camera in an open field and a later impact of its
       for (let i = 0; i < 10; i++) cam.direct(camera, 0.1, true, hold);
       return [Math.round(before), Math.round(off())];
     };
-    assert.deepEqual(axisOff(0), [12, 0], "a later crash: the axis moves onto it");
-    assert.deepEqual(axisOff(1), [12, 12], "a thrown driver: the axis stays on the first hit");
+    expect(firstMismatch(axisOff(0), [12, 0]), "a later crash: the axis moves onto it").toBeUndefined();
+    expect(firstMismatch(axisOff(1), [12, 12]), "a thrown driver: the axis stays on the first hit").toBeUndefined();
   });
 });
 
@@ -144,11 +148,11 @@ describe("given a reel's crash camera in an open field and walls boxing the wrec
     const eye = new THREE.Vector3();
     for (const cut of [0, 1, 2]) {
       crashEye(eye, CUTS[cut]!, at, n, 0, 1);
-      assert.equal(camUsable(boxed, eye, target, STILL, 0), false, `the walls hide the car from cut ${cut}`);
+      expect(camUsable(boxed, eye, target, STILL, 0), `the walls hide the car from cut ${cut}`).toBe(false);
     }
-    assert.equal(heldCut(boxed, at, n, reach, target, 2), 2, "the long lens it holds keeps the shot");
-    assert.equal(heldCut(boxed, at, n, reach, target, -1), 1, "no cut held yet: the crane, the first of the order");
-    assert.equal(heldCut(boxed, at, n, new Float32Array(3), target, 2), -1, "no eye on any cut: the reel's own camera");
+    expect(heldCut(boxed, at, n, reach, target, 2), "the long lens it holds keeps the shot").toBe(2);
+    expect(heldCut(boxed, at, n, reach, target, -1), "no cut held yet: the crane, the first of the order").toBe(1);
+    expect(heldCut(boxed, at, n, new Float32Array(3), target, 2), "no eye on any cut: the reel's own camera").toBe(-1);
   });
 });
 
@@ -162,24 +166,24 @@ describe("given a crash camera begun at a hit with the sandbox's slow-motion hol
 
   it("when the cam steps from its hit through its hand-back, then it holds from the hit to `crashCamEnd`, through the lead-in before its first cut, and not before or after", () => {
     const idle = new CrashCam(false);
-    assert.equal(idle.holding, false, "not begun");
+    expect(idle.holding, "not begun").toBe(false);
     const cam = begin();
-    assert.equal(cam.holding, true, "begun");
+    expect(cam.holding, "begun").toBe(true);
     for (let i = 0; i < 11; i++) cam.direct(camera, 0.1, true);
-    assert.equal(cam.cutting, false, "still in the lead-in, 1.1 s in");
-    assert.equal(cam.holding, true, "a ride-along waits through the lead-in");
+    expect(cam.cutting, "still in the lead-in, 1.1 s in").toBe(false);
+    expect(cam.holding, "a ride-along waits through the lead-in").toBe(true);
     for (let i = 0; i < 48; i++) cam.direct(camera, 0.1, true);
-    assert.equal(cam.cutting, true);
-    assert.equal(cam.holding, true, "and through the cuts, 5.9 s in");
+    expect(cam.cutting).toBe(true);
+    expect(cam.holding, "and through the cuts, 5.9 s in").toBe(true);
     for (let i = 0; i < 4; i++) cam.direct(camera, 0.1, true);
-    assert.equal(cam.holding, false, "handed back by 6.3 s");
-    assert.ok(cam.letterbox > 0, "the bars are still leaving");
+    expect(cam.holding, "handed back by 6.3 s").toBe(false);
+    expect(cam.letterbox, "the bars are still leaving").toBeGreaterThan(0);
   });
 
   it("when the user frames the camera in the window, then the crash cam stops and so does the wait", () => {
     const cam = begin();
     cam.direct(camera, 0.1, false);
-    assert.equal(cam.holding, false);
+    expect(cam.holding).toBe(false);
   });
 
   it("when a later crash lands while it cuts, then its cuts start over at once on a fresh axis at that hit and hand back as far past it as a first crash's, and one before the first cut has played is left to it", () => {
@@ -188,16 +192,16 @@ describe("given a crash camera begun at a hit with the sandbox's slow-motion hol
     for (let i = 0; i < 20; i++) cam.direct(camera, 0.1, true);
     cam.recut(later, new THREE.Vector3(0, 0, 1), null, SLOMO_HOLD);
     cam.direct(camera, 0.1, true);
-    assert.ok(cam["camAt"].x < 1, "2.0 s in, the bumper cut still playing: left to the first crash");
+    expect(cam["camAt"].x, "2.0 s in, the bumper cut still playing: left to the first crash").toBeLessThan(1);
     for (let i = 0; i < 9; i++) cam.direct(camera, 0.1, true);
     cam.recut(later, new THREE.Vector3(0, 0, 1), null, SLOMO_HOLD);
-    assert.ok(Math.abs(cam.camT - CUTS[0]) < 1e-9 && cam.cutting, "3.0 s in: its cuts start over, no second lead-in");
+    expect(Math.abs(cam.camT - CUTS[0]) < 1e-9 && cam.cutting, "3.0 s in: its cuts start over, no second lead-in").toBeTruthy();
     cam.direct(camera, 0.1, true);
-    assert.ok(cam["camAt"].x > 9, "on the later hit");
+    expect(cam["camAt"].x, "on the later hit").toBeGreaterThan(9);
     for (let i = 0; i < 59; i++) cam.direct(camera, 0.1, true);
-    assert.equal(cam.holding, true, "6.0 s past the later hit");
+    expect(cam.holding, "6.0 s past the later hit").toBe(true);
     for (let i = 0; i < 3; i++) cam.direct(camera, 0.1, true);
-    assert.equal(cam.holding, false, "handed back by 6.3 s past it");
+    expect(cam.holding, "handed back by 6.3 s past it").toBe(false);
   });
 });
 
@@ -222,10 +226,10 @@ describe("given a reel's crash camera in an open field holding the crane, and tw
   };
 
   it("when one thrown driver is the moment, then the lens stays the crane's, and when two are, then it opens to keep both in the frame of the narrowest screen, never past 70 degrees", () => {
-    assert.equal(lens(1, 0), LENS.crane, "one point, aimed at: the crane's own lens");
+    expect(lens(1, 0), "one point, aimed at: the crane's own lens").toBe(LENS.crane);
     const wide = lens(2, 3.2);
-    assert.ok(wide > LENS.crane && wide <= 70, `two points 3.2 m apart: ${wide.toFixed(1)} deg`);
-    assert.ok(lens(2, 12) <= 70, "never past the cap, however far apart");
+    expect(wide > LENS.crane && wide <= 70, `two points 3.2 m apart: ${wide.toFixed(1)} deg`).toBeTruthy();
+    expect(lens(2, 12), "never past the cap, however far apart").toBeLessThanOrEqual(70);
   });
 });
 
@@ -252,10 +256,10 @@ describe("given the crash cam on a hit in an open field", () => {
         lens = now;
       }
       const want: [number, number][] = [[s.take, LENS.bumper], [s.crane, LENS.crane], [s.long, LENS.long], [s.back, 0]];
-      assert.equal(changes.length, want.length, `lens changes ${JSON.stringify(changes)}`);
+      expect(changes.length, `lens changes ${JSON.stringify(changes)}`).toBe(want.length);
       for (const [i, [t, f]] of changes.entries()) {
-        assert.equal(f, want[i]![1], `change ${i} to a ${f}° lens, not ${want[i]![1]}°`);
-        assert.ok(Math.abs(t - want[i]![0]) < 0.02, `change ${i} at ${t.toFixed(3)} s, not ${want[i]![0]} s`);
+        expect(f, `change ${i} to a ${f}° lens, not ${want[i]![1]}°`).toBe(want[i]![1]);
+        expect(Math.abs(t - want[i]![0]), `change ${i} at ${t.toFixed(3)} s, not ${want[i]![0]} s`).toBeLessThan(0.02);
       }
     });
   }
@@ -275,7 +279,7 @@ describe("given the crash camera aiming at a hit on the stunt course's road", ()
   const riseOverCar = hitAim(new THREE.Vector3(), 0, 0, 0, null).y;
   const aimHeight = (carHeight: number): number => hitAim(new THREE.Vector3(), spot.x, carHeight, spot.z, sight).y;
   const assertAimsAt = (carHeight: number, want: number): void => {
-    assert.ok(Math.abs(aimHeight(carHeight) - want) < 1e-9, `aims ${aimHeight(carHeight).toFixed(3)} m, not ${want.toFixed(3)} m, for a car ${carHeight.toFixed(3)} m up`);
+    expect(Math.abs(aimHeight(carHeight) - want), `aims ${aimHeight(carHeight).toFixed(3)} m, not ${want.toFixed(3)} m, for a car ${carHeight.toFixed(3)} m up`).toBeLessThan(1e-9);
   };
 
   it("when the car is on the road at the hit, then the camera aims the same rise over the road as over a car on flat ground", () => {
@@ -325,32 +329,32 @@ describe("given a crash in an open field and the cars of the pile standing about
   const free = reachOf(open);
 
   it("when a car stands where the bumper cam's eye would be, then that cut takes a nearer eye or none, and no eye the pick samples is inside the car", () => {
-    assert.equal(free[0], 1, "no cars: the bumper cam's eye at full reach");
+    expect(free[0], "no cars: the bumper cam's eye at full reach").toBe(1);
     const old = eyeAt(0, 1, 0.5);
     const s = withCars(open, [carAt(old.x, 0, old.z)]);
-    assert.equal(carsBlock(s, old, at), true, "the eye the pick would take is inside the car");
+    expect(carsBlock(s, old, at), "the eye the pick would take is inside the car").toBe(true);
     const reach = reachOf(s);
-    assert.ok(reach[0]! < 1, `the bumper cam kept its eye in the car (reach ${reach[0]})`);
-    assert.ok(reach[0] === 0 || eyesClear(s, 0, reach[0]!), "an eye of the cut it took is in the car");
+    expect(reach[0]!, `the bumper cam kept its eye in the car (reach ${reach[0]})`).toBeLessThan(1);
+    expect(reach[0] === 0 || eyesClear(s, 0, reach[0]!), "an eye of the cut it took is in the car").toBeTruthy();
   });
 
   it("when a car stands between the long lens's eye and the hit, then that cut takes a nearer eye or none, and no eye the pick samples has a car on its line to the hit", () => {
-    assert.equal(free[2], 1, "no cars: the long lens's eye at full reach");
+    expect(free[2], "no cars: the long lens's eye at full reach").toBe(1);
     const old = eyeAt(2, 1, 0.5);
     const car = carAt(old.x / 2, 0, old.z / 2);
     const s = withCars(open, [car]);
-    assert.equal(carsBlock(s, old, at), true, "a car stands on the line from the eye the pick would take");
-    assert.ok(Math.hypot(old.x - car.group.position.x, old.z - car.group.position.z) > 4, "the eye itself is well clear of the car");
+    expect(carsBlock(s, old, at), "a car stands on the line from the eye the pick would take").toBe(true);
+    expect(Math.hypot(old.x - car.group.position.x, old.z - car.group.position.z), "the eye itself is well clear of the car").toBeGreaterThan(4);
     const reach = reachOf(s);
-    assert.ok(reach[2]! < 1, `the long lens kept its eye behind the car (reach ${reach[2]})`);
-    assert.ok(reach[2] === 0 || eyesClear(s, 2, reach[2]!), "an eye of the cut it took has the car on its line");
+    expect(reach[2]!, `the long lens kept its eye behind the car (reach ${reach[2]})`).toBeLessThan(1);
+    expect(reach[2] === 0 || eyesClear(s, 2, reach[2]!), "an eye of the cut it took has the car on its line").toBeTruthy();
   });
 
   it("when the cars stand above and below the line and the eyes, then the pick answers as it does with no cars", () => {
     const old = eyeAt(2, 1, 0.5);
     const s = withCars(open, [carAt(old.x / 2, 6, old.z / 2), carAt(old.x / 2, -3, old.z / 2), carAt(old.x, 6, old.z), carAt(old.x, -3, old.z)]);
     const reach = reachOf(s);
-    for (let cut = 0; cut < 3; cut++) assert.equal(reach[cut], free[cut], `cut ${cut} reach with cars over and under: ${reach[cut]}, without: ${free[cut]}`);
+    for (let cut = 0; cut < 3; cut++) expect(reach[cut], `cut ${cut} reach with cars over and under: ${reach[cut]}, without: ${free[cut]}`).toBe(free[cut]);
   });
 
   it("when a later crash 7 m off has a car standing on the crane's eye round it, then the crash cam gives it its own shot: its axis moves onto it, its eye outside every car with none on its line to it", () => {
@@ -358,7 +362,7 @@ describe("given a crash in an open field and the cars of the pile standing about
     const old = new THREE.Vector3();
     crashEye(old, CUTS[1]!, b, axis, 0, 1);
     const s = withCars(open, [carAt(old.x, old.y - 0.4, old.z, 0.7)]);
-    assert.equal(carsBlock(s, old, b), true, "the crane's eye round the later crash is inside the car");
+    expect(carsBlock(s, old, b), "the crane's eye round the later crash is inside the car").toBe(true);
     const later = laterHits(1);
     later.n = 1;
     later.from[0] = 3;
@@ -370,9 +374,9 @@ describe("given a crash in an open field and the cars of the pile standing about
     const camera = new THREE.PerspectiveCamera();
     let on = false;
     for (let i = 0; i < 74; i++) on = cam.direct(camera, 0.05, true, hold);
-    assert.ok(cam["camAt"].distanceTo(b) < 1e-6, "3.7 s in, the axis is on the later crash");
-    assert.equal(on, true, "the crash cam holds the camera at it");
-    assert.equal(carsBlock(s, camera.position, b), false, "its eye is in a car or has one on its line to the later crash");
+    expect(cam["camAt"].distanceTo(b), "3.7 s in, the axis is on the later crash").toBeLessThan(1e-6);
+    expect(on, "the crash cam holds the camera at it").toBe(true);
+    expect(carsBlock(s, camera.position, b), "its eye is in a car or has one on its line to the later crash").toBe(false);
   });
 
   it("when a 3-hit pile-up's later crashes come with a car standing between an eye and the second, then the crash cam holds the camera at each of them and to the last slow-mo's hand-back, so a thrown driver's ride-along (it waits on `holding`) starts only after it", () => {
@@ -388,7 +392,7 @@ describe("given a crash in an open field and the cars of the pile standing about
     crashEye(old, CUTS[1]!, points[0]!, axis, 0, 1);
     const mid = old.clone().add(points[0]!).multiplyScalar(0.5);
     const s = withCars(open, [carAt(mid.x, mid.y - 0.7, mid.z)]);
-    assert.equal(carsBlock(s, old, points[0]!), true, "a car stands on the crane eye's line to the second crash");
+    expect(carsBlock(s, old, points[0]!), "a car stands on the crane eye's line to the second crash").toBe(true);
     const later = laterHits(2);
     later.n = 2;
     const walls = hits.slice(1).map((t) => stepOf(t) / TIMELINE_HZ - tl.impact);
@@ -408,10 +412,10 @@ describe("given a crash in an open field and the cars of the pile standing about
       for (const [k, w] of walls.entries()) if (Math.abs(cam.camT - w) < 0.5 / FRAME_HZ) onAt[k] = on;
       if (!cam.holding) back = cam.camT;
     }
-    assert.deepEqual(onAt, [true, true], `the crash cam on the camera at the later crashes (wall ${walls.map((w) => (tl.impact + w).toFixed(2)).join(" / ")} s, it handed back at ${(tl.impact + back).toFixed(2)} s)`);
+    expect(firstMismatch(onAt, [true, true]), `the crash cam on the camera at the later crashes (wall ${walls.map((w) => (tl.impact + w).toFixed(2)).join(" / ")} s, it handed back at ${(tl.impact + back).toFixed(2)} s)`).toBeUndefined();
     const lastBack = tl.phase.indexOf("aftermath", stepOf(hits[2]!)) / TIMELINE_HZ;
     const early = lastBack - (tl.impact + back);
-    assert.ok(early >= 0 && early <= 0.5, `handed back at ${(tl.impact + back).toFixed(2)} wall s, the last slow-mo at ${lastBack.toFixed(2)} s`);
+    expect(early >= 0 && early <= 0.5, `handed back at ${(tl.impact + back).toFixed(2)} wall s, the last slow-mo at ${lastBack.toFixed(2)} s`).toBeTruthy();
   });
 });
 
@@ -446,8 +450,8 @@ describe("given a reel's crash camera holding the crane with two drivers thrown 
       changed = held === 1 && cam["held"] === 2;
       held = cam["held"];
     }
-    assert.ok(changed, "the wall moved the cam from the crane to the long lens");
-    for (const p of later.at.slice(0, 2)) assert.ok(fovFor(camera.position, cam["aim"], p, camera.fov) <= camera.fov + 1e-6, `the thrown driver at z ${p.z} needs a ${fovFor(camera.position, cam["aim"], p, camera.fov).toFixed(1)} deg lens, the long lens's first frame has ${camera.fov.toFixed(1)}`);
+    expect(changed, "the wall moved the cam from the crane to the long lens").toBeTruthy();
+    for (const p of later.at.slice(0, 2)) expect(fovFor(camera.position, cam["aim"], p, camera.fov), `the thrown driver at z ${p.z} needs a ${fovFor(camera.position, cam["aim"], p, camera.fov).toFixed(1)} deg lens, the long lens's first frame has ${camera.fov.toFixed(1)}`).toBeLessThanOrEqual(camera.fov + 1e-6);
   });
 });
 
@@ -463,8 +467,8 @@ describe("given the hit-stop's sim rate over the frames of a 90 ms stop at 60 Hz
       lowest = Math.min(lowest, next);
       warp = next;
     }
-    assert.ok(biggest < 0.7, `the rate moved ${biggest.toFixed(2)} in one frame`);
-    assert.ok(lowest < 0.5, `the stop barely slowed the sim: ${lowest.toFixed(2)}`);
-    assert.equal(warp, 1);
+    expect(biggest, `the rate moved ${biggest.toFixed(2)} in one frame`).toBeLessThan(0.7);
+    expect(lowest, `the stop barely slowed the sim: ${lowest.toFixed(2)}`).toBeLessThan(0.5);
+    expect(warp).toBe(1);
   });
 });

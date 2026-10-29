@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { contactHz } from "./car-air-points.ts";
 import { stepFree } from "./car-air.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
@@ -16,7 +15,7 @@ describe("given a car on flat ground, its tyres in their springs", () => {
     const car = makeCar("sedan");
     car.spawnFacing(0, 0, 0, 8);
     stepSlices(car, 2, SLICE_HZ);
-    assert.equal(contactHz(car), 0, "the rate a rolling sedan asks for");
+    expect(contactHz(car), "the rate a rolling sedan asks for").toBe(0);
   });
 
   it("when a sedan is let down from 0.25 m, then some slice of the landing asks for a finer rate and the settled car does not", () => {
@@ -28,8 +27,8 @@ describe("given a car on flat ground, its tyres in their springs", () => {
       stepFree(car, 1 / SLICE_HZ);
       finest = Math.max(finest, contactHz(car));
     }
-    assert.ok(finest > 0, "no slice of the landing asked for a finer rate");
-    assert.equal(contactHz(car), 0, "the rate the car asks for 2 s after it landed");
+    expect(finest, "no slice of the landing asked for a finer rate").toBeGreaterThan(0);
+    expect(contactHz(car), "the rate the car asks for 2 s after it landed").toBe(0);
   });
 });
 
@@ -41,6 +40,6 @@ describe("given a car whose belly is in the ground", () => {
     car.spawnFacing(0, 0, 0, 3);
     car.group.position.y = -BELLY_IN - Math.min(...car.frame.belly.map(([, y]) => y));
     stepFree(car, 1 / SLICE_HZ);
-    assert.ok(contactHz(car) > 0, "the rate a sedan with its belly in the road asks for");
+    expect(contactHz(car), "the rate a sedan with its belly in the road asks for").toBeGreaterThan(0);
   });
 });

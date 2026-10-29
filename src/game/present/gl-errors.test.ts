@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { GlErrors } from "./gl-errors.ts";
 
 const INVALID_OPERATION = 0x0502;
@@ -17,15 +16,15 @@ describe("given the WebGL error count a submission carries", () => {
     const errors = new GlErrors();
     gl.pending.push(INVALID_VALUE, INVALID_OPERATION);
     errors.read(gl);
-    assert.equal(errors.count, 2);
-    assert.equal(errors.last, INVALID_OPERATION);
+    expect(errors.count).toBe(2);
+    expect(errors.last).toBe(INVALID_OPERATION);
     errors.read(gl);
-    assert.equal(errors.count, 2);
+    expect(errors.count).toBe(2);
   });
 
   it("when a context answers an error on every call, then a read stops at the six WebGL error kinds instead of looping", () => {
     const gl = context(true);
     new GlErrors().read(gl);
-    assert.equal(gl.reads, 6);
+    expect(gl.reads).toBe(6);
   });
 });

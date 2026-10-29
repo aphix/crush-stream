@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { decodeShare } from "../hud/share-url.ts";
 import { TIME_OF_DAY, type TimeOfDay } from "../match/types.ts";
@@ -30,20 +29,20 @@ describe("given the real engine and a browser address bar that records every wri
 
   it("when Sunset, Night and Daytime are picked in Survival's menu, then the link holds tod=sunset, tod=nighttime and no tod", () => {
     engine.toggleSurvival();
-    assert.equal(engine["race"].hud().menu, "survival", "Survival's own menu is up");
+    expect(engine["race"].hud().menu, "Survival's own menu is up").toBe("survival");
     const links = [TIME_OF_DAY.sunset, TIME_OF_DAY.night, TIME_OF_DAY.day].map(pick);
-    assert.equal(links.map((h) => todIn(h) ?? "-").join(","), `${TIME_OF_DAY.sunset},${TIME_OF_DAY.night},-`, links.join("  |  "));
+    expect(links.map((h) => todIn(h) ?? "-").join(","), links.join("  |  ")).toBe(`${TIME_OF_DAY.sunset},${TIME_OF_DAY.night},-`);
   });
 
   it("when a link naming Survival at sunset is pasted, then the run opens lit for sunset, and a link without tod puts it back to daytime", () => {
     engine["applyShare"](decodeShare("#"), false);
-    assert.equal(engine["sceneId"], "fleet");
+    expect(engine["sceneId"]).toBe("fleet");
     engine["applyShare"](decodeShare("#scene=survival&tod=sunset"), false);
-    assert.equal(engine["sceneId"], "survival");
-    assert.equal(engine["stage"].time, TIME_OF_DAY.sunset, "the stage is lit for sunset");
-    assert.equal(engine["race"].options.timeOfDay, TIME_OF_DAY.sunset, "the setup's pick");
-    assert.equal(todIn(globalThis.location.hash), TIME_OF_DAY.sunset, "the bar keeps it");
+    expect(engine["sceneId"]).toBe("survival");
+    expect(engine["stage"].time, "the stage is lit for sunset").toBe(TIME_OF_DAY.sunset);
+    expect(engine["race"].options.timeOfDay, "the setup's pick").toBe(TIME_OF_DAY.sunset);
+    expect(todIn(globalThis.location.hash), "the bar keeps it").toBe(TIME_OF_DAY.sunset);
     engine["applyShare"](decodeShare("#scene=survival"), false);
-    assert.equal(engine["stage"].time, TIME_OF_DAY.day, "a link without tod is daytime");
+    expect(engine["stage"].time, "a link without tod is daytime").toBe(TIME_OF_DAY.day);
   });
 });

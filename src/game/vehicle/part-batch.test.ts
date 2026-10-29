@@ -1,5 +1,4 @@
-import { afterAll, describe, test } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, describe, expect, test } from "vitest";
 import * as THREE from "three";
 import { DETAIL_LEVELS } from "../present/car-detail.ts";
 import { DeformableCar } from "./car.ts";
@@ -64,12 +63,12 @@ describe("given the part batch and a few cars near the camera", () => {
     for (const n of [1, CARS]) {
       const { batch, car, draw } = stage();
       draw(Array.from({ length: n }, () => car(10)));
-      assert.equal(batch.kinds.length, PART_KINDS.length);
-      for (const kind of PART_KINDS) assert.equal(batch.drawn(kind), n * atRest(kind), `kind ${kind} with ${n} cars`);
-      assert.equal(PART_KINDS.filter((k) => batch.drawn(k) > 0).length, PART_KINDS.filter((k) => atRest(k) > 0).length, `${n} cars draw ten kinds`);
+      expect(batch.kinds.length).toBe(PART_KINDS.length);
+      for (const kind of PART_KINDS) expect(batch.drawn(kind), `kind ${kind} with ${n} cars`).toBe(n * atRest(kind));
+      expect(PART_KINDS.filter((k) => batch.drawn(k) > 0).length, `${n} cars draw ten kinds`).toBe(PART_KINDS.filter((k) => atRest(k) > 0).length);
       // Old: one mesh per styled variant drawn, so ten for ten kinds of one style; the four styled kinds are now the one `SeatDraw`: six plain meshes plus it.
       const draws = batch.kinds.filter((m) => m !== null && m.count > 0).length + (batch.styled.triangles > 0 ? 1 : 0);
-      assert.equal(draws, PART_KINDS.filter((k) => atRest(k) > 0 && !STYLED.includes(k)).length + 1, `${n} cars of one style draw seven meshes`);
+      expect(draws, `${n} cars of one style draw seven meshes`).toBe(PART_KINDS.filter((k) => atRest(k) > 0 && !STYLED.includes(k)).length + 1);
     }
   });
 
@@ -78,10 +77,10 @@ describe("given the part batch and a few cars near the camera", () => {
     const cars = [car(10), car(20), car(FAR_BEYOND + 20)];
     draw(cars);
     const sedan = batch.casters.find((m) => m.name === "shadow-caster-sedan")!;
-    assert.equal(sedan.count, cars.length, "one instance per undamaged sedan");
-    assert.ok(sedan.geometry === cars[0]!.restCaster, "the batch draws the sedan's rest caster");
-    assert.ok(sedan.castShadow, "the batch casts");
-    assert.equal(batch.casters.filter((m) => m.count > 0).length, 1, "one caster draw for a field of one style");
+    expect(sedan.count, "one instance per undamaged sedan").toBe(cars.length);
+    expect(sedan.geometry, "the batch draws the sedan's rest caster").toBe(cars[0]!.restCaster);
+    expect(sedan.castShadow, "the batch casts").toBeTruthy();
+    expect(batch.casters.filter((m) => m.count > 0).length, "one caster draw for a field of one style").toBe(1);
     const m = new THREE.Matrix4();
     sedan.getMatrixAt(1, m);
     assertSameNumbers(m.elements, cars[1]!.group.matrixWorld.elements, "the second sedan's caster instance", FLOAT32_SLACK);
@@ -94,8 +93,8 @@ describe("given the part batch and a few cars near the camera", () => {
     const matrix = new THREE.Matrix4();
     const seat = only.partSeats[PART_KIND.mirrorR]!;
     const rows = rowsOf(batch, PART_KIND.mirrorR);
-    assert.equal(rows.length, 1, "one mirror row");
-    assert.equal(batch.styled.variantAt(rows[0]!), variantRange(PART_KIND.mirrorR)[0] + seat.variant, "the row draws the seat's variant");
+    expect(rows.length, "one mirror row").toBe(1);
+    expect(batch.styled.variantAt(rows[0]!), "the row draws the seat's variant").toBe(variantRange(PART_KIND.mirrorR)[0] + seat.variant);
     batch.styled.matrixAt(rows[0]!, matrix);
     assertSameNumbers(matrix.elements, seat.matrixWorld.elements, "the mirror row is the seat's world matrix", FLOAT32_SLACK);
   });
@@ -107,15 +106,15 @@ describe("given the part batch and a few cars near the camera", () => {
       if (!STYLED.includes(kind)) {
         const card = kind === PART_KIND.liningL ? -1 : kind === PART_KIND.liningR ? 1 : 0;
         // Identity, never a deep compare: a geometry holds big typed arrays.
-        assert.ok(mesh !== null && mesh.geometry === (card !== 0 ? drawnDoorCard(card) : partGeometry(kind)), `kind ${kind} draws one shape once (same object, not equal copies)`);
+        expect(mesh !== null && mesh.geometry === (card !== 0 ? drawnDoorCard(card) : partGeometry(kind)), `kind ${kind} draws one shape once (same object, not equal copies)`).toBeTruthy();
         continue;
       }
-      assert.ok(mesh === null, `kind ${kind}: the styled draw holds it, no draw of its own`);
+      expect(mesh, `kind ${kind}: the styled draw holds it, no draw of its own`).toBe(null);
       const [first, end] = variantRange(kind);
-      assert.ok(end - first > 1, `kind ${kind}: a variant per own shape`);
+      expect(end - first, `kind ${kind}: a variant per own shape`).toBeGreaterThan(1);
       assertSameNumbers(positions(batch.styled.variants[first]!), positions(partGeometry(kind)), `kind ${kind}: the platform part is its variant 0`);
     }
-    assert.equal(batch.styled.variants.length, variantRange(STYLED[STYLED.length - 1]!)[1], "the styled draw holds every styled kind's variants and no more");
+    expect(batch.styled.variants.length, "the styled draw holds every styled kind's variants and no more").toBe(variantRange(STYLED[STYLED.length - 1]!)[1]);
   });
 });
 
@@ -133,12 +132,12 @@ describe("given the part batch and one car of each style", () => {
         const n = batch.drawn(kind);
         const rows = rowsOf(batch, kind);
         const own = tris(only.partSeats[kind]!.drawn);
-        assert.ok(n <= 1, `${id} kind ${kind}: ${n} seats drawn for one car`);
-        assert.equal(rows.length, n, `${id} kind ${kind}: a row per seat drawn`);
-        for (const row of rows) assert.equal(tris(batch.styled.variants[batch.styled.variantAt(row)]!), own, `${id} kind ${kind}: the seat bills its own variant's triangles`);
+        expect(n, `${id} kind ${kind}: ${n} seats drawn for one car`).toBeLessThanOrEqual(1);
+        expect(rows.length, `${id} kind ${kind}: a row per seat drawn`).toBe(n);
+        for (const row of rows) expect(tris(batch.styled.variants[batch.styled.variantAt(row)]!), `${id} kind ${kind}: the seat bills its own variant's triangles`).toBe(own);
         expected += n * own;
       }
-      assert.equal(batch.styled.triangles, expected, `${id}: the styled draw bills ${batch.styled.triangles} triangles for ${expected} of its own`);
+      expect(batch.styled.triangles, `${id}: the styled draw bills ${batch.styled.triangles} triangles for ${expected} of its own`).toBe(expected);
       batch.dispose();
     }
   });
@@ -232,22 +231,22 @@ describe("given the part batch and one car of each style, its windshield whole a
       draw([only]);
       const seat = only.partSeats[PART_KIND.wipers]!;
       const pane = only.glassPanes.find((g) => g.name === "windshield")!.mesh;
-      assert.equal(`${batch.drawn(PART_KIND.wipers)} ${rowsOf(batch, PART_KIND.wipers).length} ${seat.variant > 0} ${seat.parent === pane}`, "1 1 true true", `${id}: one wiper seat drawn in the styled draw, its style's own, on the windshield`);
+      expect(`${batch.drawn(PART_KIND.wipers)} ${rowsOf(batch, PART_KIND.wipers).length} ${seat.variant > 0} ${seat.parent === pane}`, `${id}: one wiper seat drawn in the styled draw, its style's own, on the windshield`).toBe("1 1 true true");
       const blades = seat.drawn.userData.blades as { pivot: number[]; tip: number[] }[];
-      assert.equal(blades.length, style.wipers?.count ?? 2, `${id}: blades`);
+      expect(blades.length, `${id}: blades`).toBe(style.wipers?.count ?? 2);
       for (const { pivot, tip } of blades) {
-        assert.ok(Math.sign(tip[0]! - pivot[0]!) === (style.wipers?.park ?? DRIVER_SIDE), `${id}: a blade parks from x ${pivot[0]!.toFixed(2)} to ${tip[0]!.toFixed(2)}`);
+        expect(Math.sign(tip[0]! - pivot[0]!), `${id}: a blade parks from x ${pivot[0]!.toFixed(2)} to ${tip[0]!.toFixed(2)}`).toBe((style.wipers?.park ?? DRIVER_SIDE));
         const share = Math.abs(tip[0]! - pivot[0]!) / style.windshield.wBase;
-        assert.ok(share > 0.25 && share < 0.55, `${id}: a blade spans ${share.toFixed(2)} of the base width`);
+        expect(share > 0.25 && share < 0.55, `${id}: a blade spans ${share.toFixed(2)} of the base width`).toBeTruthy();
         const floor = windshieldBaseY(style, pivot[0]! / (style.windshield.wBase / 2));
-        assert.ok(pivot[1]! > floor && pivot[1]! < floor + 0.06, `${id}: a pivot at y ${pivot[1]!.toFixed(3)}, just over the glass's base ${floor.toFixed(3)} at its column`);
+        expect(pivot[1]! > floor && pivot[1]! < floor + 0.06, `${id}: a pivot at y ${pivot[1]!.toFixed(3)}, just over the glass's base ${floor.toFixed(3)} at its column`).toBeTruthy();
       }
       const off = offGlass(seat.drawn, pane.geometry);
       const [low, high] = [Math.min(...off), Math.max(...off)];
-      assert.ok(low > -INTO_GLASS && high < OVER_GLASS, `${id}: the wipers stand ${(low * 1000).toFixed(1)} to ${(high * 1000).toFixed(1)} mm off the glass`);
+      expect(low > -INTO_GLASS && high < OVER_GLASS, `${id}: the wipers stand ${(low * 1000).toFixed(1)} to ${(high * 1000).toFixed(1)} mm off the glass`).toBeTruthy();
       only.smashGlass("windshield");
       draw([only]);
-      assert.equal(`${batch.drawn(PART_KIND.wipers)} ${rowsOf(batch, PART_KIND.wipers).length}`, "0 0", `${id}: wipers drawn over a shattered windshield`);
+      expect(`${batch.drawn(PART_KIND.wipers)} ${rowsOf(batch, PART_KIND.wipers).length}`, `${id}: wipers drawn over a shattered windshield`).toBe("0 0");
       batch.dispose();
     }
   });
@@ -268,7 +267,7 @@ describe("given the part batch and one car of each style, its windshield whole a
       if (far > PAST_OUTLINE) past.push(`${id}: ${out.filter((d) => d > PAST_OUTLINE).length} points past it, up to ${(far * 100).toFixed(1)} cm`);
       batch.dispose();
     }
-    assert.equal(past.join("; "), "");
+    expect(past.join("; ")).toBe("");
   });
 });
 
@@ -303,12 +302,12 @@ describe("given the part batch and a car whose style has its own mirror", () => 
     const seat = own.partSeats[PART_KIND.mirrorR]!;
     const rows = rowsOf(batch, PART_KIND.mirrorR);
     const { styled } = batch;
-    assert.ok(seat.variant > 0, `the control: the wagon's mirror is variant ${seat.variant}`);
-    assert.equal(batch.drawn(PART_KIND.mirrorR), 2, "both cars' mirrors draw");
-    assert.equal(rows.length, 2, "one row each");
-    assert.equal(styled.variantAt(rows[0]!), variantRange(PART_KIND.mirrorR)[0], "the platform-mirror neighbour draws as variant 0, alone");
-    assert.equal(styled.variantAt(rows[1]!), variantRange(PART_KIND.mirrorR)[0] + seat.variant, "the wagon's mirror draws in its own variant, alone");
-    assert.equal(styled.colorAt(rows[1]!, new THREE.Color()).getHex(), 0x336699, "the seat colour is its door's paint");
+    expect(seat.variant, `the control: the wagon's mirror is variant ${seat.variant}`).toBeGreaterThan(0);
+    expect(batch.drawn(PART_KIND.mirrorR), "both cars' mirrors draw").toBe(2);
+    expect(rows.length, "one row each").toBe(2);
+    expect(styled.variantAt(rows[0]!), "the platform-mirror neighbour draws as variant 0, alone").toBe(variantRange(PART_KIND.mirrorR)[0]);
+    expect(styled.variantAt(rows[1]!), "the wagon's mirror draws in its own variant, alone").toBe(variantRange(PART_KIND.mirrorR)[0] + seat.variant);
+    expect(styled.colorAt(rows[1]!, new THREE.Color()).getHex(), "the seat colour is its door's paint").toBe(0x336699);
     assertSameNumbers(positions(styled.variants[styled.variantAt(rows[1]!)]!), positions(seat.drawn), "its variant's vertices are its drawn mirror's");
   });
 
@@ -326,8 +325,8 @@ describe("given the part batch and a car whose style has its own mirror", () => 
         sumX += x;
       }
     }
-    assert.ok(count > 0, "the wheel's vertices were found");
-    assert.ok(sumX / count > 0.15, `the wheel's mean car-local x is ${(sumX / count).toFixed(2)}`);
+    expect(count, "the wheel's vertices were found").toBeGreaterThan(0);
+    expect(sumX / count, `the wheel's mean car-local x is ${(sumX / count).toFixed(2)}`).toBeGreaterThan(0.15);
   });
 });
 
@@ -340,10 +339,10 @@ describe("given the part batch and a car whose right mirror snaps off", () => {
     cars[0]!.breakMirror(1, SHOVE);
     draw(cars);
     const own = looseMeshes(mirror);
-    assert.equal(own.length, 1, "one loose mesh under the seat");
-    assert.notEqual(own[0]!.geometry, partGeometry(PART_KIND.mirrorR), "a clone, so the shared geometry is never disposed with the loose part");
-    assert.equal(batch.drawn(PART_KIND.mirrorR), CARS - 1);
-    assert.equal(batch.drawn(PART_KIND.mirrorL), CARS, "the left mirror stays");
+    expect(own.length, "one loose mesh under the seat").toBe(1);
+    expect(own[0]!.geometry, "a clone, so the shared geometry is never disposed with the loose part").not.toBe(partGeometry(PART_KIND.mirrorR));
+    expect(batch.drawn(PART_KIND.mirrorR)).toBe(CARS - 1);
+    expect(batch.drawn(PART_KIND.mirrorL), "the left mirror stays").toBe(CARS);
   });
 
   test("when the torn mirror's car is beyond the far cut, then the seat is back on the camera's layer and so is its mesh", () => {
@@ -351,11 +350,11 @@ describe("given the part batch and a car whose right mirror snaps off", () => {
     const cars = [car(FAR_BEYOND + 20), car(10), car(10)];
     const mirror = cars[0]!.partSeats[PART_KIND.mirrorR]!;
     draw(cars);
-    assert.equal(mirror.layers.isEnabled(0), false, "the control: the far cut took the seat off the camera");
+    expect(mirror.layers.isEnabled(0), "the control: the far cut took the seat off the camera").toBe(false);
     cars[0]!.breakMirror(1, SHOVE);
     draw(cars);
-    assert.equal(mirror.layers.isEnabled(0), true, "the torn seat shows on every camera");
-    assert.equal(looseMeshes(mirror)[0]!.layers.isEnabled(0), true, "its mesh too");
+    expect(mirror.layers.isEnabled(0), "the torn seat shows on every camera").toBe(true);
+    expect(looseMeshes(mirror)[0]!.layers.isEnabled(0), "its mesh too").toBe(true);
   });
 
   test("when the car is reset and synced, then the seat is back in the batch, keeps its mesh off the seat, and the car's dispose frees that mesh", () => {
@@ -371,13 +370,13 @@ describe("given the part batch and a car whose right mirror snaps off", () => {
     own.geometry.addEventListener("dispose", onFreed);
     cars[0]!.resetVisual();
     draw(cars);
-    assert.equal(mirror.loose, false);
-    assert.equal(looseMeshes(mirror).length, 0);
-    assert.equal(batch.drawn(PART_KIND.mirrorR), CARS);
-    assert.equal(freed, 0, "a re-attached seat keeps its mesh, dents and all, for the next tear");
+    expect(mirror.loose).toBe(false);
+    expect(looseMeshes(mirror).length).toBe(0);
+    expect(batch.drawn(PART_KIND.mirrorR)).toBe(CARS);
+    expect(freed, "a re-attached seat keeps its mesh, dents and all, for the next tear").toBe(0);
     cars[0]!.dispose();
     // The mirror seat is reached twice (its own part and its door's), as the old mesh was; three's dispose is idempotent.
-    assert.ok(freed >= 1, `the car's dispose frees it while it is off the seat (${freed} dispose events)`);
+    expect(freed, `the car's dispose frees it while it is off the seat (${freed} dispose events)`).toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -389,12 +388,12 @@ describe("given the part batch and a car that loses a door or its front bumper",
     cars[0]!["detachPart"](cars[0]!["doorParts"][1]!, 0, SHOVE);
     draw(cars);
     for (const kind of [PART_KIND.liningR, PART_KIND.mirrorR]) {
-      assert.equal(cars[0]!.partSeats[kind]!.loose, true, `kind ${kind} loose`);
-      assert.equal(batch.drawn(kind), CARS - 1, `kind ${kind} left the batch`);
+      expect(cars[0]!.partSeats[kind]!.loose, `kind ${kind} loose`).toBe(true);
+      expect(batch.drawn(kind), `kind ${kind} left the batch`).toBe(CARS - 1);
     }
     for (const kind of [PART_KIND.liningL, PART_KIND.mirrorL]) {
-      assert.equal(cars[0]!.partSeats[kind]!.loose, false, `kind ${kind} fast`);
-      assert.equal(batch.drawn(kind), CARS, `kind ${kind} stays`);
+      expect(cars[0]!.partSeats[kind]!.loose, `kind ${kind} fast`).toBe(false);
+      expect(batch.drawn(kind), `kind ${kind} stays`).toBe(CARS);
     }
   });
 
@@ -404,10 +403,10 @@ describe("given the part batch and a car that loses a door or its front bumper",
     draw(cars);
     cars[0]!["detachPart"](cars[0]!["parts"].find((p) => p.name === BUMPER_F)!, 0, SHOVE);
     draw(cars);
-    assert.equal(cars[0]!.partSeats[PART_KIND.grille]!.loose, true);
-    assert.equal(batch.drawn(PART_KIND.grille), CARS - 1);
-    assert.equal(cars[0]!.partSeats[PART_KIND.tailTrim]!.loose, false);
-    assert.equal(batch.drawn(PART_KIND.tailTrim), CARS);
+    expect(cars[0]!.partSeats[PART_KIND.grille]!.loose).toBe(true);
+    expect(batch.drawn(PART_KIND.grille)).toBe(CARS - 1);
+    expect(cars[0]!.partSeats[PART_KIND.tailTrim]!.loose).toBe(false);
+    expect(batch.drawn(PART_KIND.tailTrim)).toBe(CARS);
   });
 
   test("when the torn bumper is dented at its grille, then only the grille's own mesh moves, within the dent's reach of the contact", () => {
@@ -435,9 +434,9 @@ describe("given the part batch and a car that loses a door or its front bumper",
       if (dented[i] === shared[i] && dented[i + 1] === shared[i + 1] && dented[i + 2] === shared[i + 2]) continue;
       moved++;
       const reach = inBumperFrame(shared, i).distanceTo(contact);
-      assert.ok(reach < DENT_REACH, `vertex ${i / 3} moved from ${reach.toFixed(3)} m off the contact`);
+      expect(reach, `vertex ${i / 3} moved from ${reach.toFixed(3)} m off the contact`).toBeLessThan(DENT_REACH);
     }
-    assert.ok(moved > 0, "the dent moved nothing on the grille's mesh");
+    expect(moved, "the dent moved nothing on the grille's mesh").toBeGreaterThan(0);
     assertSameNumbers(shared, sharedBefore, "the shared grille positions");
   });
 });
@@ -447,10 +446,10 @@ describe("given the part batch and a car the distance detail cuts", () => {
     const { batch, car, draw } = stage();
     const cars = [car(10), car(10), car(FAR_BEYOND + 20)];
     draw(cars);
-    for (const kind of PART_KINDS) assert.equal(batch.drawn(kind), (CARS - 1) * atRest(kind), `kind ${kind} while cut`);
+    for (const kind of PART_KINDS) expect(batch.drawn(kind), `kind ${kind} while cut`).toBe((CARS - 1) * atRest(kind));
     cars[2]!.group.position.z = 12;
     draw(cars);
-    for (const kind of PART_KINDS) assert.equal(batch.drawn(kind), CARS * atRest(kind), `kind ${kind} restored`);
+    for (const kind of PART_KINDS) expect(batch.drawn(kind), `kind ${kind} restored`).toBe(CARS * atRest(kind));
   });
 
   test("when a car is hidden, then its seats draw nothing; when shown again, they do", () => {
@@ -458,10 +457,10 @@ describe("given the part batch and a car the distance detail cuts", () => {
     const cars = [car(10), car(10)];
     cars[1]!.group.visible = false;
     draw(cars);
-    for (const kind of PART_KINDS) assert.equal(batch.drawn(kind), atRest(kind), `kind ${kind} while hidden`);
+    for (const kind of PART_KINDS) expect(batch.drawn(kind), `kind ${kind} while hidden`).toBe(atRest(kind));
     cars[1]!.group.visible = true;
     draw(cars);
-    for (const kind of PART_KINDS) assert.equal(batch.drawn(kind), 2 * atRest(kind), `kind ${kind} shown`);
+    for (const kind of PART_KINDS) expect(batch.drawn(kind), `kind ${kind} shown`).toBe(2 * atRest(kind));
   });
 });
 
@@ -471,11 +470,11 @@ describe("given a part batch smaller than the cars it is asked to draw", () => {
     const { batch, car, draw } = stage(capacity);
     draw(Array.from({ length: CARS }, () => car(10)));
     for (const kind of PART_KINDS) {
-      assert.equal(batch.drawn(kind), capacity * atRest(kind), `kind ${kind}`);
+      expect(batch.drawn(kind), `kind ${kind}`).toBe(capacity * atRest(kind));
       const mesh = batch.kinds[kind];
-      if (mesh) assert.equal(mesh.instanceMatrix.count, capacity * PART_PER_CAR[kind]!, `kind ${kind}: the matrix buffer is the capacity's size, nothing grew`);
+      if (mesh) expect(mesh.instanceMatrix.count, `kind ${kind}: the matrix buffer is the capacity's size, nothing grew`).toBe(capacity * PART_PER_CAR[kind]!);
     }
-    assert.equal(batch.styled.capacity, STYLED.reduce<number>((n, kind) => n + capacity * PART_PER_CAR[kind]!, 0), "the styled draw's seat room is the capacity's size, nothing grew");
+    expect(batch.styled.capacity, "the styled draw's seat room is the capacity's size, nothing grew").toBe(STYLED.reduce<number>((n, kind) => n + capacity * PART_PER_CAR[kind]!, 0));
   });
 });
 
@@ -488,7 +487,7 @@ describe("given the part batch is disposed", () => {
     const onMesh = () => void meshesFreed++;
     const onGeometry = () => void geometriesFreed++;
     const instanced = batch.meshes.filter((m): m is THREE.InstancedMesh => (m as THREE.InstancedMesh).isInstancedMesh);
-    assert.equal(instanced.length, PART_KINDS.length - STYLED.length, "the control: every plain kind has its instanced mesh");
+    expect(instanced.length, "the control: every plain kind has its instanced mesh").toBe(PART_KINDS.length - STYLED.length);
     for (const mesh of instanced) mesh.addEventListener("dispose", onMesh);
     // The styled draw is a plain Mesh with no dispose event: what it frees is its own geometry and material.
     batch.styled.mesh.geometry.addEventListener("dispose", onMesh);
@@ -499,9 +498,9 @@ describe("given the part batch is disposed", () => {
     } finally {
       for (const kind of PART_KINDS) partGeometry(kind).removeEventListener("dispose", onGeometry);
     }
-    assert.equal(meshesFreed, instanced.length + 2, "every instanced mesh, and the styled draw's geometry and material");
-    assert.equal(geometriesFreed, 0, "the geometry is shared by every car, so the batch never frees it");
-    for (const kind of PART_KINDS) assert.ok(partGeometry(kind).getAttribute("position").array.length > 0, `kind ${kind} keeps its positions`);
+    expect(meshesFreed, "every instanced mesh, and the styled draw's geometry and material").toBe(instanced.length + 2);
+    expect(geometriesFreed, "the geometry is shared by every car, so the batch never frees it").toBe(0);
+    for (const kind of PART_KINDS) expect(partGeometry(kind).getAttribute("position").array.length, `kind ${kind} keeps its positions`).toBeGreaterThan(0);
   });
 });
 
@@ -511,16 +510,16 @@ describe("given the part batch over a resting field", () => {
     const cars = [car(8), car(12, "wagon")];
     draw(cars);
     const instanced = [...batch.kinds.filter((m): m is THREE.InstancedMesh => m !== null && m.count > 0), ...batch.casters.filter((m) => m.count > 0)];
-    assert.ok(instanced.length > 0 && batch.styled.count > 0, "the control: the field draws instanced kinds, a caster and styled parts");
+    expect(instanced.length > 0 && batch.styled.count > 0, "the control: the field draws instanced kinds, a caster and styled parts").toBeTruthy();
     const versions = () => [...instanced.map((m) => m.instanceMatrix.version), batch.styled.texture.version].join(",");
     const before = versions();
     draw(cars);
-    assert.equal(versions(), before, "a resting field re-uploaded matrices");
+    expect(versions(), "a resting field re-uploaded matrices").toBe(before);
     for (const c of cars) c.group.position.x += 0.5;
     draw(cars);
     const after = versions().split(",").map(Number);
     const was = before.split(",").map(Number);
-    assert.ok(after.every((v, i) => v > was[i]!), `a moved car's draws must upload again: ${before} -> ${after.join(",")}`);
+    expect(after.every((v, i) => v > was[i]!), `a moved car's draws must upload again: ${before} -> ${after.join(",")}`).toBeTruthy();
   });
 
   test("when the boot warm hides every draw after a sync (its restore) and the field then syncs at rest, then each kind the monster draws (its frame and axles too) and its caster show again, uploading nothing", () => {
@@ -528,14 +527,14 @@ describe("given the part batch over a resting field", () => {
     const monster = car(8, "monster");
     draw([monster]);
     const instanced = [...batch.kinds.filter((m): m is THREE.InstancedMesh => m !== null && m.count > 0), ...batch.casters.filter((m) => m.count > 0)];
-    assert.ok(batch.kinds[PART_KIND.ladderFrame]!.count === 1 && batch.kinds[PART_KIND.axle]!.count === 2, "the control: the monster draws its frame and both axles");
+    expect(batch.kinds[PART_KIND.ladderFrame]!.count === 1 && batch.kinds[PART_KIND.axle]!.count === 2, "the control: the monster draws its frame and both axles").toBeTruthy();
     const versions = () => instanced.map((m) => m.instanceMatrix.version).join(",");
     const before = versions();
     for (const m of [...instanced, batch.styled.mesh]) m.visible = false;
     draw([monster]);
     const hidden = [...instanced.filter((m) => !m.visible).map((m) => m.name || `kind ${batch.kinds.indexOf(m)}`), ...(batch.styled.mesh.visible ? [] : ["styled"])];
-    assert.equal(hidden.join(), "", "draws left hidden after the warm's restore");
-    assert.equal(versions(), before, "a resting field re-uploaded matrices");
+    expect(hidden.join(), "draws left hidden after the warm's restore").toBe("");
+    expect(versions(), "a resting field re-uploaded matrices").toBe(before);
   });
 });
 
@@ -544,9 +543,9 @@ describe("given the part batch's styled draw after a sync that built its geometr
     const { batch, car, draw } = stage();
     draw([car(8), car(12, "wagon")]);
     const geo = batch.styled.mesh.geometry;
-    assert.ok(geo.drawRange.count > 0, "the control: the styled draw packed seats");
+    expect(geo.drawRange.count, "the control: the styled draw packed seats").toBeGreaterThan(0);
     const dynamic: string[] = [];
     for (const [name, a] of [...Object.entries(geo.attributes), ["index", geo.index!] as const]) if ((a as THREE.BufferAttribute).usage !== THREE.StaticDrawUsage) dynamic.push(name);
-    assert.equal(dynamic.join(","), "");
+    expect(dynamic.join(",")).toBe("");
   });
 });

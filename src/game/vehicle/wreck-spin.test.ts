@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { applyDrive, idleDrive } from "./car-drive.ts";
@@ -54,8 +53,8 @@ describe("given a sedan wreck under power, its masses live at 8 m/s and all turn
     const before = momentum(c);
     for (let k = 0; k < 60; k++) applyDrive(c, { ...idleDrive(), throttle: 0.5, steer: 1 }, H);
     const after = momentum(c);
-    assert.ok(Math.abs(before.l) > 1000, `no spin to keep: L ${before.l.toFixed(0)}`);
-    assert.ok(Math.abs(after.l / before.l - 1) < 0.01, `L ${before.l.toFixed(0)} → ${after.l.toFixed(0)} kg·m²/s over 0.5 s of steering`);
+    expect(Math.abs(before.l), `no spin to keep: L ${before.l.toFixed(0)}`).toBeGreaterThan(1000);
+    expect(Math.abs(after.l / before.l - 1), `L ${before.l.toFixed(0)} → ${after.l.toFixed(0)} kg·m²/s over 0.5 s of steering`).toBeLessThan(0.01);
   });
 
   it("when it spins the other way round at −3 rad/s and is steered with half throttle for 0.5 s, then it keeps its angular momentum within 1 %", () => {
@@ -63,7 +62,7 @@ describe("given a sedan wreck under power, its masses live at 8 m/s and all turn
     const before = momentum(c);
     for (let k = 0; k < 60; k++) applyDrive(c, { ...idleDrive(), throttle: 0.5, steer: 1 }, H);
     const after = momentum(c);
-    assert.ok(Math.abs(after.l / before.l - 1) < 0.01, `L ${before.l.toFixed(0)} → ${after.l.toFixed(0)}`);
+    expect(Math.abs(after.l / before.l - 1), `L ${before.l.toFixed(0)} → ${after.l.toFixed(0)}`).toBeLessThan(0.01);
   });
 });
 
@@ -72,7 +71,7 @@ describe("given a sedan that a 30 km/h front wall hit left dented but still driv
     const c = new DeformableCar(paint(), new THREE.Scene(), null, CLASSES.sedan.style);
     assignClass(c, "sedan");
     runWall(30, 1, "front", { car: c, after: 0.3 });
-    assert.ok(c.crashed && c.deform.massActive && c.deform.drivetrainAlive, "fixture: the hit must leave a dented car that still drives");
+    expect(c.crashed && c.deform.massActive && c.deform.drivetrainAlive, "fixture: the hit must leave a dented car that still drives").toBeTruthy();
     const w = newWorld([c]);
     let reported = 0;
     let drawn = 0;
@@ -88,7 +87,7 @@ describe("given a sedan that a 30 km/h front wall hit left dented but still driv
         reported += c.yawRate * H;
       }
     }
-    assert.ok(Math.abs(drawn) > 0.3, `fixture: drawn turn ${drawn.toFixed(2)} rad in 0.5 s: no turn to report`);
-    assert.ok(Math.abs(reported - drawn) < 0.15 * Math.abs(drawn), `reported ${reported.toFixed(3)} rad, drawn ${drawn.toFixed(3)} rad over 0.5 s`);
+    expect(Math.abs(drawn), `fixture: drawn turn ${drawn.toFixed(2)} rad in 0.5 s: no turn to report`).toBeGreaterThan(0.3);
+    expect(Math.abs(reported - drawn), `reported ${reported.toFixed(3)} rad, drawn ${drawn.toFixed(3)} rad over 0.5 s`).toBeLessThan(0.15 * Math.abs(drawn));
   });
 });

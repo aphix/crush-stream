@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
@@ -7,6 +6,7 @@ import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
 import { LID } from "./constants.ts";
 import { paint } from "./test-support.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * The trunk lid, hatch, liftgate and drop gate swing on the doors' hinge model (docs/DOOR_RIG.md, "Lids"): a rear hit past the
@@ -48,8 +48,8 @@ describe("given a rear hit on a car with its lid shut", () => {
       const hard = parked(id);
       runWall(30, 1, "rear", { car: hard });
       t.annotate(`${id}: 14 km/h hinge ${soft.lidAngle().toFixed(3)} rad, 30 km/h ${hard.lidAngle().toFixed(3)} rad`);
-      assert.ok(soft.lidHinge().latched, `${id} lid sprang at 14 km/h`);
-      assert.ok(!hard.lidHinge().latched && !hard.lidOff(), `${id} lid at 30 km/h: latched ${hard.lidHinge().latched}, off ${hard.lidOff()}`);
+      expect(soft.lidHinge().latched, `${id} lid sprang at 14 km/h`).toBeTruthy();
+      expect(!hard.lidHinge().latched && !hard.lidOff(), `${id} lid at 30 km/h: latched ${hard.lidHinge().latched}, off ${hard.lidOff()}`).toBeTruthy();
     });
   }
 });
@@ -66,10 +66,10 @@ describe("given an unlatched lid on a parked car", () => {
       most = Math.max(most, car.lidHinge().theta);
     }
     const h = car.lidHinge();
-    assert.ok(Math.abs(s.stop - Math.PI / 2) < 1e-9, `stop ${s.stop}`);
-    assert.equal(h.theta, s.stop);
-    assert.ok(most <= s.stop, `swung to ${most}`);
-    assert.ok(h.load > 0 && h.load < s.tearJ && !car.lidOff(), `cables took ${h.load} J`);
+    expect(Math.abs(s.stop - Math.PI / 2), `stop ${s.stop}`).toBeLessThan(1e-9);
+    expect(h.theta).toBe(s.stop);
+    expect(most, `swung to ${most}`).toBeLessThanOrEqual(s.stop);
+    expect(h.load > 0 && h.load < s.tearJ && !car.lidOff(), `cables took ${h.load} J`).toBeTruthy();
   });
 
   for (const id of ["wagon", "hatchback"] as const) {
@@ -77,8 +77,8 @@ describe("given an unlatched lid on a parked car", () => {
       const car = parked(id);
       car.setLidOpen(0.02);
       swing(car, 3);
-      assert.equal(car.lidHinge().theta, car.lidHinge().spec.stop);
-      assert.ok(!car.lidOff());
+      expect(car.lidHinge().theta).toBe(car.lidHinge().spec.stop);
+      expect(!car.lidOff()).toBe(true);
     });
   }
 
@@ -87,12 +87,12 @@ describe("given an unlatched lid on a parked car", () => {
     const h = car.lidHinge();
     car.setLidOpen(0.05);
     swing(car, 2);
-    assert.equal(h.theta, h.spec.stop);
+    expect(h.theta).toBe(h.spec.stop);
     swing(car, 0.5, 8);
     const launched = h.theta;
     swing(car, 2);
-    assert.ok(launched < h.spec.stop - 0.1 && !h.latched, `launch left it at ${launched}`);
-    assert.equal(h.theta, h.spec.stop);
+    expect(launched < h.spec.stop - 0.1 && !h.latched, `launch left it at ${launched}`).toBeTruthy();
+    expect(h.theta).toBe(h.spec.stop);
   });
 });
 
@@ -104,8 +104,8 @@ describe("given an open lid pushed shut or flung onto its stop", () => {
     const hard = parked("sedan");
     hard.setLidOpen(1);
     hard.shutLid(0, rateFor(hard, 1.1, hard.lidHinge().spec.slamJ));
-    assert.ok(soft.lidHinge().latched && !soft.lidOff() && soft.lidAngle() === 0);
-    assert.ok(hard.lidOff() && hard.hasLoosePart());
+    expect(soft.lidHinge().latched && !soft.lidOff() && soft.lidAngle() === 0).toBeTruthy();
+    expect(hard.lidOff() && hard.hasLoosePart()).toBeTruthy();
   });
 
   it("when it is flung onto its stop at 0.8× its hinge limit, then it holds; at 1.25×, then it tears off", () => {
@@ -117,8 +117,8 @@ describe("given an open lid pushed shut or flung onto its stop", () => {
       return car;
     };
     const soft = fling(0.8);
-    assert.ok(!soft.lidOff() && soft.lidHinge().theta === soft.lidHinge().spec.stop, `load ${soft.lidHinge().load}`);
-    assert.ok(fling(1.25).lidOff());
+    expect(!soft.lidOff() && soft.lidHinge().theta === soft.lidHinge().spec.stop, `load ${soft.lidHinge().load}`).toBeTruthy();
+    expect(fling(1.25).lidOff()).toBeTruthy();
   });
 });
 
@@ -129,8 +129,8 @@ describe("given a rear hit on a car whose lid is already open", () => {
     const open = !car.lidHinge().latched && !car.lidOff();
     const r = runWall(24, 1, "rear", { car });
     t.annotate(`after the second hit: hinge ${r.hinge[LID.trunk]?.toFixed(3)}, detached ${r.detached.join(",")}, stop load ${car.lidHinge().load.toFixed(1)} J, ebs ${car.deform.hitSpeedValue.toFixed(2)}`);
-    assert.ok(open, "the first hit left the lid shut or tore it off");
-    assert.ok(car.lidOff() && r.detached.includes(LID.trunk) && car.hasLoosePart());
+    expect(open, "the first hit left the lid shut or tore it off").toBeTruthy();
+    expect(car.lidOff() && r.detached.includes(LID.trunk) && car.hasLoosePart()).toBeTruthy();
   });
 });
 
@@ -151,8 +151,8 @@ describe("given a car's rear window and its lid (docs/DOOR_RIG.md, Lids)", () =>
       car.ripLid(new THREE.Vector3());
       let up: THREE.Object3D | null = car["glassPanes"].find((g) => g.name === "rear")!.mesh;
       while (up !== null && up !== car.group) up = up.parent;
-      if (gate) assert.ok(moved > 0.1 && up === null, `${id} pane moved ${moved.toFixed(3)} m, still on the body ${up !== null}`);
-      else assert.ok(moved === 0 && up === car.group, `${id} pane moved ${moved} m, on the body ${up !== null}`);
+      if (gate) expect(moved > 0.1 && up === null, `${id} pane moved ${moved.toFixed(3)} m, still on the body ${up !== null}`).toBeTruthy();
+      else expect(moved === 0 && up === car.group, `${id} pane moved ${moved} m, on the body ${up !== null}`).toBeTruthy();
     });
   }
 });
@@ -172,7 +172,7 @@ function gateProbes(car: DeformableCar, meshes: THREE.Object3D[]): { name: strin
   const { base, top } = car.style.rearGlass;
   const spoiler = car.style.roof?.spoiler;
   const gate = spoiler?.gate;
-  assert.ok(spoiler !== undefined && gate !== undefined, `${car.style.id}: its spoiler has no shut line on the gate`);
+  must(spoiler !== undefined && gate !== undefined, `${car.style.id}: its spoiler has no shut line on the gate`);
   const ray = new THREE.Raycaster();
   const out: { name: string; from: THREE.Vector3; toward: THREE.Vector3 }[] = [];
   for (const side of car.style.boot.postShare === undefined ? [] : [-1, 1]) {
@@ -184,7 +184,7 @@ function gateProbes(car: DeformableCar, meshes: THREE.Object3D[]): { name: strin
         ray.set(new THREE.Vector3(side * 3, y, z), toward);
         if (ray.intersectObjects(meshes, false).length > 0) break;
       }
-      assert.ok(z < edge + 0.15, `${car.style.id}: no D-post beside the glass at ${t} on side ${side}`);
+      expect(z, `${car.style.id}: no D-post beside the glass at ${t} on side ${side}`).toBeLessThan(edge + 0.15);
       out.push({ name: `beside the glass at ${t} on side ${side}`, from: new THREE.Vector3(side * 3, y, z + POST_STRIP), toward });
     }
   }
@@ -205,7 +205,7 @@ describe("given a roof-hinged gate's frame and spoiler (hatchback, wagon)", () =
         ray.set(p.from, p.toward);
         const hit = ray.intersectObjects([shut.body, lid], false)[0];
         const met = hit === undefined ? "nothing" : hit.object === shut.body ? "the body" : "another mesh";
-        assert.ok(hit !== undefined && hit.object === lid, `${id} ${p.name}: the first hit is ${met}${hit ? ` at ${hit.point.toArray().map((v) => v.toFixed(3)).join()}` : ""}, not the gate's skin`);
+        expect(hit !== undefined && hit.object === lid, `${id} ${p.name}: the first hit is ${met}${hit ? ` at ${hit.point.toArray().map((v) => v.toFixed(3)).join()}` : ""}, not the gate's skin`).toBeTruthy();
         at.push(hit.point.clone());
       }
       const leaves = (car: DeformableCar, what: string): void => {
@@ -214,7 +214,7 @@ describe("given a roof-hinged gate's frame and spoiler (hatchback, wagon)", () =
           ray.set(probes[i]!.from, probes[i]!.toward);
           for (const hit of ray.intersectObject(car.body, false)) {
             const gap = hit.point.distanceTo(at[i]!);
-            assert.ok(gap >= NEAR, `${id} ${probes[i]!.name}, gate ${what}: the body has a surface at ${hit.point.toArray().map((v) => v.toFixed(3)).join()}, ${gap.toFixed(3)} m from where the gate's skin was (${at[i]!.toArray().map((v) => v.toFixed(3)).join()})`);
+            expect(gap, `${id} ${probes[i]!.name}, gate ${what}: the body has a surface at ${hit.point.toArray().map((v) => v.toFixed(3)).join()}, ${gap.toFixed(3)} m from where the gate's skin was (${at[i]!.toArray().map((v) => v.toFixed(3)).join()})`).toBeGreaterThanOrEqual(NEAR);
           }
         }
       };
@@ -229,12 +229,12 @@ describe("given a roof-hinged gate's frame and spoiler (hatchback, wagon)", () =
       const geometry = lid.geometry;
       const attr = geometry.getAttribute("position") as THREE.BufferAttribute;
       const surround = geometry.userData.surround;
-      assert.ok(typeof surround === "number" && surround < attr.count, `${id}: the gate's surround starts at ${String(surround)} of ${attr.count} vertices`);
+      expect(typeof surround === "number" && surround < attr.count, `${id}: the gate's surround starts at ${String(surround)} of ${attr.count} vertices`).toBeTruthy();
       const rest = Float32Array.from(attr.array);
       shut.deform.skinPanel(geometry, rest, "glassRear", shut["trunkOrigin"], surround);
       let drift = 0;
       for (let i = surround * 3; i < rest.length; i++) drift = Math.max(drift, Math.abs(attr.array[i]! - rest[i]!));
-      assert.ok(drift < 1e-4, `${id}: the surround skinned on the rear glass's cage at rest moves ${drift.toExponential(1)} m`);
+      expect(drift, `${id}: the surround skinned on the rear glass's cage at rest moves ${drift.toExponential(1)} m`).toBeLessThan(1e-4);
     });
   }
 });
@@ -264,6 +264,6 @@ describe("given every style parked and posed open for show (`showPose`)", () => 
       rows.push(`${id}: hinge axis ${(axis * 1000).toFixed(0)} mm over the rear edge at rest; open, the edge rises ${(rise * 1000).toFixed(0)} mm and the hood stands ${deg.toFixed(1)} deg`);
       if (rise > HOOD_EDGE_RISE || deg < HOOD_OPEN_DEG[0] || deg > HOOD_OPEN_DEG[1]) bad.push(id);
     }
-    assert.equal(bad.join(","), "", rows.join("\n"));
+    expect(bad.join(","), rows.join("\n")).toBe("");
   });
 });

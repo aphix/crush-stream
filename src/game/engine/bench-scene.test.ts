@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { epicenterOn } from "../deform/epicenter.ts";
 import { KNOB_DEFAULTS, KNOBS } from "../hud/knobs.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
@@ -14,6 +13,7 @@ import { skyPinOf, tap, watchWork } from "./bench-measure.ts";
 import { PHASE_SWEEP } from "./engine-bench-report.ts";
 import { endSweep, HOLD, sweep } from "./bench-sweep.ts";
 import type { CrashEngine } from "./engine.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** Sim seconds each step runs past the staged head-on: the pair meets in 0.2 s, so the wrecks, their contacts and a thrown driver are in it. */
 const CRASH_S = 2;
@@ -71,35 +71,35 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
   afterAll(() => disposeBenchEngine(engine));
 
   it("when the city bench is entered again after the epicenter arm and the strip, this time with the window's recording on (phase clock, counters, per-second series), then its sim is bit for bit the first one's, which ran unrecorded: nothing a step leaves behind reaches the next, and recording changes nothing", () => {
-    assert.equal(digests["city again"], digests["city first"]);
+    expect(digests["city again"]).toBe(digests["city first"]);
   });
 
   it("when the steps ran, then each is a different sim (the control: the strip's field is not the city's)", () => {
-    assert.notEqual(digests["strip"], digests["city first"]);
+    expect(digests["strip"]).not.toBe(digests["city first"]);
   });
 
   it("when the page enters the next step, then every Debug knob but the activation is at its default, and the activation is off unless that step asks for it (the default is on)", () => {
-    assert.equal(entered["city with the activation"]!.epicenter, true, "the control: the activation is on in its own arm");
+    expect(entered["city with the activation"]!.epicenter, "the control: the activation is on in its own arm").toBe(true);
     for (const [name, page] of Object.entries(entered)) {
-      if (name !== "city with the activation") assert.equal(page.epicenter, false, `${name}: off in the next step`);
-      assert.deepEqual(page.strayKnobs, [], `${name}: every other knob at its default`);
+      if (name !== "city with the activation") expect(page.epicenter, `${name}: off in the next step`).toBe(false);
+      expect(page.strayKnobs, `${name}: every other knob at its default`).toHaveLength(0);
     }
   });
 
   it("when the loop's steps are entered in turn (city, city with the activation, strip, city), then the card's arm label follows the knob each time: off, ON, off, off", () => {
     const labels = ["city first", "city with the activation", "strip", "city again"].map((name) => entered[name]!.armLabel);
-    assert.deepEqual(labels, ["epicenter off", "EPICENTER ON", "epicenter off", "epicenter off"]);
+    expect(firstMismatch(labels, ["epicenter off", "EPICENTER ON", "epicenter off", "epicenter off"])).toBeUndefined();
   });
 
   it("when the quick bench's start is made on the city in two steps, then the head-on pair is staged both times and crashes (the bit-for-bit window is the first row's)", () => {
     for (const name of ["city first", "city again"]) {
-      assert.equal(staged[name], true, `${name}: the pair is staged at green`);
-      assert.ok(wrecks[name]! >= 2, `${name}: ${wrecks[name]} wrecks ${CRASH_S} s on: the staged pair crashed`);
+      expect(staged[name], `${name}: the pair is staged at green`).toBe(true);
+      expect(wrecks[name]!, `${name}: ${wrecks[name]} wrecks ${CRASH_S} s on: the staged pair crashed`).toBeGreaterThanOrEqual(2);
     }
   });
 
   it("when the quick bench starts on the strip, then the pair is staged there too", () => {
-    assert.equal(staged["strip"], true);
+    expect(staged["strip"]).toBe(true);
   });
 
   it("when a full warm-up sweep (every FX tier, both pacer pins, every detail rung, the sky, the epicenter on and off) runs on the city and the page is reset as a step does, then the city's sim after it is bit for bit the first one's", async () => {
@@ -123,12 +123,12 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
     try {
       // A page without `ultra=1` (its FX tiers are the three; Ultra's look is fetched by the page before the bench, not by the sweep).
       await sweep(engine, parts, plan, ["minimal", "low", "high"], "full", t, beat, { set() {} });
-      assert.equal(parts.sky.drawn, SKY_DRAWN.procedural, "the sweep ends on the sky a race pins: the procedural sky drawn");
-      assert.equal(parts.sky.textureBytes, 0, "the strip it loaded is let go");
-      assert.ok(beat.hitches.frames > 3 * 180, `the sweep ran its frames (${beat.hitches.frames})`);
+      expect(parts.sky.drawn, "the sweep ends on the sky a race pins: the procedural sky drawn").toBe(SKY_DRAWN.procedural);
+      expect(parts.sky.textureBytes, "the strip it loaded is let go").toBe(0);
+      expect(beat.hitches.frames, `the sweep ran its frames (${beat.hitches.frames})`).toBeGreaterThan(3 * 180);
       endSweep(engine, skyPinOf(plan));
       step("city after the sweep", "?bench=city", true);
-      assert.equal(digests["city after the sweep"], digests["city first"]);
+      expect(digests["city after the sweep"]).toBe(digests["city first"]);
       // A load the step began is still in flight (its decode is a promise chain): let it land on the stand-in.
       await new Promise<void>((resolve) => setImmediate(resolve));
     } finally {
@@ -155,7 +155,7 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
     } finally {
       engine["pollInput"] = poll;
     }
-    assert.equal(seen.length, 2, "two frames ran");
-    for (const [k, wallDt] of seen.entries()) assert.equal(wallDt, FRAME_S, `frame ${k}`);
+    expect(seen.length, "two frames ran").toBe(2);
+    for (const [k, wallDt] of seen.entries()) expect(wallDt, `frame ${k}`).toBe(FRAME_S);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { drawnLamp } from "./part-variants.ts";
 import { type BodyStyle, CAR_STYLE_IDS, CAR_STYLES } from "./car-variants.ts";
@@ -43,13 +42,13 @@ describe("given the slim modern head lamps (the sedan's and the wagon's) beside 
   for (const id of slimStyles) {
     it(`when the ${id}'s head lens is drawn, then its lit lens covers at least ${MIN_LIT_SHARE_OF_OLD_STYLE} of the hatchback's share of its lamp, not a DRL strip alone`, () => {
       const [slim, old] = [litLens(CAR_STYLES[id]).share, litLens(CAR_STYLES.hatchback).share];
-      assert.ok(slim >= MIN_LIT_SHARE_OF_OLD_STYLE * old, `${id} lit share ${slim.toFixed(3)}, hatchback ${old.toFixed(3)}`);
+      expect(slim, `${id} lit share ${slim.toFixed(3)}, hatchback ${old.toFixed(3)}`).toBeGreaterThanOrEqual(MIN_LIT_SHARE_OF_OLD_STYLE * old);
     });
 
     it(`when the pool lights the ${id} at night, then its head glow is as bright as the hatchback's at the same view (the bulbs tint it, so the three channels are summed)`, () => {
       const brightness = (rgb: ArrayLike<number>): number => rgb[0]! + rgb[1]! + rgb[2]!;
       const [slim, old] = [brightness(headGlowOf(CAR_STYLES[id]).rgb), brightness(headGlowOf(CAR_STYLES.hatchback).rgb)];
-      assert.ok(slim >= 0.9 * old, `${id} head L glow ${slim.toFixed(3)}, hatchback ${old.toFixed(3)}`);
+      expect(slim, `${id} head L glow ${slim.toFixed(3)}, hatchback ${old.toFixed(3)}`).toBeGreaterThanOrEqual(0.9 * old);
     });
   }
 });
@@ -59,7 +58,7 @@ describe("given every style's head lamp, whose seat is where its glow sprite and
     it(`when the ${id}'s lens is drawn, then its seat lies within ${MAX_SEAT_TO_LIT_CENTRE * 1000} mm of the centre of the lens lit as seen from ahead`, () => {
       const { centreX, centreY } = litLens(CAR_STYLES[id]);
       const off = Math.hypot(centreX, centreY);
-      assert.ok(off <= MAX_SEAT_TO_LIT_CENTRE, `${id} seat is ${(off * 1000).toFixed(0)} mm from the lit centre (x ${(centreX * 1000).toFixed(0)}, y ${(centreY * 1000).toFixed(0)} mm)`);
+      expect(off, `${id} seat is ${(off * 1000).toFixed(0)} mm from the lit centre (x ${(centreX * 1000).toFixed(0)}, y ${(centreY * 1000).toFixed(0)} mm)`).toBeLessThanOrEqual(MAX_SEAT_TO_LIT_CENTRE);
     });
   }
 });

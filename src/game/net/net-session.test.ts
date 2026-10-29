@@ -1,5 +1,4 @@
-import { afterEach, describe, it, type TestContext, vi } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it, type TestContext, vi } from "vitest";
 import { DriverSeat, type DriveInput } from "../vehicle/car-drive.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
@@ -8,7 +7,7 @@ import { INPUT_BYTES, type Reel } from "../match/highlights.ts";
 import * as codec from "./codec.ts";
 import { NetPlay } from "./net-play.ts";
 import { carLayout } from "./car-pose.ts";
-import type { HostRoom, NetTx } from "./net-ports.ts";
+import type { HostRoom, NetStatus, NetTx } from "./net-ports.ts";
 import { publicRoomName } from "./matchmaking.ts";
 import { Hub, FRAME_MS, RELAY_MSG_MAX } from "./net-hub.test-util.ts";
 import { packReel } from "./reel-codec.ts";
@@ -20,6 +19,8 @@ import { CAR_SPRAY, NO_CAR_PICK, NO_PERSON_PICK, PERSON_SPRAY, SPRAY_PALETTE, ca
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { FACE_NOSE } from "../deform/load-crush.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** A player who picked nothing and sprayed nothing. */
 const bareLook = (): LookData => ({
@@ -28,6 +29,23 @@ const bareLook = (): LookData => ({
   carSpray: { texels: new Uint8Array(CAR_SPRAY.w * CAR_SPRAY.h), palette: SPRAY_PALETTE },
   personSpray: { texels: new Uint8Array(PERSON_SPRAY.w * PERSON_SPRAY.h), palette: SPRAY_PALETTE },
 });
+
+/** The last `setSeats` call seated exactly one guest: car `car` under `name`. */
+function expectOneSeat(seats: readonly (readonly [number, string])[] | undefined, car: number, name: string): void {
+  expect(seats, "seats of the last setSeats call").toHaveLength(1);
+  expect(seats?.[0]?.[0], "the seated car").toBe(car);
+  expect(seats?.[0]?.[1], "the seated name").toBe(name);
+}
+
+/** A lobby gate field by field, `label` naming whose gate it is. */
+function expectGate(gate: NetStatus["gate"], want: { min: number; kind: string; course: string; playlist: readonly string[]; players: number }, label: string): void {
+  expect(gate, `${label}: the gate is up`).not.toBe(null);
+  expect(gate?.min, `${label}: players wanted`).toBe(want.min);
+  expect(gate?.kind, `${label}: the game Go starts`).toBe(want.kind);
+  expect(gate?.course, `${label}: the course`).toBe(want.course);
+  expect(firstMismatch(gate?.playlist, want.playlist), `${label}: the playlist`).toBeUndefined();
+  expect(gate?.players, `${label}: players here`).toBe(want.players);
+}
 
 /** The engine as NetPlay sees it, with real cars and a real seat; records what the session asked of it. */
 function fakeGame(raceApplied?: number[], playerName = "") {
@@ -244,7 +262,7 @@ function session(opts: { raceApplied?: number[]; hostRace?: boolean; hostName?: 
     },
   };
   s.step(20);
-  assert.equal(client.status().car, 1, "the guest got car 1");
+  expect(client.status().car, "the guest got car 1").toBe(1);
   return s;
 }
 
@@ -281,15 +299,15 @@ describe("given a guest that joined a room nobody hosts", () => {
     };
     const hostGame = fakeGame();
     frames(HOST_WAIT_MS - 500);
-    assert.equal(guest.status().problem, null, "not yet: the host may still be on its way");
+    expect(guest.status().problem, "not yet: the host may still be on its way").toBe(null);
     frames(1000);
-    assert.equal(guest.status().problem, "no-host");
+    expect(guest.status().problem).toBe("no-host");
     const host = new NetPlay(hostGame, { connect: hub.connect, now: () => now });
     open.push(host);
     host.host("R", "rtc");
     frames(2000, host);
-    assert.equal(guest.status().problem, null, "a host answered");
-    assert.equal(guest.status().car, 1);
+    expect(guest.status().problem, "a host answered").toBe(null);
+    expect(guest.status().car).toBe(1);
   });
 });
 
@@ -301,8 +319,8 @@ describe("given a host and one guest seated in car 1", () => {
     s.step(10);
     s.hub.setCut(s.hostId(), s.clientId(), false);
     s.step(30);
-    assert.equal(s.client.status().car, 1);
-    assert.ok(s.hostSpeed() > 3, `the guest drives again after the blip (${s.hostSpeed().toFixed(2)} m/s)`);
+    expect(s.client.status().car).toBe(1);
+    expect(s.hostSpeed(), `the guest drives again after the blip (${s.hostSpeed().toFixed(2)} m/s)`).toBeGreaterThan(3);
   });
 
   it("when the link stays down for a minute and then returns, then the host frees the car and the guest reports the host lost, and on the return the guest is seated again in its car with its held throttle driving, never dropping to spectating", () => {
@@ -312,14 +330,14 @@ describe("given a host and one guest seated in car 1", () => {
     s.step(5);
     s.advance(60_000);
     s.step(5);
-    assert.equal(s.host.remoteCar(1), false, "the host freed the car after the grace period");
-    assert.equal(s.client.status().problem, "host-lost");
+    expect(s.host.remoteCar(1), "the host freed the car after the grace period").toBe(false);
+    expect(s.client.status().problem).toBe("host-lost");
     s.hub.setCut(s.hostId(), s.clientId(), false);
     s.step(40);
-    assert.equal(s.client.status().problem, null);
-    assert.ok(s.host.remoteCar(1), "the guest is seated again in its car");
-    assert.equal(s.cg.seat.mode, "drive", "the seat never dropped back to follow");
-    assert.ok(s.hostSpeed() > 3, `and the throttle held through the outage drives it (${s.hostSpeed().toFixed(2)} m/s)`);
+    expect(s.client.status().problem).toBe(null);
+    expect(s.host.remoteCar(1), "the guest is seated again in its car").toBeTruthy();
+    expect(s.cg.seat.mode, "the seat never dropped back to follow").toBe("drive");
+    expect(s.hostSpeed(), `and the throttle held through the outage drives it (${s.hostSpeed().toFixed(2)} m/s)`).toBeGreaterThan(3);
   });
 
   it("when the host stops hearing the guest for a minute while the guest still hears the host, then the host frees the car but the guest keeps car 1, and its next input seats it again and drives", () => {
@@ -328,13 +346,13 @@ describe("given a host and one guest seated in car 1", () => {
     s.step(5, { client: false });
     s.advance(60_000);
     s.step(5, { client: false });
-    assert.equal(s.host.remoteCar(1), false, "the host freed the car after the grace period");
-    assert.equal(s.client.status().car, 1, "the guest, still hearing the host, keeps driving car 1");
+    expect(s.host.remoteCar(1), "the host freed the car after the grace period").toBe(false);
+    expect(s.client.status().car, "the guest, still hearing the host, keeps driving car 1").toBe(1);
     s.hub.unlisted.delete(s.clientId());
     s.holdThrottle();
     s.step(30);
-    assert.ok(s.host.remoteCar(1), "its next input seats it again");
-    assert.ok(s.hostSpeed() > 3, `and drives (${s.hostSpeed().toFixed(2)} m/s)`);
+    expect(s.host.remoteCar(1), "its next input seats it again").toBeTruthy();
+    expect(s.hostSpeed(), `and drives (${s.hostSpeed().toFixed(2)} m/s)`).toBeGreaterThan(3);
   });
 
   it("when the host leaves and restarts in the same room, then the new host seats the guest in a car and the guest renders the new host's world", () => {
@@ -350,7 +368,7 @@ describe("given a host and one guest seated in car 1", () => {
       s.client.frame(FRAME_MS / 1000);
       s.hub.flush();
     }
-    assert.ok(host2.remoteCar(s.client.status().car), "the restarted host seated the guest");
+    expect(host2.remoteCar(s.client.status().car), "the restarted host seated the guest").toBeTruthy();
     s.hg.cars()[0]!.group.position.x = 7;
     for (let k = 0; k < 20; k++) {
       s.advance(FRAME_MS);
@@ -358,14 +376,14 @@ describe("given a host and one guest seated in car 1", () => {
       s.client.frame(FRAME_MS / 1000);
       s.hub.flush();
     }
-    assert.ok(Math.abs(s.cg.cars()[0]!.group.position.x - 7) < 0.01, "the guest renders the new host's world");
+    expect(Math.abs(s.cg.cars()[0]!.group.position.x - 7), "the guest renders the new host's world").toBeLessThan(0.01);
   });
 
   it("when the host leaves, then every seat is freed, so a solo race or derby has no ghost players", () => {
     const s = session();
-    assert.deepEqual(s.hg.seats.at(-1), [[1, "Player 1"]]);
+    expectOneSeat(s.hg.seats.at(-1), 1, "Player 1");
     s.host.leave();
-    assert.deepEqual(s.hg.seats.at(-1), []);
+    expect(s.hg.seats.at(-1)).toHaveLength(0);
   });
 });
 
@@ -384,24 +402,24 @@ describe("given a host and a guest who each picked colours and sprayed paint in 
     const s = session({ hostLook, guestLook });
     const onHost = s.hg.worn.filter(([car]) => car === 1).at(-1)?.[1];
     const onGuest = s.cg.worn.filter(([car]) => car === 0).at(-1)?.[1];
-    assert.ok(onHost && onGuest, "each side wore the other's look");
-    assert.equal(carPickText(onHost.car), carPickText(guestLook.car), "the guest's car picks on the host");
-    assert.equal(personPickText(onHost.person), personPickText(guestLook.person), "the guest's driver picks on the host");
+    must(onHost && onGuest, "each side wore the other's look");
+    expect(carPickText(onHost.car), "the guest's car picks on the host").toBe(carPickText(guestLook.car));
+    expect(personPickText(onHost.person), "the guest's driver picks on the host").toBe(personPickText(guestLook.person));
     assertSameNumbers(onHost.personSpray.texels, guestLook.personSpray.texels, "the guest's driver spray on the host");
     assertSameNumbers(onHost.carSpray.texels, guestLook.carSpray.texels, "the guest's bare car spray on the host");
-    assert.equal(carPickText(onGuest.car), carPickText(hostLook.car), "the host's car picks on the guest");
-    assert.equal(personPickText(onGuest.person), personPickText(hostLook.person), "the host's driver picks on the guest");
+    expect(carPickText(onGuest.car), "the host's car picks on the guest").toBe(carPickText(hostLook.car));
+    expect(personPickText(onGuest.person), "the host's driver picks on the guest").toBe(personPickText(hostLook.person));
     assertSameNumbers(onGuest.carSpray.texels, hostLook.carSpray.texels, "the host's car spray on the guest");
     assertSameNumbers(onGuest.carSpray.palette, hostLook.carSpray.palette, "the host's car spray inks on the guest, its own colour on ink 9");
-    assert.equal(s.cg.worn.some(([car, look]) => car === 1 && look !== null), false, "the guest's own seat never wears a look from the relay");
-    assert.ok(s.cg.worn.some(([car, look]) => car === 1 && look === null), "the guest's own seat put on the guest's own look when seated");
+    expect(s.cg.worn.some(([car, look]) => car === 1 && look !== null), "the guest's own seat never wears a look from the relay").toBe(false);
+    expect(s.cg.worn.some(([car, look]) => car === 1 && look === null), "the guest's own seat put on the guest's own look when seated").toBeTruthy();
   });
 });
 
 describe("given a host receiving a guest's hello", () => {
   it("when the hello's name has extra whitespace, control or text-direction characters and is over 16 characters, then the guest is seated under that name cleaned of them and cut to 16 characters", () => {
     const s = session({ name: "  Zed\u202E\u0000 the\tquick brown fox jumps  " });
-    assert.deepEqual(s.hg.seats.at(-1), [[1, "Zed the quick br"]]);
+    expectOneSeat(s.hg.seats.at(-1), 1, "Zed the quick br");
   });
 
   it("when the hello carries no name (the field's older layout), then the guest is seated as Player 1", () => {
@@ -412,7 +430,7 @@ describe("given a host receiving a guest's hello", () => {
     host.host("R", "bc");
     hub.connect("bc", "R", "bare", "client").send(new Uint8Array([codec.MSG.hello, codec.NET_VERSION]));
     hub.flush();
-    assert.deepEqual(hg.seats.at(-1), [[1, "Player 1"]]);
+    expectOneSeat(hg.seats.at(-1), 1, "Player 1");
   });
 });
 
@@ -423,10 +441,10 @@ describe("given a guest connected to its host, with other peers in the room", ()
     rogue.send(new Uint8Array([codec.MSG.assign, 5, codec.NET_VERSION ?? 0]), s.clientId());
     rogue.send(new Uint8Array([codec.MSG.snapshot, 0, 0xfe, 0x7f]), s.clientId());
     s.hub.flush();
-    assert.equal(s.client.status().car, 1, "a peer other than the host cannot move the guest to another car");
+    expect(s.client.status().car, "a peer other than the host cannot move the guest to another car").toBe(1);
     s.hg.cars()[0]!.group.position.x = 5;
     s.step(20);
-    assert.ok(Math.abs(s.cg.cars()[0]!.group.position.x - 5) < 0.01, "the host's snapshots still apply");
+    expect(Math.abs(s.cg.cars()[0]!.group.position.x - 5), "the host's snapshots still apply").toBeLessThan(0.01);
   });
 
   it("when the host sends a snapshot the guest cannot decode, then the guest keeps applying the host's following snapshots", () => {
@@ -435,7 +453,7 @@ describe("given a guest connected to its host, with other peers in the room", ()
     s.hub.flush();
     s.hg.cars()[0]!.group.position.x = 5;
     s.step(20);
-    assert.ok(Math.abs(s.cg.cars()[0]!.group.position.x - 5) < 0.01, "a truncated snapshot does not block the next ones");
+    expect(Math.abs(s.cg.cars()[0]!.group.position.x - 5), "a truncated snapshot does not block the next ones").toBeLessThan(0.01);
   });
 
   it("when a snapshot with an unknown body or a non-finite pose arrives, then the guest refuses it: no car is rebuilt on an unknown body and no NaN pose reaches a car", () => {
@@ -450,12 +468,9 @@ describe("given a guest connected to its host, with other peers in the room", ()
     s.hub.flush();
     for (let k = 0; k < 10; k++) {
       s.step();
-      for (const car of s.cg.cars()) assert.ok(Number.isFinite(car.group.position.x), "no NaN pose reaches a car");
+      for (const car of s.cg.cars()) expect(Number.isFinite(car.group.position.x), "no NaN pose reaches a car").toBeTruthy();
     }
-    assert.ok(
-      s.cg.matched.every(([, style, cls]) => typeof style === "string" && typeof cls === "string"),
-      "no car is rebuilt on an unknown body",
-    );
+    expect(s.cg.matched.every(([, style, cls]) => typeof style === "string" && typeof cls === "string"), "no car is rebuilt on an unknown body").toBeTruthy();
   });
 
   it("when a race state with an out-of-range lap count arrives, then it is not applied, while the same message with a sane lap count is", () => {
@@ -465,12 +480,12 @@ describe("given a guest connected to its host, with other peers in the room", ()
     const body = new TextEncoder().encode(JSON.stringify({ lobby: null, trackId: "oval", look: 0, snap }));
     s.hub.sendAs(s.hostId(), s.clientId(), new Uint8Array([codec.MSG.race, ...body]));
     s.hub.flush();
-    assert.deepEqual(applied, []);
+    expect(applied).toHaveLength(0);
     // Control: the same message with a sane lap count is applied, so the empty list above is the lap check's.
     const ok = new TextEncoder().encode(JSON.stringify({ lobby: null, trackId: "oval", look: 0, snap: { ...snap, laps: 3 } }));
     s.hub.sendAs(s.hostId(), s.clientId(), new Uint8Array([codec.MSG.race, ...ok]));
     s.hub.flush();
-    assert.deepEqual(applied, [3]);
+    expect(firstMismatch(applied, [3])).toBeUndefined();
   });
 
   it("when a race state carries a campaign table whose entry has no standings row, or a hundred tracks, then it is not applied, while a sound table is", () => {
@@ -486,10 +501,10 @@ describe("given a guest connected to its host, with other peers in the room", ()
     };
     send({ ...sound, entry: [0, 5] });
     send({ ...sound, tracks: Array.from({ length: 100 }, () => "oval") });
-    assert.deepEqual(applied, []);
+    expect(applied).toHaveLength(0);
     // Control: the sound table is applied, so the empty list above is the table check's.
     send(sound);
-    assert.deepEqual(applied, [3]);
+    expect(firstMismatch(applied, [3])).toBeUndefined();
   });
 });
 
@@ -506,9 +521,9 @@ describe("given a host and a peer running another build", () => {
     hub.flush();
     host.frame(FRAME_MS / 1000);
     hub.flush();
-    assert.equal(host.remoteCar(1), false, "a hello without this build's version takes no car");
+    expect(host.remoteCar(1), "a hello without this build's version takes no car").toBe(false);
     const assign = got.find((m) => m[0] === codec.MSG.assign);
-    assert.ok(assign && assign[1] === 255, "it is told it cannot join");
+    expect(assign && assign[1] === 255, "it is told it cannot join").toBeTruthy();
   });
 });
 
@@ -518,9 +533,9 @@ describe("given a host with one guest driving at full throttle", () => {
     s.holdThrottle();
     s.step(30);
     const moving = s.hostSpeed();
-    assert.ok(moving > 3);
+    expect(moving).toBeGreaterThan(3);
     s.step(30, { client: false });
-    assert.ok(s.hostSpeed() < moving, `the car coasts down (${moving.toFixed(2)} → ${s.hostSpeed().toFixed(2)} m/s)`);
+    expect(s.hostSpeed(), `the car coasts down (${moving.toFixed(2)} → ${s.hostSpeed().toFixed(2)} m/s)`).toBeLessThan(moving);
   });
 
   it("when the guest's tab is hidden, then its car on the host idles at once", () => {
@@ -531,7 +546,7 @@ describe("given a host with one guest driving at full throttle", () => {
     s.client.setHidden(true);
     s.hub.flush();
     s.step(3, { client: false });
-    assert.ok(s.hostSpeed() < moving, `no full-throttle zombie (${moving.toFixed(2)} → ${s.hostSpeed().toFixed(2)} m/s)`);
+    expect(s.hostSpeed(), `no full-throttle zombie (${moving.toFixed(2)} → ${s.hostSpeed().toFixed(2)} m/s)`).toBeLessThan(moving);
   });
 });
 
@@ -544,13 +559,13 @@ describe("given a guest connected to a host whose tab is hidden", () => {
     s.hub.flush();
     s.advance(4000);
     s.step(1, { host: false });
-    assert.equal(s.client.status().car, 1, "a paused host keeps its guests");
-    assert.equal(s.client.status().problem, "host-paused");
+    expect(s.client.status().car, "a paused host keeps its guests").toBe(1);
+    expect(s.client.status().problem).toBe("host-paused");
     s.host.leave();
     s.advance(6000);
     s.step(1, { host: false });
-    assert.equal(s.client.status().problem, "host-lost");
-    assert.equal(s.client.status().car, 1, "it keeps its car (camera, held pedal) while it asks for a seat again");
+    expect(s.client.status().problem).toBe("host-lost");
+    expect(s.client.status().car, "it keeps its car (camera, held pedal) while it asks for a seat again").toBe(1);
   });
 });
 
@@ -586,7 +601,7 @@ for (const testCase of hostModeCases) {
       s.client.frame(FRAME_MS / 1000);
       s.hub.flush();
       s.step(FRAMES_PER_SECOND, { host: false });
-      assert.equal(exits(), 0);
+      expect(exits()).toBe(0);
     });
 
     it("when its host's tab is hidden for 3 s (only the paused heartbeat arrives), then it stays in the mode", () => {
@@ -594,13 +609,13 @@ for (const testCase of hostModeCases) {
       s.host.setHidden(true);
       s.hub.flush();
       s.step(3 * FRAMES_PER_SECOND, { host: false });
-      assert.equal(exits(), 0);
+      expect(exits()).toBe(0);
     });
 
     it("when its live host stops sending the mode for 4 s of the guest's frames, then it leaves the mode once", () => {
       const { s, exits } = guestInHostMode(testCase.mode);
       s.step(4 * FRAMES_PER_SECOND);
-      assert.equal(exits(), 1);
+      expect(exits()).toBe(1);
     });
   });
 }
@@ -608,9 +623,9 @@ for (const testCase of hostModeCases) {
 describe("given a guest following its host", () => {
   it("when the host's race state carries a Survival run, then the guest enters Survival; when it carries a race, then it enters a race", () => {
     const survival = guestInHostMode("survival");
-    assert.deepEqual(survival.s.cg.raceEntered, [true]);
+    expect(firstMismatch(survival.s.cg.raceEntered, [true])).toBeUndefined();
     const race = guestInHostMode("race");
-    assert.deepEqual(race.s.cg.raceEntered, [false]);
+    expect(firstMismatch(race.s.cg.raceEntered, [false])).toBeUndefined();
   });
 });
 
@@ -621,17 +636,17 @@ describe("given a client whose scene is cleared when the host's clear count chan
   it("when the host's clear count changes, then the client's scene is emptied once, and a steady count never empties it", () => {
     const s = session();
     s.step(10);
-    assert.equal(s.cg.clears, 0, "joining a running scene clears nothing");
+    expect(s.cg.clears, "joining a running scene clears nothing").toBe(0);
     tear(s.cg.cars()[1]!);
     s.step(10);
-    assert.equal(s.cg.clears, 0, "a steady count leaves the client's scene alone");
-    assert.equal(torn(s.cg.cars()[1]!), 1, "the torn part is still there before the host clears");
+    expect(s.cg.clears, "a steady count leaves the client's scene alone").toBe(0);
+    expect(torn(s.cg.cars()[1]!), "the torn part is still there before the host clears").toBe(1);
     s.hg.gen = 1;
     s.step(10);
-    assert.equal(s.cg.clears, 1, "one clear for one change");
-    assert.equal(torn(s.cg.cars()[1]!), 0, "the client's torn part is gone");
+    expect(s.cg.clears, "one clear for one change").toBe(1);
+    expect(torn(s.cg.cars()[1]!), "the client's torn part is gone").toBe(0);
     s.step(30);
-    assert.equal(s.cg.clears, 1, "the new count is not cleared again");
+    expect(s.cg.clears, "the new count is not cleared again").toBe(1);
   });
 
   it("when the host clears just before the new scene's own wreck, then a crash right after the host's clear survives on the client", () => {
@@ -642,9 +657,9 @@ describe("given a client whose scene is cleared when the host's clear count chan
     host.crashed = true;
     tear(host);
     s.step(10);
-    assert.equal(s.cg.clears, 1);
-    assert.equal(s.cg.cars()[0]!.crashed, true, "the client shows the new scene's crash");
-    assert.equal(torn(s.cg.cars()[0]!), 1, "the new scene's torn part is drawn, not wiped by the clear");
+    expect(s.cg.clears).toBe(1);
+    expect(s.cg.cars()[0]!.crashed, "the client shows the new scene's crash").toBe(true);
+    expect(torn(s.cg.cars()[0]!), "the new scene's torn part is drawn, not wiped by the clear").toBe(1);
   });
 
   it("when the results reel is playing, then the client does not clear, and does so once the reel ends if the host cleared meanwhile", () => {
@@ -653,10 +668,10 @@ describe("given a client whose scene is cleared when the host's clear count chan
     s.cg.playing = true;
     s.hg.gen = 3;
     s.step(10);
-    assert.equal(s.cg.clears, 0, "the reel owns the cars");
+    expect(s.cg.clears, "the reel owns the cars").toBe(0);
     s.cg.playing = false;
     s.step(10);
-    assert.equal(s.cg.clears, 1, "back to the host's scene: its clear lands");
+    expect(s.cg.clears, "back to the host's scene: its clear lands").toBe(1);
   });
 });
 
@@ -679,21 +694,21 @@ describe("given a host car dented under the crash's depth (8 mm on its nose: no 
     host.deform.bakeLoadCrush();
     host.deform.skinLoaded();
     host.updateSkin();
-    assert.ok(!host.crashed && host.deform.loadCrushed(), "the host car is dented and no wreck");
+    expect(!host.crashed && host.deform.loadCrushed(), "the host car is dented and no wreck").toBeTruthy();
     const dented = apart(skin(host), rest);
-    assert.ok(dented > 0.003, `the host's skin is dented (${dented.toFixed(4)} m)`);
+    expect(dented, `the host's skin is dented (${dented.toFixed(4)} m)`).toBeGreaterThan(0.003);
     s.step(20);
-    assert.equal(guest.crashed, false, "the guest draws no wreck");
+    expect(guest.crashed, "the guest draws no wreck").toBe(false);
     const depth = guest.deform.crush[FACE_NOSE]!;
-    assert.ok(Math.abs(depth - DENT) <= codec.Q.fine / 2 + 1e-9, `the guest's nose depth is ${depth.toFixed(4)} m, the host's ${DENT} m`);
+    expect(Math.abs(depth - DENT), `the guest's nose depth is ${depth.toFixed(4)} m, the host's ${DENT} m`).toBeLessThanOrEqual(codec.Q.fine / 2 + 1e-9);
     const off = apart(skin(guest), skin(host));
-    assert.ok(off < 0.002, `the guest's skin is the host's within 2 mm (${off.toFixed(4)} m)`);
+    expect(off, `the guest's skin is the host's within 2 mm (${off.toFixed(4)} m)`).toBeLessThan(0.002);
     host.resetVisual();
     s.step(20);
-    assert.equal(host.deform.loadCrushed(), false, "the host's dent is repaired");
-    assert.equal(guest.deform.loadCrushed(), false, "the guest's dent is cleared with it");
+    expect(host.deform.loadCrushed(), "the host's dent is repaired").toBe(false);
+    expect(guest.deform.loadCrushed(), "the guest's dent is cleared with it").toBe(false);
     const back = apart(skin(guest), rest);
-    assert.ok(back < 0.002, `the guest's skin is the car's rest skin again (${back.toFixed(4)} m off)`);
+    expect(back, `the guest's skin is the car's rest skin again (${back.toFixed(4)} m off)`).toBeLessThan(0.002);
   });
 });
 
@@ -702,21 +717,21 @@ describe("given a host and a guest whose voice follows the host's roster of who 
     const s = session();
     const guestHears = s.client.voice.snapshot().peers;
     const hostHears = s.host.voice.snapshot().peers;
-    assert.equal(guestHears.length, 1, "the guest's voice lists one other player");
-    assert.equal(guestHears[0]!.id, s.hostId(), "the guest lists the host");
-    assert.equal(guestHears[0]!.car, 0, "the host drives car 0");
-    assert.equal(hostHears.length, 1, "the host's voice lists one other player");
-    assert.equal(hostHears[0]!.id, s.clientId(), "the host lists the guest");
-    assert.equal(hostHears[0]!.car, s.client.status().car, "the guest drives the car the host assigned it");
+    expect(guestHears.length, "the guest's voice lists one other player").toBe(1);
+    expect(guestHears[0]!.id, "the guest lists the host").toBe(s.hostId());
+    expect(guestHears[0]!.car, "the host drives car 0").toBe(0);
+    expect(hostHears.length, "the host's voice lists one other player").toBe(1);
+    expect(hostHears[0]!.id, "the host lists the guest").toBe(s.clientId());
+    expect(hostHears[0]!.car, "the guest drives the car the host assigned it").toBe(s.client.status().car);
   });
 
   it("when the guest leaves and its seat lapses, then the host's voice lists nobody", () => {
     const s = session();
-    assert.equal(s.host.voice.snapshot().peers.length, 1, "precondition: the guest is listed");
+    expect(s.host.voice.snapshot().peers.length, "precondition: the guest is listed").toBe(1);
     s.client.leave();
     s.advance(SLOT_GRACE_MS + 1000);
     s.step(5, { client: false });
-    assert.equal(s.host.voice.snapshot().peers.length, 0, "the roster dropped the guest");
+    expect(s.host.voice.snapshot().peers.length, "the roster dropped the guest").toBe(0);
   });
 });
 
@@ -731,16 +746,16 @@ describe("given a guest whose host sends the highlight reel", () => {
     for (const part of reelParts(await packReel({ seed: 7, clips: [] }, hostStart))) s.host.sendReliable(part);
     s.hub.flush();
     const [reel, startAt] = await played;
-    assert.equal(reel.seed, 7);
-    assert.ok(Math.abs(startAt - (hostStart + 5)) < 1e-6, `starts at host ${hostStart} + 5 s skew (${startAt})`);
+    expect(reel.seed).toBe(7);
+    expect(Math.abs(startAt - (hostStart + 5)), `starts at host ${hostStart} + 5 s skew (${startAt})`).toBeLessThan(1e-6);
 
     s.cg.playing = true;
     s.hg.cars()[0]!.group.position.x = 5;
     s.step(20);
-    assert.ok(Math.abs(s.cg.cars()[0]!.group.position.x - 5) > 1, "the reel keeps the cars while it plays");
+    expect(Math.abs(s.cg.cars()[0]!.group.position.x - 5), "the reel keeps the cars while it plays").toBeGreaterThan(1);
     s.cg.playing = false;
     s.step(20);
-    assert.ok(Math.abs(s.cg.cars()[0]!.group.position.x - 5) < 0.01, "snapshots draw again once it ends");
+    expect(Math.abs(s.cg.cars()[0]!.group.position.x - 5), "snapshots draw again once it ends").toBeLessThan(0.01);
   });
 
   it("when a reel larger than the relay's message cap is sent, then it reaches the guest with every clip", { timeout: 20000 }, async () => {
@@ -759,13 +774,13 @@ describe("given a guest whose host sends the highlight reel", () => {
     const big = { ...clip, h: new Float32Array(steps).fill(1 / FINE_HZ), shape, lone, inputs: noise(steps * 2 * INPUT_BYTES) };
     const clips = [big, { ...big, score: 9 }, { ...big, score: 8 }, { ...big, score: 7 }, { ...big, score: 6 }];
     const msg = await packReel({ seed: 5, clips }, s.clock() / 1000 + 3);
-    assert.ok(msg.length > RELAY_MSG_MAX, `precondition: the reel is ${msg.length} bytes, over the cap`);
+    expect(msg.length, `precondition: the reel is ${msg.length} bytes, over the cap`).toBeGreaterThan(RELAY_MSG_MAX);
     const parts = reelParts(msg);
-    assert.ok(parts.length > 1 && parts.every((p) => p.length <= RELAY_MSG_MAX), "no frame over the cap");
+    expect(parts.length > 1 && parts.every((p) => p.length <= RELAY_MSG_MAX), "no frame over the cap").toBeTruthy();
     for (const part of parts) s.host.sendReliable(part);
     s.hub.flush();
     const reel = await played;
-    assert.equal(reel.clips.length, 5, "every clip arrives");
+    expect(reel.clips.length, "every clip arrives").toBe(5);
     sameClip(reel.clips[0]!, big);
     sameClip(reel.clips[4]!, clips[4]!);
   });
@@ -844,16 +859,16 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
       }
     };
     step(20, [host, client]);
-    assert.equal(client.status().role, "client");
-    assert.equal(client.status().car, 1);
+    expect(client.status().role).toBe("client");
+    expect(client.status().car).toBe(1);
     host.leave();
     step(7000 / FRAME_MS, [client]);
     await settle(searches);
     const st = client.status();
-    assert.equal(st.role, "host", "the stranded guest hosts instead");
-    assert.equal(st.public, "race");
-    assert.notEqual(st.room, dead);
-    assert.equal(st.finding, false);
+    expect(st.role, "the stranded guest hosts instead").toBe("host");
+    expect(st.public).toBe("race");
+    expect(st.room).not.toBe(dead);
+    expect(st.finding).toBe(false);
   });
 
   it("given a public guest in an open room, when its page loads with its engine running no frames for 9 s and again when it stalls 9 s mid-session, then it stays in the room as car 1 both times", async () => {
@@ -876,12 +891,12 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     await client.publicMatch("race");
     run(9000, false);
     run(1000);
-    assert.deepEqual([client.status().role, client.status().room === dead, client.status().car], ["client", true, 1]);
+    expect(firstMismatch([client.status().role, client.status().room === dead, client.status().car], ["client", true, 1])).toBeUndefined();
     // A 9 s stall mid-session (a course loading): the host's messages wait in the queue behind the client's next frame.
     now += 9000;
     client.frame(0.1);
     run(1000);
-    assert.deepEqual([client.status().role, client.status().room === dead, client.status().car], ["client", true, 1]);
+    expect(firstMismatch([client.status().role, client.status().room === dead, client.status().car], ["client", true, 1])).toBeUndefined();
   });
 
   it("given a weak device with nothing to join, when it presses Play online, then it looks, hosts a field of 4 (the player plus 3 AI cars) without changing the player's own AI count, and drops that field on leaving", async () => {
@@ -892,15 +907,15 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     open.push(np);
     vi.spyOn(globalThis, "fetch").mockImplementation(listing([]));
     const searching = np.publicMatch("race");
-    assert.equal(np.status().finding, true);
+    expect(np.status().finding).toBe(true);
     await searching;
-    assert.deepEqual([np.status().role, np.status().public, np.status().finding], ["host", "race", false]);
+    expect(firstMismatch([np.status().role, np.status().public, np.status().finding], ["host", "race", false])).toBeUndefined();
     const race = g.race()!;
-    assert.equal(race.program?.aiCount, 3, "a weak host's field is the player plus 3");
-    assert.equal(race.options.aiCount, DEFAULT_RACE_OPTIONS.aiCount, "the player's own field size stays");
+    expect(race.program?.aiCount, "a weak host's field is the player plus 3").toBe(3);
+    expect(race.options.aiCount, "the player's own field size stays").toBe(DEFAULT_RACE_OPTIONS.aiCount);
     np.leave();
-    assert.equal(race.program, null, "a solo race is back to its own field");
-    assert.equal(race.options.aiCount, DEFAULT_RACE_OPTIONS.aiCount);
+    expect(race.program, "a solo race is back to its own field").toBe(null);
+    expect(race.options.aiCount).toBe(DEFAULT_RACE_OPTIONS.aiCount);
   });
 
   it("given a device able to host with nothing to join, when it presses Play online, then it hosts a full field at once, within 5 s of the start", async () => {
@@ -910,9 +925,9 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     open.push(np);
     vi.spyOn(globalThis, "fetch").mockImplementation(listing([]));
     await np.publicMatch("race");
-    assert.equal(np.status().role, "host");
-    assert.equal(g.race()!.options.aiCount, DEFAULT_RACE_OPTIONS.aiCount);
-    assert.ok(v.t.now - 1000 < 5000, "no long search before hosting");
+    expect(np.status().role).toBe("host");
+    expect(g.race()!.options.aiCount).toBe(DEFAULT_RACE_OPTIONS.aiCount);
+    expect(v.t.now - 1000, "no long search before hosting").toBeLessThan(5000);
   });
 
   it("given a Play online search in progress, when the player leaves, then no room is joined or hosted afterwards", async () => {
@@ -928,7 +943,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     np.leave();
     release();
     await searching;
-    assert.deepEqual([np.status().role, np.status().finding], ["off", false]);
+    expect(firstMismatch([np.status().role, np.status().finding], ["off", false])).toBeUndefined();
   });
 
   it("given a public host, when its match goes from the lobby through grid, countdown, racing and finished, then its relay tag reads lobby, running, running, running, over with the course, and a guest sends none", () => {
@@ -942,34 +957,34 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     const seen: string[] = [tag()];
     // The lobby holds the tag at "lobby" whatever the race director says, until the game starts.
     g.race()!.phase = "racing";
-    assert.equal(tag(), "lobby.oval", "in the lobby");
+    expect(tag(), "in the lobby").toBe("lobby.oval");
     host.setMinPlayers(1);
-    assert.ok(host.go(), "alone, with one player wanted");
+    expect(host.go(), "alone, with one player wanted").toBeTruthy();
     for (const phase of ["grid", "countdown", "racing", "finished"] as const) {
       g.race()!.phase = phase;
       seen.push(tag());
     }
-    assert.deepEqual(seen, ["lobby.oval", "running.oval", "running.oval", "running.oval", "over.oval"]);
+    expect(firstMismatch(seen, ["lobby.oval", "running.oval", "running.oval", "running.oval", "over.oval"])).toBeUndefined();
     guest.publicJoin(dead, "race");
-    assert.equal(hub.metas.get(guest.status().selfId)!(), "");
+    expect(hub.metas.get(guest.status().selfId)!()).toBe("");
   });
 
   it("given two public rooms whose hosts never answer, when a guest presses Play online, then it tries each once, never goes back to either, and then hosts", async (t) => {
     const [x, y] = ["AAAA", "BBBB"].map((c) => publicRoomName("race", c));
     const g = await guestOf(t, [x!, y!]);
     for (let k = 0; k < 3; k++) await g.dwell();
-    assert.equal(g.linked.length, 3, g.linked.join(" | "));
-    assert.equal(g.linked.slice(0, 2).join(" | "), `client ${x} | client ${y}`);
-    assert.match(g.linked[2]!, /^host pub-race-/);
+    expect(g.linked.length, g.linked.join(" | ")).toBe(3);
+    expect(g.linked.slice(0, 2).join(" | ")).toBe(`client ${x} | client ${y}`);
+    expect(g.linked[2]!).toMatch(/^host pub-race-/);
   });
 
   it("given four public rooms whose hosts never answer, when a guest presses Play online, then after 3 dead rooms in a row it hosts instead of trying a fourth", async (t) => {
     const names = ["AAAA", "BBBB", "CCCC", "DDDD"].map((c) => publicRoomName("race", c));
     const g = await guestOf(t, names);
     for (let k = 0; k < 4; k++) await g.dwell();
-    assert.equal(g.linked.length, 4, g.linked.join(" | "));
-    assert.equal(g.linked.slice(0, 3).join(" | "), names.slice(0, 3).map((n) => `client ${n}`).join(" | "));
-    assert.match(g.linked[3]!, /^host pub-race-/);
+    expect(g.linked.length, g.linked.join(" | ")).toBe(4);
+    expect(g.linked.slice(0, 3).join(" | ")).toBe(names.slice(0, 3).map((n) => `client ${n}`).join(" | "));
+    expect(g.linked[3]!).toMatch(/^host pub-race-/);
   });
 
   it("given four public rooms where the second host answers and then leaves, when a guest presses Play online, then that room does not count toward the dead rooms, so the guest tries all four before hosting", async (t) => {
@@ -980,12 +995,12 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     open.push(host);
     host.host(names[1]!, "rtc");
     run(g.hub, g.v.t, 700, [host, g.client]);
-    assert.equal(g.client.status().car, 1, "the second room's host answered");
+    expect(g.client.status().car, "the second room's host answered").toBe(1);
     host.leave();
     await g.dwell();
     await g.dwell();
     await g.dwell();
-    assert.equal(g.linked.slice(0, 4).join(" | "), names.map((n) => `client ${n}`).join(" | "), "dead, answered, dead, dead: the answering room broke the streak");
+    expect(g.linked.slice(0, 4).join(" | "), "dead, answered, dead, dead: the answering room broke the streak").toBe(names.map((n) => `client ${n}`).join(" | "));
   });
 
   it("given a guest whose last search gave up on two dead rooms, when the player leaves and presses Play online again, then the search starts over with the first room in the list", async (t) => {
@@ -995,7 +1010,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     await g.dwell();
     g.client.leave();
     await g.client.publicMatch("race");
-    assert.equal(g.linked.at(-1), `client ${x}`, "first in the list again");
+    expect(g.linked.at(-1), "first in the list again").toBe(`client ${x}`);
   });
 
   it("given a weak host, when race mode closes before it leaves, then the player's own AI count was never changed and is the default once race mode is on again", async () => {
@@ -1006,11 +1021,11 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     open.push(np);
     vi.spyOn(globalThis, "fetch").mockImplementation(listing([]));
     await np.publicMatch("race");
-    assert.equal(g.race()!.options.aiCount, DEFAULT_RACE_OPTIONS.aiCount);
+    expect(g.race()!.options.aiCount).toBe(DEFAULT_RACE_OPTIONS.aiCount);
     g.raceOn = false;
     np.leave();
     g.raceOn = true;
-    assert.equal(g.race()!.options.aiCount, DEFAULT_RACE_OPTIONS.aiCount);
+    expect(g.race()!.options.aiCount).toBe(DEFAULT_RACE_OPTIONS.aiCount);
   });
 
   it("given a public host on the real WebRTC transport against a stubbed relay, when it makes its first relay poll, then that poll already carries the lobby tag", async () => {
@@ -1029,8 +1044,8 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     open.push(np);
     np.publicHost("race", false);
     await firstPoll;
-    assert.equal(polls.length, 1);
-    assert.equal(new URL(polls[0]!, "http://relay.test").searchParams.get("meta"), "lobby.oval");
+    expect(polls.length).toBe(1);
+    expect(new URL(polls[0]!, "http://relay.test").searchParams.get("meta")).toBe("lobby.oval");
   });
 });
 
@@ -1040,14 +1055,14 @@ describe("given a host waiting in the Havana lobby of a private room", () => {
     const alone = new NetPlay(fakeGame(), { connect: new Hub().connect, now: () => 0 });
     open.push(alone);
     alone.host("A", "bc");
-    assert.deepEqual(alone.status().gate, { min: 2, kind: "race", course: "", playlist: [], players: 1 });
-    assert.equal(alone.canGo(), false);
-    assert.equal(alone.go(), false, "one human cannot start with two wanted");
-    assert.deepEqual(s.host.status().gate, { min: 2, kind: "race", course: "oval", playlist: [], players: 2 });
-    assert.equal(s.host.go(), true, "a guest has joined");
-    assert.deepEqual(s.hg.started, ["race"]);
-    assert.equal(s.host.status().gate, null, "the game runs: no gate");
-    assert.equal(s.host.go(), false, "Go works once");
+    expectGate(alone.status().gate, { min: 2, kind: "race", course: "", playlist: [], players: 1 }, "the host alone");
+    expect(alone.canGo()).toBe(false);
+    expect(alone.go(), "one human cannot start with two wanted").toBe(false);
+    expectGate(s.host.status().gate, { min: 2, kind: "race", course: "oval", playlist: [], players: 2 }, "the host with a guest");
+    expect(s.host.go(), "a guest has joined").toBe(true);
+    expect(firstMismatch(s.hg.started, ["race"])).toBeUndefined();
+    expect(s.host.status().gate, "the game runs: no gate").toBe(null);
+    expect(s.host.go(), "Go works once").toBe(false);
   });
 
   it("when the lobby wants one player, then the host starts alone; and what it asked of the engine was the Havana lobby from the first moment", () => {
@@ -1055,25 +1070,26 @@ describe("given a host waiting in the Havana lobby of a private room", () => {
     const alone = new NetPlay(g, { connect: new Hub().connect, now: () => 0 });
     open.push(alone);
     alone.host("A", "bc");
-    assert.deepEqual([g.raceEntered, g.lobbyEntered], [[false], [true]], "race mode on as the lobby");
+    expect(firstMismatch(g.raceEntered, [false]), "race mode on").toBeUndefined();
+    expect(firstMismatch(g.lobbyEntered, [true]), "as the lobby").toBeUndefined();
     alone.setMinPlayers(1);
-    assert.equal(alone.go(), true);
-    assert.deepEqual(g.started, ["race"]);
+    expect(alone.go()).toBe(true);
+    expect(firstMismatch(g.started, ["race"])).toBeUndefined();
   });
 
   it("when the minimum is set out of range or not a number, then it is clamped to 1..ROOM_MAX and rounded; a guest and a finished lobby cannot set it", () => {
     const s = session({ hostRace: true, raceApplied: [] });
     const min = (n: number): number | undefined => (s.host.setMinPlayers(n), s.host.status().gate?.min);
-    assert.deepEqual([min(0), min(-3), min(99), min(2.6), min(Number.NaN)], [1, 1, 8, 3, 1]);
+    expect(firstMismatch([min(0), min(-3), min(99), min(2.6), min(Number.NaN)], [1, 1, 8, 3, 1])).toBeUndefined();
     s.host.setMinPlayers(5);
     s.client.setMinPlayers(1);
     s.client.setLobbyKind("derby");
     s.step(10);
-    assert.deepEqual(s.host.status().gate, { min: 5, kind: "race", course: "oval", playlist: [], players: 2 }, "the guest changed nothing");
+    expectGate(s.host.status().gate, { min: 5, kind: "race", course: "oval", playlist: [], players: 2 }, "the guest changed nothing");
     s.host.setMinPlayers(2);
     s.host.go();
     s.host.setMinPlayers(8);
-    assert.equal(s.host.status().gate, null);
+    expect(s.host.status().gate).toBe(null);
     s.host.leave();
   });
 
@@ -1081,17 +1097,17 @@ describe("given a host waiting in the Havana lobby of a private room", () => {
     for (const [kind, started, entered] of [["survival", [], [false, true]], ["derby", ["derby"], [false]], ["race", ["race"], [false]]] as const) {
       const s = session();
       s.host.setLobbyKind(kind);
-      assert.equal(s.host.status().gate?.kind, kind);
+      expect(s.host.status().gate?.kind).toBe(kind);
       s.host.go();
-      assert.equal(s.hg.started.join(), started.join(), kind);
-      assert.equal(s.hg.raceEntered.join(), entered.join(), `${kind}: Survival is a race mode entered as Survival`);
+      expect(s.hg.started.join(), kind).toBe(started.join());
+      expect(s.hg.raceEntered.join(), `${kind}: Survival is a race mode entered as Survival`).toBe(entered.join());
     }
     const hub = new Hub();
     const pub = new NetPlay(fakeGame(), { connect: hub.connect, now: () => 0 });
     open.push(pub);
     pub.publicHost("derby", false);
     pub.setLobbyKind("race");
-    assert.equal(pub.status().gate?.kind, "derby", "a public room's kind is fixed");
+    expect(pub.status().gate?.kind, "a public room's kind is fixed").toBe("derby");
   });
 
   it("when the host raises the minimum, then the guest's status shows it, the players and the game, and Go waits until enough are in", () => {
@@ -1099,31 +1115,31 @@ describe("given a host waiting in the Havana lobby of a private room", () => {
     s.host.setMinPlayers(3);
     s.host.setLobbyKind("derby");
     s.step(30);
-    assert.deepEqual(s.client.status().gate, { min: 3, kind: "derby", course: "", playlist: [], players: 2 }, "the guest sees 'waiting for 1 more'");
-    assert.equal(s.host.go(), false);
+    expectGate(s.client.status().gate, { min: 3, kind: "derby", course: "", playlist: [], players: 2 }, "the guest sees 'waiting for 1 more'");
+    expect(s.host.go()).toBe(false);
     s.host.setMinPlayers(2);
     s.step(30);
-    assert.equal(s.client.status().gate?.min, 2);
+    expect(s.client.status().gate?.min).toBe(2);
     s.host.go();
     s.step(30);
-    assert.equal(s.client.status().gate, null, "the guest sees the gate close");
+    expect(s.client.status().gate, "the guest sees the gate close").toBe(null);
   });
 
   it("when the host resets the scene, then the engine resets the lobby scene once; a guest or a finished lobby cannot", () => {
     const s = session({ hostRace: true });
     s.host.resetScene();
     s.client.resetScene();
-    assert.deepEqual([s.hg.lobbySceneResets, s.cg.lobbySceneResets], [1, 0]);
+    expect(firstMismatch([s.hg.lobbySceneResets, s.cg.lobbySceneResets], [1, 0])).toBeUndefined();
     s.host.setMinPlayers(1);
     s.host.go();
     s.host.resetScene();
-    assert.equal(s.hg.lobbySceneResets, 1, "after Go the scene is the game's");
+    expect(s.hg.lobbySceneResets, "after Go the scene is the game's").toBe(1);
   });
 
   it("when the host leaves the lobby, then race mode closes with it", () => {
     const s = session({ hostRace: true });
     s.host.leave();
-    assert.equal(s.hg.raceExits, 1);
+    expect(s.hg.raceExits).toBe(1);
   });
 });
 
@@ -1134,24 +1150,24 @@ describe("given a guest in the Havana lobby", () => {
     s.hg.lobbyReset.length = 0;
     s.client.requestRespawn();
     s.step(3);
-    assert.deepEqual(s.hg.lobbyReset, [1], "a tap: the guest's car 1 and no other");
+    expect(firstMismatch(s.hg.lobbyReset, [1]), "a tap: the guest's car 1 and no other").toBeUndefined();
     s.client.requestHoldReset();
     s.step(3);
-    assert.deepEqual(s.hg.lobbyReset, [1, 1], "a hold in the lobby is the same reset");
+    expect(firstMismatch(s.hg.lobbyReset, [1, 1]), "a hold in the lobby is the same reset").toBeUndefined();
     s.step(10);
-    assert.deepEqual(s.hg.lobbyReset, [1, 1], "one ask is one reset, not one per input packet");
+    expect(firstMismatch(s.hg.lobbyReset, [1, 1]), "one ask is one reset, not one per input packet").toBeUndefined();
     s.host.go();
     s.step(30);
     s.hg.lobbyReset.length = 0;
     s.client.requestRespawn();
     s.step(3);
-    assert.deepEqual(s.hg.lobbyReset, [], "no lobby, no lobby reset");
+    expect(s.hg.lobbyReset, "no lobby, no lobby reset").toHaveLength(0);
   });
 
   it("when a seat is assigned in the lobby, then the host grows the field and puts the new car at its spawn", () => {
     const s = session({ hostRace: true });
-    assert.equal(s.hg.cars().length, 2);
-    assert.ok(s.hg.lobbyReset.includes(1), "car 1 was placed when its peer was seated");
+    expect(s.hg.cars().length).toBe(2);
+    expect(s.hg.lobbyReset.includes(1), "car 1 was placed when its peer was seated").toBeTruthy();
   });
 });
 
@@ -1181,37 +1197,37 @@ describe("given a public room in the Havana lobby", () => {
   it("when the host is alone and the lobby wants two, then the countdown holds and no match starts however long it waits; with the guest in, the countdown runs and the match starts", () => {
     const alone = publicRoom(false);
     alone.run(60);
-    assert.deepEqual(alone.hg.started, [], "one human cannot start a two-player lobby");
-    assert.equal(alone.host.status().lobby, 15, "the clock waits at the full 15 s");
+    expect(alone.hg.started, "one human cannot start a two-player lobby").toHaveLength(0);
+    expect(alone.host.status().lobby, "the clock waits at the full 15 s").toBe(15);
     const pair = publicRoom(true);
     pair.run(10);
-    assert.deepEqual(pair.hg.started, [], "10 s of 15");
-    assert.ok(pair.host.status().lobby! < 15);
+    expect(pair.hg.started, "10 s of 15").toHaveLength(0);
+    expect(pair.host.status().lobby!).toBeLessThan(15);
     pair.run(6);
-    assert.deepEqual(pair.hg.started, ["race"]);
-    assert.equal(pair.host.status().gate, null);
+    expect(firstMismatch(pair.hg.started, ["race"])).toBeUndefined();
+    expect(pair.host.status().gate).toBe(null);
   });
 
   it("when the host wants one player, then the countdown starts the match alone; and the Go switch starts a full-enough lobby early", () => {
     const solo = publicRoom(false, 1);
     solo.run(16);
-    assert.deepEqual(solo.hg.started, ["race"]);
+    expect(firstMismatch(solo.hg.started, ["race"])).toBeUndefined();
     const pair = publicRoom(true);
     pair.run(3);
-    assert.deepEqual(pair.hg.started, []);
-    assert.equal(pair.host.go(), true);
-    assert.deepEqual(pair.hg.started, ["race"]);
+    expect(pair.hg.started).toHaveLength(0);
+    expect(pair.host.go()).toBe(true);
+    expect(firstMismatch(pair.hg.started, ["race"])).toBeUndefined();
   });
 
   it("when a lobby that was waiting for the second player gets one, then the countdown begins from the full 15 s, not from the time spent waiting", () => {
     const s = publicRoom(true);
     s.host.setMinPlayers(3);
     s.run(30);
-    assert.deepEqual(s.hg.started, []);
+    expect(s.hg.started).toHaveLength(0);
     s.host.setMinPlayers(2);
     s.run(1);
-    assert.ok(s.host.status().lobby! >= 14, `${s.host.status().lobby}`);
-    assert.deepEqual(s.hg.started, []);
+    expect(s.host.status().lobby!, `${s.host.status().lobby}`).toBeGreaterThanOrEqual(14);
+    expect(s.hg.started).toHaveLength(0);
   });
 });
 
@@ -1220,13 +1236,17 @@ describe("given a host and guests in a room who each have a name", () => {
     const s = session({ hostName: "Ann", name: "Zed" });
     s.step(40);
     const seenByGuest = s.client.voice.snapshot().peers.map((p) => [p.name, p.car]);
-    assert.deepEqual(seenByGuest, [["Ann", 0]]);
+    expect(seenByGuest, "the guest sees one peer").toHaveLength(1);
+    expect(seenByGuest[0]?.[0], "the host's name").toBe("Ann");
+    expect(seenByGuest[0]?.[1], "the host's car").toBe(0);
     const seenByHost = s.host.voice.snapshot().peers.map((p) => [p.name, p.car]);
-    assert.deepEqual(seenByHost, [["Zed", 1]]);
+    expect(seenByHost, "the host sees one peer").toHaveLength(1);
+    expect(seenByHost[0]?.[0], "the guest's name").toBe("Zed");
+    expect(seenByHost[0]?.[1], "the guest's car").toBe(1);
     const bare = session();
     bare.step(40);
-    assert.deepEqual(bare.client.voice.snapshot().peers.map((p) => p.name), ["Host"]);
-    assert.deepEqual(bare.host.voice.snapshot().peers.map((p) => p.name), ["Player 1"]);
+    expect(firstMismatch(bare.client.voice.snapshot().peers.map((p) => p.name), ["Host"])).toBeUndefined();
+    expect(firstMismatch(bare.host.voice.snapshot().peers.map((p) => p.name), ["Player 1"])).toBeUndefined();
   });
 
   it("when a third peer's hello carries a hostile name, then the second guest's list shows it cleaned and cut", () => {
@@ -1242,9 +1262,11 @@ describe("given a host and guests in a room who each have a name", () => {
       hostile.frame(FRAME_MS / 1000);
       s.hub.flush();
     }
-    assert.equal(hostile.status().car, 2);
+    expect(hostile.status().car).toBe(2);
     const names = Object.fromEntries(hostile.voice.snapshot().peers.map((p) => [p.car, p.name]));
-    assert.deepEqual(names, { 0: "Host", 1: "Zed the quick br" });
+    expect(Object.keys(names), "peers the third guest lists").toHaveLength(2);
+    expect(names[0], "the host's car").toBe("Host");
+    expect(names[1], "the second guest's car").toBe("Zed the quick br");
   });
 });
 
@@ -1294,20 +1316,20 @@ describe("given a room hosted through the one hosting flow, whatever the game", 
       for (const code of ["PW", null]) {
         const label = `${kind} ${code === null ? "public" : "private"}`;
         const r = hosted({ ...CAMPAIGN_ROOM, kind, code, minPlayers: 3 });
-        assert.equal(r.host.status().gate?.min, 3, `${label}: hostRoom set the players to wait for`);
-        assert.equal(r.host.go(), false, `${label}: alone`);
+        expect(r.host.status().gate?.min, `${label}: hostRoom set the players to wait for`).toBe(3);
+        expect(r.host.go(), `${label}: alone`).toBe(false);
         r.run(2);
-        assert.equal(r.host.status().gate?.players, 2, label);
-        assert.equal(r.host.canGo(), false, `${label}: two of the three wanted`);
-        assert.equal(r.host.go(), false, label);
+        expect(r.host.status().gate?.players, label).toBe(2);
+        expect(r.host.canGo(), `${label}: two of the three wanted`).toBe(false);
+        expect(r.host.go(), label).toBe(false);
         r.host.setMinPlayers(2);
-        assert.equal(r.host.canGo(), true, `${label}: the stepper lowered it`);
-        assert.equal(r.host.go(), true, label);
+        expect(r.host.canGo(), `${label}: the stepper lowered it`).toBe(true);
+        expect(r.host.go(), label).toBe(true);
         const race = r.hg.race()!;
-        if (kind === "race") assert.deepEqual(r.hg.started, ["race"], label);
-        else if (kind === "derby") assert.deepEqual(r.hg.started, ["derby"], label);
-        else if (kind === "survival") assert.equal(r.hg.raceEntered.at(-1), true, `${label}: Survival is entered as such`);
-        else assert.deepEqual(race.commands.at(-1), { type: "campaign" }, label);
+        if (kind === "race") expect(firstMismatch(r.hg.started, ["race"]), label).toBeUndefined();
+        else if (kind === "derby") expect(firstMismatch(r.hg.started, ["derby"]), label).toBeUndefined();
+        else if (kind === "survival") expect(r.hg.raceEntered.at(-1), `${label}: Survival is entered as such`).toBe(true);
+        else expect(race.commands.at(-1)?.type, label).toBe("campaign");
       }
     }
   });
@@ -1320,43 +1342,50 @@ describe("given a room hosted through the one hosting flow, whatever the game", 
     r.run(HOST_WAIT_MS / 1000 + 1);
     for (let k = 0; k < 200; k++) wrong.frame(FRAME_MS / 1000);
     r.rooms.flush();
-    assert.equal(r.guests[0]!.status().car, 1, "the right password is seated");
-    assert.equal(wrong.status().car, -1, "the wrong one gets no car");
-    assert.equal(wrong.status().problem, "no-host", "and is told nobody hosts there");
-    assert.equal(r.host.status().peers.map((p) => p.id).join(), r.guests[0]!.status().selfId, "the host never saw it");
-    assert.equal(r.host.status().public, null);
-    assert.equal(r.rooms.hubs.get("PW")!.metas.get(r.host.status().selfId)!(), "", "a private room carries no relay tag");
+    expect(r.guests[0]!.status().car, "the right password is seated").toBe(1);
+    expect(wrong.status().car, "the wrong one gets no car").toBe(-1);
+    expect(wrong.status().problem, "and is told nobody hosts there").toBe("no-host");
+    expect(r.host.status().peers.map((p) => p.id).join(), "the host never saw it").toBe(r.guests[0]!.status().selfId);
+    expect(r.host.status().public).toBe(null);
+    expect(r.rooms.hubs.get("PW")!.metas.get(r.host.status().selfId)!(), "a private room carries no relay tag").toBe("");
     const pub = hosted({ ...CAMPAIGN_ROOM, code: null });
-    assert.equal(pub.host.status().public, "campaign");
-    assert.match(pub.host.status().room, new RegExp(`^pub-campaign-v${codec.NET_VERSION}-`));
-    assert.equal(pub.rooms.hubs.get(pub.host.status().room)!.metas.get(pub.host.status().selfId)!(), "lobby.2", "the relay lists it as a campaign lobby over 2 courses");
+    expect(pub.host.status().public).toBe("campaign");
+    expect(pub.host.status().room).toMatch(new RegExp(`^pub-campaign-v${codec.NET_VERSION}-`));
+    expect(pub.rooms.hubs.get(pub.host.status().room)!.metas.get(pub.host.status().selfId)!(), "the relay lists it as a campaign lobby over 2 courses").toBe("lobby.2");
   });
 
   it("when the host picks the courses of a campaign, then the host and the guest read them in play order, unknown and repeated courses drop, and only the host sets them", () => {
     const r = hosted(CAMPAIGN_ROOM);
     r.run(2);
-    assert.deepEqual(r.host.status().gate?.playlist, ["rally", "oval"]);
-    assert.deepEqual(r.guests[0]!.status().gate, { min: 2, kind: "campaign", course: "", playlist: ["rally", "oval"], players: 2 }, "the guest reads the host's gate");
+    expect(firstMismatch(r.host.status().gate?.playlist, ["rally", "oval"])).toBeUndefined();
+    expectGate(r.guests[0]!.status().gate, { min: 2, kind: "campaign", course: "", playlist: ["rally", "oval"], players: 2 }, "the guest reads the host's gate");
     r.host.setPlaylist(["city", "oval", "nowhere", "city"]);
     r.run(1);
-    assert.deepEqual(r.guests[0]!.status().gate?.playlist, ["city", "oval"]);
+    expect(firstMismatch(r.guests[0]!.status().gate?.playlist, ["city", "oval"])).toBeUndefined();
     r.guests[0]!.setPlaylist(["oval"]);
     r.run(1);
-    assert.deepEqual(r.host.status().gate?.playlist, ["city", "oval"], "a guest changes nothing");
+    expect(firstMismatch(r.host.status().gate?.playlist, ["city", "oval"]), "a guest changes nothing").toBeUndefined();
   });
 
   it("when Go starts a campaign, then the director gets the playlist and then the campaign; with no courses picked Go does nothing", () => {
     const empty = hosted({ ...CAMPAIGN_ROOM, playlist: [] });
     empty.run(2);
-    assert.equal(empty.host.canGo(), false, "no courses");
-    assert.equal(empty.host.go(), false);
+    expect(empty.host.canGo(), "no courses").toBe(false);
+    expect(empty.host.go()).toBe(false);
     empty.host.setPlaylist(["oval"]);
-    assert.equal(empty.host.go(), true);
+    expect(empty.host.go()).toBe(true);
     const r = hosted(CAMPAIGN_ROOM);
     r.run(2);
-    assert.equal(r.host.go(), true);
-    assert.deepEqual(r.hg.race()!.commands, [{ type: "options", options: { campaign: ["rally", "oval"] } }, { type: "campaign" }]);
-    assert.equal(r.host.status().gate, null, "the game runs: no gate");
+    expect(r.host.go()).toBe(true);
+    const sent = r.hg.race();
+    if (!sent) throw new Error("race mode is off");
+    expect(sent.commands, "the director's commands").toHaveLength(2);
+    const [options, campaign] = sent.commands;
+    if (options?.type !== "options") throw new Error(`the first command is ${options?.type}, not the options`);
+    expect(firstMismatch(options.options.campaign, ["rally", "oval"]), "the playlist the director got").toBeUndefined();
+    expect(Object.keys(options.options), "only the playlist is set").toHaveLength(1);
+    expect(campaign?.type, "then the campaign").toBe("campaign");
+    expect(r.host.status().gate, "the game runs: no gate").toBe(null);
   });
 
   it("when a campaign round ends, then everyone reads a countdown from one minute, the host moves the campaign on when it runs out, and the next round clears it", () => {
@@ -1366,17 +1395,17 @@ describe("given a room hosted through the one hosting flow, whatever the game", 
     const race = r.hg.race()!;
     race.phase = "racing";
     r.run(30);
-    assert.deepEqual([r.host.status().nextIn, r.guests[0]!.status().nextIn, race.advanced], [null, null, 0], "a round in progress has no clock");
+    expect(firstMismatch([r.host.status().nextIn, r.guests[0]!.status().nextIn, race.advanced], [null, null, 0]), "a round in progress has no clock").toBeUndefined();
     race.phase = "finished";
     r.run(10);
     // The guest's clock is the host's last race message (5 Hz): a second behind at most.
-    for (const [who, net] of [["host", r.host], ["guest", r.guests[0]!]] as const) assert.ok(net.status().nextIn! > 45 && net.status().nextIn! <= 51, `${who}: ${net.status().nextIn} s left of the minute`);
-    assert.equal(race.advanced, 0);
+    for (const [who, net] of [["host", r.host], ["guest", r.guests[0]!]] as const) expect(net.status().nextIn! > 45 && net.status().nextIn! <= 51, `${who}: ${net.status().nextIn} s left of the minute`).toBeTruthy();
+    expect(race.advanced).toBe(0);
     r.run(51);
-    assert.equal(race.advanced, 1, "the minute is up: the host moved on once");
+    expect(race.advanced, "the minute is up: the host moved on once").toBe(1);
     race.phase = "racing";
     r.run(2);
-    assert.deepEqual([r.host.status().nextIn, r.guests[0]!.status().nextIn], [null, null], "the next round is under way");
+    expect(firstMismatch([r.host.status().nextIn, r.guests[0]!.status().nextIn], [null, null]), "the next round is under way").toBeUndefined();
   });
 
   it("when the host switches auto-advance off, then the room stays on the results however long it waits and shows no clock, and switching it on again gives a fresh minute", () => {
@@ -1385,15 +1414,15 @@ describe("given a room hosted through the one hosting flow, whatever the game", 
     r.host.go();
     const race = r.hg.race()!;
     r.host.setAutoNext(false);
-    assert.equal(r.host.status().autoNext, false);
+    expect(r.host.status().autoNext).toBe(false);
     race.phase = "finished";
     r.run(150);
-    assert.deepEqual([race.advanced, r.host.status().nextIn, r.guests[0]!.status().nextIn], [0, null, null]);
+    expect(firstMismatch([race.advanced, r.host.status().nextIn, r.guests[0]!.status().nextIn], [0, null, null])).toBeUndefined();
     r.host.setAutoNext(true);
     r.run(2);
-    assert.equal(race.advanced, 0, "a fresh minute, not the one that passed");
-    assert.ok(r.guests[0]!.status().nextIn! >= 55);
-    assert.equal(r.guests[0]!.status().autoNext, null, "only the host has the switch");
+    expect(race.advanced, "a fresh minute, not the one that passed").toBe(0);
+    expect(r.guests[0]!.status().nextIn!).toBeGreaterThanOrEqual(55);
+    expect(r.guests[0]!.status().autoNext, "only the host has the switch").toBe(null);
   });
 
   it("when the campaign's last standings are left, then the room is back in the Havana lobby for everyone", () => {
@@ -1403,14 +1432,14 @@ describe("given a room hosted through the one hosting flow, whatever the game", 
     const race = r.hg.race()!;
     race.phase = "racing";
     r.run(5);
-    assert.equal(r.host.status().gate, null);
+    expect(r.host.status().gate).toBe(null);
     const lobbies = r.hg.lobbyEntered.length;
     race.phase = null;
     r.run(2);
-    assert.equal(r.hg.lobbyEntered.length, lobbies + 1, "the host reopened the lobby");
-    assert.equal(r.hg.lobbyEntered.at(-1), true);
-    assert.equal(r.host.status().gate?.kind, "campaign");
-    assert.deepEqual(r.guests[0]!.status().gate?.playlist, ["rally", "oval"], "the guest is back at the gate with the same courses");
+    expect(r.hg.lobbyEntered.length, "the host reopened the lobby").toBe(lobbies + 1);
+    expect(r.hg.lobbyEntered.at(-1)).toBe(true);
+    expect(r.host.status().gate?.kind).toBe("campaign");
+    expect(firstMismatch(r.guests[0]!.status().gate?.playlist, ["rally", "oval"]), "the guest is back at the gate with the same courses").toBeUndefined();
   });
 });
 
@@ -1430,14 +1459,14 @@ describe("given a host in a race whose state moves only in the fields a race mes
       tick++;
       s.step();
     }
-    assert.ok(applied.length >= 3 && applied.length <= 5, `${applied.length} race messages in 3 s (15 when every 6th frame sends)`);
-    assert.ok(applied.every((n) => n === 1));
+    expect(applied.length >= 3 && applied.length <= 5, `${applied.length} race messages in 3 s (15 when every 6th frame sends)`).toBeTruthy();
+    expect(applied.every((n) => n === 1)).toBeTruthy();
     laps = 2;
     for (let i = 0; i < 6; i++) {
       tick++;
       s.step();
     }
-    assert.equal(applied.at(-1), 2, "the changed field is sent without waiting for the keyframe");
-    assert.ok(Math.abs(s.cg.race()!.clockRun - run0 - (3 * FRAMES_PER_SECOND + 6) * (FRAME_MS / 1000)) < 1e-6, "the guest's clock ran on for every frame");
+    expect(applied.at(-1), "the changed field is sent without waiting for the keyframe").toBe(2);
+    expect(Math.abs(s.cg.race()!.clockRun - run0 - (3 * FRAMES_PER_SECOND + 6) * (FRAME_MS / 1000)), "the guest's clock ran on for every frame").toBeLessThan(1e-6);
   });
 });

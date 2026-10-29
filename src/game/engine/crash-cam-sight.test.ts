@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it, type TestContext } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it, type TestContext } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
@@ -143,9 +142,9 @@ function crashPicksSee(picked: Sight, judged: Sight, spots: readonly Spot[], bli
     }
   }
   t.annotate(`${label}: ${picks} picks in ${Math.round(performance.now() - started)} ms, ${bitten} turned or pulled in by a solid, ${blind.length} left every cut with no eye, ${unseen.length} unseen`);
-  assert.ok(picks >= MIN_PICKS && bitten > 0, `${label}: the fixture puts no eye behind a wall or a prop: it tests nothing`);
-  assert.deepEqual(unseen.slice(0, 5), [], `${label}: ${unseen.length}/${picks} eyes the crash cam holds miss the subject (margin ${VIEW.margin}, share ${VIEW.share.toFixed(3)})`);
-  assert.ok(blind.length <= picks * blindMost, `${label}: ${blind.length}/${picks} subjects leave the crash cam no eye on any cut: ${blind.slice(0, 5).join(", ")}`);
+  expect(picks >= MIN_PICKS && bitten > 0, `${label}: the fixture puts no eye behind a wall or a prop: it tests nothing`).toBeTruthy();
+  expect(unseen.slice(0, 5), `${label}: ${unseen.length}/${picks} eyes the crash cam holds miss the subject (margin ${VIEW.margin}, share ${VIEW.share.toFixed(3)})`).toHaveLength(0);
+  expect(blind.length, `${label}: ${blind.length}/${picks} subjects leave the crash cam no eye on any cut: ${blind.slice(0, 5).join(", ")}`).toBeLessThanOrEqual(picks * blindMost);
 }
 
 describe("given the crash camera choosing eyes for a car hit anywhere on a course (a grid of subject points by its walls and props, two axes each)", () => {
@@ -176,7 +175,7 @@ describe("given the real engine's crash camera choosing eyes for a car hit anywh
   });
 
   it("when subjects lie over the arena's floor, in rings from its wall and round every prism, then the eye the crash cam holds sees each past the arena's glass and its prisms", (t) => {
-    assert.ok(engine.derbyMode, "the engine is not in the derby");
+    expect(engine.derbyMode, "the engine is not in the derby").toBeTruthy();
     const picked = engine["crashSight"]();
     const judged: Sight = { ...picked, rim: DERBY_RADIUS, occ: DERBY_OCCLUDERS };
     crashPicksSee(picked, judged, arenaSpots(picked, DERBY_OCCLUDERS), BLIND_MOST.other, "derby arena", t);

@@ -1,6 +1,5 @@
-import { afterEach, describe, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { BOARD, LAB_LAYOUTS, type LabItem, type LabPose } from "../scenes/lab.ts";
 import { tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -14,6 +13,7 @@ import { benchPlan } from "./engine-bench-plan.ts";
 import { CRASH } from "../kernel/physics-core.js";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
 import { setGround } from "../world/ground.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * The Lab's throw bench (`Lab`), headless through the engine's own step: the presets stand, a thrown car topples the house
@@ -98,17 +98,17 @@ describe("given the house of cards on the bench (two sedans nose to tail, a thir
   todoRow("when it is left alone, then it settles within 5 mm in its first 5 s and then no car moves 0.1 mm or tips over the next 10 s", HOUSE_TODO, () => {
     const r = labRig("cards");
     const settle = planMoves(r, 5);
-    assert.ok(Math.max(...settle) < 0.005, `settling moved the cars ${settle.map((m) => (m * 1000).toFixed(2)).join(" / ")} mm`);
+    expect(Math.max(...settle), `settling moved the cars ${settle.map((m) => (m * 1000).toFixed(2)).join(" / ")} mm`).toBeLessThan(0.005);
     const after = planMoves(r, 10);
-    assert.ok(Math.max(...after) < 1e-4, `standing moved the cars ${after.map((m) => (m * 1000).toFixed(3)).join(" / ")} mm over 10 s`);
-    for (const c of r.cars) assert.ok(c.group.matrixWorld.elements[5]! > 0.99, `a car tipped to up ${c.group.matrixWorld.elements[5]}`);
+    expect(Math.max(...after), `standing moved the cars ${after.map((m) => (m * 1000).toFixed(3)).join(" / ")} mm over 10 s`).toBeLessThan(1e-4);
+    for (const c of r.cars) expect(c.group.matrixWorld.elements[5]!, `a car tipped to up ${c.group.matrixWorld.elements[5]}`).toBeGreaterThan(0.99);
   });
 
   todoRow("when it is freshly loaded and left alone for 5 s, then the top car settles onto the two roofs without dropping on them: neither roof gives 15 mm", HOUSE_TODO, () => {
     const r = labRig("cards");
     runLab(r, 5);
     const roofs = [r.cars[1]!.deform.crush[0]!, r.cars[2]!.deform.crush[0]!];
-    assert.ok(Math.max(...roofs) < 0.015, `the roofs under the top car gave ${roofs.map((d) => (d * 1000).toFixed(1)).join(" / ")} mm`);
+    expect(Math.max(...roofs), `the roofs under the top car gave ${roofs.map((d) => (d * 1000).toFixed(1)).join(" / ")} mm`).toBeLessThan(0.015);
   });
 
   const toppleCases: { it: string; speed: number; todo?: string }[] = [
@@ -125,8 +125,8 @@ describe("given the house of cards on the bench (two sedans nose to tail, a thir
       runLab(r, 5);
       const shot = throwAt(r, 0, 3, testCase.speed);
       runLab(r, 4);
-      assert.notEqual(shot.contactS, null, "the thrown car never met the stack");
-      assert.deepEqual(houseKnocked(r, shot), [1, 2, 3]);
+      expect(shot.contactS, "the thrown car never met the stack").not.toBe(null);
+      expect(firstMismatch(houseKnocked(r, shot), [1, 2, 3])).toBeUndefined();
     });
   }
 });
@@ -148,11 +148,11 @@ describe("given two sedans on the bench 20 m apart, the far one broadside to the
       runLab(r, 0.5);
       const shot = throwLevelAt(r, 0, 1, testCase.speed);
       runLab(r, 3);
-      assert.notEqual(shot.momentumAfter, null, "the hit never ended");
+      expect(shot.momentumAfter, "the hit never ended").not.toBe(null);
       const change = Math.abs(shot.momentumAfter! - shot.momentumBefore);
       const tyres = CRASH.muSlide * r.cars[1]!.deform.totalMass * GRAVITY * shot.pulseS!;
       const bound = tyres + 0.01 * shot.momentumBefore;
-      assert.ok(change <= bound, `momentum ${shot.momentumBefore.toFixed(0)} -> ${shot.momentumAfter!.toFixed(0)} kg m/s over ${shot.pulseS} s: ${change.toFixed(0)} against ${bound.toFixed(0)} (tyres ${tyres.toFixed(0)})`);
+      expect(change, `momentum ${shot.momentumBefore.toFixed(0)} -> ${shot.momentumAfter!.toFixed(0)} kg m/s over ${shot.pulseS} s: ${change.toFixed(0)} against ${bound.toFixed(0)} (tyres ${tyres.toFixed(0)})`).toBeLessThanOrEqual(bound);
     });
   }
 });
@@ -169,9 +169,9 @@ describe("given a sedan thrown at something on the bench", () => {
       runLab(r, 0.5);
       const shot = throwAt(r, 0, 1, testCase.speed);
       runLab(r, 3);
-      assert.notEqual(shot.contactS, null, "it never met the parked car");
+      expect(shot.contactS, "it never met the parked car").not.toBe(null);
       const past = deepestPast(shot, 1.5);
-      assert.ok(past < 0, `its centre got ${past.toFixed(2)} m past the parked car's`);
+      expect(past, `its centre got ${past.toFixed(2)} m past the parked car's`).toBeLessThan(0);
     });
   }
 
@@ -186,10 +186,10 @@ describe("given a sedan thrown at something on the bench", () => {
       runLab(r, 0.5);
       const shot = throwAt(r, 0, WALL, testCase.speed);
       runLab(r, 3);
-      assert.equal(shot.hit, WALL, "it never met the board");
+      expect(shot.hit, "it never met the board").toBe(WALL);
       let nearest = Infinity;
       for (let k = 0; k < shot.pathN; k++) nearest = Math.min(nearest, shot.path[k * 3 + 2]! - BOARD.z);
-      assert.ok(nearest > 0, `its centre reached ${nearest.toFixed(2)} m from the board's face`);
+      expect(nearest, `its centre reached ${nearest.toFixed(2)} m from the board's face`).toBeGreaterThan(0);
     });
   }
 
@@ -205,11 +205,11 @@ describe("given a sedan thrown at something on the bench", () => {
       runLab(r, 0.5);
       const shot = throwAt(r, 0, 1, testCase.speed);
       runLab(r, 3);
-      assert.equal(shot.hit, 1, "it never met the block");
+      expect(shot.hit, "it never met the block").toBe(1);
       let farthest = -Infinity;
       for (let k = 0; k < shot.pathN; k++) farthest = Math.max(farthest, shot.path[k * 3]!);
       // The block is 0.64 m thick across the throw: its near face stands at x = 6 - 0.32.
-      assert.ok(farthest < 6 - 0.32, `its centre reached x = ${farthest.toFixed(2)}`);
+      expect(farthest, `its centre reached x = ${farthest.toFixed(2)}`).toBeLessThan(6 - 0.32);
     });
   }
 });
@@ -220,12 +220,12 @@ describe("given a sedan flicked at 30 m/s with the automatic slow-mo on", () => 
   todoRow("when it is flicked at the house of cards' top car, then the slow-mo comes on before the hit and holds until it lands", HOUSE_TODO, () => {
     const r = labRig("cards");
     runLab(r, 5);
-    assert.equal(r.w.clock.phase, "approach", "the house fell before the throw: the clock left approach on its own cars' hit");
+    expect(r.w.clock.phase, "the house fell before the throw: the clock left approach on its own cars' hit").toBe("approach");
     throwAt(r, 0, 3, 30);
     const seen = watchSlowmo(r, 6);
-    assert.ok(seen.hitAt > 0, "it never hit the stack");
-    assert.ok(seen.slowedAt < seen.hitAt, `the slow-mo came on at sim ${seen.slowedAt} s, the hit at ${seen.hitAt.toFixed(3)} s`);
-    assert.ok(Number.isNaN(seen.freedAt), `time went back to 1x at sim ${seen.freedAt.toFixed(3)} s, before the hit at ${seen.hitAt.toFixed(3)} s`);
+    expect(seen.hitAt, "it never hit the stack").toBeGreaterThan(0);
+    expect(seen.slowedAt, `the slow-mo came on at sim ${seen.slowedAt} s, the hit at ${seen.hitAt.toFixed(3)} s`).toBeLessThan(seen.hitAt);
+    expect(Number.isNaN(seen.freedAt), `time went back to 1x at sim ${seen.freedAt.toFixed(3)} s, before the hit at ${seen.hitAt.toFixed(3)} s`).toBeTruthy();
   });
 
   it("when it is flicked past a parked sedan alongside it with 1.2 m to spare, then the slow-mo that came on for it climbs back to 1x from one step after the hit was due (a ramp of under 0.45 s, not a snap) and stays off", () => {
@@ -233,10 +233,10 @@ describe("given a sedan flicked at 30 m/s with the automatic slow-mo on", () => 
     runLab(r, 0.5);
     r.lab.launch(0, new THREE.Vector3(30 * Math.cos(0.15), 30 * Math.sin(0.15), 0));
     const seen = watchSlowmo(r, 10);
-    assert.ok(Number.isNaN(seen.hitAt), `it hit something at sim ${seen.hitAt.toFixed(3)} s`);
-    assert.ok(seen.slowedAt > 0, "the slow-mo never came on");
-    assert.ok(seen.freedAt > seen.slowedAt && seen.freedAt <= seen.slowedAt + LEAD + 2 * FRAME + 0.45, `slowed at sim ${seen.slowedAt.toFixed(3)} s, back to 1x at ${seen.freedAt.toFixed(3)} s`);
-    assert.equal(r.w.clock.timeScale, 1);
+    expect(Number.isNaN(seen.hitAt), `it hit something at sim ${seen.hitAt.toFixed(3)} s`).toBeTruthy();
+    expect(seen.slowedAt, "the slow-mo never came on").toBeGreaterThan(0);
+    expect(seen.freedAt > seen.slowedAt && seen.freedAt <= seen.slowedAt + LEAD + 2 * FRAME + 0.45, `slowed at sim ${seen.slowedAt.toFixed(3)} s, back to 1x at ${seen.freedAt.toFixed(3)} s`).toBeTruthy();
+    expect(r.w.clock.timeScale).toBe(1);
   });
 });
 
@@ -250,10 +250,10 @@ describe("given the throws of the Lab's bench page (?bench=lab), each on its own
       runLab(r, seq.settleS);
       const shot = r.lab.launch(0, new THREE.Vector3(step.along, step.up, 0));
       runLab(r, seq.segmentS - seq.settleS);
-      assert.notEqual(shot.contactS, null, "the thrower never met the set");
+      expect(shot.contactS, "the thrower never met the set").not.toBe(null);
       // The bench's A/B blocks are 3 s of wall from the set's load: the hit must land well inside one.
-      assert.ok(seq.settleS + shot.contactS! < 2, `met the set ${(seq.settleS + shot.contactS!).toFixed(2)} s after it loaded`);
-      assert.ok(shot.fell.includes(aimedAt[step.preset]!), `knocked ${JSON.stringify(shot.fell)}, not ${aimedAt[step.preset]}`);
+      expect(seq.settleS + shot.contactS!, `met the set ${(seq.settleS + shot.contactS!).toFixed(2)} s after it loaded`).toBeLessThan(2);
+      expect(shot.fell.includes(aimedAt[step.preset]!), `knocked ${JSON.stringify(shot.fell)}, not ${aimedAt[step.preset]}`).toBeTruthy();
     });
   }
 });
@@ -296,7 +296,7 @@ function throwDummyAtWindshield(r: LabRig, distance: number, speed: number, seco
   let outAfterHit = -Infinity;
   for (let t = 0; t < seconds - 1e-9; t += FRAME) {
     runLab(r, FRAME);
-    assert.ok(r.dolls!.torso(slot, p, v), "the dummy is gone");
+    expect(r.dolls!.torso(slot, p, v), "the dummy is gone").toBeTruthy();
     everInCabin ||= inCabin(car, p);
     if (shot.contactS !== null && t < shot.contactS + 0.2) outAfterHit = Math.max(outAfterHit, v.dot(out));
   }
@@ -312,10 +312,10 @@ describe("given the Glass set: a dummy and a sedan on a stand bracket, its winds
     const glass = glassOf(r.cars[0]!);
     r.dolls!.dispose();
     t.annotate(`met ${flick.shot.hit} at ${flick.shot.contactS?.toFixed(2)} s, glass ${JSON.stringify(glass)}, out ${flick.outAfterHit.toFixed(2)} m/s`);
-    assert.equal(flick.shot.hit, 1, "he never met the sedan");
-    for (const [name, state] of Object.entries(glass)) assert.equal(state, name === "windshield" ? "cracked" : "intact", name);
-    assert.ok(!flick.everInCabin, "he went into the cabin");
-    assert.ok(flick.outAfterHit > 0, `he never moved back out off the glass (${flick.outAfterHit.toFixed(2)} m/s out)`);
+    expect(flick.shot.hit, "he never met the sedan").toBe(1);
+    for (const [name, state] of Object.entries(glass)) expect(state, name).toBe(name === "windshield" ? "cracked" : "intact");
+    expect(!flick.everInCabin, "he went into the cabin").toBe(true);
+    expect(flick.outAfterHit, `he never moved back out off the glass (${flick.outAfterHit.toFixed(2)} m/s out)`).toBeGreaterThan(0);
   });
 
   // Where a bounce off the glass leaves him: near or far from the sedan along the glass's normal.
@@ -333,8 +333,8 @@ describe("given the Glass set: a dummy and a sedan on a stand bracket, its winds
       const glass = glassOf(r.cars[0]!);
       r.dolls!.dispose();
       t.annotate(`glass ${JSON.stringify(glass)}, at rest ${flick.endInCabin ? "in" : "out of"} the cabin at ${flick.endSpeed.toFixed(2)} m/s`);
-      for (const [name, state] of Object.entries(glass)) assert.equal(state, name === "windshield" ? "shattered" : "intact", name);
-      assert.ok(flick.endInCabin && flick.endSpeed < 0.3, `he came to rest ${flick.endInCabin ? "in" : "out of"} the cabin, at ${flick.endSpeed.toFixed(2)} m/s`);
+      for (const [name, state] of Object.entries(glass)) expect(state, name).toBe(name === "windshield" ? "shattered" : "intact");
+      expect(flick.endInCabin && flick.endSpeed < 0.3, `he came to rest ${flick.endInCabin ? "in" : "out of"} the cabin, at ${flick.endSpeed.toFixed(2)} m/s`).toBeTruthy();
     });
   }
 });
@@ -358,10 +358,10 @@ describe("given a dummy standing on the bench", () => {
       const shot = throwAt(r, 0, WALL, testCase.speed);
       runLab(r, 3);
       r.dolls!.dispose();
-      assert.equal(shot.hit, WALL, "he never met the board");
+      expect(shot.hit, "he never met the board").toBe(WALL);
       let nearest = Infinity;
       for (let k = 0; k < shot.pathN; k++) nearest = Math.min(nearest, shot.path[k * 3 + 2]! - BOARD.z);
-      assert.ok(nearest > 0, `his torso's centre reached ${nearest.toFixed(2)} m from the board's face`);
+      expect(nearest, `his torso's centre reached ${nearest.toFixed(2)} m from the board's face`).toBeGreaterThan(0);
     });
   }
 
@@ -380,10 +380,10 @@ describe("given a dummy standing on the bench", () => {
       const shot = throwAt(r, 0, 4, testCase.speed);
       runLab(r, 3);
       r.dolls!.dispose();
-      assert.ok(shot.hit !== null && shot.hit > 0 && row[shot.hit - 1]!.pose.x === 10, `he met ${shot.hit}, not the row`);
+      expect(shot.hit !== null && shot.hit > 0 && row[shot.hit - 1]!.pose.x === 10, `he met ${shot.hit}, not the row`).toBeTruthy();
       let farthest = -Infinity;
       for (let k = 0; k < shot.pathN; k++) farthest = Math.max(farthest, shot.path[k * 3]!);
-      assert.ok(farthest < 10, `his torso's centre reached x = ${farthest.toFixed(2)}`);
+      expect(farthest, `his torso's centre reached x = ${farthest.toFixed(2)}`).toBeLessThan(10);
     });
   }
 });
@@ -394,7 +394,7 @@ describe("given a crate standing on the bench, with the dummies' physics in", ()
   it("when the set loads, then a flick may pick the crate", async () => {
     const r = await labDollRig([crate(0, 0)]);
     r.dolls!.dispose();
-    assert.deepEqual([...r.lab.things.subarray(0, r.lab.thingN)], [0]);
+    expect(firstMismatch([...r.lab.things.subarray(0, r.lab.thingN)], [0])).toBeUndefined();
   });
 
   const boardCases = [
@@ -408,10 +408,10 @@ describe("given a crate standing on the bench, with the dummies' physics in", ()
       const shot = throwAt(r, 0, WALL, testCase.speed);
       runLab(r, 3);
       r.dolls!.dispose();
-      assert.equal(shot.hit, WALL, "it never met the board");
+      expect(shot.hit, "it never met the board").toBe(WALL);
       let nearest = Infinity;
       for (let k = 0; k < shot.pathN; k++) nearest = Math.min(nearest, shot.path[k * 3 + 2]! - BOARD.z);
-      assert.ok(nearest > 0, `its middle reached ${nearest.toFixed(2)} m from the board's face`);
+      expect(nearest, `its middle reached ${nearest.toFixed(2)} m from the board's face`).toBeGreaterThan(0);
     });
   }
 
@@ -421,11 +421,11 @@ describe("given a crate standing on the bench, with the dummies' physics in", ()
     const shot = throwAt(r, 0, 1, 20);
     runLab(r, 3);
     r.dolls!.dispose();
-    assert.equal(shot.hit, 1, `it met ${shot.hit}, not the sedan`);
+    expect(shot.hit, `it met ${shot.hit}, not the sedan`).toBe(1);
     let farthest = -Infinity;
     for (let k = 0; k < shot.pathN; k++) farthest = Math.max(farthest, shot.path[k * 3]!);
     // The sedan's side is 0.86 m from its middle line; the crate is 0.5 m to its middle.
-    assert.ok(farthest < 4 - 0.86 - 0.35, `its middle reached x = ${farthest.toFixed(2)}, the sedan's side is at ${(4 - 0.86).toFixed(2)}`);
+    expect(farthest, `its middle reached x = ${farthest.toFixed(2)}, the sedan's side is at ${(4 - 0.86).toFixed(2)}`).toBeLessThan(4 - 0.86 - 0.35);
   });
 
   it("when it is flicked into the wall of items at 20 m/s, then it meets the row and its middle never gets past the row's line", async () => {
@@ -436,10 +436,10 @@ describe("given a crate standing on the bench, with the dummies' physics in", ()
     const shot = throwAt(r, 0, 4, 20);
     runLab(r, 3);
     r.dolls!.dispose();
-    assert.ok(shot.hit !== null && shot.hit > 0 && row[shot.hit - 1]!.pose.x === 10, `it met ${shot.hit}, not the row`);
+    expect(shot.hit !== null && shot.hit > 0 && row[shot.hit - 1]!.pose.x === 10, `it met ${shot.hit}, not the row`).toBeTruthy();
     let farthest = -Infinity;
     for (let k = 0; k < shot.pathN; k++) farthest = Math.max(farthest, shot.path[k * 3]!);
-    assert.ok(farthest < 10, `its middle reached x = ${farthest.toFixed(2)}`);
+    expect(farthest, `its middle reached x = ${farthest.toFixed(2)}`).toBeLessThan(10);
   });
 });
 
@@ -452,8 +452,8 @@ describe("given an item turning on the bench that is let go", () => {
     r.cars[0]!.angular.set(0, 3, 0);
     const before = r.cars[0]!.group.quaternion.clone();
     r.lab.launch(0, LET_GO);
-    assert.equal(r.cars[0]!.group.quaternion.angleTo(before), 0, "turned by");
-    assert.equal(r.cars[0]!.angular.length(), 0, "spin");
+    expect(r.cars[0]!.group.quaternion.angleTo(before), "turned by").toBe(0);
+    expect(r.cars[0]!.angular.length(), "spin").toBe(0);
   });
 
   it("when a dummy turning at 2 rad/s is let go, then he leaves with the orientation his torso had and no spin in any part", async () => {
@@ -467,8 +467,8 @@ describe("given an item turning on the bench that is let go", () => {
     const after = bodies[0]!.rotation();
     const spins = bodies.map((b) => Math.hypot(b.angvel().x, b.angvel().y, b.angvel().z));
     r.dolls!.dispose();
-    assert.ok(new THREE.Quaternion(after.x, after.y, after.z, after.w).angleTo(before) < 1e-3, "his torso turned");
-    assert.equal(Math.max(...spins), 0, "spin of his fastest part");
+    expect(new THREE.Quaternion(after.x, after.y, after.z, after.w).angleTo(before), "his torso turned").toBeLessThan(1e-3);
+    expect(Math.max(...spins), "spin of his fastest part").toBe(0);
   });
 
   it("when a crate that is already out and tumbling at 2 rad/s is let go, then it leaves with the orientation it had and no spin", async () => {
@@ -484,7 +484,7 @@ describe("given an item turning on the bench that is let go", () => {
     const after = body.rotation();
     const spin = Math.hypot(body.angvel().x, body.angvel().y, body.angvel().z);
     r.dolls!.dispose();
-    assert.ok(new THREE.Quaternion(after.x, after.y, after.z, after.w).angleTo(before) < 1e-3, "it turned");
-    assert.equal(spin, 0, "spin");
+    expect(new THREE.Quaternion(after.x, after.y, after.z, after.w).angleTo(before), "it turned").toBeLessThan(1e-3);
+    expect(spin, "spin").toBe(0);
   });
 });

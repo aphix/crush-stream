@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -51,7 +50,7 @@ describe("given the podium on screen", () => {
     };
     for (let f = 0; f < WARM_FRAMES; f++) frame(f);
     const perFrame = untilQuiet((w) => windowPerFrame(frame, WARM_FRAMES + w * WINDOW_FRAMES), BOUND_B);
-    assert.ok(perFrame <= BOUND_B, `${perFrame.toFixed(1)} B a frame > ${BOUND_B} in every window for ${COMPILE_WAIT_S} s: the podium allocates while it is up`);
+    expect(perFrame, `${perFrame.toFixed(1)} B a frame > ${BOUND_B} in every window for ${COMPILE_WAIT_S} s: the podium allocates while it is up`).toBeLessThanOrEqual(BOUND_B);
   });
 });
 
@@ -63,6 +62,6 @@ describe("given the allocation measure", () => {
       allocatedBytes(() => {
         for (let f = 0; f < WINDOW_FRAMES; f++) kept[f % 8] = new THREE.Vector3();
       }) / WINDOW_FRAMES;
-    assert.ok(perFrame > BOUND_B, `${perFrame.toFixed(1)} B a frame for a vector a frame: the measure sees nothing`);
+    expect(perFrame, `${perFrame.toFixed(1)} B a frame for a vector a frame: the measure sees nothing`).toBeGreaterThan(BOUND_B);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { FRAME, frame, makeWorld, type World } from "./race-world.test-util.ts";
 import { TRACK_ID } from "./constants.ts";
 import { placeProps, propColliders } from "./placements.ts";
@@ -35,7 +34,7 @@ function mallWorld(seed = 1): World {
 
 function toGreen(w: World, state: { acc: number }): void {
   for (let n = 0; n * FRAME < 8 && w.race.phase !== "racing"; n++) frame(w, state);
-  assert.equal(w.race.phase, "racing");
+  expect(w.race.phase).toBe("racing");
 }
 
 describe("given the Survival course list", () => {
@@ -44,18 +43,18 @@ describe("given the Survival course list", () => {
     try {
       w.race.enter(true, false, true);
       const first = w.race.hud();
-      assert.equal(first.menu, "survival");
-      assert.equal(first.phase, null, "no run until Start");
-      assert.equal(first.survivalCourses.map((c) => c.id).join(), `havana,${TRACK_ID.nationalMall}`);
-      assert.equal(first.survivalCourses[1]!.name, "Washington DC");
-      assert.equal(first.survivalCourse, "havana");
+      expect(first.menu).toBe("survival");
+      expect(first.phase, "no run until Start").toBe(null);
+      expect(first.survivalCourses.map((c) => c.id).join()).toBe(`havana,${TRACK_ID.nationalMall}`);
+      expect(first.survivalCourses[1]!.name).toBe("Washington DC");
+      expect(first.survivalCourse).toBe("havana");
       w.race.command({ type: "survivalCourse", id: TRACK_ID.nationalMall });
-      assert.equal(w.race.hud().survivalCourse, TRACK_ID.nationalMall);
-      assert.equal(w.race.courseId, TRACK_ID.nationalMall, "the course behind the menu follows the pick");
+      expect(w.race.hud().survivalCourse).toBe(TRACK_ID.nationalMall);
+      expect(w.race.courseId, "the course behind the menu follows the pick").toBe(TRACK_ID.nationalMall);
       w.race.command({ type: "survivalCourse", id: "oval" });
-      assert.equal(w.race.hud().survivalCourse, TRACK_ID.nationalMall, "the oval has no Survival anchors");
-      assert.equal(w.race.hud().menu, "survival", "picking starts nothing");
-      assert.equal(w.race.hud().phase, null);
+      expect(w.race.hud().survivalCourse, "the oval has no Survival anchors").toBe(TRACK_ID.nationalMall);
+      expect(w.race.hud().menu, "picking starts nothing").toBe("survival");
+      expect(w.race.hud().phase).toBe(null);
     } finally {
       leaveSurvival(w);
     }
@@ -66,21 +65,21 @@ describe("given a Survival run on the National Mall", () => {
   it("when the run starts, then the player is on the race's start line facing the Washington Monument down the Mall and the cops are queued behind it, on the other side of 3rd Street from the monument", () => {
     const w = mallWorld();
     try {
-      assert.equal(w.race.courseId, TRACK_ID.nationalMall);
-      assert.equal(w.race.survival, true);
+      expect(w.race.courseId).toBe(TRACK_ID.nationalMall);
+      expect(w.race.survival).toBe(true);
       const car = w.cars[0]!;
       const at = car.group.position;
       const pole = track.gridSlot(0);
-      assert.ok(Math.hypot(at.x - pole.x, at.z - pole.z) < 5, `the player is ${Math.hypot(at.x - pole.x, at.z - pole.z).toFixed(1)} m from the race's pole slot`);
+      expect(Math.hypot(at.x - pole.x, at.z - pole.z), `the player is ${Math.hypot(at.x - pole.x, at.z - pole.z).toFixed(1)} m from the race's pole slot`).toBeLessThan(5);
       const toMonument = Math.atan2(monument.x - at.x, monument.z - at.z);
       const facing = Math.atan2(car.fwdFlat.x, car.fwdFlat.z);
       const off = Math.abs(Math.atan2(Math.sin(facing - toMonument), Math.cos(facing - toMonument)));
-      assert.ok(off < (3 * Math.PI) / 180, `the car faces ${((off * 180) / Math.PI).toFixed(1)}° off the monument`);
+      expect(off, `the car faces ${((off * 180) / Math.PI).toFixed(1)}° off the monument`).toBeLessThan((3 * Math.PI) / 180);
       for (const [k, f] of spec.formation.entries()) {
         const cop = w.cars[1 + k]!.group.position;
         const behind = -((cop.x - at.x) * car.fwdFlat.x + (cop.z - at.z) * car.fwdFlat.z);
-        assert.ok(behind > 10, `cop ${k} is ${behind.toFixed(1)} m behind the player`);
-        assert.ok(Math.hypot(cop.x - f.x, cop.z - f.z) < 0.01, `cop ${k} is on its slot`);
+        expect(behind, `cop ${k} is ${behind.toFixed(1)} m behind the player`).toBeGreaterThan(10);
+        expect(Math.hypot(cop.x - f.x, cop.z - f.z), `cop ${k} is on its slot`).toBeLessThan(0.01);
       }
     } finally {
       leaveSurvival(w);
@@ -108,7 +107,7 @@ describe("given a Survival run on the National Mall", () => {
         hold(w);
         frame(w, state);
       }
-      assert.equal(w.race.hud().survival?.result?.cause, "wrecked", "the guards' fire is what ends the run");
+      expect(w.race.hud().survival?.result?.cause, "the guards' fire is what ends the run").toBe("wrecked");
     } finally {
       leaveSurvival(w);
     }
@@ -174,8 +173,8 @@ describe("given the National Mall as a Survival course, a city closed by a rim o
       }
     }
     t.annotate(`${queue.length} cells reachable from the start; ${edge} on the edge of the ${nx} x ${nz} window of ${CELL} m cells; ${rim.length} rim blocks`);
-    assert.ok(queue.length > 100_000, `the disc spread to ${queue.length} cells only: the streets and lawns are open`);
-    assert.equal(edge, 0, `a car can drive from the start to the edge of the world (${edge} edge cells reached)`);
+    expect(queue.length, `the disc spread to ${queue.length} cells only: the streets and lawns are open`).toBeGreaterThan(100_000);
+    expect(edge, `a car can drive from the start to the edge of the world (${edge} edge cells reached)`).toBe(0);
   });
 
   it("when a car at 60 m/s is aimed at each side of the rim at a block's middle, a seam and a corner, then it is stopped inside", (t) => {
@@ -214,7 +213,7 @@ describe("given the National Mall as a Survival course, a city closed by a rim o
     const past = (x: number, z: number): number => Math.max(west - x, x - east, south - z, z - north);
     const reach = rimReach(TRACK_ID.nationalMall, launches, past);
     const deepest = Math.max(...reach.map((r) => r.far));
-    for (const r of reach) assert.ok(r.far < 0, `${r.name}: the car got ${r.far.toFixed(1)} m through the rim`);
+    for (const r of reach) expect(r.far, `${r.name}: the car got ${r.far.toFixed(1)} m through the rim`).toBeLessThan(0);
     t.annotate(`${launches.length} launches at ${LAUNCH_SPEED} m/s; the car that got furthest stopped ${(-deepest).toFixed(1)} m inside the blocks' inner faces`);
   });
 });

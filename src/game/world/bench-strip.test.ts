@@ -1,5 +1,4 @@
-import { describe, test } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, test } from "vitest";
 import { benchPlan, type BenchPlan } from "../engine/engine-bench-plan.ts";
 import { placeProps } from "./placements.ts";
 import { stripCourse, type StripSpec } from "./bench-strip.ts";
@@ -9,27 +8,31 @@ import { frame, makeWorld } from "./race-world.test-util.ts";
 import { DEFAULT_RACE_OPTIONS, type RaceOptions } from "../match/types.ts";
 import { Track } from "./track.ts";
 import { OFF_MENU, TRACKS } from "./tracks/index.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const SPEC: StripSpec = { length: 6000, props: [{ prefab: "building", count: 20 }, { prefab: "tree", count: 40 }, { prefab: "rock", count: 20 }], traffic: { lanes: 2, count: 12 } };
 
 describe("given the bench strip course", () => {
   test("when it is parsed and built, then it is an ordinary course whose first 5 km is a straight up +z from the start line", () => {
     const track = new Track(stripCourse(SPEC));
-    assert.equal(parseTrack(stripCourse(SPEC)).id, "bench");
-    assert.ok(track.length > 2 * 6000, `length ${track.length}`);
+    expect(parseTrack(stripCourse(SPEC)).id).toBe("bench");
+    expect(track.length, `length ${track.length}`).toBeGreaterThan(2 * 6000);
     const p = track.pointAt(0, { x: 0, y: 0, z: 0, tx: 0, tz: 0, half: 0 });
     const q = track.pointAt(5000, { x: 0, y: 0, z: 0, tx: 0, tz: 0, half: 0 });
-    assert.ok(Math.abs(p.x) < 1e-6 && Math.abs(q.x) < 1e-6 && q.z > 4990 && q.tz > 0.999999, `at 5000 m: x ${q.x}, z ${q.z}, heading z ${q.tz}`);
+    expect(Math.abs(p.x) < 1e-6 && Math.abs(q.x) < 1e-6 && q.z > 4990 && q.tz > 0.999999, `at 5000 m: x ${q.x}, z ${q.z}, heading z ${q.tz}`).toBeTruthy();
   });
 
   test("when it is asked for 20 buildings, 40 trees and 20 rocks, then exactly that many props are placed, each kind in its own row on the lane's left (+x)", () => {
     const placed = placeProps(new Track(stripCourse(SPEC)));
     const by: Record<string, number[]> = {};
     for (const q of placed) (by[q.prefab] ??= []).push(q.x);
-    assert.deepEqual(Object.fromEntries(Object.entries(by).map(([k, v]) => [k, v.length])), { building: 20, tree: 40, rock: 20 });
-    for (const [kind, xs] of Object.entries(by)) assert.ok(xs.every((x) => x > 11), `${kind} props stand outside the wall on the left`);
+    expect(Object.keys(by), "prop kinds placed").toHaveLength(3);
+    expect(by.building?.length, "buildings placed").toBe(20);
+    expect(by.tree?.length, "trees placed").toBe(40);
+    expect(by.rock?.length, "rocks placed").toBe(20);
+    for (const [kind, xs] of Object.entries(by)) expect(xs.every((x) => x > 11), `${kind} props stand outside the wall on the left`).toBeTruthy();
     const rows = new Set(Object.values(by).map((xs) => Math.round(xs.reduce((a, b) => a + b, 0) / xs.length)));
-    assert.equal(rows.size, 3, "three different rows");
+    expect(rows.size, "three different rows").toBe(3);
   });
 
   const trafficCases: { spec: StripSpec["traffic"]; lanes: number; cars: number }[] = [
@@ -40,59 +43,87 @@ describe("given the bench strip course", () => {
   for (const c of trafficCases) {
     test(`when the traffic is ${c.spec!.lanes} lane(s) x ${c.spec!.count}, then its road has ${c.lanes} lane(s) and ${c.cars} cars, on the right of the race lane (-x)`, () => {
       const track = new Track(stripCourse({ ...SPEC, traffic: c.spec }));
-      assert.equal(track.routes.length, 1);
-      assert.equal(track.routes[0]!.lanes.length, c.lanes);
-      assert.equal(track.routes[0]!.count, c.cars);
-      assert.ok(track.routes[0]!.path.x.every((x) => x < -20), "the road is well right of the race lane");
+      expect(track.routes.length).toBe(1);
+      expect(track.routes[0]!.lanes.length).toBe(c.lanes);
+      expect(track.routes[0]!.count).toBe(c.cars);
+      expect(track.routes[0]!.path.x.every((x) => x < -20), "the road is well right of the race lane").toBeTruthy();
     });
   }
 
   test("when props and traffic are off, then the course has neither", () => {
     const track = new Track(stripCourse({ ...SPEC, props: [], traffic: null }));
-    assert.equal(placeProps(track).length, 0);
-    assert.equal(track.routes.length, 0);
+    expect(placeProps(track).length).toBe(0);
+    expect(track.routes.length).toBe(0);
   });
 
   test("when the game lists its courses, then the strip is in neither the race menu nor the off-menu list", () => {
     const ids = [...TRACKS, ...OFF_MENU].map((j) => parseTrack(j).id);
-    assert.ok(!ids.includes("bench"));
+    expect(!ids.includes("bench")).toBe(true);
   });
 });
 
 describe("given a page's bench query", () => {
   test("when it is a bare ?bench=strip, then it is the baseline: 16 racers, one sedan body, 2 traffic lanes x 12, 20 buildings + 40 trees + 20 rocks, a 6 km straight", () => {
     const plan = benchPlan("?bench=strip")!;
-    assert.equal(plan.racers, 16);
-    assert.equal(plan.body, "sedan");
+    expect(plan.racers).toBe(16);
+    expect(plan.body).toBe("sedan");
     const strip = plan.strip!;
-    assert.equal(strip.length, SPEC.length);
-    assert.equal(strip.props.length, SPEC.props.length);
+    expect(strip.length).toBe(SPEC.length);
+    expect(strip.props.length).toBe(SPEC.props.length);
     for (let i = 0; i < SPEC.props.length; i++) {
-      assert.equal(strip.props[i]!.prefab, SPEC.props[i]!.prefab, `prop row ${i}`);
-      assert.equal(strip.props[i]!.count, SPEC.props[i]!.count, `prop row ${i}`);
+      expect(strip.props[i]!.prefab, `prop row ${i}`).toBe(SPEC.props[i]!.prefab);
+      expect(strip.props[i]!.count, `prop row ${i}`).toBe(SPEC.props[i]!.count);
     }
-    assert.equal(strip.traffic!.lanes, SPEC.traffic!.lanes);
-    assert.equal(strip.traffic!.count, SPEC.traffic!.count);
-    assert.deepEqual(plan.race, { type: "program", options: { trackId: "bench", laps: 1, aiCount: 15, police: false, aggression: 0.5, aiDifficulty: "hard", spectate: false, noReset: false } });
+    expect(strip.traffic!.lanes).toBe(SPEC.traffic!.lanes);
+    expect(strip.traffic!.count).toBe(SPEC.traffic!.count);
+    const program = plan.race?.type === "program" ? plan.race.options : null;
+    if (!program) throw new Error("the strip bench is not a program race");
+    expect(program.trackId, "program trackId").toBe("bench");
+    expect(program.laps, "program laps").toBe(1);
+    expect(program.aiCount, "program aiCount").toBe(15);
+    expect(program.police, "program police").toBe(false);
+    expect(program.aggression, "program aggression").toBe(0.5);
+    expect(program.aiDifficulty, "program aiDifficulty").toBe("hard");
+    expect(program.spectate, "program spectate").toBe(false);
+    expect(program.noReset, "program noReset").toBe(false);
   });
 
+  const stripOf = (p: BenchPlan): StripSpec => {
+    if (!p.strip) throw new Error("the plan has no strip");
+    return p.strip;
+  };
+
   const queries: { q: string; check: (p: BenchPlan) => void; what: string }[] = [
-    { q: "?bench=strip&props=off", what: "props off", check: (p) => assert.deepEqual(p.strip!.props, []) },
-    { q: "?bench=strip&traffic=off", what: "traffic off", check: (p) => assert.equal(p.strip!.traffic, null) },
-    { q: "?bench=strip&traffic=1x6", what: "one traffic lane, 6 cars", check: (p) => assert.deepEqual(p.strip!.traffic, { lanes: 1, count: 6 }) },
-    { q: "?bench=strip&props=tree:100", what: "100 trees only", check: (p) => assert.deepEqual(p.strip!.props, [{ prefab: "tree", count: 100 }]) },
-    { q: "?bench=strip&cars=4&same=off", what: "4 racers on the fleet's mix", check: (p) => assert.deepEqual([p.racers, p.body], [4, null]) },
-    { q: "?bench=strip&cars=99", what: "racers capped at 16", check: (p) => assert.equal(p.racers, 16) },
-    { q: "?bench=strip&len=100", what: "the straight is at least 1.5 km", check: (p) => assert.equal(p.strip!.length, 1500) },
-    { q: "?bench=strip&same=hatchback&traffic=banana&props=nonsense:5", what: "junk values fall back: a hatchback body, no traffic, no props", check: (p) => assert.deepEqual([p.body, p.strip!.traffic, p.strip!.props], ["hatchback", null, []]) },
+    { q: "?bench=strip&props=off", what: "props off", check: (p) => expect(p.strip!.props).toHaveLength(0) },
+    { q: "?bench=strip&traffic=off", what: "traffic off", check: (p) => expect(p.strip!.traffic).toBe(null) },
+    { q: "?bench=strip&traffic=1x6", what: "one traffic lane, 6 cars", check: (p) => {
+      const traffic = stripOf(p).traffic;
+      if (!traffic) throw new Error("no traffic");
+      expect(traffic.lanes, "traffic lanes").toBe(1);
+      expect(traffic.count, "traffic cars").toBe(6);
+    } },
+    { q: "?bench=strip&props=tree:100", what: "100 trees only", check: (p) => {
+      const props = stripOf(p).props;
+      expect(props, "prop rows").toHaveLength(1);
+      expect(props[0]?.prefab, "prop kind").toBe("tree");
+      expect(props[0]?.count, "tree count").toBe(100);
+    } },
+    { q: "?bench=strip&cars=4&same=off", what: "4 racers on the fleet's mix", check: (p) => expect(firstMismatch([p.racers, p.body], [4, null])).toBeUndefined() },
+    { q: "?bench=strip&cars=99", what: "racers capped at 16", check: (p) => expect(p.racers).toBe(16) },
+    { q: "?bench=strip&len=100", what: "the straight is at least 1.5 km", check: (p) => expect(p.strip!.length).toBe(1500) },
+    { q: "?bench=strip&same=hatchback&traffic=banana&props=nonsense:5", what: "junk values fall back: a hatchback body, no traffic, no props", check: (p) => {
+      expect(p.body, "body").toBe("hatchback");
+      expect(stripOf(p).traffic, "traffic").toBe(null);
+      expect(stripOf(p).props, "prop rows").toHaveLength(0);
+    } },
   ];
   for (const c of queries) test(`when the query is ${c.q}, then ${c.what}`, () => c.check(benchPlan(c.q)!));
 
   test("when the query names no known bench, then there is no plan; and ?bench=city is the city race with police", () => {
-    assert.equal(benchPlan("?bench=nope"), null);
-    assert.equal(benchPlan(""), null);
+    expect(benchPlan("?bench=nope")).toBe(null);
+    expect(benchPlan("")).toBe(null);
     const city = benchPlan("?bench=city")!;
-    assert.deepEqual([city.id, city.racers, city.strip], ["city", 16, null]);
+    expect(firstMismatch([city.id, city.racers, city.strip], ["city", 16, null])).toBeUndefined();
   });
 });
 
@@ -111,16 +142,16 @@ describe("given a race field handed the strip as its bench course", () => {
       // The strip's straight is run until the leader is 300 m up it (25 s at most).
       for (let n = 0; n < 25 * 60 && (n % 30 !== 0 || leader() <= 300); n++) frame(w, state);
       const hud = w.race.hud();
-      assert.equal(hud.trackName, "Bench strip");
-      assert.equal(hud.field, 16);
-      assert.ok(!hud.courses.some((c) => c.id === "bench"), "the race menu does not list it");
-      for (const key of Object.keys(DEFAULT_RACE_OPTIONS) as (keyof RaceOptions)[]) assert.equal(hud.options[key], DEFAULT_RACE_OPTIONS[key], `the player's own options: ${key}`);
+      expect(hud.trackName).toBe("Bench strip");
+      expect(hud.field).toBe(16);
+      expect(!hud.courses.some((c) => c.id === "bench"), "the race menu does not list it").toBe(true);
+      for (const key of Object.keys(DEFAULT_RACE_OPTIONS) as (keyof RaceOptions)[]) expect(hud.options[key], `the player's own options: ${key}`).toBe(DEFAULT_RACE_OPTIONS[key]);
       const cars = w.live();
-      assert.equal(cars.length, 16 + 12, "16 racers and 12 traffic cars");
+      expect(cars.length, "16 racers and 12 traffic cars").toBe(16 + 12);
       const lead = Math.max(...cars.slice(0, 16).map((c) => c.group.position.z));
-      assert.ok(lead > 300, `the leader is ${lead.toFixed(0)} m up the strip`);
-      assert.ok(cars.slice(0, 16).every((c) => Math.abs(c.group.position.x) < 40), "every racer is on the lane");
-      assert.ok(cars.slice(16).every((c) => !c.group.visible || c.group.position.x < -20), "traffic in play is on its road to the right");
+      expect(lead, `the leader is ${lead.toFixed(0)} m up the strip`).toBeGreaterThan(300);
+      expect(cars.slice(0, 16).every((c) => Math.abs(c.group.position.x) < 40), "every racer is on the lane").toBeTruthy();
+      expect(cars.slice(16).every((c) => !c.group.visible || c.group.position.x < -20), "traffic in play is on its road to the right").toBeTruthy();
     } finally {
       w.race.exit();
       setGround(null);

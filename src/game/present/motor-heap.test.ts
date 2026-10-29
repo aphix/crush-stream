@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import { VEHICLE_CLASS_IDS } from "../vehicle/vehicle-classes.ts";
@@ -67,7 +66,7 @@ describe("given six voices re-tuned over and over, as every pool swap, class cha
     // A processor builds its generator on the first block after the runtime is in.
     for (const voice of voices) {
       voice.process([], out, params);
-      assert.notEqual(voice.soundGenerator, null, "the voice built its generator");
+      expect(voice.soundGenerator, "the voice built its generator").not.toBe(null);
     }
     // A big malloc comes off the top of the heap (no hole is that large), and a leak only ever moves the top up.
     const heapTop = (): number => {
@@ -82,7 +81,7 @@ describe("given six voices re-tuned over and over, as every pool swap, class cha
       voice.port.onmessage?.({ data: tones[(i * 7) % tones.length] });
       voice.process([], out, params);
     }
-    assert.equal(wasm.HEAPU8.length, HEAP_BYTES);
-    assert.ok(heapTop() <= warm + HEAP_SLACK, `the heap top moved ${heapTop() - warm} bytes`);
+    expect(wasm.HEAPU8.length).toBe(HEAP_BYTES);
+    expect(heapTop(), `the heap top moved ${heapTop() - warm} bytes`).toBeLessThanOrEqual(warm + HEAP_SLACK);
   });
 });

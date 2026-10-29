@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld, type World } from "./race-world.test-util.ts";
 import { Track, blankProjection } from "./track.ts";
@@ -81,7 +80,7 @@ describe("given a city race of 5 cars (4 AI rivals and the AI-driven player slot
     const w = raceWorld("city", 4);
     try {
       const pushes = overPushes(w, 40);
-      assert.deepEqual(pushes, [], fmt(pushes));
+      expect(pushes, fmt(pushes)).toHaveLength(0);
     } finally {
       w.race.exit();
       setGround(null);
@@ -101,10 +100,10 @@ describe("given a lone car in the city race, racing down the back alley to its e
       w.seat.intent.gas = 1;
       const state = { acc: 0 };
       for (let n = 0; w.race.phase !== "racing" && n < 60 * 30; n++) frame(w, state);
-      assert.equal(w.race.phase, "racing");
+      expect(w.race.phase).toBe("racing");
       car.spawnFacing(ALLEY.x, ALLEY.z, ALLEY.yaw, 29);
       const pushes = overPushes(w, 2.5);
-      assert.deepEqual(pushes, [], fmt(pushes));
+      expect(pushes, fmt(pushes)).toHaveLength(0);
     } finally {
       w.race.exit();
       setGround(null);
@@ -134,7 +133,7 @@ describe("given a lone car in the city race driving at 20 m/s along the loop wit
       for (let n = 0; w.race.phase !== "racing" && n < 60 * 30; n++) frame(w, state);
       car.spawnFacing(p.x[j]! + p.tz[j]! * lat, p.z[j]! - p.tx[j]! * lat, Math.atan2(p.tx[j]!, p.tz[j]!), 20);
       const pushes = overPushes(w, 1);
-      assert.deepEqual(pushes, [], fmt(pushes));
+      expect(pushes, fmt(pushes)).toHaveLength(0);
     } finally {
       w.race.exit();
       setGround(null);
@@ -156,7 +155,7 @@ describe("given a lone car in the city race on a walled stretch of the loop, 2 m
       const car = w.cars[0]!;
       car.spawnFacing(p.x[k]! + p.tz[k]! * (limit - 2), p.z[k]! - p.tx[k]! * (limit - 2), Math.atan2(p.tx[k]!, p.tz[k]!), 0);
       w.race.courseHit(car, 0, 1 / QUIET_HZ);
-      assert.ok(Math.abs(lat(limit - 2)) < 0.05, "on the road side, the wall leaves the car alone");
+      expect(Math.abs(lat(limit - 2)), "on the road side, the wall leaves the car alone").toBeLessThan(0.05);
       // A car-car shove: 1.35 m toward the wall in one step, the flank 0.3 m into the drawn wall and the car's middle still on the
       // road side of it. (A one-step shove of 3.5 m, this test's old one, carried the middle past the whole wall: through it.)
       car.group.position.x += p.tz[k]! * 1.35;
@@ -164,7 +163,7 @@ describe("given a lone car in the city race on a walled stretch of the loop, 2 m
       w.race.courseHit(car, 0, 1 / QUIET_HZ);
       const back = lat(0);
       const hw = footHalfW(car);
-      assert.ok(back < limit - hw + 0.001 && back > limit - 3, `returned to ${back.toFixed(3)} m, the wall line at ${limit.toFixed(2)} m, the car's drawn flank ${hw.toFixed(3)} m from its middle`);
+      expect(back < limit - hw + 0.001 && back > limit - 3, `returned to ${back.toFixed(3)} m, the wall line at ${limit.toFixed(2)} m, the car's drawn flank ${hw.toFixed(3)} m from its middle`).toBeTruthy();
     } finally {
       w.race.exit();
       setGround(null);
@@ -190,7 +189,7 @@ describe("given a lone car in the city race on a walled stretch of the loop with
         });
       let k = 20;
       while (k < p.count && !(free(k) && Array.from({ length: 21 }, (_, d) => p.wallL[(k + d - 10 + p.count) % p.count]).every(Boolean))) k++;
-      assert.ok(k < p.count, "the city has a walled stretch with no prop near");
+      expect(k, "the city has a walled stretch with no prop near").toBeLessThan(p.count);
       const limit = p.half[k]! + p.runL[k]!;
       const car = w.cars[0]!;
       const lateral = () => track.project(car.group.position.x, car.group.position.z, k, blankProjection()).lateral;
@@ -201,7 +200,7 @@ describe("given a lone car in the city race on a walled stretch of the loop with
       w.race.courseHit(car, 0, 1 / QUIET_HZ);
       put(limit + 2.8);
       w.race.courseHit(car, 0, 1 / QUIET_HZ);
-      assert.ok(Math.abs(lateral() - (limit + 2.8)) < 0.01, `a car outside the wall is not pushed (now ${lateral().toFixed(2)} m, line ${limit.toFixed(2)} m)`);
+      expect(Math.abs(lateral() - (limit + 2.8)), `a car outside the wall is not pushed (now ${lateral().toFixed(2)} m, line ${limit.toFixed(2)} m)`).toBeLessThan(0.01);
       // A keyframe puts it 3.7 m back, its flank 0.05 m into the drawn wall: freshly placed, and the wall returns it that far.
       // (The old line probe read 0.13 m: it measured the front probes across the bend in the frame of the car's middle.)
       // The placed car's flank (hw from its middle) 0.05 m past the wall's face.
@@ -211,7 +210,7 @@ describe("given a lone car in the city race on a walled stretch of the loop with
       w.race.remember(0, Float64Array.of(-1), 0);
       w.race.courseHit(car, 0, 1 / QUIET_HZ);
       const pushed = limit - hw + 0.05 - lateral();
-      assert.ok(depth > 0.03 && Math.abs(pushed - depth) < 0.01, `the placed car, ${depth.toFixed(3)} m into the wall, is pushed back ${pushed.toFixed(3)} m`);
+      expect(depth > 0.03 && Math.abs(pushed - depth) < 0.01, `the placed car, ${depth.toFixed(3)} m into the wall, is pushed back ${pushed.toFixed(3)} m`).toBeTruthy();
     } finally {
       w.race.exit();
       setGround(null);
@@ -357,9 +356,9 @@ describe("given the city course's inner wall at the top of the bend past the cou
         const { inside } = reachWall(car, CITY_WALLS, from);
         const note = `hit at ${hardest.toFixed(1)} m/s, ${car.deform.massActive ? "wreck" : "rigid"}, ${(Math.hypot(car.velocity.x, car.velocity.z) * 3.6).toFixed(1)} km/h at the end, deepest ${deepest.toFixed(3)} m in the wall, ${past.toFixed(3)} m past its far face, ${inside.toFixed(3)} m left in it`;
         t.annotate(note);
-        assert.ok(hardest > 5, `${a.label}: met the wall at ${hardest.toFixed(1)} m/s, not the owner's hard hit (${note})`);
-        assert.ok(past <= PAST, `${a.label}: the body reached ${past.toFixed(3)} m past the wall's far face (${note})`);
-        assert.ok(inside <= INSIDE, `${a.label}: ${inside.toFixed(3)} m of the body left in the wall (${note})`);
+        expect(hardest, `${a.label}: met the wall at ${hardest.toFixed(1)} m/s, not the owner's hard hit (${note})`).toBeGreaterThan(5);
+        expect(past, `${a.label}: the body reached ${past.toFixed(3)} m past the wall's far face (${note})`).toBeLessThanOrEqual(PAST);
+        expect(inside, `${a.label}: ${inside.toFixed(3)} m of the body left in the wall (${note})`).toBeLessThanOrEqual(INSIDE);
       } finally {
         setGround(null);
       }

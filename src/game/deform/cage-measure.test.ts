@@ -1,11 +1,11 @@
-import { describe, test } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, test } from "vitest";
 import * as THREE from "three";
 import { CAGES, type BodyPartName } from "../kernel/rig-spec.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { paint } from "../vehicle/test-support.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { RES_SLOTS, type DeformRig, type MassNode } from "./deform-rig.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const DT = 1 / FINE_HZ;
 const NAMES = CAGES.map((c) => c.name);
@@ -46,12 +46,12 @@ describe("given a car that has taken a hard nose hit", () => {
       const strain = plainStrain(car, name);
       if (strain > 0.001) moved++;
       for (let again = 0; again < 3; again++) {
-        assert.equal(car.deform.cageStrain(name), strain, `strain of ${name}`);
-        assert.equal(car.deform.partCompression(name), plainCompression(car, name), `compression of ${name}`);
+        expect(car.deform.cageStrain(name), `strain of ${name}`).toBe(strain);
+        expect(car.deform.partCompression(name), `compression of ${name}`).toBe(plainCompression(car, name));
       }
     }
-    assert.ok(moved >= 2, `${moved} cages strained: the hit moved nothing`);
-    assert.ok(NAMES.some((name) => car.deform.partCompression(name) > 0.05), "no part is compressed: the hit did nothing");
+    expect(moved, `${moved} cages strained: the hit moved nothing`).toBeGreaterThanOrEqual(2);
+    expect(NAMES.some((name) => car.deform.partCompression(name) > 0.05), "no part is compressed: the hit did nothing").toBeTruthy();
   });
 
   test("when a cage's corner moves between two reads, then the second read measures the new corners, not the memo", () => {
@@ -61,23 +61,23 @@ describe("given a car that has taken a hard nose hit", () => {
     const corner = car.deform["cageByPart"].get(name)!.corners[3]!;
     corner.x += 0.07;
     const after = car.deform.cageStrain(name);
-    assert.equal(after, plainStrain(car, name));
-    assert.notEqual(after, before, "a moved corner leaves the strain as it was");
+    expect(after).toBe(plainStrain(car, name));
+    expect(after, "a moved corner leaves the strain as it was").not.toBe(before);
     corner.x -= 0.07;
-    assert.equal(car.deform.cageStrain(name), before, "back where it was, the same answer");
+    expect(car.deform.cageStrain(name), "back where it was, the same answer").toBe(before);
   });
 
   test("when a corner reads NaN, then the strain is whatever the plain definition says, on every read", () => {
     const car = crashed();
     const name: BodyPartName = "bonnet";
     car.deform["cageByPart"].get(name)!.corners[0]!.y = NaN;
-    for (let i = 0; i < 3; i++) assert.equal(Object.is(car.deform.cageStrain(name), plainStrain(car, name)), true);
+    for (let i = 0; i < 3; i++) expect(Object.is(car.deform.cageStrain(name), plainStrain(car, name))).toBe(true);
   });
 
   test("when a part name no cage has is asked for, then the strain and the compression are 0", () => {
     const car = crashed();
-    assert.equal(car.deform.cageStrain("nope" as BodyPartName), 0);
-    assert.equal(car.deform.partCompression("nope" as BodyPartName), 0);
+    expect(car.deform.cageStrain("nope" as BodyPartName)).toBe(0);
+    expect(car.deform.partCompression("nope" as BodyPartName)).toBe(0);
   });
 });
 
@@ -92,15 +92,15 @@ describe("given a car's glazed cages (the windscreen's, the rear glass's and the
     for (const name of ["glassFront", "glassRear", "doorLeft", "doorRight"] as const) {
       const cage = car.deform["cageByPart"].get(name)!;
       for (let i = 0; i < 8; i++) cage.corners[i]!.copy(cage.restCorners[i]!).applyQuaternion(TURN).add(SHIFT);
-      assert.ok(car.deform.glassDistortion(name) < 1e-9, `${name} moved rigidly reads ${car.deform.glassDistortion(name)} m`);
+      expect(car.deform.glassDistortion(name), `${name} moved rigidly reads ${car.deform.glassDistortion(name)} m`).toBeLessThan(1e-9);
     }
     car.deform["cageByPart"].get("glassFront")!.corners[3]!.x += PUSH;
     const pushed = car.deform.glassDistortion("glassFront");
-    assert.ok(pushed > PUSH / 3 && pushed <= PUSH, `one corner pushed ${PUSH} m reads ${pushed} m`);
+    expect(pushed > PUSH / 3 && pushed <= PUSH, `one corner pushed ${PUSH} m reads ${pushed} m`).toBeTruthy();
   });
 
   test("when a cage holds no pane, then its glass distortion is 0", () => {
-    assert.equal(crashed().deform.glassDistortion("bonnet"), 0);
+    expect(crashed().deform.glassDistortion("bonnet")).toBe(0);
   });
 
   /** The masses a cage's eight corners follow (their A5 parents, weight above 0). */
@@ -119,8 +119,8 @@ describe("given a car's glazed cages (the windscreen's, the rear glass's and the
     const cell = rig["cageByPart"].get("chassisCell")!.spec;
     const inCabin = (m: MassNode): boolean => m.rest.z >= cell.min[2] && m.rest.z <= cell.max[2] && m.rest.y >= cell.min[1];
     const outside = (name: BodyPartName): string[] => parentsOf(rig, name).filter((m) => !inCabin(m)).map((m) => m.name).sort();
-    for (const name of ["doorLeft", "doorRight"] as const) assert.deepEqual(outside(name), [], `${name}'s corners follow masses outside the cabin`);
-    assert.deepEqual(outside("glassFront"), ["wingFL", "wingFR"], "the windscreen's corners follow the cabin and the wings' share alone");
-    assert.ok(outside("bonnet").length > 0, "the control: the bonnet's corners follow the nose");
+    for (const name of ["doorLeft", "doorRight"] as const) expect(outside(name), `${name}'s corners follow masses outside the cabin`).toHaveLength(0);
+    expect(firstMismatch(outside("glassFront"), ["wingFL", "wingFR"]), "the windscreen's corners follow the cabin and the wings' share alone").toBeUndefined();
+    expect(outside("bonnet").length, "the control: the bonnet's corners follow the nose").toBeGreaterThan(0);
   });
 });

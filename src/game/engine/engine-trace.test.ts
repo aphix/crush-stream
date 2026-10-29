@@ -1,10 +1,11 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { JerseyBarrier } from "../scenes/engine-props.ts";
 import { TraceRecorder, type TraceClock, type TraceSetup } from "./engine-trace.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const setup: TraceSetup = {
   barrier: true,
@@ -58,8 +59,8 @@ function rig() {
 }
 
 const nums = (v: unknown, n: number): number[] => {
-  assert.ok(Array.isArray(v) && v.length === n);
-  for (const x of v) assert.ok(typeof x === "number" && Number.isFinite(x));
+  must(Array.isArray(v) && v.length === n, `an array of ${n} numbers`);
+  for (const x of v) expect(typeof x === "number" && Number.isFinite(x)).toBeTruthy();
   return v;
 };
 
@@ -68,16 +69,16 @@ describe("given the trace recorder (the debug recording of a crash run) begun on
     const { cars, camera, trace, clock } = rig();
     trace.begin(setup, cars, clock);
     const cam = trace.samples[0]!.camera as Record<string, unknown>;
-    assert.equal(cam.rig, "orbit");
-    assert.equal(cam.follow, "c1");
-    assert.equal(cam.fov, 46);
-    assert.deepEqual(nums(cam.pos, 3), [10.123, 6, 16]);
+    expect(cam.rig).toBe("orbit");
+    expect(cam.follow).toBe("c1");
+    expect(cam.fov).toBe(46);
+    expect(firstMismatch(nums(cam.pos, 3), [10.123, 6, 16])).toBeUndefined();
     nums(cam.quat, 4);
     const dir = nums(cam.dir, 3);
-    assert.ok(Math.abs(Math.hypot(...dir) - 1) < 2e-3);
+    expect(Math.abs(Math.hypot(...dir) - 1)).toBeLessThan(2e-3);
     // dir is the camera's forward: it points at the target it was aimed at.
     const toTarget = new THREE.Vector3(0, 0.7, 0).sub(camera.position).normalize();
-    assert.ok(new THREE.Vector3(...dir).dot(toTarget) > 0.999);
+    expect(new THREE.Vector3(...dir).dot(toTarget)).toBeGreaterThan(0.999);
   });
 
   it("when the setup and the trace are written out, then both carry every HUD setting and keep the existing fields", () => {
@@ -86,13 +87,13 @@ describe("given the trace recorder (the debug recording of a crash run) begun on
     const want = { scene: "fleet", night: true, wet: false, realism: 0.35, fxTier: "high", loop: true, autoSlomo: true, timeScale: null, deformMode: "shape", playerClass: "sedan", pixelRatio: 1.5, dpr: 2, viewport: { w: 1280, h: 720 }, carCount: 2, speedMin: 0, speedMax: 32, squash: 1, buckle: 1, fxDensity: 0.7, ramps: true, barrier: true, balls: false };
     const shown: Record<string, unknown>[] = [JSON.parse(trace.setupJson(setup)), JSON.parse(trace.traceJson(setup)), trace.initial!];
     for (const doc of shown) {
-      for (const [k, v] of Object.entries(want)) assert.equal(JSON.stringify(doc[k]), JSON.stringify(v), k);
+      for (const [k, v] of Object.entries(want)) expect(JSON.stringify(doc[k]), k).toBe(JSON.stringify(v));
     }
   });
 
   it("when the first sample is written out, then the camera adds under 200 bytes to it", () => {
     const { cars, trace, clock } = rig();
     trace.begin(setup, cars, clock);
-    assert.ok(JSON.stringify(trace.samples[0]!.camera).length < 200);
+    expect(JSON.stringify(trace.samples[0]!.camera).length).toBeLessThan(200);
   });
 });

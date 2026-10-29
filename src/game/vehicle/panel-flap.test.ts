@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
@@ -74,7 +73,7 @@ describe("given a car body of any style with a hinged quarter panel (a quarter p
       const body = makeChassisGeometry(CAR_STYLES[id]);
       const pos = body.getAttribute("position") as THREE.BufferAttribute;
       for (const r of panelRegions(CAR_STYLES[id], body).filter((q) => q.kind === "quarter")) {
-        assert.ok(standoff(r, 1) <= STAND_MAX + 1e-9, `${id} ${r.name}: ${standoff(r, 1).toFixed(3)} m by the lever`);
+        expect(standoff(r, 1), `${id} ${r.name}: ${standoff(r, 1).toFixed(3)} m by the lever`).toBeLessThanOrEqual(STAND_MAX + 1e-9);
         const shell = makeShell(r, body);
         poseShell(r, shell, body, 1, 0);
         const out = shell.getAttribute("position") as THREE.BufferAttribute;
@@ -84,8 +83,8 @@ describe("given a car body of any style with a hinged quarter panel (a quarter p
           far = Math.max(far, v.distanceTo(new THREE.Vector3().fromBufferAttribute(pos, r.verts[k]!)));
         }
         // The peel plus the 3 cm lift and the 4 mm skin.
-        assert.ok(far <= STAND_MAX + 0.05, `${id} ${r.name}: a vertex ${far.toFixed(3)} m off its body vertex`);
-        assert.ok(far > STAND_MAX * 0.8, `${id} ${r.name}: only ${far.toFixed(3)} m, the cap cut the peel away`);
+        expect(far, `${id} ${r.name}: a vertex ${far.toFixed(3)} m off its body vertex`).toBeLessThanOrEqual(STAND_MAX + 0.05);
+        expect(far, `${id} ${r.name}: only ${far.toFixed(3)} m, the cap cut the peel away`).toBeGreaterThan(STAND_MAX * 0.8);
       }
     }
   });
@@ -96,7 +95,7 @@ describe("given a car body of any style with a hinged quarter panel (a quarter p
     let last = -1;
     for (const t of [0, 0.25, 0.5, 0.75, 1]) {
       const s = standoff(r, t);
-      assert.ok(s > last, `${t}: ${s}`);
+      expect(s, `${t}: ${s}`).toBeGreaterThan(last);
       last = s;
     }
   });
@@ -112,10 +111,10 @@ describe("given a stretched panel on a crashed car (a panel stretched past its f
       run(car, 40);
       const p = car.hang("quarterR", t);
       run(car, 20);
-      assert.ok(!p.detached, `hinge ${t}: it came off with nothing touching it`);
+      expect(!p.detached, `hinge ${t}: it came off with nothing touching it`).toBe(true);
       car.deform.notifyContact();
       run(car, 2);
-      assert.equal(p.detached, off, `hinge ${t}: contact ${off ? "left it on" : "tore it"}`);
+      expect(p.detached, `hinge ${t}: contact ${off ? "left it on" : "tore it"}`).toBe(off);
     }
   });
 
@@ -127,11 +126,11 @@ describe("given a stretched panel on a crashed car (a panel stretched past its f
       car.deform.notifyContact();
       run(car, 1);
     }
-    assert.ok(!p.detached, "the contact that made the hinge tore it");
+    expect(!p.detached, "the contact that made the hinge tore it").toBe(true);
     run(car, 30);
     car.deform.notifyContact();
     run(car, 2);
-    assert.ok(p.detached, "a touch after a pause left it on");
+    expect(p.detached, "a touch after a pause left it on").toBeTruthy();
   });
 
   it("when the car sits 0.5 m below the ground, then a panel hinged to 0.7 scrapes off and one hinged to 0.3 does not", () => {
@@ -145,7 +144,7 @@ describe("given a stretched panel on a crashed car (a panel stretched past its f
       car.group.position.y = -0.5;
       car.group.updateMatrixWorld(true);
       car.stepBreakage(DT);
-      assert.equal(p.detached, off, `hinge ${t}`);
+      expect(p.detached, `hinge ${t}`).toBe(off);
     }
   });
 
@@ -164,7 +163,7 @@ describe("given a stretched panel on a crashed car (a panel stretched past its f
       car.group.position.y = y;
       car.group.updateMatrixWorld(true);
       car.stepBreakage(DT);
-      assert.equal(p.detached, off, `car at ${y} m, drawn skin at ${drawn} m`);
+      expect(p.detached, `car at ${y} m, drawn skin at ${drawn} m`).toBe(off);
     }
   });
 });
@@ -194,22 +193,22 @@ function cruise(name: string, t: number, v: number, secs: number): number | null
 describe("given a crashed car cruising with a hinged panel, sustained speed wears hinged panels and bumpers off", () => {
   it("when a quarter panel hinged to 0.6 cruises at 40 m/s or at 10 m/s, then it goes in under 2 s at 40 m/s and holds for 12 s at 10 m/s", () => {
     const fast = cruise("quarterR", 0.6, 40, 12);
-    assert.ok(fast !== null && fast < 2, `off at ${fast}`);
-    assert.equal(cruise("quarterR", 0.6, 10, 12), null);
+    expect(fast !== null && fast < 2, `off at ${fast}`).toBeTruthy();
+    expect(cruise("quarterR", 0.6, 10, 12)).toBe(null);
   });
 
   it("when a lightly hinged quarter panel cruises at 40 m/s, then it takes longer to go than a stretched one, and a flat one never goes", () => {
     const light = cruise("quarterR", 0.3, 40, 12);
     const stretched = cruise("quarterR", 0.6, 40, 12)!;
-    assert.ok(light !== null && light > stretched, `light ${light} vs stretched ${stretched}`);
-    assert.equal(cruise("quarterR", 0, 40, 12), null);
+    expect(light !== null && light > stretched, `light ${light} vs stretched ${stretched}`).toBeTruthy();
+    expect(cruise("quarterR", 0, 40, 12)).toBe(null);
   });
 
   it("when an arch flare and a hanging bumper cruise at 40 m/s, then they wear off in under 3 s, and below the tear speed they stay", () => {
     for (const name of ["archFL", "bumperF"]) {
       const at = cruise(name, 0.6, 40, 12);
-      assert.ok(at !== null && at < 3, `${name} off at ${at}`);
-      assert.equal(cruise(name, 0.6, FLAP_TEAR_MPS - 6, 12), null, `${name} at ${FLAP_TEAR_MPS - 6} m/s`);
+      expect(at !== null && at < 3, `${name} off at ${at}`).toBeTruthy();
+      expect(cruise(name, 0.6, FLAP_TEAR_MPS - 6, 12), `${name} at ${FLAP_TEAR_MPS - 6} m/s`).toBe(null);
     }
   });
 });
@@ -231,15 +230,15 @@ function flutter(name: string, t: number, v: number, frames = 90): number {
 describe("given a hinged panel on a crashed car, its flutter follows the car's speed", () => {
   it("when the car goes from rest up to 21 m/s (below the tear speed), then the quarter panel's flutter is 0 at rest and grows with speed", () => {
     const at = [0, 8, 15, 21].map((v) => flutter("quarterR", 0.4, v));
-    assert.equal(at[0], 0, "a parked car's panel moved");
-    for (let i = 1; i < at.length; i++) assert.ok(at[i]! > at[i - 1]!, `flutter ${at.map((a) => a.toFixed(3)).join(" < ")}`);
+    expect(at[0], "a parked car's panel moved").toBe(0);
+    for (let i = 1; i < at.length; i++) expect(at[i]!, `flutter ${at.map((a) => a.toFixed(3)).join(" < ")}`).toBeGreaterThan(at[i - 1]!);
     // The amplitude is the model's, 90 frames reach most of the wave.
-    assert.ok(at[3]! > 0.5 * flapAmp(21, 0.4) && at[3]! <= flapAmp(21, 0.4) + 1e-6, `${at[3]} against ${flapAmp(21, 0.4)}`);
+    expect(at[3]! > 0.5 * flapAmp(21, 0.4) && at[3]! <= flapAmp(21, 0.4) + 1e-6, `${at[3]} against ${flapAmp(21, 0.4)}`).toBeTruthy();
   });
 
   it("when an arch flare and a hanging bumper are driven faster, then the flare turns about its top and the bumper rolls more, and neither moves at rest", () => {
-    assert.equal(flutter("archFL", 0.4, 0), 0);
-    assert.ok(flutter("archFL", 0.4, 20) > 0.02);
+    expect(flutter("archFL", 0.4, 0)).toBe(0);
+    expect(flutter("archFL", 0.4, 20)).toBeGreaterThan(0.02);
     const car = crashed();
     const b = car.hang("bumperF", 0.4);
     const roll = (v: number) => {
@@ -255,8 +254,8 @@ describe("given a hinged panel on a crashed car, its flutter follows the car's s
       return hi - lo;
     };
     const still = roll(0);
-    assert.equal(still, 0, "a parked bumper swung");
-    assert.ok(roll(20) > 0.03, "a bumper at speed did not flap");
+    expect(still, "a parked bumper swung").toBe(0);
+    expect(roll(20), "a bumper at speed did not flap").toBeGreaterThan(0.03);
   });
 
   it("when the same run is made twice, then the flutter agrees and never rebuilds the shell", () => {
@@ -273,7 +272,7 @@ describe("given a hinged panel on a crashed car, its flutter follows the car's s
         car.updateSkin();
         out.push(p.object.quaternion.y, p.object.position.x, p.object.position.z);
       }
-      assert.equal((mesh.geometry.getAttribute("position") as THREE.BufferAttribute).version, uploads, "a flapping shell was rebuilt");
+      expect((mesh.geometry.getAttribute("position") as THREE.BufferAttribute).version, "a flapping shell was rebuilt").toBe(uploads);
       return out;
     };
     assertSameNumbers(trace(), trace(), "flutter trace");
@@ -292,7 +291,7 @@ describe("given a hinged panel on a crashed car, its flutter follows the car's s
     const tail = new THREE.Vector3(r.pivot[0], r.origin.y, r.pivot[1]).sub(r.origin);
     const before = tail.clone().add(r.origin);
     const after = tail.clone().applyQuaternion(p.object.quaternion).add(p.object.position);
-    assert.ok(before.distanceTo(after) < 1e-6, `the hinge line moved ${before.distanceTo(after)} m`);
+    expect(before.distanceTo(after), `the hinge line moved ${before.distanceTo(after)} m`).toBeLessThan(1e-6);
   });
 });
 
@@ -314,16 +313,16 @@ describe("given a front bumper hung by one corner on a car standing on the road 
   it("when the bumper is hinged to full, then it hangs rolled about its corner with its low end on the road, not under it", () => {
     const car = cornerCrashed();
     const p = car.hang("bumperF", 1);
-    assert.ok(Math.abs(p.object.rotation.z) > 0.05, `the bumper did not hang by a corner: roll ${p.object.rotation.z}`);
-    assert.ok(lowest(p) >= -1e-6, `the bumper's low end is ${(-lowest(p)).toFixed(3)} m under the road`);
-    assert.ok(lowest(p) < 0.08, `the bumper hangs ${lowest(p).toFixed(3)} m above the road, not resting on it`);
+    expect(Math.abs(p.object.rotation.z), `the bumper did not hang by a corner: roll ${p.object.rotation.z}`).toBeGreaterThan(0.05);
+    expect(lowest(p), `the bumper's low end is ${(-lowest(p)).toFixed(3)} m under the road`).toBeGreaterThanOrEqual(-1e-6);
+    expect(lowest(p), `the bumper hangs ${lowest(p).toFixed(3)} m above the road, not resting on it`).toBeLessThan(0.08);
   });
 
   it("when the hanging bumper is torn off, then it leaves from above the road", () => {
     const car = cornerCrashed();
     car.hang("bumperF", 1);
     const p = car.tear("bumperF");
-    assert.ok(lowest(p) >= -1e-6, `the torn bumper starts ${(-lowest(p)).toFixed(3)} m under the road`);
+    expect(lowest(p), `the torn bumper starts ${(-lowest(p)).toFixed(3)} m under the road`).toBeGreaterThanOrEqual(-1e-6);
   });
 
   it("when the hanging bumper searches for its roll on the road, then the car's ancestors are brought up to date once, not once per probe", () => {
@@ -336,8 +335,8 @@ describe("given a front bumper hung by one corner on a car standing on the road 
       walk(up, down);
     };
     const p = car.hang("bumperF", 1);
-    assert.ok(Math.abs(p.object.rotation.z) > 0.05, "the bumper did not hang by a corner, so no roll was searched");
-    assert.equal(walks, 1);
+    expect(Math.abs(p.object.rotation.z), "the bumper did not hang by a corner, so no roll was searched").toBeGreaterThan(0.05);
+    expect(walks).toBe(1);
   });
 
   it("when the car stood 10 m lower at its last full matrix update, then the hung bumper's fit still reads the bumper where it is: its drawn bounds stay on the road", () => {
@@ -358,7 +357,7 @@ describe("given a front bumper hung by one corner on a car standing on the road 
       if (geometry.boundingBox === null) geometry.computeBoundingBox();
       drawn.union(box.copy(geometry.boundingBox!).applyMatrix4(o.matrixWorld));
     });
-    assert.ok(drawn.min.y >= -1e-6 && drawn.min.y < 0.08, `the drawn bumper's low end stands ${drawn.min.y.toFixed(3)} m over the road`);
+    expect(drawn.min.y >= -1e-6 && drawn.min.y < 0.08, `the drawn bumper's low end stands ${drawn.min.y.toFixed(3)} m over the road`).toBeTruthy();
   });
 });
 
@@ -394,13 +393,13 @@ describe("given a front arch shell hanging off a wreck sitting low on the road (
   it("when the arch shell is hinged to full, then its lowest point stands on the road, not the 2 cm under it its drop would take it", () => {
     const car = sunk();
     const p = car.hang("archFL", 1);
-    assert.ok(lowest(car, p) >= 0, `the arch shell's lowest point is ${(-lowest(car, p) * 100).toFixed(1)} cm under the road`);
-    assert.ok(lowest(car, p) < SKIN_OVER_ROAD, `the arch shell hangs ${(lowest(car, p) * 100).toFixed(1)} cm over the road: its flap did not drop to it`);
+    expect(lowest(car, p), `the arch shell's lowest point is ${(-lowest(car, p) * 100).toFixed(1)} cm under the road`).toBeGreaterThanOrEqual(0);
+    expect(lowest(car, p), `the arch shell hangs ${(lowest(car, p) * 100).toFixed(1)} cm over the road: its flap did not drop to it`).toBeLessThan(SKIN_OVER_ROAD);
   });
 
   it("when the shell resting on the road is torn off, then it leaves bent as its hinge alone bends it, as the same shell torn off a car standing high", () => {
     const low = sunk();
-    assert.ok(low.hang("archFL", 1).held, "the sunk wreck's shell does not rest on the road: there is no hold to tear it free of");
+    expect(low.hang("archFL", 1).held, "the sunk wreck's shell does not rest on the road: there is no hold to tear it free of").toBeTruthy();
     const high = crashed();
     high.hang("archFL", 1);
     const shape = (car: Probe) => ((car.tear("archFL").object as THREE.Mesh).geometry.getAttribute("position") as THREE.BufferAttribute).array;
@@ -410,14 +409,14 @@ describe("given a front arch shell hanging off a wreck sitting low on the road (
   it("when the wreck lies on the flank the arch is on and the shell is hinged to full, then its flap, which reaches out of the body side into the road, stands on the road, not under it", () => {
     const car = onFlank();
     const p = car.hang("archFL", 1);
-    assert.ok(p.held, "the road held none of the flap: it hangs out of the flank into the road");
-    assert.ok(lowest(car, p) >= 0, `the arch shell's lowest point is ${(-lowest(car, p) * 100).toFixed(1)} cm under the road`);
-    assert.ok(lowest(car, p) < SKIN_OVER_ROAD, `the arch shell hangs ${(lowest(car, p) * 100).toFixed(1)} cm over the road: its flap did not drop to it`);
+    expect(p.held, "the road held none of the flap: it hangs out of the flank into the road").toBeTruthy();
+    expect(lowest(car, p), `the arch shell's lowest point is ${(-lowest(car, p) * 100).toFixed(1)} cm under the road`).toBeGreaterThanOrEqual(0);
+    expect(lowest(car, p), `the arch shell hangs ${(lowest(car, p) * 100).toFixed(1)} cm over the road: its flap did not drop to it`).toBeLessThan(SKIN_OVER_ROAD);
   });
 
   it("when the flank wreck's shell resting on the road is torn off, then it leaves bent as its hinge alone bends it, as the same shell torn off a car standing high", () => {
     const low = onFlank();
-    assert.ok(low.hang("archFL", 1).held, "the flank wreck's shell does not rest on the road: there is no hold to tear it free of");
+    expect(low.hang("archFL", 1).held, "the flank wreck's shell does not rest on the road: there is no hold to tear it free of").toBeTruthy();
     const high = crashed();
     high.hang("archFL", 1);
     const shape = (car: Probe) => ((car.tear("archFL").object as THREE.Mesh).geometry.getAttribute("position") as THREE.BufferAttribute).array;
@@ -438,6 +437,6 @@ describe("given a crashed car lying on its left side on the road, its left door 
     car.group.position.y -= lowest();
     car.group.updateMatrixWorld(true);
     car.hang("doorL", 0.2);
-    assert.ok(lowest() >= -1e-6, `the jammed door's low end stands ${lowest().toFixed(3)} m over the road`);
+    expect(lowest(), `the jammed door's low end stands ${lowest().toFixed(3)} m over the road`).toBeGreaterThanOrEqual(-1e-6);
   });
 });

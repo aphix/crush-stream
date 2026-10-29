@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { MINIGAME_MODE, START_HILL } from "../scenes/minigame-constants.ts";
 import { climbFootX, floorHeightAt, lipHeight, stationBackX, stationFrontX } from "../scenes/minigame-profile.ts";
@@ -39,7 +38,7 @@ function isPaintedAt(art: THREE.Group, x: number, z: number, hex: number): boole
       return Math.abs(colours.getX(first) - expected.r) < COLOUR_TOLERANCE && Math.abs(colours.getY(first) - expected.g) < COLOUR_TOLERANCE && Math.abs(colours.getZ(first) - expected.b) < COLOUR_TOLERANCE;
     }
   }
-  return assert.fail(`no triangle covers (${x}, ${z})`);
+  return expect.fail(`no triangle covers (${x}, ${z})`);
 }
 
 describe("given the long jump station's art in station-local coordinates", () => {
@@ -47,33 +46,33 @@ describe("given the long jump station's art in station-local coordinates", () =>
   const vertices = artVertices(art);
 
   it("when it is built, then it draws within the surface budget", () => {
-    assert.ok(artMeshes(art).length >= 1, "something to draw");
-    assert.ok(artMeshes(art).length <= SURFACE_DRAW_CALL_BUDGET, `${artMeshes(art).length} meshes, budget ${SURFACE_DRAW_CALL_BUDGET}`);
+    expect(artMeshes(art).length, "something to draw").toBeGreaterThanOrEqual(1);
+    expect(artMeshes(art).length, `${artMeshes(art).length} meshes, budget ${SURFACE_DRAW_CALL_BUDGET}`).toBeLessThanOrEqual(SURFACE_DRAW_CALL_BUDGET);
   });
 
   it("when its extent is read, then it ends at the barrier's line and nothing is drawn past it, where the range's sand and signs already stand", () => {
-    assert.ok(Math.abs(Math.max(...vertices.map((vertex) => vertex.x)) - stationFrontX(MINIGAME_MODE.longJump)) <= HEIGHT_TOLERANCE, "front x");
-    assert.equal(stationFrontX(MINIGAME_MODE.longJump), 0, "the long jump's lip is the origin");
-    assert.ok(Math.abs(Math.min(...vertices.map((vertex) => vertex.x)) - stationBackX(MINIGAME_MODE.longJump)) <= HEIGHT_TOLERANCE, "back x");
+    expect(Math.abs(Math.max(...vertices.map((vertex) => vertex.x)) - stationFrontX(MINIGAME_MODE.longJump)), "front x").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
+    expect(stationFrontX(MINIGAME_MODE.longJump), "the long jump's lip is the origin").toBe(0);
+    expect(Math.abs(Math.min(...vertices.map((vertex) => vertex.x)) - stationBackX(MINIGAME_MODE.longJump)), "back x").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
   });
 
   it("when the run is read from the pad to the lip, then it falls to the run-up below the pad and climbs back to the pad's level at the lip", () => {
     const runUpFloor = floorHeightAt(MINIGAME_MODE.longJump, climbFootX(MINIGAME_MODE.longJump), 0);
-    assert.ok(runUpFloor < 0, "the run-up lies below the pad");
-    assert.ok(Math.abs(Math.min(...vertices.map((vertex) => vertex.y)) - runUpFloor) <= HEIGHT_TOLERANCE, "lowest vertex is the run-up's floor");
+    expect(runUpFloor, "the run-up lies below the pad").toBeLessThan(0);
+    expect(Math.abs(Math.min(...vertices.map((vertex) => vertex.y)) - runUpFloor), "lowest vertex is the run-up's floor").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
     const lipVertices = vertices.filter((vertex) => Math.abs(vertex.x) <= HEIGHT_TOLERANCE);
-    assert.ok(lipVertices.length > 0, "vertices stand on the lip");
-    for (const vertex of lipVertices) assert.ok(Math.abs(vertex.y - lipHeight(MINIGAME_MODE.longJump)) <= HEIGHT_TOLERANCE, `lip vertex height ${vertex.y}`);
-    assert.ok(Math.abs(Math.max(...vertices.map((vertex) => vertex.y)) - lipHeight(MINIGAME_MODE.longJump)) <= HEIGHT_TOLERANCE, "nothing rises above the pad's level");
+    expect(lipVertices.length, "vertices stand on the lip").toBeGreaterThan(0);
+    for (const vertex of lipVertices) expect(Math.abs(vertex.y - lipHeight(MINIGAME_MODE.longJump)), `lip vertex height ${vertex.y}`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
+    expect(Math.abs(Math.max(...vertices.map((vertex) => vertex.y)) - lipHeight(MINIGAME_MODE.longJump)), "nothing rises above the pad's level").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
   });
 
   it("when the start pad is read, then its bars alternate yellow and asphalt from the back end", () => {
     const style = STATION_SURFACE_STYLES.longJump;
     const sideOfCentreLine = style.laneHalfWidth / 2;
     const backX = stationBackX(MINIGAME_MODE.longJump);
-    assert.ok(isPaintedAt(art, backX + 0.5, sideOfCentreLine, style.startPadBarColour!), "first bar");
-    assert.ok(isPaintedAt(art, backX + 1.5, sideOfCentreLine, style.baseColour), "bare floor after the first bar");
-    assert.ok(isPaintedAt(art, backX + 2.5, sideOfCentreLine, style.startPadBarColour!), "second bar");
-    assert.ok(isPaintedAt(art, backX + START_HILL.padLength + 0.5, sideOfCentreLine, style.baseColour), "no bar past the pad");
+    expect(isPaintedAt(art, backX + 0.5, sideOfCentreLine, style.startPadBarColour!), "first bar").toBeTruthy();
+    expect(isPaintedAt(art, backX + 1.5, sideOfCentreLine, style.baseColour), "bare floor after the first bar").toBeTruthy();
+    expect(isPaintedAt(art, backX + 2.5, sideOfCentreLine, style.startPadBarColour!), "second bar").toBeTruthy();
+    expect(isPaintedAt(art, backX + START_HILL.padLength + 0.5, sideOfCentreLine, style.baseColour), "no bar past the pad").toBeTruthy();
   });
 });

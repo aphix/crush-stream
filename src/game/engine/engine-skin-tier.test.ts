@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { SKIN_SSS } from "../present/dummy-shader.ts";
 import type { FxTier } from "../present/engine-post.ts";
@@ -27,7 +26,7 @@ describe("given the real engine and the people's skin switch", () => {
     it(`when the FX tier is ${testCase.tier}, then the skin look's switch is ${testCase.expected}`, () => {
       engine.setFxTier("high");
       engine.setFxTier(testCase.tier);
-      assert.equal(SKIN_SSS.value, testCase.expected);
+      expect(SKIN_SSS.value).toBe(testCase.expected);
     });
   }
 });

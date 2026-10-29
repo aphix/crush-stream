@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { collide, type Hit } from "./ejection.test-util.ts";
 import type { VehicleClassId } from "./vehicle-classes.ts";
 
@@ -28,7 +27,7 @@ describe("given a car driving into a monster truck, or a monster truck into a ca
       let prevMps = 0;
       for (const mps of speeds) {
         const [now] = collide(hit, striker, struck, mps);
-        assert.ok(now.health <= prev + HEALTH_JITTER, `${hit} ${striker} into ${struck}: ${prevMps} -> ${mps} m/s: striker health ${prev.toFixed(2)} -> ${now.health.toFixed(2)}`);
+        expect(now.health, `${hit} ${striker} into ${struck}: ${prevMps} -> ${mps} m/s: striker health ${prev.toFixed(2)} -> ${now.health.toFixed(2)}`).toBeLessThanOrEqual(prev + HEALTH_JITTER);
         prev = now.health;
         prevMps = mps;
       }

@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import type { CrashEngine } from "../engine/engine.ts";
 import { bootEngine, stubBrowser } from "../engine/engine-headless.test-util.ts";
@@ -12,6 +11,7 @@ import { setGround } from "../world/ground.ts";
 import { copPaint, copSpray } from "./cop-livery.ts";
 import { wearCarLook } from "./car-look.ts";
 import { SprayBitmap } from "./spray.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const WHITE = 1;
 const BLACK = 2;
@@ -43,32 +43,32 @@ describe("given the police style's livery drawn into a spray bitmap", () => {
 
   it("when it is read, then the roof, the A-pillars and the C-pillars beside the rear glass are white, POLICE stands black on both flanks, and the nose, front fenders, tail, rear quarters, the sail's tail on the deck's shoulder and the skin under the rear glass stay bare (the black body)", () => {
     const { layout } = spray;
-    assert.equal(spray.texels[texelAt(layout, ROOF_BARE, UP)], WHITE, "roof");
-    for (const face of [SPRAY_FACE.left, SPRAY_FACE.right]) assert.ok(inkCount(spray, layout, face, BLACK) > 100, `letters on face ${face}`);
-    assert.equal(spray.texels[texelAt(layout, [0, 0.5, 2.0], [0, 0, 1])], 0, "nose");
-    assert.equal(spray.texels[texelAt(layout, [0, 0.6, -2.1], [0, 0, -1])], 0, "tail");
-    assert.equal(spray.texels[texelAt(layout, [0.8, 0.6, -1.6], [1, 0, 0])], 0, "rear quarter");
+    expect(spray.texels[texelAt(layout, ROOF_BARE, UP)], "roof").toBe(WHITE);
+    for (const face of [SPRAY_FACE.left, SPRAY_FACE.right]) expect(inkCount(spray, layout, face, BLACK), `letters on face ${face}`).toBeGreaterThan(100);
+    expect(spray.texels[texelAt(layout, [0, 0.5, 2.0], [0, 0, 1])], "nose").toBe(0);
+    expect(spray.texels[texelAt(layout, [0, 0.6, -2.1], [0, 0, -1])], "tail").toBe(0);
+    expect(spray.texels[texelAt(layout, [0.8, 0.6, -1.6], [1, 0, 0])], "rear quarter").toBe(0);
     // The rear glass spans |x| < 0.51 at z -1.4 (police: the sedan's quad, 1.05 wide at -1.68 to 1.0 at -1.159).
-    assert.equal(spray.texels[texelAt(layout, [0, 1.15, -1.4], UP)], 0, "under the rear glass");
-    assert.equal(spray.texels[texelAt(layout, [0.65, 1.1, -1.4], UP)], WHITE, "C-pillar beside the rear glass");
-    assert.equal(spray.texels[texelAt(layout, [0.6, 1.0, -1.665], UP)], 0, "the deck lid's front strip beside the rear glass");
+    expect(spray.texels[texelAt(layout, [0, 1.15, -1.4], UP)], "under the rear glass").toBe(0);
+    expect(spray.texels[texelAt(layout, [0.65, 1.1, -1.4], UP)], "C-pillar beside the rear glass").toBe(WHITE);
+    expect(spray.texels[texelAt(layout, [0.6, 1.0, -1.665], UP)], "the deck lid's front strip beside the rear glass").toBe(0);
     // The A-post over the belt (0.9) at z 0.6, between the door glass's front edge and the windshield's foot (0.93): white, as the reference's.
-    assert.equal(spray.texels[texelAt(layout, [0.75, 1.0, 0.6], [1, 0, 0])], WHITE, "A-pillar");
-    assert.equal(spray.texels[texelAt(layout, [0.8, 0.75, 0.85], [1, 0, 0])], 0, "front fender, ahead of the door, under the belt");
-    assert.equal(spray.palette[WHITE], COP_LIVERY.doors);
-    assert.equal(spray.palette[BLACK], COP_LIVERY.body);
+    expect(spray.texels[texelAt(layout, [0.75, 1.0, 0.6], [1, 0, 0])], "A-pillar").toBe(WHITE);
+    expect(spray.texels[texelAt(layout, [0.8, 0.75, 0.85], [1, 0, 0])], "front fender, ahead of the door, under the belt").toBe(0);
+    expect(spray.palette[WHITE]).toBe(COP_LIVERY.doors);
+    expect(spray.palette[BLACK]).toBe(COP_LIVERY.body);
   });
 
   it("when a car with no light bar asks for it, then there is none", () => {
-    assert.ok(copSpray(CAR_STYLES.sedan, "desktop") === null, "a sedan has no livery bitmap");
-    assert.ok(copPaint(CAR_STYLES.sedan, CAR_SPRAY) === null, "a sedan has no livery paint");
+    expect(copSpray(CAR_STYLES.sedan, "desktop"), "a sedan has no livery bitmap").toBe(null);
+    expect(copPaint(CAR_STYLES.sedan, CAR_SPRAY), "a sedan has no livery paint").toBe(null);
   });
 
   it("when cops ask for it on a desktop and on a phone, then every cop of the style shares one bitmap per device, 512 a side on the desktop and the rivals' 256 on the phone", () => {
-    assert.ok(copSpray(CAR_STYLES.police, "desktop") === spray, "a second desktop cop drew its own bitmap");
+    expect(copSpray(CAR_STYLES.police, "desktop"), "a second desktop cop drew its own bitmap").toBe(spray);
     const phone = copSpray(CAR_STYLES.police, "mobile")!;
-    assert.equal(`${spray.layout.w} ${phone.layout.w}`, "512 256");
-    assert.ok(copSpray(CAR_STYLES.police, "mobile") === phone, "a second phone cop drew its own bitmap");
+    expect(`${spray.layout.w} ${phone.layout.w}`).toBe("512 256");
+    expect(copSpray(CAR_STYLES.police, "mobile"), "a second phone cop drew its own bitmap").toBe(phone);
   });
 });
 
@@ -82,7 +82,7 @@ function compiledUniforms(material: THREE.Material): Record<string, THREE.IUnifo
 function paintKeys(car: DeformableCar): string[] {
   const m = car.lookMeshes();
   return [m.bodyPaint, m.hood.material, m.trunk.material, ...m.doors.map((d) => d.material)].map((material) => {
-    assert.ok(material instanceof THREE.Material);
+    must(material instanceof THREE.Material, "paint is not a single material");
     return material.customProgramCacheKey();
   });
 }
@@ -102,9 +102,9 @@ describe("given the real engine with every car built as police", () => {
   it("when a cop with no player's look is dressed, then its paint samples its style's livery bitmap", () => {
     engine.useOneBody("police");
     const cop = engine["cars"][1]!;
-    assert.equal(cop.style.id, "police");
-    // Identity, not assert.equal: a failing equal inspects both textures in full (megabytes of texels).
-    assert.ok(compiledUniforms(cop.lookMeshes().bodyPaint).sprayMap?.value === copSpray(CAR_STYLES.police, engine["deviceClass"])!.texture, "the cop's paint samples its livery bitmap");
+    expect(cop.style.id).toBe("police");
+    // Identity, not equality: a failing deep compare inspects both textures in full (megabytes of texels).
+    expect(compiledUniforms(cop.lookMeshes().bodyPaint).sprayMap?.value, "the cop's paint samples its livery bitmap").toBe(copSpray(CAR_STYLES.police, engine["deviceClass"])!.texture);
   });
 
   it("when the player's own cop has a red dot sprayed on the roof, then its bare texels show the livery, the dot keeps its red, and the bitmap packs as it did without the livery", () => {
@@ -116,13 +116,13 @@ describe("given the real engine with every car built as police", () => {
     engine.useOneBody("police");
     const bare = texelAt(mine.layout, ROOF_BARE, UP);
     const dot = texelAt(mine.layout, ROOF_DOT, UP);
-    assert.equal(mine.texels[bare], 0, "the livery is not in the texels");
-    assert.equal(rgbaHex(mine.rgba, bare), COP_LIVERY.doors, "a bare roof texel shows the white roof");
-    assert.equal(mine.rgba[bare * 4 + 3], 255);
-    assert.equal(rgbaHex(mine.rgba, dot), SPRAY_PALETTE[RED], "the dot keeps its ink");
-    assert.equal(packSpray(mine).join(), packed, "wire and storage bytes");
+    expect(mine.texels[bare], "the livery is not in the texels").toBe(0);
+    expect(rgbaHex(mine.rgba, bare), "a bare roof texel shows the white roof").toBe(COP_LIVERY.doors);
+    expect(mine.rgba[bare * 4 + 3]).toBe(255);
+    expect(rgbaHex(mine.rgba, dot), "the dot keeps its ink").toBe(SPRAY_PALETTE[RED]);
+    expect(packSpray(mine).join(), "wire and storage bytes").toBe(packed);
     engine.useOneBody("sedan");
-    assert.equal(mine.rgba[bare * 4 + 3], 0, "back on a sedan, the bare roof is bare again");
+    expect(mine.rgba[bare * 4 + 3], "back on a sedan, the bare roof is bare again").toBe(0);
     mine.load(null);
   });
 
@@ -132,7 +132,7 @@ describe("given the real engine with every car built as police", () => {
     wearCarLook(sedan, NO_CAR_PICK, new SprayBitmap(CAR_SPRAY));
     engine["dressCar"](sedan);
     const sedanKeys = new Set(paintKeys(sedan));
-    for (const key of paintKeys(engine["cars"][1]!)) assert.ok(sedanKeys.has(key), `cop key ${key} not in ${[...sedanKeys].join(", ")}`);
+    for (const key of paintKeys(engine["cars"][1]!)) expect(sedanKeys.has(key), `cop key ${key} not in ${[...sedanKeys].join(", ")}`).toBeTruthy();
     engine["scene"].remove(sedan.group);
     sedan.dispose();
   });

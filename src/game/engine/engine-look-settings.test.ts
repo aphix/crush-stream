@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore, INITIAL_HUD, type CrashHudState } from "../hud/hud-store.ts";
 import { isChanged, type SettingId } from "../hud/settings-changes.ts";
@@ -12,6 +11,7 @@ import { settingsOf } from "./bench-measure.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 type LookCase = {
   it: string;
@@ -72,78 +72,78 @@ describe("given the real engine and the look sliders under Cel in the Playback s
 
   for (const c of cases) {
     it(`when ${c.it} is set, then its effect, the HUD field, the changed dot and the share key follow, and its reset puts all of that back`, () => {
-      assert.equal(hud.get()[c.field], INITIAL_HUD[c.field], "the default at the start");
-      assert.equal(c.sink(engine), c.sinkDefault, "its effect is the default's at the start");
+      expect(hud.get()[c.field], "the default at the start").toBe(INITIAL_HUD[c.field]);
+      expect(c.sink(engine), "its effect is the default's at the start").toBe(c.sinkDefault);
       c.set(engine, 0.6);
-      assert.equal(hud.get()[c.field], 0.6, "the HUD field");
-      assert.equal(c.sink(engine), c.sinkOn, "the effect's own sink");
-      assert.equal(isChanged(hud.get(), c.id), true, "the dot and the reset chip");
-      assert.equal(keyOf(c.key).join("&"), `${c.key}=0.6`, "the share key");
+      expect(hud.get()[c.field], "the HUD field").toBe(0.6);
+      expect(c.sink(engine), "the effect's own sink").toBe(c.sinkOn);
+      expect(isChanged(hud.get(), c.id), "the dot and the reset chip").toBe(true);
+      expect(keyOf(c.key).join("&"), "the share key").toBe(`${c.key}=0.6`);
       engine.resetSetting(c.id);
-      assert.equal(hud.get()[c.field], INITIAL_HUD[c.field], "reset: the HUD field");
-      assert.equal(c.sink(engine), c.sinkDefault, "reset: the effect");
-      assert.equal(isChanged(hud.get(), c.id), false, "reset: not changed");
-      assert.deepEqual(keyOf(c.key), [], "reset: the key is dropped");
+      expect(hud.get()[c.field], "reset: the HUD field").toBe(INITIAL_HUD[c.field]);
+      expect(c.sink(engine), "reset: the effect").toBe(c.sinkDefault);
+      expect(isChanged(hud.get(), c.id), "reset: not changed").toBe(false);
+      expect(keyOf(c.key), "reset: the key is dropped").toHaveLength(0);
     });
 
     it(`when ${c.it} is set to 0, NaN, null or past its range, then 0 is ${c.atZero === null ? "off" : "a real value"}, an unreadable value and null are ${c.atZero === null ? "off" : "the picture"}, and a value past the range clamps to 1`, () => {
       c.set(engine, 0);
-      assert.equal(hud.get()[c.field], c.atZero, "0");
+      expect(hud.get()[c.field], "0").toBe(c.atZero);
       c.set(engine, Number.NaN);
-      assert.equal(hud.get()[c.field], null, "NaN");
+      expect(hud.get()[c.field], "NaN").toBe(null);
       c.set(engine, 7);
-      assert.equal(hud.get()[c.field], 1, "past the range");
+      expect(hud.get()[c.field], "past the range").toBe(1);
       c.set(engine, null);
-      assert.equal(hud.get()[c.field], null, "null");
-      assert.equal(keyOf(c.key).join("&"), c.nullKey, "the key once null");
+      expect(hud.get()[c.field], "null").toBe(null);
+      expect(keyOf(c.key).join("&"), "the key once null").toBe(c.nullKey);
       engine.resetSetting(c.id);
     });
   }
 
   it("when a link carrying the four keys is applied, then each look takes its value, a link without them puts them back, and Defaults puts all four back in the HUD, the effects and the URL", () => {
     engine["applyShare"](decodeShare("#cel=0.5&psky=0.7&dots=0.5&hatch=0.3&rim=0.6"), false);
-    for (const [c, v] of [[cases[0], 0.7], [cases[1], 0.5], [cases[2], 0.3], [cases[3], 0.6]] as const) assert.equal(hud.get()[c.field], v, c.id);
-    assert.match(encodeShare(engine["shareState"]()), /(^|&)cel=0\.5&psky=0\.7&dots=0\.5&hatch=0\.3&rim=0\.6($|&)/, "in the order the menu shows them");
+    for (const [c, v] of [[cases[0], 0.7], [cases[1], 0.5], [cases[2], 0.3], [cases[3], 0.6]] as const) expect(hud.get()[c.field], c.id).toBe(v);
+    expect(encodeShare(engine["shareState"]()), "in the order the menu shows them").toMatch(/(^|&)cel=0\.5&psky=0\.7&dots=0\.5&hatch=0\.3&rim=0\.6($|&)/);
     engine["applyShare"](decodeShare("#cel=0.5"), false);
-    for (const c of cases) assert.equal(hud.get()[c.field], INITIAL_HUD[c.field], `${c.id} left out of the link: back to its default`);
+    for (const c of cases) expect(hud.get()[c.field], `${c.id} left out of the link: back to its default`).toBe(INITIAL_HUD[c.field]);
     for (const c of cases) c.set(engine, 0.6);
     engine.resetDefaults();
     for (const c of cases) {
-      assert.equal(hud.get()[c.field], INITIAL_HUD[c.field], `Defaults: ${c.id}`);
-      assert.equal(c.sink(engine), c.sinkDefault, `Defaults: the effect of ${c.id}`);
+      expect(hud.get()[c.field], `Defaults: ${c.id}`).toBe(INITIAL_HUD[c.field]);
+      expect(c.sink(engine), `Defaults: the effect of ${c.id}`).toBe(c.sinkDefault);
     }
-    for (const c of cases) assert.deepEqual(keyOf(c.key), [], `Defaults: no ${c.key} key`);
+    for (const c of cases) expect(keyOf(c.key), `Defaults: no ${c.key} key`).toHaveLength(0);
   });
 
   for (const c of strengthCases) {
     it(`when the ${c.it} is set, then the HUD, the shared shader uniform, the changed dot and the share key follow, a value past the range clamps to 2, and its reset puts the default back`, () => {
-      assert.equal(hud.get()[c.field], 1, "the default is full strength");
-      assert.equal(c.uniform.value, 1, "the uniform at the start");
+      expect(hud.get()[c.field], "the default is full strength").toBe(1);
+      expect(c.uniform.value, "the uniform at the start").toBe(1);
       c.set(engine, 0.6);
-      assert.equal(hud.get()[c.field], 0.6, "the HUD field");
-      assert.equal(c.uniform.value, 0.6, "the shader's uniform");
-      assert.equal(isChanged(hud.get(), c.id), true, "the dot and the reset chip");
-      assert.equal(keyOf(c.key).join("&"), `${c.key}=0.6`, "the share key");
+      expect(hud.get()[c.field], "the HUD field").toBe(0.6);
+      expect(c.uniform.value, "the shader's uniform").toBe(0.6);
+      expect(isChanged(hud.get(), c.id), "the dot and the reset chip").toBe(true);
+      expect(keyOf(c.key).join("&"), "the share key").toBe(`${c.key}=0.6`);
       c.set(engine, 7);
-      assert.equal(c.uniform.value, 2, "past the range");
+      expect(c.uniform.value, "past the range").toBe(2);
       c.set(engine, 0);
-      assert.equal(c.uniform.value, 0, "0 is a real value: the effect off");
+      expect(c.uniform.value, "0 is a real value: the effect off").toBe(0);
       engine["applyShare"](decodeShare(`#${c.key}=1.5`), false);
-      assert.equal(c.uniform.value, 1.5, "a link's value reaches the uniform");
+      expect(c.uniform.value, "a link's value reaches the uniform").toBe(1.5);
       engine.resetSetting(c.id);
-      assert.equal(c.uniform.value, 1, "reset: the uniform");
-      assert.equal(hud.get()[c.field], 1, "reset: the HUD field");
-      assert.equal(isChanged(hud.get(), c.id), false, "reset: not changed");
-      assert.deepEqual(keyOf(c.key), [], "reset: the key is dropped");
+      expect(c.uniform.value, "reset: the uniform").toBe(1);
+      expect(hud.get()[c.field], "reset: the HUD field").toBe(1);
+      expect(isChanged(hud.get(), c.id), "reset: not changed").toBe(false);
+      expect(keyOf(c.key), "reset: the key is dropped").toHaveLength(0);
     });
   }
 
   it("when the Sky is set off under the default procedural sky, then the dome draws nothing, and auto brings the procedural sky back", () => {
-    assert.equal(engine["stage"].sky.drawn, SKY_DRAWN.procedural, "the default");
+    expect(engine["stage"].sky.drawn, "the default").toBe(SKY_DRAWN.procedural);
     engine.setSky("off");
-    assert.equal(engine["stage"].sky.drawn, SKY_DRAWN.off);
+    expect(engine["stage"].sky.drawn).toBe(SKY_DRAWN.off);
     engine.setSky("auto");
-    assert.equal(engine["stage"].sky.drawn, SKY_DRAWN.procedural);
+    expect(engine["stage"].sky.drawn).toBe(SKY_DRAWN.procedural);
     engine.resetDefaults();
   });
 
@@ -152,12 +152,12 @@ describe("given the real engine and the look sliders under Cel in the Playback s
       const s = settingsOf(engine.benchParts(), { ...hud.get() }, "high");
       return [s.halftone, s.hatching, s.rimLight];
     };
-    assert.deepEqual(looks(), [null, null, null], "off at the start");
+    expect(firstMismatch(looks(), [null, null, null]), "off at the start").toBeUndefined();
     engine.setHalftone(0.5);
     engine.setHatching(0.4);
     engine.setRimLight(0.6);
-    assert.deepEqual(looks(), [0.5, 0.4, 0.6], "held on");
+    expect(firstMismatch(looks(), [0.5, 0.4, 0.6]), "held on").toBeUndefined();
     engine.resetDefaults();
-    assert.deepEqual(looks(), [null, null, null], "Defaults");
+    expect(firstMismatch(looks(), [null, null, null]), "Defaults").toBeUndefined();
   });
 });

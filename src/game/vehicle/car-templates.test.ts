@@ -1,10 +1,10 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { freshGeometry, ownGeometry, STYLE_PRODUCTS, type StyleProduct } from "./car-templates.ts";
 import { CAR_STYLE_IDS, CAR_STYLES, type CarStyleId } from "./car-variants.ts";
 import { assertSameDigest, assertSameNumbers, paint } from "./test-support.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 function bytesOf(array: ArrayBufferView): Uint8Array {
   return new Uint8Array(array.buffer, array.byteOffset, array.byteLength);
@@ -17,29 +17,29 @@ function boundsOf(geometry: THREE.BufferGeometry): number[] {
 
 /** Every attribute's bytes, usage and item size, the index, groups, draw range, bounds, name and `userData`: the whole of what a build leaves. */
 function assertSameGeometry(actual: THREE.BufferGeometry, expected: THREE.BufferGeometry, label: string): void {
-  assert.equal(Object.keys(actual.attributes).sort().join(), Object.keys(expected.attributes).sort().join(), `${label}: attribute names`);
+  expect(Object.keys(actual.attributes).sort().join(), `${label}: attribute names`).toBe(Object.keys(expected.attributes).sort().join());
   for (const [name, want] of Object.entries(expected.attributes)) {
     const got = actual.getAttribute(name);
-    assert.ok(got instanceof THREE.BufferAttribute && want instanceof THREE.BufferAttribute, `${label}: ${name} is a plain attribute`);
-    assert.equal(got.itemSize, want.itemSize, `${label}: ${name} item size`);
-    assert.equal(got.normalized, want.normalized, `${label}: ${name} normalized`);
-    assert.equal(got.usage, want.usage, `${label}: ${name} usage`);
-    assert.equal(got.array.constructor, want.array.constructor, `${label}: ${name} array type`);
+    must(got instanceof THREE.BufferAttribute && want instanceof THREE.BufferAttribute, `${label}: ${name} is a plain attribute`);
+    expect(got.itemSize, `${label}: ${name} item size`).toBe(want.itemSize);
+    expect(got.normalized, `${label}: ${name} normalized`).toBe(want.normalized);
+    expect(got.usage, `${label}: ${name} usage`).toBe(want.usage);
+    expect(got.array.constructor, `${label}: ${name} array type`).toBe(want.array.constructor);
     assertSameNumbers(bytesOf(got.array), bytesOf(want.array), `${label}: ${name} bytes`);
   }
-  assert.equal(actual.index === null, expected.index === null, `${label}: indexed`);
+  expect(actual.index === null, `${label}: indexed`).toBe(expected.index === null);
   if (actual.index !== null && expected.index !== null) {
-    assert.equal(actual.index.array.constructor, expected.index.array.constructor, `${label}: index type`);
+    expect(actual.index.array.constructor, `${label}: index type`).toBe(expected.index.array.constructor);
     assertSameNumbers(bytesOf(actual.index.array), bytesOf(expected.index.array), `${label}: index bytes`);
   }
-  assert.equal(actual.groups.length, expected.groups.length, `${label}: group count`);
+  expect(actual.groups.length, `${label}: group count`).toBe(expected.groups.length);
   for (const [i, want] of expected.groups.entries()) {
     assertSameNumbers([actual.groups[i]!.start, actual.groups[i]!.count, actual.groups[i]!.materialIndex ?? -1], [want.start, want.count, want.materialIndex ?? -1], `${label}: group ${i}`);
   }
   assertSameNumbers([actual.drawRange.start, actual.drawRange.count], [expected.drawRange.start, expected.drawRange.count], `${label}: draw range`);
-  assert.equal((actual.boundingBox === null) + "," + (actual.boundingSphere === null), (expected.boundingBox === null) + "," + (expected.boundingSphere === null), `${label}: which bounds are computed`);
+  expect((actual.boundingBox === null) + "," + (actual.boundingSphere === null), `${label}: which bounds are computed`).toBe((expected.boundingBox === null) + "," + (expected.boundingSphere === null));
   assertSameNumbers(boundsOf(actual), boundsOf(expected), `${label}: bounds`);
-  assert.equal(actual.name, expected.name, `${label}: name`);
+  expect(actual.name, `${label}: name`).toBe(expected.name);
   assertSameDigest(actual.userData, expected.userData, `${label}: userData`);
 }
 
@@ -79,7 +79,7 @@ describe("given a style's geometry built once and copied for each car", () => {
       const fresh = freshGeometry(style, testCase.product);
       const writer = ownGeometry(style, testCase.product);
       const reader = ownGeometry(style, testCase.product);
-      assert.notEqual(writer.getAttribute("position").array, reader.getAttribute("position").array, "the two cars share no position array");
+      expect(writer.getAttribute("position").array, "the two cars share no position array").not.toBe(reader.getAttribute("position").array);
       scribbleOver(writer);
       assertSameGeometry(reader, fresh, `${testCase.styleId} ${testCase.product} beside a scribbled copy`);
       assertSameGeometry(ownGeometry(style, testCase.product), fresh, `${testCase.styleId} ${testCase.product} taken after a scribbled copy`);
@@ -135,13 +135,13 @@ describe("given two cars built of one style", () => {
       const read = carProducts(second);
       const before = read.map(({ mesh }) => ({ parts: [...Object.values(mesh.geometry.attributes).map((a) => bytesOf(a.array).slice()), bytesOf(mesh.geometry.index!.array).slice()], userData: JSON.stringify(mesh.geometry.userData) }));
       for (const [k, { product, mesh }] of written.entries()) {
-        assert.notEqual(mesh.geometry, read[k]!.mesh.geometry, `${product}: one geometry per car`);
+        expect(mesh.geometry, `${product}: one geometry per car`).not.toBe(read[k]!.mesh.geometry);
         scribbleOver(mesh.geometry);
       }
       for (const [k, { product, mesh }] of read.entries()) {
         const now = [...Object.values(mesh.geometry.attributes).map((a) => bytesOf(a.array)), bytesOf(mesh.geometry.index!.array)];
         for (const [part, bytes] of before[k]!.parts.entries()) assertSameNumbers(now[part]!, bytes, `${styleId} ${product} part ${part} after the other car was written over`);
-        assert.equal(JSON.stringify(mesh.geometry.userData), before[k]!.userData, `${styleId} ${product} userData after the other car was written over`);
+        expect(JSON.stringify(mesh.geometry.userData), `${styleId} ${product} userData after the other car was written over`).toBe(before[k]!.userData);
       }
     });
 
@@ -150,9 +150,9 @@ describe("given two cars built of one style", () => {
       let disposed = 0;
       for (const { mesh } of carProducts(second)) mesh.geometry.addEventListener("dispose", () => disposed++);
       first.dispose();
-      assert.equal(disposed, 0, "the second car's geometries stay live");
+      expect(disposed, "the second car's geometries stay live").toBe(0);
       const third = new DeformableCar(paint(), new THREE.Scene(), null, styleId);
-      assert.equal(carProducts(third).length, STYLE_PRODUCTS.length - 1, "the third car has its meshes");
+      expect(carProducts(third).length, "the third car has its meshes").toBe(STYLE_PRODUCTS.length - 1);
       third.dispose();
       second.dispose();
     });
@@ -176,8 +176,8 @@ describe("given a car of each style built with its style's templates retired and
       const cold = new DeformableCar({ name: "cold", body: 0x808080, accent: 0x404040 }, new THREE.Scene(), null, styleId);
       const warm = new DeformableCar({ name: "warm", body: 0xc5c8ce, accent: 0x9aa0a8 }, new THREE.Scene(), null, styleId);
       const [coldGeometries, warmGeometries] = [geometriesOf(cold), geometriesOf(warm)];
-      assert.equal(warmGeometries.length, coldGeometries.length, `${styleId}: geometries held`);
-      assert.ok(coldGeometries.length >= STYLE_PRODUCTS.length, `${styleId}: the cars hold their geometries (${coldGeometries.length})`);
+      expect(warmGeometries.length, `${styleId}: geometries held`).toBe(coldGeometries.length);
+      expect(coldGeometries.length, `${styleId}: the cars hold their geometries (${coldGeometries.length})`).toBeGreaterThanOrEqual(STYLE_PRODUCTS.length);
       for (const [k, geometry] of coldGeometries.entries()) assertSameGeometry(warmGeometries[k]!, geometry, `${styleId} geometry ${k}`);
       cold.dispose();
       warm.dispose();
@@ -192,6 +192,6 @@ describe("given a style whose door field is replaced after its templates were bu
     style.door = { ...style.door, halfHeight: style.door.halfHeight + 0.05 };
     const after = ownGeometry(style, "doorLeft");
     assertSameGeometry(after, freshGeometry(style, "doorLeft"), "the replaced door");
-    assert.notEqual(bytesOf(after.getAttribute("position").array).join(), bytesOf(before.getAttribute("position").array).join(), "the taller door is a different skin");
+    expect(bytesOf(after.getAttribute("position").array).join(), "the taller door is a different skin").not.toBe(bytesOf(before.getAttribute("position").array).join());
   });
 });

@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { NO_PERSON_PICK } from "../match/look-data.ts";
 import { PARTS } from "../present/ragdoll-body.ts";
@@ -96,10 +95,10 @@ describe("given the real engine in the fleet, his player out of the car at zero 
         const still = watchStill(rig, WATCH_S);
         const walker = rig.walker();
         const seen = `steps ${still.steps}, rise ${still.rise.map((v) => (v * 100).toFixed(1))} cm, drift ${still.drift.map((v) => (v * 100).toFixed(1))} cm, standing ${still.standing}, ${walker.state}, speed ${walker.loco.speed.toFixed(2)}, turn ${walker.loco.turnRate.toFixed(2)}, planted ${[...walker.gait.planted]}, pivot ${[...walker.gait.pivot]}`;
-        assert.equal(still.steps, 0, `no foot lifted: ${seen}`);
-        assert.ok(still.rise.every((v) => v <= STILL_LIFT_M), `no sole rose: ${seen}`);
-        assert.ok(still.drift.every((v) => v <= STILL_DRIFT_M), `no foot drifted: ${seen}`);
-        assert.ok(still.standing, `the gait is parked: ${seen}`);
+        expect(still.steps, `no foot lifted: ${seen}`).toBe(0);
+        expect(still.rise.every((v) => v <= STILL_LIFT_M), `no sole rose: ${seen}`).toBeTruthy();
+        expect(still.drift.every((v) => v <= STILL_DRIFT_M), `no foot drifted: ${seen}`).toBeTruthy();
+        expect(still.standing, `the gait is parked: ${seen}`).toBeTruthy();
       });
     }
   }

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FREEWHEEL, launch, makeWorld, PARKED, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
@@ -104,8 +103,8 @@ describe("given the wheel-well dutch camera on every class's drawn body", () => 
       for (let j = 0; j < 8; j++) {
         dutch.place(cam, car, j);
         const e = cam.position;
-        for (let i = 0; i < 4; i++) assert.ok(!insideTyre(car, i, e), `${cls} mount ${j}: eye ${e.toArray().map((v) => v.toFixed(2))} inside tyre ${i}`);
-        assert.ok(Math.abs(e.x) > side, `${cls} mount ${j}: eye at x ${e.x.toFixed(2)} within the drawn body's side ${side.toFixed(2)}`);
+        for (let i = 0; i < 4; i++) expect(!insideTyre(car, i, e), `${cls} mount ${j}: eye ${e.toArray().map((v) => v.toFixed(2))} inside tyre ${i}`).toBe(true);
+        expect(Math.abs(e.x), `${cls} mount ${j}: eye at x ${e.x.toFixed(2)} within the drawn body's side ${side.toFixed(2)}`).toBeGreaterThan(side);
       }
     });
   }
@@ -121,24 +120,24 @@ describe("given a dutch shot seeded on the left rear well looking forward", () =
     const sc = new ShotCam();
     const cam = lens();
     sc.frame(shot, car, OPEN, 0, 0, [car]);
-    assert.ok(sc.found, "the shut car's dutch shot found no mount");
+    expect(sc.found, "the shut car's dutch shot found no mount").toBeTruthy();
     sc.pose(cam, car, shot, { x: 0, y: 1 });
-    assert.ok(cam.position.distanceTo(seeded.position) < 1e-9, "door shut: the seeded mount is not taken");
+    expect(cam.position.distanceTo(seeded.position), "door shut: the seeded mount is not taken").toBeLessThan(1e-9);
 
     car.setDoorOpen(-1, car.doorHinge(-1).spec.stop);
     car.group.updateMatrixWorld(true);
     const door = displacedMeshes(car);
     const before = targets(seeded, car);
-    assert.ok(crosses(door, seeded.position, before.centre) || crosses(door, seeded.position, before.subject), "the open door does not stand across the seeded mount's view");
+    expect(crosses(door, seeded.position, before.centre) || crosses(door, seeded.position, before.subject), "the open door does not stand across the seeded mount's view").toBeTruthy();
 
     sc.frame(shot, car, OPEN, 0, 0, [car]);
-    assert.ok(sc.found, "door open: no clear mount found");
+    expect(sc.found, "door open: no clear mount found").toBeTruthy();
     sc.pose(cam, car, shot, { x: 0, y: 1 });
     const { centre, subject } = targets(cam, car);
-    assert.ok(cam.position.distanceTo(seeded.position) > 0.1 || cam.getWorldDirection(new THREE.Vector3()).dot(seeded.getWorldDirection(new THREE.Vector3())) < 0, "door open: still on the seeded mount, looking the same way");
-    assert.ok(!crosses(door, cam.position, centre), "door open: the frame's centre is behind the door");
-    assert.ok(!crosses(door, cam.position, subject), "door open: the subject is behind the door");
-    assert.ok(inFrame(cam, subject), "door open: the subject is out of frame");
+    expect(cam.position.distanceTo(seeded.position) > 0.1 || cam.getWorldDirection(new THREE.Vector3()).dot(seeded.getWorldDirection(new THREE.Vector3())) < 0, "door open: still on the seeded mount, looking the same way").toBeTruthy();
+    expect(!crosses(door, cam.position, centre), "door open: the frame's centre is behind the door").toBe(true);
+    expect(!crosses(door, cam.position, subject), "door open: the subject is behind the door").toBe(true);
+    expect(inFrame(cam, subject), "door open: the subject is out of frame").toBeTruthy();
   });
 });
 
@@ -168,14 +167,14 @@ describe("given a fixed staged side hit (a sedan at 40 km/h into the parked car'
         const aim = targets(seeded, subject);
         const covered = crosses(parts, seeded.position, aim.centre) || crosses(parts, seeded.position, aim.subject);
         t.annotate(`${cls}: ${parts.length} displaced meshes, doors ${subject.doorAngle(-1).toFixed(2)} / ${subject.doorAngle(1).toFixed(2)} rad, seeded mount covered: ${covered}`);
-        assert.ok(sc.found, `${cls}: no clear wheel mount`);
+        expect(sc.found, `${cls}: no clear wheel mount`).toBeTruthy();
         const cam = lens();
         sc.pose(cam, subject, shot, { x: 0, y: 1 });
-        for (let i = 0; i < 4; i++) assert.ok(!insideTyre(subject, i, cam.position), `${cls}: eye inside tyre ${i}`);
+        for (let i = 0; i < 4; i++) expect(!insideTyre(subject, i, cam.position), `${cls}: eye inside tyre ${i}`).toBe(true);
         const { centre, subject: flank } = targets(cam, subject);
-        assert.ok(inFrame(cam, flank), `${cls}: the subject is out of frame`);
-        assert.ok(!crosses(parts, cam.position, flank), `${cls}: the subject is behind its own displaced parts`);
-        assert.ok(!crosses(parts, cam.position, centre), `${cls}: the frame's centre is behind its own displaced parts`);
+        expect(inFrame(cam, flank), `${cls}: the subject is out of frame`).toBeTruthy();
+        expect(!crosses(parts, cam.position, flank), `${cls}: the subject is behind its own displaced parts`).toBe(true);
+        expect(!crosses(parts, cam.position, centre), `${cls}: the frame's centre is behind its own displaced parts`).toBe(true);
       } finally {
         setGround(null);
       }

@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
@@ -67,49 +66,49 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
       engine.raceCommand({ type: "start" });
       runSeconds(engine, 3);
       const racing = sandboxSky();
-      assert.notEqual(racing.background, fresh.background, "the race has its own sky (the control: the colours below are not trivially equal)");
+      expect(racing.background, "the race has its own sky (the control: the colours below are not trivially equal)").not.toBe(fresh.background);
       if (testCase.nightToggled) engine.setNight(true);
       engine["setScene"](testCase.next);
       runSeconds(engine, 1);
       const after = sandboxSky();
-      for (const key of Object.keys(fresh)) assert.equal(after[key], fresh[key], `${key} after the race, in the ${testCase.next}`);
+      for (const key of Object.keys(fresh)) expect(after[key], `${key} after the race, in the ${testCase.next}`).toBe(fresh[key]);
       engine["setScene"]("fleet");
     });
   }
 
   it("when a fresh engine runs under the Sky setting auto, then on the minimal tier it draws no sky (the studio's colour), and on high the default procedural sky, its background and fog that sky's horizon", () => {
-    assert.equal(engine["cine"].tier, "minimal", "the control: a fresh page's tier");
-    assert.equal(freshDrawn, SKY_DRAWN.off, "no sky on minimal");
-    assert.equal(fresh.background, "12141a", "the studio's colour");
+    expect(engine["cine"].tier, "the control: a fresh page's tier").toBe("minimal");
+    expect(freshDrawn, "no sky on minimal").toBe(SKY_DRAWN.off);
+    expect(fresh.background, "the studio's colour").toBe("12141a");
     engine.setFxTier("high");
     runSeconds(engine, 1);
     const procedural = sandboxSky();
     const horizon = new THREE.Color(SANDBOX_SKY.day.horizon).getHexString();
-    assert.equal(stage().sky.drawn, SKY_DRAWN.procedural);
-    assert.equal(stage().sky["mat"].uniforms.uCover!.value, INITIAL_HUD.proceduralSky);
-    assert.equal(procedural.background, horizon);
-    assert.equal(procedural.fog, horizon);
+    expect(stage().sky.drawn).toBe(SKY_DRAWN.procedural);
+    expect(stage().sky["mat"].uniforms.uCover!.value).toBe(INITIAL_HUD.proceduralSky);
+    expect(procedural.background).toBe(horizon);
+    expect(procedural.fog).toBe(horizon);
     stage().setProceduralSky(null);
     runSeconds(engine, 1);
-    assert.equal(stage().sky.drawn, SKY_DRAWN.off, "the picture: the sandbox has none");
-    assert.equal(sandboxSky().background, "12141a", "the picture: the studio's colour");
+    expect(stage().sky.drawn, "the picture: the sandbox has none").toBe(SKY_DRAWN.off);
+    expect(sandboxSky().background, "the picture: the studio's colour").toBe("12141a");
     stage().setProceduralSky(INITIAL_HUD.proceduralSky);
     engine.setFxTier("minimal");
     runSeconds(engine, 1);
-    for (const key of Object.keys(fresh)) assert.equal(sandboxSky()[key], fresh[key], key);
+    for (const key of Object.keys(fresh)) expect(sandboxSky()[key], key).toBe(fresh[key]);
   });
 
   /** The dome's stops, clouds, disc and stars as drawn, each beside the look it should take. */
   const assertDomeLook = (look: SkyStops & ProceduralLook, label: string): void => {
     const dome = stage().sky;
     const u = dome["mat"].uniforms;
-    assert.equal(dome.drawn, SKY_DRAWN.procedural, `${label}: procedural`);
-    for (const [key, uniform] of [["horizon", "horizonColor"], ["mid", "midColor"], ["zenith", "zenith"]] as const) assert.equal((u[uniform]!.value as THREE.Color).getHexString(), new THREE.Color(look[key]).getHexString(), `${label}: ${key}`);
-    assert.equal(u.zenithEl!.value, look.zenithElevation, `${label}: zenith elevation`);
-    assert.equal(dome["cloudLit"].getHexString(), new THREE.Color(look.cloudLit).getHexString(), `${label}: cloud lit`);
-    assert.equal(dome["cloudShade"].getHexString(), new THREE.Color(look.cloudShade).getHexString(), `${label}: cloud shade`);
-    assert.equal(dome["discTint"].toArray().join(), look.discTint.join(), `${label}: disc tint`);
-    assert.equal(u.uStars!.value, look.stars ? 1 : 0, `${label}: stars`);
+    expect(dome.drawn, `${label}: procedural`).toBe(SKY_DRAWN.procedural);
+    for (const [key, uniform] of [["horizon", "horizonColor"], ["mid", "midColor"], ["zenith", "zenith"]] as const) expect((u[uniform]!.value as THREE.Color).getHexString(), `${label}: ${key}`).toBe(new THREE.Color(look[key]).getHexString());
+    expect(u.zenithEl!.value, `${label}: zenith elevation`).toBe(look.zenithElevation);
+    expect(dome["cloudLit"].getHexString(), `${label}: cloud lit`).toBe(new THREE.Color(look.cloudLit).getHexString());
+    expect(dome["cloudShade"].getHexString(), `${label}: cloud shade`).toBe(new THREE.Color(look.cloudShade).getHexString());
+    expect(dome["discTint"].toArray().join(), `${label}: disc tint`).toBe(look.discTint.join());
+    expect(u.uStars!.value, `${label}: stars`).toBe(look.stars ? 1 : 0);
   };
 
   it("when the default procedural sky runs on high, then each race's dome takes its time of day's look (night: its stops, moon and stars on), and the sandbox's Night toggle the sandbox night look", () => {

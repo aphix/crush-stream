@@ -1,11 +1,11 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { runField } from "./derby-field.test-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 function torn(car: DeformableCar): string[] {
   const { parts } = car.snapshot();
-  assert.ok(Array.isArray(parts), "the car's snapshot lists no parts");
+  must(Array.isArray(parts), "the car's snapshot lists no parts");
   return parts.filter((p: { detached: boolean }) => p.detached).map((p: { name: string }) => p.name);
 }
 
@@ -19,7 +19,7 @@ describe("given the derby harness (`runField`) running a two-car heat, seed 1", 
         if (tornAt < 0 && t < 10 && c.some((car) => torn(car).length > 0)) tornAt = t;
       },
     });
-    assert.ok(tornAt >= 0, `no part tore in 10 s; torn at the end: ${JSON.stringify(cars.map(torn))}`);
+    expect(tornAt, `no part tore in 10 s; torn at the end: ${JSON.stringify(cars.map(torn))}`).toBeGreaterThanOrEqual(0);
   });
 });
 
@@ -42,8 +42,8 @@ describe("given the derby harness (`runField`) running a four-car heat, seed 1, 
         }
       },
     });
-    assert.ok(f.thrown.length > 0, "a driver was thrown out in the heat");
-    assert.deepEqual(drivenAfter, [], "the AI drove a car with nobody in it");
-    assert.deepEqual(ruledIn, [], "a thrown driver's car ran on");
+    expect(f.thrown.length, "a driver was thrown out in the heat").toBeGreaterThan(0);
+    expect(drivenAfter, "the AI drove a car with nobody in it").toHaveLength(0);
+    expect(ruledIn, "a thrown driver's car ran on").toHaveLength(0);
   });
 });

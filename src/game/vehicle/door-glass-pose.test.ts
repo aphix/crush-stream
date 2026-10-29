@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
@@ -34,22 +33,22 @@ describe("given every style's car parked and posed open for show (`showPose`)", 
       for (const [side, name] of [[0, "doorL"], [1, "doorR"]] as const) {
         const paneShut = shut.glassPanes.find((g) => g.name === name)!;
         const pane = open.glassPanes.find((g) => g.name === name)!;
-        assert.ok(pane.state === "intact" && pane.mesh.parent !== null, `${id} ${name}: the pane is present (state ${pane.state})`);
-        for (let o: THREE.Object3D | null = pane.mesh; o; o = o.parent) assert.ok(o.visible, `${id} ${name}: ${o.name || o.type} is hidden`);
+        expect(pane.state === "intact" && pane.mesh.parent !== null, `${id} ${name}: the pane is present (state ${pane.state})`).toBeTruthy();
+        for (let o: THREE.Object3D | null = pane.mesh; o; o = o.parent) expect(o.visible, `${id} ${name}: ${o.name || o.type} is hidden`).toBeTruthy();
         const doorMesh = side === 0 ? open["doorMeshL"] : open["doorMeshR"];
         const doorMeshShut = side === 0 ? shut["doorMeshL"] : shut["doorMeshR"];
         const move = doorMesh.matrixWorld.clone().multiply(doorMeshShut.matrixWorld.clone().invert());
         const from = worldPoints(paneShut.mesh);
         const now = worldPoints(pane.mesh);
-        assert.equal(now.length, from.length, `${id} ${name}: the pane keeps its vertices`);
+        expect(now.length, `${id} ${name}: the pane keeps its vertices`).toBe(from.length);
         let worst = 0;
         for (let i = 0; i < now.length; i++) {
           worst = Math.max(worst, now[i]!.distanceTo(from[i]!.clone().applyMatrix4(move)));
           swung = Math.max(swung, now[i]!.distanceTo(from[i]!));
         }
-        assert.ok(worst <= FOLLOW_M, `${id} ${name}: a glass vertex ${(worst * 100).toFixed(1)} cm off its door's pose`);
+        expect(worst, `${id} ${name}: a glass vertex ${(worst * 100).toFixed(1)} cm off its door's pose`).toBeLessThanOrEqual(FOLLOW_M);
       }
-      assert.ok(swung > OPEN_M, `the control: the doors are open (the glass swung ${swung.toFixed(2)} m)`);
+      expect(swung, `the control: the doors are open (the glass swung ${swung.toFixed(2)} m)`).toBeGreaterThan(OPEN_M);
     });
   }
 });

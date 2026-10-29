@@ -1,10 +1,10 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
 import { brakeLampUnit, drawnLamp } from "./part-variants.ts";
 import { DT, paint } from "./test-support.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** How much farther (m) a lid's lamp fitting may stand off its lid's skin after a crush than it did at rest: the lid's skin dents under it, the fitting goes with it. */
 const DRIFT_OFF_LID_M = 0.01;
@@ -85,7 +85,7 @@ const styles = CAR_STYLE_IDS.filter((id) => lidFittings(spawnedCar(id)).length >
 
 describe("given the styles whose hood or boot lid carries a lamp fitting", () => {
   it("when the table is read, then the hood's share (pickup) and the boot's (sedan, hatchback, wagon) with the gate's high brake lamp (hatchback) are all in it", () => {
-    assert.deepEqual([...styles].sort(), ["hatchback", "pickup", "sedan", "wagon"]);
+    expect(firstMismatch([...styles].sort(), ["hatchback", "pickup", "sedan", "wagon"])).toBeUndefined();
   });
 
   for (const id of styles) {
@@ -99,14 +99,14 @@ describe("given the styles whose hood or boot lid carries a lamp fitting", () =>
         crushEnd(car, end);
         const restSkin = rest[lidName === "hood" ? "hoodRest" : "trunkRest"];
         const travel = skinTravel(car[lidName].geometry, restSkin);
-        assert.ok(travel > LID_MOVED_MIN_M, `the ${lidName} skin moved ${travel.toFixed(3)} m: the crush must dent it`);
+        expect(travel, `the ${lidName} skin moved ${travel.toFixed(3)} m: the crush must dent it`).toBeGreaterThan(LID_MOVED_MIN_M);
         const offenders: string[] = [];
         for (const [k, fitting] of lidFittings(car).entries()) {
           if (fitting.lid !== car[lidName]) continue;
           const off = farthestOffLidSkin(car, fitting);
           if (off - restOff[k]! > DRIFT_OFF_LID_M) offenders.push(`${fitting.kind} ${k}: ${off.toFixed(3)} m off the ${lidName}'s skin, ${restOff[k]!.toFixed(3)} m at rest`);
         }
-        assert.deepEqual(offenders, [], "every fitting of the lid follows its dent");
+        expect(offenders, "every fitting of the lid follows its dent").toHaveLength(0);
       });
     }
   }

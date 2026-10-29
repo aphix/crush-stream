@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { runWall, type WallApproach } from "../contact/crash-scenarios.test-util.ts";
 import { DeformableCar } from "./car.ts";
@@ -94,8 +93,8 @@ describe("given a coupe whose chrome window trim frames its glass and runs along
           worst = Math.max(worst, Math.hypot(trimNow[i]! - trimRest[i]! - paintMove[0], trimNow[i + 1]! - trimRest[i + 1]! - paintMove[1], trimNow[i + 2]! - trimRest[i + 2]! - paintMove[2]));
         }
       }
-      assert.ok(dented > 0, `the control: some trim point stood on paint that moved ${DENT_M * 100} cm or more`);
-      assert.ok(worst <= bar, `a trim point ${(worst * 100).toFixed(1)} cm off the move of the paint it stands on`);
+      expect(dented, `the control: some trim point stood on paint that moved ${DENT_M * 100} cm or more`).toBeGreaterThan(0);
+      expect(worst, `a trim point ${(worst * 100).toFixed(1)} cm off the move of the paint it stands on`).toBeLessThanOrEqual(bar);
     });
   }
 });
@@ -118,21 +117,21 @@ describe("given a coupe crushed, then reset", () => {
       car.flushDeferredSkin();
       car.updateSkin();
       const trimsCrushedBy = car["trims"].reduce((worst, t, n) => Math.max(worst, largestMove(rawPoints(t.mesh), builtTrims[n]!)), 0);
-      assert.ok(trimsCrushedBy > DENT_M, `the control: the crush moved a trim point ${(trimsCrushedBy * 100).toFixed(1)} cm`);
+      expect(trimsCrushedBy, `the control: the crush moved a trim point ${(trimsCrushedBy * 100).toFixed(1)} cm`).toBeGreaterThan(DENT_M);
       const panesHit = car.glassPanes.filter((g, n) => g.state !== "intact" || g.mesh.position.distanceTo(pristine.glassPanes[n]!.mesh.position) > DENT_M || largestMove(rawPoints(g.mesh), rawPoints(pristine.glassPanes[n]!.mesh)) > DENT_M);
-      assert.ok(panesHit.length > 0, "the control: the crush cracked, shattered or moved some pane");
+      expect(panesHit.length, "the control: the crush cracked, shattered or moved some pane").toBeGreaterThan(0);
       car.resetVisual();
       for (const [n, t] of car["trims"].entries()) {
         const off = largestMove(rawPoints(t.mesh), builtTrims[n]!);
-        assert.ok(off <= RESET_BAR_M, `trim ${n} (${t.cage}) stands ${(off * 1000).toFixed(1)} mm off its built place after the reset`);
+        expect(off, `trim ${n} (${t.cage}) stands ${(off * 1000).toFixed(1)} mm off its built place after the reset`).toBeLessThanOrEqual(RESET_BAR_M);
       }
       for (const [n, g] of car.glassPanes.entries()) {
         const built = pristine.glassPanes[n]!.mesh;
         const moved = g.mesh.position.distanceTo(built.position);
         const turned = (2 * Math.acos(Math.min(1, Math.abs(g.mesh.quaternion.dot(built.quaternion)))) * 180) / Math.PI;
         const bent = largestMove(rawPoints(g.mesh), rawPoints(built));
-        assert.ok(g.state === "intact" && g.mesh.visible, `pane ${g.name} is whole and drawn after the reset`);
-        assert.ok(moved <= RESET_BAR_M && turned <= RESET_TURN_DEG && bent <= RESET_BAR_M, `pane ${g.name}: ${(moved * 1000).toFixed(1)} mm, ${turned.toFixed(2)} degrees, vertices ${(bent * 1000).toFixed(1)} mm off built`);
+        expect(g.state === "intact" && g.mesh.visible, `pane ${g.name} is whole and drawn after the reset`).toBeTruthy();
+        expect(moved <= RESET_BAR_M && turned <= RESET_TURN_DEG && bent <= RESET_BAR_M, `pane ${g.name}: ${(moved * 1000).toFixed(1)} mm, ${turned.toFixed(2)} degrees, vertices ${(bent * 1000).toFixed(1)} mm off built`).toBeTruthy();
       }
     });
   }
@@ -161,7 +160,7 @@ describe("given a coupe's windshield after a front wall hit", () => {
       let sum = 0;
       for (let i = 0; i < now.length; i += 3) sum += Math.hypot(now[i]! - rest[i]!, now[i + 1]! - rest[i + 1]!, now[i + 2]! - rest[i + 2]!);
       const mean = sum / (now.length / 3);
-      assert.ok(!(Math.abs(mean - before) > LATCH_STEP_M), `${kph} km/h: the pane stands ${(mean * 100).toFixed(1)} cm off its seat, ${((mean - before) * 100).toFixed(1)} cm from the speed below`);
+      expect(!(Math.abs(mean - before) > LATCH_STEP_M), `${kph} km/h: the pane stands ${(mean * 100).toFixed(1)} cm off its seat, ${((mean - before) * 100).toFixed(1)} cm from the speed below`).toBe(true);
       before = mean;
     }
   });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { OnFootFlow, type OnFootPhase, type OnFootRefusal, type OnFootStep } from "./onfoot-flow.ts";
 
 const AT_REST = { car: 0, speed: 0, doorBlocked: false };
@@ -42,10 +41,10 @@ describe("given a player at the control", () => {
     it(testCase.it, () => {
       const flow = flowAt(testCase.start);
       const step = flow.press({ car: testCase.car, speed: testCase.speed, doorBlocked: testCase.doorBlocked });
-      assert.equal(step, testCase.expectedStep, "step");
-      assert.equal(flow.phase, testCase.expectedPhase, "phase");
-      assert.equal(flow.refusal, testCase.expectedRefusal, "refusal");
-      assert.equal(flow.car, testCase.expectedCar, "car");
+      expect(step, "step").toBe(testCase.expectedStep);
+      expect(flow.phase, "phase").toBe(testCase.expectedPhase);
+      expect(flow.refusal, "refusal").toBe(testCase.expectedRefusal);
+      expect(flow.car, "car").toBe(testCase.expectedCar);
     });
   }
 });
@@ -70,8 +69,8 @@ describe("given a player part way round the cycle", () => {
     it(testCase.it, () => {
       const flow = flowAt(testCase.start);
       const step = flow.tick(testCase.seconds);
-      assert.equal(step, testCase.expectedStep, "step");
-      assert.equal(flow.phase, testCase.expectedPhase, "phase");
+      expect(step, "step").toBe(testCase.expectedStep);
+      expect(flow.phase, "phase").toBe(testCase.expectedPhase);
     });
   }
 });
@@ -81,8 +80,8 @@ describe("given a player who got out and wants to drive on", () => {
     const flow = flowAt("onFoot");
     flow.press({ car: 0, speed: 0, doorBlocked: false });
     flow.tick(5);
-    assert.equal(flow.phase, "inCar", "back in the car");
-    assert.equal(flow.car, -1, "no car left or entered");
-    assert.equal(flow.press(AT_REST), "exitStarted", "the control gets him out again");
+    expect(flow.phase, "back in the car").toBe("inCar");
+    expect(flow.car, "no car left or entered").toBe(-1);
+    expect(flow.press(AT_REST), "the control gets him out again").toBe("exitStarted");
   });
 });

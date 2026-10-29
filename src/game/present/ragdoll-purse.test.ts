@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import type { RigidBody } from "@dimforge/rapier3d-simd";
@@ -60,24 +59,24 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
   it("when a civilian woman is thrown, then 1 handbag leaves at 0.85× her speed on her heading and, at the burst, 4-7 items fly at 0.85× the handbag's speed inside the spread cone", async () => {
     const r = await system(seedWhere(true));
     throwOut(r);
-    assert.ok(purses(r).active(0));
+    expect(purses(r).active(0)).toBeTruthy();
     const purse = bodiesOf(r)[0]!;
-    assert.ok(Math.abs(speed(purse) / V.length() - PURSE_SPEED) < 1e-3, `purse ${(speed(purse) / V.length()).toFixed(4)} of her speed`);
+    expect(Math.abs(speed(purse) / V.length() - PURSE_SPEED), `purse ${(speed(purse) / V.length()).toFixed(4)} of her speed`).toBeLessThan(1e-3);
     const heading = V.clone().normalize();
     const pv = new THREE.Vector3().copy(purse.linvel()).normalize();
-    assert.ok(pv.dot(heading) > 0.99999, "the purse leaves on her heading");
+    expect(pv.dot(heading), "the purse leaves on her heading").toBeGreaterThan(0.99999);
     const steps = untilBurst(r);
-    assert.ok(Math.abs(steps * STEP - BURST_AT) <= STEP + 1e-9, `burst after ${steps} steps`);
+    expect(Math.abs(steps * STEP - BURST_AT), `burst after ${steps} steps`).toBeLessThanOrEqual(STEP + 1e-9);
     const u = new THREE.Vector3().copy(purse.linvel());
     const items = bodiesOf(r).slice(1).filter((b) => b.isEnabled());
-    assert.ok(items.length >= ITEMS_MIN && items.length <= 7, `${items.length} things`);
-    assert.equal(bits(purses(r)["on"][0]! >> 1), items.length);
+    expect(items.length >= ITEMS_MIN && items.length <= 7, `${items.length} things`).toBeTruthy();
+    expect(bits(purses(r)["on"][0]! >> 1)).toBe(items.length);
     for (const b of items) {
       const v = new THREE.Vector3().copy(b.linvel());
-      assert.ok(Math.abs(v.length() / u.length() - ITEM_SPEED) < 5e-3, `thing at ${(v.length() / u.length()).toFixed(4)} of the purse's speed`);
+      expect(Math.abs(v.length() / u.length() - ITEM_SPEED), `thing at ${(v.length() / u.length()).toFixed(4)} of the purse's speed`).toBeLessThan(5e-3);
       const angle = v.angleTo(u);
-      assert.ok(angle <= Math.atan(SPREAD) + 1e-3, `thing ${((angle * 180) / Math.PI).toFixed(1)}° off the purse's heading`);
-      assert.ok(v.dot(u) > 0, "same way");
+      expect(angle, `thing ${((angle * 180) / Math.PI).toFixed(1)}° off the purse's heading`).toBeLessThanOrEqual(Math.atan(SPREAD) + 1e-3);
+      expect(v.dot(u), "same way").toBeGreaterThan(0);
     }
     r.dispose();
   });
@@ -86,14 +85,14 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
     const man = await system(seedWhere(false));
     throwOut(man);
     for (let n = 0; n < 60; n++) man.update(STEP, [], true, true, null);
-    assert.equal(purses(man).active(0), false);
-    assert.equal(bodiesOf(man).some((b) => b.isEnabled()), false);
+    expect(purses(man).active(0)).toBe(false);
+    expect(bodiesOf(man).some((b) => b.isEnabled())).toBe(false);
     man.dispose();
     const cop = await system(seedWhere(true));
     throwOut(cop, 0, true);
     for (let n = 0; n < 60; n++) cop.update(STEP, [], true, true, null);
-    assert.equal(purses(cop).active(0), false, "a policewoman carries no purse");
-    assert.equal(bodiesOf(cop).some((b) => b.isEnabled()), false);
+    expect(purses(cop).active(0), "a policewoman carries no purse").toBe(false);
+    expect(bodiesOf(cop).some((b) => b.isEnabled())).toBe(false);
     cop.dispose();
   });
 
@@ -105,13 +104,13 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
       r.update(STEP, [], true, true, null);
       for (const b of bodiesOf(r)) if (b.isEnabled()) low = Math.min(low, b.translation().y);
     }
-    assert.ok(low > -0.05, `lowest centre ${low.toFixed(3)} m: nothing fell through the ground`);
+    expect(low, `lowest centre ${low.toFixed(3)} m: nothing fell through the ground`).toBeGreaterThan(-0.05);
     const live = bodiesOf(r).filter((b) => b.isEnabled());
-    assert.ok(live.length >= 1 + ITEMS_MIN);
+    expect(live.length).toBeGreaterThanOrEqual(1 + ITEMS_MIN);
     for (const b of live) {
-      assert.ok(b.translation().x > 5, `rest at x = ${b.translation().x.toFixed(1)} m: it travelled her way`);
-      assert.ok(b.translation().y < 0.3, "on the ground");
-      assert.ok(speed(b) < 0.5, `at rest (${speed(b).toFixed(2)} m/s)`);
+      expect(b.translation().x, `rest at x = ${b.translation().x.toFixed(1)} m: it travelled her way`).toBeGreaterThan(5);
+      expect(b.translation().y, "on the ground").toBeLessThan(0.3);
+      expect(speed(b), `at rest (${speed(b).toFixed(2)} m/s)`).toBeLessThan(0.5);
     }
     r.dispose();
   });
@@ -135,7 +134,7 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
       poses.push(bodiesOf(r).flatMap((b) => (b.isEnabled() ? [b.translation().x, b.translation().y, b.translation().z] : [])));
       r.dispose();
     }
-    assert.ok(poses[0]!.length >= 3 * (1 + ITEMS_MIN));
+    expect(poses[0]!.length).toBeGreaterThanOrEqual(3 * (1 + ITEMS_MIN));
     assertSameNumbers(poses[0]!, poses[1]!, "the replayed throw");
   });
 
@@ -143,19 +142,19 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
     const r = await system(seedWhere(true));
     throwOut(r);
     untilBurst(r);
-    assert.ok(bodiesOf(r).filter((b) => b.isEnabled()).length >= 1 + ITEMS_MIN);
+    expect(bodiesOf(r).filter((b) => b.isEnabled()).length).toBeGreaterThanOrEqual(1 + ITEMS_MIN);
     r["despawn"](0);
-    assert.equal(purses(r).active(0), false);
-    assert.equal(bodiesOf(r).some((b) => b.isEnabled()), false, "dummy gone, purse gone");
-    assert.equal(purses(r).mesh.count, 0);
+    expect(purses(r).active(0)).toBe(false);
+    expect(bodiesOf(r).some((b) => b.isEnabled()), "dummy gone, purse gone").toBe(false);
+    expect(purses(r).mesh.count).toBe(0);
     throwOut(r);
     untilBurst(r);
     r.reset();
-    assert.equal(bodiesOf(r).some((b) => b.isEnabled()), false, "a new run clears the purse");
+    expect(bodiesOf(r).some((b) => b.isEnabled()), "a new run clears the purse").toBe(false);
     throwOut(r);
     const scene = purses(r).mesh;
     r.dispose();
-    assert.equal(scene.parent, null, "dispose takes the props mesh out of the scene");
+    expect(scene.parent, "dispose takes the props mesh out of the scene").toBe(null);
   });
 
   it("when a driver is thrown again after a reset, then he keeps the same look, and when the next race changes the look seed, the look changes", async () => {
@@ -172,7 +171,7 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
     r.reset();
     r.lookSeed = 8;
     throwOut(r, 3);
-    assert.ok(colors().some((v, i) => v !== first[i]), "the next race's driver looks different");
+    expect(colors().some((v, i) => v !== first[i]), "the next race's driver looks different").toBeTruthy();
     r.dispose();
   });
 
@@ -200,8 +199,8 @@ describe("given a thrown crash-test dummy driver who may carry a handbag (a woma
     const purse = bodiesOf(r)[0]!.translation();
     r.dispose();
     // Before the spin cap: the purse spun at 79 rad/s, skipped on and came to rest 30 m past the dummy (58.6 m against 28.4 m).
-    assert.ok(torso > LANDING_M[0] && torso < LANDING_M[1], `she landed at ${torso.toFixed(1)} m`);
-    assert.ok(Math.abs(purse.x - torso) < PURSE_NEAR, `the purse rests ${(purse.x - torso).toFixed(1)} m from her (she lies at ${torso.toFixed(1)} m)`);
-    assert.ok(spin <= 15.5, `fastest spin ${spin.toFixed(1)} rad/s`);
+    expect(torso > LANDING_M[0] && torso < LANDING_M[1], `she landed at ${torso.toFixed(1)} m`).toBeTruthy();
+    expect(Math.abs(purse.x - torso), `the purse rests ${(purse.x - torso).toFixed(1)} m from her (she lies at ${torso.toFixed(1)} m)`).toBeLessThan(PURSE_NEAR);
+    expect(spin, `fastest spin ${spin.toFixed(1)} rad/s`).toBeLessThanOrEqual(15.5);
   });
 });

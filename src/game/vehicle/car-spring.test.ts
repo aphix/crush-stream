@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { ASK, G, N, OWN, PRESS, R, SHARE, SOFT, springPushes } from "./car-air-body.ts";
 import { droop, SPRINGS } from "./car-suspension.ts";
@@ -43,12 +42,12 @@ for (const { where, from, onCar } of starts) {
     it("when it is pressed a millimetre past the start, then it pushes under 15 % of its weight, and the push grows by no more than 5 % of its weight per quarter millimetre up to its weight", () => {
       const dt = 1 / FRAME_HZ;
       const first = push(from + 0.001, dt, onCar);
-      assert.ok(first < 0.15 * WEIGHT, `1 mm past the start of its contact the tyre pushes ${((100 * first) / WEIGHT).toFixed(0)} % of its weight`);
+      expect(first, `1 mm past the start of its contact the tyre pushes ${((100 * first) / WEIGHT).toFixed(0)} % of its weight`).toBeLessThan(0.15 * WEIGHT);
       let before = push(from + 0.0001, dt, onCar);
       for (let x = from + 0.00035; x <= 0.012; x += 0.00025) {
         const now = push(x, dt, onCar);
-        assert.ok(now >= before - 1e-9, `the push falls from ${before.toFixed(3)} to ${now.toFixed(3)} m/s2 at ${(1000 * (x - from)).toFixed(2)} mm past the start`);
-        assert.ok(now - before <= 0.05 * WEIGHT, `the push steps by ${((100 * (now - before)) / WEIGHT).toFixed(1)} % of the weight at ${(1000 * (x - from)).toFixed(2)} mm past the start`);
+        expect(now, `the push falls from ${before.toFixed(3)} to ${now.toFixed(3)} m/s2 at ${(1000 * (x - from)).toFixed(2)} mm past the start`).toBeGreaterThanOrEqual(before - 1e-9);
+        expect(now - before, `the push steps by ${((100 * (now - before)) / WEIGHT).toFixed(1)} % of the weight at ${(1000 * (x - from)).toFixed(2)} mm past the start`).toBeLessThanOrEqual(0.05 * WEIGHT);
         before = now;
       }
     });
@@ -60,11 +59,11 @@ describe("given a tyre's wheel pressed to the rest ride and past it", () => {
     for (const hz of [60, 144, 240, 480]) {
       const dt = 1 / hz;
       const rest = push(0.012, dt) - STIFF * 0.012;
-      assert.ok(Math.abs(rest - WEIGHT) < 0.01 * WEIGHT, `at ${hz} Hz the tyre at the rest ride pushes ${rest.toFixed(3)} m/s2, its weight ${WEIGHT.toFixed(3)}`);
+      expect(Math.abs(rest - WEIGHT), `at ${hz} Hz the tyre at the rest ride pushes ${rest.toFixed(3)} m/s2, its weight ${WEIGHT.toFixed(3)}`).toBeLessThan(0.01 * WEIGHT);
       const past = push(0.02, dt, true);
-      assert.ok(Math.abs(past - (WEIGHT + STIFF * 0.02)) < 0.01 * WEIGHT, `at ${hz} Hz 2 cm past the rest ride it pushes ${past.toFixed(3)} m/s2, the spring ${(WEIGHT + STIFF * 0.02).toFixed(3)}`);
+      expect(Math.abs(past - (WEIGHT + STIFF * 0.02)), `at ${hz} Hz 2 cm past the rest ride it pushes ${past.toFixed(3)} m/s2, the spring ${(WEIGHT + STIFF * 0.02).toFixed(3)}`).toBeLessThan(0.01 * WEIGHT);
       const low = push(-0.05, dt);
-      assert.ok(Math.abs(low - push(-0.05, 1 / 480)) < 0.01 * WEIGHT, `at ${hz} Hz 5 cm under the rest ride it pushes ${low.toFixed(3)} m/s2, at 480 Hz ${push(-0.05, 1 / 480).toFixed(3)}`);
+      expect(Math.abs(low - push(-0.05, 1 / 480)), `at ${hz} Hz 5 cm under the rest ride it pushes ${low.toFixed(3)} m/s2, at 480 Hz ${push(-0.05, 1 / 480).toFixed(3)}`).toBeLessThan(0.01 * WEIGHT);
     }
   });
 });

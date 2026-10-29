@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { launch, makeCar, makeWorld, PARKED } from "../contact/crash-scenarios.test-util.ts";
@@ -24,6 +23,7 @@ import { clipTimeline, ReelDirector, type ReelHost } from "./engine-highlights.t
 import { phaseClock } from "../match/phase.ts";
 import { settleStep, stepWorld } from "./world-step.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * The National Mall's VIP in a replay of the driver's ejection (owner, 2026-10-15: "the ragdoll fix and persistence of the secret guest after the Konami code don't
@@ -128,7 +128,7 @@ async function race(secretOut: boolean): Promise<Run> {
   rec.end();
   ragdolls.dispose();
   const clip = rec.ledger.kept[0]!;
-  assert.ok(clip, "the head-on made no clip");
+  expect(clip, "the head-on made no clip").toBeTruthy();
   return { clip, cars, ejections, passengerThrows, flight };
 }
 
@@ -176,50 +176,58 @@ describe("given the Konami code typed on the National Mall, the VIP riding with 
 
   it("when the race is played, then the VIP gets in and is thrown with the driver, once, as the dummies' world has it live", async () => {
     run = await race(true);
-    assert.ok(run.ejections.some((e) => e.car === 0), `the player's driver is thrown (${run.ejections.length} throws)`);
-    assert.deepEqual(run.passengerThrows, [0], "the VIP is thrown once, from the player's car");
-    assert.equal(run.flight.length, run.ejections.length + 1, "a dummy out for each driver thrown, and the VIP's beside his");
+    expect(run.ejections.some((e) => e.car === 0), `the player's driver is thrown (${run.ejections.length} throws)`).toBeTruthy();
+    expect(firstMismatch(run.passengerThrows, [0]), "the VIP is thrown once, from the player's car").toBeUndefined();
+    expect(run.flight.length, "a dummy out for each driver thrown, and the VIP's beside his").toBe(run.ejections.length + 1);
   });
 
   it("when the clip is filed, then it says the VIP rode in the player's car at its start and no longer once the driver was thrown", () => {
     const { clip } = run;
     const player = clip.cars.findIndex((c) => c.slot === 0);
-    assert.ok(player >= 0, "the player's car is in the clip");
-    assert.equal(clip.vip.start, player, "the VIP rides in the player's car at the clip's start");
-    assert.ok(clip.vip.events.length === 1 && clip.vip.events[0]!.car === CLIP_NO_CAR, `his ride ends once, in the throw: ${JSON.stringify(clip.vip.events)}`);
+    expect(player, "the player's car is in the clip").toBeGreaterThanOrEqual(0);
+    expect(clip.vip.start, "the VIP rides in the player's car at the clip's start").toBe(player);
+    expect(clip.vip.events.length === 1 && clip.vip.events[0]!.car === CLIP_NO_CAR, `his ride ends once, in the throw: ${JSON.stringify(clip.vip.events)}`).toBeTruthy();
     const thrownAt = clip.ejections.find((x) => x.e.car === player)!.step;
-    assert.ok(clip.vip.events[0]!.step > thrownAt, "he is told out of the car after the driver's step, as the drawn frame that threw him comes after it");
+    expect(clip.vip.events[0]!.step, "he is told out of the car after the driver's step, as the drawn frame that threw him comes after it").toBeGreaterThan(thrownAt);
   });
 
   it("when the clip is replayed in a browser whose own race has no secret out, then the VIP is drawn in the seat until the driver is thrown, thrown with him, and gone after, and no player car of the viewer's is needed", async () => {
     again = await replay(run, false);
     const { seatedFrames, ejectionFrame, thrown, passengers } = again;
-    assert.ok(thrown.some((e) => e.car === 0), "the driver is thrown again");
-    assert.deepEqual(thrown.map((e, k) => [e.car, passengers[k]]), [[0, true], [1, false]], "the VIP is thrown with the player's driver and no other");
-    assert.ok(seatedFrames.slice(0, ejectionFrame).every(Boolean), "he sits in the seat in every frame before the throw");
-    assert.ok(seatedFrames.slice(ejectionFrame).every((seated) => !seated), "he is gone from the seat from the frame the driver is thrown");
+    expect(thrown.some((e) => e.car === 0), "the driver is thrown again").toBeTruthy();
+    expect(thrown.length, "the VIP is thrown with the player's driver and no other: throws").toBe(2);
+    expect(thrown[0]?.car, "first throw is the player's driver").toBe(0);
+    expect(passengers[0], "the player's driver is thrown with the VIP").toBe(true);
+    expect(thrown[1]?.car, "second throw is car 1").toBe(1);
+    expect(passengers[1], "car 1's driver is thrown without the VIP").toBe(false);
+    expect(seatedFrames.slice(0, ejectionFrame).every(Boolean), "he sits in the seat in every frame before the throw").toBeTruthy();
+    expect(seatedFrames.slice(ejectionFrame).every((seated) => !seated), "he is gone from the seat from the frame the driver is thrown").toBeTruthy();
   });
 
   it("when the replay's dummies fly, then the driver's and the VIP's flights follow the live ones' within a few centimetres for the first frames", () => {
-    assert.equal(again.flight.length, run.flight.length, "as many dummies out as live");
+    expect(again.flight.length, "as many dummies out as live").toBe(run.flight.length);
     for (const [slot, live] of run.flight.entries()) {
       const replayed = again.flight[slot]!;
       let worst = 0;
       for (let k = 0; k < FLIGHT_FRAMES * 3; k++) worst = Math.max(worst, Math.abs(live[k]! - replayed[k]!));
-      assert.ok(worst < NEAR, `dummy ${slot}: ${worst.toFixed(3)} m apart within ${FLIGHT_FRAMES} frames of the launch`);
+      expect(worst, `dummy ${slot}: ${worst.toFixed(3)} m apart within ${FLIGHT_FRAMES} frames of the launch`).toBeLessThan(NEAR);
     }
   });
 
   it("when the replay is restarted, then the VIP is seated again at once and thrown again at the same step", () => {
     const { sim } = again;
     sim.restart();
-    assert.equal(sim.vipRide, 0, "seated before any step");
+    expect(sim.vipRide, "seated before any step").toBe(0);
     const steps = [];
     while (!sim.done) {
       sim.advanceTo(sim.time + 1e-6);
       for (const e of sim.take()) steps.push({ car: e.car, vip: e.vip, step: sim.step });
     }
-    assert.deepEqual(steps.map((x) => [x.car, x.vip]), [[0, true], [1, false]]);
+    expect(steps.length, "throws seen over the restarted replay").toBe(2);
+    expect(steps[0]?.car, "first throw's car").toBe(0);
+    expect(steps[0]?.vip, "the VIP goes with the first throw").toBe(true);
+    expect(steps[1]?.car, "second throw's car").toBe(1);
+    expect(steps[1]?.vip, "the VIP is not with the second throw").toBe(false);
   });
 
   it("when the reel hands the throws of the step the driver is thrown in to its host, then every driver comes first and the VIP last, with his", () => {
@@ -250,19 +258,19 @@ describe("given the Konami code typed on the National Mall, the VIP riding with 
     sim.restart();
     while (sim.step <= clip.ejections[0]!.step) sim.advanceTo(sim.time + 1e-6);
     new ReelDirector(host)["launch"]({ id: 1, from: "reel", clip, sim, tl: clipTimeline(clip.firstImpact, sim.length, [], []), shots: [] });
-    assert.deepEqual(calls, ["eject 0", "eject 1", "passenger 0"]);
+    expect(firstMismatch(calls, ["eject 0", "eject 1", "passenger 0"])).toBeUndefined();
   });
 });
 
 describe("given the same race with the course's secret still in, so the VIP never leaves the house", () => {
   it("when the clip of the player's ejection is replayed, then no VIP rides in it, none is thrown with the driver and none is drawn", async () => {
     const run = await race(false);
-    assert.deepEqual(run.passengerThrows, [], "live: nobody thrown with him");
-    assert.equal(run.clip.vip.start, CLIP_NO_CAR, "the clip lists no ride at its start");
-    assert.equal(run.clip.vip.events.length, 0, "and none in its steps");
+    expect(run.passengerThrows, "live: nobody thrown with him").toHaveLength(0);
+    expect(run.clip.vip.start, "the clip lists no ride at its start").toBe(CLIP_NO_CAR);
+    expect(run.clip.vip.events.length, "and none in its steps").toBe(0);
     const { thrown, passengers, seatedFrames } = await replay(run, true);
-    assert.ok(thrown.length > 0, "a driver is thrown");
-    assert.ok(passengers.every((vip) => !vip), "no VIP thrown with him");
-    assert.ok(seatedFrames.every((seated) => !seated), "no VIP drawn, though the viewer's own race has the secret out");
+    expect(thrown.length, "a driver is thrown").toBeGreaterThan(0);
+    expect(passengers.every((vip) => !vip), "no VIP thrown with him").toBeTruthy();
+    expect(seatedFrames.every((seated) => !seated), "no VIP drawn, though the viewer's own race has the secret out").toBeTruthy();
   });
 });

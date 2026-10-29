@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { launch, makeCar } from "./crash-scenarios.test-util.ts";
 import { makeBox, solidFace } from "./external-contact.ts";
@@ -80,13 +79,13 @@ describe("given a wreck pinned nose-first on a wall, its nose hit's stroke not y
   it("when the pair is solved, then the car takes the whole push out of the tail and the wreck none", () => {
     const { wreck, car } = pinnedWreckAndCar();
     const stroke = wreck.deform.hitStroke() * (1 - wreck.deform.strokeUsed());
-    assert.ok(stroke > NOSE_IN_TAIL, `the nose hit has ${stroke.toFixed(3)} m of stroke left`);
+    expect(stroke, `the nose hit has ${stroke.toFixed(3)} m of stroke left`).toBeGreaterThan(NOSE_IN_TAIL);
     const wreckZ = wreck.group.position.z;
     const carZ = car.group.position.z;
-    assert.ok(resolveCarPair(car, wreck, H) !== null, "no pair contact");
+    expect(resolveCarPair(car, wreck, H), "no pair contact").not.toBe(null);
     // The nose's stroke is no room for a push on the tail, and the wall would put back any push the wreck took.
-    assert.ok(Math.abs(wreck.group.position.z - wreckZ) < 1e-9, `the wreck moved ${(wreck.group.position.z - wreckZ).toExponential(3)} m`);
-    assert.ok(Math.abs(carZ - car.group.position.z - satPushCap(H)) < 1e-9, `the car moved back ${(carZ - car.group.position.z).toFixed(5)} m, the push is ${satPushCap(H).toFixed(5)} m`);
+    expect(Math.abs(wreck.group.position.z - wreckZ), `the wreck moved ${(wreck.group.position.z - wreckZ).toExponential(3)} m`).toBeLessThan(1e-9);
+    expect(Math.abs(carZ - car.group.position.z - satPushCap(H)), `the car moved back ${(carZ - car.group.position.z).toFixed(5)} m, the push is ${satPushCap(H).toFixed(5)} m`).toBeLessThan(1e-9);
   });
 });
 
@@ -94,11 +93,11 @@ describe("given two wrecks at rest nose to nose, 4 cm into each other, their nos
   it("when the pair is solved, then the slice's push takes them apart: a crush takes nothing at a creep, so the stroke is no room", () => {
     const { a, b } = restingArmedPair();
     const stroke = Math.min(a.deform.hitStroke() * (1 - a.deform.strokeUsed()), b.deform.hitStroke() * (1 - b.deform.strokeUsed()));
-    assert.ok(stroke > RESTING_IN, `the nose hits have ${stroke.toFixed(3)} m of stroke left`);
+    expect(stroke, `the nose hits have ${stroke.toFixed(3)} m of stroke left`).toBeGreaterThan(RESTING_IN);
     const apart = b.group.position.z - a.group.position.z;
-    assert.ok(resolveCarPair(a, b, H) !== null, "no pair contact");
+    expect(resolveCarPair(a, b, H), "no pair contact").not.toBe(null);
     const pushed = b.group.position.z - a.group.position.z - apart;
     // Each wreck's share of the push is within its slice's push-out budget (`takePush`).
-    assert.ok(pushed >= PUSH_SPEED * H, `the pair moved apart ${pushed.toFixed(5)} m, the push-out speed's slice is ${(PUSH_SPEED * H).toFixed(5)} m`);
+    expect(pushed, `the pair moved apart ${pushed.toFixed(5)} m, the push-out speed's slice is ${(PUSH_SPEED * H).toFixed(5)} m`).toBeGreaterThanOrEqual(PUSH_SPEED * H);
   });
 });

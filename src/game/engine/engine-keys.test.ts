@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { DRIVE_KEYS } from "../vehicle/drive-input.ts";
@@ -13,15 +12,15 @@ const SEAT_MODES = ["global", "follow", "drive"] as const;
 describe("given the key tables the engine reads", () => {
   it("when the driving keys are listed, then the wheel, pedals, handbrake, boost, camera and reset are in the list", () => {
     for (const code of ["KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowLeft", "ArrowDown", "ArrowRight", "Space", "ShiftLeft", "KeyV", "KeyR", "Escape", "Backquote"]) {
-      assert.ok(DRIVING_CODES.includes(code), `${code} is a driving key`);
+      expect(DRIVING_CODES.includes(code), `${code} is a driving key`).toBeTruthy();
     }
   });
 
   for (const binding of SCENE_KEY_BINDINGS) {
     it(`when the ${binding.scene} key (${binding.label}) is set against the driving keys, then it is none of them`, () => {
-      assert.equal(DRIVING_CODES.includes(binding.code), false, `${binding.code} drives and picks ${binding.scene}`);
-      assert.equal(/^Digit/.test(binding.code), false, `${binding.code} is a rig's fire key`);
-      assert.equal(SCENE_KEY_BINDINGS.filter((other) => other.code === binding.code).length, 1, `${binding.code} picks one scene`);
+      expect(DRIVING_CODES.includes(binding.code), `${binding.code} drives and picks ${binding.scene}`).toBe(false);
+      expect(/^Digit/.test(binding.code), `${binding.code} is a rig's fire key`).toBe(false);
+      expect(SCENE_KEY_BINDINGS.filter((other) => other.code === binding.code).length, `${binding.code} picks one scene`).toBe(1);
     });
   }
 });
@@ -49,7 +48,7 @@ describe("given the real engine in the sandbox", () => {
     it(testCase.it, () => {
       seatAs(testCase.mode);
       pressKey(engine, testCase.code);
-      assert.equal(engine["sceneFade"].pending, null, "the scene is not switched");
+      expect(engine["sceneFade"].pending, "the scene is not switched").toBe(null);
     });
   }
 
@@ -58,7 +57,7 @@ describe("given the real engine in the sandbox", () => {
     it(testCase.it, () => {
       seatAs(testCase.mode);
       pressKey(engine, testCase.code);
-      assert.equal(engine["sceneFade"].pending, testCase.expectedScene, "the picked scene");
+      expect(engine["sceneFade"].pending, "the picked scene").toBe(testCase.expectedScene);
     });
   }
 });

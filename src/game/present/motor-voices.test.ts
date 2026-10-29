@@ -1,7 +1,7 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { VoicePool } from "./motor-voices.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const NO_PRIORITY = -1;
@@ -32,27 +32,27 @@ describe("given six cars and three slots", () => {
     const distSq = metres(5, 6, 7, 8, 40, 9);
     for (let frame = 0; frame < 10; frame++) {
       pool.assign(distSq, 6, 4, FRAME);
-      assert.ok(pool.car.includes(4), `frame ${frame}`);
+      expect(pool.car.includes(4), `frame ${frame}`).toBeTruthy();
     }
   });
   it("when the cars are all near, then the other slots hold the nearest ones", () => {
     const pool = new VoicePool(3);
     pool.assign(metres(5, 6, 7, 8, 40, 9), 6, 4, FRAME);
-    assert.deepEqual([...pool.car].sort(), [0, 1, 4]);
+    expect(firstMismatch([...pool.car].sort(), [0, 1, 4])).toBeUndefined();
   });
   it("when there is no priority car, then the three nearest are held", () => {
     const pool = new VoicePool(3);
     pool.assign(metres(30, 6, 7, 8, 40, 9), 6, NO_PRIORITY, FRAME);
-    assert.deepEqual([...pool.car].sort(), [1, 2, 3]);
+    expect(firstMismatch([...pool.car].sort(), [1, 2, 3])).toBeUndefined();
   });
 });
 
 describe("given two cars swinging past each other in front of a held priority car", () => {
   it("when the pool has its hysteresis, then the free slot never swaps after the first frame", () => {
-    assert.equal(swapsOfTwoNearCars(new VoicePool(2)), 0);
+    expect(swapsOfTwoNearCars(new VoicePool(2))).toBe(0);
   });
   it("when the hysteresis is off (ratio 1, no hold), then the free slot swaps more than ten times", () => {
-    assert.ok(swapsOfTwoNearCars(new VoicePool(2, 1, 0)) > 10);
+    expect(swapsOfTwoNearCars(new VoicePool(2, 1, 0))).toBeGreaterThan(10);
   });
 });
 
@@ -74,8 +74,8 @@ describe("given a car closing in on two held cars at 20 m and 25 m (one slot eac
         pool.assign(distSq, 3, NO_PRIORITY, 0.125);
         if (frame > 0 && firstSwap < 0 && pool.car.includes(2)) firstSwap = frame;
       }
-      assert.equal(firstSwap, c.swapFrame);
-      assert.deepEqual([...pool.car].sort(), [0, 2]);
+      expect(firstSwap).toBe(c.swapFrame);
+      expect(firstMismatch([...pool.car].sort(), [0, 2])).toBeUndefined();
     });
   }
 });
@@ -88,15 +88,15 @@ describe("given cars leaving the pool", () => {
     pool.swapped.fill(0);
     distSq[0] = Infinity;
     pool.assign(distSq, 2, NO_PRIORITY, FRAME);
-    assert.equal(pool.car[0], -1);
-    assert.equal(pool.swapped[0], 1);
+    expect(pool.car[0]).toBe(-1);
+    expect(pool.swapped[0]).toBe(1);
   });
   it("when the car count drops from 6 to 2, then the slots holding cars 2 to 5 are freed", () => {
     const pool = new VoicePool(4);
     pool.assign(metres(9, 8, 7, 6, 5, 4), 6, NO_PRIORITY, FRAME);
-    assert.deepEqual([...pool.car].sort(), [2, 3, 4, 5]);
+    expect(firstMismatch([...pool.car].sort(), [2, 3, 4, 5])).toBeUndefined();
     pool.assign(metres(9, 8, 7, 6, 5, 4), 2, NO_PRIORITY, FRAME);
-    assert.deepEqual([...pool.car].sort(), [-1, -1, 0, 1]);
+    expect(firstMismatch([...pool.car].sort(), [-1, -1, 0, 1])).toBeUndefined();
   });
   it("when the pool is released, then every slot is free and swapped", () => {
     const pool = new VoicePool(3);
@@ -104,8 +104,8 @@ describe("given cars leaving the pool", () => {
     pool.swapped.fill(0);
     pool.release();
     for (let s = 0; s < 3; s++) {
-      assert.equal(pool.car[s], -1);
-      assert.equal(pool.swapped[s], 1);
+      expect(pool.car[s]).toBe(-1);
+      expect(pool.swapped[s]).toBe(1);
     }
   });
   it("when the priority car is unhearable, then no slot is spent on it", () => {
@@ -113,6 +113,6 @@ describe("given cars leaving the pool", () => {
     const distSq = metres(5, 6, 7);
     distSq[2] = Infinity;
     pool.assign(distSq, 3, 2, FRAME);
-    assert.deepEqual([...pool.car].sort(), [0, 1]);
+    expect(firstMismatch([...pool.car].sort(), [0, 1])).toBeUndefined();
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { driverCarApplies } from "./driver-pick.ts";
 
 const bootPickCases = [
@@ -10,17 +9,17 @@ const bootPickCases = [
 describe("given a stored car pick and a share link that may name a car", () => {
   for (const testCase of bootPickCases) {
     it(testCase.it, () => {
-      assert.equal(driverCarApplies(null, "monster", testCase.linkNamesCar), testCase.expected);
+      expect(driverCarApplies(null, "monster", testCase.linkNamesCar)).toBe(testCase.expected);
     });
   }
 
   it("when the player switches from the monster truck to the truck after boot, then the new pick applies whether or not the link named a car", () => {
-    assert.equal(driverCarApplies("monster", "truck", true), true);
-    assert.equal(driverCarApplies("monster", "truck", false), true);
+    expect(driverCarApplies("monster", "truck", true)).toBe(true);
+    expect(driverCarApplies("monster", "truck", false)).toBe(true);
   });
 
   it("when the pick is unchanged (only the driver's name was edited), then it never re-applies, so it cannot undo a car chosen in the HUD since", () => {
-    assert.equal(driverCarApplies("monster", "monster", false), false);
-    assert.equal(driverCarApplies("monster", "monster", true), false);
+    expect(driverCarApplies("monster", "monster", false)).toBe(false);
+    expect(driverCarApplies("monster", "monster", true)).toBe(false);
   });
 });

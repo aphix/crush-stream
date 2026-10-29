@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { blankPoint, Track } from "../world/track.ts";
 import city from "../world/tracks/city.json" with { type: "json" };
@@ -133,7 +132,7 @@ describe("given a staged crash run twice, the second drawing every car before ev
     it(`when the ${stage} is done, then every car's pose, velocity, crush, cage fields, door swing and every part's hinge value and state are the same numbers at every step`, () => {
       const plain = run(false, { stage });
       const drawn = run(true, { stage });
-      assert.equal(drawn.length, plain.length, "the two races ran a different number of steps");
+      expect(drawn.length, "the two races ran a different number of steps").toBe(plain.length);
       let wrecked = 0;
       let refits = 0;
       let doorMoved = 0;
@@ -142,10 +141,10 @@ describe("given a staged crash run twice, the second drawing every car before ev
         refits = Math.max(refits, row[o + 8]!);
         for (let d = 0; d < 2; d++) doorMoved = Math.max(doorMoved, Math.abs(row[o + 10 + 2 * d]! - DOOR_AJAR_RAD));
       }
-      assert.ok(wrecked === 1 && refits >= 2, `the race crushed no car (${wrecked}) or fitted no cage twice (${refits}): the comparison proves nothing`);
-      if (stage === "door ajar") assert.ok(doorMoved > 0.01, `no open door was struck or swung (${doorMoved} rad): the comparison proves nothing about part contacts`);
+      expect(wrecked === 1 && refits >= 2, `the race crushed no car (${wrecked}) or fitted no cage twice (${refits}): the comparison proves nothing`).toBeTruthy();
+      if (stage === "door ajar") expect(doorMoved, `no open door was struck or swung (${doorMoved} rad): the comparison proves nothing about part contacts`).toBeGreaterThan(0.01);
       const first = firstDifference(plain, drawn);
-      assert.equal(first.step, -1, `a car differs at step ${first.step}, car ${Math.floor(first.at / STATE)}, number ${first.at % STATE}: ${plain[first.step]?.[first.at]} against ${drawn[first.step]?.[first.at]}`);
+      expect(first.step, `a car differs at step ${first.step}, car ${Math.floor(first.at / STATE)}, number ${first.at % STATE}: ${plain[first.step]?.[first.at]} against ${drawn[first.step]?.[first.at]}`).toBe(-1);
     });
   }
 });
@@ -155,12 +154,12 @@ describe("given a staged crash drawn every frame with `presentSkip` off and then
     it(`when the ${stage} is done, then every car's pose, velocity, crush, cage fields, door swing and part state are the same numbers at every step`, () => {
       const every = run(true, { skip: false, stage });
       const skipped = run(true, { skip: true, stage });
-      assert.equal(skipped.length, every.length, "the two races ran a different number of steps");
+      expect(skipped.length, "the two races ran a different number of steps").toBe(every.length);
       const first = firstDifference(every, skipped);
       let doorMoved = 0;
       for (const row of every) for (let o = 0; o < row.length; o += STATE) for (let d = 0; d < 2; d++) doorMoved = Math.max(doorMoved, Math.abs(row[o + 10 + 2 * d]! - DOOR_AJAR_RAD));
-      if (stage === "door ajar") assert.ok(doorMoved > 0.01, `no open door was struck or swung (${doorMoved} rad): the comparison proves nothing about part contacts`);
-      assert.equal(first.step, -1, `a car differs at step ${first.step}, car ${Math.floor(first.at / STATE)}, number ${first.at % STATE}: ${every[first.step]?.[first.at]} against ${skipped[first.step]?.[first.at]}`);
+      if (stage === "door ajar") expect(doorMoved, `no open door was struck or swung (${doorMoved} rad): the comparison proves nothing about part contacts`).toBeGreaterThan(0.01);
+      expect(first.step, `a car differs at step ${first.step}, car ${Math.floor(first.at / STATE)}, number ${first.at % STATE}: ${every[first.step]?.[first.at]} against ${skipped[first.step]?.[first.at]}`).toBe(-1);
     });
   }
 });

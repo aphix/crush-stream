@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { launch, makeCar } from "./crash-scenarios.test-util.ts";
 import { faceDepth, faceExit, makeBox } from "./external-contact.ts";
 import { physicsSlice } from "./sat.ts";
@@ -53,12 +52,12 @@ describe("given a car at rest whose nose stands 2 cm inside the end of a 2 m wid
       box.z = noseZ(car) - NOSE_IN_END + box.hx;
       const depth = faceDepth(car, box);
       if (testCase.expectedLeavesByEnd) {
-        assert.ok(depth > 0 && depth <= NOSE_IN_END + 1e-9, `depth ${depth.toFixed(3)} m`);
-        assert.ok(Math.abs(faceExit.nx) < 1e-9 && Math.abs(faceExit.nz + 1) < 1e-9, `exit (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`);
+        expect(depth > 0 && depth <= NOSE_IN_END + 1e-9, `depth ${depth.toFixed(3)} m`).toBeTruthy();
+        expect(Math.abs(faceExit.nx) < 1e-9 && Math.abs(faceExit.nz + 1) < 1e-9, `exit (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`).toBeTruthy();
         return;
       }
-      assert.ok(depth > 0.5, `depth ${depth.toFixed(3)} m`);
-      assert.ok(Math.abs(faceExit.nx + 1) < 1e-9 && Math.abs(faceExit.nz) < 1e-9, `exit (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`);
+      expect(depth, `depth ${depth.toFixed(3)} m`).toBeGreaterThan(0.5);
+      expect(Math.abs(faceExit.nx + 1) < 1e-9 && Math.abs(faceExit.nz) < 1e-9, `exit (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`).toBeTruthy();
     });
   }
 });
@@ -75,8 +74,8 @@ describe("given a car at rest straddling a 0.5 m wide, 1.2 m thick open-ended po
     box.z = 0;
     box.openEnds = true;
     const depth = faceDepth(car, box);
-    assert.ok(depth > 0.5, `depth ${depth.toFixed(3)} m`);
-    assert.ok(Math.abs(faceExit.nx + 1) < 1e-9 && Math.abs(faceExit.nz) < 1e-9, `exit (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`);
+    expect(depth, `depth ${depth.toFixed(3)} m`).toBeGreaterThan(0.5);
+    expect(Math.abs(faceExit.nx + 1) < 1e-9 && Math.abs(faceExit.nz) < 1e-9, `exit (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`).toBeTruthy();
   });
 });
 
@@ -111,7 +110,7 @@ describe("given a car lying on its side at rest, beside a 4 m wide, 1 m thick wa
       deepest = Math.max(deepest, box.hz - box.x + at.x);
     }
     const depth = faceDepth(car, box);
-    assert.ok(Math.abs(depth - deepest) < DEPTH_EPS, `faceDepth ${depth.toFixed(4)} m, the drawn vertices' deepest ${deepest.toFixed(4)} m`);
+    expect(Math.abs(depth - deepest), `faceDepth ${depth.toFixed(4)} m, the drawn vertices' deepest ${deepest.toFixed(4)} m`).toBeLessThan(DEPTH_EPS);
   });
 });
 
@@ -194,8 +193,8 @@ describe("given a crushed sedan wreck turning at 5 rad/s in the derby arena", ()
   for (const testCase of holdCases) {
     it(testCase.it, () => {
       const { worstOverBound, solidMeetings } = holdAgainstSolid(testCase.x, testCase.z, testCase.vx);
-      assert.ok(solidMeetings > 0, "the wreck never met the solid: nothing was held");
-      assert.ok(worstOverBound <= 0, `the worst step moved the wreck ${(worstOverBound * 1000).toFixed(1)} mm past its zip bound (${solidMeetings} meetings)`);
+      expect(solidMeetings, "the wreck never met the solid: nothing was held").toBeGreaterThan(0);
+      expect(worstOverBound, `the worst step moved the wreck ${(worstOverBound * 1000).toFixed(1)} mm past its zip bound (${solidMeetings} meetings)`).toBeLessThanOrEqual(0);
     });
   }
 });

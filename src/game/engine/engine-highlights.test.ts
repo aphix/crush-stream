@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { setGround } from "../world/ground.ts";
 import { blankPoint, Track } from "../world/track.ts";
@@ -86,7 +85,7 @@ async function recordedReel(w: World, clips = 1): Promise<Reel> {
   for (let n = 0; n * (1 / FRAME_HZ) < 120 && w.race.recorder.ledger.kept.length < clips && w.race.phase !== "finished"; n++) frame(w, state);
   w.race.recorder.end();
   const kept = w.race.recorder.ledger.kept;
-  assert.ok(kept.length >= 1, "no clip in 120 s");
+  expect(kept.length, "no clip in 120 s").toBeGreaterThanOrEqual(1);
   const msg = await packReel({ seed: 77, clips: kept.slice(0, clips) }, 0);
   return (await unpackReel(msg, carLayout(w.cars[0]!))).reel;
 }
@@ -123,10 +122,10 @@ describe("given a city race whose first crash is two cars put head-on a second i
       opening.stepBudgetMs = Infinity;
       opening.play(reel, 0);
       opening.frame(FLIGHT_S / 2);
-      assert.equal(torn(), 0, `the scripted head-on lost its precondition: its first clip opens on ${torn()} torn parts of an earlier pile-up`);
+      expect(torn(), `the scripted head-on lost its precondition: its first clip opens on ${torn()} torn parts of an earlier pile-up`).toBe(0);
       opening.stop();
       for (const c of a.cars) c["detachPart"](c["parts"].find((p) => p.region)!, 12);
-      assert.ok(torn() >= a.cars.length, `${torn()} torn parts over ${a.cars.length} cars`);
+      expect(torn(), `${torn()} torn parts over ${a.cars.length} cars`).toBeGreaterThanOrEqual(a.cars.length);
       let clears = 0;
       const d = new ReelDirector({
         ...hostOf(a),
@@ -137,15 +136,15 @@ describe("given a city race whose first crash is two cars put head-on a second i
       });
       d.stepBudgetMs = Infinity;
       d.stop();
-      assert.equal(clears, 0, "stop with no reel up");
+      expect(clears, "stop with no reel up").toBe(0);
       d.play(reel, 0);
       d.frame(FLIGHT_S / 2);
-      assert.equal(clears, 1, "the first clip sets up as the flight to it begins");
-      assert.equal(torn(), 0, "no torn part of the race is left, in view or hidden");
+      expect(clears, "the first clip sets up as the flight to it begins").toBe(1);
+      expect(torn(), "no torn part of the race is left, in view or hidden").toBe(0);
       d.frame(FLIGHT_S + 0.1);
-      assert.equal(clears, 1, "the clip's own frames clear nothing more");
+      expect(clears, "the clip's own frames clear nothing more").toBe(1);
       d.stop();
-      assert.equal(clears, 2, "the reel ends");
+      expect(clears, "the reel ends").toBe(2);
     } finally {
       a.race.exit();
       setGround(null);
@@ -254,19 +253,19 @@ function assertFudgeOnlyByBody(w: World, reel: Reel, parked = false): void {
   for (const pass of [0, 1]) {
     const label = pass === 0 ? "first play" : "restart";
     const at = touch[pass]!;
-    assert.ok(Number.isFinite(at), `${label}: the first impact's cars never touched`);
-    assert.ok(widest[pass]! >= FUDGE_NONE, `${label}: the farther body was only ${widest[pass]!.toFixed(2)} m off the point as the slow-mo eased in: nothing for the gate to hold back`);
-    if (parked) assert.ok(lopsided[pass], `${label}: no moment with the struck car on the point and the other ${FUDGE_NONE} m or more off: the case is not staged`);
+    expect(Number.isFinite(at), `${label}: the first impact's cars never touched`).toBeTruthy();
+    expect(widest[pass]!, `${label}: the farther body was only ${widest[pass]!.toFixed(2)} m off the point as the slow-mo eased in: nothing for the gate to hold back`).toBeGreaterThanOrEqual(FUDGE_NONE);
+    if (parked) expect(lopsided[pass], `${label}: no moment with the struck car on the point and the other ${FUDGE_NONE} m or more off: the case is not staged`).toBeTruthy();
     const mine = thrown.filter((t) => t.pass === pass);
     const fudge = mine.filter((t) => t.path === "fudge");
-    assert.ok(fudge.length >= 1, `${label}: no fudge burst, though the cars reached the point`);
+    expect(fudge.length, `${label}: no fudge burst, though the cars reached the point`).toBeGreaterThanOrEqual(1);
     const far = fudge.filter((t) => !(t.gap < FUDGE_NONE && t.strength > 0));
-    assert.equal(far.length, 0, `${label}: fudge thrown ${far.map((t) => `${t.gap.toFixed(2)} m off a body at strength ${t.strength.toFixed(2)}, ${at - t.done} steps before the touch`).join("; ")}`);
+    expect(far.length, `${label}: fudge thrown ${far.map((t) => `${t.gap.toFixed(2)} m off a body at strength ${t.strength.toFixed(2)}, ${at - t.done} steps before the touch`).join("; ")}`).toBe(0);
     const weak = fudge.filter((t) => t.gap <= FUDGE_FULL && t.strength !== 1);
-    assert.equal(weak.length, 0, `${label}: fudge at ${weak.map((t) => `strength ${t.strength.toFixed(2)} ${t.gap.toFixed(2)} m off a body`).join("; ")} (whole within ${FUDGE_FULL} m)`);
-    assert.ok(mine.some((t) => t.path === "flash and burst"), `${label}: no flash and burst`);
+    expect(weak.length, `${label}: fudge at ${weak.map((t) => `strength ${t.strength.toFixed(2)} ${t.gap.toFixed(2)} m off a body`).join("; ")} (whole within ${FUDGE_FULL} m)`).toBe(0);
+    expect(mine.some((t) => t.path === "flash and burst"), `${label}: no flash and burst`).toBeTruthy();
     const early = mine.filter((t) => t.path !== "fudge" && t.done < at);
-    assert.equal(early.length, 0, `${label}: ${early.map((t) => `${t.path} ${at - t.done} steps before the touch (step ${at})`).join(", ")}`);
+    expect(early.length, `${label}: ${early.map((t) => `${t.path} ${at - t.done} steps before the touch (step ${at})`).join(", ")}`).toBe(0);
   }
 }
 
@@ -313,16 +312,16 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
         worst = Math.max(worst, ca.position.distanceTo(cb.position), ca.quaternion.angleTo(cb.quaternion));
         compared++;
       }
-      assert.ok(compared > 200, `${compared} moments compared`);
-      assert.ok(flown > 50 && kinds.size === 2, `the camera moved ${flown.toFixed(0)} m over ${[...kinds].join(", ")}`);
-      assert.ok(worst < 1e-6, `the peers' cameras differ by ${worst.toExponential(2)} (m or rad) at the same moment`);
+      expect(compared, `${compared} moments compared`).toBeGreaterThan(200);
+      expect(flown > 50 && kinds.size === 2, `the camera moved ${flown.toFixed(0)} m over ${[...kinds].join(", ")}`).toBeTruthy();
+      expect(worst, `the peers' cameras differ by ${worst.toExponential(2)} (m or rad) at the same moment`).toBeLessThan(1e-6);
       // Watch: the first frame's timestamp precedes the click (rAF time is the frame's start): the clip starts at 0,
       // it does not play its hit (crash cam, flash) before the car reaches it.
       hits = 0;
       da.view(0, 100);
       da.frame(100 - 0.004);
       da.frame(100 + 0.012);
-      assert.equal(hits, 0, "a solo view's first frame played the clip's hit");
+      expect(hits, "a solo view's first frame played the clip's hit").toBe(0);
     } finally {
       b.race.exit();
     }
@@ -350,15 +349,15 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
     for (let n = 1; (wall = n / 60) < FLIGHT_S + tl.wall; n++) d.frame(wall);
     const at = (s: number): number => s + FLIGHT_S;
     const frame = 1 / FRAME_HZ + 1e-9;
-    assert.equal(seen.crash.length, 1, "the crash cam began once");
-    assert.ok(seen.crash[0]! >= at(tl.impact) && seen.crash[0]! < at(tl.impact) + frame, `the crash cam began at ${seen.crash[0]!.toFixed(3)} s, not at ${at(tl.impact).toFixed(3)}`);
-    assert.equal(seen.impact.length, 1, "the flash and burst went off once");
-    assert.ok(seen.impact[0]! >= at(tl.contact) && seen.impact[0]! < at(tl.contact) + frame, `the flash and burst went off at ${seen.impact[0]!.toFixed(3)} s, not as the cars meet (${at(tl.contact).toFixed(3)})`);
-    assert.ok(seen.fudge.length >= 1, "no sparks or dust before the hit");
-    assert.ok(seen.fudge.at(-1)! < at(tl.contact), `sparks and dust still asked for at ${seen.fudge.at(-1)!.toFixed(3)} s, after the cars met (${at(tl.contact).toFixed(3)})`);
-    for (let k = 1; k < seen.fudge.length; k++) assert.ok(seen.fudge[k]! - seen.fudge[k - 1]! >= FUDGE_GAP - 1e-9, `sparks ${k} came ${(seen.fudge[k]! - seen.fudge[k - 1]!).toFixed(3)} s after the last`);
-    assert.ok(seen.off < 1e-6, `sparks were asked for ${seen.off} m off the recorded impact point`);
-    assert.ok(seen.gap < FUDGE_NONE && seen.strength > 0, `sparks asked for with the farther drawn body ${seen.gap.toFixed(2)} m off the point (none from ${FUDGE_NONE} m), at strength ${seen.strength}`);
+    expect(seen.crash.length, "the crash cam began once").toBe(1);
+    expect(seen.crash[0]! >= at(tl.impact) && seen.crash[0]! < at(tl.impact) + frame, `the crash cam began at ${seen.crash[0]!.toFixed(3)} s, not at ${at(tl.impact).toFixed(3)}`).toBeTruthy();
+    expect(seen.impact.length, "the flash and burst went off once").toBe(1);
+    expect(seen.impact[0]! >= at(tl.contact) && seen.impact[0]! < at(tl.contact) + frame, `the flash and burst went off at ${seen.impact[0]!.toFixed(3)} s, not as the cars meet (${at(tl.contact).toFixed(3)})`).toBeTruthy();
+    expect(seen.fudge.length, "no sparks or dust before the hit").toBeGreaterThanOrEqual(1);
+    expect(seen.fudge.at(-1)!, `sparks and dust still asked for at ${seen.fudge.at(-1)!.toFixed(3)} s, after the cars met (${at(tl.contact).toFixed(3)})`).toBeLessThan(at(tl.contact));
+    for (let k = 1; k < seen.fudge.length; k++) expect(seen.fudge[k]! - seen.fudge[k - 1]!, `sparks ${k} came ${(seen.fudge[k]! - seen.fudge[k - 1]!).toFixed(3)} s after the last`).toBeGreaterThanOrEqual(FUDGE_GAP - 1e-9);
+    expect(seen.off, `sparks were asked for ${seen.off} m off the recorded impact point`).toBeLessThan(1e-6);
+    expect(seen.gap < FUDGE_NONE && seen.strength > 0, `sparks asked for with the farther drawn body ${seen.gap.toFixed(2)} m off the point (none from ${FUDGE_NONE} m), at strength ${seen.strength}`).toBeTruthy();
   });
 
   it("when its reel plays and restarts, then on each play the fudge throws only with both drawn bodies of the head-on's cars by the point and nothing else comes before the step they touch", () => {
@@ -388,8 +387,8 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
         }
         prev.copy(car.group.position);
       }
-      assert.ok(frames > 100, `${hz} Hz: ${frames} moving frames in the slow-mo`);
-      assert.ok(still <= frames * 0.02, `${hz} Hz: ${still} of ${frames} frames drew the car where the last frame had it, though it moves`);
+      expect(frames, `${hz} Hz: ${frames} moving frames in the slow-mo`).toBeGreaterThan(100);
+      expect(still, `${hz} Hz: ${still} of ${frames} frames drew the car where the last frame had it, though it moves`).toBeLessThanOrEqual(frames * 0.02);
     }
     assertDrawingKeepsReplay(a, clip, 240);
   });
@@ -414,9 +413,9 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
         if (dt !== null && dt > 0) advancing++;
       }
     }
-    assert.equal(wrong, 0, `${wrong} frames returned a sim time other than the clip time they drew less the last frame's`);
-    assert.ok(slowFrames > 100, `${slowFrames} frames in the slow-motion`);
-    assert.ok(advancing >= slowFrames * 0.95, `${advancing} of ${slowFrames} slow-motion frames advanced the dummies and FX`);
+    expect(wrong, `${wrong} frames returned a sim time other than the clip time they drew less the last frame's`).toBe(0);
+    expect(slowFrames, `${slowFrames} frames in the slow-motion`).toBeGreaterThan(100);
+    expect(advancing, `${advancing} of ${slowFrames} slow-motion frames advanced the dummies and FX`).toBeGreaterThanOrEqual(slowFrames * 0.95);
   });
 
   /** The reel's host with its FX counted as the pools hold them: bursts thrown (fudge, hit, flash and burst) since the pools were last cleared (`clear`). */
@@ -458,7 +457,7 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
       const lap = d["solo"]!.tl.wall + 1.5;
       run(watchAt, watchAt + 2 * lap - 1);
       const throwing = fx.live;
-      assert.ok(throwing > 0, "the watched clip threw nothing: nothing to carry over");
+      expect(throwing, "the watched clip threw nothing: nothing to carry over").toBeGreaterThan(0);
       // Put back: the reel rejoins the clip a stall's worth late and hovers over it.
       d.back();
       const lateAt = 6 * loop + FLIGHT_S + 6;
@@ -468,16 +467,16 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
         d.frame(clockS);
         hover.push(fx.live);
       }
-      assert.equal(d["hovering"], true, "the reel did not hover over the clip it rejoined late");
-      assert.deepEqual(hover.filter((n) => n > 0), [], `${throwing} bursts of the watched clip were still alive in the hover (${hover.join(",")})`);
-      assert.equal(d["cur"]!.sim.time, 0, "the hover shows the clip's opening, not where the watched clip ended");
+      expect(d["hovering"], "the reel did not hover over the clip it rejoined late").toBe(true);
+      expect(hover.filter((n) => n > 0), `${throwing} bursts of the watched clip were still alive in the hover (${hover.join(",")})`).toHaveLength(0);
+      expect(d["cur"]!.sim.time, "the hover shows the clip's opening, not where the watched clip ended").toBe(0);
     } finally {
       vi.restoreAllMocks();
     }
-    assert.ok(starts.length >= 3, `${starts.length} play starts seen`);
+    expect(starts.length, `${starts.length} play starts seen`).toBeGreaterThanOrEqual(3);
     for (const s of starts) {
-      assert.ok(s.before > 0 || s.pass === 0, `play ${s.pass}: the play before threw nothing`);
-      assert.equal(s.after, 0, `play ${s.pass} started with ${s.after} bursts of the last play alive (${s.before} before it)`);
+      expect(s.before > 0 || s.pass === 0, `play ${s.pass}: the play before threw nothing`).toBeTruthy();
+      expect(s.after, `play ${s.pass} started with ${s.after} bursts of the last play alive (${s.before} before it)`).toBe(0);
     }
   });
 
@@ -508,8 +507,8 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
     } finally {
       vi.restoreAllMocks();
     }
-    assert.ok(heldFrames > 60, `${heldFrames} frames of the hold`);
-    assert.equal(held, 0, `${held} spark showers over the ${heldFrames}-frame hold after the last step, for a contact that step left`);
+    expect(heldFrames, `${heldFrames} frames of the hold`).toBeGreaterThan(60);
+    expect(held, `${held} spark showers over the ${heldFrames}-frame hold after the last step, for a contact that step left`).toBe(0);
   });
 
   it("when a replay that made a contact is restarted, then the last step's contact is gone before its first step", () => {
@@ -519,10 +518,10 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
     a.race.resetProps();
     sim.restart();
     while (sim.world.strongest.impulse <= 0 && sim.time < sim.length) sim.advanceTo(sim.time + 1e-6);
-    assert.ok(sim.world.strongest.impulse > 0, "the clip made no contact: nothing to clear");
+    expect(sim.world.strongest.impulse, "the clip made no contact: nothing to clear").toBeGreaterThan(0);
     sim.restart();
-    assert.equal(sim.world.strongest.impulse, 0, "a restarted replay still holds the last play's contact");
-    assert.equal(sim.world.strongest.contact, null);
+    expect(sim.world.strongest.impulse, "a restarted replay still holds the last play's contact").toBe(0);
+    expect(sim.world.strongest.contact).toBe(null);
   });
 
   it("when its reel plays twice, then every frame of the second play (its first frames after the flight included) has the camera, the focus car and the crash and impact calls where the first play had them", () => {
@@ -552,15 +551,15 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
       vi.restoreAllMocks();
     }
     const [first, second] = plays as [Frame[], Frame[]];
-    assert.ok(first.length > 600, `${first.length} frames compared`);
-    assert.equal(second.length, first.length);
+    expect(first.length, `${first.length} frames compared`).toBeGreaterThan(600);
+    expect(second.length).toBe(first.length);
     let worst = 0;
     let at = -1;
     for (const [n, f] of first.entries()) {
       const g = second[n]!;
-      assert.equal(g.focus, f.focus, `frame ${n}: focus car ${g.focus} on the second play, ${f.focus} on the first`);
-      assert.equal(g.crash, f.crash, `frame ${n}: ${g.crash} crash cam begins on the second play, ${f.crash} on the first`);
-      assert.equal(g.impact, f.impact, `frame ${n}: ${g.impact} impacts on the second play, ${f.impact} on the first`);
+      expect(g.focus, `frame ${n}: focus car ${g.focus} on the second play, ${f.focus} on the first`).toBe(f.focus);
+      expect(g.crash, `frame ${n}: ${g.crash} crash cam begins on the second play, ${f.crash} on the first`).toBe(f.crash);
+      expect(g.impact, `frame ${n}: ${g.impact} impacts on the second play, ${f.impact} on the first`).toBe(f.impact);
       for (let k = 0; k < f.eye.length; k++) {
         const off = Math.abs(g.eye[k]! - f.eye[k]!);
         if (off > worst) {
@@ -569,7 +568,7 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
         }
       }
     }
-    assert.ok(worst < 1e-6, `the second play's camera differs from the first's by ${worst.toExponential(2)} (m, quaternion or deg) at frame ${at} (${((at + 1) / 60).toFixed(2)} s into the loop)`);
+    expect(worst, `the second play's camera differs from the first's by ${worst.toExponential(2)} (m, quaternion or deg) at frame ${at} (${((at + 1) / 60).toFixed(2)} s into the loop)`).toBeLessThan(1e-6);
   });
 });
 
@@ -581,7 +580,7 @@ describe("given a stunt race whose first crash is a car driven into the kicker's
   });
 
   it("when its reel plays and restarts, then on each play the fudge throws only by the car's drawn body and nothing else comes before the step it touches the wall", () => {
-    assert.ok(walled.reel.clips[0]!.firstB < 0, "the first clip is not a wall hit");
+    expect(walled.reel.clips[0]!.firstB, "the first clip is not a wall hit").toBeLessThan(0);
     assertFudgeOnlyByBody(walled.w, walled.reel);
   });
 });
@@ -594,7 +593,7 @@ describe("given a city race whose first crash is a 30 m/s car driven into a park
   });
 
   it("when its reel plays and restarts, then on each play no fudge burst comes while the striking car is still FUDGE_NONE or more off the point, though the parked car's bumper is on it, and nothing else comes before the step they touch", () => {
-    assert.ok(parked.reel.clips[0]!.firstB >= 0, "the first clip is not a car-car hit");
+    expect(parked.reel.clips[0]!.firstB, "the first clip is not a car-car hit").toBeGreaterThanOrEqual(0);
     assertFudgeOnlyByBody(parked.w, parked.reel, true);
   });
 });
@@ -617,7 +616,7 @@ async function stuntReel(a: World): Promise<Reel> {
     a.cars[3 + 2 * k]!.spawnFacing(pt.x, pt.z, Math.atan2(pt.tx, pt.tz) + Math.PI, 20);
   }
   const reel = await recordedReel(a, 3);
-  assert.ok(reel.clips.length >= 3, `${reel.clips.length} stunt clips`);
+  expect(reel.clips.length, `${reel.clips.length} stunt clips`).toBeGreaterThanOrEqual(3);
   return reel;
 }
 
@@ -627,7 +626,7 @@ describe("given the stunt course with three head-on pairs wrecked on purpose a s
   it("when each clip is replayed at 60 and 240 Hz, then drawing frames never changes the replay, even of airborne clips over the jumps", () => {
     const { w: a, reel } = stunts;
     const firsts = reel.clips.map((c) => [c.cars[c.firstA]?.slot, c.cars[c.firstB]?.slot].sort().join("-"));
-    for (const pair of ["2-3", "4-5", "6-7"]) assert.ok(firsts.includes(pair), `no clip opens on the head-on of cars ${pair}: ${firsts.join(", ")}`);
+    for (const pair of ["2-3", "4-5", "6-7"]) expect(firsts.includes(pair), `no clip opens on the head-on of cars ${pair}: ${firsts.join(", ")}`).toBeTruthy();
     for (const clip of reel.clips) for (const hz of [60, 240]) assertDrawingKeepsReplay(a, clip, hz);
   });
 
@@ -653,13 +652,13 @@ describe("given the stunt course with three head-on pairs wrecked on purpose a s
         if (shown === null || shown !== idOf[r.playing]) wrong.push(`t=${t}: clip ${r.playing} showed id ${shown}, first seen as ${idOf[r.playing]}`);
         finalShown = shown;
       }
-      assert.deepEqual(wrong, []);
-      assert.equal(idOf.length, reel.clips.length, "every clip was on screen in the loop");
-      assert.equal(new Set(idOf).size, reel.clips.length, "each clip has an id of its own");
-      assert.notEqual(finalShown, null, "the second loop reached a clip");
+      expect(wrong).toHaveLength(0);
+      expect(idOf.length, "every clip was on screen in the loop").toBe(reel.clips.length);
+      expect(new Set(idOf).size, "each clip has an id of its own").toBe(reel.clips.length);
+      expect(finalShown, "the second loop reached a clip").not.toBe(null);
       // The reel has moved on from the first clip: the id a button drawn for it carries still reaches it, and no other.
-      for (const [i, id] of idOf.entries()) assert.equal(d.clipById(id!)?.clip, reel.clips[i], `id ${id} reaches clip ${i}`);
-      assert.equal(d.clipById(-1), null);
+      for (const [i, id] of idOf.entries()) expect(d.clipById(id!)?.clip, `id ${id} reaches clip ${i}`).toBe(reel.clips[i]);
+      expect(d.clipById(-1)).toBe(null);
     });
 
     it("when a new reel replaces it, then the old ids reach nothing, so a late tap flags no clip of the new reel", () => {
@@ -670,12 +669,12 @@ describe("given the stunt course with three head-on pairs wrecked on purpose a s
       d.frame(FLIGHT_S / 2);
       d.frame(FLIGHT_S + 0.2);
       const { shown } = d.hud();
-      assert.notEqual(shown, null);
+      expect(shown).not.toBe(null);
       d.play(reel, 0);
-      assert.equal(d.clipById(shown!), null);
+      expect(d.clipById(shown!)).toBe(null);
       d.frame(FLIGHT_S / 2);
       d.frame(FLIGHT_S + 0.2);
-      assert.notEqual(d.hud().shown, shown, "the same clip in the new reel is a new id");
+      expect(d.hud().shown, "the same clip in the new reel is a new id").not.toBe(shown);
     });
 
     it("when a clip is watched alone from the reel and when a saved clip is watched alone, then the clip shown is the reel's own id or a saved one, and it ends with the view", () => {
@@ -688,21 +687,21 @@ describe("given the stunt course with three head-on pairs wrecked on purpose a s
       const inReel = d.hud().shown!;
       d.view(0, 100);
       d.frame(100.1);
-      assert.equal(d.hud().shown, inReel, "watching the reel's first clip alone shows the id it had in the reel");
-      assert.equal(d.clipById(inReel)?.from, "reel");
+      expect(d.hud().shown, "watching the reel's first clip alone shows the id it had in the reel").toBe(inReel);
+      expect(d.clipById(inReel)?.from).toBe("reel");
       d.back();
       d.stop();
       let back = 0;
       d.viewSaved(reel.clips[0]!, 200, () => back++);
       d.frame(200.1);
       const saved = d.hud().shown;
-      assert.notEqual(saved, null);
-      assert.equal(d.clipById(saved!)?.from, "saved");
-      assert.equal(d.hud().reel, null, "a saved clip has no reel behind it");
+      expect(saved).not.toBe(null);
+      expect(d.clipById(saved!)?.from).toBe("saved");
+      expect(d.hud().reel, "a saved clip has no reel behind it").toBe(null);
       d.back();
-      assert.equal(d.hud().shown, null, "no clip on screen once the view has ended");
-      assert.equal(d.clipById(saved!), null);
-      assert.equal(back, 1);
+      expect(d.hud().shown, "no clip on screen once the view has ended").toBe(null);
+      expect(d.clipById(saved!)).toBe(null);
+      expect(back).toBe(1);
     });
   });
 });

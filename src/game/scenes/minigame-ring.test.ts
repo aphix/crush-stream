@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import {
   RING_BOARD_BOUNDS,
   RING_BOARD_START_X,
@@ -14,6 +13,8 @@ import {
   ringScore,
   type RingZone,
 } from "./minigame-ring.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const ALL_ZONES: readonly RingZone[] = [...RING_CUPS, ...RING_POCKETS];
 /** The narrowest window (m across) a 100 pocket's scoring circle may offer: wide enough that a precise line and speed can land him in one. */
@@ -58,7 +59,7 @@ function floorHoldsRectangle(zone: RingZone, width: number, length: number, scal
 
 function cupNamed(score: number): RingZone {
   const cup = RING_CUPS.find((candidate) => candidate.score === score);
-  assert.ok(cup, `cup ${score} exists`);
+  must(cup, `cup ${score} exists`);
   return cup;
 }
 
@@ -66,20 +67,20 @@ describe("given the ring board's cups and pockets", () => {
   for (const zone of ALL_ZONES) {
     const label = `${zone.score} at z ${zone.centreZ.toFixed(2)}`;
     it(`when scoring the centre of the ${label} zone, then it scores ${zone.score}`, () => {
-      assert.equal(ringScore(zone.centreX, zone.centreZ), zone.score, "score at the zone centre");
+      expect(ringScore(zone.centreX, zone.centreZ), "score at the zone centre").toBe(zone.score);
     });
     it(`when scoring just inside the ${label} zone's edge in several directions, then it scores ${zone.score}`, () => {
       for (const direction of DIRECTIONS_AROUND_A_ZONE) {
         const reach = zone.radius - EDGE_NUDGE;
         const score = ringScore(zone.centreX + reach * Math.cos(direction), zone.centreZ + reach * Math.sin(direction));
-        assert.equal(score, zone.score, `score just inside at heading ${direction.toFixed(2)}`);
+        expect(score, `score just inside at heading ${direction.toFixed(2)}`).toBe(zone.score);
       }
     });
     it(`when scoring just outside the ${label} zone's edge in several directions, then it scores 0`, () => {
       for (const direction of DIRECTIONS_AROUND_A_ZONE) {
         const reach = zone.radius + EDGE_NUDGE;
         const score = ringScore(zone.centreX + reach * Math.cos(direction), zone.centreZ + reach * Math.sin(direction));
-        assert.equal(score, 0, `score just outside at heading ${direction.toFixed(2)}`);
+        expect(score, `score just outside at heading ${direction.toFixed(2)}`).toBe(0);
       }
     });
   }
@@ -95,23 +96,23 @@ describe("given the ring board's cups and pockets", () => {
   ];
   for (const point of offCupPoints) {
     it(point.it, () => {
-      assert.equal(ringScore(point.localX, point.localZ), 0, "score off every cup");
+      expect(ringScore(point.localX, point.localZ), "score off every cup").toBe(0);
     });
   }
 
   it("when the two 100 pockets are compared, then they score 100 and are mirror images across the lane centre", () => {
-    assert.equal(RING_POCKETS.length, 2, "pocket count");
+    expect(RING_POCKETS.length, "pocket count").toBe(2);
     const [left, right] = RING_POCKETS;
-    assert.equal(left!.score, 100, "left pocket score");
-    assert.equal(right!.score, 100, "right pocket score");
-    assert.equal(left!.centreX, right!.centreX, "pockets at the same x");
-    assert.equal(left!.centreZ, -right!.centreZ, "pockets on opposite sides of the centre");
-    assert.notEqual(left!.centreZ, 0, "pockets are off the centreline");
-    assert.equal(left!.radius, right!.radius, "pocket radius");
-    assert.equal(left!.floorHeight, right!.floorHeight, "pocket floor height");
-    assert.equal(left!.rimHeight, right!.rimHeight, "pocket rim height");
-    assert.equal(ringScore(left!.centreX, left!.centreZ), 100, "score at the left pocket");
-    assert.equal(ringScore(right!.centreX, right!.centreZ), 100, "score at the right pocket");
+    expect(left!.score, "left pocket score").toBe(100);
+    expect(right!.score, "right pocket score").toBe(100);
+    expect(left!.centreX, "pockets at the same x").toBe(right!.centreX);
+    expect(left!.centreZ, "pockets on opposite sides of the centre").toBe(-right!.centreZ);
+    expect(left!.centreZ, "pockets are off the centreline").not.toBe(0);
+    expect(left!.radius, "pocket radius").toBe(right!.radius);
+    expect(left!.floorHeight, "pocket floor height").toBe(right!.floorHeight);
+    expect(left!.rimHeight, "pocket rim height").toBe(right!.rimHeight);
+    expect(ringScore(left!.centreX, left!.centreZ), "score at the left pocket").toBe(100);
+    expect(ringScore(right!.centreX, right!.centreZ), "score at the right pocket").toBe(100);
   });
 });
 
@@ -127,48 +128,48 @@ describe("given the layout read off the skee-ball picture", () => {
   for (const testCase of pictureRadiusRatios) {
     it(testCase.it, () => {
       const ratio = cupNamed(testCase.score).radius / cupNamed(10).radius;
-      assert.ok(Math.abs(ratio - testCase.ratioToTen) <= PICTURE_RATIO_TOLERANCE, `radius ratio ${ratio.toFixed(3)} vs ${testCase.ratioToTen}`);
+      expect(Math.abs(ratio - testCase.ratioToTen), `radius ratio ${ratio.toFixed(3)} vs ${testCase.ratioToTen}`).toBeLessThanOrEqual(PICTURE_RATIO_TOLERANCE);
     });
   }
 
   it("when the 100 pocket is measured against the 50 cup, then it is about 0.9 as wide (the picture: 30 px against 34) and the smallest zone", () => {
     const ratio = RING_POCKETS[0]!.radius / cupNamed(50).radius;
-    assert.ok(Math.abs(ratio - 0.9) <= 0.12, `pocket to 50 radius ratio ${ratio.toFixed(3)}`);
-    for (const cup of RING_CUPS) assert.ok(RING_POCKETS[0]!.radius < cup.radius, `pocket smaller than the ${cup.score} cup`);
+    expect(Math.abs(ratio - 0.9), `pocket to 50 radius ratio ${ratio.toFixed(3)}`).toBeLessThanOrEqual(0.12);
+    for (const cup of RING_CUPS) expect(RING_POCKETS[0]!.radius, `pocket smaller than the ${cup.score} cup`).toBeLessThan(cup.radius);
   });
 
   it("when the 10 cup is measured against the lane width, then it is about 0.30 of it (54 px of 178 px) within 0.1", () => {
     const laneWidth = RING_BOARD_BOUNDS.maxZ - RING_BOARD_BOUNDS.minZ;
     const ratio = (2 * cupNamed(10).radius) / laneWidth;
-    assert.ok(Math.abs(ratio - 0.3) <= 0.1, `10 cup width over lane width ${ratio.toFixed(3)}`);
+    expect(Math.abs(ratio - 0.3), `10 cup width over lane width ${ratio.toFixed(3)}`).toBeLessThanOrEqual(0.1);
   });
 
   it("when the cups are listed by score, then size falls, height rises and each lies farther back, all on the centreline", () => {
     const scores = RING_CUPS.map((cup) => cup.score);
-    assert.deepEqual(scores, [10, 20, 30, 40, 50], "score order");
+    expect(firstMismatch(scores, [10, 20, 30, 40, 50]), "score order").toBeUndefined();
     for (let index = 1; index < RING_CUPS.length; index++) {
       const lower = RING_CUPS[index - 1]!;
       const higher = RING_CUPS[index]!;
-      assert.ok(higher.radius < lower.radius, `${higher.score} cup narrower than the ${lower.score}`);
-      assert.ok(higher.floorHeight > lower.floorHeight, `${higher.score} floor above the ${lower.score}`);
-      assert.ok(higher.rimHeight > lower.rimHeight, `${higher.score} rim above the ${lower.score}`);
-      assert.ok(higher.centreX > lower.centreX, `${higher.score} farther back than the ${lower.score}`);
+      expect(higher.radius, `${higher.score} cup narrower than the ${lower.score}`).toBeLessThan(lower.radius);
+      expect(higher.floorHeight, `${higher.score} floor above the ${lower.score}`).toBeGreaterThan(lower.floorHeight);
+      expect(higher.rimHeight, `${higher.score} rim above the ${lower.score}`).toBeGreaterThan(lower.rimHeight);
+      expect(higher.centreX, `${higher.score} farther back than the ${lower.score}`).toBeGreaterThan(lower.centreX);
     }
-    for (const cup of RING_CUPS) assert.equal(cup.centreZ, 0, `${cup.score} cup on the centreline`);
+    for (const cup of RING_CUPS) expect(cup.centreZ, `${cup.score} cup on the centreline`).toBe(0);
   });
 
   it("when the 100 pockets are placed, then they are the highest zones, behind the 50 cup, in the two back corners beside the cup column", () => {
     const fifty = cupNamed(50);
     const cupReach = RING_CUP_PROFILE.rimTopWidth + RING_CUP_PROFILE.skirtWidth;
     for (const pocket of RING_POCKETS) {
-      assert.ok(pocket.floorHeight > fifty.floorHeight, "pocket floor above the 50's");
-      assert.ok(pocket.rimHeight > fifty.rimHeight, "pocket rim above the 50's");
-      assert.ok(pocket.centreX > fifty.centreX, "pocket behind the 50");
-      assert.ok(Math.abs(pocket.centreZ) > cupNamed(10).radius, "pocket outside the widest cup's width");
+      expect(pocket.floorHeight, "pocket floor above the 50's").toBeGreaterThan(fifty.floorHeight);
+      expect(pocket.rimHeight, "pocket rim above the 50's").toBeGreaterThan(fifty.rimHeight);
+      expect(pocket.centreX, "pocket behind the 50").toBeGreaterThan(fifty.centreX);
+      expect(Math.abs(pocket.centreZ), "pocket outside the widest cup's width").toBeGreaterThan(cupNamed(10).radius);
       const reach = pocket.radius + cupReach;
-      assert.ok(Math.abs(pocket.centreZ) + reach <= RING_BOARD_BOUNDS.maxZ, "pocket skirt inside the side rim line");
-      assert.ok(pocket.centreX + reach <= RING_BOARD_BOUNDS.maxX, "pocket skirt inside the back edge");
-      assert.ok(RING_BOARD_BOUNDS.maxX - (pocket.centreX + reach) < 2 * reach, "pocket is in the back corner, not the middle");
+      expect(Math.abs(pocket.centreZ) + reach, "pocket skirt inside the side rim line").toBeLessThanOrEqual(RING_BOARD_BOUNDS.maxZ);
+      expect(pocket.centreX + reach, "pocket skirt inside the back edge").toBeLessThanOrEqual(RING_BOARD_BOUNDS.maxX);
+      expect(RING_BOARD_BOUNDS.maxX - (pocket.centreX + reach), "pocket is in the back corner, not the middle").toBeLessThan(2 * reach);
     }
   });
 
@@ -179,7 +180,7 @@ describe("given the layout read off the skee-ball picture", () => {
         const b = ALL_ZONES[second]!;
         const distance = Math.hypot(a.centreX - b.centreX, a.centreZ - b.centreZ);
         const rimsTouchAt = a.radius + b.radius + 2 * RING_CUP_PROFILE.rimTopWidth;
-        assert.ok(distance >= rimsTouchAt - 1e-9, `${a.score} and ${b.score} rims ${distance.toFixed(3)} apart, need ${rimsTouchAt.toFixed(3)}`);
+        expect(distance, `${a.score} and ${b.score} rims ${distance.toFixed(3)} apart, need ${rimsTouchAt.toFixed(3)}`).toBeGreaterThanOrEqual(rimsTouchAt - 1e-9);
       }
     }
   });
@@ -188,20 +189,20 @@ describe("given the layout read off the skee-ball picture", () => {
 describe("given a lying dummy and the cups' size", () => {
   for (const cup of RING_CUPS) {
     it(`when a ${DUMMY_LYING_WIDTH} x ${DUMMY_LYING_LENGTH} m lying dummy is set on the ${cup.score} cup's floor, then he fits at any heading`, () => {
-      assert.ok(floorHoldsRectangle(cup, DUMMY_LYING_WIDTH, DUMMY_LYING_LENGTH), `${cup.score} cup floor radius ${floorRadius(cup).toFixed(3)} holds him`);
+      expect(floorHoldsRectangle(cup, DUMMY_LYING_WIDTH, DUMMY_LYING_LENGTH), `${cup.score} cup floor radius ${floorRadius(cup).toFixed(3)} holds him`).toBeTruthy();
     });
   }
 
   it("when the cups shrink by a quarter, then the 50 cup no longer holds him (the check can fail)", () => {
     const SHRINK = 0.75;
-    assert.ok(floorHoldsRectangle(cupNamed(50), DUMMY_LYING_WIDTH, DUMMY_LYING_LENGTH), "full size holds him");
-    assert.ok(!floorHoldsRectangle(cupNamed(50), DUMMY_LYING_WIDTH, DUMMY_LYING_LENGTH, SHRINK), "three quarters size cannot");
+    expect(floorHoldsRectangle(cupNamed(50), DUMMY_LYING_WIDTH, DUMMY_LYING_LENGTH), "full size holds him").toBeTruthy();
+    expect(!floorHoldsRectangle(cupNamed(50), DUMMY_LYING_WIDTH, DUMMY_LYING_LENGTH, SHRINK), "three quarters size cannot").toBe(true);
   });
 
   it("when a pocket is measured, then its scoring circle is at least the aim window wide and its floor holds his torso", () => {
     for (const pocket of RING_POCKETS) {
-      assert.ok(2 * pocket.radius >= POCKET_AIM_WINDOW, `pocket window ${(2 * pocket.radius).toFixed(3)} m`);
-      assert.ok(floorHoldsRectangle(pocket, DUMMY_TORSO_WIDTH, DUMMY_TORSO_LENGTH), "pocket floor holds a torso");
+      expect(2 * pocket.radius, `pocket window ${(2 * pocket.radius).toFixed(3)} m`).toBeGreaterThanOrEqual(POCKET_AIM_WINDOW);
+      expect(floorHoldsRectangle(pocket, DUMMY_TORSO_WIDTH, DUMMY_TORSO_LENGTH), "pocket floor holds a torso").toBeTruthy();
     }
   });
 });
@@ -211,14 +212,14 @@ describe("given the board is the surface a thrown dummy lands on", () => {
     /** Flat flight from the lip (y = 0): y = x tan(p) - g x^2 / (2 v^2 cos^2(p)), solved for the speed v that is at `floor` over `distance`. */
     function speedToReach(distance: number, floorHeight: number): number {
       const climbed = distance * Math.tan(DESIGN_THROW_PITCH) - floorHeight;
-      assert.ok(climbed > 0, "the flight must clear the floor height at that distance");
+      expect(climbed, "the flight must clear the floor height at that distance").toBeGreaterThan(0);
       return Math.sqrt((GRAVITY * distance * distance) / (2 * Math.cos(DESIGN_THROW_PITCH) ** 2 * climbed));
     }
     let previousSpeed = 0;
     for (const zone of [...RING_CUPS, RING_POCKETS[0]!]) {
       const speed = speedToReach(zone.centreX, zone.floorHeight);
-      assert.ok(speed > previousSpeed, `${zone.score} needs more speed (${speed.toFixed(2)}) than the one before (${previousSpeed.toFixed(2)})`);
-      assert.ok(speed >= DESIGN_THROW_SPEED_MIN && speed <= DESIGN_THROW_SPEED_MAX, `${zone.score} needs ${speed.toFixed(2)} m/s`);
+      expect(speed, `${zone.score} needs more speed (${speed.toFixed(2)}) than the one before (${previousSpeed.toFixed(2)})`).toBeGreaterThan(previousSpeed);
+      expect(speed >= DESIGN_THROW_SPEED_MIN && speed <= DESIGN_THROW_SPEED_MAX, `${zone.score} needs ${speed.toFixed(2)} m/s`).toBeTruthy();
       previousSpeed = speed;
     }
   });
@@ -226,13 +227,13 @@ describe("given the board is the surface a thrown dummy lands on", () => {
 
 describe("given the board's height function", () => {
   it("when it is sampled at the board's front edge on the centreline, then it is at pad height", () => {
-    assert.equal(ringHeightAt(RING_BOARD_BOUNDS.minX, 0), 0, "height where the hump ends");
+    expect(ringHeightAt(RING_BOARD_BOUNDS.minX, 0), "height where the hump ends").toBe(0);
   });
 
   it("when it is sampled off the board, then it is the pad", () => {
-    assert.equal(ringHeightAt(0, 0), 0, "short of the board");
-    assert.equal(ringHeightAt(RING_BOARD_BOUNDS.maxX + 1, 0), 0, "past the back");
-    assert.equal(ringHeightAt(RING_CUPS[0]!.centreX, RING_BOARD_BOUNDS.maxZ + 1), 0, "beside the board");
+    expect(ringHeightAt(0, 0), "short of the board").toBe(0);
+    expect(ringHeightAt(RING_BOARD_BOUNDS.maxX + 1, 0), "past the back").toBe(0);
+    expect(ringHeightAt(RING_CUPS[0]!.centreX, RING_BOARD_BOUNDS.maxZ + 1), "beside the board").toBe(0);
   });
 
   it("when it is sampled along the bare apron beside the cups, then it rises toward the back at the board's slope", () => {
@@ -241,24 +242,24 @@ describe("given the board's height function", () => {
     let previous = ringHeightAt(RING_BOARD_BOUNDS.minX + 1, apronZ);
     for (const localX of samples) {
       const height = ringHeightAt(localX, apronZ);
-      assert.ok(height > previous, `apron rises by ${localX.toFixed(1)} m`);
-      assert.equal(height, ringBoardPlaneHeight(localX), `apron height at ${localX.toFixed(1)} equals the board plane`);
+      expect(height, `apron rises by ${localX.toFixed(1)} m`).toBeGreaterThan(previous);
+      expect(height, `apron height at ${localX.toFixed(1)} equals the board plane`).toBe(ringBoardPlaneHeight(localX));
       previous = height;
     }
   });
 
   for (const zone of ALL_ZONES) {
     it(`when it is sampled inside the ${zone.score} zone at z ${zone.centreZ.toFixed(2)}, then the floor is flat at its height, its crest is at the rim height and it meets the board past its skirt`, () => {
-      assert.equal(ringHeightAt(zone.centreX, zone.centreZ), zone.floorHeight, "floor at the centre");
-      assert.equal(ringHeightAt(zone.centreX, zone.centreZ + floorRadius(zone) * 0.9), zone.floorHeight, "floor off the centre");
+      expect(ringHeightAt(zone.centreX, zone.centreZ), "floor at the centre").toBe(zone.floorHeight);
+      expect(ringHeightAt(zone.centreX, zone.centreZ + floorRadius(zone) * 0.9), "floor off the centre").toBe(zone.floorHeight);
       const crest = zone.radius + RING_CUP_PROFILE.rimTopWidth / 2;
-      assert.equal(ringHeightAt(zone.centreX, zone.centreZ + crest), zone.rimHeight, "rim crest");
-      assert.ok(zone.floorHeight >= ringBoardPlaneHeight(zone.centreX + zone.radius), "floor is raised over the board under the cup");
+      expect(ringHeightAt(zone.centreX, zone.centreZ + crest), "rim crest").toBe(zone.rimHeight);
+      expect(zone.floorHeight, "floor is raised over the board under the cup").toBeGreaterThanOrEqual(ringBoardPlaneHeight(zone.centreX + zone.radius));
       const pastSkirt = zone.radius + RING_CUP_PROFILE.rimTopWidth + RING_CUP_PROFILE.skirtWidth + 0.01;
       const isCup = zone.centreZ === 0;
       const probeX = isCup ? zone.centreX : zone.centreX - pastSkirt;
       const probeZ = isCup ? pastSkirt : zone.centreZ;
-      assert.equal(ringHeightAt(probeX, probeZ), ringBoardPlaneHeight(probeX), "board past the skirt");
+      expect(ringHeightAt(probeX, probeZ), "board past the skirt").toBe(ringBoardPlaneHeight(probeX));
     });
   }
 
@@ -266,26 +267,26 @@ describe("given the board's height function", () => {
     const localX = RING_CUPS[2]!.centreX;
     const board = ringBoardPlaneHeight(localX);
     for (const side of [-1, 1]) {
-      assert.equal(ringHeightAt(localX, side * (RING_BOARD_BOUNDS.maxZ - RING_RAIL_PROFILE.topWidth / 2)), board + RING_RAIL_PROFILE.height, "rim top");
+      expect(ringHeightAt(localX, side * (RING_BOARD_BOUNDS.maxZ - RING_RAIL_PROFILE.topWidth / 2)), "rim top").toBe(board + RING_RAIL_PROFILE.height);
       const insideSlope = RING_BOARD_BOUNDS.maxZ - RING_RAIL_PROFILE.topWidth - RING_RAIL_PROFILE.slopeWidth - 0.01;
-      assert.equal(ringHeightAt(localX, side * insideSlope), board, "board inside the rim");
+      expect(ringHeightAt(localX, side * insideSlope), "board inside the rim").toBe(board);
     }
   });
 
   it("when it is sampled around the back and into a back corner, then the rim keeps its height all the way round", () => {
     const board = ringBoardPlaneHeight(RING_BOARD_BOUNDS.maxX - RING_RAIL_PROFILE.topWidth / 2);
-    assert.equal(ringHeightAt(RING_BOARD_BOUNDS.maxX - RING_RAIL_PROFILE.topWidth / 2, 0), board + RING_RAIL_PROFILE.height, "back wall");
+    expect(ringHeightAt(RING_BOARD_BOUNDS.maxX - RING_RAIL_PROFILE.topWidth / 2, 0), "back wall").toBe(board + RING_RAIL_PROFILE.height);
     const pocket = RING_POCKETS[1]!;
     const cornerRadius = RING_BOARD_BOUNDS.maxX - pocket.centreX;
     const alongCornerArc = (cornerRadius - RING_RAIL_PROFILE.topWidth / 2) / Math.SQRT2;
     const cornerX = pocket.centreX + alongCornerArc;
-    assert.equal(ringHeightAt(cornerX, pocket.centreZ + alongCornerArc), ringBoardPlaneHeight(cornerX) + RING_RAIL_PROFILE.height, "back-right corner arc");
+    expect(ringHeightAt(cornerX, pocket.centreZ + alongCornerArc), "back-right corner arc").toBe(ringBoardPlaneHeight(cornerX) + RING_RAIL_PROFILE.height);
   });
 
   it("when it is sampled at mirrored points across the lane centre, then the heights are equal", () => {
     for (let localX = RING_BOARD_BOUNDS.minX; localX <= RING_BOARD_BOUNDS.maxX; localX += 0.37) {
       for (let localZ = 0.11; localZ <= RING_BOARD_BOUNDS.maxZ; localZ += 0.29) {
-        assert.equal(ringHeightAt(localX, localZ), ringHeightAt(localX, -localZ), `height at ${localX.toFixed(2)}, ${localZ.toFixed(2)}`);
+        expect(ringHeightAt(localX, localZ), `height at ${localX.toFixed(2)}, ${localZ.toFixed(2)}`).toBe(ringHeightAt(localX, -localZ));
       }
     }
   });
@@ -302,8 +303,8 @@ describe("given the board's height function", () => {
         previous = height;
       }
     }
-    assert.ok(largestStep <= largestAllowedStep, `largest step ${largestStep.toFixed(4)} m over ${spacing} m, allowed ${largestAllowedStep.toFixed(4)}`);
-    assert.ok(largestStep > largestAllowedStep / 4, `the walk reached a wall (${largestStep.toFixed(4)} m): the bound is not vacuous`);
+    expect(largestStep, `largest step ${largestStep.toFixed(4)} m over ${spacing} m, allowed ${largestAllowedStep.toFixed(4)}`).toBeLessThanOrEqual(largestAllowedStep);
+    expect(largestStep, `the walk reached a wall (${largestStep.toFixed(4)} m): the bound is not vacuous`).toBeGreaterThan(largestAllowedStep / 4);
   });
 });
 
@@ -320,10 +321,10 @@ describe("given the board sampled into a triangle mesh", () => {
       const localZ = mesh.vertices[vertex * 3 + 2]!;
       largestError = Math.max(largestError, Math.abs(height - ringHeightAt(localX, localZ)));
     }
-    assert.ok(largestError <= MESH_HEIGHT_TOLERANCE, `largest vertex height error ${largestError} (tolerance ${MESH_HEIGHT_TOLERANCE})`);
+    expect(largestError, `largest vertex height error ${largestError} (tolerance ${MESH_HEIGHT_TOLERANCE})`).toBeLessThanOrEqual(MESH_HEIGHT_TOLERANCE);
     let highest = 0;
     for (let vertex = 0; vertex < vertexCount; vertex++) highest = Math.max(highest, mesh.vertices[vertex * 3 + 1]!);
-    assert.ok(highest >= RING_POCKETS[0]!.rimHeight - MESH_HEIGHT_TOLERANCE, `mesh reaches the pocket rims (${highest} m vs ${RING_POCKETS[0]!.rimHeight})`);
+    expect(highest, `mesh reaches the pocket rims (${highest} m vs ${RING_POCKETS[0]!.rimHeight})`).toBeGreaterThanOrEqual(RING_POCKETS[0]!.rimHeight - MESH_HEIGHT_TOLERANCE);
   });
 
   it("when the triangles are laid out in plan, then they tile the board exactly and no edge is longer than the step allows", () => {
@@ -338,8 +339,8 @@ describe("given the board sampled into a triangle mesh", () => {
       longestEdge = Math.max(longestEdge, Math.hypot(bx - ax, bz - az), Math.hypot(cx - bx, cz - bz), Math.hypot(ax - cx, az - cz));
     }
     const boardArea = (RING_BOARD_BOUNDS.maxX - RING_BOARD_BOUNDS.minX) * (RING_BOARD_BOUNDS.maxZ - RING_BOARD_BOUNDS.minZ);
-    assert.ok(Math.abs(plannedArea - boardArea) <= boardArea * 1e-5, `triangle area ${plannedArea.toFixed(3)} m2 vs board ${boardArea.toFixed(3)} m2`);
-    assert.ok(longestEdge <= RING_MESH_STEP * Math.SQRT2 * (1 + 1e-5), `longest edge ${longestEdge.toFixed(4)} m (diagonal of a ${RING_MESH_STEP} m cell)`);
+    expect(Math.abs(plannedArea - boardArea), `triangle area ${plannedArea.toFixed(3)} m2 vs board ${boardArea.toFixed(3)} m2`).toBeLessThanOrEqual(boardArea * 1e-5);
+    expect(longestEdge, `longest edge ${longestEdge.toFixed(4)} m (diagonal of a ${RING_MESH_STEP} m cell)`).toBeLessThanOrEqual(RING_MESH_STEP * Math.SQRT2 * (1 + 1e-5));
   });
 
   it("when the mesh is sampled at a coarse step, then its vertices still span the board's bounds with no gap above that step", () => {
@@ -353,19 +354,19 @@ describe("given the board sampled into a triangle mesh", () => {
     }
     const sortedXs = [...xs].sort((first, second) => first - second);
     const sortedZs = [...zs].sort((first, second) => first - second);
-    assert.equal(sortedXs[0], Math.fround(RING_BOARD_BOUNDS.minX), "first column at the front edge");
-    assert.equal(sortedXs.at(-1), Math.fround(RING_BOARD_BOUNDS.maxX), "last column at the back edge");
-    assert.equal(sortedZs[0], Math.fround(RING_BOARD_BOUNDS.minZ), "first row at the left edge");
-    assert.equal(sortedZs.at(-1), Math.fround(RING_BOARD_BOUNDS.maxZ), "last row at the right edge");
+    expect(sortedXs[0], "first column at the front edge").toBe(Math.fround(RING_BOARD_BOUNDS.minX));
+    expect(sortedXs.at(-1), "last column at the back edge").toBe(Math.fround(RING_BOARD_BOUNDS.maxX));
+    expect(sortedZs[0], "first row at the left edge").toBe(Math.fround(RING_BOARD_BOUNDS.minZ));
+    expect(sortedZs.at(-1), "last row at the right edge").toBe(Math.fround(RING_BOARD_BOUNDS.maxZ));
     for (const axis of [sortedXs, sortedZs]) {
       for (let index = 1; index < axis.length; index++) {
-        assert.ok(axis[index]! - axis[index - 1]! <= coarseStep + 1e-5, `gap ${(axis[index]! - axis[index - 1]!).toFixed(4)} m`);
+        expect(axis[index]! - axis[index - 1]!, `gap ${(axis[index]! - axis[index - 1]!).toFixed(4)} m`).toBeLessThanOrEqual(coarseStep + 1e-5);
       }
     }
   });
 
   it("when every index is checked, then it names a vertex that exists", () => {
-    for (let corner = 0; corner < mesh.indices.length; corner++) assert.ok(mesh.indices[corner]! < vertexCount, `index ${corner}`);
-    assert.ok(vertexCount > 1000, `${vertexCount} vertices`);
+    for (let corner = 0; corner < mesh.indices.length; corner++) expect(mesh.indices[corner]!, `index ${corner}`).toBeLessThan(vertexCount);
+    expect(vertexCount, `${vertexCount} vertices`).toBeGreaterThan(1000);
   });
 });

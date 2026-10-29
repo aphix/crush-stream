@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FACE_TOP } from "../deform/load-crush.ts";
 import { Ground, setGround } from "../world/ground.ts";
@@ -94,9 +93,9 @@ for (const testCase of crushDepths) {
       const drawn = new DrawnTop(drawnField(lower).top, lower.group.matrixWorld.elements);
       const gaps = fit(upper, drawn).gaps.filter(Number.isFinite);
       t.annotate(`tyre bottoms over the drawn body below: ${gaps.map((g) => g.toFixed(3)).join(" ")} m`);
-      assert.ok(gaps.length > 0, "no tyre is over the car below");
-      assert.ok(Math.min(...gaps) >= -SINK_M, `a tyre is ${(-Math.min(...gaps)).toFixed(3)} m inside the drawn body below`);
-      assert.ok(Math.max(...gaps) <= HOVER_M, `a tyre hangs ${Math.max(...gaps).toFixed(3)} m over the drawn body below`);
+      expect(gaps.length, "no tyre is over the car below").toBeGreaterThan(0);
+      expect(Math.min(...gaps), `a tyre is ${(-Math.min(...gaps)).toFixed(3)} m inside the drawn body below`).toBeGreaterThanOrEqual(-SINK_M);
+      expect(Math.max(...gaps), `a tyre hangs ${Math.max(...gaps).toFixed(3)} m over the drawn body below`).toBeLessThanOrEqual(HOVER_M);
     });
 
     it("when it drives at full throttle, then it is not flagged airborne in its first 0.2 s, and its speed at 0.25 s, still on the hood, is within 5 % of the same car on a flat platform at its resting height if a tyre stands on the body below, and under 5 % of it at 0.5, 1 and 1.5 s if the tyres hang clear (beached on its belly: the throttle has nothing to push on)", (t) => {
@@ -122,15 +121,15 @@ for (const testCase of crushDepths) {
       stepFrames(platform, 5);
       const ref = driveOff(platform, flat);
       t.annotate(`rest y ${y.toFixed(3)}, treads on the body below ${treads.map((on) => (on ? 1 : 0)).join("")} (sim's ${simRead}; drawn gaps ${gaps.map((g) => g.toFixed(3)).join(" ")} m); on the roof ${top.speeds.map((s) => s.toFixed(2)).join("/")} m/s, airborne early ${top.airEarly}; on the platform ${ref.speeds.map((s) => s.toFixed(2)).join("/")} m/s`);
-      assert.ok(!top.airEarly, "flagged airborne in its first 0.2 s with its belly on the car below");
+      expect(!top.airEarly, "flagged airborne in its first 0.2 s with its belly on the car below").toBe(true);
       if (tyresStand) {
         const off = Math.abs(top.speeds[ON_THE_HOOD]! - ref.speeds[ON_THE_HOOD]!);
-        assert.ok(off <= SPEED_SHARE * ref.speeds[ON_THE_HOOD]!, `${READ_AT[ON_THE_HOOD]} s: ${top.speeds[ON_THE_HOOD]!.toFixed(2)} m/s against the platform's ${ref.speeds[ON_THE_HOOD]!.toFixed(2)}`);
+        expect(off, `${READ_AT[ON_THE_HOOD]} s: ${top.speeds[ON_THE_HOOD]!.toFixed(2)} m/s against the platform's ${ref.speeds[ON_THE_HOOD]!.toFixed(2)}`).toBeLessThanOrEqual(SPEED_SHARE * ref.speeds[ON_THE_HOOD]!);
         return;
       }
       for (const [k, at] of READ_AT.entries()) {
         if (k === ON_THE_HOOD) continue;
-        assert.ok(top.speeds[k]! <= SPEED_SHARE * ref.speeds[k]!, `${at} s: ${top.speeds[k]!.toFixed(2)} m/s with its tyres hanging clear, platform's ${ref.speeds[k]!.toFixed(2)}`);
+        expect(top.speeds[k]!, `${at} s: ${top.speeds[k]!.toFixed(2)} m/s with its tyres hanging clear, platform's ${ref.speeds[k]!.toFixed(2)}`).toBeLessThanOrEqual(SPEED_SHARE * ref.speeds[k]!);
       }
     });
   });

@@ -1,5 +1,4 @@
-import { it } from "vitest";
-import assert from "node:assert/strict";
+import { expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
@@ -66,12 +65,12 @@ forModes(`given a 20 m/s head-on between two cars, simulated for ${STEPS} steps 
   it("when the crash is drawn at 60, 144 or 240 Hz or never drawn, then the same parts are torn off, lamps broken and glass cracked at every step, and at least one part does come off", () => {
     const never = crash(mode, 0);
     const changes = firstChange(never);
-    assert.ok(changes < STEPS, `[${mode}] nothing tore, broke or cracked in ${STEPS} steps: the test would pass for any rate`);
+    expect(changes, `[${mode}] nothing tore, broke or cracked in ${STEPS} steps: the test would pass for any rate`).toBeLessThan(STEPS);
     const parts = (JSON.parse(never[STEPS - 1]!) as { parts: [string, boolean, number][] }[]).flatMap((c) => c.parts.filter((p) => p[1]));
-    assert.ok(parts.length >= 1, `[${mode}] no part came off: ${parts.length}`);
+    expect(parts.length, `[${mode}] no part came off: ${parts.length}`).toBeGreaterThanOrEqual(1);
     for (const hz of [60, 144, 240]) {
       const t = crash(mode, hz);
-      for (let s = 0; s < STEPS; s++) assert.equal(t[s], never[s], `[${mode}] ${hz} Hz differs from undrawn at step ${s} (the first change is at ${changes})`);
+      for (let s = 0; s < STEPS; s++) expect(t[s], `[${mode}] ${hz} Hz differs from undrawn at step ${s} (the first change is at ${changes})`).toBe(never[s]);
     }
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -103,7 +102,7 @@ function solidPieces(): PropCollider[] {
 function sideswipe(scene: Scene, steer: number, turnIn: number, boost = false): Jump {
   const w = havanaRace();
   const solids = (havanaSolids ??= solidPieces());
-  assert.ok(solids.some((c) => c.prefab === "palm" && c.kind === "circle" && Math.hypot(c.x - scene.palm.x, c.z - scene.palm.z) < 0.5), "the palm stands where the capture says");
+  expect(solids.some((c) => c.prefab === "palm" && c.kind === "circle" && Math.hypot(c.x - scene.palm.x, c.z - scene.palm.z) < 0.5), "the palm stands where the capture says").toBeTruthy();
   const car = armedCar(scene.cls);
   launch(car, scene.x, scene.z, scene.yaw, scene.vx ?? 0, scene.vz ?? 0);
   const y = activeGround().heightAt(scene.x, scene.z);
@@ -161,17 +160,17 @@ const NO_STEP = (j: Jump): string => `step ${j.step} (frame ${j.frame}) moved th
 describe("given a car on Havana's avenue, a palm in its path", () => {
   it("when a sedan on the gas taps the handbrake at full right lock 14 m out so its rear half sideswipes the palm, then no physics step carries it further than its speed times the step plus 5 cm plus its depth in a solid", () => {
     const worst = sideswipe(SEDAN, 1, 14);
-    assert.ok(worst.moved <= worst.allowed, NO_STEP(worst));
+    expect(worst.moved, NO_STEP(worst)).toBeLessThanOrEqual(worst.allowed);
   });
   it("when a monster on the gas taps the handbrake at full right lock 5 m out so its rear half sideswipes the palm, then no physics step carries it further than its speed times the step plus 5 cm plus its depth in a solid", () => {
     const worst = sideswipe(MONSTER, 1, 5);
-    assert.ok(worst.moved <= worst.allowed, NO_STEP(worst));
+    expect(worst.moved, NO_STEP(worst)).toBeLessThanOrEqual(worst.allowed);
   });
   it("when a sedan slides past the palms 1 m from a trunk at 34 m/s and 24 m/s at each heading from -3 to 3 rad to its travel, then no physics step carries it further than its speed times the step plus 5 cm plus its depth in a solid", () => {
     for (const share of [1, 0.7]) {
       for (let yaw = -3; yaw <= 3; yaw += 0.5) {
         const worst = sideswipe(sedanThree(yaw, share), 0, -1);
-        assert.ok(worst.moved <= worst.allowed, `heading ${yaw}, share ${share}: ${NO_STEP(worst)}`);
+        expect(worst.moved, `heading ${yaw}, share ${share}: ${NO_STEP(worst)}`).toBeLessThanOrEqual(worst.allowed);
       }
     }
   });
@@ -181,7 +180,7 @@ describe("given a car on Havana's avenue, a palm in its path", () => {
         for (const boost of [false, true]) {
           for (let turnIn = 4; turnIn <= 24; turnIn += 4) {
             const worst = sideswipe(scene, steer, turnIn, boost);
-            assert.ok(worst.moved <= worst.allowed, `${scene.cls}, steer ${steer}, boost ${boost}, turn-in ${turnIn} m: ${NO_STEP(worst)}`);
+            expect(worst.moved, `${scene.cls}, steer ${steer}, boost ${boost}, turn-in ${turnIn} m: ${NO_STEP(worst)}`).toBeLessThanOrEqual(worst.allowed);
           }
         }
       }

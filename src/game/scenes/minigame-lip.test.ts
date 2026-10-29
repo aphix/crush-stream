@@ -1,5 +1,4 @@
-import { afterAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FREEWHEEL } from "../contact/crash-scenarios.test-util.ts";
 import { newWorld } from "../engine/world-step.ts";
@@ -16,6 +15,7 @@ import { LipThrow, type LipMode } from "./minigame-lip.ts";
 import { lipHeight } from "./minigame-profile.ts";
 import { dressedDriverCar, FINE_CELL, lipPitch, stationDriveProfile } from "./minigame-profile.test-util.ts";
 import { RING_CUPS } from "./minigame-ring.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const LIP_MODES: readonly LipMode[] = ["highJump", "ringFling"];
 
@@ -95,23 +95,23 @@ describe("given a car whose centre crosses the lip plane going forward at speed 
         const step = speed * FRAME;
         placeAt(car, mode, BEFORE_PLANE_SHARE * step);
         lip.collide(car, 0);
-        assert.equal(watch.take().length, 0, "no throw before the plane");
+        expect(watch.take().length, "no throw before the plane").toBe(0);
         const velocityAtLip = car.velocity.clone();
         placeAt(car, mode, PAST_PLANE_SHARE * step);
         lip.collide(car, 0);
         const events = watch.take();
-        assert.equal(events.length, 1, "exactly one ejection");
-        assert.equal(events[0]!.exit, "windshield", "through the windshield");
-        assert.equal(car.driverOut, "windshield", "the car's driver is out");
+        expect(events.length, "exactly one ejection").toBe(1);
+        expect(events[0]!.exit, "through the windshield").toBe("windshield");
+        expect(car.driverOut, "the car's driver is out").toBe("windshield");
         const launched = ejectionVelocity(events[0]!, new THREE.Vector3());
         const dir = events[0]!.dir;
         const pushed = velocityAtLip.clone().multiplyScalar(1 + LIP_LAUNCH_PUSH[mode]);
-        assert.ok(Math.abs(launched.x - (pushed.x + dir.x * THROW_OUT)) <= F32_TOLERANCE, `launch x ${launched.x}`);
-        assert.ok(Math.abs(launched.y - (pushed.y + dir.y * THROW_OUT + THROW_UP_PINNED)) <= F32_TOLERANCE, `launch y ${launched.y}`);
-        assert.ok(Math.abs(launched.z - (pushed.z + dir.z * THROW_OUT)) <= F32_TOLERANCE, `launch z ${launched.z}`);
-        assert.ok(Math.abs(car.speed - speed * (1 + LIP_LAUNCH_PUSH[mode]) * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `car speed ${car.speed}`);
-        assert.ok(Math.abs(car.velocity.length() - speed * (1 + LIP_LAUNCH_PUSH[mode]) * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `car velocity ${car.velocity.length()}`);
-        assert.ok(car.velocity.distanceTo(pushed.multiplyScalar(LIP_CAR_SPEED_KEEP)) <= EXACT_TOLERANCE, "every component scaled: the direction is kept");
+        expect(Math.abs(launched.x - (pushed.x + dir.x * THROW_OUT)), `launch x ${launched.x}`).toBeLessThanOrEqual(F32_TOLERANCE);
+        expect(Math.abs(launched.y - (pushed.y + dir.y * THROW_OUT + THROW_UP_PINNED)), `launch y ${launched.y}`).toBeLessThanOrEqual(F32_TOLERANCE);
+        expect(Math.abs(launched.z - (pushed.z + dir.z * THROW_OUT)), `launch z ${launched.z}`).toBeLessThanOrEqual(F32_TOLERANCE);
+        expect(Math.abs(car.speed - speed * (1 + LIP_LAUNCH_PUSH[mode]) * LIP_CAR_SPEED_KEEP), `car speed ${car.speed}`).toBeLessThanOrEqual(EXACT_TOLERANCE);
+        expect(Math.abs(car.velocity.length() - speed * (1 + LIP_LAUNCH_PUSH[mode]) * LIP_CAR_SPEED_KEEP), `car velocity ${car.velocity.length()}`).toBeLessThanOrEqual(EXACT_TOLERANCE);
+        expect(car.velocity.distanceTo(pushed.multiplyScalar(LIP_CAR_SPEED_KEEP)), "every component scaled: the direction is kept").toBeLessThanOrEqual(EXACT_TOLERANCE);
         car.dispose();
       });
     }
@@ -122,8 +122,8 @@ describe("given a car whose centre crosses the lip plane going forward at speed 
       const { lip, watch } = lipThrowFor(mode, car);
       const slice = (speed * FRAME) / 4;
       crossing(lip, car, mode, [-1.5 * slice, -0.5 * slice, 0.5 * slice, 1.5 * slice, 2.5 * slice]);
-      assert.equal(watch.take().length, 1, "one ejection over the four slices");
-      assert.ok(Math.abs(car.speed - speed * (1 + LIP_LAUNCH_PUSH[mode]) * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `pushed and cut once: ${car.speed}`);
+      expect(watch.take().length, "one ejection over the four slices").toBe(1);
+      expect(Math.abs(car.speed - speed * (1 + LIP_LAUNCH_PUSH[mode]) * LIP_CAR_SPEED_KEEP), `pushed and cut once: ${car.speed}`).toBeLessThanOrEqual(EXACT_TOLERANCE);
       car.dispose();
     });
   }
@@ -135,9 +135,9 @@ describe("given a car that does not cross the lip plane going forward in the lan
       const car = carMovingAtLip(mode, 20);
       const { lip, watch } = lipThrowFor(mode, car);
       crossing(lip, car, mode, [-6, -3, -0.5, -0.5, -0.5, -0.5]);
-      assert.equal(watch.take().length, 0, "no ejection");
-      assert.equal(car.driverOut, null, "his driver is in");
-      assert.equal(car.speed, 20, "no cut");
+      expect(watch.take().length, "no ejection").toBe(0);
+      expect(car.driverOut, "his driver is in").toBe(null);
+      expect(car.speed, "no cut").toBe(20);
       car.dispose();
     });
 
@@ -145,9 +145,9 @@ describe("given a car that does not cross the lip plane going forward in the lan
       const car = carMovingAtLip(mode, 20);
       const { lip, watch } = lipThrowFor(mode, car);
       crossing(lip, car, mode, [2, 1, 0.5, -0.5, -1]);
-      assert.equal(watch.take().length, 0, "no ejection");
-      assert.equal(car.driverOut, null, "his driver is in");
-      assert.equal(car.speed, 20, "no cut");
+      expect(watch.take().length, "no ejection").toBe(0);
+      expect(car.driverOut, "his driver is in").toBe(null);
+      expect(car.speed, "no cut").toBe(20);
       car.dispose();
     });
 
@@ -156,9 +156,9 @@ describe("given a car that does not cross the lip plane going forward in the lan
       car.driverOut = "doorL";
       const { lip, watch } = lipThrowFor(mode, car);
       crossing(lip, car, mode, [-0.3, 0.4, 0.8]);
-      assert.equal(watch.take().length, 0, "no ejection");
-      assert.equal(car.driverOut, "doorL", "his state is unchanged");
-      assert.equal(car.speed, 20, "no cut");
+      expect(watch.take().length, "no ejection").toBe(0);
+      expect(car.driverOut, "his state is unchanged").toBe("doorL");
+      expect(car.speed, "no cut").toBe(20);
       car.dispose();
     });
 
@@ -166,8 +166,8 @@ describe("given a car that does not cross the lip plane going forward in the lan
       const car = carMovingAtLip(mode, 20);
       const { lip, watch } = lipThrowFor(mode, car);
       crossing(lip, car, mode, [-0.3, 0.4, -0.3, 0.4, -0.3, 0.4]);
-      assert.equal(watch.take().length, 1, "one ejection over three crossings");
-      assert.ok(Math.abs(car.speed - 20 * (1 + LIP_LAUNCH_PUSH[mode]) * LIP_CAR_SPEED_KEEP) <= EXACT_TOLERANCE, `pushed and cut once: ${car.speed}`);
+      expect(watch.take().length, "one ejection over three crossings").toBe(1);
+      expect(Math.abs(car.speed - 20 * (1 + LIP_LAUNCH_PUSH[mode]) * LIP_CAR_SPEED_KEEP), `pushed and cut once: ${car.speed}`).toBeLessThanOrEqual(EXACT_TOLERANCE);
       car.dispose();
     });
 
@@ -178,14 +178,14 @@ describe("given a car that does not cross the lip plane going forward in the lan
         const car = carMovingAtLip(mode, 20);
         const { lip, watch } = lipThrowFor(mode, car);
         crossing(lip, car, mode, [-0.3, 0.4], localZ);
-        assert.equal(watch.take().length, 0, `no ejection at z ${localZ}`);
+        expect(watch.take().length, `no ejection at z ${localZ}`).toBe(0);
         car.dispose();
       }
       for (const localZ of [-inside, inside]) {
         const car = carMovingAtLip(mode, 20);
         const { lip, watch } = lipThrowFor(mode, car);
         crossing(lip, car, mode, [-0.3, 0.4], localZ);
-        assert.equal(watch.take().length, 1, `one ejection at z ${localZ}`);
+        expect(watch.take().length, `one ejection at z ${localZ}`).toBe(1);
         car.dispose();
       }
     });
@@ -195,7 +195,7 @@ describe("given a car that does not cross the lip plane going forward in the lan
       const car = carMovingAtLip(other, 20);
       const { lip, watch } = lipThrowFor(mode, car);
       crossing(lip, car, other, [-0.3, 0.4]);
-      assert.equal(watch.take().length, 0, "no ejection");
+      expect(watch.take().length, "no ejection").toBe(0);
       car.dispose();
     });
 
@@ -204,8 +204,8 @@ describe("given a car that does not cross the lip plane going forward in the lan
       car.falling = true;
       const { lip, watch } = lipThrowFor(mode, car);
       crossing(lip, car, mode, [-0.3, 0.4]);
-      assert.equal(watch.take().length, 0, "no ejection");
-      assert.equal(car.speed, 20, "no cut");
+      expect(watch.take().length, "no ejection").toBe(0);
+      expect(car.speed, "no cut").toBe(20);
       car.dispose();
     });
 
@@ -213,7 +213,7 @@ describe("given a car that does not cross the lip plane going forward in the lan
       const car = carMovingAtLip(mode, 20);
       const { lip, watch } = lipThrowFor(mode, car);
       crossing(lip, car, mode, [3, 4, 5]);
-      assert.equal(watch.take().length, 0, "no ejection");
+      expect(watch.take().length, "no ejection").toBe(0);
       car.dispose();
     });
   }
@@ -408,14 +408,14 @@ describe("given each car type driven up each station's ramp under the real lip t
         for (const speedCap of [Infinity, slowCap(type, mode)]) {
           const flight = flyFromLip(type, mode, { speedCap, keep: LIP_CAR_SPEED_KEEP, until: "throw" });
           const event = flight.event;
-          assert.ok(event !== null, `${type.id}: thrown`);
-          assert.equal(flight.ejections, 1, `${type.id}: one ejection`);
-          assert.equal(event.exit, "windshield", `${type.id}: windshield`);
-          assert.ok(flight.throwLocalX >= 0 && flight.throwLocalX <= flight.lipSpeed * FRAME, `${type.id}: thrown as the centre crossed the plane (x ${flight.throwLocalX})`);
+          must(event !== null, `${type.id}: thrown`);
+          expect(flight.ejections, `${type.id}: one ejection`).toBe(1);
+          must(event.exit === "windshield", `${type.id}: windshield`);
+          expect(flight.throwLocalX >= 0 && flight.throwLocalX <= flight.lipSpeed * FRAME, `${type.id}: thrown as the centre crossed the plane (x ${flight.throwLocalX})`).toBeTruthy();
           const own = event.rel.clone().sub(flight.seatTurn).addScaledVector(event.dir, -THROW_OUT);
           const pop = Math.hypot(own.x, own.y - THROW_UP_PINNED, own.z);
-          assert.ok(pop <= F32_TOLERANCE, `${type.id}: the driver's own velocity is off his seat's turn, the throw out and up by ${pop}`);
-          if (speedCap !== Infinity) assert.ok(Math.abs(flight.lipSpeed - SLOW_LIP_SPEED) <= SLOW_LIP_TOLERANCE, `${type.id}: slow lip speed ${flight.lipSpeed}`);
+          expect(pop, `${type.id}: the driver's own velocity is off his seat's turn, the throw out and up by ${pop}`).toBeLessThanOrEqual(F32_TOLERANCE);
+          if (speedCap !== Infinity) expect(Math.abs(flight.lipSpeed - SLOW_LIP_SPEED), `${type.id}: slow lip speed ${flight.lipSpeed}`).toBeLessThanOrEqual(SLOW_LIP_TOLERANCE);
         }
       }
     });
@@ -431,7 +431,7 @@ describe("given each car type driven up each station's ramp under the real lip t
         let lipSpeed = NaN;
         for (const keep of [...CANDIDATE_KEEPS, NO_CUT_KEEP]) {
           const flight = run(keep);
-          assert.equal(flight.ejections, 1, `${label} at keep ${keep}: one ejection over the whole flight`);
+          expect(flight.ejections, `${label} at keep ${keep}: one ejection over the whole flight`).toBe(1);
           limit = landingLimit(mode, flight);
           lipSpeed = flight.lipSpeed;
           cells.push(flight.landingLocalX.toFixed(1).padStart(7));
@@ -441,13 +441,13 @@ describe("given each car type driven up each station's ramp under the real lip t
       }
       t.annotate(lines.join("\n"));
       keepsClearing.set(mode, new Set(CANDIDATE_KEEPS.filter((keep) => clearsAll.get(keep))));
-      assert.ok(keepsClearing.get(mode)!.has(LIP_CAR_SPEED_KEEP), `LIP_CAR_SPEED_KEEP ${LIP_CAR_SPEED_KEEP} clears every bar on the ${mode}`);
-      assert.equal(clearsAll.get(NO_CUT_KEEP), false, "with no cut the bars fail");
+      expect(keepsClearing.get(mode)!.has(LIP_CAR_SPEED_KEEP), `LIP_CAR_SPEED_KEEP ${LIP_CAR_SPEED_KEEP} clears every bar on the ${mode}`).toBeTruthy();
+      expect(clearsAll.get(NO_CUT_KEEP), "with no cut the bars fail").toBe(false);
     });
   }
 
   it("when the keeps that clear every bar on each station are read together, then LIP_CAR_SPEED_KEEP is the largest candidate clearing both", () => {
     const both = CANDIDATE_KEEPS.filter((keep) => LIP_MODES.every((mode) => keepsClearing.get(mode)!.has(keep)));
-    assert.equal(LIP_CAR_SPEED_KEEP, Math.max(...both), `candidates clearing both stations: ${both.join(", ")}`);
+    expect(LIP_CAR_SPEED_KEEP, `candidates clearing both stations: ${both.join(", ")}`).toBe(Math.max(...both));
   });
 });

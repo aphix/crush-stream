@@ -1,11 +1,12 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Track, blankProjection, projectPath } from "../world/track.ts";
 import { square as squareFile } from "../world/track.test-util.ts";
 import oval from "../world/tracks/oval.json" with { type: "json" };
 import { GATE_MARGIN, RESPAWN_DELAY, RESPAWN_REQUEST_DELAY, RaceSession } from "./session.ts";
 import type { RaceEvent } from "./types.ts";
 import { along, centreline, field, onRoad, polyline, runTo, shortcutLine, type Driver, type Pt } from "./session-drive.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const square = new Track(squareFile());
 const ovalTrack = new Track(oval);
@@ -36,14 +37,14 @@ describe("given a three-lap race on the square track whose first checkpoint is t
     const dead: Driver = (t) => ({ ...polyline(pts, 20)(t), alive: t < tDie });
     const ev = runTo(s, [dead], tDie + RESPAWN_DELAY + 0.5);
     const c = s.cars[0]!;
-    assert.equal(c.next, 2, "checkpoint 2 is still owed");
+    expect(c.next, "checkpoint 2 is still owed").toBe(2);
     const r = respawnOf(ev);
-    assert.ok(r, "a respawn event");
-    assert.equal(r.keep, false);
+    must(r, "a respawn event");
+    must(r.keep === false, "r.keep === false");
     const at = onRoad(square, r.x, r.z);
-    assert.ok(at.s >= 165 && at.s <= 185, `landed at ${at.s.toFixed(1)} m, wanted where it left the road (about 170-180 m)`);
-    assert.ok(Math.abs(at.lateral) < 0.5, `on the centreline (${at.lateral.toFixed(2)} m off)`);
-    assert.ok(at.s <= g2 - GATE_MARGIN + 1e-6 && at.s >= g1, "between the last checkpoint it hit and 3 m short of the one it owes");
+    expect(at.s >= 165 && at.s <= 185, `landed at ${at.s.toFixed(1)} m, wanted where it left the road (about 170-180 m)`).toBeTruthy();
+    expect(Math.abs(at.lateral), `on the centreline (${at.lateral.toFixed(2)} m off)`).toBeLessThan(0.5);
+    expect(at.s <= g2 - GATE_MARGIN + 1e-6 && at.s >= g1, "between the last checkpoint it hit and 3 m short of the one it owes").toBeTruthy();
   });
 
   it("when a car leaves the road for the infield and asks for a reset there, then it lands on the road at the last spot it was on it, not on the road nearest the field it ended in", () => {
@@ -53,12 +54,12 @@ describe("given a three-lap race on the square track whose first checkpoint is t
     const drive = polyline(pts, 20);
     const stop = (t: number) => (t > 14 ? { ...drive(t), vx: 0, vz: 0 } : drive(t));
     runTo(s, [stop], 15);
-    assert.ok(s.requestRespawn(0));
+    expect(s.requestRespawn(0)).toBeTruthy();
     const ev = runTo(s, [stop], 15 + RESPAWN_REQUEST_DELAY + 0.5);
     const r = respawnOf(ev)!;
     const at = onRoad(square, r.x, r.z);
-    assert.ok(at.s >= 155 && at.s <= 185, `landed at ${at.s.toFixed(1)} m, wanted where it left the road (about 160-180 m)`);
-    assert.ok(Math.abs(at.lateral) < 0.5, "on the centreline");
+    expect(at.s >= 155 && at.s <= 185, `landed at ${at.s.toFixed(1)} m, wanted where it left the road (about 160-180 m)`).toBeTruthy();
+    expect(Math.abs(at.lateral), "on the centreline").toBeLessThan(0.5);
   });
 
   it("when a car that missed nothing wrecks on the road between two checkpoints, then it is put back on the road where it stopped, as before", () => {
@@ -69,8 +70,8 @@ describe("given a three-lap race on the square track whose first checkpoint is t
     const stoppedAt = onRoad(square, s.cars[0]!.x, s.cars[0]!.z).s;
     const r = respawnOf(ev)!;
     const at = onRoad(square, r.x, r.z);
-    assert.ok(Math.abs(at.s - stoppedAt) < 1, `landed at ${at.s.toFixed(1)} m, stopped at ${stoppedAt.toFixed(1)} m`);
-    assert.ok(Math.abs(at.lateral) < 0.5);
+    expect(Math.abs(at.s - stoppedAt), `landed at ${at.s.toFixed(1)} m, stopped at ${stoppedAt.toFixed(1)} m`).toBeLessThan(1);
+    expect(Math.abs(at.lateral)).toBeLessThan(0.5);
   });
 
   it("when a car drove round the end of a checkpoint on the grass and wrecks on the road beyond it, then it is put back on the road where it left it before that checkpoint, never at or past it", () => {
@@ -81,11 +82,11 @@ describe("given a three-lap race on the square track whose first checkpoint is t
     const tDie = (lengthOf(pts) - 20) / 20;
     const dead: Driver = (t) => ({ ...polyline(pts, 20)(t), alive: t < tDie });
     const ev = runTo(s, [dead], tDie + RESPAWN_DELAY + 0.5);
-    assert.equal(s.cars[0]!.next, 1, "checkpoint 1 was missed");
+    expect(s.cars[0]!.next, "checkpoint 1 was missed").toBe(1);
     const r = respawnOf(ev)!;
     const at = onRoad(square, r.x, r.z);
-    assert.ok(at.s >= g1 - 65 && at.s <= g1 - 40, `landed at ${at.s.toFixed(1)} m, wanted where it left the road (about ${g1 - 60}-${g1 - 45} m)`);
-    assert.ok(Math.abs(at.lateral) < 0.5);
+    expect(at.s >= g1 - 65 && at.s <= g1 - 40, `landed at ${at.s.toFixed(1)} m, wanted where it left the road (about ${g1 - 60}-${g1 - 45} m)`).toBeTruthy();
+    expect(Math.abs(at.lateral)).toBeLessThan(0.5);
   });
 });
 
@@ -107,12 +108,12 @@ describe("given a one-lap race on the oval whose service road is a shortcut from
     const dead: Driver = (t) => ({ ...polyline(pts, 18)(t), alive: t < tDie });
     const ev = runTo(s, [dead], tDie + RESPAWN_DELAY + 0.5);
     const c = s.cars[0]!;
-    assert.equal(c.route, 0, "still on the service road");
+    expect(c.route, "still on the service road").toBe(0);
     const r = respawnOf(ev)!;
     const p = projectPath(sc.path, r.x, r.z, -1, blankProjection());
-    assert.ok(p.dist2 < 0.25, `on the service road's centreline (${Math.sqrt(p.dist2).toFixed(2)} m off)`);
-    assert.ok(p.s >= lo && p.s <= sc.gates[5]!.s - GATE_MARGIN + 1e-6, `at ${p.s.toFixed(1)} m of the road, between its gates at ${lo.toFixed(0)} and ${sc.gates[5]!.s.toFixed(0)} m`);
-    assert.ok(p.s >= 95, `where it left the road (${p.s.toFixed(1)} m), not back at the gate`);
+    expect(p.dist2, `on the service road's centreline (${Math.sqrt(p.dist2).toFixed(2)} m off)`).toBeLessThan(0.25);
+    expect(p.s >= lo && p.s <= sc.gates[5]!.s - GATE_MARGIN + 1e-6, `at ${p.s.toFixed(1)} m of the road, between its gates at ${lo.toFixed(0)} and ${sc.gates[5]!.s.toFixed(0)} m`).toBeTruthy();
+    expect(p.s, `where it left the road (${p.s.toFixed(1)} m), not back at the gate`).toBeGreaterThanOrEqual(95);
   });
 });
 
@@ -128,50 +129,50 @@ describe("given a car racing on the square track that is held at reset", () => {
     const s = raceAt();
     const c = s.cars[0]!;
     const next = c.next;
-    assert.equal(c.missed, true);
-    assert.ok(s.holdReset(0));
+    expect(c.missed).toBe(true);
+    expect(s.holdReset(0)).toBeTruthy();
     const ev = s.events();
-    assert.deepEqual(ev.map((e) => e.type), ["respawn"], "no died event, no delay");
+    expect(firstMismatch(ev.map((e) => e.type), ["respawn"]), "no died event, no delay").toBeUndefined();
     const r = respawnOf(ev)!;
-    assert.equal(r.keep, true);
-    assert.equal(c.status, "racing");
-    assert.equal(c.deaths, 0);
-    assert.equal(c.next, next, "it still owes the checkpoint it owed");
-    assert.equal(c.missed, true, "and is still flagged until it crosses it");
+    expect(r.keep).toBe(true);
+    expect(c.status).toBe("racing");
+    expect(c.deaths).toBe(0);
+    expect(c.next, "it still owes the checkpoint it owed").toBe(next);
+    expect(c.missed, "and is still flagged until it crosses it").toBe(true);
     const at = onRoad(square, r.x, r.z);
-    assert.ok(at.s >= 165 && at.s <= 185, `at ${at.s.toFixed(1)} m`);
+    expect(at.s >= 165 && at.s <= 185, `at ${at.s.toFixed(1)} m`).toBeTruthy();
   });
 
   it("when the race is a no-reset race, then a tap is refused but the hold works, the car is not put out and nobody is revived", () => {
     const s = raceAt({ noReset: true });
-    assert.equal(s.requestRespawn(0), false);
-    assert.equal(s.holdReset(0), true);
-    assert.equal(s.cars[0]!.status, "racing");
-    assert.deepEqual(s.events().map((e) => e.type), ["respawn"]);
+    expect(s.requestRespawn(0)).toBe(false);
+    expect(s.holdReset(0)).toBe(true);
+    expect(s.cars[0]!.status).toBe("racing");
+    expect(firstMismatch(s.events().map((e) => e.type), ["respawn"])).toBeUndefined();
   });
 
   it("when the car is out, respawning, finished or the race is not on, then the hold does nothing", () => {
     const s = new RaceSession(square, field(1), { laps: 3, noReset: false });
-    assert.equal(s.holdReset(0), false, "grid");
+    expect(s.holdReset(0), "grid").toBe(false);
     const pts = centreline(square, L - 6, L + 190);
     const dead: Driver = (t) => ({ ...polyline(pts, 20)(t), alive: t < 11 });
     runTo(s, [dead], 11.2);
-    assert.equal(s.cars[0]!.status, "respawning");
-    assert.equal(s.holdReset(0), false, "respawning");
-    assert.equal(s.holdReset(7), false, "no such car");
+    expect(s.cars[0]!.status).toBe("respawning");
+    expect(s.holdReset(0), "respawning").toBe(false);
+    expect(s.holdReset(7), "no such car").toBe(false);
     const out = new RaceSession(square, field(1), { laps: 3, noReset: true });
     runTo(out, [dead], 11.2);
-    assert.equal(out.cars[0]!.status, "out");
-    assert.equal(out.holdReset(0), false, "out");
+    expect(out.cars[0]!.status).toBe("out");
+    expect(out.holdReset(0), "out").toBe(false);
     const done = new RaceSession(square, field(1), { laps: 1, noReset: false });
     runTo(done, [along(square, L - 6, 30)], 60);
-    assert.equal(done.phase, "finished");
-    assert.equal(done.holdReset(0), false, "finished");
+    expect(done.phase).toBe("finished");
+    expect(done.holdReset(0), "finished").toBe(false);
   });
 
   it("when the run is endless (a Survival run: no checkpoints, no road to go back to), then the hold does nothing", () => {
     const s = new RaceSession(square, field(1), { laps: 3, noReset: true, survival: { bustTime: 5 } });
     runTo(s, [along(square, L - 6, 20)], 3);
-    assert.equal(s.holdReset(0), false);
+    expect(s.holdReset(0)).toBe(false);
   });
 });

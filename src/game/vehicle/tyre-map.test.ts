@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import type * as THREE from "three";
 import type * as CarMaterials from "./car-materials.ts";
@@ -58,20 +57,20 @@ describe("given the tyre normal map built twice from scratch", () => {
   it("when the two builds' bytes are hashed, then they are identical and the size is the stated one", async () => {
     const first = treadNormalMap();
     const second = (await freshBuild()).treadNormalMap();
-    assert.notEqual(second, first, "a fresh build, not the cached texture");
-    assert.equal(first.image.width, TYRE_MAP_WIDTH, "width");
-    assert.equal(first.image.height, TYRE_MAP_HEIGHT, "height");
-    assert.equal(mapBytes(first).length, TYRE_MAP_WIDTH * TYRE_MAP_HEIGHT * BYTES_PER_TEXEL, "bytes");
-    assert.equal(digestOf(mapBytes(second)), digestOf(mapBytes(first)), "digest of the bytes");
+    expect(second, "a fresh build, not the cached texture").not.toBe(first);
+    expect(first.image.width, "width").toBe(TYRE_MAP_WIDTH);
+    expect(first.image.height, "height").toBe(TYRE_MAP_HEIGHT);
+    expect(mapBytes(first).length, "bytes").toBe(TYRE_MAP_WIDTH * TYRE_MAP_HEIGHT * BYTES_PER_TEXEL);
+    expect(digestOf(mapBytes(second)), "digest of the bytes").toBe(digestOf(mapBytes(first)));
   });
 
   it("when the map is asked for twice, then it is the one shared texture", () => {
-    assert.equal(treadNormalMap(), treadNormalMap());
+    expect(treadNormalMap()).toBe(treadNormalMap());
   });
 
   it("when the tread band's rows are hashed, then they are the tread-only map's, so the tread looks as it did", () => {
     const tread = rowBytes(mapBytes(treadNormalMap()), TREAD_BAND_FIRST_ROW, TREAD_BAND_ROWS);
-    assert.equal(digestOf(tread), TREAD_ONLY_MAP_DIGEST);
+    expect(digestOf(tread)).toBe(TREAD_ONLY_MAP_DIGEST);
   });
 
   it("when every texel is decoded, then each normal is unit length and points out of the tyre", () => {
@@ -79,8 +78,8 @@ describe("given the tyre normal map built twice from scratch", () => {
     for (let row = 0; row < TYRE_MAP_HEIGHT; row++) {
       for (let column = 0; column < TYRE_MAP_WIDTH; column++) {
         const [x, y, z] = normalAt(bytes, column, row);
-        assert.ok(Math.abs(Math.hypot(x, y, z) - 1) < UNIT_LENGTH_TOLERANCE, `length at column ${column}, row ${row}`);
-        assert.ok(z > 0, `outward at column ${column}, row ${row}`);
+        expect(Math.abs(Math.hypot(x, y, z) - 1), `length at column ${column}, row ${row}`).toBeLessThan(UNIT_LENGTH_TOLERANCE);
+        expect(z, `outward at column ${column}, row ${row}`).toBeGreaterThan(0);
       }
     }
   });
@@ -104,10 +103,10 @@ describe("given the rows of the tyre normal map", () => {
 
   for (const testCase of testCases) {
     it(`when the texels of ${testCase.it} are read, then the strongest normal tilt is ${testCase.expectedRelief ? "above the sidewall relief floor" : "flat"}`, () => {
-      assert.ok(testCase.firstRow <= testCase.lastRow, "the row range is not empty");
+      expect(testCase.firstRow, "the row range is not empty").toBeLessThanOrEqual(testCase.lastRow);
       const strongest = strongestDeviation(mapBytes(treadNormalMap()), testCase.firstRow, testCase.lastRow);
-      if (testCase.expectedRelief) assert.ok(strongest > SIDEWALL_RELIEF_MIN, `tilt ${strongest.toFixed(3)} over rows ${testCase.firstRow}..${testCase.lastRow}`);
-      else assert.ok(strongest < FLAT_DEVIATION, `tilt ${strongest.toFixed(3)} over rows ${testCase.firstRow}..${testCase.lastRow}`);
+      if (testCase.expectedRelief) expect(strongest, `tilt ${strongest.toFixed(3)} over rows ${testCase.firstRow}..${testCase.lastRow}`).toBeGreaterThan(SIDEWALL_RELIEF_MIN);
+      else expect(strongest, `tilt ${strongest.toFixed(3)} over rows ${testCase.firstRow}..${testCase.lastRow}`).toBeLessThan(FLAT_DEVIATION);
     });
   }
 
@@ -117,7 +116,7 @@ describe("given the rows of the tyre normal map", () => {
     const column0 = digestOf(bytes.subarray(ringRow * MAP_ROW_BYTES, ringRow * MAP_ROW_BYTES + BYTES_PER_TEXEL));
     for (let column = 1; column < TYRE_MAP_WIDTH; column++) {
       const at = ringRow * MAP_ROW_BYTES + column * BYTES_PER_TEXEL;
-      assert.equal(digestOf(bytes.subarray(at, at + BYTES_PER_TEXEL)), column0, `column ${column}`);
+      expect(digestOf(bytes.subarray(at, at + BYTES_PER_TEXEL)), `column ${column}`).toBe(column0);
     }
   });
 
@@ -130,33 +129,33 @@ describe("given the rows of the tyre normal map", () => {
       if (deviationAt(bytes, column, letterRow) > SIDEWALL_RELIEF_MIN) dashEdges++;
       else gaps++;
     }
-    assert.ok(dashEdges >= LETTER_SLOTS, `${dashEdges} raised texels`);
-    assert.ok(gaps >= LETTER_SLOTS, `${gaps} flat texels`);
+    expect(dashEdges, `${dashEdges} raised texels`).toBeGreaterThanOrEqual(LETTER_SLOTS);
+    expect(gaps, `${gaps} flat texels`).toBeGreaterThanOrEqual(LETTER_SLOTS);
   });
 });
 
 describe("given the near and far wheel geometry", () => {
   it("when the wheels are built, then their triangle counts are the ones before the sidewall detail", () => {
-    assert.equal(makeWheelGeometry().index!.count / 3, NEAR_WHEEL_TRIANGLES, "near wheel");
-    assert.equal(makeWheelGeometryFar().index!.count / 3, FAR_WHEEL_TRIANGLES, "far wheel");
+    expect(makeWheelGeometry().index!.count / 3, "near wheel").toBe(NEAR_WHEEL_TRIANGLES);
+    expect(makeWheelGeometryFar().index!.count / 3, "far wheel").toBe(FAR_WHEEL_TRIANGLES);
   });
 
   it("when the near tyre's uv1 is read, then its two points on each sidewall sample interior sidewall rows and the tread edge samples the lug start", () => {
     const sidewallV = distinctV(makeWheelGeometry()).filter((v) => v > 0 && v < TREAD_CENTRE_V);
-    assert.equal(sidewallV.length, 3, "outer: two sidewall points and the tread edge");
-    assert.ok(sidewallV[0]! * TYRE_MAP_HEIGHT > BEAD_RING_CENTRE_ROW, "the first sidewall point is past the bead ring");
-    assert.ok(sidewallV[1]! * TYRE_MAP_HEIGHT > RIB_CREST_ROWS[0] - RIB_HALF_ROWS, "the second is among the ribs");
+    expect(sidewallV.length, "outer: two sidewall points and the tread edge").toBe(3);
+    expect(sidewallV[0]! * TYRE_MAP_HEIGHT, "the first sidewall point is past the bead ring").toBeGreaterThan(BEAD_RING_CENTRE_ROW);
+    expect(sidewallV[1]! * TYRE_MAP_HEIGHT, "the second is among the ribs").toBeGreaterThan(RIB_CREST_ROWS[0] - RIB_HALF_ROWS);
     const innerV = distinctV(makeWheelGeometry()).filter((v) => v > TREAD_CENTRE_V && v < 1);
-    assert.equal(innerV.length, 3, "inner: the tread edge and two sidewall points");
+    expect(innerV.length, "inner: the tread edge and two sidewall points").toBe(3);
   });
 
   it("when the far tyre's uv1 is read, then its five points land in the outer sidewall, the tread centre and the inner sidewall", () => {
     const [beadEdge, outerShoulder, crown, innerShoulder, innerBeadEdge] = distinctV(makeWheelGeometryFar());
-    assert.equal(distinctV(makeWheelGeometryFar()).length, 5, "five distinct v values");
-    assert.equal(beadEdge, 0, "the outer bead edge is the flat row");
-    assert.ok(outerShoulder! > 0 && outerShoulder! < BAND_END_V, "the outer point is in the outer sidewall band");
-    assert.ok(crown! >= BAND_END_V && crown! < INNER_BAND_START_V, "the crown is in the tread band");
-    assert.ok(innerShoulder! > INNER_BAND_START_V && innerShoulder! < 1, "the inner point is in the inner sidewall band");
-    assert.equal(innerBeadEdge, 1, "the inner bead edge is the last row");
+    expect(distinctV(makeWheelGeometryFar()).length, "five distinct v values").toBe(5);
+    expect(beadEdge, "the outer bead edge is the flat row").toBe(0);
+    expect(outerShoulder! > 0 && outerShoulder! < BAND_END_V, "the outer point is in the outer sidewall band").toBeTruthy();
+    expect(crown! >= BAND_END_V && crown! < INNER_BAND_START_V, "the crown is in the tread band").toBeTruthy();
+    expect(innerShoulder! > INNER_BAND_START_V && innerShoulder! < 1, "the inner point is in the inner sidewall band").toBeTruthy();
+    expect(innerBeadEdge, "the inner bead edge is the last row").toBe(1);
   });
 });

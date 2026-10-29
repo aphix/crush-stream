@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { LANDING, LandingWatch } from "./landing.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -19,48 +18,48 @@ function jump(watch: LandingWatch, air: number, vy: number, wheelsDown = 15): nu
 
 describe("given a landing watch (the camera's wobble and the audio's thud share it)", () => {
   it("when the car falls fast after a long flight and lands on four wheels, then it reports the fall speed", () => {
-    assert.equal(jump(new LandingWatch(), LANDING.minAir + 0.2, -9), 9);
+    expect(jump(new LandingWatch(), LANDING.minAir + 0.2, -9)).toBe(9);
   });
   it("when the flight was a hop shorter than the minimum, then it reports nothing", () => {
-    assert.equal(jump(new LandingWatch(), LANDING.minAir / 2, -9), 0);
+    expect(jump(new LandingWatch(), LANDING.minAir / 2, -9)).toBe(0);
   });
   it("when the fall was gentler than the threshold, then it reports nothing", () => {
-    assert.equal(jump(new LandingWatch(), 1, -(LANDING.fall - 1)), 0);
+    expect(jump(new LandingWatch(), 1, -(LANDING.fall - 1))).toBe(0);
   });
   it("when a wheel is still off the ground, then it reports nothing", () => {
-    assert.equal(jump(new LandingWatch(), 1, -9, 7), 0);
+    expect(jump(new LandingWatch(), 1, -9, 7)).toBe(0);
   });
   it("when the car drives on the ground, then it reports nothing and one landing is one report", () => {
     const watch = new LandingWatch();
-    assert.equal(watch.step(body(false, 0), 1 / FRAME_HZ), 0);
-    assert.equal(jump(watch, 1, -9), 9);
-    assert.equal(watch.step(body(false, 0), 1 / FRAME_HZ), 0);
+    expect(watch.step(body(false, 0), 1 / FRAME_HZ)).toBe(0);
+    expect(jump(watch, 1, -9)).toBe(9);
+    expect(watch.step(body(false, 0), 1 / FRAME_HZ)).toBe(0);
   });
   it("when the watch is reset in flight, then the air clock restarts and a short remainder reports nothing", () => {
     const watch = new LandingWatch();
     for (let t = 0; t < 1; t += 1 / FRAME_HZ) watch.step(body(true, -9), 1 / FRAME_HZ);
     watch.reset();
-    assert.equal(watch.step(body(false, 0), 1 / FRAME_HZ), 0);
+    expect(watch.step(body(false, 0), 1 / FRAME_HZ)).toBe(0);
   });
   it("when the nose lands first and the hull has eaten the fall, then the four wheels down a few frames on report the fastest fall of the flight", () => {
     const watch = new LandingWatch();
     for (let t = 0; t < 1; t += 1 / FRAME_HZ) watch.step(body(true, -9), 1 / FRAME_HZ);
-    assert.equal(watch.step(body(false, -3, 0), 1 / FRAME_HZ), 0);
-    assert.equal(watch.step(body(false, -4, 3), 1 / FRAME_HZ), 0);
-    assert.equal(watch.step(body(false, -4, 15), 1 / FRAME_HZ), 9);
-    assert.equal(watch.step(body(false, 0, 15), 1 / FRAME_HZ), 0);
+    expect(watch.step(body(false, -3, 0), 1 / FRAME_HZ)).toBe(0);
+    expect(watch.step(body(false, -4, 3), 1 / FRAME_HZ)).toBe(0);
+    expect(watch.step(body(false, -4, 15), 1 / FRAME_HZ)).toBe(9);
+    expect(watch.step(body(false, 0, 15), 1 / FRAME_HZ)).toBe(0);
   });
   it("when the four wheels are not down within the settle time, then it reports nothing, even when they come down later", () => {
     const watch = new LandingWatch();
     for (let t = 0; t < 1; t += 1 / FRAME_HZ) watch.step(body(true, -9), 1 / FRAME_HZ);
-    for (let t = 0; t <= LANDING.settleS + 0.1; t += 1 / FRAME_HZ) assert.equal(watch.step(body(false, 0, 3), 1 / FRAME_HZ), 0);
-    assert.equal(watch.step(body(false, 0, 15), 1 / FRAME_HZ), 0);
+    for (let t = 0; t <= LANDING.settleS + 0.1; t += 1 / FRAME_HZ) expect(watch.step(body(false, 0, 3), 1 / FRAME_HZ)).toBe(0);
+    expect(watch.step(body(false, 0, 15), 1 / FRAME_HZ)).toBe(0);
   });
   it("when the car bounces back into the air before the four are down, then the next flight is judged on its own fall", () => {
     const watch = new LandingWatch();
     for (let t = 0; t < 1; t += 1 / FRAME_HZ) watch.step(body(true, -9), 1 / FRAME_HZ);
-    assert.equal(watch.step(body(false, -3, 3), 1 / FRAME_HZ), 0);
+    expect(watch.step(body(false, -3, 3), 1 / FRAME_HZ)).toBe(0);
     for (let t = 0; t < 0.5; t += 1 / FRAME_HZ) watch.step(body(true, -2), 1 / FRAME_HZ);
-    assert.equal(watch.step(body(false, 0, 15), 1 / FRAME_HZ), 0);
+    expect(watch.step(body(false, 0, 15), 1 / FRAME_HZ)).toBe(0);
   });
 });

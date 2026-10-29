@@ -1,5 +1,4 @@
-import { describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { beltY } from "./car-lines.ts";
@@ -14,6 +13,8 @@ import { CLASS_LIFT, INTERIOR_MESH, LID } from "./constants.ts";
 import { PartSeat } from "./part-geometry.ts";
 import { headGlowOf } from "./lamp-glow.test-util.ts";
 import { DT, forModes, paint } from "./test-support.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** A seat has no `raycast`; a mesh of what it draws (`drawn`: a style's own grille or mirror) at its world pose stands in for it. */
 function seatProbe(seat: PartSeat): THREE.Mesh {
@@ -89,11 +90,11 @@ forModes("given a car whose lamps live on the body and break per corner", (mode)
     crushFrontLeft(car);
     const rows = lampRows(car);
     const out = rows.filter((l) => !l.intact).map((l) => `${l.kind}${l.side < 0 ? "L" : "R"}`);
-    assert.deepEqual(out, ["headL"], `lamps out: ${out.join(",") || "none"}`);
+    expect(firstMismatch(out, ["headL"]), `lamps out: ${out.join(",") || "none"}`).toBeUndefined();
     const batch = new LampBatch(2);
     batch.sync([car]);
     const shares = (["hood", "boot"] as const).map((k) => car.lampFittings.filter((f) => f.kind === k).length);
-    assert.equal(Array.from({ length: 13 }, (_, b) => batch.drawn(b)).join(), [1, 1, 2, 0, 0, 0, ...shares, 0, 0, 0, 0, 0].join(), "drawn as head lit / head broken / tail running / tail broken, no brake lamp or marker, the lid shares as the style has them, none broken, none braking");
+    expect(Array.from({ length: 13 }, (_, b) => batch.drawn(b)).join(), "drawn as head lit / head broken / tail running / tail broken, no brake lamp or marker, the lid shares as the style has them, none broken, none braking").toBe([1, 1, 2, 0, 0, 0, ...shares, 0, 0, 0, 0, 0].join());
   });
 
   it("when the front-left corner is crushed, then the crushed corner carries its lamp with the skin and the lamp stays seated on it", () => {
@@ -101,10 +102,10 @@ forModes("given a car whose lamps live on the body and break per corner", (mode)
     const rest = lampLocal(car, HEAD_L);
     crushFrontLeft(car);
     const lamp = lampLocal(car, HEAD_L);
-    assert.ok(lamp.distanceTo(rest) > 0.03, `left headlamp did not follow the crushed skin (moved ${lamp.distanceTo(rest).toFixed(3)} m)`);
+    expect(lamp.distanceTo(rest), `left headlamp did not follow the crushed skin (moved ${lamp.distanceTo(rest).toFixed(3)} m)`).toBeGreaterThan(0.03);
     for (const i of [HEAD_L, HEAD_R]) {
       const gap = offSkin(car, lampLocal(car, i));
-      assert.ok(gap < 0.005, `lamp ${i} floats ${gap.toFixed(3)} m off the skin`);
+      expect(gap, `lamp ${i} floats ${gap.toFixed(3)} m off the skin`).toBeLessThan(0.005);
     }
   });
 
@@ -112,11 +113,11 @@ forModes("given a car whose lamps live on the body and break per corner", (mode)
     const car = spawned(mode);
     const rest = lampLocal(car, HEAD_L);
     crushFrontLeft(car, true);
-    assert.ok(lampLocal(car, HEAD_L).distanceTo(rest) < 1e-6, "lamp moved while its skin was deferred");
+    expect(lampLocal(car, HEAD_L).distanceTo(rest), "lamp moved while its skin was deferred").toBeLessThan(1e-6);
     car.flushDeferredSkin();
     const lamp = lampLocal(car, HEAD_L);
-    assert.ok(lamp.distanceTo(rest) > 0.03, "flushing the owed skin left the lamp behind");
-    assert.ok(offSkin(car, lamp) < 0.005, "flushed lamp is off the skin");
+    expect(lamp.distanceTo(rest), "flushing the owed skin left the lamp behind").toBeGreaterThan(0.03);
+    expect(offSkin(car, lamp), "flushed lamp is off the skin").toBeLessThan(0.005);
   });
 });
 
@@ -130,11 +131,11 @@ describe("given a car whose front bumper is torn off with no corner crush (a det
     const bumperAt = bumper.object.getWorldPosition(new THREE.Vector3());
     priv.detachPart(bumper, 20);
     for (let i = 0; i < 30; i++) car.step(DT);
-    assert.ok(bumper.object.getWorldPosition(new THREE.Vector3()).distanceTo(bumperAt) > 0.2, "bumper never left the car");
-    assert.ok(lampRows(car).every((l) => l.intact), "a lamp went out with the bumper");
+    expect(bumper.object.getWorldPosition(new THREE.Vector3()).distanceTo(bumperAt), "bumper never left the car").toBeGreaterThan(0.2);
+    expect(lampRows(car).every((l) => l.intact), "a lamp went out with the bumper").toBeTruthy();
     for (let i = 0; i < 4; i++) {
       const d = lampLocal(car, i).distanceTo(before[i]!);
-      assert.ok(d < 1e-4, `lamp ${i} moved ${d.toFixed(4)} m relative to the body`);
+      expect(d, `lamp ${i} moved ${d.toFixed(4)} m relative to the body`).toBeLessThan(1e-4);
     }
   });
 });
@@ -162,7 +163,7 @@ describe("given every body style fitted with its own lamps", () => {
         l.seat.updateWorldMatrix(true, false, true);
         const m = l.seat.matrixWorld;
         axis.setFromMatrixColumn(m, 2).normalize();
-        assert.ok(axis.z * (l.kind === "head" ? 1 : -1) > 0.99, `${name} faces ${axis.toArray().map((v) => v.toFixed(2))}`);
+        expect(axis.z * (l.kind === "head" ? 1 : -1), `${name} faces ${axis.toArray().map((v) => v.toFixed(2))}`).toBeGreaterThan(0.99);
         // Every drawn triangle, probed from 0.6 m out along its normal: the first surface met must be the body skin (not air, a bumper,
         // grille or lid over the lamp) within 2 cm of the triangle, so no lens chord dives into the skin and no bezel floats off a corner.
         const unit = drawnLamp(car.style, l.kind, l.side).geometry;
@@ -180,13 +181,13 @@ describe("given every body style fitted with its own lamps", () => {
           n.transformDirection(m);
           ray.set(q.copy(c).addScaledVector(n, 0.6), n.clone().negate());
           const hit = ray.intersectObjects(exterior, false)[0];
-          assert.ok(hit?.object === car.body, `${name} probe ${t} at ${c.toArray().map((e) => e.toFixed(3))} meets ${hit ? hit.object.name || hit.object.parent?.name || "a part" : "nothing"}`);
+          expect(hit?.object, `${name} probe ${t} at ${c.toArray().map((e) => e.toFixed(3))} meets ${hit ? hit.object.name || hit.object.parent?.name || "a part" : "nothing"}`).toBe(car.body);
           const off = 0.6 - hit.distance;
-          assert.ok(Math.abs(off) < 0.02, `${name} probe ${t}: skin ${(off * 100).toFixed(1)} cm off the lamp`);
+          expect(Math.abs(off), `${name} probe ${t}: skin ${(off * 100).toFixed(1)} cm off the lamp`).toBeLessThan(0.02);
         }
         car.lampWorld(i, pos, dir);
-        assert.ok(pos.distanceTo(q.setFromMatrixPosition(m)) < 1e-6, `${name} lights from ${pos.distanceTo(q).toFixed(3)} m off the drawn lamp`);
-        assert.ok(dir.dot(axis) > 0.9999, `${name} light axis off the lamp's`);
+        expect(pos.distanceTo(q.setFromMatrixPosition(m)), `${name} lights from ${pos.distanceTo(q).toFixed(3)} m off the drawn lamp`).toBeLessThan(1e-6);
+        expect(dir.dot(axis), `${name} light axis off the lamp's`).toBeGreaterThan(0.9999);
       }
     });
   }
@@ -226,9 +227,9 @@ describe("given the hatchback's tail lamps, whose outer lens wraps the tail corn
           if (0.3 - hit.distance > worst) [worst, where] = [0.3 - hit.distance, p.toArray().map((e) => e.toFixed(3)).join(",")];
         }
       }
-      assert.ok(worst <= 0.002, `tail ${l.side < 0 ? "L" : "R"}: the skin stands ${(worst * 1000).toFixed(1)} mm in front of the lens at ${where}`);
+      expect(worst, `tail ${l.side < 0 ? "L" : "R"}: the skin stands ${(worst * 1000).toFixed(1)} mm in front of the lens at ${where}`).toBeLessThanOrEqual(0.002);
     }
-    assert.ok(probed > 200, `the control: ${probed} samples met the skin over the corner`);
+    expect(probed, `the control: ${probed} samples met the skin over the corner`).toBeGreaterThan(200);
   });
 
   it("when its outer lens is followed round the corner onto the quarter, then it drops to the reference's side-view lamp height (y .63 or lower) with its front edge at z -1.60", () => {
@@ -247,15 +248,15 @@ describe("given the hatchback's tail lamps, whose outer lens wraps the tail corn
       maxZ = Math.max(maxZ, pos.getZ(i));
       count++;
     }
-    assert.ok(count > 0, "no lit lens vertices out on the quarter");
-    assert.ok(minY <= 0.63, `outer lens bottom on the quarter at y ${minY.toFixed(3)}`);
-    assert.ok(maxZ >= -1.6, `outer lens front edge at z ${maxZ.toFixed(3)}`);
+    expect(count, "no lit lens vertices out on the quarter").toBeGreaterThan(0);
+    expect(minY, `outer lens bottom on the quarter at y ${minY.toFixed(3)}`).toBeLessThanOrEqual(0.63);
+    expect(maxZ, `outer lens front edge at z ${maxZ.toFixed(3)}`).toBeGreaterThanOrEqual(-1.6);
   });
 });
 
 describe("given each style with a high-mount brake lamp", () => {
   const styles = CAR_STYLE_IDS.filter((s) => CAR_STYLES[s].lamps.brake);
-  it("the control: some style has one", () => assert.ok(styles.length > 0));
+  it("the control: some style has one", () => expect(styles.length).toBeGreaterThan(0));
   for (const style of styles) {
     it(`when a ${style} is built, then its brake lamp sits on the first surface met from behind, the body, the rear glass or a roof-hinged gate's spoiler, not inside the cabin`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, style);
@@ -267,9 +268,9 @@ describe("given each style with a high-mount brake lamp", () => {
       const gate = car["trunk"];
       const seat = new THREE.Vector3().setFromMatrixPosition(brake.seat.matrixWorld);
       const hit = new THREE.Raycaster(new THREE.Vector3(seat.x, seat.y, -5), new THREE.Vector3(0, 0, 1)).intersectObjects([car.body, glass, gate], false)[0];
-      assert.ok(hit, `${style}: nothing behind its brake lamp`);
+      expect(hit, `${style}: nothing behind its brake lamp`).toBeTruthy();
       const name = hit.object === glass ? "the rear glass" : hit.object === gate ? "the gate" : "the body";
-      assert.ok(Math.abs(hit.point.z + (CAR_STYLES[style].lamps.brake!.inset ?? 0) - seat.z) < 0.01, `${style}: brake lamp at z ${seat.z.toFixed(3)}, ${name} met from behind at z ${hit.point.z.toFixed(3)}`);
+      expect(Math.abs(hit.point.z + (CAR_STYLES[style].lamps.brake!.inset ?? 0) - seat.z), `${style}: brake lamp at z ${seat.z.toFixed(3)}, ${name} met from behind at z ${hit.point.z.toFixed(3)}`).toBeLessThan(0.01);
     });
   }
 });
@@ -293,12 +294,12 @@ describe("given the pickup's high-mount stop lamp", () => {
     const glass = car.glassPanes.find((p) => p.name === "rear")!.mesh;
     const seat = brake.seat.position;
     const hit = new THREE.Raycaster(new THREE.Vector3(seat.x, seat.y, -5), new THREE.Vector3(0, 0, 1)).intersectObjects([car.body, glass], false)[0];
-    assert.ok(hit, `pickup: nothing behind its stop lamp at y ${seat.y.toFixed(3)}`);
+    expect(hit, `pickup: nothing behind its stop lamp at y ${seat.y.toFixed(3)}`).toBeTruthy();
     const surfaceZ = hit.point.z;
-    assert.ok(rear >= surfaceZ - BRAKE_NUB_TOL, `pickup: the stop lamp's rearmost point z ${rear.toFixed(4)}, the surface it sits on z ${surfaceZ.toFixed(4)}: ${((surfaceZ - rear) * 1000).toFixed(1)} mm proud (at most ${(BRAKE_NUB_TOL * 1000).toFixed(0)} mm)`);
+    expect(rear, `pickup: the stop lamp's rearmost point z ${rear.toFixed(4)}, the surface it sits on z ${surfaceZ.toFixed(4)}: ${((surfaceZ - rear) * 1000).toFixed(1)} mm proud (at most ${(BRAKE_NUB_TOL * 1000).toFixed(0)} mm)`).toBeGreaterThanOrEqual(surfaceZ - BRAKE_NUB_TOL);
     const size = style.lamps.brake!.size[0];
     const ratio = size / style.rearGlass.wTop;
-    assert.ok(ratio <= BRAKE_GLASS_SHARE, `pickup: the stop lamp ${size} m wide over the glass's ${style.rearGlass.wTop} m top is ${(ratio * 100).toFixed(1)} % (at most ${(BRAKE_GLASS_SHARE * 100).toFixed(0)} %)`);
+    expect(ratio, `pickup: the stop lamp ${size} m wide over the glass's ${style.rearGlass.wTop} m top is ${(ratio * 100).toFixed(1)} % (at most ${(BRAKE_GLASS_SHARE * 100).toFixed(0)} %)`).toBeLessThanOrEqual(BRAKE_GLASS_SHARE);
   });
 });
 
@@ -307,7 +308,7 @@ describe("given the monster's side markers with and without a `tint`", () => {
     const plain = CAR_STYLES.monster;
     const tint = 0x806040;
     const markers = plain.lamps.sideMarkers ?? [];
-    assert.ok(markers.length > 0, "the control: the monster carries side markers");
+    expect(markers.length, "the control: the monster carries side markers").toBeGreaterThan(0);
     const colours = (style: BodyStyle): string => {
       const styles: Record<CarStyleId, BodyStyle> = CAR_STYLES;
       styles.monster = style;
@@ -326,9 +327,9 @@ describe("given the monster's side markers with and without a `tint`", () => {
     };
     const want = new THREE.Color(tint).toArray().map((c) => c.toFixed(4)).join(" ");
     const untinted: BodyStyle = { ...plain, lamps: { ...plain.lamps, sideMarkers: markers.map((m) => ({ at: m.at, size: m.size })) } };
-    assert.equal(colours(untinted), Array.from({ length: markers.length * 2 }, () => "1.0000 1.0000 1.0000").join(", "), "untinted markers keep the head look's white");
+    expect(colours(untinted), "untinted markers keep the head look's white").toBe(Array.from({ length: markers.length * 2 }, () => "1.0000 1.0000 1.0000").join(", "));
     const tinted: BodyStyle = { ...plain, lamps: { ...plain.lamps, sideMarkers: markers.map((m) => ({ ...m, tint })) } };
-    assert.equal(colours(tinted), Array.from({ length: markers.length * 2 }, () => want).join(", "), "tinted markers take the tint");
+    expect(colours(tinted), "tinted markers take the tint").toBe(Array.from({ length: markers.length * 2 }, () => want).join(", "));
   });
 });
 
@@ -358,14 +359,14 @@ describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, hal
       const texels = litTexels(bulb);
       return bluest(texels, texels.length / 3);
     });
-    assert.ok(ratios[1]! < ratios[0]! && ratios[0]! < ratios[2]!, `lit texel blue/red, none/halogen/led: ${ratios.map((r) => r.toFixed(3)).join("/")}`);
+    expect(ratios[1]! < ratios[0]! && ratios[0]! < ratios[2]!, `lit texel blue/red, none/halogen/led: ${ratios.map((r) => r.toFixed(3)).join("/")}`).toBeTruthy();
   });
 
   it("when a halogen lens is drawn, then its texel's red, under the head lens's emissive (0.905 linear x 1.15), clears the post's bloom threshold, so it glows with a halo; the neutral lens stays under 1", () => {
     /** The post's bloom threshold (engine-post GRADE) over the head lens's emissive red (0xf4 linear 0.905 x emissiveIntensity 1.15). */
     const BLOOM_RED_TEXEL = 1.6 / (0.905 * 1.15);
     const [halogen, neutral] = [Math.max(...litTexels("halogen")), Math.max(...litTexels(undefined))];
-    assert.ok(halogen > BLOOM_RED_TEXEL && neutral <= 1, `lit texel peak: halogen ${halogen.toFixed(3)} (bloom at ${BLOOM_RED_TEXEL.toFixed(3)}), neutral ${neutral.toFixed(3)}`);
+    expect(halogen > BLOOM_RED_TEXEL && neutral <= 1, `lit texel peak: halogen ${halogen.toFixed(3)} (bloom at ${BLOOM_RED_TEXEL.toFixed(3)}), neutral ${neutral.toFixed(3)}`).toBeTruthy();
   });
 
   it("when the pool lights it, then its head glow is bluer from halogen to the neutral white to LED", () => {
@@ -373,7 +374,7 @@ describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, hal
       const { rgb, n } = headGlowOf(styled(bulb));
       return bluest(rgb, n);
     });
-    assert.ok(ratios[1]! < ratios[0]! && ratios[0]! < ratios[2]!, `head glow blue/red, none/halogen/led: ${ratios.map((r) => r.toFixed(3)).join("/")}`);
+    expect(ratios[1]! < ratios[0]! && ratios[0]! < ratios[2]!, `head glow blue/red, none/halogen/led: ${ratios.map((r) => r.toFixed(3)).join("/")}`).toBeTruthy();
   });
 
   it("when its lens is dark (a lit DRL over it), then its head glow is under half the lit lens's, so the sprite never washes the lens white", () => {
@@ -381,7 +382,7 @@ describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, hal
     const head = lit.lamps.shapes!.head!;
     const dark: BodyStyle = { ...lit, lamps: { ...lit.lamps, shapes: { ...lit.lamps.shapes, head: { ...head, lens: "dark" } } } };
     const [a, b] = [headGlowOf(lit).rgb, headGlowOf(dark).rgb];
-    assert.ok(b[0]! < 0.5 * a[0]!, `head L glow red channel: lit lens ${a[0]!.toFixed(3)}, dark lens ${b[0]!.toFixed(3)}`);
+    expect(b[0]!, `head L glow red channel: lit lens ${a[0]!.toFixed(3)}, dark lens ${b[0]!.toFixed(3)}`).toBeLessThan(0.5 * a[0]!);
   });
 });
 
@@ -398,13 +399,13 @@ describe("given a monster-class car, whose lamp seats ride its lift", () => {
     const seats = new Set<THREE.Object3D>(car.lamps.map((l) => l.seat));
     let found = 0;
     car.group.traverse((o) => void (seats.has(o) && found++));
-    assert.equal(found, 0);
+    expect(found).toBe(0);
   });
 
   it("when the batch packs its lamps, then each instance is the seat's pose in the lift's frame", () => {
     const car = dressed();
     const lift = car.group.getObjectByName(CLASS_LIFT)!;
-    assert.ok(lift.position.y > 0.1, "the control: the monster class raises the body");
+    expect(lift.position.y, "the control: the monster class raises the body").toBeGreaterThan(0.1);
     const batch = new LampBatch(8);
     batch.sync([car]);
     const seatInLift = new THREE.Matrix4();
@@ -414,9 +415,9 @@ describe("given a monster-class car, whose lamp seats ride its lift", () => {
       seatInLift.compose(l.seat.position, l.seat.quaternion, l.seat.scale);
       expected.multiplyMatrices(lift.matrixWorld, seatInLift);
       batch.draw.matrixAt(row, got);
-      for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - expected.elements[k]!) < 1e-5, `${l.kind} ${l.side} element ${k}`);
+      for (let k = 0; k < 16; k++) expect(Math.abs(got.elements[k]! - expected.elements[k]!), `${l.kind} ${l.side} element ${k}`).toBeLessThan(1e-5);
       const unit = batch.draw.variants[batch.draw.variantAt(row)]!;
-      assert.equal(trianglesOf(unit), trianglesOf(drawnLamp(car.style, l.kind, l.side).geometry), `${l.kind} ${l.side} draws its own unit`);
+      expect(trianglesOf(unit), `${l.kind} ${l.side} draws its own unit`).toBe(trianglesOf(drawnLamp(car.style, l.kind, l.side).geometry));
     }
   });
 
@@ -444,7 +445,7 @@ describe("given a monster-class car, whose lamp seats ride its lift", () => {
     car.group.updateMatrixWorld(true);
     for (const [i, l] of car.lamps.entries()) {
       car.lampWorld(i, pos, dir);
-      assert.ok(pos.distanceTo(inLift(l)) < 1e-6, `${l.kind} ${l.side} lights from ${pos.distanceTo(expected).toFixed(3)} m off its seat in the moved lift`);
+      expect(pos.distanceTo(inLift(l)), `${l.kind} ${l.side} lights from ${pos.distanceTo(expected).toFixed(3)} m off its seat in the moved lift`).toBeLessThan(1e-6);
     }
     car.group.position.z += 2;
     car.group.updateMatrixWorld(true);
@@ -452,9 +453,9 @@ describe("given a monster-class car, whose lamp seats ride its lift", () => {
     const packed = new THREE.Matrix4();
     for (const [i, l] of car.lamps.entries()) {
       const drawnAt = pos.setFromMatrixPosition(batch.draw.matrixAt(i, packed));
-      assert.ok(drawnAt.distanceTo(inLift(l)) < 1e-5, `${l.kind} ${l.side} drawn ${drawnAt.distanceTo(expected).toFixed(3)} m off its seat in the moved lift`);
+      expect(drawnAt.distanceTo(inLift(l)), `${l.kind} ${l.side} drawn ${drawnAt.distanceTo(expected).toFixed(3)} m off its seat in the moved lift`).toBeLessThan(1e-5);
     }
-    assert.equal(composed, 0, "lamp seat matrices composed on a frame the skin did not move");
+    expect(composed, "lamp seat matrices composed on a frame the skin did not move").toBe(0);
   });
 });
 
@@ -475,11 +476,11 @@ describe("given the lamp batch and one car of each style", () => {
       batch.sync([car]);
       const expected = car.lamps.reduce((sum, l) => sum + trianglesOf(drawnLamp(car.style, l.kind, l.side).geometry), 0);
       const heads = [0, 1, 2, 3].reduce((n, b) => n + batch.drawn(b), 0);
-      assert.equal(heads, car.lamps.length, `${id}: every lamp is packed as a head or tail seat`);
+      expect(heads, `${id}: every lamp is packed as a head or tail seat`).toBe(car.lamps.length);
       const drawnTris = rowsTris(batch, 0, car.lamps.length);
-      assert.equal(drawnTris, expected, `${id}: the lamp batch bills ${drawnTris} triangles for lamps of ${expected}`);
+      expect(drawnTris, `${id}: the lamp batch bills ${drawnTris} triangles for lamps of ${expected}`).toBe(expected);
       const packed = rowsTris(batch, 0, batch.draw.count);
-      assert.equal(batch.draw.triangles, packed, `${id}: the one lamp draw bills ${batch.draw.triangles} triangles for seats of ${packed}`);
+      expect(batch.draw.triangles, `${id}: the one lamp draw bills ${batch.draw.triangles} triangles for seats of ${packed}`).toBe(packed);
       batch.dispose();
     }
   });
@@ -493,10 +494,10 @@ describe("given the lamp batch and one car of each style", () => {
     const instanced = (m: THREE.Mesh): m is THREE.InstancedMesh => (m as THREE.InstancedMesh).isInstancedMesh === true;
     const instancedDraws = [...parts.meshes, ...parts.casters].filter(instanced);
     const wrong = instancedDraws.filter((m) => m.visible !== m.count > 0);
-    assert.equal(wrong.length, 0, `draws shown while empty or hidden while filled: ${wrong.map((m) => `${m.name || m.geometry.name || "?"} (${m.count})`).join(", ")}`);
-    assert.ok(lamps.draw.mesh.visible === (lamps.draw.triangles > 0), "the lamp draw is shown only while it bills triangles");
-    assert.ok(parts.styled.mesh.visible === (parts.styled.triangles > 0), "the styled part draw is shown only while it bills triangles");
-    assert.ok(lamps.draw.triangles > 0 && parts.styled.triangles > 0 && instancedDraws.some((m) => m.count > 0), "nothing was packed");
+    expect(wrong.length, `draws shown while empty or hidden while filled: ${wrong.map((m) => `${m.name || m.geometry.name || "?"} (${m.count})`).join(", ")}`).toBe(0);
+    expect(lamps.draw.mesh.visible, "the lamp draw is shown only while it bills triangles").toBe((lamps.draw.triangles > 0));
+    expect(parts.styled.mesh.visible, "the styled part draw is shown only while it bills triangles").toBe((parts.styled.triangles > 0));
+    expect(lamps.draw.triangles > 0 && parts.styled.triangles > 0 && instancedDraws.some((m) => m.count > 0), "nothing was packed").toBeTruthy();
     lamps.dispose();
     parts.dispose();
   });
@@ -526,12 +527,12 @@ describe("given the lamp batch and one car of each style", () => {
       const off = read();
       car.drive.brake = 1;
       const on = read();
-      assert.equal([off.tails, off.shares, off.high].join(" "), `2,0 ${shares},0 0,${high}`, `${id} off the brakes`);
-      assert.equal([on.tails, on.shares, on.high].join(" "), `0,2 0,${shares} ${high},0`, `${id} on the brakes`);
-      assert.ok(off.glow > 0 && on.glow > 2 * off.glow, `${id}: tail glows ${off.glow.toFixed(3)} off the brakes, ${on.glow.toFixed(3)} on them`);
+      expect([off.tails, off.shares, off.high].join(" "), `${id} off the brakes`).toBe(`2,0 ${shares},0 0,${high}`);
+      expect([on.tails, on.shares, on.high].join(" "), `${id} on the brakes`).toBe(`0,2 0,${shares} ${high},0`);
+      expect(off.glow > 0 && on.glow > 2 * off.glow, `${id}: tail glows ${off.glow.toFixed(3)} off the brakes, ${on.glow.toFixed(3)} on them`).toBeTruthy();
       batch.dispose();
     }
-    assert.ok(highs >= 2, `${highs} styles carry a high brake lamp`);
+    expect(highs, `${highs} styles carry a high brake lamp`).toBeGreaterThanOrEqual(2);
   });
 
   it("when a car taps its brakes, then the lamp draw re-colours its tails without rebuilding its geometry", () => {
@@ -542,18 +543,18 @@ describe("given the lamp batch and one car of each style", () => {
       const batch = new LampBatch(2);
       batch.sync([car]);
       const tail = car.lamps.findIndex((l) => l.kind === "tail");
-      assert.ok(tail >= 0, `${id}: the control: the car carries a tail lamp`);
+      expect(tail, `${id}: the control: the car carries a tail lamp`).toBeGreaterThanOrEqual(0);
       const geo = batch.draw.mesh.geometry;
       const [position, index] = [(geo.getAttribute("position") as THREE.BufferAttribute).version, geo.index!.version];
       const glow = (): number => batch.draw.glowAt(tail, new THREE.Color()).r;
       const off = glow();
       car.drive.brake = 1;
       batch.sync([car]);
-      assert.ok(batch.draw.mesh.geometry === geo, `${id}: braking swapped the draw's geometry`);
-      assert.equal((geo.getAttribute("position") as THREE.BufferAttribute).version, position, `${id}: braking re-uploaded the vertices`);
-      assert.equal(geo.index!.version, index, `${id}: braking re-uploaded the indices`);
-      assert.ok(batch.drawn(10) > 0, `${id}: no tail drawn braking`);
-      assert.ok(glow() > off, `${id}: tail glow red ${off.toFixed(3)} off the brakes, ${glow().toFixed(3)} on them`);
+      expect(batch.draw.mesh.geometry, `${id}: braking swapped the draw's geometry`).toBe(geo);
+      expect((geo.getAttribute("position") as THREE.BufferAttribute).version, `${id}: braking re-uploaded the vertices`).toBe(position);
+      expect(geo.index!.version, `${id}: braking re-uploaded the indices`).toBe(index);
+      expect(batch.drawn(10), `${id}: no tail drawn braking`).toBeGreaterThan(0);
+      expect(glow(), `${id}: tail glow red ${off.toFixed(3)} off the brakes, ${glow().toFixed(3)} on them`).toBeGreaterThan(off);
       batch.dispose();
     }
   });
@@ -574,18 +575,18 @@ describe("given the lamp batch and one car of each style", () => {
           batch.sync([car]);
           return [slot, slot + 2].map((b) => batch.drawn(b)).join();
         };
-        assert.equal(drawn(), `${shares.length},0`, `${id} ${lid}: every share lit at rest`);
+        expect(drawn(), `${id} ${lid}: every share lit at rest`).toBe(`${shares.length},0`);
         car["breakLamp"](car.lamps.find((l) => l.kind === kind && l.side < 0)!);
         const left = shares.filter((f) => f.share?.lamp?.side === -1).length;
-        assert.equal(drawn(), `${shares.length - left},${left}`, `${id} ${lid}: the left lamp broke`);
+        expect(drawn(), `${id} ${lid}: the left lamp broke`).toBe(`${shares.length - left},${left}`);
         car["detachPart"](car["parts"].find((p) => p.name === lid)!, 0);
-        assert.equal(drawn(), `0,${shares.length}`, `${id} ${lid}: the lid tore off`);
+        expect(drawn(), `${id} ${lid}: the lid tore off`).toBe(`0,${shares.length}`);
         car.resetVisual();
-        assert.equal(drawn(), `${shares.length},0`, `${id} ${lid}: reset`);
+        expect(drawn(), `${id} ${lid}: reset`).toBe(`${shares.length},0`);
         batch.dispose();
       }
     }
-    assert.ok(lids >= 4, `${lids} lids carry lamp shares`);
+    expect(lids, `${lids} lids carry lamp shares`).toBeGreaterThanOrEqual(4);
 
   });
 });
@@ -633,8 +634,8 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     const { lights, camera, far, near, behind } = rig();
     lights.update([far, near, behind], camera, far);
     const want = [far, far, near, near].slice(0, FULL_POOL.spots);
-    for (const [k, car] of want.entries()) assert.ok(spotOn(lights.spots[k]!, car), `spot ${k} is not on the expected car`);
-    assert.equal(lights.glow.geometry.drawRange.count, 12);
+    for (const [k, car] of want.entries()) expect(spotOn(lights.spots[k]!, car), `spot ${k} is not on the expected car`).toBeTruthy();
+    expect(lights.glow.geometry.drawRange.count).toBe(12);
   });
 
   it("when a lamp is broken, then it never gets a light or a glow, and spare spots go dark, never away", () => {
@@ -645,11 +646,11 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     priv.breakLamp(priv.lamps[HEAD_L]);
     priv.breakLamp(priv.lamps[HEAD_R]);
     lights.update([far, near], camera, far);
-    assert.ok(lights.spots.every((s) => !spotOn(s, far)), "a broken headlamp kept its spot");
-    assert.equal(lights.spots.filter((s) => spotOn(s, near)).length, Math.min(2, FULL_POOL.spots));
-    assert.ok(lights.spots.slice(2).every((s) => s.intensity === 0), "an unassigned spot stayed lit");
-    assert.equal(lights.glow.geometry.drawRange.count, 6);
-    assert.equal(lightCount(scene), count, "the pool added or hid a light");
+    expect(lights.spots.every((s) => !spotOn(s, far)), "a broken headlamp kept its spot").toBeTruthy();
+    expect(lights.spots.filter((s) => spotOn(s, near)).length).toBe(Math.min(2, FULL_POOL.spots));
+    expect(lights.spots.slice(2).every((s) => s.intensity === 0), "an unassigned spot stayed lit").toBeTruthy();
+    expect(lights.glow.geometry.drawRange.count).toBe(6);
+    expect(lightCount(scene), "the pool added or hid a light").toBe(count);
   });
 
   it("when a police car's sirens are on, then they flash red then blue, each lit lens taking a pooled point in its colour, and with sirens off nothing is lit", () => {
@@ -660,24 +661,24 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     // A tail point is dim red (0.5); a siren point is bright (3), red or blue.
     const sirenPoints = () => lights.tailSpots.filter((p) => p.intensity > 1);
     lights.update([far, cop], camera, far, 0.1);
-    assert.equal(sirenPoints().length, 0, "a siren lit with the sirens off");
-    assert.equal(lights.glow.geometry.drawRange.count, 8);
+    expect(sirenPoints().length, "a siren lit with the sirens off").toBe(0);
+    expect(lights.glow.geometry.drawRange.count).toBe(8);
 
     cop.setSirens(true);
     for (const [now, red] of [[0.1, true], [0.35, false], [0.6, true]] as const) {
       lights.update([far, cop], camera, far, now);
       const lit = sirenPoints();
-      assert.equal(lit.length, 1, `t=${now}: ${lit.length} siren points`);
-      assert.equal(lit[0]!.color.r > lit[0]!.color.b, red, `t=${now}: wrong colour`);
-      assert.ok(lit[0]!.position.y > 1.4, `t=${now}: siren light at y=${lit[0]!.position.y.toFixed(2)}, not over the roof`);
-      assert.equal(lights.glow.geometry.drawRange.count, 9);
+      expect(lit.length, `t=${now}: ${lit.length} siren points`).toBe(1);
+      expect(lit[0]!.color.r > lit[0]!.color.b, `t=${now}: wrong colour`).toBe(red);
+      expect(lit[0]!.position.y, `t=${now}: siren light at y=${lit[0]!.position.y.toFixed(2)}, not over the roof`).toBeGreaterThan(1.4);
+      expect(lights.glow.geometry.drawRange.count).toBe(9);
     }
-    assert.equal(lightCount(scene), count, "sirens added or hid a light");
+    expect(lightCount(scene), "sirens added or hid a light").toBe(count);
 
     cop.setSirens(false);
     lights.update([far, cop], camera, far, 0.1);
-    assert.equal(sirenPoints().length, 0, "sirens stayed lit after setSirens(false)");
-    assert.equal(new DeformableCar(paint(), scene).lampCount, 4, "a car without a light bar grew siren slots");
+    expect(sirenPoints().length, "sirens stayed lit after setSirens(false)").toBe(0);
+    expect(new DeformableCar(paint(), scene).lampCount, "a car without a light bar grew siren slots").toBe(4);
   });
 
   it("when a police car's sirens flash, then each siren's light reaches the road beside the car on its lens's side and nothing of the cabin under the roof (the seats' tops, the wheel, the headliner's middle)", () => {
@@ -695,12 +696,12 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     for (const now of [0.1, 0.35]) {
       lights.update([far, cop], camera, far, now);
       const l = lights.tailSpots.find((p) => p.intensity > 1);
-      assert.ok(l, `t=${now}: no siren lit`);
+      must(l, `t=${now}: no siren lit`);
       for (let i = 0; i < cop.lampCount; i++) if (cop.lampWorld(i, lens, out) === "red" || cop.lampWorld(i, lens, out) === "blue") break;
       const road = lens.clone().addScaledVector(out, 1.6).setY(0.05);
-      assert.ok(reaches(l, road), `t=${now}: the siren misses the road beside the car at ${road.toArray().map((e) => e.toFixed(2))}`);
+      expect(reaches(l, road), `t=${now}: the siren misses the road beside the car at ${road.toArray().map((e) => e.toFixed(2))}`).toBeTruthy();
       const lit = cabin.filter((p) => reaches(l, p));
-      assert.equal(lit.length, 0, `t=${now}: the siren reaches the cabin at ${lit.map((p) => cop.group.worldToLocal(p.clone()).toArray().map((e) => e.toFixed(2)).join()).join("; ")}`);
+      expect(lit.length, `t=${now}: the siren reaches the cabin at ${lit.map((p) => cop.group.worldToLocal(p.clone()).toArray().map((e) => e.toFixed(2)).join()).join("; ")}`).toBe(0);
     }
   });
 
@@ -717,8 +718,8 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
       return shows(lights);
     };
     const read = [frames(true), frames(false), frames(true)];
-    assert.equal(read[1], "glows 0, head spots 0, tail spots 0, pools 0", "by day");
-    for (const night of [read[0]!, read[2]!]) assert.ok(/^glows 12, head spots 4, tail spots 4, pools [1-9]/.test(night), `at night: ${night}`);
+    expect(read[1], "by day").toBe("glows 0, head spots 0, tail spots 0, pools 0");
+    for (const night of [read[0]!, read[2]!]) expect(/^glows 12, head spots 4, tail spots 4, pools [1-9]/.test(night), `at night: ${night}`).toBeTruthy();
   });
 
   it("when it is day, then a braking car's tail lamps still glow, take real lights and draw lit lenses, and a police car's sirens still flash, while every head lamp and running tail stays off, its lens unlit", () => {
@@ -731,7 +732,7 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     lights.update([far, near, cop], camera, far, 0.1);
     const siren = lights.tailSpots.filter((p) => p.intensity > 1).length;
     // The followed car's two braking tails and the one siren lit at t = 0.1: three glows, three tail spots; no head spot.
-    assert.equal(`${shows(lights)}, siren spots ${siren}`, "glows 3, head spots 0, tail spots 3, pools 0, siren spots 1");
+    expect(`${shows(lights)}, siren spots ${siren}`).toBe("glows 3, head spots 0, tail spots 3, pools 0, siren spots 1");
 
     // The lens looks the lamp batch draws (`LAMP_SLOTS`): lit head 0, running tail 2, braking tail 10, high brake lit 4, hood share 6,
     // boot share running 7 and braking 11; their unlit day looks 13 (head), 14 (tail), 15 (hood share), 16 (boot share).
@@ -748,21 +749,21 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     const [heads, running, braking, high, hoods, boots, brakingBoots] = [count(cars, "head"), count([near, cop], "tail"), count([far], "tail"), count([far], "brake"), count(cars, "hood"), count([near, cop], "boot"), count([far], "boot")];
     const want = (day: boolean) =>
       `heads ${day ? 0 : heads} lit ${day ? heads : 0} unlit, running tails ${day ? 0 : running} lit ${day ? running : 0} unlit, braking tails ${braking}, high brake ${high}, hood shares ${day ? 0 : hoods} lit ${day ? hoods : 0} unlit, boot shares ${day ? 0 : boots} lit ${day ? boots : 0} unlit ${brakingBoots} braking`;
-    assert.equal(`day: ${lenses(false)}; night: ${lenses(true)}`, `day: ${want(true)}; night: ${want(false)}`);
-    assert.ok(heads > 0 && running > 0 && braking > 0, `the cars carry ${heads} heads, ${running} running tails, ${braking} braking tails`);
+    expect(`day: ${lenses(false)}; night: ${lenses(true)}`).toBe(`day: ${want(true)}; night: ${want(false)}`);
+    expect(heads > 0 && running > 0 && braking > 0, `the cars carry ${heads} heads, ${running} running tails, ${braking} braking tails`).toBeTruthy();
     batch.dispose();
   });
 
   it("when the pool is the phone's, then it holds 2 head spots and 2 tail spots, the followed car's two headlamps take both spots, and every intact lamp still glows", () => {
     const { lights, scene, camera, far, near, behind } = rig(PHONE_POOL);
     lights.update([far, near, behind], camera, far);
-    assert.equal(lights.spots.length, 2);
-    assert.equal(lights.tailSpots.length, 2);
-    assert.ok(lights.spots.every((s) => spotOn(s, far)), "a spot is not on the followed car");
-    assert.equal(lights.glow.geometry.drawRange.count, 12);
+    expect(lights.spots.length).toBe(2);
+    expect(lights.tailSpots.length).toBe(2);
+    expect(lights.spots.every((s) => spotOn(s, far)), "a spot is not on the followed car").toBeTruthy();
+    expect(lights.glow.geometry.drawRange.count).toBe(12);
     let pooled = 0;
     scene.traverse((o) => void ((o instanceof THREE.SpotLight || o instanceof THREE.PointLight) && pooled++));
-    assert.equal(pooled, 4, "the scene holds more pooled lights than the phone's");
+    expect(pooled, "the scene holds more pooled lights than the phone's").toBe(4);
   });
 
   it("when one car is followed, one is in the highlight, one is on the middle tile and one is far off it, then the followed and highlight cars get the real spots, and the other two get fake pools and no spot", () => {
@@ -772,8 +773,8 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
     const lights = new LampLights(scene, 16);
     lights.update([aside, near, behind, far], camera, far, 0, [behind]);
     const want = [far, far, behind, behind];
-    for (const [k, car] of want.entries()) assert.ok(spotOn(lights.spots[k]!, car), `spot ${k} is not on the expected car`);
-    for (const car of [near, aside]) assert.ok(lights.spots.every((s) => !spotOn(s, car)), "a car outside the followed car and the highlight kept a real spot");
+    for (const [k, car] of want.entries()) expect(spotOn(lights.spots[k]!, car), `spot ${k} is not on the expected car`).toBeTruthy();
+    for (const car of [near, aside]) expect(lights.spots.every((s) => !spotOn(s, car)), "a car outside the followed car and the highlight kept a real spot").toBeTruthy();
     const m = lights.pools.instanceMatrix.array;
     const pooled = (car: DeformableCar, i: number): boolean => {
       const p = new THREE.Vector3();
@@ -781,8 +782,8 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
       for (let k = 0; k < lights.pools.count; k++) if (Math.abs(m[k * 16 + 12]! - p.x) < 1e-4 && Math.abs(m[k * 16 + 14]! - p.z) < 1e-4) return true;
       return false;
     };
-    for (const car of [near, aside]) for (const i of [HEAD_L, HEAD_R]) assert.ok(pooled(car, i), `headlamp ${i} of a car without a spot has no fake pool`);
-    for (const car of [far, behind]) for (const i of [HEAD_L, HEAD_R]) assert.ok(!pooled(car, i), `headlamp ${i} of a car with real spots also shows a fake pool`);
+    for (const car of [near, aside]) for (const i of [HEAD_L, HEAD_R]) expect(pooled(car, i), `headlamp ${i} of a car without a spot has no fake pool`).toBeTruthy();
+    for (const car of [far, behind]) for (const i of [HEAD_L, HEAD_R]) expect(!pooled(car, i), `headlamp ${i} of a car with real spots also shows a fake pool`).toBe(true);
   });
 
   it("when the followed car's tail lamps hold real lights, then each lights the road behind its lens and nothing ahead of it (the cabin, the bed floor)", () => {
@@ -795,13 +796,13 @@ describe("given the lamp light pool with a followed car far ahead, a nearer car 
       if (far.lampWorld(i, pos, dir) !== "tail") continue;
       tails++;
       const l = lights.tailSpots.find((s) => s.intensity > 0 && s.position.distanceTo(pos) < 0.1);
-      assert.ok(l, `tail lamp ${i} of the followed car holds no lit light`);
+      must(l, `tail lamp ${i} of the followed car holds no lit light`);
       const ahead = pos.clone().addScaledVector(dir, -0.4).setY(pos.y + 0.2);
       const behind = pos.clone().addScaledVector(dir, 1).setY(pos.y - 0.4);
-      assert.ok(!reaches(l, ahead), `tail lamp ${i}'s light reaches ${ahead.toArray().map((e) => e.toFixed(2))}, 40 cm ahead of its lens`);
-      assert.ok(reaches(l, behind), `tail lamp ${i}'s light misses the road behind it`);
+      expect(!reaches(l, ahead), `tail lamp ${i}'s light reaches ${ahead.toArray().map((e) => e.toFixed(2))}, 40 cm ahead of its lens`).toBe(true);
+      expect(reaches(l, behind), `tail lamp ${i}'s light misses the road behind it`).toBeTruthy();
     }
-    assert.equal(tails, 2);
+    expect(tails).toBe(2);
   });
 });
 
@@ -824,10 +825,10 @@ describe("given each style's car alone at night, its lamps' glows seen from 8 m 
       };
       const lit = (row: number[], kind: string) => car.lamps.map((l, i) => [l.kind, row[i]!] as const).filter(([k]) => k === kind).map(([, g]) => g);
       const [front, back] = [glows(1), glows(-1)];
-      assert.ok(lit(front, "head").every((g) => g > 0.5), `${id}: headlamp glows from ahead ${lit(front, "head")}`);
-      assert.deepEqual(lit(front, "tail"), [0, 0], `${id}: tail lamp glows seen from ahead`);
-      assert.ok(lit(back, "tail").every((g) => g > 0.1), `${id}: tail lamp glows from behind ${lit(back, "tail")}`);
-      assert.deepEqual(lit(back, "head"), [0, 0], `${id}: headlamp glows seen from behind`);
+      expect(lit(front, "head").every((g) => g > 0.5), `${id}: headlamp glows from ahead ${lit(front, "head")}`).toBeTruthy();
+      expect(firstMismatch(lit(front, "tail"), [0, 0]), `${id}: tail lamp glows seen from ahead`).toBeUndefined();
+      expect(lit(back, "tail").every((g) => g > 0.1), `${id}: tail lamp glows from behind ${lit(back, "tail")}`).toBeTruthy();
+      expect(firstMismatch(lit(back, "head"), [0, 0]), `${id}: headlamp glows seen from behind`).toBeUndefined();
     }
   });
 });
@@ -842,8 +843,8 @@ describe("given a device class and the page's ?lamps setting", () => {
   for (const testCase of testCases) {
     it(testCase.it, () => {
       const pool = lampPoolFor(testCase.desktop, testCase.lamps);
-      assert.equal(pool.spots, testCase.spots, "spots");
-      assert.equal(pool.tails, testCase.tails, "tails");
+      expect(pool.spots, "spots").toBe(testCase.spots);
+      expect(pool.tails, "tails").toBe(testCase.tails);
     });
   }
 });
@@ -860,8 +861,8 @@ describe("given the lamp pool updating a lit car's glows every frame", () => {
     const lights = new LampLights(scene, 12, FULL_POOL);
     const toArray = vi.spyOn(THREE.Vector3.prototype, "toArray");
     lights.update([car], camera, car);
-    assert.ok(lights.glow.geometry.drawRange.count >= 4, `the control: ${lights.glow.geometry.drawRange.count} glows stored`);
-    assert.equal(toArray.mock.calls.length, 0, "Vector3.toArray calls in one update");
+    expect(lights.glow.geometry.drawRange.count, `the control: ${lights.glow.geometry.drawRange.count} glows stored`).toBeGreaterThanOrEqual(4);
+    expect(toArray.mock.calls.length, "Vector3.toArray calls in one update").toBe(0);
   });
 });
 
@@ -882,6 +883,6 @@ describe("given the hatchback, whose tail lamp crosses the step from the infill 
         if (ray.intersectObjects([car.body, lens], false)[0]?.object !== lens) gaps.push(`${x.toFixed(4)},${y}`);
       }
     }
-    assert.equal(gaps.join(" "), "", "rays along the band that meet the body before the lens, by x,y");
+    expect(gaps.join(" "), "rays along the band that meet the body before the lens, by x,y").toBe("");
   });
 });

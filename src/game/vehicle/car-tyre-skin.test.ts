@@ -1,5 +1,4 @@
-import { beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import type { PlanGrid } from "../deform/tyre-sag-kernel.ts";
 import { type CrashWorld, FREEWHEEL, launch, makeWorld, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -15,6 +14,7 @@ import { TyreSagArena } from "../deform/tyre-sag-kernel.ts";
 import { assertSameNumbers } from "./test-support.ts";
 import { tyreClearance } from "./tyre-clearance.test-util.ts";
 import { CLASSES, carClass } from "./vehicle-classes.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * A crushed skin's triangles stretched across a front tyre: one corner held over the tyre, every other point of the skin far away and low. The held corner stands on the tyre at
@@ -43,7 +43,7 @@ describe("given a pickup's skin of which one point rests over its front tyre and
     skin.hold(car.group, car.wheels, 0, lift, true);
     const over = skin["over"][FRONT_RIGHT_WHEEL]!;
     const held = Array.from(over).findIndex((rest) => !Number.isNaN(rest));
-    assert.ok(held >= 0, "fixture: a skin point resting over the tyre");
+    expect(held, "fixture: a skin point resting over the tyre").toBeGreaterThanOrEqual(0);
     const toMesh = new THREE.Matrix4().multiplyMatrices(car.group.matrixWorld.clone().invert(), mesh.matrixWorld).invert();
     const positions = mesh.geometry.getAttribute("position");
     const place = new THREE.Vector3();
@@ -66,7 +66,7 @@ describe("given a pickup's skin of which one point rests over its front tyre and
       car.wheels[FRONT_RIGHT_WHEEL]!.rotation.x = (step * 2 * Math.PI) / SPIN_STEPS;
       clearance = Math.min(clearance, tyreClearance(car, FRONT_RIGHT_WHEEL, Float32Array.from(triangles)));
     }
-    assert.ok(clearance >= CLEARANCE_M, `${(clearance * 1000).toFixed(1)} mm`);
+    expect(clearance, `${(clearance * 1000).toFixed(1)} mm`).toBeGreaterThanOrEqual(CLEARANCE_M);
   });
 });
 
@@ -137,7 +137,7 @@ describe(`given a hatchback driven into a wall with ${HOOD_COVER_OVERLAP * 100} 
           if (over > worst) [worst, where] = [over, `${seat.kind === PART_KIND.interior ? "cabin shell" : "engine bay"} at (${place.x.toFixed(2)}, ${place.y.toFixed(2)}, ${place.z.toFixed(2)})`];
         }
       }
-      assert.equal(worst, 0, `${kph} km/h: the ${where} stands ${(worst * 1000).toFixed(1)} mm over the drawn skin over it`);
+      expect(worst, `${kph} km/h: the ${where} stands ${(worst * 1000).toFixed(1)} mm over the drawn skin over it`).toBe(0);
     });
   }
 });
@@ -169,7 +169,7 @@ function compare(p: Pair, drives: readonly DriveInput[] = []): { skipped: Record
   let apart = 0;
   const version = (car: DeformableCar, mesh: (typeof MESHES)[number]): number => {
     const attr = car[mesh].geometry.getAttribute("position");
-    assert.ok(attr instanceof THREE.BufferAttribute);
+    must(attr instanceof THREE.BufferAttribute, "the position attribute is not a BufferAttribute");
     return attr.version;
   };
   for (let f = 0; f < FRAMES; f++) {
@@ -188,7 +188,7 @@ function compare(p: Pair, drives: readonly DriveInput[] = []): { skipped: Record
       for (let i = 0; i < a.length; i++) apart = Math.max(apart, Math.abs(a[i]! - b[i]!));
     }
   }
-  assert.ok(p.fastCar["bodyTyres"] && p.fastCar["hoodTyres"], "the car held its skin over its tyres");
+  expect(p.fastCar["bodyTyres"] && p.fastCar["hoodTyres"], "the car held its skin over its tyres").toBeTruthy();
   return { skipped, apart };
 }
 
@@ -209,9 +209,9 @@ describe("given a wreck's skin held over its tyres and the parts under its bonne
     };
     const [fast, full] = [pair(), pair()];
     const seen = compare({ fast: fast.w, full: full.w, fastCar: fast.car, fullCar: full.car }, drives);
-    assert.ok(fast.car.crashed, "the sedan was crashed");
-    assert.ok(seen.apart <= DRAWN_SLACK_M, `drawn ${(seen.apart * 1000).toFixed(2)} mm off the full hold`);
-    assert.ok(seen.skipped.hood > FRAMES / 2, `the bonnet's hold skipped ${seen.skipped.hood} of ${FRAMES} frames`);
+    expect(fast.car.crashed, "the sedan was crashed").toBeTruthy();
+    expect(seen.apart, `drawn ${(seen.apart * 1000).toFixed(2)} mm off the full hold`).toBeLessThanOrEqual(DRAWN_SLACK_M);
+    expect(seen.skipped.hood, `the bonnet's hold skipped ${seen.skipped.hood} of ${FRAMES} frames`).toBeGreaterThan(FRAMES / 2);
   });
 
   it(`when a pickup meets another head-on at 50 km/h, then its drawn body and bonnet stand within ${DRAWN_SLACK_M * 1000} mm of the full hold's every frame through the crush and after`, () => {
@@ -230,7 +230,7 @@ describe("given a wreck's skin held over its tyres and the parts under its bonne
     launch(fullCar, -5, 0, Math.PI / 2, 50 / 3.6, 0);
     launch(fullOther, 5, 0, -Math.PI / 2, -50 / 3.6, 0);
     const seen = compare({ fast, full, fastCar, fullCar });
-    assert.ok(seen.apart <= DRAWN_SLACK_M, `drawn ${(seen.apart * 1000).toFixed(2)} mm off the full hold`);
+    expect(seen.apart, `drawn ${(seen.apart * 1000).toFixed(2)} mm off the full hold`).toBeLessThanOrEqual(DRAWN_SLACK_M);
   });
 });
 
@@ -278,7 +278,7 @@ function holdWritten(car: DeformableCar, crushed: CrushedMesh, inKernel: boolean
 
 /** Every wheel's plan grid in `plans` is `expected`'s, array for array. */
 function assertSamePlans(plans: readonly PlanGrid[], expected: readonly PlanGrid[], label: string): void {
-  assert.equal(plans.length, expected.length, `${label} plan grids`);
+  expect(plans.length, `${label} plan grids`).toBe(expected.length);
   for (const [wheel, plan] of plans.entries()) {
     const want = expected[wheel]!;
     const at = `${label} wheel ${wheel} plan`;
@@ -317,18 +317,18 @@ describe(`given a hatchback crushed against a wall at ${KERNEL_ROW_KPH} km/h, it
     [1, "bonnet", false],
   ] as const) {
     it(`when its ${label} is held in JS and in the kernel, then every lift, drawn position and normal is the same bit for bit`, () => {
-      assert.ok(skinKernel(), "the test preload loaded the kernel");
+      expect(skinKernel(), "the test preload loaded the kernel").toBeTruthy();
       const crushed = fixture.meshes[which]!;
       const reference = holdWritten(fixture.car, crushed, false);
       const { calls, result: outcome } = countKernelCalls(1, () => holdWritten(fixture.car, crushed, true));
-      assert.ok(calls.sagPasses > 0 && calls.planGrids > 0, `${calls.sagPasses} sag passes and ${calls.planGrids} plan grids ran in the kernel`);
-      assert.equal(calls.raised > 0, sagLifts, `${calls.raised} of ${calls.sagPasses} sag passes lifted a corner`);
-      assert.ok(reference.held && reference.lift.some((lift) => lift > 0), "the hold lifted the crushed skin: the row compares a hold that moved something");
+      expect(calls.sagPasses > 0 && calls.planGrids > 0, `${calls.sagPasses} sag passes and ${calls.planGrids} plan grids ran in the kernel`).toBeTruthy();
+      expect(calls.raised > 0, `${calls.raised} of ${calls.sagPasses} sag passes lifted a corner`).toBe(sagLifts);
+      expect(reference.held && reference.lift.some((lift) => lift > 0), "the hold lifted the crushed skin: the row compares a hold that moved something").toBeTruthy();
       assertSameNumbers(outcome.lift, reference.lift, `${label} lift`);
       assertSameNumbers(outcome.positions, reference.positions, `${label} positions`);
       assertSameNumbers(outcome.normals, reference.normals, `${label} normals`);
       assertSamePlans(outcome.plans, reference.plans, label);
-      assert.equal(outcome.held, reference.held);
+      expect(outcome.held).toBe(reference.held);
     });
   }
 
@@ -336,9 +336,6 @@ describe(`given a hatchback crushed against a wall at ${KERNEL_ROW_KPH} km/h, it
     const crushed = fixture.meshes[0]!;
     const reference = holdWritten(fixture.car, crushed, false);
     const { result: outcome } = countKernelCalls(1.2, () => holdWritten(fixture.car, crushed, true));
-    assert.ok(
-      outcome.lift.some((lift, point) => lift !== reference.lift[point]),
-      "a sag pass over larger tyres must not match",
-    );
+    expect(outcome.lift.some((lift, point) => lift !== reference.lift[point]), "a sag pass over larger tyres must not match").toBeTruthy();
   });
 });

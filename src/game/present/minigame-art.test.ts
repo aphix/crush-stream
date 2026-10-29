@@ -1,5 +1,4 @@
-import { beforeAll, describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { levelOrder } from "../scenes/ground-stack.ts";
@@ -15,6 +14,8 @@ import { BOXES_MESH_NAME, GROUND_MARGIN, MinigameArt, OUTER_GROUND_NAME, STATION
 import { SURFACE_DRAW_CALL_BUDGET } from "./minigame-surface-art.ts";
 import { BOX_POSE_FLOATS } from "./ragdoll-boxes.ts";
 import { makeRingFlingArt, RING_FLING_DRAW_BUDGET } from "./ring-fling-art.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * Most draws the composer adds to any one station over its art's own: the High jump's surface (its art's factory leaves it to the
@@ -41,7 +42,7 @@ const GROUND_AREA_TOLERANCE = 0.01;
 
 function stationOf(art: MinigameArt, mode: MinigameMode): THREE.Object3D {
   const station = art.group.getObjectByName(`station:${mode}`);
-  assert.ok(station, `the composer has a station group for ${mode}`);
+  must(station, `the composer has a station group for ${mode}`);
   return station;
 }
 
@@ -58,7 +59,7 @@ function meshVertices(mesh: THREE.Mesh): THREE.Vector3[] {
 
 function groundMeshNamed(art: MinigameArt, name: string): THREE.Mesh {
   const mesh = art.group.getObjectByName(name);
-  assert.ok(mesh instanceof THREE.Mesh, `the composer has a ground mesh ${name}`);
+  must(mesh instanceof THREE.Mesh, `the composer has a ground mesh ${name}`);
   return mesh;
 }
 
@@ -96,13 +97,13 @@ describe("given the minigame stations' composer", () => {
 
   it("when it is built, then it starts invisible, and each station group sits at its anchor's x and z on the ground", () => {
     const art = builtArt();
-    assert.equal(art.group.visible, false);
-    assert.equal(art.group.parent, null, "the engine adds it to a scene, not the composer");
+    expect(art.group.visible).toBe(false);
+    expect(art.group.parent, "the engine adds it to a scene, not the composer").toBe(null);
     for (const mode of MINIGAME_MODES) {
       const station = stationOf(art, mode);
-      assert.equal(station.position.x, STATION_ANCHORS[mode].x, `${mode} station x`);
-      assert.equal(station.position.y, 0, `${mode} station y`);
-      assert.equal(station.position.z, STATION_ANCHORS[mode].z, `${mode} station z`);
+      expect(station.position.x, `${mode} station x`).toBe(STATION_ANCHORS[mode].x);
+      expect(station.position.y, `${mode} station y`).toBe(0);
+      expect(station.position.z, `${mode} station z`).toBe(STATION_ANCHORS[mode].z);
     }
     art.dispose();
   });
@@ -111,21 +112,14 @@ describe("given the minigame stations' composer", () => {
     const art = builtArt();
     for (const shown of MINIGAME_MODES) {
       art.setMode(shown);
-      assert.equal(art.group.visible, true);
-      assert.equal(
-        MINIGAME_MODES.filter((mode) => stationOf(art, mode).visible).join(","),
-        shown,
-        `only ${shown} shows`,
-      );
-      assert.equal(art.group.getObjectByName(BOXES_MESH_NAME)?.visible, shown === "highJump", `the boxes show with the High jump alone (mode ${shown})`);
+      expect(art.group.visible).toBe(true);
+      expect(MINIGAME_MODES.filter((mode) => stationOf(art, mode).visible).join(","), `only ${shown} shows`).toBe(shown);
+      expect(art.group.getObjectByName(BOXES_MESH_NAME)?.visible, `the boxes show with the High jump alone (mode ${shown})`).toBe(shown === "highJump");
     }
     art.setMode(null);
-    assert.equal(art.group.visible, false);
-    assert.deepEqual(
-      MINIGAME_MODES.filter((mode) => stationOf(art, mode).visible),
-      [],
-    );
-    assert.equal(art.group.getObjectByName(BOXES_MESH_NAME)?.visible, false);
+    expect(art.group.visible).toBe(false);
+    expect(MINIGAME_MODES.filter((mode) => stationOf(art, mode).visible)).toHaveLength(0);
+    expect(art.group.getObjectByName(BOXES_MESH_NAME)?.visible).toBe(false);
     art.dispose();
   });
 
@@ -133,17 +127,17 @@ describe("given the minigame stations' composer", () => {
     const art = new MinigameArt();
     const placements = art.setHighJumpLayout(layout, LIP_Y);
     const anchor = STATION_ANCHORS.highJump;
-    assert.equal(placements.length, layout.boxes.length);
+    expect(placements.length).toBe(layout.boxes.length);
     for (let boxIndex = 0; boxIndex < layout.boxes.length; boxIndex++) {
       const local = layout.boxes[boxIndex]!;
       const placed = placements[boxIndex]!;
-      assert.equal(placed.x, local.x + anchor.x, `box ${boxIndex} x`);
-      assert.equal(placed.y, local.y, `box ${boxIndex} y`);
-      assert.equal(placed.z, local.z + anchor.z, `box ${boxIndex} z`);
-      assert.equal(placed.yaw, local.yaw, `box ${boxIndex} yaw`);
-      assert.equal(placed.width, local.width, `box ${boxIndex} width`);
-      assert.equal(placed.height, local.height, `box ${boxIndex} height`);
-      assert.equal(placed.depth, local.depth, `box ${boxIndex} depth`);
+      expect(placed.x, `box ${boxIndex} x`).toBe(local.x + anchor.x);
+      expect(placed.y, `box ${boxIndex} y`).toBe(local.y);
+      expect(placed.z, `box ${boxIndex} z`).toBe(local.z + anchor.z);
+      expect(placed.yaw, `box ${boxIndex} yaw`).toBe(local.yaw);
+      expect(placed.width, `box ${boxIndex} width`).toBe(local.width);
+      expect(placed.height, `box ${boxIndex} height`).toBe(local.height);
+      expect(placed.depth, `box ${boxIndex} depth`).toBe(local.depth);
     }
     art.dispose();
   });
@@ -161,14 +155,11 @@ describe("given the minigame stations' composer", () => {
       });
       const disposals = oldGeometries.map((geometry) => vi.spyOn(geometry, "dispose"));
       art.setHighJumpLayout(layout, LIP_Y);
-      assert.equal(station.children.length, childCount, `rebuild ${rebuild + 1}: child count`);
-      assert.equal(descendantCount(art.group), descendants, `rebuild ${rebuild + 1}: descendant count`);
-      assert.notEqual(groundMeshNamed(art, OUTER_GROUND_NAME), oldGround, `rebuild ${rebuild + 1}: a new ground`);
-      assert.equal(oldGround.parent, null, `rebuild ${rebuild + 1}: the old ground is out of the scene graph`);
-      assert.ok(
-        disposals.every((spy) => spy.mock.calls.length >= 1),
-        `rebuild ${rebuild + 1}: every old geometry freed`,
-      );
+      expect(station.children.length, `rebuild ${rebuild + 1}: child count`).toBe(childCount);
+      expect(descendantCount(art.group), `rebuild ${rebuild + 1}: descendant count`).toBe(descendants);
+      expect(groundMeshNamed(art, OUTER_GROUND_NAME), `rebuild ${rebuild + 1}: a new ground`).not.toBe(oldGround);
+      expect(oldGround.parent, `rebuild ${rebuild + 1}: the old ground is out of the scene graph`).toBe(null);
+      expect(disposals.every((spy) => spy.mock.calls.length >= 1), `rebuild ${rebuild + 1}: every old geometry freed`).toBeTruthy();
     }
     art.dispose();
   });
@@ -185,12 +176,12 @@ describe("given the minigame stations' composer", () => {
       minZ: Math.min(...bands.map((band) => band.minZ)) - GROUND_MARGIN.z,
       maxZ: Math.max(...bands.map((band) => band.maxZ)) + GROUND_MARGIN.z,
     };
-    assert.ok(Math.abs(Math.min(...vertices.map((vertex) => vertex.x)) - expected.minX) < FLOAT32_TOLERANCE, "west end");
-    assert.ok(Math.abs(Math.max(...vertices.map((vertex) => vertex.x)) - expected.maxX) < FLOAT32_TOLERANCE, "east end");
-    assert.ok(Math.abs(Math.min(...vertices.map((vertex) => vertex.z)) - expected.minZ) < FLOAT32_TOLERANCE, "first side");
-    assert.ok(Math.abs(Math.max(...vertices.map((vertex) => vertex.z)) - expected.maxZ) < FLOAT32_TOLERANCE, "last side");
-    for (const vertex of vertices) assert.equal(vertex.y, LANDING_HEIGHT, "flat at the pad's level");
-    assert.equal(ground.renderOrder, levelOrder("terrain"), "draws at the terrain level");
+    expect(Math.abs(Math.min(...vertices.map((vertex) => vertex.x)) - expected.minX), "west end").toBeLessThan(FLOAT32_TOLERANCE);
+    expect(Math.abs(Math.max(...vertices.map((vertex) => vertex.x)) - expected.maxX), "east end").toBeLessThan(FLOAT32_TOLERANCE);
+    expect(Math.abs(Math.min(...vertices.map((vertex) => vertex.z)) - expected.minZ), "first side").toBeLessThan(FLOAT32_TOLERANCE);
+    expect(Math.abs(Math.max(...vertices.map((vertex) => vertex.z)) - expected.maxZ), "last side").toBeLessThan(FLOAT32_TOLERANCE);
+    for (const vertex of vertices) expect(vertex.y, "flat at the pad's level").toBe(LANDING_HEIGHT);
+    expect(ground.renderOrder, "draws at the terrain level").toBe(levelOrder("terrain"));
     art.dispose();
   });
 
@@ -198,18 +189,18 @@ describe("given the minigame stations' composer", () => {
     const art = builtArt();
     const footprints = triangleFootprints(groundMeshNamed(art, OUTER_GROUND_NAME));
     const bands = MINIGAME_MODES.map(bandRectangle);
-    assert.ok(footprints.length > 0, "there is ground");
+    expect(footprints.length, "there is ground").toBeGreaterThan(0);
     for (const footprint of footprints) {
       for (const band of bands) {
         const isOverBand = footprint.centreX > band.minX && footprint.centreX < band.maxX && footprint.centreZ > band.minZ && footprint.centreZ < band.maxZ;
-        assert.equal(isOverBand, false, `a triangle centred (${footprint.centreX}, ${footprint.centreZ}) lies over a band`);
+        expect(isOverBand, `a triangle centred (${footprint.centreX}, ${footprint.centreZ}) lies over a band`).toBe(false);
       }
     }
     const vertices = meshVertices(groundMeshNamed(art, OUTER_GROUND_NAME));
     const extentArea = (Math.max(...vertices.map((vertex) => vertex.x)) - Math.min(...vertices.map((vertex) => vertex.x))) * (Math.max(...vertices.map((vertex) => vertex.z)) - Math.min(...vertices.map((vertex) => vertex.z)));
     const bandsArea = bands.reduce((total, band) => total + (band.maxX - band.minX) * (band.maxZ - band.minZ), 0);
     const groundArea = footprints.reduce((total, footprint) => total + footprint.area, 0);
-    assert.ok(Math.abs(groundArea - (extentArea - bandsArea)) < GROUND_AREA_TOLERANCE, `ground ${groundArea} m2, extent minus bands ${extentArea - bandsArea} m2`);
+    expect(Math.abs(groundArea - (extentArea - bandsArea)), `ground ${groundArea} m2, extent minus bands ${extentArea - bandsArea} m2`).toBeLessThan(GROUND_AREA_TOLERANCE);
     art.dispose();
   });
 
@@ -219,13 +210,13 @@ describe("given the minigame stations' composer", () => {
       art.setMode(shown);
       for (const mode of MINIGAME_MODES) {
         const plug = groundMeshNamed(art, `${STATION_PLUG_PREFIX}${mode}`);
-        assert.equal(plug.visible, mode !== shown, `plug of ${mode} with ${shown} shown`);
+        expect(plug.visible, `plug of ${mode} with ${shown} shown`).toBe(mode !== shown);
         const band = bandRectangle(mode);
         const plugArea = triangleFootprints(plug).reduce((total, footprint) => total + footprint.area, 0);
-        assert.ok(Math.abs(plugArea - (band.maxX - band.minX) * (band.maxZ - band.minZ)) < GROUND_AREA_TOLERANCE, `${mode} plug area ${plugArea}`);
+        expect(Math.abs(plugArea - (band.maxX - band.minX) * (band.maxZ - band.minZ)), `${mode} plug area ${plugArea}`).toBeLessThan(GROUND_AREA_TOLERANCE);
         for (const vertex of meshVertices(plug)) {
-          assert.ok(vertex.x >= band.minX - FLOAT32_TOLERANCE && vertex.x <= band.maxX + FLOAT32_TOLERANCE && vertex.z >= band.minZ - FLOAT32_TOLERANCE && vertex.z <= band.maxZ + FLOAT32_TOLERANCE, `${mode} plug vertex (${vertex.x}, ${vertex.z}) is in its band`);
-          assert.equal(vertex.y, LANDING_HEIGHT, "flat at the pad's level");
+          expect(vertex.x >= band.minX - FLOAT32_TOLERANCE && vertex.x <= band.maxX + FLOAT32_TOLERANCE && vertex.z >= band.minZ - FLOAT32_TOLERANCE && vertex.z <= band.maxZ + FLOAT32_TOLERANCE, `${mode} plug vertex (${vertex.x}, ${vertex.z}) is in its band`).toBeTruthy();
+          expect(vertex.y, "flat at the pad's level").toBe(LANDING_HEIGHT);
         }
       }
     }
@@ -239,11 +230,11 @@ describe("given the minigame stations' composer", () => {
     for (const mode of MINIGAME_MODES) {
       const stationDraws = drawCalls(stationOf(art, mode));
       const added = stationDraws - drawCalls(factoryOutputs[mode]);
-      assert.ok(added <= STATION_EXTRA_DRAW_BUDGET[mode], `${mode}: the composer adds ${added} draws`);
-      assert.ok(stationDraws <= ownBudgets[mode] + STATION_EXTRA_DRAW_BUDGET[mode], `${mode} draws ${stationDraws}`);
+      expect(added, `${mode}: the composer adds ${added} draws`).toBeLessThanOrEqual(STATION_EXTRA_DRAW_BUDGET[mode]);
+      expect(stationDraws, `${mode} draws ${stationDraws}`).toBeLessThanOrEqual(ownBudgets[mode] + STATION_EXTRA_DRAW_BUDGET[mode]);
       art.setMode(mode);
       const groundDraws = drawCalls(groundMeshNamed(art, OUTER_GROUND_NAME).parent!, "traverseVisible");
-      assert.ok(groundDraws >= 1 && groundDraws <= GROUND_DRAW_BUDGET, `${mode} shown: the ground draws ${groundDraws}`);
+      expect(groundDraws >= 1 && groundDraws <= GROUND_DRAW_BUDGET, `${mode} shown: the ground draws ${groundDraws}`).toBeTruthy();
     }
     art.dispose();
   });
@@ -259,9 +250,9 @@ describe("given the minigame stations' composer", () => {
     }
     art.updateBoxes(poses, placements.length);
     const boxes = art.group.getObjectByName(BOXES_MESH_NAME) as THREE.InstancedMesh;
-    assert.deepEqual(boxes.position.toArray(), [0, 0, 0], "the boxes' mesh stays at the world origin");
-    assert.equal(boxes.parent, art.group, "not inside a station group (which sits at an anchor)");
-    assert.equal(boxes.count, placements.length);
+    expect(firstMismatch(boxes.position.toArray(), [0, 0, 0]), "the boxes' mesh stays at the world origin").toBeUndefined();
+    expect(boxes.parent, "not inside a station group (which sits at an anchor)").toBe(art.group);
+    expect(boxes.count).toBe(placements.length);
     const matrix = new THREE.Matrix4();
     const position = new THREE.Vector3();
     const rotation = new THREE.Quaternion();
@@ -270,10 +261,10 @@ describe("given the minigame stations' composer", () => {
       boxes.getMatrixAt(boxIndex, matrix).decompose(position, rotation, scale);
       const pose = boxIndex * BOX_POSE_FLOATS;
       const placement = placements[boxIndex]!;
-      assert.ok(position.distanceTo(new THREE.Vector3(poses[pose], poses[pose + 1], poses[pose + 2])) < FLOAT32_TOLERANCE, `box ${boxIndex} position ${position.toArray()}`);
+      expect(position.distanceTo(new THREE.Vector3(poses[pose], poses[pose + 1], poses[pose + 2])), `box ${boxIndex} position ${position.toArray()}`).toBeLessThan(FLOAT32_TOLERANCE);
       const expectedRotation = new THREE.Quaternion(poses[pose + 3], poses[pose + 4], poses[pose + 5], poses[pose + 6]).normalize();
-      assert.ok(Math.abs(rotation.normalize().dot(expectedRotation)) > 1 - QUATERNION_DOT_TOLERANCE, `box ${boxIndex} rotation ${rotation.toArray()} vs ${expectedRotation.toArray()}`);
-      assert.ok(scale.distanceTo(new THREE.Vector3(placement.width, placement.height, placement.depth)) < FLOAT32_TOLERANCE, `box ${boxIndex} size ${scale.toArray()}`);
+      expect(Math.abs(rotation.normalize().dot(expectedRotation)), `box ${boxIndex} rotation ${rotation.toArray()} vs ${expectedRotation.toArray()}`).toBeGreaterThan(1 - QUATERNION_DOT_TOLERANCE);
+      expect(scale.distanceTo(new THREE.Vector3(placement.width, placement.height, placement.depth)), `box ${boxIndex} size ${scale.toArray()}`).toBeLessThan(FLOAT32_TOLERANCE);
     }
     art.dispose();
   });
@@ -291,13 +282,13 @@ describe("given the minigame stations' composer", () => {
         }
       }
     });
-    assert.ok(geometries.size > 0 && textures.size > 0, "there is something to free");
+    expect(geometries.size > 0 && textures.size > 0, "there is something to free").toBeTruthy();
     const geometryDisposals = [...geometries].map((geometry) => ({ geometry, spy: vi.spyOn(geometry, "dispose") }));
     const textureDisposals = [...textures].map((texture) => ({ texture, spy: vi.spyOn(texture, "dispose") }));
     art.dispose();
     const liveGeometries = geometryDisposals.filter(({ spy }) => spy.mock.calls.length === 0).map(({ geometry }) => geometry.type + ":" + geometry.uuid);
     const liveTextures = textureDisposals.filter(({ spy }) => spy.mock.calls.length === 0).map(({ texture }) => texture.uuid);
-    assert.deepEqual(liveGeometries, [], "no live geometry");
-    assert.deepEqual(liveTextures, [], "no live texture");
+    expect(liveGeometries, "no live geometry").toHaveLength(0);
+    expect(liveTextures, "no live texture").toHaveLength(0);
   });
 });

@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { runSeconds, bootEngine, element, frameField as frameDerby, stubBrowser } from "./engine-headless.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const CANVAS_W = 800;
 const CANVAS_H = 600;
@@ -77,7 +77,7 @@ describe("given the real engine in a running derby, and a canvas that carries po
         runSeconds(engine, 0.5);
       }
       runSeconds(engine, 12);
-      assert.equal(engine.derbyMode, true, "the derby is on");
+      expect(engine.derbyMode, "the derby is on").toBe(true);
       let clicked = 0;
       for (let index = 0; index < engine["carCount"]; index++) {
         frameField();
@@ -94,11 +94,11 @@ describe("given the real engine in a running derby, and a canvas that carries po
         pointer("pointerup", spot.x, spot.y);
         const view = engine["view"];
         const why = `press on car ${index} (${speed.toFixed(1)} m/s) at ${Math.round(spot.x)},${Math.round(spot.y)}: dragId ${view["dragId"]}, take ${view.take === null ? "null" : "set"}, locked ${view.locked}`;
-        assert.equal(engine["seat"].mode, "follow", why);
-        assert.equal(engine["seat"].carIndex, index, why);
+        expect(engine["seat"].mode, why).toBe("follow");
+        expect(engine["seat"].carIndex, why).toBe(index);
         clicked++;
       }
-      assert.ok(clicked >= 2, `at least two cars clear of each other on screen (saw ${clicked})`);
+      expect(clicked, `at least two cars clear of each other on screen (saw ${clicked})`).toBeGreaterThanOrEqual(2);
     });
   }
 
@@ -123,15 +123,15 @@ describe("given the real engine in a running derby, and a canvas that carries po
         if (!onHull(x, y) && !spots.some((o, i) => i !== index && o && Math.hypot(o.x - x, o.y - y) < 24)) off = { x, y };
       }
     }
-    assert.ok(off, "a pixel just off the hull exists");
-    assert.equal(engine["carAt"](off.x, off.y), index, "a miss within 3% of the width follows the nearest car");
+    must(off, "a pixel just off the hull exists");
+    expect(engine["carAt"](off.x, off.y), "a miss within 3% of the width follows the nearest car").toBe(index);
     let far: { x: number; y: number } | null = null;
     for (let x = 10; x < CANVAS_W && !far; x += 20) {
       for (let y = 10; y < CANVAS_H && !far; y += 20) {
         if (!onHull(x, y) && !spots.some((o) => o && Math.hypot(o.x - x, o.y - y) < 40)) far = { x, y };
       }
     }
-    assert.ok(far, "a pixel clear of every car exists");
-    assert.equal(engine["carAt"](far.x, far.y), -1, "a miss far from every car follows none");
+    must(far, "a pixel clear of every car exists");
+    expect(engine["carAt"](far.x, far.y), "a miss far from every car follows none").toBe(-1);
   });
 });

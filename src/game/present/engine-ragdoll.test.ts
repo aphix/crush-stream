@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import type { MassName } from "../kernel/rig-spec.ts";
@@ -18,6 +17,7 @@ import { FLAT_GROUND } from "../world/ground.ts";
 import { addCars, occluder, sightLine, solid, type Occluder, type Sight } from "./spectate-cam.ts";
 import { BELT_Y, SILL_Y, UNDER } from "./ragdoll-proxy.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const FRAME = 1 / FRAME_HZ;
 /** The sandbox's open flat ground: nothing to stand in or look through. */
@@ -88,7 +88,7 @@ describe("given a hit that throws a driver out of his car, where the slow-mo wai
     w.onEject = (e) => ragdolls.launch(e, cars);
     tickWorld(w);
     // The engine's pre-hit check (`maybePreSlowmo` → `throwComing`): this hit will throw, so the slow-mo is held.
-    assert.ok(throwComing(cars, null), "the coming hit is judged a throw");
+    expect(throwComing(cars, null), "the coming hit is judged a throw").toBeTruthy();
     w.clock.slomoAt = THROW_ONSET;
     const ragdolls = await loadedRagdolls();
     const dolls: Dolls = ragdolls["dolls"];
@@ -124,10 +124,10 @@ describe("given a hit that throws a driver out of his car, where the slow-mo wai
       }
     }
     ragdolls.dispose();
-    assert.equal(thrown, 2, "both drivers thrown");
-    assert.ok(Math.abs(slowAt - hitAt - THROW_ONSET) < 0.03, `slow-mo ${((slowAt - hitAt) * 1000).toFixed(0)} ms after the hit`);
+    expect(thrown, "both drivers thrown").toBe(2);
+    expect(Math.abs(slowAt - hitAt - THROW_ONSET), `slow-mo ${((slowAt - hitAt) * 1000).toFixed(0)} ms after the hit`).toBeLessThan(0.03);
     // On main (slow-mo from the hit, the torso at the bonnet line) 361 slow-mo frames had a corner in a bonnet.
-    assert.deepEqual(inside.slice(0, 4), [], "torso corners inside a car body in slow-mo");
+    expect(inside.slice(0, 4), "torso corners inside a car body in slow-mo").toHaveLength(0);
   });
 
   // Since the graded cues (2f42a2f1) no change of the time scale is a snap, and the clock is eased by `easeTimeScale` as well as stepped:
@@ -140,7 +140,7 @@ describe("given a hit that throws a driver out of his car, where the slow-mo wai
       easeTimeScale(c, FRAME);
       stepPhase(c, FRAME);
     }
-    assert.equal(c.timeScale, impactScale(c), "the slow-mo runs");
+    expect(c.timeScale, "the slow-mo runs").toBe(impactScale(c));
     holdForThrow(c);
     const at: number[] = [];
     for (let t = 0; t < 0.9; t += FRAME) {
@@ -148,10 +148,10 @@ describe("given a hit that throws a driver out of his car, where the slow-mo wai
       easeTimeScale(c, FRAME);
       stepPhase(c, FRAME);
     }
-    assert.ok(at[3]! > 0.5, `past half speed 3 frames in: ${at.slice(0, 5).join()}`);
-    assert.ok(at.slice(9, 14).every((s) => s > 0.9), `normal speed for the exit: ${at.slice(0, 16).join()}`);
-    assert.equal(c.timeScale, impactScale(c), "the slow-mo is back");
-    assert.equal(c.phase, "slowmo");
+    expect(at[3]!, `past half speed 3 frames in: ${at.slice(0, 5).join()}`).toBeGreaterThan(0.5);
+    expect(at.slice(9, 14).every((s) => s > 0.9), `normal speed for the exit: ${at.slice(0, 16).join()}`).toBeTruthy();
+    expect(c.timeScale, "the slow-mo is back").toBe(impactScale(c));
+    expect(c.phase).toBe("slowmo");
   });
 });
 
@@ -182,9 +182,9 @@ describe("given a thrown dummy and the crushed bodies of the other cars", () => 
       prev.copy(_l);
     }
     ragdolls.dispose();
-    assert.deepEqual(inside, [], "torso inside the other car's lower box");
-    assert.ok(maxZ < 6.5 - 2.15 + 0.2, `bounced off the nose: got as far as z ${maxZ.toFixed(2)}`);
-    assert.ok(jump < 0.3, `moved ${jump.toFixed(2)} m in one frame as the grace ended`);
+    expect(inside, "torso inside the other car's lower box").toHaveLength(0);
+    expect(maxZ, `bounced off the nose: got as far as z ${maxZ.toFixed(2)}`).toBeLessThan(6.5 - 2.15 + 0.2);
+    expect(jump, `moved ${jump.toFixed(2)} m in one frame as the grace ended`).toBeLessThan(0.3);
   });
 });
 
@@ -212,7 +212,7 @@ describe("given the ride-along camera (the camera that rides along with thrown d
       if (ragdolls["ride"].cam["blend"] >= 1) far = Math.max(far, camera.position.distanceTo(ragdolls.rideLook));
     });
     // `CAM_NEAR` 6 m: (4.5 + 1.6·6) back, (1.8 + 0.5·6) aside, (1.3 + 0.4·6) up is 15.4 m. On main: about 63 m.
-    assert.ok(far > 4 && far < 15.5, `camera ${far.toFixed(1)} m from its target`);
+    expect(far > 4 && far < 15.5, `camera ${far.toFixed(1)} m from its target`).toBeTruthy();
   });
 
   it("when two dummies lie 3 m apart, then both stay in frame for more than 30 frames of riding", async () => {
@@ -228,8 +228,8 @@ describe("given the ride-along camera (the camera that rides along with thrown d
         if (Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1 || ndc.z > 1) out.push(`dummy ${s} at ${ndc.toArray().map((v) => v.toFixed(2))}`);
       }
     });
-    assert.ok(frames > 30, `rode ${frames} frames`);
-    assert.deepEqual(out.slice(0, 4), [], "a head out of frame");
+    expect(frames, `rode ${frames} frames`).toBeGreaterThan(30);
+    expect(out.slice(0, 4), "a head out of frame").toHaveLength(0);
   });
 });
 
@@ -252,9 +252,9 @@ describe("given a head-on crash where one car is a police car", () => {
     // The cop keeps the uniform whatever the look seed; the civilian wears a palette tee that is not the cop navy.
     const tees = SHIRTS.map((h) => `#${new THREE.Color(h).getHexString()}`);
     const navy = `#${new THREE.Color(COP_LOOK.shirt).getHexString()}`;
-    assert.equal(shirts[0], navy);
-    assert.ok(tees.includes(shirts[1]!), `civilian tee ${shirts[1]} is not in the palette`);
-    assert.ok(!tees.includes(navy), "the civilian palette holds the cop navy");
+    expect(shirts[0]).toBe(navy);
+    expect(tees.includes(shirts[1]!), `civilian tee ${shirts[1]} is not in the palette`).toBeTruthy();
+    expect(!tees.includes(navy), "the civilian palette holds the cop navy").toBe(true);
   });
 });
 
@@ -281,19 +281,19 @@ describe("given the ride-along camera following a driver thrown in a head-on at 
       tickWorld(w);
       ragdolls.update(FRAME, cars, true, true, null);
     }
-    assert.ok(ragdolls.rideAlong, "a driver was thrown");
+    expect(ragdolls.rideAlong, "a driver was thrown").toBeTruthy();
     const car = cars[threw[0]!]!;
     const fwd = car.fwdFlat.clone();
     const carPos = car.group.position.clone();
-    assert.equal(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, sight), "shot");
+    expect(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, sight)).toBe("shot");
     const rel = camera.position.clone().sub(carPos);
     const dir = camera.getWorldDirection(new THREE.Vector3());
     ragdolls.dispose();
-    assert.ok(rel.dot(fwd) > 4 && rel.dot(fwd) <= 18.001, `${rel.dot(fwd).toFixed(2)} m ahead of the car`);
-    assert.ok(Math.abs(rel.x * fwd.z - rel.z * fwd.x) < 1e-6, "on the forward axis");
-    assert.ok(rel.y >= 3, `${rel.y.toFixed(2)} m up`);
-    assert.equal(solid(sight(), camera.position.x, camera.position.y, camera.position.z, 0.5), false, "the eye stands clear of the cars");
-    assert.ok(dir.dot(fwd) < -0.3, `looking back at the car: ${dir.dot(fwd).toFixed(2)}`);
+    expect(rel.dot(fwd) > 4 && rel.dot(fwd) <= 18.001, `${rel.dot(fwd).toFixed(2)} m ahead of the car`).toBeTruthy();
+    expect(Math.abs(rel.x * fwd.z - rel.z * fwd.x), "on the forward axis").toBeLessThan(1e-6);
+    expect(rel.y, `${rel.y.toFixed(2)} m up`).toBeGreaterThanOrEqual(3);
+    expect(solid(sight(), camera.position.x, camera.position.y, camera.position.z, 0.5), "the eye stands clear of the cars").toBe(false);
+    expect(dir.dot(fwd), `looking back at the car: ${dir.dot(fwd).toFixed(2)}`).toBeLessThan(-0.3);
   });
 
   it("when no car is ahead of the thrown car, then the windshield-height eye sits 1.2-2 m up and 7-18 m ahead on the forward axis, and a car ahead sends it up to at least 3 m", async () => {
@@ -312,17 +312,17 @@ describe("given the ride-along camera following a driver thrown in a head-on at 
       const car = cars[threw[0]!]!;
       const fwd = car.fwdFlat.clone();
       const carPos = car.group.position.clone();
-      assert.equal(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, sightOf(cars, car)), "shot");
+      expect(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, sightOf(cars, car))).toBe("shot");
       ragdolls.dispose();
       const rel = camera.position.clone().sub(carPos);
       return { ahead: rel.dot(fwd), up: rel.y, side: Math.abs(rel.x * fwd.z - rel.z * fwd.x) };
     };
     const clear = await open((_, car) => carSight([car]));
-    assert.ok(clear.up >= 1.2 && clear.up <= 2, `${clear.up.toFixed(2)} m up`);
-    assert.ok(clear.ahead >= 7 - 1e-6 && clear.ahead <= 18.001, `${clear.ahead.toFixed(2)} m ahead (as far as the high eye's first try)`);
-    assert.ok(clear.side < 1e-6, "on the forward axis");
+    expect(clear.up >= 1.2 && clear.up <= 2, `${clear.up.toFixed(2)} m up`).toBeTruthy();
+    expect(clear.ahead >= 7 - 1e-6 && clear.ahead <= 18.001, `${clear.ahead.toFixed(2)} m ahead (as far as the high eye's first try)`).toBeTruthy();
+    expect(clear.side, "on the forward axis").toBeLessThan(1e-6);
     const blocked = await open((cars) => carSight(cars));
-    assert.ok(blocked.up >= 3, `with the other car in the way: ${blocked.up.toFixed(2)} m up`);
+    expect(blocked.up, `with the other car in the way: ${blocked.up.toFixed(2)} m up`).toBeGreaterThanOrEqual(3);
   });
 
   it("when a wall stands 1.7 m beside the low eye's spot, which needs 2 m of room, then the eye is at least 3 m up there (1.2-2 m up on open ground), and the cut frame's eye and aim are finite and outside every solid", async () => {
@@ -348,18 +348,18 @@ describe("given the ride-along camera following a driver thrown in a head-on at 
         occ.push(occluder(mid.x, mid.z, Math.atan2(fwd.x, fwd.z), 0.15, 8, false, 0, 2.2));
       }
       const sight = (): Sight => ({ ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ });
-      assert.equal(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, sight), "shot");
+      expect(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, sight)).toBe("shot");
       const eye = camera.position.clone();
       const dir = camera.getWorldDirection(new THREE.Vector3());
       ragdolls.dispose();
-      assert.ok([eye.x, eye.y, eye.z, dir.x, dir.y, dir.z].every(Number.isFinite), "a finite eye and aim on the cut frame");
-      assert.equal(solid(sight(), eye.x, eye.y, eye.z, 0.5), false, "the eye stands outside every solid");
+      expect([eye.x, eye.y, eye.z, dir.x, dir.y, dir.z].every(Number.isFinite), "a finite eye and aim on the cut frame").toBeTruthy();
+      expect(solid(sight(), eye.x, eye.y, eye.z, 0.5), "the eye stands outside every solid").toBe(false);
       return eye;
     };
     const bare = await open(null);
-    assert.ok(bare.y >= 1.2 && bare.y <= 2, `open ground: low eye, ${bare.y.toFixed(2)} m up`);
+    expect(bare.y >= 1.2 && bare.y <= 2, `open ground: low eye, ${bare.y.toFixed(2)} m up`).toBeTruthy();
     const beside = await open(bare);
-    assert.ok(beside.y >= 3, `a wall 1.7 m beside the spot: ${beside.y.toFixed(2)} m up`);
+    expect(beside.y, `a wall 1.7 m beside the spot: ${beside.y.toFixed(2)} m up`).toBeGreaterThanOrEqual(3);
   });
 
   for (const wallTop of [0.5, 1, 1.15, 1.5, 2]) {
@@ -384,11 +384,11 @@ describe("given the ride-along camera following a driver thrown in a head-on at 
       const mid = car.group.position.clone().addScaledVector(fwd, 5);
       const across = occluder(mid.x, mid.z, Math.atan2(fwd.x, fwd.z) + Math.PI / 2, 0.15, 12, false, -1, wallTop);
       const sight = (): Sight => ({ ground: FLAT_GROUND, path: null, wallTop: 0, rim: Infinity, occ: [across] });
-      assert.equal(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, sight), "shot");
+      expect(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, sight)).toBe("shot");
       const eye = camera.position.clone();
       ragdolls.dispose();
       const left = exits.find((x) => x.car === threw[0])!.at;
-      assert.ok(sightLine(sight(), eye.x, eye.y, eye.z, left.x, left.y, left.z) >= 0, `eye ${eye.toArray().map((v) => v.toFixed(2))} cannot see the exit point ${left.toArray().map((v) => v.toFixed(2))}`);
+      expect(sightLine(sight(), eye.x, eye.y, eye.z, left.x, left.y, left.z), `eye ${eye.toArray().map((v) => v.toFixed(2))} cannot see the exit point ${left.toArray().map((v) => v.toFixed(2))}`).toBeGreaterThanOrEqual(0);
     });
   }
 });
@@ -439,9 +439,9 @@ async function rideShots(cars: DeformableCar[], barrier: boolean): Promise<{ rid
 describe("given the ride-along camera following a driver thrown in a head-on at 26 m/s", () => {
   it("when a dummy flies under the eye through every shot change, then no shot change moves the camera more than 0.1 m and the aim never turns faster than 4 rad/s", async () => {
     const r = await rideShots(headOn(26), false);
-    assert.ok(r.riding > 300, `rode ${r.riding} frames`);
-    assert.deepEqual(r.jumps, []);
-    assert.ok(r.maxTurn < 4 * FRAME * 1.1, `turned ${r.maxTurn.toFixed(3)} rad in one frame at ${r.worst}`);
+    expect(r.riding, `rode ${r.riding} frames`).toBeGreaterThan(300);
+    expect(r.jumps).toHaveLength(0);
+    expect(r.maxTurn, `turned ${r.maxTurn.toFixed(3)} rad in one frame at ${r.worst}`).toBeLessThan(4 * FRAME * 1.1);
   });
 });
 
@@ -450,10 +450,10 @@ describe("given the ride-along camera following a driver thrown by a car into th
     const car = fleetCar();
     launch(car, 6.2, 0, -Math.PI / 2, -30, 0);
     const r = await rideShots([car], true);
-    assert.ok(r.riding > 300, `rode ${r.riding} frames`);
-    assert.deepEqual(r.shots.slice(0, 3), ["glass", "follow", "trackside"], "opens on the windshield, follows, then the trackside turn");
-    assert.deepEqual(r.jumps, []);
-    assert.ok(r.maxTurn < 4 * FRAME * 1.1, `turned ${r.maxTurn.toFixed(3)} rad in one frame at ${r.worst}`);
+    expect(r.riding, `rode ${r.riding} frames`).toBeGreaterThan(300);
+    expect(firstMismatch(r.shots.slice(0, 3), ["glass", "follow", "trackside"]), "opens on the windshield, follows, then the trackside turn").toBeUndefined();
+    expect(r.jumps).toHaveLength(0);
+    expect(r.maxTurn, `turned ${r.maxTurn.toFixed(3)} rad in one frame at ${r.worst}`).toBeLessThan(4 * FRAME * 1.1);
   });
 });
 
@@ -462,16 +462,16 @@ describe("given the ride-along camera following a driver whose throw flies a dif
   for (const mps of [22, 30, 40]) {
     it(`when a head-on at ${mps} m/s throws him under the eye, then the aim never turns faster than 4 rad/s`, async () => {
       const r = await rideShots(headOn(mps), false);
-      assert.ok(r.riding > 300, `rode ${r.riding} frames`);
-      assert.ok(r.maxTurn < turnBar, `turned ${r.maxTurn.toFixed(3)} rad in one frame at ${r.worst}`);
+      expect(r.riding, `rode ${r.riding} frames`).toBeGreaterThan(300);
+      expect(r.maxTurn, `turned ${r.maxTurn.toFixed(3)} rad in one frame at ${r.worst}`).toBeLessThan(turnBar);
     });
   }
   it("when a car hits the barrier at 12 m/s and throws him 60 m/s up, then the aim never turns faster than 4 rad/s", async () => {
     const car = fleetCar();
     launch(car, 12, 0, -Math.PI / 2, -60, 0);
     const r = await rideShots([car], true);
-    assert.ok(r.riding > 300, `rode ${r.riding} frames`);
-    assert.ok(r.maxTurn < turnBar, `turned ${r.maxTurn.toFixed(3)} rad in one frame at ${r.worst}`);
+    expect(r.riding, `rode ${r.riding} frames`).toBeGreaterThan(300);
+    expect(r.maxTurn, `turned ${r.maxTurn.toFixed(3)} rad in one frame at ${r.worst}`).toBeLessThan(turnBar);
   });
 });
 
@@ -484,14 +484,14 @@ describe("given a ride-along that ends as the dummies lie still, handing the cam
     const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 180);
     for (let f = 0; f < 40; f++) {
       ragdolls.update(FRAME, [], true, true, null);
-      assert.equal(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, OPEN), "shot");
+      expect(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, OPEN)).toBe("shot");
     }
     const lastPos = camera.position.clone();
     const lastQuat = camera.quaternion.clone();
     // He lies still: the ride lets go, and the engine's own view (an orbit far from the ride's shot) places the camera.
     ragdolls.update(FRAME, [], true, true, null);
     for (const d of ragdolls["dolls"]) d.still = 9;
-    assert.equal(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, OPEN), "none");
+    expect(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, OPEN)).toBe("none");
     const viewPos = new THREE.Vector3(14, 6, -9);
     const viewQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.4, 2.2, 0));
     // The engine's frame: the rigs work on the pose they left (the orbit chases its view from where the camera stands), then the ease.
@@ -502,7 +502,7 @@ describe("given a ride-along that ends as the dummies lie still, handing the cam
       ragdolls.fadeRide(camera, FRAME, true);
     };
     frame();
-    assert.ok(camera.position.distanceTo(lastPos) < 0.05 && camera.quaternion.angleTo(lastQuat) < 0.01, "the first frame keeps the ride's last pose");
+    expect(camera.position.distanceTo(lastPos) < 0.05 && camera.quaternion.angleTo(lastQuat) < 0.01, "the first frame keeps the ride's last pose").toBeTruthy();
     const away = lastPos.distanceTo(viewPos);
     const turn = lastQuat.angleTo(viewQuat);
     let prev = camera.position.clone();
@@ -521,14 +521,14 @@ describe("given a ride-along that ends as the dummies lie still, handing the cam
         const w = b * b * b * (b * (b * 6 - 15) + 10);
         const chase = viewPos.clone().add(lastPos.clone().sub(viewPos).multiplyScalar(Math.exp(-5.5 * FRAME * 30)));
         const shown = lastPos.clone().lerp(chase, w);
-        assert.ok(camera.position.distanceTo(shown) < 1e-3, `${camera.position.distanceTo(shown).toFixed(3)} m from the eased chase`);
+        expect(camera.position.distanceTo(shown), `${camera.position.distanceTo(shown).toFixed(3)} m from the eased chase`).toBeLessThan(1e-3);
       }
     }
     ragdolls.dispose();
     // The ease is smootherstep over the whole way (steepest 1.875 of it per second) with the orbit's own chase underneath.
-    assert.ok(step < 2.2 * away * FRAME, `${step.toFixed(2)} m in one frame of ${away.toFixed(1)} m`);
-    assert.ok(spin < 1.875 * turn * FRAME * 1.05, `${spin.toFixed(3)} rad in one frame of ${turn.toFixed(2)} rad`);
-    assert.ok(camera.position.distanceTo(viewPos) < 1e-3 && camera.quaternion.angleTo(viewQuat) < 1e-6, "three seconds on, the camera is the engine's view");
+    expect(step, `${step.toFixed(2)} m in one frame of ${away.toFixed(1)} m`).toBeLessThan(2.2 * away * FRAME);
+    expect(spin, `${spin.toFixed(3)} rad in one frame of ${turn.toFixed(2)} rad`).toBeLessThan(1.875 * turn * FRAME * 1.05);
+    expect(camera.position.distanceTo(viewPos) < 1e-3 && camera.quaternion.angleTo(viewQuat) < 1e-6, "three seconds on, the camera is the engine's view").toBeTruthy();
   });
 });
 
@@ -547,14 +547,14 @@ describe("given a highlight's ride-along on its own crash's thrown driver, while
     let far = 0;
     for (let f = 0; f < 60; f++) {
       ragdolls.update(FRAME, [], true, true, null);
-      assert.equal(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, OPEN), "shot");
+      expect(ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, OPEN)).toBe("shot");
       if (ragdolls["ride"]["primary"] !== own) framedOther++;
       const t = ragdolls["dolls"][own]!.bodies[0]!.translation();
       far = Math.max(far, ragdolls.rideLook.distanceTo(torso.set(t.x, t.y, t.z)));
     }
     ragdolls.dispose();
-    assert.equal(framedOther, 0, "frames the other crash's dummy");
-    assert.ok(far < 2, `aim ${far.toFixed(1)} m from its own driver`);
+    expect(framedOther, "frames the other crash's dummy").toBe(0);
+    expect(far, `aim ${far.toFixed(1)} m from its own driver`).toBeLessThan(2);
   });
 });
 
@@ -582,16 +582,16 @@ describe("given the user's drag holding the ride-along camera, while the cut to 
     const userPos = camera.position.clone().add(new THREE.Vector3(3, 2, 3));
     const userQuat = camera.quaternion.clone();
     camera.position.copy(userPos);
-    for (let f = 0; f < 120; f++) assert.equal(frame(), "held");
-    assert.equal(ragdolls["ride"]["primary"], first, "no cut while held");
-    assert.ok(camera.position.equals(userPos) && camera.quaternion.equals(userQuat), "the ride leaves the user's camera alone");
+    for (let f = 0; f < 120; f++) expect(frame()).toBe("held");
+    expect(ragdolls["ride"]["primary"], "no cut while held").toBe(first);
+    expect(camera.position.equals(userPos) && camera.quaternion.equals(userQuat), "the ride leaves the user's camera alone").toBeTruthy();
     held = false;
-    assert.equal(frame(), "shot");
-    assert.notEqual(ragdolls["ride"]["primary"], first, "the cut lands once released");
-    assert.ok(camera.position.distanceTo(userPos) < 0.5, `moved ${camera.position.distanceTo(userPos).toFixed(2)} m on the first frame`);
-    assert.ok(camera.quaternion.angleTo(userQuat) < 0.1, "turned only a little on the first frame");
+    expect(frame()).toBe("shot");
+    expect(ragdolls["ride"]["primary"], "the cut lands once released").not.toBe(first);
+    expect(camera.position.distanceTo(userPos), `moved ${camera.position.distanceTo(userPos).toFixed(2)} m on the first frame`).toBeLessThan(0.5);
+    expect(camera.quaternion.angleTo(userQuat), "turned only a little on the first frame").toBeLessThan(0.1);
     for (let f = 0; f < 150; f++) frame();
-    assert.ok(camera.position.distanceTo(ragdolls.rideLook) < 15.5, "settled on the new dummy");
+    expect(camera.position.distanceTo(ragdolls.rideLook), "settled on the new dummy").toBeLessThan(15.5);
     ragdolls.dispose();
   });
 });
@@ -620,13 +620,13 @@ describe("given the ride-along camera following a dummy thrown straight up at 50
       for (let frame = 0; frame < AIM_FRAMES; frame++) {
         ragdolls.update(FRAME * testCase.simShare, [], true, true, null);
         previousHead.copy(head);
-        assert.equal(ragdolls.frameCamera(camera, FRAME, true, -1, false, 50, OPEN, testCase.lead), "shot", `frame ${frame} rides him`);
+        expect(ragdolls.frameCamera(camera, FRAME, true, -1, false, 50, OPEN, testCase.lead), `frame ${frame} rides him`).toBe("shot");
       }
       const shownClimb = (head.y - previousHead.y) / FRAME;
-      assert.ok(shownClimb > 0.5 * 50 * testCase.simShare, `he is shown climbing at ${shownClimb} m/s`);
+      expect(shownClimb, `he is shown climbing at ${shownClimb} m/s`).toBeGreaterThan(0.5 * 50 * testCase.simShare);
       const expected = shownClimb * (testCase.lead - AIM_LAG_SECONDS);
       const aimAbove = ragdolls.rideLook.y - head.y;
-      assert.ok(Math.abs(aimAbove - expected) < AIM_TOLERANCE, `the aim is ${aimAbove.toFixed(3)} m above his head, ${expected.toFixed(3)} wanted`);
+      expect(Math.abs(aimAbove - expected), `the aim is ${aimAbove.toFixed(3)} m above his head, ${expected.toFixed(3)} wanted`).toBeLessThan(AIM_TOLERANCE);
       ragdolls.dispose();
     });
   }

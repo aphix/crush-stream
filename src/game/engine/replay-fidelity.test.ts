@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { makeWorld, type World } from "../world/race-world.test-util.ts";
 import { blankPoint, Track } from "../world/track.ts";
@@ -9,6 +8,7 @@ import { agreement, atClipStart, recordFlat, recordRace, type Agreement, type Re
 import { ClipSim } from "./engine-replay.ts";
 import { MEMORY } from "../match/highlights.ts";
 import { FINE_HZ, QUIET_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * The owner wants a replay or a highlight reel to show the crash as it happened. The recorder's clip (its first keyframe,
@@ -26,10 +26,13 @@ const rows: string[] = [];
 const mm = (m: number): string => (m * 1000).toFixed(3);
 function check(name: string, rec: Recording, a: Agreement): void {
   rows.push(`${name}: ${rec.clip.cars.length} cars ${a.steps} steps ${(clipBytes(rec.clip) / 1024).toFixed(0)} KB; wreck flags differ ${a.wreckMismatch}; pose ${mm(a.pose.max)} mm, ${a.vel.max} m/s, crush ${mm(a.crush.max)} mm`);
-  assert.ok(a.steps >= 100, `${name}: ${a.steps} steps compared`);
-  assert.equal(a.wreckMismatch, 0, `${name}: a car is a wreck in one run and not in the other for ${a.wreckMismatch} car-steps`);
+  expect(a.steps, `${name}: ${a.steps} steps compared`).toBeGreaterThanOrEqual(100);
+  expect(a.wreckMismatch, `${name}: a car is a wreck in one run and not in the other for ${a.wreckMismatch} car-steps`).toBe(0);
   // The point of the keyframes: what a replay restores is all the sim reads. Any error here is state a keyframe fails to carry.
-  assert.deepEqual({ pose: a.pose.max, vel: a.vel.max, crush: a.crush.max }, { pose: 0, vel: 0, crush: 0 }, `${name}: a car strays from the live sim (m, m/s, m)\n${rows.at(-1)}`);
+  const strays = `${name}: a car strays from the live sim (m, m/s, m)\n${rows.at(-1)}`;
+  expect(a.pose.max, `${strays} pose`).toBe(0);
+  expect(a.vel.max, `${strays} vel`).toBe(0);
+  expect(a.crush.max, `${strays} crush`).toBe(0);
 }
 
 describe("given a highlight clip recorded from a crash and replayed from its keyframes", () => {
@@ -61,7 +64,7 @@ describe("given a highlight clip recorded from a crash and replayed from its key
       const { clip } = rec;
       const a = clip.cars[clip.firstA]?.slot;
       const b = clip.cars[clip.firstB]?.slot;
-      assert.ok((a === 0 && b === 1) || (a === 1 && b === 0), `${name}: the clip's first impact is car ${a} against ${b ?? "a wall"}, not car 0 against car 1`);
+      expect((a === 0 && b === 1) || (a === 1 && b === 0), `${name}: the clip's first impact is car ${a} against ${b ?? "a wall"}, not car 0 against car 1`).toBeTruthy();
       check(name, rec, agreement(rec, () => w.race.resetProps()));
     };
     /**
@@ -105,7 +108,7 @@ describe("given a highlight clip recorded from a crash and replayed from its key
         };
       };
       run("race T-bone", place, 1);
-      assert.ok(strayed < 0.05, `the stopped car stood ${strayed.toFixed(2)} m off its spot when the first car touched it`);
+      expect(strayed, `the stopped car stood ${strayed.toFixed(2)} m off its spot when the first car touched it`).toBeLessThan(0.05);
     });
     it("when two cars hit head-on and two more run into the wreck, then the clip's first impact is between the head-on pair and the replay matches the live sim at every step, to the bit", () => run("race pile-up", pile(0), 3));
     for (const s of SHIFTS) it(`when the same pile-up happens ${s} m further along the road, then the replay matches the live sim at every step, to the bit, just as for the unshifted pile-up`, () => run(`race pile-up shifted ${s} m`, pile(s), 3));
@@ -120,8 +123,8 @@ describe("given a highlight clip recorded from a crash and replayed from its key
       for (const { slot } of clip.cars) seg[slot] = elsewhere;
       sim.restart();
       const held = clip.cars.map((_, j) => sim["memory"][0]![j * MEMORY]!);
-      assert.ok(held.some((h) => h >= 0 && h !== elsewhere), `no clip car's keyframe holds a hint: ${held.join(",")}`);
-      for (const [j, { slot }] of clip.cars.entries()) assert.equal(seg[slot], held[j], `car ${slot}'s road-segment hint after the restore`);
+      expect(held.some((h) => h >= 0 && h !== elsewhere), `no clip car's keyframe holds a hint: ${held.join(",")}`).toBeTruthy();
+      for (const [j, { slot }] of clip.cars.entries()) expect(seg[slot], `car ${slot}'s road-segment hint after the restore`).toBe(held[j]);
     });
   });
 
@@ -175,8 +178,8 @@ describe("given a highlight clip recorded from a crash and replayed from its key
     it("when the car behind a head-on's cars has its engine killed from outside the crash sim just after the impact (a guard's gunfire), then the replay matches the live sim at every step, to the bit, the shot car's wreck state and dead engine included", () => {
       const spawns = pile(0);
       const rec = recordFlat(spawns, 8, true, [], 1 / FINE_HZ, { car: 2, at: 2.4 });
-      assert.equal(rec.cars[2]!.deform.drivetrainAlive, false, "the shot car's engine is dead");
-      assert.ok(rec.clip.cars.some((c) => c.slot === 2), "the shot car is in the clip");
+      expect(rec.cars[2]!.deform.drivetrainAlive, "the shot car's engine is dead").toBe(false);
+      expect(rec.clip.cars.some((c) => c.slot === 2), "the shot car is in the clip").toBeTruthy();
       check("derby shot car", rec, agreement(rec));
     });
     // Seeds 4-8 of `engine-replay.ai-long-run.ts`: a clip that opens on wrecks already in motion restored them from the keyframe's solver
@@ -191,11 +194,11 @@ describe("given a highlight clip recorded from a crash and replayed from its key
       ];
       const rec = recordFlat(spawns, 10, true);
       const second = [rec.clip.cars[rec.clip.firstA]!.slot, rec.clip.cars[rec.clip.firstB]!.slot].sort();
-      assert.deepEqual(second, [2, 3], "the clip is the harder head-on's");
+      expect(firstMismatch(second, [2, 3]), "the clip is the harder head-on's").toBeUndefined();
       for (const slot of [0, 1]) {
-        assert.ok(rec.clip.cars.some((c) => c.slot === slot), `car ${slot} of the first pair is in the clip`);
+        expect(rec.clip.cars.some((c) => c.slot === slot), `car ${slot} of the first pair is in the clip`).toBeTruthy();
         const start = atClipStart(rec, slot);
-        assert.ok(start.wreck && start.speed > 1, `car ${slot} of the first pair is a wreck moving at ${start.speed.toFixed(2)} m/s as the clip opens`);
+        expect(start.wreck && start.speed > 1, `car ${slot} of the first pair is a wreck moving at ${start.speed.toFixed(2)} m/s as the clip opens`).toBeTruthy();
       }
       check("derby wrecks in motion", rec, agreement(rec));
     });
@@ -211,11 +214,11 @@ describe("given a highlight clip recorded from a crash and replayed from its key
       ];
       const rec = recordFlat(spawns, 8, true, [], 1 / QUIET_HZ);
       const inClip = rec.clip.cars.map((c) => c.slot);
-      assert.equal(inClip.length, 2, `the clip is of one head-on's two cars: ${inClip}`);
+      expect(inClip.length, `the clip is of one head-on's two cars: ${inClip}`).toBe(2);
       const away = inClip.includes(0) ? [2, 3] : [0, 1];
       const last = rec.clip.h.length - 1;
-      assert.ok(away.every((slot) => atClipStart(rec, slot, last).wreck), `the other pair (${away}) is wrecked by the clip's end, its cars no part of it`);
-      assert.ok(rec.clip.shape.some((s) => s > 0), "some step of the clip ran in contact slices");
+      expect(away.every((slot) => atClipStart(rec, slot, last).wreck), `the other pair (${away}) is wrecked by the clip's end, its cars no part of it`).toBeTruthy();
+      expect(rec.clip.shape.some((s) => s > 0), "some step of the clip ran in contact slices").toBeTruthy();
       check("derby far pair wrecking, 1/80 s steps", rec, agreement(rec));
     });
   });
@@ -229,7 +232,7 @@ describe("given a highlight clip recorded from a crash and replayed from its key
         const rec = recordFlat(spawns, 8, true, [], floor);
         const coarse = rec.clip.h.filter((h) => h > floor - 1e-6).length;
         // A 1/60 s frame is one 1/80 s step and a 1/240 s remainder, so half the steps are the floor's by the frames' own grid.
-        assert.ok(coarse >= rec.clip.h.length / 2, `${name}: ${coarse} of ${rec.clip.h.length} steps at ${rate} s (the rest are frame remainders)`);
+        expect(coarse, `${name}: ${coarse} of ${rec.clip.h.length} steps at ${rate} s (the rest are frame remainders)`).toBeGreaterThanOrEqual(rec.clip.h.length / 2);
         check(`${name} ${rate}`, rec, agreement(rec));
       };
       const coarseStepCases = [

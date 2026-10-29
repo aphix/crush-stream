@@ -1,8 +1,8 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import { agreement, atClipStart, recordFlat, type Recording, type Spawn } from "./replay-fidelity.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * A clip recorded with the epicenter activation on replays to the bit: the replay runs under the knobs the clip carries (`HighlightClip.epicenter`), so it freezes
@@ -20,7 +20,7 @@ const CLEAR_Z = 500;
 /** Car 0's z (m) where it first reaches plan x `x` in `rec`. */
 function lineAt(rec: Recording, x: number): number {
   const row = rec.trace.find((state) => state[0]! >= x);
-  assert.ok(row, `the dry run's car 0 never reached x ${x}`);
+  must(row, `the dry run's car 0 never reached x ${x}`);
   return row[2]!;
 }
 
@@ -32,12 +32,14 @@ function replays(name: string, spawns: Spawn[]): void {
   EPICENTER.on = 1;
   const rec = recordFlat(spawns, 8, true);
   loadEpicenter(EPICENTER_AT_LOAD);
-  assert.ok(rec.clip.epicenter !== null && rec.clip.epicenter[0] === 1, `${name}: the clip does not carry the activation`);
-  assert.ok(rec.cars.some((c) => c.deform.frozen), `${name}: no wreck was frozen at the end of the recording`);
+  expect(rec.clip.epicenter !== null && rec.clip.epicenter[0] === 1, `${name}: the clip does not carry the activation`).toBeTruthy();
+  expect(rec.cars.some((c) => c.deform.frozen), `${name}: no wreck was frozen at the end of the recording`).toBeTruthy();
   const a = agreement(rec);
-  assert.ok(a.steps >= 100, `${name}: ${a.steps} steps compared`);
-  assert.equal(a.wreckMismatch, 0, `${name}: a car is a wreck in one run and not in the other`);
-  assert.deepEqual({ pose: a.pose.max, vel: a.vel.max, crush: a.crush.max }, { pose: 0, vel: 0, crush: 0 }, `${name}: a car strays from the live sim (m, m/s, m)`);
+  expect(a.steps, `${name}: ${a.steps} steps compared`).toBeGreaterThanOrEqual(100);
+  expect(a.wreckMismatch, `${name}: a car is a wreck in one run and not in the other`).toBe(0);
+  expect(a.pose.max, `${name}: a car strays from the live sim (m): pose`).toBe(0);
+  expect(a.vel.max, `${name}: a car strays from the live sim (m/s): vel`).toBe(0);
+  expect(a.crush.max, `${name}: a car strays from the live sim (m): crush`).toBe(0);
 }
 
 describe("given a derby crash recorded with the epicenter activation on", () => {
@@ -77,11 +79,13 @@ describe("given a clip whose first keyframe finds a wreck frozen (the activation
     );
     loadEpicenter(EPICENTER_AT_LOAD);
     const frozenAtStart = [0, 1].filter((slot) => atClipStart(rec, slot).frozen);
-    assert.ok(rec.clip.cars.some((c) => c.slot === 2) && frozenAtStart.length > 0, `the clip must open on frozen bystanders (clip cars ${rec.clip.cars.map((c) => c.slot).join()}, frozen at its start: ${frozenAtStart.join() || "none"}): the row proves nothing`);
+    expect(rec.clip.cars.some((c) => c.slot === 2) && frozenAtStart.length > 0, `the clip must open on frozen bystanders (clip cars ${rec.clip.cars.map((c) => c.slot).join()}, frozen at its start: ${frozenAtStart.join() || "none"}): the row proves nothing`).toBeTruthy();
     const a = agreement(rec);
-    assert.ok(a.steps >= 100, `${a.steps} steps compared`);
-    assert.equal(a.wreckMismatch, 0, "a car is a wreck in one run and not in the other");
-    assert.deepEqual({ pose: a.pose.max, vel: a.vel.max, crush: a.crush.max }, { pose: 0, vel: 0, crush: 0 }, "a car strays from the live sim (m, m/s, m)");
+    expect(a.steps, `${a.steps} steps compared`).toBeGreaterThanOrEqual(100);
+    expect(a.wreckMismatch, "a car is a wreck in one run and not in the other").toBe(0);
+    expect(a.pose.max, "a car strays from the live sim (m): pose").toBe(0);
+    expect(a.vel.max, "a car strays from the live sim (m/s): vel").toBe(0);
+    expect(a.crush.max, "a car strays from the live sim (m): crush").toBe(0);
   });
 
   it("when that wreck drives on frozen at 36 m/s (sideswiped 1.5 s in, its drivetrain alive) into a parked car, then the replay from that keyframe matches the live sim at every step, to the bit", () => {
@@ -97,13 +101,12 @@ describe("given a clip whose first keyframe finds a wreck frozen (the activation
     const rec = recordFlat([...swipers, parked(line)], SWIPE_S, false, [], undefined, null, true);
     loadEpicenter(EPICENTER_AT_LOAD);
     const start = atClipStart(rec, 0);
-    assert.ok(
-      rec.clip.cars.some((c) => c.slot === 0) && start.wreck && start.frozen && start.speed > 20 && rec.cars[0]!.deform.drivetrainAlive,
-      `the clip must open on car 0 frozen and driving (clip cars ${rec.clip.cars.map((c) => c.slot).join()}, at its start ${JSON.stringify(start)}): the row proves nothing`,
-    );
+    expect(rec.clip.cars.some((c) => c.slot === 0) && start.wreck && start.frozen && start.speed > 20 && rec.cars[0]!.deform.drivetrainAlive, `the clip must open on car 0 frozen and driving (clip cars ${rec.clip.cars.map((c) => c.slot).join()}, at its start ${JSON.stringify(start)}): the row proves nothing`).toBeTruthy();
     const a = agreement(rec);
-    assert.ok(a.steps >= 100, `${a.steps} steps compared`);
-    assert.equal(a.wreckMismatch, 0, "a car is a wreck in one run and not in the other");
-    assert.deepEqual({ pose: a.pose.max, vel: a.vel.max, crush: a.crush.max }, { pose: 0, vel: 0, crush: 0 }, "a car strays from the live sim (m, m/s, m)");
+    expect(a.steps, `${a.steps} steps compared`).toBeGreaterThanOrEqual(100);
+    expect(a.wreckMismatch, "a car is a wreck in one run and not in the other").toBe(0);
+    expect(a.pose.max, "a car strays from the live sim (m): pose").toBe(0);
+    expect(a.vel.max, "a car strays from the live sim (m/s): vel").toBe(0);
+    expect(a.crush.max, "a car strays from the live sim (m): crush").toBe(0);
   });
 });

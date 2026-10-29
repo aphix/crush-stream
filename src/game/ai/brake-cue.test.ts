@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { classStats } from "../vehicle/vehicle-classes.ts";
@@ -16,17 +15,17 @@ const STRAIGHT = arc(350);
 
 describe("given the oval and a sedan", () => {
   it("when it does 50 m/s 25 m before the sharpest bend, then the cue is on", () => {
-    assert.ok(brakeCueAt(path, sedan, HAIRPIN - 25, 50, 1) > 0);
+    expect(brakeCueAt(path, sedan, HAIRPIN - 25, 50, 1)).toBeGreaterThan(0);
   });
   // The plan allows ≈ 46 m/s there (0.72 of the 28 m/s² sedan brake over 25 m into a 33 m/s corner); the cue is full 30 % over it, from 60 m/s (measured 0.9975 at 60, 1 at 62).
   it("when it does 65 m/s at the same point, then the cue is full", () => {
-    assert.equal(brakeCueAt(path, sedan, HAIRPIN - 25, 65, 1), 1);
+    expect(brakeCueAt(path, sedan, HAIRPIN - 25, 65, 1)).toBe(1);
   });
   it("when it does 8 m/s at the same point, then the cue is 0", () => {
-    assert.equal(brakeCueAt(path, sedan, HAIRPIN - 25, 8, 1), 0);
+    expect(brakeCueAt(path, sedan, HAIRPIN - 25, 8, 1)).toBe(0);
   });
   it("when it does 50 m/s mid-straight with no bend in braking reach, then the cue is 0", () => {
-    assert.equal(brakeCueAt(path, sedan, STRAIGHT, 50, 1), 0);
+    expect(brakeCueAt(path, sedan, STRAIGHT, 50, 1)).toBe(0);
   });
   it("when its speed climbs through the plan's, then the cue rises from 0 to 1 and never falls or jumps", () => {
     const STEP = 0.05;
@@ -34,12 +33,12 @@ describe("given the oval and a sedan", () => {
     let seenPartial = false;
     for (let v = 8; v <= 70; v += STEP) {
       const cue = brakeCueAt(path, sedan, HAIRPIN - 25, v, 1);
-      assert.ok(cue >= prev, `cue fell at ${v.toFixed(2)} m/s: ${prev} -> ${cue}`);
-      assert.ok(cue - prev <= 0.1, `cue jumped at ${v.toFixed(2)} m/s: ${prev} -> ${cue}`);
+      expect(cue, `cue fell at ${v.toFixed(2)} m/s: ${prev} -> ${cue}`).toBeGreaterThanOrEqual(prev);
+      expect(cue - prev, `cue jumped at ${v.toFixed(2)} m/s: ${prev} -> ${cue}`).toBeLessThanOrEqual(0.1);
       if (cue > 0 && cue < 1) seenPartial = true;
       prev = cue;
     }
-    assert.ok(seenPartial, "the cue went from 0 to 1 with nothing between");
-    assert.equal(prev, 1);
+    expect(seenPartial, "the cue went from 0 to 1 with nothing between").toBeTruthy();
+    expect(prev).toBe(1);
   });
 });

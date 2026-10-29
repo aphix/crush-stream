@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applyDrive, idleDrive } from "./car-drive.ts";
 import { DeformableCar } from "./car.ts";
@@ -38,7 +37,7 @@ describe("given two cars that have crashed head-on at 20 m/s each for 90 frames,
       }
       for (const car of w.cars) car.updateSkin();
     }
-    assert.ok(a.crashed && a.deform.massActive, "the head-on never crashed the car");
+    expect(a.crashed && a.deform.massActive, "the head-on never crashed the car").toBeTruthy();
     a.resetVisual();
     built.resetVisual();
     assertSameDigest(fields(a.deform), fields(built.deform), "deform after reset");
@@ -58,9 +57,9 @@ describe("given a car that has driven hard (gas, full lock and the handbrake at 
       car.velocity.set(car.fwdFlat.x * HARD_SPEED_MS, 0, car.fwdFlat.z * HARD_SPEED_MS);
       applyDrive(car, input, DT);
     }
-    for (const key of ["steer", "throttle", "drift", "ebrakeK"] as const) assert.ok(car.drive[key] !== 0, `the control: ${key} is ${car.drive[key]} before the respawn`);
+    for (const key of ["steer", "throttle", "drift", "ebrakeK"] as const) expect(car.drive[key], `the control: ${key} is ${car.drive[key]} before the respawn`).not.toBe(0);
     car.spawnFacing(10, 10, 1, 0);
-    for (const [key, value] of Object.entries(car.drive)) assert.equal(value, typeof value === "boolean" ? false : -0, key);
+    for (const [key, value] of Object.entries(car.drive)) expect(value, key).toBe(typeof value === "boolean" ? false : -0);
   });
 });
 
@@ -77,10 +76,10 @@ describe("given a monster truck whose rear-right wheel and front bumper have com
     const part = torn.parts.find((p) => p.name === BUMPER_F)!;
     torn.dropWheel(3, "hubRR");
     torn.detachPart(part, 0);
-    assert.ok(wheel.parent?.name !== CLASS_HUBS && part.object.parent?.name !== CLASS_LIFT, "the wheel or the bumper never came off");
+    expect(wheel.parent?.name !== CLASS_HUBS && part.object.parent?.name !== CLASS_LIFT, "the wheel or the bumper never came off").toBeTruthy();
     // Put on the plain group, the wheel was drawn 26 cm under its hub (the monster's tyre lift) and the bumper 0.87 m under its body.
     car.spawnFacing(10, 10, 1, 0);
-    assert.equal(wheel.parent?.name, CLASS_HUBS, "the wheel's parent");
-    assert.equal(part.object.parent?.name, CLASS_LIFT, "the bumper's parent");
+    expect(wheel.parent?.name, "the wheel's parent").toBe(CLASS_HUBS);
+    expect(part.object.parent?.name, "the bumper's parent").toBe(CLASS_LIFT);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { TRACK_ID } from "../world/constants.ts";
@@ -44,8 +43,8 @@ describe("given the National Mall's secret mushroom cloud (a backdrop hidden unt
   it("when the course's art is built, then no cloud canvas is painted and no cloud mesh is in the art", (t) => {
     const doc = recordingDocument(t);
     const art = mallArt();
-    assert.equal(doc.clouds(), 0, "cloud canvases painted at load");
-    assert.equal(cloudMeshes(art).length, 0, "cloud meshes in the art");
+    expect(doc.clouds(), "cloud canvases painted at load").toBe(0);
+    expect(cloudMeshes(art).length, "cloud meshes in the art").toBe(0);
     art.dispose();
   });
 
@@ -53,13 +52,13 @@ describe("given the National Mall's secret mushroom cloud (a backdrop hidden unt
     const doc = recordingDocument(t);
     const art = mallArt();
     art.reveal({ appendChild: (node) => node });
-    assert.equal(doc.clouds(), 0, "painted before the peak");
+    expect(doc.clouds(), "painted before the peak").toBe(0);
     vi.advanceTimersByTime(10_000);
-    assert.equal(doc.clouds(), 1, "painted at the peak");
+    expect(doc.clouds(), "painted at the peak").toBe(1);
     const [cloud] = cloudMeshes(art) as THREE.Mesh[];
-    assert.ok(cloud?.visible, "the cloud stands");
+    expect(cloud?.visible, "the cloud stands").toBeTruthy();
     const material = cloud!.material as THREE.MeshBasicMaterial;
-    assert.ok(material.transparent && material.side === THREE.DoubleSide && material.forceSinglePass, "a see-through double-sided panel takes one pass, not three's two");
+    expect(material.transparent && material.side === THREE.DoubleSide && material.forceSinglePass, "a see-through double-sided panel takes one pass, not three's two").toBeTruthy();
     art.dispose();
   });
 
@@ -69,15 +68,15 @@ describe("given the National Mall's secret mushroom cloud (a backdrop hidden unt
     art.reveal({ appendChild: (node) => node });
     art.resetSecret();
     vi.advanceTimersByTime(10_000);
-    assert.equal(doc.clouds(), 0, "a stopped flash never reaches its peak");
+    expect(doc.clouds(), "a stopped flash never reaches its peak").toBe(0);
     art.reveal({ appendChild: (node) => node });
     vi.advanceTimersByTime(10_000);
-    assert.equal(cloudMeshes(art).length, 1, "stands after the second code");
+    expect(cloudMeshes(art).length, "stands after the second code").toBe(1);
     art.resetSecret();
-    assert.equal(cloudMeshes(art).length, 0, "gone again after the restart");
+    expect(cloudMeshes(art).length, "gone again after the restart").toBe(0);
     art.reveal({ appendChild: (node) => node });
     vi.advanceTimersByTime(10_000);
-    assert.equal(doc.clouds(), 2, "painted again for the third code");
+    expect(doc.clouds(), "painted again for the third code").toBe(2);
     art.dispose();
   });
 });

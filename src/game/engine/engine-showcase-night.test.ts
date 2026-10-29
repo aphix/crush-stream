@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
@@ -53,22 +52,22 @@ describe("given the real engine booted on the sandbox, its Night toggle and the 
     visit("fleet", true);
     const sandboxLights = litLights().length;
     visit("showcase", true);
-    assert.equal(litLights().length, sandboxLights + POST_COUNT, "the showcase adds exactly its posts' spots");
-    assert.equal(postLights().filter((light) => light.intensity > 0 && litLights().includes(light)).length, POST_COUNT, "every post's spot is in the lit set and burning");
+    expect(litLights().length, "the showcase adds exactly its posts' spots").toBe(sandboxLights + POST_COUNT);
+    expect(postLights().filter((light) => light.intensity > 0 && litLights().includes(light)).length, "every post's spot is in the lit set and burning").toBe(POST_COUNT);
     visit("fleet", true);
-    assert.equal(litLights().length, sandboxLights, "back in the sandbox at night: no light added");
-    assert.equal(postLights().filter((light) => litLights().includes(light)).length, 0, "no post's spot is in the scene's lit set");
+    expect(litLights().length, "back in the sandbox at night: no light added").toBe(sandboxLights);
+    expect(postLights().filter((light) => litLights().includes(light)).length, "no post's spot is in the scene's lit set").toBe(0);
   });
 
   it("when the showcase is up by day, then its posts' spots and the cars' headlamp spots are dark, and at night the posts burn and the cars' headlamps light with real spots and glow", () => {
     engine["lampLights"].middleTile = true;
     visit("showcase", false);
-    assert.equal(postLights().filter((light) => light.intensity > 0).length, 0, "no post spot burns by day");
-    assert.equal(headSpotsLit(), 0, "no headlamp spot by day");
+    expect(postLights().filter((light) => light.intensity > 0).length, "no post spot burns by day").toBe(0);
+    expect(headSpotsLit(), "no headlamp spot by day").toBe(0);
     visit("showcase", true);
-    assert.equal(postLights().filter((light) => light.intensity > 0).length, POST_COUNT, "every post spot burns at night");
-    assert.ok(headSpotsLit() > 0, "the showcase cars' headlamps cast real light at night");
-    assert.ok(engine["lampLights"].glow.geometry.drawRange.count >= engine["showcase"]!.cars.length, "every car's lamps glow at night");
+    expect(postLights().filter((light) => light.intensity > 0).length, "every post spot burns at night").toBe(POST_COUNT);
+    expect(headSpotsLit(), "the showcase cars' headlamps cast real light at night").toBeGreaterThan(0);
+    expect(engine["lampLights"].glow.geometry.drawRange.count, "every car's lamps glow at night").toBeGreaterThanOrEqual(engine["showcase"]!.cars.length);
   });
 
   it("when a scene other than the showcase has its cars' lamps updated at night, then the podium's cars stay out of the lamp lights", () => {
@@ -84,7 +83,7 @@ describe("given the real engine booted on the sandbox, its Night toggle and the 
     engine["podium"].cars = () => [podiumCar];
     runSeconds(engine, 0.2);
     lampLights.update = update;
-    assert.ok(seen.length > 0, "the control: the lamp lights were updated");
-    assert.equal(seen.includes(podiumCar), false, "the podium's car is not among the cars the sandbox lights");
+    expect(seen.length, "the control: the lamp lights were updated").toBeGreaterThan(0);
+    expect(seen.includes(podiumCar), "the podium's car is not among the cars the sandbox lights").toBe(false);
   });
 });

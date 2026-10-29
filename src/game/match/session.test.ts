@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Track, blankPoint, blankProjection, pointOn } from "../world/track.ts";
 import { BUST, CLEARANCE, COUNTDOWN, DRAFT, FINISH_GRACE, GRID_TIME, RESPAWN_BRAKE, RESPAWN_DELAY, RaceSession, WRONG_WAY_ON, startLights } from "./session.ts";
 import { Campaign, CAMPAIGN_POINTS } from "./campaign.ts";
@@ -16,6 +15,14 @@ import { blankAiCar, type AiCar } from "../ai/derby-ai.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 import { TRACKS } from "../world/tracks/index.ts";
 import { parseTrack } from "../world/track-schema.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
+
+/** Rows of scalars, each compared with firstMismatch; a failure names the row. */
+function expectRows(actual: readonly (readonly unknown[])[], expected: readonly (readonly unknown[])[], what: string) {
+  expect(actual, `${what} row count`).toHaveLength(expected.length);
+  for (let i = 0; i < expected.length; i++) expect(firstMismatch(actual[i], expected[i]!), `${what} row ${i}`).toBeUndefined();
+}
 
 const _pt = blankPoint();
 
@@ -26,16 +33,16 @@ const ovalTrack = new Track(oval);
 
 describe("given a one-lap race between two cars on the square track, before the start", () => {
   it("when time runs from the grid through the countdown, then the start lights go off, red, yellow, then green at the right moments, the race goes from grid to countdown to racing, and one go event fires at 0", () => {
-    assert.deepEqual([-5, -3.2, -2.9, -1.1, -0.9, -0.01, 0, 1.4, 1.6].map(startLights), [0, 0, 1, 1, 2, 2, 3, 3, 0]);
+    expect(firstMismatch([-5, -3.2, -2.9, -1.1, -0.9, -0.01, 0, 1.4, 1.6].map(startLights), [0, 0, 1, 1, 2, 2, 3, 3, 0])).toBeUndefined();
     const s = new RaceSession(square, field(2), { laps: 1, noReset: false });
-    assert.equal(s.phase, "grid");
-    assert.ok(Math.abs(s.time + GRID_TIME + COUNTDOWN) < 1e-9);
+    expect(s.phase).toBe("grid");
+    expect(Math.abs(s.time + GRID_TIME + COUNTDOWN)).toBeLessThan(1e-9);
     const parked = [fromGrid(square, 0, 0), fromGrid(square, 1, 0)];
     runTo(s, parked, -COUNTDOWN + 0.1);
-    assert.equal(s.phase, "countdown");
+    expect(s.phase).toBe("countdown");
     const ev = runTo(s, parked, 0.1);
-    assert.equal(s.phase, "racing");
-    assert.equal(count(ev, "go"), 1);
+    expect(s.phase).toBe("racing");
+    expect(count(ev, "go")).toBe(1);
   });
 });
 
@@ -44,20 +51,20 @@ describe("given a two-lap race between two cars on the square track", () => {
     const s = new RaceSession(square, field(2), { laps: 2, noReset: false });
     const ev = runTo(s, [fromGrid(square, 0, 20), fromGrid(square, 1, 18)], 120);
     const laps = ev.filter((e) => e.type === "lap");
-    assert.deepEqual(laps.map((e) => e.type === "lap" && [e.id, e.lap]), [[0, 1], [1, 1], [0, 2], [1, 2]]);
+    expectRows(laps.flatMap((e) => (e.type === "lap" ? [[e.id, e.lap]] : [])), [[0, 1], [1, 1], [0, 2], [1, 2]], "lap events");
     const lap0 = s.cars[0]!.lapTimes;
     // Lap 1 is timed from green (the grid is 6 m behind the line), lap 2 line to line.
-    assert.ok(Math.abs(lap0[1]! - square.length / 20) < 0.02, `lap 2 ${lap0[1]} vs ${square.length / 20}`);
-    assert.ok(Math.abs(lap0[0]! - lap0[1]! - 6 / 20) < 0.02, "lap 1 includes the run to the line");
-    assert.equal(s.cars[0]!.bestLap, Math.min(...lap0));
-    assert.equal(s.winnerId, 0);
-    assert.equal(s.winBy, "laps");
-    assert.equal(s.phase, "finished");
+    expect(Math.abs(lap0[1]! - square.length / 20), `lap 2 ${lap0[1]} vs ${square.length / 20}`).toBeLessThan(0.02);
+    expect(Math.abs(lap0[0]! - lap0[1]! - 6 / 20), "lap 1 includes the run to the line").toBeLessThan(0.02);
+    expect(s.cars[0]!.bestLap).toBe(Math.min(...lap0));
+    expect(s.winnerId).toBe(0);
+    expect(s.winBy).toBe("laps");
+    expect(s.phase).toBe("finished");
     const res = s.results();
-    assert.deepEqual(res.map((r) => [r.id, r.place, r.status]), [[0, 1, "finished"], [1, 2, "finished"]]);
-    assert.equal(res[0]!.gap, 0);
-    assert.ok(res[1]!.gap! > 0 && Math.abs(res[1]!.time! - res[0]!.time! - res[1]!.gap!) < 1e-9);
-    assert.ok(s.cars[1]!.split! > 0 && s.cars[0]!.split === 0, "split to the first car through the line");
+    expectRows(res.map((r) => [r.id, r.place, r.status]), [[0, 1, "finished"], [1, 2, "finished"]], "results");
+    expect(res[0]!.gap).toBe(0);
+    expect(res[1]!.gap! > 0 && Math.abs(res[1]!.time! - res[0]!.time! - res[1]!.gap!) < 1e-9).toBeTruthy();
+    expect(s.cars[1]!.split! > 0 && s.cars[0]!.split === 0, "split to the first car through the line").toBeTruthy();
   });
 });
 
@@ -67,10 +74,10 @@ describe("given a one-lap race with one car on the square track", () => {
     const L = square.length;
     const pts = [...centreline(square, L - 6, L + square.gateS(1) + 4), { x: 60, z: 60 }, ...centreline(square, L - 30, L + 20)];
     const ev = runTo(s, [polyline(pts, 20)], 40);
-    assert.equal(count(ev, "lap"), 0);
-    assert.equal(s.cars[0]!.next, 2);
-    assert.equal(s.cars[0]!.lap, 0);
-    assert.equal(s.cars[0]!.missed, true, "the HUD is told a checkpoint was skipped");
+    expect(count(ev, "lap")).toBe(0);
+    expect(s.cars[0]!.next).toBe(2);
+    expect(s.cars[0]!.lap).toBe(0);
+    expect(s.cars[0]!.missed, "the HUD is told a checkpoint was skipped").toBe(true);
   });
 
   it("when the car drives back and forth over the line, then no lap ever counts and re-crossing the line just passed is not flagged as a skipped checkpoint", () => {
@@ -79,16 +86,16 @@ describe("given a one-lap race with one car on the square track", () => {
     const pts: Pt[] = [];
     for (let k = 0; k < 5; k++) pts.push(...centreline(square, L - 6, L + 8), ...centreline(square, L - 6, L + 8).reverse());
     const ev = runTo(s, [polyline(pts, 15)], 40);
-    assert.equal(count(ev, "lap"), 0);
-    assert.equal(s.cars[0]!.next, 1);
-    assert.equal(s.cars[0]!.missed, false, "re-crossing the line just passed is no skip");
+    expect(count(ev, "lap")).toBe(0);
+    expect(s.cars[0]!.next).toBe(1);
+    expect(s.cars[0]!.missed, "re-crossing the line just passed is no skip").toBe(false);
   });
 });
 
 describe("given a one-lap race with one car on the oval track, whose service road across the infield is a shortcut from checkpoint 4 to the line", () => {
   it("when the car takes the service road after checkpoint 4, then the shortcut lap counts and is more than 2 s quicker than the full lap, and when it joins the road without having passed checkpoint 4, then it earns no lap and still owes checkpoint 4", () => {
     const sc = ovalTrack.shortcuts[0]!;
-    assert.deepEqual([sc.from, sc.to], [4, 0]);
+    expect(firstMismatch([sc.from, sc.to], [4, 0])).toBeUndefined();
     const L = ovalTrack.length;
     const road = shortcutLine(sc.path, 0, sc.path.length, 1);
     const g = sc.gates[0]!;
@@ -99,15 +106,15 @@ describe("given a one-lap race with one car on the oval track, whose service roa
 
     const cut = new RaceSession(ovalTrack, field(1), { laps: 1, noReset: false });
     const ev = runTo(cut, [polyline([...centreline(ovalTrack, L - 6, L + ovalTrack.gateS(4) + 10), mouth, ...tail], 25)], 60);
-    assert.equal(count(ev, "lap"), 1, "the shortcut lap counts");
+    expect(count(ev, "lap"), "the shortcut lap counts").toBe(1);
     const full = new RaceSession(ovalTrack, field(1), { laps: 1, noReset: false });
     runTo(full, [fromGrid(ovalTrack, 0, 25)], 60);
-    assert.ok(cut.cars[0]!.finishTime! < full.cars[0]!.finishTime! - 2, "and it is quicker than the full lap");
+    expect(cut.cars[0]!.finishTime!, "and it is quicker than the full lap").toBeLessThan(full.cars[0]!.finishTime! - 2);
 
     const early = new RaceSession(ovalTrack, field(1), { laps: 1, noReset: false });
     const wrong = [...centreline(ovalTrack, L - 6, L + ovalTrack.gateS(3) + 4), { x: 20, z: 20 }, mouth, ...tail];
-    assert.equal(count(runTo(early, [polyline(wrong, 25)], 60), "lap"), 0);
-    assert.equal(early.cars[0]!.next, 4, "still owes checkpoint 4");
+    expect(count(runTo(early, [polyline(wrong, 25)], 60), "lap")).toBe(0);
+    expect(early.cars[0]!.next, "still owes checkpoint 4").toBe(4);
   });
 
   it("when the car cuts in past the shortcut's mouth gate, or leaves it before its exit gate, then the shortcut lap still counts", () => {
@@ -120,11 +127,11 @@ describe("given a one-lap race with one car on the oval track, whose service roa
     // Straight onto the service road between its first two gates.
     const cutIn = [...approach, ...shortcutLine(sc.path, (sc.gates[0]!.s + sc.gates[1]!.s) / 2, sc.path.length, 1), ...home];
     const a = new RaceSession(ovalTrack, field(1), { laps: 1, noReset: false });
-    assert.equal(count(runTo(a, [polyline(cutIn, 25)], 60), "lap"), 1, "cut in past the mouth");
+    expect(count(runTo(a, [polyline(cutIn, 25)], 60), "lap"), "cut in past the mouth").toBe(1);
     // Off the service road before its last gate, straight back onto the main road.
     const early = [...approach, ...shortcutLine(sc.path, 0, sc.gates[sc.gates.length - 2]!.s + 3, 1), ...home];
     const b = new RaceSession(ovalTrack, field(1), { laps: 1, noReset: false });
-    assert.equal(count(runTo(b, [polyline(early, 25)], 60), "lap"), 1, "left before the exit gate");
+    expect(count(runTo(b, [polyline(early, 25)], 60), "lap"), "left before the exit gate").toBe(1);
   });
 
   it("when the car crosses the open infield beside the dirt road, or straight across between the wall gaps, then the lap counts either way, the car finishes and no checkpoint is flagged skipped", () => {
@@ -147,9 +154,9 @@ describe("given a one-lap race with one car on the oval track, whose service roa
       const s = new RaceSession(ovalTrack, field(1), { laps: 1, noReset: false });
       const end = pts[pts.length - 1]!;
       const ev = runTo(s, [polyline([...approach, ...pts, ...homeFrom(end.x, end.z)], 25)], 60);
-      assert.equal(count(ev, "lap"), 1, `${name}: the lap counts`);
-      assert.equal(s.cars[0]!.status, "finished", name);
-      assert.equal(s.cars[0]!.missed, false, name);
+      expect(count(ev, "lap"), `${name}: the lap counts`).toBe(1);
+      expect(s.cars[0]!.status, name).toBe("finished");
+      expect(s.cars[0]!.missed, name).toBe(false);
     }
   });
 });
@@ -162,13 +169,13 @@ describe("given a three-lap race with one car on the square track, driven at 15 
     const sNow = 6 * 15 - 6;
     const back: Driver = (t) => along(square, sNow, -12)(t - 6);
     runTo(s, [back], 6 + WRONG_WAY_ON * 0.6);
-    assert.equal(s.cars[0]!.wrongWay, false, "a moment backwards is not wrong way yet");
+    expect(s.cars[0]!.wrongWay, "a moment backwards is not wrong way yet").toBe(false);
     runTo(s, [back], 6 + WRONG_WAY_ON * 1.6);
-    assert.equal(s.cars[0]!.wrongWay, true);
+    expect(s.cars[0]!.wrongWay).toBe(true);
     const t1 = s.time;
     const sBack = sNow - 12 * (t1 - 6);
     runTo(s, [(t) => along(square, sBack, 12)(t - t1)], t1 + 2);
-    assert.equal(s.cars[0]!.wrongWay, false);
+    expect(s.cars[0]!.wrongWay).toBe(false);
   });
 });
 
@@ -176,12 +183,12 @@ describe("given races on the square track where cars are ranked mid-race", () =>
   it("when a four-car race is 4 s in, then the order follows progress along the road, and two cars level on progress keep grid order", () => {
     const s = new RaceSession(square, field(4), { laps: 1, noReset: false });
     runTo(s, [fromGrid(square, 0, 12), fromGrid(square, 1, 12), fromGrid(square, 2, 16), fromGrid(square, 3, 10)], 4);
-    assert.deepEqual(s.order(), [2, 0, 1, 3]);
+    expect(firstMismatch(s.order(), [2, 0, 1, 3])).toBeUndefined();
     const tie = new RaceSession(square, field(2), { laps: 1, noReset: false });
     const L = square.length;
     runTo(tie, [along(square, L - 6, 10), along(square, L - 6, 10)], 3);
-    assert.equal(tie.cars[1]!.progress, tie.cars[0]!.progress);
-    assert.deepEqual(tie.order(), [0, 1]);
+    expect(tie.cars[1]!.progress).toBe(tie.cars[0]!.progress);
+    expect(firstMismatch(tie.order(), [0, 1])).toBeUndefined();
   });
 });
 
@@ -198,20 +205,20 @@ describe("given a three-lap race of two cars on the square track, where car 0 di
     const blocker: Driver = (t) => (t < 0 ? fromGrid(square, 1, 0)(t) : park);
     const ev = runTo(s, [dying, blocker], dieAt + 0.2);
     const died = ev.find((e) => e.type === "died");
-    assert.ok(died && died.type === "died" && died.id === 0);
-    assert.ok(Math.abs(died.respawnAt - dieAt - RESPAWN_DELAY) < 0.05);
+    must(died && died.type === "died" && died.id === 0, "died && died.type === \"died\" && died.id === 0");
+    expect(Math.abs(died.respawnAt - dieAt - RESPAWN_DELAY)).toBeLessThan(0.05);
     // The host repairs the car on the respawn event; stop there.
     const ev2 = runTo(s, [dying, blocker], dieAt + RESPAWN_DELAY + 0.1, (x) => x.cars[0]!.status === "racing");
     const rs = ev2.find((e) => e.type === "respawn");
-    assert.ok(rs && rs.type === "respawn");
-    assert.equal(s.cars[0]!.status, "racing");
+    must(rs && rs.type === "respawn", "rs && rs.type === \"respawn\"");
+    expect(s.cars[0]!.status).toBe("racing");
     const p = blankProjection();
     square.project(rs.x, rs.z, -1, p);
-    assert.ok(Math.abs(p.lateral) < square.path.half[p.k]! * 0.5 + 0.05, `on the road near the centre (lateral ${p.lateral.toFixed(2)})`);
+    expect(Math.abs(p.lateral), `on the road near the centre (lateral ${p.lateral.toFixed(2)})`).toBeLessThan(square.path.half[p.k]! * 0.5 + 0.05);
     const heading = Math.atan2(square.path.tx[p.k]!, square.path.tz[p.k]!);
-    assert.ok(Math.cos(rs.yaw - heading) > 0.99, "facing the race direction");
-    assert.ok(Math.abs(p.s - (15 * dieAt - 6)) <= 2 * CLEARANCE + 1, `near the wreck (s ${p.s.toFixed(1)})`);
-    assert.ok(Math.hypot(rs.x - park.x, rs.z - park.z) >= CLEARANCE, "clear of the parked car");
+    expect(Math.cos(rs.yaw - heading), "facing the race direction").toBeGreaterThan(0.99);
+    expect(Math.abs(p.s - (15 * dieAt - 6)), `near the wreck (s ${p.s.toFixed(1)})`).toBeLessThanOrEqual(2 * CLEARANCE + 1);
+    expect(Math.hypot(rs.x - park.x, rs.z - park.z), "clear of the parked car").toBeGreaterThanOrEqual(CLEARANCE);
   });
 });
 
@@ -227,11 +234,11 @@ describe("given car 0 whose wreck is due to respawn just as car 1 comes down the
     const fast = along(square, 15 * dieAt - 6 - 30 * (due + 0.5) + 3 * L, 30);
     const ev = runTo(s, [dying, fast], due + 3, (x) => x.cars[0]!.status === "racing" && x.time > dieAt);
     const rs = ev.find((e) => e.type === "respawn");
-    assert.ok(rs && rs.type === "respawn", "the car respawned");
-    assert.ok(s.time > due + 0.3 && s.time < due + 2.1, `respawned at ${s.time.toFixed(2)} s (due ${due} s)`);
+    must(rs && rs.type === "respawn", "the car respawned");
+    expect(s.time > due + 0.3 && s.time < due + 2.1, `respawned at ${s.time.toFixed(2)} s (due ${due} s)`).toBeTruthy();
     const q = fast(s.time);
     const ahead = ((rs.x - q.x) * q.vx + (rs.z - q.z) * q.vz) / 30;
-    assert.ok(ahead < -FLEET_HALF.z || ahead > CLEARANCE + (30 * 30) / (2 * RESPAWN_BRAKE), `dropped ${ahead.toFixed(1)} m ahead of a car at 30 m/s`);
+    expect(ahead < -FLEET_HALF.z || ahead > CLEARANCE + (30 * 30) / (2 * RESPAWN_BRAKE), `dropped ${ahead.toFixed(1)} m ahead of a car at 30 m/s`).toBeTruthy();
   });
 });
 
@@ -244,11 +251,11 @@ describe("given a three-lap race with one car on the square track, whose wreck s
     const slid = { ...along(square, g1 + 6, 0)(0), alive: false };
     const ev = runTo(s, [(t) => (t < tDie ? go(t) : slid)], tDie + RESPAWN_DELAY + 0.5);
     const rs = ev.find((e) => e.type === "respawn");
-    assert.ok(rs && rs.type === "respawn");
+    must(rs && rs.type === "respawn", "rs && rs.type === \"respawn\"");
     const p = blankProjection();
     square.project(rs.x, rs.z, -1, p);
-    assert.ok(p.s <= g1 - 2.9, `respawned at s ${p.s.toFixed(1)}, gate at ${g1.toFixed(1)}`);
-    assert.equal(s.cars[0]!.next, 1);
+    expect(p.s, `respawned at s ${p.s.toFixed(1)}, gate at ${g1.toFixed(1)}`).toBeLessThanOrEqual(g1 - 2.9);
+    expect(s.cars[0]!.next).toBe(1);
   });
 });
 
@@ -260,13 +267,13 @@ describe("given a five-lap race of three cars on the square track with no resets
       return (t) => (t < at ? d(t) : { ...d(at), vx: 0, vz: 0, alive: false });
     };
     const ev = runTo(s, [killAt(0, 3), killAt(1, 6), fromGrid(square, 2, 14)], 60);
-    assert.deepEqual(ev.filter((e) => e.type === "out").map((e) => e.type === "out" && e.id), [0, 1]);
-    assert.equal(count(ev, "respawn"), 0);
-    assert.equal(s.requestRespawn(0), false);
-    assert.equal(s.phase, "finished");
-    assert.equal(s.winnerId, 2);
-    assert.equal(s.winBy, "survival");
-    assert.deepEqual(s.results().map((r) => [r.id, r.status]), [[2, "finished"], [1, "out"], [0, "out"]]);
+    expect(firstMismatch(ev.filter((e) => e.type === "out").map((e) => e.type === "out" && e.id), [0, 1])).toBeUndefined();
+    expect(count(ev, "respawn")).toBe(0);
+    expect(s.requestRespawn(0)).toBe(false);
+    expect(s.phase).toBe("finished");
+    expect(s.winnerId).toBe(2);
+    expect(s.winBy).toBe("survival");
+    expectRows(s.results().map((r) => [r.id, r.status]), [[2, "finished"], [1, "out"], [0, "out"]], "results");
   });
 });
 
@@ -288,11 +295,11 @@ describe("given a one-lap race with one car on the square track, with resets on"
       return back(t);
     };
     const ev = runTo(s, [d], 120);
-    assert.equal(count(ev, "died"), 1);
-    assert.equal(count(ev, "out"), 0);
-    assert.equal(count(ev, "respawn"), 1);
-    assert.equal(s.cars[0]!.status, "finished");
-    assert.ok(s.cars[0]!.finishTime! > square.length / 18 + RESPAWN_DELAY - 0.5);
+    expect(count(ev, "died")).toBe(1);
+    expect(count(ev, "out")).toBe(0);
+    expect(count(ev, "respawn")).toBe(1);
+    expect(s.cars[0]!.status).toBe("finished");
+    expect(s.cars[0]!.finishTime!).toBeGreaterThan(square.length / 18 + RESPAWN_DELAY - 0.5);
   });
 });
 
@@ -305,7 +312,7 @@ describe("given a two-lap race of three cars on the square track", () => {
     assertSameDigest(b.snapshot(), a.snapshot(), "restored race at 9 s");
     runTo(a, drivers, 80);
     runTo(b, drivers, 80);
-    assert.equal(a.phase, "finished");
+    expect(a.phase).toBe("finished");
     assertSameDigest(b.snapshot(), a.snapshot(), "restored race at the finish");
   });
 });
@@ -315,8 +322,8 @@ describe("given a one-lap race of two cars on the square track where one car has
     const s = new RaceSession(square, field(2), { laps: 1, noReset: false });
     runTo(s, [fromGrid(square, 0, 22), fromGrid(square, 1, 8)], 60, (x) => x.cars[0]!.status === "finished");
     s.end();
-    assert.equal(s.phase, "finished");
-    assert.deepEqual(s.results().map((r) => [r.id, r.status]), [[0, "finished"], [1, "dnf"]]);
+    expect(s.phase).toBe("finished");
+    expectRows(s.results().map((r) => [r.id, r.status]), [[0, "finished"], [1, "dnf"]], "results");
   });
 });
 
@@ -333,16 +340,13 @@ describe("given a two-lap race of four cars on the square track: a winner, a car
     const parkAt = (i: number) => polyline(centreline(square, toLine(i), 2 * L + 40), 22);
     // Winner; a lap down at the flag (crosses before the next full-distance finisher); full distance; parked after lap 1.
     runTo(s, [fromGrid(square, 0, 30), fromGrid(square, 1, 14), fromGrid(square, 2, 26), parkAt(3)], 200);
-    assert.equal(s.phase, "finished");
+    expect(s.phase).toBe("finished");
     const res = s.results();
-    assert.deepEqual(
-      res.map((r) => [r.id, r.status, r.laps]),
-      [[0, "finished", 2], [2, "finished", 2], [1, "finished", 1], [3, "dnf", 1]],
-    );
-    assert.ok(s.cars[1]!.finishTime! < s.cars[2]!.finishTime!, "the lapped car crossed first and still ranks behind");
-    assert.equal(res[2]!.gap, null, "a lapped finisher has no time gap");
+    expectRows(res.map((r) => [r.id, r.status, r.laps]), [[0, "finished", 2], [2, "finished", 2], [1, "finished", 1], [3, "dnf", 1]], "results");
+    expect(s.cars[1]!.finishTime!, "the lapped car crossed first and still ranks behind").toBeLessThan(s.cars[2]!.finishTime!);
+    expect(res[2]!.gap, "a lapped finisher has no time gap").toBe(null);
     const win = s.cars[0]!.finishTime!;
-    assert.ok(Math.abs(s.time - (win + FINISH_GRACE)) <= DT + 1e-9, `closed at ${s.time.toFixed(2)} s, the winner + ${FINISH_GRACE} s is ${(win + FINISH_GRACE).toFixed(2)} s`);
+    expect(Math.abs(s.time - (win + FINISH_GRACE)), `closed at ${s.time.toFixed(2)} s, the winner + ${FINISH_GRACE} s is ${(win + FINISH_GRACE).toFixed(2)} s`).toBeLessThanOrEqual(DT + 1e-9);
   });
 });
 
@@ -362,9 +366,9 @@ describe("given a three-lap race of two cars on the square track, where the seco
     const s = new RaceSession(square, field(2), { laps: 3, noReset: false });
     runTo(s, [fromGrid(square, 0, 30), fromGrid(square, 1, slowV)], 300);
     const slow = s.cars[1]!;
-    assert.equal(slow.status, "finished", `the slow car is ${slow.status} on ${slow.lap} laps`);
-    assert.equal(slow.lap, 2, "flagged at its next crossing");
-    assert.ok(slow.finishTime! > s.cars[0]!.finishTime! + FINISH_GRACE, `crossed at ${slow.finishTime!.toFixed(1)} s, after the fixed grace`);
+    expect(slow.status, `the slow car is ${slow.status} on ${slow.lap} laps`).toBe("finished");
+    expect(slow.lap, "flagged at its next crossing").toBe(2);
+    expect(slow.finishTime!, `crossed at ${slow.finishTime!.toFixed(1)} s, after the fixed grace`).toBeGreaterThan(s.cars[0]!.finishTime! + FINISH_GRACE);
   });
 });
 
@@ -391,8 +395,8 @@ describe("given a three-lap race of two cars on the square track, where the seco
     const s = new RaceSession(square, field(2), { laps: 3, noReset: false });
     runTo(s, [fromGrid(square, 0, vW), cut], 600);
     const lagged = s.cars[1]!;
-    assert.equal(lagged.status, "finished", `the car whose lap 1 was fast is ${lagged.status} on ${lagged.lap} laps`);
-    assert.ok(lagged.finishTime! > s.cars[0]!.finishTime! + FINISH_GRACE, `crossed at ${lagged.finishTime!.toFixed(1)} s, after the fixed grace`);
+    expect(lagged.status, `the car whose lap 1 was fast is ${lagged.status} on ${lagged.lap} laps`).toBe("finished");
+    expect(lagged.finishTime!, `crossed at ${lagged.finishTime!.toFixed(1)} s, after the fixed grace`).toBeGreaterThan(s.cars[0]!.finishTime! + FINISH_GRACE);
   });
 });
 
@@ -439,20 +443,20 @@ describe("given a three-lap race of two cars on the oval where a police car ride
   it("when car 0 is stopped for 4.1 s within 20 m of the chasing police car, then it is busted at 4 s, DNF (did not finish) with the bust shown in the results, while the other car keeps racing", () => {
     const s = bust([[4.1, 0]], 10, GREEN + 6);
     const c = s.cars[0]!;
-    assert.equal(c.status, "dnf");
-    assert.ok(Math.abs(c.bustedAt! - (GREEN + 4)) <= 2 * DT, `busted at ${c.bustedAt} s`);
-    assert.equal(s.cars[1]!.status, "racing");
-    assert.equal(s.cars[1]!.bustedAt, null);
+    expect(c.status).toBe("dnf");
+    expect(Math.abs(c.bustedAt! - (GREEN + 4)), `busted at ${c.bustedAt} s`).toBeLessThanOrEqual(2 * DT);
+    expect(s.cars[1]!.status).toBe("racing");
+    expect(s.cars[1]!.bustedAt).toBe(null);
     const rows = s.results();
-    assert.equal(rows.find((r) => r.id === 0)!.busted, true);
-    assert.equal(rows.find((r) => r.id === 1)!.busted, false);
+    expect(rows.find((r) => r.id === 0)!.busted).toBe(true);
+    expect(rows.find((r) => r.id === 1)!.busted).toBe(false);
   });
 
   it("when the same bust happens in a no-reset race, then the car is out rather than DNF, timed like an elimination", () => {
     const s = bust([[4.1, 0]], 10, GREEN + 6, true);
     const c = s.cars[0]!;
-    assert.equal(c.status, "out");
-    assert.equal(c.outTime, c.bustedAt);
+    expect(c.status).toBe("out");
+    expect(c.outTime).toBe(c.bustedAt);
   });
 
   it("when the car is stopped 3.9 s, or stopped 8 s but 21 m from the police car, or at 21 km/h, then it is not busted and its stopped timer is back at 0 once it drives on", () => {
@@ -463,16 +467,16 @@ describe("given a three-lap race of two cars on the oval where a police car ride
     ];
     for (const [legs, gap, why] of cases) {
       const s = bust(legs, gap, GREEN + 10);
-      assert.equal(s.cars[0]!.status, "racing", why);
-      assert.equal(s.cars[0]!.bustedAt, null, why);
-      assert.equal(s.cars[0]!.stopped, 0, `${why}: the timer is back at 0 once it drives on`);
+      expect(s.cars[0]!.status, why).toBe("racing");
+      expect(s.cars[0]!.bustedAt, why).toBe(null);
+      expect(s.cars[0]!.stopped, `${why}: the timer is back at 0 once it drives on`).toBe(0);
     }
   });
 
   it("when the car speeds up in between (3 s stopped, 1 s at 30 km/h, 3 s stopped), then the timer restarts and it is not busted", () => {
     const s = bust([[3, 0], [1, 30], [3, 0]], 10, GREEN + 7 - DT);
-    assert.equal(s.cars[0]!.status, "racing");
-    assert.ok(Math.abs(s.cars[0]!.stopped - 3) <= 2 * DT, `held ${s.cars[0]!.stopped.toFixed(2)} s since the restart`);
+    expect(s.cars[0]!.status).toBe("racing");
+    expect(Math.abs(s.cars[0]!.stopped - 3), `held ${s.cars[0]!.stopped.toFixed(2)} s since the restart`).toBeLessThanOrEqual(2 * DT);
   });
 });
 
@@ -480,7 +484,7 @@ describe("given a three-lap race with one car on the oval and no police car (pol
   it("when the car sits still, then it is never busted", () => {
     const s = new RaceSession(ovalTrack, field(1), { laps: 3, noReset: false });
     runTo(s, [() => ({ x: 0, z: 0, vx: 0, vz: 0 })], GREEN + 10);
-    assert.equal(s.cars[0]!.status, "racing");
+    expect(s.cars[0]!.status).toBe("racing");
   });
 });
 
@@ -506,7 +510,7 @@ describe("given a three-lap race with one car on the oval and a PARKED stakeout 
     const start = ovalTrack.pointAt(ovalTrack.length * 0.4, _pt);
     Object.assign(cars[0]!, { x: start.x, z: start.z });
     police.update(0, 0.25, cars, hunt, ovalTrack.length * 0.4, world);
-    assert.ok(spots[1], "no stakeout parked");
+    expect(spots[1], "no stakeout parked").toBeTruthy();
     const proj = blankProjection();
     const spotS = ovalTrack.project(spots[1]!.x, spots[1]!.z, -1, proj).s;
     const s = new RaceSession(ovalTrack, field(1), { laps: 3, noReset: false });
@@ -518,7 +522,7 @@ describe("given a three-lap race with one car on the oval and a PARKED stakeout 
       Object.assign(cars[0]!, { x: p.x, z: p.z });
       Object.assign(pose, { x: p.x, z: p.z });
       const near = Math.hypot(p.x - spots[1]!.x, p.z - spots[1]!.z);
-      assert.ok(near < BUST.near, `car 0 is ${near.toFixed(1)} m from the unit`);
+      expect(near, `car 0 is ${near.toFixed(1)} m from the unit`).toBeLessThan(BUST.near);
       for (let t = 0; t < secs; t += DT) {
         if (Math.round(s.time / DT) % 15 === 0) police.update(s.time, 0.25, cars, hunt, 0, world);
         s.step(DT, [pose], s.time < 0 ? [] : police.chasers(cars, out));
@@ -526,14 +530,14 @@ describe("given a three-lap race with one car on the oval and a PARKED stakeout 
     };
     // Short of its spot: the unit stays parked, so it never counts.
     sit(-8, 4.5 + 5);
-    assert.equal(out.length, 0, "a parked unit counted as chasing");
-    assert.equal(s.cars[0]!.status, "racing");
-    assert.equal(s.cars[0]!.bustedAt, null);
+    expect(out.length, "a parked unit counted as chasing").toBe(0);
+    expect(s.cars[0]!.status).toBe("racing");
+    expect(s.cars[0]!.bustedAt).toBe(null);
     // Past it: the pack wakes and chases, and the same stop is a bust.
     sit(5, 5);
-    assert.ok(out.length > 0, "the woken unit is not chasing");
-    assert.equal(s.cars[0]!.status, "dnf");
-    assert.notEqual(s.cars[0]!.bustedAt, null);
+    expect(out.length, "the woken unit is not chasing").toBeGreaterThan(0);
+    expect(s.cars[0]!.status).toBe("dnf");
+    expect(s.cars[0]!.bustedAt).not.toBe(null);
   });
 });
 
@@ -553,20 +557,20 @@ describe("given a campaign of races across tracks (oval, rally, city)", () => {
 
   it("when three rounds are recorded, then points follow finishing place, standings sort by points with ties going to the better latest finish, each later round's grid puts the leader on pole, the campaign is done after its last track, recording more throws, and a snapshot restores identically", () => {
     const c = new Campaign(["oval", "rally", "city"], field(4));
-    assert.deepEqual(c.grid(), [0, 1, 2, 3], "round 1: entry order");
-    assert.equal(c.trackId, "oval");
+    expect(firstMismatch(c.grid(), [0, 1, 2, 3]), "round 1: entry order").toBeUndefined();
+    expect(c.trackId).toBe("oval");
     c.record([row(2, 1), row(0, 2), row(3, 3), row(1, 4, "out")]);
-    assert.deepEqual(c.standings().map((r) => [r.id, r.points]), [[2, 10], [0, 8], [3, 6], [1, 5]]);
-    assert.deepEqual(c.grid(), [2, 0, 3, 1]);
-    assert.equal(c.trackId, "rally");
+    expectRows(c.standings().map((r) => [r.id, r.points]), [[2, 10], [0, 8], [3, 6], [1, 5]], "standings");
+    expect(firstMismatch(c.grid(), [2, 0, 3, 1])).toBeUndefined();
+    expect(c.trackId).toBe("rally");
     c.record([row(0, 1), row(2, 2), row(1, 3), row(3, 4)]);
     // 0 and 2 tie on 18 points and one win each: 0 placed better in the latest round.
-    assert.deepEqual(c.standings().map((r) => [r.id, r.points, r.wins]), [[0, 18, 1], [2, 18, 1], [1, 11, 0], [3, 11, 0]]);
-    assert.equal(CAMPAIGN_POINTS[0], 10);
+    expectRows(c.standings().map((r) => [r.id, r.points, r.wins]), [[0, 18, 1], [2, 18, 1], [1, 11, 0], [3, 11, 0]], "standings");
+    expect(CAMPAIGN_POINTS[0]).toBe(10);
     c.record([row(3, 1), row(1, 2), row(0, 3), row(2, 4)]);
-    assert.equal(c.done, true);
-    assert.equal(c.trackId, null);
-    assert.throws(() => c.record([]));
+    expect(c.done).toBe(true);
+    expect(c.trackId).toBe(null);
+    expect(() => c.record([])).toThrow();
     const restored = Campaign.restore(JSON.parse(JSON.stringify(c.snapshot())));
     assertSameDigest(restored.snapshot(), c.snapshot(), "restored campaign");
   });
@@ -575,8 +579,8 @@ describe("given a campaign of races across tracks (oval, rally, city)", () => {
     const c = new Campaign(["oval"], field(10));
     c.record(Array.from({ length: 9 }, (_, i) => row(i, i + 1)));
     const st = c.standings();
-    assert.equal(st.find((r) => r.id === 8)!.points, 0);
-    assert.deepEqual(st.find((r) => r.id === 9)!.places, [0]);
+    expect(st.find((r) => r.id === 8)!.points).toBe(0);
+    expect(firstMismatch(st.find((r) => r.id === 9)!.places, [0])).toBeUndefined();
   });
 });
 
@@ -592,14 +596,14 @@ describe("given a two-car race on the square track, where one car follows anothe
     const s = race();
     const follower = straight(0.5, 12, 30);
     runTo(s, [leader, follower], DRAFT.every - 0.1);
-    assert.equal(s.cars[1]!.drafts, 0, "a bonus before the first interval");
-    assert.ok(s.cars[1]!.draft > DRAFT.every - 0.2, `drafting for ${s.cars[1]!.draft} s`);
+    expect(s.cars[1]!.drafts, "a bonus before the first interval").toBe(0);
+    expect(s.cars[1]!.draft, `drafting for ${s.cars[1]!.draft} s`).toBeGreaterThan(DRAFT.every - 0.2);
     runTo(s, [leader, follower], DRAFT.every + 0.1);
-    assert.equal(s.cars[1]!.drafts, 1);
+    expect(s.cars[1]!.drafts).toBe(1);
     runTo(s, [leader, follower], 4 * DRAFT.every + 0.5);
-    assert.equal(s.cars[1]!.drafts, 4);
-    assert.equal(s.cars[0]!.drafts, 0, "the car in front drafted");
-    assert.equal(s.cars[0]!.draft, 0);
+    expect(s.cars[1]!.drafts).toBe(4);
+    expect(s.cars[0]!.drafts, "the car in front drafted").toBe(0);
+    expect(s.cars[0]!.draft).toBe(0);
   });
 
   it("when the follower is 4 m off the leader's line at 8 m back (outside the cone), 20 m back, 1 m back, both at 12 m/s (under the speed floor) or on a broken run, then it earns no draft bonus and, the broken run aside, is never counted as drafting", () => {
@@ -614,9 +618,9 @@ describe("given a two-car race on the square track, where one car follows anothe
     for (const [name, lead, follower] of cases) {
       const s = race();
       runTo(s, [lead, follower], 3.4);
-      assert.equal(s.cars[1]!.drafts, 0, name);
-      assert.equal(s.cars[0]!.drafts, 0, name);
-      if (name !== "a broken run") assert.equal(s.cars[1]!.draft, 0, `${name}: counted as drafting`);
+      expect(s.cars[1]!.drafts, name).toBe(0);
+      expect(s.cars[0]!.drafts, name).toBe(0);
+      if (name !== "a broken run") expect(s.cars[1]!.draft, `${name}: counted as drafting`).toBe(0);
     }
   });
 
@@ -629,16 +633,16 @@ describe("given a two-car race on the square track, where one car follows anothe
   const LEN = 2 * FLEET_HALF.z;
 
   it("when the follower is 1 m behind the bumper, at 3 car lengths, or at 3.5 car lengths on a straight, then the first two are in the wake and the third is not", () => {
-    assert.ok(wakes(1, 0), "1 m behind the bumper (inside the old 2 m near cut)");
-    assert.ok(wakes(3 * LEN - 0.01, 0), "just inside 3 car lengths");
-    assert.ok(!wakes(3.5 * LEN, 0), "3.5 car lengths");
-    assert.ok(!wakes(-0.5, 0), "its nose past the leader's rear bumper");
+    expect(wakes(1, 0), "1 m behind the bumper (inside the old 2 m near cut)").toBeTruthy();
+    expect(wakes(3 * LEN - 0.01, 0), "just inside 3 car lengths").toBeTruthy();
+    expect(!wakes(3.5 * LEN, 0), "3.5 car lengths").toBe(true);
+    expect(!wakes(-0.5, 0), "its nose past the leader's rear bumper").toBe(true);
   });
 
   it("when the follower is offset sideways at 10 m behind the bumper, then it is in the wake inside half a width plus 10 m x tan 18 degrees (4.1 m) and out beyond it", () => {
-    assert.ok(wakes(10, 4), "4 m off: inside the cone, outside the old 1.5 m box");
-    assert.ok(!wakes(10, 4.5), "4.5 m off");
-    assert.ok(!wakes(0.5, 3), "3 m off right behind the bumper: the cone is narrow there");
+    expect(wakes(10, 4), "4 m off: inside the cone, outside the old 1.5 m box").toBeTruthy();
+    expect(!wakes(10, 4.5), "4.5 m off").toBe(true);
+    expect(!wakes(0.5, 3), "3 m off right behind the bumper: the cone is narrow there").toBe(true);
   });
 
   it("when both cars take a 25 m radius bend 10 m of arc apart at 20 m/s, then the follower stays in the wake, as it cannot in a straight box", () => {
@@ -649,15 +653,15 @@ describe("given a two-car race on the square track, where one car follows anothe
     };
     const s = race();
     runTo(s, [arc(10 / R), arc(0)], 0.5);
-    assert.ok(s.cars[1]!.draft > 0.4, `drafting for ${s.cars[1]!.draft} s`);
+    expect(s.cars[1]!.draft, `drafting for ${s.cars[1]!.draft} s`).toBeGreaterThan(0.4);
   });
 
   it("when the follower heads 40, 60 degrees off the leader's, or crosses its line at right angles, then only the 40 degree car drafts", () => {
     const v = 40;
     const rad = Math.PI / 180;
-    assert.ok(wakes(6, 0, v * Math.sin(40 * rad), v * Math.cos(40 * rad)), "40 degrees off, over the speed floor along the leader's line");
-    assert.ok(!wakes(6, 0, v * Math.sin(60 * rad), v * Math.cos(60 * rad)), "60 degrees off, still over the speed floor along the line");
-    assert.ok(!wakes(6, 0, 30, 0), "crossing at right angles");
+    expect(wakes(6, 0, v * Math.sin(40 * rad), v * Math.cos(40 * rad)), "40 degrees off, over the speed floor along the leader's line").toBeTruthy();
+    expect(!wakes(6, 0, v * Math.sin(60 * rad), v * Math.cos(60 * rad)), "60 degrees off, still over the speed floor along the line").toBe(true);
+    expect(!wakes(6, 0, 30, 0), "crossing at right angles").toBe(true);
   });
 });
 
@@ -675,10 +679,10 @@ describe("given a 1-car 2-lap race on each course, the car driven along the main
         missed ||= s.cars[0]!.missed;
         return false;
       });
-      assert.equal(missed, false, "a checkpoint was crossed with an earlier one owed");
-      assert.deepEqual(events.filter((e) => e.type === "lap").map((e) => e.lap), [1, 2]);
-      assert.equal(s.phase, "finished");
-      assert.equal(s.winBy, "laps");
+      expect(missed, "a checkpoint was crossed with an earlier one owed").toBe(false);
+      expect(firstMismatch(events.filter((e) => e.type === "lap").map((e) => e.lap), [1, 2])).toBeUndefined();
+      expect(s.phase).toBe("finished");
+      expect(s.winBy).toBe("laps");
     });
   }
 });

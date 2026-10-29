@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { PLATFORM_CAMERA } from "../vehicle/car-styles/platform.ts";
@@ -9,6 +8,7 @@ import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { G } from "../vehicle/car-air-body.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const FRAME = 1 / FRAME_HZ;
 type Rig = "press" | "pistons" | "doors" | "corkscrew";
@@ -38,7 +38,7 @@ describe("given the real engine in a rig scene, watching its car", () => {
   const assertCoasting = (car: DeformableCar): void => {
     const spawn = 0.5 * car.spawnSpeed * car.spawnSpeed;
     const held = 0.5 * car.velocity.lengthSq() + G * car.group.position.y;
-    assert.ok(held > COAST_SHARE * spawn, `the car holds ${held.toFixed(0)} J/kg (speed ${car.velocity.length().toFixed(1)} m/s, ${car.group.position.y.toFixed(1)} m up) of the ${spawn.toFixed(0)} J/kg it spawned with, under ${COAST_SHARE}`);
+    expect(held, `the car holds ${held.toFixed(0)} J/kg (speed ${car.velocity.length().toFixed(1)} m/s, ${car.group.position.y.toFixed(1)} m up) of the ${spawn.toFixed(0)} J/kg it spawned with, under ${COAST_SHARE}`).toBeGreaterThan(COAST_SHARE * spawn);
   };
   /** W for a moment (the seat takes the wheel), then released. */
   const takeWheel = (): void => {
@@ -61,16 +61,16 @@ describe("given the real engine in a rig scene, watching its car", () => {
   it("when V is pressed in each rig scene, then the HUD names the next spectator view, and the orbit is where it starts and where nine presses end", () => {
     for (const id of ["press", "pistons", "doors", "corkscrew"] as const) {
       watch(id);
-      assert.equal(engine["sceneId"], id);
-      assert.equal(hud.get().cam, "orbit", `${id}: the rig's default view is the orbit`);
+      expect(engine["sceneId"]).toBe(id);
+      expect(hud.get().cam, `${id}: the rig's default view is the orbit`).toBe("orbit");
       const seen: unknown[] = [];
       for (let i = 0; i < 9; i++) {
         engine.cycleCamera();
         seen.push(hud.get().cam);
       }
-      assert.deepEqual(seen, ["auto", "free", "auto", "third", "far", "first", "cine", "dutch", "orbit"], `${id}: the views V cycles from the orbit (the free view after Auto, and V from it back to Auto), round to it`);
+      expect(firstMismatch(seen, ["auto", "free", "auto", "third", "far", "first", "cine", "dutch", "orbit"]), `${id}: the views V cycles from the orbit (the free view after Auto, and V from it back to Auto), round to it`).toBeUndefined();
       engine.cycleCamera();
-      assert.equal(hud.get().cam, "auto", `${id}: and round again`);
+      expect(hud.get().cam, `${id}: and round again`).toBe("auto");
     }
   });
 
@@ -80,18 +80,18 @@ describe("given the real engine in a rig scene, watching its car", () => {
     runSeconds(engine, 0.5);
     // The orbit's next is Auto, then the free view (V from it comes back to Auto), then the chase.
     for (let presses = 0; presses < 4; presses++) engine.cycleCamera();
-    assert.equal(engine["view"].specView(false), "third");
+    expect(engine["view"].specView(false)).toBe("third");
     runSeconds(engine, 0.7);
     const cam = engine["camera"].position;
     const dx = cam.x - car.group.position.x;
     const dz = cam.z - car.group.position.z;
     const dist = Math.hypot(dx, cam.y - car.group.position.y, dz);
     const along = dx * car.fwdFlat.x + dz * car.fwdFlat.z;
-    assert.ok(car.velocity.length() > 5, `the car is under way at ${car.velocity.length().toFixed(1)} m/s`);
-    assert.ok(along < 0, `the camera is ahead of the car (${along.toFixed(2)} m along its heading)`);
-    assert.ok(dist <= PLATFORM_CAMERA.third.dist + 1.5, `the camera is ${dist.toFixed(2)} m off, the chase distance is ${PLATFORM_CAMERA.third.dist}`);
+    expect(car.velocity.length(), `the car is under way at ${car.velocity.length().toFixed(1)} m/s`).toBeGreaterThan(5);
+    expect(along, `the camera is ahead of the car (${along.toFixed(2)} m along its heading)`).toBeLessThan(0);
+    expect(dist, `the camera is ${dist.toFixed(2)} m off, the chase distance is ${PLATFORM_CAMERA.third.dist}`).toBeLessThanOrEqual(PLATFORM_CAMERA.third.dist + 1.5);
     engine.reset();
-    assert.equal(engine["view"].specView(false), "third", "the reset keeps the view");
+    expect(engine["view"].specView(false), "the reset keeps the view").toBe("third");
     runSeconds(engine, 1);
     assertCoasting(car);
   });
@@ -100,10 +100,10 @@ describe("given the real engine in a rig scene, watching its car", () => {
     watch("corkscrew");
     const car = engine["carA"];
     takeWheel();
-    assert.equal(engine["seat"].mode, "drive", "W took the wheel");
+    expect(engine["seat"].mode, "W took the wheel").toBe("drive");
     engine.reset();
-    assert.equal(engine["seat"].mode, "follow", "the reset handed the car back to the rig");
-    assert.equal(hud.get().seat, "follow", "the HUD says so");
+    expect(engine["seat"].mode, "the reset handed the car back to the rig").toBe("follow");
+    expect(hud.get().seat, "the HUD says so").toBe("follow");
     runSeconds(engine, 1);
     assertCoasting(car);
   });
@@ -113,7 +113,7 @@ describe("given the real engine in a rig scene, watching its car", () => {
     const car = engine["carA"];
     takeWheel();
     engine["seat"].esc();
-    assert.equal(engine["seat"].mode, "follow");
+    expect(engine["seat"].mode).toBe("follow");
     engine.reset();
     runSeconds(engine, 1);
     assertCoasting(car);

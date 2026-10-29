@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
 import type { DeformMode } from "./deform-rig.ts";
@@ -15,6 +14,8 @@ import { sliceSpeed } from "../contact/sat.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { DebrisSystem } from "../present/engine-fx.ts";
 import { stepWreck, type WreckRig } from "./physics-util.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 type PartRow = { name: string; hingeT: number; detached: boolean };
 
 function spawnOffset(impactX: number, speed = 14, mode: DeformMode = "lattice") {
@@ -53,8 +54,8 @@ forModes("given a car driving at 14 m/s into a wall that meets one front corner"
     const flz = mass(s.d, "bumperFL").local.z;
     const frz = mass(s.d, "bumperFR").local.z;
     const rlz = mass(s.d, "bumperRL").local.z;
-    assert.ok(frz < flz - 0.08, `no corner banana: FL.z=${flz.toFixed(3)} FR.z=${frz.toFixed(3)}`);
-    assert.ok(rlz <= (mode === "shape" ? -1.9 : -1.95), `rear extruded to ${rlz.toFixed(3)}`);
+    expect(frz, `no corner banana: FL.z=${flz.toFixed(3)} FR.z=${frz.toFixed(3)}`).toBeLessThan(flz - 0.08);
+    expect(rlz, `rear extruded to ${rlz.toFixed(3)}`).toBeLessThanOrEqual((mode === "shape" ? -1.9 : -1.95));
   });
 
   it("when the wall hits the right-front corner, then the two front bumper corners stay more than 0.7 m apart across the car, the far corner staying wide as the nose bends sideways", () => {
@@ -62,7 +63,7 @@ forModes("given a car driving at 14 m/s into a wall that meets one front corner"
     for (let i = 0; i < 22; i++) stepWall(s, DT, mass(s.d, "bumperFR").world.x);
     const r = mass(s.d, "bumperFR").local.x;
     const l = mass(s.d, "bumperFL").local.x;
-    assert.ok(r > l + 0.7, `track collapsed: FL.x=${l.toFixed(3)} FR.x=${r.toFixed(3)}`);
+    expect(r, `track collapsed: FL.x=${l.toFixed(3)} FR.x=${r.toFixed(3)}`).toBeGreaterThan(l + 0.7);
   });
 
   it("when the wall hits the left-front corner, then the left-front bumper sits at least 6 cm further back than the right-front one, so the sideways bend is not mirrored the wrong way", () => {
@@ -70,7 +71,7 @@ forModes("given a car driving at 14 m/s into a wall that meets one front corner"
     for (let i = 0; i < 22; i++) stepWall(s, DT, mass(s.d, "bumperFL").world.x);
     const flz = mass(s.d, "bumperFL").local.z;
     const frz = mass(s.d, "bumperFR").local.z;
-    assert.ok(flz < frz - 0.06, `inverted banana L=${flz.toFixed(3)} R=${frz.toFixed(3)}`);
+    expect(flz, `inverted banana L=${flz.toFixed(3)} R=${frz.toFixed(3)}`).toBeLessThan(frz - 0.06);
   });
 
   it("when the squash slider (how readily the body crushes) is 0.7 instead of 0.2 and the wall hits the right-front corner, then the hit corner is pushed back more than 1.15 times as far", () => {
@@ -84,7 +85,7 @@ forModes("given a car driving at 14 m/s into a wall that meets one front corner"
     }
     const a = 2.06 - mass(lo.d, "bumperFR").local.z;
     const b = 2.06 - mass(hi.d, "bumperFR").local.z;
-    assert.ok(b > a * 1.15, `squash slider dead: lo=${a.toFixed(3)} hi=${b.toFixed(3)}`);
+    expect(b, `squash slider dead: lo=${a.toFixed(3)} hi=${b.toFixed(3)}`).toBeGreaterThan(a * 1.15);
   });
 });
 
@@ -92,15 +93,15 @@ forModes("given a car driving at 14 m/s head-on into a wall", (mode) => {
   it("when its nose is crushed by the first 20 frames of the hit, then the car body stays on the road, below 0.15 m high", () => {
     const s = spawnOffset(0, 14, mode);
     for (let i = 0; i < 20; i++) stepWall(s, DT, 0);
-    assert.ok(s.group.position.y < 0.15, `lofted to y=${s.group.position.y}`);
+    expect(s.group.position.y, `lofted to y=${s.group.position.y}`).toBeLessThan(0.15);
   });
 
   it("when its nose is crushed by the first 20 frames of the hit, then the car body's position follows the cabin block (within 0.35 m sideways and 0.45 m lengthwise), not the crushed bumper", () => {
     const s = spawnOffset(0, 14, mode);
     for (let i = 0; i < 20; i++) stepWall(s, DT, 0);
     const cell = mass(s.d, "cell");
-    assert.ok(Math.abs(s.group.position.x - (cell.world.x - cell.rest.x)) < 0.35);
-    assert.ok(Math.abs(s.group.position.z - (cell.world.z - cell.rest.z)) < 0.45);
+    expect(Math.abs(s.group.position.x - (cell.world.x - cell.rest.x))).toBeLessThan(0.35);
+    expect(Math.abs(s.group.position.z - (cell.world.z - cell.rest.z))).toBeLessThan(0.45);
   });
 
   it("when the nose shortens over 28 frames, then the front bumper has moved back at least 8 cm (2 cm in shape mode) or sits over 5 cm from its rest position, and the remaining-crumple fraction is at most 1", () => {
@@ -108,12 +109,9 @@ forModes("given a car driving at 14 m/s head-on into a wall", (mode) => {
     const z0 = mass(s.d, "bumperFL").local.z;
     for (let i = 0; i < 28; i++) stepWall(s, DT, 0);
     const z1 = mass(s.d, "bumperFL").local.z;
-    assert.ok(
-      z0 - z1 > (mode === "shape" ? 0.02 : 0.08) || mass(s.d, "bumperFL").local.distanceTo(mass(s.d, "bumperFL").rest) > 0.05,
-      `nose never shortened ${z0} → ${z1}`,
-    );
+    expect(z0 - z1 > (mode === "shape" ? 0.02 : 0.08) || mass(s.d, "bumperFL").local.distanceTo(mass(s.d, "bumperFL").rest) > 0.05, `nose never shortened ${z0} → ${z1}`).toBeTruthy();
     const after = leftoverCrumple(s.d.crumpleTravel());
-    assert.ok(after <= 1);
+    expect(after).toBeLessThanOrEqual(1);
   });
 });
 
@@ -122,7 +120,7 @@ describe("given a car in lattice deform mode (a lattice of beams joins its parts
     const s = spawnOffset(0, 14, "lattice");
     const beam = s.d.snapshot() as { beams: { a: string; b: string; rest: number }[] };
     const spec = beam.beams.find((b) => b.a === "bumperFL" && b.b === "bumperFR");
-    assert.ok(spec);
+    expect(spec).toBeTruthy();
     const fl = mass(s.d, "bumperFL");
     const fr = mass(s.d, "bumperFR");
     fl.world.x -= 0.4;
@@ -130,8 +128,8 @@ describe("given a car in lattice deform mode (a lattice of beams joins its parts
     s.d.stepStructure(DT);
     const snap = s.d.snapshot() as { beams: { a: string; b: string; strain: number; alive: boolean }[] };
     const b = snap.beams.find((x) => x.a === "bumperFL" && x.b === "bumperFR")!;
-    assert.ok(b.alive);
-    assert.ok(b.strain > 0.05, `tension strain ${b.strain}`);
+    expect(b.alive).toBeTruthy();
+    expect(b.strain, `tension strain ${b.strain}`).toBeGreaterThan(0.05);
   });
 
   it("when the nose is crushed head-on for 16 frames, then the beam from the left engine mount to the cabin reports compression (strain below -0.02)", () => {
@@ -139,7 +137,7 @@ describe("given a car in lattice deform mode (a lattice of beams joins its parts
     for (let i = 0; i < 16; i++) stepWall(s, DT, 0);
     const snap = s.d.snapshot() as { beams: { a: string; b: string; strain: number }[] };
     const b = snap.beams.find((x) => x.a === "engineL" && x.b === "cell")!;
-    assert.ok(b.strain < -0.02, `expected compression, got ${b.strain}`);
+    expect(b.strain, `expected compression, got ${b.strain}`).toBeLessThan(-0.02);
   });
 
   it("when the wall hits the right-front corner, then the rear bumper's cross beam keeps over 92 % of its rest length, so the far side is not squashed", () => {
@@ -147,7 +145,7 @@ describe("given a car in lattice deform mode (a lattice of beams joins its parts
     for (let i = 0; i < 16; i++) stepWall(s, DT, mass(s.d, "bumperFR").world.x);
     const snap = s.d.snapshot() as { beams: { a: string; b: string; plastic: number; rest: number }[] };
     const b = snap.beams.find((x) => x.a === "bumperRL" && x.b === "bumperRR")!;
-    assert.ok(b.plastic > b.rest * 0.92, `rear beam plastic-shrunk to ${b.plastic}`);
+    expect(b.plastic, `rear beam plastic-shrunk to ${b.plastic}`).toBeGreaterThan(b.rest * 0.92);
   });
 });
 
@@ -177,14 +175,14 @@ forModes("given a car struck on its right side at 28 m/s, with the contact held 
 
   it("when the hit settles, then the right door has opened (hinge past 0.15) and by at least 0.08 more than the left door", () => {
     const { doorR: r, doorL: l } = rightSideHit();
-    assert.ok(r!.hingeT > 0.15, `right door never hinged (${r!.hingeT})`);
-    assert.ok(r!.hingeT > l!.hingeT + 0.08, `doors tied together R=${r!.hingeT} L=${l!.hingeT}`);
+    expect(r!.hingeT, `right door never hinged (${r!.hingeT})`).toBeGreaterThan(0.15);
+    expect(r!.hingeT, `doors tied together R=${r!.hingeT} L=${l!.hingeT}`).toBeGreaterThan(l!.hingeT + 0.08);
   });
 
   it("when the hit settles, then the right mirror has folded (hinge past 0.3) or broken off, and the left mirror is untouched, not detached and not hinged", () => {
     const { mirrorR: r, mirrorL: l } = rightSideHit();
-    assert.ok(r!.detached || r!.hingeT > 0.3, `right mirror untouched (${r!.hingeT})`);
-    assert.ok(!l!.detached && l!.hingeT === 0, `left mirror moved (${l!.hingeT}, detached ${l!.detached})`);
+    expect(r!.detached || r!.hingeT > 0.3, `right mirror untouched (${r!.hingeT})`).toBeTruthy();
+    expect(!l!.detached && l!.hingeT === 0, `left mirror moved (${l!.hingeT}, detached ${l!.detached})`).toBeTruthy();
   });
 });
 
@@ -209,7 +207,7 @@ forModes("given a car hit on its nose at 40 m/s, with the contact held for 50 fr
     }
     const snap = car.snapshot() as { parts: { name: string; hingeT: number; detached: boolean; folding: boolean }[] };
     const b = snap.parts.find((p) => p.name === "bumperF")!;
-    assert.ok(b.hingeT > 0.2 || b.detached, `bumper never folded (${b.hingeT})`);
+    expect(b.hingeT > 0.2 || b.detached, `bumper never folded (${b.hingeT})`).toBeTruthy();
   });
 });
 
@@ -235,13 +233,13 @@ forModes("given a car spawned far from the map's origin and hit on its nose at 5
     }
     const snap = car.snapshot() as { parts: { name: string; detached: boolean; pos: { x: number; y: number; z: number } }[] };
     const loose = snap.parts.filter((p) => p.detached);
-    assert.ok(loose.length > 0, "the 50/50 nose hit detached nothing");
+    expect(loose.length, "the 50/50 nose hit detached nothing").toBeGreaterThan(0);
     const at = car.group.position;
     for (const p of loose) {
-      assert.ok(p.pos.y > -0.05, `${p.name} fell through the map to y=${p.pos.y}`);
+      expect(p.pos.y, `${p.name} fell through the map to y=${p.pos.y}`).toBeGreaterThan(-0.05);
       // Left at its rest-local coordinates it would sit near the origin, ~140 m from the car spawned at (80, 120).
       const off = Math.hypot(p.pos.x - at.x, p.pos.z - at.z);
-      assert.ok(off < 30, `${p.name} lies ${off.toFixed(1)} m from its car`);
+      expect(off, `${p.name} lies ${off.toFixed(1)} m from its car`).toBeLessThan(30);
     }
   });
 });
@@ -263,7 +261,7 @@ forModes("given a car with one part detached", () => {
     }
     for (const r of live) r.addEventListener("dispose", () => live.delete(r));
     car.dispose();
-    assert.equal(live.size, 0, `${live.size} part geometries/materials left undisposed`);
+    expect(live.size, `${live.size} part geometries/materials left undisposed`).toBe(0);
   });
 });
 
@@ -274,14 +272,14 @@ forModes("given a car whose right mirror is torn off", () => {
     const seat = car.partSeats[PART_KIND.mirrorR]!;
     car.breakMirror(1, new THREE.Vector3());
     const own = seat.children.find((c): c is THREE.Mesh => c instanceof THREE.Mesh);
-    assert.ok(own, "the torn mirror's seat has no loose mesh");
+    must(own, "the torn mirror's seat has no loose mesh");
     let ownFreed = false;
     let sharedFreed = false;
     own.geometry.addEventListener("dispose", () => void (ownFreed = true));
     seat.geometry.addEventListener("dispose", () => void (sharedFreed = true));
     car.dispose();
-    assert.equal(ownFreed, true, "the loose copy leaked");
-    assert.equal(sharedFreed, false, "the shared geometry was disposed with one car");
+    expect(ownFreed, "the loose copy leaked").toBe(true);
+    expect(sharedFreed, "the shared geometry was disposed with one car").toBe(false);
   });
 });
 
@@ -300,11 +298,11 @@ forModes("given a freshly built car", () => {
       live.add(d.geometry);
       for (const m of [d.material].flat() as THREE.Material[]) if (!m.userData.shared) live.add(m);
     });
-    assert.ok([...live].some((r) => r instanceof THREE.BufferGeometry && r === (car["hullHelper"] as THREE.LineSegments).geometry), "the hull overlay is among what the car owns");
-    assert.ok(drawn > 20, `${drawn} drawn objects found`);
+    expect([...live].some((r) => r instanceof THREE.BufferGeometry && r === (car["hullHelper"] as THREE.LineSegments).geometry), "the hull overlay is among what the car owns").toBeTruthy();
+    expect(drawn, `${drawn} drawn objects found`).toBeGreaterThan(20);
     for (const r of live) r.addEventListener("dispose", () => live.delete(r));
     car.dispose();
-    assert.equal(live.size, 0, `${live.size} geometries/materials left undisposed`);
+    expect(live.size, `${live.size} geometries/materials left undisposed`).toBe(0);
   });
 });
 
@@ -334,17 +332,17 @@ forModes("given a car whose wheel hubs all pop off after a 2 m/s nose knock", (m
       car.afterContacts(DT);
       if (i !== 299) continue;
       // 5 s in: the rim's point on the road moves with the road (centre velocity + spin × lever = 0), to a facet's jump and one slice's gravity.
-      assert.equal(car.deform.drivetrainAlive, false, "no wheels and the drivetrain still runs");
+      expect(car.deform.drivetrainAlive, "no wheels and the drivetrain still runs").toBe(false);
       for (const [k, w] of car.wheels.entries()) {
         const body = bodies[k]!;
         const slip = slide.crossVectors(body.angular, toContact).add(body.velocity).setY(0).length();
         const speed = body.velocity.length();
-        assert.equal(w.parent, scene, `wheel ${k} still rides the car`);
-        assert.ok(Math.abs(w.position.y - tyreR) <= tyreR * FACET_SLIP + 0.02, `wheel ${k} rolls at y ${w.position.y.toFixed(3)}, not on its tyre`);
-        assert.ok(slip <= speed * FACET_SLIP + GRAVITY * DT, `wheel ${k} slides at 5 s: ${slip.toFixed(3)} m/s at the road at ${speed.toFixed(2)} m/s`);
+        expect(w.parent, `wheel ${k} still rides the car`).toBe(scene);
+        expect(Math.abs(w.position.y - tyreR), `wheel ${k} rolls at y ${w.position.y.toFixed(3)}, not on its tyre`).toBeLessThanOrEqual(tyreR * FACET_SLIP + 0.02);
+        expect(slip, `wheel ${k} slides at 5 s: ${slip.toFixed(3)} m/s at the road at ${speed.toFixed(2)} m/s`).toBeLessThanOrEqual(speed * FACET_SLIP + GRAVITY * DT);
       }
     }
-    for (const [k, w] of car.wheels.entries()) assert.ok(w.position.distanceTo(before[k]!) < 1e-3, `wheel ${k} still moving after 10 s`);
+    for (const [k, w] of car.wheels.entries()) expect(w.position.distanceTo(before[k]!), `wheel ${k} still moving after 10 s`).toBeLessThan(1e-3);
   });
 });
 
@@ -370,18 +368,18 @@ forModes("given a car hit on its right-front corner at 22 m/s, with the contact 
     const snap = car.snapshot() as { lamps: { kind: string; side: number; intact: boolean }[] };
     const right = snap.lamps.find((l) => l.kind === "head" && l.side === 1)!;
     const left = snap.lamps.find((l) => l.kind === "head" && l.side === -1)!;
-    if (!right.intact) assert.ok(left.intact, "right-front hit killed the left head first");
+    if (!right.intact) expect(left.intact, "right-front hit killed the left head first").toBeTruthy();
   });
 });
 
 describe("given a car hitting a wall", () => {
   it("when it slides sideways into it at 30 km/h, or hits it head-on at 64 km/h full-width or with a 40 % offset, then the 30 km/h slide springs the struck door (hinge past 0.15) without tearing it off, and neither 64 km/h hit tears a door off or opens one past 0.2", () => {
     const side = runWall(30, 1, "side");
-    assert.ok(!side.detached.includes("doorL"), `30 km/h side slide tore the door off: ${side.detached.join(",")}`);
-    assert.ok(side.hinge.doorL! > 0.15, `struck door never sprang (${side.hinge.doorL})`);
+    expect(!side.detached.includes("doorL"), `30 km/h side slide tore the door off: ${side.detached.join(",")}`).toBe(true);
+    expect(side.hinge.doorL!, `struck door never sprang (${side.hinge.doorL})`).toBeGreaterThan(0.15);
     for (const [name, r] of [["wall64", runWall(64)], ["offset64", runWall(64, 0.4)]] as const) {
-      assert.ok(!r.detached.some((p) => p.startsWith("door")), `${name} detached ${r.detached.join(",")}`);
-      assert.ok(Math.max(r.hinge.doorL!, r.hinge.doorR!) <= 0.2, `${name} doors L=${r.hinge.doorL} R=${r.hinge.doorR}`);
+      expect(!r.detached.some((p) => p.startsWith("door")), `${name} detached ${r.detached.join(",")}`).toBe(true);
+      expect(Math.max(r.hinge.doorL!, r.hinge.doorR!), `${name} doors L=${r.hinge.doorL} R=${r.hinge.doorR}`).toBeLessThanOrEqual(0.2);
     }
   });
 });
@@ -405,25 +403,25 @@ describe("given a car's front bumper, in shape deform mode", () => {
       car.updateSkin();
     }
     const bumper = (car.snapshot() as { parts: PartRow[] }).parts.find((p) => p.name === "bumperF")!;
-    assert.ok(!bumper.detached && bumper.hingeT > 0.1, `25 km/h EBS: hingeT ${bumper.hingeT} detached ${bumper.detached}`);
-    assert.ok(runWall(56).detached.includes("bumperF"), "56 km/h wall kept the bumper");
+    expect(!bumper.detached && bumper.hingeT > 0.1, `25 km/h EBS: hingeT ${bumper.hingeT} detached ${bumper.detached}`).toBeTruthy();
+    expect(runWall(56).detached.includes("bumperF"), "56 km/h wall kept the bumper").toBeTruthy();
   });
 });
 
 describe("given a wheel that leaves its car only on a hard small-overlap hit", () => {
   it("when cars hit a wall at 64 km/h with a 40 % offset, head-on at 2×56 km/h, and as the struck car of a 50 km/h T-bone, then only the front-left wheel leaves in the offset wall hit, fewer than two leave each car of the head-on and none leaves the struck car", () => {
-    assert.deepEqual(runWall(64, 0.4).hubsPopped, ["hubFL"], "64 km/h 40 % offset");
-    for (const r of runPair(56, 56)) assert.ok(r.hubsPopped.length < 2, `2×56 head-on popped ${r.hubsPopped.join(",")}`);
+    expect(firstMismatch(runWall(64, 0.4).hubsPopped, ["hubFL"]), "64 km/h 40 % offset").toBeUndefined();
+    for (const r of runPair(56, 56)) expect(r.hubsPopped.length, `2×56 head-on popped ${r.hubsPopped.join(",")}`).toBeLessThan(2);
     const [struck] = runPair(0, 50, "t-bone");
-    assert.deepEqual(struck.hubsPopped, [], "T-bone struck car");
+    expect(struck.hubsPopped, "T-bone struck car").toHaveLength(0);
   });
 });
 
 describe("given a corner crushed to within 0.12 m of its wheel hub", () => {
   it("when cars hit head-on at 2×80 km/h, then both front wheels come off both cars, whereas a full-width wall at 56 or 64 km/h or a 2×56 km/h head-on takes none off", () => {
-    for (const r of runPair(80, 80)) assert.deepEqual(r.hubsPopped, ["hubFL", "hubFR"], "2×80 head-on");
-    for (const r of runPair(56, 56)) assert.deepEqual(r.hubsPopped, [], "2×56 head-on");
-    for (const kph of [56, 64]) assert.deepEqual(runWall(kph).hubsPopped, [], `${kph} km/h full-width wall`);
+    for (const r of runPair(80, 80)) expect(firstMismatch(r.hubsPopped, ["hubFL", "hubFR"]), "2×80 head-on").toBeUndefined();
+    for (const r of runPair(56, 56)) expect(r.hubsPopped, "2×56 head-on").toHaveLength(0);
+    for (const kph of [56, 64]) expect(runWall(kph).hubsPopped, `${kph} km/h full-width wall`).toHaveLength(0);
   });
 });
 
@@ -431,7 +429,7 @@ describe("given an engine block made of a left and a right half", () => {
   it("when a car hits a wall at 56 km/h with a 40 % offset, and a car is T-boned at 50 km/h, then the halves stay within 1.2 cm of their rest spacing on the offset-hit car and on both T-bone cars", () => {
     const [struck, bullet] = runPair(0, 50, "t-bone");
     for (const [name, r] of [["offset56", runWall(56, 0.4)], ["struck", struck], ["bullet", bullet]] as const) {
-      assert.ok(r.engineGapErr <= 0.012, `${name}: engineL–engineR off their rest spacing by ${r.engineGapErr.toFixed(3)} m`);
+      expect(r.engineGapErr, `${name}: engineL–engineR off their rest spacing by ${r.engineGapErr.toFixed(3)} m`).toBeLessThanOrEqual(0.012);
     }
   });
 });
@@ -443,27 +441,27 @@ describe("given a car's glass panes, which break from their frame's distortion",
   };
   // Pane order (addGlass): 0 windscreen, 1 rear glass, 2/3 door glass L/R, 4/5 quarter glass L/R.
   it("when a car taps a wall at 15 km/h, then every pane stays intact: a frame that has not moved breaks no glass", () => {
-    assert.equal(glassAfter(15, "front").join(), "intact,intact,intact,intact,intact,intact");
+    expect(glassAfter(15, "front").join()).toBe("intact,intact,intact,intact,intact,intact");
   });
 
   // 50 km/h, not 56: at 56 the drivetrain dies and the driver is thrown through the windscreen, which smashes it (the ejection rows own that).
   it("when a car hits a wall at 20, 35 and 50 km/h, and is hit on its left at 50 km/h, then 20 and 35 leave every pane intact, the 50 km/h wall cracks the windscreen and leaves the doors' glass whole with no driver thrown out, and the side hit shatters the windscreen, the rear glass and the left door's glass but not the right's", () => {
-    assert.equal(glassAfter(20, "front").join(), "intact,intact,intact,intact,intact,intact", "20 km/h wall");
-    assert.equal(glassAfter(35, "front").join(), "intact,intact,intact,intact,intact,intact", "35 km/h wall");
+    expect(glassAfter(20, "front").join(), "20 km/h wall").toBe("intact,intact,intact,intact,intact,intact");
+    expect(glassAfter(35, "front").join(), "35 km/h wall").toBe("intact,intact,intact,intact,intact,intact");
     const car = makeCar();
     const hard = glassAfter(50, "front", car);
-    assert.equal(car.driverOut, null, "50 km/h wall: the driver stayed in");
-    assert.equal([hard[0], hard[2], hard[3]].join(), "cracked,intact,intact", "50 km/h wall: windscreen, door glass L/R");
+    expect(car.driverOut, "50 km/h wall: the driver stayed in").toBe(null);
+    expect([hard[0], hard[2], hard[3]].join(), "50 km/h wall: windscreen, door glass L/R").toBe("cracked,intact,intact");
     const side = glassAfter(50, "side");
-    assert.equal(side.slice(0, 4).join(), "shattered,shattered,shattered,intact", "50 km/h left side hit: windscreen, rear, door glass L/R");
+    expect(side.slice(0, 4).join(), "50 km/h left side hit: windscreen, rear, door glass L/R").toBe("shattered,shattered,shattered,intact");
   });
 
   it("when the same 50 km/h side hit runs with the glass breaking and with it never breaking, then every mass and every cage corner ends bit-identical: the panes hold nothing back", () => {
     const breaking = makeCar();
     const unbreakable = makeCar();
     unbreakable.deform.glassDistortion = () => 0;
-    assert.equal(glassAfter(50, "side", breaking).filter((s) => s === "shattered").length, 4, "the hit broke the glass");
-    assert.equal(glassAfter(50, "side", unbreakable).join(), "intact,intact,intact,intact,intact,intact", "the glass never broke");
+    expect(glassAfter(50, "side", breaking).filter((s) => s === "shattered").length, "the hit broke the glass").toBe(4);
+    expect(glassAfter(50, "side", unbreakable).join(), "the glass never broke").toBe("intact,intact,intact,intact,intact,intact");
     let worst = 0;
     const ma = breaking.deform["masses"];
     const mb = unbreakable.deform["masses"];
@@ -471,7 +469,7 @@ describe("given a car's glass panes, which break from their frame's distortion",
     const ca = breaking.deform["cages"];
     const cb = unbreakable.deform["cages"];
     for (let i = 0; i < ca.length; i++) for (let k = 0; k < 8; k++) worst = Math.max(worst, ca[i]!.corners[k]!.distanceTo(cb[i]!.corners[k]!));
-    assert.equal(worst, 0);
+    expect(worst).toBe(0);
   });
 });
 
@@ -484,12 +482,12 @@ describe("given two cars driving head-on at each other, with the squash setting 
   it("when each car drives at 40, 56, 64 or 100 km/h, then their tyres never overlap by more than 1 cm and no part jumps farther than 3·v·h + 5 cm in a physics step (v the speed, h the step); below 100 km/h no wheel pops off, and at 56 km/h the nose crushes 0.25–0.50 m", () => {
     for (const kph of [40, 56, 64, 100]) {
       for (const r of runPair(kph, kph, "head-on", { squash: 0.32 })) {
-        assert.ok(r.tyreOverlap <= 0.01, `${kph} km/h head-on: tyres overlap ${r.tyreOverlap.toFixed(3)} m`);
-        if (kph < 100) assert.equal(r.hubsPopped.length, 0, `${kph} km/h head-on popped ${r.hubsPopped.join(",")}`);
+        expect(r.tyreOverlap, `${kph} km/h head-on: tyres overlap ${r.tyreOverlap.toFixed(3)} m`).toBeLessThanOrEqual(0.01);
+        if (kph < 100) expect(r.hubsPopped.length, `${kph} km/h head-on popped ${r.hubsPopped.join(",")}`).toBe(0);
         // No mass steps past 3·v·h + 5 cm in a slice: not through the hit, its springback, or the stopped wreck levelling out.
-        assert.ok(r.massStepExcess <= 0, `${kph} km/h head-on: ${r.massStepName} stepped ${r.massStepExcess.toFixed(3)} m past 3·v·h + 5 cm in a slice`);
+        expect(r.massStepExcess, `${kph} km/h head-on: ${r.massStepName} stepped ${r.massStepExcess.toFixed(3)} m past 3·v·h + 5 cm in a slice`).toBeLessThanOrEqual(0);
         // The stop is the last limit, not a shorter crumple: 56 km/h stays in the 0.25–0.50 m nose band.
-        if (kph === 56) assert.ok(r.noseShortL >= 0.25 && r.noseShortL <= 0.5, `56 km/h nose ${r.noseShortL.toFixed(3)} m`);
+        if (kph === 56) expect(r.noseShortL >= 0.25 && r.noseShortL <= 0.5, `56 km/h nose ${r.noseShortL.toFixed(3)} m`).toBeTruthy();
       }
     }
   });
@@ -500,9 +498,9 @@ describe("given two cars driving head-on at each other, with the squash setting 
     let prev = 0;
     for (const kph of [100, 115, 130, 150, 180, 200]) {
       const [a, b] = runPair(kph, kph, "head-on", { squash: 0.32 });
-      for (const r of [a, b]) assert.ok(Math.abs(r.strokePeak - PACKED) <= PACKED_TOL, `${kph} km/h head-on: the pair stopped at ${r.strokePeak.toFixed(3)} of the stroke`);
+      for (const r of [a, b]) expect(Math.abs(r.strokePeak - PACKED), `${kph} km/h head-on: the pair stopped at ${r.strokePeak.toFixed(3)} of the stroke`).toBeLessThanOrEqual(PACKED_TOL);
       const nose = (a.noseShortL + b.noseShortL) / 2;
-      assert.ok(nose >= prev * 0.95, `${kph} km/h head-on: mean nose ${nose.toFixed(3)} m after ${prev.toFixed(3)} m at the slower speed`);
+      expect(nose, `${kph} km/h head-on: mean nose ${nose.toFixed(3)} m after ${prev.toFixed(3)} m at the slower speed`).toBeGreaterThanOrEqual(prev * 0.95);
       prev = nose;
     }
   });
@@ -515,7 +513,7 @@ describe("given a car hitting a wall or being hit from the side, until the stopp
       ["64 offset", runWall(64, 0.4)],
       ["56 side", runWall(56, 1, "side")],
     ] as const) {
-      assert.ok(r.massStepExcess <= 0, `${label}: ${r.massStepName} stepped ${r.massStepExcess.toFixed(3)} m past 3·v·h + 5 cm in a slice`);
+      expect(r.massStepExcess, `${label}: ${r.massStepName} stepped ${r.massStepExcess.toFixed(3)} m past 3·v·h + 5 cm in a slice`).toBeLessThanOrEqual(0);
     }
   });
 });
@@ -554,8 +552,8 @@ describe("given a 50 km/h T-bone, a car driving into the side of a stationary ca
   it("when the cars run with the squash setting at 0.32 and at 0.4, then within 0.3 s of contact the struck door is pushed in 0.12–0.28 m and the striking car's cabin never gets within 0.9 m of the struck car's cabin", () => {
     for (const squash of [0.32, 0.4]) {
       const { door, gap } = tbone(squash);
-      assert.ok(door >= 0.12 && door <= 0.28, `squash ${squash}: door ${door.toFixed(3)} m in the impact`);
-      assert.ok(gap > 0.9, `squash ${squash}: bullet cell ${gap.toFixed(2)} m from the struck cell`);
+      expect(door >= 0.12 && door <= 0.28, `squash ${squash}: door ${door.toFixed(3)} m in the impact`).toBeTruthy();
+      expect(gap, `squash ${squash}: bullet cell ${gap.toFixed(2)} m from the struck cell`).toBeGreaterThan(0.9);
     }
   });
 });
@@ -613,11 +611,11 @@ describe("given a 50 km/h side hit, a sedan's nose into a parked police car's ri
   it("when 1 s has passed since each part's deepest crush, then the struck door and the striker's front corners each keep at least 75 % of it, and the struck car's far door and roof end within 3 cm of their rest", () => {
     const r = sideHit();
     for (const p of r.parts) {
-      assert.ok(p.peak > DEEP_CRUSH, `${p.name}: crushed only ${p.peak.toFixed(3)} m`);
-      assert.ok(p.later >= KEPT_SHARE * p.peak, `${p.name}: ${p.peak.toFixed(3)} m at the deepest, ${p.later.toFixed(3)} m 1 s later`);
+      expect(p.peak, `${p.name}: crushed only ${p.peak.toFixed(3)} m`).toBeGreaterThan(DEEP_CRUSH);
+      expect(p.later, `${p.name}: ${p.peak.toFixed(3)} m at the deepest, ${p.later.toFixed(3)} m 1 s later`).toBeGreaterThanOrEqual(KEPT_SHARE * p.peak);
     }
-    assert.ok(r.farDoor <= FAR_SIDE_OFF, `far door ${r.farDoor.toFixed(3)} m off rest`);
-    assert.ok(r.roof <= FAR_SIDE_OFF, `roof ${r.roof.toFixed(3)} m off rest`);
+    expect(r.farDoor, `far door ${r.farDoor.toFixed(3)} m off rest`).toBeLessThanOrEqual(FAR_SIDE_OFF);
+    expect(r.roof, `roof ${r.roof.toFixed(3)} m off rest`).toBeLessThanOrEqual(FAR_SIDE_OFF);
   });
 });
 
@@ -665,7 +663,7 @@ describe("given the recorded 16-car pile-up in which wrecks spun on the spot, in
       }
     }
     const worst = turn.indexOf(Math.max(...turn));
-    assert.ok(turn[worst]! < 0.1, `${SPIN_FLEET[worst]![0]} turned ${turn[worst]!.toFixed(2)} rad in the last 2 s, |ω| ${cars[worst]!.angular.y.toFixed(2)}`);
+    expect(turn[worst]!, `${SPIN_FLEET[worst]![0]} turned ${turn[worst]!.toFixed(2)} rad in the last 2 s, |ω| ${cars[worst]!.angular.y.toFixed(2)}`).toBeLessThan(0.1);
   });
 
   // todo -> Stage 5 (item 6's wreck split left Khaki at 5.85 rad/s), the same cause as derby-ai's contact peaks. Measured (SPIN_FLEET at squash 0.4) before item 6: Khaki 5.48 rad/s over 0.1 s (Bronze 7.29 with the
@@ -699,7 +697,7 @@ describe("given the recorded 16-car pile-up in which wrecks spun on the spot, in
       }
     }
     const worst = peak.indexOf(Math.max(...peak));
-    assert.ok(peak[worst]! <= 5, `${SPIN_FLEET[worst]![0]} turned at ${peak[worst]!.toFixed(2)} rad/s over 0.1 s`);
+    expect(peak[worst]!, `${SPIN_FLEET[worst]![0]} turned at ${peak[worst]!.toFixed(2)} rad/s over 0.1 s`).toBeLessThanOrEqual(5);
   });
 });
 
@@ -751,7 +749,7 @@ describe("given crashed wrecks sliding to a stop on the ground", () => {
     const lone = slideDecel([slidingWreck(0, 10)], GRIND_S);
     // T-bone grind: the faster wreck's nose on the slower one's side, both sliding along +z.
     const pair = slideDecel([slidingWreck(-4, 11), slidingWreck(0, 9, Math.PI / 2)], GRIND_S);
-    assert.ok(pair >= lone * 0.85, `pair ${(pair / 9.81).toFixed(2)} g vs alone ${(lone / 9.81).toFixed(2)} g`);
+    expect(pair, `pair ${(pair / 9.81).toFixed(2)} g vs alone ${(lone / 9.81).toFixed(2)} g`).toBeGreaterThanOrEqual(lone * 0.85);
   });
 });
 
@@ -766,8 +764,8 @@ describe("given two overlapping wrecks in shape deform mode, one resting and one
     };
     tickWorld(w);
     const pz = a.deform.masses.reduce((s, m) => s + m.vel.z * m.mass, 0);
-    assert.ok(reported, "overlapping wrecks are a contact the pair kernel reports (`World.pairHit`)");
-    assert.ok(pz > 60, `the struck wreck took ${pz.toFixed(1)} kg·m/s of the 6 m/s slide`);
+    expect(reported, "overlapping wrecks are a contact the pair kernel reports (`World.pairHit`)").toBeTruthy();
+    expect(pz, `the struck wreck took ${pz.toFixed(1)} kg·m/s of the 6 m/s slide`).toBeGreaterThan(60);
   });
 });
 
@@ -791,10 +789,10 @@ describe("given a crashed car yawing at 2 rad/s, with a door glass pane hung off
     car.group.updateMatrixWorld(true);
     const fd = pane.mesh.getWorldPosition(new THREE.Vector3()).sub(p0).divideScalar(h);
     const v = shard as THREE.Vector3 | null;
-    assert.ok(v, "no shard burst");
+    must(v, "no shard burst");
     const err = Math.hypot(v.x - fd.x, v.z - fd.z);
-    assert.ok(Math.hypot(fd.x, fd.z) > 0.5, `pane barely moves (${fd.x.toFixed(2)},${fd.z.toFixed(2)})`);
-    assert.ok(err < 0.05 * Math.hypot(fd.x, fd.z), `shard v=(${v.x.toFixed(2)},${v.z.toFixed(2)}) pane v=(${fd.x.toFixed(2)},${fd.z.toFixed(2)})`);
+    expect(Math.hypot(fd.x, fd.z), `pane barely moves (${fd.x.toFixed(2)},${fd.z.toFixed(2)})`).toBeGreaterThan(0.5);
+    expect(err, `shard v=(${v.x.toFixed(2)},${v.z.toFixed(2)}) pane v=(${fd.x.toFixed(2)},${fd.z.toFixed(2)})`).toBeLessThan(0.05 * Math.hypot(fd.x, fd.z));
   });
 });
 
@@ -803,7 +801,7 @@ describe("given a car with a drive speed of 0 m/s and a real velocity of (24, 0,
     const car = new DeformableCar(paint(), new THREE.Scene());
     car.speed = 0;
     car.velocity.set(24, 0, -7);
-    assert.equal(sliceSpeed([car]), 25);
+    expect(sliceSpeed([car])).toBe(25);
   });
 });
 
@@ -821,7 +819,7 @@ describe("given a debris piece sliding along the ground at 6 m/s", () => {
     };
     const x60 = slide(60);
     const x240 = slide(240);
-    assert.ok(Math.abs(x60 - x240) < 0.05 * x240, `0.5 s slide: ${x60.toFixed(3)} m at 60 Hz vs ${x240.toFixed(3)} m at 240 Hz`);
+    expect(Math.abs(x60 - x240), `0.5 s slide: ${x60.toFixed(3)} m at 60 Hz vs ${x240.toFixed(3)} m at 240 Hz`).toBeLessThan(0.05 * x240);
   });
 });
 
@@ -832,8 +830,8 @@ describe("given a debris system with room for 16 pieces, after a burst of 10 pie
     debris.update(0.1);
     debris.burst(new THREE.Vector3(-5, 0, 0), new THREE.Vector3(0, 0, -1), 3);
     const items = debris.snapshot().items;
-    assert.equal(items.length, 13, "live pieces after a 10 then a 3 burst");
-    assert.equal(items.filter((p) => p.x > 2).length, 10, "the first burst's pieces stay where they flew");
+    expect(items.length, "live pieces after a 10 then a 3 burst").toBe(13);
+    expect(items.filter((p) => p.x > 2).length, "the first burst's pieces stay where they flew").toBe(10);
   });
 });
 
@@ -852,9 +850,9 @@ describe("given a debris system of 8 pieces whose first piece is nearly spent", 
       scales.push(col.setFromMatrixColumn(m, 0).length());
       qs[Math.min(i, 2)]!.setFromRotationMatrix(m.extractRotation(m.clone()));
     }
-    assert.equal(scales[0], 0, "spent piece 0 is still drawn");
-    assert.ok(new Set(scales.slice(1).map((x) => x.toFixed(4))).size > 1, `every live piece has scale ${scales[1]}`);
-    assert.ok(qs[1]!.angleTo(qs[2]!) > 0.01, "pieces 1 and 2 share one rotation");
+    expect(scales[0], "spent piece 0 is still drawn").toBe(0);
+    expect(new Set(scales.slice(1).map((x) => x.toFixed(4))).size, `every live piece has scale ${scales[1]}`).toBeGreaterThan(1);
+    expect(qs[1]!.angleTo(qs[2]!), "pieces 1 and 2 share one rotation").toBeGreaterThan(0.01);
   });
 });
 
@@ -889,11 +887,11 @@ forModes("given two cars overlapping head-on, each driving into the other", (mod
       b.updateSkin();
     }
     for (const car of [a, b]) {
-      assert.ok(car.group.position.length() < 40, `${mode} group ${car.group.position.toArray()}`);
-      assert.ok(car.velocity.length() < 60, `${mode} vel ${car.velocity.length()}`);
+      expect(car.group.position.length(), `${mode} group ${car.group.position.toArray()}`).toBeLessThan(40);
+      expect(car.velocity.length(), `${mode} vel ${car.velocity.length()}`).toBeLessThan(60);
       for (const m of car.deform.masses) {
-        assert.ok(Number.isFinite(m.world.x + m.vel.z), `${m.name} NaN`);
-        assert.ok(m.vel.length() < 60, `${m.name} ${m.vel.length()}`);
+        expect(Number.isFinite(m.world.x + m.vel.z), `${m.name} NaN`).toBeTruthy();
+        expect(m.vel.length(), `${m.name} ${m.vel.length()}`).toBeLessThan(60);
       }
     }
   });
@@ -904,15 +902,15 @@ describe("given particle positions read through snapshotPoints (the reader of de
     const pos = new Float32Array([1, 0.2, 2, 3, 250, 4]);
     const life = new Float32Array([0.4, 0]);
     const snap = snapshotPoints(pos, null, null, life, true);
-    assert.equal(snap.items.length, 1);
-    assert.ok(snap.items[0]!.y >= 0);
+    expect(snap.items.length).toBe(1);
+    expect(snap.items[0]!.y).toBeGreaterThanOrEqual(0);
   });
 
   it("when a sample whose lifetime is still running sits at y = 250 (the height dead particles are parked at), then it is not reported as a live particle", () => {
     const pos = new Float32Array([0, 250, 0]);
     const life = new Float32Array([0.5]);
     const snap = snapshotPoints(pos, null, null, life, true);
-    assert.equal(snap.items.length, 0);
+    expect(snap.items.length).toBe(0);
   });
 });
 
@@ -928,18 +926,18 @@ describe("given two cars driving head-on at each other, in shape deform mode", (
 
   for (const testCase of headOnNoseCrushCases) {
     it(testCase.it, () => {
-      for (const r of { slow, fast }[testCase.speed]) assert.ok(nose(r) >= testCase.min && nose(r) <= testCase.max, `nose ${nose(r).toFixed(3)}`);
+      for (const r of { slow, fast }[testCase.speed]) expect(nose(r) >= testCase.min && nose(r) <= testCase.max, `nose ${nose(r).toFixed(3)}`).toBeTruthy();
     });
   }
 
   it("when the speed doubles from 28 to 56 km/h each, then each car's nose crushes more than 1.4 times deeper", () => {
-    for (let i = 0; i < 2; i++) assert.ok(nose(fast[i]!) > 1.4 * nose(slow[i]!), `56=${nose(fast[i]!).toFixed(3)} 28=${nose(slow[i]!).toFixed(3)}`);
+    for (let i = 0; i < 2; i++) expect(nose(fast[i]!), `56=${nose(fast[i]!).toFixed(3)} 28=${nose(slow[i]!).toFixed(3)}`).toBeGreaterThan(1.4 * nose(slow[i]!));
   });
 
   // The thrown-driver rows stage this hit as the one that kills both engines (`ragdoll-trigger`): with the contact hull's decimation
   // changed (lid outlines held over its budget) the noses crushed 0.267 m, not 0.549, and both engines lived.
   it("when each car drives at 56 km/h, then both engines are pushed back far enough to die", () => {
-    for (const [i, r] of fast.entries()) assert.equal(r.drivetrainAlive, false, `car ${i}: engine pushed back ${r.engineMax.toFixed(3)} m, nose ${nose(r).toFixed(3)} m`);
+    for (const [i, r] of fast.entries()) expect(r.drivetrainAlive, `car ${i}: engine pushed back ${r.engineMax.toFixed(3)} m, nose ${nose(r).toFixed(3)} m`).toBe(false);
   });
 
   // The pair's stop lands the packed nose within a slice of PACKED_STROKE and the structure then springs it back by a few mm, a landing that moves
@@ -948,14 +946,14 @@ describe("given two cars driving head-on at each other, in shape deform mode", (
     let slower = 0;
     for (const kph of [54.5, 55, 55.5, 56, 56.5]) {
       const [r] = runPair(kph, kph);
-      assert.ok(r.engineTravel > slower, `${kph} km/h: engine block ${r.engineTravel.toFixed(4)} m, the slower pair's ${slower.toFixed(4)} m`);
+      expect(r.engineTravel, `${kph} km/h: engine block ${r.engineTravel.toFixed(4)} m, the slower pair's ${slower.toFixed(4)} m`).toBeGreaterThan(slower);
       slower = r.engineTravel;
-      if (kph === 56) assert.equal(r.drivetrainAlive, false, `56 km/h: engine pushed back ${r.engineTravel.toFixed(4)} m`);
+      if (kph === 56) expect(r.drivetrainAlive, `56 km/h: engine pushed back ${r.engineTravel.toFixed(4)} m`).toBe(false);
     }
   });
 
   it("when they hit at 28 km/h each with full overlap, then the impact point stays within 0.2 m of the centre line on both cars", () => {
-    for (const r of slow) assert.ok(Math.abs(r.impactLocalX) < 0.2, `impactLocal.x=${r.impactLocalX.toFixed(3)}`);
+    for (const r of slow) expect(Math.abs(r.impactLocalX), `impactLocal.x=${r.impactLocalX.toFixed(3)}`).toBeLessThan(0.2);
   });
 
   it("when the 2×56 km/h head-on is run in slow motion, then each nose's shortening is within 15 % of the full-speed head-on's, on both cars", () => {
@@ -963,7 +961,7 @@ describe("given two cars driving head-on at each other, in shape deform mode", (
     for (let i = 0; i < 2; i++) {
       for (const k of ["noseShortL", "noseShortR"] as const) {
         const ratio = slomo[i]![k] / fast[i]![k];
-        assert.ok(Math.abs(ratio - 1) <= 0.15, `car ${i} ${k}: slomo ${slomo[i]![k].toFixed(3)} vs full ${fast[i]![k].toFixed(3)}`);
+        expect(Math.abs(ratio - 1), `car ${i} ${k}: slomo ${slomo[i]![k].toFixed(3)} vs full ${fast[i]![k].toFixed(3)}`).toBeLessThanOrEqual(0.15);
       }
     }
   });
@@ -977,7 +975,7 @@ describe("given a car hitting a wall at 64 km/h with a 40 % offset", () => {
     const full = runWall(64, 0.4);
     const slow = runWall(64, 0.4, "front", { slomo: true });
     for (const k of ["noseShortL", "noseShortR"] as const) {
-      assert.ok(Math.abs(slow[k] / full[k] - 1) <= 0.15, `${k}: slomo ${slow[k].toFixed(3)} vs full ${full[k].toFixed(3)}`);
+      expect(Math.abs(slow[k] / full[k] - 1), `${k}: slomo ${slow[k].toFixed(3)} vs full ${full[k].toFixed(3)}`).toBeLessThanOrEqual(0.15);
     }
   });
 });
@@ -989,11 +987,13 @@ describe("given a car's glass panes, named for ragdoll ejection (a thrown-out dr
     car.spawn(4, 9, 0);
     const at = (name: "windshield" | "doorL" | "doorR") => car.group.worldToLocal(car.glassWorld(name, new THREE.Vector3()));
     const doorsZ = Math.max(at("doorL").z, at("doorR").z);
-    assert.ok(at("windshield").z > doorsZ && Math.abs(at("windshield").x) < 0.05, `windshield at ${at("windshield").toArray()}, ahead of the door panes at z ${doorsZ}`);
-    assert.ok(at("doorL").x < -0.6 && at("doorR").x > 0.6, `doors at ${at("doorL").x} / ${at("doorR").x}`);
-    assert.equal(car.smashGlass("doorL"), true);
-    assert.equal(car.smashGlass("doorL"), false, "a shattered pane smashed twice");
-    assert.deepEqual(car.snapshot().glass, ["intact", "intact", "shattered", "intact", "intact", "intact"]);
-    assert.equal(bursts.length, 1);
+    expect(at("windshield").z > doorsZ && Math.abs(at("windshield").x) < 0.05, `windshield at ${at("windshield").toArray()}, ahead of the door panes at z ${doorsZ}`).toBeTruthy();
+    expect(at("doorL").x < -0.6 && at("doorR").x > 0.6, `doors at ${at("doorL").x} / ${at("doorR").x}`).toBeTruthy();
+    expect(car.smashGlass("doorL")).toBe(true);
+    expect(car.smashGlass("doorL"), "a shattered pane smashed twice").toBe(false);
+    const { glass } = car.snapshot();
+    must(Array.isArray(glass), "the car's snapshot lists its glass");
+    expect(firstMismatch(glass, ["intact", "intact", "shattered", "intact", "intact", "intact"]), "glass pane states").toBeUndefined();
+    expect(bursts.length).toBe(1);
   });
 });

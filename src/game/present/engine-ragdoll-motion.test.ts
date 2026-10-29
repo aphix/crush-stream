@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import type { RigidBody, World } from "@dimforge/rapier3d-simd";
@@ -144,7 +143,7 @@ async function rangeThrow(frame: () => number): Promise<Run> {
 describe("given the ejection range (a sedan at 100 km/h over the lip into the jersey barrier, the driver thrown over it onto sand)", () => {
   it(`when the driver is thrown, then his torso turns at least ${ROLL_BEFORE_TOUCHDOWN_DEG}° about his line of flight before his first ground contact (owner: a barrel roll he can see in the slow-mo)`, async () => {
     const run = await rangeThrow(() => 1 / FRAME_HZ);
-    assert.ok((run.roll * 180) / Math.PI >= ROLL_BEFORE_TOUCHDOWN_DEG, `${((run.roll * 180) / Math.PI).toFixed(0)}° before touchdown`);
+    expect((run.roll * 180) / Math.PI, `${((run.roll * 180) / Math.PI).toFixed(0)}° before touchdown`).toBeGreaterThanOrEqual(ROLL_BEFORE_TOUCHDOWN_DEG);
   });
 
   it("when one throw is run at 30–360 Hz and with frames that vary 0.5–1.5×, then it lands in the same place", async () => {
@@ -169,7 +168,7 @@ describe("given the ejection range (a sedan at 100 km/h over the lip into the je
       const r = stream(seed);
       xs.push(await land(() => (0.5 + r()) / 144));
     }
-    assert.ok(Math.max(...xs) - Math.min(...xs) <= 0.1, `landings ${xs.map((x) => x.toFixed(2)).join(", ")} m`);
+    expect(Math.max(...xs) - Math.min(...xs), `landings ${xs.map((x) => x.toFixed(2)).join(", ")} m`).toBeLessThanOrEqual(0.1);
   });
 
   it("when the driver leaves, then his torso spins EJECT_ROLL about his line of flight past the ejection's own spin, and no more, and the roll turns him about his centre of mass: it moves none of him along", async () => {
@@ -189,21 +188,21 @@ describe("given the ejection range (a sedan at 100 km/h over the lip into the je
       thrown = true;
     };
     for (let f = 0; f < 30 * FRAME_HZ && !thrown; f++) tickWorld(w, 1 / FRAME_HZ);
-    assert.ok(thrown, "the control: the range throws its driver");
+    expect(thrown, "the control: the range throws its driver").toBeTruthy();
     const dolls: Doll[] = ragdolls["dolls"];
     const doll = dolls.find((d) => d.live)!;
     const torso = doll.bodies[0]!;
     const added = new THREE.Vector3().copy(torso.angvel()).sub(spin);
     // `limp` shifts every part's velocity a little to keep the dummy's momentum, so his torso flies within a few mrad of the throw's line.
     const off = added.angleTo(new THREE.Vector3().copy(torso.linvel()));
-    assert.ok(Math.abs(added.length() - EJECT_ROLL) < 1e-6, `added spin ${added.length().toFixed(5)} rad/s`);
-    assert.ok(off < 0.01, `added spin ${off.toFixed(4)} rad off his line of flight`);
+    expect(Math.abs(added.length() - EJECT_ROLL), `added spin ${added.length().toFixed(5)} rad/s`).toBeLessThan(1e-6);
+    expect(off, `added spin ${off.toFixed(4)} rad off his line of flight`).toBeLessThan(0.01);
     // His centre of mass moves as the throw with no roll sends it: the ejection's velocity and its own spin about his torso point.
     const com = massMean(doll.bodies, (b) => b.translation(), new THREE.Vector3());
     const t = torso.translation();
     const expected = own.add(spin.cross(com.sub(_a.set(t.x, t.y, t.z))));
     const drift = massMean(doll.bodies, (b) => b.linvel(), new THREE.Vector3()).distanceTo(expected);
-    assert.ok(drift < COM_TOLERANCE, `his centre of mass leaves ${drift.toFixed(6)} m/s off the throw's own velocity`);
+    expect(drift, `his centre of mass leaves ${drift.toFixed(6)} m/s off the throw's own velocity`).toBeLessThan(COM_TOLERANCE);
     ragdolls.dispose();
   });
 });
@@ -242,7 +241,7 @@ describe("given a dummy thrown while time runs at 0.03× (the deepest slow-mo)",
         if (m === 0 || m < 0.5 * before || m > 2 * before) out.push(`${hz} Hz frame ${f + 1}: moved ${(m * 1000).toFixed(2)} mm after ${(before * 1000).toFixed(2)} mm`);
       }
     }
-    assert.deepEqual(out, []);
+    expect(out).toHaveLength(0);
   });
 });
 
@@ -255,10 +254,10 @@ describe("given a thrown dummy (the ejected driver's jointed ragdoll)", () => {
       // Kinetic plus gravitational energy: a part falling gains kinetic energy for free, so only the rest is counted. The
       // sand pushing a part a few mm out of its penetration adds a few joules (2.8 J measured over 60 runs); what the
       // old per-frame steps pumped was 173 J and 5090 J.
-      assert.ok(run.rise < 5, `energy rose ${run.rise.toFixed(2)} J in one frame`);
-      assert.ok(run.speedAt3 < 0.05, `3 s after the first ground contact the fastest part still moves at ${run.speedAt3.toFixed(3)} m/s`);
-      assert.ok(run.kinetic[1] < run.kinetic[0] * 1e-3, `kinetic energy ${run.kinetic[0].toFixed(0)} J at the first ground contact, ${run.kinetic[1].toFixed(1)} J 3 s on`);
-      assert.ok(run.gap < 0.03, `a joint came ${(run.gap * 100).toFixed(1)} cm apart`);
+      expect(run.rise, `energy rose ${run.rise.toFixed(2)} J in one frame`).toBeLessThan(5);
+      expect(run.speedAt3, `3 s after the first ground contact the fastest part still moves at ${run.speedAt3.toFixed(3)} m/s`).toBeLessThan(0.05);
+      expect(run.kinetic[1], `kinetic energy ${run.kinetic[0].toFixed(0)} J at the first ground contact, ${run.kinetic[1].toFixed(1)} J 3 s on`).toBeLessThan(run.kinetic[0] * 1e-3);
+      expect(run.gap, `a joint came ${(run.gap * 100).toFixed(1)} cm apart`).toBeLessThan(0.03);
     });
   }
 
@@ -279,8 +278,8 @@ describe("given a thrown dummy (the ejected driver's jointed ragdoll)", () => {
       const p = torso.linvel().x * torso.mass() + arm.linvel().x * arm.mass();
       shed(torso, arm, r(), r());
       const after = energy([torso, arm]).kinetic;
-      assert.ok(after <= before, `pair ${n}: ${before.toFixed(3)} J became ${after.toFixed(3)} J`);
-      assert.ok(Math.abs(torso.linvel().x * torso.mass() + arm.linvel().x * arm.mass() - p) < 1e-2, `pair ${n}: momentum moved`);
+      expect(after, `pair ${n}: ${before.toFixed(3)} J became ${after.toFixed(3)} J`).toBeLessThanOrEqual(before);
+      expect(Math.abs(torso.linvel().x * torso.mass() + arm.linvel().x * arm.mass() - p), `pair ${n}: momentum moved`).toBeLessThan(1e-2);
     }
     ragdolls.dispose();
   });
@@ -299,12 +298,12 @@ describe("given a thrown dummy (the ejected driver's jointed ragdoll)", () => {
     ragdolls["spawn"]({ car: 5, p: new THREE.Vector3(0, 0.3, 0), q: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2), v: new THREE.Vector3(), w: new THREE.Vector3(), age: 0, cop: false, rides: true });
     const torso: RigidBody = ragdolls["dolls"][0]!.bodies[0]!;
     for (let f = 0; f < 120; f++) frame();
-    assert.ok(torso.isSleeping(), "he lies asleep after two seconds on the ground");
+    expect(torso.isSleeping(), "he lies asleep after two seconds on the ground").toBeTruthy();
     launch(car, -6, 0, Math.PI / 2, 5, 0);
     for (let f = 0; f < 240; f++) frame();
     const x = torso.translation().x;
     ragdolls.dispose();
-    assert.ok(x > 3, `the car pushed him ${x.toFixed(1)} m`);
+    expect(x, `the car pushed him ${x.toFixed(1)} m`).toBeGreaterThan(3);
   });
 
   it("when every dummy lies asleep and no car is near, then nothing is stepped, and a car coming within reach steps the world again", async () => {
@@ -320,17 +319,17 @@ describe("given a thrown dummy (the ejected driver's jointed ragdoll)", () => {
     };
     const torso: RigidBody = ragdolls["dolls"][0]!.bodies[0]!;
     for (let f = 0; f < 4 * FRAME_HZ; f++) ragdolls.update(1 / FRAME_HZ, [], true, true, null);
-    assert.ok(torso.isSleeping(), "he lies asleep after four seconds");
+    expect(torso.isSleeping(), "he lies asleep after four seconds").toBeTruthy();
     const asleep = steps;
     for (let f = 0; f < FRAME_HZ; f++) ragdolls.update(1 / FRAME_HZ, [], true, true, null);
-    assert.equal(steps, asleep, "a second of him asleep stepped nothing");
+    expect(steps, "a second of him asleep stepped nothing").toBe(asleep);
     const car = makeCar("shape", 0.32, 0.45);
     launch(car, -3, 0, Math.PI / 2, 0, 0);
     for (let f = 0; f < FRAME_HZ; f++) ragdolls.update(1 / FRAME_HZ, [car], true, true, null);
-    assert.equal(steps, asleep, "a wreck lying 3 m from him steps nothing either");
+    expect(steps, "a wreck lying 3 m from him steps nothing either").toBe(asleep);
     launch(car, -8, 0, Math.PI / 2, 5, 0);
     ragdolls.update(1 / FRAME_HZ, [car], true, true, null);
     ragdolls.dispose();
-    assert.ok(steps > asleep, "a car driving 8 m away steps the world");
+    expect(steps, "a car driving 8 m away steps the world").toBeGreaterThan(asleep);
   });
 });

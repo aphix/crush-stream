@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { CHASE } from "../present/drive-cam.ts";
@@ -72,9 +71,9 @@ describe("given the real engine and a hit on the car the camera follows", () => 
       engine.advance(FRAME, { frameDt: FRAME });
       peak = Math.max(peak, e.view.trauma);
     }
-    assert.ok(peak > 0.3, `a 24 m/s head-on shook the followed car's view to ${peak.toFixed(2)}`);
+    expect(peak, `a 24 m/s head-on shook the followed car's view to ${peak.toFixed(2)}`).toBeGreaterThan(0.3);
     e.seat.mode = "global";
-    assert.equal(after1(() => e.pairHit(0, 1, hit(24))), 0, "no car followed");
+    expect(after1(() => e.pairHit(0, 1, hit(24))), "no car followed").toBe(0);
     e.seat.mode = "drive";
   });
 
@@ -88,10 +87,10 @@ describe("given the real engine and a hit on the car the camera follows", () => 
     for (const view of ["third", "far", "first"]) {
       e.seat.view = view;
       const t = after1(() => e.pairHit(b, a, hit(15)));
-      assert.ok(t > 0.6 && t < 0.75, `${view}: a 15 m/s hit leaves trauma ${t.toFixed(2)}`);
+      expect(t > 0.6 && t < 0.75, `${view}: a 15 m/s hit leaves trauma ${t.toFixed(2)}`).toBeTruthy();
     }
-    assert.ok(after1(() => e.pairHit(a, b, hit(1))) < 0.01, "a 1 m/s nudge");
-    assert.equal(after1(() => e.pairHit(b, c, hit(25))), 0, "a hit between two other cars");
+    expect(after1(() => e.pairHit(a, b, hit(1))), "a 1 m/s nudge").toBeLessThan(0.01);
+    expect(after1(() => e.pairHit(b, c, hit(25))), "a hit between two other cars").toBe(0);
   });
 
   it("when the race's followed car meets a wall or prop at 15 m/s, then its view shakes, and when the strength knob is 0, it does not", () => {
@@ -99,28 +98,28 @@ describe("given the real engine and a hit on the car the camera follows", () => 
     e.seat.carIndex = a;
     e.seat.view = "third";
     const t = after1(() => e.race.propHits.wall(0, a, 15, 0, 0, 1, 0));
-    assert.ok(t > 0.6, `wall hit leaves trauma ${t.toFixed(2)}`);
-    assert.equal(after1(() => e.race.propHits.wall(0, b, 15, 0, 0, 1, 0)), 0, "another car's wall hit");
+    expect(t, `wall hit leaves trauma ${t.toFixed(2)}`).toBeGreaterThan(0.6);
+    expect(after1(() => e.race.propHits.wall(0, b, 15, 0, 0, 1, 0)), "another car's wall hit").toBe(0);
     engine.setKnob("cam.shake", 0);
     try {
-      assert.equal(after1(() => e.race.propHits.wall(0, a, 15, 0, 0, 1, 0)), 0, "strength 0");
-      assert.equal(after1(() => e.pairHit(a, b, hit(15))), 0, "strength 0, pair hit");
+      expect(after1(() => e.race.propHits.wall(0, a, 15, 0, 0, 1, 0)), "strength 0").toBe(0);
+      expect(after1(() => e.pairHit(a, b, hit(15))), "strength 0, pair hit").toBe(0);
     } finally {
       engine.resetSetting("cam.shake");
     }
-    assert.equal(CHASE.shake, 1);
+    expect(CHASE.shake).toBe(1);
   });
 
   it("when the derby's followed car hits a car or the arena wall at 15 m/s, then its view shakes", () => {
     engine.toggleDerby();
     for (let f = 0; f < 60 * 2; f++) engine.advance(FRAME, { frameDt: FRAME });
-    assert.ok(e.derbyMode, "the derby is on");
+    expect(e.derbyMode, "the derby is on").toBeTruthy();
     e.seat.mode = "drive";
     e.seat.carIndex = 0;
     e.seat.view = "third";
     const pair = after1(() => e.pairHit(0, 1, hit(15)));
     const wall = after1(() => e.derbyHits.wall(0, 0, 15, 0, 0, 1, 0));
-    assert.ok(pair > 0.6 && wall > 0.6, `pair hit ${pair.toFixed(2)}, wall hit ${wall.toFixed(2)}`);
+    expect(pair > 0.6 && wall > 0.6, `pair hit ${pair.toFixed(2)}, wall hit ${wall.toFixed(2)}`).toBeTruthy();
   });
 
   it("when the followed car's velocity jumps 12 m/s in a frame with the world's contacts not running (a netplay client), then its view shakes, and with them running the jump alone does not", () => {
@@ -134,7 +133,7 @@ describe("given the real engine and a hit on the car the camera follows", () => 
       e.cine.update(FRAME, FRAME, cars, followed, false, 1, velocityHits, null);
       return e.view.trauma;
     };
-    assert.equal(jump(false), 0, "contacts running: the contact hooks own the shake");
-    assert.ok(jump(true) > 0.3, `client: trauma ${e.view.trauma.toFixed(2)}`);
+    expect(jump(false), "contacts running: the contact hooks own the shake").toBe(0);
+    expect(jump(true), `client: trauma ${e.view.trauma.toFixed(2)}`).toBeGreaterThan(0.3);
   });
 });

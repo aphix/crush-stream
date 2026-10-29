@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import assert from "node:assert/strict";
 import { splitCreases } from "./car-crease.ts";
 import { assertSameNumbers } from "./test-support.ts";
 
@@ -64,13 +63,13 @@ describe("given two strips of two quads, one folded 90 degrees and one folded 10
   const split = splitCreases(unsplit, CREASE_DEGREES);
 
   it("when split at 30 degrees, then only the 90-degree fold's two edge vertices are copied", () => {
-    assert.equal(split.getAttribute("position").count, vertexCountBefore + VERTICES_PER_COLUMN);
+    expect(split.getAttribute("position").count).toBe(vertexCountBefore + VERTICES_PER_COLUMN);
   });
 
   for (const fold of folds) {
     for (const y of [0, 1]) {
       it(`when split at 30 degrees, then the ${fold.name} has ${fold.expectedIdsAtFold} vertex(es) at its y = ${y} end`, () => {
-        assert.equal(idsOnFold(split, fold.point, y).length, fold.expectedIdsAtFold);
+        expect(idsOnFold(split, fold.point, y).length).toBe(fold.expectedIdsAtFold);
       });
     }
   }
@@ -88,8 +87,8 @@ describe("given two strips of two quads, one folded 90 degrees and one folded 10
     const normal = split.getAttribute("normal");
     const lowNormal = new THREE.Vector3().fromBufferAttribute(normal, low!);
     const highNormal = new THREE.Vector3().fromBufferAttribute(normal, high!);
-    assert.ok(Math.abs(lowNormal.length() - 1) < 1e-6 && Math.abs(highNormal.length() - 1) < 1e-6, `the two normals are ${lowNormal.length()} and ${highNormal.length()} long`);
-    assert.ok(Math.abs(lowNormal.dot(highNormal)) < 1e-6, `the two normals have dot ${lowNormal.dot(highNormal)}, not 0`);
+    expect(Math.abs(lowNormal.length() - 1) < 1e-6 && Math.abs(highNormal.length() - 1) < 1e-6, `the two normals are ${lowNormal.length()} and ${highNormal.length()} long`).toBeTruthy();
+    expect(Math.abs(lowNormal.dot(highNormal)), `the two normals have dot ${lowNormal.dot(highNormal)}, not 0`).toBeLessThan(1e-6);
   });
 
   it("when split at 30 degrees, then the 10-degree fold's one normal lies between its two faces' normals, off each by under the fold's 10 degrees", () => {
@@ -99,8 +98,8 @@ describe("given two strips of two quads, one folded 90 degrees and one folded 10
     const secondQuadNormal = new THREE.Vector3(-Math.sin(SOFT_FOLD_DEGREES * RAD_PER_DEGREE), 0, Math.cos(SOFT_FOLD_DEGREES * RAD_PER_DEGREE));
     const offFirstDegrees = Math.acos(normal.dot(firstQuadNormal)) / RAD_PER_DEGREE;
     const offSecondDegrees = Math.acos(normal.dot(secondQuadNormal)) / RAD_PER_DEGREE;
-    assert.ok(offFirstDegrees > 1e-3 && offSecondDegrees > 1e-3, `the shared normal is ${offFirstDegrees} / ${offSecondDegrees} degrees off the faces: it is one face's, not an average`);
-    assert.ok(Math.abs(offFirstDegrees + offSecondDegrees - SOFT_FOLD_DEGREES) < 1e-3, `the shared normal is ${offFirstDegrees} + ${offSecondDegrees} degrees off the two faces, not between them`);
+    expect(offFirstDegrees > 1e-3 && offSecondDegrees > 1e-3, `the shared normal is ${offFirstDegrees} / ${offSecondDegrees} degrees off the faces: it is one face's, not an average`).toBeTruthy();
+    expect(Math.abs(offFirstDegrees + offSecondDegrees - SOFT_FOLD_DEGREES), `the shared normal is ${offFirstDegrees} + ${offSecondDegrees} degrees off the two faces, not between them`).toBeLessThan(1e-3);
   });
 });
 
@@ -109,7 +108,7 @@ describe("given a flat sheet with no crease at all", () => {
     const sheet = new THREE.PlaneGeometry(1, 1, 3, 3);
     const before = sheet.getAttribute("position").count;
     const split = splitCreases(sheet, CREASE_DEGREES);
-    assert.equal(split.getAttribute("position").count, before);
+    expect(split.getAttribute("position").count).toBe(before);
     assertSameNumbers(split.getAttribute("normal").array.slice(0, 3), [0, 0, 1], "plane normal", 1e-6);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { SWINGS, driveLine, lineIds, type Finding } from "./checkpoint-sweep.test-util.ts";
@@ -19,7 +18,7 @@ describe("given a scripted car that follows a line of a course at race speed, sw
     for (const { id, cut } of lineIds(track)) {
       it(`when it follows ${cut < 0 ? "the main loop" : `the ${id} shortcut`} of ${track.id} for two laps in each of ${SWINGS.length} ways of swinging, then it never misses a checkpoint, never sees WRONG WAY and completes its laps`, () => {
         const found = SWINGS.flatMap((how) => driveLine(track, cut, how));
-        assert.deepEqual(found.map(show), []);
+        expect(found.map(show)).toHaveLength(0);
       });
     }
   }

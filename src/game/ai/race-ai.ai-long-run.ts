@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { AI_DIFFICULTIES, type AiDifficulty } from "./constants.ts";
 import { COURSES, raced, type Summary } from "./race-ai.test-util.ts";
 
@@ -16,9 +15,9 @@ for (const difficulty of AI_DIFFICULTIES) {
       it(`when they race 3 laps on ${track.id}, then all 8 finish, they stay on the road at least 95% of the time, and the winner finishes within the time bound`, (t) => {
         const r = raced(track, difficulty);
         t.annotate(`${track.id} ${difficulty}: winner ${r.winner.toFixed(1)} s, best lap ${Math.min(...r.lapTimes).toFixed(2)} s, slowest lap ${Math.max(...r.lapTimes).toFixed(2)} s, on road ${(100 * r.share).toFixed(1)}%, mistakes ${r.mistakes}`);
-        assert.equal(r.finished, 8, `finished ${r.finished}/8 by ${r.time.toFixed(0)} s (bound ${r.limit.toFixed(0)} s); laps ${r.laps}`);
-        assert.ok(r.share >= 0.95, `on the road ${(r.share * 100).toFixed(1)}% of ${r.samples} samples`);
-        assert.ok(r.winner < r.limit);
+        expect(r.finished, `finished ${r.finished}/8 by ${r.time.toFixed(0)} s (bound ${r.limit.toFixed(0)} s); laps ${r.laps}`).toBe(8);
+        expect(r.share, `on the road ${(r.share * 100).toFixed(1)}% of ${r.samples} samples`).toBeGreaterThanOrEqual(0.95);
+        expect(r.winner).toBeLessThan(r.limit);
       });
     }
   });
@@ -29,20 +28,20 @@ describe("given 8 clean AI cars on every course at each difficulty, raced for 3 
     let mean = 0;
     for (const t of COURSES) {
       const [e, m, h] = AI_DIFFICULTIES.map((d) => raced(t, d).winner);
-      assert.ok(e! > h! && m! < e!, `${t.id}: winner easy ${e!.toFixed(1)} s, medium ${m!.toFixed(1)} s, hard ${h!.toFixed(1)} s`);
+      expect(e! > h! && m! < e!, `${t.id}: winner easy ${e!.toFixed(1)} s, medium ${m!.toFixed(1)} s, hard ${h!.toFixed(1)} s`).toBeTruthy();
       mean += e! / h! / COURSES.length;
     }
-    assert.ok(mean >= 1.08, `easy takes ${((mean - 1) * 100).toFixed(1)}% longer than hard on average`);
+    expect(mean, `easy takes ${((mean - 1) * 100).toFixed(1)}% longer than hard on average`).toBeGreaterThanOrEqual(1.08);
   });
 });
 
 describe("given 8 clean AI cars on every course at each difficulty", () => {
   it("when they race 3 laps, then easy makes mistakes on every course and more than medium does, and hard makes exactly none", () => {
     for (const t of COURSES) {
-      assert.ok(raced(t, "easy").mistakes > 0, `${t.id}: easy made no mistake`);
-      assert.equal(raced(t, "hard").mistakes, 0, t.id);
+      expect(raced(t, "easy").mistakes, `${t.id}: easy made no mistake`).toBeGreaterThan(0);
+      expect(raced(t, "hard").mistakes, t.id).toBe(0);
     }
     const [e, m, h] = AI_DIFFICULTIES.map((d) => total(d, (r) => r.mistakes));
-    assert.ok(e! > m! && m! > 0 && h === 0, `mistakes: easy ${e}, medium ${m}, hard ${h}`);
+    expect(e! > m! && m! > 0 && h === 0, `mistakes: easy ${e}, medium ${m}, hard ${h}`).toBeTruthy();
   });
 });

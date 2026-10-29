@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applyDrive, DriverSeat, idleDrive, type DriveInput } from "./car-drive.ts";
 import { DRAFT } from "../match/session.ts";
@@ -25,6 +24,7 @@ import {
   type VehicleClassId,
 } from "./vehicle-classes.ts";
 import { FINE_HZ, FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const RATES = [1 / QUIET_HZ, 1 / FINE_HZ] as const;
 const PAINT = { body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" };
@@ -179,17 +179,17 @@ for (const H of RATES) {
         const mean = times.reduce((a, b) => a + b, 0) / times.length;
         const table = VEHICLE_CLASS_IDS.map((id, i) => `${id} ${times[i]!.toFixed(2)} s`).join(", ");
         t.annotate(`${loop.length.toFixed(0)} m loop: ${table}`);
-        for (const lap of times) assert.ok(Math.abs(lap / mean - 1) <= 0.05, `laps: ${table} (mean ${mean.toFixed(2)})`);
+        for (const lap of times) expect(Math.abs(lap / mean - 1), `laps: ${table} (mean ${mean.toFixed(2)})`).toBeLessThanOrEqual(0.05);
       });
     });
 
     describe("given the published stats of the vehicle classes", () => {
       it("when the classes are compared, then muscle is fastest flat out, the monster is slowest to turn, muscle slides more than the sedan and the truck is heavier than the sedan", () => {
         const tops = VEHICLE_CLASS_IDS.map((id) => CLASSES[id].topSpeed);
-        assert.equal(Math.max(...tops), CLASSES.muscle.topSpeed);
+        expect(Math.max(...tops)).toBe(CLASSES.muscle.topSpeed);
         const turns = VEHICLE_CLASS_IDS.map((id) => CLASSES[id].turn);
-        assert.equal(Math.min(...turns), CLASSES.monster.turn);
-        assert.ok(CLASSES.muscle.drift > CLASSES.sedan.drift && CLASSES.truck.mass > CLASSES.sedan.mass);
+        expect(Math.min(...turns)).toBe(CLASSES.monster.turn);
+        expect(CLASSES.muscle.drift > CLASSES.sedan.drift && CLASSES.truck.mass > CLASSES.sedan.mass).toBeTruthy();
       });
     });
 
@@ -209,10 +209,10 @@ for (const H of RATES) {
           }
           return along(car);
         };
-        assert.ok(Math.abs(run(2, 1) - top) < 1e-6, "flat out at the class top");
+        expect(Math.abs(run(2, 1) - top), "flat out at the class top").toBeLessThan(1e-6);
         const drafting = run(4, DRAFT.top);
-        assert.ok(Math.abs(drafting - top * DRAFT.top) < 1e-6, `drafting: ${drafting.toFixed(3)} vs ${(top * DRAFT.top).toFixed(3)} m/s`);
-        assert.ok(Math.abs(run(4, 1) - top) < 1e-6, "back to the class top once out of the draft");
+        expect(Math.abs(drafting - top * DRAFT.top), `drafting: ${drafting.toFixed(3)} vs ${(top * DRAFT.top).toFixed(3)} m/s`).toBeLessThan(1e-6);
+        expect(Math.abs(run(4, 1) - top), "back to the class top once out of the draft").toBeLessThan(1e-6);
       });
     });
 
@@ -252,12 +252,12 @@ for (const H of RATES) {
               if (Math.abs(after / law - 1) > 0.01) off.push(`${(start * 3.6).toFixed(0)} km/h: ${after.toFixed(2)} vs ${law.toFixed(2)}`);
             }
             const got = `0–100 ${t100.toFixed(2)} s, top ${(top * 3.6).toFixed(0)} km/h at ${tTop.toFixed(2)} s (law ${timeToTop(id, 0.995 * top, realism).toFixed(2)}), ${steps} gear steps, ${rises} rises, off the law at [${off.slice(0, 4).join("; ")}]`;
-            assert.deepEqual(off, [], got);
-            assert.ok(t100 > 0 && Math.abs(t100 / zeroTo100 - 1) <= 0.05, got);
-            assert.ok(Math.abs((top * 3.6) / L.topKmh - 1) <= 0.05, got);
-            assert.ok(Math.abs(tTop / timeToTop(id, 0.995 * top, realism) - 1) <= 0.05, got);
-            assert.equal(steps, L.gears - 1, got);
-            assert.equal(rises, 0, got);
+            expect(off, got).toHaveLength(0);
+            expect(t100 > 0 && Math.abs(t100 / zeroTo100 - 1) <= 0.05, got).toBeTruthy();
+            expect(Math.abs((top * 3.6) / L.topKmh - 1), got).toBeLessThanOrEqual(0.05);
+            expect(Math.abs(tTop / timeToTop(id, 0.995 * top, realism) - 1), got).toBeLessThanOrEqual(0.05);
+            expect(steps, got).toBe(L.gears - 1);
+            expect(rises, got).toBe(0);
           });
         }
       }
@@ -289,9 +289,9 @@ for (const H of RATES) {
               car.group.localToWorld(new THREE.Vector3(0, 0.6, 2.2)).project(cam).x -
               car.group.localToWorld(new THREE.Vector3(0, 0.6, 0)).project(cam).x;
             hold(["KeyW"], 1.5);
-            assert.ok(Math.abs(noseDx()) < 0.01, `${id} camera not settled: ${noseDx()}`);
+            expect(Math.abs(noseDx()), `${id} camera not settled: ${noseDx()}`).toBeLessThan(0.01);
             hold(["KeyW", key], 0.6);
-            assert.ok(sign * noseDx() > 0.02, `${id} ${key}: nose screen dx ${noseDx().toFixed(3)}`);
+            expect(sign * noseDx(), `${id} ${key}: nose screen dx ${noseDx().toFixed(3)}`).toBeGreaterThan(0.02);
           }
         });
       }
@@ -305,17 +305,17 @@ for (const H of RATES) {
         let prev = at(0);
         for (let v = 0.1; v < k.topSpeed * 1.3; v += 0.05) {
           const rpm = at(v);
-          assert.ok(rpm >= 0 && rpm <= 1, `${v} m/s: ${rpm}`);
+          expect(rpm >= 0 && rpm <= 1, `${v} m/s: ${rpm}`).toBeTruthy();
           if (rpm < prev - 0.05) {
             drops++;
-            assert.notEqual(gearAt(k, v), gearAt(k, v - 0.05), `revs fell at ${v} m/s without a shift`);
+            expect(gearAt(k, v), `revs fell at ${v} m/s without a shift`).not.toBe(gearAt(k, v - 0.05));
           }
           prev = rpm;
         }
-        assert.equal(drops, k.gears.length - 1, "one drop per upshift");
-        assert.ok(at(gearHi(k, 1) - 0.01) > 0.99, "near the redline at the top of a bucket");
-        assert.ok(at(gearHi(k, 1) + 0.01) < 0.35, "back at the foot of the next");
-        assert.equal(carRpm({ style: { id: "sedan" }, velocity: { x: 0, z: -5 }, fwdFlat: { x: 0, z: 1 }, drive: { spinSpeed: 0 } }), 0.18, "idles in reverse");
+        expect(drops, "one drop per upshift").toBe(k.gears.length - 1);
+        expect(at(gearHi(k, 1) - 0.01), "near the redline at the top of a bucket").toBeGreaterThan(0.99);
+        expect(at(gearHi(k, 1) + 0.01), "back at the foot of the next").toBeLessThan(0.35);
+        expect(carRpm({ style: { id: "sedan" }, velocity: { x: 0, z: -5 }, fwdFlat: { x: 0, z: 1 }, drive: { spinSpeed: 0 } }), "idles in reverse").toBe(0.18);
       });
     });
 
@@ -327,9 +327,9 @@ for (const H of RATES) {
         for (const w of monster.wheels) {
           const centre = w.getWorldPosition(new THREE.Vector3());
           const radius = monster.frame.rig.tyre.r * w.getWorldScale(new THREE.Vector3()).y;
-          assert.ok(Math.abs(centre.y - radius) < 0.01, `wheel floats/sinks: centre ${centre.y.toFixed(3)} r ${radius.toFixed(3)}`);
+          expect(Math.abs(centre.y - radius), `wheel floats/sinks: centre ${centre.y.toFixed(3)} r ${radius.toFixed(3)}`).toBeLessThan(0.01);
         }
-        assert.ok(monster.body.getWorldPosition(new THREE.Vector3()).y > 0.4, "body not lifted");
+        expect(monster.body.getWorldPosition(new THREE.Vector3()).y, "body not lifted").toBeGreaterThan(0.4);
         const circle = (id: VehicleClassId) => {
           const car = classCar(id);
           car.spawnFacing(0, 0, 0, 12);
@@ -337,7 +337,7 @@ for (const H of RATES) {
           for (let t = 0; t < 1; t += H) step(car, input);
           return Math.abs(car.angular.y);
         };
-        assert.ok(circle("monster") < circle("sedan") * 0.9, `monster yaw ${circle("monster")} vs sedan ${circle("sedan")}`);
+        expect(circle("monster"), `monster yaw ${circle("monster")} vs sedan ${circle("sedan")}`).toBeLessThan(circle("sedan") * 0.9);
       });
     });
 
@@ -350,11 +350,11 @@ for (const H of RATES) {
         car.spawnFacing(0, 0, 0, 16);
         const flick = { ...idleDrive(), throttle: 1, steer: 1, ebrake: true };
         for (let t = 0; t < 0.35; t += H) step(car, flick);
-        assert.ok(slipOf(car) > 0.25, `slip after the flick ${slipOf(car).toFixed(2)} rad`);
+        expect(slipOf(car), `slip after the flick ${slipOf(car).toFixed(2)} rad`).toBeGreaterThan(0.25);
         const hold = { ...idleDrive(), throttle: 1, steer: 1 };
         for (let t = 0; t < 0.8; t += H) step(car, hold);
-        assert.ok(slipOf(car) > 0.2 && car.drive.slide > 0.5, `slide not held: slip ${slipOf(car).toFixed(2)} slide ${car.drive.slide.toFixed(2)}`);
-        assert.ok(Math.hypot(car.velocity.x, car.velocity.z) > 11, `drift bled to ${Math.hypot(car.velocity.x, car.velocity.z).toFixed(1)} m/s`);
+        expect(slipOf(car) > 0.2 && car.drive.slide > 0.5, `slide not held: slip ${slipOf(car).toFixed(2)} slide ${car.drive.slide.toFixed(2)}`).toBeTruthy();
+        expect(Math.hypot(car.velocity.x, car.velocity.z), `drift bled to ${Math.hypot(car.velocity.x, car.velocity.z).toFixed(1)} m/s`).toBeGreaterThan(11);
         return car;
       };
 
@@ -362,34 +362,34 @@ for (const H of RATES) {
         const car = drifting();
         const release = { ...idleDrive(), throttle: 0.6 };
         for (let t = 0; t < 1; t += H) step(car, release);
-        assert.ok(car.drive.drift > 0.5, `drift fell to ${car.drive.drift.toFixed(2)}`);
-        assert.ok(slipOf(car) > 0.2, `slip fell to ${slipOf(car).toFixed(2)} rad`);
+        expect(car.drive.drift, `drift fell to ${car.drive.drift.toFixed(2)}`).toBeGreaterThan(0.5);
+        expect(slipOf(car), `slip fell to ${slipOf(car).toFixed(2)} rad`).toBeGreaterThan(0.2);
       });
 
       it("when the steering is released and the throttle lifted, then the assist catches it within 0.4 s and the slip is under 0.06 rad after 1 s", () => {
         const car = drifting();
         const lift = idleDrive();
         for (let t = 0; t < 0.4; t += H) step(car, lift);
-        assert.ok(car.drive.drift < 0.05, `drift still ${car.drive.drift.toFixed(2)} after 0.4 s`);
+        expect(car.drive.drift, `drift still ${car.drive.drift.toFixed(2)} after 0.4 s`).toBeLessThan(0.05);
         for (let t = 0; t < 0.6; t += H) step(car, lift);
-        assert.ok(slipOf(car) < 0.06, `assist did not catch it: slip ${slipOf(car).toFixed(2)} rad`);
+        expect(slipOf(car), `assist did not catch it: slip ${slipOf(car).toFixed(2)} rad`).toBeLessThan(0.06);
       });
 
       it("when the steering is turned hard the other way with the throttle held, then the drift is caught and the slip is under 0.06 rad after 1 s", () => {
         const car = drifting();
         const counter = { ...idleDrive(), throttle: 0.6, steer: -1 };
         for (let t = 0; t < 1; t += H) step(car, counter);
-        assert.ok(car.drive.drift < 0.05, `drift still ${car.drive.drift.toFixed(2)}`);
+        expect(car.drive.drift, `drift still ${car.drive.drift.toFixed(2)}`).toBeLessThan(0.05);
         const straight = { ...idleDrive(), throttle: 0.6 };
         for (let t = 0; t < 1; t += H) step(car, straight);
-        assert.ok(slipOf(car) < 0.06, `slip ${slipOf(car).toFixed(2)} rad`);
+        expect(slipOf(car), `slip ${slipOf(car).toFixed(2)} rad`).toBeLessThan(0.06);
       });
 
       it("when the steering is released and the brake is pressed with the throttle off, then the drift is caught within 0.4 s", () => {
         const car = drifting();
         const brake = { ...idleDrive(), brake: 0.6 };
         for (let t = 0; t < 0.4; t += H) step(car, brake);
-        assert.ok(car.drive.drift < 0.05, `drift still ${car.drive.drift.toFixed(2)}`);
+        expect(car.drive.drift, `drift still ${car.drive.drift.toFixed(2)}`).toBeLessThan(0.05);
       });
     });
 
@@ -398,11 +398,8 @@ for (const H of RATES) {
 
       it("when health falls from full to 0.9, 0.5 and 0.1 after a crash and then the car is dead, then the stage goes healthy, dented, damaged, limping, dead, and a lost wheel makes a 0.9-health car damaged, never merely dented", () => {
         const at = (alive: boolean, crashed: boolean, h: number, wheels = 4) => drivability(alive, crashed, h, wheels, 1, 1, out).stage;
-        assert.deepEqual(
-          [at(true, false, 1), at(true, true, 0.9), at(true, true, 0.5), at(true, true, 0.1), at(false, true, 0)],
-          ["healthy", "dented", "damaged", "limping", "dead"],
-        );
-        assert.equal(at(true, true, 0.9, 3), "damaged", "a lost wheel is never cosmetic");
+        expect(firstMismatch([at(true, false, 1), at(true, true, 0.9), at(true, true, 0.5), at(true, true, 0.1), at(false, true, 0)], ["healthy", "dented", "damaged", "limping", "dead"])).toBeUndefined();
+        expect(at(true, true, 0.9, 3), "a lost wheel is never cosmetic").toBe("damaged");
       });
 
       it(`when health runs from 0 to 1 with 1 to 4 wheels left at realism 0, 0.5 and 1, then anything short of dead keeps at least ${LIMP_FLOOR * 100} % of top speed and some power`, () => {
@@ -410,7 +407,7 @@ for (const H of RATES) {
           for (let h = 0; h <= 1; h += 0.05) {
             for (let wheels = 1; wheels <= 4; wheels++) {
               drivability(true, true, h, wheels, -1, realism, out);
-              assert.ok(out.top >= LIMP_FLOOR && out.power > 0, `realism ${realism} health ${h.toFixed(2)} wheels ${wheels}: top ${out.top}`);
+              expect(out.top >= LIMP_FLOOR && out.power > 0, `realism ${realism} health ${h.toFixed(2)} wheels ${wheels}: top ${out.top}`).toBeTruthy();
             }
           }
         }
@@ -429,8 +426,8 @@ for (const H of RATES) {
         // A limping sedan's pull is about halved: ~10 s up to its floor in the gear buckets.
         for (let t = 0; t < 20; t += H) step(car, gas);
         const v = along(car);
-        assert.ok(v >= LIMP_FLOOR * CLASSES.sedan.topSpeed - 0.05 && v < CLASSES.sedan.topSpeed * 0.9, `limping at ${v.toFixed(2)} m/s`);
-        assert.ok(car.angular.y > 0.05, `no pull toward the struck (left) side: yaw ${car.angular.y.toFixed(3)}`);
+        expect(v >= LIMP_FLOOR * CLASSES.sedan.topSpeed - 0.05 && v < CLASSES.sedan.topSpeed * 0.9, `limping at ${v.toFixed(2)} m/s`).toBeTruthy();
+        expect(car.angular.y, `no pull toward the struck (left) side: yaw ${car.angular.y.toFixed(3)}`).toBeGreaterThan(0.05);
       });
     });
 
@@ -439,21 +436,21 @@ for (const H of RATES) {
         const car = makeCar();
         car.deform.killTravel = killTravel("sedan", 0, "default");
         for (let i = 0; i < 3; i++) runWall(50, 1, "front", { car });
-        assert.equal(car.deform.drivetrainAlive, true, `dead after 3 hits, travel ${car.deform.engineTravel.toFixed(3)} m`);
+        expect(car.deform.drivetrainAlive, `dead after 3 hits, travel ${car.deform.engineTravel.toFixed(3)} m`).toBe(true);
       });
     });
 
     describe("given a sedan set up for the realistic end of the realism slider (sourced kill band)", () => {
       it("when it hits a wall at 35 km/h and a fresh one at 64 km/h, then the kill travel is 0.15 m, the 35 km/h sedan drives on and the 64 km/h sedan's drivetrain dies", () => {
-        assert.equal(killTravel("sedan", 1, "default"), 0.15);
+        expect(killTravel("sedan", 1, "default")).toBe(0.15);
         const slow = makeCar();
         slow.deform.killTravel = killTravel("sedan", 1, "default");
         runWall(35, 1, "front", { car: slow });
-        assert.equal(slow.deform.drivetrainAlive, true, "35 km/h killed it");
+        expect(slow.deform.drivetrainAlive, "35 km/h killed it").toBe(true);
         const fast = makeCar();
         fast.deform.killTravel = killTravel("sedan", 1, "default");
         runWall(64, 1, "front", { car: fast });
-        assert.equal(fast.deform.drivetrainAlive, false, "64 km/h left it running");
+        expect(fast.deform.drivetrainAlive, "64 km/h left it running").toBe(false);
       });
     });
 
@@ -461,19 +458,19 @@ for (const H of RATES) {
       it("when the classes are read at the arcade end and the realistic end, then sedan, muscle, truck and monster each take at least as much as the one before, and the monster more than the sedan", () => {
         for (const realism of [0, 1]) {
           const order = (["sedan", "muscle", "truck", "monster"] as const).map((id) => killTravel(id, realism, "default"));
-          for (let i = 1; i < order.length; i++) assert.ok(order[i]! >= order[i - 1]!, `realism ${realism}: ${order.join(" ")}`);
-          assert.ok(order[3]! > order[0]!);
+          for (let i = 1; i < order.length; i++) expect(order[i]!, `realism ${realism}: ${order.join(" ")}`).toBeGreaterThanOrEqual(order[i - 1]!);
+          expect(order[3]!).toBeGreaterThan(order[0]!);
         }
       });
 
       it("when the police class is read against the sedan, then an AI police unit takes 15 to 20 % more at the default realism and more at both slider ends, while the player's police car counts as a sedan and an AI one as police", () => {
         const sedan = killTravel("sedan", DEFAULT_REALISM, "default");
         const police = killTravel("police", DEFAULT_REALISM, "default");
-        assert.ok(police >= sedan * 1.15 && police <= sedan * 1.2, `police ${police.toFixed(3)} m vs sedan ${sedan.toFixed(3)} m`);
-        for (const realism of [0, 1]) assert.ok(killTravel("police", realism, "default") > killTravel("sedan", realism, "default"), `realism ${realism}`);
+        expect(police >= sedan * 1.15 && police <= sedan * 1.2, `police ${police.toFixed(3)} m vs sedan ${sedan.toFixed(3)} m`).toBeTruthy();
+        for (const realism of [0, 1]) expect(killTravel("police", realism, "default"), `realism ${realism}`).toBeGreaterThan(killTravel("sedan", realism, "default"));
         const cruiser = (carIndex: number) => ({ style: { id: "police" as const }, group: { userData: { carIndex } } });
-        assert.equal(killClass(cruiser(0)), "sedan", "the player's slot");
-        assert.equal(killClass(cruiser(7)), "police", "an AI unit's slot");
+        expect(killClass(cruiser(0)), "the player's slot").toBe("sedan");
+        expect(killClass(cruiser(7)), "an AI unit's slot").toBe("police");
       });
     });
 
@@ -492,8 +489,8 @@ for (const H of RATES) {
           return car.deform.drivetrainAlive ? Infinity : n;
         };
         const derby = hitsToKill("derby");
-        assert.ok(derby >= 6 && derby <= 20, `derby sedan died after ${derby} hits`);
-        assert.equal(hitsToKill("default"), Infinity, "a race / fleet sedan died of side hits");
+        expect(derby >= 6 && derby <= 20, `derby sedan died after ${derby} hits`).toBeTruthy();
+        expect(hitsToKill("default"), "a race / fleet sedan died of side hits").toBe(Infinity);
       });
     });
 
@@ -511,15 +508,15 @@ for (const H of RATES) {
       it("when the derby sedan's wear share is read against the race formula's over the same 250 limit, then the derby's is 1.35 times it", () => {
         const derby = share("derby");
         const formula = share("derby", 250);
-        assert.ok(formula > 0.01, `the hit wore ${formula.toFixed(4)} of 250: nothing to scale`);
-        assert.ok(Math.abs(derby / formula - 1.35) < 1e-9, `derby ${derby.toFixed(5)} vs formula ${formula.toFixed(5)}: ${(derby / formula).toFixed(4)} times`);
+        expect(formula, `the hit wore ${formula.toFixed(4)} of 250: nothing to scale`).toBeGreaterThan(0.01);
+        expect(Math.abs(derby / formula - 1.35), `derby ${derby.toFixed(5)} vs formula ${formula.toFixed(5)}: ${(derby / formula).toFixed(4)} times`).toBeLessThan(1e-9);
       });
       it("when the race or fleet sedan and the never armed one take it, then neither has a wear limit or loses any of its drivetrain to wear", () => {
         for (const ctx of ["default", null] as const) {
           const car = makeCar();
           if (ctx) armKill(car.deform, "sedan", DEFAULT_REALISM, ctx);
-          assert.equal(car.deform.wreckEnergy, Infinity, `${ctx}: wear limit`);
-          assert.equal(share(ctx), 0, `${ctx}: wear share`);
+          expect(car.deform.wreckEnergy, `${ctx}: wear limit`).toBe(Infinity);
+          expect(share(ctx), `${ctx}: wear share`).toBe(0);
         }
       });
     });

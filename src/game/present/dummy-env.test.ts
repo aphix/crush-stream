@@ -1,11 +1,11 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { MATERIAL_STRENGTH } from "../vehicle/material-class.ts";
 import { FABRIC, FABRIC_ENV } from "./dummy-cloth.ts";
 import { ROLE } from "./dummy-rig.ts";
 import { SKIN_SSS } from "./dummy-shader.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 function compileShader(material: THREE.Material, chunks: { vertexShader: string; fragmentShader: string }): THREE.WebGLProgramParametersWithUniforms {
   const shader = { uniforms: {}, vertexShader: chunks.vertexShader, fragmentShader: chunks.fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
@@ -17,7 +17,7 @@ const compiled = (material: THREE.Material, chunks: { vertexShader: string; frag
 
 function tableOf(fragment: string, name: string): number[] {
   const match = new RegExp(`const float ${name}\\[\\d+\\] = float\\[\\d+\\]\\(([^)]*)\\)`).exec(fragment);
-  assert.ok(match, `${name} table`);
+  must(match, `${name} table`);
   return match[1]!.split(",").map(Number);
 }
 
@@ -37,38 +37,38 @@ describe("given the people's lit material", () => {
   const roles = tableOf(lit, "DOLL_ROLE_ENV");
 
   it("when it compiles, then the studio's reflection is scaled once after the lights and the shadow's depth shader has no such line", () => {
-    assert.equal(lit.split("reflectedLight.indirectSpecular *= materialSpecular(dollEnv);").length - 1, 1, "lit scale lines");
-    assert.equal(depth.includes("dollEnv"), false, "depth shader");
+    expect(lit.split("reflectedLight.indirectSpecular *= materialSpecular(dollEnv);").length - 1, "lit scale lines").toBe(1);
+    expect(depth.includes("dollEnv"), "depth shader").toBe(false);
   });
 
   it("when it compiles, then its reflection scale reads the shared Material strength uniform object", () => {
     const shader = compileShader(mesh.material, THREE.ShaderLib.standard);
-    assert.equal(shader.uniforms.materialStrength, MATERIAL_STRENGTH, "the uniform object");
-    assert.equal(shader.fragmentShader.split("uniform float materialStrength;").length - 1, 1, "declared once");
+    expect(shader.uniforms.materialStrength, "the uniform object").toBe(MATERIAL_STRENGTH);
+    expect(shader.fragmentShader.split("uniform float materialStrength;").length - 1, "declared once").toBe(1);
   });
 
   it("when it compiles, then its skin look reads the one shared switch uniform object", () => {
-    assert.equal(compileShader(mesh.material, THREE.ShaderLib.standard).uniforms.uSkinSss, SKIN_SSS);
+    expect(compileShader(mesh.material, THREE.ShaderLib.standard).uniforms.uSkinSss).toBe(SKIN_SSS);
   });
 
   it("when its fabric table is read, then it has a row per fabric, bare 'none' last", () => {
-    assert.equal(fabrics.length, FABRIC.NONE + 1, "rows");
-    assert.equal(fabrics[FABRIC.NONE], 1, "none row");
-    for (const [index, share] of FABRIC_ENV.entries()) assert.equal(fabrics[index], share, `row ${index}`);
+    expect(fabrics.length, "rows").toBe(FABRIC.NONE + 1);
+    expect(fabrics[FABRIC.NONE], "none row").toBe(1);
+    for (const [index, share] of FABRIC_ENV.entries()) expect(fabrics[index], `row ${index}`).toBe(share);
   });
 
   for (const testCase of fabricCases) {
     it(`when the ${testCase.it} row is read, then it keeps no more than ${testCase.expectedMax} of the reflection`, () => {
-      assert.ok(fabrics[testCase.fabric]! <= testCase.expectedMax, `share ${fabrics[testCase.fabric]}`);
+      expect(fabrics[testCase.fabric]!, `share ${fabrics[testCase.fabric]}`).toBeLessThanOrEqual(testCase.expectedMax);
     });
   }
 
   it("when the metal and eye roles are read, then they keep the whole reflection and a rubber sole a quarter", () => {
     const rows = Object.entries(ROLE).sort(([, a], [, b]) => a - b).map(([name]) => name);
-    assert.equal(roles[rows.indexOf("BADGE")], 1, "badge");
-    assert.equal(roles[rows.indexOf("BUCKLE")], 1, "buckle");
-    assert.equal(roles[rows.indexOf("EYES")], 1, "eyes");
-    assert.equal(roles[rows.indexOf("SOLE")], 0.25, "sole");
-    assert.equal(roles[rows.indexOf("SHIRT")], -1, "shirt follows its fabric");
+    expect(roles[rows.indexOf("BADGE")], "badge").toBe(1);
+    expect(roles[rows.indexOf("BUCKLE")], "buckle").toBe(1);
+    expect(roles[rows.indexOf("EYES")], "eyes").toBe(1);
+    expect(roles[rows.indexOf("SOLE")], "sole").toBe(0.25);
+    expect(roles[rows.indexOf("SHIRT")], "shirt follows its fabric").toBe(-1);
   });
 });

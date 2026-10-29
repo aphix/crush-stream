@@ -1,6 +1,5 @@
-import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import assert from "node:assert/strict";
 import { COMPASS, report, type Run, type Site } from "./ground-judge.test-util.ts";
 import { drop, frame, fit, FRAME, makeCar, worldOf } from "./ground-probe.test-util.ts";
 import type { DeformableCar } from "./car.ts";
@@ -248,7 +247,7 @@ describe("given every class driving up Havana's face and over the crest at 10, 2
       if (r.jump > 0) bad.push(`${cls} ${run}: teleported ${f(r.jump)} m`);
       if (r.end.z > stopZ + 1) bad.push(`${cls} ${run}: stopped at z ${f(r.end.z)} after ${f(r.end.seconds)} s`);
     }
-    assert.deepEqual(bad, []);
+    expect(bad).toHaveLength(0);
   });
 
   it("when every class has driven its run, then wheels are good on the grass: no tyre is more than 2 cm in it and no hull more than 2 cm in the ground, on any run", () => {
@@ -257,7 +256,7 @@ describe("given every class driving up Havana's face and over the crest at 10, 2
       if (r.grass > 0.02) bad.push(`${cls} ${run}: a tyre ${f(r.grass * 100)} cm in the grass`);
       if (r.pen > 0.02) bad.push(`${cls} ${run}: the hull ${f(r.pen * 100)} cm in the ground`);
     }
-    assert.deepEqual(bad, []);
+    expect(bad).toHaveLength(0);
   });
 
   it("when every class has driven its run, then the crest launches nothing at 10 and 20 m/s, launches into the air from 30 m/s up, and a full-throttle run clears the plaza and lands beyond the ring road", () => {
@@ -272,7 +271,7 @@ describe("given every class driving up Havana's face and over the crest at 10, 2
       if (!r.landing) bad.push(`${cls} ${run}: never landed`);
       else if (run === "start, full throttle" && r.landing.z > -66) bad.push(`${cls} ${run}: landed at z ${f(r.landing.z)}, short of the far side of the ring road`);
     }
-    assert.deepEqual(bad, []);
+    expect(bad).toHaveLength(0);
   });
 });
 
@@ -289,7 +288,7 @@ describe("given a car driving at 30 m/s up Havana's face and over the crest, wit
         if (r.pen > 0.02) bad.push(`${cls} lead +${k * 2} cm: the hull ${f(r.pen * 100)} cm in the ground`);
       }
     }
-    assert.deepEqual(bad, []);
+    expect(bad).toHaveLength(0);
   });
 });
 
@@ -302,17 +301,17 @@ describe("given Havana's approach boulevard and its set piece", () => {
   const start = (cls: VehicleClassId) => rows.find((x) => x.cls === cls && x.run === "start, full throttle")!.r;
 
   it("when the default class (sedan) drives the start at full throttle, then the boulevard is long enough for it to reach 90 % of its top speed at the foot", () => {
-    assert.ok(start("sedan").speedAt! >= 0.9 * CLASSES.sedan.topSpeed, `sedan ${f(start("sedan").speedAt!)} of ${f(CLASSES.sedan.topSpeed)} m/s`);
+    expect(start("sedan").speedAt!, `sedan ${f(start("sedan").speedAt!)} of ${f(CLASSES.sedan.topSpeed)} m/s`).toBeGreaterThanOrEqual(0.9 * CLASSES.sedan.topSpeed);
   });
 
   it("when a cop arrives at the player's foot speed, then it launches at the crest, lands on the lawn beyond the island and keeps going", (t) => {
     const foot = start("sedan").speedAt!;
     const r = runLine(ground, "police", FOOT, { ...LIMITS, lead: 60, speed: foot, stopZ: -215, at: FOOT_ROAD });
     t.annotate(`police at ${f(foot)} m/s: ${f(r.air, 2)} s in the air, apex ${f(r.apex)} m over the ground (${f(r.rise)} m over the crest), landed at (${f(r.landing!.x)}, ${f(r.landing!.z)}) on ${r.landing!.surface} at ${f(r.landing!.speed)} m/s, ends at z ${f(r.end.z)} doing ${f(r.end.speed)} m/s`);
-    assert.ok(r.air > 2 && r.rise > 4, `${f(r.air, 2)} s in the air, ${f(r.rise)} m up`);
+    expect(r.air > 2 && r.rise > 4, `${f(r.air, 2)} s in the air, ${f(r.rise)} m up`).toBeTruthy();
     // Beyond the ring road's far side (z -66) and inside the lawn and paseo (z -215), upright and moving.
-    assert.ok(r.landing && r.landing.z < -66 && r.landing.z > -215 && Math.abs(r.landing.x) < 90, `landed at ${JSON.stringify(r.landing)}`);
-    assert.ok(r.end.z <= -214 && r.end.speed > 0.8 * foot, `stopped or slowed: z ${f(r.end.z)}, ${f(r.end.speed)} m/s`);
-    assert.equal(r.jump > 0 || r.ejections > 0 || r.killedAt !== null, false, "no teleport, throw or kill");
+    expect(r.landing && r.landing.z < -66 && r.landing.z > -215 && Math.abs(r.landing.x) < 90, `landed at ${JSON.stringify(r.landing)}`).toBeTruthy();
+    expect(r.end.z <= -214 && r.end.speed > 0.8 * foot, `stopped or slowed: z ${f(r.end.z)}, ${f(r.end.speed)} m/s`).toBeTruthy();
+    expect(r.jump > 0 || r.ejections > 0 || r.killedAt !== null, "no teleport, throw or kill").toBe(false);
   });
 });

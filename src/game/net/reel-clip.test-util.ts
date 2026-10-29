@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { expect } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { FLIGHT } from "../vehicle/car-flight.ts";
@@ -8,6 +8,7 @@ import { SQUAD_ALARM, SQUAD_DOWN, SQUAD_SHOT, SQUAD_TARGET } from "../scenes/law
 import { makeCarFrame, makeSnapshot, snapshotMaxBytes, writeSnapshot, Writer } from "./codec.ts";
 import { carLayout, readCarPose } from "./car-pose.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** A keyframe's knocked props (bits), and each car's course memory (`MEMORY` doubles: the road segment of its projection hint). */
 const KNOCKS = [0b101, 0, 0b10000001];
@@ -147,21 +148,21 @@ export function makeClip(): { clip: HighlightClip; car: DeformableCar } {
     keyCars: Uint32Array.of(0b11, 0b10),
     keys,
   };
-  assert.ok(a.crashed, "car a is a wreck");
+  expect(a.crashed, "car a is a wreck").toBeTruthy();
   return { clip, car: a };
 }
 
 /** `got` is `want` after the wire (floats fround). */
 export function sameClip(got: HighlightClip, want: HighlightClip): void {
   for (const k of ["trackId", "impacts", "kills", "ejects", "hit", "firstStep", "focus", "firstA", "firstB", "bleed", "t0", "firstImpact", "lastImpact", "realism"] as const) {
-    assert.equal(got[k], want[k], k);
+    expect(got[k], k).toBe(want[k]);
   }
-  for (const k of ["score", "peakKph", "hitKph", "deform", "x", "z"] as const) assert.equal(got[k], Math.fround(want[k]), k);
-  assert.equal(got.epicenter?.length ?? -1, want.epicenter?.length ?? -1, "epicenter fields");
+  for (const k of ["score", "peakKph", "hitKph", "deform", "x", "z"] as const) expect(got[k], k).toBe(Math.fround(want[k]));
+  expect(got.epicenter?.length ?? -1, "epicenter fields").toBe(want.epicenter?.length ?? -1);
   if (want.epicenter) assertSameNumbers(got.epicenter!, want.epicenter, "epicenter");
-  assert.equal(got.cars.length, want.cars.length);
+  expect(got.cars.length).toBe(want.cars.length);
   for (const [i, c] of got.cars.entries()) {
-    for (const k of ["slot", "style", "cls", "name"] as const) assert.equal(c[k], want.cars[i]![k], `car ${i} ${k}`);
+    for (const k of ["slot", "style", "cls", "name"] as const) expect(c[k], `car ${i} ${k}`).toBe(want.cars[i]![k]);
   }
   assertSameNumbers(got.h, want.h, "step dt");
   assertSameNumbers(got.shape, want.shape, "step schedule");
@@ -169,28 +170,43 @@ export function sameClip(got: HighlightClip, want: HighlightClip): void {
   assertSameNumbers(got.inputs, want.inputs, "inputs");
   assertSameNumbers(got.keyStep, want.keyStep, "keyframe steps");
   assertSameNumbers(got.keyCars, want.keyCars, "keyframe car masks");
-  assert.equal(got.keys.length, want.keys.length);
+  expect(got.keys.length).toBe(want.keys.length);
   for (const [i, k] of got.keys.entries()) assertSameNumbers(k, want.keys[i]!, `keyframe ${i} bytes`);
-  assert.equal(got.ejections.length, want.ejections.length);
+  expect(got.ejections.length).toBe(want.ejections.length);
   for (const [i, x] of got.ejections.entries()) {
     const w = want.ejections[i]!;
-    assert.equal(x.step, w.step, `ejection ${i} step`);
-    assert.equal(x.own, w.own, `ejection ${i} own`);
+    expect(x.step, `ejection ${i} step`).toBe(w.step);
+    expect(x.own, `ejection ${i} own`).toBe(w.own);
     assertSameDigest({ ...x.e, pos: x.e.pos.toArray(), local: x.e.local.toArray(), dir: x.e.dir.toArray(), quat: x.e.quat.toArray(), rel: x.e.rel.toArray(), carVel: x.e.carVel.toArray(), spin: x.e.spin.toArray() }, { ...w.e, pos: w.e.pos.toArray(), local: w.e.local.toArray(), dir: w.e.dir.toArray(), quat: w.e.quat.toArray(), rel: w.e.rel.toArray(), carVel: w.e.carVel.toArray(), spin: w.e.spin.toArray() }, `ejection ${i}`);
   }
-  assert.deepEqual(got.knocks, want.knocks, "knocked props");
-  assert.deepEqual(got.stirs, want.stirs, "stirred wrecks");
-  assert.deepEqual(got.partStirs, want.partStirs, "stirred parts");
-  assert.equal(got.strikes.length, want.strikes.length);
+  sameRows(got.knocks, want.knocks, ["step", "prop"], "knocked prop");
+  sameRows(got.stirs, want.stirs, ["step", "car", "slice"], "stirred wreck");
+  sameRows(got.partStirs, want.partStirs, ["step", "car", "body", "slice", "slices"], "stirred part");
+  expect(got.strikes.length).toBe(want.strikes.length);
   for (const [i, x] of got.strikes.entries()) {
     const w = want.strikes[i]!;
-    assert.equal(x.step, w.step, `strike ${i} step`);
-    for (const k of ["guard", "car", "x", "y", "z", "faceX", "faceZ", "vx", "vy", "vz", "wx", "wy", "wz"] as const) assert.equal(x.s[k], w.s[k], `strike ${i} ${k}`);
+    expect(x.step, `strike ${i} step`).toBe(w.step);
+    for (const k of ["guard", "car", "x", "y", "z", "faceX", "faceZ", "vx", "vy", "vz", "wx", "wy", "wz"] as const) expect(x.s[k], `strike ${i} ${k}`).toBe(w.s[k]);
   }
-  assert.deepEqual(got.squad && { state: Array.from(got.squad.state), events: got.squad.events }, want.squad && { state: Array.from(want.squad.state), events: want.squad.events }, "squad");
-  assert.equal(got.hits.length, want.hits.length);
+  expect(got.squad === null, "squad present").toBe(want.squad === null);
+  if (got.squad && want.squad) {
+    expect(firstMismatch(got.squad.state, want.squad.state), "squad state").toBeUndefined();
+    sameRows(got.squad.events, want.squad.events, ["step", "kind", "a", "b", "c"], "squad event");
+  }
+  expect(got.hits.length).toBe(want.hits.length);
   for (const [i, p] of got.hits.entries()) {
     const w = want.hits[i]!;
-    assert.deepEqual(p, { t: w.t, x: Math.fround(w.x), y: Math.fround(w.y), z: Math.fround(w.z), a: w.a, b: w.b }, `scope hit ${i}`);
+    expect(p.t, `scope hit ${i} t`).toBe(w.t);
+    for (const k of ["x", "y", "z"] as const) expect(p[k], `scope hit ${i} ${k}`).toBe(Math.fround(w[k]));
+    expect(p.a, `scope hit ${i} a`).toBe(w.a);
+    expect(p.b, `scope hit ${i} b`).toBe(w.b);
+  }
+}
+
+/** `got` rows against `want` rows, each listed field on its own `expect`. */
+function sameRows<R>(got: readonly R[], want: readonly R[], keys: readonly (keyof R & string)[], label: string): void {
+  expect(got.length, `${label}s`).toBe(want.length);
+  for (const [i, row] of got.entries()) {
+    for (const k of keys) expect(row[k], `${label} ${i} ${k}`).toBe(want[i]?.[k]);
   }
 }

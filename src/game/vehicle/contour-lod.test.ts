@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { DeformableCar } from "./car.ts";
@@ -44,7 +43,7 @@ describe("given a crashed sedan whose drawn normals follow the FX tier and the e
     SMOOTHING_TIER.value = 1;
     car.updateSkin();
     car.flushDeferredSkin();
-    assert.ok(meanEdgeAngle(car) < plain * 0.95, `${meanEdgeAngle(car).toFixed(2)} against ${plain.toFixed(2)} degrees`);
+    expect(meanEdgeAngle(car), `${meanEdgeAngle(car).toFixed(2)} against ${plain.toFixed(2)} degrees`).toBeLessThan(plain * 0.95);
   });
 
   it("when the car is far from the camera, then it keeps the sim's normals, and coming near smooths it once", () => {
@@ -59,6 +58,6 @@ describe("given a crashed sedan whose drawn normals follow the FX tier and the e
     car.setNearView(true);
     car.updateSkin();
     car.flushDeferredSkin();
-    assert.ok(meanEdgeAngle(car) < far * 0.95, `near ${meanEdgeAngle(car).toFixed(2)} against far ${far.toFixed(2)} degrees`);
+    expect(meanEdgeAngle(car), `near ${meanEdgeAngle(car).toFixed(2)} against far ${far.toFixed(2)} degrees`).toBeLessThan(far * 0.95);
   });
 });

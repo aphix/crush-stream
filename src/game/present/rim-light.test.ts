@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DummyMesh } from "./ragdoll-mesh.ts";
 import { RIM_LIGHT } from "./rim-light.ts";
@@ -21,10 +20,10 @@ describe("given the people's materials patched by applyDolls", () => {
   for (const c of CASES) {
     it(`when ${c.it} is compiled, then it ${c.rim ? "shares RIM_LIGHT as uRim and adds the rim after the lights" : "carries no rim"}`, () => {
       const shader = compiled(c.material, c.chunks);
-      assert.equal(shader.uniforms.uRim === RIM_LIGHT, c.rim, "the shared uniform object");
-      assert.equal(shader.fragmentShader.includes("uniform float uRim;"), c.rim, "the uniform's declaration");
-      assert.equal(shader.fragmentShader.includes("#include <lights_fragment_end>\n\n// after shader-skills (MIT)\nfloat dollRim"), c.rim, "the rim right after the lights");
-      assert.equal(shader.fragmentShader.includes("reflectedLight.directSpecular += dollRim"), c.rim, "the rim added to the light");
+      expect(shader.uniforms.uRim === RIM_LIGHT, "the shared uniform object").toBe(c.rim);
+      expect(shader.fragmentShader.includes("uniform float uRim;"), "the uniform's declaration").toBe(c.rim);
+      expect(shader.fragmentShader.includes("#include <lights_fragment_end>\n\n// after shader-skills (MIT)\nfloat dollRim"), "the rim right after the lights").toBe(c.rim);
+      expect(shader.fragmentShader.includes("reflectedLight.directSpecular += dollRim"), "the rim added to the light").toBe(c.rim);
     });
   }
 });

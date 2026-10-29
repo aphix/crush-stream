@@ -1,7 +1,7 @@
-import { describe, test } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, test } from "vitest";
 import { DETAIL_LEVELS } from "./car-detail.ts";
 import { DetailGovernor } from "./detail-governor.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const LAST = DETAIL_LEVELS.length - 1;
 
@@ -36,34 +36,34 @@ const rungs = (moves: [number, number][]): number[] => moves.map((m) => m[1]);
 describe("given a match that runs under 57 fps on a phone's rung", () => {
   test("when it stays slow, then it steps one rung nearer every 3.5 s (1.5 s settle plus two slow windows) down to the last rung and no further", () => {
     const moves = run(new DetailGovernor(2), 30, steady(45));
-    assert.equal(moves.length, 2);
-    assert.equal(moves[0]![1], 3, "first step to rung 3");
-    assert.equal(moves[1]![1], LAST, "second step to the last rung");
-    assert.ok(Math.abs(moves[0]![0] - 3.5) < 0.2, `first step at ${moves[0]![0]} s`);
-    assert.ok(Math.abs(moves[1]![0] - 7) < 0.3, `second step at ${moves[1]![0]} s`);
+    expect(moves.length).toBe(2);
+    expect(moves[0]![1], "first step to rung 3").toBe(3);
+    expect(moves[1]![1], "second step to the last rung").toBe(LAST);
+    expect(Math.abs(moves[0]![0] - 3.5), `first step at ${moves[0]![0]} s`).toBeLessThan(0.2);
+    expect(Math.abs(moves[1]![0] - 7), `second step at ${moves[1]![0]} s`).toBeLessThan(0.3);
   });
 
   test("when the frames are fast but the pacer gives up 5 % of the sim's time, then it steps nearer too", () => {
     const moves = run(new DetailGovernor(0), 5, steady(60, 0.05));
-    assert.equal(moves.length, 1);
-    assert.equal(moves[0]![1], 1);
+    expect(moves.length).toBe(1);
+    expect(moves[0]![1]).toBe(1);
   });
 
   test("when the frames are fast and the pacer gives up 1 %, then that is a fine match: it never steps nearer, it steps back", () => {
-    assert.deepEqual(rungs(run(new DetailGovernor(2), 30, steady(100, 0.01))), [1, 0]);
+    expect(firstMismatch(rungs(run(new DetailGovernor(2), 30, steady(100, 0.01))), [1, 0])).toBeUndefined();
   });
 
   test("when one frame hitches for 400 ms among 60 fps frames, then it never steps: one hitch ends one window", () => {
     const hitch: Frames = { ms: (i) => (i === 200 ? 400 : 10) };
-    assert.equal(run(new DetailGovernor(0), 20, hitch).length, 0);
+    expect(run(new DetailGovernor(0), 20, hitch).length).toBe(0);
   });
 });
 
 describe("given a match that holds its frame rate", () => {
   test("when a phone has run fine for 10 windows, then it steps one rung back every 11.5 s, as far as the 75 m rung", () => {
     const moves = run(new DetailGovernor(2), 40, steady(60));
-    assert.deepEqual(rungs(moves), [1, 0]);
-    assert.ok(Math.abs(seconds(moves)[0]! - 11.5) < 0.3, `first step back at ${seconds(moves)[0]} s`);
+    expect(firstMismatch(rungs(moves), [1, 0])).toBeUndefined();
+    expect(Math.abs(seconds(moves)[0]! - 11.5), `first step back at ${seconds(moves)[0]} s`).toBeLessThan(0.3);
   });
 
   test("when a step back is followed at once by slow windows, then the next try waits twice as long, and twice as long again, up to 80 windows", () => {
@@ -79,54 +79,54 @@ describe("given a match that holds its frame rate", () => {
       throw new Error("the governor never moved");
     };
     const back = untilMove(100);
-    assert.equal(back.to, 1);
-    assert.ok(Math.abs(back.s - 11.5) < 0.01, `first step back after ${back.s} s`);
-    assert.equal(untilMove(40).to, 2, "slow at once: nearer again");
-    assert.equal(gov.holdWindows, 20);
+    expect(back.to).toBe(1);
+    expect(Math.abs(back.s - 11.5), `first step back after ${back.s} s`).toBeLessThan(0.01);
+    expect(untilMove(40).to, "slow at once: nearer again").toBe(2);
+    expect(gov.holdWindows).toBe(20);
     const second = untilMove(100);
-    assert.equal(second.to, 1);
-    assert.ok(Math.abs(second.s - 21.5) < 0.01, `second step back after ${second.s} s`);
-    assert.equal(untilMove(40).to, 2);
-    assert.equal(gov.holdWindows, 40);
+    expect(second.to).toBe(1);
+    expect(Math.abs(second.s - 21.5), `second step back after ${second.s} s`).toBeLessThan(0.01);
+    expect(untilMove(40).to).toBe(2);
+    expect(gov.holdWindows).toBe(40);
     untilMove(100);
     untilMove(40);
-    assert.equal(gov.holdWindows, 80);
+    expect(gov.holdWindows).toBe(80);
     untilMove(100);
     untilMove(40);
-    assert.equal(gov.holdWindows, 80, "the hold stops doubling at 80 windows");
+    expect(gov.holdWindows, "the hold stops doubling at 80 windows").toBe(80);
   });
 
   test("when a step back holds for longer than twice its hold before a slow spell, then the hold stays", () => {
     const gov = new DetailGovernor(3);
     run(gov, 15, steady(100));
-    assert.equal(gov.level, 2);
+    expect(gov.level).toBe(2);
     run(gov, 70, steady(100));
-    assert.equal(gov.level, 0);
+    expect(gov.level).toBe(0);
     run(gov, 4, steady(30));
-    assert.equal(gov.level, 1, "slow again: one rung nearer");
-    assert.equal(gov.holdWindows, 10);
+    expect(gov.level, "slow again: one rung nearer").toBe(1);
+    expect(gov.holdWindows).toBe(10);
   });
 });
 
 describe("given the governor outside a match, at the match's start and when it is given a start rung", () => {
   test("when there is no match, then nothing is counted however slow the frames are; and a match's first 1.5 s are not counted either", () => {
     const gov = new DetailGovernor(0);
-    assert.equal(run(gov, 30, steady(20), false).length, 0);
-    assert.equal(gov.level, 0);
+    expect(run(gov, 30, steady(20), false).length).toBe(0);
+    expect(gov.level).toBe(0);
     const moves = run(gov, 4, steady(20));
-    assert.ok(moves.length >= 1 && moves[0]![0] >= 3.4, `first step at ${moves[0]?.[0]} s`);
+    expect(moves.length >= 1 && moves[0]![0] >= 3.4, `first step at ${moves[0]?.[0]} s`).toBeTruthy();
   });
 
   test("when the match stops and starts again, then the count starts from a fresh settle", () => {
     const gov = new DetailGovernor(0);
-    assert.equal(run(gov, 3, steady(20)).length, 0, "settle plus one slow window is not two windows");
+    expect(run(gov, 3, steady(20)).length, "settle plus one slow window is not two windows").toBe(0);
     run(gov, 5, steady(20), false);
-    assert.equal(run(gov, 3, steady(20)).length, 0, "the settle ran again");
+    expect(run(gov, 3, steady(20)).length, "the settle ran again").toBe(0);
   });
 
   test("when the start rung is out of the ladder, then it is clamped to it", () => {
-    assert.equal(new DetailGovernor(99).level, LAST);
-    assert.equal(new DetailGovernor(-3).level, 0);
+    expect(new DetailGovernor(99).level).toBe(LAST);
+    expect(new DetailGovernor(-3).level).toBe(0);
   });
 });
 
@@ -154,7 +154,7 @@ const renderScaleCases = [
 describe("given Auto render scale's ladder (three rungs) judged on the GPU's basis", () => {
   for (const testCase of renderScaleCases) {
     test(testCase.it, () => {
-      assert.equal(renderScaleRungs(testCase.start, 30, testCase.wallMs, testCase.workMs, testCase.gpuMs), testCase.expected);
+      expect(renderScaleRungs(testCase.start, 30, testCase.wallMs, testCase.workMs, testCase.gpuMs)).toBe(testCase.expected);
     });
   }
 });

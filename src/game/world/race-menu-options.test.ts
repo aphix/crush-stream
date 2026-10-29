@@ -1,10 +1,10 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { DEFAULT_RACE_OPTIONS, type RaceMode, type RaceOptions } from "../match/types.ts";
 import { courseTap, selectAll } from "../hud/setup-patch.ts";
 import { setGround } from "./ground.ts";
 import { frame, makeWorld, type World } from "./race-world.test-util.ts";
 import { CAMPAIGN } from "./tracks/index.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** A world in race mode (the setup card up), run through `body` and always left again. */
 function inRaceMode(body: (w: World) => void): void {
@@ -25,7 +25,7 @@ const nameOf = (w: World, id: string): string => w.race.hud().courses.find((c) =
 function untilMenu(w: World, menu: "results" | "standings"): void {
   const state = { acc: 0 };
   for (let n = 0; n < 60 * 600 && w.race.hud().menu !== menu; n++) frame(w, state);
-  assert.equal(w.race.hud().menu, menu);
+  expect(w.race.hud().menu).toBe(menu);
 }
 
 /** Options none of which is a default (the course is the one under test). */
@@ -36,18 +36,18 @@ describe("given the setup card with watch, police, no reset, 5 laps, 4 AI cars, 
     inRaceMode((w) => {
       w.race.command({ type: "options", options: NON_DEFAULT });
       const before = optionsOf(w);
-      for (const [key, value] of Object.entries(NON_DEFAULT)) assert.equal(before[key as keyof RaceOptions], value, `${key} was taken`);
+      for (const [key, value] of Object.entries(NON_DEFAULT)) expect(before[key as keyof RaceOptions], `${key} was taken`).toBe(value);
       const pickAll = (when: string): void => {
         for (const c of w.race.hud().courses) {
           w.race.command({ type: "options", options: { trackId: c.id } });
           const after = optionsOf(w);
-          for (const key of Object.keys(before) as (keyof RaceOptions)[]) assert.equal(after[key], key === "trackId" ? c.id : before[key], `${when}: after picking ${c.name}: ${key}`);
+          for (const key of Object.keys(before) as (keyof RaceOptions)[]) expect(after[key], `${when}: after picking ${c.name}: ${key}`).toBe(key === "trackId" ? c.id : before[key]);
         }
       };
       pickAll("on the first card");
       w.race.command({ type: "start" });
       w.race.command({ type: "quit" });
-      assert.equal(w.race.menu, "setup");
+      expect(w.race.menu).toBe("setup");
       pickAll("on the card after a race");
     });
   });
@@ -55,32 +55,32 @@ describe("given the setup card with watch, police, no reset, 5 laps, 4 AI cars, 
 
 describe("given the setup card", () => {
   it("when it first opens, then the campaign has every course in the campaign's own order", () => {
-    assert.equal(DEFAULT_RACE_OPTIONS.campaign.join(), CAMPAIGN.join());
-    inRaceMode((w) => assert.equal(optionsOf(w).campaign.join(), CAMPAIGN.join()));
+    expect(DEFAULT_RACE_OPTIONS.campaign.join()).toBe(CAMPAIGN.join());
+    inRaceMode((w) => expect(optionsOf(w).campaign.join()).toBe(CAMPAIGN.join()));
   });
 
   it("when everything is unticked and three courses are ticked in turn, then the campaign is those three in tap order and round 1 is the first tapped", () => {
     inRaceMode((w) => {
       const pick = (campaign: readonly string[]): void => w.race.command({ type: "options", options: { campaign } });
       pick([]);
-      assert.deepEqual(optionsOf(w).campaign, []);
+      expect(optionsOf(w).campaign).toHaveLength(0);
       pick(["stunt"]);
       pick(["stunt", "oval"]);
       pick(["stunt", "oval", "city"]);
-      assert.deepEqual(optionsOf(w).campaign, ["stunt", "oval", "city"]);
+      expect(firstMismatch(optionsOf(w).campaign, ["stunt", "oval", "city"])).toBeUndefined();
       w.race.command({ type: "campaign" });
       const hud = w.race.hud();
-      assert.equal(hud.mode, "campaign");
-      assert.deepEqual(hud.campaign!.tracks, ["stunt", "oval", "city"]);
-      assert.equal(hud.trackName, nameOf(w, "stunt"));
-      assert.deepEqual(optionsOf(w).campaign, ["stunt", "oval", "city"], "the pick stays for the next campaign");
+      expect(hud.mode).toBe("campaign");
+      expect(firstMismatch(hud.campaign!.tracks, ["stunt", "oval", "city"])).toBeUndefined();
+      expect(hud.trackName).toBe(nameOf(w, "stunt"));
+      expect(firstMismatch(optionsOf(w).campaign, ["stunt", "oval", "city"]), "the pick stays for the next campaign").toBeUndefined();
     });
   });
 
   it("when the pick names unknown courses and repeats, then they drop and the rest keep the order they came in", () => {
     inRaceMode((w) => {
       w.race.command({ type: "options", options: { campaign: ["rally", "nowhere", "rally", "city", "../x"] } });
-      assert.deepEqual(optionsOf(w).campaign, ["rally", "city"]);
+      expect(firstMismatch(optionsOf(w).campaign, ["rally", "city"])).toBeUndefined();
     });
   });
 
@@ -89,9 +89,9 @@ describe("given the setup card", () => {
       w.race.command({ type: "options", options: { campaign: [] } });
       w.race.command({ type: "campaign" });
       const hud = w.race.hud();
-      assert.equal(hud.mode, "single");
-      assert.equal(hud.phase, null);
-      assert.equal(w.race.menu, "setup");
+      expect(hud.mode).toBe("single");
+      expect(hud.phase).toBe(null);
+      expect(w.race.menu).toBe("setup");
     });
   });
 
@@ -99,7 +99,7 @@ describe("given the setup card", () => {
     inRaceMode((w) => {
       w.race.command({ type: "options", options: { campaign: ["rally", "oval"] } });
       w.race.command({ type: "options", options: { laps: 2, trackId: "city" } });
-      assert.deepEqual(optionsOf(w).campaign, ["rally", "oval"]);
+      expect(firstMismatch(optionsOf(w).campaign, ["rally", "oval"])).toBeUndefined();
     });
   });
 });
@@ -109,17 +109,17 @@ describe("given a Watch campaign of the rally and then the oval, the reverse of 
     inRaceMode((w) => {
       w.race.command({ type: "options", options: { laps: 1, aiCount: 3, spectate: true, campaign: ["rally", "oval"] } });
       w.race.command({ type: "campaign" });
-      assert.equal(w.race.hud().trackName, nameOf(w, "rally"));
+      expect(w.race.hud().trackName).toBe(nameOf(w, "rally"));
       untilMenu(w, "results");
       w.race.command({ type: "next" });
-      assert.equal(w.race.hud().menu, "standings");
-      assert.equal(w.race.hud().campaign!.round, 1);
+      expect(w.race.hud().menu).toBe("standings");
+      expect(w.race.hud().campaign!.round).toBe(1);
       w.race.command({ type: "next" });
-      assert.equal(w.race.hud().trackName, nameOf(w, "oval"));
+      expect(w.race.hud().trackName).toBe(nameOf(w, "oval"));
       untilMenu(w, "results");
       w.race.command({ type: "next" });
       w.race.command({ type: "next" });
-      assert.equal(w.race.menu, "setup", "the two picked rounds were the whole campaign");
+      expect(w.race.menu, "the two picked rounds were the whole campaign").toBe("setup");
     });
   });
 });
@@ -127,14 +127,14 @@ describe("given a Watch campaign of the rally and then the oval, the reverse of 
 describe("given the setup card's Mode row set to Campaign", () => {
   it("when a campaign is started and quit again, then the Mode is still Campaign with its picks (it lives in the options, not in the menu's mount), and an unknown mode is ignored", () => {
     inRaceMode((w) => {
-      assert.equal(optionsOf(w).mode, "single");
+      expect(optionsOf(w).mode).toBe("single");
       w.race.command({ type: "options", options: { mode: "campaign", laps: 1, aiCount: 3, spectate: true, campaign: ["oval"] } });
       w.race.command({ type: "campaign" });
       w.race.command({ type: "quit" });
-      assert.equal(optionsOf(w).mode, "campaign");
-      assert.deepEqual(optionsOf(w).campaign, ["oval"]);
+      expect(optionsOf(w).mode).toBe("campaign");
+      expect(firstMismatch(optionsOf(w).campaign, ["oval"])).toBeUndefined();
       w.race.command({ type: "options", options: { mode: "tournament" as unknown as RaceMode } });
-      assert.equal(optionsOf(w).mode, "campaign");
+      expect(optionsOf(w).mode).toBe("campaign");
     });
   });
 });
@@ -145,11 +145,11 @@ describe("given a setup menu rendered from a HUD snapshot older than the last op
       const stale = optionsOf(w);
       w.race.command({ type: "options", options: { laps: 5, police: true } });
       const patch = courseTap(stale, "city");
-      assert.deepEqual(Object.keys(patch), ["trackId"]);
+      expect(firstMismatch(Object.keys(patch), ["trackId"])).toBeUndefined();
       w.race.command({ type: "options", options: patch });
-      assert.equal(optionsOf(w).trackId, "city");
-      assert.equal(optionsOf(w).laps, 5);
-      assert.equal(optionsOf(w).police, true);
+      expect(optionsOf(w).trackId).toBe("city");
+      expect(optionsOf(w).laps).toBe(5);
+      expect(optionsOf(w).police).toBe(true);
     });
   });
 
@@ -159,15 +159,15 @@ describe("given a setup menu rendered from a HUD snapshot older than the last op
       const stale = optionsOf(w);
       w.race.command({ type: "options", options: { aiCount: 4 } });
       const tick = courseTap(stale, "rally");
-      assert.deepEqual(Object.keys(tick), ["campaign"]);
+      expect(firstMismatch(Object.keys(tick), ["campaign"])).toBeUndefined();
       w.race.command({ type: "options", options: tick });
       const all = selectAll(optionsOf(w), w.race.hud().courses.map((c) => c.id));
-      assert.deepEqual(Object.keys(all), ["campaign"]);
-      assert.equal(optionsOf(w).aiCount, 4);
-      assert.deepEqual(optionsOf(w).campaign, ["rally"]);
+      expect(firstMismatch(Object.keys(all), ["campaign"])).toBeUndefined();
+      expect(optionsOf(w).aiCount).toBe(4);
+      expect(firstMismatch(optionsOf(w).campaign, ["rally"])).toBeUndefined();
       w.race.command({ type: "options", options: all });
-      assert.equal(optionsOf(w).campaign.length, w.race.hud().courses.length);
-      assert.equal(optionsOf(w).mode, "campaign");
+      expect(optionsOf(w).campaign.length).toBe(w.race.hud().courses.length);
+      expect(optionsOf(w).mode).toBe("campaign");
     });
   });
 });

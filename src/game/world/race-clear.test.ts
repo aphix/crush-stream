@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
 import { makeWorld, type World } from "./race-world.test-util.ts";
 
@@ -19,7 +18,7 @@ describe("given an entered race, where starting, retrying or moving to the next 
     for (const cmd of [{ type: "start" }, { type: "retry" }, { type: "campaign" }] as const) {
       const before = w.clears;
       w.race.command(cmd);
-      assert.equal(w.clears - before, 1, `${cmd.type}: one clear`);
+      expect(w.clears - before, `${cmd.type}: one clear`).toBe(1);
     }
   });
 
@@ -27,6 +26,6 @@ describe("given an entered race, where starting, retrying or moving to the next 
     w.race.command({ type: "quit" });
     const before = w.clears;
     w.race.command({ type: "options", options: { aiCount: 3 } });
-    assert.equal(w.clears, before);
+    expect(w.clears).toBe(before);
   });
 });

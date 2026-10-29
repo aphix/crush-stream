@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applyDrive, type DriveInput, idleDrive } from "./car-drive.ts";
 import { layOnGround } from "./car-air-points.ts";
@@ -74,9 +73,9 @@ describe("given a car driven on the road, whose drawn body squats, dives and lea
   for (const cls of VEHICLE_CLASS_IDS) {
     it(`when a ${cls} launches from rest at full throttle and brakes hard from 25 m/s, then its body pitches nose up over 1° and nose down over 1°, each within ${PITCH_MAX[cls]}°`, () => {
       const launch = peak(drive(cls, 0, () => ({ throttle: 1 }), 3), "pitch");
-      assert.ok(launch > 1 && launch <= PITCH_MAX[cls], `launch pitch ${launch.toFixed(2)}°`);
+      expect(launch > 1 && launch <= PITCH_MAX[cls], `launch pitch ${launch.toFixed(2)}°`).toBeTruthy();
       const stop = peak(drive(cls, 25, () => ({ brake: 1 }), 3), "pitch");
-      assert.ok(stop < -1 && stop >= -PITCH_MAX[cls], `braking pitch ${stop.toFixed(2)}°`);
+      expect(stop < -1 && stop >= -PITCH_MAX[cls], `braking pitch ${stop.toFixed(2)}°`).toBeTruthy();
     });
 
     it(`when a ${cls} holds a steady left turn and then a steady right turn, then its body leans outward by the same amount each way, by over 2° and within ${ROLL_MAX}°`, () => {
@@ -85,8 +84,8 @@ describe("given a car driven on the road, whose drawn body squats, dives and lea
       const left = hold(1);
       const right = hold(-1);
       const r = left[left.length - 1]!.roll;
-      assert.ok(r > 2 && peak(left, "roll") <= ROLL_MAX, `left turn rolls ${r.toFixed(2)}°`);
-      assert.ok(Math.abs(right[right.length - 1]!.roll + r) < 0.05, `right turn rolls ${right[right.length - 1]!.roll.toFixed(2)}°`);
+      expect(r > 2 && peak(left, "roll") <= ROLL_MAX, `left turn rolls ${r.toFixed(2)}°`).toBeTruthy();
+      expect(Math.abs(right[right.length - 1]!.roll + r), `right turn rolls ${right[right.length - 1]!.roll.toFixed(2)}°`).toBeLessThan(0.05);
     });
 
     it(`when a ${cls} slides under the handbrake at full lock, then its body rolls more than the same slide with no drift lean, within ${ROLL_MAX * 1.6}°`, () => {
@@ -96,7 +95,7 @@ describe("given a car driven on the road, whose drawn body squats, dives and lea
       const flat = run();
       LOAD_FEEL.driftLean = lean;
       const slide = run();
-      assert.ok(slide > flat + 0.1 && slide <= ROLL_MAX * 1.6, `no lean ${flat.toFixed(2)}°, lean ${slide.toFixed(2)}°`);
+      expect(slide > flat + 0.1 && slide <= ROLL_MAX * 1.6, `no lean ${flat.toFixed(2)}°, lean ${slide.toFixed(2)}°`).toBeTruthy();
     });
   }
 
@@ -107,24 +106,24 @@ describe("given a car driven on the road, whose drawn body squats, dives and lea
       // Driving down a 5° descent squats the body nose up, against the road (the monster 4.3° off it); braking up a climb dives it, likewise.
       const squat = peak(settled(drive(cls, 25, () => ({ throttle: 1 }), 2, 5)), "pitch");
       const dive = peak(settled(drive(cls, 40, () => ({ brake: 1 }), 1.3, -5)), "pitch");
-      assert.ok(squat < 0.5, `${cls} driving down 5°: ${squat.toFixed(2)}° nose up against the road`);
-      assert.ok(dive > -0.5, `${cls} braking up 5°: ${dive.toFixed(2)}° nose down against the road`);
+      expect(squat, `${cls} driving down 5°: ${squat.toFixed(2)}° nose up against the road`).toBeLessThan(0.5);
+      expect(dive, `${cls} braking up 5°: ${dive.toFixed(2)}° nose down against the road`).toBeGreaterThan(-0.5);
       // Driving up the climb and braking down the descent lean with the road, as on the flat.
       const climb = peak(settled(drive(cls, 5, () => ({ throttle: 1 }), 2, -5)), "pitch");
       const stop = peak(settled(drive(cls, 40, () => ({ brake: 1 }), 1.3, 5)), "pitch");
-      assert.ok(climb > 0.8 && climb <= PITCH_MAX[cls], `${cls} driving up 5°: ${climb.toFixed(2)}°`);
-      assert.ok(stop < -0.8 && stop >= -PITCH_MAX[cls], `${cls} braking down 5°: ${stop.toFixed(2)}°`);
+      expect(climb > 0.8 && climb <= PITCH_MAX[cls], `${cls} driving up 5°: ${climb.toFixed(2)}°`).toBeTruthy();
+      expect(stop < -0.8 && stop >= -PITCH_MAX[cls], `${cls} braking down 5°: ${stop.toFixed(2)}°`).toBeTruthy();
     }
   });
 
   it("when each class sits still for 1 s, or a sedan brakes from 20 m/s to a stop, then the body is level at rest and level once stopped", () => {
     for (const cls of VEHICLE_CLASS_IDS) {
       const rest = drive(cls, 0, () => ({}), 1);
-      assert.ok(Math.abs(peak(rest, "pitch")) + Math.abs(peak(rest, "roll")) < 0.01, `${cls} at rest`);
+      expect(Math.abs(peak(rest, "pitch")) + Math.abs(peak(rest, "roll")), `${cls} at rest`).toBeLessThan(0.01);
     }
     const stop = drive("sedan", 20, () => ({ brake: 1 }), 6);
     const end = stop[stop.length - 1]!;
-    assert.ok(end.speed < 0.05 && Math.abs(end.pitch) < 0.02 && Math.abs(end.roll) < 0.02, `stopped at ${end.speed.toFixed(2)} m/s, ${end.pitch.toFixed(3)}° / ${end.roll.toFixed(3)}°`);
+    expect(end.speed < 0.05 && Math.abs(end.pitch) < 0.02 && Math.abs(end.roll) < 0.02, `stopped at ${end.speed.toFixed(2)} m/s, ${end.pitch.toFixed(3)}° / ${end.roll.toFixed(3)}°`).toBeTruthy();
   });
 });
 
@@ -147,14 +146,14 @@ describe("given a car whose throttle, brake or steering goes down at once", () =
     it(`when a ${cls} launches from rest at full throttle and brakes hard from 25 m/s, then its pitch never turns faster than ${TURN_RATE_MAX}°/s and takes ${BUILD_FRAMES_MIN} frames to reach 90 % of what it is ${HELD_AT_S} s in`, () => {
       const launch = build(drive(cls, 0, () => ({ throttle: 1 }), 1.5).map((s) => s.pitch));
       const stop = build(drive(cls, 25, () => ({ brake: 1 }), 1.5).map((s) => s.pitch));
-      assert.ok(launch.rate <= TURN_RATE_MAX && stop.rate <= TURN_RATE_MAX, `launch ${launch.rate.toFixed(1)}°/s, stop ${stop.rate.toFixed(1)}°/s`);
-      assert.ok(launch.frames >= BUILD_FRAMES_MIN && stop.frames >= BUILD_FRAMES_MIN, `launch built in ${launch.frames} frames, stop in ${stop.frames}`);
+      expect(launch.rate <= TURN_RATE_MAX && stop.rate <= TURN_RATE_MAX, `launch ${launch.rate.toFixed(1)}°/s, stop ${stop.rate.toFixed(1)}°/s`).toBeTruthy();
+      expect(launch.frames >= BUILD_FRAMES_MIN && stop.frames >= BUILD_FRAMES_MIN, `launch built in ${launch.frames} frames, stop in ${stop.frames}`).toBeTruthy();
     });
 
     it(`when a ${cls} turns hard at 20 m/s, then its roll never turns faster than ${TURN_RATE_MAX}°/s and takes ${BUILD_FRAMES_MIN} frames to reach 90 % of what it is ${HELD_AT_S} s in`, () => {
       const turn = build(drive(cls, 20, (v) => ({ throttle: v < 20 ? 0.6 : 0.1, steer: 1 }), 1.5).map((s) => s.roll));
-      assert.ok(turn.rate <= TURN_RATE_MAX, `roll turned ${turn.rate.toFixed(1)}°/s`);
-      assert.ok(turn.frames >= BUILD_FRAMES_MIN, `roll built in ${turn.frames} frames`);
+      expect(turn.rate, `roll turned ${turn.rate.toFixed(1)}°/s`).toBeLessThanOrEqual(TURN_RATE_MAX);
+      expect(turn.frames, `roll built in ${turn.frames} frames`).toBeGreaterThanOrEqual(BUILD_FRAMES_MIN);
     });
   }
 });
@@ -191,18 +190,18 @@ describe("given a chase camera that rides the car's drawn body, next to one that
   it("when the car's springs are pushed past their stops, then a squat drops the riding eye and tips it up, a dive lifts and tips it down, and a bump drops it, each by under 4 cm and 0.6°", () => {
     // Offsets well past the springs' stops (a sedan's are 6.5 cm): the bound holds for any input.
     const squat = against([0.2, 0.2, -0.2, -0.2], 2);
-    assert.ok(squat.dy < -0.02 && squat.dy > -0.04, `squat drop ${(squat.dy * 100).toFixed(2)} cm`);
-    assert.ok(squat.tilt > 0.3 && squat.tilt <= 0.6, `squat tilt ${squat.tilt.toFixed(3)}°`);
+    expect(squat.dy < -0.02 && squat.dy > -0.04, `squat drop ${(squat.dy * 100).toFixed(2)} cm`).toBeTruthy();
+    expect(squat.tilt > 0.3 && squat.tilt <= 0.6, `squat tilt ${squat.tilt.toFixed(3)}°`).toBeTruthy();
     const dive = against([-0.2, -0.2, 0.2, 0.2], 2);
-    assert.ok(dive.dy > 0.02 && dive.dy < 0.04, `dive lift ${(dive.dy * 100).toFixed(2)} cm`);
-    assert.ok(dive.tilt > 0.3 && dive.tilt <= 0.6, `dive tilt ${dive.tilt.toFixed(3)}°`);
+    expect(dive.dy > 0.02 && dive.dy < 0.04, `dive lift ${(dive.dy * 100).toFixed(2)} cm`).toBeTruthy();
+    expect(dive.tilt > 0.3 && dive.tilt <= 0.6, `dive tilt ${dive.tilt.toFixed(3)}°`).toBeTruthy();
     const bump = against([-0.065, -0.065, -0.065, -0.065], 2);
-    assert.ok(bump.dy < -0.01 && bump.dy > -0.04 && bump.tilt < 0.01, `bump ${(bump.dy * 100).toFixed(2)} cm, ${bump.tilt.toFixed(3)}°`);
+    expect(bump.dy < -0.01 && bump.dy > -0.04 && bump.tilt < 0.01, `bump ${(bump.dy * 100).toFixed(2)} cm, ${bump.tilt.toFixed(3)}°`).toBeTruthy();
   });
 
   it("when the player holds a look offset while the springs squat, then the ride lets go of the camera and it matches the non-riding one to within 1 mm and 0.02°", () => {
     const held = against([0.2, 0.2, -0.2, -0.2], 0.7, [100, 0]);
-    assert.ok(Math.abs(held.dy) < 0.001 && held.tilt < 0.02, `held look: ${(held.dy * 100).toFixed(3)} cm, ${held.tilt.toFixed(3)}°`);
+    expect(Math.abs(held.dy) < 0.001 && held.tilt < 0.02, `held look: ${(held.dy * 100).toFixed(3)} cm, ${held.tilt.toFixed(3)}°`).toBeTruthy();
   });
 });
 
@@ -235,10 +234,10 @@ describe("given a car accelerating through its gears, whose drawn body kicks at 
       const on = run(cls, 1);
       const k = CLASSES[cls];
       const first = off.body.findIndex((s, i) => i > 0 && gearAt(k, s.speed) !== gearAt(k, off.body[i - 1]!.speed));
-      assert.ok(first > 10, `the first gear change comes at frame ${first}`);
+      expect(first, `the first gear change comes at frame ${first}`).toBeGreaterThan(10);
       let before = 0;
       for (let i = 0; i < first - 10; i++) before = Math.max(before, Math.abs(on.body[i]!.pitch - off.body[i]!.pitch));
-      assert.ok(before < 1e-9, `the runs differ by ${before} deg before the first gear change`);
+      expect(before, `the runs differ by ${before} deg before the first gear change`).toBeLessThan(1e-9);
       let dip = 0;
       let most = 0;
       let ride = 0;
@@ -248,8 +247,8 @@ describe("given a car accelerating through its gears, whose drawn body kicks at 
         most = Math.max(most, Math.abs(d));
         ride = Math.max(ride, Math.abs(on.tilt[i]! - off.tilt[i]!));
       }
-      assert.ok(dip < -0.1 && most < 0.6, `the kick's nose dip ${dip.toFixed(2)}°, its largest ${most.toFixed(2)}°`);
-      assert.ok(ride > 0.003, `the riding eye's tilt differs by ${ride.toFixed(4)}°`);
+      expect(dip < -0.1 && most < 0.6, `the kick's nose dip ${dip.toFixed(2)}°, its largest ${most.toFixed(2)}°`).toBeTruthy();
+      expect(ride, `the riding eye's tilt differs by ${ride.toFixed(4)}°`).toBeGreaterThan(0.003);
     });
   }
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
 import { FRAME, makeWorld, frame } from "./race-world.test-util.ts";
 import { RESPAWN_REQUEST_DELAY } from "../match/session.ts";
@@ -25,7 +24,7 @@ describe("given an oval race with two AI rivals, rival 1 held in place on the th
       const state = { acc: 0 };
       // The grid and countdown first.
       for (let n = 0; n * FRAME < 30 && w.race.phase !== "racing"; n++) frame(w, state);
-      assert.equal(w.race.phase, "racing", "the race never went green");
+      expect(w.race.phase, "the race never went green").toBe("racing");
       const car = w.live()[1]!;
       const at = car.group.position.clone();
       const yaw = car.yaw;
@@ -44,8 +43,8 @@ describe("given an oval race with two AI rivals, rival 1 held in place on the th
         car.velocity.set(0, 0, 0);
         car.angular.set(0, 0, 0);
       }
-      assert.ok(respawnedAt > 0, `the held car was not respawned within ${limit.toFixed(1)} s`);
-      assert.ok(respawnedAt >= STALL_WINDOW - FRAME, `respawned at ${respawnedAt.toFixed(2)} s, before its stall window ran out`);
+      expect(respawnedAt, `the held car was not respawned within ${limit.toFixed(1)} s`).toBeGreaterThan(0);
+      expect(respawnedAt, `respawned at ${respawnedAt.toFixed(2)} s, before its stall window ran out`).toBeGreaterThanOrEqual(STALL_WINDOW - FRAME);
     } finally {
       w.race.exit();
       setGround(null);

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS } from "./car-variants.ts";
@@ -21,7 +20,7 @@ describe("given every body style's car built in a fresh process", () => {
     } finally {
       THREE.Vector3.prototype.toArray = toArray;
     }
-    assert.ok(typed > 0, "the control: the build stores through Vector3.toArray into typed arrays");
-    assert.equal([...fresh].join("\n"), "", "Vector3.toArray calls growing a fresh array");
+    expect(typed, "the control: the build stores through Vector3.toArray into typed arrays").toBeGreaterThan(0);
+    expect([...fresh].join("\n"), "Vector3.toArray calls growing a fresh array").toBe("");
   });
 });

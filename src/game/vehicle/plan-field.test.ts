@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { cageOf } from "./car-cage-rig.ts";
 import { carInState } from "./drawn-body.test-util.ts";
 
@@ -133,7 +132,7 @@ describe("given a cage whose covered nodes are set to a mask", () => {
       f.planFresh = false;
       const plan = cage.planField();
       const want = referencePlan(nu, nv, step, covered);
-      for (let k = 0; k < nu * nv; k++) assert.ok(Object.is(plan[k], want[k]), `${text}: node ${k % nu},${Math.floor(k / nu)} is ${plan[k]}, not ${want[k]}`);
+      for (let k = 0; k < nu * nv; k++) expect(Object.is(plan[k], want[k]), `${text}: node ${k % nu},${Math.floor(k / nu)} is ${plan[k]}, not ${want[k]}`).toBeTruthy();
     }
   });
 });

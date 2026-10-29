@@ -1,5 +1,5 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
+import { firstMismatch } from "../../game/kernel/compare-arrays.test-util.ts";
 import { backoffMs, fetchDeployedSha, newerBuild, planReload, settleReload } from "./update-check.ts";
 
 /** A browser's local storage, in memory. */
@@ -34,7 +34,7 @@ describe("given the running build and the sha the server's version file names", 
   ];
   for (const testCase of cases) {
     it(`when ${testCase.it}, then the newer build is ${testCase.expected ?? "none"}`, () => {
-      assert.equal(newerBuild(testCase.running, testCase.deployed), testCase.expected);
+      expect(newerBuild(testCase.running, testCase.deployed)).toBe(testCase.expected);
     });
   }
 });
@@ -50,7 +50,7 @@ describe("given the version file the build emits", () => {
   ];
   for (const testCase of cases) {
     it(`when ${testCase.it}, then the deployed sha read is ${testCase.expected ?? "none"}`, async () => {
-      assert.equal(await fetchDeployedSha(testCase.fetcher), testCase.expected);
+      expect(await fetchDeployedSha(testCase.fetcher)).toBe(testCase.expected);
     });
   }
 });
@@ -61,63 +61,63 @@ describe("given an unattended page that keeps finding a newer build deployed", (
     // The page asks every 30 s; the server's file says a1b2c3d, the page keeps coming back on 3295bad.
     const goes: number[] = [];
     for (let t = 0; t <= 20 * MIN; t += MIN / 2) if (planReload(store, HREF, "a1b2c3d", t) !== null) goes.push(t);
-    assert.deepEqual(goes, [0, 2 * MIN, 6 * MIN, 14 * MIN]);
-    assert.notEqual(planReload(store, HREF, "f00ba12", 15 * MIN), null, "another build is not held back by the first one's backoff");
+    expect(firstMismatch(goes, [0, 2 * MIN, 6 * MIN, 14 * MIN]), "the times a reload goes").toBeUndefined();
+    expect(planReload(store, HREF, "f00ba12", 15 * MIN), "another build is not held back by the first one's backoff").not.toBe(null);
   });
 
   it("when the backoff has grown past an hour of waiting, then it stays at an hour", () => {
-    assert.deepEqual([1, 2, 3, 5, 6, 20].map(backoffMs), [2 * MIN, 4 * MIN, 8 * MIN, 32 * MIN, 60 * MIN, 60 * MIN]);
+    expect(firstMismatch([1, 2, 3, 5, 6, 20].map(backoffMs), [2 * MIN, 4 * MIN, 8 * MIN, 32 * MIN, 60 * MIN, 60 * MIN]), "backoff per failed reload").toBeUndefined();
   });
 
   it("when the reload lands on the new build, then the record is spent and the next deploy starts from a first reload", () => {
     const store = memoryStore();
     planReload(store, HREF, "a1b2c3d", 0);
     settleReload(store, "a1b2c3d");
-    assert.equal(store.length, 0);
-    assert.notEqual(planReload(store, HREF, "a1b2c3d", 1000), null);
+    expect(store.length).toBe(0);
+    expect(planReload(store, HREF, "a1b2c3d", 1000)).not.toBe(null);
   });
 
   it("when the reload lands on a different build than it went for, then the record is kept", () => {
     const store = memoryStore();
     planReload(store, HREF, "a1b2c3d", 0);
     settleReload(store, "3295bad");
-    assert.equal(planReload(store, HREF, "a1b2c3d", 1000), null);
+    expect(planReload(store, HREF, "a1b2c3d", 1000)).toBe(null);
   });
 
   it("when the device's clock is set back past the last reload, then the reload is not held for the whole jump", () => {
     const store = memoryStore();
     planReload(store, HREF, "a1b2c3d", 10 * MIN);
-    assert.notEqual(planReload(store, HREF, "a1b2c3d", 0), null);
+    expect(planReload(store, HREF, "a1b2c3d", 0)).not.toBe(null);
   });
 
   it("when a person taps the notice during the backoff, then the reload goes and counts toward the next backoff", () => {
     const store = memoryStore();
     planReload(store, HREF, "a1b2c3d", 0);
-    assert.equal(planReload(store, HREF, "a1b2c3d", MIN), null);
-    assert.notEqual(planReload(store, HREF, "a1b2c3d", MIN, true), null);
-    assert.equal(planReload(store, HREF, "a1b2c3d", 4 * MIN), null, "the tap was the second try: 4 minutes more");
-    assert.notEqual(planReload(store, HREF, "a1b2c3d", 5 * MIN), null);
+    expect(planReload(store, HREF, "a1b2c3d", MIN)).toBe(null);
+    expect(planReload(store, HREF, "a1b2c3d", MIN, true)).not.toBe(null);
+    expect(planReload(store, HREF, "a1b2c3d", 4 * MIN), "the tap was the second try: 4 minutes more").toBe(null);
+    expect(planReload(store, HREF, "a1b2c3d", 5 * MIN)).not.toBe(null);
   });
 
   it("when storage cannot remember the attempt, then no automatic reload goes (it could not back off), but a tap does", () => {
-    assert.equal(planReload(null, HREF, "a1b2c3d", 0), null);
-    assert.notEqual(planReload(null, HREF, "a1b2c3d", 0, true), null);
+    expect(planReload(null, HREF, "a1b2c3d", 0)).toBe(null);
+    expect(planReload(null, HREF, "a1b2c3d", 0, true)).not.toBe(null);
     const full = {
       getItem: () => null,
       setItem: () => {
         throw new Error("quota");
       },
     };
-    assert.equal(planReload(full, HREF, "a1b2c3d", 0), null);
+    expect(planReload(full, HREF, "a1b2c3d", 0)).toBe(null);
   });
 });
 
 describe("given a page address with a query and a share fragment", () => {
   it("when the reload goes, then it keeps the query and the fragment and adds the deployed sha as v", () => {
-    assert.equal(planReload(memoryStore(), HREF, "a1b2c3d", 0), "https://game.test/crush/?bench=city&v=a1b2c3d#seed=7");
+    expect(planReload(memoryStore(), HREF, "a1b2c3d", 0)).toBe("https://game.test/crush/?bench=city&v=a1b2c3d#seed=7");
   });
 
   it("when the address already carries an older v, then the reload replaces it", () => {
-    assert.equal(planReload(memoryStore(), "https://game.test/crush/?v=old", "a1b2c3d", 0), "https://game.test/crush/?v=a1b2c3d");
+    expect(planReload(memoryStore(), "https://game.test/crush/?v=old", "a1b2c3d", 0)).toBe("https://game.test/crush/?v=a1b2c3d");
   });
 });

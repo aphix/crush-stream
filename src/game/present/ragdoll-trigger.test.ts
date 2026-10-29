@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -55,10 +54,10 @@ describe("given thrown drivers (dummies that are cosmetic: the cars move the sam
           tickWorld(wPlain);
           ragdolls.update(FRAME, cars, true, sandbox, null);
         }
-        assert.ok(scene.getObjectByName("ragdolls")!.visible, "the dummies fly in every mode");
+        expect(scene.getObjectByName("ragdolls")!.visible, "the dummies fly in every mode").toBeTruthy();
         ragdolls.dispose();
         assertSameDigest(simState(cars), simState(plain), "every car's sim state with dummies vs without");
-        assert.equal(rideAlong.join(), sandbox ? "0,1" : "", "ride-along / slow-mo requests");
+        expect(rideAlong.join(), "ride-along / slow-mo requests").toBe(sandbox ? "0,1" : "");
       });
     }
   }
@@ -79,11 +78,11 @@ describe("given a fleet 2×36 km/h head-on that crashes both cars, cracks their 
       const k = (f - first) / 2;
       if (Number.isInteger(k) && k >= 0 && k < 2 * 2 * panes.length) cars[k % 2]!.hitGlass(panes[(k >> 1) % panes.length]!);
     }
-    assert.ok(cars.every((c) => c.crashed), "both cars crashed");
+    expect(cars.every((c) => c.crashed), "both cars crashed").toBeTruthy();
     let allShattered = 0;
     for (let p = 0; p < panes.length; p++) allShattered |= 2 << (2 * p);
-    for (const [i, car] of cars.entries()) assert.equal(car.glassBits(), allShattered, `car ${i}: every pane struck twice is gone`);
-    assert.ok(plain.some((c) => c.glassBits() !== allShattered), "the crash alone left some pane unshattered");
+    for (const [i, car] of cars.entries()) expect(car.glassBits(), `car ${i}: every pane struck twice is gone`).toBe(allShattered);
+    expect(plain.some((c) => c.glassBits() !== allShattered), "the crash alone left some pane unshattered").toBeTruthy();
     assertSameDigest(simState(cars), simState(plain), "every car's sim state with struck glass vs without");
   });
 });
@@ -107,11 +106,11 @@ describe("given a head-on crash between two fleet cars whose physics engine for 
   }
 
   it("when the physics engine loads 0.5 s into the run, then the driver is still thrown", async () => {
-    assert.equal(await thrownAfterLoad(42), true);
+    expect(await thrownAfterLoad(42)).toBe(true);
   });
 
   it("when the physics engine loads more than a second after the hit, then the throw is dropped and no dummy flies", async () => {
-    assert.equal(await thrownAfterLoad(120), false);
+    expect(await thrownAfterLoad(120)).toBe(false);
   });
 });
 
@@ -183,7 +182,7 @@ describe("given a fleet head-on crash that throws both drivers", () => {
     const w = makeWorld(cars, false, false, FREEWHEEL);
     w.onEject = (e) => ragdolls.launch(e, cars);
     // Slots fill in car order: car 0's driver first, and each flies at the other car.
-    assert.deepEqual(wrongCabinEntries(w, ragdolls, (slot) => cars[1 - slot]!), [], "a torso entered the other car's cabin where no pane is gone");
+    expect(wrongCabinEntries(w, ragdolls, (slot) => cars[1 - slot]!), "a torso entered the other car's cabin where no pane is gone").toHaveLength(0);
   });
 });
 
@@ -194,6 +193,6 @@ describe("given a parked car with its glass whole", () => {
     const w = makeWorld([car], false, false, FREEWHEEL);
     const over = new THREE.Vector3(0, CABIN.max.y + 1, (CABIN.min.z + CABIN.max.z) / 2);
     ragdolls.place(over, new THREE.Quaternion(), new THREE.Vector3(), new THREE.Vector3(), 2, -1);
-    assert.deepEqual(wrongCabinEntries(w, ragdolls, () => car), [], "a torso entered the cabin of a car with no pane gone");
+    expect(wrongCabinEntries(w, ragdolls, () => car), "a torso entered the cabin of a car with no pane gone").toHaveLength(0);
   });
 });

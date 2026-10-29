@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Radio, ShuffleBag, shuffledOrder } from "./playlist.ts";
 import type { MusicTrack, StationId } from "./music-manifest.ts";
 import { mulberry32 } from "../world/placements.ts";
@@ -22,7 +21,7 @@ describe("given a shuffle bag over a station's tracks", () => {
         const plays = deal(new ShuffleBag(c.count, mulberry32(seed)), c.count * c.loops);
         for (let loop = 0; loop < c.loops; loop++) {
           const played = plays.slice(loop * c.count, (loop + 1) * c.count).sort((a, b) => a - b);
-          assert.equal(played.join(), Array.from({ length: c.count }, (_, index) => index).join(), `seed ${seed} loop ${loop}`);
+          expect(played.join(), `seed ${seed} loop ${loop}`).toBe(Array.from({ length: c.count }, (_, index) => index).join());
         }
       }
     });
@@ -30,26 +29,26 @@ describe("given a shuffle bag over a station's tracks", () => {
   it("when 4 tracks are walked twice round, then every track plays twice", () => {
     const counts = [0, 0, 0, 0];
     for (const index of deal(new ShuffleBag(4, mulberry32(7)), 8)) counts[index]!++;
-    assert.equal(counts.join(), "2,2,2,2");
+    expect(counts.join()).toBe("2,2,2,2");
   });
   it("when a loop ends, then the next loop never opens with the track that just ended", () => {
     for (let seed = 0; seed < 200; seed++) {
       const plays = deal(new ShuffleBag(3, mulberry32(seed)), 60);
-      for (let loop = 1; loop < 20; loop++) assert.notEqual(plays[loop * 3], plays[loop * 3 - 1], `seed ${seed} loop ${loop}`);
+      for (let loop = 1; loop < 20; loop++) expect(plays[loop * 3], `seed ${seed} loop ${loop}`).not.toBe(plays[loop * 3 - 1]);
     }
   });
   it("when the dice would open the next loop with the track that just ended, then that entry swaps out", () => {
-    assert.equal(shuffledOrder(4, -1, () => 0).join(), "1,2,3,0", "the dice's order with no track to avoid");
-    assert.equal(shuffledOrder(4, 3, () => 0).join(), "1,2,3,0", "a different track just ended: no swap");
-    assert.equal(shuffledOrder(4, 1, () => 0).join(), "2,1,3,0", "track 1 just ended and would open: it swaps with the next entry");
+    expect(shuffledOrder(4, -1, () => 0).join(), "the dice's order with no track to avoid").toBe("1,2,3,0");
+    expect(shuffledOrder(4, 3, () => 0).join(), "a different track just ended: no swap").toBe("1,2,3,0");
+    expect(shuffledOrder(4, 1, () => 0).join(), "track 1 just ended and would open: it swaps with the next entry").toBe("2,1,3,0");
   });
   it("when the order is shuffled, then different dice give different first tracks (every track can open a session)", () => {
     const openers = new Set<number>();
     for (let seed = 0; seed < 100; seed++) openers.add(new ShuffleBag(4, mulberry32(seed)).next());
-    assert.equal([...openers].sort().join(), "0,1,2,3");
+    expect([...openers].sort().join()).toBe("0,1,2,3");
   });
   it("when the station has no track, then the bag deals -1", () => {
-    assert.equal(new ShuffleBag(0, mulberry32(1)).next(), -1);
+    expect(new ShuffleBag(0, mulberry32(1)).next()).toBe(-1);
   });
 });
 
@@ -66,22 +65,22 @@ describe("given a radio over tracks on two stations and one with no station", ()
   it("when the calm station plays, then only its own tracks come out, every one once per loop", () => {
     for (let seed = 0; seed < 25; seed++) {
       const plays = dealt("calm", 4, seed);
-      assert.equal(plays.slice(0, 2).sort().join(), "b,d", `seed ${seed} first loop`);
-      assert.equal(plays.slice(2, 4).sort().join(), "b,d", `seed ${seed} second loop`);
+      expect(plays.slice(0, 2).sort().join(), `seed ${seed} first loop`).toBe("b,d");
+      expect(plays.slice(2, 4).sort().join(), `seed ${seed} second loop`).toBe("b,d");
     }
   });
   it("when the high station plays, then the track with no station is on it with the tracks marked high", () => {
-    for (let seed = 0; seed < 25; seed++) assert.equal(dealt("high", 3, seed).sort().join(), "a,c,e", `seed ${seed}`);
+    for (let seed = 0; seed < 25; seed++) expect(dealt("high", 3, seed).sort().join(), `seed ${seed}`).toBe("a,c,e");
   });
   it("when the station switches from high to calm, then the next track is a calm one", () => {
     const radio = new Radio(tracks, mulberry32(3));
-    assert.ok(["a", "c", "e"].includes(radio.next("high")!.title), "high plays a high track");
-    assert.ok(["b", "d"].includes(radio.next("calm")!.title), "calm plays a calm track");
+    expect(["a", "c", "e"].includes(radio.next("high")!.title), "high plays a high track").toBeTruthy();
+    expect(["b", "d"].includes(radio.next("calm")!.title), "calm plays a calm track").toBeTruthy();
   });
   it("when a station has no track, then it deals none and counts zero", () => {
     const onlyHigh = new Radio([track("a")], mulberry32(1));
-    assert.equal(onlyHigh.next("calm"), null);
-    assert.equal(onlyHigh.trackCount("calm"), 0);
-    assert.equal(onlyHigh.trackCount("high"), 1);
+    expect(onlyHigh.next("calm")).toBe(null);
+    expect(onlyHigh.trackCount("calm")).toBe(0);
+    expect(onlyHigh.trackCount("high")).toBe(1);
   });
 });

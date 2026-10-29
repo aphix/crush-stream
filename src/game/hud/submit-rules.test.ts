@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import type { RaceHud } from "../match/types.ts";
 import { benchHoldsCommand, captureSubmitShown, flagButton, updateNoticeShown } from "./submit-rules.ts";
 
@@ -12,7 +11,7 @@ describe("given the Debug section's capture toggle and its recorded samples", ()
   ];
   for (const testCase of cases) {
     it(`when ${testCase.it}, then the Submit button is ${testCase.expected ? "drawn" : "not drawn"}`, () => {
-      assert.equal(captureSubmitShown(testCase), testCase.expected);
+      expect(captureSubmitShown(testCase)).toBe(testCase.expected);
     });
   }
 });
@@ -31,15 +30,15 @@ describe("given the [!] flag over the results reel and over a solo view", () => 
   for (const testCase of cases) {
     it(`when ${testCase.it}, then the button is ${testCase.expected.visible ? "drawn" : "not drawn"} and bound to clip ${testCase.expected.clip}`, () => {
       const button = flagButton(testCase.race);
-      assert.equal(button.visible, testCase.expected.visible);
-      assert.equal(button.clip, testCase.expected.clip);
+      expect(button.visible).toBe(testCase.expected.visible);
+      expect(button.clip).toBe(testCase.expected.clip);
     });
   }
 
   it("when the reel moves on to the next clip after the button was drawn for clip 7, then the button's own binding is still clip 7", () => {
     const drawn = flagButton({ reel: REEL, solo: null, shown: 7 });
     flagButton({ reel: { ...REEL, playing: 1 }, solo: null, shown: 8 });
-    assert.equal(drawn.clip, 7);
+    expect(drawn.clip).toBe(7);
   });
 });
 
@@ -54,12 +53,12 @@ describe("given a newer build is deployed", () => {
   ];
   for (const testCase of cases) {
     it(`when ${testCase.it}, then the update notice is ${testCase.expected ? "shown" : "held back"}`, () => {
-      assert.equal(updateNoticeShown("a1b2c3d", testCase.race), testCase.expected);
+      expect(updateNoticeShown("a1b2c3d", testCase.race)).toBe(testCase.expected);
     });
   }
 
   it("when no newer build is deployed, then the notice is never shown", () => {
-    assert.equal(updateNoticeShown(null, null), false);
+    expect(updateNoticeShown(null, null)).toBe(false);
   });
 });
 
@@ -74,7 +73,7 @@ describe("given the results menu's buttons", () => {
   ];
   for (const testCase of cases) {
     it(`when ${testCase.it}, then the HUD ${testCase.held ? "sends nothing" : "sends it"}`, () => {
-      assert.equal(benchHoldsCommand({ type: testCase.type }, testCase.benchPage), testCase.held);
+      expect(benchHoldsCommand({ type: testCase.type }, testCase.benchPage)).toBe(testCase.held);
     });
   }
 });

@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
@@ -63,16 +62,16 @@ describe("given the real engine booted on #scene=showcase", () => {
   });
 
   it("when the page has loaded, then the showcase is the scene and every kind of person stands in one draw: a woman, a portly man, a cop, a capped man in shades, a plain-clothes guard and the older aide in the back row", () => {
-    assert.equal(engine["sceneId"], "showcase");
-    assert.equal(art().group.visible, true);
+    expect(engine["sceneId"]).toBe("showcase");
+    expect(art().group.visible).toBe(true);
     const meshes: DummyMesh[] = [];
     art().group.traverse((o) => {
       if (o instanceof DummyMesh) meshes.push(o);
     });
-    assert.equal(meshes.length, 1, "one instanced mesh draws them all");
-    assert.equal(people().count, art().slots, "every slot is out");
+    expect(meshes.length, "one instanced mesh draws them all").toBe(1);
+    expect(people().count, "every slot is out").toBe(art().slots);
     const figures = Array.from({ length: art().slots }, (_, slot) => ({ ...art().figureOf(slot), back: slot >= art().slots / 2 }));
-    for (const kind of KINDS) assert.ok(figures.some(kind.is), `the ${kind.name} is on the set`);
+    for (const kind of KINDS) expect(figures.some(kind.is), `the ${kind.name} is on the set`).toBeTruthy();
     const drawn = (slot: number): number => {
       const at = new THREE.Vector3();
       let n = 0;
@@ -80,8 +79,8 @@ describe("given the real engine booted on #scene=showcase", () => {
       return n;
     };
     const kinds = new Set(Array.from({ length: art().slots / 2 }, (_, slot) => `${drawn(slot)}`));
-    assert.ok(kinds.size >= 4, `the first row's six figures draw ${kinds.size} different bodies (man, woman, cap and shades, portly)`);
-    for (let slot = 0; slot < art().slots; slot++) assert.ok(standing(slot), `slot ${slot} stands`);
+    expect(kinds.size, `the first row's six figures draw ${kinds.size} different bodies (man, woman, cap and shades, portly)`).toBeGreaterThanOrEqual(4);
+    for (let slot = 0; slot < art().slots; slot++) expect(standing(slot), `slot ${slot} stands`).toBeTruthy();
   });
 
   it("when the set stands, then every figure faces the eye as the reference's line-up faces its camera, but the cop stands square to the line as the reference's does", () => {
@@ -93,7 +92,7 @@ describe("given the real engine booted on #scene=showcase", () => {
       const at = art().markOf(slot, new THREE.Vector3());
       if (art().figureOf(slot).name === "uniformed cop") want.set(0, 0, 1);
       else want.set(SHOWCASE_EYE.x - at.x, 0, SHOWCASE_EYE.z - at.z).normalize();
-      assert.ok(forward.angleTo(want) < 0.02, `slot ${slot} (${art().figureOf(slot).name}) turned ${forward.angleTo(want).toFixed(3)} rad off`);
+      expect(forward.angleTo(want), `slot ${slot} (${art().figureOf(slot).name}) turned ${forward.angleTo(want).toFixed(3)} rad off`).toBeLessThan(0.02);
     }
   });
 
@@ -101,66 +100,66 @@ describe("given the real engine booted on #scene=showcase", () => {
     const stage = engine["stage"];
     const key = () => stage.sun.position.clone().sub(stage.sun.target.position);
     const fill = stage["fill"].position;
-    assert.ok(key().distanceTo(new THREE.Vector3(...SHOWCASE_LIGHT.sunAt)) < 1e-9, `the key at ${key().toArray()}`);
-    assert.ok(fill.distanceTo(new THREE.Vector3(...SHOWCASE_LIGHT.fillAt)) < 1e-9, `the back light at ${fill.toArray()}`);
+    expect(key().distanceTo(new THREE.Vector3(...SHOWCASE_LIGHT.sunAt)), `the key at ${key().toArray()}`).toBeLessThan(1e-9);
+    expect(fill.distanceTo(new THREE.Vector3(...SHOWCASE_LIGHT.fillAt)), `the back light at ${fill.toArray()}`).toBeLessThan(1e-9);
     stage.look(null);
     const [day, dayFill] = [key(), fill.clone()];
     stage.look(SHOWCASE_LIGHT);
-    assert.ok(day.distanceTo(new THREE.Vector3(-10, 22, 9)) < 1e-9, `the day's sun at ${day.toArray()}`);
-    assert.ok(dayFill.distanceTo(new THREE.Vector3(10, 12, -14)) < 1e-9, `the day's fill at ${dayFill.toArray()}`);
+    expect(day.distanceTo(new THREE.Vector3(-10, 22, 9)), `the day's sun at ${day.toArray()}`).toBeLessThan(1e-9);
+    expect(dayFill.distanceTo(new THREE.Vector3(10, 12, -14)), `the day's fill at ${dayFill.toArray()}`).toBeLessThan(1e-9);
   });
 
   it("when the camera opens on the set, then it is the free eye in front of the first row, and a press on a figure is the scene's, not the camera's", () => {
-    assert.equal(engine["view"].flying, true);
-    assert.equal(engine["view"].take, engine["showcase"]);
+    expect(engine["view"].flying).toBe(true);
+    expect(engine["view"].take).toBe(engine["showcase"]);
     const [x, y] = chestOf(0);
-    const miss = engine["view"].take!.down(x + 4000, y);
-    assert.equal(miss, false, "a press far from every figure leaves the camera its drag");
-    assert.equal(standing(0), true, "and knocks nobody over");
+    const miss = engine["view"].take!.down(x + 4000, y, 0);
+    expect(miss, "a press far from every figure leaves the camera its drag").toBe(false);
+    expect(standing(0), "and knocks nobody over").toBe(true);
   });
 
   it("when a figure is pressed, then he leaves the set and the ragdoll world has him in his own dress, falling; and a reset stands everybody up again", () => {
     const dolls = (): number => engine["ragdolls"]["dolls"].filter((d: { live: boolean }) => d.live).length;
     const out = dolls();
     const [x, y] = chestOf(0);
-    assert.equal(engine["view"].take!.down(x, y, 0), true);
-    assert.equal(standing(0), false, "off the set");
-    assert.equal(dolls(), out + 1, "in the ragdoll world");
+    expect(engine["view"].take!.down(x, y, 0)).toBe(true);
+    expect(standing(0), "off the set").toBe(false);
+    expect(dolls(), "in the ragdoll world").toBe(out + 1);
     const slot = engine["ragdolls"]["lastSlot"];
     const shirt = engine["ragdolls"]["mesh"].colourOf(slot, ROLE.SHIRT, new THREE.Color()).getHexString();
-    assert.equal(shirt, new THREE.Color(art().figureOf(0).look.shirt).getHexString(), "in the shirt he stood in");
+    expect(shirt, "in the shirt he stood in").toBe(new THREE.Color(art().figureOf(0).look.shirt).getHexString());
     const torso = new THREE.Vector3();
-    assert.equal(engine["ragdolls"].torso(slot, torso, null), true);
+    expect(engine["ragdolls"].torso(slot, torso, null)).toBe(true);
     const from = torso.clone();
     runSeconds(engine, 1);
     engine["ragdolls"].torso(slot, torso, null);
-    assert.ok(torso.z < from.z - 1, `knocked away from the eye: ${from.z.toFixed(2)} to ${torso.z.toFixed(2)} m`);
+    expect(torso.z, `knocked away from the eye: ${from.z.toFixed(2)} to ${torso.z.toFixed(2)} m`).toBeLessThan(from.z - 1);
     engine.reset();
-    assert.equal(engine["ragdolls"]["dolls"][slot].live, false, "the dummy is gone");
-    for (let s = 0; s < art().slots; s++) assert.ok(standing(s), `slot ${s} is back on its mark`);
+    expect(engine["ragdolls"]["dolls"][slot].live, "the dummy is gone").toBe(false);
+    for (let s = 0; s < art().slots; s++) expect(standing(s), `slot ${s} is back on its mark`).toBeTruthy();
   });
 
   it("when the set stands, then behind the people three rows of cars stand, one of each style in each: as built, every door and lid at its stop with the hood up on its rear edge, and every part and pane off, each with its cabin drawn and nobody in it", () => {
     const cars = engine["showcase"]!.cars;
     const styles = CAR_STYLE_IDS.length;
-    assert.equal(cars.length, 3 * styles, "three rows of every style");
-    for (let row = 0; row < 3; row++) assert.equal(new Set(cars.slice(row * styles, (row + 1) * styles).map((c) => c.style.id)).size, styles, `row ${row}: one of each style`);
+    expect(cars.length, "three rows of every style").toBe(3 * styles);
+    for (let row = 0; row < 3; row++) expect(new Set(cars.slice(row * styles, (row + 1) * styles).map((c) => c.style.id)).size, `row ${row}: one of each style`).toBe(styles);
     for (let k = 0; k < cars.length; k++) {
       const car = cars[k]!;
       const row = Math.floor(k / styles);
       const parts: { name: string; hinge: string; hingeT: number; detached: boolean; restQuat: THREE.Quaternion; object: { visible: boolean; quaternion: THREE.Quaternion } }[] = car["parts"];
       const hood = parts.find((p) => p.hinge === "cowl")!;
       const id = `row ${row} ${car.style.id}`;
-      if (row === 0) assert.equal(`${car.doorAngle(-1)} ${car.doorAngle(1)} ${car.lidAngle()} ${hood.hingeT} ${parts.every((p) => !p.detached && p.object.visible)} ${car.glassPanes.every((g) => g.mesh.visible)}`, "0 0 0 0 true true", `${id}: as built`);
+      if (row === 0) expect(`${car.doorAngle(-1)} ${car.doorAngle(1)} ${car.lidAngle()} ${hood.hingeT} ${parts.every((p) => !p.detached && p.object.visible)} ${car.glassPanes.every((g) => g.mesh.visible)}`, `${id}: as built`).toBe("0 0 0 0 true true");
       if (row === 1) {
         const turned = THREE.MathUtils.radToDeg(hood.object.quaternion.angleTo(hood.restQuat));
-        assert.equal(`${car.doorAngle(-1) === car.doorHinge(-1).spec.stop} ${car.doorAngle(1) === car.doorHinge(1).spec.stop} ${car.lidAngle() === car.lidHinge().spec.stop} ${hood.hingeT} ${turned >= 27 && turned <= 34} ${parts.every((p) => !p.detached)}`, "true true true 0 true true", `${id}: doors ${car.doorAngle(-1).toFixed(3)}/${car.doorAngle(1).toFixed(3)}, lid ${car.lidAngle().toFixed(3)} at their stops, the hood up ${turned.toFixed(1)} deg on its rear edge`);
+        expect(`${car.doorAngle(-1) === car.doorHinge(-1).spec.stop} ${car.doorAngle(1) === car.doorHinge(1).spec.stop} ${car.lidAngle() === car.lidHinge().spec.stop} ${hood.hingeT} ${turned >= 27 && turned <= 34} ${parts.every((p) => !p.detached)}`, `${id}: doors ${car.doorAngle(-1).toFixed(3)}/${car.doorAngle(1).toFixed(3)}, lid ${car.lidAngle().toFixed(3)} at their stops, the hood up ${turned.toFixed(1)} deg on its rear edge`).toBe("true true true 0 true true");
       }
-      if (row === 2) assert.equal(`${parts.filter((p) => !p.detached || p.object.visible).map((p) => p.name)} ${car.glassPanes.filter((g) => g.mesh.visible).length}`, " 0", `${id}: parts or panes still drawn`);
-      assert.ok(car.group.visible && car.group.parent === engine["scene"], `${id}: in the scene`);
+      if (row === 2) expect(`${parts.filter((p) => !p.detached || p.object.visible).map((p) => p.name)} ${car.glassPanes.filter((g) => g.mesh.visible).length}`, `${id}: parts or panes still drawn`).toBe(" 0");
+      expect(car.group.visible && car.group.parent === engine["scene"], `${id}: in the scene`).toBeTruthy();
     }
     const batch = engine["partBatch"];
     batch.sync(engine["drawnCars"]());
-    assert.equal(`${batch.drawn(PART_KIND.interior)} ${batch.drawn(PART_KIND.seatFront)} ${batch.drawn(PART_KIND.mirrorL)} ${batch.drawn(PART_KIND.liningL)} ${batch.drawn(PART_KIND.engineBay)}`, `${3 * styles} ${2 * 3 * styles} ${2 * styles} ${2 * styles} ${2 * styles}`, "every car's cabin and both front seats drawn; mirrors and door linings on the first two rows only; the bay under every open and stripped hood");
+    expect(`${batch.drawn(PART_KIND.interior)} ${batch.drawn(PART_KIND.seatFront)} ${batch.drawn(PART_KIND.mirrorL)} ${batch.drawn(PART_KIND.liningL)} ${batch.drawn(PART_KIND.engineBay)}`, "every car's cabin and both front seats drawn; mirrors and door linings on the first two rows only; the bay under every open and stripped hood").toBe(`${3 * styles} ${2 * 3 * styles} ${2 * styles} ${2 * styles} ${2 * styles}`);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { blankPad, mergeTouch, PAD_BUTTON, PAD_DEAD, padButtonName, padFamily, padLabel, readPad, stickScale, triggerValue, type PadSource } from "./gamepad.ts";
 import { blankIntent, readIntent, shapeDrive } from "./drive-input.ts";
 import { idleDrive } from "./car-drive.ts";
@@ -17,35 +16,35 @@ function pad(axes: number[], down: number[] = [], lt = 0, rt = 0): PadSource {
 
 describe("given a gamepad's sticks and triggers", () => {
   it("when a stick rests inside the radial deadzone, then it reads exactly zero in any direction", () => {
-    assert.equal(stickScale(0.1, 0), 0);
-    assert.equal(stickScale(0.1, -0.1), 0);
-    assert.equal(stickScale(0, PAD_DEAD.stick * 0.99), 0);
-    assert.ok(stickScale(0.12, 0.12) > 0, "a diagonal past the radius must register");
+    expect(stickScale(0.1, 0)).toBe(0);
+    expect(stickScale(0.1, -0.1)).toBe(0);
+    expect(stickScale(0, PAD_DEAD.stick * 0.99)).toBe(0);
+    expect(stickScale(0.12, 0.12), "a diagonal past the radius must register").toBeGreaterThan(0);
   });
 
   it("when a stick is pushed to full throw, then it reaches 1 and a diagonal corner never exceeds 1", () => {
-    assert.ok(Math.abs(1 * stickScale(1, 0) - 1) < 1e-9);
+    expect(Math.abs(1 * stickScale(1, 0) - 1)).toBeLessThan(1e-9);
     const s = stickScale(1, 1);
-    assert.ok(Math.hypot(s, s) <= 1 + 1e-9, `corner magnitude ${Math.hypot(s, s)}`);
+    expect(Math.hypot(s, s), `corner magnitude ${Math.hypot(s, s)}`).toBeLessThanOrEqual(1 + 1e-9);
   });
 
   it("when a stick moves through its range, then the curve is gentler than linear mid-throw and continuous at the deadzone edge", () => {
     const mid = PAD_DEAD.stick + (1 - PAD_DEAD.stick) * 0.5;
-    assert.ok(mid * stickScale(mid, 0) < 0.5, "mid-throw should steer less than half lock");
+    expect(mid * stickScale(mid, 0), "mid-throw should steer less than half lock").toBeLessThan(0.5);
     const edge = PAD_DEAD.stick + 1e-3;
-    assert.ok(edge * stickScale(edge, 0) < 1e-3, "no step at the deadzone edge");
+    expect(edge * stickScale(edge, 0), "no step at the deadzone edge").toBeLessThan(1e-3);
     let last = 0;
     for (let x = 0; x <= 1; x += 0.01) {
       const out = x * stickScale(x, 0);
-      assert.ok(out >= last - 1e-12, `non-monotonic at ${x}`);
+      expect(out, `non-monotonic at ${x}`).toBeGreaterThanOrEqual(last - 1e-12);
       last = out;
     }
   });
 
   it("when a trigger is pulled, then it ignores resting noise and reaches 1 at full pull", () => {
-    assert.equal(triggerValue(PAD_DEAD.trigger * 0.9), 0);
-    assert.equal(triggerValue(1), 1);
-    assert.ok(triggerValue(0.5) > 0.4 && triggerValue(0.5) < 0.5);
+    expect(triggerValue(PAD_DEAD.trigger * 0.9)).toBe(0);
+    expect(triggerValue(1)).toBe(1);
+    expect(triggerValue(0.5) > 0.4 && triggerValue(0.5) < 0.5).toBeTruthy();
   });
 });
 
@@ -54,23 +53,23 @@ describe("given a gamepad being polled", () => {
     const s = blankPad();
     const bit = 1 << PAD_BUTTON.north;
     readPad(pad([0, 0, 0, 0], [PAD_BUTTON.north]), s);
-    assert.equal(s.pressed & bit, bit);
+    expect(s.pressed & bit).toBe(bit);
     readPad(pad([0, 0, 0, 0], [PAD_BUTTON.north]), s);
-    assert.equal(s.pressed & bit, 0, "held, not pressed again");
-    assert.equal(s.held & bit, bit);
+    expect(s.pressed & bit, "held, not pressed again").toBe(0);
+    expect(s.held & bit).toBe(bit);
     readPad(pad([0, 0, 0, 0]), s);
     readPad(pad([0, 0, 0, 0], [PAD_BUTTON.north]), s);
-    assert.equal(s.pressed & bit, bit, "a second press registers");
+    expect(s.pressed & bit, "a second press registers").toBe(bit);
   });
 
   it("when the pad is unplugged, then every axis and button reads zero", () => {
     const s = blankPad();
     readPad(pad([-1, 0, 1, 0], [PAD_BUTTON.south], 1, 1), s);
-    assert.ok(s.connected && s.lx < -0.9 && s.rt === 1);
+    expect(s.connected && s.lx < -0.9 && s.rt === 1).toBeTruthy();
     readPad(null, s);
     assertSameDigest({ ...s }, blankPad(), "unplugged pad");
     readPad({ ...pad([-1, 0, 0, 0]), connected: false }, s);
-    assert.equal(s.lx, 0);
+    expect(s.lx).toBe(0);
   });
 
   const idCases = [
@@ -86,8 +85,8 @@ describe("given a gamepad being polled", () => {
   ] as const;
   for (const testCase of idCases) {
     it(testCase.it, () => {
-      assert.equal(padFamily(testCase.id), testCase.expectedFamily, "family");
-      assert.equal(padLabel(testCase.id), testCase.expectedLabel, "label");
+      expect(padFamily(testCase.id), "family").toBe(testCase.expectedFamily);
+      expect(padLabel(testCase.id), "label").toBe(testCase.expectedLabel);
     });
   }
 
@@ -99,7 +98,7 @@ describe("given a gamepad being polled", () => {
   for (const testCase of buttonCases) {
     it(testCase.it, () => {
       const faceButtons = [PAD_BUTTON.south, PAD_BUTTON.east, PAD_BUTTON.west, PAD_BUTTON.north];
-      for (let at = 0; at < faceButtons.length; at++) assert.equal(padButtonName(testCase.family, faceButtons[at]!), testCase.expectedNames[at], `face button ${at}`);
+      for (let at = 0; at < faceButtons.length; at++) expect(padButtonName(testCase.family, faceButtons[at]!), `face button ${at}`).toBe(testCase.expectedNames[at]);
     });
   }
 });
@@ -109,17 +108,17 @@ describe("given a gamepad driving a car", () => {
     const s = blankPad();
     readPad(pad([-1, 0, 0, 0], [], 0, 1), s);
     const intent = readIntent(new Set(), s, blankIntent());
-    assert.ok(intent.wheel > 0.99 && intent.analogWheel);
-    assert.equal(intent.gas, 1);
+    expect(intent.wheel > 0.99 && intent.analogWheel).toBeTruthy();
+    expect(intent.gas).toBe(1);
     const feel = { wheel: 0, gas: 0, brake: 0, brakeHeld: 0, pulse: 0 };
     const out = idleDrive();
     for (let i = 0; i < 30; i++) shapeDrive(intent, feel, 6, 1 / FRAME_HZ, out);
-    assert.ok(out.steer > 0.5, `steer ${out.steer}`);
-    assert.equal(out.throttle, 1);
+    expect(out.steer, `steer ${out.steer}`).toBeGreaterThan(0.5);
+    expect(out.throttle).toBe(1);
     readPad(pad([1, 0, 0, 0], [], 0, 1), s);
     readIntent(new Set(), s, intent);
     for (let i = 0; i < 30; i++) shapeDrive(intent, feel, 6, 1 / FRAME_HZ, out);
-    assert.ok(out.steer < -0.5, `stick right steer ${out.steer}`);
+    expect(out.steer, `stick right steer ${out.steer}`).toBeLessThan(-0.5);
   });
 
   it("when the left trigger is pulled, then it is an analog brake and, once stopped, reverse", () => {
@@ -129,44 +128,44 @@ describe("given a gamepad driving a car", () => {
     const feel = { wheel: 0, gas: 0, brake: 0, brakeHeld: 0, pulse: 0 };
     const out = idleDrive();
     shapeDrive(intent, feel, 8, 1 / FRAME_HZ, out);
-    assert.ok(Math.abs(out.brake - triggerValue(0.6)) < 1e-9 && out.throttle === 0, "partial pull = partial brake, no ramp");
+    expect(Math.abs(out.brake - triggerValue(0.6)) < 1e-9 && out.throttle === 0, "partial pull = partial brake, no ramp").toBeTruthy();
     shapeDrive(intent, feel, 0, 1 / FRAME_HZ, out);
-    assert.ok(out.throttle < 0 && out.brake === 0);
+    expect(out.throttle < 0 && out.brake === 0).toBeTruthy();
   });
 
   it("when keyboard and pad inputs are used together, then per axis the larger magnitude wins", () => {
     const s = blankPad();
     readPad(pad([-0.4, 0, 0, 0], [], 0.4, 0), s);
     const i = readIntent(new Set(["KeyD", "KeyW"]), s, blankIntent());
-    assert.equal(i.wheel, -1, "full D beats a light left stick");
-    assert.equal(i.analogWheel, false);
-    assert.equal(i.gas, 1);
-    assert.ok(i.brake > 0 && i.analogBrake, "LT still reads while W is held");
+    expect(i.wheel, "full D beats a light left stick").toBe(-1);
+    expect(i.analogWheel).toBe(false);
+    expect(i.gas).toBe(1);
+    expect(i.brake > 0 && i.analogBrake, "LT still reads while W is held").toBeTruthy();
     readPad(pad([-1, 0, 0, 0]), s);
     readIntent(new Set(), s, i);
-    assert.ok(i.wheel > 0.99 && i.analogWheel);
+    expect(i.wheel > 0.99 && i.analogWheel).toBeTruthy();
   });
 
   it("when X (Square) and A (Cross) are pressed, then they act as the handbrake and the boost, alongside Space and Shift", () => {
     const s = blankPad();
     readPad(pad([0, 0, 0, 0], [PAD_BUTTON.west, PAD_BUTTON.south]), s);
     const i = readIntent(new Set(), s, blankIntent());
-    assert.ok(i.handbrake && i.boost);
+    expect(i.handbrake && i.boost).toBeTruthy();
     readPad(pad([0, 0, 0, 0], [PAD_BUTTON.east]), s);
     readIntent(new Set(), s, i);
-    assert.ok(!i.handbrake && !i.boost);
+    expect(!i.handbrake && !i.boost).toBeTruthy();
     readIntent(new Set(["Space", "ShiftRight"]), null, i);
-    assert.ok(i.handbrake && i.boost);
+    expect(i.handbrake && i.boost).toBeTruthy();
   });
 
   it("when A (Cross) alone is held, then it is the boost and not the handbrake, and X (Square) alone is the handbrake and not the boost", () => {
     const s = blankPad();
     readPad(pad([0, 0, 0, 0], [PAD_BUTTON.south]), s);
     const i = readIntent(new Set(), s, blankIntent());
-    assert.ok(i.boost && !i.handbrake, `A: boost ${i.boost} handbrake ${i.handbrake}`);
+    expect(i.boost && !i.handbrake, `A: boost ${i.boost} handbrake ${i.handbrake}`).toBeTruthy();
     readPad(pad([0, 0, 0, 0], [PAD_BUTTON.west]), s);
     readIntent(new Set(), s, i);
-    assert.ok(i.handbrake && !i.boost, `X: boost ${i.boost} handbrake ${i.handbrake}`);
+    expect(i.handbrake && !i.boost, `X: boost ${i.boost} handbrake ${i.handbrake}`).toBeTruthy();
   });
 
   it("when the touch stick is held up-left with no pad plugged in, then it is gas and a left wheel, and a sub-frame tap still presses once", () => {
@@ -175,25 +174,25 @@ describe("given a gamepad driving a car", () => {
     readPad(null, s);
     mergeTouch(t, s, 0);
     const i = readIntent(new Set(), s, blankIntent());
-    assert.ok(i.wheel > 0.5 && i.analogWheel, `wheel ${i.wheel}`);
-    assert.ok(i.gas > 0.5 && i.brake === 0, `gas ${i.gas} brake ${i.brake}`);
+    expect(i.wheel > 0.5 && i.analogWheel, `wheel ${i.wheel}`).toBeTruthy();
+    expect(i.gas > 0.5 && i.brake === 0, `gas ${i.gas} brake ${i.brake}`).toBeTruthy();
     t.x = 0;
     t.y = 1;
     readPad(null, s);
     mergeTouch(t, s, s.held);
     const down = readIntent(new Set(), s, i);
-    assert.ok(down.brake === 1 && down.gas === 0, "stick down brakes, then reverses");
+    expect(down.brake === 1 && down.gas === 0, "stick down brakes, then reverses").toBeTruthy();
     const view = 1 << PAD_BUTTON.north;
     t.y = 0;
     t.tapped = view;
     let prev = s.held;
     readPad(null, s);
     mergeTouch(t, s, prev);
-    assert.equal(s.pressed & view, view, "tap released before the poll");
+    expect(s.pressed & view, "tap released before the poll").toBe(view);
     prev = s.held;
     readPad(null, s);
     mergeTouch(t, s, prev);
-    assert.equal(s.pressed, 0, "one tap, one press");
+    expect(s.pressed, "one tap, one press").toBe(0);
   });
 });
 
@@ -205,10 +204,10 @@ describe("given the touch pedals", () => {
     readPad(null, s);
     mergeTouch({ ...resting(), gas: 1 }, s, 0);
     const i = readIntent(new Set(), s, blankIntent());
-    assert.ok(s.connected, "a pedal alone counts as the touch pad being in use");
-    assert.equal(i.gas, 1);
-    assert.equal(i.brake, 0);
-    assert.equal(i.wheel, 0);
+    expect(s.connected, "a pedal alone counts as the touch pad being in use").toBeTruthy();
+    expect(i.gas).toBe(1);
+    expect(i.brake).toBe(0);
+    expect(i.wheel).toBe(0);
   });
 
   it("when the brake pedal is down, then it is full brake and, once stopped, reverse like the stick's down", () => {
@@ -216,37 +215,37 @@ describe("given the touch pedals", () => {
     readPad(null, s);
     mergeTouch({ ...resting(), brake: 1 }, s, 0);
     const i = readIntent(new Set(), s, blankIntent());
-    assert.equal(i.brake, 1);
-    assert.equal(i.gas, 0);
+    expect(i.brake).toBe(1);
+    expect(i.gas).toBe(0);
     const out = idleDrive();
     shapeDrive(i, { wheel: 0, gas: 0, brake: 0, brakeHeld: 0, pulse: 0 }, 0, 1 / FRAME_HZ, out);
-    assert.ok(out.throttle < 0 && out.brake === 0, `standing still reverses: throttle ${out.throttle} brake ${out.brake}`);
+    expect(out.throttle < 0 && out.brake === 0, `standing still reverses: throttle ${out.throttle} brake ${out.brake}`).toBeTruthy();
   });
 
   it("when the stick steers half right while the gas pedal is down, then the steering is the stick's own scaled value and the gas is full", () => {
     const s = blankPad();
     readPad(null, s);
     mergeTouch({ ...resting(), x: 0.5, gas: 1 }, s, 0);
-    assert.ok(Math.abs(s.lx - 0.5 * stickScale(0.5, 0)) < 1e-9, `lx ${s.lx}`);
-    assert.equal(s.rt, 1);
-    assert.equal(s.lt, 0);
+    expect(Math.abs(s.lx - 0.5 * stickScale(0.5, 0)), `lx ${s.lx}`).toBeLessThan(1e-9);
+    expect(s.rt).toBe(1);
+    expect(s.lt).toBe(0);
   });
 
   it("when the stick is pushed up and the gas pedal is half down, then the larger of the two wins", () => {
     const s = blankPad();
     readPad(null, s);
     mergeTouch({ ...resting(), y: -1, gas: 0.25 }, s, 0);
-    assert.equal(s.rt, 1);
+    expect(s.rt).toBe(1);
     readPad(null, s);
     mergeTouch({ ...resting(), y: -0.1, gas: 0.25 }, s, 0);
-    assert.equal(s.rt, 0.25);
+    expect(s.rt).toBe(0.25);
   });
 
   it("when nothing is touched, then the pad stays disconnected", () => {
     const s = blankPad();
     readPad(null, s);
     mergeTouch(resting(), s, 0);
-    assert.equal(s.connected, false);
-    assert.equal(s.rt + s.lt, 0);
+    expect(s.connected).toBe(false);
+    expect(s.rt + s.lt).toBe(0);
   });
 });

@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 
@@ -48,18 +47,18 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     const own = rig.cars()[0]!;
     const start = own.group.position.clone();
     rig.getOut();
-    assert.equal(rig.away(), 0, "his car is the one he left");
+    expect(rig.away(), "his car is the one he left").toBe(0);
     rig.walkTo(new THREE.Vector3(start.x + 4, 0, start.z + WALK_AWAY_M), 1.5, 15);
     rig.runDownBy(rig.cars()[1]!, own);
     for (let t = 0; t < FALL_WITHIN_S && rig.walker().state === "stand"; t += FRAME) rig.run(FRAME);
-    assert.notEqual(rig.walker().state, "stand", "the car knocked him down");
-    assert.ok(own.group.position.distanceTo(start) < HELD_CREEP_M, `his car held where it stood: ${own.group.position.distanceTo(start).toFixed(2)} m`);
+    expect(rig.walker().state, "the car knocked him down").not.toBe("stand");
+    expect(own.group.position.distanceTo(start), `his car held where it stood: ${own.group.position.distanceTo(start).toFixed(2)} m`).toBeLessThan(HELD_CREEP_M);
     rig.getUp();
     rig.getIn();
-    assert.equal(rig.away(), -1, "his car is his to drive again");
+    expect(rig.away(), "his car is his to drive again").toBe(-1);
     const before = own.group.position.z;
     rig.hold("KeyW", 2);
-    assert.ok(own.group.position.z - before > 3, `he drove off: ${(own.group.position.z - before).toFixed(1)} m`);
+    expect(own.group.position.z - before, `he drove off: ${(own.group.position.z - before).toFixed(1)} m`).toBeGreaterThan(3);
   });
 
   it("when he walks to another car's driver door and presses the control, then he is told it is not his and stays out, and his own car's door lets him in", () => {
@@ -68,70 +67,74 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     rig.walkToDoor(cars[1]!);
     rig.press("Enter");
     rig.run(1);
-    assert.equal(rig.phase(), "onFoot", "he is still out");
-    assert.equal(rig.engine["seat"].mode, "follow", "the neighbour's wheel is not his");
-    assert.equal(rig.engine["onFoot"].prompt(), "Walk up to your car's driver door");
+    expect(rig.phase(), "he is still out").toBe("onFoot");
+    expect(rig.engine["seat"].mode, "the neighbour's wheel is not his").toBe("follow");
+    expect(rig.engine["onFoot"].prompt()).toBe("Walk up to your car's driver door");
     rig.getIn();
-    assert.equal(rig.engine["seat"].carIndex, 0, "he is in his own car");
+    expect(rig.engine["seat"].carIndex, "he is in his own car").toBe(0);
   });
 
   it("when his driver has been thrown out in a crash and the seat is still on the car, then the control offers nothing and does nothing, and with the driver back in it offers to get out", () => {
     const own = rig.cars()[0]!;
-    assert.equal(rig.engine["onFoot"].prompt(), "Enter or B: get out", "the driver is in: it is offered");
+    expect(rig.engine["onFoot"].prompt(), "the driver is in: it is offered").toBe("Enter or B: get out");
     own.driverOut = "windshield";
-    assert.equal(rig.engine["onFoot"].prompt(), null, "a thrown driver has nobody to get out: nothing is offered");
-    assert.equal(rig.engine["onFoot"].hud(), null, "nor on the HUD: no Out button");
+    expect(rig.engine["onFoot"].prompt(), "a thrown driver has nobody to get out: nothing is offered").toBe(null);
+    expect(rig.engine["onFoot"].hud(), "nor on the HUD: no Out button").toBe(null);
     rig.press("Enter");
     rig.run(1);
-    assert.equal(rig.phase(), "inCar", "and the press does nothing");
+    expect(rig.phase(), "and the press does nothing").toBe("inCar");
     own.driverOut = null;
-    assert.equal(rig.engine["onFoot"].prompt(), "Enter or B: get out", "the driver back in: offered again");
+    expect(rig.engine["onFoot"].prompt(), "the driver back in: offered again").toBe("Enter or B: get out");
   });
 
   it("when the touch Out button is tapped at the wheel, then he gets out once, the tap is spent, the pedal strip's gas walks him, and the same button tapped at his door gets him back in", () => {
-    assert.deepEqual(rig.engine["onFoot"].hud(), { out: false, prompt: "Enter or B: get out", refusal: null }, "at the wheel the button is Out");
+    const hud = rig.engine["onFoot"].hud();
+    if (!hud) throw new Error("at the wheel the button is Out: no HUD read");
+    expect(hud.out, "at the wheel the button is Out: out").toBe(false);
+    expect(hud.prompt, "at the wheel the button is Out: prompt").toBe("Enter or B: get out");
+    expect(hud.refusal, "at the wheel the button is Out: refusal").toBeNull();
     rig.tapOnFoot(1);
-    assert.equal(rig.phase(), "onFoot", `he is out (he was told: ${rig.engine["onFoot"].flow.refusal})`);
-    assert.equal(rig.engine.touch.tapped, 0, "the tap fired on one poll");
-    assert.equal(rig.engine.touch.held, 0, "and holds nothing");
-    assert.equal(rig.engine["onFoot"].hud()?.out, true, "on foot the button is In");
+    expect(rig.phase(), `he is out (he was told: ${rig.engine["onFoot"].flow.refusal})`).toBe("onFoot");
+    expect(rig.engine.touch.tapped, "the tap fired on one poll").toBe(0);
+    expect(rig.engine.touch.held, "and holds nothing").toBe(0);
+    expect(rig.engine["onFoot"].hud()?.out, "on foot the button is In").toBe(true);
     const from = rig.torso();
     rig.engine.touch.gas = TOUCH_WALK_GAS;
     rig.run(TOUCH_WALK_S);
     rig.engine.touch.gas = 0;
-    assert.ok(rig.torso().distanceTo(from) > TOUCH_WALK_MIN_M, `the strip's gas walked him ${rig.torso().distanceTo(from).toFixed(2)} m`);
+    expect(rig.torso().distanceTo(from), `the strip's gas walked him ${rig.torso().distanceTo(from).toFixed(2)} m`).toBeGreaterThan(TOUCH_WALK_MIN_M);
     rig.walkToDoor(rig.cars()[0]!);
     rig.tapOnFoot(1);
-    assert.equal(rig.phase(), "inCar", "the tap got him in");
-    assert.equal(rig.engine["seat"].mode, "drive", "with the wheel");
+    expect(rig.phase(), "the tap got him in").toBe("inCar");
+    expect(rig.engine["seat"].mode, "with the wheel").toBe("drive");
   });
 
   it("when the touch Out button is tapped while the car still rolls, then he stays in and the touch HUD reads the desktop prompt's reason, which clears", () => {
     const own = rig.cars()[0]!;
     own.spawnFacing(0, 0, 0, ROLLING_MPS);
     rig.tapOnFoot(2 * FRAME);
-    assert.equal(rig.phase(), "inCar", "a rolling car is not left");
+    expect(rig.phase(), "a rolling car is not left").toBe("inCar");
     const foot = rig.engine["onFoot"].hud();
-    assert.equal(foot?.refusal, "Stop the car first", "the touch HUD is told why");
-    assert.equal(foot?.refusal, rig.engine["onFoot"].prompt(), "in the desktop prompt's words");
+    expect(foot?.refusal, "the touch HUD is told why").toBe("Stop the car first");
+    expect(foot?.refusal, "in the desktop prompt's words").toBe(rig.engine["onFoot"].prompt());
     rig.run(REFUSAL_GONE_S);
-    assert.equal(rig.engine["onFoot"].hud()?.refusal, null, "and the reason clears");
+    expect(rig.engine["onFoot"].hud()?.refusal, "and the reason clears").toBe(null);
   });
 
   it("when the seat only follows his car, not at its wheel, then nothing offers getting out: no Out button, and a tap does nothing", () => {
     rig.engine["seat"].mode = "follow";
-    assert.equal(rig.engine["onFoot"].hud(), null, "no Out button");
+    expect(rig.engine["onFoot"].hud(), "no Out button").toBe(null);
     rig.tapOnFoot(1);
-    assert.equal(rig.phase(), "inCar", "the tap does nothing");
+    expect(rig.phase(), "the tap does nothing").toBe("inCar");
   });
 
   it("when the fleet's own crash loop (seed 4) leaves car 0 stopped with its driver in and another wreck at his door, then Enter tells him there is no room and he stays in", () => {
     const own = rig.stoppedInFleetLoop(LOOP_DRIVER_IN_SEED);
-    assert.equal(own.driverOut, null, "the crash left his driver in");
-    assert.equal(rig.engine["onFoot"].prompt(), "Enter or B: get out", "the control is offered");
+    expect(own.driverOut, "the crash left his driver in").toBe(null);
+    expect(rig.engine["onFoot"].prompt(), "the control is offered").toBe("Enter or B: get out");
     rig.press("Enter");
-    assert.equal(rig.phase(), "inCar", "a wreck lies at his door");
-    assert.equal(rig.engine["onFoot"].prompt(), "No room to open the door", "and he is told");
+    expect(rig.phase(), "a wreck lies at his door").toBe("inCar");
+    expect(rig.engine["onFoot"].prompt(), "and he is told").toBe("No room to open the door");
   });
 
   it("when the fleet's own crash loop (seed 4) leaves car 0 stopped with its driver in and the wrecks cleared from his door, then Enter gets him out, the car stays where the crash left it, and Enter gets him back in", () => {
@@ -140,20 +143,20 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     for (let i = 1; i < rig.cars().length; i++) rig.place(i, PARKED_AT * (i % 2 === 0 ? 1 : -1), -PARKED_AT + 4 * i);
     const at = own.group.position.clone();
     rig.getOut();
-    assert.equal(rig.away(), 0, "he got out of the car the crash left");
+    expect(rig.away(), "he got out of the car the crash left").toBe(0);
     rig.run(2);
-    assert.ok(own.group.position.distanceTo(at) < HELD_CREEP_M, `the car stood where it was: ${own.group.position.distanceTo(at).toFixed(2)} m`);
+    expect(own.group.position.distanceTo(at), `the car stood where it was: ${own.group.position.distanceTo(at).toFixed(2)} m`).toBeLessThan(HELD_CREEP_M);
     rig.getIn();
-    assert.equal(rig.away(), -1, "and he is in it again");
+    expect(rig.away(), "and he is in it again").toBe(-1);
   });
 
   it("when the fleet's own crash loop (seed 1) throws car 0's driver out and stops it with the seat still on the car, then the control offers nothing and Enter does nothing", () => {
     const own = rig.stoppedInFleetLoop(LOOP_DRIVER_THROWN_SEED);
-    assert.notEqual(own.driverOut, null, "the crash threw his driver out");
-    assert.equal(rig.engine["seat"].mode, "drive", "the seat is still on the car");
-    assert.equal(rig.engine["onFoot"].prompt(), null, "a thrown driver has nobody to get out: nothing is offered");
+    expect(own.driverOut, "the crash threw his driver out").not.toBe(null);
+    expect(rig.engine["seat"].mode, "the seat is still on the car").toBe("drive");
+    expect(rig.engine["onFoot"].prompt(), "a thrown driver has nobody to get out: nothing is offered").toBe(null);
     rig.press("Enter");
     rig.run(1);
-    assert.equal(rig.phase(), "inCar", "and the press does nothing");
+    expect(rig.phase(), "and the press does nothing").toBe("inCar");
   });
 });

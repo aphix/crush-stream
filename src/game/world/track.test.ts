@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Track, blankProjection, crossGate, type Projection } from "./track.ts";
 import { parseTrack } from "./track-schema.ts";
 import { square } from "./track.test-util.ts";
@@ -9,17 +8,17 @@ for (const json of TRACKS) {
   const t = new Track(json);
   describe(`given the ${t.id} course`, () => {
     it("when its gates and grid slots are read, then the gates run forward round the loop and the grid sits behind the line, on the road", () => {
-      for (let i = 1; i < t.gates.length; i++) assert.ok(t.gates[i]!.s > t.gates[i - 1]!.s, `gate ${i} not after gate ${i - 1}`);
+      for (let i = 1; i < t.gates.length; i++) expect(t.gates[i]!.s, `gate ${i} not after gate ${i - 1}`).toBeGreaterThan(t.gates[i - 1]!.s);
       const p = blankProjection();
       const slots = Array.from({ length: 16 }, (_, i) => t.gridSlot(i));
       for (const [i, g] of slots.entries()) {
         t.project(g.x, g.z, -1, p);
-        assert.ok(Math.abs(p.lateral) < t.path.half[p.k]! - 1, `slot ${i} off the road (lateral ${p.lateral.toFixed(1)})`);
-        assert.ok(p.s > t.length - 6 - 8 * 9, `slot ${i} too far back (s ${p.s.toFixed(0)})`);
+        expect(Math.abs(p.lateral), `slot ${i} off the road (lateral ${p.lateral.toFixed(1)})`).toBeLessThan(t.path.half[p.k]! - 1);
+        expect(p.s, `slot ${i} too far back (s ${p.s.toFixed(0)})`).toBeGreaterThan(t.length - 6 - 8 * 9);
         const tx = t.path.tx[p.k]!;
         const tz = t.path.tz[p.k]!;
-        assert.ok(Math.sin(g.yaw) * tx + Math.cos(g.yaw) * tz > 0.99, `slot ${i} not facing the race direction`);
-        for (let j = 0; j < i; j++) assert.ok(Math.hypot(g.x - slots[j]!.x, g.z - slots[j]!.z) > 4.5, `slots ${j} and ${i} overlap`);
+        expect(Math.sin(g.yaw) * tx + Math.cos(g.yaw) * tz, `slot ${i} not facing the race direction`).toBeGreaterThan(0.99);
+        for (let j = 0; j < i; j++) expect(Math.hypot(g.x - slots[j]!.x, g.z - slots[j]!.z), `slots ${j} and ${i} overlap`).toBeGreaterThan(4.5);
       }
     });
 
@@ -45,7 +44,7 @@ for (const json of TRACKS) {
         }
         prev = { lat: pr.lateral, inside };
       });
-      assert.deepEqual(closed, []);
+      expect(closed).toHaveLength(0);
     });
     // `progress` runs between the shortcut's gates (RACE_DESIGN: Checkpoints), so a mouth far past its `from` gate drops every car that takes it back that far in the order, and 8 s of such a drop at the start reads as a stall (a respawn request on a car doing 40 m/s).
     const GATE_SLACK = 100;
@@ -61,7 +60,7 @@ for (const json of TRACKS) {
         if (into > GATE_SLACK) far.push(`${id}: mouth ${into.toFixed(0)} m past gate ${sc.from}`);
         if (out > GATE_SLACK) far.push(`${id}: exit ${out.toFixed(0)} m before gate ${sc.to}`);
       });
-      assert.deepEqual(far, []);
+      expect(far).toHaveLength(0);
     });
   });
 }
@@ -70,38 +69,35 @@ describe("given the square course's first gate", () => {
   it("when cars cross it in each direction and outside its span, then only a crossing in the race direction counts", () => {
     const t = new Track(square());
     const g = t.gates[0]!;
-    assert.ok(crossGate(g, 0, -1, 0, 1) > 0.4);
-    assert.equal(crossGate(g, 0, 1, 0, -1), -1);
-    assert.equal(crossGate(g, 30, -1, 30, 1), -1, "outside the gate's span");
+    expect(crossGate(g, 0, -1, 0, 1)).toBeGreaterThan(0.4);
+    expect(crossGate(g, 0, 1, 0, -1)).toBe(-1);
+    expect(crossGate(g, 30, -1, 30, 1), "outside the gate's span").toBe(-1);
   });
 });
 
 describe("given a square course layout with a malformed checkpoint list, shortcut or road", () => {
   it("when it is parsed, then each malformed layout is rejected with the offending path", () => {
-    assert.throws(() => parseTrack(square({ checkpoints: [{ node: 1 }, { node: 2 }, { node: 4 }] })), /checkpoints\.0: checkpoint 0 must be node 0/);
-    assert.throws(() => parseTrack(square({ checkpoints: [{ node: 0 }, { node: 4 }, { node: 2 }] })), /checkpoints\.2: checkpoints must run in driving order/);
-    assert.throws(
-      () => parseTrack(square({ shortcuts: [{ id: "a", from: 1, to: 2, path: [{ x: 1, z: 1 }, { x: 2, z: 2 }] }] })),
-      /shortcuts\.0: a shortcut must skip at least one checkpoint/,
-    );
-    assert.throws(() => new Track(square({ road: { width: 30, runoff: [20, 20] } })), /inside its own corridor/);
+    expect(() => parseTrack(square({ checkpoints: [{ node: 1 }, { node: 2 }, { node: 4 }] }))).toThrow(/checkpoints\.0: checkpoint 0 must be node 0/);
+    expect(() => parseTrack(square({ checkpoints: [{ node: 0 }, { node: 4 }, { node: 2 }] }))).toThrow(/checkpoints\.2: checkpoints must run in driving order/);
+    expect(() => parseTrack(square({ shortcuts: [{ id: "a", from: 1, to: 2, path: [{ x: 1, z: 1 }, { x: 2, z: 2 }] }] }))).toThrow(/shortcuts\.0: a shortcut must skip at least one checkpoint/);
+    expect(() => new Track(square({ road: { width: 30, runoff: [20, 20] } }))).toThrow(/inside its own corridor/);
   });
 });
 
 describe("given the square course's ground and the oval course's ground", () => {
   it("when heights, normals and grip are read, then a flat course is the y = 0 plane, banking raises the right edge and grip follows the surface", () => {
     const flat = new Track(square()).ground();
-    for (const [x, z] of [[0, 30], [5, 50], [60, 60], [-30, -30], [500, 500]] as const) assert.equal(flat.heightAt(x, z), 0);
+    for (const [x, z] of [[0, 30], [5, 50], [60, 60], [-30, -30], [500, 500]] as const) expect(flat.heightAt(x, z)).toBe(0);
     const n = flat.normalAt(0, 30, { x: 0, y: 0, z: 0 });
-    assert.ok(n.y === 1 && n.x === 0 && n.z === 0, `normal ${JSON.stringify(n)}`);
-    assert.equal(flat.frictionAt(0, 30), 1, "asphalt");
-    assert.equal(flat.frictionAt(60, 60), 0.5, "grass infield");
+    expect(n.y === 1 && n.x === 0 && n.z === 0, `normal ${JSON.stringify(n)}`).toBeTruthy();
+    expect(flat.frictionAt(0, 30), "asphalt").toBe(1);
+    expect(flat.frictionAt(60, 60), "grass infield").toBe(0.5);
     const banked = square({ nodes: square().nodes!.map((nd) => ({ ...nd, bank: 8 })) });
     const g = new Track(banked).ground();
     // Driving +Z at x = 0: right is −X.
-    assert.ok(g.heightAt(-4, 60) > 0.4 && g.heightAt(4, 60) < -0.4, `right ${g.heightAt(-4, 60)} left ${g.heightAt(4, 60)}`);
+    expect(g.heightAt(-4, 60) > 0.4 && g.heightAt(4, 60) < -0.4, `right ${g.heightAt(-4, 60)} left ${g.heightAt(4, 60)}`).toBeTruthy();
     const oval = new Track(TRACKS[0]).ground();
-    assert.equal(oval.frictionAt(0, -115), 0.72, "the oval's dirt service road");
+    expect(oval.frictionAt(0, -115), "the oval's dirt service road").toBe(0.72);
   });
 });
 
@@ -113,11 +109,11 @@ describe("given the square course with a dirt shortcut whose first point carries
     const path = track.shortcuts[0]!.path;
     const nearMouth = path.count >> 4;
     const nearExit = path.count - (path.count >> 4);
-    assert.equal(ground.surfaceAt(path.x[nearMouth]!, path.z[nearMouth]!), "cobble", "just inside the mouth");
-    assert.equal(ground.frictionAt(path.x[nearMouth]!, path.z[nearMouth]!), 0.85, "cobble grip");
-    assert.equal(ground.surfaceAt(path.x[nearExit]!, path.z[nearExit]!), "dirt", "near the exit");
-    assert.equal(ground.frictionAt(path.x[nearExit]!, path.z[nearExit]!), 0.72, "dirt grip");
-    assert.equal(ground.surfaceAt(0, 90), "asphalt", "the loop beside the mouth");
+    expect(ground.surfaceAt(path.x[nearMouth]!, path.z[nearMouth]!), "just inside the mouth").toBe("cobble");
+    expect(ground.frictionAt(path.x[nearMouth]!, path.z[nearMouth]!), "cobble grip").toBe(0.85);
+    expect(ground.surfaceAt(path.x[nearExit]!, path.z[nearExit]!), "near the exit").toBe("dirt");
+    expect(ground.frictionAt(path.x[nearExit]!, path.z[nearExit]!), "dirt grip").toBe(0.72);
+    expect(ground.surfaceAt(0, 90), "the loop beside the mouth").toBe("asphalt");
   });
 });
 
@@ -126,21 +122,21 @@ describe("given the stunt course, whose figure-of-eight crosses itself at the or
     const stunt = new Track(TRACKS.find((j) => parseTrack(j).id === "stunt"));
     const g = stunt.ground();
     // The figure-of-eight crosses itself at the origin: the start straight under, the deck 9 m over.
-    assert.ok(Math.abs(g.heightAt(0, 0, 0.3)) < 0.05, `under the bridge ${g.heightAt(0, 0, 0.3)}`);
-    assert.ok(Math.abs(g.heightAt(0, 0, 9.2) - 9) < 0.15, `on the deck ${g.heightAt(0, 0, 9.2)}`);
-    assert.ok(Math.abs(g.heightAt(0, 0) - 9) < 0.15, "no layer hint: the top surface");
-    assert.equal(g.surfaceAt(0, 0, 9.2), "asphalt");
+    expect(Math.abs(g.heightAt(0, 0, 0.3)), `under the bridge ${g.heightAt(0, 0, 0.3)}`).toBeLessThan(0.05);
+    expect(Math.abs(g.heightAt(0, 0, 9.2) - 9), `on the deck ${g.heightAt(0, 0, 9.2)}`).toBeLessThan(0.15);
+    expect(Math.abs(g.heightAt(0, 0) - 9), "no layer hint: the top surface").toBeLessThan(0.15);
+    expect(g.surfaceAt(0, 0, 9.2)).toBe("asphalt");
     // Off the deck's side the ground below shows again, whatever the hint.
-    assert.ok(g.heightAt(14, 14, 9.2) < 1, "beside the deck you fall to the ground");
+    expect(g.heightAt(14, 14, 9.2), "beside the deck you fall to the ground").toBeLessThan(1);
   });
 
   it("when a crossover has no deck, too little headroom, or a checkpoint over the other level, then each course is rejected", () => {
     const stunt = parseTrack(TRACKS.find((j) => parseTrack(j).id === "stunt"));
     const noDeck = { ...stunt, nodes: stunt.nodes.map((nd) => ({ ...nd, deck: false })) };
-    assert.throws(() => new Track(noDeck), /crosses itself .* without a deck/);
+    expect(() => new Track(noDeck)).toThrow(/crosses itself .* without a deck/);
     const low = { ...stunt, nodes: stunt.nodes.map((nd) => (nd.y === 9 ? { ...nd, y: 3 } : nd)) };
-    assert.throws(() => new Track(low), /a car needs 4.5 m/);
+    expect(() => new Track(low)).toThrow(/a car needs 4.5 m/);
     const gateOver = { ...stunt, checkpoints: [...stunt.checkpoints.slice(0, 1), { node: 1, t: 0 }, ...stunt.checkpoints.slice(1)] };
-    assert.throws(() => new Track(gateOver), /sits over another part of the loop/);
+    expect(() => new Track(gateOver)).toThrow(/sits over another part of the loop/);
   });
 });

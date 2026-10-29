@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { runPair } from "./crash-scenarios.test-util.ts";
 import { Ground, setGround } from "../world/ground.ts";
 
@@ -33,12 +32,12 @@ function assertSlopeKeepsCrash(kind: "head-on" | "t-bone", kph: number, carOneDe
   const slope = runPair(kph, kph, kind, { after: 2.5 });
   for (let i = 0; i < 2; i++) {
     const r = slope[i]!;
-    assert.ok(r.massStepExcess <= 0, `${kind} car ${i}: ${r.massStepName} stepped ${r.massStepExcess.toFixed(3)} m past 3·v·h + 5 cm in a slice`);
-    assert.ok(Math.abs(r.engineTravel - flat[i]!.engineTravel) <= BLOCK_NOISE, `${kind} car ${i} engine block: slope ${r.engineTravel.toFixed(4)} vs flat ${flat[i]!.engineTravel.toFixed(4)}`);
+    expect(r.massStepExcess, `${kind} car ${i}: ${r.massStepName} stepped ${r.massStepExcess.toFixed(3)} m past 3·v·h + 5 cm in a slice`).toBeLessThanOrEqual(0);
+    expect(Math.abs(r.engineTravel - flat[i]!.engineTravel), `${kind} car ${i} engine block: slope ${r.engineTravel.toFixed(4)} vs flat ${flat[i]!.engineTravel.toFixed(4)}`).toBeLessThanOrEqual(BLOCK_NOISE);
     for (const k of i === 0 ? DENTS : carOneDents) {
       const s = r[k];
       const f = flat[i]![k];
-      assert.ok(Math.abs(s - f) <= Math.max(0.03, 0.15 * Math.abs(f)), `${kind} car ${i} ${k}: slope ${s.toFixed(3)} vs flat ${f.toFixed(3)}`);
+      expect(Math.abs(s - f), `${kind} car ${i} ${k}: slope ${s.toFixed(3)} vs flat ${f.toFixed(3)}`).toBeLessThanOrEqual(Math.max(0.03, 0.15 * Math.abs(f)));
     }
   }
 }

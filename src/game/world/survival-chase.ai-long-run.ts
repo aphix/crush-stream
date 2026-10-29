@@ -1,5 +1,4 @@
-import { beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { beforeAll, describe, expect, it } from "vitest";
 import { chase, type Chase } from "./survival-players.test-util.ts";
 import { FRAME, course } from "./race-world.test-util.ts";
 import { StuckWatch } from "./stuck-canary.test-util.ts";
@@ -30,12 +29,12 @@ describe("given Havana's Survival course, a closed city with a ring of stucco bl
   it("when the pack hunts it, then it stays on the map", (t) => {
     const b = course("havana").bounds;
     t.annotate(`reach x ${c.reach.minX.toFixed(0)}…${c.reach.maxX.toFixed(0)}, z ${c.reach.minZ.toFixed(0)}…${c.reach.maxZ.toFixed(0)}; ended ${c.cause} at ${c.time.toFixed(1)} s`);
-    assert.ok(c.reach.minX > b.minX && c.reach.maxX < b.maxX, `drove to x ${c.reach.minX.toFixed(0)}…${c.reach.maxX.toFixed(0)}`);
-    assert.ok(c.reach.minZ > b.minZ && c.reach.maxZ < b.maxZ, `drove to z ${c.reach.minZ.toFixed(0)}…${c.reach.maxZ.toFixed(0)}`);
+    expect(c.reach.minX > b.minX && c.reach.maxX < b.maxX, `drove to x ${c.reach.minX.toFixed(0)}…${c.reach.maxX.toFixed(0)}`).toBeTruthy();
+    expect(c.reach.minZ > b.minZ && c.reach.maxZ < b.maxZ, `drove to z ${c.reach.minZ.toFixed(0)}…${c.reach.maxZ.toFixed(0)}`).toBeTruthy();
   });
 
   it("when the pack hunts it, then no live car asks for drive yet stays put outside a pile", (t) => {
     t.annotate(`${watch.episodes.length} stuck windows${watch.episodes.length ? `\n${watch.episodes.join("\n")}` : ""}`);
-    assert.deepEqual(watch.episodes, []);
+    expect(watch.episodes).toHaveLength(0);
   });
 });

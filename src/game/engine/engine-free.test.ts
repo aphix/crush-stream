@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { PAD_BUTTON, blankPad } from "../vehicle/gamepad.ts";
 import { blankFreeInput } from "../present/free-cam.ts";
 import { readFreeInput } from "./engine-free.ts";
@@ -23,42 +22,42 @@ describe("given the keys and sticks held in the free view", () => {
   for (const testCase of keyed) {
     it(testCase.it, () => {
       const out = readFreeInput(new Set(testCase.keys), blankPad(), false, blankFreeInput());
-      assert.equal(out.forward, testCase.expectedForward, "forward");
-      assert.equal(out.strafe, testCase.expectedStrafe, "strafe");
-      assert.equal(out.rise, testCase.expectedRise, "rise");
-      assert.equal(out.fast, testCase.expectedFast, "fast");
+      expect(out.forward, "forward").toBe(testCase.expectedForward);
+      expect(out.strafe, "strafe").toBe(testCase.expectedStrafe);
+      expect(out.rise, "rise").toBe(testCase.expectedRise);
+      expect(out.fast, "fast").toBe(testCase.expectedFast);
     });
   }
 
   it("when the left stick is pushed up and right, then forward and strafe follow it, and the right stick is the look", () => {
     const pad = { ...blankPad(), lx: 0.5, ly: -0.75, rx: 0.25, ry: -0.5 };
     const out = readFreeInput(new Set(), pad, false, blankFreeInput());
-    assert.equal(out.forward, 0.75, "forward");
-    assert.equal(out.strafe, 0.5, "strafe");
-    assert.equal(out.lookX, 0.25, "look x");
-    assert.equal(out.lookY, -0.5, "look y");
+    expect(out.forward, "forward").toBe(0.75);
+    expect(out.strafe, "strafe").toBe(0.5);
+    expect(out.lookX, "look x").toBe(0.25);
+    expect(out.lookY, "look y").toBe(-0.5);
   });
 
   it("when the right trigger is pulled 0.6 and the left 0.2, then rise is the difference, and A is fast", () => {
     const pad = { ...blankPad(), rt: 0.6, lt: 0.2, held: 1 << PAD_BUTTON.south };
     const out = readFreeInput(new Set(), pad, false, blankFreeInput());
-    assert.ok(Math.abs(out.rise - 0.4) < 1e-9, `rise ${out.rise}`);
-    assert.equal(out.fast, true, "fast");
+    expect(Math.abs(out.rise - 0.4), `rise ${out.rise}`).toBeLessThan(1e-9);
+    expect(out.fast, "fast").toBe(true);
   });
 
   it("when W and S cancel and the left stick is pushed up 0.4, then forward is the stick's 0.4", () => {
     const pad = { ...blankPad(), ly: -0.4 };
-    assert.equal(readFreeInput(new Set(["KeyW", "KeyS"]), pad, false, blankFreeInput()).forward, 0.4);
+    expect(readFreeInput(new Set(["KeyW", "KeyS"]), pad, false, blankFreeInput()).forward).toBe(0.4);
   });
 
   it("when a menu holds the keys, then every axis is zero with keys and sticks down", () => {
     const pad = { ...blankPad(), lx: 1, ly: -1, rx: 1, ry: 1, rt: 1, held: 1 << PAD_BUTTON.south };
     const out = readFreeInput(new Set(["KeyW", "KeyD", "PageUp", "ShiftLeft"]), pad, true, { forward: 1, strafe: 1, rise: 1, lookX: 1, lookY: 1, fast: true });
-    assert.equal(out.forward, 0, "forward");
-    assert.equal(out.strafe, 0, "strafe");
-    assert.equal(out.rise, 0, "rise");
-    assert.equal(out.lookX, 0, "look x");
-    assert.equal(out.lookY, 0, "look y");
-    assert.equal(out.fast, false, "fast");
+    expect(out.forward, "forward").toBe(0);
+    expect(out.strafe, "strafe").toBe(0);
+    expect(out.rise, "rise").toBe(0);
+    expect(out.lookX, "look x").toBe(0);
+    expect(out.lookY, "look y").toBe(0);
+    expect(out.fast, "fast").toBe(false);
   });
 });

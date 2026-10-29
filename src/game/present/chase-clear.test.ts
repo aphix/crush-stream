@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { DriverSeat } from "../vehicle/car-drive.ts";
@@ -146,8 +145,8 @@ describe("given the chase camera on a car driven through the derby bowl", () => 
     it(`when it is driven ${drive.it}, then the eye is never inside a solid, outside the wall or behind one, and without the keeper it is`, () => {
       const kept = follow(drive, true);
       const bare = follow(drive, false);
-      assert.equal(kept.blocked, 0, `frames with the car hidden or the eye in a solid, kept (of ${kept.eyes.length})`);
-      assert.ok(bare.blocked > 10, `frames with the car hidden or the eye in a solid, bare: ${bare.blocked} (the drive must put a solid in the way)`);
+      expect(kept.blocked, `frames with the car hidden or the eye in a solid, kept (of ${kept.eyes.length})`).toBe(0);
+      expect(bare.blocked, `frames with the car hidden or the eye in a solid, bare: ${bare.blocked} (the drive must put a solid in the way)`).toBeGreaterThan(10);
     });
   }
 
@@ -172,7 +171,7 @@ describe("given the chase camera on a car driven through the derby bowl", () => 
     const bare = run(false);
     let worst = 0;
     for (let f = 0; f < kept.length; f++) worst = Math.max(worst, kept[f]!.distanceTo(bare[f]!));
-    assert.equal(worst, 0, "largest distance (m) between the kept eye and the bare rig's over 600 frames");
+    expect(worst, "largest distance (m) between the kept eye and the bare rig's over 600 frames").toBe(0);
   });
 
   it("when the car stands against a container's face with its chase eye behind inside it, then the eye swings round to a clear side at least a car's length out", () => {
@@ -186,9 +185,9 @@ describe("given the chase camera on a car driven through the derby bowl", () => 
     const rig = new THREE.Vector3(behind.x, 2.4, behind.z);
     const eye = rig.clone();
     new EyeClear().apply(sight, sight.cars!, subject, eye, Infinity);
-    assert.equal(sightBlocked(exact, eye, subject), false, "eye hidden or inside a solid");
-    assert.ok(eye.distanceTo(subject) >= CAR_LENGTH - 0.05, `eye ${eye.distanceTo(subject).toFixed(2)} m from the car`);
-    assert.ok(Math.abs(Math.atan2(eye.x - subject.x, eye.z - subject.z) - Math.atan2(rig.x - subject.x, rig.z - subject.z)) > 0.1, "the eye turned round the car");
+    expect(sightBlocked(exact, eye, subject), "eye hidden or inside a solid").toBe(false);
+    expect(eye.distanceTo(subject), `eye ${eye.distanceTo(subject).toFixed(2)} m from the car`).toBeGreaterThanOrEqual(CAR_LENGTH - 0.05);
+    expect(Math.abs(Math.atan2(eye.x - subject.x, eye.z - subject.z) - Math.atan2(rig.x - subject.x, rig.z - subject.z)), "the eye turned round the car").toBeGreaterThan(0.1);
   });
 
   it("when the orbit looks at a car 2.4 m from a container's face from low and the far side of it, then the orbit's eye keeps the car in sight", () => {
@@ -214,8 +213,8 @@ describe("given the chase camera on a car driven through the derby bowl", () => 
       }
       return blocked;
     };
-    assert.equal(orbit(true), 0, "orbit frames with the car hidden or the eye in a solid, kept");
-    assert.ok(orbit(false) > 10, "orbit frames with the car hidden or the eye in a solid, bare (the orbit must put a solid in the way)");
+    expect(orbit(true), "orbit frames with the car hidden or the eye in a solid, kept").toBe(0);
+    expect(orbit(false), "orbit frames with the car hidden or the eye in a solid, bare (the orbit must put a solid in the way)").toBeGreaterThan(10);
   });
 
   it("when the rear view is held on a car nose to the ring wall, then the eye ahead of the car stays inside the wall with the car in sight, and outside it without the keeper", () => {
@@ -228,8 +227,8 @@ describe("given the chase camera on a car driven through the derby bowl", () => 
       const subject = new THREE.Vector3(nose.x, PLATFORM_CAMERA.third.aimUp, nose.z);
       return sightBlocked(exactSolids(sight), camera.position, subject);
     };
-    assert.equal(rear(true), false, "the rear view's eye hidden from the car or in a solid, kept");
-    assert.equal(rear(false), true, "the rear view's eye hidden from the car or in a solid, bare (the wall must be in the way)");
+    expect(rear(true), "the rear view's eye hidden from the car or in a solid, kept").toBe(false);
+    expect(rear(false), "the rear view's eye hidden from the car or in a solid, bare (the wall must be in the way)").toBe(true);
   });
 });
 
@@ -287,7 +286,7 @@ describe("given the chase camera on a car 2 m outside a tall prop or building of
               return blocked;
             });
             tried++;
-            assert.equal(outcome[0], 0, `${track.id} prop ${i}, turn ${turn.toFixed(2)}: frames with the eye in a solid or the car hidden, kept`);
+            expect(outcome[0], `${track.id} prop ${i}, turn ${turn.toFixed(2)}: frames with the eye in a solid or the car hidden, kept`).toBe(0);
             bareTotal += outcome[1]!;
           }
         }
@@ -295,8 +294,8 @@ describe("given the chase camera on a car 2 m outside a tall prop or building of
         setGround(null);
       }
     }
-    assert.ok(tried > 50, `placements tried over every course: ${tried}`);
-    assert.ok(bareTotal > 100, `frames with the eye in a solid or the car hidden, bare, over every course: ${bareTotal} (the placements must put solids in the way)`);
+    expect(tried, `placements tried over every course: ${tried}`).toBeGreaterThan(50);
+    expect(bareTotal, `frames with the eye in a solid or the car hidden, bare, over every course: ${bareTotal} (the placements must put solids in the way)`).toBeGreaterThan(100);
   });
 });
 
@@ -392,19 +391,19 @@ describe("given the chase camera on a car racing down a flat straight, a rival c
     const gap = tailGapUnderRoofline();
     const run = overtake(gap);
     t.annotate(`tail gap ${gap.toFixed(3)} m, eye lifted ${run.lift.toFixed(3)} m`);
-    assert.ok(gap > 0, `the rival's nose stands ${gap.toFixed(2)} m behind the car's tail: no tailgate sits its roof ${ROOF_OVER_LINE} m over the eye's line`);
-    assert.ok(run.bareHidden > 30, `frames with the rival on the bare eye's line: ${run.bareHidden} (the tailgate must hide the car)`);
-    assert.equal(run.hidden, 0, "frames with the rival on the eye's line");
-    assert.equal(run.inCar, 0, "frames with the eye inside the driven car");
-    assert.ok(run.side < 0.01, `eye swung ${run.side.toFixed(2)} m to the side`);
-    assert.ok(run.pull < 0.01, `eye pulled ${run.pull.toFixed(2)} m in along its line`);
-    assert.ok(run.lift > 0.05, `eye lifted ${run.lift.toFixed(2)} m`);
-    assert.ok(run.step <= CLOSING * DT, `eye moved ${run.step.toFixed(3)} m off the rig's path in one frame`);
+    expect(gap, `the rival's nose stands ${gap.toFixed(2)} m behind the car's tail: no tailgate sits its roof ${ROOF_OVER_LINE} m over the eye's line`).toBeGreaterThan(0);
+    expect(run.bareHidden, `frames with the rival on the bare eye's line: ${run.bareHidden} (the tailgate must hide the car)`).toBeGreaterThan(30);
+    expect(run.hidden, "frames with the rival on the eye's line").toBe(0);
+    expect(run.inCar, "frames with the eye inside the driven car").toBe(0);
+    expect(run.side, `eye swung ${run.side.toFixed(2)} m to the side`).toBeLessThan(0.01);
+    expect(run.pull, `eye pulled ${run.pull.toFixed(2)} m in along its line`).toBeLessThan(0.01);
+    expect(run.lift, `eye lifted ${run.lift.toFixed(2)} m`).toBeGreaterThan(0.05);
+    expect(run.step, `eye moved ${run.step.toFixed(3)} m off the rig's path in one frame`).toBeLessThanOrEqual(CLOSING * DT);
   });
 
   it("when the rival's nose sits 1 m off the tail, under the eye's line, then the eye stands exactly where the rig puts it", () => {
     const run = overtake(1);
-    assert.equal(run.bareHidden, 0, "frames with the rival on the bare eye's line");
-    assert.equal(run.side + run.pull + run.lift + run.step, 0, `eye off the rig: side ${run.side.toFixed(2)}, in ${run.pull.toFixed(2)}, up ${run.lift.toFixed(2)} m`);
+    expect(run.bareHidden, "frames with the rival on the bare eye's line").toBe(0);
+    expect(run.side + run.pull + run.lift + run.step, `eye off the rig: side ${run.side.toFixed(2)}, in ${run.pull.toFixed(2)}, up ${run.lift.toFixed(2)} m`).toBe(0);
   });
 });

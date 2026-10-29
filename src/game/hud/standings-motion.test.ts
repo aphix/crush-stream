@@ -1,32 +1,31 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import type { RaceHudRow } from "../match/types.ts";
 import { GREEN_WINDOW_SECONDS, nextFlashUntil, PASS_FLASH_MS, STANDING_LI, standingsVisible, withLeavers, type StandingsVisibility } from "./standings-motion.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const row = (id: number, place: number): RaceHudRow => ({ id, name: `car ${id}`, place, lap: 1, status: "racing", gap: null, bestLap: null, you: false, watched: false });
 
 describe("given the classes a standings row carries", () => {
   it("then it slides (a transform transition), fades through opacity (a transition, not a keyframe a moved row would restart), and fades while data-fading", () => {
-    assert.match(STANDING_LI, /transition-\[transform,opacity\]/);
-    assert.match(STANDING_LI, /data-\[fading\]:opacity-0/);
-    assert.doesNotMatch(STANDING_LI, /animate-/);
+    expect(STANDING_LI).toMatch(/transition-\[transform,opacity\]/);
+    expect(STANDING_LI).toMatch(/data-\[fading\]:opacity-0/);
+    expect(STANDING_LI).not.toMatch(/animate-/);
   });
 });
 
 describe("given a car that left the standings from P2 of four", () => {
   it("when the rest stand P1 to P3, then it is put back at P2, flagged leaving", () => {
     const slots = withLeavers([row(1, 1), row(3, 2), row(4, 3)], [row(2, 2)]);
-    assert.deepEqual(
-      slots.map((s) => [s.row.id, s.leaving]),
-      [[1, false], [2, true], [3, false], [4, false]],
-    );
+    expect(slots, "slots").toHaveLength(4);
+    const expected = [[1, false], [2, true], [3, false], [4, false]] as const;
+    for (let i = 0; i < expected.length; i++) {
+      expect(slots[i]!.row.id, `slot ${i} id`).toBe(expected[i]![0]);
+      expect(slots[i]!.leaving, `slot ${i} leaving`).toBe(expected[i]![1]);
+    }
   });
   it("when it is back in the standings, then it is not a leaver", () => {
     const slots = withLeavers([row(1, 1), row(2, 2)], [row(2, 2)]);
-    assert.deepEqual(
-      slots.map((s) => s.leaving),
-      [false, false],
-    );
+    expect(firstMismatch(slots.map((s) => s.leaving), [false, false])).toBeUndefined();
   });
 });
 
@@ -44,7 +43,7 @@ describe("given a viewer whose place may change", () => {
   ];
   for (const { it: name, previous, place, flashUntil, expected } of cases) {
     it(name, () => {
-      assert.equal(nextFlashUntil(previous, place, NOW, flashUntil), expected);
+      expect(nextFlashUntil(previous, place, NOW, flashUntil)).toBe(expected);
     });
   }
 });
@@ -65,7 +64,7 @@ describe("given the phone standings list", () => {
   ];
   for (const { it: name, state, expected } of cases) {
     it(name, () => {
-      assert.equal(standingsVisible(state), expected);
+      expect(standingsVisible(state)).toBe(expected);
     });
   }
 });

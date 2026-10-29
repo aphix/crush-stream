@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { CAR_SPRAY, carPickText, NO_CAR_PICK, NO_PERSON_PICK, packSpray, PERSON_SPRAY, personPickText, SPRAY_PALETTE } from "../match/look-data.ts";
 import { packLook, readLook } from "../net/look-codec.ts";
 import { RELAY_MSG_MAX } from "../net/net-hub.test-util.ts";
 import { PlayerLooks } from "./player-looks.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** Where `PlayerLooks` keeps each spray: what a build from before the bitmaps doubled wrote too. */
 const KEYS = { car: "crush.spray.car", person: "crush.spray.person" } as const;
@@ -38,7 +38,7 @@ describe("given the player's spray kept in this browser's storage", () => {
       const looks = new PlayerLooks();
       for (const bitmap of [looks.mine.carSpray, looks.mine.personSpray]) {
         const side = bitmap.layout.w;
-        assert.equal(side, 2 * OLD_SIDE, "the bitmap is twice the old side");
+        expect(side, "the bitmap is twice the old side").toBe(2 * OLD_SIDE);
         const expected = Uint8Array.from({ length: side * side }, (_, i) => old.texels[(Math.floor(i / side) >> 1) * OLD_SIDE + ((i % side) >> 1)]!);
         assertSameNumbers(bitmap.texels, expected, "texels doubled 2 x 2");
         assertSameNumbers(bitmap.palette, old.palette, "the inks' colours");
@@ -59,9 +59,9 @@ describe("given the player's spray kept in this browser's storage", () => {
       assertSameNumbers(next.sprayOf(target).palette, looks.sprayOf(target).palette, `${target}: inks from storage`);
     }
     const msg = packLook(3, { ...looks.data(), car: { ...NO_CAR_PICK, body: 0xffffff }, person: { ...NO_PERSON_PICK, shirt: 0xffffff } });
-    assert.ok(msg.length <= RELAY_MSG_MAX, `MSG.look ${msg.length} bytes against the cap's ${RELAY_MSG_MAX}`);
+    expect(msg.length, `MSG.look ${msg.length} bytes against the cap's ${RELAY_MSG_MAX}`).toBeLessThanOrEqual(RELAY_MSG_MAX);
     const heard = readLook(msg);
-    assert.ok(heard, "a peer reads the look");
+    must(heard, "a peer reads the look");
     assertSameNumbers(heard.look.carSpray.texels, looks.mine.carSpray.texels, "car texels on the wire");
     assertSameNumbers(heard.look.personSpray.palette, looks.mine.personSpray.palette, "driver inks on the wire");
     looks.dispose();
@@ -71,7 +71,7 @@ describe("given the player's spray kept in this browser's storage", () => {
   it("when a peer's look is worn, then its car spray is mipped, so a far car's paint does not alias", () => {
     const looks = new PlayerLooks();
     looks.wear(1, looks.data());
-    assert.equal(looks.of(1, 0)?.carSpray.texture.generateMipmaps, true);
+    expect(looks.of(1, 0)?.carSpray.texture.generateMipmaps).toBe(true);
     looks.dispose();
   });
 });
@@ -83,13 +83,13 @@ describe("given the player's picks kept in this browser's storage", () => {
     looks.mine.car = { ...NO_CAR_PICK, body: 0xff0000, rims: 0x00ff00 };
     looks.savePicks();
     const next = new PlayerLooks();
-    assert.equal(personPickText(next.mine.person), personPickText(looks.mine.person), "the driver's picks");
-    assert.equal(carPickText(next.mine.car), carPickText(looks.mine.car), "the car's picks");
+    expect(personPickText(next.mine.person), "the driver's picks").toBe(personPickText(looks.mine.person));
+    expect(carPickText(next.mine.car), "the car's picks").toBe(carPickText(looks.mine.car));
     saved.set("crush.look.person", "garbled");
     saved.delete("crush.look.car");
     const garbled = new PlayerLooks();
-    assert.equal(personPickText(garbled.mine.person), personPickText(NO_PERSON_PICK), "a garbled save");
-    assert.equal(carPickText(garbled.mine.car), carPickText(NO_CAR_PICK), "no save");
+    expect(personPickText(garbled.mine.person), "a garbled save").toBe(personPickText(NO_PERSON_PICK));
+    expect(carPickText(garbled.mine.car), "no save").toBe(carPickText(NO_CAR_PICK));
     for (const l of [looks, next, garbled]) l.dispose();
   });
 });

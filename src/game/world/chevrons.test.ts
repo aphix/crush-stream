@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { CHEVRON_GAP, CHEVRON_RUN, CHEVRON_SLOTS, CHEVRON_TURN, PREFAB } from "./constants.ts";
 import { junctionsOf } from "./junctions.ts";
 import { placeProps, type Placed } from "./placements.ts";
@@ -62,19 +61,15 @@ const withShortcuts = TRACKS.map((json) => new Track(json)).filter((track) => tr
 
 describe("given the courses that have shortcuts", () => {
   it("when they are listed against the run-count table, then none is missing from it and none is extra", () => {
-    assert.equal(
-      withShortcuts.map((track) => track.id).join(","),
-      runCounts.map((testCase) => testCase.track).join(","),
-      "courses with shortcuts, in course order",
-    );
+    expect(withShortcuts.map((track) => track.id).join(","), "courses with shortcuts, in course order").toBe(runCounts.map((testCase) => testCase.track).join(","));
   });
 
   for (const testCase of runCounts) {
     it(testCase.it, () => {
       const track = withShortcuts.find((t) => t.id === testCase.track)!;
       const { runs, boards } = runsOf(track);
-      assert.equal(runs.length, testCase.expectedRuns, "shortcut ends turning more than 30°");
-      assert.equal(boards.length, testCase.expectedRuns * CHEVRON_RUN, "chevron boards on the course");
+      expect(runs.length, "shortcut ends turning more than 30°").toBe(testCase.expectedRuns);
+      expect(boards.length, "chevron boards on the course").toBe(testCase.expectedRuns * CHEVRON_RUN);
     });
   }
 });
@@ -92,7 +87,7 @@ for (const track of withShortcuts) {
         for (const [b, board] of run.boards.entries()) {
           const faceNormal = { x: Math.cos(board.yaw), z: -Math.sin(board.yaw) };
           const square = Math.abs(dot(faceNormal, run.approach));
-          assert.ok(square >= Math.cos(Math.PI / 4), `${run.shortcut} ${run.end} board ${b} turns ${(Math.acos(square) * 180) / Math.PI} degrees off square to its drivers`);
+          expect(square, `${run.shortcut} ${run.end} board ${b} turns ${(Math.acos(square) * 180) / Math.PI} degrees off square to its drivers`).toBeGreaterThanOrEqual(Math.cos(Math.PI / 4));
         }
       }
     });
@@ -101,8 +96,8 @@ for (const track of withShortcuts) {
       for (const run of runs) {
         for (const [b, board] of run.boards.entries()) {
           const arrow = { x: -Math.sin(board.yaw), z: -Math.cos(board.yaw) };
-          assert.ok(dot(arrow, run.target) > 0, `${run.shortcut} ${run.end} board ${b}: arrow points ${dot(arrow, run.target).toFixed(2)} along the way to turn`);
-          assert.equal(Math.sign(leftOf(run.approach, arrow)), Math.sign(leftOf(run.approach, run.target)), `${run.shortcut} ${run.end} board ${b}: arrow on the side of the turn`);
+          expect(dot(arrow, run.target), `${run.shortcut} ${run.end} board ${b}: arrow points ${dot(arrow, run.target).toFixed(2)} along the way to turn`).toBeGreaterThan(0);
+          expect(Math.sign(leftOf(run.approach, arrow)), `${run.shortcut} ${run.end} board ${b}: arrow on the side of the turn`).toBe(Math.sign(leftOf(run.approach, run.target)));
         }
       }
     });
@@ -111,7 +106,7 @@ for (const track of withShortcuts) {
       for (const run of runs) {
         for (const [b, board] of run.boards.entries()) {
           const frontToDriver = -(Math.cos(board.yaw) * run.approach.x - Math.sin(board.yaw) * run.approach.z) > 0;
-          assert.equal(frontToDriver, leftOf(run.approach, run.target) < 0, `${run.shortcut} ${run.end} board ${b}: the '>' face toward drivers who turn right`);
+          expect(frontToDriver, `${run.shortcut} ${run.end} board ${b}: the '>' face toward drivers who turn right`).toBe(leftOf(run.approach, run.target) < 0);
         }
       }
     });
@@ -125,7 +120,7 @@ for (const track of withShortcuts) {
           const at = track.pointAt(proj.s, point);
           const offset = { x: board.x - proj.cx, z: board.z - proj.cz };
           const side = leftOf({ x: at.tx, z: at.tz }, offset);
-          assert.equal(Math.sign(side), -Math.sign(leftOf(run.approach, run.target)), `${run.shortcut} ${run.end} board ${b}: opposite the side the drivers turn to`);
+          expect(Math.sign(side), `${run.shortcut} ${run.end} board ${b}: opposite the side the drivers turn to`).toBe(-Math.sign(leftOf(run.approach, run.target)));
         }
       }
     });
@@ -137,7 +132,7 @@ for (const track of withShortcuts) {
         for (const [b, board] of run.boards.entries()) {
           projectPath(track.path, board.x, board.z, -1, proj);
           const along = loopDistance(track, run.endS, proj.s) * (run.end === "mouth" ? -1 : 1);
-          assert.ok(along >= -CHEVRON_GAP && along <= reach + CHEVRON_GAP, `${run.shortcut} ${run.end} board ${b} stands ${along.toFixed(1)} m ahead of the junction along the run's way`);
+          expect(along >= -CHEVRON_GAP && along <= reach + CHEVRON_GAP, `${run.shortcut} ${run.end} board ${b} stands ${along.toFixed(1)} m ahead of the junction along the run's way`).toBeTruthy();
         }
       }
     });

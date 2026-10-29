@@ -1,5 +1,4 @@
-import { afterEach, describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { EPICENTER,  epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
@@ -66,9 +65,9 @@ describe("given a crash filmed with and without presentSkip", () => {
     it(`when the ${scene} is run both ways, then every part's pose in every filmed frame is the same to a nanometre`, () => {
       const every = film(scene, false);
       const skipping = film(scene, true);
-      assert.ok(every.poses.length > 0, "no parts filmed");
+      expect(every.poses.length, "no parts filmed").toBeGreaterThan(0);
       assertSameNumbers(skipping.poses, every.poses, "part poses", POSE_TOLERANCE);
-      if (scene === "settled head-on") assert.ok(skipping.calls < 0.5 * every.calls, `${skipping.calls} part poses against ${every.calls}: it skipped too few frames to be a saving`);
+      if (scene === "settled head-on") expect(skipping.calls, `${skipping.calls} part poses against ${every.calls}: it skipped too few frames to be a saving`).toBeLessThan(0.5 * every.calls);
     });
   }
 });

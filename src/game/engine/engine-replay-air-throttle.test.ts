@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -60,7 +59,7 @@ function record(): { clip: HighlightClip; cars: DeformableCar[]; trace: Float64A
   }
   const flierAirborne = flier.airborne;
   rec.end();
-  assert.ok(rec.ledger.kept.length >= 1, "the head-on crash did not rank as a highlight");
+  expect(rec.ledger.kept.length, "the head-on crash did not rank as a highlight").toBeGreaterThanOrEqual(1);
   const kept = rec.ledger.kept[0]!;
   const w = new Writer(clipBytes(kept));
   writeClip(w, kept);
@@ -73,9 +72,9 @@ const flierSlot = clip.cars.findIndex((c) => c.slot === FLIER);
 
 describe("given a head-on's clip with a car beside it in the air the whole clip, its driver holding the throttle down", () => {
   it("when the clip is filed, then the flier rides in it, still in the air at the end, its gas having wound its wheels", () => {
-    assert.ok(flierSlot >= 0, `the flier is a bystander of the clip (its cars: ${clip.cars.map((c) => c.slot).join(",")})`);
-    assert.ok(flierAirborne, "the flier landed during the recording");
-    assert.ok(trace[STEPS - 1]![0] !== 0, "the held gas left the flier's front-left wheel still");
+    expect(flierSlot, `the flier is a bystander of the clip (its cars: ${clip.cars.map((c) => c.slot).join(",")})`).toBeGreaterThanOrEqual(0);
+    expect(flierAirborne, "the flier landed during the recording").toBeTruthy();
+    expect(trace[STEPS - 1]![0], "the held gas left the flier's front-left wheel still").not.toBe(0);
   });
 
   it("when the clip is replayed, then at every step the flier's drawn wheels' rate and turn are the live ones, to the bit", () => {

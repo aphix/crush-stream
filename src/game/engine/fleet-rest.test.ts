@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { CAGE_STEP } from "../vehicle/car-cage.ts";
 import { WRECK_REST_S } from "../vehicle/car.ts";
@@ -27,7 +26,7 @@ const _p = new THREE.Vector3();
 describe("given the fleet capture's hatchback, its front hubs popped, asleep as a wreck beside the pickup's wreck on flat road", () => {
   it(`when its sill is sunk ${SILL_SINK * 1000} mm in the road, then it rises out without a hop (at most ${MAX_TURNS} turns of its height) and sleeps within ${RISE_SLEEPS_BY} s`, () => {
     const { hatch, world } = fleetPair(APART);
-    assert.ok(frames(world, SETTLE_FRAMES, () => hatch.asleep) > 0, "the hatchback never slept on the road");
+    expect(frames(world, SETTLE_FRAMES, () => hatch.asleep), "the hatchback never slept on the road").toBeGreaterThan(0);
     hatch.wake();
     hatch.group.position.y -= SILL_SINK;
     for (const m of hatch.deform.masses) m.world.y -= SILL_SINK;
@@ -44,18 +43,18 @@ describe("given the fleet capture's hatchback, its front hubs popped, asleep as 
       lastY = y;
       return hatch.asleep;
     });
-    assert.ok(slept > 0, "the sunk hatchback never slept");
-    assert.ok(turns <= MAX_TURNS, `its height turned ${turns} times on the way out`);
-    assert.ok(slept * DT <= RISE_SLEEPS_BY, `it slept ${(slept * DT).toFixed(3)} s after it was sunk`);
+    expect(slept, "the sunk hatchback never slept").toBeGreaterThan(0);
+    expect(turns, `its height turned ${turns} times on the way out`).toBeLessThanOrEqual(MAX_TURNS);
+    expect(slept * DT, `it slept ${(slept * DT).toFixed(3)} s after it was sunk`).toBeLessThanOrEqual(RISE_SLEEPS_BY);
   });
 
   it(`when the pickup stands ${(INSIDE_AT_LEAST * 100).toFixed(0)} cm or more into the hatchback's side and both come to rest, then they rest no more than ${MAX_OVERLAP * 100} cm into each other`, () => {
     const { hatch, pickup, world } = fleetPair(INSIDE);
     const before = satCars(hatch, pickup, _n, _p, 0) ?? 0;
-    assert.ok(before >= INSIDE_AT_LEAST, `staged only ${(before * 100).toFixed(1)} cm in`);
-    assert.ok(frames(world, SETTLE_FRAMES, () => hatch.asleep && pickup.asleep) > 0, "the pair never both slept");
+    expect(before, `staged only ${(before * 100).toFixed(1)} cm in`).toBeGreaterThanOrEqual(INSIDE_AT_LEAST);
+    expect(frames(world, SETTLE_FRAMES, () => hatch.asleep && pickup.asleep), "the pair never both slept").toBeGreaterThan(0);
     tick(world);
     const after = satCars(hatch, pickup, _n, _p, 0) ?? 0;
-    assert.ok(after <= MAX_OVERLAP, `they rest ${(after * 100).toFixed(1)} cm into each other`);
+    expect(after, `they rest ${(after * 100).toFixed(1)} cm into each other`).toBeLessThanOrEqual(MAX_OVERLAP);
   });
 });

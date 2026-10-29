@@ -1,6 +1,5 @@
-import { describe, it, type TestContext } from "vitest";
+import { describe, expect, it, type TestContext } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import type { RayColliderHit } from "@dimforge/rapier3d-simd";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -108,14 +107,11 @@ for (const testCase of proxyCases) {
   describe(`given a dummy lying 3 m from a ${testCase.body} body ${testCase.stateText}`, () => {
     it(testCase.it, async (t) => {
       const off = await proxyGaps(t, testCase);
-      assert.deepEqual(
-        Object.entries(off).flatMap(([part, wrong]) => (testCase.todoParts.includes(part) ? [] : wrong)),
-        [],
-      );
+      expect(Object.entries(off).flatMap(([part, wrong]) => (testCase.todoParts.includes(part) ? [] : wrong))).toHaveLength(0);
     });
     for (const part of testCase.todoParts) {
       todoRow(`${testCase.it}, over its ${part}`, testCase.todoCauses[part] ?? todoCause[part], async (t) => {
-        assert.deepEqual((await proxyGaps(t, testCase))[part], []);
+        expect((await proxyGaps(t, testCase))[part]).toHaveLength(0);
       });
     }
   });
@@ -145,7 +141,7 @@ for (const b of BODIES.filter((body) => body.style === "pickup" || body.style ==
         if (!LOW_PARTS.some((r) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1)) continue;
         if (y - hy > 0) slabs.push(`leaf at x ${x.toFixed(2)} z ${z.toFixed(2)}: ${(y - hy).toFixed(2)}-${(y + hy).toFixed(2)} m`);
       }
-      assert.deepEqual(slabs, []);
+      expect(slabs).toHaveLength(0);
     });
   });
 }
@@ -188,12 +184,12 @@ describe("given a dummy lying 3 m from a sedan whose cage refits every frame", (
       if (!c) continue;
       const h = c.halfExtents();
       const o = k * BOX_FLOATS;
-      assert.equal(h.x, Math.fround(fits[o + 3]!));
-      assert.equal(h.y, Math.fround(fits[o + 4]!));
-      assert.equal(h.z, Math.fround(fits[o + 5]!));
+      expect(h.x).toBe(Math.fround(fits[o + 3]!));
+      expect(h.y).toBe(Math.fround(fits[o + 4]!));
+      expect(h.z).toBe(Math.fround(fits[o + 5]!));
       resized++;
     }
-    assert.ok(resized > 0);
-    assert.equal(pending.size, 0);
+    expect(resized).toBeGreaterThan(0);
+    expect(pending.size).toBe(0);
   });
 });

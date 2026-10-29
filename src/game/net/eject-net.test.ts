@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { blankEjection, type Ejection } from "../vehicle/ejection.ts";
@@ -9,6 +8,7 @@ import { EjectQueue } from "./eject-queue.ts";
 import { carLayout, readCarPose } from "./car-pose.ts";
 import { drawSnapshots } from "./net-view.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** A thrown driver as `EjectionWatch` makes one: f32-exact numbers. */
 function sample(car = 1): Ejection {
@@ -45,10 +45,10 @@ describe("given a network snapshot whose per-car flags byte records whether the 
     writeSnapshot(w, s, L);
     const got = makeSnapshot();
     readSnapshot(new Reader().reset(w.done()), got, L);
-    assert.deepEqual(got.cars.slice(0, 4).map((c) => c.driverOut), [0, 1, 2, 3]);
-    assert.deepEqual(got.cars.slice(0, 4).map((c) => c.crashed), [false, true, false, true], "the neighbouring flag bits are untouched");
-    assert.deepEqual(got.cars.slice(0, 4).map((c) => c.sirens), [false, false, false, true]);
-    assert.deepEqual(got.cars.slice(0, 4).map((c) => c.dented), [false, false, true, false], "the dent bit is its own");
+    expect(firstMismatch(got.cars.slice(0, 4).map((c) => c.driverOut), [0, 1, 2, 3])).toBeUndefined();
+    expect(firstMismatch(got.cars.slice(0, 4).map((c) => c.crashed), [false, true, false, true]), "the neighbouring flag bits are untouched").toBeUndefined();
+    expect(firstMismatch(got.cars.slice(0, 4).map((c) => c.sirens), [false, false, false, true])).toBeUndefined();
+    expect(firstMismatch(got.cars.slice(0, 4).map((c) => c.dented), [false, false, true, false]), "the dent bit is its own").toBeUndefined();
   });
 
   it("when a host car's driver leaves, then the host's frame carries it, a client car takes it from the drawn snapshot, and loses it again when the host puts him back", () => {
@@ -58,16 +58,16 @@ describe("given a network snapshot whose per-car flags byte records whether the 
     ensureFrames(s, 1, L);
     s.count = 1;
     readCarPose(host, s.cars[0]!);
-    assert.equal(s.cars[0]!.driverOut, 2, "doorL is code 2");
+    expect(s.cars[0]!.driverOut, "doorL is code 2").toBe(2);
     const client = makeCar();
     const ring = [s];
     s.time = 5;
     drawSnapshots(ring, [1], [], [client], 5, 1 / FRAME_HZ, { setVaporized: () => {}, clearScene: () => {} }, -1);
-    assert.equal(client.driverOut, "doorL");
+    expect(client.driverOut).toBe("doorL");
     host.spawnFacing(0, 0, 0, 0);
     readCarPose(host, s.cars[0]!);
     drawSnapshots(ring, [1], [], [client], 5, 1 / FRAME_HZ, { setVaporized: () => {}, clearScene: () => {} }, -1);
-    assert.equal(client.driverOut, null, "the host put him back");
+    expect(client.driverOut, "the host put him back").toBe(null);
   });
 });
 
@@ -77,9 +77,9 @@ describe("given an eject message (the host telling clients a driver was thrown o
     writeEject(w, sample(), 12.625);
     const got = blankEjection();
     const time = readEject(new Reader().reset(w.done()), got);
-    assert.equal(time, 12.625);
+    expect(time).toBe(12.625);
     assertSameDigest(arrays(got), arrays(sample()), "the event on the wire");
-    assert.equal(got.cop, true);
+    expect(got.cop).toBe(true);
   });
 
   it("when the car index is out of range, the pane code is invalid, or a number is not finite, then the read refuses each as a RangeError (a host never sends them)", () => {
@@ -87,7 +87,7 @@ describe("given an eject message (the host telling clients a driver was thrown o
       const w = new Writer(256);
       writeEject(w, sample(), 1);
       mutate(w);
-      assert.throws(() => readEject(new Reader().reset(w.done()), blankEjection()), RangeError);
+      expect(() => readEject(new Reader().reset(w.done()), blankEjection())).toThrow(RangeError);
     };
     // Layout: type, f64 clock (8), car, pane/cop bits, then f32s.
     bad((w) => w.bytes.set([200], 9));
@@ -110,12 +110,12 @@ describe("given a client's eject queue, which launches the host's thrown dummy w
     const q = new EjectQueue();
     q.take(msg(sample(2), 10));
     q.due(9.99, game);
-    assert.equal(launched.length, 0, "the car he left has not been drawn leaving yet");
+    expect(launched.length, "the car he left has not been drawn leaving yet").toBe(0);
     q.due(10, game);
-    assert.equal(launched.length, 1);
-    assert.equal(launched[0]!.car, 2);
+    expect(launched.length).toBe(1);
+    expect(launched[0]!.car).toBe(2);
     q.due(11, game);
-    assert.equal(launched.length, 1, "launched once");
+    expect(launched.length, "launched once").toBe(1);
   });
 
   it("when a reel is playing, the car is missing here, or the queue is cleared, then the dummy is dropped rather than launched late", () => {
@@ -127,14 +127,14 @@ describe("given a client's eject queue, which launches the host's thrown dummy w
     q.due(2, game);
     reel = false;
     q.due(3, game);
-    assert.equal(launched.length, 0, "dropped while the reel played");
+    expect(launched.length, "dropped while the reel played").toBe(0);
     q.take(msg(sample(9), 1));
     q.due(5, game);
-    assert.equal(launched.length, 0, "no car 9 here");
+    expect(launched.length, "no car 9 here").toBe(0);
     q.take(msg(sample(0), 100));
     q.clear();
     q.due(200, game);
-    assert.equal(launched.length, 0, "cleared");
+    expect(launched.length, "cleared").toBe(0);
   });
 
   it("when events arrive out of step with the frames and then a flood of 100 arrives, then they launch in clock order whatever the frame gap and the flood is capped", () => {
@@ -145,9 +145,9 @@ describe("given a client's eject queue, which launches the host's thrown dummy w
     q.take(msg(sample(1), 2));
     q.take(msg(sample(2), 3));
     q.due(2.5, game);
-    assert.deepEqual(launched, [0, 1]);
+    expect(firstMismatch(launched, [0, 1])).toBeUndefined();
     for (let k = 0; k < 100; k++) q.take(msg(sample(0), 50));
     q.due(60, game);
-    assert.ok(launched.length - 2 <= 33, `${launched.length - 2} launched from a flood of 100`);
+    expect(launched.length - 2, `${launched.length - 2} launched from a flood of 100`).toBeLessThanOrEqual(33);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { launch, makeCar, makeWorld, strikeReach, tickWorld, type WallApproach } from "./crash-scenarios.test-util.ts";
 import { BARRIER_HALF, BARRIER_TOP } from "./sat.ts";
@@ -51,7 +50,7 @@ for (const testCase of wallHits) {
         deepest = Math.max(deepest, deepestInside(car));
       }
       t.annotate(`deepest drawn vertex inside the slab ${deepest.toFixed(3)} m`);
-      assert.ok(deepest <= DEEPEST_INSIDE_M, `a drawn vertex is ${deepest.toFixed(3)} m inside the slab`);
+      expect(deepest, `a drawn vertex is ${deepest.toFixed(3)} m inside the slab`).toBeLessThanOrEqual(DEEPEST_INSIDE_M);
     });
   });
 }

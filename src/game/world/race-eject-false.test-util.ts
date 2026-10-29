@@ -1,9 +1,9 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import type * as THREE from "three";
 import { setGround } from "./ground.ts";
 import { COURSE_IDS, course as builtCourse, FRAME, frame, makeWorld, playerRace, type PlayerLine, type World } from "./race-world.test-util.ts";
 import { DeformableCar } from "../vehicle/car.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * Owner, 2026-10-03: "drivers are now getting thrown out of their cars when going on that same slope [the stunt
@@ -32,7 +32,7 @@ function unexplained(w: World, go: () => void): string[] {
     return apply.call(this, point, inward, impulse, ebs);
   };
   const watch = w.step.ejection;
-  assert.ok(watch, "the race stack runs the ejection watch");
+  must(watch, "the race stack runs the ejection watch");
   const take = watch.take.bind(watch);
   watch.take = () => {
     const out = take();
@@ -78,7 +78,7 @@ function aiRace(course: string, seed: number): string[] {
     const bound = 4.5 + AI_LAPS * 3 * (track.length / 9);
     return unexplained(w, () => {
       for (let n = 0; w.race.phase !== "finished" && n * FRAME < bound; n++) frame(w, state);
-      assert.equal(w.race.phase, "finished", `${course} seed ${seed}: the race never finished`);
+      expect(w.race.phase, `${course} seed ${seed}: the race never finished`).toBe("finished");
     });
   } finally {
     w.race.exit();
@@ -110,7 +110,7 @@ export function describeAiRaces(part: number, parts: number): void {
     const courses = COURSE_IDS.filter((id) => id !== "city").filter((_, i) => i % parts === part);
     for (const course of courses) {
       it(`when 6 AI-driven cars race ${AI_LAPS} lap of ${course} with field seed ${AI_SEED}, then every engine kill and driver throw follows a hit of at least ${MIN_HIT} m/s on that car in the previous ${RECENT} s`, () => {
-        assert.deepEqual(aiRace(course, AI_SEED), []);
+        expect(aiRace(course, AI_SEED)).toHaveLength(0);
       });
     }
   });
@@ -127,7 +127,7 @@ export function describePlayerLines(): void {
     afterEach(() => setGround(null));
     for (const testCase of playerLineCases) {
       it(testCase.it, () => {
-        assert.deepEqual(playerLap(testCase.course, testCase.line, testCase.laps), []);
+        expect(playerLap(testCase.course, testCase.line, testCase.laps)).toHaveLength(0);
       });
     }
   });

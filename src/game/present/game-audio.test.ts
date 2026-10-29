@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { GameAudio } from "./game-audio.ts";
 
@@ -36,8 +35,8 @@ describe("given the audio on, with a music player", () => {
       const { audio, player } = unlocked();
       (audio as unknown as { musicLevel: number }).musicLevel = c.from;
       audio.setVolumes(c.to, 0.25);
-      assert.equal(player.plays, c.expectedPlays, "plays");
-      assert.equal(player.pauses, c.expectedPauses, "pauses");
+      expect(player.plays, "plays").toBe(c.expectedPlays);
+      expect(player.pauses, "pauses").toBe(c.expectedPauses);
     });
   }
 });

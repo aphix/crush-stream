@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { guardMates } from "./pack-guard.ts";
 import { MIN_LIFE, OUT_RANGE, PoliceBrain } from "./police.ts";
@@ -12,6 +11,7 @@ import { blankProjection, Track } from "../world/track.ts";
 import fourCount from "../world/tracks/four-count.json" with { type: "json" };
 import city from "../world/tracks/city.json" with { type: "json" };
 import { BEAT, pt, rig, track } from "./police-rig.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** The oval is short, so its racers see a third of the full ranges (`sightRange`). */
 const SIGHT = sightRange(track.length);
@@ -24,12 +24,12 @@ describe("given a racer with a stakeout of two cops parked ahead of it, the firs
     const r = rig();
     r.hunt[0] = 0;
     r.beat();
-    assert.equal(r.police.think(r.cars[2]!, r.cars, BEAT).throttle, 0, "unit 2 still drives");
+    expect(r.police.think(r.cars[2]!, r.cars, BEAT).throttle, "unit 2 still drives").toBe(0);
     r.sit(PAST_SIGHT);
     r.run(MIN_LIFE - 2);
-    assert.ok(!r.stored.includes(2), "unit 2 is younger than MIN_LIFE");
+    expect(!r.stored.includes(2), "unit 2 is younger than MIN_LIFE").toBe(true);
     r.run(3);
-    assert.ok(r.stored.includes(2), "unit 2 is put away past MIN_LIFE");
+    expect(r.stored.includes(2), "unit 2 is put away past MIN_LIFE").toBeTruthy();
   });
 
   it("when the racer stops racing beside the parked cop in the camera's view, then it is not put away while the camera sees it, and is put away once the racer has driven off and the camera no longer sees it", () => {
@@ -37,11 +37,11 @@ describe("given a racer with a stakeout of two cops parked ahead of it, the firs
     r.hunt[0] = 0;
     r.camera.sees = true;
     r.run(MIN_LIFE + 30);
-    assert.ok(!r.stored.includes(2), "nothing vanishes in the camera's view");
+    expect(!r.stored.includes(2), "nothing vanishes in the camera's view").toBe(true);
     r.sit(PAST_SIGHT);
     r.camera.sees = false;
     r.beat();
-    assert.ok(r.stored.includes(2), "gone once out of the camera's view");
+    expect(r.stored.includes(2), "gone once out of the camera's view").toBeTruthy();
   });
 });
 
@@ -67,9 +67,9 @@ describe("given a stakeout of two cops parked ahead of a racer on the road", () 
       r.beat();
       return r.police.chasers(r.cars, []).map((c) => c.id);
     };
-    assert.deepEqual(racerAt(60), [1], "unit 2 woke for a racer 60 m off the road");
+    expect(firstMismatch(racerAt(60), [1]), "unit 2 woke for a racer 60 m off the road").toBeUndefined();
     // Control: the same pass on the road itself wakes it.
-    assert.deepEqual(racerAt(0), [1, 2], "the rig's pass never wakes unit 2: the test proves nothing");
+    expect(firstMismatch(racerAt(0), [1, 2]), "the rig's pass never wakes unit 2: the test proves nothing").toBeUndefined();
   });
 });
 
@@ -86,21 +86,21 @@ describe("given a pack-mate guard (the check that keeps a cop from driving into 
 
   it("when a mate 40 m dead ahead is facing it and has only just woken (stopped, but it pulls out), then the cop steers away and cuts its throttle for the head-on hit about 1.1 s away", () => {
     const out = meet(() => true);
-    assert.ok(out.steer < 0.2, `steer ${out.steer} not bent away from the mate`);
-    assert.ok(out.throttle < 1, "no braking for a head-on in 1.1 s");
+    expect(out.steer, `steer ${out.steer} not bent away from the mate`).toBeLessThan(0.2);
+    expect(out.throttle, "no braking for a head-on in 1.1 s").toBeLessThan(1);
   });
 
   it("when a mate beside the path with its nose across it cannot pull out (parked at its stakeout, stored, knocked out), then it is read as stopped and the steer is left alone, but the same mate pulling out is steered away from", () => {
     // 8 m to the left, nose across the path: pulling out at 8 m/s it would be hit in 1.1 s; parked it is 8 m off.
     const mate = { x: -8, z: 30, yaw: Math.PI / 2 };
-    assert.equal(meet(() => false, mate).steer, 0.2);
-    assert.notEqual(meet(() => true, mate).steer, 0.2, "the geometry never makes a pulling-out mate a threat: the test proves nothing");
+    expect(meet(() => false, mate).steer).toBe(0.2);
+    expect(meet(() => true, mate).steer, "the geometry never makes a pulling-out mate a threat: the test proves nothing").not.toBe(0.2);
   });
 
   it("when a parked mate stands 40 m ahead on the path, then the cop steers round it and cuts its throttle", () => {
     const out = meet(() => false);
-    assert.ok(out.steer < 0.2, `steer ${out.steer} not bent away from the parked mate`);
-    assert.ok(out.throttle < 1, "no braking for a parked car dead ahead in 1.5 s");
+    expect(out.steer, `steer ${out.steer} not bent away from the parked mate`).toBeLessThan(0.2);
+    expect(out.throttle, "no braking for a parked car dead ahead in 1.5 s").toBeLessThan(1);
   });
 
   it("when a mate stands 14 m ahead in its path and the cop is itself braking at 20 m/s, then it steers round and brakes harder, but a stopped cop and a reversing one are left alone and the same cop on the throttle is steered round", () => {
@@ -113,12 +113,12 @@ describe("given a pack-mate guard (the check that keeps a cop from driving into 
       return out;
     };
     const braking = through(0, 0.5, 20);
-    assert.ok(braking.steer < 0.2 && braking.brake > 0.5, `a braking car at 20 m/s was left to hit a stopped mate 14 m ahead: steer ${braking.steer}, brake ${braking.brake}`);
+    expect(braking.steer < 0.2 && braking.brake > 0.5, `a braking car at 20 m/s was left to hit a stopped mate 14 m ahead: steer ${braking.steer}, brake ${braking.brake}`).toBeTruthy();
     // Controls: a stopped car and a reversing one are left alone, and the same car on the throttle is read.
     const stopped = through(0, 1, 0);
-    assert.ok(stopped.steer === 0.2 && stopped.brake === 1, "a stopped car was steered or braked by the guard");
-    assert.equal(through(-1, 0, 20).steer, 0.2, "a reversing car was steered");
-    assert.ok(through(1, 0, 20).steer < 0.2, "the geometry never makes the guard act on a car on the throttle: the test proves nothing");
+    expect(stopped.steer === 0.2 && stopped.brake === 1, "a stopped car was steered or braked by the guard").toBeTruthy();
+    expect(through(-1, 0, 20).steer, "a reversing car was steered").toBe(0.2);
+    expect(through(1, 0, 20).steer, "the geometry never makes the guard act on a car on the throttle: the test proves nothing").toBeLessThan(0.2);
   });
 
   it("when a mate passing alongside would be reached sooner (a graze 0.2 s away) and a just-woken mate is 6 m ahead with its nose at the cop (a hit 0.35 s away), then the cop still brakes for the one it would hit", () => {
@@ -129,7 +129,7 @@ describe("given a pack-mate guard (the check that keeps a cop from driving into 
     Object.assign(cars[3]!, { x: 3, z: 6, vx: 0, vz: 0, yaw: Math.PI });
     const out = { ...idleDrive(), throttle: 1, steer: 0 };
     guardMates(cars[1]!, cars, 1, 3, out, () => true);
-    assert.ok(out.brake > 0.5, `brake ${out.brake}: the mate 0.35 s ahead was not braked for`);
+    expect(out.brake, `brake ${out.brake}: the mate 0.35 s ahead was not braked for`).toBeGreaterThan(0.5);
   });
 
   it("when a pulling-out mate is dead ahead, then the cop lifts off the throttle without braking and drops its boost, but for a mate passing 5 m off (a graze) it lifts off the throttle and keeps its boost", () => {
@@ -142,11 +142,11 @@ describe("given a pack-mate guard (the check that keeps a cop from driving into 
       return out;
     };
     const hit = boosting(0);
-    assert.ok(hit.throttle < 1 && hit.brake === 0, "the geometry never makes the guard lift the throttle short of the brake: the test proves nothing");
-    assert.equal(hit.boost, false);
+    expect(hit.throttle < 1 && hit.brake === 0, "the geometry never makes the guard lift the throttle short of the brake: the test proves nothing").toBeTruthy();
+    expect(hit.boost).toBe(false);
     const graze = boosting(5);
-    assert.ok(graze.throttle < 1, "the geometry never makes the guard act on the graze: the test proves nothing");
-    assert.equal(graze.boost, true);
+    expect(graze.throttle, "the geometry never makes the guard act on the graze: the test proves nothing").toBeLessThan(1);
+    expect(graze.boost).toBe(true);
   });
 
   it("when the cop at 50 m/s is steering full lock that swings it 30 m clear of a parked mate far ahead, then the guard does not cancel that steer, but it steers round a mate when the cop holds straight on or when a mate 15 m ahead leaves no room to swing clear in time", () => {
@@ -161,10 +161,10 @@ describe("given a pack-mate guard (the check that keeps a cop from driving into 
       guardMates(cars[1]!, cars, 1, 2, out, () => false);
       return out;
     };
-    assert.equal(through(1, 90).steer, 1, "the guard bent a full-lock steer that swings the car 30 m clear of the mate by the time it gets there");
+    expect(through(1, 90).steer, "the guard bent a full-lock steer that swings the car 30 m clear of the mate by the time it gets there").toBe(1);
     // Controls: the same mate against a car holding straight on, and against the same steer with no room to use it, is steered round.
-    assert.ok(through(0, 90).steer < -0.5, "the geometry never makes the guard act on a car holding straight on: the test proves nothing");
-    assert.ok(through(1, 15).steer < 0.5, "the guard let a car steer into a mate 0.3 s ahead on the strength of a swing that cannot clear it in time");
+    expect(through(0, 90).steer, "the geometry never makes the guard act on a car holding straight on: the test proves nothing").toBeLessThan(-0.5);
+    expect(through(1, 15).steer, "the guard let a car steer into a mate 0.3 s ahead on the strength of a swing that cannot clear it in time").toBeLessThan(0.5);
   });
 
   it("when a pack-mate dead ahead is still parked, then the cop's steer is exactly what it is with no mate there, and once that mate is knocked into motion and wakes the guard changes the steer", () => {
@@ -176,11 +176,11 @@ describe("given a pack-mate guard (the check that keeps a cop from driving into 
     Object.assign(r.cars[2]!, { x: 4000, z: 4000 });
     const alone = steer();
     Object.assign(r.cars[2]!, ahead);
-    assert.equal(steer(), alone, "a parked mate bent the lead-in's steering");
+    expect(steer(), "a parked mate bent the lead-in's steering").toBe(alone);
     // Control: the same mate, knocked into motion, wakes (state pursuit) and the guard does read it.
     Object.assign(r.cars[2]!, { vx: 5 });
     r.beat();
-    assert.notEqual(steer(), alone, "the rig's geometry never makes the guard act: the test proves nothing");
+    expect(steer(), "the rig's geometry never makes the guard act: the test proves nothing").not.toBe(alone);
   });
 });
 
@@ -223,7 +223,7 @@ describe("given two packs of cops, each with a parked stakeout, and a racer pass
         beat();
         refresh();
       }
-      assert.equal(everPlaced.size, 4, `seed ${seed}: two stakeouts parked`);
+      expect(everPlaced.size, `seed ${seed}: two stakeouts parked`).toBe(4);
       // One racer passes both packs' first spots in one beat (so both wake, and both call their reinforcement in the same beat 5 s on);
       // stakeouts further apart than a pass covers are skipped.
       const arcs = [...everPlaced.values()].map((p) => track.project(p.x, p.z, -1, blankProjection()).s);
@@ -237,12 +237,12 @@ describe("given two packs of cops, each with a parked stakeout, and a racer pass
         if (placed.length > 1) {
           doubled++;
           const [a, b] = placed;
-          assert.ok(Math.hypot(a!.x - b!.x, a!.z - b!.z) > 10, `seed ${seed}: two reinforcements parked ${Math.hypot(a!.x - b!.x, a!.z - b!.z).toFixed(1)} m apart in one beat`);
+          expect(Math.hypot(a!.x - b!.x, a!.z - b!.z), `seed ${seed}: two reinforcements parked ${Math.hypot(a!.x - b!.x, a!.z - b!.z).toFixed(1)} m apart in one beat`).toBeGreaterThan(10);
         }
         refresh();
       }
     }
-    assert.ok(doubled >= 2, `only ${doubled} beats called two reinforcements: the test proves nothing`);
+    expect(doubled, `only ${doubled} beats called two reinforcements: the test proves nothing`).toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -268,12 +268,12 @@ describe("given a racer on the road with stakeouts parked for it and a reinforce
       for (const park of r.parks) {
         spots++;
         const { dist, ahead } = against(park.racer, park);
-        assert.ok(!racerSees(park.racer, park), `seed ${seed}: unit ${park.id} put ${dist.toFixed(0)} m from the racer, ${ahead.toFixed(0)} m ahead of it along the road`);
+        expect(!racerSees(park.racer, park), `seed ${seed}: unit ${park.id} put ${dist.toFixed(0)} m from the racer, ${ahead.toFixed(0)} m ahead of it along the road`).toBe(true);
       }
       if (r.parks.some((park) => park.id === 3)) reinforcements++;
     }
-    assert.ok(spots >= 18, `${spots} cops put on the road: the test proves nothing`);
-    assert.ok(reinforcements >= 1, "no reinforcement was called: the test proves nothing");
+    expect(spots, `${spots} cops put on the road: the test proves nothing`).toBeGreaterThanOrEqual(18);
+    expect(reinforcements, "no reinforcement was called: the test proves nothing").toBeGreaterThanOrEqual(1);
   });
 });
 
@@ -292,12 +292,12 @@ describe("given a pack that has stood down (its racer stopped racing) with a cop
     for (let n = 0; n < 60 / BEAT; n++) {
       drive(r.cars, 60);
       r.beat();
-      assert.ok(!r.stored.includes(1), `a cop moving 60 m from the racer was put away at ${r.clock().toFixed(2)} s`);
+      expect(!r.stored.includes(1), `a cop moving 60 m from the racer was put away at ${r.clock().toFixed(2)} s`).toBe(true);
     }
     r.camera.sees = false;
     drive(r.cars, -150);
     r.beat();
-    assert.ok(r.stored.includes(1), "a cop 150 m behind the racer is put away");
+    expect(r.stored.includes(1), "a cop 150 m behind the racer is put away").toBeTruthy();
   });
 });
 
@@ -326,10 +326,10 @@ describe("given a stood-down pack's cop that keeps driving in a racer's sight al
     it(`when the camera sees it on ${id}, then it is never put away, and once the camera looks away, then it is put away within a beat if it is clear of the racers' near range, and never inside it`, () => {
       const near = sightRange(on.length).near;
       const clear = near + 20 + 6;
-      assert.equal(goneAfter(on, share, clear, 120), Infinity, "a cop the camera sees was put away");
+      expect(goneAfter(on, share, clear, 120), "a cop the camera sees was put away").toBe(Infinity);
       const gone = goneAfter(on, share, clear, 120, 60);
-      assert.ok(gone > 60 && gone < 60 + 2 * BEAT, `a cop out of the camera's view went at ${gone} s, not as the camera looked away at 60 s`);
-      assert.equal(goneAfter(on, share, near, 120, 0), Infinity, "a cop inside the near range was put away");
+      expect(gone > 60 && gone < 60 + 2 * BEAT, `a cop out of the camera's view went at ${gone} s, not as the camera looked away at 60 s`).toBeTruthy();
+      expect(goneAfter(on, share, near, 120, 0), "a cop inside the near range was put away").toBe(Infinity);
     });
   }
 
@@ -340,10 +340,10 @@ describe("given a stood-down pack's cop that keeps driving in a racer's sight al
     r.beat();
     Object.assign(r.cars[1]!, { vx: 0, vz: 25 });
     const young = r.police.think(r.cars[1]!, r.cars, 0);
-    assert.ok(young.brake < 0.5 && young.throttle > 0, `a young given-up cop braked: throttle ${young.throttle}, brake ${young.brake}`);
+    expect(young.brake < 0.5 && young.throttle > 0, `a young given-up cop braked: throttle ${young.throttle}, brake ${young.brake}`).toBeTruthy();
     r.run(120);
     const old = r.police.think(r.cars[1]!, r.cars, 0);
-    assert.ok(old.brake < 0.5 && old.throttle > 0, `a given-up cop out 120 s braked: throttle ${old.throttle}, brake ${old.brake}`);
+    expect(old.brake < 0.5 && old.throttle > 0, `a given-up cop out 120 s braked: throttle ${old.throttle}, brake ${old.brake}`).toBeTruthy();
   });
 });
 
@@ -358,16 +358,16 @@ describe("given a stood-down pack's cop on the oval with a second racer on the c
     };
     r.hunt[0] = 0;
     r.beat();
-    assert.equal(r.police.copsOn(0), 0, "the pack did not stand down");
+    expect(r.police.copsOn(0), "the pack did not stand down").toBe(0);
     r.hunt[0] = 1;
     behind(r.cars[0]!, 20);
     r.run(5);
-    assert.deepEqual(r.police.chasers(r.cars, []), [], "a cop took up the racer its pack gave up on");
+    expect(r.police.chasers(r.cars, []), "a cop took up the racer its pack gave up on").toHaveLength(0);
     r.hunt[1] = 1;
     behind(r.cars[1]!, 25);
     r.beat();
-    assert.deepEqual(r.police.chasers(r.cars, []).map((c) => c.id), [2], "the given-up cop did not take up the other racer");
-    assert.equal(r.police.copsOn(1), 1);
+    expect(firstMismatch(r.police.chasers(r.cars, []).map((c) => c.id), [2]), "the given-up cop did not take up the other racer").toBeUndefined();
+    expect(r.police.copsOn(1)).toBe(1);
   });
 });
 
@@ -383,10 +383,10 @@ describe("given a woken cop the race's stall rule has asked to put away", () => 
     place(56, 10);
     r.beat();
     r.police.recall(1, r.world);
-    assert.equal(r.stored.length, 0, "a cop driving 36 km/h 56 m from the racer was recalled");
+    expect(r.stored.length, "a cop driving 36 km/h 56 m from the racer was recalled").toBe(0);
     place(56, 0);
     r.police.recall(1, { ...r.world, hidden: () => true });
-    assert.deepEqual(r.stored, [1], "a stopped cop is recalled where it stands");
+    expect(firstMismatch(r.stored, [1]), "a stopped cop is recalled where it stands").toBeUndefined();
   });
 
   it("when it is stopped 5 m from the racer in the camera's view, then it is not put away, and once the camera no longer sees it, then it is, where it stands", () => {
@@ -396,10 +396,10 @@ describe("given a woken cop the race's stall rule has asked to put away", () => 
     r.cars[1]!.vz = 0;
     r.beat();
     r.police.recall(1, r.world);
-    assert.equal(r.stored.length, 0, "a stuck cop the camera sees was recalled");
+    expect(r.stored.length, "a stuck cop the camera sees was recalled").toBe(0);
     r.camera.sees = false;
     r.police.recall(1, r.world);
-    assert.deepEqual(r.stored, [1], "a stuck cop out of the camera's view is recalled");
+    expect(firstMismatch(r.stored, [1]), "a stuck cop out of the camera's view is recalled").toBeUndefined();
   });
 
   it("when it is driving 36 km/h 400 m ahead of the racer, then it is put away", () => {
@@ -408,7 +408,7 @@ describe("given a woken cop the race's stall rule has asked to put away", () => 
     Object.assign(r.cars[1]!, { x: p.x, z: p.z, vx: 0, vz: 10 });
     r.beat();
     r.police.recall(1, { ...r.world, hidden: () => true });
-    assert.deepEqual(r.stored, [1], "a moving cop out of every racer's sight is recalled");
+    expect(firstMismatch(r.stored, [1]), "a moving cop out of every racer's sight is recalled").toBeUndefined();
   });
 });
 
@@ -418,9 +418,9 @@ describe("given a stakeout parked and its pack stood down half a second later, t
     r.hunt[0] = 0;
     r.sit(PAST_SIGHT);
     r.run(MIN_LIFE - 3);
-    assert.equal(r.stored.length, 0, "a cop was put away before MIN_LIFE");
+    expect(r.stored.length, "a cop was put away before MIN_LIFE").toBe(0);
     r.run(4);
-    assert.ok(r.stored.includes(1) && r.stored.includes(2), "both cops are put away once MIN_LIFE has passed");
+    expect(r.stored.includes(1) && r.stored.includes(2), "both cops are put away once MIN_LIFE has passed").toBeTruthy();
   });
 
   it("when the race is over (its clock stands still, the beats go on), then the cops are put away once they have been on the road MIN_LIFE s all the same", () => {
@@ -429,9 +429,9 @@ describe("given a stakeout parked and its pack stood down half a second later, t
     r.sit(PAST_SIGHT);
     r.finish();
     r.run(MIN_LIFE - 3);
-    assert.equal(r.stored.length, 0, "a cop was put away before MIN_LIFE");
+    expect(r.stored.length, "a cop was put away before MIN_LIFE").toBe(0);
     r.run(4);
-    assert.ok(r.stored.includes(1) && r.stored.includes(2), "both cops are put away once MIN_LIFE s of beats have passed");
+    expect(r.stored.includes(1) && r.stored.includes(2), "both cops are put away once MIN_LIFE s of beats have passed").toBeTruthy();
   });
 
   it("when the racer is farther than OUT_RANGE away, then the cops are put away at once", () => {
@@ -439,7 +439,7 @@ describe("given a stakeout parked and its pack stood down half a second later, t
     r.hunt[0] = 0;
     Object.assign(r.cars[0]!, { x: OUT_RANGE * 10, z: OUT_RANGE * 10 });
     r.run(1);
-    assert.ok(r.stored.includes(1) && r.stored.includes(2), "out of range, both go before MIN_LIFE");
+    expect(r.stored.includes(1) && r.stored.includes(2), "out of range, both go before MIN_LIFE").toBeTruthy();
   });
 
   it("when a cop is knocked out, then it is put away DOWN_STORE s on, before MIN_LIFE", () => {
@@ -448,7 +448,7 @@ describe("given a stakeout parked and its pack stood down half a second later, t
     r.sit(PAST_SIGHT);
     r.beat();
     r.run(7);
-    assert.ok(r.stored.includes(2), "the wreck is put away before MIN_LIFE");
-    assert.ok(!r.stored.includes(1), "unit 1, not wrecked and younger than MIN_LIFE, stays");
+    expect(r.stored.includes(2), "the wreck is put away before MIN_LIFE").toBeTruthy();
+    expect(!r.stored.includes(1), "unit 1, not wrecked and younger than MIN_LIFE, stays").toBe(true);
   });
 });

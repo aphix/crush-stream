@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DerbyMatch, snapshotAiCar } from "./derby.ts";
 import { DERBY_RADIUS } from "../scenes/derby-arena.ts";
@@ -200,15 +199,15 @@ describe("given derby matches between AI cars", () => {
   describe(`given six AI cars in the arena at the arcade crush knobs (seed ${HIT_SEED})`, () => {
     it("when 20 s of derby are played, then the cars keep hitting (at least 15 scored hits), under a quarter of the hits are nose to nose and nobody sits wedged on the throttle for 3 s", () => {
       const { hits, noseToNose, worstWedge } = sixCarDerby(20, HIT_SEED);
-      assert.ok(hits >= 15, `only ${hits} scored hits in 20 s`);
-      assert.ok(noseToNose / hits < 0.25, `${noseToNose}/${hits} hits were nose to nose`);
-      assert.ok(worstWedge < 3, `a car sat on the throttle without moving for ${worstWedge.toFixed(2)} s`);
+      expect(hits, `only ${hits} scored hits in 20 s`).toBeGreaterThanOrEqual(15);
+      expect(noseToNose / hits, `${noseToNose}/${hits} hits were nose to nose`).toBeLessThan(0.25);
+      expect(worstWedge, `a car sat on the throttle without moving for ${worstWedge.toFixed(2)} s`).toBeLessThan(3);
     });
   });
   describe("given the owner's 9-car derby run for 15 s", () => {
     it("when settled wrecks are hit again in the 9-car derby, at crush squash 0.4 and rear 0.45 and again at the realistic 0.32 and 0.38, then no wreck ever moves faster than its own parts allow (it never jumps)", () => {
-      assert.equal(owner.zips.length, 0, `0.4/0.45: ${owner.zips.length} zips: ${owner.zips.slice(0, 4).join("; ")}`);
-      assert.equal(ownerReal.zips.length, 0, `0.32/0.38: ${ownerReal.zips.length} zips: ${ownerReal.zips.slice(0, 4).join("; ")}`);
+      expect(owner.zips.length, `0.4/0.45: ${owner.zips.length} zips: ${owner.zips.slice(0, 4).join("; ")}`).toBe(0);
+      expect(ownerReal.zips.length, `0.32/0.38: ${ownerReal.zips.length} zips: ${ownerReal.zips.slice(0, 4).join("; ")}`).toBe(0);
     });
 
     // Was 19 pops in 15 s (0.10–0.24 m): the first contact on a planted wreck re-anchored the group on
@@ -222,7 +221,7 @@ describe("given derby matches between AI cars", () => {
     // against 0/0/1/6, max 0/0/5.0/5.4 cm on da39401. Closes with the above.
     todoRow(`when a car crashes, then its body never moves more than 3 times its speed times the slice length plus 2 cm in one slice, from the spawn speed ${POP_SPAWN_MPS} m/s where the pop shows`, "after the plan (still open after Stage 4 item 6, the wreck split): a wreck at rest against the ring wall takes the wall's drawn-body shove (`wallBounce`) once per wall piece it meets in a slice: spawn 11.80 m/s, o6 at 4.78-4.85 s, three or four 12-13 mm shoves in one 8.8 ms slice (group 0.03-0.047 m at 0.0 m/s). Limiting the slice's total to one reach moved the pops to spawn 11.65 (o6 0.032-0.047 m at 0.3 m/s, mid-contact), cleared the stucco second-hit sink row, and reshuffled derby-ai (seeds 5-7 zipped, a spin) and engine-replay seed 1; closes with the masses carried as a crush layer of the rigid body", () => {
       const run = ownerDerby(15, ARCADE, POP_SPAWN_MPS);
-      assert.equal(run.pops.length, 0, `${run.pops.length} pops: ${run.pops.slice(0, 4).join("; ")}`);
+      expect(run.pops.length, `${run.pops.length} pops: ${run.pops.slice(0, 4).join("; ")}`).toBe(0);
     });
   });
 });

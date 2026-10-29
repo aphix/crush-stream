@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { TRACKS } from "../world/tracks/index.ts";
@@ -43,26 +42,26 @@ function run(at: { x: number; z: number }, seconds: number, standDown = false) {
 describe("given the White House grounds' guard post (owner, 2026-10-14: drive onto the lawn and the guards come out and shoot the car)", () => {
   it(`when a car parks on the North Lawn, then the squad opens fire once it is out of the doors, and the car's engine dies at a hit from ${KILL_HITS_MIN} to ${KILL_HITS_MIN + KILL_HITS_SPREAD - 1}, keyed for the replay`, () => {
     const { guard, car, firstShotAt, diedAt, hitsToKill } = run(NORTH_LAWN, 12);
-    assert.ok(firstShotAt >= GUARD_DEPLOY_S - STEP && firstShotAt < GUARD_DEPLOY_S + FIRE_EVERY, `first shot at ${firstShotAt.toFixed(2)} s`);
-    assert.ok(diedAt > firstShotAt && diedAt < firstShotAt + KILL_WINDOW_S, `the engine died at ${diedAt.toFixed(2)} s`);
-    assert.ok(hitsToKill >= KILL_HITS_MIN && hitsToKill < KILL_HITS_MIN + KILL_HITS_SPREAD, `${hitsToKill} hits killed it`);
-    assert.equal(car.placements, 1, "the spawn only: the guards' kill is no placement");
-    assert.equal(car.kills, 1, "the kill: the recorder keys the step the guards killed it in");
-    assert.equal(guard.target, NO_TARGET, "a dead car is no target");
+    expect(firstShotAt >= GUARD_DEPLOY_S - STEP && firstShotAt < GUARD_DEPLOY_S + FIRE_EVERY, `first shot at ${firstShotAt.toFixed(2)} s`).toBeTruthy();
+    expect(diedAt > firstShotAt && diedAt < firstShotAt + KILL_WINDOW_S, `the engine died at ${diedAt.toFixed(2)} s`).toBeTruthy();
+    expect(hitsToKill >= KILL_HITS_MIN && hitsToKill < KILL_HITS_MIN + KILL_HITS_SPREAD, `${hitsToKill} hits killed it`).toBeTruthy();
+    expect(car.placements, "the spawn only: the guards' kill is no placement").toBe(1);
+    expect(car.kills, "the kill: the recorder keys the step the guards killed it in").toBe(1);
+    expect(guard.target, "a dead car is no target").toBe(NO_TARGET);
   });
 
   it("when the course's secret is out (the VIP comes out instead), then a car on the lawn draws no fire and keeps its engine", () => {
     const { guard, car } = run(NORTH_LAWN, 12, true);
-    assert.equal(guard.shots, 0, "no shot");
-    assert.equal(guard.alarm, -1, "no alarm");
-    assert.equal(car.deform.drivetrainAlive, true, "the engine runs");
+    expect(guard.shots, "no shot").toBe(0);
+    expect(guard.alarm, "no alarm").toBe(-1);
+    expect(car.deform.drivetrainAlive, "the engine runs").toBe(true);
   });
 
   it("when a car stays off the grounds, then no alarm goes up and nobody fires, though the same car on the lawn is fired on", () => {
     const off = run(OFF_GROUNDS, 8);
-    assert.equal(off.guard.alarm, -1, "no alarm");
-    assert.equal(off.guard.shots, 0, "no shot");
-    assert.ok(run(NORTH_LAWN, 8).guard.shots > 0, "on the lawn they fire");
+    expect(off.guard.alarm, "no alarm").toBe(-1);
+    expect(off.guard.shots, "no shot").toBe(0);
+    expect(run(NORTH_LAWN, 8).guard.shots, "on the lawn they fire").toBeGreaterThan(0);
   });
 });
 
@@ -101,18 +100,18 @@ describe("given the squad out at its posts, firing on a parked car (owner, 2026-
   for (const testCase of speedCases) {
     it(testCase.it, () => {
       const { guard, strikes, post } = runAtGuard(testCase.mps);
-      assert.equal(guard.mode[0] === GUARD_DOWN, testCase.expectedDown, "guard 0 down");
-      assert.equal(strikes.length > 0, testCase.expectedDown, "guards struck");
-      assert.equal(strikes.length, Array.from(guard.mode).filter((mode) => mode === GUARD_DOWN).length, "each guard down was struck once, and no other");
+      expect(guard.mode[0] === GUARD_DOWN, "guard 0 down").toBe(testCase.expectedDown);
+      expect(strikes.length > 0, "guards struck").toBe(testCase.expectedDown);
+      expect(strikes.length, "each guard down was struck once, and no other").toBe(Array.from(guard.mode).filter((mode) => mode === GUARD_DOWN).length);
       if (!testCase.expectedDown) return;
       const strike = strikes.find((s) => s.guard === 0)!;
-      assert.ok(strike, "the guard struck");
-      assert.equal(strike.car, 1, "the car that struck him");
-      assert.ok(Math.abs(strike.x - post.x) < 1e-3 && Math.abs(strike.z - post.z) < 1e-3, "where his feet stood");
-      assert.ok(Math.abs(strike.vz - testCase.mps) < 1e-3, "launched at the car's speed along its way");
-      assert.ok(Math.abs(strike.vx) > 1, "and kicked clear of its centre line");
-      assert.ok(strike.vy > 0, "with a lift");
-      assert.ok(Math.abs(strike.faceX * strike.faceX + strike.faceZ * strike.faceZ - 1) < 1e-6, "facing a unit vector");
+      expect(strike, "the guard struck").toBeTruthy();
+      expect(strike.car, "the car that struck him").toBe(1);
+      expect(Math.abs(strike.x - post.x) < 1e-3 && Math.abs(strike.z - post.z) < 1e-3, "where his feet stood").toBeTruthy();
+      expect(Math.abs(strike.vz - testCase.mps), "launched at the car's speed along its way").toBeLessThan(1e-3);
+      expect(Math.abs(strike.vx), "and kicked clear of its centre line").toBeGreaterThan(1);
+      expect(strike.vy, "with a lift").toBeGreaterThan(0);
+      expect(Math.abs(strike.faceX * strike.faceX + strike.faceZ * strike.faceZ - 1), "facing a unit vector").toBeLessThan(1e-6);
     });
   }
 
@@ -133,20 +132,20 @@ describe("given the squad out at its posts, firing on a parked car (owner, 2026-
     };
     const full = fired(false);
     const short = fired(true);
-    assert.ok(full.shooters.has(0), "at full strength guard 0 fires");
-    assert.ok(!short.shooters.has(0), "a guard run down never fires");
-    assert.ok(short.shots > 0 && short.shots < full.shots, `${short.shots} shots a second with a guard down against ${full.shots}`);
+    expect(full.shooters.has(0), "at full strength guard 0 fires").toBeTruthy();
+    expect(!short.shooters.has(0), "a guard run down never fires").toBe(true);
+    expect(short.shots > 0 && short.shots < full.shots, `${short.shots} shots a second with a guard down against ${full.shots}`).toBeTruthy();
   });
 
   it("when the race restarts after a guard was run down, then every guard is back inside and comes out standing at his post", () => {
     const { guard } = runAtGuard(15);
-    assert.equal(guard.mode[0], GUARD_DOWN, "run down");
+    expect(guard.mode[0], "run down").toBe(GUARD_DOWN);
     guard.reset(7);
-    for (let i = 0; i < spec.count; i++) assert.equal(guard.mode[i], GUARD_IN, `guard ${i} inside`);
-    assert.equal(guard.takeStrikes().length, 0, "no strike pending");
+    for (let i = 0; i < spec.count; i++) expect(guard.mode[i], `guard ${i} inside`).toBe(GUARD_IN);
+    expect(guard.takeStrikes().length, "no strike pending").toBe(0);
     const car = makeCar();
     launch(car, NORTH_LAWN.x, NORTH_LAWN.z, 0, 0, 0);
     for (let t = 0; t < 3; t += STEP) guard.step([car], STEP);
-    assert.equal(guard.mode[0], GUARD_AT_POST, "guard 0 at his post again");
+    expect(guard.mode[0], "guard 0 at his post again").toBe(GUARD_AT_POST);
   });
 });

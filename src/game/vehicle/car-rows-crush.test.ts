@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { classCar } from "./ejection.test-util.ts";
 import { launch, makeCar, makeWorld, Probe, run, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -33,7 +32,7 @@ describe("given a sedan driving head-on into a monster truck, each at 40 m/s", (
     for (let frame = 0; frame < 6; frame++) tickWorld(world);
     for (const [name, car] of [["sedan", sedan], ["truck", truck]] as const) {
       const armed = car.deform["hitSpeed"];
-      assert.ok(Math.abs(armed - EQUAL_MASS_SHARE) <= SHARE_TOLERANCE * EQUAL_MASS_SHARE, `${name}'s hit read ${armed.toFixed(1)} m/s, its share is ${EQUAL_MASS_SHARE} m/s`);
+      expect(Math.abs(armed - EQUAL_MASS_SHARE), `${name}'s hit read ${armed.toFixed(1)} m/s, its share is ${EQUAL_MASS_SHARE} m/s`).toBeLessThanOrEqual(SHARE_TOLERANCE * EQUAL_MASS_SHARE);
     }
   });
 });
@@ -50,7 +49,7 @@ describe("given a sedan driving its nose into a parked sedan's door at 55 m/s", 
       tickWorld(world);
       highest = Math.max(highest, striker.group.position.y);
     }
-    assert.ok(highest <= MOST_LIFT_M, `the striker rose ${highest.toFixed(3)} m`);
+    expect(highest, `the striker rose ${highest.toFixed(3)} m`).toBeLessThanOrEqual(MOST_LIFT_M);
   });
 });
 
@@ -71,9 +70,9 @@ describe("given two sedans, undriven, driving head-on at each other at 56, 58 an
       const want = kph / 3.6;
       for (const [name, car] of [["a", a], ["b", b]] as const) {
         const armed = car.deform.hitSpeedValue;
-        assert.ok(Math.abs(armed - want) <= LAUNCH_TOLERANCE * want, `${kph} km/h: car ${name}'s hit read ${armed.toFixed(2)} m/s, it met at ${want.toFixed(2)}`);
+        expect(Math.abs(armed - want), `${kph} km/h: car ${name}'s hit read ${armed.toFixed(2)} m/s, it met at ${want.toFixed(2)}`).toBeLessThanOrEqual(LAUNCH_TOLERANCE * want);
       }
-      assert.ok(crush > slower, `${kph} km/h: nose ${crush.toFixed(4)} m, the slower pair's ${slower.toFixed(4)} m`);
+      expect(crush, `${kph} km/h: nose ${crush.toFixed(4)} m, the slower pair's ${slower.toFixed(4)} m`).toBeGreaterThan(slower);
       slower = crush;
     }
   });

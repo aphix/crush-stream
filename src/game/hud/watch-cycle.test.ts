@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { showsPrevNext } from "./watch-cycle.ts";
 
 describe("given the camera and the targets Previous / Next could reach", () => {
@@ -12,6 +11,6 @@ describe("given the camera and the targets Previous / Next could reach", () => {
     { it: "when the player is at the wheel with many cars, then there are no Previous / Next", seat: "drive", watchTargets: 14, expected: false },
   ] as const;
   for (const testCase of cases) {
-    it(testCase.it, () => assert.equal(showsPrevNext({ seat: testCase.seat, watchTargets: testCase.watchTargets }), testCase.expected));
+    it(testCase.it, () => expect(showsPrevNext({ seat: testCase.seat, watchTargets: testCase.watchTargets })).toBe(testCase.expected));
   }
 });

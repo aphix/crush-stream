@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { outlineOf } from "../contact/cage-outline.ts";
 import { bodyHit, makeBox, partContact, strikeCar } from "../contact/external-contact.ts";
@@ -11,6 +10,7 @@ import { PANEL_SMUSH_MIN } from "../vehicle/car-wear.ts";
 import { assertSameDigest, DT, paint } from "../vehicle/test-support.ts";
 import { DOOR_LANES, laneFor, type DoorScenario, type RamShot } from "./door-rig.ts";
 import { fireRam } from "./door-rig.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * Frame invariance (docs/CONTACT_PARITY.md, docs/PANEL_FLAP.md): what the Doors ram does depends only on the relative motion.
@@ -37,12 +37,12 @@ const SHOTS: Shot[] = [
 
 function same(a: RamShot, b: RamShot, what: string): void {
   assertSameDigest([...a.detached].sort(), [...b.detached].sort(), `${what}: parts off ${a.detached} vs ${b.detached}`);
-  assert.equal(a.latched, b.latched, `${what}: latch`);
-  assert.ok(Math.abs(a.doorDeg - b.doorDeg) < 0.5, `${what}: door ${a.doorDeg.toFixed(2)}° vs ${b.doorDeg.toFixed(2)}°`);
-  assert.ok(Math.abs(a.mirrorFoldDeg - b.mirrorFoldDeg) < 0.5, `${what}: mirror fold ${a.mirrorFoldDeg} vs ${b.mirrorFoldDeg}`);
-  assert.ok(Math.abs(a.hingeLoadJ - b.hingeLoadJ) <= 0.01 * Math.max(a.hingeLoadJ, 1), `${what}: hinge load ${a.hingeLoadJ} vs ${b.hingeLoadJ} J`);
-  assert.ok(Math.abs(a.panelHinge - b.panelHinge) < 0.005, `${what}: panel ${a.panelHinge} vs ${b.panelHinge}`);
-  assert.equal(a.ramStopped, b.ramStopped, `${what}: ram stopped`);
+  expect(a.latched, `${what}: latch`).toBe(b.latched);
+  expect(Math.abs(a.doorDeg - b.doorDeg), `${what}: door ${a.doorDeg.toFixed(2)}° vs ${b.doorDeg.toFixed(2)}°`).toBeLessThan(0.5);
+  expect(Math.abs(a.mirrorFoldDeg - b.mirrorFoldDeg), `${what}: mirror fold ${a.mirrorFoldDeg} vs ${b.mirrorFoldDeg}`).toBeLessThan(0.5);
+  expect(Math.abs(a.hingeLoadJ - b.hingeLoadJ), `${what}: hinge load ${a.hingeLoadJ} vs ${b.hingeLoadJ} J`).toBeLessThanOrEqual(0.01 * Math.max(a.hingeLoadJ, 1));
+  expect(Math.abs(a.panelHinge - b.panelHinge), `${what}: panel ${a.panelHinge} vs ${b.panelHinge}`).toBeLessThan(0.005);
+  expect(a.ramStopped, `${what}: ram stopped`).toBe(b.ramStopped);
 }
 
 describe("given a ram and a parked car meeting at the same closing speed, once with the ram moving and once with the car moving (mirror, overOpen and shut: the door scenes; panelPush and panelPull: the ram pushes the quarter panel in or pulls it out)", () => {
@@ -58,11 +58,11 @@ describe("given a ram and a parked car meeting at the same closing speed, once w
 
   it("when the table of shots is read, then it covers every door scene and a panel torn off, smushed back and opened, in both travel directions", () => {
     const dirs = new Set(SHOTS.map((s) => s.scenario));
-    assert.deepEqual([...dirs].sort(), ["mirror", "overOpen", "panelPull", "panelPush", "shut"]);
+    expect(firstMismatch([...dirs].sort(), ["mirror", "overOpen", "panelPull", "panelPush", "shut"])).toBeUndefined();
     const outcomes = SHOTS.map((s) => fireRam(makeCar(), s.scenario, { kph: s.kph, kg: s.kg, side: 1 }));
-    assert.ok(outcomes.some((o) => o.detached.includes("quarterR")), "no shot tore the panel");
-    assert.ok(outcomes.some((o) => o.panelHinge > PANEL_SMUSH_MIN && o.panelHinge < 0.4 && !o.detached.includes("quarterR")), "no shot smushed it");
-    assert.ok(outcomes.some((o) => o.panelHinge > 0.8 && !o.detached.includes("quarterR")), "no shot opened it");
+    expect(outcomes.some((o) => o.detached.includes("quarterR")), "no shot tore the panel").toBeTruthy();
+    expect(outcomes.some((o) => o.panelHinge > PANEL_SMUSH_MIN && o.panelHinge < 0.4 && !o.detached.includes("quarterR")), "no shot smushed it").toBeTruthy();
+    expect(outcomes.some((o) => o.panelHinge > 0.8 && !o.detached.includes("quarterR")), "no shot opened it").toBeTruthy();
   });
 });
 
@@ -82,7 +82,7 @@ describe("given a quarter panel smushed back by a 56 km/h rear crash into a wall
       runWall(56, 0.3, "rear", { car });
       const p = car.part("quarterR");
       const was = p.hingeT;
-      assert.ok(was > 0.25 && !p.detached, `the wall left the panel at ${was}`);
+      expect(was > 0.25 && !p.detached, `the wall left the panel at ${was}`).toBeTruthy();
       if (smush) car.bendPanel(1, 0.15);
       else {
         p.hingeT = 0.15;
@@ -90,8 +90,8 @@ describe("given a quarter panel smushed back by a 56 km/h rear crash into a wall
       for (let f = 0; f < 60; f++) car.stepBreakage(DT);
       return p.hingeT;
     };
-    assert.ok(Math.abs(hit(true) - 0.15) < 1e-9, `a pushed-back panel rose to ${hit(true)}`);
-    assert.ok(hit(false) > 0.25, "the control did not rise");
+    expect(Math.abs(hit(true) - 0.15), `a pushed-back panel rose to ${hit(true)}`).toBeLessThan(1e-9);
+    expect(hit(false), "the control did not rise").toBeGreaterThan(0.25);
   });
 });
 
@@ -157,11 +157,11 @@ describe("given a still box with the car driven at it, and the same box driven a
     it(`when the shot is "${name}", then the moving car ends with the same parts off, latch, door and panel as the moving box`, () => {
       const box = strike(part, dir, kph, kg, false);
       const car = strike(part, dir, kph, kg, true);
-      assert.ok(meaningful(box), `the shot did not do what it is named for: ${JSON.stringify(box)}`);
+      expect(meaningful(box), `the shot did not do what it is named for: ${JSON.stringify(box)}`).toBeTruthy();
       assertSameDigest(car.off, box.off, "parts off");
-      assert.equal(car.latched, box.latched, "latch");
-      assert.ok(Math.abs(car.door - box.door) < 0.01, `door ${car.door} vs ${box.door} rad`);
-      assert.ok(Math.abs(car.panel - box.panel) < 0.01, `panel ${car.panel} vs ${box.panel}`);
+      expect(car.latched, "latch").toBe(box.latched);
+      expect(Math.abs(car.door - box.door), `door ${car.door} vs ${box.door} rad`).toBeLessThan(0.01);
+      expect(Math.abs(car.panel - box.panel), `panel ${car.panel} vs ${box.panel}`).toBeLessThan(0.01);
     });
   }
 });
@@ -171,9 +171,9 @@ describe("given a panel folded by the sim's step on a car no frame ever drew", (
     it(`when it is struck and ${name}, then it ends as the same panel posed by a frame does`, () => {
       const drawn = strike("panel", dir, kph, kg, true);
       const sim = strike("panel", dir, kph, kg, true, false);
-      assert.ok(drawn.panel !== 0.45 || drawn.off.length > 0, "the strike changed nothing: the comparison proves nothing");
+      expect(drawn.panel !== 0.45 || drawn.off.length > 0, "the strike changed nothing: the comparison proves nothing").toBeTruthy();
       assertSameDigest(sim.off, drawn.off, "parts off");
-      assert.equal(sim.panel, drawn.panel, "panel hinge");
+      expect(sim.panel, "panel hinge").toBe(drawn.panel);
     });
   }
 });
@@ -182,7 +182,7 @@ describe("given a striker whose heights cross the car's widest section, so its b
   it("when its inner edge is swept across the plan edge in 1 cm steps, then the depth the striker reads equals the plain loop over every outline node at each step", () => {
     const car = makeCar();
     car.spawnFacing(0, 0, 0, 0);
-    assert.ok(car.rightFlat.x === 1 && car.fwdFlat.z === 1, "the oracle below reads a car at yaw 0");
+    expect(car.rightFlat.x === 1 && car.fwdFlat.z === 1, "the oracle below reads a car at yaw 0").toBeTruthy();
     const outline = outlineOf(car);
     const p = car.group.position;
     const planEdge = car.cage.fields.planBox[1]!;
@@ -206,10 +206,10 @@ describe("given a striker whose heights cross the car's widest section, so its b
         if (along < -box.hz) continue;
         want = Math.max(want, box.hz - along);
       }
-      assert.ok(bodyHit.depth === want, `inner edge ${edge.toFixed(2)} m: the striker reads depth ${bodyHit.depth}, the loop over every node ${want}`);
+      expect(bodyHit.depth, `inner edge ${edge.toFixed(2)} m: the striker reads depth ${bodyHit.depth}, the loop over every node ${want}`).toBe(want);
       if (want === -Infinity) missed++;
       else met++;
     }
-    assert.ok(met > 0 && missed > 0, `the sweep met nodes at ${met} edges and none at ${missed}: it must cross the body's edge`);
+    expect(met > 0 && missed > 0, `the sweep met nodes at ${met} edges and none at ${missed}: it must cross the body's edge`).toBeTruthy();
   });
 });

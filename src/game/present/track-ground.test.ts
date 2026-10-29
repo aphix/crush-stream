@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { CELL as GROUND_CELL, Track, type TrackGround } from "../world/track.ts";
 import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
@@ -9,6 +8,7 @@ import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
 import { cellMaterial, FLAT_TOL, Mesher, RoadIndex } from "./track-mesh.ts";
 import { sections } from "../world/track-sections.ts";
 import { buildGroundLayers, TerrainBatch } from "./track-ground.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** A course's terrain as `TrackArt` draws it: the near mesh (chunk after chunk, then the far skirt), the chunks, the road index, and the ground the mesh was cut from with its terrain's surface index. */
 type Terrain = { near: Mesher; chunks: { coarse: Mesher; box: Float32Array; fineAt: Int32Array; coarseAt: Int32Array }; roads: RoadIndex; ground: TrackGround; terrainSurface: number };
@@ -18,8 +18,8 @@ function terrainOf(course: string): Terrain {
   const paths = track.paths();
   const roads = new RoadIndex(paths);
   const terrain = buildGroundLayers(track, track.ground(), roads, paths, paths.map((p) => sections(p, 0)))[0]!;
-  assert.equal(terrain.kind, "terrain");
-  assert.ok(terrain.chunks, "the terrain is cut into chunks");
+  expect(terrain.kind).toBe("terrain");
+  must(terrain.chunks, "the terrain is cut into chunks");
   return { near: terrain.m, chunks: terrain.chunks, roads, ground: track.ground(), terrainSurface: SURFACE_IDS.indexOf(track.json.environment.terrain) };
 }
 
@@ -125,10 +125,10 @@ describe("given a course's terrain drawn in chunks, each with a near mesh and a 
       const near = sampleGround(t, () => false);
 
       it("when neighbouring chunks are drawn one near and one far (both ways round), then no crack opens: the ground's height agrees within 1 cm across every 2 m grid line", () => {
-        assert.ok(largestStep(near) < 0.01, `near everywhere: a ${largestStep(near)} m step`);
+        expect(largestStep(near), `near everywhere: a ${largestStep(near)} m step`).toBeLessThan(0.01);
         for (const parity of [0, 1]) {
           const step = largestStep(sampleGround(t, (c) => (Math.floor(c / columns) + (c % columns)) % 2 === parity));
-          assert.ok(step < 0.01, `checkerboard ${parity}: a ${step} m step`);
+          expect(step, `checkerboard ${parity}: a ${step} m step`).toBeLessThan(0.01);
         }
       });
 
@@ -151,13 +151,13 @@ describe("given a course's terrain drawn in chunks, each with a near mesh and a 
           compared++;
           worst = Math.max(worst, Math.abs(a - b));
         }
-        assert.ok(compared > 0, "ground was sampled");
-        assert.equal(uncoveredAwayFromRoads, 0, "far ground left a hole away from a road");
-        assert.equal(addedAwayFromRoads, 0, "far ground covers a hole the near ground leaves away from a road");
-        assert.ok(worst <= 0.2 + 1e-4, `${worst} m from the near ground`);
+        expect(compared, "ground was sampled").toBeGreaterThan(0);
+        expect(uncoveredAwayFromRoads, "far ground left a hole away from a road").toBe(0);
+        expect(addedAwayFromRoads, "far ground covers a hole the near ground leaves away from a road").toBe(0);
+        expect(worst, `${worst} m from the near ground`).toBeLessThanOrEqual(0.2 + 1e-4);
         const nearTriangles = t.chunks.fineAt[chunks * 2 + 1]! / 3;
         const farTriangles = t.chunks.coarseAt[chunks * 2 + 1]! / 3;
-        assert.ok(farTriangles <= nearTriangles * (1 - testCase.fewerFarTrianglesPct / 100), `${farTriangles} far triangles against ${nearTriangles} near`);
+        expect(farTriangles, `${farTriangles} far triangles against ${nearTriangles} near`).toBeLessThanOrEqual(nearTriangles * (1 - testCase.fewerFarTrianglesPct / 100));
       });
     });
   }
@@ -169,11 +169,11 @@ describe("given the National Mall's terrain, its lawns painted over a flat concr
   const farTriangles = t.chunks.coarseAt[(t.chunks.box.length / 4) * 2 + 1]! / 3;
 
   it("when the chunks are built, then flat and gently sloping lawn and road verge are merged into large quads and a colour's straight edge into strips: the near mesh stays under 76 000 triangles", () => {
-    assert.ok(nearTriangles < 76_000, `${nearTriangles} near triangles`);
+    expect(nearTriangles, `${nearTriangles} near triangles`).toBeLessThan(76_000);
   });
 
   it("when the chunks are built, then the far mesh stays under 62 000 triangles", () => {
-    assert.ok(farTriangles < 62_000, `${farTriangles} far triangles`);
+    expect(farTriangles, `${farTriangles} far triangles`).toBeLessThan(62_000);
   });
 });
 
@@ -300,13 +300,16 @@ describe("given every course's terrain, drawn near, far, or a checkerboard of bo
       for (const testCase of cases) {
         it(`when ${testCase.name} are drawn, then no vertex lies inside another triangle's edge, no lattice point is drawn at two heights, and every triangle faces up`, () => {
           const { triangles, ...seams } = seamsOf(testCase.drawn, GROUND_CELL);
-          assert.ok(triangles > 0, "something is drawn");
-          assert.deepEqual(seams, { notFacingUp: 0, tJunctions: 0, splitHeights: 0 }, `${triangles} triangles`);
+          expect(triangles, "something is drawn").toBeGreaterThan(0);
+          expect(seams.notFacingUp, `${triangles} triangles: notFacingUp`).toBe(0);
+          expect(seams.tJunctions, `${triangles} triangles: tJunctions`).toBe(0);
+          expect(seams.splitHeights, `${triangles} triangles: splitHeights`).toBe(0);
         });
         it(`when ${testCase.name} are drawn, then every border between a fine cell and a coarse one has its middle drawn as a vertex on both sides, at one height`, () => {
           const { drawn, spanned, splitHeights } = bordersOf(t, testCase.drawn);
-          assert.deepEqual({ spanned, splitHeights }, { spanned: 0, splitHeights: 0 }, `${drawn} borders drawn`);
-          if (MIXED_COURSES.includes(course) && testCase.name === "every chunk near") assert.ok(drawn >= MIN_POINTS, `${drawn} borders drawn`);
+          expect(spanned, `${drawn} borders drawn: spanned`).toBe(0);
+          expect(splitHeights, `${drawn} borders drawn: splitHeights`).toBe(0);
+          if (MIXED_COURSES.includes(course) && testCase.name === "every chunk near") expect(drawn, `${drawn} borders drawn`).toBeGreaterThanOrEqual(MIN_POINTS);
         });
       }
     });
@@ -385,10 +388,10 @@ describe("given every course's terrain, its single-cell triangles drawn in 2 m c
       const { onNodes, eased } = groundAgainstDrawnCells(terrainOf(course));
       for (const kind of CELL_KINDS) {
         const { compared, worst } = onNodes[kind];
-        if (MIXED_COURSES.includes(course)) assert.ok(compared >= MIN_POINTS, `${compared} ${kind} points read`);
-        assert.ok(worst <= GROUND_DRAWN_TOLERANCE, `${worst} m from the drawn triangle over ${compared} ${kind} points`);
+        if (MIXED_COURSES.includes(course)) expect(compared, `${compared} ${kind} points read`).toBeGreaterThanOrEqual(MIN_POINTS);
+        expect(worst, `${worst} m from the drawn triangle over ${compared} ${kind} points`).toBeLessThanOrEqual(GROUND_DRAWN_TOLERANCE);
       }
-      assert.ok(eased.worst <= FLAT_TOL + GROUND_DRAWN_TOLERANCE, `${eased.worst} m from the eased triangle over ${eased.compared} points`);
+      expect(eased.worst, `${eased.worst} m from the eased triangle over ${eased.compared} points`).toBeLessThanOrEqual(FLAT_TOL + GROUND_DRAWN_TOLERANCE);
     });
   }
 });
@@ -414,21 +417,21 @@ describe("given a course's terrain batch (four-count)", () => {
     view(x, z);
     let nearCount = 0;
     for (let k = 0; k < batch.far.length; k++) {
-      assert.equal(batch.far[k], gap(k, x, z) > 240 ? 1 : 0, `chunk ${k} at ${gap(k, x, z)} m`);
+      expect(batch.far[k], `chunk ${k} at ${gap(k, x, z)} m`).toBe(gap(k, x, z) > 240 ? 1 : 0);
       nearCount += 1 - batch.far[k]!;
     }
-    assert.ok(nearCount > 0 && nearCount < batch.far.length, `${nearCount} of ${batch.far.length} near`);
+    expect(nearCount > 0 && nearCount < batch.far.length, `${nearCount} of ${batch.far.length} near`).toBeTruthy();
   });
 
   it("when a far chunk's nearest point comes back to 230 m, then it stays far, and at 220 m it draws near again", () => {
     const z = (batch.box[1]! + batch.box[3]!) / 2;
     const edge = batch.box[2]!;
     view(edge + 300, z);
-    assert.equal(batch.far[0], 1);
+    expect(batch.far[0]).toBe(1);
     view(edge + 230, z);
-    assert.equal(batch.far[0], 1);
+    expect(batch.far[0]).toBe(1);
     view(edge + 220, z);
-    assert.equal(batch.far[0], 0);
+    expect(batch.far[0]).toBe(0);
   });
 
   it("when the camera looks east from the middle of the course, then every chunk wholly behind it is left out, and the chunks straight ahead are drawn", () => {
@@ -444,25 +447,25 @@ describe("given a course's terrain batch (four-count)", () => {
       const b = batch.box;
       if (b[k * 4 + 2]! < x) {
         behind++;
-        assert.equal(batch.getVisibleAt(k), false, `chunk ${k} behind the camera`);
+        expect(batch.getVisibleAt(k), `chunk ${k} behind the camera`).toBe(false);
       } else if (b[k * 4]! > x && b[k * 4 + 1]! <= z && b[k * 4 + 3]! >= z) {
         ahead++;
-        assert.equal(batch.getVisibleAt(k), true, `chunk ${k} straight ahead`);
+        expect(batch.getVisibleAt(k), `chunk ${k} straight ahead`).toBe(true);
       }
     }
-    assert.ok(behind > 0 && ahead > 0, `${behind} chunks behind, ${ahead} straight ahead`);
+    expect(behind > 0 && ahead > 0, `${behind} chunks behind, ${ahead} straight ahead`).toBeTruthy();
   });
 });
 
 describe("given Razor Shelf, whose inside cut is a dirt road across dirt terrain", () => {
   it("when its ground layers are built, then every vertex of the dirt road strip is darker than the darkest terrain mottle (0.9 of the surface colour), and the paved road keeps its own colour", () => {
     const track = TRACKS.map((raw) => new Track(raw)).find((t) => t.id === "razor-shelf")!;
-    assert.equal(track.json.environment.terrain, "dirt", "the staging: dirt terrain");
+    expect(track.json.environment.terrain, "the staging: dirt terrain").toBe("dirt");
     const paths = track.paths();
     const layers = buildGroundLayers(track, track.ground(), new RoadIndex(paths), paths, paths.map((p) => sections(p, 0)));
     const brightest = (kind: string, surface: keyof typeof SURFACES): number => {
       const layer = layers.find((l) => l.kind === kind && l.surface === surface && l.level !== "deck");
-      assert.ok(layer, `a ${kind} layer of ${surface}`);
+      must(layer, `a ${kind} layer of ${surface}`);
       const base = new THREE.Color(SURFACES[surface].color);
       let most = 0;
       for (let i = 0; i < layer.m.col.length; i += 3) most = Math.max(most, layer.m.col[i]! / base.r, layer.m.col[i + 1]! / base.g, layer.m.col[i + 2]! / base.b);
@@ -470,9 +473,9 @@ describe("given Razor Shelf, whose inside cut is a dirt road across dirt terrain
     };
     // The terrain draws each patch at 0.9 to 1.1 of its colour: a road at its full colour matched every patch beside it and 720 m read as open desert.
     const dirt = brightest("road", "dirt");
-    assert.ok(dirt < 0.9, `the dirt road is drawn at up to ${dirt.toFixed(3)} of the dirt colour`);
+    expect(dirt, `the dirt road is drawn at up to ${dirt.toFixed(3)} of the dirt colour`).toBeLessThan(0.9);
     const paved = brightest("road", "asphalt");
-    assert.ok(Math.abs(paved - 1) < 1e-6, `asphalt drawn at ${paved.toFixed(3)} of its colour`);
+    expect(Math.abs(paved - 1), `asphalt drawn at ${paved.toFixed(3)} of its colour`).toBeLessThan(1e-6);
   });
 });
 
@@ -485,29 +488,29 @@ describe("given the National Mall, whose lawns are painted on a concrete terrain
 
   for (const [name, mesher] of [["near", t.near], ["far", t.chunks.coarse]] as const) {
     it(`when its ${name} mesh is built, then a vertex coloured as grass takes the grass patch's id and one coloured as concrete the concrete terrain's, so the lawn takes no concrete's shine or detail`, () => {
-      assert.equal(mesher.cls?.length, mesher.pos.length / 3, "an id per vertex");
+      expect(mesher.cls?.length, "an id per vertex").toBe(mesher.pos.length / 3);
       const seen = new Set<number>();
       for (let v = 0; v < mesher.pos.length / 3; v++) {
         const surface = surfaceAt(mesher, v);
         if (surface < 0) continue;
-        assert.equal(mesher.cls![v], cellMaterial(surface, t.terrainSurface), `vertex ${v} of surface ${SURFACE_IDS[surface]}`);
+        expect(mesher.cls![v], `vertex ${v} of surface ${SURFACE_IDS[surface]}`).toBe(cellMaterial(surface, t.terrainSurface));
         seen.add(surface);
       }
-      assert.ok(seen.has(SURFACE_IDS.indexOf("grass")), "lawn vertices exist");
-      assert.ok(seen.has(SURFACE_IDS.indexOf("concrete")), "concrete vertices exist");
-      assert.equal(cellMaterial(SURFACE_IDS.indexOf("grass"), t.terrainSurface), MAT.PATCH_GRASS, "a lawn on the concrete terrain is a patch");
-      assert.equal(cellMaterial(SURFACE_IDS.indexOf("concrete"), t.terrainSurface), MAT.TERRAIN_CONCRETE, "the bare terrain is the terrain's own");
-      assert.equal(MATERIALS[cellMaterial(SURFACE_IDS.indexOf("grass"), t.terrainSurface)]![1], MAT.SOIL, "the lawn shades as soil");
-      assert.equal(MATERIALS[cellMaterial(SURFACE_IDS.indexOf("concrete"), t.terrainSurface)]![1], MAT.CONCRETE, "the paved ground shades as concrete");
+      expect(seen.has(SURFACE_IDS.indexOf("grass")), "lawn vertices exist").toBeTruthy();
+      expect(seen.has(SURFACE_IDS.indexOf("concrete")), "concrete vertices exist").toBeTruthy();
+      expect(cellMaterial(SURFACE_IDS.indexOf("grass"), t.terrainSurface), "a lawn on the concrete terrain is a patch").toBe(MAT.PATCH_GRASS);
+      expect(cellMaterial(SURFACE_IDS.indexOf("concrete"), t.terrainSurface), "the bare terrain is the terrain's own").toBe(MAT.TERRAIN_CONCRETE);
+      expect(MATERIALS[cellMaterial(SURFACE_IDS.indexOf("grass"), t.terrainSurface)]![1], "the lawn shades as soil").toBe(MAT.SOIL);
+      expect(MATERIALS[cellMaterial(SURFACE_IDS.indexOf("concrete"), t.terrainSurface)]![1], "the paved ground shades as concrete").toBe(MAT.CONCRETE);
     });
   }
 });
 
 describe("given the cobble surface, drawn as a ribbon and as terrain cells", () => {
   it("when its ids are read, then the ribbon is ROAD_COBBLE shaded as soil (the detail texture) and a terrain cell is TERRAIN_COBBLE shaded as stone", () => {
-    assert.equal(SURFACES.cobble.ribbon, MAT.ROAD_COBBLE);
-    assert.equal(MATERIALS[SURFACES.cobble.ribbon]![1], MAT.SOIL);
-    assert.equal(MATERIALS[cellMaterial(SURFACE_IDS.indexOf("cobble"), SURFACE_IDS.indexOf("cobble"))]![1], MAT.STONE);
+    expect(SURFACES.cobble.ribbon).toBe(MAT.ROAD_COBBLE);
+    expect(MATERIALS[SURFACES.cobble.ribbon]![1]).toBe(MAT.SOIL);
+    expect(MATERIALS[cellMaterial(SURFACE_IDS.indexOf("cobble"), SURFACE_IDS.indexOf("cobble"))]![1]).toBe(MAT.STONE);
   });
 });
 
@@ -524,14 +527,14 @@ describe("given a classed mesher cut into draw cells", () => {
     triangle(m, MAT.WALL_TOP_PAINT);
     const [g] = m.cellGeometries();
     const ids = g!.getAttribute(MATERIAL_ATTRIBUTE)!.array;
-    assert.equal(ids[0], MAT.TRACK_WALL);
-    assert.equal(ids[1], MAT.TRACK_WALL);
-    assert.equal(ids[2], MAT.WALL_TOP_PAINT);
+    expect(ids[0]).toBe(MAT.TRACK_WALL);
+    expect(ids[1]).toBe(MAT.TRACK_WALL);
+    expect(ids[2]).toBe(MAT.WALL_TOP_PAINT);
   });
 
   it("when an unclassed mesher is cut, then its cells carry no id attribute", () => {
     const m = new Mesher();
     triangle(m);
-    assert.equal(m.cellGeometries()[0]!.getAttribute(MATERIAL_ATTRIBUTE), undefined);
+    expect(m.cellGeometries()[0]!.getAttribute(MATERIAL_ATTRIBUTE)).toBe(undefined);
   });
 });

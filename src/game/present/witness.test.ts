@@ -1,8 +1,8 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { Witness } from "./witness.ts";
 import { mulberry32 } from "../world/placements.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** Camera at the origin looking down -z: near 0.1, far 200, 50° vertical, 16:9. */
 function cam(): THREE.PerspectiveCamera {
@@ -20,51 +20,51 @@ describe("given a Witness (the camera view cone that decides whether a purely co
     w.aim(cam());
     // At z = -10 the right edge is 10·tan(25°)·16/9 = 8.29 m out: a 1 m ball centred 0.5 m outside still pokes in.
     const edge = 10 * Math.tan(THREE.MathUtils.degToRad(25)) * (16 / 9);
-    assert.equal(w.mayWitness(at(edge + 0.5, 0, -10), 1), true);
-    assert.equal(w.mayWitness(at(edge + 20, 0, -10), 1), false);
+    expect(w.mayWitness(at(edge + 0.5, 0, -10), 1)).toBe(true);
+    expect(w.mayWitness(at(edge + 20, 0, -10), 1)).toBe(false);
   });
 
   it("when a ball lies far behind the camera, then it is not witnessed, and when a ball lies just behind the near plane inside the margin, it is", () => {
     const w = new Witness();
     w.aim(cam());
-    assert.equal(w.mayWitness(at(0, 0, 60), 2), false);
-    assert.equal(w.mayWitness(at(0, 0, 0.5), 1), true);
+    expect(w.mayWitness(at(0, 0, 60), 2)).toBe(false);
+    expect(w.mayWitness(at(0, 0, 0.5), 1)).toBe(true);
   });
 
   it("when a ball lies just inside the far plane, then it is witnessed, and when it lies past the far plane by more than its radius plus the margin, it is not", () => {
     const w = new Witness();
     w.aim(cam());
-    assert.equal(w.mayWitness(at(0, 0, -199), 2), true);
-    assert.equal(w.mayWitness(at(0, 0, -260), 2), false);
+    expect(w.mayWitness(at(0, 0, -199), 2)).toBe(true);
+    expect(w.mayWitness(at(0, 0, -260), 2)).toBe(false);
   });
 
   it("when nothing has aimed it yet, or it is switched off, then everything is witnessed, and once aimed and switched on a far-off point is not", () => {
     const w = new Witness();
-    assert.equal(w.mayWitness(at(0, 0, 500), 1), true);
+    expect(w.mayWitness(at(0, 0, 500), 1)).toBe(true);
     w.aim(cam());
-    assert.equal(w.mayWitness(at(0, 0, 500), 1), false);
+    expect(w.mayWitness(at(0, 0, 500), 1)).toBe(false);
     w.enabled = false;
-    assert.equal(w.mayWitness(at(0, 0, 500), 1), true);
+    expect(w.mayWitness(at(0, 0, 500), 1)).toBe(true);
   });
 
   it("when the camera moves and the Witness is aimed at it again, then the view cone follows the camera it last read", () => {
     const w = new Witness();
     const c = cam();
     w.aim(c);
-    assert.equal(w.mayWitness(at(0, 0, 80), 2), false);
+    expect(w.mayWitness(at(0, 0, 80), 2)).toBe(false);
     c.position.set(0, 0, 100);
     w.aim(c);
-    assert.equal(w.mayWitness(at(0, 0, 80), 2), true);
+    expect(w.mayWitness(at(0, 0, 80), 2)).toBe(true);
   });
 
   it("when points are asked through its counting check, then it counts what it refused and what it let through, and with the gate switched off it lets everything through", () => {
     const w = new Witness();
     w.aim(cam());
-    assert.equal(w.sees(at(0, 0, -10), 4), true);
-    assert.equal(w.sees(at(0, 0, 80), 4), false);
-    assert.deepEqual([w.allowed, w.skipped], [1, 1]);
+    expect(w.sees(at(0, 0, -10), 4)).toBe(true);
+    expect(w.sees(at(0, 0, 80), 4)).toBe(false);
+    expect(firstMismatch([w.allowed, w.skipped], [1, 1])).toBeUndefined();
     w.gateFx = false;
-    assert.equal(w.sees(at(0, 0, 80), 4), true);
+    expect(w.sees(at(0, 0, 80), 4)).toBe(true);
   });
 
   it("when 4000 random cameras and box poses are tried, then a box with any corner inside the viewport is always witnessed", () => {
@@ -94,8 +94,8 @@ describe("given a Witness (the camera view cone that decides whether a purely co
       }
       if (!inView) continue;
       visible++;
-      assert.equal(w.mayWitness(centre, radius), true, `trial ${n}: a visible corner, not witnessed`);
+      expect(w.mayWitness(centre, radius), `trial ${n}: a visible corner, not witnessed`).toBe(true);
     }
-    assert.ok(visible > 200, `only ${visible} of 4000 trials had the box in view: the property was barely exercised`);
+    expect(visible, `only ${visible} of 4000 trials had the box in view: the property was barely exercised`).toBeGreaterThan(200);
   });
 });

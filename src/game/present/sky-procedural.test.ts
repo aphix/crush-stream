@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { TIME_OF_DAY } from "../match/types.ts";
 import { PROCEDURAL_LOOKS, SANDBOX_SKY, type ProceduralLook, type SkyStops } from "./sky-procedural.ts";
 
@@ -16,14 +15,14 @@ const cases: { it: string; look: ProceduralLook & Partial<SkyStops>; stops: bool
 describe("given the procedural sky's looks", () => {
   for (const c of cases) {
     it(`when ${c.it} is drawn, then its clouds and disc have colours, stars show only at night and the sandbox brings its own gradient`, () => {
-      assert.match(c.look.cloudLit, HEX);
-      assert.match(c.look.cloudShade, HEX);
-      assert.equal(c.look.discTint.length, 3);
-      for (const channel of c.look.discTint) assert.ok(channel > 0 && channel <= 1, `disc tint channel ${channel}`);
-      assert.equal(c.look.stars, c.stars);
+      expect(c.look.cloudLit).toMatch(HEX);
+      expect(c.look.cloudShade).toMatch(HEX);
+      expect(c.look.discTint.length).toBe(3);
+      for (const channel of c.look.discTint) expect(channel > 0 && channel <= 1, `disc tint channel ${channel}`).toBeTruthy();
+      expect(c.look.stars).toBe(c.stars);
       if (!c.stops) return;
-      for (const stop of [c.look.horizon, c.look.mid, c.look.zenith]) assert.match(stop ?? "", HEX);
-      assert.ok((c.look.zenithElevation ?? 0) > 0 && (c.look.hazeTop ?? 0) > 0, `zenith at ${c.look.zenithElevation} rad, haze to ${c.look.hazeTop} rad`);
+      for (const stop of [c.look.horizon, c.look.mid, c.look.zenith]) expect(stop ?? "").toMatch(HEX);
+      expect((c.look.zenithElevation ?? 0) > 0 && (c.look.hazeTop ?? 0) > 0, `zenith at ${c.look.zenithElevation} rad, haze to ${c.look.hazeTop} rad`).toBeTruthy();
     });
   }
 });

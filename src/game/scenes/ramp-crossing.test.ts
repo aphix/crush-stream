@@ -1,5 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { MU_BODY } from "../vehicle/car-air-body.ts";
@@ -291,7 +290,7 @@ describe("given a sedan cruising at the fleet's jump ramp with steer 0 and the t
           if (r.dv > BAR.dv + chinScrape(v)) failures.push(`dv ${r.dv.toFixed(3)} m/s`);
           if (r.tilt > BAR.tilt) failures.push(`plane ${r.tilt.toFixed(2)}° (${r.tiltAt})`);
           if (r.airWhileTouching > 0) failures.push(`airborne with a tyre within 3 cm in ${r.airWhileTouching} slices`);
-          assert.deepEqual(failures, []);
+          expect(failures).toHaveLength(0);
         });
       }
     }
@@ -311,11 +310,11 @@ describe("given the same crossing built twice, once over the ramp's -x edge and 
         it(`when a sedan drives at ${v} m/s at ${th}° to the ramp's axis and its centreline crosses the toe ${e} m inside the edge, then the reflected crossing measures the same yaw, heading, shove, speed change and plane, to float error`, () => {
           const direct = cross(v, th, e);
           const reflected = cross(v, th, e, true);
-          assert.equal(reflected.slices, direct.slices);
-          assert.equal(reflected.crashed, direct.crashed);
+          expect(reflected.slices).toBe(direct.slices);
+          expect(reflected.crashed).toBe(direct.crashed);
           for (const measure of ["yaw", "heading", "shove", "dv", "tilt"] as const) {
             const floatError = Number.EPSILON * DEG * direct.slices;
-            assert.ok(Math.abs(reflected[measure] - direct[measure]) <= floatError, `${measure}: ${direct[measure]} against ${reflected[measure]} reflected`);
+            expect(Math.abs(reflected[measure] - direct[measure]), `${measure}: ${direct[measure]} against ${reflected[measure]} reflected`).toBeLessThanOrEqual(floatError);
           }
         });
       }
@@ -332,8 +331,8 @@ describe("given a sedan driving up the middle of the ramp's wedge, so its tyres 
 
   it("when the plane through its touching wheels is fitted through their resting hubs and through the ground under their hubs, then the two planes agree within 0.01° wherever the ground under every tyre is one plane", () => {
     const r = cross(8, 0, RAMP.halfW);
-    assert.ok(r.flatSlices >= 10, `only ${r.flatSlices} slices with every point on level ground`);
-    assert.ok(r.planeSlices - r.flatSlices >= 5, `only ${r.planeSlices - r.flatSlices} slices with every point on the wedge's slope`);
-    assert.ok(r.planeGap <= 0.01, `the planes differ by ${r.planeGap.toFixed(4)}° over ${r.planeSlices} single-plane slices`);
+    expect(r.flatSlices, `only ${r.flatSlices} slices with every point on level ground`).toBeGreaterThanOrEqual(10);
+    expect(r.planeSlices - r.flatSlices, `only ${r.planeSlices - r.flatSlices} slices with every point on the wedge's slope`).toBeGreaterThanOrEqual(5);
+    expect(r.planeGap, `the planes differ by ${r.planeGap.toFixed(4)}° over ${r.planeSlices} single-plane slices`).toBeLessThanOrEqual(0.01);
   });
 });

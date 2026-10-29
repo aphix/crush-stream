@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { frame, makeWorld } from "../world/race-world.test-util.ts";
 import { setGround } from "../world/ground.ts";
 
@@ -44,17 +43,10 @@ describe("given seeded 100 s city races with 8 AI, traffic and police, watched i
       if (pooled.reduce((n, r) => n + r.firsts.length, 0) >= MIN_CLIPS) break;
     }
     const total = pooled.reduce((n, r) => n + r.firsts.length, 0);
-    assert.ok(total >= MIN_CLIPS, `${total} clips in ${pooled.length} races of 100 s: the field is too quiet to test`);
+    expect(total, `${total} clips in ${pooled.length} races of 100 s: the field is too quiet to test`).toBeGreaterThanOrEqual(MIN_CLIPS);
     for (const { seed, racers, firsts } of pooled) {
-      assert.deepEqual(
-        firsts.filter(([a, b]) => a >= racers && !(b >= 0 && b < racers)),
-        [],
-        `seed ${seed}, racers ${racers}: clips whose first impact has no racer: ${JSON.stringify(firsts)}`,
-      );
+      expect(firsts.filter(([a, b]) => a >= racers && !(b >= 0 && b < racers)), `seed ${seed}, racers ${racers}: clips whose first impact has no racer: ${JSON.stringify(firsts)}`).toHaveLength(0);
     }
-    assert.ok(
-      pooled.some(({ racers, firsts }) => firsts.some(([a, b]) => a < racers && b >= racers)),
-      `a racer's hit on a cop or traffic car is no moment: ${JSON.stringify(pooled)}`,
-    );
+    expect(pooled.some(({ racers, firsts }) => firsts.some(([a, b]) => a < racers && b >= racers)), `a racer's hit on a cop or traffic car is no moment: ${JSON.stringify(pooled)}`).toBeTruthy();
   });
 });

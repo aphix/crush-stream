@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import { idleDrive } from "../vehicle/car-drive.ts";
 import { DerbyMatch } from "../match/derby.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -96,8 +95,8 @@ describe("given a network snapshot carrying the host's scene clear count (0..127
       writeSnapshot(w, s, L);
       const got = makeSnapshot();
       readSnapshot(new Reader().reset(w.done()), got, L);
-      assert.equal(got.clearGen, gen, `clear count ${gen}`);
-      assert.equal(got.keyframe, keyframe, `keyframe flag beside clear count ${gen}`);
+      expect(got.clearGen, `clear count ${gen}`).toBe(gen);
+      expect(got.keyframe, `keyframe flag beside clear count ${gen}`).toBe(keyframe);
     }
   });
 });
@@ -143,33 +142,33 @@ describe("given a two-car network snapshot with every field filled in", () => {
     const got = makeSnapshot();
     readSnapshot(new Reader().reset(w.done()), got, L);
 
-    assert.equal(got.seq, 70000 & 0xffff);
-    assert.equal(got.time, 12345.678);
-    assert.equal(got.keyframe, true);
-    assert.equal(got.count, 2);
-    assert.ok(Math.abs(got.realism - 0.25) <= 0.5 / 255);
-    assert.equal(got.phase, 2);
-    assert.ok(Math.abs(got.timeScale - 0.032) <= 0.5e-4);
+    expect(got.seq).toBe(70000 & 0xffff);
+    expect(got.time).toBe(12345.678);
+    expect(got.keyframe).toBe(true);
+    expect(got.count).toBe(2);
+    expect(Math.abs(got.realism - 0.25)).toBeLessThanOrEqual(0.5 / 255);
+    expect(got.phase).toBe(2);
+    expect(Math.abs(got.timeScale - 0.032)).toBeLessThanOrEqual(0.5e-4);
     for (let c = 0; c < 2; c++) {
       const a = s.cars[c]!;
       const b = got.cars[c]!;
-      assert.equal(b.x, Math.fround(a.x));
-      assert.equal(b.z, Math.fround(a.z));
-      assert.ok(Math.abs(b.yaw - a.yaw) <= Q.fine / 2 + 1e-12);
-      assert.ok(Math.abs(b.roll - a.roll) <= Q.fine / 2 + 1e-12);
-      assert.ok(Math.abs(b.vx - a.vx) <= Q.vel / 2 + 1e-9);
-      assert.ok(Math.abs(b.wy - a.wy) <= Q.rate / 2 + 1e-9);
-      assert.equal(b.crashed, true);
-      assert.equal(b.style, a.style);
-      assert.equal(b.cls, a.cls);
-      assert.equal(b.wreck, c === 0);
-      assert.equal(b.falling, c === 0);
-      assert.equal(b.vaporized, c === 1);
-      assert.equal(b.sirens, c === 1);
-      assert.equal(b.dented, c === 1);
-      if (c === 0) assert.ok(Math.abs(b.meter - 0.4) <= 0.5 / 254, `meter ${b.meter}`);
-      else assert.equal(b.meter, -1, "a car with no nitrous reads back as none");
-      assert.ok(Math.abs(b.spin - a.spin) <= 0.125 + 1e-9, `spin ${b.spin}`);
+      expect(b.x).toBe(Math.fround(a.x));
+      expect(b.z).toBe(Math.fround(a.z));
+      expect(Math.abs(b.yaw - a.yaw)).toBeLessThanOrEqual(Q.fine / 2 + 1e-12);
+      expect(Math.abs(b.roll - a.roll)).toBeLessThanOrEqual(Q.fine / 2 + 1e-12);
+      expect(Math.abs(b.vx - a.vx)).toBeLessThanOrEqual(Q.vel / 2 + 1e-9);
+      expect(Math.abs(b.wy - a.wy)).toBeLessThanOrEqual(Q.rate / 2 + 1e-9);
+      expect(b.crashed).toBe(true);
+      expect(b.style).toBe(a.style);
+      expect(b.cls).toBe(a.cls);
+      expect(b.wreck).toBe(c === 0);
+      expect(b.falling).toBe(c === 0);
+      expect(b.vaporized).toBe(c === 1);
+      expect(b.sirens).toBe(c === 1);
+      expect(b.dented).toBe(c === 1);
+      if (c === 0) expect(Math.abs(b.meter - 0.4), `meter ${b.meter}`).toBeLessThanOrEqual(0.5 / 254);
+      else expect(b.meter, "a car with no nitrous reads back as none").toBe(-1);
+      expect(Math.abs(b.spin - a.spin), `spin ${b.spin}`).toBeLessThanOrEqual(0.125 + 1e-9);
     }
     const a = s.cars[0]!;
     const b = got.cars[0]!;
@@ -178,24 +177,24 @@ describe("given a two-car network snapshot with every field filled in", () => {
     assertSameNumbers(b.deform.skinXf, a.deform.skinXf, "skinXf", Q.xf / 2 + 1e-6);
     assertSameNumbers(b.deform.sensor, a.deform.sensor, "sensor", Q.fine / 2 + 1e-6);
     assertSameNumbers(b.deform.impact, a.deform.impact, "impact", Q.fine / 2 + 1e-6);
-    assert.equal(b.deform.popped, a.deform.popped);
-    assert.equal(b.deform.skinPopped, a.deform.skinPopped);
-    assert.equal(b.deform.flags, a.deform.flags);
-    assert.ok(Math.abs(b.deform.engineTravel - 0.123) <= Q.pos / 2 + 1e-6);
-    assert.ok(Math.abs(b.deform.killTravel - 0.5) <= Q.pos / 2 + 1e-6);
+    expect(b.deform.popped).toBe(a.deform.popped);
+    expect(b.deform.skinPopped).toBe(a.deform.skinPopped);
+    expect(b.deform.flags).toBe(a.deform.flags);
+    expect(Math.abs(b.deform.engineTravel - 0.123)).toBeLessThanOrEqual(Q.pos / 2 + 1e-6);
+    expect(Math.abs(b.deform.killTravel - 0.5)).toBeLessThanOrEqual(Q.pos / 2 + 1e-6);
     assertSameNumbers(b.deform.crush, a.deform.crush, "face depths within 0.05 mm", Q.fine / 2 + 1e-6);
     assertSameNumbers(b.deform.crushBaked, a.deform.crushBaked, "crushBaked", Q.fine / 2 + 1e-6);
     assertSameNumbers(b.parts.flags, a.parts.flags, "part flags");
     assertSameNumbers(b.parts.hinge, a.parts.hinge, "hinge", Q.fine / 2 + 1e-6);
-    assert.equal(b.parts.lamps, a.parts.lamps);
-    assert.equal(b.parts.glass, a.parts.glass);
-    assert.equal(b.parts.wheelLoose, a.parts.wheelLoose);
+    expect(b.parts.lamps).toBe(a.parts.lamps);
+    expect(b.parts.glass).toBe(a.parts.glass);
+    expect(b.parts.wheelLoose).toBe(a.parts.wheelLoose);
     for (const i of [0, 2]) {
-      for (let k = 0; k < 3; k++) assert.equal(b.parts.wheels[i * 7 + k], Math.fround(a.parts.wheels[i * 7 + k]!));
-      for (let k = 3; k < 7; k++) assert.ok(Math.abs(b.parts.wheels[i * 7 + k]! - a.parts.wheels[i * 7 + k]!) <= Q.quat);
+      for (let k = 0; k < 3; k++) expect(b.parts.wheels[i * 7 + k]).toBe(Math.fround(a.parts.wheels[i * 7 + k]!));
+      for (let k = 3; k < 7; k++) expect(Math.abs(b.parts.wheels[i * 7 + k]! - a.parts.wheels[i * 7 + k]!)).toBeLessThanOrEqual(Q.quat);
     }
     // 17-byte header, 30-byte poses (body, meter, spin, pose), a 687-byte wreck (its impact block is 12 numbers of 2 bytes, its load crush 10) with 20 more per loose wheel (2): a loose part's pose is not sent.
-    assert.equal(w.off, 17 + 30 + (687 + 20 * 2) + 30);
+    expect(w.off).toBe(17 + 30 + (687 + 20 * 2) + 30);
   });
 });
 
@@ -216,7 +215,7 @@ describe("given a host car whose driven wheels spin ahead of the body", () => {
       const got = makeSnapshot();
       readSnapshot(new Reader().reset(w.done()), got, layout);
       drawSnapshots([got], [1], [], [client], 5, 1 / FRAME_HZ, { setVaporized: () => {}, clearScene: () => {} }, -1);
-      assert.ok(Math.abs(client.drive.spinSpeed - want) <= 0.125 + 1e-9, `spin ${spin} drew as ${client.drive.spinSpeed}`);
+      expect(Math.abs(client.drive.spinSpeed - want), `spin ${spin} drew as ${client.drive.spinSpeed}`).toBeLessThanOrEqual(0.125 + 1e-9);
     }
   });
 });
@@ -234,7 +233,7 @@ describe("given two cars wrecked as far as a snapshot can carry: every part and 
     }
     const w = new Writer();
     writeSnapshot(w, s, L);
-    assert.equal(w.off, snapshotMaxBytes(2, L));
+    expect(w.off).toBe(snapshotMaxBytes(2, L));
   });
 });
 
@@ -244,8 +243,8 @@ describe("given the network writer's 16-bit fixed-point numbers", () => {
     w.q16(1e9, 1);
     w.q16(-1e9, 1);
     const r = new Reader().reset(w.done());
-    assert.equal(r.q16(1), 32767);
-    assert.equal(r.q16(1), -32767);
+    expect(r.q16(1)).toBe(32767);
+    expect(r.q16(1)).toBe(-32767);
   });
 });
 
@@ -257,12 +256,12 @@ describe("given a drive input of throttle, steer, brake, handbrake and boost, se
     const out = idleDrive();
     const meter = new Float64Array(1);
     readInput(new Reader().reset(w.done()), out, meter);
-    assert.ok(Math.abs(out.throttle - input.throttle) < 1 / 127);
-    assert.equal(out.steer, 1);
-    assert.ok(Math.abs(out.brake - 0.25) < 1 / 255);
-    assert.equal(out.ebrake, true);
-    assert.equal(out.boost, false);
-    assert.ok(Math.abs(meter[0]! - 0.6) < 1 / 254, `meter ${meter[0]}`);
+    expect(Math.abs(out.throttle - input.throttle)).toBeLessThan(1 / 127);
+    expect(out.steer).toBe(1);
+    expect(Math.abs(out.brake - 0.25)).toBeLessThan(1 / 255);
+    expect(out.ebrake).toBe(true);
+    expect(out.boost).toBe(false);
+    expect(Math.abs(meter[0]! - 0.6), `meter ${meter[0]}`).toBeLessThan(1 / 254);
   });
 });
 
@@ -272,21 +271,21 @@ describe("given a client car that applies the host car's state from the wire", (
     // An arcade-end kill travel the client's default does not share: graded damage must come over the wire.
     host.deform.killTravel = 0.5;
     runWall(64, 0.4, "front", { car: host, after: 1.5 });
-    assert.ok(host.crashed && host.deform.massActive);
+    expect(host.crashed && host.deform.massActive).toBeTruthy();
     const client = apply(makeCar(mode), wire(host));
 
     const hv = simSkin(host);
     const cv = simSkin(client);
     const rest = makeCar(mode).body.geometry.getAttribute("position").array;
     const dent = Array.from(hv, (v, i) => Math.abs(v - rest[i]!)).reduce((m, d) => Math.max(m, d), 0);
-    assert.ok(dent > 0.05, `the host car is dented (${dent.toFixed(3)} m)`);
+    expect(dent, `the host car is dented (${dent.toFixed(3)} m)`).toBeGreaterThan(0.05);
     // The client re-skins from the host's baked inputs; only quantization (≤ 0.25 mm per particle) separates them.
     assertSameNumbers(cv, hv, "skin vertices within 2 mm", 0.002);
     const tris = drawnTriangles(client);
     for (const wheel of [0, 1]) {
       if (client["looseWheels"][wheel]!.loose) continue;
       const clearance = tyreClearance(client, wheel, tris);
-      assert.ok(clearance >= TYRE_CLEARANCE_M, `the client's wheel ${wheel} stands ${(clearance * 1000).toFixed(1)} mm under its drawn hood`);
+      expect(clearance, `the client's wheel ${wheel} stands ${(clearance * 1000).toFixed(1)} mm under its drawn hood`).toBeGreaterThanOrEqual(TYRE_CLEARANCE_M);
     }
 
     host.refitCage();
@@ -298,26 +297,26 @@ describe("given a client car that applies the host car's state from the wire", (
     host.readPartNetState(a.parts);
     client.readPartNetState(b.parts);
     assertSameNumbers(b.parts.flags, a.parts.flags, "part states identical");
-    assert.equal(b.parts.lamps, a.parts.lamps);
-    assert.equal(b.parts.glass, a.parts.glass);
-    assert.equal(client.deform.drivetrainAlive, host.deform.drivetrainAlive);
-    assert.ok(host.deform.drivetrainHealth < 1, "the hit cost the engine some health");
-    assert.ok(Math.abs(client.deform.drivetrainHealth - host.deform.drivetrainHealth) < 0.01, "graded damage matches");
+    expect(b.parts.lamps).toBe(a.parts.lamps);
+    expect(b.parts.glass).toBe(a.parts.glass);
+    expect(client.deform.drivetrainAlive).toBe(host.deform.drivetrainAlive);
+    expect(host.deform.drivetrainHealth, "the hit cost the engine some health").toBeLessThan(1);
+    expect(Math.abs(client.deform.drivetrainHealth - host.deform.drivetrainHealth), "graded damage matches").toBeLessThan(0.01);
   });
 
   it("when the host's next wreck has a part back on that an earlier crash tore off, then the client re-attaches it", () => {
     const host = makeCar();
     runWall(72, 1, "front", { car: host, after: 1.5 });
     const client = apply(makeCar(), wire(host));
-    assert.ok(looseParts(client) > 0, "a 72 km/h wall hit tears a part off");
-    assert.equal(looseParts(client), looseParts(host));
+    expect(looseParts(client), "a 72 km/h wall hit tears a part off").toBeGreaterThan(0);
+    expect(looseParts(client)).toBe(looseParts(host));
 
     host.resetVisual();
     host.crashed = false;
     runWall(24, 1, "front", { car: host, after: 1 });
-    assert.ok(host.crashed && looseParts(host) === 0);
+    expect(host.crashed && looseParts(host) === 0).toBeTruthy();
     apply(client, wire(host));
-    assert.equal(looseParts(client), 0);
+    expect(looseParts(client)).toBe(0);
     assertSameNumbers(simSkin(client), simSkin(host), "skin vertices within 2 mm", 0.002);
   });
 
@@ -332,21 +331,21 @@ describe("given a client car that applies the host car's state from the wire", (
     const client = apply(makeCar(), wire(host));
     const h = panels(host);
     const c = panels(client);
-    assert.equal(h.filter((p) => p.detached).length, 1, "the 58 km/h rear corner hit tears one quarter panel");
-    assert.ok(h.some((p) => !p.detached && p.hingeT > 0.1), "and hinges another panel");
+    expect(h.filter((p) => p.detached).length, "the 58 km/h rear corner hit tears one quarter panel").toBe(1);
+    expect(h.some((p) => !p.detached && p.hingeT > 0.1), "and hinges another panel").toBeTruthy();
     for (const [i, p] of h.entries()) {
-      assert.equal(c[i]!.detached, p.detached, `${p.name} torn on the client`);
-      assert.ok(Math.abs(c[i]!.hingeT - p.hingeT) < 1e-3, `${p.name} hinge ${c[i]!.hingeT} vs ${p.hingeT}`);
-      if (p.detached) assert.ok(Math.hypot(c[i]!.pos.x - client.group.position.x, c[i]!.pos.y, c[i]!.pos.z - client.group.position.z) < 20, `${p.name} is loose in the client's own world, near its car (the host's pose is not sent: debris is per player)`);
+      expect(c[i]!.detached, `${p.name} torn on the client`).toBe(p.detached);
+      expect(Math.abs(c[i]!.hingeT - p.hingeT), `${p.name} hinge ${c[i]!.hingeT} vs ${p.hingeT}`).toBeLessThan(1e-3);
+      if (p.detached) expect(Math.hypot(c[i]!.pos.x - client.group.position.x, c[i]!.pos.y, c[i]!.pos.z - client.group.position.z), `${p.name} is loose in the client's own world, near its car (the host's pose is not sent: debris is per player)`).toBeLessThan(20);
     }
-    assert.ok(primer(host) > 20 && Math.abs(primer(client) - primer(host)) < 0.5, `primer under the panels: host ${primer(host)}, client ${primer(client)}`);
+    expect(primer(host) > 20 && Math.abs(primer(client) - primer(host)) < 0.5, `primer under the panels: host ${primer(host)}, client ${primer(client)}`).toBeTruthy();
 
     host.resetVisual();
     host.crashed = false;
     runWall(24, 1, "front", { car: host, after: 1 });
     apply(client, wire(host));
-    assert.ok(panels(client).every((p) => !p.detached && p.hingeT === 0), "the next wreck has every panel on, flat");
-    assert.equal(primer(client), 0);
+    expect(panels(client).every((p) => !p.detached && p.hingeT === 0), "the next wreck has every panel on, flat").toBeTruthy();
+    expect(primer(client)).toBe(0);
   });
 
   it("when a wheel is torn off on the host, then the client's wheel lies where the host's does, the client never throws one itself, and the next wreck has all four wheels on", () => {
@@ -358,22 +357,22 @@ describe("given a client car that applies the host car's state from the wire", (
       host.afterContacts(1 / FRAME_HZ);
     }
     const hostWheel = host.wheels[0]!.getWorldPosition(host.wheels[0]!.position.clone());
-    assert.ok(hostWheel.distanceTo(host.group.position) > 0.5, "the host's wheel left the car");
+    expect(hostWheel.distanceTo(host.group.position), "the host's wheel left the car").toBeGreaterThan(0.5);
 
     const client = apply(makeCar(), wire(host));
     for (let i = 0; i < 30; i++) client.netFrame(1 / FRAME_HZ);
     const f = makeCarFrame(carLayout(client));
     client.readPartNetState(f.parts);
-    assert.equal(f.parts.wheelLoose, 1, "only wheel 0 is loose");
+    expect(f.parts.wheelLoose, "only wheel 0 is loose").toBe(1);
     const clientWheel = client.wheels[0]!.getWorldPosition(client.wheels[0]!.position.clone());
-    assert.ok(clientWheel.distanceTo(hostWheel) < 0.001, `loose wheel within 1 mm (${clientWheel.distanceTo(hostWheel)})`);
+    expect(clientWheel.distanceTo(hostWheel), `loose wheel within 1 mm (${clientWheel.distanceTo(hostWheel)})`).toBeLessThan(0.001);
 
     host.resetVisual();
     host.crashed = false;
     runWall(24, 1, "front", { car: host, after: 1 });
     apply(client, wire(host));
     client.readPartNetState(f.parts);
-    assert.equal(f.parts.wheelLoose, 0, "the next wreck has all four wheels on");
+    expect(f.parts.wheelLoose, "the next wreck has all four wheels on").toBe(0);
   });
 });
 
@@ -407,9 +406,9 @@ describe("given a host pickup that met a second pickup head-on at 50 km/h, and a
       if (client["looseWheels"][wheel]!.loose) continue;
       kept++;
       const clearance = tyreClearance(client, wheel, tris);
-      assert.ok(clearance >= TYRE_CLEARANCE_M, `the client's wheel ${wheel} stands ${(clearance * 1000).toFixed(1)} mm under its drawn hood`);
+      expect(clearance, `the client's wheel ${wheel} stands ${(clearance * 1000).toFixed(1)} mm under its drawn hood`).toBeGreaterThanOrEqual(TYRE_CLEARANCE_M);
     }
-    assert.ok(kept > 0, "no front wheel kept: the row proves nothing");
+    expect(kept, "no front wheel kept: the row proves nothing").toBeGreaterThan(0);
   });
 });
 
@@ -422,7 +421,7 @@ describe("given a host wreck the epicenter freeze holds (the activation on) and 
       const host = makeCar();
       host.deform.killTravel = 0.5;
       runWall(64, 0.4, "front", { car: host, after: 9 });
-      assert.ok(host.crashed && host.deform.massActive && host.deform.frozen, "the host wreck is frozen: the row proves nothing otherwise");
+      expect(host.crashed && host.deform.massActive && host.deform.frozen, "the host wreck is frozen: the row proves nothing otherwise").toBeTruthy();
       const client = apply(makeCar(), wire(host));
       const hv = simSkin(host);
       const cv = simSkin(client);
@@ -430,7 +429,7 @@ describe("given a host wreck the epicenter freeze holds (the activation on) and 
       host.refitCage();
       client.refitCage();
       assertSameNumbers(client.cage.fields.planBox, host.cage.fields.planBox, "cage plan box within 1 mm", 0.001);
-      assert.ok(Math.abs(client.deform.drivetrainHealth - host.deform.drivetrainHealth) < 0.01, "graded damage matches");
+      expect(Math.abs(client.deform.drivetrainHealth - host.deform.drivetrainHealth), "graded damage matches").toBeLessThan(0.01);
     } finally {
       loadEpicenter(saved);
     }
@@ -447,7 +446,7 @@ describe("given a derby match played on the host and sent to clients as derby st
     );
     const moving = (id: number, t: number) => ({ id, name: "", alive: true, x: id === 3 ? 0 : 5 * Math.sin(t + id), z: 0 });
     for (let t = 1; t <= steps; t++) {
-      if (t === 2) assert.ok(m.noteHit(1, 2, 6, 0.5, 6), "a hard hit is a contact");
+      if (t === 2) expect(m.noteHit(1, 2, 6, 0.5, 6), "a hard hit is a contact").toBeTruthy();
       m.step(1, [0, 1, 2, 3].map((id) => ({ ...moving(id, t), alive: !(id === 2 && t >= 3) })));
     }
     return m;
@@ -466,32 +465,32 @@ describe("given a derby match played on the host and sent to clients as derby st
   it("when a running match is sent over the wire, then scores, hits, disables, alive flags, count-out clocks and seats all come back", () => {
     const m = playedMatch(10);
     const s = netState(m, 70001, null);
-    assert.equal(m.winnerId, null, "still running after 10 s");
-    assert.ok(m.board.find((r) => r.id === 1)!.score > 0 && !m.board.find((r) => r.id === 2)!.alive, "the host's board moved");
+    expect(m.winnerId, "still running after 10 s").toBe(null);
+    expect(m.board.find((r) => r.id === 1)!.score > 0 && !m.board.find((r) => r.id === 2)!.alive, "the host's board moved").toBeTruthy();
     const got = wire(s);
-    assert.equal(got.round, 70001 & 0xffff);
-    assert.equal(got.active, true);
-    assert.equal(got.lobby, null);
-    assert.equal(got.seats, 1 << 2);
-    assert.equal(got.winnerId, null);
-    assert.equal(got.decided, null);
-    assert.ok(Math.abs(got.time - s.time) < 1e-5 && Math.abs(got.radius - 18.5) < 1e-5);
-    assert.equal(got.board.length, 4);
+    expect(got.round).toBe(70001 & 0xffff);
+    expect(got.active).toBe(true);
+    expect(got.lobby).toBe(null);
+    expect(got.seats).toBe(1 << 2);
+    expect(got.winnerId).toBe(null);
+    expect(got.decided).toBe(null);
+    expect(Math.abs(got.time - s.time) < 1e-5 && Math.abs(got.radius - 18.5) < 1e-5).toBeTruthy();
+    expect(got.board.length).toBe(4);
     for (let i = 0; i < 4; i++) {
       const [a, b] = [s.board[i]!, got.board[i]!];
       assertSameDigest({ ...b, clock: 0 }, { ...a, clock: 0 }, `row ${a.id}`);
-      assert.ok(Math.abs(b.clock - a.clock) <= 0.05, `row ${a.id} clock ${a.clock} → ${b.clock}`);
+      expect(Math.abs(b.clock - a.clock), `row ${a.id} clock ${a.clock} → ${b.clock}`).toBeLessThanOrEqual(0.05);
     }
   });
 
   it("when a decided match and a lobby are sent over the wire, then the winner and how he won come back, and the lobby comes back with its countdown and no match", () => {
     // Car 3 never moves: hitClock 20 s counts every idle car out, the last standing wins.
     const m = playedMatch(25);
-    assert.notEqual(m.winnerId, null, "decided within 25 s");
+    expect(m.winnerId, "decided within 25 s").not.toBe(null);
     const got = wire(netState(m, 3, null));
-    assert.equal(got.winnerId, m.winnerId);
-    assert.equal(got.winnerName, m.winnerName);
-    assert.equal(got.decided, m.decided);
+    expect(got.winnerId).toBe(m.winnerId);
+    expect(got.winnerName).toBe(m.winnerName);
+    expect(got.decided).toBe(m.decided);
     assertSameDigest(
       got.board.map((r) => [r.id, r.score, r.alive, r.out]),
       m.board.map((r) => [r.id, r.score, r.alive, r.out]),
@@ -500,9 +499,9 @@ describe("given a derby match played on the host and sent to clients as derby st
 
     const lobby = new DerbyMatch();
     const l = wire(netState(lobby, 4, 12.5));
-    assert.equal(l.active, false);
-    assert.equal(l.lobby, 12.5);
-    assert.deepEqual(l.board, []);
+    expect(l.active).toBe(false);
+    expect(l.lobby).toBe(12.5);
+    expect(l.board).toHaveLength(0);
   });
 });
 
@@ -529,16 +528,13 @@ describe("given snapshots and derby boards of values a host never sends", () => 
   });
 
   it("when the snapshot has an empty or oversized field or a non-finite clock or pose, then reading refuses it as a RangeError", () => {
-    assert.throws(readBack((s) => (s.count = 0)), RangeError);
-    assert.throws(
-      readBack((s) => {
+    expect(readBack((s) => (s.count = 0))).toThrow(RangeError);
+    expect(readBack((s) => {
         ensureFrames(s, 33, L);
         s.count = 33;
-      }),
-      RangeError,
-    );
-    assert.throws(readBack((s) => (s.time = Number.NaN)), RangeError);
-    assert.throws(readBack((s) => (s.cars[1]!.z = Number.POSITIVE_INFINITY)), RangeError);
+      })).toThrow(RangeError);
+    expect(readBack((s) => (s.time = Number.NaN))).toThrow(RangeError);
+    expect(readBack((s) => (s.cars[1]!.z = Number.POSITIVE_INFINITY))).toThrow(RangeError);
   });
 
   it("when a derby board is larger than any field, names a winner outside it, or has a non-finite clock or bowl, then reading refuses it as a RangeError, and a well-formed board reads fine", () => {
@@ -550,9 +546,9 @@ describe("given snapshots and derby boards of values a host never sends", () => 
       return readDerby(new Reader().reset(w.done()));
     };
     read({ ...base, board: [row(0), row(1)] })();
-    assert.throws(read({ ...base, board: Array.from({ length: 33 }, (_, i) => row(i)) }), RangeError);
-    assert.throws(read({ ...base, board: [row(0)], winnerId: 40, winnerName: "x", decided: "wreck" }), RangeError);
-    assert.throws(read({ ...base, radius: Number.NaN }), RangeError);
-    assert.throws(read({ ...base, time: Number.POSITIVE_INFINITY }), RangeError);
+    expect(read({ ...base, board: Array.from({ length: 33 }, (_, i) => row(i)) })).toThrow(RangeError);
+    expect(read({ ...base, board: [row(0)], winnerId: 40, winnerName: "x", decided: "wreck" })).toThrow(RangeError);
+    expect(read({ ...base, radius: Number.NaN })).toThrow(RangeError);
+    expect(read({ ...base, time: Number.POSITIVE_INFINITY })).toThrow(RangeError);
   });
 });

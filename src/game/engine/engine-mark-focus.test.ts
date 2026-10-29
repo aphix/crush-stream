@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
@@ -65,9 +64,9 @@ describe("given the real engine in a race on the National Mall (wider than the m
     free.pitch = -Math.atan2(20, EYE_OFF);
     run(1);
     const eye = engine["camera"].position;
-    assert.ok(Math.hypot(eye.x - car.x, eye.z - car.z) > EYE_OFF - 1, "the eye stands off the car");
+    expect(Math.hypot(eye.x - car.x, eye.z - car.z), "the eye stands off the car").toBeGreaterThan(EYE_OFF - 1);
     const w = markWindow();
-    assert.ok(inWindow(w, car.x, car.z), `the car (${car.x.toFixed(1)}, ${car.z.toFixed(1)}) is in the window from (${w.x.toFixed(1)}, ${w.y.toFixed(1)}), ${(1 / w.z).toFixed(1)} m wide`);
-    assert.ok(!inWindow(w, eye.x, eye.z), "the eye's own spot is not what the window follows");
+    expect(inWindow(w, car.x, car.z), `the car (${car.x.toFixed(1)}, ${car.z.toFixed(1)}) is in the window from (${w.x.toFixed(1)}, ${w.y.toFixed(1)}), ${(1 / w.z).toFixed(1)} m wide`).toBeTruthy();
+    expect(!inWindow(w, eye.x, eye.z), "the eye's own spot is not what the window follows").toBe(true);
   });
 });

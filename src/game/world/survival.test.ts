@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { RESULTS_DELAY } from "../engine/engine-race.ts";
 import { copsWanted, HUNT } from "../ai/hunter.ts";
@@ -11,6 +10,8 @@ import { Track } from "./track.ts";
 import { HAVANA } from "./tracks/havana.ts";
 import { assertDropInsHidden, chaseCam, dropInsAtPoses, hold, leaveSurvival, liveCops, play, shortenBustHold, survivalWorld, visibleFrom } from "./survival-run.test-util.ts";
 import { drivers } from "./survival-players.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const spec = new Track(HAVANA).survival!;
 const KEY = "crush.survival.best.havana";
@@ -49,7 +50,7 @@ function until(w: World, state: { acc: number }, max: number, done: () => boolea
 /** Run the countdown out: the green is up. */
 function toGreen(w: World, state: { acc: number }): void {
   until(w, state, 8, () => w.race.phase === "racing");
-  assert.equal(w.race.phase, "racing");
+  expect(w.race.phase).toBe("racing");
 }
 
 /** Advance `seconds` of game time with the scripted player holding still. */
@@ -68,18 +69,18 @@ describe("given a Survival run on the Havana course (the player against a pack o
     const w = survivalWorld();
     try {
       const p = w.cars[0]!.group.position;
-      assert.ok(Math.hypot(p.x - spec.start.x, p.z - spec.start.z) < 0.01, `player at ${p.x},${p.z}`);
+      expect(Math.hypot(p.x - spec.start.x, p.z - spec.start.z), `player at ${p.x},${p.z}`).toBeLessThan(0.01);
       for (const [k, f] of spec.formation.entries()) {
         const c = w.cars[1 + k]!;
-        assert.ok(c.group.visible && Math.hypot(c.group.position.x - f.x, c.group.position.z - f.z) < 0.01, `cop ${k} is not on its slot`);
+        expect(c.group.visible && Math.hypot(c.group.position.x - f.x, c.group.position.z - f.z) < 0.01, `cop ${k} is not on its slot`).toBeTruthy();
       }
-      for (let i = 1 + spec.formation.length; i < w.live().length; i++) assert.ok(!w.cars[i]!.group.visible, `spare cop ${i} is on the road`);
-      assert.equal(w.live().length, 1 + HUNT.units);
+      for (let i = 1 + spec.formation.length; i < w.live().length; i++) expect(!w.cars[i]!.group.visible, `spare cop ${i} is on the road`).toBe(true);
+      expect(w.live().length).toBe(1 + HUNT.units);
       const h = hud(w);
-      assert.equal(h.survival?.cops, spec.formation.length);
-      assert.equal(h.survival?.best, null);
-      assert.equal(h.noReset, true);
-      assert.equal(h.phase, "grid");
+      expect(h.survival?.cops).toBe(spec.formation.length);
+      expect(h.survival?.best).toBe(null);
+      expect(h.noReset).toBe(true);
+      expect(h.phase).toBe("grid");
 
       // The countdown is the race's (grid, red-yellow-green); the cops do not move before it.
       const state = { acc: 0 };
@@ -89,12 +90,12 @@ describe("given a Survival run on the Havana course (the player against a pack o
         hold(w);
         frame(w, state);
         phases.add(w.race.phase ?? "");
-        for (const [k, c] of w.cars.slice(1, 6).entries()) assert.ok(c.group.position.distanceTo(where[k]!) < 0.3, `cop ${k} moved before the green`);
+        for (const [k, c] of w.cars.slice(1, 6).entries()) expect(c.group.position.distanceTo(where[k]!), `cop ${k} moved before the green`).toBeLessThan(0.3);
       }
-      assert.deepEqual([...phases].sort(), ["countdown", "grid", "racing"]);
+      expect(firstMismatch([...phases].sort(), ["countdown", "grid", "racing"])).toBeUndefined();
       // After the green they come.
       sit(w, state, 2);
-      assert.ok(w.cars[1]!.group.position.distanceTo(where[0]!) > 5, "the cops did not leave on the green");
+      expect(w.cars[1]!.group.position.distanceTo(where[0]!), "the cops did not leave on the green").toBeGreaterThan(5);
     } finally {
       leaveSurvival(w);
     }
@@ -120,15 +121,15 @@ describe("given a Survival run on the Havana course (the player against a pack o
         if (hud(w).you?.busted && heldAtBust < 0) heldAtBust = held;
       }
       const h = hud(w);
-      assert.equal(h.phase, "finished", `the run never ended (longest hold ${longest.toFixed(1)} s)`);
-      assert.equal(h.you?.status, "out");
+      expect(h.phase, `the run never ended (longest hold ${longest.toFixed(1)} s)`).toBe("finished");
+      expect(h.you?.status).toBe("out");
       const cause = h.survival?.result?.cause;
       // The cops may wreck a car that sits there before the hold runs out (they ram it); the bust, when it comes, is never early.
       // The frame-end count cannot see a shove's spike inside a frame (it restarts the real hold), so it may run past the hold before
       // the bust, never short of it. The exact bust time is the session test's (`match/survival.test.ts`).
-      assert.ok(cause === "busted" || cause === "wrecked", `cause ${cause}`);
-      if (cause === "busted") assert.ok(heldAtBust >= SURVIVAL.bustTime - 0.05, `busted after holding only ${heldAtBust.toFixed(2)} s`);
-      else assert.equal(h.you?.busted, false);
+      expect(cause === "busted" || cause === "wrecked", `cause ${cause}`).toBeTruthy();
+      if (cause === "busted") expect(heldAtBust, `busted after holding only ${heldAtBust.toFixed(2)} s`).toBeGreaterThanOrEqual(SURVIVAL.bustTime - 0.05);
+      else expect(h.you?.busted).toBe(false);
     } finally {
       leaveSurvival(w);
     }
@@ -144,19 +145,19 @@ describe("given a Survival run on the Havana course (the player against a pack o
       w.cars[0]!.driverOut = "windshield";
       sit(w, state, 0.2);
       let h = hud(w);
-      assert.equal(h.phase, "finished");
-      assert.equal(h.you?.status, "out");
-      assert.equal(h.you?.busted, false);
+      expect(h.phase).toBe("finished");
+      expect(h.you?.status).toBe("out");
+      expect(h.you?.busted).toBe(false);
       const r = h.survival?.result;
-      assert.ok(r, "no result");
-      assert.equal(r.cause, "wrecked");
-      assert.ok(Math.abs(r.time - wreckedAt) < 0.1, `time ${r.time} vs wrecked at ${wreckedAt}`);
-      assert.equal(r.isNew, true);
-      assert.equal(h.menu, null, "the banner shows before the card");
+      must(r, "no result");
+      must(r.cause === "wrecked", "r.cause === \"wrecked\"");
+      expect(Math.abs(r.time - wreckedAt), `time ${r.time} vs wrecked at ${wreckedAt}`).toBeLessThan(0.1);
+      must(r.isNew, "r.isNew");
+      expect(h.menu, "the banner shows before the card").toBe(null);
       sit(w, state, RESULTS_DELAY + 0.2);
       h = hud(w);
-      assert.equal(h.menu, "results");
-      assert.equal(h.survival?.result?.time, r.time);
+      expect(h.menu).toBe("results");
+      expect(h.survival?.result?.time).toBe(r.time);
     } finally {
       leaveSurvival(w);
     }
@@ -178,30 +179,30 @@ describe("given a Survival run on the Havana course (the player against a pack o
         return hud(w).survival!.result!;
       };
       const a = runUntil(3);
-      assert.equal(a.isNew, true);
-      assert.equal(Number(localStorage.getItem(KEY)), a.time, "the first run's time is the best");
+      expect(a.isNew).toBe(true);
+      expect(Number(localStorage.getItem(KEY)), "the first run's time is the best").toBe(a.time);
 
       w.race.command({ type: "retry" });
-      assert.equal(hud(w).survival?.best, a.time, "the run in play shows the best before it");
-      assert.equal(hud(w).survival?.result, null);
+      expect(hud(w).survival?.best, "the run in play shows the best before it").toBe(a.time);
+      expect(hud(w).survival?.result).toBe(null);
       const b = runUntil(1.5);
-      assert.equal(b.isNew, false);
-      assert.equal(b.best, a.time);
-      assert.equal(Number(localStorage.getItem(KEY)), a.time, "a worse run must not overwrite the best");
+      expect(b.isNew).toBe(false);
+      expect(b.best).toBe(a.time);
+      expect(Number(localStorage.getItem(KEY)), "a worse run must not overwrite the best").toBe(a.time);
 
       w.race.command({ type: "retry" });
       const c = runUntil(5);
-      assert.equal(c.isNew, true);
-      assert.ok(c.time > a.time);
-      assert.equal(Number(localStorage.getItem(KEY)), c.time);
+      expect(c.isNew).toBe(true);
+      expect(c.time).toBeGreaterThan(a.time);
+      expect(Number(localStorage.getItem(KEY))).toBe(c.time);
 
       // Storage off (site data blocked): the run still ends with its result.
       useStorage({ ...memoryStorage(), getItem: () => { throw new Error("blocked"); }, setItem: () => { throw new Error("blocked"); } });
       w.race.command({ type: "retry" });
-      assert.equal(hud(w).survival?.best, null, "an unreadable best reads as none");
+      expect(hud(w).survival?.best, "an unreadable best reads as none").toBe(null);
       const d = runUntil(2);
-      assert.equal(d.isNew, true);
-      assert.equal(d.cause, "wrecked");
+      expect(d.isNew).toBe(true);
+      expect(d.cause).toBe("wrecked");
     } finally {
       leaveSurvival(w);
     }
@@ -215,21 +216,21 @@ describe("given a Survival run on the Havana course (the player against a pack o
       sit(w, state, 2);
       w.cars[0]!.driverOut = "windshield";
       sit(w, state, 0.2);
-      assert.equal(hud(w).phase, "finished");
+      expect(hud(w).phase).toBe("finished");
       const clears = w.clears;
       w.race.command({ type: "retry" });
-      assert.equal(w.clears, clears + 1, "the last run's wreckage must be cleared");
+      expect(w.clears, "the last run's wreckage must be cleared").toBe(clears + 1);
       const h = hud(w);
-      assert.equal(h.phase, "grid");
-      assert.equal(h.survival?.cops, spec.formation.length);
-      assert.equal(h.survival?.wrecked, 0);
-      assert.equal(h.you?.busted, false);
-      assert.equal(w.cars[0]!.driverOut, null, "the driver is back in the car");
+      expect(h.phase).toBe("grid");
+      expect(h.survival?.cops).toBe(spec.formation.length);
+      expect(h.survival?.wrecked).toBe(0);
+      expect(h.you?.busted).toBe(false);
+      expect(w.cars[0]!.driverOut, "the driver is back in the car").toBe(null);
       const p = w.cars[0]!.group.position;
-      assert.ok(Math.hypot(p.x - spec.start.x, p.z - spec.start.z) < 0.01);
-      assert.equal(w.leaves, 0);
+      expect(Math.hypot(p.x - spec.start.x, p.z - spec.start.z)).toBeLessThan(0.01);
+      expect(w.leaves).toBe(0);
       w.race.command({ type: "quit" });
-      assert.equal(w.leaves, 1, "Quit in Survival goes back to the fleet, not to a course menu");
+      expect(w.leaves, "Quit in Survival goes back to the fleet, not to a course menu").toBe(1);
     } finally {
       leaveSurvival(w);
     }
@@ -247,12 +248,12 @@ describe("given a Survival run on the Havana course (the player against a pack o
         const frac = (g.time % HUNT.every) / HUNT.every;
         const step = Math.floor(g.time / HUNT.every);
         if (frac > 0.3 && frac < 0.8) runs.set(step, [...(runs.get(step) ?? []), g.cops - copsWanted(g.time, spec.formation.length)]);
-        assert.ok(g.cops <= HUNT.cap, `${g.cops} cops at ${g.time.toFixed(0)} s`);
+        expect(g.cops, `${g.cops} cops at ${g.time.toFixed(0)} s`).toBeLessThanOrEqual(HUNT.cap);
       }
       const steps = [...runs.keys()].sort((a, b) => a - b);
-      assert.ok(steps.includes(0) && steps.includes(1), `no run lasted past the first schedule step (${steps.join(",")}; ends ${JSON.stringify(r.ends)})`);
+      expect(steps.includes(0) && steps.includes(1), `no run lasted past the first schedule step (${steps.join(",")}; ends ${JSON.stringify(r.ends)})`).toBeTruthy();
       // A cop wrecked or lost is dropped in again, so the pack is never more than a couple short of the schedule.
-      for (const [step, errs] of runs) assert.ok(Math.min(...errs) >= -3 && Math.max(...errs) <= 0, `step ${step}: pack minus schedule ${errs.join(",")}`);
+      for (const [step, errs] of runs) expect(Math.min(...errs) >= -3 && Math.max(...errs) <= 0, `step ${step}: pack minus schedule ${errs.join(",")}`).toBeTruthy();
     } finally {
       leaveSurvival(w);
     }
@@ -274,11 +275,11 @@ describe("given Survival's cops dropped in during a run", () => {
       chaseCam(w);
       const car = w.cars[0]!.group.position;
       const f = w.cars[0]!.fwdFlat;
-      assert.equal(visibleFrom(w, car.x + f.x * 30, car.z + f.z * 30), true, "a spot 30 m ahead of the chase camera must be visible");
-      assert.equal(visibleFrom(w, car.x - f.x * 60, car.z - f.z * 60), false, "a spot 60 m behind the chase camera is out of its view");
+      expect(visibleFrom(w, car.x + f.x * 30, car.z + f.z * 30), "a spot 30 m ahead of the chase camera must be visible").toBe(true);
+      expect(visibleFrom(w, car.x - f.x * 60, car.z - f.z * 60), "a spot 60 m behind the chase camera is out of its view").toBe(false);
       // And a solid between hides what the frustum covers.
       const camera: THREE.PerspectiveCamera = w.camera;
-      assert.ok(camera.position.distanceTo(w.cars[0]!.group.position) < 10);
+      expect(camera.position.distanceTo(w.cars[0]!.group.position)).toBeLessThan(10);
     } finally {
       leaveSurvival(w);
     }

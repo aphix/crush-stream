@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { MATERIAL_WET, tagMaterial } from "../vehicle/material-class.ts";
@@ -9,6 +8,7 @@ import { cellMaterial } from "./track-mesh.ts";
 import { WorldStage } from "./engine-world.ts";
 import { GarageArt } from "./garage-art.ts";
 import { ShowcaseArt } from "./showcase-art.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** The program build's input for `material`: three's physical template, patched by the material's compile hook. */
 function compile(material: THREE.Material) {
@@ -19,20 +19,20 @@ function compile(material: THREE.Material) {
 
 const tableOf = (fragment: string, name: string): number[] => {
   const match = new RegExp(`float ${name}\\[\\d+\\] = float\\[\\d+\\]\\(([^)]*)\\)`).exec(fragment);
-  assert.ok(match, `the ${name} table`);
+  must(match, `the ${name} table`);
   return match[1]!.split(",").map(Number);
 };
 
 const constantOf = (fragment: string, name: string): number => {
   const match = new RegExp(`const float ${name} = ([\\d.]+);`).exec(fragment);
-  assert.ok(match, `the ${name} constant`);
+  must(match, `the ${name} constant`);
   return Number(match[1]);
 };
 
 /** `worldEnvShare`'s two thresholds, read off its own text. */
 function glossLine(fragment: string): { from: number; to: number } {
   const match = /smoothstep\(([\d.]+), ([\d.]+), roughness\)/.exec(fragment);
-  assert.ok(match, "the gloss line");
+  must(match, "the gloss line");
   return { from: Number(match[1]), to: Number(match[2]) };
 }
 
@@ -44,7 +44,7 @@ const step = (from: number, to: number, x: number): number => {
 /** The up component range the wet drop fades in over, read off the shader's own text. */
 function upLine(fragment: string): { from: number; to: number } {
   const match = /smoothstep\(([\d.]+), ([\d.]+), dot\(normalize\(normal\)/.exec(fragment);
-  assert.ok(match, "the up-facing line");
+  must(match, "the up-facing line");
   return { from: Number(match[1]), to: Number(match[2]) };
 }
 
@@ -62,8 +62,8 @@ function effective(fragment: string, materialClass: MaterialId, roughness: numbe
 
 /** Two evaluated surfaces draw the same: roughness and reflection share each equal. */
 function assertSame(actual: { roughness: number; share: number }, expected: { roughness: number; share: number }, label: string): void {
-  assert.equal(actual.roughness, expected.roughness, `${label}: roughness`);
-  assert.equal(actual.share, expected.share, `${label}: share`);
+  expect(actual.roughness, `${label}: roughness`).toBe(expected.roughness);
+  expect(actual.share, `${label}: share`).toBe(expected.share);
 }
 
 /** A class's fragment program at a typical dry road roughness. */
@@ -77,21 +77,21 @@ const FAMILY_COUNT = 14;
 describe("given a world material tagged with a class", () => {
   it("when it compiles, then it reads the one shared wet uniform", () => {
     const shader = compile(tagMaterial(new THREE.MeshStandardMaterial(), MAT.ASPHALT));
-    assert.equal(shader.uniforms.materialWet, MATERIAL_WET, "the shared uniform object");
+    expect(shader.uniforms.materialWet, "the shared uniform object").toBe(MATERIAL_WET);
   });
 
   it("when every surface a terrain paints is read wet, then the class its cell is drawn in wets, a lawn as soil on a paved terrain", () => {
     const fragment = programOf(MAT.CONCRETE);
     for (let index = 0; index < SURFACE_IDS.length; index++) {
       const cell = MATERIALS[cellMaterial(index, index)]![1];
-      assert.ok(tableOf(fragment, "MATERIAL_WET")[cell]! > 0, `${SURFACE_IDS[index]} is drawn in class ${cell}`);
+      expect(tableOf(fragment, "MATERIAL_WET")[cell]!, `${SURFACE_IDS[index]} is drawn in class ${cell}`).toBeGreaterThan(0);
     }
   });
 
   it("when wet soil and a lawn are read, then they keep a fifth of the sun's specular and only the sky's reflection comes back with the wetness", () => {
     const fragment = programOf(MAT.SOIL);
-    assert.ok(tableOf(fragment, "MATERIAL_DIRECT")[MAT.SOIL]! <= 0.25, "soil's direct share");
-    assert.ok(effective(fragment, MAT.SOIL, 1, 1).share > 0.8, "the sky's reflection is back");
+    expect(tableOf(fragment, "MATERIAL_DIRECT")[MAT.SOIL]!, "soil's direct share").toBeLessThanOrEqual(0.25);
+    expect(effective(fragment, MAT.SOIL, 1, 1).share, "the sky's reflection is back").toBeGreaterThan(0.8);
   });
 
   it("when the classes that stay dry are read wet, then their roughness and reflection do not change", () => {
@@ -104,20 +104,20 @@ describe("given a world material tagged with a class", () => {
   it("when a class is dry and rough, then it keeps exactly its tuned share", () => {
     for (const materialClass of MATERIALS.slice(0, FAMILY_COUNT).map((_, id) => id)) {
       const fragment = programOf(materialClass);
-      assert.equal(effective(fragment, materialClass, TUNED_FROM, 0).share, tableOf(fragment, "MATERIAL_ENV")[materialClass], `class ${materialClass}`);
+      expect(effective(fragment, materialClass, TUNED_FROM, 0).share, `class ${materialClass}`).toBe(tableOf(fragment, "MATERIAL_ENV")[materialClass]);
     }
   });
 
   it("when a cut class is glossy and dry, then it keeps more of the reflection than the same class rough", () => {
     const fragment = programOf(MAT.PLASTIC);
     const rough = effective(fragment, MAT.PLASTIC, DRY_ROAD_ROUGHNESS, 0).share;
-    assert.ok(effective(fragment, MAT.PLASTIC, 0.25, 0).share > rough + 0.3, `rough ${rough}`);
+    expect(effective(fragment, MAT.PLASTIC, 0.25, 0).share, `rough ${rough}`).toBeGreaterThan(rough + 0.3);
   });
 
   it("when the albedo darkening is read, then wet soil loses some and wet asphalt none", () => {
     const dark = tableOf(programOf(MAT.SOIL), "MATERIAL_DARK");
-    assert.ok(dark[MAT.SOIL]! > 0.2, "soil");
-    assert.equal(dark[MAT.ASPHALT], 0, "asphalt");
+    expect(dark[MAT.SOIL]!, "soil").toBeGreaterThan(0.2);
+    expect(dark[MAT.ASPHALT], "asphalt").toBe(0);
   });
 
   const pavements = [
@@ -139,8 +139,8 @@ describe("given a world material tagged with a class", () => {
       const fragment = programOf(testCase.materialClass);
       const dry = effective(fragment, testCase.materialClass, DRY_ROAD_ROUGHNESS, 0);
       const wet = effective(fragment, testCase.materialClass, DRY_ROAD_ROUGHNESS, 1);
-      assert.ok(wet.roughness < dry.roughness - 0.2, `roughness ${dry.roughness} -> ${wet.roughness}`);
-      assert.ok(wet.share >= testCase.expectedMinShare && wet.share > dry.share + 0.15, `share ${dry.share} -> ${wet.share}`);
+      expect(wet.roughness, `roughness ${dry.roughness} -> ${wet.roughness}`).toBeLessThan(dry.roughness - 0.2);
+      expect(wet.share >= testCase.expectedMinShare && wet.share > dry.share + 0.15, `share ${dry.share} -> ${wet.share}`).toBeTruthy();
     });
   }
 });
@@ -148,7 +148,7 @@ describe("given a world material tagged with a class", () => {
 /** A lit world material's effective dry and wet state, off the program its compile hook builds. */
 function dryAndWet(material: THREE.MeshStandardMaterial) {
   const shader = compile(material);
-  assert.equal(shader.uniforms.materialWet, MATERIAL_WET, "reads the shared wet object");
+  expect(shader.uniforms.materialWet, "reads the shared wet object").toBe(MATERIAL_WET);
   const materialClass = material.userData.materialClass as MaterialId;
   const wetShare = Number(shader.uniforms.materialWetShare?.value);
   return { dry: effective(shader.fragmentShader, materialClass, material.roughness, 0), wet: effective(shader.fragmentShader, materialClass, material.roughness, wetShare) };
@@ -156,7 +156,7 @@ function dryAndWet(material: THREE.MeshStandardMaterial) {
 
 function assertWetter(state: ReturnType<typeof dryAndWet>): void {
   const { dry, wet } = state;
-  assert.ok(wet.roughness < dry.roughness - 0.3 && wet.share > dry.share, `roughness ${dry.roughness} -> ${wet.roughness}, share ${dry.share} -> ${wet.share}`);
+  expect(wet.roughness < dry.roughness - 0.3 && wet.share > dry.share, `roughness ${dry.roughness} -> ${wet.roughness}, share ${dry.share} -> ${wet.share}`).toBeTruthy();
 }
 
 describe("given the stage's ground and the showcase's floor", () => {
@@ -164,26 +164,26 @@ describe("given the stage's ground and the showcase's floor", () => {
     stubBrowser();
     const stage = new WorldStage(new THREE.Scene());
     stage.setWet(true);
-    assert.equal(MATERIAL_WET.value, 1, "wet");
+    expect(MATERIAL_WET.value, "wet").toBe(1);
     assertWetter(dryAndWet(stage.ground.material as THREE.MeshStandardMaterial));
     stage.setWet(false);
-    assert.equal(MATERIAL_WET.value, 0, "dry again");
+    expect(MATERIAL_WET.value, "dry again").toBe(0);
   });
 
   it("when the showcase's floor is compiled, then it is a lit wet-prone surface that Wet changes as it does the ground", () => {
     stubBrowser();
     const floor = new ShowcaseArt().group.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh && child.geometry instanceof THREE.CircleGeometry);
-    assert.ok(floor, "the floor");
-    assert.ok(floor.material instanceof THREE.MeshStandardMaterial, "a lit material");
+    must(floor, "the floor");
+    must(floor.material instanceof THREE.MeshStandardMaterial, "a lit material");
     const state = dryAndWet(floor.material);
     assertWetter(state);
-    assert.ok(state.wet.roughness > 0.5, `the floor stays too rough for the back light's hot spot: ${state.wet.roughness}`);
+    expect(state.wet.roughness, `the floor stays too rough for the back light's hot spot: ${state.wet.roughness}`).toBeGreaterThan(0.5);
   });
 
   it("when the garage's floor is compiled, then it is interior and Wet leaves it as it was", () => {
     stubBrowser();
     const floor = new GarageArt().group.children.find((child): child is THREE.Mesh => child instanceof THREE.Mesh && child.geometry instanceof THREE.PlaneGeometry && child.position.y === 0);
-    assert.ok(floor?.material instanceof THREE.MeshStandardMaterial, "a lit floor");
+    must(floor?.material instanceof THREE.MeshStandardMaterial, "a lit floor");
     const { dry, wet } = dryAndWet(floor.material);
     assertSame(wet, dry, "garage floor");
   });

@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
@@ -27,7 +26,7 @@ const DRAWN_ALPHA = 0.5;
 const bodyOf = (car: DeformableCar): Float32Array => Float32Array.from(car.lookMeshes().body.geometry.getAttribute("position").array);
 
 function skinGap(a: Float32Array, b: Float32Array): number {
-  assert.equal(a.length, b.length, "the same body mesh");
+  expect(a.length, "the same body mesh").toBe(b.length);
   let gap = 0;
   for (let i = 0; i < a.length; i++) gap = Math.max(gap, Math.abs(a[i]! - b[i]!));
   return gap;
@@ -160,33 +159,33 @@ describe("given the real engine and a race ended with every car dented", () => {
   });
 
   it("when the podium is up, then its cars are the first three of the results, in order, named as the results name them", () => {
-    assert.ok(results.length >= 4, "the control: a field of four was classified");
+    expect(results.length, "the control: a field of four was classified").toBeGreaterThanOrEqual(4);
     const standing = [...engine["podium"].cars()];
-    assert.equal(standing.length, 3);
-    for (const [k, car] of standing.entries()) assert.equal(car.group.userData.carIndex, results[k]!.id, `place ${k + 1}`);
-    assert.equal(podiumHud()?.kind, "race");
-    for (const [k, row] of results.slice(0, 3).entries()) assert.equal(podiumHud()?.names[k], row.name, `name of place ${k + 1}`);
+    expect(standing.length).toBe(3);
+    for (const [k, car] of standing.entries()) expect(car.group.userData.carIndex, `place ${k + 1}`).toBe(results[k]!.id);
+    expect(podiumHud()?.kind).toBe("race");
+    for (const [k, row] of results.slice(0, 3).entries()) expect(podiumHud()?.names[k], `name of place ${k + 1}`).toBe(row.name);
   });
 
   it("when the three cars are measured, then the winner's is on the highest block in the middle, the second's lower on the left, the third's lowest on the right", () => {
     const spot = race().podiumSpot()!;
     const cars = engine["podium"].cars();
     const [first, second, third] = [cars[0]!.group.position, cars[1]!.group.position, cars[2]!.group.position];
-    assert.ok(first.y > second.y && second.y > third.y, `heights ${first.y} > ${second.y} > ${third.y}`);
-    assert.ok(second.x < first.x && first.x < third.x, `places ${second.x} < ${first.x} < ${third.x}`);
-    assert.equal(first.x, spot.x + PODIUM_BLOCKS[0]!.x);
-    assert.equal(first.y, spot.y + PODIUM_BLOCKS[0]!.top);
+    expect(first.y > second.y && second.y > third.y, `heights ${first.y} > ${second.y} > ${third.y}`).toBeTruthy();
+    expect(second.x < first.x && first.x < third.x, `places ${second.x} < ${first.x} < ${third.x}`).toBeTruthy();
+    expect(first.x).toBe(spot.x + PODIUM_BLOCKS[0]!.x);
+    expect(first.y).toBe(spot.y + PODIUM_BLOCKS[0]!.top);
   });
 
   it("when each car's skin is read, then it is the dented skin its racer's car had as it crossed the finish line (or when the race ended, for one that never did), though the field's cars have since been put back", () => {
-    assert.ok(skinGap(skinAtTheEnd, skinAtTheLine) >= DENT_M, `the control: the hit after the line dents the finisher ${skinGap(skinAtTheEnd, skinAtTheLine)} m`);
+    expect(skinGap(skinAtTheEnd, skinAtTheLine), `the control: the hit after the line dents the finisher ${skinGap(skinAtTheEnd, skinAtTheLine)} m`).toBeGreaterThanOrEqual(DENT_M);
     const standing = [...engine["podium"].cars()];
-    assert.ok(standing.some((c) => c.group.userData.carIndex === FINISHER), "the control: the finisher is on the podium");
+    expect(standing.some((c) => c.group.userData.carIndex === FINISHER), "the control: the finisher is on the podium").toBeTruthy();
     for (const [k, car] of standing.entries()) {
       const id = results[k]!.id;
       const wanted = skinsAtTheFinish.get(id)!;
-      assert.ok(skinGap(bodyOf(car), wanted) <= SAME_SKIN_M, `place ${k + 1}: the podium's car is ${skinGap(bodyOf(car), wanted)} m from the finish's skin`);
-      assert.ok(skinGap(bodyOf(live()[id]!), wanted) >= DENT_M, `place ${k + 1}, the control: the field's car, put back, is a dent away from it`);
+      expect(skinGap(bodyOf(car), wanted), `place ${k + 1}: the podium's car is ${skinGap(bodyOf(car), wanted)} m from the finish's skin`).toBeLessThanOrEqual(SAME_SKIN_M);
+      expect(skinGap(bodyOf(live()[id]!), wanted), `place ${k + 1}, the control: the field's car, put back, is a dent away from it`).toBeGreaterThanOrEqual(DENT_M);
     }
   });
 
@@ -199,25 +198,22 @@ describe("given the real engine and a race ended with every car dented", () => {
         if (!want) continue;
         // Along the ground only: the podium's wheel stands on its hub mass's x and z (`followHubs`), not on the live car's suspension seat.
         const gap = Math.hypot(wheel.position.x - want.x, wheel.position.z - want.z);
-        assert.ok(gap <= WHEEL_SEAT_TOLERANCE, `place ${k + 1}, wheel ${i}: ${wheel.position.toArray()} against the finish's ${want.toArray()}`);
+        expect(gap, `place ${k + 1}, wheel ${i}: ${wheel.position.toArray()} against the finish's ${want.toArray()}`).toBeLessThanOrEqual(WHEEL_SEAT_TOLERANCE);
         checked++;
       }
     }
-    assert.ok(checked > 0, "the control: some kept wheel was compared");
+    expect(checked, "the control: some kept wheel was compared").toBeGreaterThan(0);
   });
 
   it("when the wheel batch draws the podium's cars, then every wheel they kept is drawn and none they lost is", () => {
     const lost = [...engine["podium"].cars()].map((_, k) => lostAtTheFinish.get(results[k]!.id)!);
-    assert.ok(
-      lost.some((n) => n > 0),
-      "the control: a podium car lost a wheel",
-    );
+    expect(lost.some((n) => n > 0), "the control: a podium car lost a wheel").toBeTruthy();
     // The renderer's pre-draw hook, run by hand: the stubbed renderer draws nothing.
     const scene = engine["scene"];
     scene.onBeforeRender(engine["renderer"], scene, engine["camera"], new THREE.BufferGeometry(), new THREE.MeshBasicMaterial(), new THREE.Group());
     const drawn = engine["wheels"].meshes.slice(0, -1).reduce((n, mesh) => n + mesh.count, 0);
-    assert.equal(drawn, lost.reduce((total, n) => total + 4 - n, 0), "wheels drawn: four a car less the ones it lost");
-    assert.ok(drawn > 0, "the control: some wheels are drawn");
+    expect(drawn, "wheels drawn: four a car less the ones it lost").toBe(lost.reduce((total, n) => total + 4 - n, 0));
+    expect(drawn, "the control: some wheels are drawn").toBeGreaterThan(0);
   });
 
   it("when each podium car's doors, hood, bumpers and mirrors are read against the car as it finished, then the attached ones sit in the same pose and the torn ones are absent", () => {
@@ -225,38 +221,32 @@ describe("given the real engine and a race ended with every car dented", () => {
     let torn = 0;
     for (const [k, car] of [...engine["podium"].cars()].entries()) {
       const finish = partsAtTheFinish.get(results[k]!.id)!;
-      assert.equal(car["parts"].length, finish.length, `place ${k + 1}: the same parts`);
+      expect(car["parts"].length, `place ${k + 1}: the same parts`).toBe(finish.length);
       for (const [i, p] of car["parts"].entries()) {
         const want = finish[i]!;
-        assert.equal(p.detached, want.detached, `place ${k + 1}, ${p.name}: torn off as the car finished`);
+        expect(p.detached, `place ${k + 1}, ${p.name}: torn off as the car finished`).toBe(want.detached);
         if (want.detached) {
           torn++;
-          assert.equal(p.object.visible, false, `place ${k + 1}, ${p.name}: a torn part is not drawn`);
+          expect(p.object.visible, `place ${k + 1}, ${p.name}: a torn part is not drawn`).toBe(false);
           continue;
         }
         const shown = poseOf(p);
         const tolerance = p.bumper ? BUMPER_HANG_TOLERANCE : POSE_TOLERANCE;
-        for (const [n, value] of want.pose.entries()) assert.ok(Math.abs(shown[n]! - value) <= tolerance, `place ${k + 1}, ${p.name}: pose component ${n} is ${shown[n]}, the finish's ${value}`);
+        for (const [n, value] of want.pose.entries()) expect(Math.abs(shown[n]! - value), `place ${k + 1}, ${p.name}: pose component ${n} is ${shown[n]}, the finish's ${value}`).toBeLessThanOrEqual(tolerance);
         if (want.pose.some((value, n) => Math.abs(value - want.rest[n]!) > OFF_REST)) open++;
       }
     }
-    assert.ok(open > 0, "the control: some attached part is posed away from its rest");
-    assert.ok(torn > 0, "the control: some part is torn off");
+    expect(open, "the control: some attached part is posed away from its rest").toBeGreaterThan(0);
+    expect(torn, "the control: some part is torn off").toBeGreaterThan(0);
   });
 
   it("when the podium is up, then the field's cars are hidden, the podium's own are not the field's, and the camera is up over the course on the stand", () => {
     const standing = [...engine["podium"].cars()];
-    assert.ok(
-      live().every((c) => !c.group.visible),
-      "the field is hidden",
-    );
-    assert.ok(
-      standing.every((c) => c.group.visible && !live().includes(c)),
-      "three cars of its own",
-    );
-    assert.equal(engine["highlights"].playing, true);
-    assert.equal(engine["cameraRig"](), "podium");
-    assert.ok(engine["camera"].position.y > race().podiumSpot()!.y, "over the platform");
+    expect(live().every((c) => !c.group.visible), "the field is hidden").toBeTruthy();
+    expect(standing.every((c) => c.group.visible && !live().includes(c)), "three cars of its own").toBeTruthy();
+    expect(engine["highlights"].playing).toBe(true);
+    expect(engine["cameraRig"]()).toBe("podium");
+    expect(engine["camera"].position.y, "over the platform").toBeGreaterThan(race().podiumSpot()!.y);
   });
 
   it("when the podium has been up for ten seconds at the high tier, then sparks are in the air over the platform and they move from one frame to the next", () => {
@@ -273,29 +263,26 @@ describe("given the real engine and a race ended with every car dented", () => {
     };
     const inAir = (): number[] => [...sparkLives(sys).keys()].filter((k) => sparkLives(sys)[k]! > 0 && overPlatform(k));
     const before = inAir();
-    assert.ok(before.length > 0, "the control: the podium's jets have sparks in the air");
+    expect(before.length, "the control: the podium's jets have sparks in the air").toBeGreaterThan(0);
     const heightBefore = new Map(before.map((k) => [k, sparkAt(sys, k, at).y]));
     run(0.1);
     const moved = before.filter((k) => sparkLives(sys)[k]! > 0 && sparkAt(sys, k, at).y !== heightBefore.get(k));
-    assert.ok(moved.length > 0, "the jets update while the podium shows: the sparks in the air are not frozen");
+    expect(moved.length, "the jets update while the podium shows: the sparks in the air are not frozen").toBeGreaterThan(0);
   });
 
   it("when Skip is pressed, then the podium is down, the field is back as it was and the sheet's cars are not the podium's", () => {
     engine.raceCommand({ type: "podium", on: false });
     run(0.1);
-    assert.equal(podiumHud(), null);
-    assert.equal(engine["highlights"].playing, false);
-    assert.ok(
-      live().every((c) => c.group.visible),
-      "the field is drawn again",
-    );
-    assert.equal(engine["podium"].cars().length, 0, "no podium car is standing");
+    expect(podiumHud()).toBe(null);
+    expect(engine["highlights"].playing).toBe(false);
+    expect(live().every((c) => c.group.visible), "the field is drawn again").toBeTruthy();
+    expect(engine["podium"].cars().length, "no podium car is standing").toBe(0);
   });
 
   it("when the podium is raised a second time, then it shows the same three", () => {
     engine.raceCommand({ type: "podium", on: true });
     run(0.2);
-    for (const [k, car] of [...engine["podium"].cars()].entries()) assert.equal(car.group.userData.carIndex, results[k]!.id, `place ${k + 1}`);
+    for (const [k, car] of [...engine["podium"].cars()].entries()) expect(car.group.userData.carIndex, `place ${k + 1}`).toBe(results[k]!.id);
     engine.raceCommand({ type: "podium", on: false });
     run(0.1);
   });

@@ -1,5 +1,4 @@
-import { test } from "vitest";
-import assert from "node:assert/strict";
+import { expect, test } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -12,20 +11,20 @@ const PROCESSOR = readFileSync(join(ROOT, "kernels/motor/motor-processor.js"), "
 
 test("the committed worklet is upstream's prebuilt module with our processor spliced on (npm run build:motor)", () => {
   const upstreamProcessor = PREBUILT.indexOf("/*\n * Copyright (c) 2021-2022 Antonio-R1");
-  assert.ok(upstreamProcessor > 0);
+  expect(upstreamProcessor).toBeGreaterThan(0);
   const committed = readFileSync(OUT, "utf8");
-  assert.equal(committed.slice(0, upstreamProcessor), PREBUILT.slice(0, upstreamProcessor));
-  assert.equal(committed.slice(upstreamProcessor), PROCESSOR.replace(/^\n/, ""));
+  expect(committed.slice(0, upstreamProcessor)).toBe(PREBUILT.slice(0, upstreamProcessor));
+  expect(committed.slice(upstreamProcessor)).toBe(PROCESSOR.replace(/^\n/, ""));
 });
 
 test("the build is idempotent", () => {
   const before = readFileSync(OUT, "utf8");
   execFileSync("node", [join(ROOT, "scripts/build-motor-worklet.mjs")], { stdio: "pipe" });
-  assert.equal(readFileSync(OUT, "utf8"), before);
+  expect(readFileSync(OUT, "utf8")).toBe(before);
 });
 
 test("the patched processor keeps upstream's licence header and registers the same processor name", () => {
-  assert.match(PROCESSOR, /Copyright \(c\) 2021-2022 Antonio-R1/);
-  assert.match(PROCESSOR, /registerProcessor\("engine-sound-processor", EngineSoundGenerator\)/);
-  assert.match(PROCESSOR, /Modified for crash-deformer-test/);
+  expect(PROCESSOR).toMatch(/Copyright \(c\) 2021-2022 Antonio-R1/);
+  expect(PROCESSOR).toMatch(/registerProcessor\("engine-sound-processor", EngineSoundGenerator\)/);
+  expect(PROCESSOR).toMatch(/Modified for crash-deformer-test/);
 });

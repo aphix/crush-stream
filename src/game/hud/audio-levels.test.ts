@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { audioLevels, type AudioSetters } from "./audio-levels.ts";
 import { INITIAL_HUD } from "./hud-store.ts";
 
@@ -18,17 +17,17 @@ describe("given the sound settings the race menus and the settings panel's Audio
   it("when the HUD says audio is on with the music at 0.4 and the engines at 0.7, then the levels read exactly those values", () => {
     const { engine } = recordingEngine();
     const levels = audioLevels({ audioOn: true, musicVolume: 0.4, engineVolume: 0.7 }, engine);
-    assert.equal(levels.on, true, "on");
-    assert.equal(levels.music, 0.4, "music");
-    assert.equal(levels.engines, 0.7, "engines");
+    expect(levels.on, "on").toBe(true);
+    expect(levels.music, "music").toBe(0.4);
+    expect(levels.engines, "engines").toBe(0.7);
   });
 
   it("when the HUD is untouched, then the levels are the defaults: audio off, music 0.15, engines 0.25", () => {
     const { engine } = recordingEngine();
     const levels = audioLevels(INITIAL_HUD, engine);
-    assert.equal(levels.on, false, "on");
-    assert.equal(levels.music, 0.15, "music");
-    assert.equal(levels.engines, 0.25, "engines");
+    expect(levels.on, "on").toBe(false);
+    expect(levels.music, "music").toBe(0.15);
+    expect(levels.engines, "engines").toBe(0.25);
   });
 
   it("when the toggle, the music slider and the engines slider are used, then each calls the engine's own setter once and nothing else", () => {
@@ -37,10 +36,10 @@ describe("given the sound settings the race menus and the settings panel's Audio
     levels.onToggle();
     levels.onMusic(0.3);
     levels.onEngines(0.9);
-    assert.equal(calls.length, 3, "calls");
-    assert.equal(calls[0], "toggleAudio", "toggle");
-    assert.equal(calls[1], "setMusicVolume 0.3", "music");
-    assert.equal(calls[2], "setEngineVolume 0.9", "engines");
+    expect(calls.length, "calls").toBe(3);
+    expect(calls[0], "toggle").toBe("toggleAudio");
+    expect(calls[1], "music").toBe("setMusicVolume 0.3");
+    expect(calls[2], "engines").toBe("setEngineVolume 0.9");
   });
 
   it("when the engine is not up yet, then the controls do nothing instead of throwing", () => {
@@ -48,6 +47,6 @@ describe("given the sound settings the race menus and the settings panel's Audio
     levels.onToggle();
     levels.onMusic(0.3);
     levels.onEngines(0.9);
-    assert.equal(levels.on, false, "still off");
+    expect(levels.on, "still off").toBe(false);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
@@ -8,6 +7,7 @@ import { BLOCK_DEPTH, BLOCK_WIDTH, PODIUM_BLOCKS, type PodiumPlace } from "../ma
 import { CarDamage } from "./car-damage.ts";
 import { NOW, PodiumDirector, type PodiumHost } from "./engine-podium.ts";
 import { stubBrowser } from "./engine-headless.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 stubBrowser();
 
@@ -26,7 +26,7 @@ const bodyOf = (car: DeformableCar): Float32Array => Float32Array.from(car.lookM
 
 /** The largest coordinate difference between two skins (m). */
 function skinGap(a: Float32Array, b: Float32Array): number {
-  assert.equal(a.length, b.length, "the same body mesh");
+  expect(a.length, "the same body mesh").toBe(b.length);
   let gap = 0;
   for (let i = 0; i < a.length; i++) gap = Math.max(gap, Math.abs(a[i]! - b[i]!));
   return gap;
@@ -62,47 +62,51 @@ describe("given the podium raised over a course with three racers, the winner's 
   const { host, donor, jets, make } = hostOver(scene);
   const director = new PodiumDirector(host);
   const wreckSkin = bodyOf(donor);
-  assert.ok(director.raise(PLACES, "race", "Test Oval"), "raised");
+  expect(director.raise(PLACES, "race", "Test Oval"), "raised").toBeTruthy();
   director.time[NOW] = 0;
   director.frame();
   const cars = [...director.cars()];
 
   it("when the cars are read, then there is one per place and the winner's is first", () => {
-    assert.equal(cars.length, 3);
-    assert.equal(director.focus(), cars[0], "the sun's shadow follows the winner");
+    expect(cars.length).toBe(3);
+    expect(director.focus(), "the sun's shadow follows the winner").toBe(cars[0]);
   });
 
   it("when each car's place is read, then it stands on its block's top, the stand's middle at the spot, nose turned as the block says", () => {
     for (const [k, block] of PODIUM_BLOCKS.entries()) {
       const p = cars[k]!.group.position;
-      assert.equal(p.x, SPOT.x + block.x, `x of place ${block.place}`);
-      assert.equal(p.z, SPOT.z, `z of place ${block.place}`);
-      assert.equal(p.y, SPOT.y + block.top, `y of place ${block.place}`);
-      assert.ok(Math.abs(cars[k]!.yaw - block.yaw) < 1e-9, `yaw of place ${block.place}`);
+      expect(p.x, `x of place ${block.place}`).toBe(SPOT.x + block.x);
+      expect(p.z, `z of place ${block.place}`).toBe(SPOT.z);
+      expect(p.y, `y of place ${block.place}`).toBe(SPOT.y + block.top);
+      expect(Math.abs(cars[k]!.yaw - block.yaw), `yaw of place ${block.place}`).toBeLessThan(1e-9);
     }
   });
 
   it("when the three heights are compared, then the winner stands highest, the second lower and the third lowest", () => {
     const [first, second, third] = cars.map((c) => c.group.position.y) as [number, number, number];
-    assert.ok(first > second && second > third, `${first} > ${second} > ${third}`);
+    expect(first > second && second > third, `${first} > ${second} > ${third}`).toBeTruthy();
   });
 
   it("when the cars' footprints are measured, then each fits its block", () => {
     for (const [k, block] of PODIUM_BLOCKS.entries()) {
       const box = new THREE.Box3().setFromObject(cars[k]!.lookMeshes().body);
-      assert.ok(box.min.x >= SPOT.x + block.x - BLOCK_WIDTH / 2 - 0.3 && box.max.x <= SPOT.x + block.x + BLOCK_WIDTH / 2 + 0.3, `place ${block.place} across`);
-      assert.ok(box.min.z >= SPOT.z - BLOCK_DEPTH / 2 && box.max.z <= SPOT.z + BLOCK_DEPTH / 2, `place ${block.place} along`);
+      expect(box.min.x >= SPOT.x + block.x - BLOCK_WIDTH / 2 - 0.3 && box.max.x <= SPOT.x + block.x + BLOCK_WIDTH / 2 + 0.3, `place ${block.place} across`).toBeTruthy();
+      expect(box.min.z >= SPOT.z - BLOCK_DEPTH / 2 && box.max.z <= SPOT.z + BLOCK_DEPTH / 2, `place ${block.place} along`).toBeTruthy();
     }
   });
 
   it("when the winner's skin is read beside the wreck the race ended with, then it is that wreck's, and a fresh car's of the same body is not", () => {
     const shown = bodyOf(cars[0]!);
-    assert.ok(skinGap(shown, wreckSkin) <= SAME_SKIN_M, `the winner's car is ${skinGap(shown, wreckSkin)} m from the wreck's skin`);
-    assert.ok(skinGap(bodyOf(make(0)), wreckSkin) >= DENT_M, "the control: an undamaged car of the wreck's own body is a dent away from the wreck");
+    expect(skinGap(shown, wreckSkin), `the winner's car is ${skinGap(shown, wreckSkin)} m from the wreck's skin`).toBeLessThanOrEqual(SAME_SKIN_M);
+    expect(skinGap(bodyOf(make(0)), wreckSkin), "the control: an undamaged car of the wreck's own body is a dent away from the wreck").toBeGreaterThanOrEqual(DENT_M);
   });
 
   it("when the HUD is read, then it names the three racers as the standings do", () => {
-    assert.deepEqual(director.hud(2), { kind: "race", names: ["Ayla", "Bo", "Cy"], reel: 2 });
+    const hud = director.hud(2);
+    if (!hud) throw new Error("the HUD is up while the stage is raised");
+    expect(hud.kind, "HUD kind").toBe("race");
+    expect(firstMismatch(hud.names, ["Ayla", "Bo", "Cy"]), "HUD names").toBeUndefined();
+    expect(hud.reel, "HUD reel").toBe(2);
   });
 
   it("when ten seconds are drawn, then the fountains fire a round of four jets every three seconds from the platform", () => {
@@ -111,26 +115,23 @@ describe("given the podium raised over a course with three racers, the winner's 
       director.time[NOW] = f / 60;
       director.frame();
     }
-    assert.equal(jets.length, 4 * 3, "rounds at 3, 6 and 9 s (the one at the start went before)");
-    for (const jet of jets) assert.equal(jet.y, SPOT.y, "from the platform's top");
-    assert.ok(new Set(jets.map((j) => j.color.getHex())).size > 1, "in more than one colour");
+    expect(jets.length, "rounds at 3, 6 and 9 s (the one at the start went before)").toBe(4 * 3);
+    for (const jet of jets) expect(jet.y, "from the platform's top").toBe(SPOT.y);
+    expect(new Set(jets.map((j) => j.color.getHex())).size, "in more than one colour").toBeGreaterThan(1);
   });
 
   it("when it is lowered, then the stand and its cars are gone, and the HUD has nothing to draw", () => {
     director.lower();
-    assert.equal(director.open, false);
-    assert.equal(director.hud(0), null);
-    assert.deepEqual(
-      cars.map((c) => c.group.visible),
-      [false, false, false],
-    );
-    assert.equal(director.cars().length, 0);
+    expect(director.open).toBe(false);
+    expect(director.hud(0)).toBe(null);
+    expect(firstMismatch(cars.map((c) => c.group.visible), [false, false, false])).toBeUndefined();
+    expect(director.cars().length).toBe(0);
   });
 
   it("when it is raised again with a racer fewer, then the stand holds two", () => {
-    assert.ok(director.raise(PLACES.slice(0, 2), "campaign", "Championship"));
-    assert.equal(director.cars().length, 2);
-    assert.equal(director.hud(0)?.kind, "campaign");
+    expect(director.raise(PLACES.slice(0, 2), "campaign", "Championship")).toBeTruthy();
+    expect(director.cars().length).toBe(2);
+    expect(director.hud(0)?.kind).toBe("campaign");
   });
 });
 
@@ -158,10 +159,10 @@ describe("given the camera round the podium", () => {
         director.frame();
         director.aim(camera);
         camera.updateMatrixWorld(true);
-        assert.ok(camera.position.y > SPOT.y, `${shape.it} at ${f / 60} s: the eye is over the platform`);
+        expect(camera.position.y, `${shape.it} at ${f / 60} s: the eye is over the platform`).toBeGreaterThan(SPOT.y);
         for (const p of corners) {
           const ndc = p.clone().project(camera);
-          assert.ok(Math.abs(ndc.x) <= 1 && ndc.z < 1, `${shape.it} at ${f / 60} s: a block's top corner is out of view (ndc ${ndc.x.toFixed(2)})`);
+          expect(Math.abs(ndc.x) <= 1 && ndc.z < 1, `${shape.it} at ${f / 60} s: a block's top corner is out of view (ndc ${ndc.x.toFixed(2)})`).toBeTruthy();
         }
       }
     }
@@ -176,7 +177,7 @@ describe("given the camera round the podium", () => {
       director.aim(camera);
       camera.updateMatrixWorld(true);
       const ndc = middle.clone().project(camera);
-      assert.ok(Math.abs(ndc.x) < 1e-6 && Math.abs(ndc.y) < 1e-6, `at ${f / 60} s the middle is at ndc (${ndc.x}, ${ndc.y})`);
+      expect(Math.abs(ndc.x) < 1e-6 && Math.abs(ndc.y) < 1e-6, `at ${f / 60} s the middle is at ndc (${ndc.x}, ${ndc.y})`).toBeTruthy();
     }
   });
 
@@ -186,7 +187,7 @@ describe("given the camera round the podium", () => {
       director.time[NOW] = f / 60;
       director.frame();
       director.aim(camera);
-      assert.ok(camera.position.z > SPOT.z + BLOCK_DEPTH / 2, `at ${f / 60} s the eye is at z ${camera.position.z - SPOT.z} from the stand`);
+      expect(camera.position.z, `at ${f / 60} s the eye is at z ${camera.position.z - SPOT.z} from the stand`).toBeGreaterThan(SPOT.z + BLOCK_DEPTH / 2);
     }
   });
 });
@@ -205,11 +206,11 @@ describe("given a wreck whose rear left hub the crash shoved off its rest seat",
   it("when the podium car's wheels are read, then the wheel of the shoved hub sits on that hub, off its rest seat, and the wheel of a hub that stayed sits on it", () => {
     const shoved = car.deform.massLocal("hubRL");
     const rest = car.frame.wheels[2]!;
-    assert.ok(Math.abs(shoved.x - rest[0]) > HUB_SHOVE_M / 2, `the control: the shove survived the net state (hub at x ${shoved.x}, rest ${rest[0]})`);
+    expect(Math.abs(shoved.x - rest[0]), `the control: the shove survived the net state (hub at x ${shoved.x}, rest ${rest[0]})`).toBeGreaterThan(HUB_SHOVE_M / 2);
     const wheel = car["wheels"][2]!;
-    assert.ok(Math.abs(wheel.position.x - shoved.x) <= SEAT_TOLERANCE_M, `the wheel is at x ${wheel.position.x}, its hub at ${shoved.x}`);
-    assert.ok(Math.abs(wheel.position.z - shoved.z) <= SEAT_TOLERANCE_M, `the wheel is at z ${wheel.position.z}, its hub at ${shoved.z}`);
+    expect(Math.abs(wheel.position.x - shoved.x), `the wheel is at x ${wheel.position.x}, its hub at ${shoved.x}`).toBeLessThanOrEqual(SEAT_TOLERANCE_M);
+    expect(Math.abs(wheel.position.z - shoved.z), `the wheel is at z ${wheel.position.z}, its hub at ${shoved.z}`).toBeLessThanOrEqual(SEAT_TOLERANCE_M);
     const kept = car.deform.massLocal("hubFR");
-    assert.ok(Math.abs(car["wheels"][1]!.position.x - kept.x) <= SEAT_TOLERANCE_M, "the front right wheel is on its hub");
+    expect(Math.abs(car["wheels"][1]!.position.x - kept.x), "the front right wheel is on its hub").toBeLessThanOrEqual(SEAT_TOLERANCE_M);
   });
 });

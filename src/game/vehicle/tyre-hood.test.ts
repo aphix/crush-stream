@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import type { BufferAttribute } from "three";
 import { type CrashWorld, FREEWHEEL, launch, makeWorld, PARKED, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { DT } from "./test-support.ts";
@@ -53,7 +52,7 @@ describe("given a car let down from a metre onto flat ground, its tyres driven u
       launch(car, 0, 0, 0, 0, 0);
       car.group.position.y = 1;
       const seen = leastClearance(w, car, FRONT_WHEELS, 90);
-      assert.ok(seen.clearance >= CLEARANCE_M, `${fmt(seen.clearance)} at frame ${seen.at}`);
+      expect(seen.clearance, `${fmt(seen.clearance)} at frame ${seen.at}`).toBeGreaterThanOrEqual(CLEARANCE_M);
     });
   }
 });
@@ -68,7 +67,7 @@ describe("given a pickup that hits something with its nose", () => {
     launch(a, -5, 0, Math.PI / 2, 50 / 3.6, 0);
     launch(b, 5, 0, -Math.PI / 2, -50 / 3.6, 0);
     const seen = leastClearance(w, a, FRONT_WHEELS, 150);
-    assert.ok(seen.clearance >= CLEARANCE_M, `${fmt(seen.clearance)} at frame ${seen.at}`);
+    expect(seen.clearance, `${fmt(seen.clearance)} at frame ${seen.at}`).toBeGreaterThanOrEqual(CLEARANCE_M);
   });
 
   it("when it drives into a parked sedan's flank at 72 km/h, then its front tyres keep 5 mm under the drawn hood through the crush and after", () => {
@@ -80,7 +79,7 @@ describe("given a pickup that hits something with its nose", () => {
     launch(a, -12, 0, Math.PI / 2, 72 / 3.6, 0);
     launch(b, 0, 0, 0, 0, 0);
     const seen = leastClearance(w, a, FRONT_WHEELS, 150);
-    assert.ok(seen.clearance >= CLEARANCE_M, `${fmt(seen.clearance)} at frame ${seen.at}`);
+    expect(seen.clearance, `${fmt(seen.clearance)} at frame ${seen.at}`).toBeGreaterThanOrEqual(CLEARANCE_M);
   });
 });
 
@@ -92,16 +91,16 @@ describe("given a pickup wrecked head-on and lying still, its skin held over its
     launch(a, -5, 0, Math.PI / 2, 50 / 3.6, 0);
     launch(b, 5, 0, -Math.PI / 2, -50 / 3.6, 0);
     for (let f = 0; f < 90; f++) tickWorld(w, DT);
-    assert.ok(a.panelsFollow);
+    expect(a.panelsFollow).toBeTruthy();
     const skin = a.body.geometry.getAttribute("position") as BufferAttribute;
     a.updateSkin();
     const before = skin.version;
     a.wheels[0]!.position.y += 1e-3;
     a.updateSkin();
     const held = skin.version;
-    assert.ok(held > before);
+    expect(held).toBeGreaterThan(before);
     a.wheels[0]!.position.y += 5e-6;
     a.updateSkin();
-    assert.equal(skin.version, held);
+    expect(skin.version).toBe(held);
   });
 });

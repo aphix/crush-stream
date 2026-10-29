@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { stepFree } from "./car-air.ts";
@@ -29,7 +28,7 @@ describe("given a car at its rest ride on flat ground, held by its tyre springs"
       car.spawnFacing(0, 0, 0, 0);
       car.parked = true;
       stepSlices(car, PARK_S, testCase.hz);
-      assert.ok(Math.abs(car.group.position.y) <= MILLIMETRE, `origin ${(car.group.position.y * 1000).toFixed(2)} mm off its rest ride`);
+      expect(Math.abs(car.group.position.y), `origin ${(car.group.position.y * 1000).toFixed(2)} mm off its rest ride`).toBeLessThanOrEqual(MILLIMETRE);
     });
   }
 });
@@ -47,7 +46,7 @@ describe("given a car standing still on flat ground with the drive's throttle he
         applyDrive(car, FULL_THROTTLE, slice);
         stepFree(car, slice);
         const speed = car.velocity.length();
-        assert.ok(speed > speedBefore, `slice ${s}: speed ${speed.toFixed(4)} m/s after ${speedBefore.toFixed(4)}`);
+        expect(speed, `slice ${s}: speed ${speed.toFixed(4)} m/s after ${speedBefore.toFixed(4)}`).toBeGreaterThan(speedBefore);
         speedBefore = speed;
       }
     });
@@ -61,7 +60,7 @@ describe("given a car rolling over flat ground at 5 m/s on its tyre springs", ()
       const car = makeCar(testCase.cls);
       car.spawnFacing(0, 0, 0, 5);
       stepSlices(car, 4, testCase.hz);
-      assert.ok(Math.abs(car.group.position.y) <= MILLIMETRE, `origin ${(car.group.position.y * 1000).toFixed(2)} mm off its rest ride`);
+      expect(Math.abs(car.group.position.y), `origin ${(car.group.position.y * 1000).toFixed(2)} mm off its rest ride`).toBeLessThanOrEqual(MILLIMETRE);
     });
   }
 });
@@ -75,7 +74,7 @@ describe("given a car let down onto flat ground from above its rest ride", () =>
       car.parked = true;
       car.group.position.y = 0.3;
       stepSlices(car, PARK_S, testCase.hz);
-      assert.ok(Math.abs(car.group.position.y) <= MILLIMETRE, `origin ${(car.group.position.y * 1000).toFixed(2)} mm off its rest ride`);
+      expect(Math.abs(car.group.position.y), `origin ${(car.group.position.y * 1000).toFixed(2)} mm off its rest ride`).toBeLessThanOrEqual(MILLIMETRE);
     });
   }
 
@@ -84,7 +83,7 @@ describe("given a car let down onto flat ground from above its rest ride", () =>
     car.spawnFacing(0, 0, 0, 0);
     car.group.position.y = 0.08;
     stepSlices(car, 0.05, 144);
-    assert.ok(car.velocity.y < -0.01, `vertical speed ${car.velocity.y.toFixed(4)} m/s`);
+    expect(car.velocity.y, `vertical speed ${car.velocity.y.toFixed(4)} m/s`).toBeLessThan(-0.01);
   });
 });
 
@@ -136,17 +135,17 @@ describe("given a monster let down onto flat ground, on the springs of a heavy t
     const touchedAt = ride.findIndex((y) => y <= droop("monster"));
     let unsettled = ride.length - 1;
     while (unsettled > 0 && Math.abs(ride[unsettled]!) <= SWING_M) unsettled--;
-    assert.ok(points.length - 1 <= 1, `overshoots ${points.slice(1).map((p) => (p * 1000).toFixed(1)).join(", ")} mm after a ${(points[0]! * 1000).toFixed(0)} mm compression`);
+    expect(points.length - 1, `overshoots ${points.slice(1).map((p) => (p * 1000).toFixed(1)).join(", ")} mm after a ${(points[0]! * 1000).toFixed(0)} mm compression`).toBeLessThanOrEqual(1);
     const zeta = dampingRatio(points[0]!, points[1] ?? SWING_M);
     t.annotate(`let down ${DROP_M} m: turns ${points.map((p) => (p * 1000).toFixed(1)).join(", ")} mm, damping ratio ${zeta.toFixed(2)}, within ${SWING_M * 1000} mm ${((unsettled - touchedAt) / LAND_HZ).toFixed(2)} s after touching`);
-    assert.ok(zeta >= ZETA_BAND.min && zeta <= ZETA_BAND.max, `damping ratio ${zeta.toFixed(2)}`);
-    assert.ok((unsettled - touchedAt) / LAND_HZ <= SETTLE_AFTER_TOUCH_S, `${(((unsettled - touchedAt) / LAND_HZ)).toFixed(2)} s after touching it is still ${(Math.abs(ride[unsettled]!) * 1000).toFixed(1)} mm from rest`);
+    expect(zeta >= ZETA_BAND.min && zeta <= ZETA_BAND.max, `damping ratio ${zeta.toFixed(2)}`).toBeTruthy();
+    expect((unsettled - touchedAt) / LAND_HZ, `${(((unsettled - touchedAt) / LAND_HZ)).toFixed(2)} s after touching it is still ${(Math.abs(ride[unsettled]!) * 1000).toFixed(1)} mm from rest`).toBeLessThanOrEqual(SETTLE_AFTER_TOUCH_S);
   });
 
   it(`when it is let down ${DROP_M} m up pitched ${TILT_DEG}°, then its pitch swings back past level over ${SWING_DEG}° at most once`, () => {
     const { pitch } = letDown(TILT_DEG);
     const points = turningPoints(pitch, SWING_DEG);
-    assert.ok(points.length - 1 <= 1, `pitch turns at ${points.map((p) => p.toFixed(2)).join(", ")}°`);
+    expect(points.length - 1, `pitch turns at ${points.map((p) => p.toFixed(2)).join(", ")}°`).toBeLessThanOrEqual(1);
   });
 });
 
@@ -167,12 +166,12 @@ describe("given a car standing with its tyres on a 10° wedge's face, held by it
       car.parked = true;
       const spring = SPRINGS[testCase.cls];
       const settleS = Math.log(LARGEST_OFFSET / MILLIMETRE) / (spring.zeta * 2 * Math.PI * spring.hz);
-      assert.ok(settleS < PARK_S, "the spring envelope outlasts the test");
+      expect(settleS, "the spring envelope outlasts the test").toBeLessThan(PARK_S);
       stepSlices(car, settleS, testCase.hz);
       const restedAt = car.group.position.clone();
       stepSlices(car, PARK_S - settleS, testCase.hz);
-      assert.ok(Math.abs(car.group.position.y - restedAt.y) <= MILLIMETRE, `origin sank ${((restedAt.y - car.group.position.y) * 1000).toFixed(2)} mm`);
-      assert.ok(Math.hypot(car.group.position.x - restedAt.x, car.group.position.z - restedAt.z) <= MILLIMETRE, "origin crept along the face");
+      expect(Math.abs(car.group.position.y - restedAt.y), `origin sank ${((restedAt.y - car.group.position.y) * 1000).toFixed(2)} mm`).toBeLessThanOrEqual(MILLIMETRE);
+      expect(Math.hypot(car.group.position.x - restedAt.x, car.group.position.z - restedAt.z), "origin crept along the face").toBeLessThanOrEqual(MILLIMETRE);
     });
   }
 });

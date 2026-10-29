@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FLEET_MIN_SEP, LAMP_POSTS, LAMP_RING_R, MAX_CARS, fleetClass, fleetStyle, layoutDerby, layoutFleet, slotType } from "./fleet.ts";
 import { scatterRampBalls, type RampBall } from "./engine-props.ts";
@@ -9,19 +8,19 @@ describe("given a player's car pick, hatchback", () => {
   const hatchback = { cls: "sedan", style: "hatchback" } as const;
   it("when a field outside the stack is built, then only slot 0 is the pick and the rest are the fleet's cycle", () => {
     const first = slotType(0, hatchback, false);
-    assert.equal(first.cls, hatchback.cls);
-    assert.equal(first.style, hatchback.style);
+    expect(first.cls).toBe(hatchback.cls);
+    expect(first.style).toBe(hatchback.style);
     for (let i = 1; i < 12; i++) {
       const slot = slotType(i, hatchback, false);
-      assert.equal(slot.cls, fleetClass(i), `slot ${i} class`);
-      assert.equal(slot.style, fleetStyle(i), `slot ${i} style`);
+      expect(slot.cls, `slot ${i} class`).toBe(fleetClass(i));
+      expect(slot.style, `slot ${i} style`).toBe(fleetStyle(i));
     }
   });
   it("when the stack is built, then every slot is the pick", () => {
     for (let i = 0; i < 20; i++) {
       const slot = slotType(i, hatchback, true);
-      assert.equal(slot.cls, hatchback.cls, `slot ${i} class`);
-      assert.equal(slot.style, hatchback.style, `slot ${i} style`);
+      expect(slot.cls, `slot ${i} class`).toBe(hatchback.cls);
+      expect(slot.style, `slot ${i} style`).toBe(hatchback.style);
     }
   });
 });
@@ -34,22 +33,22 @@ const fixedSpeedCases = [
 describe("given a fleet of cars laid out around the arena (where each car spawns and how fast it moves)", () => {
   it("when 1 car and then 2 cars are laid out, then the single car spawns away from the centre and the pair sit opposite each other, more than twice the minimum separation apart", () => {
     const one = layoutFleet(1, 10, 10, mulberry32(1));
-    assert.equal(one.length, 1);
-    assert.ok(Math.hypot(one[0]!.x, one[0]!.z) > 8);
+    expect(one.length).toBe(1);
+    expect(Math.hypot(one[0]!.x, one[0]!.z)).toBeGreaterThan(8);
 
     const two = layoutFleet(2, 8, 12, mulberry32(2));
-    assert.equal(two.length, 2);
+    expect(two.length).toBe(2);
     const d = Math.hypot(two[0]!.x - two[1]!.x, two[0]!.z - two[1]!.z);
-    assert.ok(d > FLEET_MIN_SEP * 2, `head-on pair only ${d.toFixed(2)} m apart`);
+    expect(d, `head-on pair only ${d.toFixed(2)} m apart`).toBeGreaterThan(FLEET_MIN_SEP * 2);
   });
 
   it("when 8 cars are laid out, then every pair spawns at least the minimum separation apart (within 5 cm)", () => {
     const slots = layoutFleet(8, 0, 20, mulberry32(7));
-    assert.equal(slots.length, 8);
+    expect(slots.length).toBe(8);
     for (let i = 0; i < slots.length; i++) {
       for (let j = i + 1; j < slots.length; j++) {
         const d = Math.hypot(slots[i]!.x - slots[j]!.x, slots[i]!.z - slots[j]!.z);
-        assert.ok(d >= FLEET_MIN_SEP - 0.05, `pair ${i},${j} at ${d.toFixed(2)} m`);
+        expect(d, `pair ${i},${j} at ${d.toFixed(2)} m`).toBeGreaterThanOrEqual(FLEET_MIN_SEP - 0.05);
       }
     }
   });
@@ -57,13 +56,13 @@ describe("given a fleet of cars laid out around the arena (where each car spawns
   for (const testCase of fixedSpeedCases) {
     it(testCase.it, () => {
       const slots = layoutFleet(testCase.count, testCase.minSpeed, testCase.maxSpeed, mulberry32(testCase.seed));
-      assert.ok(slots.every((s) => s.speed === testCase.expectedSpeed));
+      expect(slots.every((s) => s.speed === testCase.expectedSpeed)).toBeTruthy();
     });
   }
 
   it("when 99 cars and then 0 cars are asked for, then the fleet is capped at the maximum car count and never drops below 1 car", () => {
-    assert.equal(layoutFleet(99, 1, 2, mulberry32(4)).length, MAX_CARS);
-    assert.equal(layoutFleet(0, 1, 2, mulberry32(4)).length, 1);
+    expect(layoutFleet(99, 1, 2, mulberry32(4)).length).toBe(MAX_CARS);
+    expect(layoutFleet(0, 1, 2, mulberry32(4)).length).toBe(1);
   });
 });
 
@@ -92,7 +91,7 @@ describe("given the six lamp posts on the 16 m ring", () => {
         }
       }
     }
-    assert.ok(worst >= 2 - 1e-9, `after ${cases} spawns the closest a post comes to a spawn's path is ${worst.toFixed(2)} m`);
+    expect(worst, `after ${cases} spawns the closest a post comes to a spawn's path is ${worst.toFixed(2)} m`).toBeGreaterThanOrEqual(2 - 1e-9);
   });
 
   it("when fleets of 2 to 32 cars are laid out over 200 seeds, then no car's straight path from its spawn comes within 2 m of a post before it meets another car or 2 s have passed", () => {
@@ -147,7 +146,7 @@ describe("given the six lamp posts on the 16 m ring", () => {
         }
       }
     }
-    assert.ok(worst >= 2 - 1e-9, `after ${cases} spawn paths the closest a post comes to one is ${worst.toFixed(2)} m (${where})`);
+    expect(worst, `after ${cases} spawn paths the closest a post comes to one is ${worst.toFixed(2)} m (${where})`).toBeGreaterThanOrEqual(2 - 1e-9);
   });
 });
 
@@ -156,21 +155,21 @@ describe("given a layout built from a seeded random source", () => {
     const spawns = (n: number, seed: number): string => JSON.stringify(layoutFleet(n, 10, 32, mulberry32(seed)));
     for (const n of [1, 2, 3, 8, MAX_CARS]) {
       const first = spawns(n, 0x3fa2c1);
-      assert.equal(spawns(n, 0x3fa2c1), first, `${n} cars, same seed`);
-      assert.notEqual(spawns(n, 0x3fa2c2), first, `${n} cars, next seed`);
+      expect(spawns(n, 0x3fa2c1), `${n} cars, same seed`).toBe(first);
+      expect(spawns(n, 0x3fa2c2), `${n} cars, next seed`).not.toBe(first);
     }
   });
 
   it("when the derby's start bearing and the ramp balls are scattered twice with seed 7 and once with seed 8, then seed 7 repeats itself and seed 8 differs, for both", () => {
     const bowl = (seed: number): string => JSON.stringify(layoutDerby(6, 40, mulberry32(seed)));
-    assert.equal(bowl(7), bowl(7));
-    assert.notEqual(bowl(7), bowl(8));
+    expect(bowl(7)).toBe(bowl(7));
+    expect(bowl(7)).not.toBe(bowl(8));
     const balls: RampBall[] = Array.from({ length: 3 }, () => ({ mesh: new THREE.Mesh(), radius: 0.78, intact: true, kicked: new Set<string>() }));
     const ring = (seed: number): string => {
       scatterRampBalls(balls, true, mulberry32(seed));
       return JSON.stringify(balls.map((b) => [b.radius, b.mesh.position.toArray()]));
     };
-    assert.equal(ring(7), ring(7));
-    assert.notEqual(ring(7), ring(8));
+    expect(ring(7)).toBe(ring(7));
+    expect(ring(7)).not.toBe(ring(8));
   });
 });

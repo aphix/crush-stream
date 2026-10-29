@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applyDrive, idleDrive } from "./car-drive.ts";
 import { beginFakeFall, type DeformableCar } from "./car.ts";
@@ -67,9 +66,9 @@ describe("given a car spawned 100 m up with a velocity and no spin, touching not
     it(`when it is stepped ${FLIGHT_S} s at ${hz} Hz, then its centre is on the closed-form parabola of its launch velocity, within float error, and it has no spin`, () => {
       const car = launch(new THREE.Vector3());
       const r = fly(car, hz, new THREE.Vector3());
-      assert.ok(r.centreError <= r.bound, `centre ${r.centreError} m off the parabola (float error ${r.bound})`);
-      assert.ok(r.axesError <= r.bound, `axes ${r.axesError} off the identity turn (float error ${r.bound})`);
-      assert.equal(car.angular.length(), 0);
+      expect(r.centreError, `centre ${r.centreError} m off the parabola (float error ${r.bound})`).toBeLessThanOrEqual(r.bound);
+      expect(r.axesError, `axes ${r.axesError} off the identity turn (float error ${r.bound})`).toBeLessThanOrEqual(r.bound);
+      expect(car.angular.length()).toBe(0);
     });
   }
 });
@@ -80,9 +79,9 @@ describe("given a car launched with a velocity and a spin that is swapped for th
       const car = launch(SPIN);
       beginFakeFall(car);
       const r = fly(car, hz, SPIN);
-      assert.ok(car.falling);
-      assert.ok(r.centreError <= r.bound, `centre ${r.centreError} m off the parabola (float error ${r.bound})`);
-      assert.ok(r.axesError <= r.bound, `axes ${r.axesError} off the spin's turn (float error ${r.bound})`);
+      expect(car.falling).toBeTruthy();
+      expect(r.centreError, `centre ${r.centreError} m off the parabola (float error ${r.bound})`).toBeLessThanOrEqual(r.bound);
+      expect(r.axesError, `axes ${r.axesError} off the spin's turn (float error ${r.bound})`).toBeLessThanOrEqual(r.bound);
     });
   }
 });

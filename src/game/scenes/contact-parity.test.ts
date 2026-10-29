@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import { carDoorPass, carSandwich, carStrike, copIntoSide, crushMismatch, DOOR_FORMS, doorGap, doorHit, onGround, pistonStrike, pressByForce, pressUntil, ramDoorPass, shortening, type CarState, type DoorGap, type Strike } from "./contact-parity.test-util.ts";
 import { assertSameDigest } from "../vehicle/test-support.ts";
 
@@ -19,16 +18,16 @@ function cached<A extends (string | number | boolean)[], T>(run: (...args: A) =>
 
 function sameParts(x: CarState, y: CarState, what: string): void {
   assertSameDigest(x.detached, y.detached, `${what}: parts off car [${x.detached}] vs rig [${y.detached}]`);
-  assert.ok(Math.abs(x.doorDeg - y.doorDeg) <= 3, `${what}: door ${x.doorDeg.toFixed(1)}° vs ${y.doorDeg.toFixed(1)}°`);
-  assert.equal(x.latched, y.latched, `${what}: latch`);
-  assert.ok(Math.abs(x.mirrorFoldDeg - y.mirrorFoldDeg) <= 3, `${what}: mirror fold ${x.mirrorFoldDeg.toFixed(1)}° vs ${y.mirrorFoldDeg.toFixed(1)}°`);
-  assert.equal(x.drivetrainAlive, y.drivetrainAlive, `${what}: drivetrain`);
+  expect(Math.abs(x.doorDeg - y.doorDeg), `${what}: door ${x.doorDeg.toFixed(1)}° vs ${y.doorDeg.toFixed(1)}°`).toBeLessThanOrEqual(3);
+  expect(x.latched, `${what}: latch`).toBe(y.latched);
+  expect(Math.abs(x.mirrorFoldDeg - y.mirrorFoldDeg), `${what}: mirror fold ${x.mirrorFoldDeg.toFixed(1)}° vs ${y.mirrorFoldDeg.toFixed(1)}°`).toBeLessThanOrEqual(3);
+  expect(x.drivetrainAlive, `${what}: drivetrain`).toBe(y.drivetrainAlive);
 }
 
 function sameCrush(x: CarState, y: CarState, what: string): void {
   const off = crushMismatch(x, y);
-  assert.deepEqual(off, [], `${what}: particle crush (car/rig mm) ${off.join(", ")}`);
-  assert.ok(Math.abs(x.cabinMm - y.cabinMm) <= Math.max(10, 0.15 * Math.max(x.cabinMm, y.cabinMm)), `${what}: cabin ${x.cabinMm} vs ${y.cabinMm} mm`);
+  expect(off, `${what}: particle crush (car/rig mm) ${off.join(", ")}`).toHaveLength(0);
+  expect(Math.abs(x.cabinMm - y.cabinMm), `${what}: cabin ${x.cabinMm} vs ${y.cabinMm} mm`).toBeLessThanOrEqual(Math.max(10, 0.15 * Math.max(x.cabinMm, y.cabinMm)));
 }
 
 describe("given the Doors ram lane's three scenes (mirror: the striker grazes a shut door's mirror; overOpen: it drives an open door past its stop; shut: it drives an open door shut)", () => {
@@ -131,7 +130,7 @@ describe("given a police sedan driving nose-first into the right side of a parke
         if (hit.overlapM > SKIN) failures.push(`overlap ${hit.overlapM.toFixed(3)} m`);
         const dentM = (hit.intrusionMm + hit.noseMm) / 1000;
         if (dentM < hit.overlapM - SKIN) failures.push(`overlap ${hit.overlapM.toFixed(3)} m, dents only ${dentM.toFixed(3)} m (side ${hit.intrusionMm} mm, nose ${hit.noseMm} mm)`);
-        assert.deepEqual(failures, []);
+        expect(failures).toHaveLength(0);
       });
     }
   }
@@ -176,7 +175,7 @@ describe("given every door scene (mirror, overOpen, shut, panelPush, panelPull) 
               }
             }
             t.annotate(rows.join("\n"));
-            assert.deepEqual(failures, []);
+            expect(failures).toHaveLength(0);
           });
         }
       }
@@ -220,7 +219,7 @@ describe("given the same hit on the nose, tail and right side of a parked car de
           }
         }
         t.annotate(rows.join("\n"));
-        assert.deepEqual(failures, []);
+        expect(failures).toHaveLength(0);
       });
     }
   }

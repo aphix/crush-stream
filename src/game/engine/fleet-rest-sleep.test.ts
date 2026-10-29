@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { REST_SPEED } from "../vehicle/car-air-body.ts";
 import { DT, fleetPair, frames, tick } from "./fleet-rest.test-util.ts";
 
@@ -25,18 +24,18 @@ function rock(car: { wake(): void; angular: { z: number } }, rate: number): void
 describe("given the fleet capture's hatchback, its front hubs popped, asleep as a wreck 0.6 m beside the pickup's sleeping wreck", () => {
   it(`when the pickup tips at ${TIP_UNDER.toFixed(3)} rad/s and then at ${TIP_OVER.toFixed(3)} rad/s (under, then over rest speed), then the hatchback, at rest itself, sleeps through both: a stir costs a resting wreck none of its rest`, () => {
     const { hatch, pickup, world } = fleetPair(APART);
-    assert.ok(frames(world, SETTLE_FRAMES, () => hatch.asleep && pickup.asleep) > 0, "the pair never both slept");
+    expect(frames(world, SETTLE_FRAMES, () => hatch.asleep && pickup.asleep), "the pair never both slept").toBeGreaterThan(0);
 
     // The pickup rocks at a held rate: set before each frame, as its contacts damp a one-off spin inside the step, before the hatchback (the earlier slot) next reads it.
     for (let f = 0; f < WATCH_FRAMES; f++) {
       rock(pickup, TIP_UNDER);
       tick(world);
-      assert.ok(hatch.asleep, `the hatchback woke ${f} frames after the pickup tipped under rest speed`);
+      expect(hatch.asleep, `the hatchback woke ${f} frames after the pickup tipped under rest speed`).toBeTruthy();
     }
     for (let f = 0; f < WATCH_FRAMES; f++) {
       rock(pickup, TIP_OVER);
       tick(world);
-      assert.ok(hatch.asleep, `the hatchback woke ${f} frames after the pickup tipped over rest speed (rest ${hatch.restS.toFixed(2)} s): a stir cost it its rest`);
+      expect(hatch.asleep, `the hatchback woke ${f} frames after the pickup tipped over rest speed (rest ${hatch.restS.toFixed(2)} s): a stir cost it its rest`).toBeTruthy();
     }
   });
 });

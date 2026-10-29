@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { assignClass } from "../vehicle/vehicle-classes.ts";
@@ -9,6 +8,7 @@ import { assertSameNumbers, paint } from "../vehicle/test-support.ts";
 import { newWorld, settleStep, stepWorld } from "./world-step.ts";
 import { PACE_BUDGET_MS, SimPacer } from "./sim-pace.ts";
 import { FINE_HZ, FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const V = 30;
 const SPIN = 1.2;
@@ -59,29 +59,29 @@ describe("given a car moving straight at 30 m/s while turning at 1.2 rad/s, draw
       it(`when frames come at ${hz} Hz, ${jitter * 100}% uneven, then the drawn car is within 1 µm and 1 µrad of where its motion puts it at the frame's time (undrawn it is up to a step's travel off)`, () => {
         const on = drawn(hz, jitter, true);
         const off = drawn(hz, jitter, false);
-        assert.ok(on.worst < 1e-6, `blended: ${on.worst} m off`);
-        assert.ok(on.worstYaw < 1e-6, `blended: ${on.worstYaw} rad off`);
+        expect(on.worst, `blended: ${on.worst} m off`).toBeLessThan(1e-6);
+        expect(on.worstYaw, `blended: ${on.worstYaw} rad off`).toBeLessThan(1e-6);
         // The control: without the blend the frame shows the state the last step left, up to a slice of travel ahead
         // (frames at the display rate and at the fine rate that are whole slices land on a step's end: nothing to blend there).
         const whole = jitter === 0 && (hz === FRAME_HZ || hz === FINE_HZ);
-        assert.ok(whole || off.worst > 0.01, `undrawn control only ${off.worst} m off: this test could not have failed`);
+        expect(whole || off.worst > 0.01, `undrawn control only ${off.worst} m off: this test could not have failed`).toBeTruthy();
       });
     }
   }
 
   it(`when frames come 1 ms apart (shorter than a step) or at ${FINE_HZ} Hz, then most 1 ms frames run no step yet the car is still drawn on its motion, and every ${FINE_HZ} Hz frame runs exactly one step`, () => {
     const slow = drawn(1000, 0, true);
-    assert.ok(slow.steps.filter((s) => s === 0).length > slow.steps.length / 2, "frames shorter than a step run none");
-    assert.ok(slow.worst < 1e-6, `${slow.worst} m off`);
+    expect(slow.steps.filter((s) => s === 0).length, "frames shorter than a step run none").toBeGreaterThan(slow.steps.length / 2);
+    expect(slow.worst, `${slow.worst} m off`).toBeLessThan(1e-6);
     const same = drawn(FINE_HZ, 0, true).steps.slice(10);
-    assert.ok(same.every((s) => s === 1), `steps per frame ${[...new Set(same)]}`);
+    expect(same.every((s) => s === 1), `steps per frame ${[...new Set(same)]}`).toBeTruthy();
   });
 
   it(`when the sim runs in slow motion at ${FRAME_HZ} or ${FINE_HZ} Hz, then each step covers less sim time, so a frame still runs a step (after the first few) and the car is still drawn on its motion`, () => {
     for (const hz of [FRAME_HZ, FINE_HZ]) {
       const slow = drawn(hz, 0, true, 0.032);
-      assert.ok(slow.steps.slice(5).every((s) => s >= 1), `${hz} Hz: frames with no step ${slow.steps.filter((s) => s === 0).length}`);
-      assert.ok(slow.worst < 1e-6, `${hz} Hz: ${slow.worst} m off`);
+      expect(slow.steps.slice(5).every((s) => s >= 1), `${hz} Hz: frames with no step ${slow.steps.filter((s) => s === 0).length}`).toBeTruthy();
+      expect(slow.worst, `${hz} Hz: ${slow.worst} m off`).toBeLessThan(1e-6);
     }
   });
 });
@@ -137,8 +137,8 @@ describe("given a classed car whose class body and wheels ride the springs a lit
     it(`when frames come at ${hz} Hz, so a frame holds one or two steps by turns, then the class body's height and tilt and a wheel's height are drawn on their steady motion at the frame's time (undrawn they alternate by a step's travel)`, () => {
       const on = drawnRide(hz, true);
       const off = drawnRide(hz, false);
-      assert.ok(on.worstHeight < 1e-9 && on.worstTilt < 1e-9 && on.worstWheel < 1e-9, `blended: ${on.worstHeight} m, ${on.worstTilt} rad, ${on.worstWheel} m off`);
-      assert.ok(off.worstHeight > (BODY_RISE * FINE_STEP) / 4 && off.worstTilt > (BODY_TILT * FINE_STEP) / 4, `undrawn control only ${off.worstHeight} m / ${off.worstTilt} rad off: this test could not have failed`);
+      expect(on.worstHeight < 1e-9 && on.worstTilt < 1e-9 && on.worstWheel < 1e-9, `blended: ${on.worstHeight} m, ${on.worstTilt} rad, ${on.worstWheel} m off`).toBeTruthy();
+      expect(off.worstHeight > (BODY_RISE * FINE_STEP) / 4 && off.worstTilt > (BODY_TILT * FINE_STEP) / 4, `undrawn control only ${off.worstHeight} m / ${off.worstTilt} rad off: this test could not have failed`).toBeTruthy();
     });
   }
 });
@@ -176,19 +176,19 @@ describe("given a frame that cannot afford all its steps (its time budget runs o
 
   it("when one late frame misses its steps, then only that frame's time is lost and the next frames advance their own time, where the old catch-up loop ran a burst of extra steps", () => {
     const old = oldLoop(frames);
-    assert.ok(Math.max(...old.slice(11, 15)) > 1.4 * dt, `the old loop's catch-up frame advanced only ${Math.max(...old.slice(11, 15))} s: no lurch to cure`);
+    expect(Math.max(...old.slice(11, 15)), `the old loop's catch-up frame advanced only ${Math.max(...old.slice(11, 15))} s: no lurch to cure`).toBeGreaterThan(1.4 * dt);
     const { adv, lost } = paced(frames);
     for (let i = 0; i < frames.length; i++) {
-      if (frames[i]!.over) assert.ok(Math.abs(adv[i]! - 2 / FINE_HZ) < 1e-6, `late frame ${i} stepped ${adv[i]} s`);
-      else assert.ok(Math.abs(adv[i]! - dt) < 1 / FINE_HZ + 1e-6, `frame ${i} advanced ${adv[i]} s, a frame is ${dt}`);
+      if (frames[i]!.over) expect(Math.abs(adv[i]! - 2 / FINE_HZ), `late frame ${i} stepped ${adv[i]} s`).toBeLessThan(1e-6);
+      else expect(Math.abs(adv[i]! - dt), `frame ${i} advanced ${adv[i]} s, a frame is ${dt}`).toBeLessThan(1 / FINE_HZ + 1e-6);
     }
     const missed = 2 * (dt - 2 / FINE_HZ);
-    assert.ok(Math.abs(lost - missed) < 2e-3, `lost ${lost} s, the two late frames ran ${missed} s short`);
+    expect(Math.abs(lost - missed), `lost ${lost} s, the two late frames ran ${missed} s short`).toBeLessThan(2e-3);
   });
 
   it("when the sim is behind in every frame, then it runs slow by the same share in each frame", () => {
     const { adv } = paced(Array.from({ length: 20 }, () => ({ dt, over: true })));
-    assert.ok(adv.every((a) => Math.abs(a - adv[0]!) < 1e-9), `advances ${[...new Set(adv)]}`);
+    expect(adv.every((a) => Math.abs(a - adv[0]!) < 1e-9), `advances ${[...new Set(adv)]}`).toBeTruthy();
   });
 });
 
@@ -246,9 +246,9 @@ describe("given a head-on crash at 165 Hz frames, with or without the pose drawn
   it("when the crash that tears parts off is run with the pose and the skin drawn between its steps every frame, then every frame ends in exactly the same bits, skin included, as the same crash never drawn", () => {
     const off = crash(false);
     const on = crash(true);
-    assert.ok(on.blended > 100, `the blend moved a car in only ${on.blended} frame-cars: nothing was drawn between steps`);
-    assert.ok(on.freed > 0, "no part or wheel flew free: the free bodies were never blended");
-    assert.ok(on.skinned > 10, `the skin was drawn between writes in only ${on.skinned} frame-cars`);
+    expect(on.blended, `the blend moved a car in only ${on.blended} frame-cars: nothing was drawn between steps`).toBeGreaterThan(100);
+    expect(on.freed, "no part or wheel flew free: the free bodies were never blended").toBeGreaterThan(0);
+    expect(on.skinned, `the skin was drawn between writes in only ${on.skinned} frame-cars`).toBeGreaterThan(10);
     for (let f = 0; f < off.states.length; f++) assertSameNumbers(on.states[f]!, off.states[f]!, `frame ${f}`);
   });
 });
@@ -280,12 +280,14 @@ describe("given a car whose crush skin is written after each of two steps", () =
       drawn.push([position.getX(0), normal.getX(0)]);
       pose.restore();
     }
-    assert.deepEqual(drawn, [
+    const wanted = [
       [1, 0.25],
       [2, 0.5],
       [3, 0.75],
-    ]);
-    assert.deepEqual([position.getX(0), normal.getX(0)], [3, 0.75]);
+    ];
+    expect(drawn, "frames drawn").toHaveLength(wanted.length);
+    for (const [i, want] of wanted.entries()) expect(firstMismatch(drawn[i], want), `frame ${i}: skin vertex x and its normal's x`).toBeUndefined();
+    expect(firstMismatch([position.getX(0), normal.getX(0)], [3, 0.75])).toBeUndefined();
   });
 });
 
@@ -303,7 +305,7 @@ describe("given a car drawn between steps by the pose blend, where blending woul
     car.group.position.x += 100;
     pose.end(cars);
     pose.present(cars, 0.3);
-    assert.equal(car.group.position.x, 100);
+    expect(car.group.position.x).toBe(100);
   });
 
   it("when the car is moved after the step (a respawn between frames), then it is drawn where it was put and kept there once the blend is undone", () => {
@@ -313,9 +315,9 @@ describe("given a car drawn between steps by the pose blend, where blending woul
     pose.end(cars);
     car.group.position.x = 3;
     pose.present(cars, 0.3);
-    assert.equal(car.group.position.x, 3);
+    expect(car.group.position.x).toBe(3);
     pose.restore();
-    assert.equal(car.group.position.x, 3);
+    expect(car.group.position.x).toBe(3);
   });
 
   it("when the car is drawn halfway between a heading of 3 rad and one of -3 rad, then it is halfway along its path and its heading is π, the short way round", () => {
@@ -326,9 +328,9 @@ describe("given a car drawn between steps by the pose blend, where blending woul
     car.group.rotation.set(0, -3, 0, "YXZ");
     pose.end(cars);
     pose.present(cars, 0.5);
-    assert.ok(Math.abs(car.group.position.x - 1) < 1e-12);
+    expect(Math.abs(car.group.position.x - 1)).toBeLessThan(1e-12);
     // 3 and -3 rad are 2π − 6 ≈ 0.283 rad apart through π.
-    assert.ok(Math.abs(Math.abs(car.group.rotation.y) - Math.PI) < 0.01, `heading ${car.group.rotation.y}`);
+    expect(Math.abs(Math.abs(car.group.rotation.y) - Math.PI), `heading ${car.group.rotation.y}`).toBeLessThan(0.01);
   });
 });
 
@@ -368,19 +370,19 @@ describe(`given the adaptive pacer, which steps the sim at the coarse step on a 
   it(`when the device keeps up (0.8 ms a step, 4 ms of draw, a 90 Hz screen), then it steps at 1/${FINE_HZ} s throughout, at the very times the fixed pacer steps`, () => {
     const on = device(true, () => 0.8, 4, 90, 8);
     const off = device(false, () => 0.8, 4, 90, 8);
-    assert.equal(on.pace.coarseSteps, 0);
-    assert.ok(on.log.every((e) => e.h === fine));
-    assert.equal(on.log.length, off.log.length);
-    assert.ok(on.log.every((e, i) => e.h === off.log[i]!.h && e.at === off.log[i]!.at), "the same steps at the same times");
+    expect(on.pace.coarseSteps).toBe(0);
+    expect(on.log.every((e) => e.h === fine)).toBeTruthy();
+    expect(on.log.length).toBe(off.log.length);
+    expect(on.log.every((e, i) => e.h === off.log[i]!.h && e.at === off.log[i]!.at), "the same steps at the same times").toBeTruthy();
   });
 
   it(`when the device cannot afford 1/${FINE_HZ} s steps (4.7 ms each, 9.4 ms of draw, a 90 Hz screen), then the fixed pacer runs under 0.45 of real time while the adaptive one settles at the coarse step and gets its sim speed back`, () => {
     const off = device(false, () => 4.7, 9.4, 90, 20);
     const on = device(true, () => 4.7, 9.4, 90, 20);
-    assert.ok(off.speed < 0.45, `the fixed pacer runs at ${off.speed}`);
-    assert.ok(on.speed > 0.7 && on.speed > 1.8 * off.speed, `adaptive ${on.speed} vs fixed ${off.speed}`);
-    assert.ok(on.log.slice(-200).every((e) => e.h === coarse), "settled at the coarse step");
-    assert.ok(on.pace.coarseSteps > 0.8 * on.pace.total);
+    expect(off.speed, `the fixed pacer runs at ${off.speed}`).toBeLessThan(0.45);
+    expect(on.speed > 0.7 && on.speed > 1.8 * off.speed, `adaptive ${on.speed} vs fixed ${off.speed}`).toBeTruthy();
+    expect(on.log.slice(-200).every((e) => e.h === coarse), "settled at the coarse step").toBeTruthy();
+    expect(on.pace.coarseSteps).toBeGreaterThan(0.8 * on.pace.total);
   });
 
   it(`when the load is heavy for 6 s and then light, then the step size is chosen before a frame's first step, each size is held for about a second, and it returns to 1/${FINE_HZ} s once the load goes`, () => {
@@ -392,40 +394,40 @@ describe(`given the adaptive pacer, which steps the sim at the coarse step on a 
     for (const e of d.log) {
       if (e.h !== last.h) {
         flips++;
-        assert.ok(e.at - since >= 950, `a mode lasted ${e.at - since} ms`);
+        expect(e.at - since, `a mode lasted ${e.at - since} ms`).toBeGreaterThanOrEqual(950);
         since = e.at;
       }
       last = e;
     }
-    assert.ok(flips >= 2, `${flips} mode changes`);
-    assert.equal(d.log[0]!.h, fine);
-    assert.ok(d.log.slice(-200).every((e) => e.h === fine), `back at 1/${FINE_HZ} s once the load is gone`);
-    assert.ok(d.log.some((e) => e.h === coarse));
+    expect(flips, `${flips} mode changes`).toBeGreaterThanOrEqual(2);
+    expect(d.log[0]!.h).toBe(fine);
+    expect(d.log.slice(-200).every((e) => e.h === fine), `back at 1/${FINE_HZ} s once the load is gone`).toBeTruthy();
+    expect(d.log.some((e) => e.h === coarse)).toBeTruthy();
   });
 
   it(`when one hitch (a 40 ms step, then a 100 ms frame) hits a fast device, then it never leaves 1/${FINE_HZ} s steps`, () => {
     const d = device(true, (_t, n) => (n === 700 ? 40 : 0.8), 4, 90, 10);
-    assert.equal(d.pace.coarseSteps, 0);
+    expect(d.pace.coarseSteps).toBe(0);
   });
 
   it("when the load is heavy in slow motion at a quarter of real time, then the coarse step is the scaled coarse step and the wait before the first change counts wall seconds", () => {
     const d = device(true, () => 6, 4, 90, 12, 0.25);
-    assert.ok(d.log.slice(-100).every((e) => e.h === Math.fround(coarse * 0.25)));
+    expect(d.log.slice(-100).every((e) => e.h === Math.fround(coarse * 0.25))).toBeTruthy();
     const first = d.log.findIndex((e) => e.h !== d.log[0]!.h);
-    assert.ok(d.log[first]!.at >= 950, `first change ${d.log[first]!.at} ms in`);
+    expect(d.log[first]!.at, `first change ${d.log[first]!.at} ms in`).toBeGreaterThanOrEqual(950);
   });
 
   it("good: a pinned floor holds against the cost either way, and unpinned the pacer adapts again", () => {
     // Heavy steps would drive the adaptive pacer coarse; pinned fine it stays fine (and loses sim time), and a cheap device pinned coarse stays coarse.
     const heavyFine = device(true, () => 4.7, 9.4, 90, 8, 1, false);
-    assert.equal(heavyFine.pace.coarseSteps, 0);
-    assert.ok(heavyFine.log.every((e) => e.h === fine));
-    assert.ok(heavyFine.speed < 0.5, `pinned fine, ${heavyFine.speed}`);
+    expect(heavyFine.pace.coarseSteps).toBe(0);
+    expect(heavyFine.log.every((e) => e.h === fine)).toBeTruthy();
+    expect(heavyFine.speed, `pinned fine, ${heavyFine.speed}`).toBeLessThan(0.5);
     const cheapCoarse = device(true, () => 0.5, 4, 90, 8, 1, true);
-    assert.ok(cheapCoarse.log.every((e) => e.h === coarse));
-    assert.ok(cheapCoarse.speed > 0.99, `pinned coarse, ${cheapCoarse.speed}`);
+    expect(cheapCoarse.log.every((e) => e.h === coarse)).toBeTruthy();
+    expect(cheapCoarse.speed, `pinned coarse, ${cheapCoarse.speed}`).toBeGreaterThan(0.99);
     const free = device(true, () => 4.7, 9.4, 90, 8);
-    assert.ok(free.pace.coarseSteps > 0 && free.speed > heavyFine.speed + 0.2, "unpinned: the adaptive pacer is back");
+    expect(free.pace.coarseSteps > 0 && free.speed > heavyFine.speed + 0.2, "unpinned: the adaptive pacer is back").toBeTruthy();
   });
 });
 
@@ -443,20 +445,20 @@ describe("given the pacer's fine-slice need (a crush window open on some car)", 
 
   it("when no crush window is open and nothing is pinned, then every step is the coarse slice", () => {
     const hs = slices(null, false);
-    assert.ok(hs.length > 0 && hs.every((h) => h === coarse), `slices ${hs.join(",")}`);
+    expect(hs.length > 0 && hs.every((h) => h === coarse), `slices ${hs.join(",")}`).toBeTruthy();
   });
 
   it("when a crush window is open and nothing is pinned, then every step is the fine slice", () => {
     const hs = slices(null, true);
-    assert.ok(hs.length > 0 && hs.every((h) => h === fine), `slices ${hs.join(",")}`);
+    expect(hs.length > 0 && hs.every((h) => h === fine), `slices ${hs.join(",")}`).toBeTruthy();
   });
 
   it("when the floor is pinned fine, then the steps are fine whether or not a window is open", () => {
-    assert.ok(slices(false, false).every((h) => h === fine));
+    expect(slices(false, false).every((h) => h === fine)).toBeTruthy();
   });
 
   it("when the floor is pinned coarse, then the steps are coarse even with a window open", () => {
-    assert.ok(slices(true, true).every((h) => h === coarse));
+    expect(slices(true, true).every((h) => h === coarse)).toBeTruthy();
   });
 });
 
@@ -471,9 +473,9 @@ describe("given the engine's pacer in a browser whose clock reads only in coarse
   for (const testCase of coarseClockCases) {
     it(`${testCase.it} (4 ms of draw, a 90 Hz screen)`, () => {
       const d = device(true, () => testCase.stepMs, 4, 90, 8, 1, null, testCase.tickMs);
-      assert.ok(d.speed > 0.99, `sim speed ${d.speed}`);
-      assert.equal(d.pace.cut, 0, `${d.pace.cut} frames cut short`);
-      assert.ok(d.log.slice(-200).every((e) => e.h === coarse), "settled at the coarse step");
+      expect(d.speed, `sim speed ${d.speed}`).toBeGreaterThan(0.99);
+      expect(d.pace.cut, `${d.pace.cut} frames cut short`).toBe(0);
+      expect(d.log.slice(-200).every((e) => e.h === coarse), "settled at the coarse step").toBeTruthy();
     });
   }
 
@@ -486,9 +488,9 @@ describe("given the engine's pacer in a browser whose clock reads only in coarse
     it(`${testCase.it} (a 90 Hz screen)`, () => {
       const exact = device(true, () => testCase.stepMs, testCase.drawMs, 90, 8);
       const ticked = device(true, () => testCase.stepMs, testCase.drawMs, 90, 8, 1, null, 0.1);
-      assert.equal(ticked.log.length, exact.log.length);
-      assert.ok(ticked.log.every((e, i) => e.h === exact.log[i]!.h && e.at === exact.log[i]!.at), "the same steps at the same times");
-      assert.equal(ticked.pace.cut, exact.pace.cut);
+      expect(ticked.log.length).toBe(exact.log.length);
+      expect(ticked.log.every((e, i) => e.h === exact.log[i]!.h && e.at === exact.log[i]!.at), "the same steps at the same times").toBeTruthy();
+      expect(ticked.pace.cut).toBe(exact.pace.cut);
     });
   }
 });

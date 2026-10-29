@@ -1,5 +1,4 @@
-import { beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { beforeAll, describe, expect, it } from "vitest";
 import { launch, makeCar, makeWorld } from "../contact/crash-scenarios.test-util.ts";
 import { CLIP_OUT_CAR, type HighlightClip } from "../match/highlights.ts";
 import { GuardSquad, People } from "../present/people.ts";
@@ -111,7 +110,7 @@ function race(crashAt: { x: number; z: number }, runner: number): Run {
   }
   rec.end();
   const clip = rec.ledger.kept[0]!;
-  assert.ok(clip, "the head-on made no clip");
+  expect(clip, "the head-on made no clip").toBeTruthy();
   return { clip, cars, trace, start: Math.round(clip.t0 / H), struck, shotAt };
 }
 
@@ -149,54 +148,54 @@ describe("given the squad running out of the White House when the clip starts, o
 
   it("when the clip is filed, then it starts with the alarm up, guards on their way out and guard 5 down, and its decisions are the live squad's", () => {
     const squad = run.clip.squad!;
-    assert.ok(squad, "the clip carries the squad");
-    assert.ok(squad.state[0]! > 0 && squad.state[0]! < 2.5, `the alarm ${squad.state[0]} s old: guards mid-deploy`);
+    expect(squad, "the clip carries the squad").toBeTruthy();
+    expect(squad.state[0]! > 0 && squad.state[0]! < 2.5, `the alarm ${squad.state[0]} s old: guards mid-deploy`).toBeTruthy();
     const modes = Array.from({ length: spec.count }, (_, i) => squad.state[2 + 5 * i]);
-    assert.ok(modes.includes(GUARD_RUNNING_OUT), "a guard is running out");
-    assert.equal(modes[DOWN_GUARD], GUARD_DOWN, "guard 5 is down before the clip");
-    assert.ok(squad.events.some((e) => e.kind === SQUAD_DOWN), "the run-down of a guard is listed");
+    expect(modes.includes(GUARD_RUNNING_OUT), "a guard is running out").toBeTruthy();
+    expect(modes[DOWN_GUARD], "guard 5 is down before the clip").toBe(GUARD_DOWN);
+    expect(squad.events.some((e) => e.kind === SQUAD_DOWN), "the run-down of a guard is listed").toBeTruthy();
     const live = run.shotAt.filter((x) => x.step >= run.start && x.car === 0).length;
-    assert.ok(live > 0, "the squad fired in the clip");
-    assert.equal(squad.events.filter((e) => e.kind === SQUAD_SHOT).length, live, "every shot at a car the clip carries is listed");
+    expect(live, "the squad fired in the clip").toBeGreaterThan(0);
+    expect(squad.events.filter((e) => e.kind === SQUAD_SHOT).length, "every shot at a car the clip carries is listed").toBe(live);
   });
 
   it("when the clip is replayed step by step, then every guard is in the live run's mode and within a millimetre of its place, and drawn as the live run drew him", () => {
-    assert.equal(frames.length, run.trace.length - run.start, "the clip's steps");
+    expect(frames.length, "the clip's steps").toBe(run.trace.length - run.start);
     let moving = 0;
     for (const f of frames) {
       const want = run.trace[f.step]!;
-      assert.equal(f.mode.join(), want.mode.join(), `modes at step ${f.step}`);
+      expect(f.mode.join(), `modes at step ${f.step}`).toBe(want.mode.join());
       for (let i = 0; i < spec.count; i++) {
         if (f.mode[i] === GUARD_DOWN || want.mode[i] === 0) continue;
-        assert.ok(Math.abs(f.x[i]! - want.x[i]!) < NEAR && Math.abs(f.z[i]! - want.z[i]!) < NEAR, `guard ${i} at step ${f.step}: (${f.x[i]}, ${f.z[i]}) against (${want.x[i]}, ${want.z[i]})`);
+        expect(Math.abs(f.x[i]! - want.x[i]!) < NEAR && Math.abs(f.z[i]! - want.z[i]!) < NEAR, `guard ${i} at step ${f.step}: (${f.x[i]}, ${f.z[i]}) against (${want.x[i]}, ${want.z[i]})`).toBeTruthy();
       }
       if (f.mode.includes(GUARD_RUNNING_OUT)) moving++;
-      if (f.step % DRAW_EVERY === 0) assert.equal(f.mask, want.mask, `figures drawn at step ${f.step}`);
+      if (f.step % DRAW_EVERY === 0) expect(f.mask, `figures drawn at step ${f.step}`).toBe(want.mask);
     }
-    assert.ok(moving > 0.5 / H, `${moving} steps with a guard running out`);
+    expect(moving, `${moving} steps with a guard running out`).toBeGreaterThan(0.5 / H);
   });
 
   it("when the guard run down before the clip is checked in every step, then he is never standing", () => {
     for (const f of frames) {
-      assert.equal(f.mode[DOWN_GUARD], GUARD_DOWN, `step ${f.step}`);
-      assert.equal((f.mask >> (1 + DOWN_GUARD)) & 1, 0, `drawn at step ${f.step}`);
+      expect(f.mode[DOWN_GUARD], `step ${f.step}`).toBe(GUARD_DOWN);
+      expect((f.mask >> (1 + DOWN_GUARD)) & 1, `drawn at step ${f.step}`).toBe(0);
     }
   });
 
   it("when a car of the clip runs a guard down, then the clip throws him once, as a ragdoll, and he is on the ground in the squad from that step on", () => {
     const thrown = frames.flatMap((f) => f.thrown.map((guard) => ({ step: f.step, guard })));
     const live = run.struck.filter((x) => x.step >= run.start && run.clip.cars.some((c) => c.slot === x.car));
-    assert.ok(live.length > 0, "the runner ran a guard down");
-    assert.equal(thrown.map((x) => `${x.step}:${x.guard}`).join(), live.map((x) => `${x.step}:${x.guard}`).join(), "thrown once each, at the live strikes' steps");
-    assert.equal(new Set(thrown.map((x) => x.guard)).size, thrown.length, "no guard twice");
-    for (const x of thrown) for (const f of frames) if (f.step >= x.step) assert.equal(f.mode[x.guard], GUARD_DOWN, `guard ${x.guard} at step ${f.step}`);
+    expect(live.length, "the runner ran a guard down").toBeGreaterThan(0);
+    expect(thrown.map((x) => `${x.step}:${x.guard}`).join(), "thrown once each, at the live strikes' steps").toBe(live.map((x) => `${x.step}:${x.guard}`).join());
+    expect(new Set(thrown.map((x) => x.guard)).size, "no guard twice").toBe(thrown.length);
+    for (const x of thrown) for (const f of frames) if (f.step >= x.step) expect(f.mode[x.guard], `guard ${x.guard} at step ${f.step}`).toBe(GUARD_DOWN);
   });
 
   it("when the clip is restarted, then the squad starts again from the clip's start and plays the same", () => {
     const again = replay(run).frames;
-    assert.equal(again.map((f) => f.mode.join()).join("|"), frames.map((f) => f.mode.join()).join("|"), "modes");
-    assert.equal(again.map((f) => f.thrown.join()).join("|"), frames.map((f) => f.thrown.join()).join("|"), "figures thrown");
-    assert.equal(sim.squad!.shots, run.clip.squad!.events.filter((e) => e.kind === SQUAD_SHOT).length, "shots handed to the squad");
+    expect(again.map((f) => f.mode.join()).join("|"), "modes").toBe(frames.map((f) => f.mode.join()).join("|"));
+    expect(again.map((f) => f.thrown.join()).join("|"), "figures thrown").toBe(frames.map((f) => f.thrown.join()).join("|"));
+    expect(sim.squad!.shots, "shots handed to the squad").toBe(run.clip.squad!.events.filter((e) => e.kind === SQUAD_SHOT).length);
   });
 });
 
@@ -211,21 +210,21 @@ describe("given the squad firing on a parked car and a car run down a guard that
 
   it("when the clip is filed, then it lists the run-down guard and the target as a car the clip leaves out, and no shot at it", () => {
     const squad = run.clip.squad!;
-    assert.ok(!run.clip.cars.some((c) => c.slot === 0 || c.slot === 3), "neither the parked car nor the runner is in the clip");
-    assert.equal(squad.state[1], CLIP_OUT_CAR, "the target is a car the clip leaves out");
-    assert.ok(squad.events.filter((e) => e.kind === SQUAD_DOWN).length > 0, "the run-down is listed");
-    assert.equal(squad.events.filter((e) => e.kind === SQUAD_SHOT).length, 0, "no shot is listed");
-    assert.ok(squad.events.every((e) => e.kind !== SQUAD_TARGET || e.a !== 0), "no target is a clip car");
-    assert.equal(run.clip.strikes.length, 0, "no strike: its car is not in the clip");
+    expect(!run.clip.cars.some((c) => c.slot === 0 || c.slot === 3), "neither the parked car nor the runner is in the clip").toBe(true);
+    expect(squad.state[1], "the target is a car the clip leaves out").toBe(CLIP_OUT_CAR);
+    expect(squad.events.filter((e) => e.kind === SQUAD_DOWN).length, "the run-down is listed").toBeGreaterThan(0);
+    expect(squad.events.filter((e) => e.kind === SQUAD_SHOT).length, "no shot is listed").toBe(0);
+    expect(squad.events.every((e) => e.kind !== SQUAD_TARGET || e.a !== 0), "no target is a clip car").toBeTruthy();
+    expect(run.clip.strikes.length, "no strike: its car is not in the clip").toBe(0);
   });
 
   it("when the clip is replayed, then every guard is where the live run had him, the run-down one is on the ground, and nobody is thrown", () => {
     for (const f of frames) {
-      assert.equal(f.mode.join(), run.trace[f.step]!.mode.join(), `modes at step ${f.step}`);
-      assert.equal(f.thrown.length, 0, `thrown at step ${f.step}`);
+      expect(f.mode.join(), `modes at step ${f.step}`).toBe(run.trace[f.step]!.mode.join());
+      expect(f.thrown.length, `thrown at step ${f.step}`).toBe(0);
     }
     const live = run.struck.filter((x) => x.step >= run.start);
-    assert.ok(live.length > 0, "the fourth car ran a guard down");
-    for (const x of live) assert.equal(frames[frames.length - 1]!.mode[x.guard], GUARD_DOWN, `guard ${x.guard}`);
+    expect(live.length, "the fourth car ran a guard down").toBeGreaterThan(0);
+    for (const x of live) expect(frames[frames.length - 1]!.mode[x.guard], `guard ${x.guard}`).toBe(GUARD_DOWN);
   });
 });

@@ -1,10 +1,10 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { blankIntent, readIntent, shapeDrive } from "../vehicle/drive-input.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { idleDrive } from "../vehicle/car-drive.ts";
 import { blankPad, mergeTouch, PAD_BUTTON, type TouchPad } from "../vehicle/gamepad.ts";
 import { discReading, pedalsFor, pressTouchButton, pulledDown, releaseTouchButton, schemeLayout, sliderSteer, stripReading, type TouchScheme } from "./touch-scheme.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** Where each thumb is, as the controls read it: the steering thumb (px from the bar's centre, px pulled down), the pedal thumb (strip height 0..1, or a Brake pad). */
 type Thumbs = {
@@ -79,12 +79,12 @@ describe("given a scripted two-thumb drive at speed", () => {
       const { intent, out } = driveFor(testCase.thumbs);
       const wheel = intent.wheel > 0.3 ? "left" : intent.wheel < -0.3 ? "right" : "straight";
       const gas = intent.gas === 0 ? "none" : intent.gas < 0.99 ? "some" : "full";
-      assert.equal(wheel, testCase.wheel, `wheel ${intent.wheel.toFixed(2)}`);
-      assert.equal(gas, testCase.gas, `gas ${intent.gas.toFixed(2)}`);
-      assert.equal(intent.brake > 0.5, testCase.brake, `brake ${intent.brake.toFixed(2)}`);
-      assert.equal(out.ebrake, testCase.ebrake, "e-brake");
-      assert.equal(intent.boost, testCase.boost, "boost");
-      assert.equal(out.throttle > 0, testCase.pulls, `throttle ${out.throttle.toFixed(2)}`);
+      expect(wheel, `wheel ${intent.wheel.toFixed(2)}`).toBe(testCase.wheel);
+      expect(gas, `gas ${intent.gas.toFixed(2)}`).toBe(testCase.gas);
+      expect(intent.brake > 0.5, `brake ${intent.brake.toFixed(2)}`).toBe(testCase.brake);
+      expect(out.ebrake, "e-brake").toBe(testCase.ebrake);
+      expect(intent.boost, "boost").toBe(testCase.boost);
+      expect(out.throttle > 0, `throttle ${out.throttle.toFixed(2)}`).toBe(testCase.pulls);
     });
   }
 });
@@ -115,18 +115,18 @@ const NO_EVENT: readonly ThumbEvent[] = [];
 describe("given a thumb on the touch Boost control", () => {
   it("when it presses down and later lifts, then Boost is asked for on every poll while it is down and on none after", () => {
     const polls = boostPolls([NO_EVENT, ["down"], NO_EVENT, NO_EVENT, ["up"], NO_EVENT, NO_EVENT]);
-    assert.deepEqual(polls.map((poll) => poll.boost), [false, true, true, true, false, false, false]);
+    expect(firstMismatch(polls.map((poll) => poll.boost), [false, true, true, true, false, false, false])).toBeUndefined();
   });
 
   it("when a short press ends after two polls, then Boost lasts those two polls and nothing carries on after the thumb leaves", () => {
     const polls = boostPolls([["down"], NO_EVENT, ["up"], ...Array<readonly ThumbEvent[]>(FRAME_HZ * 5).fill(NO_EVENT)]);
-    assert.deepEqual(polls.slice(0, 3).map((poll) => poll.boost), [true, true, false]);
-    assert.equal(polls.slice(2).some((poll) => poll.boost), false, "boost after the thumb left");
+    expect(firstMismatch(polls.slice(0, 3).map((poll) => poll.boost), [true, true, false])).toBeUndefined();
+    expect(polls.slice(2).some((poll) => poll.boost), "boost after the thumb left").toBe(false);
   });
 
   it("when a press and its release fall between two polls, then the pad reads the press once, and Boost is asked for on no poll", () => {
     const polls = boostPolls([NO_EVENT, ["down", "up"], NO_EVENT]);
-    assert.deepEqual(polls.map((poll) => poll.pressed), [false, true, false], "pressed");
-    assert.deepEqual(polls.map((poll) => poll.boost), [false, false, false], "boost");
+    expect(firstMismatch(polls.map((poll) => poll.pressed), [false, true, false]), "pressed").toBeUndefined();
+    expect(firstMismatch(polls.map((poll) => poll.boost), [false, false, false]), "boost").toBeUndefined();
   });
 });

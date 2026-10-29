@@ -1,5 +1,4 @@
-import { describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, DriverSeat, idleDrive, type DriveInput, type SeatView } from "../vehicle/car-drive.ts";
@@ -16,6 +15,7 @@ import { type CarPicker, ChaseCamera, RIDE_PAUSE, type SpecScene } from "./engin
 import { blankFreeInput, DRAG_PITCH_PER_PX, DRAG_YAW_PER_PX } from "./free-cam.ts";
 import { CINE, occluder, solid, type Sight } from "./spectate-cam.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const DT = 1 / FRAME_HZ;
 const NO_PICK: CarPicker = { at: () => -1, choose() {} };
@@ -52,9 +52,9 @@ describe("given the ride-along camera following a thrown driver's dummy", () => 
     view.frameRide(look);
     view.orbit(DT, 0, false);
     const off = camera.position.clone().sub(look);
-    assert.equal(view.userFramed, false);
+    expect(view.userFramed).toBe(false);
     // 40 px left turns the bearing by 0.2 rad about the dummy: the eye moves round it, not away from it.
-    assert.ok(Math.abs(Math.atan2(off.x, off.z) - Math.atan2(4, 6)) > 0.01, "the eye turned about the dummy");
+    expect(Math.abs(Math.atan2(off.x, off.z) - Math.atan2(4, 6)), "the eye turned about the dummy").toBeGreaterThan(0.01);
   });
 
   it("when a drag goes far past the limits in the global view, then the eye stops at the orbit's pitch range, above the ground, however far the drag goes", () => {
@@ -66,8 +66,8 @@ describe("given the ride-along camera following a thrown driver's dummy", () => 
       for (let f = 0; f < 4 * FRAME_HZ; f++) view.orbit(DT, 0, false);
       const off = camera.position.clone().sub(look);
       const elev = Math.asin(off.y / off.length());
-      assert.ok(elev >= 0.079 && elev <= 1.221, `elevation ${elev.toFixed(3)} rad`);
-      assert.ok(off.y + look.y > 0, "above the ground");
+      expect(elev >= 0.079 && elev <= 1.221, `elevation ${elev.toFixed(3)} rad`).toBeTruthy();
+      expect(off.y + look.y, "above the ground").toBeGreaterThan(0);
       pointer(canvas, "pointermove", 100, 100);
     }
     pointer(canvas, "pointerup", 100, 100);
@@ -79,26 +79,26 @@ describe("given the ride-along's automatic cuts and a drag on its camera", () =>
     const { canvas, view, look } = rig("global");
     const held = (on = true): boolean => view.rideHeld(on, DT);
     view.frameRide(look);
-    assert.equal(held(), false, "no drag yet");
+    expect(held(), "no drag yet").toBe(false);
     pointer(canvas, "pointerdown", 100, 100);
-    assert.equal(held(), false, "a pointer that has not moved is a click so far");
+    expect(held(), "a pointer that has not moved is a click so far").toBe(false);
     pointer(canvas, "pointermove", 140, 100);
-    for (let f = 0; f < 600; f++) assert.equal(held(), true, "held for as long as the drag lasts");
+    for (let f = 0; f < 600; f++) expect(held(), "held for as long as the drag lasts").toBe(true);
     pointer(canvas, "pointerup", 140, 100);
     let heldFor = 0;
     while (held()) heldFor += DT;
-    assert.ok(Math.abs(heldFor - RIDE_PAUSE) < 2 * DT, `held ${heldFor.toFixed(2)} s after the drag, want ${RIDE_PAUSE}`);
+    expect(Math.abs(heldFor - RIDE_PAUSE), `held ${heldFor.toFixed(2)} s after the drag, want ${RIDE_PAUSE}`).toBeLessThan(2 * DT);
     pointer(canvas, "pointerdown", 100, 100);
     pointer(canvas, "pointerup", 100, 100);
-    assert.equal(held(), false, "a tap");
+    expect(held(), "a tap").toBe(false);
     // A drag that ended just before the ride stopped must not hold the next ride.
     pointer(canvas, "pointerdown", 100, 100);
     pointer(canvas, "pointermove", 140, 100);
     held();
     pointer(canvas, "pointerup", 140, 100);
-    assert.equal(held(), true);
-    assert.equal(held(false), false, "the ride ended");
-    assert.equal(held(), false, "the next ride is free");
+    expect(held()).toBe(true);
+    expect(held(false), "the ride ended").toBe(false);
+    expect(held(), "the next ride is free").toBe(false);
   });
 });
 
@@ -136,10 +136,10 @@ describe("given the orbit camera around a ring of lamp posts", () => {
       return { near, step };
     };
     const plain = turn([]);
-    assert.ok(plain.near < 1, `the plain orbit passes ${plain.near.toFixed(2)} m from a post (the test needs one close)`);
+    expect(plain.near, `the plain orbit passes ${plain.near.toFixed(2)} m from a post (the test needs one close)`).toBeLessThan(1);
     const pushed = turn(ring);
-    assert.ok(pushed.near >= 3, `eye ${pushed.near.toFixed(2)} m from a post`);
-    assert.ok(pushed.step <= 2 * plain.step, `step ${pushed.step.toFixed(3)} m a frame against ${plain.step.toFixed(3)} m plain`);
+    expect(pushed.near, `eye ${pushed.near.toFixed(2)} m from a post`).toBeGreaterThanOrEqual(3);
+    expect(pushed.step, `step ${pushed.step.toFixed(3)} m a frame against ${plain.step.toFixed(3)} m plain`).toBeLessThanOrEqual(2 * plain.step);
   });
 
   it("when a post stands 1.5 m beside the resting eye, then only a standing, visible post pushes the eye: a hidden or knocked-over one does not", () => {
@@ -154,16 +154,16 @@ describe("given the orbit camera around a ring of lamp posts", () => {
     // A post 1.5 m beside the resting eye.
     post.group.position.set(rest.x + 1.5, 0, rest.z);
     settle();
-    assert.ok(camera.position.distanceTo(rest) > 1, "a post beside the eye leaves it where it was");
+    expect(camera.position.distanceTo(rest), "a post beside the eye leaves it where it was").toBeGreaterThan(1);
     post.group.visible = false;
     settle();
-    assert.ok(camera.position.distanceTo(rest) < 0.01, "a hidden post still pushes");
+    expect(camera.position.distanceTo(rest), "a hidden post still pushes").toBeLessThan(0.01);
     post.group.visible = true;
     settle();
-    assert.ok(camera.position.distanceTo(rest) > 1, "the post is back and does not push");
+    expect(camera.position.distanceTo(rest), "the post is back and does not push").toBeGreaterThan(1);
     post.intact = false;
     settle();
-    assert.ok(camera.position.distanceTo(rest) < 0.01, "a knocked-over post still pushes");
+    expect(camera.position.distanceTo(rest), "a knocked-over post still pushes").toBeLessThan(0.01);
   });
 });
 
@@ -186,9 +186,9 @@ describe("given the derby's orbit round a car 4 m from the bowl's 38 m wall", ()
       return far;
     };
     const plain = turn(Infinity);
-    assert.ok(plain > 38, `the plain orbit reaches ${plain.toFixed(2)} m from the middle (the test needs it past the wall)`);
+    expect(plain, `the plain orbit reaches ${plain.toFixed(2)} m from the middle (the test needs it past the wall)`).toBeGreaterThan(38);
     const kept = turn(38);
-    assert.ok(kept <= 36 + 1e-9, `eye ${kept.toFixed(2)} m from the middle`);
+    expect(kept, `eye ${kept.toFixed(2)} m from the middle`).toBeLessThanOrEqual(36 + 1e-9);
   });
 });
 
@@ -226,7 +226,7 @@ describe("given the orbit kept clear of the scene's solids round a look that is 
     ];
     const spin = 0.32;
     for (const [name, sight, at] of cases) {
-      assert.ok(solid(sight, at.x, at.y, at.z, 0), `${name}: the look is not inside a solid (the test needs it inside)`);
+      expect(solid(sight, at.x, at.y, at.z, 0), `${name}: the look is not inside a solid (the test needs it inside)`).toBeTruthy();
       const { camera, view } = rig("global");
       view.look.copy(at);
       camera.position.set(at.x, at.y + 5, at.z + 13);
@@ -238,8 +238,8 @@ describe("given the orbit kept clear of the scene's solids round a look that is 
         near = Math.min(near, p.distanceTo(at));
         if (solid(sight, p.x, p.y, p.z, 0)) buried++;
       }
-      assert.equal(buried, 0, `${name}: the eye stood inside a solid on ${buried} frames`);
-      assert.ok(near >= CINE.stop, `${name}: the eye came ${near.toFixed(2)} m from the look`);
+      expect(buried, `${name}: the eye stood inside a solid on ${buried} frames`).toBe(0);
+      expect(near, `${name}: the eye came ${near.toFixed(2)} m from the look`).toBeGreaterThanOrEqual(CINE.stop);
     }
   });
 });
@@ -284,8 +284,8 @@ describe("given the chase eye drifting toward a wall along the course", () => {
         last = d;
       }
       t.annotate(`${hz} Hz: the wall pushed the eye up to ${pushed.toFixed(2)} m, by at most ${step.toFixed(4)} m a frame`);
-      assert.ok(pushed > 1, `${hz} Hz: the wall pushed the eye ${pushed.toFixed(2)} m (the test needs it to reach in)`);
-      assert.ok(step < 0.1, `${hz} Hz: the pull-in moved the eye ${step.toFixed(3)} m in one frame, at ${at.toFixed(2)} s`);
+      expect(pushed, `${hz} Hz: the wall pushed the eye ${pushed.toFixed(2)} m (the test needs it to reach in)`).toBeGreaterThan(1);
+      expect(step, `${hz} Hz: the pull-in moved the eye ${step.toFixed(3)} m in one frame, at ${at.toFixed(2)} s`).toBeLessThan(0.1);
     }
   });
 });
@@ -308,12 +308,12 @@ describe("given a spectator camera taking a car up from another shot", () => {
 
   it("when the previous shot is within the blend range of the car, then the eye blends in and has hardly moved on the first frame", () => {
     const r = enter(CHASE.blendRange - 10);
-    assert.ok(r.moved < 2, `the eye moved ${r.moved.toFixed(2)} m on the first frame`);
+    expect(r.moved, `the eye moved ${r.moved.toFixed(2)} m on the first frame`).toBeLessThan(2);
   });
 
   it("when the previous shot is farther off than the blend range, then the camera cuts to the chase shot, with no swoop across the map after a scene change", () => {
     const r = enter(426);
-    assert.ok(r.first < 15, `the eye is ${r.first.toFixed(1)} m from the car on the first frame`);
+    expect(r.first, `the eye is ${r.first.toFixed(1)} m from the car on the first frame`).toBeLessThan(15);
   });
 });
 
@@ -353,17 +353,17 @@ describe("given the chase camera on a car driven by its own drive", () => {
     const p = r.car.group.position;
     const dist = PLATFORM_CAMERA.third.dist + Math.min(r.car.speed, 30) * CHASE.pullback;
     const gap = Math.hypot(r.fine.position.x - (p.x - r.car.fwdFlat.x * dist), r.fine.position.y - (p.y + PLATFORM_CAMERA.third.height), r.fine.position.z - (p.z - r.car.fwdFlat.z * dist));
-    assert.ok(gap < 0.02, `the eye is ${(gap * 100).toFixed(1)} cm off the chase offset`);
+    expect(gap, `the eye is ${(gap * 100).toFixed(1)} cm off the chase offset`).toBeLessThan(0.02);
     const rates = r.fine.position.distanceTo(r.coarse.position);
-    assert.ok(rates < 0.01, `${FRAME_HZ} and ${FINE_HZ} Hz eyes are ${(rates * 100).toFixed(2)} cm apart`);
+    expect(rates, `${FRAME_HZ} and ${FINE_HZ} Hz eyes are ${(rates * 100).toFixed(2)} cm apart`).toBeLessThan(0.01);
   });
 
   it(`when the car holds a 15 m/s turn at steer 0.5 for 2 s, then it sits off the camera's centre line, the same at ${FRAME_HZ} and ${FINE_HZ} Hz`, () => {
     const r = followed(15, (car) => ({ throttle: Math.min(1, Math.max(0, 0.3 + (15 - car.speed) * 0.5)), steer: 0.5 }), 2);
     const fine = Math.abs(offCentre(r.fine, r.car));
     const coarse = Math.abs(offCentre(r.coarse, r.car));
-    assert.ok(fine >= 0.55, `the car is ${fine.toFixed(2)} m off the camera's centre line`);
-    assert.ok(Math.abs(fine - coarse) <= 0.05 * fine, `${FRAME_HZ} Hz ${coarse.toFixed(3)} m, ${FINE_HZ} Hz ${fine.toFixed(3)} m`);
+    expect(fine, `the car is ${fine.toFixed(2)} m off the camera's centre line`).toBeGreaterThanOrEqual(0.55);
+    expect(Math.abs(fine - coarse), `${FRAME_HZ} Hz ${coarse.toFixed(3)} m, ${FINE_HZ} Hz ${fine.toFixed(3)} m`).toBeLessThanOrEqual(0.05 * fine);
   });
 
   it("when the car slides 40 degrees off its heading at 12 m/s, then the aim leads along its velocity, not its nose", () => {
@@ -378,9 +378,9 @@ describe("given the chase camera on a car driven by its own drive", () => {
     const aim = rig["aim"].x;
     const p = car.group.position;
     const off = (Math.atan2(aim.x - p.x, aim.z - p.z) * 180) / Math.PI;
-    assert.ok(Math.abs(off - 40) < 1, `the aim leads ${off.toFixed(1)} degrees round, the velocity 40`);
+    expect(Math.abs(off - 40), `the aim leads ${off.toFixed(1)} degrees round, the velocity 40`).toBeLessThan(1);
     const lead = Math.hypot(aim.x - p.x, aim.z - p.z);
-    assert.ok(Math.abs(lead - 12 * CHASE.aheadVel) < 0.05, `the aim leads ${lead.toFixed(2)} m`);
+    expect(Math.abs(lead - 12 * CHASE.aheadVel), `the aim leads ${lead.toFixed(2)} m`).toBeLessThan(0.05);
   });
 
   /** The eye over a fall from 3.2 m at 8 m/s after 0.4 s in the air: how far it dips below where it settles, its height 1.5 s after touchdown against that, the view's roll and its pitch. */
@@ -427,17 +427,17 @@ describe("given the chase camera on a car driven by its own drive", () => {
   it("when the car lands on four wheels after 0.4 s falling at 8 m/s, then the eye dips under its settled height and is back within 1 cm by 1.5 s", () => {
     for (const h of [1 / FRAME_HZ, H]) {
       const l = landing(h, false);
-      assert.ok(l.dip >= 0.03, `at ${Math.round(1 / h)} Hz the eye dipped ${(l.dip * 100).toFixed(1)} cm`);
-      assert.ok(l.off < 0.01, `at ${Math.round(1 / h)} Hz the eye was ${(l.off * 100).toFixed(1)} cm off its settled height after 1.5 s`);
+      expect(l.dip, `at ${Math.round(1 / h)} Hz the eye dipped ${(l.dip * 100).toFixed(1)} cm`).toBeGreaterThanOrEqual(0.03);
+      expect(l.off, `at ${Math.round(1 / h)} Hz the eye was ${(l.off * 100).toFixed(1)} cm off its settled height after 1.5 s`).toBeLessThan(0.01);
     }
   });
 
   it("when the car lands after a fall at 8 m/s, then the camera's landing carries the fall speed for the pad's rumble, and a fall under the landing floor carries none", () => {
-    assert.ok(Math.abs(landing(H, false).fall - 8) < 1e-9);
+    expect(Math.abs(landing(H, false).fall - 8)).toBeLessThan(1e-9);
     const was = LANDING.fall;
     LANDING.fall = 9;
     try {
-      assert.equal(landing(H, false).fall, 0);
+      expect(landing(H, false).fall).toBe(0);
     } finally {
       LANDING.fall = was;
     }
@@ -451,9 +451,9 @@ describe("given the chase camera on a car driven by its own drive", () => {
     CHASE.landing.wobble = was;
     let pitch = 0;
     for (let i = 0; i < l.pitch.length; i++) pitch = Math.max(pitch, Math.abs(l.pitch[i]! - still.pitch[i]!));
-    assert.ok(pitch > 0.005, `the pitch moved ${pitch.toFixed(4)} against a still landing`);
-    assert.ok(l.roll > 0.005, `the roll reached ${l.roll.toFixed(4)} rad`);
-    assert.ok(still.roll < 1e-6, `a still landing rolled ${still.roll}`);
+    expect(pitch, `the pitch moved ${pitch.toFixed(4)} against a still landing`).toBeGreaterThan(0.005);
+    expect(l.roll, `the roll reached ${l.roll.toFixed(4)} rad`).toBeGreaterThan(0.005);
+    expect(still.roll, `a still landing rolled ${still.roll}`).toBeLessThan(1e-6);
   });
 
   it("when the landing's pitch is sampled every millisecond, then the wobble crosses zero at most 12 times in its half second (a 9 Hz wobble, not a 30 Hz strobe at a 60 fps display's Nyquist rate), and starts from rest", () => {
@@ -473,15 +473,15 @@ describe("given the chase camera on a car driven by its own drive", () => {
       if (prev !== 0 && Math.sign(d) !== Math.sign(prev)) crossings++;
       prev = d;
     }
-    assert.ok(crossings >= 2, `the wobble crossed zero ${crossings} times: it never swung`);
-    assert.ok(crossings <= 12, `${crossings} zero crossings in the landing window (${(crossings / 2 / CHASE.landing.hold).toFixed(0)} Hz)`);
-    assert.ok(first < 0.001, `the wobble began at ${first} of pitch, not from rest`);
+    expect(crossings, `the wobble crossed zero ${crossings} times: it never swung`).toBeGreaterThanOrEqual(2);
+    expect(crossings, `${crossings} zero crossings in the landing window (${(crossings / 2 / CHASE.landing.hold).toFixed(0)} Hz)`).toBeLessThanOrEqual(12);
+    expect(first, `the wobble began at ${first} of pitch, not from rest`).toBeLessThan(0.001);
   });
 
   it("when motion is reduced, then the landing neither dips the eye past 1 cm nor wobbles the view", () => {
     const l = landing(H, true);
-    assert.ok(l.dip <= 0.01, `the eye dipped ${(l.dip * 100).toFixed(1)} cm`);
-    assert.ok(l.roll < 1e-6, `the view rolled ${l.roll} rad`);
+    expect(l.dip, `the eye dipped ${(l.dip * 100).toFixed(1)} cm`).toBeLessThanOrEqual(0.01);
+    expect(l.roll, `the view rolled ${l.roll} rad`).toBeLessThan(1e-6);
   });
 });
 
@@ -496,8 +496,8 @@ describe("given the chase eye's springs", () => {
       return { x: s.x, peak };
     });
     const overshoot = Math.exp((-Math.PI * zeta) / Math.sqrt(1 - zeta * zeta));
-    assert.ok(Math.abs(rates[1]!.peak - overshoot) < 0.01, `overshoot ${rates[1]!.peak.toFixed(3)}, expected ${overshoot.toFixed(3)}`);
-    assert.ok(Math.abs(rates[0]!.x - rates[1]!.x) < 1e-9, `${FRAME_HZ} Hz ${rates[0]!.x}, ${FINE_HZ} Hz ${rates[1]!.x}`);
+    expect(Math.abs(rates[1]!.peak - overshoot), `overshoot ${rates[1]!.peak.toFixed(3)}, expected ${overshoot.toFixed(3)}`).toBeLessThan(0.01);
+    expect(Math.abs(rates[0]!.x - rates[1]!.x), `${FRAME_HZ} Hz ${rates[0]!.x}, ${FINE_HZ} Hz ${rates[1]!.x}`).toBeLessThan(1e-9);
   });
 
   it("when a speed cap is set, then the eye's speed relative to its target never passes it", () => {
@@ -510,7 +510,7 @@ describe("given the chase eye's springs", () => {
       s.stepBasis(target, axes, calm, 3, DT, 0, 1);
       fastest = Math.max(fastest, s.v.length());
     }
-    assert.ok(fastest <= 3 + 1e-9, `the eye reached ${fastest.toFixed(2)} m/s`);
+    expect(fastest, `the eye reached ${fastest.toFixed(2)} m/s`).toBeLessThanOrEqual(3 + 1e-9);
   });
 });
 
@@ -539,20 +539,20 @@ describe("given the chase camera and a hit on the car it follows", () => {
   it("when the car is hit at 1, 4, 15 and 40 m/s, then a nudge adds nothing, a hard hit raises trauma by a straight ramp from 2 to 20 m/s, and trauma never passes 1", () => {
     const { view } = make();
     view.jolt(1);
-    assert.equal(view.trauma, 0, "1 m/s");
+    expect(view.trauma, "1 m/s").toBe(0);
     view.jolt(4);
-    assert.ok(Math.abs(view.trauma - (4 - 2) / 18) < 1e-12, `4 m/s ${view.trauma}`);
+    expect(Math.abs(view.trauma - (4 - 2) / 18), `4 m/s ${view.trauma}`).toBeLessThan(1e-12);
     view.trauma = 0;
     view.jolt(15);
-    assert.ok(Math.abs(view.trauma - 13 / 18) < 1e-12, `15 m/s ${view.trauma}`);
+    expect(Math.abs(view.trauma - 13 / 18), `15 m/s ${view.trauma}`).toBeLessThan(1e-12);
     view.jolt(40);
-    assert.equal(view.trauma, 1, "40 m/s on top of that");
+    expect(view.trauma, "40 m/s on top of that").toBe(1);
   });
 
   it("when a pile grinds on the car with a 10 m/s hit every frame for a second, then the shake holds that one hit's level instead of climbing to full", () => {
     const { view } = make();
     for (let f = 0; f < 60; f++) view.jolt(10);
-    assert.ok(Math.abs(view.trauma - 8 / 18) < 1e-12, `trauma ${view.trauma} after 60 hits`);
+    expect(Math.abs(view.trauma - 8 / 18), `trauma ${view.trauma} after 60 hits`).toBeLessThan(1e-12);
   });
 
   it("when the eye's sideways shake is sampled every millisecond for a second, then it swings at most 12 times a second (a jolt, not a strobing flicker)", () => {
@@ -573,7 +573,7 @@ describe("given the chase camera and a hit on the car it follows", () => {
       if (ms > 0 && Math.sign(side) !== Math.sign(prev) && side !== 0) crossings++;
       prev = side;
     }
-    assert.ok(crossings <= 24, `${crossings} sign changes in 1 s (${crossings / 2} Hz)`);
+    expect(crossings, `${crossings} sign changes in 1 s (${crossings / 2} Hz)`).toBeLessThanOrEqual(24);
   });
 
   it("when the orbit shakes, then the eye moves across the view and never along it, so the road far ahead holds still", () => {
@@ -589,8 +589,8 @@ describe("given the chase camera and a hit on the car it follows", () => {
     const calm = frame(0);
     const shaken = frame(0.7);
     const d = shaken.at.clone().sub(calm.at);
-    assert.ok(d.length() > 0.02, `the eye moved ${d.length().toFixed(3)} m`);
-    assert.ok(Math.abs(d.dot(calm.dir)) < 1e-9, `${d.dot(calm.dir)} m of it along the view`);
+    expect(d.length(), `the eye moved ${d.length().toFixed(3)} m`).toBeGreaterThan(0.02);
+    expect(Math.abs(d.dot(calm.dir)), `${d.dot(calm.dir)} m of it along the view`).toBeLessThan(1e-9);
   });
 
   it("when the strength knob is 0, or motion is reduced, then a hit and the first crash's kick add no shake", () => {
@@ -600,19 +600,19 @@ describe("given the chase camera and a hit on the car it follows", () => {
       const { view } = make();
       view.jolt(30);
       view.kick(2);
-      assert.equal(view.trauma, 0, "knob 0");
+      expect(view.trauma, "knob 0").toBe(0);
     } finally {
       CHASE.shake = was;
     }
     const calm = make(true).view;
     calm.jolt(30);
     calm.kick(2);
-    assert.equal(calm.trauma, 0, "reduced motion");
+    expect(calm.trauma, "reduced motion").toBe(0);
     const half = make().view;
     CHASE.shake = 0.5;
     try {
       half.jolt(20);
-      assert.equal(half.trauma, 0.5, "knob 0.5 halves a full hit");
+      expect(half.trauma, "knob 0.5 halves a full hit").toBe(0.5);
     } finally {
       CHASE.shake = was;
     }
@@ -623,10 +623,10 @@ describe("given the chase camera and a hit on the car it follows", () => {
     const chase = shaken("third", 0.7);
     const far = shaken("far", 0.7);
     const hood = shaken("first", 0.7);
-    assert.ok(chase > 0.02 && far > 0.02, `chase ${chase.toFixed(3)} m, far ${far.toFixed(3)} m`);
-    assert.ok(hood > 0.01 && Math.abs(hood / chase - CHASE.shakeHood) < 0.02, `hood ${hood.toFixed(3)} m is ${(hood / chase).toFixed(3)} of the chase's`);
+    expect(chase > 0.02 && far > 0.02, `chase ${chase.toFixed(3)} m, far ${far.toFixed(3)} m`).toBeTruthy();
+    expect(hood > 0.01 && Math.abs(hood / chase - CHASE.shakeHood) < 0.02, `hood ${hood.toFixed(3)} m is ${(hood / chase).toFixed(3)} of the chase's`).toBeTruthy();
     const calm = shaken("third", 0);
-    assert.ok(calm < chase / 20, `no trauma moves the settled eye ${calm.toFixed(4)} m against the shake's ${chase.toFixed(3)} m`);
+    expect(calm, `no trauma moves the settled eye ${calm.toFixed(4)} m against the shake's ${chase.toFixed(3)} m`).toBeLessThan(chase / 20);
   });
 });
 
@@ -656,8 +656,8 @@ describe("given the driven car's chase and far chase eye beside a course wall an
       }
       const f = free.camera.position;
       const h = held.camera.position;
-      assert.ok(solid(wall, f.x, f.y, f.z, 0.5), `${view}: the unguarded eye at x ${f.x.toFixed(2)} m is not in the wall (the test needs it inside)`);
-      assert.ok(!solid(wall, h.x, h.y, h.z, 0.5), `${view}: the eye at x ${h.x.toFixed(2)} m, y ${h.y.toFixed(2)} m stands inside the wall's clearance`);
+      expect(solid(wall, f.x, f.y, f.z, 0.5), `${view}: the unguarded eye at x ${f.x.toFixed(2)} m is not in the wall (the test needs it inside)`).toBeTruthy();
+      expect(!solid(wall, h.x, h.y, h.z, 0.5), `${view}: the eye at x ${h.x.toFixed(2)} m, y ${h.y.toFixed(2)} m stands inside the wall's clearance`).toBe(true);
     }
   });
 
@@ -675,7 +675,7 @@ describe("given the driven car's chase and far chase eye beside a course wall an
           const p = camera.position;
           worst = Math.min(worst, p.y - hill.heightAt(p.x, p.z, car.group.position.y));
         }
-        assert.ok(worst >= CHASE.floor - 1e-6, `${view}: the eye came ${worst.toFixed(2)} m over the ground (clearance ${CHASE.floor} m)`);
+        expect(worst, `${view}: the eye came ${worst.toFixed(2)} m over the ground (clearance ${CHASE.floor} m)`).toBeGreaterThanOrEqual(CHASE.floor - 1e-6);
       }
     } finally {
       setGround(null);
@@ -701,10 +701,10 @@ describe("given a driven car whose body style seats its own cameras", () => {
       const g = car.group.position;
       if (view === "first") {
         const eye = car.group.localToWorld(new THREE.Vector3(0, own.hood[0], own.hood[1]));
-        assert.ok(p.distanceTo(eye) < 0.05, `hood eye ${p.toArray().map((v) => v.toFixed(2))} vs the style's ${eye.toArray().map((v) => v.toFixed(2))}`);
+        expect(p.distanceTo(eye), `hood eye ${p.toArray().map((v) => v.toFixed(2))} vs the style's ${eye.toArray().map((v) => v.toFixed(2))}`).toBeLessThan(0.05);
       } else {
         const [back, up] = [Math.hypot(p.x - g.x, p.z - g.z), p.y - g.y];
-        assert.ok(Math.abs(back - own[view].dist) < 0.3 && Math.abs(up - own[view].height) < 0.3, `${view}: eye ${back.toFixed(2)} m back, ${up.toFixed(2)} m up; the style's ${own[view].dist}, ${own[view].height}`);
+        expect(Math.abs(back - own[view].dist) < 0.3 && Math.abs(up - own[view].height) < 0.3, `${view}: eye ${back.toFixed(2)} m back, ${up.toFixed(2)} m up; the style's ${own[view].dist}, ${own[view].height}`).toBeTruthy();
       }
     }
   });
@@ -729,7 +729,7 @@ describe("given a canvas press and release (a click) over a world that moves whi
     pointer(canvas, "pointerdown", 100, 50);
     world.at = 400;
     pointer(canvas, "pointerup", 100, 50);
-    assert.deepEqual(chosen, [7]);
+    expect(firstMismatch(chosen, [7])).toBeUndefined();
   });
 
   it("when the press missed every car and one slides under the pointer before the release, then nothing is followed", () => {
@@ -738,7 +738,7 @@ describe("given a canvas press and release (a click) over a world that moves whi
     pointer(canvas, "pointerdown", 100, 50);
     world.at = 100;
     pointer(canvas, "pointerup", 100, 50);
-    assert.deepEqual(chosen, []);
+    expect(chosen).toHaveLength(0);
   });
 
   it("when the press on a car turns into a drag, then nothing is followed", () => {
@@ -746,7 +746,7 @@ describe("given a canvas press and release (a click) over a world that moves whi
     pointer(canvas, "pointerdown", 100, 50);
     pointer(canvas, "pointermove", 140, 50);
     pointer(canvas, "pointerup", 140, 50);
-    assert.deepEqual(chosen, []);
+    expect(chosen).toHaveLength(0);
   });
 });
 
@@ -757,11 +757,11 @@ describe("given the spectator cam cycle with the free view in it", () => {
     const { view } = rig("global");
     view.spec = "auto";
     view.cycleSpec(false);
-    assert.equal(view.specView(false), "free", "the free view follows Auto in the ring");
-    assert.equal(view.flying, true, "and flies");
+    expect(view.specView(false), "the free view follows Auto in the ring").toBe("free");
+    expect(view.flying, "and flies").toBe(true);
     view.cycleSpec(false);
-    assert.equal(view.specView(false), "auto", "View again is back where it came from");
-    assert.equal(view.flying, false, "and no longer flies");
+    expect(view.specView(false), "View again is back where it came from").toBe("auto");
+    expect(view.flying, "and no longer flies").toBe(false);
   });
 
   it("when View is pressed again after coming back from the free view, then the ring carries on to the chase and Auto's next press reaches the free view again", () => {
@@ -772,20 +772,20 @@ describe("given the spectator cam cycle with the free view in it", () => {
       view.cycleSpec(false);
       seen.push(view.specView(false));
     }
-    assert.deepEqual(seen, ["free", "auto", "third"], "Auto, free, back to Auto, then past it");
+    expect(firstMismatch(seen, ["free", "auto", "third"]), "Auto, free, back to Auto, then past it").toBeUndefined();
     for (let press = 0; press < 6; press++) view.cycleSpec(false);
-    assert.equal(view.specView(false), "auto", "round the ring to Auto");
+    expect(view.specView(false), "round the ring to Auto").toBe("auto");
     view.cycleSpec(false);
-    assert.equal(view.specView(false), "free", "and the free view is in the ring again");
+    expect(view.specView(false), "and the free view is in the ring again").toBe("free");
   });
 
   it("when the view before it was the scene's own (none picked), then leaving the free view puts that back", () => {
     const { view } = rig("global");
     view.enterFree();
-    assert.equal(view.spec, "free");
-    assert.equal(view.leaveFree(), true, "it was on");
-    assert.equal(view.spec, null, "the scene's own view again");
-    assert.equal(view.leaveFree(), false, "leaving again is nothing");
+    expect(view.spec).toBe("free");
+    expect(view.leaveFree(), "it was on").toBe(true);
+    expect(view.spec, "the scene's own view again").toBe(null);
+    expect(view.leaveFree(), "leaving again is nothing").toBe(false);
   });
 
   it("when the free view begins and nothing is held, then the camera keeps the pose it had", () => {
@@ -795,8 +795,8 @@ describe("given the spectator cam cycle with the free view in it", () => {
     const before = camera.getWorldDirection(new THREE.Vector3());
     view.enterFree();
     view.frameFree(blankInput, DT);
-    assert.ok(camera.position.distanceTo(new THREE.Vector3(4, 2, 6)) < 1e-9, `the eye is at ${camera.position.toArray().join(", ")}`);
-    assert.ok(camera.getWorldDirection(new THREE.Vector3()).distanceTo(before) < 1e-6, "the view is the one it had");
+    expect(camera.position.distanceTo(new THREE.Vector3(4, 2, 6)), `the eye is at ${camera.position.toArray().join(", ")}`).toBeLessThan(1e-9);
+    expect(camera.getWorldDirection(new THREE.Vector3()).distanceTo(before), "the view is the one it had").toBeLessThan(1e-6);
   });
 
   it("when the free view frames, then the shot counts as the viewer's own, and leaving gives back what it was", () => {
@@ -804,9 +804,9 @@ describe("given the spectator cam cycle with the free view in it", () => {
     view.userFramed = false;
     view.enterFree();
     view.frameFree(blankInput, DT);
-    assert.equal(view.userFramed, true, "the cinematic and the auto cuts stand down");
+    expect(view.userFramed, "the cinematic and the auto cuts stand down").toBe(true);
     view.leaveFree();
-    assert.equal(view.userFramed, false, "the view before it was not framed");
+    expect(view.userFramed, "the view before it was not framed").toBe(false);
   });
 
   it("when a pointer drags in the free view, then the view turns by the drag and the orbit's bearing does not move", () => {
@@ -817,9 +817,9 @@ describe("given the spectator cam cycle with the free view in it", () => {
     pointer(canvas, "pointerdown", 100, 100);
     pointer(canvas, "pointermove", 150, 140);
     pointer(canvas, "pointerup", 150, 140);
-    assert.ok(Math.abs(view.free.yaw + 50 * DRAG_YAW_PER_PX) < 1e-9, `yaw ${view.free.yaw}`);
-    assert.ok(Math.abs(view.free.pitch + 40 * DRAG_PITCH_PER_PX) < 1e-9, `pitch ${view.free.pitch}`);
-    assert.equal(view.bearing, bearing, "the orbit stayed");
+    expect(Math.abs(view.free.yaw + 50 * DRAG_YAW_PER_PX), `yaw ${view.free.yaw}`).toBeLessThan(1e-9);
+    expect(Math.abs(view.free.pitch + 40 * DRAG_PITCH_PER_PX), `pitch ${view.free.pitch}`).toBeLessThan(1e-9);
+    expect(view.bearing, "the orbit stayed").toBe(bearing);
   });
 
   it("when the wheel turns in the free view, then it sets the flight speed", () => {
@@ -827,7 +827,7 @@ describe("given the spectator cam cycle with the free view in it", () => {
     view.enterFree();
     view.frameFree(blankInput, DT);
     canvas.dispatchEvent(Object.assign(new Event("wheel"), { deltaY: -100, preventDefault() {} }));
-    assert.ok(Math.abs(view.free.speedScale - Math.exp(0.15)) < 1e-9, `speed scale ${view.free.speedScale}`);
+    expect(Math.abs(view.free.speedScale - Math.exp(0.15)), `speed scale ${view.free.speedScale}`).toBeLessThan(1e-9);
   });
 
   it("when two fingers spread 40 px apart while their middle moves 20 px right, then the eye flies 40 px of the reach forward and slides 20 px of it left", () => {
@@ -843,7 +843,7 @@ describe("given the spectator cam cycle with the free view in it", () => {
     touch("pointermove", 2, 340, 100);
     view.frameFree(blankInput, DT);
     const pxToMetres = view.free.reach / 400;
-    assert.ok(Math.abs(camera.position.z - (6 - 40 * pxToMetres)) < 1e-6, `z ${camera.position.z}: 40 px of spread ahead of 6`);
-    assert.ok(Math.abs(camera.position.x - (4 - 20 * pxToMetres)) < 1e-6, `x ${camera.position.x}: 20 px of slide left of 4`);
+    expect(Math.abs(camera.position.z - (6 - 40 * pxToMetres)), `z ${camera.position.z}: 40 px of spread ahead of 6`).toBeLessThan(1e-6);
+    expect(Math.abs(camera.position.x - (4 - 20 * pxToMetres)), `x ${camera.position.x}: 20 px of slide left of 4`).toBeLessThan(1e-6);
   });
 });

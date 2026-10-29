@@ -1,11 +1,11 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { decodeShare, encodeShare } from "../hud/share-url.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** Frames the rows run: enough that a panel fed once per frame has been fed more than once. */
 const FRAMES = 5;
@@ -49,39 +49,39 @@ describe("given the frame-time panel (the Backslash key) up on the real engine",
     const { fed, panel } = fakeStats();
     Object.assign(engine, { stats: panel });
     engine.advance(FRAMES / FRAME_HZ, { frameDt: 1 / FRAME_HZ, render: true });
-    assert.equal(fed.begins, FRAMES, "begun");
-    assert.equal(fed.ends, FRAMES, "ended");
+    expect(fed.begins, "begun").toBe(FRAMES);
+    expect(fed.ends, "ended").toBe(FRAMES);
   });
 
   it("when a frame runs through the page's own loop (tick), then the panel is fed once for it too", () => {
     const { fed, panel } = fakeStats();
     Object.assign(engine, { stats: panel });
     engine["tick"](performance.now());
-    assert.equal(fed.begins, 1, "begun");
-    assert.equal(fed.ends, 1, "ended");
+    expect(fed.begins, "begun").toBe(1);
+    expect(fed.ends, "ended").toBe(1);
   });
 
   it("when the panel is up on FPS, then the share state carries stats=0; a click that moves it to ms moves the key; down, there is no key", () => {
     const { panel } = fakeStats(FPS);
     Object.assign(engine, { stats: panel });
-    assert.deepEqual(shareKeys(), ["stats=0"], "FPS");
+    expect(firstMismatch(shareKeys(), ["stats=0"]), "FPS").toBeUndefined();
     panel.showPanel(MS);
-    assert.deepEqual(shareKeys(), ["stats=1"], "the panel's own click moved it to ms");
+    expect(firstMismatch(shareKeys(), ["stats=1"]), "the panel's own click moved it to ms").toBeUndefined();
     Object.assign(engine, { stats: null });
-    assert.deepEqual(shareKeys(), [], "down");
+    expect(shareKeys(), "down").toHaveLength(0);
   });
 
   it("when a link carrying stats= is applied, then the panel comes up on the panel it names, a link without the key puts it down, and one past the last panel clamps to it", () => {
     const { fed, panel } = fakeStats(FPS);
     Object.assign(engine, { stats: panel });
     engine["applyShare"](decodeShare("#stats=1"), false);
-    assert.equal(engine.statsPanel(), MS, "ms");
-    assert.equal(panel.dom.children[MS]!.style.display, "block");
-    assert.equal(panel.dom.children[FPS]!.style.display, "none");
+    expect(engine.statsPanel(), "ms").toBe(MS);
+    expect(panel.dom.children[MS]!.style.display).toBe("block");
+    expect(panel.dom.children[FPS]!.style.display).toBe("none");
     engine["applyShare"](decodeShare("#stats=9"), false);
-    assert.equal(engine.statsPanel(), PANELS - 1, "clamped to the heap panel");
+    expect(engine.statsPanel(), "clamped to the heap panel").toBe(PANELS - 1);
     engine["applyShare"](decodeShare("#"), false);
-    assert.equal(engine.statsPanel(), null, "down");
-    assert.equal(fed.removed, true, "the panel left the page");
+    expect(engine.statsPanel(), "down").toBe(null);
+    expect(fed.removed, "the panel left the page").toBe(true);
   });
 });

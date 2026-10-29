@@ -1,5 +1,4 @@
-import { beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { CardboardBoxes } from "./cardboard-art.ts";
@@ -42,11 +41,11 @@ describe("given the dynamic box piles' drawing", () => {
 
   it("when it is built, then it is one instanced mesh of one material (one draw), its box textured and never frustum-culled", () => {
     const boxes = new CardboardBoxes(placements.length);
-    assert.ok(boxes.mesh instanceof THREE.InstancedMesh);
-    assert.equal(Array.isArray(boxes.mesh.material), false, "one material is one draw");
-    assert.equal(boxes.mesh.instanceMatrix.count, placements.length, "one matrix slot per box of the capacity");
-    assert.ok((boxes.mesh.material as THREE.MeshStandardMaterial).map, "the cardboard texture");
-    assert.equal(boxes.mesh.frustumCulled, false, "the pile tumbles away from the unit cube's own bounding sphere");
+    expect(boxes.mesh).toBeInstanceOf(THREE.InstancedMesh);
+    expect(Array.isArray(boxes.mesh.material), "one material is one draw").toBe(false);
+    expect(boxes.mesh.instanceMatrix.count, "one matrix slot per box of the capacity").toBe(placements.length);
+    expect((boxes.mesh.material as THREE.MeshStandardMaterial).map, "the cardboard texture").toBeTruthy();
+    expect(boxes.mesh.frustumCulled, "the pile tumbles away from the unit cube's own bounding sphere").toBe(false);
     boxes.dispose();
   });
 
@@ -55,11 +54,11 @@ describe("given the dynamic box piles' drawing", () => {
     const material = boxes.mesh.material as THREE.MeshStandardMaterial;
     const shader = { uniforms: {}, vertexShader: "void main() {\n#include <uv_vertex>\n}", fragmentShader: "" } as THREE.WebGLProgramParametersWithUniforms;
     material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
-    assert.match(shader.vertexShader, /#include <uv_vertex>\n#ifdef USE_INSTANCING/, "after the stock uv chunk, for instanced draws");
-    assert.match(shader.vertexShader, /length\(instanceMatrix\[0\]\.xyz\)/, "the instance's own x size");
-    assert.match(shader.vertexShader, /length\(instanceMatrix\[1\]\.xyz\)/, "the instance's own y size");
-    assert.match(shader.vertexShader, /length\(instanceMatrix\[2\]\.xyz\)/, "the instance's own z size");
-    assert.match(shader.vertexShader, /vMapUv = \(vMapUv - 0\.5\) \* faceMetres \/ 1\.0000 \+ 0\.5;/, "metres over a one-metre tile, about the face's centre");
+    expect(shader.vertexShader, "after the stock uv chunk, for instanced draws").toMatch(/#include <uv_vertex>\n#ifdef USE_INSTANCING/);
+    expect(shader.vertexShader, "the instance's own x size").toMatch(/length\(instanceMatrix\[0\]\.xyz\)/);
+    expect(shader.vertexShader, "the instance's own y size").toMatch(/length\(instanceMatrix\[1\]\.xyz\)/);
+    expect(shader.vertexShader, "the instance's own z size").toMatch(/length\(instanceMatrix\[2\]\.xyz\)/);
+    expect(shader.vertexShader, "metres over a one-metre tile, about the face's centre").toMatch(/vMapUv = \(vMapUv - 0\.5\) \* faceMetres \/ 1\.0000 \+ 0\.5;/);
     boxes.dispose();
   });
 
@@ -70,10 +69,10 @@ describe("given the dynamic box piles' drawing", () => {
     for (let boxIndex = 0; boxIndex < placements.length; boxIndex++) {
       const drawn = drawnBox(boxes, boxIndex);
       const placement = placements[boxIndex]!;
-      assert.ok(drawn.position.distanceTo(centres[boxIndex]!) < FLOAT32_TOLERANCE, `box ${boxIndex} position ${drawn.position.toArray()}`);
+      expect(drawn.position.distanceTo(centres[boxIndex]!), `box ${boxIndex} position ${drawn.position.toArray()}`).toBeLessThan(FLOAT32_TOLERANCE);
       const expectedRotation = new THREE.Quaternion().setFromAxisAngle(tumbles[boxIndex]!, spins[boxIndex]!);
-      assert.ok(drawn.rotation.angleTo(expectedRotation) < FLOAT32_TOLERANCE, `box ${boxIndex} rotation is off by ${drawn.rotation.angleTo(expectedRotation)} rad`);
-      assert.ok(drawn.scale.distanceTo(new THREE.Vector3(placement.width, placement.height, placement.depth)) < FLOAT32_TOLERANCE, `box ${boxIndex} size ${drawn.scale.toArray()}`);
+      expect(drawn.rotation.angleTo(expectedRotation), `box ${boxIndex} rotation is off by ${drawn.rotation.angleTo(expectedRotation)} rad`).toBeLessThan(FLOAT32_TOLERANCE);
+      expect(drawn.scale.distanceTo(new THREE.Vector3(placement.width, placement.height, placement.depth)), `box ${boxIndex} size ${drawn.scale.toArray()}`).toBeLessThan(FLOAT32_TOLERANCE);
     }
     boxes.dispose();
   });
@@ -81,20 +80,20 @@ describe("given the dynamic box piles' drawing", () => {
   it("when fewer boxes than the layout are updated, then only that many are drawn, and a later full update draws them all", () => {
     const boxes = new CardboardBoxes(placements.length);
     boxes.setLayout(placements);
-    assert.equal(boxes.mesh.count, 0, "nothing draws before the first update");
+    expect(boxes.mesh.count, "nothing draws before the first update").toBe(0);
     boxes.update(tumbledPoses(), 2);
-    assert.equal(boxes.mesh.count, 2);
+    expect(boxes.mesh.count).toBe(2);
     boxes.update(tumbledPoses(), placements.length);
-    assert.equal(boxes.mesh.count, placements.length);
+    expect(boxes.mesh.count).toBe(placements.length);
     boxes.dispose();
   });
 
   it("when a layout holds more boxes than the capacity, or an update more than the layout or the poses give, then it throws", () => {
     const boxes = new CardboardBoxes(placements.length);
-    assert.throws(() => boxes.setLayout([...placements, placements[0]!]), RangeError);
+    expect(() => boxes.setLayout([...placements, placements[0]!])).toThrow(RangeError);
     boxes.setLayout(placements);
-    assert.throws(() => boxes.update(tumbledPoses(), placements.length + 1), RangeError, "more poses than boxes in the layout");
-    assert.throws(() => boxes.update(new Float32Array(BOX_POSE_FLOATS), placements.length), RangeError, "poses too short");
+    expect(() => boxes.update(tumbledPoses(), placements.length + 1), "more poses than boxes in the layout").toThrow(RangeError);
+    expect(() => boxes.update(new Float32Array(BOX_POSE_FLOATS), placements.length), "poses too short").toThrow(RangeError);
     boxes.dispose();
   });
 });

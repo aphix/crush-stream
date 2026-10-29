@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
@@ -66,16 +65,16 @@ describe("given the real engine, with a pad that records the effects it is sent"
 
   it("when the driven car is hit at 15 m/s, then the pad rumbles by that closing speed once, and a 1 m/s nudge sends nothing", () => {
     const fx = effects(() => e.pairHit(1, 0, hit(15)));
-    assert.equal(fx.length, 1);
-    assert.ok(Math.abs(fx[0]!.strong - 13 / 18) < 1e-9 && Math.abs(fx[0]!.ms - (80 + 320 * (13 / 18))) < 1e-6, JSON.stringify(fx[0]));
-    assert.deepEqual(effects(() => e.pairHit(1, 0, hit(1))), []);
+    expect(fx.length).toBe(1);
+    expect(Math.abs(fx[0]!.strong - 13 / 18) < 1e-9 && Math.abs(fx[0]!.ms - (80 + 320 * (13 / 18))) < 1e-6, JSON.stringify(fx[0])).toBeTruthy();
+    expect(effects(() => e.pairHit(1, 0, hit(1)))).toHaveLength(0);
   });
 
   it("when a car the seat does not drive is hit, or the seat only follows the hit car, then the pad stays quiet", () => {
-    assert.deepEqual(effects(() => e.pairHit(1, 2, hit(25))), [], "another car's hit");
+    expect(effects(() => e.pairHit(1, 2, hit(25))), "another car's hit").toHaveLength(0);
     e.seat.mode = "follow";
     try {
-      assert.deepEqual(effects(() => e.pairHit(1, 0, hit(25))), [], "a followed car");
+      expect(effects(() => e.pairHit(1, 0, hit(25))), "a followed car").toHaveLength(0);
     } finally {
       e.seat.mode = "drive";
     }
@@ -84,27 +83,27 @@ describe("given the real engine, with a pad that records the effects it is sent"
   it("when the Rumble setting is off, then a hit sends nothing, and when it is on again, it does", () => {
     engine.setRumble(false);
     try {
-      assert.equal(store.get().rumble, false, "the HUD carries the setting");
-      assert.deepEqual(effects(() => e.pairHit(1, 0, hit(25))), []);
+      expect(store.get().rumble, "the HUD carries the setting").toBe(false);
+      expect(effects(() => e.pairHit(1, 0, hit(25)))).toHaveLength(0);
     } finally {
       engine.setRumble(true);
     }
-    assert.equal(store.get().rumble, true);
-    assert.equal(effects(() => e.pairHit(1, 0, hit(25))).length, 1);
+    expect(store.get().rumble).toBe(true);
+    expect(effects(() => e.pairHit(1, 0, hit(25))).length).toBe(1);
   });
 
   it("when the drive camera lands the driven car after a fall, then the pad thuds by the fall once, and a landing the seat was not driving through plays later never", () => {
     e.view.drive.landFall = LANDING.fall + 10;
     const fx = effects(() => {});
-    assert.equal(fx.length, 1);
-    assert.ok(Math.abs(fx[0]!.strong - 1) < 1e-9 && Math.abs(fx[0]!.ms - 380) < 1e-6, JSON.stringify(fx[0]));
-    assert.equal(e.view.drive.landFall, 0, "taken");
+    expect(fx.length).toBe(1);
+    expect(Math.abs(fx[0]!.strong - 1) < 1e-9 && Math.abs(fx[0]!.ms - 380) < 1e-6, JSON.stringify(fx[0])).toBeTruthy();
+    expect(e.view.drive.landFall, "taken").toBe(0);
     e.seat.mode = "follow";
     e.view.drive.landFall = 12;
     engine.advance(FRAME, { frameDt: FRAME });
     e.seat.mode = "drive";
-    assert.equal(e.view.drive.landFall, 0, "taken, and silent, while following");
-    assert.deepEqual(effects(() => {}), []);
+    expect(e.view.drive.landFall, "taken, and silent, while following").toBe(0);
+    expect(effects(() => {})).toHaveLength(0);
   });
 
   it("when the driven car slides, then the pad buzzes lightly every 0.1 s, and not under the long effect of a hit still playing", () => {
@@ -114,19 +113,19 @@ describe("given the real engine, with a pad that records the effects it is sent"
     try {
       sent = [];
       e.rumbleFrame(FRAME);
-      assert.equal(sent.length, 1, "the buzz starts at once");
+      expect(sent.length, "the buzz starts at once").toBe(1);
       for (let f = 1; f < 60; f++) e.rumbleFrame(FRAME);
-      assert.ok(sent.length >= 9 && sent.length <= 11, `${sent.length} buzzes in a second`);
-      assert.ok(sent.every((r) => r.strong === 0 && r.weak > 0.1 && r.weak < 0.25), "the light motor alone");
+      expect(sent.length >= 9 && sent.length <= 11, `${sent.length} buzzes in a second`).toBeTruthy();
+      expect(sent.every((r) => r.strong === 0 && r.weak > 0.1 && r.weak < 0.25), "the light motor alone").toBeTruthy();
       // A hit's effect holds the buzz back for its own length (400 ms at 20 m/s).
       sent = [];
       e.pairHit(1, 0, hit(20));
       engine["shakeOnHits"]();
-      assert.equal(sent.length, 1, "the hit");
+      expect(sent.length, "the hit").toBe(1);
       for (let f = 0; f < 20; f++) e.rumbleFrame(FRAME);
-      assert.equal(sent.length, 1, "no buzz inside the hit's 0.4 s");
+      expect(sent.length, "no buzz inside the hit's 0.4 s").toBe(1);
       for (let f = 0; f < 20; f++) e.rumbleFrame(FRAME);
-      assert.ok(sent.length > 1, "the buzz comes back");
+      expect(sent.length, "the buzz comes back").toBeGreaterThan(1);
     } finally {
       car.drive.slide = 0;
     }
@@ -136,12 +135,17 @@ describe("given the real engine, with a pad that records the effects it is sent"
     Object.assign(e.seat.drift, { s: 1.1, clean: true, paid: 2 });
     engine["emitHud"]();
     const shown = store.get().drift;
-    assert.deepEqual(shown, { s: 1.1, clean: true, paid: 2 });
-    assert.notEqual(shown, e.seat.drift, "published as a copy");
+    expect(shown.s, "drift s").toBe(1.1);
+    expect(shown.clean, "drift clean").toBe(true);
+    expect(shown.paid, "drift paid").toBe(2);
+    expect(shown, "published as a copy").not.toBe(e.seat.drift);
     e.seat.mode = "global";
     try {
       engine["emitHud"]();
-      assert.deepEqual(store.get().drift, { s: 0, clean: true, paid: 0 });
+      const off = store.get().drift;
+      expect(off.s, "drift when the seat is not driving: s").toBe(0);
+      expect(off.clean, "drift when the seat is not driving: clean").toBe(true);
+      expect(off.paid, "drift when the seat is not driving: paid").toBe(0);
     } finally {
       e.seat.mode = "drive";
       Object.assign(e.seat.drift, { s: 0, clean: true, paid: 0 });

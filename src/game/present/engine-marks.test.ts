@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applyMarkMap, SkidMarks, type MarkRenderer } from "./engine-marks.ts";
 import { OFF_MENU, TRACKS } from "../world/tracks/index.ts";
@@ -57,17 +56,17 @@ describe("given the mark map with a wheel laying one stamp every frame", () => {
       layStamp(marks);
       marks.flush(renderer, WALL_DT, ...FOCUS);
     }
-    assert.equal(drawn.renders, 30, "render() calls into the mark map");
-    assert.equal(drawn.quads, 60, "stamp quads drawn: none dropped, none drawn twice");
+    expect(drawn.renders, "render() calls into the mark map").toBe(30);
+    expect(drawn.quads, "stamp quads drawn: none dropped, none drawn twice").toBe(60);
   });
 
   it("when the first stamp is queued, then it is drawn by the next frame's flush", () => {
     const { marks, renderer, drawn } = settledMarks();
     layStamp(marks);
     marks.flush(renderer, WALL_DT, ...FOCUS);
-    assert.equal(drawn.renders, 0, "the first frame's stamp waits for the second");
+    expect(drawn.renders, "the first frame's stamp waits for the second").toBe(0);
     marks.flush(renderer, WALL_DT, ...FOCUS);
-    assert.equal(drawn.quads, 1, "the second flush draws it");
+    expect(drawn.quads, "the second flush draws it").toBe(1);
   });
 });
 
@@ -86,7 +85,8 @@ describe("given a stamp waiting for the next frame's draw", () => {
     const { marks, renderer, drawn } = inkedMarks();
     layStamp(marks);
     marks.flush(renderer, FADE_DUE_DT, ...FOCUS);
-    assert.deepEqual(drawn, { renders: 1, quads: 1 });
+    expect(drawn.renders, "renders").toBe(1);
+    expect(drawn.quads, "quads").toBe(1);
   });
 
   it("when the map is cleared, then the waiting stamp is dropped with the old marks", () => {
@@ -96,7 +96,8 @@ describe("given a stamp waiting for the next frame's draw", () => {
     marks.clear();
     marks.flush(renderer, WALL_DT, ...FOCUS);
     marks.flush(renderer, WALL_DT, ...FOCUS);
-    assert.deepEqual(drawn, { renders: 0, quads: 0 });
+    expect(drawn.renders, "renders").toBe(0);
+    expect(drawn.quads, "quads").toBe(0);
   });
 });
 
@@ -109,13 +110,13 @@ describe("given the mark map's periodic fade", () => {
   it("when a wiped map that was never stamped sees 10 fade periods, then nothing is drawn into it", () => {
     const { marks, renderer, drawn } = settledMarks();
     fadeFrames(marks, renderer, 10);
-    assert.equal(drawn.renders, 0);
+    expect(drawn.renders).toBe(0);
   });
 
   it("when one stamp was drawn and 300 fade periods pass, then the map is faded 255 times, a full-ink texel's 8-bit steps, and then left alone", () => {
     const { marks, renderer, drawn } = inkedMarks();
     fadeFrames(marks, renderer, 300);
-    assert.equal(drawn.renders, 255);
+    expect(drawn.renders).toBe(255);
   });
 
   it("when a new stamp goes in with the 101st fade, then 255 more fades follow it", () => {
@@ -123,7 +124,7 @@ describe("given the mark map's periodic fade", () => {
     fadeFrames(marks, renderer, 100);
     layStamp(marks);
     fadeFrames(marks, renderer, 1 + 300);
-    assert.equal(drawn.renders, 100 + 1 + 255);
+    expect(drawn.renders).toBe(100 + 1 + 255);
   });
 
   it("when the map is cleared after a stamp, then no fade runs", () => {
@@ -131,7 +132,7 @@ describe("given the mark map's periodic fade", () => {
     marks.clear();
     marks.flush(renderer, WALL_DT, ...FOCUS);
     fadeFrames(marks, renderer, 10);
-    assert.equal(drawn.renders, 0);
+    expect(drawn.renders).toBe(0);
   });
 });
 
@@ -160,12 +161,12 @@ describe("given the mark map on every course at each tier's map size", () => {
         marks.setBounds(b.minX, b.minZ, b.maxX, b.maxZ);
         marks.flush(renderer, WALL_DT, (b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2);
         const { rect, map } = groundSample();
-        assert.equal(map, marks["rt"]!.texture, "the ground samples this map");
+        expect(map, "the ground samples this map").toBe(marks["rt"]!.texture);
         const texels = marks["rt"]!.width;
         const diagonal = Math.hypot(1 / (rect.z * texels), 1 / (rect.w * texels));
         if (diagonal >= TYRE_W) coarse.push(`${course.id} ${(diagonal * 100).toFixed(1)} cm`);
       }
-      assert.deepEqual(coarse, [], "texel diagonals at least a tyre wide");
+      expect(coarse, "texel diagonals at least a tyre wide").toHaveLength(0);
     });
   }
 });
@@ -190,7 +191,7 @@ describe("given a course wider than the map's window", () => {
     marks.flush(renderer, WALL_DT, 0.2, 0.1);
     wiped.length = 0;
     marks.flush(renderer, WALL_DT, 0.6, 0.1);
-    assert.equal(wiped.join(" "), `32,0,4,${MAP_SIZE}`, "window x 3.2..3.6 m: columns 32-35");
+    expect(wiped.join(" "), "window x 3.2..3.6 m: columns 32-35").toBe(`32,0,4,${MAP_SIZE}`);
   });
 
   it("when the shot's focus jumps three steps across the map's edge, then the band is wiped in two parts: the last columns and the first", () => {
@@ -198,7 +199,7 @@ describe("given a course wider than the map's window", () => {
     marks.flush(renderer, WALL_DT, 2.6, 0.1);
     wiped.length = 0;
     marks.flush(renderer, WALL_DT, 3.8, 0.1);
-    assert.equal(wiped.join(" "), `56,0,8,${MAP_SIZE} 0,0,4,${MAP_SIZE}`, "window x 5.6..6.8 m: columns 56-63 and 0-3");
+    expect(wiped.join(" "), "window x 5.6..6.8 m: columns 56-63 and 0-3").toBe(`56,0,8,${MAP_SIZE} 0,0,4,${MAP_SIZE}`);
   });
 
   it("when the shot's focus stays inside its step, then nothing is wiped", () => {
@@ -206,7 +207,7 @@ describe("given a course wider than the map's window", () => {
     marks.flush(renderer, WALL_DT, 0.2, 0.1);
     wiped.length = 0;
     marks.flush(renderer, WALL_DT, 0.35, 0.3);
-    assert.equal(wiped.length, 0);
+    expect(wiped.length).toBe(0);
   });
 });
 
@@ -236,7 +237,7 @@ describe("given a reel on the National Mall with its 2048² map, the first crash
         });
         if (!inside || covered) hit.push(`${((a * 180) / Math.PI).toFixed(0)}°: ${inside ? "wiped" : "outside the window"}`);
       }
-      assert.equal(hit.join("; "), "", "directions that lose the first crash's marks");
+      expect(hit.join("; "), "directions that lose the first crash's marks").toBe("");
     });
   }
 });
@@ -261,15 +262,15 @@ describe("given a wheel laying a stamp every frame round a 6 m turn", () => {
 
   it("when its quads are read, then each starts exactly on the edge the one before ended on (one strip, no wedge gaps)", () => {
     for (let q = 1; q < STAMPS; q++) {
-      assert.equal(cornerText(marks, q, 0), cornerText(marks, q - 1, 3), `quad ${q} start left`);
-      assert.equal(cornerText(marks, q, 1), cornerText(marks, q - 1, 2), `quad ${q} start right`);
+      expect(cornerText(marks, q, 0), `quad ${q} start left`).toBe(cornerText(marks, q - 1, 3));
+      expect(cornerText(marks, q, 1), `quad ${q} start right`).toBe(cornerText(marks, q - 1, 2));
     }
   });
 
   it("when its quads are read, then every edge is a tyre wide", () => {
     for (let q = 0; q < STAMPS; q++) {
-      assert.ok(Math.abs(edgeLength(corner(marks, q, 0), corner(marks, q, 1)) - TYRE_W) < 1e-6, `quad ${q} start edge`);
-      assert.ok(Math.abs(edgeLength(corner(marks, q, 3), corner(marks, q, 2)) - TYRE_W) < 1e-6, `quad ${q} end edge`);
+      expect(Math.abs(edgeLength(corner(marks, q, 0), corner(marks, q, 1)) - TYRE_W), `quad ${q} start edge`).toBeLessThan(1e-6);
+      expect(Math.abs(edgeLength(corner(marks, q, 3), corner(marks, q, 2)) - TYRE_W), `quad ${q} end edge`).toBeLessThan(1e-6);
     }
   });
 });
@@ -284,14 +285,14 @@ describe("given the mark map at each tier's size on a phone and on a desktop", (
     let resized = 0;
     rt.addEventListener("dispose", () => resized++);
     for (const size of [high, low, high]) marks.setResolution(size);
-    assert.equal(marks["rt"], rt, "the phone's map target");
-    assert.equal(rt.width, low, "the phone's map edge");
-    assert.equal(resized, 0, "resizes of the phone's map (setSize frees the old storage)");
+    expect(marks["rt"], "the phone's map target").toBe(rt);
+    expect(rt.width, "the phone's map edge").toBe(low);
+    expect(resized, "resizes of the phone's map (setSize frees the old storage)").toBe(0);
   });
 
   it("when a desktop's FX tier goes to high, then its map is 2048 texels", () => {
     const marks = new SkidMarks(4);
     marks.setResolution(high);
-    assert.equal(marks["rt"]!.width, high);
+    expect(marks["rt"]!.width).toBe(high);
   });
 });

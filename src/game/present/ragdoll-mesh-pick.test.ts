@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { PARTS } from "./ragdoll-body.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
@@ -48,8 +47,8 @@ describe("given a dummy with one forearm raised or hanging", () => {
       const mesh = dummy(testCase.raise);
       const aim = testCase.aimAt === "where the hand is now" ? carried(mesh, HAND_STANDING) : HAND_STANDING.clone();
       const { slot, off } = shoot(mesh, aim);
-      assert.equal(slot, testCase.expectedSlot, "slot hit");
-      if (testCase.expectedSlot !== undefined) assert.ok(off < 0.1, `the first hit is ${off.toFixed(3)} m from the hand`);
+      expect(slot, "slot hit").toBe(testCase.expectedSlot);
+      if (testCase.expectedSlot !== undefined) expect(off, `the first hit is ${off.toFixed(3)} m from the hand`).toBeLessThan(0.1);
     });
   }
 });

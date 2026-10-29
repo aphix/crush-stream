@@ -1,7 +1,6 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { createHash } from "node:crypto";
-import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import type { LooseShape } from "./car-core.ts";
 import { carFrame } from "./car-rig.ts";
@@ -37,6 +36,7 @@ import { SPRINGS } from "./car-suspension.ts";
 import { CarCage } from "./car-cage.ts";
 import { cageSourceOf } from "./car-cage-rig.ts";
 import { CLASSES, STYLE_CLASS } from "./vehicle-classes.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const PAINT = { body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" };
 /** The sedan's rear seam cover, both sides: a band from the seam to the fascia's top, kept inside the car's triangle budget. */
@@ -65,7 +65,7 @@ function topAt(id: CarStyleId, z: number): number {
     meshes.push(o);
   });
   const hit = new THREE.Raycaster(new THREE.Vector3(0, 3, z), new THREE.Vector3(0, -1, 0)).intersectObjects(meshes, false)[0];
-  assert.ok(hit, `${id}: nothing under z=${z}`);
+  expect(hit, `${id}: nothing under z=${z}`).toBeTruthy();
   return hit.point.y;
 }
 
@@ -221,17 +221,17 @@ describe("given every body style, compared with the sedan and the platform its r
       const b = chassisBox(CAR_STYLES[id]);
       const len = b.max.z - b.min.z;
       const longer = len - (sedan.max.z - sedan.min.z);
-      assert.ok(Math.abs(longer - (dimsLength(id) - dimsLength("sedan"))) <= 0.12, `${id} length ${len}`);
+      expect(Math.abs(longer - (dimsLength(id) - dimsLength("sedan"))), `${id} length ${len}`).toBeLessThanOrEqual(0.12);
       const wider = b.max.x - b.min.x - (sedan.max.x - sedan.min.x);
-      assert.ok(Math.abs(wider - (CAR_STYLES[id].dims.width - CAR_STYLES.sedan.dims.width)) < 0.03, `${id} width ${b.min.x}..${b.max.x}`);
+      expect(Math.abs(wider - (CAR_STYLES[id].dims.width - CAR_STYLES.sedan.dims.width)), `${id} width ${b.min.x}..${b.max.x}`).toBeLessThan(0.03);
     });
 
     it(`when a ${id} is built, then its mass rig is the platform's carried onto its body: the platform's masses in its order, each the platform's mass times the car's mass scale, the hubs on its wheels and every other mass inside its dims' box`, () => {
       const c = cars[id];
       const d = CAR_STYLES[id].dims;
-      assert.equal(c.deform.masses.map((m) => m.name).join(), PLATFORM_RIG.masses.map((m) => m.name).join());
+      expect(c.deform.masses.map((m) => m.name).join()).toBe(PLATFORM_RIG.masses.map((m) => m.name).join());
       for (const [k, m] of c.deform.masses.entries()) {
-        assert.ok(Math.abs(m.mass - PLATFORM_RIG.masses[k]!.mass * c.frame.rig.massScale) < 1e-9, `${id} ${m.name} mass ${m.mass}`);
+        expect(Math.abs(m.mass - PLATFORM_RIG.masses[k]!.mass * c.frame.rig.massScale), `${id} ${m.name} mass ${m.mass}`).toBeLessThan(1e-9);
         const hub = ["hubFL", "hubFR", "hubRL", "hubRR"].indexOf(m.name);
         if (hub >= 0) {
           assertSameNumbers(m.rest.toArray(), c.frame.wheels[hub]!, `${id} ${m.name} rest`);
@@ -239,14 +239,14 @@ describe("given every body style, compared with the sedan and the platform its r
         }
         const [x, y, z] = m.rest.toArray();
         const inLength = z! <= d.wheelbase / 2 + d.overhang.front && z! >= -(d.wheelbase / 2 + d.overhang.rear);
-        assert.ok(Math.abs(x!) <= d.width / 2 && y! >= 0 && y! <= d.height && inLength, `${id} ${m.name} rest ${x},${y},${z} outside its dims' box`);
+        expect(Math.abs(x!) <= d.width / 2 && y! >= 0 && y! <= d.height && inLength, `${id} ${m.name} rest ${x},${y},${z} outside its dims' box`).toBeTruthy();
       }
     });
   }
 
   it("when a 10-car field is generated, then every fleet style and the monster appear, slot 0 is the sedan and police never spawn on their own", () => {
     const field = Array.from({ length: 10 }, (_, i) => fleetStyle(i));
-    assert.equal(field[0], "sedan");
+    expect(field[0]).toBe("sedan");
     assertSameDigest([...new Set(field)].sort(), [...FLEET_STYLE_IDS, "monster"].sort(), "styles in a 10-car field");
   });
 });
@@ -305,7 +305,7 @@ describe("given every body style's spec dimensions (`BodyStyle.dims`)", () => {
       const hubs = cars[id].wheels.flatMap((w) => [Math.abs(w.position.x), w.position.y, Math.abs(w.position.z)]);
       assertSameNumbers(hubs, cars[id].wheels.flatMap(() => [d.track / 2, d.wheel.radius, d.wheelbase / 2]), `${id} hubs`, DIMS_TOL);
       const halfW = cars[id].frame.rig.tyre.halfW;
-      assert.ok(Math.abs(2 * halfW - d.wheel.width) < DIMS_TOL, `${id} tyre width ${2 * halfW} vs dims ${d.wheel.width}`);
+      expect(Math.abs(2 * halfW - d.wheel.width), `${id} tyre width ${2 * halfW} vs dims ${d.wheel.width}`).toBeLessThan(DIMS_TOL);
     });
   }
 });
@@ -313,47 +313,47 @@ describe("given every body style's spec dimensions (`BodyStyle.dims`)", () => {
 
 describe("given each body style's silhouette, measured as the highest visible surface along the car's length", () => {
   it("when the sedan is measured, then it is a fastback: the roof stands over the cabin and the rear glass falls from it in one slope to a short deck", () => {
-    assert.ok(topAt("sedan", -0.2) > 1.25);
+    expect(topAt("sedan", -0.2)).toBeGreaterThan(1.25);
     const glassTop = topAt("sedan", -1.2);
     const glassMid = topAt("sedan", -1.45);
     const deck = topAt("sedan", -1.9);
-    assert.ok(glassTop > 1.15 && glassTop < 1.26, `sedan rear glass top at z=-1.2 is ${glassTop}`);
-    assert.ok(glassMid > 1.05 && glassMid < glassTop - 0.07, `sedan rear glass at z=-1.45 is ${glassMid}`);
-    assert.ok(deck > 0.9 && deck < 1.02, `sedan deck at z=-1.9 is ${deck}`);
+    expect(glassTop > 1.15 && glassTop < 1.26, `sedan rear glass top at z=-1.2 is ${glassTop}`).toBeTruthy();
+    expect(glassMid > 1.05 && glassMid < glassTop - 0.07, `sedan rear glass at z=-1.45 is ${glassMid}`).toBeTruthy();
+    expect(deck > 0.9 && deck < 1.02, `sedan deck at z=-1.9 is ${deck}`).toBeTruthy();
   });
 
   it("when the wagon's roof is measured 1.2 m and 1.5 m behind the centre, then it runs on past the sedan's toward the tail, above 1.2 m at both", () => {
-    for (const z of [-1.2, -1.5]) assert.ok(topAt("wagon", z) > 1.2, `wagon roof at z=${z} is ${topAt("wagon", z)}`);
+    for (const z of [-1.2, -1.5]) expect(topAt("wagon", z), `wagon roof at z=${z} is ${topAt("wagon", z)}`).toBeGreaterThan(1.2);
   });
 
   it("when the hatchback is measured, then its roof runs on toward the tail but its tail drops at least 0.2 m below the wagon's", () => {
-    assert.ok(topAt("hatchback", -1.2) > 1.2, `hatch roof ${topAt("hatchback", -1.2)}`);
-    assert.ok(topAt("hatchback", -1.75) < topAt("wagon", -1.75) - 0.2, "hatch tail is as tall as the wagon's");
+    expect(topAt("hatchback", -1.2), `hatch roof ${topAt("hatchback", -1.2)}`).toBeGreaterThan(1.2);
+    expect(topAt("hatchback", -1.75), "hatch tail is as tall as the wagon's").toBeLessThan(topAt("wagon", -1.75) - 0.2);
   });
 
   it("when the muscle (coupe) is measured, then its roof sits lower than the sedan's by the gap between their spec heights", () => {
     const gap = CAR_STYLES.sedan.dims.height - CAR_STYLES.coupe.dims.height;
     const measured = topAt("sedan", -0.2) - topAt("coupe", -0.2);
-    assert.ok(measured > 0 && Math.abs(measured - gap) <= ROOF_GAP_TOL, `coupe ${topAt("coupe", -0.2)} sedan ${topAt("sedan", -0.2)}: ${measured} m apart against the specs' ${gap}`);
+    expect(measured > 0 && Math.abs(measured - gap) <= ROOF_GAP_TOL, `coupe ${topAt("coupe", -0.2)} sedan ${topAt("sedan", -0.2)}: ${measured} m apart against the specs' ${gap}`).toBeTruthy();
   });
 
   it("when the pickup and the monster are measured, then each has a cab roof and an open bed: its floor where its spec's bed tub puts it, deep under its rail, and lower than every other style's deck", () => {
     const beds: readonly CarStyleId[] = ["pickup", "monster"];
     for (const id of beds) {
-      assert.ok(topAt(id, -0.2) > 1.25, `${id} cab roof ${topAt(id, -0.2)}`);
+      expect(topAt(id, -0.2), `${id} cab roof ${topAt(id, -0.2)}`).toBeGreaterThan(1.25);
       const style = CAR_STYLES[id];
       const [zRear, zFront, floorY] = style.tubs.at(-1)!;
       const mid = (zRear + zFront) / 2;
       const floor = topAt(id, mid);
-      assert.ok(Math.abs(floor - floorY) <= BED_FLOOR_TOL, `${id} bed floor ${floor} at z=${mid} vs its tub's ${floorY}`);
+      expect(Math.abs(floor - floorY), `${id} bed floor ${floor} at z=${mid} vs its tub's ${floorY}`).toBeLessThanOrEqual(BED_FLOOR_TOL);
       const rail = sampleSlice(mid, style.profile).yBelt;
-      assert.ok(rail - floor >= BED_DEPTH, `${id} bed ${rail - floor} m deep under its rail at ${rail}`);
+      expect(rail - floor, `${id} bed ${rail - floor} m deep under its rail at ${rail}`).toBeGreaterThanOrEqual(BED_DEPTH);
     }
     for (const z of [-1.1, -1.7]) {
       for (const id of CAR_STYLE_IDS) {
         if (beds.includes(id) || !hasDeckAt(CAR_STYLES[id], z)) continue;
-        assert.ok(topAt(id, z) > 0.78, `${id} deck at z=${z}`);
-        for (const bed of beds) assert.ok(topAt(bed, z) < topAt(id, z), `${bed} bed floor ${topAt(bed, z)} at z=${z} against the ${id} deck ${topAt(id, z)}`);
+        expect(topAt(id, z), `${id} deck at z=${z}`).toBeGreaterThan(0.78);
+        for (const bed of beds) expect(topAt(bed, z), `${bed} bed floor ${topAt(bed, z)} at z=${z} against the ${id} deck ${topAt(id, z)}`).toBeLessThan(topAt(id, z));
       }
     }
   });
@@ -366,18 +366,18 @@ describe("given every body style's rig cage (the soft-body frame that wraps the 
     it(`when a ${id} is at rest, then its boot, glass and any light bar sit inside their cages with no clamping`, () => {
       const d = new StreamedDeformation(makeChassisGeometry(style), carFrame(style).rig);
       const [oy, oz] = bootPivot(style.boot);
-      assert.ok(panelClamp(d, makeTrunkGeometry(style), "boot", new THREE.Vector3(0, oy, oz)) < 1e-4, `${id} boot`);
-      assert.ok(panelClamp(d, makeWindshield(style), "glassFront", new THREE.Vector3()) < 1e-4, `${id} windshield`);
-      assert.ok(panelClamp(d, makeRearGlass(style), "glassRear", new THREE.Vector3()) < 1e-4, `${id} rear glass`);
+      expect(panelClamp(d, makeTrunkGeometry(style), "boot", new THREE.Vector3(0, oy, oz)), `${id} boot`).toBeLessThan(1e-4);
+      expect(panelClamp(d, makeWindshield(style), "glassFront", new THREE.Vector3()), `${id} windshield`).toBeLessThan(1e-4);
+      expect(panelClamp(d, makeRearGlass(style), "glassRear", new THREE.Vector3()), `${id} rear glass`).toBeLessThan(1e-4);
       if (style.lightBar) {
         const bar = cars[id].group.getObjectByName("lightBar")!;
-        assert.ok(panelClamp(d, makeLightBar(), "roof", bar.position) < 1e-4, `${id} light bar`);
+        expect(panelClamp(d, makeLightBar(), "roof", bar.position), `${id} light bar`).toBeLessThan(1e-4);
       }
     });
 
     it(`when a ${id} gets an at-rest skin pass, then its roof and pillars stay put, drifting under 0.1 m`, () => {
       const drift = roofSkinDrift(style);
-      assert.ok(drift < 0.1, `${id} roof-level skin drift ${drift.toFixed(3)} m`);
+      expect(drift, `${id} roof-level skin drift ${drift.toFixed(3)} m`).toBeLessThan(0.1);
     });
 
     it(`when a ${id} is hit from behind, then the tail crushes in by more than 5 cm without the skin exploding or any vertex going NaN`, () => {
@@ -397,14 +397,14 @@ describe("given every body style's rig cage (the soft-body frame that wraps the 
         d.stepCrush(1 / FRAME_HZ);
         d.update(geo);
       }
-      assert.ok(rl.local.z - z0 > 0.05, `${id} tail did not crush ${z0} → ${rl.local.z}`);
+      expect(rl.local.z - z0, `${id} tail did not crush ${z0} → ${rl.local.z}`).toBeGreaterThan(0.05);
       const a = geo.getAttribute("position").array as Float32Array;
       let r = 0;
       for (let i = 0; i < a.length; i += 3) {
-        assert.ok(Number.isFinite(a[i]! + a[i + 1]! + a[i + 2]!), `${id} NaN vertex`);
+        expect(Number.isFinite(a[i]! + a[i + 1]! + a[i + 2]!), `${id} NaN vertex`).toBeTruthy();
         r = Math.max(r, Math.hypot(a[i]!, a[i + 1]!, a[i + 2]!));
       }
-      assert.ok(r < 4.2, `${id} skin exploded, vertex radius ${r}`);
+      expect(r, `${id} skin exploded, vertex radius ${r}`).toBeLessThan(4.2);
     });
   }
 });
@@ -427,17 +427,17 @@ describe("given a sedan whose windshield and rear glass bow deep in plan", () =>
     for (const { name, geo, base, top, bow, segX, segY } of panes) {
       const pos = geo.getAttribute("position");
       const z = (i: number, j: number) => pos.getZ(j * (segX + 1) + i);
-      assert.ok(near(z(segX / 2, 0), base + bow.base) && near(z(segX / 2, segY), top + bow.top), `${name}: its centre line at z ${z(segX / 2, 0)} (base) and ${z(segX / 2, segY)} (top)`);
-      assert.ok(near(z(0, 0), base) && near(z(segX, 0), base) && near(z(0, segY), top) && near(z(segX, segY), top), `${name}: its corners on the style's edge lines`);
+      expect(near(z(segX / 2, 0), base + bow.base) && near(z(segX / 2, segY), top + bow.top), `${name}: its centre line at z ${z(segX / 2, 0)} (base) and ${z(segX / 2, segY)} (top)`).toBeTruthy();
+      expect(near(z(0, 0), base) && near(z(segX, 0), base) && near(z(0, segY), top) && near(z(segX, segY), top), `${name}: its corners on the style's edge lines`).toBeTruthy();
       const centre = geo.userData.centre as readonly [number, number, number];
-      assert.ok(near(centre[2], (base + top) / 2 + (bow.base + bow.top) / 2), `${name}: its centre at z ${centre[2]}`);
+      expect(near(centre[2], (base + top) / 2 + (bow.base + bow.top) / 2), `${name}: its centre at z ${centre[2]}`).toBeTruthy();
     }
   });
 
   it("when it is at rest, then both panes sit inside their glass cages with no clamping: each cage reaches out as far as its pane's bow outgrows the default one", () => {
     const d = new StreamedDeformation(makeChassisGeometry(style), carFrame(style).rig);
-    assert.ok(panelClamp(d, makeWindshield(style), "glassFront", new THREE.Vector3()) < 1e-4, "windshield");
-    assert.ok(panelClamp(d, makeRearGlass(style), "glassRear", new THREE.Vector3()) < 1e-4, "rear glass");
+    expect(panelClamp(d, makeWindshield(style), "glassFront", new THREE.Vector3()), "windshield").toBeLessThan(1e-4);
+    expect(panelClamp(d, makeRearGlass(style), "glassRear", new THREE.Vector3()), "rear glass").toBeLessThan(1e-4);
   });
 
   it("when its roof is drawn, then the roof's front and rear edges bow with the glass tops under them, past the default bows", () => {
@@ -447,8 +447,8 @@ describe("given a sedan whose windshield and rear glass bow deep in plan", () =>
       return [Math.min(...zs), Math.max(...zs)];
     };
     const [[flatRear, flatFront], [bowedRear, bowedFront]] = [extentZ(makeRoofGeometry(sedan)), extentZ(makeRoofGeometry(style))];
-    assert.ok(near(bowedFront - flatFront, DEEP_BOWS.windshield.top - DEFAULT_TOP_BOWS.windshield), `front edge bowed ${(bowedFront - flatFront).toFixed(4)} m`);
-    assert.ok(near(bowedRear - flatRear, DEEP_BOWS.rear.top - DEFAULT_TOP_BOWS.rear), `rear edge bowed ${(bowedRear - flatRear).toFixed(4)} m`);
+    expect(near(bowedFront - flatFront, DEEP_BOWS.windshield.top - DEFAULT_TOP_BOWS.windshield), `front edge bowed ${(bowedFront - flatFront).toFixed(4)} m`).toBeTruthy();
+    expect(near(bowedRear - flatRear, DEEP_BOWS.rear.top - DEFAULT_TOP_BOWS.rear), `rear edge bowed ${(bowedRear - flatRear).toFixed(4)} m`).toBeTruthy();
   });
 });
 
@@ -468,23 +468,23 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
     for (let v = 0; v < pos.count; v++) if (Math.abs(pos.getX(v)) < 1e-6 && !headliner.has(v)) crowns.push({ y: pos.getY(v), z: pos.getZ(v) });
     crowns.sort((a, b) => a.z - b.z);
     const [rear, front] = [crowns[0]!, crowns[crowns.length - 1]!];
-    assert.ok(Math.abs(rear.y - rearTop[0]) < 1e-5 && Math.abs(front.y - coupe.windshieldTop[0]) < 1e-5, `end crowns at y ${rear.y} / ${front.y}, the glass tops ${rearTop[0]} / ${coupe.windshieldTop[0]}`);
+    expect(Math.abs(rear.y - rearTop[0]) < 1e-5 && Math.abs(front.y - coupe.windshieldTop[0]) < 1e-5, `end crowns at y ${rear.y} / ${front.y}, the glass tops ${rearTop[0]} / ${coupe.windshieldTop[0]}`).toBeTruthy();
     const inside = crowns.filter((c) => c.z > coupe.roofZ[0] + RUNS.rear && c.z < coupe.roofZ[1] - RUNS.front);
-    assert.ok(inside.length > 0, "no crown read between the runs");
-    for (const c of inside) assert.ok(Math.abs(c.y - roofTopY(0, c.z, coupe)) < 1e-5, `crown at z ${c.z}: y ${c.y}, the plain coupe's ${roofTopY(0, c.z, coupe)}`);
+    expect(inside.length, "no crown read between the runs").toBeGreaterThan(0);
+    for (const c of inside) expect(Math.abs(c.y - roofTopY(0, c.z, coupe)), `crown at z ${c.z}: y ${c.y}, the plain coupe's ${roofTopY(0, c.z, coupe)}`).toBeLessThan(1e-5);
   });
 
   it("when its roof's dome is read, then every skin vertex over the dome (inside its edges) is at the drawn roof's height, and every drawn greenhouse part stays under it: the posts' clamp follows the rolled ends", () => {
     for (let v = 0; v < pos.count; v++) {
       const [x, y, z] = [pos.getX(v), pos.getY(v), pos.getZ(v)];
       if (headliner.has(v) || z < rolled.roofZ[0] || z > rolled.roofZ[1] || Math.abs(x) > roofAt(z, rolled).x + 1e-6 || y < drawnRoofTopY(roofAt(z, rolled).x, z, rolled) - 1e-6) continue;
-      assert.ok(Math.abs(y - drawnRoofTopY(x, z, rolled)) < 1e-5, `dome vertex (${x}, ${y}, ${z}): drawnRoofTopY ${drawnRoofTopY(x, z, rolled)}`);
+      expect(Math.abs(y - drawnRoofTopY(x, z, rolled)), `dome vertex (${x}, ${y}, ${z}): drawnRoofTopY ${drawnRoofTopY(x, z, rolled)}`).toBeLessThan(1e-5);
     }
     for (const part of makeGreenhouseFrame(rolled, "drawn")) {
       const at = part.getAttribute("position") as THREE.BufferAttribute;
       for (let i = 0; i < at.count; i++) {
         const [x, y, z] = [at.getX(i), at.getY(i), at.getZ(i)];
-        if (z >= rolled.roofZ[0] && z <= rolled.roofZ[1]) assert.ok(y <= drawnRoofTopY(x, z, rolled) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the rolled roof (${drawnRoofTopY(x, z, rolled)})`);
+        if (z >= rolled.roofZ[0] && z <= rolled.roofZ[1]) expect(y, `${part.name} vertex (${x}, ${y}, ${z}) over the rolled roof (${drawnRoofTopY(x, z, rolled)})`).toBeLessThanOrEqual(drawnRoofTopY(x, z, rolled) + 1e-6);
       }
     }
   });
@@ -498,12 +498,12 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
       { name: "rear", points: crown.filter((c) => c.z <= rolled.roofZ[0] + RUNS.rear + 1e-6).sort((a, b) => b.z - a.z) },
     ];
     for (const end of ends) {
-      assert.ok(end.points.length >= 3, `${end.name}: ${end.points.length} crown points over the roll`);
+      expect(end.points.length, `${end.name}: ${end.points.length} crown points over the roll`).toBeGreaterThanOrEqual(3);
       let previousFall = -Infinity;
       for (let k = 1; k < end.points.length; k++) {
         const [a, b] = [end.points[k - 1]!, end.points[k]!];
         const fall = (a.y - b.y) / Math.abs(b.z - a.z);
-        assert.ok(fall >= previousFall - 1e-9, `${end.name} chord ${k} at z ${b.z.toFixed(4)} falls ${fall.toFixed(4)} m per m after ${previousFall.toFixed(4)}`);
+        expect(fall, `${end.name} chord ${k} at z ${b.z.toFixed(4)} falls ${fall.toFixed(4)} m per m after ${previousFall.toFixed(4)}`).toBeGreaterThanOrEqual(previousFall - 1e-9);
         previousFall = fall;
       }
     }
@@ -522,7 +522,7 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
     const plain: BodyStyle = { ...coupe, roofEnds: { ...coupe.roofEnds, glassBow: undefined } };
     const met: BodyStyle = { ...plain, roofEnds: { ...plain.roofEnds, glassBow: { rear: true } } };
     const [open, shut] = [endGap(plain), endGap(met)];
-    assert.ok(Math.abs(shut) < 1e-4 && Math.abs(open + REAR_GLASS_BOW.top) < 1e-4, `rear crown ${(shut * 1000).toFixed(1)} mm ahead of the glass top with glassBow, ${(open * 1000).toFixed(1)} mm without`);
+    expect(Math.abs(shut) < 1e-4 && Math.abs(open + REAR_GLASS_BOW.top) < 1e-4, `rear crown ${(shut * 1000).toFixed(1)} mm ahead of the glass top with glassBow, ${(open * 1000).toFixed(1)} mm without`).toBeTruthy();
   });
 });
 
@@ -551,20 +551,20 @@ describe("given a coupe whose roof's section is one curve from crown to cant (ro
     };
     const [plain, dome] = [skinOf(coupe).mid, skinOf(domed).mid];
     const [plainCant, domeCant] = [plain[plain.length - 1]!, dome[dome.length - 1]!];
-    assert.ok(Math.abs(dome[0]!.y - plain[0]!.y) < 1e-6 && domeCant.distanceTo(plainCant) < 1e-6, `crown y ${dome[0]!.y} (plain ${plain[0]!.y}), cant (${domeCant.x}, ${domeCant.y}) (plain (${plainCant.x}, ${plainCant.y}))`);
-    assert.ok(slopeAtHalf(dome) > DOME_SLOPE_DEGREES && slopeAtHalf(plain) < DOME_SLOPE_DEGREES, `chord at half the half-width: ${slopeAtHalf(dome).toFixed(1)}° (plain ${slopeAtHalf(plain).toFixed(1)}°)`);
+    expect(Math.abs(dome[0]!.y - plain[0]!.y) < 1e-6 && domeCant.distanceTo(plainCant) < 1e-6, `crown y ${dome[0]!.y} (plain ${plain[0]!.y}), cant (${domeCant.x}, ${domeCant.y}) (plain (${plainCant.x}, ${plainCant.y}))`).toBeTruthy();
+    expect(slopeAtHalf(dome) > DOME_SLOPE_DEGREES && slopeAtHalf(plain) < DOME_SLOPE_DEGREES, `chord at half the half-width: ${slopeAtHalf(dome).toFixed(1)}° (plain ${slopeAtHalf(plain).toFixed(1)}°)`).toBeTruthy();
   });
 
   it("when its roof's skin is read, then every skin vertex between its ends is at the drawn roof's height, and every drawn greenhouse part stays under it: the posts' clamp follows the curve", () => {
     const { pos, skin } = skinOf(domed);
     const inside = skin.filter((v) => pos.getZ(v) >= domed.roofZ[0] && pos.getZ(v) <= domed.roofZ[1]);
-    assert.ok(inside.length > 0, "no skin vertex read");
-    for (const v of inside) assert.ok(Math.abs(pos.getY(v) - drawnRoofTopY(pos.getX(v), pos.getZ(v), domed)) < 1e-5, `skin vertex ${v} (${pos.getX(v)}, ${pos.getY(v)}, ${pos.getZ(v)}): drawnRoofTopY ${drawnRoofTopY(pos.getX(v), pos.getZ(v), domed)}`);
+    expect(inside.length, "no skin vertex read").toBeGreaterThan(0);
+    for (const v of inside) expect(Math.abs(pos.getY(v) - drawnRoofTopY(pos.getX(v), pos.getZ(v), domed)), `skin vertex ${v} (${pos.getX(v)}, ${pos.getY(v)}, ${pos.getZ(v)}): drawnRoofTopY ${drawnRoofTopY(pos.getX(v), pos.getZ(v), domed)}`).toBeLessThan(1e-5);
     for (const part of makeGreenhouseFrame(domed, "drawn")) {
       const at = part.getAttribute("position") as THREE.BufferAttribute;
       for (let i = 0; i < at.count; i++) {
         const [x, y, z] = [at.getX(i), at.getY(i), at.getZ(i)];
-        if (z >= domed.roofZ[0] && z <= domed.roofZ[1]) assert.ok(y <= drawnRoofTopY(x, z, domed) + 1e-6, `${part.name} vertex (${x}, ${y}, ${z}) over the curved roof (${drawnRoofTopY(x, z, domed)})`);
+        if (z >= domed.roofZ[0] && z <= domed.roofZ[1]) expect(y, `${part.name} vertex (${x}, ${y}, ${z}) over the curved roof (${drawnRoofTopY(x, z, domed)})`).toBeLessThanOrEqual(drawnRoofTopY(x, z, domed) + 1e-6);
       }
     }
   });
@@ -582,7 +582,7 @@ describe("given the pickup whose roof's rear corners sit flush over its posts (r
       return x - roofAt(z0, style).x;
     };
     const [flush, lip] = [reachAtEnd(pickup), reachAtEnd(lipped)];
-    assert.ok(flush < 1e-6 && lip > 0.05, `rear end past the dome's edge: flush ${flush.toFixed(4)} m, without flush ${lip.toFixed(4)} m`);
+    expect(flush < 1e-6 && lip > 0.05, `rear end past the dome's edge: flush ${flush.toFixed(4)} m, without flush ${lip.toFixed(4)} m`).toBeTruthy();
   });
 
   it("when its roof is drawn, then its centre line ends within 1 cm of its rear glass's top in plan, as the reference's rolled rear edge does, not a ledge reaching past the glass", () => {
@@ -592,7 +592,7 @@ describe("given the pickup whose roof's rear corners sit flush over its posts (r
     for (let v = 0; v < roof.count; v++) if (Math.abs(roof.getX(v)) < 1e-6) roofZ = Math.min(roofZ, roof.getZ(v));
     let [topY, topZ] = [-Infinity, 0];
     for (let i = 0; i < glass.count; i++) if (Math.abs(glass.getX(i)) < 1e-6 && glass.getY(i) > topY) [topY, topZ] = [glass.getY(i), glass.getZ(i)];
-    assert.ok(Math.abs(topZ - roofZ) <= 0.01, `the roof ends at z ${roofZ.toFixed(3)}, the rear glass's top at ${topZ.toFixed(3)}`);
+    expect(Math.abs(topZ - roofZ), `the roof ends at z ${roofZ.toFixed(3)}, the rear glass's top at ${topZ.toFixed(3)}`).toBeLessThanOrEqual(0.01);
   });
 });
 
@@ -609,7 +609,7 @@ describe("given the trucks' posts against their side plates' window outlines", (
   it("when the pickup's A-post and sail are read, then they span its side plate's 38.9 cm at the windshield's foot (y 1.248) and 27.4 cm at y 1.39", () => {
     const pickup = CAR_STYLES.pickup;
     const [foot, mid] = [aWidthAt(pickup, 1.248), aWidthAt(pickup, 1.39)];
-    assert.ok(Math.abs(foot - 0.389) <= PLATE_TOL && Math.abs(mid - 0.274) <= PLATE_TOL, `A-post and sail ${(foot * 100).toFixed(1)} cm at the foot, ${(mid * 100).toFixed(1)} cm at y 1.39`);
+    expect(Math.abs(foot - 0.389) <= PLATE_TOL && Math.abs(mid - 0.274) <= PLATE_TOL, `A-post and sail ${(foot * 100).toFixed(1)} cm at the foot, ${(mid * 100).toFixed(1)} cm at y 1.39`).toBeTruthy();
   });
 
   it("when the monster's B-post is drawn, then it stands upright between its door glasses where its side plate's does (z -.214 to -.128, 8.6 cm) at the belt and at the roof, not narrowing to 4 cm", () => {
@@ -622,7 +622,7 @@ describe("given the trucks' posts against their side plates' window outlines", (
       if (pos.getY(i) > box.max.y - 0.005) top.push(pos.getZ(i));
     }
     const spans = [Math.min(...low), Math.max(...low), Math.min(...top), Math.max(...top)];
-    assert.ok(spans.every((z, k) => Math.abs(z - [-0.214, -0.128][k % 2]!) <= 0.005), `B-post z at the belt [${spans.slice(0, 2).map((z) => z.toFixed(3))}], at the roof [${spans.slice(2).map((z) => z.toFixed(3))}]`);
+    expect(spans.every((z, k) => Math.abs(z - [-0.214, -0.128][k % 2]!) <= 0.005), `B-post z at the belt [${spans.slice(0, 2).map((z) => z.toFixed(3))}], at the roof [${spans.slice(2).map((z) => z.toFixed(3))}]`).toBeTruthy();
   });
 });
 
@@ -642,12 +642,12 @@ describe("given the pickup's door and B-post against its side plate", () => {
     const pickup = drawnStyle(CAR_STYLES.pickup);
     // The body's cut opens at the first z (1 mm steps) where `doorAperture` leaves 0: its rear end, feathered in from there.
     const cut = Array.from({ length: 500 }, (_, k) => -0.5 + k * 0.001).find((z) => doorAperture(z, pickup) > 0);
-    assert.ok(cut !== undefined && Math.abs(cut - PLATE_SEAM_Z) <= PLATE_TOL, `the door's rear cut opens at z ${cut}, the plate's seam at ${PLATE_SEAM_Z}`);
+    expect(cut !== undefined && Math.abs(cut - PLATE_SEAM_Z) <= PLATE_TOL, `the door's rear cut opens at z ${cut}, the plate's seam at ${PLATE_SEAM_Z}`).toBeTruthy();
     const band = bPillarBand(pickup);
     const [belt, top] = [band.belt, band.top].map(([rear, front]) => front - rear);
-    assert.ok(Math.abs(belt! - PLATE_B_WIDTH) <= WIDTH_TOL && Math.abs(top! - PLATE_B_WIDTH) <= WIDTH_TOL, `the B band is ${(belt! * 100).toFixed(1)} cm wide at the belt, ${(top! * 100).toFixed(1)} cm at the top`);
+    expect(Math.abs(belt! - PLATE_B_WIDTH) <= WIDTH_TOL && Math.abs(top! - PLATE_B_WIDTH) <= WIDTH_TOL, `the B band is ${(belt! * 100).toFixed(1)} cm wide at the belt, ${(top! * 100).toFixed(1)} cm at the top`).toBeTruthy();
     // The door glass shows up to the B band's front edge (its pane runs on a little way under the post).
-    assert.ok(Math.abs(band.belt[1] - PLATE_GLASS_REAR_Z) <= PLATE_TOL, `the door glass shows back to z ${band.belt[1].toFixed(3)} at the belt, the plate's at ${PLATE_GLASS_REAR_Z}`);
+    expect(Math.abs(band.belt[1] - PLATE_GLASS_REAR_Z), `the door glass shows back to z ${band.belt[1].toFixed(3)} at the belt, the plate's at ${PLATE_GLASS_REAR_Z}`).toBeLessThanOrEqual(PLATE_TOL);
   });
 });
 
@@ -665,23 +665,23 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
     const plain = makeRearGlass(rounded);
     const [pos, flat] = [geo.getAttribute("position"), plain.getAttribute("position")];
     const tone = geo.getAttribute(GLASS_ATTRIBUTE);
-    assert.ok(pos.count === flat.count, `${pos.count} vertices against the plain build's ${flat.count}`);
+    expect(pos.count, `${pos.count} vertices against the plain build's ${flat.count}`).toBe(flat.count);
     let frit = 0;
     for (let i = 0; i < pos.count; i++) {
       const off = new THREE.Vector3().fromBufferAttribute(pos, i).distanceTo(new THREE.Vector3().fromBufferAttribute(flat, i));
-      if (tone.getX(i) === 0) assert.ok(off < 1e-6, `clear vertex ${i} moved ${off} m`);
+      if (tone.getX(i) === 0) expect(off, `clear vertex ${i} moved ${off} m`).toBeLessThan(1e-6);
       else {
         frit++;
-        assert.ok(Math.abs(off - INSET) < 1e-4, `frit vertex ${i} stands ${(off * 1000).toFixed(1)} mm off the plain build's`);
+        expect(Math.abs(off - INSET), `frit vertex ${i} stands ${(off * 1000).toFixed(1)} mm off the plain build's`).toBeLessThan(1e-4);
       }
     }
-    assert.ok(frit > 0, "no frit backing");
+    expect(frit, "no frit backing").toBeGreaterThan(0);
     const squarePos = makeRearGlass(square).getAttribute("position");
     for (const k of [0, 8, 54, 62]) {
       const corner = new THREE.Vector3().fromBufferAttribute(squarePos, k);
       let near = Infinity;
       for (let i = 0; i < pos.count; i++) if (tone.getX(i) === 0) near = Math.min(near, corner.distanceTo(new THREE.Vector3().fromBufferAttribute(pos, i)));
-      assert.ok(near > 0.9 * ROUND * (Math.SQRT2 - 1), `corner ${k}: the glass reaches ${near.toFixed(4)} m off it`);
+      expect(near, `corner ${k}: the glass reaches ${near.toFixed(4)} m off it`).toBeGreaterThan(0.9 * ROUND * (Math.SQRT2 - 1));
     }
   });
 
@@ -689,7 +689,7 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
     const geo = makeRearGlass(rounded);
     const pos = geo.getAttribute("position");
     const tone = geo.getAttribute(GLASS_ATTRIBUTE);
-    assert.ok(tone !== undefined, "the rounded pane carries its frit's glass tone");
+    expect(tone, "the rounded pane carries its frit's glass tone").not.toBe(undefined);
     // The square pane's corners as drawn (its 8 × 6 grid's), fallen with the roof's dome at the top.
     const squarePos = makeRearGlass(square).getAttribute("position");
     for (const k of [0, 8, 54, 62]) {
@@ -700,12 +700,12 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
         if (tone.getX(i) === 0) clear = Math.min(clear, d);
         else frit = Math.min(frit, d);
       }
-      assert.ok(clear > 0.9 * ROUND * (Math.SQRT2 - 1) && clear < 1.2 * ROUND * (Math.SQRT2 - 1), `corner ${k}: the clear pane's nearest point ${clear.toFixed(4)} m off it`);
-      assert.ok(frit < 1e-6, `corner ${k}: the frit reaches it (${frit} m)`);
+      expect(clear > 0.9 * ROUND * (Math.SQRT2 - 1) && clear < 1.2 * ROUND * (Math.SQRT2 - 1), `corner ${k}: the clear pane's nearest point ${clear.toFixed(4)} m off it`).toBeTruthy();
+      expect(frit, `corner ${k}: the frit reaches it (${frit} m)`).toBeLessThan(1e-6);
     }
     const [box, squareBox] = [partBox(geo), partBox(makeRearGlass(square))];
-    assert.ok(box.min.distanceTo(squareBox.min) < 1e-6 && box.max.distanceTo(squareBox.max) < 1e-6, "the outline is the square pane's");
-    assert.ok(`${geo.userData.centre}` === `${makeRearGlass(square).userData.centre}`, `centre ${geo.userData.centre}`);
+    expect(box.min.distanceTo(squareBox.min) < 1e-6 && box.max.distanceTo(squareBox.max) < 1e-6, "the outline is the square pane's").toBeTruthy();
+    expect(`${geo.userData.centre}`, `centre ${geo.userData.centre}`).toBe(`${makeRearGlass(square).userData.centre}`);
   });
 
   it("when its chrome bead is built (windowTrim), then the bead keeps the corner's arc in from each square corner too, not a sharp mitre on it", () => {
@@ -724,8 +724,8 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
       );
     };
     const [round, sharp] = [near(rounded), near(square)];
-    assert.ok(Math.min(...sharp) < BEAD_ARC, `the control: the square pane's bead stands ${sharp.map((d) => d.toFixed(4)).join(", ")} m off its corners`);
-    assert.ok(Math.min(...round) >= BEAD_ARC, `the bead stands ${round.map((d) => d.toFixed(4)).join(", ")} m off the square corners, want ${BEAD_ARC.toFixed(4)} or more`);
+    expect(Math.min(...sharp), `the control: the square pane's bead stands ${sharp.map((d) => d.toFixed(4)).join(", ")} m off its corners`).toBeLessThan(BEAD_ARC);
+    expect(Math.min(...round), `the bead stands ${round.map((d) => d.toFixed(4)).join(", ")} m off the square corners, want ${BEAD_ARC.toFixed(4)} or more`).toBeGreaterThanOrEqual(BEAD_ARC);
   });
 });
 
@@ -739,7 +739,7 @@ describe("given a deck lid that wraps the tail (boot.drop)", () => {
   for (const [id, style] of WRAPPED) {
     it(`when a ${id}'s wrapping lid is built, then it folds down the rear face to drop.y, its bottom edge at drop.z (else z1), drop.w wide, inside its cage with no clamping`, () => {
       const boot = style.boot;
-      assert.ok(boot.kind === "lid" && boot.drop !== undefined);
+      must(boot.kind === "lid" && boot.drop !== undefined, `${id}: the wrapping boot is a lid with a drop`);
       const [py, pz] = bootPivot(boot);
       const geo = makeTrunkGeometry(style);
       const pos = geo.getAttribute("position") as THREE.BufferAttribute;
@@ -754,17 +754,17 @@ describe("given a deck lid that wraps the tail (boot.drop)", () => {
         faceW = Math.max(faceW, Math.abs(pos.getX(i)));
       }
       const bottomZ = boot.drop.z ?? boot.z1;
-      assert.ok(Math.abs(low - boot.drop.y) < 1e-6 && Math.abs(faceW - boot.drop.w) < 1e-6, `${id} face bottom ${low} m, half-width ${faceW} m`);
-      assert.ok(back < bottomZ && back > bottomZ - 0.02, `${id} face bottom edge at z ${back}`);
+      expect(Math.abs(low - boot.drop.y) < 1e-6 && Math.abs(faceW - boot.drop.w) < 1e-6, `${id} face bottom ${low} m, half-width ${faceW} m`).toBeTruthy();
+      expect(back < bottomZ && back > bottomZ - 0.02, `${id} face bottom edge at z ${back}`).toBeTruthy();
       const d = new StreamedDeformation(makeChassisGeometry(style), carFrame(style).rig);
-      assert.ok(panelClamp(d, geo, "boot", new THREE.Vector3(0, py, pz)) < 1e-4, `${id} boot clamped`);
+      expect(panelClamp(d, geo, "boot", new THREE.Vector3(0, py, pz)), `${id} boot clamped`).toBeLessThan(1e-4);
     });
   }
 
   it("when their hinges are read, then the sedan's lid is a torsion-bar deck lid and the roof-hinged hatch a strutted hatch carrying its glass", () => {
     const [sedan, hatch] = WRAPPED.map(([, s]) => s.boot);
-    assert.ok(!roofHinged(sedan!) && lidSpec(sedan!).kg === 12.4 && lidSpec(sedan!).dir === 1, `sedan ${JSON.stringify(lidSpec(sedan!))}`);
-    assert.ok(roofHinged(hatch!) && lidSpec(hatch!).kg === 18 && lidSpec(hatch!).dir === 1, `hatch ${JSON.stringify(lidSpec(hatch!))}`);
+    expect(!roofHinged(sedan!) && lidSpec(sedan!).kg === 12.4 && lidSpec(sedan!).dir === 1, `sedan ${JSON.stringify(lidSpec(sedan!))}`).toBeTruthy();
+    expect(roofHinged(hatch!) && lidSpec(hatch!).kg === 18 && lidSpec(hatch!).dir === 1, `hatch ${JSON.stringify(lidSpec(hatch!))}`).toBeTruthy();
   });
 });
 
@@ -773,7 +773,7 @@ describe("given the trucks' bed gates", () => {
     for (const id of ["pickup", "monster"] as const) {
       const s = lidSpec(CAR_STYLES[id].boot);
       const read = `${s.dir} ${s.stop.toFixed(4)} ${s.kg} ${roofHinged(CAR_STYLES[id].boot)}`;
-      assert.ok(read === "-1 1.5708 22 false", `${id}: dir, stop, kg, roof-hinged ${read}`);
+      expect(read, `${id}: dir, stop, kg, roof-hinged ${read}`).toBe("-1 1.5708 22 false");
     }
   });
 });
@@ -783,7 +783,7 @@ function copThroughWall(kph: number): { car: DeformableCar; detached: string[]; 
   const car = new DeformableCar(PAINT, new THREE.Scene(), null, "police");
   car.deform.setMode("shape");
   const bar = car.group.getObjectByName("lightBar");
-  assert.ok(bar instanceof THREE.Mesh, "police car has no light bar");
+  must(bar instanceof THREE.Mesh, "police car has no light bar");
   return { car, detached: runWall(kph, 1, "front", { car }).detached, bar };
 }
 
@@ -797,15 +797,15 @@ function sedanThroughWall(kph: number): string[] {
 describe("given the police cruiser", () => {
   it("when its paint and light bar are inspected, then the body is black, the doors are white whatever the fleet paint, and a light bar stands on top of the sedan's roof", () => {
     const c = cars.police;
-    assert.equal((c.body.material as THREE.MeshStandardMaterial).color.getHex(), new THREE.Color(CAR_STYLES.police.livery!.body).getHex());
+    expect((c.body.material as THREE.MeshStandardMaterial).color.getHex()).toBe(new THREE.Color(CAR_STYLES.police.livery!.body).getHex());
     const paints = new Set<number>();
     c.group.traverse((o) => {
       if (o instanceof THREE.Mesh && o.material instanceof THREE.MeshPhysicalMaterial && o.material.clearcoat > 0) paints.add(o.material.color.getHex());
     });
-    assert.ok(paints.has(new THREE.Color(CAR_STYLES.police.livery!.doors).getHex()), "no white door paint");
-    assert.ok(!paints.has(new THREE.Color(PAINT.body).getHex()), "the fleet paint leaked onto the police car");
+    expect(paints.has(new THREE.Color(CAR_STYLES.police.livery!.doors).getHex()), "no white door paint").toBeTruthy();
+    expect(!paints.has(new THREE.Color(PAINT.body).getHex()), "the fleet paint leaked onto the police car").toBe(true);
     const z = c.group.getObjectByName("lightBar")!.position.z;
-    assert.ok(topAt("police", z) > topAt("sedan", z) + 0.1, `bar top ${topAt("police", z)} vs sedan roof ${topAt("sedan", z)}`);
+    expect(topAt("police", z), `bar top ${topAt("police", z)} vs sedan roof ${topAt("sedan", z)}`).toBeGreaterThan(topAt("sedan", z) + 0.1);
   });
 
   it("when the light bar's sole corners are measured against the roof under them, then the bar stands on its feet, every corner within 1.2 cm of the roof", () => {
@@ -817,9 +817,9 @@ describe("given the police cruiser", () => {
       for (const z of [-0.09, 0.09]) {
         sole.set(x, LIGHT_BAR_FOOT.sole, z).applyMatrix4(bar.matrixWorld);
         const roof = new THREE.Raycaster(new THREE.Vector3(sole.x, 3, sole.z), new THREE.Vector3(0, -1, 0)).intersectObject(c.body, false)[0];
-        assert.ok(roof, `no roof under the sole at x=${x}`);
+        expect(roof, `no roof under the sole at x=${x}`).toBeTruthy();
         const gap = sole.y - roof.point.y;
-        assert.ok(Math.abs(gap) < 0.012, `sole at x=${x} z=${z} is ${(gap * 100).toFixed(1)} cm off the roof`);
+        expect(Math.abs(gap), `sole at x=${x} z=${z} is ${(gap * 100).toFixed(1)} cm off the roof`).toBeLessThan(0.012);
       }
     }
   });
@@ -831,7 +831,7 @@ describe("given the police cruiser", () => {
     const now = bar.geometry.getAttribute("position").array;
     let moved = 0;
     for (let i = 0; i < rest.length; i++) moved = Math.max(moved, Math.abs(now[i]! - rest[i]!));
-    assert.ok(moved > 0.005 && moved < 0.3, `bar skin moved ${moved.toFixed(3)} m with the roof`);
+    expect(moved > 0.005 && moved < 0.3, `bar skin moved ${moved.toFixed(3)} m with the roof`).toBeTruthy();
   });
 
   it("when it hits a wall square-on at 56 km/h, then its front wings crush as far as a sedan's do, within 3 cm: its push bar's box stands ahead of its bumper's particles, which the wall holds a bar's reach further back", (t) => {
@@ -845,19 +845,19 @@ describe("given the police cruiser", () => {
     const cop = wingCrush("police");
     const sedan = wingCrush("sedan");
     t.annotate(`wing crush: police ${cop.toFixed(3)} m, sedan ${sedan.toFixed(3)} m`);
-    assert.ok(Math.abs(cop - sedan) <= 0.03, `the cruiser's wing crushed ${cop.toFixed(3)} m, the sedan's ${sedan.toFixed(3)} m`);
+    expect(Math.abs(cop - sedan), `the cruiser's wing crushed ${cop.toFixed(3)} m, the sedan's ${sedan.toFixed(3)} m`).toBeLessThanOrEqual(0.03);
   });
 
   it("when it hits a wall square-on at 64 km/h, then the light bar is thrown clear onto the ground with its sirens dark, and the rest tears as it does on a sedan", () => {
     const { car, detached, bar } = copThroughWall(64);
-    assert.ok(detached.includes("lightBar"), `parts off: ${detached}`);
+    expect(detached.includes("lightBar"), `parts off: ${detached}`).toBeTruthy();
     assertSameDigest(detached.filter((n) => n !== "lightBar"), sedanThroughWall(64), "other parts off at 64 km/h");
-    assert.ok(bar.parent !== car.group && bar.position.y < 0.5, `the bar is still up at y=${bar.position.y.toFixed(2)}, not on the ground`);
+    expect(bar.parent !== car.group && bar.position.y < 0.5, `the bar is still up at y=${bar.position.y.toFixed(2)}, not on the ground`).toBeTruthy();
     car.setSirens(true);
     const p = new THREE.Vector3();
     for (const now of [0.1, 0.35]) {
       car.flashSirens(now);
-      for (let i = 4; i < car.lampCount; i++) assert.equal(car.lampWorld(i, p, new THREE.Vector3()), null, `siren ${i} lit at t=${now} off a torn bar`);
+      for (let i = 4; i < car.lampCount; i++) expect(car.lampWorld(i, p, new THREE.Vector3()), `siren ${i} lit at t=${now} off a torn bar`).toBe(null);
     }
   });
 });
@@ -894,7 +894,7 @@ describe("given a body style's own hardpoints (windshield, belt, hood, bumpers, 
     for (const pane of [2, 4]) {
       for (const k of [0, 1]) {
         const at = pane * 12 + k * 3;
-        assert.ok(Math.abs(corners[at + 1]! - beltY(corners[at + 2]!, moved)) < 1e-6, `pane ${pane} base corner ${k} at y ${corners[at + 1]} off the belt ${beltY(corners[at + 2]!, moved)}`);
+        expect(Math.abs(corners[at + 1]! - beltY(corners[at + 2]!, moved)), `pane ${pane} base corner ${k} at y ${corners[at + 1]} off the belt ${beltY(corners[at + 2]!, moved)}`).toBeLessThan(1e-6);
       }
     }
   });
@@ -906,7 +906,7 @@ describe("given a body style's own hardpoints (windshield, belt, hood, bumpers, 
     const arch = sectionPoints(sampleSlice(hubZ, moved.profile), moved, "drawn");
     const outer = Math.max(...arch.map((p) => p.x));
     const lowestOuter = Math.min(...arch.filter((p) => p.x > outer - 0.01).map((p) => p.y));
-    assert.ok(lowestOuter > hubY + 0.42 - 0.01, `the side over the front hub comes down to ${lowestOuter.toFixed(3)} m, inside the ${0.42} m arch`);
+    expect(lowestOuter, `the side over the front hub comes down to ${lowestOuter.toFixed(3)} m, inside the ${0.42} m arch`).toBeGreaterThan(hubY + 0.42 - 0.01);
   });
 });
 
@@ -939,7 +939,7 @@ function doorSkinAtMirror(style: BodyStyle): number {
   const d = style.door;
   const [zT, yT] = [-(d.mirrorZ ?? 0) - doorSkinZ(style), d.mirrorY];
   const widest = widestAt(makeDoorGeometry(1, style), zT, yT);
-  assert.ok(widest > -Infinity, `${style.id}: no door skin triangle at the mirror's z ${zT} and height ${yT}`);
+  expect(widest, `${style.id}: no door skin triangle at the mirror's z ${zT} and height ${yT}`).toBeGreaterThan(-Infinity);
   return d.hingeX + widest;
 }
 
@@ -972,7 +972,7 @@ function bodySideAtMirror(style: BodyStyle): number {
   }
   const zs = [...columns.keys()].sort((a, b) => a - b);
   const after = zs.findIndex((z) => z >= mirrorZ);
-  assert.ok(after > 0, `${style.id}: no chassis vertex column either side of the mirror's z ${mirrorZ} under its height ${mirrorY}`);
+  expect(after, `${style.id}: no chassis vertex column either side of the mirror's z ${mirrorZ} under its height ${mirrorY}`).toBeGreaterThan(0);
   const [z0, z1] = [zs[after - 1]!, zs[after]!];
   const [x0, x1] = [columns.get(z0)!, columns.get(z1)!];
   return x0 + ((x1 - x0) * (mirrorZ - z0)) / (z1 - z0);
@@ -1016,12 +1016,12 @@ describe("given a body style's H2 hardpoints", () => {
     const moved: BodyStyle = { ...sedan, underside: [[-2.2, ride + 0.155], [-1.6, ride], [1.6, ride]] };
     for (const source of ["drawn", "cage"] as const) {
       const tail = ringLowest(moved, -2.0, source);
-      assert.ok(Math.abs(tail - floorY(-2.0, moved)) < 1e-9 && tail > ride + 0.05, `${source}: lowest y at z -2.0 is ${tail}, floor ${floorY(-2.0, moved)}, must be > ${ride + 0.05}`);
+      expect(Math.abs(tail - floorY(-2.0, moved)) < 1e-9 && tail > ride + 0.05, `${source}: lowest y at z -2.0 is ${tail}, floor ${floorY(-2.0, moved)}, must be > ${ride + 0.05}`).toBeTruthy();
       const mid = ringLowest(moved, 0, source);
-      assert.ok(Math.abs(mid - ride) < 1e-9, `${source}: lowest y at z 0 is ${mid}, ride height ${ride}`);
+      expect(Math.abs(mid - ride), `${source}: lowest y at z 0 is ${mid}, ride height ${ride}`).toBeLessThan(1e-9);
     }
     const lift = rockerAt(-2.0, moved) - rockerAt(0, moved);
-    assert.ok(Math.abs(lift - (floorY(-2.0, moved) - ride)) < 1e-9, `rocker lifts ${lift} m between z 0 and -2.0, the floor lifts ${floorY(-2.0, moved) - ride}`);
+    expect(Math.abs(lift - (floorY(-2.0, moved) - ride)), `rocker lifts ${lift} m between z 0 and -2.0, the floor lifts ${floorY(-2.0, moved) - ride}`).toBeLessThan(1e-9);
   });
 
   it("when its ride height and rocker are raised, then no section point, on the body side or in the door cut, dips below the floor", () => {
@@ -1029,20 +1029,20 @@ describe("given a body style's H2 hardpoints", () => {
     for (const source of ["drawn", "cage"] as const) {
       for (const z of [-0.5, 0.27, 0.5]) {
         const low = ringLowest(moved, z, source);
-        assert.ok(low >= 0.245 - 1e-9, `${source} section at z ${z} reaches down to y ${low}, floor 0.245`);
+        expect(low, `${source} section at z ${z} reaches down to y ${low}, floor 0.245`).toBeGreaterThanOrEqual(0.245 - 1e-9);
       }
     }
   });
 
   it("when its door aperture is moved, then the body's cut and the door skin's length and place follow it", () => {
     const moved: BodyStyle = { ...sedan, door: { ...sedan.door, aperture: [-0.2, 0.7] } };
-    assert.ok(doorAperture(0.6, moved) === 1 && doorAperture(-0.1, moved) === 1, `moved cut at z 0.6 is ${doorAperture(0.6, moved)}, at z -0.1 ${doorAperture(-0.1, moved)}, both 1`);
-    assert.ok(doorAperture(0.6, sedan) === 0, `sedan cut at z 0.6 is ${doorAperture(0.6, sedan)}, 0`);
+    expect(doorAperture(0.6, moved) === 1 && doorAperture(-0.1, moved) === 1, `moved cut at z 0.6 is ${doorAperture(0.6, moved)}, at z -0.1 ${doorAperture(-0.1, moved)}, both 1`).toBeTruthy();
+    expect(doorAperture(0.6, sedan), `sedan cut at z 0.6 is ${doorAperture(0.6, sedan)}, 0`).toBe(0);
     const box = partBox(makeDoorGeometry(1, moved));
     const length = box.max.z - box.min.z;
-    assert.ok(Math.abs(length - 0.94) < 1e-3, `skin is ${length} m long, 0.9 + 0.04`);
+    expect(Math.abs(length - 0.94), `skin is ${length} m long, 0.9 + 0.04`).toBeLessThan(1e-3);
     const centre = (box.max.z + box.min.z) / 2 + doorSkinZ(moved) + moved.door.hingeZ;
-    assert.ok(Math.abs(centre - 0.25) < 1e-3, `skin is centred at car z ${centre}, the cut's middle 0.25`);
+    expect(Math.abs(centre - 0.25), `skin is centred at car z ${centre}, the cut's middle 0.25`).toBeLessThan(1e-3);
   });
 
   it("when any style's mirror is seated, then its arm starts on the body side", () => {
@@ -1050,7 +1050,7 @@ describe("given a body style's H2 hardpoints", () => {
       const style = CAR_STYLES[id];
       const side = bodySideAtMirror(style);
       const root = style.door.hingeX + mirrorSeatX(style) + MIRROR_ROOT * (style.door.mirrorReach / MIRROR_REACH);
-      assert.ok(Math.abs(root - side) < 0.005, `${id}: mirror arm starts at x ${root}, body side at x ${side}`);
+      expect(Math.abs(root - side), `${id}: mirror arm starts at x ${root}, body side at x ${side}`).toBeLessThan(0.005);
     }
   });
 
@@ -1072,7 +1072,7 @@ describe("given a body style's H2 hardpoints", () => {
       read("posed");
       car.dispose();
     }
-    assert.deepEqual(wrong, []);
+    expect(wrong).toHaveLength(0);
   });
 
   it("when a mirror sits back along a door whose side narrows rearward, then its arm still starts on the door skin there", () => {
@@ -1083,7 +1083,7 @@ describe("given a body style's H2 hardpoints", () => {
     const moved: BodyStyle = { ...coupe, profile, door: { ...coupe.door, mirrorZ: 0.3, mirrorY: Math.min(coupe.door.mirrorY, coupe.door.halfHeight - 0.05) } };
     const skin = bodySideAtMirror(moved);
     const root = moved.door.hingeX + mirrorSeatX(moved) + MIRROR_ROOT * (moved.door.mirrorReach / MIRROR_REACH);
-    assert.ok(Math.abs(root - skin) < 0.005, `mirror 0.3 m back: arm starts at x ${root}, door skin at x ${skin}`);
+    expect(Math.abs(root - skin), `mirror 0.3 m back: arm starts at x ${root}, door skin at x ${skin}`).toBeLessThan(0.005);
   });
 
   it("when a style that sets no B widths moves its B-pillar band, then the door glass's rear edge and the quarter glass's front edge follow the band, 1 cm in under its edges at the belt and the top, wherever the door's trailing edge is", () => {
@@ -1095,7 +1095,7 @@ describe("given a body style's H2 hardpoints", () => {
     const edges = [c[3 * 12 + 2]!, c[3 * 12 + 6 + 2]!, c[5 * 12 + 3 + 2]!, c[5 * 12 + 9 + 2]!];
     assertSameNumbers(edges, [-0.31, -0.325, -0.39, -0.375], "door glass rear and quarter glass front edges at the belt and the top (z), band [-0.4, -0.3] narrowing 1.5 cm a side at its top", 1e-5);
     const front = partBox(makeSideGlass(1, moved)).max.z + moved.door.hingeZ + DOOR_GLASS_SEAT.z;
-    assert.ok(front > 0.86 && front < 0.95, `door glass front edge at z ${front}, around the A-pillar foot 0.88`);
+    expect(front > 0.86 && front < 0.95, `door glass front edge at z ${front}, around the A-pillar foot 0.88`).toBeTruthy();
   });
 
   it("when the A-pillar's top moves back, then the door glass's top-front corner and the pillar's rear top corner (its post's, or the sail's behind it) follow it", () => {
@@ -1121,7 +1121,7 @@ describe("given a body style's H2 hardpoints", () => {
         const side = behindWindshieldEdge(post!, style);
         const proud = -Math.min(...side);
         // The post's front stands 4 mm off the glass; the old slab stood 1-2 cm over it.
-        assert.ok(proud < 0.006, `${id} aPillarTop ${aPillarTopZ(style)}: the post stands ${proud} m proud of the windshield's edge line`);
+        expect(proud, `${id} aPillarTop ${aPillarTopZ(style)}: the post stands ${proud} m proud of the windshield's edge line`).toBeLessThan(0.006);
         // Side-view width across the windshield's edge, ring by ring along the post (its stations, belt to top); a station reaching up past
         // the cant line into the roof's side is held in under the roof's skin (checked below), so it is buried, not read.
         const { ring, slices } = post!.userData.loft as { ring: number; slices: number };
@@ -1135,10 +1135,10 @@ describe("given a body style's H2 hardpoints", () => {
           const width = Math.max(...behind) - Math.min(...behind);
           const set = style.pillars?.a;
           const want = (set ?? 0.06) - 0.002;
-          assert.ok(width > want, `${id} aPillarTop ${aPillarTopZ(style)}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}, under ${want}`);
-          if (set !== undefined) assert.ok(width < set + 0.01, `${id}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}, its pillars.a ${set}`);
+          expect(width, `${id} aPillarTop ${aPillarTopZ(style)}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}, under ${want}`).toBeGreaterThan(want);
+          if (set !== undefined) expect(width, `${id}: the post is ${width} m wide in side view at station ${slice + 1}/${slices}, its pillars.a ${set}`).toBeLessThan(set + 0.01);
         }
-        assert.ok(read >= slices - 2, `${id} aPillarTop ${aPillarTopZ(style)}: ${read} of ${slices} stations show under the roof`);
+        expect(read, `${id} aPillarTop ${aPillarTopZ(style)}: ${read} of ${slices} stations show under the roof`).toBeGreaterThanOrEqual(slices - 2);
         // Every drawn greenhouse part (A-post, sail, B, rear, divider, rail, fills) stays in the roof: under its skin, and in under its side over the cant line.
         for (const part of makeGreenhouseFrame(style, "drawn")) {
           const pos = part.getAttribute("position") as THREE.BufferAttribute;
@@ -1146,10 +1146,10 @@ describe("given a body style's H2 hardpoints", () => {
             const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
             if (z < style.roofZ[0] || z > style.roofZ[1]) continue;
             // 1e-6: float32 vertices, a ulp at 1.3 m is 1.2e-7.
-            assert.ok(y <= drawnRoofTopY(x, z, style) + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands over the roof skin there (${drawnRoofTopY(x, z, style)})`);
+            expect(y, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands over the roof skin there (${drawnRoofTopY(x, z, style)})`).toBeLessThanOrEqual(drawnRoofTopY(x, z, style) + 1e-6);
             // The drawn roof's side runs 1 cm past the cant line, out to the pillars' faces.
             const lipX = roofAt(z, style).x + 0.09;
-            assert.ok(y <= cantY(z, style) + 1e-6 || Math.abs(x) <= lipX + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands out past the roof's lip (x ${lipX}) over the cant line`);
+            expect(y <= cantY(z, style) + 1e-6 || Math.abs(x) <= lipX + 1e-6, `${id} ${part.name} vertex (${x}, ${y}, ${z}) stands out past the roof's lip (x ${lipX}) over the cant line`).toBeTruthy();
           }
         }
       }
@@ -1158,7 +1158,7 @@ describe("given a body style's H2 hardpoints", () => {
 
   it("when a curved-roof style's (`roofSection`) drawn greenhouse parts are read against its drawn roof mesh, then no vertex over the roof's z span stands over the roof's skin as drawn: a ray down from above meets the roof at or over every vertex (the rolled squared front and the loft's chords between its rings included)", () => {
     const ids = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].roofSection !== undefined);
-    assert.ok(ids.length >= 3, `only ${ids.length} styles set a roofSection`);
+    expect(ids.length, `only ${ids.length} styles set a roofSection`).toBeGreaterThanOrEqual(3);
     const ray = new THREE.Raycaster();
     const from = new THREE.Vector3();
     const down = new THREE.Vector3(0, -1, 0);
@@ -1182,10 +1182,10 @@ describe("given a body style's H2 hardpoints", () => {
           if (y > hit.point.y + 1e-6) over.push({ mm, text: `${id} ${part.name} (${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)}) ${mm.toFixed(2)} mm over the drawn roof` });
         }
       }
-      assert.ok(checked > 0, `${id}: no greenhouse vertex met the drawn roof under it`);
+      expect(checked, `${id}: no greenhouse vertex met the drawn roof under it`).toBeGreaterThan(0);
     }
     over.sort((a, b) => b.mm - a.mm);
-    assert.equal(over.length, 0, `${over.length} greenhouse vertices stand over the drawn roof's skin, worst first: ${over.slice(0, 5).map((o) => o.text).join("; ")}`);
+    expect(over.length, `${over.length} greenhouse vertices stand over the drawn roof's skin, worst first: ${over.slice(0, 5).map((o) => o.text).join("; ")}`).toBe(0);
   });
 
   it(`when any style's cage A-pillar box is read, then its rear top corner stands at least ${A_PILLAR_TOP_CLEAR * 100} cm behind the windshield's top edge, so the dummies' roof proxy stays off the pane`, () => {
@@ -1193,21 +1193,21 @@ describe("given a body style's H2 hardpoints", () => {
     const behind = (style: BodyStyle): number => style.windshieldTop[1] - partBox(makeGreenhouseFrame(style, "cage")[0]!).min.z;
     for (const id of CAR_STYLE_IDS) {
       const gap = behind(CAR_STYLES[id]);
-      assert.ok(gap >= A_PILLAR_TOP_CLEAR - 1e-6, `${id} aPillarTop ${aPillarTopZ(CAR_STYLES[id])}: the cage A-pillar's rear top corner stands ${gap.toFixed(4)} m behind the windshield's top (z ${CAR_STYLES[id].windshieldTop[1]})`);
+      expect(gap, `${id} aPillarTop ${aPillarTopZ(CAR_STYLES[id])}: the cage A-pillar's rear top corner stands ${gap.toFixed(4)} m behind the windshield's top (z ${CAR_STYLES[id].windshieldTop[1]})`).toBeGreaterThanOrEqual(A_PILLAR_TOP_CLEAR - 1e-6);
     }
     const old = behind({ ...CAR_STYLES.sedan, aPillarTop: 0.143 });
-    assert.ok(old < A_PILLAR_TOP_CLEAR, `the sedan's old 0.143 reads ${old.toFixed(4)} m behind: the row would not catch it`);
+    expect(old, `the sedan's old 0.143 reads ${old.toFixed(4)} m behind: the row would not catch it`).toBeLessThan(A_PILLAR_TOP_CLEAR);
   });
 
   it("when a style without a drip (roofDrip 0: the coupe's) is read, then its drawn roof's side stands nowhere out past the cant line (the side glass's plane): it rolls into the glass, no rail", () => {
     const ids = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].roofDrip === 0);
-    assert.ok(ids.length > 0, "no style sets roofDrip 0");
+    expect(ids.length, "no style sets roofDrip 0").toBeGreaterThan(0);
     for (const id of ids) {
       const style = CAR_STYLES[id];
       const pos = makeRoofGeometry(style).getAttribute("position") as THREE.BufferAttribute;
       let out = -Infinity;
       for (let i = 0; i < pos.count; i++) out = Math.max(out, Math.abs(pos.getX(i)) - cantX(pos.getZ(i), style));
-      assert.ok(out <= 1e-6, `${id}: the roof's side stands ${(out * 1000).toFixed(1)} mm out past the cant line`);
+      expect(out, `${id}: the roof's side stands ${(out * 1000).toFixed(1)} mm out past the cant line`).toBeLessThanOrEqual(1e-6);
     }
   });
 
@@ -1218,7 +1218,7 @@ describe("given a body style's H2 hardpoints", () => {
         const { ring, slices } = post.userData.loft as { ring: number; slices: number };
         const pos = post.getAttribute("position") as THREE.BufferAttribute;
         for (let k = (slices - 1) * ring; k < slices * ring; k++) {
-          assert.ok(pos.getZ(k) <= style.roofZ[1], `${id}: A-post top vertex (${pos.getX(k)}, ${pos.getY(k)}, ${pos.getZ(k)}) past the roof's front end ${style.roofZ[1]}`);
+          expect(pos.getZ(k), `${id}: A-post top vertex (${pos.getX(k)}, ${pos.getY(k)}, ${pos.getZ(k)}) past the roof's front end ${style.roofZ[1]}`).toBeLessThanOrEqual(style.roofZ[1]);
         }
       }
     }
@@ -1227,12 +1227,12 @@ describe("given a body style's H2 hardpoints", () => {
   it(`when any style's drawn windshield top and A-post tops are read against its drawn roof, then each pane top vertex (corners too) is tucked under the roof (a ray along the pane's outward normal meets it) or within ${ROOF_JOIN_M * 1000} mm of it, and each post's front-top vertex stands under the roof's skin within ${ROOF_JOIN_M * 1000} mm: no see-through slot ahead of the roof, no corner standing out of its roll, no post top open under it or through it; the wagon without its twin's roofEnds reads open`, () => {
     const off: string[] = [];
     for (const id of CAR_STYLE_IDS) off.push(...openRoofJoins(drawnStyle(CAR_STYLES[id])).map((text) => `${id} ${text}`));
-    assert.equal(off.length, 0, off.join("; "));
+    expect(off.length, off.join("; ")).toBe(0);
     // The control: the wagon's twin without its `roofEnds` leaves the dome's crown over its pane's top edge, a slot between them.
     const wagon = CAR_STYLES.wagon;
-    assert.ok(wagon.drawn?.roofEnds !== undefined, "the wagon's drawn twin sets roofEnds");
+    expect(wagon.drawn?.roofEnds, "the wagon's drawn twin sets roofEnds").not.toBe(undefined);
     const open = openRoofJoins(drawnStyle({ ...wagon, drawn: { ...wagon.drawn, roofEnds: undefined } }));
-    assert.ok(open.some((text) => text.startsWith("windshield top")), `the wagon without its twin's roofEnds reads closed: ${open.join("; ")}`);
+    expect(open.some((text) => text.startsWith("windshield top")), `the wagon without its twin's roofEnds reads closed: ${open.join("; ")}`).toBeTruthy();
   });
 
   it(`when any style's drawn windshield top edge is read across, then every read stands within ${ROOF_JOIN_M * 1000} mm of its drawn roof's skin by closest point, tucked under its lip or not: the pane's corner never stands a dome's fall under the roof the end rolls flat onto; the hatchback's twin without its pane's dome share reads open at its corners`, () => {
@@ -1240,12 +1240,12 @@ describe("given a body style's H2 hardpoints", () => {
     for (const id of CAR_STYLE_IDS) {
       for (const { x, gap } of windshieldTopGaps(drawnStyle(CAR_STYLES[id]))) if (gap > ROOF_JOIN_M) off.push(`${id} x ${x.toFixed(3)}: ${(gap * 1000).toFixed(1)} mm`);
     }
-    assert.equal(off.length, 0, off.join("; "));
+    expect(off.length, off.join("; ")).toBe(0);
     // The control: the hatchback's drawn pane at the roof's whole dome stands 9 mm under the roof's rolled front at its corners.
     const hatch = CAR_STYLES.hatchback;
-    assert.ok(hatch.drawn?.windshield?.domeFall !== undefined, "the hatchback's drawn windshield sets domeFall");
+    must(hatch.drawn?.windshield?.domeFall !== undefined, "the hatchback's drawn windshield sets domeFall");
     const whole = windshieldTopGaps(drawnStyle({ ...hatch, drawn: { ...hatch.drawn, windshield: { ...hatch.drawn.windshield, domeFall: undefined } } }));
-    assert.ok(whole.some(({ gap }) => gap > ROOF_JOIN_M), `the hatchback's pane at the whole dome reads closed: ${whole.map(({ gap }) => (gap * 1000).toFixed(1)).join(" ")}`);
+    expect(whole.some(({ gap }) => gap > ROOF_JOIN_M), `the hatchback's pane at the whole dome reads closed: ${whole.map(({ gap }) => (gap * 1000).toFixed(1)).join(" ")}`).toBeTruthy();
   });
 
   /** The pickup windshield's top-corner turn (°) from its flat pane: at 3.1° the corner mirrored the garage's key light into a bloom blob in the landing iso; at 0.76° (a quarter of the dome) it did not. */
@@ -1278,7 +1278,7 @@ describe("given a body style's H2 hardpoints", () => {
         for (const k of [2, 3]) if (Math.abs(corners[p * 12 + k * 3 + 1]! - planeY) > 1e-5) off.push(`${id} ${name} slab corner ${k}: y ${corners[p * 12 + k * 3 + 1]}, the pane's plane ${planeY}`);
       }
     }
-    assert.ok(off.length === 0, off.join("\n"));
+    expect(off.length, off.join("\n")).toBe(0);
   });
 
   it(`when the pickup's windshield is built, then its top corners' normals turn under ${PICKUP_CORNER_TURN_DEG}° from the flat pane's and follow its own faces: at the roof's whole dome they turned 3.1° and mirrored the garage's key light`, () => {
@@ -1289,10 +1289,10 @@ describe("given a body style's H2 hardpoints", () => {
     const [segX, segY] = [10, 8];
     for (const [k, across] of [[segY * (segX + 1), 1], [segY * (segX + 1) + segX, -1]] as const) {
       const turn = THREE.MathUtils.radToDeg(at(normal, k).angleTo(at(flatNormal, k)));
-      assert.ok(turn < PICKUP_CORNER_TURN_DEG, `top corner ${k}: its normal turns ${turn.toFixed(2)}° from the flat pane's`);
+      expect(turn, `top corner ${k}: its normal turns ${turn.toFixed(2)}° from the flat pane's`).toBeLessThan(PICKUP_CORNER_TURN_DEG);
       const face = at(pos, k + across).sub(at(pos, k)).cross(at(pos, k - segX - 1).sub(at(pos, k))).normalize();
       const off = THREE.MathUtils.radToDeg(Math.min(face.angleTo(at(normal, k)), face.negate().angleTo(at(normal, k))));
-      assert.ok(off < 0.5, `top corner ${k}: its normal ${off.toFixed(2)}° off its own face's`);
+      expect(off, `top corner ${k}: its normal ${off.toFixed(2)}° off its own face's`).toBeLessThan(0.5);
     }
   });
 
@@ -1316,14 +1316,14 @@ describe("given a body style's H2 hardpoints", () => {
         const [a, b] = [edge[j - 1]!, edge[j]!];
         proud = Math.max(proud, lerp(a.behind, b.behind, (s - a.s) / (b.s - a.s)) - behind[i]!);
       }
-      assert.ok(proud < 0.006, `${id}: the A-post stands ${(proud * 1000).toFixed(1)} mm proud of the windshield's drawn edge`);
+      expect(proud, `${id}: the A-post stands ${(proud * 1000).toFixed(1)} mm proud of the windshield's drawn edge`).toBeLessThan(0.006);
     }
   });
 
   it("when a windshield rounds its top corners (`windshield.round`), then its clear glass stands off the square top corner by the arc's cut and keeps its base corners square, and the cage's plain pane keeps its 10 x 8 grid", () => {
     const style = drawnStyle(CAR_STYLES.pickup);
     const { round } = style.windshield;
-    assert.ok(round !== undefined, "the pickup's drawn windshield rounds its top corners");
+    expect(round, "the pickup's drawn windshield rounds its top corners").not.toBe(undefined);
     const clear = (laid: BodyStyle): THREE.Vector3[] => {
       const geo = makeWindshield(laid);
       const [pos, tone] = [geo.getAttribute("position"), geo.getAttribute(GLASS_ATTRIBUTE)];
@@ -1333,10 +1333,10 @@ describe("given a body style's H2 hardpoints", () => {
     const [rounded, square] = [clear(style), clear({ ...style, windshield: { ...style.windshield, round: undefined } })];
     // A quarter circle of radius `round` in the corner leaves its middle this far (m) from the square corner, less a tenth for the pane's bow.
     const cut = round! * (Math.SQRT2 - 1) * 0.9;
-    assert.ok(nearest(square, windshieldPoint(style, 1, 1)) < 1e-3, "the control: the square pane reaches its top corner");
-    assert.ok(nearest(rounded, windshieldPoint(style, 1, 1)) >= cut, `the rounded pane's clear glass stands ${(nearest(rounded, windshieldPoint(style, 1, 1)) * 1000).toFixed(1)} mm off the square corner, under ${(cut * 1000).toFixed(1)}`);
-    assert.ok(nearest(rounded, windshieldPoint(style, 1, 0)) < 1e-3, "its base corner stays square on the cowl");
-    assert.equal(makeWindshield(CAR_STYLES.pickup).getAttribute("position").count, 99, "the cage's pane keeps its 10 x 8 grid");
+    expect(nearest(square, windshieldPoint(style, 1, 1)), "the control: the square pane reaches its top corner").toBeLessThan(1e-3);
+    expect(nearest(rounded, windshieldPoint(style, 1, 1)), `the rounded pane's clear glass stands ${(nearest(rounded, windshieldPoint(style, 1, 1)) * 1000).toFixed(1)} mm off the square corner, under ${(cut * 1000).toFixed(1)}`).toBeGreaterThanOrEqual(cut);
+    expect(nearest(rounded, windshieldPoint(style, 1, 0)), "its base corner stays square on the cowl").toBeLessThan(1e-3);
+    expect(makeWindshield(CAR_STYLES.pickup).getAttribute("position").count, "the cage's pane keeps its 10 x 8 grid").toBe(99);
   });
 
   it("when any style's drawn rear post (no sail) is read, then its top ring lies inside the roof's z span, so the roof takes all of it down the dome: no fold where half of it stood over the roof", () => {
@@ -1347,7 +1347,7 @@ describe("given a body style's H2 hardpoints", () => {
         const { ring, slices } = post.userData.loft as { ring: number; slices: number };
         const pos = post.getAttribute("position") as THREE.BufferAttribute;
         for (let k = (slices - 1) * ring; k < slices * ring; k++) {
-          assert.ok(pos.getZ(k) >= style.roofZ[0], `${id}: rear post top vertex (${pos.getX(k)}, ${pos.getY(k)}, ${pos.getZ(k)}) behind the roof's rear end ${style.roofZ[0]}`);
+          expect(pos.getZ(k), `${id}: rear post top vertex (${pos.getX(k)}, ${pos.getY(k)}, ${pos.getZ(k)}) behind the roof's rear end ${style.roofZ[0]}`).toBeGreaterThanOrEqual(style.roofZ[0]);
         }
       }
     }
@@ -1378,10 +1378,10 @@ describe("given a body style's H2 hardpoints", () => {
       return floor;
     };
     const without: BodyStyle = { ...hatch, pillars: { ...hatch.pillars, rearFoot: undefined } };
-    assert.ok(seen(without) > 0, "the control: without the foot the opening shows");
-    assert.ok(seen(hatch) === 0, `${seen(hatch)} rays see the cabin's floor between the D-pillar and the shoulder`);
+    expect(seen(without), "the control: without the foot the opening shows").toBeGreaterThan(0);
+    expect(seen(hatch), `${seen(hatch)} rays see the cabin's floor between the D-pillar and the shoulder`).toBe(0);
     const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
-    assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(hatch, "cage")), "the cage moved with the drawn foot");
+    expect(bits(makeChassisGeometry(without, "cage")), "the cage moved with the drawn foot").toBe(bits(makeChassisGeometry(hatch, "cage")));
   });
 
   it("when a roof-hinged gate's frame and spoiler are read for folds, then no vertex has a convex and a concave fold side by side (3 to 15 degrees, 6 or more each way): no ripple on the open or shut car", () => {
@@ -1439,9 +1439,9 @@ describe("given a body style's H2 hardpoints", () => {
       const style = CAR_STYLES[id];
       const gate = withGateSurround(makeTrunkGeometry(style), style);
       const from = gate.userData.surround as number;
-      assert.ok(from > 0, `${id}: the gate carries a surround`);
+      expect(from, `${id}: the gate carries a surround`).toBeGreaterThan(0);
       const found = waves(gate, from);
-      assert.ok(found.length === 0, `${id}: the gate's frame and spoiler have a fold each way at ${found.join(" ")}`);
+      expect(found.length, `${id}: the gate's frame and spoiler have a fold each way at ${found.join(" ")}`).toBe(0);
     }
   });
 
@@ -1452,7 +1452,7 @@ describe("given a body style's H2 hardpoints", () => {
     const key = (pos: THREE.BufferAttribute, i: number): string => `${pos.getX(i)},${pos.getY(i)},${pos.getZ(i)}`;
     const body = makeGreenhouseFrame(wagon, "drawn").filter((g) => g.name === "rear");
     const gate = gatePosts(wagon);
-    assert.ok(body.length === 2 && gate.length === 2, `${body.length} body posts, ${gate.length} gate posts`);
+    expect(body.length === 2 && gate.length === 2, `${body.length} body posts, ${gate.length} gate posts`).toBeTruthy();
     const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
     const slabs = [makeRoofFittings(wagon, "body")!.geometry, gateSpoiler(wagon)!].map((g) => new THREE.Mesh(g, material));
     const ray = new THREE.Raycaster();
@@ -1460,7 +1460,7 @@ describe("given a body style's H2 hardpoints", () => {
       const [pa, pb] = [body[side]!.getAttribute("position") as THREE.BufferAttribute, gate[side]!.getAttribute("position") as THREE.BufferAttribute];
       const [a, b] = [new Set(Array.from({ length: pa.count }, (_, i) => key(pa, i))), new Set(Array.from({ length: pb.count }, (_, i) => key(pb, i)))];
       const shared = [...a].filter((k) => b.has(k));
-      assert.ok(shared.length === CUT_POINTS, `side ${side}: the pieces share ${shared.length} vertices, not the cut's ${CUT_POINTS}`);
+      expect(shared.length, `side ${side}: the pieces share ${shared.length} vertices, not the cut's ${CUT_POINTS}`).toBe(CUT_POINTS);
       // Closed: every edge of the welded gate piece has two faces (its ends are capped, its cut is a face).
       const index = gate[side]!.getIndex()!.array;
       const edges = new Map<string, number>();
@@ -1472,7 +1472,7 @@ describe("given a body style's H2 hardpoints", () => {
         }
       }
       const open = [...edges.values()].filter((n) => n !== 2).length;
-      assert.ok(open === 0, `side ${side}: ${open} edges of the gate's post piece have not two faces: an uncapped end`);
+      expect(open, `side ${side}: ${open} edges of the gate's post piece have not two faces: an uncapped end`).toBe(0);
       // Its head (the top 5 mm) lies between the slab's underside and its top where the slab covers it.
       let top = -Infinity;
       for (let i = 0; i < pb.count; i++) top = Math.max(top, pb.getY(i));
@@ -1483,9 +1483,9 @@ describe("given a body style's H2 hardpoints", () => {
         const ys = ray.intersectObjects(slabs, false).map((h) => h.point.y);
         if (ys.length > 0 && !(Math.min(...ys) < pb.getY(i) && pb.getY(i) < Math.max(...ys))) outside.push(`(${pb.getX(i).toFixed(3)}, ${pb.getY(i).toFixed(4)}, ${pb.getZ(i).toFixed(3)}) slab ${ys.map((y) => y.toFixed(4)).join("/")}`);
       }
-      assert.ok(outside.length === 0, `side ${side}: gate post head vertices outside the slab's thickness: ${outside.join("; ")}`);
+      expect(outside.length, `side ${side}: gate post head vertices outside the slab's thickness: ${outside.join("; ")}`).toBe(0);
     }
-    assert.ok(gatePosts(CAR_STYLES.hatchback).length === 0, "the hatchback's gate carries a D-post share");
+    expect(gatePosts(CAR_STYLES.hatchback).length, "the hatchback's gate carries a D-post share").toBe(0);
   });
 
   it("when the wagon's rear glass top edge is read against the gate's slab and its flange, then every vertex of it is inside their thickness: no slit between the glass and the spoiler over its dome-fallen corners", () => {
@@ -1503,7 +1503,7 @@ describe("given a body style's H2 hardpoints", () => {
       const ys = ray.intersectObjects(slab, false).map((h) => h.point.y);
       if (!(ys.length > 0 && Math.min(...ys) < glass.getY(i) && glass.getY(i) < Math.max(...ys))) outside.push(`${glass.getX(i).toFixed(2)},${glass.getY(i).toFixed(3)} slab ${ys.map((y) => y.toFixed(3)).join("/")}`);
     }
-    assert.ok(outside.length === 0, `glass top vertices outside the slab: ${outside.join("; ")}`);
+    expect(outside.length, `glass top vertices outside the slab: ${outside.join("; ")}`).toBe(0);
   });
 
   it("when the pickup's cab back post fans its foot onto the shoulder (pillars.rearFoot), then no ray down between its rear glass's edge and the shoulder sees the cabin's floor through the opening beside the cab back, and the cage is unchanged", () => {
@@ -1527,11 +1527,11 @@ describe("given a body style's H2 hardpoints", () => {
       return floor;
     };
     const without: BodyStyle = { ...pickup, pillars: { ...pickup.pillars, rearFoot: undefined } };
-    assert.ok(seen(without) > 0, "the control: without the foot the opening shows");
+    expect(seen(without), "the control: without the foot the opening shows").toBeGreaterThan(0);
     const shown = seen(pickup);
-    assert.ok(shown === 0, `${shown} rays see the cabin's floor between the cab back and the shoulder`);
+    expect(shown, `${shown} rays see the cabin's floor between the cab back and the shoulder`).toBe(0);
     const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
-    assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(pickup, "cage")), "the cage moved with the drawn foot");
+    expect(bits(makeChassisGeometry(without, "cage")), "the cage moved with the drawn foot").toBe(bits(makeChassisGeometry(pickup, "cage")));
   });
 
   it("when the coupe's belt is read from its tail to the sail's foot (z -1.587 to -1.43), then it rises all the way: no crest under the sail's rear end, which drew a lit hump where the reference's sail meets the deck", () => {
@@ -1539,7 +1539,7 @@ describe("given a body style's H2 hardpoints", () => {
     let prev = -Infinity;
     for (let z = -1.587; z <= -1.43 + 1e-9; z += 0.005) {
       const y = sampleSlice(z, coupe.profile).yBelt;
-      assert.ok(y >= prev - 1e-6, `the belt falls to ${y.toFixed(4)} at z ${z.toFixed(3)} from ${prev.toFixed(4)}`);
+      expect(y, `the belt falls to ${y.toFixed(4)} at z ${z.toFixed(3)} from ${prev.toFixed(4)}`).toBeGreaterThanOrEqual(prev - 1e-6);
       prev = y;
     }
   });
@@ -1552,7 +1552,7 @@ describe("given a body style's H2 hardpoints", () => {
     const sail = makeGreenhouseFrame(coupe, "drawn").find((g) => g.name === "rear" && g.getAttribute("position").getX(0) > 0)!.getAttribute("position");
     let front = -Infinity;
     for (let i = 0; i < sail.count; i++) front = Math.max(front, sail.getZ(i));
-    assert.ok(back <= -0.975 && Math.abs(front + 0.666) <= 0.01, `the glass reaches z ${back.toFixed(3)}, the sail runs to z ${front.toFixed(3)}`);
+    expect(back <= -0.975 && Math.abs(front + 0.666) <= 0.01, `the glass reaches z ${back.toFixed(3)}, the sail runs to z ${front.toFixed(3)}`).toBeTruthy();
   });
 
   it("when the coupe's quarter window and the body behind it are read in the side view, then the glass's sill rises from the door's belt to the window's point and the shoulder behind it runs back no higher than that point: the reference's line, with no hump over the window", () => {
@@ -1569,7 +1569,7 @@ describe("given a body style's H2 hardpoints", () => {
     }
     let over = -Infinity;
     for (let z = -1.49; z <= tipZ; z += 0.005) over = Math.max(over, sampleSlice(z, coupe.profile).yBelt - tipY);
-    assert.ok(frontSill <= BELT_TOP && tipY >= POINT_LOW && over <= OVER_POINT, `sill ${frontSill.toFixed(3)} ahead of z -0.6, point ${tipY.toFixed(3)} at z ${tipZ.toFixed(3)}, shoulder ${(over * 1000).toFixed(0)} mm over it`);
+    expect(frontSill <= BELT_TOP && tipY >= POINT_LOW && over <= OVER_POINT, `sill ${frontSill.toFixed(3)} ahead of z -0.6, point ${tipY.toFixed(3)} at z ${tipZ.toFixed(3)}, shoulder ${(over * 1000).toFixed(0)} mm over it`).toBeTruthy();
   });
 
   it("when the coupe's drawn side is read at the tail, over the rear arch and at the quarter window's point, then its widest line (the haunch's crest) stands within 6 cm under the belt at the point and has risen at least 6 cm from the tail to it, not the default 10 cm under the belt", () => {
@@ -1591,8 +1591,8 @@ describe("given a body style's H2 hardpoints", () => {
     const [tail, point] = [ys[0]!, ys[2]!];
     const belt = beltY(coupe.quarter.zRearBot, coupe);
     const readings = zs.map((z, i) => `z ${z} y ${ys[i]!.toFixed(3)}`).join(", ");
-    assert.ok(belt - point <= CREST_UNDER_POINT, `the crest stands ${((belt - point) * 100).toFixed(1)} cm under the belt (${belt.toFixed(3)}) at the window's point, ${CREST_UNDER_POINT * 100} cm asked: ${readings}`);
-    assert.ok(point - tail >= CREST_RISE, `the crest rises ${((point - tail) * 100).toFixed(1)} cm from the tail to the window's point, ${CREST_RISE * 100} cm asked: ${readings}`);
+    expect(belt - point, `the crest stands ${((belt - point) * 100).toFixed(1)} cm under the belt (${belt.toFixed(3)}) at the window's point, ${CREST_UNDER_POINT * 100} cm asked: ${readings}`).toBeLessThanOrEqual(CREST_UNDER_POINT);
+    expect(point - tail, `the crest rises ${((point - tail) * 100).toFixed(1)} cm from the tail to the window's point, ${CREST_RISE * 100} cm asked: ${readings}`).toBeGreaterThanOrEqual(CREST_RISE);
   });
 
   it("when the coupe's door is drawn, then its skin is flush with the body side inside its cut (door.proud 0), not a lit 3 mm step at the shut line", () => {
@@ -1608,8 +1608,8 @@ describe("given a body style's H2 hardpoints", () => {
       const hit = new THREE.Raycaster(new THREE.Vector3(2, y, z), new THREE.Vector3(-1, 0, 0)).intersectObject(door)[0]!;
       return hit.point.x - drawnSideX(z, y, s);
     };
-    assert.ok(Math.abs(proudOf(coupe)) <= FLUSH, `the door skin stands ${(proudOf(coupe) * 1000).toFixed(1)} mm off the body side`);
-    assert.ok(proudOf({ ...coupe, door: { ...coupe.door, proud: undefined } }) > FLUSH, "the control: the platform's skin stands proud");
+    expect(Math.abs(proudOf(coupe)), `the door skin stands ${(proudOf(coupe) * 1000).toFixed(1)} mm off the body side`).toBeLessThanOrEqual(FLUSH);
+    expect(proudOf({ ...coupe, door: { ...coupe.door, proud: undefined } }), "the control: the platform's skin stands proud").toBeGreaterThan(FLUSH);
   });
 
   it("when the coupe's flush door's skin is read at its lower corners beside the body's door-cut ramps, then the skin stands clear of the ramp (no coplanar skin to z-fight)", (t) => {
@@ -1634,11 +1634,11 @@ describe("given a body style's H2 hardpoints", () => {
     };
     const stock = clearances(coupe);
     for (const { z, y, clear } of stock) t.annotate(`ramp clear z=${z.toFixed(3)} y=${y.toFixed(2)} mm=${(clear * 1000).toFixed(2)}`);
-    assert.ok(stock.length > 0, "the door's skin and the body are met at the cut's ends");
+    expect(stock.length, "the door's skin and the body are met at the cut's ends").toBeGreaterThan(0);
     const control = clearances({ ...coupe, door: { ...coupe.door, lowProud: undefined } });
     for (const { z, y, clear } of control) t.annotate(`control ramp clear z=${z.toFixed(3)} y=${y.toFixed(2)} mm=${(clear * 1000).toFixed(2)}`);
-    for (const { z, y, clear } of stock) assert.ok(clear >= MIN_CLEAR, `the skin stands ${(clear * 1000).toFixed(2)} mm off the ramp at z ${z.toFixed(3)} y ${y}, ${MIN_CLEAR * 1000} mm asked`);
-    assert.ok(Math.min(...control.map((r) => r.clear)) < MIN_CLEAR, "the control: without lowProud the skin lies within the ramp's z-fight band");
+    for (const { z, y, clear } of stock) expect(clear, `the skin stands ${(clear * 1000).toFixed(2)} mm off the ramp at z ${z.toFixed(3)} y ${y}, ${MIN_CLEAR * 1000} mm asked`).toBeGreaterThanOrEqual(MIN_CLEAR);
+    expect(Math.min(...control.map((r) => r.clear)), "the control: without lowProud the skin lies within the ramp's z-fight band").toBeLessThan(MIN_CLEAR);
   });
 
   it("when a lowProud door's chrome strips are read at their own ends and 2 cm in, then the stand they lose toward the end is the drawn door face's own within 1 mm (the face's stand tapers to nothing at its cut ends), not the full stand held to it", () => {
@@ -1658,7 +1658,7 @@ describe("given a body style's H2 hardpoints", () => {
       const stand = doorSkinStand(style);
       const faceStand = (z: number, y: number) => {
         const hit = bodyHit(door, [2, y, z], [-1, 0, 0], 3);
-        assert.ok(hit, `${id}: the drawn door face is met at z ${z.toFixed(3)} y ${y}`);
+        must(hit, `${id}: the drawn door face is met at z ${z.toFixed(3)} y ${y}`);
         return hit.x - drawnSideX(z, y, style);
       };
       const riding = (style.chromeStrips ?? []).filter((strip) => strip.points.every(([z]) => z >= aperture[0] && z <= aperture[1]));
@@ -1667,14 +1667,14 @@ describe("given a body style's H2 hardpoints", () => {
         for (const [[zEnd, y], [zOther]] of [[first, last], [last, first]] as const) {
           const zIn = zEnd + Math.sign(zOther - zEnd) * FULL_IN;
           const [stripDrop, faceDrop] = [stand(zIn, y) - stand(zEnd, y), faceStand(zIn, y) - faceStand(zEnd, y)];
-          assert.ok(Math.abs(stripDrop - faceDrop) <= AGREE, `${id}: from z ${zIn.toFixed(3)} to the strip's end z ${zEnd.toFixed(3)} at y ${y}, the strip's stand falls ${(stripDrop * 1000).toFixed(2)} mm, the drawn door face's ${(faceDrop * 1000).toFixed(2)} mm`);
+          expect(Math.abs(stripDrop - faceDrop), `${id}: from z ${zIn.toFixed(3)} to the strip's end z ${zEnd.toFixed(3)} at y ${y}, the strip's stand falls ${(stripDrop * 1000).toFixed(2)} mm, the drawn door face's ${(faceDrop * 1000).toFixed(2)} mm`).toBeLessThanOrEqual(AGREE);
           fullest = Math.max(fullest, stand(zIn, y));
           reads++;
         }
       }
     }
-    assert.ok(reads > 0, "a lowProud door's chrome strips are read");
-    assert.ok(fullest > AGREE, `the fullest strip stand 2 cm in is ${(fullest * 1000).toFixed(2)} mm, ${AGREE * 1000} mm asked: no taper to read`);
+    expect(reads, "a lowProud door's chrome strips are read").toBeGreaterThan(0);
+    expect(fullest, `the fullest strip stand 2 cm in is ${(fullest * 1000).toFixed(2)} mm, ${AGREE * 1000} mm asked: no taper to read`).toBeGreaterThan(AGREE);
   });
 
   it("when the coupe's drawn A-post is seated on its deck (pillars.aSeat), then no level ray in from the side between the fender's top and the belt under the post's foot sees into the cabin, and the cage is unchanged", () => {
@@ -1697,10 +1697,10 @@ describe("given a body style's H2 hardpoints", () => {
       return cabin;
     };
     const without: BodyStyle = { ...coupe, pillars: { ...coupe.pillars, aSeat: undefined } };
-    assert.ok(seen(without) > 0, "the control: without the seat the gap under the foot shows the cabin");
-    assert.ok(seen(coupe) === 0, `${seen(coupe)} level rays under the A-post's foot see into the cabin`);
+    expect(seen(without), "the control: without the seat the gap under the foot shows the cabin").toBeGreaterThan(0);
+    expect(seen(coupe), `${seen(coupe)} level rays under the A-post's foot see into the cabin`).toBe(0);
     const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
-    assert.ok(bits(makeChassisGeometry(without, "cage")) === bits(makeChassisGeometry(coupe, "cage")), "the cage moved with the drawn seat");
+    expect(bits(makeChassisGeometry(without, "cage")), "the cage moved with the drawn seat").toBe(bits(makeChassisGeometry(coupe, "cage")));
   });
 
   it("when the coupe's body is drawn (door.shutCrease), then at each end of its door cut the side's shoulder and feature line keep the panel's own normal up to the shut line, not rolled off by the cut's ramp into a round cap", () => {
@@ -1720,8 +1720,8 @@ describe("given a body style's H2 hardpoints", () => {
         return SIDE.map((j) => THREE.MathUtils.radToDeg(new THREE.Vector3().fromBufferAttribute(normal, at * ring + ring - 1 - j).angleTo(new THREE.Vector3().fromBufferAttribute(normal, panel * ring + ring - 1 - j))));
       });
     };
-    assert.ok(Math.max(...turns({ ...coupe, door: { ...coupe.door, shutCrease: undefined } })) > PANEL_TURN, "the control: without the crease the ramp rolls the panel's end off");
-    assert.ok(Math.max(...turns(coupe)) <= PANEL_TURN, `the panel's end turns ${turns(coupe).map((t) => t.toFixed(1)).join(", ")}° off its next ring`);
+    expect(Math.max(...turns({ ...coupe, door: { ...coupe.door, shutCrease: undefined } })), "the control: without the crease the ramp rolls the panel's end off").toBeGreaterThan(PANEL_TURN);
+    expect(Math.max(...turns(coupe)), `the panel's end turns ${turns(coupe).map((t) => t.toFixed(1)).join(", ")}° off its next ring`).toBeLessThanOrEqual(PANEL_TURN);
   });
 
   /** A post section's outer face in ring points (`postSection`: three chords a corner, then the crown's three points): its edges and the chords off them. */
@@ -1746,11 +1746,11 @@ describe("given a body style's H2 hardpoints", () => {
   it("when a style sets `pillars.aCrown`, then the turn across its drawn A-post's outer face is that of a face crowned that share of its width (the plank's 15-20°, the default's 25° and over, the pickup's .25 at 40° and over)", () => {
     const pickup = CAR_STYLES.pickup;
     const plain: BodyStyle = { ...pickup, pillars: { ...pickup.pillars, aCrown: undefined } };
-    assert.ok(pickup.pillars?.aCrown === 0.25, "the pickup sets aCrown .25");
+    expect(pickup.pillars?.aCrown, "the pickup sets aCrown .25").toBe(0.25);
     const [rounder, base] = [faceTurns(pickup), faceTurns(plain)];
-    assert.ok(base.length > 0 && rounder.length > 0, `${base.length} / ${rounder.length} stations 10 cm wide under the roof`);
-    assert.ok(Math.min(...base) < 40, `the control: the default crown turns ${Math.min(...base).toFixed(1)}° at its flattest station`);
-    assert.ok(Math.min(...rounder) >= 40, `the pickup's A-post turns ${Math.min(...rounder).toFixed(1)}° at its flattest station`);
+    expect(base.length > 0 && rounder.length > 0, `${base.length} / ${rounder.length} stations 10 cm wide under the roof`).toBeTruthy();
+    expect(Math.min(...base), `the control: the default crown turns ${Math.min(...base).toFixed(1)}° at its flattest station`).toBeLessThan(40);
+    expect(Math.min(...rounder), `the pickup's A-post turns ${Math.min(...rounder).toFixed(1)}° at its flattest station`).toBeGreaterThanOrEqual(40);
   });
 
   it("when a drawn A-post 10 cm wide or more is read at a station under the roof, then its outer face turns 25° or more across its width, outboard on both sides: a curved post from the side glass to the windshield, not a flat plank (the plank turned 15-20°)", () => {
@@ -1769,20 +1769,20 @@ describe("given a body style's H2 hardpoints", () => {
           read++;
           const centre = points.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(ring);
           const mid = a.clone().add(b).multiplyScalar(0.5);
-          assert.ok(Math.abs(mid.x) > Math.abs(centre.x), `${id} station ${slice}: the crowned face stands inboard of the post's centre (x ${mid.x} vs ${centre.x})`);
+          expect(Math.abs(mid.x), `${id} station ${slice}: the crowned face stands inboard of the post's centre (x ${mid.x} vs ${centre.x})`).toBeGreaterThan(Math.abs(centre.x));
           const turn = at(FACE.next[0]).sub(a).angleTo(b.clone().sub(at(FACE.next[1])));
-          assert.ok(turn >= THREE.MathUtils.degToRad(25), `${id} station ${slice}: the outer face turns ${THREE.MathUtils.radToDeg(turn).toFixed(1)}° across ${(a.distanceTo(b) * 1000).toFixed(0)} mm`);
+          expect(turn, `${id} station ${slice}: the outer face turns ${THREE.MathUtils.radToDeg(turn).toFixed(1)}° across ${(a.distanceTo(b) * 1000).toFixed(0)} mm`).toBeGreaterThanOrEqual(THREE.MathUtils.degToRad(25));
         }
       }
     }
-    assert.ok(read > 0, "no A-post station 10 cm wide under the roof");
+    expect(read, "no A-post station 10 cm wide under the roof").toBeGreaterThan(0);
   });
 
   it("when a style's door glass starts further back than the A-post's width, then a sail fills the gap from the post to the glass at the belt", () => {
     const sedan = CAR_STYLES.sedan;
     const moved: BodyStyle = { ...sedan, aPillarFoot: sedan.windshield.base[1] - 0.4 };
     const [post, sail] = aPillarParts(moved);
-    assert.ok(sail !== undefined, "the sail is drawn");
+    expect(sail, "the sail is drawn").not.toBe(undefined);
     const belt = beltY(moved.aPillarFoot, moved);
     const lowZ = (g: THREE.BufferGeometry) => {
       const pos = g.getAttribute("position") as THREE.BufferAttribute;
@@ -1801,14 +1801,14 @@ describe("given a body style's H2 hardpoints", () => {
     const knee = beltY(gap.aPillarFoot, gap) + 0.1;
     const kneed: BodyStyle = { ...gap, aPillarKnee: knee };
     const top = (g: THREE.BufferGeometry) => partBox(g).max.y;
-    assert.ok(top(aPillarParts(gap)[1]!) > knee + 0.1, "the control: without a knee the sail runs up the post");
-    assert.ok(Math.abs(top(aPillarParts(kneed)[1]!) - knee) < 1e-5, `the sail tops out at the knee ${knee}: ${top(aPillarParts(kneed)[1]!)}`);
+    expect(top(aPillarParts(gap)[1]!), "the control: without a knee the sail runs up the post").toBeGreaterThan(knee + 0.1);
+    expect(Math.abs(top(aPillarParts(kneed)[1]!) - knee), `the sail tops out at the knee ${knee}: ${top(aPillarParts(kneed)[1]!)}`).toBeLessThan(1e-5);
     const pane = makeSideGlass(1, kneed);
     const pos = pane.getAttribute("position") as THREE.BufferAttribute;
     const { hingeY, hingeZ } = kneed.door;
     let front = -Infinity;
     for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) + hingeY + DOOR_GLASS_SEAT.y - knee) < 1e-5) front = Math.max(front, pos.getZ(i) + hingeZ + DOOR_GLASS_SEAT.z);
-    assert.ok(Math.abs(front - (aPostRearZ(knee, kneed) + 0.01)) < 1e-5, `the door glass's front edge at the knee stands at z ${front}, 1 cm under the post's rear edge ${aPostRearZ(knee, kneed)}`);
+    expect(Math.abs(front - (aPostRearZ(knee, kneed) + 0.01)), `the door glass's front edge at the knee stands at z ${front}, 1 cm under the post's rear edge ${aPostRearZ(knee, kneed)}`).toBeLessThan(1e-5);
   });
 
   it("when a style with no knee sets `aPillarSailGlass`, then no level ray in from the side, 5 mm ahead of the door glass's front edge, passes its drawn sail to the far side: the sail's rear edge follows the glass's straight front edge up to its top, not one chord from its middle to the post's top over a see-through wedge", () => {
@@ -1816,7 +1816,7 @@ describe("given a body style's H2 hardpoints", () => {
     const stock = CAR_STYLES.sedan;
     const sedan = drawnStyle(stock);
     const control = drawnStyle({ ...stock, drawn: { ...stock.drawn, aPillarSailGlass: undefined, aPillarOneLoft: undefined } });
-    assert.ok(sedan.aPillarKnee === undefined && sedan.aPillarSailGlass === true && control.aPillarSailGlass === undefined, "the drawn sedan sets the field over a kneeless glass; the control does not");
+    expect(sedan.aPillarKnee === undefined && sedan.aPillarSailGlass === true && control.aPillarSailGlass === undefined, "the drawn sedan sets the field over a kneeless glass; the control does not").toBeTruthy();
     const footY = beltY(sedan.aPillarFoot, sedan);
     const glassTop = glassTopY(aPillarTopZ(sedan), sedan);
     // The contour tool's pillar cuts (`PILLAR_AT` of the side glass's height, the belt up to the quarter glass's cant top).
@@ -1835,14 +1835,14 @@ describe("given a body style's H2 hardpoints", () => {
       const y = footY + share * (topY - footY);
       const z = doorGlassFrontZ(y, footY, glassTop, sedan) + 0.005;
       const [now, was] = [firstX(sailed, y, z), firstX(plain, y, z)];
-      assert.ok(now !== null && now > 0.3, `${share} of the glass (y ${y.toFixed(3)}, z ${z.toFixed(3)}): the ray's first hit is at x ${now}, not on the near side`);
-      assert.ok(was === null || was < 0.3, `the control, ${share} of the glass (y ${y.toFixed(3)}): the ray first hits at x ${was}, so there is no wedge to see through`);
+      expect(now !== null && now > 0.3, `${share} of the glass (y ${y.toFixed(3)}, z ${z.toFixed(3)}): the ray's first hit is at x ${now}, not on the near side`).toBeTruthy();
+      expect(was === null || was < 0.3, `the control, ${share} of the glass (y ${y.toFixed(3)}): the ray first hits at x ${was}, so there is no wedge to see through`).toBeTruthy();
     }
   });
 
   it("when the sedan and the police are drawn, then no ray in from outside slips between the A-pillar and the windshield or the door glass: every horizontal ray at the A-pillar's heights, fanned from the windshield's middle back past the door glass's front edge, first meets the near side's skin or glass", () => {
     const off = (["sedan", "police"] as const).flatMap((id) => aPillarLeaks(cars[id], drawnStyle(CAR_STYLES[id])).map((line) => `${id} ${line}`));
-    assert.ok(off.length === 0, off.join("; "));
+    expect(off.length, off.join("; ")).toBe(0);
   });
 
   it("when a style blacks out greenhouse parts, then exactly their drawn vertices turn gloss black, and the drawn shape and the cage are unchanged", () => {
@@ -1859,18 +1859,18 @@ describe("given a body style's H2 hardpoints", () => {
       if (primer(now).getX(i) === primer(was).getX(i)) continue;
       turned++;
       const z = now.getAttribute("position").getZ(i);
-      assert.ok(onBand(z), `vertex ${i} at z ${z} turned dark: off the B-pillar and divider bands ${JSON.stringify(bands)}`);
-      assert.ok(primer(now).getX(i) === BLACKOUT, `vertex ${i} turned to ${primer(now).getX(i)}: blacked-out pillars are gloss black (BLACKOUT), not bare-steel primer`);
+      expect(onBand(z), `vertex ${i} at z ${z} turned dark: off the B-pillar and divider bands ${JSON.stringify(bands)}`).toBeTruthy();
+      expect(primer(now).getX(i), `vertex ${i} turned to ${primer(now).getX(i)}: blacked-out pillars are gloss black (BLACKOUT), not bare-steel primer`).toBe(BLACKOUT);
     }
     const pillars = makeGreenhouseFrame(dark, "drawn").filter((g) => g.userData.blackout === true);
-    assert.equal(pillars.length, 4, "two B-pillars and two dividers");
-    assert.equal(turned, pillars.reduce((n, g) => n + g.getAttribute("position").count, 0), "every vertex of them, no other");
+    expect(pillars.length, "two B-pillars and two dividers").toBe(4);
+    expect(turned, "every vertex of them, no other").toBe(pillars.reduce((n, g) => n + g.getAttribute("position").count, 0));
     const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
-    assert.ok(bits(now) === bits(was), "the drawn body's shape is unchanged");
-    assert.ok(bits(makeChassisGeometry(dark, "cage")) === bits(makeChassisGeometry(wagon, "cage")), "the cage is unchanged");
+    expect(bits(now), "the drawn body's shape is unchanged").toBe(bits(was));
+    expect(bits(makeChassisGeometry(dark, "cage")), "the cage is unchanged").toBe(bits(makeChassisGeometry(wagon, "cage")));
     const sailed: BodyStyle = { ...wagon, aPillarFoot: wagon.windshield.base[1] - 0.4, blackout: { a: true, sail: true, rear: true } };
     const names = makeGreenhouseFrame(sailed, "drawn").filter((g) => g.userData.blackout === true).map((g) => g.name || "rear");
-    assert.ok(names.join(",") === "a,rear,sail,a,rear,sail", `A-posts, rear pillars and sails dark: ${names.join(",")}`);
+    expect(names.join(","), `A-posts, rear pillars and sails dark: ${names.join(",")}`).toBe("a,rear,sail,a,rear,sail");
   });
 
   it("when a style's rear pillar is matte, then exactly the gloss-black rear pillar's vertices turn matte black, and the drawn shape is unchanged", () => {
@@ -1883,12 +1883,12 @@ describe("given a body style's H2 hardpoints", () => {
     for (let i = 0; i < primer(now).count; i++) {
       if (primer(now).getX(i) === primer(was).getX(i)) continue;
       turned++;
-      assert.ok(primer(was).getX(i) === BLACKOUT && primer(now).getX(i) === MATTE_BLACKOUT, `vertex ${i}: ${primer(was).getX(i)} → ${primer(now).getX(i)}`);
+      expect(primer(was).getX(i) === BLACKOUT && primer(now).getX(i) === MATTE_BLACKOUT, `vertex ${i}: ${primer(was).getX(i)} → ${primer(now).getX(i)}`).toBeTruthy();
     }
     const rear = makeGreenhouseFrame(matte, "drawn").filter((g) => g.userData.matte === true);
-    assert.ok(rear.length === 2 && turned === rear.reduce((n, g) => n + g.getAttribute("position").count, 0), `${rear.length} matte pillars, ${turned} vertices turned`);
+    expect(rear.length === 2 && turned === rear.reduce((n, g) => n + g.getAttribute("position").count, 0), `${rear.length} matte pillars, ${turned} vertices turned`).toBeTruthy();
     const bits = (g: THREE.BufferGeometry) => createHash("sha256").update(new Uint8Array((g.getAttribute("position").array as Float32Array).buffer)).digest("hex");
-    assert.ok(bits(now) === bits(was), "the drawn body's shape is unchanged");
+    expect(bits(now), "the drawn body's shape is unchanged").toBe(bits(was));
   });
 
   it("when a style blacks out its cowl, then the deck's crown from 5 cm under the windshield's foot to 5 cm under the hood's rear edge turns primer-dark, and nothing else does", () => {
@@ -1905,9 +1905,9 @@ describe("given a body style's H2 hardpoints", () => {
       turned++;
       const z = now.getAttribute("position").getZ(v);
       const onCrown = v < ring * slices && (v % ring === 0 || v % ring === ring - 1);
-      assert.ok(onCrown && z >= from - 1e-6 && z <= to + 1e-6 && primer(now).getX(v) === BLACKOUT, `vertex ${v} (ring point ${v % ring}) at z ${z} turned to ${primer(now).getX(v)}: off the cowl's crown [${from}, ${to}]`);
+      expect(onCrown && z >= from - 1e-6 && z <= to + 1e-6 && primer(now).getX(v) === BLACKOUT, `vertex ${v} (ring point ${v % ring}) at z ${z} turned to ${primer(now).getX(v)}: off the cowl's crown [${from}, ${to}]`).toBeTruthy();
     }
-    assert.ok(turned >= 4, `the cowl's crown on both sides at two slices at least: ${turned} vertices turned`);
+    expect(turned, `the cowl's crown on both sides at two slices at least: ${turned} vertices turned`).toBeGreaterThanOrEqual(4);
   });
 
   it("when a style leans its B-pillar and its divider, then the drawn pillars take their bands at the belt and the top, the side panes tuck under the B-pillar's edges, and the cage keeps its bands", () => {
@@ -1934,7 +1934,7 @@ describe("given a body style's H2 hardpoints", () => {
     const c = glassCorners(moved);
     assertSameNumbers([c[3 * 12 + 2]!, c[3 * 12 + 6 + 2]!, c[5 * 12 + 3 + 2]!, c[5 * 12 + 9 + 2]!], [bz + 0.11, bz + 0.04, bz - 0.04, bz - 0.04], "door glass rear and quarter glass front edges, 1 cm under the B-pillar's edges at the belt and the top (z)", 1e-5);
     const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join("|");
-    assert.ok(cage(moved) === cage(wagon), "the cage greenhouse is unchanged");
+    expect(cage(moved), "the cage greenhouse is unchanged").toBe(cage(wagon));
   });
 
   it("when every style's drawn belt rail is read, then it runs along the quarter glass's belt edge on the glass plane, flush: its top covers the edge at every glass column and stands at most 5 mm over it, no vertex more than 1 cm out of it", () => {
@@ -1960,7 +1960,7 @@ describe("given a body style's H2 hardpoints", () => {
         const [x, y] = sillAt(z);
         const [out, over] = [Math.abs(pos.getX(i)) - x, pos.getY(i) - y];
         // 1 mm over the lip for the inner face, carried a few mm along the sill where its depth runs square to a sill turning in.
-        assert.ok(out <= RAIL_PROUD + 1e-6 && over <= RAIL_LIP + 1e-3, `${id} rail vertex ${i} at z ${z.toFixed(3)}: ${(out * 100).toFixed(1)} cm out of the glass's edge, ${(over * 100).toFixed(1)} cm over it`);
+        expect(out <= RAIL_PROUD + 1e-6 && over <= RAIL_LIP + 1e-3, `${id} rail vertex ${i} at z ${z.toFixed(3)}: ${(out * 100).toFixed(1)} cm out of the glass's edge, ${(over * 100).toFixed(1)} cm over it`).toBeTruthy();
       }
       // Each ring's top (its lip on the glass plane) at its station, the z of its outer face: where the sill tapers in plan, the top's
       // fillet vertices stand a few mm along the rail from it. The rail's top line, read at every glass column.
@@ -1977,7 +1977,7 @@ describe("given a body style's H2 hardpoints", () => {
         const k = Math.max(tops.findIndex(([tz]) => tz >= z - 1e-6), 1);
         const [[z0, y0], [z1, y1]] = [tops[k - 1]!, tops[k]!];
         const over = lerp(y0, y1, (z - z0) / (z1 - z0)) - y;
-        assert.ok(over >= -1e-4 && over <= RAIL_LIP + 1e-4, `${id} rail top at the glass's column z ${z.toFixed(3)}: ${(over * 1000).toFixed(1)} mm over its edge`);
+        expect(over >= -1e-4 && over <= RAIL_LIP + 1e-4, `${id} rail top at the glass's column z ${z.toFixed(3)}: ${(over * 1000).toFixed(1)} mm over its edge`).toBeTruthy();
       }
     }
   });
@@ -2004,8 +2004,8 @@ describe("given a body style's H2 hardpoints", () => {
       return cabin;
     };
     const without: BodyStyle = { ...sedan, cPillar: { ...sedan.cPillar, railRun: undefined } };
-    assert.ok(seen(without) > 0, "the control: without the run-on the slit behind the window's point shows the cabin");
-    assert.ok(seen(sedan) === 0, `${seen(sedan)} level rays behind the window's point see into the cabin`);
+    expect(seen(without), "the control: without the run-on the slit behind the window's point shows the cabin").toBeGreaterThan(0);
+    expect(seen(sedan), `${seen(sedan)} level rays behind the window's point see into the cabin`).toBe(0);
   });
 
   it("when the side glass drops less under the roof, then the glass top, the roof's side lip and the pillar tops rise with it", () => {
@@ -2028,12 +2028,12 @@ describe("given a body style's H2 hardpoints", () => {
     const corners = glassCorners(moved);
     assertSameNumbers([corners[5 * 12 + 6 + 1]!, corners[3 * 12 + 9 + 1]!], [yRear, yFront], "quarter glass rear top y, door glass front top y", 1e-5);
     const [drawn, stock] = [makeGreenhouseFrame(moved, "drawn"), makeGreenhouseFrame(hatch, "drawn")];
-    assert.equal(drawn.length - stock.length, 2, "one fill a side");
+    expect(drawn.length - stock.length, "one fill a side").toBe(2);
     const fill = partBox(drawn[drawn.length - 1]!);
     const low = Math.min(yRear, yFront);
-    assert.ok(Math.abs(fill.min.y - low) < 1e-4 && fill.max.y > glassTopY(zFront, hatch) - 1e-4, `right fill spans y ${fill.min.y}..${fill.max.y}: from the glass top's low end ${low} up to the cant line`);
+    expect(Math.abs(fill.min.y - low) < 1e-4 && fill.max.y > glassTopY(zFront, hatch) - 1e-4, `right fill spans y ${fill.min.y}..${fill.max.y}: from the glass top's low end ${low} up to the cant line`).toBeTruthy();
     const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join("|");
-    assert.ok(cage(moved) === cage(hatch), "the cage greenhouse is unchanged");
+    expect(cage(moved), "the cage greenhouse is unchanged").toBe(cage(hatch));
   });
 
   it("when a style seats its cameras, then its hood eye stands over its drawn bonnet and ahead of its windshield base", () => {
@@ -2042,7 +2042,7 @@ describe("given a body style's H2 hardpoints", () => {
       if (style.camera === undefined && id !== "sedan") continue;
       const [y, z] = (style.camera ?? PLATFORM_CAMERA).hood;
       const bonnet = topAt(id, z);
-      assert.ok(y > bonnet + 0.05 && z > style.windshield.base[1], `${id}: hood eye y ${y} z ${z}: the drawn top there is ${bonnet.toFixed(3)} (5 cm under the eye at most), the windshield base at z ${style.windshield.base[1]}`);
+      expect(y > bonnet + 0.05 && z > style.windshield.base[1], `${id}: hood eye y ${y} z ${z}: the drawn top there is ${bonnet.toFixed(3)} (5 cm under the eye at most), the windshield base at z ${style.windshield.base[1]}`).toBeTruthy();
     }
   });
 
@@ -2057,7 +2057,7 @@ describe("given a body style's H2 hardpoints", () => {
       for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i) - moved.quarter.zRearBot) < 0.01 && pos.getX(i) > 0) footX = Math.max(footX, pos.getX(i));
     }
     // The belt rail's rear end stands 1.5 cm outboard of the sill and is 3 cm thick.
-    assert.ok(footX > 0.65 && footX < 0.66 + 0.031, `C-pillar foot and belt rail at the quarter's rear z ${moved.quarter.zRearBot} stand out to x ${footX}, sill there 0.66`);
+    expect(footX > 0.65 && footX < 0.66 + 0.031, `C-pillar foot and belt rail at the quarter's rear z ${moved.quarter.zRearBot} stand out to x ${footX}, sill there 0.66`).toBeTruthy();
   });
 
   it("when the tailgate's bottom edge leans out, then its foot moves with it and its hinge edge stays put", () => {
@@ -2067,8 +2067,8 @@ describe("given a body style's H2 hardpoints", () => {
     const [was, now] = [makeTrunkGeometry(upright), makeTrunkGeometry(moved)];
     const foot = edgeMeanZ(now, false) - edgeMeanZ(was, false);
     const hinge = edgeMeanZ(now, true) - edgeMeanZ(was, true);
-    assert.ok(Math.abs(foot + 0.2) < 0.01, `lowest vertices moved ${foot} m in z, -0.2 asked`);
-    assert.ok(Math.abs(hinge) < 0.005, `highest vertices moved ${hinge} m in z, 0 asked`);
+    expect(Math.abs(foot + 0.2), `lowest vertices moved ${foot} m in z, -0.2 asked`).toBeLessThan(0.01);
+    expect(Math.abs(hinge), `highest vertices moved ${hinge} m in z, 0 asked`).toBeLessThan(0.005);
   });
 
   it("when a bumper's wrap starts nearer the middle, then its corners sweep back from its face", () => {
@@ -2076,14 +2076,14 @@ describe("given a body style's H2 hardpoints", () => {
     // Inside the narrowest nose's half-width, where the platform wrap (from 0.58) leaves the face flat.
     const gap = (style: BodyStyle) => bumperReachAt(makeBumperGeometry(true, style), 0, 0.05) - bumperReachAt(makeBumperGeometry(true, style), 0.35, 0.45);
     const [movedGap, sedanGap] = [gap(moved), gap(sedan)];
-    assert.ok(movedGap - sedanGap >= 0.02, `moved bumper's corner at |x| 0.35-0.45 stands ${movedGap} m behind its middle, the platform wrap's ${sedanGap}: at least 0.02 more`);
-    assert.ok(Math.abs(sedanGap) < 0.01, `platform-wrap bumper's corner at |x| 0.35-0.45 stands ${sedanGap} m behind its middle, under 0.01`);
+    expect(movedGap - sedanGap, `moved bumper's corner at |x| 0.35-0.45 stands ${movedGap} m behind its middle, the platform wrap's ${sedanGap}: at least 0.02 more`).toBeGreaterThanOrEqual(0.02);
+    expect(Math.abs(sedanGap), `platform-wrap bumper's corner at |x| 0.35-0.45 stands ${sedanGap} m behind its middle, under 0.01`).toBeLessThan(0.01);
   });
 
   it("when a bumper has lofted ends, then each runs on along the body side to `back`, its face `stand` off the skin there, where the plain wrap of the same bumper stays inside the skin", () => {
     const coupe = CAR_STYLES.coupe;
     const { front } = coupe.bumpers;
-    assert.ok(front.wrap.end, "the control: the coupe's front bumper has lofted ends");
+    must(front.wrap.end, "the control: the coupe's front bumper has lofted ends");
     const plain: BodyStyle = { ...coupe, bumpers: { ...coupe.bumpers, front: { ...front, wrap: { from: front.wrap.from, back: front.wrap.back } } } };
     // The bumper's rearmost z (car frame), and how far its rearmost ring's outermost point stands past the body side at its height (m).
     const endOf = (style: BodyStyle) => {
@@ -2101,9 +2101,9 @@ describe("given a body style's H2 hardpoints", () => {
     };
     const [lofted, wrapped] = [endOf(coupe), endOf(plain)];
     const faceZ = front.seat.z + Math.max(...front.fascia.map(([, out]) => out));
-    assert.ok(Math.abs(faceZ - lofted.rear - front.wrap.back) < 0.001, `the lofted end runs ${faceZ - lofted.rear} m back from the face, ${front.wrap.back} asked`);
-    assert.ok(lofted.stand >= front.wrap.end.stand - 0.001, `the lofted end stands ${lofted.stand} m off the skin, ${front.wrap.end.stand} asked`);
-    assert.ok(wrapped.stand <= 0, `the plain wrap's end stands ${wrapped.stand} m off the skin: held inside it`);
+    expect(Math.abs(faceZ - lofted.rear - front.wrap.back), `the lofted end runs ${faceZ - lofted.rear} m back from the face, ${front.wrap.back} asked`).toBeLessThan(0.001);
+    expect(lofted.stand, `the lofted end stands ${lofted.stand} m off the skin, ${front.wrap.end.stand} asked`).toBeGreaterThanOrEqual(front.wrap.end.stand - 0.001);
+    expect(wrapped.stand, `the plain wrap's end stands ${wrapped.stand} m off the skin: held inside it`).toBeLessThanOrEqual(0);
   });
 
   it("when the coupe's rear chrome bar is read round its corner, then its section keeps its full depth (no thinned corner) and the corner turns on a radius of at least 12 cm in plan", (t) => {
@@ -2117,7 +2117,7 @@ describe("given a body style's H2 hardpoints", () => {
     const TIGHT_CORNER = 0.05;
     const read = (style: BodyStyle) => {
       const { fascia, wrap } = style.bumpers.rear;
-      assert.ok(wrap.end, "the rear bar has lofted ends");
+      must(wrap.end, "the rear bar has lofted ends");
       const bar = makeBumperGeometry(false, style);
       const { ring, slices } = bar.userData.loft as { ring: number; slices: number };
       const pos = bar.getAttribute("position");
@@ -2132,7 +2132,7 @@ describe("given a body style's H2 hardpoints", () => {
       };
       const outs = fascia.map(([, out]) => out);
       const faceDepth = depthAt(mid);
-      assert.ok(Math.abs(faceDepth - (Math.max(...outs) - Math.min(...outs))) < NOISE, `the face ring reads ${faceDepth} m deep, the fascia's section ${Math.max(...outs) - Math.min(...outs)} m`);
+      expect(Math.abs(faceDepth - (Math.max(...outs) - Math.min(...outs))), `the face ring reads ${faceDepth} m deep, the fascia's section ${Math.max(...outs) - Math.min(...outs)} m`).toBeLessThan(NOISE);
       const rings = Array.from({ length: slices - mid }, (_, k) => mid + k);
       const shares = rings.map((r) => depthAt(r) / faceDepth);
       // The outline: each ring's outer-face vertex, as |x| and d back from the face.
@@ -2141,7 +2141,7 @@ describe("given a body style's H2 hardpoints", () => {
       const outline = rings.map((r) => ({ x: Math.abs(pos.getX(r * ring + outer)), d: Math.abs(pos.getZ(r * ring + outer) - faceZ) }));
       const b = wrap.end.corner;
       const turn = outline.find((p) => p.d >= b - NOISE);
-      assert.ok(turn, `no ring of the outline reaches the corner's ${b} m depth`);
+      must(turn, `no ring of the outline reaches the corner's ${b} m depth`);
       const a = turn.x - wrap.from;
       // The corner is a quarter-ellipse a out by b back: its tightest radius is at the end of its longer axis.
       return { shares, a, b, radius: Math.min((b * b) / a, (a * a) / b) };
@@ -2150,18 +2150,18 @@ describe("given a body style's H2 hardpoints", () => {
     const { shares, a, b, radius } = read(coupe);
     t.annotate(`rear bar depth share by ring from the face: ${shares.map((s) => s.toFixed(2)).join(" ")}`);
     t.annotate(`rear bar corner ${(a * 1000).toFixed(0)} mm out by ${(b * 1000).toFixed(0)} mm back: plan radius ${(radius * 1000).toFixed(0)} mm`);
-    assert.ok(Math.min(...shares) >= FULL_DEPTH, `the section thins to ${(Math.min(...shares) * 100).toFixed(0)}% of its face's depth round the corner, ${FULL_DEPTH * 100}% asked`);
-    assert.ok(radius >= MIN_RADIUS, `the corner turns on a ${(radius * 1000).toFixed(0)} mm radius in plan, ${MIN_RADIUS * 1000} mm asked`);
+    expect(Math.min(...shares), `the section thins to ${(Math.min(...shares) * 100).toFixed(0)}% of its face's depth round the corner, ${FULL_DEPTH * 100}% asked`).toBeGreaterThanOrEqual(FULL_DEPTH);
+    expect(radius, `the corner turns on a ${(radius * 1000).toFixed(0)} mm radius in plan, ${MIN_RADIUS * 1000} mm asked`).toBeGreaterThanOrEqual(MIN_RADIUS);
     const { rear } = coupe.bumpers;
-    assert.ok(rear.wrap.end, "the control: the coupe's rear bar has lofted ends");
+    must(rear.wrap.end, "the control: the coupe's rear bar has lofted ends");
     const tight = read({ ...coupe, bumpers: { ...coupe.bumpers, rear: { ...rear, wrap: { ...rear.wrap, end: { ...rear.wrap.end, corner: TIGHT_CORNER } } } } });
-    assert.ok(tight.radius < MIN_RADIUS, `the control: a ${TIGHT_CORNER * 1000} mm deep corner turns on ${(tight.radius * 1000).toFixed(0)} mm`);
+    expect(tight.radius, `the control: a ${TIGHT_CORNER * 1000} mm deep corner turns on ${(tight.radius * 1000).toFixed(0)} mm`).toBeLessThan(MIN_RADIUS);
   });
 
   it("when the hatchback's front bumper is built, then its face runs straight across to its corners as the reference's: at |x| 0.40-0.45 within 1 cm of its middle's reach", () => {
     const hatch = makeBumperGeometry(true, CAR_STYLES.hatchback);
     const gap = bumperReachAt(hatch, 0, 0.05) - bumperReachAt(hatch, 0.4, 0.45);
-    assert.ok(Math.abs(gap) < 0.01, `the bumper's face at |x| 0.40-0.45 stands ${gap.toFixed(3)} m behind its middle`);
+    expect(Math.abs(gap), `the bumper's face at |x| 0.40-0.45 stands ${gap.toFixed(3)} m behind its middle`).toBeLessThan(0.01);
   });
 
   it("when its door hinge moves with the door's trailing edge kept, then the door glass stays in the same window: it rides on its door's own hinge", () => {
@@ -2182,7 +2182,7 @@ describe("given a body style's H2 hardpoints", () => {
       const side = sampleSlice(wz, moved.profile).hw;
       const box = partBox(liner);
       const reach = Math.max(box.max.x, -box.min.x);
-      assert.ok(reach <= side + 0.02, `liner ${k} reaches x ${reach} on a 2.2 m track, the body side ${side} at its wheel (z ${wz})`);
+      expect(reach, `liner ${k} reaches x ${reach} on a 2.2 m track, the body side ${side} at its wheel (z ${wz})`).toBeLessThanOrEqual(side + 0.02);
     }
   });
 
@@ -2223,8 +2223,8 @@ describe("given a body style's H2 hardpoints", () => {
           if (skinX !== Infinity && x - skinX > worst) [worst, where] = [x - skinX, `liner ${k} at y ${y.toFixed(3)} z ${z.toFixed(3)}`];
         }
       }
-      assert.ok(below <= 0.001, `${id}: ${belowAt} hangs ${(below * 100).toFixed(1)} cm below the rocker`);
-      assert.ok(worst <= -LINER_END_INSIDE, `${id}: ${where} stands ${(worst * 100).toFixed(1)} cm outboard of the body side (bar: ${LINER_END_INSIDE * 100} cm inside)`);
+      expect(below, `${id}: ${belowAt} hangs ${(below * 100).toFixed(1)} cm below the rocker`).toBeLessThanOrEqual(0.001);
+      expect(worst, `${id}: ${where} stands ${(worst * 100).toFixed(1)} cm outboard of the body side (bar: ${LINER_END_INSIDE * 100} cm inside)`).toBeLessThanOrEqual(-LINER_END_INSIDE);
     });
   }
 
@@ -2243,7 +2243,7 @@ describe("given a body style's H2 hardpoints", () => {
         const past = Math.min(...carFrame(style).wheels.map(([, wy, wz]) => (y < wy ? Math.abs(z - wz) : Math.hypot((y - wy) / rise, z - wz)))) - r;
         worst = Math.max(worst, past);
       }
-      assert.ok(worst <= 0.01, `${id}: a dark lip vertex stands ${(worst * 100).toFixed(1)} cm out past the opening, over painted skin`);
+      expect(worst, `${id}: a dark lip vertex stands ${(worst * 100).toFixed(1)} cm out past the opening, over painted skin`).toBeLessThanOrEqual(0.01);
     });
   }
 
@@ -2269,8 +2269,8 @@ describe("given a body style's H2 hardpoints", () => {
         return worst;
       };
       const [lipped, bare] = [paintedDown(style), paintedDown(plain)];
-      assert.ok(bare < inset / 2, `the control: the lip-less ${id} arch reads paint ${(bare * 100).toFixed(1)} cm under its top`);
-      assert.ok(lipped >= inset - 0.01, `the ${id} arch reads paint only ${(lipped * 100).toFixed(1)} cm under its top, its lip stands ${inset * 100} cm in`);
+      expect(bare, `the control: the lip-less ${id} arch reads paint ${(bare * 100).toFixed(1)} cm under its top`).toBeLessThan(inset / 2);
+      expect(lipped, `the ${id} arch reads paint only ${(lipped * 100).toFixed(1)} cm under its top, its lip stands ${inset * 100} cm in`).toBeGreaterThanOrEqual(inset - 0.01);
     });
   }
 
@@ -2278,7 +2278,7 @@ describe("given a body style's H2 hardpoints", () => {
     const moved: BodyStyle = { ...sedan, tubs: [[-0.7, 0.7, ride - 0.1]] };
     for (const source of ["drawn", "cage"] as const) {
       const low = ringLowest(moved, 0, source);
-      assert.ok(low >= ride - 1e-9, `${source} section at z 0 reaches down to y ${low}, the body's floor ${ride}`);
+      expect(low, `${source} section at z 0 reaches down to y ${low}, the body's floor ${ride}`).toBeGreaterThanOrEqual(ride - 1e-9);
     }
   });
 });
@@ -2328,7 +2328,7 @@ describe("given a body style's detail table", () => {
   it("when any style's details are read, then every stroke and patch lies on the car within its view", () => {
     for (const id of CAR_STYLE_IDS) {
       const faults = detailFaults(CAR_STYLES[id]);
-      assert.ok(faults.length === 0, `${id} has ${faults.length} detail faults: ${faults.join("; ")}`);
+      expect(faults.length, `${id} has ${faults.length} detail faults: ${faults.join("; ")}`).toBe(0);
     }
   });
 
@@ -2343,7 +2343,7 @@ describe("given a body style's detail table", () => {
       },
     };
     const faults = detailFaults(style);
-    assert.ok(faults.length === 1, `expected 1 fault for a stroke 0.1 m past the nose at z ${noseZ + 0.1}, got ${faults.length}: ${faults.join("; ")}`);
+    expect(faults.length, `expected 1 fault for a stroke 0.1 m past the nose at z ${noseZ + 0.1}, got ${faults.length}: ${faults.join("; ")}`).toBe(1);
   });
 });
 
@@ -2480,20 +2480,20 @@ describe("given a body style's P1 parts", () => {
     const bulge = { z0: 0.9, z1: 1.8, width: 0.6, rise: 0.04, scoop: { inlets: 2, z: 1.55, width: 0.44, height: 0.05 } } as const;
     const style: BodyStyle = { ...sedan, hood: { ...sedan.hood, bulge } };
     const plainHood = makeHoodGeometry(sedan);
-    assert.ok(withHoodBulge(plainHood, sedan) === plainHood, "a hood without a bulge comes back as built");
+    expect(withHoodBulge(plainHood, sedan), "a hood without a bulge comes back as built").toBe(plainHood);
     const plain = readBulge(plainHood, sedan);
-    assert.ok(plain.raised.isEmpty() && plain.peak < POSITION_TOL, `the plain lid has nothing standing over it (peak ${plain.peak})`);
+    expect(plain.raised.isEmpty() && plain.peak < POSITION_TOL, `the plain lid has nothing standing over it (peak ${plain.peak})`).toBeTruthy();
     const { raised, peak, mouth, forward } = readBulge(withHoodBulge(makeHoodGeometry(style), style), style);
     const half = bulge.width / 2;
-    assert.ok(raised.max.x - raised.min.x > bulge.width * 0.8, `the bulge spans ${(raised.max.x - raised.min.x).toFixed(3)} m of its ${bulge.width}`);
+    expect(raised.max.x - raised.min.x, `the bulge spans ${(raised.max.x - raised.min.x).toFixed(3)} m of its ${bulge.width}`).toBeGreaterThan(bulge.width * 0.8);
     const inside = raised.min.x >= -half - POSITION_TOL && raised.max.x <= half + POSITION_TOL && raised.min.z >= bulge.z0 - POSITION_TOL && raised.max.z <= bulge.z1 + POSITION_TOL;
-    assert.ok(inside, `raised x ${raised.min.x.toFixed(3)}..${raised.max.x.toFixed(3)}, z ${raised.min.z.toFixed(3)}..${raised.max.z.toFixed(3)}`);
+    expect(inside, `raised x ${raised.min.x.toFixed(3)}..${raised.max.x.toFixed(3)}, z ${raised.min.z.toFixed(3)}..${raised.max.z.toFixed(3)}`).toBeTruthy();
     assertSameNumbers([peak], [bulge.rise + bulge.scoop.height], "the scoop's top over the lid's centre line", 1e-4);
     assertSameNumbers([mouth.min.z, mouth.max.z], [bulge.scoop.z, bulge.scoop.z], "the mouths' z", POSITION_TOL);
     const scoopHalf = bulge.scoop.width / 2;
-    assert.ok(!mouth.isEmpty() && mouth.min.x >= -scoopHalf - POSITION_TOL && mouth.max.x <= scoopHalf + POSITION_TOL, `mouths x ${mouth.min.x}..${mouth.max.x}`);
-    assert.ok(forward > 0.99, `every mouth vertex faces forward (least normal z ${forward.toFixed(3)})`);
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    expect(!mouth.isEmpty() && mouth.min.x >= -scoopHalf - POSITION_TOL && mouth.max.x <= scoopHalf + POSITION_TOL, `mouths x ${mouth.min.x}..${mouth.max.x}`).toBeTruthy();
+    expect(forward, `every mouth vertex faces forward (least normal z ${forward.toFixed(3)})`).toBeGreaterThan(0.99);
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a crowned hood sets its inset, then its side edge stands that far inside the station's side, the cowl's at z0 and the nose's at z1, at the plain edge's height under the plain crown, and the cage builds are unchanged", () => {
@@ -2515,7 +2515,7 @@ describe("given a body style's P1 parts", () => {
       const heights = [deckTopY(edge, z, straight, true), deckTopY(0, z, straight, true)];
       assertSameNumbers(heights, [deckTopY(hw - 0.07, z, plain, true), deckTopY(0, z, plain, true)], `at z ${z} the inset edge and the crown against the plain hood's`, 1e-6);
     }
-    assert.ok(cageHash(straight) === cageHash(plain), "the cage builds are unchanged");
+    expect(cageHash(straight), "the cage builds are unchanged").toBe(cageHash(plain));
   });
 
   it("when a hood bulge is rolled, then its flanks roll up from the lid in steps outside its crest, the crest stays inside the roll, and the cage builds are unchanged", () => {
@@ -2531,12 +2531,12 @@ describe("given a body style's P1 parts", () => {
       if (Math.abs(z - zMid) < 1e-3 && y - deckTopY(x, z, style, true) > RAISED_M) raised.push({ x: Math.abs(x), y });
     }
     const steps = [...new Set(raised.map((v) => Math.round(v.x * 1000)))].sort((a, b) => a - b);
-    assert.ok(steps.length >= 2, `the roll stands at one |x| only: ${steps.join(", ")} mm`);
+    expect(steps.length, `the roll stands at one |x| only: ${steps.join(", ")} mm`).toBeGreaterThanOrEqual(2);
     const top = Math.max(...raised.map((v) => v.y));
     for (const v of raised) {
-      if (top - v.y < 1e-4) assert.ok(v.x <= bulge.width / 2 - bulge.round + POSITION_TOL, `the crest reaches |x| ${v.x.toFixed(4)}, outside its ${(bulge.width / 2 - bulge.round).toFixed(4)}`);
+      if (top - v.y < 1e-4) expect(v.x, `the crest reaches |x| ${v.x.toFixed(4)}, outside its ${(bulge.width / 2 - bulge.round).toFixed(4)}`).toBeLessThanOrEqual(bulge.width / 2 - bulge.round + POSITION_TOL);
     }
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when the coupe's hood pod is drawn, then its flank leans off the lid and its crest under the fitting crease, so it shades smooth with the hood as the reference's soft pod does, not a hard-lit black band in the side view", () => {
@@ -2555,7 +2555,7 @@ describe("given a body style's P1 parts", () => {
     const crestX = Math.max(...raised.filter((v) => top - v.y < 1e-4).map((v) => v.x));
     const flank = raised.reduce((a, v) => (v.x > a.x ? v : a));
     const lean = (Math.atan2(top - flank.y, flank.x - crestX) * 180) / Math.PI;
-    assert.ok(lean < CREASE_DEGREES.fitting, `the flank leans ${lean.toFixed(1)} deg off the lid, past the ${CREASE_DEGREES.fitting} deg fitting crease`);
+    expect(lean, `the flank leans ${lean.toFixed(1)} deg off the lid, past the ${CREASE_DEGREES.fitting} deg fitting crease`).toBeLessThan(CREASE_DEGREES.fitting);
   });
 
   it("when a hood bulge sets a cowl ramp and a cowl width, then it widens toward its cowl end and eases into the lid over that run there, its nose end as without them, and the cage builds are unchanged", () => {
@@ -2579,9 +2579,9 @@ describe("given a body style's P1 parts", () => {
     // Rings 4 and 12 sit a quarter and three quarters of the way from the cowl: 0.6 -> 0.4 wide narrows them 5 cm apart in half-width.
     assertSameNumbers([ring(style, 4).x - ring(style, 12).x, ring(plain, 4).x - ring(plain, 12).x], [0.05, 0], "the crest's half-width at ring 4 over ring 12", 1e-6);
     // Ring 4 is 0.225 m in from the cowl end: past the 0.15 m ramp at full rise, still on the 0.4 m one.
-    assert.ok(ring(style, 4).top < plainBulge.rise * 0.6 && Math.abs(ring(plain, 4).top - plainBulge.rise) < 1e-6, `ring 4 stands ${ring(style, 4).top.toFixed(4)} m with the cowl ramp, ${ring(plain, 4).top.toFixed(4)} without`);
-    assert.ok(ring(style, 15).top === ring(plain, 15).top, "the nose end eases in as before");
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    expect(ring(style, 4).top < plainBulge.rise * 0.6 && Math.abs(ring(plain, 4).top - plainBulge.rise) < 1e-6, `ring 4 stands ${ring(style, 4).top.toFixed(4)} m with the cowl ramp, ${ring(plain, 4).top.toFixed(4)} without`).toBeTruthy();
+    expect(ring(style, 15).top, "the nose end eases in as before").toBe(ring(plain, 15).top);
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a hood bulge sets a mouth, then its nose ring stands at full rise where the plain pod's sits on the lid, so its front cap is a face looking forward, and the cage builds are unchanged", () => {
@@ -2600,8 +2600,8 @@ describe("given a body style's P1 parts", () => {
       return top;
     };
     assertSameNumbers([noseTop(style)], [plainBulge.rise], "the mouth pod's nose ring over the lid", 1e-6);
-    assert.ok(noseTop(plain) < RAISED_M, `the plain pod's nose stands ${noseTop(plain).toFixed(4)} m over the lid`);
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    expect(noseTop(plain), `the plain pod's nose stands ${noseTop(plain).toFixed(4)} m over the lid`).toBeLessThan(RAISED_M);
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a hood bulge sets a groove, then mid-pod its crest dips that deep on the centre line, where the plain pod's crest has no vertex at all, and the cage builds are unchanged", () => {
@@ -2623,8 +2623,8 @@ describe("given a body style's P1 parts", () => {
     };
     const grooved = { ...bulge, groove: 0.004 };
     assertSameNumbers([dip(grooved)], [0.004], "the grooved crest's dip on the centre line", 1e-6);
-    assert.ok(dip(bulge) === Infinity, `the plain crest dips ${dip(bulge)} on the centre line`);
-    assert.ok(cageHash({ ...sedan, hood: { ...sedan.hood, bulge: grooved } }) === cageHash(sedan), "the cage builds are unchanged");
+    expect(dip(bulge), `the plain crest dips ${dip(bulge)} on the centre line`).toBe(Infinity);
+    expect(cageHash({ ...sedan, hood: { ...sedan.hood, bulge: grooved } }), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a hood is a clamshell, then its sides wrap over the body's shoulder to a shut line on the fender top, clear of the body there, and the cage builds are unchanged", () => {
@@ -2634,10 +2634,10 @@ describe("given a body style's P1 parts", () => {
     const fenderTop = ring[ring.length - 4]!;
     const lid = outerEdgeAt(makeHoodGeometry(sedan), sedan, z);
     const clam = outerEdgeAt(makeHoodGeometry(style), style, z);
-    assert.ok(clam.x > fenderTop.x && clam.x - fenderTop.x < 0.01, `the clamshell's edge at x ${clam.x.toFixed(4)} stands clear of the fender top at ${fenderTop.x.toFixed(4)}, within 1 cm`);
+    expect(clam.x > fenderTop.x && clam.x - fenderTop.x < 0.01, `the clamshell's edge at x ${clam.x.toFixed(4)} stands clear of the fender top at ${fenderTop.x.toFixed(4)}, within 1 cm`).toBeTruthy();
     assertSameNumbers([clam.y], [fenderTop.y], "the shut line's height on the fender top", 1e-4);
-    assert.ok(fenderTop.x - lid.x > 0.05, `the plain lid stops on the deck at x ${lid.x.toFixed(3)}, inboard of the fender top`);
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    expect(fenderTop.x - lid.x, `the plain lid stops on the deck at x ${lid.x.toFixed(3)}, inboard of the fender top`).toBeGreaterThan(0.05);
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a boot carries a lip, then a deck lid's top rises its rise at the rear edge, a tailgate's top edge kicks its rise out, nothing moves past its depth from the edge, and the cage builds are unchanged", () => {
@@ -2645,14 +2645,14 @@ describe("given a body style's P1 parts", () => {
     const { coupe, hatchback } = CAR_STYLES;
     const { lip: ownLip, ...bareDeck } = coupe.boot;
     const { lip: gateLip, ...gate } = hatchback.boot;
-    assert.ok(bareDeck.kind === "lid" && gate.kind === "tailgate", "the coupe has a deck lid, the hatchback a tailgate");
+    must(bareDeck.kind === "lid" && gate.kind === "tailgate", "the coupe has a deck lid, the hatchback a tailgate");
     // The plain deck and gate are the coupe's lid and the hatch's gate without their own lips, so the measured rise is the test lip's alone.
     const deck = bareDeck;
     const plainStyle: BodyStyle = { ...coupe, boot: bareDeck };
     const deckStyle: BodyStyle = { ...coupe, boot: { ...bareDeck, lip } };
     const plainGateStyle: BodyStyle = { ...hatchback, boot: gate };
     const gateStyle: BodyStyle = { ...hatchback, boot: { ...gate, lip } };
-    assert.ok((ownLip === undefined || ownLip.rise > 0) && (gateLip === undefined || gateLip.rise < 0), "the coupe's own lip, if any, rises; the hatch's, if any, rolls in");
+    expect((ownLip === undefined || ownLip.rise > 0) && (gateLip === undefined || gateLip.rise < 0), "the coupe's own lip, if any, rises; the hatch's, if any, rolls in").toBeTruthy();
     const [plainDeck, lipDeck, plainGate, lipGate] = [plainStyle, deckStyle, plainGateStyle, gateStyle].map((s) => makeTrunkGeometry(s));
     const edge = deck.z1 - deck.origin[1];
     const deckIn = lerp(deck.z0, deck.z1, 0.8) - deck.origin[1];
@@ -2662,14 +2662,14 @@ describe("given a body style's P1 parts", () => {
     const face = (g: THREE.BufferGeometry, at: number) => extremeAt(g, 1, at, 2, -1);
     assertSameNumbers([top(lipDeck!, edge) - top(plainDeck!, edge), top(lipDeck!, deckIn) - top(plainDeck!, deckIn)], [lip.rise, 0], "the deck lid's top over the plain one's at its rear edge and 0.13 m in", 1e-5);
     assertSameNumbers([face(plainGate!, gateTop) - face(lipGate!, gateTop), face(plainGate!, gateDown) - face(lipGate!, gateDown)], [lip.rise, 0], "the tailgate's face behind the plain one's at its top edge and 0.15 m down", 1e-5);
-    assert.ok(cageHash(deckStyle) === cageHash(plainStyle) && cageHash(gateStyle) === cageHash(plainGateStyle) && cageHash(plainGateStyle) === cageHash(hatchback), "the cage builds are unchanged");
+    expect(cageHash(deckStyle) === cageHash(plainStyle) && cageHash(gateStyle) === cageHash(plainGateStyle) && cageHash(plainGateStyle) === cageHash(hatchback), "the cage builds are unchanged").toBeTruthy();
   });
 
   it("when a deck lid is flush, then its edge seats on the deck edge like the hood's, lower and wider than the plain lid's step, its crown unchanged, and the cage builds are unchanged", () => {
     const { coupe } = CAR_STYLES;
     const bareDeck = { ...coupe.boot, flush: undefined, halfWidth: undefined };
     const deck = coupe.boot;
-    assert.ok(deck.kind === "lid", "the coupe has a deck lid");
+    must(deck.kind === "lid", "the coupe has a deck lid");
     const plainStyle: BodyStyle = { ...coupe, boot: bareDeck };
     const flushStyle: BodyStyle = { ...coupe, boot: { ...bareDeck, flush: true } };
     const z = lerp(deck.z0, deck.z1, 0.5) - deck.origin[1];
@@ -2681,11 +2681,11 @@ describe("given a body style's P1 parts", () => {
       return { w, y, crown };
     };
     const [plain, flush] = [plainStyle, flushStyle].map((s) => edgeAt(makeTrunkGeometry(s)));
-    assert.ok(plain!.w > 0 && flush!.w > 0, "the control: both lids have a ring at mid deck");
-    assert.ok(plain!.y - flush!.y > 0.005, `the flush lid's edge (${flush!.y.toFixed(4)}) sits over 5 mm under the plain lid's step (${plain!.y.toFixed(4)})`);
-    assert.ok(flush!.w > plain!.w, `the flush lid runs out to the deck edge (half-width ${flush!.w.toFixed(4)} against ${plain!.w.toFixed(4)})`);
+    expect(plain!.w > 0 && flush!.w > 0, "the control: both lids have a ring at mid deck").toBeTruthy();
+    expect(plain!.y - flush!.y, `the flush lid's edge (${flush!.y.toFixed(4)}) sits over 5 mm under the plain lid's step (${plain!.y.toFixed(4)})`).toBeGreaterThan(0.005);
+    expect(flush!.w, `the flush lid runs out to the deck edge (half-width ${flush!.w.toFixed(4)} against ${plain!.w.toFixed(4)})`).toBeGreaterThan(plain!.w);
     assertSameNumbers([flush!.crown], [plain!.crown], "the lid's crown", 1e-6);
-    assert.ok(cageHash(flushStyle) === cageHash(plainStyle), "the cage builds are unchanged");
+    expect(cageHash(flushStyle), "the cage builds are unchanged").toBe(cageHash(plainStyle));
   });
 
   /** A rolled lid edge's sharpest turn (°): its one chord splits the corner's ~90° turn in two; a sharp corner turns ~90°. */
@@ -2720,38 +2720,38 @@ describe("given a body style's P1 parts", () => {
         return worst;
       };
       const [rolled, sharp] = [edgeTurn(style), edgeTurn(plain)];
-      assert.ok(sharp > 80, `the control: the field-less ${id} lid's edge turns ${sharp.toFixed(1)}°`);
-      assert.ok(rolled < ROLLED_TURN_MAX, `the ${id} lid's rolled edge turns ${rolled.toFixed(1)}° at its sharpest`);
-      assert.ok(cageHash(style) === cageHash(plain), "the cage builds are unchanged");
+      expect(sharp, `the control: the field-less ${id} lid's edge turns ${sharp.toFixed(1)}°`).toBeGreaterThan(80);
+      expect(rolled, `the ${id} lid's rolled edge turns ${rolled.toFixed(1)}° at its sharpest`).toBeLessThan(ROLLED_TURN_MAX);
+      expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(plain));
     });
   }
 
   it("when a roof carries rails, then two dark rails stand on it between their |x| and z ends, their tops their rise over the roof at their inner edge, and the cage builds are unchanged", () => {
     const rails = { x: [0.45, 0.5], z: [-0.6, 0.4], rise: 0.04 } as const;
     const { style, body, from, all, dark } = roofParts({ rails });
-    assert.ok(all.count > 0 && dark.count === all.count, `${all.count} roof-part vertices, ${dark.count} of them dark`);
+    expect(all.count > 0 && dark.count === all.count, `${all.count} roof-part vertices, ${dark.count} of them dark`).toBeTruthy();
     assertSameNumbers([all.box.min.x, all.box.max.x, all.box.min.z, all.box.max.z], [-0.5, 0.5, -0.6, 0.4], "the rails' x and z ends", POSITION_TOL);
     const { inner, peak } = overRoof(body, from, style, rails.x[0]);
     assertSameNumbers([inner, peak], [rails.x[0], rails.rise], "the rails' inner edge and their top over the roof there", 1e-4);
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a roof carries a glass panel, then a dark panel lies on the roof a few mm proud across its width and z span, and the cage builds are unchanged", () => {
     const glassPanel = { z: [-0.6, 0.2], width: 0.8 } as const;
     const { style, body, from, all, dark } = roofParts({ glassPanel });
-    assert.ok(all.count > 0 && dark.count === all.count, `${all.count} roof-part vertices, ${dark.count} of them dark`);
+    expect(all.count > 0 && dark.count === all.count, `${all.count} roof-part vertices, ${dark.count} of them dark`).toBeTruthy();
     assertSameNumbers([all.box.min.x, all.box.max.x, all.box.min.z, all.box.max.z], [-0.4, 0.4, -0.6, 0.2], "the panel's x and z ends", POSITION_TOL);
     const { peak } = overRoof(body, from, style, null);
-    assert.ok(peak > 0 && peak < 0.01, `the panel stands ${(peak * 1000).toFixed(1)} mm over the roof skin`);
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    expect(peak > 0 && peak < 0.01, `the panel stands ${(peak * 1000).toFixed(1)} mm over the roof skin`).toBeTruthy();
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a roof carries a spoiler, then a body-colour wedge fills its z, y and half-width numbers, and the cage builds are unchanged", () => {
     const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5 } as const;
     const { style, all, dark } = roofParts({ spoiler });
-    assert.ok(all.count > 0 && dark.count === 0, `${all.count} roof-part vertices, ${dark.count} of them dark`);
+    expect(all.count > 0 && dark.count === 0, `${all.count} roof-part vertices, ${dark.count} of them dark`).toBeTruthy();
     assertSameNumbers([...all.box.min.toArray(), ...all.box.max.toArray()], [-0.5, 1.15, -0.95, 0.5, 1.22, -0.8], "the spoiler's box", POSITION_TOL);
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a spoiler's ends slope and taper, then its top's ends stand `slope` inboard of its underside's and its tip's `taper` inboard of its front edge's", () => {
@@ -2800,7 +2800,7 @@ describe("given a body style's P1 parts", () => {
       tip = Math.min(tip, z);
     }
     assertSameNumbers([centre, corner, tip], [spoiler.z[1] - bow, spoiler.z[1], spoiler.z[0]], "the bowed front's middle and corners, and the tip", POSITION_TOL);
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a spoiler's tip rounds (round), then its underside's half-width follows a quarter ellipse from the front to the tip, wider mid-run than the straight chamfer", () => {
@@ -2820,10 +2820,10 @@ describe("given a body style's P1 parts", () => {
       if (u > 0.01 && u < 0.99) interior.add(Math.round(u * 1000));
       if (Math.abs(u - Math.SQRT1_2) < 1e-3) mid = Math.abs(pos.getX(i));
     }
-    assert.ok(worst < 1e-6, `the underside strays ${worst} from the quarter ellipse`);
-    assert.ok(interior.size >= 3, `${interior.size} interior stations along the run`);
+    expect(worst, `the underside strays ${worst} from the quarter ellipse`).toBeLessThan(1e-6);
+    expect(interior.size, `${interior.size} interior stations along the run`).toBeGreaterThanOrEqual(3);
     const wider = mid - (spoiler.halfWidth - taper * Math.SQRT1_2);
-    assert.ok(wider > 0.03, `at u 0.7071 the half-width stands ${wider} over the straight chamfer's`);
+    expect(wider, `at u 0.7071 the half-width stands ${wider} over the straight chamfer's`).toBeGreaterThan(0.03);
   });
 
   it("when the wagon's spoiler caps the roof's last drawn chord, then its front edge's crowned top sits on the drawn roof (within 2 mm) and its sloped ends never stand over it", () => {
@@ -2835,14 +2835,14 @@ describe("given a body style's P1 parts", () => {
       // The sloped ends may tuck under the roof's roll; only standing over it shows.
       if (o === null || o > 0.002 || (Math.abs(Number(x)) <= reach && o < -0.002)) off.push(`${x}:${o === null ? "no roof" : `${(o * 1000) | 0}mm`}`);
     }
-    assert.ok(over.size >= 5, `front-top vertices met: ${over.size}`);
-    assert.equal(off.join(" "), "", "spoiler front-top vertices off the drawn roof, by x");
+    expect(over.size, `front-top vertices met: ${over.size}`).toBeGreaterThanOrEqual(5);
+    expect(off.join(" "), "spoiler front-top vertices off the drawn roof, by x").toBe("");
   });
 
   it("when the hatch's spoiler caps the roof's rear end, then its front, bowed back with the glass top, stands on the roof's end (no run over the roof skin to fight it), its front edge's crowned top never falls under the drawn roof and sits within 5 mm of it across the crown, and no point of the rear glass's bowed top or frit stands over its top (no dark sliver between them)", () => {
     const style = CAR_STYLES.hatchback;
     const spoiler = style.roof!.spoiler!;
-    assert.ok(Math.abs(spoiler.z[1] - style.roofZ[0]) <= 0.003, `the front at z ${spoiler.z[1]}, the roof's end at ${style.roofZ[0]}`);
+    expect(Math.abs(spoiler.z[1] - style.roofZ[0]), `the front at z ${spoiler.z[1]}, the roof's end at ${style.roofZ[0]}`).toBeLessThanOrEqual(0.003);
     const reach = spoiler.halfWidth - (spoiler.ends?.[0] ?? 0) + POSITION_TOL;
     // The roof's crown run, inside its roll down to the tucked cant.
     const crown = 0.3;
@@ -2852,7 +2852,7 @@ describe("given a body style's P1 parts", () => {
       if (o === null || Math.abs(Number(x)) > reach) continue;
       if (o < 0 || (Math.abs(Number(x)) <= crown && o > 0.005)) off.push(`${x}:${(o * 1000).toFixed(1)}mm`);
     }
-    assert.equal(off.join(" "), "", "spoiler front-top vertices under the drawn roof, or standing over 5 mm off it across the crown, by x");
+    expect(off.join(" "), "spoiler front-top vertices under the drawn roof, or standing over 5 mm off it across the crown, by x").toBe("");
     // The glass's top bows 15 mm behind the roof's straight end at its centre: the spoiler's falling top must still cover it.
     const lip = new THREE.Mesh(makeRoofFittings(style)!.geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
     const glass = makeRearGlass(style).getAttribute("position");
@@ -2865,37 +2865,37 @@ describe("given a body style's P1 parts", () => {
       const hit = ray.intersectObject(lip, false)[0];
       if (!hit || hit.point.y < y) over.push(`(${x.toFixed(3)}, ${z.toFixed(3)}): ${hit ? `${((y - hit.point.y) * 1000).toFixed(1)} mm over` : "no spoiler"}`);
     }
-    assert.equal(over.join(" "), "", "rear glass vertices standing over the spoiler's top");
+    expect(over.join(" "), "rear glass vertices standing over the spoiler's top").toBe("");
   });
 
   it("when a bumper's trim is chrome, black or body, then it wears chrome, black plastic or the body's colour (unset: the car's accent trim), and no bumper or cage build changes", () => {
     const accent = 0x9aa0a8;
     const body = 0x7a1020;
-    assert.ok(bumperMaterial(undefined, accent, body) === trimMaterial(accent), "unset: the accent trim every such car shares");
+    expect(bumperMaterial(undefined, accent, body), "unset: the accent trim every such car shares").toBe(trimMaterial(accent));
     const chrome = bumperMaterial("chrome", accent, body);
     const black = bumperMaterial("black", accent, body);
     const painted = bumperMaterial("body", accent, body);
-    assert.ok(chrome.metalness > 0.9 && chrome.color.r > 0.5, `chrome: metalness ${chrome.metalness}, red ${chrome.color.r.toFixed(3)}`);
-    assert.ok(black.color.r < 0.02 && black.color.g < 0.02 && black.color.b < 0.02, `black: ${black.color.getHexString()}`);
-    assert.ok(painted.color.getHex() === body && painted.metalness < trimMaterial(accent).metalness, `body: ${painted.color.getHexString()}, metalness ${painted.metalness}`);
+    expect(chrome.metalness > 0.9 && chrome.color.r > 0.5, `chrome: metalness ${chrome.metalness}, red ${chrome.color.r.toFixed(3)}`).toBeTruthy();
+    expect(black.color.r < 0.02 && black.color.g < 0.02 && black.color.b < 0.02, `black: ${black.color.getHexString()}`).toBeTruthy();
+    expect(painted.color.getHex() === body && painted.metalness < trimMaterial(accent).metalness, `body: ${painted.color.getHexString()}, metalness ${painted.metalness}`).toBeTruthy();
     const style: BodyStyle = { ...sedan, bumpers: { front: { ...sedan.bumpers.front, trim: "chrome" }, rear: { ...sedan.bumpers.rear, trim: "black" } } };
     const bumpers = (s: BodyStyle) => geometryHash([makeBumperGeometry(true, s), makeBumperGeometry(false, s)]);
-    assert.ok(bumpers(style) === bumpers(sedan) && cageHash(style) === cageHash(sedan), "the bumpers and cage builds are unchanged");
+    expect(bumpers(style) === bumpers(sedan) && cageHash(style) === cageHash(sedan), "the bumpers and cage builds are unchanged").toBeTruthy();
   });
 
   it("when a rear bumper carries a hitch, then one black receiver stands under its middle, its top inside the bumper and its end past the bumper's face, and the cage builds are unchanged", () => {
     const pickup = { ...CAR_STYLES.pickup, bumpers: { ...CAR_STYLES.pickup.bumpers, rear: { ...CAR_STYLES.pickup.bumpers.rear, hitch: false, band: undefined } }, exhaust: undefined };
     const style: BodyStyle = { ...pickup, bumpers: { ...pickup.bumpers, rear: { ...pickup.bumpers.rear, hitch: true } } };
     const fascia = makeBumperGeometry(false, pickup);
-    assert.ok(withRearFittings(fascia, pickup) === fascia, "a bumper with no fittings comes back as built");
+    expect(withRearFittings(fascia, pickup), "a bumper with no fittings comes back as built").toBe(fascia);
     const face = partBox(makeBumperGeometry(false, style)).clone();
     const fitted = withRearFittings(makeBumperGeometry(false, style), style);
     const { box, count } = toneBox(fitted, FITTING_ATTRIBUTE, FITTING_TONE.black);
-    assert.ok(count > 0 && toneBox(fitted, FITTING_ATTRIBUTE, FITTING_TONE.chrome).count === 0, `${count} black vertices, no chrome`);
+    expect(count > 0 && toneBox(fitted, FITTING_ATTRIBUTE, FITTING_TONE.chrome).count === 0, `${count} black vertices, no chrome`).toBeTruthy();
     assertSameNumbers([box.min.x + box.max.x], [0], "the receiver's middle x", POSITION_TOL);
-    assert.ok(box.min.y < face.min.y && box.max.y > face.min.y && box.max.y < face.min.y + 0.03, `receiver y ${box.min.y.toFixed(3)}..${box.max.y.toFixed(3)}, the bumper's bottom ${face.min.y.toFixed(3)}`);
-    assert.ok(box.min.z < face.min.z && box.max.z > face.min.z, `receiver z ${box.min.z.toFixed(3)}..${box.max.z.toFixed(3)}, the bumper's face ${face.min.z.toFixed(3)}`);
-    assert.ok(cageHash(style) === cageHash(pickup), "the cage builds are unchanged");
+    expect(box.min.y < face.min.y && box.max.y > face.min.y && box.max.y < face.min.y + 0.03, `receiver y ${box.min.y.toFixed(3)}..${box.max.y.toFixed(3)}, the bumper's bottom ${face.min.y.toFixed(3)}`).toBeTruthy();
+    expect(box.min.z < face.min.z && box.max.z > face.min.z, `receiver z ${box.min.z.toFixed(3)}..${box.max.z.toFixed(3)}, the bumper's face ${face.min.z.toFixed(3)}`).toBeTruthy();
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(pickup));
   });
 
   for (const testCase of EXHAUST_CASES) {
@@ -2924,14 +2924,14 @@ describe("given a body style's P1 parts", () => {
         const size = tip.getSize(new THREE.Vector3());
         const centre = tip.getCenter(new THREE.Vector3());
         assertSameNumbers([centre.x, centre.y, size.y], [x, exhaust.y - sedan.bumpers.rear.seat.y, h], `the tip at x ${x}: middle x, y and height`, 1e-4);
-        assert.ok(size.x > w * (exhaust.shape === "round" ? ROUND_TIP_SPAN : 1) - 1e-4 && size.x < w + 1e-4, `the tip at x ${x} is ${size.x.toFixed(4)} m wide of ${w}`);
+        expect(size.x > w * (exhaust.shape === "round" ? ROUND_TIP_SPAN : 1) - 1e-4 && size.x < w + 1e-4, `the tip at x ${x} is ${size.x.toFixed(4)} m wide of ${w}`).toBeTruthy();
         // The face behind this tip (a wrapped corner stands forward of the rearmost point); under the bumper, the rearmost point.
         const hit = new THREE.Raycaster(new THREE.Vector3(x, centre.y, face.min.z - 1), new THREE.Vector3(0, 0, 1)).intersectObject(new THREE.Mesh(makeBumperGeometry(false, sedan), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), false)[0];
         const behind = hit ? hit.point.z : face.min.z;
-        assert.ok(tip.min.z >= behind && tip.min.z < behind + TIP_FLUSH && throats > 0 && throatBack < -0.99, `the tip ends at z ${tip.min.z.toFixed(3)}, the face behind it at ${behind.toFixed(3)} (rearmost ${face.min.z.toFixed(3)}); ${throats} throat vertices, normal z up to ${throatBack.toFixed(3)}`);
-        assert.ok(toneBox(fitted, null, 0).box.min.z >= face.min.z, "nothing of the fittings stands past the bumper's face");
+        expect(tip.min.z >= behind && tip.min.z < behind + TIP_FLUSH && throats > 0 && throatBack < -0.99, `the tip ends at z ${tip.min.z.toFixed(3)}, the face behind it at ${behind.toFixed(3)} (rearmost ${face.min.z.toFixed(3)}); ${throats} throat vertices, normal z up to ${throatBack.toFixed(3)}`).toBeTruthy();
+        expect(toneBox(fitted, null, 0).box.min.z, "nothing of the fittings stands past the bumper's face").toBeGreaterThanOrEqual(face.min.z);
       }
-      assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+      expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
     });
   }
 
@@ -2939,15 +2939,15 @@ describe("given a body style's P1 parts", () => {
     const { seat, band, wrap, bandHalfWidth } = sedan.bumpers.rear;
     const plain: BodyStyle = { ...sedan, bumpers: { ...sedan.bumpers, rear: { ...sedan.bumpers.rear, band: undefined } } };
     const [inlay, bare] = [sedan, plain].map((style) => toneBox(withRearFittings(makeBumperGeometry(false, style), style), FITTING_ATTRIBUTE, FITTING_TONE.black));
-    assert.ok(inlay!.count > bare!.count, `${inlay!.count} black vertices with the band, ${bare!.count} without`);
+    expect(inlay!.count, `${inlay!.count} black vertices with the band, ${bare!.count} without`).toBeGreaterThan(bare!.count);
     const [bottom, top] = band!.map((y) => y - seat.y);
     // The fascia's top crown lifts its rows up to 2 cm at the centre line.
-    assert.ok(inlay!.box.min.y >= bottom! - POSITION_TOL && inlay!.box.max.y <= top! + 0.02 + POSITION_TOL, `black y ${inlay!.box.min.y.toFixed(3)}..${inlay!.box.max.y.toFixed(3)}, the band ${bottom!.toFixed(3)}..${top!.toFixed(3)}`);
-    assert.ok(inlay!.box.max.x - inlay!.box.min.x > 2 * wrap.from, `the band spans ${(inlay!.box.max.x - inlay!.box.min.x).toFixed(3)} m across`);
+    expect(inlay!.box.min.y >= bottom! - POSITION_TOL && inlay!.box.max.y <= top! + 0.02 + POSITION_TOL, `black y ${inlay!.box.min.y.toFixed(3)}..${inlay!.box.max.y.toFixed(3)}, the band ${bottom!.toFixed(3)}..${top!.toFixed(3)}`).toBeTruthy();
+    expect(inlay!.box.max.x - inlay!.box.min.x, `the band spans ${(inlay!.box.max.x - inlay!.box.min.x).toFixed(3)} m across`).toBeGreaterThan(2 * wrap.from);
     const tipless: BodyStyle = { ...sedan, exhaust: undefined };
     const reach = toneBox(withRearFittings(makeBumperGeometry(false, tipless), tipless), FITTING_ATTRIBUTE, FITTING_TONE.black).box;
-    assert.ok(Math.max(-reach.min.x, reach.max.x) <= bandHalfWidth! + POSITION_TOL, `black (tips off) out to |x| ${Math.max(-reach.min.x, reach.max.x).toFixed(3)}, the band's half-width ${bandHalfWidth}`);
-    assert.ok(cageHash(sedan) === cageHash(plain), "the cage builds are unchanged");
+    expect(Math.max(-reach.min.x, reach.max.x), `black (tips off) out to |x| ${Math.max(-reach.min.x, reach.max.x).toFixed(3)}, the band's half-width ${bandHalfWidth}`).toBeLessThanOrEqual(bandHalfWidth! + POSITION_TOL);
+    expect(cageHash(sedan), "the cage builds are unchanged").toBe(cageHash(plain));
   });
 
   for (const id of CAR_STYLE_IDS) {
@@ -2968,7 +2968,7 @@ describe("given a body style's P1 parts", () => {
         const proud = x - sideX(y, slice.hw, slice.yBelt, rocker, shoulderDrop(z, style));
         if (proud > worst) [worst, at] = [proud, `x ${x.toFixed(3)} y ${y.toFixed(3)} z ${z.toFixed(3)}`];
       }
-      assert.ok(read > 0 && worst <= BUMPER_FLUSH, `${id}: of ${read} corner and run vertices the proudest stands ${(worst * 1000).toFixed(1)} mm out of the body side, at ${at}`);
+      expect(read > 0 && worst <= BUMPER_FLUSH, `${id}: of ${read} corner and run vertices the proudest stands ${(worst * 1000).toFixed(1)} mm out of the body side, at ${at}`).toBeTruthy();
     });
   }
 
@@ -2991,8 +2991,8 @@ describe("given a body style's P1 parts", () => {
         const proud = x - sideX(y, slice.hw, slice.yBelt, rocker);
         if (proud > nearest) [nearest, at] = [proud, `x ${x.toFixed(3)} y ${y.toFixed(3)} z ${z.toFixed(3)}`];
       }
-      assert.ok(read > 0 && nearest >= -BUMPER_RUN_INSIDE, `${id}: of ${read} run vertices the nearest stands ${(-nearest * 1000).toFixed(1)} mm inside the body side, at ${at}`);
-      assert.ok(end.corner >= BUMPER_CORNER_MIN, `${id}: the corner turns ${end.corner} m deep, under ${BUMPER_CORNER_MIN}: a square end`);
+      expect(read > 0 && nearest >= -BUMPER_RUN_INSIDE, `${id}: of ${read} run vertices the nearest stands ${(-nearest * 1000).toFixed(1)} mm inside the body side, at ${at}`).toBeTruthy();
+      expect(end.corner, `${id}: the corner turns ${end.corner} m deep, under ${BUMPER_CORNER_MIN}: a square end`).toBeGreaterThanOrEqual(BUMPER_CORNER_MIN);
     });
   }
 
@@ -3001,12 +3001,12 @@ describe("given a body style's P1 parts", () => {
     const { seat, band, wrap } = pickup.bumpers.front;
     const plain: BodyStyle = { ...pickup, bumpers: { ...pickup.bumpers, front: { ...pickup.bumpers.front, band: undefined } } };
     const bare = makeBumperGeometry(true, plain);
-    assert.ok(withFrontBand(bare, plain) === bare, "a front bumper without a band is its plain geometry");
+    expect(withFrontBand(bare, plain), "a front bumper without a band is its plain geometry").toBe(bare);
     const inlay = toneBox(withFrontBand(makeBumperGeometry(true, pickup), pickup), FITTING_ATTRIBUTE, FITTING_TONE.black);
-    assert.ok(inlay.count > 0, "the band draws black vertices");
+    expect(inlay.count, "the band draws black vertices").toBeGreaterThan(0);
     const [bottom, top] = band!.map((y) => y - seat.y);
-    assert.ok(inlay.box.min.y >= bottom! - 0.02 - POSITION_TOL && inlay.box.max.y <= top! + 0.02 + POSITION_TOL, `black y ${inlay.box.min.y.toFixed(3)}..${inlay.box.max.y.toFixed(3)}, the band ${bottom!.toFixed(3)}..${top!.toFixed(3)}`);
-    assert.ok(inlay.box.max.x - inlay.box.min.x > 2 * wrap.from, `the band spans ${(inlay.box.max.x - inlay.box.min.x).toFixed(3)} m across`);
+    expect(inlay.box.min.y >= bottom! - 0.02 - POSITION_TOL && inlay.box.max.y <= top! + 0.02 + POSITION_TOL, `black y ${inlay.box.min.y.toFixed(3)}..${inlay.box.max.y.toFixed(3)}, the band ${bottom!.toFixed(3)}..${top!.toFixed(3)}`).toBeTruthy();
+    expect(inlay.box.max.x - inlay.box.min.x, `the band spans ${(inlay.box.max.x - inlay.box.min.x).toFixed(3)} m across`).toBeGreaterThan(2 * wrap.from);
   });
 
   it("when the pickup's rear bumper is drawn, then its face is plain under a black top step", () => {
@@ -3018,13 +3018,13 @@ describe("given a body style's P1 parts", () => {
     const mesh = new THREE.Mesh(makeBumperGeometry(false, pickup), new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
     const outs = HEIGHTS.map((y) => -(new THREE.Raycaster(new THREE.Vector3(0.05, y, -1), new THREE.Vector3(0, 0, 1)).intersectObject(mesh, false)[0]?.point.z ?? NaN));
     const spread = Math.max(...outs) - Math.min(...outs);
-    assert.ok(spread <= FLAT_TOL, `the face stands ${outs.map((o) => o.toFixed(3)).join(", ")} m out up its middle, a ${spread.toFixed(3)} m spread`);
+    expect(spread, `the face stands ${outs.map((o) => o.toFixed(3)).join(", ")} m out up its middle, a ${spread.toFixed(3)} m spread`).toBeLessThanOrEqual(FLAT_TOL);
     const style: BodyStyle = { ...pickup, bumpers: { ...pickup.bumpers, rear: { ...pickup.bumpers.rear, hitch: false } }, exhaust: undefined };
     const fitted = withRearFittings(makeBumperGeometry(false, style), style);
-    assert.ok(fitted.hasAttribute(FITTING_ATTRIBUTE), "the rear bumper's band is merged in; without one it comes back as built");
+    expect(fitted.hasAttribute(FITTING_ATTRIBUTE), "the rear bumper's band is merged in; without one it comes back as built").toBeTruthy();
     const { box, count } = toneBox(fitted, FITTING_ATTRIBUTE, FITTING_TONE.black);
     // The step's rows run 0.094-0.1 over the seat (the crown lifts them up to 2 cm at the middle); the face under it stays chrome.
-    assert.ok(count > 0 && box.min.y >= 0.08 && box.max.y >= 0.095, `${count} black vertices, y ${box.min.y.toFixed(3)}..${box.max.y.toFixed(3)} over the seat`);
+    expect(count > 0 && box.min.y >= 0.08 && box.max.y >= 0.095, `${count} black vertices, y ${box.min.y.toFixed(3)}..${box.max.y.toFixed(3)} over the seat`).toBeTruthy();
   });
 });
 
@@ -3245,7 +3245,7 @@ describe("given every body style's door mirror and wipers", () => {
         }
       }
     }
-    assert.ok(count === 0, `${count} buried coplanar pairs: ${first.join("; ")}`);
+    expect(count, `${count} buried coplanar pairs: ${first.join("; ")}`).toBe(0);
   });
 });
 
@@ -3259,7 +3259,7 @@ describe("given the trucks' drawn hoods, whose nose folds tighter than its skirt
         if (first.length < BURIED_SHOWN) first.push(`${id} hood at (${at.x.toFixed(3)}, ${at.y.toFixed(3)}, ${at.z.toFixed(3)})`);
       }
     }
-    assert.ok(count === 0, `${count} buried coplanar pairs: ${first.join("; ")}`);
+    expect(count, `${count} buried coplanar pairs: ${first.join("; ")}`).toBe(0);
   });
 });
 
@@ -3271,12 +3271,12 @@ describe("given the trucks' drawn A-posts", () => {
     for (const id of ["pickup", "monster"] as const) {
       const style = drawnStyle(CAR_STYLES[id]);
       const knee = style.aPillarKnee;
-      assert.ok(knee !== undefined, `${id}: the drawn door glass knees onto the post`);
+      must(knee !== undefined, `${id}: the drawn door glass knees onto the post`);
       const sail = aPillarParts(style)[1];
-      assert.ok(sail !== undefined && sail.userData.blackout === true, `${id}: the sail is drawn black`);
+      expect(sail !== undefined && sail.userData.blackout === true, `${id}: the sail is drawn black`).toBeTruthy();
       const top = partBox(sail).max.y;
       const belt = beltY(style.aPillarFoot, style);
-      assert.ok(Math.abs(top - knee) < 1e-5 && knee - belt <= TRUCK_SAIL_RISE, `${id}: the sail tops out at y ${top}, knee ${knee}, ${(knee - belt).toFixed(3)} m over the belt ${belt}`);
+      expect(Math.abs(top - knee) < 1e-5 && knee - belt <= TRUCK_SAIL_RISE, `${id}: the sail tops out at y ${top}, knee ${knee}, ${(knee - belt).toFixed(3)} m over the belt ${belt}`).toBeTruthy();
     }
   });
 });
@@ -3289,9 +3289,9 @@ describe("given a body style's P2 parts", () => {
     const capSize = cap.getSize(new THREE.Vector3());
     assertSameNumbers([capSize.x, capSize.y, capSize.z, outer], [...size, style.door.hingeX + mirrorSeatX(style) + style.door.mirrorReach], "the cap's w, h, d and its outer face", POSITION_TOL);
     const skin = bodySideAtMirror(style);
-    assert.ok(Math.abs(inner - skin) < MIRROR_SEAT_TOL, `the foot starts at x ${inner}, the drawn skin at ${skin}`);
-    assert.ok(mirrorSeatX(style) === mirrorSeatX({ ...style, door: { ...CAR_STYLES.sedan.door, mirrorReach: style.door.mirrorReach } }), "the seat is the platform mirror's at that reach");
-    assert.ok(cageHash(style) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
+    expect(Math.abs(inner - skin), `the foot starts at x ${inner}, the drawn skin at ${skin}`).toBeLessThan(MIRROR_SEAT_TOL);
+    expect(mirrorSeatX(style), "the seat is the platform mirror's at that reach").toBe(mirrorSeatX({ ...style, door: { ...CAR_STYLES.sedan.door, mirrorReach: style.door.mirrorReach } }));
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(CAR_STYLES.sedan));
   });
 
   it("when a mirror's cap is a tear, then its section tapers to its rear face, its inner face held, and the seat and cage builds are unchanged", () => {
@@ -3307,9 +3307,9 @@ describe("given a body style's P2 parts", () => {
       for (let i = 0; i < pos.count; i++) if (painted.getX(i) === 1 && pos.getZ(i) <= box.min.z + 0.1 * d) rear.expandByPoint(new THREE.Vector3(pos.getX(i) * scaleX, pos.getY(i), pos.getZ(i)));
       return { style, inner: box.min.x, rear: rear.max.x - rear.min.x };
     });
-    assert.ok(tear!.rear < 0.65 * w && rounded!.rear > 0.8 * w, `the cap's rear tenth spans ${tear!.rear.toFixed(3)} m (tear), ${rounded!.rear.toFixed(3)} m (rounded) of its ${w}`);
+    expect(tear!.rear < 0.65 * w && rounded!.rear > 0.8 * w, `the cap's rear tenth spans ${tear!.rear.toFixed(3)} m (tear), ${rounded!.rear.toFixed(3)} m (rounded) of its ${w}`).toBeTruthy();
     assertSameNumbers([tear!.inner], [rounded!.inner], "the cap's inner face", 1e-4);
-    assert.ok(mirrorSeatX(tear!.style) === mirrorSeatX(rounded!.style) && cageHash(tear!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
+    expect(mirrorSeatX(tear!.style) === mirrorSeatX(rounded!.style) && cageHash(tear!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged").toBeTruthy();
   });
 
   it("when a mirror's cap is a nose, then its section tapers to its front face while its rear face (the glass's) keeps its full width, its inner face held, and the seat and cage builds are unchanged", () => {
@@ -3330,10 +3330,10 @@ describe("given a body style's P2 parts", () => {
       }
       return { style, inner: box.min.x, front: front.max.x - front.min.x, rear: rear.max.x - rear.min.x };
     });
-    assert.ok(nose!.front < 0.65 * w && rounded!.front > 0.8 * w, `the cap's front tenth spans ${nose!.front.toFixed(3)} m (nose), ${rounded!.front.toFixed(3)} m (rounded) of its ${w}`);
-    assert.ok(nose!.rear > 0.8 * w, `the nose cap's rear tenth spans ${nose!.rear.toFixed(3)} m of its ${w}`);
+    expect(nose!.front < 0.65 * w && rounded!.front > 0.8 * w, `the cap's front tenth spans ${nose!.front.toFixed(3)} m (nose), ${rounded!.front.toFixed(3)} m (rounded) of its ${w}`).toBeTruthy();
+    expect(nose!.rear, `the nose cap's rear tenth spans ${nose!.rear.toFixed(3)} m of its ${w}`).toBeGreaterThan(0.8 * w);
     assertSameNumbers([nose!.inner], [rounded!.inner], "the cap's inner face", 1e-4);
-    assert.ok(mirrorSeatX(nose!.style) === mirrorSeatX(rounded!.style) && cageHash(nose!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
+    expect(mirrorSeatX(nose!.style) === mirrorSeatX(rounded!.style) && cageHash(nose!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged").toBeTruthy();
   });
 
   it("when a nose cap sets its taper, then its front face keeps that share of its section (a fuller pod) while its rear face keeps its full width and its inner face holds, and the seat and cage builds are unchanged", () => {
@@ -3354,10 +3354,10 @@ describe("given a body style's P2 parts", () => {
       }
       return { style, inner: box.min.x, front: front.max.x - front.min.x, rear: rear.max.x - rear.min.x };
     });
-    assert.ok(full!.front > 0.65 * w && plain!.front < 0.6 * w, `the cap's front tenth spans ${full!.front.toFixed(3)} m (taper .85), ${plain!.front.toFixed(3)} m (default) of its ${w}`);
-    assert.ok(full!.rear > 0.8 * w, `the tapered cap's rear tenth spans ${full!.rear.toFixed(3)} m of its ${w}`);
+    expect(full!.front > 0.65 * w && plain!.front < 0.6 * w, `the cap's front tenth spans ${full!.front.toFixed(3)} m (taper .85), ${plain!.front.toFixed(3)} m (default) of its ${w}`).toBeTruthy();
+    expect(full!.rear, `the tapered cap's rear tenth spans ${full!.rear.toFixed(3)} m of its ${w}`).toBeGreaterThan(0.8 * w);
     assertSameNumbers([full!.inner], [plain!.inner], "the cap's inner face", 1e-4);
-    assert.ok(mirrorSeatX(full!.style) === mirrorSeatX(plain!.style) && cageHash(full!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
+    expect(mirrorSeatX(full!.style) === mirrorSeatX(plain!.style) && cageHash(full!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged").toBeTruthy();
   });
 
   it("when a mirror's cap is rounder (`round`), then its outer face's flat run is shorter by twice the radius it grows, and the seat and cage builds are unchanged", () => {
@@ -3375,7 +3375,7 @@ describe("given a body style's P2 parts", () => {
       return { style, run: face.max.y - face.min.y };
     });
     assertSameNumbers([plain!.run, round!.run], [h - 2 * 0.35 * w, h - 2 * 0.48 * w], "the outer face's flat run up the cap (default, round 0.48)", 1e-4);
-    assert.ok(mirrorSeatX(round!.style) === mirrorSeatX(plain!.style) && cageHash(round!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged");
+    expect(mirrorSeatX(round!.style) === mirrorSeatX(plain!.style) && cageHash(round!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged").toBeTruthy();
   });
 
   it("when a mirror is lifted, then its cap rises that far over the seat while its foot still starts on the drawn skin, and the seat and cage builds are unchanged", () => {
@@ -3384,9 +3384,9 @@ describe("given a body style's P2 parts", () => {
     const lifted = mirrorStyle({ ...spec, lift: 0.05 });
     const up = readMirror(lifted);
     assertSameNumbers([up.cap.min.y - flat.cap.min.y, up.cap.max.y - flat.cap.max.y], [0.05, 0.05], "the cap's rise", POSITION_TOL);
-    assert.ok(Math.abs(up.inner - bodySideAtMirror(lifted)) < MIRROR_SEAT_TOL, `the foot starts at x ${up.inner}, the drawn skin at ${bodySideAtMirror(lifted)}`);
-    assert.ok(mirrorSeatX(lifted) === mirrorSeatX(mirrorStyle(spec)), "the seat is unchanged");
-    assert.ok(cageHash(lifted) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
+    expect(Math.abs(up.inner - bodySideAtMirror(lifted)), `the foot starts at x ${up.inner}, the drawn skin at ${bodySideAtMirror(lifted)}`).toBeLessThan(MIRROR_SEAT_TOL);
+    expect(mirrorSeatX(lifted), "the seat is unchanged").toBe(mirrorSeatX(mirrorStyle(spec)));
+    expect(cageHash(lifted), "the cage builds are unchanged").toBe(cageHash(CAR_STYLES.sedan));
   });
 
   it("when a mirror sets a stalk, then its foot runs that far along the car under the cap instead of 0.7 of the cap's depth, and the seat and cage builds are unchanged", () => {
@@ -3405,8 +3405,8 @@ describe("given a body style's P2 parts", () => {
       return hi - lo;
     };
     assertSameNumbers([footLength(mirrorStyle(spec)), footLength(slim)], [0.07, 0.025], "the foot's length along the car", POSITION_TOL);
-    assert.ok(mirrorSeatX(slim) === mirrorSeatX(mirrorStyle(spec)), "the seat is unchanged");
-    assert.ok(cageHash(slim) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
+    expect(mirrorSeatX(slim), "the seat is unchanged").toBe(mirrorSeatX(mirrorStyle(spec)));
+    expect(cageHash(slim), "the cage builds are unchanged").toBe(cageHash(CAR_STYLES.sedan));
   });
 
   it("when a mirror sets a neck, then its foot reaches that far under the cap's bottom, where without one it hides behind the cap, and the seat and cage builds are unchanged", () => {
@@ -3420,10 +3420,10 @@ describe("given a body style's P2 parts", () => {
       return readMirror(style).cap.min.y - low;
     };
     const necked = mirrorStyle({ ...spec, neck: 0.04 });
-    assert.ok(reach(mirrorStyle(spec)) < 0, `without a neck the foot reaches ${reach(mirrorStyle(spec)).toFixed(4)} m under the cap`);
+    expect(reach(mirrorStyle(spec)), `without a neck the foot reaches ${reach(mirrorStyle(spec)).toFixed(4)} m under the cap`).toBeLessThan(0);
     assertSameNumbers([reach(necked)], [0.04], "the neck's reach under the cap", POSITION_TOL);
-    assert.ok(mirrorSeatX(necked) === mirrorSeatX(mirrorStyle(spec)), "the seat is unchanged");
-    assert.ok(cageHash(necked) === cageHash(CAR_STYLES.sedan), "the cage builds are unchanged");
+    expect(mirrorSeatX(necked), "the seat is unchanged").toBe(mirrorSeatX(mirrorStyle(spec)));
+    expect(cageHash(necked), "the cage builds are unchanged").toBe(cageHash(CAR_STYLES.sedan));
   });
 
   it("when a mirror is mounted on the door glass, then its foot lies on the drawn pane up its height and nowhere sinks into it, the pane's lean followed, which the same seat on the skin does not", () => {
@@ -3451,9 +3451,9 @@ describe("given a body style's P2 parts", () => {
     const words = ({ on, deepest }: { on: number; deepest: number }) => `on the pane at ${on} heights, the deepest ${deepest.toFixed(4)} m into it`;
     for (const id of ["pickup", "monster"] as const) {
       const style = CAR_STYLES[id];
-      assert.ok(style.door.mirror?.mount === "glass", `${id}: its tow mirror is glass-mounted`);
+      expect(style.door.mirror?.mount, `${id}: its tow mirror is glass-mounted`).toBe("glass");
       const mounted = reading(paneGaps(style));
-      assert.ok(seated(mounted), `${id}: ${words(mounted)}`);
+      expect(seated(mounted), `${id}: ${words(mounted)}`).toBeTruthy();
       // The foot's inner face (within 1 cm of the glass surface; its outer face stands 1.6 cm out) lies on that surface, 2 mm sunk, at every row up its height.
       const d = style.door;
       const [seatX, scaleX] = [d.hingeX + mirrorSeatX(style), d.mirrorReach / MIRROR_REACH];
@@ -3463,21 +3463,21 @@ describe("given a body style's P2 parts", () => {
         const gap = seatX + pos.getX(i) * scaleX - glassX(d.hingeZ - (d.mirrorZ ?? 0) + pos.getZ(i), d.hingeY + d.mirrorY + pos.getY(i), style);
         if (Math.abs(gap) < 0.01) inner.push(gap);
       }
-      assert.ok(inner.length >= 8 && inner.every((g) => Math.abs(g + 0.002) < 0.001), `${id}: the foot's inner face stands ${[...new Set(inner.map((g) => g.toFixed(4)))].join(", ")} m off the glass surface`);
+      expect(inner.length >= 8 && inner.every((g) => Math.abs(g + 0.002) < 0.001), `${id}: the foot's inner face stands ${[...new Set(inner.map((g) => g.toFixed(4)))].join(", ")} m off the glass surface`).toBeTruthy();
       const onSkin = reading(paneGaps({ ...style, door: { ...style.door, mirror: { ...style.door.mirror!, mount: undefined } } }));
-      assert.ok(!seated(onSkin), `${id} on the skin: ${words(onSkin)}`);
+      expect(!seated(onSkin), `${id} on the skin: ${words(onSkin)}`).toBe(true);
     }
   });
 
   it("when a mirror's finish is black or chrome, then its cap wears that tone and nothing takes paint, a black one gloss as the references' are; when it is body, its cap carries the paint's tone for its door's colour", () => {
     for (const [finish, hex] of [["black", TRIM_BLACK], ["chrome", TRIM_CHROME]] as const) {
       const { cap, tip, tipRoughness } = readMirror(mirrorStyle({ cap: "box", finish }));
-      assert.ok(cap.isEmpty(), `${finish}: nothing is painted`);
-      assert.equal(tip.getHex(), hex, `${finish}: the cap's outer face`);
-      if (finish === "black") assert.ok(tipRoughness <= TRIM_FINISH.gloss.roughness + 0.01, `black: the cap's roughness ${tipRoughness} is gloss (${TRIM_FINISH.gloss.roughness}), not satin plastic`);
+      expect(cap.isEmpty(), `${finish}: nothing is painted`).toBeTruthy();
+      expect(tip.getHex(), `${finish}: the cap's outer face`).toBe(hex);
+      if (finish === "black") expect(tipRoughness, `black: the cap's roughness ${tipRoughness} is gloss (${TRIM_FINISH.gloss.roughness}), not satin plastic`).toBeLessThanOrEqual(TRIM_FINISH.gloss.roughness + 0.01);
     }
     const { cap, tip } = readMirror(mirrorStyle({ cap: "rounded", finish: "body" }));
-    assert.ok(!cap.isEmpty() && tip.getHex() === PAINT_COLOR_TONE.getHex(), `body: the cap is painted, its outer face 0x${tip.getHexString()}`);
+    expect(!cap.isEmpty() && tip.getHex() === PAINT_COLOR_TONE.getHex(), `body: the cap is painted, its outer face 0x${tip.getHexString()}`).toBeTruthy();
   });
 
   it("when the coupe's mirror is drawn, then its head is the reference side view's (10 cm long, 8.5 cm tall, centred .93 m up, seated low on the door) on a foot running 6 cm along the door, not a 6.5 cm cap lifted on a slim stalk", () => {
@@ -3485,12 +3485,12 @@ describe("given a body style's P2 parts", () => {
     const { cap } = readMirror(style);
     const size = cap.getSize(new THREE.Vector3());
     const centre = style.door.hingeY + style.door.mirrorY + (cap.min.y + cap.max.y) / 2;
-    assert.ok(Math.abs(centre - 0.93) <= 0.01 && size.y >= 0.08 && size.z >= 0.095, `the head is ${size.z.toFixed(3)} m long, ${size.y.toFixed(3)} m tall, centred ${centre.toFixed(3)} m up`);
+    expect(Math.abs(centre - 0.93) <= 0.01 && size.y >= 0.08 && size.z >= 0.095, `the head is ${size.z.toFixed(3)} m long, ${size.y.toFixed(3)} m tall, centred ${centre.toFixed(3)} m up`).toBeTruthy();
     const geo = drawnPart(PART_KIND.mirrorR, style).geometry;
     const [pos, painted] = [geo.getAttribute("position"), geo.getAttribute(PAINTED_ATTRIBUTE)];
     let [lo, hi] = [Infinity, -Infinity];
     for (let i = 0; i < pos.count; i++) if (painted.getX(i) !== 1 && pos.getY(i) < cap.min.y - POSITION_TOL) [lo, hi] = [Math.min(lo, pos.getZ(i)), Math.max(hi, pos.getZ(i))];
-    assert.ok(hi - lo >= 0.055, `the foot runs ${(hi - lo).toFixed(3)} m along the door`);
+    expect(hi - lo, `the foot runs ${(hi - lo).toFixed(3)} m along the door`).toBeGreaterThanOrEqual(0.055);
   });
 
   it("when the pickup's mirror is drawn, then its head is the side plate's: 12-15 cm tall and rounded", () => {
@@ -3502,8 +3502,8 @@ describe("given a body style's P2 parts", () => {
     let [outer, lo, hi] = [-Infinity, Infinity, -Infinity];
     for (let i = 0; i < pos.count; i++) outer = Math.max(outer, pos.getX(i) * scaleX);
     for (let i = 0; i < pos.count; i++) if (pos.getX(i) * scaleX >= outer - HEAD_FACE) [lo, hi] = [Math.min(lo, pos.getY(i)), Math.max(hi, pos.getY(i))];
-    assert.ok(hi - lo >= 0.12 && hi - lo <= 0.15, `the head is ${(hi - lo).toFixed(3)} m tall at its outer face`);
-    assert.equal(style.door.mirror?.cap, "rounded", `the cap is ${style.door.mirror?.cap}`);
+    expect(hi - lo >= 0.12 && hi - lo <= 0.15, `the head is ${(hi - lo).toFixed(3)} m tall at its outer face`).toBeTruthy();
+    expect(style.door.mirror?.cap, `the cap is ${style.door.mirror?.cap}`).toBe("rounded");
   });
 
   it("when the hatch's and SUV's mirrors are drawn, then their heads run as long as the references' pods (hatch 16 cm, SUV 19 cm along the door) and each cap's inner face stands clear of its foot's (no two faces within the 2 mm that fight at range)", () => {
@@ -3524,7 +3524,7 @@ describe("given a body style's P2 parts", () => {
       if (long < want[id] - POSITION_TOL) off.push(`${id}: head ${long.toFixed(3)} m long`);
       if (capInner - inner < 0.003) off.push(`${id}: cap's inner face ${((capInner - inner) * 1000).toFixed(1)} mm off the foot's`);
     }
-    assert.equal(off.join("; "), "");
+    expect(off.join("; ")).toBe("");
   });
 
   it("when the coupe is drawn, then a chrome badge rides each front fender ahead of its door where the reference side view has one (z .66-.73, y .42)", () => {
@@ -3534,7 +3534,7 @@ describe("given a body style's P2 parts", () => {
       const [x, y, z] = [pos.getX(i), pos.getY(i), pos.getZ(i)];
       if (z > 0.65 && z < 0.745 && y > 0.4 && y < 0.44) sides.add(Math.sign(x));
     }
-    assert.ok(sides.has(1) && sides.has(-1), `chrome at the badge on sides [${[...sides].join(", ")}]`);
+    expect(sides.has(1) && sides.has(-1), `chrome at the badge on sides [${[...sides].join(", ")}]`).toBeTruthy();
   });
 
   it("when the coupe's tail lamps are drawn, then a chrome ring badge sits in the middle of the black panel between them, as the reference rear iso's", () => {
@@ -3547,7 +3547,7 @@ describe("given a body style's P2 parts", () => {
       if (Math.abs(pos.getX(i)) > 0.035 || pos.getY(i) < 0.64 || pos.getY(i) > 0.71) continue;
       if (new THREE.Color(colour.getX(i), colour.getY(i), colour.getZ(i)).getHex() === TRIM_CHROME) chrome++;
     }
-    assert.ok(chrome > 0, "no chrome in the middle of the panel between the tail lamps");
+    expect(chrome, "no chrome in the middle of the panel between the tail lamps").toBeGreaterThan(0);
   });
 
   it("when a style has no mirror or grille of its own, then its seats draw the platform parts", () => {
@@ -3556,7 +3556,7 @@ describe("given a body style's P2 parts", () => {
       const own = [style.door.mirror, style.door.mirror, style.grille];
       for (const [k, kind] of [PART_KIND.mirrorL, PART_KIND.mirrorR, PART_KIND.grille].entries()) {
         const seat = cars[id].partSeats[kind]!;
-        assert.ok(own[k] !== undefined || (seat.drawn === partGeometry(kind) && seat.variant === 0 && drawnPart(kind, style).geometry === partGeometry(kind)), `${id} kind ${kind}`);
+        expect(own[k] !== undefined || (seat.drawn === partGeometry(kind) && seat.variant === 0 && drawnPart(kind, style).geometry === partGeometry(kind)), `${id} kind ${kind}`).toBeTruthy();
       }
     }
   });
@@ -3565,15 +3565,15 @@ describe("given a body style's P2 parts", () => {
     const own = sedanWithMirror({ cap: "rounded", finish: "body" });
     const plain = new DeformableCar(PAINT, scene, null, "sedan");
     const seat = own.partSeats[PART_KIND.mirrorR]!;
-    assert.ok(seat.geometry === partGeometry(PART_KIND.mirrorR) && seat.drawn !== seat.geometry, "the sim's shape is the platform mirror's, the drawn one its own");
-    assert.equal(seat.tint.getHex(), PAINT.body, "the cap takes the door's paint");
+    expect(seat.geometry === partGeometry(PART_KIND.mirrorR) && seat.drawn !== seat.geometry, "the sim's shape is the platform mirror's, the drawn one its own").toBeTruthy();
+    expect(seat.tint.getHex(), "the cap takes the door's paint").toBe(PAINT.body);
     wearCarLook(own, { ...NO_CAR_PICK, doors: 0x336699 }, null);
-    assert.equal(seat.tint.getHex(), 0x336699, "and a look's door colour");
+    expect(seat.tint.getHex(), "and a look's door colour").toBe(0x336699);
     for (const car of [own, plain]) for (const side of [-1, 1]) car.breakMirror(side, new THREE.Vector3(side, 0.5, 0));
     for (const i of [0, 1] as const) {
-      assert.equal(mirrorRestReading(own, i), mirrorRestReading(plain, i), `mirror ${i}: seat and rest box`);
+      expect(mirrorRestReading(own, i), `mirror ${i}: seat and rest box`).toBe(mirrorRestReading(plain, i));
       const [torn, platformTorn] = [tornMirror(own, i), tornMirror(plain, i)];
-      assert.ok(torn.reach !== platformTorn.reach || !torn.half.equals(platformTorn.half), `mirror ${i}: the torn mirror flies as the style's own, not the platform's`);
+      expect(torn.reach !== platformTorn.reach || !torn.half.equals(platformTorn.half), `mirror ${i}: the torn mirror flies as the style's own, not the platform's`).toBeTruthy();
       const drawn = mirrorSeat(own, i).children.find((c): c is THREE.Mesh => c instanceof THREE.Mesh)!.geometry.getAttribute("position");
       const half = torn.half.clone().addScalar(1e-6);
       const [lo, hi] = [torn.centre.clone().sub(half), torn.centre.clone().add(half)];
@@ -3588,7 +3588,7 @@ describe("given a body style's P2 parts", () => {
           farthest = Math.max(farthest, out);
         }
       }
-      assert.equal(outside, 0, `mirror ${i}: ${outside} of ${drawn.count} drawn vertices stand outside the torn box, the farthest ${(farthest * 100).toFixed(1)} cm`);
+      expect(outside, `mirror ${i}: ${outside} of ${drawn.count} drawn vertices stand outside the torn box, the farthest ${(farthest * 100).toFixed(1)} cm`).toBe(0);
     }
     const loose = seat.children.find((c): c is THREE.Mesh => c instanceof THREE.Mesh)!;
     const [painted, colour] = [loose.geometry.getAttribute(PAINTED_ATTRIBUTE), loose.geometry.getAttribute("color")];
@@ -3608,10 +3608,10 @@ describe("given a body style's P2 parts", () => {
     assertSameNumbers([size.x, size.y, centre.y, box.max.z], [...grille.size, grille.y, grille.z], "the grille's w, h, centre height and face", POSITION_TOL);
     const colour = geo.getAttribute("color");
     const chrome = new THREE.Color(TRIM_CHROME);
-    assert.ok(Array.from({ length: colour.count }, (_, i) => i).some((i) => Math.abs(colour.getX(i) - chrome.r) < 1e-6), "its surround and bars are chrome");
+    expect(Array.from({ length: colour.count }, (_, i) => i).some((i) => Math.abs(colour.getX(i) - chrome.r) < 1e-6), "its surround and bars are chrome").toBeTruthy();
     const plain: BodyStyle = { ...style, grille: undefined };
-    assert.ok(drawnPart(PART_KIND.grille, plain).geometry === partGeometry(PART_KIND.grille), "without the field, the platform grille");
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    expect(drawnPart(PART_KIND.grille, plain).geometry, "without the field, the platform grille").toBe(partGeometry(PART_KIND.grille));
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a grille sets a bezel, then a chrome frame of that width rings it, its front over the face, and without the field the grille has no chrome", () => {
@@ -3629,8 +3629,8 @@ describe("given a body style's P2 parts", () => {
     const framed = chromeBox(drawnPart(PART_KIND.grille, { ...sedan, grille: { ...grille, bezel }, lamps }).geometry);
     const size = framed.getSize(new THREE.Vector3());
     assertSameNumbers([size.x, size.y], [grille.size[0] + 2 * bezel, grille.size[1] + 2 * bezel], "the chrome frame's w and h", POSITION_TOL);
-    assert.ok(chromeBox(drawnPart(PART_KIND.grille, { ...sedan, grille, lamps }).geometry).isEmpty(), "without the field, no chrome");
-    assert.ok(cageHash({ ...sedan, grille: { ...grille, bezel } }) === cageHash(sedan), "the cage builds are unchanged");
+    expect(chromeBox(drawnPart(PART_KIND.grille, { ...sedan, grille, lamps }).geometry).isEmpty(), "without the field, no chrome").toBeTruthy();
+    expect(cageHash({ ...sedan, grille: { ...grille, bezel } }), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a grille sets its bars' width (bar), then its middle bar stands that tall, and without the field 12 mm", () => {
@@ -3648,7 +3648,7 @@ describe("given a body style's P2 parts", () => {
     };
     const bar = 0.007;
     assertSameNumbers([middleBar({ ...grille, bar }), middleBar(grille)], [bar, 0.012], "the middle bar's height with the field and without", 1e-6);
-    assert.ok(cageHash({ ...sedan, grille: { ...grille, bar } }) === cageHash(sedan), "the cage builds are unchanged");
+    expect(cageHash({ ...sedan, grille: { ...grille, bar } }), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a rear bumper sets its plate's height, then the plate's centre stands at it (unset: where the platform puts it), and the cage builds are unchanged", () => {
@@ -3658,8 +3658,8 @@ describe("given a body style's P2 parts", () => {
     const style: BodyStyle = { ...plain, bumpers: { ...plain.bumpers, rear: { ...plain.bumpers.rear, plate } } };
     const box = partBox(drawnPart(PART_KIND.tailTrim, style).geometry);
     assertSameNumbers([box.getCenter(new THREE.Vector3()).y + sedan.bumpers.rear.seat.y], [plate], "the plate's centre height", POSITION_TOL);
-    assert.ok(drawnPart(PART_KIND.tailTrim, plain).geometry === partGeometry(PART_KIND.tailTrim), "without the field, the platform plate");
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    expect(drawnPart(PART_KIND.tailTrim, plain).geometry, "without the field, the platform plate").toBe(partGeometry(PART_KIND.tailTrim));
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a rear bumper sets its plate's face and colour, then the plate's rear face stands that far out of the seat in that colour, and the cage builds are unchanged", () => {
@@ -3674,10 +3674,10 @@ describe("given a body style's P2 parts", () => {
     const want = new THREE.Color(plateFace.color);
     let off = 0;
     for (let i = 0; i < colour.count; i++) off = Math.max(off, Math.abs(colour.getX(i) - want.r));
-    assert.ok(off < 1e-6, `every plate vertex is the dark tone (off by ${off})`);
+    expect(off, `every plate vertex is the dark tone (off by ${off})`).toBeLessThan(1e-6);
     const bare = partBox(drawnPart(PART_KIND.tailTrim, { ...plain, bumpers: { ...plain.bumpers, rear } }).geometry);
     assertSameNumbers([bare.min.z], [-0.09], "without the field, the platform plate's face", POSITION_TOL);
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a style draws its own head lamp to an outline, then its lit lens fills the outline 1-6 mm proud of the skin on each side, the left lamp mirrors the right, and the cage builds are unchanged", () => {
@@ -3707,11 +3707,11 @@ describe("given a body style's P2 parts", () => {
       return { footprint, drawn, low, high };
     });
     const [l, r] = [lens[0]!, lens[1]!];
-    assert.ok(!r.footprint.isEmpty(), "the control: the lit lens is drawn");
+    expect(!r.footprint.isEmpty(), "the control: the lit lens is drawn").toBe(true);
     assertSameNumbers([r.footprint.min.x, r.footprint.max.x, r.footprint.min.y, r.footprint.max.y], [x - 0.08, x + 0.08, y - 0.03, y + 0.03], "the lens fills its outline", 0.003);
     assertSameNumbers([l.drawn.min.x, l.drawn.max.x], [-r.drawn.max.x, -r.drawn.min.x], "the left lamp mirrors the right", OWN_SKIN_MIRROR_TOL);
-    for (const [side, s] of [["right", r], ["left", l]] as const) assert.ok(s.low > 0.001 && s.high < 0.006, `the ${side} lens stands ${(s.low * 1000).toFixed(1)}-${(s.high * 1000).toFixed(1)} mm off the skin`);
-    assert.ok(cageHash(style) === cageHash(sedan), "the cage builds are unchanged");
+    for (const [side, s] of [["right", r], ["left", l]] as const) expect(s.low > 0.001 && s.high < 0.006, `the ${side} lens stands ${(s.low * 1000).toFixed(1)}-${(s.high * 1000).toFixed(1)} mm off the skin`).toBeTruthy();
+    expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
   it("when a grille is a trapezoid hex mesh with a badge, then its surround is its width at the top and `bottom` at the bottom, and a chrome badge sits at its centre", () => {
@@ -3725,7 +3725,7 @@ describe("given a body style's P2 parts", () => {
     assertSameNumbers([widthAt(cy + 0.12), widthAt(cy - 0.12)], [0.7, 0.5], "the surround's width at its top and bottom", 1e-4);
     const chrome = new THREE.Color(TRIM_CHROME);
     const badge = Array.from({ length: pos.count }, (_, i) => i).filter((i) => Math.hypot(pos.getX(i), pos.getY(i) - cy) < grille.badge + 1e-4 && Math.abs(colour.getX(i) - chrome.r) < 1e-6);
-    assert.ok(badge.length > 0, "a chrome badge at the centre of a black grille");
+    expect(badge.length, "a chrome badge at the centre of a black grille").toBeGreaterThan(0);
   });
 
   it("when a grille leans, then its face's top and bottom edges stand where the lean turns them about its centre line on its face", () => {
@@ -3736,8 +3736,8 @@ describe("given a body style's P2 parts", () => {
     const [cy, face, half] = [grille.y - seat.y - GRILLE_SEAT.y, grille.z - seat.z - GRILLE_SEAT.z, grille.size[1] / 2];
     const [dy, dz] = [half * Math.cos(grille.lean), half * Math.sin(grille.lean)];
     const has = (y: number, z: number): boolean => Array.from({ length: pos.count }, (_, i) => i).some((i) => Math.abs(Math.abs(pos.getX(i)) - 0.3) < 1e-4 && Math.abs(pos.getY(i) - y) < 1e-4 && Math.abs(pos.getZ(i) - z) < 1e-4);
-    assert.ok(has(cy + dy, face - dz), `the face's top corners lean back to ${(cy + dy).toFixed(4)}, ${(face - dz).toFixed(4)}`);
-    assert.ok(has(cy - dy, face + dz), `the face's bottom corners stand out to ${(cy - dy).toFixed(4)}, ${(face + dz).toFixed(4)}`);
+    expect(has(cy + dy, face - dz), `the face's top corners lean back to ${(cy + dy).toFixed(4)}, ${(face - dz).toFixed(4)}`).toBeTruthy();
+    expect(has(cy - dy, face + dz), `the face's bottom corners stand out to ${(cy - dy).toFixed(4)}, ${(face + dz).toFixed(4)}`).toBeTruthy();
   });
 
   it("when a grille's surround takes its own finish, then the ring out to the grille's edge turns chrome and its mesh stays black", () => {
@@ -3758,16 +3758,16 @@ describe("given a body style's P2 parts", () => {
     };
     const plain = tones(grille);
     const rimmed = tones({ ...grille, rim: "chrome" });
-    assert.ok(plain.chromeN === 0 && rimmed.chromeN > 0, `chrome vertices: ${plain.chromeN} plain, ${rimmed.chromeN} rimmed`);
-    assert.ok(Math.abs(rimmed.reach - grille.size[0] / 2) < 1e-4, `the chrome reaches ${rimmed.reach.toFixed(4)} across, the grille's edge ${grille.size[0] / 2}`);
-    assert.ok(rimmed.blackN === plain.blackN - rimmed.chromeN && rimmed.blackN > 0, `only the surround turned: black ${plain.blackN} -> ${rimmed.blackN}`);
+    expect(plain.chromeN === 0 && rimmed.chromeN > 0, `chrome vertices: ${plain.chromeN} plain, ${rimmed.chromeN} rimmed`).toBeTruthy();
+    expect(Math.abs(rimmed.reach - grille.size[0] / 2), `the chrome reaches ${rimmed.reach.toFixed(4)} across, the grille's edge ${grille.size[0] / 2}`).toBeLessThan(1e-4);
+    expect(rimmed.blackN === plain.blackN - rimmed.chromeN && rimmed.blackN > 0, `only the surround turned: black ${plain.blackN} -> ${rimmed.blackN}`).toBeTruthy();
   });
 
   it("when a hex grille gives a count, then it draws that many lines each way, one 12-triangle bar each", () => {
     const sedan = CAR_STYLES.sedan;
     const grille = { y: 0.48, z: sedan.bumpers.front.seat.z + 0.07, size: [0.6, 0.16], kind: "hex", finish: "black" } as const;
     const tris = (count: number) => drawnPart(PART_KIND.grille, { ...sedan, grille: { ...grille, count }, lamps: { ...sedan.lamps, shapes: undefined } }).geometry.getIndex()!.count / 3;
-    assert.ok(tris(16) - tris(8) === 2 * 8 * 12, `16 lines each way draw ${tris(16) - tris(8)} triangles more than 8`);
+    expect(tris(16) - tris(8), `16 lines each way draw ${tris(16) - tris(8)} triangles more than 8`).toBe(2 * 8 * 12);
   });
 
   it("when a hex grille gives its bars' angle, then their front edges run at ± that angle and none at the default 60°", () => {
@@ -3782,7 +3782,7 @@ describe("given a body style's P2 parts", () => {
       for (const a of ends) for (const b of ends) if (b.x - a.x > 0.03 && Math.abs(Math.abs(Math.atan2(b.y - a.y, b.x - a.x)) - angle) < 1e-3) n++;
       return n;
     };
-    assert.ok(edgesAt(grille.angle) > 0 && edgesAt(Math.PI / 3) === 0, `bar edges at ±${grille.angle}: ${edgesAt(grille.angle)}, at ±60°: ${edgesAt(Math.PI / 3)}`);
+    expect(edgesAt(grille.angle) > 0 && edgesAt(Math.PI / 3) === 0, `bar edges at ±${grille.angle}: ${edgesAt(grille.angle)}, at ±60°: ${edgesAt(Math.PI / 3)}`).toBeTruthy();
   });
 
   it("when a rear glass has a frame, then its clear pane is drawn that far inside the outline, the band out to the outline is its black frit, and the car's pane carries its per-vertex glass tone", () => {
@@ -3800,8 +3800,8 @@ describe("given a body style's P2 parts", () => {
     const paneFoot = [half, q.base[0] + t0 * (q.top[0] - q.base[0]) - domeFall(hatch, q.top[1])(half, t0)];
     assertSameNumbers([...reach(clear), ...reach(frit)], [...paneFoot, q.wBase / 2, q.base[0]], "the clear pane's and the frit's half-width and foot", 1e-5);
     const pane = cars.hatchback["glassPanes"].find((p) => p.name === "rear")!;
-    assert.ok(pane.mesh.geometry.hasAttribute(GLASS_ATTRIBUTE), "the car's rear pane carries its frit");
-    assert.ok(!makeRearGlass({ ...hatch, rearGlass: { ...q, frame: undefined } }).hasAttribute(GLASS_ATTRIBUTE), "no frit without a frame");
+    expect(pane.mesh.geometry.hasAttribute(GLASS_ATTRIBUTE), "the car's rear pane carries its frit").toBeTruthy();
+    expect(!makeRearGlass({ ...hatch, rearGlass: { ...q, frame: undefined } }).hasAttribute(GLASS_ATTRIBUTE), "no frit without a frame").toBe(true);
   });
 
   it("when a style puts lamps on its bumpers, then the grille seat draws the front ones on the fascia and the tail trim the rear ones, with no shared dark strip across the tail", () => {
@@ -3818,13 +3818,13 @@ describe("given a body style's P2 parts", () => {
     const { front, rear } = sedan.bumpers;
     const grille = drawnPart(PART_KIND.grille, sedan).geometry;
     const grilleAt = new THREE.Vector3(0, front.seat.y + GRILLE_SEAT.y, front.seat.z + GRILLE_SEAT.z);
-    for (const x of [-0.6, 0.6]) assert.ok(near(grille, grilleAt, new THREE.Vector3(x, 0.305, meet(true, Math.abs(x), 0.305))), `the fog lens at x ${x} on the fascia`);
+    for (const x of [-0.6, 0.6]) expect(near(grille, grilleAt, new THREE.Vector3(x, 0.305, meet(true, Math.abs(x), 0.305))), `the fog lens at x ${x} on the fascia`).toBeTruthy();
     const trim = drawnPart(PART_KIND.tailTrim, sedan).geometry;
     const trimAt = new THREE.Vector3(0, rear.seat.y, -rear.seat.z);
-    for (const x of [-0.55, 0.55]) assert.ok(near(trim, trimAt, new THREE.Vector3(x, 0.495, meet(false, Math.abs(x), 0.495))), `the reflector at x ${x} on the fascia`);
+    for (const x of [-0.55, 0.55]) expect(near(trim, trimAt, new THREE.Vector3(x, 0.495, meet(false, Math.abs(x), 0.495))), `the reflector at x ${x} on the fascia`).toBeTruthy();
     const plate = partGeometry(PART_KIND.tailTrim);
     plate.computeBoundingBox();
-    assert.ok(plate.boundingBox!.max.x - plate.boundingBox!.min.x < 0.4, `the platform tail trim is the plate alone, ${(plate.boundingBox!.max.x - plate.boundingBox!.min.x).toFixed(2)} m wide`);
+    expect(plate.boundingBox!.max.x - plate.boundingBox!.min.x, `the platform tail trim is the plate alone, ${(plate.boundingBox!.max.x - plate.boundingBox!.min.x).toFixed(2)} m wide`).toBeLessThan(0.4);
   });
 
   it("when a bumper lamp is met on the body too, then its lens stands proud of the body skin where the fascia's wrapped corner is held inside it", () => {
@@ -3838,7 +3838,7 @@ describe("given a body style's P2 parts", () => {
       new THREE.Raycaster(new THREE.Vector3(0.62, 0.3, 5), new THREE.Vector3(0, 0, -1)).intersectObject(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), false)[0]?.point.z ?? -Infinity;
     const skin = meetZ(makeChassisGeometry(sedan));
     const [lens, buried] = [sedan, off].map((style) => meetZ(drawnPart(PART_KIND.grille, style).geometry.clone().translate(0, seat.y + GRILLE_SEAT.y, seat.z + GRILLE_SEAT.z)));
-    assert.ok(lens! > skin + 0.001 && buried! < skin, `the fog pod's lens at z ${lens!.toFixed(4)} (without the field ${buried!.toFixed(4)}), the body skin at ${skin.toFixed(4)}`);
+    expect(lens! > skin + 0.001 && buried! < skin, `the fog pod's lens at z ${lens!.toFixed(4)} (without the field ${buried!.toFixed(4)}), the body skin at ${skin.toFixed(4)}`).toBeTruthy();
   });
 
   it("when the hatchback's and the SUV's bumper lamps are met from outside, then each lens, cell and strip is drawn in front of the body and the fascia, where the nose or tail corner stands proud of the bumper too", () => {
@@ -3871,8 +3871,8 @@ describe("given a body style's P2 parts", () => {
         }
       }
     }
-    assert.equal(hidden.join(" "), "", "bumper lamp points the body or the fascia hides");
-    assert.ok(proud >= 3, `the control: the body stands proud of the fascia at ${proud} of them`);
+    expect(hidden.join(" "), "bumper lamp points the body or the fascia hides").toBe("");
+    expect(proud, `the control: the body stands proud of the fascia at ${proud} of them`).toBeGreaterThanOrEqual(3);
   });
 
   it("when a rear bumper is plateless, then its tail trim is its bumper lamps alone, with no platform plate in it", () => {
@@ -3883,10 +3883,10 @@ describe("given a body style's P2 parts", () => {
       return Array.from({ length: c.count }, (_, i) => [c.getX(i), c.getY(i), c.getZ(i)].join()).filter((k) => k === cream).length;
     };
     for (const id of ["hatchback", "wagon"] as const) {
-      assert.equal(creams(id), 0, `plate vertices in the ${id}'s tail trim`);
-      assert.ok(CAR_STYLES[id].bumpers.rear.plateless, `the ${id}'s reference shows no plate on its bumper`);
+      expect(creams(id), `plate vertices in the ${id}'s tail trim`).toBe(0);
+      expect(CAR_STYLES[id].bumpers.rear.plateless, `the ${id}'s reference shows no plate on its bumper`).toBeTruthy();
     }
-    assert.ok(creams("sedan") > 0, "the control: the sedan's trim carries the plate");
+    expect(creams("sedan"), "the control: the sedan's trim carries the plate").toBeGreaterThan(0);
   });
 
   it("when a bumper lamp's lens is black, then the hatchback's and the SUV's diffuser bands are the trim's matte black plastic, not a glossy dark lens", () => {
@@ -3896,8 +3896,8 @@ describe("given a body style's P2 parts", () => {
       const trim = drawnPart(PART_KIND.tailTrim, CAR_STYLES[id]).geometry;
       const [c, uv] = [trim.getAttribute("color"), trim.getAttribute("uv")];
       const band = Array.from({ length: c.count }, (_, i) => i).filter((i) => [c.getX(i), c.getY(i), c.getZ(i)].join() === black);
-      assert.ok(band.length > 0, `${id}: no black plastic in the tail trim`);
-      assert.equal(band.filter((i) => uv.getX(i) !== texel).length, 0, `${id}: black vertices off the plastic finish's texel`);
+      expect(band.length, `${id}: no black plastic in the tail trim`).toBeGreaterThan(0);
+      expect(band.filter((i) => uv.getX(i) !== texel).length, `${id}: black vertices off the plastic finish's texel`).toBe(0);
     }
   });
 
@@ -3911,7 +3911,7 @@ describe("given a body style's P2 parts", () => {
     const pos = grille.getAttribute("position");
     const intake = Array.from({ length: pos.count }, (_, i) => i).filter((i) => Math.abs(pos.getX(i)) < 0.4 && pos.getY(i) + y0 > 0.23 && pos.getY(i) + y0 < 0.27);
     const filled = intake.filter((i) => tone(grille, i) === key).length;
-    assert.ok(filled > intake.length / 2, `${filled} of ${intake.length} intake vertices in the grille backing's tone (the rest its bezel lip)`);
+    expect(filled, `${filled} of ${intake.length} intake vertices in the grille backing's tone (the rest its bezel lip)`).toBeGreaterThan(intake.length / 2);
   });
 
   it("when the wagon's corner intake is read above its lower intake, then its dark recess starts no further inboard than x .59, as the reference's narrow recess", () => {
@@ -3927,16 +3927,16 @@ describe("given a body style's P2 parts", () => {
         count++;
       }
     }
-    assert.ok(count > 0, "no dark lens vertices above the lower intake");
-    assert.ok(inner >= 0.59 - POSITION_TOL, `corner recess's inboard edge at x ${inner.toFixed(3)}`);
+    expect(count, "no dark lens vertices above the lower intake").toBeGreaterThan(0);
+    expect(inner, `corner recess's inboard edge at x ${inner.toFixed(3)}`).toBeGreaterThanOrEqual(0.59 - POSITION_TOL);
   });
 
   it("when a tail lamp's outline runs onto the boot lid, then the lid carries that share and opens with it, and the body keeps the rest", () => {
     const car = new DeformableCar(PAINT, new THREE.Scene(), null, "hatchback");
     const lid = car.lampFittings.find((f) => f.kind === "boot");
-    assert.ok(lid, "the hatch carries a share of the tails");
+    must(lid, "the hatch carries a share of the tails");
     const trunk = lid.seat.parent as THREE.Mesh;
-    assert.ok(trunk.parent && trunk.position.z === bootPivot(car.style.boot)[1], "riding the lid itself");
+    expect(trunk.parent && trunk.position.z === bootPivot(car.style.boot)[1], "riding the lid itself").toBeTruthy();
     car.group.updateMatrixWorld(true);
     // Nearest distance (m) from a car-frame point to a mesh's surface.
     const gap = (mesh: THREE.Mesh, p: THREE.Vector3): number => {
@@ -3956,10 +3956,10 @@ describe("given a body style's P2 parts", () => {
       const off = Array.from({ length: pos.count }, (_, i) => gap(trunk, new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(trunk.matrixWorld)));
       let loose = 0;
       for (let t = 0; t < index.count; t += 3) if (Math.min(off[index.getX(t)]!, off[index.getX(t + 1)]!, off[index.getX(t + 2)]!) > 0.016) loose++;
-      assert.ok(index.count > 0, `the lid carries side ${side}'s share`);
-      assert.equal(loose, 0, `side ${side}: lid-share triangles off the lid`);
+      expect(index.count, `the lid carries side ${side}'s share`).toBeGreaterThan(0);
+      expect(loose, `side ${side}: lid-share triangles off the lid`).toBe(0);
     }
-    assert.ok(drawnLamp(car.style, "tail", 1).geometry.getIndex()!.count > 0, "the body keeps a share");
+    expect(drawnLamp(car.style, "tail", 1).geometry.getIndex()!.count, "the body keeps a share").toBeGreaterThan(0);
     trunk.rotation.x = 0.6;
     car.group.updateMatrixWorld(true);
     const batch = new LampBatch(2);
@@ -3967,20 +3967,20 @@ describe("given a body style's P2 parts", () => {
     // Rows pack the lamps, then the fittings in order (all shown here): the lid's row follows the lamps and the fittings before it.
     const row = car.lamps.length + car.lampFittings.indexOf(lid);
     const got = batch.draw.matrixAt(row, new THREE.Matrix4());
-    for (let k = 0; k < 16; k++) assert.ok(Math.abs(got.elements[k]! - trunk.matrixWorld.elements[k]!) < 1e-6, `the opened lid's pose, element ${k}`);
+    for (let k = 0; k < 16; k++) expect(Math.abs(got.elements[k]! - trunk.matrixWorld.elements[k]!), `the opened lid's pose, element ${k}`).toBeLessThan(1e-6);
     const drawnShare = batch.draw.variants[batch.draw.variantAt(row)]!.getIndex()!.count;
-    assert.equal(drawnShare, drawnLamp(car.style, "boot", lid.share!.lamp!.side).geometry.getIndex()!.count, "the lid's row draws its own share");
+    expect(drawnShare, "the lid's row draws its own share").toBe(drawnLamp(car.style, "boot", lid.share!.lamp!.side).geometry.getIndex()!.count);
   });
 
   it("when a bumper carries its seam, then it is the skin up to the seam on the end face and round the corner on both sides (rays from outside meet it 2 cm under the seam and the body 2 cm over), and a bumper without one draws as before", () => {
     const style = CAR_STYLES.sedan;
     const { seat, top, edge } = style.bumpers.rear;
-    assert.ok(top && edge, "the control: the sedan's rear bumper carries its seam");
+    must(top && edge, "the control: the sedan's rear bumper carries its seam");
     const fascia = withRearFittings(makeBumperGeometry(false, style), style);
     const drawn = withSeamCover(fascia, style, false);
-    assert.ok(drawn !== fascia, "the control: the seam cover is merged in");
+    expect(drawn, "the control: the seam cover is merged in").not.toBe(fascia);
     const cover = (drawn.index!.count - fascia.index!.count) / 3;
-    assert.ok(cover <= SEAM_COVER_TRIANGLES, `the cover bills ${cover} triangles, over ${SEAM_COVER_TRIANGLES}: a band down to the fascia, not the skin it hides`);
+    expect(cover, `the cover bills ${cover} triangles, over ${SEAM_COVER_TRIANGLES}: a band down to the fascia, not the skin it hides`).toBeLessThanOrEqual(SEAM_COVER_TRIANGLES);
     const both = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
     const bumper = new THREE.Mesh(drawn, both);
     bumper.position.set(0, seat.y, -seat.z);
@@ -3996,18 +3996,18 @@ describe("given a body style's P2 parts", () => {
     for (const side of [1, -1]) {
       for (const [x, y] of top.slice(1)) {
         for (const [dy, want] of [[-0.02, "bumper"], [0.02, "body"]] as const) {
-          assert.equal(meets(new THREE.Vector3(side * x, y + dy, tail - 5), new THREE.Vector3(0, 0, 1)), want, `end face [${side * x}, ${y + dy}]`);
+          expect(meets(new THREE.Vector3(side * x, y + dy, tail - 5), new THREE.Vector3(0, 0, 1)), `end face [${side * x}, ${y + dy}]`).toBe(want);
         }
       }
       // The seam's run back along the quarter, before it turns down the arch's lip.
       for (const [z, y] of edge.slice(0, 5)) {
         for (const [dy, want] of [[-0.02, "bumper"], [0.02, "body"]] as const) {
-          assert.equal(meets(new THREE.Vector3(side * 5, y + dy, z), new THREE.Vector3(-side, 0, 0)), want, `side [${z}, ${y + dy}] (${side < 0 ? "left" : "right"})`);
+          expect(meets(new THREE.Vector3(side * 5, y + dy, z), new THREE.Vector3(-side, 0, 0)), `side [${z}, ${y + dy}] (${side < 0 ? "left" : "right"})`).toBe(want);
         }
       }
     }
     const plain = makeBumperGeometry(true, CAR_STYLES.coupe);
-    assert.ok(withSeamCover(plain, CAR_STYLES.coupe, true) === plain, "a bumper with no seam is drawn as it was");
+    expect(withSeamCover(plain, CAR_STYLES.coupe, true), "a bumper with no seam is drawn as it was").toBe(plain);
   });
 
   it("when a style's bumpers carry their seams, then every seam cover vertex lies on the body skin (no fold of the band stands off an edge)", () => {
@@ -4031,7 +4031,7 @@ describe("given a body style's P2 parts", () => {
           const hit = ray.intersectObject(body, false)[0];
           off = Math.max(off, hit ? Math.abs(hit.distance - 0.05) : Infinity);
         }
-        assert.ok(off < SEAM_COVER_OFF, `${id} ${front ? "front" : "rear"}: a cover vertex ${(off * 100).toFixed(1)} cm off the skin`);
+        expect(off, `${id} ${front ? "front" : "rear"}: a cover vertex ${(off * 100).toFixed(1)} cm off the skin`).toBeLessThan(SEAM_COVER_OFF);
       }
     }
   });
@@ -4060,7 +4060,7 @@ describe("given a body style's P2 parts", () => {
           worst = Math.max(worst, box.distanceToPoint(v));
         }
       });
-      assert.ok(outside === 0, `${name}: ${outside} drawn vertices outside its loose box, the farthest ${(worst * 100).toFixed(1)} cm`);
+      expect(outside, `${name}: ${outside} drawn vertices outside its loose box, the farthest ${(worst * 100).toFixed(1)} cm`).toBe(0);
     }
   });
 
@@ -4108,7 +4108,7 @@ describe("given a body style's P2 parts", () => {
         armSolids(null);
       }
     }
-    assert.ok(fails.length === 0, fails.join("; "));
+    expect(fails.length, fails.join("; ")).toBe(0);
   });
 });
 
@@ -4221,7 +4221,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
   for (const [id, style] of cases) {
     it(`when a ${id}'s drawn body is built, then nothing of it stands in its boot's opening: under its lid between the lid's edges, in its face's cut`, () => {
       const hits = openingCrossings(style);
-      assert.ok(hits.length === 0, `${id}: ${hits.length} rays meet body in the opening, first ${hits.slice(0, 4).join(" ")}`);
+      expect(hits.length, `${id}: ${hits.length} rays meet body in the opening, first ${hits.slice(0, 4).join(" ")}`).toBe(0);
     });
   }
 
@@ -4239,7 +4239,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
   it("when the coupe's deck lid is drawn, then its edge stands at the reference's seam (|x| .54) along its whole length, the groove beside it opens into the hollow, the quarter top outboard of it stands flush (within 1 cm under the lid's edge), along its whole length including the cut's ramps at both ends, and the cage builds are unchanged", () => {
     const { coupe } = CAR_STYLES;
     const b = coupe.boot;
-    assert.ok(b.kind === "lid" && b.flush === true, "the coupe's boot is a flush deck lid");
+    must(b.kind === "lid" && b.flush === true, "the coupe's boot is a flush deck lid");
     const [py, pz] = bootPivot(b);
     const zMid = lerp(b.z0, b.z1, 0.5);
     const lid = makeTrunkGeometry(coupe).getAttribute("position");
@@ -4251,13 +4251,13 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       if (Math.abs(x - COUPE_LID_SEAM) < LID_EDGE_NEAR.x && Math.abs(lid.getZ(i) + pz - zMid) < LID_EDGE_NEAR.z) edgeY = Math.max(edgeY, lid.getY(i) + py);
     }
     assertSameNumbers([reach], [COUPE_LID_SEAM], "the lid's widest point (|x|)", 1e-4);
-    assert.ok(Number.isFinite(edgeY), "the control: the lid has a vertex at its seam at mid-lid");
+    expect(Number.isFinite(edgeY), "the control: the lid has a vertex at its seam at mid-lid").toBeTruthy();
     const body = new THREE.Mesh(makeChassisGeometry(coupe), SIDED);
     const down = (x: number) => bodyHit(body, [x, edgeY + 0.05, zMid], [0, -1, 0], OPEN_DEPTH);
-    assert.ok(down(COUPE_LID_SEAM + 0.005) === null, "the groove beside the lid's edge is open into the hollow");
+    expect(down(COUPE_LID_SEAM + 0.005), "the groove beside the lid's edge is open into the hollow").toBe(null);
     for (const x of [COUPE_LID_SEAM + 0.02, COUPE_LID_SEAM + 0.06]) {
       const hit = down(x);
-      assert.ok(hit !== null && hit.y <= edgeY && edgeY - hit.y < FLUSH_UNDER, `the quarter top at |x| ${x.toFixed(2)} stands at ${hit?.y.toFixed(4)}, within ${FLUSH_UNDER * 1000} mm under the lid's edge ${edgeY.toFixed(4)}`);
+      expect(hit !== null && hit.y <= edgeY && edgeY - hit.y < FLUSH_UNDER, `the quarter top at |x| ${x.toFixed(2)} stands at ${hit?.y.toFixed(4)}, within ${FLUSH_UNDER * 1000} mm under the lid's edge ${edgeY.toFixed(4)}`).toBeTruthy();
     }
     const scanZs = Array.from({ length: Math.floor((b.z0 - b.z1 - 2 * SCAN_INSET) / SCAN_STEP + 1e-6) + 1 }, (_, k) => b.z0 - SCAN_INSET - k * SCAN_STEP);
     const wedges: string[] = [];
@@ -4268,8 +4268,8 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         if (hit === null || belt - hit.y > QUARTER_UNDER_BELT) wedges.push(`${z.toFixed(3)}@${x.toFixed(2)}:${hit?.y.toFixed(4) ?? "none"}`);
       }
     }
-    assert.ok(wedges.length === 0, `the quarter top stands within ${QUARTER_UNDER_BELT * 1000} mm of the belt along the whole lid, but ${wedges.length} rays fell through (z@x:y): ${wedges.join(" ")}`);
-    assert.ok(cageHash(coupe) === cageHash({ ...coupe, boot: { ...b, halfWidth: undefined } }), "the cage builds are unchanged");
+    expect(wedges.length, `the quarter top stands within ${QUARTER_UNDER_BELT * 1000} mm of the belt along the whole lid, but ${wedges.length} rays fell through (z@x:y): ${wedges.join(" ")}`).toBe(0);
+    expect(cageHash(coupe), "the cage builds are unchanged").toBe(cageHash({ ...coupe, boot: { ...b, halfWidth: undefined } }));
   });
 
   /** A plain lid's edge stands this far (m) in from its station's half-width (`DECK_INSET`), a seated lid's (`HOOD_INSET`) this far. */
@@ -4288,7 +4288,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
   it("when the sedan's boot lid is drawn, then the sedan's boot lid's sides meet the quarter's rim within 1 cm from the hollow's front ramp to the lip (no shelf)", () => {
     const { sedan } = CAR_STYLES;
     const b = sedan.boot;
-    assert.ok(b.kind === "lid" && b.flush === true && b.drop !== undefined && b.edgeRoll !== undefined && b.crown !== undefined && b.lip !== undefined, "the sedan's boot is a flush, rolled, crowned deck lid with a lip, wrapping the tail");
+    must(b.kind === "lid" && b.flush === true && b.drop !== undefined && b.edgeRoll !== undefined && b.crown !== undefined && b.lip !== undefined, "the sedan's boot is a flush, rolled, crowned deck lid with a lip, wrapping the tail");
     const [py, pz] = bootPivot(b);
     const roll = b.edgeRoll;
     const lipStart = b.z1 + LID_FOLD + b.lip.depth;
@@ -4308,22 +4308,22 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         const rimXs = Array.from({ length: Math.round(CORNER_RIM_REACH / LID_RIM_OUT) }, (_, k) => edge + (k + 1) * LID_RIM_OUT);
         const rimX = rimXs.find((x) => down(body, x) !== null) ?? edge + CORNER_RIM_REACH;
         const [top, rim] = [down(lid, lidX), down(body, rimX)];
-        assert.ok(top !== null && rim !== null, `z ${z.toFixed(3)} (hw ${hw.toFixed(3)}, lid edge ${edge.toFixed(3)}): the lid's top at x ${lidX.toFixed(3)} ${top ? "found" : "MISSED"}, the quarter's rim at x ${rimX.toFixed(3)} ${rim ? "found" : "MISSED"}`);
+        must(top !== null && rim !== null, `z ${z.toFixed(3)} (hw ${hw.toFixed(3)}, lid edge ${edge.toFixed(3)}): the lid's top at x ${lidX.toFixed(3)} ${top ? "found" : "MISSED"}, the quarter's rim at x ${rimX.toFixed(3)} ${rim ? "found" : "MISSED"}`);
         return top.y - rim.y;
       });
     };
     const overs = standOver(sedan);
     const worst = Math.max(...overs);
-    assert.ok(worst <= CORNER_STEP, `the lid's sides stand over the quarter's rim by (mm, front to lip) ${overs.map((o) => (o * 1000).toFixed(1)).join(" ")}, over ${CORNER_STEP * 1000}`);
+    expect(worst, `the lid's sides stand over the quarter's rim by (mm, front to lip) ${overs.map((o) => (o * 1000).toFixed(1)).join(" ")}, over ${CORNER_STEP * 1000}`).toBeLessThanOrEqual(CORNER_STEP);
     // The control: the unseated lid (its edge a step up off the deck, its crown 2 cm), over the body built for it, so the row cannot pass vacuously.
     const control: BodyStyle = { ...sedan, boot: { ...b, flush: undefined, halfWidth: undefined, crown: [0.02, b.crown[1]] } };
     const stepped = Math.max(...standOver(control));
-    assert.ok(stepped > CORNER_STEP, `the control: the unseated lid's sides stand up to ${(stepped * 1000).toFixed(1)} mm over their rim, over ${CORNER_STEP * 1000}`);
+    expect(stepped, `the control: the unseated lid's sides stand up to ${(stepped * 1000).toFixed(1)} mm over their rim, over ${CORNER_STEP * 1000}`).toBeGreaterThan(CORNER_STEP);
   });
 
   it("when the hatch's tailgate is built on its seam's outline, then its edge stands on the outline at each of the outline's corners, in the drawn and the cage build", () => {
     const b = CAR_STYLES.hatchback.boot;
-    assert.ok(b.kind === "tailgate" && b.outline, "the hatch's gate carries an outline");
+    must(b.kind === "tailgate" && b.outline, "the hatch's gate carries an outline");
     const [py] = bootPivot(b);
     const off: string[] = [];
     for (const source of ["drawn", "cage"] as const) {
@@ -4335,13 +4335,13 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         if (Math.abs(edge - ox) > 1e-3) off.push(`${source} at y ${oy}: ${edge.toFixed(3)} (${ox})`);
       }
     }
-    assert.ok(off.length === 0, `the gate's edge: ${off.join("; ")}`);
+    expect(off.length, `the gate's edge: ${off.join("; ")}`).toBe(0);
   });
 
   it("when the hatch's tailgate steps in between its tail lamps, then the body's tail beside the step is shut flush with the gate's face", () => {
     const style = CAR_STYLES.hatchback;
     const b = style.boot;
-    assert.ok(b.kind === "tailgate" && b.z0 !== undefined, "the hatch's gate leans");
+    must(b.kind === "tailgate" && b.z0 !== undefined, "the hatch's gate leans");
     const [y1, oz] = b.origin;
     const lean = (b.z0 - oz) / (b.y0 - y1);
     const body = new THREE.Mesh(makeChassisGeometry(style), SIDED);
@@ -4353,7 +4353,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         if (!(Math.abs(z - gate) < 0.005)) off.push(`(${x}, ${y.toFixed(2)}): ${z.toFixed(3)} vs ${gate.toFixed(3)}`);
       }
     }
-    assert.ok(off.length === 0, `the tail beside the step: ${off.join("; ")}`);
+    expect(off.length, `the tail beside the step: ${off.join("; ")}`).toBe(0);
   });
 
   for (const id of ["pickup", "monster", "hatchback", "wagon"] as const) {
@@ -4366,7 +4366,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         const floor = Math.max(f, floorY(z, style));
         for (let x = -0.45; x <= 0.45; x += 0.05) worst = Math.max(worst, Math.abs((bodyHit(body, [x, floor + 0.3, z], [0, -1, 0], 1)?.y ?? 0) - floor));
       }
-      assert.ok(worst < 0.005, `${id}: the floor stands ${worst.toFixed(3)} m off its height`);
+      expect(worst, `${id}: the floor stands ${worst.toFixed(3)} m off its height`).toBeLessThan(0.005);
     });
   }
 
@@ -4381,7 +4381,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         const x = Math.sign(wx) * (linerInnerEdge(style, wx, wz) - 0.01);
         const from = wy + r + 0.1 + (style.wheelTub?.rise ?? 0);
         const top = bodyHit(body, [x, from, wz], [0, -1, 0], from - wy)?.y ?? -Infinity;
-        assert.ok(top >= wy + r, `${id} wheel at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: the top over the liner's edge at ${top.toFixed(3)} m, the liner's top at ${(wy + r).toFixed(3)} m`);
+        expect(top, `${id} wheel at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: the top over the liner's edge at ${top.toFixed(3)} m, the liner's top at ${(wy + r).toFixed(3)} m`).toBeGreaterThanOrEqual(wy + r);
       }
     });
   }
@@ -4408,7 +4408,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
           for (const [what, y, want] of readings) if (Math.abs(y - want) > 0.005) off.push(`${source} x ${wx.toFixed(2)} ${what} ${y.toFixed(3)} (${want.toFixed(3)})`);
         }
       }
-      assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
+      expect(off.length, `${id}: ${off.join("; ")}`).toBe(0);
     });
 
     it(`when a ${id}'s tyres are risen to their spring's stop, then none stands through the bed floor between the bed's walls`, () => {
@@ -4432,7 +4432,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
           }
         }
       }
-      assert.ok(worst >= 0, `${id}: a tyre stands ${(-worst).toFixed(3)} m through the bed at ${at}`);
+      expect(worst, `${id}: a tyre stands ${(-worst).toFixed(3)} m through the bed at ${at}`).toBeGreaterThanOrEqual(0);
     });
 
     it(`when a ${id}'s bed is looked down onto just outside and inside its wall's top edge, then the rim is ${tubWall(style)} m wide and the wall's face drops away inside it, in the drawn and the cage build`, () => {
@@ -4448,7 +4448,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         if (rim < floor + 0.1) off.push(`${source} rim ${rim.toFixed(3)} (over ${(floor + 0.1).toFixed(3)})`);
         if (rim - inside < 0.05) off.push(`${source} inside ${inside.toFixed(3)} (under ${(rim - 0.05).toFixed(3)})`);
       }
-      assert.ok(off.length === 0, `${id} at z ${z.toFixed(2)}: ${off.join("; ")}`);
+      expect(off.length, `${id} at z ${z.toFixed(2)}: ${off.join("; ")}`).toBe(0);
     });
   }
 
@@ -4460,8 +4460,8 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       // The hull ends where the first part apart (a bumper) begins: the parts follow the tubs.
       const n = plain!.vertexGroup.findIndex((g) => g >= plain!.partGroup);
       const hull = (pos: Float64Array): string => Array.from(pos.subarray(0, n * 3), (v) => v.toFixed(6)).join(",");
-      assert.ok(tubbed!.vertexCount > n, `${id}: ${tubbed!.vertexCount} hull vertices, ${n} without its tubs`);
-      assert.ok(hull(tubbed!.pristine.pos) === hull(plain!.pristine.pos), `${id}: the hull's first ${n} vertices are not the tub-less hull's`);
+      expect(tubbed!.vertexCount, `${id}: ${tubbed!.vertexCount} hull vertices, ${n} without its tubs`).toBeGreaterThan(n);
+      expect(hull(tubbed!.pristine.pos), `${id}: the hull's first ${n} vertices are not the tub-less hull's`).toBe(hull(plain!.pristine.pos));
     });
   }
 
@@ -4484,9 +4484,9 @@ describe("given a body style's boot opening, its open floors and its arch lips (
           const out = (mesh: THREE.Mesh) => at(mesh, mesh === plain ? Math.max(y, top) : y);
           proud = Math.max(proud, out(drawn) - out(plain));
         }
-        assert.ok(Math.abs(proud - lip.flare) < LIP_TOL, `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: the lip stands ${proud.toFixed(4)} m proud`);
+        expect(Math.abs(proud - lip.flare), `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: the lip stands ${proud.toFixed(4)} m proud`).toBeLessThan(LIP_TOL);
       }
-      assert.ok(cageHash(style) === cageHash(lipless(style)), "the cage build is unchanged");
+      expect(cageHash(style), "the cage build is unchanged").toBe(cageHash(lipless(style)));
     });
     it(`when a ${id}'s arch tops are looked at from outside and from under, then the lip's crown is painted and, up to ${WELL_GAP.at(-1)} m in past the body side, the well over the tyre is unpainted (a lit edge over a dark gap)`, () => {
       const body = makeChassisGeometry(style);
@@ -4501,9 +4501,9 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         const at = `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}`;
         const crown = toneHit(drawn, [s * 3, top - (lip.inset ?? 0) + 0.3 * lip.width, wz], [-s, 0, 0], 3);
         const onLip = crown !== null && crown.at >= lips.from && crown.at < lipEnd;
-        assert.ok(onLip && crown.tone === 0, `${at}: from outside, ${onLip ? `the lip's crown is toned ${crown.tone}` : "the lip is not met"}`);
+        expect(onLip && crown.tone === 0, `${at}: from outside, ${onLip ? `the lip's crown is toned ${crown.tone}` : "the lip is not met"}`).toBeTruthy();
         const seen = WELL_GAP.map((d) => toneHit(drawn, [s * (skin - d), wy, wz], [0, 1, 0], style.arch.radius)?.tone ?? NaN);
-        assert.ok(seen.every((t) => t >= WELL_DARK), `${at}: ${WELL_GAP.join(", ")} m in past the skin, up from the hub, the well is toned ${seen.map((t) => t.toFixed(2)).join(", ")}`);
+        expect(seen.every((t) => t >= WELL_DARK), `${at}: ${WELL_GAP.join(", ")} m in past the skin, up from the hub, the well is toned ${seen.map((t) => t.toFixed(2)).join(", ")}`).toBeTruthy();
       }
     });
   }
@@ -4527,7 +4527,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
             if (!hit || hit.tone < WELL_DARK) off.push(`(y ${y.toFixed(2)}, z ${z.toFixed(2)}) ${hit ? `toned ${hit.tone.toFixed(2)}` : "through"}`);
           }
         }
-        assert.ok(looked > 20 && off.length === 0, `${id} arch at z ${wz.toFixed(2)}: ${off.length} of ${looked} sight lines meet paint or nothing: ${off.slice(0, 6).join(", ")}`);
+        expect(looked > 20 && off.length === 0, `${id} arch at z ${wz.toFixed(2)}: ${off.length} of ${looked} sight lines meet paint or nothing: ${off.slice(0, 6).join(", ")}`).toBeTruthy();
       }
     });
   }
@@ -4542,7 +4542,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
         const s = Math.sign(wx);
         const top = wy + style.arch.radius * rise;
         const [over, under] = [top + 0.01, top - 0.02].map((y) => toneHit(drawn, [s * 3, y, wz], [-s, 0, 0], 6)?.tone ?? NaN);
-        assert.ok(over === 0 && under! >= WELL_DARK, `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: toned ${over} 1 cm over its crown, ${under} 2 cm under`);
+        expect(over === 0 && under! >= WELL_DARK, `${id} arch at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: toned ${over} 1 cm over its crown, ${under} 2 cm under`).toBeTruthy();
       }
     });
   }
@@ -4565,7 +4565,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
           }
         }
       }
-      assert.ok(looked >= 16 && off.length === 0, `${id}: ${off.length} of ${looked} leg sight lines show no straight edge: ${off.slice(0, 6).join(", ")}`);
+      expect(looked >= 16 && off.length === 0, `${id}: ${off.length} of ${looked} leg sight lines show no straight edge: ${off.slice(0, 6).join(", ")}`).toBeTruthy();
     });
   }
 
@@ -4582,7 +4582,7 @@ describe("given a body style's boot opening, its open floors and its arch lips (
       for (const [wx, wy, wz] of carFrame(style).wheels) {
         const top = wy + style.dims.wheel.radius * (wheelScale - 1) - lift + bump + style.dims.wheel.radius * wheelScale;
         const crown = wy + style.arch.radius * rise;
-        assert.ok(top + CROWN_CLEAR <= crown, `${id} wheel at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: its tyre's top at ${top.toFixed(3)} m stands ${(crown - top).toFixed(3)} m under the crown at ${crown.toFixed(3)} m`);
+        expect(top + CROWN_CLEAR, `${id} wheel at x ${wx.toFixed(2)} z ${wz.toFixed(2)}: its tyre's top at ${top.toFixed(3)} m stands ${(crown - top).toFixed(3)} m under the crown at ${crown.toFixed(3)} m`).toBeLessThanOrEqual(crown);
       }
     });
   }
@@ -4592,7 +4592,7 @@ describe("given every style's doors and the shared door card", () => {
   it("when a ray from outside meets each style's door skin at every drawn card vertex, then the card stands under the skin's outer face (no dark wedge where the skin tucks in); the sim still measures the card's own box", () => {
     for (const sign of [-1, 1]) {
       const card = drawnDoorCard(sign);
-      assert.ok(card !== partGeometry(sign < 0 ? PART_KIND.liningL : PART_KIND.liningR), "the seat's measured geometry is the card's own");
+      expect(card, "the seat's measured geometry is the card's own").not.toBe(partGeometry(sign < 0 ? PART_KIND.liningL : PART_KIND.liningR));
       const pos = card.getAttribute("position") as THREE.BufferAttribute;
       const ray = new THREE.Raycaster();
       for (const id of CAR_STYLE_IDS) {
@@ -4602,7 +4602,7 @@ describe("given every style's doors and the shared door card", () => {
         for (let i = 0; i < pos.count; i++) {
           ray.set(new THREE.Vector3(sign * 2, pos.getY(i), pos.getZ(i)), new THREE.Vector3(-sign, 0, 0));
           const hit = ray.intersectObject(skin, false)[0];
-          if (hit) assert.ok(sign * pos.getX(i) < sign * hit.point.x, `${id} side ${sign}: card vertex (${pos.getX(i)}, ${pos.getY(i)}, ${pos.getZ(i)}) stands out of the door skin at x ${hit.point.x}`);
+          if (hit) expect(sign * pos.getX(i), `${id} side ${sign}: card vertex (${pos.getX(i)}, ${pos.getY(i)}, ${pos.getZ(i)}) stands out of the door skin at x ${hit.point.x}`).toBeLessThan(sign * hit.point.x);
         }
         skin.geometry.dispose();
       }
@@ -4650,7 +4650,7 @@ describe("given every style's doors and the shared door card", () => {
             proud = Math.max(proud, p.x - body);
           }
           const stand = want ?? d.proud ?? 0.003;
-          assert.ok(Math.abs(proud - stand) < 1e-5, `${id}: ${inside * 100} cm inside the ${end > 0 ? "hinge" : "latch"} end the skin stands ${proud * 1000} mm proud, want ${stand * 1000}`);
+          expect(Math.abs(proud - stand), `${id}: ${inside * 100} cm inside the ${end > 0 ? "hinge" : "latch"} end the skin stands ${proud * 1000} mm proud, want ${stand * 1000}`).toBeLessThan(1e-5);
         }
       }
     }
@@ -4676,7 +4676,7 @@ describe("given every style's doors and the shared door card", () => {
         const ring = sectionPoints(sampleSlice(d.aperture[end > 0 ? 1 : 0], style.profile), style, "drawn");
         const body = ring.slice(1, ROCKER + 1).map((p) => ({ x: -p.x, y: p.y }));
         const shared = face.filter((f) => body.some((b) => Math.abs(b.y - f.y) < 1e-6)).map((f) => f.y);
-        assert.ok(shared.length >= 2, `${id}: the ${end > 0 ? "hinge" : "latch"} cut's face carries only ${shared.length} of the body ring's rows`);
+        expect(shared.length, `${id}: the ${end > 0 ? "hinge" : "latch"} cut's face carries only ${shared.length} of the body ring's rows`).toBeGreaterThanOrEqual(2);
         let worst = 0;
         let at = 0;
         for (const y of [...face, ...body].map((p) => p.y)) {
@@ -4684,7 +4684,7 @@ describe("given every style's doors and the shared door card", () => {
           const off = xAt(face, y) - xAt(body, y);
           if (Math.abs(off) > Math.abs(worst)) [worst, at] = [off, y];
         }
-        assert.ok(Math.abs(worst) < RIPPLE, `${id}: at the ${end > 0 ? "hinge" : "latch"} cut the door's face stands ${worst * 1000} mm off the body's at y ${at}`);
+        expect(Math.abs(worst), `${id}: at the ${end > 0 ? "hinge" : "latch"} cut the door's face stands ${worst * 1000} mm off the body's at y ${at}`).toBeLessThan(RIPPLE);
       }
     }
   });
@@ -4705,9 +4705,9 @@ describe("given every style's doors and the shared door card", () => {
       let top = -Infinity;
       for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getZ(i) - z) < 1e-6) top = Math.max(top, d.hingeY + pos.getY(i));
       const deckEdge = sectionPoints(sampleSlice(d.aperture[1], style.profile), style, "drawn")[1]!.y;
-      assert.ok(top - deckEdge < OVER, `${id}: at the hinge cut the skin's top stands at y ${top}, ${(top - deckEdge) * 1000} mm over the fender's deck edge ${deckEdge}`);
+      expect(top - deckEdge, `${id}: at the hinge cut the skin's top stands at y ${top}, ${(top - deckEdge) * 1000} mm over the fender's deck edge ${deckEdge}`).toBeLessThan(OVER);
     }
-    assert.ok(checked >= 3, `only ${checked} styles' skin tops stand free at the hinge cut`);
+    expect(checked, `only ${checked} styles' skin tops stand free at the hinge cut`).toBeGreaterThanOrEqual(3);
   });
 });
 
@@ -4728,9 +4728,9 @@ describe("given a style with privacy glass", () => {
       };
       for (const pass of ["built", "recoloured"]) {
         if (pass === "recoloured") car.setGlassTint(0x6688aa);
-        for (const dark of ["rear", "quarterL", "quarterR"]) assert.ok(privacy(dark).every((y) => y === 1), `${pass}: ${dark} is marked privacy on every vertex`);
-        for (const clear of ["windshield", "doorL", "doorR"]) assert.ok(privacy(clear).every((y) => y === 0), `${pass}: ${clear} is not marked privacy`);
-        for (const g of car["glassPanes"]) assert.ok(colour(g.name).equals(colour("windshield")), `${pass}: ${g.name} wears the windshield's colour`);
+        for (const dark of ["rear", "quarterL", "quarterR"]) expect(privacy(dark).every((y) => y === 1), `${pass}: ${dark} is marked privacy on every vertex`).toBeTruthy();
+        for (const clear of ["windshield", "doorL", "doorR"]) expect(privacy(clear).every((y) => y === 0), `${pass}: ${clear} is not marked privacy`).toBeTruthy();
+        for (const g of car["glassPanes"]) expect(colour(g.name).equals(colour("windshield")), `${pass}: ${g.name} wears the windshield's colour`).toBeTruthy();
       }
     } finally {
       hatch.privacyGlass = was;
@@ -4744,7 +4744,7 @@ describe("given a style with privacy glass", () => {
       return [...new Set(Array.from({ length: tone.count }, (_, i) => tone.getY(i)))].join();
     };
     const read = ["rear", "quarterL", "quarterR"].map(tones).join(" ");
-    assert.ok(read === `1 ${MATTE_PRIVACY} ${MATTE_PRIVACY}`, `privacy tones rear, quarterL, quarterR: ${read}`);
+    expect(read, `privacy tones rear, quarterL, quarterR: ${read}`).toBe(`1 ${MATTE_PRIVACY} ${MATTE_PRIVACY}`);
   });
 });
 
@@ -4754,7 +4754,7 @@ describe("given a pull handle for a style's side details", () => {
     const { patches, lines } = pullHandle(z0, z1, y, h);
     const [pocket] = patches;
     const [bar] = lines;
-    assert.ok(pocket !== undefined && pocket.view === "side" && pocket.depth < 0 && pocket.cavity > 0, "one recessed, darkened side pocket");
+    expect(pocket !== undefined && pocket.view === "side" && pocket.depth < 0 && pocket.cavity > 0, "one recessed, darkened side pocket").toBeTruthy();
     const pts = pocket.points;
     const zs = pts.map(([z]) => z);
     const ys = pts.map(([, py]) => py);
@@ -4762,9 +4762,9 @@ describe("given a pull handle for a style's side details", () => {
     for (let i = 0; i < pts.length; i++) {
       const [a, b, c] = [pts[(i + pts.length - 1) % pts.length]!, pts[i]!, pts[(i + 1) % pts.length]!];
       const turn = (new THREE.Vector2(b[0] - a[0], b[1] - a[1]).angleTo(new THREE.Vector2(c[0] - b[0], c[1] - b[1])) * 180) / Math.PI;
-      assert.ok(turn <= 35, `the outline turns ${turn.toFixed(1)}° at point ${i}: a corner, not a rounded end`);
+      expect(turn, `the outline turns ${turn.toFixed(1)}° at point ${i}: a corner, not a rounded end`).toBeLessThanOrEqual(35);
     }
-    assert.ok(bar !== undefined && bar.profile === "u" && bar.depth > 0 && bar.points.every(([z, py]) => py === y && z >= z1 && z <= z0), "a raised rounded bar inside the pocket, along its middle");
+    expect(bar !== undefined && bar.profile === "u" && bar.depth > 0 && bar.points.every(([z, py]) => py === y && z >= z1 && z <= z0), "a raised rounded bar inside the pocket, along its middle").toBeTruthy();
   });
 });
 
@@ -4776,24 +4776,24 @@ describe("given a style with chrome window trim", () => {
       car.group.traverse((o) => void (o instanceof THREE.Mesh && o.name === "windowTrim" && found.push(o)));
       return found;
     };
-    assert.ok(trims(cars.coupe).every((m) => m.material === chrome), "every trim mesh wears the shared chrome");
+    expect(trims(cars.coupe).every((m) => m.material === chrome), "every trim mesh wears the shared chrome").toBeTruthy();
     const coupe = cars.coupe;
     // Split by what each follows in a crush: per door its glass frame and its chrome strips, on the body the quarter frames, the windshield's, the rear glass's and the strips.
     const parents = trims(coupe).map((m) => m.parent);
-    assert.equal(parents.length, 8, "eight trim meshes: two on each door, four on the body");
-    assert.equal(parents.filter((p) => p === coupe.group).length, 4, "four on the body");
+    expect(parents.length, "eight trim meshes: two on each door, four on the body").toBe(8);
+    expect(parents.filter((p) => p === coupe.group).length, "four on the body").toBe(4);
     for (const door of [coupe["doorL"], coupe["doorR"]]) {
       const onDoor = trims(coupe).filter((m) => m.parent === door);
-      assert.equal(onDoor.length, 2, "a frame and the strips on each door");
+      expect(onDoor.length, "a frame and the strips on each door").toBe(2);
       const trim = onDoor[0]!;
       const pane = coupe["glassPanes"].find((g) => g.mesh.parent === door)!.mesh;
-      assert.ok(onDoor.every((m) => m.position.equals(pane.position)), "the door's trims sit at its glass's seat");
+      expect(onDoor.every((m) => m.position.equals(pane.position)), "the door's trims sit at its glass's seat").toBeTruthy();
       trim.geometry.computeBoundingBox();
       pane.geometry.computeBoundingBox();
       const out = (b: THREE.Box3) => Math.max(Math.abs(b.min.x), Math.abs(b.max.x));
-      assert.ok(out(trim.geometry.boundingBox!) > out(pane.geometry.boundingBox!), "the trim stands proud of the glass");
+      expect(out(trim.geometry.boundingBox!), "the trim stands proud of the glass").toBeGreaterThan(out(pane.geometry.boundingBox!));
     }
-    assert.equal(trims(cars.sedan).length, 0, "the control: a style without trim draws none");
+    expect(trims(cars.sedan).length, "the control: a style without trim draws none").toBe(0);
   });
 });
 
@@ -4804,7 +4804,7 @@ describe("given a style's paint finish (paintFinish)", () => {
       const m = cars[id].lookMeshes().bodyPaint;
       return `${m.roughness}/${m.clearcoat}/${m.clearcoatRoughness}`;
     };
-    assert.ok(read("coupe") === `${finish.roughness}/${finish.clearcoat}/${finish.clearcoatRoughness}`, `coupe paint ${read("coupe")}`);
-    assert.ok(read("sedan") === "0.42/0.72/0.24", `sedan paint ${read("sedan")}`);
+    expect(read("coupe"), `coupe paint ${read("coupe")}`).toBe(`${finish.roughness}/${finish.clearcoat}/${finish.clearcoatRoughness}`);
+    expect(read("sedan"), `sedan paint ${read("sedan")}`).toBe("0.42/0.72/0.24");
   });
 });

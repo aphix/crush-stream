@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { carLayout } from "../net/car-pose.ts";
 import { makeCarFrame } from "../net/codec.ts";
@@ -28,8 +27,8 @@ describe("given a car whose engine is killed from outside the crash sim (a guard
       tickWorld(w, DT);
       if (car.asleep) slept = f;
     }
-    assert.ok(slept >= 0, "asleep within 10 s");
-    assert.ok(car.group.position.distanceTo(from) < 20, `stopped within 20 m, rolled ${car.group.position.distanceTo(from).toFixed(1)} m`);
+    expect(slept, "asleep within 10 s").toBeGreaterThanOrEqual(0);
+    expect(car.group.position.distanceTo(from), `stopped within 20 m, rolled ${car.group.position.distanceTo(from).toFixed(1)} m`).toBeLessThan(20);
   });
 
   it("when its engine is killed, then it is a wreck with a dead drivetrain and the kill is counted for the recorder, not as a placement", () => {
@@ -37,10 +36,10 @@ describe("given a car whose engine is killed from outside the crash sim (a guard
     launch(car, 0, 0, 0, 0, 0);
     const placed = car.placements;
     car.disable();
-    assert.equal(car.deform.drivetrainAlive, false, "the engine");
-    assert.ok(car.crashed && car.deform.massActive, "a wreck");
-    assert.equal(car.kills, 1, "counted as a kill");
-    assert.equal(car.placements, placed, "not put anywhere");
+    expect(car.deform.drivetrainAlive, "the engine").toBe(false);
+    expect(car.crashed && car.deform.massActive, "a wreck").toBeTruthy();
+    expect(car.kills, "counted as a kill").toBe(1);
+    expect(car.placements, "not put anywhere").toBe(placed);
   });
 
   const testCases = [
@@ -62,7 +61,7 @@ describe("given a car whose engine is killed from outside the crash sim (a guard
       if (testCase.disabled) recorded.disable();
       else replayed.disable();
       restoreWreck(recorded, replayed);
-      assert.equal(replayed.deform.drivetrainAlive, testCase.expectedAlive, "the replayed car's engine");
+      expect(replayed.deform.drivetrainAlive, "the replayed car's engine").toBe(testCase.expectedAlive);
     });
   }
 });

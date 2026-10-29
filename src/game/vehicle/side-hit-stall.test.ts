@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { firePiston } from "../scenes/piston-rig.test-util.ts";
 import type { PistonId } from "../scenes/piston-rig.ts";
@@ -67,7 +66,7 @@ function slideAfterTBone(bulletKph: number, fuelRestored = false): Slide {
     } else if (since >= 0) {
       since += DT * world.clock.timeScale;
       metres += Math.hypot(at.x - x, at.z - z);
-    } else assert.ok((waited += DT) < MEET_WITHIN_S, `the ${bulletKph} km/h bullet never met the struck sedan in ${MEET_WITHIN_S} s`);
+    } else expect((waited += DT), `the ${bulletKph} km/h bullet never met the struck sedan in ${MEET_WITHIN_S} s`).toBeLessThan(MEET_WITHIN_S);
     x = at.x;
     z = at.z;
   }
@@ -93,7 +92,7 @@ function sensorEdge(): { edge: number; running: Slide; stalled: Slide } {
   let far = slideAfterTBone(farKph);
   while (far.stalledAtHit > 0 === cuts) {
     step *= 2;
-    assert.ok(step <= SEARCH_STEP_MAX, `the cut never flipped from ${SEARCH_FROM_KPH} km/h to ${farKph} km/h`);
+    expect(step, `the cut never flipped from ${SEARCH_FROM_KPH} km/h to ${farKph} km/h`).toBeLessThanOrEqual(SEARCH_STEP_MAX);
     [nearKph, near] = [farKph, far];
     farKph = nearKph + toward * step;
     far = slideAfterTBone(farKph);
@@ -133,22 +132,22 @@ function speedLostUnder(kph: number, stalledS: number, pedals: DriveInput, secon
 
 describe("given a parked car struck by a 858 kg piston", () => {
   it("when it is hit on its side at 50 km/h, then the fuel is cut for the stall time", () => {
-    assert.ok(struck("right", 50).stalledS > 0, "the side hit left the engine running");
+    expect(struck("right", 50).stalledS, "the side hit left the engine running").toBeGreaterThan(0);
   });
 
   it("when it is hit on its side at 8 km/h, below the crash sensor, then the engine keeps running", () => {
-    assert.equal(struck("right", 8).stalledS, 0);
+    expect(struck("right", 8).stalledS).toBe(0);
   });
 
   it("when it is hit on its nose at 50 km/h, then the engine keeps running (the cut-off is for side hits)", () => {
-    assert.equal(struck("front", 50).stalledS, 0);
+    expect(struck("front", 50).stalledS).toBe(0);
   });
 
   it("when the stall is read against the sensor's own threshold, then 50 km/h on the side is past it and 8 km/h is under it", () => {
     // The crush stroke the hit gets (`crushStroke`, squash 0.32) is affine in its barrier speed: average deceleration = ebs² / (2 · stroke).
     const stroke = (ebs: number) => (0.035 * ebs + 0.02) * (0.6 + 0.32);
     const decel = (kph: number) => (kph / 3.6) ** 2 / (2 * stroke(kph / 3.6)) / 9.81;
-    assert.ok(decel(50) > FUEL_CUTOFF_G && decel(8) < FUEL_CUTOFF_G, `${decel(50).toFixed(1)} g and ${decel(8).toFixed(1)} g against ${FUEL_CUTOFF_G} g`);
+    expect(decel(50) > FUEL_CUTOFF_G && decel(8) < FUEL_CUTOFF_G, `${decel(50).toFixed(1)} g and ${decel(8).toFixed(1)} g against ${FUEL_CUTOFF_G} g`).toBeTruthy();
   });
 });
 
@@ -161,10 +160,10 @@ describe("given a sedan rolling on flat ground with its fuel cut", () => {
     for (let t = 0; t < STALL_S - 0.5; t += DT) {
       tickWorld(world);
       peak = Math.max(peak, alongSpeed(car));
-      assert.equal(car.drive.throttle, 0, "the gas the drive and a clip see");
-      assert.equal(car.drive.boost, false, "the boost the drive and a clip see");
+      expect(car.drive.throttle, "the gas the drive and a clip see").toBe(0);
+      expect(car.drive.boost, "the boost the drive and a clip see").toBe(false);
     }
-    assert.ok(peak <= before + 0.01, `${before.toFixed(2)} -> ${peak.toFixed(2)} m/s under full gas`);
+    expect(peak, `${before.toFixed(2)} -> ${peak.toFixed(2)} m/s under full gas`).toBeLessThanOrEqual(before + 0.01);
   });
 
   it("when the same car's fuel is not cut and the gas is held, then it does gain speed (the staging's control)", () => {
@@ -172,49 +171,49 @@ describe("given a sedan rolling on flat ground with its fuel cut", () => {
     world.pedals.set(car, FULL_GAS);
     const before = alongSpeed(car);
     for (let t = 0; t < 1; t += DT) tickWorld(world);
-    assert.ok(alongSpeed(car) > before + 1, `${before.toFixed(2)} -> ${alongSpeed(car).toFixed(2)} m/s`);
+    expect(alongSpeed(car), `${before.toFixed(2)} -> ${alongSpeed(car).toFixed(2)} m/s`).toBeGreaterThan(before + 1);
   });
 
   it("when the brake pedal is held, then it slows by the brakes' pull, not just the engine's lift-off braking", () => {
     const coast = speedLostUnder(60, STALL_S, idleDrive(), 0.5);
     const braked = speedLostUnder(60, STALL_S, FULL_BRAKE, 0.5);
-    assert.ok(coast > 0, "the lift-off engine braking still acts");
-    assert.ok(braked > 0.9 * (coast / DRIVE.coast), `braked ${braked.toFixed(2)} m/s vs coasting ${coast.toFixed(2)} m/s, the brake being 1/${DRIVE.coast} of the lift-off pull`);
+    expect(coast, "the lift-off engine braking still acts").toBeGreaterThan(0);
+    expect(braked, `braked ${braked.toFixed(2)} m/s vs coasting ${coast.toFixed(2)} m/s, the brake being 1/${DRIVE.coast} of the lift-off pull`).toBeGreaterThan(0.9 * (coast / DRIVE.coast));
   });
 
   it("when the handbrake is pulled at full lock, then it grips and kicks the tail out as it does on a running car", () => {
     const { car, world } = rollingCar(60, STALL_S);
     world.pedals.set(car, HANDBRAKE_AT_LOCK);
     for (let t = 0; t < DRIVE.ebrakeIn * 3; t += DT) tickWorld(world);
-    assert.equal(car.drive.ebrakeK, 1, "the handbrake's grip");
-    assert.ok(car.drive.drift > 0, `drift ${car.drive.drift.toFixed(2)}`);
+    expect(car.drive.ebrakeK, "the handbrake's grip").toBe(1);
+    expect(car.drive.drift, `drift ${car.drive.drift.toFixed(2)}`).toBeGreaterThan(0);
   });
 
   it("when the stall time is out, then the fuel is back: stalledS is 0 and the gas pushes again", () => {
     const { car, world } = rollingCar(20, STALL_S);
     world.pedals.set(car, FULL_GAS);
     for (let t = 0; t < STALL_S + DT; t += DT) tickWorld(world);
-    assert.equal(car.stalledS, 0, `still stalled after ${STALL_S} s`);
+    expect(car.stalledS, `still stalled after ${STALL_S} s`).toBe(0);
     const before = alongSpeed(car);
     for (let t = 0; t < 1; t += DT) tickWorld(world);
-    assert.ok(car.drive.throttle > 0, "the gas is read again");
-    assert.ok(alongSpeed(car) > before + 1, `${before.toFixed(2)} -> ${alongSpeed(car).toFixed(2)} m/s after the restart`);
+    expect(car.drive.throttle, "the gas is read again").toBeGreaterThan(0);
+    expect(alongSpeed(car), `${before.toFixed(2)} -> ${alongSpeed(car).toFixed(2)} m/s after the restart`).toBeGreaterThan(before + 1);
   });
 });
 
 describe("given a sedan t-boned at its door while rolling at 60 km/h, its pedals zero after the hit", () => {
   it("when the bullet is just past the crash sensor, then the engine stalls and the struck car slides no farther than a running one's few metres", () => {
     const { edge, running, stalled } = sensorEdge();
-    assert.equal(running.stalledAtHit, 0, `the hit just under the sensor (${edge - 1} km/h) leaves the engine running`);
-    assert.equal(stalled.stalledAtHit, STALL_S, `the next km/h (${edge}) cuts the fuel`);
+    expect(running.stalledAtHit, `the hit just under the sensor (${edge - 1} km/h) leaves the engine running`).toBe(0);
+    expect(stalled.stalledAtHit, `the next km/h (${edge}) cuts the fuel`).toBe(STALL_S);
     // The two hits are one km/h apart, so the same tyres on the same slide: a dragged wreck went 4x as far.
-    assert.ok(stalled.metres < 1.5 * running.metres, `stalled ${stalled.metres.toFixed(2)} m vs running ${running.metres.toFixed(2)} m`);
+    expect(stalled.metres, `stalled ${stalled.metres.toFixed(2)} m vs running ${running.metres.toFixed(2)} m`).toBeLessThan(1.5 * running.metres);
   });
 
   it("when the same 55 km/h hit is run with the fuel cut and with the engine running, then the zero-pedal slide is the same to the millimetre (the cut takes only the gas)", () => {
     const cut = slideAfterTBone(55);
     const running = slideAfterTBone(55, true);
-    assert.ok(cut.stalledAtHit > 0, "the hit cuts the fuel");
-    assert.ok(Math.abs(cut.metres - running.metres) < 0.001, `cut ${cut.metres.toFixed(3)} m vs running ${running.metres.toFixed(3)} m`);
+    expect(cut.stalledAtHit, "the hit cuts the fuel").toBeGreaterThan(0);
+    expect(Math.abs(cut.metres - running.metres), `cut ${cut.metres.toFixed(3)} m vs running ${running.metres.toFixed(3)} m`).toBeLessThan(0.001);
   });
 });

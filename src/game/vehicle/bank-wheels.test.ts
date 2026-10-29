@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applyDrive, idleDrive } from "./car-drive.ts";
 import { layOnGround } from "./car-air-points.ts";
@@ -100,7 +99,7 @@ function bankRun(track: Track, cls: VehicleClassId, lat: (half: number, inset: n
       acc -= h;
     }
     car.updateSkin();
-    assert.equal(car.crashed, false, `${cls} crashed on ${track.id}'s bank`);
+    expect(car.crashed, `${cls} crashed on ${track.id}'s bank`).toBe(false);
     if (car.airborne) continue;
     car.group.updateWorldMatrix(true, true);
     for (const [i, wh] of car.wheels.entries()) {
@@ -153,7 +152,7 @@ describe("given every course's banked road, where the ground meets the flat runo
       }
       if (Math.abs(worst) > 0.01) bad.push(`${track.id}: ground ${(worst * 100).toFixed(1)} cm off the road at ${at}`);
     }
-    assert.deepEqual(bad, []);
+    expect(bad).toHaveLength(0);
   });
 });
 
@@ -170,7 +169,7 @@ for (const cls of ["sedan", "monster"] as const) {
         it(`then every tyre stays within ${BOUND * 100} cm of the ground`, (t) => {
           const r = bankRun(stunt, cls, lat);
           t.annotate(`${cls} ${name}: tread clearance ${(r.low * 100).toFixed(1)}..${(r.high * 100).toFixed(1)} cm, worst ${r.at}`);
-          assert.ok(r.low >= -BOUND && r.high <= BOUND, `${cls} on ${name}: ${(r.low * 100).toFixed(1)}..${(r.high * 100).toFixed(1)} cm, worst ${r.at}`);
+          expect(r.low >= -BOUND && r.high <= BOUND, `${cls} on ${name}: ${(r.low * 100).toFixed(1)}..${(r.high * 100).toFixed(1)} cm, worst ${r.at}`).toBeTruthy();
         });
       });
     }

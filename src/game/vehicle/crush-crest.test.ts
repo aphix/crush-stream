@@ -1,5 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
@@ -109,7 +108,7 @@ describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboa
         if (w.framePitch > PLAIN.pose) failures.push(`${v} m/s: frame pitch ${w.framePitch.toFixed(2)}° off the slope`);
         if (w.pitch > PLAIN.pose) failures.push(`${v} m/s: drawn pitch ${w.pitch.toFixed(2)}° off the slope`);
       }
-      assert.deepEqual(failures, []);
+      expect(failures).toHaveLength(0);
     });
   }
 });
@@ -130,7 +129,7 @@ describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboa
         if (w.framePitch > pitch) failures.push(`${v} m/s: frame pitch ${w.framePitch.toFixed(2)}° off the slope`);
         if (w.pitch > pitch) failures.push(`${v} m/s: drawn pitch ${w.pitch.toFixed(2)}° off the slope`);
       }
-      assert.deepEqual(failures, []);
+      expect(failures).toHaveLength(0);
     });
   }
 
@@ -148,11 +147,11 @@ describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboa
       const after = worst(run.slice(Math.max(0, landed) + 60), 0, Infinity);
       const whole = worst(run, 0, Infinity);
       t.annotate(`${cls}: ${(air * FRAME).toFixed(2)} s in the air, landed at s ${landed >= 0 ? run[landed]!.s.toFixed(0) : "-"}; a second later gap ${(after.gap * 100).toFixed(1)} cm, pitch ${after.pitch.toFixed(2)}°; hull under the road all run ${(whole.pen * 100).toFixed(1)} cm of ${(slicePenetration(closing) * 100).toFixed(1)}`);
-      assert.ok(air * FRAME >= 0.6 && air * FRAME <= 2, `${(air * FRAME).toFixed(2)} s in the air`);
-      assert.ok(landed > 0, "never landed");
-      assert.ok(after.gap <= PLAIN.gap, `a second after landing a tyre is ${(after.gap * 100).toFixed(1)} cm off the road`);
-      assert.ok(after.pitch <= springPitch(cls), `a second after landing the body is ${after.pitch.toFixed(2)}° off the slope`);
-      assert.ok(whole.pen <= slicePenetration(closing), `hull ${(whole.pen * 100).toFixed(1)} cm into the road`);
+      expect(air * FRAME >= 0.6 && air * FRAME <= 2, `${(air * FRAME).toFixed(2)} s in the air`).toBeTruthy();
+      expect(landed, "never landed").toBeGreaterThan(0);
+      expect(after.gap, `a second after landing a tyre is ${(after.gap * 100).toFixed(1)} cm off the road`).toBeLessThanOrEqual(PLAIN.gap);
+      expect(after.pitch, `a second after landing the body is ${after.pitch.toFixed(2)}° off the slope`).toBeLessThanOrEqual(springPitch(cls));
+      expect(whole.pen, `hull ${(whole.pen * 100).toFixed(1)} cm into the road`).toBeLessThanOrEqual(slicePenetration(closing));
     });
   }
 
@@ -168,7 +167,7 @@ describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboa
     it(`when a ${cls} drives over the crest at ${FAST_CREST_SPEED} m/s, then around its first tyre touching down its body never turns more than ${SNAP}° in a frame, no tyre sinks more than ${PLAIN.gap * 100} cm and no underside more than its closing speed carries it in one contact slice, all four tyres are on the road within the time its tail needs to fall from where it hung, and from then on the body stays within what its springs allow of the road's slope`, (t) => {
       const { run, closing } = crestRun(cls, 880, 1010, FAST_CREST_SPEED);
       const first = run.findIndex((r, i) => i > 0 && run[i - 1]!.airborne && !r.airborne);
-      assert.ok(first > 0, "never landed");
+      expect(first, "never landed").toBeGreaterThan(0);
       let turn = 0;
       let sunk = 0;
       let pen = 0;
@@ -188,20 +187,20 @@ describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboa
       const settled = settledFrom(run, first + fallFrames);
       const w = worst(run.slice(Math.max(0, settled), settled + READ_FRAMES), 0, Infinity);
       t.annotate(`${cls}: touched down at s ${run[first]!.s.toFixed(0)} with the tail ${(hung * 100).toFixed(0)} cm up, all down ${down - first} of ${fallFrames} frames later, pitch settled ${settled - first} frames after touchdown; the next 0.5 s: most turn in a frame ${turn.toFixed(2)}°, deepest tyre ${(sunk * 100).toFixed(1)} cm, underside ${(pen * 100).toFixed(1)} cm of ${(slicePenetration(closing) * 100).toFixed(1)}; once settled: frame ${w.framePitch.toFixed(2)}° off the slope of ${springPitch(cls).toFixed(1)}°`);
-      assert.ok(turn <= SNAP, `the body turned ${turn.toFixed(2)}° in one frame after touchdown`);
-      assert.ok(sunk <= PLAIN.gap, `a tyre ${(sunk * 100).toFixed(1)} cm into the road after touchdown`);
-      assert.ok(pen <= slicePenetration(closing), `underside ${(pen * 100).toFixed(1)} cm into the road after touchdown`);
-      assert.ok(down >= 0, `the tyres were not all on the road ${fallFrames} frames after touchdown`);
-      assert.ok(settled >= 0, `the frame's pitch never settled within the run (still moving at ${PITCH_STILL_SPEED} m/s an axle)`);
-      assert.ok(w.airFrames === 0 && w.framePitch <= springPitch(cls), `after settling: ${w.airFrames} frames off the road, the frame ${w.framePitch.toFixed(2)}° off the slope`);
+      expect(turn, `the body turned ${turn.toFixed(2)}° in one frame after touchdown`).toBeLessThanOrEqual(SNAP);
+      expect(sunk, `a tyre ${(sunk * 100).toFixed(1)} cm into the road after touchdown`).toBeLessThanOrEqual(PLAIN.gap);
+      expect(pen, `underside ${(pen * 100).toFixed(1)} cm into the road after touchdown`).toBeLessThanOrEqual(slicePenetration(closing));
+      expect(down, `the tyres were not all on the road ${fallFrames} frames after touchdown`).toBeGreaterThanOrEqual(0);
+      expect(settled, `the frame's pitch never settled within the run (still moving at ${PITCH_STILL_SPEED} m/s an axle)`).toBeGreaterThanOrEqual(0);
+      expect(w.airFrames === 0 && w.framePitch <= springPitch(cls), `after settling: ${w.airFrames} frames off the road, the frame ${w.framePitch.toFixed(2)}° off the slope`).toBeTruthy();
     });
   }
 
   it("when every class drives over the crest at 6 m/s and at 16 m/s, then none leaves the road at 6 m/s and all do at 16 m/s: the crest gives airtime from a moderate pace", () => {
     const flies = (cls: VehicleClassId, v: number) => drive(track, cls, 885, 975, () => v, { lead: 45 }).some((r) => r.airborne);
     for (const cls of VEHICLE_CLASS_IDS) {
-      assert.ok(!flies(cls, 6), `${cls} flew at 6 m/s`);
-      assert.ok(flies(cls, 16), `${cls} stayed down at 16 m/s`);
+      expect(!flies(cls, 6), `${cls} flew at 6 m/s`).toBe(true);
+      expect(flies(cls, 16), `${cls} stayed down at 16 m/s`).toBeTruthy();
     }
   });
 });
@@ -217,18 +216,18 @@ describe("given the reading of where the frame settles after a landing", () => {
   it("when a run holds the frame 4° off the slope, then it settles at once and reads 4°, over the hatch's springs' bar", () => {
     const run = heldRun(120, () => 4);
     const at = settledFrom(run, 21);
-    assert.equal(at, 21);
-    assert.ok(worst(run.slice(at, at + READ_FRAMES), 0, Infinity).framePitch > HATCH_BAR, "the held frame reads inside the bar");
+    expect(at).toBe(21);
+    expect(worst(run.slice(at, at + READ_FRAMES), 0, Infinity).framePitch, "the held frame reads inside the bar").toBeGreaterThan(HATCH_BAR);
   });
 
   it("when a rebound of 5° at 3 Hz decays over a second, then it settles only once the rebound is under the pitch's rest and reads inside the bar, not the rebound's turning points", () => {
     const run = heldRun(240, (i) => 5 * Math.cos(2 * Math.PI * 3 * i * FRAME) * Math.exp(-i * FRAME * 4));
     const at = settledFrom(run, 0);
-    assert.ok(at > 30, `settled at frame ${at}, inside the rebound`);
-    assert.ok(worst(run.slice(at, at + READ_FRAMES), 0, Infinity).framePitch <= HATCH_BAR, "the settled frame reads over the bar");
+    expect(at, `settled at frame ${at}, inside the rebound`).toBeGreaterThan(30);
+    expect(worst(run.slice(at, at + READ_FRAMES), 0, Infinity).framePitch, "the settled frame reads over the bar").toBeLessThanOrEqual(HATCH_BAR);
   });
 
   it("when a frame rocks 2° at 3 Hz for the whole run, then it never settles", () => {
-    assert.equal(settledFrom(heldRun(240, (i) => 2 * Math.cos(2 * Math.PI * 3 * i * FRAME)), 0), -1);
+    expect(settledFrom(heldRun(240, (i) => 2 * Math.cos(2 * Math.PI * 3 * i * FRAME)), 0)).toBe(-1);
   });
 });

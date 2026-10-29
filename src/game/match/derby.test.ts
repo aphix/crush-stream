@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DerbyBrain, blankAiCar } from "../ai/derby-ai.ts";
 import { personality } from "../ai/personality.ts";
@@ -16,6 +15,7 @@ import { physicsSlice } from "../contact/sat.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
 import { aiCar, assertSameDigest, decide } from "../vehicle/test-support.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 describe("given a brawler (full aggression) driving at a target that comes straight at it with a flattened nose", () => {
   it("when it decides its drive input, then it swings wide or backs in rather than charging nose first (head-on hits are banned in the rule books)", () => {
@@ -24,7 +24,7 @@ describe("given a brawler (full aggression) driving at a target that comes strai
     const me = aiCar(2, { z: -8 });
     const flat = aiCar(1, { z: 8, yaw: Math.PI, vz: -8, front: 0.8, damage: 0.8 });
     const input = decide(brain, me, [me, flat]);
-    assert.ok(Math.abs(input.steer) > 0.3 || input.throttle < 0, `charged nose first: steer ${input.steer} throttle ${input.throttle}`);
+    expect(Math.abs(input.steer) > 0.3 || input.throttle < 0, `charged nose first: steer ${input.steer} throttle ${input.throttle}`).toBeTruthy();
   });
 });
 
@@ -33,15 +33,15 @@ describe("given a derby car that fights with its tail as the bumper", () => {
     const parked = aiCar(0, { vz: 0 });
     const behind = aiCar(1, { z: -10 });
     const back = decide(new DerbyBrain(), parked, [parked, behind]);
-    assert.ok(back.throttle < -0.5, `didn't back in: throttle ${back.throttle}`);
+    expect(back.throttle, `didn't back in: throttle ${back.throttle}`).toBeLessThan(-0.5);
     const spent = aiCar(0, { vz: 0, front: 0.7, damage: 0.7 });
-    assert.ok(decide(new DerbyBrain(), spent, [spent, behind]).throttle < 0, "front-damaged car donated its block");
+    expect(decide(new DerbyBrain(), spent, [spent, behind]).throttle, "front-damaged car donated its block").toBeLessThan(0);
     const rolling = aiCar(0, { vz: 8 });
     const ahead = aiCar(1, { z: 12, vz: 0 });
     const brain = new DerbyBrain();
     const turn = decide(brain, rolling, [rolling, ahead]);
-    assert.equal(brain.tacticOf(0), "jturn");
-    assert.ok(turn.ebrake && turn.throttle === 0 && Math.abs(turn.steer) > 0.5, `no J-turn: ${JSON.stringify(turn)}`);
+    expect(brain.tacticOf(0)).toBe("jturn");
+    expect(turn.ebrake && turn.throttle === 0 && Math.abs(turn.steer) > 0.5, `no J-turn: ${JSON.stringify(turn)}`).toBeTruthy();
   });
 });
 
@@ -50,7 +50,7 @@ describe("given a derby car 1.2 m from the arena wall with another car 4 m to it
     const me = aiCar(3, { x: 0, z: DERBY_RADIUS - 1.2 });
     const foe = aiCar(1, { x: 4, z: 0 });
     const input = decide(new DerbyBrain(), me, [me, foe]);
-    assert.ok(Math.abs(input.steer) > 0.5 || input.throttle < 0, `steer ${input.steer} throttle ${input.throttle}`);
+    expect(Math.abs(input.steer) > 0.5 || input.throttle < 0, `steer ${input.steer} throttle ${input.throttle}`).toBeTruthy();
   });
 });
 
@@ -63,10 +63,7 @@ describe("given a derby car backing tail first toward a target that faces it", (
     const crossing = aiCar(1, { yaw: Math.PI, vx: 8, vz: 0 });
     const atParked = decide(new DerbyBrain(), me, [me, parked]);
     const atCrossing = decide(new DerbyBrain(), me, [me, crossing]);
-    assert.ok(
-      atCrossing.steer > atParked.steer + 0.3,
-      `no lead: steer ${atCrossing.steer.toFixed(2)} vs parked ${atParked.steer.toFixed(2)}`,
-    );
+    expect(atCrossing.steer, `no lead: steer ${atCrossing.steer.toFixed(2)} vs parked ${atParked.steer.toFixed(2)}`).toBeGreaterThan(atParked.steer + 0.3);
   });
 });
 
@@ -80,20 +77,20 @@ describe("given two parked victims, with hunters backing toward them tail first"
     const all = [south, north, a, b];
     const alone = new DerbyBrain();
     decide(alone, north, all);
-    assert.equal(alone.huntersOf(4), 1, "the lone hunter should take the nearer victim");
+    expect(alone.huntersOf(4), "the lone hunter should take the nearer victim").toBe(1);
     const pair = new DerbyBrain();
     pair.setAggression(2, 0.2);
     pair.setAggression(3, 0.2);
     decide(pair, south, all);
     decide(pair, north, all);
-    assert.deepEqual([pair.huntersOf(4), pair.huntersOf(5)], [1, 1]);
+    expect(firstMismatch([pair.huntersOf(4), pair.huntersOf(5)], [1, 1])).toBeUndefined();
     const wreck = aiCar(5, { x: 3.6, vz: 0, front: 0.8, damage: 0.8 });
     const brutes = new DerbyBrain();
     brutes.setAggression(2, 1);
     brutes.setAggression(3, 1);
     decide(brutes, south, [south, north, a, wreck]);
     decide(brutes, north, [south, north, a, wreck]);
-    assert.deepEqual([brutes.huntersOf(4), brutes.huntersOf(5)], [0, 2], "the weakened car should draw both brutes");
+    expect(firstMismatch([brutes.huntersOf(4), brutes.huntersOf(5)], [0, 2]), "the weakened car should draw both brutes").toBeUndefined();
   });
 });
 
@@ -104,19 +101,19 @@ describe("given a derby car wedged 3 m from a foe that sits across its path", ()
     const foe = aiCar(1, { z: 3, yaw: Math.PI / 2, vz: 0 });
     const others = [me, foe];
     const push = decide(brain, me, others).throttle;
-    assert.ok(Math.abs(push) > 0.35, `not pushing: ${push}`);
+    expect(Math.abs(push), `not pushing: ${push}`).toBeGreaterThan(0.35);
     let backed = 0;
     for (let k = 0; k < 15 && backed === 0; k++) {
       const input = decide(brain, me, others, 0.1);
       if (brain.recovering(3)) backed = input.throttle;
     }
-    assert.ok(backed * push < 0, "never backed out of a dead push");
+    expect(backed * push, "never backed out of a dead push").toBeLessThan(0);
     let escape = 0;
     for (let k = 0; k < 40 && escape * backed >= 0; k++) {
       const input = decide(brain, me, others, 0.1);
       if (brain.recovering(3)) escape = input.throttle;
     }
-    assert.ok(escape * backed < 0, "kept trying the same blocked gear");
+    expect(escape * backed, "kept trying the same blocked gear").toBeLessThan(0);
   });
 });
 
@@ -124,8 +121,8 @@ describe("given derby drivers built from their ids in two matches", () => {
   it("when the drivers are built, then driver 7 is the same driver both times, and across ten ids some flank each way and some launch at once while others hold back", () => {
     assertSameDigest(personality(7), personality(7), "driver 7 in two matches");
     const field = Array.from({ length: 10 }, (_, i) => personality(i));
-    assert.ok(new Set(field.map((p) => p.side)).size === 2, "everyone flanks the same way");
-    assert.ok(field.some((p) => p.hold === 0) && field.some((p) => p.hold > 0.3), "whole field launches in lockstep");
+    expect(new Set(field.map((p) => p.side)).size, "everyone flanks the same way").toBe(2);
+    expect(field.some((p) => p.hold === 0) && field.some((p) => p.hold > 0.3), "whole field launches in lockstep").toBeTruthy();
   });
 });
 
@@ -140,16 +137,16 @@ describe("given a three-car derby match", () => {
       ],
       { start: 0 },
     );
-    assert.equal(m.noteHit(0, 1, 8, 2, 6), true);
-    assert.equal(m.noteHit(0, 1, 8, 2, 6), false, "same contact twice");
+    expect(m.noteHit(0, 1, 8, 2, 6)).toBe(true);
+    expect(m.noteHit(0, 1, 8, 2, 6), "same contact twice").toBe(false);
     m.time = SCORE_GAP / 2;
     m.noteHit(0, 1, 8, 2, 6);
     m.noteHit(0, 2, 3, 0, 6);
-    assert.equal(m.row(0)!.score, HIT_POINTS, "inside the gap, or a 3 m/s tap, scored");
+    expect(m.row(0)!.score, "inside the gap, or a 3 m/s tap, scored").toBe(HIT_POINTS);
     m.time = SCORE_GAP + 0.05;
     m.noteHit(0, 1, 8, 2, 6);
-    assert.equal(m.row(0)!.score, HIT_POINTS * 2);
-    assert.equal(m.row(0)!.hits, 2);
+    expect(m.row(0)!.score).toBe(HIT_POINTS * 2);
+    expect(m.row(0)!.hits).toBe(2);
   });
 });
 
@@ -169,10 +166,10 @@ describe("given a two-car derby match where one car lands seven hits on the othe
       { id: 0, name: "Titanium", alive: false, x: 0, z: 0 },
       { id: 1, name: "Petrol", alive: true, x: 0, z: 5 },
     ]);
-    assert.equal(m.row(1)!.disables, 1);
-    assert.equal(m.row(1)!.score, 7 * HIT_POINTS + DISABLE_POINTS);
-    assert.equal(m.winnerId, 1);
-    assert.equal(m.winnerName, "Petrol");
+    expect(m.row(1)!.disables).toBe(1);
+    expect(m.row(1)!.score).toBe(7 * HIT_POINTS + DISABLE_POINTS);
+    expect(m.winnerId).toBe(1);
+    expect(m.winnerName).toBe("Petrol");
   });
 });
 
@@ -191,8 +188,8 @@ describe("given a two-car derby match where the car with more points is disabled
       { id: 0, name: "Oxide", alive: false, x: 0, z: 0 },
       { id: 1, name: "Ink", alive: true, x: 0, z: 5 },
     ]);
-    assert.equal(m.winnerId, 1);
-    assert.ok(m.row(0)!.score > m.row(1)!.score);
+    expect(m.winnerId).toBe(1);
+    expect(m.row(0)!.score).toBeGreaterThan(m.row(1)!.score);
   });
 });
 
@@ -219,13 +216,13 @@ describe("given a derby car driven at the arena wall at 25 m/s from 12 m out (th
       const slice = physicsSlice(1 / FRAME_HZ, Math.max(car.speed, 4));
       applyDrive(car, { ...idleDrive(), throttle: 1 }, slice);
       stepWorld(world, slice);
-      if (elapsed === 0) assert.equal(car.stalledS, 0, "the engine was cut in the first slice: the car starts in a prop, not on its run at the wall");
+      if (elapsed === 0) expect(car.stalledS, "the engine was cut in the first slice: the car starts in a prop, not on its run at the wall").toBe(0);
       elapsed += slice;
     }
     const reach = Math.hypot(car.group.position.x, car.group.position.z);
-    assert.ok(reach < DERBY_RADIUS - WALL_CAGE_REACH, `car centre ${reach.toFixed(2)} m out`);
+    expect(reach, `car centre ${reach.toFixed(2)} m out`).toBeLessThan(DERBY_RADIUS - WALL_CAGE_REACH);
     const outwardSpeed = car.velocity.x * outward.x + car.velocity.z * outward.z;
-    assert.ok(outwardSpeed < OUTWARD_SPEED_LEFT, `still ${outwardSpeed.toFixed(2)} m/s outward`);
+    expect(outwardSpeed, `still ${outwardSpeed.toFixed(2)} m/s outward`).toBeLessThan(OUTWARD_SPEED_LEFT);
   });
 });
 
@@ -235,23 +232,23 @@ describe("given the wall's boxes (DERBY_BOXES kind DERBY_PROP.wall)", () => {
     for (const wall of walls) {
       const centreRadius = Math.hypot(wall.x, wall.z);
       const dot = Math.abs((Math.sin(wall.yaw) * wall.x + Math.cos(wall.yaw) * wall.z) / centreRadius);
-      assert.ok(dot < 0.25, `wall box long-axis is radial, dot=${dot.toFixed(2)}`);
-      assert.ok(Math.abs(centreRadius - wall.hx - DERBY_RADIUS) < 0.01, `wall box inner face off the ring, r=${(centreRadius - wall.hx).toFixed(2)}`);
+      expect(dot, `wall box long-axis is radial, dot=${dot.toFixed(2)}`).toBeLessThan(0.25);
+      expect(Math.abs(centreRadius - wall.hx - DERBY_RADIUS), `wall box inner face off the ring, r=${(centreRadius - wall.hx).toFixed(2)}`).toBeLessThan(0.01);
     }
-    assert.ok(walls.length >= 16);
+    expect(walls.length).toBeGreaterThanOrEqual(16);
   });
 });
 
 describe("given six derby cars laid out in the bowl", () => {
   it("when their start slots are laid out, then all six sit on a ring inside the bowl, within the car limit, each facing its centre", () => {
     const slots = layoutDerby(6, DERBY_RADIUS, () => 0.5, DERBY_FREE_PROPS);
-    assert.equal(slots.length, 6);
-    assert.ok(slots.length <= MAX_CARS);
+    expect(slots.length).toBe(6);
+    expect(slots.length).toBeLessThanOrEqual(MAX_CARS);
     for (const s of slots) {
-      assert.ok(Math.hypot(s.x, s.z) < DERBY_RADIUS - 3);
+      expect(Math.hypot(s.x, s.z)).toBeLessThan(DERBY_RADIUS - 3);
       // Nose (sin yaw, cos yaw) along the line to the origin.
       const r = Math.hypot(s.x, s.z);
-      assert.ok(Math.sin(s.yaw) * (-s.x / r) + Math.cos(s.yaw) * (-s.z / r) > 0.9999);
+      expect(Math.sin(s.yaw) * (-s.x / r) + Math.cos(s.yaw) * (-s.z / r)).toBeGreaterThan(0.9999);
     }
   });
 });
@@ -260,17 +257,17 @@ describe("given the AI's damage reading of a car", () => {
   it("when a mint car and a car with a dead drivetrain are read, then the mint car reads near 0 and the dead drivetrain reads 1", () => {
     const c = new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" }, new THREE.Scene());
     const s = snapshotAiCar(blankAiCar(0), 0, c, true);
-    assert.ok(s.front < 0.02 && s.rear < 0.02 && s.damage < 0.02, `mint read ${s.front}/${s.rear}/${s.damage}`);
-    assert.equal(snapshotAiCar(blankAiCar(0), 0, c, false).damage, 1);
+    expect(s.front < 0.02 && s.rear < 0.02 && s.damage < 0.02, `mint read ${s.front}/${s.rear}/${s.damage}`).toBeTruthy();
+    expect(snapshotAiCar(blankAiCar(0), 0, c, false).damage).toBe(1);
   });
 });
 
 describe("given the idle drive input", () => {
   it("when it is read, then throttle is zero and neither handbrake nor boost is on", () => {
     const d = idleDrive();
-    assert.equal(d.throttle, 0);
-    assert.equal(d.ebrake, false);
-    assert.equal(d.boost, false);
+    expect(d.throttle).toBe(0);
+    expect(d.ebrake).toBe(false);
+    expect(d.boost).toBe(false);
   });
 });
 
@@ -308,8 +305,8 @@ describe("given two cars, each at half the speed of a 50 km/h rigid-wall hit, dr
       const er = car.deform.masses.find((m) => m.name === "engineR")!;
       return Math.max(el.local.distanceTo(el.rest), er.local.distanceTo(er.rest));
     };
-    assert.equal(a.deform.drivetrainAlive, true, `titanium died on a 25 km/h head-on travel=${travel(a).toFixed(3)}`);
-    assert.equal(b.deform.drivetrainAlive, true, `petrol died on a 25 km/h head-on travel=${travel(b).toFixed(3)}`);
+    expect(a.deform.drivetrainAlive, `titanium died on a 25 km/h head-on travel=${travel(a).toFixed(3)}`).toBe(true);
+    expect(b.deform.drivetrainAlive, `petrol died on a 25 km/h head-on travel=${travel(b).toFixed(3)}`).toBe(true);
   });
 });
 
@@ -345,10 +342,10 @@ describe("given a default two-car derby in shape deform mode", () => {
       minD = Math.min(minD, Math.hypot(a.group.position.x - b.group.position.x, a.group.position.z - b.group.position.z));
       t += h;
     }
-    assert.equal(a.deform.drivetrainAlive, true, "titanium engine died before 5s");
-    assert.equal(b.deform.drivetrainAlive, true, "petrol engine died before 5s");
+    expect(a.deform.drivetrainAlive, "titanium engine died before 5s").toBe(true);
+    expect(b.deform.drivetrainAlive, "petrol engine died before 5s").toBe(true);
     const sp = Math.max(a.velocity.length(), b.velocity.length());
-    assert.ok(sp > 3, `both parked at 5s, max speed ${sp.toFixed(2)} m/s`);
-    assert.ok(minD < 6.5, `never met, closest ${minD.toFixed(2)} m`);
+    expect(sp, `both parked at 5s, max speed ${sp.toFixed(2)} m/s`).toBeGreaterThan(3);
+    expect(minD, `never met, closest ${minD.toFixed(2)} m`).toBeLessThan(6.5);
   });
 });

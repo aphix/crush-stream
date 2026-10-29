@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { applyDrive, DRIVE, idleDrive, THROTTLE_STEPS, type DriveInput } from "./car-drive.ts";
 import type { DeformableCar } from "./car.ts";
 import { FLIGHT } from "./car-flight.ts";
@@ -63,8 +62,8 @@ describe("given the traction law of each driveline layout (a pure function of th
 
   it("when both axles stand on dry asphalt, then every layout passes the class's launch pull at both ends of the slider (the sourced launch was driven on real tyres: a cap under it would count the tyre twice)", () => {
     for (const layout of LAYOUTS) {
-      assert.ok(Math.abs(on(layout, 1, 1, 0) - CLASSES.sedan.launch[0]) < 1e-9, `${layout} arcade`);
-      assert.ok(Math.abs(on(layout, 1, 1, 1) - CLASSES.sedan.launch[1]) < 1e-9, `${layout} realistic`);
+      expect(Math.abs(on(layout, 1, 1, 0) - CLASSES.sedan.launch[0]), `${layout} arcade`).toBeLessThan(1e-9);
+      expect(Math.abs(on(layout, 1, 1, 1) - CLASSES.sedan.launch[1]), `${layout} realistic`).toBeLessThan(1e-9);
     }
   });
 
@@ -76,12 +75,12 @@ describe("given the traction law of each driveline layout (a pure function of th
       const awd = on("awd", 1, 0.5, realism);
       const locked = on("4wd", 1, 0.5, realism);
       const got = `realism ${realism}: fwd ${fwd.toFixed(2)}, rwd ${rwd.toFixed(2)}, awd ${awd.toFixed(2)}, 4wd ${locked.toFixed(2)} of ${launch}`;
-      assert.ok(Math.abs(fwd - launch) < 1e-9, got);
-      assert.ok(rwd <= 0.5 * launch + 1e-9 && rwd > 0, got);
-      assert.ok((realism === 0 ? Math.abs(awd - rwd) < 1e-9 : awd > rwd && awd < fwd) && locked > rwd && locked < fwd, got);
+      expect(Math.abs(fwd - launch), got).toBeLessThan(1e-9);
+      expect(rwd <= 0.5 * launch + 1e-9 && rwd > 0, got).toBeTruthy();
+      expect((realism === 0 ? Math.abs(awd - rwd) < 1e-9 : awd > rwd && awd < fwd) && locked > rwd && locked < fwd, got).toBeTruthy();
     }
     // Mirrored grips mirror the one-axle layouts at the arcade end (no load transfer there).
-    assert.ok(Math.abs(on("rwd", 0.5, 1, 0) - CLASSES.sedan.launch[0]) < 1e-9 && Math.abs(on("fwd", 0.5, 1, 0) - on("rwd", 1, 0.5, 0)) < 1e-9, "mirrored");
+    expect(Math.abs(on("rwd", 0.5, 1, 0) - CLASSES.sedan.launch[0]) < 1e-9 && Math.abs(on("fwd", 0.5, 1, 0) - on("rwd", 1, 0.5, 0)) < 1e-9, "mirrored").toBeTruthy();
   });
 
   it("when the grip is halved under both axles at the realistic end, then a locked 4wd keeps exactly half its launch, a front-driven car a little more (its transfer penalty shrinks with the grip) and a rear-driven car less (its transfer gain shrinks)", () => {
@@ -89,7 +88,7 @@ describe("given the traction law of each driveline layout (a pure function of th
     const fwd = kept("fwd");
     const rwd = kept("rwd");
     const locked = kept("4wd");
-    assert.ok(Math.abs(locked - 0.5) < 1e-9 && rwd < 0.5 && fwd > 0.5 && fwd < 0.6, `kept: fwd ${fwd.toFixed(3)}, rwd ${rwd.toFixed(3)}, 4wd ${locked.toFixed(3)}`);
+    expect(Math.abs(locked - 0.5) < 1e-9 && rwd < 0.5 && fwd > 0.5 && fwd < 0.6, `kept: fwd ${fwd.toFixed(3)}, rwd ${rwd.toFixed(3)}, 4wd ${locked.toFixed(3)}`).toBeTruthy();
   });
 });
 
@@ -102,10 +101,10 @@ for (const H of RATES) {
           drive(cls, flat(front, rear), 0.3, H, FULL, (car) => (most = Math.max(most, car.drive.spin)));
           return most;
         };
-        assert.equal(peak("sedan", SURFACE.asphalt, SURFACE.grass), 0, "a front-driven car with its fronts on asphalt");
-        assert.ok(peak("police", SURFACE.asphalt, SURFACE.grass) > 0.3, "a rear-driven car with its rears on grass");
-        assert.ok(peak("sedan", SURFACE.grass, SURFACE.asphalt) > 0.3, "a front-driven car with its fronts on grass");
-        assert.equal(peak("police", SURFACE.grass, SURFACE.asphalt), 0, "a rear-driven car with its rears on asphalt");
+        expect(peak("sedan", SURFACE.asphalt, SURFACE.grass), "a front-driven car with its fronts on asphalt").toBe(0);
+        expect(peak("police", SURFACE.asphalt, SURFACE.grass), "a rear-driven car with its rears on grass").toBeGreaterThan(0.3);
+        expect(peak("sedan", SURFACE.grass, SURFACE.asphalt), "a front-driven car with its fronts on grass").toBeGreaterThan(0.3);
+        expect(peak("police", SURFACE.grass, SURFACE.asphalt), "a rear-driven car with its rears on asphalt").toBe(0);
       });
     });
 
@@ -122,10 +121,10 @@ for (const H of RATES) {
       }
 
       it("when it is front-driven, then it has no traction and does not pull; when it is rear-driven, then it pulls as on all four; when it is a locked 4wd, then its rears carry it on", () => {
-        assert.equal(pull("sedan", 0b1100), 0, "a front-driven car with its fronts up");
-        assert.ok(Math.abs(pull("police", 0b1100) / pull("police", 0b1111) - 1) < 1e-9, "a rear-driven car with its fronts up");
-        assert.ok(Math.abs(pull("truck", 0b1100) / pull("truck", 0b1111) - 1) < 1e-9, "a locked 4wd with its fronts up");
-        assert.equal(pull("police", 0b0011), 0, "a rear-driven car with its rears up");
+        expect(pull("sedan", 0b1100), "a front-driven car with its fronts up").toBe(0);
+        expect(Math.abs(pull("police", 0b1100) / pull("police", 0b1111) - 1), "a rear-driven car with its fronts up").toBeLessThan(1e-9);
+        expect(Math.abs(pull("truck", 0b1100) / pull("truck", 0b1111) - 1), "a locked 4wd with its fronts up").toBeLessThan(1e-9);
+        expect(pull("police", 0b0011), "a rear-driven car with its rears up").toBe(0);
       });
     });
 
@@ -144,8 +143,9 @@ for (const H of RATES) {
         };
         // A flat-out car lying on its side against the arena wall, its wheels on the wall, pushed itself through the 1 m wall at 0.5 m/s.
         const side = gain(Math.PI / 2);
-        assert.deepEqual(side, { dv: 0, throttle: 0 }, "on its side");
-        assert.ok(gain(0).dv > 0, "upright, it pulls");
+        expect(side.dv, "on its side: dv").toBe(0);
+        expect(side.throttle, "on its side: throttle").toBe(0);
+        expect(gain(0).dv, "upright, it pulls").toBeGreaterThan(0);
       });
     });
 
@@ -178,41 +178,41 @@ for (const H of RATES) {
 
       it("when its body up·world-up sweeps from 0.2 to 0.9 on level ground, then the drive rises with it from nothing at 0.35 to whole at 0.42, never by more than 25 % of the whole between 0.01 steps (the old cut stepped it by all of it)", () => {
         const upright = gainRolled(0, null).dv;
-        assert.ok(upright > 0, "upright, it pulls");
+        expect(upright, "upright, it pulls").toBeGreaterThan(0);
         let last = 0;
         let widest = 0;
         for (let upY = 0.2; upY < 0.9; upY += 0.01) {
           const dv = gainRolled(Math.acos(upY), null).dv / upright;
           widest = Math.max(widest, Math.abs(dv - last));
-          assert.ok(dv >= last - 1e-12, `the drive fell from ${last.toFixed(4)} to ${dv.toFixed(4)} of the whole at up·world-up ${upY.toFixed(2)}`);
-          if (upY < 0.349) assert.equal(dv, 0, `up·world-up ${upY.toFixed(2)} drives`);
-          if (upY > 0.44) assert.ok(Math.abs(dv - 1) < 1e-9, `up·world-up ${upY.toFixed(2)} drives ${dv.toFixed(4)} of the whole`);
+          expect(dv, `the drive fell from ${last.toFixed(4)} to ${dv.toFixed(4)} of the whole at up·world-up ${upY.toFixed(2)}`).toBeGreaterThanOrEqual(last - 1e-12);
+          if (upY < 0.349) expect(dv, `up·world-up ${upY.toFixed(2)} drives`).toBe(0);
+          if (upY > 0.44) expect(Math.abs(dv - 1), `up·world-up ${upY.toFixed(2)} drives ${dv.toFixed(4)} of the whole`).toBeLessThan(1e-9);
           last = dv;
         }
-        assert.ok(widest < 0.25, `the drive stepped by ${widest.toFixed(4)} of the whole in 0.01 of up·world-up`);
+        expect(widest, `the drive stepped by ${widest.toFixed(4)} of the whole in 0.01 of up·world-up`).toBeLessThan(0.25);
       });
 
       it("when it is rolled 72° and every tyre stands on a bank the body lies along (a normal along its up, 0.31 up), then it keeps over 95 % of its drive (the old cut gave it none under 0.35)", () => {
         const upright = gainRolled(0, null).dv;
         const roll = (72 * Math.PI) / 180;
         const banked = gainRolled(roll, bodyUp(roll));
-        assert.ok(banked.dv > 0.95 * upright, `drives ${(banked.dv / upright).toFixed(3)} of the whole`);
-        assert.equal(banked.throttle, 1, "its pedals run");
+        expect(banked.dv, `drives ${(banked.dv / upright).toFixed(3)} of the whole`).toBeGreaterThan(0.95 * upright);
+        expect(banked.throttle, "its pedals run").toBe(1);
       });
 
       it("when it lies on its side with every tyre pressed to a wall (a normal along its up, none up), then it has no drive and its pedals idle, while upright on the floor it pulls", () => {
         const upright = gainRolled(0, null).dv;
         const wall = gainRolled(Math.PI / 2, [-1, 0, 0]);
-        assert.equal(wall.dv, 0, "the gain against the wall");
-        assert.equal(wall.throttle, 0, "the throttle against the wall");
-        assert.ok(upright > 0, "upright, it pulls");
+        expect(wall.dv, "the gain against the wall").toBe(0);
+        expect(wall.throttle, "the throttle against the wall").toBe(0);
+        expect(upright, "upright, it pulls").toBeGreaterThan(0);
       });
 
       it("when an upright truck has one tyre against a wall (as against another car's side) and three on the floor, then it keeps its whole drive; with all four against it, none", () => {
         const upright = gainRolled(0, null).dv;
-        assert.ok(upright > 0, "upright, it pulls");
-        assert.ok(Math.abs(gainRolled(0, null, 1).dv / upright - 1) < 1e-9, "one tyre on the wall");
-        assert.equal(gainRolled(0, null, 4).dv, 0, "four tyres on the wall");
+        expect(upright, "upright, it pulls").toBeGreaterThan(0);
+        expect(Math.abs(gainRolled(0, null, 1).dv / upright - 1), "one tyre on the wall").toBeLessThan(1e-9);
+        expect(gainRolled(0, null, 4).dv, "four tyres on the wall").toBe(0);
       });
     });
 
@@ -227,8 +227,8 @@ for (const H of RATES) {
           if (Number.isNaN(first)) first = along(car) / H;
         });
         const launch = (k.launch[0] + (k.launch[1] - k.launch[0]) * HANDLING.realism) * k.boostAccel;
-        assert.equal(most, 0, `the boost launch spun at ${most.toFixed(2)}`);
-        assert.ok(Math.abs(first / launch - 1) < 0.01, `the first slice pulled ${first.toFixed(2)} against the boosted launch ${launch.toFixed(2)} m/s²`);
+        expect(most, `the boost launch spun at ${most.toFixed(2)}`).toBe(0);
+        expect(Math.abs(first / launch - 1), `the first slice pulled ${first.toFixed(2)} against the boosted launch ${launch.toFixed(2)} m/s²`).toBeLessThan(0.01);
       });
     });
 
@@ -243,8 +243,8 @@ for (const H of RATES) {
           if (car.drive.spin > 0) pulls.push((v - last) / H);
           last = v;
         });
-        assert.ok(pulls.length > 10, `${pulls.length} slices with the wheels spinning`);
-        for (const pull of pulls) assert.ok(Math.abs(pull / cap - 1) <= 0.01, `${pull.toFixed(2)} m/s² against the traction ${cap.toFixed(2)}`);
+        expect(pulls.length, `${pulls.length} slices with the wheels spinning`).toBeGreaterThan(10);
+        for (const pull of pulls) expect(Math.abs(pull / cap - 1), `${pull.toFixed(2)} m/s² against the traction ${cap.toFixed(2)}`).toBeLessThanOrEqual(0.01);
       });
     });
 
@@ -252,13 +252,13 @@ for (const H of RATES) {
       it("when it launches, then the spin passes 0.6 within a second and is 0 on asphalt; when it lifts, then the spin fades over the driveline's rotating mass, never in one slice, and is gone within a second", () => {
         let most = 0;
         const car = drive("sedan", flat(SURFACE.grass), BUILD_S, H, FULL, (c) => (most = Math.max(most, c.drive.spin)));
-        assert.ok(most > SPIN_PASSED, `the spin peaked at ${most.toFixed(2)}`);
+        expect(most, `the spin peaked at ${most.toFixed(2)}`).toBeGreaterThan(SPIN_PASSED);
         // Up to 10 m/s, still on the gas, on the grass.
         while (along(car) < 10) {
           applyDrive(car, FULL, H);
           car.integrate(H);
         }
-        assert.ok(car.drive.spinSpeed > 1, `lifting with ${car.drive.spinSpeed.toFixed(2)} m/s of spin`);
+        expect(car.drive.spinSpeed, `lifting with ${car.drive.spinSpeed.toFixed(2)} m/s of spin`).toBeGreaterThan(1);
         const k = CLASSES.sedan;
         let gone = Infinity;
         let steps = 0;
@@ -272,12 +272,12 @@ for (const H of RATES) {
           was = c.drive.spinSpeed;
           bodyWas = along(c);
         }, car);
-        assert.equal(steps, 0, "the spin fell faster than the tyres can slow the wheel");
-        assert.ok(gone <= FADE_S, `the spin was gone ${gone.toFixed(2)} s after the lift`);
+        expect(steps, "the spin fell faster than the tyres can slow the wheel").toBe(0);
+        expect(gone, `the spin was gone ${gone.toFixed(2)} s after the lift`).toBeLessThanOrEqual(FADE_S);
         let onAsphalt = 0;
         HANDLING.realism = 0;
         drive("sedan", flat(SURFACE.asphalt), BUILD_S, H, FULL, (c) => (onAsphalt = Math.max(onAsphalt, c.drive.spin)));
-        assert.equal(onAsphalt, 0, "no spin on asphalt at the arcade end");
+        expect(onAsphalt, "no spin on asphalt at the arcade end").toBe(0);
       });
     });
 
@@ -287,7 +287,7 @@ for (const H of RATES) {
         drive("sedan", flat(SURFACE.grass), BUILD_S, H, FULL, (car) => {
           if (carGear(car) === 2 && along(car) < 0.5 * gearHi(CLASSES.sedan, 0)) early = true;
         });
-        assert.ok(early, "the gauge never read second under half of first's top");
+        expect(early, "the gauge never read second under half of first's top").toBeTruthy();
       });
     });
 
@@ -310,8 +310,8 @@ for (const H of RATES) {
                 rpm = r;
               });
               const cell = `${cls} at realism ${realism} on ${surface}`;
-              assert.deepEqual(falls, [], `${cell}: the revs fell without an upshift at ${falls.join(", ")}`);
-              assert.ok(down <= 1, `${cell}: ${down} downshifts`);
+              expect(falls, `${cell}: the revs fell without an upshift at ${falls.join(", ")}`).toHaveLength(0);
+              expect(down, `${cell}: ${down} downshifts`).toBeLessThanOrEqual(1);
             }
           }
         }
@@ -325,17 +325,17 @@ for (const H of RATES) {
         const steer: DriveInput = { ...FULL, steer: 1 };
         pair[1]!.drive.spinSpeed = 0;
         for (const car of pair) applyDrive(car, steer, H);
-        assert.ok(pair[0]!.drive.spin > 0.3, `${cls} spinning at ${pair[0]!.drive.spin.toFixed(2)}`);
+        expect(pair[0]!.drive.spin, `${cls} spinning at ${pair[0]!.drive.spin.toFixed(2)}`).toBeGreaterThan(0.3);
         return { yaw: [pair[0]!.angular.y, pair[1]!.angular.y], hold: [pair[0]!.drive.hold, pair[1]!.drive.hold] };
       }
 
       it("when it is front-driven (the sedan), then the spin costs it steering authority and sideways hold; when it is rear-driven (the muscle car), then it steers as if gripping and only the hold falls", () => {
         const fwd = withAndWithoutSpin("sedan");
-        assert.ok(fwd.yaw[0] < 0.9 * fwd.yaw[1], `a spinning front axle steers at ${fwd.yaw[0].toFixed(3)} against ${fwd.yaw[1].toFixed(3)} rad/s`);
-        assert.ok(fwd.hold[0] < fwd.hold[1], `hold ${fwd.hold[0].toFixed(3)} spinning, ${fwd.hold[1].toFixed(3)} gripping`);
+        expect(fwd.yaw[0], `a spinning front axle steers at ${fwd.yaw[0].toFixed(3)} against ${fwd.yaw[1].toFixed(3)} rad/s`).toBeLessThan(0.9 * fwd.yaw[1]);
+        expect(fwd.hold[0], `hold ${fwd.hold[0].toFixed(3)} spinning, ${fwd.hold[1].toFixed(3)} gripping`).toBeLessThan(fwd.hold[1]);
         const rwd = withAndWithoutSpin("muscle");
-        assert.ok(Math.abs(rwd.yaw[0] / rwd.yaw[1] - 1) < 0.02, `a spinning rear axle steers at ${rwd.yaw[0].toFixed(3)} against ${rwd.yaw[1].toFixed(3)} rad/s`);
-        assert.ok(rwd.hold[0] < rwd.hold[1], `hold ${rwd.hold[0].toFixed(3)} spinning, ${rwd.hold[1].toFixed(3)} gripping`);
+        expect(Math.abs(rwd.yaw[0] / rwd.yaw[1] - 1), `a spinning rear axle steers at ${rwd.yaw[0].toFixed(3)} against ${rwd.yaw[1].toFixed(3)} rad/s`).toBeLessThan(0.02);
+        expect(rwd.hold[0], `hold ${rwd.hold[0].toFixed(3)} spinning, ${rwd.hold[1].toFixed(3)} gripping`).toBeLessThan(rwd.hold[1]);
       });
     });
 
@@ -355,16 +355,16 @@ for (const H of RATES) {
         for (const [cls, surface, gear] of cases) {
           const k = CLASSES[cls];
           const law = terminalSpeed(k, rollingOver(SURFACES[surface].roll));
-          assert.ok(law < k.topSpeed, `${cls} on ${surface}: the law's terminal ${law.toFixed(1)} is under the class top`);
+          expect(law, `${cls} on ${surface}: the law's terminal ${law.toFixed(1)} is under the class top`).toBeLessThan(k.topSpeed);
           const got = settled(cls, surface, 60);
           const share = (law - gearLo(k, gear - 1)) / (gearHi(k, gear - 1) - gearLo(k, gear - 1));
           const detail = `${cls} on ${surface}: ${got.v.toFixed(2)} m/s in gear ${got.gear} at revs ${got.rpm.toFixed(2)} (law ${law.toFixed(2)}, gear ${gear} at ${(0.3 + 0.7 * share).toFixed(2)})`;
-          assert.ok(got.v <= law && law - got.v <= 0.5, detail);
-          assert.equal(got.gear, gear, detail);
-          assert.ok(Math.abs(got.rpm - (0.3 + 0.7 * share)) <= 0.03 && got.rpm < 0.97, detail);
+          expect(got.v <= law && law - got.v <= 0.5, detail).toBeTruthy();
+          expect(got.gear, detail).toBe(gear);
+          expect(Math.abs(got.rpm - (0.3 + 0.7 * share)) <= 0.03 && got.rpm < 0.97, detail).toBeTruthy();
         }
         const asphalt = settled("sedan", SURFACE.asphalt, 30);
-        assert.ok(Math.abs(asphalt.v - CLASSES.sedan.topSpeed) < 1e-6, `asphalt reaches the class top: ${asphalt.v.toFixed(2)}`);
+        expect(Math.abs(asphalt.v - CLASSES.sedan.topSpeed), `asphalt reaches the class top: ${asphalt.v.toFixed(2)}`).toBeLessThan(1e-6);
       });
 
       it("when the sedan holds half throttle on grass, then it holds exactly that share of the class top (its power beats the drag there); when it holds 90 % on sand from 50 m/s, then it sags to the sand's terminal", () => {
@@ -372,7 +372,7 @@ for (const H of RATES) {
         // The pedal the sim runs is on the clip's grid (`THROTTLE_STEPS`): 0.5 rounds to 64/127.
         const share = Math.round(0.5 * THROTTLE_STEPS) / THROTTLE_STEPS;
         const half = drive("sedan", flat(SURFACE.grass), 20, H, { ...idleDrive(), throttle: 0.5 }, () => {});
-        assert.ok(Math.abs(along(half) - share * k.topSpeed) < 1e-6, `half throttle on grass holds ${along(half).toFixed(3)} of ${(share * k.topSpeed).toFixed(3)}`);
+        expect(Math.abs(along(half) - share * k.topSpeed), `half throttle on grass holds ${along(half).toFixed(3)} of ${(share * k.topSpeed).toFixed(3)}`).toBeLessThan(1e-6);
         const seeded = makeCar("sedan");
         seeded.spawnFacing(0, 0, 0, 50);
         let last = 50;
@@ -383,7 +383,7 @@ for (const H of RATES) {
         }, seeded);
         const law = terminalSpeed(k, rollingOver(SURFACES.sand.roll));
         // The sag is the law's approach from above (`power / v − resist` per second, a few hundredths near the terminal): still falling and within 1 m/s at 30 s.
-        assert.ok(falling && along(sag) > law && along(sag) - law <= 1, `90 % throttle on sand sags to ${along(sag).toFixed(2)} (law ${law.toFixed(2)}, ${falling ? "still falling" : "rose"})`);
+        expect(falling && along(sag) > law && along(sag) - law <= 1, `90 % throttle on sand sags to ${along(sag).toFixed(2)} (law ${law.toFixed(2)}, ${falling ? "still falling" : "rose"})`).toBeTruthy();
       });
 
       it("when the sedan freewheels in neutral, then on grass it sheds the whole of the grass's rolling resistance plus the air's drag, more than on asphalt", () => {
@@ -396,8 +396,8 @@ for (const H of RATES) {
         const grass = decel(SURFACE.grass);
         const asphalt = decel(SURFACE.asphalt);
         const law = SURFACES.grass.roll * FRICTION_G + DRIVE.drag * 20 * 20;
-        assert.ok(Math.abs(grass / law - 1) <= 0.3, `neutral on grass sheds ${grass.toFixed(2)} m/s² (law about ${law.toFixed(2)})`);
-        assert.ok(grass > 3 * asphalt, `grass ${grass.toFixed(2)} against asphalt ${asphalt.toFixed(2)} m/s²`);
+        expect(Math.abs(grass / law - 1), `neutral on grass sheds ${grass.toFixed(2)} m/s² (law about ${law.toFixed(2)})`).toBeLessThanOrEqual(0.3);
+        expect(grass, `grass ${grass.toFixed(2)} against asphalt ${asphalt.toFixed(2)} m/s²`).toBeGreaterThan(3 * asphalt);
       });
 
       it("when the sedan's right wheels stand on grass and its left on asphalt, then it feels half the grass's extra rolling resistance", () => {
@@ -415,7 +415,7 @@ for (const H of RATES) {
         const asphalt = decel(flat(SURFACE.asphalt));
         const grass = decel(flat(SURFACE.grass));
         const half = asphalt + 0.5 * (grass - asphalt);
-        assert.ok(Math.abs(mixed / half - 1) <= 0.05, `mixed ${mixed.toFixed(3)} against half the grass's extra ${half.toFixed(3)} m/s²`);
+        expect(Math.abs(mixed / half - 1), `mixed ${mixed.toFixed(3)} against half the grass's extra ${half.toFixed(3)} m/s²`).toBeLessThanOrEqual(0.05);
       });
     });
   });
@@ -425,7 +425,7 @@ describe("given a muscle car mid-spin on grass and a twin rebuilt from its fligh
   it("when both are driven on with the same pedals for a second, then their spin and speed agree to the bit every slice", () => {
     const H = 1 / FINE_HZ;
     const car = drive("muscle", flat(SURFACE.grass), 0.5, H, FULL, () => {});
-    assert.ok(car.drive.spinSpeed > 1, `mid-spin at ${car.drive.spinSpeed.toFixed(2)} m/s`);
+    expect(car.drive.spinSpeed, `mid-spin at ${car.drive.spinSpeed.toFixed(2)} m/s`).toBeGreaterThan(1);
     const block = new Float64Array(FLIGHT);
     car.flight(block, 0, false);
     const twin = makeCar("muscle");
@@ -436,8 +436,8 @@ describe("given a muscle car mid-spin on grass and a twin rebuilt from its fligh
         applyDrive(c, FULL, H);
         c.integrate(H);
       }
-      assert.equal(twin.drive.spinSpeed, car.drive.spinSpeed, `spin at ${t.toFixed(3)} s`);
-      assert.equal(along(twin), along(car), `speed at ${t.toFixed(3)} s`);
+      expect(twin.drive.spinSpeed, `spin at ${t.toFixed(3)} s`).toBe(car.drive.spinSpeed);
+      expect(along(twin), `speed at ${t.toFixed(3)} s`).toBe(along(car));
     }
   });
 });

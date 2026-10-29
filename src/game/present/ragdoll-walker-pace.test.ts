@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import type { RagdollSystem } from "./engine-ragdoll.ts";
 import { driverLook } from "./driver-look.ts";
@@ -28,7 +27,7 @@ const drawn = new THREE.Vector3();
 
 beforeEach(async () => {
   system = await flatSystem();
-  assert.equal(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: driverLook(0, 0) }), WALKER, "the walker is placed in his slot");
+  expect(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: driverLook(0, 0) }), "the walker is placed in his slot").toBe(WALKER);
 });
 
 afterEach(() => {
@@ -139,13 +138,13 @@ describe("given a walker standing on open ground", () => {
       const seconds = samples[track.findIndex((v) => v >= 0.9 * speed)]!.t;
       const jitter = std(steady.map((s) => s.drawnSpeed));
       const slide = plantedFootSpeeds(steady);
-      assert.ok(samples.every((s) => s.standing), "never went down");
-      assert.ok(speed >= testCase.expectedMinSpeed && speed <= testCase.expectedMaxSpeed, `steady speed ${speed.toFixed(2)} m/s within ${testCase.expectedMinSpeed}-${testCase.expectedMaxSpeed}`);
-      assert.ok(seconds <= testCase.expectedMaxSecondsTo90, `90 % of it in ${seconds.toFixed(2)} s within ${testCase.expectedMaxSecondsTo90}`);
-      assert.ok(jitter <= testCase.expectedMaxJitter, `drawn speed varies by ${jitter.toFixed(3)} m/s within ${testCase.expectedMaxJitter}`);
-      assert.ok(Math.max(...samples.map((s) => s.tilt)) <= testCase.expectedMaxTilt, `worst tilt ${Math.max(...samples.map((s) => s.tilt)).toFixed(1)} degrees`);
-      assert.ok(slide.count > 20, `${slide.count} planted-foot readings (a gait that never plants proves nothing)`);
-      assert.ok(slide.mean <= testCase.expectedMaxFootSlide && slide.p95 <= testCase.expectedMaxFootSlide95, `a planted foot slides ${slide.mean.toFixed(2)} m/s on average, ${slide.p95.toFixed(2)} at the 95th percentile`);
+      expect(samples.every((s) => s.standing), "never went down").toBeTruthy();
+      expect(speed >= testCase.expectedMinSpeed && speed <= testCase.expectedMaxSpeed, `steady speed ${speed.toFixed(2)} m/s within ${testCase.expectedMinSpeed}-${testCase.expectedMaxSpeed}`).toBeTruthy();
+      expect(seconds, `90 % of it in ${seconds.toFixed(2)} s within ${testCase.expectedMaxSecondsTo90}`).toBeLessThanOrEqual(testCase.expectedMaxSecondsTo90);
+      expect(jitter, `drawn speed varies by ${jitter.toFixed(3)} m/s within ${testCase.expectedMaxJitter}`).toBeLessThanOrEqual(testCase.expectedMaxJitter);
+      expect(Math.max(...samples.map((s) => s.tilt)), `worst tilt ${Math.max(...samples.map((s) => s.tilt)).toFixed(1)} degrees`).toBeLessThanOrEqual(testCase.expectedMaxTilt);
+      expect(slide.count, `${slide.count} planted-foot readings (a gait that never plants proves nothing)`).toBeGreaterThan(20);
+      expect(slide.mean <= testCase.expectedMaxFootSlide && slide.p95 <= testCase.expectedMaxFootSlide95, `a planted foot slides ${slide.mean.toFixed(2)} m/s on average, ${slide.p95.toFixed(2)} at the 95th percentile`).toBeTruthy();
     });
   }
 });
@@ -164,7 +163,7 @@ describe("given a walker going at a steady pace", () => {
       system.walker.command = testCase.command;
       const swing = run(8).slice(-240).map((s) => s.thighSwing);
       const peakToPeak = Math.max(...swing) - Math.min(...swing);
-      assert.ok(peakToPeak >= testCase.expectedMinSwing && peakToPeak <= testCase.expectedMaxSwing, `thigh swing ${peakToPeak.toFixed(1)} degrees within ${testCase.expectedMinSwing}-${testCase.expectedMaxSwing}`);
+      expect(peakToPeak >= testCase.expectedMinSwing && peakToPeak <= testCase.expectedMaxSwing, `thigh swing ${peakToPeak.toFixed(1)} degrees within ${testCase.expectedMinSwing}-${testCase.expectedMaxSwing}`).toBeTruthy();
     });
   }
 });
@@ -183,11 +182,11 @@ describe("given a walker at speed", () => {
       system.walker.command = 0;
       const after = run(4);
       const still = smoothed(after.map((s) => s.speed), 5).findIndex((v) => v < STOPPED_SPEED);
-      assert.ok(still >= 0, "he stopped");
+      expect(still, "he stopped").toBeGreaterThanOrEqual(0);
       const travelled = after.slice(0, still + 1).reduce((sum, s) => sum + s.speed * FRAME, 0);
-      assert.ok(after[still]!.t <= testCase.expectedMaxSeconds, `under ${STOPPED_SPEED} m/s after ${after[still]!.t.toFixed(2)} s within ${testCase.expectedMaxSeconds}`);
-      assert.ok(travelled <= testCase.expectedMaxMetres, `${travelled.toFixed(2)} m to a stop within ${testCase.expectedMaxMetres}`);
-      assert.ok(travelled > 0.1 && after.every((s) => s.standing), "he travelled and stayed on his feet");
+      expect(after[still]!.t, `under ${STOPPED_SPEED} m/s after ${after[still]!.t.toFixed(2)} s within ${testCase.expectedMaxSeconds}`).toBeLessThanOrEqual(testCase.expectedMaxSeconds);
+      expect(travelled, `${travelled.toFixed(2)} m to a stop within ${testCase.expectedMaxMetres}`).toBeLessThanOrEqual(testCase.expectedMaxMetres);
+      expect(travelled > 0.1 && after.every((s) => s.standing), "he travelled and stayed on his feet").toBeTruthy();
     });
   }
 });
@@ -210,11 +209,11 @@ describe("given a walker sprinting along +z", () => {
       const faced = samples.findIndex((s) => Math.abs(Math.atan2(Math.sin(s.facing - heading), Math.cos(s.facing - heading))) < 0.35);
       const slowest = Math.min(...smoothed(samples.map((s) => s.speed), 5).slice(0, faced + 30));
       const slide = plantedFootSpeeds(samples);
-      assert.ok(samples.every((s) => s.standing), "never went down");
-      assert.ok(faced >= 0 && samples[faced]!.t <= testCase.expectedMaxSecondsToFace, `facing the new way after ${faced < 0 ? "never" : samples[faced]!.t.toFixed(2)} s within ${testCase.expectedMaxSecondsToFace}`);
-      assert.ok(Math.max(...samples.map((s) => s.tilt)) <= testCase.expectedMaxTilt, `worst tilt ${Math.max(...samples.map((s) => s.tilt)).toFixed(1)} degrees within ${testCase.expectedMaxTilt}`);
-      assert.ok(slowest >= testCase.expectedMinSlowest && slowest <= testCase.expectedMaxSlowest, `slowest ${slowest.toFixed(2)} m/s within ${testCase.expectedMinSlowest}-${testCase.expectedMaxSlowest}`);
-      assert.ok(slide.count > 10 && slide.p95 <= 3.2, `planted feet slide ${slide.p95.toFixed(2)} m/s at the 95th percentile over ${slide.count} readings`);
+      expect(samples.every((s) => s.standing), "never went down").toBeTruthy();
+      expect(faced >= 0 && samples[faced]!.t <= testCase.expectedMaxSecondsToFace, `facing the new way after ${faced < 0 ? "never" : samples[faced]!.t.toFixed(2)} s within ${testCase.expectedMaxSecondsToFace}`).toBeTruthy();
+      expect(Math.max(...samples.map((s) => s.tilt)), `worst tilt ${Math.max(...samples.map((s) => s.tilt)).toFixed(1)} degrees within ${testCase.expectedMaxTilt}`).toBeLessThanOrEqual(testCase.expectedMaxTilt);
+      expect(slowest >= testCase.expectedMinSlowest && slowest <= testCase.expectedMaxSlowest, `slowest ${slowest.toFixed(2)} m/s within ${testCase.expectedMinSlowest}-${testCase.expectedMaxSlowest}`).toBeTruthy();
+      expect(slide.count > 10 && slide.p95 <= 3.2, `planted feet slide ${slide.p95.toFixed(2)} m/s at the 95th percentile over ${slide.count} readings`).toBeTruthy();
     });
   }
 });
@@ -238,7 +237,7 @@ describe("given a walker at speed along +z", () => {
         leans.push((Math.atan2(2 * (q.y * q.z + q.x * q.w), 1 - 2 * (q.x * q.x + q.z * q.z)) * 180) / Math.PI);
       }
       const lean = mean(leans);
-      assert.ok(lean >= testCase.expectedMinLean && lean <= testCase.expectedMaxLean, `lean ${lean.toFixed(1)} degrees within ${testCase.expectedMinLean}-${testCase.expectedMaxLean}`);
+      expect(lean >= testCase.expectedMinLean && lean <= testCase.expectedMaxLean, `lean ${lean.toFixed(1)} degrees within ${testCase.expectedMinLean}-${testCase.expectedMaxLean}`).toBeTruthy();
     });
   }
 });
@@ -265,7 +264,7 @@ describe("given a walker running along +z", () => {
   for (const testCase of reverseCases) {
     it(testCase.it, () => {
       system.stopWalker(WALKER);
-      assert.equal(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: testCase.woman ? WOMAN : driverLook(0, 0) }, WALKER), WALKER, "the walker is placed in his slot");
+      expect(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: testCase.woman ? WOMAN : driverLook(0, 0) }, WALKER), "the walker is placed in his slot").toBe(WALKER);
       const heading = (testCase.degrees * Math.PI) / 180;
       system.walker.heading = 0;
       system.walker.command = RUN_SPEED;
@@ -276,19 +275,19 @@ describe("given a walker running along +z", () => {
         const at = bodies()[0]!.translation();
         if (hypot2(at.x, at.z) >= testCase.metres) turnedAfter = samples.length * FRAME;
       }
-      assert.ok(turnedAfter < Infinity, "the walker ran the distance");
+      expect(turnedAfter, "the walker ran the distance").toBeLessThan(Infinity);
       system.walker.heading = heading;
       samples.push(...run(REVERSAL_SECONDS));
       const turned = samples.slice(Math.round(turnedAfter * FRAME_HZ));
       const fallen = turned.find((s) => !s.standing);
-      assert.equal(fallen, undefined, `fell ${(turned.findIndex((s) => !s.standing) * FRAME).toFixed(2)} s after the stick was pulled back, torso ${fallen?.torsoY.toFixed(2)} m, tilt ${fallen?.tilt.toFixed(0)} degrees`);
+      expect(fallen, `fell ${(turned.findIndex((s) => !s.standing) * FRAME).toFixed(2)} s after the stick was pulled back, torso ${fallen?.torsoY.toFixed(2)} m, tilt ${fallen?.tilt.toFixed(0)} degrees`).toBe(undefined);
       const weakest = Math.min(...turned.map((s) => s.strength));
       const lowest = Math.min(...turned.map((s) => s.torsoY));
       const tipped = Math.max(...turned.map((s) => s.tilt));
-      assert.ok(weakest >= NO_STUMBLE_STRENGTH, `stumbled: strength fell to ${weakest.toFixed(2)}`);
-      assert.ok(lowest >= NO_SINK_HEIGHT, `torso sank to ${lowest.toFixed(2)} m`);
-      assert.ok(tipped <= NO_TIP_TILT, `torso tipped ${tipped.toFixed(0)} degrees`);
-      assert.ok(Math.abs(wrapAngle(turned[turned.length - 1]!.facing - heading)) < FACED_BACK, "faces the way the stick points");
+      expect(weakest, `stumbled: strength fell to ${weakest.toFixed(2)}`).toBeGreaterThanOrEqual(NO_STUMBLE_STRENGTH);
+      expect(lowest, `torso sank to ${lowest.toFixed(2)} m`).toBeGreaterThanOrEqual(NO_SINK_HEIGHT);
+      expect(tipped, `torso tipped ${tipped.toFixed(0)} degrees`).toBeLessThanOrEqual(NO_TIP_TILT);
+      expect(Math.abs(wrapAngle(turned[turned.length - 1]!.facing - heading)), "faces the way the stick points").toBeLessThan(FACED_BACK);
     });
   }
 });

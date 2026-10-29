@@ -1,5 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { DeformableCar } from "./car.ts";
@@ -106,7 +105,7 @@ describe("given a car with brake and handbrake held, dropped 0.5 m onto the midd
         if (Math.abs(r.rollErr) > 1.5) failures.push(`roll ${r.roll.toFixed(2)}° vs face ${(r.roll - r.rollErr).toFixed(2)}°`);
         if (r.tiltErr > 1.5) failures.push(`body up ${r.tiltErr.toFixed(2)}° off the face normal`);
         if (deg < 30 && r.slide > 0.5) failures.push(`slid ${r.slide.toFixed(3)} m`);
-        assert.deepEqual(failures, []);
+        expect(failures).toHaveLength(0);
       });
     }
   }

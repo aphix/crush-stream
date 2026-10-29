@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { ArmBadge } from "./bench-badge.ts";
 
 /** A line of the card that counts how often the page is written to. */
@@ -24,22 +23,22 @@ describe("given the bench card's arm label, reading a knob that the loop turns o
     const element = line();
     const badge = new ArmBadge(element, () => on);
     badge.sync();
-    assert.equal(element.textContent, "epicenter off");
+    expect(element.textContent).toBe("epicenter off");
     const quiet = element.style.cssText;
     on = true;
     badge.sync();
-    assert.equal(element.textContent, "EPICENTER ON");
-    assert.notEqual(element.style.cssText, quiet, "the on look differs from the off look");
+    expect(element.textContent).toBe("EPICENTER ON");
+    expect(element.style.cssText, "the on look differs from the off look").not.toBe(quiet);
     on = false;
     badge.sync();
-    assert.equal(element.textContent, "epicenter off");
-    assert.equal(element.style.cssText, quiet);
+    expect(element.textContent).toBe("epicenter off");
+    expect(element.style.cssText).toBe(quiet);
   });
 
   it("when it is synced a thousand times with the knob unchanged, then the page is written once, not a thousand times", () => {
     const element = line();
     const badge = new ArmBadge(element, () => true);
     for (let i = 0; i < 1000; i++) badge.sync();
-    assert.equal(element.writes, 1);
+    expect(element.writes).toBe(1);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { Corkscrew, CORKSCREW } from "../scenes/corkscrew.ts";
@@ -102,7 +101,7 @@ async function fireAt(prefab: PrefabId, solids: boolean): Promise<{ solid: Prop;
     if (y < q.y0 || y > q.y1 || Math.abs(q.z) >= q.hz) continue;
     face = Math.min(face, q.x - (q.circle ? Math.sqrt(q.hx * q.hx - q.z * q.z) : q.hx));
   }
-  assert.ok(Number.isFinite(face), `${prefab}: nothing at ${y} m on the shot's line`);
+  expect(Number.isFinite(face), `${prefab}: nothing at ${y} m on the shot's line`).toBeTruthy();
   const solid: Prop = { x: -45, z: 30, yaw: 0.4, pieces, face };
   const track = new Track(parseTrack(square({ props: [{ prefab, x: solid.x, z: solid.z, yaw: solid.yaw, scale: 1 }] })));
   const sys = await system(track.ground(), track);
@@ -129,16 +128,16 @@ describe("given a thrown dummy (the ejected driver's ragdoll) and the solid prop
   for (const prefab of kinds) {
     it(`when a dummy is fired at a ${prefab} at 15 m/s, then it stops on the prop's face: no part inside it and none behind it`, async () => {
       const { solid, deepest, reach, along } = await fireAt(prefab, true);
-      assert.ok(reach > solid.face - 0.6, `the shot reached the face (${reach.toFixed(2)} vs ${solid.face.toFixed(2)})`);
-      assert.ok(deepest > -SOAK, `a part sank ${(-deepest).toFixed(2)} m into the ${prefab}`);
-      assert.ok(along < solid.face, `torso ended behind the face: ${along.toFixed(2)}`);
+      expect(reach, `the shot reached the face (${reach.toFixed(2)} vs ${solid.face.toFixed(2)})`).toBeGreaterThan(solid.face - 0.6);
+      expect(deepest, `a part sank ${(-deepest).toFixed(2)} m into the ${prefab}`).toBeGreaterThan(-SOAK);
+      expect(along, `torso ended behind the face: ${along.toFixed(2)}`).toBeLessThan(solid.face);
     });
   }
 
   it("when the course's solids are left out and the same shots are fired at props over 1.2 m tall, then the torso ends inside or behind the props", async () => {
     for (const prefab of kinds.filter((k) => PREFABS[k].size[1] > 1.2)) {
       const { solid, along } = await fireAt(prefab, false);
-      assert.ok(along > solid.face, `${prefab}: with no solid the torso ended ${along.toFixed(2)} along, face at ${solid.face.toFixed(2)}`);
+      expect(along, `${prefab}: with no solid the torso ended ${along.toFixed(2)} along, face at ${solid.face.toFixed(2)}`).toBeGreaterThan(solid.face);
     }
   });
 
@@ -149,7 +148,7 @@ describe("given a thrown dummy (the ejected driver's ragdoll) and the solid prop
     run(sys, 3, () => {});
     const x = dollsOf(sys)[0]!.bodies[0]!.translation().x;
     sys.dispose();
-    assert.ok(x > -44, `through the opening: ${x.toFixed(2)}`);
+    expect(x, `through the opening: ${x.toFixed(2)}`).toBeGreaterThan(-44);
   });
 
   it("when a crate has been knocked off its spot versus left standing and a dummy is fired at the spot, then the standing crate stops him and the knocked one, flown off sideways, lets him by", async () => {
@@ -166,8 +165,8 @@ describe("given a thrown dummy (the ejected driver's ragdoll) and the solid prop
       ends.push(dollsOf(sys)[0]!.bodies[0]!.translation().x);
       sys.dispose();
     }
-    assert.ok(ends[0]! < -45.5, `standing crate stops him: ${ends[0]!.toFixed(2)}`);
-    assert.ok(ends[1]! > -44, `knocked crate lets him by: ${ends[1]!.toFixed(2)}`);
+    expect(ends[0]!, `standing crate stops him: ${ends[0]!.toFixed(2)}`).toBeLessThan(-45.5);
+    expect(ends[1]!, `knocked crate lets him by: ${ends[1]!.toFixed(2)}`).toBeGreaterThan(-44);
   });
 });
 
@@ -189,7 +188,7 @@ describe("given a thrown dummy and the stunt course's tunnel shell and bridge de
       let far = 0;
       run(sys, 3, (q) => (far = Math.max(far, (q.x - p.x[k]!) * dir.x + (q.z - p.z[k]!) * dir.z)));
       sys.dispose();
-      assert.ok(far < wall + 0.1, `a part reached ${far.toFixed(2)} m from the centre line; the wall's face is ${wall.toFixed(2)}`);
+      expect(far, `a part reached ${far.toFixed(2)} m from the centre line; the wall's face is ${wall.toFixed(2)}`).toBeLessThan(wall + 0.1);
     }
     // Straight up at 15 m/s (11.7 m of rise): the arch's apex is the most height there is.
     const sys = await system(ground, track);
@@ -197,38 +196,38 @@ describe("given a thrown dummy and the stunt course's tunnel shell and bridge de
     let top = 0;
     run(sys, 3, (q) => (top = Math.max(top, q.y)));
     sys.dispose();
-    assert.ok(top < road + TUNNEL_SIDE + 3 + 0.25, `a part rose to ${(top - road).toFixed(2)} m over the road; the arch's apex is ${(TUNNEL_SIDE + 3).toFixed(1)}`);
+    expect(top, `a part rose to ${(top - road).toFixed(2)} m over the road; the arch's apex is ${(TUNNEL_SIDE + 3).toFixed(1)}`).toBeLessThan(road + TUNNEL_SIDE + 3 + 0.25);
   });
 
   it("when he is thrown up under the bridge and dropped on top of it, then the deck's underside holds him and he ends on the road under it, and on top he lies on the deck", async () => {
     const roadY = ground.heightAt(0, 0, 1);
     const deckY = ground.heightAt(0, 0, 12);
-    assert.ok(deckY - roadY > 8, "the crossing is a real bridge");
+    expect(deckY - roadY, "the crossing is a real bridge").toBeGreaterThan(8);
     const under = await system(ground, track);
     throwFrom(under, new THREE.Vector3(0, roadY + 1.5, 0), new THREE.Vector3(0, 15, 0), UP);
     let top = 0;
     run(under, 4, (q) => (top = Math.max(top, q.y)));
     const end = dollsOf(under)[0]!.bodies[0]!.translation().y;
     under.dispose();
-    assert.ok(top > deckY - 1 - 0.6, `he reached the underside: rose to ${top.toFixed(2)}`);
-    assert.ok(top < deckY - 1 + 0.1, `a part rose to ${top.toFixed(2)}, the underside is ${(deckY - 1).toFixed(2)}`);
-    assert.ok(end < roadY + 1, `he came down on the road under it: torso y ${end.toFixed(2)}`);
+    expect(top, `he reached the underside: rose to ${top.toFixed(2)}`).toBeGreaterThan(deckY - 1 - 0.6);
+    expect(top, `a part rose to ${top.toFixed(2)}, the underside is ${(deckY - 1).toFixed(2)}`).toBeLessThan(deckY - 1 + 0.1);
+    expect(end, `he came down on the road under it: torso y ${end.toFixed(2)}`).toBeLessThan(roadY + 1);
     const over = await system(ground, track);
     throwFrom(over, new THREE.Vector3(0, deckY + 3, 0), new THREE.Vector3(), null);
     let low = Infinity;
     run(over, 3, (q) => (low = Math.min(low, q.y)));
     const rest = dollsOf(over)[0]!.bodies[0]!.translation().y;
     over.dispose();
-    assert.ok(low > deckY - 0.1, `a part went ${(deckY - low).toFixed(2)} m under the deck's top`);
-    assert.ok(rest > deckY && rest < deckY + 0.8, `torso rests on the deck: ${(rest - deckY).toFixed(2)} m over it`);
+    expect(low, `a part went ${(deckY - low).toFixed(2)} m under the deck's top`).toBeGreaterThan(deckY - 0.1);
+    expect(rest > deckY && rest < deckY + 0.8, `torso rests on the deck: ${(rest - deckY).toFixed(2)} m over it`).toBeTruthy();
     // levelAt is the sim's own deck height, so the colliders are where the cars drive.
-    assert.ok(Math.abs(levelAt(p, 637, 0) - deckY) < 0.05);
+    expect(Math.abs(levelAt(p, 637, 0) - deckY)).toBeLessThan(0.05);
   });
 
   it("when he is fired at the wall of the road under the bridge, then the wall stands on the road, not on the deck above", async () => {
     let k = 0;
     for (let i = 0; i < p.count; i++) if (p.y[i]! < 1 && Math.hypot(p.x[i]!, p.z[i]!) < Math.hypot(p.x[k]!, p.z[k]!)) k = i;
-    assert.ok(Math.hypot(p.x[k]!, p.z[k]!) < 3 && !p.deck[k], "the road crosses under the bridge near the origin");
+    expect(Math.hypot(p.x[k]!, p.z[k]!) < 3 && !p.deck[k], "the road crosses under the bridge near the origin").toBeTruthy();
     const left = new THREE.Vector3(p.tz[k]!, 0, -p.tx[k]!);
     const wall = p.half[k]! + p.runL[k]!;
     const sys = await system(ground, track);
@@ -236,7 +235,7 @@ describe("given a thrown dummy and the stunt course's tunnel shell and bridge de
     let far = 0;
     run(sys, 3, (q) => (far = Math.max(far, (q.x - p.x[k]!) * left.x + (q.z - p.z[k]!) * left.z)));
     sys.dispose();
-    assert.ok(far > wall - 0.6 && far < wall + 0.15, `a part reached ${far.toFixed(2)} m out; the wall's face is ${wall.toFixed(2)}`);
+    expect(far > wall - 0.6 && far < wall + 0.15, `a part reached ${far.toFixed(2)} m out; the wall's face is ${wall.toFixed(2)}`).toBeTruthy();
   });
 });
 
@@ -256,8 +255,8 @@ describe("given a thrown dummy and the fleet ramps", () => {
     const t = dollsOf(drop)[0]!.bodies[0]!.translation();
     const gap = t.y - ramps.heightAt(t.x, t.z);
     drop.dispose();
-    assert.ok(under < 0.05, `a part sank ${under.toFixed(2)} m into the ramp`);
-    assert.ok(gap > 0.05 && gap < 0.5, `torso rests ${gap.toFixed(2)} m over the face`);
+    expect(under, `a part sank ${under.toFixed(2)} m into the ramp`).toBeLessThan(0.05);
+    expect(gap > 0.05 && gap < 0.5, `torso rests ${gap.toFixed(2)} m over the face`).toBeTruthy();
     // Across the wedge's side face (1.07 m tall 0.5 m up the run), from 5 m out, at mid-height; only parts alongside the wedge count.
     const side = await system(ramps, null);
     const face = at(RAMP.start + 0.5, -RAMP.halfW - 5);
@@ -269,7 +268,7 @@ describe("given a thrown dummy and the fleet ramps", () => {
       if (u > RAMP.start + 0.1 && u < RAMP.start + RAMP.len - 0.1) reach = Math.max(reach, q.x * az - q.z * ax);
     });
     side.dispose();
-    assert.ok(reach < -RAMP.halfW + SOAK, `a part crossed the face: v ${reach.toFixed(2)} vs ${(-RAMP.halfW).toFixed(2)}`);
+    expect(reach, `a part crossed the face: v ${reach.toFixed(2)} vs ${(-RAMP.halfW).toFixed(2)}`).toBeLessThan(-RAMP.halfW + SOAK);
   });
 });
 
@@ -283,13 +282,13 @@ describe("given a thrown dummy and the corkscrew's channel and the sandbox's lam
     let low = Infinity;
     run(drop, 3, (q) => (low = Math.min(low, q.y - cork.heightAt(q.x, q.z, q.y + 1))));
     drop.dispose();
-    assert.ok(low > -0.1, `a part sank ${(-low).toFixed(2)} m into the floor`);
+    expect(low, `a part sank ${(-low).toFixed(2)} m into the floor`).toBeGreaterThan(-0.1);
     const side = await system(cork, null);
     throwFrom(side, new THREE.Vector3(0, floor + 0.7, z), new THREE.Vector3(12, 0, 0), new THREE.Vector3(1, 0, 0));
     let far = 0;
     run(side, 2, (q) => (far = Math.max(far, Math.abs(q.x))));
     side.dispose();
-    assert.ok(far < CORKSCREW.halfW + 0.2, `a part got ${far.toFixed(2)} m from the centre; the walls stand ${CORKSCREW.halfW} m out`);
+    expect(far, `a part got ${far.toFixed(2)} m from the centre; the walls stand ${CORKSCREW.halfW} m out`).toBeLessThan(CORKSCREW.halfW + 0.2);
   });
 
   it("when a dummy is fired at a lamp post that is standing, broken or hidden, then the standing post stops him and a broken or hidden one does not", async () => {
@@ -302,8 +301,8 @@ describe("given a thrown dummy and the corkscrew's channel and the sandbox's lam
       ends.push(dollsOf(sys)[0]!.bodies[0]!.translation().x);
       sys.dispose();
     }
-    assert.ok(ends[0]! < 16, `standing pole stops him: ${ends[0]!.toFixed(2)}`);
-    assert.ok(ends[1]! > 18 && ends[2]! > 18, `a broken or hidden pole does not: ${ends[1]!.toFixed(2)}, ${ends[2]!.toFixed(2)}`);
+    expect(ends[0]!, `standing pole stops him: ${ends[0]!.toFixed(2)}`).toBeLessThan(16);
+    expect(ends[1]! > 18 && ends[2]! > 18, `a broken or hidden pole does not: ${ends[1]!.toFixed(2)}, ${ends[2]!.toFixed(2)}`).toBeTruthy();
   });
 });
 
@@ -322,12 +321,12 @@ describe("given the ragdoll world after throws on a course, the corkscrew and th
       sys.update(FRAME, [], true, false, null);
       peaks.push(colliders(sys) - base);
       sys.reset();
-      assert.equal(colliders(sys), base, `after a reset on ${ground.constructor.name}`);
+      expect(colliders(sys), `after a reset on ${ground.constructor.name}`).toBe(base);
     }
-    assert.ok(peaks.every((n) => n > 0), `the throws built colliders: ${peaks.join(", ")} more`);
+    expect(peaks.every((n) => n > 0), `the throws built colliders: ${peaks.join(", ")} more`).toBeTruthy();
     // The course swap: a new course drops the old solids' recipes with it.
     sys.setCourse(track, placeProps(track), null);
-    assert.equal(sys["solids"], null);
+    expect(sys["solids"]).toBe(null);
     sys.dispose();
   });
 });

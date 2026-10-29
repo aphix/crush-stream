@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { beginFakeFall, type DeformableCar } from "./car.ts";
 import { FREEWHEEL, makeCar, makeWorld, runPair, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -78,8 +77,8 @@ describe("given the fleet course's disc-shaped ground (a round pad with a rim pa
       // `CrashEngine.stepEdge`'s order: physics for the frame, then the edge rule.
       for (; frame < 300; frame++) {
         tickWorld(w);
-        for (const m of car.deform.masses) assert.ok(Number.isFinite(m.world.x + m.world.y + m.world.z), `mass NaN at frame ${frame}`);
-        assert.ok(Number.isFinite(p.x + p.y + p.z), `group NaN at frame ${frame}`);
+        for (const m of car.deform.masses) expect(Number.isFinite(m.world.x + m.world.y + m.world.z), `mass NaN at frame ${frame}`).toBeTruthy();
+        expect(Number.isFinite(p.x + p.y + p.z), `group NaN at frame ${frame}`).toBeTruthy();
         const d = p.y - prevY;
         // A pop is any frame whose height change departs from the last one by more than gravity's share.
         if (frame > 2) worstJerk = Math.max(worstJerk, Math.abs(d - prevD));
@@ -94,12 +93,12 @@ describe("given the fleet course's disc-shaped ground (a round pad with a rim pa
           break;
         }
       }
-      assert.ok(fellOffAt > 0 && onDiscFrames > 0, `no vaporize (frame ${fellOffAt}), ${onDiscFrames} frames on the disc`);
-      assert.ok(Math.hypot(p.x, p.z) > DISC_RADIUS - 2, "vaporized before it reached the rim");
-      assert.ok(p.y > -1 && p.y < 0.01, `vaporized at y ${p.y.toFixed(3)} m: the first frame its lowest point was 10 mm under, not a fall of metres`);
-      assert.ok(worstJerk <= G_FRAME2 * 1.05, `height popped ${worstJerk.toFixed(4)} m/frame² (gravity ${G_FRAME2.toFixed(4)})`);
+      expect(fellOffAt > 0 && onDiscFrames > 0, `no vaporize (frame ${fellOffAt}), ${onDiscFrames} frames on the disc`).toBeTruthy();
+      expect(Math.hypot(p.x, p.z), "vaporized before it reached the rim").toBeGreaterThan(DISC_RADIUS - 2);
+      expect(p.y > -1 && p.y < 0.01, `vaporized at y ${p.y.toFixed(3)} m: the first frame its lowest point was 10 mm under, not a fall of metres`).toBeTruthy();
+      expect(worstJerk, `height popped ${worstJerk.toFixed(4)} m/frame² (gravity ${G_FRAME2.toFixed(4)})`).toBeLessThanOrEqual(G_FRAME2 * 1.05);
       // Measured 0.000 m driven, ≈0.1 m for the wreck (its nose tips over the rim first; 0.03 before the rim).
-      assert.ok(worstShape < 0.2, `body bent ${worstShape.toFixed(3)} m while falling`);
+      expect(worstShape, `body bent ${worstShape.toFixed(3)} m while falling`).toBeLessThan(0.2);
     });
   }
 
@@ -116,9 +115,9 @@ describe("given the fleet course's disc-shaped ground (a round pad with a rim pa
     // The wreck's body turns about its masses' centroid; the intact body about `frame.comY`: the velocity there is v + spin × (centre − centroid).
     const want = car.velocity.clone().add(spin.clone().cross(com.clone().sub(c)));
     beginFakeFall(car);
-    assert.ok(car.falling && !car.deform.massActive);
-    assert.ok(car.angular.distanceTo(spin) < 1e-9, `spin ${car.angular.toArray()} vs ${spin.toArray()}`);
-    assert.ok(car.velocity.distanceTo(want) < 1e-9, `velocity ${car.velocity.toArray()} vs ${want.toArray()}`);
+    expect(car.falling && !car.deform.massActive).toBeTruthy();
+    expect(car.angular.distanceTo(spin), `spin ${car.angular.toArray()} vs ${spin.toArray()}`).toBeLessThan(1e-9);
+    expect(car.velocity.distanceTo(want), `velocity ${car.velocity.toArray()} vs ${want.toArray()}`).toBeLessThan(1e-9);
   });
 
   it("when a vaporized car is stepped for 30 frames, then it is out of the sim: its group and masses stay put", () => {
@@ -145,30 +144,30 @@ describe("given the fleet course's disc-shaped ground (a round pad with a rim pa
       const car = makeCar();
       car.group.position.set(testCase.x, testCase.y, 0);
       if (testCase.flipped) car.group.quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI);
-      assert.equal(carFellOffRim(car), testCase.expectedFellOff, "fell off the rim");
+      expect(carFellOffRim(car), "fell off the rim").toBe(testCase.expectedFellOff);
     });
   }
 
   it(`when a car has fallen off the rim, then it is vaporized at once, and only the driven car respawns ${RESPAWN_S} s later while an AI car stays gone`, () => {
-    assert.equal(edgeAction(false, false, true, 0), null);
-    assert.equal(edgeAction(true, false, false, 0), "vaporize");
-    assert.equal(edgeAction(true, false, true, 0), "vaporize");
-    assert.equal(edgeAction(true, true, true, RESPAWN_S - 0.1), null);
-    assert.equal(edgeAction(true, true, true, RESPAWN_S + 0.1), "respawn");
-    assert.equal(edgeAction(true, true, false, 60), null, "an AI car stays gone");
+    expect(edgeAction(false, false, true, 0)).toBe(null);
+    expect(edgeAction(true, false, false, 0)).toBe("vaporize");
+    expect(edgeAction(true, false, true, 0)).toBe("vaporize");
+    expect(edgeAction(true, true, true, RESPAWN_S - 0.1)).toBe(null);
+    expect(edgeAction(true, true, true, RESPAWN_S + 0.1)).toBe("respawn");
+    expect(edgeAction(true, true, false, 60), "an AI car stays gone").toBe(null);
   });
 
   it("when a car respawns, then it is on the disc along the bearing it fell from, facing the centre, and clear of other cars", () => {
     const free = respawnSlot(60, 0, []);
-    assert.ok(free.x > 30 && Math.abs(free.z) < 1e-9, "on the bearing it fell from");
+    expect(free.x > 30 && Math.abs(free.z) < 1e-9, "on the bearing it fell from").toBeTruthy();
     const parked = [{ x: free.x, z: free.z }];
     const s = respawnSlot(60, 0, parked);
     for (const slot of [free, s]) {
-      assert.ok(Math.hypot(slot.x, slot.z) < DISC_RADIUS - 5);
+      expect(Math.hypot(slot.x, slot.z)).toBeLessThan(DISC_RADIUS - 5);
       // Nose (sin yaw, cos yaw) points at the origin.
-      assert.ok(Math.sin(slot.yaw) * -slot.x + Math.cos(slot.yaw) * -slot.z > Math.hypot(slot.x, slot.z) * 0.999);
+      expect(Math.sin(slot.yaw) * -slot.x + Math.cos(slot.yaw) * -slot.z).toBeGreaterThan(Math.hypot(slot.x, slot.z) * 0.999);
     }
-    assert.ok(Math.hypot(s.x - free.x, s.z - free.z) >= FLEET_MIN_SEP);
+    expect(Math.hypot(s.x - free.x, s.z - free.z)).toBeGreaterThanOrEqual(FLEET_MIN_SEP);
   });
 
   it("when a fleet crash and a head-on pair are replayed on the disc and on the flat pad, then the two grounds give exactly the same results inside the rim", () => {
@@ -210,8 +209,8 @@ describe("given the fleet course's disc-shaped ground (a round pad with a rim pa
       }
       if (fleetEmptied(cars, vaporAt, now)) firedAt = frame;
     }
-    assert.ok(firedAt >= 0, "the disc emptied but the loop never fired");
-    assert.ok(cars.every((c) => c.vaporized), "every car left the sim");
-    assert.ok(firedAt / 60 < 10, `fired at ${(firedAt / 60).toFixed(2)} s`);
+    expect(firedAt, "the disc emptied but the loop never fired").toBeGreaterThanOrEqual(0);
+    expect(cars.every((c) => c.vaporized), "every car left the sim").toBeTruthy();
+    expect(firedAt / 60, `fired at ${(firedAt / 60).toFixed(2)} s`).toBeLessThan(10);
   });
 });

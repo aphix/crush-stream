@@ -1,11 +1,11 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_TURN_IDX } from "./constants.ts";
 import { guardContact } from "./contact-guard.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** A car at (`x`, `z`) doing `speed` m/s along +z (`dir` 1) or −z (−1). */
 function car(id: number, x: number, z: number, speed: number, dir: 1 | -1 = 1): AiCar {
@@ -31,22 +31,22 @@ describe("given a driver planning full throttle straight on at 30 m/s, with the 
 
   it("when another car comes head-on at 30 m/s, then at 70 m it steers clear without braking, at 40 m it brakes instead, and at 300 m (out of the time it looks ahead) it leaves the plan alone", () => {
     const clear = guarded(me, [car(1, 0, 70, 30, -1)]);
-    assert.ok(Math.abs(clear.steer) > 0.1 && clear.brake === 0, `70 m off: steer ${clear.steer.toFixed(2)}, brake ${clear.brake.toFixed(2)}`);
+    expect(Math.abs(clear.steer) > 0.1 && clear.brake === 0, `70 m off: steer ${clear.steer.toFixed(2)}, brake ${clear.brake.toFixed(2)}`).toBeTruthy();
     const close = guarded(me, [car(1, 0, 40, 30, -1)]);
-    assert.ok(close.throttle < 0.2 && close.brake > 0.5, `40 m off: throttle ${close.throttle.toFixed(2)}, brake ${close.brake.toFixed(2)}`);
-    assert.deepEqual(pedals(guarded(me, [car(1, 0, 300, 30, -1)])), [1, 0, 0], "300 m off, closing at 60 m/s: 90 m in the time looked ahead");
+    expect(close.throttle < 0.2 && close.brake > 0.5, `40 m off: throttle ${close.throttle.toFixed(2)}, brake ${close.brake.toFixed(2)}`).toBeTruthy();
+    expect(firstMismatch(pedals(guarded(me, [car(1, 0, 300, 30, -1)])), [1, 0, 0]), "300 m off, closing at 60 m/s: 90 m in the time looked ahead").toBeUndefined();
   });
 
   it("when a stopped car is 47 m or 60 m dead ahead, then the guard steers away from the one at 47 m (the reach of its zone about 1.5 s ahead) and leaves the plan alone for the one at 60 m", () => {
     const met = guarded(me, [car(1, 0, 47, 0)]);
-    assert.ok(met.steer !== 0, `47 m: steer ${met.steer}`);
-    assert.deepEqual(pedals(guarded(me, [car(1, 0, 60, 0)])), [1, 0, 0], "60 m: out of the zone through the time ahead");
+    expect(met.steer, `47 m: steer ${met.steer}`).not.toBe(0);
+    expect(firstMismatch(pedals(guarded(me, [car(1, 0, 60, 0)])), [1, 0, 0]), "60 m: out of the zone through the time ahead").toBeUndefined();
   });
 
   it("when cars far out of reach are added around a car it is about to meet, then the pedals and steering stay exactly what they were with that car alone", () => {
     const meets = car(1, 0.8, 40, 30, -1);
     const alone = guarded(me, [meets]);
-    assert.ok(alone.brake > 0.5, `the car in reach is braked for: ${alone.brake.toFixed(2)}`);
+    expect(alone.brake, `the car in reach is braked for: ${alone.brake.toFixed(2)}`).toBeGreaterThan(0.5);
     const withFar = guarded(me, [car(2, -40, 500, 10, -1), meets, car(3, 30, -400, 25)]);
     assertSameNumbers(pedals(withFar), pedals(alone), "pedals with cars out of reach about");
   });
@@ -54,7 +54,7 @@ describe("given a driver planning full throttle straight on at 30 m/s, with the 
   it("when the car coming head-on at 40 m is one the driver means to hit, then the guard leaves the plan alone", () => {
     const spare = new Uint8Array(32);
     spare[1] = 1;
-    assert.deepEqual(pedals(guarded(me, [car(1, 0, 40, 30, -1)], spare)), [1, 0, 0]);
+    expect(firstMismatch(pedals(guarded(me, [car(1, 0, 40, 30, -1)], spare)), [1, 0, 0])).toBeUndefined();
   });
 });
 
@@ -63,10 +63,10 @@ describe("given a driver at 18 m/s asking 0.4 of lock toward a car 10 m ahead an
   const crossing: AiCar = { ...blankAiCar(1), x: 6, z: 10, yaw: -Math.PI / 2, vx: -8 };
   it("when the guard checks the hands' input, then it brakes for the crossing car as it does with the hands caught up on the ask, where the arc of the hands' 0.3 alone finds nothing to brake for", () => {
     const caughtUp = guarded(me, [crossing], undefined, 0.4);
-    assert.ok(caughtUp.brake > 0.5, `hands at the ask: brake ${caughtUp.brake.toFixed(2)}`);
+    expect(caughtUp.brake, `hands at the ask: brake ${caughtUp.brake.toFixed(2)}`).toBeGreaterThan(0.5);
     const lagging = guarded(me, [crossing], undefined, 0.3, 0.4);
-    assert.ok(lagging.brake > 0.5 && lagging.throttle === 0, `hands at 0.3 on an ask of 0.4: brake ${lagging.brake.toFixed(2)}, throttle ${lagging.throttle.toFixed(2)}`);
-    assert.equal(guarded(me, [crossing], undefined, 0.3).brake, 0, "an ask of 0.3 steers clear of it");
+    expect(lagging.brake > 0.5 && lagging.throttle === 0, `hands at 0.3 on an ask of 0.4: brake ${lagging.brake.toFixed(2)}, throttle ${lagging.throttle.toFixed(2)}`).toBeTruthy();
+    expect(guarded(me, [crossing], undefined, 0.3).brake, "an ask of 0.3 steers clear of it").toBe(0);
   });
 });
 
@@ -75,8 +75,8 @@ describe("given a driver at 20 m/s straight on, with a stopped car 12 m ahead an
   const beside = (yaw: number): AiCar => ({ ...blankAiCar(1), x: 2.9, z: 12, yaw });
   it("when it lies across the way (60° off), its end pokes into the path, so the guard brakes; lying along it (a parallel car) leaves the plan alone", () => {
     const across = guarded(me, [beside(Math.PI / 3)]);
-    assert.ok(across.brake > 0.5 && across.throttle === 0, `across: brake ${across.brake.toFixed(2)}, throttle ${across.throttle.toFixed(2)}`);
-    assert.equal(guarded(me, [beside(0)]).brake, 0, "along");
+    expect(across.brake > 0.5 && across.throttle === 0, `across: brake ${across.brake.toFixed(2)}, throttle ${across.throttle.toFixed(2)}`).toBeTruthy();
+    expect(guarded(me, [beside(0)]).brake, "along").toBe(0);
   });
 });
 
@@ -94,8 +94,8 @@ describe("given a driver at 25 m/s with 0.6 of lock on, and a stopped car 18 m a
     return out.brake;
   };
   it("when the arc of its lock is read at the full 0.9 rad/s, then it swings clear of the stopped car; held to the yaw rate its tyres give (10 grip: 0.42 rad/s) it does not, and the guard brakes", () => {
-    assert.equal(brakeWith(0), 0, "uncapped arc");
-    assert.ok(brakeWith(10) > 0.5, `capped arc: brake ${brakeWith(10).toFixed(2)}`);
+    expect(brakeWith(0), "uncapped arc").toBe(0);
+    expect(brakeWith(10), `capped arc: brake ${brakeWith(10).toFixed(2)}`).toBeGreaterThan(0.5);
   });
 });
 
@@ -130,28 +130,28 @@ describe("given the contact guard called every step for one car (its held push a
   it("when the car it steers away from goes out of reach, then its steer push is still on 0.1 s later and gone within 2 s", () => {
     const tune = tuned();
     const on = run(tune, [STEER_FROM], 0.5);
-    assert.ok(Math.abs(on.steer) > 0.03 && on.brake === 0, `contact: steer ${on.steer.toFixed(2)}, brake ${on.brake.toFixed(2)}`);
+    expect(Math.abs(on.steer) > 0.03 && on.brake === 0, `contact: steer ${on.steer.toFixed(2)}, brake ${on.brake.toFixed(2)}`).toBeTruthy();
     const soon = run(tune, CLEAR, 0.1);
-    assert.ok(Math.abs(soon.steer) > 0.02, `0.1 s after the contact: steer ${soon.steer.toFixed(3)}`);
+    expect(Math.abs(soon.steer), `0.1 s after the contact: steer ${soon.steer.toFixed(3)}`).toBeGreaterThan(0.02);
     const later = run(tune, CLEAR, 2);
-    assert.ok(later.steer === 0, `2 s after: steer ${later.steer}`);
+    expect(later.steer, `2 s after: steer ${later.steer}`).toBe(0);
   });
 
   it("when the car it brakes for goes out of reach, then the brake is still on 0.1 s later and off within a second", () => {
     const tune = tuned();
     const on = run(tune, [BRAKE_FOR], 0.5);
-    assert.ok(on.brake > 0.5, `contact: brake ${on.brake.toFixed(2)}`);
+    expect(on.brake, `contact: brake ${on.brake.toFixed(2)}`).toBeGreaterThan(0.5);
     const soon = run(tune, CLEAR, 0.1);
-    assert.ok(soon.brake > 0.2, `0.1 s after: brake ${soon.brake.toFixed(2)}`);
+    expect(soon.brake, `0.1 s after: brake ${soon.brake.toFixed(2)}`).toBeGreaterThan(0.2);
     const later = run(tune, CLEAR, 1);
-    assert.ok(later.brake === 0 && later.throttle > 0.9, `1 s after: brake ${later.brake}, throttle ${later.throttle}`);
+    expect(later.brake === 0 && later.throttle > 0.9, `1 s after: brake ${later.brake}, throttle ${later.throttle}`).toBeTruthy();
   });
 
   it("when a call with no step (dt 0, a one-off) comes after the contact, then it holds nothing: the plan comes back as it was", () => {
     const tune = tuned();
     run(tune, [STEER_FROM], 0.5);
     const once = call(tune, CLEAR, 0);
-    assert.deepEqual(pedals(once), [1, 0, 0]);
+    expect(firstMismatch(pedals(once), [1, 0, 0])).toBeUndefined();
   });
 
   it("when the stopped car ahead reads 0.3 m left of the path's centre on one step and 0.3 m right on the next (the look-ahead's jitter at speed), then the push keeps the side it took: the wheel never swings back across", () => {
@@ -164,14 +164,14 @@ describe("given the contact guard called every step for one car (its held push a
       out = call(tune, [s % 2 === 0 ? left : right], STEP);
       if (out.steer > 0) across++;
     }
-    assert.equal(across, 0, "steps the wheel was pushed toward the car it steers from");
-    assert.ok(out.steer < -0.03, `after 0.5 s: steer ${out.steer.toFixed(3)}`);
+    expect(across, "steps the wheel was pushed toward the car it steers from").toBe(0);
+    expect(out.steer, `after 0.5 s: steer ${out.steer.toFixed(3)}`).toBeLessThan(-0.03);
   });
 
   it("when it has steered clear of a stopped car 0.3 m left of centre and then brakes for a car 0.3 m right of centre 20 m ahead at 15 m/s, then the push turns away from the one it brakes for instead of keeping its side toward it", () => {
     const tune = tuned();
     run(tune, [car(1, 0.3, 47, 0)], 0.3);
     const braked = run(tune, [car(1, -0.3, 20, 15)], 0.3);
-    assert.ok(braked.brake > 0.5 && braked.steer > 0, `braking: brake ${braked.brake.toFixed(2)}, steer ${braked.steer.toFixed(4)}`);
+    expect(braked.brake > 0.5 && braked.steer > 0, `braking: brake ${braked.brake.toFixed(2)}, steer ${braked.steer.toFixed(4)}`).toBeTruthy();
   });
 });

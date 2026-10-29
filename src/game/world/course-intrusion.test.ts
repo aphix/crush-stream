@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { TRACK_ID } from "./constants.ts";
 import { PREFABS } from "./catalog.ts";
 import { placeProps, type Placed } from "./placements.ts";
@@ -142,10 +141,10 @@ for (const json of TRACKS) {
   const track = new Track(json);
   describe(`given the ${track.id} course`, () => {
     it(`when every placed building and prop is measured against the road and runoff, then none reaches more than ${TOL} m onto them`, () => {
-      assert.deepEqual(courseIntrusions(track), []);
+      expect(courseIntrusions(track)).toHaveLength(0);
     });
     it(`when the ground is scanned across every road and its runoff, then no step rises or falls more than the road's own bank plus ${STEP_TOL} m per ${STEP_DX} m`, () => {
-      assert.deepEqual(roadSteps(track), []);
+      expect(roadSteps(track)).toHaveLength(0);
     });
   });
 }
@@ -185,10 +184,10 @@ describe("given a building beside a straight of the oval course, set by how far 
       const lateral = testCase.side * (edge + outward - inward);
       const placed = { prefab: "building", x: loop.x[node]! + loop.tz[node]! * lateral, y: loop.y[node]!, z: loop.z[node]! - loop.tx[node]! * lateral, yaw: Math.atan2(loop.tx[node]!, loop.tz[node]!) + testCase.turn, sx: 1, sy: 1, sz: 1 } as const;
       const hits = intrusions(track, reaches, placed, 0);
-      assert.equal(hits.length, testCase.expectedHits, "pieces reported");
+      expect(hits.length, "pieces reported").toBe(testCase.expectedHits);
       if (testCase.expectedHits === 0) return;
-      assert.equal(hits[0]!.path, 0, "the corridor reached");
-      assert.ok(Math.abs(hits[0]!.depth - Math.min(inward, edge)) < 1e-6, `depth ${hits[0]!.depth}`);
+      expect(hits[0]!.path, "the corridor reached").toBe(0);
+      expect(Math.abs(hits[0]!.depth - Math.min(inward, edge)), `depth ${hits[0]!.depth}`).toBeLessThan(1e-6);
     });
   }
 });

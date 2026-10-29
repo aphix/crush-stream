@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { createHash } from "node:crypto";
 import { launch, makeCar, makeWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -42,21 +41,21 @@ describe("given the same head-on crash stepped through stepWorld with the phase 
   const on = crowd(2, true);
 
   it("when the clock is off, then no phase has any time; with it on, no phase is negative and the phases a crash always runs each hold some", () => {
-    assert.equal(on.ms.length, PHASE_COUNT);
+    expect(on.ms.length).toBe(PHASE_COUNT);
     for (const [i, name] of PHASE_NAMES.entries()) {
-      assert.equal(off.ms[i], 0, `${name} accumulated with the clock off`);
-      assert.ok(on.ms[i]! >= 0, `${name} is negative`);
+      expect(off.ms[i], `${name} accumulated with the clock off`).toBe(0);
+      expect(on.ms[i]!, `${name} is negative`).toBeGreaterThanOrEqual(0);
     }
-    for (const name of ["plan", "integrate", "pairs", "structure", "course"] as const) assert.ok(on.ms[PHASE_NAMES.indexOf(name)]! > 0, `${name} timed nothing`);
+    for (const name of ["plan", "integrate", "pairs", "structure", "course"] as const) expect(on.ms[PHASE_NAMES.indexOf(name)]!, `${name} timed nothing`).toBeGreaterThan(0);
   });
 
   it("when the crash is stepped with the clock on, then every car and mass ends bit for bit where it ended with the clock off", () => {
-    assert.equal(on.digest, off.digest, "the digest of poses, velocities and masses");
+    expect(on.digest, "the digest of poses, velocities and masses").toBe(off.digest);
   });
 
   it("when the clock is off, then the work counters are the same as with it on (they are counts, kept always) and the crash did meet its cars", () => {
-    for (const [i, name] of WORK_NAMES.entries()) assert.equal(off.work[i], on.work[i], `${name} differs with the clock`);
-    assert.ok(on.work[WORK_NAMES.indexOf("pairContacts")]! > 0, "the two cars never met in a pair contact");
+    for (const [i, name] of WORK_NAMES.entries()) expect(off.work[i], `${name} differs with the clock`).toBe(on.work[i]);
+    expect(on.work[WORK_NAMES.indexOf("pairContacts")]!, "the two cars never met in a pair contact").toBeGreaterThan(0);
   });
 });
 
@@ -64,8 +63,8 @@ describe("given a crowd of head-on pairs stepped through stepWorld", () => {
   it("when the same crowd is stepped twice, then every work counter is the same", () => {
     const first = crowd(4, false);
     const second = crowd(4, false);
-    for (const [i, name] of WORK_NAMES.entries()) assert.equal(first.work[i], second.work[i], `${name} differs between two runs`);
-    for (const name of ["slices", "liveCarSlices", "pairTests"] as const) assert.ok(first.work[WORK_NAMES.indexOf(name)]! > 0, `${name} counted nothing`);
+    for (const [i, name] of WORK_NAMES.entries()) expect(first.work[i], `${name} differs between two runs`).toBe(second.work[i]);
+    for (const name of ["slices", "liveCarSlices", "pairTests"] as const) expect(first.work[WORK_NAMES.indexOf(name)]!, `${name} counted nothing`).toBeGreaterThan(0);
   });
 
   const cases = [
@@ -76,7 +75,7 @@ describe("given a crowd of head-on pairs stepped through stepWorld", () => {
     it(testCase.it, () => {
       const two = crowd(2, false).work[WORK_NAMES.indexOf(testCase.counter)]!;
       const four = crowd(4, false).work[WORK_NAMES.indexOf(testCase.counter)]!;
-      assert.ok(four > two, `${testCase.counter}: ${four} for four cars, ${two} for two`);
+      expect(four, `${testCase.counter}: ${four} for four cars, ${two} for two`).toBeGreaterThan(two);
     });
   }
 });

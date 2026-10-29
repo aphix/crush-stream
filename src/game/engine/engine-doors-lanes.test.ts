@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -7,6 +6,7 @@ import type { DoorScenario, RamShot } from "../scenes/door-rig.ts";
 import { MIRROR_FOLD_MAX } from "../vehicle/car-core.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const FRAME = 1 / FRAME_HZ;
 /** The least crush (mm) a tail shot must leave: a head that met the tail leaves tens of mm, one that went through leaves none. */
@@ -64,7 +64,7 @@ class DoorsBench {
     }
     const car = engine["carA"];
     const shot = engine["doorShot"];
-    assert.ok(shot, `${scenario} ${kph} km/h: the shot ended with no result`);
+    must(shot, `${scenario} ${kph} km/h: the shot ended with no result`);
     return { shot, furthest, wall: car.rearSeatBackZ(), lidLatched: car.lidHinge().latched, lidRad: car.lidAngle(), carMoved: car.group.position.length() };
   }
 }
@@ -127,29 +127,29 @@ describe("given the real engine in the Doors scene, every lane's button pressed 
       it(`when ${c.lane} is fired on the ${id} at ${c.kph} km/h and ${c.kg} kg, then ${c.reacts}, and the car moves under ${CAR_MOVED_MAX_M} m`, () => {
         bench.park(id);
         const fired = bench.fire(c.lane, c.kph, c.kg);
-        assert.ok(fired.shot.detached.includes(c.expected), `off [${fired.shot.detached}], wanted ${c.expected}`);
-        assert.ok(fired.carMoved < CAR_MOVED_MAX_M, `the car moved ${fired.carMoved} m`);
+        expect(fired.shot.detached.includes(c.expected), `off [${fired.shot.detached}], wanted ${c.expected}`).toBeTruthy();
+        expect(fired.carMoved, `the car moved ${fired.carMoved} m`).toBeLessThan(CAR_MOVED_MAX_M);
       });
     }
 
     it(`when lidPop is fired on the ${id} at ${F_HARD.kph} km/h and ${F_HARD.kg} kg, then the head springs the lid past its latch by contact, still on the car, and the car moves under ${CAR_MOVED_MAX_M} m`, () => {
       bench.park(id);
       const fired = bench.fire("lidPop", F_HARD.kph, F_HARD.kg);
-      assert.ok(!fired.lidLatched && !fired.shot.detached.includes("trunk"), `lid latched ${fired.lidLatched}, off [${fired.shot.detached}]`);
-      assert.ok(fired.carMoved < CAR_MOVED_MAX_M, `the car moved ${fired.carMoved} m`);
+      expect(!fired.lidLatched && !fired.shot.detached.includes("trunk"), `lid latched ${fired.lidLatched}, off [${fired.shot.detached}]`).toBeTruthy();
+      expect(fired.carMoved, `the car moved ${fired.carMoved} m`).toBeLessThan(CAR_MOVED_MAX_M);
     });
 
     it(`when lidPop is fired on the ${id} at ${F_GENTLE.kph} km/h and ${F_GENTLE.kg} kg, then the lid stays latched and the car moves under ${CAR_MOVED_MAX_M} m`, () => {
       bench.park(id);
       const fired = bench.fire("lidPop", F_GENTLE.kph, F_GENTLE.kg);
-      assert.ok(fired.lidLatched && fired.shot.detached.length === 0, `lid latched ${fired.lidLatched}, off [${fired.shot.detached}]`);
-      assert.ok(fired.carMoved < CAR_MOVED_MAX_M, `the car moved ${fired.carMoved} m`);
+      expect(fired.lidLatched && fired.shot.detached.length === 0, `lid latched ${fired.lidLatched}, off [${fired.shot.detached}]`).toBeTruthy();
+      expect(fired.carMoved, `the car moved ${fired.carMoved} m`).toBeLessThan(CAR_MOVED_MAX_M);
     });
 
     for (const g of GENTLE_SHOTS) {
       it(`when ${g.lane} is fired on the ${id} at ${g.kph} km/h and ${g.kg} kg, then ${g.reacts}`, () => {
         bench.park(id);
-        assert.equal(gentleFailure(g.lane, bench.fire(g.lane, g.kph, g.kg)), "");
+        expect(gentleFailure(g.lane, bench.fire(g.lane, g.kph, g.kg))).toBe("");
       });
     }
   }
@@ -162,9 +162,9 @@ describe("given the real engine in the Doors scene, a drop gate's latch sprung b
         for (let shot = 0; shot < GATE_SHOTS; shot++) {
           bench.park(id);
           const fired = bench.fire("lidPop", kph, 100);
-          assert.ok(!fired.lidLatched, `shot ${shot}: the gate was not sprung`);
+          expect(!fired.lidLatched, `shot ${shot}: the gate was not sprung`).toBe(true);
           bench.idle(GATE_HOLD_S);
-          assert.ok(!bench.engine["carA"].lidHinge().latched, `shot ${shot}: the sprung gate latched again within ${GATE_HOLD_S} s`);
+          expect(!bench.engine["carA"].lidHinge().latched, `shot ${shot}: the sprung gate latched again within ${GATE_HOLD_S} s`).toBe(true);
         }
       });
     }
@@ -178,13 +178,13 @@ describe("given the real engine in the Doors scene, a tail lane's button pressed
         bench.park(id);
         const first = bench.fire(tail.lane, tail.kph, tail.kg);
         const second = bench.fire(tail.lane, tail.kph, tail.kg);
-        assert.ok(first.furthest <= first.wall + 1e-6, `first head reached z ${first.furthest} past the seat back at ${first.wall}`);
-        assert.ok(second.furthest <= second.wall + 1e-6, `second head reached z ${second.furthest} past the seat back at ${second.wall}`);
-        assert.ok(first.shot.ramStopped && second.shot.ramStopped, `nothing stopped the head (first ${first.shot.ramStopped}, second ${second.shot.ramStopped})`);
-        assert.ok(Math.abs(second.furthest - first.furthest) < REACH_TOL_MM / 1000, `furthest z ${second.furthest} against ${first.furthest}`);
-        assert.ok(Math.abs(second.shot.bodyVertexMm - first.shot.bodyVertexMm) <= CRUSH_SHARE_TOL * first.shot.bodyVertexMm + CRUSH_SLACK_MM, `crush ${second.shot.bodyVertexMm} mm against ${first.shot.bodyVertexMm} mm`);
-        assert.equal(second.shot.detached.join(), first.shot.detached.join(), "parts off");
-        if (tail.lane === "lidPop") assert.ok(first.shot.bodyVertexMm > CRUSH_MIN_MM, `the tail was barely crushed (${first.shot.bodyVertexMm} mm): the head met little or nothing`);
+        expect(first.furthest, `first head reached z ${first.furthest} past the seat back at ${first.wall}`).toBeLessThanOrEqual(first.wall + 1e-6);
+        expect(second.furthest, `second head reached z ${second.furthest} past the seat back at ${second.wall}`).toBeLessThanOrEqual(second.wall + 1e-6);
+        expect(first.shot.ramStopped && second.shot.ramStopped, `nothing stopped the head (first ${first.shot.ramStopped}, second ${second.shot.ramStopped})`).toBeTruthy();
+        expect(Math.abs(second.furthest - first.furthest), `furthest z ${second.furthest} against ${first.furthest}`).toBeLessThan(REACH_TOL_MM / 1000);
+        expect(Math.abs(second.shot.bodyVertexMm - first.shot.bodyVertexMm), `crush ${second.shot.bodyVertexMm} mm against ${first.shot.bodyVertexMm} mm`).toBeLessThanOrEqual(CRUSH_SHARE_TOL * first.shot.bodyVertexMm + CRUSH_SLACK_MM);
+        expect(second.shot.detached.join(), "parts off").toBe(first.shot.detached.join());
+        if (tail.lane === "lidPop") expect(first.shot.bodyVertexMm, `the tail was barely crushed (${first.shot.bodyVertexMm} mm): the head met little or nothing`).toBeGreaterThan(CRUSH_MIN_MM);
       });
     }
   }
@@ -193,7 +193,7 @@ describe("given the real engine in the Doors scene, a tail lane's button pressed
     bench.park("muscle");
     bench.fire("lidTear", G_HARD.kph, G_HARD.kg);
     const second = bench.fire("lidPop", F_HARD.kph, F_HARD.kg);
-    assert.ok(second.shot.ramStopped && second.furthest <= second.wall + 1e-6, `F after G: furthest z ${second.furthest}, wall ${second.wall}`);
-    assert.ok(!second.lidLatched, "F after G left the lid latched");
+    expect(second.shot.ramStopped && second.furthest <= second.wall + 1e-6, `F after G: furthest z ${second.furthest}, wall ${second.wall}`).toBeTruthy();
+    expect(!second.lidLatched, "F after G left the lid latched").toBe(true);
   });
 });

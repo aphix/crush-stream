@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { launch, makeCar } from "./crash-scenarios.test-util.ts";
 import { physicsSlice, sliceSpeed } from "./sat.ts";
 import { newWorld, stepWorld } from "../engine/world-step.ts";
@@ -47,9 +46,9 @@ describe("given a car driven at 8 m/s into a resting car's flank", () => {
   // velocity: this scene held the resting car at 4.4 m/s of travel for 2 s at a reported 0.06 m/s.
   it("when the shove plays out for 2.5 s, then no frame moves the struck car over 0.06 m while its reported speed is under 1 m/s", () => {
     const frames = shoveFlank(2.5);
-    assert.ok(frames.length > 100, `the resting car did not become a wreck (${frames.length} frames)`);
+    expect(frames.length, `the resting car did not become a wreck (${frames.length} frames)`).toBeGreaterThan(100);
     const zips = frames.filter((fr, i) => fr.step > 0.06 && Math.max(fr.speed, frames[i - 1]?.speed ?? 0) < 1);
-    assert.equal(zips.length, 0, `${zips.length} of ${frames.length} frames over 0.06 m at a reported speed under 1 m/s, first ${zips[0]?.step.toFixed(3)} m at ${zips[0]?.speed.toFixed(2)} m/s`);
+    expect(zips.length, `${zips.length} of ${frames.length} frames over 0.06 m at a reported speed under 1 m/s, first ${zips[0]?.step.toFixed(3)} m at ${zips[0]?.speed.toFixed(2)} m/s`).toBe(0);
   });
 
   // A shove that moves a car is its velocity: the cars trade the momentum their closing leaves (the pusher's drive speed
@@ -60,6 +59,6 @@ describe("given a car driven at 8 m/s into a resting car's flank", () => {
     const frames = shoveFlank(2.5).slice(60);
     const travel = frames.reduce((s, fr) => s + fr.step, 0) / (frames.length * DT);
     const reported = frames.reduce((s, fr) => s + fr.speed, 0) / frames.length;
-    assert.ok(reported >= 0.7 * travel, `the shoved car reads ${reported.toFixed(2)} m/s while its masses travel ${travel.toFixed(2)} m/s`);
+    expect(reported, `the shoved car reads ${reported.toFixed(2)} m/s while its masses travel ${travel.toFixed(2)} m/s`).toBeGreaterThanOrEqual(0.7 * travel);
   });
 });

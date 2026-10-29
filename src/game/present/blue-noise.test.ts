@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { BLUE_NOISE, BLUE_NOISE_SIZE } from "./blue-noise.ts";
 
 const CHANNELS = 4;
@@ -29,21 +28,21 @@ describe("given the shared blue-noise texture", () => {
   const data = tex.image.data as Uint8Array;
 
   it("when its size is read, then it is a 64 by 64 table of four 8-bit channels", () => {
-    assert.equal(tex.image.width, 64);
-    assert.equal(tex.image.height, 64);
-    assert.equal(data.length, 64 * 64 * 4);
+    expect(tex.image.width).toBe(64);
+    expect(tex.image.height).toBe(64);
+    expect(data.length).toBe(64 * 64 * 4);
   });
 
   for (const testCase of channelCases) {
     it(`when the ${testCase.name} channel is counted by value, then every 8-bit level appears between 8 and 17 times (a flat histogram)`, () => {
       const counts = new Array<number>(256).fill(0);
       for (let i = testCase.channel; i < data.length; i += CHANNELS) counts[data[i]!]!++;
-      assert.equal(Math.min(...counts), 8);
-      assert.equal(Math.max(...counts), 17);
+      expect(Math.min(...counts)).toBe(8);
+      expect(Math.max(...counts)).toBe(17);
     });
 
     it(`when the ${testCase.name} channel's neighbouring texels are compared, then they differ by more than white noise would (about 85 of 255 steps)`, () => {
-      assert.ok(meanNeighbourStep(data, testCase.channel) > 90);
+      expect(meanNeighbourStep(data, testCase.channel)).toBeGreaterThan(90);
     });
   }
 });

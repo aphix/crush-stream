@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { makeRenderer } from "../engine/engine-renderer.ts";
@@ -16,11 +15,11 @@ describe(`given the post chain's strengths after a switch from a plain tier, at 
     let frames = 0;
     for (; fade < 1 && frames < 600; frames++) {
       const next = easeFade(fade, FRAME);
-      assert.ok(next >= fade && next - fade <= 0.25, `a frame moved the fade ${fade} -> ${next}`);
+      expect(next >= fade && next - fade <= 0.25, `a frame moved the fade ${fade} -> ${next}`).toBeTruthy();
       fade = next;
     }
-    assert.equal(fade, 1);
-    assert.ok(frames * FRAME > 0.15 && frames * FRAME < 0.5, `took ${(frames * FRAME).toFixed(2)} s`);
+    expect(fade).toBe(1);
+    expect(frames * FRAME > 0.15 && frames * FRAME < 0.5, `took ${(frames * FRAME).toFixed(2)} s`).toBeTruthy();
   });
 });
 
@@ -48,11 +47,11 @@ describe("given the post chain on a headless renderer and a print look's strengt
         post[look.field] = STRENGTH;
         post.render(scene, camera, 1 / FRAME_HZ);
         const composite = post["composites"][tier];
-        assert.equal(composite.uniforms[look.uniform]!.value, STRENGTH);
+        expect(composite.uniforms[look.uniform]!.value).toBe(STRENGTH);
         const frag = composite.fragmentShader;
         const at = frag.indexOf(look.branch);
-        assert.ok(at > frag.indexOf(CEL_BRANCH) && frag.indexOf(CEL_BRANCH) >= 0, `${look.branch} sits after ${CEL_BRANCH}: at ${at}`);
-        assert.ok(at < frag.indexOf(VIGNETTE), `${look.branch} sits before ${VIGNETTE}: at ${at}`);
+        expect(at > frag.indexOf(CEL_BRANCH) && frag.indexOf(CEL_BRANCH) >= 0, `${look.branch} sits after ${CEL_BRANCH}: at ${at}`).toBeTruthy();
+        expect(at, `${look.branch} sits before ${VIGNETTE}: at ${at}`).toBeLessThan(frag.indexOf(VIGNETTE));
         post[look.field] = 0;
       });
     }
@@ -63,7 +62,7 @@ describe("given the post chain on a headless renderer and a print look's strengt
       for (const hold of [false, true]) {
         renderer.info.autoReset = hold;
         post.render(scene, camera, 1 / FRAME_HZ);
-        assert.equal(renderer.info.autoReset, hold, `${tier} tier changed autoReset from ${hold}`);
+        expect(renderer.info.autoReset, `${tier} tier changed autoReset from ${hold}`).toBe(hold);
       }
     }
   });
@@ -92,7 +91,7 @@ describe("given the post chain on a headless renderer with its strengths settled
         post.radial = testCase.radial;
         for (let f = 0; f < 2 * FRAME_HZ; f++) post.render(scene, camera, 1 / FRAME_HZ);
         const blur = post["composites"][tier].uniforms.uRadial!.value;
-        assert.ok(Math.abs(blur - testCase.expected) < 1e-12, `uRadial ${blur} vs ${testCase.expected}`);
+        expect(Math.abs(blur - testCase.expected), `uRadial ${blur} vs ${testCase.expected}`).toBeLessThan(1e-12);
         post.radial = 0;
       });
     }
@@ -100,13 +99,13 @@ describe("given the post chain on a headless renderer with its strengths settled
     it(`at ${tier}: when its composite is built, then the taps are ${ZOOM_TAPS[tier] ?? "absent"}, and the blur sits behind the zero-strength skip, ramping from 0 at the centre to the cap at the corner`, () => {
       const composite = post["composites"][tier];
       const frag = composite.fragmentShader;
-      assert.equal(composite.defines.ZOOM_TAPS, ZOOM_TAPS[tier], "ZOOM_TAPS");
-      assert.equal(composite.defines.RADIAL === undefined, ZOOM_TAPS[tier] === undefined, "RADIAL");
+      expect(composite.defines.ZOOM_TAPS, "ZOOM_TAPS").toBe(ZOOM_TAPS[tier]);
+      expect(composite.defines.RADIAL === undefined, "RADIAL").toBe(ZOOM_TAPS[tier] === undefined);
       const skip = frag.indexOf("if (uRadial > 0.0) {");
       const loop = frag.indexOf("for (int i = 1; i < ZOOM_TAPS; i++)");
-      assert.ok(skip >= 0 && loop > skip, `the tap loop (${loop}) follows the zero-strength skip (${skip})`);
-      assert.ok(frag.includes("uRadial * smoothstep(0.0, ZOOM_FULL_RADIUS, r)"), "the blur is the cap × a smoothstep from the centre");
-      assert.ok(frag.includes(`const float ZOOM_FULL_RADIUS = ${BOOST_ZOOM_FULL_RADIUS.toFixed(4)};`), "the ramp ends at the corner's distance");
+      expect(skip >= 0 && loop > skip, `the tap loop (${loop}) follows the zero-strength skip (${skip})`).toBeTruthy();
+      expect(frag.includes("uRadial * smoothstep(0.0, ZOOM_FULL_RADIUS, r)"), "the blur is the cap × a smoothstep from the centre").toBeTruthy();
+      expect(frag.includes(`const float ZOOM_FULL_RADIUS = ${BOOST_ZOOM_FULL_RADIUS.toFixed(4)};`), "the ramp ends at the corner's distance").toBeTruthy();
     });
   }
 });
@@ -129,7 +128,7 @@ describe("given the post chain on a headless renderer, on a device of pixel rati
       post.dispose();
       return `dpr ${dpr}: ${tiers.join(", ")}`;
     });
-    assert.equal(read.join("; "), WANT);
+    expect(read.join("; ")).toBe(WANT);
   });
 
   it("when the tier steps down from high to low and back on a device of ratio 2, then the one scene target loses and regains its samples in place and keeps its size", () => {
@@ -144,8 +143,8 @@ describe("given the post chain on a headless renderer, on a device of pixel rati
       post.render(scene, camera, 1 / FRAME_HZ);
       steps.push(`${tier} ${post.sceneRT.samples} ${post.sceneRT.width}x${post.sceneRT.height}`);
     }
-    assert.equal(post.sceneRT, target, "the same target");
-    assert.equal(steps.join(", "), `low 0 ${size}, high 4 ${size}`);
+    expect(post.sceneRT, "the same target").toBe(target);
+    expect(steps.join(", ")).toBe(`low 0 ${size}, high 4 ${size}`);
   });
 
   /** A canvas whose WebGL context reports the `antialias` the page asked it for (the stand-in's always says false). */
@@ -185,6 +184,6 @@ describe("given the post chain on a headless renderer, on a device of pixel rati
       return `dpr ${dpr}: ${tiers.join(", ")}`;
     });
     (globalThis as { devicePixelRatio: number }).devicePixelRatio = 1;
-    assert.equal(read.join("; "), EDGES);
+    expect(read.join("; ")).toBe(EDGES);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
@@ -61,8 +60,8 @@ describe("given a dummy launched through launch() from a car", () => {
     sys.releaseThrown();
     const afterRelease = sys.latest(torso);
     sys.dispose();
-    assert.ok(heldStill > HELD_STILL_SECONDS, `after ${HELD_SECONDS} s he has lain still for ${heldStill.toFixed(1)} s (-1: he is gone)`);
-    assert.equal(afterRelease, -1, "released: he is gone");
+    expect(heldStill, `after ${HELD_SECONDS} s he has lain still for ${heldStill.toFixed(1)} s (-1: he is gone)`).toBeGreaterThan(HELD_STILL_SECONDS);
+    expect(afterRelease, "released: he is gone").toBe(-1);
   });
 
   it("when nothing was held and 11 s of sim pass, then his 10 s life is over and he is gone", async () => {
@@ -73,7 +72,7 @@ describe("given a dummy launched through launch() from a car", () => {
     for (let frame = 0; frame < (DEFAULT_LIFE_SECONDS + 1) * FRAME_HZ; frame++) sys.update(FRAME, [], true, false, null);
     const gone = sys.latest(torso);
     sys.dispose();
-    assert.equal(gone, -1, "gone after LIFE");
+    expect(gone, "gone after LIFE").toBe(-1);
   });
 
   it("when he was held and released, then the next dummy lives 10 s again", async () => {
@@ -86,7 +85,7 @@ describe("given a dummy launched through launch() from a car", () => {
     for (let frame = 0; frame < (DEFAULT_LIFE_SECONDS + 1) * FRAME_HZ; frame++) sys.update(FRAME, [], true, false, null);
     const gone = sys.latest(torso);
     sys.dispose();
-    assert.equal(gone, -1, "the default life is back");
+    expect(gone, "the default life is back").toBe(-1);
   });
 
   it("when reset() is called while a box stands and a dummy is held, then the box is gone and the next dummy lives 10 s", async () => {
@@ -99,8 +98,8 @@ describe("given a dummy launched through launch() from a car", () => {
     sys.launch(farEjection(), [car]);
     const life = dummyOf(sys).life;
     sys.dispose();
-    assert.equal(count, 0, "no boxes after reset");
-    assert.equal(life, DEFAULT_LIFE_SECONDS, "LIFE after reset");
+    expect(count, "no boxes after reset").toBe(0);
+    expect(life, "LIFE after reset").toBe(DEFAULT_LIFE_SECONDS);
   });
 
   it("when launched with no scale, with the identity scale and with forward 0.5 and upward 1.2, then his centre of mass moves at the ejection's own velocity, the identity scales equal it bit for bit, and the third has its horizontal halved and its vertical raised by a fifth", async () => {
@@ -120,24 +119,24 @@ describe("given a dummy launched through launch() from a car", () => {
     const identity = await launched({ forward: 1, upward: 1, elevation: null });
     const named = await launched(NO_RELEASE_SCALE);
     const scaled = await launched({ forward: FORWARD_SCALE, upward: UPWARD_SCALE, elevation: null });
-    assert.ok(Math.abs(unscaled.velocity.x - unscaled.own.x) < SPEED_TOLERANCE, `default x ${unscaled.velocity.x} vs ${unscaled.own.x}`);
-    assert.ok(Math.abs(unscaled.velocity.y - unscaled.own.y) < SPEED_TOLERANCE, `default y ${unscaled.velocity.y} vs ${unscaled.own.y}`);
-    assert.ok(Math.abs(unscaled.velocity.z - unscaled.own.z) < SPEED_TOLERANCE, `default z ${unscaled.velocity.z} vs ${unscaled.own.z}`);
-    assert.equal(identity.velocity.x, unscaled.velocity.x, "identity x");
-    assert.equal(identity.velocity.y, unscaled.velocity.y, "identity y");
-    assert.equal(identity.velocity.z, unscaled.velocity.z, "identity z");
-    assert.equal(named.velocity.x, unscaled.velocity.x, "NO_RELEASE_SCALE x");
-    assert.equal(named.velocity.y, unscaled.velocity.y, "NO_RELEASE_SCALE y");
-    assert.equal(named.velocity.z, unscaled.velocity.z, "NO_RELEASE_SCALE z");
-    assert.equal(NO_RELEASE_SCALE.forward, 1, "the named identity's forward");
-    assert.equal(NO_RELEASE_SCALE.upward, 1, "the named identity's upward");
-    assert.equal(NO_RELEASE_SCALE.elevation, null, "the named identity's elevation");
-    assert.ok(Math.abs(scaled.velocity.x - FORWARD_SCALE * unscaled.own.x) < SPEED_TOLERANCE, `scaled x ${scaled.velocity.x} vs ${FORWARD_SCALE * unscaled.own.x}`);
-    assert.ok(Math.abs(scaled.velocity.y - UPWARD_SCALE * unscaled.own.y) < SPEED_TOLERANCE, `scaled y ${scaled.velocity.y} vs ${UPWARD_SCALE * unscaled.own.y}`);
-    assert.ok(Math.abs(scaled.velocity.z - FORWARD_SCALE * unscaled.own.z) < SPEED_TOLERANCE, `scaled z ${scaled.velocity.z} vs ${FORWARD_SCALE * unscaled.own.z}`);
-    assert.equal(scaled.position.x, unscaled.position.x, "the scale does not move him: same start x");
-    assert.equal(scaled.position.y, unscaled.position.y, "the scale does not move him: same start y");
-    assert.equal(scaled.position.z, unscaled.position.z, "the scale does not move him: same start z");
+    expect(Math.abs(unscaled.velocity.x - unscaled.own.x), `default x ${unscaled.velocity.x} vs ${unscaled.own.x}`).toBeLessThan(SPEED_TOLERANCE);
+    expect(Math.abs(unscaled.velocity.y - unscaled.own.y), `default y ${unscaled.velocity.y} vs ${unscaled.own.y}`).toBeLessThan(SPEED_TOLERANCE);
+    expect(Math.abs(unscaled.velocity.z - unscaled.own.z), `default z ${unscaled.velocity.z} vs ${unscaled.own.z}`).toBeLessThan(SPEED_TOLERANCE);
+    expect(identity.velocity.x, "identity x").toBe(unscaled.velocity.x);
+    expect(identity.velocity.y, "identity y").toBe(unscaled.velocity.y);
+    expect(identity.velocity.z, "identity z").toBe(unscaled.velocity.z);
+    expect(named.velocity.x, "NO_RELEASE_SCALE x").toBe(unscaled.velocity.x);
+    expect(named.velocity.y, "NO_RELEASE_SCALE y").toBe(unscaled.velocity.y);
+    expect(named.velocity.z, "NO_RELEASE_SCALE z").toBe(unscaled.velocity.z);
+    expect(NO_RELEASE_SCALE.forward, "the named identity's forward").toBe(1);
+    expect(NO_RELEASE_SCALE.upward, "the named identity's upward").toBe(1);
+    expect(NO_RELEASE_SCALE.elevation, "the named identity's elevation").toBe(null);
+    expect(Math.abs(scaled.velocity.x - FORWARD_SCALE * unscaled.own.x), `scaled x ${scaled.velocity.x} vs ${FORWARD_SCALE * unscaled.own.x}`).toBeLessThan(SPEED_TOLERANCE);
+    expect(Math.abs(scaled.velocity.y - UPWARD_SCALE * unscaled.own.y), `scaled y ${scaled.velocity.y} vs ${UPWARD_SCALE * unscaled.own.y}`).toBeLessThan(SPEED_TOLERANCE);
+    expect(Math.abs(scaled.velocity.z - FORWARD_SCALE * unscaled.own.z), `scaled z ${scaled.velocity.z} vs ${FORWARD_SCALE * unscaled.own.z}`).toBeLessThan(SPEED_TOLERANCE);
+    expect(scaled.position.x, "the scale does not move him: same start x").toBe(unscaled.position.x);
+    expect(scaled.position.y, "the scale does not move him: same start y").toBe(unscaled.position.y);
+    expect(scaled.position.z, "the scale does not move him: same start z").toBe(unscaled.position.z);
   });
 
   it("when launched with forward 0.5 and an elevation of 30 degrees, then his whole speed is half the ejection's horizontal speed, aimed 30 degrees up along its heading, whatever the ejection's own vertical was", async () => {
@@ -149,9 +148,9 @@ describe("given a dummy launched through launch() from a car", () => {
     sys.dispose();
     const speed = ELEVATION_FORWARD * Math.hypot(own.x, own.z);
     const horizontal = Math.hypot(velocity.x, velocity.z);
-    assert.ok(own.y !== 0, "the ejection has a vertical of its own to be dropped");
-    assert.ok(Math.abs(horizontal - speed * Math.cos(ELEVATION_RADIANS)) < SPEED_TOLERANCE, `horizontal ${horizontal} vs ${speed * Math.cos(ELEVATION_RADIANS)}`);
-    assert.ok(Math.abs(velocity.y - speed * Math.sin(ELEVATION_RADIANS)) < SPEED_TOLERANCE, `vertical ${velocity.y} vs ${speed * Math.sin(ELEVATION_RADIANS)}`);
-    assert.ok(Math.abs(velocity.x / horizontal - own.x / Math.hypot(own.x, own.z)) < SPEED_TOLERANCE, "the heading is the ejection's");
+    expect(own.y, "the ejection has a vertical of its own to be dropped").not.toBe(0);
+    expect(Math.abs(horizontal - speed * Math.cos(ELEVATION_RADIANS)), `horizontal ${horizontal} vs ${speed * Math.cos(ELEVATION_RADIANS)}`).toBeLessThan(SPEED_TOLERANCE);
+    expect(Math.abs(velocity.y - speed * Math.sin(ELEVATION_RADIANS)), `vertical ${velocity.y} vs ${speed * Math.sin(ELEVATION_RADIANS)}`).toBeLessThan(SPEED_TOLERANCE);
+    expect(Math.abs(velocity.x / horizontal - own.x / Math.hypot(own.x, own.z)), "the heading is the ejection's").toBeLessThan(SPEED_TOLERANCE);
   });
 });

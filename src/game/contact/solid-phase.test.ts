@@ -1,6 +1,5 @@
-import { describe } from "vitest";
+import { describe, expect } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import { armedCar } from "../world/solid-parity.test-util.ts";
 import { FREEWHEEL, launch, strikeReach } from "./crash-scenarios.test-util.ts";
 import { propContact, type PropHits } from "./prop-contact.ts";
@@ -126,8 +125,8 @@ describe("given a fixed solid standing at the side of a sedan's path", () => {
         const health = runs.map((r) => r.health);
         const after = runs.map((r) => r.speed);
         const detail = `health ${health.map((h) => h.toFixed(2)).join(" ")}, speed ${after.map((s) => s.toFixed(1)).join(" ")}`;
-        assert.ok(Math.max(...health) - Math.min(...health) <= HEALTH_BAND, `drivetrain health differs between starts: ${detail}`);
-        assert.ok(Math.max(...after) - Math.min(...after) <= SPEED_BAND, `speed leaving the contact differs between starts: ${detail}`);
+        expect(Math.max(...health) - Math.min(...health), `drivetrain health differs between starts: ${detail}`).toBeLessThanOrEqual(HEALTH_BAND);
+        expect(Math.max(...after) - Math.min(...after), `speed leaving the contact differs between starts: ${detail}`).toBeLessThanOrEqual(SPEED_BAND);
       });
     }
   }

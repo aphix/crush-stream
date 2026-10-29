@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import type { RaceView } from "../match/types.ts";
 import { NO_DRIFT } from "../vehicle/car-drive.ts";
 import { needsReset, resetGlow, resetInput, resetPromptLabel } from "./reset-prompt.ts";
@@ -22,38 +21,38 @@ const view = (wheelsOff: number, canReset = true): RaceView => ({
 
 describe("given a car view reporting how many wheels are off and whether the game would allow a reset", () => {
   it("when the input in use is the keyboard, a pad or touch, then the reset prompt names that input's control: R, D-pad ↓, and Respawn in a race or Recover otherwise", () => {
-    assert.equal(resetPromptLabel(view(2), "keyboard", true), "R");
-    assert.equal(resetPromptLabel(view(2), "pad", true), "D-pad ↓");
-    assert.equal(resetPromptLabel(view(2), "touch", true), "Respawn");
-    assert.equal(resetPromptLabel(view(2), "touch", false), "Recover");
+    expect(resetPromptLabel(view(2), "keyboard", true)).toBe("R");
+    expect(resetPromptLabel(view(2), "pad", true)).toBe("D-pad ↓");
+    expect(resetPromptLabel(view(2), "touch", true)).toBe("Respawn");
+    expect(resetPromptLabel(view(2), "touch", false)).toBe("Recover");
   });
 
   it("when 0, 1, 2 and 4 wheels are off, then the prompt stays down with one wheel off or none, and comes up with two or all four", () => {
-    assert.equal(resetPromptLabel(view(0), "keyboard", true), null);
-    assert.equal(resetPromptLabel(view(1), "keyboard", true), null);
-    assert.equal(resetPromptLabel(view(2), "keyboard", true), "R");
-    assert.equal(resetPromptLabel(view(4), "keyboard", true), "R");
+    expect(resetPromptLabel(view(0), "keyboard", true)).toBe(null);
+    expect(resetPromptLabel(view(1), "keyboard", true)).toBe(null);
+    expect(resetPromptLabel(view(2), "keyboard", true)).toBe("R");
+    expect(resetPromptLabel(view(4), "keyboard", true)).toBe("R");
   });
 
   it("when the game would refuse the reset, then the prompt never shows, whatever the wheels", () => {
-    assert.equal(resetPromptLabel(view(4, false), "keyboard", true), null);
-    assert.equal(resetPromptLabel(view(3, false), "touch", false), null);
+    expect(resetPromptLabel(view(4, false), "keyboard", true)).toBe(null);
+    expect(resetPromptLabel(view(3, false), "touch", false)).toBe(null);
   });
 
   it("when a pad is connected, only touch is in use, or neither, then a connected pad wins, touch resets only while driving, and the keyboard is used otherwise", () => {
-    assert.equal(resetInput(true, true, true), "pad");
-    assert.equal(resetInput(true, false, false), "pad");
-    assert.equal(resetInput(false, true, true), "touch");
-    assert.equal(resetInput(false, true, false), null);
-    assert.equal(resetInput(false, false, false), "keyboard");
-    assert.equal(resetInput(false, false, true), "keyboard");
+    expect(resetInput(true, true, true)).toBe("pad");
+    expect(resetInput(true, false, false)).toBe("pad");
+    expect(resetInput(false, true, true)).toBe("touch");
+    expect(resetInput(false, true, false)).toBe(null);
+    expect(resetInput(false, false, false)).toBe("keyboard");
+    expect(resetInput(false, false, true)).toBe("keyboard");
   });
 
   it("when 1, 2 and 4 wheels are off, and 4 are off but the game would refuse, then a reset is needed with two or more wheels off and an allowed reset, nothing else", () => {
-    assert.equal(needsReset(view(1)), false);
-    assert.equal(needsReset(view(2)), true);
-    assert.equal(needsReset(view(4)), true);
-    assert.equal(needsReset(view(4, false)), false);
+    expect(needsReset(view(1))).toBe(false);
+    expect(needsReset(view(2))).toBe(true);
+    expect(needsReset(view(4))).toBe(true);
+    expect(needsReset(view(4, false))).toBe(false);
   });
 
   describe("given the reset controls' glow, driven by the viewed car of the scene in play", () => {
@@ -62,32 +61,32 @@ describe("given a car view reporting how many wheels are off and whether the gam
 
     it("when 0 to 4 wheels are off in a race, then the controls glow only with two, three or four off", () => {
       for (const [off, glows] of [[0, false], [1, false], [2, true], [3, true], [4, true]] as const) {
-        assert.equal(resetGlow(race(view(off))), glows, `${off} off`);
+        expect(resetGlow(race(view(off))), `${off} off`).toBe(glows);
       }
     });
 
     it("when the game would refuse the reset, then the controls never glow in a race, a derby or the fleet, whatever the wheels", () => {
       for (const off of [2, 3, 4]) {
-        assert.equal(resetGlow(race(view(off, false))), false, `race ${off} off`);
-        assert.equal(resetGlow({ ...none, derbyView: view(off, false) }), false, `derby ${off} off`);
-        assert.equal(resetGlow({ ...none, fleetView: view(off, false) }), false, `fleet ${off} off`);
+        expect(resetGlow(race(view(off, false))), `race ${off} off`).toBe(false);
+        expect(resetGlow({ ...none, derbyView: view(off, false) }), `derby ${off} off`).toBe(false);
+        expect(resetGlow({ ...none, fleetView: view(off, false) }), `fleet ${off} off`).toBe(false);
       }
     });
 
     it("when two wheels are off in a race, a derby or the fleet, then the controls glow, following the view of the scene in play", () => {
-      assert.equal(resetGlow(race(view(2))), true);
-      assert.equal(resetGlow({ ...none, derbyView: view(2) }), true);
-      assert.equal(resetGlow({ ...none, fleetView: view(2) }), true);
+      expect(resetGlow(race(view(2)))).toBe(true);
+      expect(resetGlow({ ...none, derbyView: view(2) })).toBe(true);
+      expect(resetGlow({ ...none, fleetView: view(2) })).toBe(true);
     });
 
     it("when there is no driven or watched car, then the controls do not glow", () => {
-      assert.equal(resetGlow(none), false);
-      assert.equal(resetGlow(race(null)), false);
+      expect(resetGlow(none)).toBe(false);
+      expect(resetGlow(race(null))).toBe(false);
     });
 
     it("when a race has its own view, then a stale derby or fleet view never makes the controls glow inside it", () => {
-      assert.equal(resetGlow({ race: { view: view(1) }, derbyView: view(4), fleetView: view(4) }), false);
-      assert.equal(resetGlow({ race: { view: null }, derbyView: view(4), fleetView: view(4) }), false);
+      expect(resetGlow({ race: { view: view(1) }, derbyView: view(4), fleetView: view(4) })).toBe(false);
+      expect(resetGlow({ race: { view: null }, derbyView: view(4), fleetView: view(4) })).toBe(false);
     });
   });
 });

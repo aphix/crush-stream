@@ -1,6 +1,5 @@
-import { afterAll, describe } from "vitest";
+import { afterAll, describe, expect } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { setGround, activeGround } from "../world/ground.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -46,7 +45,7 @@ describe("given the fleet capture on jitter seed 6, its pickup's nose crushed ba
           if (depth > deepest.depth) deepest = { depth, sim: t };
         }
       });
-      assert.ok(deepest.depth <= IN_GROUND_M, `${(deepest.depth * 1000).toFixed(0)} mm in the ground at sim ${deepest.sim.toFixed(2)} s`);
+      expect(deepest.depth, `${(deepest.depth * 1000).toFixed(0)} mm in the ground at sim ${deepest.sim.toFixed(2)} s`).toBeLessThanOrEqual(IN_GROUND_M);
     },
   );
 });

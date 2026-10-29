@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { PREFAB, TRACK_ID } from "../world/constants.ts";
@@ -65,9 +64,9 @@ describe("given the National Mall's art and the race's chase eye and sun on the 
     for (const mesh of meshes) all += triangles(mesh);
     const inView = drawn(meshes, view);
     const inShadow = drawn(casters, sun.shadow.getFrustum());
-    assert.ok(inView > 0 && inShadow > 0, `the start's view draws ${inView} and its shadow box ${inShadow} of them`);
-    assert.ok(inView <= all * MAIN_SHARE, `the view draws ${inView} of ${all} triangles (${((inView / all) * 100).toFixed(1)} %)`);
-    assert.ok(inShadow <= all * SHADOW_SHARE, `the shadow box draws ${inShadow} of ${all} triangles (${((inShadow / all) * 100).toFixed(1)} %)`);
+    expect(inView > 0 && inShadow > 0, `the start's view draws ${inView} and its shadow box ${inShadow} of them`).toBeTruthy();
+    expect(inView, `the view draws ${inView} of ${all} triangles (${((inView / all) * 100).toFixed(1)} %)`).toBeLessThanOrEqual(all * MAIN_SHARE);
+    expect(inShadow, `the shadow box draws ${inShadow} of ${all} triangles (${((inShadow / all) * 100).toFixed(1)} %)`).toBeLessThanOrEqual(all * SHADOW_SHARE);
     art.dispose();
   });
 });
@@ -86,13 +85,13 @@ describe("given a knockable cone standing behind the camera, its draw cell out o
   it("when a car knocks it 30 m out of its cell into the view, then it draws, and once the course resets, its cell is out of view again", () => {
     const meshes: THREE.InstancedMesh[] = [];
     const props = new PropTumble([cone], mats, (mesh) => meshes.push(mesh));
-    assert.equal(meshes.length, 1, "the cone's one part");
+    expect(meshes.length, "the cone's one part").toBe(1);
     const mesh = meshes[0]!;
     mesh.updateMatrixWorld();
-    assert.equal(shows(mesh), false, "standing behind the camera, its cell is culled");
+    expect(shows(mesh), "standing behind the camera, its cell is culled").toBe(false);
     props.place(0, new THREE.Vector3(0, 0.5, 130), new THREE.Quaternion());
-    assert.equal(shows(mesh), true, "knocked in front of the camera, it draws");
+    expect(shows(mesh), "knocked in front of the camera, it draws").toBe(true);
     props.reset();
-    assert.equal(shows(mesh), false, "back on its spot after the reset, its cell is culled again");
+    expect(shows(mesh), "back on its spot after the reset, its cell is culled again").toBe(false);
   });
 });

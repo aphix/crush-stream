@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { driverLook, JEANS, type DriverLook } from "./driver-look.ts";
 import { DummyMesh } from "./ragdoll-mesh.ts";
@@ -139,26 +138,26 @@ const torsoShirt = (rows: Drawn[], low: number, high: number) => ofRole(rows, RO
 describe("given the crash-test dummies drawn for thrown drivers", () => {
   it("when a civilian man is dressed, then he wears his own shirt and hair colours and nothing of the default charcoal shirt", () => {
     const rows = drawn(MAN, false);
-    assert.ok(has(rows, MAN.shirt) && has(rows, MAN.hair));
-    assert.ok(!has(rows, 0x2b2d32), "the old charcoal tee is gone");
+    expect(has(rows, MAN.shirt) && has(rows, MAN.hair)).toBeTruthy();
+    expect(!has(rows, 0x2b2d32), "the old charcoal tee is gone").toBe(true);
   });
 
   it("when a cop is dressed, then he keeps the navy uniform whatever the random look; only his hair colour varies, and no civilian shirt appears", () => {
     const rows = drawn(MAN, true);
-    assert.ok(rows.some((r) => r.hex === NAVY.getHex()), "navy shirt");
-    assert.ok(!has(rows, MAN.shirt), "no civilian tee on a cop");
-    assert.ok(has(rows, MAN.hair), "the hair under the cap is the driver's");
+    expect(rows.some((r) => r.hex === NAVY.getHex()), "navy shirt").toBeTruthy();
+    expect(!has(rows, MAN.shirt), "no civilian tee on a cop").toBe(true);
+    expect(has(rows, MAN.hair), "the hair under the cap is the driver's").toBeTruthy();
   });
 
   it("when a woman is dressed against a man, then she has narrower shoulders, long hair reaching further down her back, her own shirt and hair colours and a different body", () => {
     const man = drawn(MAN, false);
     const woman = drawn(WOMAN, false);
-    assert.ok(has(woman, WOMAN.shirt) && has(woman, WOMAN.hair));
+    expect(has(woman, WOMAN.shirt) && has(woman, WOMAN.hair)).toBeTruthy();
     const chest = (rows: Drawn[]) => Math.max(...torsoShirt(rows, 1.15, 1.33).map((r) => Math.abs(r.at.x)));
-    assert.ok(chest(woman) < chest(man) * 0.9, `chest half width ${chest(woman).toFixed(3)} m against ${chest(man).toFixed(3)} m`);
+    expect(chest(woman), `chest half width ${chest(woman).toFixed(3)} m against ${chest(man).toFixed(3)} m`).toBeLessThan(chest(man) * 0.9);
     const hairBottom = (rows: Drawn[]) => Math.min(...[...ofRole(rows, ROLE.HAIR), ...ofRole(rows, ROLE.LOCKS)].map((r) => r.at.y));
-    assert.ok(hairBottom(woman) < hairBottom(man) - 0.1, `her hair reaches ${hairBottom(woman).toFixed(2)} m, his ${hairBottom(man).toFixed(2)} m`);
-    assert.notEqual(man.length, woman.length, "a different body");
+    expect(hairBottom(woman), `her hair reaches ${hairBottom(woman).toFixed(2)} m, his ${hairBottom(man).toFixed(2)} m`).toBeLessThan(hairBottom(man) - 0.1);
+    expect(man.length, "a different body").not.toBe(woman.length);
   });
 
   it("when a portly man in a suit is dressed against a plain man, then he is broader through the chest and belly, wears a tie and a white collar, and has fuller hair over his crown", () => {
@@ -170,24 +169,24 @@ describe("given the crash-test dummies drawn for thrown drivers", () => {
       const [x, z] = [belly.map((r) => r.at.x), belly.map((r) => r.at.z)];
       return (Math.max(...x) - Math.min(...x)) * (Math.max(...z) - Math.min(...z));
     };
-    assert.ok(section(portly) > section(plain) * 1.3, `torso section ${section(portly).toFixed(3)} m² against ${section(plain).toFixed(3)} m²`);
-    assert.ok(ofRole(portly, ROLE.TIE).length > 0 && ofRole(plain, ROLE.TIE).length === 0, "a tie");
-    assert.ok(has(portly, 0xf4f4f1) && !has(plain, 0xf4f4f1), "a white collar");
+    expect(section(portly), `torso section ${section(portly).toFixed(3)} m² against ${section(plain).toFixed(3)} m²`).toBeGreaterThan(section(plain) * 1.3);
+    expect(ofRole(portly, ROLE.TIE).length > 0 && ofRole(plain, ROLE.TIE).length === 0, "a tie").toBeTruthy();
+    expect(has(portly, 0xf4f4f1) && !has(plain, 0xf4f4f1), "a white collar").toBeTruthy();
     const hairWidth = (rows: Drawn[]) => Math.max(...ofRole(rows, ROLE.HAIR).map((r) => Math.abs(r.at.x)));
-    assert.ok(hairWidth(portly) > hairWidth(plain) + 0.01, `${hairWidth(portly).toFixed(3)} m across the hair against ${hairWidth(plain).toFixed(3)} m`);
+    expect(hairWidth(portly), `${hairWidth(portly).toFixed(3)} m across the hair against ${hairWidth(plain).toFixed(3)} m`).toBeGreaterThan(hairWidth(plain) + 0.01);
   });
 
   it("when a driver picks trousers, a cap and a moustache, then his legs wear the trousers' colour, his crown the cap's, and his face gains a moustache in his hair's colour", () => {
     const plain = drawn(MAN, false);
     const capped = drawn({ ...MAN, pants: 0x123456, hat: 0xee2211 }, false);
     const picked = drawn({ ...MAN, pants: 0x123456, hat: 0xee2211, mustache: true }, false);
-    assert.ok(has(picked, 0x123456) && !has(plain, 0x123456), "the trousers' colour");
-    assert.ok(has(picked, 0xee2211) && !has(plain, 0xee2211), "the cap's colour");
+    expect(has(picked, 0x123456) && !has(plain, 0x123456), "the trousers' colour").toBeTruthy();
+    expect(has(picked, 0xee2211) && !has(plain, 0xee2211), "the cap's colour").toBeTruthy();
     const moustache = (rows: Drawn[]) => ofRole(rows, ROLE.MUSTACHE);
-    assert.equal(moustache(capped).length, 0, "no moustache unless he wears one");
-    assert.ok(moustache(picked).length > 0, "his moustache is drawn");
-    assert.ok(moustache(picked).every((r) => r.at.z > 0.08 && r.at.y > 1.52 && r.at.y < 1.62), "on his upper lip, in front of his face");
-    assert.equal(has(picked, MAN.hair), true);
+    expect(moustache(capped).length, "no moustache unless he wears one").toBe(0);
+    expect(moustache(picked).length, "his moustache is drawn").toBeGreaterThan(0);
+    expect(moustache(picked).every((r) => r.at.z > 0.08 && r.at.y > 1.52 && r.at.y < 1.62), "on his upper lip, in front of his face").toBeTruthy();
+    expect(has(picked, MAN.hair)).toBe(true);
   });
 
   it("when a field of 8 drivers is dressed, then at least 6 of them look different, and dressing the same drivers again leaves every slot's colours unchanged", () => {
@@ -198,22 +197,22 @@ describe("given the crash-test dummies drawn for thrown drivers", () => {
     };
     for (let s = 0; s < 8; s++) mesh.dress(s, false, driverLook(5, s));
     const before = Array.from({ length: 8 }, (_, s) => dress(s));
-    assert.ok(new Set(before).size >= 6, "8 drivers, at least 6 distinct dress");
+    expect(new Set(before).size, "8 drivers, at least 6 distinct dress").toBeGreaterThanOrEqual(6);
     for (let s = 0; s < 8; s++) mesh.dress(s, false, driverLook(5, s));
-    assert.equal(Array.from({ length: 8 }, (_, s) => dress(s)).join("|"), before.join("|"), "the same drivers dressed again");
+    expect(Array.from({ length: 8 }, (_, s) => dress(s)).join("|"), "the same drivers dressed again").toBe(before.join("|"));
   });
 
   it("when a dummy is posed and hidden, then the draw ends after the highest slot with a dummy out, and the one body is a single instance per slot", () => {
     const mesh = new DummyMesh(8);
-    assert.equal(mesh.count, 0, "nothing out, nothing drawn");
+    expect(mesh.count, "nothing out, nothing drawn").toBe(0);
     show(mesh, posture({}));
-    assert.equal(mesh.count, 1, "slot 0 out");
+    expect(mesh.count, "slot 0 out").toBe(1);
     mesh.pose(5, 0, centre(0), new THREE.Quaternion());
-    assert.equal(mesh.count, 6, "slot 5 out ends the draw after it");
+    expect(mesh.count, "slot 5 out ends the draw after it").toBe(6);
     mesh.hide(5);
-    assert.equal(mesh.count, 1, "slot 5 gone, the draw ends after slot 0 again");
+    expect(mesh.count, "slot 5 gone, the draw ends after slot 0 again").toBe(1);
     mesh.hide(0);
-    assert.equal(mesh.count, 0);
+    expect(mesh.count).toBe(0);
   });
 
   for (const kind of KINDS) {
@@ -224,8 +223,8 @@ describe("given the crash-test dummies drawn for thrown drivers", () => {
       const [kinds, index] = [mesh.geometry.getAttribute(KINDS_ATTRIBUTE), mesh.geometry.index!];
       let triangles = 0;
       for (let t = 0; t < index.count; t += 3) if ([0, 1, 2].every((k) => isDrawn(kinds.getY(index.getX(t + k)), flags))) triangles++;
-      assert.ok(triangles >= BODY_TRIANGLES, `${triangles} triangles, the ${BODY_TRIANGLES}-triangle body is missing`);
-      assert.ok(triangles <= DRAWN_TRIANGLES, `${triangles} drawn triangles, bound ${DRAWN_TRIANGLES}`);
+      expect(triangles, `${triangles} triangles, the ${BODY_TRIANGLES}-triangle body is missing`).toBeGreaterThanOrEqual(BODY_TRIANGLES);
+      expect(triangles, `${triangles} drawn triangles, bound ${DRAWN_TRIANGLES}`).toBeLessThanOrEqual(DRAWN_TRIANGLES);
     });
   }
 
@@ -255,7 +254,7 @@ describe("given the crash-test dummies drawn for thrown drivers", () => {
       const [rest, skin] = [restShape(mesh), mesh.geometry.getAttribute(BONES_ATTRIBUTE)];
       let height = 0;
       for (let i = 0; i < BODY_VERTICES; i++) height = Math.max(height, rest.getY(i));
-      assert.ok(Math.abs(height - top) < HEIGHT_BOUND, `${build.name} is ${height.toFixed(3)} m, the rig top is ${top}`);
+      expect(Math.abs(height - top), `${build.name} is ${height.toFixed(3)} m, the rig top is ${top}`).toBeLessThan(HEIGHT_BOUND);
       for (const limb of limbs) {
         const [, , jx, , jz] = JOINTS[limb.joint]!;
         const sum = new THREE.Vector3();
@@ -265,8 +264,8 @@ describe("given the crash-test dummies drawn for thrown drivers", () => {
           sum.add(new THREE.Vector3(rest.getX(i), 0, rest.getZ(i)));
           n++;
         }
-        assert.ok(n > 20, `${build.name} ${limb.name}: ${n} rigid vertices on part ${limb.part}`);
-        assert.ok(Math.abs(sum.x / n - jx) < PIVOT_BOUND && Math.abs(sum.z / n - jz) < PIVOT_BOUND, `${build.name} ${limb.name}: the limb's axis is at x ${(sum.x / n).toFixed(3)}, z ${(sum.z / n).toFixed(3)}, the rig's joint at ${jx}, ${jz}`);
+        expect(n, `${build.name} ${limb.name}: ${n} rigid vertices on part ${limb.part}`).toBeGreaterThan(20);
+        expect(Math.abs(sum.x / n - jx) < PIVOT_BOUND && Math.abs(sum.z / n - jz) < PIVOT_BOUND, `${build.name} ${limb.name}: the limb's axis is at x ${(sum.x / n).toFixed(3)}, z ${(sum.z / n).toFixed(3)}, the rig's joint at ${jx}, ${jz}`).toBeTruthy();
       }
       for (const band of bands) {
         const jy = JOINTS[band.joint]![3];
@@ -276,8 +275,8 @@ describe("given the crash-test dummies drawn for thrown drivers", () => {
           sum += rest.getY(i);
           n++;
         }
-        assert.ok(n >= 6, `${build.name} ${band.name}: ${n} vertices within 0.2 of half weight`);
-        assert.ok(Math.abs(sum / n - jy) < PIVOT_BOUND_Y, `${build.name} ${band.name}: the blend is at half weight at y ${(sum / n).toFixed(3)}, the rig's joint at ${jy}`);
+        expect(n, `${build.name} ${band.name}: ${n} vertices within 0.2 of half weight`).toBeGreaterThanOrEqual(6);
+        expect(Math.abs(sum / n - jy), `${build.name} ${band.name}: the blend is at half weight at y ${(sum / n).toFixed(3)}, the rig's joint at ${jy}`).toBeLessThan(PIVOT_BOUND_Y);
       }
     }
   });
@@ -298,8 +297,8 @@ describe("given the crash-test dummies drawn for thrown drivers", () => {
           sheet = `edge ${i}-${j} at (${rest.getX(i).toFixed(2)}, ${rest.getY(i).toFixed(2)}, ${rest.getZ(i).toFixed(2)}) is ${standing.toFixed(3)} m in the T-pose and ${fitted.toFixed(3)} m fitted`;
         }
       }
-      assert.ok(checked === index.length, `${checked} edges checked`);
-      assert.equal(sheet, "", `a sheet: ${sheet}`);
+      expect(checked, `${checked} edges checked`).toBe(index.length);
+      expect(sheet, `a sheet: ${sheet}`).toBe("");
     });
 
     it(`when the ${build.name} stands, then every limb vertex is inside its rig part's box grown by a ${LIMB_MARGIN} m skin margin (the arms hang inside the arm boxes)`, () => {
@@ -319,8 +318,8 @@ describe("given the crash-test dummies drawn for thrown drivers", () => {
         checked++;
         if (over > worst) [worst, where] = [over, `vertex ${i} at (${rest.getX(i).toFixed(3)}, ${rest.getY(i).toFixed(3)}, ${rest.getZ(i).toFixed(3)}) on part ${part}`];
       }
-      assert.ok(checked > 1000, `${checked} limb vertices checked`);
-      assert.ok(worst <= LIMB_MARGIN, `${where} is ${worst.toFixed(3)} m outside its part's box, the margin is ${LIMB_MARGIN} m`);
+      expect(checked, `${checked} limb vertices checked`).toBeGreaterThan(1000);
+      expect(worst, `${where} is ${worst.toFixed(3)} m outside its part's box, the margin is ${LIMB_MARGIN} m`).toBeLessThanOrEqual(LIMB_MARGIN);
     });
   }
 });
@@ -339,10 +338,10 @@ describe("given the dummy skinned to the ten rigid parts", () => {
     for (let i = 0; i < shape.count; i++) {
       if (!mesh.posed(0, i, at)) continue;
       standing.fromBufferAttribute(shape, i).applyMatrix4(move);
-      assert.ok(at.distanceTo(standing) < 1e-5, `vertex ${i} is ${at.distanceTo(standing)} m off`);
+      expect(at.distanceTo(standing), `vertex ${i} is ${at.distanceTo(standing)} m off`).toBeLessThan(1e-5);
       moved++;
     }
-    assert.ok(moved > mesh.geometry.getAttribute("position").count / 2, `${moved} vertices checked`);
+    expect(moved, `${moved} vertices checked`).toBeGreaterThan(mesh.geometry.getAttribute("position").count / 2);
   });
 });
 
@@ -449,11 +448,11 @@ describe("given the dummy bent at its joints", () => {
         mesh.dress(0, false, build.look);
         show(mesh, posture(bend.turns));
         const rows = stretches(mesh, false);
-        assert.ok(rows.filter((r) => r.bones.length === 2).length > 100, "the bands' edges were measured");
+        expect(rows.filter((r) => r.bones.length === 2).length, "the bands' edges were measured").toBeGreaterThan(100);
         const { worst, joint, steep, steepJoint } = overshoot(rows, mesh);
-        assert.ok(steep <= 0, `a weight climbs faster than its band: ${steepJoint}`);
-        assert.ok(worst <= 0, `a seam opened: ${joint}`);
-        for (const row of rows) if (row.bones.length === 1) assert.ok(Math.abs(row.ratio - 1) < 1e-4, `a rigid edge stretched ${row.ratio}x`);
+        expect(steep, `a weight climbs faster than its band: ${steepJoint}`).toBeLessThanOrEqual(0);
+        expect(worst, `a seam opened: ${joint}`).toBeLessThanOrEqual(0);
+        for (const row of rows) if (row.bones.length === 1) expect(Math.abs(row.ratio - 1), `a rigid edge stretched ${row.ratio}x`).toBeLessThan(1e-4);
       });
     }
   }
@@ -465,14 +464,14 @@ describe("given the dummy bent at its joints", () => {
       mesh.dress(0, false, MAN);
       show(mesh, posture(bend.turns));
       const { worst, joint } = overshoot(stretches(mesh, true), mesh);
-      assert.ok(worst > 0.02, `no seam opened without the blend: ${joint}`);
+      expect(worst, `no seam opened without the blend: ${joint}`).toBeGreaterThan(0.02);
     });
   }
 
   it("when the body is at rest, then every joint band's edge is its standing length", () => {
     const mesh = new DummyMesh(1);
     show(mesh, posture({}));
-    assert.ok(stretches(mesh, false).every((r) => Math.abs(r.ratio - 1) < 1e-4));
+    expect(stretches(mesh, false).every((r) => Math.abs(r.ratio - 1) < 1e-4)).toBeTruthy();
   });
 
   it("when a slot flags whiskers and builds, then each build draws only its own vertices", () => {
@@ -484,8 +483,8 @@ describe("given the dummy bent at its joints", () => {
       for (let i = 0; i < mesh.geometry.getAttribute("position").count; i++) if (mesh.posed(0, i, probe)) n++;
       return n;
     };
-    assert.equal(new Set([count(BUILD.MAN), count(BUILD.WOMAN), count(BUILD.PORTLY)]).size, 3, "three different bodies");
-    assert.ok(count(BUILD.MAN | WHISKERS) > count(BUILD.MAN), "a moustache adds vertices");
+    expect(new Set([count(BUILD.MAN), count(BUILD.WOMAN), count(BUILD.PORTLY)]).size, "three different bodies").toBe(3);
+    expect(count(BUILD.MAN | WHISKERS), "a moustache adds vertices").toBeGreaterThan(count(BUILD.MAN));
   });
 });
 
@@ -498,10 +497,10 @@ describe("given a dummy ray-picked as the garage's driver is", () => {
     mesh.updateMatrixWorld(true);
     const ray = new THREE.Raycaster(new THREE.Vector3(4, 1.2, 8), new THREE.Vector3(0, 0, -1));
     const hit = ray.intersectObject(mesh)[0]!;
-    assert.equal(hit.instanceId, 0);
-    assert.ok(hit.point.z > 6 && hit.point.z < 6.2, `hit at z = ${hit.point.z}`);
+    expect(hit.instanceId).toBe(0);
+    expect(hit.point.z > 6 && hit.point.z < 6.2, `hit at z = ${hit.point.z}`).toBeTruthy();
     const miss = new THREE.Raycaster(new THREE.Vector3(-4, 1.2, 8), new THREE.Vector3(0, 0, -1));
-    assert.equal(miss.intersectObject(mesh).length, 0, "a ray past him misses");
+    expect(miss.intersectObject(mesh).length, "a ray past him misses").toBe(0);
   });
 });
 
@@ -545,7 +544,7 @@ describe("given the dummy's head", () => {
       mesh.dress(0, head.cop, head.look);
       show(mesh, posture({}));
       const skin = skinTriangles(mesh);
-      assert.ok(skin.length > 60, `${skin.length} skin triangles on the head`);
+      expect(skin.length, `${skin.length} skin triangles on the head`).toBeGreaterThan(60);
       const geo = mesh.geometry;
       const [kinds, bones] = [geo.getAttribute(KINDS_ATTRIBUTE), geo.getAttribute(BONES_ATTRIBUTE)];
       const at = new THREE.Vector3();
@@ -556,27 +555,27 @@ describe("given the dummy's head", () => {
       for (let i = 0; i < kinds.count; i++) {
         const role = kinds.getX(i);
         if (![ROLE.HAIR, ROLE.LOCKS, ROLE.BRIM].includes(role as never) || !mesh.posed(0, i, at) || at.y < HANGS_BELOW) continue;
-        assert.ok(bones.getX(i) === 1 && bones.getY(i) === 1, `vertex ${i} of the head wear rides the head bone alone`);
+        expect(bones.getX(i) === 1 && bones.getY(i) === 1, `vertex ${i} of the head wear rides the head bone alone`).toBeTruthy();
         let best = Infinity;
         for (const tri of skin) best = Math.min(best, tri.closestPointToPoint(at, near).distanceTo(at));
         const bound = role === ROLE.BRIM ? PEAK_BOUND : WEAR_BOUND;
-        assert.ok(best <= bound, `vertex ${i} (role ${role}) floats ${best.toFixed(3)} m off the skull, bound ${bound} m`);
+        expect(best, `vertex ${i} (role ${role}) floats ${best.toFixed(3)} m off the skull, bound ${bound} m`).toBeLessThanOrEqual(bound);
         if (role === ROLE.BRIM) peak.push(at.clone());
         if (role === ROLE.HAIR) crown.push(at.clone());
         checked++;
       }
       if (head.look.hat !== null) {
         const fastened = peak.filter((p) => crown.some((c) => c.distanceTo(p) < 1e-3)).length;
-        assert.ok(fastened >= PEAK_ATTACHED, `${fastened} of ${peak.length} peak vertices lie on the crown, at least ${PEAK_ATTACHED} must`);
-      } else assert.equal(peak.length, 0, "no peak without a cap");
+        expect(fastened, `${fastened} of ${peak.length} peak vertices lie on the crown, at least ${PEAK_ATTACHED} must`).toBeGreaterThanOrEqual(PEAK_ATTACHED);
+      } else expect(peak.length, "no peak without a cap").toBe(0);
     });
   }
 
   it("when a man is dressed with shades and without, then the shaded man has lens vertices on his face and the bare one has none", () => {
     const lenses = (rows: Drawn[]) => ofRole(rows, ROLE.EYES).filter((r) => r.at.z > 0.05 && r.at.y > 1.55);
     const shaded = lenses(drawn({ ...MAN, shades: true }, false)).length;
-    assert.ok(shaded > 8, `${shaded} lens vertices on the shaded man`);
-    assert.equal(lenses(drawn(MAN, false)).length, 0, "no lenses without shades");
+    expect(shaded, `${shaded} lens vertices on the shaded man`).toBeGreaterThan(8);
+    expect(lenses(drawn(MAN, false)).length, "no lenses without shades").toBe(0);
   });
 });
 
@@ -681,8 +680,8 @@ describe("given the dummy's shoulders and hips", () => {
         show(mesh, posture(pose.turns));
         for (const seam of SEAMS) {
           const { float, hole } = seamGap(mesh, seam.joint);
-          assert.ok(float <= CAP_FLOAT, `${seam.name} end cap floats ${float.toFixed(3)} m off the torso (bound ${CAP_FLOAT} m)`);
-          assert.ok(hole <= SEAM_HOLE, `${seam.name} opens a ${hole.toFixed(3)} m hole (bound ${SEAM_HOLE} m)`);
+          expect(float, `${seam.name} end cap floats ${float.toFixed(3)} m off the torso (bound ${CAP_FLOAT} m)`).toBeLessThanOrEqual(CAP_FLOAT);
+          expect(hole, `${seam.name} opens a ${hole.toFixed(3)} m hole (bound ${SEAM_HOLE} m)`).toBeLessThanOrEqual(SEAM_HOLE);
         }
       });
     }
@@ -737,9 +736,9 @@ describe("given the shoulder and hip bridges", () => {
         show(mesh, posture(pose.turns));
         for (const seam of SEAMS) {
           const dot = inwardFace(mesh, seam.joint);
-          assert.ok(dot >= OUTWARD, `${seam.name} ${pose.name}: a face points inward ${dot.toFixed(2)} (bound ${OUTWARD})`);
+          expect(dot, `${seam.name} ${pose.name}: a face points inward ${dot.toFixed(2)} (bound ${OUTWARD})`).toBeGreaterThanOrEqual(OUTWARD);
           const { hole } = seamGap(mesh, seam.joint);
-          assert.ok(hole <= SEAM_HOLE, `${seam.name} ${pose.name}: a ${hole.toFixed(3)} m flap (bound ${SEAM_HOLE} m)`);
+          expect(hole, `${seam.name} ${pose.name}: a ${hole.toFixed(3)} m flap (bound ${SEAM_HOLE} m)`).toBeLessThanOrEqual(SEAM_HOLE);
         }
       }
     });
@@ -752,8 +751,8 @@ describe("given the people's shader drawn with MSAA", () => {
     const { vertexShader, fragmentShader } = THREE.ShaderLib.standard;
     const shader = { uniforms: {}, vertexShader, fragmentShader } as THREE.WebGLProgramParametersWithUniforms;
     mesh.material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
-    assert.match(shader.vertexShader, /^centroid varying vec4 vDollRegion;$/m, "the vertex stage");
-    assert.match(shader.fragmentShader, /^centroid varying vec4 vDollRegion;$/m, "the fragment stage");
+    expect(shader.vertexShader, "the vertex stage").toMatch(/^centroid varying vec4 vDollRegion;$/m);
+    expect(shader.fragmentShader, "the fragment stage").toMatch(/^centroid varying vec4 vDollRegion;$/m);
   });
 });
 
@@ -771,7 +770,7 @@ describe("given the people's lit program on a GLES driver that counts built-in i
     const declared = shader.vertexShader.match(/^attribute (?:float|vec[234]) \w+;$/gm) ?? [];
     const builtins = new Set(shader.vertexShader.match(/\bgl_(?:VertexID|InstanceID)\b/g));
     const slots = THREE_SLOTS + declared.length + builtins.size;
-    assert.ok(slots <= DUMMY_SLOTS, `${slots} slots (bound ${DUMMY_SLOTS}): three's ${THREE_SLOTS}, ${[...declared, ...builtins].join(" ")}`);
+    expect(slots, `${slots} slots (bound ${DUMMY_SLOTS}): three's ${THREE_SLOTS}, ${[...declared, ...builtins].join(" ")}`).toBeLessThanOrEqual(DUMMY_SLOTS);
   });
 });
 
@@ -788,8 +787,8 @@ describe("given the wear lofted over the bodies", () => {
       const roles = corners.map((vertex) => kinds.getX(vertex));
       if ((roles[0] !== roles[1] || roles[0] !== roles[2]) && mixed === "") mixed = `triangle ${t / 3}: roles ${roles.join(", ")}`;
     }
-    assert.ok(wear > 1000, `${wear} wear triangles`);
-    assert.equal(mixed, "", `a wear triangle mixes roles: ${mixed}`);
+    expect(wear, `${wear} wear triangles`).toBeGreaterThan(1000);
+    expect(mixed, `a wear triangle mixes roles: ${mixed}`).toBe("");
   });
 });
 
@@ -797,8 +796,8 @@ describe("given two dummy meshes", () => {
   it("when both are built, then they draw one geometry and it carries the bust weights", () => {
     const first = new DummyMesh(1);
     const second = new DummyMesh(2);
-    assert.equal(first.geometry, second.geometry, "one shared geometry");
+    expect(first.geometry, "one shared geometry").toBe(second.geometry);
     const kinds = first.geometry.getAttribute(KINDS_ATTRIBUTE);
-    assert.ok(Array.from({ length: kinds.count }, (_, i) => kinds.getZ(i)).some((share) => share > 0), "bust weights in roleKind's z");
+    expect(Array.from({ length: kinds.count }, (_, i) => kinds.getZ(i)).some((share) => share > 0), "bust weights in roleKind's z").toBeTruthy();
   });
 });

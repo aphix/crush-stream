@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -169,9 +168,9 @@ describe("given a scene holding leftovers of the last scene (wrecked parts, effe
     it(`when the scene holds only ${row.label} and is reset, then none of it is left`, async () => {
       const r = rig();
       await row.seed(r);
-      assert.ok(row.left(r) > 0, `${name} was seeded`);
+      expect(row.left(r), `${name} was seeded`).toBeGreaterThan(0);
       clearTransients(r.t);
-      assert.equal(row.left(r), 0, `${name} left over`);
+      expect(row.left(r), `${name} left over`).toBe(0);
       r.ragdolls.dispose();
     });
   }
@@ -179,11 +178,11 @@ describe("given a scene holding leftovers of the last scene (wrecked parts, effe
   it("when every system is seeded at once and the scene is reset, then nothing is left in any of them and the scene root is back at its baseline child count", async () => {
     const r = rig();
     for (const row of Object.values(ROWS)) await row.seed(r);
-    assert.ok(r.scene.children.length > r.base, "loose parts hang in the scene root");
+    expect(r.scene.children.length, "loose parts hang in the scene root").toBeGreaterThan(r.base);
     clearTransients(r.t);
     const left = Object.entries(ROWS).map(([name, row]) => [name, row.left(r)] as const).filter(([, n]) => n > 0);
-    assert.deepEqual(left, [], "systems with leftovers");
-    assert.equal(r.scene.children.length, r.base, "scene root children");
+    expect(left, "systems with leftovers").toHaveLength(0);
+    expect(r.scene.children.length, "scene root children").toBe(r.base);
     r.ragdolls.dispose();
   });
 });

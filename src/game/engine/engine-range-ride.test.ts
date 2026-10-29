@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -77,10 +76,10 @@ describe("given the real engine in the Range, its thrown driver ridden through t
         _was.copy(_ndc);
         framed++;
       }
-      assert.ok(framed >= WATCHED_S * FRAME_HZ, `the ride lasted ${(framed / FRAME_HZ).toFixed(1)} s`);
-      assert.equal(leftFrame, 0, `his head was off screen for ${leftFrame} frames`);
-      assert.ok(worstStep <= HEAD_STEP_BAR, `his head moved ${worstStep.toFixed(3)} of the frame in one frame, ${worstAt.toFixed(2)} s into the ride`);
-      assert.ok(worstLens <= LENS_STEP_BAR, `the lens changed ${worstLens.toFixed(2)} degrees in one frame, ${worstLensAt.toFixed(2)} s into the ride`);
+      expect(framed, `the ride lasted ${(framed / FRAME_HZ).toFixed(1)} s`).toBeGreaterThanOrEqual(WATCHED_S * FRAME_HZ);
+      expect(leftFrame, `his head was off screen for ${leftFrame} frames`).toBe(0);
+      expect(worstStep, `his head moved ${worstStep.toFixed(3)} of the frame in one frame, ${worstAt.toFixed(2)} s into the ride`).toBeLessThanOrEqual(HEAD_STEP_BAR);
+      expect(worstLens, `the lens changed ${worstLens.toFixed(2)} degrees in one frame, ${worstLensAt.toFixed(2)} s into the ride`).toBeLessThanOrEqual(LENS_STEP_BAR);
     });
   }
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { FLIGHT } from "./car-flight.ts";
@@ -115,17 +114,17 @@ const _roofMid = new THREE.Vector3();
 /** The stack's claims (a settled stack, and again 5 s on): each roof crushed more than the one above it, the top car's roof not at all, the bottom roof in the FMVSS 216 band, the base car where it was set, and every other car still on the roof under it. */
 function assertStands(cars: readonly DeformableCar[]): void {
   const sink = cars.map(roofSink);
-  for (let i = 1; i < 4; i++) assert.ok(sink[i - 1]! > sink[i]! + 0.02, `car ${i - 1} (${sink[i - 1]!.toFixed(3)} m) is not under a clearly worse roof than car ${i} (${sink[i]!.toFixed(3)} m)`);
-  assert.ok(sink[3]! < 0.002, `the top car's roof is crushed ${sink[3]!.toFixed(3)} m with nothing on it`);
-  assert.ok(sink[0]! > 0.12 && sink[0]! < 0.26, `the bottom roof took ${sink[0]!.toFixed(3)} m under three cars (FMVSS 216 band: 0.12-0.26 m with the drop's overshoot)`);
-  assert.ok(Math.hypot(cars[0]!.group.position.x, cars[0]!.group.position.z) < 0.02, `the base car slid ${Math.hypot(cars[0]!.group.position.x, cars[0]!.group.position.z).toFixed(3)} m on the pad`);
+  for (let i = 1; i < 4; i++) expect(sink[i - 1]!, `car ${i - 1} (${sink[i - 1]!.toFixed(3)} m) is not under a clearly worse roof than car ${i} (${sink[i]!.toFixed(3)} m)`).toBeGreaterThan(sink[i]! + 0.02);
+  expect(sink[3]!, `the top car's roof is crushed ${sink[3]!.toFixed(3)} m with nothing on it`).toBeLessThan(0.002);
+  expect(sink[0]! > 0.12 && sink[0]! < 0.26, `the bottom roof took ${sink[0]!.toFixed(3)} m under three cars (FMVSS 216 band: 0.12-0.26 m with the drop's overshoot)`).toBeTruthy();
+  expect(Math.hypot(cars[0]!.group.position.x, cars[0]!.group.position.z), `the base car slid ${Math.hypot(cars[0]!.group.position.x, cars[0]!.group.position.z).toFixed(3)} m on the pad`).toBeLessThan(0.02);
   // A car stands while its origin is within half the roof's length of the middle of the roof under it (the lower roof's `roofZ` span, turned with the car).
   for (let i = 1; i < 4; i++) {
     const lower = cars[i - 1]!;
     const [rear, front] = lower.style.roofZ;
     _roofMid.set(0, 0, 0.5 * (rear + front)).applyQuaternion(lower.group.quaternion).add(lower.group.position);
     const off = Math.hypot(cars[i]!.group.position.x - _roofMid.x, cars[i]!.group.position.z - _roofMid.z);
-    assert.ok(off < 0.5 * (front - rear), `car ${i} stands ${off.toFixed(3)} m from the middle of the roof under it, which carries it within ${(0.5 * (front - rear)).toFixed(3)} m`);
+    expect(off, `car ${i} stands ${off.toFixed(3)} m from the middle of the roof under it, which carries it within ${(0.5 * (front - rear)).toFixed(3)} m`).toBeLessThan(0.5 * (front - rear));
   }
 }
 
@@ -139,21 +138,21 @@ describe("given a stack of cars dropped one on the next on the flat pad, each ro
 
   it("when the stack has two, three and four cars, then the bottom roof is crushed more with each car added, so it takes the weight above it and not just the car on it", () => {
     const bottom = [2, 3, 4].map((n) => roofSink(stack(n).cars[0]!));
-    assert.ok(bottom[0]! > 0.02, `one car on a roof crushed it ${bottom[0]!.toFixed(3)} m`);
-    assert.ok(bottom[1]! > bottom[0]! + 0.02 && bottom[2]! > bottom[1]! + 0.02, `bottom roof under 1, 2, 3 cars: ${bottom.map((b) => b.toFixed(3)).join(", ")} m`);
+    expect(bottom[0]!, `one car on a roof crushed it ${bottom[0]!.toFixed(3)} m`).toBeGreaterThan(0.02);
+    expect(bottom[1]! > bottom[0]! + 0.02 && bottom[2]! > bottom[1]! + 0.02, `bottom roof under 1, 2, 3 cars: ${bottom.map((b) => b.toFixed(3)).join(", ")} m`).toBeTruthy();
   });
 
   it("when a stack of four settles while simulated at 60, 144 and 240 Hz, then every roof is crushed the same amount at all three rates", () => {
     const sinks = [60, 144, 240].map((hz) => stack(4, hz).cars.map(roofSink));
     for (let i = 0; i < 3; i++) {
       const v = sinks.map((s) => s[i]!);
-      assert.ok(Math.max(...v) - Math.min(...v) < 0.04 * Math.max(...v) + 0.002, `car ${i}'s roof at 60/144/240 Hz: ${v.map((x) => x.toFixed(3)).join(" / ")} m`);
+      expect(Math.max(...v) - Math.min(...v), `car ${i}'s roof at 60/144/240 Hz: ${v.map((x) => x.toFixed(3)).join(" / ")} m`).toBeLessThan(0.04 * Math.max(...v) + 0.002);
     }
   });
 
   it("when a settled stack of four is restored from a clip keyframe into fresh cars, then the roofs show the crush they had live, carry on from it for 3 s, and the crushed cars are wrecks", () => {
     const { cars: live, w } = stack(4);
-    assert.ok(live.slice(0, 3).every((c) => c.crashed), "a load-crushed car is not a wreck (it would not ride the replay's and netplay's wreck sections)");
+    expect(live.slice(0, 3).every((c) => c.crashed), "a load-crushed car is not a wreck (it would not ride the replay's and netplay's wreck sections)").toBeTruthy();
     // The keyframe: pose, flight and solver state of each car (`engine-record` writes the same three), into fresh cars.
     const restored = live.map((src) => {
       const c = makeCar(STYLE_CLASS[WAGONS.style]);
@@ -172,11 +171,11 @@ describe("given a stack of cars dropped one on the next on the flat pad, each ro
       c.refreshBasis();
       return c;
     });
-    for (const [i, c] of live.entries()) assert.ok(Math.abs(roofSink(restored[i]!) - roofSink(c)) < 0.0005, `car ${i}: restored roof ${roofSink(restored[i]!).toFixed(4)} m, live ${roofSink(c).toFixed(4)} m`);
+    for (const [i, c] of live.entries()) expect(Math.abs(roofSink(restored[i]!) - roofSink(c)), `car ${i}: restored roof ${roofSink(restored[i]!).toFixed(4)} m, live ${roofSink(c).toFixed(4)} m`).toBeLessThan(0.0005);
     const rw = makeWorld(restored, false, false);
     run(w, 3);
     run(rw, 3);
-    for (const [i, c] of live.entries()) assert.ok(Math.abs(roofSink(restored[i]!) - roofSink(c)) < 0.002, `car ${i} 3 s on: restored roof ${roofSink(restored[i]!).toFixed(4)} m, live ${roofSink(c).toFixed(4)} m`);
+    for (const [i, c] of live.entries()) expect(Math.abs(roofSink(restored[i]!) - roofSink(c)), `car ${i} 3 s on: restored roof ${roofSink(restored[i]!).toFixed(4)} m, live ${roofSink(c).toFixed(4)} m`).toBeLessThan(0.002);
   });
 });
 
@@ -188,36 +187,36 @@ describe("given one car resting on another car's roof by its belly", () => {
       tickWorld(w, 1 / FRAME_HZ);
       fastest = Math.max(fastest, cars[1]!.velocity.length() + cars[1]!.angular.length());
     }
-    assert.ok(fastest < STILL_SPEED, `the top car ends a frame at ${fastest.toExponential(2)} (speed plus spin)`);
+    expect(fastest, `the top car ends a frame at ${fastest.toExponential(2)} (speed plus spin)`).toBeLessThan(STILL_SPEED);
   });
 });
 
 describe("given a car dropped onto one of its faces on the flat pad", () => {
   it("when it is dropped upside-down from 0.5, 1 and 2 m, then the roof crushes at 0.5 m, crushes more from higher, and no further than its packed depth", () => {
     const sink = [0.5, 1, 2].map((h) => roofSink(drop("roof", h)));
-    assert.ok(sink[0]! > 0.1, `0.5 m onto the roof crushed it ${sink[0]!.toFixed(3)} m`);
-    assert.ok(sink[1]! > sink[0]! + 0.03 && sink[2]! > sink[1]! + 0.03, `roof crush from 0.5 / 1 / 2 m: ${sink.map((s) => s.toFixed(3)).join(" / ")} m`);
-    assert.ok(sink[2]! <= faceMax(FACE_TOP) + 0.001, `the roof crushed ${sink[2]!.toFixed(3)} m past its packed depth ${faceMax(FACE_TOP)} m`);
+    expect(sink[0]!, `0.5 m onto the roof crushed it ${sink[0]!.toFixed(3)} m`).toBeGreaterThan(0.1);
+    expect(sink[1]! > sink[0]! + 0.03 && sink[2]! > sink[1]! + 0.03, `roof crush from 0.5 / 1 / 2 m: ${sink.map((s) => s.toFixed(3)).join(" / ")} m`).toBeTruthy();
+    expect(sink[2]!, `the roof crushed ${sink[2]!.toFixed(3)} m past its packed depth ${faceMax(FACE_TOP)} m`).toBeLessThanOrEqual(faceMax(FACE_TOP) + 0.001);
   });
 
   it("when it is dropped from 1 m on its nose, tail, left flank, right flank or a corner, then the struck face crushes and the opposite face does not", () => {
     const nose = drop("nose", 1).deform.crush;
-    assert.ok(nose[FACE_NOSE]! > 0.02 && nose[FACE_TAIL] === 0, `nose drop: nose ${nose[FACE_NOSE]!.toFixed(3)} m, tail ${nose[FACE_TAIL]!.toFixed(3)} m`);
+    expect(nose[FACE_NOSE]! > 0.02 && nose[FACE_TAIL] === 0, `nose drop: nose ${nose[FACE_NOSE]!.toFixed(3)} m, tail ${nose[FACE_TAIL]!.toFixed(3)} m`).toBeTruthy();
     const tail = drop("tail", 1).deform.crush;
-    assert.ok(tail[FACE_TAIL]! > 0.02 && tail[FACE_NOSE] === 0, `tail drop: tail ${tail[FACE_TAIL]!.toFixed(3)} m, nose ${tail[FACE_NOSE]!.toFixed(3)} m`);
+    expect(tail[FACE_TAIL]! > 0.02 && tail[FACE_NOSE] === 0, `tail drop: tail ${tail[FACE_TAIL]!.toFixed(3)} m, nose ${tail[FACE_NOSE]!.toFixed(3)} m`).toBeTruthy();
     const left = drop("left", 1).deform.crush;
-    assert.ok(left[FACE_LEFT]! > 0.04 && left[FACE_RIGHT] === 0, `left drop: left ${left[FACE_LEFT]!.toFixed(3)} m, right ${left[FACE_RIGHT]!.toFixed(3)} m`);
+    expect(left[FACE_LEFT]! > 0.04 && left[FACE_RIGHT] === 0, `left drop: left ${left[FACE_LEFT]!.toFixed(3)} m, right ${left[FACE_RIGHT]!.toFixed(3)} m`).toBeTruthy();
     const right = drop("right", 1).deform.crush;
-    assert.ok(right[FACE_RIGHT]! > 0.04 && right[FACE_LEFT] === 0, `right drop: right ${right[FACE_RIGHT]!.toFixed(3)} m, left ${right[FACE_LEFT]!.toFixed(3)} m`);
+    expect(right[FACE_RIGHT]! > 0.04 && right[FACE_LEFT] === 0, `right drop: right ${right[FACE_RIGHT]!.toFixed(3)} m, left ${right[FACE_LEFT]!.toFixed(3)} m`).toBeTruthy();
     const corner = drop("corner", 1).deform.crush;
-    assert.ok(corner[FACE_NOSE]! + corner[FACE_LEFT]! + corner[FACE_RIGHT]! > 0.02 && corner[FACE_TAIL] === 0, `corner drop (nose, left): ${Array.from(corner, (x) => x.toFixed(3)).join(" / ")} m`);
+    expect(corner[FACE_NOSE]! + corner[FACE_LEFT]! + corner[FACE_RIGHT]! > 0.02 && corner[FACE_TAIL] === 0, `corner drop (nose, left): ${Array.from(corner, (x) => x.toFixed(3)).join(" / ")} m`).toBeTruthy();
   });
 
   it("when it is dropped on its nose and on its left flank from 0.5, 1 and 2 m, then the struck face crushes more from each higher drop", () => {
     for (const kind of ["nose", "left"] as const) {
       const face = kind === "nose" ? FACE_NOSE : FACE_LEFT;
       const d = [0.5, 1, 2].map((h) => drop(kind, h).deform.crush[face]!);
-      assert.ok(d[1]! > d[0]! && d[2]! > d[1]!, `${kind} crush from 0.5 / 1 / 2 m: ${d.map((x) => x.toFixed(3)).join(" / ")} m`);
+      expect(d[1]! > d[0]! && d[2]! > d[1]!, `${kind} crush from 0.5 / 1 / 2 m: ${d.map((x) => x.toFixed(3)).join(" / ")} m`).toBeTruthy();
     }
   });
 });
@@ -244,9 +243,9 @@ function drawnTopSink(c: DeformableCar): number {
 describe("given a car's roof another car presses, which takes the belly's imprint for good", () => {
   it("when a car settles on its roof, then the roof takes the imprint and its drawn top sinks no further than the roof's packed depth", () => {
     const lower = stack(2).cars[0]!;
-    assert.notEqual(lower.deform.imprint[0], IMPRINT_NONE, "the control: a belly resting on the roof imprints it");
+    expect(lower.deform.imprint[0], "the control: a belly resting on the roof imprints it").not.toBe(IMPRINT_NONE);
     const sink = drawnTopSink(lower);
-    assert.ok(sink > 0.01 && sink <= faceMax(FACE_TOP) + DRAWN_SLACK, `the drawn roof sank ${sink.toFixed(3)} m`);
+    expect(sink > 0.01 && sink <= faceMax(FACE_TOP) + DRAWN_SLACK, `the drawn roof sank ${sink.toFixed(3)} m`).toBeTruthy();
   });
 
   it("when a second car is set down on a wreck's spot, the second's belly inside its body, then the wreck's roof face is pressed but takes no imprint and its drawn top sinks no further than the roof's packed depth: a body inside the car is no belly on its roof, and the roof cut to it left the cabin open", () => {
@@ -256,17 +255,17 @@ describe("given a car's roof another car presses, which takes the belly's imprin
     const placed = new DeformableCar(paint(), new THREE.Scene());
     placed.spawnFacing(SAME_SPOT_M, SAME_SPOT_M, 0, 0);
     run(makeWorld([struck, placed], false, false), 0.25);
-    assert.ok(struck.deform.crush[FACE_TOP]! > 0, "the control: the belly inside the body pressed the roof's face");
+    expect(struck.deform.crush[FACE_TOP]!, "the control: the belly inside the body pressed the roof's face").toBeGreaterThan(0);
     const sink = drawnTopSink(struck);
-    assert.ok(sink <= faceMax(FACE_TOP) + DRAWN_SLACK, `the drawn roof sank ${sink.toFixed(3)} m (imprint plane ${struck.deform.imprint[0]!.toFixed(3)} m)`);
-    assert.equal(struck.deform.imprint[0], IMPRINT_NONE, `the roof took an imprint plane at ${struck.deform.imprint[0]!.toFixed(3)} m`);
+    expect(sink, `the drawn roof sank ${sink.toFixed(3)} m (imprint plane ${struck.deform.imprint[0]!.toFixed(3)} m)`).toBeLessThanOrEqual(faceMax(FACE_TOP) + DRAWN_SLACK);
+    expect(struck.deform.imprint[0], `the roof took an imprint plane at ${struck.deform.imprint[0]!.toFixed(3)} m`).toBe(IMPRINT_NONE);
   });
 });
 
 describe("given the roof's strength law (the load a roof carries at each crush depth, in car weights)", () => {
   it("when the strength is read at 127 mm and at the depths where 1, 2 and 3 car weights settle, then it carries 3 car weights at 127 mm (the FMVSS 216 roof test), 1, 2 and 3 settle at 31, 81 and 122 mm, and it is unbounded at its packed depth", () => {
-    assert.ok(faceStrength(FACE_TOP, 0.127) >= 3 && faceStrength(FACE_TOP, 0.127) < 3.5, `strength at 127 mm: ${faceStrength(FACE_TOP, 0.127).toFixed(2)} W`);
-    for (const [w, d] of [[1, 0.031], [2, 0.081], [3, 0.122]] as const) assert.ok(Math.abs(faceStrength(FACE_TOP, d) - w) < 0.03, `${w} W settles at ${d} m, strength there ${faceStrength(FACE_TOP, d).toFixed(3)} W`);
-    assert.equal(faceStrength(FACE_TOP, faceMax(FACE_TOP)), Infinity);
+    expect(faceStrength(FACE_TOP, 0.127) >= 3 && faceStrength(FACE_TOP, 0.127) < 3.5, `strength at 127 mm: ${faceStrength(FACE_TOP, 0.127).toFixed(2)} W`).toBeTruthy();
+    for (const [w, d] of [[1, 0.031], [2, 0.081], [3, 0.122]] as const) expect(Math.abs(faceStrength(FACE_TOP, d) - w), `${w} W settles at ${d} m, strength there ${faceStrength(FACE_TOP, d).toFixed(3)} W`).toBeLessThan(0.03);
+    expect(faceStrength(FACE_TOP, faceMax(FACE_TOP))).toBe(Infinity);
   });
 });

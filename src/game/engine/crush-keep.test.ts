@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import { FREEWHEEL, launch, makeWorld, runWall, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { pushCar } from "../contact/pair-contact.ts";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -39,7 +38,7 @@ const STYLES: [CarStyleId, VehicleClassId][] = [
 function wreck(style: CarStyleId, cls: VehicleClassId): DeformableCar {
   const car = makeCar(cls);
   runWall(50, 1, "front", { car });
-  assert.ok(car.deform.frozen, `${style}: the wreck did not freeze`);
+  expect(car.deform.frozen, `${style}: the wreck did not freeze`).toBeTruthy();
   return car;
 }
 
@@ -71,8 +70,8 @@ function ticks(w: CrashWorld, seconds: number): void {
 }
 
 function assertKept(label: string, before: number, after: number): void {
-  assert.ok(before > 0.05, `${label}: the fixture crushed the nose only ${(before * 1000).toFixed(1)} mm`);
-  assert.ok(Math.abs(after - before) <= KEEP, `${label}: the drawn nose crush went ${(before * 1000).toFixed(1)} → ${(after * 1000).toFixed(1)} mm`);
+  expect(before, `${label}: the fixture crushed the nose only ${(before * 1000).toFixed(1)} mm`).toBeGreaterThan(0.05);
+  expect(Math.abs(after - before), `${label}: the drawn nose crush went ${(before * 1000).toFixed(1)} → ${(after * 1000).toFixed(1)} mm`).toBeLessThanOrEqual(KEEP);
 }
 
 /** `dst` set as a keyframe holds `src`: pose, net state, solver state and parts, as `ClipSim.spawn` restores a car. */
@@ -118,7 +117,7 @@ for (const [style, cls] of STYLES) {
       ticks(w, 0.5);
       assertKept(`${style} thawed`, before, drawnNose(car));
       for (let t = 0; t < 6 && !car.asleep; t += 1 / FRAME_HZ) tickWorld(w);
-      assert.ok(car.asleep, `${style}: the wreck never fell asleep`);
+      expect(car.asleep, `${style}: the wreck never fell asleep`).toBeTruthy();
       car.wake();
       ticks(w, 0.5);
       assertKept(`${style} woken`, before, drawnNose(car));
@@ -143,7 +142,7 @@ for (const [style, cls] of STYLES) {
       launch(car, 6.2, 0, -Math.PI / 2, -50 / 3.6, 0);
       const w = makeWorld([car], true, false, FREEWHEEL);
       for (let t = 0; t < 3 && (!car.crashed || car.deform.crushing); t += 1 / FRAME_HZ) tickWorld(w);
-      assert.ok(car.crashed && !car.deform.crushing, `${style}: the hit's crash window never closed`);
+      expect(car.crashed && !car.deform.crushing, `${style}: the hit's crash window never closed`).toBeTruthy();
       w.pedals.set(car, GAS);
       let last = noseAsDrawn(car);
       let worst = 0;
@@ -154,7 +153,7 @@ for (const [style, cls] of STYLES) {
         last = now;
       }
       worst = Math.max(worst, Math.abs(drawnNose(car) - last));
-      assert.ok(worst <= KEEP, `${style}: the drawn nose jumped ${(worst * 1000).toFixed(1)} mm between frames`);
+      expect(worst, `${style}: the drawn nose jumped ${(worst * 1000).toFixed(1)} mm between frames`).toBeLessThanOrEqual(KEEP);
     });
   });
 }

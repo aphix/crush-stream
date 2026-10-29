@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { BETWEEN_STEPS_S, extendedPlanS, planText, quickPlanS } from "./bench-plan-time.ts";
 import { QUICK } from "./bench-measure.ts";
 import { ULTRA_AVAILABLE } from "./bench-loop.ts";
@@ -16,29 +15,29 @@ describe("given the planned lengths of the benches the start screen shows", () =
   it("when the quick bench is planned, with or without Ultra, then it is under the 4 minute bound and over 2 minutes of measuring", () => {
     for (const ultra of [false, true]) {
       const planned = quickPlanS(ultra);
-      assert.ok(planned < QUICK_BOUND_S, `${planned} s planned (ultra ${ultra})`);
-      assert.ok(planned > 4 * QUICK.windowS, `${planned} s is more than its four windows`);
+      expect(planned, `${planned} s planned (ultra ${ultra})`).toBeLessThan(QUICK_BOUND_S);
+      expect(planned, `${planned} s is more than its four windows`).toBeGreaterThan(4 * QUICK.windowS);
     }
   });
 
   it("when Ultra is on, then the quick bench's one sweep holds one more setting, and nothing else grows", () => {
-    assert.equal(quickPlanS(true) - quickPlanS(false), ULTRA_AVAILABLE ? QUICK.sweepStopS : 0);
+    expect(quickPlanS(true) - quickPlanS(false)).toBe(ULTRA_AVAILABLE ? QUICK.sweepStopS : 0);
   });
 
   it("when the quick bench has its pauses between pages, then they are the loop's own: three of them for four pages", () => {
     const pages = 4 * (QUICK.loadS + QUICK.countdownS + QUICK.windowS);
-    assert.equal(quickPlanS(false) - pages - 5 * QUICK.sweepStopS, 3 * BETWEEN_STEPS_S);
+    expect(quickPlanS(false) - pages - 5 * QUICK.sweepStopS).toBe(3 * BETWEEN_STEPS_S);
   });
 
   it("when the extended bench is planned, then a cycle is no longer than the measured one it replaces plus its quality A/Bs, and much longer than the quick bench", () => {
     for (const ultra of [false, true]) {
-      assert.ok(extendedPlanS(ultra) < EXTENDED_BOUND_S, `${extendedPlanS(ultra)} s planned against ${EXTENDED_BOUND_S} s (${EXTENDED_BEFORE_S} s measured plus the quality A/Bs, ultra ${ultra})`);
-      assert.ok(extendedPlanS(ultra) > 5 * quickPlanS(ultra), "the extended bench is the long one");
+      expect(extendedPlanS(ultra), `${extendedPlanS(ultra)} s planned against ${EXTENDED_BOUND_S} s (${EXTENDED_BEFORE_S} s measured plus the quality A/Bs, ultra ${ultra})`).toBeLessThan(EXTENDED_BOUND_S);
+      expect(extendedPlanS(ultra), "the extended bench is the long one").toBeGreaterThan(5 * quickPlanS(ultra));
     }
   });
 
   it("when a length is written for the start screen, then it is whole minutes with at least one", () => {
-    assert.equal(planText(150), "about 3 min");
-    assert.equal(planText(10), "about 1 min");
+    expect(planText(150)).toBe("about 3 min");
+    expect(planText(10)).toBe("about 1 min");
   });
 });

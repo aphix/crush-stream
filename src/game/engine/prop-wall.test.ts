@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { makeWorld, type World } from "../world/race-world.test-util.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -44,7 +43,7 @@ function alley() {
   const w = makeWorld();
   w.race.showLobby("havana");
   const panels = w.race["colliders"].filter((c) => c.prefab === "wall" && c.top - c.base > 1 && Math.abs(c.x - PANEL.x) < 1e-3);
-  assert.equal(panels.length, 5, "the alley wall is five panels in a row");
+  expect(panels.length, "the alley wall is five panels in a row").toBe(5);
   return w;
 }
 
@@ -71,10 +70,10 @@ describe("given a panel of the Havana alley wall (0.44 m thick) and a car with o
       const x0 = -40.45 - car.cage.fields.planBox[2]!;
       car.spawnFacing(x0, PANEL.z, 90 * D, 0);
       propContact(car, 0, w.race["solids"], w.race["knocked"], w.race["propHits"], 1 / QUIET_HZ);
-      assert.ok(car.group.position.x > x0, `pushed east, to x=${car.group.position.x.toFixed(3)}`);
+      expect(car.group.position.x, `pushed east, to x=${car.group.position.x.toFixed(3)}`).toBeGreaterThan(x0);
       const { past, inside } = reach(car);
-      assert.equal(past, 0, "no corner past the far face");
-      assert.ok(inside < 0.02, `${inside.toFixed(3)} m left in the slab`);
+      expect(past, "no corner past the far face").toBe(0);
+      expect(inside, `${inside.toFixed(3)} m left in the slab`).toBeLessThan(0.02);
     });
 
     it(`when a ${cls}'s flank corner is 0.2 m past the middle plane, then it is pushed out the near face too, with no corner past the far face`, () => {
@@ -83,8 +82,8 @@ describe("given a panel of the Havana alley wall (0.44 m thick) and a car with o
       const x0 = -40.45 + Math.max(-car.cage.fields.planBox[0]!, car.cage.fields.planBox[1]!);
       car.spawnFacing(x0, PANEL.z, 0, 0);
       propContact(car, 0, w.race["solids"], w.race["knocked"], w.race["propHits"], 1 / QUIET_HZ);
-      assert.ok(car.group.position.x > x0, `pushed east, to x=${car.group.position.x.toFixed(3)}`);
-      assert.equal(reach(car).past, 0);
+      expect(car.group.position.x, `pushed east, to x=${car.group.position.x.toFixed(3)}`).toBeGreaterThan(x0);
+      expect(reach(car).past).toBe(0);
     });
   }
 });
@@ -156,10 +155,10 @@ describe("given the Havana alley wall and a car swung into it with the handbrake
         const w = alley();
         for (const c of CASES) {
           const r = hit(w, cls, c, pinned);
-          assert.ok(r.past < 0.02, `${JSON.stringify(c)}: ${r.past.toFixed(2)} m past the far face`);
-          assert.ok(r.inside < 0.05, `${JSON.stringify(c)}: left ${r.inside.toFixed(2)} m inside the slab`);
+          expect(r.past, `${JSON.stringify(c)}: ${r.past.toFixed(2)} m past the far face`).toBeLessThan(0.02);
+          expect(r.inside, `${JSON.stringify(c)}: left ${r.inside.toFixed(2)} m inside the slab`).toBeLessThan(0.05);
           // Alone, a car that lived through the hit and stands on its wheels drives out of the wall. (A pinned car can lose its wheel hubs to the cop; that is the pair contact's, not the wall's. A truck that rolled onto its side has no tyre to drive on: under `UPRIGHT_UP_Y` the sim itself takes its springs off.)
-          if (!pinned && r.alive && r.upY >= UPRIGHT_UP_Y) assert.ok(r.off >= OFF_WALL, `${JSON.stringify(c)}: stuck, ${r.off.toFixed(2)} m off the wall's face ${RECOVER} s after the engine ran`);
+          if (!pinned && r.alive && r.upY >= UPRIGHT_UP_Y) expect(r.off, `${JSON.stringify(c)}: stuck, ${r.off.toFixed(2)} m off the wall's face ${RECOVER} s after the engine ran`).toBeGreaterThanOrEqual(OFF_WALL);
         }
       });
     }
@@ -178,8 +177,8 @@ describe("given the Havana alley wall and a physics step of 1/80 s (69 cm a step
         const w = alley();
         for (const c of CASES) {
           const r = hit(w, cls, c, pinned, QUIET_HZ);
-          assert.ok(r.past < 0.02, `${JSON.stringify(c)}: ${r.past.toFixed(2)} m past the far face`);
-          assert.ok(r.inside < 0.05, `${JSON.stringify(c)}: left ${r.inside.toFixed(2)} m inside the slab`);
+          expect(r.past, `${JSON.stringify(c)}: ${r.past.toFixed(2)} m past the far face`).toBeLessThan(0.02);
+          expect(r.inside, `${JSON.stringify(c)}: left ${r.inside.toFixed(2)} m inside the slab`).toBeLessThan(0.05);
         }
       });
     }
@@ -230,6 +229,6 @@ describe("given the Havana alley wall and a sedan driven into it at 40 m/s from 
       const r = wreckOnWall(lone);
       if (r.passes > 0) left.push(`${lone ? "lone" : "sliced"}: ${r.passes} passes, deepest ${r.deepest.toExponential(3)} m`);
     }
-    assert.deepEqual(left, [], "spheres left in the face");
+    expect(left, "spheres left in the face").toHaveLength(0);
   });
 });

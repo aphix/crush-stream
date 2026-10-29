@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
@@ -155,25 +154,25 @@ describe("given the real engine in the garage", () => {
   it("when it is entered from the fleet (driving or not), a mini game or a race, then it opens on its shot and the eye stays put idle, and a tap on the car, W and View leave the seat on the whole set and the eye and the car where they were", async () => {
     for (const from of ENTRIES) {
       await enter(from);
-      assert.equal(engine["sceneId"], "garage", from);
+      expect(engine["sceneId"], from).toBe("garage");
       const opening = eye();
       const { lookX, lookY, lookZ, radius: r, pitch } = GARAGE.shot;
       const shot = new THREE.Vector3(lookX + Math.sin(GARAGE.angle) * r * Math.cos(pitch), lookY + r * Math.sin(pitch), lookZ + Math.cos(GARAGE.angle) * r * Math.cos(pitch));
-      assert.ok(opening.distanceTo(shot) < STILL, `${from}: the eye opens ${opening.distanceTo(shot).toFixed(3)} m off the garage's shot`);
-      assert.ok(look().distanceTo(new THREE.Vector3(lookX, lookY, lookZ)) < STILL, `${from}: the orbit circles ${look().toArray().map((v) => v.toFixed(2)).join(", ")}, not the garage's shot`);
+      expect(opening.distanceTo(shot), `${from}: the eye opens ${opening.distanceTo(shot).toFixed(3)} m off the garage's shot`).toBeLessThan(STILL);
+      expect(look().distanceTo(new THREE.Vector3(lookX, lookY, lookZ)), `${from}: the orbit circles ${look().toArray().map((v) => v.toFixed(2)).join(", ")}, not the garage's shot`).toBeLessThan(STILL);
       runSeconds(engine, 5);
-      assert.ok(eye().distanceTo(opening) < STILL, `${from}: the idle eye moved ${eye().distanceTo(opening).toFixed(3)} m in 5 s`);
+      expect(eye().distanceTo(opening), `${from}: the idle eye moved ${eye().distanceTo(opening).toFixed(3)} m in 5 s`).toBeLessThan(STILL);
       engine.watchCar(0);
       engine["keys"].add("KeyW");
       runSeconds(engine, 0.5);
       engine["keys"].clear();
       engine.cycleCamera();
       runSeconds(engine, 0.5);
-      assert.equal(engine["seat"].mode, "global", `${from}: the seat`);
-      assert.equal(engine["view"].flying, false, `${from}: View flew the eye free`);
-      assert.equal(hud.get().cam, null, `${from}: the HUD names a camera`);
-      assert.ok(eye().distanceTo(opening) < STILL, `${from}: the tap, W and View moved the eye ${eye().distanceTo(opening).toFixed(3)} m`);
-      assert.ok(engine["carA"].group.position.length() < 0.01, `${from}: the car drove to ${engine["carA"].group.position.toArray().map((v) => v.toFixed(2)).join(", ")}`);
+      expect(engine["seat"].mode, `${from}: the seat`).toBe("global");
+      expect(engine["view"].flying, `${from}: View flew the eye free`).toBe(false);
+      expect(hud.get().cam, `${from}: the HUD names a camera`).toBe(null);
+      expect(eye().distanceTo(opening), `${from}: the tap, W and View moved the eye ${eye().distanceTo(opening).toFixed(3)} m`).toBeLessThan(STILL);
+      expect(engine["carA"].group.position.length(), `${from}: the car drove to ${engine["carA"].group.position.toArray().map((v) => v.toFixed(2)).join(", ")}`).toBeLessThan(0.01);
     }
   });
 
@@ -186,41 +185,41 @@ describe("given the real engine in the garage", () => {
     const turn = new THREE.Quaternion().fromArray(rows, 4);
     const local = look().sub(new THREE.Vector3().fromArray(rows, 0)).applyQuaternion(turn.invert()).sub(new THREE.Vector3(...PARTS[0].c));
     const [hx, hy, hz] = PARTS[0].h;
-    assert.ok(Math.abs(local.x) <= hx && Math.abs(local.y) <= hy && Math.abs(local.z) <= hz, `the centre sits ${local.toArray().map((v) => v.toFixed(2)).join(", ")} m off his torso's middle, outside its box`);
+    expect(Math.abs(local.x) <= hx && Math.abs(local.y) <= hy && Math.abs(local.z) <= hz, `the centre sits ${local.toArray().map((v) => v.toFixed(2)).join(", ")} m off his torso's middle, outside its box`).toBeTruthy();
     const centre = look();
     runSeconds(engine, 5);
-    assert.ok(look().distanceTo(centre) < STILL, "the centre went back to the car");
+    expect(look().distanceTo(centre), "the centre went back to the car").toBeLessThan(STILL);
     engine.frameGarage("car");
     runSeconds(engine, FRAME);
-    assert.ok(look().distanceTo(new THREE.Vector3(GARAGE.shot.lookX, GARAGE.shot.lookY, GARAGE.shot.lookZ)) < STILL, "the car's pick centres on the car's shot");
+    expect(look().distanceTo(new THREE.Vector3(GARAGE.shot.lookX, GARAGE.shot.lookY, GARAGE.shot.lookZ)), "the car's pick centres on the car's shot").toBeLessThan(STILL);
   });
 
   it("when the wheel or a pinch zooms in, then the orbit comes in to its shot's closest, the car's or the driver's, and in a race or the fleet no closer than before", async () => {
     await enter("fleet");
     wheelIn();
-    assert.equal(radius(), GARAGE.shot.minRadius, "the wheel on the car's shot");
+    expect(radius(), "the wheel on the car's shot").toBe(GARAGE.shot.minRadius);
     engine.frameGarage("person");
     pinchOut();
-    assert.equal(radius(), GARAGE.driverShot.minRadius, "a pinch on the driver's shot");
+    expect(radius(), "a pinch on the driver's shot").toBe(GARAGE.driverShot.minRadius);
     engine["setScene"]("race");
     runSeconds(engine, FRAME);
     wheelIn();
-    assert.equal(radius(), ORBIT_RADIUS.min, "a race's wheel, straight from the driver's shot");
+    expect(radius(), "a race's wheel, straight from the driver's shot").toBe(ORBIT_RADIUS.min);
     engine["setScene"]("fleet");
     runSeconds(engine, FRAME);
     wheelIn();
-    assert.equal(radius(), ORBIT_RADIUS.min, "the fleet's wheel");
+    expect(radius(), "the fleet's wheel").toBe(ORBIT_RADIUS.min);
   });
 
   it("when the fleet's cars are left for the garage, then the garage holds the player's car alone, and the fleet gets all of them back", async () => {
     await enter("fleet");
     const fleet = engine["sandboxCars"];
-    assert.ok(fleet > 1, `the fleet has ${fleet} cars`);
-    assert.equal(engine["cars"].length, 1, "cars in the garage");
+    expect(fleet, `the fleet has ${fleet} cars`).toBeGreaterThan(1);
+    expect(engine["cars"].length, "cars in the garage").toBe(1);
     engine["setScene"]("fleet");
     runSeconds(engine, FRAME);
-    assert.equal(engine["cars"].length, fleet, "cars back in the fleet");
-    assert.equal(engine["live"]().length, fleet, "and all of them shown");
+    expect(engine["cars"].length, "cars back in the fleet").toBe(fleet);
+    expect(engine["live"]().length, "and all of them shown").toBe(fleet);
   });
 
   it("when it is entered, then no driver sits in the car (the standing dummy is the driver), and back in the fleet the drivers sit in their cars again", async () => {
@@ -233,22 +232,29 @@ describe("given the real engine in the garage", () => {
     };
     engine["setScene"]("fleet");
     runSeconds(engine, FRAME);
-    assert.ok(seated() > 0, "control: the fleet's drivers sit in their cars");
+    expect(seated(), "control: the fleet's drivers sit in their cars").toBeGreaterThan(0);
     await enter("fleet");
-    assert.equal(seated(), 0, "a driver sits in the garage's car");
-    assert.ok(engine["garage"]!.art.dummy.visible, "the standing dummy is shown");
+    expect(seated(), "a driver sits in the garage's car").toBe(0);
+    expect(engine["garage"]!.art.dummy.visible, "the standing dummy is shown").toBeTruthy();
     engine["setScene"]("fleet");
     runSeconds(engine, FRAME);
-    assert.ok(seated() > 0, "the drivers sit again in the fleet");
+    expect(seated(), "the drivers sit again in the fleet").toBeGreaterThan(0);
   });
 
   it("when the can is on, then a stroke paints only what the panel edits: the other one drops out of the ray, so it never blocks or takes paint", async () => {
     await enter("fleet");
     engine.setSprayTool({ on: true });
-    assert.deepEqual(stroke("person", ["carOnly", "carOnly"]), { sprayed: false, car: false, person: false }, "Driver picked, a stroke over the car");
-    assert.deepEqual(stroke("person", ["driverBehind", "driverBehind"], FAR_SIDE), { sprayed: true, car: false, person: true }, "Driver picked, a stroke over him behind the car");
-    assert.deepEqual(stroke("car", ["driverFront", "carOnly"]), { sprayed: true, car: true, person: false }, "Car picked, a stroke from him in front of the car across the car");
-    assert.deepEqual(stroke("car", ["driverOnly", "driverOnly"]), { sprayed: false, car: false, person: false }, "Car picked, a stroke over him alone");
+    const rows = [
+      { got: stroke("person", ["carOnly", "carOnly"]), sprayed: false, car: false, person: false, why: "Driver picked, a stroke over the car" },
+      { got: stroke("person", ["driverBehind", "driverBehind"], FAR_SIDE), sprayed: true, car: false, person: true, why: "Driver picked, a stroke over him behind the car" },
+      { got: stroke("car", ["driverFront", "carOnly"]), sprayed: true, car: true, person: false, why: "Car picked, a stroke from him in front of the car across the car" },
+      { got: stroke("car", ["driverOnly", "driverOnly"]), sprayed: false, car: false, person: false, why: "Car picked, a stroke over him alone" },
+    ];
+    for (const row of rows) {
+      expect(row.got.sprayed, `${row.why}: sprayed`).toBe(row.sprayed);
+      expect(row.got.car, `${row.why}: car took paint`).toBe(row.car);
+      expect(row.got.person, `${row.why}: person took paint`).toBe(row.person);
+    }
     engine.setSprayTool({ on: false });
   });
 
@@ -280,11 +286,11 @@ describe("given the real engine in the garage", () => {
     };
     const first = spray(SPRAY_PALETTE[4]!);
     const second = spray(0x123456);
-    assert.notEqual(Buffer.compare(first, second), 0, "the second stroke changed the bitmap");
+    expect(Buffer.compare(first, second), "the second stroke changed the bitmap").not.toBe(0);
     engine.undoSpray();
     assertSameNumbers(bitmap.rgba, first, "undone: the bitmap after the first stroke");
     assertSameNumbers(reloaded(), first, "undone: what storage keeps");
-    assert.equal(hud.get().garage?.redo, 1, "one stroke to redo");
+    expect(hud.get().garage?.redo, "one stroke to redo").toBe(1);
     engine.redoSpray();
     assertSameNumbers(bitmap.rgba, second, "redone: the bitmap after the second stroke");
     assertSameNumbers(reloaded(), second, "redone: what storage keeps");
@@ -293,7 +299,7 @@ describe("given the real engine in the garage", () => {
     engine.redoSpray();
     assertSameNumbers(bitmap.rgba, third, "a new stroke dropped the redo chain");
     engine.clearSpray("car");
-    assert.equal(bitmap.painted(), false, "cleared");
+    expect(bitmap.painted(), "cleared").toBe(false);
     engine.undoSpray();
     assertSameNumbers(bitmap.rgba, third, "the clear undone");
     await enter("fleet");
@@ -321,15 +327,15 @@ describe("given the real engine in the garage", () => {
           garage.move({ clientX: at.x + 15, clientY: at.y + 5 });
           garage.up();
           const bitmap = engine["looks"].sprayOf(edit);
-          assert.ok(bitmap.painted(), `${edit}: the stroke painted`);
+          expect(bitmap.painted(), `${edit}: the stroke painted`).toBeTruthy();
           const off = asymmetry(bitmap);
           if (!mirror) {
-            assert.ok(off > 0, `${edit}: the stroke alone is already symmetric, so the row proves nothing`);
+            expect(off, `${edit}: the stroke alone is already symmetric, so the row proves nothing`).toBeGreaterThan(0);
             continue;
           }
-          assert.equal(off, 0, `${edit}: ${off} painted texels without their mirror`);
+          expect(off, `${edit}: ${off} painted texels without their mirror`).toBe(0);
           engine.undoSpray();
-          assert.equal(bitmap.painted(), false, `${edit}: one undo took both halves`);
+          expect(bitmap.painted(), `${edit}: one undo took both halves`).toBe(false);
         }
       }
     } finally {
@@ -347,13 +353,13 @@ describe("given the real engine in the garage", () => {
     const look = (): string => `${personPickText(engine["looks"].mine.person)} ${carPickText(engine["looks"].mine.car)}`;
     const chosenLook = look();
     engine["applyShare"](decodeShare(""), false);
-    assert.equal(look(), chosenLook, "a bare link");
+    expect(look(), "a bare link").toBe(chosenLook);
     const reloaded = new PlayerLooks();
-    assert.equal(personPickText(reloaded.mine.person), personPickText({ ...NO_PERSON_PICK, ...chosen }), "what the next visit starts with");
+    expect(personPickText(reloaded.mine.person), "what the next visit starts with").toBe(personPickText({ ...NO_PERSON_PICK, ...chosen }));
     reloaded.dispose();
     engine["applyShare"](decodeShare(`pk=${personPickText({ ...NO_PERSON_PICK, woman: false })}`), false);
-    assert.equal(look(), `${personPickText({ ...NO_PERSON_PICK, woman: false })} ${carPickText(engine["looks"].mine.car)}`, "a link naming the driver");
-    assert.ok(look().endsWith(carPickText({ ...NO_CAR_PICK, body: 0xff0000 })), "the car's pick kept");
+    expect(look(), "a link naming the driver").toBe(`${personPickText({ ...NO_PERSON_PICK, woman: false })} ${carPickText(engine["looks"].mine.car)}`);
+    expect(look().endsWith(carPickText({ ...NO_CAR_PICK, body: 0xff0000 })), "the car's pick kept").toBeTruthy();
     engine.setPersonPick(NO_PERSON_PICK);
     engine.setCarColour("body", null);
   });

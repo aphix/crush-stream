@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { skinKernel } from "../deform/skin-kernel.ts";
 import { loadSkinKernelForTest } from "../deform/skin-kernel.test-util.ts";
 import { COUNTER_COUNT, summarize, type BenchParts, type Samples, type Window } from "./bench-measure.ts";
@@ -22,9 +21,9 @@ const card = () => summarize(PARTS, PLAN, SAMPLES, WINDOW, {} as never);
 
 describe("given the bench card assembled from a run", () => {
   it("when the skin kernel is not loaded, then the card says skinKernel false; once it loads, true", async () => {
-    assert.equal(skinKernel(), null, "this file runs without the preload");
-    assert.equal(card().skinKernel, false);
+    expect(skinKernel(), "this file runs without the preload").toBe(null);
+    expect(card().skinKernel).toBe(false);
     await loadSkinKernelForTest();
-    assert.equal(card().skinKernel, true);
+    expect(card().skinKernel).toBe(true);
   });
 });

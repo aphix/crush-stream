@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { recordFlat, type Spawn } from "./replay-fidelity.test-util.ts";
 import { ClipSim } from "./engine-replay.ts";
@@ -154,13 +153,13 @@ describe("given a crash replayed in slow motion from its clip", () => {
       const every = shares(frame, 0);
       const skipping = shares(frame, 1);
       // The skipping run must be one that skips (parts posed only when their inputs changed), or it proves nothing about presentSkip. The cars move all through this clip, so it skips little (a still wreck skips almost every pose: pose-skip.test.ts).
-      assert.ok(skipping.calls < every.calls, `${skipping.calls} part poses with presentSkip against ${every.calls} without`);
+      expect(skipping.calls, `${skipping.calls} part poses with presentSkip against ${every.calls} without`).toBeLessThan(every.calls);
       for (const [name, { rows: s }] of [["presentSkip 0", every], ["presentSkip 1", skipping]] as const) {
         const rows = (Object.keys(s) as Class[]).map((c) => `${c} ${s[c].changed}/${s[c].moving}`).join(", ");
-        assert.ok(s.part.moving > 100, `${name}: the clip sheds parts that move (${rows})`);
-        assert.ok(s.hinged.moving > 20, `${name}: the clip moves parts that are still on the car (${rows})`);
-        assert.ok(s.wheel.moving > 100 && s.classLift.moving > 100 && s.group.moving > 100 && s.skin.moving > 100, `${name}: ${rows}`);
-        for (const c of Object.keys(s) as Class[]) assert.ok(s[c].changed >= BAR * s[c].moving, `${name}, ${c}: ${(s[c].changed / s[c].moving).toFixed(3)} of its moving frames change (${rows})`);
+        expect(s.part.moving, `${name}: the clip sheds parts that move (${rows})`).toBeGreaterThan(100);
+        expect(s.hinged.moving, `${name}: the clip moves parts that are still on the car (${rows})`).toBeGreaterThan(20);
+        expect(s.wheel.moving > 100 && s.classLift.moving > 100 && s.group.moving > 100 && s.skin.moving > 100, `${name}: ${rows}`).toBeTruthy();
+        for (const c of Object.keys(s) as Class[]) expect(s[c].changed, `${name}, ${c}: ${(s[c].changed / s[c].moving).toFixed(3)} of its moving frames change (${rows})`).toBeGreaterThanOrEqual(BAR * s[c].moving);
       }
     });
   }
@@ -180,7 +179,7 @@ describe("given a crash replayed in slow motion from its clip", () => {
     const before = poses();
     sim.present(sim.time - 0.001);
     const drawn = poses();
-    assert.ok(drawn.some((v, i) => v !== before[i]), "the drawn pose is between the steps");
+    expect(drawn.some((v, i) => v !== before[i]), "the drawn pose is between the steps").toBeTruthy();
     rec.scene.blend.restore();
     assertSameNumbers(poses(), before, "the sim's own pose handed back");
   });

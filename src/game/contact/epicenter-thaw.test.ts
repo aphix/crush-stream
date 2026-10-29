@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { EPICENTER,  epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
@@ -26,7 +25,7 @@ function wreck(): DeformableCar {
   layOnGround(car);
   const w = makeWorld([car], true, false, FREEWHEEL);
   run(w, [new Probe(car, car.velocity)], 1.5);
-  assert.ok(car.deform.massActive && car.deform.quietTime() > 0.35, "the wreck is not quiet");
+  expect(car.deform.massActive && car.deform.quietTime() > 0.35, "the wreck is not quiet").toBeTruthy();
   return car;
 }
 
@@ -52,9 +51,9 @@ describe("given a wreck that has been frozen", () => {
   ];
   for (const [name, call] of writers) {
     it(`when ${name} writes to it, then it is thawed`, () => {
-      assert.ok(frozen());
+      expect(frozen()).toBeTruthy();
       call();
-      assert.equal(d.frozen, false);
+      expect(d.frozen).toBe(false);
     });
   }
 
@@ -68,35 +67,35 @@ describe("given a wreck that has been frozen", () => {
   ];
   for (const [name, call] of silent) {
     it(`when ${name} is called, then it stays frozen`, () => {
-      assert.ok(frozen());
+      expect(frozen()).toBeTruthy();
       call();
-      assert.equal(d.frozen, true);
+      expect(d.frozen).toBe(true);
     });
   }
 
   it("when epi.feedMin is 0 (today), then a small resting feed (a few millimetres of overlap) thaws the wreck, the cost of a pile that feeds crush every slice", () => {
-    assert.ok(frozen());
+    expect(frozen()).toBeTruthy();
     const kept = EPICENTER.feedMin;
     try {
       EPICENTER.feedMin = 0;
       d.feedOverlap(AT, IN, 0.003, 0.001);
-      assert.equal(d.frozen, false);
-      assert.equal(d.crushDropped, 0);
+      expect(d.frozen).toBe(false);
+      expect(d.crushDropped).toBe(0);
     } finally {
       EPICENTER.feedMin = kept;
     }
   });
 
   it("when epi.feedMin is 1 cm, then the same small feed is dropped and counted and the wreck stays frozen, and a real feed (over the limit) thaws it as ever", () => {
-    assert.ok(frozen());
+    expect(frozen()).toBeTruthy();
     const kept = EPICENTER.feedMin;
     try {
       EPICENTER.feedMin = 0.01;
       d.feedOverlap(AT, IN, 0.003, 0.001);
-      assert.equal(d.frozen, true);
-      assert.ok(d.crushDropped > 1e-5 && d.crushDropped < 0.01, `dropped ${d.crushDropped} m`);
+      expect(d.frozen).toBe(true);
+      expect(d.crushDropped > 1e-5 && d.crushDropped < 0.01, `dropped ${d.crushDropped} m`).toBeTruthy();
       d.feedOverlap(AT, IN, 0.3, 8);
-      assert.equal(d.frozen, false);
+      expect(d.frozen).toBe(false);
     } finally {
       EPICENTER.feedMin = kept;
     }
@@ -116,12 +115,12 @@ describe("given the guard that checks frozen cars", () => {
       const w = makeWorld([car], true, false, FREEWHEEL);
       run(w, [new Probe(car, car.velocity)], 1.5);
       const d = car.deform;
-      assert.ok(d.frozen, "the wreck froze");
+      expect(d.frozen, "the wreck froze").toBeTruthy();
       d.stepFrozen(1 / FINE_HZ, car.group);
-      assert.equal(d.frozenBreaches, 0, "an untouched frozen car breached");
+      expect(d.frozenBreaches, "an untouched frozen car breached").toBe(0);
       d.masses[3]!.local.x += 0.01;
       d.stepFrozen(1 / FINE_HZ, car.group);
-      assert.equal(d.frozenBreaches, 1, "a moved mass went unnoticed");
+      expect(d.frozenBreaches, "a moved mass went unnoticed").toBe(1);
     } finally {
       loadEpicenter(saved);
     }
@@ -139,13 +138,13 @@ describe("given the guard that checks frozen cars", () => {
       const w = makeWorld([car], true, false, FREEWHEEL);
       run(w, [new Probe(car, car.velocity)], 1.5);
       const d = car.deform;
-      assert.ok(d.frozen, "the wreck froze");
+      expect(d.frozen, "the wreck froze").toBeTruthy();
       d.frozenReady = false;
       d.masses.find((m) => m.hub)!.world.x += 0.16;
       d.stepFrozen(1 / FINE_HZ, car.group, true);
-      assert.equal(d.frozenBreaches, 0, "a sleeper never re-derived was counted");
+      expect(d.frozenBreaches, "a sleeper never re-derived was counted").toBe(0);
       d.stepFrozen(1 / FINE_HZ, car.group, false);
-      assert.equal(d.frozenBreaches, 1, "an awake wreck with a mass off its frame went unnoticed");
+      expect(d.frozenBreaches, "an awake wreck with a mass off its frame went unnoticed").toBe(1);
     } finally {
       loadEpicenter(saved);
     }
@@ -163,10 +162,10 @@ describe("given the guard that checks frozen cars", () => {
       const w = makeWorld([car], true, false, FREEWHEEL);
       run(w, [new Probe(car, car.velocity)], 1.5);
       const d = car.deform;
-      assert.ok(d.frozen && d.frozenReady, "the wreck froze with its centre cached");
-      assert.equal(d.frozenBreaches, 0, "the run itself breached");
+      expect(d.frozen && d.frozenReady, "the wreck froze with its centre cached").toBeTruthy();
+      expect(d.frozenBreaches, "the run itself breached").toBe(0);
       car.syncPose(0);
-      assert.equal(d.frozenBreaches, 1, "a clamp after the cache went unnoticed");
+      expect(d.frozenBreaches, "a clamp after the cache went unnoticed").toBe(1);
     } finally {
       loadEpicenter(saved);
     }
@@ -182,10 +181,10 @@ describe("given the guard that checks frozen cars", () => {
       layOnGround(car);
       const w = makeWorld([car], true, false, FREEWHEEL);
       run(w, [new Probe(car, car.velocity)], 1.5);
-      assert.ok(car.deform.frozen && car.deform.frozenReady, "the wreck froze with its centre cached");
+      expect(car.deform.frozen && car.deform.frozenReady, "the wreck froze with its centre cached").toBeTruthy();
       car.spawnFacing(0, 0, 0, 0);
-      assert.equal(car.deform.frozen, false, "frozen after a respawn");
-      assert.equal(car.deform.frozenReady, false, "the cached centre survived a respawn");
+      expect(car.deform.frozen, "frozen after a respawn").toBe(false);
+      expect(car.deform.frozenReady, "the cached centre survived a respawn").toBe(false);
     } finally {
       loadEpicenter(saved);
     }
@@ -203,14 +202,14 @@ describe("given the guard that checks frozen cars", () => {
       const w = makeWorld([car], true, false, FREEWHEEL);
       run(w, [new Probe(car, car.velocity)], 6);
       const d = car.deform;
-      assert.ok(d.frozen && d.frozenReady && car.asleep, `the wreck froze (${d.frozen}) with its centre cached (${d.frozenReady}) and fell asleep (${car.asleep})`);
+      expect(d.frozen && d.frozenReady && car.asleep, `the wreck froze (${d.frozen}) with its centre cached (${d.frozenReady}) and fell asleep (${car.asleep})`).toBeTruthy();
       for (let i = 0; i < 50; i++) {
         applyDrive(car, { ...idleDrive(), steer: 1 }, 1 / FINE_HZ);
         car.integrate(1 / FINE_HZ);
         d.stepFrozen(1 / FINE_HZ, car.group);
       }
-      assert.ok(car.asleep, "the wreck woke: the row would not tell a frame turned alone from one turned with its masses");
-      assert.equal(d.frozenBreaches, 0, `a mass stood ${d.breachOffMax} m (${d.breachOffName}) off its frame`);
+      expect(car.asleep, "the wreck woke: the row would not tell a frame turned alone from one turned with its masses").toBeTruthy();
+      expect(d.frozenBreaches, `a mass stood ${d.breachOffMax} m (${d.breachOffName}) off its frame`).toBe(0);
     } finally {
       loadEpicenter(saved);
     }

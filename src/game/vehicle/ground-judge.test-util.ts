@@ -1,5 +1,4 @@
-import { type TestContext } from "vitest";
-import assert from "node:assert/strict";
+import { expect, type TestContext } from "vitest";
 import { DEG, drop, MATRIX_HEAD, matrixRow, type Cell } from "./ground-probe.test-util.ts";
 import type { VehicleClassId } from "./vehicle-classes.ts";
 import { blankPoint, pointOn, type Track } from "../world/track.ts";
@@ -131,5 +130,5 @@ export function report(t: TestContext, sites: readonly Site[]): void {
   const summary = `${failing.length} of ${cells} cells fail${failing.length ? ` (${[...counts].map(([f, n]) => `${f} ${n}`).join(", ")})` : ""}; pose unjudged on ${edge} edge cells (hubs straddle a step); ${rolled} cells rolled past ${ROLLED}° (judged on the hull only)`;
   t.annotate(`\n${rows.join("\n")}`);
   t.annotate(summary);
-  assert.ok(failing.length === 0, `${summary}: ${failing.slice(0, 12).join("; ")}${failing.length > 12 ? "; …" : ""}`);
+  expect(failing.length, `${summary}: ${failing.slice(0, 12).join("; ")}${failing.length > 12 ? "; …" : ""}`).toBe(0);
 }

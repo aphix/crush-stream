@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
@@ -142,17 +141,17 @@ describe("given a car that has not been in a crash", () => {
     it(`when it is a ${testCase.it}, then only its rest caster${testCase.bar ? " and its light bar cast" : " casts"} a shadow and the shadow covers the ground the whole car's would, to within 1.2 % either way`, () => {
       const car = standingCar(testCase.style);
       const casting = castingMeshes(car);
-      assert.equal(casting.length, testCase.bar ? 1 : 0, `${casting.length} meshes of its own cast`);
-      assert.ok(car.restCasts, "the rest caster casts");
+      expect(casting.length, `${casting.length} meshes of its own cast`).toBe(testCase.bar ? 1 : 0);
+      expect(car.restCasts, "the rest caster casts").toBeTruthy();
       const rest = new THREE.Mesh(car.restCaster, shadowOnlyMaterial());
       car.group.add(rest);
       const whole = sunCoverage([car.body, ...car.flushCasters], car.group.position);
       const caster = sunCoverage([rest], car.group.position);
       const gap = uncovered(whole, caster);
       const spill = uncovered(caster, whole);
-      assert.ok(gap.of > 2000, `the whole car fills ${gap.of} texels`);
-      assert.ok(gap.missing / gap.of <= UNDAMAGED_MISSING_MAX, `${gap.missing} of ${gap.of} texels left lit`);
-      assert.ok(spill.missing / gap.of <= UNDAMAGED_MISSING_MAX, `${spill.missing} texels shaded beyond the car's ${gap.of}`);
+      expect(gap.of, `the whole car fills ${gap.of} texels`).toBeGreaterThan(2000);
+      expect(gap.missing / gap.of, `${gap.missing} of ${gap.of} texels left lit`).toBeLessThanOrEqual(UNDAMAGED_MISSING_MAX);
+      expect(spill.missing / gap.of, `${spill.missing} texels shaded beyond the car's ${gap.of}`).toBeLessThanOrEqual(UNDAMAGED_MISSING_MAX);
     });
   }
 
@@ -160,7 +159,7 @@ describe("given a car that has not been in a crash", () => {
     it(`when it is a ${style}, then its shadow caster holds at most ${CASTER_TRIANGLES_MAX} triangles`, () => {
       const index = standingCar(style).restCaster.index;
       const triangles = index ? index.count / 3 : 0;
-      assert.ok(triangles > 0 && triangles <= CASTER_TRIANGLES_MAX, `${triangles} triangles`);
+      expect(triangles > 0 && triangles <= CASTER_TRIANGLES_MAX, `${triangles} triangles`).toBeTruthy();
     });
   }
 });
@@ -176,7 +175,7 @@ describe("given a car", () => {
     it(`when ${testCase.it}, then its hood, boot lid, doors and bumpers cast shadows as they are`, () => {
       const car = standingCar("sedan");
       hitAndSettle(car, testCase.side, testCase.speed, testCase.frames);
-      for (const part of car.flushCasters) assert.ok(part.castShadow, "a flush part does not cast after the hit, torn off or not");
+      for (const part of car.flushCasters) expect(part.castShadow, "a flush part does not cast after the hit, torn off or not").toBeTruthy();
     });
   }
 
@@ -184,7 +183,7 @@ describe("given a car", () => {
     const car = standingCar("sedan");
     car.setDoorOpen(1, 0.6);
     car.updateSkin();
-    for (const part of car.flushCasters) assert.ok(part.castShadow, "a flush part does not cast with a door open");
+    for (const part of car.flushCasters) expect(part.castShadow, "a flush part does not cast with a door open").toBeTruthy();
   });
 
   it("when it is hit and then put back on the grid, then only its rest caster casts a shadow again", () => {
@@ -194,6 +193,6 @@ describe("given a car", () => {
     car.group.updateMatrixWorld(true);
     car.updateSkin();
     const casting = castingMeshes(car);
-    assert.ok(casting.length === 0 && car.restCasts, `${casting.length} meshes of its own cast`);
+    expect(casting.length === 0 && car.restCasts, `${casting.length} meshes of its own cast`).toBeTruthy();
   });
 });

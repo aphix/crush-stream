@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
@@ -110,11 +109,11 @@ describe("given the real engine in a race, lit for a time of day", () => {
       const drawn0 = drawn;
       const writes = colorWrites(watchedColors(), () => run(FRAMES));
       for (const [, light] of lights) Object.defineProperty(light, "intensity", { configurable: true, writable: true, enumerable: true, value: light.intensity });
-      assert.ok(drawn - drawn0 >= FRAMES, "the frames were drawn (the dome's per-draw callback ran with them)");
-      assert.equal(Object.keys(writes).length, 0, `colour writes ${JSON.stringify(writes)}`);
-      for (const [label] of lights) assert.equal(intensityWrites[label], 0, `${label} intensity writes`);
-      assert.equal(projection.mock.calls.length, 0, "shadow camera projection rebuilds");
-      assert.equal(cross.mock.calls.length, 0, "cross products (the sun's axes are made when the time of day is set)");
+      expect(drawn - drawn0, "the frames were drawn (the dome's per-draw callback ran with them)").toBeGreaterThanOrEqual(FRAMES);
+      expect(Object.keys(writes).length, `colour writes ${JSON.stringify(writes)}`).toBe(0);
+      for (const [label] of lights) expect(intensityWrites[label], `${label} intensity writes`).toBe(0);
+      expect(projection.mock.calls.length, "shadow camera projection rebuilds").toBe(0);
+      expect(cross.mock.calls.length, "cross products (the sun's axes are made when the time of day is set)").toBe(0);
     });
   }
 
@@ -122,18 +121,18 @@ describe("given the real engine in a race, lit for a time of day", () => {
     race(TRACK_ID.city, TIME_OF_DAY.day);
     const writes = colorWrites(watchedColors(), () => stage().setNight(true));
     for (const label of ["background", "fog", "sun", "hemisphere", "fill", "dome haze"]) {
-      assert.ok(Object.keys(writes).some((k) => k.startsWith(`${label}.`)), `${label} written`);
+      expect(Object.keys(writes).some((k) => k.startsWith(`${label}.`)), `${label} written`).toBeTruthy();
     }
-    assert.ok(hazeOf().equals(scene().fog!.color), "the haze is the fog's colour, without a frame between");
-    assert.ok(stage().time === TIME_OF_DAY.night, "night");
+    expect(hazeOf().equals(scene().fog!.color), "the haze is the fog's colour, without a frame between").toBeTruthy();
+    expect(stage().time, "night").toBe(TIME_OF_DAY.night);
   });
 
   it("when the sun is set for each time of day, then its right and up axes are unit, square to each other and to its offset", () => {
     for (const time of [TIME_OF_DAY.day, TIME_OF_DAY.sunset, TIME_OF_DAY.night]) {
       stage().setTime(time);
       const { sunRight, sunUp, sunOffset } = stage();
-      assert.ok(Math.abs(sunRight.length() - 1) < 1e-9 && Math.abs(sunUp.length() - 1) < 1e-9, `${time}: unit axes`);
-      assert.ok(Math.abs(sunRight.dot(sunOffset)) < 1e-9 && Math.abs(sunUp.dot(sunOffset)) < 1e-9 && Math.abs(sunRight.dot(sunUp)) < 1e-9, `${time}: square axes`);
+      expect(Math.abs(sunRight.length() - 1) < 1e-9 && Math.abs(sunUp.length() - 1) < 1e-9, `${time}: unit axes`).toBeTruthy();
+      expect(Math.abs(sunRight.dot(sunOffset)) < 1e-9 && Math.abs(sunUp.dot(sunOffset)) < 1e-9 && Math.abs(sunRight.dot(sunUp)) < 1e-9, `${time}: square axes`).toBeTruthy();
     }
   });
 
@@ -144,6 +143,6 @@ describe("given the real engine in a race, lit for a time of day", () => {
       const materials = Array.isArray((o as THREE.Mesh).material) ? ((o as THREE.Mesh).material as THREE.Material[]) : (o as THREE.Mesh).material ? [(o as THREE.Mesh).material as THREE.Material] : [];
       for (const m of materials) if (m.transparent && m.side === THREE.DoubleSide && !m.forceSinglePass) twoPass.push(`${m.type} on ${o.type} "${o.name}"`);
     });
-    assert.equal(twoPass.length, 0, `materials that would be drawn twice: ${twoPass.join(", ")}`);
+    expect(twoPass.length, `materials that would be drawn twice: ${twoPass.join(", ")}`).toBe(0);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
 import { DT, dummyGeom } from "../vehicle/test-support.ts";
@@ -24,8 +23,8 @@ function spinningWreckPastItsHit(): WreckRig {
 describe("given a wreck spinning at 5 rad/s whose last contact was a glancing hit", () => {
   it("when its drivetrain lives and the contact window closes, then its tyres own the turn and the body keeps none", () => {
     const rig = spinningWreckPastItsHit();
-    assert.ok(rig.d.drivetrainAlive, "the drivetrain lives");
+    expect(rig.d.drivetrainAlive, "the drivetrain lives").toBeTruthy();
     while (rig.d.quietTime() < WINDOW_CLOSED_S) stepWreck(rig, DT);
-    assert.equal(rig.omega.y, 0, "the body's spin once the tyres own the turn");
+    expect(rig.omega.y, "the body's spin once the tyres own the turn").toBe(0);
   });
 });

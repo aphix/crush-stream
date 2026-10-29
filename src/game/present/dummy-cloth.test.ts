@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { DECAL_FACE_AT, DECAL_FLAT, DECAL_H, DECAL_HALF_X, DECAL_HALF_Z, DECAL_NO_PAINT, DECAL_RAISE_STEP, DECAL_W, DECAL_Y, decalMap, FABRIC, fabricTexels } from "./dummy-cloth.ts";
 import type { Decal } from "./dummy-rig.ts";
 
@@ -36,8 +35,8 @@ describe("given the fabric tiles", () => {
           wrap = Math.max(wrap, i + 1 < tile ? 0 : right, j + 1 < tile ? 0 : down);
         }
       }
-      assert.ok(inside > 0, "the tile has relief");
-      assert.ok(wrap <= inside, `the wrap steps ${wrap}, the largest step inside is ${inside}`);
+      expect(inside, "the tile has relief").toBeGreaterThan(0);
+      expect(wrap, `the wrap steps ${wrap}, the largest step inside is ${inside}`).toBeLessThanOrEqual(inside);
     });
   }
 });
@@ -63,21 +62,21 @@ describe("given an outfit's decals baked into the decal layers", () => {
 
   it("when a filled rect on the front is read, then its middle carries its shade and raise and no paint, a texel past it and the other layer's same texel are flat", () => {
     const [red, green, blue] = texelAt(data, 0, "+z", middleX, middleY);
-    assert.equal(red, Math.round(DECAL_FLAT * FILLED.shade), "shade");
-    assert.equal(green, Math.round(DECAL_FLAT + FILLED.raise / DECAL_RAISE_STEP), "raise");
-    assert.equal(blue, DECAL_NO_PAINT, "no paint");
-    assert.equal(texelAt(data, 0, "+z", FILLED.x1 + OUTSIDE, middleY).join(","), FLAT, "outside the rect");
-    assert.equal(texelAt(data, 1, "+z", middleX, middleY).join(","), FLAT, "the other layer");
+    expect(red, "shade").toBe(Math.round(DECAL_FLAT * FILLED.shade));
+    expect(green, "raise").toBe(Math.round(DECAL_FLAT + FILLED.raise / DECAL_RAISE_STEP));
+    expect(blue, "no paint").toBe(DECAL_NO_PAINT);
+    expect(texelAt(data, 0, "+z", FILLED.x1 + OUTSIDE, middleY).join(","), "outside the rect").toBe(FLAT);
+    expect(texelAt(data, 1, "+z", middleX, middleY).join(","), "the other layer").toBe(FLAT);
   });
 
   it("when a painted border on his right side is read, then its middle has no cover and no relief, and its band carries the painted role at full cover on that side's columns", () => {
     const middle = texelAt(data, 1, "-x", (BORDER.x0 + BORDER.x1) / 2, (BORDER.y0 + BORDER.y1) / 2);
-    assert.equal(middle[0], DECAL_FLAT, "middle shade");
-    assert.equal(middle[1], DECAL_FLAT, "middle raise");
-    assert.equal(middle[3], 0, "middle cover");
+    expect(middle[0], "middle shade").toBe(DECAL_FLAT);
+    expect(middle[1], "middle raise").toBe(DECAL_FLAT);
+    expect(middle[3], "middle cover").toBe(0);
     const band = texelAt(data, 1, "-x", BORDER.x0 + IN_BAND, (BORDER.y0 + BORDER.y1) / 2);
-    assert.equal(band[2], BORDER.paint, "band paint");
-    assert.equal(band[3], 255, "band cover");
-    assert.equal(texelAt(data, 1, "+z", BORDER.x0 + IN_BAND, (BORDER.y0 + BORDER.y1) / 2).join(","), FLAT, "the front's same texel");
+    expect(band[2], "band paint").toBe(BORDER.paint);
+    expect(band[3], "band cover").toBe(255);
+    expect(texelAt(data, 1, "+z", BORDER.x0 + IN_BAND, (BORDER.y0 + BORDER.y1) / 2).join(","), "the front's same texel").toBe(FLAT);
   });
 });

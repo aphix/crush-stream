@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import { runField } from "./derby-field.test-util.ts";
 import { SPIN_RATE_BAR } from "./vertical-turn.test-util.ts";
 
@@ -28,23 +27,23 @@ describe(`given ten AI cars at the default aggression, one fixed heat (seed ${SE
     `zips ${r.zips.length} max ${(r.zipMax * 100).toFixed(1)} cm [${r.zips.join("; ")}]; contact peak ${r.contactPeak.rate.toFixed(2)} rad/s (${r.contactPeak.note})`;
 
   it("when the heat is played, then the AI's own driving never spins a car faster than 5 rad/s for 0.2 s", () => {
-    assert.deepEqual(r.freeSpins, [], row);
+    expect(r.freeSpins, row).toHaveLength(0);
   });
 
   // A zip is a car teleporting centimetres in one step: a physics defect, never noise.
   it("when the heat is played, then no car teleports a few centimetres in one physics step", () => {
-    assert.deepEqual(r.zips, [], row);
+    expect(r.zips, row).toHaveLength(0);
   });
 
   it("when the heat is played, then nobody dies in the first 8 s (one hit never kills)", () => {
-    assert.ok((r.deaths[0] ?? Infinity) > 8, row);
+    expect((r.deaths[0] ?? Infinity), row).toBeGreaterThan(8);
   });
 
   // The struck car's spin is the pair kernel's lever (`bodyContact`: dw = J·lever/I); what slows a spinning wreck is the tyres' yaw grip,
   // which the wreck split (`tyre-yaw.ts`, `followGroup`) still owns until Stage 5 makes the wreck one rigid body on the same solve.
   todoRow("when the heat is played, then the turn rate over 0.1 s while cars are in contact never exceeds 6.5 rad/s, and no car spins in contact", "contact peaks over 6.5 rad/s (lever torque of the pair kernel; the tyres' yaw grip is the wreck's): Stage 5", () => {
-    assert.deepEqual(r.contactSpins, [], row);
-    assert.ok(r.contactPeak.rate <= 6.5, row);
+    expect(r.contactSpins, row).toHaveLength(0);
+    expect(r.contactPeak.rate, row).toBeLessThanOrEqual(6.5);
   });
 });
 
@@ -71,8 +70,8 @@ describe("given a heat in which car 0 is turned over the spin bar for two second
 
   it("when the heat is played past the window, then the free-spin row's measure reports it as a spin of car 0 that no contact explains", () => {
     const mine = forced.freeSpins.filter((note) => note.includes(" c0 "));
-    assert.ok(mine.length > 0, `no free spin of c0 (free ${JSON.stringify(forced.freeSpins)}, contact ${JSON.stringify(forced.contactSpins)}): the row cannot see a spin`);
+    expect(mine.length, `no free spin of c0 (free ${JSON.stringify(forced.freeSpins)}, contact ${JSON.stringify(forced.contactSpins)}): the row cannot see a spin`).toBeGreaterThan(0);
     const at = Number(/^t=([\d.]+)/.exec(mine[0]!)![1]);
-    assert.ok(at >= FORCED_SPIN_FROM && at <= FORCED_SPIN_TO + 0.1, `the spin was counted at t=${at}, outside the window it was forced in`);
+    expect(at >= FORCED_SPIN_FROM && at <= FORCED_SPIN_TO + 0.1, `the spin was counted at t=${at}, outside the window it was forced in`).toBeTruthy();
   });
 });

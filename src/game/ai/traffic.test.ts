@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
 import { applyAiDrive } from "./input-fade.ts";
@@ -12,6 +11,7 @@ import { Track, blankProjection, projectPath } from "../world/track.ts";
 import { SPAWN_FAR, SPAWN_NEAR, TrafficBrain } from "./traffic.ts";
 import city from "../world/tracks/city.json" with { type: "json" };
 import { DT } from "../vehicle/test-support.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const track = new Track(city);
 
@@ -41,17 +41,17 @@ describe("given the city track's ambient traffic (cars that drive the lanes arou
   const brain = new TrafficBrain(track, 0);
 
   it("when the traffic is first laid out, then it fills the loop lanes and then every side street, each car in its lane facing its lane's direction", () => {
-    assert.equal(brain.count, 4 + 4 + 4);
+    expect(brain.count).toBe(4 + 4 + 4);
     const p = blankProjection();
     for (const [i, s] of brain.spawns().entries()) {
       const slot = brain.slotOf(i);
       projectPath(slot.path, s.x, s.z, -1, p);
-      assert.ok(Math.abs(p.lateral - slot.offset) < 0.2, `car ${i} lateral ${p.lateral.toFixed(2)} vs lane ${slot.offset}`);
+      expect(Math.abs(p.lateral - slot.offset), `car ${i} lateral ${p.lateral.toFixed(2)} vs lane ${slot.offset}`).toBeLessThan(0.2);
       const along = Math.sin(s.yaw) * slot.path.tx[p.k]! + Math.cos(s.yaw) * slot.path.tz[p.k]!;
-      assert.ok(along * slot.dir > 0.95, `car ${i} faces its lane direction`);
-      if (slot.path === track.path) assert.ok(p.s > 70 && p.s < track.length - 70, `loop car ${i} on the grid (s ${p.s.toFixed(0)})`);
+      expect(along * slot.dir, `car ${i} faces its lane direction`).toBeGreaterThan(0.95);
+      if (slot.path === track.path) expect(p.s > 70 && p.s < track.length - 70, `loop car ${i} on the grid (s ${p.s.toFixed(0)})`).toBeTruthy();
     }
-    assert.ok(brain.slots.some((s) => s.path !== track.path && s.dir < 0) && brain.slots.some((s) => s.path !== track.path && s.dir > 0));
+    expect(brain.slots.some((s) => s.path !== track.path && s.dir < 0) && brain.slots.some((s) => s.path !== track.path && s.dir > 0)).toBeTruthy();
   });
 
   it("when twelve traffic cars drive 50 s from their start lanes, then they stay in their lanes at least 90% of the time and the cross-street cars drive through all four of the race loop's junctions", () => {
@@ -78,8 +78,8 @@ describe("given the city track's ambient traffic (cars that drive the lanes arou
       if (slot.path === track.path) return;
       for (const [jx, jz] of junctions) if (Math.hypot(c.group.position.x - jx!, c.group.position.z - jz!) < 4) crossed.add(`${jx},${jz}`);
     });
-    assert.ok(inLane / samples >= 0.9, `in lane ${((inLane / samples) * 100).toFixed(1)}%`);
-    assert.equal(crossed.size, 4, `junctions crossed: ${[...crossed].join(" ")}`);
+    expect(inLane / samples, `in lane ${((inLane / samples) * 100).toFixed(1)}%`).toBeGreaterThanOrEqual(0.9);
+    expect(crossed.size, `junctions crossed: ${[...crossed].join(" ")}`).toBe(4);
   });
 
   it("when a car comes up on another stopped in its lane, then it stops behind it without touching, and after 8 more seconds has edged round it", () => {
@@ -103,12 +103,12 @@ describe("given the city track's ambient traffic (cars that drive the lanes arou
       minGap = Math.min(minGap, gap);
       if (c.velocity.length() < 0.5) stopped = true;
     }, 1);
-    assert.ok(stopped, "came to a stop");
-    assert.ok(minGap > 4.6, `kept clear, closest ${minGap.toFixed(2)} m centre to centre`);
+    expect(stopped, "came to a stop").toBeTruthy();
+    expect(minGap, `kept clear, closest ${minGap.toFixed(2)} m centre to centre`).toBeGreaterThan(4.6);
     run(brain, [mover!, blocker!], 8, () => {}, 1);
     const p = blankProjection();
     projectPath(track.path, mover!.group.position.x, mover!.group.position.z, -1, p);
-    assert.ok(p.s > 240, `got past the blocker (s ${p.s.toFixed(1)})`);
+    expect(p.s, `got past the blocker (s ${p.s.toFixed(1)})`).toBeGreaterThan(240);
   });
 
   it("when a car comes up on a racer stopped in its lane and facing it, then after the wait it edges out to its own kerb, and for a blocker facing the same way it edges toward the road's centre instead", () => {
@@ -139,8 +139,8 @@ describe("given the city track's ambient traffic (cars that drive the lanes arou
     };
     const facing = swing(Math.PI);
     const sameWay = swing(0);
-    assert.ok(facing.kerb > 1 && facing.centre < 1, `facing blocker: ${facing.kerb.toFixed(2)} m toward its own kerb, ${facing.centre.toFixed(2)} m toward the centre`);
-    assert.ok(sameWay.centre > 2.5 && sameWay.kerb < 0.5, `same-way blocker: ${sameWay.centre.toFixed(2)} m toward the centre, ${sameWay.kerb.toFixed(2)} m toward its own kerb`);
+    expect(facing.kerb > 1 && facing.centre < 1, `facing blocker: ${facing.kerb.toFixed(2)} m toward its own kerb, ${facing.centre.toFixed(2)} m toward the centre`).toBeTruthy();
+    expect(sameWay.centre > 2.5 && sameWay.kerb < 0.5, `same-way blocker: ${sameWay.centre.toFixed(2)} m toward the centre, ${sameWay.kerb.toFixed(2)} m toward its own kerb`).toBeTruthy();
   });
 
   it("when a car on the throttle stays pinned where it is, then after about a second it backs off in reverse", () => {
@@ -152,7 +152,7 @@ describe("given the city track's ambient traffic (cars that drive the lanes arou
     for (let step = 0; step < 4 / DT && reversedAt < 0; step++) {
       if (brain.think(wedged, [wedged], DT).throttle < 0) reversedAt = step * DT;
     }
-    assert.ok(reversedAt > 1 && reversedAt < 2, `backed off at ${reversedAt.toFixed(2)} s`);
+    expect(reversedAt > 1 && reversedAt < 2, `backed off at ${reversedAt.toFixed(2)} s`).toBeTruthy();
   });
 
   it("when a put-away traffic car is asked for a spot, then it wakes on its lane inside the observer's spawn ring, at least 14 m from other cars, and gets no spot where the player is looking", () => {
@@ -161,10 +161,10 @@ describe("given the city track's ambient traffic (cars that drive the lanes arou
     const observer = { ...blankAiCar(0), x: 0, z: -30 };
     const others = [observer, { ...blankAiCar(1), x: 2, z: 0 }];
     const spot = brain.spawnPoint(id, [observer], others, () => false);
-    assert.ok(spot, "found a spot");
+    must(spot, "found a spot");
     const d = Math.hypot(spot.x - observer.x, spot.z - observer.z);
-    assert.ok(d >= SPAWN_NEAR && d <= SPAWN_FAR, `distance ${d.toFixed(1)}`);
-    assert.ok(Math.hypot(spot.x - 2, spot.z) >= 14);
-    assert.equal(brain.spawnPoint(id, [observer], others, () => true), null, "never pops in where the player is looking");
+    expect(d >= SPAWN_NEAR && d <= SPAWN_FAR, `distance ${d.toFixed(1)}`).toBeTruthy();
+    expect(Math.hypot(spot.x - 2, spot.z)).toBeGreaterThanOrEqual(14);
+    expect(brain.spawnPoint(id, [observer], others, () => true), "never pops in where the player is looking").toBe(null);
   });
 });

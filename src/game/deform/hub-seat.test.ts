@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
 import { PLANT_QUIET } from "./deform-state.ts";
@@ -70,11 +69,11 @@ describe("given a wrecked car about to come to rest, whose wheels are freed when
     const hub = d.masses.find((q) => q.hub)!;
     const { x: cx, z: cz } = massCentroid(d.masses);
     const arm = Math.hypot(hub.world.x - cx, hub.world.z - cz);
-    assert.ok(8 * arm > 8.5, `the wheel rides ${(8 * arm).toFixed(2)} m/s off the centroid: no slip to test`);
+    expect(8 * arm, `the wheel rides ${(8 * arm).toFixed(2)} m/s off the centroid: no slip to test`).toBeGreaterThan(8.5);
     const l0 = momentum(d);
     d.seat();
     const l1 = momentum(d);
-    assert.ok(Math.abs(l1 / l0 - 1) < 0.01, `L ${l0.toFixed(0)} → ${l1.toFixed(0)} kg·m²/s: a wheel turning with the body is not slipping`);
+    expect(Math.abs(l1 / l0 - 1), `L ${l0.toFixed(0)} → ${l1.toFixed(0)} kg·m²/s: a wheel turning with the body is not slipping`).toBeLessThan(0.01);
   });
 
   it("when a wheel moves 20 m/s off the speed of the body at that wheel, with the car spinning at 0 and at 8 rad/s, then seating the wheels cuts the slip back to the 8 m/s limit (7.5 to 8.5) either way", () => {
@@ -89,7 +88,7 @@ describe("given a wrecked car about to come to rest, whose wheels are freed when
       hub.vel.z = bodyZ;
       d.seat();
       const slip = Math.hypot(hub.vel.x - bodyX, hub.vel.z - bodyZ);
-      assert.ok(slip > 7.5 && slip < 8.5, `spin ${w}: slip ${slip.toFixed(2)} m/s, 8 allowed`);
+      expect(slip > 7.5 && slip < 8.5, `spin ${w}: slip ${slip.toFixed(2)} m/s, 8 allowed`).toBeTruthy();
     }
   });
 });
@@ -173,7 +172,7 @@ describe("given two still sedan wrecks side by side with their near wheels 0.3 m
       stepWorld(world, slice);
       elapsed += slice;
     }
-    assert.ok(wrecks.every((wreck) => wreck.deform.quietTime() < PLANT_QUIET), "the wrecks have not planted yet when the measuring starts");
+    expect(wrecks.every((wreck) => wreck.deform.quietTime() < PLANT_QUIET), "the wrecks have not planted yet when the measuring starts").toBeTruthy();
     const worstWheel = { move: 0, allowed: Infinity, at: 0 };
     const worstSkin = { move: 0, allowed: Infinity, at: 0 };
     let crossedPlant = false;
@@ -200,9 +199,9 @@ describe("given two still sedan wrecks side by side with their near wheels 0.3 m
       }
       crossedPlant = true;
     }
-    assert.ok(crossedPlant, "the wrecks crossed PLANT_QUIET during the measuring");
-    assert.ok(worstWheel.move <= worstWheel.allowed, `a wheel moved ${(worstWheel.move * 1000).toFixed(1)} mm in one slice at ${worstWheel.at.toFixed(3)} s (the body's speed allows ${(worstWheel.allowed * 1000).toFixed(1)} mm)`);
-    assert.ok(worstSkin.move <= worstSkin.allowed, `a point of the drawn body moved ${(worstSkin.move * 1000).toFixed(1)} mm in one slice at ${worstSkin.at.toFixed(3)} s (the body's speed allows ${(worstSkin.allowed * 1000).toFixed(1)} mm)`);
+    expect(crossedPlant, "the wrecks crossed PLANT_QUIET during the measuring").toBeTruthy();
+    expect(worstWheel.move, `a wheel moved ${(worstWheel.move * 1000).toFixed(1)} mm in one slice at ${worstWheel.at.toFixed(3)} s (the body's speed allows ${(worstWheel.allowed * 1000).toFixed(1)} mm)`).toBeLessThanOrEqual(worstWheel.allowed);
+    expect(worstSkin.move, `a point of the drawn body moved ${(worstSkin.move * 1000).toFixed(1)} mm in one slice at ${worstSkin.at.toFixed(3)} s (the body's speed allows ${(worstSkin.allowed * 1000).toFixed(1)} mm)`).toBeLessThanOrEqual(worstSkin.allowed);
   });
 });
 
@@ -258,11 +257,11 @@ describe("given a still sedan wreck that a car is driven straight at", () => {
     todoRow(strikeCase.it, strikeCase.todo, () => {
       const unplanted = strikeStillWreckAtQuiet(PLANT_QUIET - 0.01, strikeCase.speed, strikeCase.nose);
       const planted = strikeStillWreckAtQuiet(PLANT_QUIET + 0.01, strikeCase.speed, strikeCase.nose);
-      assert.ok(Math.abs(unplanted.firstContactAt - (PLANT_QUIET - 0.01)) < 0.005 && Math.abs(planted.firstContactAt - (PLANT_QUIET + 0.01)) < 0.005, `the hits landed at ${unplanted.firstContactAt.toFixed(3)} and ${planted.firstContactAt.toFixed(3)} s quiet`);
-      assert.ok(Math.min(unplanted.crush, planted.crush) > 0.3, `the hit crushed ${unplanted.crush.toFixed(3)} and ${planted.crush.toFixed(3)} m: nothing to compare`);
-      assert.ok(Math.abs(unplanted.crush - planted.crush) <= CRUSH_MATCH * Math.max(unplanted.crush, planted.crush), `crush ${unplanted.crush.toFixed(3)} m before the plant against ${planted.crush.toFixed(3)} m after`);
-      assert.equal(unplanted.wheelsLost, strikeCase.expectedWheelsLost, "wheels lost before the plant");
-      assert.equal(planted.wheelsLost, strikeCase.expectedWheelsLost, "wheels lost after the plant");
+      expect(Math.abs(unplanted.firstContactAt - (PLANT_QUIET - 0.01)) < 0.005 && Math.abs(planted.firstContactAt - (PLANT_QUIET + 0.01)) < 0.005, `the hits landed at ${unplanted.firstContactAt.toFixed(3)} and ${planted.firstContactAt.toFixed(3)} s quiet`).toBeTruthy();
+      expect(Math.min(unplanted.crush, planted.crush), `the hit crushed ${unplanted.crush.toFixed(3)} and ${planted.crush.toFixed(3)} m: nothing to compare`).toBeGreaterThan(0.3);
+      expect(Math.abs(unplanted.crush - planted.crush), `crush ${unplanted.crush.toFixed(3)} m before the plant against ${planted.crush.toFixed(3)} m after`).toBeLessThanOrEqual(CRUSH_MATCH * Math.max(unplanted.crush, planted.crush));
+      expect(unplanted.wheelsLost, "wheels lost before the plant").toBe(strikeCase.expectedWheelsLost);
+      expect(planted.wheelsLost, "wheels lost after the plant").toBe(strikeCase.expectedWheelsLost);
     });
   }
 });
@@ -282,18 +281,18 @@ describe("given a wreck quiet past PLANT_QUIET and lying over, with a hub 1 m of
     group.updateMatrixWorld();
     const hub = d.masses.find((q) => q.hub && !q.popped)!;
     d.stepStructure(PLANT_QUIET + 0.05, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), LYING_ROLL));
-    assert.ok(d.quietTime() > PLANT_QUIET, `quiet ${d.quietTime().toFixed(3)} s: the wreck is not past its plant time`);
+    expect(d.quietTime(), `quiet ${d.quietTime().toFixed(3)} s: the wreck is not past its plant time`).toBeGreaterThan(PLANT_QUIET);
     hub.world.y += HUB_STRANDED_M;
     const velocity = new THREE.Vector3();
     const spin = new THREE.Vector3();
     const before = hub.world.clone();
     d.followGroup(group, velocity, spin, 1 / FRAME_HZ);
     const moved = hub.world.distanceTo(before);
-    assert.ok(moved > 0.05, `the hub did not move (${moved.toFixed(3)} m): it was not written back, so there is nothing to bound`);
-    assert.ok(moved <= HUB_RETURN_STEP_M, `the hub crossed ${moved.toFixed(3)} m in one clamp`);
+    expect(moved, `the hub did not move (${moved.toFixed(3)} m): it was not written back, so there is nothing to bound`).toBeGreaterThan(0.05);
+    expect(moved, `the hub crossed ${moved.toFixed(3)} m in one clamp`).toBeLessThanOrEqual(HUB_RETURN_STEP_M);
     for (let k = 1; k < HUB_HOME_CLAMPS; k++) d.followGroup(group, velocity, spin, 1 / FRAME_HZ);
     const home = Math.hypot(hub.world.x - hub.rest.x, hub.world.y - hub.rest.y, hub.world.z - hub.rest.z);
-    assert.ok(home < 0.1, `the hub stands ${home.toFixed(3)} m off its place after ${HUB_HOME_CLAMPS} clamps`);
+    expect(home, `the hub stands ${home.toFixed(3)} m off its place after ${HUB_HOME_CLAMPS} clamps`).toBeLessThan(0.1);
   });
 });
 
@@ -307,7 +306,7 @@ describe("given a wreck quiet past PLANT_QUIET and lying over, with its four hub
     const group = new THREE.Group();
     group.updateMatrixWorld();
     d.stepStructure(PLANT_QUIET + 0.05, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), LYING_ROLL));
-    assert.ok(d.quietTime() > PLANT_QUIET, `quiet ${d.quietTime().toFixed(3)} s: the wreck is not past its plant time`);
+    expect(d.quietTime(), `quiet ${d.quietTime().toFixed(3)} s: the wreck is not past its plant time`).toBeGreaterThan(PLANT_QUIET);
     const { x: cx, z: cz } = massCentroid(d.masses);
     const hubs = d.masses.filter((q) => q.hub && !q.popped);
     const c = Math.cos(HUBS_TURNED_RAD);
@@ -320,11 +319,11 @@ describe("given a wreck quiet past PLANT_QUIET and lying over, with its four hub
     }
     const off = (): number => Math.max(...hubs.map((q) => Math.hypot(q.world.x - q.rest.x, q.world.z - q.rest.z)));
     const start = off();
-    assert.ok(start > 0.5, `the hubs stand ${start.toFixed(3)} m off their places: not far enough to need a return`);
+    expect(start, `the hubs stand ${start.toFixed(3)} m off their places: not far enough to need a return`).toBeGreaterThan(0.5);
     const velocity = new THREE.Vector3();
     const spin = new THREE.Vector3();
     for (let k = 0; k < HUBS_TURNED_CLAMPS; k++) d.followGroup(group, velocity, spin, 1 / FRAME_HZ);
-    assert.ok(off() < 0.1, `the hubs stand ${off().toFixed(3)} m off their places after ${HUBS_TURNED_CLAMPS} clamps (from ${start.toFixed(3)} m)`);
+    expect(off(), `the hubs stand ${off().toFixed(3)} m off their places after ${HUBS_TURNED_CLAMPS} clamps (from ${start.toFixed(3)} m)`).toBeLessThan(0.1);
   });
 });
 
@@ -340,7 +339,7 @@ describe("given a wreck quiet past PLANT_QUIET and upright, its planted hub drag
     const group = new THREE.Group();
     group.updateMatrixWorld();
     d.stepStructure(PLANT_QUIET + 0.05, new THREE.Quaternion());
-    assert.ok(d.quietTime() > PLANT_QUIET, `quiet ${d.quietTime().toFixed(3)} s: the wreck is not past its plant time`);
+    expect(d.quietTime(), `quiet ${d.quietTime().toFixed(3)} s: the wreck is not past its plant time`).toBeGreaterThan(PLANT_QUIET);
     const [far, near] = d.masses.filter((q) => q.hub && !q.popped);
     far!.world.x += HUB_DRAGGED_M;
     near!.world.x += HUB_PIN_MAX / 2;
@@ -359,9 +358,9 @@ describe("given a wreck quiet past PLANT_QUIET and upright, its planted hub drag
       d.followGroup(group, velocity, spin, 0);
       worstStep = Math.max(worstStep, far!.world.distanceTo(before));
     }
-    assert.ok(worstStep <= TETHER_STEP_M, `the hub moved ${worstStep.toFixed(4)} m in one clamp`);
-    assert.ok(stretch(far) <= HUB_PIN_MAX + 1e-6, `the hub stands ${stretch(far).toFixed(3)} m off its pin after ${TETHER_CLAMPS} clamps`);
-    assert.ok(stretch(far) >= HUB_PIN_MAX - 1e-3, `the hub was drawn in past the bound: ${stretch(far).toFixed(3)} m off its pin`);
-    assert.equal(near!.world.distanceTo(nearBefore), 0, "a hub within the bound was moved");
+    expect(worstStep, `the hub moved ${worstStep.toFixed(4)} m in one clamp`).toBeLessThanOrEqual(TETHER_STEP_M);
+    expect(stretch(far), `the hub stands ${stretch(far).toFixed(3)} m off its pin after ${TETHER_CLAMPS} clamps`).toBeLessThanOrEqual(HUB_PIN_MAX + 1e-6);
+    expect(stretch(far), `the hub was drawn in past the bound: ${stretch(far).toFixed(3)} m off its pin`).toBeGreaterThanOrEqual(HUB_PIN_MAX - 1e-3);
+    expect(near!.world.distanceTo(nearBefore), "a hub within the bound was moved").toBe(0);
   });
 });

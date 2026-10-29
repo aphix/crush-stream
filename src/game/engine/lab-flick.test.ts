@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { houseKnocked, labDollRig, labRig, runLab, throwAt, type LabRig } from "./engine-lab.test-util.ts";
 import type { LabShot } from "./engine-lab.ts";
@@ -8,6 +7,7 @@ import { FLICK, LabFlick } from "./lab-flick.ts";
 import { LAB_SHOT, planLabShot } from "./lab-shot.ts";
 import { heldPose } from "../scenes/lab.ts";
 import { setGround } from "../world/ground.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * The Lab's flick (`LabFlick`), headless: a landscape 844 × 390 screen looking at the house of cards from a bearing off the
@@ -111,8 +111,8 @@ function planeSwipe(v: View, speed: number, degrees: number, ms: number): void {
   const metres = (speed * ms) / 1000;
   const a = (degrees * Math.PI) / 180;
   const end = planeEnd(v, metres * Math.cos(a), metres * Math.sin(a));
-  assert.ok(Math.hypot(end[0] - v.thrower[0], end[1] - v.thrower[1]) > FLICK.tapPx, "the test's swipe is no longer than a tap");
-  assert.ok(swipe(v.flick, v.thrower, end, ms), "the press on the thrower was left to the camera");
+  expect(Math.hypot(end[0] - v.thrower[0], end[1] - v.thrower[1]), "the test's swipe is no longer than a tap").toBeGreaterThan(FLICK.tapPx);
+  expect(swipe(v.flick, v.thrower, end, ms), "the press on the thrower was left to the camera").toBeTruthy();
 }
 
 /** The x (m) where a launched car comes back down to the height it left from (NaN: it never did). */
@@ -136,12 +136,12 @@ describe("given the house of cards on the bench, its thrower swiped on the throw
     it(testCase.it, () => {
       const v = view("cards", testCase.degrees);
       planeSwipe(v, testCase.speed, testCase.swipeDegrees, 200);
-      assert.equal(v.flicks.length, 1, "flicks");
+      expect(v.flicks.length, "flicks").toBe(1);
       const a = (testCase.swipeDegrees * Math.PI) / 180;
       const out = v.flicks[0]!.velocity;
-      assert.ok(Math.abs(out.x - testCase.speed * Math.cos(a)) < 1e-6, `along the bench ${out.x.toFixed(4)} m/s`);
-      assert.ok(Math.abs(out.y - testCase.speed * Math.sin(a)) < 1e-6, `up ${out.y.toFixed(4)} m/s`);
-      assert.equal(out.z, 0, "across the bench");
+      expect(Math.abs(out.x - testCase.speed * Math.cos(a)), `along the bench ${out.x.toFixed(4)} m/s`).toBeLessThan(1e-6);
+      expect(Math.abs(out.y - testCase.speed * Math.sin(a)), `up ${out.y.toFixed(4)} m/s`).toBeLessThan(1e-6);
+      expect(out.z, "across the bench").toBe(0);
     });
   }
 
@@ -149,17 +149,17 @@ describe("given the house of cards on the bench, its thrower swiped on the throw
     const v = view("cards", OBLIQUE);
     const centre = v.r.lab.centre(0, new THREE.Vector3());
     const towardCamera = v.px(centre.clone().add(new THREE.Vector3(0, 0, 3)));
-    assert.ok(Math.hypot(towardCamera[0] - v.thrower[0], towardCamera[1] - v.thrower[1]) > FLICK.tapPx, "the test's swipe is no longer than a tap");
-    assert.ok(swipe(v.flick, v.thrower, towardCamera, 200), "the press on the thrower was left to the camera");
-    assert.equal(v.flicks.length, 1, "flicks");
-    assert.equal(v.flicks[0]!.velocity.z, 0, "across the bench");
+    expect(Math.hypot(towardCamera[0] - v.thrower[0], towardCamera[1] - v.thrower[1]), "the test's swipe is no longer than a tap").toBeGreaterThan(FLICK.tapPx);
+    expect(swipe(v.flick, v.thrower, towardCamera, 200), "the press on the thrower was left to the camera").toBeTruthy();
+    expect(v.flicks.length, "flicks").toBe(1);
+    expect(v.flicks[0]!.velocity.z, "across the bench").toBe(0);
     const from = centreOfMass(v.r.cars[0]!, new THREE.Vector3());
     v.r.lab.launch(0, v.flicks[0]!.velocity);
     runLab(v.r, 1);
     const to = centreOfMass(v.r.cars[0]!, new THREE.Vector3());
     const flown = to.distanceTo(from);
-    assert.ok(flown > 0.5, "it never left");
-    assert.ok(Math.abs(to.z - from.z) < LINE_DRIFT * flown, `its centre of mass moved ${(to.z - from.z).toFixed(4)} m across the bench in ${flown.toFixed(2)} m of flight`);
+    expect(flown, "it never left").toBeGreaterThan(0.5);
+    expect(Math.abs(to.z - from.z), `its centre of mass moved ${(to.z - from.z).toFixed(4)} m across the bench in ${flown.toFixed(2)} m of flight`).toBeLessThan(LINE_DRIFT * flown);
   });
 
   const reachCases = [
@@ -173,11 +173,11 @@ describe("given the house of cards on the bench, its thrower swiped on the throw
       const lob = throwAt(scratch, 0, 3, 30).launch;
       const v = view("cards", testCase.degrees);
       planeSwipe(v, Math.hypot(lob.x, lob.y), (Math.atan2(lob.y, lob.x) * 180) / Math.PI, 200);
-      assert.equal(v.flicks.length, 1, "flicks");
+      expect(v.flicks.length, "flicks").toBe(1);
       const shot = v.r.lab.launch(v.flicks[0]!.thing, v.flicks[0]!.velocity);
       runLab(v.r, 4);
-      assert.notEqual(shot.contactS, null, "the flicked car never met the stack");
-      assert.deepEqual(houseKnocked(v.r, shot), [1, 2, 3]);
+      expect(shot.contactS, "the flicked car never met the stack").not.toBe(null);
+      expect(firstMismatch(houseKnocked(v.r, shot), [1, 2, 3])).toBeUndefined();
     });
   }
 
@@ -191,12 +191,12 @@ describe("given the house of cards on the bench, its thrower swiped on the throw
       for (const speed of [8, 16]) {
         const v = view("pad", testCase.degrees);
         planeSwipe(v, speed, 40, 200);
-        assert.equal(v.flicks.length, 1, `flicks at ${speed} m/s`);
+        expect(v.flicks.length, `flicks at ${speed} m/s`).toBe(1);
         const shot = v.r.lab.launch(v.flicks[0]!.thing, v.flicks[0]!.velocity);
         runLab(v.r, 4);
         landings.push(landingX(shot));
       }
-      assert.ok(landings[0]! < landings[1]!, `slow landed at x = ${landings[0]!.toFixed(2)} m, fast at x = ${landings[1]!.toFixed(2)} m`);
+      expect(landings[0]!, `slow landed at x = ${landings[0]!.toFixed(2)} m, fast at x = ${landings[1]!.toFixed(2)} m`).toBeLessThan(landings[1]!);
     });
   }
 
@@ -204,18 +204,18 @@ describe("given the house of cards on the bench, its thrower swiped on the throw
     const v = view("cards", SIDE_ON);
     const [x, y] = v.thrower;
     swipe(v.flick, v.thrower, [x + FLICK.tapPx - 2, y], 80);
-    assert.equal(v.flicks.length, 0, "flicks from the short swipe");
+    expect(v.flicks.length, "flicks from the short swipe").toBe(0);
     swipe(v.flick, v.thrower, [x + FLICK.tapPx + 2, y], 80);
-    assert.equal(v.flicks.length, 1, "flicks from the longer swipe");
+    expect(v.flicks.length, "flicks from the longer swipe").toBe(1);
   });
 
   it("when the camera looks straight down the bench, then a swipe past a tap throws nothing, and from the side it does", () => {
     const along = view("cards", DOWN_THE_BENCH);
-    assert.ok(swipe(along.flick, along.thrower, [along.thrower[0] + 30, along.thrower[1] - 60], 120), "the press on the thrower was left to the camera");
-    assert.equal(along.flicks.length, 0, "flicks looking down the bench");
+    expect(swipe(along.flick, along.thrower, [along.thrower[0] + 30, along.thrower[1] - 60], 120), "the press on the thrower was left to the camera").toBeTruthy();
+    expect(along.flicks.length, "flicks looking down the bench").toBe(0);
     const side = view("cards", SIDE_ON);
-    assert.ok(swipe(side.flick, side.thrower, [side.thrower[0] + 30, side.thrower[1] - 60], 120), "the press on the thrower was left to the camera");
-    assert.equal(side.flicks.length, 1, "flicks seen side-on");
+    expect(swipe(side.flick, side.thrower, [side.thrower[0] + 30, side.thrower[1] - 60], 120), "the press on the thrower was left to the camera").toBeTruthy();
+    expect(side.flicks.length, "flicks seen side-on").toBe(1);
   });
 
   it("when a swipe's moves of its last 112 ms reach the page together in one late event, then it leaves as fast as when they came one by one", () => {
@@ -235,24 +235,24 @@ describe("given the house of cards on the bench, its thrower swiped on the throw
     const held = Array.from({ length: 14 }, (_, i) => at(ms - 112 + 8 * i));
     v.flick.move({ ...last, getCoalescedEvents: () => held });
     v.flick.up(last.clientX, last.clientY, ms, false);
-    assert.equal(v.flicks.length, 2);
+    expect(v.flicks.length).toBe(2);
     const [oneByOne, together] = [v.flicks[0]!.velocity, v.flicks[1]!.velocity];
-    assert.equal(together.x, oneByOne.x, `along the bench: one by one ${oneByOne.x.toFixed(2)} m/s, held back ${together.x.toFixed(2)} m/s`);
-    assert.equal(together.y, oneByOne.y, `up: one by one ${oneByOne.y.toFixed(2)} m/s, held back ${together.y.toFixed(2)} m/s`);
+    expect(together.x, `along the bench: one by one ${oneByOne.x.toFixed(2)} m/s, held back ${together.x.toFixed(2)} m/s`).toBe(oneByOne.x);
+    expect(together.y, `up: one by one ${oneByOne.y.toFixed(2)} m/s, held back ${together.y.toFixed(2)} m/s`).toBe(oneByOne.y);
   });
 
   it("when a swipe is faster than the cap, then it leaves at the cap in the swipe's direction", () => {
     const v = view("cards", SIDE_ON);
     planeSwipe(v, 3 * FLICK.max, 25, 120);
     const out = v.flicks[0]!.velocity;
-    assert.ok(Math.abs(Math.hypot(out.x, out.y) - FLICK.max) < 1e-6, `speed ${Math.hypot(out.x, out.y).toFixed(3)} m/s`);
-    assert.ok(Math.abs(Math.atan2(out.y, out.x) - (25 * Math.PI) / 180) < 1e-6, `angle ${((Math.atan2(out.y, out.x) * 180) / Math.PI).toFixed(3)}°`);
+    expect(Math.abs(Math.hypot(out.x, out.y) - FLICK.max), `speed ${Math.hypot(out.x, out.y).toFixed(3)} m/s`).toBeLessThan(1e-6);
+    expect(Math.abs(Math.atan2(out.y, out.x) - (25 * Math.PI) / 180), `angle ${((Math.atan2(out.y, out.x) * 180) / Math.PI).toFixed(3)}°`).toBeLessThan(1e-6);
   });
 
   it("when a finger presses the empty sky above the board and swipes, then the press is left to the camera", () => {
     const v = view("cards", SIDE_ON);
-    assert.equal(swipe(v.flick, [SCREEN.width / 2, 5], [SCREEN.width / 2, 300], 120), false);
-    assert.equal(v.flicks.length, 0);
+    expect(swipe(v.flick, [SCREEN.width / 2, 5], [SCREEN.width / 2, 300], 120)).toBe(false);
+    expect(v.flicks.length).toBe(0);
   });
 
   it("when the system takes the pointer mid-swipe, then nothing is flicked", () => {
@@ -261,7 +261,7 @@ describe("given the house of cards on the bench, its thrower swiped on the throw
     v.flick.down(v.thrower[0], v.thrower[1], 0);
     v.flick.move({ clientX: (v.thrower[0] + x1) / 2, clientY: (v.thrower[1] + y1) / 2, timeStamp: 60 });
     v.flick.up(x1, y1, 120, true);
-    assert.equal(v.flicks.length, 0);
+    expect(v.flicks.length).toBe(0);
   });
 });
 
@@ -301,7 +301,7 @@ describe("given the Lab opened on a 414 × 757 phone held upright, its side shot
     const v = viewThrough("cards", openingCameraUpright, PHONE_UPRIGHT);
     const direction = towardStack(v);
     const degreesOffUp = (Math.atan2(Math.abs(direction[0]), -direction[1]) * 180) / Math.PI;
-    assert.ok(degreesOffUp >= minDegreesOffUp, `the stack reads ${degreesOffUp.toFixed(1)}° off straight up`);
+    expect(degreesOffUp, `the stack reads ${degreesOffUp.toFixed(1)}° off straight up`).toBeGreaterThanOrEqual(minDegreesOffUp);
   });
 
   it("when the thrower is swiped straight toward the stack on the screen, then it leaves along the bench toward the stack at the swipe's own velocity on the throw plane, lifted by the swipe's upward part and never across the bench", () => {
@@ -309,34 +309,34 @@ describe("given the Lab opened on a 414 × 757 phone held upright, its side shot
     const direction = towardStack(v);
     const distancePx = (screenSwipeSpeedPx * screenSwipeMs) / 1000;
     const end: Px = [v.thrower[0] + direction[0] * distancePx, v.thrower[1] + direction[1] * distancePx];
-    assert.ok(swipe(v.flick, v.thrower, end, screenSwipeMs), "the press on the thrower was left to the camera");
-    assert.equal(v.flicks.length, 1, "flicks");
-    assert.equal(v.flicks[0]!.thing, 0, "the flicked item is the thrower");
+    expect(swipe(v.flick, v.thrower, end, screenSwipeMs), "the press on the thrower was left to the camera").toBeTruthy();
+    expect(v.flicks.length, "flicks").toBe(1);
+    expect(v.flicks[0]!.thing, "the flicked item is the thrower").toBe(0);
     const out = v.flicks[0]!.velocity;
-    assert.ok(out.x > 0, `along the bench toward the stack ${out.x.toFixed(3)} m/s`);
-    assert.ok(out.y > 0 && out.y < out.x, `lifted by the upward part of the swipe, still a throw and not a lob: up ${out.y.toFixed(3)} m/s over along ${out.x.toFixed(3)} m/s`);
-    assert.equal(out.z, 0, "across the bench");
+    expect(out.x, `along the bench toward the stack ${out.x.toFixed(3)} m/s`).toBeGreaterThan(0);
+    expect(out.y > 0 && out.y < out.x, `lifted by the upward part of the swipe, still a throw and not a lob: up ${out.y.toFixed(3)} m/s over along ${out.x.toFixed(3)} m/s`).toBeTruthy();
+    expect(out.z, "across the bench").toBe(0);
     const screenX = out.x * v.along[0] + out.y * v.up[0];
     const screenY = out.x * v.along[1] + out.y * v.up[1];
-    assert.ok(Math.abs(screenX - direction[0] * screenSwipeSpeedPx) < 1e-6, `the launch on the screen x ${screenX.toFixed(3)} px/s, the swipe's ${(direction[0] * screenSwipeSpeedPx).toFixed(3)} px/s`);
-    assert.ok(Math.abs(screenY - direction[1] * screenSwipeSpeedPx) < 1e-6, `the launch on the screen y ${screenY.toFixed(3)} px/s, the swipe's ${(direction[1] * screenSwipeSpeedPx).toFixed(3)} px/s`);
+    expect(Math.abs(screenX - direction[0] * screenSwipeSpeedPx), `the launch on the screen x ${screenX.toFixed(3)} px/s, the swipe's ${(direction[0] * screenSwipeSpeedPx).toFixed(3)} px/s`).toBeLessThan(1e-6);
+    expect(Math.abs(screenY - direction[1] * screenSwipeSpeedPx), `the launch on the screen y ${screenY.toFixed(3)} px/s, the swipe's ${(direction[1] * screenSwipeSpeedPx).toFixed(3)} px/s`).toBeLessThan(1e-6);
   });
 
   it("when a finger presses the screen away from every car and swipes, then the press is left to the camera, so one finger turns the view", () => {
     const v = viewThrough("cards", openingCameraUpright, PHONE_UPRIGHT);
     for (const y of [0.15, 0.3, 0.85]) {
-      assert.equal(swipe(v.flick, [PHONE_UPRIGHT.width / 2, y * PHONE_UPRIGHT.height], [PHONE_UPRIGHT.width / 4, y * PHONE_UPRIGHT.height], 120), false, `a press ${y * 100} % down the screen`);
+      expect(swipe(v.flick, [PHONE_UPRIGHT.width / 2, y * PHONE_UPRIGHT.height], [PHONE_UPRIGHT.width / 4, y * PHONE_UPRIGHT.height], 120), `a press ${y * 100} % down the screen`).toBe(false);
     }
-    assert.equal(v.flicks.length, 0);
+    expect(v.flicks.length).toBe(0);
   });
 
   it("when the grid of presses over the cards' screen is tried, then the picks of the cars take at most a fifth of it", () => {
     const share = pickedShare(viewThrough("cards", openingCameraUpright, PHONE_UPRIGHT));
-    assert.ok(share > 0 && share <= maxPickedShare, `${(share * 100).toFixed(1)} % of the screen is picked`);
+    expect(share > 0 && share <= maxPickedShare, `${(share * 100).toFixed(1)} % of the screen is picked`).toBeTruthy();
   });
 
   it("when the grid of presses over the wall's screen is tried, then the picks of the cars and the knockable props take at most a fifth of it", async () => {
     const share = pickedShare(viewThrough("wall", openingCameraUpright, PHONE_UPRIGHT, await labDollRig("wall")));
-    assert.ok(share > 0 && share <= maxPickedShare, `${(share * 100).toFixed(1)} % of the screen is picked`);
+    expect(share > 0 && share <= maxPickedShare, `${(share * 100).toFixed(1)} % of the screen is picked`).toBeTruthy();
   });
 });

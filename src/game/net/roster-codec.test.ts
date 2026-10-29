@@ -1,9 +1,9 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { ROOM_MAX } from "../../lib/multiplayer/rooms.ts";
 import { NAME_MAX } from "../match/types.ts";
 import { MAX_NET_CARS, MSG } from "./codec.ts";
 import { packRoster, readRoster } from "./roster-codec.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const roundTripCases = [
   { it: "when a roster of the host alone is sent, then the guest reads the host in car 0 under its name", entries: [{ peer: "a1b2c3d4", car: 0, name: "Ann" }] },
@@ -19,12 +19,12 @@ describe("given the host's roster of peers and their cars", () => {
   for (const testCase of roundTripCases) {
     it(testCase.it, () => {
       const read = readRoster(packRoster(testCase.entries));
-      assert.ok(read, "the message reads");
-      assert.equal(read.length, testCase.entries.length, "entry count");
+      must(read, "the message reads");
+      expect(read.length, "entry count").toBe(testCase.entries.length);
       for (let i = 0; i < testCase.entries.length; i++) {
-        assert.equal(read[i]!.peer, testCase.entries[i]!.peer, `entry ${i} peer`);
-        assert.equal(read[i]!.car, testCase.entries[i]!.car, `entry ${i} car`);
-        assert.equal(read[i]!.name, testCase.entries[i]!.name, `entry ${i} name`);
+        expect(read[i]!.peer, `entry ${i} peer`).toBe(testCase.entries[i]!.peer);
+        expect(read[i]!.car, `entry ${i} car`).toBe(testCase.entries[i]!.car);
+        expect(read[i]!.name, `entry ${i} name`).toBe(testCase.entries[i]!.name);
       }
     });
   }
@@ -55,14 +55,14 @@ const hostileCases = [
 describe("given a roster message from a peer that cannot be trusted", () => {
   for (const testCase of hostileCases) {
     it(testCase.it, () => {
-      assert.equal(readRoster(testCase.data), null);
+      expect(readRoster(testCase.data)).toBe(null);
     });
   }
 
   it("when the unmodified message is read, then the cases above fail only for the byte they change", () => {
     const read = readRoster(good);
-    assert.ok(read, "the untouched message reads");
-    assert.equal(read.length, 2, "entry count");
+    must(read, "the untouched message reads");
+    expect(read.length, "entry count").toBe(2);
   });
 });
 
@@ -82,12 +82,12 @@ describe("given a roster whose names are hostile", () => {
       const id = new TextEncoder().encode("a1b2c3d4");
       const name = new TextEncoder().encode(testCase.raw).slice(0, NAME_MAX * 4);
       const bytes = Uint8Array.from([MSG.roster, 1, 1, id.length, ...id, name.length, ...name]);
-      assert.equal(readRoster(bytes)?.[0]?.name, testCase.read);
+      expect(readRoster(bytes)?.[0]?.name).toBe(testCase.read);
     });
   }
 
   it("when the host packs a hostile name, then the message already carries it cleaned", () => {
     const read = readRoster(packRoster([{ peer: "a1b2c3d4", car: 1, name: "  Zed\u202E\u0000 the\tquick brown fox jumps  " }]));
-    assert.equal(read?.[0]?.name, "Zed the quick br");
+    expect(read?.[0]?.name).toBe("Zed the quick br");
   });
 });

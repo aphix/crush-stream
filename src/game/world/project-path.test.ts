@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { blankProjection, projectPath, Track, WINDOW, type Projection, type TrackPath } from "./track.ts";
 import { OFF_MENU, TRACKS } from "./tracks/index.ts";
 import { parseTrack } from "./track-schema.ts";
@@ -95,10 +94,10 @@ for (const json of [...TRACKS, ...OFF_MENU]) {
           scan(p, x, z, hint, want);
           projectPath(p, x, z, hint, got);
           queries++;
-          assert.ok(same(want, got), `(${x.toFixed(3)}, ${z.toFixed(3)}) hint ${hint}: want ${JSON.stringify(want)} got ${JSON.stringify(got)}`);
+          expect(same(want, got), `(${x.toFixed(3)}, ${z.toFixed(3)}) hint ${hint}: want ${JSON.stringify(want)} got ${JSON.stringify(got)}`).toBeTruthy();
         }
       }
-      assert.ok(queries >= 3000);
+      expect(queries).toBeGreaterThanOrEqual(3000);
     });
   });
 }
@@ -111,7 +110,7 @@ describe("given a point far outside the path's box, and the plain scan as the re
     for (const [x, z] of [[5000, 5000], [-4000, 10], [10, -9000]] as const) {
       scan(track.path, x, z, -1, want);
       projectPath(track.path, x, z, -1, got);
-      assert.ok(same(want, got), `(${x}, ${z})`);
+      expect(same(want, got), `(${x}, ${z})`).toBeTruthy();
     }
   });
 });

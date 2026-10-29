@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { VEHICLE_CLASS_IDS } from "./vehicle-classes.ts";
 import { assertHeld, crashedRun, loopRun, NAMED_LOOPS, track } from "./ejection-slope.test-util.ts";
@@ -19,7 +18,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
         const r = crashedRun(stunt, cls, pace, "side", 860, 960);
         t.annotate(`${cls} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm, ended at s ${r.endS.toFixed(0)}`);
         assertHeld(r, "s 960");
-        assert.deepEqual(r.thrown, []);
+        expect(r.thrown).toHaveLength(0);
       });
     }
   }
@@ -44,7 +43,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
       it(`when a ${cls} hit on its ${hit} drives over the crest at 30 m/s, then the engine block stays put and nobody is thrown`, () => {
         const r = crashedRun(stunt, cls, 30, hit, 860, 960);
         assertHeld(r, "s 960");
-        assert.deepEqual(r.thrown, []);
+        expect(r.thrown).toHaveLength(0);
       });
     }
   }
@@ -60,7 +59,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
         const r = crashedRun(stunt, "sedan", pace, hit, 200, end, [200, 340]);
         t.annotate(`${hit} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm`);
         assertHeld(r, `s ${end}`);
-        assert.deepEqual(r.thrown, []);
+        expect(r.thrown).toHaveLength(0);
       });
     }
   }
@@ -73,7 +72,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
         const r = loopRun(trk, pace);
         t.annotate(`${course} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm, ended at s ${r.endS.toFixed(0)} of ${trk.length.toFixed(0)}`);
         assertHeld(r, `its end, s ${trk.length.toFixed(0)}`);
-        assert.deepEqual(r.thrown, []);
+        expect(r.thrown).toHaveLength(0);
       });
     }
   }

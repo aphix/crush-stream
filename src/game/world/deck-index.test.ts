@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Track, segmentAt, blankSegment } from "./track.ts";
 import { OFF_MENU, TRACKS } from "./tracks/index.ts";
 import { parseTrack } from "./track-schema.ts";
@@ -60,11 +59,11 @@ for (const json of [...TRACKS, ...OFF_MENU]) {
         const height = ground.heightAt(x, z, y);
         const surface = ground.surfaceIndex(x, z, y);
         const at = `(${x.toFixed(3)}, ${z.toFixed(3)}) from ${y.toFixed(3)}`;
-        assert.equal(height, onDeck ? deck.best : field, `height at ${at}`);
-        assert.equal(surface, onDeck ? deck.surface : fieldSurface, `surface at ${at}`);
+        expect(height, `height at ${at}`).toBe(onDeck ? deck.best : field);
+        expect(surface, `surface at ${at}`).toBe(onDeck ? deck.surface : fieldSurface);
         if (onDeck) hits++;
       }
-      assert.ok(hits > 4000, `the points land on the deck often enough to mean something (${hits})`);
+      expect(hits, `the points land on the deck often enough to mean something (${hits})`).toBeGreaterThan(4000);
     });
   });
 }

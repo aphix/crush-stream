@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { assertSameDigest } from "../vehicle/test-support.ts";
 import { driverLook, HAIRS, SHIRTS, WOMAN_RATE } from "./driver-look.ts";
 
@@ -12,7 +11,7 @@ describe("given the generated look of each driver (shirt, hair and whether a wom
       const b = driverLook(2, slot);
       if (a.shirt !== b.shirt || a.hair !== b.hair || a.woman !== b.woman) differ++;
     }
-    assert.ok(differ >= 28, `${differ} of 32 slots look different in the next race`);
+    expect(differ, `${differ} of 32 slots look different in the next race`).toBeGreaterThanOrEqual(28);
   });
 
   it("when 200 seeds each make a field of 8, then at the median seed the field has at least 5 distinct tees and 4 distinct hairs", () => {
@@ -25,8 +24,8 @@ describe("given the generated look of each driver (shirt, hair and whether a wom
     }
     shirts.sort((a, b) => a - b);
     hairs.sort((a, b) => a - b);
-    assert.ok(shirts[100]! >= 5, `median distinct tees ${shirts[100]}`);
-    assert.ok(hairs[100]! >= 4, `median distinct hairs ${hairs[100]}`);
+    expect(shirts[100]!, `median distinct tees ${shirts[100]}`).toBeGreaterThanOrEqual(5);
+    expect(hairs[100]!, `median distinct hairs ${hairs[100]}`).toBeGreaterThanOrEqual(4);
   });
 
   it("when 10 000 seed and slot pairs are generated, then 10% ± 1 are women and every tee and hair of the palettes turns up", () => {
@@ -39,9 +38,9 @@ describe("given the generated look of each driver (shirt, hair and whether a wom
       tees.add(l.shirt);
       manes.add(l.hair);
     }
-    assert.ok(Math.abs(women / 10000 - WOMAN_RATE) <= 0.01, `${women / 100}% women`);
-    assert.equal(tees.size, new Set(SHIRTS).size);
-    assert.equal(manes.size, new Set(HAIRS).size);
+    expect(Math.abs(women / 10000 - WOMAN_RATE), `${women / 100}% women`).toBeLessThanOrEqual(0.01);
+    expect(tees.size).toBe(new Set(SHIRTS).size);
+    expect(manes.size).toBe(new Set(HAIRS).size);
   });
 
   it("when women are picked out of 2000 seeds, then a woman's tee and hair are drawn from the same palettes as a man's", () => {
@@ -50,8 +49,8 @@ describe("given the generated look of each driver (shirt, hair and whether a wom
       const l = driverLook(i, 3);
       if (!l.woman) continue;
       women++;
-      assert.ok(SHIRTS.includes(l.shirt) && HAIRS.includes(l.hair));
+      expect(SHIRTS.includes(l.shirt) && HAIRS.includes(l.hair)).toBeTruthy();
     }
-    assert.ok(women > 100);
+    expect(women).toBeGreaterThan(100);
   });
 });

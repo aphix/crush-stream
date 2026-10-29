@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
@@ -43,7 +42,7 @@ function answer(seq: number, hits: ResultMessage["hits"]): ResultMessage {
 /** Frames posted until the strike in frame 1's answer shows on the car, the answer arriving `arrive` posts after frame 1; -1: not before the sim must have it. */
 function glassAfterFrame(arrive: number, frames: number): number[] {
   Object.assign(globalThis, { Worker: ScriptedWorker });
-  const remote = RagdollRemote.open(() => assert.fail("the worker failed"))!;
+  const remote = RagdollRemote.open(() => expect.fail("the worker failed"))!;
   const worker = ScriptedWorker.last;
   worker.say({ type: "ready" });
   const car = makeCar();
@@ -52,7 +51,7 @@ function glassAfterFrame(arrive: number, frames: number): number[] {
   const seen: number[] = [];
   for (let frame = 1; frame <= frames; frame++) {
     if (frame === 1 + arrive) worker.say(answer(1, [{ car: 0, pane: WINDSHIELD }]));
-    if (frame === LAG + 1 && arrive < 0) assert.equal(remote.behind(true), true, "the sim waits for the answer it is to hear");
+    if (frame === LAG + 1 && arrive < 0) expect(remote.behind(true), "the sim waits for the answer it is to hear").toBe(true);
     if (frame === LAG + 1 && arrive < 0) worker.say(answer(1, [{ car: 0, pane: WINDSHIELD }]));
     remote.post(FRAME, cars, true, false, 0);
     seen.push((car.glassBits() >> (2 * WINDSHIELD)) & 3);
@@ -63,9 +62,9 @@ function glassAfterFrame(arrive: number, frames: number): number[] {
 
 /** The two sequences are as long and agree at every index; a failure names the first index they differ at and both values. */
 function assertSame(actual: readonly number[], expected: readonly number[], label: string): void {
-  assert.equal(actual.length, expected.length, `${label}: lengths`);
+  expect(actual.length, `${label}: lengths`).toBe(expected.length);
   const at = actual.findIndex((value, index) => value !== expected[index]);
-  assert.equal(at, -1, `${label}: first difference at ${at}: ${actual[at]} against ${expected[at]}`);
+  expect(at, `${label}: first difference at ${at}: ${actual[at]} against ${expected[at]}`).toBe(-1);
 }
 
 describe("given the dummies' world in a worker whose answer to frame 1 struck a car's windshield", () => {
@@ -83,18 +82,18 @@ describe("given the dummies' world in a worker whose answer to frame 1 struck a 
 describe("given the dummies' world has something out and its answer to a frame the sim is to hear is missing", () => {
   it("when the answer comes, then the sim stops waiting; a peer that does not own the glass never waits", () => {
     Object.assign(globalThis, { Worker: ScriptedWorker });
-    const remote = RagdollRemote.open(() => assert.fail("the worker failed"))!;
+    const remote = RagdollRemote.open(() => expect.fail("the worker failed"))!;
     const worker = ScriptedWorker.last;
     worker.say({ type: "ready" });
     remote.knock(0, -1, 0, 0, 0);
     const cars = [makeCar()];
     for (let frame = 1; frame < LAG; frame++) remote.post(FRAME, cars, true, false, 0);
-    assert.equal(remote.behind(true), false, "no answer is due yet");
+    expect(remote.behind(true), "no answer is due yet").toBe(false);
     remote.post(FRAME, cars, true, false, 0);
-    assert.equal(remote.behind(true), true, "answer to frame 1 is due");
-    assert.equal(remote.behind(false), false, "a client's glass is the host's");
+    expect(remote.behind(true), "answer to frame 1 is due").toBe(true);
+    expect(remote.behind(false), "a client's glass is the host's").toBe(false);
     worker.say(answer(1, []));
-    assert.equal(remote.behind(true), false, "answer is in");
+    expect(remote.behind(true), "answer is in").toBe(false);
     remote.dispose();
   });
 });
@@ -123,6 +122,6 @@ describe("given the same scripted strike of a car's windshield in the dummies' w
     assertSame(inline.glass, [0, 0, CRACKED, CRACKED, CRACKED], "main thread's own world");
     assertSame(inline.glass, worker, "worker, answer early");
     assertSame(inline.glass, stalled, "worker, sim stalled for the answer");
-    assert.match(inline.digest, /^1 /, "the car ends with the windshield cracked and sits where it was");
+    expect(inline.digest, "the car ends with the windshield cracked and sits where it was").toMatch(/^1 /);
   });
 });

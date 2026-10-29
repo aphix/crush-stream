@@ -1,9 +1,9 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import assert from "node:assert/strict";
 import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
 import { DeformableCar } from "./car.ts";
 import { paint } from "./test-support.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** The rest-ripple check's measure (`scripts/contour-ripples.mjs`): each skin of a panel read for gentle folds each way side by side, normals its faces do not give, and split normals its faces do not account for. */
 interface Skin {
@@ -41,7 +41,7 @@ describe("given every body style as built and undeformed", () => {
     it(`when a ${id}'s lids, doors and roof are read skin by skin, then none ripples past the bad level but the readings listed as open, and those are still past it`, async () => {
       // Imported at run time: a static import would pull the script into tsc's strict checkJs program.
       const tool: unknown = await import(new URL("../../../scripts/contour-ripples.mjs", import.meta.url).href);
-      assert.ok(isRippleTool(tool), "the script exports panelsOf, ripplesOf and RIPPLE_FLAG");
+      must(isRippleTool(tool), "the script exports panelsOf, ripplesOf and RIPPLE_FLAG");
       const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
       const { panels } = tool.ripplesOf(tool.panelsOf(car));
       const open = OPEN[id] ?? {};
@@ -58,8 +58,8 @@ describe("given every body style as built and undeformed", () => {
           }
         }
       }
-      assert.equal(over.join("; "), "", `${id}: a skin ripples past the bad level`);
-      assert.equal(fixed.join("; "), "", `${id}: a listed open reading is clean now: drop it from OPEN`);
+      expect(over.join("; "), `${id}: a skin ripples past the bad level`).toBe("");
+      expect(fixed.join("; "), `${id}: a listed open reading is clean now: drop it from OPEN`).toBe("");
     });
   }
 });

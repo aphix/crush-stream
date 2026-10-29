@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { backdropGeometry, PANEL } from "./sky-backdrop.ts";
 
 describe("given the sky backdrop's panel (`environment.backdrop`)", () => {
@@ -18,10 +17,10 @@ describe("given the sky backdrop's panel (`environment.backdrop`)", () => {
         const el = PANEL.foot + (PANEL.top - PANEL.foot) * uv.getY(i);
         if (uv.getX(i) === 0.5 && Math.abs(el) < 0.03 && (middle < 0 || Math.abs(pos.getY(i)) < Math.abs(pos.getY(middle)))) middle = i;
       }
-      assert.ok(middle >= 0, "a vertex on the middle column at the horizon");
+      expect(middle, "a vertex on the middle column at the horizon").toBeGreaterThanOrEqual(0);
       const flat = Math.hypot(pos.getX(middle), pos.getZ(middle));
-      assert.ok(Math.abs(pos.getX(middle) / flat - Math.sin(b)) < 1e-6 && Math.abs(pos.getZ(middle) / flat + Math.cos(b)) < 1e-6, "the middle column on the bearing");
-      assert.ok(low < 0 && high > Math.sin(PANEL.top) - 1e-6, `elevations from ${low.toFixed(3)} to ${high.toFixed(3)}`);
+      expect(Math.abs(pos.getX(middle) / flat - Math.sin(b)) < 1e-6 && Math.abs(pos.getZ(middle) / flat + Math.cos(b)) < 1e-6, "the middle column on the bearing").toBeTruthy();
+      expect(low < 0 && high > Math.sin(PANEL.top) - 1e-6, `elevations from ${low.toFixed(3)} to ${high.toFixed(3)}`).toBeTruthy();
     });
   }
 
@@ -30,8 +29,8 @@ describe("given the sky backdrop's panel (`environment.backdrop`)", () => {
     const pos = g.getAttribute("position");
     const uv = g.getAttribute("uv");
     for (let i = 0; i < pos.count; i++) {
-      if (uv.getX(i) === 0) assert.ok(pos.getX(i) < 0, "u = 0 lies west of north");
-      if (uv.getX(i) === 1) assert.ok(pos.getX(i) > 0, "u = 1 lies east of north");
+      if (uv.getX(i) === 0) expect(pos.getX(i), "u = 0 lies west of north").toBeLessThan(0);
+      if (uv.getX(i) === 1) expect(pos.getX(i), "u = 1 lies east of north").toBeGreaterThan(0);
     }
   });
 });

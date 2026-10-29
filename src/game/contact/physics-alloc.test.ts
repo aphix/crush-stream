@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -79,7 +78,7 @@ function pileUpKbPerFrame(extra: () => void = () => {}): number {
   try {
     for (let f = 0; f < WARM; f++) step();
     const crashed = cars.filter((c) => c.deform.massActive).length;
-    assert.ok(crashed >= CARS / 2, `only ${crashed} of ${CARS} cars crashed: the pile-up no longer exercises the crush path`);
+    expect(crashed, `only ${crashed} of ${CARS} cars crashed: the pile-up no longer exercises the crush path`).toBeGreaterThanOrEqual(CARS / 2);
     const kb =
       allocatedBytes(() => {
         for (let f = 0; f < MEASURE; f++) {
@@ -99,7 +98,7 @@ function pileUpKbPerFrame(extra: () => void = () => {}): number {
 describe("given a warmed 24-car derby pile-up with every car driving at the arena centre", () => {
   it(`when 300 frames are stepped, then physics allocates at most ${BOUND_KB} KB per frame (boxed doubles, iterators and per-call arrays would show up as race GC pauses)`, () => {
     const kb = untilQuiet(() => pileUpKbPerFrame(), BOUND_KB);
-    assert.ok(kb <= BOUND_KB, `${kb.toFixed(0)} KB per frame > ${BOUND_KB} in every pile-up for ${COMPILE_WAIT_S} s: a hot physics path allocates again (see docs/PERF_HITCH.md)`);
+    expect(kb, `${kb.toFixed(0)} KB per frame > ${BOUND_KB} in every pile-up for ${COMPILE_WAIT_S} s: a hot physics path allocates again (see docs/PERF_HITCH.md)`).toBeLessThanOrEqual(BOUND_KB);
   });
 });
 
@@ -109,6 +108,6 @@ describe("given the allocation measure on a derby pile-up", () => {
     const kb = pileUpKbPerFrame(() => {
       for (let i = 0; i < CONTROL_VECTORS; i++) kept[i % 8] = new THREE.Vector3();
     });
-    assert.ok(kb > BOUND_KB, `${kb.toFixed(0)} KB per frame for ${CONTROL_VECTORS} vectors a frame: the measure sees nothing`);
+    expect(kb, `${kb.toFixed(0)} KB per frame for ${CONTROL_VECTORS} vectors a frame: the measure sees nothing`).toBeGreaterThan(BOUND_KB);
   });
 });

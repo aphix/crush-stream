@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { AI_DIFFICULTIES, type AiDifficulty } from "../ai/constants.ts";
 import { fieldAggression } from "../ai/ai-aggression.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
@@ -120,7 +119,7 @@ describe("given the contact classifier (it says which car of a racer-racer conta
   for (const testCase of handCheckedContactCases) {
     it(testCase.it, () => {
       const v = classifyContact(window(testCase.a, testCase.knockedA), window(testCase.b, testCase.knockedB));
-      assert.equal(`${v.a} ${v.b}`, testCase.want.join(" "), `toward A ${v.towardA.toFixed(1)}, toward B ${v.towardB.toFixed(1)}, closing ${v.closing.toFixed(1)}`);
+      expect(`${v.a} ${v.b}`, `toward A ${v.towardA.toFixed(1)}, toward B ${v.towardB.toFixed(1)}, closing ${v.closing.toFixed(1)}`).toBe(testCase.want.join(" "));
     });
   }
 });
@@ -147,7 +146,7 @@ function opening<T>(slider: number, seed: number, difficulty: AiDifficulty, read
 describe("given the aggression slider at 0, so every rival is as gentle as can be", () => {
   it("when field seeds 1 to 5 roll the rivals' aggression, then every rival's is 0 whatever the seed", () => {
     for (let seed = 1; seed <= 5; seed++) {
-      for (let id = 1; id <= AI_RIVALS + 3; id++) assert.equal(fieldAggression(0, seed, id), 0, `seed ${seed}, rival ${id}`);
+      for (let id = 1; id <= AI_RIVALS + 3; id++) expect(fieldAggression(0, seed, id), `seed ${seed}, rival ${id}`).toBe(0);
     }
   });
 
@@ -155,15 +154,15 @@ describe("given the aggression slider at 0, so every rival is as gentle as can b
     it(`when field seeds 1 and 2 start the same oval race at ${difficulty} AI, then every car stands where it does under the other seed after ${OPENING} s of racing`, () => {
       const stand = (seed: number) => opening(0, seed, difficulty, (w) => w.live().flatMap((c) => c.group.position.toArray()));
       const first = stand(1);
-      assert.ok(first.length >= 3 * (AI_RIVALS + 1) && first.some((v) => v !== 0), "the cars stand somewhere: the test proves nothing otherwise");
+      expect(first.length >= 3 * (AI_RIVALS + 1) && first.some((v) => v !== 0), "the cars stand somewhere: the test proves nothing otherwise").toBeTruthy();
       assertSameNumbers(stand(2), first, "every car's position under field seed 2");
     });
 
     for (const track of [OVAL, CITY]) {
       it(`when a full grid of 8 races 2 laps of the ${track.id} course at ${difficulty} AI, as the brains decide (the kinematic race), then no racer drives into another car`, () => {
         const r = kinematicContacts(track, 8, 0, 2, difficulty);
-        assert.equal(r.finished, 8, "every car finished: the field raced");
-        assert.deepEqual(r.hits, []);
+        expect(r.finished, "every car finished: the field raced").toBe(8);
+        expect(r.hits).toHaveLength(0);
       });
     }
   }
@@ -171,6 +170,6 @@ describe("given the aggression slider at 0, so every rival is as gentle as can b
 
 describe("given every rival at the ramming maximum of the aggression slider", () => {
   it("when a full grid of 8 races 2 laps of the oval at hard AI (the kinematic race), then racers drive into other cars (the clean-field check can fail)", () => {
-    assert.ok(kinematicContacts(OVAL, 8, 1, 2, "hard").hits.length >= 1, "no racer-initiated contact at the ramming maximum: the clean-field rows above prove nothing");
+    expect(kinematicContacts(OVAL, 8, 1, 2, "hard").hits.length, "no racer-initiated contact at the ramming maximum: the clean-field rows above prove nothing").toBeGreaterThanOrEqual(1);
   });
 });

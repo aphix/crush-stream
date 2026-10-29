@@ -1,10 +1,10 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { levelOrder } from "../scenes/ground-stack.ts";
 import { LANDING_HEIGHT, MINIGAME_MODE, MINIGAME_MODES, MODE_LABELS, START_HILL, STATION_HALF_WIDTH, type MinigameMode } from "../scenes/minigame-constants.ts";
 import { floorHeightAt, lipHeight, stationBackX, stationFrontX } from "../scenes/minigame-profile.ts";
 import { flatGroundTiles, makeFlatGround, makeStationSurface, STATION_SURFACE_STYLES, SURFACE_DRAW_CALL_BUDGET, SURFACE_STEP, SURFACE_TERRAIN_COLOUR, type GroundRectangle } from "./minigame-surface-art.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const HEIGHT_TOLERANCE = 0.001;
 const EXTENT_TOLERANCE = 0.001;
@@ -100,7 +100,7 @@ function triangleAt(triangles: readonly Triangle[], x: number, z: number): Trian
     const box = bounds(triangle);
     return x > box.minX && x < box.maxX && z > box.minZ && z < box.maxZ;
   });
-  assert.ok(found, `a triangle covers (${x}, ${z})`);
+  must(found, `a triangle covers (${x}, ${z})`);
   return found;
 }
 
@@ -146,12 +146,12 @@ function area(rectangle: GroundRectangle): number {
 
 describe("given the stations' surfaces built in node, with no document and no WebGL context", () => {
   it("when each is made, then it is one group with at most the draw-call budget of meshes", () => {
-    assert.equal(Reflect.has(globalThis, "document"), false, "no document in this process");
+    expect(Reflect.has(globalThis, "document"), "no document in this process").toBe(false);
     for (const mode of MINIGAME_MODES) {
       const group = makeStationSurface(mode, STATION_SURFACE_STYLES[mode]);
       const drawCalls = surfaceMeshes(group).length;
-      assert.ok(drawCalls >= 1, `${mode} draws something`);
-      assert.ok(drawCalls <= SURFACE_DRAW_CALL_BUDGET, `${mode} draws ${drawCalls} meshes, budget ${SURFACE_DRAW_CALL_BUDGET}`);
+      expect(drawCalls, `${mode} draws something`).toBeGreaterThanOrEqual(1);
+      expect(drawCalls, `${mode} draws ${drawCalls} meshes, budget ${SURFACE_DRAW_CALL_BUDGET}`).toBeLessThanOrEqual(SURFACE_DRAW_CALL_BUDGET);
     }
   });
 });
@@ -168,32 +168,32 @@ for (const mode of MINIGAME_MODES) {
     it("when every floor vertex is compared with the floor function, then its height is the floor's at its x and z to a millimetre", () => {
       for (const corner of floorCorners) {
         const expected = floorHeightAt(mode, corner.x, corner.z);
-        assert.ok(Math.abs(corner.y - expected) <= HEIGHT_TOLERANCE, `at (${corner.x}, ${corner.z}) height ${corner.y}, floor ${expected}`);
+        expect(Math.abs(corner.y - expected), `at (${corner.x}, ${corner.z}) height ${corner.y}, floor ${expected}`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
       }
     });
 
     it("when its extent is read, then the floor runs from the station's back to its front and across the sim ground's whole band, and the strip lies within it", () => {
-      assert.ok(Math.abs(Math.min(...floorCorners.map((corner) => corner.x)) - stationBackX(mode)) <= EXTENT_TOLERANCE, "back x");
-      assert.ok(Math.abs(Math.max(...floorCorners.map((corner) => corner.x)) - stationFrontX(mode)) <= EXTENT_TOLERANCE, "front x");
-      assert.ok(Math.abs(Math.min(...floorCorners.map((corner) => corner.z)) + STATION_HALF_WIDTH) <= EXTENT_TOLERANCE, "left side");
-      assert.ok(Math.abs(Math.max(...floorCorners.map((corner) => corner.z)) - STATION_HALF_WIDTH) <= EXTENT_TOLERANCE, "right side");
-      assert.ok(style.laneHalfWidth < STATION_HALF_WIDTH, "the strip is narrower than the band");
+      expect(Math.abs(Math.min(...floorCorners.map((corner) => corner.x)) - stationBackX(mode)), "back x").toBeLessThanOrEqual(EXTENT_TOLERANCE);
+      expect(Math.abs(Math.max(...floorCorners.map((corner) => corner.x)) - stationFrontX(mode)), "front x").toBeLessThanOrEqual(EXTENT_TOLERANCE);
+      expect(Math.abs(Math.min(...floorCorners.map((corner) => corner.z)) + STATION_HALF_WIDTH), "left side").toBeLessThanOrEqual(EXTENT_TOLERANCE);
+      expect(Math.abs(Math.max(...floorCorners.map((corner) => corner.z)) - STATION_HALF_WIDTH), "right side").toBeLessThanOrEqual(EXTENT_TOLERANCE);
+      expect(style.laneHalfWidth, "the strip is narrower than the band").toBeLessThan(STATION_HALF_WIDTH);
     });
 
     it("when its triangles are added up as seen from above, then they cover the whole band with no hole", () => {
       const covered = floor.reduce((total, triangle) => total + footprintArea(triangle), 0);
       const band = (stationFrontX(mode) - stationBackX(mode)) * STATION_HALF_WIDTH * 2;
-      assert.ok(Math.abs(covered - band) < COVERAGE_TOLERANCE, `covered ${covered} m2 of ${band} m2`);
+      expect(Math.abs(covered - band), `covered ${covered} m2 of ${band} m2`).toBeLessThan(COVERAGE_TOLERANCE);
     });
 
     it("when its vertex columns along the run are read, then none is farther from the next than a step and the lip is one of them at the lip's height", () => {
       const columns = leftEdgeColumns(floorCorners);
       for (let index = 1; index < columns.length; index++) {
-        assert.ok(columns[index]!.x - columns[index - 1]!.x <= SURFACE_STEP + EXTENT_TOLERANCE, `gap before x ${columns[index]!.x}`);
+        expect(columns[index]!.x - columns[index - 1]!.x, `gap before x ${columns[index]!.x}`).toBeLessThanOrEqual(SURFACE_STEP + EXTENT_TOLERANCE);
       }
       const lip = columns.find((column) => Math.abs(column.x) <= EXTENT_TOLERANCE);
-      assert.ok(lip, "a vertex column stands on the lip");
-      assert.ok(Math.abs(lip.y - lipHeight(mode)) <= HEIGHT_TOLERANCE, `lip height ${lip.y}, wanted ${lipHeight(mode)}`);
+      must(lip, "a vertex column stands on the lip");
+      expect(Math.abs(lip.y - lipHeight(mode)), `lip height ${lip.y}, wanted ${lipHeight(mode)}`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
     });
 
     it("when the surface is read between two vertices of a column, then it is within a chord tolerance of the floor", () => {
@@ -202,47 +202,47 @@ for (const mode of MINIGAME_MODES) {
         const before = columns[index - 1]!;
         const after = columns[index]!;
         const off = Math.abs((before.y + after.y) / 2 - floorHeightAt(mode, (before.x + after.x) / 2, before.z));
-        assert.ok(off <= CHORD_TOLERANCE, `between x ${before.x} and ${after.x} the surface is ${off} m off the floor`);
+        expect(off, `between x ${before.x} and ${after.x} the surface is ${off} m off the floor`).toBeLessThanOrEqual(CHORD_TOLERANCE);
       }
     });
 
     it("when the band's back and front edges are read, then both lie at the pad's level, so the flat ground beside them meets them without a step", () => {
       const edgeCorners = floorCorners.filter((corner) => Math.abs(corner.x - stationBackX(mode)) <= EXTENT_TOLERANCE || Math.abs(corner.x - stationFrontX(mode)) <= EXTENT_TOLERANCE);
-      assert.ok(edgeCorners.length >= 4, "corners on both edges");
-      for (const corner of edgeCorners) assert.ok(Math.abs(corner.y - LANDING_HEIGHT) <= HEIGHT_TOLERANCE, `edge corner at x ${corner.x} is ${corner.y} m high`);
+      expect(edgeCorners.length, "corners on both edges").toBeGreaterThanOrEqual(4);
+      for (const corner of edgeCorners) expect(Math.abs(corner.y - LANDING_HEIGHT), `edge corner at x ${corner.x} is ${corner.y} m high`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
     });
 
     it("when the band is read beside the strip, then it is terrain colour, and on the strip it is not", () => {
       const run = cellCentresPastThePad(mode);
       const beside = (style.laneHalfWidth + STATION_HALF_WIDTH) / 2;
       const probeX = run[Math.floor(run.length / 2)]!;
-      for (const side of [-1, 1]) assert.ok(isColour(triangleAt(floor, probeX, side * beside), SURFACE_TERRAIN_COLOUR), `terrain beside the strip on side ${side}`);
-      assert.equal(isColour(triangleAt(floor, probeX, style.laneHalfWidth / 2), SURFACE_TERRAIN_COLOUR), false, "the strip is painted");
+      for (const side of [-1, 1]) expect(isColour(triangleAt(floor, probeX, side * beside), SURFACE_TERRAIN_COLOUR), `terrain beside the strip on side ${side}`).toBeTruthy();
+      expect(isColour(triangleAt(floor, probeX, style.laneHalfWidth / 2), SURFACE_TERRAIN_COLOUR), "the strip is painted").toBe(false);
     });
 
     it("when each side wall's corners are read, then its top corners are the floor's height at their x and its foot corners are the pad's level", () => {
-      assert.ok(walls.length > 0, "the floor is off the pad's level somewhere, so there are walls");
+      expect(walls.length, "the floor is off the pad's level somewhere, so there are walls").toBeGreaterThan(0);
       for (const corner of cornersOf(walls)) {
         const isFoot = corner.y === LANDING_HEIGHT;
         const isTop = Math.abs(corner.y - floorHeightAt(mode, corner.x, corner.z)) <= HEIGHT_TOLERANCE;
-        assert.ok(isFoot || isTop, `wall corner (${corner.x}, ${corner.y}, ${corner.z}) is neither at the pad's level nor on the floor`);
+        expect(isFoot || isTop, `wall corner (${corner.x}, ${corner.y}, ${corner.z}) is neither at the pad's level nor on the floor`).toBeTruthy();
       }
-      for (const wall of walls) assert.ok(wall.corners.some((corner) => corner.y === LANDING_HEIGHT), "each wall triangle stands on the pad's level");
+      for (const wall of walls) expect(wall.corners.some((corner) => corner.y === LANDING_HEIGHT), "each wall triangle stands on the pad's level").toBeTruthy();
     });
 
     it("when the walls' areas are added up per side, then each side's wall is as large as the floor's depth or height integrated down the run", () => {
       const expected = floorIntegral(mode);
-      assert.ok(expected > 0, "the floor leaves the pad's level");
+      expect(expected, "the floor leaves the pad's level").toBeGreaterThan(0);
       for (const side of [-1, 1]) {
         const wallArea = walls.filter((wall) => Math.sign(wall.corners[0].z) === side).reduce((total, wall) => total + profileArea(wall), 0);
-        assert.ok(Math.abs(wallArea - expected) <= expected * WALL_AREA_TOLERANCE, `side ${side}: wall ${wallArea} m2, floor integral ${expected} m2`);
+        expect(Math.abs(wallArea - expected), `side ${side}: wall ${wallArea} m2, floor integral ${expected} m2`).toBeLessThanOrEqual(expected * WALL_AREA_TOLERANCE);
       }
     });
 
     it("when the pad at the station's back is read, then the floor there is level and no wall stands on it", () => {
       const padEndX = stationBackX(mode) + START_HILL.padLength;
       const wallsOnPad = walls.filter((wall) => wall.corners.every((corner) => corner.x <= padEndX));
-      assert.equal(wallsOnPad.length, 0, "walls on the level pad");
+      expect(wallsOnPad.length, "walls on the level pad").toBe(0);
     });
 
     it("when each wall's winding is read, then its visible face looks away from a raised floor's solid and into a trench", () => {
@@ -253,10 +253,10 @@ for (const mode of MINIGAME_MODES) {
         if (!isOneSidedAndWide) continue;
         const outward = Math.sign(wall.corners[0].z);
         const raised = heights[0]! > 0;
-        assert.equal(Math.sign(normalZ(wall)), raised ? outward : -outward, `wall at x ${wall.corners[0].x} on side ${outward} (${raised ? "raised" : "trench"})`);
+        expect(Math.sign(normalZ(wall)), `wall at x ${wall.corners[0].x} on side ${outward} (${raised ? "raised" : "trench"})`).toBe(raised ? outward : -outward);
         checkedWalls++;
       }
-      assert.ok(checkedWalls >= walls.length / 2, `${checkedWalls} of ${walls.length} walls checked`);
+      expect(checkedWalls, `${checkedWalls} of ${walls.length} walls checked`).toBeGreaterThanOrEqual(walls.length / 2);
     });
   });
 }
@@ -267,9 +267,9 @@ describe("given the High jump's back drop behind the lip", () => {
   it("when its side walls are read, then they run down the drop to the pad's level, closing it to the front edge", () => {
     const walls = triangles.filter(isSideWall);
     const frontmostWallX = Math.max(...cornersOf(walls).map((corner) => corner.x));
-    assert.ok(frontmostWallX >= stationFrontX(MINIGAME_MODE.highJump) - SURFACE_STEP - EXTENT_TOLERANCE, `walls end at x ${frontmostWallX}, the drop at ${stationFrontX(MINIGAME_MODE.highJump)}`);
+    expect(frontmostWallX, `walls end at x ${frontmostWallX}, the drop at ${stationFrontX(MINIGAME_MODE.highJump)}`).toBeGreaterThanOrEqual(stationFrontX(MINIGAME_MODE.highJump) - SURFACE_STEP - EXTENT_TOLERANCE);
     const lipWalls = walls.filter((wall) => wall.corners.some((corner) => Math.abs(corner.x) <= EXTENT_TOLERANCE) && wall.corners.some((corner) => corner.y > 0));
-    assert.ok(lipWalls.length >= 2, "walls on both sides at the lip, standing on the raised floor");
+    expect(lipWalls.length, "walls on both sides at the lip, standing on the raised floor").toBeGreaterThanOrEqual(2);
   });
 });
 
@@ -281,11 +281,11 @@ describe("given the High jump's red run-up strip with its dashed centre line", (
   it("when the strip's middle is walked along the run-up, then dashes come and go as separate runs of the line's colour and the strip's", () => {
     const dashed = runUpCellCentres.map((x) => isColour(triangleAt(triangles, x, 0), style.centreDashColour!));
     const dashRuns = dashed.filter((isDash, index) => isDash && (index === 0 || !dashed[index - 1])).length;
-    assert.ok(dashRuns >= 2, `${dashRuns} dashes along ${runUpCellCentres.length} cells`);
-    assert.ok(dashed.includes(false), "gaps between the dashes");
+    expect(dashRuns, `${dashRuns} dashes along ${runUpCellCentres.length} cells`).toBeGreaterThanOrEqual(2);
+    expect(dashed.includes(false), "gaps between the dashes").toBeTruthy();
     for (const x of runUpCellCentres) {
       const triangle = triangleAt(triangles, x, 0);
-      assert.ok(isColour(triangle, style.centreDashColour!) || isColour(triangle, style.baseColour), `x ${x} is neither dash nor strip`);
+      expect(isColour(triangle, style.centreDashColour!) || isColour(triangle, style.baseColour), `x ${x} is neither dash nor strip`).toBeTruthy();
     }
   });
 });
@@ -302,9 +302,9 @@ describe("given each station's paint across the band", () => {
       const triangles = floorTriangles(surfaceTriangles(makeStationSurface(testCase.mode, style)));
       const paints = { terrain: SURFACE_TERRAIN_COLOUR, base: style.baseColour, line: style.edgeLineColour! };
       const probeX = cellCentresPastThePad(testCase.mode).find((x) => style.centreDashColour === null || isColour(triangleAt(triangles, x, 0), style.centreDashColour));
-      assert.ok(probeX !== undefined, "an x where the centre line is painted");
+      must(probeX !== undefined, "an x where the centre line is painted");
       const colourNames = coloursAcrossBand(triangles, probeX, Object.values(paints)).map((hex) => Object.entries(paints).find(([, painted]) => painted === hex)?.[0] ?? "unknown");
-      assert.equal(colourNames.join(","), testCase.runsOfPaint.join(","), "paint runs across the band");
+      expect(colourNames.join(","), "paint runs across the band").toBe(testCase.runsOfPaint.join(","));
     });
   }
 });
@@ -320,13 +320,13 @@ describe("given a ground plan cut around holes", () => {
     it(testCase.it, () => {
       const tiles = flatGroundTiles(testCase.extent, testCase.holes);
       const expectedArea = area(testCase.extent) - testCase.holes.reduce((total, hole) => total + area(hole), 0);
-      assert.ok(Math.abs(tiles.reduce((total, tile) => total + area(tile), 0) - expectedArea) < COVERAGE_TOLERANCE, "tiles cover the extent minus the holes");
+      expect(Math.abs(tiles.reduce((total, tile) => total + area(tile), 0) - expectedArea), "tiles cover the extent minus the holes").toBeLessThan(COVERAGE_TOLERANCE);
       for (const tile of tiles) {
-        assert.ok(tile.minX >= testCase.extent.minX && tile.maxX <= testCase.extent.maxX && tile.minZ >= testCase.extent.minZ && tile.maxZ <= testCase.extent.maxZ, "tile within the extent");
-        for (const hole of testCase.holes) assert.equal(overlaps(tile, hole), false, `tile ${JSON.stringify(tile)} over hole ${JSON.stringify(hole)}`);
+        expect(tile.minX >= testCase.extent.minX && tile.maxX <= testCase.extent.maxX && tile.minZ >= testCase.extent.minZ && tile.maxZ <= testCase.extent.maxZ, "tile within the extent").toBeTruthy();
+        for (const hole of testCase.holes) expect(overlaps(tile, hole), `tile ${JSON.stringify(tile)} over hole ${JSON.stringify(hole)}`).toBe(false);
       }
       for (let first = 0; first < tiles.length; first++) {
-        for (let second = first + 1; second < tiles.length; second++) assert.equal(overlaps(tiles[first]!, tiles[second]!), false, `tiles ${first} and ${second} overlap`);
+        for (let second = first + 1; second < tiles.length; second++) expect(overlaps(tiles[first]!, tiles[second]!), `tiles ${first} and ${second} overlap`).toBe(false);
       }
     });
   }
@@ -337,21 +337,21 @@ describe("given flat ground made from tiles", () => {
   const ground = makeFlatGround("test-ground", tiles);
 
   it("when it is made, then it is one terrain-level mesh in the terrain colour, flat at the pad's level, covering exactly the tiles", () => {
-    assert.equal(ground.name, "test-ground");
-    assert.equal(ground.renderOrder, levelOrder("terrain"), "terrain level");
+    expect(ground.name).toBe("test-ground");
+    expect(ground.renderOrder, "terrain level").toBe(levelOrder("terrain"));
     const groundTriangles = surfaceTriangles(ground);
-    assert.ok(groundTriangles.length >= tiles.length * 2, "two triangles a tile");
+    expect(groundTriangles.length, "two triangles a tile").toBeGreaterThanOrEqual(tiles.length * 2);
     for (const triangle of groundTriangles) {
-      assert.ok(isColour(triangle, SURFACE_TERRAIN_COLOUR), "terrain colour");
-      for (const corner of triangle.corners) assert.equal(corner.y, LANDING_HEIGHT, "flat at the pad's level");
+      expect(isColour(triangle, SURFACE_TERRAIN_COLOUR), "terrain colour").toBeTruthy();
+      for (const corner of triangle.corners) expect(corner.y, "flat at the pad's level").toBe(LANDING_HEIGHT);
     }
     const covered = groundTriangles.reduce((total, triangle) => total + footprintArea(triangle), 0);
-    assert.ok(Math.abs(covered - tiles.reduce((total, tile) => total + area(tile), 0)) < COVERAGE_TOLERANCE, "covers the tiles");
+    expect(Math.abs(covered - tiles.reduce((total, tile) => total + area(tile), 0)), "covers the tiles").toBeLessThan(COVERAGE_TOLERANCE);
   });
 
   it("when its triangles' normals are read, then they face up so the ground shows from above", () => {
     const normals = ground.geometry.getAttribute("normal");
-    assert.ok(normals.count > 0);
-    for (let index = 0; index < normals.count; index++) assert.ok(normals.getY(index) > 0.999, `normal ${index} is ${normals.getY(index)} up`);
+    expect(normals.count).toBeGreaterThan(0);
+    for (let index = 0; index < normals.count; index++) expect(normals.getY(index), `normal ${index} is ${normals.getY(index)} up`).toBeGreaterThan(0.999);
   });
 });

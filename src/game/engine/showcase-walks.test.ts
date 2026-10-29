@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { DummyMesh } from "../present/ragdoll-mesh.ts";
@@ -8,6 +7,7 @@ import { SHOWCASE_EYE } from "../present/showcase-art.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * A press on a showcase figure pushes him at the point it landed, the way the camera faces; he goes limp, gets up and walks back to his
@@ -70,8 +70,8 @@ describe("given the real engine booted on #scene=showcase", () => {
     settle();
     const seed = engine["sceneSeed"];
     runSeconds(engine, 12);
-    assert.equal(engine["sceneSeed"], seed, "the scene was not rerolled");
-    assert.equal(engine["cars"][0]!.vaporized, true, "the car did leave the sim, as it always does here");
+    expect(engine["sceneSeed"], "the scene was not rerolled").toBe(seed);
+    expect(engine["cars"][0]!.vaporized, "the car did leave the sim, as it always does here").toBe(true);
   });
 
   const partCases: readonly { it: string; height: number; across: number; expectedParts: readonly number[] }[] = [
@@ -83,7 +83,7 @@ describe("given the real engine booted on #scene=showcase", () => {
   for (const testCase of partCases) {
     it(testCase.it, () => {
       settle();
-      assert.equal(press(2, testCase.height, testCase.across), true, "the press landed on him");
+      expect(press(2, testCase.height, testCase.across), "the press landed on him").toBe(true);
       const slot = ragdolls()["lastSlot"];
       const bodies = ragdolls()["dolls"][slot].bodies;
       const speeds = PARTS.map((_, k) => {
@@ -91,7 +91,7 @@ describe("given the real engine booted on #scene=showcase", () => {
         return Math.hypot(v.x, v.y, v.z);
       });
       const fastest = speeds.indexOf(Math.max(...speeds));
-      assert.ok(testCase.expectedParts.includes(fastest), `the fastest part is ${fastest} (${speeds[fastest]!.toFixed(1)} m/s), not one of ${testCase.expectedParts.join(", ")}`);
+      expect(testCase.expectedParts.includes(fastest), `the fastest part is ${fastest} (${speeds[fastest]!.toFixed(1)} m/s), not one of ${testCase.expectedParts.join(", ")}`).toBeTruthy();
     });
   }
 
@@ -111,8 +111,8 @@ describe("given the real engine booted on #scene=showcase", () => {
       const ndc = target.clone().project(engine["camera"]);
       ray.setFromCamera(new THREE.Vector2(ndc.x, ndc.y), engine["camera"]);
       const hit = ray.intersectObject(art().people.group, true).find((h) => h.object instanceof DummyMesh);
-      assert.equal(hit?.instanceId, testCase.slot, "the ray lands on his slot");
-      assert.ok(hit!.point.distanceTo(target) < 0.1, `and ${hit!.point.distanceTo(target).toFixed(3)} m from where the forearm is drawn`);
+      expect(hit?.instanceId, "the ray lands on his slot").toBe(testCase.slot);
+      expect(hit!.point.distanceTo(target), `and ${hit!.point.distanceTo(target).toFixed(3)} m from where the forearm is drawn`).toBeLessThan(0.1);
     });
   }
 
@@ -125,7 +125,7 @@ describe("given the real engine booted on #scene=showcase", () => {
     it(testCase.it, () => {
       settle();
       lookFrom(testCase.eye, testCase.target);
-      assert.equal(press(testCase.slot, 1.2), true, "the press landed on him");
+      expect(press(testCase.slot, 1.2), "the press landed on him").toBe(true);
       const slot = ragdolls()["lastSlot"];
       const from = new THREE.Vector3();
       ragdolls().torso(slot, from, null);
@@ -133,7 +133,7 @@ describe("given the real engine booted on #scene=showcase", () => {
       const to = new THREE.Vector3();
       ragdolls().torso(slot, to, null);
       const moved = (to[testCase.axis] - from[testCase.axis]) * testCase.expectedSign;
-      assert.ok(moved > 0.5, `moved ${moved.toFixed(2)} m the way the camera faces along ${testCase.axis}`);
+      expect(moved, `moved ${moved.toFixed(2)} m the way the camera faces along ${testCase.axis}`).toBeGreaterThan(0.5);
     });
   }
 
@@ -145,8 +145,8 @@ describe("given the real engine booted on #scene=showcase", () => {
   for (const testCase of homeCases) {
     it(testCase.it, () => {
       settle();
-      assert.equal(press(testCase.slot, 1.2), true, "the press landed on him");
-      assert.equal(standing(testCase.slot), false, "off the set while he is away");
+      expect(press(testCase.slot, 1.2), "the press landed on him").toBe(true);
+      expect(standing(testCase.slot), "off the set while he is away").toBe(false);
       const slot = ragdolls()["lastSlot"];
       const walker = ragdolls().walkers[slot]!;
       const seen = new Set<string>();
@@ -158,20 +158,20 @@ describe("given the real engine booted on #scene=showcase", () => {
         seen.add(walker.state);
         if (ragdolls().walkerTorso(torso, slot)) farthest = Math.max(farthest, Math.hypot(torso.x - mark.x, torso.z - mark.z));
       }
-      assert.equal(standing(testCase.slot), true, "back on the set");
-      assert.deepEqual([...seen].sort(), ["down", "getUp", "stand"], "he lay, got up and walked");
-      assert.ok(farthest > 1, `he was knocked ${farthest.toFixed(1)} m from his mark`);
-      assert.equal(live(), 0, "no dummy of his is left in the ragdoll world");
-      assert.equal(walker.active, false, "his walker is let go");
+      expect(standing(testCase.slot), "back on the set").toBe(true);
+      expect(firstMismatch([...seen].sort(), ["down", "getUp", "stand"]), "he lay, got up and walked").toBeUndefined();
+      expect(farthest, `he was knocked ${farthest.toFixed(1)} m from his mark`).toBeGreaterThan(1);
+      expect(live(), "no dummy of his is left in the ragdoll world").toBe(0);
+      expect(walker.active, "his walker is let go").toBe(false);
     });
   }
 
   it("when a fifth figure is knocked while four are away, then the one longest away is sent home at once and four dummies are out", () => {
     settle();
-    for (const slot of [0, 1, 2, 3, 4]) assert.equal(press(slot, 1.2), true, `figure ${slot} pressed`);
-    assert.equal(standing(0), true, "the first is back on his mark");
-    for (const slot of [1, 2, 3, 4]) assert.equal(standing(slot), false, `figure ${slot} is away`);
-    assert.equal(live(), 4, "four dummies are out");
+    for (const slot of [0, 1, 2, 3, 4]) expect(press(slot, 1.2), `figure ${slot} pressed`).toBe(true);
+    expect(standing(0), "the first is back on his mark").toBe(true);
+    for (const slot of [1, 2, 3, 4]) expect(standing(slot), `figure ${slot} is away`).toBe(false);
+    expect(live(), "four dummies are out").toBe(4);
   });
 
   const againCases: readonly { it: string; waitFor: string }[] = [
@@ -182,23 +182,23 @@ describe("given the real engine booted on #scene=showcase", () => {
   for (const testCase of againCases) {
     it(testCase.it, () => {
       settle();
-      assert.equal(press(3, 1.2), true, "the first press landed on him");
+      expect(press(3, 1.2), "the first press landed on him").toBe(true);
       const slot = ragdolls()["lastSlot"];
       const walker = ragdolls().walkers[slot]!;
       const torso = new THREE.Vector3();
       runSeconds(engine, 0.3);
       for (let t = 0; t < 12 && walker.state !== testCase.waitFor; t += 0.1) runSeconds(engine, 0.1);
-      assert.equal(walker.state, testCase.waitFor, "he reached the state under test");
+      expect(walker.state, "he reached the state under test").toBe(testCase.waitFor);
       const before = walker.sinceStruck;
-      assert.equal(ragdolls().walkerTorso(torso, slot), true, "his dummy is out");
+      expect(ragdolls().walkerTorso(torso, slot), "his dummy is out").toBe(true);
       const [x, y] = screenOf(torso);
-      assert.equal(engine["view"].take!.down(x, y, 0), true, "the press landed on his dummy");
-      assert.equal(walker.state, "down", "limp again");
-      assert.ok(walker.sinceStruck < before, `struck again: ${walker.sinceStruck.toFixed(2)} s ago, not ${before.toFixed(2)}`);
-      assert.equal(standing(3), false, "he is not back on the set yet");
+      expect(engine["view"].take!.down(x, y, 0), "the press landed on his dummy").toBe(true);
+      expect(walker.state, "limp again").toBe("down");
+      expect(walker.sinceStruck, `struck again: ${walker.sinceStruck.toFixed(2)} s ago, not ${before.toFixed(2)}`).toBeLessThan(before);
+      expect(standing(3), "he is not back on the set yet").toBe(false);
       for (let t = 0; t < HOME_WITHIN_SECONDS && !standing(3); t += 0.1) runSeconds(engine, 0.1);
-      assert.equal(standing(3), true, "he got home after all");
-      assert.equal(live(), 0, "and his dummy is gone from the ragdoll world");
+      expect(standing(3), "he got home after all").toBe(true);
+      expect(live(), "and his dummy is gone from the ragdoll world").toBe(0);
     });
   }
 });

@@ -1,11 +1,11 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
 import { DebrisSystem, GlassDotSystem, SparkSystem, TireSmokeSystem } from "./engine-fx.ts";
 import { sparkLives } from "./fountain-sparks.test-util.ts";
 import { FountainSystem, JET_FADE_S, REBASE_S } from "./fountain-system.ts";
 import { drawQueued } from "./fx-uploads.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** A point sprite never draws under one pixel however far it is, so the dot pools must hand the GPU only their live dots; every crash FX pool uploads only those. */
 
@@ -74,25 +74,25 @@ const drawnY = (sys: Dots): number[] => {
 
 /** `attr` is a dynamic buffer with exactly one queued upload: the first `floats` floats, where the live entries are packed. */
 function assertFrontUpload(attr: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, floats: number, label: string): void {
-  assert.ok(attr instanceof THREE.BufferAttribute, `${label} is a plain buffer`);
-  assert.equal(attr.usage, THREE.DynamicDrawUsage, `${label} usage`);
-  assert.equal(attr.updateRanges.length, 1, `${label} ranges`);
-  assert.equal(attr.updateRanges[0]!.start, 0, `${label} range start`);
-  assert.equal(attr.updateRanges[0]!.count, floats, `${label} range count`);
+  must(attr instanceof THREE.BufferAttribute, `${label} is a plain buffer`);
+  expect(attr.usage, `${label} usage`).toBe(THREE.DynamicDrawUsage);
+  expect(attr.updateRanges.length, `${label} ranges`).toBe(1);
+  expect(attr.updateRanges[0]!.start, `${label} range start`).toBe(0);
+  expect(attr.updateRanges[0]!.count, `${label} range count`).toBe(floats);
 }
 
 for (const { name, make } of POOLS) {
   describe(`given a ${name} pool`, () => {
     it("when nothing has been thrown, then the GPU draws no dot", () => {
       const { sys } = make(new THREE.Scene());
-      assert.equal(drawn(sys), 0);
+      expect(drawn(sys)).toBe(0);
     });
 
     it("when the pool is made, then its material reads vertex colours exactly when it has a colour attribute", () => {
       const { sys } = make(new THREE.Scene());
       const material = sys["points"].material;
-      assert.ok(material instanceof THREE.PointsMaterial);
-      assert.equal(material.vertexColors, sys["geo"].getAttribute("color") !== undefined);
+      must(material instanceof THREE.PointsMaterial, "the pool's material is a points material");
+      expect(material.vertexColors).toBe(sys["geo"].getAttribute("color") !== undefined);
     });
 
     it("when a shower is in the air, then the GPU draws exactly its live dots, all near the world", () => {
@@ -100,9 +100,9 @@ for (const { name, make } of POOLS) {
       shower();
       run(sys, 0.2);
       const live = alive(sys);
-      assert.ok(live > 0, "the shower is still up");
-      assert.equal(drawn(sys), live, "one drawn dot per live dot");
-      assert.ok(Math.max(...drawnY(sys)) < NEAR_WORLD_M, "no drawn dot is parked high above the world");
+      expect(live, "the shower is still up").toBeGreaterThan(0);
+      expect(drawn(sys), "one drawn dot per live dot").toBe(live);
+      expect(Math.max(...drawnY(sys)), "no drawn dot is parked high above the world").toBeLessThan(NEAR_WORLD_M);
     });
 
     it("when a shower is in the air, then only the live dots' floats are queued for the GPU, into dynamic buffers", () => {
@@ -117,7 +117,7 @@ for (const { name, make } of POOLS) {
       const { sys, shower } = make(new THREE.Scene());
       shower();
       run(sys, ALL_DEAD_S);
-      assert.equal(drawn(sys), 0);
+      expect(drawn(sys)).toBe(0);
     });
 
     it("when the pool is reset in mid-air, then the GPU draws none", () => {
@@ -125,7 +125,7 @@ for (const { name, make } of POOLS) {
       shower();
       run(sys, 0.2);
       sys.reset();
-      assert.equal(drawn(sys), 0);
+      expect(drawn(sys)).toBe(0);
     });
   });
 }
@@ -136,7 +136,7 @@ const ITEM_SIZE = { position: 3, aVel: 3, aSpan: 2, color: 3 } as const;
 function fountainRanges(sys: FountainSystem): { name: string; attr: THREE.BufferAttribute; item: number }[] {
   return Object.entries(ITEM_SIZE).map(([name, item]) => {
     const attr = sys["geo"].getAttribute(name);
-    assert.ok(attr instanceof THREE.BufferAttribute, `${name} is a plain buffer`);
+    must(attr instanceof THREE.BufferAttribute, `${name} is a plain buffer`);
     return { name, attr, item };
   });
 }
@@ -152,16 +152,16 @@ function compiledVertex(sys: FountainSystem): { vertexShader: string; uniforms: 
 describe("given a fountain pool", () => {
   it("when nothing has been thrown, then it draws no spark and is not drawn", () => {
     const sys = new FountainSystem(new THREE.Scene());
-    assert.equal(sys["geo"].drawRange.count, 0);
-    assert.equal(sys["points"].visible, false);
+    expect(sys["geo"].drawRange.count).toBe(0);
+    expect(sys["points"].visible).toBe(false);
   });
 
   it("when it is made, then its material reads vertex colours and the geometry carries each spark's colour", () => {
     const sys = new FountainSystem(new THREE.Scene());
     const material = sys["points"].material;
-    assert.ok(material instanceof THREE.PointsMaterial);
-    assert.equal(material.vertexColors, true);
-    assert.ok(sys["geo"].getAttribute("color") !== undefined);
+    must(material instanceof THREE.PointsMaterial, "the pool's material is a points material");
+    expect(material.vertexColors).toBe(true);
+    expect(sys["geo"].getAttribute("color")).not.toBe(undefined);
   });
 
   it("when a jet has thrown for a frame, then each attribute queues exactly the slots it spawned and the draw reaches them", () => {
@@ -169,23 +169,23 @@ describe("given a fountain pool", () => {
     sys.jet(0, 0, 0, 0, 5);
     run(sys, STEP);
     const spawned = sys["cursor"];
-    assert.ok(spawned > 0, "the jet threw");
+    expect(spawned, "the jet threw").toBeGreaterThan(0);
     for (const { name, attr, item } of fountainRanges(sys)) {
-      assert.equal(attr.usage, THREE.DynamicDrawUsage, `${name} usage`);
-      assert.equal(attr.updateRanges.length, 1, `${name} ranges`);
-      assert.equal(attr.updateRanges[0]!.start, 0, `${name} range start`);
-      assert.equal(attr.updateRanges[0]!.count, spawned * item, `${name} range count`);
+      expect(attr.usage, `${name} usage`).toBe(THREE.DynamicDrawUsage);
+      expect(attr.updateRanges.length, `${name} ranges`).toBe(1);
+      expect(attr.updateRanges[0]!.start, `${name} range start`).toBe(0);
+      expect(attr.updateRanges[0]!.count, `${name} range count`).toBe(spawned * item);
     }
-    assert.equal(sys["geo"].drawRange.count, spawned);
+    expect(sys["geo"].drawRange.count).toBe(spawned);
     drawQueued(sys["points"]);
     run(sys, STEP);
     const second = sys["cursor"] - spawned;
-    assert.ok(second > 0, "the jet threw again");
+    expect(second, "the jet threw again").toBeGreaterThan(0);
     for (const { name, attr, item } of fountainRanges(sys)) {
-      assert.equal(attr.updateRanges[0]!.start, spawned * item, `${name} second range start`);
-      assert.equal(attr.updateRanges[0]!.count, second * item, `${name} second range count`);
+      expect(attr.updateRanges[0]!.start, `${name} second range start`).toBe(spawned * item);
+      expect(attr.updateRanges[0]!.count, `${name} second range count`).toBe(second * item);
     }
-    assert.equal(sys["geo"].drawRange.count, spawned + second);
+    expect(sys["geo"].drawRange.count).toBe(spawned + second);
   });
 
   it("when a frame spawns nothing, then no attribute is sent to the GPU", () => {
@@ -193,7 +193,7 @@ describe("given a fountain pool", () => {
     sys.jet(0, 0, 0, 1, 5);
     const before = fountainRanges(sys).map(({ attr }) => attr.version);
     run(sys, 0.5);
-    for (const [i, { name, attr }] of fountainRanges(sys).entries()) assert.equal(attr.version, before[i], `${name} was sent`);
+    for (const [i, { name, attr }] of fountainRanges(sys).entries()) expect(attr.version, `${name} was sent`).toBe(before[i]);
   });
 
   it("when the ring wraps, then the spawn that crosses its end sends every slot and the draw stays inside the ring", () => {
@@ -205,9 +205,9 @@ describe("given a fountain pool", () => {
       sys.update(STEP);
       const position = sys["geo"].getAttribute("position") as THREE.BufferAttribute;
       if (position.updateRanges[0]!.count === ring * ITEM_SIZE.position && position.updateRanges[0]!.start === 0) sentWhole = true;
-      assert.ok(sys["geo"].drawRange.count <= ring, "the draw stays inside the ring");
+      expect(sys["geo"].drawRange.count, "the draw stays inside the ring").toBeLessThanOrEqual(ring);
     }
-    assert.ok(sentWhole, "a frame sent the whole ring");
+    expect(sentWhole, "a frame sent the whole ring").toBeTruthy();
   });
 
   it("when update runs at slow-mo or not at all, then the shader's clock advances by exactly the FX time it was given", () => {
@@ -215,17 +215,17 @@ describe("given a fountain pool", () => {
     sys.update(STEP / 4);
     sys.update(STEP / 4);
     sys.update(0);
-    assert.ok(Math.abs(sys["clock"].value - STEP / 2) < 1e-12, `the clock reads ${sys["clock"].value}`);
+    expect(Math.abs(sys["clock"].value - STEP / 2), `the clock reads ${sys["clock"].value}`).toBeLessThan(1e-12);
   });
 
   it("when every spark has landed, then the pool is not drawn", () => {
     const sys = new FountainSystem(new THREE.Scene());
     sys.jet(0, 0, 0, 0, 0.5);
     run(sys, 0.2);
-    assert.equal(sys["points"].visible, true);
+    expect(sys["points"].visible).toBe(true);
     run(sys, ALL_DEAD_S);
-    assert.equal(sys["points"].visible, false);
-    assert.ok(sparkLives(sys).every((life) => life <= 0));
+    expect(sys["points"].visible).toBe(false);
+    expect(sparkLives(sys).every((life) => life <= 0)).toBeTruthy();
   });
 
   it("when the pool is reset in mid-air, then the GPU draws none and every spark is gone", () => {
@@ -233,9 +233,9 @@ describe("given a fountain pool", () => {
     sys.jet(0, 0, 0, 0, 2);
     run(sys, 0.2);
     sys.reset();
-    assert.equal(sys["geo"].drawRange.count, 0);
-    assert.equal(sys["points"].visible, false);
-    assert.ok(sparkLives(sys).every((life) => life <= 0));
+    expect(sys["geo"].drawRange.count).toBe(0);
+    expect(sys["points"].visible).toBe(false);
+    expect(sparkLives(sys).every((life) => life <= 0)).toBeTruthy();
   });
 
   it("when the clock passes the rebase, then every spark in flight keeps the time it had left", () => {
@@ -243,22 +243,22 @@ describe("given a fountain pool", () => {
     sys.jet(0, 0, 0, 0, 1000);
     while (sys["clock"].value + STEP < REBASE_S) sys.update(STEP);
     const before = sparkLives(sys);
-    assert.ok(before.some((life) => life > 0), "the control: sparks are in flight");
+    expect(before.some((life) => life > 0), "the control: sparks are in flight").toBeTruthy();
     sys.update(STEP);
-    assert.ok(sys["clock"].value < 1, `the clock restarted at ${sys["clock"].value}`);
+    expect(sys["clock"].value, `the clock restarted at ${sys["clock"].value}`).toBeLessThan(1);
     for (const [k, life] of sparkLives(sys).entries()) {
-      if (before[k]! > STEP * 2) assert.ok(Math.abs(life - (before[k]! - STEP)) < 1e-3, `slot ${k} had ${before[k]} s and has ${life} s a frame later`);
+      if (before[k]! > STEP * 2) expect(Math.abs(life - (before[k]! - STEP)), `slot ${k} had ${before[k]} s and has ${life} s a frame later`).toBeLessThan(1e-3);
     }
   });
 
   it("when the vertex shader is built, then it flies each spark by the clock uniform, fades it over its last JET_FADE_S and culls a slot not in flight", () => {
     const sys = new FountainSystem(new THREE.Scene());
     const shader = compiledVertex(sys);
-    assert.equal(shader.uniforms.uFxTime, sys["clock"], "the pool's own clock is the uniform");
-    assert.ok(shader.vertexShader.includes("uniform float uFxTime"));
-    assert.ok(shader.vertexShader.includes(`/ ${JET_FADE_S.toFixed(6)}`), "the fade runs over JET_FADE_S");
-    assert.ok(shader.vertexShader.includes(`${(GRAVITY / 2).toFixed(6)} * fxAge * fxAge`), "the arc falls at GRAVITY");
-    assert.ok(/if \(fxAge < 0\.0 \|\| fxAge >= aSpan\.y\) gl_Position/.test(shader.vertexShader), "a slot outside its flight is clipped");
+    expect(shader.uniforms.uFxTime, "the pool's own clock is the uniform").toBe(sys["clock"]);
+    expect(shader.vertexShader.includes("uniform float uFxTime")).toBeTruthy();
+    expect(shader.vertexShader.includes(`/ ${JET_FADE_S.toFixed(6)}`), "the fade runs over JET_FADE_S").toBeTruthy();
+    expect(shader.vertexShader.includes(`${(GRAVITY / 2).toFixed(6)} * fxAge * fxAge`), "the arc falls at GRAVITY").toBeTruthy();
+    expect(/if \(fxAge < 0\.0 \|\| fxAge >= aSpan\.y\) gl_Position/.test(shader.vertexShader), "a slot outside its flight is clipped").toBeTruthy();
   });
 });
 
@@ -286,16 +286,16 @@ describe("given a crash smoke pool with dead puffs among live ones", () => {
     const smoke = gappedSmoke();
     const mesh = smoke["mesh"];
     const live = liveSlots(smoke["life"]);
-    assert.equal(live.length, 2 * PUFFS, "the plumes are up, the dust is gone");
-    assert.equal(mesh.count, live.length, "instances drawn");
+    expect(live.length, "the plumes are up, the dust is gone").toBe(2 * PUFFS);
+    expect(mesh.count, "instances drawn").toBe(live.length);
     const m = new THREE.Matrix4();
     const at = new THREE.Vector3();
     for (let k = 0; k < live.length; k++) {
       at.setFromMatrixPosition(m.fromArray(mesh.instanceMatrix.array, k * MATRIX_FLOATS));
       const slot = live[k]!;
-      assert.equal(at.x, smoke["px"][slot], `instance ${k} x is slot ${slot}'s`);
-      assert.equal(at.y, smoke["py"][slot], `instance ${k} y is slot ${slot}'s`);
-      assert.equal(at.z, smoke["pz"][slot], `instance ${k} z is slot ${slot}'s`);
+      expect(at.x, `instance ${k} x is slot ${slot}'s`).toBe(smoke["px"][slot]);
+      expect(at.y, `instance ${k} y is slot ${slot}'s`).toBe(smoke["py"][slot]);
+      expect(at.z, `instance ${k} z is slot ${slot}'s`).toBe(smoke["pz"][slot]);
     }
   });
 
@@ -310,8 +310,8 @@ describe("given a crash smoke pool with dead puffs among live ones", () => {
   it("when every puff has died, then it draws none", () => {
     const smoke = gappedSmoke();
     runSmoke(smoke, SMOKE_GONE_S);
-    assert.equal(liveSlots(smoke["life"]).length, 0, "all gone");
-    assert.equal(smoke["mesh"].count, 0, "instances drawn");
+    expect(liveSlots(smoke["life"]).length, "all gone").toBe(0);
+    expect(smoke["mesh"].count, "instances drawn").toBe(0);
   });
 });
 
@@ -320,7 +320,7 @@ describe("given a debris burst in the air", () => {
     const debris = new DebrisSystem(new THREE.Scene());
     debris.burst(ORIGIN, UP, PUFFS);
     debris.update(STEP);
-    assert.equal(debris["mesh"].count, PUFFS, "instances drawn");
+    expect(debris["mesh"].count, "instances drawn").toBe(PUFFS);
     assertFrontUpload(debris["mesh"].instanceMatrix, PUFFS * MATRIX_FLOATS, "matrix");
   });
 });

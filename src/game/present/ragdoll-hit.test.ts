@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { type RagdollSystem } from "./engine-ragdoll.ts";
 import { driverLook } from "./driver-look.ts";
@@ -43,7 +42,7 @@ let system: RagdollSystem;
 
 beforeEach(async () => {
   system = await flatSystem();
-  assert.equal(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: driverLook(0, 0) }), WALKER, "the walker is placed in his slot");
+  expect(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: driverLook(0, 0) }), "the walker is placed in his slot").toBe(WALKER);
 });
 
 afterEach(() => {
@@ -57,16 +56,16 @@ describe("given a figure standing facing +z that is pushed at a point", () => {
       const point = new THREE.Vector3(testCase.at.x, testCase.at.y, testCase.at.z);
       const direction = new THREE.Vector3(testCase.direction.x, testCase.direction.y, testCase.direction.z);
       system.strikeWalker(WALKER, point, direction, SPEED);
-      assert.equal(system.walker.state, "down", "limp at once");
+      expect(system.walker.state, "limp at once").toBe("down");
       const along = (k: number): number => {
         const v = bodies[k]!.linvel();
         return v.x * direction.x + v.y * direction.y + v.z * direction.z;
       };
-      assert.ok(along(testCase.expectedPart === TORSO ? TORSO : testCase.expectedPart) > SPEED * 0.9, `part ${testCase.expectedPart} sent at ${along(testCase.expectedPart).toFixed(1)} m/s`);
-      assert.equal(along(TORSO) > SPEED * 0.9, testCase.expectedTorsoPush === "pushed", `the torso moves ${along(TORSO).toFixed(1)} m/s`);
+      expect(along(testCase.expectedPart === TORSO ? TORSO : testCase.expectedPart), `part ${testCase.expectedPart} sent at ${along(testCase.expectedPart).toFixed(1)} m/s`).toBeGreaterThan(SPEED * 0.9);
+      expect(along(TORSO) > SPEED * 0.9, `the torso moves ${along(TORSO).toFixed(1)} m/s`).toBe(testCase.expectedTorsoPush === "pushed");
       const spin = bodies[TORSO]!.angvel();
-      assert.equal(sign(spin.y), testCase.expectedTurn.y, `turn about the vertical ${spin.y.toFixed(1)} rad/s`);
-      assert.equal(sign(spin.x), testCase.expectedTurn.x, `pitch ${spin.x.toFixed(1)} rad/s`);
+      expect(sign(spin.y), `turn about the vertical ${spin.y.toFixed(1)} rad/s`).toBe(testCase.expectedTurn.y);
+      expect(sign(spin.x), `pitch ${spin.x.toFixed(1)} rad/s`).toBe(testCase.expectedTurn.x);
     });
   }
 });

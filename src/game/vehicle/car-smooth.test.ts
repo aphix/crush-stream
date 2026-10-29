@@ -1,7 +1,6 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { createHash } from "node:crypto";
-import assert from "node:assert/strict";
 import { CAR_STYLES, CAR_STYLE_IDS, drawnStyle, type BodyStyle, type CarStyleId, type DrawnTwin } from "./car-variants.ts";
 import { makeRoofFittings } from "./car-fittings-mesh.ts";
 import { CREASE_DEGREES, SHUT_RAMP, bayAt, cantX, cantY, glassTopY, makeBumperGeometry, makeHoodGeometry, makeTrunkGeometry, roofArc, roofTopY, sampleSlice, sectionPoints, shoulderTop } from "./car-mesh.ts";
@@ -21,6 +20,7 @@ import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { tyresUnderSkin } from "./car-suspension.ts";
 import { STYLE_CLASS } from "./vehicle-classes.ts";
 import { roofHinged } from "./hinge-spec.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const DEGREES_PER_RADIAN = 180 / Math.PI;
 
@@ -182,7 +182,7 @@ describe("given every body style's rest meshes (chassis, bonnet, boot, doors, bu
         const normal = geometry.getAttribute("normal");
         for (let vertex = 0; vertex < normal.count; vertex++) {
           const length = Math.hypot(normal.getX(vertex), normal.getY(vertex), normal.getZ(vertex));
-          assert.ok(Math.abs(length - 1) < 1e-4, `${testCase.id} ${name} vertex ${vertex}: normal length ${length}`);
+          expect(Math.abs(length - 1), `${testCase.id} ${name} vertex ${vertex}: normal length ${length}`).toBeLessThan(1e-4);
         }
       }
     });
@@ -190,7 +190,7 @@ describe("given every body style's rest meshes (chassis, bonnet, boot, doors, bu
     it(`when a ${testCase.id}'s body side and ends are read, then every normal points outward (dot with the centroid direction above 0)`, () => {
       const chassis = meshes[0]![1];
       for (const point of outerSidePoints(chassis, chassis.getAttribute("normal"), DOOR_CUT_Z, chassis.getAttribute("position"))) {
-        assert.ok(point.normal.dot(point.outward) > 0, `${testCase.id} vertex ${point.vertex}: normal ${point.normal.dot(point.outward)} against outward`);
+        expect(point.normal.dot(point.outward), `${testCase.id} vertex ${point.vertex}: normal ${point.normal.dot(point.outward)} against outward`).toBeGreaterThan(0);
       }
     });
   }
@@ -250,9 +250,9 @@ describe("given the lids as built", () => {
       const inner = (slice: number) => slice > 0 && slice < loft.slices - 2;
       for (const line of creaseLines) {
         const angles = ringLineDihedrals(lid, line, inner);
-        assert.ok(Math.min(...angles) >= testCase.creaseDegrees, `ring line ${line} turns only ${Math.min(...angles)}°`);
+        expect(Math.min(...angles), `ring line ${line} turns only ${Math.min(...angles)}°`).toBeGreaterThanOrEqual(testCase.creaseDegrees);
         for (let slice = 1; slice < loft.slices - 1; slice++) {
-          assert.ok(verticesAtSamePlace(lid, slice * loft.ring + line) >= 2, `ring line ${line} slice ${slice} is one vertex: its crease is not split`);
+          expect(verticesAtSamePlace(lid, slice * loft.ring + line), `ring line ${line} slice ${slice} is one vertex: its crease is not split`).toBeGreaterThanOrEqual(2);
         }
       }
       // A lid that wraps the tail ends its deck on the lip's crest (its last deck ring): the kick turns 51-54° down into the fold there,
@@ -260,17 +260,17 @@ describe("given the lids as built", () => {
       const crest = testCase.rolledLid ? (lid.userData.deckRings as number) - 1 : -1;
       for (const line of smoothLines) {
         const angles = ringLineDihedrals(lid, line, inner);
-        assert.ok(Math.max(...angles) < FLAT_CURVE_LIMIT_DEGREES, `ring line ${line} turns ${Math.max(...angles)}°`);
+        expect(Math.max(...angles), `ring line ${line} turns ${Math.max(...angles)}°`).toBeLessThan(FLAT_CURVE_LIMIT_DEGREES);
         for (let slice = 1; slice < loft.slices - 1; slice++) {
           const want = slice === crest ? 2 : 1;
-          assert.equal(verticesAtSamePlace(lid, slice * loft.ring + line), want, `ring line ${line} slice ${slice}: ${want === 2 ? "the lip's crest is not a hard edge" : "split, its curve is not smooth"}`);
+          expect(verticesAtSamePlace(lid, slice * loft.ring + line), `ring line ${line} slice ${slice}: ${want === 2 ? "the lip's crest is not a hard edge" : "split, its curve is not smooth"}`).toBe(want);
         }
       }
       for (const line of rollLines) {
         const angles = ringLineDihedrals(lid, line, inner);
-        assert.ok(Math.max(...angles) < ROLL_TURN_MAX_DEGREES && Math.min(...angles) >= FLAT_CURVE_LIMIT_DEGREES, `rolled ring line ${line} turns ${Math.min(...angles).toFixed(1)}-${Math.max(...angles).toFixed(1)}°`);
+        expect(Math.max(...angles) < ROLL_TURN_MAX_DEGREES && Math.min(...angles) >= FLAT_CURVE_LIMIT_DEGREES, `rolled ring line ${line} turns ${Math.min(...angles).toFixed(1)}-${Math.max(...angles).toFixed(1)}°`).toBeTruthy();
         for (let slice = 1; slice < loft.slices - 1; slice++) {
-          assert.equal(verticesAtSamePlace(lid, slice * loft.ring + line), 1, `rolled ring line ${line} slice ${slice} is split: the roll does not shade round`);
+          expect(verticesAtSamePlace(lid, slice * loft.ring + line), `rolled ring line ${line} slice ${slice} is split: the roll does not shade round`).toBe(1);
         }
       }
     });
@@ -286,7 +286,7 @@ describe("given the lids as built", () => {
       const edge = positionAt(lid, slice * loft.ring);
       const rise = positionAt(lid, slice * loft.ring + rim / 2).y - edge.y;
       const want = drop * (edge.x / at) ** 2;
-      assert.ok(Math.abs(rise - want) < 1e-4, `slice ${slice}: the centre stands ${(rise * 100).toFixed(2)} cm over the edge at |x| ${(-edge.x).toFixed(3)}, want ${(want * 100).toFixed(2)}`);
+      expect(Math.abs(rise - want), `slice ${slice}: the centre stands ${(rise * 100).toFixed(2)} cm over the edge at |x| ${(-edge.x).toFixed(3)}, want ${(want * 100).toFixed(2)}`).toBeLessThan(1e-4);
     }
     // The sedan's own hood, its edge inset, keeps the dome as smooth.
     for (const style of [CROWNED_SEDAN, CAR_STYLES.sedan]) {
@@ -295,7 +295,7 @@ describe("given the lids as built", () => {
       const inner = (slice: number) => slice > 0 && slice < hoodLoft.slices - 2;
       for (let line = 1; line < rim; line++) {
         const turn = Math.max(...ringLineDihedrals(hood, line, inner));
-        assert.ok(turn < FLAT_CURVE_LIMIT_DEGREES, `${style.hood.inset ? "inset" : "plain"} dome ring line ${line} of ${rim - 1} turns ${turn.toFixed(2)}°`);
+        expect(turn, `${style.hood.inset ? "inset" : "plain"} dome ring line ${line} of ${rim - 1} turns ${turn.toFixed(2)}°`).toBeLessThan(FLAT_CURVE_LIMIT_DEGREES);
       }
     }
   });
@@ -310,17 +310,17 @@ describe("given the lids as built", () => {
     const deck = hood.userData.deckRings as number;
     const rim = hood.userData.lidEdge as number;
     const [, oz] = style.hood.origin;
-    assert.ok(slices > deck, `${slices} rings, ${deck} of them the deck's: no fold`);
+    expect(slices, `${slices} rings, ${deck} of them the deck's: no fold`).toBeGreaterThan(deck);
     const top = positionAt(hood, (deck - 1) * ring + rim);
     const [yc, zc] = [top.y - RADIUS, top.z];
     for (let slice = deck; slice < slices; slice++) {
       const p = positionAt(hood, slice * ring + rim);
       const off = p.y >= yc ? Math.hypot(p.y - yc, p.z - zc) - RADIUS : p.z - zc - RADIUS;
-      assert.ok(Math.abs(off) < 1e-4, `fold ring ${slice - deck}: its edge stands ${(off * 1000).toFixed(2)} mm off the bend or face`);
+      expect(Math.abs(off), `fold ring ${slice - deck}: its edge stands ${(off * 1000).toFixed(2)} mm off the bend or face`).toBeLessThan(1e-4);
     }
     const bottom = positionAt(hood, (slices - 1) * ring + rim);
-    assert.ok(Math.abs(top.y - bottom.y - DROP) < 1e-4 && Math.abs(bottom.z + oz - style.hood.z1) < 1e-4, `the fold ends ${((top.y - bottom.y) * 100).toFixed(2)} cm under the deck's edge at z ${(bottom.z + oz).toFixed(3)}, want ${DROP * 100} at ${style.hood.z1}`);
-    assert.ok(loftOf(makeHoodGeometry(style, "cage")).slices === loftOf(makeHoodGeometry({ ...style, hood: { ...style.hood, nose: undefined } }, "cage")).slices, "the cage's hood folds too");
+    expect(Math.abs(top.y - bottom.y - DROP) < 1e-4 && Math.abs(bottom.z + oz - style.hood.z1) < 1e-4, `the fold ends ${((top.y - bottom.y) * 100).toFixed(2)} cm under the deck's edge at z ${(bottom.z + oz).toFixed(3)}, want ${DROP * 100} at ${style.hood.z1}`).toBeTruthy();
+    expect(loftOf(makeHoodGeometry(style, "cage")).slices, "the cage's hood folds too").toBe(loftOf(makeHoodGeometry({ ...style, hood: { ...style.hood, nose: undefined } }, "cage")).slices);
   });
 
   it(`when the sedan's crowned deck lid (boot.crown) is read, then past its 25 cm ease-in its centre stands the parabola's drop over its edge at every deck station, its dome turns under ${FLAT_CURVE_LIMIT_DEGREES}° at each of its own vertices, and the cage's lid is the plain one`, () => {
@@ -328,7 +328,7 @@ describe("given the lids as built", () => {
     const [RUN, FOLD] = [0.25, 0.08];
     const style = CAR_STYLES.sedan;
     const b = style.boot;
-    assert.ok(b.kind === "lid" && b.crown !== undefined, "the sedan's boot is a crowned deck lid");
+    must(b.kind === "lid" && b.crown !== undefined, "the sedan's boot is a crowned deck lid");
     const [drop, at] = b.crown;
     const lid = makeTrunkGeometry(style);
     const loft = loftOf(lid);
@@ -344,18 +344,18 @@ describe("given the lids as built", () => {
       if (z > b.z0 - RUN || z < b.z1 + FOLD + 1e-6) continue;
       const rise = positionAt(lid, slice * loft.ring + centre).y - edge.y;
       const want = drop * (edge.x / at) ** 2;
-      assert.ok(Math.abs(rise - want) < 1e-4, `z ${z.toFixed(3)}: the centre stands ${(rise * 100).toFixed(2)} cm over the edge at |x| ${(-edge.x).toFixed(3)}, want ${(want * 100).toFixed(2)}`);
+      expect(Math.abs(rise - want), `z ${z.toFixed(3)}: the centre stands ${(rise * 100).toFixed(2)} cm over the edge at |x| ${(-edge.x).toFixed(3)}, want ${(want * 100).toFixed(2)}`).toBeLessThan(1e-4);
       read++;
     }
-    assert.ok(read >= 2, `only ${read} deck stations past the ease-in`);
+    expect(read, `only ${read} deck stations past the ease-in`).toBeGreaterThanOrEqual(2);
     const inner = (slice: number) => slice > 0 && slice < loft.slices - 2;
     for (const line of domeLines) {
       const turn = Math.max(...ringLineDihedrals(lid, line, inner));
-      assert.ok(turn < FLAT_CURVE_LIMIT_DEGREES, `dome ring line ${line} turns ${turn.toFixed(2)}°`);
+      expect(turn, `dome ring line ${line} turns ${turn.toFixed(2)}°`).toBeLessThan(FLAT_CURVE_LIMIT_DEGREES);
     }
     const plain: BodyStyle = { ...style, boot: { ...b, crown: undefined } };
     const [cage, plainCage] = [makeTrunkGeometry(style, "cage"), makeTrunkGeometry(plain, "cage")].map((g) => (g.getAttribute("position").array as Float32Array).join(","));
-    assert.ok(cage === plainCage, "the cage's lid moved with the crown");
+    expect(cage, "the cage's lid moved with the crown").toBe(plainCage);
   });
 });
 
@@ -375,9 +375,9 @@ describe("given every part whose hard edges are declared, as built for every bod
       it(`when a ${id} ${testCase.name}'s edges are read against its ${testCase.creaseDegrees}° crease, then every sharper edge has vertices of its own and every softer one shares them`, () => {
         const geometry = testCase.make(id);
         const census = censusOfEdges(geometry, testCase.creaseDegrees, testCase.capsAreCuts);
-        assert.ok(census.sharpEdges > 0, `${id} ${testCase.name} has no sharp edge at all`);
-        assert.equal(census.sharpEdgesStillShared, 0, `${id} ${testCase.name}: sharp edges still share vertices (${JSON.stringify(census)})`);
-        assert.equal(census.smoothEdgesSplit, 0, `${id} ${testCase.name}: smooth edges were split (${JSON.stringify(census)})`);
+        expect(census.sharpEdges, `${id} ${testCase.name} has no sharp edge at all`).toBeGreaterThan(0);
+        expect(census.sharpEdgesStillShared, `${id} ${testCase.name}: sharp edges still share vertices (${JSON.stringify(census)})`).toBe(0);
+        expect(census.smoothEdgesSplit, `${id} ${testCase.name}: smooth edges were split (${JSON.stringify(census)})`).toBe(0);
       });
     }
   }
@@ -401,9 +401,9 @@ describe("given every style's bumpers as its car wears them (the fascia with its
       for (const end of ["bumperF", "bumperR"] as const) {
         const group: THREE.Object3D = car[end];
         const mesh = group.children.find((o): o is THREE.Mesh => o instanceof THREE.Mesh);
-        assert.ok(mesh, `${id} ${end}: a drawn mesh`);
+        must(mesh, `${id} ${end}: a drawn mesh`);
         const census = censusOfEdges(mesh.geometry, CREASE_DEGREES.bumper, false);
-        assert.equal(census.sharpEdgesStillShared, 0, `${id} ${end}: ${census.sharpEdgesStillShared} of its ${census.sharpEdges} folds over ${CREASE_DEGREES.bumper}° shaded smooth; first: ${census.firstOffence}`);
+        expect(census.sharpEdgesStillShared, `${id} ${end}: ${census.sharpEdgesStillShared} of its ${census.sharpEdges} folds over ${CREASE_DEGREES.bumper}° shaded smooth; first: ${census.firstOffence}`).toBe(0);
       }
     });
   }
@@ -441,10 +441,10 @@ describe("given every body style's chassis, whose nose and tail roll into the en
           if (!isSideSegment(loft, segment)) continue;
           const normals = rows.map((row) => outwardQuadNormal(body, loft, end === "tail" ? row : row - 1, segment));
           const outermost = normals[0];
-          if (outermost) assert.ok(angleBetweenDegrees(outermost, endFaceNormal) < ROLLED_EDGE_LIMIT_DEGREES, `${id} ${end} segment ${segment}: ${angleBetweenDegrees(outermost, endFaceNormal)}° from the end face`);
+          if (outermost) expect(angleBetweenDegrees(outermost, endFaceNormal), `${id} ${end} segment ${segment}: ${angleBetweenDegrees(outermost, endFaceNormal)}° from the end face`).toBeLessThan(ROLLED_EDGE_LIMIT_DEGREES);
           for (let k = 1; k < normals.length; k++) {
             const [outer, inner] = [normals[k - 1], normals[k]];
-            if (outer && inner) assert.ok(angleBetweenDegrees(outer, inner) < ROLLED_EDGE_LIMIT_DEGREES, `${id} ${end} segment ${segment} row ${k}: ${angleBetweenDegrees(outer, inner)}° between rows`);
+            if (outer && inner) expect(angleBetweenDegrees(outer, inner), `${id} ${end} segment ${segment} row ${k}: ${angleBetweenDegrees(outer, inner)}° between rows`).toBeLessThan(ROLLED_EDGE_LIMIT_DEGREES);
           }
         }
       });
@@ -473,7 +473,7 @@ describe("given every body style's drawn nose, whose plan and fender line turn h
           const line = loft.ring - 1 - point;
           const chord = positionAt(body, slice * loft.ring + line).add(positionAt(body, (slice + 1) * loft.ring + line)).multiplyScalar(0.5);
           const sag = Math.hypot(chord.x - section[line]!.x, chord.y - section[line]!.y);
-          assert.ok(sag <= NOSE_CHORD_SAG, `${id} ring point ${point} between z ${a.z.toFixed(3)} and ${b.z.toFixed(3)}: ${(sag * 1000).toFixed(1)} mm off the section`);
+          expect(sag, `${id} ring point ${point} between z ${a.z.toFixed(3)} and ${b.z.toFixed(3)}: ${(sag * 1000).toFixed(1)} mm off the section`).toBeLessThanOrEqual(NOSE_CHORD_SAG);
         }
       }
       const hood = makeHoodGeometry(style);
@@ -486,7 +486,7 @@ describe("given every body style's drawn nose, whose plan and fender line turn h
         const [a, b] = [positionAt(hood, slice * hoodLoft.ring + rim), positionAt(hood, (slice + 1) * hoodLoft.ring + rim)];
         if (b.z + oz < noseZ - NOSE_READ) continue;
         const sag = Math.abs(inset(a.clone().add(b).multiplyScalar(0.5)) - inset(a));
-        assert.ok(sag <= NOSE_CHORD_SAG, `${id} hood edge between z ${(a.z + oz).toFixed(3)} and ${(b.z + oz).toFixed(3)}: ${(sag * 1000).toFixed(1)} mm off its plan line`);
+        expect(sag, `${id} hood edge between z ${(a.z + oz).toFixed(3)} and ${(b.z + oz).toFixed(3)}: ${(sag * 1000).toFixed(1)} mm off its plan line`).toBeLessThanOrEqual(NOSE_CHORD_SAG);
       }
     });
   }
@@ -516,8 +516,8 @@ describe("given every body style whose drawn body splits its loft gaps over a z 
           if (sag > FLANK_CHORD_SAG) off.push(`ring point ${point} between z ${a.z.toFixed(3)} and ${b.z.toFixed(3)}: ${(sag * 1000).toFixed(1)} mm`);
         }
       }
-      assert.ok(read > 0, `${id}: no body gap over z ${z0}-${z1}`);
-      assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
+      expect(read, `${id}: no body gap over z ${z0}-${z1}`).toBeGreaterThan(0);
+      expect(off.length, `${id}: ${off.join("; ")}`).toBe(0);
     });
   }
 });
@@ -529,8 +529,8 @@ describe("given every body style whose drawn loft keeps only its knots' rings in
       const plain: BodyStyle = { ...style, bareDoorCut: undefined };
       const [a0, a1] = style.door.aperture;
       const [bare, full] = [style, plain].map((s) => sliceZs(s, "drawn").filter((z) => z > a0 && z < a1).map((z) => z.toFixed(4)));
-      assert.ok(bare!.length < full!.length && bare!.every((z) => full!.includes(z)), `${id}: door cut stations ${bare!.join(" ")} against ${full!.join(" ")}`);
-      assert.ok(sliceZs(style, "cage").join() === sliceZs(plain, "cage").join(), `${id}: the cage's stations moved`);
+      expect(bare!.length < full!.length && bare!.every((z) => full!.includes(z)), `${id}: door cut stations ${bare!.join(" ")} against ${full!.join(" ")}`).toBeTruthy();
+      expect(sliceZs(style, "cage").join(), `${id}: the cage's stations moved`).toBe(sliceZs(plain, "cage").join());
     });
   }
 });
@@ -571,11 +571,11 @@ describe("given every body style's drawn hood over its open engine bay", () => {
         if (bayAt(positionAt(body, slice * loft.ring).z, style) < 0.5) continue;
         for (const point of [1, loft.ring - 2]) {
           const v = slice * loft.ring + point;
-          assert.ok(normal.getY(v) > WALL_TOP_NORMAL_Y && primer.getX(v) === 0, `${id} slice ${slice} ring point ${point}: normal y ${normal.getY(v).toFixed(3)}, primer ${primer.getX(v)}`);
+          expect(normal.getY(v) > WALL_TOP_NORMAL_Y && primer.getX(v) === 0, `${id} slice ${slice} ring point ${point}: normal y ${normal.getY(v).toFixed(3)}, primer ${primer.getX(v)}`).toBeTruthy();
           read++;
         }
       }
-      assert.ok(read > 0, `${id}: no slice over the open bay`);
+      expect(read, `${id}: no slice over the open bay`).toBeGreaterThan(0);
     });
 
     it(`when a ${id}'s drawn hood is laid on its body, then its edge stands 0 to ${HOOD_EDGE_STEP * 1000} mm over the fender just outboard of it at every station`, (t) => {
@@ -594,7 +594,7 @@ describe("given every body style's drawn hood over its open engine bay", () => {
         const k = top.findIndex((p, i) => i > 0 && p.x >= x);
         const fender = x <= top[0]!.x || k < 0 ? top[0]!.y : top[k - 1]!.y + ((top[k]!.y - top[k - 1]!.y) * (x - top[k - 1]!.x)) / (top[k]!.x - top[k - 1]!.x);
         const step = edge.y + oy - fender;
-        assert.ok(step >= 0 && step <= HOOD_EDGE_STEP, `${id} hood edge at z ${z.toFixed(3)}: ${(step * 1000).toFixed(1)} mm over the fender`);
+        expect(step >= 0 && step <= HOOD_EDGE_STEP, `${id} hood edge at z ${z.toFixed(3)}: ${(step * 1000).toFixed(1)} mm over the fender`).toBeTruthy();
       }
     });
 
@@ -608,11 +608,11 @@ describe("given every body style's drawn hood over its open engine bay", () => {
         const [grooved, flush] = [sectionPoints(s, style, "drawn"), sectionPoints(s, plain, "drawn")];
         const [p, q] = [grooved[grooved.length - 2]!, flush[flush.length - 2]!];
         const t = bayAt(z, style);
-        assert.ok(Math.abs(p.x - q.x - out * t) < 1e-9 && Math.abs(q.y - p.y - down * t) < 1e-9, `${id} z ${z.toFixed(2)}: deck edge moved ${((p.x - q.x) * 1000).toFixed(2)} out, ${((q.y - p.y) * 1000).toFixed(2)} down, want ${out * t * 1000}, ${down * t * 1000}`);
-        assert.ok(JSON.stringify(sectionPoints(s, style, "cage")) === JSON.stringify(sectionPoints(s, plain, "cage")), `${id} z ${z.toFixed(2)}: the cage ring moved with the groove`);
+        expect(Math.abs(p.x - q.x - out * t) < 1e-9 && Math.abs(q.y - p.y - down * t) < 1e-9, `${id} z ${z.toFixed(2)}: deck edge moved ${((p.x - q.x) * 1000).toFixed(2)} out, ${((q.y - p.y) * 1000).toFixed(2)} down, want ${out * t * 1000}, ${down * t * 1000}`).toBeTruthy();
+        expect(JSON.stringify(sectionPoints(s, style, "cage")), `${id} z ${z.toFixed(2)}: the cage ring moved with the groove`).toBe(JSON.stringify(sectionPoints(s, plain, "cage")));
         if (t === 1) read++;
       }
-      assert.ok(read > 0, `${id}: no station over the open bay`);
+      expect(read, `${id}: no station over the open bay`).toBeGreaterThan(0);
     });
   }
 
@@ -630,10 +630,10 @@ describe("given every body style's drawn hood over its open engine bay", () => {
       if (bayAt(z, style) < 1) continue;
       const section = sectionPoints(sampleSlice(z, style.profile), style, "drawn");
       const deckEdge = section[section.length - 2]!;
-      assert.ok(deckEdge.x - edge.x >= SLOT && deckEdge.y < edge.y + oy, `coupe z ${z.toFixed(3)}: the fender's deck edge stands ${((deckEdge.x - edge.x) * 1000).toFixed(1)} mm outboard of the hood's edge, ${((edge.y + oy - deckEdge.y) * 1000).toFixed(1)} mm under it`);
+      expect(deckEdge.x - edge.x >= SLOT && deckEdge.y < edge.y + oy, `coupe z ${z.toFixed(3)}: the fender's deck edge stands ${((deckEdge.x - edge.x) * 1000).toFixed(1)} mm outboard of the hood's edge, ${((edge.y + oy - deckEdge.y) * 1000).toFixed(1)} mm under it`).toBeTruthy();
       read++;
     }
-    assert.ok(read > 0, "coupe: no hood station over the open bay");
+    expect(read, "coupe: no hood station over the open bay").toBeGreaterThan(0);
   });
 
   it(`when an SUV's clamshell is laid on its body, then its top edge and skirt stand within ${CLAMSHELL_LAP * 1000} mm of the body's deck edge and shoulder at every station, both ends included`, () => {
@@ -647,7 +647,7 @@ describe("given every body style's drawn hood over its open engine bay", () => {
       for (const k of [loft.ring - 9, loft.ring - 8, loft.ring - 7]) {
         const p = positionAt(hood, slice * loft.ring + k);
         const off = distanceToChain({ x: p.x, y: p.y + oy }, chain);
-        assert.ok(off > 0 && off <= CLAMSHELL_LAP, `z ${z.toFixed(3)} ring point ${k}: ${(off * 1000).toFixed(2)} mm off the body`);
+        expect(off > 0 && off <= CLAMSHELL_LAP, `z ${z.toFixed(3)} ring point ${k}: ${(off * 1000).toFixed(2)} mm off the body`).toBeTruthy();
       }
     }
   });
@@ -662,14 +662,14 @@ describe("given every body style's drawn hood over its open engine bay", () => {
       const v = positionAt(body, slice * loft.ring + shut);
       const step = sectionPoints(sampleSlice(v.z, CLAMSHELL_SUV.profile), CLAMSHELL_SUV, "drawn")[shut]!.x - v.x;
       if (Math.abs(v.z - z0) < 1e-6) {
-        assert.ok(Math.abs(step) < 1e-6, `the slice at the lid's rear end steps ${(step * 1000).toFixed(2)} mm`);
+        expect(Math.abs(step), `the slice at the lid's rear end steps ${(step * 1000).toFixed(2)} mm`).toBeLessThan(1e-6);
         rearEnd++;
       } else if (v.z > z0 + SHUT_RAMP && v.z < z1 - SHUT_RAMP) {
-        assert.ok(step >= SHUT_GROOVE, `z ${v.z.toFixed(3)}: the shut line steps ${(step * 1000).toFixed(2)} mm in`);
+        expect(step, `z ${v.z.toFixed(3)}: the shut line steps ${(step * 1000).toFixed(2)} mm in`).toBeGreaterThanOrEqual(SHUT_GROOVE);
         grooved++;
       }
     }
-    assert.ok(rearEnd === 1 && grooved > 0, `${rearEnd} slices at the lid's rear end, ${grooved} under its shut line`);
+    expect(rearEnd === 1 && grooved > 0, `${rearEnd} slices at the lid's rear end, ${grooved} under its shut line`).toBeTruthy();
   });
 });
 
@@ -718,7 +718,7 @@ function wholePosts(style: BodyStyle, frame: THREE.BufferGeometry[]): THREE.Buff
     const sameAt = (k: number, s: number, at: number): boolean => positionAt(body, s * b.ring + k).equals(positionAt(piece, s * g.ring + at));
     const cutOuter = Array.from({ length: g.ring }, (_, i) => i).find((i) => sameAt(0, 0, i));
     const cutInner = Array.from({ length: g.ring }, (_, i) => i).find((i) => sameAt(b.ring - 1, 0, i));
-    assert.ok(cutOuter !== undefined && cutInner !== undefined, `${style.id}: the gate's post piece does not meet the body's on its cut`);
+    must(cutOuter !== undefined && cutInner !== undefined, `${style.id}: the gate's post piece does not meet the body's on its cut`);
     const points: number[] = [];
     let ring = 0;
     for (let s = 0; s < b.slices; s++) {
@@ -753,12 +753,12 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
     it(`when a ${id}'s posts are read at every station under the roof, then each section has ${POST_MIN_POINTS} points or more and every chord turns under ${POST_TURN_DEGREES}° from the one before`, () => {
       const style = CAR_STYLES[id];
       const posts = wholePosts(style, makeGreenhouseFrame(style, "drawn")).filter((g) => POST_NAMES.includes(g.name));
-      assert.ok(posts.filter((g) => g.name === "a").length === 2 && posts.length >= 6, `${id}: ${posts.length} posts`);
+      expect(posts.filter((g) => g.name === "a").length === 2 && posts.length >= 6, `${id}: ${posts.length} posts`).toBeTruthy();
       // A station reaching up past the cant line into the roof's side has its points held in under the roof (`insideRoof`).
       const held = (p: THREE.Vector3) => p.z >= style.roofZ[0] && p.z <= style.roofZ[1] && p.y > cantY(p.z, style);
       for (const post of posts) {
         const { ring, slices } = loftOf(post);
-        assert.ok(ring >= POST_MIN_POINTS, `${id} ${post.name}: ${ring} section points`);
+        expect(ring, `${id} ${post.name}: ${ring} section points`).toBeGreaterThanOrEqual(POST_MIN_POINTS);
         let read = 0;
         for (let slice = 0; slice < slices; slice++) {
           const at = (k: number) => positionAt(post, slice * ring + ((k + ring) % ring));
@@ -766,10 +766,10 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
           read++;
           for (let k = 0; k < ring; k++) {
             const turn = angleBetweenDegrees(at(k).sub(at(k - 1)).normalize(), at(k + 1).sub(at(k)).normalize());
-            assert.ok(turn < POST_TURN_DEGREES, `${id} ${post.name} station ${slice} section point ${k} turns ${turn.toFixed(1)}°`);
+            expect(turn, `${id} ${post.name} station ${slice} section point ${k} turns ${turn.toFixed(1)}°`).toBeLessThan(POST_TURN_DEGREES);
           }
         }
-        assert.ok(read > 0 && (post.name !== "a" || read >= A_POST_STATIONS_SHOWN), `${id} ${post.name}: ${read} stations read under the roof`);
+        expect(read > 0 && (post.name !== "a" || read >= A_POST_STATIONS_SHOWN), `${id} ${post.name}: ${read} stations read under the roof`).toBeTruthy();
       }
     });
   }
@@ -778,9 +778,9 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
     it(`when a ${id}'s A-post and sail are drawn as one loft, then no sail part stands beside it, every shown station's chords turn under ${POST_TURN_DEGREES}° and the sail's face turns into the post's under ${ONE_LOFT_JOIN_DEGREES}° past the foot: no crease runs down the pillar`, () => {
       const style = drawnStyle(CAR_STYLES[id]);
       const frame = makeGreenhouseFrame(style, "drawn");
-      assert.ok(!frame.some((g) => g.name === "sail"), `${id}: a sail part stands beside the post`);
+      expect(!frame.some((g) => g.name === "sail"), `${id}: a sail part stands beside the post`).toBe(true);
       const posts = frame.filter((g) => g.name === "a");
-      assert.ok(posts.length === 2 && posts.every((g) => g.userData.postRing !== undefined), `${id}: ${posts.length} A-posts, one loft each`);
+      expect(posts.length === 2 && posts.every((g) => g.userData.postRing !== undefined), `${id}: ${posts.length} A-posts, one loft each`).toBeTruthy();
       const held = (p: THREE.Vector3) => p.z >= style.roofZ[0] && p.z <= style.roofZ[1] && p.y > cantY(p.z, style);
       for (const post of posts) {
         const { ring, slices } = loftOf(post);
@@ -791,13 +791,13 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
           for (let k = 0; k < ring; k++) {
             const at = (j: number) => positionAt(post, slice * ring + ((j + ring) % ring));
             const turn = angleBetweenDegrees(at(k).sub(at(k - 1)).normalize(), at(k + 1).sub(at(k)).normalize());
-            assert.ok(turn < POST_TURN_DEGREES, `${id} station ${slice} section point ${k} turns ${turn.toFixed(1)}°`);
+            expect(turn, `${id} station ${slice} section point ${k} turns ${turn.toFixed(1)}°`).toBeLessThan(POST_TURN_DEGREES);
           }
         }
         // The foot's first quad rises out of the cowl, where the post's own section turns to meet it.
         const turns = ringLineDihedrals(post, join, (slice) => slice > 0 && shown(slice) && shown(slice + 1));
-        assert.ok(turns.length >= ONE_LOFT_JOINS_READ, `${id}: ${turns.length} quads read at the join`);
-        assert.ok(Math.max(...turns) < ONE_LOFT_JOIN_DEGREES, `${id}: the sail's face turns into the post's by ${turns.map((t) => t.toFixed(1)).join(", ")}°`);
+        expect(turns.length, `${id}: ${turns.length} quads read at the join`).toBeGreaterThanOrEqual(ONE_LOFT_JOINS_READ);
+        expect(Math.max(...turns), `${id}: the sail's face turns into the post's by ${turns.map((t) => t.toFixed(1)).join(", ")}°`).toBeLessThan(ONE_LOFT_JOIN_DEGREES);
       }
     });
   }
@@ -827,18 +827,18 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
           const centre = own.reduce((sum, p) => sum.add(p), new THREE.Vector3()).divideScalar(own.length);
           const [edgeBase, edgeTop] = chordAt(centre);
           const lap = Math.min(...section.map((p) => distanceToLine(p, edgeBase, edgeTop)));
-          assert.ok(lap <= A_POST_EDGE_FOLLOW, `${id} station ${slice}: the post stands ${(lap * 100).toFixed(1)} cm off the windshield's edge`);
+          expect(lap, `${id} station ${slice}: the post stands ${(lap * 100).toFixed(1)} cm off the windshield's edge`).toBeLessThanOrEqual(A_POST_EDGE_FOLLOW);
           offsets.push(distanceToLine(sideView(centre), sideView(edgeBase), sideView(edgeTop)));
         }
         const drift = Math.max(...offsets) - Math.min(...offsets);
-        assert.ok(drift < A_POST_EDGE_FOLLOW, `${id}: the post's centre runs ${offsets.map((d) => (d * 100).toFixed(1)).join(", ")} cm off the edge`);
+        expect(drift, `${id}: the post's centre runs ${offsets.map((d) => (d * 100).toFixed(1)).join(", ")} cm off the edge`).toBeLessThan(A_POST_EDGE_FOLLOW);
       }
     });
   }
 
   it("when a drawn windshield rounds its top corners (`windshield.round`), then the A-post's rail follows the arc: each station under the roof laps the rounded edge within the follow bar, and its top ring's front stands over 2 cm further in than a post laid along the straight edge's", () => {
     const style = drawnStyle(CAR_STYLES.pickup);
-    assert.ok(style.windshield.round !== undefined, "the pickup's drawn windshield rounds its top corners");
+    expect(style.windshield.round, "the pickup's drawn windshield rounds its top corners").not.toBe(undefined);
     // The post's foot starts at the belt, below the pane's base: the edge's first chord carried on down past it.
     const edge = windshieldEdge(style, 1);
     edge.unshift(edge[0]!.clone().addScaledVector(edge[1]!.clone().sub(edge[0]!), -WINDSHIELD_EDGE_STEPS / 2));
@@ -850,14 +850,14 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
     const section = (geo: THREE.BufferGeometry, slice: number) => Array.from({ length: ring }, (_, k) => positionAt(geo, slice * ring + k));
     for (let slice = 0; slice < slices - 1; slice++) {
       const lap = Math.min(...section(post, slice).map((p) => Math.min(...segments.map((segment) => segment.closestPointToPoint(p, true, closest).distanceTo(p)))));
-      assert.ok(lap <= A_POST_EDGE_FOLLOW, `station ${slice}: the post stands ${(lap * 1000).toFixed(1)} mm off the rounded edge`);
+      expect(lap, `station ${slice}: the post stands ${(lap * 1000).toFixed(1)} mm off the rounded edge`).toBeLessThanOrEqual(A_POST_EDGE_FOLLOW);
     }
     const frontX = (geo: THREE.BufferGeometry) => {
       const { ring: n, slices: count } = loftOf(geo);
       return Array.from({ length: n }, (_, k) => positionAt(geo, (count - 1) * n + k)).reduce((front, p) => (p.z > front.z ? p : front)).x;
     };
     const straight = postOf({ ...style, windshield: { ...style.windshield, round: undefined } });
-    assert.ok(frontX(straight) - frontX(post) > 0.02, `the top ring's front stands at x ${frontX(post).toFixed(3)}, the straight edge's post's at ${frontX(straight).toFixed(3)}`);
+    expect(frontX(straight) - frontX(post), `the top ring's front stands at x ${frontX(post).toFixed(3)}, the straight edge's post's at ${frontX(straight).toFixed(3)}`).toBeGreaterThan(0.02);
   });
 
   it("when a post's section is read across depths and widths, then the chords along its depth sides are each under a third of its depth", () => {
@@ -867,7 +867,7 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
         for (let k = 0; k < metric.length; k++) {
           const [a, b] = [metric[k]!, metric[(k + 1) % metric.length]!];
           const [depth, across] = [Math.abs(b.depth - a.depth), Math.abs(b.across - a.across)];
-          if (depth > across) assert.ok(Math.hypot(depth, across) < thick / 3, `depth ${thick}, width ${width}: chord ${k} along the depth side is ${(Math.hypot(depth, across) * 1000).toFixed(1)} mm`);
+          if (depth > across) expect(Math.hypot(depth, across), `depth ${thick}, width ${width}: chord ${k} along the depth side is ${(Math.hypot(depth, across) * 1000).toFixed(1)} mm`).toBeLessThan(thick / 3);
         }
       }
     }
@@ -1013,9 +1013,9 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         const shoulder = shoulderTop(foot.z, style);
         const off = Math.hypot(foot.x - shoulder.x, foot.y - shoulder.y);
         const lean = angleBetweenDegrees(next.sub(foot).normalize(), new THREE.Vector3(shoulder.tangent[0], shoulder.tangent[1], 0));
-        assert.ok(off <= SAIL_FOOT_OFF && lean < SAIL_LEAN_DEGREES, `${id} z ${foot.z.toFixed(3)}: foot ${(off * 1000).toFixed(1)} mm off the shoulder, face ${lean.toFixed(1)}° off its tangent`);
+        expect(off <= SAIL_FOOT_OFF && lean < SAIL_LEAN_DEGREES, `${id} z ${foot.z.toFixed(3)}: foot ${(off * 1000).toFixed(1)} mm off the shoulder, face ${lean.toFixed(1)}° off its tangent`).toBeTruthy();
       }
-      assert.ok(read >= SAIL_HAUNCH_SECTIONS, `${id}: ${read} sections along the haunch`);
+      expect(read, `${id}: ${read} sections along the haunch`).toBeGreaterThanOrEqual(SAIL_HAUNCH_SECTIONS);
     });
     it(`when a ${id}'s sail is read at the roof's rear end, then a section stands within ${SAIL_ROOF_GAP * 1000} mm behind it, none of its points stands over the roof's skin (no flap) and it covers the roof end's skin outboard of the rear glass (no slit)`, () => {
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
@@ -1025,11 +1025,11 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         const z = positionAt(sail, s * ring).z;
         return z < roofZ && z >= roofZ - SAIL_ROOF_GAP;
       });
-      assert.ok(ends.length === 1, `${id}: ${ends.length} sections within ${SAIL_ROOF_GAP * 1000} mm behind the roof's rear end (z ${roofZ})`);
+      expect(ends.length, `${id}: ${ends.length} sections within ${SAIL_ROOF_GAP * 1000} mm behind the roof's rear end (z ${roofZ})`).toBe(1);
       for (let k = 0; k < ring; k++) {
         const p = positionAt(sail, ends[0]! * ring + k);
         const over = p.y - roofTopY(Math.abs(p.x), roofZ, style);
-        assert.ok(over <= 1e-4, `${id} point ${k} (x ${p.x.toFixed(3)}, y ${p.y.toFixed(3)}): ${(over * 1000).toFixed(1)} mm over the roof's skin`);
+        expect(over, `${id} point ${k} (x ${p.x.toFixed(3)}, y ${p.y.toFixed(3)}): ${(over * 1000).toFixed(1)} mm over the roof's skin`).toBeLessThanOrEqual(1e-4);
       }
       const section = Array.from({ length: ring }, (_, k) => positionAt(sail, ends[0]! * ring + k));
       const roof = makeRoofGeometry(style).getAttribute("position") as THREE.BufferAttribute;
@@ -1046,9 +1046,9 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
           const t = THREE.MathUtils.clamp(((x - a.x) * (b.x - a.x) + (y - a.y) * (b.y - a.y)) / ((b.x - a.x) ** 2 + (b.y - a.y) ** 2 || 1), 0, 1);
           near = Math.min(near, Math.hypot(x - a.x - t * (b.x - a.x), y - a.y - t * (b.y - a.y)));
         }
-        assert.ok(inside || near <= SAIL_ROOF_COVER, `${id}: the roof end's skin at (x ${x.toFixed(3)}, y ${y.toFixed(3)}) stands ${(near * 1000).toFixed(1)} mm outside the sail's section`);
+        expect(inside || near <= SAIL_ROOF_COVER, `${id}: the roof end's skin at (x ${x.toFixed(3)}, y ${y.toFixed(3)}) stands ${(near * 1000).toFixed(1)} mm outside the sail's section`).toBeTruthy();
       }
-      assert.ok(read > 0, `${id}: no roof end skin outboard of the rear glass read`);
+      expect(read, `${id}: no roof end skin outboard of the rear glass read`).toBeGreaterThan(0);
     });
   }
 
@@ -1074,8 +1074,8 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         const straight = foot.z <= style.roofZ[0] - (style.cPillar?.blend ?? SAIL_ROLL_BLEND_TEST) - SAIL_ROOF_GAP;
         if ((straight && bow > SAIL_FLAT_BOW) || proud > SAIL_SINK_TEST + 1e-4 || proud < 0) off.push(`z ${foot.z.toFixed(3)}: face bows ${(bow * 1000).toFixed(1)} mm, body stands ${(proud * 1000).toFixed(1)} mm outside its line`);
       }
-      assert.ok(read >= SAIL_HAUNCH_SECTIONS, `${id}: ${read} sections along the haunch`);
-      assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
+      expect(read, `${id}: ${read} sections along the haunch`).toBeGreaterThanOrEqual(SAIL_HAUNCH_SECTIONS);
+      expect(off.length, `${id}: ${off.join("; ")}`).toBe(0);
     });
     it(`when a ${id}'s flat sail is read from its rear end to its front, then its outer face's shape off its chord changes at most ${SAIL_SHAPE_RATE} m per m of length between sections (no line where the flat haunch meets the roof's roll, nor where the roll meets the post ahead of it)`, () => {
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
@@ -1096,8 +1096,8 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         const rate = Math.max(...a.offsets.map((o, k) => Math.abs(b.offsets[k]! - o))) / (b.z - a.z);
         if (rate > SAIL_SHAPE_RATE) off.push(`z ${a.z.toFixed(3)} to ${b.z.toFixed(3)}: ${rate.toFixed(2)} m per m`);
       }
-      assert.ok(profiles.length >= 3, `${id}: ${profiles.length} sections up to the roof's rear end`);
-      assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
+      expect(profiles.length, `${id}: ${profiles.length} sections up to the roof's rear end`).toBeGreaterThanOrEqual(3);
+      expect(off.length, `${id}: ${off.join("; ")}`).toBe(0);
     });
     it(`when a ${id}'s flat sail is read across each of its sections, then its outer face folds at most ${SAIL_END_FOLD_DEGREES}° there between the strips behind and ahead (no hard line from the roof's rear corner down to the quarter)`, () => {
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
@@ -1108,12 +1108,12 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         const [a, b, c, d] = [at(s, k), at(s, k + 1), at(s + 1, k), at(s + 1, k + 1)];
         return b.clone().sub(a).cross(c.clone().sub(a)).add(d.clone().sub(b).cross(c.clone().sub(b))).normalize();
       };
-      assert.ok(end !== undefined && end > 0 && end < slices - 1, `${id}: no section inside the sail at the roof's rear end`);
+      expect(end !== undefined && end > 0 && end < slices - 1, `${id}: no section inside the sail at the roof's rear end`).toBeTruthy();
       const off = Array.from({ length: slices - 2 }, (_, i) => i + 1).flatMap((s) => {
         const folds = Array.from({ length: SAIL_OUTER_POINTS - 1 }, (_, k) => THREE.MathUtils.radToDeg(normal(s - 1, k).angleTo(normal(s, k))));
         return Math.max(...folds) > SAIL_END_FOLD_DEGREES ? [`z ${at(s, 0).z.toFixed(3)}: ${folds.map((f) => f.toFixed(1)).join(", ")}°`] : [];
       });
-      assert.ok(off.length === 0, `${id}: the outer face folds across ${off.join("; ")}`);
+      expect(off.length, `${id}: the outer face folds across ${off.join("; ")}`).toBe(0);
     });
   }
   it(`when the coupe's flat sail sets \`cPillar.reachLip\`, then ahead of its roof end every section's outer face meets the roof's cant lip within ${SAIL_LIP_GAP * 1000} mm at the lip's height, not a chord to a head under the roof's edge`, () => {
@@ -1122,16 +1122,16 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
     const reach: BodyStyle = { ...stock, cPillar: { ...stock.cPillar!, reachLip: 1 } };
     const ahead = (style: BodyStyle) => sailRings(style).filter(([foot]) => foot!.z > style.roofZ[0] && foot!.z <= drawnQuarter(style).zRearTop);
     const gaps = ahead(reach).map((section) => lipGap(reach, section));
-    assert.ok(gaps.length >= 2, `${gaps.length} sections ahead of the roof end up to the quarter's top`);
-    assert.ok(gaps.every((gap) => Math.abs(gap) <= SAIL_LIP_GAP), `lip past the face (mm): ${gaps.map((gap) => (gap * 1000).toFixed(1)).join(", ")}`);
+    expect(gaps.length, `${gaps.length} sections ahead of the roof end up to the quarter's top`).toBeGreaterThanOrEqual(2);
+    expect(gaps.every((gap) => Math.abs(gap) <= SAIL_LIP_GAP), `lip past the face (mm): ${gaps.map((gap) => (gap * 1000).toFixed(1)).join(", ")}`).toBeTruthy();
     const control = lipGap(stock, ahead(stock)[0]!);
-    assert.ok(control > SAIL_LIP_GAP, `the stock coupe's lip overhangs: the row would not catch it (${(control * 1000).toFixed(1)} mm)`);
+    expect(control, `the stock coupe's lip overhangs: the row would not catch it (${(control * 1000).toFixed(1)} mm)`).toBeGreaterThan(SAIL_LIP_GAP);
   });
   it(`when the coupe's sail is read ahead of its roof end, then the roof's cant lip stands at most ${COUPE_FIN_GAP * 1000} mm past its outer face where it crosses the lip's height (a fin over the quarter)`, () => {
     const coupe = CAR_STYLES.coupe;
     const first = sailRings(coupe).find(([foot]) => foot!.z > coupe.roofZ[0])!;
     const gap = lipGap(coupe, first);
-    assert.ok(gap <= COUPE_FIN_GAP, `the lip stands ${(gap * 1000).toFixed(1)} mm past the face at z ${first[0]!.z.toFixed(3)}`);
+    expect(gap, `the lip stands ${(gap * 1000).toFixed(1)} mm past the face at z ${first[0]!.z.toFixed(3)}`).toBeLessThanOrEqual(COUPE_FIN_GAP);
   });
   it("when the coupe's flat sail sets `cPillar.rollShare` 0.5, then each ring behind its roof end carries half the stock's offset off its chord and every vertex at or ahead of the roof end is the stock's", () => {
     const coupe = CAR_STYLES.coupe;
@@ -1155,23 +1155,23 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         if (Math.abs(half[k]! - 0.5 * whole[k]!) > 1e-6) off.push(`z ${z.toFixed(3)} point ${k}: ${(half[k]! * 1000).toFixed(2)} mm off its chord, the stock's ${(whole[k]! * 1000).toFixed(2)} mm`);
       }
     }
-    assert.ok(behind >= 2, `${behind} rings behind the roof end`);
-    assert.ok(carried > 0.001, `the stock's roll offsets stand at most ${(carried * 1000).toFixed(2)} mm off the chord: the row would not catch a wrong share`);
-    assert.ok(off.length === 0, off.join("; "));
+    expect(behind, `${behind} rings behind the roof end`).toBeGreaterThanOrEqual(2);
+    expect(carried, `the stock's roll offsets stand at most ${(carried * 1000).toFixed(2)} mm off the chord: the row would not catch a wrong share`).toBeGreaterThan(0.001);
+    expect(off.length, off.join("; ")).toBe(0);
   });
   for (const [id, style] of SAIL_STYLES.filter(([, s]) => (s.cPillar?.pinch ?? 0) > 0)) {
     it(`when a ${id}'s pinched side window is read in the side view, then its glass shows within ${WINDOW_POINT_SHOWS * 1000} mm of the window's point: the sail never cuts across it`, () => {
       const blunt = windowPointCover(UNPINCHED_COUPE);
-      assert.ok(blunt > WINDOW_POINT_SHOWS, `the control: the coupe's unpinched window shows its glass ${(blunt * 1000).toFixed(0)} mm past its point`);
+      expect(blunt, `the control: the coupe's unpinched window shows its glass ${(blunt * 1000).toFixed(0)} mm past its point`).toBeGreaterThan(WINDOW_POINT_SHOWS);
       const cover = windowPointCover(style);
-      assert.ok(cover <= WINDOW_POINT_SHOWS, `${id}: the glass shows ${(cover * 1000).toFixed(0)} mm past the window's point`);
+      expect(cover, `${id}: the glass shows ${(cover * 1000).toFixed(0)} mm past the window's point`).toBeLessThanOrEqual(WINDOW_POINT_SHOWS);
     });
     it(`when a ${id}'s pinched side window is read at its sail's front ring, then the sail reaches at most ${PINCH_FRONT_UNDER * 1000} mm under the glass's top line there: the window's line rounds into it`, () => {
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const { ring, slices } = loftOf(sail);
       const points = Array.from({ length: ring }, (_, k) => positionAt(sail, (slices - 1) * ring + k));
       const under = glassTopY(points[0]!.z, style) - Math.min(...points.map((p) => p.y));
-      assert.ok(under <= PINCH_FRONT_UNDER, `${id}: at z ${points[0]!.z.toFixed(3)} the sail reaches ${(under * 1000).toFixed(1)} mm under the glass's top line`);
+      expect(under, `${id}: at z ${points[0]!.z.toFixed(3)} the sail reaches ${(under * 1000).toFixed(1)} mm under the glass's top line`).toBeLessThanOrEqual(PINCH_FRONT_UNDER);
     });
   }
   for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.dEnd)) {
@@ -1191,7 +1191,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       const stations = Array.from({ length: Math.floor((dTangent - dRear) / D_END_STEP) + 1 }, (_, k) => dRear + k * D_END_STEP).filter(
         (z) => arcY(z) - D_END_FIT >= beltY(z, style) + D_END_RAIL && lineY(z) - arcY(z) > D_END_FIT,
       );
-      assert.ok(stations.length >= D_END_MIN_READ, `${id}: ${stations.length} stations read the arc over the belt's rail, under the line`);
+      expect(stations.length, `${id}: ${stations.length} stations read the arc over the belt's rail, under the line`).toBeGreaterThanOrEqual(D_END_MIN_READ);
       // The sail's visible lower edge at each station (the highest y under the scan's top where the glass shows), as its offset (m) off the arc; NaN where the scan finds none.
       const edgeOffsets = (covers: (z: number, y: number) => boolean) =>
         stations.map((z) => (Array.from({ length: D_END_EDGE_READS }, (_, k) => arcY(z) + D_END_REACH - k * D_END_EDGE_STEP).find((y) => !covers(z, y)) ?? NaN) - arcY(z));
@@ -1199,11 +1199,11 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       const listed = (offsets: number[]) => stations.map((z, k) => `${z.toFixed(4)}: ${(offsets[k]! * 1000).toFixed(2)}`).join(", ");
       const covers = sailCovers(style);
       const bare = stations.filter((z) => !covers(z, arcY(z) + D_END_FIT));
-      assert.ok(bare.length === 0, `${id}: the glass shows over the arc at z ${bare.map((z) => z.toFixed(4)).join(", ")}`);
+      expect(bare.length, `${id}: the glass shows over the arc at z ${bare.map((z) => z.toFixed(4)).join(", ")}`).toBe(0);
       const offsets = edgeOffsets(covers);
-      assert.ok(spreadOf(offsets) <= D_END_SHAPE, `${id}: the sail's edge stands off the arc by (z: mm) ${listed(offsets)}`);
+      expect(spreadOf(offsets), `${id}: the sail's edge stands off the arc by (z: mm) ${listed(offsets)}`).toBeLessThanOrEqual(D_END_SHAPE);
       const straight = edgeOffsets(sailCovers({ ...style, cPillar: { ...style.cPillar, dEnd: undefined } }));
-      assert.ok(spreadOf(straight) > D_END_SHAPE, `${id}'s control: without the round end the sail's edge stands off the arc by (z: mm) ${listed(straight)}, within ${D_END_SHAPE * 1000} mm: the row would not catch a point`);
+      expect(spreadOf(straight), `${id}'s control: without the round end the sail's edge stands off the arc by (z: mm) ${listed(straight)}, within ${D_END_SHAPE * 1000} mm: the row would not catch a point`).toBeGreaterThan(D_END_SHAPE);
     });
   }
   it("when a truck cab (a curved roof square to its cant at the rear, an upright quarter window edge on the monster) sets any sail, then the sail builds whole: every vertex finite", () => {
@@ -1216,7 +1216,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
         for (let i = 0; i < pos.count; i++) if (!Number.isFinite(pos.getX(i) + pos.getY(i) + pos.getZ(i))) bad++;
         if (bad > 0) off.push(`${id} ${JSON.stringify(cPillar)}: ${bad} of ${pos.count} vertices not finite`);
       }
-    assert.ok(off.length === 0, off.join("; "));
+    expect(off.length, off.join("; ")).toBe(0);
   });
 });
 
@@ -1234,8 +1234,8 @@ describe("given a style that stands a bar on its side glass (`pillars.glassBar`)
   it(`when its drawn greenhouse is read, then each side carries one black strip on the glass, within ${GLASS_BAR_STAND * 1000} mm off its plane and never under it, its width about its centre line at the belt and at the top; the cage carries none`, () => {
     const { width, z } = BARRED_SEDAN.pillars!.glassBar!;
     const bars = makeGreenhouseFrame(BARRED_SEDAN, "drawn").filter((g) => g.name === "glassBar");
-    assert.ok(bars.length === 2, `${bars.length} bars drawn`);
-    assert.ok(makeGreenhouseFrame(BARRED_SEDAN, "cage").every((g) => g.name !== "glassBar"), "the cage carries a bar");
+    expect(bars.length, `${bars.length} bars drawn`).toBe(2);
+    expect(makeGreenhouseFrame(BARRED_SEDAN, "cage").every((g) => g.name !== "glassBar"), "the cage carries a bar").toBeTruthy();
     const off: string[] = [];
     for (const bar of bars) {
       if (bar.userData.blackout !== true) off.push("not toned black");
@@ -1260,7 +1260,7 @@ describe("given a style that stands a bar on its side glass (`pillars.glassBar`)
           off.push(`${k === 0 ? "belt" : "top"} end: ${end.length} points, z ${lo.toFixed(4)} to ${hi.toFixed(4)}`);
       }
     }
-    assert.ok(off.length === 0, off.join("; "));
+    expect(off.length, off.join("; ")).toBe(0);
   });
 });
 
@@ -1292,8 +1292,8 @@ describe("given a truck cab whose rear post is squared (`pillars.rearSquare`)", 
       for (let i = 0; i < normal.count; i++) if (normal.getZ(i) >= 0) off.push(`cab back normal ${i} z ${normal.getZ(i).toFixed(3)}: not facing the tail`);
     }
     const cage = (style: BodyStyle) => makeGreenhouseFrame(style, "cage").map((g) => Array.from(g.getAttribute("position").array).join(",")).join(";");
-    assert.ok(cage(SQUARED_MONSTER) === cage(CAR_STYLES.monster), "the squared monster's cage differs from the plain monster's");
-    assert.ok(off.length === 0, off.join("; "));
+    expect(cage(SQUARED_MONSTER), "the squared monster's cage differs from the plain monster's").toBe(cage(CAR_STYLES.monster));
+    expect(off.length, off.join("; ")).toBe(0);
   });
 });
 
@@ -1318,8 +1318,8 @@ describe("given every body style whose drawn sail laps the rear glass (`cPillar.
         const over = head.y - rearGlassInset(style, z, lap).y;
         if (!(over > 0 && over <= SAIL_FLUSH_HEIGHT && lap >= SAIL_FLUSH_LAP_MIN)) off.push(`z ${z.toFixed(3)}: head ${(over * 1000).toFixed(1)} mm over the glass, ${(lap * 1000).toFixed(1)} mm in over its edge`);
       }
-      assert.ok(read > 0, `${id}: no sail section along the rear glass`);
-      assert.ok(off.length === 0, `${id}: ${off.join("; ")}`);
+      expect(read, `${id}: no sail section along the rear glass`).toBeGreaterThan(0);
+      expect(off.length, `${id}: ${off.join("; ")}`).toBe(0);
     });
   }
 
@@ -1328,11 +1328,11 @@ describe("given every body style whose drawn sail laps the rear glass (`cPillar.
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const { ring, slices } = loftOf(sail);
       const end = Array.from({ length: slices }, (_, s) => s).find((s) => positionAt(sail, s * ring).z < style.roofZ[0] && positionAt(sail, s * ring).z >= style.roofZ[0] - SAIL_ROOF_GAP);
-      assert.ok(end !== undefined, `${id}: no section at the roof's rear end`);
+      must(end !== undefined, `${id}: no section at the roof's rear end`);
       const section = Array.from({ length: ring }, (_, k) => positionAt(sail, end * ring + k));
       const head = section.reduce((a, b) => (b.y > a.y ? b : a));
       const lap = rearGlassInset(style, rearGlassCornerZ(style, 0.5)!, 0).x - head.x;
-      assert.ok(lap >= SAIL_FLUSH_LAP_MIN, `${id}: the roof end's head (x ${head.x.toFixed(3)}) ${(lap * 1000).toFixed(1)} mm in over the corner's mid-arc`);
+      expect(lap, `${id}: the roof end's head (x ${head.x.toFixed(3)}) ${(lap * 1000).toFixed(1)} mm in over the corner's mid-arc`).toBeGreaterThanOrEqual(SAIL_FLUSH_LAP_MIN);
       // The roof's rear end (its end ring, bowed with the glass top) as z by x, +x side.
       const roof = makeRoofGeometry(style).getAttribute("position") as THREE.BufferAttribute;
       const endRing = Array.from({ length: roof.count }, (_, v) => [roof.getX(v), roof.getZ(v)] as const)
@@ -1343,7 +1343,7 @@ describe("given every body style whose drawn sail laps the rear glass (`cPillar.
         if (k <= 0) continue;
         const [[xa, za], [xb, zb]] = [endRing[k - 1]!, endRing[k]!];
         const roofEnd = xb === xa ? za : THREE.MathUtils.lerp(za, zb, (p.x - xa) / (xb - xa));
-        assert.ok(p.z < roofEnd, `${id}: sail point (x ${p.x.toFixed(3)}, z ${p.z.toFixed(4)}) stands ${((p.z - roofEnd) * 1000).toFixed(1)} mm into the roof's end (z ${roofEnd.toFixed(4)})`);
+        expect(p.z, `${id}: sail point (x ${p.x.toFixed(3)}, z ${p.z.toFixed(4)}) stands ${((p.z - roofEnd) * 1000).toFixed(1)} mm into the roof's end (z ${roofEnd.toFixed(4)})`).toBeLessThan(roofEnd);
       }
     });
   }
@@ -1363,7 +1363,7 @@ describe("given every body style whose drawn sail laps the rear glass (`cPillar.
     };
     const edge = rearGlassInset(turned, rearGlassCornerZ(turned, SHARE)!, 0).x;
     const [lap, midLap] = [edge - endHeadX(turned), edge - endHeadX(base)];
-    assert.ok(lap >= SAIL_FLUSH_LAP_MIN && midLap < SAIL_FLUSH_LAP_MIN, `in over the arc at ${SHARE}: ${(lap * 1000).toFixed(1)} mm with the field, ${(midLap * 1000).toFixed(1)} mm with the mid-arc head`);
+    expect(lap >= SAIL_FLUSH_LAP_MIN && midLap < SAIL_FLUSH_LAP_MIN, `in over the arc at ${SHARE}: ${(lap * 1000).toFixed(1)} mm with the field, ${(midLap * 1000).toFixed(1)} mm with the mid-arc head`).toBeTruthy();
   });
 });
 
@@ -1375,7 +1375,7 @@ describe("given every body style's greenhouse frame", () => {
         const loft = loftOf(part);
         for (let line = 0; line < loft.ring; line++) {
           const angles = ringLineDihedrals(part, line);
-          assert.ok(angles.length > 0 && Math.max(...angles) < ROLLED_EDGE_LIMIT_DEGREES, `${id} ${testCase.name} ring line ${line} turns ${Math.max(...angles)}°`);
+          expect(angles.length > 0 && Math.max(...angles) < ROLLED_EDGE_LIMIT_DEGREES, `${id} ${testCase.name} ring line ${line} turns ${Math.max(...angles)}°`).toBeTruthy();
         }
       });
     }
@@ -1390,8 +1390,8 @@ describe("given every body style's drawn roof and greenhouse", () => {
           g.computeBoundingBox();
           return g.boundingBox!.min.x < 0 && g.boundingBox!.max.x > 0;
         }).length;
-      assert.equal(crossing("cage"), 2, "the control: the cage's two header boxes");
-      assert.equal(crossing("drawn"), 0, `${id}: drawn parts across the roof`);
+      expect(crossing("cage"), "the control: the cage's two header boxes").toBe(2);
+      expect(crossing("drawn"), `${id}: drawn parts across the roof`).toBe(0);
     });
 
     it(`when a ${id}'s drawn roof side is read at mid-roof, then its normals at the cant line point out (x over ${ROOF_SIDE_NORMAL_X}), not down with the underside's: no grey band along the roof's edge`, () => {
@@ -1408,7 +1408,7 @@ describe("given every body style's drawn roof and greenhouse", () => {
         if (pos.getY(i) < cant.y) cant = { y: pos.getY(i), nx: normal.getX(i) };
         else if (pos.getY(i) === cant.y) cant.nx = Math.max(cant.nx, normal.getX(i));
       }
-      assert.ok(cant.nx > ROOF_SIDE_NORMAL_X, `${id}: the roof's side at the cant line (y ${cant.y}) has normal x ${cant.nx} at most`);
+      expect(cant.nx, `${id}: the roof's side at the cant line (y ${cant.y}) has normal x ${cant.nx} at most`).toBeGreaterThan(ROOF_SIDE_NORMAL_X);
     });
   }
 });
@@ -1435,7 +1435,7 @@ function crushedByWall(id: CarStyleId): DeformableCar {
  */
 function assertFacesOut(label: string, geometry: THREE.BufferGeometry, normals: THREE.BufferAttribute | THREE.InterleavedBufferAttribute, style: BodyStyle): void {
   for (const point of outerSidePoints(geometry, normals, style.door.aperture, makeChassisGeometry(style).getAttribute("position"))) {
-    assert.ok(point.normal.dot(point.outward) > CRUSHED_OUTWARD_DOT_FLOOR, `${label} vertex ${point.vertex}: crushed normal ${point.normal.dot(point.outward)} against outward`);
+    expect(point.normal.dot(point.outward), `${label} vertex ${point.vertex}: crushed normal ${point.normal.dot(point.outward)} against outward`).toBeGreaterThan(CRUSHED_OUTWARD_DOT_FLOOR);
   }
 }
 
@@ -1446,7 +1446,7 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
       const normals = geometry.getAttribute("normal");
       for (let vertex = 0; vertex < normals.count; vertex++) {
         const length = Math.hypot(normals.getX(vertex), normals.getY(vertex), normals.getZ(vertex));
-        assert.ok(Number.isFinite(length) && Math.abs(length - 1) < 1e-4, `${id} vertex ${vertex}: crushed normal length ${length}`);
+        expect(Number.isFinite(length) && Math.abs(length - 1) < 1e-4, `${id} vertex ${vertex}: crushed normal length ${length}`).toBeTruthy();
       }
       assertFacesOut(id, geometry, normals, CAR_STYLES[id]);
     });
@@ -1456,7 +1456,7 @@ describe("given every body style crushed by a 64 km/h full-width wall hit, as th
     it(`when a ${id}'s skin is read as the sim writes it, before the drawn tyre hold (the skin the wire carries and the cage is cut from), then none of its normals on the side or ends points into the hull`, () => {
       const car = crushedByWall(id);
       const written = car["bodyTyres"]?.["written"];
-      assert.ok(written, `${id}: no tyre hold ran`);
+      must(written, `${id}: no tyre hold ran`);
       const geometry = car.body.geometry.clone();
       geometry.setAttribute("position", new THREE.BufferAttribute(Float32Array.from(written), 3));
       geometry.computeVertexNormals();
@@ -1504,7 +1504,7 @@ function roofFittingVertices(style: BodyStyle): { all: number; body: number; byK
 }
 
 function assertRoofFittingCaps(id: string, byKind: [RoofKind, number][]): void {
-  for (const [kind, n] of byKind) assert.ok(n <= ROOF_FITTING_VERTICES[kind], `${id} ${kind}: ${n} vertices against ${ROOF_FITTING_VERTICES[kind]}`);
+  for (const [kind, n] of byKind) expect(n, `${id} ${kind}: ${n} vertices against ${ROOF_FITTING_VERTICES[kind]}`).toBeLessThanOrEqual(ROOF_FITTING_VERTICES[kind]);
 }
 
 /**
@@ -1567,16 +1567,16 @@ describe("given every body style's car built whole", () => {
         drawCalls++;
         triangles += triangleCountOf(object.geometry);
       });
-      assert.equal(drawCalls, testCase.drawCalls);
-      assert.ok(triangles <= testCase.triangles * TRIANGLE_BUDGET, `${triangles} triangles against ${testCase.triangles * TRIANGLE_BUDGET}`);
+      expect(drawCalls).toBe(testCase.drawCalls);
+      expect(triangles, `${triangles} triangles against ${testCase.triangles * TRIANGLE_BUDGET}`).toBeLessThanOrEqual(testCase.triangles * TRIANGLE_BUDGET);
       const fittings = roofFittingVertices(car.style);
       const wells = wellAndCutVertices(car.style);
       const loft = car.body.geometry.getAttribute("position").count - fittings.body - wells.lips - wells.humps - wells.liners - wells.bootRings - wells.noseRings - wells.splitRings - wells.wallTops - wells.shutCopies - wells.curvedPosts;
-      assert.ok(loft <= testCase.bodyVertices * BODY_VERTEX_BUDGET, `${loft} body loft vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`);
+      expect(loft, `${loft} body loft vertices against ${testCase.bodyVertices * BODY_VERTEX_BUDGET}`).toBeLessThanOrEqual(testCase.bodyVertices * BODY_VERTEX_BUDGET);
       assertRoofFittingCaps(testCase.id, fittings.byKind);
       const cap = WELL_AND_CUT_VERTICES[testCase.id];
       const within = (Object.keys(cap) as (keyof typeof cap)[]).every((part) => wells[part] <= cap[part]);
-      assert.ok(within, `${testCase.id} ${JSON.stringify(wells)} against ${JSON.stringify(cap)}`);
+      expect(within, `${testCase.id} ${JSON.stringify(wells)} against ${JSON.stringify(cap)}`).toBeTruthy();
     });
   }
 
@@ -1584,10 +1584,10 @@ describe("given every body style's car built whole", () => {
     const wagon = CAR_STYLES.wagon;
     const roof = { rails: { x: [0.5, 0.56], z: [-1.6, 0.12], rise: 0.045 }, glassPanel: { z: [-0.75, 0.05], width: 0.8 }, spoiler: { z: [-1.85, -1.7], y: [1.52, 1.6], halfWidth: 0.6 } } as const;
     const fittings = roofFittingVertices({ ...wagon, roof });
-    assert.equal(fittings.byKind.length, 3, "the control: every kind is built");
+    expect(fittings.byKind.length, "the control: every kind is built").toBe(3);
     assertRoofFittingCaps("wagon", fittings.byKind);
     // Against the wagon with no fittings at all: the style itself may carry some.
-    assert.equal(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.body, makeChassisGeometry({ ...wagon, roof: undefined }).getAttribute("position").count, "the fittings are all the body gains");
+    expect(makeChassisGeometry({ ...wagon, roof }).getAttribute("position").count - fittings.body, "the fittings are all the body gains").toBe(makeChassisGeometry({ ...wagon, roof: undefined }).getAttribute("position").count);
   });
 });
 
@@ -1599,7 +1599,7 @@ describe("given every body style's panels cut from its smoothed loft", () => {
       const body = makeChassisGeometry(drawnStyle(CAR_STYLES[id]));
       const loft = loftOf(body);
       const regions = panelRegions(CAR_STYLES[id], body);
-      assert.equal(regions.length, PANEL_NAMES.length);
+      expect(regions.length).toBe(PANEL_NAMES.length);
       // Each arch lip's triangles (`archLipGeometry`), keyed as the regions key theirs.
       const lips = body.userData.archLips as { from: number; perWheel: readonly number[] } | undefined;
       const lipOf = new Map<string, string>();
@@ -1608,11 +1608,11 @@ describe("given every body style's panels cut from its smoothed loft", () => {
       }
       const seen = new Set<string>();
       for (const region of regions) {
-        assert.ok(region.verts.length > 20 && region.tris.count >= 30 * 3, `${id} ${region.name} has ${region.tris.count / 3} triangles`);
+        expect(region.verts.length > 20 && region.tris.count >= 30 * 3, `${id} ${region.name} has ${region.tris.count / 3} triangles`).toBeTruthy();
         for (let t = 0; t < region.tris.count; t += 3) {
           const key = [0, 1, 2].map((k) => region.tris.getX(t + k)).join(",");
-          assert.ok(!seen.has(key), `${id}: triangle ${key} is in two panels (${region.name})`);
-          assert.ok(region.tris.getX(t) < loft.ring * loft.slices || lipOf.get(key) === region.name, `${id} ${region.name}: a triangle outside the loft and its own lip`);
+          expect(!seen.has(key), `${id}: triangle ${key} is in two panels (${region.name})`).toBe(true);
+          expect(region.tris.getX(t) < loft.ring * loft.slices || lipOf.get(key) === region.name, `${id} ${region.name}: a triangle outside the loft and its own lip`).toBeTruthy();
           seen.add(key);
         }
       }
@@ -1796,7 +1796,7 @@ describe("given a style whose windshield is drawn apart from its cage (`drawn`)"
       if (String(paneOf(car).userData.centre) !== String(paneOf(plain).userData.centre)) off.push(`the exit point moved: ${paneOf(car).userData.centre} vs ${paneOf(plain).userData.centre}`);
       if (massesOf(car) !== massesOf(plain)) off.push("the sim's masses at rest moved");
       if (cageSourceDigest(car) !== cageSourceDigest(plain)) off.push("the cage source moved");
-      assert.ok(off.length === 0, off.join("; "));
+      expect(off.length, off.join("; ")).toBe(0);
     } finally {
       delete CAR_STYLES.sedan.drawn;
     }
@@ -1830,7 +1830,7 @@ describe("given a sedan whose windshield wraps in plan and bulges in side view, 
       const want = base[1] + 0.165 * (1 - xn * xn) + 0.04;
       if (Math.abs(hp.getZ(k) + oz - want) > 1e-4) off.push(`hood rear point ${k} at x ${x.toFixed(3)}: z ${(hp.getZ(k) + oz).toFixed(4)}, want ${want.toFixed(4)}`);
     }
-    assert.ok(off.length === 0, off.join("; "));
+    expect(off.length, off.join("; ")).toBe(0);
   });
   it("when its hood tucks under the glass's base, then the pane's base sits on the hood's top at every column (under 1 cm over it, never into it), and the drawn A-post's foot stands on that base", () => {
     const off: string[] = [];
@@ -1857,7 +1857,7 @@ describe("given a sedan whose windshield wraps in plan and bulges in side view, 
     const foot = Math.min(...Array.from({ length: post.getAttribute("position").count }, (_, k) => post.getAttribute("position").getY(k)));
     const side = windshieldBaseY(TUCKED_SEDAN, 1);
     if (foot > side + A_POST_FOOT_SLACK_M) off.push(`the A-post's foot stands ${((foot - side) * 1000).toFixed(1)} mm over the pane's side base`);
-    assert.ok(off.length === 0, off.join("; "));
+    expect(off.length, off.join("; ")).toBe(0);
   });
 });
 
@@ -1900,7 +1900,7 @@ describe("given every body style's drawn rings beside the cage source's rings at
           }
         }
       }
-      assert.ok(worstOutside <= HULL_SKIN_M, `${id}: a drawn ring point at z ${worstAt.toFixed(2)} stands ${(worstOutside * 100).toFixed(1)} cm outside the cage source's ring`);
+      expect(worstOutside, `${id}: a drawn ring point at z ${worstAt.toFixed(2)} stands ${(worstOutside * 100).toFixed(1)} cm outside the cage source's ring`).toBeLessThanOrEqual(HULL_SKIN_M);
     });
   }
 });

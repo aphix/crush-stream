@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { DRIVE } from "../vehicle/car-drive.ts";
@@ -47,49 +46,49 @@ describe("given the real engine and two live cars cruising at the zoom's full sp
   describe("and the camera on the seat's car", () => {
     it("when the player's own car boosts for 0.125 s, then the strength is half of full, and from 0.25 s on it is full", () => {
       strengthAfter(2, COASTING);
-      assert.ok(Math.abs(strengthAfter(0.125, DRIVING_CAR_BOOSTING) - 0.5) < 0.05, "half way up");
-      assert.equal(strengthAfter(0.125, DRIVING_CAR_BOOSTING), 1, "full at 0.25 s");
-      assert.equal(strengthAfter(1, DRIVING_CAR_BOOSTING), 1, "holds");
+      expect(Math.abs(strengthAfter(0.125, DRIVING_CAR_BOOSTING) - 0.5), "half way up").toBeLessThan(0.05);
+      expect(strengthAfter(0.125, DRIVING_CAR_BOOSTING), "full at 0.25 s").toBe(1);
+      expect(strengthAfter(1, DRIVING_CAR_BOOSTING), "holds").toBe(1);
     });
 
     it("when the boost ends, then the strength is half after 0.2 s and 0 after 0.4 s", () => {
       strengthAfter(1, DRIVING_CAR_BOOSTING);
-      assert.ok(Math.abs(strengthAfter(0.2, COASTING) - 0.5) < 0.05, "half way down");
-      assert.equal(strengthAfter(0.2, COASTING), 0, "gone at 0.4 s");
+      expect(Math.abs(strengthAfter(0.2, COASTING) - 0.5), "half way down").toBeLessThan(0.05);
+      expect(strengthAfter(0.2, COASTING), "gone at 0.4 s").toBe(0);
     });
 
     it("when the camera watches an AI car that boosts (the seat does not drive), then the zoom eases up exactly as for the driven car", () => {
       strengthAfter(2, COASTING);
-      assert.ok(Math.abs(strengthAfter(0.125, WATCHING_CAR_BOOSTING) - 0.5) < 0.05, "half way up");
-      assert.equal(strengthAfter(0.125, WATCHING_CAR_BOOSTING), 1, "full at 0.25 s");
+      expect(Math.abs(strengthAfter(0.125, WATCHING_CAR_BOOSTING) - 0.5), "half way up").toBeLessThan(0.05);
+      expect(strengthAfter(0.125, WATCHING_CAR_BOOSTING), "full at 0.25 s").toBe(1);
     });
 
     it("when the camera watches a car that is not boosting while another car boosts, then there is no zoom", () => {
       strengthAfter(2, COASTING);
-      assert.equal(strengthAfter(1, { ...WATCHING_CAR_BOOSTING, watch: 1 }), 0, "the other car's boost is not the watched one's");
+      expect(strengthAfter(1, { ...WATCHING_CAR_BOOSTING, watch: 1 }), "the other car's boost is not the watched one's").toBe(0);
     });
 
     it("when the camera switches from the boosting car to a coasting one, then the zoom eases down over 0.4 s and does not snap", () => {
       strengthAfter(1, WATCHING_CAR_BOOSTING);
       const switched = { ...WATCHING_CAR_BOOSTING, watch: 1 };
       const first = strengthAfter(FRAME, switched);
-      assert.ok(first > 0.9 && first < 1, `one frame after the switch the strength is ${first}`);
-      assert.ok(Math.abs(strengthAfter(0.2 - FRAME, switched) - 0.5) < 0.05, "half way down");
-      assert.equal(strengthAfter(0.2, switched), 0, "gone at 0.4 s");
+      expect(first > 0.9 && first < 1, `one frame after the switch the strength is ${first}`).toBeTruthy();
+      expect(Math.abs(strengthAfter(0.2 - FRAME, switched) - 0.5), "half way down").toBeLessThan(0.05);
+      expect(strengthAfter(0.2, switched), "gone at 0.4 s").toBe(0);
     });
 
     it("when the camera switches from a coasting car to a boosting one, then the zoom eases up and does not snap", () => {
       strengthAfter(1, { ...WATCHING_CAR_BOOSTING, watch: 1 });
       const first = strengthAfter(FRAME, WATCHING_CAR_BOOSTING);
-      assert.ok(first > 0 && first < 0.1, `one frame after the switch the strength is ${first}`);
-      assert.equal(strengthAfter(0.25, WATCHING_CAR_BOOSTING), 1, "full by 0.25 s");
+      expect(first > 0 && first < 0.1, `one frame after the switch the strength is ${first}`).toBeTruthy();
+      expect(strengthAfter(0.25, WATCHING_CAR_BOOSTING), "full by 0.25 s").toBe(1);
     });
 
     it("when the watched car's speed jumps from standing to full, then the strength follows over a fraction of a second, not in one frame", () => {
       strengthAfter(1, { ...WATCHING_CAR_BOOSTING, speed: 0 });
       const first = strengthAfter(FRAME, WATCHING_CAR_BOOSTING);
-      assert.ok(first > 0.2 && first < 0.5, `one frame after the speed jump the strength is ${first}`);
-      assert.equal(strengthAfter(1, WATCHING_CAR_BOOSTING), 1, "full once settled");
+      expect(first > 0.2 && first < 0.5, `one frame after the speed jump the strength is ${first}`).toBeTruthy();
+      expect(strengthAfter(1, WATCHING_CAR_BOOSTING), "full once settled").toBe(1);
     });
 
     const OFF_CASES = [
@@ -102,7 +101,7 @@ describe("given the real engine and two live cars cruising at the zoom's full sp
     for (const testCase of OFF_CASES) {
       it(testCase.it, () => {
         strengthAfter(2, COASTING);
-        assert.equal(strengthAfter(1, testCase.play), 0, "strength");
+        expect(strengthAfter(1, testCase.play), "strength").toBe(0);
       });
     }
   });
@@ -131,19 +130,19 @@ describe("given the real engine and two live cars cruising at the zoom's full sp
     };
     it("when the clip's focus car boosts, then the zoom eases up for it, though the seat's car does not", () => {
       reelStrengthAfter(2, 1, { ...WATCHING_CAR_BOOSTING, boosting: [] });
-      assert.ok(Math.abs(reelStrengthAfter(0.125, 1, { ...WATCHING_CAR_BOOSTING, boosting: [1] }) - 0.5) < 0.05, "half way up");
-      assert.equal(reelStrengthAfter(0.125, 1, { ...WATCHING_CAR_BOOSTING, boosting: [1] }), 1, "full at 0.25 s");
+      expect(Math.abs(reelStrengthAfter(0.125, 1, { ...WATCHING_CAR_BOOSTING, boosting: [1] }) - 0.5), "half way up").toBeLessThan(0.05);
+      expect(reelStrengthAfter(0.125, 1, { ...WATCHING_CAR_BOOSTING, boosting: [1] }), "full at 0.25 s").toBe(1);
     });
 
     it("when the clip's focus car does not boost while the seat's car does, then there is no zoom", () => {
       reelStrengthAfter(2, 1, { ...WATCHING_CAR_BOOSTING, boosting: [] });
-      assert.equal(reelStrengthAfter(1, 1, { ...WATCHING_CAR_BOOSTING, boosting: [0] }), 0, "the seat's car is not what the reel shows");
+      expect(reelStrengthAfter(1, 1, { ...WATCHING_CAR_BOOSTING, boosting: [0] }), "the seat's car is not what the reel shows").toBe(0);
     });
 
     it("when the reel flies between clips (no focus car), then a zoom in progress eases down over 0.4 s", () => {
       reelStrengthAfter(1, 1, { ...WATCHING_CAR_BOOSTING, boosting: [1] });
-      assert.ok(Math.abs(reelStrengthAfter(0.2, null, { ...WATCHING_CAR_BOOSTING, boosting: [1] }) - 0.5) < 0.05, "half way down");
-      assert.equal(reelStrengthAfter(0.2, null, { ...WATCHING_CAR_BOOSTING, boosting: [1] }), 0, "gone at 0.4 s");
+      expect(Math.abs(reelStrengthAfter(0.2, null, { ...WATCHING_CAR_BOOSTING, boosting: [1] }) - 0.5), "half way down").toBeLessThan(0.05);
+      expect(reelStrengthAfter(0.2, null, { ...WATCHING_CAR_BOOSTING, boosting: [1] }), "gone at 0.4 s").toBe(0);
     });
   });
 });

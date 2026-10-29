@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { roundHalfUp } from "./cage-outline.ts";
 
 describe("given a lattice coordinate between nodes", () => {
@@ -16,7 +15,7 @@ describe("given a lattice coordinate between nodes", () => {
 
   for (const testCase of testCases) {
     it(testCase.it, () => {
-      assert.equal(roundHalfUp(testCase.coordinate) | 0, Math.round(testCase.coordinate) | 0, "lattice index");
+      expect(roundHalfUp(testCase.coordinate) | 0, "lattice index").toBe(Math.round(testCase.coordinate) | 0);
     });
   }
 });

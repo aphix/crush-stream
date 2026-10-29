@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { GQ } from "../world/ground-clock.ts";
@@ -64,8 +63,8 @@ describe("given a wreck dropped in six attitudes on the stunt course's start str
       GQ.check = true;
       for (const attitude of ATTITUDES) restedWreck(cls, attitude);
       const c = GQ.allClear;
-      assert.ok(c.wreckSlices > 0, `the gate skipped no slice of a wreck (${c.slices} slices in all): nothing here to check`);
-      assert.equal(c.wreckRowSlices, 0, `the gate skipped the points of ${c.wreckRowSlices} of ${c.wreckSlices} wreck slices where reading them made ${c.rows} contact rows`);
+      expect(c.wreckSlices, `the gate skipped no slice of a wreck (${c.slices} slices in all): nothing here to check`).toBeGreaterThan(0);
+      expect(c.wreckRowSlices, `the gate skipped the points of ${c.wreckRowSlices} of ${c.wreckSlices} wreck slices where reading them made ${c.rows} contact rows`).toBe(0);
     });
   }
 });

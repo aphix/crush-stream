@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { FRAME, frame, makeWorld, type World } from "./race-world.test-util.ts";
 import { TRACK_ID } from "./constants.ts";
 import { leaveSurvival } from "./survival-run.test-util.ts";
@@ -60,9 +59,9 @@ describe("given the National Mall's basin, stretched to 320 x 96 m", () => {
     const w = mallWorld();
     try {
       const out = drive(w, START_X, HIT_Z, Math.PI / 2, 1);
-      assert.ok(out.x > PASS_X, `the car stopped at x ${out.x.toFixed(1)}, short of ${PASS_X}`);
-      assert.ok(!out.crashed, "the car crashed on open road");
-      assert.ok(out.shove < 0.2, `the course shoved the car ${out.shove.toFixed(2)} m/s in one step`);
+      expect(out.x, `the car stopped at x ${out.x.toFixed(1)}, short of ${PASS_X}`).toBeGreaterThan(PASS_X);
+      expect(!out.crashed, "the car crashed on open road").toBe(true);
+      expect(out.shove, `the course shoved the car ${out.shove.toFixed(2)} m/s in one step`).toBeLessThan(0.2);
     } finally {
       leaveSurvival(w);
     }
@@ -73,14 +72,14 @@ describe("given the National Mall's basin, stretched to 320 x 96 m", () => {
     try {
       const edge = basin.z - SEMI_Z;
       const out = drive(w, basin.x, edge - RUN_UP, 0, SECONDS);
-      assert.ok(out.shove > 0.5, `the drawn edge at z ${edge.toFixed(1)} touched the car by only ${out.shove.toFixed(2)} m/s`);
-      assert.ok(out.z < edge + 1, `the car got to z ${out.z.toFixed(1)}, past the drawn edge at ${edge.toFixed(1)}`);
+      expect(out.shove, `the drawn edge at z ${edge.toFixed(1)} touched the car by only ${out.shove.toFixed(2)} m/s`).toBeGreaterThan(0.5);
+      expect(out.z, `the car got to z ${out.z.toFixed(1)}, past the drawn edge at ${edge.toFixed(1)}`).toBeLessThan(edge + 1);
     } finally {
       leaveSurvival(w);
     }
   });
 
   it("when the basin's ellipse is read, then it is 320 m across the Mall and 96 m deep, so the rows above stand where they were measured", () => {
-    assert.ok(Math.abs(SEMI_X - 160) < 1 && Math.abs(SEMI_Z - 48) < 1, `half axes ${SEMI_X.toFixed(1)} x ${SEMI_Z.toFixed(1)}`);
+    expect(Math.abs(SEMI_X - 160) < 1 && Math.abs(SEMI_Z - 48) < 1, `half axes ${SEMI_X.toFixed(1)} x ${SEMI_Z.toFixed(1)}`).toBeTruthy();
   });
 });

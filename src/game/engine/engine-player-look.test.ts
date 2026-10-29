@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -60,16 +59,16 @@ describe("given the real engine and a player who customized his driver in the ga
   const throwOut = (car: number): Worn => {
     worn.length = 0;
     engine["ragdolls"].launch(ejectionOf(engine["live"](), car), engine["live"]());
-    assert.equal(worn.length, 1, `car ${car}'s driver was dressed once`);
+    expect(worn.length, `car ${car}'s driver was dressed once`).toBe(1);
     return worn[0]!;
   };
   const assertPlayer = (w: Worn, why: string): void => {
-    assert.equal(dressOf(w.look), dressOf(ownLook(PLAYER)), `${why}: the player's driver wears his saved look`);
-    assert.equal(w.spray, mine().personSpray, `${why}: and his saved spray`);
+    expect(dressOf(w.look), `${why}: the player's driver wears his saved look`).toBe(dressOf(ownLook(PLAYER)));
+    expect(w.spray, `${why}: and his saved spray`).toBe(mine().personSpray);
   };
   const assertAi = (w: Worn, why: string): void => {
-    assert.equal(dressOf(w.look), dressOf(driverLook(engine["ragdolls"].lookSeed, w.car)), `${why}: an AI driver wears his seat's drawn look`);
-    assert.equal(w.spray, null, `${why}: and no spray`);
+    expect(dressOf(w.look), `${why}: an AI driver wears his seat's drawn look`).toBe(dressOf(driverLook(engine["ragdolls"].lookSeed, w.car)));
+    expect(w.spray, `${why}: and no spray`).toBe(null);
   };
 
   it("when the Fleet loops 3 times, then every thrown player driver wears the saved look, an AI driver his seed's, and a peer's car's driver the peer's", () => {
@@ -82,23 +81,23 @@ describe("given the real engine and a player who customized his driver in the ga
       assertPlayer(throwOut(PLAYER_CAR), `loop ${loop}`);
       assertAi(throwOut(AI_CAR), `loop ${loop}`);
       engine["looks"].wear(PEER_CAR, { ...engine["looks"].data(), person: PEER });
-      assert.equal(dressOf(throwOut(PEER_CAR).look), dressOf(ownLook(PEER)), `loop ${loop}: the peer's driver wears the peer's look`);
+      expect(dressOf(throwOut(PEER_CAR).look), `loop ${loop}: the peer's driver wears the peer's look`).toBe(dressOf(ownLook(PEER)));
       engine["looks"].drop(PEER_CAR);
     }
-    assert.equal(seeds.size, 3, "each loop rolled a look seed of its own");
+    expect(seeds.size, "each loop rolled a look seed of its own").toBe(3);
   });
 
   it("when the long jump is thrown 3 times (a Retry after each score), then each real throw's driver wears the saved look", () => {
     engine["setScene"]("range");
     runSeconds(engine, 1);
     engine.startMinigame("longJump");
-    assert.equal(engine["minigameMode"], "longJump", "the long jump is on");
+    expect(engine["minigameMode"], "the long jump is on").toBe("longJump");
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) engine.retryMinigame();
       worn.length = 0;
       throwLongJump(engine);
       const thrown = worn.filter((w) => w.car === PLAYER_CAR);
-      assert.equal(thrown.length, 1, `attempt ${attempt}: the driver was thrown once`);
+      expect(thrown.length, `attempt ${attempt}: the driver was thrown once`).toBe(1);
       assertPlayer(thrown[0]!, `attempt ${attempt}`);
     }
     engine.exitMinigame();
@@ -157,5 +156,5 @@ function throwLongJump(engine: CrashEngine): void {
   for (let frame = 0; frame < THROW_TIMEOUT_S * FRAME_HZ && engine["minigames"].hud().phase !== "scored"; frame++) engine.advance(FRAME, { frameDt: FRAME });
   engine["keys"].delete(THROTTLE_KEY);
   for (let frame = 0; frame < 2; frame++) engine.advance(FRAME, { frameDt: FRAME });
-  assert.equal(engine["minigames"].hud().phase, "scored", "the long jump scored");
+  expect(engine["minigames"].hud().phase, "the long jump scored").toBe("scored");
 }

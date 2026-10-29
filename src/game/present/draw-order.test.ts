@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import type { RenderItem } from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -40,15 +39,15 @@ describe("given two opaque draws in one frame", () => {
     it(testCase.it, () => {
       const first = draw({ [testCase.key]: 1, ...Object.fromEntries(testCase.later.map((k) => [k, 9])) });
       const second = draw({ [testCase.key]: 9, ...Object.fromEntries(testCase.later.map((k) => [k, 1])) });
-      assert.ok(sortByDrawClass(first, second) < 0, "the lower one is not first");
-      assert.ok(sortByDrawClass(second, first) > 0, "the order is not symmetric");
+      expect(sortByDrawClass(first, second), "the lower one is not first").toBeLessThan(0);
+      expect(sortByDrawClass(second, first), "the order is not symmetric").toBeGreaterThan(0);
     });
   }
 
   it("when the material carries no draw class, then it ranks as class 0, before every classed material", () => {
     const unset = draw({ drawClass: 0 });
     unset.material.userData = {};
-    assert.ok(sortByDrawClass(unset, draw({ drawClass: 1 })) < 0);
+    expect(sortByDrawClass(unset, draw({ drawClass: 1 }))).toBeLessThan(0);
   });
 });
 
@@ -83,9 +82,9 @@ describe("given a field of cars painted differently", () => {
     const byMaterialId = draws.slice().sort((a, b) => idOf(a) - idOf(b) || a.id - b.id);
     const byClass = draws.slice().sort(sortByDrawClass);
     const classes = new Set(draws.map((d) => drawClassOf(d.material)));
-    assert.ok(classes.has(1) && classes.has(2) && classes.has(3), `classes ${[...classes].join(",")}: paint, parts and trim all appear`);
-    assert.equal(runsOf(byClass, (d) => drawClassOf(d.material)), classes.size, "a class is split");
-    assert.ok(runsOf(byMaterialId, (d) => drawClassOf(d.material)) > 2 * classes.size, "by material id the classes already ran together: the test proves nothing");
+    expect(classes.has(1) && classes.has(2) && classes.has(3), `classes ${[...classes].join(",")}: paint, parts and trim all appear`).toBeTruthy();
+    expect(runsOf(byClass, (d) => drawClassOf(d.material)), "a class is split").toBe(classes.size);
+    expect(runsOf(byMaterialId, (d) => drawClassOf(d.material)), "by material id the classes already ran together: the test proves nothing").toBeGreaterThan(2 * classes.size);
     for (const car of cars) car.dispose();
   });
 });

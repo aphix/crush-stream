@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 
@@ -13,7 +12,7 @@ describe("given cars wearing body-colour bumper trim", () => {
   it("when two cars share a body colour, then all four of their bumpers draw with one material", () => {
     const a = sedanIn(0x445566, 0x111111);
     const b = sedanIn(0x445566, 0x222222);
-    assert.equal(new Set([...bumperMaterials(a), ...bumperMaterials(b)]).size, 1);
+    expect(new Set([...bumperMaterials(a), ...bumperMaterials(b)]).size).toBe(1);
     a.dispose();
     b.dispose();
   });
@@ -23,9 +22,9 @@ describe("given cars wearing body-colour bumper trim", () => {
     const b = sedanIn(0x665544, 0x111111);
     const [trimA] = bumperMaterials(a) as THREE.MeshStandardMaterial[];
     const [trimB] = bumperMaterials(b) as THREE.MeshStandardMaterial[];
-    assert.notEqual(trimA, trimB);
-    assert.equal(trimA!.color.getHex(), new THREE.Color(0x445566).getHex());
-    assert.equal(trimB!.color.getHex(), new THREE.Color(0x665544).getHex());
+    expect(trimA).not.toBe(trimB);
+    expect(trimA!.color.getHex()).toBe(new THREE.Color(0x445566).getHex());
+    expect(trimB!.color.getHex()).toBe(new THREE.Color(0x665544).getHex());
     a.dispose();
     b.dispose();
   });
@@ -36,7 +35,7 @@ describe("given cars wearing body-colour bumper trim", () => {
     let freed = 0;
     for (const m of bumperMaterials(stays)) m.addEventListener("dispose", () => freed++);
     gone.dispose();
-    assert.equal(freed, 0);
+    expect(freed).toBe(0);
     stays.dispose();
   });
 });

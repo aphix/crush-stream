@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { PART_STATE, LOOSE_STATE_MAX } from "../vehicle/part-state.ts";
@@ -97,8 +96,8 @@ describe("given a damaged car put back on the road keeping its damage (a held re
   const now = damagedCar(scene);
 
   it("when the two cars are made the same way, then their full state is identical (the control)", () => {
-    assert.equal(before.crashed, true, "a wreck");
-    assert.ok(before.hasLoosePart(), "with a part torn off");
+    expect(before.crashed, "a wreck").toBe(true);
+    expect(before.hasLoosePart(), "with a part torn off").toBeTruthy();
     assertSameDigest(fullState(before), fullState(now), "twins");
   });
 
@@ -109,9 +108,9 @@ describe("given a damaged car put back on the road keeping its damage (a held re
   });
 
   it("when the state after is compared with the engine's dress, then the car kept the crumple settings it had (the respawn's re-dress did not stand)", () => {
-    assert.equal(now.deform.squash, 1.1);
-    assert.equal(now.deform.buckle, 0.3);
-    assert.notEqual(now.deform.squash, ENGINE_DRESS.squash, "the control: the dress differs from the car's own");
+    expect(now.deform.squash).toBe(1.1);
+    expect(now.deform.buckle).toBe(0.3);
+    expect(now.deform.squash, "the control: the dress differs from the car's own").not.toBe(ENGINE_DRESS.squash);
   });
 });
 
@@ -137,7 +136,7 @@ describe("given a racer that crosses the finish line dented and is hit again aft
       fromLine = Math.max(fromLine, Math.abs(drawn[k]! - atLine[k]!));
       dentAfter = Math.max(dentAfter, Math.abs(atEnd[k]! - atLine[k]!));
     }
-    assert.ok(dentAfter > 0.01, `the control: the hit after the line dents it ${dentAfter.toFixed(3)} m`);
-    assert.ok(fromLine < 1e-6, `the podium's car is ${fromLine.toFixed(4)} m from the car at the line`);
+    expect(dentAfter, `the control: the hit after the line dents it ${dentAfter.toFixed(3)} m`).toBeGreaterThan(0.01);
+    expect(fromLine, `the podium's car is ${fromLine.toFixed(4)} m from the car at the line`).toBeLessThan(1e-6);
   });
 });

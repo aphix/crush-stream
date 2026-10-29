@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import {
   BODY_HARD, BODY_I, BODY_M, BODY_SIZE, BODY_VX, BODY_VZ, BODY_W, BODY_X, BODY_Z,
   bodyContact, CT_DEPTH, CT_E, CT_JMAX, CT_MU, CT_NX, CT_NZ, CT_SIZE, CT_X, CT_Z,
@@ -80,7 +79,7 @@ function kineticEnergy(o: number): number {
 }
 
 function near(actual: number, expected: number, tol: number, what: string): void {
-  assert.ok(Math.abs(actual - expected) <= tol, `${what}: ${actual} vs ${expected} (±${tol})`);
+  expect(Math.abs(actual - expected), `${what}: ${actual} vs ${expected} (±${tol})`).toBeLessThanOrEqual(tol);
 }
 
 /** The owner's hit (clip 2026-10-07): A's front-right corner into B's rear wheel, A at 27.19 m/s, B at rest. */
@@ -111,7 +110,7 @@ describe("given two bodies that touch at a point and press into each other", () 
         const approach = bodyContactClosing(testCase);
         const keBefore = kineticEnergy(0) + kineticEnergy(BODY_SIZE);
         const j = bodyContact(rows, 0, BODY_SIZE, ct, out);
-        assert.ok(j > 0, "the bodies exchange an impulse");
+        expect(j, "the bodies exchange an impulse").toBeGreaterThan(0);
         for (let axis = 0; axis < 3; axis++) {
           const sum0 = before[0]![axis]! + before[1]![axis]!;
           const sum1 = momentum(0, px, pz)[axis]! + momentum(BODY_SIZE, px, pz)[axis]!;
@@ -157,12 +156,12 @@ describe("given a kinematic body (a press plate, a piston head, a wall) and a ca
       bodyContact(rows, 0, BODY_SIZE, ct, out);
       const va = pointVelocity(0, 1.5, 0.8);
       near(va[0], 0.55, 1e-9, "car's point speed along the plate's travel");
-      assert.equal(rows[BODY_SIZE + BODY_VX], 0.55, "plate speed");
-      assert.equal(rows[BODY_SIZE + BODY_W], 0, "plate yaw rate");
-      assert.ok(out[OUT_J]! > 0, "the plate gives an impulse");
+      expect(rows[BODY_SIZE + BODY_VX], "plate speed").toBe(0.55);
+      expect(rows[BODY_SIZE + BODY_W], "plate yaw rate").toBe(0);
+      expect(out[OUT_J]!, "the plate gives an impulse").toBeGreaterThan(0);
       near(out[OUT_EBS_A]!, out[OUT_CLOSING]! * Math.sqrt(out[OUT_MEFF]! / SEDAN.m), 1e-9, "the car's barrier speed is the closing scaled by what the lever leaves of its mass");
-      assert.ok(out[OUT_EBS_A]! < out[OUT_CLOSING]!, "a hit off the centre line crushes less than a square one");
-      assert.equal(out[OUT_EBS_B], 0, "a kinematic body has no barrier speed");
+      expect(out[OUT_EBS_A]!, "a hit off the centre line crushes less than a square one").toBeLessThan(out[OUT_CLOSING]!);
+      expect(out[OUT_EBS_B], "a kinematic body has no barrier speed").toBe(0);
     });
   });
   describe("when the car is struck at its centre by the plate", () => {
@@ -170,7 +169,7 @@ describe("given a kinematic body (a press plate, a piston head, a wall) and a ca
       load({ ...plateHit, point: [1.5, 0], a: { ...SEDAN, x: 3, z: 0, ...AT_REST } });
       bodyContact(rows, 0, BODY_SIZE, ct, out);
       near(rows[BODY_VX]!, 0.55, 1e-9, "car speed");
-      assert.equal(rows[BODY_W], 0, "no spin");
+      expect(rows[BODY_W], "no spin").toBe(0);
       near(out[OUT_MEFF]!, SEDAN.m, 1e-9, "effective mass is the car's own");
       near(out[OUT_EBS_A]!, 0.55, 1e-9, "barrier speed is the closing");
     });
@@ -182,8 +181,8 @@ describe("given a contact that yields and one that is already parting", () => {
     it("then it gives 1000 N·s and the points are still closing", () => {
       load({ ...OWNER_HIT, jmax: 1000 });
       const j = bodyContact(rows, 0, BODY_SIZE, ct, out);
-      assert.equal(j, 1000);
-      assert.ok(bodyContactClosing(OWNER_HIT) > 0, "the cap left a closing speed");
+      expect(j).toBe(1000);
+      expect(bodyContactClosing(OWNER_HIT), "the cap left a closing speed").toBeGreaterThan(0);
       near(out[OUT_CRUSH_J]!, 1000 * (27.19 - 0.5 * 1000 * (1 / out[OUT_MEFF]!)), 1e-6, "crush energy of the capped impulse");
       near(out[OUT_PLASTIC_J]!, 0.5 * out[OUT_MEFF]! * 27.19 ** 2, 1e-6, "the plastic energy stays that of the full closing");
     });
@@ -191,15 +190,15 @@ describe("given a contact that yields and one that is already parting", () => {
   describe("when the bodies' points move apart", () => {
     it("then nothing is exchanged", () => {
       load({ ...OWNER_HIT, a: { ...OWNER_HIT.a, vx: -3 } });
-      assert.equal(bodyContact(rows, 0, BODY_SIZE, ct, out), 0);
-      assert.equal(rows[BODY_VX], -3);
-      assert.equal(rows[BODY_SIZE + BODY_VX], 0);
+      expect(bodyContact(rows, 0, BODY_SIZE, ct, out)).toBe(0);
+      expect(rows[BODY_VX]).toBe(-3);
+      expect(rows[BODY_SIZE + BODY_VX]).toBe(0);
     });
   });
   describe("when both bodies are kinematic", () => {
     it("then nothing is exchanged", () => {
       load({ ...OWNER_HIT, a: { ...PLATE, x: -2, z: 0, vx: 5, vz: 0, w: 0 }, b: { ...PLATE, x: 2, z: 0, ...AT_REST } });
-      assert.equal(bodyContact(rows, 0, BODY_SIZE, ct, out), 0);
+      expect(bodyContact(rows, 0, BODY_SIZE, ct, out)).toBe(0);
     });
   });
 });
@@ -252,7 +251,7 @@ describe("given a contact with friction", () => {
       const va = pointVelocity(0, 0, 0);
       const vb = pointVelocity(BODY_SIZE, 0, 0);
       near(va[1] - vb[1], 0, 1e-9, "sliding speed left");
-      assert.ok(Math.abs(out[OUT_JT]!) <= 10 * j, "friction impulse within the limit");
+      expect(Math.abs(out[OUT_JT]!), "friction impulse within the limit").toBeLessThanOrEqual(10 * j);
     });
   });
   describe("when the friction is 0.05", () => {
@@ -261,7 +260,7 @@ describe("given a contact with friction", () => {
       const j = bodyContact(rows, 0, BODY_SIZE, ct, out);
       near(Math.abs(out[OUT_JT]!), 0.05 * j, 1e-9, "friction impulse");
       const slidLeft = pointVelocity(0, 0, 0)[1] - pointVelocity(BODY_SIZE, 0, 0)[1];
-      assert.ok(slidLeft > 0.1, `sliding left ${slidLeft}`);
+      expect(slidLeft, `sliding left ${slidLeft}`).toBeGreaterThan(0.1);
     });
   });
 });
@@ -272,7 +271,7 @@ describe("given a pair that overlaps by 0.1 m", () => {
       load({ ...OWNER_HIT, depth: 0.1, b: { ...PLATE, x: 0.76, z: -1.65, ...AT_REST } });
       bodyContact(rows, 0, BODY_SIZE, ct, out);
       near(out[OUT_PUSH_A]!, 0.1, 1e-12, "car's push against the plate");
-      assert.equal(out[OUT_PUSH_B], 0);
+      expect(out[OUT_PUSH_B]).toBe(0);
       load({ ...OWNER_HIT, depth: 0.1 });
       bodyContact(rows, 0, BODY_SIZE, ct, out);
       near(out[OUT_PUSH_A]!, 0.05, 1e-12, "car's push against an equal car");

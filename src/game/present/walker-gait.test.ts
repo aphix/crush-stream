@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { Gait, GAIT } from "./walker-gait.ts";
 import { Locomotion, RUN_SPEED, SPRINT_SPEED, WALK_SPEED } from "./walker-locomotion.ts";
@@ -58,14 +57,14 @@ describe("given a gait over flat ground", () => {
   for (const testCase of stanceCases) {
     it(testCase.it, () => {
       const { worst, samples } = plantedSlide(watch(testCase.command, 3, testCase.turnTo));
-      assert.ok(samples >= testCase.expectedMinSamples, `${samples} planted frames seen (a gait that never plants proves nothing)`);
-      assert.ok(worst < 1e-9, `a planted foot moved ${worst} m in a frame`);
+      expect(samples, `${samples} planted frames seen (a gait that never plants proves nothing)`).toBeGreaterThanOrEqual(testCase.expectedMinSamples);
+      expect(worst, `a planted foot moved ${worst} m in a frame`).toBeLessThan(1e-9);
     });
   }
 
   it("when he runs, then his feet do move: each swing carries a foot over a metre", () => {
     const frames = watch(RUN_SPEED, 3);
-    for (let f = 0; f < 2; f++) assert.ok(range(frames.map((frame) => frame.feet[f * 3 + 2]!)) > 3 * RUN_SPEED * 0.8, `foot ${f} travelled with him`);
+    for (let f = 0; f < 2; f++) expect(range(frames.map((frame) => frame.feet[f * 3 + 2]!)), `foot ${f} travelled with him`).toBeGreaterThan(3 * RUN_SPEED * 0.8);
   });
 
   const flightCases: readonly { it: string; command: number; expectedMinFlight: number; expectedMaxFlight: number; expectedMinBoth: number; expectedMaxBoth: number }[] = [
@@ -78,8 +77,8 @@ describe("given a gait over flat ground", () => {
       const frames = watch(testCase.command, 4);
       const flight = share(frames, (frame) => frame.planted[0] === 0 && frame.planted[1] === 0);
       const both = share(frames, (frame) => frame.planted[0] === 1 && frame.planted[1] === 1);
-      assert.ok(flight >= testCase.expectedMinFlight && flight <= testCase.expectedMaxFlight, `flight ${flight.toFixed(2)} within ${testCase.expectedMinFlight}-${testCase.expectedMaxFlight}`);
-      assert.ok(both >= testCase.expectedMinBoth && both <= testCase.expectedMaxBoth, `both down ${both.toFixed(2)} within ${testCase.expectedMinBoth}-${testCase.expectedMaxBoth}`);
+      expect(flight >= testCase.expectedMinFlight && flight <= testCase.expectedMaxFlight, `flight ${flight.toFixed(2)} within ${testCase.expectedMinFlight}-${testCase.expectedMaxFlight}`).toBeTruthy();
+      expect(both >= testCase.expectedMinBoth && both <= testCase.expectedMaxBoth, `both down ${both.toFixed(2)} within ${testCase.expectedMinBoth}-${testCase.expectedMaxBoth}`).toBeTruthy();
     });
   }
 });
@@ -109,8 +108,8 @@ describe("given a gait that has walked and been asked to stop", () => {
         if (gait.standing && settledAt === Infinity) settledAt = f * FRAME;
         if (settledAt < Infinity && !gait.standing) liftedAfter++;
       }
-      assert.ok(settledAt <= testCase.expectedMaxSettleSeconds, `stood still after ${settledAt.toFixed(2)} s within ${testCase.expectedMaxSettleSeconds}`);
-      assert.equal(liftedAfter, 0, `${liftedAfter} frames of stepping after he stood still`);
+      expect(settledAt, `stood still after ${settledAt.toFixed(2)} s within ${testCase.expectedMaxSettleSeconds}`).toBeLessThanOrEqual(testCase.expectedMaxSettleSeconds);
+      expect(liftedAfter, `${liftedAfter} frames of stepping after he stood still`).toBe(0);
     });
   }
 });
@@ -143,7 +142,7 @@ describe("given a gait at each speed", () => {
       const elbow = Math.abs(Math.min(...frames.map((frame) => frame.targets[GAIT.ELBOW_L]! * DEGREES)));
       const twist = range(frames.map((frame) => frame.twist * DEGREES));
       const bob = range(frames.map((frame) => frame.anchorY)) * 100;
-      const within = (value: number, [low, high]: readonly [number, number], name: string) => assert.ok(value >= low && value <= high, `${name} ${value.toFixed(1)} within ${low}-${high}`);
+      const within = (value: number, [low, high]: readonly [number, number], name: string) => expect(value >= low && value <= high, `${name} ${value.toFixed(1)} within ${low}-${high}`).toBeTruthy();
       within(hip, testCase.expectedHipPP, "hip swing");
       within(knee, testCase.expectedKneePeak, "knee flexion");
       within(shoulder, testCase.expectedShoulderPP, "shoulder swing");
@@ -163,14 +162,14 @@ describe("given a gait at each speed", () => {
       against += centred(frame, GAIT.ARM_L) * centred(frame, GAIT.HIP_L);
       withOther += centred(frame, GAIT.ARM_L) * centred(frame, GAIT.HIP_R);
     }
-    assert.ok(against < 0 && withOther > 0, `arm against own leg ${against.toFixed(2)}, with the other ${withOther.toFixed(2)}`);
+    expect(against < 0 && withOther > 0, `arm against own leg ${against.toFixed(2)}, with the other ${withOther.toFixed(2)}`).toBeTruthy();
   });
 
   it("when he runs, then the pelvis turns against the legs: the hips ahead lead it round", () => {
     const frames = watch(RUN_SPEED, 4);
     let product = 0;
     for (const frame of frames) product += frame.twist * (frame.targets[GAIT.HIP_R]! - frame.targets[GAIT.HIP_L]!);
-    assert.ok(product > 0, `twist follows the hip difference (${product.toFixed(3)})`);
+    expect(product, `twist follows the hip difference (${product.toFixed(3)})`).toBeGreaterThan(0);
   });
 });
 
@@ -190,8 +189,8 @@ describe("given a steady gait", () => {
         step = Math.max(step, Math.abs(frames[i]!.anchorY - frames[i - 1]!.anchorY) * 100);
         for (const index of [GAIT.KNEE_L, GAIT.KNEE_R]) kneeStep = Math.max(kneeStep, Math.abs(frames[i]!.targets[index]! - frames[i - 1]!.targets[index]!) * DEGREES);
       }
-      assert.ok(step <= testCase.expectedMaxStepCm, `pelvis step ${step.toFixed(2)} cm within ${testCase.expectedMaxStepCm}`);
-      assert.ok(kneeStep <= testCase.expectedMaxKneeStepDegrees, `knee step ${kneeStep.toFixed(1)} degrees within ${testCase.expectedMaxKneeStepDegrees}`);
+      expect(step, `pelvis step ${step.toFixed(2)} cm within ${testCase.expectedMaxStepCm}`).toBeLessThanOrEqual(testCase.expectedMaxStepCm);
+      expect(kneeStep, `knee step ${kneeStep.toFixed(1)} degrees within ${testCase.expectedMaxKneeStepDegrees}`).toBeLessThanOrEqual(testCase.expectedMaxKneeStepDegrees);
     });
   }
 });
@@ -211,9 +210,9 @@ describe("given the arms of a steady gait", () => {
       const left = frames.map((frame) => handReach(frame.targets[GAIT.ARM_L]!, frame.targets[GAIT.ELBOW_L]!));
       const right = frames.map((frame) => handReach(frame.targets[GAIT.ARM_R]!, frame.targets[GAIT.ELBOW_R]!));
       const opposite = left.filter((reach, i) => Math.sign(reach - 0.05) !== Math.sign(right[i]! - 0.05)).length / left.length;
-      assert.ok(Math.min(...left, ...right) < testCase.expectedMaxRearReach, `rear hand ${Math.min(...left, ...right).toFixed(2)} m`);
-      assert.ok(Math.max(...left, ...right) > 0.2, "the front hand comes forward too");
-      assert.ok(opposite > testCase.expectedMinOpposite, `opposite sides ${opposite.toFixed(2)} of the cycle`);
+      expect(Math.min(...left, ...right), `rear hand ${Math.min(...left, ...right).toFixed(2)} m`).toBeLessThan(testCase.expectedMaxRearReach);
+      expect(Math.max(...left, ...right), "the front hand comes forward too").toBeGreaterThan(0.2);
+      expect(opposite, `opposite sides ${opposite.toFixed(2)} of the cycle`).toBeGreaterThan(testCase.expectedMinOpposite);
     });
   }
 });
@@ -222,8 +221,8 @@ describe("given a gait at a run", () => {
   it("when a foot is under him at mid-stance, then its knee is under 45 degrees and the pelvis dips under 6 cm: he does not sit", () => {
     const frames = watch(RUN_SPEED, 4);
     const mid = frames.filter((frame) => frame.planted[0] === 1 && Math.abs(frame.targets[GAIT.HIP_L]!) < 0.15);
-    assert.ok(mid.length > 10, `${mid.length} mid-stance frames seen`);
-    assert.ok(Math.max(...mid.map((frame) => frame.targets[GAIT.KNEE_L]! * DEGREES)) < 45, "mid-stance knee");
-    assert.ok(range(frames.map((frame) => frame.hipY)) * 100 < 6, `pelvis range ${(range(frames.map((frame) => frame.hipY)) * 100).toFixed(1)} cm`);
+    expect(mid.length, `${mid.length} mid-stance frames seen`).toBeGreaterThan(10);
+    expect(Math.max(...mid.map((frame) => frame.targets[GAIT.KNEE_L]! * DEGREES)), "mid-stance knee").toBeLessThan(45);
+    expect(range(frames.map((frame) => frame.hipY)) * 100, `pelvis range ${(range(frames.map((frame) => frame.hipY)) * 100).toFixed(1)} cm`).toBeLessThan(6);
   });
 });

@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { idleDrive, THROTTLE_STEPS, type DriveInput } from "../vehicle/car-drive.ts";
 import { applyAiDrive, FADE_S, InputFade } from "../ai/input-fade.ts";
@@ -22,7 +21,7 @@ describe("given an AI driver's hands (`InputFade`)", () => {
       const hands = new InputFade();
       let throttle = 0;
       for (let s = 0; s < steps; s++) throttle = hands.fade(0, GAS, dt, FAST).throttle;
-      assert.ok(Math.abs(throttle - (1 - Math.exp(-1))) < 1e-9, `${throttle.toFixed(6)} after ${steps} steps`);
+      expect(Math.abs(throttle - (1 - Math.exp(-1))), `${throttle.toFixed(6)} after ${steps} steps`).toBeLessThan(1e-9);
     }
   });
 
@@ -33,9 +32,9 @@ describe("given an AI driver's hands (`InputFade`)", () => {
       while (hands.fade(0, { ...idleDrive(), steer: 1 }, STEP, speed).steer < 0.63 && n < 1000) n++;
       return n * STEP;
     };
-    assert.ok(Math.abs(steps(30) - FADE_S.steer) < STEP, `at 30 m/s ${steps(30).toFixed(3)} s`);
-    assert.ok(Math.abs(steps(3) - FADE_S.steer / 5) < STEP, `at 3 m/s ${steps(3).toFixed(3)} s`);
-    assert.equal(steps(0), 0, "stopped");
+    expect(Math.abs(steps(30) - FADE_S.steer), `at 30 m/s ${steps(30).toFixed(3)} s`).toBeLessThan(STEP);
+    expect(Math.abs(steps(3) - FADE_S.steer / 5), `at 3 m/s ${steps(3).toFixed(3)} s`).toBeLessThan(STEP);
+    expect(steps(0), "stopped").toBe(0);
   });
 
   it("when it flips between gas and brake every step, then neither pedal ever moves by more than a few percent a step and the mean is what the flips average to", () => {
@@ -49,25 +48,25 @@ describe("given an AI driver's hands (`InputFade`)", () => {
       before = out.throttle;
       sum += out.throttle;
     }
-    assert.ok(worst < 0.2, `a pedal moved ${worst.toFixed(3)} in one step`);
-    assert.ok(Math.abs(sum / 400 - 0.5) < 0.1, `mean gas ${(sum / 400).toFixed(3)}`);
+    expect(worst, `a pedal moved ${worst.toFixed(3)} in one step`).toBeLessThan(0.2);
+    expect(Math.abs(sum / 400 - 0.5), `mean gas ${(sum / 400).toFixed(3)}`).toBeLessThan(0.1);
   });
 
   it("when the handbrake is asked for one step, then it is not pressed; asked for a tenth of a second it is, and it stays until let go for as long", () => {
     const hands = new InputFade();
-    assert.equal(hands.fade(0, { ...idleDrive(), ebrake: true }, STEP, FAST).ebrake, false, "one step");
-    assert.equal(hands.fade(0, idleDrive(), STEP, FAST).ebrake, false);
+    expect(hands.fade(0, { ...idleDrive(), ebrake: true }, STEP, FAST).ebrake, "one step").toBe(false);
+    expect(hands.fade(0, idleDrive(), STEP, FAST).ebrake).toBe(false);
     let on = false;
     for (let t = 0; t < 0.2; t += STEP) on = hands.fade(0, { ...idleDrive(), ebrake: true }, STEP, FAST).ebrake;
-    assert.equal(on, true, "asked 0.2 s");
-    assert.equal(hands.fade(0, idleDrive(), STEP, FAST).ebrake, true, "let go for one step");
+    expect(on, "asked 0.2 s").toBe(true);
+    expect(hands.fade(0, idleDrive(), STEP, FAST).ebrake, "let go for one step").toBe(true);
   });
 
   it("when another driver had the car (`follow`), then the hands take over from where it left the pedals", () => {
     const hands = new InputFade();
     hands.follow(3, { ...idleDrive(), throttle: 0.8, steer: -0.4 });
     const out = hands.fade(3, { ...idleDrive(), throttle: 0.8, steer: -0.4 }, STEP, FAST);
-    assert.ok(Math.abs(out.throttle - 0.8) < 1e-9 && Math.abs(out.steer + 0.4) < 1e-9);
+    expect(Math.abs(out.throttle - 0.8) < 1e-9 && Math.abs(out.steer + 0.4) < 1e-9).toBeTruthy();
   });
 
   it("when the car is put on a spot (its placements count moves), then its first step there is what the driver asks, not a fade from the pedals it had where it was; with the count unmoved it fades as ever", () => {
@@ -75,9 +74,9 @@ describe("given an AI driver's hands (`InputFade`)", () => {
     const hands = new InputFade();
     for (let s = 0; s < 100; s++) hands.fade(0, { ...idleDrive(), throttle: 1 }, STEP, FAST, 1);
     const placed = hands.fade(0, ask, STEP, FAST, 2);
-    assert.ok(Math.abs(placed.brake - 0.7) < 1e-9 && Math.abs(placed.steer + 0.2) < 1e-9 && placed.throttle === 0, `brake ${placed.brake.toFixed(3)}, steer ${placed.steer.toFixed(3)}, gas ${placed.throttle.toFixed(3)}`);
+    expect(Math.abs(placed.brake - 0.7) < 1e-9 && Math.abs(placed.steer + 0.2) < 1e-9 && placed.throttle === 0, `brake ${placed.brake.toFixed(3)}, steer ${placed.steer.toFixed(3)}, gas ${placed.throttle.toFixed(3)}`).toBeTruthy();
     const next = hands.fade(0, { ...idleDrive(), throttle: 1 }, STEP, FAST, 2);
-    assert.ok(next.throttle > 0 && next.throttle < 0.5, "and fades from there on");
+    expect(next.throttle > 0 && next.throttle < 0.5, "and fades from there on").toBeTruthy();
   });
 });
 
@@ -93,7 +92,7 @@ describe("given a sedan at 25 m/s driven by an AI driver (`applyAiDrive`, every 
         applyAiDrive(car, { ...idleDrive(), steer: s % 2 === 0 ? 1 : -1 }, dt);
         worst = Math.max(worst, Math.abs(car.drive.steer - was));
       }
-      assert.ok(worst > 0 && worst <= reach, `${(1 / dt).toFixed(0)} Hz: the wheel moved ${worst.toFixed(4)} in a step, a pad's reach ${reach.toFixed(4)}`);
+      expect(worst > 0 && worst <= reach, `${(1 / dt).toFixed(0)} Hz: the wheel moved ${worst.toFixed(4)} in a step, a pad's reach ${reach.toFixed(4)}`).toBeTruthy();
       const from = car.drive.steer;
       let steps = 0;
       while (car.drive.steer < 1 && steps < 100) {
@@ -101,7 +100,7 @@ describe("given a sedan at 25 m/s driven by an AI driver (`applyAiDrive`, every 
         steps++;
       }
       const bytes = Math.floor(FEEL.steerPad * dt * THROTTLE_STEPS);
-      assert.ok(steps <= Math.ceil(((1 - from) * THROTTLE_STEPS) / bytes), `${(1 / dt).toFixed(0)} Hz: full lock from ${from.toFixed(3)} in ${steps} steps of ${bytes} bytes`);
+      expect(steps, `${(1 / dt).toFixed(0)} Hz: full lock from ${from.toFixed(3)} in ${steps} steps of ${bytes} bytes`).toBeLessThanOrEqual(Math.ceil(((1 - from) * THROTTLE_STEPS) / bytes));
     }
   });
 });
@@ -206,19 +205,19 @@ describe("given the bench strip's first 30 s with the AI driving the player's se
 
   it("when it drives, then the wheel and the pedals do not reverse at the step rate and a step seldom jumps the wheel by more than a fifth of lock", () => {
     const judged = samples.slice(SETTLE_STEPS).filter((s) => !s.crashed);
-    assert.ok(judged.length > 15 * QUIET_HZ, `${judged.length} steps judged`);
+    expect(judged.length, `${judged.length} steps judged`).toBeGreaterThan(15 * QUIET_HZ);
     const steer = judged.map((s) => s.steer);
     const jump = Math.max(...steer.slice(1).map((v, i) => Math.abs(v - steer[i]!)));
-    assert.ok(jumpsPerS(steer, STEER_JUMP) <= MOST_BIG_JUMPS, `big wheel jumps a second ${jumpsPerS(steer, STEER_JUMP).toFixed(2)}, the largest ${jump.toFixed(3)} of lock`);
-    assert.ok(reversalsPerS(steer, PEDAL_JUMP) <= MOST_STEER_REVERSALS, `wheel reversals a second ${reversalsPerS(steer, PEDAL_JUMP).toFixed(2)}`);
-    assert.ok(reversalsPerS(judged.map((s) => s.throttle), PEDAL_JUMP) <= MOST_REVERSALS, "gas reversals a second");
-    assert.ok(reversalsPerS(judged.map((s) => s.brake), PEDAL_JUMP) <= MOST_REVERSALS, "brake reversals a second");
-    assert.ok(swingsPerS(steer, 0.1) <= MOST_STEER_SWINGS, `wheel swings a second ${swingsPerS(steer, 0.1).toFixed(2)}`);
+    expect(jumpsPerS(steer, STEER_JUMP), `big wheel jumps a second ${jumpsPerS(steer, STEER_JUMP).toFixed(2)}, the largest ${jump.toFixed(3)} of lock`).toBeLessThanOrEqual(MOST_BIG_JUMPS);
+    expect(reversalsPerS(steer, PEDAL_JUMP), `wheel reversals a second ${reversalsPerS(steer, PEDAL_JUMP).toFixed(2)}`).toBeLessThanOrEqual(MOST_STEER_REVERSALS);
+    expect(reversalsPerS(judged.map((s) => s.throttle), PEDAL_JUMP), "gas reversals a second").toBeLessThanOrEqual(MOST_REVERSALS);
+    expect(reversalsPerS(judged.map((s) => s.brake), PEDAL_JUMP), "brake reversals a second").toBeLessThanOrEqual(MOST_REVERSALS);
+    expect(swingsPerS(steer, 0.1), `wheel swings a second ${swingsPerS(steer, 0.1).toFixed(2)}`).toBeLessThanOrEqual(MOST_STEER_SWINGS);
   });
 
   it("when it drives, then the drawn body does not rock left and right: its roll swings (1.5 degrees apart) no more than 3 times a second", () => {
     const judged = samples.slice(SETTLE_STEPS).filter((s) => !s.crashed);
     const swings = swingsPerS(judged.map((s) => (s.roll * 180) / Math.PI), ROLL_SWING_DEG);
-    assert.ok(swings <= MOST_ROLL_SWINGS, `roll swings a second ${swings.toFixed(2)}`);
+    expect(swings, `roll swings a second ${swings.toFixed(2)}`).toBeLessThanOrEqual(MOST_ROLL_SWINGS);
   });
 });

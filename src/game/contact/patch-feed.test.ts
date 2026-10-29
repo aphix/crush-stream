@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { launch, makeCar } from "./crash-scenarios.test-util.ts";
 import { patch, satCars } from "./sat.ts";
@@ -16,7 +15,7 @@ describe("given a sedan's nose driven 15 cm into a parked sedan's door", () => {
     const n = new THREE.Vector3();
     const p = new THREE.Vector3();
     const sink = satCars(bullet, struck, n, p, 0);
-    assert.ok(sink !== null && sink > 0.05, `sink ${sink}`);
-    assert.ok(patch.half > 0.75 * NOSE_HALF && patch.half < 1.25 * NOSE_HALF, `patch half width ${patch.half.toFixed(3)} m against the nose's ${NOSE_HALF} m`);
+    expect(sink !== null && sink > 0.05, `sink ${sink}`).toBeTruthy();
+    expect(patch.half > 0.75 * NOSE_HALF && patch.half < 1.25 * NOSE_HALF, `patch half width ${patch.half.toFixed(3)} m against the nose's ${NOSE_HALF} m`).toBeTruthy();
   });
 });

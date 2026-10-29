@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
 import { SEAT_SPEED } from "./deform-contact.ts";
@@ -44,7 +43,7 @@ function hold(s: WreckRig, dx: number, dz: number): THREE.Vector3 {
       cell.world.set(cell.rest.x + dx, cell.rest.y, cell.rest.z + dz).applyMatrix4(s.group.matrixWorld);
     });
   }
-  assert.ok(s.d.quietTime() < STEP * 2, `quiet ${s.d.quietTime().toFixed(3)} s: the wreck is no longer in contact`);
+  expect(s.d.quietTime(), `quiet ${s.d.quietTime().toFixed(3)} s: the wreck is no longer in contact`).toBeLessThan(STEP * 2);
   return s.group.position.clone().sub(start);
 }
 
@@ -78,7 +77,7 @@ describe("given a wreck held against a prism with its cell 1-6 cm off its seat f
     it(`when it is ${c.name}, then its height drifts under 1 µm over the second`, () => {
       setGround(new Prism());
       const moved = hold(wreckAt(c.roll, c.pitch), c.dx, c.dz);
-      assert.ok(Math.abs(moved.y) < DRIFT_LIMIT, `the wreck moved ${(moved.y * 1000).toFixed(3)} mm in height over ${SECONDS} s (seat step ${(STEP * SEAT_SPEED * 1000).toFixed(1)} mm)`);
+      expect(Math.abs(moved.y), `the wreck moved ${(moved.y * 1000).toFixed(3)} mm in height over ${SECONDS} s (seat step ${(STEP * SEAT_SPEED * 1000).toFixed(1)} mm)`).toBeLessThan(DRIFT_LIMIT);
     });
   }
 
@@ -92,7 +91,7 @@ describe("given a wreck held against a prism with its cell 1-6 cm off its seat f
       setGround(new Prism());
       const moved = hold(wreckAt(0, 0), c.dx, c.dz);
       const want = -SEAT_SPEED * SECONDS;
-      assert.ok(Math.abs(moved[c.along] / want - 1) < 0.1, `moved ${moved[c.along].toFixed(3)} m along ${c.along}, ${want} m wanted`);
+      expect(Math.abs(moved[c.along] / want - 1), `moved ${moved[c.along].toFixed(3)} m along ${c.along}, ${want} m wanted`).toBeLessThan(0.1);
     });
   }
 });

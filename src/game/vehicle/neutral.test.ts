@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { applyDrive, DRIVE, idleDrive, type DriveInput } from "./car-drive.ts";
@@ -37,26 +36,26 @@ describe("given a sedan doing 130 km/h on the flat, freewheeling in neutral (a t
     t.annotate(`130 km/h, ${SECS} s: lift-off ${liftDecel.toFixed(2)} m/s² (${(lift.speed / KPH).toFixed(0)} km/h left), neutral ${freeDecel.toFixed(2)} m/s² (${(free.speed / KPH).toFixed(0)} km/h left)`);
     // Rolling resistance (asphalt's Crr) + air drag alone: about 0.5 m/s² at this speed.
     const roll = SURFACES.asphalt.roll * FRICTION_G;
-    assert.ok(freeDecel > 0.3 * (roll + DRIVE.drag * v0 * v0) && freeDecel < 1.5 * (roll + DRIVE.drag * v0 * v0), `neutral sheds ${freeDecel.toFixed(2)} m/s²`);
-    assert.ok(liftDecel > 5 * freeDecel, `lift-off ${liftDecel.toFixed(2)} vs neutral ${freeDecel.toFixed(2)} m/s²`);
-    assert.ok(free.speed > 0.9 * v0, `${(free.speed / KPH).toFixed(0)} km/h left of 130`);
+    expect(freeDecel > 0.3 * (roll + DRIVE.drag * v0 * v0) && freeDecel < 1.5 * (roll + DRIVE.drag * v0 * v0), `neutral sheds ${freeDecel.toFixed(2)} m/s²`).toBeTruthy();
+    expect(liftDecel, `lift-off ${liftDecel.toFixed(2)} vs neutral ${freeDecel.toFixed(2)} m/s²`).toBeGreaterThan(5 * freeDecel);
+    expect(free.speed, `${(free.speed / KPH).toFixed(0)} km/h left of 130`).toBeGreaterThan(0.9 * v0);
   });
 
   it("when the neutral flag is set, then the car carries it (the recorder's input byte reads it) and an ordinary input does not", () => {
-    assert.equal(free.car.drive.neutral, true);
-    assert.equal(lift.car.drive.neutral, false);
+    expect(free.car.drive.neutral).toBe(true);
+    expect(lift.car.drive.neutral).toBe(false);
   });
 
   it("when the car drives with neutral false or absent from the input, then ordinary driving is bit-identical either way", () => {
     const a = run({ ...idleDrive(), throttle: 0.6, steer: 0.2 });
     const b = run({ ...idleDrive(), throttle: 0.6, steer: 0.2, neutral: false });
-    assert.equal(a.speed, b.speed);
-    assert.equal(a.car.group.position.x, b.car.group.position.x);
-    assert.equal(a.car.group.position.z, b.car.group.position.z);
+    expect(a.speed).toBe(b.speed);
+    expect(a.car.group.position.x).toBe(b.car.group.position.x);
+    expect(a.car.group.position.z).toBe(b.car.group.position.z);
   });
 
   it("when a freewheeling car holds the brake, then it still brakes (neutral is only the no-pedals case)", () => {
     const braked = run({ ...idleDrive(), brake: 1, neutral: true }, 1);
-    assert.ok(braked.speed < 0.6 * v0, `${(braked.speed / KPH).toFixed(0)} km/h after a second on the brake`);
+    expect(braked.speed, `${(braked.speed / KPH).toFixed(0)} km/h after a second on the brake`).toBeLessThan(0.6 * v0);
   });
 });

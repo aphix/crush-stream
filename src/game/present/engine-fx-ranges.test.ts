@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import type { FxTier } from "./engine-post.ts";
@@ -7,6 +6,7 @@ import { DebrisSystem, GlassDotSystem, SparkSystem, TireSmokeSystem } from "./en
 import { FountainSystem } from "./fountain-system.ts";
 import { FOUNTAIN_TIER } from "./fountain-plan.ts";
 import { attributesOf, drawQueued } from "./fx-uploads.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * Every partial upload an FX pool queues (`updateRanges`, sent by three as `bufferSubData(…, array, start, count)`) lies inside its
@@ -119,7 +119,7 @@ for (const { name, make } of DRIVES) {
       for (let f = 0; f < FRAMES; f++) {
         frame(f);
         const bad = overrun(scene);
-        assert.equal(bad, null, `frame ${f}: ${bad}`);
+        expect(bad, `frame ${f}: ${bad}`).toBe(null);
         drawQueued(scene);
       }
     });
@@ -130,7 +130,7 @@ for (const { name, make } of DRIVES) {
       for (let f = 0; f < FRAMES; f++) {
         frame(f);
         const bad = overrun(scene);
-        assert.equal(bad, null, `frame ${f}: ${bad}`);
+        expect(bad, `frame ${f}: ${bad}`).toBe(null);
         if (f % 23 === 22) drawQueued(scene);
       }
     });
@@ -147,10 +147,10 @@ describe("given a fountain pool whose spawns are not drawn for a few frames", ()
     const from = sys["cursor"];
     for (let f = 0; f < 3; f++) sys.update(STEP);
     const spawned = sys["cursor"] - from;
-    assert.ok(spawned > 0 && from + spawned <= RING, `the control: ${spawned} slots spawned from ${from}, inside the ring`);
+    expect(spawned > 0 && from + spawned <= RING, `the control: ${spawned} slots spawned from ${from}, inside the ring`).toBeTruthy();
     const position = sys["geo"].getAttribute("position");
-    assert.ok(position instanceof THREE.BufferAttribute);
+    must(position instanceof THREE.BufferAttribute, "position is a plain buffer");
     const covered = position.updateRanges.some((r) => r.start <= from * 3 && r.start + r.count >= (from + spawned) * 3);
-    assert.ok(covered, `ranges ${JSON.stringify(position.updateRanges)} miss slots ${from}..${from + spawned}`);
+    expect(covered, `ranges ${JSON.stringify(position.updateRanges)} miss slots ${from}..${from + spawned}`).toBeTruthy();
   });
 });

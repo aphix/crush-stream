@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
@@ -42,9 +41,9 @@ describe("given a torso lying at a rotation", () => {
     it(testCase.it, () => {
       const q = rotationOf(testCase.turns);
       const pose = [0, 0, 0, q.x, q.y, q.z, q.w];
-      assert.equal(chooseRoute(pose, 3), testCase.expectedRoute, "route");
+      expect(chooseRoute(pose, 3), "route").toBe(testCase.expectedRoute);
       const bearing = standingBearing(pose, 3, 0);
-      assert.ok(Math.abs(Math.atan2(Math.sin(bearing - testCase.expectedBearing), Math.cos(bearing - testCase.expectedBearing))) < 0.05, `bearing ${bearing.toFixed(2)} for ${testCase.expectedBearing.toFixed(2)}`);
+      expect(Math.abs(Math.atan2(Math.sin(bearing - testCase.expectedBearing), Math.cos(bearing - testCase.expectedBearing))), `bearing ${bearing.toFixed(2)} for ${testCase.expectedBearing.toFixed(2)}`).toBeLessThan(0.05);
     });
   }
 });
@@ -86,7 +85,7 @@ function torsoReading() {
 
 beforeEach(async () => {
   system = await flatSystem();
-  assert.equal(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: driverLook(0, 0) }), WALKER, "the walker is placed in his slot");
+  expect(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: driverLook(0, 0) }), "the walker is placed in his slot").toBe(WALKER);
 });
 
 afterEach(() => {
@@ -106,15 +105,15 @@ describe("given a limp walker lying on the ground", () => {
     it(testCase.it, () => {
       layDown(testCase.turns, testCase.height);
       frames(1.5);
-      assert.equal(system.walker.state, "down", "limp while nobody asks");
+      expect(system.walker.state, "limp while nobody asks").toBe("down");
       frames(2, () => system.walker.ask());
-      assert.notEqual(system.walker.state, "down", "the ask starts the get-up");
-      assert.equal(system.walker.route, testCase.expectedRoute, "route");
+      expect(system.walker.state, "the ask starts the get-up").not.toBe("down");
+      expect(system.walker.route, "route").toBe(testCase.expectedRoute);
       frames(5, () => system.walker.ask());
       const end = torsoReading();
-      assert.equal(system.walker.state, "stand", "state at the end");
-      assert.ok(end.tilt < 20, `upright at the end: tilt ${end.tilt.toFixed(1)} deg`);
-      assert.ok(end.y > 1, `standing height at the end: ${end.y.toFixed(2)} m`);
+      expect(system.walker.state, "state at the end").toBe("stand");
+      expect(end.tilt, `upright at the end: tilt ${end.tilt.toFixed(1)} deg`).toBeLessThan(20);
+      expect(end.y, `standing height at the end: ${end.y.toFixed(2)} m`).toBeGreaterThan(1);
     });
   }
 });
@@ -124,7 +123,7 @@ describe("given a walker who has got up", () => {
     layDown([["x", -QUARTER]], 0.15);
     frames(1.5);
     frames(8, () => system.walker.ask());
-    assert.equal(system.walker.state, "stand", "he is up");
+    expect(system.walker.state, "he is up").toBe("stand");
     system.walker.heading = system.walker.facing;
     system.walker.command = WALK_SPEED;
     frames(2);
@@ -132,8 +131,8 @@ describe("given a walker who has got up", () => {
     frames(5, () => system.walker.ask());
     const to = torsoReading();
     const speed = Math.hypot(to.x - from.x, to.z - from.z) / 5;
-    assert.equal(system.walker.state, "stand", "still on his feet");
-    assert.ok(speed > 0.6 && speed < 2.2, `walked at ${speed.toFixed(2)} m/s`);
+    expect(system.walker.state, "still on his feet").toBe("stand");
+    expect(speed > 0.6 && speed < 2.2, `walked at ${speed.toFixed(2)} m/s`).toBeTruthy();
   });
 });
 
@@ -155,7 +154,7 @@ describe("given a limp walker the player asks to get up at once", () => {
         const reading = torsoReading();
         if (system.walker.state === "stand" && reading.tilt < 20 && reading.y > 1) upAt = f * FRAME;
       }
-      assert.ok(upAt <= testCase.expectedMaxSeconds, `on his feet after ${upAt.toFixed(2)} s within ${testCase.expectedMaxSeconds}`);
+      expect(upAt, `on his feet after ${upAt.toFixed(2)} s within ${testCase.expectedMaxSeconds}`).toBeLessThanOrEqual(testCase.expectedMaxSeconds);
       system.walker.heading = system.walker.facing;
       system.walker.command = RUN_SPEED;
       let running = Infinity;
@@ -164,8 +163,8 @@ describe("given a limp walker the player asks to get up at once", () => {
         system.update(FRAME, [], true, true, null);
         if (system.walker.loco.speed >= 0.9 * RUN_SPEED) running = f * FRAME;
       }
-      assert.ok(running <= 0.6, `running ${running.toFixed(2)} s after he is up (a movable state, not a wobbling one)`);
-      assert.equal(system.walker.state, "stand", "still on his feet");
+      expect(running, `running ${running.toFixed(2)} s after he is up (a movable state, not a wobbling one)`).toBeLessThanOrEqual(0.6);
+      expect(system.walker.state, "still on his feet").toBe("stand");
     });
   }
 });
@@ -189,20 +188,20 @@ describe("given a car coming at a walker standing on open ground", () => {
     it(testCase.it, () => {
       frames(1);
       const car = carAt(testCase.mps);
-      assert.equal(runsDown(car, 0, 0, 0), testCase.expectedStruck, "the car's footprint meets him at this speed");
+      expect(runsDown(car, 0, 0, 0), "the car's footprint meets him at this speed").toBe(testCase.expectedStruck);
       if (!testCase.expectedStruck) return;
       system.knockWalker(fell(car, 0, -1, 0, 0, 0, 0, 1, blankStrike()));
-      assert.equal(system.walker.state, "down", "limp at once");
-      assert.ok(system.walker.sinceStruck < 0.1, "marked as struck");
+      expect(system.walker.state, "limp at once").toBe("down");
+      expect(system.walker.sinceStruck, "marked as struck").toBeLessThan(0.1);
       const flying = new THREE.Vector3();
       system.torso(WALKER, new THREE.Vector3(), flying);
-      assert.ok(flying.length() > testCase.mps * 0.5, `flung at ${flying.length().toFixed(1)} m/s`);
+      expect(flying.length(), `flung at ${flying.length().toFixed(1)} m/s`).toBeGreaterThan(testCase.mps * 0.5);
       frames(2.5);
-      assert.equal(system.walker.state, "down", "limp while nobody asks");
+      expect(system.walker.state, "limp while nobody asks").toBe("down");
       frames(8, () => system.walker.ask());
       const end = torsoReading();
-      assert.equal(system.walker.state, "stand", "on his feet again");
-      assert.ok(end.tilt < 20 && end.y > 1, `upright at the end: tilt ${end.tilt.toFixed(1)} deg, height ${end.y.toFixed(2)} m`);
+      expect(system.walker.state, "on his feet again").toBe("stand");
+      expect(end.tilt < 20 && end.y > 1, `upright at the end: tilt ${end.tilt.toFixed(1)} deg, height ${end.y.toFixed(2)} m`).toBeTruthy();
     });
   }
 });
@@ -255,12 +254,12 @@ describe("given a standing walker pushed onto his back", () => {
   for (const testCase of pushedCases) {
     it(testCase.it, () => {
       system.stopWalker(WALKER);
-      assert.equal(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: testCase.woman ? WOMAN : driverLook(0, 0) }, WALKER), WALKER, "the walker is placed in his slot");
+      expect(system.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: testCase.woman ? WOMAN : driverLook(0, 0) }, WALKER), "the walker is placed in his slot").toBe(WALKER);
       frames(FRAME);
       const direction = new THREE.Vector3(-Math.sin(testCase.yaw), PUSH_LIFT, -Math.cos(testCase.yaw)).normalize();
       system.strikeWalker(WALKER, new THREE.Vector3(Math.sin(testCase.yaw) * 0.1, testCase.height, Math.cos(testCase.yaw) * 0.1), direction, PUSH_SPEED);
       frames(LIE_SECONDS);
-      assert.equal(walkerState(), "down", "lying");
+      expect(walkerState(), "lying").toBe("down");
       const aim = feetBearing();
       let route = "";
       let standingAt = Infinity;
@@ -283,12 +282,12 @@ describe("given a standing walker pushed onto his back", () => {
         if (t < standingAt + WALK_SECONDS - HEADING_SECONDS) walkedFrom = reading;
         walkedTo = reading;
       }
-      assert.equal(route, "faceUp", "he landed on his back");
-      assert.ok(standingAt < Infinity, "he stood up");
-      assert.equal(fellAfter, Infinity, `he fell ${fellAfter.toFixed(2)} s after standing`);
-      assert.ok(minStrength >= NO_STUMBLE_STRENGTH, `he stumbled: strength fell to ${minStrength.toFixed(2)} within ${WALK_SECONDS} s of standing`);
+      expect(route, "he landed on his back").toBe("faceUp");
+      expect(standingAt, "he stood up").toBeLessThan(Infinity);
+      expect(fellAfter, `he fell ${fellAfter.toFixed(2)} s after standing`).toBe(Infinity);
+      expect(minStrength, `he stumbled: strength fell to ${minStrength.toFixed(2)} within ${WALK_SECONDS} s of standing`).toBeGreaterThanOrEqual(NO_STUMBLE_STRENGTH);
       const walked = Math.atan2(walkedTo.x - walkedFrom.x, walkedTo.z - walkedFrom.z);
-      assert.ok(Math.abs(wrapAngle(walked - aim)) < HEADING_TOLERANCE, `he walked ${walked.toFixed(2)} rad, his feet pointed ${aim.toFixed(2)}`);
+      expect(Math.abs(wrapAngle(walked - aim)), `he walked ${walked.toFixed(2)} rad, his feet pointed ${aim.toFixed(2)}`).toBeLessThan(HEADING_TOLERANCE);
     });
   }
 });

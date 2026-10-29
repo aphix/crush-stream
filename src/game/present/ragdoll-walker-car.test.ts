@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -70,7 +69,7 @@ describe("given a car driven through the spot where the player's walker stands, 
   it("when it hits him, then he is flung and every reading of the car's position, velocity and sim state is the same as without him, bit for bit", async () => {
     const without = await drive(false);
     const hit = await drive(true);
-    assert.ok(hit.flung > FLUNG_M, `he was flung ${hit.flung.toFixed(1)} m: the car did meet him`);
+    expect(hit.flung, `he was flung ${hit.flung.toFixed(1)} m: the car did meet him`).toBeGreaterThan(FLUNG_M);
     assertSameNumbers(hit.states, without.states, "the hitting car's sim state with the walker vs without him");
   });
 });

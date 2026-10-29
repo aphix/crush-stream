@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { SimPacer } from "../engine/sim-pace.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -79,8 +78,8 @@ describe(`given a parked car of each class hit in a door by a sedan at ${SPEED} 
     it(`when the ${cls}'s ${sign < 0 ? "left" : "right"} door skin is dented and the door swings, then every vertex of its drawn card stands under the skin's outer face`, (t) => {
       const { outside, ride, at, crush } = tbone(cls, sign);
       t.annotate(`crushed ${crush.toFixed(3)} m; card worst ${(outside * 1000).toFixed(1)} mm out (negative: under), rode in ${(ride * 1000).toFixed(0)} mm, worst at ${at.toFixed(2)} s`);
-      assert.ok(crush >= DENTED, `the ${cls} was crushed only ${crush.toFixed(3)} m: the hit did not reach the door`);
-      assert.ok(outside <= 0, `a card vertex stood ${(outside * 1000).toFixed(1)} mm out of the dented skin at ${at.toFixed(2)} s (the card rode in ${(ride * 1000).toFixed(0)} mm)`);
+      expect(crush, `the ${cls} was crushed only ${crush.toFixed(3)} m: the hit did not reach the door`).toBeGreaterThanOrEqual(DENTED);
+      expect(outside, `a card vertex stood ${(outside * 1000).toFixed(1)} mm out of the dented skin at ${at.toFixed(2)} s (the card rode in ${(ride * 1000).toFixed(0)} mm)`).toBeLessThanOrEqual(0);
     });
   }
 });

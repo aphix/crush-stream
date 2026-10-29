@@ -1,4 +1,5 @@
-import assert from "node:assert/strict";
+import { expect } from "vitest";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { PoliceBrain } from "./police.ts";
 import type { HunterWorld } from "./cop-brain.ts";
@@ -70,12 +71,12 @@ export function rig(units = 2, seed = 1, leadShare = 0.4, racers = 1, on: Track 
     Object.assign(cars[i]!, { x: p.x, z: p.z });
   }
   beat();
-  assert.ok(spots[first] && spots[first + 1], "the stakeout parked");
+  expect(spots[first] && spots[first + 1], "the stakeout parked").toBeTruthy();
   if (woken) {
     sit(5);
     beat();
-    assert.deepEqual(police.chasers(cars, []).map((c) => c.id), [first], "the first unit chases");
-    assert.equal(stored.length, 0);
+    expect(firstMismatch(police.chasers(cars, []).map((c) => c.id), [first]), "the first unit chases").toBeUndefined();
+    expect(stored.length).toBe(0);
   }
   return { police, cars, hunt, stored, parks, knockedOut, camera, beat, run, sit, world, clock: () => time, finish };
 }

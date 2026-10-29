@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 import { CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
@@ -22,8 +21,8 @@ describe("given a 5-spoke rim (it repeats every 72°, so a frame that turns it m
         for (let v = 0; v <= 60; v += 0.25) {
           const step = v / radius / hz;
           const s = spokeSmear(step);
-          if (seen(step) < 0.7 * step) assert.ok(s >= 0.99, `${cls} ${hz} Hz ${v} m/s: spokes read ${seen(step).toFixed(2)} of a true ${step.toFixed(2)} rad, smear ${s.toFixed(2)}`);
-          if (step < 0.2 * SPOKE_PERIOD) assert.equal(s, 0, `${cls} ${hz} Hz ${v} m/s: sharp spokes got a smear of ${s}`);
+          if (seen(step) < 0.7 * step) expect(s, `${cls} ${hz} Hz ${v} m/s: spokes read ${seen(step).toFixed(2)} of a true ${step.toFixed(2)} rad, smear ${s.toFixed(2)}`).toBeGreaterThanOrEqual(0.99);
+          if (step < 0.2 * SPOKE_PERIOD) expect(s, `${cls} ${hz} Hz ${v} m/s: sharp spokes got a smear of ${s}`).toBe(0);
         }
       }
     });
@@ -33,17 +32,17 @@ describe("given a 5-spoke rim (it repeats every 72°, so a frame that turns it m
     let last = 0;
     for (let i = 0; i <= 100; i++) {
       const s = spokeSmear((i / 100) * SPOKE_PERIOD);
-      assert.ok(s >= last, `smear fell at ${i}%`);
+      expect(s, `smear fell at ${i}%`).toBeGreaterThanOrEqual(last);
       last = s;
-      assert.equal(spokeSmear(-(i / 100) * SPOKE_PERIOD), s);
+      expect(spokeSmear(-(i / 100) * SPOKE_PERIOD)).toBe(s);
     }
   });
 
   it("when a sedan wheel turns at 20 m/s, then the spokes are fully smeared at 60 Hz, not smeared at 60 Hz in 1/10 slow-mo, and almost sharp (under 0.05) at 240 Hz", () => {
     const tyreR = carFrame(CAR_STYLES.sedan).rig.tyre.r;
     const step = (hz: number, scale: number) => (20 * scale) / tyreR / hz;
-    assert.equal(spokeSmear(step(60, 1)), 1);
-    assert.equal(spokeSmear(step(60, 0.1)), 0);
-    assert.ok(spokeSmear(step(240, 1)) < 0.05, `240 Hz smear ${spokeSmear(step(240, 1))}`);
+    expect(spokeSmear(step(60, 1))).toBe(1);
+    expect(spokeSmear(step(60, 0.1))).toBe(0);
+    expect(spokeSmear(step(240, 1)), `240 Hz smear ${spokeSmear(step(240, 1))}`).toBeLessThan(0.05);
   });
 });

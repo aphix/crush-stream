@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { expect } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -326,7 +326,7 @@ export function recordField(w: World, f: Field): Recording[] {
   return rec.ledger.kept.map((kept) => {
     const wr = new Writer(clipBytes(kept));
     writeClip(wr, kept);
-    assert.equal(wr.off, clipBytes(kept), "clipBytes is the exact size");
+    expect(wr.off, "clipBytes is the exact size").toBe(clipBytes(kept));
     const clip = readClip(new Reader().reset(wr.done()), L);
     return { clip, cars: w.cars, scene, trace, s0: clipStart(clip, times), frameEnd };
   });

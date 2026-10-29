@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { makeCar } from "../vehicle/ground-probe.test-util.ts";
@@ -53,7 +52,7 @@ describe("given a muscle car's wreck set with its front tyres on a parked sedan 
     let heard = false;
     w.world.partTouch = () => (heard = true);
     for (let frame = 0; frame < ON_TOP_FRAMES; frame++) tickWorld(w, FRAME);
-    assert.ok(heard, "the world never heard the muscle car and the sedan wreck touch");
+    expect(heard, "the world never heard the muscle car and the sedan wreck touch").toBeTruthy();
   });
 
   it("when its front tyres read the other wreck's top, which the rigid step takes no row from, then its drawn nose is not seated on it: no raise and no raise/flat flips", () => {
@@ -76,8 +75,8 @@ describe("given a muscle car's wreck set with its front tyres on a parked sedan 
       if (up !== was) flips++;
       was = up;
     }
-    assert.ok(onTop > 0, "no front tyre read the other wreck's top: the staging proves nothing");
-    assert.equal(flips, 0, `drawn front raise/flat flips (${raised} frames raised, seat up to ${(most * 1000).toFixed(0)} mm)`);
-    assert.equal(raised, 0, `drawn front raised in ${raised} frames (seat up to ${(most * 1000).toFixed(0)} mm)`);
+    expect(onTop, "no front tyre read the other wreck's top: the staging proves nothing").toBeGreaterThan(0);
+    expect(flips, `drawn front raise/flat flips (${raised} frames raised, seat up to ${(most * 1000).toFixed(0)} mm)`).toBe(0);
+    expect(raised, `drawn front raised in ${raised} frames (seat up to ${(most * 1000).toFixed(0)} mm)`).toBe(0);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { driverLook, type DriverLook } from "./driver-look.ts";
 import { BODY_VERTICES } from "./dummy-bodies.ts";
@@ -34,22 +33,22 @@ describe("given the uniformed kinds' wear", () => {
     const holster = (rows: readonly Drawn[]) => ofRole(rows, ROLE.BELT).filter((row) => row.at.y < BELT_BOTTOM - UNDER_BELT);
     const cop = drawn(true, COP_LOOK).rows;
     const civilian = drawn(false, CIVILIAN).rows;
-    assert.ok(holster(cop).length > 0, "the cop has a holster");
-    assert.ok(holster(cop).every((row) => row.at.x < 0), "on his right (-x), the gun hand's side");
-    assert.ok(ofRole(cop, ROLE.BELT).some((row) => row.at.x > 0 && row.at.y > BELT_BOTTOM - UNDER_BELT), "pouches on the belt's left");
-    assert.ok(ofRole(cop, ROLE.BADGE).length > 0 && ofRole(cop, ROLE.BADGE).every((row) => row.at.x > 0 && row.at.y > 1.15), "a badge on his left breast");
-    assert.ok(ofRole(cop, ROLE.PATCH).length > 0 && ofRole(cop, ROLE.PATCH).every((row) => row.at.x < -0.2), "a patch on his right sleeve");
-    assert.equal(holster(civilian).length, 0, "no holster on a civilian");
-    assert.equal(ofRole(civilian, ROLE.BADGE).length + ofRole(civilian, ROLE.PATCH).length, 0, "no badge or patch on a civilian");
+    expect(holster(cop).length, "the cop has a holster").toBeGreaterThan(0);
+    expect(holster(cop).every((row) => row.at.x < 0), "on his right (-x), the gun hand's side").toBeTruthy();
+    expect(ofRole(cop, ROLE.BELT).some((row) => row.at.x > 0 && row.at.y > BELT_BOTTOM - UNDER_BELT), "pouches on the belt's left").toBeTruthy();
+    expect(ofRole(cop, ROLE.BADGE).length > 0 && ofRole(cop, ROLE.BADGE).every((row) => row.at.x > 0 && row.at.y > 1.15), "a badge on his left breast").toBeTruthy();
+    expect(ofRole(cop, ROLE.PATCH).length > 0 && ofRole(cop, ROLE.PATCH).every((row) => row.at.x < -0.2), "a patch on his right sleeve").toBeTruthy();
+    expect(holster(civilian).length, "no holster on a civilian").toBe(0);
+    expect(ofRole(civilian, ROLE.BADGE).length + ofRole(civilian, ROLE.PATCH).length, "no badge or patch on a civilian").toBe(0);
   });
 
   it("when the cop raises his right arm and bends both knees, then the patch stays on his sleeve and each dress shoe on its own foot", () => {
     const raised = drawn(true, COP_LOOK, posture({ [LEFT_ARM]: turn(new THREE.Vector3(0, 0, 1), -80), [LEFT_LEG + 1]: turn(new THREE.Vector3(1, 0, 0), 70), [RIGHT_LEG + 1]: turn(new THREE.Vector3(1, 0, 0), 70), [LEFT_FOOT]: turn(new THREE.Vector3(1, 0, 0), 70), [RIGHT_FOOT]: turn(new THREE.Vector3(1, 0, 0), 70) })).rows;
-    assert.ok(furthestOff(ofRole(raised, ROLE.PATCH), raised, LEFT_ARM) < ON_BODY, `the patch is ${furthestOff(ofRole(raised, ROLE.PATCH), raised, LEFT_ARM).toFixed(3)} m off the raised arm`);
+    expect(furthestOff(ofRole(raised, ROLE.PATCH), raised, LEFT_ARM), `the patch is ${furthestOff(ofRole(raised, ROLE.PATCH), raised, LEFT_ARM).toFixed(3)} m off the raised arm`).toBeLessThan(ON_BODY);
     for (const foot of [LEFT_FOOT, RIGHT_FOOT]) {
       const shoe = [...ofRole(raised, ROLE.SHOE), ...ofRole(raised, ROLE.SOLE)].filter((row) => row.bone === foot);
-      assert.ok(shoe.length > 0, `a shoe rides foot ${foot}`);
-      assert.ok(furthestOff(shoe, raised, foot) < ON_BODY, `the shoe on foot ${foot} is ${furthestOff(shoe, raised, foot).toFixed(3)} m off its foot`);
+      expect(shoe.length, `a shoe rides foot ${foot}`).toBeGreaterThan(0);
+      expect(furthestOff(shoe, raised, foot), `the shoe on foot ${foot} is ${furthestOff(shoe, raised, foot).toFixed(3)} m off its foot`).toBeLessThan(ON_BODY);
     }
   });
 
@@ -60,11 +59,11 @@ describe("given the uniformed kinds' wear", () => {
     const [copKeys, guardKeys] = [new Set(cop.rows.map(key)), new Set(guard.rows.map(key))];
     const copOnly = cop.rows.filter((row) => !guardKeys.has(key(row)));
     const guardOnly = guard.rows.filter((row) => !copKeys.has(key(row)));
-    assert.ok(guard.rows.length - guardOnly.length > BODY_VERTICES, "the guard shares the cop's body and kit");
-    assert.ok(copOnly.length > 0 && copOnly.every((row) => row.role === ROLE.PATCH), "all the cop has that the guard lacks is the police patch");
-    assert.ok(guardOnly.length > 0 && guardOnly.every((row) => row.role === ROLE.EYES), "all the guard adds is his sunglasses");
+    expect(guard.rows.length - guardOnly.length, "the guard shares the cop's body and kit").toBeGreaterThan(BODY_VERTICES);
+    expect(copOnly.length > 0 && copOnly.every((row) => row.role === ROLE.PATCH), "all the cop has that the guard lacks is the police patch").toBeTruthy();
+    expect(guardOnly.length > 0 && guardOnly.every((row) => row.role === ROLE.EYES), "all the guard adds is his sunglasses").toBeTruthy();
     const shirt = guard.mesh.colourOf(0, ROLE.SHIRT, new THREE.Color());
-    assert.ok(Math.max(shirt.r, shirt.g, shirt.b) < BLACK, `the guard's shirt is black, not the cop's navy: #${shirt.getHexString()}`);
+    expect(Math.max(shirt.r, shirt.g, shirt.b), `the guard's shirt is black, not the cop's navy: #${shirt.getHexString()}`).toBeLessThan(BLACK);
   });
 
   for (const suit of [
@@ -75,13 +74,13 @@ describe("given the uniformed kinds' wear", () => {
       const { mesh, rows } = drawn(false, suit.look);
       const fit: Fit = hangingFit(restFits()[suit.build], SUIT_HANG);
       const tie = ofRole(rows, ROLE.TIE);
-      assert.ok(tie.length > 0, "a tie");
+      expect(tie.length, "a tie").toBeGreaterThan(0);
       const worst = Math.max(...tie.map((row) => Math.abs(row.at.z - surfaceZ(fit, 0, row.at.y))));
-      assert.ok(worst < TIE_OFF_CHEST, `the tie stands up to ${worst.toFixed(3)} m off his chest`);
-      assert.ok(ofRole(rows, ROLE.COLLAR).length > 0, "a collar");
+      expect(worst, `the tie stands up to ${worst.toFixed(3)} m off his chest`).toBeLessThan(TIE_OFF_CHEST);
+      expect(ofRole(rows, ROLE.COLLAR).length, "a collar").toBeGreaterThan(0);
       const collar = mesh.colourOf(0, ROLE.COLLAR, new THREE.Color());
-      assert.ok(Math.min(collar.r, collar.g, collar.b) > WHITE, `a white collar: #${collar.getHexString()}`);
-      assert.ok(ofRole(rows, ROLE.SOLE).length > 0 && ofRole(rows, ROLE.SHOE).length > 0, "dress shoes");
+      expect(Math.min(collar.r, collar.g, collar.b), `a white collar: #${collar.getHexString()}`).toBeGreaterThan(WHITE);
+      expect(ofRole(rows, ROLE.SOLE).length > 0 && ofRole(rows, ROLE.SHOE).length > 0, "dress shoes").toBeTruthy();
     });
   }
 });

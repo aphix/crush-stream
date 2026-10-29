@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { TRACK_ID } from "./constants.ts";
 import { setGround } from "./ground.ts";
 import { frame, makeWorld } from "./race-world.test-util.ts";
@@ -20,7 +19,7 @@ describe("given an oval race with police on, whose player car the race AI drives
       const racers = w.race.racers.length;
       const policeOut = () => w.live().some((c, i) => i >= racers && c.group.visible);
       for (let n = 0; n < RUN_S * 60 && !policeOut(); n++) frame(w, state);
-      assert.ok(policeOut(), "the police are out");
+      expect(policeOut(), "the police are out").toBeTruthy();
       const meterOf = (id: number): number | null => {
         w.seat.carIndex = id;
         return w.race.hud().view!.boost;
@@ -29,9 +28,9 @@ describe("given an oval race with police on, whose player car the race AI drives
       w.seat.boost = 0.123456;
       for (const id of [0, 1]) {
         const m = meterOf(id);
-        assert.ok(m !== null && m >= 0 && m <= 1 && m !== w.seat.boost, `car ${id} (${w.race.racers[id]!.kind}) shows meter ${m}`);
+        expect(m !== null && m >= 0 && m <= 1 && m !== w.seat.boost, `car ${id} (${w.race.racers[id]!.kind}) shows meter ${m}`).toBeTruthy();
       }
-      assert.equal(meterOf(racers), 1, "a police unit's bottle is full");
+      expect(meterOf(racers), "a police unit's bottle is full").toBe(1);
     } finally {
       w.race.exit();
       setGround(null);
@@ -53,12 +52,17 @@ describe("given an oval race whose player car the seat drives", () => {
       w.seat.carIndex = 0;
       Object.assign(w.seat.drift, { s: 1.4, clean: false, paid: 3 });
       const mine = w.race.hud().view!;
-      assert.deepEqual(mine.drift, { s: 1.4, clean: false, paid: 3 });
+      expect(mine.drift.s, "drift seconds").toBe(1.4);
+      expect(mine.drift.clean, "drift clean").toBe(false);
+      expect(mine.drift.paid, "drift paid").toBe(3);
       w.seat.drift.s = 2;
-      assert.equal(mine.drift.s, 1.4, "a copy: the seat goes on writing its own");
+      expect(mine.drift.s, "a copy: the seat goes on writing its own").toBe(1.4);
       w.seat.mode = "follow";
       w.seat.carIndex = 1;
-      assert.deepEqual(w.race.hud().view!.drift, { s: 0, clean: true, paid: 0 }, "a rival's view");
+      const rival = w.race.hud().view!.drift;
+      expect(rival.s, "a rival's view: drift seconds").toBe(0);
+      expect(rival.clean, "a rival's view: drift clean").toBe(true);
+      expect(rival.paid, "a rival's view: drift paid").toBe(0);
     } finally {
       w.race.exit();
       setGround(null);

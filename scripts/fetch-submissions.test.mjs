@@ -1,11 +1,11 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { mkdtemp, readdir, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { readFileSync } from "node:fs";
 import { fetchSubmissions } from "./fetch-submissions.mjs";
 import { roundCard } from "../src/game/engine/bench-card.ts";
+import { firstMismatch } from "../src/game/kernel/compare-arrays.test-util.ts";
 
 const TOKEN = "owner-token-".padEnd(40, "x");
 const ROWS = [
@@ -41,15 +41,16 @@ describe("given an owner pulling submissions from the server", () => {
     const out = await tempDir();
     const { fetchImpl, calls } = server();
     const result = await fetchSubmissions({ base: "https://game.test/crush", token: TOKEN, out, fetchImpl, pause: noPause });
-    assert.deepEqual(result, { saved: ["AAAA-1111", "BBBB-2222"], skipped: [] });
-    assert.deepEqual((await readdir(out)).sort(), ["AAAA-1111.json", "BBBB-2222.json"]);
-    assert.equal(JSON.parse(await readFile(path.join(out, "AAAA-1111.json"), "utf8")).submission.kind, "bench");
-    assert.deepEqual(calls.map((c) => c.url), [
+    expect(firstMismatch(result.saved, ["AAAA-1111", "BBBB-2222"]), "saved").toBeUndefined();
+    expect(result.skipped, "skipped").toHaveLength(0);
+    expect(firstMismatch((await readdir(out)).sort(), ["AAAA-1111.json", "BBBB-2222.json"])).toBeUndefined();
+    expect(JSON.parse(await readFile(path.join(out, "AAAA-1111.json"), "utf8")).submission.kind).toBe("bench");
+    expect(firstMismatch(calls.map((c) => c.url), [
       "https://game.test/crush/api/submissions?limit=50",
       "https://game.test/crush/api/submissions?id=AAAA-1111",
       "https://game.test/crush/api/submissions?id=BBBB-2222",
-    ]);
-    assert.equal(new Set(calls.map((c) => c.auth)).size, 1);
+    ])).toBeUndefined();
+    expect(new Set(calls.map((c) => c.auth)).size).toBe(1);
   });
 
   it("when it is run again, then the submissions already saved are not fetched again", async () => {
@@ -57,28 +58,29 @@ describe("given an owner pulling submissions from the server", () => {
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out, fetchImpl: server().fetchImpl, pause: noPause });
     const { fetchImpl, calls } = server();
     const result = await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out, fetchImpl, pause: noPause });
-    assert.deepEqual(result, { saved: [], skipped: ["AAAA-1111", "BBBB-2222"] });
-    assert.equal(calls.length, 1, "only the list was asked for");
+    expect(firstMismatch(result.saved, []), "saved").toBeUndefined();
+    expect(firstMismatch(result.skipped, ["AAAA-1111", "BBBB-2222"]), "skipped").toBeUndefined();
+    expect(calls.length, "only the list was asked for").toBe(1);
   });
 
   it("when a kind and a limit are given, then the list request carries them", async () => {
     const { fetchImpl, calls } = server([]);
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), kind: "flag", limit: 5, fetchImpl, pause: noPause });
-    assert.equal(calls[0].url, "https://game.test/crush/api/submissions?limit=5&kind=flag");
+    expect(calls[0].url).toBe("https://game.test/crush/api/submissions?limit=5&kind=flag");
   });
 
   it("when one receipt is asked for, then only that one is fetched, with no list request", async () => {
     const { fetchImpl, calls } = server();
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), id: "BBBB-2222", fetchImpl, pause: noPause });
-    assert.deepEqual(calls.map((c) => c.url), ["https://game.test/crush/api/submissions?id=BBBB-2222"]);
+    expect(firstMismatch(calls.map((c) => c.url), ["https://game.test/crush/api/submissions?id=BBBB-2222"])).toBeUndefined();
   });
 
   it("when the server rate-limits the first requests, then the script waits and carries on instead of failing", async () => {
     const pauses = [];
     const { fetchImpl } = server(ROWS, 2);
     const result = await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl, pause: async (ms) => void pauses.push(ms) });
-    assert.equal(result.saved.length, 2);
-    assert.equal(pauses.length, 2);
+    expect(result.saved.length).toBe(2);
+    expect(pauses.length).toBe(2);
   });
 });
 
@@ -89,7 +91,7 @@ describe("given flagged replays as the game sends them now and before the GL err
     const rows = [flag("AAAA-1111", { fxTier: "high", fxAuto: true, glErrors: 3, glError: 1282 }), flag("BBBB-2222", { fxTier: "low", fxAuto: false, glErrors: 0, glError: 0 }), flag("CCCC-3333", { fxTier: "minimal" })];
     const lines = [];
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server(rows).fetchImpl, pause: noPause, log: (l) => lines.push(l) });
-    assert.deepEqual(lines.map((l) => l.split(".json")[1]), ["  fx minimal, GL errors not recorded", "  fx low (picked), GL errors 0", "  fx high (Auto), GL errors 3 (last 0x502)"]);
+    expect(firstMismatch(lines.map((l) => l.split(".json")[1]), ["  fx minimal, GL errors not recorded", "  fx low (picked), GL errors 0", "  fx high (Auto), GL errors 3 (last 0x502)"])).toBeUndefined();
   });
 });
 
@@ -121,18 +123,18 @@ describe("given the owner asks for each bench card's phase table (--phases)", ()
     const lines = [];
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out, fetchImpl: server(rows).fetchImpl, pause: noPause, phases: true, log: (l) => lines.push(l) });
     const table = lines.filter((l) => l.startsWith("    "));
-    assert.deepEqual(table, [
+    expect(firstMismatch(table, [
       "    city 215.5 ms/sim-s = drive 30.3  wreck 80.0  unattributed 5.0",
       "    per sim-s: steps 240  skins 480",
       "    4 long tasks, 312.5 ms; battery 83 % -> 81 % charging",
       "    phases: none (a card from before the phase timing)",
-    ]);
+    ])).toBeUndefined();
     const again = [];
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out, fetchImpl: server(rows).fetchImpl, pause: noPause, phases: true, log: (l) => again.push(l) });
-    assert.deepEqual(again, table, "the saved cards print their tables without a fetch");
+    expect(firstMismatch(again, table), "the saved cards print their tables without a fetch").toBeUndefined();
     const quiet = [];
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out, fetchImpl: server(rows).fetchImpl, pause: noPause, log: (l) => quiet.push(l) });
-    assert.deepEqual(quiet, [], "no flag, no table");
+    expect(quiet, "no flag, no table").toHaveLength(0);
   });
 });
 
@@ -163,20 +165,20 @@ describe("given the owner asks for a card's per-second series and its page and u
   it("when --phases is given, then the headline carries the window's spread and the card adds its unit costs and its page's state", async () => {
     const lines = [];
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([rich]).fetchImpl, pause: noPause, phases: true, log: (l) => lines.push(l) });
-    assert.deepEqual(lines.filter((l) => l.startsWith("    ")), [
+    expect(firstMismatch(lines.filter((l) => l.startsWith("    ")), [
       "    city 215.5 ms/sim-s (spread 12.3 %) = drive 30.3  wreck 80.0  unattributed 5.0",
       "    per sim-s: steps 240  skins 480",
       "    per unit (us): wreck us/wreck slice 42.1  integrate us/live slice 9.5",
       "    page: step 2 of the page, keep true, heap 118 of 4096 MiB, ragdoll remote",
       "    4 long tasks, 312.5 ms; battery 83 % -> 81 % charging",
-    ]);
+    ])).toBeUndefined();
   });
 
   it("when --series is given, then each second of the window is a row of its wall span, sim seconds, phases and counters, and a card from before the series says so", async () => {
     const lines = [];
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([rich, PHASED]).fetchImpl, pause: noPause, series: true, log: (l) => lines.push(l) });
     const table = lines.filter((l) => l.startsWith("    ")).map((l) => l.trim().split(/\s+/).join(" "));
-    assert.deepEqual(table, [
+    expect(firstMismatch(table, [
       "per-second series: none (a card from before the series)",
       "city per-second series (the window: 2.0 s, 215.5 ms/sim-s, spread 12.3 %)",
       "s wall s sim s drive wreck",
@@ -185,7 +187,7 @@ describe("given the owner asks for a card's per-second series and its page and u
       "s steps skins",
       "1 240 480",
       "2 235 479",
-    ]);
+    ])).toBeUndefined();
   });
 });
 
@@ -219,10 +221,10 @@ describe("given the bench loop ran a map twice, the epicenter activation off and
 
   it("when the two cards of a map are fetched, then each carries its arm and one block puts off and on side by side with the change and the cost per unit of work; a card without its twin prints no block", async () => {
     const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500), arm("CCCC-3333", "strip", false, 100, 40, 0)]);
-    assert.ok(lines.some((l) => l.includes("city, epicenter off 600.0")), "the off card says so");
-    assert.ok(lines.some((l) => l.includes("city, epicenter ON 540.0")), "the on card says so");
+    expect(lines.some((l) => l.includes("city, epicenter off 600.0")), "the off card says so").toBeTruthy();
+    expect(lines.some((l) => l.includes("city, epicenter ON 540.0")), "the on card says so").toBeTruthy();
     const block = lines.slice(lines.findIndex((l) => l.startsWith("k3x9q2 cycle 1 city")));
-    assert.deepEqual(squash(block), [
+    expect(firstMismatch(squash(block), [
       "k3x9q2 cycle 1 city: epicenter off | on",
       "sim ms/sim-s 600.0 540.0 -10.0 %",
       "integrate 100.0 100.0 +0.0 %",
@@ -235,25 +237,25 @@ describe("given the bench loop ran a map twice, the epicenter activation off and
       "wreck us/wreck slice 75.0 67.5 -10.0 %",
       "structure us/wreck slice 75.0 67.5 -10.0 %",
       "frozen % of wreck+asleep 0.0 70.0",
-    ]);
+    ])).toBeUndefined();
   });
 
   it("when one arm's window was unfocused and out of fullscreen on a desktop and the arms ran different FX tiers, then the block flags only the tiers and says the focus and fullscreen as a note", async () => {
     const unfocused = { pageEvents: [{ phase: "warm", atS: 0, visible: true, focused: true, fullscreen: true }, { phase: "window", atS: 0, visible: true, focused: false, fullscreen: false }], tierPct: { ultra: 100 } };
     const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, unfocused)]);
-    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG the arms ran different FX tiers: off high, on ultra"]);
-    assert.deepEqual(squash(lines.filter((l) => l.includes("note epicenter"))), ["note epicenter on: not fullscreen (desktop); unfocused (visible)"]);
+    expect(firstMismatch(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG the arms ran different FX tiers: off high, on ultra"])).toBeUndefined();
+    expect(firstMismatch(squash(lines.filter((l) => l.includes("note epicenter"))), ["note epicenter on: not fullscreen (desktop); unfocused (visible)"])).toBeUndefined();
   });
 
   it("when the two cards ran different quality knobs, then the pair is flagged", async () => {
     /** A card's own settings with the draw distance pinned by the URL (`epicenter` rides in them too, so the arm stays an arm). */
     const held = (on) => ({ settings: { epicenter: on, quality: { draw: "max", scale: "auto", shadow: "auto", pinned: "draw" } } });
     const different = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, held(false)), arm("BBBB-2222", "city:epi", true, 540, 270, 3500)]);
-    assert.deepEqual(squash(different.filter((l) => l.includes("FLAG"))), ["FLAG the arms ran different quality knobs: off draw max, on auto"]);
+    expect(firstMismatch(squash(different.filter((l) => l.includes("FLAG"))), ["FLAG the arms ran different quality knobs: off draw max, on auto"])).toBeUndefined();
     // The equal pair is the control: the same knobs on both arms say nothing.
     const equal = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, held(false)), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, held(true))]);
-    assert.deepEqual(squash(equal.filter((l) => l.includes("FLAG"))), []);
-    assert.ok(equal.some((l) => l.includes("k3x9q2 cycle 1 city")), "the equal pair is still paired");
+    expect(squash(equal.filter((l) => l.includes("FLAG")))).toHaveLength(0);
+    expect(equal.some((l) => l.includes("k3x9q2 cycle 1 city")), "the equal pair is still paired").toBeTruthy();
   });
 
   const PHONE = "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/149.0.0.0 Mobile Safari/537.36";
@@ -262,30 +264,30 @@ describe("given the bench loop ran a map twice, the epicenter activation off and
     const out = { pageEvents: [{ phase: "window", atS: 0, visible: true, focused: true, fullscreen: false }], device: { userAgent: PHONE } };
     const kept = { pageEvents: [{ phase: "window", atS: 0, visible: true, focused: true, fullscreen: true }], device: { userAgent: PHONE } };
     const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, kept), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, out)]);
-    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran not fullscreen"]);
+    expect(firstMismatch(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran not fullscreen"])).toBeUndefined();
   });
 
   it("when a phone's card carries the per-second series with two window seconds out of fullscreen, then they are a FLAG with their count, and the same seconds on a desktop are only a note", async () => {
     const series = { pageSeconds: { flags: "ffbb", phases: "1111" } };
     const phone = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, { ...series, device: { userAgent: PHONE } })]);
-    assert.deepEqual(squash(phone.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran not fullscreen 2 of 4 s"]);
+    expect(firstMismatch(squash(phone.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran not fullscreen 2 of 4 s"])).toBeUndefined();
     const desktop = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, series)]);
-    assert.deepEqual(desktop.filter((l) => l.includes("FLAG")), []);
+    expect(desktop.filter((l) => l.includes("FLAG"))).toHaveLength(0);
   });
 
   it("when a card carries the per-second series, then hidden and screen-not-held seconds are FLAGs with their counts, and the unfocused and (desktop) out-of-fullscreen seconds are a note", async () => {
     // Six seconds: warm (stretch 0) f; window seconds (stretch 1): f, d (shown, fullscreen, awake: unfocused), 5 (shown, fullscreen: unfocused, no wake lock), 0 (hidden), f.
     const series = { pageSeconds: { flags: "ffd50" + "f", phases: "0011" + "11" } };
     const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, series)]);
-    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran hidden 1 of 4 s, screen not held 2 of 4 s"]);
-    assert.deepEqual(squash(lines.filter((l) => l.includes("note epicenter"))), ["note epicenter on: not fullscreen 1 of 4 s (desktop); unfocused 2 of 4 s (visible)"]);
+    expect(firstMismatch(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran hidden 1 of 4 s, screen not held 2 of 4 s"])).toBeUndefined();
+    expect(firstMismatch(squash(lines.filter((l) => l.includes("note epicenter"))), ["note epicenter on: not fullscreen 1 of 4 s (desktop); unfocused 2 of 4 s (visible)"])).toBeUndefined();
   });
 
   it("when the epicenter knob read on in the last warm second and off in the window's first, then it is a FLAG; read the same, there is none", async () => {
     const changed = { pageSeconds: { flags: "ffff", phases: "0011", epi: "1100" } };
     const kept = { pageSeconds: { flags: "ffff", phases: "0011", epi: "1111" } };
     const flagged = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, kept), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, changed)]);
-    assert.deepEqual(squash(flagged.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran the epicenter knob changed between the warm-up's last second and the window's first"]);
+    expect(firstMismatch(squash(flagged.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran the epicenter knob changed between the warm-up's last second and the window's first"])).toBeUndefined();
   });
 
   describe("and the window's frame time in its focused and unfocused seconds", () => {
@@ -302,32 +304,32 @@ describe("given the bench loop ran a map twice, the epicenter activation off and
 
     it("when the unfocused seconds ran at the same frame time, then there is no FLAG for focus, and the note gives both frame times and says no cost", async () => {
       const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, focusWindow([60, 59, 61, 60, 60, 61, 59, 60, 60, 61]))]);
-      assert.deepEqual(flags(lines), []);
-      assert.equal(notes(lines).length, 1);
-      assert.ok(notes(lines)[0].includes("unfocused (visible)") && notes(lines)[0].includes("frame time 16.6 ms unfocused (6 s) against 16.7 ms focused (4 s)") && notes(lines)[0].endsWith(": no cost"), notes(lines)[0]);
+      expect(flags(lines)).toHaveLength(0);
+      expect(notes(lines).length).toBe(1);
+      expect(notes(lines)[0].includes("unfocused (visible)") && notes(lines)[0].includes("frame time 16.6 ms unfocused (6 s) against 16.7 ms focused (4 s)") && notes(lines)[0].endsWith(": no cost"), notes(lines)[0]).toBeTruthy();
     });
 
     it("when the unfocused seconds ran at half the frame rate, then focus loss is a FLAG with the two frame times and the window's own spread", async () => {
       const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, focusWindow([60, 60, 60, 60, 30, 30, 30, 30, 30, 30]))]);
-      assert.equal(flags(lines).length, 1);
-      assert.ok(flags(lines)[0].startsWith("FLAG epicenter on: losing focus cost frame time: frame time 33.3 ms unfocused (6 s) against 16.7 ms focused (4 s): 100.0 % apart, the window's own spread"), flags(lines)[0]);
+      expect(flags(lines).length).toBe(1);
+      expect(flags(lines)[0].startsWith("FLAG epicenter on: losing focus cost frame time: frame time 33.3 ms unfocused (6 s) against 16.7 ms focused (4 s): 100.0 % apart, the window's own spread"), flags(lines)[0]).toBeTruthy();
     });
 
     it("when the frame time differs by less than the window's own spread (a noisy window), then there is no FLAG", async () => {
       const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, focusWindow([50, 70, 45, 75, 52, 68, 47, 73, 50, 70]))]);
-      assert.deepEqual(flags(lines), []);
+      expect(flags(lines)).toHaveLength(0);
     });
 
     it("when the frame rate falls to 1 fps for two window seconds, then they are throttled seconds and a FLAG, in a window that was never unfocused", async () => {
       const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, { fpsPerSecond: [60, 60, 1, 1, 60, 60] })]);
-      assert.deepEqual(flags(lines), ["FLAG epicenter on: the window ran frame rate throttled (2 fps or less) 2 of 6 s"]);
+      expect(firstMismatch(flags(lines), ["FLAG epicenter on: the window ran frame rate throttled (2 fps or less) 2 of 6 s"])).toBeUndefined();
     });
 
     it("when a window second was hidden, then it is a FLAG whatever the frame time was", async () => {
       const hidden = { pageSeconds: { flags: "ffff", phases: "1111" }, fpsPerSecond: [60, 60, 60, 60] };
       hidden.pageSeconds.flags = "f0ff";
       const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, hidden)]);
-      assert.deepEqual(flags(lines), ["FLAG epicenter on: the window ran hidden 1 of 4 s, screen not held 1 of 4 s"]);
+      expect(firstMismatch(flags(lines), ["FLAG epicenter on: the window ran hidden 1 of 4 s, screen not held 1 of 4 s"])).toBeUndefined();
     });
   });
 
@@ -335,31 +337,31 @@ describe("given the bench loop ran a map twice, the epicenter activation off and
     const drift = { settings: { epicenter: true, sky: "full" }, pageSeconds: { flags: "ffff", phases: "1111", sky: "3343" } };
     const steady = { settings: { epicenter: false, sky: "full" }, pageSeconds: { flags: "ffff", phases: "1111", sky: "3333" } };
     const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, steady), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, drift)]);
-    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran sky not as pinned 1 of 4 s"]);
+    expect(firstMismatch(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran sky not as pinned 1 of 4 s"])).toBeUndefined();
   });
 
   it("when a card pinned the procedural sky (Sky setting full) and drew it all through, then nothing is said of the sky, and a second that drew the strip instead is flagged", async () => {
     const drift = { settings: { epicenter: true, sky: "full", skyPin: "procedural" }, pageSeconds: { flags: "ffff", phases: "1111", sky: "5535" } };
     const steady = { settings: { epicenter: false, sky: "full", skyPin: "procedural" }, pageSeconds: { flags: "ffff", phases: "1111", sky: "5555" } };
     const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, steady), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, drift)]);
-    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran sky not as pinned 1 of 4 s"]);
+    expect(firstMismatch(squash(lines.filter((l) => l.includes("FLAG"))), ["FLAG epicenter on: the window ran sky not as pinned 1 of 4 s"])).toBeUndefined();
   });
 
   it("when a window's cost swung over 25 % a second and the page had not settled when it opened, then the block gives the window spread of both arms and flags each", async () => {
     const swung = { simSpreadPct: 40, switches: [{ stretch: "window", arm: "start", round: 1, settled: false, settleS: 6, longestMs: 812 }] };
     const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, { simSpreadPct: 5 }), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, swung)]);
-    assert.deepEqual(squash(lines.filter((l) => l.includes("FLAG"))), [
+    expect(firstMismatch(squash(lines.filter((l) => l.includes("FLAG"))), [
       "FLAG epicenter on: the window's sim cost swung 40.0 % second to second (over 25 %): its mean says little, read the per-second series (--series)",
       "FLAG epicenter on: the page never settled before the window opened (6.0 s watched, longest frame 812 ms)",
-    ]);
-    assert.ok(squash(lines).includes("window spread % 5.0 40.0 +700.0 %"), "the spread row");
+    ])).toBeUndefined();
+    expect(squash(lines).includes("window spread % 5.0 40.0 +700.0 %"), "the spread row").toBeTruthy();
   });
 
   it("when both cards carry the cost per unit of work by class, then a class the block does not already print gets its own row", async () => {
     const unit = (us) => ({ phases: { msPerSimS: { integrate: 100, wreck: 300, structure: 300 }, unattributedMsPerSimS: 0, workPerSimS: { liveCarSlices: 5000, wreckCarSlices: 4000, asleepCarSlices: 1000, frozenCarSlices: 0 }, unitUs: { "pairs us/pair test": us, "wreck us/wreck slice": 75 } } });
     const lines = await fetchLines([arm("AAAA-1111", "city", false, 600, 300, 0, unit(2)), arm("BBBB-2222", "city:epi", true, 540, 270, 3500, unit(3))]);
-    assert.ok(squash(lines).includes("pairs us/pair test 2.0 3.0 +50.0 %"), "the new class's row");
-    assert.equal(squash(lines).filter((l) => l.startsWith("wreck us/wreck slice")).length, 1, "a class the block prints already is not printed twice");
+    expect(squash(lines).includes("pairs us/pair test 2.0 3.0 +50.0 %"), "the new class's row").toBeTruthy();
+    expect(squash(lines).filter((l) => l.startsWith("wreck us/wreck slice")).length, "a class the block prints already is not printed twice").toBe(1);
   });
 
   it("when a pair of cards as the owner's phone sent them (the arm only in the step and the url, the card's settings one level up) is fetched, then it pairs by session, cycle and map", async () => {
@@ -369,7 +371,7 @@ describe("given the bench loop ran a map twice, the epicenter activation off and
       return card;
     };
     const lines = await fetchLines([phone("PPPP-1111", "strip", false), phone("QQQQ-2222", "strip:epi", true)]);
-    assert.ok(lines.includes("k3x9q2 cycle 1 strip: epicenter off | on"), "the pair is printed");
+    expect(lines.includes("k3x9q2 cycle 1 strip: epicenter off | on"), "the pair is printed").toBeTruthy();
   });
 });
 
@@ -388,8 +390,8 @@ describe("given a bench card from before the card was shortened and the same car
       await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([row]).fetchImpl, pause: noPause, phases: true, log: (l) => lines.push(l) });
       tables.push(lines.filter((l) => l.startsWith("    ")));
     }
-    assert.equal(tables[0].length, 3, tables[0].join("\n"));
-    assert.deepEqual(tables[1], tables[0]);
+    expect(tables[0].length, tables[0].join("\n")).toBe(3);
+    expect(firstMismatch(tables[1], tables[0]), "the shortened card prints the same table").toBeUndefined();
   });
 });
 
@@ -404,8 +406,8 @@ describe("given a pull that must fail loudly", () => {
   for (const testCase of cases) {
     it(`when ${testCase.it}, then it stops with a message and saves nothing`, async () => {
       const out = await tempDir();
-      await assert.rejects(fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out, fetchImpl: server().fetchImpl, pause: noPause, ...testCase.options }), testCase.error);
-      assert.deepEqual(await readdir(out), []);
+      await expect(fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out, fetchImpl: server().fetchImpl, pause: noPause, ...testCase.options })).rejects.toThrow(testCase.error);
+      expect(await readdir(out)).toHaveLength(0);
     });
   }
 
@@ -413,8 +415,8 @@ describe("given a pull that must fail loudly", () => {
     const out = await tempDir();
     const rows = [{ ...ROWS[0], id: "../../evil" }, ROWS[1]];
     const result = await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out, fetchImpl: server(rows).fetchImpl, pause: noPause });
-    assert.deepEqual(result.saved, ["AAAA-1111"]);
-    assert.deepEqual(await readdir(out), ["AAAA-1111.json"]);
+    expect(firstMismatch(result.saved, ["AAAA-1111"])).toBeUndefined();
+    expect(firstMismatch(await readdir(out), ["AAAA-1111.json"])).toBeUndefined();
   });
 });
 
@@ -445,23 +447,23 @@ describe("given a card whose frames the device summarised, and the card as the w
     const lines = [];
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([card()]).fetchImpl, pause: noPause, phases: true, log: (l) => lines.push(l) });
     const said = lines.map((l) => l.trim());
-    assert.ok(said.includes("city, epicenter off frames: 2700, median 11.1 ms, p95 14.2, p99 31.4, p99.9 88.8, max 120.5; lows: 1 % 28.6 fps, 0.1 % 11.3 fps"), said.join("\n"));
-    assert.ok(said.includes("12 spikes over 3x the median (33.3 ms); in a spike against elsewhere: crashed 6.0 vs 3.0 (r 0.41), wreckCarSlices 31.0 vs 11.0 (r 0.55), pairContacts 44.0 vs 9.0 (r 0.72), freezes 1.5 vs 0.1 (r 0.20), ragdollMessages 4.0 vs 0.5 (r 0.20); phase wreck largest in 9"));
+    expect(said.includes("city, epicenter off frames: 2700, median 11.1 ms, p95 14.2, p99 31.4, p99.9 88.8, max 120.5; lows: 1 % 28.6 fps, 0.1 % 11.3 fps"), said.join("\n")).toBeTruthy();
+    expect(said.includes("12 spikes over 3x the median (33.3 ms); in a spike against elsewhere: crashed 6.0 vs 3.0 (r 0.41), wreckCarSlices 31.0 vs 11.0 (r 0.55), pairContacts 44.0 vs 9.0 (r 0.72), freezes 1.5 vs 0.1 (r 0.20), ragdollMessages 4.0 vs 0.5 (r 0.20); phase wreck largest in 9")).toBeTruthy();
   });
 
   it("when --frames is given, then every listed spike is a row with its activity and its largest phase, and the window's buckets follow", async () => {
     const lines = [];
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([card()]).fetchImpl, pause: noPause, frames: true, log: (l) => lines.push(l) });
     const said = lines.map((l) => l.trim().split(/\s+/).join(" "));
-    assert.ok(said.includes("3.2 88.8 60.5 10.2 4 6 40 44 1 0 3 wreck 41.3 ms"), said.join("\n"));
-    assert.ok(said.includes("0.2 17 12.5 31.2 4.4 5 61 70 2 1 6"), "the second bucket's row");
-    assert.ok(said.some((l) => l.endsWith("(2 buckets)")));
+    expect(said.includes("3.2 88.8 60.5 10.2 4 6 40 44 1 0 3 wreck 41.3 ms"), said.join("\n")).toBeTruthy();
+    expect(said.includes("0.2 17 12.5 31.2 4.4 5 61 70 2 1 6"), "the second bucket's row").toBeTruthy();
+    expect(said.some((l) => l.endsWith("(2 buckets)"))).toBeTruthy();
   });
 
   it("when a card from before the frame stats is printed with --frames, then it says so", async () => {
     const lines = [];
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([PHASED]).fetchImpl, pause: noPause, frames: true, log: (l) => lines.push(l) });
-    assert.ok(lines.includes("    frames: none (a card from before the frame stats)"));
+    expect(lines.includes("    frames: none (a card from before the frame stats)")).toBeTruthy();
   });
 
   it("when a card carries its switches and page entries as the wire's tables, then --ab reads them as it reads the old lists: a window that never settled is flagged", async () => {
@@ -469,7 +471,7 @@ describe("given a card whose frames the device summarised, and the card as the w
     const arm = (id, step, on, extra) => ({ id, kind: "bench", receivedAt: "2026-10-18T10:00:00Z", sha: "d2c53024", size: 9000, submission: { kind: "bench", settings: { session: "k3x9q2", loop: 1, step }, payload: { result: { course: "city", simMsPerSimS: 500, tierPct: { high: 100 }, settings: { epicenter: on }, phases: { msPerSimS: { integrate: 100 }, unattributedMsPerSimS: 0, workPerSimS: { liveCarSlices: 1000 } }, ...extra } } } });
     const lines = [];
     await fetchSubmissions({ base: "https://game.test/crush/", token: TOKEN, out: await tempDir(), fetchImpl: server([arm("AAAA-1111", "city", false, {}), arm("BBBB-2222", "city:epi", true, wire)]).fetchImpl, pause: noPause, ab: true, log: (l) => lines.push(l) });
-    assert.ok(lines.some((l) => l.trim() === "FLAG epicenter on: the page never settled before the window opened (6.0 s watched, longest frame 812 ms)"), lines.join("\n"));
+    expect(lines.some((l) => l.trim() === "FLAG epicenter on: the page never settled before the window opened (6.0 s watched, longest frame 812 ms)"), lines.join("\n")).toBeTruthy();
   });
 });
 
@@ -496,14 +498,14 @@ describe("given the quick bench's cards, one arm of each map a run, the other ar
       quick("AAAA-1111", "run1", "city", false, 600),
     ]);
     const heads = said.filter((l) => l.endsWith("epicenter off | on"));
-    assert.deepEqual(heads, ["quick d2c53024 Mozilla/5.0 (X11; Linux x86_64) city, run 1: epicenter off | on"]);
-    assert.ok(said.includes("sim ms/sim-s 600.0 540.0 -10.0 %"), said.join("\n"));
+    expect(firstMismatch(heads, ["quick d2c53024 Mozilla/5.0 (X11; Linux x86_64) city, run 1: epicenter off | on"])).toBeUndefined();
+    expect(said.includes("sim ms/sim-s 600.0 540.0 -10.0 %"), said.join("\n")).toBeTruthy();
   });
 
   it("when two devices ran the quick bench, then their cards are never paired with each other's", async () => {
     const phone = quick("DDDD-4444", "run9", "city:epi", true, 900);
     phone.submission.payload.result.device.userAgent = "Mozilla/5.0 (Android 17; Mobile)";
     const said = await lines([quick("AAAA-1111", "run1", "city", false, 600), phone]);
-    assert.deepEqual(said.filter((l) => l.endsWith("epicenter off | on")), []);
+    expect(said.filter((l) => l.endsWith("epicenter off | on"))).toHaveLength(0);
   });
 });

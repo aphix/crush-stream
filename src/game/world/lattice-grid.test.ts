@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Ground } from "./ground.ts";
 
 /**
@@ -92,7 +91,7 @@ for (const { name, heights, fine } of fields) {
       let worst = 0;
       const points = probePoints();
       for (const [x, z] of points) worst = Math.max(worst, Math.abs(ground.heightAt(x, z) - expectedPlane(heights, fine, x, z).height));
-      assert.ok(worst <= PLANE_TOLERANCE, `${worst} m from the triangle's plane over ${points.length} points`);
+      expect(worst, `${worst} m from the triangle's plane over ${points.length} points`).toBeLessThanOrEqual(PLANE_TOLERANCE);
     });
 
     it("when its normal is read at points across the grid, then it is the normal of that triangle's plane", () => {
@@ -104,7 +103,7 @@ for (const { name, heights, fine } of fields) {
         ground.normalAt(x, z, normal);
         worst = Math.max(worst, Math.abs(normal.x + slopeX / length), Math.abs(normal.y - 1 / length), Math.abs(normal.z + slopeZ / length));
       }
-      assert.ok(worst <= PLANE_TOLERANCE, `${worst} off the plane's normal`);
+      expect(worst, `${worst} off the plane's normal`).toBeLessThanOrEqual(PLANE_TOLERANCE);
     });
 
     it("when the baked cell bounds are read against every point, then no point stands above its cell's top or has a normal flatter than its cell's bound", () => {
@@ -119,7 +118,8 @@ for (const { name, heights, fine } of fields) {
         ground.normalAt(x, z, normal);
         if (normal.y * 255 < bounds![cell]!) steeperThanBound++;
       }
-      assert.deepEqual({ aboveTop, steeperThanBound }, { aboveTop: 0, steeperThanBound: 0 });
+      expect(aboveTop, "samples above the top").toBe(0);
+      expect(steeperThanBound, "samples steeper than the bound").toBe(0);
     });
   });
 }

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -100,7 +99,7 @@ function record(style: CarStyleId, kph: number): Recorded {
     torn.push(struck.lidOff());
   }
   rec.end();
-  assert.ok(rec.ledger.kept.length >= 1, "the rear-end did not rank as a highlight");
+  expect(rec.ledger.kept.length, "the rear-end did not rank as a highlight").toBeGreaterThanOrEqual(1);
   const kept = rec.ledger.kept[0]!;
   const w = new Writer(clipBytes(kept));
   writeClip(w, kept);
@@ -123,9 +122,9 @@ describe("given a rear-end that springs the struck sedan's trunk lid", () => {
   const keyStep = Math.round(r.clip.t0 / H);
 
   it("when the clip is filed, then the struck car rides in it and its lid swings open during it, still on the car", () => {
-    assert.ok(r.clip.cars.some((c) => c.slot === STRUCK), "the struck car is in the clip");
-    assert.ok(r.sprung.slice(keyStep).some((s) => s), "the lid never left its latch in the clip");
-    assert.ok(!r.torn[r.torn.length - 1], "the lid tore off");
+    expect(r.clip.cars.some((c) => c.slot === STRUCK), "the struck car is in the clip").toBeTruthy();
+    expect(r.sprung.slice(keyStep).some((s) => s), "the lid never left its latch in the clip").toBeTruthy();
+    expect(!r.torn[r.torn.length - 1], "the lid tore off").toBe(true);
   });
 
   it("when the clip is replayed, then at every step the struck car's parts state, the lid's swing included, is the live one's to the bit", () => {
@@ -138,7 +137,7 @@ describe("given a hard rear-end that tears the struck pickup's tailgate off", ()
   const keyStep = Math.round(r.clip.t0 / H);
 
   it("when the clip is filed, then the tailgate leaves the car during it", () => {
-    assert.ok(!r.torn[keyStep] && r.torn[r.torn.length - 1], `torn at the keyframe ${r.torn[keyStep]}, at the end ${r.torn[r.torn.length - 1]}`);
+    expect(!r.torn[keyStep] && r.torn[r.torn.length - 1], `torn at the keyframe ${r.torn[keyStep]}, at the end ${r.torn[r.torn.length - 1]}`).toBeTruthy();
   });
 
   it("when the clip is replayed, then at every step the struck car's parts and loose bodies, the torn gate's flight included, are the live ones to the bit", () => {

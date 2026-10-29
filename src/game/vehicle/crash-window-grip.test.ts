@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { CONTACT_WINDOW } from "../deform/constants.ts";
 import { CRASH, FRICTION_G } from "../deform/physics-util.ts";
@@ -63,14 +62,14 @@ for (const [engine, kph] of Object.entries(BULLET_KPH)) {
     const { slices, struck, massesCommonShare } = driveSlices(kph);
 
     it(`when it is in contact, then the drive takes no more sideways speed per second than a sliding tyre's grip and the fade's share of one frame`, () => {
-      assert.equal(struck.stalledS > 0, engine === "stalled", "the engine is cut as staged");
+      expect(struck.stalledS > 0, "the engine is cut as staged").toBe(engine === "stalled");
       // The contact clock moves once a frame: a car touched this frame reads under one frame of quiet, so the grip's return may have begun by that frame's share.
       const touching = slices.filter((slice) => slice.quiet < DT);
-      assert.ok(touching.length > 10, `${touching.length} slices in contact with the car sliding sideways`);
+      expect(touching.length, `${touching.length} slices in contact with the car sliding sideways`).toBeGreaterThan(10);
       const best = Math.max(...slices.map((slice) => slice.acceleration));
       const bar = ROLLING_ALLOWANCE * SLIDING_GRIP + (best - SLIDING_GRIP) * (DT / CONTACT_WINDOW);
       const worst = Math.max(...touching.map((slice) => slice.acceleration));
-      assert.ok(worst <= bar, `${worst.toFixed(1)} m/s² against the sliding grip ${SLIDING_GRIP.toFixed(1)} (bar ${bar.toFixed(1)})`);
+      expect(worst, `${worst.toFixed(1)} m/s² against the sliding grip ${SLIDING_GRIP.toFixed(1)} (bar ${bar.toFixed(1)})`).toBeLessThanOrEqual(bar);
     });
 
     it(`when the contact has ended, then the tyres' grip comes back over the contact window, never in one slice`, () => {
@@ -78,18 +77,18 @@ for (const [engine, kph] of Object.entries(BULLET_KPH)) {
       const best = Math.max(...after.map((slice) => slice.acceleration));
       let rise = 0;
       for (let i = 1; i < after.length; i++) rise = Math.max(rise, after[i]!.acceleration - after[i - 1]!.acceleration);
-      assert.ok(rise <= MOST_RISE_SHARE * (best - SLIDING_GRIP), `rose ${rise.toFixed(1)} m/s² in one slice, of a climb of ${(best - SLIDING_GRIP).toFixed(1)}`);
+      expect(rise, `rose ${rise.toFixed(1)} m/s² in one slice, of a climb of ${(best - SLIDING_GRIP).toFixed(1)}`).toBeLessThanOrEqual(MOST_RISE_SHARE * (best - SLIDING_GRIP));
     });
 
     it(`when its contact window has closed, then the tyres give their arcade grip again, at least twice the sliding grip`, () => {
       const closed = slices.filter((slice) => !slice.windowOpen);
-      assert.ok(closed.length > 10, `${closed.length} slices with the window closed and the car sliding sideways`);
+      expect(closed.length, `${closed.length} slices with the window closed and the car sliding sideways`).toBeGreaterThan(10);
       const best = Math.max(...closed.map((slice) => slice.acceleration));
-      assert.ok(best >= 2 * SLIDING_GRIP, `${best.toFixed(1)} m/s² against twice the sliding grip ${(2 * SLIDING_GRIP).toFixed(1)}`);
+      expect(best, `${best.toFixed(1)} m/s² against twice the sliding grip ${(2 * SLIDING_GRIP).toFixed(1)}`).toBeGreaterThanOrEqual(2 * SLIDING_GRIP);
     });
 
     it(`when the hit's exchange is made, then the struck car's masses reach 90 % of the pair's common speed`, () => {
-      assert.ok(massesCommonShare >= 0.9, `${(massesCommonShare * 100).toFixed(0)} % of the common speed`);
+      expect(massesCommonShare, `${(massesCommonShare * 100).toFixed(0)} % of the common speed`).toBeGreaterThanOrEqual(0.9);
     });
   });
 }

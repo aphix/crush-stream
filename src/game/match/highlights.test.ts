@@ -1,6 +1,7 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { clipScore, countsAsImpact, HighlightLedger, IMPACT_MIN, impactEnergy, MAX_SPAN, MIN_SCORE, QUIET_GAP, REHIT_S, TOP, type CrashCluster } from "./highlights.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const SEDAN = 1400;
 const kph = (v: number): number => v / 3.6;
@@ -20,9 +21,9 @@ describe("given a highlight ledger (the list of crash clusters scored for the hi
     const tap = new HighlightLedger();
     const t = hit(tap, 10, 0, 1, kph(20));
     const p = pile.open[0]!;
-    assert.equal(pile.open.length, 1, "the pile-up is one cluster");
-    assert.ok(p.score > t.score * 3, `pile-up ${p.score.toFixed(1)} vs tap ${t.score.toFixed(1)}`);
-    assert.ok(!tap.ranks(t.score), `a 20 km/h tap (${t.score.toFixed(2)}) must stay under MIN_SCORE ${MIN_SCORE}`);
+    expect(pile.open.length, "the pile-up is one cluster").toBe(1);
+    expect(p.score, `pile-up ${p.score.toFixed(1)} vs tap ${t.score.toFixed(1)}`).toBeGreaterThan(t.score * 3);
+    expect(!tap.ranks(t.score), `a 20 km/h tap (${t.score.toFixed(2)}) must stay under MIN_SCORE ${MIN_SCORE}`).toBe(true);
   });
 
   it("when an engine-destroying hit and a wall scrape happen at the same 50 km/h, then the engine-destroying hit scores more than 3 points above the scrape", () => {
@@ -31,7 +32,7 @@ describe("given a highlight ledger (the list of crash clusters scored for the hi
     kill.kill(5.05, 1, 0, 0);
     const scrape = new HighlightLedger();
     hit(scrape, 5, 0, -1, kph(50));
-    assert.ok(kill.open[0]!.score > scrape.open[0]!.score + 3, `kill ${kill.open[0]!.score.toFixed(1)} vs scrape ${scrape.open[0]!.score.toFixed(1)}`);
+    expect(kill.open[0]!.score, `kill ${kill.open[0]!.score.toFixed(1)} vs scrape ${scrape.open[0]!.score.toFixed(1)}`).toBeGreaterThan(scrape.open[0]!.score + 3);
   });
 
   it("when a driver is thrown out in a 20 km/h wall tap, then the tap alone stays off the reel but the ejection scores far above a 100 km/h head-on, names the thrown car as the subject and makes the reel", () => {
@@ -39,56 +40,53 @@ describe("given a highlight ledger (the list of crash clusters scored for the hi
     hit(head, 5, 0, 1, kph(100));
     const wall = new HighlightLedger();
     hit(wall, 5, 0, -1, kph(20));
-    assert.ok(!wall.ranks(wall.open[0]!.score), `a 20 km/h wall tap alone scores ${wall.open[0]!.score.toFixed(2)}, under MIN_SCORE ${MIN_SCORE}`);
+    expect(!wall.ranks(wall.open[0]!.score), `a 20 km/h wall tap alone scores ${wall.open[0]!.score.toFixed(2)}, under MIN_SCORE ${MIN_SCORE}`).toBe(true);
     wall.eject(5.03, 0, 0, 0);
     const thrown = wall.open[0]!;
-    assert.equal(thrown.ejects, 1);
-    assert.equal(thrown.focus, 0, "the ejected car is the subject");
-    assert.ok(thrown.score > head.open[0]!.score + 5, `ejection ${thrown.score.toFixed(1)} vs head-on ${head.open[0]!.score.toFixed(1)}`);
-    assert.ok(wall.ranks(thrown.score));
+    expect(thrown.ejects).toBe(1);
+    expect(thrown.focus, "the ejected car is the subject").toBe(0);
+    expect(thrown.score, `ejection ${thrown.score.toFixed(1)} vs head-on ${head.open[0]!.score.toFixed(1)}`).toBeGreaterThan(head.open[0]!.score + 5);
+    expect(wall.ranks(thrown.score)).toBeTruthy();
   });
 
   it("when contacts come after different quiet spells and at different speeds, then a contact counts as an impact only after the quiet spell and from the minimum impact speed, whether car, wall or prop (one rule for the recorder and the replay)", () => {
-    assert.equal(countsAsImpact(REHIT_S + 0.01, IMPACT_MIN), true);
-    assert.equal(countsAsImpact(REHIT_S - 0.01, 30), false, "a contact 0.34 s after the last is grinding");
-    assert.equal(countsAsImpact(5, IMPACT_MIN - 0.1), false, "a soft touch");
-    assert.equal(countsAsImpact(5, 5), false, "the old 5 m/s floor: a slow bump is no impact");
-    assert.equal(countsAsImpact(Infinity, IMPACT_MIN), true, "the first ever contact");
+    expect(countsAsImpact(REHIT_S + 0.01, IMPACT_MIN)).toBe(true);
+    expect(countsAsImpact(REHIT_S - 0.01, 30), "a contact 0.34 s after the last is grinding").toBe(false);
+    expect(countsAsImpact(5, IMPACT_MIN - 0.1), "a soft touch").toBe(false);
+    expect(countsAsImpact(5, 5), "the old 5 m/s floor: a slow bump is no impact").toBe(false);
+    expect(countsAsImpact(Infinity, IMPACT_MIN), "the first ever contact").toBe(true);
   });
 
   it("when impacts land inside, outside and far from an open cluster, then those inside the quiet gap merge into one cluster while a later one, or a far one with other cars, opens its own, and a cluster stops growing past its maximum span", () => {
     const l = new HighlightLedger();
     const a = hit(l, 1, 0, 1, 10);
-    assert.equal(hit(l, 1 + QUIET_GAP * 0.9, 1, 2, 10), a, "a shared car inside the gap joins");
-    assert.equal(hit(l, 1 + QUIET_GAP * 1.6, 4, 5, 10, 5), a, "nearby (5 m) inside the gap from the last impact joins");
-    assert.notEqual(hit(l, 1 + QUIET_GAP * 1.8, 6, 7, 10, 200), a, "200 m away with other cars opens its own");
-    assert.notEqual(hit(l, 1 + QUIET_GAP * 4, 0, 1, 10), a, "after the gap the same cars open a new cluster");
-    assert.equal(a.impacts, 3);
-    assert.equal(a.cars, 0b110111, "cars 0–2, 4 and 5 are in it");
+    expect(hit(l, 1 + QUIET_GAP * 0.9, 1, 2, 10), "a shared car inside the gap joins").toBe(a);
+    expect(hit(l, 1 + QUIET_GAP * 1.6, 4, 5, 10, 5), "nearby (5 m) inside the gap from the last impact joins").toBe(a);
+    expect(hit(l, 1 + QUIET_GAP * 1.8, 6, 7, 10, 200), "200 m away with other cars opens its own").not.toBe(a);
+    expect(hit(l, 1 + QUIET_GAP * 4, 0, 1, 10), "after the gap the same cars open a new cluster").not.toBe(a);
+    expect(a.impacts).toBe(3);
+    expect(a.cars, "cars 0–2, 4 and 5 are in it").toBe(0b110111);
     const long = new HighlightLedger();
     const first = hit(long, 0, 0, 1, 10);
     for (let t = 1; t <= MAX_SPAN; t++) hit(long, t, 0, 1, 10);
-    assert.notEqual(hit(long, MAX_SPAN + 1, 0, 1, 10), first, "past MAX_SPAN a cluster stops growing (the recorder's ring holds it)");
+    expect(hit(long, MAX_SPAN + 1, 0, 1, 10), "past MAX_SPAN a cluster stops growing (the recorder's ring holds it)").not.toBe(first);
   });
 
   it("when more clips are offered than the reel holds, then the ledger keeps only the best five, best first, and a clip below the fifth no longer ranks", () => {
     const l = new HighlightLedger<{ score: number }>();
     for (const score of [4, 9, 5, 12, 3.5, 7, 20, 6]) if (l.ranks(score)) l.keep({ score });
-    assert.deepEqual(
-      l.kept.map((c) => c.score),
-      [20, 12, 9, 7, 6],
-    );
-    assert.equal(l.kept.length, TOP);
-    assert.ok(!l.ranks(5), "a clip below the fifth no longer ranks");
+    expect(firstMismatch(l.kept.map((c) => c.score), [20, 12, 9, 7, 6])).toBeUndefined();
+    expect(l.kept.length).toBe(TOP);
+    expect(!l.ranks(5), "a clip below the fifth no longer ranks").toBe(true);
   });
 
   it("when a cluster's last impact is 1 s old, 3.1 s old, or the race has ended, then it is due only once its post-roll has passed, or at once when the race ends", () => {
     const l = new HighlightLedger();
     hit(l, 10, 0, 1, 10);
-    assert.equal(l.due(11), null);
-    assert.equal(l.due(11, true)?.first, 10, "race over: cut now");
+    expect(l.due(11)).toBe(null);
+    expect(l.due(11, true)?.first, "race over: cut now").toBe(10);
     hit(l, 20, 0, 1, 10);
-    assert.notEqual(l.due(23.1), null);
+    expect(l.due(23.1)).not.toBe(null);
   });
 });
 
@@ -100,11 +98,16 @@ describe("given cars A (0) and B (1) colliding, and another crash that starts ne
     hit(l, 10, 0, 1, kph(80));
     hit(l, 10.1, 2, 3, kph(80), 25);
     l.eject(10.15, 2, 25, 0);
-    assert.equal(l.open.length, 2, "the far crash is not in the A-B scope");
+    expect(l.open.length, "the far crash is not in the A-B scope").toBe(2);
     const [ab, far] = l.open as [CrashCluster, CrashCluster];
-    assert.deepEqual({ hit: ab.hit, ejects: ab.ejects, kills: ab.kills }, { hit: 2, ejects: 0, kills: 0 });
-    assert.equal(ab.score, alone.open[0]!.score, "the far crash adds nothing to the clip about A and B");
-    assert.deepEqual({ hit: far.hit, ejects: far.ejects, focus: far.focus, mask: far.hitCars }, { hit: 2, ejects: 1, focus: 2, mask: 0b1100 }, "the far pair, its thrown driver the subject");
+    expect(ab.hit, "A-B hit").toBe(2);
+    expect(ab.ejects, "A-B ejects").toBe(0);
+    expect(ab.kills, "A-B kills").toBe(0);
+    expect(ab.score, "the far crash adds nothing to the clip about A and B").toBe(alone.open[0]!.score);
+    expect(far.hit, "the far pair, its thrown driver the subject: hit").toBe(2);
+    expect(far.ejects, "the far pair, its thrown driver the subject: ejects").toBe(1);
+    expect(far.focus, "the far pair, its thrown driver the subject: focus").toBe(2);
+    expect(far.hitCars, "the far pair, its thrown driver the subject: mask").toBe(0b1100);
   });
 
   const reach = [
@@ -117,7 +120,7 @@ describe("given cars A (0) and B (1) colliding, and another crash that starts ne
       const l = new HighlightLedger();
       hit(l, 10, 0, 1, kph(80));
       l.eject(10.2, 2, r.m, 0);
-      assert.equal(l.open.map((c) => c.ejects).join(), r.ejects.join());
+      expect(l.open.map((c) => c.ejects).join()).toBe(r.ejects.join());
     });
   }
 
@@ -125,12 +128,9 @@ describe("given cars A (0) and B (1) colliding, and another crash that starts ne
     const l = new HighlightLedger();
     hit(l, 10, 0, 1, kph(80));
     hit(l, 10.4, 1, 2, kph(60), 6);
-    assert.equal(l.open[0]!.hit, 3, "A, B and C");
+    expect(l.open[0]!.hit, "A, B and C").toBe(3);
     hit(l, 10.6, 3, 4, kph(60), 20);
-    assert.deepEqual(
-      l.open.map((c) => c.hit),
-      [3, 2],
-    );
+    expect(firstMismatch(l.open.map((c) => c.hit), [3, 2])).toBeUndefined();
   });
 
   it("when B then hits a car C 18 m from A's hit, throwing C's driver, and a car D is hit 8 m past that, then B's hit on C is in scope too: the pile-up counts A, B, C and D's crash, and C's throw counts (10 m round each in-scope impact)", () => {
@@ -140,7 +140,11 @@ describe("given cars A (0) and B (1) colliding, and another crash that starts ne
     l.eject(10.45, 2, 18, 0);
     hit(l, 10.6, 3, 4, kph(60), 26);
     const c = l.open[0]!;
-    assert.deepEqual({ clusters: l.open.length, hit: c.hit, ejects: c.ejects, impacts: c.impacts, hits: c.hits().map((p) => p.x) }, { clusters: 1, hit: 5, ejects: 1, impacts: 3, hits: [0, 18, 26] });
+    expect(l.open.length, "clusters").toBe(1);
+    expect(c.hit, "hit").toBe(5);
+    expect(c.ejects, "ejects").toBe(1);
+    expect(c.impacts, "impacts").toBe(3);
+    expect(firstMismatch(c.hits().map((p) => p.x), [0, 18, 26]), "hit positions").toBeUndefined();
   });
 
   it("when a bystander pair is hit 8 m from the A-B hit and an unrelated driver is then thrown out 8 m beyond it, 16 m from A-B, then the bystander hit is in the scope but starts no circle of its own: the throw stays out", () => {
@@ -148,13 +152,12 @@ describe("given cars A (0) and B (1) colliding, and another crash that starts ne
     hit(l, 10, 0, 1, kph(80));
     hit(l, 10.2, 2, 3, kph(60), 8);
     l.eject(10.3, 4, 16, 0);
-    assert.deepEqual(
-      l.open.map((c) => ({ hit: c.hit, ejects: c.ejects })),
-      [
-        { hit: 4, ejects: 0 },
-        { hit: 1, ejects: 1 },
-      ],
-    );
+    expect(l.open, "clusters").toHaveLength(2);
+    const expected = [{ hit: 4, ejects: 0 }, { hit: 1, ejects: 1 }];
+    for (let i = 0; i < expected.length; i++) {
+      expect(l.open[i]?.hit, `cluster ${i} hit`).toBe(expected[i]!.hit);
+      expect(l.open[i]?.ejects, `cluster ${i} ejects`).toBe(expected[i]!.ejects);
+    }
   });
 
   it("when a stronger hit that B takes far off makes its other car the main car, then the crash of A and a car X, no longer in that scope, is the cluster's rest and a clip of its own", () => {
@@ -162,13 +165,16 @@ describe("given cars A (0) and B (1) colliding, and another crash that starts ne
     hit(l, 10, 0, 3, kph(60), -20);
     hit(l, 10.2, 0, 1, kph(70));
     hit(l, 10.4, 1, 4, kph(120), 25, 0, kph(120));
-    assert.equal(l.open.length, 1);
+    expect(l.open.length).toBe(1);
     const c = l.open[0]!;
-    assert.deepEqual({ main: c.main, hitCars: c.hitCars }, { main: 4, hitCars: 0b10011 }, "the scope is B's crash with A and with the main car G");
+    expect(c.main, "the scope is B's crash with A and with the main car G: main").toBe(4);
+    expect(c.hitCars, "the scope is B's crash with A and with the main car G: hitCars").toBe(0b10011);
     const rest = c.rest();
-    assert.ok(rest, "A's crash with X is left over");
-    assert.deepEqual({ main: rest.main, hitCars: rest.hitCars, again: rest.rest() }, { main: 0, hitCars: 0b1001, again: null });
-    assert.equal(c.hitCars, 0b10011, "the cluster itself is as it was");
+    must(rest, "A's crash with X is left over");
+    expect(rest.main, "rest main").toBe(0);
+    expect(rest.hitCars, "rest hitCars").toBe(0b1001);
+    expect(rest.rest(), "rest of the rest").toBeNull();
+    expect(c.hitCars, "the cluster itself is as it was").toBe(0b10011);
   });
 });
 
@@ -176,7 +182,7 @@ describe("given the owner's example, a 2 m total crush at 30 km/h against a 1 m 
   it("when each is a lone sedan hit scored with its crush, then the 2 m crush at 30 km/h outranks the 1 m crush at 60 km/h", () => {
     const slow = hit(new HighlightLedger(), 10, 0, 1, kph(30)).score;
     const fast = hit(new HighlightLedger(), 10, 0, 1, kph(60)).score;
-    assert.ok(clipScore(slow, 2) > clipScore(fast, 1), `30 km/h ${slow.toFixed(2)} + 2 m = ${clipScore(slow, 2).toFixed(2)} vs 60 km/h ${fast.toFixed(2)} + 1 m = ${clipScore(fast, 1).toFixed(2)}: a metre must be worth more than ${(fast - slow).toFixed(2)}`);
+    expect(clipScore(slow, 2), `30 km/h ${slow.toFixed(2)} + 2 m = ${clipScore(slow, 2).toFixed(2)} vs 60 km/h ${fast.toFixed(2)} + 1 m = ${clipScore(fast, 1).toFixed(2)}: a metre must be worth more than ${(fast - slow).toFixed(2)}`).toBeGreaterThan(clipScore(fast, 1));
   });
 });
 
@@ -190,13 +196,13 @@ describe("given a head-on between a car driving at 50 km/h and one at 20 km/h (c
     it(`when ${r.it}, then the cluster's hit speed is the main car's own ${r.kph} km/h, not the 70 km/h closing`, () => {
       const l = new HighlightLedger();
       const c = hit(l, 10, 0, 1, kph(70), 0, kph(r.a), kph(r.b));
-      assert.ok(Math.abs(c.hitMps * 3.6 - r.kph) < 1e-9, `${(c.hitMps * 3.6).toFixed(2)} km/h`);
-      assert.ok(Math.abs(c.peak * 3.6 - 70) < 1e-9, "the closing speed stays the peak the impact's flash uses");
+      expect(Math.abs(c.hitMps * 3.6 - r.kph), `${(c.hitMps * 3.6).toFixed(2)} km/h`).toBeLessThan(1e-9);
+      expect(Math.abs(c.peak * 3.6 - 70), "the closing speed stays the peak the impact's flash uses").toBeLessThan(1e-9);
     });
   }
   it("when a car hits the wall, then its hit speed is its speed into the wall", () => {
     const l = new HighlightLedger();
     const c = hit(l, 10, 0, -1, kph(80), 0, kph(95), 0);
-    assert.ok(Math.abs(c.hitMps * 3.6 - 80) < 1e-9);
+    expect(Math.abs(c.hitMps * 3.6 - 80)).toBeLessThan(1e-9);
   });
 });

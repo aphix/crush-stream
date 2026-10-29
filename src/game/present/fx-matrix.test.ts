@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { BASIS_SIZE, cameraBasis, writeBillboard } from "./fx-matrix.ts";
 
@@ -32,7 +31,7 @@ for (const { name, angles, s, at } of POSES) {
       dummy.updateMatrix();
       for (let k = 0; k < MATRIX_FLOATS; k++) {
         const got = out[SLOT * MATRIX_FLOATS + k]!;
-        assert.ok(Math.abs(got - dummy.matrix.elements[k]!) < TOLERANCE, `element ${k} is ${got}, compose gives ${dummy.matrix.elements[k]}`);
+        expect(Math.abs(got - dummy.matrix.elements[k]!), `element ${k} is ${got}, compose gives ${dummy.matrix.elements[k]}`).toBeLessThan(TOLERANCE);
       }
     });
   });
@@ -44,7 +43,7 @@ describe("given a basis written for a turned camera", () => {
     const basis = new Float64Array(BASIS_SIZE);
     cameraBasis(q, basis);
     const column = (c: number) => new THREE.Vector3(basis[c * 3]!, basis[c * 3 + 1]!, basis[c * 3 + 2]!);
-    for (let c = 0; c < 3; c++) assert.ok(Math.abs(column(c).length() - 1) < TOLERANCE, `column ${c} is unit`);
-    assert.ok(Math.abs(column(0).dot(column(1))) < TOLERANCE && Math.abs(column(1).dot(column(2))) < TOLERANCE, "the columns are at right angles");
+    for (let c = 0; c < 3; c++) expect(Math.abs(column(c).length() - 1), `column ${c} is unit`).toBeLessThan(TOLERANCE);
+    expect(Math.abs(column(0).dot(column(1))) < TOLERANCE && Math.abs(column(1).dot(column(2))) < TOLERANCE, "the columns are at right angles").toBeTruthy();
   });
 });

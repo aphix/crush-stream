@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import {
   RING_BACKSTOP,
@@ -16,6 +15,7 @@ import {
 } from "../scenes/minigame-ring.ts";
 import { STATION_SURFACE_STYLES } from "./minigame-surface-art.ts";
 import { makeRingFlingArt, RING_FLING_DRAW_BUDGET } from "./ring-fling-art.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** A canvas that is only a recorder: the art's canvas textures are drawn into it, and the text it was told to draw is kept (there is no `document` in node). */
 type DrawnText = { text: string; x: number; y: number };
@@ -80,7 +80,7 @@ type Vertex = { x: number; y: number; z: number };
 
 function meshNamed(art: THREE.Group, name: string): THREE.Mesh {
   const found = art.getObjectByName(name);
-  assert.ok(found instanceof THREE.Mesh, `a mesh named ${name}`);
+  must(found instanceof THREE.Mesh, `a mesh named ${name}`);
   return found;
 }
 
@@ -113,7 +113,7 @@ describe("given the Ring Fling station's art in station-local coordinates", () =
   function surfaceAt(x: number, z: number): { height: number; colour: THREE.Color } {
     raycaster.set(new THREE.Vector3(x, RAY_START_HEIGHT, z), new THREE.Vector3(0, -1, 0));
     const hit = raycaster.intersectObjects([wood, white], false)[0];
-    assert.ok(hit?.face, `nothing is drawn at (${x}, ${z})`);
+    must(hit?.face, `nothing is drawn at (${x}, ${z})`);
     const colours = (hit.object as THREE.Mesh).geometry.getAttribute("color");
     return { height: hit.point.y, colour: new THREE.Color(colours.getX(hit.face.a), colours.getY(hit.face.a), colours.getZ(hit.face.a)) };
   }
@@ -123,11 +123,11 @@ describe("given the Ring Fling station's art in station-local coordinates", () =
     let probes = 0;
     for (let x = minX + GRID_STEP_X / 2; x < maxX; x += GRID_STEP_X) {
       for (let z = minZ + GRID_STEP_Z / 2; z < maxZ; z += GRID_STEP_Z) {
-        assert.ok(Math.abs(surfaceAt(x, z).height - ringHeightAt(x, z)) <= SURFACE_TOLERANCE, `(${x}, ${z}) is ${surfaceAt(x, z).height}, the model says ${ringHeightAt(x, z)}`);
+        expect(Math.abs(surfaceAt(x, z).height - ringHeightAt(x, z)), `(${x}, ${z}) is ${surfaceAt(x, z).height}, the model says ${ringHeightAt(x, z)}`).toBeLessThanOrEqual(SURFACE_TOLERANCE);
         probes++;
       }
     }
-    assert.ok(probes > MIN_GRID_PROBES, `${probes} probes`);
+    expect(probes, `${probes} probes`).toBeGreaterThan(MIN_GRID_PROBES);
   });
 
   it("when each cup and pocket is read along a line out from its centre, then its floor, wall, rim top and skirt stand at the model's radii and heights", () => {
@@ -138,13 +138,13 @@ describe("given the Ring Fling station's art in station-local coordinates", () =
       for (const angle of PROBE_ANGLES) {
         const probe = (radius: number) => surfaceAt(zone.centreX + radius * Math.cos(angle), zone.centreZ + radius * Math.sin(angle)).height;
         const label = `${zone.score} cup at ${angle} rad`;
-        assert.ok(Math.abs(probe(0) - zone.floorHeight) <= SURFACE_TOLERANCE, `${label}: floor centre ${probe(0)}`);
-        assert.ok(Math.abs(probe(floorRadius / 2) - zone.floorHeight) <= SURFACE_TOLERANCE, `${label}: floor ${probe(floorRadius / 2)}`);
-        assert.ok(Math.abs(probe(floorRadius + RING_CUP_PROFILE.wallFootWidth / 2) - (zone.floorHeight + RING_CUP_PROFILE.wallHeight / 2)) <= SURFACE_TOLERANCE, `${label}: wall middle ${probe(floorRadius + RING_CUP_PROFILE.wallFootWidth / 2)}`);
-        assert.ok(Math.abs(probe(zone.radius + RING_CUP_PROFILE.rimTopWidth / 2) - zone.rimHeight) <= SURFACE_TOLERANCE, `${label}: rim top ${probe(zone.radius + RING_CUP_PROFILE.rimTopWidth / 2)}`);
+        expect(Math.abs(probe(0) - zone.floorHeight), `${label}: floor centre ${probe(0)}`).toBeLessThanOrEqual(SURFACE_TOLERANCE);
+        expect(Math.abs(probe(floorRadius / 2) - zone.floorHeight), `${label}: floor ${probe(floorRadius / 2)}`).toBeLessThanOrEqual(SURFACE_TOLERANCE);
+        expect(Math.abs(probe(floorRadius + RING_CUP_PROFILE.wallFootWidth / 2) - (zone.floorHeight + RING_CUP_PROFILE.wallHeight / 2)), `${label}: wall middle ${probe(floorRadius + RING_CUP_PROFILE.wallFootWidth / 2)}`).toBeLessThanOrEqual(SURFACE_TOLERANCE);
+        expect(Math.abs(probe(zone.radius + RING_CUP_PROFILE.rimTopWidth / 2) - zone.rimHeight), `${label}: rim top ${probe(zone.radius + RING_CUP_PROFILE.rimTopWidth / 2)}`).toBeLessThanOrEqual(SURFACE_TOLERANCE);
         const skirtMiddleX = zone.centreX + skirtMiddleRadius * Math.cos(angle);
         const skirtMiddleZ = zone.centreZ + skirtMiddleRadius * Math.sin(angle);
-        assert.ok(Math.abs(probe(skirtMiddleRadius) - ringHeightAt(skirtMiddleX, skirtMiddleZ)) <= SURFACE_TOLERANCE, `${label}: skirt middle ${probe(skirtMiddleRadius)}, the model says ${ringHeightAt(skirtMiddleX, skirtMiddleZ)}`);
+        expect(Math.abs(probe(skirtMiddleRadius) - ringHeightAt(skirtMiddleX, skirtMiddleZ)), `${label}: skirt middle ${probe(skirtMiddleRadius)}, the model says ${ringHeightAt(skirtMiddleX, skirtMiddleZ)}`).toBeLessThanOrEqual(SURFACE_TOLERANCE);
       }
     }
   });
@@ -153,21 +153,21 @@ describe("given the Ring Fling station's art in station-local coordinates", () =
     for (const zone of ZONES) {
       const rimEndRadius = zone.radius + RING_CUP_PROFILE.rimTopWidth;
       const crest = whiteVertices.filter((vertex) => Math.abs(vertex.y - zone.rimHeight) <= HEIGHT_TOLERANCE && Math.hypot(vertex.x - zone.centreX, vertex.z - zone.centreZ) < rimEndRadius + HEIGHT_TOLERANCE);
-      assert.ok(crest.length >= 2 * MIN_RIM_VERTICES_PER_CIRCLE, `${zone.score} rim has ${crest.length} vertices`);
+      expect(crest.length, `${zone.score} rim has ${crest.length} vertices`).toBeGreaterThanOrEqual(2 * MIN_RIM_VERTICES_PER_CIRCLE);
       for (const vertex of crest) {
         const radius = Math.hypot(vertex.x - zone.centreX, vertex.z - zone.centreZ);
-        assert.ok(Math.abs(radius - zone.radius) <= HEIGHT_TOLERANCE || Math.abs(radius - rimEndRadius) <= HEIGHT_TOLERANCE, `${zone.score} rim vertex at radius ${radius}`);
+        expect(Math.abs(radius - zone.radius) <= HEIGHT_TOLERANCE || Math.abs(radius - rimEndRadius) <= HEIGHT_TOLERANCE, `${zone.score} rim vertex at radius ${radius}`).toBeTruthy();
       }
       const normals = white.geometry.getAttribute("normal");
       const colours = white.geometry.getAttribute("color");
       const wallFoot = whiteVertices
         .map((vertex, index) => ({ vertex, index }))
         .filter(({ vertex, index }) => Math.abs(vertex.y - zone.floorHeight) <= HEIGHT_TOLERANCE && colours.getX(index) > WALL_COLOUR_MIN_RED && Math.abs(Math.hypot(vertex.x - zone.centreX, vertex.z - zone.centreZ) - (zone.radius - RING_CUP_PROFILE.wallFootWidth)) <= HEIGHT_TOLERANCE);
-      assert.ok(wallFoot.length >= MIN_RIM_VERTICES_PER_CIRCLE, `${zone.score} wall foot has ${wallFoot.length} vertices`);
+      expect(wallFoot.length, `${zone.score} wall foot has ${wallFoot.length} vertices`).toBeGreaterThanOrEqual(MIN_RIM_VERTICES_PER_CIRCLE);
       for (const { vertex, index } of wallFoot) {
         const inwardness = ((zone.centreX - vertex.x) * normals.getX(index) + (zone.centreZ - vertex.z) * normals.getZ(index)) / Math.hypot(vertex.x - zone.centreX, vertex.z - zone.centreZ);
-        assert.ok(Math.abs(inwardness - Math.sqrt(1 - normals.getY(index) ** 2)) <= NORMAL_TOLERANCE, `${zone.score} wall normal (${normals.getX(index)}, ${normals.getY(index)}, ${normals.getZ(index)}) does not point to the centre`);
-        assert.ok(Math.abs(normals.getY(index) - normals.getY(wallFoot[0]!.index)) <= NORMAL_TOLERANCE, `${zone.score} wall normals tilt differently`);
+        expect(Math.abs(inwardness - Math.sqrt(1 - normals.getY(index) ** 2)), `${zone.score} wall normal (${normals.getX(index)}, ${normals.getY(index)}, ${normals.getZ(index)}) does not point to the centre`).toBeLessThanOrEqual(NORMAL_TOLERANCE);
+        expect(Math.abs(normals.getY(index) - normals.getY(wallFoot[0]!.index)), `${zone.score} wall normals tilt differently`).toBeLessThanOrEqual(NORMAL_TOLERANCE);
       }
     }
   });
@@ -197,17 +197,17 @@ describe("given the Ring Fling station's art in station-local coordinates", () =
     ];
     for (const probe of probes) {
       const expected = ringBoardPlaneHeight(probe.x) + probe.rise;
-      assert.ok(Math.abs(surfaceAt(probe.x, probe.z).height - expected) <= SURFACE_TOLERANCE, `${probe.name}: ${surfaceAt(probe.x, probe.z).height}, expected ${expected}`);
+      expect(Math.abs(surfaceAt(probe.x, probe.z).height - expected), `${probe.name}: ${surfaceAt(probe.x, probe.z).height}, expected ${expected}`).toBeLessThanOrEqual(SURFACE_TOLERANCE);
     }
-    assert.ok(Math.abs(cornerCentreZ + cornerRadius - maxZ) <= HEIGHT_TOLERANCE, "the corner arc is tangent to the side");
+    expect(Math.abs(cornerCentreZ + cornerRadius - maxZ), "the corner arc is tangent to the side").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
   });
 
   it("when the board's wooden skirt is read, then each wall hangs from the model's height down to the pad", () => {
     const skirtVertices = verticesOf(wood).filter((vertex) => Math.abs(vertex.z) >= RING_BOARD_BOUNDS.maxZ - HEIGHT_TOLERANCE || vertex.x >= RING_BOARD_BOUNDS.maxX - HEIGHT_TOLERANCE);
-    assert.ok(skirtVertices.length > 0, "a skirt exists");
+    expect(skirtVertices.length, "a skirt exists").toBeGreaterThan(0);
     for (const vertex of skirtVertices) {
       const topHeight = ringHeightAt(vertex.x, vertex.z);
-      assert.ok(Math.abs(vertex.y) <= HEIGHT_TOLERANCE || Math.abs(vertex.y - topHeight) <= HEIGHT_TOLERANCE || Math.abs(vertex.y - ringBoardPlaneHeight(vertex.x)) <= HEIGHT_TOLERANCE, `skirt vertex (${vertex.x}, ${vertex.z}) at ${vertex.y} is neither the pad nor ${topHeight}`);
+      expect(Math.abs(vertex.y) <= HEIGHT_TOLERANCE || Math.abs(vertex.y - topHeight) <= HEIGHT_TOLERANCE || Math.abs(vertex.y - ringBoardPlaneHeight(vertex.x)) <= HEIGHT_TOLERANCE, `skirt vertex (${vertex.x}, ${vertex.z}) at ${vertex.y} is neither the pad nor ${topHeight}`).toBeTruthy();
     }
   });
 
@@ -221,12 +221,12 @@ describe("given the Ring Fling station's art in station-local coordinates", () =
     const sideRimLightness = lightnessOf(surfaceAt(RING_RAIL_START_X + RING_RAIL_PROFILE.rampLength + 1, -RING_BOARD_BOUNDS.maxZ + RING_RAIL_PROFILE.topWidth / 2).colour);
     const floorLightness = lightnessOf(surfaceAt(cup.centreX, cup.centreZ + (cup.radius - RING_CUP_PROFILE.wallFootWidth) / 2).colour);
     const laneLightness = lightnessOf(new THREE.Color(STATION_SURFACE_STYLES.ringFling.baseColour));
-    assert.ok(boardLightness <= BOARD_TO_WHITE_LIGHTNESS_MAX * rimLightness, `board ${boardLightness} against cup rim ${rimLightness}`);
-    assert.ok(boardLightness <= BOARD_TO_WHITE_LIGHTNESS_MAX * sideRimLightness, `board ${boardLightness} against side rim ${sideRimLightness}`);
-    assert.ok(floorLightness > boardLightness, `cup floor ${floorLightness} is no lighter than the board ${boardLightness}: it would read as a hole`);
-    assert.ok(floorLightness >= CUP_FLOOR_LIGHTNESS_MIN, `cup floor ${floorLightness} is too dark for black numerals`);
-    assert.ok(floorLightness < rimLightness, `cup floor ${floorLightness} against the cups' white ${rimLightness}`);
-    assert.ok(laneLightness < boardLightness, `lane ${laneLightness} against board ${boardLightness}`);
+    expect(boardLightness, `board ${boardLightness} against cup rim ${rimLightness}`).toBeLessThanOrEqual(BOARD_TO_WHITE_LIGHTNESS_MAX * rimLightness);
+    expect(boardLightness, `board ${boardLightness} against side rim ${sideRimLightness}`).toBeLessThanOrEqual(BOARD_TO_WHITE_LIGHTNESS_MAX * sideRimLightness);
+    expect(floorLightness, `cup floor ${floorLightness} is no lighter than the board ${boardLightness}: it would read as a hole`).toBeGreaterThan(boardLightness);
+    expect(floorLightness, `cup floor ${floorLightness} is too dark for black numerals`).toBeGreaterThanOrEqual(CUP_FLOOR_LIGHTNESS_MIN);
+    expect(floorLightness, `cup floor ${floorLightness} against the cups' white ${rimLightness}`).toBeLessThan(rimLightness);
+    expect(laneLightness, `lane ${laneLightness} against board ${boardLightness}`).toBeLessThan(boardLightness);
   });
 
   it("when the numeral discs are read, then there is one per cup and pocket, centred on it, lying wholly inside its floor circle, and each reads its zone's score", () => {
@@ -239,44 +239,44 @@ describe("given the Ring Fling station's art in station-local coordinates", () =
     for (let zoneIndex = 0; zoneIndex < ZONES.length; zoneIndex++) {
       const zone = ZONES[zoneIndex]!;
       const members = vertices.map((vertex, index) => ({ vertex, index })).filter(({ vertex }) => nearestZoneIndex(vertex) === zoneIndex);
-      assert.ok(members.length >= MIN_DISC_VERTICES, `${zone.score} disc has ${members.length} vertices`);
+      expect(members.length, `${zone.score} disc has ${members.length} vertices`).toBeGreaterThanOrEqual(MIN_DISC_VERTICES);
       const corners = members.map(({ vertex }) => vertex);
-      assert.ok(Math.abs((Math.max(...corners.map((corner) => corner.x)) + Math.min(...corners.map((corner) => corner.x))) / 2 - zone.centreX) <= HEIGHT_TOLERANCE, `${zone.score} centre x`);
-      assert.ok(Math.abs((Math.max(...corners.map((corner) => corner.z)) + Math.min(...corners.map((corner) => corner.z))) / 2 - zone.centreZ) <= HEIGHT_TOLERANCE, `${zone.score} centre z`);
+      expect(Math.abs((Math.max(...corners.map((corner) => corner.x)) + Math.min(...corners.map((corner) => corner.x))) / 2 - zone.centreX), `${zone.score} centre x`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
+      expect(Math.abs((Math.max(...corners.map((corner) => corner.z)) + Math.min(...corners.map((corner) => corner.z))) / 2 - zone.centreZ), `${zone.score} centre z`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
       const hover = mean(corners.map((corner) => corner.y)) - zone.floorHeight;
-      assert.ok(hover > 0 && hover <= DECAL_HOVER_MAX, `${zone.score} hovers ${hover} m over its floor`);
+      expect(hover > 0 && hover <= DECAL_HOVER_MAX, `${zone.score} hovers ${hover} m over its floor`).toBeTruthy();
       const floorRadius = zone.radius - RING_CUP_PROFILE.wallFootWidth;
       for (const corner of corners) {
         const reach = Math.hypot(corner.x - zone.centreX, corner.z - zone.centreZ);
-        assert.ok(reach <= floorRadius, `a ${zone.score} disc vertex is ${reach} m out, the floor circle is ${floorRadius} m`);
+        expect(reach, `a ${zone.score} disc vertex is ${reach} m out, the floor circle is ${floorRadius} m`).toBeLessThanOrEqual(floorRadius);
       }
       const alongThrow = Math.max(...corners.map((corner) => corner.x)) - Math.min(...corners.map((corner) => corner.x));
       const acrossLane = Math.max(...corners.map((corner) => corner.z)) - Math.min(...corners.map((corner) => corner.z));
-      assert.ok(Math.min(alongThrow, acrossLane) > DUMMY_LYING_WIDTH, `a ${zone.score} disc is ${alongThrow} x ${acrossLane} m: a dummy ${DUMMY_LYING_WIDTH} m wide, either way round, would cover all of it`);
+      expect(Math.min(alongThrow, acrossLane), `a ${zone.score} disc is ${alongThrow} x ${acrossLane} m: a dummy ${DUMMY_LYING_WIDTH} m wide, either way round, would cover all of it`).toBeGreaterThan(DUMMY_LYING_WIDTH);
       const atlasX = mean(members.map(({ index }) => uv.getX(index))) * atlas.width;
       const atlasY = (1 - mean(members.map(({ index }) => uv.getY(index)))) * atlas.height;
       const [readText] = [...atlas.drawnTexts].sort((first, second) => Math.hypot(first.x - atlasX, first.y - atlasY) - Math.hypot(second.x - atlasX, second.y - atlasY));
-      assert.equal(readText!.text, String(zone.score), `the disc at the ${zone.score} zone reads ${readText!.text}`);
+      expect(readText!.text, `the disc at the ${zone.score} zone reads ${readText!.text}`).toBe(String(zone.score));
     }
   });
 
   it("when the numerals' atlas and the backboard's face were drawn, then every score and the title were written and the score strip shows dashes, never a number", () => {
     const writtenTexts = recordingCanvases.flatMap((canvas) => canvas.drawnTexts.map((drawn) => drawn.text));
-    for (const text of ["10", "20", "30", "40", "50", "100", "RING FLING", "HIGH SCORE", "---"]) assert.ok(writtenTexts.includes(text), `"${text}" is drawn`);
-    assert.ok(!writtenTexts.includes("000"), "the strip does not claim a score");
+    for (const text of ["10", "20", "30", "40", "50", "100", "RING FLING", "HIGH SCORE", "---"]) expect(writtenTexts.includes(text), `"${text}" is drawn`).toBeTruthy();
+    expect(!writtenTexts.includes("000"), "the strip does not claim a score").toBe(true);
   });
 
   it("when the backboard is read, then its front face stands at the backstop's distance with the stated height, thickness and a span wider than the board", () => {
     const slab = verticesOf(meshNamed(art, "ring-backboard"));
     const frontX = RING_BOARD_BOUNDS.maxX + RING_BACKSTOP.distancePastBoard;
-    assert.ok(Math.abs(Math.min(...slab.map((vertex) => vertex.x)) - frontX) <= HEIGHT_TOLERANCE, "front face x");
-    assert.ok(Math.abs(Math.max(...slab.map((vertex) => vertex.x)) - (frontX + RING_BACKSTOP.thickness)) <= HEIGHT_TOLERANCE, "back face x");
-    assert.ok(Math.abs(Math.max(...slab.map((vertex) => vertex.y)) - RING_BACKSTOP.height) <= HEIGHT_TOLERANCE, "top");
-    assert.ok(Math.abs(Math.min(...slab.map((vertex) => vertex.y))) <= HEIGHT_TOLERANCE, "foot on the pad");
-    assert.ok(Math.min(...slab.map((vertex) => vertex.z)) <= RING_BOARD_BOUNDS.minZ - RING_RAIL_PROFILE.height + HEIGHT_TOLERANCE, "reaches past the board's left side");
-    assert.ok(Math.max(...slab.map((vertex) => vertex.z)) >= RING_BOARD_BOUNDS.maxZ + RING_RAIL_PROFILE.height - HEIGHT_TOLERANCE, "reaches past the board's right side");
+    expect(Math.abs(Math.min(...slab.map((vertex) => vertex.x)) - frontX), "front face x").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
+    expect(Math.abs(Math.max(...slab.map((vertex) => vertex.x)) - (frontX + RING_BACKSTOP.thickness)), "back face x").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
+    expect(Math.abs(Math.max(...slab.map((vertex) => vertex.y)) - RING_BACKSTOP.height), "top").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
+    expect(Math.abs(Math.min(...slab.map((vertex) => vertex.y))), "foot on the pad").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
+    expect(Math.min(...slab.map((vertex) => vertex.z)), "reaches past the board's left side").toBeLessThanOrEqual(RING_BOARD_BOUNDS.minZ - RING_RAIL_PROFILE.height + HEIGHT_TOLERANCE);
+    expect(Math.max(...slab.map((vertex) => vertex.z)), "reaches past the board's right side").toBeGreaterThanOrEqual(RING_BOARD_BOUNDS.maxZ + RING_RAIL_PROFILE.height - HEIGHT_TOLERANCE);
     const faceX = verticesOf(meshNamed(art, "ring-backboard-face")).map((vertex) => vertex.x);
-    assert.ok(Math.max(...faceX) < frontX && frontX - Math.max(...faceX) < RING_BACKSTOP.thickness, "the face hovers a hair in front of the slab, facing the lip");
+    expect(Math.max(...faceX) < frontX && frontX - Math.max(...faceX) < RING_BACKSTOP.thickness, "the face hovers a hair in front of the slab, facing the lip").toBeTruthy();
   });
 
   it("when the backboard's wings are read, then one flanks each end of the slab, splayed forward and outward, clear of the board and lower than the slab", () => {
@@ -285,22 +285,22 @@ describe("given the Ring Fling station's art in station-local coordinates", () =
     const slabHalfWidth = (RING_BOARD_BOUNDS.maxZ - RING_BOARD_BOUNDS.minZ) / 2 + RING_RAIL_PROFILE.height;
     for (const side of [-1, 1]) {
       const wing = wings.filter((vertex) => Math.sign(vertex.z) === side);
-      assert.ok(wing.length > 0, `a wing on the ${side} side`);
-      assert.ok(Math.min(...wing.map((vertex) => vertex.x)) < frontX - MIN_WING_REACH, `the ${side} wing reaches forward of the slab`);
-      assert.ok(Math.max(...wing.map((vertex) => vertex.x)) <= frontX + RING_BACKSTOP.thickness + HEIGHT_TOLERANCE, `the ${side} wing stays in front of the slab's back face`);
-      assert.ok(Math.max(...wing.map((vertex) => Math.abs(vertex.z))) > slabHalfWidth + MIN_WING_REACH, `the ${side} wing splays outward past the slab's end`);
-      assert.ok(Math.min(...wing.map((vertex) => Math.abs(vertex.z))) >= RING_BOARD_BOUNDS.maxZ, `the ${side} wing stands clear of the board`);
-      assert.ok(Math.max(...wing.map((vertex) => vertex.y)) < RING_BACKSTOP.height, `the ${side} wing is lower than the slab`);
-      assert.ok(Math.abs(Math.min(...wing.map((vertex) => vertex.y))) <= HEIGHT_TOLERANCE, `the ${side} wing stands on the pad`);
+      expect(wing.length, `a wing on the ${side} side`).toBeGreaterThan(0);
+      expect(Math.min(...wing.map((vertex) => vertex.x)), `the ${side} wing reaches forward of the slab`).toBeLessThan(frontX - MIN_WING_REACH);
+      expect(Math.max(...wing.map((vertex) => vertex.x)), `the ${side} wing stays in front of the slab's back face`).toBeLessThanOrEqual(frontX + RING_BACKSTOP.thickness + HEIGHT_TOLERANCE);
+      expect(Math.max(...wing.map((vertex) => Math.abs(vertex.z))), `the ${side} wing splays outward past the slab's end`).toBeGreaterThan(slabHalfWidth + MIN_WING_REACH);
+      expect(Math.min(...wing.map((vertex) => Math.abs(vertex.z))), `the ${side} wing stands clear of the board`).toBeGreaterThanOrEqual(RING_BOARD_BOUNDS.maxZ);
+      expect(Math.max(...wing.map((vertex) => vertex.y)), `the ${side} wing is lower than the slab`).toBeLessThan(RING_BACKSTOP.height);
+      expect(Math.abs(Math.min(...wing.map((vertex) => vertex.y))), `the ${side} wing stands on the pad`).toBeLessThanOrEqual(HEIGHT_TOLERANCE);
     }
   });
 
   it("when the station is drawn, then it costs no more than the draw budget, the numerals are one merged mesh, no two meshes share a geometry and the black pieces share one material", () => {
     const meshes = allMeshes(art);
-    assert.ok(meshes.length <= RING_FLING_DRAW_BUDGET, `${meshes.length} meshes, budget ${RING_FLING_DRAW_BUDGET}`);
-    assert.equal(meshes.filter((mesh) => mesh.name === "ring-numerals").length, 1, "all numerals in one mesh");
-    assert.equal(new Set(meshes.map((mesh) => mesh.geometry)).size, meshes.length, "one geometry per mesh, none per cup");
-    assert.equal(meshNamed(art, "ring-backboard").material, meshNamed(art, "ring-backboard-wings").material, "the slab and the wings share a material");
+    expect(meshes.length, `${meshes.length} meshes, budget ${RING_FLING_DRAW_BUDGET}`).toBeLessThanOrEqual(RING_FLING_DRAW_BUDGET);
+    expect(meshes.filter((mesh) => mesh.name === "ring-numerals").length, "all numerals in one mesh").toBe(1);
+    expect(new Set(meshes.map((mesh) => mesh.geometry)).size, "one geometry per mesh, none per cup").toBe(meshes.length);
+    expect(meshNamed(art, "ring-backboard").material, "the slab and the wings share a material").toBe(meshNamed(art, "ring-backboard-wings").material);
   });
 });
 
@@ -308,21 +308,18 @@ describe("given the Ring Fling backstop's constant", () => {
   const boardTop = Math.max(...RING_CUPS.map((cup) => cup.rimHeight), ...RING_POCKETS.map((pocket) => pocket.rimHeight));
 
   it("when it is read, then it is the real machine's 50 in backboard and 1 in thickness at the board's scale, with a positive gap", () => {
-    assert.ok(RING_BACKSTOP.distancePastBoard > 0, "gap past the board");
-    assert.ok(Math.abs(RING_BACKSTOP.height - REAL_BACKBOARD_HEIGHT_INCHES * REAL_INCH_SCALED) <= HEIGHT_TOLERANCE, "height");
-    assert.ok(Math.abs(RING_BACKSTOP.thickness - REAL_INCH_SCALED) <= HEIGHT_TOLERANCE, "thickness");
+    expect(RING_BACKSTOP.distancePastBoard, "gap past the board").toBeGreaterThan(0);
+    expect(Math.abs(RING_BACKSTOP.height - REAL_BACKBOARD_HEIGHT_INCHES * REAL_INCH_SCALED), "height").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
+    expect(Math.abs(RING_BACKSTOP.thickness - REAL_INCH_SCALED), "thickness").toBeLessThanOrEqual(HEIGHT_TOLERANCE);
   });
 
   it("when it is read against the board, then it stands over every rim and is at least 3 x the 50 cup's rim height", () => {
-    assert.ok(RING_BACKSTOP.height > boardTop, "above the highest rim");
-    assert.ok(
-      RING_BACKSTOP.height >= BACKSTOP_RIM_CLEARANCE_FACTOR * RING_CUPS[4]!.rimHeight,
-      `${RING_BACKSTOP.height} m is less than ${BACKSTOP_RIM_CLEARANCE_FACTOR} x the 50 cup's rim (${RING_CUPS[4]!.rimHeight} m)`,
-    );
+    expect(RING_BACKSTOP.height, "above the highest rim").toBeGreaterThan(boardTop);
+    expect(RING_BACKSTOP.height, `${RING_BACKSTOP.height} m is less than ${BACKSTOP_RIM_CLEARANCE_FACTOR} x the 50 cup's rim (${RING_CUPS[4]!.rimHeight} m)`).toBeGreaterThanOrEqual(BACKSTOP_RIM_CLEARANCE_FACTOR * RING_CUPS[4]!.rimHeight);
   });
 
   it("when a dummy leaves the highest rim at the fastest design throw, then his ballistic apex stays under the backstop's top", () => {
     const apexRise = (DESIGN_THROW_SPEED_MAX * Math.sin(DESIGN_THROW_PITCH)) ** 2 / (2 * GRAVITY);
-    assert.ok(RING_BACKSTOP.height >= boardTop + apexRise, `top ${RING_BACKSTOP.height} m, a dummy at ${boardTop} m rises ${apexRise} m`);
+    expect(RING_BACKSTOP.height, `top ${RING_BACKSTOP.height} m, a dummy at ${boardTop} m rises ${apexRise} m`).toBeGreaterThanOrEqual(boardTop + apexRise);
   });
 });

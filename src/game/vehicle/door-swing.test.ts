@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
@@ -45,22 +44,22 @@ const SPEC = makeCar().doorHinge(1).spec;
 describe("given swingAccel (the swing push the car's own acceleration puts on an unlatched door's hinge)", () => {
   it("when the car brakes at 6 m/s² or accelerates at 6 m/s², then braking pushes a door on either side open and accelerating pushes it shut", () => {
     for (const sx of [-1, 1]) {
-      assert.ok(swingAccel(SPEC, sx, 0.5, 0, -6, 0, 0) > 0, `side ${sx} braking`);
-      assert.ok(swingAccel(SPEC, sx, 0.5, 0, 6, 0, 0) < 0, `side ${sx} accelerating`);
+      expect(swingAccel(SPEC, sx, 0.5, 0, -6, 0, 0), `side ${sx} braking`).toBeGreaterThan(0);
+      expect(swingAccel(SPEC, sx, 0.5, 0, 6, 0, 0), `side ${sx} accelerating`).toBeLessThan(0);
     }
   });
 
   it("when the car turns, then the door on the outside of the turn is pushed open and the one on the inside shut, by one law mirrored left to right", () => {
     // A turn toward +x pushes the frame's contents toward −x: the −x (left) door opens, the +x one shuts.
-    assert.ok(swingAccel(SPEC, -1, 0.6, 8, 0, 0, 0) > 0 && swingAccel(SPEC, 1, 0.6, 8, 0, 0, 0) < 0);
+    expect(swingAccel(SPEC, -1, 0.6, 8, 0, 0, 0) > 0 && swingAccel(SPEC, 1, 0.6, 8, 0, 0, 0) < 0).toBeTruthy();
     for (const [ax, az, w, al] of [
       [5, -3, 0.4, 0.2],
       [-2, 4, 1, -3],
-    ] as const) assert.ok(Math.abs(swingAccel(SPEC, -1, 0.7, -ax, az, w, -al) - swingAccel(SPEC, 1, 0.7, ax, az, w, al)) < 1e-9, "mirror");
+    ] as const) expect(Math.abs(swingAccel(SPEC, -1, 0.7, -ax, az, w, -al) - swingAccel(SPEC, 1, 0.7, ax, az, w, al)), "mirror").toBeLessThan(1e-9);
   });
 
   it("when a car brakes at 9 m/s² with a door shut, then the shut door gets no swing push, because the force is along its slab", () => {
-    assert.equal(swingAccel(SPEC, 1, 0, 0, -9, 0, 0), 0);
+    expect(swingAccel(SPEC, 1, 0, 0, -9, 0, 0)).toBe(0);
   });
 });
 
@@ -69,8 +68,8 @@ describe("given an unlatched open door that swings with the car's acceleration",
     for (const side of [-1, 1] as const) {
       const car = open(30, side);
       push(car, 0, -6, 0.52);
-      assert.ok(deg(car, side) > 50, `side ${side} at ${deg(car, side).toFixed(1)}°`);
-      assert.ok(!car.doorHinge(side).latched);
+      expect(deg(car, side), `side ${side} at ${deg(car, side).toFixed(1)}°`).toBeGreaterThan(50);
+      expect(!car.doorHinge(side).latched).toBe(true);
     }
   });
 
@@ -79,8 +78,8 @@ describe("given an unlatched open door that swings with the car's acceleration",
       const car = open(30, side);
       push(car, 0, 6, 0.92);
       const h = car.doorHinge(side);
-      assert.ok(h.latched && h.theta === 0, `side ${side}: ${deg(car, side).toFixed(1)}° latched ${h.latched}`);
-      assert.ok(!car.partOff(side < 0 ? "doorL" : "doorR"), "the door tore off");
+      expect(h.latched && h.theta === 0, `side ${side}: ${deg(car, side).toFixed(1)}° latched ${h.latched}`).toBeTruthy();
+      expect(!car.partOff(side < 0 ? "doorL" : "doorR"), "the door tore off").toBe(true);
     }
   });
 
@@ -88,23 +87,23 @@ describe("given an unlatched open door that swings with the car's acceleration",
     const brief = open(60);
     push(brief, 0, 6, 0.1);
     push(brief, 0, 0, 3);
-    assert.ok(deg(brief) > 20 && deg(brief) < 55 && !brief.doorHinge(1).latched, `brief push left it at ${deg(brief).toFixed(1)}°`);
+    expect(deg(brief) > 20 && deg(brief) < 55 && !brief.doorHinge(1).latched, `brief push left it at ${deg(brief).toFixed(1)}°`).toBeTruthy();
     const long = open(60);
     push(long, 0, 6, 0.1);
     push(long, 0, 6, 0.9);
-    assert.ok(long.doorHinge(1).latched, `a long push left it at ${deg(long).toFixed(1)}°`);
+    expect(long.doorHinge(1).latched, `a long push left it at ${deg(long).toFixed(1)}°`).toBeTruthy();
     const gentle = open(30);
     push(gentle, 0, 1, 3);
-    assert.ok(Math.abs(deg(gentle) - 30) < 1e-6, "1 m/s² moved a door the hinge friction holds");
+    expect(Math.abs(deg(gentle) - 30), "1 m/s² moved a door the hinge friction holds").toBeLessThan(1e-6);
   });
 
   it("when the car turns with 8 m/s² of sideways acceleration for 0.5 s, then the outside door swings open past 60° and the inside door slams shut and latches", () => {
     const out = open(40, -1);
     push(out, 8, 0, 0.5);
-    assert.ok(deg(out, -1) > 60, `outside door at ${deg(out, -1).toFixed(1)}°`);
+    expect(deg(out, -1), `outside door at ${deg(out, -1).toFixed(1)}°`).toBeGreaterThan(60);
     const inside = open(40, 1);
     push(inside, 8, 0, 0.5);
-    assert.ok(inside.doorHinge(1).latched && !inside.partOff("doorR"), "the inside door should latch");
+    expect(inside.doorHinge(1).latched && !inside.partOff("doorR"), "the inside door should latch").toBeTruthy();
   });
 
   it("when the car faces any heading or is carried at 30 m/s, then the door swings exactly as it does on a car at rest facing forward, because only the acceleration in the car's own frame counts", () => {
@@ -118,14 +117,14 @@ describe("given an unlatched open door that swings with the car's acceleration",
       return trace;
     };
     const base = at(0, 0);
-    assert.ok(base[7]! > 50, "the base case did not swing");
+    expect(base[7]!, "the base case did not swing").toBeGreaterThan(50);
     for (const [yaw, v0] of [
       [Math.PI / 2, 0],
       [2.2, 0],
       [0, 30],
     ] as const) {
       const other = at(yaw, v0);
-      for (let k = 0; k < 8; k++) assert.ok(Math.abs(other[k]! - base[k]!) < 1e-6, `yaw ${yaw} v0 ${v0} step ${k}: ${other[k]} vs ${base[k]}`);
+      for (let k = 0; k < 8; k++) expect(Math.abs(other[k]! - base[k]!), `yaw ${yaw} v0 ${v0} step ${k}: ${other[k]} vs ${base[k]}`).toBeLessThan(1e-6);
     }
   });
 
@@ -133,8 +132,8 @@ describe("given an unlatched open door that swings with the car's acceleration",
     const car = open(30);
     car.velocity.z -= 15;
     for (let k = 0; k < 60; k++) car.swingHinges(H);
-    assert.ok(!car.partOff("doorR"));
-    assert.ok(deg(car) <= DOOR_OPEN_MAX / D2R + 1e-9);
+    expect(!car.partOff("doorR")).toBe(true);
+    expect(deg(car)).toBeLessThanOrEqual(DOOR_OPEN_MAX / D2R + 1e-9);
   });
 
   it("when the open door swings shut carrying 0.85× then 1.15× the slam-tear energy, then it latches at 0.85× and tears off at 1.15×, as the Doors ram's slam rule says (past the slam-tear energy limit the door leaves)", () => {
@@ -146,8 +145,8 @@ describe("given an unlatched open door that swings with the car's acceleration",
       const car = open(30);
       car.doorHinge(1).omega = -Math.sqrt((2 * share * SLAM_TEAR_J) / SPEC.inertia);
       for (let k = 0; k < 240; k++) car.swingHinges(H);
-      assert.equal(car.partOff("doorR"), off, `${share}× slam energy`);
-      if (!off) assert.ok(car.doorHinge(1).latched);
+      expect(car.partOff("doorR"), `${share}× slam energy`).toBe(off);
+      if (!off) expect(car.doorHinge(1).latched).toBeTruthy();
     }
   });
 
@@ -166,8 +165,8 @@ describe("given an unlatched open door that swings with the car's acceleration",
       const held = pushed(id, 0.9);
       const swung = pushed(id, 1.1);
       const length = held.doorHinge(1).spec.length;
-      assert.ok(Math.abs(deg(held) - 30) < 1e-9, `${id} (door ${length} m) at 0.9×: ${deg(held)}°, checked ${checked.join()}`);
-      assert.ok(deg(swung) > 30.5, `${id} (door ${length} m) at 1.1×: ${deg(swung)}°, checked ${checked.join()}`);
+      expect(Math.abs(deg(held) - 30), `${id} (door ${length} m) at 0.9×: ${deg(held)}°, checked ${checked.join()}`).toBeLessThan(1e-9);
+      expect(deg(swung), `${id} (door ${length} m) at 1.1×: ${deg(swung)}°, checked ${checked.join()}`).toBeGreaterThan(30.5);
       checked.push(id);
     }
   });
@@ -198,18 +197,18 @@ describe("given a car driven for real in shape deform mode with its right door o
 
   it("when it brakes fully from 25 m/s with the door at 30°, then the door is thrown onto its stop and holds there without tearing off", () => {
     const car = drive(25, 30, { brake: 1 }, 3);
-    assert.ok(Math.abs(deg(car) - DOOR_OPEN_MAX / D2R) < 0.5, `${deg(car)}°`);
-    assert.ok(!car.partOff("doorR"));
+    expect(Math.abs(deg(car) - DOOR_OPEN_MAX / D2R), `${deg(car)}°`).toBeLessThan(0.5);
+    expect(!car.partOff("doorR")).toBe(true);
   });
 
   it("when it launches from 3 m/s at full throttle with the door at 60°, then the door swings shut, latches and stays on", () => {
     const car = drive(3, 60, { throttle: 1 }, 3);
-    assert.ok(car.doorHinge(1).latched && !car.partOff("doorR"), `${deg(car)}°`);
+    expect(car.doorHinge(1).latched && !car.partOff("doorR"), `${deg(car)}°`).toBeTruthy();
   });
 
   it("when it drives at 15 m/s through a turn that puts the open door on the inside, then the door shuts and latches", () => {
     const car = drive(15, 40, { throttle: 0.6, steer: 1 }, 3);
-    assert.ok(car.doorHinge(1).latched, `${deg(car)}°`);
+    expect(car.doorHinge(1).latched, `${deg(car)}°`).toBeTruthy();
   });
 });
 
@@ -225,10 +224,10 @@ describe("given a car whose door a side hit has sprung open", () => {
     car.deform.setMode("shape");
     runWall(40, 1, "side", { car });
     const sides = ([-1, 1] as const).filter((s) => !car.doorHinge(s).latched);
-    assert.equal(sides.length, 1, `unlatched doors: ${sides.length}`);
+    expect(sides.length, `unlatched doors: ${sides.length}`).toBe(1);
     const jam = car.jam(sides[0]!);
-    assert.ok(jam > DOOR_AJAR, `jam ${jam}`);
-    assert.ok(car.doorHinge(sides[0]!).theta >= Math.min(jam * 1.45, DOOR_OPEN_MAX) - 1e-9, "the door hangs shut past its jam");
+    expect(jam, `jam ${jam}`).toBeGreaterThan(DOOR_AJAR);
+    expect(car.doorHinge(sides[0]!).theta, "the door hangs shut past its jam").toBeGreaterThanOrEqual(Math.min(jam * 1.45, DOOR_OPEN_MAX) - 1e-9);
   });
 
   it("when it hits a wall side-on at 40 km/h in shape deform mode, then its cage drops the sprung door's panel and keeps the latched door's (the doors are the cage's last two panels, left then right)", () => {
@@ -237,10 +236,10 @@ describe("given a car whose door a side hit has sprung open", () => {
     runWall(40, 1, "side", { car });
     car.refitCage();
     const on = car.cage.fields.panelOn;
-    assert.ok(([-1, 1] as const).some((s) => !car.doorHinge(s).latched), "no door sprung");
+    expect(([-1, 1] as const).some((s) => !car.doorHinge(s).latched), "no door sprung").toBeTruthy();
     for (const side of [-1, 1] as const) {
       const flag = on[on.length - (side < 0 ? 2 : 1)];
-      assert.equal(flag, car.doorHinge(side).latched ? 1 : 0, `side ${side} latched ${car.doorHinge(side).latched}: its door panel ${flag}`);
+      expect(flag, `side ${side} latched ${car.doorHinge(side).latched}: its door panel ${flag}`).toBe(car.doorHinge(side).latched ? 1 : 0);
     }
   });
 });

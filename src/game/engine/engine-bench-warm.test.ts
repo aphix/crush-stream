@@ -1,5 +1,4 @@
-import { describe, test } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, test } from "vitest";
 import type { RacePhase } from "../match/types.ts";
 import { warmUp } from "./engine-bench-warm.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -23,13 +22,13 @@ async function warmRaceBench(warmS: number, onFrame: (race: { phase: RacePhase |
 describe("given a bench race whose warm-up runs on the race clock", () => {
   test("when the race is under way, then the warm-up lasts until the race clock reaches the warm-up seconds", async () => {
     const frames = await warmRaceBench(1, () => {});
-    assert.ok(frames >= 60, `${frames} frames for 1 s of race clock`);
+    expect(frames, `${frames} frames for 1 s of race clock`).toBeGreaterThanOrEqual(60);
   });
 
   test("when the race finishes before the warm-up seconds have run, then the warm-up ends and the bench goes on to its window", async () => {
     const frames = await warmRaceBench(8, (race, n) => {
       if (n === 3) race.phase = "finished";
     });
-    assert.equal(frames, 3, "the warm-up ended on the frame the race finished");
+    expect(frames, "the warm-up ended on the frame the race finished").toBe(3);
   });
 });

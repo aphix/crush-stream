@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
 import { makeWorld, playerRace, type PlayerLine, type World } from "./race-world.test-util.ts";
 import { Track } from "./track.ts";
@@ -41,13 +40,13 @@ describe(`given a ${LAPS}-lap race on the oval with the player's car driven thro
     it(`when the player's line is ${name}, then he is home on the full distance, and the HUD's lap and place match the rules' count`, (t) => {
       const o = playerRace(w, track, line, LAPS, 3, 220);
       t.annotate(`${name}: you ${o.you.status} P${o.you.place} ${o.you.time?.toFixed(1) ?? "-"} s, ${o.you.laps} laps; AI ${o.ai.map((a) => `${a.status}/${a.laps}`).join(" ")}`);
-      assert.equal(o.you.status, "finished", `you ${o.you.status} on ${o.you.laps} laps`);
-      assert.equal(o.you.laps, LAPS);
-      assert.ok(o.ai.every((a) => a.laps === LAPS), "the AI on the same distance");
+      expect(o.you.status, `you ${o.you.status} on ${o.you.laps} laps`).toBe("finished");
+      expect(o.you.laps).toBe(LAPS);
+      expect(o.ai.every((a) => a.laps === LAPS), "the AI on the same distance").toBeTruthy();
       // A sample every 0.5 s: 2 laps at 200 km/h are over in ~40 s.
-      assert.ok(o.samples > 50, `${o.samples} samples`);
-      assert.equal(o.hudLapMismatch, 0, "HUD lap = rules lap");
-      assert.equal(o.hudPlaceMismatch, 0, "HUD place = rules place");
+      expect(o.samples, `${o.samples} samples`).toBeGreaterThan(50);
+      expect(o.hudLapMismatch, "HUD lap = rules lap").toBe(0);
+      expect(o.hudPlaceMismatch, "HUD place = rules place").toBe(0);
     });
   }
 });

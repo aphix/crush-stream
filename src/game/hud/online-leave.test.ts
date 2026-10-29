@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { leaveFollowUp } from "./online-leave.ts";
 import type { NetRole } from "../net/net-ports.ts";
 
@@ -14,7 +13,7 @@ const testCases = [
 describe("given a browser leaving its online session", () => {
   for (const testCase of testCases) {
     it(testCase.it, () => {
-      assert.equal(leaveFollowUp(testCase.role, testCase.inRace), testCase.expected, "scene follow-up");
+      expect(leaveFollowUp(testCase.role, testCase.inRace), "scene follow-up").toBe(testCase.expected);
     });
   }
 });

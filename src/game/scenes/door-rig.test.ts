@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { _lane, hitMirror } from "../contact/door-contact.ts";
@@ -43,8 +42,8 @@ const CASES: Case[] = [
     kg: kgFor(0.8, 4),
     off: [],
     check: (r) => {
-      assert.ok(r.mirrorFoldDeg > MIRROR_FOLD_MAX * R2D - 1, `mirror folded only ${r.mirrorFoldDeg}°`);
-      assert.ok(r.ramStopped, "the folded mirror's stop should have stopped the ram");
+      expect(r.mirrorFoldDeg, `mirror folded only ${r.mirrorFoldDeg}°`).toBeGreaterThan(MIRROR_FOLD_MAX * R2D - 1);
+      expect(r.ramStopped, "the folded mirror's stop should have stopped the ram").toBeTruthy();
     },
   },
   { scenario: "mirror", level: "carrying 1.25× the mirror's break energy", kph: 4, kg: kgFor(1.25, 4), off: ["mirror"], check: () => {} },
@@ -56,9 +55,9 @@ const CASES: Case[] = [
     kg: 120,
     off: [],
     check: (r) => {
-      assert.ok(Math.abs(r.doorDeg - DOOR_OPEN_MAX * R2D) < 0.5, `door at ${r.doorDeg}°, not on its stop`);
-      assert.ok(r.hingeLoadJ > 0 && r.hingeLoadJ < HINGE_TEAR_J, `hinge load ${r.hingeLoadJ} J`);
-      assert.ok(r.ramStopped, "the strap should have stopped the ram");
+      expect(Math.abs(r.doorDeg - DOOR_OPEN_MAX * R2D), `door at ${r.doorDeg}°, not on its stop`).toBeLessThan(0.5);
+      expect(r.hingeLoadJ > 0 && r.hingeLoadJ < HINGE_TEAR_J, `hinge load ${r.hingeLoadJ} J`).toBeTruthy();
+      expect(r.ramStopped, "the strap should have stopped the ram").toBeTruthy();
     },
   },
   { scenario: "overOpen", level: "above the hinge tear threshold", kph: 15, kg: 300, off: ["door", "mirror"], check: () => {} },
@@ -68,7 +67,7 @@ const CASES: Case[] = [
     kph: 4,
     kg: 300,
     off: [],
-    check: (r) => assert.ok(r.doorDeg < 0.01, `door left ${r.doorDeg}° open`),
+    check: (r) => expect(r.doorDeg, `door left ${r.doorDeg}° open`).toBeLessThan(0.01),
   },
   { scenario: "shut", level: "with high force, which slams the door off", kph: 40, kg: 300, off: ["door", "mirror"], check: () => {} },
 ];
@@ -85,9 +84,9 @@ for (const sketchCar of SKETCH_CARS) {
           const r = fireRam(sketchCar.park(), c.scenario, { kph: c.kph, kg: c.kg, side });
           assertSameDigest([...r.detached].sort(), c.off.map((p) => p + suffix).sort(), `detached [${[...r.detached].sort()}]`);
           const doorOn = !c.off.includes("door");
-          if (doorOn && c.scenario !== "overOpen") assert.ok(r.latched, "door should be shut and latched");
-          assert.ok(r.bodyParticleMm <= BODY_TOL_MM, `control particles moved ${r.bodyParticleMm} mm`);
-          assert.ok(r.bodyVertexMm <= BODY_TOL_MM, `skinned vertices moved ${r.bodyVertexMm} mm`);
+          if (doorOn && c.scenario !== "overOpen") expect(r.latched, "door should be shut and latched").toBeTruthy();
+          expect(r.bodyParticleMm, `control particles moved ${r.bodyParticleMm} mm`).toBeLessThanOrEqual(BODY_TOL_MM);
+          expect(r.bodyVertexMm, `skinned vertices moved ${r.bodyVertexMm} mm`).toBeLessThanOrEqual(BODY_TOL_MM);
           c.check(r);
         });
       }
@@ -110,16 +109,16 @@ describe("given a car's right door swung from half a radian open at a chosen ope
   // 1.15×: the margin 1.1× had over the swing's losses from half a radian on the shorter, lighter door the row was written for.
   it("when it is swung shut at 0.9× and then 1.15× the slam limit, then the first latches shut and the second tears the door off", () => {
     const soft = swing(0.5, -omegaFor(0.9, SLAM_TEAR_J));
-    assert.ok(!soft.partOff("doorR") && soft.doorHinge(1).latched && soft.doorHinge(1).theta === 0);
-    assert.ok(swing(0.5, -omegaFor(1.15, SLAM_TEAR_J)).partOff("doorR"), "1.15× slam energy kept the door on");
+    expect(!soft.partOff("doorR") && soft.doorHinge(1).latched && soft.doorHinge(1).theta === 0).toBeTruthy();
+    expect(swing(0.5, -omegaFor(1.15, SLAM_TEAR_J)).partOff("doorR"), "1.15× slam energy kept the door on").toBeTruthy();
   });
 
   it("when it is flung open onto its stop at 0.9× and then 1.2× the hinge limit, then the first stays on at the stop and the second tears the door off together with its mirror", () => {
     const soft = swing(0.5, omegaFor(0.9, HINGE_TEAR_J));
-    assert.ok(!soft.partOff("doorR"));
-    assert.ok(Math.abs(soft.doorHinge(1).theta - DOOR_OPEN_MAX) < 0.05, `door at ${soft.doorHinge(1).theta * R2D}°`);
+    expect(!soft.partOff("doorR")).toBe(true);
+    expect(Math.abs(soft.doorHinge(1).theta - DOOR_OPEN_MAX), `door at ${soft.doorHinge(1).theta * R2D}°`).toBeLessThan(0.05);
     const hard = swing(0.5, omegaFor(1.2, HINGE_TEAR_J));
-    assert.ok(hard.partOff("doorR") && hard.partOff("mirrorR"), "door and its mirror should leave together");
+    expect(hard.partOff("doorR") && hard.partOff("mirrorR"), "door and its mirror should leave together").toBeTruthy();
   });
 });
 
@@ -127,10 +126,10 @@ describe("given a car driven at 64 km/h head-on into a wall", () => {
   it("when the crash settles, then both doors stay on and both hinges are shut, latched and unloaded", () => {
     const car = makeCar();
     const r = runWall(64, 1, "front", { car });
-    assert.ok(!r.detached.some((p) => p.startsWith("door")), `detached ${r.detached.join(",")}`);
+    expect(!r.detached.some((p) => p.startsWith("door")), `detached ${r.detached.join(",")}`).toBe(true);
     for (const side of [-1, 1]) {
       const h = car.doorHinge(side);
-      assert.ok(h.latched && h.theta === 0 && h.load === 0, `side ${side} hinge ${JSON.stringify(h)}`);
+      expect(h.latched && h.theta === 0 && h.load === 0, `side ${side} hinge ${JSON.stringify(h)}`).toBeTruthy();
     }
   });
 });
@@ -151,8 +150,8 @@ describe("given a rear ram square into the tail of a parked car (F lidPop: lid s
       fireRam(soft, "lidPop", LATCH_GENTLE);
       const hard = parkedStyle(id);
       fireRam(hard, "lidPop", LATCH_HARD);
-      assert.ok(soft.lidHinge().latched && !soft.lidOff(), `${id} lid sprang at ${LATCH_GENTLE.kph} km/h`);
-      assert.ok(!hard.lidHinge().latched && !hard.lidOff(), `${id} lid at ${LATCH_HARD.kph} km/h: latched ${hard.lidHinge().latched}, off ${hard.lidOff()}`);
+      expect(soft.lidHinge().latched && !soft.lidOff(), `${id} lid sprang at ${LATCH_GENTLE.kph} km/h`).toBeTruthy();
+      expect(!hard.lidHinge().latched && !hard.lidOff(), `${id} lid at ${LATCH_HARD.kph} km/h: latched ${hard.lidHinge().latched}, off ${hard.lidOff()}`).toBeTruthy();
     });
   }
 
@@ -164,8 +163,8 @@ describe("given a rear ram square into the tail of a parked car (F lidPop: lid s
       const h = open.lidHinge();
       const hard = parkedStyle(id);
       const torn = fireRam(hard, "lidTear", { kph: 12, kg: 100 });
-      assert.ok(!h.latched && h.theta === h.spec.stop && !open.lidOff(), `${id} 35 J: latched ${h.latched} at ${h.theta} rad, off ${open.lidOff()}`);
-      assert.ok(torn.detached.includes("trunk") && hard.hasLoosePart(), `${id} 555 J lid stayed on: [${torn.detached}]`);
+      expect(!h.latched && h.theta === h.spec.stop && !open.lidOff(), `${id} 35 J: latched ${h.latched} at ${h.theta} rad, off ${open.lidOff()}`).toBeTruthy();
+      expect(torn.detached.includes("trunk") && hard.hasLoosePart(), `${id} 555 J lid stayed on: [${torn.detached}]`).toBeTruthy();
     });
   }
 });
@@ -177,11 +176,11 @@ describe("given the Doors scene's lid state for the park (share key dlid)", () =
     rig.lid = 1;
     rig.attach(open);
     const h = open.lidHinge();
-    assert.ok(!h.latched && h.theta === h.spec.stop && !open.lidOff(), `lid 1: latched ${h.latched} at ${h.theta} rad`);
+    expect(!h.latched && h.theta === h.spec.stop && !open.lidOff(), `lid 1: latched ${h.latched} at ${h.theta} rad`).toBeTruthy();
     const torn = parkedStyle("sedan");
     rig.lid = 2;
     rig.attach(torn);
-    assert.ok(torn.lidOff(), "lid 2 left the lid on");
+    expect(torn.lidOff(), "lid 2 left the lid on").toBeTruthy();
   });
 });
 
@@ -205,16 +204,16 @@ describe("given a mirror on a shut right door struck by a face that clears its b
   };
 
   it("when the face has passed the cap, then the mirror folds just until its tip clears the face (acos of half) and not onto its stop, and the striker keeps its speed", () => {
-    assert.ok(Math.acos(0.5) < MIRROR_FOLD_MAX, "acos(0.5) is past the stop: the clear branch is not the one under test");
+    expect(Math.acos(0.5), "acos(0.5) is past the stop: the clear branch is not the one under test").toBeLessThan(MIRROR_FOLD_MAX);
     const fold = strikeMirror(makeCar(), 0.5);
-    assert.ok(Math.abs(fold - Math.acos(0.5)) < 1e-9, `fold ${fold} rad, acos(0.5) ${Math.acos(0.5)} rad`);
-    assert.equal(_lane.u, 5);
+    expect(Math.abs(fold - Math.acos(0.5)), `fold ${fold} rad, acos(0.5) ${Math.acos(0.5)} rad`).toBeLessThan(1e-9);
+    expect(_lane.u).toBe(5);
   });
 
   it("when the mirror is already folded onto its stop, then the strike leaves it there", () => {
     const car = makeCar();
     car.setMirrorFold(1, -MIRROR_FOLD_MAX);
-    assert.equal(strikeMirror(car, 0.5), MIRROR_FOLD_MAX);
+    expect(strikeMirror(car, 0.5)).toBe(MIRROR_FOLD_MAX);
   });
 });
 
@@ -268,13 +267,13 @@ describe("given each lane's ram fired at the right side of a parked car of every
   for (const c of styleLanes) {
     it(`when ${c.scenario} is fired at the ${c.id}, then its head's lane meets the drawn ${c.part} by ${MEETS_M * 1000} mm or more`, () => {
       const metres = shootDrawn(c.id, c.scenario, c.kph, c.kg).overlap(partName(c.part, 1));
-      assert.ok(metres >= MEETS_M, `${c.id} ${c.scenario}: the head overlaps the drawn ${c.part} by ${metres} m`);
+      expect(metres, `${c.id} ${c.scenario}: the head overlaps the drawn ${c.part} by ${metres} m`).toBeGreaterThanOrEqual(MEETS_M);
     });
 
     it(`when ${c.scenario} is fired at the ${c.id} at ${c.kph} km/h and ${c.kg} kg, then the ${c.part} ${c.scenario === "lidPop" ? "is sprung past its latch" : "comes off"}`, () => {
       const { shot, lidLatched } = shootDrawn(c.id, c.scenario, c.kph, c.kg);
-      if (c.scenario === "lidPop") assert.ok(!lidLatched && !shot.detached.includes("trunk"), `${c.id} F: lid latched ${lidLatched}, off [${shot.detached}]`);
-      else assert.ok(shot.detached.includes(partName(c.part, 1)), `${c.id} ${c.scenario}: off [${shot.detached}]`);
+      if (c.scenario === "lidPop") expect(!lidLatched && !shot.detached.includes("trunk"), `${c.id} F: lid latched ${lidLatched}, off [${shot.detached}]`).toBeTruthy();
+      else expect(shot.detached.includes(partName(c.part, 1)), `${c.id} ${c.scenario}: off [${shot.detached}]`).toBeTruthy();
     });
 
     it(`when ${c.scenario} is fired at the ${c.id} at 6 km/h, 12 km/h and ${c.kph} km/h, then every part that comes off was met by the head`, () => {
@@ -287,7 +286,7 @@ describe("given each lane's ram fired at the right side of a parked car of every
           if (drawn.overlap(carrier) < MEETS_M) unseen.push(`${name} at ${strength.kph} km/h`);
         }
       }
-      assert.equal(unseen.join(", "), "", `${c.id} ${c.scenario}: parts off that the head never met`);
+      expect(unseen.join(", "), `${c.id} ${c.scenario}: parts off that the head never met`).toBe("");
     });
   }
 });
@@ -296,8 +295,8 @@ describe("given a monster whose drawn body rides 0.87 m over its stock heights, 
   it("when B's head runs under the door's drawn height and then at it, then the first leaves the door alone and the second tears it off", () => {
     const under = fireRam(parkedStyle("monster"), "overOpen", { kph: 30, kg: 1500, shape: { bottom: 0.3, top: 0.75 } });
     const level = fireRam(parkedStyle("monster"), "overOpen", { kph: 30, kg: 1500, shape: { bottom: 1.3, top: 1.6 } });
-    assert.equal(under.detached.join(), "", "a head under the lifted door took something off");
-    assert.ok(Math.abs(under.doorDeg - 55) < 0.5, `the door under the head moved to ${under.doorDeg}°`);
-    assert.ok(level.detached.includes("doorR"), `a head at the door's drawn height left [${level.detached}]`);
+    expect(under.detached.join(), "a head under the lifted door took something off").toBe("");
+    expect(Math.abs(under.doorDeg - 55), `the door under the head moved to ${under.doorDeg}°`).toBeLessThan(0.5);
+    expect(level.detached.includes("doorR"), `a head at the door's drawn height left [${level.detached}]`).toBeTruthy();
   });
 });

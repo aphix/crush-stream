@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { DISC_GROUND, DISC_RADIUS, FLAT_GROUND, setGround } from "../world/ground.ts";
@@ -30,7 +29,7 @@ describe("given the fleet disc's dummies, where one who falls off the rim is put
     const ragdolls = await dummies();
     const slid = ragdolls.place(new THREE.Vector3(DISC_RADIUS - 2, 0.3, 0), LYING, new THREE.Vector3(8, 0, 0), STILL, 10, 0);
     const stayed = ragdolls.place(new THREE.Vector3(0, 0.3, 0), LYING, STILL, STILL, 10, 1);
-    assert.ok(slid >= 0 && stayed >= 0 && slid !== stayed, "both dummies are out");
+    expect(slid >= 0 && stayed >= 0 && slid !== stayed, "both dummies are out").toBeTruthy();
     let lowestSeen = Infinity;
     let goneAt = -1;
     for (let f = 0; f < 4 * FRAME_HZ && goneAt < 0; f++) {
@@ -38,9 +37,9 @@ describe("given the fleet disc's dummies, where one who falls off the rim is put
       if (ragdolls.torso(slid, _torso, null)) lowestSeen = _torso.y;
       else goneAt = f;
     }
-    assert.ok(goneAt >= 0, `still out after 4 s, torso at ${lowestSeen.toFixed(2)} m`);
-    assert.ok(lowestSeen > PUT_AWAY_TORSO_Y, `put away with his torso ${lowestSeen.toFixed(2)} m down`);
-    assert.ok(ragdolls.torso(stayed, _torso, null), "the dummy on the disc is still out");
+    expect(goneAt, `still out after 4 s, torso at ${lowestSeen.toFixed(2)} m`).toBeGreaterThanOrEqual(0);
+    expect(lowestSeen, `put away with his torso ${lowestSeen.toFixed(2)} m down`).toBeGreaterThan(PUT_AWAY_TORSO_Y);
+    expect(ragdolls.torso(stayed, _torso, null), "the dummy on the disc is still out").toBeTruthy();
     ragdolls.dispose();
   });
 
@@ -57,9 +56,9 @@ describe("given the fleet disc's dummies, where one who falls off the rim is put
       if (ragdolls.frameCamera(camera, FRAME, false, -1, false, 50, OPEN) === "none") dropped = true;
       else rode++;
     }
-    assert.ok(rode > 3, `rode him ${rode} frames before he left`);
-    assert.ok(dropped, "the ride never let go of him");
-    assert.equal(ragdolls.latest(_torso), -1, "no dummy is out");
+    expect(rode, `rode him ${rode} frames before he left`).toBeGreaterThan(3);
+    expect(dropped, "the ride never let go of him").toBeTruthy();
+    expect(ragdolls.latest(_torso), "no dummy is out").toBe(-1);
     ragdolls.dispose();
   });
 });

@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { setGround } from "./ground.ts";
 import { TRACKS } from "./tracks/index.ts";
@@ -48,34 +47,34 @@ describe("given the player's car crashed in a race with a mirror torn off and ly
   it("when the reset is held again and again, then the drawn body is the one the car had before the first hold, on the first frame of each", () => {
     const { w, car, state } = crashed();
     const skin = car.skinGeometries().map((g) => Float32Array.from(g.getAttribute("position").array));
-    assert.ok(car.deform.massActive, "the fixture's crash started");
+    expect(car.deform.massActive, "the fixture's crash started").toBeTruthy();
     for (let k = 1; k <= 3; k++) {
       w.race.holdReset();
       frame(w, state);
-      assert.ok(skinDrift(skin, car) < 0.001, `hold ${k}: the drawn body drifted ${skinDrift(skin, car).toFixed(3)} m from the damaged car's`);
+      expect(skinDrift(skin, car), `hold ${k}: the drawn body drifted ${skinDrift(skin, car).toFixed(3)} m from the damaged car's`).toBeLessThan(0.001);
     }
   });
 
   it("when only a mirror is torn (no hit: no skin was ever baked) and the reset is held, then the drawn body is the whole, undented one, not collapsed by the net state's zero skin inputs", () => {
     const { w, car, state } = crashed(false);
     const skin = car.skinGeometries().map((g) => Float32Array.from(g.getAttribute("position").array));
-    assert.ok(!car.deform.massActive && car.hasLoosePart(), "the fixture's car has a part off and no crash");
+    expect(!car.deform.massActive && car.hasLoosePart(), "the fixture's car has a part off and no crash").toBeTruthy();
     w.race.holdReset();
     frame(w, state);
-    assert.ok(skinDrift(skin, car) < 0.001, `the drawn body drifted ${skinDrift(skin, car).toFixed(3)} m from the car's own`);
+    expect(skinDrift(skin, car), `the drawn body drifted ${skinDrift(skin, car).toFixed(3)} m from the car's own`).toBeLessThan(0.001);
   });
 
   it("when the reset is held again and again, then the torn mirror stays torn and where it lies, thrown no more", () => {
     const { w, car, state } = crashed();
     const torn = car["parts"].filter((p) => p.detached);
-    assert.ok(torn.length >= 1, "the fixture's crash tore a part off");
+    expect(torn.length, "the fixture's crash tore a part off").toBeGreaterThanOrEqual(1);
     const lies = torn.map((p) => p.object.position.clone());
     for (let k = 1; k <= 3; k++) {
       w.race.holdReset();
       frame(w, state);
-      assert.equal(car["parts"].filter((p) => p.detached).length, torn.length, `hold ${k}: the torn part count changed`);
-      for (const p of torn) assert.ok(p.detached, `hold ${k}: ${p.name} is attached again`);
-      for (const [i, p] of torn.entries()) assert.ok(p.object.position.distanceTo(lies[i]!) < 0.02, `hold ${k}: ${p.name} was moved ${p.object.position.distanceTo(lies[i]!).toFixed(2)} m from where it lies`);
+      expect(car["parts"].filter((p) => p.detached).length, `hold ${k}: the torn part count changed`).toBe(torn.length);
+      for (const p of torn) expect(p.detached, `hold ${k}: ${p.name} is attached again`).toBeTruthy();
+      for (const [i, p] of torn.entries()) expect(p.object.position.distanceTo(lies[i]!), `hold ${k}: ${p.name} was moved ${p.object.position.distanceTo(lies[i]!).toFixed(2)} m from where it lies`).toBeLessThan(0.02);
     }
   });
 });

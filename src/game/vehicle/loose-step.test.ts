@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { CRASH } from "../deform/physics-util.ts";
 import { GRAVITY, FINE_HZ, FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
@@ -57,7 +56,7 @@ describe("given a torn part sliding along a road", () => {
   it("when the road is raised (a dam, a bridge, a crest), then the part slides, slows and stops exactly as it does on a road at ground level", () => {
     const low = slideRaised(0, 6);
     const high = slideRaised(18, 6);
-    assert.ok(Math.abs(high.x - low.x) < 1e-6 && Math.abs(high.y - low.y) < 1e-6, `raised road: ${high.x.toFixed(2)} m along, level road: ${low.x.toFixed(2)} m`);
+    expect(Math.abs(high.x - low.x) < 1e-6 && Math.abs(high.y - low.y) < 1e-6, `raised road: ${high.x.toFixed(2)} m along, level road: ${low.x.toFixed(2)} m`).toBeTruthy();
   });
 });
 
@@ -132,9 +131,9 @@ function assertSlideStop(part: DetachPart): void {
   const [, mid, big] = part.shape.half.toArray().sort((a, b) => a - b);
   const k = (0.5 * AIR_DENSITY * PLATE_CN_BROADSIDE * 4 * mid! * big!) / partMass(part);
   const stop = Math.log(1 + (k * SLIDE_V ** 2) / (MU_BODY * GRAVITY)) / (2 * k);
-  assert.equal(planSpeed(part), 0, "plan speed after twice its stopping time");
-  assert.ok(Math.abs(travelled - stop) <= SLIDE_V * H, `slid ${travelled.toFixed(3)} m; at μ ${MU_BODY} and the wind's k ${k.toFixed(4)}/m: ${stop.toFixed(3)} m ± one step's ${(SLIDE_V * H).toFixed(3)} m`);
-  assert.ok(Math.abs(part.object.position.x - SLIDE_X) < STRAIGHT, `it slides straight along its line (${part.object.position.x - SLIDE_X} m off)`);
+  expect(planSpeed(part), "plan speed after twice its stopping time").toBe(0);
+  expect(Math.abs(travelled - stop), `slid ${travelled.toFixed(3)} m; at μ ${MU_BODY} and the wind's k ${k.toFixed(4)}/m: ${stop.toFixed(3)} m ± one step's ${(SLIDE_V * H).toFixed(3)} m`).toBeLessThanOrEqual(SLIDE_V * H);
+  expect(Math.abs(part.object.position.x - SLIDE_X), `it slides straight along its line (${part.object.position.x - SLIDE_X} m off)`).toBeLessThan(STRAIGHT);
 }
 
 describe("given a front bumper torn off a parked car, sliding along the road at 8 m/s", () => {
@@ -145,7 +144,7 @@ describe("given a front bumper torn off a parked car, sliding along the road at 
   it("when it slides past the flank of a second car parked beside it, then it stops in the distance its slide friction gives at its speed, the same as on open road", () => {
     const beside = slide(true);
     assertSlideStop(beside);
-    assert.equal(beside.object.position.z, slide(false).object.position.z, "distance beside the parked car vs on open road");
+    expect(beside.object.position.z, "distance beside the parked car vs on open road").toBe(slide(false).object.position.z);
   });
 });
 
@@ -157,14 +156,14 @@ describe("given a front bumper torn off a parked car, flying as its drawn shell"
     const { part } = lot(false);
     boxShape(part.shape, part.object);
     const s = part.shape;
-    assert.ok(!s.box, "the control: it flies as its shell's own points");
+    expect(!s.box, "the control: it flies as its shell's own points").toBe(true);
     const unpaired: number[] = [];
     for (let k = 0; k < s.count; k++) {
       const mirrored = (j: number): boolean =>
         Math.hypot(s.points[j * 3]! + s.points[k * 3]! + 2 * s.centre.x, s.points[j * 3 + 1]! - s.points[k * 3 + 1]!, s.points[j * 3 + 2]! - s.points[k * 3 + 2]!) < SAME_PLACE;
       if (!Array.from({ length: s.count }, (_, j) => j).some(mirrored)) unpaired.push(k);
     }
-    assert.deepEqual(unpaired, [], `points with no mirror image among the ${s.count}: ${unpaired.join(",")}`);
+    expect(unpaired, `points with no mirror image among the ${s.count}: ${unpaired.join(",")}`).toHaveLength(0);
   });
 });
 
@@ -183,14 +182,14 @@ describe("given a torn part whose box is as deep as it is tall because its ends 
   it("when it flies as its drawn shell, then its wind plate faces its broad face's normal (z), not its shortest box axis (y)", () => {
     const shape = newLooseShape(true);
     boxShape(shape, wrappedFace());
-    assert.ok(shape.half.y < shape.half.z, `the control: its shortest half extent is y (${shape.half.y.toFixed(3)} < ${shape.half.z.toFixed(3)})`);
-    assert.equal(shape.plate, 2, "its plate normal");
+    expect(shape.half.y, `the control: its shortest half extent is y (${shape.half.y.toFixed(3)} < ${shape.half.z.toFixed(3)})`).toBeLessThan(shape.half.z);
+    expect(shape.plate, "its plate normal").toBe(2);
   });
 
   it("when it flies as its box (a mirror's pod, the light bar), then its plate faces the box's shortest axis", () => {
     const shape = newLooseShape(false);
     boxShape(shape, wrappedFace());
-    assert.equal(shape.plate, 1, "its plate normal");
+    expect(shape.plate, "its plate normal").toBe(1);
   });
 });
 
@@ -231,12 +230,12 @@ describe("given a front bumper torn off a parked car and dropped 0.5 m onto the 
   it("when it lands, then it rests on the roof; when pushed across it at 5 m/s, then it slides off the roof's edge and comes to rest on the road", () => {
     const l = lot(true);
     const { onRoof, middle, top, restSpeed, end, endLow, roofY } = roofDrop(l, B_X, ROOF_SETTLE_S, OFF_ROOF_S);
-    assert.ok(onRoof, `its middle at x ${(middle.x - B_X).toFixed(3)} m off B's, its top ${top.toFixed(3)} m up, roof crown ${roofY.toFixed(3)} m (a point ${SKIN} m under a top stands on it)`);
-    assert.ok(restSpeed <= 2 * GRAVITY * H, `its speed resting on the roof: ${restSpeed.toFixed(4)} m/s, at most the jitter a step's gravity gives (${(2 * GRAVITY * H).toFixed(4)} m/s)`);
+    expect(onRoof, `its middle at x ${(middle.x - B_X).toFixed(3)} m off B's, its top ${top.toFixed(3)} m up, roof crown ${roofY.toFixed(3)} m (a point ${SKIN} m under a top stands on it)`).toBeTruthy();
+    expect(restSpeed, `its speed resting on the roof: ${restSpeed.toFixed(4)} m/s, at most the jitter a step's gravity gives (${(2 * GRAVITY * H).toFixed(4)} m/s)`).toBeLessThanOrEqual(2 * GRAVITY * H);
     const flank = B_X + l.cars[1]!.frame.half.x;
-    assert.ok(end.x > flank, `ended at x ${end.x.toFixed(2)}, B's flank at ${flank.toFixed(2)}`);
-    assert.ok(endLow >= -RESTS && endLow <= RESTS, `ended with its lowest point ${endLow.toFixed(3)} m over the road`);
-    assert.equal(planSpeed(l.part), 0, "plan speed on the road");
+    expect(end.x, `ended at x ${end.x.toFixed(2)}, B's flank at ${flank.toFixed(2)}`).toBeGreaterThan(flank);
+    expect(endLow >= -RESTS && endLow <= RESTS, `ended with its lowest point ${endLow.toFixed(3)} m over the road`).toBeTruthy();
+    expect(planSpeed(l.part), "plan speed on the road").toBe(0);
   });
 });
 
@@ -268,22 +267,22 @@ function stirredSteps(l: Lot, steps: number): number {
 describe("given a front bumper torn off a parked car, asleep on the road a hand's width off the flank of a second car parked beside it (within its roof's reach)", () => {
   it("when the second car stays parked, then for 2 s no slice steps the bumper (a still roof is no stir) and its pose stays as it was", () => {
     const l = besideB();
-    assert.ok(l.part.shape.asleep, "it fell asleep beside B");
+    expect(l.part.shape.asleep, "it fell asleep beside B").toBeTruthy();
     const at = l.part.object.position.clone();
     const turn = l.part.object.quaternion.clone();
     const n = stirredSteps(l, 2 * QUIET_HZ);
-    assert.ok(n === 0, `stirred in ${n} of ${2 * QUIET_HZ} steps`);
-    assert.ok(l.part.object.position.equals(at) && l.part.object.quaternion.equals(turn), `pose moved ${l.part.object.position.distanceTo(at)} m`);
+    expect(n, `stirred in ${n} of ${2 * QUIET_HZ} steps`).toBe(0);
+    expect(l.part.object.position.equals(at) && l.part.object.quaternion.equals(turn), `pose moved ${l.part.object.position.distanceTo(at)} m`).toBeTruthy();
   });
 
   it(`when the second car is pushed into it at ${PUSH_INTO} m/s, then the bumper wakes in the push's first step and is shoved at least ${SHOVED} m in a second`, () => {
     const l = besideB();
     const at = l.part.object.position.clone();
     l.cars[1]!.velocity.set(-PUSH_INTO, 0, 0);
-    assert.equal(stirredSteps(l, 1), 1, "stirred in the push's first step");
+    expect(stirredSteps(l, 1), "stirred in the push's first step").toBe(1);
     stirredSteps(l, QUIET_HZ - 1);
     const moved = l.part.object.position.distanceTo(at);
-    assert.ok(moved >= SHOVED, `shoved ${moved.toFixed(3)} m`);
+    expect(moved, `shoved ${moved.toFixed(3)} m`).toBeGreaterThanOrEqual(SHOVED);
   });
 });
 
@@ -304,7 +303,7 @@ describe("given a front bumper torn off a parked car, flying along the road at t
       l.part.shape.asleep = false;
       throwPart(l, side + FLANK_GAP + l.part.shape.half.x, 0.3, DOOR_Z, new THREE.Vector3(-FLANK_V, 0, 0), 1.5);
       const lead = -farthest(l.part, new THREE.Vector3(-1, 0, 0));
-      assert.ok(side - lead <= DOOR_FACE_SLACK, `its leading end reached x ${lead.toFixed(3)} m, ${(side - lead).toFixed(3)} m inside B's side at ${side.toFixed(3)} m`);
+      expect(side - lead, `its leading end reached x ${lead.toFixed(3)} m, ${(side - lead).toFixed(3)} m inside B's side at ${side.toFixed(3)} m`).toBeLessThanOrEqual(DOOR_FACE_SLACK);
     });
   }
 });
@@ -340,13 +339,13 @@ function sunkBumper(drive: number): { inside: number; widest: number } {
 describe("given a front bumper lying 0.2 m inside the front door's face of a second car parked beside it", () => {
   it(`when that car stays parked, then the flank puts the bumper out of its side within ${PUT_OUT_S} s, as a wall puts a part out`, () => {
     const { inside } = sunkBumper(0);
-    assert.ok(inside <= FACE_TOL, `its leading end is ${inside.toFixed(3)} m inside B's side after ${PUT_OUT_S} s`);
+    expect(inside, `its leading end is ${inside.toFixed(3)} m inside B's side after ${PUT_OUT_S} s`).toBeLessThanOrEqual(FACE_TOL);
   });
 
   it(`when that car is driven away from it at ${DRIVE_AWAY} m/s, then no step moves the bumper farther than that closing carries it with the rest lift on top: it is pushed out as the door comes, not flung over the car`, () => {
     const { widest } = sunkBumper(DRIVE_AWAY);
     const most = (DRIVE_AWAY + REST_SPEED) * H;
-    assert.ok(widest <= most * 1.05, `one step moved it ${widest.toFixed(4)} m, more than the ${most.toFixed(4)} m the closing and the rest lift carry`);
+    expect(widest, `one step moved it ${widest.toFixed(4)} m, more than the ${most.toFixed(4)} m the closing and the rest lift carry`).toBeLessThanOrEqual(most * 1.05);
   });
 });
 
@@ -371,9 +370,9 @@ describe("given a torn hood let go a metre over the road, spinning", () => {
   it("when three seconds have passed, then its lowest point rests on the road (within a centimetre) and its thin axis is up", () => {
     const hood = dropHood(H);
     const up = plateUp(hood);
-    assert.ok(up > LIES_FLAT, `its plate normal is ${up.toFixed(3)} up`);
+    expect(up, `its plate normal is ${up.toFixed(3)} up`).toBeGreaterThan(LIES_FLAT);
     const low = lowest(hood);
-    assert.ok(low >= -1e-9 && low <= RESTS, `its lowest point is ${low.toFixed(4)} m over the road`);
+    expect(low >= -1e-9 && low <= RESTS, `its lowest point is ${low.toFixed(4)} m over the road`).toBeTruthy();
   });
 
   it(`when a slab slides at 8 m/s along the road at steps of 1/${FRAME_HZ} s and of 1/${FINE_HZ} s, then the two slide as far as each other to within 5 %`, () => {
@@ -384,7 +383,7 @@ describe("given a torn hood let go a metre over the road, spinning", () => {
     };
     const coarse = far(1 / FRAME_HZ);
     const fine = far(1 / FINE_HZ);
-    assert.ok(Math.abs(coarse - fine) <= 0.05 * fine, `${coarse.toFixed(3)} m at 1/${FRAME_HZ} s, ${fine.toFixed(3)} m at 1/${FINE_HZ} s`);
+    expect(Math.abs(coarse - fine), `${coarse.toFixed(3)} m at 1/${FRAME_HZ} s, ${fine.toFixed(3)} m at 1/${FINE_HZ} s`).toBeLessThanOrEqual(0.05 * fine);
   });
 });
 
@@ -414,12 +413,12 @@ function slideToWall(wall: boolean): number {
 describe("given a torn part sliding along the road into a wall", () => {
   it("when it meets the wall at 6 m/s (the same launch with no wall slides on past the wall's face), then it stops at the wall: its far end is no more than a centimetre inside the wall's face", () => {
     const free = slideToWall(false);
-    assert.ok(free > WALL_Z + WALL_HALF_THICK * 2, `with no wall the slab's front reaches z ${free.toFixed(3)} m, past the wall's back face at ${WALL_Z + 2 * WALL_HALF_THICK} m: the launch reaches the wall`);
+    expect(free, `with no wall the slab's front reaches z ${free.toFixed(3)} m, past the wall's back face at ${WALL_Z + 2 * WALL_HALF_THICK} m: the launch reaches the wall`).toBeGreaterThan(WALL_Z + WALL_HALF_THICK * 2);
     const reach = slideToWall(true);
-    assert.ok(reach <= WALL_Z + RESTS, `its far end reached z ${reach.toFixed(3)} m, the wall's face is at ${WALL_Z} m`);
+    expect(reach, `its far end reached z ${reach.toFixed(3)} m, the wall's face is at ${WALL_Z} m`).toBeLessThanOrEqual(WALL_Z + RESTS);
     // It bounces off the face at `RESTITUTION` of its closing speed and slides back until the road's friction stops it (the road's grip, not 1, scales μ: twice the grip-1 distance is the bound).
     const rebound = (RESTITUTION * ARRIVES_AT) ** 2 / (2 * CRASH.muSlide * GRAVITY);
-    assert.ok(reach > WALL_Z - 2 * rebound, `its far end stopped at z ${reach.toFixed(3)} m, further from the wall's face (${WALL_Z} m) than a rebound slides (${rebound.toFixed(3)} m)`);
+    expect(reach, `its far end stopped at z ${reach.toFixed(3)} m, further from the wall's face (${WALL_Z} m) than a rebound slides (${rebound.toFixed(3)} m)`).toBeGreaterThan(WALL_Z - 2 * rebound);
   });
 });
 
@@ -443,7 +442,7 @@ describe("given two cars parked side by side and a bumper torn off one (loose pa
     const away = lot(true);
     const { onRoof, top, roofY } = roofDrop(onCar, B_X, 1, 2);
     roofDrop(away, 40, 1, 2);
-    assert.ok(onRoof, `the bumper rested on the roof (its top ${top.toFixed(3)} m up, crown ${roofY.toFixed(3)} m)`);
+    expect(onRoof, `the bumper rested on the roof (its top ${top.toFixed(3)} m up, crown ${roofY.toFixed(3)} m)`).toBeTruthy();
     assertSameDigest(simState(onCar.cars), simState(away.cars), "every car's sim state with the bumper on the roof vs on open road");
   });
 });
@@ -458,7 +457,7 @@ function settled(): LooseBody {
 describe("given a torn part at rest on the road", () => {
   it("when nothing is near, then it sleeps and a step leaves its pose as it was", () => {
     const part = settled();
-    assert.ok(part.shape.asleep, "it fell asleep");
+    expect(part.shape.asleep, "it fell asleep").toBeTruthy();
     const at = part.object.position.clone();
     const turn = part.object.quaternion.clone();
     // Asleep it is not asked what is under it: the road dropped 20 m away leaves it where it lay.
@@ -468,8 +467,8 @@ describe("given a torn part at rest on the road", () => {
     } finally {
       setGround(null);
     }
-    assert.ok(part.object.position.equals(at) && part.object.quaternion.equals(turn), "pose unchanged over a second");
-    assert.ok(part.shape.asleep, "still asleep");
+    expect(part.object.position.equals(at) && part.object.quaternion.equals(turn), "pose unchanged over a second").toBeTruthy();
+    expect(part.shape.asleep, "still asleep").toBeTruthy();
   });
 
   it("when a hit gives it speed, then it wakes and leaves the road", () => {
@@ -477,7 +476,7 @@ describe("given a torn part at rest on the road", () => {
     const y = part.object.position.y;
     part.velocity.set(0, 3, 0);
     stepLoose(part, H, -1);
-    assert.ok(!part.shape.asleep && part.object.position.y > y + 0.01, `woke and rose ${(part.object.position.y - y).toFixed(3)} m`);
+    expect(!part.shape.asleep && part.object.position.y > y + 0.01, `woke and rose ${(part.object.position.y - y).toFixed(3)} m`).toBeTruthy();
   });
 
   it("when a moving solid is far, then it sleeps on, and when the solid is moved onto it, then it wakes and is put out of it", () => {
@@ -489,10 +488,10 @@ describe("given a torn part at rest on the road", () => {
       const at = part.object.position.clone();
       solids.movePrism(plate, 10, 10, 0, 0, 0);
       stepLoose(part, H, -1);
-      assert.ok(part.shape.asleep, "a solid 10 m away leaves it asleep");
+      expect(part.shape.asleep, "a solid 10 m away leaves it asleep").toBeTruthy();
       solids.movePrism(plate, at.x + 0.9, at.z, 0, 0, 0);
       stepLoose(part, H, -1);
-      assert.ok(part.object.position.distanceTo(at) > 0.05, `moved ${part.object.position.distanceTo(at).toFixed(3)} m`);
+      expect(part.object.position.distanceTo(at), `moved ${part.object.position.distanceTo(at).toFixed(3)} m`).toBeGreaterThan(0.05);
     } finally {
       armSolids(null);
     }
@@ -529,14 +528,14 @@ function onPosts(rock: number, seconds: number): { sleptAt: number; low: number 
 describe("given a torn bumper laid level across two posts, one under the middle of each end (two points, its weight over the line between them)", () => {
   it("when it is left still, then it sleeps where it lies within two seconds", () => {
     const { sleptAt, low } = onPosts(0, 2);
-    assert.ok(sleptAt > 0, "it fell asleep on the posts");
-    assert.ok(Math.abs(low - POST_TOP) < RESTS, `lowest point ${low.toFixed(3)} m, the posts' top ${POST_TOP} m`);
+    expect(sleptAt, "it fell asleep on the posts").toBeGreaterThan(0);
+    expect(Math.abs(low - POST_TOP), `lowest point ${low.toFixed(3)} m, the posts' top ${POST_TOP} m`).toBeLessThan(RESTS);
   });
 
   it("when it rolls at 0.01 rad/s about the line between the posts, then it does not sleep on them: it tips off and comes to rest on the road", () => {
     const { sleptAt, low } = onPosts(ROCK, 3);
-    assert.ok(sleptAt > 0, "it fell asleep");
-    assert.ok(Math.abs(low) < RESTS, `lowest point ${low.toFixed(3)} m over the road (the posts' top ${POST_TOP} m)`);
+    expect(sleptAt, "it fell asleep").toBeGreaterThan(0);
+    expect(Math.abs(low), `lowest point ${low.toFixed(3)} m over the road (the posts' top ${POST_TOP} m)`).toBeLessThan(RESTS);
   });
 });
 
@@ -554,7 +553,7 @@ describe("given a body with unequal inertias turned to any orientation", () => {
       const want = x.clone().applyMatrix3(turn.clone().transpose()).multiply(shape.invI).applyMatrix3(turn);
       worst = Math.max(worst, invInertia(x.clone(), q, q.clone().invert(), shape.invI).distanceTo(want));
     }
-    assert.ok(worst < 1e-9, `worst miss ${worst} over 100 orientations`);
+    expect(worst, `worst miss ${worst} over 100 orientations`).toBeLessThan(1e-9);
   });
 });
 
@@ -574,18 +573,18 @@ describe("given a front bumper torn off a car with no linear velocity spinning a
   it("when it is torn off with no kick, then it leaves at ω × r about the car's centre of mass: along +x for a bumper ahead of it", () => {
     const { part, r } = tear(SPIN, new THREE.Vector3(), 0);
     const want = new THREE.Vector3(0, SPIN, 0).cross(r);
-    assert.ok(part.velocity.distanceTo(want) < 1e-9, `velocity ${part.velocity.toArray()} vs ω × r ${want.toArray()}`);
-    assert.ok(part.velocity.x > 4, `a bumper ${r.z.toFixed(2)} m ahead of the centre is flung sideways at ${part.velocity.x.toFixed(2)} m/s`);
+    expect(part.velocity.distanceTo(want), `velocity ${part.velocity.toArray()} vs ω × r ${want.toArray()}`).toBeLessThan(1e-9);
+    expect(part.velocity.x, `a bumper ${r.z.toFixed(2)} m ahead of the centre is flung sideways at ${part.velocity.x.toFixed(2)} m/s`).toBeGreaterThan(4);
   });
 
   it("when it is torn off by the crash launch, then it leaves with the car's spin on top of the tumble and ω × r on top of the launch, as against the same car at rest", () => {
     const spun = tear(SPIN, undefined, 20);
     const still = tear(0, undefined, 20);
     const turn = new THREE.Vector3(0, SPIN, 0);
-    assert.ok(spun.part.angular.distanceTo(still.part.angular.clone().add(turn)) < 1e-9, `spin ${spun.part.angular.toArray()} vs ${still.part.angular.toArray()} + ${turn.toArray()}`);
+    expect(spun.part.angular.distanceTo(still.part.angular.clone().add(turn)), `spin ${spun.part.angular.toArray()} vs ${still.part.angular.toArray()} + ${turn.toArray()}`).toBeLessThan(1e-9);
     const carried = spun.part.velocity.clone().sub(still.part.velocity);
-    assert.ok(carried.distanceTo(turn.clone().cross(spun.r)) < 0.5, `carried ${carried.toArray()} vs ω × r ${turn.clone().cross(spun.r).toArray()}`);
-    assert.ok(carried.x > 4, `carried ${carried.x.toFixed(2)} m/s sideways`);
+    expect(carried.distanceTo(turn.clone().cross(spun.r)), `carried ${carried.toArray()} vs ω × r ${turn.clone().cross(spun.r).toArray()}`).toBeLessThan(0.5);
+    expect(carried.x, `carried ${carried.x.toFixed(2)} m/s sideways`).toBeGreaterThan(4);
   });
 });
 
@@ -632,8 +631,8 @@ describe(`given a torn sheet panel lying flat on the road, sliding at ${TORN_AT}
         stepTorn(part);
         if (left === Infinity && (plateUp(part) < LIES_FLAT || lowest(part) > LIFTED)) left = t;
       }
-      assert.ok(left <= 1, `it left the flat slide (tilted past ${LIES_FLAT} or rose ${LIFTED} m) at ${left.toFixed(2)} s`);
-      assert.ok(part.velocity.length() < TORN_AT / 2, `speed at 2.6 s: ${part.velocity.length().toFixed(1)} m/s`);
+      expect(left, `it left the flat slide (tilted past ${LIES_FLAT} or rose ${LIFTED} m) at ${left.toFixed(2)} s`).toBeLessThanOrEqual(1);
+      expect(part.velocity.length(), `speed at 2.6 s: ${part.velocity.length().toFixed(1)} m/s`).toBeLessThan(TORN_AT / 2);
     });
   }
 
@@ -644,8 +643,8 @@ describe(`given a torn sheet panel lying flat on the road, sliding at ${TORN_AT}
       stepTorn(door);
       flattest = Math.min(flattest, plateUp(door));
     }
-    assert.ok(flattest >= LIES_FLAT, `its plate normal turned to ${flattest.toFixed(3)} of up`);
-    assert.ok(lowest(door) <= RESTS, `its lowest point is ${lowest(door).toFixed(3)} m over the road`);
+    expect(flattest, `its plate normal turned to ${flattest.toFixed(3)} of up`).toBeGreaterThanOrEqual(LIES_FLAT);
+    expect(lowest(door), `its lowest point is ${lowest(door).toFixed(3)} m over the road`).toBeLessThanOrEqual(RESTS);
   });
 });
 
@@ -700,8 +699,8 @@ describe("given a torn panel lying flat on the road, sliding into a 0.5 m kerb",
   for (const testCase of testCases) {
     it(`${testCase.it}, keeping at least ${KERB_KEEPS} of its speed`, () => {
       const { before, after, away } = kerbMeet(testCase.part, testCase.speed, testCase.yawDeg);
-      assert.ok(after >= KERB_KEEPS * before, `${after.toFixed(2)} m/s 0.05 s after meeting it at ${before.toFixed(2)} m/s`);
-      assert.ok(away < 0, `moving ${away.toFixed(2)} m/s along z: away from the kerb`);
+      expect(after, `${after.toFixed(2)} m/s 0.05 s after meeting it at ${before.toFixed(2)} m/s`).toBeGreaterThanOrEqual(KERB_KEEPS * before);
+      expect(away, `moving ${away.toFixed(2)} m/s along z: away from the kerb`).toBeLessThan(0);
     });
   }
 
@@ -719,6 +718,6 @@ describe("given a torn panel lying flat on the road, sliding into a 0.5 m kerb",
       }
     }
     t.annotate(rows.join("; "));
-    assert.deepEqual(dead, []);
+    expect(dead).toHaveLength(0);
   });
 });

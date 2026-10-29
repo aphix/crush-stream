@@ -1,5 +1,5 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { P_STRIDE } from "../world/surfaces.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
 import { carInState } from "./drawn-body.test-util.ts";
@@ -17,9 +17,9 @@ describe("given a crushed car whose own cage fields are refitted in place", () =
     car.deform["loadDirty"][0] = 1;
     car.deform.bakeSkin();
     // The rigid step's `loadPoints` fits the cage first and discards the answer.
-    assert.equal(car.refitCage(), true, "fixture: the refit must change the fields");
-    assert.equal(car.cage.fields, fields, "fixture: an own cage is refitted in place");
-    assert.ok(fields.heightMax > before, "fixture: the open hood must raise the height bound");
+    expect(car.refitCage(), "fixture: the refit must change the fields").toBe(true);
+    expect(car.cage.fields, "fixture: an own cage is refitted in place").toBe(fields);
+    expect(fields.heightMax, "fixture: the open hood must raise the height bound").toBeGreaterThan(before);
 
     stale.sync(0, car);
     const fresh = new CarSurfaces();
@@ -27,7 +27,7 @@ describe("given a crushed car whose own cage fields are refitted in place", () =
     const a = stale.p.subarray(0, P_STRIDE);
     const b = fresh.p.subarray(0, P_STRIDE);
     const k = a.findIndex((v, j) => !Object.is(v, b[j]));
-    assert.equal(k, -1, `the roof patch differs from a fresh sync's at parameter ${k}: ${a[k]} vs ${b[k]}`);
+    expect(k, `the roof patch differs from a fresh sync's at parameter ${k}: ${a[k]} vs ${b[k]}`).toBe(-1);
   });
 });
 
@@ -46,7 +46,8 @@ describe("given a car with a point in another car's top, closing at a crash's sp
     surfaces.begin(a);
     surfaces.strike(1);
     surfaces.commit();
-    assert.deepEqual(met, [[0, 1]], "the strike was not reported as a meeting");
-    assert.equal(a.restsOn, null, "a car it struck at a crash's speed is not what it rests on");
+    expect(met, "the strike was not reported as a meeting").toHaveLength(1);
+    expect(firstMismatch(met[0], [0, 1]), "the meeting's cars").toBeUndefined();
+    expect(a.restsOn, "a car it struck at a crash's speed is not what it rests on").toBe(null);
   });
 });

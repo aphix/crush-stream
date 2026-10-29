@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { RANGE_LIP_ART } from "../present/range-art.ts";
@@ -96,7 +95,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
   /** The mode's score of a throw's torso samples, worked out here from the model's own pieces (the first at-rest sample; the high jump's highest point up to it). */
   const expectedScore = (mode: MinigameMode, samples: readonly TorsoSample[]): number => {
     const restAt = samples.findIndex((sample) => sample.still >= REST_HOLD);
-    assert.ok(restAt >= 0, "the dummy came to rest");
+    expect(restAt, "the dummy came to rest").toBeGreaterThanOrEqual(0);
     const atRest = samples[restAt]!;
     if (mode === "highJump") {
       const peak = new HighJumpPeak();
@@ -130,20 +129,20 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
 
     it("when it runs, then it is the auto-looping jersey-barrier range on its ground with the lip before the barrier, its art (the lip's too) and studio showing, and no minigame card", () => {
       attractGround = activeGround();
-      assert.equal(engine["minigameMode"], null, "no minigame in play");
-      assert.ok(engine["barrierUp"], "the jersey barrier stands");
-      assert.ok(engine["rangeArt"]?.visible && engine["rangeArt"].getObjectByName(RANGE_LIP_ART)!.visible && activeGround().heightAt(-1, 0) > 0, "the sand, signs and lip show, and the lip is ground");
-      assert.ok(engine["studio"].length > 0 && engine["studio"].every((object) => object.visible), "the studio's disc, grid and rings show");
-      assert.ok(engine["looping"], "it loops");
-      assert.equal(hud.get().minigame, null, "no minigame card");
-      assert.ok(hud.get().range !== null, "the range readout shows");
+      expect(engine["minigameMode"], "no minigame in play").toBe(null);
+      expect(engine["barrierUp"], "the jersey barrier stands").toBeTruthy();
+      expect(engine["rangeArt"]?.visible && engine["rangeArt"].getObjectByName(RANGE_LIP_ART)!.visible && activeGround().heightAt(-1, 0) > 0, "the sand, signs and lip show, and the lip is ground").toBeTruthy();
+      expect(engine["studio"].length > 0 && engine["studio"].every((object) => object.visible), "the studio's disc, grid and rings show").toBeTruthy();
+      expect(engine["looping"], "it loops").toBeTruthy();
+      expect(hud.get().minigame, "no minigame card").toBe(null);
+      expect(hud.get().range, "the range readout shows").not.toBe(null);
     });
 
     it("when the car meets the barrier, then its driver is thrown once with no release boost", () => {
       launches.length = 0;
       for (let frame = 0; frame < 10 * FRAME_HZ && launches.length === 0; frame++) engine.advance(FRAME, { frameDt: FRAME });
-      assert.equal(launches.length, 1, "one driver thrown");
-      assert.equal(launches[0]!.releaseScale, undefined, "the sandbox's throw is unscaled");
+      expect(launches.length, "one driver thrown").toBe(1);
+      expect(launches[0]!.releaseScale, "the sandbox's throw is unscaled").toBe(undefined);
     });
   });
 
@@ -157,20 +156,20 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         engine.startMinigame(mode);
         const start = engine["minigames"].stationStart();
         const position = car().group.position;
-        assert.equal(engine["minigameMode"], mode, "the mode is on");
-        assert.ok(Math.abs(position.x - start.x) < START_TOLERANCE && Math.abs(position.z - start.z) < START_TOLERANCE, `at the start (${position.x}, ${position.z})`);
-        assert.ok(car().parked, "parked");
-        assert.equal(engine["seat"].mode, "follow", "follow, not drive");
-        assert.equal(hud.get().minigame?.mode, mode, "the card is the mode's");
-        assert.equal(hud.get().minigame?.phase, "ready", "ready");
-        assert.equal(hud.get().range, null, "the attract readout is gone");
+        expect(engine["minigameMode"], "the mode is on").toBe(mode);
+        expect(Math.abs(position.x - start.x) < START_TOLERANCE && Math.abs(position.z - start.z) < START_TOLERANCE, `at the start (${position.x}, ${position.z})`).toBeTruthy();
+        expect(car().parked, "parked").toBeTruthy();
+        expect(engine["seat"].mode, "follow, not drive").toBe("follow");
+        expect(hud.get().minigame?.mode, "the card is the mode's").toBe(mode);
+        expect(hud.get().minigame?.phase, "ready").toBe("ready");
+        expect(hud.get().range, "the attract readout is gone").toBe(null);
       });
 
       it("when three seconds pass with no input, then the car has not moved and the attempt is still ready", () => {
         const before = car().group.position.clone();
         runSeconds(engine, IDLE_WAIT_S);
-        assert.ok(car().group.position.distanceTo(before) < START_TOLERANCE, `moved ${car().group.position.distanceTo(before)} m`);
-        assert.equal(minigameHud().phase, "ready", "ready");
+        expect(car().group.position.distanceTo(before), `moved ${car().group.position.distanceTo(before)} m`).toBeLessThan(START_TOLERANCE);
+        expect(minigameHud().phase, "ready").toBe("ready");
       });
 
       it("when the camera has settled on the parked car, then the car is in frame, near the middle, within 30 m of the eye", (t) => {
@@ -182,8 +181,8 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         const inFrame = car().group.position.clone().project(camera);
         const distance = camera.position.distanceTo(car().group.position);
         t.annotate(`${mode}: car at (${inFrame.x.toFixed(2)}, ${inFrame.y.toFixed(2)}) of the frame, ${distance.toFixed(1)} m from the eye`);
-        assert.ok(inFrame.z <= 1 && Math.abs(inFrame.x) < PARKED_CAR_FRAME_LIMIT && Math.abs(inFrame.y) < PARKED_CAR_FRAME_LIMIT, `car at (${inFrame.x}, ${inFrame.y})`);
-        assert.ok(distance < PARKED_CAR_EYE_DISTANCE_LIMIT, `${distance} m from the eye`);
+        expect(inFrame.z <= 1 && Math.abs(inFrame.x) < PARKED_CAR_FRAME_LIMIT && Math.abs(inFrame.y) < PARKED_CAR_FRAME_LIMIT, `car at (${inFrame.x}, ${inFrame.y})`).toBeTruthy();
+        expect(distance, `${distance} m from the eye`).toBeLessThan(PARKED_CAR_EYE_DISTANCE_LIMIT);
       });
 
       it("when the camera has settled on the parked car, then the eye stands behind it on its line and looks down its heading", (t) => {
@@ -194,17 +193,17 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         const metresAside = Math.abs(behind.x * forward.z - behind.z * forward.x);
         const looking = camera.getWorldDirection(new THREE.Vector3()).dot(forward);
         t.annotate(`${mode}: eye ${metresBehind.toFixed(1)} m behind, ${metresAside.toFixed(1)} m aside, looking ${looking.toFixed(2)} along the heading`);
-        assert.ok(metresBehind >= PARKED_EYE_BEHIND_MIN && metresAside <= PARKED_EYE_ASIDE_MAX, `${metresBehind} m behind, ${metresAside} m aside`);
-        assert.ok(looking >= PARKED_EYE_LOOKING_MIN, `looking ${looking} along the heading`);
+        expect(metresBehind >= PARKED_EYE_BEHIND_MIN && metresAside <= PARKED_EYE_ASIDE_MAX, `${metresBehind} m behind, ${metresAside} m aside`).toBeTruthy();
+        expect(looking, `looking ${looking} along the heading`).toBeGreaterThanOrEqual(PARKED_EYE_LOOKING_MIN);
       });
 
       it("when the throttle is pressed, then the seat takes the wheel, the car drives off and the attempt is running", () => {
         const before = car().group.position.clone();
         engine["keys"].add(THROTTLE_KEY);
         runSeconds(engine, 2);
-        assert.equal(engine["seat"].mode, "drive", "driving");
-        assert.ok(car().group.position.distanceTo(before) > 5, `moved ${car().group.position.distanceTo(before)} m`);
-        assert.equal(minigameHud().phase, "running", "running");
+        expect(engine["seat"].mode, "driving").toBe("drive");
+        expect(car().group.position.distanceTo(before), `moved ${car().group.position.distanceTo(before)} m`).toBeGreaterThan(5);
+        expect(minigameHud().phase, "running").toBe("running");
         releaseThrottle();
       });
 
@@ -212,24 +211,24 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         const attemptBefore = minigameHud().attempt;
         engine.resetMinigameRun();
         const start = engine["minigames"].stationStart();
-        assert.ok(Math.abs(car().group.position.x - start.x) < START_TOLERANCE, "back at the start");
-        assert.ok(car().parked, "parked");
-        assert.equal(minigameHud().phase, "ready", "ready");
-        assert.equal(minigameHud().attempt, attemptBefore, "no attempt used");
+        expect(Math.abs(car().group.position.x - start.x), "back at the start").toBeLessThan(START_TOLERANCE);
+        expect(car().parked, "parked").toBeTruthy();
+        expect(minigameHud().phase, "ready").toBe("ready");
+        expect(minigameHud().attempt, "no attempt used").toBe(attemptBefore);
       });
 
       it("when the player drives to the lip, then one driver is thrown with this mode's boost and the throw scores what the model reads from the dummy's torso", () => {
         launches.length = 0;
         samples = throwAndRead(mode);
-        assert.equal(launches.length, 1, "exactly one throw");
+        expect(launches.length, "exactly one throw").toBe(1);
         const boost = launches[0]!.releaseScale!;
         const expectedBoost = mode === "longJump" ? bailRelease(THROW_BOOST.longJump, 0) : THROW_BOOST[mode];
-        assert.equal(boost.forward, expectedBoost.forward, "the mode's forward");
-        assert.equal(boost.upward, expectedBoost.upward, "the mode's upward");
-        assert.equal(boost.elevation, expectedBoost.elevation, "the mode's elevation");
+        expect(boost.forward, "the mode's forward").toBe(expectedBoost.forward);
+        expect(boost.upward, "the mode's upward").toBe(expectedBoost.upward);
+        expect(boost.elevation, "the mode's elevation").toBe(expectedBoost.elevation);
         scoredHud = minigameHud();
-        assert.equal(scoredHud.phase, "scored", "scored");
-        assert.equal(scoredHud.lastScore, expectedScore(mode, samples), "the score");
+        expect(scoredHud.phase, "scored").toBe("scored");
+        expect(scoredHud.lastScore, "the score").toBe(expectedScore(mode, samples));
       });
 
       it("when the best was stored, then a new session on the same storage reads it as this car's and the overall best", () => {
@@ -239,13 +238,13 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         const recorded = scoredHud.throwsPerSet === null ? scoredHud.lastScore! : scoredHud.setComplete ? scoredHud.setTotal : 0;
         const score = recorded;
         if (score > 0) {
-          assert.equal(fresh.hud().best.thisCar, score, "this car's best");
-          assert.equal(fresh.hud().best.overall, score, "the overall best");
+          expect(fresh.hud().best.thisCar, "this car's best").toBe(score);
+          expect(fresh.hud().best.overall, "the overall best").toBe(score);
         } else {
-          assert.equal(fresh.hud().best.thisCar, null, "a score of 0 is no best");
+          expect(fresh.hud().best.thisCar, "a score of 0 is no best").toBe(null);
         }
-        assert.equal(scoredHud.best.thisCar, fresh.hud().best.thisCar, "the engine's card shows this car's best");
-        assert.equal(scoredHud.best.overall, fresh.hud().best.overall, "the engine's card shows the overall best");
+        expect(scoredHud.best.thisCar, "the engine's card shows this car's best").toBe(fresh.hud().best.thisCar);
+        expect(scoredHud.best.overall, "the engine's card shows the overall best").toBe(fresh.hud().best.overall);
       });
 
       it(`when ${HOLD_CHECK_S} s pass after the throw, then the dummy is alive, the camera still rides him, and nothing reset: no timer, no loop`, () => {
@@ -253,22 +252,22 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         const before = JSON.stringify(minigameHud());
         runSeconds(engine, HOLD_CHECK_S);
         const torso = new THREE.Vector3();
-        assert.ok(engine["ragdolls"].latest(torso) >= 0, "the dummy is still out");
-        assert.ok(engine["ragdolls"].rideAlong, "the ride camera still follows him");
-        assert.equal(engine["clearGen"](), generation, "the scene was not cleared");
-        assert.equal(JSON.stringify(minigameHud()), before, "the session is unchanged");
-        assert.ok(engine["camera"].position.distanceTo(torso) < 60, `the camera is ${engine["camera"].position.distanceTo(torso)} m from him`);
+        expect(engine["ragdolls"].latest(torso), "the dummy is still out").toBeGreaterThanOrEqual(0);
+        expect(engine["ragdolls"].rideAlong, "the ride camera still follows him").toBeTruthy();
+        expect(engine["clearGen"](), "the scene was not cleared").toBe(generation);
+        expect(JSON.stringify(minigameHud()), "the session is unchanged").toBe(before);
+        expect(engine["camera"].position.distanceTo(torso), `the camera is ${engine["camera"].position.distanceTo(torso)} m from him`).toBeLessThan(60);
       });
 
       it("when Retry is pressed, then the dummy is released, the car is back at the start parked, and the next attempt is ready", () => {
         const attemptBefore = minigameHud().attempt;
         engine.retryMinigame();
         const start = engine["minigames"].stationStart();
-        assert.ok(engine["ragdolls"].latest(new THREE.Vector3()) < 0, "no dummy out");
-        assert.ok(Math.abs(car().group.position.x - start.x) < START_TOLERANCE, "at the start");
-        assert.ok(car().parked, "parked");
-        assert.equal(minigameHud().phase, "ready", "ready");
-        assert.equal(minigameHud().attempt, attemptBefore + 1, "the next attempt");
+        expect(engine["ragdolls"].latest(new THREE.Vector3()), "no dummy out").toBeLessThan(0);
+        expect(Math.abs(car().group.position.x - start.x), "at the start").toBeLessThan(START_TOLERANCE);
+        expect(car().parked, "parked").toBeTruthy();
+        expect(minigameHud().phase, "ready").toBe("ready");
+        expect(minigameHud().attempt, "the next attempt").toBe(attemptBefore + 1);
       });
 
       if (mode === "highJump") {
@@ -276,11 +275,11 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
           const poses = new Float32Array(BOX_COUNT * BOX_POSE_FLOATS);
           const count = engine["ragdolls"].copyBoxPoses(poses);
           const placements = engine["minigames"]["boxPlacements"].highJump!;
-          assert.equal(count, placements.length, "box count");
+          expect(count, "box count").toBe(placements.length);
           for (let box = 0; box < count; box++) {
             const placement = placements[box]!;
             const at = box * BOX_POSE_FLOATS;
-            assert.ok(Math.hypot(poses[at]! - placement.x, poses[at + 1]! - placement.y, poses[at + 2]! - placement.z) < 0.01, `box ${box} at its place`);
+            expect(Math.hypot(poses[at]! - placement.x, poses[at + 1]! - placement.y, poses[at + 2]! - placement.z), `box ${box} at its place`).toBeLessThan(0.01);
           }
         });
       }
@@ -297,48 +296,48 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       it(testCase.it, () => {
         engine.startMinigame(testCase.mode);
         const art = engine["minigames"]["art"]!;
-        assert.equal(activeGround(), engine["minigames"].groundInPlay, "the minigame ground is the world's ground");
-        assert.notEqual(activeGround(), attractGround, "not the flat attract ground");
-        assert.equal(engine["barrierUp"], testCase.barrier, "barrier up");
-        assert.equal(engine["barrier"].group.visible, testCase.barrier, "barrier drawn");
-        assert.ok(engine["rangeArt"]!.visible === testCase.rangeArt && !engine["rangeArt"]!.getObjectByName(RANGE_LIP_ART)!.visible, "range art, never the lip");
-        assert.ok(engine["studio"].every((object) => !object.visible), "the studio is hidden");
-        assert.ok(art.group.visible, "the minigame art shows");
-        for (const mode of MINIGAME_MODES) assert.equal(art["stations"][mode].visible, mode === testCase.mode, `${mode}'s station art`);
+        expect(activeGround(), "the minigame ground is the world's ground").toBe(engine["minigames"].groundInPlay);
+        expect(activeGround(), "not the flat attract ground").not.toBe(attractGround);
+        expect(engine["barrierUp"], "barrier up").toBe(testCase.barrier);
+        expect(engine["barrier"].group.visible, "barrier drawn").toBe(testCase.barrier);
+        expect(engine["rangeArt"]!.visible === testCase.rangeArt && !engine["rangeArt"]!.getObjectByName(RANGE_LIP_ART)!.visible, "range art, never the lip").toBeTruthy();
+        expect(engine["studio"].every((object) => !object.visible), "the studio is hidden").toBeTruthy();
+        expect(art.group.visible, "the minigame art shows").toBeTruthy();
+        for (const mode of MINIGAME_MODES) expect(art["stations"][mode].visible, `${mode}'s station art`).toBe(mode === testCase.mode);
       });
     }
 
     it("when another mode is picked after a throw, then the dummy is released and the car stands at the new station's start", () => {
       engine.startMinigame("ringFling");
       throwAndRead("ringFling");
-      assert.ok(engine["ragdolls"].latest(new THREE.Vector3()) >= 0, "the dummy lies out");
+      expect(engine["ragdolls"].latest(new THREE.Vector3()), "the dummy lies out").toBeGreaterThanOrEqual(0);
       engine.startMinigame("longJump");
       const start = engine["minigames"].stationStart();
-      assert.ok(engine["ragdolls"].latest(new THREE.Vector3()) < 0, "the dummy is released");
-      assert.ok(Math.abs(engine["carA"].group.position.x - start.x) < START_TOLERANCE, "at the long jump's start");
-      assert.equal(minigameHud().mode, "longJump", "the card follows");
-      assert.equal(minigameHud().attempt, 1, "a fresh first attempt");
+      expect(engine["ragdolls"].latest(new THREE.Vector3()), "the dummy is released").toBeLessThan(0);
+      expect(Math.abs(engine["carA"].group.position.x - start.x), "at the long jump's start").toBeLessThan(START_TOLERANCE);
+      expect(minigameHud().mode, "the card follows").toBe("longJump");
+      expect(minigameHud().attempt, "a fresh first attempt").toBe(1);
     });
 
     it("when the Ring Fling set length is changed, then the card shows it, the set starts again at the start, and a later pick keeps it", () => {
       engine.startMinigame("ringFling");
       engine.setMinigameThrowsPerSet(3);
-      assert.equal(minigameHud().throwsPerSet, 3, "three throws");
-      assert.equal(minigameHud().attempt, 1, "the set restarted");
-      assert.equal(minigameHud().phase, "ready", "ready");
+      expect(minigameHud().throwsPerSet, "three throws").toBe(3);
+      expect(minigameHud().attempt, "the set restarted").toBe(1);
+      expect(minigameHud().phase, "ready").toBe("ready");
       engine.startMinigame("longJump");
       engine.startMinigame("ringFling");
-      assert.equal(minigameHud().throwsPerSet, 3, "kept");
+      expect(minigameHud().throwsPerSet, "kept").toBe(3);
     });
 
     it("when the free camera flies in a minigame, then its reach is the stations' footprint, not the fleet disc", () => {
       const bounds = engine["minigames"].bounds()!;
       engine["flyFree"](FRAME);
       const extent = engine["view"].free.extent;
-      assert.equal(extent.radius, Math.hypot(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) / 2, "half the footprint's diagonal");
-      assert.ok(extent.radius > DISC_RADIUS, "wider than the disc");
-      assert.equal(extent.x, (bounds.minX + bounds.maxX) / 2, "centre x");
-      assert.equal(extent.z, (bounds.minZ + bounds.maxZ) / 2, "centre z");
+      expect(extent.radius, "half the footprint's diagonal").toBe(Math.hypot(bounds.maxX - bounds.minX, bounds.maxZ - bounds.minZ) / 2);
+      expect(extent.radius, "wider than the disc").toBeGreaterThan(DISC_RADIUS);
+      expect(extent.x, "centre x").toBe((bounds.minX + bounds.maxX) / 2);
+      expect(extent.z, "centre z").toBe((bounds.minZ + bounds.maxZ) / 2);
     });
   });
 
@@ -349,31 +348,31 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       seatModeBefore = engine["seat"].mode;
       throwAndRead("highJump");
       engine.exitMinigame();
-      assert.equal(engine["minigameMode"], null, "no minigame");
-      assert.equal(activeGround(), attractGround, "the flat attract ground");
-      assert.ok(engine["barrierUp"] && engine["barrier"].group.visible, "the barrier stands");
-      assert.ok(engine["rangeArt"]!.visible, "the range's art shows");
-      assert.ok(engine["studio"].every((object) => object.visible), "the studio shows");
-      assert.ok(!engine["minigames"]["art"]!.group.visible, "the minigame art is hidden");
-      assert.equal(hud.get().minigame, null, "no minigame card");
-      assert.ok(hud.get().range !== null, "the attract readout is back");
-      assert.ok(engine["ragdolls"].latest(new THREE.Vector3()) < 0, "the dummy is gone");
-      assert.notEqual(seatModeBefore, "global", "the minigame had the seat following");
-      assert.equal(engine["seat"].mode, "global", "the seat is let go");
+      expect(engine["minigameMode"], "no minigame").toBe(null);
+      expect(activeGround(), "the flat attract ground").toBe(attractGround);
+      expect(engine["barrierUp"] && engine["barrier"].group.visible, "the barrier stands").toBeTruthy();
+      expect(engine["rangeArt"]!.visible, "the range's art shows").toBeTruthy();
+      expect(engine["studio"].every((object) => object.visible), "the studio shows").toBeTruthy();
+      expect(!engine["minigames"]["art"]!.group.visible, "the minigame art is hidden").toBe(true);
+      expect(hud.get().minigame, "no minigame card").toBe(null);
+      expect(hud.get().range, "the attract readout is back").not.toBe(null);
+      expect(engine["ragdolls"].latest(new THREE.Vector3()), "the dummy is gone").toBeLessThan(0);
+      expect(seatModeBefore, "the minigame had the seat following").not.toBe("global");
+      expect(engine["seat"].mode, "the seat is let go").toBe("global");
     });
 
     it("then the attract loop runs again: its car is thrown with no boost and the scene loops", () => {
       launches.length = 0;
       const generation = engine["clearGen"]();
       runSeconds(engine, 30);
-      assert.ok(launches.length >= 1, "a driver was thrown");
-      for (const launch of launches) assert.equal(launch.releaseScale, undefined, "no boost");
-      assert.notEqual(engine["clearGen"](), generation, "the loop reset the scene");
+      expect(launches.length, "a driver was thrown").toBeGreaterThanOrEqual(1);
+      for (const launch of launches) expect(launch.releaseScale, "no boost").toBe(undefined);
+      expect(engine["clearGen"](), "the loop reset the scene").not.toBe(generation);
     });
 
     it("then the free camera's reach is the fleet disc again", () => {
       engine["flyFree"](FRAME);
-      assert.equal(engine["view"].free.extent.radius, DISC_RADIUS, "the disc");
+      expect(engine["view"].free.extent.radius, "the disc").toBe(DISC_RADIUS);
     });
   });
 
@@ -383,31 +382,31 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       engine.startMinigame("highJump");
       throwAndRead("highJump");
       engine["setScene"]("fleet");
-      assert.equal(engine["minigames"].mode, null, "the minigame ended");
-      assert.ok(!engine["minigames"]["art"]!.group.visible, "the art is hidden");
-      assert.notEqual(activeGround(), engine["minigames"]["ground"], "not the minigame ground");
-      assert.ok(engine["studio"].every((object) => object.visible), "the studio shows");
-      assert.ok(engine["ragdolls"].latest(new THREE.Vector3()) < 0, "the dummy is released");
-      assert.equal(hud.get().minigame, null, "no minigame card");
+      expect(engine["minigames"].mode, "the minigame ended").toBe(null);
+      expect(!engine["minigames"]["art"]!.group.visible, "the art is hidden").toBe(true);
+      expect(activeGround(), "not the minigame ground").not.toBe(engine["minigames"]["ground"]);
+      expect(engine["studio"].every((object) => object.visible), "the studio shows").toBeTruthy();
+      expect(engine["ragdolls"].latest(new THREE.Vector3()), "the dummy is released").toBeLessThan(0);
+      expect(hud.get().minigame, "no minigame card").toBe(null);
     });
 
     it("then returning to the Range is the attract range, not the minigame", () => {
       engine["setScene"]("range");
-      assert.equal(engine["minigameMode"], null, "no minigame");
-      assert.equal(activeGround(), attractGround, "the flat ground");
-      assert.ok(engine["barrierUp"], "the barrier stands");
+      expect(engine["minigameMode"], "no minigame").toBe(null);
+      expect(activeGround(), "the flat ground").toBe(attractGround);
+      expect(engine["barrierUp"], "the barrier stands").toBeTruthy();
     });
   });
 
   describe("given a minigame with a scored sedan best, when the player picks another car", () => {
     it("then the card shows the new car's own best (none yet) next to the overall best, and the attempt starts again", () => {
       engine.startMinigame("longJump");
-      assert.ok(minigameHud().best.overall !== null, "a long jump best exists from the sedan's throw");
+      expect(minigameHud().best.overall, "a long jump best exists from the sedan's throw").not.toBe(null);
       engine.setPlayerCar("monster");
-      assert.equal(minigameHud().best.thisCar, null, "the monster has no best");
-      assert.ok(minigameHud().best.overall !== null, "the overall best is kept");
-      assert.equal(minigameHud().phase, "ready", "ready");
-      assert.equal(engine["minigameMode"], "longJump", "still in the minigame");
+      expect(minigameHud().best.thisCar, "the monster has no best").toBe(null);
+      expect(minigameHud().best.overall, "the overall best is kept").not.toBe(null);
+      expect(minigameHud().phase, "ready").toBe("ready");
+      expect(engine["minigameMode"], "still in the minigame").toBe("longJump");
     });
   });
 
@@ -417,7 +416,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         it("when a monster holds the throttle to the barrier and presses no bail, then it flies the barrier and lands past it with its driver in: nobody is thrown, the bail meets no hit, and the attempt ends as a no throw within the rest hold of its settling", () => {
           engine.setPlayerCar("monster");
           engine.startMinigame("longJump");
-          assert.equal(minigameHud().phase, "ready", "ready");
+          expect(minigameHud().phase, "ready").toBe("ready");
           launches.length = 0;
           engine["keys"].add(THROTTLE_KEY);
           runSeconds(engine, LONG_JUMP_PAST_S);
@@ -429,27 +428,27 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
             restS = engine["carA"].moving ? 0 : restS + FRAME;
           }
           const card = minigameHud();
-          assert.equal(launches.length, 0, "nobody thrown");
-          assert.equal(engine["minigames"]["bail"]["hitAt"], null, "the bail met no hit");
-          assert.ok(x > BARRIER_HALF.x, `the monster stands at local x ${x.toFixed(1)} m, not past the barrier`);
-          assert.equal(card.phase, "scored", "the attempt ended");
-          assert.equal(card.noThrow, true, "as a no throw");
-          assert.ok(restS <= REST_HOLD + 2 * FRAME, `it scored ${restS.toFixed(2)} s after the monster settled, not within the rest hold`);
+          expect(launches.length, "nobody thrown").toBe(0);
+          expect(engine["minigames"]["bail"]["hitAt"], "the bail met no hit").toBe(null);
+          expect(x, `the monster stands at local x ${x.toFixed(1)} m, not past the barrier`).toBeGreaterThan(BARRIER_HALF.x);
+          expect(card.phase, "the attempt ended").toBe("scored");
+          expect(card.noThrow, "as a no throw").toBe(true);
+          expect(restS, `it scored ${restS.toFixed(2)} s after the monster settled, not within the rest hold`).toBeLessThanOrEqual(REST_HOLD + 2 * FRAME);
         });
         continue;
       }
       it(`when a ${driverCar.id} holds the throttle to the barrier and presses no bail, then its driver is thrown exactly once and the throw scores the dummy's rest distance, mid-field`, (t) => {
         engine.setPlayerCar(driverCar.id);
         engine.startMinigame("longJump");
-        assert.equal(minigameHud().phase, "ready", "ready");
+        expect(minigameHud().phase, "ready").toBe("ready");
         launches.length = 0;
         const samples = throwAndRead("longJump");
-        assert.equal(launches.length, 1, "exactly one throw");
-        assert.equal(minigameHud().phase, "scored", "scored");
+        expect(launches.length, "exactly one throw").toBe(1);
+        expect(minigameHud().phase, "scored").toBe("scored");
         t.annotate(`${driverCar.id}: scored ${minigameHud().lastScore!.toFixed(1)} m`);
-        assert.equal(minigameHud().lastScore, expectedScore("longJump", samples), "the score is the torso's x at rest");
-        assert.ok(minigameHud().lastScore! > LONG_JUMP_NO_BAIL_MINIMUM, `he rested at ${minigameHud().lastScore} m, not past ${LONG_JUMP_NO_BAIL_MINIMUM} m`);
-        assert.ok(minigameHud().lastScore! < LONG_JUMP_NO_BAIL_MAXIMUM, `he rested at ${minigameHud().lastScore} m, past ${LONG_JUMP_NO_BAIL_MAXIMUM} m`);
+        expect(minigameHud().lastScore, "the score is the torso's x at rest").toBe(expectedScore("longJump", samples));
+        expect(minigameHud().lastScore!, `he rested at ${minigameHud().lastScore} m, not past ${LONG_JUMP_NO_BAIL_MINIMUM} m`).toBeGreaterThan(LONG_JUMP_NO_BAIL_MINIMUM);
+        expect(minigameHud().lastScore!, `he rested at ${minigameHud().lastScore} m, past ${LONG_JUMP_NO_BAIL_MAXIMUM} m`).toBeLessThan(LONG_JUMP_NO_BAIL_MAXIMUM);
       });
     }
   });
@@ -492,8 +491,8 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         }
         releaseThrottle();
         ragdolls.launch = spy;
-        assert.ok(framesSeen > 100, `${framesSeen} frames of flight`);
-        assert.equal(framesOut, 0, `${framesOut} frames out of ${framesSeen}, worst ${worstOffCentre} half-heights off centre; first: ${firstOut}`);
+        expect(framesSeen, `${framesSeen} frames of flight`).toBeGreaterThan(100);
+        expect(framesOut, `${framesOut} frames out of ${framesSeen}, worst ${worstOffCentre} half-heights off centre; first: ${firstOut}`).toBe(0);
       });
     }
   });
@@ -511,15 +510,15 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         engine.setPlayerCar(testCase.carId);
         engine.startMinigame(testCase.mode);
         engine["view"]["onWheel"](Object.assign(new Event("wheel"), { deltaY: WHEEL_STEP, preventDefault() {} }) as WheelEvent);
-        assert.ok(engine["view"].userFramed, "the wheel framed the view");
+        expect(engine["view"].userFramed, "the wheel framed the view").toBeTruthy();
         const torso = new THREE.Vector3();
         engine["keys"].add(THROTTLE_KEY);
         for (let frame = 0; frame < THROW_TIMEOUT_S * FRAME_HZ && engine["ragdolls"].latest(torso) < 0; frame++) engine.advance(FRAME, { frameDt: FRAME });
         runSeconds(engine, RIDE_SETTLE_S);
         engine["ragdolls"].latest(torso);
         releaseThrottle();
-        assert.ok(engine["ragdolls"].rideAlong, "the ride camera follows him");
-        assert.ok(engine["camera"].position.distanceTo(torso) < 60, `the eye is ${engine["camera"].position.distanceTo(torso)} m from him`);
+        expect(engine["ragdolls"].rideAlong, "the ride camera follows him").toBeTruthy();
+        expect(engine["camera"].position.distanceTo(torso), `the eye is ${engine["camera"].position.distanceTo(torso)} m from him`).toBeLessThan(60);
       });
     }
   });
@@ -532,10 +531,10 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         engine.startMinigame(testCase.mode);
         launches.length = 0;
         const samples = throwAndRead(testCase.mode);
-        assert.equal(launches.length, 1, "exactly one throw");
-        assert.equal(launches[0]!.releaseScale, THROW_BOOST[testCase.mode], "the mode's boost");
-        assert.ok(samples.length > 0, "he flew");
-        assert.equal(minigameHud().phase, "scored", "scored");
+        expect(launches.length, "exactly one throw").toBe(1);
+        expect(launches[0]!.releaseScale, "the mode's boost").toBe(THROW_BOOST[testCase.mode]);
+        expect(samples.length, "he flew").toBeGreaterThan(0);
+        expect(minigameHud().phase, "scored").toBe("scored");
       });
     }
   });
@@ -564,9 +563,9 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         releaseThrottle();
         ragdolls.frameCamera = original;
         engine["looping"] = true;
-        assert.ok(ragdolls.latest(new THREE.Vector3()) >= 0, "a dummy is out");
-        assert.ok(seen.length > 0, "the camera framed him");
-        for (const lead of seen) assert.equal(lead, testCase.expectedLead, "the lead passed");
+        expect(ragdolls.latest(new THREE.Vector3()), "a dummy is out").toBeGreaterThanOrEqual(0);
+        expect(seen.length, "the camera framed him").toBeGreaterThan(0);
+        for (const lead of seen) expect(lead, "the lead passed").toBe(testCase.expectedLead);
       });
     }
   });
@@ -632,10 +631,10 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       it(`when a ${driverCar.id} taps the boost key on the hit, then the bail is perfect and he rests at least ${PERFECT_OVER_NONE_M} m past the same run with no press`, () => {
         const none = baseline(driverCar.id);
         const perfect = perfectRun(driverCar.id);
-        assert.equal(none.verdict.kind, "none", "no press is no bail");
-        assert.equal(perfect.verdict.kind, "perfect", `${driverCar.id}'s press at ${perfect.verdict.offsetSeconds} s from the hit`);
-        assert.ok(Math.abs(perfect.hitRelative - none.hitRelative) < PRESS_TOLERANCE_S, `the barrier was reached ${perfect.hitRelative - none.hitRelative} s apart`);
-        assert.ok(perfect.score - none.score >= PERFECT_OVER_NONE_M, `${driverCar.id}: perfect ${perfect.score.toFixed(1)} m against none ${none.score.toFixed(1)} m`);
+        expect(none.verdict.kind, "no press is no bail").toBe("none");
+        expect(perfect.verdict.kind, `${driverCar.id}'s press at ${perfect.verdict.offsetSeconds} s from the hit`).toBe("perfect");
+        expect(Math.abs(perfect.hitRelative - none.hitRelative), `the barrier was reached ${perfect.hitRelative - none.hitRelative} s apart`).toBeLessThan(PRESS_TOLERANCE_S);
+        expect(perfect.score - none.score, `${driverCar.id}: perfect ${perfect.score.toFixed(1)} m against none ${none.score.toFixed(1)} m`).toBeGreaterThanOrEqual(PERFECT_OVER_NONE_M);
       });
     }
 
@@ -649,10 +648,10 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
           const none = baseline(carId);
           const perfect = perfectRun(carId);
           const run = bailRun(carId, none.hitRelative + testCase.offset);
-          assert.equal(run.verdict.kind, testCase.expectedKind, `kind at ${run.verdict.offsetSeconds} s`);
-          assert.ok(Math.abs(run.verdict.offsetSeconds! - testCase.offset) < PRESS_TOLERANCE_S, `offset ${run.verdict.offsetSeconds} against ${testCase.offset}`);
-          assert.ok(run.score > none.score + FADE_MARGIN_M, `${run.score.toFixed(1)} m is not past no press ${none.score.toFixed(1)} m`);
-          assert.ok(run.score < perfect.score - FADE_MARGIN_M, `${run.score.toFixed(1)} m is not short of perfect ${perfect.score.toFixed(1)} m`);
+          expect(run.verdict.kind, `kind at ${run.verdict.offsetSeconds} s`).toBe(testCase.expectedKind);
+          expect(Math.abs(run.verdict.offsetSeconds! - testCase.offset), `offset ${run.verdict.offsetSeconds} against ${testCase.offset}`).toBeLessThan(PRESS_TOLERANCE_S);
+          expect(run.score, `${run.score.toFixed(1)} m is not past no press ${none.score.toFixed(1)} m`).toBeGreaterThan(none.score + FADE_MARGIN_M);
+          expect(run.score, `${run.score.toFixed(1)} m is not short of perfect ${perfect.score.toFixed(1)} m`).toBeLessThan(perfect.score - FADE_MARGIN_M);
         });
       }
     }
@@ -660,15 +659,15 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     it("when a sedan taps the boost key far too early, then the bail is wasted: too early, and he rests where a no-press run does", () => {
       const none = baseline("sedan");
       const wasted = bailRun("sedan", none.hitRelative + WASTED_EARLY_S);
-      assert.equal(wasted.verdict.kind, "tooEarly", "kind");
-      assert.ok(Math.abs(wasted.score - none.score) < WASTED_SCATTER_M, `wasted ${wasted.score.toFixed(1)} m against none ${none.score.toFixed(1)} m`);
+      expect(wasted.verdict.kind, "kind").toBe("tooEarly");
+      expect(Math.abs(wasted.score - none.score), `wasted ${wasted.score.toFixed(1)} m against none ${none.score.toFixed(1)} m`).toBeLessThan(WASTED_SCATTER_M);
     });
 
     it("when a sedan taps the boost key after the throw has gone, then the bail is too late and the throw was the no-press one", () => {
       const none = baseline("sedan");
       const late = bailRun("sedan", none.hitRelative + AFTER_THE_THROW_S);
-      assert.equal(late.verdict.kind, "tooLate", "kind");
-      assert.ok(Math.abs(late.score - none.score) < 1, `late ${late.score.toFixed(1)} m against none ${none.score.toFixed(1)} m`);
+      expect(late.verdict.kind, "kind").toBe("tooLate");
+      expect(Math.abs(late.score - none.score), `late ${late.score.toFixed(1)} m against none ${none.score.toFixed(1)} m`).toBeLessThan(1);
     });
 
     it("when the boost key is held on the parked car before the throttle, then it is no press and the bail is still open", () => {
@@ -677,8 +676,8 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       engine["keys"].add(BOOST_KEY);
       runSeconds(engine, 0.5);
       engine["keys"].delete(BOOST_KEY);
-      assert.equal(minigameHud().phase, "ready", "still ready");
-      assert.equal(minigameHud().bail!.pressed, false, "not pressed");
+      expect(minigameHud().phase, "still ready").toBe("ready");
+      expect(minigameHud().bail!.pressed, "not pressed").toBe(false);
     });
 
     it(`when the boost key and the throttle are held for ${BOOST_HOLD_S} s, then the long jump's car never boosts and the meter is not drained, and the high jump's car does`, () => {
@@ -696,10 +695,10 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       };
       const longJump = holdBoost("longJump");
       const highJump = holdBoost("highJump");
-      assert.equal(longJump.boosting, 0, "the long jump car's boost thrust");
-      assert.equal(longJump.meter, 1, "the long jump's meter is full");
-      assert.equal(highJump.boosting, 1, "the high jump car's boost thrust");
-      assert.ok(highJump.meter < 1, `the high jump's meter drained to ${highJump.meter}`);
+      expect(longJump.boosting, "the long jump car's boost thrust").toBe(0);
+      expect(longJump.meter, "the long jump's meter is full").toBe(1);
+      expect(highJump.boosting, "the high jump car's boost thrust").toBe(1);
+      expect(highJump.meter, `the high jump's meter drained to ${highJump.meter}`).toBeLessThan(1);
     });
 
     /** What one long jump did to the crash clock: every frame's time scale from the hit to the throw's release, the frames that took, the lowest scale before the hit and after the release, and the bail's verdict. */
@@ -748,11 +747,11 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     for (const testCase of cases) {
       it(`when the throttle is ${testCase.it} and no bail is pressed, then the clock runs at 1x from the start to the release, the throw goes at the window's end in presented time, and the slow-mo comes after it`, () => {
         const run = clockRun(testCase.liftAtX, null);
-        assert.equal(run.lowestScaleBeforeHit, 1, "the approach is at 1x");
-        assert.ok(run.scalesHitToRelease.length > 0, "the barrier was hit");
-        assert.equal(Math.min(...run.scalesHitToRelease), 1, `the lowest scale between the hit and the release, over ${run.scalesHitToRelease.length} frames`);
-        assert.ok(Math.abs(run.framesHitToRelease - WINDOW_FRAMES) <= FRAME_SLACK, `${run.framesHitToRelease} presented frames from the hit to the release, not ${WINDOW_FRAMES}`);
-        assert.ok(run.lowestScaleAfterRelease < SLOW_ENOUGH, `the slow-mo after the release reached only ${run.lowestScaleAfterRelease}`);
+        expect(run.lowestScaleBeforeHit, "the approach is at 1x").toBe(1);
+        expect(run.scalesHitToRelease.length, "the barrier was hit").toBeGreaterThan(0);
+        expect(Math.min(...run.scalesHitToRelease), `the lowest scale between the hit and the release, over ${run.scalesHitToRelease.length} frames`).toBe(1);
+        expect(Math.abs(run.framesHitToRelease - WINDOW_FRAMES), `${run.framesHitToRelease} presented frames from the hit to the release, not ${WINDOW_FRAMES}`).toBeLessThanOrEqual(FRAME_SLACK);
+        expect(run.lowestScaleAfterRelease, `the slow-mo after the release reached only ${run.lowestScaleAfterRelease}`).toBeLessThan(SLOW_ENOUGH);
       });
     }
 
@@ -779,7 +778,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       const afterThrow = startOf();
       const afterDrive = startOf();
       const first = afterThrow.findIndex((x, frame) => x !== afterDrive[frame]);
-      assert.equal(first, -1, `frame ${first}: x ${afterThrow[first]} after the throw against ${afterDrive[first]} after the drive`);
+      expect(first, `frame ${first}: x ${afterThrow[first]} after the throw against ${afterDrive[first]} after the drive`).toBe(-1);
     });
 
     const presses = [
@@ -789,8 +788,8 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     for (const press of presses) {
       it(`when the boost key is tapped ${press.it} of presented time after the hit on a coasting run, then the bail is ${press.expectedKind} by that much and not perfect`, () => {
         const run = clockRun(COASTING_LIFT_X, press.framesAfterHit);
-        assert.equal(run.verdict.kind, press.expectedKind, `verdict at ${run.verdict.offsetSeconds} s`);
-        assert.ok(Math.abs(run.verdict.offsetSeconds! - press.expectedOffsetS) < PRESS_TOLERANCE_S, `offset ${run.verdict.offsetSeconds} against ${press.expectedOffsetS}`);
+        expect(run.verdict.kind, `verdict at ${run.verdict.offsetSeconds} s`).toBe(press.expectedKind);
+        expect(Math.abs(run.verdict.offsetSeconds! - press.expectedOffsetS), `offset ${run.verdict.offsetSeconds} against ${press.expectedOffsetS}`).toBeLessThan(PRESS_TOLERANCE_S);
       });
     }
   });
@@ -830,13 +829,13 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         const bestBefore = minigameHud().best.thisCar;
         const restS = coastToRest(testCase.liftAtX);
         const card = minigameHud();
-        assert.ok(restS >= RESOLVE_AFTER_REST_S, `the car never settled (rested ${restS.toFixed(2)} s)`);
-        assert.equal(card.phase, "scored", `${restS.toFixed(2)} s after the car settled at x ${engine["carA"].group.position.x.toFixed(2)}, the attempt is still ${card.phase}`);
-        assert.equal(card.noThrow, true, "the attempt is a no throw");
-        assert.equal(card.lastScore, null, "no score");
-        assert.equal(card.best.thisCar, bestBefore, "the best is untouched");
-        assert.equal(card.bail!.verdict, null, "no bail verdict: nobody was thrown");
-        assert.equal(launches.length, launched, "no dummy was launched");
+        expect(restS, `the car never settled (rested ${restS.toFixed(2)} s)`).toBeGreaterThanOrEqual(RESOLVE_AFTER_REST_S);
+        expect(card.phase, `${restS.toFixed(2)} s after the car settled at x ${engine["carA"].group.position.x.toFixed(2)}, the attempt is still ${card.phase}`).toBe("scored");
+        expect(card.noThrow, "the attempt is a no throw").toBe(true);
+        expect(card.lastScore, "no score").toBe(null);
+        expect(card.best.thisCar, "the best is untouched").toBe(bestBefore);
+        expect(card.bail!.verdict, "no bail verdict: nobody was thrown").toBe(null);
+        expect(launches.length, "no dummy was launched").toBe(launched);
       });
     }
 
@@ -847,14 +846,14 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
       const ended = minigameHud();
       engine.retryMinigame();
       const again = minigameHud();
-      assert.equal(again.phase, "ready", "Retry readies the next run");
-      assert.equal(again.noThrow, false, "the next run is not a no throw");
-      assert.equal(again.attempt, ended.attempt, "a no throw uses no attempt");
-      assert.ok(Math.abs(engine["carA"].group.position.x - engine["minigames"].stationStart().x) < START_TOLERANCE, "the car is back on the hilltop");
+      expect(again.phase, "Retry readies the next run").toBe("ready");
+      expect(again.noThrow, "the next run is not a no throw").toBe(false);
+      expect(again.attempt, "a no throw uses no attempt").toBe(ended.attempt);
+      expect(Math.abs(engine["carA"].group.position.x - engine["minigames"].stationStart().x), "the car is back on the hilltop").toBeLessThan(START_TOLERANCE);
       const samples = throwAndRead("longJump");
-      assert.ok(samples.length > 0, "the retried run threw him");
-      assert.equal(minigameHud().phase, "scored", "the retried run scored");
-      assert.equal(minigameHud().noThrow, false, "a throw is no no throw");
+      expect(samples.length, "the retried run threw him").toBeGreaterThan(0);
+      expect(minigameHud().phase, "the retried run scored").toBe("scored");
+      expect(minigameHud().noThrow, "a throw is no no throw").toBe(false);
     });
   });
 });

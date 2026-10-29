@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import { idleDrive, applyDrive } from "./car-drive.ts";
@@ -58,12 +57,12 @@ describe("given a wreck whose arch flare tore off while its body was still crush
   it("when the twin's arch is put back where the wreck's lies, then it flies as the box the wreck's was measured as when it tore, not as its shell drawn on the twin's skin now", () => {
     const car = wreckWithTornArch();
     const arch = car["parts"].find((p) => p.name === ARCH)!;
-    assert.ok(arch.detached && arch.shape.count > 0, "the arch tore and flew");
+    expect(arch.detached && arch.shape.count > 0, "the arch tore and flew").toBeTruthy();
     const twin = twinFromKeyframe(car);
     const twinArch = twin["parts"].find((p) => p.name === ARCH)!;
     const drawnNow = newLooseShape();
     boxShape(drawnNow, twinArch.object);
-    assert.notEqual(drawnNow.reach, arch.shape.reach, "the control: the twin's shell, drawn on the skin as it is now, is the box of another size");
+    expect(drawnNow.reach, "the control: the twin's shell, drawn on the skin as it is now, is the box of another size").not.toBe(arch.shape.reach);
     const [twinBox, liveBox] = [twinArch.shape, arch.shape].map((s) => [s.count, s.plate, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
     assertSameNumbers(twinBox!, liveBox!, "the twin's arch box");
   });
@@ -77,7 +76,7 @@ describe("given a parked sedan whose front bumper tore off and flew, and a twin 
     const bumper = car["parts"].find((p) => p.name === "bumperF")!;
     car["detachPart"](bumper, 0);
     for (let slice = 0; slice < AFTER_SLICES; slice++) stepWorld(world, SLICE_S);
-    assert.ok(bumper.shape.count > 0 && !bumper.shape.box, `the bumper flew as its shell's points: count ${bumper.shape.count}, box ${bumper.shape.box}`);
+    expect(bumper.shape.count > 0 && !bumper.shape.box, `the bumper flew as its shell's points: count ${bumper.shape.count}, box ${bumper.shape.box}`).toBeTruthy();
     const twin = twinFromKeyframe(car);
     const twinBumper = twin["parts"].find((p) => p.name === "bumperF")!;
     const [twinShape, liveShape] = [twinBumper.shape, bumper.shape].map((s) => [s.count, s.box ? 1 : 0, s.plate, s.reach, ...s.centre.toArray(), ...s.half.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
@@ -102,7 +101,7 @@ describe("given a sedan whose front bumper, carrying the style's own drawn grill
     twin.spawnFacing(car.group.position.x, car.group.position.z, car.yaw, 0);
     twin.writeNetState(frame.deform, frame.parts);
     const twinBumper = twin["parts"].find((p) => p.name === "bumperF")!;
-    assert.ok(twinBumper.detached, "the client's bumper tore from the net state alone");
+    expect(twinBumper.detached, "the client's bumper tore from the net state alone").toBeTruthy();
     boxShape(twinBumper.shape, twinBumper.object);
     const [client, host] = [twinBumper.shape, bumper.shape].map((s) => [s.count, s.plate, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
     assertSameNumbers(client!, host!, "the client's torn bumper shape");
@@ -111,14 +110,14 @@ describe("given a sedan whose front bumper, carrying the style's own drawn grill
     bumper.object.traverse((o) => {
       if (o instanceof PartSeat && o.kind === PART_KIND.grille) seats.push(o);
     });
-    assert.equal(seats.length, 1, "the bumper carries one grille seat");
+    expect(seats.length, "the bumper carries one grille seat").toBe(1);
     const loose = seats[0]!.children.find((c): c is THREE.Mesh => c instanceof THREE.Mesh)!;
     const flies = loose.geometry.boundingBox!;
     const drawn = new THREE.Box3().setFromBufferAttribute(loose.geometry.getAttribute("position") as THREE.BufferAttribute);
-    assert.ok(flies.equals(drawn), `the torn grille's box ${flies.min.toArray()} .. ${flies.max.toArray()} is not its drawn vertices' ${drawn.min.toArray()} .. ${drawn.max.toArray()}`);
+    expect(flies.equals(drawn), `the torn grille's box ${flies.min.toArray()} .. ${flies.max.toArray()} is not its drawn vertices' ${drawn.min.toArray()} .. ${drawn.max.toArray()}`).toBeTruthy();
     const platform = partGeometry(PART_KIND.grille);
     if (platform.boundingBox === null) platform.computeBoundingBox();
-    assert.ok(!platform.boundingBox!.equals(flies), "the control: the sedan's drawn grille is the platform grille's box");
+    expect(!platform.boundingBox!.equals(flies), "the control: the sedan's drawn grille is the platform grille's box").toBe(true);
   });
 });
 
@@ -141,7 +140,7 @@ describe("given a rear-ended hatch or SUV whose roof-hinged gate, carrying its D
       twin.spawnFacing(car.group.position.x, car.group.position.z, car.yaw, 0);
       twin.writeNetState(frame.deform, frame.parts);
       const twinGate = twin["parts"].find((p) => p.name === LID.trunk)!;
-      assert.ok(twinGate.detached, "the client's gate tore from the net state alone");
+      expect(twinGate.detached, "the client's gate tore from the net state alone").toBeTruthy();
       boxShape(twinGate.shape, twinGate.object);
       const [client, host] = [twinGate.shape, gate.shape].map((s) => [s.count, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
       t.annotate(`${id} torn gate: count ${gate.shape.count}, reach ${gate.shape.reach.toFixed(4)}, centre ${gate.shape.centre.toArray().map((v) => v.toFixed(4))}, invI ${gate.shape.invI.toArray().map((v) => v.toFixed(3))}`);

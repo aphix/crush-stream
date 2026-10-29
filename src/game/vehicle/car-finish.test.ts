@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applySpray, BARE_SPRAY, sprayUniforms } from "../present/spray.ts";
 import { CAR_SPRAY, NO_CAR_PICK } from "../match/look-data.ts";
@@ -15,6 +14,7 @@ import type * as CarFinish from "./car-finish.ts";
 import { makePaintMaterial, trimMaterial } from "./car-materials.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
 import { GARAGE } from "../present/garage-art.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** What a car material's program key is with the finish off: the strings these tests prove an OFF material still has (the trim's names its fittings hook). */
 const PAINT_KEY_TODAY = "car-paint-primer";
@@ -84,17 +84,17 @@ describe("given the procedural car finish maps", () => {
     it(testCase.it, () => {
       const texture = finishTextureOf(finishModule, testCase.kind);
       const data = texture.image.data as Uint8Array;
-      assert.equal(texture.image.width, testCase.width, "width");
-      assert.equal(texture.image.height, testCase.height, "height");
-      assert.equal(texture.format, testCase.format, "format");
-      assert.equal(texture.type, THREE.UnsignedByteType, "type");
-      assert.equal(data.length, testCase.width * testCase.height * testCase.channels, "byte count");
-      assert.equal(texture.wrapS, THREE.RepeatWrapping, "wrapS");
-      assert.equal(texture.wrapT, THREE.RepeatWrapping, "wrapT");
-      assert.equal(texture.generateMipmaps, true, "mipmaps");
-      assert.equal(texture.minFilter, THREE.LinearMipmapLinearFilter, "minFilter");
-      assert.ok(texture.anisotropy > 1, "anisotropic");
-      assert.equal(texture.userData.shared, true, "shared, never disposed with a car");
+      expect(texture.image.width, "width").toBe(testCase.width);
+      expect(texture.image.height, "height").toBe(testCase.height);
+      expect(texture.format, "format").toBe(testCase.format);
+      expect(texture.type, "type").toBe(THREE.UnsignedByteType);
+      expect(data.length, "byte count").toBe(testCase.width * testCase.height * testCase.channels);
+      expect(texture.wrapS, "wrapS").toBe(THREE.RepeatWrapping);
+      expect(texture.wrapT, "wrapT").toBe(THREE.RepeatWrapping);
+      expect(texture.generateMipmaps, "mipmaps").toBe(true);
+      expect(texture.minFilter, "minFilter").toBe(THREE.LinearMipmapLinearFilter);
+      expect(texture.anisotropy, "anisotropic").toBeGreaterThan(1);
+      expect(texture.userData.shared, "shared, never disposed with a car").toBe(true);
     });
   }
 
@@ -103,7 +103,7 @@ describe("given the procedural car finish maps", () => {
       const fresh = await freshFinishModule();
       const first = finishTextureOf(finishModule, testCase.kind).image.data as Uint8Array;
       const second = finishTextureOf(fresh, testCase.kind).image.data as Uint8Array;
-      assert.notEqual(first, second, "two separate builds, not one cached array");
+      expect(first, "two separate builds, not one cached array").not.toBe(second);
       assertSameNumbers(second, first, `${testCase.kind} finish bytes`);
     });
   }
@@ -132,9 +132,9 @@ describe("given the procedural car finish maps", () => {
             else interiorStepY = Math.max(interiorStepY, below);
           }
         }
-        assert.ok(lowest < highest, `channel ${channel} is flat at ${lowest}`);
-        assert.ok(wrapStepX <= interiorStepX, `right edge to left edge steps ${wrapStepX}, interior steps at most ${interiorStepX}`);
-        assert.ok(wrapStepY <= interiorStepY, `bottom edge to top edge steps ${wrapStepY}, interior steps at most ${interiorStepY}`);
+        expect(lowest, `channel ${channel} is flat at ${lowest}`).toBeLessThan(highest);
+        expect(wrapStepX, `right edge to left edge steps ${wrapStepX}, interior steps at most ${interiorStepX}`).toBeLessThanOrEqual(interiorStepX);
+        expect(wrapStepY, `bottom edge to top edge steps ${wrapStepY}, interior steps at most ${interiorStepY}`).toBeLessThanOrEqual(interiorStepY);
       });
     }
   }
@@ -143,7 +143,7 @@ describe("given the procedural car finish maps", () => {
     const data = finishTextureOf(finishModule, "paint").image.data as Uint8Array;
     let lowestAlpha = 255;
     for (let i = 3; i < data.length; i += 4) lowestAlpha = Math.min(lowestAlpha, data[i]!);
-    assert.equal(lowestAlpha, 255);
+    expect(lowestAlpha).toBe(255);
   });
 });
 
@@ -158,7 +158,7 @@ const tierCases = [
 describe("given the FX tiers", () => {
   for (const testCase of tierCases) {
     it(testCase.it, () => {
-      assert.equal(finishForTier(testCase.tier), testCase.expectedOn);
+      expect(finishForTier(testCase.tier)).toBe(testCase.expectedOn);
     });
   }
 });
@@ -175,10 +175,10 @@ describe("given a built car", () => {
       applyCarFinish(car.group, !testCase.enabled);
       applyCarFinish(car.group, testCase.enabled);
       const { paints, trims } = finishMaterialsUnder(car.group);
-      assert.ok(paints.length > 0, "the car has finish-capable paint");
-      assert.ok(trims.length > 0, "the car has finish-capable trim");
-      for (const material of paints) assert.equal(material.customProgramCacheKey(), testCase.paintKey, "paint key");
-      for (const material of trims) assert.equal(material.customProgramCacheKey(), testCase.trimKey, "trim key");
+      expect(paints.length, "the car has finish-capable paint").toBeGreaterThan(0);
+      expect(trims.length, "the car has finish-capable trim").toBeGreaterThan(0);
+      for (const material of paints) expect(material.customProgramCacheKey(), "paint key").toBe(testCase.paintKey);
+      for (const material of trims) expect(material.customProgramCacheKey(), "trim key").toBe(testCase.trimKey);
       car.dispose();
     });
   }
@@ -194,8 +194,8 @@ describe("given a built car", () => {
     applyCarFinish(car.group, false);
     const afterOff = materials.map((m) => m.version);
     for (let i = 0; i < materials.length; i++) {
-      assert.equal(afterOn[i], before[i]! + 1, `material ${i} rebuilt once on switching on`);
-      assert.equal(afterOff[i], before[i]! + 2, `material ${i} rebuilt once on switching off`);
+      expect(afterOn[i], `material ${i} rebuilt once on switching on`).toBe(before[i]! + 1);
+      expect(afterOff[i], `material ${i} rebuilt once on switching off`).toBe(before[i]! + 2);
     }
     car.dispose();
   });
@@ -208,9 +208,9 @@ describe("given a built car", () => {
     const before = materials.map((m) => m.version);
     const changed = applyCarFinish(car.group, true);
     const after = materials.map((m) => m.version);
-    assert.equal(changed, false, "reports no change");
+    expect(changed, "reports no change").toBe(false);
     assertSameNumbers(after, before, "material versions after a repeat");
-    assert.equal(applyCarFinish(car.group, false), true, "the real switch still reports its change");
+    expect(applyCarFinish(car.group, false), "the real switch still reports its change").toBe(true);
     car.dispose();
   });
 });
@@ -226,7 +226,7 @@ describe("given a paint material that already wears a spray", () => {
       applySpray(material, sprayUniforms(CAR_SPRAY, BARE_SPRAY, 1), "attribute vec3 sprayPos;\nattribute vec3 sprayNrm;", "vSprayP = sprayPos;\nvSprayN = sprayNrm;\nvSprayRow = 0.0;", "car");
       switchFinish(material, !testCase.enabled);
       switchFinish(material, testCase.enabled);
-      assert.equal(material.customProgramCacheKey(), testCase.expectedKey);
+      expect(material.customProgramCacheKey()).toBe(testCase.expectedKey);
     });
   }
 
@@ -235,8 +235,8 @@ describe("given a paint material that already wears a spray", () => {
     applySpray(material, sprayUniforms(CAR_SPRAY, BARE_SPRAY, 1), "attribute vec3 sprayPos;\nattribute vec3 sprayNrm;", "vSprayP = sprayPos;\nvSprayN = sprayNrm;\nvSprayRow = 0.0;", "car");
     switchFinish(material, true);
     const { fragment } = compile(material);
-    assert.ok(fragment.includes("sprayTexel()"), "spray in the shader");
-    assert.ok(fragment.includes("finishPlaneWeights("), "finish in the shader");
+    expect(fragment.includes("sprayTexel()"), "spray in the shader").toBeTruthy();
+    expect(fragment.includes("finishPlaneWeights("), "finish in the shader").toBeTruthy();
   });
 });
 
@@ -247,7 +247,7 @@ describe("given a fresh car material with the finish never switched on", () => {
   ] as const;
   for (const testCase of todayCases) {
     it(testCase.it, () => {
-      assert.equal(materialOfKind(testCase.kind, testCase.color).customProgramCacheKey(), testCase.expectedKey);
+      expect(materialOfKind(testCase.kind, testCase.color).customProgramCacheKey()).toBe(testCase.expectedKey);
     });
   }
 });
@@ -264,15 +264,15 @@ describe("given a car material being compiled", () => {
       const material = materialOfKind(testCase.kind, testCase.color);
       switchFinish(material, testCase.enabled);
       const { uniforms, vertex, fragment } = compile(material);
-      assert.equal(uniforms.finishMap?.value instanceof THREE.DataTexture, testCase.expectedBlock, "finish map texture");
-      assert.equal(fragment.includes("finishPlaneWeights("), testCase.expectedBlock, "triplanar weights in the fragment shader");
-      assert.equal(vertex.includes("vFinishPos = position;"), testCase.expectedBlock, "object-space position handed on by the vertex shader");
-      assert.equal(vertex.includes("vFinishNormal = objectNormal;"), testCase.expectedBlock, "object-space normal handed on by the vertex shader");
-      assert.equal(fragment.includes("clearcoatNormal = finishPerturbedNormal("), testCase.expectedClearcoat, "clear coat normal perturbed");
+      expect(uniforms.finishMap?.value instanceof THREE.DataTexture, "finish map texture").toBe(testCase.expectedBlock);
+      expect(fragment.includes("finishPlaneWeights("), "triplanar weights in the fragment shader").toBe(testCase.expectedBlock);
+      expect(vertex.includes("vFinishPos = position;"), "object-space position handed on by the vertex shader").toBe(testCase.expectedBlock);
+      expect(vertex.includes("vFinishNormal = objectNormal;"), "object-space normal handed on by the vertex shader").toBe(testCase.expectedBlock);
+      expect(fragment.includes("clearcoatNormal = finishPerturbedNormal("), "clear coat normal perturbed").toBe(testCase.expectedClearcoat);
       const declared = fragment.indexOf("vec3 clearcoatNormal = nonPerturbedNormal;");
       const perturbed = fragment.indexOf("clearcoatNormal = finishPerturbedNormal(");
       const lit = fragment.indexOf("material.diffuseColor = diffuseColor.rgb");
-      if (testCase.expectedClearcoat) assert.ok(declared >= 0 && declared < perturbed && perturbed < lit, `declaration ${declared}, perturbation ${perturbed}, lighting ${lit}`);
+      if (testCase.expectedClearcoat) expect(declared >= 0 && declared < perturbed && perturbed < lit, `declaration ${declared}, perturbation ${perturbed}, lighting ${lit}`).toBeTruthy();
     });
   }
 
@@ -286,9 +286,9 @@ describe("given a car material being compiled", () => {
       const widened = fragment.indexOf("material.roughness = min( sqrt( sqrt( pow2( specAaAlpha )");
       const coatWidened = fragment.indexOf("material.clearcoatRoughness = min( sqrt( sqrt( pow2( specAaAlpha )");
       const lit = fragment.indexOf("vec3 geometryPosition = - vViewPosition;");
-      assert.ok(fragment.includes("vec3 specAaDx = dFdx( normal - nonPerturbedNormal );"), `${kind}: the variance reads the perturbation alone (three already widens for the vertex normal's own change)`);
-      assert.ok(perturbed >= 0 && perturbed < threeWidens && threeWidens < widened && widened < lit, `${kind}: perturbation ${perturbed}, three's widening ${threeWidens}, the perturbation's ${widened}, lighting ${lit}`);
-      assert.ok(coatWidened > widened && coatWidened < lit, `${kind}: the clear coat's widening (${coatWidened}) follows the base's, before lighting`);
+      expect(fragment.includes("vec3 specAaDx = dFdx( normal - nonPerturbedNormal );"), `${kind}: the variance reads the perturbation alone (three already widens for the vertex normal's own change)`).toBeTruthy();
+      expect(perturbed >= 0 && perturbed < threeWidens && threeWidens < widened && widened < lit, `${kind}: perturbation ${perturbed}, three's widening ${threeWidens}, the perturbation's ${widened}, lighting ${lit}`).toBeTruthy();
+      expect(coatWidened > widened && coatWidened < lit, `${kind}: the clear coat's widening (${coatWidened}) follows the base's, before lighting`).toBeTruthy();
     });
   }
 
@@ -296,8 +296,8 @@ describe("given a car material being compiled", () => {
     const material = materialOfKind("paint", 0x203043);
     switchFinish(material, true);
     const { fragment } = compile(material);
-    assert.ok(fragment.includes("normal = finishPerturbedNormal(normal, baseSlope"), "base layer: waviness, peel and flake");
-    assert.ok(fragment.includes("clearcoatNormal = finishPerturbedNormal(clearcoatNormal, coatSlope"), "clear coat: waviness and peel only");
+    expect(fragment.includes("normal = finishPerturbedNormal(normal, baseSlope"), "base layer: waviness, peel and flake").toBeTruthy();
+    expect(fragment.includes("clearcoatNormal = finishPerturbedNormal(clearcoatNormal, coatSlope"), "clear coat: waviness and peel only").toBeTruthy();
   });
 
   it("when a paint material compiles with the finish on, then its orange peel keeps a quarter of its relief nearer than 2 m and all of it only past the garage's opening orbit: drawn 50 times real, nearer it reads as hammered metal; the trim's grain keeps all of its", () => {
@@ -307,11 +307,11 @@ describe("given a car material being compiled", () => {
       const lines = compile(material).fragment.split("\n").map((line) => line.trim());
       const ramp = lines.find((line) => line.startsWith("* mix(finishNearShare, vec3(1.0), smoothstep(")) ?? "";
       const [near, full] = (/smoothstep\(([\d.]+), ([\d.]+), finishDistance\)\)$/.exec(ramp) ?? []).slice(1).map(Number);
-      assert.ok(near === 2 && full! > GARAGE.shot.radius, `${kind}: the near share rises to full from ${near} to ${full} m, the garage opening at ${GARAGE.shot.radius} m (${ramp})`);
+      expect(near === 2 && full! > GARAGE.shot.radius, `${kind}: the near share rises to full from ${near} to ${full} m, the garage opening at ${GARAGE.shot.radius} m (${ramp})`).toBeTruthy();
       return lines.find((line) => line.startsWith("const vec3 finishNearShare"));
     };
-    assert.equal(nearShare("paint"), "const vec3 finishNearShare = vec3(1.0, 0.25, 1.0);", "paint: waviness and flake in full, the peel a quarter up close");
-    assert.equal(nearShare("trim"), "const vec3 finishNearShare = vec3(1.0);", "trim: its grain in full");
+    expect(nearShare("paint"), "paint: waviness and flake in full, the peel a quarter up close").toBe("const vec3 finishNearShare = vec3(1.0, 0.25, 1.0);");
+    expect(nearShare("trim"), "trim: its grain in full").toBe("const vec3 finishNearShare = vec3(1.0);");
   });
 
   it("when a paint material compiles with the finish on, then near-black paint drops its peel and flake (their sparse glints read as brown speckle) from a linear luma of 0.04 down to 0.004, after the tone and spray set its albedo; the trim keeps its grain", () => {
@@ -321,13 +321,13 @@ describe("given a car material being compiled", () => {
       const fragment = compile(material).fragment;
       const lines = fragment.split("\n").map((line) => line.trim());
       const gate = lines.indexOf("* finishKeep(diffuseColor.rgb);");
-      assert.ok(gate > lines.findIndex((line) => line.startsWith("vec3 finishFade =")), `${kind}: the fade takes the albedo's keep`);
+      expect(gate, `${kind}: the fade takes the albedo's keep`).toBeGreaterThan(lines.findIndex((line) => line.startsWith("vec3 finishFade =")));
       const albedoAt = fragment.indexOf("diffuseColor *= sampledDiffuseColor");
-      assert.ok(albedoAt >= 0 && fragment.indexOf("* finishKeep(diffuseColor.rgb);") > albedoAt, `${kind}: read after the map has set the albedo`);
+      expect(albedoAt >= 0 && fragment.indexOf("* finishKeep(diffuseColor.rgb);") > albedoAt, `${kind}: read after the map has set the albedo`).toBeTruthy();
       return lines[lines.indexOf("vec3 finishKeep(vec3 albedo) {") + 1];
     };
-    assert.equal(keepOf("paint"), "float keep = smoothstep(0.004, 0.04, dot(albedo, vec3(0.2126, 0.7152, 0.0722)));", "paint: peel and flake fade out on near-black");
-    assert.equal(keepOf("trim"), "return vec3(1.0);", "trim: its grain in full");
+    expect(keepOf("paint"), "paint: peel and flake fade out on near-black").toBe("float keep = smoothstep(0.004, 0.04, dot(albedo, vec3(0.2126, 0.7152, 0.0722)));");
+    expect(keepOf("trim"), "trim: its grain in full").toBe("return vec3(1.0);");
   });
 
   const gateCases = [
@@ -345,14 +345,14 @@ describe("given a car material being compiled", () => {
       switchFinish(material, true);
       const { fragment } = compile(material);
       const lines = fragment.split("\n").map((line) => line.trim());
-      assert.equal(lines.filter((line) => line === "uniform mat4 modelViewMatrix;").length, 1, "the mesh's view transform declared once");
-      assert.ok(lines.includes("return length(modelViewMatrix[3].xyz) - 4.0;"), "the nearest pixel of the draw: its origin's distance less the reach");
-      assert.ok(lines.includes("if (finishMeshNear() < max(finishFadeEnd.x, max(finishFadeEnd.y, finishFadeEnd.z))) {"), "the normal block skipped once every layer has faded");
+      expect(lines.filter((line) => line === "uniform mat4 modelViewMatrix;").length, "the mesh's view transform declared once").toBe(1);
+      expect(lines.includes("return length(modelViewMatrix[3].xyz) - 4.0;"), "the nearest pixel of the draw: its origin's distance less the reach").toBeTruthy();
+      expect(lines.includes("if (finishMeshNear() < max(finishFadeEnd.x, max(finishFadeEnd.y, finishFadeEnd.z))) {"), "the normal block skipped once every layer has faded").toBeTruthy();
       const fetchLines = lines.filter((line) => line.includes("finishTriplanar(p, w,") || (line.includes("texture2D(finishMap") && !line.startsWith("return")));
-      assert.equal(fetchLines.length, testCase.fetchLines, `fetch lines: ${fetchLines.join(" / ")}`);
+      expect(fetchLines.length, `fetch lines: ${fetchLines.join(" / ")}`).toBe(testCase.fetchLines);
       const gateAt = testCase.gates.map((gate) => lines.findIndex((line) => line.startsWith(gate)));
-      assert.ok(gateAt.every((at) => at >= 0), `gates found at lines ${gateAt.join(", ")}`);
-      if (testCase.kind === "trim") assert.ok(gateAt[0]! < lines.findIndex((line) => line.includes("texture2D(finishMap")), "the trim gate comes before its fetch");
+      expect(gateAt.every((at) => at >= 0), `gates found at lines ${gateAt.join(", ")}`).toBeTruthy();
+      if (testCase.kind === "trim") expect(gateAt[0]!, "the trim gate comes before its fetch").toBeLessThan(lines.findIndex((line) => line.includes("texture2D(finishMap")));
     });
   }
 });
@@ -365,9 +365,9 @@ const ROUGHNESS_TONE_LINE = `roughnessFactor *= ${0x8a / 0xff};`;
 describe("given the tones every paint material multiplies in", () => {
   it("when a paint material is made where there is no document, then it samples no texture for them: no colour map, no roughness map", () => {
     const material = makePaintMaterial(0x445566);
-    assert.equal(typeof document, "undefined");
-    assert.equal(material.map, null, "colour map");
-    assert.equal(material.roughnessMap, null, "roughness map");
+    expect(typeof document).toBe("undefined");
+    expect(material.map, "colour map").toBe(null);
+    expect(material.roughnessMap, "roughness map").toBe(null);
   });
 
   it("when a sprayed paint compiles, then the colour tone lands where the map was, before the spray, and the roughness tone after the roughness chunk", () => {
@@ -375,9 +375,9 @@ describe("given the tones every paint material multiplies in", () => {
     applySpray(material, sprayUniforms(CAR_SPRAY, BARE_SPRAY, 1), "attribute vec3 sprayPos;\nattribute vec3 sprayNrm;", "vSprayP = sprayPos;\nvSprayN = sprayNrm;\nvSprayRow = 0.0;", "car");
     const { fragment } = compile(material);
     const tone = fragment.indexOf(PAINT_TONE_LINE);
-    assert.ok(tone > fragment.indexOf("diffuseColor *= sampledDiffuseColor"), "the colour tone follows the map chunk");
-    assert.ok(tone < fragment.indexOf("vec4 sprayS = sprayTexel();"), "the colour tone comes before the spray (the spray is not toned)");
-    assert.ok(fragment.indexOf(ROUGHNESS_TONE_LINE) > fragment.indexOf("float roughnessFactor = roughness;"), "the roughness tone follows roughnessFactor");
+    expect(tone, "the colour tone follows the map chunk").toBeGreaterThan(fragment.indexOf("diffuseColor *= sampledDiffuseColor"));
+    expect(tone, "the colour tone comes before the spray (the spray is not toned)").toBeLessThan(fragment.indexOf("vec4 sprayS = sprayTexel();"));
+    expect(fragment.indexOf(ROUGHNESS_TONE_LINE), "the roughness tone follows roughnessFactor").toBeGreaterThan(fragment.indexOf("float roughnessFactor = roughness;"));
   });
 });
 
@@ -421,9 +421,9 @@ describe("given the real engine with its cars on the screen", () => {
       engine.setFxTier(testCase.expectedOn ? "low" : "high");
       engine.setFxTier(testCase.tier);
       const { paintKeys, trimKeys } = keysOfEveryCar();
-      assert.ok(paintKeys.length > 0 && trimKeys.length > 0, "the cars carry finish-capable materials");
-      for (const key of paintKeys) assert.equal(key.includes(FINISH_KEY_MARK), testCase.expectedOn, `paint key ${key}`);
-      for (const key of trimKeys) assert.equal(key.includes(FINISH_KEY_MARK), testCase.expectedOn, `trim key ${key}`);
+      expect(paintKeys.length > 0 && trimKeys.length > 0, "the cars carry finish-capable materials").toBeTruthy();
+      for (const key of paintKeys) expect(key.includes(FINISH_KEY_MARK), `paint key ${key}`).toBe(testCase.expectedOn);
+      for (const key of trimKeys) expect(key.includes(FINISH_KEY_MARK), `trim key ${key}`).toBe(testCase.expectedOn);
     });
   }
 
@@ -432,10 +432,10 @@ describe("given the real engine with its cars on the screen", () => {
     const car = engine["buildCar"](engine["cars"].length);
     wearCarLook(car, { ...NO_CAR_PICK, body: 0x2244cc, bumpers: 0xcc4422 }, null);
     const unfinished = finishMaterialsUnder(car.group).paints.filter((material) => !material.customProgramCacheKey().includes(FINISH_KEY_MARK));
-    assert.ok(unfinished.length > 0, "the look's new paints start without the finish");
+    expect(unfinished.length, "the look's new paints start without the finish").toBeGreaterThan(0);
     engine["dressCar"](car);
     const { paints, trims } = finishMaterialsUnder(car.group);
-    for (const material of [...paints, ...trims]) assert.ok(material.customProgramCacheKey().includes(FINISH_KEY_MARK), `key ${material.customProgramCacheKey()}`);
+    for (const material of [...paints, ...trims]) expect(material.customProgramCacheKey().includes(FINISH_KEY_MARK), `key ${material.customProgramCacheKey()}`).toBeTruthy();
     engine["scene"].remove(car.group);
     car.dispose();
   });
@@ -446,17 +446,17 @@ describe("given the real engine with its cars on the screen", () => {
     applyCarFinish(car.group, true);
     engine["dressCar"](car);
     const { paints, trims } = finishMaterialsUnder(car.group);
-    for (const material of [...paints, ...trims]) assert.equal(material.customProgramCacheKey().includes(FINISH_KEY_MARK), false, `key ${material.customProgramCacheKey()}`);
+    for (const material of [...paints, ...trims]) expect(material.customProgramCacheKey().includes(FINISH_KEY_MARK), `key ${material.customProgramCacheKey()}`).toBe(false);
   });
 });
 
 /** What the renderer binds for `material` now (`WebGLRenderer.properties`): whether its current program draws the finish, and the finish map in the uniforms it uploads to that program (null: none). */
 function boundFinish(renderer: THREE.WebGLRenderer, material: THREE.Material): { finishProgram: boolean; finishMap: THREE.Texture | null } {
   const built = renderer.properties.get(material);
-  assert.ok(typeof built === "object" && built !== null && "currentProgram" in built && "uniforms" in built, "the renderer has built the material");
+  must(typeof built === "object" && built !== null && "currentProgram" in built && "uniforms" in built, "the renderer has built the material");
   const { currentProgram: program, uniforms } = built;
-  assert.ok(typeof program === "object" && program !== null && "cacheKey" in program && typeof program.cacheKey === "string", "a current program");
-  assert.ok(typeof uniforms === "object" && uniforms !== null, "uniforms for it");
+  must(typeof program === "object" && program !== null && "cacheKey" in program && typeof program.cacheKey === "string", "a current program");
+  must(typeof uniforms === "object" && uniforms !== null, "uniforms for it");
   const holder = "finishMap" in uniforms ? uniforms.finishMap : null;
   const map: unknown = typeof holder === "object" && holder !== null && "value" in holder ? holder.value : null;
   return { finishProgram: program.cacheKey.includes(FINISH_KEY_MARK), finishMap: map instanceof THREE.Texture ? map : null };
@@ -475,10 +475,10 @@ describe("given a police car whose paint and trim the renderer built with the fi
       renderer.compile(scene, camera);
     }
     const bound = [...paints, ...trims].map((material) => boundFinish(renderer, material));
-    assert.ok(paints.length >= 2 && trims.length > 0, `the cop's body and door paints and its trim: ${paints.length} paints, ${trims.length} trims`);
-    assert.ok(bound.every((b) => b.finishProgram), "every finish material is back on its finish program");
+    expect(paints.length >= 2 && trims.length > 0, `the cop's body and door paints and its trim: ${paints.length} paints, ${trims.length} trims`).toBeTruthy();
+    expect(bound.every((b) => b.finishProgram), "every finish material is back on its finish program").toBeTruthy();
     const unbound = bound.filter((b) => b.finishMap === null).length;
-    assert.equal(unbound, 0, `${unbound} of ${bound.length} finish materials handed no finish map`);
+    expect(unbound, `${unbound} of ${bound.length} finish materials handed no finish map`).toBe(0);
     car.dispose();
     renderer.dispose();
   });

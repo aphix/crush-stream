@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applySpray, BARE_SPRAY, sprayUniforms } from "../present/spray.ts";
 import { CAR_SPRAY } from "../match/look-data.ts";
@@ -11,6 +10,7 @@ import { MAP_ANISOTROPY } from "./car-finish.ts";
 import { makePaintMaterial } from "./car-materials.ts";
 import { CAR_STYLES, type BodyStyle } from "./car-variants.ts";
 import { assertSameNumbers, paint } from "./test-support.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 type Details = NonNullable<BodyStyle["details"]>;
 
@@ -28,7 +28,7 @@ function sedanWith(details: Details): BodyStyle {
 }
 
 function within(actual: number, expected: number, share: number, label: string): void {
-  assert.ok(Math.abs(actual - expected) <= Math.abs(expected) * share, `${label}: ${actual} is not within ${share * 100}% of ${expected}`);
+  expect(Math.abs(actual - expected), `${label}: ${actual} is not within ${share * 100}% of ${expected}`).toBeLessThanOrEqual(Math.abs(expected) * share);
 }
 
 describe("given a style's detail table baked to its atlas", () => {
@@ -39,17 +39,17 @@ describe("given a style's detail table baked to its atlas", () => {
     within(centre.cavity, 0.85, 0.12, "cavity on the groove's centre");
     within(read("side", 0, 0.5 + 0.01).height, -0.002, 0.2, "height a quarter width off the centre, half way down the v");
     const past = read("side", 0, 0.5 + 0.02 + 1.5 * TEXEL);
-    assert.equal(past.height, 0, "height one texel past half the width");
-    assert.equal(past.cavity, 0, "cavity one texel past half the width");
+    expect(past.height, "height one texel past half the width").toBe(0);
+    expect(past.cavity, "cavity one texel past half the width").toBe(0);
   });
 
   it("when a top-view stroke sits at x 0.3, then a lookup at x -0.3 reads it the same", () => {
     const read = detailReader(sedanWith({ lines: [{ view: "top", points: [[-0.5, 0.3], [0.5, 0.3]], width: 0.02, depth: -0.004, profile: "v", cavity: 0.85 }], patches: [] }));
     const right = read("top", 0, 0.3);
     const left = read("top", 0, -0.3);
-    assert.ok(right.height < -0.003, `the stroke reads at x 0.3: ${right.height}`);
-    assert.equal(left.height, right.height, "height at x -0.3");
-    assert.equal(left.cavity, right.cavity, "cavity at x -0.3");
+    expect(right.height, `the stroke reads at x 0.3: ${right.height}`).toBeLessThan(-0.003);
+    expect(left.height, "height at x -0.3").toBe(right.height);
+    expect(left.cavity, "cavity at x -0.3").toBe(right.cavity);
   });
 
   it("when any style's bottom tile is read on its exhaust run, then the pipe stands proud and dark on both sides, and a car with no strokes of its own has it in no other tile", () => {
@@ -59,34 +59,34 @@ describe("given a style's detail table baked to its atlas", () => {
       const pipe = style.exhaust?.x ?? 0.4;
       for (const x of [pipe, -pipe]) {
         const under = read("bottom", -0.5, x);
-        assert.ok(under.height >= 0.005 && under.cavity >= 0.4, `${style.id} at x ${x}: height ${under.height}, cavity ${under.cavity}`);
+        expect(under.height >= 0.005 && under.cavity >= 0.4, `${style.id} at x ${x}: height ${under.height}, cavity ${under.cavity}`).toBeTruthy();
       }
     }
     const bare = sedanWith({ lines: [], patches: [] });
     const read = detailReader(bare);
     const pipe = bare.exhaust?.x ?? 0.4;
-    assert.ok(read("bottom", -0.5, pipe).height >= 0.005 && read("top", -0.5, pipe).height === 0, "the pan's pipe lands in the bottom tile only");
+    expect(read("bottom", -0.5, pipe).height >= 0.005 && read("top", -0.5, pipe).height === 0, "the pan's pipe lands in the bottom tile only").toBeTruthy();
   });
 
   it("when the shader is built, then a down-facing pixel reads the bottom tile in the top's place", () => {
     const { fragmentShader } = compileHooks(detailPaint(SEDAN));
-    assert.ok(fragmentShader.includes("bool detailUnder = vDetailNormal.y < 0.0;") && fragmentShader.includes("detailUnder ? detailTiles[4] : detailTiles[1]"), "the bottom tile replaces the top's under the car");
+    expect(fragmentShader.includes("bool detailUnder = vDetailNormal.y < 0.0;") && fragmentShader.includes("detailUnder ? detailTiles[4] : detailTiles[1]"), "the bottom tile replaces the top's under the car").toBeTruthy();
   });
 
   it("when a step runs forward along the side, then its left (above) stands its depth proud and its right (below) reads nothing", () => {
     const read = detailReader(sedanWith({ lines: [{ view: "side", points: [[-1, 0.7], [1, 0.7]], width: 0.012, depth: 0.003, profile: "step", cavity: 0 }], patches: [] }));
     within(read("side", 0, 0.7 + 0.012).height, 0.003, 0.1, "height a width left of the line");
-    assert.equal(read("side", 0, 0.7 - 0.012).height, 0, "height a width right of the line");
+    expect(read("side", 0, 0.7 - 0.012).height, "height a width right of the line").toBe(0);
   });
 
   it("when a broad, shallow u stroke is read across texel by texel, then its slope as the shader decodes it bends smoothly: no texel steps off its neighbours' mean, as 8-bit height differences hammer it", () => {
     // 30 cm wide and 6 mm high: the slope peaks at 0.063 m/m, and its own bend from one texel to the next is under 0.3 mm/m.
     const read = detailReader(sedanWith({ lines: [{ view: "side", points: [[-1, 0.5], [1, 0.5]], width: 0.3, depth: 0.006, profile: "u", cavity: 0 }], patches: [] }));
     const slopes = Array.from({ length: 0.3 / TEXEL }, (_, k) => read("side", 0, 0.351 + k * TEXEL).slope[1]);
-    assert.ok(Math.max(...slopes.map(Math.abs)) > 0.05, `the stroke's slope reads: ${Math.max(...slopes.map(Math.abs))} m/m at most`);
+    expect(Math.max(...slopes.map(Math.abs)), `the stroke's slope reads: ${Math.max(...slopes.map(Math.abs))} m/m at most`).toBeGreaterThan(0.05);
     for (let k = 1; k + 1 < slopes.length; k++) {
       const step = Math.abs(slopes[k]! - (slopes[k - 1]! + slopes[k + 1]!) / 2);
-      assert.ok(step < CRINKLE_MAX, `texel ${k} across the stroke: slope ${slopes[k]} steps ${step} m/m off its neighbours' mean`);
+      expect(step, `texel ${k} across the stroke: slope ${slopes[k]} steps ${step} m/m off its neighbours' mean`).toBeLessThan(CRINKLE_MAX);
     }
   });
 
@@ -97,7 +97,7 @@ describe("given a style's detail table baked to its atlas", () => {
     within(floor.height, -0.005, 0.02, "height on the floor");
     within(floor.cavity, 0.6, 0.02, "cavity on the floor");
     within(read("front", 0.11, 0.45).height, -0.0025, 0.2, "height half way up the rim");
-    assert.equal(read("front", 0.09, 0.45).height, 0, "height outside the outline");
+    expect(read("front", 0.09, 0.45).height, "height outside the outline").toBe(0);
   });
 
   it("when a patch carries horizontal slats, then a bar stands its depth off the floor without cavity and between bars the floor reads", () => {
@@ -107,7 +107,7 @@ describe("given a style's detail table baked to its atlas", () => {
     const bar = read("front", 0.3, 0.3 + pattern.pitch / 2 + 4 * pattern.pitch);
     const between = read("front", 0.3, 0.3 + 5 * pattern.pitch);
     within(bar.height, -0.001, 0.05, "height on a bar");
-    assert.equal(bar.cavity, 0, "cavity on a bar");
+    expect(bar.cavity, "cavity on a bar").toBe(0);
     within(between.height, -0.004, 0.02, "height between bars");
     within(between.cavity, 0.8, 0.02, "cavity between bars");
   });
@@ -131,10 +131,10 @@ describe("given a style's detail table baked to its atlas", () => {
     const nose = SEDAN.dims.wheelbase / 2 + SEDAN.dims.overhang.front;
     const tail = -(SEDAN.dims.wheelbase / 2 + SEDAN.dims.overhang.rear);
     const read = detailReader(sedanWith({ lines: [{ view: "side", points: [[nose - 0.25, 0.5], [nose + 0.25, 0.5]], width: 0.02, depth: -0.004, profile: "v", cavity: 0.85 }], patches: [] }));
-    assert.ok(read("side", nose - 0.05, 0.5).height < -0.003, "the stroke reads inside the tile");
+    expect(read("side", nose - 0.05, 0.5).height, "the stroke reads inside the tile").toBeLessThan(-0.003);
     let deepest = 0;
     for (let z = tail; z < tail + 0.3; z += TEXEL) for (let y = 0.47; y < 0.53; y += TEXEL) deepest = Math.min(deepest, read("side", z, y).height);
-    assert.equal(deepest, 0, "deepest height along the tail's first 30 cm");
+    expect(deepest, "deepest height along the tail's first 30 cm").toBe(0);
   });
 });
 
@@ -175,7 +175,7 @@ describe("given a sedan built with a details table", () => {
       const expected = new Float32Array(pos.count * 3);
       for (let i = 0; i < pos.count; i++) v.fromBufferAttribute(pos, i).applyMatrix4(toCar).toArray(expected, i * 3);
       const rest = mesh.geometry.getAttribute("sprayPos");
-      assert.ok(rest !== undefined, `skin ${k} has a rest position`);
+      expect(rest, `skin ${k} has a rest position`).not.toBe(undefined);
       assertSameNumbers(rest.array, expected, `rest positions of skin ${k}`, 1e-5);
     }
   });
@@ -187,7 +187,7 @@ describe("given a sedan built with a details table", () => {
     runWall(50, 1, "front", { car });
     let crush = 0;
     for (let i = 0; i < body.array.length; i++) crush = Math.max(crush, Math.abs(body.array[i]! - bodyBefore[i]!));
-    assert.ok(crush > 0.05, `the body skin moved ${crush} m`);
+    expect(crush, `the body skin moved ${crush} m`).toBeGreaterThan(0.05);
     for (const [k, mesh] of skins().entries()) assertSameNumbers(mesh.geometry.getAttribute("sprayPos").array, rests[k]!, `rest positions of skin ${k}`);
   });
 });
@@ -202,22 +202,22 @@ describe("given the detail compile hook on a paint material", () => {
 
   it("when the finish is on, then the shader samples the detail map inside the finish's draw gate", () => {
     const { fragmentShader } = compileHooks(detailPaint(style));
-    assert.ok(fragmentShader.includes("uniform sampler2D detailMap;"), "the sampler is declared");
-    assert.ok(fragmentShader.includes("float detailNear = finishMeshNear();"), "the detail reads the finish's mesh distance gate");
-    assert.ok(fragmentShader.includes("float detailX = abs(vDetailPos.x);"), "the top and end tiles are read at |x|, mirroring the x >= 0 strokes");
+    expect(fragmentShader.includes("uniform sampler2D detailMap;"), "the sampler is declared").toBeTruthy();
+    expect(fragmentShader.includes("float detailNear = finishMeshNear();"), "the detail reads the finish's mesh distance gate").toBeTruthy();
+    expect(fragmentShader.includes("float detailX = abs(vDetailPos.x);"), "the top and end tiles are read at |x|, mirroring the x >= 0 strokes").toBeTruthy();
   });
 
   it("when its atlas is read, then it is mip-mapped and anisotropically filtered as the finish's maps are: a hood seen from the chase camera and a flank seen edge-on keep their shut lines and vents instead of taking the blurred mip", () => {
     const texture = compileHooks(detailPaint(style)).uniforms.detailMap!.value as THREE.DataTexture;
-    assert.equal(texture.minFilter, THREE.LinearMipmapLinearFilter, "trilinear");
-    assert.ok(texture.generateMipmaps, "mip-mapped");
-    assert.equal(texture.anisotropy, MAP_ANISOTROPY, "anisotropic as the finish's maps");
+    expect(texture.minFilter, "trilinear").toBe(THREE.LinearMipmapLinearFilter);
+    expect(texture.generateMipmaps, "mip-mapped").toBeTruthy();
+    expect(texture.anisotropy, "anisotropic as the finish's maps").toBe(MAP_ANISOTROPY);
   });
 
   it("when the finish is on, then the bump's slope comes from texel differences along each tile, never from the screen derivative of the filtered height", () => {
     const { fragmentShader } = compileHooks(detailPaint(style));
-    assert.ok(fragmentShader.includes("vec4 detailPlane(vec4 tile, vec4 bounds, vec2 q, vec2 qx, vec2 qy)"), "each tile reads its own slope");
-    assert.ok(!/dFdx\(detail(Height|Texel)/.test(fragmentShader), "no screen derivative of the sampled height: it steps at every texel");
+    expect(fragmentShader.includes("vec4 detailPlane(vec4 tile, vec4 bounds, vec2 q, vec2 qx, vec2 qy)"), "each tile reads its own slope").toBeTruthy();
+    expect(!/dFdx\(detail(Height|Texel)/.test(fragmentShader), "no screen derivative of the sampled height: it steps at every texel").toBe(true);
   });
 
   for (const testCase of CHAINS) {
@@ -229,18 +229,18 @@ describe("given the detail compile hook on a paint material", () => {
       if (!testCase.detailFirst) applyDetailMap(material, style);
       switchFinish(material, true);
       const { vertexShader } = compileHooks(material);
-      assert.ok(vertexShader.includes("vDetailPos = sprayPos;") && vertexShader.includes("vSprayP = sprayPos;"), "both hooks read the rest frame");
-      assert.equal(vertexShader.split("attribute vec3 sprayPos;").length - 1, 1, "sprayPos declarations");
-      assert.equal(vertexShader.split("attribute vec3 sprayNrm;").length - 1, 1, "sprayNrm declarations");
+      expect(vertexShader.includes("vDetailPos = sprayPos;") && vertexShader.includes("vSprayP = sprayPos;"), "both hooks read the rest frame").toBeTruthy();
+      expect(vertexShader.split("attribute vec3 sprayPos;").length - 1, "sprayPos declarations").toBe(1);
+      expect(vertexShader.split("attribute vec3 sprayNrm;").length - 1, "sprayNrm declarations").toBe(1);
     });
   }
 
   it("when the finish is on, then the front tile prints only ahead of the front axle and the rear tile only behind the rear axle, so a cab's back wall or a gate's inner face takes neither", () => {
     const { uniforms, fragmentShader } = compileHooks(detailPaint(style));
     const ends = uniforms.detailEnds?.value as THREE.Vector2 | undefined;
-    assert.ok(ends !== undefined, "the axles' z reach the shader");
-    assert.equal(`${ends.x} ${ends.y}`, `${style.dims.wheelbase / 2} ${-style.dims.wheelbase / 2}`, "front and rear axle z");
-    assert.ok(fragmentShader.includes("if (detailFront ? vDetailPos.z < detailEnds.x : vDetailPos.z > detailEnds.y) detailWeights.z = 0.0;"), "the end tile's weight is cut between the axles");
+    must(ends !== undefined, "the axles' z reach the shader");
+    expect(`${ends.x} ${ends.y}`, "front and rear axle z").toBe(`${style.dims.wheelbase / 2} ${-style.dims.wheelbase / 2}`);
+    expect(fragmentShader.includes("if (detailFront ? vDetailPos.z < detailEnds.x : vDetailPos.z > detailEnds.y) detailWeights.z = 0.0;"), "the end tile's weight is cut between the axles").toBeTruthy();
   });
 
   it("when the style has no details, then the material keeps its hook, its program key and samples no texture, unlike one with details", () => {
@@ -248,25 +248,25 @@ describe("given the detail compile hook on a paint material", () => {
     const bareHook = bare.onBeforeCompile;
     applyDetailMap(bare, { ...SEDAN, details: undefined });
     switchFinish(bare, true);
-    assert.ok(bare.onBeforeCompile === bareHook, "the compile hook is the one it had");
-    assert.equal(bare.customProgramCacheKey(), PAINT_FINISH_KEY, "program key without details");
-    assert.ok(compileHooks(bare).uniforms.detailMap === undefined, "no detail map uniform without details");
+    expect(bare.onBeforeCompile, "the compile hook is the one it had").toBe(bareHook);
+    expect(bare.customProgramCacheKey(), "program key without details").toBe(PAINT_FINISH_KEY);
+    expect(compileHooks(bare).uniforms.detailMap, "no detail map uniform without details").toBe(undefined);
     const detailed = detailPaint(style);
-    assert.equal(detailed.customProgramCacheKey(), `${PAINT_FINISH_KEY}|detail`, "program key with details");
-    assert.ok(compileHooks(detailed).uniforms.detailMap?.value instanceof THREE.DataTexture, "a detail map with details");
+    expect(detailed.customProgramCacheKey(), "program key with details").toBe(`${PAINT_FINISH_KEY}|detail`);
+    expect(compileHooks(detailed).uniforms.detailMap?.value, "a detail map with details").toBeInstanceOf(THREE.DataTexture);
   });
 
   it("when the finish is off (a low tier), then a detailed material keeps today's program key, its atlas is already baked, and a Low→High→Low→High round trip draws that same atlas", () => {
     const material = makePaintMaterial(0x336699);
     applyDetailMap(material, sedanWith(SEDAN_DETAILS));
-    assert.equal(material.customProgramCacheKey(), "car-paint-primer", "program key with the finish off");
+    expect(material.customProgramCacheKey(), "program key with the finish off").toBe("car-paint-primer");
     const baked = compileHooks(material).uniforms.detailMap?.value;
-    assert.ok(baked instanceof THREE.DataTexture, "the atlas is baked when the material is patched, before any compile with the finish on");
+    expect(baked, "the atlas is baked when the material is patched, before any compile with the finish on").toBeInstanceOf(THREE.DataTexture);
     switchFinish(material, true);
-    assert.ok(compileHooks(material).uniforms.detailMap?.value === baked, "the first compile with the finish on bakes nothing new");
+    expect(compileHooks(material).uniforms.detailMap?.value, "the first compile with the finish on bakes nothing new").toBe(baked);
     switchFinish(material, false);
     compileHooks(material);
     switchFinish(material, true);
-    assert.ok(compileHooks(material).uniforms.detailMap?.value === baked, "a tier round trip keeps the atlas");
+    expect(compileHooks(material).uniforms.detailMap?.value, "a tier round trip keeps the atlas").toBe(baked);
   });
 });

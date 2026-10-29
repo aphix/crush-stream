@@ -1,11 +1,12 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { setGround } from "../world/ground.ts";
 import { CrashEngine } from "./engine.ts";
 import { element, stubBrowser } from "./engine-headless.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** What a finish program's key carries (`applyFinish`). */
 const FINISH_KEY_MARK = "|finish-";
@@ -73,24 +74,24 @@ describe("given the engine warming its programs before the loop starts", () => {
   });
 
   it("when the boot warm-up draws the scene, then the thrown dummies' rig lines and particle spheres are drawn too, and both views are off again after", () => {
-    assert.deepEqual([...drawnDebugViews].sort(), ["LineSegments", "Mesh"]);
-    assert.equal(engine["ragdolls"].debug.on, false);
+    expect(firstMismatch([...drawnDebugViews].sort(), ["LineSegments", "Mesh"])).toBeUndefined();
+    expect(engine["ragdolls"].debug.on).toBe(false);
   });
 
   it("when the boot warm-up runs on a tier without the finish, then car paint is linked and drawn plain for both outputs and finished for the HDR target only, and is plain again after", () => {
-    assert.equal([...compiledPasses].sort().join(), FINISH_PASSES, "linked");
-    assert.equal([...drawnPasses].sort().join(), FINISH_PASSES, "drawn");
-    assert.equal(paintKey().includes(FINISH_KEY_MARK), false, `key ${paintKey()}`);
+    expect([...compiledPasses].sort().join(), "linked").toBe(FINISH_PASSES);
+    expect([...drawnPasses].sort().join(), "drawn").toBe(FINISH_PASSES);
+    expect(paintKey().includes(FINISH_KEY_MARK), `key ${paintKey()}`).toBe(false);
   });
 
   it("when Rapier is in after boot, then the purse pool its world adds is linked for both outputs and drawn before any throw", async () => {
     await engine["ragdolls"].preload();
     await engine.warmsIdle();
     const purses = engine["ragdolls"]["purses"];
-    assert.ok(purses, "the purse pool was never built");
+    must(purses, "the purse pool was never built");
     const keys = (engine["renderer"].info.programs ?? []).map((p) => String(p.cacheKey)).filter((k) => k.endsWith(PURSE_KEY));
-    assert.equal(keys.length, OUTPUTS, "purse programs");
-    assert.equal(drawnMaterials.has([purses.mesh.material].flat()[0]!), true, "the purse pool was not drawn");
+    expect(keys.length, "purse programs").toBe(OUTPUTS);
+    expect(drawnMaterials.has([purses.mesh.material].flat()[0]!), "the purse pool was not drawn").toBe(true);
   });
 
   it("when content with a new program joins the scene after boot, then the warm-up draws only the meshes wearing it", async () => {
@@ -102,15 +103,15 @@ describe("given the engine warming its programs before the loop starts", () => {
     engine["queueWarm"]();
     await engine.warmsIdle();
     engine["scene"].remove(late);
-    assert.equal([...drawnMaterials].map((m) => (m === material ? "late" : m.name || m.type)).join(), "late");
+    expect([...drawnMaterials].map((m) => (m === material ? "late" : m.name || m.type)).join()).toBe("late");
   });
 
   it("when the FX tier rises to High after boot, then the switch queues the warm-up, which links plain paint for both outputs and the finish for the HDR target only, and the paint keeps the finish after", async () => {
     compiledPasses.clear();
     engine.setFxTier("high");
     await engine.warmsIdle();
-    assert.equal([...compiledPasses].sort().join(), FINISH_PASSES);
-    assert.ok(paintKey().includes(FINISH_KEY_MARK), `key ${paintKey()}`);
+    expect([...compiledPasses].sort().join()).toBe(FINISH_PASSES);
+    expect(paintKey().includes(FINISH_KEY_MARK), `key ${paintKey()}`).toBeTruthy();
   });
 
   it("when the context is lost and restored, then the warm-up links and draws the whole scene again, every load window starts over (FX tier, distance detail, Auto render scale) and the player's quality knobs stay in force", async () => {
@@ -126,9 +127,9 @@ describe("given the engine warming its programs before the loop starts", () => {
     fire("webglcontextlost");
     fire("webglcontextrestored");
     await engine.warmsIdle();
-    assert.equal(drawnMaterials.has(engine["live"]()[0]!.lookMeshes().bodyPaint), true, "car paint was not drawn again");
-    assert.equal(windows.map((win) => win.settling).join(), "true,true,true");
-    assert.equal(knobsBefore, "270 2 2048", "the knobs were put in force");
-    assert.equal(knobs(), knobsBefore, "the knobs after the restore");
+    expect(drawnMaterials.has(engine["live"]()[0]!.lookMeshes().bodyPaint), "car paint was not drawn again").toBe(true);
+    expect(windows.map((win) => win.settling).join()).toBe("true,true,true");
+    expect(knobsBefore, "the knobs were put in force").toBe("270 2 2048");
+    expect(knobs(), "the knobs after the restore").toBe(knobsBefore);
   });
 });

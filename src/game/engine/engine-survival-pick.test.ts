@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
@@ -36,48 +35,48 @@ describe("given the real engine booted on #scene=survival&track=national-mall", 
   it("when the page has loaded, then a Survival run is on the Mall at once, with no menu in front of it", () => {
     runSeconds(engine, 0.5);
     const hud = engine["race"].hud();
-    assert.equal(engine["race"].active, true);
-    assert.equal(engine["race"].survival, true);
-    assert.equal(engine["race"].courseId, TRACK_ID.nationalMall);
-    assert.equal(hud.menu, null, "a link starts the run like every other scene");
-    assert.notEqual(hud.survival, null, "a run, not a parked field");
+    expect(engine["race"].active).toBe(true);
+    expect(engine["race"].survival).toBe(true);
+    expect(engine["race"].courseId).toBe(TRACK_ID.nationalMall);
+    expect(hud.menu, "a link starts the run like every other scene").toBe(null);
+    expect(hud.survival, "a run, not a parked field").not.toBe(null);
   });
 
   it("when the scene bar's Survival is pressed from the fleet, then Survival's menu is up on the picked course with no run started, a pick moves the course behind it, and Start survival runs the picked course", () => {
     engine.toggleSurvival(); // in Survival: back to the fleet
-    assert.equal(engine["race"].active, false);
+    expect(engine["race"].active).toBe(false);
     engine.toggleSurvival(); // the bottom bar's way in
     const menu = engine["race"].hud();
-    assert.equal(engine["race"].active, true);
-    assert.equal(menu.menu, "survival", "the menu comes first");
-    assert.equal(menu.phase, null, "no race session behind it");
-    assert.equal(menu.survival, null, "no run");
-    assert.equal(menu.time, 0, "no clock");
-    assert.equal(menu.survivalCourse, TRACK_ID.nationalMall, "the last pick stands");
+    expect(engine["race"].active).toBe(true);
+    expect(menu.menu, "the menu comes first").toBe("survival");
+    expect(menu.phase, "no race session behind it").toBe(null);
+    expect(menu.survival, "no run").toBe(null);
+    expect(menu.time, "no clock").toBe(0);
+    expect(menu.survivalCourse, "the last pick stands").toBe(TRACK_ID.nationalMall);
     engine.raceCommand({ type: "survivalCourse", id: "havana" });
-    assert.equal(engine["race"].hud().menu, "survival", "a pick keeps the menu up");
-    assert.equal(engine["race"].courseId, "havana", "the course behind the menu follows");
+    expect(engine["race"].hud().menu, "a pick keeps the menu up").toBe("survival");
+    expect(engine["race"].courseId, "the course behind the menu follows").toBe("havana");
     runSeconds(engine, 0.5);
-    assert.equal(engine["race"].hud().phase, null, "waiting in the menu starts nothing");
+    expect(engine["race"].hud().phase, "waiting in the menu starts nothing").toBe(null);
     engine.raceCommand({ type: "survivalCourse", id: TRACK_ID.nationalMall });
     engine.raceCommand({ type: "start" });
     const started = engine["race"].hud();
-    assert.equal(started.menu, null);
-    assert.notEqual(started.survival, null);
-    assert.equal(engine["race"].courseId, TRACK_ID.nationalMall, "Start survival runs the picked course");
+    expect(started.menu).toBe(null);
+    expect(started.survival).not.toBe(null);
+    expect(engine["race"].courseId, "Start survival runs the picked course").toBe(TRACK_ID.nationalMall);
   });
 
   it("when Change course is pressed in a run, then Survival's menu is back with the run dropped, and the address names the course picked there", () => {
     runSeconds(engine, 1);
     engine.raceCommand({ type: "survivalMenu" });
     const menu = engine["race"].hud();
-    assert.equal(menu.menu, "survival");
-    assert.equal(menu.survival, null, "the run is dropped");
+    expect(menu.menu).toBe("survival");
+    expect(menu.survival, "the run is dropped").toBe(null);
     engine.raceCommand({ type: "survivalCourse", id: "havana" });
     engine.raceCommand({ type: "start" });
     runSeconds(engine, FRAME);
-    assert.equal(engine["race"].courseId, "havana");
-    assert.match(bar.at(-1)!, /#scene=survival&track=havana$/, "the # follows the run");
+    expect(engine["race"].courseId).toBe("havana");
+    expect(bar.at(-1)!, "the # follows the run").toMatch(/#scene=survival&track=havana$/);
   });
 
   it("when the # is edited to name the Mall again, then the run restarts on it", () => {
@@ -85,8 +84,8 @@ describe("given the real engine booted on #scene=survival&track=national-mall", 
     const before = engine["race"].hud().time;
     globalThis.location.hash = "#scene=survival&track=national-mall";
     engine["onShareHash"]();
-    assert.equal(engine["race"].courseId, TRACK_ID.nationalMall);
-    assert.equal(engine["race"].survival, true);
-    assert.ok(engine["race"].hud().time < before, "a fresh run clock");
+    expect(engine["race"].courseId).toBe(TRACK_ID.nationalMall);
+    expect(engine["race"].survival).toBe(true);
+    expect(engine["race"].hud().time, "a fresh run clock").toBeLessThan(before);
   });
 });

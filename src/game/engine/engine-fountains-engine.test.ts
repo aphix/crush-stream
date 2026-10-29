@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -12,6 +11,7 @@ import { blankPoint, pointOn } from "../world/track.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * The celebration fountains in the real engine: the Range's car (plain, and in each minigame) is led up its run-up to the lip by rows that
@@ -68,21 +68,21 @@ describe("given the real engine", () => {
       engine["setScene"]("range");
       launches.length = 0;
       for (let frame = 0; frame < LAUNCH_TIMEOUT_S * FRAME_HZ && fountains().jets.jets < 6 && launches.length === 0; frame++) advance(1);
-      assert.equal(launches.length, 0, "before the throw: the run-up's fountains lead the car in");
+      expect(launches.length, "before the throw: the run-up's fountains lead the car in").toBe(0);
       const edge = RANGE.halfWidth + 1;
       const placed = jetsAt();
-      assert.equal(placed.length, 6, "three rows of two at the high tier, all lit before the throw");
-      assert.equal(new Set(placed.map((j) => j.z)).size, 2, "a jet on each side");
-      assert.ok(placed.every((j) => Math.abs(Math.abs(j.z) - edge) < 1e-6), "each stands on the field's edge");
-      assert.ok(placed.every((j) => j.x <= 0), "none past the barrier");
+      expect(placed.length, "three rows of two at the high tier, all lit before the throw").toBe(6);
+      expect(new Set(placed.map((j) => j.z)).size, "a jet on each side").toBe(2);
+      expect(placed.every((j) => Math.abs(Math.abs(j.z) - edge) < 1e-6), "each stands on the field's edge").toBeTruthy();
+      expect(placed.every((j) => j.x <= 0), "none past the barrier").toBeTruthy();
       for (let frame = 0; frame < LAUNCH_TIMEOUT_S * FRAME_HZ && launches.length === 0; frame++) advance(1);
-      assert.equal(launches.length, 1, "the driver was thrown");
-      assert.equal(fountains().jets.jets, 6, "the jets keep going through the launch");
+      expect(launches.length, "the driver was thrown").toBe(1);
+      expect(fountains().jets.jets, "the jets keep going through the launch").toBe(6);
       advance(FRAME_HZ);
-      assert.ok(sparkLives(fountains().jets).some((life) => life > 0), "sparks are in the air while the dummy flies");
+      expect(sparkLives(fountains().jets).some((life) => life > 0), "sparks are in the air while the dummy flies").toBeTruthy();
       engine["clearLocal"]();
-      assert.equal(fountains().jets.jets, 0, "a reset stops the jets");
-      assert.ok(sparkLives(fountains().jets).every((life) => life <= 0), "and clears their sparks");
+      expect(fountains().jets.jets, "a reset stops the jets").toBe(0);
+      expect(sparkLives(fountains().jets).every((life) => life <= 0), "and clears their sparks").toBeTruthy();
     });
 
     for (const mode of MINIGAME_MODES) {
@@ -90,7 +90,7 @@ describe("given the real engine", () => {
         launches.length = 0;
         engine.startMinigame(mode);
         advance(FRAME_HZ);
-        assert.equal(fountains().jets.jets, 0, "parked at the start: nothing");
+        expect(fountains().jets.jets, "parked at the start: nothing").toBe(0);
         const lip = STATION_ANCHORS[mode];
         const lit: number[] = [];
         engine["keys"].add("KeyW");
@@ -99,14 +99,14 @@ describe("given the real engine", () => {
           for (const j of jetsAt()) {
             const row = Math.round((lip.x - j.x) / STATION_ROW_GAP[mode]);
             if (!lit.includes(row)) lit.push(row);
-            assert.ok(j.x <= lip.x + 1e-6, `${mode}: a jet stands past the lip`);
-            assert.ok(Math.abs(Math.abs(j.z - lip.z) - STATION_HALF_WIDTH) < 1e-6, `${mode}: a jet stands off the ramp's edge`);
+            expect(j.x, `${mode}: a jet stands past the lip`).toBeLessThanOrEqual(lip.x + 1e-6);
+            expect(Math.abs(Math.abs(j.z - lip.z) - STATION_HALF_WIDTH), `${mode}: a jet stands off the ramp's edge`).toBeLessThan(1e-6);
           }
         }
         engine["keys"].delete("KeyW");
-        assert.equal(launches.length, 1, `${mode}: the driver was thrown`);
-        assert.deepEqual(lit, [2, 1, 0], `${mode}: back row first, the lip's pair last, all before the throw`);
-        assert.equal(fountains().jets.jets, 6, `${mode}: three rows burn through the launch`);
+        expect(launches.length, `${mode}: the driver was thrown`).toBe(1);
+        expect(firstMismatch(lit, [2, 1, 0]), `${mode}: back row first, the lip's pair last, all before the throw`).toBeUndefined();
+        expect(fountains().jets.jets, `${mode}: three rows burn through the launch`).toBe(6);
       });
     }
   });
@@ -129,22 +129,22 @@ describe("given the real engine", () => {
       s.phase = "racing";
       const c = me();
       Object.assign(c, { status: "racing", armed: true, lap: LAPS - 1, progress: LAPS * L - 123.5 });
-      assert.ok(Math.abs(director().lastLapLeft(director().self) - 123.5) < 1e-6, "the last lap: the race's distance less the car's");
+      expect(Math.abs(director().lastLapLeft(director().self) - 123.5), "the last lap: the race's distance less the car's").toBeLessThan(1e-6);
       c.lap = LAPS - 2;
-      assert.ok(Number.isNaN(director().lastLapLeft(director().self)), "an earlier lap");
+      expect(Number.isNaN(director().lastLapLeft(director().self)), "an earlier lap").toBeTruthy();
       c.lap = LAPS - 1;
       c.armed = false;
-      assert.ok(Number.isNaN(director().lastLapLeft(director().self)), "the grid, behind the line");
+      expect(Number.isNaN(director().lastLapLeft(director().self)), "the grid, behind the line").toBeTruthy();
       c.armed = true;
       c.status = "out";
-      assert.ok(Number.isNaN(director().lastLapLeft(director().self)), "a car out of the race");
+      expect(Number.isNaN(director().lastLapLeft(director().self)), "a car out of the race").toBeTruthy();
       c.status = "racing";
       s.phase = "countdown";
-      assert.ok(Number.isNaN(director().lastLapLeft(director().self)), "before the green light");
+      expect(Number.isNaN(director().lastLapLeft(director().self)), "before the green light").toBeTruthy();
       s.phase = "finished";
-      assert.ok(Number.isNaN(director().lastLapLeft(director().self)), "once the race is over");
+      expect(Number.isNaN(director().lastLapLeft(director().self)), "once the race is over").toBeTruthy();
       s.phase = "racing";
-      assert.ok(Number.isNaN(director().lastLapLeft(director()["entrants"].length)), "a car that is no racer");
+      expect(Number.isNaN(director().lastLapLeft(director()["entrants"].length)), "a car that is no racer").toBeTruthy();
     });
 
     it("when the road's two edges are asked for at a distance before the line, then they are mirrored about the road and the margin outside it", () => {
@@ -152,10 +152,10 @@ describe("given the real engine", () => {
       const centre = pointOn(track.path, track.length - 44, blankPoint());
       const left = new THREE.Vector3();
       const right = new THREE.Vector3();
-      assert.ok(director().roadsideAt(44, 1, 2, left) && director().roadsideAt(44, -1, 2, right), "the course is loaded");
-      assert.ok(Math.abs((left.x + right.x) / 2 - centre.x) < 1e-6 && Math.abs((left.z + right.z) / 2 - centre.z) < 1e-6, "the pair is centred on the road");
+      expect(director().roadsideAt(44, 1, 2, left) && director().roadsideAt(44, -1, 2, right), "the course is loaded").toBeTruthy();
+      expect(Math.abs((left.x + right.x) / 2 - centre.x) < 1e-6 && Math.abs((left.z + right.z) / 2 - centre.z) < 1e-6, "the pair is centred on the road").toBeTruthy();
       const apart = Math.hypot(left.x - right.x, left.z - right.z);
-      assert.ok(Math.abs(apart - 2 * (centre.half + 2)) < 1e-6, `${apart.toFixed(2)} m apart: the road's width and a margin each side`);
+      expect(Math.abs(apart - 2 * (centre.half + 2)), `${apart.toFixed(2)} m apart: the road's width and a margin each side`).toBeLessThan(1e-6);
     });
 
     it("when a row is placed back from the line, then its pair stands either side of the road's centre that far before the line along the course, the first at the line", () => {
@@ -163,10 +163,10 @@ describe("given the real engine", () => {
       const left = new THREE.Vector3();
       const right = new THREE.Vector3();
       for (const k of [0, 1, 2, 3]) {
-        assert.ok(director().roadsideAt(k * RACE_ROW_GAP, 1, ROAD_MARGIN, left) && director().roadsideAt(k * RACE_ROW_GAP, -1, ROAD_MARGIN, right));
+        expect(director().roadsideAt(k * RACE_ROW_GAP, 1, ROAD_MARGIN, left) && director().roadsideAt(k * RACE_ROW_GAP, -1, ROAD_MARGIN, right)).toBeTruthy();
         const centre = pointOn(track.path, track.length - k * RACE_ROW_GAP, blankPoint());
         const off = Math.hypot((left.x + right.x) / 2 - centre.x, (left.z + right.z) / 2 - centre.z);
-        assert.ok(off < 1e-6, `row ${k}: its pair is centred on the road ${k * RACE_ROW_GAP} m before the line (${off.toFixed(3)} m off)`);
+        expect(off, `row ${k}: its pair is centred on the road ${k * RACE_ROW_GAP} m before the line (${off.toFixed(3)} m off)`).toBeLessThan(1e-6);
       }
     });
 
@@ -174,7 +174,7 @@ describe("given the real engine", () => {
       fountains().reset();
       director().lastLapLeft = () => NaN;
       advance(2);
-      assert.equal(fountains().jets.jets, 0, "an earlier lap: no jets");
+      expect(fountains().jets.jets, "an earlier lap: no jets").toBe(0);
       const track = session().track;
       const g = track.gates[0]!;
       const cx = (g.ax + g.bx) / 2;
@@ -189,16 +189,16 @@ describe("given the real engine", () => {
         advance(1);
         for (const j of jetsAt()) {
           const row = Math.round(Math.abs(along(j.x, j.z)) / RACE_ROW_GAP);
-          assert.ok(along(j.x, j.z) <= 0.05, `a jet stands ${along(j.x, j.z).toFixed(2)} m past the line`);
+          expect(along(j.x, j.z), `a jet stands ${along(j.x, j.z).toFixed(2)} m past the line`).toBeLessThanOrEqual(0.05);
           if (!lit.includes(row)) {
             lit.push(row);
             lastLit.push(left);
           }
         }
       }
-      assert.deepEqual(lit, [2, 1, 0], "the farthest row first, the line's pair last");
-      assert.ok(lastLit.every((at) => at > 0), `every row lit while the car was still short of the line (at ${lastLit.join(", ")} m to go)`);
-      assert.equal(jetsAt().length, 6, "three rows of two at the high tier");
+      expect(firstMismatch(lit, [2, 1, 0]), "the farthest row first, the line's pair last").toBeUndefined();
+      expect(lastLit.every((at) => at > 0), `every row lit while the car was still short of the line (at ${lastLit.join(", ")} m to go)`).toBeTruthy();
+      expect(jetsAt().length, "three rows of two at the high tier").toBe(6);
     });
   });
 });

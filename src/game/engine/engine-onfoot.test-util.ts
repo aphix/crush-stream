@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import { expect } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -80,7 +80,7 @@ export class OnFootRig {
   /** His torso as drawn this frame (a fresh vector). */
   torso(): THREE.Vector3 {
     const at = new THREE.Vector3();
-    assert.ok(this.engine["ragdolls"].walkerTorso(at), "he is out");
+    expect(this.engine["ragdolls"].walkerTorso(at), "he is out").toBeTruthy();
     return at;
   }
 
@@ -119,7 +119,7 @@ export class OnFootRig {
     this.sit(0);
     const car = this.cars()[0]!;
     for (let t = 0; t < LOOP_STOPS_WITHIN_S && car.velocity.length() > LOOP_STOPPED_MPS; t += LOOP_STEP_S) this.run(LOOP_STEP_S);
-    assert.ok(car.velocity.length() <= LOOP_STOPPED_MPS, `car 0 stopped in the loop of seed ${seed}: ${car.velocity.length().toFixed(2)} m/s`);
+    expect(car.velocity.length(), `car 0 stopped in the loop of seed ${seed}: ${car.velocity.length().toFixed(2)} m/s`).toBeLessThanOrEqual(LOOP_STOPPED_MPS);
     return car;
   }
 
@@ -137,7 +137,7 @@ export class OnFootRig {
   getOut(): void {
     this.press("Enter");
     this.run(CLIMB_OUT_S);
-    assert.equal(this.phase(), "onFoot", `the climb out is over (he was told: ${this.engine["onFoot"].flow.refusal})`);
+    expect(this.phase(), `the climb out is over (he was told: ${this.engine["onFoot"].flow.refusal})`).toBe("onFoot");
   }
 
   /** The touch HUD's Out / In button tapped once, and the frames after it. */
@@ -184,7 +184,7 @@ export class OnFootRig {
       const gap = Math.hypot(car.group.position.x - at.x, car.group.position.z - at.z);
       if (gap < NEAR_REPORT_M) near.push(`car ${i} ${gap.toFixed(1)} m at ${car.group.position.x.toFixed(1)}, ${car.group.position.z.toFixed(1)} going ${car.velocity.length().toFixed(1)} m/s`);
     }
-    assert.fail(`he did not reach within ${within} m of (${target.x.toFixed(1)}, ${target.z.toFixed(1)}) in ${limitSeconds} s, he stands at ${at.x.toFixed(1)}, ${at.z.toFixed(1)} (${this.walker().state}); near him: ${near.join("; ") || "no car"}`);
+    expect.fail(`he did not reach within ${within} m of (${target.x.toFixed(1)}, ${target.z.toFixed(1)}) in ${limitSeconds} s, he stands at ${at.x.toFixed(1)}, ${at.z.toFixed(1)} (${this.walker().state}); near him: ${near.join("; ") || "no car"}`);
   }
 
   /**
@@ -214,7 +214,7 @@ export class OnFootRig {
     this.engine["keys"].add("KeyW");
     for (let t = 0; t < GET_UP_LIMIT_S && walker.state !== "stand"; t += BURST_S) this.run(BURST_S);
     this.engine["keys"].clear();
-    assert.equal(walker.state, "stand", `he is up: ${walker.state}`);
+    expect(walker.state, `he is up: ${walker.state}`).toBe("stand");
   }
 
   /** Walks to `car`'s driver door by a point out from it, so he does not walk into the body. */
@@ -231,9 +231,9 @@ export class OnFootRig {
     this.walkToDoor(this.cars()[index]!);
     this.press("Enter");
     this.run(CLIMB_IN_S);
-    assert.equal(this.phase(), "inCar", "the climb in is over");
-    assert.equal(this.engine["seat"].mode, "drive", "the seat has the wheel");
-    assert.equal(this.engine["seat"].carIndex, index, "his own car");
+    expect(this.phase(), "the climb in is over").toBe("inCar");
+    expect(this.engine["seat"].mode, "the seat has the wheel").toBe("drive");
+    expect(this.engine["seat"].carIndex, "his own car").toBe(index);
   }
 
   dispose(): void {

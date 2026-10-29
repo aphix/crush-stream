@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld, type World } from "./race-world.test-util.ts";
 import { PoliceBrain } from "../ai/police.ts";
@@ -30,11 +29,11 @@ function afterFinish(seed: number): { atFinish: number; after: number; finishedA
     w.race.command({ type: "start" });
     w.seat.mode = "follow";
     const brain = Reflect.get(w.race, "police");
-    assert.ok(brain instanceof PoliceBrain, "the race has a police brain");
+    expect(brain, "the race has a police brain").toBeInstanceOf(PoliceBrain);
     const state = { acc: 0 };
     let n = 0;
     for (; n * FRAME < RACE_BOUND && w.race.phase !== "finished"; n++) frame(w, state);
-    assert.equal(w.race.phase, "finished", `the race did not finish in ${RACE_BOUND} s`);
+    expect(w.race.phase, `the race did not finish in ${RACE_BOUND} s`).toBe("finished");
     const finishedAt = n * FRAME;
     const atFinish = givenUp(brain, w);
     for (let k = 0; k * FRAME < GONE_IN; k++) frame(w, state);
@@ -49,7 +48,7 @@ describe("given a seeded three-lap police race on the oval that finishes with gi
   it(`when the race is over and no player can see them, then every one is put away within ${GONE_IN} s of the finish`, (t) => {
     const { atFinish, after, finishedAt } = afterFinish(1);
     t.annotate(`finished at ${finishedAt.toFixed(1)} s with ${atFinish} given-up cops out; ${after} still out ${GONE_IN} s later`);
-    assert.ok(atFinish > 0, "no cop had given up by the finish: the test proves nothing");
-    assert.equal(after, 0, `${after} given-up cops still drive the course ${GONE_IN} s after the finish`);
+    expect(atFinish, "no cop had given up by the finish: the test proves nothing").toBeGreaterThan(0);
+    expect(after, `${after} given-up cops still drive the course ${GONE_IN} s after the finish`).toBe(0);
   });
 });

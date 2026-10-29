@@ -1,6 +1,5 @@
-import { afterEach, describe, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DriveInput } from "./car-drive.ts";
@@ -99,9 +98,9 @@ function drive(ground: Ground, z: number, yaw: number, y: number, times: readonl
 
 /** The speeds `on` is read at against the flat reference's, for the first `count` times. */
 function matches(label: string, on: Run, flat: Run, count: number, times: readonly number[] = TIMES): void {
-  assert.ok(count >= 1 && flat.speeds[0]! > 0 && (count < 2 || flat.speeds[count - 1]! > flat.speeds[0]!), `${label}: the reference does not accelerate (${flat.speeds.map((s) => s.toFixed(2)).join("/")} m/s)`);
+  expect(count >= 1 && flat.speeds[0]! > 0 && (count < 2 || flat.speeds[count - 1]! > flat.speeds[0]!), `${label}: the reference does not accelerate (${flat.speeds.map((s) => s.toFixed(2)).join("/")} m/s)`).toBeTruthy();
   for (let k = 0; k < count; k++) {
-    assert.ok(Math.abs(on.speeds[k]! - flat.speeds[k]!) <= BAND * flat.speeds[k]!, `${label} at ${times[k]} s: ${on.speeds[k]!.toFixed(2)} m/s against the flat platform's ${flat.speeds[k]!.toFixed(2)}`);
+    expect(Math.abs(on.speeds[k]! - flat.speeds[k]!), `${label} at ${times[k]} s: ${on.speeds[k]!.toFixed(2)} m/s against the flat platform's ${flat.speeds[k]!.toFixed(2)}`).toBeLessThanOrEqual(BAND * flat.speeds[k]!);
   }
 }
 
@@ -127,7 +126,7 @@ describe("given a sedan with all four tyres on the top of a solid, at full throt
     // Both cars are still on the deck while z stays between the slab end and the toe.
     let count = 0;
     while (count < RAMP_TIMES.length && on.z[count]! > RAMP.start + 0.5 && field.z[count]! > RAMP.start + 0.5) count++;
-    assert.ok(count >= 1, `on the deck at ${on.z.map((v) => v.toFixed(1)).join("/")} m, the field ramp's at ${field.z.map((v) => v.toFixed(1)).join("/")} m`);
+    expect(count, `on the deck at ${on.z.map((v) => v.toFixed(1)).join("/")} m, the field ramp's at ${field.z.map((v) => v.toFixed(1)).join("/")} m`).toBeGreaterThanOrEqual(1);
     matches("the ramp's deck", on, field, count, RAMP_TIMES);
   });
 });
@@ -225,7 +224,7 @@ function flight(ground: Ground, top: number): { time: number; fell: number; stra
   };
   w.pedals.set(c, FULL);
   for (let f = 0; f < 4 / DT && !landed; f++) tickWorld(w, DT);
-  assert.ok(landed, "the sedan never left the top and landed");
+  expect(landed, "the sedan never left the top and landed").toBeTruthy();
   return { time: lastAir, fell, stray, vy0 };
 }
 
@@ -237,10 +236,10 @@ describe("given a sedan driven off the edge of a solid's top", () => {
       const r = flight(new Block(top, role, -LENGTH, 0), top);
       const fall = Math.sqrt((2 * top) / G);
       t.annotate(`flew ${r.time.toFixed(4)} s, origin fell ${r.fell.toFixed(3)} m (the edge ${top} m: free fall ${fall.toFixed(4)} s), at most ${r.stray.toExponential(2)} m from the free fall`);
-      assert.ok(r.time > 5 * SLICE, `flew only ${r.time.toFixed(4)} s`);
-      assert.ok(r.stray <= 0.5 * G * SLICE * SLICE + 1e-6, `${r.stray.toExponential(2)} m from the free fall`);
+      expect(r.time, `flew only ${r.time.toFixed(4)} s`).toBeGreaterThan(5 * SLICE);
+      expect(r.stray, `${r.stray.toExponential(2)} m from the free fall`).toBeLessThanOrEqual(0.5 * G * SLICE * SLICE + 1e-6);
       const freeFall = (r.vy0 + Math.sqrt(r.vy0 * r.vy0 + 2 * G * r.fell)) / G;
-      assert.ok(Math.abs(r.time - freeFall) <= SLICE, `flew ${r.time.toFixed(4)} s over a ${r.fell.toFixed(3)} m fall, the free fall from ${r.vy0.toFixed(3)} m/s takes ${freeFall.toFixed(4)} s`);
+      expect(Math.abs(r.time - freeFall), `flew ${r.time.toFixed(4)} s over a ${r.fell.toFixed(3)} m fall, the free fall from ${r.vy0.toFixed(3)} m/s takes ${freeFall.toFixed(4)} s`).toBeLessThanOrEqual(SLICE);
     });
   }
 });
@@ -269,7 +268,7 @@ describe("given a wrecked sedan with no tyres dropped onto a prism's top, no oth
     const car = sedan(0, 0, 0, 0);
     car.parked = false;
     car.applyImpact(car.group.position.clone().addScaledVector(car.forward, 2).setY(0.5), car.forward.clone().negate(), 20, 12);
-    assert.ok(car.crashed && car.deform.massActive, "the hit did not make a wreck");
+    expect(car.crashed && car.deform.massActive, "the hit did not make a wreck").toBeTruthy();
     for (const hub of ["hubFL", "hubFR", "hubRL", "hubRR"]) car.deform.popHub(car.deform.masses.find((m) => m.name === hub)!);
     car.group.position.y = SLAB_TOP + DROP;
     const w = makeWorld([car], false, false);
@@ -278,7 +277,7 @@ describe("given a wrecked sedan with no tyres dropped onto a prism's top, no oth
       tickWorld(w, DT);
       lowest = Math.min(lowest, centreY(car));
     }
-    assert.ok(lowest >= SLAB_TOP + KEEP_OVER, `the centre of mass fell to ${lowest.toFixed(3)} m over a prism top at ${SLAB_TOP} m`);
+    expect(lowest, `the centre of mass fell to ${lowest.toFixed(3)} m over a prism top at ${SLAB_TOP} m`).toBeGreaterThanOrEqual(SLAB_TOP + KEEP_OVER);
   });
 });
 
@@ -326,8 +325,8 @@ describe(`given a monster at full throttle from rest toward a box ${STEP_TOP} m 
     };
     w.pedals.set(c, FULL);
     for (let f = 0; f < 2 / DT; f++) tickWorld(w, DT);
-    assert.ok(worst <= RISE_SLACK, `a slice rose ${(worst * 1000).toFixed(1)} mm over its climb's bound`);
-    assert.ok(climbing >= CLIMB_SLICES, `it climbed over ${climbing} slices`);
-    assert.ok(c.group.position.z > STEP_AT + 2 && Math.abs(c.group.position.y - STEP_TOP) < 0.05, `it ended at z ${c.group.position.z.toFixed(2)}, its origin ${c.group.position.y.toFixed(3)} m up`);
+    expect(worst, `a slice rose ${(worst * 1000).toFixed(1)} mm over its climb's bound`).toBeLessThanOrEqual(RISE_SLACK);
+    expect(climbing, `it climbed over ${climbing} slices`).toBeGreaterThanOrEqual(CLIMB_SLICES);
+    expect(c.group.position.z > STEP_AT + 2 && Math.abs(c.group.position.y - STEP_TOP) < 0.05, `it ended at z ${c.group.position.z.toFixed(2)}, its origin ${c.group.position.y.toFixed(3)} m up`).toBeTruthy();
   });
 });

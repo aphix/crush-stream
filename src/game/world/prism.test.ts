@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { armSolids, C_DEPTH, C_H, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, MOUNT, pointContact, PQ_BODY, PQ_MOUNT, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, STEP_MAX, Surface, WALL, wheelContact } from "./surfaces.ts";
 import { ASKER } from "./prism.ts";
 import "./ground.ts";
@@ -61,47 +60,47 @@ describe("given a box prism in the scene's solids", () => {
   it("when a point is above its top then it answers the top's height as a floor with a gap under it", () => {
     solids(BOX);
     const hit = ask(0.2, 1.05, 0.3);
-    assert.equal(hit[C_H], 1);
-    assert.equal(hit[C_NY], 1);
-    assert.ok(Math.abs(hit[C_DEPTH]! + 0.05) < 1e-12, `gap ${hit[C_DEPTH]}`);
+    expect(hit[C_H]).toBe(1);
+    expect(hit[C_NY]).toBe(1);
+    expect(Math.abs(hit[C_DEPTH]! + 0.05), `gap ${hit[C_DEPTH]}`).toBeLessThan(1e-12);
     armSolids(null);
   });
 
   it("when a point is in it deeper than a tyre mounts then it answers a side: no floor, a level normal and the way out", () => {
     solids(BOX);
     const hit = ask(0.9, 0.5, 0, 0, 0);
-    assert.equal(hit[C_H], -Infinity);
-    assert.equal(hit[C_NY], 0);
-    assert.ok(Math.abs(hit[C_DEPTH]! - 0.1) < 1e-12, `depth ${hit[C_DEPTH]}`);
-    assert.ok(Math.abs(hit[C_NX]! - 1) < 1e-12 && Math.abs(hit[C_NZ]!) < 1e-12, `normal ${hit[C_NX]} ${hit[C_NZ]}`);
+    expect(hit[C_H]).toBe(-Infinity);
+    expect(hit[C_NY]).toBe(0);
+    expect(Math.abs(hit[C_DEPTH]! - 0.1), `depth ${hit[C_DEPTH]}`).toBeLessThan(1e-12);
+    expect(Math.abs(hit[C_NX]! - 1) < 1e-12 && Math.abs(hit[C_NZ]!) < 1e-12, `normal ${hit[C_NX]} ${hit[C_NZ]}`).toBeTruthy();
     armSolids(null);
   });
 
   it("when a point is in it no deeper than the step a tyre mounts then it stands on the top if it is a tyre's or no deeper under it than the face it is in is deep: a body point in a side face is in a wall", () => {
     solids(BOX);
     const kerb = ask(0.9, 1 - STEP_MAX * 0.9, 0);
-    assert.equal(kerb[C_H], 1);
+    expect(kerb[C_H]).toBe(1);
     const wall = ask(0.9, 1 - STEP_MAX * 0.9, 0, 0, 0, true);
-    assert.equal(wall[C_H], -Infinity);
-    assert.equal(wall[C_NY], 0);
-    assert.ok(Math.abs(wall[C_DEPTH]! - 0.1) < 1e-12, `depth ${wall[C_DEPTH]}`);
+    expect(wall[C_H]).toBe(-Infinity);
+    expect(wall[C_NY]).toBe(0);
+    expect(Math.abs(wall[C_DEPTH]! - 0.1), `depth ${wall[C_DEPTH]}`).toBeLessThan(1e-12);
     const beyond = ask(0.9, 1 - STEP_MAX * 1.1, 0);
-    assert.equal(beyond[C_H], -Infinity);
+    expect(beyond[C_H]).toBe(-Infinity);
     armSolids(null);
   });
 
   it("when a body point is under the top by less than the face it is in is deep then it stands on the top", () => {
     solids(BOX);
     const hit = ask(0.2, 1 - 0.002, 0.3, 0, 0, true);
-    assert.equal(hit[C_H], 1);
+    expect(hit[C_H]).toBe(1);
     armSolids(null);
   });
 
   it("when a point under its base is asked then the prism is no floor and no wall: a body passes beneath", () => {
     solids({ ...BOX, base: 3, top: 4 });
     const hit = ask(0, 1, 0);
-    assert.equal(hit[C_H], 0, "the ground answers, as if the prism were not there");
-    assert.equal(hit[C_NY], 1);
+    expect(hit[C_H], "the ground answers, as if the prism were not there").toBe(0);
+    expect(hit[C_NY]).toBe(1);
     armSolids(null);
   });
 
@@ -110,10 +109,10 @@ describe("given a box prism in the scene's solids", () => {
     // 0.3 m in from the +x flank and 0.05 m in from the +z end: nearest exit is the end, but it is moving in along -x, fast enough
     // to have crossed the flank within the step (`ENTRY_WINDOW`) it is asked in.
     const arrived = ask(0.7, 0.5, 1.95, -(0.3 / ENTRY_WINDOW) * 2, 0);
-    assert.ok(Math.abs(arrived[C_NX]! - 1) < 1e-12, `normal ${arrived[C_NX]} ${arrived[C_NZ]}`);
-    assert.ok(Math.abs(arrived[C_DEPTH]! - 0.3) < 1e-12, `depth ${arrived[C_DEPTH]}`);
+    expect(Math.abs(arrived[C_NX]! - 1), `normal ${arrived[C_NX]} ${arrived[C_NZ]}`).toBeLessThan(1e-12);
+    expect(Math.abs(arrived[C_DEPTH]! - 0.3), `depth ${arrived[C_DEPTH]}`).toBeLessThan(1e-12);
     const resting = ask(0.7, 0.5, 1.95, 0, 0);
-    assert.ok(Math.abs(resting[C_NZ]! - 1) < 1e-12, `at rest it leaves by the nearest: ${resting[C_NX]} ${resting[C_NZ]}`);
+    expect(Math.abs(resting[C_NZ]! - 1), `at rest it leaves by the nearest: ${resting[C_NX]} ${resting[C_NZ]}`).toBeLessThan(1e-12);
     armSolids(null);
   });
 
@@ -121,15 +120,15 @@ describe("given a box prism in the scene's solids", () => {
     solids(BOX);
     // 0.3 m in from the +x flank, drifting in along -x at half the speed that would cross it within `ENTRY_WINDOW`: it came in earlier.
     const drifting = ask(0.7, 0.5, 1.95, -(0.3 / ENTRY_WINDOW) / 2, 0);
-    assert.ok(Math.abs(drifting[C_NZ]! - 1) < 1e-12, `leaves by the nearest: ${drifting[C_NX]} ${drifting[C_NZ]}`);
-    assert.ok(Math.abs(drifting[C_DEPTH]! - 0.05) < 1e-12, `depth ${drifting[C_DEPTH]}`);
+    expect(Math.abs(drifting[C_NZ]! - 1), `leaves by the nearest: ${drifting[C_NX]} ${drifting[C_NZ]}`).toBeLessThan(1e-12);
+    expect(Math.abs(drifting[C_DEPTH]! - 0.05), `depth ${drifting[C_DEPTH]}`).toBeLessThan(1e-12);
     armSolids(null);
   });
 
   it("when a point is moving no faster than the rest speed then it leaves through the nearest face", () => {
     solids(BOX);
     const hit = ask(0.7, 0.5, 1.95, -SOLID_AT_REST * 0.5, 0);
-    assert.ok(Math.abs(hit[C_NZ]! - 1) < 1e-12);
+    expect(Math.abs(hit[C_NZ]! - 1)).toBeLessThan(1e-12);
     armSolids(null);
   });
 
@@ -143,11 +142,11 @@ describe("given a box prism in the scene's solids", () => {
       solids(TALL);
       // 0.3 m past the middle of the 2 m wide box, toward -x: the -x face is the nearer (0.7 m), the body stands outside the +x face (1.3 m).
       const alone = ask(-0.3, 0.5, 0, 0, 0);
-      assert.ok(Math.abs(alone[C_NX]! + 1) < 1e-12 && Math.abs(alone[C_DEPTH]! - 0.7) < 1e-12, `no body asks: ${alone[C_NX]} depth ${alone[C_DEPTH]}`);
+      expect(Math.abs(alone[C_NX]! + 1) < 1e-12 && Math.abs(alone[C_DEPTH]! - 0.7) < 1e-12, `no body asks: ${alone[C_NX]} depth ${alone[C_DEPTH]}`).toBeTruthy();
       ASKER[0] = 3;
       ASKER[1] = 0;
       const own = ask(-0.3, 0.5, 0, 0, 0);
-      assert.ok(Math.abs(own[C_NX]! - 1) < 1e-12 && Math.abs(own[C_DEPTH]! - 1.3) < 1e-12, `its body at +3: ${own[C_NX]} depth ${own[C_DEPTH]}`);
+      expect(Math.abs(own[C_NX]! - 1) < 1e-12 && Math.abs(own[C_DEPTH]! - 1.3) < 1e-12, `its body at +3: ${own[C_NX]} depth ${own[C_DEPTH]}`).toBeTruthy();
       armSolids(null);
     });
 
@@ -156,10 +155,10 @@ describe("given a box prism in the scene's solids", () => {
       ASKER[0] = 0;
       ASKER[1] = 0;
       const over = ask(-0.3, 0.5, 0, 0, 0);
-      assert.ok(Math.abs(over[C_NX]! + 1) < 1e-12, `a body over it: ${over[C_NX]}`);
+      expect(Math.abs(over[C_NX]! + 1), `a body over it: ${over[C_NX]}`).toBeLessThan(1e-12);
       ASKER[0] = 3;
       const arrived = ask(0.7, 0.5, 0, -(0.3 / ENTRY_WINDOW) * 2, 0);
-      assert.ok(Math.abs(arrived[C_NX]! - 1) < 1e-12 && Math.abs(arrived[C_DEPTH]! - 0.3) < 1e-12, `moving in at +x: ${arrived[C_NX]} depth ${arrived[C_DEPTH]}`);
+      expect(Math.abs(arrived[C_NX]! - 1) < 1e-12 && Math.abs(arrived[C_DEPTH]! - 0.3) < 1e-12, `moving in at +x: ${arrived[C_NX]} depth ${arrived[C_DEPTH]}`).toBeTruthy();
       armSolids(null);
     });
 
@@ -168,7 +167,7 @@ describe("given a box prism in the scene's solids", () => {
       ASKER[0] = 6;
       ASKER[1] = 0;
       const hit = ask(2.9, 1, 0, 0, 0);
-      assert.ok(Math.abs(hit[C_NX]! - 1) < 1e-12 && Math.abs(hit[C_DEPTH]! - 0.6) < 1e-12, `depth ${hit[C_DEPTH]} nx ${hit[C_NX]}`);
+      expect(Math.abs(hit[C_NX]! - 1) < 1e-12 && Math.abs(hit[C_DEPTH]! - 0.6) < 1e-12, `depth ${hit[C_DEPTH]} nx ${hit[C_NX]}`).toBeTruthy();
       armSolids(null);
     });
 
@@ -178,8 +177,8 @@ describe("given a box prism in the scene's solids", () => {
       ASKER[0] = 3;
       ASKER[1] = 0;
       const hit = ask(-0.3, 0.1, 0, 0, 0);
-      assert.equal(hit[C_H], -Infinity, `no floor: the top read as the way out, ${hit[C_H]}`);
-      assert.ok(Math.abs(hit[C_NX]! - 1) < 1e-12 && Math.abs(hit[C_DEPTH]! - 1.3) < 1e-12, `its body's side: ${hit[C_NX]} depth ${hit[C_DEPTH]}`);
+      expect(hit[C_H], `no floor: the top read as the way out, ${hit[C_H]}`).toBe(-Infinity);
+      expect(Math.abs(hit[C_NX]! - 1) < 1e-12 && Math.abs(hit[C_DEPTH]! - 1.3) < 1e-12, `its body's side: ${hit[C_NX]} depth ${hit[C_DEPTH]}`).toBeTruthy();
       armSolids(null);
     });
 
@@ -187,11 +186,11 @@ describe("given a box prism in the scene's solids", () => {
       solids(TALL);
       // 0.3 m past the middle toward -x, moving +x at 0.5 m/s: the -x face it would have entered by is 1.4 s back, outside the window.
       const alone = ask(-0.3, 0.5, 0, 0.5, 0);
-      assert.ok(Math.abs(alone[C_NX]! + 1) < 1e-12 && Math.abs(alone[C_DEPTH]! - 0.7) < 1e-12, `no body asks: ${alone[C_NX]} depth ${alone[C_DEPTH]}`);
+      expect(Math.abs(alone[C_NX]! + 1) < 1e-12 && Math.abs(alone[C_DEPTH]! - 0.7) < 1e-12, `no body asks: ${alone[C_NX]} depth ${alone[C_DEPTH]}`).toBeTruthy();
       ASKER[0] = 3;
       ASKER[1] = 0;
       const own = ask(-0.3, 0.5, 0, 0.5, 0);
-      assert.ok(Math.abs(own[C_NX]! - 1) < 1e-12 && Math.abs(own[C_DEPTH]! - 1.3) < 1e-12, `its body at +3: ${own[C_NX]} depth ${own[C_DEPTH]}`);
+      expect(Math.abs(own[C_NX]! - 1) < 1e-12 && Math.abs(own[C_DEPTH]! - 1.3) < 1e-12, `its body at +3: ${own[C_NX]} depth ${own[C_DEPTH]}`).toBeTruthy();
       armSolids(null);
     });
   });
@@ -204,22 +203,22 @@ describe("given a box prism in the scene's solids", () => {
       const hit = ask(1 - depth, 0.5, 1.9 - 0.3 * depth, -20, -6);
       faces.add(`${hit[C_NX]!.toFixed(3)} ${hit[C_NZ]!.toFixed(3)}`);
     }
-    assert.equal(faces.size, 1, `faces ${[...faces].join(" | ")}`);
+    expect(faces.size, `faces ${[...faces].join(" | ")}`).toBe(1);
     armSolids(null);
   });
 
   it("when its end is a joint then the end is no face and a point at the end leaves across", () => {
     solids({ ...BOX, ends: 1 });
     const hit = ask(0.5, 0.5, 1.95, 0, 0);
-    assert.ok(Math.abs(Math.abs(hit[C_NX]!) - 1) < 1e-12, `normal ${hit[C_NX]} ${hit[C_NZ]}`);
+    expect(Math.abs(Math.abs(hit[C_NX]!) - 1), `normal ${hit[C_NX]} ${hit[C_NZ]}`).toBeLessThan(1e-12);
     armSolids(null);
   });
 
   it("when it is a prop knocked off its spot by a hit then a point query does not meet it", () => {
     solids({ ...BOX, role: KNOCK });
     const hit = ask(0.9, 0.5, 0);
-    assert.equal(hit[C_H], 0, "the ground answers");
-    assert.equal(hit[C_NY], 1);
+    expect(hit[C_H], "the ground answers").toBe(0);
+    expect(hit[C_NY]).toBe(1);
     armSolids(null);
   });
 });
@@ -228,15 +227,15 @@ describe("given a circle prism and a ramp prism", () => {
   it("when a point is inside the circle then it leaves along the radius by the way out", () => {
     solids({ x: 3, z: 0, yaw: 0, hx: 0.5, hz: 0.5, circle: true, base: 0, top: 3, id: 0 });
     const hit = ask(3.3, 1, 0, -1, 0);
-    assert.ok(Math.abs(hit[C_DEPTH]! - 0.2) < 1e-12 && Math.abs(hit[C_NX]! - 1) < 1e-12, `depth ${hit[C_DEPTH]} nx ${hit[C_NX]}`);
+    expect(Math.abs(hit[C_DEPTH]! - 0.2) < 1e-12 && Math.abs(hit[C_NX]! - 1) < 1e-12, `depth ${hit[C_DEPTH]} nx ${hit[C_NX]}`).toBeTruthy();
     armSolids(null);
   });
 
   it("when the top is tilted then the floor's normal leans away from the high side and its height is the plane's", () => {
     solids({ ...BOX, top: 1, gw: -0.25 });
     const hit = ask(0, 3, 1);
-    assert.ok(Math.abs(hit[C_H]! - 0.75) < 1e-12, `height ${hit[C_H]}`);
-    assert.ok(hit[C_NZ]! > 0 && Math.abs(hit[C_NZ]! - 0.25 / Math.hypot(0.25, 1)) < 1e-12, `normal ${hit[C_NZ]}`);
+    expect(Math.abs(hit[C_H]! - 0.75), `height ${hit[C_H]}`).toBeLessThan(1e-12);
+    expect(hit[C_NZ]! > 0 && Math.abs(hit[C_NZ]! - 0.25 / Math.hypot(0.25, 1)) < 1e-12, `normal ${hit[C_NZ]}`).toBeTruthy();
     armSolids(null);
   });
 
@@ -244,9 +243,9 @@ describe("given a circle prism and a ramp prism", () => {
     const s = new Surface();
     const i = s.addPrism({ ...BOX, moves: true });
     armSolids(s);
-    assert.equal(ask(5, 0.5, 0)[C_H], 0, "the prism is not there yet");
+    expect(ask(5, 0.5, 0)[C_H], "the prism is not there yet").toBe(0);
     s.movePrism(i, 5.5, 0, 0, 2, 0);
-    assert.equal(ask(5, 0.5, 0, 0, 0)[C_H], -Infinity, "it is now");
+    expect(ask(5, 0.5, 0, 0, 0)[C_H], "it is now").toBe(-Infinity);
     armSolids(null);
   });
 });
@@ -257,16 +256,16 @@ describe("given the step a tyre mounts", () => {
 
   it("when it is derived from the classes then it is the biggest tyre's share of its radius", () => {
     const biggest = Math.max(...CAR_STYLE_IDS.map((id) => carFrame(CAR_STYLES[id]).rig.tyre.r * CLASSES[STYLE_CLASS[id]].wheelScale));
-    assert.ok(Math.abs(STEP_MAX - MOUNT * biggest) < 1e-9, `${STEP_MAX} against ${MOUNT * biggest}`);
+    expect(Math.abs(STEP_MAX - MOUNT * biggest), `${STEP_MAX} against ${MOUNT * biggest}`).toBeLessThan(1e-9);
   });
 
   it("when a sedan's tyre and a monster's are asked at the same point 0.12 m under a box prism's top, then the sedan's own mount reads a side and the monster's a floor", () => {
     solids(BOX);
     const y = 1 - 0.12;
     const sedanHit = ask(0.9, y, 0, 0, 0, false, mountOf("sedan"))[C_H];
-    assert.equal(sedanHit, -Infinity, `sedan mount ${mountOf("sedan")}: read ${sedanHit}`);
+    expect(sedanHit, `sedan mount ${mountOf("sedan")}: read ${sedanHit}`).toBe(-Infinity);
     const monsterHit = ask(0.9, y, 0, 0, 0, false, mountOf("monster"))[C_H];
-    assert.equal(monsterHit, 1, `monster mount ${mountOf("monster")}: read ${monsterHit}`);
+    expect(monsterHit, `monster mount ${mountOf("monster")}: read ${monsterHit}`).toBe(1);
     armSolids(null);
   });
 
@@ -275,12 +274,12 @@ describe("given the step a tyre mounts", () => {
     const y = 1 - 0.12;
     // 0.1 m inside the +x face, closing on it at 10 m/s: it came in through it a hundredth of a second ago.
     const into = ask(0.9, y, 0, -10, 0, false, mountOf("monster"));
-    assert.equal(into[C_H], -Infinity, `rolling into the side: read ${into[C_H]}`);
-    assert.equal(into[C_NX], 1);
-    assert.ok(Math.abs(into[C_DEPTH]! - 0.1) < 1e-12, `depth ${into[C_DEPTH]}`);
+    expect(into[C_H], `rolling into the side: read ${into[C_H]}`).toBe(-Infinity);
+    expect(into[C_NX]).toBe(1);
+    expect(Math.abs(into[C_DEPTH]! - 0.1), `depth ${into[C_DEPTH]}`).toBeLessThan(1e-12);
     // Along +z, the nearest face it closes on is the far end's, 2 m off: crossed longer ago than the entry window.
-    assert.equal(ask(0.9, y, 0, 0, 10, false, mountOf("monster"))[C_H], 1, "rolling along the side");
-    assert.equal(ask(0.9, y, 0, 0, 0, false, mountOf("monster"))[C_H], 1, "at rest");
+    expect(ask(0.9, y, 0, 0, 10, false, mountOf("monster"))[C_H], "rolling along the side").toBe(1);
+    expect(ask(0.9, y, 0, 0, 0, false, mountOf("monster"))[C_H], "at rest").toBe(1);
     armSolids(null);
   });
 
@@ -288,28 +287,28 @@ describe("given the step a tyre mounts", () => {
     solids(BOX);
     // 0.12 m under the top, 0.15 m inside a face it closes on: a body point there stands on the top, as the biggest tyre's step lets it.
     const bare = ask(0.85, 1 - 0.12, 0, -1, 0, true);
-    assert.equal(bare[C_H], 1, "a body point standing 0.12 m under the top, inside a deeper face");
+    expect(bare[C_H], "a body point standing 0.12 m under the top, inside a deeper face").toBe(1);
     const bareRead = [bare[C_H], bare[C_NY], bare[C_DEPTH]].join();
     const mounted = ask(0.85, 1 - 0.12, 0, -1, 0, true, mountOf("sedan"));
-    assert.equal([mounted[C_H], mounted[C_NY], mounted[C_DEPTH]].join(), bareRead, `body point with the sedan's mount ${mountOf("sedan")}`);
+    expect([mounted[C_H], mounted[C_NY], mounted[C_DEPTH]].join(), `body point with the sedan's mount ${mountOf("sedan")}`).toBe(bareRead);
     armSolids(null);
   });
 
   it("when a tyre is 0.4 m under a box prism's top and falling, then the sedan's tyre (0.342 m) is not stood on the top, however it came in: it reads the ground under it; the monster's (0.614 m) is stood on it", () => {
     solids(BOX);
     const sedanHit = ask(0, 0.6, 0, 0, 0, false, mountOf("sedan"), -1)[C_H];
-    assert.equal(sedanHit, 0, `sedan mount ${mountOf("sedan")}: read ${sedanHit}`);
+    expect(sedanHit, `sedan mount ${mountOf("sedan")}: read ${sedanHit}`).toBe(0);
     const monsterHit = ask(0, 0.6, 0, 0, 0, false, mountOf("monster"), -1)[C_H];
-    assert.equal(monsterHit, 1, `monster mount ${mountOf("monster")}: read ${monsterHit}`);
+    expect(monsterHit, `monster mount ${mountOf("monster")}: read ${monsterHit}`).toBe(1);
     armSolids(null);
   });
 
   it("when a tyre's tread footprint stands 0.12 m under the top of a prism narrower than the tyre's step, then the sedan's reads the ground (the prism a wall to it) and the monster's the prism's top", () => {
     const flat = { sedan: treadRead("sedan"), monster: treadRead("monster") };
     solids({ ...BOX, hx: 0.1, hz: 3 });
-    assert.equal(treadRead("sedan"), flat.sedan, `sedan tread (scale ${treadScale("sedan").toFixed(3)}, mount ${mountOf("sedan").toFixed(3)})`);
+    expect(treadRead("sedan"), `sedan tread (scale ${treadScale("sedan").toFixed(3)}, mount ${mountOf("sedan").toFixed(3)})`).toBe(flat.sedan);
     const monster = treadRead("monster");
-    assert.ok(monster > flat.monster + 0.5, `monster tread (scale ${treadScale("monster").toFixed(3)}, mount ${mountOf("monster").toFixed(3)}): ${monster} over the ground's ${flat.monster}`);
+    expect(monster, `monster tread (scale ${treadScale("monster").toFixed(3)}, mount ${mountOf("monster").toFixed(3)}): ${monster} over the ground's ${flat.monster}`).toBeGreaterThan(flat.monster + 0.5);
     armSolids(null);
   });
 
@@ -318,7 +317,7 @@ describe("given the step a tyre mounts", () => {
     const flat = treadRead("monster", motion);
     solids({ ...BOX, hx: 0.1, hz: 3 });
     const rolling = treadRead("monster", motion);
-    assert.equal(rolling, flat, `monster tread rolling across (scale ${treadScale("monster").toFixed(3)}, mount ${mountOf("monster").toFixed(3)}): ${rolling} against the ground's ${flat}`);
+    expect(rolling, `monster tread rolling across (scale ${treadScale("monster").toFixed(3)}, mount ${mountOf("monster").toFixed(3)}): ${rolling} against the ground's ${flat}`).toBe(flat);
     armSolids(null);
   });
 
@@ -327,9 +326,9 @@ describe("given the step a tyre mounts", () => {
     for (let k = 0; k < 20; k++) s.addPrism({ ...BOX, x: k * 30, id: k, role: WALL });
     s.seal();
     const count = s.prismsNear(60, 0, 5);
-    assert.equal(count, 1);
-    assert.equal(s.nearList[0], 2);
-    assert.equal(s.prismsNear(45, 0, 20), 2);
+    expect(count).toBe(1);
+    expect(s.nearList[0]).toBe(2);
+    expect(s.prismsNear(45, 0, 20)).toBe(2);
   });
 });
 
@@ -360,19 +359,19 @@ describe("given a car's footprint over a circle prism at its flank", () => {
     foot[FOOT_FZ] = 1;
     foot[FOOT_HW] = HW;
     foot[FOOT_HL] = HL;
-    assert.ok(footFace(s.p, 0, foot, 0, speed, 1 / FINE_HZ, hit), "they overlap");
+    expect(footFace(s.p, 0, foot, 0, speed, 1 / FINE_HZ, hit), "they overlap").toBeTruthy();
     return { pen: hit[FF_PEN]!, nx: hit[FF_NX]!, nz: hit[FF_NZ]! };
   }
 
   it("when the car drives on at 30 m/s then it met the prism through the footprint's front, the walk back's depth", () => {
     const { pen, nx, nz } = meet(30);
-    assert.ok(nz < -0.99, `normal ${nx} ${nz}`);
-    assert.ok(pen > RADIUS - 0.006 + 0.05, `depth ${pen}`);
+    expect(nz, `normal ${nx} ${nz}`).toBeLessThan(-0.99);
+    expect(pen, `depth ${pen}`).toBeGreaterThan(RADIUS - 0.006 + 0.05);
   });
 
   it("when the car drifts at 1 m/s then it leaves the way it is nearest, across the flank, by the flank's own depth", () => {
     const { pen, nx, nz } = meet(1);
-    assert.ok(Math.abs(nx + 1) < 1e-12 && Math.abs(nz) < 1e-12, `normal ${nx} ${nz}`);
-    assert.ok(Math.abs(pen - (RADIUS - 0.006)) < 1e-12, `depth ${pen}`);
+    expect(Math.abs(nx + 1) < 1e-12 && Math.abs(nz) < 1e-12, `normal ${nx} ${nz}`).toBeTruthy();
+    expect(Math.abs(pen - (RADIUS - 0.006)), `depth ${pen}`).toBeLessThan(1e-12);
   });
 });

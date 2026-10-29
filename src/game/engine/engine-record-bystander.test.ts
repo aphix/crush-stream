@@ -1,5 +1,4 @@
-import { beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { crownY, keelY } from "../vehicle/car-cage-rig.ts";
@@ -18,6 +17,7 @@ import { ClipSim } from "./engine-replay.ts";
 import { FACE_NOSE } from "../deform/load-crush.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** The engine's step is a float32 (`Math.fround`), which the recorder stores whole: the replay runs the very step the live sim ran. */
 const H = Math.fround(1 / FINE_HZ);
@@ -79,16 +79,16 @@ function record(): Recorded {
   cars[FAR]!.spawnFacing(IMPACT_X, -300, Math.PI / 2, 12);
   cars[MIRROR]!.spawnFacing(IMPACT_X, 45, Math.PI / 2, 12);
   cars[MIRROR]!.breakMirror(-1, new THREE.Vector3(1, 1, 0));
-  assert.ok(!cars[MIRROR]!.crashed && cars[MIRROR]!.hasLoosePart(), "the mirror car has a part off and is no wreck");
+  expect(!cars[MIRROR]!.crashed && cars[MIRROR]!.hasLoosePart(), "the mirror car has a part off and is no wreck").toBeTruthy();
   cars[DENTED]!.spawnFacing(IMPACT_X, -40, Math.PI / 2, 12);
   cars[DENTED]!.deform.crush[FACE_NOSE] = DENT_M;
   cars[DENTED]!.deform.bakeLoadCrush();
-  assert.ok(!cars[DENTED]!.crashed && !cars[DENTED]!.hasLoosePart() && cars[DENTED]!.deform.loadCrushed(), "the dented car has a nose dent under the crash's depth, no part off and is no wreck");
+  expect(!cars[DENTED]!.crashed && !cars[DENTED]!.hasLoosePart() && cars[DENTED]!.deform.loadCrushed(), "the dented car has a nose dent under the crash's depth, no part off and is no wreck").toBeTruthy();
   for (const [k, i] of WRECKS.entries()) {
     const car = cars[i]!;
     car.spawnFacing(IMPACT_X + 6 * (k & 1), 50 + 4 * (k >> 1), Math.PI / 2, 12);
     car.applyImpact(new THREE.Vector3(car.group.position.x + 2.2, 0.5, car.group.position.z), new THREE.Vector3(-1, 0, 0), 16, 12);
-    assert.ok(car.crashed, `car ${i} is a wreck`);
+    expect(car.crashed, `car ${i} is a wreck`).toBeTruthy();
   }
   // A course (the race's road-segment hint and 128 props, none knocked at the start): every keyframe reads them, a replay restores them.
   const rec = new CrashRecorder({ recall: (_i, out) => out.set([-1]), knocks: () => new Uint8Array(16) });
@@ -119,7 +119,7 @@ function record(): Recorded {
     t += H;
   }
   rec.end();
-  assert.ok(rec.ledger.kept.length >= 1, "the head-on crash did not rank as a highlight");
+  expect(rec.ledger.kept.length, "the head-on crash did not rank as a highlight").toBeGreaterThanOrEqual(1);
   const kept = rec.ledger.kept[0]!;
   const w = new Writer(clipBytes(kept));
   writeClip(w, kept);
@@ -154,46 +154,46 @@ describe("given a flat-field head-on recorded as a highlight with 19 bystander c
     const { clip } = run;
     const slots = clip.cars.map((c) => c.slot);
     t.annotate(`clip cars: ${slots.join(",")} (${(clipBytes(clip) / 1024).toFixed(0)} KB)`);
-    assert.ok(slots.includes(A) && slots.includes(B), "the head-on pair is in the clip");
-    assert.ok(slots.includes(NEAR), "a car 40 m from the hit is in the clip");
-    assert.ok(slots.includes(TOUCHER), "a car that touched a bystander since the clip's start is in the clip, wherever it is");
-    assert.ok(slots.includes(JUMPER), "a car 50 m from the hit is in the clip though it is respawned after the impact: a keyframe puts it there");
-    assert.ok(!slots.includes(FAR), "a car 300 m away is not in the clip");
+    expect(slots.includes(A) && slots.includes(B), "the head-on pair is in the clip").toBeTruthy();
+    expect(slots.includes(NEAR), "a car 40 m from the hit is in the clip").toBeTruthy();
+    expect(slots.includes(TOUCHER), "a car that touched a bystander since the clip's start is in the clip, wherever it is").toBeTruthy();
+    expect(slots.includes(JUMPER), "a car 50 m from the hit is in the clip though it is respawned after the impact: a keyframe puts it there").toBeTruthy();
+    expect(!slots.includes(FAR), "a car 300 m away is not in the clip").toBe(true);
     // The recorder's clock sums `H` as this loop did, so the clip's first step is the trace step at `t0`.
     const s0 = Math.round(clip.t0 / H);
-    assert.ok(Math.abs(s0 * H - clip.t0) < 1e-9, "the clip starts on a step of the trace");
+    expect(Math.abs(s0 * H - clip.t0), "the clip starts on a step of the trace").toBeLessThan(1e-9);
     const jump = clip.keyStep.indexOf(JUMP_STEP - s0);
-    assert.ok(jump > 0 && ((clip.keyCars[jump]! >>> slots.indexOf(JUMPER)) & 1) === 1 && clip.keyCars[jump] === 1 << slots.indexOf(JUMPER), "the respawn has a keyframe of its own, with the respawned car alone");
+    expect(jump > 0 && ((clip.keyCars[jump]! >>> slots.indexOf(JUMPER)) & 1) === 1 && clip.keyCars[jump] === 1 << slots.indexOf(JUMPER), "the respawn has a keyframe of its own, with the respawned car alone").toBeTruthy();
     const worst = replayWorst(run);
     t.annotate([...worst].map(([slot, d]) => `car ${slot}: ${d} m off`).join("\n"));
-    assert.deepEqual([...worst.values()].filter((d) => d !== 0), [], "every car of the clip is where the sim had it at every step");
+    expect([...worst.values()].filter((d) => d !== 0), "every car of the clip is where the sim had it at every step").toHaveLength(0);
   });
 
   it("when the clip's byte share is spent on the wrecks 50 to 74 m out, then it takes the nearer wrecks and drops the farther ones", (t) => {
     const taken = WRECKS.filter((i) => run.clip.cars.some((c) => c.slot === i));
     t.annotate(`wrecks taken: ${taken.join(",")} of ${WRECKS.join(",")} (${(clipBytes(run.clip) / 1024).toFixed(0)} KB)`);
-    assert.ok(taken.length >= 1, "the nearest wreck (50 m) is in the clip");
-    assert.ok(taken.length < WRECKS.length, "the farthest wreck (74 m) would take the clip past its share");
-    assert.ok(taken.every((slot, k) => slot === WRECKS[k]), "the wrecks taken are the nearest ones");
+    expect(taken.length, "the nearest wreck (50 m) is in the clip").toBeGreaterThanOrEqual(1);
+    expect(taken.length, "the farthest wreck (74 m) would take the clip past its share").toBeLessThan(WRECKS.length);
+    expect(taken.every((slot, k) => slot === WRECKS[k]), "the wrecks taken are the nearest ones").toBeTruthy();
   });
 
   it("when the clip is restored, then a car with a torn mirror and no crash gets back its own hit direction, not the zeroed one of its network state", () => {
     const { clip, cars, dress } = run;
-    assert.ok(clip.cars.some((c) => c.slot === MIRROR), "the mirror car (45 m from the hit) is in the clip");
+    expect(clip.cars.some((c) => c.slot === MIRROR), "the mirror car (45 m from the hit) is in the clip").toBeTruthy();
     const sim = new ClipSim(clip, clip.cars.map((c) => cars[c.slot]!), { dress, collide: () => {}, blend: new PoseBlend() });
     sim.restart();
-    assert.deepEqual(cars[MIRROR]!.deform.impactInward.toArray(), [0, 0, -1]);
+    expect(firstMismatch(cars[MIRROR]!.deform.impactInward.toArray(), [0, 0, -1])).toBeUndefined();
   });
 
   it("when the clip is restored, then a car with a nose dent under the crash's depth and no crash gets its load crush back from the keyframe, no wreck", () => {
     const { clip, cars, dress } = run;
     const car = cars[DENTED]!;
-    assert.ok(clip.cars.some((c) => c.slot === DENTED), "the dented car (40 m from the hit) is in the clip");
+    expect(clip.cars.some((c) => c.slot === DENTED), "the dented car (40 m from the hit) is in the clip").toBeTruthy();
     car.deform.crush.fill(0);
     const sim = new ClipSim(clip, clip.cars.map((c) => cars[c.slot]!), { dress, collide: () => {}, blend: new PoseBlend() });
     sim.restart();
-    assert.ok(!car.crashed, "the dented car is restored with no wreck");
-    assert.ok(Math.abs(car.deform.crush[FACE_NOSE]! - DENT_M) < 1e-9, `its nose crush is ${car.deform.crush[FACE_NOSE]!.toFixed(4)} m after the restore, ${DENT_M} m as recorded`);
+    expect(!car.crashed, "the dented car is restored with no wreck").toBe(true);
+    expect(Math.abs(car.deform.crush[FACE_NOSE]! - DENT_M), `its nose crush is ${car.deform.crush[FACE_NOSE]!.toFixed(4)} m after the restore, ${DENT_M} m as recorded`).toBeLessThan(1e-9);
   });
 
   it("when the clip is restored, then a car with a torn mirror and no crash is drawn in its rest skin, not collapsed by the zero skin inputs of its network state (no bake ever ran for it)", () => {
@@ -201,20 +201,20 @@ describe("given a flat-field head-on recorded as a highlight with 19 bystander c
     const car = cars[MIRROR]!;
     const sim = new ClipSim(clip, clip.cars.map((c) => cars[c.slot]!), { dress, collide: () => {}, blend: new PoseBlend() });
     sim.restart();
-    assert.ok(car.hasLoosePart() && !car.crashed, "the mirror car is restored with its mirror off and no wreck");
+    expect(car.hasLoosePart() && !car.crashed, "the mirror car is restored with its mirror off and no wreck").toBeTruthy();
     const drawn = car.body.geometry.getAttribute("position").array as Float32Array;
     const rest = car.deform.restSkin;
     let off = 0;
     for (let i = 0; i < rest.length; i++) off = Math.max(off, Math.abs(drawn[i]! - rest[i]!));
-    assert.equal(off, 0, `the body skin is ${off} m off its rest shape at the clip's first frame`);
+    expect(off, `the body skin is ${off} m off its rest shape at the clip's first frame`).toBe(0);
   });
 
   it("when the clip is replayed, then a prop that a car outside the clip knocked off its spot is in the clip's knocks and is knocked again at that step, while a clip car's own knock is not", () => {
     const { clip, cars, dress } = run;
     const s0 = Math.round(clip.t0 / H);
-    assert.ok(clip.cars.some((c) => c.slot === NEAR) && !clip.cars.some((c) => c.slot === FAR), "NEAR is in the clip and FAR is not");
+    expect(clip.cars.some((c) => c.slot === NEAR) && !clip.cars.some((c) => c.slot === FAR), "NEAR is in the clip and FAR is not").toBeTruthy();
     const want = JSON.stringify([{ step: KNOCK_STEP - s0, prop: OUTSIDE_PROP }]);
-    assert.equal(JSON.stringify(clip.knocks), want);
+    expect(JSON.stringify(clip.knocks)).toBe(want);
     const heard: { step: number; prop: number }[] = [];
     const sim: ClipSim = new ClipSim(clip, clip.cars.map((c) => cars[c.slot]!), {
       dress,
@@ -225,9 +225,9 @@ describe("given a flat-field head-on recorded as a highlight with 19 bystander c
       blend: new PoseBlend(),
     });
     sim.restart();
-    assert.equal(heard.length, 0, "no prop is knocked in the first keyframe");
+    expect(heard.length, "no prop is knocked in the first keyframe").toBe(0);
     while (!sim.done) sim.advanceTo(sim.time + 1e-6);
-    assert.equal(JSON.stringify(heard), want, "the replay knocks the prop the step the record did, before it runs");
+    expect(JSON.stringify(heard), "the replay knocks the prop the step the record did, before it runs").toBe(want);
   });
 });
 
@@ -278,7 +278,7 @@ function recordStack(): Recorded {
     trace.push(Float64Array.from(cars.flatMap((c) => c.group.position.toArray())));
   }
   rec.end();
-  assert.ok(rec.ledger.kept.length >= 1, "the head-on crash did not rank as a highlight");
+  expect(rec.ledger.kept.length, "the head-on crash did not rank as a highlight").toBeGreaterThanOrEqual(1);
   const kept = rec.ledger.kept[0]!;
   const w = new Writer(clipBytes(kept));
   writeClip(w, kept);
@@ -290,11 +290,11 @@ describe("given a flat-field head-on recorded as a highlight while 300 m away a 
     const run = recordStack();
     const slots = run.clip.cars.map((c) => c.slot);
     t.annotate(`clip cars: ${slots.join(",")}`);
-    assert.ok(slots.includes(ON_TOP), "the grazed top car is in the clip");
-    assert.ok(slots.includes(UNDER), "the car the top car stands on is in the clip, 300 m from the hit");
+    expect(slots.includes(ON_TOP), "the grazed top car is in the clip").toBeTruthy();
+    expect(slots.includes(UNDER), "the car the top car stands on is in the clip, 300 m from the hit").toBeTruthy();
     const worst = replayWorst(run);
     t.annotate([...worst].map(([slot, d]) => `car ${slot}: ${d} m off`).join("\n"));
-    assert.deepEqual([...worst.values()].filter((d) => d !== 0), [], "every car of the clip is where the sim had it at every step");
+    expect([...worst.values()].filter((d) => d !== 0), "every car of the clip is where the sim had it at every step").toHaveLength(0);
   });
 });
 
@@ -325,7 +325,7 @@ function recordArrival(): Recorded {
     const car = cars[i]!;
     car.spawnFacing(ARRIVE_X + 6 * (k & 1), PILE_Z + 5 + 4 * (k >> 1), Math.PI / 2, 12);
     car.applyImpact(new THREE.Vector3(car.group.position.x + 2.2, 0.5, car.group.position.z), new THREE.Vector3(-1, 0, 0), 16, 12);
-    assert.ok(car.crashed, `car ${i} is a wreck`);
+    expect(car.crashed, `car ${i} is a wreck`).toBeTruthy();
   }
   const rec = new CrashRecorder({ recall: (_i, out) => out.set([-1]), knocks: () => new Uint8Array(16) });
   rec.begin("flat", HANDLING.realism, false, cars.length, (i) => `c${i}`, 1);
@@ -346,7 +346,7 @@ function recordArrival(): Recorded {
     trace.push(Float64Array.from(cars.flatMap((c) => c.group.position.toArray())));
   }
   rec.end();
-  assert.ok(rec.ledger.kept.length >= 1, "the head-on crash did not rank as a highlight");
+  expect(rec.ledger.kept.length, "the head-on crash did not rank as a highlight").toBeGreaterThanOrEqual(1);
   const kept = rec.ledger.kept[0]!;
   const w = new Writer(clipBytes(kept));
   writeClip(w, kept);
@@ -362,28 +362,28 @@ describe("given a head-on whose car A was put on the road a second before the im
     const run = arrival;
     const slots = run.clip.cars.map((c) => c.slot);
     t.annotate(`clip cars: ${slots.join(",")} (${(clipBytes(run.clip) / 1024).toFixed(0)} KB)`);
-    assert.ok(PARKED.every((i) => slots.includes(i)), "the cars parked 30 to 45 m from the hit are in the clip");
-    assert.deepEqual(PILE.filter((i) => slots.includes(i)), [], "no wreck of the pile A left is in the clip");
+    expect(PARKED.every((i) => slots.includes(i)), "the cars parked 30 to 45 m from the hit are in the clip").toBeTruthy();
+    expect(PILE.filter((i) => slots.includes(i)), "no wreck of the pile A left is in the clip").toHaveLength(0);
     const worst = replayWorst(run);
     t.annotate([...worst].map(([slot, d]) => `car ${slot}: ${d} m off`).join("\n"));
-    assert.deepEqual([...worst.values()].filter((d) => d !== 0), [], "every car of the clip is where the sim had it at every step");
+    expect([...worst.values()].filter((d) => d !== 0), "every car of the clip is where the sim had it at every step").toHaveLength(0);
   });
 
   it("when the replay's scene knows where cars wait put away, then A is hidden there from the clip's start to the step its keyframe puts it on the road, and the shots frame a drawn car throughout", () => {
     const { clip, cars, dress } = arrival;
     const j = clip.cars.findIndex((c) => c.slot === A);
     const put = clip.keyStep.findIndex((s, i) => i > 0 && ((clip.keyCars[i]! >>> j) & 1) === 1);
-    assert.ok(j >= 0 && put > 0, "A is in the clip and has a keyframe of its own: its respawn");
+    expect(j >= 0 && put > 0, "A is in the clip and has a keyframe of its own: its respawn").toBeTruthy();
     const at = clip.keyStep[put]!;
     const sim = new ClipSim(clip, clip.cars.map((c) => cars[c.slot]!), { dress, collide: () => {}, stored: (_slot, _x, z) => z > PILE_Z - 50, blend: new PoseBlend() });
     sim.restart();
     while (sim.step <= at) {
-      assert.equal(cars[A]!.group.visible, false, `A is drawn at step ${sim.step}, before the step ${at} that puts it on the road`);
-      assert.ok(sim.cars[sim.subject]!.group.visible, `the shots frame a hidden car at step ${sim.step}`);
-      if (clip.focus === j) assert.notEqual(sim.subject, j, "the shots frame A while it waits");
+      expect(cars[A]!.group.visible, `A is drawn at step ${sim.step}, before the step ${at} that puts it on the road`).toBe(false);
+      expect(sim.cars[sim.subject]!.group.visible, `the shots frame a hidden car at step ${sim.step}`).toBeTruthy();
+      if (clip.focus === j) expect(sim.subject, "the shots frame A while it waits").not.toBe(j);
       sim.advanceTo(sim.time + 1e-6);
     }
-    assert.equal(cars[A]!.group.visible, true, `A is still hidden after step ${at}, which puts it on the road`);
-    assert.equal(sim.subject, clip.focus, "the shots are on the clip's focus once it is on the road");
+    expect(cars[A]!.group.visible, `A is still hidden after step ${at}, which puts it on the road`).toBe(true);
+    expect(sim.subject, "the shots are on the clip's focus once it is on the road").toBe(clip.focus);
   });
 });

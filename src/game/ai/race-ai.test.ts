@@ -1,7 +1,6 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { BOOST } from "../vehicle/car-drive.ts";
-import assert from "node:assert/strict";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { classStats } from "../vehicle/vehicle-classes.ts";
@@ -66,21 +65,21 @@ describe("given 8 clean AI cars (aggression 0) on the grid of the oval", () => {
     it(`when they race 3 laps at ${difficulty} difficulty, then all 8 finish, they stay on the road at least 95% of the time, and the winner finishes within the time bound`, (t) => {
       const r = raced(oval, difficulty);
       t.annotate(`${oval.id} ${difficulty}: winner ${r.winner.toFixed(1)} s, best lap ${Math.min(...r.lapTimes).toFixed(2)} s, slowest lap ${Math.max(...r.lapTimes).toFixed(2)} s, on road ${(100 * r.share).toFixed(1)}%, mistakes ${r.mistakes}`);
-      assert.equal(r.finished, 8, `finished ${r.finished}/8 by ${r.time.toFixed(0)} s (bound ${r.limit.toFixed(0)} s); laps ${r.laps}`);
-      assert.ok(r.share >= 0.95, `on the road ${(r.share * 100).toFixed(1)}% of ${r.samples} samples`);
-      assert.ok(r.winner < r.limit);
+      expect(r.finished, `finished ${r.finished}/8 by ${r.time.toFixed(0)} s (bound ${r.limit.toFixed(0)} s); laps ${r.laps}`).toBe(8);
+      expect(r.share, `on the road ${(r.share * 100).toFixed(1)}% of ${r.samples} samples`).toBeGreaterThanOrEqual(0.95);
+      expect(r.winner).toBeLessThan(r.limit);
     });
   }
 
   it("when easy races hard, then easy's winner is at least 8% slower, and medium's is faster than easy's", () => {
     const [e, m, h] = AI_DIFFICULTIES.map((d) => raced(oval, d).winner);
-    assert.ok(e! > h! && m! < e!, `winner easy ${e!.toFixed(1)} s, medium ${m!.toFixed(1)} s, hard ${h!.toFixed(1)} s`);
-    assert.ok(e! / h! >= 1.08, `easy takes ${((e! / h! - 1) * 100).toFixed(1)}% longer than hard`);
+    expect(e! > h! && m! < e!, `winner easy ${e!.toFixed(1)} s, medium ${m!.toFixed(1)} s, hard ${h!.toFixed(1)} s`).toBeTruthy();
+    expect(e! / h!, `easy takes ${((e! / h! - 1) * 100).toFixed(1)}% longer than hard`).toBeGreaterThanOrEqual(1.08);
   });
 
   it("when they race 3 laps, then easy makes mistakes and hard makes exactly none", () => {
-    assert.ok(raced(oval, "easy").mistakes > 0, "easy made no mistake");
-    assert.equal(raced(oval, "hard").mistakes, 0);
+    expect(raced(oval, "easy").mistakes, "easy made no mistake").toBeGreaterThan(0);
+    expect(raced(oval, "hard").mistakes).toBe(0);
   });
 });
 
@@ -88,9 +87,9 @@ describe("given the same 8 easy AI cars raced twice from the grid of the oval", 
   it("when both runs finish, then every car's lap times are identical, to the bit (slips and sway are seeded, not random)", () => {
     const once = raced(oval, "easy");
     const again = summarize(oval, "easy");
-    assert.ok(once.mistakes > 0, "a run with no mistakes proves nothing about their seeding");
+    expect(once.mistakes, "a run with no mistakes proves nothing about their seeding").toBeGreaterThan(0);
     assertSameNumbers(again.lapTimes, once.lapTimes, "lap times, run twice");
-    assert.equal(again.mistakes, once.mistakes);
+    expect(again.mistakes).toBe(once.mistakes);
   });
 });
 
@@ -107,11 +106,11 @@ describe("given a stale medium driver holding its last drive between thinks, wit
       return { brain, held };
     };
     const medium = clear("medium");
-    assert.ok(medium.held.throttle > 0 && medium.held.brake === 0, `the held drive is clear road: throttle ${medium.held.throttle}, brake ${medium.held.brake}`);
+    expect(medium.held.throttle > 0 && medium.held.brake === 0, `the held drive is clear road: throttle ${medium.held.throttle}, brake ${medium.held.brake}`).toBeTruthy();
     const guarded = medium.brain.guard(me, [me, parked], medium.held);
-    assert.ok(guarded.brake > 0 && guarded.throttle === 0, `guard brakes for the stopped car: brake ${guarded.brake.toFixed(2)}, throttle ${guarded.throttle.toFixed(2)}`);
+    expect(guarded.brake > 0 && guarded.throttle === 0, `guard brakes for the stopped car: brake ${guarded.brake.toFixed(2)}, throttle ${guarded.throttle.toFixed(2)}`).toBeTruthy();
     const hard = clear(AI_EVERY_SLICE);
-    assert.equal(hard.brain.guard(me, [me, parked], hard.held), hard.held, "a hard brain guarded inside think, so its guard hands the drive back");
+    expect(hard.brain.guard(me, [me, parked], hard.held), "a hard brain guarded inside think, so its guard hands the drive back").toBe(hard.held);
   });
 });
 
@@ -120,7 +119,7 @@ describe("given a hard brain driving 8 cars from the grid of a course", () => {
     it(`when each thinks 600 times on ${id}, then every checkpoint of its output is bit for bit what it was before the tiers existed`, () => {
       const got = hardMarks(new Track(TRACKS.find((j) => parseTrack(j).id === id)!));
       const first = got.findIndex((m, k) => m !== expected[k]);
-      assert.ok(first < 0 && got.length === expected.length, `${got.length}/${expected.length} checkpoints, first differing: ${first} (car ${first >> 1}, think ${first % 2 ? 600 : 300})`);
+      expect(first < 0 && got.length === expected.length, `${got.length}/${expected.length} checkpoints, first differing: ${first} (car ${first >> 1}, think ${first % 2 ? 600 : 300})`).toBeTruthy();
     });
   }
 });
@@ -148,10 +147,10 @@ describe("given AI drivers at about 17 m/s on the oval course's back straight, w
     const brute = new RaceBrain(oval, 2);
     brute.setAggression(0, 1);
     const ramming = lane(brute, me, [me, slow], 40);
-    assert.ok(passing < -0.05, `clean pulls right to pass, steer ${passing.toFixed(3)}`);
-    assert.ok(Math.abs(ramming) < 0.06 && Math.abs(ramming) < Math.abs(passing) / 3, `aggressive stays on the slow car's line, steer ${ramming.toFixed(3)} vs clean ${passing.toFixed(3)}`);
+    expect(passing, `clean pulls right to pass, steer ${passing.toFixed(3)}`).toBeLessThan(-0.05);
+    expect(Math.abs(ramming) < 0.06 && Math.abs(ramming) < Math.abs(passing) / 3, `aggressive stays on the slow car's line, steer ${ramming.toFixed(3)} vs clean ${passing.toFixed(3)}`).toBeTruthy();
     const charge = brute.think(me, [me, slow], { next: 1, lap: 0 }, DT);
-    assert.ok(charge.throttle > 0 && charge.brake === 0, "and keeps the throttle in");
+    expect(charge.throttle > 0 && charge.brake === 0, "and keeps the throttle in").toBeTruthy();
   });
 
   it("when a faster car comes through just behind on its left, then an aggressive driver steers left into its path to close the door and a clean one moves away to give it room", () => {
@@ -162,8 +161,8 @@ describe("given AI drivers at about 17 m/s on the oval course's back straight, w
     brute.setAggression(0, 1);
     const yields = lane(clean, me, [me, fast], 40);
     const blocks = lane(brute, me, [me, fast], 40);
-    assert.ok(blocks > 0.02, `aggressive steers into its path (left is +), steer ${blocks.toFixed(3)}`);
-    assert.ok(yields < -0.02, `clean moves away from it, steer ${yields.toFixed(3)}`);
+    expect(blocks, `aggressive steers into its path (left is +), steer ${blocks.toFixed(3)}`).toBeGreaterThan(0.02);
+    expect(yields, `clean moves away from it, steer ${yields.toFixed(3)}`).toBeLessThan(-0.02);
   });
 
   it("when a rival ahead is closed on at a ram's speed (9 m/s) or a nudge's (1 m/s), then a middling driver passes the rammable car, wrecked or not, and pushes the nudge-speed one unless it is itself the more wrecked car, while a full-aggression driver rams regardless of its own state", () => {
@@ -176,14 +175,14 @@ describe("given AI drivers at about 17 m/s on the oval course's back straight, w
     // A rival 9 m ahead doing 8 m/s is a ram (closing 9 m/s): passed, wrecked or not. One doing 16 m/s is a nudge (1 m/s): pushed.
     const slow = at(1, pt.x + 6, pt.z + 9, 8);
     const pace = at(1, pt.x + 6, pt.z + 9, 16);
-    assert.ok(lane(mid(), me, [me, slow], 40) < -0.05, "passes the slow car it would ram");
-    assert.ok(lane(mid(), me, [me, { ...slow, damage: 0.6 }], 40) < -0.05, "and a wrecked one too");
-    assert.ok(Math.abs(lane(mid(), me, [me, pace], 40)) < 0.06, "pushes the one it closes on at a nudge");
+    expect(lane(mid(), me, [me, slow], 40), "passes the slow car it would ram").toBeLessThan(-0.05);
+    expect(lane(mid(), me, [me, { ...slow, damage: 0.6 }], 40), "and a wrecked one too").toBeLessThan(-0.05);
+    expect(Math.abs(lane(mid(), me, [me, pace], 40)), "pushes the one it closes on at a nudge").toBeLessThan(0.06);
     const hurtMe = { ...me, damage: 0.8 };
-    assert.ok(lane(mid(), hurtMe, [hurtMe, { ...pace, damage: 0.6 }], 40) < -0.05, "but not when it is the more wrecked of the two");
+    expect(lane(mid(), hurtMe, [hurtMe, { ...pace, damage: 0.6 }], 40), "but not when it is the more wrecked of the two").toBeLessThan(-0.05);
     const brute = new RaceBrain(oval, 2);
     brute.setAggression(0, 1);
-    assert.ok(Math.abs(lane(brute, hurtMe, [hurtMe, slow], 40)) < 0.06, "full aggression rams regardless of its own state");
+    expect(Math.abs(lane(brute, hurtMe, [hurtMe, slow], 40)), "full aggression rams regardless of its own state").toBeLessThan(0.06);
   });
 
   it("when a rival is abreast 2.6 m to its left, then a clean driver steers away, a full-aggression driver always shoves, and a middling one shoves only a safe rival: not one 1.5 m off the wall, not at a ram's closing speed, not over the stunt course's crest", () => {
@@ -197,27 +196,27 @@ describe("given AI drivers at about 17 m/s on the oval course's back straight, w
       return lane(b, self, [self, onRoad(track, 1, s + 0.5, lean, its)], 60);
     };
     const edge = pt.half - 1.5;
-    assert.ok(abreast(0, oval, s0, 1.3) < -0.05, "a clean driver steers away");
-    assert.ok(abreast(1, oval, s0, 1.3) > 0.15, "a full one shoves");
-    assert.ok(abreast(0.5, oval, s0, 1.3) > 0, "a middling one shoves a rival mid-road, level");
-    assert.ok(abreast(0.5, oval, s0, edge) < -0.05, "but not one 1.5 m off the wall it would be pushed into");
-    assert.ok(abreast(1, oval, s0, edge) > 0.15, "where a full driver shoves regardless");
-    assert.ok(abreast(0.5, oval, s0, 1.3, 15, 12) < -0.05, "nor closing on it at 3 m/s");
-    assert.ok(abreast(0.5, oval, s0, 1.3, 12, 15) < -0.05, "nor with the rival the faster by 3 m/s");
-    assert.ok(abreast(0.5, stunt, 300, 1.3, 20, 20) > 0.1, "on level road at 20 m/s it shoves");
-    assert.ok(abreast(0.5, stunt, 899.5, 1.3, 20, 20) < -0.05, "the same pair on the stunt course's crest (a car leaves it above 17 m/s): it keeps off");
-    assert.ok(abreast(1, stunt, 899.5, 1.3, 20, 20) > 0.1, "and a full driver shoves there regardless");
+    expect(abreast(0, oval, s0, 1.3), "a clean driver steers away").toBeLessThan(-0.05);
+    expect(abreast(1, oval, s0, 1.3), "a full one shoves").toBeGreaterThan(0.15);
+    expect(abreast(0.5, oval, s0, 1.3), "a middling one shoves a rival mid-road, level").toBeGreaterThan(0);
+    expect(abreast(0.5, oval, s0, edge), "but not one 1.5 m off the wall it would be pushed into").toBeLessThan(-0.05);
+    expect(abreast(1, oval, s0, edge), "where a full driver shoves regardless").toBeGreaterThan(0.15);
+    expect(abreast(0.5, oval, s0, 1.3, 15, 12), "nor closing on it at 3 m/s").toBeLessThan(-0.05);
+    expect(abreast(0.5, oval, s0, 1.3, 12, 15), "nor with the rival the faster by 3 m/s").toBeLessThan(-0.05);
+    expect(abreast(0.5, stunt, 300, 1.3, 20, 20), "on level road at 20 m/s it shoves").toBeGreaterThan(0.1);
+    expect(abreast(0.5, stunt, 899.5, 1.3, 20, 20), "the same pair on the stunt course's crest (a car leaves it above 17 m/s): it keeps off").toBeLessThan(-0.05);
+    expect(abreast(1, stunt, 899.5, 1.3, 20, 20), "and a full driver shoves there regardless").toBeGreaterThan(0.1);
   });
 
   it("when a rival 6 m ahead drives at the driver's own 17 m/s pace, then a clean driver brakes to keep a gap without boosting, and a hungry one boosts to catch it", () => {
     const me = at(0, pt.x, pt.z, 17);
     const rival = at(1, pt.x, pt.z + 6, 17);
     const clean = new RaceBrain(oval, 2).think(me, [me, rival], { next: 1, lap: 0 }, DT);
-    assert.ok(!clean.boost && clean.brake > 0, `clean opens the gap: brake ${clean.brake.toFixed(2)}, boost ${clean.boost}`);
+    expect(!clean.boost && clean.brake > 0, `clean opens the gap: brake ${clean.brake.toFixed(2)}, boost ${clean.boost}`).toBeTruthy();
     const brute = new RaceBrain(oval, 2);
     brute.setAggression(0, 1);
     const hunt = brute.think(me, [me, rival], { next: 1, lap: 0 }, DT);
-    assert.ok(hunt.boost && hunt.throttle > 0, `hungry boosts into it: throttle ${hunt.throttle.toFixed(2)}, boost ${hunt.boost}`);
+    expect(hunt.boost && hunt.throttle > 0, `hungry boosts into it: throttle ${hunt.throttle.toFixed(2)}, boost ${hunt.boost}`).toBeTruthy();
   });
 
   it("when a rival is 2.6 m to its left at 15 m/s, then a hungry driver steers left into it and a clean one steers away, and at a 2 m/s crawl a hungry driver steers the same as if it were alone", () => {
@@ -228,8 +227,8 @@ describe("given AI drivers at about 17 m/s on the oval course's back straight, w
     brute.setAggression(0, 1);
     const shove = lane(brute, me, [me, rival], 20);
     const shy = lane(new RaceBrain(oval, 2), me, [me, rival], 20);
-    assert.ok(shove > 0.05, `hungry steers left into it, steer ${shove.toFixed(3)}`);
-    assert.ok(shy < -0.02, `clean steers away, steer ${shy.toFixed(3)}`);
+    expect(shove, `hungry steers left into it, steer ${shove.toFixed(3)}`).toBeGreaterThan(0.05);
+    expect(shy, `clean steers away, steer ${shy.toFixed(3)}`).toBeLessThan(-0.02);
     const slowMe = at(0, pt.x, pt.z, 2);
     const slowRival = at(1, pt.x + 2.6, pt.z + 0.5, 2);
     const hungry = () => {
@@ -239,28 +238,28 @@ describe("given AI drivers at about 17 m/s on the oval course's back straight, w
     };
     const withRival = lane(hungry(), slowMe, [slowMe, slowRival], 20);
     const alone = lane(hungry(), slowMe, [slowMe], 20);
-    assert.ok(Math.abs(withRival - alone) < 0.01, `at a crawl it drives its line as if alone (two hungry cars wedged each other on a wall): ${withRival.toFixed(3)} vs ${alone.toFixed(3)}`);
+    expect(Math.abs(withRival - alone), `at a crawl it drives its line as if alone (two hungry cars wedged each other on a wall): ${withRival.toFixed(3)} vs ${alone.toFixed(3)}`).toBeLessThan(0.01);
   });
 
   it("when a driver crawling at 2 m/s comes up on a parked car 5.5 m ahead, then it keeps rolling without braking and steers round it", () => {
     const me = at(0, pt.x, pt.z, 2);
     const parked = at(1, pt.x, pt.z + 5.5, 0);
     const out = new RaceBrain(oval, 2).think(me, [me, parked], { next: 1, lap: 0 }, DT);
-    assert.ok(out.throttle > 0 && out.brake === 0, `keeps rolling: throttle ${out.throttle.toFixed(2)}, brake ${out.brake.toFixed(2)}`);
-    assert.ok(Math.abs(lane(new RaceBrain(oval, 2), me, [me, parked], 40)) > 0.05, "and steers round it");
+    expect(out.throttle > 0 && out.brake === 0, `keeps rolling: throttle ${out.throttle.toFixed(2)}, brake ${out.brake.toFixed(2)}`).toBeTruthy();
+    expect(Math.abs(lane(new RaceBrain(oval, 2), me, [me, parked], 40)), "and steers round it").toBeGreaterThan(0.05);
   });
 });
 
 describe("given the field's aggression slider (the most aggressive any rival may be)", () => {
   it("when 15 rivals roll their own values under a slider of 0.6, then each is between 0 and 0.6 with a real spread, the same seed gives the same field, a new race rolls again, a slider of 0 gives all 0, and the mood to hit is negative at aggression 0 and positive at full aggression", () => {
     const rolls = Array.from({ length: 15 }, (_, id) => fieldAggression(0.6, 4, id + 1));
-    assert.ok(rolls.every((a) => a >= 0 && a <= 0.6));
-    assert.ok(Math.max(...rolls) - Math.min(...rolls) > 0.3, "a spread, not one value");
+    expect(rolls.every((a) => a >= 0 && a <= 0.6)).toBeTruthy();
+    expect(Math.max(...rolls) - Math.min(...rolls), "a spread, not one value").toBeGreaterThan(0.3);
     assertSameNumbers(rolls, Array.from({ length: 15 }, (_, id) => fieldAggression(0.6, 4, id + 1)), "same seed, same field");
     const reroll = Array.from({ length: 15 }, (_, id) => fieldAggression(0.6, 5, id + 1));
-    assert.ok(reroll.some((a, i) => a !== rolls[i]), "a new race rolls again");
-    assert.ok(Array.from({ length: 15 }, (_, id) => fieldAggression(0, 4, id)).every((a) => a === 0));
-    assert.ok(mood(0, 0, 1) < 0 && mood(1, 1, 0) > 0);
+    expect(reroll.some((a, i) => a !== rolls[i]), "a new race rolls again").toBeTruthy();
+    expect(Array.from({ length: 15 }, (_, id) => fieldAggression(0, 4, id)).every((a) => a === 0)).toBeTruthy();
+    expect(mood(0, 0, 1) < 0 && mood(1, 1, 0) > 0).toBeTruthy();
   });
 });
 
@@ -278,11 +277,11 @@ describe("given an AI driver at 17 m/s alone on a clear straight with a full boo
       run = b ? run + DT : 0;
       longest = Math.max(longest, run);
     }
-    assert.ok(longest >= BOOST.full - 2 * DT, `first burst ${longest.toFixed(2)} s`);
-    assert.ok(longest <= BOOST.full + DT, `one burst ${longest.toFixed(2)} s, a full meter is ${BOOST.full} s`);
+    expect(longest, `first burst ${longest.toFixed(2)} s`).toBeGreaterThanOrEqual(BOOST.full - 2 * DT);
+    expect(longest, `one burst ${longest.toFixed(2)} s, a full meter is ${BOOST.full} s`).toBeLessThanOrEqual(BOOST.full + DT);
     // A full meter plus what it refills over the run.
     const budget = BOOST.full + (T * BOOST.full) / BOOST.recharge;
-    assert.ok(boosted <= budget + DT, `boosted ${boosted.toFixed(2)} s of ${T} s, budget ${budget.toFixed(2)} s`);
+    expect(boosted, `boosted ${boosted.toFixed(2)} s of ${T} s, budget ${budget.toFixed(2)} s`).toBeLessThanOrEqual(budget + DT);
   });
 });
 
@@ -294,7 +293,7 @@ describe("given a road only 6 m wide with a driver at 15 m/s coming up on a 6 m/
     const slow = at(1, p.x, p.z + 7, 6);
     const brain = new RaceBrain(narrow, 2);
     const out = brain.think(me, [me, slow], { next: 1, lap: 0 }, DT);
-    assert.ok(out.brake > 0 && out.throttle === 0, `brake ${out.brake} throttle ${out.throttle}`);
+    expect(out.brake > 0 && out.throttle === 0, `brake ${out.brake} throttle ${out.throttle}`).toBeTruthy();
   });
 });
 
@@ -306,10 +305,10 @@ describe("given an AI driver at 30 m/s on the oval's back straight, alone, its n
     const pointedOut = (off: number): AiCar => ({ ...onRoad(oval, 0, s0, off, 0), yaw, vx: 30 * Math.sin(yaw), vz: 30 * Math.cos(yaw) });
     const offRoad = pointedOut(pt.half + 1);
     const wide = new RaceBrain(oval, 1).think(offRoad, [offRoad], { next: 1, lap: 0 }, DT);
-    assert.ok(wide.brake > 0 && wide.throttle === 0, `off the road: brake ${wide.brake} throttle ${wide.throttle}`);
+    expect(wide.brake > 0 && wide.throttle === 0, `off the road: brake ${wide.brake} throttle ${wide.throttle}`).toBeTruthy();
     const centred = pointedOut(0);
     const onLine = new RaceBrain(oval, 1).think(centred, [centred], { next: 1, lap: 0 }, DT);
-    assert.ok(onLine.throttle > 0 && onLine.brake === 0, `on the road: brake ${onLine.brake} throttle ${onLine.throttle}`);
+    expect(onLine.throttle > 0 && onLine.brake === 0, `on the road: brake ${onLine.brake} throttle ${onLine.throttle}`).toBeTruthy();
   });
 });
 
@@ -321,16 +320,16 @@ describe("given an easy driver whose slip starts on the oval's open road, then h
     const race = { next: 1, lap: 0 };
     const slip = onRoad(oval, 0, 70, 0, 17);
     brain.think(slip, [slip], race, DT);
-    assert.equal(brain["slip"][0], SLIP_WINDOW + SLIP_RECOVER, "a corner on an open road started the slip");
+    expect(brain["slip"][0], "a corner on an open road started the slip").toBe(SLIP_WINDOW + SLIP_RECOVER);
     // On the back straight (no corner in the plan), an 8 m/s car 9 m ahead on its line: it follows, so the road is not open.
     const me = onRoad(oval, 0, 340, 0, 17);
     const slow = onRoad(oval, 1, 349, 0, 8);
     for (let k = 0; k < Math.ceil((SLIP_WINDOW + SLIP_RECOVER + 1) / DT); k++) brain.think(me, [me, slow], race, DT);
-    assert.equal(brain["busy"][0], 1, "the slow car held it in traffic");
+    expect(brain["busy"][0], "the slow car held it in traffic").toBe(1);
     const out = brain.think(me, [me], race, DT);
-    assert.equal(brain["busy"][0], 0, "the road cleared");
-    assert.equal(brain["slip"][0], 0, "the slip aged out in traffic");
-    assert.ok(out.throttle === 1 && out.brake === 0, `unshaken: throttle ${out.throttle} brake ${out.brake}`);
+    expect(brain["busy"][0], "the road cleared").toBe(0);
+    expect(brain["slip"][0], "the slip aged out in traffic").toBe(0);
+    expect(out.throttle === 1 && out.brake === 0, `unshaken: throttle ${out.throttle} brake ${out.brake}`).toBeTruthy();
   });
 });
 
@@ -373,12 +372,12 @@ describe("given a hard sedan brain flat out at the oval's sharpest bend (33 m/s 
     const tune = brain["tunes"][0]!;
     const want = sedan.brake * BRAKE_SHARE;
     t.annotate(`onsets ${far.toFixed(1)} m / ${near.toFixed(1)} m: plan sheds ${planned.toFixed(1)} m/s², guard ${tune[GUARD_BRAKE_IDX]!.toFixed(1)} m/s², a car ahead ${tune[GUARD_LEAD_IDX]!.toFixed(1)} m/s², real full brake ${real.toFixed(1)} m/s²`);
-    assert.equal(tune[GUARD_BRAKE_IDX], want, "the guard's own braking");
-    assert.equal(tune[GUARD_LEAD_IDX], sedan.brake, "what a car ahead is taken to shed: the whole class brake, the most it can (the guard never counts on a leader stopping gentler than it can)");
+    expect(tune[GUARD_BRAKE_IDX], "the guard's own braking").toBe(want);
+    expect(tune[GUARD_LEAD_IDX], "what a car ahead is taken to shed: the whole class brake, the most it can (the guard never counts on a leader stopping gentler than it can)").toBe(sedan.brake);
     // The onsets are found to 0.25 m but the plan reads the road every 3 m: against the 23 m the two speeds' stops differ by (measured) a 3 m step is 13 % of it, so 15 % is the least the reading can be trusted to; the old 0.5 share reads 14.0 m/s², 31 % under.
-    assert.ok(Math.abs(planned / want - 1) < 0.15, `the plan sheds ${planned.toFixed(1)} m/s², the guard counts on ${want.toFixed(1)}`);
+    expect(Math.abs(planned / want - 1), `the plan sheds ${planned.toFixed(1)} m/s², the guard counts on ${want.toFixed(1)}`).toBeLessThan(0.15);
     // The share is of what the car really sheds: full brake measures the class brake (28 m/s² for the sedan) within 5 %, so the plan asks for less than the car has by about the share.
-    assert.ok(Math.abs(real / sedan.brake - 1) < 0.05 && planned < real, `real full brake ${real.toFixed(1)} m/s² of the class's ${sedan.brake}, the plan ${planned.toFixed(1)}`);
+    expect(Math.abs(real / sedan.brake - 1) < 0.05 && planned < real, `real full brake ${real.toFixed(1)} m/s² of the class's ${sedan.brake}, the plan ${planned.toFixed(1)}`).toBeTruthy();
   });
 });
 
@@ -395,12 +394,12 @@ describe("given a racer on the oval's back straight with a car 12 m ahead at 2.3
   it("when the blocker is stopped, or oncoming at 10 m/s, then the racer rounds it on the side with more road (right: the blocker's lane less the 3.3 m a pass needs), not the narrow one the nudge points at", () => {
     for (const speed of [0, -10]) {
       const { want } = chosen(speed);
-      assert.ok(want < -1 && want > -1.5, `blocker doing ${speed} m/s: chose ${want.toFixed(2)} m, the wide side is about -1.2 m (right of the centre line), the narrow one 5.4 m`);
+      expect(want < -1 && want > -1.5, `blocker doing ${speed} m/s: chose ${want.toFixed(2)} m, the wide side is about -1.2 m (right of the centre line), the narrow one 5.4 m`).toBeTruthy();
     }
   });
   it("when the blocker moves with it at 8 m/s, then the pass is unchanged: the side nearest the planned lane (left, with the nudge)", () => {
     const { want, room } = chosen(8);
-    assert.ok(want > 5 && want <= room, `chose ${want.toFixed(2)} m, the left pass is about 5.4 m (room ${room.toFixed(1)} m)`);
+    expect(want > 5 && want <= room, `chose ${want.toFixed(2)} m, the left pass is about 5.4 m (room ${room.toFixed(1)} m)`).toBeTruthy();
   });
 });
 
@@ -427,11 +426,11 @@ describe("given an every-slice brain whose contact guard runs after its think (`
     for (const gap of [10, 14]) {
       const inside = steps(gap, false);
       const late = steps(gap, true);
-      assert.ok(inside.out.brake > 0.5 && !inside.out.boost, `${gap} m: the guard brakes and cancels the boost (brake ${inside.out.brake.toFixed(2)})`);
-      assert.ok(inside.meter === 1, `${gap} m: the meter inside think ${inside.meter}`);
-      assert.equal(late.out.brake, inside.out.brake, `${gap} m: the late guard's brake`);
-      assert.equal(late.out.boost, inside.out.boost, `${gap} m: the late guard's boost`);
-      assert.equal(late.meter, inside.meter, `${gap} m: the late guard's meter`);
+      expect(inside.out.brake > 0.5 && !inside.out.boost, `${gap} m: the guard brakes and cancels the boost (brake ${inside.out.brake.toFixed(2)})`).toBeTruthy();
+      expect(inside.meter, `${gap} m: the meter inside think ${inside.meter}`).toBe(1);
+      expect(late.out.brake, `${gap} m: the late guard's brake`).toBe(inside.out.brake);
+      expect(late.out.boost, `${gap} m: the late guard's boost`).toBe(inside.out.boost);
+      expect(late.meter, `${gap} m: the late guard's meter`).toBe(inside.meter);
     }
   });
 });

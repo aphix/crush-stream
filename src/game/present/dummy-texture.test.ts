@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { FACE, FACES } from "./dummy-faces.ts";
 import { EYE_U, EYES_AT, FACE_SPAN, LIP_AT } from "./dummy-head.ts";
 import { PRINT_CELL, PRINT_CELLS, PRINT_TEXELS, printMap } from "./dummy-texture.ts";
@@ -16,8 +15,8 @@ describe("given the print atlas", () => {
     const map = printMap();
     const px = map.image.data as Uint8Array;
     const n = PRINT_TEXELS;
-    assert.equal(map.image.height, n * PRINT_CELLS);
-    assert.equal(Object.keys(FACE).length, FACES.length);
+    expect(map.image.height).toBe(n * PRINT_CELLS);
+    expect(Object.keys(FACE).length).toBe(FACES.length);
     const eyeRow = (EYES_AT / FACE_SPAN) * n;
     const noseRow = Math.round(((EYES_AT + LIP_AT) / 2 / FACE_SPAN) * n);
     /** Over white: a clear texel never reads as an eye. */
@@ -36,10 +35,10 @@ describe("given the print atlas", () => {
           for (let x = middle - EYE_HALF_WINDOW; x <= middle + EYE_HALF_WINDOW; x++) sum += overWhite(cell, x, y);
           if (sum < darkest) [darkest, darkestRow] = [sum, y];
         }
-        assert.ok(Math.abs(darkestRow - eyeRow) <= EYE_ROW_SLACK, `${name}'s eye at u ${u} is darkest on row ${darkestRow}, the head's eye line is ${eyeRow.toFixed(1)}`);
+        expect(Math.abs(darkestRow - eyeRow), `${name}'s eye at u ${u} is darkest on row ${darkestRow}, the head's eye line is ${eyeRow.toFixed(1)}`).toBeLessThanOrEqual(EYE_ROW_SLACK);
       }
       for (const [x, y] of [[0, 0], [n - 1, 0], [0, n - 1], [n - 1, n - 1]] as const) {
-        assert.equal(px[((cell * n + y) * n + x) * 4 + 3], 0, `${name}'s corner (${x}, ${y}) is clear`);
+        expect(px[((cell * n + y) * n + x) * 4 + 3], `${name}'s corner (${x}, ${y}) is clear`).toBe(0);
       }
     }
   });

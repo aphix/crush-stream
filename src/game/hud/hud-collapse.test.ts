@@ -1,5 +1,4 @@
-import { describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it, vi } from "vitest";
 import { CALM_MS, watchCalm } from "./hud-collapse.ts";
 
 /** A page stand-in: `closest` answers like an element (null: not inside the driving controls). */
@@ -11,6 +10,10 @@ const counters = () => {
   const counts = { calm: 0, wake: 0 };
   return { counts, onCalm: () => counts.calm++, onWake: () => counts.wake++ };
 };
+const expectCounts = (counts: { calm: number; wake: number }, calm: number, wake: number) => {
+  expect(counts.calm, "calm callbacks").toBe(calm);
+  expect(counts.wake, "wake callbacks").toBe(wake);
+};
 
 describe("given the driving HUD's calm watcher (read-outs fade once nothing has changed for a few seconds)", () => {
   it("when the page stays untouched for the calm time, then the HUD calms exactly when the time is up, not before", () => {
@@ -19,10 +22,10 @@ describe("given the driving HUD's calm watcher (read-outs fade once nothing has 
     const { counts, onCalm, onWake } = counters();
     const watch = watchCalm(page, onCalm, onWake);
     vi.advanceTimersByTime(CALM_MS - 1);
-    assert.equal(counts.calm, 0);
+    expect(counts.calm).toBe(0);
     vi.advanceTimersByTime(1);
-    assert.equal(counts.calm, 1);
-    assert.equal(counts.wake, 0);
+    expect(counts.calm).toBe(1);
+    expect(counts.wake).toBe(0);
     watch.stop();
     vi.useRealTimers();
   });
@@ -35,10 +38,10 @@ describe("given the driving HUD's calm watcher (read-outs fade once nothing has 
     vi.advanceTimersByTime(CALM_MS - 1);
     tap(page);
     vi.advanceTimersByTime(CALM_MS - 1);
-    assert.equal(counts.calm, 0);
-    assert.equal(counts.wake, 0, "a tap while lit has nothing to wake");
+    expect(counts.calm).toBe(0);
+    expect(counts.wake, "a tap while lit has nothing to wake").toBe(0);
     vi.advanceTimersByTime(1);
-    assert.equal(counts.calm, 1);
+    expect(counts.calm).toBe(1);
     watch.stop();
     vi.useRealTimers();
   });
@@ -50,11 +53,11 @@ describe("given the driving HUD's calm watcher (read-outs fade once nothing has 
     const watch = watchCalm(page, onCalm, onWake);
     vi.advanceTimersByTime(CALM_MS);
     tap(page);
-    assert.deepEqual(counts, { calm: 1, wake: 1 });
+    expectCounts(counts, 1, 1);
     vi.advanceTimersByTime(CALM_MS - 1);
-    assert.deepEqual(counts, { calm: 1, wake: 1 });
+    expectCounts(counts, 1, 1);
     vi.advanceTimersByTime(1);
-    assert.deepEqual(counts, { calm: 2, wake: 1 });
+    expectCounts(counts, 2, 1);
     watch.stop();
     vi.useRealTimers();
   });
@@ -67,9 +70,9 @@ describe("given the driving HUD's calm watcher (read-outs fade once nothing has 
     vi.advanceTimersByTime(CALM_MS - 1);
     tap(page);
     vi.advanceTimersByTime(1);
-    assert.equal(counts.calm, 1);
+    expect(counts.calm).toBe(1);
     tap(page);
-    assert.equal(counts.wake, 0);
+    expect(counts.wake).toBe(0);
     watch.stop();
     vi.useRealTimers();
   });
@@ -81,11 +84,11 @@ describe("given the driving HUD's calm watcher (read-outs fade once nothing has 
     const watch = watchCalm(page, onCalm, onWake);
     vi.advanceTimersByTime(CALM_MS);
     watch.wake();
-    assert.deepEqual(counts, { calm: 1, wake: 1 });
+    expectCounts(counts, 1, 1);
     vi.advanceTimersByTime(CALM_MS - 1);
-    assert.equal(counts.calm, 1);
+    expect(counts.calm).toBe(1);
     vi.advanceTimersByTime(1);
-    assert.equal(counts.calm, 2);
+    expect(counts.calm).toBe(2);
     watch.stop();
     vi.useRealTimers();
   });
@@ -98,7 +101,7 @@ describe("given the driving HUD's calm watcher (read-outs fade once nothing has 
     vi.advanceTimersByTime(CALM_MS - 1);
     watch.wake();
     vi.advanceTimersByTime(CALM_MS - 1);
-    assert.deepEqual(counts, { calm: 0, wake: 0 });
+    expectCounts(counts, 0, 0);
     watch.stop();
     vi.useRealTimers();
   });
@@ -111,7 +114,7 @@ describe("given the driving HUD's calm watcher (read-outs fade once nothing has 
     watch.stop();
     tap(page);
     vi.advanceTimersByTime(CALM_MS * 2);
-    assert.deepEqual(counts, { calm: 0, wake: 0 });
+    expectCounts(counts, 0, 0);
     vi.useRealTimers();
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { strike, strikeSink } from "./solid-parity.test-util.ts";
 import { BARRIER_HALF, BARRIER_TOP } from "../contact/sat.ts";
@@ -68,8 +67,8 @@ describe("given a monster driven square into the range's slab, its body's keel o
         y = p.y;
         vy = car.velocity.y;
       });
-      assert.ok(deepest <= TYRE_IN, `${speed} m/s: a tyre stood ${(deepest * 100).toFixed(1)} cm inside the slab at frame ${frame}`);
-      assert.ok(pop <= POP, `${speed} m/s: the body rose ${(pop * 100).toFixed(1)} cm past its own climb in a frame`);
+      expect(deepest, `${speed} m/s: a tyre stood ${(deepest * 100).toFixed(1)} cm inside the slab at frame ${frame}`).toBeLessThanOrEqual(TYRE_IN);
+      expect(pop, `${speed} m/s: the body rose ${(pop * 100).toFixed(1)} cm past its own climb in a frame`).toBeLessThanOrEqual(POP);
     });
   }
 });
@@ -91,7 +90,7 @@ describe("given a sedan driven square into the range's slab", () => {
           }
         }
       });
-      assert.equal(highest, -Infinity, `${speed} m/s: a tyre stood on the slab's top at frame ${frame}, its foot ${highest} m`);
+      expect(highest, `${speed} m/s: a tyre stood on the slab's top at frame ${frame}, its foot ${highest} m`).toBe(-Infinity);
     });
   }
 });
@@ -107,18 +106,18 @@ const HEALTH_BAND = 0.2;
 describe("given a monster whose tyres alone meet the range's slab", () => {
   it("when it meets the slab at 15 m/s, under the hit that pops a hub, then every wheel stays on and the drivetrain lives", () => {
     const [hit] = strike("barrier", "monster", 15);
-    assert.ok(hit!.wheels === 4 && hit!.alive, JSON.stringify(hit));
+    expect(hit!.wheels === 4 && hit!.alive, JSON.stringify(hit)).toBeTruthy();
   });
 
   it("when it meets the slab at 30 m/s, over the hit that pops a hub, then a wheel comes off", () => {
     const [hit] = strike("barrier", "monster", 30);
-    assert.ok(hit!.wheels < 4, JSON.stringify(hit));
+    expect(hit!.wheels, JSON.stringify(hit)).toBeLessThan(4);
   });
 
   it(`when it meets the slab at 55 m/s, then its drivetrain ends within ${HEALTH_BAND} of where its body's own hit on a wall at 55 m/s leaves it, and the driver is thrown alike`, () => {
     const [tyre] = strike("barrier", "monster", 55);
     const [body] = strike("stucco", "monster", 55);
-    assert.ok(Math.abs(tyre!.health - body!.health) <= HEALTH_BAND && tyre!.ejected === body!.ejected, `tyre hit ${JSON.stringify(tyre)} against the body hit ${JSON.stringify(body)}`);
+    expect(Math.abs(tyre!.health - body!.health) <= HEALTH_BAND && tyre!.ejected === body!.ejected, `tyre hit ${JSON.stringify(tyre)} against the body hit ${JSON.stringify(body)}`).toBeTruthy();
   });
 });
 
@@ -131,12 +130,12 @@ describe("given a sedan and a monster that meet the range's slab and a stucco wa
     it(`when they meet the ${target} at ${TEARS_SEDAN_MPS} m/s, then the sedan loses a wheel and the monster, whose hubs hold to ${HOLD_MPS} m/s, keeps all four`, () => {
       const [sedan] = strike(target, "sedan", TEARS_SEDAN_MPS);
       const [monster] = strike(target, "monster", TEARS_SEDAN_MPS);
-      assert.ok(sedan!.wheels < 4 && monster!.wheels === 4, `sedan ${JSON.stringify(sedan)}, monster ${JSON.stringify(monster)}`);
+      expect(sedan!.wheels < 4 && monster!.wheels === 4, `sedan ${JSON.stringify(sedan)}, monster ${JSON.stringify(monster)}`).toBeTruthy();
     });
 
     it(`when the monster meets the ${target} at ${OVER_HOLD_MPS} m/s, over the speed its hubs hold to, then a wheel comes off`, () => {
       const [monster] = strike(target, "monster", OVER_HOLD_MPS);
-      assert.ok(monster!.wheels < 4, JSON.stringify(monster));
+      expect(monster!.wheels, JSON.stringify(monster)).toBeLessThan(4);
     });
   }
 });
@@ -148,14 +147,14 @@ describe("given a sedan and a monster that meet the range's slab and a stucco wa
 describe("given a monster whose tyres alone meet the oval's wall, thinner than a tyre is long", () => {
   it("when it meets the wall at 56 m/s, then every wheel is torn off at it: none rolls through", () => {
     const [hit] = strike("oval", "monster", 56);
-    assert.equal(hit!.wheels, 0, JSON.stringify(hit));
+    expect(hit!.wheels, JSON.stringify(hit)).toBe(0);
   });
 
   it("when each class's tyre is sampled, then its edge's samples are no further apart than the gap and the most a body holds rows for covers the largest tyre", () => {
     for (const cls of VEHICLE_CLASS_IDS) {
       const r = carFrame(CAR_STYLES[CLASSES[cls].style]).rig.tyre.r * CLASSES[cls].wheelScale;
       const along = Math.ceil((2 * r) / TYRE_SAMPLE_GAP) + 1;
-      assert.ok(along <= TYRE_ALONG_MAX, `${cls}: a ${(2 * r).toFixed(2)} m tyre needs ${along} samples along an edge, room for ${TYRE_ALONG_MAX}`);
+      expect(along, `${cls}: a ${(2 * r).toFixed(2)} m tyre needs ${along} samples along an edge, room for ${TYRE_ALONG_MAX}`).toBeLessThanOrEqual(TYRE_ALONG_MAX);
     }
   });
 });

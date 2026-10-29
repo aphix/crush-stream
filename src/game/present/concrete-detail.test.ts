@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setImmediate as yieldToLoop } from "node:timers/promises";
 import { MATERIAL_DETAIL, MATERIAL_DETAIL_READY } from "../vehicle/material-class.ts";
 import { setConcreteDetailTier } from "./concrete-detail.ts";
@@ -38,26 +37,26 @@ async function mapLoaded(): Promise<void> {
 describe("given the detail map's finish-tier switch", () => {
   it("when a tier without the finish is set, then nothing is fetched and the switch stays off", () => {
     setConcreteDetailTier(false);
-    assert.equal(requested.length, 0, "fetches");
-    assert.equal(MATERIAL_DETAIL_READY.value, 0, "switch");
-    assert.equal(MATERIAL_DETAIL.value.image, null, "stand-in");
+    expect(requested.length, "fetches").toBe(0);
+    expect(MATERIAL_DETAIL_READY.value, "switch").toBe(0);
+    expect(MATERIAL_DETAIL.value.image, "stand-in").toBe(null);
   });
 
   it("when a finish tier is set, then the map is fetched once, bound to the shared uniform, and the switch comes on when it arrives", async () => {
     setConcreteDetailTier(true);
-    assert.equal(MATERIAL_DETAIL_READY.value, 0, "off until the picture arrives");
+    expect(MATERIAL_DETAIL_READY.value, "off until the picture arrives").toBe(0);
     await mapLoaded();
-    assert.equal(requested.length, 1, "fetches");
-    assert.ok(requested[0]!.endsWith("materials/concrete-detail.webp"), `url ${requested[0]}`);
-    assert.equal(MATERIAL_DETAIL.value.image, PICTURE, "the decoded picture");
-    assert.equal(MATERIAL_DETAIL_READY.value, 1, "switch");
+    expect(requested.length, "fetches").toBe(1);
+    expect(requested[0]!.endsWith("materials/concrete-detail.webp"), `url ${requested[0]}`).toBeTruthy();
+    expect(MATERIAL_DETAIL.value.image, "the decoded picture").toBe(PICTURE);
+    expect(MATERIAL_DETAIL_READY.value, "switch").toBe(1);
   });
 
   it("when the tier drops to one without the finish and returns, then the switch follows it and the map is not fetched again", () => {
     setConcreteDetailTier(false);
-    assert.equal(MATERIAL_DETAIL_READY.value, 0, "off");
+    expect(MATERIAL_DETAIL_READY.value, "off").toBe(0);
     setConcreteDetailTier(true);
-    assert.equal(MATERIAL_DETAIL_READY.value, 1, "on again");
-    assert.equal(requested.length, 1, "fetches");
+    expect(MATERIAL_DETAIL_READY.value, "on again").toBe(1);
+    expect(requested.length, "fetches").toBe(1);
   });
 });

@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { applyDrive, DRIVE, idleDrive, type DriveInput } from "./car-drive.ts";
 import type { DeformableCar } from "./car.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
@@ -28,7 +27,7 @@ function heldSlide(h: number): DeformableCar {
   step({ ...idleDrive(), throttle: 1, steer: 1, ebrake: true }, 0.4);
   step({ ...idleDrive(), throttle: 1, steer: 1 }, 0.6);
   step({ ...idleDrive(), throttle: 1, steer: 0 }, 0.5);
-  assert.ok(car.drive.drift > 0.9, `held at drift ${car.drive.drift.toFixed(2)}`);
+  expect(car.drive.drift, `held at drift ${car.drive.drift.toFixed(2)}`).toBeGreaterThan(0.9);
   return car;
 }
 
@@ -50,8 +49,8 @@ for (const h of [1 / QUIET_HZ, 1 / FINE_HZ]) {
       const before = Math.abs(rates[cross - 1]! - rates[cross - 2]!);
       const at = Math.abs(rates[cross]! - rates[cross - 1]!);
       // Across the crossing the yaw rate may move at most 20 % of itself per slice more than it did the slice before (a switch dropped it 80 % in one slice).
-      assert.ok(at <= before + 0.2 * Math.abs(rates[cross - 1]!) * (h * QUIET_HZ), `the yaw rate stepped ${at.toFixed(3)} rad/s at the crossing (${rates[cross - 1]!.toFixed(3)} → ${rates[cross]!.toFixed(3)}), ${before.toFixed(3)} the slice before`);
-      assert.ok(car.drive.drift > 0.9, `the slide is still held at drift ${car.drive.drift.toFixed(2)} past the deadband`);
+      expect(at, `the yaw rate stepped ${at.toFixed(3)} rad/s at the crossing (${rates[cross - 1]!.toFixed(3)} → ${rates[cross]!.toFixed(3)}), ${before.toFixed(3)} the slice before`).toBeLessThanOrEqual(before + 0.2 * Math.abs(rates[cross - 1]!) * (h * QUIET_HZ));
+      expect(car.drive.drift, `the slide is still held at drift ${car.drive.drift.toFixed(2)} past the deadband`).toBeGreaterThan(0.9);
     });
 
     it("when the stick stays inside the deadband, then the aim is the angle held: the yaw rate is the same slice for slice as with the stick dead centre", () => {
@@ -64,7 +63,7 @@ for (const h of [1 / QUIET_HZ, 1 / FINE_HZ]) {
         applyDrive(inside, { ...idleDrive(), throttle: 1, steer: 0.5 * DRIVE.driftDeadband }, h);
         centre.integrate(h);
         inside.integrate(h);
-        assert.equal(inside.yaw - y1, centre.yaw - y0, `yaw step at ${t.toFixed(3)} s`);
+        expect(inside.yaw - y1, `yaw step at ${t.toFixed(3)} s`).toBe(centre.yaw - y0);
       }
     });
 
@@ -82,7 +81,7 @@ for (const h of [1 / QUIET_HZ, 1 / FINE_HZ]) {
         };
         step({ ...idleDrive(), throttle: 1, steer: 1, ebrake: true }, 0.12);
         step({ ...idleDrive(), throttle: 1, steer: 1 }, 0.15);
-        assert.ok(car.drive.drift > 0.5, `sliding at drift ${car.drive.drift.toFixed(2)}`);
+        expect(car.drive.drift, `sliding at drift ${car.drive.drift.toFixed(2)}`).toBeGreaterThan(0.5);
         let last = Infinity;
         const rises: string[] = [];
         let t = 0;
@@ -92,8 +91,8 @@ for (const h of [1 / QUIET_HZ, 1 / FINE_HZ]) {
           if (rate > last + 1e-9) rises.push(`${t.toFixed(2)} s: ${last.toFixed(3)} → ${rate.toFixed(3)}`);
           last = rate;
         });
-        assert.deepEqual(rises, [], `the yaw rate rose at ${rises.slice(0, 4).join("; ")}${rises.length > 4 ? ` (+${rises.length - 4})` : ""}`);
-        assert.equal(car.drive.drift, 0, "the slide ended");
+        expect(rises, `the yaw rate rose at ${rises.slice(0, 4).join("; ")}${rises.length > 4 ? ` (+${rises.length - 4})` : ""}`).toHaveLength(0);
+        expect(car.drive.drift, "the slide ended").toBe(0);
       });
     });
   });

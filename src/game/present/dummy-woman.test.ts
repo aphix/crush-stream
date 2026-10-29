@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { OUTFIT, type DriverLook } from "./driver-look.ts";
 import { BUST, restFits } from "./dummy-fit.ts";
@@ -55,11 +54,11 @@ describe("given the woman in her top, cut-offs and heels", () => {
       const foot = standing.filter((row) => !row.wear && row.at.y < FOOT_TOP && Math.sign(row.at.x) === side.sign);
       const back = Math.min(...foot.map((row) => row.at.z));
       const heel = foot.filter((row) => row.at.z < back + HEEL_LENGTH);
-      assert.ok(lowest(heel) >= HEEL_LIFT, `her heel's underside is ${lowest(heel).toFixed(3)} m off the floor`);
-      assert.ok(lowest(foot) <= TOES_DOWN, `her toes are ${lowest(foot).toFixed(3)} m off the floor`);
+      expect(lowest(heel), `her heel's underside is ${lowest(heel).toFixed(3)} m off the floor`).toBeGreaterThanOrEqual(HEEL_LIFT);
+      expect(lowest(foot), `her toes are ${lowest(foot).toFixed(3)} m off the floor`).toBeLessThanOrEqual(TOES_DOWN);
       const stiletto = ofWear(standing, ROLE.SHOE, BUILD.WOMAN).filter((row) => Math.sign(row.at.x) === side.sign);
-      assert.ok(stiletto.length > 0, "she wears a stiletto");
-      assert.ok(lowest(stiletto) <= TIP_DOWN, `the stiletto's tip is ${lowest(stiletto).toFixed(3)} m off the floor`);
+      expect(stiletto.length, "she wears a stiletto").toBeGreaterThan(0);
+      expect(lowest(stiletto), `the stiletto's tip is ${lowest(stiletto).toFixed(3)} m off the floor`).toBeLessThanOrEqual(TIP_DOWN);
     });
   }
 
@@ -69,8 +68,8 @@ describe("given the woman in her top, cut-offs and heels", () => {
     for (const side of SIDES) {
       const ankle = lowestRigid(standing, side.shin, FOOT_TOP);
       const stiletto = ofWear(standing, ROLE.SHOE, BUILD.WOMAN).filter((row) => Math.sign(row.at.x) === side.sign);
-      assert.ok(stiletto.length > 0 && to.get(ankle.index)!.at.distanceTo(ankle.at) > HEEL_LIFT, `the ${side.name} ankle moved with the bend`);
-      assert.ok(drift(stiletto, ankle.index, from, to) < RIGID, `the ${side.name} stiletto drifts ${drift(stiletto, ankle.index, from, to).toFixed(4)} m from her ankle`);
+      expect(stiletto.length > 0 && to.get(ankle.index)!.at.distanceTo(ankle.at) > HEEL_LIFT, `the ${side.name} ankle moved with the bend`).toBeTruthy();
+      expect(drift(stiletto, ankle.index, from, to), `the ${side.name} stiletto drifts ${drift(stiletto, ankle.index, from, to).toFixed(4)} m from her ankle`).toBeLessThan(RIGID);
     }
   });
 
@@ -79,21 +78,21 @@ describe("given the woman in her top, cut-offs and heels", () => {
     const [from, to] = [byIndex(standing), byIndex(raised)];
     const elbow = lowestRigid(standing, LEFT_ARM, 0);
     const sleeve = ofWear(standing, ROLE.SHIRT, BUILD.WOMAN | SHORT_SLEEVES).filter((row) => row.at.x < 0);
-    assert.ok(sleeve.length > 0 && to.get(elbow.index)!.at.distanceTo(elbow.at) > ARM_MOVED, "she wears a sleeve and her arm moved");
-    assert.ok(drift(sleeve, elbow.index, from, to) < RIGID, `her sleeve drifts ${drift(sleeve, elbow.index, from, to).toFixed(4)} m from her arm`);
+    expect(sleeve.length > 0 && to.get(elbow.index)!.at.distanceTo(elbow.at) > ARM_MOVED, "she wears a sleeve and her arm moved").toBeTruthy();
+    expect(drift(sleeve, elbow.index, from, to), `her sleeve drifts ${drift(sleeve, elbow.index, from, to).toFixed(4)} m from her arm`).toBeLessThan(RIGID);
   });
 
   it("when she and a man in the same clothes stand, then her bust is her body's own chest standing in front of her sternum, with no shell over it, and the man's chest stays flat", () => {
     const chest = (rows: readonly Drawn[]) => rows.filter((row) => !row.wear && Math.abs(row.at.y - BUST.y) < BUST.r && Math.abs(row.at.x) < BUST.x + BUST.r);
     const front = Math.max(...chest(standing).map((row) => row.at.z));
-    assert.ok(front - BUST.wall >= BUST_PROJECTION, `her bust stands ${(front - BUST.wall).toFixed(3)} m in front of her sternum`);
-    assert.equal(ofWear(standing, ROLE.SHIRT, BUILD.WOMAN).length, 0, "no dome shell lies over her chest (its rim would show)");
+    expect(front - BUST.wall, `her bust stands ${(front - BUST.wall).toFixed(3)} m in front of her sternum`).toBeGreaterThanOrEqual(BUST_PROJECTION);
+    expect(ofWear(standing, ROLE.SHIRT, BUILD.WOMAN).length, "no dome shell lies over her chest (its rim would show)").toBe(0);
     const man = Math.max(...chest(drawnRows(false, { ...WOMAN, woman: false }).rows).map((row) => row.at.z));
-    assert.ok(man - BUST.wall < BUST_PROJECTION / 2, `his chest stands ${(man - BUST.wall).toFixed(3)} m in front of her sternum's line`);
+    expect(man - BUST.wall, `his chest stands ${(man - BUST.wall).toFixed(3)} m in front of her sternum's line`).toBeLessThan(BUST_PROJECTION / 2);
   });
 
   it("when she stands, then under her top's scoop the fabric spans her cleavage at her bust's own height", () => {
     const [middle, dome] = [surfaceZ(fit, 0, BUST.y), surfaceZ(fit, BUST.x, BUST.y)];
-    assert.ok(dome - middle <= BRIDGED, `her middle lies ${(dome - middle).toFixed(3)} m behind her bust's front`);
+    expect(dome - middle, `her middle lies ${(dome - middle).toFixed(3)} m behind her bust's front`).toBeLessThanOrEqual(BRIDGED);
   });
 });

@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DerbyMatch, snapshotAiCar } from "./derby.ts";
 import { arenaWorld, placeDerby } from "../scenes/derby-arena.test-util.ts";
@@ -100,8 +99,8 @@ function derbySeed(): { frozenSlices: number; worstHub: number; worstWheel: numb
 describe("given a six-car derby (seed 10) with the epicenter activation on", () => {
   it("when it runs 15 s, then every frozen wreck's hubs stay within half a metre of their car-frame places and its drawn wheels within half a metre of their hubs", () => {
     const { frozenSlices, worstHub, worstWheel } = derbySeed();
-    assert.ok(frozenSlices > 1000, `${frozenSlices} frozen wreck slices: the row proves nothing`);
-    assert.ok(worstHub < HUB_BOUND, `a frozen wreck's hub stood ${worstHub.toFixed(2)} m off its place in the car frame`);
-    assert.ok(worstWheel < HUB_BOUND, `a frozen wreck's drawn wheel stood ${worstWheel.toFixed(2)} m off its hub`);
+    expect(frozenSlices, `${frozenSlices} frozen wreck slices: the row proves nothing`).toBeGreaterThan(1000);
+    expect(worstHub, `a frozen wreck's hub stood ${worstHub.toFixed(2)} m off its place in the car frame`).toBeLessThan(HUB_BOUND);
+    expect(worstWheel, `a frozen wreck's drawn wheel stood ${worstWheel.toFixed(2)} m off its hub`).toBeLessThan(HUB_BOUND);
   });
 });

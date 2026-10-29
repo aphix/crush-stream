@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { newWorld, stepWorld } from "./world-step.ts";
 import { FINE_HZ, QUIET_HZ, SLICES_PER_STEP } from "../kernel/constants.ts";
@@ -61,21 +60,21 @@ const uncutCases = [
 describe("given a car driven at 10 m/s at a resting car on open ground for 1.5 s", () => {
   it("when it starts 6 m out and is stepped at the pacer's coarse step with its 1/240 s floor set, then the steps counted as cut short are exactly those that ran in a contact cut of 1/240 s slices, some steps but not all", () => {
     const { cuts, sliced, widest, steps } = countedCuts(-6, FINE, COARSE);
-    assert.ok(cuts > 0 && cuts < steps, `${cuts} of ${steps} steps counted`);
-    assert.equal(cuts, sliced);
-    assert.equal(widest, SLICES_PER_STEP);
+    expect(cuts > 0 && cuts < steps, `${cuts} of ${steps} steps counted`).toBeTruthy();
+    expect(cuts).toBe(sliced);
+    expect(widest).toBe(SLICES_PER_STEP);
   });
   it("when it hits the other with no pacer floor set, then its contact steps are cut to slices of 1/240 s all the same", () => {
     const { sliced, widest } = countedCuts(-6, 0, COARSE);
-    assert.ok(sliced > 0);
-    assert.equal(widest, SLICES_PER_STEP);
+    expect(sliced).toBeGreaterThan(0);
+    expect(widest).toBe(SLICES_PER_STEP);
   });
   it("when it hits the other at every step as short as the 1/240 s floor, then no step runs in more than one slice", () => {
-    assert.equal(countedCuts(-6, FINE, FINE).widest, 1);
+    expect(countedCuts(-6, FINE, FINE).widest).toBe(1);
   });
   for (const testCase of uncutCases) {
     it(testCase.it, () => {
-      assert.equal(countedCuts(testCase.startX, testCase.fine, testCase.step).cuts, 0);
+      expect(countedCuts(testCase.startX, testCase.fine, testCase.step).cuts).toBe(0);
     });
   }
 });
@@ -83,13 +82,13 @@ describe("given a car driven at 10 m/s at a resting car on open ground for 1.5 s
 describe("given the pacer's coarse step", () => {
   it("when two cars are 200 m apart, then every step runs in one slice (the quiet step is not cut)", () => {
     const { lengths, counts } = slicesOf(-200, COARSE);
-    assert.ok(counts.every((c) => c === 1), `slices per step: ${[...new Set(counts)].join(", ")}`);
-    assert.equal(lengths.length, counts.length);
+    expect(counts.every((c) => c === 1), `slices per step: ${[...new Set(counts)].join(", ")}`).toBeTruthy();
+    expect(lengths.length).toBe(counts.length);
   });
   it("when one hits the other, then a step in contact runs in slices of exactly 1/240 s, never shorter", () => {
     const { lengths, counts } = slicesOf(-6, COARSE);
-    assert.ok(counts.includes(SLICES_PER_STEP), "no step was cut for the hit");
+    expect(counts.includes(SLICES_PER_STEP), "no step was cut for the hit").toBeTruthy();
     const off = lengths.filter((h) => Math.abs(h - Math.fround(FINE)) > 1e-7 && Math.abs(h - COARSE) > 1e-7);
-    assert.deepEqual(off, [], "slices that are neither the whole step nor a 1/240 s one");
+    expect(off, "slices that are neither the whole step nor a 1/240 s one").toHaveLength(0);
   });
 });

@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { DEG, FRAME, fit, frame, makeCar, worldOf, type Fit } from "../vehicle/ground-probe.test-util.ts";
 import { idleDrive } from "../vehicle/car-drive.ts";
 import { layOnGround } from "../vehicle/car-air-points.ts";
@@ -123,12 +122,12 @@ describe("given a car struck head-on while standing on flat ground, a slope, a b
         for (let n = 0; n < REST_S * 60; n++) step();
         const f = fit(car, site.ground);
         car.dispose();
-        assert.ok(car.crashed && car.deform.massActive, "the hit did not make a wreck");
+        expect(car.crashed && car.deform.massActive, "the hit did not make a wreck").toBeTruthy();
         const where = `${cls} on ${site.name}: ${label(f)}`;
-        assert.ok(Math.abs(f.pitch - intact.pitch) <= tilt, `pitch off the intact car's (${intact.pitch.toFixed(1)}°): ${where}`);
-        assert.ok(Math.abs(f.roll - intact.roll) <= tilt, `roll off the intact car's (${intact.roll.toFixed(1)}°): ${where}`);
-        assert.ok(Math.max(...f.gaps.map(Math.abs)) <= GAP_M, `a tyre off the ground or in it: ${where}`);
-        assert.ok(f.pen <= PEN_M, `the underside is in the ground: ${where}`);
+        expect(Math.abs(f.pitch - intact.pitch), `pitch off the intact car's (${intact.pitch.toFixed(1)}°): ${where}`).toBeLessThanOrEqual(tilt);
+        expect(Math.abs(f.roll - intact.roll), `roll off the intact car's (${intact.roll.toFixed(1)}°): ${where}`).toBeLessThanOrEqual(tilt);
+        expect(Math.max(...f.gaps.map(Math.abs)), `a tyre off the ground or in it: ${where}`).toBeLessThanOrEqual(GAP_M);
+        expect(f.pen, `the underside is in the ground: ${where}`).toBeLessThanOrEqual(PEN_M);
       });
     }
   }
@@ -160,8 +159,8 @@ describe("given a sedan struck head-on while sliding at 6 m/s down a −20° slo
         at.copy(car.group.position);
       }
       car.dispose();
-      assert.ok(turn <= 2, `${site.name}: the body turned ${turn.toFixed(2)}° in one frame`);
-      assert.ok(jump <= 1.5 * SLIDE_MPS * FRAME + 0.02, `${site.name}: the car moved ${(jump * 100).toFixed(1)} cm in one frame`);
+      expect(turn, `${site.name}: the body turned ${turn.toFixed(2)}° in one frame`).toBeLessThanOrEqual(2);
+      expect(jump, `${site.name}: the car moved ${(jump * 100).toFixed(1)} cm in one frame`).toBeLessThanOrEqual(1.5 * SLIDE_MPS * FRAME + 0.02);
     }
   });
 });

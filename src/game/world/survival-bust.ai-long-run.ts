@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { chase, type CopTamper } from "./survival-players.test-util.ts";
 import { ARENA } from "./survival-arena.test-util.ts";
 import { miss, release } from "./survival-pack.test-util.ts";
@@ -19,12 +18,12 @@ describe("given the closed arena with a player that runs for the far corner and 
   it(`when the pack is released at ${release(SEED).toFixed(1)} s, then it busts the player`, (t) => {
     const c = chase("corner", SEED, release(SEED) + BUST_T, ARENA, { release: release(SEED) });
     t.annotate(`ended ${c.cause} at ${c.time.toFixed(1)} s, ${c.touches} cop contacts`);
-    assert.equal(miss(c, false, BUST_T, "busted"), null);
+    expect(miss(c, false, BUST_T, "busted")).toBe(null);
   });
   it("when the cops never move, then they never bust it", (t) => {
     const c = chase("corner", SEED, release(SEED) + BUST_T, ARENA, { release: release(SEED), tamper: FROZEN });
     const why = miss(c, false, BUST_T, "busted");
     t.annotate(`not busted: ${why}`);
-    assert.notEqual(why, null, `cops that never move busted the player at ${c.time.toFixed(1)} s`);
+    expect(why, `cops that never move busted the player at ${c.time.toFixed(1)} s`).not.toBe(null);
   });
 });

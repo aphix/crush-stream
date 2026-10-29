@@ -1,5 +1,4 @@
-import { type TestContext } from "vitest";
-import assert from "node:assert/strict";
+import { expect, type TestContext } from "vitest";
 import * as THREE from "three";
 import { HUNT } from "../ai/hunter.ts";
 import { COUNTDOWN, GRID_TIME } from "../match/session.ts";
@@ -270,8 +269,8 @@ export function dropInsAtPoses(w: World, path: Track["path"], poses: number, spe
 /** The bars on `dropInsAtPoses`' result: a drop-in for every pose (else the check is vacuous), none in the camera's view, none nearer than `HUNT.dropMin`. */
 export function assertDropInsHidden(r: Play, poses: number): void {
   const seen = r.spawns.filter((s) => s.visible);
-  assert.ok(r.spawns.length >= poses, `only ${r.spawns.length} drop-ins for ${poses} poses: the invariant would be vacuous (ends ${JSON.stringify(r.ends)})`);
-  assert.deepEqual(seen, [], `cops appeared in view: ${JSON.stringify(seen.slice(0, 3))}`);
-  assert.ok(r.spawns.every((s) => s.dist >= HUNT.dropMin - 1e-6), "a drop-in closer than the minimum");
+  expect(r.spawns.length, `only ${r.spawns.length} drop-ins for ${poses} poses: the invariant would be vacuous (ends ${JSON.stringify(r.ends)})`).toBeGreaterThanOrEqual(poses);
+  expect(seen, `cops appeared in view: ${JSON.stringify(seen.slice(0, 3))}`).toHaveLength(0);
+  expect(r.spawns.every((s) => s.dist >= HUNT.dropMin - 1e-6), "a drop-in closer than the minimum").toBeTruthy();
 }
 

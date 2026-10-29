@@ -1,5 +1,4 @@
-import { afterAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { launch, makeCar, relaunchDamaged } from "../contact/crash-scenarios.test-util.ts";
 import { satCars } from "../contact/sat.ts";
@@ -83,9 +82,9 @@ describe("given 16 sedans in two columns, 5 m nose to tail and 3.5 m abeam, at 1
 
   it("when lone cars run, then every step is one slice of every car (16 car-slices) and no step is cut; with them off the same field cuts every step to 3 slices (48)", () => {
     const rows = convoyRuns().rows.slice(0, 80);
-    assert.ok(rows.every((r) => r.slices === 1 && r.loners === 0 && r.carSlices === 16 && r.missed === 0), `slices per step ${[...new Set(rows.map((r) => r.slices))]}, car-slices ${[...new Set(rows.map((r) => r.carSlices))]}`);
+    expect(rows.every((r) => r.slices === 1 && r.loners === 0 && r.carSlices === 16 && r.missed === 0), `slices per step ${[...new Set(rows.map((r) => r.slices))]}, car-slices ${[...new Set(rows.map((r) => r.carSlices))]}`).toBeTruthy();
     const cut = convoyRuns().cut.slice(0, 80);
-    assert.ok(cut.every((r) => r.slices === SLICES_PER_STEP && r.carSlices === 16 * SLICES_PER_STEP), "the old test cut every step of the convoy");
+    expect(cut.every((r) => r.slices === SLICES_PER_STEP && r.carSlices === 16 * SLICES_PER_STEP), "the old test cut every step of the convoy").toBeTruthy();
   });
 
   it("when it runs for 3 s lone and sliced, then every car ends within 0.15 m and 0.1 m/s of where the sliced car does", () => {
@@ -93,7 +92,7 @@ describe("given 16 sedans in two columns, 5 m nose to tail and 3.5 m abeam, at 1
     for (const [i, car] of on.cars.entries()) {
       const ref = off.cars[i]!;
       const gap = dist(car, ref);
-      assert.ok(gap < 0.15 && Math.abs(car.velocity.length() - ref.velocity.length()) < 0.1, `car ${i}: ${gap.toFixed(3)} m apart`);
+      expect(gap < 0.15 && Math.abs(car.velocity.length() - ref.velocity.length()) < 0.1, `car ${i}: ${gap.toFixed(3)} m apart`).toBeTruthy();
     }
   });
 
@@ -102,11 +101,11 @@ describe("given 16 sedans in two columns, 5 m nose to tail and 3.5 m abeam, at 1
     const off = convoy(8, 2, 5, 3.5, 40, false);
     const rows = drive(on.w, 240);
     drive(off.w, 240);
-    assert.ok(rows.every((r) => r.slices === 1 && r.missed === 0), "every step was one slice");
+    expect(rows.every((r) => r.slices === 1 && r.missed === 0), "every step was one slice").toBeTruthy();
     for (const [i, car] of on.cars.entries()) {
       const ref = off.cars[i]!;
-      assert.ok(!car.crashed && !ref.crashed, `car ${i} crashed`);
-      assert.ok(dist(car, ref) < 0.15, `car ${i} drifted from the sliced run`);
+      expect(!car.crashed && !ref.crashed, `car ${i} crashed`).toBeTruthy();
+      expect(dist(car, ref), `car ${i} drifted from the sliced run`).toBeLessThan(0.15);
     }
     dispose([...on.cars, ...off.cars]);
   });
@@ -156,54 +155,54 @@ describe("given two sedans abeam at 15 m/s, the step cut by a pair parked far of
     const sedan = makeCar("shape");
     /** The mirrors' tips of two sedans side by side meet at this centre distance (m): each car's own (`mirrorBaseX` + its door's `mirrorReach`). */
     const meet = 2 * (sedan.mirrorBaseX + sedan.style.door.mirrorReach);
-    assert.ok(s >= meet + LEAST_BEYOND && s <= meet + MOST_BEYOND, `lone from ${s.toFixed(3)} m apart`);
-    assert.equal(firstMask(s - 0.01, 0), 0, "10 mm inside the clearance neither is lone");
-    assert.equal(firstMask(s + 0.01, 0), 0b11, "10 mm outside it both are");
+    expect(s >= meet + LEAST_BEYOND && s <= meet + MOST_BEYOND, `lone from ${s.toFixed(3)} m apart`).toBeTruthy();
+    expect(firstMask(s - 0.01, 0), "10 mm inside the clearance neither is lone").toBe(0);
+    expect(firstMask(s + 0.01, 0), "10 mm outside it both are").toBe(0b11);
   });
 
   for (const closing of [1, 2, 4]) {
     it(`when one closes on the other at ${closing} m/s (below a crash's 5.5 m/s), then the clearance grows by exactly the step's travel (${closing} m/s of 1/80 s)`, () => {
       const grown = stillClearance() + closing * COARSE;
-      assert.ok(!lone(grown - MATCH_M, closing), `lone ${MATCH_M * 1000} mm inside the still clearance plus the step's travel (${grown.toFixed(4)} m)`);
-      assert.ok(lone(grown + MATCH_M, closing), `held ${MATCH_M * 1000} mm outside the still clearance plus the step's travel (${grown.toFixed(4)} m)`);
+      expect(!lone(grown - MATCH_M, closing), `lone ${MATCH_M * 1000} mm inside the still clearance plus the step's travel (${grown.toFixed(4)} m)`).toBe(true);
+      expect(lone(grown + MATCH_M, closing), `held ${MATCH_M * 1000} mm outside the still clearance plus the step's travel (${grown.toFixed(4)} m)`).toBeTruthy();
     });
   }
 
   for (const closing of [6, 20]) {
     it(`when one closes on the other at ${closing} m/s (a crash's closing: the hit-ahead mark of \`nearHit\` holds the pair too), then the clearance is never less than the hull rule's: the 0-speed one and the step's travel`, () => {
       const rule = stillClearance() + closing * COARSE;
-      assert.ok(!lone(rule - MATCH_M, closing), `lone ${MATCH_M * 1000} mm inside the hull rule's ${rule.toFixed(3)} m`);
+      expect(!lone(rule - MATCH_M, closing), `lone ${MATCH_M * 1000} mm inside the hull rule's ${rule.toFixed(3)} m`).toBe(true);
     });
   }
 
   it("when one car is leaving the other (negative closing), then the clearance does not shrink below the 0-speed one", () => {
     const s = stillClearance();
-    assert.ok(!lone(s - MATCH_M, -10), "separating speed buys clearance: lone inside the still one");
-    assert.ok(lone(s + MATCH_M, -10), "separating speed costs clearance: held outside the still one");
+    expect(!lone(s - MATCH_M, -10), "separating speed buys clearance: lone inside the still one").toBe(true);
+    expect(lone(s + MATCH_M, -10), "separating speed costs clearance: held outside the still one").toBeTruthy();
   });
 
   it(`when one is spinning at 3 rad/s (its rim moves 7 m/s), then the clearance grows by what the rim travels in a step, at least ${SPIN_GROWS} m`, () => {
     const at = stillClearance() + SPIN_GROWS - BISECT_M;
-    assert.ok(!lone(at, 0, (a) => a.angular.set(0, 3, 0)), `the spinning pair is lone at ${at.toFixed(4)} m`);
+    expect(!lone(at, 0, (a) => a.angular.set(0, 3, 0)), `the spinning pair is lone at ${at.toFixed(4)} m`).toBe(true);
   });
 });
 
 describe("given two sedans abeam at a hull-clear distance the circle of the old test would hold, the step cut by a pair parked far off", () => {
   const APART = 3.2;
   it("when both are whole, then they are lone from 3.2 m apart; each of the four breaks of the hull's description holds them both in the slices", () => {
-    assert.equal(firstMask(APART, 0), 0b11, "the whole pair");
-    assert.equal(firstMask(APART, 0, (a) => (a["doorParts"][0]!.swing!.latched = false)), 0, "a door ajar swings out past the hull");
-    assert.equal(firstMask(APART, 0, (a) => (a["parts"][0]!.detached = true)), 0, "a torn part flies on its own");
-    assert.equal(firstMask(APART, 0, (a) => {
+    expect(firstMask(APART, 0), "the whole pair").toBe(0b11);
+    expect(firstMask(APART, 0, (a) => (a["doorParts"][0]!.swing!.latched = false)), "a door ajar swings out past the hull").toBe(0);
+    expect(firstMask(APART, 0, (a) => (a["parts"][0]!.detached = true)), "a torn part flies on its own").toBe(0);
+    expect(firstMask(APART, 0, (a) => {
       a.group.rotation.z = 0.12;
       a.refreshBasis();
-    }), 0, "a leaning body's plan reaches past the level box");
-    assert.equal(firstMask(APART, 0, (a) => (a.airborne = true)), 0, "a car in the air meets what is under it");
+    }), "a leaning body's plan reaches past the level box").toBe(0);
+    expect(firstMask(APART, 0, (a) => (a.airborne = true)), "a car in the air meets what is under it").toBe(0);
   });
 
   it("when one has crashed, or stands on the other's roof, then they stay in the slices (the plan box is no description of them)", () => {
-    assert.equal(firstMask(APART, 0, (a) => (a.crashed = true)), 0, "a crashed car");
-    assert.equal(firstMask(APART, 0, (a, b) => (a.restsOn = b)), 0, "a car standing on another");
+    expect(firstMask(APART, 0, (a) => (a.crashed = true)), "a crashed car").toBe(0);
+    expect(firstMask(APART, 0, (a, b) => (a.restsOn = b)), "a car standing on another").toBe(0);
   });
 
   it("when both are wrecks (their masses move the hull) lying still, then neither is lone", () => {
@@ -214,12 +213,12 @@ describe("given two sedans abeam at a hull-clear distance the circle of the old 
     const crash = newWorld([a, b]);
     crash.fine = FINE;
     run(crash, 160, COARSE);
-    assert.ok(a.deform.massActive && b.deform.massActive, "the head-on made two wrecks");
+    expect(a.deform.massActive && b.deform.massActive, "the head-on made two wrecks").toBeTruthy();
     relaunchDamaged(a, 0, 0, HEAD_Z, 0, 0);
     relaunchDamaged(b, APART, 0, HEAD_Z, 0, 0);
     const far = parkedPair();
     const rows = run(fieldOf([a, b, ...far], true).w, 1, COARSE);
-    assert.equal(rows[0]!.loners & 0b11, 0, "two wrecks 3.2 m abeam");
+    expect(rows[0]!.loners & 0b11, "two wrecks 3.2 m abeam").toBe(0);
     dispose([a, b, ...far]);
   });
 
@@ -227,8 +226,8 @@ describe("given two sedans abeam at a hull-clear distance the circle of the old 
     const f = pairField(abeam(APART, 0), true);
     const before = f.w.phases.work[WORK.pairTests]!;
     const rows = run(f.w, 10, COARSE);
-    assert.ok(rows.every((r) => (r.loners & 0b11) === 0b11 && r.slices === SLICES_PER_STEP), "the pair is lone in a cut step");
-    assert.equal(f.w.phases.work[WORK.pairTests]! - before, 10 * SLICES_PER_STEP, "pair tests: the parked pair in every slice, the lone pair in none");
+    expect(rows.every((r) => (r.loners & 0b11) === 0b11 && r.slices === SLICES_PER_STEP), "the pair is lone in a cut step").toBeTruthy();
+    expect(f.w.phases.work[WORK.pairTests]! - before, "pair tests: the parked pair in every slice, the lone pair in none").toBe(10 * SLICES_PER_STEP);
     dispose(f.cars);
   });
 });
@@ -238,17 +237,14 @@ describe("given two sedans abeam at 15 m/s a race lane's gap apart (up to 2.4 m:
     const sedan = makeCar("shape");
     const meet = 2 * (sedan.mirrorBaseX + sedan.style.door.mirrorReach);
     dispose([sedan]);
-    assert.ok(meet + MOST_BEYOND < 2.4, `the clearance ends by ${(meet + MOST_BEYOND).toFixed(3)} m`);
+    expect(meet + MOST_BEYOND, `the clearance ends by ${(meet + MOST_BEYOND).toFixed(3)} m`).toBeLessThan(2.4);
     for (const apart of [meet + MOST_BEYOND, 2.4]) {
       const on = pairField(abeam(apart, 0), true);
       const off = pairField(abeam(apart, 0), false);
       const rows = run(on.w, 80, COARSE);
       run(off.w, 80, COARSE);
       const masks = [...new Set(rows.map((r) => r.loners & 0b11))].join();
-      assert.ok(
-        rows.every((r) => (r.loners & 0b11) === 0b11 && r.slices === SLICES_PER_STEP && r.missed === 0),
-        `${apart} m apart: lone masks seen ${masks}, missed ${rows.reduce((n, r) => n + r.missed, 0)}`,
-      );
+      expect(rows.every((r) => (r.loners & 0b11) === 0b11 && r.slices === SLICES_PER_STEP && r.missed === 0), `${apart} m apart: lone masks seen ${masks}, missed ${rows.reduce((n, r) => n + r.missed, 0)}`).toBeTruthy();
       samePose(on, off);
       dispose([...on.cars, ...off.cars]);
     }
@@ -264,7 +260,7 @@ describe("given a car of each class leaning as far as the level bar lets it (a r
       car.group.rotation.set(LEVEL - 0.002, 0, LEVEL - 0.002, "YXZ");
       car.refreshBasis();
       const hull = new Float64Array(HULL_STRIDE);
-      assert.ok(readHull(car, hull, 0), "a car under the level bar is read");
+      expect(readHull(car, hull, 0), "a car under the level bar is read").toBeTruthy();
       const pos = car.cage.fields.pos;
       const v = new THREE.Vector3();
       let wide = 0;
@@ -276,7 +272,7 @@ describe("given a car of each class leaning as far as the level bar lets it (a r
         wide = Math.max(wide, Math.abs(dx * car.rightFlat.x + dz * car.rightFlat.z));
         long = Math.max(long, Math.abs(dx * car.fwdFlat.x + dz * car.fwdFlat.z));
       }
-      assert.ok(wide <= hull[H_HX]! && long <= hull[H_HZ]!, `cage ${wide.toFixed(3)} x ${long.toFixed(3)} m inside the box ${hull[H_HX]!.toFixed(3)} x ${hull[H_HZ]!.toFixed(3)} m`);
+      expect(wide <= hull[H_HX]! && long <= hull[H_HZ]!, `cage ${wide.toFixed(3)} x ${long.toFixed(3)} m inside the box ${hull[H_HX]!.toFixed(3)} x ${hull[H_HZ]!.toFixed(3)} m`).toBeTruthy();
       dispose([car]);
     });
   }
@@ -311,7 +307,7 @@ function contactOf(field: Field, steps: number, before: (step: number) => void):
 function samePose(on: Field, off: Field): void {
   for (const k of [0, 1]) {
     const d = dist(on.cars[k]!, off.cars[k]!);
-    assert.ok(d < SAME_M, `car ${k} ends ${d.toFixed(3)} m from the sliced run's`);
+    expect(d, `car ${k} ends ${d.toFixed(3)} m from the sliced run's`).toBeLessThan(SAME_M);
   }
 }
 
@@ -321,10 +317,10 @@ function matchesSliced(make: (lone: boolean) => Field, steps: number, before: (f
   const off = make(false);
   const hitOn = contactOf(on, steps, () => before(on, true));
   const hitOff = contactOf(off, steps, () => before(off, false));
-  assert.ok(hitOff.first > 0, "the sliced run met in the window");
-  assert.equal(hitOn.first, hitOff.first, "first contact");
-  assert.equal(hitOn.missed, 0, "pairs with a lone car that overlap at a step's end");
-  assert.ok(hitOn.depth <= hitOff.depth + 0.02, `deepest overlap ${hitOn.depth.toFixed(3)} m against ${hitOff.depth.toFixed(3)} m`);
+  expect(hitOff.first, "the sliced run met in the window").toBeGreaterThan(0);
+  expect(hitOn.first, "first contact").toBe(hitOff.first);
+  expect(hitOn.missed, "pairs with a lone car that overlap at a step's end").toBe(0);
+  expect(hitOn.depth, `deepest overlap ${hitOn.depth.toFixed(3)} m against ${hitOff.depth.toFixed(3)} m`).toBeLessThanOrEqual(hitOff.depth + 0.02);
   samePose(on, off);
   dispose([...on.cars, ...off.cars]);
 }
@@ -367,7 +363,7 @@ describe("given a sedan 5 m nose to tail behind another and 5 m/s faster, or a s
           if (lone) for (const [k, car] of [a!, b!].entries()) worst = Math.max(worst, car.velocity.distanceTo(v[k]!) / COARSE);
         },
       );
-      assert.ok(worst <= ACCEL_BOUND, `the largest velocity change a step was ${worst.toFixed(1)} m/s^2`);
+      expect(worst, `the largest velocity change a step was ${worst.toFixed(1)} m/s^2`).toBeLessThanOrEqual(ACCEL_BOUND);
     });
   }
 });
@@ -382,9 +378,9 @@ describe("given two sedans driving head-on at 12 m/s each from 40 m, nothing els
     const off = pairField(headOn, false, false);
     const rows = run(on.w, 120, COARSE);
     run(off.w, 120, COARSE);
-    assert.ok(rows.slice(0, 20).every((r) => r.slices === 1 && r.loners === 0), "40 m apart the world is the quiet step");
-    assert.ok(rows.some((r) => r.slices === SLICES_PER_STEP), "the hit's steps are cut");
-    assert.ok(on.cars.every((c) => c.crashed), "both crashed");
+    expect(rows.slice(0, 20).every((r) => r.slices === 1 && r.loners === 0), "40 m apart the world is the quiet step").toBeTruthy();
+    expect(rows.some((r) => r.slices === SLICES_PER_STEP), "the hit's steps are cut").toBeTruthy();
+    expect(on.cars.every((c) => c.crashed), "both crashed").toBeTruthy();
     samePose(on, off);
     dispose([...on.cars, ...off.cars]);
   });
@@ -417,7 +413,7 @@ describe("given a car of each class on open ground at 15 and at 40 m/s, driven w
           dispose([car]);
         }
       }
-      assert.ok(worst <= ACCEL_BOUND, `${cls}: the largest velocity change a step was ${worst.toFixed(1)} m/s^2`);
+      expect(worst, `${cls}: the largest velocity change a step was ${worst.toFixed(1)} m/s^2`).toBeLessThanOrEqual(ACCEL_BOUND);
     });
   }
 });
@@ -446,7 +442,7 @@ describe("given a car driven for 5 s with a sinusoidal steer in a world cut ever
     const flipping = driven((s) => s % 2 === 0);
     for (const other of [always, never]) {
       const gap = Math.hypot(flipping.x - other.x, flipping.z - other.z);
-      assert.ok(gap < 0.15 && Math.abs(flipping.speed - other.speed) < 0.1 && Math.abs(flipping.yaw - other.yaw) < 0.01, `${gap.toFixed(3)} m, ${(flipping.speed - other.speed).toFixed(3)} m/s, ${(flipping.yaw - other.yaw).toFixed(4)} rad`);
+      expect(gap < 0.15 && Math.abs(flipping.speed - other.speed) < 0.1 && Math.abs(flipping.yaw - other.yaw) < 0.01, `${gap.toFixed(3)} m, ${(flipping.speed - other.speed).toFixed(3)} m/s, ${(flipping.yaw - other.yaw).toFixed(4)} rad`).toBeTruthy();
     }
   });
 });

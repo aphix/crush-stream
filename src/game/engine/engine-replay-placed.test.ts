@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -90,7 +89,7 @@ function record(keyStep: number): Recorded {
     trace.push(partsOf(parked));
   }
   rec.end();
-  assert.ok(rec.ledger.kept.length >= 1, "the head-on crash did not rank as a highlight");
+  expect(rec.ledger.kept.length, "the head-on crash did not rank as a highlight").toBeGreaterThanOrEqual(1);
   const kept = rec.ledger.kept[0]!;
   const w = new Writer(clipBytes(kept));
   writeClip(w, kept);
@@ -104,12 +103,12 @@ const placeKey = clip.keyStep.indexOf(PLACE_AFTER_KEY);
 
 describe("given a head-on's clip in which an intact parked car beside it, its mirrors folded by a brush, is put on a spot half a second in", () => {
   it("when the clip is filed, then the parked car rides in it with a keyframe of its own at the respawn, its mirrors folded before it and out after", () => {
-    assert.ok(parkedSlot >= 0, `the parked car is a bystander of the clip (its cars: ${clip.cars.map((c) => c.slot).join(",")})`);
-    assert.ok(placeKey > 0 && clip.keyCars[placeKey] === 1 << parkedSlot, `the respawn has a keyframe with the parked car alone (keyframes at ${clip.keyStep.join(",")})`);
+    expect(parkedSlot, `the parked car is a bystander of the clip (its cars: ${clip.cars.map((c) => c.slot).join(",")})`).toBeGreaterThanOrEqual(0);
+    expect(placeKey > 0 && clip.keyCars[placeKey] === 1 << parkedSlot, `the respawn has a keyframe with the parked car alone (keyframes at ${clip.keyStep.join(",")})`).toBeTruthy();
     const at = keyStep + PLACE_AFTER_KEY;
-    assert.notEqual(trace[at - 1]!.join(), trace[at]!.join(), "the respawn put the parked car's parts back to new");
+    expect(trace[at - 1]!.join(), "the respawn put the parked car's parts back to new").not.toBe(trace[at]!.join());
     const parked = cars[PARKED]!;
-    assert.ok(!parked.crashed && !parked.deform.massActive, "the parked car is no wreck");
+    expect(!parked.crashed && !parked.deform.massActive, "the parked car is no wreck").toBeTruthy();
   });
 
   it("when the clip is replayed, then at every step the parked car's parts state is the live one's, to the bit, the respawn's unfolded mirrors included", () => {

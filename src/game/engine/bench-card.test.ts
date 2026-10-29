@@ -1,8 +1,8 @@
-import { describe, test } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, test } from "vitest";
 import { readFileSync } from "node:fs";
 import { INITIAL_HUD, type CrashHudState } from "../hud/hud-store.ts";
 import { DECIMALS, hudSettings, roundCard } from "./bench-card.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** A card as the bench sent it before the card was shortened: a real one, from a phone (strip, Ultra, 28 cars; 17.9 kB, the HUD's whole state in it). */
 const OLD = JSON.parse(readFileSync(new URL("./bench-card.fixture.json", import.meta.url), "utf8")) as { hud: CrashHudState; result: Record<string, unknown> };
@@ -20,48 +20,51 @@ function numbers(value: unknown, path: string[] = []): { key: string; n: number 
 
 describe("given a real bench card from a phone", () => {
   test("when the card is written for the wire, then its JSON is 9 kB or less (it was 17.9 kB)", () => {
-    assert.ok(JSON.stringify(OLD).length > 17_000, "the fixture is the old, whole card");
+    expect(JSON.stringify(OLD).length, "the fixture is the old, whole card").toBeGreaterThan(17_000);
     const bytes = JSON.stringify(NEW).length;
-    assert.ok(bytes <= 9 * 1024, `${bytes} bytes`);
+    expect(bytes, `${bytes} bytes`).toBeLessThanOrEqual(9 * 1024);
   });
 
   test("when the numbers are rounded, then each one named in the table is a multiple of its unit, within half a unit of what was measured", () => {
     const before = numbers(OLD.result);
     const after = numbers(NEW.result);
-    assert.equal(after.length, before.length);
+    expect(after.length).toBe(before.length);
     let checked = 0;
     for (const [i, { key, n }] of after.entries()) {
       const decimals = DECIMALS[key];
       if (decimals === undefined) {
-        assert.equal(n, before[i]!.n, `${key} is not in the table and keeps every digit`);
+        expect(n, `${key} is not in the table and keeps every digit`).toBe(before[i]!.n);
         continue;
       }
       checked++;
       const unit = 10 ** -decimals;
-      assert.ok(Math.abs(n - before[i]!.n) <= unit / 2 + 1e-9, `${key}: ${before[i]!.n} -> ${n}`);
-      assert.equal(Number(n.toFixed(decimals)), n, `${key}: ${n} has more than ${decimals} decimals`);
+      expect(Math.abs(n - before[i]!.n), `${key}: ${before[i]!.n} -> ${n}`).toBeLessThanOrEqual(unit / 2 + 1e-9);
+      expect(Number(n.toFixed(decimals)), `${key}: ${n} has more than ${decimals} decimals`).toBe(n);
     }
-    assert.ok(checked > 100, `${checked} numbers were rounded`);
+    expect(checked, `${checked} numbers were rounded`).toBeGreaterThan(100);
   });
 
   test("when the card is written, then only the numbers change: every key and non-number is as it was, and rounding twice is rounding once", () => {
     const shape = (v: unknown): unknown => JSON.parse(JSON.stringify(v, (_k, x: unknown) => (typeof x === "number" ? 0 : x)));
-    assert.equal(JSON.stringify(shape(NEW.result)), JSON.stringify(shape(OLD.result)));
-    assert.equal(JSON.stringify(roundCard(NEW.result)), JSON.stringify(NEW.result));
+    expect(JSON.stringify(shape(NEW.result))).toBe(JSON.stringify(shape(OLD.result)));
+    expect(JSON.stringify(roundCard(NEW.result))).toBe(JSON.stringify(NEW.result));
   });
 });
 
 describe("given the HUD's state at the end of a bench", () => {
   test("when the HUD is at its defaults, then the card carries nothing of it", () => {
-    assert.deepEqual(hudSettings(INITIAL_HUD, INITIAL_HUD), {});
+    expect(Object.keys(hudSettings(INITIAL_HUD, INITIAL_HUD)), "settings kept at defaults").toHaveLength(0);
   });
 
   test("when a setting differs from its default, then it is kept, and the readouts (the race, the board, the clock) never are", () => {
     const hud = { ...INITIAL_HUD, squash: 0.5, night: true, elapsed: 12, race: {} as CrashHudState["race"], derbyBoard: [{ id: 1, name: "x", score: 1, alive: true, out: false, clock: 0, watched: false }] };
-    assert.deepEqual(hudSettings(hud, INITIAL_HUD), { squash: 0.5, night: true });
+    const kept = hudSettings(hud, INITIAL_HUD);
+    expect(firstMismatch(Object.keys(kept).sort(), ["night", "squash"]), "kept keys").toBeUndefined();
+    expect(kept.squash, "squash").toBe(0.5);
+    expect(kept.night, "night").toBe(true);
   });
 
   test("when the real card's HUD is cut, then what is left are the four settings it differed in", () => {
-    assert.deepEqual(Object.keys(NEW.hud).sort(), ["cageCount", "carCount", "fxTier", "seat"]);
+    expect(firstMismatch(Object.keys(NEW.hud).sort(), ["cageCount", "carCount", "fxTier", "seat"])).toBeUndefined();
   });
 });

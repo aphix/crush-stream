@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
 import { DT, dummyGeom, mass } from "../vehicle/test-support.ts";
@@ -60,8 +59,8 @@ describe("given a crashed car whose parts keep moving (the body's velocity and s
     const s = settled();
     spinRigid(s.d, 2, 1.5, -0.5);
     stepWreck(s, DT);
-    assert.equal(s.omega.y, 0, `spin ${s.omega.y.toFixed(6)} rad/s`);
-    assert.ok(s.vel.x === 0 && s.vel.z === 0, `velocity ${s.vel.x.toFixed(3)}, ${s.vel.z.toFixed(3)}`);
+    expect(s.omega.y, `spin ${s.omega.y.toFixed(6)} rad/s`).toBe(0);
+    expect(s.vel.x === 0 && s.vel.z === 0, `velocity ${s.vel.x.toFixed(3)}, ${s.vel.z.toFixed(3)}`).toBeTruthy();
   });
 
   it("when the engine pair is swung 0.35 rad about the rear axle in one step while the parts turn at 2 rad/s, then the body's spin is still its own", () => {
@@ -75,7 +74,7 @@ describe("given a crashed car whose parts keep moving (the body's velocity and s
       e.z = axle.z - dx * Math.sin(0.35) + dz * Math.cos(0.35);
     }
     stepWreck(s, DT);
-    assert.equal(s.omega.y, 0, `spin ${s.omega.y.toFixed(2)} rad/s`);
+    expect(s.omega.y, `spin ${s.omega.y.toFixed(2)} rad/s`).toBe(0);
   });
 });
 
@@ -117,9 +116,9 @@ describe("given a crashed car in flight, hit off-centre by a 14 m/s push so that
       stepWreck(s, DT);
       worst = Math.max(worst, Math.abs(momentum(s.d) - before));
     }
-    assert.ok(Math.abs(l0) > 400, `the hit left ${l0.toFixed(0)} kg·m²/s: the setup no longer turns the wreck`);
-    assert.ok(worst < 0.01 * Math.abs(l0), `a step moved ${worst.toFixed(1)} of ${l0.toFixed(0)} kg·m²/s`);
-    assert.ok(Math.abs(momentum(s.d) - l0) < 0.02 * Math.abs(l0), `${l0.toFixed(0)} → ${momentum(s.d).toFixed(0)} kg·m²/s over the live window`);
+    expect(Math.abs(l0), `the hit left ${l0.toFixed(0)} kg·m²/s: the setup no longer turns the wreck`).toBeGreaterThan(400);
+    expect(worst, `a step moved ${worst.toFixed(1)} of ${l0.toFixed(0)} kg·m²/s`).toBeLessThan(0.01 * Math.abs(l0));
+    expect(Math.abs(momentum(s.d) - l0), `${l0.toFixed(0)} → ${momentum(s.d).toFixed(0)} kg·m²/s over the live window`).toBeLessThan(0.02 * Math.abs(l0));
   });
 });
 
@@ -166,6 +165,6 @@ describe("given a crashed car in flight beside a raised plateau (the high end of
 
   it("when its anchor is 0.25 m under the top of a walled plateau, nearer its side than its top, then its frame and parts stay put (under 2 cm) instead of climbing onto the plateau", () => {
     const r = rise(true, 0.25);
-    assert.ok(r.frame < 0.02 && r.mass < 0.02, `the frame rose ${r.frame.toFixed(3)} m and a mass ${r.mass.toFixed(3)} m onto a top 0.25 m above the wreck's anchor`);
+    expect(r.frame < 0.02 && r.mass < 0.02, `the frame rose ${r.frame.toFixed(3)} m and a mass ${r.mass.toFixed(3)} m onto a top 0.25 m above the wreck's anchor`).toBeTruthy();
   });
 });

@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { carRuns } from "../vehicle/car-drive.ts";
 import { standingBite } from "../vehicle/wheel-bite.ts";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** Sim s past the green light the rows start at: the grid and countdown are 4.5 s, and the cars are rolling by then. */
 const RUN_TO_S = 3;
@@ -36,18 +36,18 @@ describe("given the real engine in a derby, past the green light, the player at 
   function throwAndWatch(i: number): void {
     const car = rig.cars()[i]!;
     for (let t = 0; t < WATCH_S && !drivable(car); t += FRAME) rig.run(FRAME);
-    assert.ok(drivable(car), "the car stands on its wheels");
+    expect(drivable(car), "the car stands on its wheels").toBeTruthy();
     rig.engine["ejection"].throwDriverNow(rig.cars(), i);
     rig.engine["keys"].add("KeyW");
     let coasted = false;
     for (let t = 0; t < WATCH_S; t += FRAME) {
       rig.run(FRAME);
-      assert.ok(noPedals(car), `+${t.toFixed(2)} s: throttle ${car.drive.throttle}, brake ${car.drive.brake}, steer ${car.drive.steer}`);
+      expect(noPedals(car), `+${t.toFixed(2)} s: throttle ${car.drive.throttle}, brake ${car.drive.brake}, steer ${car.drive.steer}`).toBeTruthy();
       coasted ||= car.drive.neutral;
     }
     rig.engine["keys"].delete("KeyW");
-    assert.ok(coasted, "it freewheels");
-    assert.equal(car.driverOut, "windshield", "his seat stays empty");
+    expect(coasted, "it freewheels").toBeTruthy();
+    expect(car.driverOut, "his seat stays empty").toBe("windshield");
   }
 
   beforeAll(async () => {
@@ -56,7 +56,7 @@ describe("given the real engine in a derby, past the green light, the player at 
     rig.engine["pinnedSeed"] = DERBY_SEED;
     rig.engine.toggleDerby();
     rig.run(0.5);
-    assert.ok(rig.engine.derbyMode, "the derby is on");
+    expect(rig.engine.derbyMode, "the derby is on").toBeTruthy();
     rig.sit(0);
     rig.engine["keys"].add("KeyW");
     while (derby().time < RUN_TO_S) rig.run(FRAME);
@@ -67,23 +67,23 @@ describe("given the real engine in a derby, past the green light, the player at 
   it("when the player's driver is thrown out with the gas held, then his car takes no pedals, coasts, and is out of the heat", () => {
     const self = rig.engine["seat"].carIndex;
     const own = rig.cars()[self]!;
-    assert.ok(own.velocity.length() > ROLLING_MPS, `his car runs at ${own.velocity.length().toFixed(1)} m/s`);
-    assert.equal(row(self).alive, true);
+    expect(own.velocity.length(), `his car runs at ${own.velocity.length().toFixed(1)} m/s`).toBeGreaterThan(ROLLING_MPS);
+    expect(row(self).alive).toBe(true);
     throwAndWatch(self);
-    assert.equal(row(self).alive, false, "a thrown driver's car is a wreck to the rules");
+    expect(row(self).alive, "a thrown driver's car is a wreck to the rules").toBe(false);
   });
 
   it("when an AI rival's driver is thrown out, then its car takes no pedals and is out; once every car but one has lost its driver, that one wins by wreck", () => {
     const self = rig.engine["seat"].carIndex;
     const running = rig.cars().flatMap((c, i) => (carRuns(c) ? [i] : []));
     const rolling = running.find((i) => i !== self && rig.cars()[i]!.velocity.length() > ROLLING_MPS);
-    assert.ok(rolling !== undefined, "a rival is driving");
+    must(rolling !== undefined, "a rival is driving");
     throwAndWatch(rolling);
-    assert.equal(row(rolling).alive, false, "a thrown driver's car is a wreck to the rules");
+    expect(row(rolling).alive, "a thrown driver's car is a wreck to the rules").toBe(false);
     const last = running.find((i) => i !== rolling)!;
     for (const i of running) if (i !== rolling && i !== last && derby().winnerId == null) rig.engine["ejection"].throwDriverNow(rig.cars(), i);
     rig.run(0.1);
-    assert.equal(derby().winnerId, last, "the last car with a driver in it won");
-    assert.equal(derby().decided, "wreck");
+    expect(derby().winnerId, "the last car with a driver in it won").toBe(last);
+    expect(derby().decided).toBe("wreck");
   });
 });

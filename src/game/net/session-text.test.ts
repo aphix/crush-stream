@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { sessionText } from "./session-text.ts";
 import type { NetStatus } from "./net-ports.ts";
 
@@ -44,13 +43,13 @@ const testCases = [
 describe("given a session's status", () => {
   for (const testCase of testCases) {
     it(testCase.it, () => {
-      assert.equal(sessionText({ ...guestInPrivateRoom, ...testCase.change }), testCase.expected, "chip text");
+      expect(sessionText({ ...guestInPrivateRoom, ...testCase.change }), "chip text").toBe(testCase.expected);
     });
   }
 
   it("when the lobby counts down, then the screen-reader line leaves the seconds out so only a state change announces", () => {
     const lobby = { ...guestInPrivateRoom, public: "race", lobby: 9 } as const;
-    assert.equal(sessionText(lobby, false), "Joined · 2/8 · in the lobby", "without seconds");
-    assert.equal(sessionText({ ...lobby, lobby: 8 }, false), "Joined · 2/8 · in the lobby", "one second later it is the same line");
+    expect(sessionText(lobby, false), "without seconds").toBe("Joined · 2/8 · in the lobby");
+    expect(sessionText({ ...lobby, lobby: 8 }, false), "one second later it is the same line").toBe("Joined · 2/8 · in the lobby");
   });
 });

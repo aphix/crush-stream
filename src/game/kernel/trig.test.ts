@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import "./three-trig.ts";
 import { Euler, Object3D, Quaternion, Vector3 } from "three";
 import { detAcos, detAsin, detAtan, detAtan2, detCos, detSin, sinCosAt } from "./physics-core.js";
@@ -98,30 +97,30 @@ describe("given the game's own sine and cosine (the same bits in every browser, 
         worst = Math.max(worst, Math.abs(ulpApart(detSin(x), exact.sin)), Math.abs(ulpApart(detCos(x), exact.cos)));
         if (detSin(x) === exact.sin && detCos(x) === exact.cos) exactCount++;
       }
-      assert.ok(worst <= 1, `worst error ${worst} ulp`);
-      assert.ok(exactCount >= 0.9 * testCase.inputs.length, `exactly rounded for ${exactCount} of ${testCase.inputs.length}`);
+      expect(worst, `worst error ${worst} ulp`).toBeLessThanOrEqual(1);
+      expect(exactCount, `exactly rounded for ${exactCount} of ${testCase.inputs.length}`).toBeGreaterThanOrEqual(0.9 * testCase.inputs.length);
     });
   }
 
   it("when asked for the angles that have exact answers, then it returns those answers", () => {
-    assert.equal(Object.is(detSin(0), 0), true);
-    assert.equal(Object.is(detSin(-0), -0), true);
-    assert.equal(detCos(0), 1);
-    assert.equal(detCos(-0), 1);
-    assert.equal(detSin(Math.PI / 2), 1);
-    assert.equal(detCos(Math.PI), -1);
+    expect(Object.is(detSin(0), 0)).toBe(true);
+    expect(Object.is(detSin(-0), -0)).toBe(true);
+    expect(detCos(0)).toBe(1);
+    expect(detCos(-0)).toBe(1);
+    expect(detSin(Math.PI / 2)).toBe(1);
+    expect(detCos(Math.PI)).toBe(-1);
   });
 
   it("when asked for an angle and its mirror, then sine flips sign and cosine is unchanged", () => {
     for (const x of sequence(7, 500, 50)) {
-      assert.equal(detSin(-x), -detSin(x));
-      assert.equal(detCos(-x), detCos(x));
+      expect(detSin(-x)).toBe(-detSin(x));
+      expect(detCos(-x)).toBe(detCos(x));
     }
   });
 
   it("when asked for an angle that is not a finite number, then it returns not-a-number", () => {
     for (const x of [NaN, Infinity, -Infinity]) {
-      assert.ok(Number.isNaN(detSin(x)) && Number.isNaN(detCos(x)));
+      expect(Number.isNaN(detSin(x)) && Number.isNaN(detCos(x))).toBeTruthy();
     }
   });
 
@@ -131,7 +130,7 @@ describe("given the game's own sine and cosine (the same bits in every browser, 
     for (const x of angles) {
       pair[2] = x;
       sinCosAt(pair, 2);
-      assert.equal(Object.is(pair[2], detSin(x)) && Object.is(pair[3], detCos(x)), true, `angle ${x}: ${pair[2]}, ${pair[3]} against ${detSin(x)}, ${detCos(x)}`);
+      expect(Object.is(pair[2], detSin(x)) && Object.is(pair[3], detCos(x)), `angle ${x}: ${pair[2]}, ${pair[3]} against ${detSin(x)}, ${detCos(x)}`).toBe(true);
     }
   });
 
@@ -144,8 +143,8 @@ describe("given the game's own sine and cosine (the same bits in every browser, 
   ];
   for (const testCase of knownValues) {
     it(`when asked for ${testCase.it}, then it returns the correctly rounded published value`, () => {
-      assert.equal(detSin(testCase.angle), testCase.sin);
-      assert.equal(detCos(testCase.angle), testCase.cos);
+      expect(detSin(testCase.angle)).toBe(testCase.sin);
+      expect(detCos(testCase.angle)).toBe(testCase.cos);
     });
   }
 });
@@ -236,8 +235,8 @@ describe("given the game's own inverse trigonometry (the same bits in every brow
         worst = Math.max(worst, Math.abs(ulpApart(detAtan2(y, x), exact)));
         if (detAtan2(y, x) === exact) exactCount++;
       }
-      assert.ok(worst <= 1, `worst error ${worst} ulp`);
-      assert.ok(exactCount >= 0.75 * testCase.points.length, `exactly rounded for ${exactCount} of ${testCase.points.length}`);
+      expect(worst, `worst error ${worst} ulp`).toBeLessThanOrEqual(1);
+      expect(exactCount, `exactly rounded for ${exactCount} of ${testCase.points.length}`).toBeGreaterThanOrEqual(0.75 * testCase.points.length);
     });
   }
 
@@ -250,8 +249,8 @@ describe("given the game's own inverse trigonometry (the same bits in every brow
         worst = Math.max(worst, Math.abs(ulpApart(detAtan(x), exact)));
         if (detAtan(x) === exact) exactCount++;
       }
-      assert.ok(worst <= 1, `worst error ${worst} ulp`);
-      assert.ok(exactCount >= 0.9 * testCase.values.length, `exactly rounded for ${exactCount} of ${testCase.values.length}`);
+      expect(worst, `worst error ${worst} ulp`).toBeLessThanOrEqual(1);
+      expect(exactCount, `exactly rounded for ${exactCount} of ${testCase.values.length}`).toBeGreaterThanOrEqual(0.9 * testCase.values.length);
     });
   }
 
@@ -265,8 +264,8 @@ describe("given the game's own inverse trigonometry (the same bits in every brow
         worst = Math.max(worst, Math.abs(ulpApart(detAsin(x), exactSine)), Math.abs(ulpApart(detAcos(x), exactCosine)));
         if (detAsin(x) === exactSine && detAcos(x) === exactCosine) exactCount++;
       }
-      assert.ok(worst <= 1, `worst error ${worst} ulp`);
-      assert.ok(exactCount >= 0.7 * testCase.values.length, `exactly rounded for ${exactCount} of ${testCase.values.length}`);
+      expect(worst, `worst error ${worst} ulp`).toBeLessThanOrEqual(1);
+      expect(exactCount, `exactly rounded for ${exactCount} of ${testCase.values.length}`).toBeGreaterThanOrEqual(0.7 * testCase.values.length);
     });
   }
 
@@ -301,7 +300,7 @@ describe("given the game's own inverse trigonometry (the same bits in every brow
   ];
   for (const testCase of edgeAngles) {
     it(`when asked for the angle of ${testCase.it}, then atan2 returns ${testCase.expected} (the sign of zero and the quadrant as ECMAScript fixes them)`, () => {
-      assert.equal(Object.is(detAtan2(testCase.y, testCase.x), testCase.expected), true, `got ${detAtan2(testCase.y, testCase.x)}`);
+      expect(Object.is(detAtan2(testCase.y, testCase.x), testCase.expected), `got ${detAtan2(testCase.y, testCase.x)}`).toBe(true);
     });
   }
 
@@ -318,9 +317,9 @@ describe("given the game's own inverse trigonometry (the same bits in every brow
   ];
   for (const testCase of edgeInverses) {
     it(`when asked for the arctangent, arcsine and arccosine of ${testCase.it}, then it returns the exact answers (and not-a-number outside [-1, 1] for the last two)`, () => {
-      assert.equal(Object.is(detAtan(testCase.x), testCase.atan), true, `atan ${detAtan(testCase.x)}`);
-      assert.equal(Object.is(detAsin(testCase.x), testCase.asin), true, `asin ${detAsin(testCase.x)}`);
-      assert.equal(Object.is(detAcos(testCase.x), testCase.acos), true, `acos ${detAcos(testCase.x)}`);
+      expect(Object.is(detAtan(testCase.x), testCase.atan), `atan ${detAtan(testCase.x)}`).toBe(true);
+      expect(Object.is(detAsin(testCase.x), testCase.asin), `asin ${detAsin(testCase.x)}`).toBe(true);
+      expect(Object.is(detAcos(testCase.x), testCase.acos), `acos ${detAcos(testCase.x)}`).toBe(true);
     });
   }
 
@@ -328,11 +327,11 @@ describe("given the game's own inverse trigonometry (the same bits in every brow
     const xs = sequence(51, 500, 50);
     const ys = sequence(52, 500, 50);
     for (let i = 0; i < xs.length; i++) {
-      assert.equal(detAtan2(-ys[i]!, xs[i]!), -detAtan2(ys[i]!, xs[i]!), "atan2 mirror in y");
-      assert.equal(detAtan(-xs[i]!), -detAtan(xs[i]!), "atan odd");
+      expect(detAtan2(-ys[i]!, xs[i]!), "atan2 mirror in y").toBe(-detAtan2(ys[i]!, xs[i]!));
+      expect(detAtan(-xs[i]!), "atan odd").toBe(-detAtan(xs[i]!));
       const unit = xs[i]! / 50;
-      assert.equal(detAsin(-unit), -detAsin(unit), "asin odd");
-      assert.ok(Math.abs(detAcos(-unit) - (Math.PI - detAcos(unit))) <= 2 ** -51, "acos reflects about the quarter turn");
+      expect(detAsin(-unit), "asin odd").toBe(-detAsin(unit));
+      expect(Math.abs(detAcos(-unit) - (Math.PI - detAcos(unit))), "acos reflects about the quarter turn").toBeLessThanOrEqual(2 ** -51);
     }
   });
 
@@ -342,9 +341,9 @@ describe("given the game's own inverse trigonometry (the same bits in every brow
   ];
   for (const testCase of knownValues) {
     it(`when asked for the arctangent, arcsine and arccosine of ${testCase.it}, then it returns the correctly rounded published values`, () => {
-      assert.equal(detAtan(testCase.value), testCase.atan);
-      assert.equal(detAsin(testCase.value), testCase.asin);
-      assert.equal(detAcos(testCase.value), testCase.acos);
+      expect(detAtan(testCase.value)).toBe(testCase.atan);
+      expect(detAsin(testCase.value)).toBe(testCase.asin);
+      expect(detAcos(testCase.value)).toBe(testCase.acos);
     });
   }
 });
@@ -381,8 +380,8 @@ describe("given three's quaternion from Euler angles, from an axis and angle, an
       const before = yxz(x, y, z, Math.sin, Math.cos);
       const now = read();
       for (let k = 0; k < 4; k++) {
-        assert.ok(Math.abs(now[k]! - exact[k]!) <= ONE_ULP_FACTORS, `component ${k} of (${x}, ${y}, ${z}) is ${Math.abs(now[k]! - exact[k]!)} from the exact formula`);
-        assert.ok(Math.abs(now[k]! - before[k]!) <= ONE_ULP_FACTORS, `component ${k} of (${x}, ${y}, ${z}) is ${Math.abs(now[k]! - before[k]!)} from the engine's own`);
+        expect(Math.abs(now[k]! - exact[k]!), `component ${k} of (${x}, ${y}, ${z}) is ${Math.abs(now[k]! - exact[k]!)} from the exact formula`).toBeLessThanOrEqual(ONE_ULP_FACTORS);
+        expect(Math.abs(now[k]! - before[k]!), `component ${k} of (${x}, ${y}, ${z}) is ${Math.abs(now[k]! - before[k]!)} from the engine's own`).toBeLessThanOrEqual(ONE_ULP_FACTORS);
       }
     }
   });
@@ -412,7 +411,7 @@ describe("given three's quaternion from Euler angles, from an axis and angle, an
       assertSameNumbers(nudged, plain, "with the engine's trig nudged");
       // The control: the nudge does change the same formula on the engine's trig, so the bars above can fail.
       const [x, y, z] = triples[0]!;
-      assert.notEqual(yxz(x, y, z, Math.sin, Math.cos)[3], yxz(x, y, z, sin, cos)[3]);
+      expect(yxz(x, y, z, Math.sin, Math.cos)[3]).not.toBe(yxz(x, y, z, sin, cos)[3]);
     } finally {
       Math.sin = sin;
       Math.cos = cos;

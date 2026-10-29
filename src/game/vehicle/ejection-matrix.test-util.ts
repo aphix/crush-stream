@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { collide as collideOnce, ejectBar, strikerShare, type Hit, type Outcome } from "./ejection.test-util.ts";
 import { VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";
 
@@ -42,8 +41,8 @@ export function ejectionMatrix(hit: Hit): void {
         const [striker, struck] = collide(hit, a, b, SURVIVABLE[hit]);
         for (const [who, o] of [["striker", striker], ["struck", struck]] as const) {
           const where = `${label(hit, a, b, SURVIVABLE[hit])}, ${who}`;
-          assert.equal(o.thrown, false, `${where}: thrown`);
-          assert.ok(o.alive && o.health >= 0.6, `${where}: health ${o.health.toFixed(2)}`);
+          expect(o.thrown, `${where}: thrown`).toBe(false);
+          expect(o.alive && o.health >= 0.6, `${where}: health ${o.health.toFixed(2)}`).toBeTruthy();
         }
       }
     });
@@ -52,14 +51,14 @@ export function ejectionMatrix(hit: Hit): void {
       for (const [a, b] of PAIRS) {
         const [striker, struck] = collide(hit, a, b, LETHAL[hit]);
         const where = label(hit, a, b, LETHAL[hit]);
-        assert.equal(striker.thrown, true, `${where}: striker not thrown (health ${striker.health.toFixed(2)}, block ${striker.travel.toFixed(3)} m)`);
-        assert.ok(striker.health <= 0.2, `${where}: striker health ${striker.health.toFixed(2)}`);
+        expect(striker.thrown, `${where}: striker not thrown (health ${striker.health.toFixed(2)}, block ${striker.travel.toFixed(3)} m)`).toBe(true);
+        expect(striker.health, `${where}: striker health ${striker.health.toFixed(2)}`).toBeLessThanOrEqual(0.2);
         if (hit === "head-on") {
-          assert.equal(struck.thrown, true, `${where}: struck not thrown (health ${struck.health.toFixed(2)}, block ${struck.travel.toFixed(3)} m)`);
-          assert.ok(struck.health <= 0.2, `${where}: struck health ${struck.health.toFixed(2)}`);
+          expect(struck.thrown, `${where}: struck not thrown (health ${struck.health.toFixed(2)}, block ${struck.travel.toFixed(3)} m)`).toBe(true);
+          expect(struck.health, `${where}: struck health ${struck.health.toFixed(2)}`).toBeLessThanOrEqual(0.2);
         } else {
-          assert.equal(struck.thrown, hit === "t-bone" && !struckStays(a, b), `${where}: struck ${struck.thrown ? "thrown" : "not thrown"}`);
-          assert.ok(struck.alive && struck.health >= 0.8, `${where}: struck health ${struck.health.toFixed(2)}`);
+          expect(struck.thrown, `${where}: struck ${struck.thrown ? "thrown" : "not thrown"}`).toBe(hit === "t-bone" && !struckStays(a, b));
+          expect(struck.alive && struck.health >= 0.8, `${where}: struck health ${struck.health.toFixed(2)}`).toBeTruthy();
         }
       }
     });
@@ -75,8 +74,8 @@ export function ejectionMatrix(hit: Hit): void {
             const cars = hit === "head-on" ? [0, 1] : [0];
             for (const k of cars) {
               const where = `${hit} ${a} into ${b}, ${k === 0 ? "striker" : "struck"}: ${prevMps} → ${mps} m/s`;
-              assert.ok(now[k]!.health <= prev[k]!.health + HEALTH_JITTER, `${where}: health ${prev[k]!.health.toFixed(2)} → ${now[k]!.health.toFixed(2)}`);
-              assert.ok(now[k]!.thrown || !prev[k]!.thrown, `${where}: thrown at ${prevMps} m/s, not at ${mps}`);
+              expect(now[k]!.health, `${where}: health ${prev[k]!.health.toFixed(2)} → ${now[k]!.health.toFixed(2)}`).toBeLessThanOrEqual(prev[k]!.health + HEALTH_JITTER);
+              expect(now[k]!.thrown || !prev[k]!.thrown, `${where}: thrown at ${prevMps} m/s, not at ${mps}`).toBeTruthy();
             }
           }
           prev = now;

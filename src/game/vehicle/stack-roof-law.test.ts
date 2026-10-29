@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { SAMPLE, sampleAt } from "./car-cage.ts";
@@ -67,10 +66,10 @@ function roofUnderOneCar(hz: number): number {
 describe("given one car dropped by its belly onto another car's roof", () => {
   it("when it falls 2 cm onto the roof at 60, 144 and 240 Hz, then the roof under it crushes as the roof's strength law gives for a car released that high, not more", () => {
     const law = lawCrush();
-    assert.ok(law > 0.05 && law < 0.15, `the control: the law's peak crush for a 2 cm drop, ${law.toFixed(4)} m`);
+    expect(law > 0.05 && law < 0.15, `the control: the law's peak crush for a 2 cm drop, ${law.toFixed(4)} m`).toBeTruthy();
     for (const hz of [60, 144, 240]) {
       const sink = roofUnderOneCar(hz);
-      assert.ok(Math.abs(sink - law) < LAW_BAR_M, `at ${hz} Hz the roof crushed ${sink.toFixed(4)} m, the law ${law.toFixed(4)} m`);
+      expect(Math.abs(sink - law), `at ${hz} Hz the roof crushed ${sink.toFixed(4)} m, the law ${law.toFixed(4)} m`).toBeLessThan(LAW_BAR_M);
     }
   });
 });

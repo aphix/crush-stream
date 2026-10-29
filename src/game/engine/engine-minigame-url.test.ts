@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { decodeShare } from "../hud/share-url.ts";
 import { MINIGAME_MODES, type MinigameMode } from "../scenes/minigame-constants.ts";
@@ -48,8 +47,8 @@ describe("given the real engine on the Range and a browser address bar that reco
     const seen = MINIGAME_MODES.map((mode) => ({ mode, ...roundTrip(mode) }));
     const report = seen.map((s) => `${s.mode}: ${s.link} -> ${s.reopened}`).join("  |  ");
     for (const s of seen) {
-      assert.equal(s.reopened, s.mode, report);
-      assert.equal(s.entriesAdded, 0, `${s.mode}: a pick inside the Range adds no history entry`);
+      expect(s.reopened, report).toBe(s.mode);
+      expect(s.entriesAdded, `${s.mode}: a pick inside the Range adds no history entry`).toBe(0);
     }
   });
 
@@ -57,8 +56,8 @@ describe("given the real engine on the Range and a browser address bar that reco
     roundTrip("ringFling");
     engine.exitMinigame();
     const keys = [...new URLSearchParams(globalThis.location.hash.replace(/^#/, "")).keys()].filter((k) => k.startsWith("mg"));
-    assert.equal(keys.join(","), "", globalThis.location.hash);
-    assert.equal(engine["minigameMode"], null);
+    expect(keys.join(","), globalThis.location.hash).toBe("");
+    expect(engine["minigameMode"]).toBe(null);
   });
 
   it("when Ring Fling's set length is changed and its link is pasted, then the link opens Ring Fling with that set length", () => {
@@ -67,6 +66,6 @@ describe("given the real engine on the Range and a browser address bar that reco
     const withSet = globalThis.location.hash;
     engine["applyShare"](decodeShare("#"), false);
     engine["applyShare"](decodeShare(withSet), false);
-    assert.equal(engine["minigames"].hud().throwsPerSet, PICKED_SET_LENGTH, `${link} then ${withSet}`);
+    expect(engine["minigames"].hud().throwsPerSet, `${link} then ${withSet}`).toBe(PICKED_SET_LENGTH);
   });
 });

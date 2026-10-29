@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -76,10 +75,10 @@ describe("given the real engine running the owner's five-car fleet crash with th
   });
 
   it(`when the cars hit and settle for ${TO_S} s, then the pickup's front tyres keep 5 mm under its drawn hood in every frame`, () => {
-    assert.ok(least.clearance >= CLEARANCE_M, `${(least.clearance * 1000).toFixed(1)} mm at sim ${least.sim.toFixed(2)} s`);
+    expect(least.clearance, `${(least.clearance * 1000).toFixed(1)} mm at sim ${least.sim.toFixed(2)} s`).toBeGreaterThanOrEqual(CLEARANCE_M);
   });
 
   it(`when the cars hit and settle for ${TO_S} s, then the pickup's drawn sill (the rocker and the arch's rear lip) never stands inside a front tyre`, () => {
-    assert.equal(sill.depth, 0, `the sill stood ${(sill.depth * 1000).toFixed(1)} mm inside a front tyre at sim ${sill.sim.toFixed(2)} s`);
+    expect(sill.depth, `the sill stood ${(sill.depth * 1000).toFixed(1)} mm inside a front tyre at sim ${sill.sim.toFixed(2)} s`).toBe(0);
   });
 });

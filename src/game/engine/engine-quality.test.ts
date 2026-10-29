@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
@@ -46,47 +45,47 @@ describe("given the real engine on a page whose URL says ?draw=max&scale=1.5&sha
   });
 
   it("when it is up, then those knobs are in force and the FX tier is still Auto", () => {
-    assert.equal(inForce(), "360 1.5 2048 true");
+    expect(inForce()).toBe("360 1.5 2048 true");
   });
 
   it("when the bench starts a step over (resetAdaptiveQuality), then the URL's arms stay in force", () => {
     engine.resetAdaptiveQuality();
-    assert.equal(inForce(), "360 1.5 2048 true");
-    assert.equal(engine["quality"].pinnedKnobs, "draw scale shadow");
+    expect(inForce()).toBe("360 1.5 2048 true");
+    expect(engine["quality"].pinnedKnobs).toBe("draw scale shadow");
   });
 
   it("when the player picks far, 2 and max, then each is in force and the FX tier's Auto stays on", () => {
     engine.setDrawDistance("far");
     engine.setRenderScale("2");
     engine.setShadows("max");
-    assert.equal(`${engine["camera"].far} ${engine["quality"].pixelRatio} ${engine["sun"].shadow.mapSize.x} | ${engine["autoFx"].auto} ${hud.get().fxAuto}`, "270 2 4096 | true true");
+    expect(`${engine["camera"].far} ${engine["quality"].pixelRatio} ${engine["sun"].shadow.mapSize.x} | ${engine["autoFx"].auto} ${hud.get().fxAuto}`).toBe("270 2 4096 | true true");
   });
 
   it("when Draw distance is far, a race loads its course, the player switches to max mid-race and leaves, then the course draws at its far × 1.5 then × 2 and the sandbox comes back at 180 × 2 with its fog at 0.008 / 2", () => {
-    assert.notEqual(COURSE.far, SANDBOX_FAR, "the control: the course's far plane is not the sandbox's");
+    expect(COURSE.far, "the control: the course's far plane is not the sandbox's").not.toBe(SANDBOX_FAR);
     engine.toggleRace();
     engine.raceCommand({ type: "program", options: { trackId: TRACK_ID.city, laps: 1, aiCount: 3, police: false, aggression: 0.5, aiDifficulty: AI_EVERY_SLICE, spectate: false, noReset: false, timeOfDay: TIME_OF_DAY.day } });
     engine.raceCommand({ type: "start" });
     runSeconds(engine, 1);
-    assert.equal(view(), `${COURSE.far * FAR_REACH} ${COURSE.fog / FAR_REACH}`, "the course at far");
+    expect(view(), "the course at far").toBe(`${COURSE.far * FAR_REACH} ${COURSE.fog / FAR_REACH}`);
     engine.setDrawDistance("max");
-    assert.equal(view(), `${COURSE.far * MAX_REACH} ${COURSE.fog / MAX_REACH}`, "the course at max, mid-race");
+    expect(view(), "the course at max, mid-race").toBe(`${COURSE.far * MAX_REACH} ${COURSE.fog / MAX_REACH}`);
     engine["setScene"]("fleet");
     runSeconds(engine, 1);
-    assert.equal(view(), `${SANDBOX_FAR * MAX_REACH} ${SANDBOX_FOG / MAX_REACH}`, "the sandbox at max, from its authored 180 m and 0.008");
+    expect(view(), "the sandbox at max, from its authored 180 m and 0.008").toBe(`${SANDBOX_FAR * MAX_REACH} ${SANDBOX_FOG / MAX_REACH}`);
   });
 
   it("when Shadows are max and Ultra raises the sun's map to 2048 and goes off, then the map stays 4096 and the box ±48 m; and at Auto, Ultra's 2048 holds while it is on and 1024 comes back when it is off", () => {
     const stage = engine["stage"];
     engine.setShadows("max");
     stage.setUltraShadow(2048);
-    assert.equal(sunShadow(), "4096 48", "max, Ultra on");
+    expect(sunShadow(), "max, Ultra on").toBe("4096 48");
     stage.setUltraShadow(0);
-    assert.equal(sunShadow(), "4096 48", "max, Ultra off");
+    expect(sunShadow(), "max, Ultra off").toBe("4096 48");
     engine.setShadows("auto");
     stage.setUltraShadow(2048);
-    assert.equal(sunShadow(), "2048 24", "auto, Ultra on");
+    expect(sunShadow(), "auto, Ultra on").toBe("2048 24");
     stage.setUltraShadow(0);
-    assert.equal(sunShadow(), "1024 24", "auto, Ultra off");
+    expect(sunShadow(), "auto, Ultra off").toBe("1024 24");
   });
 });

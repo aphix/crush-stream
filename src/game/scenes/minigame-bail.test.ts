@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { BAIL_ELEVATION_DEGREES, BAIL_NO_PRESS_RANGE_SHARE, BAIL_PERFECT_SECONDS, BAIL_WINDOW_SECONDS, bailRelease, bailVerdict, LongJumpBail } from "./minigame-bail.ts";
 
 const BASE = { forward: 1.15, upward: 1, elevation: null } as const;
@@ -24,9 +23,9 @@ describe("given a press at some distance from the barrier hit", () => {
   for (const testCase of cases) {
     it(testCase.it, () => {
       const verdict = bailVerdict(testCase.offset);
-      assert.equal(verdict.kind, testCase.expectedKind, "kind");
-      assert.ok(Math.abs(verdict.quality - testCase.expectedQuality) < EPSILON, `quality ${verdict.quality} vs ${testCase.expectedQuality}`);
-      assert.equal(verdict.offsetSeconds, testCase.offset, "the offset is kept");
+      expect(verdict.kind, "kind").toBe(testCase.expectedKind);
+      expect(Math.abs(verdict.quality - testCase.expectedQuality), `quality ${verdict.quality} vs ${testCase.expectedQuality}`).toBeLessThan(EPSILON);
+      expect(verdict.offsetSeconds, "the offset is kept").toBe(testCase.offset);
     });
   }
 });
@@ -41,15 +40,15 @@ describe("given the release a bail of some quality earns", () => {
   for (const testCase of cases) {
     it(testCase.it, () => {
       const release = bailRelease(BASE, testCase.quality);
-      assert.ok(release.elevation !== null && Math.abs(release.elevation - testCase.expectedElevationDegrees * DEGREES_TO_RADIANS) < EPSILON, `elevation ${release.elevation}`);
+      expect(release.elevation !== null && Math.abs(release.elevation - testCase.expectedElevationDegrees * DEGREES_TO_RADIANS) < EPSILON, `elevation ${release.elevation}`).toBeTruthy();
       const rangeShare = (release.forward / BASE.forward) ** 2 * Math.sin(2 * release.elevation!);
-      assert.ok(Math.abs(rangeShare - testCase.expectedRangeShare) < EPSILON, `range share ${rangeShare} vs ${testCase.expectedRangeShare}`);
-      assert.equal(release.upward, BASE.upward, "upward is the base's");
+      expect(Math.abs(rangeShare - testCase.expectedRangeShare), `range share ${rangeShare} vs ${testCase.expectedRangeShare}`).toBeLessThan(EPSILON);
+      expect(release.upward, "upward is the base's").toBe(BASE.upward);
     });
   }
 
   it("when the quality is 1, then the speed is exactly the base's (the perfect throw is the sized one)", () => {
-    assert.ok(Math.abs(bailRelease(BASE, 1).forward - BASE.forward) < EPSILON);
+    expect(Math.abs(bailRelease(BASE, 1).forward - BASE.forward)).toBeLessThan(EPSILON);
   });
 });
 
@@ -59,27 +58,27 @@ describe("given one attempt's bail", () => {
     bail.press(HIT_AT - 0.1);
     bail.hit(HIT_AT);
     const verdict = bail.launchDue(HIT_AT);
-    assert.equal(verdict?.kind, "early");
-    assert.ok(Math.abs(verdict!.offsetSeconds! + 0.1) < EPSILON, `offset ${verdict!.offsetSeconds}`);
-    assert.ok(!bail.holding, "no longer held");
+    expect(verdict?.kind).toBe("early");
+    expect(Math.abs(verdict!.offsetSeconds! + 0.1), `offset ${verdict!.offsetSeconds}`).toBeLessThan(EPSILON);
+    expect(!bail.holding, "no longer held").toBe(true);
   });
 
   it("when the hit comes first, then the throw waits for a late press and goes the moment it comes, with the late verdict", () => {
     const bail = new LongJumpBail();
     bail.hit(HIT_AT);
-    assert.equal(bail.launchDue(HIT_AT + 0.1), null, "still held at 0.1 s");
-    assert.ok(bail.holding, "held");
+    expect(bail.launchDue(HIT_AT + 0.1), "still held at 0.1 s").toBe(null);
+    expect(bail.holding, "held").toBeTruthy();
     bail.press(HIT_AT + 0.12);
     const verdict = bail.launchDue(HIT_AT + 0.12);
-    assert.equal(verdict?.kind, "late");
-    assert.ok(Math.abs(verdict!.offsetSeconds! - 0.12) < EPSILON, `offset ${verdict!.offsetSeconds}`);
+    expect(verdict?.kind).toBe("late");
+    expect(Math.abs(verdict!.offsetSeconds! - 0.12), `offset ${verdict!.offsetSeconds}`).toBeLessThan(EPSILON);
   });
 
   it("when no press comes in the window, then the throw goes at the window's end with no bail, and not a moment before", () => {
     const bail = new LongJumpBail();
     bail.hit(HIT_AT);
-    assert.equal(bail.launchDue(HIT_AT + BAIL_WINDOW_SECONDS - 0.001), null, "just inside the window");
-    assert.equal(bail.launchDue(HIT_AT + BAIL_WINDOW_SECONDS)?.kind, "none");
+    expect(bail.launchDue(HIT_AT + BAIL_WINDOW_SECONDS - 0.001), "just inside the window").toBe(null);
+    expect(bail.launchDue(HIT_AT + BAIL_WINDOW_SECONDS)?.kind).toBe("none");
   });
 
   it("when two presses come, then only the first counts", () => {
@@ -88,8 +87,8 @@ describe("given one attempt's bail", () => {
     bail.press(HIT_AT);
     bail.hit(HIT_AT);
     const verdict = bail.launchDue(HIT_AT);
-    assert.equal(verdict?.kind, "early");
-    assert.ok(Math.abs(verdict!.offsetSeconds! + 0.2) < EPSILON, `offset ${verdict!.offsetSeconds}`);
+    expect(verdict?.kind).toBe("early");
+    expect(Math.abs(verdict!.offsetSeconds! + 0.2), `offset ${verdict!.offsetSeconds}`).toBeLessThan(EPSILON);
   });
 
   it("when the only press is far too early, then it is the wasted bail and the throw goes at the hit with no quality", () => {
@@ -97,26 +96,26 @@ describe("given one attempt's bail", () => {
     bail.press(HIT_AT - 1);
     bail.hit(HIT_AT);
     const verdict = bail.launchDue(HIT_AT);
-    assert.equal(verdict?.kind, "tooEarly");
-    assert.equal(verdict?.quality, 0);
+    expect(verdict?.kind).toBe("tooEarly");
+    expect(verdict?.quality).toBe(0);
   });
 
   it("when the first press comes after the throw has gone, then the verdict becomes too late with that offset", () => {
     const bail = new LongJumpBail();
     bail.hit(HIT_AT);
     bail.launchDue(HIT_AT + BAIL_WINDOW_SECONDS);
-    assert.equal(bail.verdict?.kind, "none");
+    expect(bail.verdict?.kind).toBe("none");
     bail.press(HIT_AT + 0.6);
-    assert.equal(bail.verdict?.kind, "tooLate");
-    assert.ok(Math.abs(bail.verdict!.offsetSeconds! - 0.6) < EPSILON);
+    expect(bail.verdict?.kind).toBe("tooLate");
+    expect(Math.abs(bail.verdict!.offsetSeconds! - 0.6)).toBeLessThan(EPSILON);
   });
 
   it("when there is no hit yet, then nothing is due and a press waits for it", () => {
     const bail = new LongJumpBail();
     bail.press(HIT_AT - 0.05);
-    assert.equal(bail.launchDue(HIT_AT), null);
-    assert.ok(bail.pressed, "pressed");
-    assert.ok(!bail.holding, "nothing held");
+    expect(bail.launchDue(HIT_AT)).toBe(null);
+    expect(bail.pressed, "pressed").toBeTruthy();
+    expect(!bail.holding, "nothing held").toBe(true);
   });
 
   it("when the attempt is reset, then the press, the hit and the verdict are gone", () => {
@@ -125,7 +124,7 @@ describe("given one attempt's bail", () => {
     bail.hit(HIT_AT);
     bail.launchDue(HIT_AT);
     bail.reset();
-    assert.ok(!bail.pressed && !bail.holding && bail.verdict === null, "clean");
-    assert.equal(bail.launchDue(HIT_AT + 1), null, "nothing due");
+    expect(!bail.pressed && !bail.holding && bail.verdict === null, "clean").toBeTruthy();
+    expect(bail.launchDue(HIT_AT + 1), "nothing due").toBe(null);
   });
 });

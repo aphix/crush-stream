@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { blankAiCar } from "./derby-ai.ts";
 import { RacerSight, SIGHT_MARGIN } from "./cop-sight.ts";
 import { blankPoint, Track } from "../world/track.ts";
@@ -31,17 +30,17 @@ describe("given a racer on the oval's road and the sight a police pack puts its 
   const { near, ahead } = sight.range;
 
   it("when a candidate spot lies on the road within the near range (plus the margin) of the racer, then it is in sight, ahead or behind", () => {
-    assert.equal(hiddenAlong(sight, near + SIGHT_MARGIN - CLEAR), false, "just inside the near range, ahead");
-    assert.equal(hiddenAlong(sight, -(near + SIGHT_MARGIN - CLEAR)), false, "just inside the near range, behind");
+    expect(hiddenAlong(sight, near + SIGHT_MARGIN - CLEAR), "just inside the near range, ahead").toBe(false);
+    expect(hiddenAlong(sight, -(near + SIGHT_MARGIN - CLEAR)), "just inside the near range, behind").toBe(false);
   });
 
   it("when a candidate spot lies on the road ahead of the racer, then it is in sight up to the ahead range (plus the margin) and out of it past", () => {
-    assert.equal(hiddenAlong(sight, ahead + SIGHT_MARGIN - CLEAR), false, "just inside the ahead range");
-    assert.equal(hiddenAlong(sight, ahead + SIGHT_MARGIN + CLEAR), true, "just past the ahead range");
+    expect(hiddenAlong(sight, ahead + SIGHT_MARGIN - CLEAR), "just inside the ahead range").toBe(false);
+    expect(hiddenAlong(sight, ahead + SIGHT_MARGIN + CLEAR), "just past the ahead range").toBe(true);
   });
 
   it("when a candidate spot lies on the road behind the racer, then it is out of sight past the near range (plus the margin): the mirrors reach no further", () => {
-    assert.equal(hiddenAlong(sight, -(near + SIGHT_MARGIN + CLEAR)), true, "just past the near range, behind");
+    expect(hiddenAlong(sight, -(near + SIGHT_MARGIN + CLEAR)), "just past the near range, behind").toBe(true);
   });
 
   it("when the racer is off the road and a spot is off it too, then the racer sees the ahead range all round it and no further", () => {
@@ -50,8 +49,8 @@ describe("given a racer on the oval's road and the sight a police pack puts its 
     // 60 m to the side of the road: past its corridor, so the racer's heading says nothing of the road.
     racerOff.watch([{ ...blankAiCar(0), x: off.x + off.tz * 60, z: off.z - off.tx * 60 }]);
     const at = (radial: number) => racerOff.hiddenAt(off.x + off.tz * (60 + radial), off.z - off.tx * (60 + radial), RACER_S, false);
-    assert.equal(at(ahead + SIGHT_MARGIN - CLEAR), false, "just inside the ahead range, round the racer");
-    assert.equal(at(ahead + SIGHT_MARGIN + CLEAR), true, "just past it");
+    expect(at(ahead + SIGHT_MARGIN - CLEAR), "just inside the ahead range, round the racer").toBe(false);
+    expect(at(ahead + SIGHT_MARGIN + CLEAR), "just past it").toBe(true);
   });
 
   it("when a cop car stands in the racer's near range, then `hiddenCar` reads it as seen, and out of every range as hidden", () => {
@@ -59,7 +58,7 @@ describe("given a racer on the oval's road and the sight a police pack puts its 
       const p = track.pointAt(RACER_S + ds, pt);
       return { ...blankAiCar(1), x: p.x, z: p.z };
     };
-    assert.equal(sight.hiddenCar(stand(near - CLEAR)), false, "inside the near range");
-    assert.equal(sight.hiddenCar(stand(ahead + SIGHT_MARGIN + CLEAR)), true, "past the ahead range");
+    expect(sight.hiddenCar(stand(near - CLEAR)), "inside the near range").toBe(false);
+    expect(sight.hiddenCar(stand(ahead + SIGHT_MARGIN + CLEAR)), "past the ahead range").toBe(true);
   });
 });

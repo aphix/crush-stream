@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore, INITIAL_HUD } from "../hud/hud-store.ts";
 import { changedSettings, SETTINGS } from "../hud/settings-changes.ts";
@@ -11,6 +10,7 @@ import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 describe("given the real engine and a camera slider of the debug panel", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -31,50 +31,46 @@ describe("given the real engine and a camera slider of the debug panel", () => {
   });
 
   it("when a slider is moved, then the camera reads it, the HUD shows it changed, the share state carries its key, and its reset puts all of that back", () => {
-    assert.deepEqual(camKeys(), [], "no camera key at the defaults");
+    expect(camKeys(), "no camera key at the defaults").toHaveLength(0);
     engine.setKnob("cam.pos.lon", 12);
-    assert.equal(CHASE.pos.lon, 12, "the camera's own value");
-    assert.equal(hud.get()["cam.pos.lon"], 12, "the HUD field");
-    assert.deepEqual(changedSettings(hud.get(), "debug"), ["cam.pos.lon"], "the dot, the count and the reset chip");
-    assert.deepEqual(camKeys(), ["cam.pos.lon=12"], "the share URL key");
+    expect(CHASE.pos.lon, "the camera's own value").toBe(12);
+    expect(hud.get()["cam.pos.lon"], "the HUD field").toBe(12);
+    expect(firstMismatch(changedSettings(hud.get(), "debug"), ["cam.pos.lon"]), "the dot, the count and the reset chip").toBeUndefined();
+    expect(firstMismatch(camKeys(), ["cam.pos.lon=12"]), "the share URL key").toBeUndefined();
     engine.resetSetting("cam.pos.lon");
-    assert.equal(CHASE.pos.lon, INITIAL_HUD["cam.pos.lon"], "reset: the camera's value");
-    assert.deepEqual(changedSettings(hud.get(), "debug"), [], "reset: nothing changed");
-    assert.deepEqual(camKeys(), [], "reset: the key is dropped");
+    expect(CHASE.pos.lon, "reset: the camera's value").toBe(INITIAL_HUD["cam.pos.lon"]);
+    expect(changedSettings(hud.get(), "debug"), "reset: nothing changed").toHaveLength(0);
+    expect(camKeys(), "reset: the key is dropped").toHaveLength(0);
   });
 
   it("when a slider is set past its range, then it clamps to the range", () => {
     engine.setKnob("cam.zeta.lat", 0);
-    assert.equal(CHASE.zeta.lat, 0.3);
+    expect(CHASE.zeta.lat).toBe(0.3);
     engine.resetSetting("cam.zeta.lat");
   });
 
   it("when a link carrying camera keys is applied, then each slider takes its value, a key left out is the default, and Defaults puts every slider back", () => {
     engine["applyShare"](decodeShare("#cam.landing.hold=1.2&cam.driftLean=0.1"), false);
-    assert.equal(CHASE.landing.hold, 1.2);
-    assert.deepEqual(changedSettings(hud.get(), "debug"), ["cam.driftLean", "cam.landing.hold"]);
+    expect(CHASE.landing.hold).toBe(1.2);
+    expect(firstMismatch(changedSettings(hud.get(), "debug"), ["cam.driftLean", "cam.landing.hold"])).toBeUndefined();
     engine["applyShare"](decodeShare("#cam.landing.hold=1.2"), false);
-    assert.deepEqual(changedSettings(hud.get(), "debug"), ["cam.landing.hold"], "driftLean left out of the link: back to its default");
+    expect(firstMismatch(changedSettings(hud.get(), "debug"), ["cam.landing.hold"]), "driftLean left out of the link: back to its default").toBeUndefined();
     engine.resetDefaults();
-    assert.deepEqual(changedSettings(hud.get(), "debug"), [], "Defaults: no slider changed");
-    for (const k of CHASE_KNOBS) assert.equal(k.get(), INITIAL_HUD[k.id], `${k.id} is at its default`);
-    assert.deepEqual(camKeys(), []);
+    expect(changedSettings(hud.get(), "debug"), "Defaults: no slider changed").toHaveLength(0);
+    for (const k of CHASE_KNOBS) expect(k.get(), `${k.id} is at its default`).toBe(INITIAL_HUD[k.id]);
+    expect(camKeys()).toHaveLength(0);
   });
 
   it("when a link carrying the epicenter keys is applied, then the activation and its thresholds take them, a link without them puts them back, and #epi.on=0 is the whole of what turns it off", () => {
     engine["applyShare"](decodeShare("#epi.on=0&epi.relockHold=0.5"), false);
-    assert.equal(EPICENTER.on, 0, "on");
-    assert.equal(EPICENTER.relockHold, 0.5, "relockHold");
-    assert.deepEqual(changedSettings(hud.get(), "debug"), ["epi.relockHold"], "the Debug views list the threshold, not the activation");
-    assert.deepEqual(changedSettings(hud.get(), "tuning"), ["epi.on"], "Cars & crash lists the activation beside Solver");
-    assert.equal(SETTINGS["epi.on"].label, "Activation");
-    assert.deepEqual(
-      encodeShare(engine["shareState"]()).split("&").filter((kv) => kv.startsWith("epi.")),
-      ["epi.on=0", "epi.relockHold=0.5"],
-      "the share URL carries them, so the bar the engine writes keeps them through a race start",
-    );
+    expect(EPICENTER.on, "on").toBe(0);
+    expect(EPICENTER.relockHold, "relockHold").toBe(0.5);
+    expect(firstMismatch(changedSettings(hud.get(), "debug"), ["epi.relockHold"]), "the Debug views list the threshold, not the activation").toBeUndefined();
+    expect(firstMismatch(changedSettings(hud.get(), "tuning"), ["epi.on"]), "Cars & crash lists the activation beside Solver").toBeUndefined();
+    expect(SETTINGS["epi.on"].label).toBe("Activation");
+    expect(firstMismatch(encodeShare(engine["shareState"]()).split("&").filter((kv) => kv.startsWith("epi.")), ["epi.on=0", "epi.relockHold=0.5"]), "the share URL carries them, so the bar the engine writes keeps them through a race start").toBeUndefined();
     engine["applyShare"](decodeShare("#"), false);
-    for (const [i, k] of EPICENTER_KNOBS.entries()) assert.equal(k.get(), EPICENTER_AT_LOAD[i], `${k.id} back to its default`);
+    for (const [i, k] of EPICENTER_KNOBS.entries()) expect(k.get(), `${k.id} back to its default`).toBe(EPICENTER_AT_LOAD[i]);
   });
 
   it("when a camera preset is applied, then every value it names is on the camera, the HUD and the share URL in one publish, Default puts today's values back, and a link carrying the preset's keys picks the same preset", () => {
@@ -82,31 +78,31 @@ describe("given the real engine and a camera slider of the debug panel", () => {
       engine.setKnobs({ "cam.pos.lon": 14, "cam.shake": 2 });
       engine.setKnobs(cameraPresetValues(p));
       for (const [id, want] of Object.entries(cameraPresetValues(p))) {
-        assert.equal(hud.get()[id as ChaseKnobId], want, `${p.label}: ${id} on the HUD`);
+        expect(hud.get()[id as ChaseKnobId], `${p.label}: ${id} on the HUD`).toBe(want);
       }
-      assert.equal(activeCameraPreset(hud.get()), p, `${p.label} is the one the HUD reads as picked`);
-      for (const k of CHASE_KNOBS) assert.equal(k.get(), cameraPresetValues(p)[k.id], `${p.label}: ${k.id} on the camera`);
+      expect(activeCameraPreset(hud.get()), `${p.label} is the one the HUD reads as picked`).toBe(p);
+      for (const k of CHASE_KNOBS) expect(k.get(), `${p.label}: ${k.id} on the camera`).toBe(cameraPresetValues(p)[k.id]);
       const link = encodeShare(engine["shareState"]());
       engine.resetDefaults();
       engine["applyShare"](decodeShare(`#${link}`), false);
-      assert.equal(activeCameraPreset(hud.get()), p, `${p.label}: restored from its link (${link})`);
+      expect(activeCameraPreset(hud.get()), `${p.label}: restored from its link (${link})`).toBe(p);
     }
     engine.setKnobs(cameraPresetValues(CAMERA_PRESETS[0]!));
-    assert.deepEqual(changedSettings(hud.get(), "debug"), [], "Default: nothing changed");
-    assert.deepEqual(camKeys(), [], "Default: no camera key in the URL");
+    expect(changedSettings(hud.get(), "debug"), "Default: nothing changed").toHaveLength(0);
+    expect(camKeys(), "Default: no camera key in the URL").toHaveLength(0);
     engine.resetDefaults();
   });
 
   it("when the activation toggle's knob (epi.on) is set, then the HUD field the toggle reads follows, the link carries it, and a link restores it", () => {
     engine.setKnob("epi.on", 0);
-    assert.equal(hud.get()["epi.on"], 0);
-    assert.equal(EPICENTER.on, 0);
-    assert.match(encodeShare(engine["shareState"]()), /(^|&)epi\.on=0(&|$)/);
+    expect(hud.get()["epi.on"]).toBe(0);
+    expect(EPICENTER.on).toBe(0);
+    expect(encodeShare(engine["shareState"]())).toMatch(/(^|&)epi\.on=0(&|$)/);
     engine.resetDefaults();
-    assert.equal(hud.get()["epi.on"], 1, "Defaults: epicenter");
+    expect(hud.get()["epi.on"], "Defaults: epicenter").toBe(1);
     engine["applyShare"](decodeShare("#epi.on=0"), false);
-    assert.equal(hud.get()["epi.on"], 0, "the link");
+    expect(hud.get()["epi.on"], "the link").toBe(0);
     engine["applyShare"](decodeShare("#"), false);
-    assert.equal(hud.get()["epi.on"], 1);
+    expect(hud.get()["epi.on"]).toBe(1);
   });
 });

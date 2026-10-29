@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import type * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { MotorSound } from "./motor-sound.ts";
@@ -27,11 +26,11 @@ describe("given a car with a voice that drifts across the 70 m cutoff", () => {
     const { sound, held } = seatedSound();
     const car = carAt(60);
     sound.update(FRAME_S, [car], CAMERA, null, 1, false);
-    assert.equal(held(), 0);
+    expect(held()).toBe(0);
     for (const x of [71, 69, 74, 70.5, 76]) {
       car.group.position.x = x;
       sound.update(FRAME_S, [car], CAMERA, null, 1, false);
-      assert.equal(held(), 0, `lost its voice at ${x} m`);
+      expect(held(), `lost its voice at ${x} m`).toBe(0);
     }
   });
 
@@ -41,12 +40,12 @@ describe("given a car with a voice that drifts across the 70 m cutoff", () => {
     sound.update(FRAME_S, [car], CAMERA, null, 1, false);
     car.group.position.x = 78;
     sound.update(FRAME_S, [car], CAMERA, null, 1, false);
-    assert.equal(held(), -1);
+    expect(held()).toBe(-1);
     car.group.position.x = 72;
     sound.update(FRAME_S, [car], CAMERA, null, 1, false);
-    assert.equal(held(), -1);
+    expect(held()).toBe(-1);
     car.group.position.x = 69;
     sound.update(FRAME_S, [car], CAMERA, null, 1, false);
-    assert.equal(held(), 0);
+    expect(held()).toBe(0);
   });
 });

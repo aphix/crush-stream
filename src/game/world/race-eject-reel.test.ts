@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "./ground.ts";
@@ -109,14 +108,14 @@ async function replay(clip: HighlightClip, frameEnds: readonly number[]): Promis
 describe("given an oval race of 3 AI rivals in which two cars meet head-on at 20 m/s each a second in (both engines survive it)", () => {
   it(`when the race runs on and its highlights are cut, then the ejection is in the reel (top ${TOP}) as its best clip, scored well above a hard hit and titled for it`, async () => {
     const { clips, events } = await live();
-    assert.ok(events.length >= 2, `${events.length} drivers thrown`);
-    assert.ok(clips.length > 0 && clips.length <= TOP, `${clips.length} clips`);
+    expect(events.length, `${events.length} drivers thrown`).toBeGreaterThanOrEqual(2);
+    expect(clips.length > 0 && clips.length <= TOP, `${clips.length} clips`).toBeTruthy();
     const best = clips[0]!;
-    assert.ok(best.ejects >= 2, `the best clip holds ${best.ejects} ejections`);
-    assert.ok(best.score >= 48, `score ${best.score.toFixed(1)}: 24 a driver`);
-    assert.equal(clipTitle(best), "2 drivers thrown out");
-    assert.ok(best.ejections.length >= 2 && best.ejections.every((x) => x.step >= 0 && x.step < best.h.length && x.e.car < best.cars.length), "the clip carries both throws, on its own car indices");
-    assert.ok(best.ejections.every((x) => best.cars[x.e.car]!.slot <= 1), "and they are the head-on's cars");
+    expect(best.ejects, `the best clip holds ${best.ejects} ejections`).toBeGreaterThanOrEqual(2);
+    expect(best.score, `score ${best.score.toFixed(1)}: 24 a driver`).toBeGreaterThanOrEqual(48);
+    expect(clipTitle(best)).toBe("2 drivers thrown out");
+    expect(best.ejections.length >= 2 && best.ejections.every((x) => x.step >= 0 && x.step < best.h.length && x.e.car < best.cars.length), "the clip carries both throws, on its own car indices").toBeTruthy();
+    expect(best.ejections.every((x) => best.cars[x.e.car]!.slot <= 1), "and they are the head-on's cars").toBeTruthy();
   });
 
   it("when the best ejection clip is replayed twice, then both replays throw the same dummies along the very same paths, from the very launch numbers of the live throw", async (t) => {
@@ -124,9 +123,9 @@ describe("given an oval race of 3 AI rivals in which two cars meet head-on at 20
     const clip = clips.find((c) => c.ejections.length > 0)!;
     const first = await replay(clip, frameEnds);
     const again = await replay(clip, frameEnds);
-    assert.ok(first.size >= 2, `${first.size} dummies thrown in the replay`);
+    expect(first.size, `${first.size} dummies thrown in the replay`).toBeGreaterThanOrEqual(2);
     for (const [car, trail] of first) {
-      assert.ok(trail.length >= 3 * 120, `car ${car}'s dummy flew ${trail.length / 3} frames`);
+      expect(trail.length, `car ${car}'s dummy flew ${trail.length / 3} frames`).toBeGreaterThanOrEqual(3 * 120);
       assertSameNumbers(again.get(car)!, trail, `car ${car}'s dummy, replay 2 vs replay 1`);
     }
     // Live vs replay, sampled on the same frames: the launch numbers are the record's, so the first sample is the same
@@ -139,8 +138,8 @@ describe("given an oval race of 3 AI rivals in which two cars meet head-on at 20
         const k = Math.min(frames, trail.length / 3 - 1, lv.length / 3 - 1) * 3;
         const d = Math.hypot(trail[k]! - lv[k]!, trail[k + 1]! - lv[k + 1]!, trail[k + 2]! - lv[k + 2]!);
         report.push(`car ${car} +${frames} frames: ${d.toFixed(3)} m`);
-        if (frames === 0) assert.ok(d < 1e-3, `car ${car}'s dummy starts ${d} m from the live one`);
-        if (frames === 10) assert.ok(d < 0.5, `car ${car}'s dummy is ${d.toFixed(2)} m from the live one 10 frames on`);
+        if (frames === 0) expect(d, `car ${car}'s dummy starts ${d} m from the live one`).toBeLessThan(1e-3);
+        if (frames === 10) expect(d, `car ${car}'s dummy is ${d.toFixed(2)} m from the live one 10 frames on`).toBeLessThan(0.5);
       }
     }
     t.annotate(`live vs replay dummy: ${report.join("; ")}`);

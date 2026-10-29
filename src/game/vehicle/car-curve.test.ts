@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import assert from "node:assert/strict";
 import { bowPointAt, bowTurnSteps, type Bow } from "./car-curve.ts";
 
 const EXACT = 1e-12;
@@ -29,11 +28,11 @@ describe("given a bowed edge 2 m long along x", () => {
       const start = bowPointAt(b, 0, new THREE.Vector3());
       const middle = bowPointAt(b, 0.5, new THREE.Vector3());
       const end = bowPointAt(b, 1, new THREE.Vector3());
-      assert.ok(start.distanceTo(new THREE.Vector3(...BOW_FROM)) < EXACT, `start ${start.toArray()}`);
-      assert.ok(end.distanceTo(new THREE.Vector3(...BOW_TO)) < EXACT, `end ${end.toArray()}`);
-      assert.ok(Math.abs(middle.x - testCase.expectedMiddle[0]) < EXACT, `middle x ${middle.x}`);
-      assert.ok(Math.abs(middle.y - testCase.expectedMiddle[1]) < EXACT, `middle y ${middle.y}`);
-      assert.ok(Math.abs(middle.z - testCase.expectedMiddle[2]) < EXACT, `middle z ${middle.z}`);
+      expect(start.distanceTo(new THREE.Vector3(...BOW_FROM)), `start ${start.toArray()}`).toBeLessThan(EXACT);
+      expect(end.distanceTo(new THREE.Vector3(...BOW_TO)), `end ${end.toArray()}`).toBeLessThan(EXACT);
+      expect(Math.abs(middle.x - testCase.expectedMiddle[0]), `middle x ${middle.x}`).toBeLessThan(EXACT);
+      expect(Math.abs(middle.y - testCase.expectedMiddle[1]), `middle y ${middle.y}`).toBeLessThan(EXACT);
+      expect(Math.abs(middle.z - testCase.expectedMiddle[2]), `middle z ${middle.z}`).toBeLessThan(EXACT);
     });
   }
 });
@@ -54,21 +53,21 @@ describe("given a bowed edge 2 m long along x, sampled by turn", () => {
       const b: Bow = { from: BOW_FROM, to: BOW_TO, bow: testCase.bow, toward: testCase.toward };
       const maxTurn = testCase.maxTurnDegrees * RAD_PER_DEGREE;
       const ts = bowTurnSteps(b, maxTurn);
-      assert.equal(ts.length - 1, testCase.expectedSteps, "steps");
-      assert.equal(ts[0], 0, "first sample at the start");
-      assert.equal(ts[ts.length - 1], 1, "last sample at the end");
+      expect(ts.length - 1, "steps").toBe(testCase.expectedSteps);
+      expect(ts[0], "first sample at the start").toBe(0);
+      expect(ts[ts.length - 1], "last sample at the end").toBe(1);
       const before = new THREE.Vector3();
       const after = new THREE.Vector3();
       const turns: number[] = [];
       for (let k = 1; k < ts.length; k++) {
-        assert.ok(ts[k]! > ts[k - 1]!, `samples ascend at ${k}`);
+        expect(ts[k]!, `samples ascend at ${k}`).toBeGreaterThan(ts[k - 1]!);
         tangentAt(testCase.bow, ts[k - 1]!, before);
         tangentAt(testCase.bow, ts[k]!, after);
         turns.push(before.angleTo(after));
       }
       for (const [k, turn] of turns.entries()) {
-        assert.ok(turn <= maxTurn + 1e-9, `step ${k} turns ${turn / RAD_PER_DEGREE}° (max ${testCase.maxTurnDegrees}°)`);
-        assert.ok(Math.abs(turn - turns[0]!) < 1e-9, `step ${k} turns as much as the first (${turn} vs ${turns[0]})`);
+        expect(turn, `step ${k} turns ${turn / RAD_PER_DEGREE}° (max ${testCase.maxTurnDegrees}°)`).toBeLessThanOrEqual(maxTurn + 1e-9);
+        expect(Math.abs(turn - turns[0]!), `step ${k} turns as much as the first (${turn} vs ${turns[0]})`).toBeLessThan(1e-9);
       }
     });
   }
@@ -83,7 +82,7 @@ describe("given a bowed edge whose middle control point sits at (1, 2, 0) (from 
     const end = bowPointAt(b, 1, new THREE.Vector3()).sub(bowPointAt(b, 1 - step, new THREE.Vector3())).normalize();
     const legTolerance = 1e-5;
     const leg = 1 / Math.sqrt(5);
-    assert.ok(Math.abs(start.x - leg) < legTolerance && Math.abs(start.y - 2 * leg) < legTolerance, `start tangent ${start.toArray()}`);
-    assert.ok(Math.abs(end.x - leg) < legTolerance && Math.abs(end.y + 2 * leg) < legTolerance, `end tangent ${end.toArray()}`);
+    expect(Math.abs(start.x - leg) < legTolerance && Math.abs(start.y - 2 * leg) < legTolerance, `start tangent ${start.toArray()}`).toBeTruthy();
+    expect(Math.abs(end.x - leg) < legTolerance && Math.abs(end.y + 2 * leg) < legTolerance, `end tangent ${end.toArray()}`).toBeTruthy();
   });
 });

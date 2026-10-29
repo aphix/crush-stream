@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
@@ -77,7 +76,7 @@ const STOPS: readonly Stop[] = [
 
 /** Every count in `held` is `first`'s; a failure names where, the count and both values. */
 function assertSame(held: Counts, first: Counts, where: string): void {
-  for (const [count, value] of Object.entries(held)) assert.equal(value, first[count], `${where}: ${count} is ${value}, was ${first[count]}`);
+  for (const [count, value] of Object.entries(held)) expect(value, `${where}: ${count} is ${value}, was ${first[count]}`).toBe(first[count]);
 }
 
 describe("given the real engine drawing on the stub GL", () => {
@@ -153,7 +152,7 @@ describe("given the real engine drawing on the stub GL", () => {
     beforeAll(() => {
       tour();
       tours = Array.from({ length: TOURS }, tour);
-      assert.equal(engine["ragdolls"].placement, "inline", "the dummies' world runs on this thread, where its counts can be read");
+      expect(engine["ragdolls"].placement, "the dummies' world runs on this thread, where its counts can be read").toBe("inline");
     });
 
     /** Each stop of every tour after the first holds what it held in the first. */

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { FREEWHEEL, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -63,15 +62,9 @@ describe("given the captured two-car spawn (a 28 m/s Titanium sedan and a 5 m/s 
       if (wall >= 10) kphAt10 = kph;
     }
 
-    assert.ok(a.crashed || b.crashed, "setup never collided");
-    assert.ok(
-      kphAt10 < closing0 * 0.55,
-      `10s zip ${kphAt10.toFixed(0)} km/h (closing was ${closing0.toFixed(0)}, peak ${peakKph.toFixed(0)}) petrol=${(b.velocity.length() * 3.6).toFixed(0)} titanium=${(a.velocity.length() * 3.6).toFixed(0)}`,
-    );
-    assert.ok(
-      b.velocity.length() * 3.6 < 70,
-      `petrol (green) wild accel ${(b.velocity.length() * 3.6).toFixed(0)} km/h`,
-    );
+    expect(a.crashed || b.crashed, "setup never collided").toBeTruthy();
+    expect(kphAt10, `10s zip ${kphAt10.toFixed(0)} km/h (closing was ${closing0.toFixed(0)}, peak ${peakKph.toFixed(0)}) petrol=${(b.velocity.length() * 3.6).toFixed(0)} titanium=${(a.velocity.length() * 3.6).toFixed(0)}`).toBeLessThan(closing0 * 0.55);
+    expect(b.velocity.length() * 3.6, `petrol (green) wild accel ${(b.velocity.length() * 3.6).toFixed(0)} km/h`).toBeLessThan(70);
   });
 });
 
@@ -131,11 +124,8 @@ describe("given an offset two-car spawn (a 14 m/s and a 28 m/s sedan closing on 
       }
     }
 
-    assert.ok(crashedAt >= 0, "setup never collided");
-    assert.ok(
-      speedAt89 < 4 && latAt89 < 3,
-      `8.9s slide ${(speedAt89 * 3.6).toFixed(0)} km/h (lat ${(latAt89 * 3.6).toFixed(0)}) peakAfter6=${(peakAfter6 * 3.6).toFixed(0)} at6=${(speedAt6 * 3.6).toFixed(0)} crashedAt=${crashedAt.toFixed(2)}\n${samples.join("\n")}`,
-    );
+    expect(crashedAt, "setup never collided").toBeGreaterThanOrEqual(0);
+    expect(speedAt89 < 4 && latAt89 < 3, `8.9s slide ${(speedAt89 * 3.6).toFixed(0)} km/h (lat ${(latAt89 * 3.6).toFixed(0)}) peakAfter6=${(peakAfter6 * 3.6).toFixed(0)} at6=${(speedAt6 * 3.6).toFixed(0)} crashedAt=${crashedAt.toFixed(2)}\n${samples.join("\n")}`).toBeTruthy();
   });
 });
 
@@ -197,11 +187,8 @@ describe("given an offset two-car spawn (a 16 m/s and a 20 m/s sedan closing on 
     const driftB = posB2 ? Math.hypot(b.group.position.x - posB2.x, b.group.position.z - posB2.z) : 99;
     const alongA = a.velocity.x * fwdA0.x + a.velocity.z * fwdA0.z;
     const alongB = b.velocity.x * fwdB0.x + b.velocity.z * fwdB0.z;
-    assert.ok(crashedAt >= 0, "setup never collided");
-    assert.ok(
-      driftA < 2.5 && driftB < 2.5 && alongA > -1.2 && alongB > -1.2,
-      `reverse slide driftA=${driftA.toFixed(2)} driftB=${driftB.toFixed(2)} alongA=${alongA.toFixed(2)} alongB=${alongB.toFixed(2)} crashedAt=${crashedAt.toFixed(2)}\n${samples.join("\n")}`,
-    );
+    expect(crashedAt, "setup never collided").toBeGreaterThanOrEqual(0);
+    expect(driftA < 2.5 && driftB < 2.5 && alongA > -1.2 && alongB > -1.2, `reverse slide driftA=${driftA.toFixed(2)} driftB=${driftB.toFixed(2)} alongA=${alongA.toFixed(2)} alongB=${alongB.toFixed(2)} crashedAt=${crashedAt.toFixed(2)}\n${samples.join("\n")}`).toBeTruthy();
   });
 });
 
@@ -259,8 +246,8 @@ describe("given an offset two-car spawn (a 9 m/s and a 16 m/s sedan closing on e
       prev.set(arr);
     }
 
-    assert.ok(a.crashed, "titanium never crashed");
-    assert.equal(skins, 0, `titanium still reskinning ${skins}/${frames} frames in 12–16s\n${notes.join("\n")}`);
-    assert.ok(maxDelta < 0.002, `titanium verts moved ${maxDelta.toFixed(4)} m in 12–16s\n${notes.join("\n")}`);
+    expect(a.crashed, "titanium never crashed").toBeTruthy();
+    expect(skins, `titanium still reskinning ${skins}/${frames} frames in 12–16s\n${notes.join("\n")}`).toBe(0);
+    expect(maxDelta, `titanium verts moved ${maxDelta.toFixed(4)} m in 12–16s\n${notes.join("\n")}`).toBeLessThan(0.002);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { frame, makeWorld } from "./race-world.test-util.ts";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -70,10 +69,10 @@ describe("given a field of 36 or 40 cars on a ring, each driving at its centre, 
     it(`when ${n} cars meet and pile up for ${PILE_S} s after a car past the 32nd first touches another, then the step runs, every car stays at a real position and cars past the 32nd collide`, (t) => {
       const r = pileup(n);
       t.annotate(`contacts ${r.contacts}, on a car past the 32nd ${r.pastCap}, fine slice ${r.fine.toFixed(5)} s`);
-      assert.equal(r.thrown, "");
-      assert.ok(r.fine > 0, `fine floor ${r.fine}`);
-      assert.equal(r.nonFinite, 0);
-      assert.ok(r.pastCap > 0, `contacts on a car past the 32nd: ${r.pastCap}`);
+      expect(r.thrown).toBe("");
+      expect(r.fine, `fine floor ${r.fine}`).toBeGreaterThan(0);
+      expect(r.nonFinite).toBe(0);
+      expect(r.pastCap, `contacts on a car past the 32nd: ${r.pastCap}`).toBeGreaterThan(0);
     });
   }
 });

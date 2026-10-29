@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -166,10 +165,10 @@ const IMPACT_SPEEDS = [40, 50, 60] as const;
 
 describe("given the High jump's real pile of 48 cardboard boxes standing asleep on the real ground", () => {
   it("when the layout is read, then it holds 48 boxes in 3-high stacks of 1.6-2.6 m boxes at the station", () => {
-    assert.equal(PLACEMENTS.length, BOX_COUNT, "box count");
-    assert.equal(STACKS[0]!.boxCount, 3, "the tallest stack is 3 boxes high");
-    assert.ok(PILE_TOP > 5, `the tallest stack's top is ${PILE_TOP.toFixed(2)} m`);
-    assert.ok(PLACEMENTS.every((box) => box.z > anchor.z - 6 && box.z < anchor.z + 6), "the boxes stand in the lane at the station's z");
+    expect(PLACEMENTS.length, "box count").toBe(BOX_COUNT);
+    expect(STACKS[0]!.boxCount, "the tallest stack is 3 boxes high").toBe(3);
+    expect(PILE_TOP, `the tallest stack's top is ${PILE_TOP.toFixed(2)} m`).toBeGreaterThan(5);
+    expect(PLACEMENTS.every((box) => box.z > anchor.z - 6 && box.z < anchor.z + 6), "the boxes stand in the lane at the station's z").toBeTruthy();
   });
 
   it("when nothing touches it while the world steps for 10 s, then no box drifts 5 cm and every box is still asleep", async () => {
@@ -181,9 +180,9 @@ describe("given the High jump's real pile of 48 cardboard boxes standing asleep 
     const drift = currentMove(sys);
     const asleep = allAsleep(sys);
     sys.dispose();
-    assert.ok(stepped >= 10 * STEPS_PER_FRAME * FRAME_HZ - STEPS_PER_FRAME, `the world stepped ${stepped} times: a dummy was flying`);
-    assert.ok(drift < DRIFT_MAX, `a box drifted ${drift.toFixed(3)} m`);
-    assert.ok(asleep, "every box is asleep");
+    expect(stepped, `the world stepped ${stepped} times: a dummy was flying`).toBeGreaterThanOrEqual(10 * STEPS_PER_FRAME * FRAME_HZ - STEPS_PER_FRAME);
+    expect(drift, `a box drifted ${drift.toFixed(3)} m`).toBeLessThan(DRIFT_MAX);
+    expect(asleep, "every box is asleep").toBeTruthy();
   });
 
   it("when every box is woken and left untouched for 10 s, then the 3-high stacks hold: no box ends 5 cm from where it stood", async () => {
@@ -199,8 +198,8 @@ describe("given the High jump's real pile of 48 cardboard boxes standing asleep 
       if (!sys["boxes"].asleep()) awakeFrames++;
     }
     sys.dispose();
-    assert.ok(awakeFrames > FRAME_HZ, `the pile was awake for ${awakeFrames} frames: a jitter or a slow collapse is what that would show`);
-    assert.ok(maxDrift < DRIFT_MAX, `a box moved ${maxDrift.toFixed(3)} m from its place`);
+    expect(awakeFrames, `the pile was awake for ${awakeFrames} frames: a jitter or a slow collapse is what that would show`).toBeGreaterThan(FRAME_HZ);
+    expect(maxDrift, `a box moved ${maxDrift.toFixed(3)} m from its place`).toBeLessThan(DRIFT_MAX);
   });
 });
 
@@ -241,11 +240,11 @@ describe("given a held dummy dropped on the pile's five tallest stacks, 3 boxes 
       );
       const stepTravel = shot.speed * STEP;
       const inLandingField = shot.torso.x > anchor.x && shot.torso.x < anchor.x + layout.netX && Math.abs(shot.torso.z - anchor.z) < STATION_HALF_WIDTH + LYING_LENGTH;
-      assert.ok(shot.stillSeconds >= REST_HOLD, `his still-time reached ${shot.stillSeconds.toFixed(2)} s in ${shot.simSeconds.toFixed(1)} s sim`);
-      assert.ok(shot.deepestInside < stepTravel, `a part went ${shot.deepestInside.toFixed(3)} m into a box: more than a step's ${stepTravel.toFixed(3)} m travel is a tunnel`);
-      assert.ok(shot.lowestPart > -PAD_SOAK, `a part went down to ${shot.lowestPart.toFixed(3)} m: under the pad`);
-      assert.ok(shot.perched || shot.farthestBoxMove > BOX_HIT_MOVE, `no box moved (the farthest went ${shot.farthestBoxMove.toFixed(3)} m) and he is not on the stack (torso ${shot.torso.y.toFixed(2)} m up, top ${shot.stack.top.toFixed(2)} m)`);
-      assert.ok(inLandingField, `his torso lies at (${(shot.torso.x - anchor.x).toFixed(1)}, ${(shot.torso.z - anchor.z).toFixed(1)}) in the station's frame: outside the landing field`);
+      expect(shot.stillSeconds, `his still-time reached ${shot.stillSeconds.toFixed(2)} s in ${shot.simSeconds.toFixed(1)} s sim`).toBeGreaterThanOrEqual(REST_HOLD);
+      expect(shot.deepestInside, `a part went ${shot.deepestInside.toFixed(3)} m into a box: more than a step's ${stepTravel.toFixed(3)} m travel is a tunnel`).toBeLessThan(stepTravel);
+      expect(shot.lowestPart, `a part went down to ${shot.lowestPart.toFixed(3)} m: under the pad`).toBeGreaterThan(-PAD_SOAK);
+      expect(shot.perched || shot.farthestBoxMove > BOX_HIT_MOVE, `no box moved (the farthest went ${shot.farthestBoxMove.toFixed(3)} m) and he is not on the stack (torso ${shot.torso.y.toFixed(2)} m up, top ${shot.stack.top.toFixed(2)} m)`).toBeTruthy();
+      expect(inLandingField, `his torso lies at (${(shot.torso.x - anchor.x).toFixed(1)}, ${(shot.torso.z - anchor.z).toFixed(1)}) in the station's frame: outside the landing field`).toBeTruthy();
     });
   }
 
@@ -254,9 +253,9 @@ describe("given a held dummy dropped on the pile's five tallest stacks, 3 boxes 
     const moved = all.filter((shot) => shot.farthestBoxMove > BOX_HIT_MOVE).length;
     const nearPile = all.filter((shot) => shot.outsidePile <= LYING_LENGTH).length;
     console.log(`boxes: ${all.length} drops, boxes moved in ${moved}, he lay within ${LYING_LENGTH} m of the pile in ${nearPile}, on a stack in ${all.filter((shot) => shot.perched).length}`);
-    assert.equal(all.length, RANKS.length * IMPACT_SPEEDS.length, "every drop ran");
-    assert.ok(moved >= MOST_DROPS, `the boxes moved in only ${moved} of ${all.length} drops`);
-    assert.ok(nearPile >= MOST_DROPS, `he lay within ${LYING_LENGTH} m of the pile in only ${nearPile} of ${all.length} drops`);
+    expect(all.length, "every drop ran").toBe(RANKS.length * IMPACT_SPEEDS.length);
+    expect(moved, `the boxes moved in only ${moved} of ${all.length} drops`).toBeGreaterThanOrEqual(MOST_DROPS);
+    expect(nearPile, `he lay within ${LYING_LENGTH} m of the pile in only ${nearPile} of ${all.length} drops`).toBeGreaterThanOrEqual(MOST_DROPS);
   });
 });
 
@@ -279,11 +278,11 @@ describe("given boxes a dummy has scattered", () => {
     dropOnStack(sys, SCATTER_STACK, SCATTER_SPEED);
     const second = runUntilStill(sys, REST_HOLD, REST_WITHIN);
     sys.dispose();
-    assert.ok(first.farthestBoxMove > BOX_HIT_MOVE, `the first dummy scattered them ${first.farthestBoxMove.toFixed(2)} m`);
-    assert.ok(farthest < RESTACK_TOLERANCE, `a box is ${farthest.toFixed(4)} m from its place`);
-    assert.ok(poseMove < RESTACK_TOLERANCE, `copyBoxPoses has a box ${poseMove.toFixed(4)} m from its place`);
-    assert.ok(asleep, "every box is asleep");
-    assert.ok(second.farthestBoxMove > BOX_HIT_MOVE, `the second dummy moved a restacked box ${second.farthestBoxMove.toFixed(3)} m: it never woke`);
+    expect(first.farthestBoxMove, `the first dummy scattered them ${first.farthestBoxMove.toFixed(2)} m`).toBeGreaterThan(BOX_HIT_MOVE);
+    expect(farthest, `a box is ${farthest.toFixed(4)} m from its place`).toBeLessThan(RESTACK_TOLERANCE);
+    expect(poseMove, `copyBoxPoses has a box ${poseMove.toFixed(4)} m from its place`).toBeLessThan(RESTACK_TOLERANCE);
+    expect(asleep, "every box is asleep").toBeTruthy();
+    expect(second.farthestBoxMove, `the second dummy moved a restacked box ${second.farthestBoxMove.toFixed(3)} m: it never woke`).toBeGreaterThan(BOX_HIT_MOVE);
   });
 
   it("when the dummy is released while the boxes still tumble, then the world keeps stepping until they lie asleep above the pad", async () => {
@@ -299,10 +298,10 @@ describe("given boxes a dummy has scattered", () => {
     const asleep = allAsleep(sys);
     const poolAsleep = sys["boxes"].asleep();
     sys.dispose();
-    assert.ok(awakeAtRelease > 0, "boxes were still moving when he went");
-    assert.equal(stepWithBoxesAlone, STEP, "boxes tumbling alone are stepped as finely as a dummy is: they have no continuous collision detection");
-    assert.ok(asleep && poolAsleep, "every box ended asleep");
-    assert.ok(lowest > -BOX_SETTLE_SOAK, `a box ended with its lowest face ${lowest.toFixed(3)} m: under the pad`);
+    expect(awakeAtRelease, "boxes were still moving when he went").toBeGreaterThan(0);
+    expect(stepWithBoxesAlone, "boxes tumbling alone are stepped as finely as a dummy is: they have no continuous collision detection").toBe(STEP);
+    expect(asleep && poolAsleep, "every box ended asleep").toBeTruthy();
+    expect(lowest, `a box ended with its lowest face ${lowest.toFixed(3)} m: under the pad`).toBeGreaterThan(-BOX_SETTLE_SOAK);
   });
 
   it("when the dummy falls asleep while boxes he hit still move, then the world steps on until the pile lies asleep", async () => {
@@ -315,8 +314,8 @@ describe("given boxes a dummy has scattered", () => {
     }
     const asleep = allAsleep(sys);
     sys.dispose();
-    assert.ok(awakeWhenDummySlept >= 0, "he fell asleep");
-    assert.ok(asleep, "every box ended asleep");
+    expect(awakeWhenDummySlept, "he fell asleep").toBeGreaterThanOrEqual(0);
+    expect(asleep, "every box ended asleep").toBeTruthy();
   });
 });
 
@@ -339,8 +338,8 @@ describe("given two cartons on the flat ground beside the pile, one with its air
     const dampedSlide = damped!.translation().x - lane[0]!.x;
     const undampedSlide = undamped!.translation().x - lane[1]!.x;
     sys.dispose();
-    assert.ok(undampedSlide > 1, `the control slid ${undampedSlide.toFixed(2)} m: it was shoved`);
-    assert.ok(dampedSlide < DAMPED_SLIDE_SHARE_MAX * undampedSlide, `with air drag it slid ${dampedSlide.toFixed(2)} m against ${undampedSlide.toFixed(2)} m without`);
+    expect(undampedSlide, `the control slid ${undampedSlide.toFixed(2)} m: it was shoved`).toBeGreaterThan(1);
+    expect(dampedSlide, `with air drag it slid ${dampedSlide.toFixed(2)} m against ${undampedSlide.toFixed(2)} m without`).toBeLessThan(DAMPED_SLIDE_SHARE_MAX * undampedSlide);
   });
 });
 
@@ -355,7 +354,7 @@ describe("given the boxes a ragdoll system draws from and the bodies it holds", 
     const after = sys.copyBoxPoses(out);
     const farthest = Math.max(...PLACEMENTS.map((placement, i) => Math.hypot(out[i * 7]! - placement.x, out[i * 7 + 1]! - placement.y, out[i * 7 + 2]! - placement.z)));
     const turnError = Math.max(...PLACEMENTS.map((placement, i) => Math.hypot(out[i * 7 + 3]!, out[i * 7 + 4]! - Math.sin(placement.yaw / 2), out[i * 7 + 5]!, out[i * 7 + 6]! - Math.cos(placement.yaw / 2))));
-    assert.throws(() => sys.copyBoxPoses(new Float32Array(BOX_POSE_FLOATS * (BOX_COUNT - 1))), RangeError, "a buffer one box short is refused");
+    expect(() => sys.copyBoxPoses(new Float32Array(BOX_POSE_FLOATS * (BOX_COUNT - 1))), "a buffer one box short is refused").toThrow(RangeError);
     sys.setBoxes(PLACEMENTS.slice(0, 3));
     const replaced = sys.copyBoxPoses(out);
     const bodiesReplaced = sys.stats.bodies;
@@ -363,14 +362,14 @@ describe("given the boxes a ragdoll system draws from and the bodies it holds", 
     const cleared = sys.copyBoxPoses(out);
     const bodiesCleared = sys.stats.bodies;
     sys.dispose();
-    assert.equal(before, 0, "no boxes before Rapier");
-    assert.equal(after, BOX_COUNT, "every box once Rapier is in");
-    assert.ok(farthest < 1e-4, `a pose is ${farthest} m from its placement`);
-    assert.ok(turnError < 1e-5, `a rotation is ${turnError} off the yaw's quaternion`);
-    assert.equal(replaced, 3, "setBoxes replaces the pile");
-    assert.equal(bodiesBefore - bodiesReplaced, BOX_COUNT - 3, "the replaced boxes' bodies are removed from the world");
-    assert.equal(cleared, 0, "clearBoxes leaves none");
-    assert.equal(bodiesBefore - bodiesCleared, BOX_COUNT, "every box's body is removed from the world");
+    expect(before, "no boxes before Rapier").toBe(0);
+    expect(after, "every box once Rapier is in").toBe(BOX_COUNT);
+    expect(farthest, `a pose is ${farthest} m from its placement`).toBeLessThan(1e-4);
+    expect(turnError, `a rotation is ${turnError} off the yaw's quaternion`).toBeLessThan(1e-5);
+    expect(replaced, "setBoxes replaces the pile").toBe(3);
+    expect(bodiesBefore - bodiesReplaced, "the replaced boxes' bodies are removed from the world").toBe(BOX_COUNT - 3);
+    expect(cleared, "clearBoxes leaves none").toBe(0);
+    expect(bodiesBefore - bodiesCleared, "every box's body is removed from the world").toBe(BOX_COUNT);
   });
 
   it("when a dummy has scattered them, then copyBoxPoses reads where the bodies are", async () => {
@@ -385,7 +384,7 @@ describe("given the boxes a ragdoll system draws from and the bodies it holds", 
       farthest = Math.max(farthest, Math.hypot(out[i * 7]! - at.x, out[i * 7 + 1]! - at.y, out[i * 7 + 2]! - at.z));
     }
     sys.dispose();
-    assert.ok(farthest < 1e-4, `a drawn box is ${farthest} m from its body`);
+    expect(farthest, `a drawn box is ${farthest} m from its body`).toBeLessThan(1e-4);
   });
 });
 
@@ -415,10 +414,10 @@ describe("given the real pile of 48 boxes in the dummies' world and a dummy flyi
       awakeFrames++;
     }
     sys.dispose();
-    assert.equal(mostAwakeWhileAsleep, 0, "boxes awake while the dummy flew far away");
-    assert.equal(mostAwakeWhenWoken, BOX_COUNT, "the control: every box woken counts as awake");
-    assert.ok(awakeFrames > FRAME_HZ / 2, `the woken boxes slept again after ${awakeFrames} frames: too soon to have been awake`);
-    assert.ok(awakeFrames < FLIGHT_FRAMES, "the woken boxes never slept again within the window");
+    expect(mostAwakeWhileAsleep, "boxes awake while the dummy flew far away").toBe(0);
+    expect(mostAwakeWhenWoken, "the control: every box woken counts as awake").toBe(BOX_COUNT);
+    expect(awakeFrames, `the woken boxes slept again after ${awakeFrames} frames: too soon to have been awake`).toBeGreaterThan(FRAME_HZ / 2);
+    expect(awakeFrames, "the woken boxes never slept again within the window").toBeLessThan(FLIGHT_FRAMES);
   });
 
   it("when a dummy is dropped through the pile, then boxes wake and the whole pile lies asleep again within the window", async () => {
@@ -432,7 +431,7 @@ describe("given the real pile of 48 boxes in the dummies' world and a dummy flyi
       if (frame > FRAME_HZ && awake === 0) break;
     }
     sys.dispose();
-    assert.ok(mostAwake > 0, "the control: the dummy woke boxes");
-    assert.ok(frame < HIT_WINDOW_FRAMES, "the pile was still awake at the end of the window");
+    expect(mostAwake, "the control: the dummy woke boxes").toBeGreaterThan(0);
+    expect(frame, "the pile was still awake at the end of the window").toBeLessThan(HIT_WINDOW_FRAMES);
   });
 });

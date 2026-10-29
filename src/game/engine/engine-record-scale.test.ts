@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import { launch, makeCar, makeWorld, relaunchDamaged } from "../contact/crash-scenarios.test-util.ts";
 import { BARRIER_HALF } from "../contact/sat.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -8,6 +7,7 @@ import { clipScore, clipTitle, IMPACT_MIN, MIN_SCORE, TOP, type CrashCluster } f
 import { CrashRecorder } from "./engine-record.ts";
 import { settleStep, stepWorld } from "./world-step.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * Highlight scores through the real sim: two sedans (or one and the jersey slab) crash at a set closing speed, the
@@ -86,27 +86,27 @@ describe("given the highlight recorder scoring crashes between real simulated se
     ] as const) {
       const scores = SWEEP.map((v) => crash(v).score);
       for (const [i, s] of scores.entries()) {
-        if (i > 0) assert.ok(s > scores[i - 1]!, `${name}: ${SWEEP[i]} km/h scores ${s.toFixed(2)}, not above ${SWEEP[i - 1]} km/h's ${scores[i - 1]!.toFixed(2)} (${scores.map((x) => x.toFixed(1)).join(" ")})`);
+        if (i > 0) expect(s, `${name}: ${SWEEP[i]} km/h scores ${s.toFixed(2)}, not above ${SWEEP[i - 1]} km/h's ${scores[i - 1]!.toFixed(2)} (${scores.map((x) => x.toFixed(1)).join(" ")})`).toBeGreaterThan(scores[i - 1]!);
       }
     }
     const wall = [50, 56, 80].map((v) => wallHit(v, 0.4)!.score);
-    assert.ok(wall[0]! < wall[1]! && wall[1]! < wall[2]!, `offset wall 50/56/80 km/h: ${wall.map((x) => x.toFixed(1)).join(" ")}`);
+    expect(wall[0]! < wall[1]! && wall[1]! < wall[2]!, `offset wall 50/56/80 km/h: ${wall.map((x) => x.toFixed(1)).join(" ")}`).toBeTruthy();
   });
 
   it("when a 100 km/h head-on is scored against a 50 km/h one, then it scores 3.5 to 5 times as much, and the 50 km/h one keeps its score of 3.65", () => {
     const at50 = headOn(50).score;
     const at100 = headOn(100).score;
-    assert.ok(Math.abs(at50 - 3.65) < 0.02, `the 50 km/h reference moved: ${at50.toFixed(2)} (was 3.65)`);
-    assert.ok(at100 / at50 >= 3.5 && at100 / at50 <= 5, `100 km/h ${at100.toFixed(2)} vs 50 km/h ${at50.toFixed(2)}: ×${(at100 / at50).toFixed(2)}`);
+    expect(Math.abs(at50 - 3.65), `the 50 km/h reference moved: ${at50.toFixed(2)} (was 3.65)`).toBeLessThan(0.02);
+    expect(at100 / at50 >= 3.5 && at100 / at50 <= 5, `100 km/h ${at100.toFixed(2)} vs 50 km/h ${at50.toFixed(2)}: ×${(at100 / at50).toFixed(2)}`).toBeTruthy();
   });
 
   it("when 20 and 40 km/h head-ons are recorded, then they fall under the minimum impact speed and open no cluster, while a 50 km/h head-on still scores enough for the highlight reel", () => {
     for (const kph of [20, 40]) {
       const [a, b] = [makeCar(), makeCar()] as const;
       placeHeadOn(a, b, kph / 3.6);
-      assert.equal(record([a, b], false, 3).clusters.length, 0, `a ${kph} km/h head-on opened a cluster`);
+      expect(record([a, b], false, 3).clusters.length, `a ${kph} km/h head-on opened a cluster`).toBe(0);
     }
-    assert.ok(headOn(50).score >= MIN_SCORE, "a 50 km/h head-on still makes the reel");
+    expect(headOn(50).score, "a 50 km/h head-on still makes the reel").toBeGreaterThanOrEqual(MIN_SCORE);
   });
 
   it("when a race has seven head-ons from 20 to 100 km/h, then the five hardest are kept, best first, and the softest two are dropped", () => {
@@ -115,25 +115,21 @@ describe("given the highlight recorder scoring crashes between real simulated se
     for (const [k, v] of speeds.entries()) placeHeadOn(cars[2 * k]!, cars[2 * k + 1]!, v / 3.6, k * 200);
     const { rec } = record(cars, false, 4);
     const kept = rec.ledger.kept;
-    assert.equal(kept.length, TOP);
-    assert.deepEqual(
-      kept.map((c) => Math.round(c.peakKph)),
-      [100, 90, 80, 70, 60],
-      `the reel: ${kept.map((c) => `${c.peakKph.toFixed(0)} km/h = ${c.score.toFixed(1)}`).join(", ")}`,
-    );
+    expect(kept.length).toBe(TOP);
+    expect(firstMismatch(kept.map((c) => Math.round(c.peakKph)), [100, 90, 80, 70, 60]), `the reel: ${kept.map((c) => `${c.peakKph.toFixed(0)} km/h = ${c.score.toFixed(1)}`).join(", ")}`).toBeUndefined();
     for (const [i, c] of kept.entries()) {
-      if (i > 0) assert.ok(c.score < kept[i - 1]!.score, "best first");
+      if (i > 0) expect(c.score, "best first").toBeLessThan(kept[i - 1]!.score);
     }
   });
 
   it("when the softest driver ejection (a 55 km/h wall hit) is scored against the hardest hit that spares both engines (a 109 km/h head-on), then the ejection scores more than 1.5 times as much, and an 80 km/h wall throw scores higher still", () => {
     const spared = headOn(109);
-    assert.equal(spared.kills, 0, "109 km/h head-on must still spare both engines for this to be the hardest spared hit");
+    expect(spared.kills, "109 km/h head-on must still spare both engines for this to be the hardest spared hit").toBe(0);
     const soft = wallHit(55)!;
     const hard = wallHit(80)!;
-    assert.ok(soft.ejects === 1 && hard.ejects === 1, `wall 55/80 km/h throw ${soft.ejects}/${hard.ejects} drivers`);
-    assert.ok(soft.score > spared.score * 1.5, `55 km/h wall throw ${soft.score.toFixed(1)} vs 109 km/h head-on ${spared.score.toFixed(1)}`);
-    assert.ok(hard.score > soft.score, `80 km/h throw ${hard.score.toFixed(1)} vs 55 km/h throw ${soft.score.toFixed(1)}`);
+    expect(soft.ejects === 1 && hard.ejects === 1, `wall 55/80 km/h throw ${soft.ejects}/${hard.ejects} drivers`).toBeTruthy();
+    expect(soft.score, `55 km/h wall throw ${soft.score.toFixed(1)} vs 109 km/h head-on ${spared.score.toFixed(1)}`).toBeGreaterThan(spared.score * 1.5);
+    expect(hard.score, `80 km/h throw ${hard.score.toFixed(1)} vs 55 km/h throw ${soft.score.toFixed(1)}`).toBeGreaterThan(soft.score);
   });
 });
 
@@ -150,25 +146,22 @@ const fourCars = (v: number, extra = 0, apart = 8): { clusters: CrashCluster[]; 
 describe("given four cars in two head-on pairs 8 m apart, and the minimum closing speed any impact must reach to count", () => {
   it("when they bump at 9 m/s (32 km/h), then no cluster, no clip and no pile-up is made", () => {
     const { clusters, rec } = fourCars(9);
-    assert.equal(clusters.length, 0, `${clusters.length} cluster(s) opened by 32 km/h bumps`);
-    assert.equal(rec.ledger.kept.length, 0, "no clip");
+    expect(clusters.length, `${clusters.length} cluster(s) opened by 32 km/h bumps`).toBe(0);
+    expect(rec.ledger.kept.length, "no clip").toBe(0);
   });
 
   it("when they hit at 20 m/s (72 km/h), then a clip is still made, titled a 4-car pile-up", () => {
     const { rec } = fourCars(20);
     const [clip] = rec.ledger.kept;
-    assert.ok(clip, "the fast pile-up made no clip");
-    assert.equal(clip.hit, 4, "four cars hit");
-    assert.equal(clipTitle(clip), "4-car pile-up");
+    expect(clip, "the fast pile-up made no clip").toBeTruthy();
+    expect(clip.hit, "four cars hit").toBe(4);
+    expect(clipTitle(clip)).toBe("4-car pile-up");
   });
 
   it("when the second pair is 20 m from the first's hit instead of 8 m, then each pair is its own clip of two cars, not a 4-car pile-up", () => {
     const { rec } = fourCars(20, 0, 20);
-    assert.deepEqual(
-      rec.ledger.kept.map((c) => c.hit),
-      [2, 2],
-    );
-    assert.ok(rec.ledger.kept.every((c) => clipTitle(c) === "36 km/h smash"), rec.ledger.kept.map((c) => clipTitle(c)).join(", "));
+    expect(firstMismatch(rec.ledger.kept.map((c) => c.hit), [2, 2])).toBeUndefined();
+    expect(rec.ledger.kept.every((c) => clipTitle(c) === "36 km/h smash"), rec.ledger.kept.map((c) => clipTitle(c)).join(", ")).toBeTruthy();
   });
 });
 
@@ -178,11 +171,11 @@ describe("given a two-car head-on at 72 km/h with six idle cars standing close e
     placeHeadOn(cars[0]!, cars[1]!, 20);
     for (let k = 2; k < 8; k++) launch(cars[k]!, 40 + 8 * k, 40, Math.PI / 2, 0, 0);
     const [clip] = record(cars, false, 4).rec.ledger.kept;
-    assert.ok(clip, "the 72 km/h head-on made no clip");
-    assert.ok(clip.cars.length > 2, `${clip.cars.length} cars in the clip: the idle ones are bystanders`);
-    assert.equal(clip.hit, 2);
-    assert.equal(clipTitle(clip), "36 km/h smash", "the title's speed is the main car's own (each car of a 72 km/h closing head-on drove at 36 km/h), not the closing speed");
-    assert.equal(Math.round(clip.peakKph), 72, "the closing speed is still the impact's flash");
+    expect(clip, "the 72 km/h head-on made no clip").toBeTruthy();
+    expect(clip.cars.length, `${clip.cars.length} cars in the clip: the idle ones are bystanders`).toBeGreaterThan(2);
+    expect(clip.hit).toBe(2);
+    expect(clipTitle(clip), "the title's speed is the main car's own (each car of a 72 km/h closing head-on drove at 36 km/h), not the closing speed").toBe("36 km/h smash");
+    expect(Math.round(clip.peakKph), "the closing speed is still the impact's flash").toBe(72);
   });
 });
 
@@ -192,17 +185,16 @@ describe("given a head-on at 72 km/h and, 25 m beside it, another at 130 km/h th
     placeHeadOn(cars[0]!, cars[1]!, 20);
     placeHeadOn(cars[2]!, cars[3]!, 130 / 3.6, 25);
     const { clusters, rec } = record(cars, false, 4);
-    assert.equal(clusters.length, 2, "two clusters: the far crash is outside the near one's scope (the old 30 m join claimed it)");
-    assert.deepEqual(
-      rec.ledger.kept.map((c) => clipTitle(c)),
-      ["2 drivers thrown out", "36 km/h smash"],
-    );
+    expect(clusters.length, "two clusters: the far crash is outside the near one's scope (the old 30 m join claimed it)").toBe(2);
+    expect(firstMismatch(rec.ledger.kept.map((c) => clipTitle(c)), ["2 drivers thrown out", "36 km/h smash"])).toBeUndefined();
     const far = rec.ledger.kept.find((c) => c.ejects > 0)!;
     const near = rec.ledger.kept.find((c) => c.ejects === 0)!;
-    assert.deepEqual({ hit: near.hit, ejects: near.ejects, far: far.ejects }, { hit: 2, ejects: 0, far: 2 });
-    assert.ok(near.ejections.length > 0 && near.ejections.every((x) => !x.own), "the far driver flies in the near clip's replay as recorded, and is not its own");
-    assert.ok(far.ejections.some((x) => x.own), "the far clip owns his throw");
-    assert.ok(near.score < 26, `the near clip scores ${near.score.toFixed(1)}: the far throw's 26 points are not in it`);
+    expect(near.hit, "the near clip's cars hit").toBe(2);
+    expect(near.ejects, "the near clip's ejections").toBe(0);
+    expect(far.ejects, "the far clip's ejections").toBe(2);
+    expect(near.ejections.length > 0 && near.ejections.every((x) => !x.own), "the far driver flies in the near clip's replay as recorded, and is not its own").toBeTruthy();
+    expect(far.ejections.some((x) => x.own), "the far clip owns his throw").toBeTruthy();
+    expect(near.score, `the near clip scores ${near.score.toFixed(1)}: the far throw's 26 points are not in it`).toBeLessThan(26);
   });
 });
 
@@ -212,9 +204,9 @@ describe("given the deformation the cars of a clip gained", () => {
     placeHeadOn(a, b, 20);
     const { clusters, rec } = record([a, b], false, 4);
     const [clip] = rec.ledger.kept;
-    assert.ok(clip, "no clip");
-    assert.ok(clip.deform > 2 && clip.deform < 6, `${clip.deform.toFixed(3)} m of crush`);
-    assert.ok(Math.abs(clip.score - clipScore(clusters[0]!.score, clip.deform)) < 1e-9, `score ${clip.score.toFixed(3)} = ${clusters[0]!.score.toFixed(3)} impact + ${clip.deform.toFixed(3)} m of crush`);
+    expect(clip, "no clip").toBeTruthy();
+    expect(clip.deform > 2 && clip.deform < 6, `${clip.deform.toFixed(3)} m of crush`).toBeTruthy();
+    expect(Math.abs(clip.score - clipScore(clusters[0]!.score, clip.deform)), `score ${clip.score.toFixed(3)} = ${clusters[0]!.score.toFixed(3)} impact + ${clip.deform.toFixed(3)} m of crush`).toBeLessThan(1e-9);
   });
 
   it("when the same two cars, their noses already crushed by the first crash, crash again at 72 km/h, then the second clip counts only what they gained, less than the first", () => {
@@ -228,8 +220,8 @@ describe("given the deformation the cars of a clip gained", () => {
       },
     };
     const [first, second] = [...record([a, b], false, 12, undefined, again).rec.ledger.kept].sort((x, y) => x.t0 - y.t0);
-    assert.ok(first && second, "two clips");
-    assert.ok(second.deform > 0 && second.deform < first.deform, `second ${second.deform.toFixed(3)} m, first ${first.deform.toFixed(3)} m`);
+    expect(first && second, "two clips").toBeTruthy();
+    expect(second.deform > 0 && second.deform < first.deform, `second ${second.deform.toFixed(3)} m, first ${first.deform.toFixed(3)} m`).toBeTruthy();
   });
 
   // todo -> after the plan: recalibrate the wall hit's crush against the lever's spin. The 55 km/h wall ejection's clip scores 33.2 (0.8 m of
@@ -241,9 +233,9 @@ describe("given the deformation the cars of a clip gained", () => {
     const [a, b] = [makeCar(), makeCar()] as const;
     placeHeadOn(a, b, 109 / 3.6);
     const [spared] = record([a, b], false, 4).rec.ledger.kept;
-    assert.ok(thrown && spared, "both made a clip");
-    assert.deepEqual([thrown.ejects, spared.kills], [1, 0], "a thrown driver; both engines spared");
-    assert.ok(thrown.score > spared.score, `ejection ${thrown.score.toFixed(1)} (${thrown.deform.toFixed(1)} m of crush) vs head-on ${spared.score.toFixed(1)} (${spared.deform.toFixed(1)} m)`);
+    expect(thrown && spared, "both made a clip").toBeTruthy();
+    expect(firstMismatch([thrown.ejects, spared.kills], [1, 0]), "a thrown driver; both engines spared").toBeUndefined();
+    expect(thrown.score, `ejection ${thrown.score.toFixed(1)} (${thrown.deform.toFixed(1)} m of crush) vs head-on ${spared.score.toFixed(1)} (${spared.deform.toFixed(1)} m)`).toBeGreaterThan(spared.score);
   });
 });
 
@@ -270,10 +262,10 @@ function dropOnto(h: number, turnedOver: boolean): { clusters: CrashCluster[]; r
 describe("given a sedan falling onto another's, slower than any impact that counts by its speed", () => {
   for (const turnedOver of [false, true]) {
     it(`when it falls 3 m (28 km/h) ${turnedOver ? "roof onto roof" : "wheels onto the roof"}, then a slow crush is no highlight however deep: no cluster opens and no clip is recorded`, () => {
-      assert.ok(Math.sqrt(2 * 9.81 * 3) < IMPACT_MIN, "the fall is slower than any impact that counts by speed");
+      expect(Math.sqrt(2 * 9.81 * 3), "the fall is slower than any impact that counts by speed").toBeLessThan(IMPACT_MIN);
       const { clusters, rec } = dropOnto(3, turnedOver);
-      assert.equal(clusters.length, 0, "clusters opened");
-      assert.equal(rec.ledger.kept.length, 0, "clips recorded");
+      expect(clusters.length, "clusters opened").toBe(0);
+      expect(rec.ledger.kept.length, "clips recorded").toBe(0);
     });
   }
 });

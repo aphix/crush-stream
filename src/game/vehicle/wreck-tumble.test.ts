@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { assignClass, CLASSES } from "./vehicle-classes.ts";
@@ -73,8 +72,8 @@ describe("given a monster wreck tumbling in the air at 9 rad/s about its length,
       at = `step ${f}: body ${car.velocity.y.toFixed(2)} m/s, masses ${massesAtCentre(car).toFixed(2)}, up ${up.toFixed(2)}`;
     }
     t.annotate(`worst ${worst.toFixed(2)} m/s (${at})`);
-    assert.ok(car.deform.massActive, "the monster is no wreck");
-    assert.ok(worst < OFF_MAX, `the masses stood ${worst.toFixed(2)} m/s off the body (${at})`);
+    expect(car.deform.massActive, "the monster is no wreck").toBeTruthy();
+    expect(worst, `the masses stood ${worst.toFixed(2)} m/s off the body (${at})`).toBeLessThan(OFF_MAX);
   });
 
   it(`when it tumbles for ${SECONDS} s, its lift fading as it lies over, then its body falls as gravity has it: its vertical velocity within ${FALL_OFF_MAX} m/s of −g t`, (t) => {
@@ -91,6 +90,6 @@ describe("given a monster wreck tumbling in the air at 9 rad/s about its length,
       at = `step ${f}: body ${car.velocity.y.toFixed(2)} m/s, −g t ${fall.toFixed(2)}, lift ${centreLift(car).toFixed(2)} m`;
     }
     t.annotate(`worst ${worst.toFixed(2)} m/s (${at})`);
-    assert.ok(worst < FALL_OFF_MAX, `the body's fall stood ${worst.toFixed(2)} m/s off gravity's (${at})`);
+    expect(worst, `the body's fall stood ${worst.toFixed(2)} m/s off gravity's (${at})`).toBeLessThan(FALL_OFF_MAX);
   });
 });

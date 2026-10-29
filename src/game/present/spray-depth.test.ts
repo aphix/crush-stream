@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { PERSON_SPRAY, SPRAY_DEPTH_BAND, SPRAY_FACE, sprayFace, sprayPlace, type SpraySurface } from "../match/look-data.ts";
@@ -111,14 +110,14 @@ describe("given a driver's spray, a box projection every surface facing the same
     const tip = outermost(fragments, LEFT_HAND, FRONT);
     assertSameNumbers(partsOf(paintedAfter(fragments, [tip], surface)), [LEFT_HAND], "parts painted with the depth map");
     const parts = partsOf(paintedAfter(fragments, [tip], null));
-    assert.ok(parts.some((part) => !HANDS.includes(part)), `control: the box projection alone paints parts ${parts}`);
+    expect(parts.some((part) => !HANDS.includes(part)), `control: the box projection alone paints parts ${parts}`).toBeTruthy();
   });
 
   it("when the can sprays the outside of a hand, then the other hand behind the body takes no paint, where the box projection alone painted it", () => {
     const tip = outermost(fragments, LEFT_HAND, LEFT);
     assertSameNumbers(partsOf(paintedAfter(fragments, [tip], surface)), [LEFT_HAND], "parts painted with the depth map");
     const parts = partsOf(paintedAfter(fragments, [tip], null));
-    assert.ok(parts.includes(RIGHT_HAND), `control: the box projection alone paints parts ${parts}`);
+    expect(parts.includes(RIGHT_HAND), `control: the box projection alone paints parts ${parts}`).toBeTruthy();
   });
 
   it("when the can sprays the front of a hand with Symmetric on, then the mirrored hand is painted too, and nothing else", () => {
@@ -139,7 +138,7 @@ describe("given a driver's spray, a box projection every surface facing the same
   it("when the can sprays the top of his head, then his hair, out past the skull, is painted", () => {
     const crown = outermost(fragments, HEAD, UP, Infinity);
     const painted = paintedAfter(fragments, [crown], surface);
-    assert.ok(painted.some((f) => f.onWear), "the hair's shell takes the paint");
+    expect(painted.some((f) => f.onWear), "the hair's shell takes the paint").toBeTruthy();
   });
 
   it("when the body's vertices are asked, then paint draws where a ray down the face's axis meets the body first and nowhere it is hidden, bar a few at a texel's edge", () => {
@@ -168,8 +167,8 @@ describe("given a driver's spray, a box projection every surface facing the same
         if (draws) tally.hiddenDrawn++;
       }
     }
-    assert.ok(tally.visible > 100 && tally.hidden > 50, `a mix of fragments is asked: ${JSON.stringify(tally)}`);
-    assert.ok(tally.visibleRefused <= tally.visible * EDGE_SHARE, `outermost fragments refused: ${JSON.stringify(tally)}`);
-    assert.ok(tally.hiddenDrawn <= tally.hidden * EDGE_SHARE, `hidden fragments drawn: ${JSON.stringify(tally)}`);
+    expect(tally.visible > 100 && tally.hidden > 50, `a mix of fragments is asked: ${JSON.stringify(tally)}`).toBeTruthy();
+    expect(tally.visibleRefused, `outermost fragments refused: ${JSON.stringify(tally)}`).toBeLessThanOrEqual(tally.visible * EDGE_SHARE);
+    expect(tally.hiddenDrawn, `hidden fragments drawn: ${JSON.stringify(tally)}`).toBeLessThanOrEqual(tally.hidden * EDGE_SHARE);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -58,7 +57,7 @@ function record(): Recorded {
   const sleeper = cars[SLEEPER]!;
   sleeper.spawnFacing(IMPACT_X, 40, Math.PI / 2, 12);
   sleeper.applyImpact(new THREE.Vector3(sleeper.group.position.x + 2.2, 0.5, sleeper.group.position.z), new THREE.Vector3(-1, 0, 0), 16, 12);
-  assert.ok(sleeper.crashed, "the sleeper is a wreck");
+  expect(sleeper.crashed, "the sleeper is a wreck").toBeTruthy();
   const rec = new CrashRecorder({ recall: (_i, out) => out.set([-1]), knocks: () => new Uint8Array(16) });
   rec.begin("flat", HANDLING.realism, false, 4, (i) => `c${i}`, 1);
   const world = newWorld(cars);
@@ -97,7 +96,7 @@ function record(): Recorded {
     trace.push(Float64Array.from(cars.flatMap((c) => [...c.group.position.toArray(), ...c.velocity.toArray()])));
   }
   rec.end();
-  assert.ok(rec.ledger.kept.length >= 1, "the head-on crash did not rank as a highlight");
+  expect(rec.ledger.kept.length, "the head-on crash did not rank as a highlight").toBeGreaterThanOrEqual(1);
   const kept = rec.ledger.kept[0]!;
   const w = new Writer(clipBytes(kept));
   writeClip(w, kept);
@@ -134,23 +133,25 @@ describe("given a head-on recorded as a highlight, a wreck lying asleep 40 m off
 
   it("when the clip is filed, then it carries the wreck but not the passing car, and lists the wreck's wake after it fell asleep: its step, its car and the slice", (t) => {
     t.annotate(`clip cars ${clip.cars.map((c) => c.slot).join(",")}, steps ${s0} to ${s0 + clip.h.length}; wreck asleep from step ${run.asleepAt}; passer nearest at step ${run.closest.step} (${run.closest.gap.toFixed(2)} m); stirs ${JSON.stringify(clip.stirs)}`);
-    assert.ok(clip.cars.some((c) => c.slot === A) && clip.cars.some((c) => c.slot === B) && sleeperAt >= 0, "the pair and the wreck are in the clip");
-    assert.ok(!clip.cars.some((c) => c.slot === PASSER), "the car that joined the field after the clip began is left out");
-    assert.ok(run.asleepAt > 0 && run.asleepAt < JOIN_STEP + 400, `the wreck fell asleep (step ${run.asleepAt}) before the passer came by`);
-    assert.ok(s0 + clip.h.length > run.closest.step, "the passer comes by inside the clip");
+    expect(clip.cars.some((c) => c.slot === A) && clip.cars.some((c) => c.slot === B) && sleeperAt >= 0, "the pair and the wreck are in the clip").toBeTruthy();
+    expect(!clip.cars.some((c) => c.slot === PASSER), "the car that joined the field after the clip began is left out").toBe(true);
+    expect(run.asleepAt > 0 && run.asleepAt < JOIN_STEP + 400, `the wreck fell asleep (step ${run.asleepAt}) before the passer came by`).toBeTruthy();
+    expect(s0 + clip.h.length, "the passer comes by inside the clip").toBeGreaterThan(run.closest.step);
     const mine = clip.stirs.filter((x) => x.car === sleeperAt);
-    assert.ok(mine.length >= 1, "the wreck was stirred by the car that drove past");
+    expect(mine.length, "the wreck was stirred by the car that drove past").toBeGreaterThanOrEqual(1);
     const first = mine[0]!;
-    assert.ok(s0 + first.step > run.asleepAt && s0 + first.step <= run.closest.step, `the wake (step ${s0 + first.step}) is after the wreck slept (${run.asleepAt}) and as the passer comes by (${run.closest.step})`);
-    assert.ok(first.slice >= 0 && first.slice < 8, "the slice is one of the step's");
+    expect(s0 + first.step > run.asleepAt && s0 + first.step <= run.closest.step, `the wake (step ${s0 + first.step}) is after the wreck slept (${run.asleepAt}) and as the passer comes by (${run.closest.step})`).toBeTruthy();
+    expect(first.slice >= 0 && first.slice < 8, "the slice is one of the step's").toBeTruthy();
   });
 
   it("when the clip is replayed with its stirs, then every car of it matches the live sim at every step, to the bit", () => {
-    assert.deepEqual(replayWorst(run, clip), { pose: 0, vel: 0 });
+    const worst = replayWorst(run, clip);
+    expect(worst.pose, "worst pose distance (m)").toBe(0);
+    expect(worst.vel, "worst speed difference (m/s)").toBe(0);
   });
 
   it("when the same clip is replayed without its stirs, then the wreck sleeps on while the live one woke, so the replay strays (the case holds what it is for)", () => {
     const worst = replayWorst(run, { ...clip, stirs: [] });
-    assert.ok(worst.pose > 0 || worst.vel > 0, `without the stirs the replay stays exact: ${JSON.stringify(worst)}`);
+    expect(worst.pose > 0 || worst.vel > 0, `without the stirs the replay stays exact: ${JSON.stringify(worst)}`).toBeTruthy();
   });
 });

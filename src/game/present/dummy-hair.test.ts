@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { OUTFIT, type DriverLook } from "./driver-look.ts";
 import { VIP_LOOK } from "./dummy-dress.ts";
 import { restFits } from "./dummy-fit.ts";
@@ -37,16 +36,16 @@ describe("given the people's hair", () => {
       const head = measureHead(fit);
       const height = head.top - head.chin;
       const band = hairOf(drawnRows(false, look).rows).filter((row) => row.at.y > head.chin + FACE_FROM * height && row.at.y < head.chin + FACE_TOP * height && Math.abs(row.at.x) < Math.min(FACE_OPEN, headAt(head, row.at.y)[0] - FACE_CLEAR));
-      assert.ok(band.length > 0, "the hair crosses that band (behind the head)");
+      expect(band.length, "the hair crosses that band (behind the head)").toBeGreaterThan(0);
       const over = band.filter((row) => row.at.z > surfaceZ(fit, row.at.x, row.at.y) - FACE_CLEAR);
-      assert.equal(over.length, 0, `${over.length} hair vertices over the face`);
+      expect(over.length, `${over.length} hair vertices over the face`).toBe(0);
     });
   }
 
   it("when the man stands bare-headed, then his hair stands full over his crown", () => {
     const head = measureHead(fits.man);
     const top = Math.max(...hairOf(drawnRows(false, MAN).rows).map((row) => row.at.y));
-    assert.ok(top >= head.top + CROWN_VOLUME, `it stands ${(top - head.top).toFixed(3)} m over his crown`);
+    expect(top, `it stands ${(top - head.top).toFixed(3)} m over his crown`).toBeGreaterThanOrEqual(head.top + CROWN_VOLUME);
   });
 
   it("when she stands, then her hair frames her face past her cheeks on both sides at eye height and ends on her shoulders", () => {
@@ -54,8 +53,8 @@ describe("given the people's hair", () => {
     const eyes = head.chin + EYES_AT * (head.top - head.chin);
     const hair = hairOf(drawnRows(false, WOMAN).rows);
     const atEyes = hair.filter((row) => Math.abs(row.at.y - eyes) < EYE_BAND);
-    assert.ok(Math.max(...atEyes.map((row) => row.at.x)) >= FRAME_X, `it reaches x = ${Math.max(...atEyes.map((row) => row.at.x)).toFixed(3)} m on her left`);
-    assert.ok(Math.min(...atEyes.map((row) => row.at.x)) <= -FRAME_X, `it reaches x = ${Math.min(...atEyes.map((row) => row.at.x)).toFixed(3)} m on her right`);
-    assert.ok(Math.min(...hair.map((row) => row.at.y)) >= HAIR_ENDS, `it hangs to ${Math.min(...hair.map((row) => row.at.y)).toFixed(3)} m`);
+    expect(Math.max(...atEyes.map((row) => row.at.x)), `it reaches x = ${Math.max(...atEyes.map((row) => row.at.x)).toFixed(3)} m on her left`).toBeGreaterThanOrEqual(FRAME_X);
+    expect(Math.min(...atEyes.map((row) => row.at.x)), `it reaches x = ${Math.min(...atEyes.map((row) => row.at.x)).toFixed(3)} m on her right`).toBeLessThanOrEqual(-FRAME_X);
+    expect(Math.min(...hair.map((row) => row.at.y)), `it hangs to ${Math.min(...hair.map((row) => row.at.y)).toFixed(3)} m`).toBeGreaterThanOrEqual(HAIR_ENDS);
   });
 });

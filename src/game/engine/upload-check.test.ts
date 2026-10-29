@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
@@ -58,7 +57,7 @@ Object.assign(globalThis, { Worker: PageWorker });
 describe("given a page opened without ?debug=uploads", () => {
   it("when the engine starts, then nothing on its WebGL context is wrapped", async () => {
     const { engine, wrapped } = await engineOn("");
-    assert.deepEqual([...wrapped].filter(([, value]) => typeof value === "function").map(([key]) => String(key)), []);
+    expect([...wrapped].filter(([, value]) => typeof value === "function").map(([key]) => String(key))).toHaveLength(0);
     engine.dispose();
   });
 });
@@ -70,7 +69,7 @@ describe("given a page opened with ?debug=uploads", () => {
   afterAll(() => engine.dispose());
 
   it("when a mesh's attribute is updated past its array's end, then the first refused bufferSubData is logged once, naming the attribute, geometry, mesh, sizes, range, FX tier and stack", () => {
-    assert.ok(wrapped.has("bufferSubData") && wrapped.has("texSubImage2D"), "wrapped upload calls");
+    expect(wrapped.has("bufferSubData") && wrapped.has("texSubImage2D"), "wrapped upload calls").toBeTruthy();
     const geometry = new THREE.BufferGeometry();
     geometry.name = "probe-geometry";
     const position = new THREE.BufferAttribute(new Float32Array(30), 3);
@@ -87,10 +86,10 @@ describe("given a page opened with ?debug=uploads", () => {
         draw();
       }
     });
-    assert.equal(reports.length, 1, reports.join("\n"));
+    expect(reports.length, reports.join("\n")).toBe(1);
     const [report] = reports;
     for (const part of ["bufferSubData refused", "srcOffset 25 + length 10 past the view's 30 elements", 'attribute \\"position\\" (10 x 3)', 'geometry \\"probe-geometry\\"', 'Mesh \\"probe-mesh\\" {\\"probe\\":7}', '"bufferBytes":120', '"dstOffset":100', '"tier":"minimal"', "upload-check.ts"]) {
-      assert.ok(report!.includes(part), `${part} in ${report}`);
+      expect(report!.includes(part), `${part} in ${report}`).toBeTruthy();
     }
   });
 });
@@ -112,9 +111,9 @@ describe("given the upload check on a headless context", () => {
       texture.needsUpdate = true;
       renderer.initTexture(texture);
     });
-    assert.equal(reports.length, 1, reports.join("\n"));
+    expect(reports.length, reports.join("\n")).toBe(1);
     for (const part of ["texSubImage2D refused", "needs 72 bytes of the view's 64", 'texture \\"probe-texture\\"', 'Mesh \\"probe-plane\\"', '"tier":"low"']) {
-      assert.ok(reports[0]!.includes(part), `${part} in ${reports[0]}`);
+      expect(reports[0]!.includes(part), `${part} in ${reports[0]}`).toBeTruthy();
     }
   });
 });

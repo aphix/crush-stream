@@ -1,5 +1,4 @@
-import { beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { beforeAll, describe, expect, it } from "vitest";
 import { launch, makeCar, makeWorld } from "../contact/crash-scenarios.test-util.ts";
 import { blankStrike, type FigureStrike } from "../scenes/figure-strike.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -9,6 +8,7 @@ import { CrashRecorder } from "./engine-record.ts";
 import { ClipSim } from "./engine-replay.ts";
 import { settleStep, stepWorld } from "./world-step.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * Figures run down, through the recorder and a clip's replay: slot 0 stands 400 m off (a car the clip leaves out), slots 1 and 2
@@ -66,15 +66,15 @@ describe("given a head-on crash of two cars with a third car 400 m off, and the 
   let firstStep: number;
   beforeAll(() => {
     run = record(STRIKES, true);
-    assert.ok(run.clip, "the head-on made no clip");
+    must(run.clip, "the head-on made no clip");
     clip = run.clip;
     firstStep = Math.round(clip.t0 / H);
   });
 
   it("when the clip is filed, then it carries the carried cars' two strikes in step order and leaves out the third car's", () => {
-    assert.equal(clip.strikes.length, 2, "strikes in the clip");
-    assert.equal(clip.cars.length, PAIR.length, "the clip's car count");
-    for (const [i, slot] of PAIR.entries()) assert.equal(clip.cars[i]!.slot, slot, `clip car ${i}`);
+    expect(clip.strikes.length, "strikes in the clip").toBe(2);
+    expect(clip.cars.length, "the clip's car count").toBe(PAIR.length);
+    for (const [i, slot] of PAIR.entries()) expect(clip.cars[i]!.slot, `clip car ${i}`).toBe(slot);
   });
 
   const kept = [
@@ -85,8 +85,8 @@ describe("given a head-on crash of two cars with a third car 400 m off, and the 
     it(testCase.it, () => {
       const got = clip.strikes[testCase.at]!;
       const want = figure(STRIKES[testCase.source]!.guard, testCase.expectedCar, STRIKES[testCase.source]!.x);
-      assert.equal(got.step, STRIKES[testCase.source]!.step - firstStep, "step");
-      for (const key of FIGURE_KEYS) assert.equal(got.s[key], want[key], key);
+      expect(got.step, "step").toBe(STRIKES[testCase.source]!.step - firstStep);
+      for (const key of FIGURE_KEYS) expect(got.s[key], key).toBe(want[key]);
     });
   }
 
@@ -99,33 +99,33 @@ describe("given a head-on crash of two cars with a third car 400 m off, and the 
       while (!sim.done) {
         sim.advanceTo(sim.time + 1e-6);
         for (const s of sim.takeStrikes()) inPass.push({ step: sim.step - 1, guard: s.guard, car: s.car });
-        assert.equal(sim.takeStrikes().length, 0, "a second take in the same step is empty");
+        expect(sim.takeStrikes().length, "a second take in the same step is empty").toBe(0);
       }
       handed.push(inPass);
     }
     for (const pass of handed) {
-      assert.equal(pass.length, 2, "strikes handed in a pass");
+      expect(pass.length, "strikes handed in a pass").toBe(2);
       for (const [k, x] of clip.strikes.entries()) {
-        assert.equal(pass[k]!.step, x.step, `strike ${k} step`);
-        assert.equal(pass[k]!.guard, x.s.guard, `strike ${k} guard`);
-        assert.equal(pass[k]!.car, clip.cars[x.s.car]!.slot, `strike ${k} car`);
+        expect(pass[k]!.step, `strike ${k} step`).toBe(x.step);
+        expect(pass[k]!.guard, `strike ${k} guard`).toBe(x.s.guard);
+        expect(pass[k]!.car, `strike ${k} car`).toBe(clip.cars[x.s.car]!.slot);
       }
     }
   });
 
   it("when the recorder is told of strikes and a race resets, then the next race's clip carries none of them", () => {
     const again = record([], true, run.rec);
-    assert.ok(again.clip, "the head-on made no clip");
-    assert.equal(again.clip.strikes.length, 0, "strikes in a clip of a race told of none");
+    must(again.clip, "the head-on made no clip");
+    expect(again.clip.strikes.length, "strikes in a clip of a race told of none").toBe(0);
   });
 });
 
 describe("given three cars that never meet, and the recorder told of a figure run down", () => {
   it("when the race ends, then the strike made no clip, while the same strikes beside a crash ride in one", () => {
     const quiet = record(STRIKES, false);
-    assert.equal(quiet.clips, 0, "clips of a strike alone");
+    expect(quiet.clips, "clips of a strike alone").toBe(0);
     const crash = record(STRIKES, true);
-    assert.equal(crash.clips, 1, "clips of the crash");
-    assert.equal(crash.clip!.strikes.length, 2, "strikes riding in it");
+    expect(crash.clips, "clips of the crash").toBe(1);
+    expect(crash.clip!.strikes.length, "strikes riding in it").toBe(2);
   });
 });

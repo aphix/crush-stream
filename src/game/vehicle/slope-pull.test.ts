@@ -1,5 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import type { DeformableCar } from "./car.ts";
 import { G } from "./car-air-body.ts";
 import { energyOf } from "./energy.test-util.ts";
@@ -36,7 +35,7 @@ describe("given a car coasting along a 10° wedge's face on its tyre springs", (
       stepSlices(car, COAST_S, RATE_HZ);
       const gain = car.velocity.x - testCase.startSpeedX;
       const expected = -PULL * COAST_S;
-      assert.ok(Math.abs(gain - expected) <= GAIN_TOLERANCE * Math.abs(expected), `horizontal speed changed by ${gain.toFixed(3)} m/s, gravity along the face gives ${expected.toFixed(3)}`);
+      expect(Math.abs(gain - expected), `horizontal speed changed by ${gain.toFixed(3)} m/s, gravity along the face gives ${expected.toFixed(3)}`).toBeLessThanOrEqual(GAIN_TOLERANCE * Math.abs(expected));
     });
   }
 });
@@ -92,7 +91,7 @@ describe("given a car coasting along a steep wedge face on its tyre springs", ()
       stepSlices(car, COAST_S, RATE_HZ);
       const gain = car.velocity.x - c.startSpeedX;
       const expected = -G * Math.sin(c.deg * RAD) * Math.cos(c.deg * RAD) * COAST_S;
-      assert.ok(Math.abs(gain - expected) <= STEEP_PULL_TOLERANCE * Math.abs(expected), `horizontal speed changed by ${gain.toFixed(3)} m/s, gravity along the face gives ${expected.toFixed(3)}`);
+      expect(Math.abs(gain - expected), `horizontal speed changed by ${gain.toFixed(3)} m/s, gravity along the face gives ${expected.toFixed(3)}`).toBeLessThanOrEqual(STEEP_PULL_TOLERANCE * Math.abs(expected));
     });
   }
 });
@@ -112,7 +111,7 @@ describe("given a car coasting along a steep wedge face on springs so stiff that
       const before = energyOf(car);
       stepSlices(car, ENERGY_WINDOW_S, RATE_HZ);
       const gain = energyOf(car) - before;
-      assert.ok(gain <= ENERGY_ROUNDING, `the car gained ${gain.toFixed(3)} J/kg of the ${before.toFixed(1)} it had`);
+      expect(gain, `the car gained ${gain.toFixed(3)} J/kg of the ${before.toFixed(1)} it had`).toBeLessThanOrEqual(ENERGY_ROUNDING);
     });
   }
 });
@@ -170,7 +169,7 @@ describe("given a car coasting from flat road onto a wedge face, on springs so s
     it(`when a ${c.cls} coasts onto the ${c.deg}° face at ${c.speed} m/s, then it never holds more energy than it came with`, (t) => {
       const { gain, start, at } = mountGain(c);
       t.annotate(`${c.cls} ${c.deg}° at ${c.speed} m/s: ${gain >= 0 ? "+" : ""}${gain.toFixed(2)} J/kg of the ${start.toFixed(1)} it came with, ${at.toFixed(1)} m past the foot`);
-      assert.ok(gain <= MOUNT_GAIN_ROUNDING, `the car held ${gain.toFixed(2)} J/kg more than the ${start.toFixed(1)} it came with, ${at.toFixed(1)} m past the foot`);
+      expect(gain, `the car held ${gain.toFixed(2)} J/kg more than the ${start.toFixed(1)} it came with, ${at.toFixed(1)} m past the foot`).toBeLessThanOrEqual(MOUNT_GAIN_ROUNDING);
     });
   }
 });

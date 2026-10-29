@@ -1,8 +1,7 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { aroundCentre, parseTiltSettings, TILT, tiltSteer, wheelAngle } from "./tilt-steer.ts";
 
-const near = (actual: number, expected: number, message: string) => assert.ok(Math.abs(actual - expected) < 1e-6, `${message}: ${actual} vs ${expected}`);
+const near = (actual: number, expected: number, message: string) => expect(Math.abs(actual - expected), `${message}: ${actual} vs ${expected}`).toBeLessThan(1e-6);
 
 describe("given the phone's orientation angles", () => {
   // Each attitude is a 20 degree clockwise turn of the wheel (the screen's right side down) in a different screen rotation,
@@ -31,9 +30,9 @@ describe("given the phone's orientation angles", () => {
 
 describe("given a calibrated centre", () => {
   it("when the angle is measured from a centre, then it is the difference wrapped to half a turn either way", () => {
-    assert.equal(aroundCentre(30, 10), 20);
-    assert.equal(aroundCentre(-170, 170), 20);
-    assert.equal(aroundCentre(170, -170), -20);
+    expect(aroundCentre(30, 10)).toBe(20);
+    expect(aroundCentre(-170, 170)).toBe(20);
+    expect(aroundCentre(170, -170)).toBe(-20);
   });
 });
 
@@ -41,8 +40,8 @@ describe("given the wheel angle and the tilt settings", () => {
   const settings = { fullLockDegrees: 25, deadZoneDegrees: 5 };
 
   it("when the angle is inside the dead zone, then it steers nothing, either way", () => {
-    assert.equal(tiltSteer(4.9, settings), 0);
-    assert.equal(tiltSteer(-4.9, settings), 0);
+    expect(tiltSteer(4.9, settings)).toBe(0);
+    expect(tiltSteer(-4.9, settings)).toBe(0);
   });
 
   it("when the angle is halfway between the dead zone and full lock, then it steers half, with the angle's sign", () => {
@@ -51,9 +50,9 @@ describe("given the wheel angle and the tilt settings", () => {
   });
 
   it("when the angle is at or past full lock, then it holds at one", () => {
-    assert.equal(tiltSteer(25, settings), 1);
-    assert.equal(tiltSteer(80, settings), 1);
-    assert.equal(tiltSteer(-80, settings), -1);
+    expect(tiltSteer(25, settings)).toBe(1);
+    expect(tiltSteer(80, settings)).toBe(1);
+    expect(tiltSteer(-80, settings)).toBe(-1);
   });
 });
 
@@ -61,25 +60,27 @@ describe("given the stored tilt settings", () => {
   it("when nothing is stored, then the defaults apply", () => {
     for (const [fullLock, deadZone] of [["", ""], ["nope", "NaN"]]) {
       const settings = parseTiltSettings(fullLock, deadZone);
-      assert.equal(settings.fullLockDegrees, TILT.fullLockDegrees.default);
-      assert.equal(settings.deadZoneDegrees, TILT.deadZoneDegrees.default);
+      expect(settings.fullLockDegrees).toBe(TILT.fullLockDegrees.default);
+      expect(settings.deadZoneDegrees).toBe(TILT.deadZoneDegrees.default);
     }
   });
 
   it("when a value is out of range, then it clamps to the nearest bound", () => {
     const high = parseTiltSettings("500", "-3");
-    assert.equal(high.fullLockDegrees, TILT.fullLockDegrees.max);
-    assert.equal(high.deadZoneDegrees, TILT.deadZoneDegrees.min);
+    expect(high.fullLockDegrees).toBe(TILT.fullLockDegrees.max);
+    expect(high.deadZoneDegrees).toBe(TILT.deadZoneDegrees.min);
     const low = parseTiltSettings("1", "99");
-    assert.equal(low.fullLockDegrees, TILT.fullLockDegrees.min);
-    assert.equal(low.deadZoneDegrees, TILT.deadZoneDegrees.max);
+    expect(low.fullLockDegrees).toBe(TILT.fullLockDegrees.min);
+    expect(low.deadZoneDegrees).toBe(TILT.deadZoneDegrees.max);
   });
 
   it("when a value is in range, then it is kept", () => {
-    assert.deepEqual(parseTiltSettings("30", "3.5"), { fullLockDegrees: 30, deadZoneDegrees: 3.5 });
+    const parsed = parseTiltSettings("30", "3.5");
+    expect(parsed.fullLockDegrees, "fullLockDegrees").toBe(30);
+    expect(parsed.deadZoneDegrees, "deadZoneDegrees").toBe(3.5);
   });
 
   it("when the widest dead zone meets the narrowest full lock, then full lock is still past the dead zone", () => {
-    assert.ok(TILT.fullLockDegrees.min > TILT.deadZoneDegrees.max);
+    expect(TILT.fullLockDegrees.min).toBeGreaterThan(TILT.deadZoneDegrees.max);
   });
 });

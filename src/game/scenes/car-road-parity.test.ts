@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -325,7 +324,7 @@ describe("given a flat strip of ground 0.894 m high over four car lengths, and t
     const [first] = road();
     const gap = skinGap(first!, flat);
     t.annotate(`skin vs layer ${gap.toFixed(3)} m`);
-    assert.ok(gap <= 0.2, `skin ${gap.toFixed(3)} m off the pressed height`);
+    expect(gap, `skin ${gap.toFixed(3)} m off the pressed height`).toBeLessThanOrEqual(0.2);
   });
 
   const stripRuns = [
@@ -352,7 +351,7 @@ describe("given a flat strip of ground 0.894 m high over four car lengths, and t
       if (Math.abs(run.yMax - H) > 0.05) wrong.push(`rise ${run.yMax.toFixed(2)} m`);
       if (run.headingMax > 1) wrong.push(`heading turn ${run.headingMax.toFixed(2)} deg`);
       if (run.crashed) wrong.push("crashed");
-      assert.deepEqual(wrong, []);
+      expect(wrong).toHaveLength(0);
     });
   }
 
@@ -364,7 +363,7 @@ describe("given a flat strip of ground 0.894 m high over four car lengths, and t
   for (const v of [8, 12, 20, 28]) {
     todoRow(`when a sedan drives onto each at ${v} m/s, then its speed is within 5 %, it rises within 0.05 m, turns within 1 deg, drives over the same wheel sequence and never crashes`, true, (t) => {
       const real: DriveSetup = { x: 0, z: -14, v, ground: strip, ref: strip, held: [], seconds: 7, stopZ: END + 6 };
-      assert.deepEqual(compare(real, road(), { speed: 0.05, y: 0.05, heading: 1 }, t), []);
+      expect(compare(real, road(), { speed: 0.05, y: 0.05, heading: 1 }, t)).toHaveLength(0);
     });
   }
 });
@@ -380,7 +379,7 @@ describe("given the fleet's jump wedge, and a car pressed into its profile and h
   it("when the drawn top of the pressed car is read against the wedge's, then the skin follows the masses within the skin's 0.2 m", (t) => {
     const gap = skinGap(wedge()[0]!, layer);
     t.annotate(`skin vs wedge ${gap.toFixed(3)} m`);
-    assert.ok(gap <= 0.2, `skin ${gap.toFixed(3)} m off the wedge`);
+    expect(gap, `skin ${gap.toFixed(3)} m off the wedge`).toBeLessThanOrEqual(0.2);
   });
 
   // todo -> after the plan: fit the held car's cage top to the layer in the rig. The pressed held car's cage top is not a slab (`shapeCar`
@@ -390,7 +389,7 @@ describe("given the fleet's jump wedge, and a car pressed into its profile and h
     todoRow(`when a sedan drives up each at ${v} m/s, then it rises within 0.1 m, stays in the air within 0.1 s, lands within 0.5 m, turns within ${HEADING} deg and touches down on the same wheels`, true, (t) => {
       // Past the landing: a flight is recorded when it ends, and the 12 m/s jump comes down about 10 m beyond the high end.
       const real: DriveSetup = { x: 0, z: -16, v, ground: ramps, collide: (c, h) => collideOn(ramps)(c, 0, h), ref: ramps, held: [], seconds: 6, stopZ: 30 };
-      assert.deepEqual(compare(real, wedge(), { y: 0.1, air: 0.1, land: 0.5, heading: HEADING }, t), []);
+      expect(compare(real, wedge(), { y: 0.1, air: 0.1, land: 0.5, heading: HEADING }, t)).toHaveLength(0);
     });
   }
 });
@@ -414,7 +413,7 @@ describe("given the corkscrew channel, and cars pressed into its floor along its
   for (const v of [6, 14, 22, 27]) {
     todoRow(`when a driverless sedan is launched at ${v} m/s 6 m short of each, then it rises within 0.1 m, stays in the air within 0.1 s, lands within 0.5 m, turns within ${HEADING} deg and touches down on the same wheels`, true, (t) => {
       const real: DriveSetup = { x: 0, z: CORKSCREW.mouthZ - 6, v, ground: cork, collide: (c) => cork.contact(c), ref: cork, held: [], seconds: 12, coast: true, stopStill: 90 };
-      assert.deepEqual(compare(real, floor(), { y: 0.1, air: 0.1, land: 0.5, heading: HEADING }, t), []);
+      expect(compare(real, floor(), { y: 0.1, air: 0.1, land: 0.5, heading: HEADING }, t)).toHaveLength(0);
     });
   }
 });

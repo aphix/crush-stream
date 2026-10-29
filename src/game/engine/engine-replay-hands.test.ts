@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { makeWorld } from "../world/race-world.test-util.ts";
 import { blankPoint, blankProjection, Track } from "../world/track.ts";
@@ -39,7 +38,7 @@ describe("given a driven oval field with two racers put head-on 4 s into the rac
             // The opening pile-up's clips go, so the staged crash's ranks.
             w.race.recorder.ledger.clear();
             for (let i = 0; i < w.race.racers.length && headOn.length < 2; i++) if (!w.cars[i]!.crashed) headOn.push(i);
-            assert.equal(headOn.length, 2, `seed ${seed}: two racers unwrecked at ${STAGE_S} s`);
+            expect(headOn.length, `seed ${seed}: two racers unwrecked at ${STAGE_S} s`).toBe(2);
             const c = w.cars[headOn[0]!]!.group.position;
             const s = track.project(c.x, c.z, -1, proj).s;
             for (const [k, slot] of headOn.entries()) {
@@ -50,18 +49,22 @@ describe("given a driven oval field with two racers put head-on 4 s into the rac
           done: () => headOn.length > 0 && w.race.recorder.ledger.kept.length > 0,
           maxFrames: (STAGE_S + KEEP_S) * 60,
         });
-        assert.ok(recs.length > 0, `seed ${seed}: no clip kept in the ${KEEP_S} s after the staged head-on`);
+        expect(recs.length, `seed ${seed}: no clip kept in the ${KEEP_S} s after the staged head-on`).toBeGreaterThan(0);
         for (const rec of recs) {
           const { clip } = rec;
           const n = clip.cars.length;
           const steer = (step: number, j: number): number => (clip.inputs[(step * n + j) * INPUT_BYTES + 1]! << 24) >> 24;
           let moving = 0;
           for (let j = 0; j < n; j++) if (steer(0, j) !== 0 && steer(0, j) !== steer(LOOK, j)) moving++;
-          assert.ok(moving > 0, `seed ${seed}: no wheel is moving in the clip's first ${LOOK} steps (${n} cars)`);
+          expect(moving, `seed ${seed}: no wheel is moving in the clip's first ${LOOK} steps (${n} cars)`).toBeGreaterThan(0);
           const a = agreement(rec, () => w.race.resetProps());
           t.annotate(`${n} clip cars, ${moving} wheels moving at its start, impact at ${clip.firstImpact.toFixed(2)} s: ${a.steps} steps, worst pose ${a.pose.max} m, velocity ${a.vel.max} m/s`);
-          assert.ok(a.steps >= 100, `${a.steps} steps compared`);
-          assert.deepEqual({ pose: a.pose.max, vel: a.vel.max, crush: a.crush.max, wreck: a.wreckMismatch }, { pose: 0, vel: 0, crush: 0, wreck: 0 }, `seed ${seed}: a car strays from the live sim (m, m/s, m)`);
+          expect(a.steps, `${a.steps} steps compared`).toBeGreaterThanOrEqual(100);
+          const strays = `seed ${seed}: a car strays from the live sim (m, m/s, m)`;
+          expect(a.pose.max, `${strays} pose`).toBe(0);
+          expect(a.vel.max, `${strays} vel`).toBe(0);
+          expect(a.crush.max, `${strays} crush`).toBe(0);
+          expect(a.wreckMismatch, `${strays} wreck`).toBe(0);
         }
       } finally {
         w.race.exit();

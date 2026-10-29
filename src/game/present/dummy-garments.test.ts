@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { BODY_VERTICES, bodyIndex } from "./dummy-bodies.ts";
 import { restFits } from "./dummy-fit.ts";
 import { armOf, casualWear, fitted, hangAttribute, hangOffsets, legOf, torsoOf, type Take } from "./dummy-garments.ts";
@@ -109,8 +108,8 @@ describe("given a garment ring fitted flush to the man's body", () => {
       const polygon = corners(shell, shell.rings[0]!);
       const points = crossings(man, taken, testCase.y);
       const outside = points.filter(([x, z]) => !inside(polygon, x, z));
-      assert.ok(points.length > 30, `${points.length} section points`);
-      assert.equal(outside.length, 0, `${outside.length} section points poke out, the first at ${outside[0]?.map((v) => v.toFixed(4)).join(", ")}`);
+      expect(points.length, `${points.length} section points`).toBeGreaterThan(30);
+      expect(outside.length, `${outside.length} section points poke out, the first at ${outside[0]?.map((v) => v.toFixed(4)).join(", ")}`).toBe(0);
     });
   }
 });
@@ -131,8 +130,8 @@ describe("given the casual man's clothes (belt, tee hem, sleeve hems, cuffs, jea
         }
       }
     }
-    assert.ok(checked > 500, `${checked} body points checked`);
-    assert.equal(poked, "", `the body pokes through: ${poked}`);
+    expect(checked, `${checked} body points checked`).toBeGreaterThan(500);
+    expect(poked, `the body pokes through: ${poked}`).toBe("");
   });
 
   it("when the body inside each garment is read, then it rides what that garment rides at its height (its bone alone, or a shoe's own shin-to-foot share over the ankle), so no pose can pull it through", () => {
@@ -150,8 +149,8 @@ describe("given the casual man's clothes (belt, tee hem, sleeve hems, cuffs, jea
         if (!ridesWith(i, y, shell, rings) && loose === "") loose = `vertex ${i} at (${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)}) rides ${bones.getX(i)}/${bones.getY(i)} at ${bones.getZ(i).toFixed(2)}, its garment bone ${shell.bone}${shell.shin === undefined ? "" : ` from shin ${shell.shin}`}`;
       }
     }
-    assert.ok(checked > 200, `${checked} body vertices inside garments`);
-    assert.equal(loose, "", `a garment over a joint: ${loose}`);
+    expect(checked, `${checked} body vertices inside garments`).toBeGreaterThan(200);
+    expect(loose, `a garment over a joint: ${loose}`).toBe("");
   });
 });
 
@@ -171,8 +170,8 @@ describe("given the casual man's tee and jeans hanging off his body", () => {
         narrowest = Math.min(narrowest, width);
         if (width - narrowest > regrowth) [regrowth, worst] = [width - narrowest, `${(width - narrowest).toFixed(4)} m wider at y ${y.toFixed(2)} than above it`];
       }
-      assert.ok(narrowest > 0.03 && narrowest < Infinity, `the section was read: narrowest reach ${narrowest.toFixed(3)} m`);
-      assert.ok(regrowth <= REGROWTH, `it widens again: ${worst}`);
+      expect(narrowest > 0.03 && narrowest < Infinity, `the section was read: narrowest reach ${narrowest.toFixed(3)} m`).toBeTruthy();
+      expect(regrowth, `it widens again: ${worst}`).toBeLessThanOrEqual(REGROWTH);
     });
   }
 });
@@ -195,9 +194,9 @@ describe("given the casual man's jeans falling straight and his long sleeves nar
         return Math.max(...xs) - Math.min(...xs);
       };
       const [top, bottom] = [width(testCase.top), width(testCase.bottom)];
-      assert.ok(top > 0.05, `the top was read: ${top.toFixed(3)} m`);
+      expect(top, `the top was read: ${top.toFixed(3)} m`).toBeGreaterThan(0.05);
       const [least, most] = testCase.share;
-      assert.ok(bottom >= least * top && bottom <= most * top, `${bottom.toFixed(3)} m across above the hem against ${top.toFixed(3)} m at the top`);
+      expect(bottom >= least * top && bottom <= most * top, `${bottom.toFixed(3)} m across above the hem against ${top.toFixed(3)} m at the top`).toBeTruthy();
     });
   }
 });
@@ -213,9 +212,9 @@ describe("given the shader's hang, one attribute for the man's and the portly ma
       if (own.some((v, k) => Math.abs(packed[i * 4 + k]! - v) > 1e-7) && wrong === "") wrong = `vertex ${i} packs ${Array.from(packed.subarray(i * 4, i * 4 + 4)).join(", ")}`;
       if (Math.abs(own[0]! - own[2]!) + Math.abs(own[1]! - own[3]!) > 0.002) differs++;
     }
-    assert.equal(wrong, "", `a body vertex packs another push: ${wrong}`);
-    assert.ok(differs > 100, `only ${differs} body vertices push differently on the two builds`);
-    assert.ok(packed.subarray(BODY_VERTICES * 4).every((v) => v === 0), "the wear does not hang");
+    expect(wrong, `a body vertex packs another push: ${wrong}`).toBe("");
+    expect(differs, `only ${differs} body vertices push differently on the two builds`).toBeGreaterThan(100);
+    expect(packed.subarray(BODY_VERTICES * 4).every((v) => v === 0), "the wear does not hang").toBeTruthy();
   });
 });
 
@@ -225,21 +224,21 @@ describe("given the casual man's sneakers", () => {
   const caps = shells.filter((shell) => shell.print?.cell === PRINT_CELL.TOE_CAP);
 
   it("when each sneaker is read, then its upper is all canvas, its laces a print down the middle of the instep and its toe cap a print over the toe that leaves the sides at the ball canvas", () => {
-    assert.equal(sneakers.length, 2, "a sneaker on each foot");
-    assert.equal(caps.length, 2, "a toe cap on each foot");
+    expect(sneakers.length, "a sneaker on each foot").toBe(2);
+    expect(caps.length, "a toe cap on each foot").toBe(2);
     for (const [s, shell] of sneakers.entries()) {
       const soleTop = Math.max(...shell.rings.filter((ring) => ring[4] === ROLE.SOLE).map((ring) => ring[0]));
-      assert.ok(shell.rings.every((ring) => ring[0] <= soleTop || ring[4] === ROLE.SHOE), "no white ring above the sole");
+      expect(shell.rings.every((ring) => ring[0] <= soleTop || ring[4] === ROLE.SHOE), "no white ring above the sole").toBeTruthy();
       const laces = shell.print!;
       const instep = shell.rings.filter((ring) => Math.abs(ring[0] - laces.centre[1]) <= laces.size[1] / 2).map((ring) => corners(shell, ring).reduce((front, corner) => (corner[1] > front[1] ? corner : front))[0]);
       const middle = instep.reduce((sum, x) => sum + x, 0) / instep.length;
-      assert.ok(Math.abs(laces.centre[0] - middle) < LACES_OFF_MIDDLE, `the laces' middle is ${(laces.centre[0] - middle).toFixed(4)} m off the instep's (${instep.length} rings)`);
+      expect(Math.abs(laces.centre[0] - middle), `the laces' middle is ${(laces.centre[0] - middle).toFixed(4)} m off the instep's (${instep.length} rings)`).toBeLessThan(LACES_OFF_MIDDLE);
       const cap = caps[s]!.print!;
       const ring = shell.rings.find((step) => step[0] < cap.centre[1] + cap.size[1] / 2 && step[4] === ROLE.SHOE)!;
       const front = corners(shell, ring).filter(([, z]) => z > ring[3]).map(([x]) => x);
       const [left, right] = [Math.min(...front), Math.max(...front)];
-      assert.ok(Math.abs(cap.centre[0] - (left + right) / 2) < TOE_OFF_MIDDLE, `the cap's middle is ${(cap.centre[0] - (left + right) / 2).toFixed(4)} m off the toe's`);
-      assert.ok(cap.size[0] < right - left, `the cap (${cap.size[0]} m) is narrower than the toe's front half (${(right - left).toFixed(3)} m), so the sides stay canvas`);
+      expect(Math.abs(cap.centre[0] - (left + right) / 2), `the cap's middle is ${(cap.centre[0] - (left + right) / 2).toFixed(4)} m off the toe's`).toBeLessThan(TOE_OFF_MIDDLE);
+      expect(cap.size[0], `the cap (${cap.size[0]} m) is narrower than the toe's front half (${(right - left).toFixed(3)} m), so the sides stay canvas`).toBeLessThan(right - left);
     }
   });
 });

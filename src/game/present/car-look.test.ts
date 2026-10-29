@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { CAR_SPRAY, NO_CAR_PICK, sprayFace, sprayPlace, SPRAY_FACE } from "../match/look-data.ts";
 import { REST_POSITION } from "../vehicle/car-detail-map.ts";
@@ -10,6 +9,7 @@ import { paint } from "../vehicle/test-support.ts";
 import { sprayCovers, wearCarLook } from "./car-look.ts";
 import { SprayBitmap } from "./spray.ts";
 import { CAR_SPRAY_DEPTH_BAND, type RestTriangles } from "./spray-depth.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const INK = 4;
 /** Samples of a triangle (weights of its corners) inside it on a grid of sixths: a corner or an edge is shared with the next surface. */
@@ -116,8 +116,8 @@ describe("given a police car sprayed all over", () => {
   it("when it is whole, then no fragment of its paint loses its livery, so it draws as it did", () => {
     const torn = tornNow();
     const refused = police.fragments.filter((f) => !drawsPaint(f, police.uniforms) && drawsPaint(f, {}));
-    assert.equal(refused.length, 0, `fragments without their livery: ${refused.length}: ${refused.slice(0, 6).map((f) => f.p.toArray().map((v) => v.toFixed(3))).join("; ")}`);
-    assert.deepEqual(torn, [0, 0, 0, 0], "torn flags of a whole car");
+    expect(refused.length, `fragments without their livery: ${refused.length}: ${refused.slice(0, 6).map((f) => f.p.toArray().map((v) => v.toFixed(3))).join("; ")}`).toBe(0);
+    expect(firstMismatch(torn, [0, 0, 0, 0]), "torn flags of a whole car").toBeUndefined();
   });
 
   it("when its left door is torn off, then the frame it, its glass and its card covered (jambs, sill, the skin under the door) reads no livery, where the box projection alone smeared it over them", () => {
@@ -125,10 +125,10 @@ describe("given a police car sprayed all over", () => {
     const torn = tornNow();
     const frame = police.fragments.filter((f) => underLeftDoor(f));
     const drawn = frame.filter((f) => drawsPaint(f, police.uniforms));
-    assert.ok(frame.some((f) => f.n.y > 0.7), "the sill's top, under the glass and the card, is asked");
-    assert.ok(frame.filter((f) => drawsPaint(f, {})).length > 30, `control: the box projection alone draws livery on the frame's ${frame.length} fragments`);
-    assert.equal(drawn.length, 0, `frame fragments drawing livery of ${frame.length}: ${drawn.map((f) => f.p.toArray().map((v) => v.toFixed(3))).join("; ")}`);
-    assert.deepEqual(torn, [0, 0, 1, 0], "torn flags with the left door off");
+    expect(frame.some((f) => f.n.y > 0.7), "the sill's top, under the glass and the card, is asked").toBeTruthy();
+    expect(frame.filter((f) => drawsPaint(f, {})).length, `control: the box projection alone draws livery on the frame's ${frame.length} fragments`).toBeGreaterThan(30);
+    expect(drawn.length, `frame fragments drawing livery of ${frame.length}: ${drawn.map((f) => f.p.toArray().map((v) => v.toFixed(3))).join("; ")}`).toBe(0);
+    expect(firstMismatch(torn, [0, 0, 1, 0]), "torn flags with the left door off").toBeUndefined();
   });
 
   it("when its left door is torn off, then the skin round the opening that a ray down its face's axis meets first keeps its livery", () => {
@@ -136,8 +136,8 @@ describe("given a police car sprayed all over", () => {
     const near = police.doorBox.clone().expandByScalar(BESIDE_DOOR);
     const outer = police.fragments.filter((f) => near.containsPoint(f.p) && seenDownAxis(f));
     const refused = outer.filter((f) => !drawsPaint(f, police.uniforms));
-    assert.ok(outer.length > 100, `skin fragments asked: ${outer.length}`);
-    assert.equal(refused.length, 0, `skin round the opening without its livery: ${refused.length} of ${outer.length}: ${refused.slice(0, 6).map((f) => f.p.toArray().map((v) => v.toFixed(3))).join("; ")}`);
+    expect(outer.length, `skin fragments asked: ${outer.length}`).toBeGreaterThan(100);
+    expect(refused.length, `skin round the opening without its livery: ${refused.length} of ${outer.length}: ${refused.slice(0, 6).map((f) => f.p.toArray().map((v) => v.toFixed(3))).join("; ")}`).toBe(0);
   });
 
   /** Whether the left door (skin, glass or card) at rest covers `f` along its face's axis, more than the band out, at it and `OUTLINE_CLEAR` round it. */

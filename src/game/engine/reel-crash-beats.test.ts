@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { setGround } from "../world/ground.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { Track } from "../world/track.ts";
@@ -62,17 +61,14 @@ describe("given highlight clips of a head-on that throws both drivers, and of a 
 
   it("when a driver is thrown inside the crash shots, then the ride-along follows him only from the crash cam's hand-back, and never before the clip's last impact", async () => {
     const rides = (await played).filter((p) => p.frames.some((f) => f.rig === "ride"));
-    assert.ok(rides.length >= 1, "a clip with a thrown driver to follow");
+    expect(rides.length, "a clip with a thrown driver to follow").toBeGreaterThanOrEqual(1);
     for (const { clip, frames } of rides) {
       const win = crashWindow(frames)!;
       const start = frames.find((f) => f.rig === "ride")!.wall;
-      assert.ok(start >= win.until - FRAME, `${clipTitle(clip)}: the ride began at ${start.toFixed(2)} s, the crash cam holds until ${win.until.toFixed(2)} s`);
+      expect(start, `${clipTitle(clip)}: the ride began at ${start.toFixed(2)} s, the crash cam holds until ${win.until.toFixed(2)} s`).toBeGreaterThanOrEqual(win.until - FRAME);
       const last = wallOf(frames, clip.hits[clip.hits.length - 1]!.t);
-      assert.ok(start >= last, `${clipTitle(clip)}: the ride began at ${start.toFixed(2)} s, before the last impact at ${last.toFixed(2)} s`);
-      assert.ok(
-        frames.every((f) => f.rig !== "crash" || f.wall < start),
-        `${clipTitle(clip)}: a crash shot after the ride began`,
-      );
+      expect(start, `${clipTitle(clip)}: the ride began at ${start.toFixed(2)} s, before the last impact at ${last.toFixed(2)} s`).toBeGreaterThanOrEqual(last);
+      expect(frames.every((f) => f.rig !== "crash" || f.wall < start), `${clipTitle(clip)}: a crash shot after the ride began`).toBeTruthy();
     }
   });
 
@@ -86,10 +82,10 @@ describe("given highlight clips of a head-on that throws both drivers, and of a 
         if (at < win.from || at >= win.until) continue;
         inside++;
         const f = frames.find((x) => x.wall >= at)!;
-        assert.equal(f.rig, "crash", `${clipTitle(clip)}: the impact at ${at.toFixed(2)} s (crash window ${win.from.toFixed(2)} to ${win.until.toFixed(2)} s) was on ${f.rig}`);
+        expect(f.rig, `${clipTitle(clip)}: the impact at ${at.toFixed(2)} s (crash window ${win.from.toFixed(2)} to ${win.until.toFixed(2)} s) was on ${f.rig}`).toBe("crash");
       }
     }
-    assert.ok(inside >= 1, "a clip with a later impact inside the crash cam's window");
+    expect(inside, "a clip with a later impact inside the crash cam's window").toBeGreaterThanOrEqual(1);
   });
 
   it("when the crash cam's window is open, then no frame of it falls to the chase shot while a cut has an eye on the hit", async () => {
@@ -97,11 +93,7 @@ describe("given highlight clips of a head-on that throws both drivers, and of a 
       const win = crashWindow(frames);
       if (!win) continue;
       const gaps = frames.filter((f) => f.wall >= win.from && f.wall < win.until && f.rig !== "crash");
-      assert.deepEqual(
-        gaps.map((f) => f.wall.toFixed(2)),
-        [],
-        `${clipTitle(clip)}: frames of the crash cam's window ${win.from.toFixed(2)} to ${win.until.toFixed(2)} s on another camera`,
-      );
+      expect(gaps.map((f) => f.wall.toFixed(2)), `${clipTitle(clip)}: frames of the crash cam's window ${win.from.toFixed(2)} to ${win.until.toFixed(2)} s on another camera`).toHaveLength(0);
     }
   });
 });
@@ -119,13 +111,13 @@ describe("given a car that hits the wall on the stunt course's kicker 9 m above 
     const w = raceOn("stunt", 3, 1);
     try {
       const rec = recordRace(w, track, [{ kind: "wall", at: KICKER * track.length, speed: 32, side: -1, cars: [1] }], 12);
-      assert.equal(rec.clips.length, 1, "the wall hit makes a clip");
+      expect(rec.clips.length, "the wall hit makes a clip").toBe(1);
       const hit = rec.clips[0]!.hits[0]!;
-      assert.ok(hit.y > 8, `the hit is ${hit.y.toFixed(1)} m up, not on the kicker's deck`);
+      expect(hit.y, `the hit is ${hit.y.toFixed(1)} m up, not on the kicker's deck`).toBeGreaterThan(8);
       const views = (await reelViews(w, rec.clips, "stunt kicker wall"))[0]!;
       const out = views.filter((v) => !v.seen).map((v) => `${v.title} ${v.kind} at ${v.at.toFixed(2)} s by ${v.rig}: ndc ${v.ndcX.toFixed(2)},${v.ndcY.toFixed(2)}${v.clear ? "" : " blocked"}, share ${v.share.toFixed(3)}`);
-      assert.ok(views.length >= 1, "no moment to see");
-      assert.deepEqual(out, [], "moments out of the frame");
+      expect(views.length, "no moment to see").toBeGreaterThanOrEqual(1);
+      expect(out, "moments out of the frame").toHaveLength(0);
     } finally {
       w.race.exit();
       setGround(null);
@@ -167,12 +159,12 @@ describe("given two points 40 m apart on the stunt course, the first on the lip 
         if (Math.abs(cam.camT - at) < FRAME / 2) onAtFoot = on;
         if (!cam.holding) back = cam.camT;
       }
-      assert.equal(onAtFoot, true, `the crash cam not on the camera at the foot's crash (wall ${(tl.impact + at).toFixed(2)} s, handed back at ${(tl.impact + back).toFixed(2)} s)`);
+      expect(onAtFoot, `the crash cam not on the camera at the foot's crash (wall ${(tl.impact + at).toFixed(2)} s, handed back at ${(tl.impact + back).toFixed(2)} s)`).toBe(true);
       let last = k;
       while (last < tl.sim.length - 1 && tl.sim[last]! < hits[2]!) last++;
       const lastBack = tl.phase.indexOf("aftermath", last) / TIMELINE_HZ;
       const early = lastBack - (tl.impact + back);
-      assert.ok(early >= 0 && early <= 0.5, `handed back at ${(tl.impact + back).toFixed(2)} wall s, the last slow-mo at ${lastBack.toFixed(2)} s`);
+      expect(early >= 0 && early <= 0.5, `handed back at ${(tl.impact + back).toFixed(2)} wall s, the last slow-mo at ${lastBack.toFixed(2)} s`).toBeTruthy();
     } finally {
       w.race.exit();
       setGround(null);

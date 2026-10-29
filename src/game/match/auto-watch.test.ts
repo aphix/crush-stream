@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { AutoWatch, WATCH, type Cand, type Wreck } from "./auto-watch.ts";
 
 /** A car parked far from every other (no contact, no battle: nothing happens to it), place id + 1. */
@@ -10,6 +9,14 @@ function car(id: number, over: Partial<Cand> = {}): Cand {
 /** Cars `a` and `b` head on, `gap` m apart on a line at z = 1000, each doing `v` m/s toward the other: contact in gap / 2v s at 2v closing. */
 function headOn(a: number, b: number, gap: number, v: number): [Cand, Cand] {
   return [car(a, { x: 0, z: 1000 + a, vx: v }), car(b, { x: gap, z: 1000 + a, vx: -v })];
+}
+
+/** A logged switch, field by field (a missing entry fails on `t`). */
+function expectSwitch(entry: AutoWatch["log"][number] | undefined, t: number, from: number, to: number, why: string) {
+  expect(entry?.t, "switch t").toBe(t);
+  expect(entry?.from, "switch from").toBe(from);
+  expect(entry?.to, "switch to").toBe(to);
+  expect(entry?.why, "switch why").toBe(why);
 }
 
 /** A car already held at `t`: Auto on car 0 from `t` with `cuts`. */
@@ -26,19 +33,20 @@ describe("given the Auto spectator view is following a car with nothing going on
     // 14 m apart at 7 m/s each: contact in 1 s (not under crashTtc), closing 14 m/s.
     const field = [car(0), ...headOn(1, 2, 14, 7)];
     const early = watching(0.1);
-    assert.equal(early.step(4, field, NONE, -1, true), 0, "3.9 s on the car: stays");
-    assert.equal(early.log.length, 0);
+    expect(early.step(4, field, NONE, -1, true), "3.9 s on the car: stays").toBe(0);
+    expect(early.log.length).toBe(0);
     const w = watching(0);
-    for (let t = 0; t < WATCH.floor; t += 0.25) assert.equal(w.step(t, field, NONE, -1, true), 0, `stays at ${t}`);
-    assert.equal(w.step(4, field, NONE, -1, true), 1, "held 4 s: switches");
-    assert.deepEqual(w.log, [{ t: 4, from: 0, to: 1, why: "contact" }]);
+    for (let t = 0; t < WATCH.floor; t += 0.25) expect(w.step(t, field, NONE, -1, true), `stays at ${t}`).toBe(0);
+    expect(w.step(4, field, NONE, -1, true), "held 4 s: switches").toBe(1);
+    expect(w.log, "switches logged").toHaveLength(1);
+    expectSwitch(w.log[0], 4, 0, 1, "contact");
   });
 
   it("when the camera is between cuts, then the idle car is kept, and the next camera cut moves the view to the car about to make contact (the imminent-crash exception aside)", () => {
     const field = [car(0), ...headOn(1, 2, 14, 7)];
     const w = watching(0, 0);
-    assert.equal(w.step(10, field, NONE, 0, false), 0);
-    assert.equal(w.step(10.25, field, NONE, 1, true), 1, "the next cut takes it");
+    expect(w.step(10, field, NONE, 0, false)).toBe(0);
+    expect(w.step(10.25, field, NONE, 1, true), "the next cut takes it").toBe(1);
   });
 
   it("when the view leaves the car because of a wreck, a police bust, a close battle or a sudden slowdown, then the logged reason names it: wreck, bust, battle or jolt", () => {
@@ -48,24 +56,24 @@ describe("given the Auto spectator view is following a car with nothing going on
       w.step(5, field, wrecks, -1, true);
       return w.log[0]?.why ?? "none";
     };
-    assert.equal(why([car(0), car(1)], [{ cars: 1 << 1, age: 0.5, score: 6 }]), "wreck");
-    assert.equal(why([car(0), car(1, { stopped: 3 })]), "bust");
+    expect(why([car(0), car(1)], [{ cars: 1 << 1, age: 0.5, score: 6 }])).toBe("wreck");
+    expect(why([car(0), car(1, { stopped: 3 })])).toBe("bust");
     // Places 2 and 3, 20 m apart, 0.3 s apart at the last gate.
-    assert.equal(why([car(0, { split: 0 }), car(1, { split: 5 }), car(2, { split: 5.3, x: 520 })]), "battle");
+    expect(why([car(0, { split: 0 }), car(1, { split: 5 }), car(2, { split: 5.3, x: 520 })])).toBe("battle");
     // A car that was doing 20 m/s and is now at 8: a hit or a hard brake.
     const w = watching(0);
     for (let t = 0; t < 2; t += 0.25) w.step(t, [car(0), car(1, { vx: 20 })], NONE, -1, true);
     for (let t = 2; t < 4; t += 0.25) w.step(t, [car(0), car(1, { vx: 20 })], NONE, -1, true);
-    assert.equal(w.step(4, [car(0), car(1, { vx: 8 })], NONE, -1, true), 1);
-    assert.equal(w.log[0]!.why, "jolt");
+    expect(w.step(4, [car(0), car(1, { vx: 8 })], NONE, -1, true)).toBe(1);
+    expect(w.log[0]!.why).toBe("jolt");
   });
 
   it("when a wreck has gone quiet, a lone 20 km/h tap happens, or a car is only airborne, then none is worth leaving the car for", () => {
     const w = watching(0);
     const field = [car(0), car(1, { air: true }), car(2)];
-    assert.equal(w.step(5, field, [{ cars: 1 << 2, age: 1.6, score: 20 }], -1, true), 0, "ledger cluster past QUIET_GAP");
-    assert.equal(w.step(6, field, [{ cars: 1 << 2, age: 0.1, score: 2.3 }], -1, true), 0, "a 20 km/h tap (score 2.3)");
-    assert.equal(w.step(7, field, NONE, -1, true), 0, "air alone");
+    expect(w.step(5, field, [{ cars: 1 << 2, age: 1.6, score: 20 }], -1, true), "ledger cluster past QUIET_GAP").toBe(0);
+    expect(w.step(6, field, [{ cars: 1 << 2, age: 0.1, score: 2.3 }], -1, true), "a 20 km/h tap (score 2.3)").toBe(0);
+    expect(w.step(7, field, NONE, -1, true), "air alone").toBe(0);
   });
 
   it("when the watched car is in a contact, or has just overtaken, then the view stays on it, and only leaves once the overtake is 3 s old", () => {
@@ -73,17 +81,17 @@ describe("given the Auto spectator view is following a car with nothing going on
     // Car 0 itself in a head-on with car 4, closing 12, 1.2 s out: interest well over idle.
     const [a, b] = headOn(0, 4, 14.4, 6);
     const w = watching(0);
-    assert.equal(w.step(5, [a, car(1), car(2), hot, b], NONE, -1, true), 0, "in a contact");
+    expect(w.step(5, [a, car(1), car(2), hot, b], NONE, -1, true), "in a contact").toBe(0);
     // Steps are 0.25 s apart: a car unseen for half a second starts its history over.
     const p = watching(0);
     const bust = car(1, { stopped: 3 });
     for (let t = 0; t < 5; t += 0.25) {
       const place = t < 2 ? 3 : 2;
       const got = p.step(t, [car(0, { place }), bust], NONE, -1, true);
-      if (t < 4.75) assert.equal(got, 0, `overtook at 2 s, still watched at ${t}`);
+      if (t < 4.75) expect(got, `overtook at 2 s, still watched at ${t}`).toBe(0);
     }
-    assert.equal(p.step(5, [car(0, { place: 2 }), bust], NONE, -1, true), 1, "3 s on: idle again, leaves");
-    assert.equal(p.log[0]!.why, "bust");
+    expect(p.step(5, [car(0, { place: 2 }), bust], NONE, -1, true), "3 s on: idle again, leaves").toBe(1);
+    expect(p.log[0]!.why).toBe("bust");
   });
 });
 
@@ -95,8 +103,8 @@ describe("given the Auto spectator view is following a car while other cars keep
       const field = [0, 1, 2, 3].map((i) => car(i, { stopped: i === w.current ? 0 : 3 }));
       w.step(t, field, NONE, -1, true);
     }
-    assert.ok(w.log.length >= 10, `${w.log.length} switches in 60 s`);
-    for (let k = 1; k < w.log.length; k++) assert.ok(w.log[k]!.t - w.log[k - 1]!.t >= WATCH.floor, `switch ${k} came ${w.log[k]!.t - w.log[k - 1]!.t} s after the one before`);
+    expect(w.log.length, `${w.log.length} switches in 60 s`).toBeGreaterThanOrEqual(10);
+    for (let k = 1; k < w.log.length; k++) expect(w.log[k]!.t - w.log[k - 1]!.t, `switch ${k} came ${w.log[k]!.t - w.log[k - 1]!.t} s after the one before`).toBeGreaterThanOrEqual(WATCH.floor);
   });
 
   it("when 400 s of constant switching pass, then the switch log keeps only the last 32 switches", () => {
@@ -105,8 +113,8 @@ describe("given the Auto spectator view is following a car while other cars keep
       const field = [0, 1].map((i) => car(i, { stopped: i === w.current ? 0 : 3 }));
       w.step(t, field, NONE, -1, true);
     }
-    assert.equal(w.log.length, 32);
-    assert.ok(w.log[31]!.t > 380);
+    expect(w.log.length).toBe(32);
+    expect(w.log[31]!.t).toBeGreaterThan(380);
   });
 });
 
@@ -115,33 +123,34 @@ describe("given the Auto spectator view in a field where some cars are no longer
     const w = watching(0);
     const field = [car(0), car(1, { racing: false, stopped: 4, air: true }), car(2, { racing: false, x: 14, z: 0, vx: -7 }), car(3, { racing: false, x: 0, z: 0, vx: 7 })];
     for (let t = 0; t < 60; t += 0.25) w.step(t, field, [{ cars: 1 << 1, age: 0, score: 20 }], 3 * t, true);
-    assert.equal(w.current, 0);
-    assert.equal(w.log.length, 0);
+    expect(w.current).toBe(0);
+    expect(w.log.length).toBe(0);
     // Rotation skips them too: the next car by place is the racing one after.
     const r = watching(0, 0);
     const f2 = [car(0), car(1, { racing: false }), car(2)];
     r.step(1, f2, NONE, 3, true);
-    assert.equal(r.step(5, f2, NONE, 3, true), 2);
+    expect(r.step(5, f2, NONE, 3, true)).toBe(2);
   });
 
   it("when the watched car finishes, then the view leaves it for the best racing car after 1 s, not 4 s, and without waiting for a camera cut", () => {
     const w = watching(0);
     const field = [car(0, { racing: false }), car(1), car(2, { stopped: 3 })];
-    assert.equal(w.step(0.75, field, NONE, 0, false), 0, "under the 1 s floor");
-    assert.equal(w.step(1, field, NONE, 0, false), 2);
-    assert.deepEqual(w.log, [{ t: 1, from: 0, to: 2, why: "invalid" }]);
+    expect(w.step(0.75, field, NONE, 0, false), "under the 1 s floor").toBe(0);
+    expect(w.step(1, field, NONE, 0, false)).toBe(2);
+    expect(w.log, "switches logged").toHaveLength(1);
+    expectSwitch(w.log[0], 1, 0, 2, "invalid");
   });
 
   it("when no car is racing, then the view stays where it is", () => {
     const w = watching(0);
-    assert.equal(w.step(10, [car(0, { racing: false }), car(1, { racing: false })], NONE, 0, true), 0);
+    expect(w.step(10, [car(0, { racing: false }), car(1, { racing: false })], NONE, 0, true)).toBe(0);
   });
 });
 
 describe("given the Auto spectator view has no car to follow yet", () => {
   it("when it first steps over a field of three cars, then it starts on the leader", () => {
     const w = new AutoWatch();
-    assert.equal(w.step(0, [car(0, { place: 3 }), car(1, { place: 1 }), car(2, { place: 2 })], NONE, -1, true), 1);
+    expect(w.step(0, [car(0, { place: 3 }), car(1, { place: 1 }), car(2, { place: 2 })], NONE, -1, true)).toBe(1);
   });
 });
 
@@ -150,43 +159,43 @@ describe("given the Auto spectator view is rotating between four plain cars", ()
 
   it("when the camera has shot the watched car 3 times, then the view moves to the next car by place, wrapping from last to the leader, but not after 2 shots, between cuts, or before 4 s", () => {
     const w = watching(0, 10);
-    assert.equal(w.step(6, field, NONE, 12, true), 0, "2 shots");
-    assert.equal(w.step(6, field, NONE, 13, false), 0, "3 shots but no cut now");
-    assert.equal(w.step(3.75, field, NONE, 13, true), 0, "held under 4 s");
-    assert.equal(w.step(6, field, NONE, 13, true), 1);
-    assert.deepEqual(w.log[0], { t: 6, from: 0, to: 1, why: "rotate" });
+    expect(w.step(6, field, NONE, 12, true), "2 shots").toBe(0);
+    expect(w.step(6, field, NONE, 13, false), "3 shots but no cut now").toBe(0);
+    expect(w.step(3.75, field, NONE, 13, true), "held under 4 s").toBe(0);
+    expect(w.step(6, field, NONE, 13, true)).toBe(1);
+    expectSwitch(w.log[0], 6, 0, 1, "rotate");
     // Shots count from the switch: the counter at the switch was 13.
-    assert.equal(w.step(12, field, NONE, 15, true), 1);
-    assert.equal(w.step(12.25, field, NONE, 16, true), 2);
+    expect(w.step(12, field, NONE, 15, true)).toBe(1);
+    expect(w.step(12.25, field, NONE, 16, true)).toBe(2);
     // Last place wraps to the leader.
     const last = new AutoWatch();
     last.follow(3, 0, 0);
-    assert.equal(last.step(9, field, NONE, 3, true), 0);
+    expect(last.step(9, field, NONE, 3, true)).toBe(0);
   });
 
   it("when the camera makes no cuts, then the view rotates on the clock, after 3 shots of 7 s (21 s)", () => {
     const w = watching(0);
-    assert.equal(w.step(20.75, field, NONE, -1, true), 0);
-    assert.equal(w.step(21, field, NONE, -1, true), 1);
-    assert.equal(w.log[0]!.why, "rotate");
+    expect(w.step(20.75, field, NONE, -1, true)).toBe(0);
+    expect(w.step(21, field, NONE, -1, true)).toBe(1);
+    expect(w.log[0]!.why).toBe("rotate");
   });
 
   it("when something is going on at another car (held beside a police car), then rotation picks it over the next car by place", () => {
     const w = watching(0, 0);
     const f = [car(0), car(1), car(2, { stopped: 1.2 }), car(3)];
-    assert.equal(w.step(6, f, NONE, 3, true), 2);
+    expect(w.step(6, f, NONE, 3, true)).toBe(2);
   });
 
   it("when the watched car is mid-crash, then rotation never moves away from it, but when it is in a plain contact, rotation moves to the other car of that contact", () => {
     const wreck = [{ cars: 1 << 0, age: 0.2, score: 8 }];
     const w = watching(0, 0);
-    for (let t = 0; t < 60; t += 0.25) assert.equal(w.step(t, field, wreck, Math.floor(t), true), 0, `at ${t}`);
+    for (let t = 0; t < 60; t += 0.25) expect(w.step(t, field, wreck, Math.floor(t), true), `at ${t}`).toBe(0);
     // A contact scores ~0.6: under `hot`.
     const [a, b] = headOn(0, 1, 14, 7);
     const c = watching(0, 0);
     // The best car to go to is the other half of the same contact.
-    assert.equal(c.step(6, [a, b, car(2), car(3)], NONE, 3, true), 1);
-    assert.equal(c.log[0]!.why, "rotate");
+    expect(c.step(6, [a, b, car(2), car(3)], NONE, 3, true)).toBe(1);
+    expect(c.log[0]!.why).toBe("rotate");
   });
 });
 
@@ -196,11 +205,11 @@ describe("given the Auto spectator view is following a car while two other cars,
 
   it("when the watched car has been held 2 s, then the view switches to the crash even between cuts and not before, and stays on it once there", () => {
     const w = watching(0, 0);
-    assert.equal(w.step(1.75, crash, NONE, 0, false), 0, "under the 2 s anti ping-pong floor");
-    assert.equal(w.step(2, crash, NONE, 0, false), 1);
-    assert.deepEqual(w.log[0]!.why, "crash");
+    expect(w.step(1.75, crash, NONE, 0, false), "under the 2 s anti ping-pong floor").toBe(0);
+    expect(w.step(2, crash, NONE, 0, false)).toBe(1);
+    expect(w.log[0]?.why, "why").toBe("crash");
     // Now in the crash itself: no further switch off it.
-    assert.equal(w.step(10, crash, NONE, 0, false), 1);
+    expect(w.step(10, crash, NONE, 0, false)).toBe(1);
   });
 
   it("when the pair closes at only 10 m/s, or the two cars miss each other, then the view does not leave between cuts", () => {
@@ -208,15 +217,15 @@ describe("given the Auto spectator view is following a car while two other cars,
     const miss = [car(0), car(1, { x: 0, z: 1000, vx: 10 }), car(2, { x: 16, z: 1010, vx: -10 })];
     for (const field of [tap, miss]) {
       const w = watching(0, 0);
-      for (let t = 0; t < 8; t += 0.25) assert.equal(w.step(t, field, NONE, 0, false), 0);
+      for (let t = 0; t < 8; t += 0.25) expect(w.step(t, field, NONE, 0, false)).toBe(0);
     }
   });
 
   it("when the watched car is itself in the crash, then the view is not left and no switch is logged", () => {
     const w = new AutoWatch();
     w.follow(1, 0, 0);
-    assert.equal(w.step(5, crash, NONE, 0, false), 1);
-    assert.equal(w.log.length, 0);
+    expect(w.step(5, crash, NONE, 0, false)).toBe(1);
+    expect(w.log.length).toBe(0);
   });
 });
 
@@ -235,7 +244,7 @@ describe("given the Auto spectator view run twice over the same pseudo-random 8-
       return JSON.stringify(w.log);
     };
     const a = run();
-    assert.ok(JSON.parse(a).length > 3, "the scenario switches");
-    assert.equal(run(), a);
+    expect(JSON.parse(a).length, "the scenario switches").toBeGreaterThan(3);
+    expect(run()).toBe(a);
   });
 });

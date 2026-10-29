@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_WORST_M, topGaps, topGapsOff, topParts } from "./drawn-body.test-util.ts";
 
 /**
@@ -45,7 +44,7 @@ for (const testCase of topCases) {
         if (cliffs.some((c) => c.part === part)) continue;
         wrong.push(...topGapsOff(part, g));
       }
-      assert.deepEqual(wrong, []);
+      expect(wrong).toHaveLength(0);
     });
     for (const cliff of cliffs) it.todo(`the surface's ${cliff.part} within the bars (measured ${cliff.measured}: ${cliff.cause})`);
   });

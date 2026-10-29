@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { CHEVRON, PREFABS } from "../world/catalog.ts";
 import { PREFAB, TRACK_ID } from "../world/constants.ts";
@@ -24,18 +23,18 @@ describe("given the chevron prefab", () => {
   const boardCentre = CHEVRON.top - CHEVRON.height / 2;
 
   it("when its parts are listed, then it is one part on the scene's plain material, so a course draws all its boards in one call", () => {
-    assert.equal(parts.length, 1, "parts");
-    assert.equal(parts[0]!.material, plain, "material");
-    assert.equal(parts[0]!.shared, false, "owns no shared material (the track art casts its shadow)");
+    expect(parts.length, "parts").toBe(1);
+    expect(parts[0]!.material, "material").toBe(plain);
+    expect(parts[0]!.shared, "owns no shared material (the track art casts its shadow)").toBe(false);
   });
 
   it("when its drawn extent is measured, then it stands on the ground inside its size box", () => {
     const box = new THREE.Box3().setFromBufferAttribute(position as THREE.BufferAttribute);
     const [width, height, depth] = PREFABS[PREFAB.chevron].size;
-    assert.ok(box.min.y >= 0 && box.max.y <= height + 1e-6, `height ${box.min.y} to ${box.max.y} m`);
-    assert.ok(box.max.x <= width / 2 + 1e-6 && box.min.x >= -width / 2 - 1e-6, `through ${box.min.x} to ${box.max.x} m`);
-    assert.ok(box.max.z <= depth / 2 + 1e-6 && box.min.z >= -depth / 2 - 1e-6, `across ${box.min.z} to ${box.max.z} m`);
-    assert.ok(Math.abs(box.max.y - CHEVRON.top) < 1e-6, "its top is the board's top");
+    expect(box.min.y >= 0 && box.max.y <= height + 1e-6, `height ${box.min.y} to ${box.max.y} m`).toBeTruthy();
+    expect(box.max.x <= width / 2 + 1e-6 && box.min.x >= -width / 2 - 1e-6, `through ${box.min.x} to ${box.max.x} m`).toBeTruthy();
+    expect(box.max.z <= depth / 2 + 1e-6 && box.min.z >= -depth / 2 - 1e-6, `across ${box.min.z} to ${box.max.z} m`).toBeTruthy();
+    expect(Math.abs(box.max.y - CHEVRON.top), "its top is the board's top").toBeLessThan(1e-6);
   });
 
   it("when the yellow strokes are measured, then their ends stand further toward +Z than their apex, so the arrow points along local -Z", () => {
@@ -54,8 +53,8 @@ describe("given the chevron prefab", () => {
         apexes++;
       }
     }
-    assert.ok(tips > 0 && apexes > 0, `${tips} tip and ${apexes} apex vertices found`);
-    assert.ok(tipZ / tips > apexZ / apexes, `tips at z ${(tipZ / tips).toFixed(3)}, apex at z ${(apexZ / apexes).toFixed(3)}`);
+    expect(tips > 0 && apexes > 0, `${tips} tip and ${apexes} apex vertices found`).toBeTruthy();
+    expect(tipZ / tips, `tips at z ${(tipZ / tips).toFixed(3)}, apex at z ${(apexZ / apexes).toFixed(3)}`).toBeGreaterThan(apexZ / apexes);
   });
 
   it("when its strokes are measured through the board, then each face carries them proud of the black", () => {
@@ -68,8 +67,8 @@ describe("given the chevron prefab", () => {
       if (yellow) (x > 0 ? front : back).expandByPoint(new THREE.Vector3(x, 0, 0));
       else if (position.getY(i) > CHEVRON.top - CHEVRON.height) black.expandByPoint(new THREE.Vector3(x, 0, 0));
     }
-    assert.ok(front.max.x > black.max.x, `front stroke face ${front.max.x} over the board's ${black.max.x}`);
-    assert.ok(back.min.x < black.min.x, `back stroke face ${back.min.x} under the board's ${black.min.x}`);
+    expect(front.max.x, `front stroke face ${front.max.x} over the board's ${black.max.x}`).toBeGreaterThan(black.max.x);
+    expect(back.min.x, `back stroke face ${back.min.x} under the board's ${black.min.x}`).toBeLessThan(black.min.x);
   });
 });
 
@@ -81,8 +80,8 @@ describe("given every chevron board of the four-count course", () => {
     new PropTumble(boards, mats, (mesh, id) => {
       if (id === PREFAB.chevron) chevronMeshes.push(mesh);
     });
-    assert.ok(boards.length > 1, `${boards.length} boards`);
-    assert.equal(chevronMeshes.length, new Set(boards.map((b) => drawCell(b.x, b.z))).size, "instanced meshes of the chevron prefab");
-    assert.equal(chevronMeshes.reduce((sum, mesh) => sum + mesh.count, 0), boards.length, "boards in them");
+    expect(boards.length, `${boards.length} boards`).toBeGreaterThan(1);
+    expect(chevronMeshes.length, "instanced meshes of the chevron prefab").toBe(new Set(boards.map((b) => drawCell(b.x, b.z))).size);
+    expect(chevronMeshes.reduce((sum, mesh) => sum + mesh.count, 0), "boards in them").toBe(boards.length);
   });
 });

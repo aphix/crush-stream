@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { setGround } from "./ground.ts";
 import { frame, FRAME, makeWorld, type World } from "./race-world.test-util.ts";
@@ -13,6 +12,7 @@ import { standingBite } from "../vehicle/wheel-bite.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import type { CarRecord } from "../match/types.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * Owner, 2026-10-03: "if your guy flies out of the car in race mode you can't drive any more (it continues in neutral
@@ -116,8 +116,8 @@ describe("given a 3-lap oval race of 3 AI rivals, 5 s in, with one car's driver 
       const car = w.cars[who.id]!;
       watch.car = car;
       const v0 = car.velocity.length();
-      assert.ok(v0 > 8, `${who.name} runs at ${v0.toFixed(1)} m/s before the throw`);
-      assert.equal(rec(who.id).status, "racing");
+      expect(v0, `${who.name} runs at ${v0.toFixed(1)} m/s before the throw`).toBeGreaterThan(8);
+      expect(rec(who.id).status).toBe("racing");
       const t0 = w.race.time;
       car.driverOut = "windshield";
       let died = -1;
@@ -131,31 +131,31 @@ describe("given a 3-lap oval race of 3 AI rivals, 5 s in, with one car's driver 
         if (died < 0 && r.status === "respawning") died = t;
         if (died >= 0 && r.status === "racing") back = t;
         if (back < 0) {
-          assert.ok(neutral(car), `frame at +${t.toFixed(2)} s: throttle ${car.drive.throttle}, brake ${car.drive.brake}, steer ${car.drive.steer}, ebrake ${car.drive.ebrake}, boost ${car.drive.boost}, neutral ${car.drive.neutral}, drove ${watch.drove}`);
-          assert.equal(car.driverOut, "windshield", "his seat stays empty until the reset");
+          expect(neutral(car), `frame at +${t.toFixed(2)} s: throttle ${car.drive.throttle}, brake ${car.drive.brake}, steer ${car.drive.steer}, ebrake ${car.drive.ebrake}, boost ${car.drive.boost}, neutral ${car.drive.neutral}, drove ${watch.drove}`).toBeTruthy();
+          expect(car.driverOut, "his seat stays empty until the reset").toBe("windshield");
           if (Number.isNaN(shedAt) && t >= 0.3) {
             shedAt = t;
             vAt = car.velocity.length();
           }
         }
       }
-      assert.ok(died >= 0 && died < 0.1, `the wreck rule took the car within ${(died * 1000).toFixed(0)} ms`);
+      expect(died >= 0 && died < 0.1, `the wreck rule took the car within ${(died * 1000).toFixed(0)} ms`).toBeTruthy();
       // A free roll (`DriveInput.neutral`): a player who only lets go of the pedals still sheds the lift-off drag (`DRIVE.coast` × the
       // class's brake), a thrown-out driver's car just rolling resistance and air drag, a twentieth of it.
       const liftOff = CLASSES[carClass(car)].brake * DRIVE.coast;
       const shed = (v0 - vAt) / shedAt;
-      assert.ok(shed < 0.25 * liftOff, `${v0.toFixed(1)} -> ${vAt.toFixed(1)} m/s in ${shedAt.toFixed(2)} s: ${shed.toFixed(1)} m/s², lift-off would shed ${liftOff.toFixed(1)}`);
-      assert.ok(Math.abs(back - died - RESPAWN_DELAY) < 0.1, `reset ${(back - died).toFixed(3)} s after the wreck rule took the car (${RESPAWN_DELAY} s)`);
-      assert.equal(car.driverOut, null, "the driver is back in the car after the reset");
-      assert.equal(rec(who.id).deaths, 1);
+      expect(shed, `${v0.toFixed(1)} -> ${vAt.toFixed(1)} m/s in ${shedAt.toFixed(2)} s: ${shed.toFixed(1)} m/s², lift-off would shed ${liftOff.toFixed(1)}`).toBeLessThan(0.25 * liftOff);
+      expect(Math.abs(back - died - RESPAWN_DELAY), `reset ${(back - died).toFixed(3)} s after the wreck rule took the car (${RESPAWN_DELAY} s)`).toBeLessThan(0.1);
+      expect(car.driverOut, "the driver is back in the car after the reset").toBe(null);
+      expect(rec(who.id).deaths).toBe(1);
       // Driving resumes: the player's seat or the AI is back on the pedals within a moment.
       let drove = false;
       for (let n = 0; n < 60 * 3; n++) {
         tick(state);
         drove ||= car.drive.throttle > 0.3;
       }
-      assert.ok(drove, "pedals come back after the reset");
-      assert.ok(car.velocity.length() > 3, `moving again: ${car.velocity.length().toFixed(1)} m/s`);
+      expect(drove, "pedals come back after the reset").toBeTruthy();
+      expect(car.velocity.length(), `moving again: ${car.velocity.length().toFixed(1)} m/s`).toBeGreaterThan(3);
     });
 
     it(`when ${who.name} loses its driver in a No-reset race, then it gets no pedals, coasts, and is out of the race for good`, () => {
@@ -167,12 +167,12 @@ describe("given a 3-lap oval race of 3 AI rivals, 5 s in, with one car's driver 
       car.driverOut = "doorL";
       for (let n = 0; n < 60 * 8; n++) {
         tick(state);
-        assert.ok(neutral(car), `frame at +${(w.race.time - t0).toFixed(2)} s: throttle ${car.drive.throttle}, brake ${car.drive.brake}, steer ${car.drive.steer}, ebrake ${car.drive.ebrake}, boost ${car.drive.boost}, neutral ${car.drive.neutral}, drove ${watch.drove}`);
+        expect(neutral(car), `frame at +${(w.race.time - t0).toFixed(2)} s: throttle ${car.drive.throttle}, brake ${car.drive.brake}, steer ${car.drive.steer}, ebrake ${car.drive.ebrake}, boost ${car.drive.boost}, neutral ${car.drive.neutral}, drove ${watch.drove}`).toBeTruthy();
       }
-      assert.equal(rec(who.id).status, "out", "no resets: out of the race");
-      assert.equal(car.driverOut, "doorL", "and he stays out");
-      if (who.id === PLAYER) assert.equal(w.race.hud().menu, "dead", "the player gets the wrecked menu");
-      assert.equal(w.race.hud().you!.driverOut, w.cars[PLAYER]!.driverOut !== null, "the HUD's DRIVER OUT flag is the player's own car's");
+      expect(rec(who.id).status, "no resets: out of the race").toBe("out");
+      expect(car.driverOut, "and he stays out").toBe("doorL");
+      if (who.id === PLAYER) expect(w.race.hud().menu, "the player gets the wrecked menu").toBe("dead");
+      expect(w.race.hud().you!.driverOut, "the HUD's DRIVER OUT flag is the player's own car's").toBe(w.cars[PLAYER]!.driverOut !== null);
     });
   }
 });
@@ -183,10 +183,10 @@ describe("given a netplay peer's car parked on the grid of an oval race, as a hu
     try {
       const state = start(false);
       runTo(state, 14);
-      assert.equal(w.race.racers[RIVAL]!.kind, "remote");
-      assert.ok(w.cars[RIVAL]!.velocity.length() < 1, "the peer sits still");
-      assert.equal(rec(RIVAL).status, "racing", "no still-for-8-s death");
-      assert.equal(rec(RIVAL).deaths, 0);
+      expect(w.race.racers[RIVAL]!.kind).toBe("remote");
+      expect(w.cars[RIVAL]!.velocity.length(), "the peer sits still").toBeLessThan(1);
+      expect(rec(RIVAL).status, "no still-for-8-s death").toBe("racing");
+      expect(rec(RIVAL).deaths).toBe(0);
     } finally {
       w.race.setSeats(new Map());
     }
@@ -221,7 +221,7 @@ function headOnRun(noReset: boolean): { out: number[]; reset: number[]; events: 
     for (const k of [0, 1]) {
       if (out[k]! < 0 && cars[k]!.driverOut !== null) out[k] = n;
       if (out[k]! >= 0 && reset[k]! < 0 && cars[k]!.driverOut === null) reset[k] = n;
-      if (out[k]! >= 0 && reset[k]! < 0) assert.ok(neutral(cars[k]!) || n === out[k], `car ${k} drives after its driver left (frame ${n})`);
+      if (out[k]! >= 0 && reset[k]! < 0) expect(neutral(cars[k]!) || n === out[k], `car ${k} drives after its driver left (frame ${n})`).toBeTruthy();
     }
   }
   const status = [rec(PLAYER).status, rec(RIVAL).status];
@@ -231,19 +231,19 @@ function headOnRun(noReset: boolean): { out: number[]; reset: number[]; events: 
 describe("given the player's car and the first AI rival driving head-on at each other at 2×20 m/s (72 km/h each) on the oval's start straight, where both engines survive the crash", () => {
   it(`when the race is a Respawn race, then both drivers leave, both cars are reset ${RESPAWN_DELAY} s later, and they race on`, () => {
     const o = headOnRun(false);
-    assert.ok(o.out[0]! >= 0 && o.out[1]! >= 0, `both drivers leave: ${JSON.stringify(o.out)}`);
+    expect(o.out[0]! >= 0 && o.out[1]! >= 0, `both drivers leave: ${JSON.stringify(o.out)}`).toBeTruthy();
     for (const k of [0, 1]) {
       const secs = (o.reset[k]! - o.out[k]!) * FRAME;
-      assert.ok(Math.abs(secs - RESPAWN_DELAY) < 0.2, `car ${k} reset ${secs.toFixed(2)} s after the throw`);
+      expect(Math.abs(secs - RESPAWN_DELAY), `car ${k} reset ${secs.toFixed(2)} s after the throw`).toBeLessThan(0.2);
     }
-    assert.deepEqual(o.status, ["racing", "racing"], "and they race on");
+    expect(firstMismatch(o.status, ["racing", "racing"]), "and they race on").toBeUndefined();
   });
 
   it("when the race is a No-reset race, then both drivers leave and both cars are out of the race for good, never reset", () => {
     const o = headOnRun(true);
-    assert.ok(o.out[0]! >= 0 && o.out[1]! >= 0);
-    assert.deepEqual(o.reset, [-1, -1], "no reset");
-    assert.deepEqual(o.status, ["out", "out"]);
+    expect(o.out[0]! >= 0 && o.out[1]! >= 0).toBeTruthy();
+    expect(firstMismatch(o.reset, [-1, -1]), "no reset").toBeUndefined();
+    expect(firstMismatch(o.status, ["out", "out"])).toBeUndefined();
   });
 
   /**
@@ -264,7 +264,7 @@ describe("given the player's car and the first AI rival driving head-on at each 
     const again = headOnRun(false);
     assertSameNumbers(again.out, first.out, "ejection frames");
     assertSameNumbers(again.reset, first.reset, "reset frames");
-    assert.equal(again.events, first.events);
-    assert.notEqual(first.events, "[]");
+    expect(again.events).toBe(first.events);
+    expect(first.events).not.toBe("[]");
   });
 });

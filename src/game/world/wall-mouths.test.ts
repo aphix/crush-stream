@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Track } from "./track.ts";
 import { parseTrack } from "./track-schema.ts";
 import { pathWallColliders } from "./track-sections.ts";
@@ -47,7 +46,7 @@ describe("given each course's wall runs and the other roads of the course (short
           }
         }
       }
-      assert.deepEqual(tight, []);
+      expect(tight).toHaveLength(0);
     });
   }
 });

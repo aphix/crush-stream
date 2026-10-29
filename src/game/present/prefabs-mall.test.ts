@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { triangles } from "../world/collider-drawn.test-util.ts";
 import { BASIN, FOUNTAIN, POOL, type PrefabId } from "../world/catalog.ts";
@@ -65,9 +64,9 @@ describe("given the Mall's four ponds (reflecting pool, round basin, lawn founta
   for (const pond of PONDS) {
     it(`when the ${pond.id}'s upward faces over its water are listed, then its water's top is among them and no other face lies within ${OVERHEAD_DEPTH_GAP} m under it`, () => {
       const heights = horizontalFacesInside(pond.id, pond.inside);
-      assert.ok(heights.some((y) => Math.abs(y - pond.waterTop) < SAME_HEIGHT), `the ${pond.id} draws no water top at ${pond.waterTop} m`);
+      expect(heights.some((y) => Math.abs(y - pond.waterTop) < SAME_HEIGHT), `the ${pond.id} draws no water top at ${pond.waterTop} m`).toBeTruthy();
       const flickering = heights.filter((y) => y < pond.waterTop - SAME_HEIGHT && y > pond.waterTop - OVERHEAD_DEPTH_GAP);
-      assert.deepEqual(flickering, [], `${flickering.length} faces of the ${pond.id} lie under its water top (${pond.waterTop} m) at ${[...new Set(flickering)].join(", ")} m`);
+      expect(flickering, `${flickering.length} faces of the ${pond.id} lie under its water top (${pond.waterTop} m) at ${[...new Set(flickering)].join(", ")} m`).toHaveLength(0);
     });
   }
 });

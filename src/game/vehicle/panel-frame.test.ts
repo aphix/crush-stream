@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import type { DetachPart } from "./car-core.ts";
@@ -87,7 +86,7 @@ describe("given a wreck settled for 3 s (a sedan, truck or monster class, intact
         const held = r.verts.reduce((a, _, k) => (r.w[k]! < r.w[a]! ? k : a), 0);
         const body = new THREE.Vector3().fromBufferAttribute(pos, r.verts[held]!).applyMatrix4(car.body.matrixWorld);
         const hinge = new THREE.Vector3().fromBufferAttribute(shell.geometry.getAttribute("position"), held).applyMatrix4(shell.matrixWorld);
-        assert.ok(hinge.distanceTo(body) < 0.01, `${name}: shell hinge ${(hinge.distanceTo(body) * 100).toFixed(1)} cm off its body vertex`);
+        expect(hinge.distanceTo(body), `${name}: shell hinge ${(hinge.distanceTo(body) * 100).toFixed(1)} cm off its body vertex`).toBeLessThan(0.01);
       }
     });
 
@@ -98,8 +97,8 @@ describe("given a wreck settled for 3 s (a sedan, truck or monster class, intact
         const patch = centre(car.body, [...p.region!.verts]);
         car.tear(name);
         const d = centre(p.object as THREE.Mesh).sub(patch);
-        assert.ok(Math.abs(d.y - 0.08) < 0.03, `${name}: torn shell starts ${(d.y * 100).toFixed(1)} cm above its patch of body (launch lift 8 cm)`);
-        assert.ok(Math.hypot(d.x, d.z) < 0.2, `${name}: torn shell starts ${Math.hypot(d.x, d.z).toFixed(2)} m sideways of its patch of body`);
+        expect(Math.abs(d.y - 0.08), `${name}: torn shell starts ${(d.y * 100).toFixed(1)} cm above its patch of body (launch lift 8 cm)`).toBeLessThan(0.03);
+        expect(Math.hypot(d.x, d.z), `${name}: torn shell starts ${Math.hypot(d.x, d.z).toFixed(2)} m sideways of its patch of body`).toBeLessThan(0.2);
       }
     });
   }
@@ -125,8 +124,8 @@ describe("given a settled wreck's hinged panel shells, a shell is rebuilt when i
     open[0]!.hingeT = 0.8;
     car.stepBreakage(1 / FRAME_HZ);
     car.updateSkin();
-    assert.ok(uploads(open[0]!) > before[0]!, "a shell whose hinge moved stayed as it was");
-    assert.equal(uploads(open[1]!), before[1], "the other shell was rebuilt");
+    expect(uploads(open[0]!), "a shell whose hinge moved stayed as it was").toBeGreaterThan(before[0]!);
+    expect(uploads(open[1]!), "the other shell was rebuilt").toBe(before[1]);
   });
 
   it("when a third shell is torn past the two a car draws, then the oldest stays hidden where it was and the drawn ones lie down", () => {
@@ -135,11 +134,11 @@ describe("given a settled wreck's hinged panel shells, a shell is rebuilt when i
     const names = ["quarterL", "quarterR", "archFL"];
     for (const n of names) car.tear(n);
     const [hidden, ...drawn] = names.map((n) => car.part(n));
-    assert.ok(!hidden!.object.visible && drawn.every((p) => p.object.visible), "the oldest of three torn shells is the hidden one");
+    expect(!hidden!.object.visible && drawn.every((p) => p.object.visible), "the oldest of three torn shells is the hidden one").toBeTruthy();
     const at = hidden!.object.position.clone();
     const was = drawn.map((p) => p.object.position.y);
     for (let f = 0; f < 120; f++) car.step(DT);
-    assert.equal(hidden!.object.position.distanceTo(at), 0, "a hidden shell kept moving");
-    assert.ok(drawn.every((p, i) => p.object.position.y < was[i]! - 0.05), "a drawn shell did not fall");
+    expect(hidden!.object.position.distanceTo(at), "a hidden shell kept moving").toBe(0);
+    expect(drawn.every((p, i) => p.object.position.y < was[i]! - 0.05), "a drawn shell did not fall").toBeTruthy();
   });
 });

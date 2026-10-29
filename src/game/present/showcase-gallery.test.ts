@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { PREFAB_IDS, PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { STAGE_DIAMETER } from "./engine-world.ts";
@@ -37,27 +36,27 @@ describe("given the showcase prop gallery", () => {
   const boxes = SHOWCASE_GALLERY.map(footprint);
 
   it("when its prefabs are listed, then each non-unique prefab stands once and no unique landmark is there", () => {
-    assert.equal(SHOWCASE_GALLERY.length, NON_UNIQUE.length);
-    for (const id of NON_UNIQUE) assert.equal(SHOWCASE_GALLERY.filter((p) => p.prefab === id).length, 1, id);
-    for (const id of EXCLUDED) assert.equal(SHOWCASE_GALLERY.filter((p) => p.prefab === id).length, 0, id);
+    expect(SHOWCASE_GALLERY.length).toBe(NON_UNIQUE.length);
+    for (const id of NON_UNIQUE) expect(SHOWCASE_GALLERY.filter((p) => p.prefab === id).length, id).toBe(1);
+    for (const id of EXCLUDED) expect(SHOWCASE_GALLERY.filter((p) => p.prefab === id).length, id).toBe(0);
   });
 
   it("when a prefab is added to the game, then it is sorted into the gallery or the excluded set", () => {
-    for (const id of PREFAB_IDS) assert.ok(NON_UNIQUE.includes(id) !== EXCLUDED.includes(id), id);
+    for (const id of PREFAB_IDS) expect(NON_UNIQUE.includes(id), id).not.toBe(EXCLUDED.includes(id));
   });
 
   it("when its footprints are placed, then all stand behind the eye's clearance and inside the disc", () => {
     const reach = STAGE_DIAMETER / 2 - RIM_MARGIN;
     for (const b of boxes) {
-      assert.ok(b.z0 > SHOWCASE_EYE.z + MIN_CLEARANCE, `${b.id} reaches z ${b.z0}`);
-      for (const x of [b.x0, b.x1]) for (const z of [b.z0, b.z1]) assert.ok(Math.hypot(x, z) <= reach, `${b.id} corner (${x}, ${z})`);
+      expect(b.z0, `${b.id} reaches z ${b.z0}`).toBeGreaterThan(SHOWCASE_EYE.z + MIN_CLEARANCE);
+      for (const x of [b.x0, b.x1]) for (const z of [b.z0, b.z1]) expect(Math.hypot(x, z), `${b.id} corner (${x}, ${z})`).toBeLessThanOrEqual(reach);
     }
   });
 
   it("when its footprints are compared, then none overlap", () => {
     for (const [i, a] of boxes.entries()) {
       for (const b of boxes.slice(i + 1)) {
-        assert.ok(a.x1 <= b.x0 || b.x1 <= a.x0 || a.z1 <= b.z0 || b.z1 <= a.z0, `${a.id} overlaps ${b.id}`);
+        expect(a.x1 <= b.x0 || b.x1 <= a.x0 || a.z1 <= b.z0 || b.z1 <= a.z0, `${a.id} overlaps ${b.id}`).toBeTruthy();
       }
     }
   });

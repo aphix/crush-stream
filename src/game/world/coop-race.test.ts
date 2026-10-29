@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import type { RaceBrain } from "../ai/race-ai.ts";
 import { CAMPAIGN_POINTS } from "../match/campaign.ts";
 import { FINISH_GRACE } from "../match/session.ts";
@@ -49,18 +48,18 @@ describe("given a co-op race on the oval: the host and a peer who never touches 
     t.onTestFinished(() => leave(w));
     const o = playerRace(w, track, { lat: 0 }, LAPS, FIELD, 240);
     const hud = w.race.hud();
-    assert.equal(hud.phase, "finished");
+    expect(hud.phase).toBe("finished");
     const rows = hud.results!;
     const humans = rows.filter((r) => r.kind !== "ai");
     t.annotate(`host P${o.you.place} ${o.you.status}; peer ${rows.find((r) => r.id === 1)!.status}; AI ${rows.filter((r) => r.kind === "ai").map((r) => `P${r.place} ${r.status}`)}`);
-    assert.equal(humans.length, 2);
-    assert.equal(rows.length, 4, "each car keeps its own row and place");
+    expect(humans.length).toBe(2);
+    expect(rows.length, "each car keeps its own row and place").toBe(4);
     const team = hud.team!;
-    assert.equal(team.humans, 2);
-    assert.equal(team.free, 0);
-    assert.equal(team.place, Math.min(...humans.map((r) => r.place)));
-    assert.equal(team.won, rows.find((r) => r.place === 1)!.kind !== "ai");
-    assert.equal(rows.find((r) => r.id === 1)!.status, "dnf", "the peer was not asked to finish");
+    expect(team.humans).toBe(2);
+    expect(team.free).toBe(0);
+    expect(team.place).toBe(Math.min(...humans.map((r) => r.place)));
+    expect(team.won).toBe(rows.find((r) => r.place === 1)!.kind !== "ai");
+    expect(rows.find((r) => r.id === 1)!.status, "the peer was not asked to finish").toBe("dnf");
   });
 
   it("when the AI cars sit on the grid and the host drives flat out, then the host finishes first, the team won with place 1, and the race ends with the peer and the AI DNF", (t) => {
@@ -68,12 +67,15 @@ describe("given a co-op race on the oval: the host and a peer who never touches 
     t.onTestFinished(() => leave(w));
     parkAi(w);
     const o = playerRace(w, track, { lat: 0 }, LAPS, FIELD, 240);
-    assert.equal(o.you.place, 1);
-    assert.equal(o.you.status, "finished");
+    expect(o.you.place).toBe(1);
+    expect(o.you.status).toBe("finished");
     const hud = w.race.hud();
-    assert.deepEqual(hud.team, { humans: 2, free: 0, place: 1, won: true });
-    assert.equal(hud.winnerName, o.you.name);
-    assert.ok(hud.results!.filter((r) => r.id !== 0).every((r) => r.status === "dnf"), "nobody else finished, and the race still ended");
+    expect(hud.team?.humans, "team humans").toBe(2);
+    expect(hud.team?.free, "team free").toBe(0);
+    expect(hud.team?.place, "team place").toBe(1);
+    expect(hud.team?.won, "team won").toBe(true);
+    expect(hud.winnerName).toBe(o.you.name);
+    expect(hud.results!.filter((r) => r.id !== 0).every((r) => r.status === "dnf"), "nobody else finished, and the race still ended").toBeTruthy();
   });
 });
 
@@ -90,16 +92,16 @@ describe("given a co-op race on the oval with both humans sitting on the grid", 
       frame(w, state);
     }
     const hud = w.race.hud();
-    assert.equal(hud.phase, "finished", "the race ended with nobody asked to finish");
+    expect(hud.phase, "the race ended with nobody asked to finish").toBe("finished");
     const rows = hud.results!;
-    assert.ok(rows.filter((r) => r.kind === "ai").some((r) => r.place === 1), "an AI car won");
+    expect(rows.filter((r) => r.kind === "ai").some((r) => r.place === 1), "an AI car won").toBeTruthy();
     const humans = rows.filter((r) => r.kind !== "ai");
-    assert.ok(humans.every((r) => r.status === "dnf"));
+    expect(humans.every((r) => r.status === "dnf")).toBeTruthy();
     const team = hud.team!;
-    assert.equal(team.humans, 2);
-    assert.equal(team.free, 0);
-    assert.equal(team.place, Math.min(...humans.map((r) => r.place)));
-    assert.equal(team.won, false);
+    expect(team.humans).toBe(2);
+    expect(team.free).toBe(0);
+    expect(team.place).toBe(Math.min(...humans.map((r) => r.place)));
+    expect(team.won).toBe(false);
   });
 });
 
@@ -110,7 +112,7 @@ describe("given a co-op campaign whose first round is the oval, the peer sitting
     const toResults = (): void => {
       const state = { acc: 0 };
       for (let n = 0; n < 400 && w.race.hud().menu !== "results"; n++) frame(w, state);
-      assert.equal(w.race.hud().menu, "results");
+      expect(w.race.hud().menu).toBe("results");
     };
     // The round with the AI racing and both humans sitting: the team loses it.
     w.race.command({ type: "options", options: { trackId: track.id, laps: 1, aiCount: FIELD, noReset: false } });
@@ -121,25 +123,25 @@ describe("given a co-op campaign whose first round is the oval, the peer sitting
       frame(w, state);
     }
     toResults();
-    assert.equal(w.race.hud().team!.won, false);
+    expect(w.race.hud().team!.won).toBe(false);
     w.race.command({ type: "next" });
     const again = w.race.hud();
-    assert.equal(again.mode, "campaign");
-    assert.equal(again.campaign!.round, 0, "the round did not count");
-    assert.ok(again.campaign!.standings.every((r) => r.points === 0), "nobody scored");
-    assert.equal(again.menu, null, "the round is on again");
-    assert.equal(again.phase, "grid");
+    expect(again.mode).toBe("campaign");
+    expect(again.campaign!.round, "the round did not count").toBe(0);
+    expect(again.campaign!.standings.every((r) => r.points === 0), "nobody scored").toBeTruthy();
+    expect(again.menu, "the round is on again").toBe(null);
+    expect(again.phase).toBe("grid");
     // The same round replayed with the AI parked and the host driving: it wins, and Next scores it.
     parkAi(w);
     w.seat.intent.handbrake = false;
     const o = playerRace(w, track, { lat: 0 }, 1, FIELD, 240, null);
-    assert.equal(o.you.place, 1);
+    expect(o.you.place).toBe(1);
     toResults();
-    assert.equal(w.race.hud().team!.won, true);
+    expect(w.race.hud().team!.won).toBe(true);
     w.race.command({ type: "next" });
     const after = w.race.hud();
-    assert.equal(after.menu, "standings");
-    assert.equal(after.campaign!.round, 1, "the round counted");
-    assert.equal(after.campaign!.standings.find((r) => r.id === 0)!.points, CAMPAIGN_POINTS[0]);
+    expect(after.menu).toBe("standings");
+    expect(after.campaign!.round, "the round counted").toBe(1);
+    expect(after.campaign!.standings.find((r) => r.id === 0)!.points).toBe(CAMPAIGN_POINTS[0]);
   });
 });

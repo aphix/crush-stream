@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { blankAiCar } from "../ai/derby-ai.ts";
 import { RacerSight } from "../ai/cop-sight.ts";
 import type { HunterWorld } from "../ai/cop-brain.ts";
@@ -26,11 +25,11 @@ describe("given a racer on Four-Count's skip-city shortcut, off the main road's 
     const proj = blankProjection();
     for (const spot of SPOTS) {
       const gameHidden = sight.hiddenAt(spot.x, spot.z, track.project(spot.x, spot.z, -1, proj).s, true);
-      assert.equal(gameHidden, true, `the game reads (${spot.x}, ${spot.z}) as out of sight`);
-      assert.equal(racerSeeing(track, [SHORTCUT_RACER], spot.x, spot.z).sees, false, `the judge reads (${spot.x}, ${spot.z}) as out of sight`);
+      expect(gameHidden, `the game reads (${spot.x}, ${spot.z}) as out of sight`).toBe(true);
+      expect(racerSeeing(track, [SHORTCUT_RACER], spot.x, spot.z).sees, `the judge reads (${spot.x}, ${spot.z}) as out of sight`).toBe(false);
     }
     const round = sight.range.ahead - 10;
-    assert.equal(racerSeeing(track, [SHORTCUT_RACER], SHORTCUT_RACER.x - round, SHORTCUT_RACER.z).sees, true, "a spot inside the ahead range round it is seen");
+    expect(racerSeeing(track, [SHORTCUT_RACER], SHORTCUT_RACER.x - round, SHORTCUT_RACER.z).sees, "a spot inside the ahead range round it is seen").toBe(true);
   });
 });
 
@@ -69,10 +68,10 @@ describe("given a field of 8 racers strung out on the road and a stakeout of two
   for (const l of LAYOUTS) {
     it(`when ${l.course} parks ${l.why}, then both cops are put on the road and no racer sees either spot`, () => {
       const { parks, racers } = stakeout(l.on, l.lead, l.gap, l.target, l.seed, l.seventh);
-      assert.equal(parks.length, 2, "both cops parked");
+      expect(parks.length, "both cops parked").toBe(2);
       for (const p of parks) {
         const seen = racerSeeing(l.on, racers, p.x, p.z);
-        assert.equal(seen.sees, false, `cop put on the road at (${p.x.toFixed(0)}, ${p.z.toFixed(0)}) in sight of ${seen.text}`);
+        expect(seen.sees, `cop put on the road at (${p.x.toFixed(0)}, ${p.z.toFixed(0)}) in sight of ${seen.text}`).toBe(false);
       }
     });
   }

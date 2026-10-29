@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { launch } from "../contact/crash-scenarios.test-util.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
@@ -128,16 +127,16 @@ describe(`given a face rising ${HEIGHT} m on level ground, the body friction's l
     it(`when a sedan drives square into the ny ${ny.toFixed(2)} face at ${SPEED} m/s, then the face stops it: its origin never reaches the foot (${PAST_FOOT} m) and never rises over its height at the touch by more than ${CLIMB} m`, () => {
       const r = driveAt(ny, SPEED);
       const at = `${r.past.toFixed(2)} m past the foot, rose ${r.climb.toFixed(2)} m, highest ${r.top.toFixed(2)} m`;
-      assert.ok(r.met, `never met the face: ${at}`);
-      assert.ok(r.past <= PAST_FOOT, at);
-      assert.ok(r.climb <= CLIMB, at);
+      expect(r.met, `never met the face: ${at}`).toBeTruthy();
+      expect(r.past, at).toBeLessThanOrEqual(PAST_FOOT);
+      expect(r.climb, at).toBeLessThanOrEqual(CLIMB);
     });
   }
 
   it(`when it drives into the ny ${FLANK_NY.toFixed(2)} flank at ${FLANK_SPEED} m/s, then it is a ramp: the origin rides up it onto the top`, () => {
     const r = driveAt(FLANK_NY, FLANK_SPEED);
     const run = new FaceGround(FLANK_NY).run;
-    assert.ok(r.past > run && r.top >= HEIGHT, `${r.past.toFixed(2)} m past the foot (the flank is ${run.toFixed(2)} m), highest ${r.top.toFixed(2)} m`);
+    expect(r.past > run && r.top >= HEIGHT, `${r.past.toFixed(2)} m past the foot (the flank is ${run.toFixed(2)} m), highest ${r.top.toFixed(2)} m`).toBeTruthy();
     setGround(null);
   });
 });
@@ -180,8 +179,8 @@ describe(`given the terrain of ${COURSE}`, () => {
   });
 
   it("when its cells are read, then it has cut faces the sedan above is stopped by (the steepest under the lowest face tried) and flanks of the ramp's kind", () => {
-    assert.ok(cells > 100000, `${cells} cells read`);
-    assert.ok(cuts >= 10 && steepest <= STOPPING_NY[0], `${cuts} cells under ny ${POINT_STOPS_BELOW.toFixed(2)}, the steepest ny ${steepest.toFixed(2)}`);
-    assert.ok(flanks >= 1000, `${flanks} flank cells (ny 0.55 to 0.7)`);
+    expect(cells, `${cells} cells read`).toBeGreaterThan(100000);
+    expect(cuts >= 10 && steepest <= STOPPING_NY[0], `${cuts} cells under ny ${POINT_STOPS_BELOW.toFixed(2)}, the steepest ny ${steepest.toFixed(2)}`).toBeTruthy();
+    expect(flanks, `${flanks} flank cells (ny 0.55 to 0.7)`).toBeGreaterThanOrEqual(1000);
   });
 });

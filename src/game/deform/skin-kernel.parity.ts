@@ -1,5 +1,4 @@
-import { beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -15,6 +14,7 @@ import { TyreSagArena } from "./tyre-sag-kernel.ts";
 import { TyreSkin } from "../vehicle/car-tyre-skin.ts";
 import { loadSkinKernelForTest } from "./skin-kernel.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * The WASM skin (kernels/skin) is the JS skin's exact bits. The engine's own frame loop (accumulator of fixed steps,
@@ -85,7 +85,7 @@ const HASHED = [
 
 function numberField(o: object, key: string): number {
   const v: unknown = Reflect.get(o, key);
-  assert.ok(typeof v === "number", key);
+  if (typeof v !== "number") throw new Error(`${key} is a ${typeof v}, not a number`);
   return v;
 }
 
@@ -132,7 +132,7 @@ function playScenario(s: Scenario): Leg {
         if (d.mode === "lattice") seen.lattice++;
         if (d.deepCrush) seen.deep++;
         const hubOf: unknown = Reflect.get(d, "skinHub");
-        assert.ok(hubOf instanceof Int32Array);
+        must(hubOf instanceof Int32Array, "hubOf instanceof Int32Array");
         if (d.masses.some((m, j) => m.popped && hubOf.includes(j))) seen.hubs++;
       }
       if (c["bodyTyres"]?.["held"] || c["hoodTyres"]?.["held"]) seen.held++;
@@ -202,23 +202,23 @@ function playOnKernel(s: Scenario, mutate?: (d: SkinDynamic) => void): { leg: Le
 describe("given the WASM skin kernel (the compiled skin and normals maths), loaded after the JS skin has played each scenario", () => {
   const js = new Map<Scenario, Leg>();
   beforeAll(async () => {
-    assert.equal(skinKernel(), null, "the JS legs run before the kernel loads");
+    expect(skinKernel(), "the JS legs run before the kernel loads").toBe(null);
     for (const s of SCENARIOS) js.set(s, play(s));
     await loadSkinKernelForTest();
-    assert.ok(skinKernel(), "the kernel loaded");
+    expect(skinKernel(), "the kernel loaded").toBeTruthy();
   });
 
   for (const s of SCENARIOS) {
     it(`when it plays ${s.label}, then every frame's skin, bonnet and normals are bit-for-bit the JS skin's`, () => {
       const ref = js.get(s)!;
-      for (const key of s.covers) assert.ok(ref.seen[key] > 0, `the scenario never skinned with ${key}`);
+      for (const key of s.covers) expect(ref.seen[key], `the scenario never skinned with ${key}`).toBeGreaterThan(0);
       const { leg, runs, tyreCalls } = playOnKernel(s);
-      assert.ok(runs >= ref.seen.skins, `${runs} kernel runs for ${ref.seen.skins} skinned car-frames: some skins stayed in JS`);
-      assert.ok(tyreCalls.sagPasses >= ref.seen.sagRaised && tyreCalls.planGrids > 0, `${tyreCalls.sagPasses} sag passes and ${tyreCalls.planGrids} plan grids built in the kernel: the hold stayed in JS`);
-      assert.equal(leg.seen.held, ref.seen.held, "car-frames with a tyre hold that moved the skin");
-      assert.equal(leg.seen.sagRaised, ref.seen.sagRaised, "sag passes that lifted a corner");
+      expect(runs, `${runs} kernel runs for ${ref.seen.skins} skinned car-frames: some skins stayed in JS`).toBeGreaterThanOrEqual(ref.seen.skins);
+      expect(tyreCalls.sagPasses >= ref.seen.sagRaised && tyreCalls.planGrids > 0, `${tyreCalls.sagPasses} sag passes and ${tyreCalls.planGrids} plan grids built in the kernel: the hold stayed in JS`).toBeTruthy();
+      expect(leg.seen.held, "car-frames with a tyre hold that moved the skin").toBe(ref.seen.held);
+      expect(leg.seen.sagRaised, "sag passes that lifted a corner").toBe(ref.seen.sagRaised);
       assertSameNumbers(leg.digests, ref.digests, "per-frame digest");
-      assert.equal(leg.final.length, ref.final.length);
+      expect(leg.final.length).toBe(ref.final.length);
       for (const [i, a] of leg.final.entries()) assertSameNumbers(a, ref.final[i]!, `car ${Math.floor(i / HASHED.length)} ${HASHED[i % HASHED.length]!.join(" ")}`);
     });
   }
@@ -228,10 +228,7 @@ describe("given the WASM skin kernel (the compiled skin and normals maths), load
     const { leg } = playOnKernel(s, (d) => {
       d.params[8] = 0;
     });
-    assert.ok(
-      leg.digests.some((h, f) => h !== js.get(s)!.digests[f]),
-      "a kernel reading the lattice branch in shape mode must not match",
-    );
+    expect(leg.digests.some((h, f) => h !== js.get(s)!.digests[f]), "a kernel reading the lattice branch in shape mode must not match").toBeTruthy();
   });
 
   it("when the sag pass is handed tyres a fifth larger than the car's, then at least one frame's digest differs from the JS hold's, so the hold comparison can fail", () => {
@@ -242,10 +239,7 @@ describe("given the WASM skin kernel (the compiled skin and normals maths), load
     };
     try {
       const { leg } = playOnKernel(s);
-      assert.ok(
-        leg.digests.some((h, f) => h !== js.get(s)!.digests[f]),
-        "a sag pass over larger tyres must not match",
-      );
+      expect(leg.digests.some((h, f) => h !== js.get(s)!.digests[f]), "a sag pass over larger tyres must not match").toBeTruthy();
     } finally {
       TyreSagArena.prototype.sagPass = real;
     }

@@ -1,5 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, it, vi } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { setImmediate as yieldToLoop } from "node:timers/promises";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -148,7 +147,7 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     await engine["ragdolls"].preload();
     engine["scene"].add(surface("ultra-pick-course"));
     engine.setFxTier("high");
-    assert.equal(await engine.loadUltra(), true, "Ultra loaded");
+    expect(await engine.loadUltra(), "Ultra loaded").toBe(true);
     await engine.warmsIdle();
   });
   afterAll(() => {
@@ -170,11 +169,11 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     await picking;
     await engine.warmsIdle();
     const first = drawFrames(1);
-    assert.equal(`${heldFirst.unlinked}|${heldLater.unlinked}`, "|", "materials drawn while their program was linking");
-    assert.equal(heldTier, "high", "tier while the programs linked");
-    assert.equal(engine["cine"].tier, "ultra", "tier after the programs linked");
-    assert.equal(first.unlinked, "", "materials the first Ultra frame drew unlinked");
-    assert.equal(first.made, 0, "programs the first Ultra frame linked");
+    expect(`${heldFirst.unlinked}|${heldLater.unlinked}`, "materials drawn while their program was linking").toBe("|");
+    expect(heldTier, "tier while the programs linked").toBe("high");
+    expect(engine["cine"].tier, "tier after the programs linked").toBe("ultra");
+    expect(first.unlinked, "materials the first Ultra frame drew unlinked").toBe("");
+    expect(first.made, "programs the first Ultra frame linked").toBe(0);
   });
 
   it("when another tier is picked while Ultra's programs link, then Ultra never switches in and the scene is left as that tier wears it", { timeout: HANG_GUARD_MS }, async () => {
@@ -192,9 +191,9 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     vi.useRealTimers();
     await picking;
     await engine.warmsIdle();
-    assert.equal(engine["cine"].tier, "low");
-    assert.ok(engine["scene"].environment === env, "the scene's environment is the tier's own");
-    assert.ok(late.material.map === ownMap, "the late surface wears its own map");
+    expect(engine["cine"].tier).toBe("low");
+    expect(engine["scene"].environment, "the scene's environment is the tier's own").toBe(env);
+    expect(late.material.map, "the late surface wears its own map").toBe(ownMap);
   });
 
   it("when Ultra is picked from Low (no car finish) on a running loop, then no two frames have more than a step's programs linked between them, frames are drawn between the warm-up's last draws and the switch, and the pick makes only programs the Ultra frames draw", { timeout: HANG_GUARD_MS }, async () => {
@@ -213,10 +212,10 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     const framesBeforeSwitch = tally.frames - tally.warmDrawAt;
     const first = drawFrames(1);
     const made = (engine["renderer"].info.programs ?? []).filter((p) => !before.has(p));
-    assert.ok(made.length > 2 * STEP_PROGRAMS, `programs the pick made: ${made.length}, more than two steps link`);
-    assert.ok(Math.max(...madeBetweenFrames) <= STEP_PROGRAMS, `programs made between two frames: ${madeBetweenFrames.join()}`);
-    assert.ok(framesBeforeSwitch >= STEP_FRAMES, `frames between the warm-up's last draws and the switch: ${framesBeforeSwitch}`);
-    assert.equal(made.filter((p) => !drawn.programs.has(p)).length, 0, "programs the pick made that the first Ultra frame does not draw");
-    assert.equal(first.made, 0, "programs the first Ultra frame linked");
+    expect(made.length, `programs the pick made: ${made.length}, more than two steps link`).toBeGreaterThan(2 * STEP_PROGRAMS);
+    expect(Math.max(...madeBetweenFrames), `programs made between two frames: ${madeBetweenFrames.join()}`).toBeLessThanOrEqual(STEP_PROGRAMS);
+    expect(framesBeforeSwitch, `frames between the warm-up's last draws and the switch: ${framesBeforeSwitch}`).toBeGreaterThanOrEqual(STEP_FRAMES);
+    expect(made.filter((p) => !drawn.programs.has(p)).length, "programs the pick made that the first Ultra frame does not draw").toBe(0);
+    expect(first.made, "programs the first Ultra frame linked").toBe(0);
   });
 });

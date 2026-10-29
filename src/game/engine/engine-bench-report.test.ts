@@ -1,5 +1,4 @@
-import { describe, test } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, test } from "vitest";
 import type { FrameStats } from "./bench-frames.ts";
 import { browserName, describeBench, perSecond, stat, type Block, type BenchResult, type PhaseCard, type RagdollCost, type ReplayResult, type ReplayTier } from "./engine-bench-report.ts";
 import { HITCH } from "./bench-hitch.ts";
@@ -7,6 +6,8 @@ import { roundCard } from "./bench-card.ts";
 import { MAX_JSON_BYTES } from "../../lib/submissions/kinds.ts";
 import { benchPlan } from "./engine-bench-plan.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const COARSE_LABEL = `1/${QUIET_HZ} s`;
 
@@ -138,18 +139,27 @@ const RESULT: BenchResult = {
 describe("given a list of frame-time samples", () => {
   test("when the percentiles of the first 5 of 7 values are asked, then they ignore the rest and the order of the values, and an empty list gives all zeros", () => {
     const s = stat([5, 1, 9, 3, 7, 100, 100], 5);
-    assert.deepEqual(s, { mean: 5, p50: 5, p95: 9, p99: 9, max: 9 });
-    assert.deepEqual(stat([]), { mean: 0, p50: 0, p95: 0, p99: 0, max: 0 });
+    expect(s.mean, "mean").toBe(5);
+    expect(s.p50, "p50").toBe(5);
+    expect(s.p95, "p95").toBe(9);
+    expect(s.p99, "p99").toBe(9);
+    expect(s.max, "max").toBe(9);
+    const none = stat([]);
+    expect(none.mean, "empty: mean").toBe(0);
+    expect(none.p50, "empty: p50").toBe(0);
+    expect(none.p95, "empty: p95").toBe(0);
+    expect(none.p99, "empty: p99").toBe(0);
+    expect(none.max, "empty: max").toBe(0);
   });
 });
 
 describe("given a browser's user-agent string", () => {
   test("when the bench names the browser, then it gives the browser and its major version, and an unknown agent reads as unknown browser", () => {
-    assert.equal(browserName("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"), "Firefox 128");
-    assert.equal(browserName("Mozilla/5.0 (Linux; Android 14; Pixel 8a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36"), "Chrome 150");
-    assert.equal(browserName("Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0"), "Edge 150");
-    assert.equal(browserName("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1"), "Safari 17");
-    assert.equal(browserName("curl/8"), "unknown browser");
+    expect(browserName("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0")).toBe("Firefox 128");
+    expect(browserName("Mozilla/5.0 (Linux; Android 14; Pixel 8a) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Mobile Safari/537.36")).toBe("Chrome 150");
+    expect(browserName("Mozilla/5.0 (Windows NT 10.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36 Edg/150.0.0.0")).toBe("Edge 150");
+    expect(browserName("Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1")).toBe("Safari 17");
+    expect(browserName("curl/8")).toBe("unknown browser");
   });
 });
 
@@ -157,41 +167,47 @@ describe("given the frame times and the sim's time per frame of a bench run", ()
   test("when they are summed per wall second, then each full second gives its frame count and the sim's ms in it, scaled to 1000 ms, and a partial last second is dropped", () => {
     const frames = [...Array<number>(100).fill(10), ...Array<number>(50).fill(20), ...Array<number>(25).fill(40), 5];
     const simMs = [...Array<number>(100).fill(2), ...Array<number>(50).fill(8), ...Array<number>(25).fill(0), 3];
-    assert.deepEqual(perSecond(frames, simMs), { fps: [100, 50, 25], workMs: [200, 400, 0] });
-    assert.deepEqual(perSecond([500, 750], [100, 150]), { fps: [2], workMs: [200] });
-    assert.deepEqual(perSecond([300, 300], [1, 1]), { fps: [], workMs: [] });
+    const full = perSecond(frames, simMs);
+    expect(firstMismatch(full.fps, [100, 50, 25]), "fps per second").toBeUndefined();
+    expect(firstMismatch(full.workMs, [200, 400, 0]), "work ms per second").toBeUndefined();
+    const two = perSecond([500, 750], [100, 150]);
+    expect(firstMismatch(two.fps, [2]), "two long frames: fps").toBeUndefined();
+    expect(firstMismatch(two.workMs, [200]), "two long frames: work ms").toBeUndefined();
+    const partial = perSecond([300, 300], [1, 1]);
+    expect(partial.fps, "a partial second drops: fps").toHaveLength(0);
+    expect(partial.workMs, "a partial second drops: work ms").toHaveLength(0);
   });
 });
 
 describe("given the bench result of a phone running the city course (describeBench writes it as the results card)", () => {
   test("when the card is written, then it leads with the build, fps, the sim's ms each second and sim speed, lists the settings (the depth buffer with the offset a ground layer needs to show over a coplanar one), both A/Bs and the steps cut short for a coming hit, marks a browser-masked GPU, shows the GPU timing when it can, and fits a 412 px tall phone screen", () => {
     const lines = describeBench(RESULT);
-    assert.match(lines[0]!, /^CRUSH BENCH {2}city {2}22 cars.*\(Chrome 150\) {2}build 36b137f$/);
-    assert.match(lines[1]!, /^90\.0 FPS {3}1% low 28\.6 {3}0\.1% low 11\.3 {3}by thirds 90\.0 \/ 90\.0 \/ 89\.0$/);
-    assert.equal(lines[2], "fps each second: 90 91 89 90");
-    assert.equal(lines[3], "sim ms each second: 212 230 640 205");
-    assert.match(lines[4]!, /^SIM SPEED 98 % /);
-    assert.ok(lines[4]!.endsWith(`${COARSE_LABEL} steps in 62 % of frames   wrecks: mean 3.4, end 5`));
-    assert.ok(lines.some((l) => /^GPU {7}no timer query/.test(l)));
-    assert.ok(lines.some((l) => l.endsWith("2.7 steps/frame, 1.56 ms/step, 212 ms per sim-second, 3.4 fine-slice cuts/sim-s")));
-    assert.ok(lines.some((l) => l.startsWith("fx tier: high 97 %, minimal 3 % (auto)") && l.includes("radial blur, grain 0.03")));
-    assert.ok(lines.some((l) => l.includes("PCF 2048x2048, 223 casters") && l.includes("pixel ratio 1.5 of device 2.625, canvas 1373x618, no MSAA")));
-    assert.ok(lines.some((l) => l === "depth: 24 bits (drawing buffer), subpixel 8 bits, fragment highp 23 bits, range 2^127..2^127, camera near 0.1 far 180, log depth off, coplanar layer shows at 0.063 px of slope or 62 steps"));
+    expect(lines[0]!).toMatch(/^CRUSH BENCH {2}city {2}22 cars.*\(Chrome 150\) {2}build 36b137f$/);
+    expect(lines[1]!).toMatch(/^90\.0 FPS {3}1% low 28\.6 {3}0\.1% low 11\.3 {3}by thirds 90\.0 \/ 90\.0 \/ 89\.0$/);
+    expect(lines[2]).toBe("fps each second: 90 91 89 90");
+    expect(lines[3]).toBe("sim ms each second: 212 230 640 205");
+    expect(lines[4]!).toMatch(/^SIM SPEED 98 % /);
+    expect(lines[4]!.endsWith(`${COARSE_LABEL} steps in 62 % of frames   wrecks: mean 3.4, end 5`)).toBeTruthy();
+    expect(lines.some((l) => /^GPU {7}no timer query/.test(l))).toBeTruthy();
+    expect(lines.some((l) => l.endsWith("2.7 steps/frame, 1.56 ms/step, 212 ms per sim-second, 3.4 fine-slice cuts/sim-s"))).toBeTruthy();
+    expect(lines.some((l) => l.startsWith("fx tier: high 97 %, minimal 3 % (auto)") && l.includes("radial blur, grain 0.03"))).toBeTruthy();
+    expect(lines.some((l) => l.includes("PCF 2048x2048, 223 casters") && l.includes("pixel ratio 1.5 of device 2.625, canvas 1373x618, no MSAA"))).toBeTruthy();
+    expect(lines.some((l) => l === "depth: 24 bits (drawing buffer), subpixel 8 bits, fragment highp 23 bits, range 2^127..2^127, camera near 0.1 far 180, log depth off, coplanar layer shows at 0.063 px of slope or 62 steps")).toBeTruthy();
     const noDepth = describeBench({ ...RESULT, settings: { ...RESULT.settings, depth: { ...RESULT.settings.depth, bits: 16, contextDepth: false, fragmentHighFloat: null, logarithmicDepthBuffer: true } } });
-    assert.ok(noDepth.some((l) => l === "depth: 16 bits (drawing buffer, none requested), subpixel 8 bits, fragment highp not supported, camera near 0.1 far 180, log depth on, coplanar layer shows at 0.063 px of slope or 62 steps"));
-    assert.ok(lines.some((l) => l.startsWith("A/B pacer pinned: 1/240 s 41.0 fps") && l.endsWith(", 12.5 fine-slice cuts/sim-s")) && lines.some((l) => l.includes(`${COARSE_LABEL} 58.0 fps`) && l.endsWith(", 0.0 fine-slice cuts/sim-s")));
-    assert.ok(lines.some((l) => l.includes("minimal 60.0 fps") && l.includes("gpu 1.1")) && lines.some((l) => l.includes("high 48.0 fps") && l.includes("gpu n/a")));
-    assert.ok(lines.some((l) => l === "detail: only the body drawn beyond 50 m for 80 %, 40 m for 20 % of the window"));
-    assert.ok(lines.some((l) => l.startsWith("A/B detail pinned: no cuts 44.0 fps")) && lines.some((l) => l.includes("body beyond 30 m 59.0 fps")));
-    assert.ok(!lines.some((l) => l.includes("masked")));
+    expect(noDepth.some((l) => l === "depth: 16 bits (drawing buffer, none requested), subpixel 8 bits, fragment highp not supported, camera near 0.1 far 180, log depth on, coplanar layer shows at 0.063 px of slope or 62 steps")).toBeTruthy();
+    expect(lines.some((l) => l.startsWith("A/B pacer pinned: 1/240 s 41.0 fps") && l.endsWith(", 12.5 fine-slice cuts/sim-s")) && lines.some((l) => l.includes(`${COARSE_LABEL} 58.0 fps`) && l.endsWith(", 0.0 fine-slice cuts/sim-s"))).toBeTruthy();
+    expect(lines.some((l) => l.includes("minimal 60.0 fps") && l.includes("gpu 1.1")) && lines.some((l) => l.includes("high 48.0 fps") && l.includes("gpu n/a"))).toBeTruthy();
+    expect(lines.some((l) => l === "detail: only the body drawn beyond 50 m for 80 %, 40 m for 20 % of the window")).toBeTruthy();
+    expect(lines.some((l) => l.startsWith("A/B detail pinned: no cuts 44.0 fps")) && lines.some((l) => l.includes("body beyond 30 m 59.0 fps"))).toBeTruthy();
+    expect(!lines.some((l) => l.includes("masked"))).toBe(true);
     const masked = describeBench({ ...RESULT, device: { ...RESULT.device, gpu: "ANGLE (NVIDIA GeForce GTX 980), or similar", gpuMasked: true } });
-    assert.ok(masked.some((l) => l.includes("GTX 980") && l.includes("[masked by the browser: not the real GPU]")));
+    expect(masked.some((l) => l.includes("GTX 980") && l.includes("[masked by the browser: not the real GPU]"))).toBeTruthy();
     const timed = describeBench({ ...RESULT, gpuMs: S(3) });
-    assert.ok(timed.some((l) => /^GPU {7}p50 3\.0 {2}p95 6\.0/.test(l) && !l.includes("wait on the display")), "frames of 11 ms: a 6 ms p95 is work");
+    expect(timed.some((l) => /^GPU {7}p50 3\.0 {2}p95 6\.0/.test(l) && !l.includes("wait on the display")), "frames of 11 ms: a 6 ms p95 is work").toBeTruthy();
     // The owner's 165 Hz desktop card: frame p50 6.1 ms, GPU p50 1.5 ms and p95 5.96 ms: one refresh long, so a wait.
     const waiting = describeBench({ ...RESULT, frameMs: S(6.1), gpuMs: { mean: 2.9, p50: 1.5, p95: 5.96, p99: 6.2, max: 10.6 } });
-    assert.ok(waiting.some((l) => /^GPU {7}p50 1\.5 {2}p95 6\.0 {2}p99 6\.2 {2}max 10\.6 ms {3}p95 is one frame long: a wait on the display, p50 is the work$/.test(l)));
-    assert.ok(lines.length <= 30, `${lines.length} lines: the card scrolls on a 412 px tall phone screen at 11 px type`);
+    expect(waiting.some((l) => /^GPU {7}p50 1\.5 {2}p95 6\.0 {2}p99 6\.2 {2}max 10\.6 ms {3}p95 is one frame long: a wait on the display, p50 is the work$/.test(l))).toBeTruthy();
+    expect(lines.length, `${lines.length} lines: the card scrolls on a 412 px tall phone screen at 11 px type`).toBeLessThanOrEqual(30);
   });
 });
 
@@ -199,8 +215,8 @@ describe("given the bench result of a run with the print looks and the rim light
   const settingsLine = (settings: BenchResult["settings"]): string => describeBench({ ...RESULT, settings }).find((l) => l.includes("fx density"))!;
 
   test("when none is held on, then the settings line says off for dots, hatch and rim, and when they are held, it gives each strength after the cel's", () => {
-    assert.match(settingsLine(RESULT.settings), /cel auto, dots off, hatch off, rim off {3}night/);
-    assert.match(settingsLine({ ...RESULT.settings, celLook: 0.5, halftone: 0.5, hatching: 0.4, rimLight: 0.6 }), /cel 0\.5, dots 0\.5, hatch 0\.4, rim 0\.6 {3}night/);
+    expect(settingsLine(RESULT.settings)).toMatch(/cel auto, dots off, hatch off, rim off {3}night/);
+    expect(settingsLine({ ...RESULT.settings, celLook: 0.5, halftone: 0.5, hatching: 0.4, rimLight: 0.6 })).toMatch(/cel 0\.5, dots 0\.5, hatch 0\.4, rim 0\.6 {3}night/);
   });
 });
 
@@ -217,35 +233,35 @@ describe("given a bench window the owner left for another app (the 2278f1c phone
         { phase: "ab-pace", atS: 0, visible: true, focused: false, fullscreen: false },
       ],
     });
-    assert.ok(left.includes("PAGE LEFT during the window: unfocused 18.5 s, hidden 19.0 s, back 45.0 s. Read max and p99 with that in mind: a phone holds a page it is leaving"));
-    assert.ok(!describeBench(RESULT).some((l) => l.startsWith("PAGE LEFT")));
+    expect(left.includes("PAGE LEFT during the window: unfocused 18.5 s, hidden 19.0 s, back 45.0 s. Read max and p99 with that in mind: a phone holds a page it is leaving")).toBeTruthy();
+    expect(!describeBench(RESULT).some((l) => l.startsWith("PAGE LEFT"))).toBe(true);
   });
 });
 
 describe("given a card from a bench loop whose options the chooser set (Loop, Epicenter, Ultra)", () => {
   test("when the card is written, then the line under its header names each option, so an epicenter-on quick run reads apart from an older whole-mode one, and a card from no loop has no such line", () => {
     const lines = describeBench({ ...RESULT, run: { ...RESULT.run, options: { loop: true, epi: true, ultra: false } } });
-    assert.equal(lines[1], "run options: Loop on, Epicenter on, Ultra off");
-    assert.ok(!describeBench(RESULT).some((l) => l.startsWith("run options")));
+    expect(lines[1]).toBe("run options: Loop on, Epicenter on, Ultra off");
+    expect(!describeBench(RESULT).some((l) => l.startsWith("run options"))).toBe(true);
   });
 });
 
 describe("given the bench result of the Lab's throws (?bench=lab)", () => {
   test("when the card is written, then its second line names the throws in turn, how often and when they leave, that time was held at 1x, and how many the window saw; a race's card has no such line", () => {
     const lines = describeBench({ ...RESULT, course: "lab", cars: 4, cops: null, labThrown: 4 });
-    assert.match(lines[0]!, /^CRUSH BENCH {2}lab {2}4 cars/);
+    expect(lines[0]!).toMatch(/^CRUSH BENCH {2}lab {2}4 cars/);
     const line = lines[1]!;
     const lab = benchPlan("?bench=lab")!.lab!;
-    assert.ok(line.startsWith("lab: "), line);
+    expect(line.startsWith("lab: "), line).toBeTruthy();
     let from = 0;
     for (const t of lab.throws) {
       const at = line.indexOf(t.preset, from);
-      assert.ok(at >= from, `${t.preset} is not named after the throw before it: ${line}`);
-      assert.ok(line.slice(at).includes(`${t.along} m/s`) && line.slice(at).includes(`${t.up} m/s up`), `${t.preset}'s launch is not named: ${line}`);
+      expect(at, `${t.preset} is not named after the throw before it: ${line}`).toBeGreaterThanOrEqual(from);
+      expect(line.slice(at).includes(`${t.along} m/s`) && line.slice(at).includes(`${t.up} m/s up`), `${t.preset}'s launch is not named: ${line}`).toBeTruthy();
       from = at + t.preset.length;
     }
-    assert.ok(line.includes("held at 1x") && line.includes("4 thrown in the window"), line);
-    assert.ok(!describeBench(RESULT).some((l) => l.startsWith("lab:")));
+    expect(line.includes("held at 1x") && line.includes("4 thrown in the window"), line).toBeTruthy();
+    expect(!describeBench(RESULT).some((l) => l.startsWith("lab:"))).toBe(true);
   });
 });
 
@@ -253,8 +269,8 @@ describe("given the bench result of a page that asked for the Ultra arm (?ultra=
   test("when the card is written, then the fx A/B has an ultra row after high with its fps, gpu ms and draw calls; a card without the arm has no ultra row", () => {
     const lines = describeBench({ ...RESULT, abFx: { ...RESULT.abFx!, ultra: { ...B(41, 3.2), calls: 655 } } });
     const at = lines.findIndex((l) => l.includes("high 48.0 fps"));
-    assert.match(lines[at + 1]!, /^ +ultra 41\.0 fps, .*gpu 3\.2, 655 calls$/);
-    assert.ok(!describeBench(RESULT).some((l) => l.includes("ultra ")));
+    expect(lines[at + 1]!).toMatch(/^ +ultra 41\.0 fps, .*gpu 3\.2, 655 calls$/);
+    expect(!describeBench(RESULT).some((l) => l.includes("ultra "))).toBe(true);
   });
 });
 
@@ -263,36 +279,36 @@ describe("given the bench result with the sky as drawn each second", () => {
 
   test("when every window second drew the strip, then the settings line says the strip was drawn for all of them, counting the window's seconds only", () => {
     // Two warm-up seconds (stretch 0) with the strip still loading, then four window seconds (stretch 1) all drawing it.
-    assert.ok(skyLine({ flags: "ffffff", phases: "001111", sky: "443333" }).endsWith("drawn full 4 of 4 window s"));
+    expect(skyLine({ flags: "ffffff", phases: "001111", sky: "443333" }).endsWith("drawn full 4 of 4 window s")).toBeTruthy();
   });
 
   test("when the window drew the strip for three seconds and nothing for one, then the line gives both, the larger first", () => {
-    assert.ok(skyLine({ flags: "ffffff", phases: "001111", sky: "003303" }).endsWith("drawn full 3 of 4 window s, none 1 of 4 window s"));
+    expect(skyLine({ flags: "ffffff", phases: "001111", sky: "003303" }).endsWith("drawn full 3 of 4 window s, none 1 of 4 window s")).toBeTruthy();
   });
 
   test("when the series has no window second, then the line says so", () => {
-    assert.ok(skyLine({ flags: "ff", phases: "00", sky: "33" }).endsWith("drawn no window seconds"));
+    expect(skyLine({ flags: "ff", phases: "00", sky: "33" }).endsWith("drawn no window seconds")).toBeTruthy();
   });
 });
 
 describe("given the bench result of a race that ran the sky A/B", () => {
   test("when a card from before the procedural default is written, then it names the Sky setting and what it drew at the top tier, and the sky arms give their fps and draw calls with the full strip first; the Lab's card has no sky arms", () => {
     const lines = describeBench({ ...RESULT, abSky: { full: { ...B(52, null), calls: 160 }, off: { ...B(57, null), calls: 159 } } });
-    assert.ok(lines.some((l) => l.includes("deform shape, sky full pinned by the bench (your setting auto, put back after; full on every tier), drawn ")), "the setting in effect");
+    expect(lines.some((l) => l.includes("deform shape, sky full pinned by the bench (your setting auto, put back after; full on every tier), drawn ")), "the setting in effect").toBeTruthy();
     const at = lines.findIndex((l) => l.startsWith("A/B sky pinned: full 52.0 fps"));
-    assert.ok(at >= 0 && lines[at]!.endsWith("160 calls"), "the full arm");
-    assert.match(lines[at + 1]!, /^ +off 57\.0 fps, .*159 calls$/);
-    assert.ok(!describeBench({ ...RESULT, abSky: null }).some((l) => l.startsWith("A/B sky")), "no arms without a sky");
+    expect(at >= 0 && lines[at]!.endsWith("160 calls"), "the full arm").toBeTruthy();
+    expect(lines[at + 1]!).toMatch(/^ +off 57\.0 fps, .*159 calls$/);
+    expect(!describeBench({ ...RESULT, abSky: null }).some((l) => l.startsWith("A/B sky")), "no arms without a sky").toBe(true);
   });
 
   test("when a card that pinned the procedural sky is written, then its settings line names that pin, and the sky arms run procedural, the strip, then none", () => {
     const settings = { ...RESULT.settings, skyPin: "procedural", skyDetail: "procedural" } as const;
     const lines = describeBench({ ...RESULT, settings, abSky: { procedural: { ...B(55, null), calls: 160 }, full: { ...B(52, null), calls: 160 }, off: { ...B(57, null), calls: 159 } } });
-    assert.ok(lines.some((l) => l.includes("sky procedural pinned by the bench (your setting auto, put back after; procedural on every tier), drawn ")), "the pin in effect");
+    expect(lines.some((l) => l.includes("sky procedural pinned by the bench (your setting auto, put back after; procedural on every tier), drawn ")), "the pin in effect").toBeTruthy();
     const at = lines.findIndex((l) => l.startsWith("A/B sky pinned: procedural 55.0 fps"));
-    assert.ok(at >= 0, "the procedural arm first");
-    assert.match(lines[at + 1]!, /^ +full 52\.0 fps, .*160 calls$/);
-    assert.match(lines[at + 2]!, /^ +off 57\.0 fps, .*159 calls$/);
+    expect(at, "the procedural arm first").toBeGreaterThanOrEqual(0);
+    expect(lines[at + 1]!).toMatch(/^ +full 52\.0 fps, .*160 calls$/);
+    expect(lines[at + 2]!).toMatch(/^ +off 57\.0 fps, .*159 calls$/);
   });
 });
 
@@ -300,8 +316,8 @@ describe("given a card whose run held draw max and scale 2 pinned by the URL", (
   test("when it is described, then its quality line says so", () => {
     const settings = { ...RESULT.settings, quality: { draw: "max", scale: "2", shadow: "auto", pinned: "draw scale" } };
     const lines = describeBench({ ...RESULT, settings });
-    assert.ok(lines.includes("quality: draw max, scale 2, shadows auto (the URL pinned draw scale)"), lines.join("\n"));
-    assert.ok(!describeBench(RESULT).some((l) => l.startsWith("quality:")), "a card from before the knobs has no quality line");
+    expect(lines.includes("quality: draw max, scale 2, shadows auto (the URL pinned draw scale)"), lines.join("\n")).toBeTruthy();
+    expect(!describeBench(RESULT).some((l) => l.startsWith("quality:")), "a card from before the knobs has no quality line").toBe(true);
   });
 });
 
@@ -320,11 +336,11 @@ describe("given an extended card with quality A/B blocks", () => {
     ];
     for (const knob of knobs) {
       const at = lines.findIndex((l) => l.startsWith(knob.title));
-      assert.ok(at >= 0, `${knob.title} is printed`);
-      assert.ok(lines[at]!.startsWith(`${knob.title}${knob.auto}`), `${knob.title} Auto arm: ${lines[at]}`);
-      assert.ok(lines[at + 1]!.startsWith(`${" ".repeat(knob.title.length)}${knob.top}`), `${knob.title} top arm: ${lines[at + 1]}`);
+      expect(at, `${knob.title} is printed`).toBeGreaterThanOrEqual(0);
+      expect(lines[at]!.startsWith(`${knob.title}${knob.auto}`), `${knob.title} Auto arm: ${lines[at]}`).toBeTruthy();
+      expect(lines[at + 1]!.startsWith(`${" ".repeat(knob.title.length)}${knob.top}`), `${knob.title} top arm: ${lines[at + 1]}`).toBeTruthy();
     }
-    assert.ok(!describeBench(RESULT).some((l) => l.startsWith("A/B draw distance") || l.startsWith("A/B render scale") || l.startsWith("A/B shadows")), "a card without the blocks prints none");
+    expect(!describeBench(RESULT).some((l) => l.startsWith("A/B draw distance") || l.startsWith("A/B render scale") || l.startsWith("A/B shadows")), "a card without the blocks prints none").toBe(true);
   });
 });
 
@@ -354,43 +370,43 @@ describe("given the bench result of a run that replayed its own crash at each FX
 
   test("when the card is written, then the replay's clip is named and every tier has its own row with fps, frame, cpu, sim, draw and the ragdoll step ms", () => {
     const at = card.findIndex((l) => l.startsWith("replay of this run's crash: 8 cars, 2 thrown, 40 KB clip, 12 s per tier"));
-    assert.ok(at >= 0, card.join("\n"));
+    expect(at, card.join("\n")).toBeGreaterThanOrEqual(0);
     for (const [i, tier] of ["minimal", "low", "high", "ultra"].entries()) {
       const line = card[at + 1 + i]!;
-      assert.ok(line.startsWith(`  ${tier.padEnd(8)}`) && /fps, 1% low .*frame .*cpu .*sim .*draw .*gpu 2\.1, ragdoll step 0\.32\/0\.62 \(1400 steps\)$/.test(line), line);
+      expect(line.startsWith(`  ${tier.padEnd(8)}`) && /fps, 1% low .*frame .*cpu .*sim .*draw .*gpu 2\.1, ragdoll step 0\.32\/0\.62 \(1400 steps\)$/.test(line), line).toBeTruthy();
     }
   });
 
   test("when the card is written, then the window's ragdoll world line gives its steps, its step ms and the colliders and bodies it holds", () => {
-    assert.ok(card.includes("ragdoll world: 1800 steps, step 0.32 ms mean / 0.62 p95, 340 colliders, 52 bodies"), card.join("\n"));
+    expect(card.includes("ragdoll world: 1800 steps, step 0.32 ms mean / 0.62 p95, 340 colliders, 52 bodies"), card.join("\n")).toBeTruthy();
   });
 
   test("when the result is sent with the replay and ragdoll fields, then the card stays under the submission cap with the room the old card left", () => {
     // The old card measured 19 kB, HUD state included (`lib/submissions/kinds.ts`): what the two new fields add must fit the cap with it.
     const added = JSON.stringify({ ragdoll: ragdollOf(1800), replay: REPLAY, replayWhy: null }).length;
-    assert.ok(19 * 1024 + added < MAX_JSON_BYTES.bench, `${added} bytes added to 19 kB`);
-    assert.ok(added < 4096, `${added} bytes`);
+    expect(19 * 1024 + added, `${added} bytes added to 19 kB`).toBeLessThan(MAX_JSON_BYTES.bench);
+    expect(added, `${added} bytes`).toBeLessThan(4096);
   });
 });
 
 describe("given the bench result of a run that had no clip to replay", () => {
   test("when the card is written, then it says why and has no tier rows, and the ragdoll line is still there", () => {
     const card = describeBench({ ...RESULT, replay: null, replayWhy: "the crash was not filed as a highlight" });
-    assert.ok(card.includes("replay: none (the crash was not filed as a highlight)"), card.join("\n"));
-    assert.ok(!card.some((l) => l.startsWith("replay of")));
-    assert.ok(card.some((l) => l.startsWith("ragdoll world: 1800 steps")), "ragdoll line");
+    expect(card.includes("replay: none (the crash was not filed as a highlight)"), card.join("\n")).toBeTruthy();
+    expect(!card.some((l) => l.startsWith("replay of"))).toBe(true);
+    expect(card.some((l) => l.startsWith("ragdoll world: 1800 steps")), "ragdoll line").toBeTruthy();
   });
 });
 
 describe("given the bench result whose frames the device summarised", () => {
   test("when the card is written, then one line counts the frame spikes and says what the sim was doing in them against the other frames, with the correlation and the phase that was largest", () => {
     const line = describeBench(RESULT).find((l) => l.startsWith("frame spikes"));
-    assert.equal(line, "frame spikes (over 3x the window median 11.1 ms, at least 25 ms): 12 of 2700 frames, p99 31.4 p99.9 88.8 max 120.5 ms; in a spike against elsewhere: crashed 6.0 vs 3.0 (r 0.41), wreckCarSlices 31.0 vs 11.0 (r 0.55), pairContacts 44.0 vs 9.0 (r 0.72), freezes 1.5 vs 0.1 (r 0.20), ragdollMessages 4.0 vs 0.5 (r 0.20); the wreck phase is the largest in 9 of them");
+    expect(line).toBe("frame spikes (over 3x the window median 11.1 ms, at least 25 ms): 12 of 2700 frames, p99 31.4 p99.9 88.8 max 120.5 ms; in a spike against elsewhere: crashed 6.0 vs 3.0 (r 0.41), wreckCarSlices 31.0 vs 11.0 (r 0.55), pairContacts 44.0 vs 9.0 (r 0.72), freezes 1.5 vs 0.1 (r 0.20), ragdollMessages 4.0 vs 0.5 (r 0.20); the wreck phase is the largest in 9 of them");
   });
 
   test("when no frame was a spike, then the line says none", () => {
     const quiet = { ...FRAME_STATS, spikes: { ...FRAME_STATS.spikes, count: 0 } };
-    assert.ok(describeBench({ ...RESULT, frameStats: quiet }).some((l) => l.startsWith("frame spikes") && l.endsWith(", none")));
+    expect(describeBench({ ...RESULT, frameStats: quiet }).some((l) => l.startsWith("frame spikes") && l.endsWith(", none"))).toBeTruthy();
   });
 });
 
@@ -398,20 +414,20 @@ describe("given the bench result with the sim's phase table, its work counts, lo
   test("when the card is written, then one line names every phase with its ms per sim-second, the unattributed rest (summing to the headline) and the work counts, and the device line carries the long tasks and battery", () => {
     const lines = describeBench(RESULT);
     const phaseLine = lines.find((l) => l.startsWith("  sim phases"));
-    assert.ok(phaseLine !== undefined, "no phase line");
-    assert.ok(phaseLine.startsWith("  sim phases, ms per sim-second: drive 30.0, plan 5.0, integrate 25.0, wreck 80.0, pairs 20.0, structure 18.0, course 8.0, bake 1.0, rules 3.0, settle 17.0, unattributed 5.0  (sum 212.0 of 212.0, 38.4 % spread over its seconds);  work per sim-second: steps 240, slices 330, liveCarSlices 3000, wreckCarSlices 1900"));
-    assert.ok(phaseLine.endsWith("ragdollMessages 0, ragdollBytes 0"));
-    assert.ok(lines.some((l) => l.startsWith("9 cores, 8 GB") && l.includes("long tasks in the window: 4, 312.5 ms in all, longest 120.3 ms   battery: 83 % on battery at the start, 81 % on battery at the end")));
+    must(phaseLine !== undefined, "no phase line");
+    expect(phaseLine.startsWith("  sim phases, ms per sim-second: drive 30.0, plan 5.0, integrate 25.0, wreck 80.0, pairs 20.0, structure 18.0, course 8.0, bake 1.0, rules 3.0, settle 17.0, unattributed 5.0  (sum 212.0 of 212.0, 38.4 % spread over its seconds);  work per sim-second: steps 240, slices 330, liveCarSlices 3000, wreckCarSlices 1900")).toBeTruthy();
+    expect(phaseLine.endsWith("ragdollMessages 0, ragdollBytes 0")).toBeTruthy();
+    expect(lines.some((l) => l.startsWith("9 cores, 8 GB") && l.includes("long tasks in the window: 4, 312.5 ms in all, longest 120.3 ms   battery: 83 % on battery at the start, 81 % on battery at the end"))).toBeTruthy();
   });
 
   test("when the browser reports no long tasks and no battery, then the line says so instead of showing zeros", () => {
     const lines = describeBench({ ...RESULT, longTasks: null, device: { ...RESULT.device, battery: null } });
-    assert.ok(lines.some((l) => l.endsWith("long tasks: not reported   battery: not reported")));
+    expect(lines.some((l) => l.endsWith("long tasks: not reported   battery: not reported"))).toBeTruthy();
   });
 
   test("when the new fields are added to a card, then they come to under 1.5 kB of JSON", () => {
     const added = JSON.stringify({ phases: RESULT.phases, longTasks: RESULT.longTasks, battery: RESULT.device.battery }).length;
-    assert.ok(added < 1536, `${added} bytes added to a card`);
+    expect(added, `${added} bytes added to a card`).toBeLessThan(1536);
   });
 });
 
@@ -419,12 +435,12 @@ describe("given the bench result with the hitch log and the A/B switches' hitche
   test("when the card is written, then one line counts the hitches and names the worst with their stretch, time, cpu and draw ms and causes, and one line gives each switch's longest frame and time to settle, marking an arm that never settled", () => {
     const lines = describeBench(RESULT);
     const line = lines.find((l) => l.startsWith("hitches:"));
-    assert.equal(line, "hitches: 3 of 7200 frames over 3x the median (and 25 ms), 612 ms over in all; worst: window 3.2 s 412 ms (cpu 380, draw 350; focus), ab-fx 0.4 s 180 ms (cpu 150, draw 140; setting-switch+gpu-resources), ab-fx 7.7 s 60 ms (cpu 8, draw 3; no visible cause)   switch hitches (longest frame ms / s to settle, scored after it, ! never settled): fx: minimal 412/0.4, high 90/6.0!   warm-up sweep: 9 hitched of 2400 frames, 2100 ms over");
+    expect(line).toBe("hitches: 3 of 7200 frames over 3x the median (and 25 ms), 612 ms over in all; worst: window 3.2 s 412 ms (cpu 380, draw 350; focus), ab-fx 0.4 s 180 ms (cpu 150, draw 140; setting-switch+gpu-resources), ab-fx 7.7 s 60 ms (cpu 8, draw 3; no visible cause)   switch hitches (longest frame ms / s to settle, scored after it, ! never settled): fx: minimal 412/0.4, high 90/6.0!   warm-up sweep: 9 hitched of 2400 frames, 2100 ms over");
   });
 
   test("when no frame hitched, then the line says none and names no rows", () => {
     const lines = describeBench({ ...RESULT, hitches: { ...RESULT.hitches, count: 0, excessMs: 0, rows: [] } });
-    assert.ok(lines.some((l) => l.startsWith("hitches: 0 of 7200 frames over 3x the median (and 25 ms), 0 ms over in all   switch hitches")));
+    expect(lines.some((l) => l.startsWith("hitches: 0 of 7200 frames over 3x the median (and 25 ms), 0 ms over in all   switch hitches"))).toBeTruthy();
   });
 });
 
@@ -435,7 +451,7 @@ describe("given a run that hitched as often as the table holds, over every A/B s
     const switches = Array.from({ length: 30 }, (_, i) => ({ stretch: "fx", arm: i % 2 ? "high" : "minimal", round: 1 + (i >> 1), settled: i % 3 !== 0, frames: 60 + i, settleS: 3 + digits, longestMs: 400 + digits, longestAt: i, longestCpuMs: 200 + digits }));
     const full = { ...RESULT, hitches: { ...RESULT.hitches, count: 4000, excessMs: 123456 + digits, rows }, switches };
     const bytes = JSON.stringify(roundCard(full)).length;
-    assert.ok(bytes < MAX_JSON_BYTES.bench - 12 * 1024, `${bytes} bytes against the cap of ${MAX_JSON_BYTES.bench}`);
+    expect(bytes, `${bytes} bytes against the cap of ${MAX_JSON_BYTES.bench}`).toBeLessThan(MAX_JSON_BYTES.bench - 12 * 1024);
   });
 
   test("when the window carries its per-second phases and counters for every second it can hold, with the page's per-second state of the longest page, then the card's JSON still stays 12 kB under the cap", () => {
@@ -451,6 +467,6 @@ describe("given a run that hitched as often as the table holds, over every A/B s
     const hex = "fd".repeat(900);
     const full = { ...RESULT, phases: { ...PHASES, perSecond }, pageSeconds: { flags: hex, phases: hex, sky: hex, epi: hex } };
     const bytes = JSON.stringify(roundCard(full)).length;
-    assert.ok(bytes < MAX_JSON_BYTES.bench - 12 * 1024, `${bytes} bytes against the cap of ${MAX_JSON_BYTES.bench}`);
+    expect(bytes, `${bytes} bytes against the cap of ${MAX_JSON_BYTES.bench}`).toBeLessThan(MAX_JSON_BYTES.bench - 12 * 1024);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { snapshotAiCar } from "../match/derby.ts";
 import { setGround } from "../world/ground.ts";
@@ -153,9 +152,9 @@ describe("given a stakeout pair of cops standing 12 m apart in one lane of the o
     it(`when the racer passes the stakeout ${share} of the lap on and the cops wake into their lead-ins, then no two cops touch, and each cop that pulls away has the racer past its spot`, (t) => {
       const r = runPair(share);
       t.annotate(`closest ${r.closest.toFixed(1)} m`);
-      assert.ok(r.pulled[0] && r.pulled[1], `both cops woke (cop 1 ${r.pulled[0]}, cop 2 ${r.pulled[1]}): the test proves nothing`);
-      assert.deepEqual(r.bad, []);
-      assert.deepEqual(r.touched, [], "frames in which the two cops' footprints overlapped");
+      expect(r.pulled[0] && r.pulled[1], `both cops woke (cop 1 ${r.pulled[0]}, cop 2 ${r.pulled[1]}): the test proves nothing`).toBeTruthy();
+      expect(r.bad).toHaveLength(0);
+      expect(r.touched, "frames in which the two cops' footprints overlapped").toHaveLength(0);
     });
   }
 });
@@ -170,13 +169,13 @@ describe("given one stakeout cop parked by the oval, its nose turned toward the 
   for (const c of LONE) {
     it(`when the cop wakes into its lead-in ${c.where}, then its heading off the road ends under where it started or under ${LINED_UP} rad, and it never T-bones the racer`, (t) => {
       const r = runPair(c.share, track, false, true);
-      assert.ok(r.pulled[0] && r.heading.length > 0, "the cop woke and drove its lead-in");
+      expect(r.pulled[0] && r.heading.length > 0, "the cop woke and drove its lead-in").toBeTruthy();
       const start = r.heading[0]!;
       const end = r.heading.at(-1)!;
       t.annotate(`spot ${r.spot.toFixed(0)} m, heading ${start.toFixed(2)} → ${end.toFixed(2)} rad`);
-      assert.ok(end < start || end < LINED_UP, `heading ${start.toFixed(2)} → ${end.toFixed(2)} rad off the road`);
-      assert.deepEqual(r.bad, []);
-      assert.deepEqual(r.tbones, [], "frames the cop was crossways into the racer's flank");
+      expect(end < start || end < LINED_UP, `heading ${start.toFixed(2)} → ${end.toFixed(2)} rad off the road`).toBeTruthy();
+      expect(r.bad).toHaveLength(0);
+      expect(r.tbones, "frames the cop was crossways into the racer's flank").toHaveLength(0);
     });
   }
 });
@@ -192,10 +191,10 @@ describe("given a stakeout pair of cops parked 12 m apart nose to nose on a long
     it(`when the racer passes the stakeout on ${c.id}, then both cops wake into their lead-ins, no two cops touch, and each cop that pulls away has the racer past its spot`, (t) => {
       const r = runPair(c.share, new Track(TRACKS.find((j) => parseTrack(j).id === c.id)), true);
       t.annotate(`spot ${r.spot.toFixed(0)} m (blind read ${r.blind.toFixed(0)} m), closest ${r.closest.toFixed(1)} m`);
-      if (c.stacked) assert.ok(Math.abs(r.blind - r.spot) > 1000, `the stakeout at ${r.spot.toFixed(0)} m is not under the dam: the stacked case is not staged`);
-      assert.ok(r.pulled[0] && r.pulled[1], `both cops woke (cop 1 ${r.pulled[0]}, cop 2 ${r.pulled[1]})`);
-      assert.deepEqual(r.bad, []);
-      assert.deepEqual(r.touched, [], "frames in which the two cops' footprints overlapped");
+      if (c.stacked) expect(Math.abs(r.blind - r.spot), `the stakeout at ${r.spot.toFixed(0)} m is not under the dam: the stacked case is not staged`).toBeGreaterThan(1000);
+      expect(r.pulled[0] && r.pulled[1], `both cops woke (cop 1 ${r.pulled[0]}, cop 2 ${r.pulled[1]})`).toBeTruthy();
+      expect(r.bad).toHaveLength(0);
+      expect(r.touched, "frames in which the two cops' footprints overlapped").toHaveLength(0);
     });
   }
 });

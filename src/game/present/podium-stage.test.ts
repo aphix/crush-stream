@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { BLOCK_WIDTH, PODIUM_BLOCKS, type PodiumPlace } from "../match/podium.ts";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
@@ -71,25 +70,25 @@ describe("given the podium's stage drawn on recording canvases", () => {
 
   it("when everything the stage wrote is read, then the word podium is nowhere, and the banner names the course", () => {
     const all = canvases.flatMap((c) => c.texts);
-    assert.ok(all.length > 0, "the control: text was drawn");
-    assert.ok(!all.some((t) => /podium/i.test(t)), "no podium text");
-    assert.ok(all.includes("BRICKYARD OVAL"), "the course on the banner");
-    for (const name of ["Ayla", "Bo", "Cy"]) assert.ok(all.includes(name), `the plate of ${name}`);
+    expect(all.length, "the control: text was drawn").toBeGreaterThan(0);
+    expect(!all.some((t) => /podium/i.test(t)), "no podium text").toBe(true);
+    expect(all.includes("BRICKYARD OVAL"), "the course on the banner").toBeTruthy();
+    for (const name of ["Ayla", "Bo", "Cy"]) expect(all.includes(name), `the plate of ${name}`).toBeTruthy();
   });
 
   it("when a campaign's stage is lettered, then the banner says championship and still not podium", () => {
     stage.setNames(PLACES, "Championship");
     const all = canvases.flatMap((c) => c.texts);
-    assert.ok(all.includes("CHAMPIONSHIP"));
-    assert.ok(!all.some((t) => /podium/i.test(t)));
+    expect(all.includes("CHAMPIONSHIP")).toBeTruthy();
+    expect(!all.some((t) => /podium/i.test(t))).toBe(true);
   });
 
   it("when every point a decal's cups touch is read, then it lies inside the decal's canvas", () => {
     const decals = canvases.filter((c) => c.w === 512 && c.h === 256);
-    assert.equal(decals.length, 3, "one decal canvas per block");
+    expect(decals.length, "one decal canvas per block").toBe(3);
     for (const decal of decals) {
-      assert.ok(decal.points.length > 0, "the control: the cups were drawn");
-      for (const p of decal.points) assert.ok(p.x >= 0 && p.x <= decal.w && p.y >= 0 && p.y <= decal.h, `a point at (${p.x.toFixed(0)}, ${p.y.toFixed(0)}) is off the ${decal.w} × ${decal.h} decal`);
+      expect(decal.points.length, "the control: the cups were drawn").toBeGreaterThan(0);
+      for (const p of decal.points) expect(p.x >= 0 && p.x <= decal.w && p.y >= 0 && p.y <= decal.h, `a point at (${p.x.toFixed(0)}, ${p.y.toFixed(0)}) is off the ${decal.w} × ${decal.h} decal`).toBeTruthy();
     }
   });
 
@@ -97,29 +96,29 @@ describe("given the podium's stage drawn on recording canvases", () => {
     const { cupSize, cupY, leftX, rightX, numeralHalfWidth } = decalLayout();
     const left = cupBox(leftX, cupY, cupSize);
     const right = cupBox(rightX, cupY, cupSize);
-    assert.ok(left.left >= EDGE_MARGIN_PX, `the left cup starts ${left.left} px in`);
-    assert.ok(right.right <= 512 - EDGE_MARGIN_PX, `the right cup ends ${512 - right.right} px short of the edge`);
-    assert.ok(left.top >= EDGE_MARGIN_PX && left.bottom <= 256 - EDGE_MARGIN_PX, "inside top and bottom");
-    assert.ok(256 - numeralHalfWidth - left.right >= NUMERAL_GAP_PX, `the left cup is ${256 - numeralHalfWidth - left.right} px from the numeral`);
-    assert.ok(right.left - (256 + numeralHalfWidth) >= NUMERAL_GAP_PX, `the right cup is ${right.left - 256 - numeralHalfWidth} px from the numeral`);
+    expect(left.left, `the left cup starts ${left.left} px in`).toBeGreaterThanOrEqual(EDGE_MARGIN_PX);
+    expect(right.right, `the right cup ends ${512 - right.right} px short of the edge`).toBeLessThanOrEqual(512 - EDGE_MARGIN_PX);
+    expect(left.top >= EDGE_MARGIN_PX && left.bottom <= 256 - EDGE_MARGIN_PX, "inside top and bottom").toBeTruthy();
+    expect(256 - numeralHalfWidth - left.right, `the left cup is ${256 - numeralHalfWidth - left.right} px from the numeral`).toBeGreaterThanOrEqual(NUMERAL_GAP_PX);
+    expect(right.left - (256 + numeralHalfWidth), `the right cup is ${right.left - 256 - numeralHalfWidth} px from the numeral`).toBeGreaterThanOrEqual(NUMERAL_GAP_PX);
   });
 
   it("when the banner's cups are placed, then each is inside the gold frame by the edge margin", () => {
     const { cupSize, cupY, leftX, rightX } = bannerLayout();
-    assert.ok(cupBox(leftX, cupY, cupSize).left >= BANNER_FRAME_PX + EDGE_MARGIN_PX - 1e-9);
-    assert.ok(cupBox(rightX, cupY, cupSize).right <= 1536 - BANNER_FRAME_PX - EDGE_MARGIN_PX + 1e-9);
+    expect(cupBox(leftX, cupY, cupSize).left).toBeGreaterThanOrEqual(BANNER_FRAME_PX + EDGE_MARGIN_PX - 1e-9);
+    expect(cupBox(rightX, cupY, cupSize).right).toBeLessThanOrEqual(1536 - BANNER_FRAME_PX - EDGE_MARGIN_PX + 1e-9);
   });
 
   it("when each decal's world box is read at its block's size, then it is inside the block's front face with a margin all round", () => {
     stage.group.updateMatrixWorld(true);
     const decals = stage["decals"];
-    assert.equal(decals.length, 3);
+    expect(decals.length).toBe(3);
     for (const [k, block] of PODIUM_BLOCKS.entries()) {
       const box = new THREE.Box3().setFromObject(decals[k]!);
-      assert.ok(box.min.x >= block.x - BLOCK_WIDTH / 2 + FACE_SIDE_MARGIN_M, `place ${block.place}: left edge ${box.min.x} against the face's ${block.x - BLOCK_WIDTH / 2}`);
-      assert.ok(box.max.x <= block.x + BLOCK_WIDTH / 2 - FACE_SIDE_MARGIN_M, `place ${block.place}: right edge ${box.max.x}`);
-      assert.ok(box.min.y >= FACE_MARGIN_M, `place ${block.place}: bottom edge ${box.min.y}`);
-      assert.ok(box.max.y <= block.top - FACE_MARGIN_M, `place ${block.place}: top edge ${box.max.y} against the block's ${block.top}`);
+      expect(box.min.x, `place ${block.place}: left edge ${box.min.x} against the face's ${block.x - BLOCK_WIDTH / 2}`).toBeGreaterThanOrEqual(block.x - BLOCK_WIDTH / 2 + FACE_SIDE_MARGIN_M);
+      expect(box.max.x, `place ${block.place}: right edge ${box.max.x}`).toBeLessThanOrEqual(block.x + BLOCK_WIDTH / 2 - FACE_SIDE_MARGIN_M);
+      expect(box.min.y, `place ${block.place}: bottom edge ${box.min.y}`).toBeGreaterThanOrEqual(FACE_MARGIN_M);
+      expect(box.max.y, `place ${block.place}: top edge ${box.max.y} against the block's ${block.top}`).toBeLessThanOrEqual(block.top - FACE_MARGIN_M);
     }
   });
 });

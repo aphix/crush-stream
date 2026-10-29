@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import { BENCH, blocksOf } from "./bench-measure.ts";
 import { alternate } from "./bench-frame.ts";
 import { display, restoreFrame, rig, STEADY_MS, STEADY_SIM_MS, STRETCH } from "./bench-frame.test-util.ts";
@@ -34,48 +33,48 @@ describe("given an A/B whose second arm opens with a decaying hang (400 ms, fall
     ], 1);
     const steady = result.accs.get("steady")!;
     const hang = result.accs.get("hang")!;
-    assert.ok(Math.abs(steady.sim / steady.frames - STEADY_SIM_MS) < SIM_TOLERANCE_MS, "the steady arm's sim ms a frame");
-    assert.ok(Math.abs(hang.sim / hang.frames - STEADY_SIM_MS) < SIM_TOLERANCE_MS, "the hang arm's sim ms a frame: no frame of the hang was scored");
-    assert.ok(Math.abs(hang.frames - steady.frames) <= FRAME_COUNT_SLACK, `frames scored in the block: ${hang.frames} against ${steady.frames}`);
+    expect(Math.abs(steady.sim / steady.frames - STEADY_SIM_MS), "the steady arm's sim ms a frame").toBeLessThan(SIM_TOLERANCE_MS);
+    expect(Math.abs(hang.sim / hang.frames - STEADY_SIM_MS), "the hang arm's sim ms a frame: no frame of the hang was scored").toBeLessThan(SIM_TOLERANCE_MS);
+    expect(Math.abs(hang.frames - steady.frames), `frames scored in the block: ${hang.frames} against ${steady.frames}`).toBeLessThanOrEqual(FRAME_COUNT_SLACK);
     const [first, second] = result.switches;
-    assert.ok(first!.longestMs < 2 * STEADY_MS, "the steady switch's longest frame is an ordinary one");
-    assert.equal(second!.arm, "hang", "the second switch");
-    assert.ok(second!.longestMs >= 400, `the hang is the switch's longest frame (${second!.longestMs} ms)`);
-    assert.equal(second!.longestAt, 0, "at the first frame after the switch");
-    assert.ok(second!.frames > 15, `${second!.frames} frames watched: the hang took more than ten frames to fall`);
-    assert.equal(second!.settled, true, "settled");
+    expect(first!.longestMs, "the steady switch's longest frame is an ordinary one").toBeLessThan(2 * STEADY_MS);
+    expect(second!.arm, "the second switch").toBe("hang");
+    expect(second!.longestMs, `the hang is the switch's longest frame (${second!.longestMs} ms)`).toBeGreaterThanOrEqual(400);
+    expect(second!.longestAt, "at the first frame after the switch").toBe(0);
+    expect(second!.frames, `${second!.frames} frames watched: the hang took more than ten frames to fall`).toBeGreaterThan(15);
+    expect(second!.settled, "settled").toBe(true);
   });
 
   it("when the arms are steady throughout, then every switch settles in two windows of frames and each arm scores the same frames", async () => {
     const { engine, parts, t, beat } = rig();
     const result = await alternate(engine, parts, t, beat, ui, "fx", [{ key: "a", set() {} }, { key: "b", set() {} }], 2);
-    assert.equal(result.switches.length, 4, "two arms, two rounds");
+    expect(result.switches.length, "two arms, two rounds").toBe(4);
     for (const s of result.switches) {
-      assert.equal(s.settled, true, `${s.arm} round ${s.round} settled`);
-      assert.equal(s.frames, 2 * SETTLE.frames, `${s.arm} round ${s.round} frames watched`);
+      expect(s.settled, `${s.arm} round ${s.round} settled`).toBe(true);
+      expect(s.frames, `${s.arm} round ${s.round} frames watched`).toBe(2 * SETTLE.frames);
     }
     const a = result.accs.get("a")!;
     const b = result.accs.get("b")!;
-    assert.ok(Math.abs(a.frames - b.frames) <= 2 * FRAME_COUNT_SLACK, `frames scored by each arm: ${a.frames} against ${b.frames}`);
-    assert.ok(Math.abs(a.frames - 2 * (BENCH.blockS / (STEADY_MS / 1000))) <= 2 * FRAME_COUNT_SLACK, `two blocks of the block length at 6 ms: ${a.frames} frames`);
+    expect(Math.abs(a.frames - b.frames), `frames scored by each arm: ${a.frames} against ${b.frames}`).toBeLessThanOrEqual(2 * FRAME_COUNT_SLACK);
+    expect(Math.abs(a.frames - 2 * (BENCH.blockS / (STEADY_MS / 1000))), `two blocks of the block length at 6 ms: ${a.frames} frames`).toBeLessThanOrEqual(2 * FRAME_COUNT_SLACK);
   });
 
   it("when a frame time never levels (it grows 10 % a frame), then the arm is scored after the cap and its switch says it never settled", async () => {
     const { engine, parts, t, beat } = rig();
     const result = await alternate(engine, parts, t, beat, ui, "fx", [{ key: "never", set: () => display.use((since) => STEADY_MS * 1.1 ** since) }], 1);
     const [only] = result.switches;
-    assert.equal(only!.settled, false, "settled");
-    assert.ok(only!.settleS >= SETTLE.capS, `${only!.settleS} s watched`);
+    expect(only!.settled, "settled").toBe(false);
+    expect(only!.settleS, `${only!.settleS} s watched`).toBeGreaterThanOrEqual(SETTLE.capS);
   });
 
   it("when a hang falls inside the settle watch, then the hitch log holds it with the tier-switch cause and the stretch the arm ran in, and the scored block adds none", async () => {
     const { engine, parts, t, beat } = rig();
     await alternate(engine, parts, t, beat, ui, "fx", [{ key: "a", set: () => display.use((since) => (since === 45 ? 450 : STEADY_MS)) }], 1);
     const table = beat.hitches.table();
-    assert.equal(table.count, 1, "hitches");
-    assert.equal(table.rows[0]!.ms, 450, "the hang's ms");
-    assert.equal(table.rows[0]!.phase, STRETCH, "its stretch");
-    assert.ok(table.rows[0]!.causes.includes(CAUSE_NAMES[0]), "the setting-switch cause");
+    expect(table.count, "hitches").toBe(1);
+    expect(table.rows[0]!.ms, "the hang's ms").toBe(450);
+    expect(table.rows[0]!.phase, "its stretch").toBe(STRETCH);
+    expect(table.rows[0]!.causes.includes(CAUSE_NAMES[0]), "the setting-switch cause").toBeTruthy();
   });
 });
 
@@ -91,17 +90,17 @@ describe("given an A/B's arm whose sim cost swings from one second to the next, 
     ], 1);
     const steady = result.accs.get("steady")!;
     const swing = result.accs.get("swing")!;
-    assert.ok(steady.binN >= BENCH.blockS - 1, `${steady.binN} whole seconds binned for a ${BENCH.blockS} s block`);
+    expect(steady.binN, `${steady.binN} whole seconds binned for a ${BENCH.blockS} s block`).toBeGreaterThanOrEqual(BENCH.blockS - 1);
     const blocks = blocksOf(result, NO_GPU_QUERIES);
-    assert.ok(blocks["steady"]!.simSpreadPct < 1, "the steady arm's spread");
-    assert.ok(blocks["swing"]!.simSpreadPct > 40, `the swinging arm's spread: ${blocks["swing"]!.simSpreadPct} %`);
-    assert.equal(steady.unsettled + swing.unsettled, 0, "every switch settled");
+    expect(blocks["steady"]!.simSpreadPct, "the steady arm's spread").toBeLessThan(1);
+    expect(blocks["swing"]!.simSpreadPct, `the swinging arm's spread: ${blocks["swing"]!.simSpreadPct} %`).toBeGreaterThan(40);
+    expect(steady.unsettled + swing.unsettled, "every switch settled").toBe(0);
   });
 
   it("when a switch never settles, then its arm counts it", async () => {
     const { engine, parts, t, beat } = rig();
     const result = await alternate(engine, parts, t, beat, ui, "fx", [{ key: "never", set: () => display.use((since) => STEADY_MS * 1.1 ** since) }], 2);
-    assert.equal(result.accs.get("never")!.unsettled, 2, "two rounds, two switches");
+    expect(result.accs.get("never")!.unsettled, "two rounds, two switches").toBe(2);
   });
 });
 
@@ -116,13 +115,13 @@ describe("given the bench card's arm label, kept up to date by the bench's frame
     knob.set(0);
     try {
       await frame(engine, parts.renderer, t, beat);
-      assert.equal(element.textContent, "epicenter off", "the first frame");
+      expect(element.textContent, "the first frame").toBe("epicenter off");
       knob.set(1);
       await frame(engine, parts.renderer, t, beat);
-      assert.equal(element.textContent, "EPICENTER ON", "the frame after the knob went on");
+      expect(element.textContent, "the frame after the knob went on").toBe("EPICENTER ON");
       knob.set(0);
       await frame(engine, parts.renderer, t, beat);
-      assert.equal(element.textContent, "epicenter off", "the frame after it went back");
+      expect(element.textContent, "the frame after it went back").toBe("epicenter off");
     } finally {
       knob.set(initial);
     }

@@ -1,11 +1,10 @@
-import { afterEach, describe, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { zipBound } from "../contact/zip-bound.test-util.ts";
 import { PUSH_SPEED } from "../deform/push-budget.ts";
 import { launch, makeCar as makeCrashCar } from "../contact/crash-scenarios.test-util.ts";
 import { arenaWorld } from "../scenes/derby-arena.test-util.ts";
 import { DERBY_BOXES } from "../scenes/derby-ground.ts";
 import { stepWorld } from "./world-step.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import { PREFABS, type PrefabId } from "../world/catalog.ts";
 import { setGround } from "../world/ground.ts";
@@ -104,16 +103,16 @@ describe("given a prop on a course, solid (palm, wall, dumpster) or knockable (c
 
       it("when its lowest point is 0.5 m above the prop's top, then it passes over untouched, with no push and no lost speed", () => {
         const { car, v, touched } = hit(0.5);
-        assert.equal(touched, false, "no contact");
+        expect(touched, "no contact").toBe(false);
         assertSameNumbers(car.velocity.toArray(), v.toArray(), "no push, no lost speed");
       });
 
       it("when its lowest point is 0.2 m under the prop's top, then it still hits the prop", () => {
-        assert.equal(hit(-0.2).touched, true);
+        expect(hit(-0.2).touched).toBe(true);
       });
 
       it("when it is on the ground (its lowest point at the prop's foot), then it hits the prop", () => {
-        assert.equal(hit(0, 0, true).touched, true);
+        expect(hit(0, 0, true).touched).toBe(true);
       });
 
       it(`when it is nose down ${NOSE_DOWN_DEGREES}° with its centre ${CENTRE_OVER} m over the top, more than 0.2 m, but its front underside corner under it, then it hits the prop, while a level car at that centre height passes`, () => {
@@ -121,9 +120,9 @@ describe("given a prop on a course, solid (palm, wall, dumpster) or knockable (c
         const reach = probe.car.group.position.y - probe.k.top(probe.c);
         const tilted = hit(CENTRE_OVER - reach, NOSE_DOWN);
         const origin = tilted.car.group.position.y - tilted.k.top(tilted.c);
-        assert.ok(origin > 0.2, `the origin is ${origin.toFixed(2)} m over the prop's top`);
-        assert.equal(tilted.touched, true, "the corner is in it");
-        assert.equal(hit(origin).touched, false, "level, the same origin height clears");
+        expect(origin, `the origin is ${origin.toFixed(2)} m over the prop's top`).toBeGreaterThan(0.2);
+        expect(tilted.touched, "the corner is in it").toBe(true);
+        expect(hit(origin).touched, "level, the same origin height clears").toBe(false);
       });
     });
   }
@@ -141,10 +140,10 @@ describe("given a prop on a course, solid (palm, wall, dumpster) or knockable (c
         for (let k = 0; k < car.cage.style.vertexCount; k++) low = Math.min(low, _v.set(pos[k * 3]!, pos[k * 3 + 1]! + lift, pos[k * 3 + 2]!).applyQuaternion(car.group.quaternion).y);
         return 3 + low;
       };
-      assert.ok(Math.abs(lowestY(car) - lowest()) < 1e-9);
+      expect(Math.abs(lowestY(car) - lowest())).toBeLessThan(1e-9);
       car.group.quaternion.setFromAxisAngle(new THREE.Vector3(1, 0, 0), 0.3);
-      assert.ok(Math.abs(lowestY(car) - lowest()) < 1e-9);
-      assert.ok(lowestY(car) < 3, "the front underside corner is under the origin's height");
+      expect(Math.abs(lowestY(car) - lowest())).toBeLessThan(1e-9);
+      expect(lowestY(car), "the front underside corner is under the origin's height").toBeLessThan(3);
     });
   });
 });
@@ -181,10 +180,10 @@ describe("given a sedan flying a ballistic arc at 12 m/s over a wall or palm on 
   for (const prefab of ["wall", "palm"] as const) {
     it(`when its lowest point is planned to cross 2.5 m over the ${prefab}, then it takes no hit and flies on past it, while the same launch 3.5 m lower does hit`, () => {
       const over = fly(prefab, 2.5);
-      assert.ok(over.clearest > 0.3, `the arc crosses ${over.clearest.toFixed(2)} m over the top, so the scenario is a clear pass`);
-      assert.equal(over.hits, 0, "no contact in mid-air");
-      assert.ok(over.along > 2, `flew on past it (${over.along.toFixed(1)} m beyond its middle)`);
-      assert.ok(fly(prefab, -1).hits > 0, "the same launch, 3.5 m lower, is stopped by it: the count sees hits");
+      expect(over.clearest, `the arc crosses ${over.clearest.toFixed(2)} m over the top, so the scenario is a clear pass`).toBeGreaterThan(0.3);
+      expect(over.hits, "no contact in mid-air").toBe(0);
+      expect(over.along, `flew on past it (${over.along.toFixed(1)} m beyond its middle)`).toBeGreaterThan(2);
+      expect(fly(prefab, -1).hits, "the same launch, 3.5 m lower, is stopped by it: the count sees hits").toBeGreaterThan(0);
     });
   }
 });
@@ -307,9 +306,9 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
   for (const c of landings) {
     it(c.it, () => {
       const hit = place(c.id, c.along, c.inward, -c.under, [c.v[0], c.v[1], c.v[2]]).slice(c.dt);
-      assert.ok(hit.shove <= hit.bound, `the slice shoved the wreck ${(hit.shove * 1000).toFixed(0)} mm, past its zip bound of ${(hit.bound * 1000).toFixed(0)} mm`);
-      assert.ok(hit.low >= -1e-9 && hit.vy >= -1e-9, `it ends ${(hit.low * 1000).toFixed(1)} mm from the top at ${hit.vy.toFixed(2)} m/s up: on the top and no longer falling`);
-      assert.ok(hit.massVy >= -1e-9, `its masses still fall at ${hit.massVy.toFixed(2)} m/s: the next slice reads that as crush through the top`);
+      expect(hit.shove, `the slice shoved the wreck ${(hit.shove * 1000).toFixed(0)} mm, past its zip bound of ${(hit.bound * 1000).toFixed(0)} mm`).toBeLessThanOrEqual(hit.bound);
+      expect(hit.low >= -1e-9 && hit.vy >= -1e-9, `it ends ${(hit.low * 1000).toFixed(1)} mm from the top at ${hit.vy.toFixed(2)} m/s up: on the top and no longer falling`).toBeTruthy();
+      expect(hit.massVy, `its masses still fall at ${hit.massVy.toFixed(2)} m/s: the next slice reads that as crush through the top`).toBeGreaterThanOrEqual(-1e-9);
     });
   }
 
@@ -323,7 +322,7 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
   for (const c of stands) {
     it(c.it, () => {
       const hit = place(c.id, c.along, c.inward, -c.under, [c.v[0], c.v[1], c.v[2]]).slice(c.dt);
-      assert.ok(hit.shove <= hit.bound, `the slice moved the wreck's masses ${(hit.shove * 1000).toFixed(0)} mm, past its zip bound of ${(hit.bound * 1000).toFixed(0)} mm (met ${hit.walls})`);
+      expect(hit.shove, `the slice moved the wreck's masses ${(hit.shove * 1000).toFixed(0)} mm, past its zip bound of ${(hit.bound * 1000).toFixed(0)} mm (met ${hit.walls})`).toBeLessThanOrEqual(hit.bound);
     });
   }
 
@@ -366,22 +365,22 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
     const reach = Math.hypot(prism.x, prism.z);
     const { slice, wreck } = place(54, OFF_55, 1.7, -1, [(8 * prism.x) / reach, 0, (8 * prism.z) / reach]);
     const ring = Math.min(footprintClear(wreck, 26), footprintClear(wreck, 27));
-    assert.ok(ring >= RING_CLEAR, `staging: the footprint stands ${ring.toFixed(3)} m off ring walls 26 and 27`);
+    expect(ring, `staging: the footprint stands ${ring.toFixed(3)} m off ring walls 26 and 27`).toBeGreaterThanOrEqual(RING_CLEAR);
     const met = new Set<number>();
     let towardMiddle = 0;
     for (let t = 0; t < EPISODE_S; t += EPISODE_SLICE) {
       for (const m of wreck.deform.masses) m.world.addScaledVector(m.vel, EPISODE_SLICE);
       wreck.group.position.addScaledVector(wreck.velocity, EPISODE_SLICE);
       const hit = slice(EPISODE_SLICE);
-      assert.ok(hit.shove <= hit.bound, `${(t * 1000).toFixed(1)} ms in: shoved ${(hit.shove * 1000).toFixed(0)} mm, past its zip bound of ${(hit.bound * 1000).toFixed(0)} mm`);
+      expect(hit.shove, `${(t * 1000).toFixed(1)} ms in: shoved ${(hit.shove * 1000).toFixed(0)} mm, past its zip bound of ${(hit.bound * 1000).toFixed(0)} mm`).toBeLessThanOrEqual(hit.bound);
       for (const id of hit.walls) met.add(id);
       towardMiddle += hit.towardMiddle;
       // Parted: the stack neither met it nor moved it this slice, and the wreck is not still driving into it (a touch read from a few
       // cm off, then a slice with none while the hull closes the last mm, is not the end of the contact).
       if (met.size > 0 && hit.walls.length === 0 && hit.towardMiddle <= 0 && wreck.velocity.x * prism.x + wreck.velocity.z * prism.z <= 0) break;
     }
-    assert.ok(met.size > 0 && [...met].every((i) => i === 54), `met the stack alone: ${[...met]}`);
-    assert.ok(towardMiddle >= MIN_PUSH, `pushed ${(towardMiddle * 1000).toFixed(1)} mm back toward the middle over the contact (at least ${MIN_PUSH * 1000} mm)`);
+    expect(met.size > 0 && [...met].every((i) => i === 54), `met the stack alone: ${[...met]}`).toBeTruthy();
+    expect(towardMiddle, `pushed ${(towardMiddle * 1000).toFixed(1)} mm back toward the middle over the contact (at least ${MIN_PUSH * 1000} mm)`).toBeGreaterThanOrEqual(MIN_PUSH);
   });
 
   it("when it is held 0.3 m inside the tyre stack 54's side at rest, a metre under the top, then it is pushed out of the stack within the slices the push-out speed implies, every slice within its zip bound", () => {
@@ -392,11 +391,11 @@ describe("given a crushed wreck over a prism of the derby arena, met in slices",
     let settled = -1;
     for (let n = 1; n <= 3 * implied; n++) {
       const hit = slice(dt);
-      assert.ok(hit.shove <= hit.bound, `slice ${n} moved it ${(hit.shove * 1000).toFixed(1)} mm, past its zip bound of ${(hit.bound * 1000).toFixed(1)} mm`);
+      expect(hit.shove, `slice ${n} moved it ${(hit.shove * 1000).toFixed(1)} mm, past its zip bound of ${(hit.bound * 1000).toFixed(1)} mm`).toBeLessThanOrEqual(hit.bound);
       out += hit.towardMiddle;
       if (hit.shove < 1e-4 && settled < 0) settled = n;
     }
-    assert.ok(out > 0.05, `it was pushed out only ${(out * 1000).toFixed(0)} mm of its 0.3 m hull overlap`);
-    assert.ok(settled > 0 && settled <= implied + 3, `it stopped being pushed at slice ${settled}, the push-out speed implies ${implied}`);
+    expect(out, `it was pushed out only ${(out * 1000).toFixed(0)} mm of its 0.3 m hull overlap`).toBeGreaterThan(0.05);
+    expect(settled > 0 && settled <= implied + 3, `it stopped being pushed at slice ${settled}, the push-out speed implies ${implied}`).toBeTruthy();
   });
 });

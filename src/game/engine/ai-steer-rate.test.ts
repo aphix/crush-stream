@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { CrashEngine } from "./engine.ts";
 import { benchRaceEngine, disposeBenchEngine } from "./engine-bench-headless.test-util.ts";
@@ -8,6 +7,7 @@ import { THROTTLE_STEPS, type DriveInput } from "../vehicle/car-drive.ts";
 import { standingBite } from "../vehicle/wheel-bite.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 import { blankPoint } from "../world/track.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const STEP = 1 / QUIET_HZ;
 /** Seconds of each scene judged, from its green light. */
@@ -126,17 +126,17 @@ describe("given the real engine's AI drivers, one step at the phone's coarse 1/8
   for (const kind of ["racer", "traffic", "police", "hunter", "derby"] as const) {
     it(`when the ${kind} AI drives, then no car's wheel moves faster than a pad player's ${FEEL.steerPad} of lock a second in any step`, (ctx) => {
       const t = tally.get(kind);
-      assert.ok(t !== undefined && t.steps >= FEWEST, `${t?.steps ?? 0} ${kind} car-steps judged`);
+      must(t !== undefined && t.steps >= FEWEST, `${t?.steps ?? 0} ${kind} car-steps judged`);
       ctx.annotate(`${t.steps} car-steps; the fastest: ${t.at}`);
-      assert.ok(t.worst <= 0, `${kind}: ${t.at}, ${t.worst.toFixed(3)} of lock past the reach`);
+      expect(t.worst, `${kind}: ${t.at}, ${t.worst.toFixed(3)} of lock past the reach`).toBeLessThanOrEqual(0);
     });
   }
 
   it("when the player drives the race (keyboard: gas, the wheel held left and right, the handbrake tapped at speed), then every step the car runs the wheel the seat shaped, bit for bit, steps faster than a pad's included", (ctx) => {
-    assert.ok(player.ran.length >= 4 * QUIET_HZ, `${player.ran.length} steps judged`);
+    expect(player.ran.length, `${player.ran.length} steps judged`).toBeGreaterThanOrEqual(4 * QUIET_HZ);
     ctx.annotate(`${player.ran.length} steps; the fastest moved the wheel ${player.fastest.toFixed(3)} in a step`);
-    assert.ok(player.fastest > reach(STEP), `the fastest step moved the wheel ${player.fastest.toFixed(3)}: nothing a limiter would have cut`);
-    for (let k = 0; k < player.ran.length; k++) assert.equal(player.ran[k], player.asked[k], `step ${k}`);
+    expect(player.fastest, `the fastest step moved the wheel ${player.fastest.toFixed(3)}: nothing a limiter would have cut`).toBeGreaterThan(reach(STEP));
+    for (let k = 0; k < player.ran.length; k++) expect(player.ran[k], `step ${k}`).toBe(player.asked[k]);
   });
 });
 
@@ -152,7 +152,7 @@ const PLAYER_ROOM = 100;
 function startOnStraight(engine: CrashEngine, car: DeformableCar): void {
   const race = engine["race"];
   const track = race["track"];
-  assert.ok(track !== null, "the race has a course");
+  must(track !== null, "the race has a course");
   const { curv, count } = track.path;
   const span = Math.ceil((PLAYER_ROOM / track.length) * count);
   let best = 0;

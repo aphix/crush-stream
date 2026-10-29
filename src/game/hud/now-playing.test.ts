@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { nowPlayingCorner, type NowPlayingContext } from "./now-playing.ts";
 
 const IDLE: NowPlayingContext = { raceLive: false, menuOpen: false, reel: false, narrow: false };
@@ -18,7 +17,7 @@ describe("given what is on screen when a song starts", () => {
   ];
   for (const c of testCases) {
     it(`when ${c.name} shows, then the toast takes ${c.expected}`, () => {
-      assert.equal(nowPlayingCorner(c.context), c.expected);
+      expect(nowPlayingCorner(c.context)).toBe(c.expected);
     });
   }
 });

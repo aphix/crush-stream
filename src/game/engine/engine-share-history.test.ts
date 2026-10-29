@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { CAMERA_PRESETS, cameraPresetValues } from "../hud/camera-presets.ts";
@@ -67,27 +66,27 @@ describe("given the real engine writing the page's # into a browser history stac
 
   it("when a scene's settings change a dozen times, then the stack has no more entries; entering another scene adds one, its own changes add none, and Back returns to the first scene with its last settings", () => {
     change(1);
-    assert.equal(entries.length, 1, "the fleet's changes rewrite the one entry");
+    expect(entries.length, "the fleet's changes rewrite the one entry").toBe(1);
     const left = hud.get();
     const fleetBar = entries[0]!;
-    assert.match(fleetBar, /cam\.pos\.lon=/, "the fleet's settings are in its entry");
+    expect(fleetBar, "the fleet's settings are in its entry").toMatch(/cam\.pos\.lon=/);
 
     engine["setScene"]("press");
-    assert.equal(engine["sceneId"], "press");
-    assert.equal(entries.length, 2, "one entry for the scene change");
-    assert.match(entries[1]!, /scene=press/);
-    assert.equal(entries[0], fleetBar, "the fleet's entry is as it was left");
+    expect(engine["sceneId"]).toBe("press");
+    expect(entries.length, "one entry for the scene change").toBe(2);
+    expect(entries[1]!).toMatch(/scene=press/);
+    expect(entries[0], "the fleet's entry is as it was left").toBe(fleetBar);
 
     change(2);
-    assert.equal(entries.length, 2, "the press's changes rewrite its entry");
-    assert.match(entries[1]!, /scene=press/);
+    expect(entries.length, "the press's changes rewrite its entry").toBe(2);
+    expect(entries[1]!).toMatch(/scene=press/);
 
     back();
-    assert.equal(engine["sceneId"], "fleet");
-    assert.equal(hud.get()["cam.pos.lon"], left["cam.pos.lon"], "the camera slider as the fleet left it");
-    assert.equal(hud.get()["cam.shake"], left["cam.shake"]);
-    assert.equal(hud.get()["epi.on"], left["epi.on"], "the activation as the fleet left it");
-    assert.equal(hud.get().night, left.night);
-    assert.equal(entries.length, 2, "going Back writes nothing");
+    expect(engine["sceneId"]).toBe("fleet");
+    expect(hud.get()["cam.pos.lon"], "the camera slider as the fleet left it").toBe(left["cam.pos.lon"]);
+    expect(hud.get()["cam.shake"]).toBe(left["cam.shake"]);
+    expect(hud.get()["epi.on"], "the activation as the fleet left it").toBe(left["epi.on"]);
+    expect(hud.get().night).toBe(left.night);
+    expect(entries.length, "going Back writes nothing").toBe(2);
   });
 });

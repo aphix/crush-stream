@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { DeformableCar } from "./car.ts";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { CLASSES, HANDLING, type VehicleClassId } from "./vehicle-classes.ts";
@@ -38,22 +37,22 @@ for (const cls of ["sedan", "monster"] as const) {
   describe(`given a ${cls} whose drawn wheels turn with the ground (the distance the car moves along its nose over the tyre's drawn radius)`, () => {
     it("when it drives 10 m/s forward and 3 m/s back for 1 s, then the wheel turns +10/r rad forward and −3/r rad back (r is the class's own tyre radius)", () => {
       const fwd = roll(parked(cls), 0, 10, 1);
-      assert.ok(Math.abs(fwd.angle - 10 / radius(cls)) < 0.02 * (10 / radius(cls)), `forward ${fwd.angle.toFixed(3)} rad vs ${(10 / radius(cls)).toFixed(3)}`);
+      expect(Math.abs(fwd.angle - 10 / radius(cls)), `forward ${fwd.angle.toFixed(3)} rad vs ${(10 / radius(cls)).toFixed(3)}`).toBeLessThan(0.02 * (10 / radius(cls)));
       const rev = roll(parked(cls), 0, -3, 1);
-      assert.ok(Math.abs(rev.angle + 3 / radius(cls)) < 0.02 * (3 / radius(cls)), `reverse ${rev.angle.toFixed(3)} rad vs ${(-3 / radius(cls)).toFixed(3)}`);
+      expect(Math.abs(rev.angle + 3 / radius(cls)), `reverse ${rev.angle.toFixed(3)} rad vs ${(-3 / radius(cls)).toFixed(3)}`).toBeLessThan(0.02 * (3 / radius(cls)));
     });
 
     it("when it rolls at 10, −10, −3 and 25 m/s for 1 s, then the wheel's rolled distance is the distance the car moved, signed, within 2 %, not the speed's magnitude", () => {
       for (const v of [10, -10, -3, 25]) {
         const r = roll(parked(cls), 0, v, 1);
-        assert.ok(Math.abs(r.angle * radius(cls) - r.along) < 0.02 * Math.abs(r.along), `${v} m/s: rolled ${(r.angle * radius(cls)).toFixed(3)} m, moved ${r.along.toFixed(3)} m`);
+        expect(Math.abs(r.angle * radius(cls) - r.along), `${v} m/s: rolled ${(r.angle * radius(cls)).toFixed(3)} m, moved ${r.along.toFixed(3)} m`).toBeLessThan(0.02 * Math.abs(r.along));
       }
     });
 
     it("when it slides purely sideways and when it slides at 60° to its nose, then the sideways slide turns the wheel not at all and the 60° slide turns it by its 5 m component along the nose", () => {
-      assert.equal(roll(parked(cls), 10, 0, 1).angle, 0);
+      expect(roll(parked(cls), 10, 0, 1).angle).toBe(0);
       const slant = roll(parked(cls), 10 * Math.sin(Math.PI / 3), 10 * Math.cos(Math.PI / 3), 1);
-      assert.ok(Math.abs(slant.angle * radius(cls) - 5) < 0.1, `rolled ${(slant.angle * radius(cls)).toFixed(3)} m of a 5 m component`);
+      expect(Math.abs(slant.angle * radius(cls) - 5), `rolled ${(slant.angle * radius(cls)).toFixed(3)} m of a 5 m component`).toBeLessThan(0.1);
     });
   });
 }
@@ -67,10 +66,10 @@ describe("given a sedan under the real drive with the throttle held in reverse",
       car.integrate(DT);
     }
     const along = car.group.position.z - z0;
-    assert.ok(car.velocity.dot(car.forward) < -2, `not reversing: ${car.velocity.dot(car.forward).toFixed(2)} m/s`);
-    assert.ok(car.wheels[0]!.rotation.x < 0, `wheels turned forward ${car.wheels[0]!.rotation.x.toFixed(2)} rad reversing`);
+    expect(car.velocity.dot(car.forward), `not reversing: ${car.velocity.dot(car.forward).toFixed(2)} m/s`).toBeLessThan(-2);
+    expect(car.wheels[0]!.rotation.x, `wheels turned forward ${car.wheels[0]!.rotation.x.toFixed(2)} rad reversing`).toBeLessThan(0);
     const tyreR = car.frame.rig.tyre.r;
-    assert.ok(Math.abs(car.wheels[0]!.rotation.x * tyreR - along) < 0.05 * Math.abs(along), `rolled ${(car.wheels[0]!.rotation.x * tyreR).toFixed(2)} m, moved ${along.toFixed(2)} m`);
+    expect(Math.abs(car.wheels[0]!.rotation.x * tyreR - along), `rolled ${(car.wheels[0]!.rotation.x * tyreR).toFixed(2)} m, moved ${along.toFixed(2)} m`).toBeLessThan(0.05 * Math.abs(along));
   });
 });
 
@@ -84,14 +83,14 @@ describe("given a sedan in the air whose wheels were spun up by driving at 10 m/
       car.airborne = true;
       car.airThrottle = throttle;
       for (let i = 0; i < Math.round(secs / DT); i++) car.integrate(DT);
-      assert.ok(car.airborne, "landed");
+      expect(car.airborne, "landed").toBeTruthy();
       return car.wheelRate[0]! / spun;
     };
     const coast = rateAfter(0, 0.5);
-    assert.ok(coast > 0.6 && coast < 0.85, `0.5 s of drag left ${coast.toFixed(2)} of the rate`);
-    assert.ok(rateAfter(0, 3) < 0.2, "still spinning at full rate 3 s on");
-    assert.ok(rateAfter(1, 0.5) > coast + 0.1, "throttle did not spin the wheels up");
-    assert.ok(rateAfter(-1, 0.5) < coast - 0.1, "reverse throttle did not slow them");
+    expect(coast > 0.6 && coast < 0.85, `0.5 s of drag left ${coast.toFixed(2)} of the rate`).toBeTruthy();
+    expect(rateAfter(0, 3), "still spinning at full rate 3 s on").toBeLessThan(0.2);
+    expect(rateAfter(1, 0.5), "throttle did not spin the wheels up").toBeGreaterThan(coast + 0.1);
+    expect(rateAfter(-1, 0.5), "reverse throttle did not slow them").toBeLessThan(coast - 0.1);
   });
 });
 
@@ -100,8 +99,8 @@ describe("given a sedan with a wheel that has left the car", () => {
     const car = parked("sedan");
     car["looseWheels"][0]!.loose = true;
     roll(car, 0, 10, 0.5);
-    assert.equal(car.wheels[0]!.rotation.x, 0);
-    assert.ok(car.wheels[1]!.rotation.x > 1, "a wheel on the car stopped turning");
+    expect(car.wheels[0]!.rotation.x).toBe(0);
+    expect(car.wheels[1]!.rotation.x, "a wheel on the car stopped turning").toBeGreaterThan(1);
   });
 });
 
@@ -112,7 +111,7 @@ describe("given a crashed sedan with a dead drivetrain", () => {
       car.crashed = true;
       car.deform.drivetrainAlive = false;
       const r = roll(car, 0, v, 1);
-      assert.ok(Math.abs(r.angle * radius("sedan") - r.along) < 0.03 * Math.abs(r.along), `${v} m/s: rolled ${(r.angle * radius("sedan")).toFixed(3)} m, moved ${r.along.toFixed(3)} m`);
+      expect(Math.abs(r.angle * radius("sedan") - r.along), `${v} m/s: rolled ${(r.angle * radius("sedan")).toFixed(3)} m, moved ${r.along.toFixed(3)} m`).toBeLessThan(0.03 * Math.abs(r.along));
     }
   });
 });
@@ -125,7 +124,7 @@ describe("given a netplay client's sedan, whose velocity comes from a snapshot",
       car.refreshBasis();
       for (let i = 0; i < 60; i++) car.netFrame(DT);
       const want = v / radius("sedan");
-      assert.ok(Math.abs(car.wheels[0]!.rotation.x - want) < 0.02 * Math.abs(want), `${v} m/s: ${car.wheels[0]!.rotation.x.toFixed(3)} rad vs ${want.toFixed(3)}`);
+      expect(Math.abs(car.wheels[0]!.rotation.x - want), `${v} m/s: ${car.wheels[0]!.rotation.x.toFixed(3)} rad vs ${want.toFixed(3)}`).toBeLessThan(0.02 * Math.abs(want));
     }
   });
 });
@@ -159,9 +158,9 @@ describe("given each vehicle class driven at 20 m/s with half throttle and the s
   for (const cls of ["sedan", "muscle", "truck", "monster", "police"] as const) {
     it(`when a ${cls} turns for 1.5 s, then every wheel rolls what its own contact point travels (within 1.5 %) and the two front wheels' paths differ by over 2 m, as the inner and outer wheel of a turn do`, () => {
       const r = driveRun(cls, 20, 1.5, { throttle: 0.5, steer: 1 });
-      assert.ok(r.travel[0]! - r.travel[1]! > 2, `no inner/outer split in the travel: ${r.travel.map((t) => t.toFixed(1))}`);
+      expect(r.travel[0]! - r.travel[1]!, `no inner/outer split in the travel: ${r.travel.map((t) => t.toFixed(1))}`).toBeGreaterThan(2);
       for (let i = 0; i < 4; i++) {
-        assert.ok(Math.abs(r.rolled[i]! / r.travel[i]! - 1) < 0.015, `wheel ${i}: rolled ${r.rolled[i]!.toFixed(2)} m, its contact point went ${r.travel[i]!.toFixed(2)} m`);
+        expect(Math.abs(r.rolled[i]! / r.travel[i]! - 1), `wheel ${i}: rolled ${r.rolled[i]!.toFixed(2)} m, its contact point went ${r.travel[i]!.toFixed(2)} m`).toBeLessThan(0.015);
       }
     });
   }
@@ -172,13 +171,13 @@ describe("given a sedan driven at 20 m/s with the handbrake held", () => {
     // The grip ramps in over `DRIVE.ebrakeIn` (0.08 s): at 20 m/s the rears roll about 0.8 m before it is full, so the lock is judged over the window after it.
     const ramp = driveRun("sedan", 20, 0.08, { ebrake: true });
     const r = driveRun("sedan", 20, 0.5, { ebrake: true });
-    assert.ok(r.car.speed > 5, `stopped: ${r.car.speed.toFixed(1)} m/s`);
+    expect(r.car.speed, `stopped: ${r.car.speed.toFixed(1)} m/s`).toBeGreaterThan(5);
     for (const i of [2, 3]) {
       const rolled = Math.abs(r.rolled[i]! - ramp.rolled[i]!);
       const travel = r.travel[i]! - ramp.travel[i]!;
-      assert.ok(rolled < 0.05 * travel, `rear ${i} rolled ${rolled.toFixed(2)} of ${travel.toFixed(2)} m after the grip-in`);
+      expect(rolled, `rear ${i} rolled ${rolled.toFixed(2)} of ${travel.toFixed(2)} m after the grip-in`).toBeLessThan(0.05 * travel);
     }
-    assert.ok(Math.abs(r.rolled[0]! / r.travel[0]! - 1) < 0.02, `front rolled ${r.rolled[0]!.toFixed(2)} of ${r.travel[0]!.toFixed(2)} m`);
+    expect(Math.abs(r.rolled[0]! / r.travel[0]! - 1), `front rolled ${r.rolled[0]!.toFixed(2)} of ${r.travel[0]!.toFixed(2)} m`).toBeLessThan(0.02);
   });
 });
 
@@ -188,8 +187,8 @@ describe("given a sedan driven at 30 m/s at the realistic end of the realism sli
     HANDLING.realism = 1;
     try {
       const r = driveRun("sedan", 30, 0.3, { brake: 1 });
-      assert.ok(r.car.drive.lock > 0.5, `no lock-up: ${r.car.drive.lock.toFixed(2)}`);
-      for (let i = 0; i < 4; i++) assert.ok(r.rolled[i]! < 0.7 * r.travel[i]!, `wheel ${i} rolled ${r.rolled[i]!.toFixed(2)} of ${r.travel[i]!.toFixed(2)} m under a lock of ${r.car.drive.lock.toFixed(2)}`);
+      expect(r.car.drive.lock, `no lock-up: ${r.car.drive.lock.toFixed(2)}`).toBeGreaterThan(0.5);
+      for (let i = 0; i < 4; i++) expect(r.rolled[i]!, `wheel ${i} rolled ${r.rolled[i]!.toFixed(2)} of ${r.travel[i]!.toFixed(2)} m under a lock of ${r.car.drive.lock.toFixed(2)}`).toBeLessThan(0.7 * r.travel[i]!);
     } finally {
       HANDLING.realism = was;
     }

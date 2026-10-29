@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -397,7 +396,7 @@ for (const shotCase of shotCases) {
     for (const pointCase of pointCases) {
       it(`when it falls onto ${pointCase.name} with its hit direction straight down, then it arrives at the matched speed`, () => {
         const { piston, drop } = strikeAndDrop(pointCase.id, shot);
-        assert.deepEqual(landingMismatch(drop.landing, piston.ebs), [], `${pointCase.id}: drop / piston`);
+        expect(landingMismatch(drop.landing, piston.ebs), `${pointCase.id}: drop / piston`).toHaveLength(0);
       });
 
       // todo -> after the plan: give the kernel's rows y/ny (with the cage) so a vertical drop's crush reaches the kernel. The rows are plan-only
@@ -407,7 +406,7 @@ for (const shotCase of shotCases) {
       // and the engine block's travel is 0 against the piston's 13-163 mm wherever it is listed.
       todoRow(`when it lands on ${pointCase.name} the same way the piston strikes it, then the crush depth at every point and region, the engine block's travel, the parts that come off and the drivetrain match the piston hit's within 15 % or 10 mm`, true, () => {
         const { piston, drop } = strikeAndDrop(pointCase.id, shot);
-        assert.deepEqual(dropMismatch(drop, piston), [], `${pointCase.id}: drop / piston (crush window ${drop.windowMs} / ${piston.windowMs} ms, fall ${drop.fromM.toFixed(2)} m)`);
+        expect(dropMismatch(drop, piston), `${pointCase.id}: drop / piston (crush window ${drop.windowMs} / ${piston.windowMs} ms, fall ${drop.fromM.toFixed(2)} m)`).toHaveLength(0);
       });
     }
   });

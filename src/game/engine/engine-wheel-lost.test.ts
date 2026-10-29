@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
@@ -113,14 +112,11 @@ function chainVisible(o: THREE.Object3D): boolean {
 
 /** No wheel was drawn twice or where no shown wheel is, and every lost wheel was drawn off its seat once it had `CLEAR_S` to leave. */
 function assertNoneOnSeat(out: Frames, what: string): void {
-  assert.ok(out.lost.size > 0, `the control: ${what} lost a wheel (${out.frames} frames read)`);
-  assert.equal(out.farthest.size, out.lost.size, `the control: every lost wheel was read past ${CLEAR_S} s`);
-  assert.deepEqual(out.faults.slice(0, 5), [], `${out.faults.length} of ${out.frames} frames drew a wheel twice or where no shown wheel is`);
+  expect(out.lost.size, `the control: ${what} lost a wheel (${out.frames} frames read)`).toBeGreaterThan(0);
+  expect(out.farthest.size, `the control: every lost wheel was read past ${CLEAR_S} s`).toBe(out.lost.size);
+  expect(out.faults.slice(0, 5), `${out.faults.length} of ${out.frames} frames drew a wheel twice or where no shown wheel is`).toHaveLength(0);
   const farthest = [...out.farthest].map(([key, gap]) => `${key} ${gap.toFixed(3)} m`);
-  assert.ok(
-    [...out.farthest.values()].every((gap) => gap >= LEFT_SEAT_M),
-    `a lost wheel stayed on its seat; farthest along the ground per wheel: ${farthest.join(", ")}`,
-  );
+  expect([...out.farthest.values()].every((gap) => gap >= LEFT_SEAT_M), `a lost wheel stayed on its seat; farthest along the ground per wheel: ${farthest.join(", ")}`).toBeTruthy();
 }
 
 describe("given the real engine and an offset head-on at the start line that throws wheels", () => {
@@ -155,11 +151,11 @@ describe("given the real engine and an offset head-on at the start line that thr
     engine.toggleRace();
     engine.raceCommand({ type: "program", options: RULES });
     engine.raceCommand({ type: "start" });
-    assert.ok(await runUntil(() => race().phase === "racing", GREEN_WAIT_S), "the race went green");
-    assert.ok(race().crashAtStart(CRASH_GAP, CRASH_SPEED, CRASH_OFFSET), "two cars on the grid");
+    expect(await runUntil(() => race().phase === "racing", GREEN_WAIT_S), "the race went green").toBeTruthy();
+    expect(race().crashAtStart(CRASH_GAP, CRASH_SPEED, CRASH_OFFSET), "two cars on the grid").toBeTruthy();
     watch = new LostWheelWatch(engine, () => engine["live"](), () => engine["elapsedSim"]);
     const kept = race().recorder.ledger.kept;
-    assert.ok(await runUntil(() => kept.length > 0, CLIP_WAIT_S), "the crash was filed");
+    expect(await runUntil(() => kept.length > 0, CLIP_WAIT_S), "the crash was filed").toBeTruthy();
     live = watch.out;
     clip = kept[0]!;
     watch = null;
@@ -187,8 +183,8 @@ describe("given the real engine and an offset head-on at the start line that thr
     const replay = watch.out;
     engine.advance(highlights["solo"]!.tl.wall + SOLO_HOLD_S + 1, { frameDt: FRAME, render: true });
     watch = null;
-    assert.ok(ended, "the control: the clip played to its end");
-    assert.equal([...replay.lost].sort().join(), [...live.lost].sort().join(), "the replay loses the wheels the race lost");
+    expect(ended, "the control: the clip played to its end").toBeTruthy();
+    expect([...replay.lost].sort().join(), "the replay loses the wheels the race lost").toBe([...live.lost].sort().join());
     assertNoneOnSeat(replay, "the replay");
   });
 });

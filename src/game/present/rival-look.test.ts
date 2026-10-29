@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { CAR_SPRAY, SPRAY_PALETTE } from "../match/look-data.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { RIVAL_INK_CONTRAST, RIVAL_PATTERNS, RivalLooks, rivalLook } from "./rival-look.ts";
@@ -37,7 +36,7 @@ describe("given the rivals' pattern collection and its seeded order", () => {
     for (let slot = 0; slot < 8; slot++) {
       const a = rivalLook(77, slot, 0x3366aa);
       const b = rivalLook(77, slot, 0x3366aa);
-      assert.equal(a.pattern.name, b.pattern.name, `slot ${slot} pattern`);
+      expect(a.pattern.name, `slot ${slot} pattern`).toBe(b.pattern.name);
       assertSameNumbers(a.inks, b.inks, `slot ${slot} inks`);
       const first = new RivalLooks();
       const second = new RivalLooks();
@@ -48,15 +47,15 @@ describe("given the rivals' pattern collection and its seeded order", () => {
   });
 
   it("when the collection is counted, then it holds 20 differently named patterns", () => {
-    assert.equal(RIVAL_PATTERNS.length, 20);
-    assert.equal(new Set(RIVAL_PATTERNS.map((pattern) => pattern.name)).size, 20);
+    expect(RIVAL_PATTERNS.length).toBe(20);
+    expect(new Set(RIVAL_PATTERNS.map((pattern) => pattern.name)).size).toBe(20);
   });
 
   it("when one field's first 20 slots are asked, then they wear 20 distinct patterns and slots 20 to 31 reuse them", () => {
     for (const seed of [1, 99, 123456]) {
       const names = Array.from({ length: 32 }, (_, slot) => rivalLook(seed, slot, 0x336699).pattern.name);
-      assert.equal(new Set(names.slice(0, 20)).size, 20, `seed ${seed}: distinct patterns over slots 0..19`);
-      for (let slot = 20; slot < 32; slot++) assert.equal(names[slot], names[slot - 20], `seed ${seed}: slot ${slot} reuses slot ${slot - 20}`);
+      expect(new Set(names.slice(0, 20)).size, `seed ${seed}: distinct patterns over slots 0..19`).toBe(20);
+      for (let slot = 20; slot < 32; slot++) expect(names[slot], `seed ${seed}: slot ${slot} reuses slot ${slot - 20}`).toBe(names[slot - 20]);
     }
   });
 
@@ -69,25 +68,25 @@ describe("given the rivals' pattern collection and its seeded order", () => {
       const differs = Array.from({ length: 20 }, (_, slot) => rivalLook(a, slot, 0x336699).pattern.name !== rivalLook(b, slot, 0x336699).pattern.name);
       if (differs.some(Boolean)) reordered++;
     }
-    assert.ok(reordered >= 48, `${reordered} of ${pairs} neighbouring seeds reorder the field`);
+    expect(reordered, `${reordered} of ${pairs} neighbouring seeds reorder the field`).toBeGreaterThanOrEqual(48);
   });
 });
 
 describe("given the inks a rival is sprayed in", () => {
   it("when 2000 seed, slot and paint cases are drawn, then every ink is a palette colour that clears the paint and the first ink", () => {
-    assert.ok(RIVAL_INK_CONTRAST >= READABLE_CONTRAST, `contrast ${RIVAL_INK_CONTRAST} is under the readable floor ${READABLE_CONTRAST}`);
+    expect(RIVAL_INK_CONTRAST, `contrast ${RIVAL_INK_CONTRAST} is under the readable floor ${READABLE_CONTRAST}`).toBeGreaterThanOrEqual(READABLE_CONTRAST);
     const bodies = bodiesOf(2000 - 3 - SPRAY_PALETTE.length);
-    assert.equal(bodies.length, 2000);
+    expect(bodies.length).toBe(2000);
     for (const [at, body] of bodies.entries()) {
       const { pattern, inks } = rivalLook(Math.imul(at, 40503) + 12345, at % 32, body);
-      assert.equal(inks.length, pattern.inks, `case ${at}: ink count of ${pattern.name}`);
+      expect(inks.length, `case ${at}: ink count of ${pattern.name}`).toBe(pattern.inks);
       for (const ink of inks) {
-        assert.ok(Number.isInteger(ink) && ink >= 1 && ink < SPRAY_PALETTE.length, `case ${at}: ink ${ink} is a palette index from 1`);
-        assert.ok(distance(SPRAY_PALETTE[ink]!, body) >= RIVAL_INK_CONTRAST, `case ${at}: ink ${ink} against paint ${body.toString(16)}`);
+        expect(Number.isInteger(ink) && ink >= 1 && ink < SPRAY_PALETTE.length, `case ${at}: ink ${ink} is a palette index from 1`).toBeTruthy();
+        expect(distance(SPRAY_PALETTE[ink]!, body), `case ${at}: ink ${ink} against paint ${body.toString(16)}`).toBeGreaterThanOrEqual(RIVAL_INK_CONTRAST);
       }
       if (inks.length === 2) {
-        assert.notEqual(inks[1], inks[0], `case ${at}: two different inks`);
-        assert.ok(distance(SPRAY_PALETTE[inks[1]!]!, SPRAY_PALETTE[inks[0]!]!) >= RIVAL_INK_CONTRAST, `case ${at}: ink 1 against ink 0`);
+        expect(inks[1], `case ${at}: two different inks`).not.toBe(inks[0]);
+        expect(distance(SPRAY_PALETTE[inks[1]!]!, SPRAY_PALETTE[inks[0]!]!), `case ${at}: ink 1 against ink 0`).toBeGreaterThanOrEqual(RIVAL_INK_CONTRAST);
       }
     }
   });
@@ -99,10 +98,10 @@ describe("given the inks a rival is sprayed in", () => {
       for (const green of lattice) {
         for (const blue of lattice) {
           const body = (red << 16) | (green << 8) | blue;
-          assert.ok(Math.max(...colours.map((colour) => distance(colour, body))) >= RIVAL_INK_CONTRAST + LATTICE_HALF_DIAGONAL, `first ink for paint ${body.toString(16)}`);
+          expect(Math.max(...colours.map((colour) => distance(colour, body))), `first ink for paint ${body.toString(16)}`).toBeGreaterThanOrEqual(RIVAL_INK_CONTRAST + LATTICE_HALF_DIAGONAL);
           for (const first of colours) {
             const best = Math.max(...colours.filter((colour) => colour !== first).map((colour) => Math.min(distance(colour, body), distance(colour, first))));
-            assert.ok(best >= RIVAL_INK_CONTRAST + LATTICE_HALF_DIAGONAL, `second ink for paint ${body.toString(16)} after ${first.toString(16)}: best margin ${best.toFixed(1)}`);
+            expect(best, `second ink for paint ${body.toString(16)} after ${first.toString(16)}: best margin ${best.toFixed(1)}`).toBeGreaterThanOrEqual(RIVAL_INK_CONTRAST + LATTICE_HALF_DIAGONAL);
           }
         }
       }
@@ -121,11 +120,11 @@ describe("given the rivals' bitmaps", () => {
       const used = new Set(texels);
       used.delete(0);
       const painted = texels.filter((texel) => texel !== 0).length;
-      assert.ok(painted >= 40, `${pattern.name} paints ${painted} texels`);
-      for (const texel of used) assert.ok(inks.includes(texel), `${pattern.name} paints palette colour ${texel} outside its inks ${inks}`);
+      expect(painted, `${pattern.name} paints ${painted} texels`).toBeGreaterThanOrEqual(40);
+      for (const texel of used) expect(inks.includes(texel), `${pattern.name} paints palette colour ${texel} outside its inks ${inks}`).toBeTruthy();
       masks.add(maskOf(looks, 31, slot, body));
     }
-    assert.equal(masks.size, RIVAL_PATTERNS.length, "20 different texel sets");
+    expect(masks.size, "20 different texel sets").toBe(RIVAL_PATTERNS.length);
     looks.dispose();
   });
 
@@ -134,15 +133,15 @@ describe("given the rivals' bitmaps", () => {
     const bitmap = looks.of(1, 3, 0x336699);
     const before = bitmap.texels.slice();
     const version = bitmap.texture.version;
-    assert.equal(looks.of(1, 3, 0x336699), bitmap, "same key, same bitmap");
-    assert.equal(bitmap.texture.version, version, "same key leaves the texture alone");
+    expect(looks.of(1, 3, 0x336699), "same key, same bitmap").toBe(bitmap);
+    expect(bitmap.texture.version, "same key leaves the texture alone").toBe(version);
     assertSameNumbers(bitmap.texels, before, "same key leaves the texels alone");
-    assert.equal(looks.of(2, 3, 0x336699), bitmap, "new seed, same bitmap object");
-    assert.ok(bitmap.texture.version > version, "new seed uploads the texture again");
-    assert.notEqual(Buffer.compare(bitmap.texels, before), 0, "new seed paints new texels");
+    expect(looks.of(2, 3, 0x336699), "new seed, same bitmap object").toBe(bitmap);
+    expect(bitmap.texture.version, "new seed uploads the texture again").toBeGreaterThan(version);
+    expect(Buffer.compare(bitmap.texels, before), "new seed paints new texels").not.toBe(0);
     const again = bitmap.texture.version;
     looks.of(2, 3, 0xcc3300);
-    assert.ok(bitmap.texture.version > again, "new paint redraws too");
+    expect(bitmap.texture.version, "new paint redraws too").toBeGreaterThan(again);
     looks.dispose();
   });
 });
@@ -172,9 +171,9 @@ describe("given the rivals' bitmaps follow the FX tier", () => {
       const looks = new RivalLooks();
       looks.useTier(tier, "desktop");
       const bitmap = looks.of(3, 1, 0x336699);
-      assert.equal(bitmap.layout.w, side, `${tier}: width`);
-      assert.equal(bitmap.layout.h, side, `${tier}: height`);
-      assert.equal(bitmap.texture.generateMipmaps, side > 128, `${tier}: mip chain`);
+      expect(bitmap.layout.w, `${tier}: width`).toBe(side);
+      expect(bitmap.layout.h, `${tier}: height`).toBe(side);
+      expect(bitmap.texture.generateMipmaps, `${tier}: mip chain`).toBe(side > 128);
       for (const [at, face] of CAR_SPRAY.faces.entries()) assertSameNumbers(bitmap.layout.faces[at]!, face.map((texels) => (texels * side) / CAR_SPRAY.w), `${tier}: face ${at}`);
       assertSameNumbers(bitmap.layout.min, CAR_SPRAY.min, `${tier}: box minimum`);
       assertSameNumbers(bitmap.layout.max, CAR_SPRAY.max, `${tier}: box maximum`);
@@ -186,36 +185,36 @@ describe("given the rivals' bitmaps follow the FX tier", () => {
     for (const [klass, side] of [["mobile", 256], ["desktop", 512]] as const) {
       const looks = new RivalLooks();
       looks.useTier("ultra", klass);
-      assert.equal(looks.of(3, 1, 0x336699).layout.w, side, `${klass}: width at Ultra`);
+      expect(looks.of(3, 1, 0x336699).layout.w, `${klass}: width at Ultra`).toBe(side);
       looks.dispose();
     }
     const looks = new RivalLooks();
-    assert.equal(looks.useTier("high", "mobile"), false, "nothing was drawn");
+    expect(looks.useTier("high", "mobile"), "nothing was drawn").toBe(false);
     looks.of(3, 1, 0x336699);
-    assert.equal(looks.useTier("ultra", "mobile"), false, "mobile High and mobile Ultra draw the same size: no redress");
+    expect(looks.useTier("ultra", "mobile"), "mobile High and mobile Ultra draw the same size: no redress").toBe(false);
     looks.dispose();
   });
 
   it("when the tier changes the bitmap's size, then the bitmaps drawn so far are freed and the next ask is a new one of that size; a tier of the same size changes nothing, and a step to a coarser tier keeps the finer bitmaps", () => {
     const looks = new RivalLooks();
-    assert.equal(looks.useTier("minimal", "desktop"), false, "nothing was drawn and the size is the same");
+    expect(looks.useTier("minimal", "desktop"), "nothing was drawn and the size is the same").toBe(false);
     const standard = looks.of(3, 1, 0x336699);
-    assert.equal(looks.useTier("low", "desktop"), false, "low draws the same size as minimal");
-    assert.equal(looks.of(3, 1, 0x336699), standard, "so the bitmap stays");
-    assert.equal(looks.useTier("high", "desktop"), true, "High changes the size with a bitmap worn");
+    expect(looks.useTier("low", "desktop"), "low draws the same size as minimal").toBe(false);
+    expect(looks.of(3, 1, 0x336699), "so the bitmap stays").toBe(standard);
+    expect(looks.useTier("high", "desktop"), "High changes the size with a bitmap worn").toBe(true);
     const fine = looks.of(3, 1, 0x336699);
-    assert.notEqual(fine, standard, "a new bitmap");
-    assert.equal(fine.layout.w, 256, "of the finer size");
-    assert.equal(looks.useTier("low", "desktop"), false, "a step down to Low frees and redraws nothing");
-    assert.equal(looks.of(3, 1, 0x336699), fine, "the High bitmap is kept at Low");
-    assert.equal(looks.useTier("high", "desktop"), false, "and the rise back to High asks for no redraw either");
-    assert.equal(looks.of(3, 1, 0x336699), fine, "the same bitmap");
-    assert.equal(looks.useTier("ultra", "desktop"), true, "Ultra changes it again");
-    assert.equal(looks.of(3, 1, 0x336699).layout.w, 512, "to the finest size");
-    assert.equal(looks.useTier("minimal", "desktop"), false, "a step down from Ultra keeps it");
-    assert.equal(looks.of(3, 1, 0x336699).layout.w, 512, "at the finest size");
+    expect(fine, "a new bitmap").not.toBe(standard);
+    expect(fine.layout.w, "of the finer size").toBe(256);
+    expect(looks.useTier("low", "desktop"), "a step down to Low frees and redraws nothing").toBe(false);
+    expect(looks.of(3, 1, 0x336699), "the High bitmap is kept at Low").toBe(fine);
+    expect(looks.useTier("high", "desktop"), "and the rise back to High asks for no redraw either").toBe(false);
+    expect(looks.of(3, 1, 0x336699), "the same bitmap").toBe(fine);
+    expect(looks.useTier("ultra", "desktop"), "Ultra changes it again").toBe(true);
+    expect(looks.of(3, 1, 0x336699).layout.w, "to the finest size").toBe(512);
+    expect(looks.useTier("minimal", "desktop"), "a step down from Ultra keeps it").toBe(false);
+    expect(looks.of(3, 1, 0x336699).layout.w, "at the finest size").toBe(512);
     looks.dispose();
-    assert.equal(looks.useTier("off", "desktop"), false, "with nothing drawn there is nothing to dress again");
+    expect(looks.useTier("off", "desktop"), "with nothing drawn there is nothing to dress again").toBe(false);
   });
 
   it("when one look is drawn at every size, then each face is painted to the same share and the finer bitmap is a bigger picture of the same paint", () => {
@@ -230,7 +229,7 @@ describe("given the rivals' bitmaps follow the FX tier", () => {
       }
       const name = rivalLook(31, slot, body).pattern.name;
       for (const [at, share] of shares[0]!.entries()) {
-        for (const finer of [1, 2] as const) assert.ok(Math.abs(shares[finer]![at]! - share) <= SHARE_TOLERANCE, `${name}: face ${at} painted ${share.toFixed(3)} standard against ${shares[finer]![at]!.toFixed(3)} at size ${finer === 1 ? "High" : "Ultra"}`);
+        for (const finer of [1, 2] as const) expect(Math.abs(shares[finer]![at]! - share), `${name}: face ${at} painted ${share.toFixed(3)} standard against ${shares[finer]![at]!.toFixed(3)} at size ${finer === 1 ? "High" : "Ultra"}`).toBeLessThanOrEqual(SHARE_TOLERANCE);
       }
     }
   });

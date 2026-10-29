@@ -1,7 +1,6 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { readFileSync } from "node:fs";
-import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES, CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
@@ -209,7 +208,7 @@ describe("arch humps", () => {
     }
     it(name, () => {
       const humps = archHumps(id);
-      assert.ok(humps.length === 0, `humps over the arches:\n${humps.join("\n")}`);
+      expect(humps.length, `humps over the arches:\n${humps.join("\n")}`).toBe(0);
     });
   }
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { BodyFit } from "./body-fit.ts";
 
 /** A body's masses in its own frame: (x, z, kg). */
@@ -38,20 +37,20 @@ describe("given a BodyFit (works out a body's spin rate from its parts' momentum
   }
 
   it("when the body turns rigidly at 2, -3.5 or 0.4 rad/s, with any body velocity and reference position, then the spin reads that rate to within 1e-9", () => {
-    for (const [w, vx, vz] of [[2, 0, 0], [-3.5, 12, -4], [0.4, -30, 30]] as const) assert.ok(Math.abs(spinOf(w, vx, vz) - w) < 1e-9, `${w} rad/s at (${vx}, ${vz})`);
+    for (const [w, vx, vz] of [[2, 0, 0], [-3.5, 12, -4], [0.4, -30, 30]] as const) expect(Math.abs(spinOf(w, vx, vz) - w), `${w} rad/s at (${vx}, ${vz})`).toBeLessThan(1e-9);
   });
 
   it("when the body only translates, or a single part is given, then the spin is 0", () => {
-    assert.ok(Math.abs(spinOf(0, 9, -2)) < 1e-9);
+    expect(Math.abs(spinOf(0, 9, -2))).toBeLessThan(1e-9);
     const fit = new BodyFit();
     fit.reset();
     fit.addSpin(100, 1, 2, 3, 4);
-    assert.equal(fit.spin(), 0);
+    expect(fit.spin()).toBe(0);
   });
 
   it("when one 9 kg corner runs at 20 rad/s instead of 2, then the body's spin rises by only that corner's share of the inertia, by under 1.5 rad/s, not by 18", () => {
     const base = spinOf(2, 0, 0);
     const jelly = spinOf(2, 0, 0, 4, 18);
-    assert.ok(jelly > base && jelly < base + 1.5, `${base.toFixed(2)} -> ${jelly.toFixed(2)} rad/s`);
+    expect(jelly > base && jelly < base + 1.5, `${base.toFixed(2)} -> ${jelly.toFixed(2)} rad/s`).toBeTruthy();
   });
 });

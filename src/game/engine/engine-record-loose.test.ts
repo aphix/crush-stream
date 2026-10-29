@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { crownY } from "../vehicle/car-cage-rig.ts";
@@ -118,7 +117,7 @@ function record(keyStep: number): Recorded {
     trace.push(looseBodies(parked));
   }
   rec.end();
-  assert.ok(rec.ledger.kept.length >= 1, "the head-on crash did not rank as a highlight");
+  expect(rec.ledger.kept.length, "the head-on crash did not rank as a highlight").toBeGreaterThanOrEqual(1);
   const kept = rec.ledger.kept[0]!;
   const w = new Writer(clipBytes(kept));
   writeClip(w, kept);
@@ -160,31 +159,31 @@ function replayAgainstLive(): { atStart: number; later: number } {
 
 describe("given a parked car with a door, a quarter panel and a wheel off before a head-on's clip begins, its hood in the air when the clip's keyframe is taken and its trunk lid on the roof of a car 100 m from the hit that drives off from under it", () => {
   it("when the clip is filed, then the parked car rides in it with its parts already off at the keyframe: some lying asleep, one still flying", () => {
-    assert.ok(parkedSlot >= 0, "the parked car is a bystander of the clip");
-    assert.ok(keyStep > HOOD_BEFORE_KEY, `the clip's keyframe is at step ${keyStep}`);
+    expect(parkedSlot, "the parked car is a bystander of the clip").toBeGreaterThanOrEqual(0);
+    expect(keyStep, `the clip's keyframe is at step ${keyStep}`).toBeGreaterThan(HOOD_BEFORE_KEY);
     const atKey = trace[keyStep - 1]!;
     const before = trace[keyStep - 2]!;
-    assert.ok(atKey.length / ROW >= 4, `${atKey.length / ROW} loose bodies at the keyframe: door, quarter panel, hood and wheel`);
+    expect(atKey.length / ROW, `${atKey.length / ROW} loose bodies at the keyframe: door, quarter panel, hood and wheel`).toBeGreaterThanOrEqual(4);
     const hoodSlot = cars[PARKED]!["parts"].findIndex((p) => p.name === "hood");
     const hood = bodyRows(atKey).find((r) => r[0] === hoodSlot)!;
     const hoodBefore = bodyRows(before).find((r) => r[0] === hoodSlot)!;
-    assert.ok(gap(hood.subarray(ROW_POSITION, ROW_POSITION + 3), hoodBefore.subarray(ROW_POSITION, ROW_POSITION + 3)) > 1e-6, "the hood is still moving at the keyframe");
-    assert.ok(bodyRows(atKey).some((r) => r[ROW_ASLEEP] === 1), "some torn part lies asleep at the keyframe");
-    assert.ok(bodyRows(atKey).some((r) => r[ROW_DENTS]! > 0), "a part has been dented in its fall");
+    expect(gap(hood.subarray(ROW_POSITION, ROW_POSITION + 3), hoodBefore.subarray(ROW_POSITION, ROW_POSITION + 3)), "the hood is still moving at the keyframe").toBeGreaterThan(1e-6);
+    expect(bodyRows(atKey).some((r) => r[ROW_ASLEEP] === 1), "some torn part lies asleep at the keyframe").toBeTruthy();
+    expect(bodyRows(atKey).some((r) => r[ROW_DENTS]! > 0), "a part has been dented in its fall").toBeTruthy();
   });
 
   it("when the clip is filed, then the car the trunk lid slid off rides in it, and the lid moved over a metre while the clip ran", () => {
     const lidSlot = cars[PARKED]!["parts"].findIndex((p) => p.name === "trunk");
     const [atKey, atEnd] = [trace[keyStep - 1]!, trace[keyStep - 1 + clip.h.length]!].map((bodies) => bodyRows(bodies).find((r) => r[0] === lidSlot)!.subarray(ROW_POSITION, ROW_POSITION + 3));
-    assert.ok(gap(atKey!, atEnd!) > 1, "the lid moved more than a metre over the clip");
-    assert.ok(clip.cars.some((c) => c.slot === CARRIER), `the carrier is in the clip (its cars: ${clip.cars.map((c) => c.slot).join(",")})`);
+    expect(gap(atKey!, atEnd!), "the lid moved more than a metre over the clip").toBeGreaterThan(1);
+    expect(clip.cars.some((c) => c.slot === CARRIER), `the carrier is in the clip (its cars: ${clip.cars.map((c) => c.slot).join(",")})`).toBeTruthy();
   });
 
   it("when the clip is replayed, then at its start every torn part and the popped wheel lie or fly where the live sim had them, to the bit, not thrown off the car afresh", () => {
-    assert.equal(replayAgainstLive().atStart, 0);
+    expect(replayAgainstLive().atStart).toBe(0);
   });
 
   it("when the clip is replayed, then at every step after they are where the live sim had them, the hood landing and the dents carved, to the bit", () => {
-    assert.equal(replayAgainstLive().later, 0);
+    expect(replayAgainstLive().later).toBe(0);
   });
 });

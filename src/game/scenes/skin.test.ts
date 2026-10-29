@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import assert from "node:assert/strict";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { PISTON, PISTON_IDS } from "./piston-rig.ts";
 import { doorShell, firePiston, pistonLocality, PISTON_DENT_RADIUS, PISTON_FAR, type PistonLocality, type PistonShot, type PistonShotResult } from "./piston-rig.test-util.ts";
@@ -266,7 +265,7 @@ function referencePanel(d: Internals, rest: Float32Array, name: string, origin: 
 }
 
 function maxAbs(a: ArrayLike<number>, b: ArrayLike<number>): number {
-  assert.equal(a.length, b.length);
+  expect(a.length).toBe(b.length);
   let m = 0;
   for (let i = 0; i < a.length; i++) m = Math.max(m, Math.abs(a[i]! - b[i]!));
   return m;
@@ -287,22 +286,22 @@ function crushedCar(mode: DeformMode): { car: DeformableCar; d: Internals } {
 forModes("given a car crushed by a 64 km/h full-width wall hit with its front-left hub popped", (mode) => {
   it("when the production skinner and the slow reference skinner kept in this file both skin it, then body skin, cage corners and the bonnet and boot panels agree within 1e-5 m", () => {
     const { car, d } = crushedCar(mode);
-    assert.ok(d.wrinkleAmp * Math.min(1, d.elapsed * 6) > 0.02, "the wrinkle pass must run");
+    expect(d.wrinkleAmp * Math.min(1, d.elapsed * 6), "the wrinkle pass must run").toBeGreaterThan(0.02);
     if (mode === "shape") {
       d.bakeLocalSkin();
       d.solveCagesFromShape();
       const corners = d.cages.flatMap((c) => c.corners.flatMap((v) => [v.x, v.y, v.z]));
       referenceCageSolve(d);
       const want = d.cages.flatMap((c) => c.corners.flatMap((v) => [v.x, v.y, v.z]));
-      assert.ok(maxAbs(corners, want) < 1e-9, `cage corners off by ${maxAbs(corners, want)} m`);
+      expect(maxAbs(corners, want), `cage corners off by ${maxAbs(corners, want)} m`).toBeLessThan(1e-9);
     }
     const geo = car.body.geometry;
     d.skin(geo);
     const want = referenceSkin(d);
     const crushed = maxAbs(want, d.restPos);
-    assert.ok(crushed > 0.1, `the car is crushed (${crushed.toFixed(3)} m)`);
+    expect(crushed, `the car is crushed (${crushed.toFixed(3)} m)`).toBeGreaterThan(0.1);
     const diff = maxAbs(geo.getAttribute("position").array as Float32Array, want);
-    assert.ok(diff < 1e-5, `skin off the reference by ${diff} m`);
+    expect(diff, `skin off the reference by ${diff} m`).toBeLessThan(1e-5);
 
     const panels = car as unknown as { hood: THREE.Mesh; hoodRest: Float32Array; hoodOrigin: THREE.Vector3; trunk: THREE.Mesh; trunkRest: Float32Array; trunkOrigin: THREE.Vector3 };
     for (const [mesh, rest, name, origin] of [
@@ -311,7 +310,7 @@ forModes("given a car crushed by a 64 km/h full-width wall hit with its front-le
     ] as const) {
       car.deform.skinPanel(mesh.geometry, rest, name, origin);
       const pd = maxAbs(mesh.geometry.getAttribute("position").array as Float32Array, referencePanel(d, rest, name, origin));
-      assert.ok(pd < 1e-5, `${name} panel off the reference by ${pd} m`);
+      expect(pd, `${name} panel off the reference by ${pd} m`).toBeLessThan(1e-5);
     }
   });
 });
@@ -332,7 +331,7 @@ describe("given a car tapped at 3 km/h by a piston", () => {
         if (d.restPos[i * 3 + 1]! >= d.rig.archTop || !d.masses.some((m) => m.hub && Math.hypot(rx - m.rest.x, rz - m.rest.z) <= d.rig.archPlant)) continue;
         worst = Math.max(worst, Math.hypot(now[i * 3]! - rx, now[i * 3 + 2]! - rz));
       }
-      assert.ok(worst <= 0.03, `arch skin moved ${worst.toFixed(3)} m in plan`);
+      expect(worst, `arch skin moved ${worst.toFixed(3)} m in plan`).toBeLessThanOrEqual(0.03);
     });
   }
 });
@@ -403,12 +402,12 @@ describe("given a car shot at 40 km/h by a piston, measured against a 3 km/h tap
     // the door paint 8% past the door.
     it(`when the ${id} piston shoots it, then the paint dent is at least 75% and at most 105% of the dent of the particles it struck, weighted as the paint hangs on them`, () => {
       const { dent, particle } = measure(id);
-      assert.ok(dent >= 0.75 * particle && dent <= 1.05 * particle, `paint ${dent.toFixed(3)} m vs particles ${particle.toFixed(3)} m`);
+      expect(dent >= 0.75 * particle && dent <= 1.05 * particle, `paint ${dent.toFixed(3)} m vs particles ${particle.toFixed(3)} m`).toBeTruthy();
     });
     // Cluster-only skin: a rear-corner shot moved far paint 0.228 m where far particles moved 0.140 m.
     it(`when the ${id} piston shoots it, then the paint hung on particles far from the hit moves no more than 4 cm past the particles far from it`, () => {
       const { farSkin, farParticle } = measure(id);
-      assert.ok(farSkin <= farParticle + 0.04, `far paint ${farSkin.toFixed(3)} m vs far particles ${farParticle.toFixed(3)} m`);
+      expect(farSkin, `far paint ${farSkin.toFixed(3)} m vs far particles ${farParticle.toFixed(3)} m`).toBeLessThanOrEqual(farParticle + 0.04);
     });
   }
 });
@@ -431,7 +430,7 @@ describe("given a car shot on its right side at 40 km/h by a piston, its cell pu
         at = m.name;
       }
     }
-    assert.ok(worst <= SEATED_SKIN_SLACK, `${at} stands ${worst.toFixed(3)} m from where the skin last saw it`);
+    expect(worst, `${at} stands ${worst.toFixed(3)} m from where the skin last saw it`).toBeLessThanOrEqual(SEATED_SKIN_SLACK);
   });
 
   it("when its shape rest is rebased after a bake and before the mesh is written, then the mesh is the bake's", () => {
@@ -444,7 +443,7 @@ describe("given a car shot on its right side at 40 km/h by a piston, its cell pu
     car.deform["rebaseShapeRest"]();
     car.deform.flushSkin(geo, true);
     const moved = maxAbs(geo.getAttribute("position").array, baked);
-    assert.ok(moved < 1e-6, `the rebase moved the drawn skin ${moved.toFixed(4)} m`);
+    expect(moved, `the rebase moved the drawn skin ${moved.toFixed(4)} m`).toBeLessThan(1e-6);
   });
 });
 
@@ -487,7 +486,7 @@ describe("given a car whose right door stands exactly on a kept 0.2 m set, the r
       const k = v * 3;
       worst = Math.max(worst, Math.hypot(now[k]! - rest[k]! - ex, now[k + 1]! - rest[k + 1]! - ey, now[k + 2]! - rest[k + 2]! - ez));
     }
-    assert.ok(worst <= KEPT_PAINT_SLACK, `a paint point stands ${worst.toFixed(4)} m off its parents' move`);
+    expect(worst, `a paint point stands ${worst.toFixed(4)} m off its parents' move`).toBeLessThanOrEqual(KEPT_PAINT_SLACK);
   });
 });
 
@@ -509,6 +508,6 @@ forModes("given a car that has not deformed", (mode) => {
       }
     }
     const rest = [...d.restPos.slice(at * 3, at * 3 + 3)].map((v) => v.toFixed(2)).join(", ");
-    assert.ok(worst <= 1e-3, `vertex at rest (${rest}) moved ${worst.toFixed(4)} m`);
+    expect(worst, `vertex at rest (${rest}) moved ${worst.toFixed(4)} m`).toBeLessThanOrEqual(1e-3);
   });
 });

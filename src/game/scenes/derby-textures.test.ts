@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import {
   GLASS_CELL_ALPHA,
@@ -15,6 +14,7 @@ import {
   makeTyreStackTexture,
 } from "./derby-textures.ts";
 import { pixelsOf } from "./derby-textures.test-util.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 const BUILDERS = {
   plank: makePlankTexture,
@@ -61,15 +61,6 @@ function columnMean(texture: THREE.DataTexture, column: number, fromRow: number,
   return total / (toRow - fromRow);
 }
 
-function firstMismatch(first: THREE.DataTexture, second: THREE.DataTexture): number {
-  const firstPixels = pixelsOf(first);
-  const secondPixels = pixelsOf(second);
-  for (let index = 0; index < firstPixels.length; index++) {
-    if (firstPixels[index] !== secondPixels[index]) return index;
-  }
-  return -1;
-}
-
 describe("given each procedural arena texture", () => {
   const shapeCases = [
     { it: "when the planks are built, then they are 256 x 256, repeating, opaque", builder: "plank", width: 256, height: 256, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping, hasTranslucentTexel: false },
@@ -89,13 +80,13 @@ describe("given each procedural arena texture", () => {
       for (let index = ALPHA_INDEX; index < pixels.length; index += CHANNELS) {
         if (pixels[index] < OPAQUE) translucentTexels++;
       }
-      assert.equal(texture.image.width, testCase.width, "width");
-      assert.equal(texture.image.height, testCase.height, "height");
-      assert.equal(texture.wrapS, testCase.wrapS, "wrapS");
-      assert.equal(texture.wrapT, testCase.wrapT, "wrapT");
-      assert.equal(texture.colorSpace, THREE.SRGBColorSpace, "colour space");
-      assert.equal(texture.generateMipmaps, true, "mipmaps");
-      assert.equal(translucentTexels > 0, testCase.hasTranslucentTexel, "has translucent texels");
+      expect(texture.image.width, "width").toBe(testCase.width);
+      expect(texture.image.height, "height").toBe(testCase.height);
+      expect(texture.wrapS, "wrapS").toBe(testCase.wrapS);
+      expect(texture.wrapT, "wrapT").toBe(testCase.wrapT);
+      expect(texture.colorSpace, "colour space").toBe(THREE.SRGBColorSpace);
+      expect(texture.generateMipmaps, "mipmaps").toBe(true);
+      expect(translucentTexels > 0, "has translucent texels").toBe(testCase.hasTranslucentTexel);
     });
   }
 
@@ -111,7 +102,7 @@ describe("given each procedural arena texture", () => {
 
   for (const testCase of determinismCases) {
     it(testCase.it, () => {
-      assert.equal(firstMismatch(textureOf(testCase.builder), BUILDERS[testCase.builder]()), -1, "first mismatching byte index");
+      expect(firstMismatch(pixelsOf(textureOf(testCase.builder)), pixelsOf(BUILDERS[testCase.builder]())), "first mismatching byte").toBeUndefined();
     });
   }
 });
@@ -128,7 +119,7 @@ describe("given the plank texture", () => {
   for (const testCase of plankCases) {
     it(testCase.it, () => {
       const texture = textureOf("plank");
-      assert.ok(rowMean(texture, testCase.gapRow) < rowMean(texture, testCase.bodyRow) * GAP_BRIGHTNESS_SHARE, "gap row mean luminance");
+      expect(rowMean(texture, testCase.gapRow), "gap row mean luminance").toBeLessThan(rowMean(texture, testCase.bodyRow) * GAP_BRIGHTNESS_SHARE);
     });
   }
 });
@@ -146,7 +137,7 @@ describe("given the corrugated metal texture", () => {
     it(testCase.it, () => {
       const texture = textureOf("corrugated");
       const height = texture.image.height;
-      assert.ok(columnMean(texture, testCase.crestColumn, 0, height) > columnMean(texture, testCase.troughColumn, 0, height), "crest column mean over trough column mean");
+      expect(columnMean(texture, testCase.crestColumn, 0, height), "crest column mean over trough column mean").toBeGreaterThan(columnMean(texture, testCase.troughColumn, 0, height));
     });
   }
 });
@@ -167,8 +158,8 @@ describe("given the corrugated metal texture with rust", () => {
         else if (red <= blue * RUST_RED_OVER_BLUE) plainTexels++;
       }
     }
-    assert.ok(rustTexels > 0, "rust texels");
-    assert.ok(plainTexels > rustTexels, "plain metal texels outnumber rust texels");
+    expect(rustTexels, "rust texels").toBeGreaterThan(0);
+    expect(plainTexels, "plain metal texels outnumber rust texels").toBeGreaterThan(rustTexels);
   });
 });
 
@@ -186,8 +177,8 @@ describe("given the tyre stack texture", () => {
       const hole = luminanceAt(texture, testCase.centreColumn, testCase.centreRow);
       const sidewall = luminanceAt(texture, testCase.centreColumn + SIDEWALL_OFFSET, testCase.centreRow);
       const treadRing = luminanceAt(texture, testCase.centreColumn + TREAD_RING_OFFSET, testCase.centreRow);
-      assert.ok(hole < treadRing, "hole luminance under tread ring luminance");
-      assert.ok(sidewall < treadRing, "sidewall luminance under tread ring luminance");
+      expect(hole, "hole luminance under tread ring luminance").toBeLessThan(treadRing);
+      expect(sidewall, "sidewall luminance under tread ring luminance").toBeLessThan(treadRing);
     });
   }
 });
@@ -219,20 +210,20 @@ describe("given the tyre stack texture's finish", () => {
       const next = ring[(step + 1) % RING_STEPS];
       if (Math.max(here / next, next / here) >= BLOCK_EDGE_RATIO) edges++;
     }
-    assert.ok(edges >= LEAST_BLOCK_EDGES, "block edges round the ring");
+    expect(edges, "block edges round the ring").toBeGreaterThanOrEqual(LEAST_BLOCK_EDGES);
   });
 
   it("when the sidewall's upper left meets its lower right, then the upper left is lighter (dusty highlight)", () => {
     const texture = textureOf("tyre");
     const upperLeft = luminanceAt(texture, TYRE_CENTRE - SIDEWALL_REACH, TYRE_CENTRE + SIDEWALL_REACH);
     const lowerRight = luminanceAt(texture, TYRE_CENTRE + SIDEWALL_REACH, TYRE_CENTRE - SIDEWALL_REACH);
-    assert.ok(upperLeft > lowerRight * 1.4, "upper-left sidewall luminance over lower-right");
+    expect(upperLeft, "upper-left sidewall luminance over lower-right").toBeGreaterThan(lowerRight * 1.4);
   });
 
   it("when four tyres of the tile are read at the same point of their tread, then their greys differ by 10 levels or more", () => {
     const texture = textureOf("tyre");
     const greys = TREAD_RING_AT_ANGLE_ZERO.map(([column, row]) => luminanceAt(texture, column, row));
-    assert.ok(Math.max(...greys) - Math.min(...greys) >= LEAST_GREY_SPREAD, "spread of the four greys (levels)");
+    expect(Math.max(...greys) - Math.min(...greys), "spread of the four greys (levels)").toBeGreaterThanOrEqual(LEAST_GREY_SPREAD);
   });
 
   it("when the darkest texel is found, then it is the gap between tyres and darker than a tyre's hole", () => {
@@ -241,7 +232,7 @@ describe("given the tyre stack texture's finish", () => {
     for (let row = 0; row < texture.image.height; row++) {
       for (let column = 0; column < texture.image.width; column++) darkest = Math.min(darkest, luminanceAt(texture, column, row));
     }
-    assert.ok(darkest < luminanceAt(texture, TYRE_CENTRE, TYRE_CENTRE), "darkest texel under the hole of the tyre at (32, 32)");
+    expect(darkest, "darkest texel under the hole of the tyre at (32, 32)").toBeLessThan(luminanceAt(texture, TYRE_CENTRE, TYRE_CENTRE));
   });
 });
 
@@ -261,12 +252,12 @@ describe("given the rubber texture", () => {
 
   it("when stud centres meet the rubber between them, then the studs are lighter on average", () => {
     const texture = textureOf("rubber");
-    assert.ok(meanAt(texture, STUD_CENTRES) > meanAt(texture, BETWEEN_STUDS), "mean stud luminance over mean plain luminance");
+    expect(meanAt(texture, STUD_CENTRES), "mean stud luminance over mean plain luminance").toBeGreaterThan(meanAt(texture, BETWEEN_STUDS));
   });
 
   it("when the edge band column meets a plain column, then the edge band is lighter on average", () => {
     const texture = textureOf("rubber");
-    assert.ok(columnMean(texture, EDGE_COLUMN, 0, texture.image.height) > columnMean(texture, PLAIN_COLUMN, 0, texture.image.height), "edge column mean over plain column mean");
+    expect(columnMean(texture, EDGE_COLUMN, 0, texture.image.height), "edge column mean over plain column mean").toBeGreaterThan(columnMean(texture, PLAIN_COLUMN, 0, texture.image.height));
   });
 });
 
@@ -297,16 +288,16 @@ describe("given the concrete wall texture", () => {
         else if (Math.max(red, green, blue) < 60) black++;
         else concrete++;
       }
-      assert.equal(yellow > 0, testCase.expectedHazard, "has yellow stripe texels");
-      assert.equal(black > 0, testCase.expectedHazard, "has black stripe texels");
-      assert.equal(concrete > 0, !testCase.expectedHazard, "has concrete texels");
+      expect(yellow > 0, "has yellow stripe texels").toBe(testCase.expectedHazard);
+      expect(black > 0, "has black stripe texels").toBe(testCase.expectedHazard);
+      expect(concrete > 0, "has concrete texels").toBe(!testCase.expectedHazard);
     });
   }
 
   it("when the panel seam column meets the middle of the panel, then the seam is darker", () => {
     const texture = textureOf("wall");
     const concreteRows = rowAt(3.5 - HAZARD_BAND_METRES);
-    assert.ok(columnMean(texture, 0, 0, concreteRows) < columnMean(texture, 128, 0, concreteRows) * SEAM_BRIGHTNESS_SHARE, "seam column mean over panel column mean");
+    expect(columnMean(texture, 0, 0, concreteRows), "seam column mean over panel column mean").toBeLessThan(columnMean(texture, 128, 0, concreteRows) * SEAM_BRIGHTNESS_SHARE);
   });
 });
 
@@ -319,9 +310,9 @@ describe("given the barrier texture", () => {
   const PANEL_COLUMN = 64;
   it("when the base, the shoulder and the seam meet the body, then the base is darker, the shoulder lighter, the seam darker", () => {
     const texture = textureOf("barrier");
-    assert.ok(rowMean(texture, BASE_ROW) < rowMean(texture, BODY_ROW), "base row mean under body row mean");
-    assert.ok(rowMean(texture, SHOULDER_ROW) > rowMean(texture, BELOW_SHOULDER_ROW), "shoulder row mean over body row mean");
-    assert.ok(columnMean(texture, SEAM_COLUMN, 0, texture.image.height) < columnMean(texture, PANEL_COLUMN, 0, texture.image.height), "seam column mean under panel column mean");
+    expect(rowMean(texture, BASE_ROW), "base row mean under body row mean").toBeLessThan(rowMean(texture, BODY_ROW));
+    expect(rowMean(texture, SHOULDER_ROW), "shoulder row mean over body row mean").toBeGreaterThan(rowMean(texture, BELOW_SHOULDER_ROW));
+    expect(columnMean(texture, SEAM_COLUMN, 0, texture.image.height), "seam column mean under panel column mean").toBeLessThan(columnMean(texture, PANEL_COLUMN, 0, texture.image.height));
   });
 });
 
@@ -341,8 +332,8 @@ describe("given the glass texture", () => {
   for (const testCase of glassCases) {
     it(testCase.it, () => {
       const alpha = channelAt(textureOf("glass"), testCase.column, testCase.row, ALPHA_INDEX);
-      assert.equal(alpha, testCase.expectedAlpha, "alpha");
-      assert.equal(alpha === OPAQUE, testCase.expectedOpaque, "is opaque");
+      expect(alpha, "alpha").toBe(testCase.expectedAlpha);
+      expect(alpha === OPAQUE, "is opaque").toBe(testCase.expectedOpaque);
     });
   }
 
@@ -360,8 +351,8 @@ describe("given the glass texture", () => {
       const previousOpaque = row > 0 && channelAt(texture, CELL_COLUMN, row - 1, ALPHA_INDEX) === OPAQUE;
       if (opaque && !previousOpaque) transomRuns++;
     }
-    assert.ok(opaqueColumns >= MULLION_TEXELS.least && opaqueColumns <= MULLION_TEXELS.most, "opaque columns of a cell row");
-    assert.equal(transomRuns, EXPECTED_TRANSOMS, "transom runs in a cell column");
+    expect(opaqueColumns >= MULLION_TEXELS.least && opaqueColumns <= MULLION_TEXELS.most, "opaque columns of a cell row").toBeTruthy();
+    expect(transomRuns, "transom runs in a cell column").toBe(EXPECTED_TRANSOMS);
   });
 
   it("when the interior alphas are scanned, then the reflection streak lifts the strongest one to the streak alpha", () => {
@@ -372,6 +363,6 @@ describe("given the glass texture", () => {
       const alpha = pixels[index];
       if (alpha < OPAQUE && alpha > strongestInterior) strongestInterior = alpha;
     }
-    assert.equal(strongestInterior, GLASS_STREAK_ALPHA, "strongest interior alpha");
+    expect(strongestInterior, "strongest interior alpha").toBe(GLASS_STREAK_ALPHA);
   });
 });

@@ -1,11 +1,11 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { Track } from "../world/track.ts";
 import { HAVANA } from "../world/tracks/havana.ts";
 import { BUST, RaceSession } from "./session.ts";
 import { SURVIVAL, settleRun } from "./survival.ts";
 import type { CarPose, Entrant } from "./types.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 const track = new Track(HAVANA);
 const you: Entrant = { id: 0, name: "You", kind: "player", aggression: 0 };
@@ -37,26 +37,26 @@ function bustAfter(s: RaceSession, kph: number, copAt: number, limit: number): n
 
 describe("given one player car on the Havana track, busted when held under 20 km/h within 20 m of a cop for a hold time (12 s in survival, shorter in a race)", () => {
   it("when the car is held under 20 km/h within 20 m of a cop, then it is busted after 12 s and not a step before, and a bust ends the one-car run with the car out", () => {
-    assert.equal(SURVIVAL.bustTime, HOLD);
+    expect(SURVIVAL.bustTime).toBe(HOLD);
     const s = session(true);
     const at = bustAfter(s, 5, 10, 30);
-    assert.ok(at !== null, "never busted");
-    assert.ok(at > HOLD && at < HOLD + 2 * DT, `busted after ${at.toFixed(3)} s`);
-    assert.equal(s.cars[0]!.status, "out", "a bust is out in a no-reset run");
-    assert.equal(s.phase, "finished", "and the only car out ends the run");
+    must(at !== null, "never busted");
+    expect(at > HOLD && at < HOLD + 2 * DT, `busted after ${at.toFixed(3)} s`).toBeTruthy();
+    expect(s.cars[0]!.status, "a bust is out in a no-reset run").toBe("out");
+    expect(s.phase, "and the only car out ends the run").toBe("finished");
   });
 
   it("when the same stopped-near-a-cop situation runs as an ordinary race instead of survival, then the car is busted at the race's own shorter hold and is a DNF", () => {
-    assert.ok(SURVIVAL.bustTime > BUST.time, "the survival hold is the owner's 10-15 s, longer than the race's");
+    expect(SURVIVAL.bustTime, "the survival hold is the owner's 10-15 s, longer than the race's").toBeGreaterThan(BUST.time);
     const race = new RaceSession(track, [you], { laps: 3, noReset: false });
     const at = bustAfter(race, 5, 10, 40);
-    assert.ok(at !== null && at > BUST.time && at < BUST.time + 2 * DT, `race busted after ${at}`);
-    assert.equal(race.cars[0]!.status, "dnf");
+    expect(at !== null && at > BUST.time && at < BUST.time + 2 * DT, `race busted after ${at}`).toBeTruthy();
+    expect(race.cars[0]!.status).toBe("dnf");
   });
 
   it("when the car is farther than 20 m from every cop, or moving at 20 km/h and over, then it is never busted", () => {
-    assert.equal(bustAfter(session(true), 5, BUST.near + 1, 40), null, "busted with the cop out of range");
-    assert.equal(bustAfter(session(true), BUST.kph + 1, 5, 40), null, "busted while moving");
+    expect(bustAfter(session(true), 5, BUST.near + 1, 40), "busted with the cop out of range").toBe(null);
+    expect(bustAfter(session(true), BUST.kph + 1, 5, 40), "busted while moving").toBe(null);
   });
 
   it("when the car moves off, or the cops fall away, partway through the hold, then the hold restarts from zero and the bust comes only after a full hold again", () => {
@@ -68,12 +68,12 @@ describe("given one player car on the Havana track, busted when held under 20 km
     step(5, 10, HOLD - 1);
     step(40, 10, DT * 2);
     step(5, 10, HOLD - 1);
-    assert.equal(s.cars[0]!.bustedAt, null, "a car that moved off was busted on the old clock");
+    expect(s.cars[0]!.bustedAt, "a car that moved off was busted on the old clock").toBe(null);
     step(5, 60, DT * 2);
     step(5, 10, HOLD - 1);
-    assert.equal(s.cars[0]!.bustedAt, null, "a car the cops lost was busted on the old clock");
+    expect(s.cars[0]!.bustedAt, "a car the cops lost was busted on the old clock").toBe(null);
     step(5, 10, 2);
-    assert.notEqual(s.cars[0]!.bustedAt, null);
+    expect(s.cars[0]!.bustedAt).not.toBe(null);
   });
 
   it("when the car drives the ring four times at 80 km/h, then no gates count, the run never finishes and the car is never flagged wrong-way", () => {
@@ -84,18 +84,25 @@ describe("given one player car on the Havana track, busted when held under 20 km
       for (let k = 0; k < p.count; k++) s.step(DT, [pose(p.x[k]!, p.z[k]!, 80)], []);
     }
     const c = s.cars[0]!;
-    assert.equal(c.lap, 0);
-    assert.equal(c.status, "racing");
-    assert.equal(s.phase, "racing");
-    assert.equal(c.wrongWay, false);
+    expect(c.lap).toBe(0);
+    expect(c.status).toBe("racing");
+    expect(s.phase).toBe("racing");
+    expect(c.wrongWay).toBe(false);
   });
 });
 
 describe("given a survival run's recorded best time", () => {
   it("when a first run, a longer run and an equal run settle against it, then only a longer run is a new best", () => {
-    assert.deepEqual(settleRun(null, 12.5), { best: 12.5, isNew: true });
-    assert.deepEqual(settleRun(12.5, 30), { best: 30, isNew: true });
-    assert.deepEqual(settleRun(30, 12.5), { best: 30, isNew: false });
-    assert.deepEqual(settleRun(30, 30), { best: 30, isNew: false });
+    const cases = [
+      { run: settleRun(null, 12.5), best: 12.5, isNew: true },
+      { run: settleRun(12.5, 30), best: 30, isNew: true },
+      { run: settleRun(30, 12.5), best: 30, isNew: false },
+      { run: settleRun(30, 30), best: 30, isNew: false },
+    ];
+    for (let i = 0; i < cases.length; i++) {
+      const { run, best, isNew } = cases[i]!;
+      expect(run.best, `settle ${i} best`).toBe(best);
+      expect(run.isNew, `settle ${i} isNew`).toBe(isNew);
+    }
   });
 });

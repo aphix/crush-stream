@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { blankPad, mergeTouch, readPad } from "../vehicle/gamepad.ts";
 import { DEFAULT_TOUCH_SCHEME, discReading, EBRAKE_PULL, parseMirror, parseTouchScheme, pedalsFor, pulledDown, schemeLayout, sliderSteer, STRIP, stripReading, TOUCH_SCHEMES, TOUCH_SCHEME_HINT, TOUCH_SCHEME_LABEL } from "./touch-scheme.ts";
 
@@ -7,23 +6,23 @@ const none = { gas: 0, brake: 0 };
 
 describe("given the stored touch scheme", () => {
   it("when nothing or an unknown value is stored, then it is the driving disc", () => {
-    assert.equal(DEFAULT_TOUCH_SCHEME, "stick");
-    assert.equal(parseTouchScheme(""), "stick");
-    assert.equal(parseTouchScheme("wheel"), "stick");
-    assert.equal(schemeLayout(DEFAULT_TOUCH_SCHEME).steer, "stick");
+    expect(DEFAULT_TOUCH_SCHEME).toBe("stick");
+    expect(parseTouchScheme("")).toBe("stick");
+    expect(parseTouchScheme("wheel")).toBe("stick");
+    expect(schemeLayout(DEFAULT_TOUCH_SCHEME).steer).toBe("stick");
   });
 
   it("when each scheme's id is stored, then it reads back as itself, with a label and a hint", () => {
     for (const scheme of TOUCH_SCHEMES) {
-      assert.equal(parseTouchScheme(scheme), scheme);
-      assert.ok(TOUCH_SCHEME_LABEL[scheme].length > 0 && TOUCH_SCHEME_HINT[scheme].length > 0, scheme);
+      expect(parseTouchScheme(scheme)).toBe(scheme);
+      expect(TOUCH_SCHEME_LABEL[scheme].length > 0 && TOUCH_SCHEME_HINT[scheme].length > 0, scheme).toBeTruthy();
     }
   });
 
   it("when the mirror flag is read, then only '1' is on", () => {
-    assert.equal(parseMirror("1"), true);
-    assert.equal(parseMirror(""), false);
-    assert.equal(parseMirror("0"), false);
+    expect(parseMirror("1")).toBe(true);
+    expect(parseMirror("")).toBe(false);
+    expect(parseMirror("0")).toBe(false);
   });
 });
 
@@ -43,16 +42,16 @@ describe("given a scheme's pedals", () => {
   for (const testCase of cases) {
     it(testCase.it, () => {
       const pedals = pedalsFor(testCase.scheme, testCase.thumb, true);
-      assert.equal(pedals.gas, testCase.expected.gas, "gas");
-      assert.equal(pedals.brake, testCase.expected.brake, "brake");
+      expect(pedals.gas, "gas").toBe(testCase.expected.gas);
+      expect(pedals.brake, "brake").toBe(testCase.expected.brake);
     });
   }
 
   it("when the car is not the player's to drive, then no scheme writes a pedal", () => {
     for (const scheme of TOUCH_SCHEMES) {
       const pedals = pedalsFor(scheme, { gas: 1, brake: 1 }, false);
-      assert.equal(pedals.gas, 0, `${scheme} gas`);
-      assert.equal(pedals.brake, 0, `${scheme} brake`);
+      expect(pedals.gas, `${scheme} gas`).toBe(0);
+      expect(pedals.brake, `${scheme} brake`).toBe(0);
     }
   });
 });
@@ -67,10 +66,10 @@ describe("given each scheme's layout", () => {
   for (const testCase of cases) {
     it(testCase.it, () => {
       const layout = schemeLayout(testCase.scheme);
-      assert.equal(layout.steer, testCase.steer, "steer");
-      assert.equal(layout.right, testCase.right, "right");
-      assert.equal(layout.ebrake, testCase.ebrake, "ebrake");
-      assert.equal(layout.autoGas, testCase.autoGas, "autoGas");
+      expect(layout.steer, "steer").toBe(testCase.steer);
+      expect(layout.right, "right").toBe(testCase.right);
+      expect(layout.ebrake, "ebrake").toBe(testCase.ebrake);
+      expect(layout.autoGas, "autoGas").toBe(testCase.autoGas);
     });
   }
 });
@@ -89,9 +88,9 @@ describe("given the pedal strip", () => {
   for (const testCase of cases) {
     it(testCase.it, () => {
       const reading = stripReading(testCase.position);
-      assert.ok(Math.abs(reading.gas - testCase.gas) < 1e-9, `gas ${reading.gas}`);
-      assert.ok(Math.abs(reading.brake - testCase.brake) < 1e-9, `brake ${reading.brake}`);
-      assert.equal(reading.boost, testCase.boost, "boost");
+      expect(Math.abs(reading.gas - testCase.gas), `gas ${reading.gas}`).toBeLessThan(1e-9);
+      expect(Math.abs(reading.brake - testCase.brake), `brake ${reading.brake}`).toBeLessThan(1e-9);
+      expect(reading.boost, "boost").toBe(testCase.boost);
     });
   }
 });
@@ -108,21 +107,21 @@ describe("given the e-brake pull on the steering bar", () => {
   ] as const;
   for (const testCase of cases) {
     it(testCase.it, () => {
-      assert.equal(pulledDown(testCase.held, testCase.fingerY, middle), testCase.expected);
+      expect(pulledDown(testCase.held, testCase.fingerY, middle)).toBe(testCase.expected);
     });
   }
 });
 
 describe("given the steering slider", () => {
   it("when the finger is left of centre, then it steers left in the stick's signs, linearly", () => {
-    assert.equal(sliderSteer(-44, 88), -0.5);
-    assert.equal(sliderSteer(22, 88), 0.25);
+    expect(sliderSteer(-44, 88)).toBe(-0.5);
+    expect(sliderSteer(22, 88)).toBe(0.25);
   });
 
   it("when the finger is past the bar's end or the bar has no length, then it clamps and never divides by zero", () => {
-    assert.equal(sliderSteer(500, 88), 1);
-    assert.equal(sliderSteer(-500, 88), -1);
-    assert.equal(sliderSteer(10, 0), 0);
+    expect(sliderSteer(500, 88)).toBe(1);
+    expect(sliderSteer(-500, 88)).toBe(-1);
+    expect(sliderSteer(10, 0)).toBe(0);
   });
 });
 
@@ -136,29 +135,33 @@ describe("given the driving disc's reading", () => {
   };
 
   it("when the thumb rests on the middle, then the disc reads nothing", () => {
-    assert.deepEqual(discReading(0, 0), { x: 0, y: 0 });
-    assert.deepEqual(discReading(0.02, -0.02), { x: 0, y: 0 });
+    const centre = discReading(0, 0);
+    expect(centre.x, "centre x").toBe(0);
+    expect(centre.y, "centre y").toBe(0);
+    const jitter = discReading(0.02, -0.02);
+    expect(jitter.x, "jitter x").toBe(0);
+    expect(jitter.y, "jitter y").toBe(0);
   });
 
   const nudges = [0.1, 0.25, 0.5, 1];
   for (const offset of nudges) {
     it(`when the thumb pushes up ${offset} of the way, then the car gets ${offset} of the gas, and the same down is that much brake`, () => {
       const up = throughPad(discReading(0, -offset));
-      assert.ok(Math.abs(up.rt - offset) < 1e-9, `gas ${up.rt}`);
+      expect(Math.abs(up.rt - offset), `gas ${up.rt}`).toBeLessThan(1e-9);
       const down = throughPad(discReading(0, offset));
-      assert.ok(Math.abs(down.lt - offset) < 1e-9, `brake ${down.lt}`);
+      expect(Math.abs(down.lt - offset), `brake ${down.lt}`).toBeLessThan(1e-9);
     });
   }
 
   it("when the thumb pushes a little sideways, then the wheel gets that little, to the side the thumb went", () => {
     const right = throughPad(discReading(0.2, 0));
-    assert.ok(Math.abs(right.lx - 0.2) < 1e-9, `right ${right.lx}`);
+    expect(Math.abs(right.lx - 0.2), `right ${right.lx}`).toBeLessThan(1e-9);
     const left = throughPad(discReading(-0.2, 0));
-    assert.ok(Math.abs(left.lx + 0.2) < 1e-9, `left ${left.lx}`);
+    expect(Math.abs(left.lx + 0.2), `left ${left.lx}`).toBeLessThan(1e-9);
   });
 
   it("when the thumb goes past the rim, then it stays at one", () => {
     const far = discReading(0, -3);
-    assert.ok(Math.hypot(far.x, far.y) <= 1 + 1e-9);
+    expect(Math.hypot(far.x, far.y)).toBeLessThanOrEqual(1 + 1e-9);
   });
 });

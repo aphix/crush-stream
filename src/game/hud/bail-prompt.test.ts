@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { bailArmed, bailControlName, bailPromptText, bailResultText } from "./bail-prompt.ts";
 import { blankIntent, boostPadButton, DRIVE_KEYS, readIntent } from "../vehicle/drive-input.ts";
 import { blankPad, PAD_BUTTON_COUNT, padButtonName, type PadFamily } from "../vehicle/gamepad.ts";
@@ -13,14 +12,14 @@ describe("given the Long jump's bail state", () => {
     { it: "when the mode has no bail, then it is not armed", state: { bail: null, phase: "ready" }, expected: false },
   ] as const;
   for (const testCase of cases) {
-    it(testCase.it, () => assert.equal(bailArmed(testCase.state as Parameters<typeof bailArmed>[0]), testCase.expected));
+    it(testCase.it, () => expect(bailArmed(testCase.state as Parameters<typeof bailArmed>[0])).toBe(testCase.expected));
   }
 });
 
 describe("given the pad button the drive input binds to Boost", () => {
   it("when every button is held in turn, then exactly the found one boosts, and no key does", () => {
     const found = boostPadButton();
-    assert.ok(found !== null, "a button boosts");
+    expect(found, "a button boosts").not.toBe(null);
     const boosting: number[] = [];
     for (let button = 0; button < PAD_BUTTON_COUNT; button++) {
       const pad = blankPad();
@@ -28,9 +27,9 @@ describe("given the pad button the drive input binds to Boost", () => {
       pad.held = 1 << button;
       if (readIntent(new Set(), pad, blankIntent()).boost) boosting.push(button);
     }
-    assert.equal(boosting.length, 1, `boosting buttons ${boosting.join(", ")}`);
-    assert.equal(boosting[0], found, "the found button is the one that boosts");
-    assert.ok(DRIVE_KEYS.boost.every((code) => readIntent(new Set([code]), null, blankIntent()).boost), "the boost keys boost");
+    expect(boosting.length, `boosting buttons ${boosting.join(", ")}`).toBe(1);
+    expect(boosting[0], "the found button is the one that boosts").toBe(found);
+    expect(DRIVE_KEYS.boost.every((code) => readIntent(new Set([code]), null, blankIntent()).boost), "the boost keys boost").toBeTruthy();
   });
 });
 
@@ -41,7 +40,7 @@ describe("given the control the bail prompt names", () => {
   ] as const;
   for (const testCase of cases) {
     it(testCase.it, () => {
-      assert.equal(bailControlName(testCase.padFamily, testCase.touch), testCase.expectedName);
+      expect(bailControlName(testCase.padFamily, testCase.touch)).toBe(testCase.expectedName);
     });
   }
 
@@ -49,31 +48,31 @@ describe("given the control the bail prompt names", () => {
   for (const family of padFamilies) {
     it(`when a ${family} pad is connected, then the name is what that pad calls the button the drive input binds to Boost`, () => {
       const button = boostPadButton()!;
-      assert.equal(bailControlName(family, false), padButtonName(family, button));
+      expect(bailControlName(family, false)).toBe(padButtonName(family, button));
     });
   }
 
   it("when a pad is connected on a touch screen too, then the pad's button is named, not the touch button", () => {
-    assert.notEqual(bailControlName("xbox", true), "Boost");
+    expect(bailControlName("xbox", true)).not.toBe("Boost");
   });
 
   it("when an Xbox pad and a PlayStation pad are connected, then they name the one binding differently", () => {
-    assert.notEqual(bailControlName("xbox", false), bailControlName("playstation", false));
+    expect(bailControlName("xbox", false)).not.toBe(bailControlName("playstation", false));
   });
 
   it("when a generic pad is connected, then it is named as an Xbox layout", () => {
-    assert.equal(bailControlName("generic", false), bailControlName("xbox", false));
+    expect(bailControlName("generic", false)).toBe(bailControlName("xbox", false));
   });
 });
 
 describe("given the bail's texts", () => {
   it("when the prompt is named for a control, then it says to press it as the car hits the barrier", () => {
-    assert.equal(bailPromptText("Cross", false), "Press Cross as you hit the barrier");
-    assert.equal(bailPromptText("Cross", true), "Bail pressed");
+    expect(bailPromptText("Cross", false)).toBe("Press Cross as you hit the barrier");
+    expect(bailPromptText("Cross", true)).toBe("Bail pressed");
   });
 
   it("when a verdict has a timing, then the result is rounded to hundredths of a second without a sign", () => {
-    assert.equal(bailResultText({ kind: "early", offsetSeconds: -0.1234, quality: 0.5 }), "Early 0.12 s");
-    assert.equal(bailResultText({ kind: "late", offsetSeconds: 0.0849, quality: 0.5 }), "Late 0.08 s");
+    expect(bailResultText({ kind: "early", offsetSeconds: -0.1234, quality: 0.5 })).toBe("Early 0.12 s");
+    expect(bailResultText({ kind: "late", offsetSeconds: 0.0849, quality: 0.5 })).toBe("Late 0.08 s");
   });
 });

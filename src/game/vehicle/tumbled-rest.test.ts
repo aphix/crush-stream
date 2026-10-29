@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { type CrashWorld, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -180,11 +179,11 @@ describe("given a car dropped onto its roof on the flat pad, from 0.5 and from 2
       for (const height of [0.5, 2]) {
         const { car, lowest } = dropped(style, cls, "roof", height);
         const tag = `${cls} dropped on its roof from ${height} m`;
-        assert.ok(lowest.body > -BODY_SINK_M, `${tag}: body ${cm(-lowest.body)} into the ground`);
-        assert.ok(lowest.crown > -BODY_SINK_M, `${tag}: roof crown ${cm(-lowest.crown)} into the ground`);
-        assert.ok(lowest.mirrors > -PART_SINK_M, `${tag}: a mirror ${cm(-lowest.mirrors)} into the ground`);
-        assert.ok(lowest.lamps > -PART_SINK_M, `${tag}: a lamp ${cm(-lowest.lamps)} into the ground`);
-        assert.ok(!car.partOff("mirrorL") && !car.partOff("mirrorR"), `${tag}: a mirror that stands clear of the ground was torn off`);
+        expect(lowest.body, `${tag}: body ${cm(-lowest.body)} into the ground`).toBeGreaterThan(-BODY_SINK_M);
+        expect(lowest.crown, `${tag}: roof crown ${cm(-lowest.crown)} into the ground`).toBeGreaterThan(-BODY_SINK_M);
+        expect(lowest.mirrors, `${tag}: a mirror ${cm(-lowest.mirrors)} into the ground`).toBeGreaterThan(-PART_SINK_M);
+        expect(lowest.lamps, `${tag}: a lamp ${cm(-lowest.lamps)} into the ground`).toBeGreaterThan(-PART_SINK_M);
+        expect(!car.partOff("mirrorL") && !car.partOff("mirrorR"), `${tag}: a mirror that stands clear of the ground was torn off`).toBeTruthy();
       }
     });
   }
@@ -192,7 +191,7 @@ describe("given a car dropped onto its roof on the flat pad, from 0.5 and from 2
   it("when a sedan rests on its roof from 0.5 m, then its drawn doors are out of the ground", () => {
     const { lowest } = dropped("sedan", "sedan", "roof", 0.5);
     // A 0.12 m allowance here was the shattered side pane, hidden on its rest seat, counted as door: the drawn door stands 0.29 m clear.
-    assert.ok(lowest.doors > 0, `a door ${cm(-lowest.doors)} into the ground`);
+    expect(lowest.doors, `a door ${cm(-lowest.doors)} into the ground`).toBeGreaterThan(0);
   });
 });
 
@@ -205,10 +204,10 @@ describe("given a car dropped onto its left or right flank on the flat pad, from
           const tag = `${cls} dropped on its ${side} flank from ${height} m`;
           const [down, up] = side === "left" ? (["mirrorL", "mirrorR"] as const) : (["mirrorR", "mirrorL"] as const);
           t.annotate(`${tag}: body ${cm(lowest.body)}, mirrors ${cm(lowest.mirrors)}, lamps ${cm(lowest.lamps)} over the ground`);
-          assert.ok(lowest.body > -BODY_SINK_M, `${tag}: body ${cm(-lowest.body)} into the ground`);
-          assert.ok(lowest.mirrors > -PART_SINK_M, `${tag}: a mirror ${cm(-lowest.mirrors)} into the ground`);
-          assert.ok(car.partOff(down), `${tag}: the mirror under the car is still on it`);
-          assert.ok(!car.partOff(up), `${tag}: the mirror above the car was torn off`);
+          expect(lowest.body, `${tag}: body ${cm(-lowest.body)} into the ground`).toBeGreaterThan(-BODY_SINK_M);
+          expect(lowest.mirrors, `${tag}: a mirror ${cm(-lowest.mirrors)} into the ground`).toBeGreaterThan(-PART_SINK_M);
+          expect(car.partOff(down), `${tag}: the mirror under the car is still on it`).toBeTruthy();
+          expect(!car.partOff(up), `${tag}: the mirror above the car was torn off`).toBe(true);
         }
       }
     });
@@ -222,7 +221,7 @@ describe("given any class dropped onto its left or right flank on the flat pad f
       for (const side of ["left", "right"] as const) {
         const { lowest } = dropped(CLASSES[cls].style, cls, side, 0.5);
         t.annotate(`${cls} dropped on its ${side} flank from 0.5 m: lowest tyre ${cm(lowest.tyres)} over the ground`);
-        assert.ok(lowest.tyres > -TYRE_SQUASH_M, `${cls} dropped on its ${side} flank from 0.5 m: a tyre ${cm(-lowest.tyres)} into the ground`);
+        expect(lowest.tyres, `${cls} dropped on its ${side} flank from 0.5 m: a tyre ${cm(-lowest.tyres)} into the ground`).toBeGreaterThan(-TYRE_SQUASH_M);
       }
     });
   }
@@ -236,10 +235,10 @@ describe("given a monster that lost the two wheels on one side, dropped onto tha
         const tag = `monster without its ${side} wheels dropped on its ${side} flank from ${height} m`;
         const [down, up] = side === "left" ? (["mirrorL", "mirrorR"] as const) : (["mirrorR", "mirrorL"] as const);
         t.annotate(`${tag}: body ${cm(lowest.body)}, mirrors ${cm(lowest.mirrors)} over the ground`);
-        assert.ok(lowest.body > -BODY_SINK_M, `${tag}: body ${cm(-lowest.body)} into the ground`);
-        assert.ok(lowest.mirrors > -PART_SINK_M, `${tag}: a mirror ${cm(-lowest.mirrors)} into the ground`);
-        assert.ok(car.partOff(down), `${tag}: the mirror under the car is still on it`);
-        assert.ok(!car.partOff(up), `${tag}: the mirror above the car was torn off`);
+        expect(lowest.body, `${tag}: body ${cm(-lowest.body)} into the ground`).toBeGreaterThan(-BODY_SINK_M);
+        expect(lowest.mirrors, `${tag}: a mirror ${cm(-lowest.mirrors)} into the ground`).toBeGreaterThan(-PART_SINK_M);
+        expect(car.partOff(down), `${tag}: the mirror under the car is still on it`).toBeTruthy();
+        expect(!car.partOff(up), `${tag}: the mirror above the car was torn off`).toBe(true);
       }
     }
   });
@@ -248,11 +247,11 @@ describe("given a monster that lost the two wheels on one side, dropped onto tha
     for (const side of ["left", "right"] as const) {
       const { car, world } = dropped("sedan", "monster", side, 2, 0.5, LOW_HUBS[side]);
       const tag = `monster without its ${side} wheels dropped on its ${side} flank from 2 m`;
-      assert.ok(car.asleep, `${tag}: it has not fallen asleep in ${DROP_SECONDS} s`);
+      expect(car.asleep, `${tag}: it has not fallen asleep in ${DROP_SECONDS} s`).toBeTruthy();
       const before = car.deform.masses.map((m) => m.local.clone());
       for (let f = 0; f < 2 * FRAME_HZ; f++) tickWorld(world, 1 / FRAME_HZ);
       const moved = Math.max(...car.deform.masses.map((m, i) => m.local.distanceTo(before[i]!)));
-      assert.ok(car.asleep && moved < MASS_STILL_M, `${tag}: a mass moved ${cm(moved)} in 2 s asleep`);
+      expect(car.asleep && moved < MASS_STILL_M, `${tag}: a mass moved ${cm(moved)} in 2 s asleep`).toBeTruthy();
     }
   });
 });
@@ -266,9 +265,9 @@ describe("given any class that lost one of the two wheels it lies on, dropped on
           const cage = cageClearance(car);
           const tag = `${cls} without its ${hub} dropped on its ${side} flank from ${height} m`;
           t.annotate(`${tag}: ${car.asleep ? "asleep" : `awake at ${car.velocity.length().toFixed(2)} m/s`}, cage ${cm(cage)}, body ${cm(lowest.body)} over the ground`);
-          assert.ok(car.asleep, `${tag}: still awake after ${REST_SECONDS} s, moving at ${car.velocity.length().toFixed(2)} m/s`);
-          assert.ok(cage > -BODY_SINK_M, `${tag}: cage ${cm(-cage)} into the ground`);
-          assert.ok(lowest.body > -BODY_SINK_M, `${tag}: body ${cm(-lowest.body)} into the ground`);
+          expect(car.asleep, `${tag}: still awake after ${REST_SECONDS} s, moving at ${car.velocity.length().toFixed(2)} m/s`).toBeTruthy();
+          expect(cage, `${tag}: cage ${cm(-cage)} into the ground`).toBeGreaterThan(-BODY_SINK_M);
+          expect(lowest.body, `${tag}: body ${cm(-lowest.body)} into the ground`).toBeGreaterThan(-BODY_SINK_M);
         }
       }
     });
@@ -282,8 +281,8 @@ describe("given a car struck on the nose, its front bumper torn off, and dropped
         const { lowest } = dropped(style, cls, attitude, 0.5, HOOD_OFF_MPS, [], DROP_SECONDS, true);
         const tag = `${cls} struck at ${HOOD_OFF_MPS} m/s and dropped on its ${attitude}`;
         t.annotate(`${tag}: lowest rigid under-part ${cm(lowest.kit)} over the ground`);
-        assert.ok(lowest.kit < Infinity, `${tag}: none of the cabin shell, engine bay, crash bar, frame or axles shows, so nothing here could stand in the ground`);
-        assert.ok(lowest.kit > 0, `${tag}: a rigid under-part ${cm(-lowest.kit)} into the ground`);
+        expect(lowest.kit, `${tag}: none of the cabin shell, engine bay, crash bar, frame or axles shows, so nothing here could stand in the ground`).toBeLessThan(Infinity);
+        expect(lowest.kit, `${tag}: a rigid under-part ${cm(-lowest.kit)} into the ground`).toBeGreaterThan(0);
       }
     });
   }
@@ -293,9 +292,9 @@ describe("given a car dropped on its wheels on the flat pad", () => {
   it("when it settles for 5 s, then it keeps both mirrors: nothing of it lies over far enough to put one into the ground", () => {
     for (const { style, cls } of FLEET) {
       const { car, lowest } = dropped(style, cls, "wheels", 0.5, 0.5);
-      assert.ok(car.crashed, `${cls}: the nose hit did not make it a wreck, so nothing here could tear a mirror`);
-      assert.ok(!car.partOff("mirrorL") && !car.partOff("mirrorR"), `${cls}: a mirror was torn off a car standing on its wheels`);
-      assert.ok(lowest.mirrors > MIRROR_ON_WHEELS_MIN_M, `${cls}: a mirror ${cm(lowest.mirrors)} over the ground, not up where it stands`);
+      expect(car.crashed, `${cls}: the nose hit did not make it a wreck, so nothing here could tear a mirror`).toBeTruthy();
+      expect(!car.partOff("mirrorL") && !car.partOff("mirrorR"), `${cls}: a mirror was torn off a car standing on its wheels`).toBeTruthy();
+      expect(lowest.mirrors, `${cls}: a mirror ${cm(lowest.mirrors)} over the ground, not up where it stands`).toBeGreaterThan(MIRROR_ON_WHEELS_MIN_M);
     }
   });
 });
@@ -303,7 +302,7 @@ describe("given a car dropped on its wheels on the flat pad", () => {
 describe("given a car lying on its roof, with its doors drawn on their rest seats", () => {
   it("when it rests after a 2 m drop, then each drawn door is out of the ground (the 0.19 m it read was the hidden shattered pane)", () => {
     const { lowest } = dropped("sedan", "sedan", "roof", 2);
-    assert.ok(lowest.doors > 0, `a door ${cm(-lowest.doors)} into the ground`);
+    expect(lowest.doors, `a door ${cm(-lowest.doors)} into the ground`).toBeGreaterThan(0);
   });
 });
 
@@ -323,8 +322,8 @@ describe("given a monster truck lying on its roof, next to one on its wheels, on
     const inverted = hubsOverRails(dropped("monster", "monster", "roof", 0.5).car);
     for (const [i, rest] of standing.entries()) {
       const compression = inverted[i]! - rest;
-      assert.ok(compression > 0 && compression <= droop("monster") - BUMP_RESERVE + SLACK_M, `wheel ${i} stands ${cm(compression)} nearer its frame than at rest, its bump stop ${cm(droop("monster"))}`);
-      assert.ok(inverted[i]! < 0, `wheel ${i}'s hub stands ${cm(inverted[i]!)} over the frame's rails`);
+      expect(compression > 0 && compression <= droop("monster") - BUMP_RESERVE + SLACK_M, `wheel ${i} stands ${cm(compression)} nearer its frame than at rest, its bump stop ${cm(droop("monster"))}`).toBeTruthy();
+      expect(inverted[i]!, `wheel ${i}'s hub stands ${cm(inverted[i]!)} over the frame's rails`).toBeLessThan(0);
     }
   });
 });

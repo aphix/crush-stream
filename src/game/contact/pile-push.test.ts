@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FREEWHEEL, launch, makeCar, makeWorld, PARKED, type CrashWorld } from "./crash-scenarios.test-util.ts";
 import { dressedCar } from "./off-centre-hit.test-util.ts";
@@ -25,7 +24,7 @@ function wedged(depth: number): { wreck: DeformableCar; world: CrashWorld } {
   launch(bullet, 0, 9, Math.PI, 0, -9);
   const settle = makeWorld([wreck, bullet], false, false, FREEWHEEL);
   for (let t = 0; t < 2.5; t += 1 / QUIET_HZ) stepWorld(settle.world, 1 / QUIET_HZ);
-  assert.ok(wreck.deform.massActive && wreck.deform.quietTime() > 1, "no settled wreck to wedge");
+  expect(wreck.deform.massActive && wreck.deform.quietTime() > 1, "no settled wreck to wedge").toBeTruthy();
   const { x: wx, z: wz } = massCentroid(wreck.deform.masses);
   const yaw = wreck.yaw;
   const flank = 0.95 + 2.3 - depth;
@@ -50,7 +49,7 @@ describe("given a settled wreck with two plain cars wedged 1.4 m into its flank"
       const after = massCentroid(wreck.deform.masses);
       const moved = Math.hypot(after.x - before.x, after.z - before.z);
       const bound = 3 * Math.max(v0, Math.hypot(wreck.velocity.x, wreck.velocity.z)) * H + 0.05;
-      assert.ok(moved <= bound, `step ${s}: moved ${moved.toFixed(4)} m, bound ${bound.toFixed(4)} m`);
+      expect(moved, `step ${s}: moved ${moved.toFixed(4)} m, bound ${bound.toFixed(4)} m`).toBeLessThanOrEqual(bound);
     }
   });
 });
@@ -85,7 +84,7 @@ describe("given a coupe whose door a graze armed, driven nose-first into a parke
     it(`when the coupe's nose meets ${where}, then it sinks into the pickup no deeper than ${GRAZED_SINK} m`, (t) => {
       const sink = grazedNoseHit(corner);
       t.annotate(`sink ${sink.toFixed(3)} m`);
-      assert.ok(sink <= GRAZED_SINK, `the coupe sank ${sink.toFixed(3)} m into the pickup`);
+      expect(sink, `the coupe sank ${sink.toFixed(3)} m into the pickup`).toBeLessThanOrEqual(GRAZED_SINK);
     });
   }
 });
@@ -110,8 +109,8 @@ describe("given two sedans in a plain 50 km/h head-on or T-bone", () => {
       };
       for (let s = 0; s < 1.5 / H; s++) stepWorld(w.world, H);
       for (const car of [a, b]) {
-        assert.ok(armed.has(car), `car ${car === a ? "A" : "B"} never crashed`);
-        assert.ok(car.deform.hitSpeedValue === armed.get(car), `car ${car === a ? "A" : "B"} re-armed: ${armed.get(car)!.toFixed(2)} -> ${car.deform.hitSpeedValue.toFixed(2)} m/s`);
+        expect(armed.has(car), `car ${car === a ? "A" : "B"} never crashed`).toBeTruthy();
+        expect(car.deform.hitSpeedValue, `car ${car === a ? "A" : "B"} re-armed: ${armed.get(car)!.toFixed(2)} -> ${car.deform.hitSpeedValue.toFixed(2)} m/s`).toBe(armed.get(car));
       }
     });
   }
@@ -123,32 +122,32 @@ describe("given a PushBudget (the cap on the net translation contact pushes may 
   it("when three 1 cm pushes go the same way, then the first gets 1 cm, the second only what is left of the cap and the third nothing", () => {
     const b = new PushBudget();
     const got = [0.01, 0.01, 0.01].map((a) => b.take(1, 1, 0, a, H, 0));
-    assert.ok(Math.abs(got[0]! - 0.01) < 1e-12 && Math.abs(got[1]! - (cap - 0.01)) < 1e-12 && got[2] === 0, JSON.stringify(got));
+    expect(Math.abs(got[0]! - 0.01) < 1e-12 && Math.abs(got[1]! - (cap - 0.01)) < 1e-12 && got[2] === 0, JSON.stringify(got)).toBeTruthy();
   });
 
   it("when a 1 cm push is followed by a 1 cm push back the other way, then both are granted, the net translation is zero and a push across the cancelled squeeze gets the whole cap", () => {
     const b = new PushBudget();
-    assert.ok(Math.abs(b.take(1, 1, 0, 0.01, H, 0) - 0.01) < 1e-12);
-    assert.ok(Math.abs(b.take(1, -1, 0, 0.01, H, 0) - 0.01) < 1e-12, "the push back the other way was refused");
-    assert.ok(Math.hypot(b.x, b.z) < 1e-12, "the squeeze left a net translation");
-    assert.ok(Math.abs(b.take(1, 0, 1, 0.2, H, 0) - cap) < 1e-12, "a push across a cancelled squeeze gets the whole cap");
+    expect(Math.abs(b.take(1, 1, 0, 0.01, H, 0) - 0.01)).toBeLessThan(1e-12);
+    expect(Math.abs(b.take(1, -1, 0, 0.01, H, 0) - 0.01), "the push back the other way was refused").toBeLessThan(1e-12);
+    expect(Math.hypot(b.x, b.z), "the squeeze left a net translation").toBeLessThan(1e-12);
+    expect(Math.abs(b.take(1, 0, 1, 0.2, H, 0) - cap), "a push across a cancelled squeeze gets the whole cap").toBeLessThan(1e-12);
   });
 
   it("when a wall translation or sphere shift of 1 cm is debited first, then a following push gets the cap less 1 cm and nothing once the corrections fill the cap", () => {
     const b = new PushBudget();
     b.debit(1, 0.01, 0);
-    assert.ok(Math.abs(b.take(1, 1, 0, 0.05, H, 0) - (cap - 0.01)) < 1e-12);
-    assert.equal(b.take(1, 1, 0, 0.05, H, 0), 0, "nothing is left once the corrections fill the cap");
+    expect(Math.abs(b.take(1, 1, 0, 0.05, H, 0) - (cap - 0.01))).toBeLessThan(1e-12);
+    expect(b.take(1, 1, 0, 0.05, H, 0), "nothing is left once the corrections fill the cap").toBe(0);
   });
 
   it("when the partner moves at 20 m/s, then the cap is lifted to the fast-hit push cap, so a 20 m/s hit separates as before", () => {
     const b = new PushBudget();
-    assert.ok(Math.abs(b.take(1, 1, 0, 0.2, H, 20) - satPushCap(H)) < 1e-12);
+    expect(Math.abs(b.take(1, 1, 0, 0.2, H, 20) - satPushCap(H))).toBeLessThan(1e-12);
   });
 
   it("when the next slice starts, then the budget is empty again and a push gets the whole cap", () => {
     const b = new PushBudget();
     b.take(1, 1, 0, 1, H, 0);
-    assert.ok(Math.abs(b.take(1 + H, 1, 0, 1, H, 0) - cap) < 1e-12);
+    expect(Math.abs(b.take(1 + H, 1, 0, 1, H, 0) - cap)).toBeLessThan(1e-12);
   });
 });

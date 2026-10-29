@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { Lab } from "./engine-lab.ts";
 import { LAB_SHOT, planLabShot } from "./lab-shot.ts";
@@ -59,7 +58,7 @@ describe("given the Lab's sets on a wide screen and on phones held upright", () 
         const planned = openOn(preset, screen);
         const axis = new THREE.Vector2(planned.lab.focus.x - planned.thrower.x, planned.lab.focus.z - planned.thrower.z).normalize();
         const eye = new THREE.Vector2(Math.sin(planned.bearing), Math.cos(planned.bearing));
-        assert.ok(Math.abs(axis.dot(eye)) < SIDE_COSINE, `the eye is ${Math.abs(axis.dot(eye)).toFixed(6)} along the throw's axis`);
+        expect(Math.abs(axis.dot(eye)), `the eye is ${Math.abs(axis.dot(eye)).toFixed(6)} along the throw's axis`).toBeLessThan(SIDE_COSINE);
       });
     }
   }
@@ -70,14 +69,14 @@ describe("given the Lab's sets on a wide screen and on phones held upright", () 
       const camera = cameraFor(planned, screen);
       const thrower = planned.thrower.clone().project(camera);
       const stack = new THREE.Vector3(10, 0, 0).project(camera);
-      assert.ok(thrower.x < stack.x, `thrower at ${thrower.x.toFixed(2)}, stack at ${stack.x.toFixed(2)} (screen ${screen.width} × ${screen.height})`);
+      expect(thrower.x, `thrower at ${thrower.x.toFixed(2)}, stack at ${stack.x.toFixed(2)} (screen ${screen.width} × ${screen.height})`).toBeLessThan(stack.x);
     }
   });
 
   it("when the same set opens on a phone upright and on a wide screen, then both look from the same side", () => {
     const upright = openOn("wall", PHONES_UPRIGHT[0]);
     const wide = openOn("wall", WIDE);
-    assert.ok(Math.abs(upright.bearing - wide.bearing) < 1e-9, `${upright.bearing} against ${wide.bearing}`);
+    expect(Math.abs(upright.bearing - wide.bearing), `${upright.bearing} against ${wide.bearing}`).toBeLessThan(1e-9);
   });
 });
 
@@ -91,7 +90,7 @@ describe("given a phone held upright", () => {
           const at = heldPose(item);
           for (const along of [-CAR_HALF_LENGTH, CAR_HALF_LENGTH]) {
             const onScreen = new THREE.Vector3(at.x + along, at.y, at.z).project(camera);
-            assert.ok(Math.abs(onScreen.x) <= 1, `${item.kind} at x ${at.x.toFixed(1)} m is at ${onScreen.x.toFixed(2)} of the half width`);
+            expect(Math.abs(onScreen.x), `${item.kind} at x ${at.x.toFixed(1)} m is at ${onScreen.x.toFixed(2)} of the half width`).toBeLessThanOrEqual(1);
           }
         }
       });
@@ -104,6 +103,6 @@ describe("given a phone held upright", () => {
     const camera = cameraFor(planned, screen);
     const thrower = planned.thrower.clone().project(camera);
     const downFromTop = (1 - thrower.y) / 2;
-    assert.ok(downFromTop > 0.3 && downFromTop < 0.7, `the thrower is ${(downFromTop * 100).toFixed(0)} % down the screen`);
+    expect(downFromTop > 0.3 && downFromTop < 0.7, `the thrower is ${(downFromTop * 100).toFixed(0)} % down the screen`).toBeTruthy();
   });
 });

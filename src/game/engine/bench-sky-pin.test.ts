@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { SKY_DRAWN, type SkyDrawn } from "../present/sky-dome.ts";
 import { skyPinOf, tap } from "./bench-measure.ts";
 import { applySkyPin, newBeat, pinSky } from "./bench-frame.ts";
@@ -47,16 +46,16 @@ describe("given the real engine on the city bench, whose sky is a picture the pa
     engine.setSky("auto");
     const states = new Set<SkyDrawn>();
     for (const tier of TIERS) states.add(await drawnAt(tier));
-    assert.ok(states.has(SKY_DRAWN.off), "none on minimal");
-    assert.ok(states.has(SKY_DRAWN.procedural), "the default procedural sky on high");
-    assert.ok(states.size > 1, `${[...states]} : an auto sky changes with the tier`);
+    expect(states.has(SKY_DRAWN.off), "none on minimal").toBeTruthy();
+    expect(states.has(SKY_DRAWN.procedural), "the default procedural sky on high").toBeTruthy();
+    expect(states.size, `${[...states]} : an auto sky changes with the tier`).toBeGreaterThan(1);
   });
 
   it("when the bench pins the sky for a race, then every FX tier, and the engine's Auto FX policy running on its own, leave the default procedural sky drawn for every frame", async () => {
     const pin = skyPinOf(benchPlan("?bench=city")!);
-    assert.equal(pin, "procedural", "a race pins the default procedural sky");
+    expect(pin, "a race pins the default procedural sky").toBe("procedural");
     applySkyPin(engine, pin);
-    for (const tier of TIERS) assert.equal(await drawnAt(tier), SKY_DRAWN.procedural, `at ${tier}`);
+    for (const tier of TIERS) expect(await drawnAt(tier), `at ${tier}`).toBe(SKY_DRAWN.procedural);
     engine.setFxAuto();
     const seen = new Set<SkyDrawn>();
     const tiers = new Set<string>();
@@ -65,18 +64,18 @@ describe("given the real engine on the city bench, whose sky is a picture the pa
       seen.add(engine.benchParts().sky.drawn);
       tiers.add(engine.benchParts().cine.tier);
     }
-    assert.equal(seen.size, 1, `one sky state over ${AUTO_FRAMES} frames of Auto FX (tiers seen: ${[...tiers]})`);
-    assert.ok(seen.has(SKY_DRAWN.procedural), "and it is the procedural sky");
+    expect(seen.size, `one sky state over ${AUTO_FRAMES} frames of Auto FX (tiers seen: ${[...tiers]})`).toBe(1);
+    expect(seen.has(SKY_DRAWN.procedural), "and it is the procedural sky").toBeTruthy();
   });
 
   it("when the bench pins the painted strip (the sky A/B's `full` arm), then every FX tier draws the strip", async () => {
     applySkyPin(engine, "full");
-    for (const tier of TIERS) assert.equal(await drawnAt(tier), SKY_DRAWN.full, `at ${tier}`);
+    for (const tier of TIERS) expect(await drawnAt(tier), `at ${tier}`).toBe(SKY_DRAWN.full);
   });
 
   it("when the bench pins the sky for the Lab (it has no sky), then no FX tier draws one", async () => {
     applySkyPin(engine, skyPinOf(benchPlan("?bench=lab")!));
-    for (const tier of TIERS) assert.equal(await drawnAt(tier), SKY_DRAWN.off, `at ${tier}`);
+    for (const tier of TIERS) expect(await drawnAt(tier), `at ${tier}`).toBe(SKY_DRAWN.off);
   });
 
   for (const player of [{ it: "the picture", cover: null }, { it: "a cover of 0.8", cover: 0.8 }]) {
@@ -88,13 +87,13 @@ describe("given the real engine on the city bench, whose sky is a picture the pa
         const parts = engine.benchParts();
         const t = tap(engine.pace, parts);
         const beat = newBeat(parts, 0, null, 0);
-        assert.equal(await pinSky(engine, parts, t, beat, "procedural"), true, "the procedural sky is pinned");
-        assert.equal(parts.sky.drawn, SKY_DRAWN.procedural);
-        assert.equal(engine["stage"].sky["mat"].uniforms.uCover!.value, INITIAL_HUD.proceduralSky, "at the default cover, not the player's");
-        assert.equal(await pinSky(engine, parts, t, beat, "full"), true, "the strip is pinned");
-        assert.equal(parts.sky.drawn, SKY_DRAWN.full);
-        assert.equal(await pinSky(engine, parts, t, beat, "off"), true, "off is pinned");
-        assert.equal(parts.sky.drawn, SKY_DRAWN.off);
+        expect(await pinSky(engine, parts, t, beat, "procedural"), "the procedural sky is pinned").toBe(true);
+        expect(parts.sky.drawn).toBe(SKY_DRAWN.procedural);
+        expect(engine["stage"].sky["mat"].uniforms.uCover!.value, "at the default cover, not the player's").toBe(INITIAL_HUD.proceduralSky);
+        expect(await pinSky(engine, parts, t, beat, "full"), "the strip is pinned").toBe(true);
+        expect(parts.sky.drawn).toBe(SKY_DRAWN.full);
+        expect(await pinSky(engine, parts, t, beat, "off"), "off is pinned").toBe(true);
+        expect(parts.sky.drawn).toBe(SKY_DRAWN.off);
       } finally {
         restoreFrame();
         engine.setProceduralSky(INITIAL_HUD.proceduralSky);

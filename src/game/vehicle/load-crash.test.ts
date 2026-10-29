@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { CarSurfaces } from "./car-surfaces.ts";
@@ -35,8 +34,8 @@ describe("given a car whose nose a load presses in slices, harder than the nose 
   it("when it presses in 1.7 mm, a belly's soft touch, then the nose carries the dent and the car is no wreck", () => {
     const { car, surfaces } = standing();
     press(surfaces, car, 0.0017);
-    assert.ok(Math.abs(car.deform.crush[FACE_NOSE]! - 0.0017) < 1e-12, `the nose is crushed ${car.deform.crush[FACE_NOSE]!.toFixed(4)} m`);
-    assert.equal(car.crashed, false, "a dent under its elastic range wrecked the car");
+    expect(Math.abs(car.deform.crush[FACE_NOSE]! - 0.0017), `the nose is crushed ${car.deform.crush[FACE_NOSE]!.toFixed(4)} m`).toBeLessThan(1e-12);
+    expect(car.crashed, "a dent under its elastic range wrecked the car").toBe(false);
   });
 
   it("when four presses of 4 mm follow, then the car is no wreck at 12 mm and a wreck at 16 mm: the face's depth is the total", () => {
@@ -46,14 +45,14 @@ describe("given a car whose nose a load presses in slices, harder than the nose 
       press(surfaces, car, 0.004);
       wrecked.push(car.crashed);
     }
-    assert.ok(0.012 < SPRING_YIELD && 0.016 > SPRING_YIELD, "the control: 12 mm is under the elastic range, 16 mm past it");
-    assert.equal(wrecked.join(), "false,false,false,true", "crashed after each press");
+    expect(0.012 < SPRING_YIELD && 0.016 > SPRING_YIELD, "the control: 12 mm is under the elastic range, 16 mm past it").toBeTruthy();
+    expect(wrecked.join(), "crashed after each press").toBe("false,false,false,true");
   });
 
   it("when it presses in 40 mm in one slice, then the car is a wreck", () => {
     const { car, surfaces } = standing();
     press(surfaces, car, 0.04);
-    assert.equal(car.crashed, true);
+    expect(car.crashed).toBe(true);
   });
 });
 
@@ -76,15 +75,15 @@ function pressRoof(depth: number): { under: DeformableCar; over: DeformableCar }
 describe("given a car whose roof another car's belly presses, harder than the roof carries", () => {
   it("when it presses in 1.7 mm, then the roof carries the dent and neither car is a wreck", () => {
     const { under, over } = pressRoof(0.0017);
-    assert.ok(Math.abs(under.deform.crush[FACE_TOP]! - 0.0017) < 1e-12, `the roof is crushed ${under.deform.crush[FACE_TOP]!.toFixed(4)} m`);
-    assert.equal(under.crashed, false, "a dent under its elastic range wrecked the roof's car");
-    assert.equal(over.crashed, false);
-    assert.equal(under.panelsFollow, true, "the dented roof's panels do not follow the dent");
+    expect(Math.abs(under.deform.crush[FACE_TOP]! - 0.0017), `the roof is crushed ${under.deform.crush[FACE_TOP]!.toFixed(4)} m`).toBeLessThan(1e-12);
+    expect(under.crashed, "a dent under its elastic range wrecked the roof's car").toBe(false);
+    expect(over.crashed).toBe(false);
+    expect(under.panelsFollow, "the dented roof's panels do not follow the dent").toBe(true);
   });
 
   it("when it presses in 20 mm, then the roof's car is a wreck and the pressing car is not", () => {
     const { under, over } = pressRoof(0.02);
-    assert.equal(under.crashed, true);
-    assert.equal(over.crashed, false);
+    expect(under.crashed).toBe(true);
+    expect(over.crashed).toBe(false);
   });
 });

@@ -1,6 +1,5 @@
-import { describe, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import assert from "node:assert/strict";
 import { doorAperture, lerp, makeHoodGeometry, makeTrunkGeometry, sampleSlice, SEDAN } from "./car-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";
 import { doorSkinZ, makeDoorGeometry } from "./car-door-mesh.ts";
@@ -50,50 +49,47 @@ function bbox(geo: THREE.BufferGeometry) {
 describe("given the sedan's rest-pose side profile (the body outline read at points along the car's length)", () => {
   it("when read over the boot 1.7 m behind the middle, then the body side stays at the fastback deck (under 1.02 m, the reference's deck there) and is not flagged as cabin, so the boot is not a greenhouse", () => {
     const p = restSideProfile(-1.7);
-    assert.ok(p.ySideTop < 1.02, `trunk body ${p.ySideTop} looks like a cabin`);
-    assert.ok(p.cabin < 0.15, `trunk cabin flag ${p.cabin}`);
+    expect(p.ySideTop, `trunk body ${p.ySideTop} looks like a cabin`).toBeLessThan(1.02);
+    expect(p.cabin, `trunk cabin flag ${p.cabin}`).toBeLessThan(0.15);
   });
 
   it("when read at the rear quarter 0.4 m behind the middle, then the body side is belt height (0.7 to 0.96 m, the reference's rising sill) with the greenhouse more than 0.3 m above it, not a wall up to the roof", () => {
     const p = restSideProfile(-0.4);
-    assert.ok(p.ySideTop > 0.7 && p.ySideTop < 0.96, `quarter ${p.ySideTop}`);
-    assert.ok(p.yRoof - p.ySideTop > 0.3, "greenhouse must sit above the quarter, not be filled with body");
+    expect(p.ySideTop > 0.7 && p.ySideTop < 0.96, `quarter ${p.ySideTop}`).toBeTruthy();
+    expect(p.yRoof - p.ySideTop, "greenhouse must sit above the quarter, not be filled with body").toBeGreaterThan(0.3);
   });
 
   it("when read at the door 0.28 m ahead of the middle, then there is a door cut-out and the body side drops to a sill under 0.3 m, not the whole cabin side", () => {
     const p = restSideProfile(0.28);
-    assert.ok(p.doorHole > 0.5, `expected a door hole at z=0.28, got ${p.doorHole}`);
-    assert.ok(p.ySideTop < 0.3, `door sill ${p.ySideTop} is still a wall`);
+    expect(p.doorHole, `expected a door hole at z=0.28, got ${p.doorHole}`).toBeGreaterThan(0.5);
+    expect(p.ySideTop, `door sill ${p.ySideTop} is still a wall`).toBeLessThan(0.3);
   });
 
   it("when read just behind (0.31 m behind the middle, the B-pillar) and just ahead (0.8 m ahead, the A-pillar) of the door, then there is no door cut-out at either, so the cut leaves the B-pillar and the A-pillar whole", () => {
-    assert.equal(restSideProfile(-0.31).doorHole, 0);
-    assert.equal(restSideProfile(0.8).doorHole, 0);
+    expect(restSideProfile(-0.31).doorHole).toBe(0);
+    expect(restSideProfile(0.8).doorHole).toBe(0);
   });
 
   it("when read over the front fender 1.5 m ahead of the middle, then the body side is hood height (0.48 to 0.87 m, the reference's hood line there) and not flagged as cabin", () => {
     const p = restSideProfile(1.5);
-    assert.ok(p.ySideTop > 0.48 && p.ySideTop < 0.87, `fender ${p.ySideTop}`);
-    assert.ok(p.cabin < 0.05);
+    expect(p.ySideTop > 0.48 && p.ySideTop < 0.87, `fender ${p.ySideTop}`).toBeTruthy();
+    expect(p.cabin).toBeLessThan(0.05);
   });
 
   it("when read at three points from 0.5 m behind to 0.5 m ahead of the middle, then the body side top stays under 0.95 m, and 1.1 m behind under the reference's 1.0 m quarter sill, never lofted up to the roof as a hearse's would be", () => {
     for (const z of [-0.5, 0.2, 0.5]) {
       const p = restSideProfile(z);
-      assert.ok(
-        p.ySideTop < 0.95,
-        `z=${z} body top ${p.ySideTop} reaches the roof — van/hearse blob`,
-      );
+      expect(p.ySideTop, `z=${z} body top ${p.ySideTop} reaches the roof — van/hearse blob`).toBeLessThan(0.95);
     }
     const quarter = restSideProfile(-1.1);
-    assert.ok(quarter.ySideTop < 1.0, `z=-1.1 body top ${quarter.ySideTop} reaches the roof — van/hearse blob`);
+    expect(quarter.ySideTop, `z=-1.1 body top ${quarter.ySideTop} reaches the roof — van/hearse blob`).toBeLessThan(1.0);
   });
 
   it("when read in the greenhouse 0.2 m behind the middle, then the roof is over 1.15 m, the belt under 0.94 m and the two more than 0.35 m apart", () => {
     const p = restSideProfile(-0.2);
-    assert.ok(p.yRoof > 1.15, `roof ${p.yRoof}`);
-    assert.ok(p.yBelt < 0.94, `belt ${p.yBelt}`);
-    assert.ok(p.yRoof - p.yBelt > 0.35);
+    expect(p.yRoof, `roof ${p.yRoof}`).toBeGreaterThan(1.15);
+    expect(p.yBelt, `belt ${p.yBelt}`).toBeLessThan(0.94);
+    expect(p.yRoof - p.yBelt).toBeGreaterThan(0.35);
   });
 });
 
@@ -101,10 +97,10 @@ describe("given the sedan's rest-pose body panels (chassis shell, hood, trunk an
   it("when the chassis shell is measured, then it is a compact sedan: 4.0 to 4.6 m long, 1.5 to 2.05 m wide, 1.05 to 1.45 m tall and symmetric left to right within 8 cm", () => {
     const geo = makeChassisGeometry();
     const b = bbox(geo);
-    assert.ok(b.sz > 4.0 && b.sz < 4.6, `length ${b.sz}`);
-    assert.ok(b.sx > 1.5 && b.sx < 2.05, `width ${b.sx}`);
-    assert.ok(b.sy > 1.05 && b.sy < 1.45, `height ${b.sy}`);
-    assert.ok(Math.abs(b.min.x + b.max.x) < 0.08, "asymmetric in X");
+    expect(b.sz > 4.0 && b.sz < 4.6, `length ${b.sz}`).toBeTruthy();
+    expect(b.sx > 1.5 && b.sx < 2.05, `width ${b.sx}`).toBeTruthy();
+    expect(b.sy > 1.05 && b.sy < 1.45, `height ${b.sy}`).toBeTruthy();
+    expect(Math.abs(b.min.x + b.max.x), "asymmetric in X").toBeLessThan(0.08);
     geo.dispose();
   });
 
@@ -112,8 +108,8 @@ describe("given the sedan's rest-pose body panels (chassis shell, hood, trunk an
     const half = carFrame(CAR_STYLES.sedan).half;
     const { dims } = CAR_STYLES.sedan;
     const halfLength = (dims.overhang.front + dims.wheelbase + dims.overhang.rear) / 2;
-    assert.ok(Math.abs(half.x - dims.width / 2) < 0.04, `half-width ${half.x} vs shell ${dims.width / 2}`);
-    assert.ok(Math.abs(half.z - halfLength) < 0.1, `half-length ${half.z} vs shell ${halfLength}`);
+    expect(Math.abs(half.x - dims.width / 2), `half-width ${half.x} vs shell ${dims.width / 2}`).toBeLessThan(0.04);
+    expect(Math.abs(half.z - halfLength), `half-length ${half.z} vs shell ${halfLength}`).toBeLessThan(0.1);
   });
 
   it("when the hood and trunk panels are measured, then each is a shallow shell under 0.5 m tall, not a cabin", () => {
@@ -121,8 +117,8 @@ describe("given the sedan's rest-pose body panels (chassis shell, hood, trunk an
     const trunk = makeTrunkGeometry();
     const h = bbox(hood);
     const t = bbox(trunk);
-    assert.ok(h.sy < 0.5, `hood height ${h.sy}`);
-    assert.ok(t.sy < 0.5, `trunk height ${t.sy}`);
+    expect(h.sy, `hood height ${h.sy}`).toBeLessThan(0.5);
+    expect(t.sy, `trunk height ${t.sy}`).toBeLessThan(0.5);
     hood.dispose();
     trunk.dispose();
   });
@@ -130,8 +126,8 @@ describe("given the sedan's rest-pose body panels (chassis shell, hood, trunk an
   it("when the door panel is measured, then it is 0.85 to 1.15 m long (the reference's 1.0 m front door; real front doors 0.95-1.1 m) and 0.5 to 0.8 m tall, a door and not a cabin slab", () => {
     const door = makeDoorGeometry(-1);
     const b = bbox(door);
-    assert.ok(b.sz > 0.85 && b.sz < 1.15, `door length ${b.sz}`);
-    assert.ok(b.sy > 0.5 && b.sy < 0.8, `door height ${b.sy}`);
+    expect(b.sz > 0.85 && b.sz < 1.15, `door length ${b.sz}`).toBeTruthy();
+    expect(b.sy > 0.5 && b.sy < 0.8, `door height ${b.sy}`).toBeTruthy();
     door.dispose();
   });
 
@@ -140,8 +136,8 @@ describe("given the sedan's rest-pose body panels (chassis shell, hood, trunk an
     const r = makeDoorGeometry(1);
     const bl = bbox(l);
     const br = bbox(r);
-    assert.ok(Math.abs(bl.sz - br.sz) < 0.02);
-    assert.ok(Math.abs(bl.sy - br.sy) < 0.02);
+    expect(Math.abs(bl.sz - br.sz)).toBeLessThan(0.02);
+    expect(Math.abs(bl.sy - br.sy)).toBeLessThan(0.02);
     l.dispose();
     r.dispose();
   });
@@ -196,14 +192,14 @@ describe("given the assembled rest-pose sedan (chassis, hood, trunk, doors and g
   for (const testCase of sideHitCases) {
     it(testCase.it, () => {
       const x = hitX(g, testCase.y, testCase.z);
-      assert.ok(x !== null && x > testCase.minX, testCase.failure.replace("{x}", String(x)));
+      expect(x !== null && x > testCase.minX, testCase.failure.replace("{x}", String(x))).toBeTruthy();
     });
   }
 
   it("when rays are fired along the greenhouse from belt to roof (1.02 m up, at four points from 0.55 m behind to 0.35 m ahead of the middle), then every ray hits the body beyond 0.64 m out (the reference's glass there: 0.67), so there is no cabin-length void", () => {
     for (const z of [-0.55, -0.25, 0.15, 0.35]) {
       const x = hitX(g, 1.02, z);
-      assert.ok(x !== null && x > 0.64, `greenhouse hole at z=${z} x=${x}`);
+      expect(x !== null && x > 0.64, `greenhouse hole at z=${z} x=${x}`).toBeTruthy();
     }
   });
 });
@@ -219,19 +215,19 @@ describe("given the road wheel mesh (tyre, rim and hub) the wheel batch scales t
   it("when the largest radius is measured, then the tread crown equals the platform tyre radius the batch scales from within 1e-6 m, so every car's wheel neither floats nor sinks", () => {
     let r = 0;
     for (let i = 0; i < pos.count; i++) r = Math.max(r, radius(i));
-    assert.ok(Math.abs(r - tyreR) < 1e-6, `crown ${r} vs tyre radius ${tyreR}`);
+    expect(Math.abs(r - tyreR), `crown ${r} vs tyre radius ${tyreR}`).toBeLessThan(1e-6);
   });
 
   it("when the wheel's extent along the axle is measured, then it is mirror-symmetric across the axle plane within 1e-6 m and under 0.24 m wide, so one mesh serves the left and right wheels", () => {
     const b = bbox(geo);
-    assert.ok(Math.abs(b.min.x + b.max.x) < 1e-6 && b.sx < 0.24, `x ${b.min.x}..${b.max.x}`);
+    expect(Math.abs(b.min.x + b.max.x) < 1e-6 && b.sx < 0.24, `x ${b.min.x}..${b.max.x}`).toBeTruthy();
   });
 
   it("when the normals of the tread vertices are read, then each points outward (more than 0.8 of the way), so the tyre does not render inside out", () => {
     for (let i = 0; i < pos.count; i++) {
       if (radius(i) < tyreR - 0.002) continue;
       const out = (nrm.getY(i) * pos.getY(i) + nrm.getZ(i) * pos.getZ(i)) / radius(i);
-      assert.ok(out > 0.8, `tread vertex ${i} normal points ${out.toFixed(2)} outward`);
+      expect(out, `tread vertex ${i} normal points ${out.toFixed(2)} outward`).toBeGreaterThan(0.8);
     }
   });
 
@@ -248,11 +244,11 @@ describe("given the road wheel mesh (tyre, rim and hub) the wheel batch scales t
       if (isTyreVertex(i)) continue;
       rimVertices++;
       const v = uv1.getY(i);
-      assert.ok(v === 0 || v === 1, `vertex ${i} at r=${radius(i).toFixed(3)} samples tread row ${v}`);
+      expect(v === 0 || v === 1, `vertex ${i} at r=${radius(i).toFixed(3)} samples tread row ${v}`).toBeTruthy();
       const tilt = strongestDeviationSampledAt(bytes, v);
-      assert.ok(tilt < FLAT_DEVIATION, `vertex ${i} at r=${radius(i).toFixed(3)} samples a normal tilt of ${tilt.toFixed(3)}`);
+      expect(tilt, `vertex ${i} at r=${radius(i).toFixed(3)} samples a normal tilt of ${tilt.toFixed(3)}`).toBeLessThan(FLAT_DEVIATION);
     }
-    assert.ok(rimVertices > 0, "the wheel has rim, spoke and hub vertices");
+    expect(rimVertices, "the wheel has rim, spoke and hub vertices").toBeGreaterThan(0);
   });
 
   it("when the tyre vertices within 0.3 m of the axle are read, then some sample sidewall relief, so the flat rim rows are not flat for want of any relief in the map", () => {
@@ -262,6 +258,6 @@ describe("given the road wheel mesh (tyre, rim and hub) the wheel batch scales t
       if (!isTyreVertex(i) || radius(i) >= 0.3) continue;
       if (strongestDeviationSampledAt(bytes, uv1.getY(i)) > SIDEWALL_RELIEF_MIN) tyreVerticesOnRelief++;
     }
-    assert.ok(tyreVerticesOnRelief > 0, "a sidewall vertex within 0.3 m of the axle samples relief");
+    expect(tyreVerticesOnRelief, "a sidewall vertex within 0.3 m of the axle samples relief").toBeGreaterThan(0);
   });
 });

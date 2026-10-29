@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { PlayerQuality } from "./player-quality.ts";
 
@@ -52,7 +51,7 @@ const bootCases = [
 describe("given a page booting on Auto", () => {
   for (const testCase of bootCases) {
     it(testCase.it, () => {
-      assert.equal(String(boot(testCase.deviceRatio).quality.pixelRatio), testCase.expected);
+      expect(String(boot(testCase.deviceRatio).quality.pixelRatio)).toBe(testCase.expected);
     });
   }
 });
@@ -61,9 +60,9 @@ describe("given a desktop at pixel ratio 1", () => {
   it("when the player picks 2 and then Auto, then it draws at 2 with the post targets resized once, then at 1 again", () => {
     const { quality, sent } = boot(1);
     quality.setScale("2");
-    assert.equal(`${quality.pixelRatio} ${sent.postSizes}`, "2 1", "picked 2");
+    expect(`${quality.pixelRatio} ${sent.postSizes}`, "picked 2").toBe("2 1");
     quality.setScale("auto");
-    assert.equal(`${quality.pixelRatio} ${sent.postSizes}`, "1 2", "back to Auto");
+    expect(`${quality.pixelRatio} ${sent.postSizes}`, "back to Auto").toBe("1 2");
   });
 });
 
@@ -71,14 +70,14 @@ describe("given the sandbox (180 m, fog 0.008)", () => {
   it("when Draw distance goes to max, a course authored at 900 m / 0.0035 loads, and Draw distance goes back to auto, then the view reads 360/0.004, 1800/0.00175, 900/0.0035 and the car detail's reach 2 then 1", () => {
     const page = boot(1);
     page.quality.setDraw("max");
-    assert.equal(viewReads(page), "360 0.004", "the sandbox at max");
+    expect(viewReads(page), "the sandbox at max").toBe("360 0.004");
     // A course's load: its own fog stands in the scene, then its far plane and fog density are authored.
     page.scene.fog = new THREE.FogExp2(0, 0.0035);
     page.quality.view.author(900, 0.0035);
-    assert.equal(viewReads(page), "1800 0.00175", "the course at max");
+    expect(viewReads(page), "the course at max").toBe("1800 0.00175");
     page.quality.setDraw("auto");
-    assert.equal(viewReads(page), "900 0.0035", "the course at auto");
-    assert.equal(page.sent.reaches.join(","), "2,1", "the car detail's reach");
+    expect(viewReads(page), "the course at auto").toBe("900 0.0035");
+    expect(page.sent.reaches.join(","), "the car detail's reach").toBe("2,1");
   });
 });
 
@@ -87,10 +86,10 @@ describe("given the page's URL pinned draw max", () => {
     const { quality } = boot(1);
     quality.pinFromPage("max", null, null);
     quality.setSaved("far", "1.5", "high");
-    assert.equal(`${quality.draw} ${quality.scale} ${quality.shadow} | ${quality.pinnedKnobs}`, "max 1.5 high | draw", "the pin holds draw");
+    expect(`${quality.draw} ${quality.scale} ${quality.shadow} | ${quality.pinnedKnobs}`, "the pin holds draw").toBe("max 1.5 high | draw");
     quality.setDraw("far");
     quality.setSaved("auto", "auto", "auto");
-    assert.equal(`${quality.draw}|${quality.pinnedKnobs}`, "auto|", "the pick cleared the pin");
+    expect(`${quality.draw}|${quality.pinnedKnobs}`, "the pick cleared the pin").toBe("auto|");
   });
 });
 
@@ -99,7 +98,7 @@ describe("given the URL arms max / 2 / max", () => {
     const { quality } = boot(2);
     quality.pinFromPage("max", "2", "max");
     quality.restartAuto();
-    assert.equal(`${quality.draw} ${quality.scale} ${quality.shadow} | ${quality.pinnedKnobs} | ${quality.pixelRatio}`, "max 2 max | draw scale shadow | 2");
+    expect(`${quality.draw} ${quality.scale} ${quality.shadow} | ${quality.pinnedKnobs} | ${quality.pixelRatio}`).toBe("max 2 max | draw scale shadow | 2");
   });
 });
 
@@ -111,21 +110,21 @@ describe("given a device of pixel ratio 2 in a GPU-bound match (25 ms frames, 4 
       return ratios.join(",");
     };
     const auto = boot(2).quality;
-    assert.equal(steps(auto), "1.25,1", "Auto walks down its rungs");
+    expect(steps(auto), "Auto walks down its rungs").toBe("1.25,1");
     const picked = boot(2).quality;
     picked.setScale("1.5");
-    assert.equal(steps(picked), "", "the picked scale never moves");
-    assert.equal(String(picked.pixelRatio), "1.5", "and it is still 1.5");
+    expect(steps(picked), "the picked scale never moves").toBe("");
+    expect(String(picked.pixelRatio), "and it is still 1.5").toBe("1.5");
   });
 });
 
 describe("given a stage whose shadows the knob sets", () => {
   it("when Shadows go high then max then auto, then the stage gets 2048, 4096, 1024", () => {
     const { quality, sent } = boot(1);
-    assert.equal(sent.maps.join(","), "", "the constructor leaves the stage's shadows as built");
+    expect(sent.maps.join(","), "the constructor leaves the stage's shadows as built").toBe("");
     quality.setShadow("high");
     quality.setShadow("max");
     quality.setShadow("auto");
-    assert.equal(sent.maps.join(","), "2048,4096,1024");
+    expect(sent.maps.join(",")).toBe("2048,4096,1024");
   });
 });

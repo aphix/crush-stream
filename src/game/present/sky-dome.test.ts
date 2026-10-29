@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { TIME_OF_DAY, TIMES_OF_DAY } from "../match/types.ts";
 import { courseDay, sunElevation, sunOffset } from "./engine-world.ts";
@@ -14,20 +13,20 @@ const DEG = Math.PI / 180;
 describe("given the race's times of day: the sky pictures and the light", () => {
   it("when the race runs by day, then the sun shines from exactly where it always has", () => {
     const off = sunOffset(TIME_OF_DAY.day, new THREE.Vector3());
-    assert.ok(off.distanceTo(OLD_SUN) < 1e-9, `the day's sun at (${off.x}, ${off.y}, ${off.z})`);
+    expect(off.distanceTo(OLD_SUN), `the day's sun at (${off.x}, ${off.y}, ${off.z})`).toBeLessThan(1e-9);
   });
 
   it("when a course with no daylight of its own is lit, then its sky (and fog) colour is the course's, not the studio's near-black", () => {
-    assert.equal(courseDay(null, "#9db3c7").sky, 0x9db3c7);
-    assert.equal(courseDay({ sun: "#fff0d4", sunIntensity: 2.6, hemi: "#b7d0ea", fill: "#f6e2c8" }, "#a6c6e2").sky, 0xa6c6e2);
+    expect(courseDay(null, "#9db3c7").sky).toBe(0x9db3c7);
+    expect(courseDay({ sun: "#fff0d4", sunIntensity: 2.6, hemi: "#b7d0ea", fill: "#f6e2c8" }, "#a6c6e2").sky).toBe(0xa6c6e2);
   });
 
   it("when the race runs at sunset, then the sun comes in low (12-25°) from the day's side, at the day's height over the shadow box", () => {
     const el = sunElevation(TIME_OF_DAY.sunset);
-    assert.ok(el >= 12 * DEG - 1e-9 && el <= 25 * DEG, `${(el / DEG).toFixed(1)}°`);
+    expect(el >= 12 * DEG - 1e-9 && el <= 25 * DEG, `${(el / DEG).toFixed(1)}°`).toBeTruthy();
     const off = sunOffset(TIME_OF_DAY.sunset, new THREE.Vector3());
-    assert.ok(Math.abs(Math.atan2(off.x, -off.z) - Math.atan2(OLD_SUN.x, -OLD_SUN.z)) < 1e-9, "the same bearing");
-    assert.ok(Math.abs(off.y - OLD_SUN.y) < 1e-9, "the same height");
+    expect(Math.abs(Math.atan2(off.x, -off.z) - Math.atan2(OLD_SUN.x, -OLD_SUN.z)), "the same bearing").toBeLessThan(1e-9);
+    expect(Math.abs(off.y - OLD_SUN.y), "the same height").toBeLessThan(1e-9);
   });
 
   for (const time of TIMES_OF_DAY) {
@@ -35,15 +34,15 @@ describe("given the race's times of day: the sky pictures and the light", () => 
     it(`when the ${time} sky is drawn, then its disc (if any) lands on the light's bearing, and its strip runs from under the horizon to well above it`, () => {
       const bearing = Math.atan2(OLD_SUN.x, -OLD_SUN.z);
       const u0 = uAtNorth(look, bearing);
-      assert.ok(u0 >= 0 && u0 < 1, `u at north ${u0}`);
+      expect(u0 >= 0 && u0 < 1, `u at north ${u0}`).toBeTruthy();
       if (look.disc) {
         // The shader's u at the light's bearing is the disc's column.
         const u = (((bearing / (2 * Math.PI) + u0) % 1) + 1) % 1;
-        assert.ok(Math.abs(u * look.width - look.disc.column) < 1e-6, `u ${u * look.width} against column ${look.disc.column}`);
-        assert.ok(rowElevation(look, look.disc.row) > 0, "the disc above the horizon");
+        expect(Math.abs(u * look.width - look.disc.column), `u ${u * look.width} against column ${look.disc.column}`).toBeLessThan(1e-6);
+        expect(rowElevation(look, look.disc.row), "the disc above the horizon").toBeGreaterThan(0);
       }
-      assert.ok(rowElevation(look, look.height - 1) < 0, "the bottom row under the horizon");
-      assert.ok(rowElevation(look, 0) > 40 * DEG, `the top row at ${(rowElevation(look, 0) / DEG).toFixed(0)}°`);
+      expect(rowElevation(look, look.height - 1), "the bottom row under the horizon").toBeLessThan(0);
+      expect(rowElevation(look, 0), `the top row at ${(rowElevation(look, 0) / DEG).toFixed(0)}°`).toBeGreaterThan(40 * DEG);
     });
   }
 });
@@ -70,7 +69,7 @@ describe("given the Sky setting and the FX tier", () => {
   ];
   for (const [mode, tier, detail] of rows) {
     it(`when the sky is ${mode} on the ${tier} tier, then it draws ${detail}`, () => {
-      assert.equal(skyDetailFor(mode, tier), detail);
+      expect(skyDetailFor(mode, tier)).toBe(detail);
     });
   }
 });
@@ -100,7 +99,7 @@ describe("given a procedural sky cover, the Sky setting and the FX tier", () => 
   ];
   for (const row of rows) {
     it(`when the sky is ${row.mode} on the ${row.tier} tier, then it draws ${row.detail}`, () => {
-      assert.equal(skyDetailFor(row.mode, row.tier, true), row.detail);
+      expect(skyDetailFor(row.mode, row.tier, true)).toBe(row.detail);
     });
   }
 });
@@ -111,14 +110,14 @@ describe("given a sandbox dome (no time of day) with a procedural cover", () => 
     dome.show(null, 0);
     dome.setProcedural(0.4);
     dome.setDetail("procedural");
-    assert.equal(dome.mesh.visible, true);
-    assert.equal(dome.drawn, SKY_DRAWN.procedural);
-    assert.equal(dome.textureBytes, 0);
-    assert.equal(dome["mat"].uniforms.uCover!.value, 0.4);
+    expect(dome.mesh.visible).toBe(true);
+    expect(dome.drawn).toBe(SKY_DRAWN.procedural);
+    expect(dome.textureBytes).toBe(0);
+    expect(dome["mat"].uniforms.uCover!.value).toBe(0.4);
     dome.setProcedural(null);
     dome.setDetail("off");
-    assert.equal(dome.mesh.visible, false);
-    assert.equal(dome.drawn, SKY_DRAWN.off);
+    expect(dome.mesh.visible).toBe(false);
+    expect(dome.drawn).toBe(SKY_DRAWN.off);
   });
 
   it("when the sandbox's night comes on, then the dome draws the night look with stars, and the day look without them when it goes", () => {
@@ -129,11 +128,11 @@ describe("given a sandbox dome (no time of day) with a procedural cover", () => 
     const u = dome["mat"].uniforms;
     const horizon = (): string => `#${(u.horizonColor!.value as THREE.Color).getHexString()}`;
     dome.setNight(true);
-    assert.equal(horizon(), SANDBOX_SKY.night.horizon);
-    assert.equal(u.uStars!.value, 1);
+    expect(horizon()).toBe(SANDBOX_SKY.night.horizon);
+    expect(u.uStars!.value).toBe(1);
     dome.setNight(false);
-    assert.equal(horizon(), SANDBOX_SKY.day.horizon);
-    assert.equal(u.uStars!.value, 0);
+    expect(horizon()).toBe(SANDBOX_SKY.day.horizon);
+    expect(u.uStars!.value).toBe(0);
   });
 });
 
@@ -152,11 +151,11 @@ describe("given a race dome holding its strip", () => {
     dome.show(TIME_OF_DAY.day, 0);
     dome.setDetail("full");
     await loaded;
-    assert.ok(dome.textureBytes > 0, "the control: the strip is held");
+    expect(dome.textureBytes, "the control: the strip is held").toBeGreaterThan(0);
     dome.setDetail("procedural");
-    assert.equal(dome.textureBytes, 0);
-    assert.equal(dome.drawn, SKY_DRAWN.procedural);
-    assert.equal(loads.join(), TIME_OF_DAY.day, "the one load, the strip's");
+    expect(dome.textureBytes).toBe(0);
+    expect(dome.drawn).toBe(SKY_DRAWN.procedural);
+    expect(loads.join(), "the one load, the strip's").toBe(TIME_OF_DAY.day);
   });
 });
 
@@ -164,19 +163,19 @@ describe("given a race's sky dome", () => {
   it("when its detail goes gradient, then off, then gradient again, then it draws only while on and holds no texture", () => {
     const dome = new SkyDome();
     dome.show(TIME_OF_DAY.sunset, 0);
-    assert.equal(dome.mesh.visible, false, "no detail asked for yet");
+    expect(dome.mesh.visible, "no detail asked for yet").toBe(false);
     dome.setDetail("gradient");
-    assert.equal(dome.mesh.visible, true);
-    assert.equal(dome.textureBytes, 0);
+    expect(dome.mesh.visible).toBe(true);
+    expect(dome.textureBytes).toBe(0);
     dome.setDetail("off");
-    assert.equal(dome.mesh.visible, false);
+    expect(dome.mesh.visible).toBe(false);
     dome.setDetail("gradient");
-    assert.equal(dome.mesh.visible, true);
+    expect(dome.mesh.visible).toBe(true);
     dome.show(null, 0);
-    assert.equal(dome.mesh.visible, false, "no time of day: no sky");
+    expect(dome.mesh.visible, "no time of day: no sky").toBe(false);
   });
 
   it("when it is built, then it draws after every opaque surface, so the depth test skips what they cover", () => {
-    assert.ok(new SkyDome().mesh.renderOrder > 1e9);
+    expect(new SkyDome().mesh.renderOrder).toBeGreaterThan(1e9);
   });
 });

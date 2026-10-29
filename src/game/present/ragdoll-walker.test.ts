@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { RagdollSystem } from "./engine-ragdoll.ts";
 import { driverLook } from "./driver-look.ts";
@@ -29,7 +28,7 @@ let system: RagdollSystem;
 
 async function stoodUp(): Promise<RagdollSystem> {
   const sys = await flatSystem();
-  assert.equal(sys.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: driverLook(0, 0) }), WALKER, "the walker is placed in his slot");
+  expect(sys.startWalker(new THREE.Vector3(0, 0, 0), 0, { cop: false, look: driverLook(0, 0) }), "the walker is placed in his slot").toBe(WALKER);
   return sys;
 }
 
@@ -88,11 +87,11 @@ describe("given a walker standing on open ground", () => {
         fell ||= system.walker.state !== "stand";
       });
       const end = readTorso(system);
-      assert.equal(system.walker.state, "stand", "state at the end");
-      assert.ok(end.tilt < 15, `upright at the end: tilt ${end.tilt.toFixed(1)} deg`);
-      assert.ok(end.y > 1, `standing height at the end: ${end.y.toFixed(2)} m`);
-      assert.ok(worstTilt <= testCase.expectedMaxTilt, `worst tilt ${worstTilt.toFixed(1)} deg within ${testCase.expectedMaxTilt}`);
-      assert.equal(fell, testCase.expectedOutcome === "standsAfterFalling", "whether he went down");
+      expect(system.walker.state, "state at the end").toBe("stand");
+      expect(end.tilt, `upright at the end: tilt ${end.tilt.toFixed(1)} deg`).toBeLessThan(15);
+      expect(end.y, `standing height at the end: ${end.y.toFixed(2)} m`).toBeGreaterThan(1);
+      expect(worstTilt, `worst tilt ${worstTilt.toFixed(1)} deg within ${testCase.expectedMaxTilt}`).toBeLessThanOrEqual(testCase.expectedMaxTilt);
+      expect(fell, "whether he went down").toBe(testCase.expectedOutcome === "standsAfterFalling");
     });
   }
 });
@@ -118,11 +117,11 @@ describe("given a walker asked to go", () => {
       });
       const to = readTorso(system);
       const speed = Math.hypot(to.x - from.x, to.z - from.z) / 6;
-      assert.equal(system.walker.state, "stand", "still on his feet");
-      assert.ok(worstTilt < 25, `never tipped far: ${worstTilt.toFixed(1)} deg`);
-      assert.ok(speed >= testCase.expectedMinSpeed && speed <= testCase.expectedMaxSpeed, `speed ${speed.toFixed(2)} m/s within ${testCase.expectedMinSpeed}-${testCase.expectedMaxSpeed}`);
+      expect(system.walker.state, "still on his feet").toBe("stand");
+      expect(worstTilt, `never tipped far: ${worstTilt.toFixed(1)} deg`).toBeLessThan(25);
+      expect(speed >= testCase.expectedMinSpeed && speed <= testCase.expectedMaxSpeed, `speed ${speed.toFixed(2)} m/s within ${testCase.expectedMinSpeed}-${testCase.expectedMaxSpeed}`).toBeTruthy();
       const bearing = Math.atan2(to.x - from.x, to.z - from.z);
-      assert.ok(Math.abs(bearing - testCase.headingTurn) < 0.5, `walked toward ${testCase.headingTurn.toFixed(2)} rad, went ${bearing.toFixed(2)}`);
+      expect(Math.abs(bearing - testCase.headingTurn), `walked toward ${testCase.headingTurn.toFixed(2)} rad, went ${bearing.toFixed(2)}`).toBeLessThan(0.5);
     });
   }
 });

@@ -1,5 +1,4 @@
-import { afterEach, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { launch, makeWorld, tickWorld, PARKED } from "./crash-scenarios.test-util.ts";
@@ -78,8 +77,8 @@ describe("given two fleet cars, one struck on its flank by the other at 72 km/h 
   for (const [striker, struck] of cases) {
     it(`when a ${striker} strikes a parked ${struck}, then both stop and overlap by no more than ${REST_OVERLAP * 100} cm`, () => {
       const { depth, speed } = restOverlap(striker, struck);
-      assert.ok(speed < STILL_MPS, `still moving at ${speed.toFixed(3)} m/s`);
-      assert.ok(depth <= REST_OVERLAP, `they rest ${(depth * 100).toFixed(1)} cm into each other`);
+      expect(speed, `still moving at ${speed.toFixed(3)} m/s`).toBeLessThan(STILL_MPS);
+      expect(depth, `they rest ${(depth * 100).toFixed(1)} cm into each other`).toBeLessThanOrEqual(REST_OVERLAP);
     });
   }
 
@@ -88,9 +87,9 @@ describe("given two fleet cars, one struck on its flank by the other at 72 km/h 
     EPICENTER.on = 1;
     EPICENTER.frozenCheck = 1;
     const { depth, speed, breaches, thaws } = restOverlap("sedan", "pickup", SHOVE);
-    assert.ok(speed < STILL_MPS, `still moving at ${speed.toFixed(3)} m/s`);
-    assert.ok(depth <= REST_OVERLAP, `they rest ${(depth * 100).toFixed(1)} cm into each other`);
-    assert.equal(breaches, 0, "a frozen-state breach");
-    assert.ok(thaws <= MAX_THAWS, `${thaws} thaws in ${RUN_SECONDS} s: the pair thaws every slice`);
+    expect(speed, `still moving at ${speed.toFixed(3)} m/s`).toBeLessThan(STILL_MPS);
+    expect(depth, `they rest ${(depth * 100).toFixed(1)} cm into each other`).toBeLessThanOrEqual(REST_OVERLAP);
+    expect(breaches, "a frozen-state breach").toBe(0);
+    expect(thaws, `${thaws} thaws in ${RUN_SECONDS} s: the pair thaws every slice`).toBeLessThanOrEqual(MAX_THAWS);
   });
 });

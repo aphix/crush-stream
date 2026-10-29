@@ -1,6 +1,6 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { bakeTerrainCells } from "./terrain-cells.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /**
  * `bakeTerrainCells` on a flat 9 × 9 node grid (four drawn cells a side, their corners on the even nodes) with a few nodes raised: which cells are fine,
@@ -30,12 +30,12 @@ describe("given a flat grid with the centre node of its first drawn cell raised 
   const cells = bake(flatWith([[1, 1, BUMP]]));
 
   it("when its cells are baked, then only that cell is fine", () => {
-    assert.deepEqual(Array.from(cells.fine), [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(firstMismatch(Array.from(cells.fine), [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])).toBeUndefined();
   });
 
   it("when its unit cells are baked, then the four in the fine cell read themselves (side 1) and every other reads its drawn cell (side 2)", () => {
     const sides = Array.from({ length: NODES - 1 }, (_, v) => Array.from({ length: NODES - 1 }, (_, u) => cells.sides[v * (NODES - 1) + u]));
-    assert.deepEqual(sides.map((row) => row.join("")), ["11222222", "11222222", "22222222", "22222222", "22222222", "22222222", "22222222", "22222222"]);
+    expect(firstMismatch(sides.map((row) => row.join("")), ["11222222", "11222222", "22222222", "22222222", "22222222", "22222222", "22222222", "22222222"])).toBeUndefined();
   });
 });
 
@@ -44,15 +44,15 @@ describe("given a fine drawn cell beside a coarse one whose shared edge's middle
   const cells = bake(heights);
 
   it("when it is baked, then the edge's middle node is drawn on the coarse cell's edge, the mean of the edge's corners, and the fine cell's centre as it is", () => {
-    assert.equal(cells.fine[1], 0, "the neighbour is coarse");
-    assert.equal(cells.drawn[node(2, 1)], 0);
-    assert.equal(cells.drawn[node(1, 1)], Math.fround(BUMP));
+    expect(cells.fine[1], "the neighbour is coarse").toBe(0);
+    expect(cells.drawn[node(2, 1)]).toBe(0);
+    expect(cells.drawn[node(1, 1)]).toBe(Math.fround(BUMP));
   });
 
   it("when the neighbour is fine too, then the edge's middle node keeps its own height", () => {
     const both = bake(flatWith([[1, 1, BUMP], [3, 1, BUMP], [2, 1, SMALL_BUMP]]));
-    assert.deepEqual(Array.from(both.fine.slice(0, 2)), [1, 1]);
-    assert.equal(both.drawn[node(2, 1)], Math.fround(SMALL_BUMP));
+    expect(firstMismatch(Array.from(both.fine.slice(0, 2)), [1, 1])).toBeUndefined();
+    expect(both.drawn[node(2, 1)]).toBe(Math.fround(SMALL_BUMP));
   });
 });
 
@@ -60,12 +60,12 @@ describe("given a cell with a miss over the seam's limit and under fineMiss", ()
   const heights = flatWith([[5, 1, CREASE_BUMP]]);
 
   it("when it is off the road, then it is coarse", () => {
-    assert.equal(bake(heights).fine[2], 0);
+    expect(bake(heights).fine[2]).toBe(0);
   });
 
   it("when one of its nodes is on the road's crease, then it is fine", () => {
     const lat = new Float32Array(NODES * NODES).fill(NaN);
     lat[node(4, 0)] = 0.9;
-    assert.equal(bake(heights, lat).fine[2], 1);
+    expect(bake(heights, lat).fine[2]).toBe(1);
   });
 });

@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { PREFABS } from "./catalog.ts";
 import { placeProps, propColliders, type Placed } from "./placements.ts";
@@ -7,6 +6,7 @@ import { Track, blankProjection, projectPath, type TrackPath } from "./track.ts"
 import oval from "./tracks/oval.json" with { type: "json" };
 import stunt from "./tracks/stunt.json" with { type: "json" };
 import { assertSameDigest } from "../vehicle/test-support.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 
 /** Distance (m) from (x, z) beyond the wall line of a corridor (< 0 = on road or runoff). */
 function gap(path: TrackPath, x: number, z: number): number {
@@ -32,7 +32,7 @@ describe("given the oval course", () => {
   it("when the same track is placed twice, then it places the same props and colliders every time", () => {
     const a = placeProps(new Track(oval));
     const b = placeProps(new Track(structuredClone(oval)));
-    assert.ok(a.length > oval.props.length);
+    expect(a.length).toBeGreaterThan(oval.props.length);
     assertSameDigest(a, b, "props");
     assertSameDigest(propColliders(a), propColliders(b), "colliders");
   });
@@ -40,19 +40,19 @@ describe("given the oval course", () => {
   it("when its props are placed, then the along and scatter props keep off every corridor, and the scatter stays in its band and clear of the start line", () => {
     const t = new Track(oval);
     const placed = placeProps(t);
-    assert.deepEqual(onCorridor(t, placed), []);
+    expect(onCorridor(t, placed)).toHaveLength(0);
     const trees = placed.filter((p) => p.prefab === "tree");
-    assert.equal(trees.length, 70);
+    expect(trees.length).toBe(70);
     const g0 = t.gates[0]!;
     const mx = (g0.ax + g0.bx) / 2;
     const mz = (g0.az + g0.bz) / 2;
     for (const p of trees) {
       const near = Math.min(...t.paths().map((c) => gap(c, p.x, p.z)));
-      assert.ok(near >= 14 && near <= 70, `tree at (${p.x.toFixed(1)}, ${p.z.toFixed(1)}) is ${near.toFixed(1)} m from the nearest wall line`);
-      assert.ok(Math.hypot(p.x - mx, p.z - mz) >= 25, "tree within 25 m of the start line");
-      assert.equal(p.y, t.ground().heightAt(p.x, p.z));
+      expect(near >= 14 && near <= 70, `tree at (${p.x.toFixed(1)}, ${p.z.toFixed(1)}) is ${near.toFixed(1)} m from the nearest wall line`).toBeTruthy();
+      expect(Math.hypot(p.x - mx, p.z - mz), "tree within 25 m of the start line").toBeGreaterThanOrEqual(25);
+      expect(p.y).toBe(t.ground().heightAt(p.x, p.z));
     }
-    assert.equal(placed.filter((p) => p.prefab === "lamp").length, Math.round(t.length / 45));
+    expect(placed.filter((p) => p.prefab === "lamp").length).toBe(Math.round(t.length / 45));
   });
 });
 
@@ -61,8 +61,8 @@ describe("given the oval with a row of lamps along its left side", () => {
     const t = new Track({ ...oval, along: [{ prefab: "lamp", every: 6, side: "left", offset: 1 }], scatter: [] });
     const placed = placeProps(t);
     const lamps = placed.filter((p) => p.prefab === "lamp");
-    assert.ok(lamps.length > 0 && lamps.length < Math.round(t.length / 6), `${lamps.length} lamps`);
-    assert.deepEqual(onCorridor(t, placed), []);
+    expect(lamps.length > 0 && lamps.length < Math.round(t.length / 6), `${lamps.length} lamps`).toBeTruthy();
+    expect(onCorridor(t, placed)).toHaveLength(0);
   });
 });
 
@@ -82,15 +82,15 @@ describe("given the oval with a two-lane street across the infield", () => {
     const houses = placed.filter((p) => p.prefab === "building");
     // 220 m of street every 16 m on both sides, less the copies that would sit on the loop's corridor.
     const full = 2 * (Math.floor(route.length / 16) + 1);
-    assert.ok(houses.length > 10 && houses.length < full, `${houses.length} of ${full} buildings`);
-    assert.deepEqual(onCorridor(t, placed), []);
+    expect(houses.length > 10 && houses.length < full, `${houses.length} of ${full} buildings`).toBeTruthy();
+    expect(onCorridor(t, placed)).toHaveLength(0);
     for (const b of houses) {
       const p = projectPath(route, b.x, b.z, -1, blankProjection());
-      assert.ok(Math.abs(Math.sqrt(p.dist2) - (route.half[p.k]! + 9)) < 0.3, "building not at half + offset from the street");
+      expect(Math.abs(Math.sqrt(p.dist2) - (route.half[p.k]! + 9)), "building not at half + offset from the street").toBeLessThan(0.3);
       const toStreet = ((p.cx - b.x) * Math.cos(b.yaw) - (p.cz - b.z) * Math.sin(b.yaw)) / Math.hypot(p.cx - b.x, p.cz - b.z);
-      assert.ok(toStreet > 0.99, "building front not facing the street");
+      expect(toStreet, "building front not facing the street").toBeGreaterThan(0.99);
     }
-    for (const tr of placed.filter((p) => p.prefab === "tree")) assert.ok(gap(route, tr.x, tr.z) >= 4, "tree on the street");
+    for (const tr of placed.filter((p) => p.prefab === "tree")) expect(gap(route, tr.x, tr.z), "tree on the street").toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -104,10 +104,10 @@ describe("given the oval with a bridge span, a tunnel and a row of lamps along b
       for (const l of lamps) if (flag[projectPath(t.path, l.x, l.z, -1, blankProjection()).k]) n++;
       return n;
     };
-    assert.ok(t.path.deck.includes(1) && t.path.tunnel.includes(1));
-    assert.equal(covered(t.path.deck), 0);
-    assert.equal(covered(t.path.tunnel), 0);
-    assert.ok(lamps.length > 150, `${lamps.length} lamps`);
+    expect(t.path.deck.includes(1) && t.path.tunnel.includes(1)).toBeTruthy();
+    expect(covered(t.path.deck)).toBe(0);
+    expect(covered(t.path.tunnel)).toBe(0);
+    expect(lamps.length, `${lamps.length} lamps`).toBeGreaterThan(150);
   });
 });
 
@@ -125,10 +125,10 @@ describe("given the stunt course, with cones on the start straight under the bri
     });
     const [under, onDeck, beside] = placeProps(t);
     const g = t.ground();
-    assert.ok(g.heightAt(0, 0) > 8, "the bridge is over the origin");
-    assert.ok(Math.abs(under!.y - g.heightAt(0, 0, -1e9)) < 1e-9 && under!.y < 1, `under the bridge at y ${under!.y}`);
-    assert.ok(Math.abs(onDeck!.y - 9) < 0.3, `on the bridge at y ${onDeck!.y}`);
-    assert.equal(beside!.y, g.heightAt(60, -120, -1e9));
+    expect(g.heightAt(0, 0), "the bridge is over the origin").toBeGreaterThan(8);
+    expect(Math.abs(under!.y - g.heightAt(0, 0, -1e9)) < 1e-9 && under!.y < 1, `under the bridge at y ${under!.y}`).toBeTruthy();
+    expect(Math.abs(onDeck!.y - 9), `on the bridge at y ${onDeck!.y}`).toBeLessThan(0.3);
+    expect(beside!.y).toBe(g.heightAt(60, -120, -1e9));
   });
 });
 
@@ -136,13 +136,13 @@ describe("given the oval with billboards along both sides", () => {
   it("when the billboards are placed, then each front (+X) points at the centreline", () => {
     const t = new Track({ ...oval, along: [{ prefab: "billboard", every: 30, side: "both", offset: 4 }], scatter: [] });
     const boards = placeProps(t).filter((p) => p.prefab === "billboard").slice(2);
-    assert.ok(boards.length > 10);
+    expect(boards.length).toBeGreaterThan(10);
     for (const b of boards) {
       const p = projectPath(t.path, b.x, b.z, -1, blankProjection());
       const fx = Math.cos(b.yaw);
       const fz = -Math.sin(b.yaw);
       const toRoad = ((p.cx - b.x) * fx + (p.cz - b.z) * fz) / Math.hypot(p.cx - b.x, p.cz - b.z);
-      assert.ok(toRoad > 0.99, `billboard at (${b.x.toFixed(1)}, ${b.z.toFixed(1)}) faces ${toRoad.toFixed(2)} away`);
+      expect(toRoad, `billboard at (${b.x.toFixed(1)}, ${b.z.toFixed(1)}) faces ${toRoad.toFixed(2)} away`).toBeGreaterThan(0.99);
     }
   });
 });
@@ -162,17 +162,14 @@ describe("given props of different scales and sizes (crates, a cone and a gantry
     });
     const cols = propColliders(placeProps(t));
     // The cone is three pieces (its base plate and the cone's two bands), one index.
-    assert.deepEqual(
-      cols.map((c) => c.index),
-      [0, 1, 2, 2, 2],
-    );
+    expect(firstMismatch(cols.map((c) => c.index), [0, 1, 2, 2, 2])).toBeUndefined();
     const [crate, big, ...cone] = cols;
-    assert.equal(big!.hx, crate!.hx * 2);
-    assert.equal(big!.hz, crate!.hz * 2);
-    assert.equal(big!.mass, crate!.mass * 8);
-    assert.deepEqual(cone.map((c) => c.kind), ["circle", "circle", "box"]);
-    assert.equal(cone[0]!.r, 0.33);
-    for (const piece of cone) assert.equal(piece.mass, PREFABS.cone.mass * 8);
+    expect(big!.hx).toBe(crate!.hx * 2);
+    expect(big!.hz).toBe(crate!.hz * 2);
+    expect(big!.mass).toBe(crate!.mass * 8);
+    expect(firstMismatch(cone.map((c) => c.kind), ["circle", "circle", "box"])).toBeUndefined();
+    expect(cone[0]!.r).toBe(0.33);
+    for (const piece of cone) expect(piece.mass).toBe(PREFABS.cone.mass * 8);
   });
 });
 
@@ -193,15 +190,15 @@ describe("given a yawed billboard prop", () => {
     o.rotation.y = p.yaw;
     o.scale.set(p.sx, p.sy, p.sz);
     o.updateMatrixWorld();
-    assert.equal(cols.length, PREFABS.billboard.collider.length);
+    expect(cols.length).toBe(PREFABS.billboard.collider.length);
     for (const [k, piece] of PREFABS.billboard.collider.entries()) {
       const c = cols[k]!;
-      assert.equal(piece.kind, "box");
+      expect(piece.kind).toBe("box");
       const centre = new THREE.Vector3(piece.x ?? 0, 0, piece.z ?? 0).applyMatrix4(o.matrixWorld);
-      assert.ok(Math.abs(c.x - centre.x) < 1e-9 && Math.abs(c.z - centre.z) < 1e-9, `piece ${k} stands at (${c.x}, ${c.z}), the art's at (${centre.x}, ${centre.z})`);
-      assert.equal(c.yaw, p.yaw);
-      assert.ok(Math.abs(c.hx - (piece.kind === "box" ? piece.hx : 0) * p.sx) < 1e-9 && Math.abs(c.hz - (piece.kind === "box" ? piece.hz : 0) * p.sz) < 1e-9, `piece ${k} extents`);
-      assert.ok(Math.abs(c.base - (p.y + (piece.y0 ?? 0) * p.sy)) < 1e-9 && Math.abs(c.top - (p.y + (piece.y1 ?? PREFABS.billboard.size[1]) * p.sy)) < 1e-9, `piece ${k} heights`);
+      expect(Math.abs(c.x - centre.x) < 1e-9 && Math.abs(c.z - centre.z) < 1e-9, `piece ${k} stands at (${c.x}, ${c.z}), the art's at (${centre.x}, ${centre.z})`).toBeTruthy();
+      expect(c.yaw).toBe(p.yaw);
+      expect(Math.abs(c.hx - (piece.kind === "box" ? piece.hx : 0) * p.sx) < 1e-9 && Math.abs(c.hz - (piece.kind === "box" ? piece.hz : 0) * p.sz) < 1e-9, `piece ${k} extents`).toBeTruthy();
+      expect(Math.abs(c.base - (p.y + (piece.y0 ?? 0) * p.sy)) < 1e-9 && Math.abs(c.top - (p.y + (piece.y1 ?? PREFABS.billboard.size[1]) * p.sy)) < 1e-9, `piece ${k} heights`).toBeTruthy();
     }
   });
 });

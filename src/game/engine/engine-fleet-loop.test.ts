@@ -1,5 +1,4 @@
-import { afterAll, beforeAll, describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore, INITIAL_HUD } from "../hud/hud-store.ts";
 import { FLEET_EMPTY_S } from "../scenes/fleet.ts";
@@ -25,11 +24,11 @@ describe("given the real engine on Fleet's default settings, every car driving s
   });
 
   it("when the last car has left the disc, then the loop resets the scene within FLEET_EMPTY_S + 1 s", (t) => {
-    assert.equal(hud.get().carCount, INITIAL_HUD.carCount, "the HUD starts on its default car count");
-    assert.equal(INITIAL_HUD.carCount, 5, "Fleet's default is 5 cars");
+    expect(hud.get().carCount, "the HUD starts on its default car count").toBe(INITIAL_HUD.carCount);
+    expect(INITIAL_HUD.carCount, "Fleet's default is 5 cars").toBe(5);
     const cars = engine["live"]();
-    assert.equal(cars.length, 5, "the default Fleet runs 5 cars");
-    assert.ok(engine["looping"], "the default Fleet loops");
+    expect(cars.length, "the default Fleet runs 5 cars").toBe(5);
+    expect(engine["looping"], "the default Fleet loops").toBeTruthy();
     // No car meets another: five bearings out from the centre, each at 20 m/s along it.
     for (const [k, car] of cars.entries()) {
       const a = (k / cars.length) * 2 * Math.PI;
@@ -48,12 +47,12 @@ describe("given the real engine on Fleet's default settings, every car driving s
       if (cars.every((c) => c.vaporized)) lastLeft = Math.max(...vaporAt.map((t) => t ?? 0));
       if (engine["clearGen"]() !== gen) resetAt = before + FRAME;
     }
-    assert.ok(lastLeft >= 0, "every car left the disc");
-    assert.ok(resetAt >= 0, "the scene never reset");
+    expect(lastLeft, "every car left the disc").toBeGreaterThanOrEqual(0);
+    expect(resetAt, "the scene never reset").toBeGreaterThanOrEqual(0);
     const delay = resetAt - lastLeft;
     t.annotate(`reset ${delay.toFixed(3)} s after the last car left (FLEET_EMPTY_S ${FLEET_EMPTY_S})`);
-    assert.ok(delay >= FLEET_EMPTY_S - FRAME, `reset ${delay.toFixed(3)} s after the last car left: before the disc had been empty ${FLEET_EMPTY_S} s`);
-    assert.ok(delay <= FLEET_EMPTY_S + 1, `reset ${delay.toFixed(3)} s after the last car left, over ${FLEET_EMPTY_S + 1} s`);
+    expect(delay, `reset ${delay.toFixed(3)} s after the last car left: before the disc had been empty ${FLEET_EMPTY_S} s`).toBeGreaterThanOrEqual(FLEET_EMPTY_S - FRAME);
+    expect(delay, `reset ${delay.toFixed(3)} s after the last car left, over ${FLEET_EMPTY_S + 1} s`).toBeLessThanOrEqual(FLEET_EMPTY_S + 1);
   });
 
   it("when two cars meet head-on and crash, then every wreck has rolled to rest within 3 s", () => {
@@ -76,8 +75,8 @@ describe("given the real engine on Fleet's default settings, every car driving s
       car.spawnSpeed = car.speed;
     }
     for (let frame = 0; frame < 10 * 60 && !crashed(); frame++) engine.advance(FRAME, { frameDt: FRAME });
-    assert.ok(cars[0]!.crashed && cars[1]!.crashed, "the two cars crashed");
+    expect(cars[0]!.crashed && cars[1]!.crashed, "the two cars crashed").toBeTruthy();
     for (let frame = 0; frame < 3 * 60; frame++) engine.advance(FRAME, { frameDt: FRAME });
-    for (const [k, car] of cars.entries()) assert.ok(car.velocity.length() < 0.5, `car ${k} still moves at ${car.velocity.length().toFixed(2)} m/s 3 s after the crash`);
+    for (const [k, car] of cars.entries()) expect(car.velocity.length(), `car ${k} still moves at ${car.velocity.length().toFixed(2)} m/s 3 s after the crash`).toBeLessThan(0.5);
   });
 });

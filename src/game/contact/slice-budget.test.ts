@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { FREEWHEEL, launch, makeCar, makeWorld } from "./crash-scenarios.test-util.ts";
 import { stepWorld } from "../engine/world-step.ts";
 import { pushCar } from "./pair-contact.ts";
@@ -27,7 +26,7 @@ function plantedWreck(): DeformableCar {
   launch(bullet, 0, 9, Math.PI, 0, -9);
   const settle = makeWorld([wreck, bullet], false, false, FREEWHEEL);
   for (let t = 0; t < 2.5; t += 1 / QUIET_HZ) stepWorld(settle.world, 1 / QUIET_HZ);
-  assert.ok(wreck.deform.massActive && wreck.deform.quietTime() > 0.35, "no planted wreck");
+  expect(wreck.deform.massActive && wreck.deform.quietTime() > 0.35, "no planted wreck").toBeTruthy();
   return wreck;
 }
 
@@ -102,7 +101,7 @@ describe("given a slice whose contact corrections (pair pushes, structure step, 
         after.x - before.x + PUSH_N[1] * CLIP - wreck.velocity.x * H,
         after.z - before.z - PUSH_N[0] * CLIP - wreck.velocity.z * H,
       );
-      assert.ok(net <= limit + 1e-6, `slice ${s}: corrections moved the centroid ${(net * 1000).toFixed(1)} mm, cap ${(limit * 1000).toFixed(1)} mm`);
+      expect(net, `slice ${s}: corrections moved the centroid ${(net * 1000).toFixed(1)} mm, cap ${(limit * 1000).toFixed(1)} mm`).toBeLessThanOrEqual(limit + 1e-6);
     }
   });
 
@@ -110,18 +109,18 @@ describe("given a slice whose contact corrections (pair pushes, structure step, 
   // was refused as "nothing left" and the wreck stayed at 51.5 mm; against the net, it brings it in.
   it("when a drift settles against a full net translation then it is allowed, and when it goes along the net then it is refused", () => {
     const full = new PushBudget();
-    assert.ok(Math.abs(full.settle(1, 0, 1, 1, H, TOUCH) - STEP_CEIL) < 1e-12, "a drift along nothing gets the ceiling");
-    assert.equal(full.settle(1, 0, 1, 0.01, H, TOUCH), 0, "a drift along the full net was allowed");
-    assert.ok(Math.abs(full.settle(1, 0, -1, 0.02, H, TOUCH) - 0.02) < 1e-12, "a drift back along the net was refused");
-    assert.ok(Math.abs(full.z - (STEP_CEIL - 0.02)) < 1e-12, "the net was not brought in");
+    expect(Math.abs(full.settle(1, 0, 1, 1, H, TOUCH) - STEP_CEIL), "a drift along nothing gets the ceiling").toBeLessThan(1e-12);
+    expect(full.settle(1, 0, 1, 0.01, H, TOUCH), "a drift along the full net was allowed").toBe(0);
+    expect(Math.abs(full.settle(1, 0, -1, 0.02, H, TOUCH) - 0.02), "a drift back along the net was refused").toBeLessThan(1e-12);
+    expect(Math.abs(full.z - (STEP_CEIL - 0.02)), "the net was not brought in").toBeLessThan(1e-12);
   });
 
   // Refused past the cap, a push back against the net was granted whole or not at all by the rounding of cap² − net² at a full cap.
   it("when a push goes against a net translation past the cap then it is allowed, and when it goes along the net then it is refused", () => {
     const full = new PushBudget();
     full.debit(1, 0, STEP_CEIL);
-    assert.equal(full.take(1, 0, 1, 0.01, H, TOUCH), 0, "a push along the full net was allowed");
-    assert.ok(Math.abs(full.take(1, 0, -1, 0.01, H, TOUCH) - 0.01) < 1e-12, "a push back against the full net was refused");
+    expect(full.take(1, 0, 1, 0.01, H, TOUCH), "a push along the full net was allowed").toBe(0);
+    expect(Math.abs(full.take(1, 0, -1, 0.01, H, TOUCH) - 0.01), "a push back against the full net was refused").toBeLessThan(1e-12);
   });
 });
 
@@ -140,6 +139,6 @@ describe("given a live wreck pushed by the pair kernel's push (pushCar, the amou
     const shift = Math.hypot(shifted.x - start.x, shifted.z - start.z);
     const total = Math.hypot(end.x - start.x, end.z - start.z);
     const limit = Math.max(new PushBudget().take(1, 1, 0, 1, H, 0), STEP_CEIL);
-    assert.ok(total <= Math.max(shift, limit) + 1e-6, `push ${(shift * 1000).toFixed(1)} mm, then the re-fit: ${(total * 1000).toFixed(1)} mm in all, cap ${(limit * 1000).toFixed(1)} mm`);
+    expect(total, `push ${(shift * 1000).toFixed(1)} mm, then the re-fit: ${(total * 1000).toFixed(1)} mm in all, cap ${(limit * 1000).toFixed(1)} mm`).toBeLessThanOrEqual(Math.max(shift, limit) + 1e-6);
   });
 });

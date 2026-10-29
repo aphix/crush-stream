@@ -1,15 +1,14 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { bandOf, crossing, describeDepthProbe, rowDistance, type DepthProbe } from "./depth-probe.ts";
 
 describe("given the depth probe (how far a ground layer must be offset to show over a coplanar one on this GPU)", () => {
   it("when the share of pixels showing the layer rises with the offset, then the offset reaching a target share is interpolated between the two offsets around it, zero if already there, none if never reached", () => {
     const offsets = [0, 1, 2, 4];
     const shares = [0.2, 0.5, 0.9, 1];
-    assert.equal(crossing(offsets, shares, 0.5), 1);
-    assert.ok(Math.abs(crossing(offsets, shares, 0.95)! - 3) < 1e-9);
-    assert.equal(crossing(offsets, [0.6, 0.7, 0.9, 1], 0.5), 0);
-    assert.equal(crossing(offsets, [0.1, 0.2, 0.3, 0.4], 0.5), null);
+    expect(crossing(offsets, shares, 0.5)).toBe(1);
+    expect(Math.abs(crossing(offsets, shares, 0.95)! - 3)).toBeLessThan(1e-9);
+    expect(crossing(offsets, [0.6, 0.7, 0.9, 1], 0.5)).toBe(0);
+    expect(crossing(offsets, [0.1, 0.2, 0.3, 0.4], 0.5)).toBe(null);
   });
 
   const bandCases = [
@@ -22,17 +21,17 @@ describe("given the depth probe (how far a ground layer must be offset to show o
   ] as const;
   for (const testCase of bandCases) {
     it(testCase.it, () => {
-      assert.equal(bandOf(testCase.z), testCase.expected);
+      expect(bandOf(testCase.z)).toBe(testCase.expected);
     });
   }
 
   it("when the race camera 2.4 m up looks level over a 616-row view, then the bottom row sees ground 4 m out, each row up sees farther, and the horizon rows see none", () => {
-    assert.ok(Math.abs(rowDistance(0, 616) - 3.99) < 0.02);
-    assert.equal(rowDistance(308, 616), Infinity);
+    expect(Math.abs(rowDistance(0, 616) - 3.99)).toBeLessThan(0.02);
+    expect(rowDistance(308, 616)).toBe(Infinity);
     let last = 0;
     for (let y = 0; y < 308; y++) {
       const d = rowDistance(y, 616);
-      assert.ok(d > last, `row ${y}`);
+      expect(d, `row ${y}`).toBeGreaterThan(last);
       last = d;
     }
   });
@@ -58,7 +57,7 @@ describe("given the depth probe (how far a ground layer must be offset to show o
   for (const testCase of cardCases) {
     it(testCase.it, () => {
       const probe: DepthProbe = { subpixelBits: 4, bands: testCase.bands.map((b) => ({ ...b, slope: { ...b.slope }, steps: { ...b.steps } })) };
-      assert.equal(describeDepthProbe(probe), testCase.expected);
+      expect(describeDepthProbe(probe)).toBe(testCase.expected);
     });
   }
 });

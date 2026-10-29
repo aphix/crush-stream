@@ -1,5 +1,4 @@
-import { describe, it } from "vitest";
-import assert from "node:assert/strict";
+import { describe, expect, it } from "vitest";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { FRAME } from "./race-world.test-util.ts";
 import { StuckWatch } from "./stuck-canary.test-util.ts";
@@ -39,8 +38,8 @@ describe("given the stuck watch of the AI-field canary, fed one car's pedals and
         for (let partner = 1; partner <= testCase.touching; partner++) watch.pair(0, partner);
         watch.step([car], t, FRAME, () => testCase.alive);
       }
-      assert.equal(watch.episodes.length, testCase.expectedEpisode === null ? 0 : 1, "stuck windows reported");
-      if (testCase.expectedEpisode !== null) assert.equal(watch.episodes[0], testCase.expectedEpisode, "the window reported");
+      expect(watch.episodes.length, "stuck windows reported").toBe(testCase.expectedEpisode === null ? 0 : 1);
+      if (testCase.expectedEpisode !== null) expect(watch.episodes[0], "the window reported").toBe(testCase.expectedEpisode);
     });
   }
 });
