@@ -149,7 +149,7 @@ describe("given a staged crash run twice, the second drawing every car before ev
   }
 });
 
-describe("given a staged crash drawn every frame with `presentSkip` off and then on", () => {
+describe("given a staged crash drawn every frame with frame skipping off and then on", () => {
   for (const stage of ["head-on", "door ajar"] as const) {
     it(`when the ${stage} is done, then every car's pose, velocity, crush, cage fields, door swing and part state are the same numbers at every step`, () => {
       const every = run(true, { skip: false, stage });

@@ -9,8 +9,8 @@ function torn(car: DeformableCar): string[] {
   return parts.filter((p: { detached: boolean }) => p.detached).map((p: { name: string }) => p.name);
 }
 
-describe("given the derby harness (`runField`) running a two-car heat, seed 1", () => {
-  it("when the cars meet in their opening hits, then parts tear off within the first 10 s, as the engine's slice steps each car's breakage (`settleStep`)", () => {
+describe("given a derby heat of two cars played from seed 1", () => {
+  it("when the cars meet in their opening hits, then parts tear off within the first 10 s, as the engine steps each car's breakage", () => {
     let cars: DeformableCar[] = [];
     let tornAt = -1;
     runField(2, 1, {
@@ -23,7 +23,7 @@ describe("given the derby harness (`runField`) running a two-car heat, seed 1", 
   });
 });
 
-describe("given the derby harness (`runField`) running a four-car heat, seed 1, with the engine's ejection watch", () => {
+describe("given a derby heat of four cars played from seed 1, with the engine's ejection watch", () => {
   it("when a hit throws a driver out, then from that step his car never takes the AI's input or a pedal, and the rules count it out", () => {
     const thrownAt = new Map<number, number>();
     const drivenAfter: string[] = [];

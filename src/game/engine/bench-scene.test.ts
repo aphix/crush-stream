@@ -20,7 +20,7 @@ const CRASH_S = 2;
 /** Frames the grid may take to go green on the 1/240 s floor (a 3 s countdown with the course loaded): a guard, not a wait. */
 const GRID_FRAMES = 4000;
 
-describe("given one page that runs the bench's steps in turn, as the loop does (a second CrashEngine never resolves ready, so one engine for the file)", () => {
+describe("given one page that runs the bench's steps in turn, as the loop does (a second engine never gets ready, so one engine serves the file)", () => {
   let engine: CrashEngine;
   /** The sim digest of each step of the sequence, whether its head-on pair was staged, and its wrecks at the end, by step name. */
   const digests: Record<string, string> = {};

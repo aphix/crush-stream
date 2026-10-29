@@ -18,8 +18,13 @@ function headOn(kph: number, bFirst: boolean): [CrashResult, CrashResult] {
 describe("given two identical cars in a mirror-symmetric head-on", () => {
   // 180 km/h: A's noses came out 0.939 m against B's 0.835 m (engine 0.481 against 0.498 m) while the world stepped A first;
   // at 100–150 km/h the pair was symmetric to 0.01 m.
-  for (const kph of [100, 130, 150, 165, 180, 190, 200]) {
-    it(`when the crash runs at ${kph} km/h with either car first in the world's car list, then the two cars' noses (within 0.01 m), engine blocks (within 5 mm) and popped hubs agree`, () => {
+  const testCases = [100, 130, 150, 165, 180, 190, 200].map((kph) => ({
+    it: `when the crash runs at ${kph} km/h with either car first in the world's car list, then the two cars' noses (within 0.01 m), engine blocks (within 5 mm) and popped hubs agree`,
+    kph,
+  }));
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { kph } = testCase;
       for (const bFirst of [false, true]) {
         const [a, b] = headOn(kph, bFirst);
         const label = `${kph} km/h, ${bFirst ? "B" : "A"} first`;

@@ -42,7 +42,7 @@ function assertSlopeKeepsCrash(kind: "head-on" | "t-bone", kph: number, carOneDe
   }
 }
 
-const slopeCrashCases = [
+const testCases = [
   { it: "when a 48 km/h head-on crashes on it, then each car keeps the flat pad's dents and no mass pops past 3·v·h + 5 cm in a slice", kind: "head-on", kph: 48, carOneDents: DENTS },
   // The struck car (facing uphill) used to level out at quiet 0.35 s to world level, not to the slope: the frame
   // turned 0.2 rad against masses resting on the ground, the cell shifted 0.058 m and the tail read 0.083 m of crush
@@ -62,7 +62,7 @@ const slopeCrashCases = [
 describe("given two cars crashing on a 6.8° side slope, and the same crash on the flat pad", () => {
   afterEach(() => setGround(null));
 
-  for (const testCase of slopeCrashCases) {
+  for (const testCase of testCases) {
     it(testCase.it, () => {
       assertSlopeKeepsCrash(testCase.kind, testCase.kph, testCase.carOneDents);
     });

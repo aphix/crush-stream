@@ -77,7 +77,7 @@ describe("given a resting sedan struck by a face at a lever of 1 m ahead of its 
     assertTextbook(l);
   });
 
-  it("when the masses along its near flank (most of its mass) already stand on the face, then it spins as the impulse its masses took turns it, not the kernel's whole", () => {
+  it("when the masses along its near flank (most of its mass) already stand on the face, then it spins as the impulse its masses took turns it, not the whole the contact delivered", () => {
     const l = landExchange((dx) => dx < NEAR_FLANK_M);
     expect(l.taken, `the masses took ${l.taken.toFixed(0)} of the kernel's ${l.kernelJ.toFixed(0)} N·s: the cut no longer binds`).toBeLessThan(0.5 * l.kernelJ);
     assertTextbook(l);

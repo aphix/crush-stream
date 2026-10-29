@@ -45,7 +45,7 @@ describe("given the frame-time panel (the Backslash key) up on the real engine",
     setGround(null);
   });
 
-  it("when frames run through advance (the way a bench page, which has no animation loop, draws), then the panel is begun and ended once for each", () => {
+  it("when frames are stepped by hand (the way a bench page, which has no animation loop, draws), then the panel is begun and ended once for each", () => {
     const { fed, panel } = fakeStats();
     Object.assign(engine, { stats: panel });
     engine.advance(FRAMES / FRAME_HZ, { frameDt: 1 / FRAME_HZ, render: true });
@@ -53,7 +53,7 @@ describe("given the frame-time panel (the Backslash key) up on the real engine",
     expect(fed.ends, "ended").toBe(FRAMES);
   });
 
-  it("when a frame runs through the page's own loop (tick), then the panel is fed once for it too", () => {
+  it("when a frame runs through the page's own animation loop, then the panel is fed once for it too", () => {
     const { fed, panel } = fakeStats();
     Object.assign(engine, { stats: panel });
     engine["tick"](performance.now());

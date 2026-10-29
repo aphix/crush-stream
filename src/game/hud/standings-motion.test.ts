@@ -6,7 +6,7 @@ import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 const row = (id: number, place: number): RaceHudRow => ({ id, name: `car ${id}`, place, lap: 1, status: "racing", gap: null, bestLap: null, you: false, watched: false });
 
 describe("given the classes a standings row carries", () => {
-  it("then it slides (a transform transition), fades through opacity (a transition, not a keyframe a moved row would restart), and fades while data-fading", () => {
+  it("when a row is drawn, then it slides (a transform transition), fades through opacity (a transition, not a keyframe a moved row would restart), and fades while it is marked fading", () => {
     expect(STANDING_LI).toMatch(/transition-\[transform,opacity\]/);
     expect(STANDING_LI).toMatch(/data-\[fading\]:opacity-0/);
     expect(STANDING_LI).not.toMatch(/animate-/);
@@ -33,23 +33,23 @@ const NOW = 100_000;
 const racing: StandingsVisibility = { spectating: false, phase: "racing", raceTime: 60, reel: false, flashUntil: 0, now: NOW };
 
 describe("given a viewer whose place may change", () => {
-  const cases = [
+  const testCases = [
     { it: "when they pass a car (P5 to P4), then the flash runs for the pass window from now", previous: 5, place: 4, flashUntil: 0, expected: NOW + PASS_FLASH_MS },
     { it: "when a car passes them (P4 to P5), then the flash runs for the pass window from now", previous: 4, place: 5, flashUntil: 0, expected: NOW + PASS_FLASH_MS },
     { it: "when they pass again inside a running flash, then the window restarts from now", previous: 4, place: 3, flashUntil: NOW + 500, expected: NOW + PASS_FLASH_MS },
     { it: "when the place is the same, then the flash is left as it was", previous: 4, place: 4, flashUntil: NOW + 500, expected: NOW + 500 },
     { it: "when it is the first sample (no previous place), then there is no flash", previous: null, place: 4, flashUntil: 0, expected: 0 },
     { it: "when they have no place now, then the flash is left as it was", previous: 4, place: null, flashUntil: 0, expected: 0 },
-  ];
-  for (const { it: name, previous, place, flashUntil, expected } of cases) {
-    it(name, () => {
-      expect(nextFlashUntil(previous, place, NOW, flashUntil)).toBe(expected);
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      expect(nextFlashUntil(testCase.previous, testCase.place, NOW, testCase.flashUntil)).toBe(testCase.expected);
     });
   }
 });
 
 describe("given the phone standings list", () => {
-  const cases = [
+  const testCases = [
     { it: "when the viewer is driving mid-race with no recent pass, then it is hidden", state: racing, expected: false },
     { it: "when spectating, then it is always up", state: { ...racing, spectating: true }, expected: true },
     { it: "when the results reel plays, then it is up", state: { ...racing, phase: "finished" as const, reel: true }, expected: true },
@@ -61,10 +61,10 @@ describe("given the phone standings list", () => {
     { it: "when a pass flash is still running, then it is up", state: { ...racing, flashUntil: NOW + 1 }, expected: true },
     { it: "when the pass flash ends exactly now, then it is hidden", state: { ...racing, flashUntil: NOW }, expected: false },
     { it: "when there is no race phase, then it is hidden even while spectating", state: { ...racing, phase: null, spectating: true }, expected: false },
-  ];
-  for (const { it: name, state, expected } of cases) {
-    it(name, () => {
-      expect(standingsVisible(state)).toBe(expected);
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      expect(standingsVisible(testCase.state)).toBe(testCase.expected);
     });
   }
 });

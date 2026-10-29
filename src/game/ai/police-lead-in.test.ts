@@ -32,9 +32,6 @@ const OFF_COURSE = 1e4;
 /** A lead-in heading that ends under this (rad) off the road is lined up, whether or not it started further off. */
 const LINED_UP = 0.2;
 
-/** Where along the lap the stakeout stands (shares of its length): the oval's near straight and its far one. */
-const SHARES = [0.4, 0.7];
-
 type Footprint = { x: number; z: number; yaw: number };
 
 const footprintOf = (car: DeformableCar): Footprint => ({ x: car.group.position.x, z: car.group.position.z, yaw: car.yaw });
@@ -148,9 +145,14 @@ function runPair(
 }
 
 describe("given a stakeout pair of cops standing 12 m apart in one lane of the oval, nose to nose, and a racer passing them at 50 m/s", () => {
-  for (const share of SHARES) {
-    it(`when the racer passes the stakeout ${share} of the lap on and the cops wake into their lead-ins, then no two cops touch, and each cop that pulls away has the racer past its spot`, (t) => {
-      const r = runPair(share);
+  /** Where along the lap the stakeout stands (shares of its length): the oval's near straight and its far one. */
+  const testCases = [
+    { it: "when the racer passes the stakeout 0.4 of the lap on and the cops wake into their lead-ins, then no two cops touch, and each cop that pulls away has the racer past its spot", share: 0.4 },
+    { it: "when the racer passes the stakeout 0.7 of the lap on and the cops wake into their lead-ins, then no two cops touch, and each cop that pulls away has the racer past its spot", share: 0.7 },
+  ];
+  for (const testCase of testCases) {
+    it(testCase.it, (t) => {
+      const r = runPair(testCase.share);
       t.annotate(`closest ${r.closest.toFixed(1)} m`);
       expect(r.pulled[0] && r.pulled[1], `both cops woke (cop 1 ${r.pulled[0]}, cop 2 ${r.pulled[1]}): the test proves nothing`).toBeTruthy();
       expect(r.bad).toHaveLength(0);
@@ -159,16 +161,15 @@ describe("given a stakeout pair of cops standing 12 m apart in one lane of the o
   }
 });
 
-/** The lone cop's stakeouts (the racer's lead share): its spot on the straight before the line, and mid-bend, where the error must rise while it turns into the road. */
-const LONE = [
-  { where: "on a straight", share: 0.8 },
-  { where: "on a bend", share: 0.5 },
-];
-
 describe("given one stakeout cop parked by the oval, its nose turned toward the road and no pack-mate near, and a slow racer (5 m/s) just past it", () => {
-  for (const c of LONE) {
-    it(`when the cop wakes into its lead-in ${c.where}, then its heading off the road ends under where it started or under ${LINED_UP} rad, and it never T-bones the racer`, (t) => {
-      const r = runPair(c.share, track, false, true);
+  /** The lone cop's stakeouts (the racer's lead share): its spot on the straight before the line, and mid-bend, where the error must rise while it turns into the road. */
+  const testCases = [
+    { it: "when the cop wakes into its lead-in on a straight, then its heading off the road ends under where it started or under 0.2 rad, and it never T-bones the racer", share: 0.8 },
+    { it: "when the cop wakes into its lead-in on a bend, then its heading off the road ends under where it started or under 0.2 rad, and it never T-bones the racer", share: 0.5 },
+  ];
+  for (const testCase of testCases) {
+    it(testCase.it, (t) => {
+      const r = runPair(testCase.share, track, false, true);
       expect(r.pulled[0] && r.heading.length > 0, "the cop woke and drove its lead-in").toBeTruthy();
       const start = r.heading[0]!;
       const end = r.heading.at(-1)!;
@@ -180,18 +181,17 @@ describe("given one stakeout cop parked by the oval, its nose turned toward the 
   }
 });
 
-/** The long fast courses' stakeouts: Dam Spine's on the valley road under the dam (stacked in plan: a blind read of the spot takes the dam, 2 km back), Four-Count's on its long back straight. */
-const LONG_FAST = [
-  { id: "dam-spine", share: 0.506, stacked: true },
-  { id: "four-count", share: 0.5, stacked: false },
-] as const;
-
 describe("given a stakeout pair of cops parked 12 m apart nose to nose on a long fast course, and a racer driven up the road past them at 50 m/s", () => {
-  for (const c of LONG_FAST) {
-    it(`when the racer passes the stakeout on ${c.id}, then both cops wake into their lead-ins, no two cops touch, and each cop that pulls away has the racer past its spot`, (t) => {
-      const r = runPair(c.share, new Track(TRACKS.find((j) => parseTrack(j).id === c.id)), true);
+  /** The long fast courses' stakeouts: Dam Spine's on the valley road under the dam (stacked in plan: a blind read of the spot takes the dam, 2 km back), Four-Count's on its long back straight. */
+  const testCases = [
+    { it: "when the racer passes the stakeout on dam-spine, then both cops wake into their lead-ins, no two cops touch, and each cop that pulls away has the racer past its spot", id: "dam-spine", share: 0.506, stacked: true },
+    { it: "when the racer passes the stakeout on four-count, then both cops wake into their lead-ins, no two cops touch, and each cop that pulls away has the racer past its spot", id: "four-count", share: 0.5, stacked: false },
+  ];
+  for (const testCase of testCases) {
+    it(testCase.it, (t) => {
+      const r = runPair(testCase.share, new Track(TRACKS.find((j) => parseTrack(j).id === testCase.id)), true);
       t.annotate(`spot ${r.spot.toFixed(0)} m (blind read ${r.blind.toFixed(0)} m), closest ${r.closest.toFixed(1)} m`);
-      if (c.stacked) expect(Math.abs(r.blind - r.spot), `the stakeout at ${r.spot.toFixed(0)} m is not under the dam: the stacked case is not staged`).toBeGreaterThan(1000);
+      if (testCase.stacked) expect(Math.abs(r.blind - r.spot), `the stakeout at ${r.spot.toFixed(0)} m is not under the dam: the stacked case is not staged`).toBeGreaterThan(1000);
       expect(r.pulled[0] && r.pulled[1], `both cops woke (cop 1 ${r.pulled[0]}, cop 2 ${r.pulled[1]})`).toBeTruthy();
       expect(r.bad).toHaveLength(0);
       expect(r.touched, "frames in which the two cops' footprints overlapped").toHaveLength(0);

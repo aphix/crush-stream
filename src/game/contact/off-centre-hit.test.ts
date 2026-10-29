@@ -10,7 +10,7 @@ import { ownerHit, rigidExchange } from "./off-centre-hit.test-util.ts";
 /** How far a car's measured change may be from the rigid-body answer, as a share of it. */
 const TOLERANCE = 0.3;
 
-const hitCases = [
+const testCases = [
   { it: "the coupe's right-rear wheel (the owner's clip)", spot: "rearWheel" },
   { it: "the coupe's middle", spot: "middle" },
   { it: "its right-front wheel", spot: "frontWheel" },
@@ -18,7 +18,7 @@ const hitCases = [
 
 
 describe("given a hatchback at 98 km/h driving across a coupe's path, its nose meeting the coupe's right side", () => {
-  for (const testCase of hitCases) {
+  for (const testCase of testCases) {
     describe(`when the nose meets ${testCase.it}`, () => {
       const hit = ownerHit(testCase.spot);
       const rigid = rigidExchange(hit, PAIR_MU);

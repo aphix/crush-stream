@@ -19,9 +19,8 @@ type LookCase = {
   id: SettingId;
   key: keyof ShareState;
   field: keyof CrashHudState;
-  set: (e: CrashEngine, v: number | null) => void;
-  /** What the effect's own sink reads (the procedural cover drawn, the composite's drive, the shared uniform) with the look at 0.6 and at its default. */
-  sink: (e: CrashEngine) => number;
+  setter: "setProceduralSky" | "setHalftone" | "setHatching" | "setRimLight";
+  /** What the effect's own sink reads (see `sinkOf`) with the look at 0.6 and at its default. */
   sinkOn: number;
   sinkDefault: number;
   /** What null writes into the link: the cloud cover's null is the picture, the print looks' and the rim's is off, their default. */
@@ -30,12 +29,19 @@ type LookCase = {
   atZero: number | null;
 };
 
+// What each look's own sink reads: the procedural cover drawn (-1 when the dome draws no procedural sky), the composite's drive, the shared uniform.
+const sinkOf = {
+  psky: (e: CrashEngine): number => (e["stage"].sky.drawn === SKY_DRAWN.procedural ? (e["stage"].sky["mat"].uniforms.uCover!.value as number) : -1),
+  halftone: (e: CrashEngine): number => e["cine"].post.dots,
+  hatch: (e: CrashEngine): number => e["cine"].post.hatch,
+  rim: (): number => RIM_LIGHT.value,
+} as const;
+
 const cases = [
-  // The cover the dome draws, -1 when it draws no procedural sky.
-  { it: "the procedural sky", id: "psky", key: "psky", field: "proceduralSky", set: (e, v) => e.setProceduralSky(v), sink: (e) => (e["stage"].sky.drawn === SKY_DRAWN.procedural ? (e["stage"].sky["mat"].uniforms.uCover!.value as number) : -1), sinkOn: 0.6, sinkDefault: INITIAL_HUD.proceduralSky ?? -1, nullKey: "psky=picture", atZero: 0 },
-  { it: "the halftone dots", id: "halftone", key: "dots", field: "halftone", set: (e, v) => e.setHalftone(v), sink: (e) => e["cine"].post.dots, sinkOn: 0.6, sinkDefault: 0, nullKey: "", atZero: null },
-  { it: "the pencil hatching", id: "hatch", key: "hatch", field: "hatching", set: (e, v) => e.setHatching(v), sink: (e) => e["cine"].post.hatch, sinkOn: 0.6, sinkDefault: 0, nullKey: "", atZero: null },
-  { it: "the rim light", id: "rim", key: "rim", field: "rimLight", set: (e, v) => e.setRimLight(v), sink: () => RIM_LIGHT.value, sinkOn: 0.6, sinkDefault: 0, nullKey: "", atZero: null },
+  { it: "the procedural sky", id: "psky", key: "psky", field: "proceduralSky", setter: "setProceduralSky", sinkOn: 0.6, sinkDefault: INITIAL_HUD.proceduralSky ?? -1, nullKey: "psky=picture", atZero: 0 },
+  { it: "the halftone dots", id: "halftone", key: "dots", field: "halftone", setter: "setHalftone", sinkOn: 0.6, sinkDefault: 0, nullKey: "", atZero: null },
+  { it: "the pencil hatching", id: "hatch", key: "hatch", field: "hatching", setter: "setHatching", sinkOn: 0.6, sinkDefault: 0, nullKey: "", atZero: null },
+  { it: "the rim light", id: "rim", key: "rim", field: "rimLight", setter: "setRimLight", sinkOn: 0.6, sinkDefault: 0, nullKey: "", atZero: null },
 ] as const satisfies readonly LookCase[];
 
 type StrengthCase = {
@@ -43,13 +49,13 @@ type StrengthCase = {
   id: SettingId;
   key: keyof ShareState;
   field: keyof CrashHudState;
-  set: (e: CrashEngine, v: number) => void;
+  setter: "setMaterialStrength" | "setContourStrength";
   uniform: { value: number };
 };
 
 const strengthCases = [
-  { it: "material strength", id: "materials", key: "mat", field: "materialStrength", set: (e, v) => e.setMaterialStrength(v), uniform: MATERIAL_STRENGTH },
-  { it: "car contour strength", id: "contours", key: "cont", field: "contourStrength", set: (e, v) => e.setContourStrength(v), uniform: CONTOUR_SMOOTHING },
+  { it: "material strength", id: "materials", key: "mat", field: "materialStrength", setter: "setMaterialStrength", uniform: MATERIAL_STRENGTH },
+  { it: "car contour strength", id: "contours", key: "cont", field: "contourStrength", setter: "setContourStrength", uniform: CONTOUR_SMOOTHING },
 ] as const satisfies readonly StrengthCase[];
 
 describe("given the real engine and the look sliders under Cel in the Playback section", () => {
@@ -70,71 +76,71 @@ describe("given the real engine and the look sliders under Cel in the Playback s
     setGround(null);
   });
 
-  for (const c of cases) {
-    it(`when ${c.it} is set, then its effect, the HUD field, the changed dot and the share key follow, and its reset puts all of that back`, () => {
-      expect(hud.get()[c.field], "the default at the start").toBe(INITIAL_HUD[c.field]);
-      expect(c.sink(engine), "its effect is the default's at the start").toBe(c.sinkDefault);
-      c.set(engine, 0.6);
-      expect(hud.get()[c.field], "the HUD field").toBe(0.6);
-      expect(c.sink(engine), "the effect's own sink").toBe(c.sinkOn);
-      expect(isChanged(hud.get(), c.id), "the dot and the reset chip").toBe(true);
-      expect(keyOf(c.key).join("&"), "the share key").toBe(`${c.key}=0.6`);
-      engine.resetSetting(c.id);
-      expect(hud.get()[c.field], "reset: the HUD field").toBe(INITIAL_HUD[c.field]);
-      expect(c.sink(engine), "reset: the effect").toBe(c.sinkDefault);
-      expect(isChanged(hud.get(), c.id), "reset: not changed").toBe(false);
-      expect(keyOf(c.key), "reset: the key is dropped").toHaveLength(0);
+  for (const testCase of cases) {
+    it(`when ${testCase.it} is set, then its effect, the HUD field, the changed dot and the share key follow, and its reset puts all of that back`, () => {
+      expect(hud.get()[testCase.field], "the default at the start").toBe(INITIAL_HUD[testCase.field]);
+      expect(sinkOf[testCase.id](engine), "its effect is the default's at the start").toBe(testCase.sinkDefault);
+      engine[testCase.setter](0.6);
+      expect(hud.get()[testCase.field], "the HUD field").toBe(0.6);
+      expect(sinkOf[testCase.id](engine), "the effect's own sink").toBe(testCase.sinkOn);
+      expect(isChanged(hud.get(), testCase.id), "the dot and the reset chip").toBe(true);
+      expect(keyOf(testCase.key).join("&"), "the share key").toBe(`${testCase.key}=0.6`);
+      engine.resetSetting(testCase.id);
+      expect(hud.get()[testCase.field], "reset: the HUD field").toBe(INITIAL_HUD[testCase.field]);
+      expect(sinkOf[testCase.id](engine), "reset: the effect").toBe(testCase.sinkDefault);
+      expect(isChanged(hud.get(), testCase.id), "reset: not changed").toBe(false);
+      expect(keyOf(testCase.key), "reset: the key is dropped").toHaveLength(0);
     });
 
-    it(`when ${c.it} is set to 0, NaN, null or past its range, then 0 is ${c.atZero === null ? "off" : "a real value"}, an unreadable value and null are ${c.atZero === null ? "off" : "the picture"}, and a value past the range clamps to 1`, () => {
-      c.set(engine, 0);
-      expect(hud.get()[c.field], "0").toBe(c.atZero);
-      c.set(engine, Number.NaN);
-      expect(hud.get()[c.field], "NaN").toBe(null);
-      c.set(engine, 7);
-      expect(hud.get()[c.field], "past the range").toBe(1);
-      c.set(engine, null);
-      expect(hud.get()[c.field], "null").toBe(null);
-      expect(keyOf(c.key).join("&"), "the key once null").toBe(c.nullKey);
-      engine.resetSetting(c.id);
+    it(`when ${testCase.it} is set to 0, NaN, null or past its range, then 0 is ${testCase.atZero === null ? "off" : "a real value"}, an unreadable value and null are ${testCase.atZero === null ? "off" : "the picture"}, and a value past the range clamps to 1`, () => {
+      engine[testCase.setter](0);
+      expect(hud.get()[testCase.field], "0").toBe(testCase.atZero);
+      engine[testCase.setter](Number.NaN);
+      expect(hud.get()[testCase.field], "NaN").toBe(null);
+      engine[testCase.setter](7);
+      expect(hud.get()[testCase.field], "past the range").toBe(1);
+      engine[testCase.setter](null);
+      expect(hud.get()[testCase.field], "null").toBe(null);
+      expect(keyOf(testCase.key).join("&"), "the key once null").toBe(testCase.nullKey);
+      engine.resetSetting(testCase.id);
     });
   }
 
   it("when a link carrying the four keys is applied, then each look takes its value, a link without them puts them back, and Defaults puts all four back in the HUD, the effects and the URL", () => {
     engine["applyShare"](decodeShare("#cel=0.5&psky=0.7&dots=0.5&hatch=0.3&rim=0.6"), false);
-    for (const [c, v] of [[cases[0], 0.7], [cases[1], 0.5], [cases[2], 0.3], [cases[3], 0.6]] as const) expect(hud.get()[c.field], c.id).toBe(v);
+    for (const [testCase, v] of [[cases[0], 0.7], [cases[1], 0.5], [cases[2], 0.3], [cases[3], 0.6]] as const) expect(hud.get()[testCase.field], testCase.id).toBe(v);
     expect(encodeShare(engine["shareState"]()), "in the order the menu shows them").toMatch(/(^|&)cel=0\.5&psky=0\.7&dots=0\.5&hatch=0\.3&rim=0\.6($|&)/);
     engine["applyShare"](decodeShare("#cel=0.5"), false);
-    for (const c of cases) expect(hud.get()[c.field], `${c.id} left out of the link: back to its default`).toBe(INITIAL_HUD[c.field]);
-    for (const c of cases) c.set(engine, 0.6);
+    for (const testCase of cases) expect(hud.get()[testCase.field], `${testCase.id} left out of the link: back to its default`).toBe(INITIAL_HUD[testCase.field]);
+    for (const testCase of cases) engine[testCase.setter](0.6);
     engine.resetDefaults();
-    for (const c of cases) {
-      expect(hud.get()[c.field], `Defaults: ${c.id}`).toBe(INITIAL_HUD[c.field]);
-      expect(c.sink(engine), `Defaults: the effect of ${c.id}`).toBe(c.sinkDefault);
+    for (const testCase of cases) {
+      expect(hud.get()[testCase.field], `Defaults: ${testCase.id}`).toBe(INITIAL_HUD[testCase.field]);
+      expect(sinkOf[testCase.id](engine), `Defaults: the effect of ${testCase.id}`).toBe(testCase.sinkDefault);
     }
-    for (const c of cases) expect(keyOf(c.key), `Defaults: no ${c.key} key`).toHaveLength(0);
+    for (const testCase of cases) expect(keyOf(testCase.key), `Defaults: no ${testCase.key} key`).toHaveLength(0);
   });
 
-  for (const c of strengthCases) {
-    it(`when the ${c.it} is set, then the HUD, the shared shader uniform, the changed dot and the share key follow, a value past the range clamps to 2, and its reset puts the default back`, () => {
-      expect(hud.get()[c.field], "the default is full strength").toBe(1);
-      expect(c.uniform.value, "the uniform at the start").toBe(1);
-      c.set(engine, 0.6);
-      expect(hud.get()[c.field], "the HUD field").toBe(0.6);
-      expect(c.uniform.value, "the shader's uniform").toBe(0.6);
-      expect(isChanged(hud.get(), c.id), "the dot and the reset chip").toBe(true);
-      expect(keyOf(c.key).join("&"), "the share key").toBe(`${c.key}=0.6`);
-      c.set(engine, 7);
-      expect(c.uniform.value, "past the range").toBe(2);
-      c.set(engine, 0);
-      expect(c.uniform.value, "0 is a real value: the effect off").toBe(0);
-      engine["applyShare"](decodeShare(`#${c.key}=1.5`), false);
-      expect(c.uniform.value, "a link's value reaches the uniform").toBe(1.5);
-      engine.resetSetting(c.id);
-      expect(c.uniform.value, "reset: the uniform").toBe(1);
-      expect(hud.get()[c.field], "reset: the HUD field").toBe(1);
-      expect(isChanged(hud.get(), c.id), "reset: not changed").toBe(false);
-      expect(keyOf(c.key), "reset: the key is dropped").toHaveLength(0);
+  for (const testCase of strengthCases) {
+    it(`when the ${testCase.it} is set, then the HUD, the shared shader uniform, the changed dot and the share key follow, a value past the range clamps to 2, and its reset puts the default back`, () => {
+      expect(hud.get()[testCase.field], "the default is full strength").toBe(1);
+      expect(testCase.uniform.value, "the uniform at the start").toBe(1);
+      engine[testCase.setter](0.6);
+      expect(hud.get()[testCase.field], "the HUD field").toBe(0.6);
+      expect(testCase.uniform.value, "the shader's uniform").toBe(0.6);
+      expect(isChanged(hud.get(), testCase.id), "the dot and the reset chip").toBe(true);
+      expect(keyOf(testCase.key).join("&"), "the share key").toBe(`${testCase.key}=0.6`);
+      engine[testCase.setter](7);
+      expect(testCase.uniform.value, "past the range").toBe(2);
+      engine[testCase.setter](0);
+      expect(testCase.uniform.value, "0 is a real value: the effect off").toBe(0);
+      engine["applyShare"](decodeShare(`#${testCase.key}=1.5`), false);
+      expect(testCase.uniform.value, "a link's value reaches the uniform").toBe(1.5);
+      engine.resetSetting(testCase.id);
+      expect(testCase.uniform.value, "reset: the uniform").toBe(1);
+      expect(hud.get()[testCase.field], "reset: the HUD field").toBe(1);
+      expect(isChanged(hud.get(), testCase.id), "reset: not changed").toBe(false);
+      expect(keyOf(testCase.key), "reset: the key is dropped").toHaveLength(0);
     });
   }
 

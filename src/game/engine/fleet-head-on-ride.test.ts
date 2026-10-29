@@ -47,7 +47,7 @@ function bonnetStaging(): { over: DeformableCar; cars: readonly DeformableCar[];
 }
 
 describe("given a muscle car's wreck set with its front tyres on a parked sedan wreck's bonnet and its rear tyres on the road", () => {
-  it("when its front tyres read the other wreck's top, which the rigid step takes no row from, then the world hears the two touch: a highlight clip that keeps the car keeps the wreck its tyres lost their row to", () => {
+  it("when its front tyres stand on the other wreck's crushed top, then the two count as touching: a highlight clip that keeps the car keeps the wreck its tyres stand on", () => {
     const { w } = bonnetStaging();
     let heard = false;
     w.world.partTouch = () => (heard = true);
@@ -55,7 +55,7 @@ describe("given a muscle car's wreck set with its front tyres on a parked sedan 
     expect(heard, "the world never heard the muscle car and the sedan wreck touch").toBeTruthy();
   });
 
-  it("when its front tyres read the other wreck's top, which the rigid step takes no row from, then its drawn nose is not seated on it: no raise and no raise/flat flips", () => {
+  it("when its front tyres stand on the other wreck's crushed top, then its drawn nose never rides up onto it: no raise and no up-and-down flicker", () => {
     const { over, cars, w } = bonnetStaging();
     let onTop = 0;
     let raised = 0;

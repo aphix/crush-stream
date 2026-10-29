@@ -204,7 +204,7 @@ const OUTWARD_SPEED_LEFT = 2;
 
 describe("given a derby car driven at the arena wall at 25 m/s from 12 m out (the sedan)", () => {
   afterEach(() => setGround(null));
-  it("when it has hit it and run on 3 s, then it stays inside the wall (cage reach: car centre hypot < DERBY_RADIUS - 1) and it has lost its outward speed", () => {
+  it("when it has hit it and run on 3 s, then it stays inside the wall (its centre stays more than 1 m inside the ring) and it has lost its outward speed", () => {
     const car = new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: "Titanium" }, new THREE.Scene());
     car.deform.setMode("shape");
     const outward = { x: Math.sin(ARENA_APPROACH_ANGLE), z: Math.cos(ARENA_APPROACH_ANGLE) };
@@ -226,8 +226,8 @@ describe("given a derby car driven at the arena wall at 25 m/s from 12 m out (th
   });
 });
 
-describe("given the wall's boxes (DERBY_BOXES kind DERBY_PROP.wall)", () => {
-  it("when each box's long axis is compared with the ring's radial direction, then each lies along the ring (tangent), not radial, its inner face is on DERBY_RADIUS, and there are at least 16 boxes", () => {
+describe("given the derby arena's wall boxes", () => {
+  it("when each box's long axis is compared with the ring's radial direction, then each lies along the ring (tangent), not radial, its inner face is on the ring's radius, and there are at least 16 boxes", () => {
     const walls = DERBY_BOXES.filter((box) => box.kind === DERBY_PROP.wall);
     for (const wall of walls) {
       const centreRadius = Math.hypot(wall.x, wall.z);

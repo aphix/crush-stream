@@ -214,8 +214,8 @@ const STRIKE_SECONDS = 1.5;
 const STRIKER_NOSE_TO_WRECK_CENTRE = 4.6;
 const CRUSH_MATCH = 0.05;
 const strikeCases = [
-  { it: "when a car at 30 m/s hits the front corner of a still wreck 0.01 s before and 0.01 s after PLANT_QUIET, then the crush matches within 5% and no wheel is lost either way", speed: 30, nose: 0.6, expectedWheelsLost: 0, todo: false },
-  { it: "when a car at 80 m/s hits the front wheel of a still wreck 0.01 s before and 0.01 s after PLANT_QUIET, then the crush matches within 5% and the same single wheel is lost either way", speed: 80, nose: 0.74, expectedWheelsLost: 1, todo: true },
+  { it: "when a car at 30 m/s hits the front corner of a still wreck 0.01 s before and 0.01 s after it has sat quiet long enough (0.2 s) to plant on its wheels, then the crush matches within 5% and no wheel is lost either way", speed: 30, nose: 0.6, expectedWheelsLost: 0, todo: false },
+  { it: "when a car at 80 m/s hits the front wheel of a still wreck 0.01 s before and 0.01 s after it has sat quiet long enough (0.2 s) to plant on its wheels, then the crush matches within 5% and the same single wheel is lost either way", speed: 80, nose: 0.74, expectedWheelsLost: 1, todo: true },
 ] as const;
 
 function strikeStillWreck(extraDistance: number, speed: number, nose: number, seconds: number): { firstContactAt: number; crush: number; wheelsLost: number } {
@@ -274,7 +274,7 @@ const HUB_STRANDED_M = 1;
 const HUB_RETURN_STEP_M = 0.3 + 1e-9;
 const HUB_HOME_CLAMPS = 6;
 
-describe("given a wreck quiet past PLANT_QUIET and lying over, with a hub 1 m off its place (its plant over: a tipped wreck that was carried)", () => {
+describe("given a wreck quiet past 0.2 s and lying over, with a hub 1 m off its place (its plant over: a tipped wreck that was carried)", () => {
   it("when its frame is read, then the hub returns toward its place by 0.3 m a clamp, not across the body in one, and is home within a few", () => {
     const d = wreck();
     const group = new THREE.Group();
@@ -300,7 +300,7 @@ describe("given a wreck quiet past PLANT_QUIET and lying over, with a hub 1 m of
 const HUBS_TURNED_RAD = 0.5;
 const HUBS_TURNED_CLAMPS = 12;
 
-describe("given a wreck quiet past PLANT_QUIET and lying over, with its four hubs turned 0.5 rad about its centre off their places", () => {
+describe("given a wreck quiet past 0.2 s and lying over, with its four hubs turned 0.5 rad about its centre off their places", () => {
   it("when its frame is read again and again, then the hubs come home and the clamp's turn undo does not walk them back out", () => {
     const d = wreck();
     const group = new THREE.Group();
@@ -333,8 +333,8 @@ const HUB_DRAGGED_M = 1;
 const TETHER_STEP_M = 0.01 + 1e-9;
 const TETHER_CLAMPS = 150;
 
-describe("given a wreck quiet past PLANT_QUIET and upright, its planted hub dragged 1 m off its pin in plan by a body that slid on over it", () => {
-  it("when its frame is read again and again, then the hub is drawn back to HUB_PIN_MAX of its pin by at most 1 cm a clamp, and a hub within it is left where it stands", () => {
+describe("given a wreck quiet past 0.2 s and upright, its planted hub dragged 1 m off its pin in plan by a body that slid on over it", () => {
+  it("when its frame is read again and again, then the hub is drawn back to 0.3 m of its pin by at most 1 cm a clamp, and a hub within it is left where it stands", () => {
     const d = wreck();
     const group = new THREE.Group();
     group.updateMatrixWorld();

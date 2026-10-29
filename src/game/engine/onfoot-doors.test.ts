@@ -24,12 +24,12 @@ afterEach(() => setGround(null));
 
 describe("given a car and the spot outside its driver door", () => {
   const speed = new Float64Array(1);
-  const torsoCases: readonly { it: string; offset: number; expectedReach: boolean }[] = [
+  const testCases: readonly { it: string; offset: number; expectedReach: boolean }[] = [
     { it: "when his torso stands at the spot, then the door is in reach", offset: 0, expectedReach: true },
     { it: "when his torso stands a metre from the spot, then the door is in reach", offset: REACHED_M, expectedReach: true },
     { it: "when his torso stands 3 m from the spot, then the door is out of reach", offset: MISSED_M, expectedReach: false },
   ];
-  for (const testCase of torsoCases) {
+  for (const testCase of testCases) {
     it(testCase.it, () => {
       const car = carAt(INSIDE_X, 0);
       const spot = doorSpot(car, new THREE.Vector3());

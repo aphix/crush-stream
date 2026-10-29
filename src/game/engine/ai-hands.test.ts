@@ -14,7 +14,7 @@ const STEP = 1 / QUIET_HZ;
 const FAST = 30;
 const GAS: DriveInput = { ...idleDrive(), throttle: 1 };
 
-describe("given an AI driver's hands (`InputFade`)", () => {
+describe("given an AI driver's hands (the pedals and wheel fade toward what the driver asks)", () => {
   it("when it asks for full gas, then 0.06 s later (one time constant) the pedal is 63 % of the way, the same at 1/240, 1/120 and 1/60 s steps", () => {
     for (const steps of [29, 14, 7]) {
       const dt = FADE_S.throttle / steps;
@@ -25,7 +25,7 @@ describe("given an AI driver's hands (`InputFade`)", () => {
     }
   });
 
-  it("when the car is crawling (3 m/s) the wheel follows the driver in a fifth of the time constant it has at 15 m/s and above, and stopped it follows at once", () => {
+  it("when the car is crawling (3 m/s), then the wheel follows the driver in a fifth of the time constant it has at 15 m/s and above, and stopped it follows at once", () => {
     const steps = (speed: number): number => {
       const hands = new InputFade();
       let n = 0;
@@ -62,14 +62,14 @@ describe("given an AI driver's hands (`InputFade`)", () => {
     expect(hands.fade(0, idleDrive(), STEP, FAST).ebrake, "let go for one step").toBe(true);
   });
 
-  it("when another driver had the car (`follow`), then the hands take over from where it left the pedals", () => {
+  it("when another driver had the car, then the hands take over from where it left the pedals", () => {
     const hands = new InputFade();
     hands.follow(3, { ...idleDrive(), throttle: 0.8, steer: -0.4 });
     const out = hands.fade(3, { ...idleDrive(), throttle: 0.8, steer: -0.4 }, STEP, FAST);
     expect(Math.abs(out.throttle - 0.8) < 1e-9 && Math.abs(out.steer + 0.4) < 1e-9).toBeTruthy();
   });
 
-  it("when the car is put on a spot (its placements count moves), then its first step there is what the driver asks, not a fade from the pedals it had where it was; with the count unmoved it fades as ever", () => {
+  it("when the car is put on a spot, then its first step there is what the driver asks, not a fade from the pedals it had where it was; when it is put nowhere new it fades as ever", () => {
     const ask = { ...idleDrive(), brake: 0.7, steer: -0.2 };
     const hands = new InputFade();
     for (let s = 0; s < 100; s++) hands.fade(0, { ...idleDrive(), throttle: 1 }, STEP, FAST, 1);
@@ -80,7 +80,7 @@ describe("given an AI driver's hands (`InputFade`)", () => {
   });
 });
 
-describe("given a sedan at 25 m/s driven by an AI driver (`applyAiDrive`, every AI's way to the drive)", () => {
+describe("given a sedan at 25 m/s driven by an AI driver (every AI's way to the drive)", () => {
   it("when the driver flips between full left and full right lock every step, then the wheel the car runs moves no faster than a pad player's (12 of lock a second, on the byte grid), at 1/240, 1/80 and 1/60 s steps; then held at full lock, it gets there moving the pad's whole bytes a step", () => {
     for (const dt of [1 / FINE_HZ, 1 / QUIET_HZ, 1 / FRAME_HZ]) {
       const car = new DeformableCar({ body: 0xc5c8ce, accent: 0x9aa0a8, name: "hands" }, new THREE.Scene());

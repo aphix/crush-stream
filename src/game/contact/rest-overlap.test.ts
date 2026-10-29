@@ -68,21 +68,22 @@ function restOverlap(striker: Style, struck: Style, shove = 0): { depth: number;
 describe("given two fleet cars, one struck on its flank by the other at 72 km/h and left to rest", () => {
   const saved = epicenterValues();
   afterEach(() => loadEpicenter(saved));
-  const cases: readonly [Style, Style][] = [
-    ["sedan", "pickup"],
-    ["pickup", "sedan"],
-    ["sedan", "wagon"],
-    ["coupe", "pickup"],
-  ];
-  for (const [striker, struck] of cases) {
-    it(`when a ${striker} strikes a parked ${struck}, then both stop and overlap by no more than ${REST_OVERLAP * 100} cm`, () => {
+  const testCases = [
+    { it: "when a sedan strikes a parked pickup, then both stop and overlap by no more than 2.5 cm", striker: "sedan", struck: "pickup" },
+    { it: "when a pickup strikes a parked sedan, then both stop and overlap by no more than 2.5 cm", striker: "pickup", struck: "sedan" },
+    { it: "when a sedan strikes a parked wagon, then both stop and overlap by no more than 2.5 cm", striker: "sedan", struck: "wagon" },
+    { it: "when a coupe strikes a parked pickup, then both stop and overlap by no more than 2.5 cm", striker: "coupe", struck: "pickup" },
+  ] as const satisfies readonly { it: string; striker: Style; struck: Style }[];
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { striker, struck } = testCase;
       const { depth, speed } = restOverlap(striker, struck);
       expect(speed, `still moving at ${speed.toFixed(3)} m/s`).toBeLessThan(STILL_MPS);
       expect(depth, `they rest ${(depth * 100).toFixed(1)} cm into each other`).toBeLessThanOrEqual(REST_OVERLAP);
     });
   }
 
-  it("when the relock is on and the rested, relocked pickup is shoved 8 cm back into the sedan, then the overlap is out again with no frozen-state breach and no thaw every slice", () => {
+  it("when frozen wrecks are on and the rested pickup, frozen again, is shoved 8 cm back into the sedan, then the overlap is out again with no frozen-state breach and no thaw every slice", () => {
     loadEpicenter(EPICENTER_AT_LOAD);
     EPICENTER.on = 1;
     EPICENTER.frozenCheck = 1;

@@ -104,15 +104,20 @@ describe("given a sedan driving into the rigid wall at 56 km/h in coarse steps",
   });
 });
 
-/** How far (m) a nose's first touch is read ahead of the overlap: none, and the travel of a 1/240 s slice at 30 m/s. */
-const LOOKS = [0, 30 / FINE_HZ];
+/** How far (m) a nose's first touch is read ahead of the overlap in the second case: the travel of a 1/240 s slice at 30 m/s. */
+const SLICE_LOOK_M = 30 / FINE_HZ;
 /** How far (mm) into the contact the patch is followed: past the outlines' outermost half step, where the other cage's nodes first read a depth. */
 const ENTRY_MM = 60;
 /** The widest (m) the patch's centre may move between two readings 1 mm apart of the nose's closing, in its first `ENTRY_MM`: a node enters with the depth it has, from nothing (read at the gate of the drawn triangles' box, the door's nodes at the nose's edge entered with 0.02 m at once: 0.021 m at no look, 0.112 m at a slice's; now 0.009 m and 0.002 m). */
 const PATCH_STEP = 0.015;
 describe("given a sedan's nose closing on a parked sedan's right door, read 1 mm at a time from the first touch", () => {
-  for (const look of LOOKS) {
-    it(`when the pair's patch is read ${look.toFixed(3)} m ahead of the overlap, then its centre moves under ${PATCH_STEP} m between neighbouring millimetres of the first ${ENTRY_MM}`, (t) => {
+  const testCases = [
+    { it: "when the pair's patch is read 0.000 m ahead of the overlap, then its centre moves under 0.015 m between neighbouring millimetres of the first 60 mm", look: 0 },
+    { it: "when the pair's patch is read 0.125 m ahead of the overlap, then its centre moves under 0.015 m between neighbouring millimetres of the first 60 mm", look: SLICE_LOOK_M },
+  ];
+  for (const testCase of testCases) {
+    it(testCase.it, (t) => {
+      const { look } = testCase;
       const struck = classCar("sedan");
       const striker = classCar("sedan");
       launch(struck, 0, 0, 0, 0, 0);

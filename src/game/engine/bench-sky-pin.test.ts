@@ -79,7 +79,7 @@ describe("given the real engine on the city bench, whose sky is a picture the pa
   });
 
   for (const player of [{ it: "the picture", cover: null }, { it: "a cover of 0.8", cover: 0.8 }]) {
-    it(`when the player has ${player.it} and the bench pins each sky in turn, then each pin is drawn, the procedural sky at the default cover, then the strip, then nothing, instead of waiting out \`BENCH.skyWaitS\``, async () => {
+    it(`when the player has ${player.it} and the bench pins each sky in turn, then each pin is drawn, the procedural sky at the default cover, then the strip, then nothing, instead of waiting out the bench's sky wait`, async () => {
       engine.setProceduralSky(player.cover);
       let stamp = 0;
       Object.defineProperty(globalThis, "requestAnimationFrame", { value: (callback: (at: number) => void) => void setImmediate(() => callback((stamp += 1000 / 60))), configurable: true });

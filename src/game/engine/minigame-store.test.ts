@@ -85,7 +85,7 @@ describe("given the minigame bests in an in-memory localStorage", () => {
     expectBests(store.bestFor("ringFling", 4, "sedan"), null, null, "a length never played");
   });
 
-  it("when scores are recorded, then they live under crush.minigame.best.<mode>[.<throwsPerSet>].<carType|overall>", () => {
+  it("when scores are recorded, then each is saved in the browser's storage under its mode, its set length (Ring Fling only) and its car type and overall", () => {
     const store = minigameStore();
     store.record("longJump", null, "wagon", 11);
     store.record("ringFling", 5, "wagon", 70);

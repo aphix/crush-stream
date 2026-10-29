@@ -36,7 +36,7 @@ function crowd(count: number, timed: boolean): { digest: string; ms: Float64Arra
   return result;
 }
 
-describe("given the same head-on crash stepped through stepWorld with the phase clock off and then on", () => {
+describe("given the same head-on crash stepped through the world step with the phase clock off and then on", () => {
   const off = crowd(2, false);
   const on = crowd(2, true);
 
@@ -59,7 +59,7 @@ describe("given the same head-on crash stepped through stepWorld with the phase 
   });
 });
 
-describe("given a crowd of head-on pairs stepped through stepWorld", () => {
+describe("given a crowd of head-on pairs stepped through the world step", () => {
   it("when the same crowd is stepped twice, then every work counter is the same", () => {
     const first = crowd(4, false);
     const second = crowd(4, false);
@@ -67,11 +67,11 @@ describe("given a crowd of head-on pairs stepped through stepWorld", () => {
     for (const name of ["slices", "liveCarSlices", "pairTests"] as const) expect(first.work[WORK_NAMES.indexOf(name)]!, `${name} counted nothing`).toBeGreaterThan(0);
   });
 
-  const cases = [
+  const testCases = [
     { it: "when there are four cars instead of two, then more pair tests are made", counter: "pairTests" },
     { it: "when there are four cars instead of two, then more car-slices are stepped", counter: "liveCarSlices" },
   ] as const;
-  for (const testCase of cases) {
+  for (const testCase of testCases) {
     it(testCase.it, () => {
       const two = crowd(2, false).work[WORK_NAMES.indexOf(testCase.counter)]!;
       const four = crowd(4, false).work[WORK_NAMES.indexOf(testCase.counter)]!;

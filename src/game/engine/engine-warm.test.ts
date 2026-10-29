@@ -84,7 +84,7 @@ describe("given the engine warming its programs before the loop starts", () => {
     expect(paintKey().includes(FINISH_KEY_MARK), `key ${paintKey()}`).toBe(false);
   });
 
-  it("when Rapier is in after boot, then the purse pool its world adds is linked for both outputs and drawn before any throw", async () => {
+  it("when physics is in after boot, then the purse pool its world adds is linked for both outputs and drawn before any throw", async () => {
     await engine["ragdolls"].preload();
     await engine.warmsIdle();
     const purses = engine["ragdolls"]["purses"];

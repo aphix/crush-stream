@@ -24,7 +24,7 @@ describe("given one cycle of the benchmark loop", () => {
     expect(cycleOf(false).map((s) => s.id).join(" ")).toBe("strip strip:epi city city:epi dam-spine dam-spine:epi national-mall national-mall:epi");
   });
 
-  it("when the second cycle is listed, then each pair runs on then off, the same eight steps, and stepOf follows the cycle", () => {
+  it("when the second cycle is listed, then each pair runs on then off, the same eight steps, and the step the loop is at follows the cycle", () => {
     expect(cycleOf(false, 2).map((s) => s.id).join(" ")).toBe("strip:epi strip city:epi city dam-spine:epi dam-spine national-mall:epi national-mall");
     expect(cycleOf(false, 3).map((s) => s.id).join(" ")).toBe(cycleOf(false, 1).map((s) => s.id).join(" "));
     const run = { ...startRun("k3x9q2", true), loop: 2, step: 0 };
@@ -325,7 +325,7 @@ describe("given a page whose address carries a share # (a stale one, or one past
   });
 });
 
-describe("given a page outside a secure context (a build opened over plain http on the LAN), where crypto.randomUUID is missing", () => {
+describe("given a page outside a secure context (a build opened over plain http on the LAN), where the browser cannot make a random id", () => {
   it("when the Benchmark entry starts a loop, then it gets a session its own bench page reads back as that loop", () => {
     vi.spyOn(crypto, "randomUUID").mockImplementation(() => {
       throw new TypeError("crypto.randomUUID is not a function");

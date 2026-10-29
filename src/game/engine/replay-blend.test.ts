@@ -149,7 +149,7 @@ afterEach(() => loadEpicenter(saved));
 
 describe("given a crash replayed in slow motion from its clip", () => {
   for (const frame of FRAME_S) {
-    it(`when frames of ${(frame * 1000).toFixed(2)} ms of the clip (a 1/60 s frame at ${(frame * 60).toFixed(1)}x) are drawn, with presentSkip off and on, then every class of drawn part changes pose on at least ${BAR * 100} % of the frames it moves on`, () => {
+    it(`when frames of ${(frame * 1000).toFixed(2)} ms of the clip (a 1/60 s frame at ${(frame * 60).toFixed(1)}x) are drawn, with pose skipping off and on, then every class of drawn part changes pose on at least ${BAR * 100} % of the frames it moves on`, () => {
       const every = shares(frame, 0);
       const skipping = shares(frame, 1);
       // The skipping run must be one that skips (parts posed only when their inputs changed), or it proves nothing about presentSkip. The cars move all through this clip, so it skips little (a still wreck skips almost every pose: pose-skip.test.ts).

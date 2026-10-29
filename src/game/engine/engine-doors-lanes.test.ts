@@ -132,14 +132,14 @@ describe("given the real engine in the Doors scene, every lane's button pressed 
       });
     }
 
-    it(`when lidPop is fired on the ${id} at ${F_HARD.kph} km/h and ${F_HARD.kg} kg, then the head springs the lid past its latch by contact, still on the car, and the car moves under ${CAR_MOVED_MAX_M} m`, () => {
+    it(`when F (the lid pop) is fired on the ${id} at ${F_HARD.kph} km/h and ${F_HARD.kg} kg, then the head springs the lid past its latch by contact, still on the car, and the car moves under ${CAR_MOVED_MAX_M} m`, () => {
       bench.park(id);
       const fired = bench.fire("lidPop", F_HARD.kph, F_HARD.kg);
       expect(!fired.lidLatched && !fired.shot.detached.includes("trunk"), `lid latched ${fired.lidLatched}, off [${fired.shot.detached}]`).toBeTruthy();
       expect(fired.carMoved, `the car moved ${fired.carMoved} m`).toBeLessThan(CAR_MOVED_MAX_M);
     });
 
-    it(`when lidPop is fired on the ${id} at ${F_GENTLE.kph} km/h and ${F_GENTLE.kg} kg, then the lid stays latched and the car moves under ${CAR_MOVED_MAX_M} m`, () => {
+    it(`when F (the lid pop) is fired on the ${id} at ${F_GENTLE.kph} km/h and ${F_GENTLE.kg} kg, then the lid stays latched and the car moves under ${CAR_MOVED_MAX_M} m`, () => {
       bench.park(id);
       const fired = bench.fire("lidPop", F_GENTLE.kph, F_GENTLE.kg);
       expect(fired.lidLatched && fired.shot.detached.length === 0, `lid latched ${fired.lidLatched}, off [${fired.shot.detached}]`).toBeTruthy();

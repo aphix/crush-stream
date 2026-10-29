@@ -78,8 +78,8 @@ describe("given a head-on crash of two cars with a third car 400 m off, and the 
   });
 
   const kept = [
-    { it: "when the first listed strike is read, then it is slot 2's at its step with the car remapped to the clip's index 1", at: 0, source: 0, expectedCar: 1 },
-    { it: "when the second listed strike is read, then it is slot 1's (the VIP's guard index -1) at its step with the car remapped to the clip's index 0", at: 1, source: 2, expectedCar: 0 },
+    { it: "when the first listed strike is read, then it is the one the race's third car made, at its step, with that car renumbered as the clip's second car", at: 0, source: 0, expectedCar: 1 },
+    { it: "when the second listed strike is read, then it is the one the race's second car made (the VIP's guard), at its step, with that car renumbered as the clip's first car", at: 1, source: 2, expectedCar: 0 },
   ] as const;
   for (const testCase of kept) {
     it(testCase.it, () => {
@@ -90,7 +90,7 @@ describe("given a head-on crash of two cars with a third car 400 m off, and the 
     });
   }
 
-  it("when the clip's strikes are replayed as a peer does, then each is handed once at the step it ran in with the car as the engine slot, and again after a restart", () => {
+  it("when the clip's strikes are replayed as a peer does, then each is handed once at the step it ran in with the car as the race's own car, and again after a restart", () => {
     const sim = new ClipSim(clip, clip.cars.map((c) => run.cars[c.slot]!), { dress: () => {}, collide: () => {}, blend: new PoseBlend() });
     const handed: { step: number; guard: number; car: number }[][] = [];
     for (let pass = 0; pass < 2; pass++) {

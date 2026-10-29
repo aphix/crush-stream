@@ -24,8 +24,8 @@ function field(): { cars: DeformableCar[]; w: World } {
   return { cars, w };
 }
 
-describe("given a car the race put away (`stored`) beside a car driving on", () => {
-  it("when the world steps 1 s with `epi.storedSkip` at 1, then the put-away car is not stepped (nothing of it moves, no car-slice counted) and the driving car runs its slices", () => {
+describe("given a car the race put away beside a car driving on", () => {
+  it("when the world steps 1 s with the put-away skip set to 1, then the put-away car is not stepped (nothing of it moves, no car-slice counted) and the driving car runs its slices", () => {
     loadEpicenter(EPICENTER_AT_LOAD);
     EPICENTER.storedSkip = 1;
     const { cars, w } = field();

@@ -23,7 +23,7 @@ describe("given the real engine on Fleet's default settings, every car driving s
     setGround(null);
   });
 
-  it("when the last car has left the disc, then the loop resets the scene within FLEET_EMPTY_S + 1 s", (t) => {
+  it("when the last car has left the disc, then the loop resets the scene once the disc has been empty 1 s and within 1 s more", (t) => {
     expect(hud.get().carCount, "the HUD starts on its default car count").toBe(INITIAL_HUD.carCount);
     expect(INITIAL_HUD.carCount, "Fleet's default is 5 cars").toBe(5);
     const cars = engine["live"]();

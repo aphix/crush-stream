@@ -27,13 +27,17 @@ function speckled(count: number): { texels: Uint8Array; palette: number[] } {
 }
 
 describe("given the player's spray kept in this browser's storage", () => {
-  const oldSaves = [
-    { it: "a stripe and a dot in presets (packed as runs)", paint: () => ({ texels: new Uint8Array(OLD_SIDE * OLD_SIDE).fill(4, 3000, 3500).fill(9, 9000, 9003), palette: SPRAY_PALETTE }) },
-    { it: "a speckled bitmap in colours of the player's own (packed as nibbles)", paint: () => speckled(OLD_SIDE * OLD_SIDE) },
-  ];
-  for (const testCase of oldSaves) {
+  const oldPaints = {
+    runs: () => ({ texels: new Uint8Array(OLD_SIDE * OLD_SIDE).fill(4, 3000, 3500).fill(9, 9000, 9003), palette: SPRAY_PALETTE }),
+    speckled: () => speckled(OLD_SIDE * OLD_SIDE),
+  };
+  const testCases = [
+    { it: "a stripe and a dot in presets (packed as runs)", paint: "runs" },
+    { it: "a speckled bitmap in colours of the player's own (packed as nibbles)", paint: "speckled" },
+  ] as const;
+  for (const testCase of testCases) {
     it(`when a 128 x 128 save of ${testCase.it} is loaded, then each old texel covers its 2 x 2 of the 256 x 256 bitmap in the same ink and colour`, () => {
-      const old = testCase.paint();
+      const old = oldPaints[testCase.paint]();
       for (const key of Object.values(KEYS)) saved.set(key, Buffer.from(packSpray(old)).toString("base64"));
       const looks = new PlayerLooks();
       for (const bitmap of [looks.mine.carSpray, looks.mine.personSpray]) {

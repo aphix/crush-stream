@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatSpeed, speedUnitFor } from "./speed-units.ts";
 
-const localeUnitCases = [
+const testCases = [
   { it: "when the locale is en-US, then the readout is in mph", tag: "en-US", unit: "mph" },
   { it: "when the locale is en-GB, then the readout is in km/h", tag: "en-GB", unit: "km/h" },
   { it: "when the locale is de-DE, then the readout is in km/h", tag: "de-DE", unit: "km/h" },
@@ -9,7 +9,7 @@ const localeUnitCases = [
 ] as const;
 
 describe("given the speed readout's unit, chosen from the browser's language tags", () => {
-  for (const testCase of localeUnitCases) {
+  for (const testCase of testCases) {
     it(testCase.it, () => {
       expect(speedUnitFor([testCase.tag])).toBe(testCase.unit);
     });

@@ -58,7 +58,7 @@ describe("given a driver planning full throttle straight on at 30 m/s, with the 
   });
 });
 
-describe("given a driver at 18 m/s asking 0.4 of lock toward a car 10 m ahead and 6 m to that side that crosses its path at 8 m/s, its hands still at 0.3 (`InputFade` lags the ask)", () => {
+describe("given a driver at 18 m/s asking 0.4 of lock toward a car 10 m ahead and 6 m to that side that crosses its path at 8 m/s, its hands still at 0.3 (its hands lag the ask)", () => {
   const me = car(0, 0, 0, 18);
   const crossing: AiCar = { ...blankAiCar(1), x: 6, z: 10, yaw: -Math.PI / 2, vx: -8 };
   it("when the guard checks the hands' input, then it brakes for the crossing car as it does with the hands caught up on the ask, where the arc of the hands' 0.3 alone finds nothing to brake for", () => {
@@ -99,7 +99,7 @@ describe("given a driver at 25 m/s with 0.6 of lock on, and a stopped car 18 m a
   });
 });
 
-describe("given the contact guard called every step for one car (its held push and braking demand kept in the tune buffer), a stopped car dead ahead that is then taken away", () => {
+describe("given the contact guard called every step for one car (its held push and braking demand kept between calls), a stopped car dead ahead that is then taken away", () => {
   const STEP = 1 / QUIET_HZ;
   const me = car(0, 0, 0, 30);
   function tuned(): Float64Array {

@@ -21,7 +21,7 @@ describe("given the calibrated crash knob defaults (squash, buckle and realism)"
     }
   });
 
-  it("when each camera slider's default is compared with its range, then it sits inside the range, and every KnobId has its own row", () => {
+  it("when each camera slider's default is compared with its range, then it sits inside the range, and every slider has its own row", () => {
     for (const k of KNOBS) {
       expect(k.min, `${k.id} range ${k.min}–${k.max}`).toBeLessThan(k.max);
       expect(INITIAL_HUD[k.id] >= k.min && INITIAL_HUD[k.id] <= k.max, `${k.id} ${INITIAL_HUD[k.id]} outside ${k.min}–${k.max}`).toBeTruthy();

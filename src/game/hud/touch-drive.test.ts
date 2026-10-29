@@ -58,7 +58,7 @@ function driveFor(thumbs: Thumbs) {
 }
 
 describe("given a scripted two-thumb drive at speed", () => {
-  const cases = [
+  const testCases = [
     { it: "when Pedals gets half gas on the strip and a full right push on the bar, then it pulls and turns right with no brake", thumbs: { scheme: "pedals", steerPx: 60, stripAt: 0.6 }, wheel: "right", gas: "some", brake: false, ebrake: false, boost: false, pulls: true },
     { it: "when Pedals gets the foot of the strip and a right push, then it brakes hard and turns right", thumbs: { scheme: "pedals", steerPx: 60, stripAt: 0 }, wheel: "right", gas: "none", brake: true, ebrake: false, boost: false, pulls: false },
     { it: "when Pedals strip is in the coast band, then neither pedal is pressed", thumbs: { scheme: "pedals", stripAt: 0.34 }, wheel: "straight", gas: "none", brake: false, ebrake: false, boost: false, pulls: false },
@@ -74,7 +74,7 @@ describe("given a scripted two-thumb drive at speed", () => {
     { it: "when the Disc is pushed up and right, then it pulls and turns right (unchanged)", thumbs: { scheme: "stick", discPush: { x: 36, y: -36 } }, wheel: "right", gas: "some", brake: false, ebrake: false, boost: false, pulls: true },
     { it: "when the Disc is pushed down and the Handbrake button is held, then it brakes with the e-brake (unchanged)", thumbs: { scheme: "stick", discPush: { x: 0, y: 36 }, handbrakeButton: true }, wheel: "straight", gas: "none", brake: true, ebrake: true, boost: false, pulls: false },
   ] as const satisfies readonly { it: string; thumbs: Thumbs; wheel: "left" | "right" | "straight"; gas: "none" | "some" | "full"; brake: boolean; ebrake: boolean; boost: boolean; pulls: boolean }[];
-  for (const testCase of cases) {
+  for (const testCase of testCases) {
     it(testCase.it, () => {
       const { intent, out } = driveFor(testCase.thumbs);
       const wheel = intent.wheel > 0.3 ? "left" : intent.wheel < -0.3 ? "right" : "straight";

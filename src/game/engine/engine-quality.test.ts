@@ -48,7 +48,7 @@ describe("given the real engine on a page whose URL says ?draw=max&scale=1.5&sha
     expect(inForce()).toBe("360 1.5 2048 true");
   });
 
-  it("when the bench starts a step over (resetAdaptiveQuality), then the URL's arms stay in force", () => {
+  it("when the bench starts a step over and the automatic quality is reset, then the URL's draw, scale and shadow settings stay in force", () => {
     engine.resetAdaptiveQuality();
     expect(inForce()).toBe("360 1.5 2048 true");
     expect(engine["quality"].pinnedKnobs).toBe("draw scale shadow");

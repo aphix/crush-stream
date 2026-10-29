@@ -17,13 +17,13 @@ describe("given the real engine and the people's skin switch", () => {
     setGround(null);
   });
 
-  const CASES: readonly { tier: FxTier; expected: number }[] = [
-    { tier: "minimal", expected: 0 },
-    { tier: "low", expected: 0 },
-    { tier: "high", expected: 1 },
+  const testCases: readonly { it: string; tier: FxTier; expected: number }[] = [
+    { it: "when the FX tier is minimal, then the people's skin look is off (switch 0)", tier: "minimal", expected: 0 },
+    { it: "when the FX tier is low, then the people's skin look is off (switch 0)", tier: "low", expected: 0 },
+    { it: "when the FX tier is high, then the people's skin look is on (switch 1)", tier: "high", expected: 1 },
   ];
-  for (const testCase of CASES) {
-    it(`when the FX tier is ${testCase.tier}, then the skin look's switch is ${testCase.expected}`, () => {
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
       engine.setFxTier("high");
       engine.setFxTier(testCase.tier);
       expect(SKIN_SSS.value).toBe(testCase.expected);

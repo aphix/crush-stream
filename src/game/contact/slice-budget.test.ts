@@ -64,7 +64,7 @@ function restoreAlongPush(car: DeformableCar): void {
   };
 }
 
-describe("given a slice whose contact corrections (pair pushes, structure step, re-fit, bowl clip) draw on one net-translation budget (PushBudget)", () => {
+describe("given a slice whose contact corrections (pair pushes, structure step, re-fit, bowl clip) draw on one net-translation budget", () => {
   // Derby seed 161 (main) and o6 (17491eb) zipped in one 6.9 ms slice: the pair pushes took the whole cap (44 mm), and
   // the structure step (12.2 mm), the re-fit (8.6 mm) and the bowl clip (14.9 mm) came after them, each debited to the
   // NEXT slice's budget, so the wreck's centroid moved 66 mm against a zip bound of 3·v·h + 5 cm = 61 mm.
@@ -107,7 +107,7 @@ describe("given a slice whose contact corrections (pair pushes, structure step, 
 
   // Derby seed 40 with the ceiling: the pushes took the whole cap (47.8 mm at 8.5 ms), so a structure drift AGAINST them
   // was refused as "nothing left" and the wreck stayed at 51.5 mm; against the net, it brings it in.
-  it("when a drift settles against a full net translation then it is allowed, and when it goes along the net then it is refused", () => {
+  it("when a drift settles against a full net translation, then it is allowed, and when it goes along the net, then it is refused", () => {
     const full = new PushBudget();
     expect(Math.abs(full.settle(1, 0, 1, 1, H, TOUCH) - STEP_CEIL), "a drift along nothing gets the ceiling").toBeLessThan(1e-12);
     expect(full.settle(1, 0, 1, 0.01, H, TOUCH), "a drift along the full net was allowed").toBe(0);
@@ -116,7 +116,7 @@ describe("given a slice whose contact corrections (pair pushes, structure step, 
   });
 
   // Refused past the cap, a push back against the net was granted whole or not at all by the rounding of cap² − net² at a full cap.
-  it("when a push goes against a net translation past the cap then it is allowed, and when it goes along the net then it is refused", () => {
+  it("when a push goes against a net translation past the cap, then it is allowed, and when it goes along the net, then it is refused", () => {
     const full = new PushBudget();
     full.debit(1, 0, STEP_CEIL);
     expect(full.take(1, 0, 1, 0.01, H, TOUCH), "a push along the full net was allowed").toBe(0);
@@ -127,7 +127,7 @@ describe("given a slice whose contact corrections (pair pushes, structure step, 
 // Seed 275 of 17491eb: one `followGroup` re-fit moved a live car's centroid 49 mm (49/47/37/32 over four steps) right
 // after a 26 mm correction. A live wreck's frame sits on its cell, so a push that shifts the cell leaves the other masses
 // behind it, and the clamp drags them after: the whole cloud moves again, on top of the shift.
-describe("given a live wreck pushed by the pair kernel's push (pushCar, the amount takePush grants)", () => {
+describe("given a live wreck pushed by the pair solver (the amount the push cap grants)", () => {
   it("when it is pushed 30 mm and its masses are re-fitted, then the re-fit adds no translation beyond what the push and the cap leave", () => {
     const wreck = plantedWreck();
     stepWorld(makeWorld([wreck], false, false).world, H);

@@ -158,7 +158,7 @@ describe("given a browser with long-task entries, or without", () => {
     disconnect(): void {}
   }
 
-  it("when the browser lists longtask, then the count, total and longest of the tasks seen, and the ones still pending at stop, are returned", () => {
+  it("when the browser lists long-task entries, then the count, total and longest of the tasks seen, and the ones still pending at stop, are returned", () => {
     Object.defineProperty(globalThis, "PerformanceObserver", { value: Supported, configurable: true });
     const found = watchLongTasks().stop();
     must(found !== null, "long tasks are supported");
@@ -167,7 +167,7 @@ describe("given a browser with long-task entries, or without", () => {
     expect(found.maxMs, "longest ms").toBe(110.5);
   });
 
-  it("when the browser does not list longtask, then there is no reading at all (null, not zero)", () => {
+  it("when the browser does not list long-task entries, then there is no reading at all (null, not zero)", () => {
     Object.defineProperty(globalThis, "PerformanceObserver", { value: class { static supportedEntryTypes = ["mark"]; }, configurable: true });
     expect(watchLongTasks().stop()).toBe(null);
   });
@@ -178,7 +178,7 @@ describe("given a browser with a battery, without one, or that refuses it", () =
   afterEach(() => Object.defineProperty(globalThis, "navigator", original!));
   const withNavigator = (value: object): void => void Object.defineProperty(globalThis, "navigator", { value, configurable: true });
 
-  it("when getBattery answers, then the charging flag and level are read", async () => {
+  it("when the battery reading answers, then the charging flag and level are read", async () => {
     withNavigator({ getBattery: async () => ({ charging: true, level: 0.62, chargingTime: 5, dischargingTime: Infinity }) });
     const battery = await readBattery();
     must(battery !== null, "a battery");
@@ -187,12 +187,12 @@ describe("given a browser with a battery, without one, or that refuses it", () =
     expect(Object.keys(battery).length, "only the two fields a card keeps").toBe(2);
   });
 
-  it("when the browser has no getBattery, then there is no reading (null)", async () => {
+  it("when the browser has no battery reading, then there is no reading (null)", async () => {
     withNavigator({});
     expect(await readBattery()).toBe(null);
   });
 
-  it("when getBattery is refused, then the refusal is logged and the reading is none", async () => {
+  it("when the battery reading is refused, then the refusal is logged and the reading is none", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     withNavigator({ getBattery: async () => Promise.reject(new Error("blocked by permissions policy")) });
     expect(await readBattery()).toBe(null);

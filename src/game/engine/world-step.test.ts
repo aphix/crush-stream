@@ -51,7 +51,7 @@ function countedCuts(startX: number, fine: number, step: number): { cuts: number
   return { cuts: world.fineCuts, sliced, widest, steps };
 }
 
-const uncutCases = [
+const testCases = [
   { it: "when they are 200 m apart, then no step is counted as cut short", startX: -200, fine: FINE, step: COARSE },
   { it: "when one hits the other with no pacer floor set (a harness or a replay), then no step is counted as cut short", startX: -6, fine: 0, step: COARSE },
   { it: "when one hits the other with every step already as short as the 1/240 s floor, then no step is counted as cut short", startX: -6, fine: FINE, step: FINE },
@@ -72,7 +72,7 @@ describe("given a car driven at 10 m/s at a resting car on open ground for 1.5 s
   it("when it hits the other at every step as short as the 1/240 s floor, then no step runs in more than one slice", () => {
     expect(countedCuts(-6, FINE, FINE).widest).toBe(1);
   });
-  for (const testCase of uncutCases) {
+  for (const testCase of testCases) {
     it(testCase.it, () => {
       expect(countedCuts(testCase.startX, testCase.fine, testCase.step).cuts).toBe(0);
     });

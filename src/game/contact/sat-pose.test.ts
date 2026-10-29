@@ -108,7 +108,7 @@ function overlapOf(): number {
 }
 
 describe("given a monster truck pitched 27° nose-up and a level cop facing its tail", () => {
-  it("when the cop's nose is 0.1 to 0.8 m into the tail, lowered 0.5 m, then the plan SAT reads the cages' 3D overlap to within a lattice step", () => {
+  it("when the cop's nose is 0.1 to 0.8 m into the tail, lowered 0.5 m, then the contact check reads the cages' 3D overlap to within a lattice step", () => {
     let worst = "";
     let worstOff = 0;
     for (let s = 0; s <= DEEPER_STEPS; s++) {
@@ -123,14 +123,14 @@ describe("given a monster truck pitched 27° nose-up and a level cop facing its 
     expect(worstOff, worst).toBeLessThanOrEqual(CAGE_STEP);
   });
 
-  it("when the tail is raised 1.5 m over the cop's cab, no part of either in the other, then the plan SAT finds no contact", () => {
+  it("when the tail is raised 1.5 m over the cop's cab, no part of either in the other, then the contact check finds no contact", () => {
     stage(monster, cop, 1.5, 3);
     expect(overlapOf(), "the cages overlap").toBe(0);
     const sat = satCars(cop, monster, normal, contact, 0);
     expect(sat, `SAT ${sat?.toFixed(3)} m`).toBe(null);
   });
 
-  it("when its centre stands 0.5, 1.0 or 1.5 m up and the cop 2.5 to 4.8 m back, then the plan SAT never reads the cages a lattice step deeper in each other than they stand (a raised tail over the cab is no contact)", () => {
+  it("when its centre stands 0.5, 1.0 or 1.5 m up and the cop 2.5 to 4.8 m back, then the contact check never reads the cages a lattice step deeper in each other than they stand (a raised tail over the cab is no contact)", () => {
     let worst = "";
     let worstOver = 0;
     for (const rise of RISES) {
@@ -147,9 +147,14 @@ describe("given a monster truck pitched 27° nose-up and a level cop facing its 
   });
 });
 
-describe("given a monster truck pitched 28° to 32° nose-up, either side of the 30° where the SAT reads every node's own column, and a level cop facing its tail", () => {
-  for (const degrees of SWITCH_PITCHES) {
-    it(`when the cop's nose is 0.1 to 0.8 m into the tail pitched ${degrees}°, lowered 0.5 m, then the plan SAT reads the cages' 3D overlap to within a lattice step`, () => {
+describe("given a monster truck pitched 28° to 32° nose-up, either side of the 30° where the contact check reads every node's own column, and a level cop facing its tail", () => {
+  const testCases = SWITCH_PITCHES.map((degrees) => ({
+    it: `when the cop's nose is 0.1 to 0.8 m into the tail pitched ${degrees}°, lowered 0.5 m, then the contact check reads the cages' 3D overlap to within a lattice step`,
+    degrees,
+  }));
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { degrees } = testCase;
       let worst = "";
       let worstOff = 0;
       for (let s = 0; s <= DEEPER_STEPS; s++) {
@@ -166,8 +171,13 @@ describe("given a monster truck pitched 28° to 32° nose-up, either side of the
 });
 
 describe("given a monster truck lying rolled 65°, 70° or 75° over (its body lift faded with the tilt) and a level cop facing its roof", () => {
-  for (const roll of ROLLS) {
-    it(`when the cop's nose goes into the roof of the monster rolled ${roll}° over, then the plan SAT reads plan contact where the cages overlap by more than a lattice step of height, to within a lattice step`, () => {
+  const testCases = ROLLS.map((roll) => ({
+    it: `when the cop's nose goes into the roof of the monster rolled ${roll}° over, then the contact check reads contact where the cages overlap by more than a lattice step of height, to within a lattice step`,
+    roll,
+  }));
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { roll } = testCase;
       let worst = "";
       let worstOff = 0;
       let deepest = 0;
@@ -195,7 +205,7 @@ describe("given two sedans, one standing with its keel a little into the other's
   const upper = build("sedan");
   const lower = build("sedan");
 
-  it("when the keel stands a lattice step less 1 cm and a step plus 1 cm into the roof under it, then the oracle reads no plan contact and then the plan depth (a column that grazes the other's top by less than a step is no overlap)", () => {
+  it("when the keel stands a lattice step less 1 cm and a step plus 1 cm into the roof under it, then the graze-free overlap reads none and then the depth (a column that grazes the other's top by less than a step is no overlap)", () => {
     const lowerFields = lower.cage.fields, lowerStyle = lower.cage.style, upperFields = upper.cage.fields, upperStyle = upper.cage.style;
     let roof = -1, keel = -1;
     for (let k = 0; k < lowerStyle.nu * lowerStyle.nv; k++) if (lowerFields.covered[k] && (roof < 0 || lowerFields.top[k]! > lowerFields.top[roof]!)) roof = k;
@@ -217,7 +227,7 @@ describe("given two sedans, one standing with its keel a little into the other's
     expect(reads[0]![1], `without the rule the ${KEEL_INTO[0]! * 100} cm graze reads ${reads[0]![1].toFixed(3)} m: the rule is what the row pins`).toBeGreaterThan(0.5);
   });
 
-  it("when its flank edge is over the roof, then the plan SAT reads no contact at a lattice step less 1 cm and the plan overlap at a step plus 1 cm, whichever car is asked first", () => {
+  it("when its flank edge is over the roof, then the contact check reads no contact at a lattice step less 1 cm and the overlap at a step plus 1 cm, whichever car is asked first", () => {
     const reads = KEEL_INTO.map((into) => {
       lower.spawnFacing(0, 0, 0, 0);
       lower.group.position.y = 0;
@@ -235,7 +245,7 @@ describe("given two sedans, one standing with its keel a little into the other's
 });
 
 describe("given a monster truck pitched 27° nose-up with its centre 1 m up and a level cop facing its tail", () => {
-  todoRow("when the cop is 3.6 m back, then the plan SAT reads no deeper than the graze-free cages' overlap by a lattice step", "the outline's stretched band reads a one-level graze of the tail's top as a plan contact: SAT 0.750 m against the graze-free overlap 0 m (old behaviour, the pitched rows above read the same before and after; the tilt past 30° reads every node's own column instead)", () => {
+  todoRow("when the cop is 3.6 m back, then the contact check reads no deeper than the graze-free cages' overlap by a lattice step", "the outline's stretched band reads a one-level graze of the tail's top as a plan contact: SAT 0.750 m against the graze-free overlap 0 m (old behaviour, the pitched rows above read the same before and after; the tilt past 30° reads every node's own column instead)", () => {
     stage(monster, cop, 1, 3.6);
     const sat = satCars(cop, monster, normal, contact, 0) ?? 0;
     const overlap = Math.max(cageDepthIn(cop, monster, true), cageDepthIn(monster, cop, true));

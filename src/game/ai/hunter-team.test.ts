@@ -8,8 +8,14 @@ import { BEAT, FAR, rig, spec } from "./hunter-rig.test-util.ts";
 describe("given the pack a Survival run builds for its humans", () => {
   const n = spec.formation.length;
 
-  for (const humans of [1, 2, 4]) {
-    it(`when ${humans} human${humans > 1 ? "s" : ""} are being hunted, then the pack grows ${humans}-fold in the cops it wants and never passes the cap the cars allow`, () => {
+  const testCases = [
+    { it: "when 1 human is being hunted, then the pack grows 1-fold in the cops it wants and never passes the cap the cars allow", humans: 1 },
+    { it: "when 2 humans are being hunted, then the pack grows 2-fold in the cops it wants and never passes the cap the cars allow", humans: 2 },
+    { it: "when 4 humans are being hunted, then the pack grows 4-fold in the cops it wants and never passes the cap the cars allow", humans: 4 },
+  ];
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { humans } = testCase;
       const r = rig({ humans, think: true });
       const cap = huntCap(humans, r.count);
       // The formation is the course's own; the rest of the wanted count drops in, one every `HUNT.gap`.
@@ -85,8 +91,14 @@ describe("given two humans far apart and a pack hunting them", () => {
 const VIEW = 60;
 
 describe("given a hosted Survival run with every cop that comes into view wrecked and the humans parked", () => {
-  for (const humans of [1, 2, 4]) {
-    it(`when ${humans} human${humans > 1 ? "s" : ""} wait out 150 s, then the pack never goes more than ${HUNT.gap} s without dropping a cop in, though every unit ends up a wreck in view`, () => {
+  const testCases = [
+    { it: "when 1 human waits out 150 s, then the pack never goes longer than the drop-in gap without dropping a cop in, though every unit ends up a wreck in view", humans: 1 },
+    { it: "when 2 humans wait out 150 s, then the pack never goes longer than the drop-in gap without dropping a cop in, though every unit ends up a wreck in view", humans: 2 },
+    { it: "when 4 humans wait out 150 s, then the pack never goes longer than the drop-in gap without dropping a cop in, though every unit ends up a wreck in view", humans: 4 },
+  ];
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { humans } = testCase;
       const slots = Array.from({ length: humans }, (_, k) => humanSlot(spec.start, k));
       const r = rig({ humans, hidden: (x, z) => slots.every((s) => Math.hypot(s.x - x, s.z - z) >= VIEW), think: true });
       // A cop that is on the road is wrecked beside the first human: in view, so it is never put away.

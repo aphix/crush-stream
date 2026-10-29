@@ -52,7 +52,7 @@ describe("given a head-on pair and two cars alone, 300 m off, stepped at the pac
 });
 
 describe("given two cars alone, 300 m apart", () => {
-  it("when one has a hit about to land (`nearHit`, as the course marks a car driving hard at a wall), then the step is cut to the fine slices, that car takes all of them and the other, alone, takes one", () => {
+  it("when one has a hit about to land (as the course marks a car driving hard at a wall), then the step is cut to the fine slices, that car takes all of them and the other, alone, takes one", () => {
     const a = makeCar("shape");
     const b = makeCar("shape");
     launch(a, 0, 0, 0, 0, 30);
@@ -71,7 +71,7 @@ describe("given two cars alone, 300 m apart", () => {
     dispose([a, b]);
   });
 
-  it("when one's crush runs on (`deform.crushing`), then it is no lone car: it stays in the step's slices", () => {
+  it("when one's crush runs on, then it is no lone car: it stays in the step's slices", () => {
     const [a, b] = parkedPair();
     const far = makeCar("shape");
     launch(far, 0, 0, 0, 0, 30);
@@ -86,7 +86,7 @@ describe("given two cars alone, 300 m apart", () => {
     dispose([a!, b!, far]);
   });
 
-  it("when one's body touches something (`hardTouch`, so `contactHz` asks 480 Hz), then it is no lone car and the step takes the slices that rate asks for", () => {
+  it("when one's body touches something hard, so its contact rate asks 480 Hz, then it is no lone car and the step takes the slices that rate asks for", () => {
     const [a, b] = parkedPair();
     const far = makeCar("shape");
     launch(far, 0, 0, 0, 0, 30);
@@ -215,7 +215,7 @@ function stateOf(cars: readonly DeformableCar[]): string {
 }
 
 describe("given a field run live with lone cars, its recorded schedule and lone masks", () => {
-  it("when the same field is run again on the record (`plan`, `planLoners`), then it ends bit for bit where the live run did; with the masks dropped it does not", () => {
+  it("when the same field is run again on the recorded schedule and lone masks, then it ends bit for bit where the live run did; with the masks dropped it does not", () => {
     const record: { shape: number; loners: number }[] = [];
     const first = headOnField(true);
     for (let s = 0; s < 120; s++) {

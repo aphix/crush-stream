@@ -4,7 +4,7 @@ import { ragdollCost, replayTier, type ReplayFrames } from "./engine-bench-repla
 
 const NO_COST = { steps: 0, stepMs: { mean: 0, p95: 0 }, colliders: 0, bodies: 0 };
 
-describe("given the ragdoll world's step log (a ring of the newest world.step() ms)", () => {
+describe("given the ragdoll world's step log (a ring of the newest step times in ms)", () => {
   test("when fewer steps ran since the mark than the ring holds, then the cost is those steps' mean and p95, and the world's size is the one now", () => {
     const log = new Float64Array(8);
     log.set([9, 9, 1, 2, 3, 4]);

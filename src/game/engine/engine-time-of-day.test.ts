@@ -136,7 +136,7 @@ describe("given the real engine in a race, lit for a time of day", () => {
     }
   });
 
-  it("when a race is loaded, then no double-sided see-through material takes three's two-pass draw (back then front: two material rebuilds a frame for each)", () => {
+  it("when a race is loaded, then no double-sided see-through material is drawn in two passes (back then front: two material rebuilds a frame for each)", () => {
     race(TRACK_ID.city, TIME_OF_DAY.sunset);
     const twoPass: string[] = [];
     scene().traverse((o) => {

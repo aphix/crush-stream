@@ -53,7 +53,7 @@ describe("given a racer on the oval's road and the sight a police pack puts its 
     expect(at(ahead + SIGHT_MARGIN + CLEAR), "just past it").toBe(true);
   });
 
-  it("when a cop car stands in the racer's near range, then `hiddenCar` reads it as seen, and out of every range as hidden", () => {
+  it("when a cop car stands in the racer's near range, then it counts as seen, and out of every range as hidden", () => {
     const stand = (ds: number) => {
       const p = track.pointAt(RACER_S + ds, pt);
       return { ...blankAiCar(1), x: p.x, z: p.z };

@@ -124,7 +124,7 @@ describe("given the game's own sine and cosine (the same bits in every browser, 
     }
   });
 
-  it("when sinCosAt is given an angle, then it writes the bits of detSin and detCos, for every input set and the special values", () => {
+  it("when the sine and cosine of an angle are asked for together, then the pair holds the bits of the game's sine and cosine of it, for every input set and the special values", () => {
     const pair = new Float64Array(4);
     const angles = [0, -0, NaN, Infinity, -Infinity, Math.PI / 4, -Math.PI / 4, Math.PI / 2, Math.PI, -3 * Math.PI / 2, 0.3, 0.78125, ...inputSets.flatMap((set) => set.inputs)];
     for (const x of angles) {

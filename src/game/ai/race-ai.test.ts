@@ -61,8 +61,13 @@ const HARD_MARKS: Record<string, string[]> = {
 };
 
 describe("given 8 clean AI cars (aggression 0) on the grid of the oval", () => {
-  for (const difficulty of AI_DIFFICULTIES) {
-    it(`when they race 3 laps at ${difficulty} difficulty, then all 8 finish, they stay on the road at least 95% of the time, and the winner finishes within the time bound`, (t) => {
+  const testCases = AI_DIFFICULTIES.map((difficulty) => ({
+    it: `when they race 3 laps at ${difficulty} difficulty, then all 8 finish, they stay on the road at least 95% of the time, and the winner finishes within the time bound`,
+    difficulty,
+  }));
+  for (const testCase of testCases) {
+    it(testCase.it, (t) => {
+      const { difficulty } = testCase;
       const r = raced(oval, difficulty);
       t.annotate(`${oval.id} ${difficulty}: winner ${r.winner.toFixed(1)} s, best lap ${Math.min(...r.lapTimes).toFixed(2)} s, slowest lap ${Math.max(...r.lapTimes).toFixed(2)} s, on road ${(100 * r.share).toFixed(1)}%, mistakes ${r.mistakes}`);
       expect(r.finished, `finished ${r.finished}/8 by ${r.time.toFixed(0)} s (bound ${r.limit.toFixed(0)} s); laps ${r.laps}`).toBe(8);
@@ -115,8 +120,14 @@ describe("given a stale medium driver holding its last drive between thinks, wit
 });
 
 describe("given a hard brain driving 8 cars from the grid of a course", () => {
-  for (const [id, expected] of Object.entries(HARD_MARKS)) {
-    it(`when each thinks 600 times on ${id}, then every checkpoint of its output is bit for bit what it was before the tiers existed`, () => {
+  const testCases = Object.keys(HARD_MARKS).map((id) => ({
+    it: `when each thinks 600 times on ${id}, then every checkpoint of its output is bit for bit what it was before the tiers existed`,
+    id,
+  }));
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { id } = testCase;
+      const expected = HARD_MARKS[id]!;
       const got = hardMarks(new Track(TRACKS.find((j) => parseTrack(j).id === id)!));
       const first = got.findIndex((m, k) => m !== expected[k]);
       expect(first < 0 && got.length === expected.length, `${got.length}/${expected.length} checkpoints, first differing: ${first} (car ${first >> 1}, think ${first % 2 ? 600 : 300})`).toBeTruthy();
@@ -313,7 +324,7 @@ describe("given an AI driver at 30 m/s on the oval's back straight, alone, its n
 });
 
 describe("given an easy driver whose slip starts on the oval's open road, then held in traffic past the slip's whole length", () => {
-  it("when the road clears, then its slip timer has run out and it plans unshaken top speed, not `shaken` x top", () => {
+  it("when the road clears, then its slip has run out and it plans its full top speed, not the shaken fraction of it", () => {
     const brain = new RaceBrain(oval, 2);
     brain.setDifficulty(0, "easy");
     brain["slipP"][0] = 1;
@@ -403,7 +414,7 @@ describe("given a racer on the oval's back straight with a car 12 m ahead at 2.3
   });
 });
 
-describe("given an every-slice brain whose contact guard runs after its think (`guardLate`, as the engine runs it) with a car 10 m or 14 m ahead of it at 28 m/s on a boost it wants", () => {
+describe("given an every-slice brain whose contact guard runs after it has planned, as the engine runs it, with a car 10 m or 14 m ahead of it at 28 m/s on a boost it wants", () => {
   /** The oval at 100 m round, the brain's car doing 28 m/s along it with a car `gap` m ahead; 20 steps of think and guard. */
   function steps(gap: number, late: boolean): { out: DriveInput; meter: number } {
     const brain = new RaceBrain(oval, 2);

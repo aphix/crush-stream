@@ -104,8 +104,8 @@ function particlesAt(pts: [number, number, number][], mass = 1): ShapeParticle[]
   return pts.map(([x, y, z]) => ({ x, y, z, vx: 0, vy: 0, vz: 0, mass }));
 }
 
-describe("given the polar decomposition that splits a 3×3 transform A into a rotation R and a stretch S", () => {
-  it("when A is a pure 0.7 rad rotation about the vertical axis, then R is that rotation, S is the identity and R has determinant +1", () => {
+describe("given a body's deformation (a 3×3 transform) split into a rotation and a stretch", () => {
+  it("when the deformation is a pure 0.7 rad rotation about the vertical axis, then the rotation is that rotation, the stretch is the identity and the rotation has determinant +1", () => {
     const A = rotY(0.7);
     const R = m3();
     const S = m3();
@@ -115,7 +115,7 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     expect(Math.abs(m3Det(R) - 1)).toBeLessThan(1e-4);
   });
 
-  it("when A is a stretch of 0.5 along x and 1.4 along z followed by a 0.4 rad rotation, then S recovers both stretches to within 0.04", () => {
+  it("when the deformation is a stretch of 0.5 along x and 1.4 along z followed by a 0.4 rad rotation, then the stretch recovers both stretches to within 0.04", () => {
     const S0 = m3Id();
     S0[0] = 0.5;
     S0[8] = 1.4;
@@ -128,7 +128,7 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     expect(Math.abs(S[8]! - 1.4), `Szz ${S[8]}`).toBeLessThan(0.04);
   });
 
-  it("when A mirrors the x axis, then R still has a positive determinant, so it is a rotation and not a reflection", () => {
+  it("when the deformation mirrors the x axis, then the rotation still has a positive determinant, so it is a rotation and not a reflection", () => {
     const A = m3Id();
     A[0] = -1;
     const R = m3();
@@ -137,7 +137,7 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     expect(m3Det(R), `det(R)=${m3Det(R)}`).toBeGreaterThan(0.5);
   });
 
-  it("when A is a 180° yaw, then R is clamped to under 1 rad and stays a true rotation, rather than applied as an inside-out mesh", () => {
+  it("when the deformation is a 180° yaw, then the rotation is clamped to under 1 rad and stays a true rotation, rather than applied as an inside-out mesh", () => {
     const A = rotY(Math.PI);
     const R = m3();
     const S = m3();
@@ -146,7 +146,7 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     expect(m3Det(R)).toBeGreaterThan(0.5);
   });
 
-  it("when A holds huge values or NaN, then R and S stay finite and small (below 5), and a NaN A yields the identity R and S", () => {
+  it("when the deformation holds huge values or NaN, then the rotation and stretch stay finite and small (below 5), and a NaN deformation yields the identity rotation and stretch", () => {
     const A = m3Id();
     A[0] = 1e8;
     A[8] = -4e7;
@@ -163,7 +163,7 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     expect(S[0]).toBe(1);
   });
 
-  it("when the previous frame's rotation estimate is 0.5 rad off about another axis, then R and S still converge to the exact 0.6 rad rotation and the exact stretch", () => {
+  it("when the previous frame's rotation estimate is 0.5 rad off about another axis, then the rotation and stretch still converge to the exact 0.6 rad rotation and the exact stretch", () => {
     const S0 = m3Id();
     S0[0] = 0.7;
     S0[4] = 1.2;
@@ -181,7 +181,7 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     for (let i = 0; i < 9; i++) expect(Math.abs(S[i]! - S0[i]!), `S[${i}]=${S[i]} vs ${S0[i]}`).toBeLessThan(1e-6);
   });
 
-  it("when A turns 1.2 rad, then the output rotation is clamped to between 0.8 and 0.9 rad about the same axis, while the estimate kept for the next frame holds the full 1.2 rad", () => {
+  it("when the deformation turns 1.2 rad, then the output rotation is clamped to between 0.8 and 0.9 rad about the same axis, while the estimate kept for the next frame holds the full 1.2 rad", () => {
     const q = quatId();
     const R = m3();
     const S = m3();
@@ -193,7 +193,7 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
     expect(Math.abs(qAng - 1.2), `warm start stored the clamped turn ${qAng}`).toBeLessThan(1e-6);
   });
 
-  it("when A collapses to all zeros while the previous rotation was 0.5 rad, then R and S stay finite and the rotation holds at 0.5 rad instead of snapping or going NaN", () => {
+  it("when the deformation collapses to all zeros while the previous rotation was 0.5 rad, then the rotation and stretch stay finite and the rotation holds at 0.5 rad instead of snapping or going NaN", () => {
     const q = quatId();
     q[1] = Math.sin(0.25);
     q[3] = Math.cos(0.25);
@@ -205,7 +205,7 @@ describe("given the polar decomposition that splits a 3×3 transform A into a ro
   });
 });
 
-describe("given the shape-matching solver (it pulls a cluster of particles toward the best-fit pose of its rest shape)", () => {
+describe("given a cluster of particles pulled toward the best-fit pose of its rest shape", () => {
   it("when every particle is rotated and shifted rigidly, then the goal positions land on the particles with under 0.05 total error", () => {
     const rest: [number, number, number][] = [
       [1, 0, 0],
@@ -536,7 +536,7 @@ describe("given a skin fit to a cluster by the per-cell (local) skin fit", () =>
   });
 });
 
-describe("given a car's crash deformation (StreamedDeformation, the object that dents a car's body)", () => {
+describe("given a car's crash deformation (the object that dents a car's body)", () => {
   it("when it is created, then it starts in shape-matching mode", () => {
     const d = new StreamedDeformation(new THREE.BoxGeometry(1.7, 1.3, 4.3, 2, 2, 4));
     expect(d.mode).toBe("shape");

@@ -27,7 +27,7 @@ describe("given the stored touch scheme", () => {
 });
 
 describe("given a scheme's pedals", () => {
-  const cases = [
+  const testCases = [
     { it: "when Easy has no finger down, then the gas is on by itself", scheme: "autogas", thumb: none, expected: { gas: 1, brake: 0 } },
     { it: "when Easy's Brake is held, then the gas lifts and the brake is full", scheme: "autogas", thumb: { gas: 0, brake: 1 }, expected: { gas: 0, brake: 1 } },
     { it: "when Easy is shown a gas reading, then it is ignored: the gas is its own", scheme: "autogas", thumb: { gas: 0.3, brake: 0 }, expected: { gas: 1, brake: 0 } },
@@ -39,7 +39,7 @@ describe("given a scheme's pedals", () => {
     { it: "when Pedals is given both, then the brake wins", scheme: "pedals", thumb: { gas: 1, brake: 1 }, expected: { gas: 0, brake: 1 } },
     { it: "when Stick is given a reading, then the pedals stay at zero (the disc owns them)", scheme: "stick", thumb: { gas: 1, brake: 1 }, expected: { gas: 0, brake: 0 } },
   ] as const;
-  for (const testCase of cases) {
+  for (const testCase of testCases) {
     it(testCase.it, () => {
       const pedals = pedalsFor(testCase.scheme, testCase.thumb, true);
       expect(pedals.gas, "gas").toBe(testCase.expected.gas);
@@ -57,13 +57,13 @@ describe("given a scheme's pedals", () => {
 });
 
 describe("given each scheme's layout", () => {
-  const cases = [
+  const testCases = [
     { it: "when Easy is drawn, then it has a Brake pad over automatic gas and the e-brake pulled down on the bar", scheme: "autogas", steer: "slider", right: "brake", ebrake: "pull", autoGas: true },
     { it: "when Pedals is drawn, then it has the pedal strip and the e-brake pulled down on the bar", scheme: "pedals", steer: "slider", right: "strip", ebrake: "pull", autoGas: false },
     { it: "when Tilt is drawn, then it has the pedal strip and an e-brake pad under the left thumb", scheme: "tilt", steer: "tilt", right: "strip", ebrake: "pad", autoGas: false },
     { it: "when Stick is drawn, then it keeps the disc with Boost and Handbrake buttons on the right", scheme: "stick", steer: "stick", right: "buttons", ebrake: "button", autoGas: false },
   ] as const;
-  for (const testCase of cases) {
+  for (const testCase of testCases) {
     it(testCase.it, () => {
       const layout = schemeLayout(testCase.scheme);
       expect(layout.steer, "steer").toBe(testCase.steer);
@@ -75,7 +75,7 @@ describe("given each scheme's layout", () => {
 });
 
 describe("given the pedal strip", () => {
-  const cases = [
+  const testCases = [
     { it: "when the thumb is at the foot, then the brake is full", position: 0, gas: 0, brake: 1, boost: false },
     { it: "when the thumb is halfway up the brake zone, then the brake is a half", position: STRIP.brakeTop / 2, gas: 0, brake: 0.5, boost: false },
     { it: "when the thumb is at the top of the brake zone, then nothing is pressed", position: STRIP.brakeTop, gas: 0, brake: 0, boost: false },
@@ -85,7 +85,7 @@ describe("given the pedal strip", () => {
     { it: "when the thumb is past either end, then it clamps to the end's reading", position: 1.5, gas: 1, brake: 0, boost: true },
     { it: "when the thumb is below the foot, then the brake is full", position: -0.5, gas: 0, brake: 1, boost: false },
   ] as const;
-  for (const testCase of cases) {
+  for (const testCase of testCases) {
     it(testCase.it, () => {
       const reading = stripReading(testCase.position);
       expect(Math.abs(reading.gas - testCase.gas), `gas ${reading.gas}`).toBeLessThan(1e-9);
@@ -97,7 +97,7 @@ describe("given the pedal strip", () => {
 
 describe("given the e-brake pull on the steering bar", () => {
   const middle = 700;
-  const cases = [
+  const testCases = [
     { it: "when the thumb rests at the bar's middle, then the e-brake is off", held: false, fingerY: middle, expected: false },
     { it: "when the thumb is pulled less than the pull distance, then the e-brake is still off", held: false, fingerY: middle + EBRAKE_PULL.on, expected: false },
     { it: "when the thumb is pulled past the pull distance, then the e-brake is on", held: false, fingerY: middle + EBRAKE_PULL.on + 1, expected: true },
@@ -105,7 +105,7 @@ describe("given the e-brake pull on the steering bar", () => {
     { it: "when the e-brake is on and the thumb comes back past the let-go distance, then it lets go", held: true, fingerY: middle + EBRAKE_PULL.off, expected: false },
     { it: "when the thumb goes up from the middle, then the e-brake is off", held: false, fingerY: middle - 60, expected: false },
   ] as const;
-  for (const testCase of cases) {
+  for (const testCase of testCases) {
     it(testCase.it, () => {
       expect(pulledDown(testCase.held, testCase.fingerY, middle)).toBe(testCase.expected);
     });

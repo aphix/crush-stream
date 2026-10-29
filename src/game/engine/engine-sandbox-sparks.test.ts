@@ -93,7 +93,7 @@ function assertGated(seen: Watched): void {
 describe("given the real engine's fleet sandbox with auto slow-mo on, a car parked and another sent at it at 24 m/s from 16 m off", () => {
   const box = booted();
 
-  it("when the pre-impact slow-mo eases in, then no spark or debris burst comes before the cars touch until both drawn bodies are within FUDGE_NONE of the point, though the parked car's stands on it, and one still comes as they reach it", () => {
+  it("when the pre-impact slow-mo eases in, then no spark or debris burst comes before the cars touch until both drawn bodies are within 1 m of the point, though the parked car's stands on it, and one still comes as they reach it", () => {
     const { engine, e } = box();
     parkAll(e);
     place(e, 0, 6, 0, -Math.PI / 2, 0);

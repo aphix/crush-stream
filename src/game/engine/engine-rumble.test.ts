@@ -131,7 +131,7 @@ describe("given the real engine, with a pad that records the effects it is sent"
     }
   });
 
-  it("when the seat is sliding, then the HUD's drift is the seat's slide as a copy, and `NO_DRIFT` when the seat is not driving", () => {
+  it("when the seat is sliding, then the HUD shows its drift (a copy of it), and no drift when the seat is not driving", () => {
     Object.assign(e.seat.drift, { s: 1.1, clean: true, paid: 2 });
     engine["emitHud"]();
     const shown = store.get().drift;

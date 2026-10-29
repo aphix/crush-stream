@@ -241,7 +241,7 @@ describe("given the cel (cartoon shading) strength, which is Auto until a manual
 });
 
 describe("given the procedural sky's cloud cover (psky), drawn by default at the HUD's cover, with the picture as the opt-out", () => {
-  it("when the default is encoded, a cover is set or the picture is picked, then the default writes nothing, a cover is written after the cel key, the picture is written `picture` and reads back, 0 is a real cover, out-of-range values clamp and an unreadable one is the default", () => {
+  it("when the default is encoded, a cover is set or the picture is picked, then the default writes nothing, a cover is written after the cel key, the picture is written as the word picture and reads back, 0 is a real cover, out-of-range values clamp and an unreadable one is the default", () => {
     expect(DEFAULTS.psky).toBe(INITIAL_HUD.proceduralSky);
     expect(DEFAULTS.psky, "the procedural sky is the default").not.toBe(null);
     expect(encodeShare(DEFAULTS)).toBe("");

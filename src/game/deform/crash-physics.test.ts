@@ -691,11 +691,13 @@ forModes("given a car struck at its nose or its tail", (spawn) => {
   // A frontal hit's far end is the tail: its bumpers are not the facing crumple zone, so a push along the struck line
   // (`separateAlong`, a pair's or a wall's shove) carries them with the cabin. Weighted as a second face they took
   // 12 % of every push and pumped ~730 J of internal kinetic energy into a pinned wreck (derby wreck residue).
-  for (const [end, nz, far] of [
-    ["nose", -1, ["bumperRL", "bumperRR"]],
-    ["tail", 1, ["bumperFL", "bumperFR"]],
-  ] as const) {
-    it(`when a push along the line of a ${end} hit moves the cabin, then the bumpers at the far end move with it by the same distance and speed, as one rigid body`, () => {
+  const testCases = [
+    { it: "when a push along the line of a nose hit moves the cabin, then the bumpers at the far end move with it by the same distance and speed, as one rigid body", nz: -1, far: ["bumperRL", "bumperRR"] },
+    { it: "when a push along the line of a tail hit moves the cabin, then the bumpers at the far end move with it by the same distance and speed, as one rigid body", nz: 1, far: ["bumperFL", "bumperFR"] },
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { nz, far } = testCase;
       const s = spawn(0, 14, new THREE.Vector3(0, 0, nz), new THREE.Vector3(0, 0.36, -nz * 2.06));
       const cell = mass(s.d, "cell");
       const cell0 = { z: cell.world.z, v: cell.vel.z };

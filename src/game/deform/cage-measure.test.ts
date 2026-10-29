@@ -1,4 +1,4 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { CAGES, type BodyPartName } from "../kernel/rig-spec.ts";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -39,7 +39,7 @@ function plainCompression(car: DeformableCar, name: BodyPartName): number {
 }
 
 describe("given a car that has taken a hard nose hit", () => {
-  test("when every cage's strain and every part's compression are read, then each equals the plain definition, bit for bit, on the first read and on repeats", () => {
+  it("when every cage's strain and every part's compression are read, then each equals the plain definition, bit for bit, on the first read and on repeats", () => {
     const car = crashed();
     let moved = 0;
     for (const name of NAMES) {
@@ -54,7 +54,7 @@ describe("given a car that has taken a hard nose hit", () => {
     expect(NAMES.some((name) => car.deform.partCompression(name) > 0.05), "no part is compressed: the hit did nothing").toBeTruthy();
   });
 
-  test("when a cage's corner moves between two reads, then the second read measures the new corners, not the memo", () => {
+  it("when a cage's corner moves between two reads, then the second read measures the new corners, not the earlier read's", () => {
     const car = crashed();
     const name: BodyPartName = "doorLeft";
     const before = car.deform.cageStrain(name);
@@ -67,14 +67,14 @@ describe("given a car that has taken a hard nose hit", () => {
     expect(car.deform.cageStrain(name), "back where it was, the same answer").toBe(before);
   });
 
-  test("when a corner reads NaN, then the strain is whatever the plain definition says, on every read", () => {
+  it("when a corner reads NaN, then the strain is whatever the plain definition says, on every read", () => {
     const car = crashed();
     const name: BodyPartName = "bonnet";
     car.deform["cageByPart"].get(name)!.corners[0]!.y = NaN;
     for (let i = 0; i < 3; i++) expect(Object.is(car.deform.cageStrain(name), plainStrain(car, name))).toBe(true);
   });
 
-  test("when a part name no cage has is asked for, then the strain and the compression are 0", () => {
+  it("when a part name no cage has is asked for, then the strain and the compression are 0", () => {
     const car = crashed();
     expect(car.deform.cageStrain("nope" as BodyPartName)).toBe(0);
     expect(car.deform.partCompression("nope" as BodyPartName)).toBe(0);
@@ -87,7 +87,7 @@ describe("given a car's glazed cages (the windscreen's, the rear glass's and the
   /** How far (m) one corner of the windscreen's aperture is pushed. */
   const PUSH = 0.03;
 
-  test("when every corner of each turns 0.7 rad and shifts 2.3 m as one body, then the glass distortion reads 0 to 1e-9 m; when one windscreen aperture corner is then pushed 3 cm, it reads more than 1 cm and at most 3 cm", () => {
+  it("when every corner of each turns 0.7 rad and shifts 2.3 m as one body, then the glass distortion reads 0 to 1e-9 m; when one windscreen aperture corner is then pushed 3 cm, it reads more than 1 cm and at most 3 cm", () => {
     const car = new DeformableCar(paint(), new THREE.Scene());
     for (const name of ["glassFront", "glassRear", "doorLeft", "doorRight"] as const) {
       const cage = car.deform["cageByPart"].get(name)!;
@@ -99,7 +99,7 @@ describe("given a car's glazed cages (the windscreen's, the rear glass's and the
     expect(pushed > PUSH / 3 && pushed <= PUSH, `one corner pushed ${PUSH} m reads ${pushed} m`).toBeTruthy();
   });
 
-  test("when a cage holds no pane, then its glass distortion is 0", () => {
+  it("when a cage holds no pane, then its glass distortion is 0", () => {
     expect(crashed().deform.glassDistortion("bonnet")).toBe(0);
   });
 
@@ -114,7 +114,7 @@ describe("given a car's glazed cages (the windscreen's, the rear glass's and the
     return [...found];
   }
 
-  test("when each door cage's corners' parent masses are listed, then every one is a cabin mass (its rest inside the cell cage's span above its floor), and the windscreen's are cabin masses and the two wings (the foot's share of the nose), never a rail or the engine, whereas the bonnet's follow masses outside the cabin", () => {
+  it("when each door cage's corners' parent masses are listed, then every one is a cabin mass (its rest inside the cell cage's span above its floor), and the windscreen's are cabin masses and the two wings (the foot's share of the nose), never a rail or the engine, whereas the bonnet's follow masses outside the cabin", () => {
     const rig = new DeformableCar(paint(), new THREE.Scene()).deform;
     const cell = rig["cageByPart"].get("chassisCell")!.spec;
     const inCabin = (m: MassNode): boolean => m.rest.z >= cell.min[2] && m.rest.z <= cell.max[2] && m.rest.y >= cell.min[1];

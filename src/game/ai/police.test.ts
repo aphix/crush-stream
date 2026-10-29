@@ -20,7 +20,7 @@ const SIGHT = sightRange(track.length);
 const PAST_SIGHT = SIGHT.near + 50;
 
 describe("given a racer with a stakeout of two cops parked ahead of it, the first just woken by the racer passing and the second still parked", () => {
-  it("when the racer stops racing and no chaser is near another racer so the pack stands down, then the parked cop never pulls out onto the road and is put away only once the racer is out of sight and the cop is MIN_LIFE s old", () => {
+  it("when the racer stops racing and no chaser is near another racer so the pack stands down, then the parked cop never pulls out onto the road and is put away only once the racer is out of sight and the cop has been out for its minimum time on the road", () => {
     const r = rig();
     r.hunt[0] = 0;
     r.beat();
@@ -322,8 +322,16 @@ describe("given a stood-down pack's cop that keeps driving in a racer's sight al
 
   // The ranges scale with the course: the oval and City (~0.7 km) a third of them, Four-Count (4 km) the full ones. Each racer sits before a straight,
   // so the cop's straight-line gap is its road gap.
-  for (const [id, on, share] of [["oval", track, 0.4], ["four-count", new Track(fourCount), 0.4], ["city", new Track(city), 0.5]] as const) {
-    it(`when the camera sees it on ${id}, then it is never put away, and once the camera looks away, then it is put away within a beat if it is clear of the racers' near range, and never inside it`, () => {
+  const courses = { oval: track, "four-count": new Track(fourCount), city: new Track(city) };
+  const testCases = [
+    { it: "when the camera sees it on the oval, then it is never put away, and once the camera looks away, then it is put away within a beat if it is clear of the racers' near range, and never inside it", course: "oval", share: 0.4 },
+    { it: "when the camera sees it on four-count, then it is never put away, and once the camera looks away, then it is put away within a beat if it is clear of the racers' near range, and never inside it", course: "four-count", share: 0.4 },
+    { it: "when the camera sees it on city, then it is never put away, and once the camera looks away, then it is put away within a beat if it is clear of the racers' near range, and never inside it", course: "city", share: 0.5 },
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const on = courses[testCase.course];
+      const { share } = testCase;
       const near = sightRange(on.length).near;
       const clear = near + 20 + 6;
       expect(goneAfter(on, share, clear, 120), "a cop the camera sees was put away").toBe(Infinity);
@@ -348,7 +356,7 @@ describe("given a stood-down pack's cop that keeps driving in a racer's sight al
 });
 
 describe("given a stood-down pack's cop on the oval with a second racer on the course", () => {
-  it("when the racer its pack gave up on drives behind it, then it does not take it up again, and when the other racer comes within ENGAGE m, then it takes that one up", () => {
+  it("when the racer its pack gave up on drives behind it, then it does not take it up again, and when the other racer comes within the engage range, then it takes that one up", () => {
     const r = rig(2, 1, 0.4, 2);
     r.camera.sees = true;
     const s = track.project(r.cars[2]!.x, r.cars[2]!.z, -1, blankProjection()).s;
@@ -413,7 +421,7 @@ describe("given a woken cop the race's stall rule has asked to put away", () => 
 });
 
 describe("given a stakeout parked and its pack stood down half a second later, the racer far past it", () => {
-  it("when the cops are younger than MIN_LIFE, then they stay, and when they have been on the road MIN_LIFE s, then they are put away", () => {
+  it("when the cops are younger than the minimum time on the road, then they stay, and when they have been on the road that long, then they are put away", () => {
     const r = rig();
     r.hunt[0] = 0;
     r.sit(PAST_SIGHT);
@@ -423,7 +431,7 @@ describe("given a stakeout parked and its pack stood down half a second later, t
     expect(r.stored.includes(1) && r.stored.includes(2), "both cops are put away once MIN_LIFE has passed").toBeTruthy();
   });
 
-  it("when the race is over (its clock stands still, the beats go on), then the cops are put away once they have been on the road MIN_LIFE s all the same", () => {
+  it("when the race is over (its clock stands still, the beats go on), then the cops are put away once they have been on the road the minimum time all the same", () => {
     const r = rig();
     r.hunt[0] = 0;
     r.sit(PAST_SIGHT);
@@ -434,7 +442,7 @@ describe("given a stakeout parked and its pack stood down half a second later, t
     expect(r.stored.includes(1) && r.stored.includes(2), "both cops are put away once MIN_LIFE s of beats have passed").toBeTruthy();
   });
 
-  it("when the racer is farther than OUT_RANGE away, then the cops are put away at once", () => {
+  it("when the racer is farther than the far range away, then the cops are put away at once", () => {
     const r = rig();
     r.hunt[0] = 0;
     Object.assign(r.cars[0]!, { x: OUT_RANGE * 10, z: OUT_RANGE * 10 });
@@ -442,7 +450,7 @@ describe("given a stakeout parked and its pack stood down half a second later, t
     expect(r.stored.includes(1) && r.stored.includes(2), "out of range, both go before MIN_LIFE").toBeTruthy();
   });
 
-  it("when a cop is knocked out, then it is put away DOWN_STORE s on, before MIN_LIFE", () => {
+  it("when a cop is knocked out, then it is put away after its short downed-cop wait, before the minimum time on the road", () => {
     const r = rig();
     r.knockedOut.add(2);
     r.sit(PAST_SIGHT);

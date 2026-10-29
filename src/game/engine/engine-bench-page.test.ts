@@ -57,7 +57,7 @@ function expectEvents(events: readonly PageEvent[], expected: readonly PageEvent
   }
 }
 
-describe("given the bench page with a stub document and window (watchPage records the page's state over a run)", () => {
+describe("given the bench page with a stub document and window (the page's state is recorded over a run)", () => {
   let stub: StubPage;
   beforeEach(() => {
     stub = stubPage();
@@ -134,7 +134,7 @@ describe("given the bench page with a stub document and window (watchPage record
     expect(events.length).toBeLessThan(500);
   });
 
-  test("when the phases are named by their index constants, then the names run in the order of a run, the replay of the run's crash last", () => {
+  test("when the phases are named, then the names run in the order of a run, the replay of the run's crash last", () => {
     expect(firstMismatch([PHASE_WARM, PHASE_WINDOW, PHASE_AB_PACE, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_SKY, PHASE_REPLAY].map((i) => PAGE_PHASES[i]), ["warm", "window", "ab-pace", "ab-detail", "ab-fx", "ab-sky", "replay"])).toBeUndefined();
   });
 

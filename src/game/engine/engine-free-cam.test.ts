@@ -72,7 +72,7 @@ describe("given the real engine in the fleet, watching a car", () => {
     press("Space");
   });
 
-  it("when Ctrl goes down in the free view (its keydown carries ctrlKey, as a browser's does) and W is pressed with it, then the eye sinks and flies on, and neither keydown reaches the browser", () => {
+  it("when Ctrl goes down in the free view (its keydown carries the Ctrl flag, as a browser's does) and W is pressed with it, then the eye sinks and flies on, and neither keydown reaches the browser", () => {
     flyFree();
     const start = eye();
     const down = (code: string) => Object.assign(new Event("keydown", { cancelable: true }), { code, repeat: false, ctrlKey: true, metaKey: false, altKey: false }) as KeyboardEvent;
@@ -112,7 +112,7 @@ describe("given the real engine in the fleet, watching a car", () => {
     expect(eye().distanceTo(start), `the eye drifted ${eye().distanceTo(start)} m`).toBeLessThan(1e-6);
   });
 
-  it("when the free view is on, then the camera's own rig is the free one", () => {
+  it("when the free view is on, then the camera runs in the free mode", () => {
     flyFree();
     expect(engine["cameraRig"]()).toBe("free");
   });

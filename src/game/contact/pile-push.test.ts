@@ -80,8 +80,13 @@ function grazedNoseHit(corner: boolean): number {
 }
 
 describe("given a coupe whose door a graze armed, driven nose-first into a parked pickup at 19.5 m/s before it is quiet", () => {
-  for (const [where, corner] of [["its left flank", false], ["its rear corner", true]] as const) {
-    it(`when the coupe's nose meets ${where}, then it sinks into the pickup no deeper than ${GRAZED_SINK} m`, (t) => {
+  const testCases = [
+    { it: "when the coupe's nose meets its left flank, then it sinks into the pickup no deeper than 0.2 m", corner: false },
+    { it: "when the coupe's nose meets its rear corner, then it sinks into the pickup no deeper than 0.2 m", corner: true },
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, (t) => {
+      const { corner } = testCase;
       const sink = grazedNoseHit(corner);
       t.annotate(`sink ${sink.toFixed(3)} m`);
       expect(sink, `the coupe sank ${sink.toFixed(3)} m into the pickup`).toBeLessThanOrEqual(GRAZED_SINK);
@@ -90,8 +95,13 @@ describe("given a coupe whose door a graze armed, driven nose-first into a parke
 });
 
 describe("given two sedans in a plain 50 km/h head-on or T-bone", () => {
-  for (const kind of ["head-on", "t-bone"] as const) {
-    it(`when the ${kind} runs 1.5 s, then each car keeps the barrier speed its hit armed at: a hit's own pulse never re-arms it`, () => {
+  const testCases = [
+    { it: "when the head-on runs 1.5 s, then each car keeps the barrier speed its hit armed at: a hit's own pulse never re-arms it", kind: "head-on" },
+    { it: "when the t-bone runs 1.5 s, then each car keeps the barrier speed its hit armed at: a hit's own pulse never re-arms it", kind: "t-bone" },
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { kind } = testCase;
       const a = makeCar();
       const b = makeCar();
       if (kind === "head-on") {
@@ -116,7 +126,7 @@ describe("given two sedans in a plain 50 km/h head-on or T-bone", () => {
   }
 });
 
-describe("given a PushBudget (the cap on the net translation contact pushes may move a car in one slice)", () => {
+describe("given the cap on the net translation contact pushes may move a car in one slice", () => {
   const cap = PUSH_SPEED * H;
 
   it("when three 1 cm pushes go the same way, then the first gets 1 cm, the second only what is left of the cap and the third nothing", () => {

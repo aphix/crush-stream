@@ -14,7 +14,7 @@ const BODY: readonly (readonly [number, number, number])[] = [
   [0, -0.9, 48],
 ];
 
-describe("given a BodyFit (works out a body's spin rate from its parts' momentum) fed a body of nine parts", () => {
+describe("given a body of nine parts whose spin rate is worked out from its parts' momentum", () => {
   /** The body moving as one rigid body (v = w (z, −x) about its centroid) at (vx, vz), plus `extra` rad/s for the one mass `who`. */
   function spinOf(w: number, vx: number, vz: number, who = -1, extra = 0): number {
     let m = 0;

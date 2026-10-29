@@ -30,7 +30,7 @@ describe("given the sound settings the race menus and the settings panel's Audio
     expect(levels.engines, "engines").toBe(0.25);
   });
 
-  it("when the toggle, the music slider and the engines slider are used, then each calls the engine's own setter once and nothing else", () => {
+  it("when the toggle, the music slider and the engines slider are used, then each reaches the sound engine once with its own value and nothing else is sent", () => {
     const { calls, engine } = recordingEngine();
     const levels = audioLevels(INITIAL_HUD, engine);
     levels.onToggle();

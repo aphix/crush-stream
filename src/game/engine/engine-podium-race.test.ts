@@ -205,7 +205,7 @@ describe("given the real engine and a race ended with every car dented", () => {
     expect(checked, "the control: some kept wheel was compared").toBeGreaterThan(0);
   });
 
-  it("when the wheel batch draws the podium's cars, then every wheel they kept is drawn and none they lost is", () => {
+  it("when the podium's cars are drawn, then every wheel they kept is drawn and none they lost is", () => {
     const lost = [...engine["podium"].cars()].map((_, k) => lostAtTheFinish.get(results[k]!.id)!);
     expect(lost.some((n) => n > 0), "the control: a podium car lost a wheel").toBeTruthy();
     // The renderer's pre-draw hook, run by hand: the stubbed renderer draws nothing.

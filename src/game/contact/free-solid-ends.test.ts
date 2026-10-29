@@ -33,33 +33,32 @@ const noseZ = (car: DeformableCar): number => {
   return nose;
 };
 
-const vertexCases = [
-  { it: "when the solid's end plane is 2 cm inside the nose and its ends are open, then the nose reads the end's 2 cm and leaves round the end", openEnds: true, expectedLeavesByEnd: true },
-  { it: "when the same box is a wall's hold face (ends closed), then the nose reads its whole depth through the side face and leaves through it", openEnds: false, expectedLeavesByEnd: false },
-] as const;
+/** The nose's depth through a 2 m wide, 1.2 m thick box whose end plane is `NOSE_IN_END` inside the nose of a car at rest. */
+function depthOfNoseInBox(openEnds: boolean): number {
+  const car = makeCar("shape");
+  launch(car, 0, 0, 0, 0, 0);
+  const box = makeBox();
+  box.yaw = -Math.PI / 2;
+  box.hx = 1;
+  box.hz = 0.6;
+  box.x = 0.5;
+  box.openEnds = openEnds;
+  box.z = noseZ(car) - NOSE_IN_END + box.hx;
+  return faceDepth(car, box);
+}
 
 describe("given a car at rest whose nose stands 2 cm inside the end of a 2 m wide, 1.2 m thick box seen from its -x side", () => {
-  for (const testCase of vertexCases) {
-    it(testCase.it, () => {
-      const car = makeCar("shape");
-      launch(car, 0, 0, 0, 0, 0);
-      const box = makeBox();
-      box.yaw = -Math.PI / 2;
-      box.hx = 1;
-      box.hz = 0.6;
-      box.x = 0.5;
-      box.openEnds = testCase.openEnds;
-      box.z = noseZ(car) - NOSE_IN_END + box.hx;
-      const depth = faceDepth(car, box);
-      if (testCase.expectedLeavesByEnd) {
-        expect(depth > 0 && depth <= NOSE_IN_END + 1e-9, `depth ${depth.toFixed(3)} m`).toBeTruthy();
-        expect(Math.abs(faceExit.nx) < 1e-9 && Math.abs(faceExit.nz + 1) < 1e-9, `exit (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`).toBeTruthy();
-        return;
-      }
-      expect(depth, `depth ${depth.toFixed(3)} m`).toBeGreaterThan(0.5);
-      expect(Math.abs(faceExit.nx + 1) < 1e-9 && Math.abs(faceExit.nz) < 1e-9, `exit (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`).toBeTruthy();
-    });
-  }
+  it("when the solid's end plane is 2 cm inside the nose and its ends are open, then the nose reads the end's 2 cm and leaves round the end", () => {
+    const depth = depthOfNoseInBox(true);
+    expect(depth > 0 && depth <= NOSE_IN_END + 1e-9, `depth ${depth.toFixed(3)} m`).toBeTruthy();
+    expect(Math.abs(faceExit.nx) < 1e-9 && Math.abs(faceExit.nz + 1) < 1e-9, `exit (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`).toBeTruthy();
+  });
+
+  it("when the same box is a wall's hold face (ends closed), then the nose reads its whole depth through the side face and leaves through it", () => {
+    const depth = depthOfNoseInBox(false);
+    expect(depth, `depth ${depth.toFixed(3)} m`).toBeGreaterThan(0.5);
+    expect(Math.abs(faceExit.nx + 1) < 1e-9 && Math.abs(faceExit.nz) < 1e-9, `exit (${faceExit.nx.toFixed(2)}, ${faceExit.nz.toFixed(2)})`).toBeTruthy();
+  });
 });
 
 describe("given a car at rest straddling a 0.5 m wide, 1.2 m thick open-ended post (a monument's arm, a crash pad) whose face is seen from its -x side", () => {

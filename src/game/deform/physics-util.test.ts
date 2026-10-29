@@ -20,7 +20,7 @@ import {
 } from "./physics-util.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
 
-describe("given the CRASH constants (the tuned crash-physics numbers, researched for a sedan and from NCAP crash tests)", () => {
+describe("given the tuned crash-physics numbers (researched for a sedan and from NCAP crash tests)", () => {
   it("when the pulse length, crush distance and tyre friction values are read, then they sit in the published bands (pulse 0.09–0.16 s, crush 0.45–0.75 m, friction 0.9 at peak, 0.75 sliding, 0.4 scuffing)", () => {
     expect(CRASH.pulseSec >= 0.09 && CRASH.pulseSec <= 0.16).toBeTruthy();
     expect(CRASH.crushMeters >= 0.45 && CRASH.crushMeters <= 0.75).toBeTruthy();
@@ -48,7 +48,7 @@ describe("given the CRASH constants (the tuned crash-physics numbers, researched
   });
 });
 
-describe("given clampSpeed (limits a velocity to the top speed a part of the car may have)", () => {
+describe("given the speed limit on a part of the car (the top speed a part of the car may have)", () => {
   it("when it is given a NaN velocity, a 1e6 m/s velocity and a 20 m/s velocity, then the NaN one is zeroed, the huge one is cut to the top speed and the 20 m/s crash speed is kept", () => {
     const a = new THREE.Vector3(Number.NaN, 0, 4);
     clampSpeed(a);
@@ -62,7 +62,7 @@ describe("given clampSpeed (limits a velocity to the top speed a part of the car
   });
 });
 
-describe("given leftoverCrumple (the fraction of the crush zone still unused, from the remaining nose length in metres)", () => {
+describe("given the unused share of the crush zone (the fraction still unused, from the remaining nose length in metres)", () => {
   it("when the remaining length is 1.5 m or 0 m, then a full zone reads 1 and no remaining length reads 0", () => {
     expect(leftoverCrumple(1.5)).toBe(1);
     expect(leftoverCrumple(0)).toBe(0);
@@ -84,8 +84,8 @@ describe("given leftoverCrumple (the fraction of the crush zone still unused, fr
   });
 });
 
-describe("given hypot2 and hypot3 (two- and three-term vector lengths that replays and contact digests depend on)", () => {
-  it("when they are compared with Math.hypot over special values (signs, ±0, NaN, Infinity, extremes) and 20000 seeded random triples, then every result is bit-identical to Math.hypot's", () => {
+describe("given two- and three-term vector lengths (that replays and contact digests depend on)", () => {
+  it("when they are compared with the standard hypot over special values (signs, ±0, NaN, Infinity, extremes) and 20000 seeded random triples, then every result is bit-identical to the standard hypot's", () => {
     const special = [0, -0, 1, -1, 3, 4, 1e-300, 5e-324, 1.7e308, -1.7e308, Infinity, -Infinity, NaN, 0.1, 1 / 3];
     let seed = 7;
     const rnd = () => {
@@ -102,7 +102,7 @@ describe("given hypot2 and hypot3 (two- and three-term vector lengths that repla
   });
 });
 
-describe("given applyGroundFriction (slows the ground-plane part of a velocity by Coulomb friction)", () => {
+describe("given ground friction (slows the ground-plane part of a car's velocity by Coulomb friction)", () => {
   it("when a car moving 10 m/s along x and 3 m/s up slides for 0.1 s with friction coefficient 1, then its ground speed drops by μ·g·dt = 0.981 m/s and its vertical speed is unchanged", () => {
     const v = new THREE.Vector3(10, 3, 0);
     applyGroundFriction(v, 0.1, 1, true);
@@ -141,14 +141,14 @@ describe("given applyGroundFriction (slows the ground-plane part of a velocity b
   });
 });
 
-describe("given round4 (rounds a number to four decimals, halves upward)", () => {
+describe("given rounding to four decimals (halves upward)", () => {
   it("when 1.23444 and 1.23445 are rounded, then they give 1.2344 and 1.2345", () => {
     expect(round4(1.23444)).toBe(1.2344);
     expect(round4(1.23445)).toBe(1.2345);
   });
 });
 
-describe("given vec3 (snapshots a vector as plain x, y, z numbers rounded to four decimals)", () => {
+describe("given a vector snapshot (x, y, z as plain numbers rounded to four decimals)", () => {
   it("when a vector (0.12345, -2, 8) is snapshotted, then it gives x 0.1235, y -2 and z 8", () => {
     const v = vec3(new THREE.Vector3(0.12345, -2, 8));
     expect(v.x, "x").toBe(0.1235);
@@ -157,7 +157,7 @@ describe("given vec3 (snapshots a vector as plain x, y, z numbers rounded to fou
   });
 });
 
-describe("given snapshotPoints (turns particle position and life arrays into the list of live particles, up to a cap)", () => {
+describe("given the particle snapshot (turns particle position and life arrays into the list of live particles, up to a cap)", () => {
   it("when two of three particles are alive but the cap is 1, then it reports only the first live particle, with its x and remaining life", () => {
     const r = snapshotPoints([1, 2, 3], [4, 5, 6], [7, 8, 9], [0.2, 0, 0.9], false, 1);
     expect(r.count).toBe(1);
@@ -241,7 +241,7 @@ describe("given force transfer bands (the crush distances at which a region pass
   });
 });
 
-describe("given satPushCap (the cap on one step's push), where slow motion must not rocket the cars", () => {
+describe("given the cap on one step's push, where slow motion must not rocket the cars", () => {
   it("when the step is a fine slice instead of a frame, then the push cap is under 35 % of the frame step's", () => {
     expect(satPushCap(1 / FINE_HZ)).toBeLessThan(satPushCap(1 / FRAME_HZ) * 0.35);
   });

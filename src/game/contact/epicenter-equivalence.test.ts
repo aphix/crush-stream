@@ -62,8 +62,15 @@ function stage(kind: Kind, on: boolean, nudge = 0): Ran {
 const REGIONS = ["noseShortL", "noseShortR", "noseMaxL", "noseMaxR", "tailShort", "tailMax", "engineMax", "doorMaxL", "doorMaxR", "roofMax", "cellShift", "cabinIntrusion", "engineTravel"] as const;
 
 describe("given a staged hit run once per activation mode", () => {
-  for (const kind of ["owner head-on", "t-bone", "wall", "re-hit"] as const) {
-    it(`when the ${kind} is run in epicenter mode, then every car's crush per region is the whole solve's within 10 % or 1 cm, the same parts are off and wheels popped, and the wreck was frozen for most of it`, () => {
+  const testCases = [
+    { it: "when the owner head-on is run in epicenter mode, then every car's crush per region is the whole solve's within 10 % or 1 cm, the same parts are off and wheels popped, and the wreck was frozen for most of it", kind: "owner head-on" },
+    { it: "when the t-bone is run in epicenter mode, then every car's crush per region is the whole solve's within 10 % or 1 cm, the same parts are off and wheels popped, and the wreck was frozen for most of it", kind: "t-bone" },
+    { it: "when the wall is run in epicenter mode, then every car's crush per region is the whole solve's within 10 % or 1 cm, the same parts are off and wheels popped, and the wreck was frozen for most of it", kind: "wall" },
+    { it: "when the re-hit is run in epicenter mode, then every car's crush per region is the whole solve's within 10 % or 1 cm, the same parts are off and wheels popped, and the wreck was frozen for most of it", kind: "re-hit" },
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { kind } = testCase;
       const whole = stage(kind, false);
       const epi = stage(kind, true);
       expect(whole.frozenCarSlices, "whole mode froze a car").toBe(0);
@@ -95,8 +102,15 @@ describe("given a staged hit run once per activation mode", () => {
 });
 
 describe("given the same staged hits run twice in whole mode, one with a car's masses nudged 1 micrometre", () => {
-  for (const kind of ["owner head-on", "t-bone", "wall", "re-hit"] as const) {
-    it(`when the ${kind} is run, then no mass ends more than 1 mm apart (the 1.2 cm bar of the epicenter rows is a real bar, not a chaotic one)`, () => {
+  const testCases = [
+    { it: "when the owner head-on is run, then no mass ends more than 1 mm apart (the 1.2 cm bar of the epicenter rows is a real bar, not a chaotic one)", kind: "owner head-on" },
+    { it: "when the t-bone is run, then no mass ends more than 1 mm apart (the 1.2 cm bar of the epicenter rows is a real bar, not a chaotic one)", kind: "t-bone" },
+    { it: "when the wall is run, then no mass ends more than 1 mm apart (the 1.2 cm bar of the epicenter rows is a real bar, not a chaotic one)", kind: "wall" },
+    { it: "when the re-hit is run, then no mass ends more than 1 mm apart (the 1.2 cm bar of the epicenter rows is a real bar, not a chaotic one)", kind: "re-hit" },
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { kind } = testCase;
       const plain = stage(kind, false);
       const nudged = stage(kind, false, 1e-6);
       let worst = 0;

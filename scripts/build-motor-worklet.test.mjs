@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { describe, expect, it } from "vitest";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -9,22 +9,24 @@ const OUT = join(ROOT, "public/audio/motor-worklet.js");
 const PREBUILT = readFileSync(join(ROOT, "kernels/motor/engine_sound_generator_worklet_webassembly.js"), "utf8");
 const PROCESSOR = readFileSync(join(ROOT, "kernels/motor/motor-processor.js"), "utf8");
 
-test("the committed worklet is upstream's prebuilt module with our processor spliced on (npm run build:motor)", () => {
-  const upstreamProcessor = PREBUILT.indexOf("/*\n * Copyright (c) 2021-2022 Antonio-R1");
-  expect(upstreamProcessor).toBeGreaterThan(0);
-  const committed = readFileSync(OUT, "utf8");
-  expect(committed.slice(0, upstreamProcessor)).toBe(PREBUILT.slice(0, upstreamProcessor));
-  expect(committed.slice(upstreamProcessor)).toBe(PROCESSOR.replace(/^\n/, ""));
-});
+describe("given the engine-sound worklet shipped to the game", () => {
+  it("when it is compared with its sources, then it is the upstream prebuilt module with our processor spliced on", () => {
+    const upstreamProcessor = PREBUILT.indexOf("/*\n * Copyright (c) 2021-2022 Antonio-R1");
+    expect(upstreamProcessor).toBeGreaterThan(0);
+    const committed = readFileSync(OUT, "utf8");
+    expect(committed.slice(0, upstreamProcessor)).toBe(PREBUILT.slice(0, upstreamProcessor));
+    expect(committed.slice(upstreamProcessor)).toBe(PROCESSOR.replace(/^\n/, ""));
+  });
 
-test("the build is idempotent", () => {
-  const before = readFileSync(OUT, "utf8");
-  execFileSync("node", [join(ROOT, "scripts/build-motor-worklet.mjs")], { stdio: "pipe" });
-  expect(readFileSync(OUT, "utf8")).toBe(before);
-});
+  it("when the worklet is built again, then the shipped file is unchanged", () => {
+    const before = readFileSync(OUT, "utf8");
+    execFileSync("node", [join(ROOT, "scripts/build-motor-worklet.mjs")], { stdio: "pipe" });
+    expect(readFileSync(OUT, "utf8")).toBe(before);
+  });
 
-test("the patched processor keeps upstream's licence header and registers the same processor name", () => {
-  expect(PROCESSOR).toMatch(/Copyright \(c\) 2021-2022 Antonio-R1/);
-  expect(PROCESSOR).toMatch(/registerProcessor\("engine-sound-processor", EngineSoundGenerator\)/);
-  expect(PROCESSOR).toMatch(/Modified for crash-deformer-test/);
+  it("when the patched processor is read, then it keeps upstream's licence header and registers the same processor name", () => {
+    expect(PROCESSOR).toMatch(/Copyright \(c\) 2021-2022 Antonio-R1/);
+    expect(PROCESSOR).toMatch(/registerProcessor\("engine-sound-processor", EngineSoundGenerator\)/);
+    expect(PROCESSOR).toMatch(/Modified for crash-deformer-test/);
+  });
 });

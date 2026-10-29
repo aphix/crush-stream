@@ -73,7 +73,7 @@ describe("given the highlight reel timeline of a pile-up whose hits land at 3.31
     expect(Math.max(...between), `the clip never sped up between the first and second hit (at most ${Math.max(...between).toFixed(3)}×)`).toBeGreaterThan(2 * SLOW_ENOUGH);
   });
 
-  it("when its third hit lands while the second's slow-mo holds, then the slow-mo hands back CONTACT_HOLD wall s after the third", () => {
+  it("when its third hit lands while the second's slow-mo holds, then the slow-mo hands back 6.3 wall s after the third", () => {
     const third = stepAt(tl, hits[2]!);
     const back = tl.phase.indexOf("aftermath", third);
     expect(Math.abs((back - third) / TIMELINE_HZ - CONTACT_HOLD), `handed back ${((back - third) / TIMELINE_HZ).toFixed(3)} wall s after the third hit`).toBeLessThanOrEqual(2 / TIMELINE_HZ);

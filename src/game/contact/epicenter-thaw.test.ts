@@ -37,43 +37,67 @@ describe("given a wreck that has been frozen", () => {
     return d.frozen;
   };
 
-  const writers: [string, () => void][] = [
-    ["translateMasses", () => d.translateMasses(0.01, 0, 0.1, 0)],
-    ["pushMass", () => d.pushMass(0, 0.01, 0)],
-    ["separateAlong", () => d.separateAlong(1, 0, 0, 0.01)],
-    ["kickCore", () => d.kickCore(1, 0, 0, 0.5)],
-    ["kickAlong", () => d.kickAlong(1, 0, 0, 0.5)],
-    ["applyImpulse", () => d.applyImpulse(0, 0, -1, 300)],
-    ["impulseAt", () => d.impulseAt(AT, IN, 5)],
-    ["kickNearest", () => d.kickNearest(AT, 1, 0, 0, 100)],
-    ["feedOverlap with a real feed", () => d.feedOverlap(AT, IN, 0.05, 5)],
-    ["notifyContact", () => d.notifyContact()],
-  ];
-  for (const [name, call] of writers) {
-    it(`when ${name} writes to it, then it is thawed`, () => {
-      expect(frozen()).toBeTruthy();
-      call();
-      expect(d.frozen).toBe(false);
-    });
-  }
+  describe("and something writes to its masses or restarts its contact clock", () => {
+    const writerCalls = {
+      translateMasses: () => d.translateMasses(0.01, 0, 0.1, 0),
+      pushMass: () => d.pushMass(0, 0.01, 0),
+      separateAlong: () => d.separateAlong(1, 0, 0, 0.01),
+      kickCore: () => d.kickCore(1, 0, 0, 0.5),
+      kickAlong: () => d.kickAlong(1, 0, 0, 0.5),
+      applyImpulse: () => d.applyImpulse(0, 0, -1, 300),
+      impulseAt: () => d.impulseAt(AT, IN, 5),
+      kickNearest: () => d.kickNearest(AT, 1, 0, 0, 100),
+      feedOverlap: () => d.feedOverlap(AT, IN, 0.05, 5),
+      notifyContact: () => d.notifyContact(),
+    };
+    const testCases = [
+      { it: "when its masses are moved as a whole, then it is thawed", writer: "translateMasses" },
+      { it: "when one of its masses is pushed, then it is thawed", writer: "pushMass" },
+      { it: "when its masses are separated along an axis, then it is thawed", writer: "separateAlong" },
+      { it: "when its core is kicked, then it is thawed", writer: "kickCore" },
+      { it: "when its masses are kicked along an axis, then it is thawed", writer: "kickAlong" },
+      { it: "when an impulse is applied to its masses, then it is thawed", writer: "applyImpulse" },
+      { it: "when an impulse lands at a point on it, then it is thawed", writer: "impulseAt" },
+      { it: "when the mass nearest a point is kicked, then it is thawed", writer: "kickNearest" },
+      { it: "when a real overlap feed reaches it, then it is thawed", writer: "feedOverlap" },
+      { it: "when a contact is reported on it, then it is thawed", writer: "notifyContact" },
+    ] as const;
+    for (const testCase of testCases) {
+      it(testCase.it, () => {
+        expect(frozen()).toBeTruthy();
+        writerCalls[testCase.writer]();
+        expect(d.frozen).toBe(false);
+      });
+    }
+  });
 
-  const silent: [string, () => void][] = [
-    ["translateMasses by nothing", () => d.translateMasses(0, 0, 0, 0)],
-    ["separateAlong by nothing", () => d.separateAlong(1, 0, 0, 0)],
-    ["kickCore by nothing", () => d.kickCore(1, 0, 0, 0)],
-    ["applyImpulse of nothing", () => d.applyImpulse(0, 0, -1, 0)],
-    ["feedOverlap of a resting contact (no overlap, no closing)", () => d.feedOverlap(AT, IN, 0, 0)],
-    ["cutDrive, which only scales the hubs' speed the rigid field overwrites", () => d.cutDrive(1 / FINE_HZ)],
-  ];
-  for (const [name, call] of silent) {
-    it(`when ${name} is called, then it stays frozen`, () => {
-      expect(frozen()).toBeTruthy();
-      call();
-      expect(d.frozen).toBe(true);
-    });
-  }
+  describe("and something is called that writes nothing", () => {
+    const silentCalls = {
+      translateMasses: () => d.translateMasses(0, 0, 0, 0),
+      separateAlong: () => d.separateAlong(1, 0, 0, 0),
+      kickCore: () => d.kickCore(1, 0, 0, 0),
+      applyImpulse: () => d.applyImpulse(0, 0, -1, 0),
+      feedOverlap: () => d.feedOverlap(AT, IN, 0, 0),
+      cutDrive: () => d.cutDrive(1 / FINE_HZ),
+    };
+    const testCases = [
+      { it: "when its masses are moved by nothing, then it stays frozen", writer: "translateMasses" },
+      { it: "when its masses are separated by nothing, then it stays frozen", writer: "separateAlong" },
+      { it: "when its core is kicked with nothing, then it stays frozen", writer: "kickCore" },
+      { it: "when an impulse of nothing is applied, then it stays frozen", writer: "applyImpulse" },
+      { it: "when a resting contact (no overlap, no closing) is fed, then it stays frozen", writer: "feedOverlap" },
+      { it: "when its drive is cut, which only scales the hubs' speed the rigid field overwrites, then it stays frozen", writer: "cutDrive" },
+    ] as const;
+    for (const testCase of testCases) {
+      it(testCase.it, () => {
+        expect(frozen()).toBeTruthy();
+        silentCalls[testCase.writer]();
+        expect(d.frozen).toBe(true);
+      });
+    }
+  });
 
-  it("when epi.feedMin is 0 (today), then a small resting feed (a few millimetres of overlap) thaws the wreck, the cost of a pile that feeds crush every slice", () => {
+  it("when the smallest feed that counts is 0 (today), then a small resting feed (a few millimetres of overlap) thaws the wreck, the cost of a pile that feeds crush every slice", () => {
     expect(frozen()).toBeTruthy();
     const kept = EPICENTER.feedMin;
     try {
@@ -86,7 +110,7 @@ describe("given a wreck that has been frozen", () => {
     }
   });
 
-  it("when epi.feedMin is 1 cm, then the same small feed is dropped and counted and the wreck stays frozen, and a real feed (over the limit) thaws it as ever", () => {
+  it("when the smallest feed that counts is 1 cm, then the same small feed is dropped and counted and the wreck stays frozen, and a real feed (over the limit) thaws it as ever", () => {
     expect(frozen()).toBeTruthy();
     const kept = EPICENTER.feedMin;
     try {
@@ -150,7 +174,7 @@ describe("given the guard that checks frozen cars", () => {
     }
   });
 
-  it("when a car whose frozen centre is cached has its pose re-measured (followGroup: a clamp after the cache), then the check counts a breach: the invariant the freeze rests on (a planted hub's pin must not replace its stand)", () => {
+  it("when a car whose frozen centre is cached has its pose re-measured (a clamp after the cache), then the check counts a breach: the invariant the freeze rests on (a planted hub's pin must not replace its stand)", () => {
     const saved = epicenterValues();
     try {
       loadEpicenter(EPICENTER_AT_LOAD);

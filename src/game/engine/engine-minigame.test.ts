@@ -7,7 +7,7 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 import { MINIGAME_AIM_LEAD } from "../present/ride-cam.ts";
 import { BOX_POSE_FLOATS, type ReleaseScale } from "../present/ragdoll-boxes.ts";
 import { DISC_RADIUS, activeGround, setGround, type Ground } from "../world/ground.ts";
-import { MINIGAME_MODES, REST_HOLD, STATION_ANCHORS, THROW_BOOST, type MinigameMode } from "../scenes/minigame-constants.ts";
+import { MINIGAME_MODES, MODE_LABELS, REST_HOLD, STATION_ANCHORS, THROW_BOOST, type MinigameMode } from "../scenes/minigame-constants.ts";
 import { BOX_COUNT, HighJumpPeak, type TorsoSample } from "../scenes/minigame-high-jump.ts";
 import { DRIVER_CARS } from "../match/types.ts";
 import { lipHeight } from "../scenes/minigame-profile.ts";
@@ -147,7 +147,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
   });
 
   for (const mode of MINIGAME_MODES) {
-    describe(`given the ${mode} station`, () => {
+    describe(`given the ${MODE_LABELS[mode]} station`, () => {
       let samples: TorsoSample[] = [];
       let scoredHud: MinigameHudState;
       const car = () => engine["carA"];
@@ -524,7 +524,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
   });
 
   describe("given every driver car driven from the parked start to the lip of the high jump and of Ring Fling", () => {
-    const cases = DRIVER_CARS.flatMap((driverCar) => (["highJump", "ringFling"] as const).map((mode) => ({ it: `when a ${driverCar.id} holds the throttle on the ${mode} station, then its driver is thrown exactly once, at the lip, with the mode's boost`, carId: driverCar.id, mode })));
+    const cases = DRIVER_CARS.flatMap((driverCar) => (["highJump", "ringFling"] as const).map((mode) => ({ it: `when a ${driverCar.id} holds the throttle on the ${MODE_LABELS[mode]} station, then its driver is thrown exactly once, at the lip, with the mode's boost`, carId: driverCar.id, mode })));
     for (const testCase of cases) {
       it(testCase.it, () => {
         engine.setPlayerCar(testCase.carId);
@@ -541,9 +541,9 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
 
   describe("given the ride camera framing a dummy", () => {
     const leads: { it: string; mode: MinigameMode | null; expectedLead: number }[] = [
-      { it: "when a High jump dummy is framed, then the aim lead is MINIGAME_AIM_LEAD", mode: "highJump", expectedLead: MINIGAME_AIM_LEAD },
-      { it: "when a Long jump dummy is framed, then the aim lead is MINIGAME_AIM_LEAD", mode: "longJump", expectedLead: MINIGAME_AIM_LEAD },
-      { it: "when the attract Range's dummy is framed, then there is no aim lead", mode: null, expectedLead: 0 },
+      { it: "when a High jump dummy is framed, then the camera aims ahead of him by the minigames' aim lead", mode: "highJump", expectedLead: MINIGAME_AIM_LEAD },
+      { it: "when a Long jump dummy is framed, then the camera aims ahead of him by the minigames' aim lead", mode: "longJump", expectedLead: MINIGAME_AIM_LEAD },
+      { it: "when the attract Range's dummy is framed, then the camera aims straight at him with no lead", mode: null, expectedLead: 0 },
     ];
     for (const testCase of leads) {
       it(testCase.it, () => {

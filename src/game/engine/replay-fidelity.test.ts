@@ -85,11 +85,11 @@ describe("given a highlight clip recorded from a crash and replayed from its key
     /** The pile-up with every car `s` m further along the road. */
     const pile = (s: number) => () => (put(0, 40 + s, 0, 0, 20), put(1, 48 + s, 0, Math.PI, 20), put(2, 30 + s, 0, 0, 20), put(3, 20 + s, 0, 0, 20));
 
-    const raceHeadOnCases = [
+    const testCases = [
       { it: "when two cars 8 m apart drive head-on at each other at 20 m/s each, then the clip's first impact is between those two cars and the replay matches the live sim at every step, to the bit", name: "race head-on", sideA: 0, sideB: 0 },
       { it: "when the same head-on is offset so the cars' centre lines are 1 m apart, then the clip's first impact is between those two cars and the replay matches the live sim at every step, to the bit", name: "race offset", sideA: 0.5, sideB: -0.5 },
     ] as const;
-    for (const testCase of raceHeadOnCases) {
+    for (const testCase of testCases) {
       it(testCase.it, () => run(testCase.name, () => (put(0, 40, testCase.sideA, 0, 20), put(1, 48, testCase.sideB, Math.PI, 20)), 1));
     }
     it("when a car driven flat out hits the side of a stopped car, then the clip's first impact is between those two cars and the replay matches the live sim at every step, to the bit", () => {
@@ -235,7 +235,7 @@ describe("given a highlight clip recorded from a crash and replayed from its key
         expect(coarse, `${name}: ${coarse} of ${rec.clip.h.length} steps at ${rate} s (the rest are frame remainders)`).toBeGreaterThanOrEqual(rec.clip.h.length / 2);
         check(`${name} ${rate}`, rec, agreement(rec));
       };
-      const coarseStepCases = [
+      const testCases = [
         {
           it: `when two cars 80 m apart drive head-on at each other at 20 m/s each, then most steps are ${rate} s and the replay matches the live sim at every step, to the bit`,
           name: "coarse head-on",
@@ -255,7 +255,7 @@ describe("given a highlight clip recorded from a crash and replayed from its key
           ],
         },
       ] as const;
-      for (const testCase of coarseStepCases) {
+      for (const testCase of testCases) {
         it(testCase.it, () => run(testCase.name, [...testCase.spawns]));
       }
     });

@@ -94,8 +94,10 @@ describe("given a long jump in each phase", () => {
 });
 
 describe("given the quick-switch list", () => {
-  for (const mode of MINIGAME_MODES) {
-    it(`when the mode is ${mode}, then the list holds the other modes with their labels`, () => {
+  const testCases = MINIGAME_MODES.map((mode) => ({ it: `when the mode is ${mode}, then the list holds the other modes with their labels`, mode }));
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { mode } = testCase;
       const others = minigamePanelView({ ...LONG_JUMP_READY, mode }, KEYBOARD_CONTROL).otherModes;
       const expected = MINIGAME_MODES.filter((other) => other !== mode);
       expect(others.length).toBe(expected.length);
@@ -127,7 +129,7 @@ describe("given a Ring Fling", () => {
     expect(view.retryEnabled).toBe(true);
   });
 
-  it("when the stepper is shown, then its bounds come from THROWS_PER_SET", () => {
+  it("when the stepper is shown, then its bounds are the fewest and most throws a set may have", () => {
     const atMin = minigamePanelView({ ...RING_READY, throwsPerSet: THROWS_PER_SET.min }, KEYBOARD_CONTROL).stepper;
     const atMax = minigamePanelView({ ...RING_READY, throwsPerSet: THROWS_PER_SET.max }, KEYBOARD_CONTROL).stepper;
     const between = minigamePanelView({ ...RING_READY, throwsPerSet: THROWS_PER_SET.min + 1 }, KEYBOARD_CONTROL).stepper;
@@ -198,7 +200,7 @@ describe("given a Ring Fling", () => {
 
 describe("given a long jump with its bail", () => {
   const BAILING: MinigameHudState = { ...LONG_JUMP_READY, bail: { pressed: false, verdict: null } };
-  const cases = [
+  const testCases = [
     { it: "when it is ready and nothing is pressed, then the prompt names the control and the barrier", state: BAILING, control: "Shift", expectedPrompt: "Press Shift as you hit the barrier", expectedResult: null },
     { it: "when it is running on a pad whose boost button is named Cross, then the prompt names Cross", state: { ...BAILING, phase: "running" }, control: "Cross", expectedPrompt: "Press Cross as you hit the barrier", expectedResult: null },
     { it: "when the bail is pressed and the barrier is not hit yet, then the prompt says so", state: { ...BAILING, phase: "running", bail: { pressed: true, verdict: null } }, control: "Shift", expectedPrompt: "Bail pressed", expectedResult: null },
@@ -210,7 +212,7 @@ describe("given a long jump with its bail", () => {
     { it: "when nothing was pressed, then the result reads No bail", state: { ...BAILING, phase: "scored", lastScore: 50, bail: { pressed: false, verdict: { kind: "none", offsetSeconds: null, quality: 0 } } }, control: "Shift", expectedPrompt: null, expectedResult: "No bail" },
     { it: "when it is another mode with no bail, then there is neither prompt nor result", state: { ...LONG_JUMP_READY, mode: "highJump" }, control: "Shift", expectedPrompt: null, expectedResult: null },
   ] as const;
-  for (const testCase of cases) {
+  for (const testCase of testCases) {
     it(testCase.it, () => {
       const view = minigamePanelView(testCase.state, testCase.control);
       expect(view.bailPrompt, "prompt").toBe(testCase.expectedPrompt);
@@ -220,9 +222,15 @@ describe("given a long jump with its bail", () => {
 });
 
 describe("given the card on a touch screen, which shows Retry inline only once the attempt is scored", () => {
-  const phases = ["ready", "running", "thrown", "scored"] as const;
-  for (const phase of phases) {
-    it(`when the attempt is ${phase}, then Retry is ${phase === "scored" ? "enabled" : "disabled"}`, () => {
+  const testCases = [
+    { it: "when the attempt is ready, then Retry is disabled", phase: "ready" },
+    { it: "when the attempt is running, then Retry is disabled", phase: "running" },
+    { it: "when the attempt is thrown, then Retry is disabled", phase: "thrown" },
+    { it: "when the attempt is scored, then Retry is enabled", phase: "scored" },
+  ] as const;
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const { phase } = testCase;
       expect(minigamePanelView({ ...LONG_JUMP_READY, phase }, "Boost").retryEnabled).toBe(phase === "scored");
     });
   }

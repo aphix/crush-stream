@@ -101,13 +101,13 @@ describe("given a damaged car put back on the road keeping its damage (a held re
     assertSameDigest(fullState(before), fullState(now), "twins");
   });
 
-  it("when one takes the path as it was and the other the CarDamage path, then every number of their state is identical", () => {
+  it("when one car is put back the old way and the other the way that carries its damage along, then every number of their state is identical", () => {
     placeKeepingBefore(before);
     placeKeepingNow(now);
     assertSameDigest(fullState(before), fullState(now), "after the held reset");
   });
 
-  it("when the state after is compared with the engine's dress, then the car kept the crumple settings it had (the respawn's re-dress did not stand)", () => {
+  it("when the state after is compared with the engine's default crumple settings, then the car kept the crumple settings it had (the respawn's re-dress did not stand)", () => {
     expect(now.deform.squash).toBe(1.1);
     expect(now.deform.buckle).toBe(0.3);
     expect(now.deform.squash, "the control: the dress differs from the car's own").not.toBe(ENGINE_DRESS.squash);

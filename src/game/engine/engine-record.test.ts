@@ -245,7 +245,7 @@ function plainStrain(car: DeformableCar): number[] {
   });
 }
 
-describe("given a car the recorder read while crashed, then respawned with the recorder off and crashed gently up to the same corner serial", () => {
+describe("given a car the recorder read while wrecked, then respawned with the recorder off and wrecked again, gently, until it has taken as many dents as the first time", () => {
   /** The recorder with the first crash's row cached, the car crashed again, and the first row. */
   function setup(): { rec: CrashRecorder; car: DeformableCar; rowA: Float32Array } {
     const car = new DeformableCar({ body: 0x808080, accent: 0, name: "c0" }, new THREE.Scene(), null, fleetStyle(0));
@@ -267,7 +267,7 @@ describe("given a car the recorder read while crashed, then respawned with the r
     return { rec, car, rowA };
   }
 
-  it("when the recorder begins again and reads the car, then the row is the second crash's", () => {
+  it("when the recorder begins again and reads the car, then its crush reading is the second crash's", () => {
     const { rec, car, rowA } = setup();
     rec.begin("oval", HANDLING.realism, false, 1, () => "c0", 1);
     const rowB = new Float32Array(CAGES.length);
@@ -277,7 +277,7 @@ describe("given a car the recorder read while crashed, then respawned with the r
     expect(rowB.some((v, k) => v !== rowA[k]), "the second crash's row differs from the first's").toBeTruthy();
   });
 
-  it("when a step starts after the respawn without a new begin, then the step's strain row is the second crash's", () => {
+  it("when a step starts after the respawn without a new recording begun, then the step's crush reading is the second crash's", () => {
     const { rec, car, rowA } = setup();
     rec.startStep([car]);
     const rowB = rec["strainPre"].subarray(0, CAGES.length);
@@ -287,7 +287,7 @@ describe("given a car the recorder read while crashed, then respawned with the r
   });
 });
 
-describe("given a crashed car the recorder tracks, whose engine is then killed from outside the crash sim (`DeformableCar.disable`: a guard's gunfire)", () => {
+describe("given a crashed car the recorder tracks, whose engine is then killed from outside the crash sim (a guard's gunfire)", () => {
   /** The recorder after a few steps with `cars[0]` a crashed wreck (its strain baseline held) and `cars[1]` a running car. */
   function setup(): { rec: CrashRecorder; cars: DeformableCar[]; firstKey: number } {
     const scene = new THREE.Scene();
@@ -306,7 +306,7 @@ describe("given a crashed car the recorder tracks, whose engine is then killed f
     return { rec, cars, firstKey: rec["keyStep"][0]! };
   }
 
-  it("when the next step starts, then the kill step is keyed, the wreck keeps its strain baseline and no car is marked as arrived", () => {
+  it("when the next step starts, then the kill step is keyed, the wreck keeps its crush baseline and no car is marked as arrived", () => {
     const { rec, cars, firstKey } = setup();
     cars[0]!.disable();
     rec.startStep(cars);

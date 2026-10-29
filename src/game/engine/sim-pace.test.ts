@@ -417,7 +417,7 @@ describe(`given the adaptive pacer, which steps the sim at the coarse step on a 
     expect(d.log[first]!.at, `first change ${d.log[first]!.at} ms in`).toBeGreaterThanOrEqual(950);
   });
 
-  it("good: a pinned floor holds against the cost either way, and unpinned the pacer adapts again", () => {
+  it("when heavy steps hit a device pinned to the fine step and cheap steps hit one pinned to the coarse step, then each holds its step against the cost, and unpinned the pacer adapts again", () => {
     // Heavy steps would drive the adaptive pacer coarse; pinned fine it stays fine (and loses sim time), and a cheap device pinned coarse stays coarse.
     const heavyFine = device(true, () => 4.7, 9.4, 90, 8, 1, false);
     expect(heavyFine.pace.coarseSteps).toBe(0);

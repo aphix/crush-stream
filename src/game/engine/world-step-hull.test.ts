@@ -169,7 +169,7 @@ describe("given two sedans abeam at 15 m/s, the step cut by a pair parked far of
   }
 
   for (const closing of [6, 20]) {
-    it(`when one closes on the other at ${closing} m/s (a crash's closing: the hit-ahead mark of \`nearHit\` holds the pair too), then the clearance is never less than the hull rule's: the 0-speed one and the step's travel`, () => {
+    it(`when one closes on the other at ${closing} m/s (a crash's closing: the hit-ahead warning holds the pair too), then the clearance is never less than the hull rule's: the 0-speed one and the step's travel`, () => {
       const rule = stillClearance() + closing * COARSE;
       expect(!lone(rule - MATCH_M, closing), `lone ${MATCH_M * 1000} mm inside the hull rule's ${rule.toFixed(3)} m`).toBe(true);
     });
@@ -200,7 +200,7 @@ describe("given two sedans abeam at a hull-clear distance the circle of the old 
     expect(firstMask(APART, 0, (a) => (a.airborne = true)), "a car in the air meets what is under it").toBe(0);
   });
 
-  it("when one has crashed, or stands on the other's roof, then they stay in the slices (the plan box is no description of them)", () => {
+  it("when one has crashed, or stands on the other's roof, then they stay in the slices (a predicted box is no description of them)", () => {
     expect(firstMask(APART, 0, (a) => (a.crashed = true)), "a crashed car").toBe(0);
     expect(firstMask(APART, 0, (a, b) => (a.restsOn = b)), "a car standing on another").toBe(0);
   });
@@ -396,7 +396,7 @@ const PEDALS: readonly DriveInput[] = [
 
 describe("given a car of each class on open ground at 15 and at 40 m/s, driven with every pedal the handling rows use for 2 s in coarse steps", () => {
   for (const cls of VEHICLE_CLASS_IDS) {
-    it(`when it is a ${cls}, then its velocity never changes by more than ${ACCEL_BOUND} m/s^2 times a step (the bound \`hullsClear\` budgets its position error from)`, () => {
+    it(`when it is a ${cls}, then its velocity never changes by more than ${ACCEL_BOUND} m/s^2 times a step (the bound the hull rule budgets its position error from)`, () => {
       let worst = 0;
       for (const speed of [15, 40]) {
         for (const pedal of PEDALS) {

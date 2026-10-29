@@ -179,7 +179,7 @@ describe("given the frame times and the sim's time per frame of a bench run", ()
   });
 });
 
-describe("given the bench result of a phone running the city course (describeBench writes it as the results card)", () => {
+describe("given the bench result of a phone running the city course (the results card is written from it)", () => {
   test("when the card is written, then it leads with the build, fps, the sim's ms each second and sim speed, lists the settings (the depth buffer with the offset a ground layer needs to show over a coplanar one), both A/Bs and the steps cut short for a coming hit, marks a browser-masked GPU, shows the GPU timing when it can, and fits a 412 px tall phone screen", () => {
     const lines = describeBench(RESULT);
     expect(lines[0]!).toMatch(/^CRUSH BENCH {2}city {2}22 cars.*\(Chrome 150\) {2}build 36b137f$/);

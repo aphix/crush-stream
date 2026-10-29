@@ -30,16 +30,16 @@ function deepestInside(car: DeformableCar): number {
   return depth;
 }
 
-const wallHits = [
-  { it: "when it hits the slab square at 56 km/h", approach: "front", kph: 56 },
-  { it: "when it hits the slab square at 78 km/h", approach: "front", kph: 78 },
-  { it: "when it backs into the slab square at 56 km/h", approach: "rear", kph: 56 },
-  { it: "when it hits the slab square at 100 km/h", approach: "front", kph: 100 },
-] as const satisfies readonly { it: string; approach: WallApproach; kph: number }[];
+describe("given a sedan driving at the jersey slab", () => {
+  const testCases = [
+    { it: "when it hits the slab square at 56 km/h, then no drawn vertex of its body is ever more than 5 cm inside the slab", approach: "front", kph: 56 },
+    { it: "when it hits the slab square at 78 km/h, then no drawn vertex of its body is ever more than 5 cm inside the slab", approach: "front", kph: 78 },
+    { it: "when it backs into the slab square at 56 km/h, then no drawn vertex of its body is ever more than 5 cm inside the slab", approach: "rear", kph: 56 },
+    { it: "when it hits the slab square at 100 km/h, then no drawn vertex of its body is ever more than 5 cm inside the slab", approach: "front", kph: 100 },
+  ] as const satisfies readonly { it: string; approach: WallApproach; kph: number }[];
 
-for (const testCase of wallHits) {
-  describe("given a sedan driving at the jersey slab", () => {
-    it(`${testCase.it}, then no drawn vertex of its body is ever more than ${DEEPEST_INSIDE_M * 100} cm inside the slab`, (t) => {
+  for (const testCase of testCases) {
+    it(testCase.it, (t) => {
       const car = makeCar();
       const yaw = testCase.approach === "front" ? -Math.PI / 2 : Math.PI / 2;
       launch(car, SLAB_FACE_X + 2 + strikeReach(car, testCase.approach), 0, yaw, -testCase.kph / 3.6, 0);
@@ -52,5 +52,5 @@ for (const testCase of wallHits) {
       t.annotate(`deepest drawn vertex inside the slab ${deepest.toFixed(3)} m`);
       expect(deepest, `a drawn vertex is ${deepest.toFixed(3)} m inside the slab`).toBeLessThanOrEqual(DEEPEST_INSIDE_M);
     });
-  });
-}
+  }
+});

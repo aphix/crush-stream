@@ -327,7 +327,7 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
     }
   });
 
-  it("when its slow-mo eases in, then the crash cam begins before it, sparks and dust are asked for at the clip's recorded impact point at most every FUDGE_GAP, only once both cars' drawn bodies are within FUDGE_NONE of it, until the cars meet and never after, and the flash and burst go off once, as they meet", () => {
+  it("when its slow-mo eases in, then the crash cam begins before it, sparks and dust are asked for at the clip's recorded impact point at most every 0.08 s, only once both cars' drawn bodies are within 1 m of it, until the cars meet and never after, and the flash and burst go off once, as they meet", () => {
     const { w: a, reel } = fast;
     const clip = reel.clips[0]!;
     const seen = { crash: [] as number[], impact: [] as number[], fudge: [] as number[], off: 0, gap: 0, strength: 1 };
@@ -360,7 +360,7 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
     expect(seen.gap < FUDGE_NONE && seen.strength > 0, `sparks asked for with the farther drawn body ${seen.gap.toFixed(2)} m off the point (none from ${FUDGE_NONE} m), at strength ${seen.strength}`).toBeTruthy();
   });
 
-  it("when its reel plays and restarts, then on each play the fudge throws only with both drawn bodies of the head-on's cars by the point and nothing else comes before the step they touch", () => {
+  it("when its reel plays and restarts, then on each play the sparks and dust thrown before the cars meet come only with both drawn bodies of the head-on's cars by the point and nothing else comes before the step they touch", () => {
     assertFudgeOnlyByBody(fast.w, fast.reel);
   });
 
@@ -579,7 +579,7 @@ describe("given a stunt race whose first crash is a car driven into the kicker's
     return recordedReel(a);
   });
 
-  it("when its reel plays and restarts, then on each play the fudge throws only by the car's drawn body and nothing else comes before the step it touches the wall", () => {
+  it("when its reel plays and restarts, then on each play the sparks and dust thrown before the car meets the wall come only by the car's drawn body and nothing else comes before the step it touches the wall", () => {
     expect(walled.reel.clips[0]!.firstB, "the first clip is not a wall hit").toBeLessThan(0);
     assertFudgeOnlyByBody(walled.w, walled.reel);
   });
@@ -592,7 +592,7 @@ describe("given a city race whose first crash is a 30 m/s car driven into a park
     return recordedReel(a);
   });
 
-  it("when its reel plays and restarts, then on each play no fudge burst comes while the striking car is still FUDGE_NONE or more off the point, though the parked car's bumper is on it, and nothing else comes before the step they touch", () => {
+  it("when its reel plays and restarts, then on each play no burst of sparks and dust comes before the cars meet while the striking car is still 1 m or more off the point, though the parked car's bumper is on it, and nothing else comes before the step they touch", () => {
     expect(parked.reel.clips[0]!.firstB, "the first clip is not a car-car hit").toBeGreaterThanOrEqual(0);
     assertFudgeOnlyByBody(parked.w, parked.reel, true);
   });

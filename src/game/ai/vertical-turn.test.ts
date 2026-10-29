@@ -15,7 +15,7 @@ const TUMBLING_FROM = [-0.5119077976834439, 0.28822882465912086, -0.273318431056
 const TUMBLING_TO = [-0.5145082933736278, 0.2810557888158411, -0.27139291079902245, -0.7633051471010016] as const;
 
 describe("given a car airborne and pitched 70° up, rolling, one 240 Hz step apart (the derby seed 1 tumble)", () => {
-  it("when its turn is read about the vertical, then it is under the spin bar though its Euler yaw changes faster than the bar", () => {
+  it("when its turn is read about the vertical, then it is under the spin bar though its yaw angle changes faster than the bar", () => {
     const from = quaternion(TUMBLING_FROM);
     const to = quaternion(TUMBLING_TO);
     const eulerRate = Math.abs(eulerYaw(to) - eulerYaw(from)) / STEP_S;

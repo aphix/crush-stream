@@ -3,13 +3,13 @@ import type { RaceHud } from "../match/types.ts";
 import { benchHoldsCommand, captureSubmitShown, flagButton, updateNoticeShown } from "./submit-rules.ts";
 
 describe("given the Debug section's capture toggle and its recorded samples", () => {
-  const cases = [
+  const testCases = [
     { it: "the capture is on with 12 samples", captureTrace: true, traceSamples: 12, expected: true },
     { it: "the capture is on and has recorded nothing yet", captureTrace: true, traceSamples: 0, expected: false },
     { it: "the capture is off though the spawn snapshot counts as 1 sample", captureTrace: false, traceSamples: 1, expected: false },
     { it: "the capture is off and empty", captureTrace: false, traceSamples: 0, expected: false },
   ];
-  for (const testCase of cases) {
+  for (const testCase of testCases) {
     it(`when ${testCase.it}, then the Submit button is ${testCase.expected ? "drawn" : "not drawn"}`, () => {
       expect(captureSubmitShown(testCase)).toBe(testCase.expected);
     });
@@ -19,7 +19,7 @@ describe("given the Debug section's capture toggle and its recorded samples", ()
 const REEL = { clips: [], playing: 0 } satisfies RaceHud["reel"];
 
 describe("given the [!] flag over the results reel and over a solo view", () => {
-  const cases = [
+  const testCases = [
     { it: "the reel shows clip id 7", race: { reel: REEL, solo: null, shown: 7 }, expected: { visible: true, clip: 7 } },
     { it: "the reel is in its flight between clips", race: { reel: { ...REEL, playing: -1 }, solo: null, shown: null }, expected: { visible: true, clip: null } },
     { it: "a clip is watched alone (a reel clip, id 7)", race: { reel: REEL, solo: "Head-on", shown: 7 }, expected: { visible: true, clip: 7 } },
@@ -27,7 +27,7 @@ describe("given the [!] flag over the results reel and over a solo view", () => 
     { it: "no reel and no solo view is up", race: { reel: null, solo: null, shown: null }, expected: { visible: false, clip: null } },
     { it: "there is no race at all", race: null, expected: { visible: false, clip: null } },
   ];
-  for (const testCase of cases) {
+  for (const testCase of testCases) {
     it(`when ${testCase.it}, then the button is ${testCase.expected.visible ? "drawn" : "not drawn"} and bound to clip ${testCase.expected.clip}`, () => {
       const button = flagButton(testCase.race);
       expect(button.visible).toBe(testCase.expected.visible);
@@ -43,7 +43,7 @@ describe("given the [!] flag over the results reel and over a solo view", () => 
 });
 
 describe("given a newer build is deployed", () => {
-  const cases = [
+  const testCases = [
     { it: "the player is in the fleet scene (no race)", race: null, expected: true },
     { it: "a race is on its setup menu or grid", race: { phase: "grid" as const }, expected: true },
     { it: "a race is counting down", race: { phase: "countdown" as const }, expected: false },
@@ -51,7 +51,7 @@ describe("given a newer build is deployed", () => {
     { it: "a race has finished and shows its results", race: { phase: "finished" as const }, expected: true },
     { it: "the race scene is up with no session", race: { phase: null }, expected: true },
   ];
-  for (const testCase of cases) {
+  for (const testCase of testCases) {
     it(`when ${testCase.it}, then the update notice is ${testCase.expected ? "shown" : "held back"}`, () => {
       expect(updateNoticeShown("a1b2c3d", testCase.race)).toBe(testCase.expected);
     });
@@ -63,7 +63,7 @@ describe("given a newer build is deployed", () => {
 });
 
 describe("given the results menu's buttons", () => {
-  const cases = [
+  const testCases = [
     { it: "Retry is pressed on a bench page", type: "retry" as const, benchPage: true, held: true },
     { it: "Next course is pressed on a bench page", type: "next" as const, benchPage: true, held: true },
     { it: "Menu is pressed on a bench page", type: "quit" as const, benchPage: true, held: true },
@@ -71,7 +71,7 @@ describe("given the results menu's buttons", () => {
     { it: "Next course is pressed on an ordinary page", type: "next" as const, benchPage: false, held: false },
     { it: "the bench itself starts its race on a bench page", type: "start" as const, benchPage: true, held: false },
   ];
-  for (const testCase of cases) {
+  for (const testCase of testCases) {
     it(`when ${testCase.it}, then the HUD ${testCase.held ? "sends nothing" : "sends it"}`, () => {
       expect(benchHoldsCommand({ type: testCase.type }, testCase.benchPage)).toBe(testCase.held);
     });

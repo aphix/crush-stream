@@ -68,7 +68,7 @@ describe("given a page opened with ?debug=uploads", () => {
   beforeAll(async () => ({ engine, wrapped } = await engineOn("?debug=uploads")));
   afterAll(() => engine.dispose());
 
-  it("when a mesh's attribute is updated past its array's end, then the first refused bufferSubData is logged once, naming the attribute, geometry, mesh, sizes, range, FX tier and stack", () => {
+  it("when a mesh's attribute is updated past its array's end, then the first refused upload is logged once, naming the attribute, geometry, mesh, sizes, range, FX tier and stack", () => {
     expect(wrapped.has("bufferSubData") && wrapped.has("texSubImage2D"), "wrapped upload calls").toBeTruthy();
     const geometry = new THREE.BufferGeometry();
     geometry.name = "probe-geometry";
@@ -95,7 +95,7 @@ describe("given a page opened with ?debug=uploads", () => {
 });
 
 describe("given the upload check on a headless context", () => {
-  it("when a data texture's update range reads past its pixels, then the refused texSubImage2D is logged naming the texture, material and mesh", () => {
+  it("when a data texture's update range reads past its pixels, then the refused upload is logged naming the texture, material and mesh", () => {
     const { gl } = wrappableContext();
     const renderer = new THREE.WebGLRenderer({ canvas: element(), context: gl });
     const texture = new THREE.DataTexture(new Uint8Array(4 * 4 * 4), 4, 4);

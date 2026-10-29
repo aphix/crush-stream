@@ -754,7 +754,7 @@ describe("given crashed wrecks sliding to a stop on the ground", () => {
 });
 
 describe("given two overlapping wrecks in shape deform mode, one resting and one sliding at 6 m/s along z and 4 m/s toward it", () => {
-  it("when they scrape flank to flank for one frame, then the pair kernel reports the contact and the resting wreck takes over 60 kg·m/s of the slide through friction", () => {
+  it("when they scrape flank to flank for one frame, then the contact between them is reported and the resting wreck takes over 60 kg·m/s of the slide through friction", () => {
     const a = slidingWreck(0, 0);
     const b = slidingWreck(0, 6, 0, 1.5, -4);
     const w = makeWorld([a, b], false, false, null);
@@ -897,7 +897,7 @@ forModes("given two cars overlapping head-on, each driving into the other", (mod
   });
 });
 
-describe("given particle positions read through snapshotPoints (the reader of debris positions)", () => {
+describe("given the positions of debris particles as they are read back", () => {
   it("when one sample is dead and the other alive, then only the live one is reported, at a height of at least 0", () => {
     const pos = new Float32Array([1, 0.2, 2, 3, 250, 4]);
     const life = new Float32Array([0.4, 0]);
@@ -919,12 +919,12 @@ describe("given two cars driving head-on at each other, in shape deform mode", (
   const fast = runPair(56, 56);
   const nose = (r: (typeof slow)[number]) => Math.max(r.noseMaxL, r.noseMaxR);
 
-  const headOnNoseCrushCases = [
+  const testCases = [
     { it: "when each car drives at 28 km/h, then each nose crushes between 0.15 and 0.40 m", speed: "slow", min: 0.15, max: 0.4 },
     { it: "when each car drives at 56 km/h, then each nose crushes between 0.35 and 0.70 m", speed: "fast", min: 0.35, max: 0.7 },
   ] as const;
 
-  for (const testCase of headOnNoseCrushCases) {
+  for (const testCase of testCases) {
     it(testCase.it, () => {
       for (const r of { slow, fast }[testCase.speed]) expect(nose(r) >= testCase.min && nose(r) <= testCase.max, `nose ${nose(r).toFixed(3)}`).toBeTruthy();
     });
