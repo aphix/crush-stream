@@ -99,25 +99,34 @@ describe("given the room list a relay returns to a player looking for a race roo
 
   it("when rooms carry the host's stage and course tag, then the stage and course are read from it, and a relay without tags lists rooms unstaged", () => {
     const rooms = openRooms([room("A", 1, "over.rally"), room("B", 1, ""), room("C", 1, "bogus.x")], "race");
-    const want = [["over", "rally"], [null, ""], [null, "x"]] as const;
-    expect(rooms, "rooms listed").toHaveLength(want.length);
-    for (let i = 0; i < want.length; i++) {
-      expect(rooms[i]?.stage, `room ${i} stage`).toBe(want[i]?.[0]);
-      expect(rooms[i]?.course, `room ${i} course`).toBe(want[i]?.[1]);
+    const testCases = [
+      { room: "A", expectedStage: "over", expectedCourse: "rally" },
+      { room: "B", expectedStage: null, expectedCourse: "" },
+      { room: "C", expectedStage: null, expectedCourse: "x" },
+    ] as const;
+    expect(rooms, "rooms listed").toHaveLength(testCases.length);
+    for (const [i, testCase] of testCases.entries()) {
+      expect(rooms[i]?.stage, `room ${testCase.room} stage`).toBe(testCase.expectedStage);
+      expect(rooms[i]?.course, `room ${testCase.room} course`).toBe(testCase.expectedCourse);
     }
   });
 
   it("when the list holds public rooms of all four games, then no filter lists every one of this build with its game and course tag, and a game's filter lists only that game's rooms", () => {
     const list = [room("A", 2, "lobby.oval", "race"), room("B", 3, "lobby.3", "campaign"), room("C", 2, "running.havana", "survival"), room("D", 2, "lobby", "derby")];
     const all = openRooms(list, null).map((r) => [r.kind, codeOf(r.room), r.course] as const).sort();
-    const wantAll = [["campaign", "B", "3"], ["derby", "D", ""], ["race", "A", "oval"], ["survival", "C", "havana"]] as const;
-    expect(all, "rooms of all four games").toHaveLength(wantAll.length);
-    for (let i = 0; i < wantAll.length; i++) {
-      expect(all[i]?.[0], `room ${i} kind`).toBe(wantAll[i]?.[0]);
-      expect(all[i]?.[1], `room ${i} code`).toBe(wantAll[i]?.[1]);
-      expect(all[i]?.[2], `room ${i} course`).toBe(wantAll[i]?.[2]);
+    const expectedAll = [
+      { kind: "campaign", code: "B", course: "3" },
+      { kind: "derby", code: "D", course: "" },
+      { kind: "race", code: "A", course: "oval" },
+      { kind: "survival", code: "C", course: "havana" },
+    ] as const;
+    expect(all, "rooms of all four games").toHaveLength(expectedAll.length);
+    for (const [i, expected] of expectedAll.entries()) {
+      expect(all[i]?.[0], `room ${i} kind`).toBe(expected.kind);
+      expect(all[i]?.[1], `room ${i} code`).toBe(expected.code);
+      expect(all[i]?.[2], `room ${i} course`).toBe(expected.course);
     }
-    for (const [kind, code] of [["race", "A"], ["campaign", "B"], ["survival", "C"], ["derby", "D"]] as const) expect(openRooms(list, kind).map((r) => codeOf(r.room)).join(), kind).toBe(code);
+    for (const testCase of expectedAll) expect(openRooms(list, testCase.kind).map((r) => codeOf(r.room)).join(), testCase.kind).toBe(testCase.code);
   });
 });
 
@@ -236,12 +245,16 @@ describe("given the caller asks to skip the room whose host just died", () => {
 
 describe("given a lone host already running its own room", () => {
   it("when a later room list offers a room padded by one address's idle peers or one with another real address in it, then it leaves for the real one and never for the padding", async () => {
-    for (const [other, joins] of [[room("PAD", 7, "lobby.oval", "race", 1), false], [room("REAL", 3), true]] as const) {
-      const h = harness((call) => (call < 2 ? [] : [other]));
+    const testCases = [
+      { other: room("PAD", 7, "lobby.oval", "race", 1), expectedJoins: false },
+      { other: room("REAL", 3), expectedJoins: true },
+    ] as const;
+    for (const testCase of testCases) {
+      const h = harness((call) => (call < 2 ? [] : [testCase.other]));
       const done = findMatch("race", true, h.deps);
       await h.clock.drain();
       await done;
-      expect(h.log.map((l) => l.what).join(", "), codeOf(other.room)).toBe(joins ? `host, join ${codeOf(other.room)}` : "host");
+      expect(h.log.map((l) => l.what).join(", "), codeOf(testCase.other.room)).toBe(testCase.expectedJoins ? `host, join ${codeOf(testCase.other.room)}` : "host");
     }
   });
 });

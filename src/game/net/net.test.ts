@@ -85,18 +85,24 @@ function looseParts(car: DeformableCar): number {
 
 describe("given a network snapshot carrying the host's scene clear count (0..127) beside its keyframe flag", () => {
   it("when snapshots with clear counts 0, 1, 77 and 127 and mixed keyframe flags are written and read, then each count and flag comes back unchanged, a count of 0 being what an older host sends", () => {
-    for (const [gen, keyframe] of [[0, false], [1, true], [77, false], [127, true]] as const) {
+    const testCases = [
+      { clearGen: 0, keyframe: false },
+      { clearGen: 1, keyframe: true },
+      { clearGen: 77, keyframe: false },
+      { clearGen: 127, keyframe: true },
+    ] as const;
+    for (const testCase of testCases) {
       const s = makeSnapshot();
       ensureFrames(s, 1, L);
       s.count = 1;
-      s.keyframe = keyframe;
-      s.clearGen = gen;
+      s.keyframe = testCase.keyframe;
+      s.clearGen = testCase.clearGen;
       const w = new Writer();
       writeSnapshot(w, s, L);
       const got = makeSnapshot();
       readSnapshot(new Reader().reset(w.done()), got, L);
-      expect(got.clearGen, `clear count ${gen}`).toBe(gen);
-      expect(got.keyframe, `keyframe flag beside clear count ${gen}`).toBe(keyframe);
+      expect(got.clearGen, `clear count ${testCase.clearGen}`).toBe(testCase.clearGen);
+      expect(got.keyframe, `keyframe flag beside clear count ${testCase.clearGen}`).toBe(testCase.keyframe);
     }
   });
 });
@@ -207,21 +213,26 @@ describe("given a host car whose driven wheels spin ahead of the body", () => {
     s.count = 1;
     s.time = 5;
     const client = makeCar();
-    for (const [spin, want] of [[12.37, 12.37], [0, 0], [70, 63.75]] as const) {
-      host.drive.spinSpeed = spin;
+    const testCases = [
+      { spin: 12.37, expected: 12.37 },
+      { spin: 0, expected: 0 },
+      { spin: 70, expected: 63.75 },
+    ] as const;
+    for (const testCase of testCases) {
+      host.drive.spinSpeed = testCase.spin;
       readCarPose(host, s.cars[0]!);
       const w = new Writer();
       writeSnapshot(w, s, layout);
       const got = makeSnapshot();
       readSnapshot(new Reader().reset(w.done()), got, layout);
       drawSnapshots([got], [1], [], [client], 5, 1 / FRAME_HZ, { setVaporized: () => {}, clearScene: () => {} }, -1);
-      expect(Math.abs(client.drive.spinSpeed - want), `spin ${spin} drew as ${client.drive.spinSpeed}`).toBeLessThanOrEqual(0.125 + 1e-9);
+      expect(Math.abs(client.drive.spinSpeed - testCase.expected), `spin ${testCase.spin} drew as ${client.drive.spinSpeed}`).toBeLessThanOrEqual(0.125 + 1e-9);
     }
   });
 });
 
 describe("given two cars wrecked as far as a snapshot can carry: every part and wheel loose", () => {
-  it("when they are written, then the snapshot is exactly the most bytes snapshotMaxBytes allows (the recorder sizes its fixed buffers from it)", () => {
+  it("when they are written, then the snapshot is exactly the most bytes a snapshot is allowed to hold (the recorder sizes its fixed buffers from it)", () => {
     const s = makeSnapshot();
     ensureFrames(s, 2, L);
     s.count = 2;

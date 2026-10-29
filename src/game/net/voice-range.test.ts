@@ -64,7 +64,7 @@ describe("given a speaker whose browser sends to a listener only while within ra
     }
   });
 
-  it("when the resume range is read against the maximum range, then the resume range is the nearer, so the gate has a band that cannot flicker", () => {
+  it("when the full-strength, resume and maximum ranges are laid out, then full-strength is the nearest, the resume range next and the maximum the farthest, so the gate has a band that cannot flicker", () => {
     expect(VOICE_RESUME_RANGE_M, "resume range is inside the maximum range").toBeLessThan(VOICE_MAX_RANGE_M);
     expect(VOICE_FULL_RANGE_M, "full-strength range is inside the resume range").toBeLessThan(VOICE_RESUME_RANGE_M);
   });

@@ -59,7 +59,7 @@ describe("given a roster message from a peer that cannot be trusted", () => {
     });
   }
 
-  it("when the unmodified message is read, then the cases above fail only for the byte they change", () => {
+  it("when the unmodified message is read, then it is a roster of both entries, so each refusal above comes from the one byte it changes", () => {
     const read = readRoster(good);
     must(read, "the untouched message reads");
     expect(read.length, "entry count").toBe(2);

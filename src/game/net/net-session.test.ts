@@ -841,7 +841,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     return { hub, v, client, linked, dwell };
   };
 
-  it("given a guest in a public room, when the host of that room leaves, then the stranded guest hosts a fresh public room of its own", async () => {
+  it("when the host of a public room leaves, then the stranded guest hosts a fresh public room of its own", async () => {
     const hub = new Hub();
     const v = virtual();
     const host = new NetPlay(fakeGame(), { connect: hub.connect, now: v.opts.now });
@@ -871,7 +871,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     expect(st.finding).toBe(false);
   });
 
-  it("given a public guest in an open room, when its page loads with its engine running no frames for 9 s and again when it stalls 9 s mid-session, then it stays in the room as car 1 both times", async () => {
+  it("when a public guest's page loads with its engine running no frames for 9 s and again when it stalls 9 s mid-session, then it stays in the room as car 1 both times", async () => {
     const hub = new Hub();
     let now = 1000;
     const host = new NetPlay(fakeGame(), { connect: hub.connect, now: () => now });
@@ -899,7 +899,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     expect(firstMismatch([client.status().role, client.status().room === dead, client.status().car], ["client", true, 1])).toBeUndefined();
   });
 
-  it("given a weak device with nothing to join, when it presses Play online, then it looks, hosts a field of 4 (the player plus 3 AI cars) without changing the player's own AI count, and drops that field on leaving", async () => {
+  it("when a weak device with nothing to join presses Play online, then it looks, hosts a field of 4 (the player plus 3 AI cars) without changing the player's own AI count, and drops that field on leaving", async () => {
     const v = virtual();
     const g = fakeGame([]);
     g.fit = false;
@@ -918,7 +918,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     expect(race.options.aiCount).toBe(DEFAULT_RACE_OPTIONS.aiCount);
   });
 
-  it("given a device able to host with nothing to join, when it presses Play online, then it hosts a full field at once, within 5 s of the start", async () => {
+  it("when a device able to host with nothing to join presses Play online, then it hosts a full field at once, within 5 s of the start", async () => {
     const v = virtual();
     const g = fakeGame([]);
     const np = new NetPlay(g, { connect: new Hub().connect, ...v.opts });
@@ -930,7 +930,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     expect(v.t.now - 1000, "no long search before hosting").toBeLessThan(5000);
   });
 
-  it("given a Play online search in progress, when the player leaves, then no room is joined or hosted afterwards", async () => {
+  it("when the player leaves during a Play online search, then no room is joined or hosted afterwards", async () => {
     const v = virtual();
     const np = new NetPlay(fakeGame(), { connect: new Hub().connect, ...v.opts });
     open.push(np);
@@ -946,7 +946,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     expect(firstMismatch([np.status().role, np.status().finding], ["off", false])).toBeUndefined();
   });
 
-  it("given a public host, when its match goes from the lobby through grid, countdown, racing and finished, then its relay tag reads lobby, running, running, running, over with the course, and a guest sends none", () => {
+  it("when a public host's match goes from the lobby through grid, countdown, racing and finished, then its relay tag reads lobby, running, running, running, over with the course, and a guest sends none", () => {
     const hub = new Hub();
     const g = fakeGame([]);
     const host = new NetPlay(g, { connect: hub.connect });
@@ -969,7 +969,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     expect(hub.metas.get(guest.status().selfId)!()).toBe("");
   });
 
-  it("given two public rooms whose hosts never answer, when a guest presses Play online, then it tries each once, never goes back to either, and then hosts", async (t) => {
+  it("when a guest presses Play online with two public rooms whose hosts never answer, then it tries each once, never goes back to either, and then hosts", async (t) => {
     const [x, y] = ["AAAA", "BBBB"].map((c) => publicRoomName("race", c));
     const g = await guestOf(t, [x!, y!]);
     for (let k = 0; k < 3; k++) await g.dwell();
@@ -978,7 +978,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     expect(g.linked[2]!).toMatch(/^host pub-race-/);
   });
 
-  it("given four public rooms whose hosts never answer, when a guest presses Play online, then after 3 dead rooms in a row it hosts instead of trying a fourth", async (t) => {
+  it("when a guest presses Play online with four public rooms whose hosts never answer, then after 3 dead rooms in a row it hosts instead of trying a fourth", async (t) => {
     const names = ["AAAA", "BBBB", "CCCC", "DDDD"].map((c) => publicRoomName("race", c));
     const g = await guestOf(t, names);
     for (let k = 0; k < 4; k++) await g.dwell();
@@ -987,7 +987,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     expect(g.linked[3]!).toMatch(/^host pub-race-/);
   });
 
-  it("given four public rooms where the second host answers and then leaves, when a guest presses Play online, then that room does not count toward the dead rooms, so the guest tries all four before hosting", async (t) => {
+  it("when a guest presses Play online with four public rooms where the second host answers and then leaves, then that room does not count toward the dead rooms, so the guest tries all four before hosting", async (t) => {
     const names = ["AAAA", "BBBB", "CCCC", "DDDD"].map((c) => publicRoomName("race", c));
     const g = await guestOf(t, names);
     await g.dwell();
@@ -1003,7 +1003,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     expect(g.linked.slice(0, 4).join(" | "), "dead, answered, dead, dead: the answering room broke the streak").toBe(names.map((n) => `client ${n}`).join(" | "));
   });
 
-  it("given a guest whose last search gave up on two dead rooms, when the player leaves and presses Play online again, then the search starts over with the first room in the list", async (t) => {
+  it("when the player leaves and presses Play online again after a search gave up on two dead rooms, then the search starts over with the first room in the list", async (t) => {
     const [x, y] = ["AAAA", "BBBB"].map((c) => publicRoomName("race", c));
     const g = await guestOf(t, [x!, y!]);
     await g.dwell();
@@ -1013,7 +1013,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     expect(g.linked.at(-1), "first in the list again").toBe(`client ${x}`);
   });
 
-  it("given a weak host, when race mode closes before it leaves, then the player's own AI count was never changed and is the default once race mode is on again", async () => {
+  it("when race mode closes on a weak host before it leaves, then the player's own AI count was never changed and is the default once race mode is on again", async () => {
     const v = virtual();
     const g = fakeGame([]);
     g.fit = false;
@@ -1028,7 +1028,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     expect(g.race()!.options.aiCount).toBe(DEFAULT_RACE_OPTIONS.aiCount);
   });
 
-  it("given a public host on the real WebRTC transport against a stubbed relay, when it makes its first relay poll, then that poll already carries the lobby tag", async () => {
+  it("when a public host on the real WebRTC transport against a stubbed relay makes its first relay poll, then that poll already carries the lobby tag", async () => {
     const polls: string[] = [];
     let polled: () => void = () => {};
     const firstPoll = new Promise<void>((resolve) => (polled = resolve));
@@ -1077,7 +1077,7 @@ describe("given a host waiting in the Havana lobby of a private room", () => {
     expect(firstMismatch(g.started, ["race"])).toBeUndefined();
   });
 
-  it("when the minimum is set out of range or not a number, then it is clamped to 1..ROOM_MAX and rounded; a guest and a finished lobby cannot set it", () => {
+  it("when the minimum is set out of range or not a number, then it is clamped to between 1 and the room's maximum and rounded; a guest and a finished lobby cannot set it", () => {
     const s = session({ hostRace: true, raceApplied: [] });
     const min = (n: number): number | undefined => (s.host.setMinPlayers(n), s.host.status().gate?.min);
     expect(firstMismatch([min(0), min(-3), min(99), min(2.6), min(Number.NaN)], [1, 1, 8, 3, 1])).toBeUndefined();
@@ -1094,13 +1094,18 @@ describe("given a host waiting in the Havana lobby of a private room", () => {
   });
 
   it("when the host picks Survival or a derby, then Go starts that game; a public room's game is the one its name says", () => {
-    for (const [kind, started, entered] of [["survival", [], [false, true]], ["derby", ["derby"], [false]], ["race", ["race"], [false]]] as const) {
+    const testCases = [
+      { kind: "survival", expectedStarted: [], expectedEntered: [false, true] },
+      { kind: "derby", expectedStarted: ["derby"], expectedEntered: [false] },
+      { kind: "race", expectedStarted: ["race"], expectedEntered: [false] },
+    ] as const;
+    for (const testCase of testCases) {
       const s = session();
-      s.host.setLobbyKind(kind);
-      expect(s.host.status().gate?.kind).toBe(kind);
+      s.host.setLobbyKind(testCase.kind);
+      expect(s.host.status().gate?.kind).toBe(testCase.kind);
       s.host.go();
-      expect(s.hg.started.join(), kind).toBe(started.join());
-      expect(s.hg.raceEntered.join(), `${kind}: Survival is a race mode entered as Survival`).toBe(entered.join());
+      expect(s.hg.started.join(), testCase.kind).toBe(testCase.expectedStarted.join());
+      expect(s.hg.raceEntered.join(), `${testCase.kind}: Survival is a race mode entered as Survival`).toBe(testCase.expectedEntered.join());
     }
     const hub = new Hub();
     const pub = new NetPlay(fakeGame(), { connect: hub.connect, now: () => 0 });
