@@ -69,6 +69,7 @@ Treat model-written prose as leads, not facts; cite the listed sources.
 | `perplexity/2026-10-28-tether-just-cause-design.md` | Just Cause grapple/tether design: ~80 m range (JC4), cable length = distance at attach, taut/slack distance constraint, 2/4/6 active tethers (JC3 upgrades), retractor power Off/Soft/Extreme, retract speed, min length, end behaviour Deactivate/Snap/Pulse, light vs heavy targets, breaking; no published forces (Tether lane) |
 | `perplexity/2026-10-28-tether-physics-implementation.md` | Implementing a max-length tether: one-sided distance constraint (impulse / position / XPBD), Jacobian and effective mass, softness/Baumgarte, mass-ratio and high-speed stability, substeps, retracting without energy blow-ups, break force, damping; drawing taut vs slack (catenary/verlet) (Tether lane) |
 | `perplexity/2026-10-28-tether-ux-mobile.md` | Aiming and firing a grapple on desktop, pad and touch: aim-assist cones, target highlight and snap, attach-two-in-sequence, reel/release/cancel, touch button vs drag-to-target, ranges and reticle feedback (Tether lane) |
+| `perplexity/2026-10-28-boost-tap-burst.md` | What a boost tap does in arcade racers: NFS Underground/MW05/HP2010 and Burnout drain while held (a tap is a short boost, no published minimum); NFS Heat/Unbound burst nitrous, Asphalt nitro levels, Mario Kart/Blur/Split-Second are discrete charges spending a fixed meter or item; minimums are meter or charge, not seconds; slow motion and replays not documented per game (Main, touch boost tap) |
 
 ## Papers (`papers/`)
 
