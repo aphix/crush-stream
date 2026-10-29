@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as THREE from "three";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { PISTON, PISTON_IDS, PistonRig, type PistonId } from "./piston-rig.ts";
@@ -7,6 +8,7 @@ import { firePiston, pistonLocality, PISTON_FAR, PISTON_STRUCK, type PistonShot,
 import type { DeformMode } from "../deform/deform-rig.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /**
  * Piston rig: eight impactors around a parked car (docs/PISTON_RIG.md).
@@ -151,6 +153,60 @@ describe("given the piston rig attached to a parked car (eight impactors, one at
     expect(free.shove, `free car slid ${f3(free.shove)} m vs held ${f3(held.shove)} m`).toBeGreaterThan(held.shove * 5);
     expect(held.energy, `held ${held.energy.toFixed(0)} J vs free ${free.energy.toFixed(0)} J`).toBeGreaterThan(free.energy * 2);
     expect(crushOf(held), `held crush ${f3(crushOf(held))} vs free ${f3(crushOf(free))}`).toBeGreaterThan(crushOf(free));
+  });
+});
+
+/** The rear bumper cover's end on the `side` (+1 right, -1 left) as posed, car frame: its mesh's widest point that way. */
+function coverEnd(car: DeformableCar, side: 1 | -1): THREE.Vector3 {
+  const group: THREE.Object3D = car["bumperR"];
+  const mesh = group.children.find((o): o is THREE.Mesh => o instanceof THREE.Mesh);
+  must(mesh, "the rear bumper's drawn mesh");
+  mesh.geometry.computeBoundingBox();
+  const box = mesh.geometry.boundingBox;
+  must(box, "its bounds");
+  group.updateMatrix();
+  return new THREE.Vector3(side > 0 ? box.max.x : box.min.x, 0, 0).applyMatrix4(group.matrix);
+}
+
+/** A rear-corner shot the cover survives (1500 kg steel at 35 km/h: the standard 40 km/h tears it off). */
+const COVER_SHOT: PistonShot = { ...STANDARD, speedKph: 35 };
+
+/** The car `shoot` kept for piston `id`'s `shot`. */
+function shotCar(id: PistonId, shot: PistonShot): DeformableCar {
+  shoot(id, shot);
+  const car = cars.get(`shape|${id}|${JSON.stringify(shot)}`);
+  must(car, `${id}'s car`);
+  return car;
+}
+
+/** How far (m) the rear cover's `side` end and the `corner` particle went in along the car under `id`'s cover shot, over its 3 km/h tap (both posed alike). */
+function coverAndCorner(id: PistonId, side: 1 | -1, corner: string): { end: number; corner: number; car: DeformableCar } {
+  const car = shotCar(id, COVER_SHOT);
+  const tap = shotCar(id, TAP);
+  const z = (c: DeformableCar): number => {
+    const m = c.deform.masses.find((q) => q.name === corner);
+    must(m, corner);
+    return m.local.z;
+  };
+  return { end: coverEnd(car, side).z - coverEnd(tap, side).z, corner: z(car) - z(tap), car };
+}
+
+describe("given a parked car whose rear corner a piston shoots hard but not hard enough to tear the bumper cover off", () => {
+  it("when the rearRight and rearLeft pistons fire, then the cover's struck end goes in as far as the struck corner, within 15 %", () => {
+    for (const [id, side, corner] of [["rearRight", 1, "bumperRR"], ["rearLeft", -1, "bumperRL"]] as const) {
+      const { end, corner: cornerIn, car } = coverAndCorner(id, side, corner);
+      expect(car["parts"].find((p) => p.name === "bumperR")?.detached, `${id}: the cover came off`).toBe(false);
+      expect(Math.abs(end - cornerIn), `${id}: cover end in ${f3(end)} m, ${corner} in ${f3(cornerIn)} m`).toBeLessThanOrEqual(0.15 * cornerIn);
+    }
+  });
+
+  it("when the rearRight and rearLeft pistons fire, then the two covers are drawn as mirror images: the same squash and the struck ends equally far in, to 5 mm", () => {
+    const right = coverAndCorner("rearRight", 1, "bumperRR");
+    const left = coverAndCorner("rearLeft", -1, "bumperRL");
+    const r: THREE.Object3D = right.car["bumperR"];
+    const l: THREE.Object3D = left.car["bumperR"];
+    expect(Math.abs(r.scale.z - l.scale.z), `squash right ${f3(r.scale.z)} left ${f3(l.scale.z)}`).toBeLessThanOrEqual(0.005);
+    expect(Math.abs(right.end - left.end), `struck end in: right ${f3(right.end)} m, left ${f3(left.end)} m`).toBeLessThanOrEqual(0.005);
   });
 });
 

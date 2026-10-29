@@ -1,4 +1,4 @@
-import { hypot2, detSin, detCos, PART_FAMILY } from "../kernel/physics-core.js";
+import { hypot2, detSin, detCos, detAtan2, PART_FAMILY } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { BUMPER_F, LID } from "./constants.ts";
@@ -134,6 +134,16 @@ function lowestClearance(o: THREE.Object3D, below = -Infinity, clearAbove = Infi
   for (let i = 0; i < o.children.length && low >= below; i++) low = Math.min(low, lowestClearance(o.children[i]!, below, clearAbove));
   return low;
 }
+
+/** Half the width (m) of a bumper group's cover: its mesh's widest |x| at rest. */
+function bumperHalfWidth(group: THREE.Object3D): number {
+  const mesh = group.children.find((o): o is THREE.Mesh => o instanceof THREE.Mesh);
+  if (!mesh) return 1;
+  const g = mesh.geometry;
+  if (!g.boundingBox) g.computeBoundingBox();
+  return Math.max(-g.boundingBox!.min.x, g.boundingBox!.max.x);
+}
+
 const _bumpW = new THREE.Vector3();
 /** A mirror the ground crushes off its car leaves with this much speed straight up (m/s, world). */
 const MIRROR_POP = 0.5;
@@ -407,9 +417,13 @@ export abstract class CarParts extends CarGlass {
         const fl = this.deform.massLocal(p.name === BUMPER_F ? "bumperFL" : "bumperRL");
         const fr = this.deform.massLocal(p.name === BUMPER_F ? "bumperFR" : "bumperRR");
         p.object.position.set((fl.x + fr.x) * 0.5, (fl.y + fr.y) * 0.5, (fl.z + fr.z) * 0.5);
+        // It turns with the line of its two corners: a corner hit carries its end in with that corner. A rigid cover reaches past its
+        // corner seats, so it turns by the corners' gap over its own width: its ends move as far as their corners, not further.
+        p.object.rotation.y = detAtan2(fl.z - fr.z, 2 * bumperHalfWidth(p.object));
         const front = p.name === BUMPER_F;
         const seatZ = (front ? this.style.bumpers.front : this.style.bumpers.rear).seat.z;
-        const span = Math.abs(fl.z - (front ? seatZ : -seatZ));
+        // Squashed by the more-pushed corner: a hit on either corner squashes it alike (it read the left corner alone).
+        const span = Math.max(Math.abs(fl.z - (front ? seatZ : -seatZ)), Math.abs(fr.z - (front ? seatZ : -seatZ)));
         p.object.scale.set(1 + t * 0.04, Math.max(0.45, 1 - t * 0.28), Math.max(0.18, 1 - span * 0.45));
         // Hangs by the corner that took less: rolls about it, the struck end drops.
         const left = this.deform.sensorCompression(p.attachL);
