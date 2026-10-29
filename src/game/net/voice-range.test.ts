@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { VOICE_FULL_RANGE_M, VOICE_MAX_RANGE_M, VOICE_RESUME_RANGE_M, voiceGain, voiceSendOpen } from "./voice-range.ts";
 

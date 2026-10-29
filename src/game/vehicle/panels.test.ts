@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
@@ -145,7 +146,7 @@ describe("given every car body style, whose panels are cut from each body's own 
 describe("given the standard crashes into a wall, body panels hinge, then tear", () => {
   // todo -> after the plan: recalibrate the off-centre wall hit's crush against the lever's spin. 56 km/h rear wall 30 % offset gives a
   // quarter-panel hinge 0.055 (the bend needs 0.2-0.8): the lever spins the car away, so the corner crushes less than a square hit.
-  it.todo("when a car hits a rear wall 30 % offset at 56 km/h and then at 80, then a quarter panel bends at 56 and tears at 80", () => {
+  todoRow("when a car hits a rear wall 30 % offset at 56 km/h and then at 80, then a quarter panel bends at 56 and tears at 80", true, () => {
     const soft = runWall(56, 0.3, "rear");
     assert.ok(worst(soft, "quarter") > 0.2 && worst(soft, "quarter") < 0.8, `56 km/h hinge ${worst(soft, "quarter")}`);
     assert.deepEqual(torn(soft, "quarter"), []);
@@ -155,7 +156,7 @@ describe("given the standard crashes into a wall, body panels hinge, then tear",
 
   // todo -> after the plan: recalibrate the off-centre wall hit's crush against the lever's spin. 40 km/h front wall 30 % offset gives an
   // arch hinge 0.073 (the flap needs more than 0.5): the lever spins the car away from the wall, so the struck corner crushes less.
-  it.todo("when a car hits a front wall 30 % offset at 40 km/h and then at 56, then an arch flare flaps at 40 and tears at 56", () => {
+  todoRow("when a car hits a front wall 30 % offset at 40 km/h and then at 56, then an arch flare flaps at 40 and tears at 56", true, () => {
     const soft = runWall(40, 0.3, "front");
     assert.ok(worst(soft, "arch") > 0.5, `40 km/h arch hinge ${worst(soft, "arch")}`);
     assert.deepEqual(torn(soft, "arch"), []);

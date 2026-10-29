@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -37,14 +37,14 @@ describe("given the real engine booted on the sandbox, its Night toggle and the 
     runSeconds(engine, FADE_SECONDS);
   };
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     globalThis.location.hash = "";
     engine = await bootEngine();
     await engine["ragdolls"].preload();
     runSeconds(engine, 0.5);
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

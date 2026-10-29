@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { fleetClass } from "../scenes/fleet.ts";
@@ -100,7 +100,7 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
   const views: MomentView[] = [];
   const covered: MomentView[][] = LAYOUTS.map(() => []);
   let world: World | null = null;
-  after(() => {
+  afterAll(() => {
     world?.race.exit();
     setGround(null);
   });
@@ -144,7 +144,7 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
   describe(title, () => {
     // A staging that throws (a field with no clip, a harness that ran nothing) would only cancel the rows, which node:test counts as neither passed nor failed: every row starts with `staged()`, so each fails with the staging's own error instead.
     let stagingError: unknown = null;
-    before(async () => {
+    beforeAll(async () => {
       try {
         await staging(stage);
       } catch (e) {
@@ -166,9 +166,9 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
         kinds.set(v.kind, k);
       }
       const missed = views.filter((v) => !v.seen);
-      t.diagnostic(`seen ${views.length - missed.length}/${views.length}: ${[...kinds].map(([k, [a, n]]) => `${k} ${a}/${n}`).join(", ")}; widest crash-cam lens ${Math.max(0, ...views.filter((v) => v.rig === "crash").map((v) => v.fov)).toFixed(1)} deg`);
+      t.annotate(`seen ${views.length - missed.length}/${views.length}: ${[...kinds].map(([k, [a, n]]) => `${k} ${a}/${n}`).join(", ")}; widest crash-cam lens ${Math.max(0, ...views.filter((v) => v.rig === "crash").map((v) => v.fov)).toFixed(1)} deg`);
       for (const v of missed) {
-        t.diagnostic(`${v.scene} "${v.title}" ${v.kind} at ${v.at.toFixed(2)} s by ${v.rig}: ndc ${v.ndcX.toFixed(2)},${v.ndcY.toFixed(2)}${v.front ? "" : " behind"}, ${v.clear ? "clear" : "BLOCKED"}, share ${v.share.toFixed(3)} (${v.note})`);
+        t.annotate(`${v.scene} "${v.title}" ${v.kind} at ${v.at.toFixed(2)} s by ${v.rig}: ndc ${v.ndcX.toFixed(2)},${v.ndcY.toFixed(2)}${v.front ? "" : " behind"}, ${v.clear ? "clear" : "BLOCKED"}, share ${v.share.toFixed(3)} (${v.note})`);
       }
       const count = (kind: string): number => kinds.get(kind)?.[1] ?? 0;
       assert.ok(count("impact") >= bars.impact && count("hit") >= bars.hit && count("throw") >= bars.throw && count("takeoff") >= bars.takeoff, `too few moments to test: ${[...kinds].map(([k, [, n]]) => `${k} ${n}`).join(", ")}`);
@@ -180,12 +180,12 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
       const missed: string[] = [];
       for (const [i, { name }] of LAYOUTS.entries()) {
         const seen = covered[i]!.filter((v) => v.seen).length;
-        t.diagnostic(`${name}: seen ${seen}/${covered[i]!.length}, under a panel ${covered[i]!.filter((v) => v.covered).length}, widest crash-cam lens ${Math.max(0, ...covered[i]!.filter((v) => v.rig === "crash").map((v) => v.fov)).toFixed(1)} deg`);
+        t.annotate(`${name}: seen ${seen}/${covered[i]!.length}, under a panel ${covered[i]!.filter((v) => v.covered).length}, widest crash-cam lens ${Math.max(0, ...covered[i]!.filter((v) => v.rig === "crash").map((v) => v.fov)).toFixed(1)} deg`);
         for (const v of covered[i]!) {
           if (!v.seen) missed.push(`${name}: ${v.scene} "${v.title}" ${v.kind} at ${v.at.toFixed(2)} s by ${v.rig}: ndc ${v.ndcX.toFixed(2)},${v.ndcY.toFixed(2)}${v.front ? "" : " behind"}${v.covered ? " UNDER A PANEL" : ""}, ${v.clear ? "clear" : "BLOCKED"}, share ${v.share.toFixed(3)}`);
         }
       }
-      for (const m of missed) t.diagnostic(m);
+      for (const m of missed) t.annotate(m);
       assert.ok(covered.every((c) => c.length === views.length), "every layout plays the same moments");
       assert.equal(missed.length, 0, `${missed.length} moments not visible beside the panels`);
     });
@@ -197,8 +197,8 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
       const cuts = later.filter((v) => v.back?.cut);
       const own = cuts.filter((v) => v.back!.axis);
       const lost = cuts.filter((v) => !v.back!.inFrame && !v.back!.axis);
-      t.diagnostic(`${later.length} later hits, ${cuts.length} after a camera change (${own.length} onto the crash's own axis, ${own.filter((v) => !v.back!.inFrame).length} of them losing the earlier point), the earlier point lost at ${lost.length} other cuts`);
-      for (const v of cuts) t.diagnostic(`${v.scene} "${v.title}" hit at ${v.at.toFixed(2)} s by ${v.cam}${v.back!.axis ? " (own axis)" : ""}: the earlier point at ndc ${v.back!.ndcX.toFixed(2)},${v.back!.ndcY.toFixed(2)}${v.back!.inFrame ? "" : " LOST"} (${v.note})`);
+      t.annotate(`${later.length} later hits, ${cuts.length} after a camera change (${own.length} onto the crash's own axis, ${own.filter((v) => !v.back!.inFrame).length} of them losing the earlier point), the earlier point lost at ${lost.length} other cuts`);
+      for (const v of cuts) t.annotate(`${v.scene} "${v.title}" hit at ${v.at.toFixed(2)} s by ${v.cam}${v.back!.axis ? " (own axis)" : ""}: the earlier point at ndc ${v.back!.ndcX.toFixed(2)},${v.back!.ndcY.toFixed(2)}${v.back!.inFrame ? "" : " LOST"} (${v.note})`);
       assert.ok(later.length >= bars.hit && cuts.length >= bars.cut, `too few later hits to test: ${later.length} hits, ${cuts.length} after a camera change`);
       assert.deepEqual(lost.map((v) => `${v.scene} ${v.at.toFixed(2)}`), []);
     });
@@ -235,7 +235,7 @@ export function reelViewClaims(title: string, bars: Bars, staging: (stage: Stage
           sums[v.kind][1]++;
         }
       }
-      t.diagnostic(`mean hold (wall s): impact ${(sums.impact[0]! / sums.impact[1]!).toFixed(2)} over ${sums.impact[1]}, later hit ${(sums.hit[0]! / sums.hit[1]!).toFixed(2)} over ${sums.hit[1]}, throw ${(sums.throw[0]! / sums.throw[1]!).toFixed(2)} over ${sums.throw[1]}; ${late} throws after the hand-back`);
+      t.annotate(`mean hold (wall s): impact ${(sums.impact[0]! / sums.impact[1]!).toFixed(2)} over ${sums.impact[1]}, later hit ${(sums.hit[0]! / sums.hit[1]!).toFixed(2)} over ${sums.hit[1]}, throw ${(sums.throw[0]! / sums.throw[1]!).toFixed(2)} over ${sums.throw[1]}; ${late} throws after the hand-back`);
       assert.ok(sums.impact[1]! >= bars.impact && sums.throw[1]! >= bars.throw, `too few holds to test: ${sums.impact[1]} impacts, ${sums.throw[1]} throws`);
       assert.deepEqual(bad, []);
     });

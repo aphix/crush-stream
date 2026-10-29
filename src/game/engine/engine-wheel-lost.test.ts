@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -165,11 +165,11 @@ describe("given the real engine and an offset head-on at the start line that thr
     watch = null;
   };
 
-  before(async () => {
+  beforeAll(async () => {
     await startEngine();
     await crashLive();
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

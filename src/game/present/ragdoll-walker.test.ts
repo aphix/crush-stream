@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { RagdollSystem } from "./engine-ragdoll.ts";

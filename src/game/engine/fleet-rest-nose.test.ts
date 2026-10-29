@@ -1,4 +1,5 @@
-import { after, describe, it } from "node:test";
+import { afterAll, describe } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { setGround, activeGround } from "../world/ground.ts";
@@ -21,13 +22,12 @@ const IN_GROUND_M = 0.03;
 let engine: CrashEngine | undefined;
 
 describe("given the fleet capture on jitter seed 6, its pickup's nose crushed back and its front bumper and arch torn off", () => {
-  after(() => {
+  afterAll(() => {
     setGround(null);
     engine?.dispose();
   });
-  it(
-    "when the pickup slides on, then its drawn body never stands more than 3 cm in the ground",
-    { todo: "after the plan: the cage's crush skin follows the drawn skin at the nose underside (3 cm apart), and a ground point holds without sinking 1.2 cm" },
+  todoRow(
+    "when the pickup slides on, then its drawn body never stands more than 3 cm in the ground", "after the plan: the cage's crush skin follows the drawn skin at the nose underside (3 cm apart), and a ground point holds without sinking 1.2 cm",
     async () => {
       const fresh = (engine = await makeEngine());
       const point = new THREE.Vector3();

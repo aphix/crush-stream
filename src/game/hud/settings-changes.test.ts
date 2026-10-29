@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { INITIAL_HUD, type CrashHudState } from "./hud-store.ts";
 import { changedSettings, isChanged, SETTING_IDS, SETTINGS, type SettingId } from "./settings-changes.ts";

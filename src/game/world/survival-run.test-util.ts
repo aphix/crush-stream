@@ -1,3 +1,4 @@
+import { type TestContext } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { HUNT } from "../ai/hunter.ts";
@@ -6,7 +7,6 @@ import { activeGround, setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld, type World } from "./race-world.test-util.ts";
 import type { Track } from "./track.ts";
 import { SURVIVAL } from "../match/survival.ts";
-import type { TestContext } from "node:test";
 import { sightLine } from "../present/spectate-cam.ts";
 
 /**
@@ -32,7 +32,9 @@ export function leaveSurvival(w: World): void {
 export function shortenBustHold(t: TestContext, seconds: number): void {
   const owner = SURVIVAL.bustTime;
   Reflect.set(SURVIVAL, "bustTime", seconds);
-  t.after(() => Reflect.set(SURVIVAL, "bustTime", owner));
+  t.onTestFinished(() => {
+    Reflect.set(SURVIVAL, "bustTime", owner);
+  });
 }
 
 /** The engine's chase camera, roughly: 7 m behind the player, 3 m up, looking at the car. */

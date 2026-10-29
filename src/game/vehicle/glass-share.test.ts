@@ -1,5 +1,5 @@
+import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
 import { GLASS_COLOR, getCrackMap } from "./car-materials.ts";

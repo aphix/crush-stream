@@ -1,5 +1,5 @@
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
 import { makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FACE_TOP } from "../deform/load-crush.ts";
 import { Ground, setGround } from "../world/ground.ts";
@@ -93,7 +93,7 @@ for (const testCase of crushDepths) {
       lower.group.updateMatrixWorld(true);
       const drawn = new DrawnTop(drawnField(lower).top, lower.group.matrixWorld.elements);
       const gaps = fit(upper, drawn).gaps.filter(Number.isFinite);
-      t.diagnostic(`tyre bottoms over the drawn body below: ${gaps.map((g) => g.toFixed(3)).join(" ")} m`);
+      t.annotate(`tyre bottoms over the drawn body below: ${gaps.map((g) => g.toFixed(3)).join(" ")} m`);
       assert.ok(gaps.length > 0, "no tyre is over the car below");
       assert.ok(Math.min(...gaps) >= -SINK_M, `a tyre is ${(-Math.min(...gaps)).toFixed(3)} m inside the drawn body below`);
       assert.ok(Math.max(...gaps) <= HOVER_M, `a tyre hangs ${Math.max(...gaps).toFixed(3)} m over the drawn body below`);
@@ -121,7 +121,7 @@ for (const testCase of crushDepths) {
       const platform = makeWorld([flat], false, false);
       stepFrames(platform, 5);
       const ref = driveOff(platform, flat);
-      t.diagnostic(`rest y ${y.toFixed(3)}, treads on the body below ${treads.map((on) => (on ? 1 : 0)).join("")} (sim's ${simRead}; drawn gaps ${gaps.map((g) => g.toFixed(3)).join(" ")} m); on the roof ${top.speeds.map((s) => s.toFixed(2)).join("/")} m/s, airborne early ${top.airEarly}; on the platform ${ref.speeds.map((s) => s.toFixed(2)).join("/")} m/s`);
+      t.annotate(`rest y ${y.toFixed(3)}, treads on the body below ${treads.map((on) => (on ? 1 : 0)).join("")} (sim's ${simRead}; drawn gaps ${gaps.map((g) => g.toFixed(3)).join(" ")} m); on the roof ${top.speeds.map((s) => s.toFixed(2)).join("/")} m/s, airborne early ${top.airEarly}; on the platform ${ref.speeds.map((s) => s.toFixed(2)).join("/")} m/s`);
       assert.ok(!top.airEarly, "flagged airborne in its first 0.2 s with its belly on the car below");
       if (tyresStand) {
         const off = Math.abs(top.speeds[ON_THE_HOOD]! - ref.speeds[ON_THE_HOOD]!);

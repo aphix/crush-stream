@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import type { RaceHud } from "../match/types.ts";
 import { benchHoldsCommand, captureSubmitShown, flagButton, updateNoticeShown } from "./submit-rules.ts";

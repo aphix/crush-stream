@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { makeWorld } from "../world/race-world.test-util.ts";
@@ -93,7 +93,7 @@ export function sweepSeeds(list: readonly number[]): void {
           assert.deepEqual({ pose: a.pose.max, vel: a.vel.max, crush: a.crush.max, wreck: a.wreckMismatch }, { pose: 0, vel: 0, crush: 0, wreck: 0 }, `seed ${seed}: a car strays from the live sim\n${rows.join("\n")}`);
         }
         total.clips += recs.length;
-        t.diagnostic(rows.join("\n"));
+        t.annotate(rows.join("\n"));
       } finally {
         w.race.exit();
         setGround(null);

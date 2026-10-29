@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { activeGround, setGround } from "../world/ground.ts";
@@ -15,11 +15,11 @@ const SECONDS = 12;
 describe("given the real engine in a 10-car derby, watched from the orbit (no car followed)", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine({ pacer: true });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

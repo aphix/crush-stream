@@ -1,4 +1,4 @@
-import { after, before, beforeEach, describe, it } from "node:test";
+import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
@@ -27,7 +27,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let rig: OnFootRig;
 
-  before(async () => {
+  beforeAll(async () => {
     rig = await OnFootRig.boot();
     rig.engine["looping"] = false;
     rig.run(FRAME);
@@ -42,7 +42,7 @@ describe("given the real engine in the fleet, its player at the wheel of car 0 w
     rig.sit(0);
     rig.run(0.2);
   });
-  after(() => rig.dispose());
+  afterAll(() => rig.dispose());
 
   it("when he gets out, walks off, is run down by another car, gets up and walks back to his door and in, then he drives his own car again", () => {
     const own = rig.cars()[0]!;

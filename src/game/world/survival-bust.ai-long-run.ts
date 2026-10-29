@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { chase, type CopTamper } from "./survival-players.test-util.ts";
 import { ARENA } from "./survival-arena.test-util.ts";
@@ -18,13 +18,13 @@ const FROZEN: CopTamper = (input) => Object.assign(input, { throttle: 0, steer: 
 describe("given the closed arena with a player that runs for the far corner and creeps there at 3 m/s", () => {
   it(`when the pack is released at ${release(SEED).toFixed(1)} s, then it busts the player`, (t) => {
     const c = chase("corner", SEED, release(SEED) + BUST_T, ARENA, { release: release(SEED) });
-    t.diagnostic(`ended ${c.cause} at ${c.time.toFixed(1)} s, ${c.touches} cop contacts`);
+    t.annotate(`ended ${c.cause} at ${c.time.toFixed(1)} s, ${c.touches} cop contacts`);
     assert.equal(miss(c, false, BUST_T, "busted"), null);
   });
   it("when the cops never move, then they never bust it", (t) => {
     const c = chase("corner", SEED, release(SEED) + BUST_T, ARENA, { release: release(SEED), tamper: FROZEN });
     const why = miss(c, false, BUST_T, "busted");
-    t.diagnostic(`not busted: ${why}`);
+    t.annotate(`not busted: ${why}`);
     assert.notEqual(why, null, `cops that never move busted the player at ${c.time.toFixed(1)} s`);
   });
 });

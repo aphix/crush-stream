@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -133,7 +133,7 @@ describe("given a head-on recorded as a highlight, a wreck lying asleep 40 m off
   const s0 = Math.round(clip.t0 / H);
 
   it("when the clip is filed, then it carries the wreck but not the passing car, and lists the wreck's wake after it fell asleep: its step, its car and the slice", (t) => {
-    t.diagnostic(`clip cars ${clip.cars.map((c) => c.slot).join(",")}, steps ${s0} to ${s0 + clip.h.length}; wreck asleep from step ${run.asleepAt}; passer nearest at step ${run.closest.step} (${run.closest.gap.toFixed(2)} m); stirs ${JSON.stringify(clip.stirs)}`);
+    t.annotate(`clip cars ${clip.cars.map((c) => c.slot).join(",")}, steps ${s0} to ${s0 + clip.h.length}; wreck asleep from step ${run.asleepAt}; passer nearest at step ${run.closest.step} (${run.closest.gap.toFixed(2)} m); stirs ${JSON.stringify(clip.stirs)}`);
     assert.ok(clip.cars.some((c) => c.slot === A) && clip.cars.some((c) => c.slot === B) && sleeperAt >= 0, "the pair and the wreck are in the clip");
     assert.ok(!clip.cars.some((c) => c.slot === PASSER), "the car that joined the field after the clip began is left out");
     assert.ok(run.asleepAt > 0 && run.asleepAt < JOIN_STEP + 400, `the wreck fell asleep (step ${run.asleepAt}) before the passer came by`);

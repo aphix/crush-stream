@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
@@ -35,11 +35,11 @@ describe("given the real engine in the sandbox", () => {
     engine["keys"].clear();
     engine["sceneFade"].pending = null;
   };
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine({ fades: true });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

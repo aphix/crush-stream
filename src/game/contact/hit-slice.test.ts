@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { SimPacer } from "../engine/sim-pace.ts";
 import { FINE_HZ, FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
@@ -135,7 +135,7 @@ describe("given a sedan's nose closing on a parked sedan's right door, read 1 mm
       }
       striker.dispose();
       struck.dispose();
-      t.diagnostic(`first touch at ${first} mm, the largest step ${worst.toFixed(4)} m at ${worstAt} mm in`);
+      t.annotate(`first touch at ${first} mm, the largest step ${worst.toFixed(4)} m at ${worstAt} mm in`);
       assert.ok(first > 0, "the sweep never met the contact");
       assert.ok(worst <= PATCH_STEP, `the patch's centre moved ${worst.toFixed(4)} m in 1 mm of closing, ${worstAt} mm into the contact`);
     });

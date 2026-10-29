@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { idleDrive, THROTTLE_STEPS, type DriveInput } from "../vehicle/car-drive.ts";
@@ -198,11 +198,11 @@ const SETTLE_STEPS = 5 * QUIET_HZ;
 describe("given the bench strip's first 30 s with the AI driving the player's sedan", () => {
   let engine: CrashEngine;
   let samples: Sample[];
-  before(async () => {
+  beforeAll(async () => {
     engine = await benchPlanEngine("?bench=strip");
     samples = runWindow(engine);
   });
-  after(() => disposeBenchEngine(engine));
+  afterAll(() => disposeBenchEngine(engine));
 
   it("when it drives, then the wheel and the pedals do not reverse at the step rate and a step seldom jumps the wheel by more than a fifth of lock", () => {
     const judged = samples.slice(SETTLE_STEPS).filter((s) => !s.crashed);

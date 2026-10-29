@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { runPair } from "./crash-scenarios.test-util.ts";
 import { Ground, setGround } from "../world/ground.ts";

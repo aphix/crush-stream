@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -245,7 +245,7 @@ describe(`given the ejection range with a hard handbrake turn ${TURN_AT} m befor
       if (type.id === "monster") {
         it(`when a ${type.label} swings its nose ${side} and slides into the barrier, then its tyres meet the slab as a wall (its 0.81 m top stands over their 0.614 m hubs, and a side a tyre came in by within the entry window is a wall), it trips on them and rolls over the slab, and nobody is thrown`, async (t) => {
           const s = await slideIn(type, steer);
-          t.diagnostic(`${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s, rose to ${s.top.toFixed(2)} m, leant ${s.lean.toFixed(0)}° at most, ${s.run.ejections} throws`);
+          t.annotate(`${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s, rose to ${s.top.toFixed(2)} m, leant ${s.lean.toFixed(0)}° at most, ${s.run.ejections} throws`);
           assert.ok(s.heading >= 60 && s.speed >= 20, `${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s`);
           assert.ok(s.lean >= ON_ITS_SIDE_DEG, `${type.id}: leant ${s.lean.toFixed(0)}° at most, rose to ${s.top.toFixed(2)} m`);
           assert.equal(s.run.ejections, 0, `${type.id}: ${s.run.ejections} throws`);

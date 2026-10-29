@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -157,7 +157,7 @@ describe("given two dummies thrown from one car (a driver and his passenger), bo
       ahead = Math.max(ahead, b!.bodies[0]!.translation().x - a!.bodies[0]!.translation().x);
     }
     ragdolls.dispose();
-    t.diagnostic(`deepest ${(deepest * 100).toFixed(1)} cm; the second torso got to ${ahead.toFixed(2)} m of the first's`);
+    t.annotate(`deepest ${(deepest * 100).toFixed(1)} cm; the second torso got to ${ahead.toFixed(2)} m of the first's`);
     assert.ok(deepest < 0.1, `a part sank ${(deepest * 100).toFixed(0)} cm into the other dummy`);
     assert.ok(ahead < 0, `the second torso got ${ahead.toFixed(2)} m past the first's`);
   });

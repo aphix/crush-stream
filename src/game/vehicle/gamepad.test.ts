@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { blankPad, mergeTouch, PAD_BUTTON, PAD_DEAD, padButtonName, padFamily, padLabel, readPad, stickScale, triggerValue, type PadSource } from "./gamepad.ts";
 import { blankIntent, readIntent, shapeDrive } from "./drive-input.ts";

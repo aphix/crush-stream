@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { m3, m3Id, m3Mul, m3Det, m3Polar, quatId, rebuildAqqWeighted } from "../kernel/shape-match-core.js";
@@ -734,7 +735,7 @@ describe("given a car crushed by a 50 km/h front wall hit", () => {
   // bar alone and their effects add. [INFERENCE] The Stage 4 items 1-4 (rigs and strikers) part is the hit's rigid increment going onto every mass of the wreck
   // (`shiftBody`, dv and dw × r), which the lattice then plays out as shear; a wreck that is one rigid body with the lattice crushing
   // only from the contact impulses has none (docs/UNIFIED_CONTACT.md Stage 4 item 6 (wreck split)).
-  it("when a 30 km/h wall then hits its rear 2.5 s later, then the front structure moves under 0.05", { todo: "Stage 4 item 6 (wreck split): the roof shears 0.076 m forward in the rear hit (Stage 3 alone 0.033, Stage 4 items 1-4 (rigs and strikers) alone 0.047, together 0.076); closes when the wreck is one rigid body" }, () => {
+  todoRow("when a 30 km/h wall then hits its rear 2.5 s later, then the front structure moves under 0.05", "Stage 4 item 6 (wreck split): the roof shears 0.076 m forward in the rear hit (Stage 3 alone 0.033, Stage 4 items 1-4 (rigs and strikers) alone 0.047, together 0.076); closes when the wreck is one rigid body", () => {
     const { pairs, first, second } = rearHit();
     let worst = 0,
       which = "";

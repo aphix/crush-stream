@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -39,7 +39,7 @@ describe("given the real engine in a race on the National Mall (wider than the m
     for (let i = 0; i < frames; i++) engine.advance(FRAME, { frameDt: FRAME, render: true });
   };
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine();
     engine.toggleRace();
@@ -47,7 +47,7 @@ describe("given the real engine in a race on the National Mall (wider than the m
     engine.raceCommand({ type: "start" });
     run(5 * FRAME_HZ);
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

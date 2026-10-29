@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -31,7 +31,7 @@ describe("given a sedan dropped onto its roof from 2 m", () => {
       }
     }
     const states = car.glassPanes.map((g) => `${g.name} ${g.state}, peak ${(peak.get(g.name) ?? 0).toFixed(4)} m`).join("; ");
-    t.diagnostic(states);
+    t.annotate(states);
     const shattered = car.glassPanes.filter((g) => g.state === "shattered").map((g) => g.name).sort();
     assert.deepEqual(shattered, ["doorL", "doorR", "quarterL", "quarterR", "windshield"], states);
   });

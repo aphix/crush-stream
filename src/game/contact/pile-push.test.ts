@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FREEWHEEL, launch, makeCar, makeWorld, PARKED, type CrashWorld } from "./crash-scenarios.test-util.ts";
@@ -84,7 +84,7 @@ describe("given a coupe whose door a graze armed, driven nose-first into a parke
   for (const [where, corner] of [["its left flank", false], ["its rear corner", true]] as const) {
     it(`when the coupe's nose meets ${where}, then it sinks into the pickup no deeper than ${GRAZED_SINK} m`, (t) => {
       const sink = grazedNoseHit(corner);
-      t.diagnostic(`sink ${sink.toFixed(3)} m`);
+      t.annotate(`sink ${sink.toFixed(3)} m`);
       assert.ok(sink <= GRAZED_SINK, `the coupe sank ${sink.toFixed(3)} m into the pickup`);
     });
   }

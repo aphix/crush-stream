@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { CONTACT_WINDOW } from "../deform/constants.ts";
 import { CRASH, FRICTION_G } from "../deform/physics-util.ts";

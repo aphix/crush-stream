@@ -1,5 +1,5 @@
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
 import * as THREE from "three";
 import { applySpray, BARE_SPRAY, sprayUniforms } from "../present/spray.ts";
 import { CAR_SPRAY } from "../match/look-data.ts";
@@ -150,12 +150,12 @@ const SEDAN_DETAILS: Details = {
 describe("given a sedan built with a details table", () => {
   const ownDetails = SEDAN.details;
   let car: DeformableCar;
-  before(() => {
+  beforeAll(() => {
     CAR_STYLES.sedan.details = SEDAN_DETAILS;
     car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
     car.deform.setMode("shape");
   });
-  after(() => {
+  afterAll(() => {
     CAR_STYLES.sedan.details = ownDetails;
   });
 

@@ -1,4 +1,5 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { BOARD, LAB_LAYOUTS, type LabItem, type LabPose } from "../scenes/lab.ts";
@@ -94,7 +95,7 @@ const HOUSE_TODO =
   "after the plan: the house of cards stands or falls on which vertices the decimated cage keeps over the base cars' cowl; the sedan's hood edge at z0 0.99 falls (0.97 / 0.98 / 0.9875 too), at 0.985 / 0.989 / 0.991 it stands (the top car settling 10.4 mm, over the 5 mm bar, since before the hood move)";
 
 describe("given the house of cards on the bench (two sedans nose to tail, a third lying across both roofs)", () => {
-  it("when it is left alone, then it settles within 5 mm in its first 5 s and then no car moves 0.1 mm or tips over the next 10 s", { todo: HOUSE_TODO }, () => {
+  todoRow("when it is left alone, then it settles within 5 mm in its first 5 s and then no car moves 0.1 mm or tips over the next 10 s", HOUSE_TODO, () => {
     const r = labRig("cards");
     const settle = planMoves(r, 5);
     assert.ok(Math.max(...settle) < 0.005, `settling moved the cars ${settle.map((m) => (m * 1000).toFixed(2)).join(" / ")} mm`);
@@ -103,7 +104,7 @@ describe("given the house of cards on the bench (two sedans nose to tail, a thir
     for (const c of r.cars) assert.ok(c.group.matrixWorld.elements[5]! > 0.99, `a car tipped to up ${c.group.matrixWorld.elements[5]}`);
   });
 
-  it("when it is freshly loaded and left alone for 5 s, then the top car settles onto the two roofs without dropping on them: neither roof gives 15 mm", { todo: HOUSE_TODO }, () => {
+  todoRow("when it is freshly loaded and left alone for 5 s, then the top car settles onto the two roofs without dropping on them: neither roof gives 15 mm", HOUSE_TODO, () => {
     const r = labRig("cards");
     runLab(r, 5);
     const roofs = [r.cars[1]!.deform.crush[0]!, r.cars[2]!.deform.crush[0]!];
@@ -119,7 +120,7 @@ describe("given the house of cards on the bench (two sedans nose to tail, a thir
     { it: "when a sedan is thrown at its top car at 25 m/s, then the top car and both cars under it are knocked down: off their places, or pinned under the thrown car with the roof crushed", speed: 25 },
   ];
   for (const testCase of toppleCases) {
-    it(testCase.it, { todo: testCase.todo }, () => {
+    todoRow(testCase.it, testCase.todo, () => {
       const r = labRig("cards");
       runLab(r, 5);
       const shot = throwAt(r, 0, 3, testCase.speed);
@@ -216,7 +217,7 @@ describe("given a sedan thrown at something on the bench", () => {
 describe("given a sedan flicked at 30 m/s with the automatic slow-mo on", () => {
   // The hit it slows for must be the throw's: a house that fell while it stood 5 s leaves the clock out of approach before the throw (its own
   // cars met), so the first frame read as the hit (0.017 s) and the slow-mo, armed only in approach, never came on (reported NaN: never).
-  it("when it is flicked at the house of cards' top car, then the slow-mo comes on before the hit and holds until it lands", { todo: HOUSE_TODO }, () => {
+  todoRow("when it is flicked at the house of cards' top car, then the slow-mo comes on before the hit and holds until it lands", HOUSE_TODO, () => {
     const r = labRig("cards");
     runLab(r, 5);
     assert.equal(r.w.clock.phase, "approach", "the house fell before the throw: the clock left approach on its own cars' hit");
@@ -310,7 +311,7 @@ describe("given the Glass set: a dummy and a sedan on a stand bracket, its winds
     const flick = throwDummyAtWindshield(r, 4, 12, 4);
     const glass = glassOf(r.cars[0]!);
     r.dolls!.dispose();
-    t.diagnostic(`met ${flick.shot.hit} at ${flick.shot.contactS?.toFixed(2)} s, glass ${JSON.stringify(glass)}, out ${flick.outAfterHit.toFixed(2)} m/s`);
+    t.annotate(`met ${flick.shot.hit} at ${flick.shot.contactS?.toFixed(2)} s, glass ${JSON.stringify(glass)}, out ${flick.outAfterHit.toFixed(2)} m/s`);
     assert.equal(flick.shot.hit, 1, "he never met the sedan");
     for (const [name, state] of Object.entries(glass)) assert.equal(state, name === "windshield" ? "cracked" : "intact", name);
     assert.ok(!flick.everInCabin, "he went into the cabin");
@@ -331,7 +332,7 @@ describe("given the Glass set: a dummy and a sedan on a stand bracket, its winds
       const flick = throwDummyAtWindshield(r, testCase.distance, 12, 4);
       const glass = glassOf(r.cars[0]!);
       r.dolls!.dispose();
-      t.diagnostic(`glass ${JSON.stringify(glass)}, at rest ${flick.endInCabin ? "in" : "out of"} the cabin at ${flick.endSpeed.toFixed(2)} m/s`);
+      t.annotate(`glass ${JSON.stringify(glass)}, at rest ${flick.endInCabin ? "in" : "out of"} the cabin at ${flick.endSpeed.toFixed(2)} m/s`);
       for (const [name, state] of Object.entries(glass)) assert.equal(state, name === "windshield" ? "shattered" : "intact", name);
       assert.ok(flick.endInCabin && flick.endSpeed < 0.3, `he came to rest ${flick.endInCabin ? "in" : "out of"} the cabin, at ${flick.endSpeed.toFixed(2)} m/s`);
     });
@@ -351,7 +352,7 @@ describe("given a dummy standing on the bench", () => {
     },
   ] as const;
   for (const testCase of boardCases) {
-    it(testCase.it, { todo: testCase.todo }, async () => {
+    todoRow(testCase.it, testCase.todo, async () => {
       const r = await labDollRig([dummy(0, BOARD.z + 16, Math.PI)]);
       runLab(r, 1);
       const shot = throwAt(r, 0, WALL, testCase.speed);

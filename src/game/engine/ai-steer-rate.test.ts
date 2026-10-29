@@ -1,4 +1,4 @@
-import { before, after, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { CrashEngine } from "./engine.ts";
@@ -99,7 +99,7 @@ describe("given the real engine's AI drivers, one step at the phone's coarse 1/8
   const player = { asked: [] as number[], ran: [] as number[], fastest: 0 };
   /** The scenes judge steering, which no drawn skin feeds back into: their cars are not skinned each frame (`updateSkin` writes meshes only). */
   const skin = DeformableCar.prototype.updateSkin;
-  before(async () => {
+  beforeAll(async () => {
     DeformableCar.prototype.updateSkin = () => {};
     engine = await benchRaceEngine();
     engine.pace.pin = true;
@@ -118,7 +118,7 @@ describe("given the real engine's AI drivers, one step at the phone's coarse 1/8
     engine["pinnedSeed"] = null;
     run(engine, DERBY_S);
   });
-  after(() => {
+  afterAll(() => {
     DeformableCar.prototype.updateSkin = skin;
     disposeBenchEngine(engine);
   });
@@ -127,14 +127,14 @@ describe("given the real engine's AI drivers, one step at the phone's coarse 1/8
     it(`when the ${kind} AI drives, then no car's wheel moves faster than a pad player's ${FEEL.steerPad} of lock a second in any step`, (ctx) => {
       const t = tally.get(kind);
       assert.ok(t !== undefined && t.steps >= FEWEST, `${t?.steps ?? 0} ${kind} car-steps judged`);
-      ctx.diagnostic(`${t.steps} car-steps; the fastest: ${t.at}`);
+      ctx.annotate(`${t.steps} car-steps; the fastest: ${t.at}`);
       assert.ok(t.worst <= 0, `${kind}: ${t.at}, ${t.worst.toFixed(3)} of lock past the reach`);
     });
   }
 
   it("when the player drives the race (keyboard: gas, the wheel held left and right, the handbrake tapped at speed), then every step the car runs the wheel the seat shaped, bit for bit, steps faster than a pad's included", (ctx) => {
     assert.ok(player.ran.length >= 4 * QUIET_HZ, `${player.ran.length} steps judged`);
-    ctx.diagnostic(`${player.ran.length} steps; the fastest moved the wheel ${player.fastest.toFixed(3)} in a step`);
+    ctx.annotate(`${player.ran.length} steps; the fastest moved the wheel ${player.fastest.toFixed(3)} in a step`);
     assert.ok(player.fastest > reach(STEP), `the fastest step moved the wheel ${player.fastest.toFixed(3)}: nothing a limiter would have cut`);
     for (let k = 0; k < player.ran.length; k++) assert.equal(player.ran[k], player.asked[k], `step ${k}`);
   });

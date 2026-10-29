@@ -1,9 +1,9 @@
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 

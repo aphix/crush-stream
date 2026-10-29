@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { parseTrack } from "../world/track-schema.ts";
@@ -18,7 +18,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
       it(`when a damaged sedan drives the whole ${course} loop at ${pace} m/s (banks, crests, climbs), then the engine block stays put and nobody is thrown`, (t) => {
         const trk = track(course);
         const r = loopRun(trk, pace);
-        t.diagnostic(`${course} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm, ended at s ${r.endS.toFixed(0)} of ${trk.length.toFixed(0)}`);
+        t.annotate(`${course} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm, ended at s ${r.endS.toFixed(0)} of ${trk.length.toFixed(0)}`);
         assertHeld(r, `its end, s ${trk.length.toFixed(0)}`);
         assert.deepEqual(r.thrown, []);
       });

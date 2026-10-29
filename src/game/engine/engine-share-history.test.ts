@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
@@ -28,7 +28,7 @@ describe("given the real engine writing the page's # into a browser history stac
     globalThis.location.hash = entries[at]!;
     engine["onShareHash"]();
   };
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     Object.assign(globalThis, {
       location: { pathname: "/", search: "", hash: "", href: "http://x/", origin: "http://x" },
@@ -49,7 +49,7 @@ describe("given the real engine writing the page's # into a browser history stac
     hud = new HudStore();
     engine = await bootEngine({ hud });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

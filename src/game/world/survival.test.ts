@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { RESULTS_DELAY } from "../engine/engine-race.ts";
@@ -288,7 +288,7 @@ describe("given Survival's cops dropped in during a run", () => {
     const w = survivalWorld();
     try {
       const r = dropInsAtPoses(w, new Track(HAVANA).path, POSES, DRIVE_SPEED);
-      t.diagnostic(`${r.spawns.length} drop-ins in ${r.seconds.toFixed(0)} s, nearest ${Math.min(...r.spawns.map((s) => s.dist)).toFixed(0)} m, ${r.spawns.filter((s) => s.visible).length} visible`);
+      t.annotate(`${r.spawns.length} drop-ins in ${r.seconds.toFixed(0)} s, nearest ${Math.min(...r.spawns.map((s) => s.dist)).toFixed(0)} m, ${r.spawns.filter((s) => s.visible).length} visible`);
       assertDropInsHidden(r, POSES);
     } finally {
       leaveSurvival(w);

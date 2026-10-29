@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
@@ -67,7 +67,7 @@ describe("given a monster truck resting with its belly on a sedan's roof and its
     const platform = makeWorld([flat], false, false);
     settle(platform, 5);
     const ref = driveOff(platform, flat);
-    t.diagnostic(`rest y ${y.toFixed(3)}; on the sedan ${top.v.map((s) => s.toFixed(2)).join("/")} m/s, z ${top.z.toFixed(1)}, airborne early ${top.airEarly}; on the platform ${ref.v.map((s) => s.toFixed(2)).join("/")} m/s`);
+    t.annotate(`rest y ${y.toFixed(3)}; on the sedan ${top.v.map((s) => s.toFixed(2)).join("/")} m/s, z ${top.z.toFixed(1)}, airborne early ${top.airEarly}; on the platform ${ref.v.map((s) => s.toFixed(2)).join("/")} m/s`);
     assert.ok(!top.airEarly, "flagged airborne in its first 0.2 s with its tyres on the sedan");
     assert.ok(Math.abs(top.v[0]! - ref.v[0]!) <= 0.05 * ref.v[0]!, `0.25 s: ${top.v[0]!.toFixed(2)} m/s against the platform's ${ref.v[0]!.toFixed(2)}`);
     assert.ok(top.z > 5, `drove only ${top.z.toFixed(1)} m in 1.5 s`);
@@ -93,7 +93,7 @@ describe("given a sedan resting belly-down on another sedan's roof, its tyres 0.
       if (upper.airborne) air++;
     }
     const moved = Math.abs(upper.group.position.z - z0);
-    t.diagnostic(`y ${upper.group.position.y.toFixed(3)}, flagged airborne in ${air} of 240 frames, moved ${moved.toFixed(3)} m`);
+    t.annotate(`y ${upper.group.position.y.toFixed(3)}, flagged airborne in ${air} of 240 frames, moved ${moved.toFixed(3)} m`);
     assert.equal(air, 0, `flagged airborne in ${air} frames while resting on the roof`);
     assert.ok(moved < 0.05, `moved ${moved.toFixed(3)} m with no tyre on anything`);
   });

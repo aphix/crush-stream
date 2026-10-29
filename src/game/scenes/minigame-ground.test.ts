@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -100,7 +100,7 @@ describe("given the minigame ground", () => {
     const ground = buildGround();
     let nodes = 0;
     for (const mesh of ground.meshes) nodes += mesh.vertices.length / 3;
-    t.diagnostic(`${nodes} nodes: ${ground.count} patches, ${ground.meshes.length} meshes`);
+    t.annotate(`${nodes} nodes: ${ground.count} patches, ${ground.meshes.length} meshes`);
     assert.ok(nodes <= NODE_BUDGET, `${nodes} nodes`);
   });
 
@@ -142,7 +142,7 @@ describe("given each station's lane read between the nodes of the grid", () => {
 
   it("when the high jump's kicker, the lane that bends most, is sampled, then the grid's worst error is within 1 to 2 mm: the cell is the coarsest that keeps the bar", (t) => {
     const worst = worstError(buildGround(), "highJump");
-    t.diagnostic(`high jump worst error ${(worst * 1000).toFixed(2)} mm`);
+    t.annotate(`high jump worst error ${(worst * 1000).toFixed(2)} mm`);
     assert.ok(worst <= HEIGHT_TOLERANCE, `${worst} m: too coarse`);
     assert.ok(worst >= COARSEST_CELL_ERROR_FLOOR, `${worst} m: a finer cell than the bar needs`);
   });
@@ -302,7 +302,7 @@ describe("given each of the 7 car types parked at each station's start on the re
         if (mode === "longJump") assert.ok(drive.reachedLongJumpBar, `${type.id} reached x = ${LONG_JUMP_REACH_X}`);
         else assert.equal(drive.ejections, 1, `${type.id}: ${drive.ejections} ejections`);
       }
-      t.diagnostic(`${mode}:\n${rows.join("\n")}`);
+      t.annotate(`${mode}:\n${rows.join("\n")}`);
     });
   }
 
@@ -400,7 +400,7 @@ describe("given a dummy thrown from the Ring Fling lip at the design speeds on t
       rows.push(`${speed.toFixed(2)} m/s -> x ${localX.toFixed(2)} z ${localZ.toFixed(2)} zone ${score} still ${result.still.toFixed(2)} after ${result.seconds.toFixed(1)} s ground ${result.onGround}`);
       if (result.still >= REST_HOLD && score > 0) cupsHeld.add(score);
     }
-    t.diagnostic(`lip speed -> where the dummy rests:\n${rows.join("\n")}`);
+    t.annotate(`lip speed -> where the dummy rests:\n${rows.join("\n")}`);
     for (const cup of RING_CUPS) assert.ok(cupsHeld.has(cup.score), `no throw rested in the ${cup.score} cup: ${[...cupsHeld].join(", ")}`);
   });
 
@@ -542,14 +542,14 @@ describe("given a dummy flung into the high jump's frame", () => {
 
   it("when he is flung at a slat, then it stops him at its back face and catches him short of where he lands without the frame", async (t) => {
     const { caught, control } = await flung(seatAt(0, slat.y));
-    t.diagnostic(`slat at ${slat.y} m: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
+    t.annotate(`slat at ${slat.y} m: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
     assert.ok(caught.furthestPartX <= anchor.x + FRAME.postsX + SLAT_THICKNESS / 2 + SOAK, `a part reached x ${caught.furthestPartX - anchor.x} past the slat's back face at ${FRAME.postsX + SLAT_THICKNESS / 2}`);
     assert.ok(control.torso.x - caught.torso.x >= FRAME_STOPS_BY, `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`);
   });
 
   it("when he is flung at a post between two slats, then it stops him at its back face and catches him short of where he lands without the frame", async (t) => {
     const { caught, control } = await flung(seatAt(POST_HALF_SPAN, slat.y + FRAME_SHOT.gapOffset));
-    t.diagnostic(`post: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
+    t.annotate(`post: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
     assert.ok(caught.furthestPartX <= anchor.x + FRAME.postsX + POST_THICKNESS / 2 + SOAK, `a part reached x ${caught.furthestPartX - anchor.x} past the post's back face at ${FRAME.postsX + POST_THICKNESS / 2}`);
     assert.ok(control.torso.x - caught.torso.x >= FRAME_STOPS_BY, `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`);
   });
@@ -557,7 +557,7 @@ describe("given a dummy flung into the high jump's frame", () => {
   it("when he is flung through the middle half way between two slats at a height mark, then nothing stops him: he lands where he lands without the frame", async (t) => {
     const mark = FRAME.signs.find((candidate) => candidate.heightAboveLip === FRAME_SHOT.markMetresOverLip)!;
     const { caught, control } = await flung(seatAt(0, mark.y + FRAME_SHOT.gapOffset));
-    t.diagnostic(`between the ${mark.heightAboveLip} m and the next slat: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
+    t.annotate(`between the ${mark.heightAboveLip} m and the next slat: with the frame his torso rests at x ${(caught.torso.x - anchor.x).toFixed(2)} (furthest part ${(caught.furthestPartX - anchor.x).toFixed(2)}), without it at x ${(control.torso.x - anchor.x).toFixed(2)}`);
     assert.ok(caught.furthestPartX > anchor.x + FRAME.postsX + FRAME_STOPS_BY, `he got only to x ${caught.furthestPartX - anchor.x}: something between the posts stopped him`);
     assert.ok(Math.abs(caught.torso.x - control.torso.x) < PASSED_UNTOUCHED, `with the frame he rests at x ${caught.torso.x - anchor.x}, without it at ${control.torso.x - anchor.x}`);
   });

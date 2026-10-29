@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -142,12 +142,12 @@ describe("given the real engine in the garage", () => {
   /** The orbit's bearing from the car's far side (-x): the car stands between the eye and the driver. */
   const FAR_SIDE = -Math.PI / 2;
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     hud = new HudStore();
     engine = await bootEngine({ hud, canvas });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

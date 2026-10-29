@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { AutoWatch, WATCH, type Cand, type Wreck } from "./auto-watch.ts";
 

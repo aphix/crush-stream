@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { driveKeys, footKeys } from "./drive-keys.ts";
 import { boostPadButton } from "../vehicle/drive-input.ts";

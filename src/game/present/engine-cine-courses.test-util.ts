@@ -1,4 +1,4 @@
-import { describe, it, type TestContext } from "node:test";
+import { describe, it, type TestContext } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { placeProps } from "../world/placements.ts";
@@ -108,7 +108,7 @@ function wallCensus(t: TestContext, track: Track, sight: Sight, all: readonly Sp
       }
     }
   }
-  t.diagnostic(`${track.id}: ${spots} wall spots, ${blindAsHit} blind on the hit's own axis, ${blind.length} left a cut with no eye after the turn, ${lost.length} of ${eyes} eyes lose room or sight during their cut`);
+  t.annotate(`${track.id}: ${spots} wall spots, ${blindAsHit} blind on the hit's own axis, ${blind.length} left a cut with no eye after the turn, ${lost.length} of ${eyes} eyes lose room or sight during their cut`);
   if (spots === 0) return;
   assert.ok(blindAsHit > 0, "the fixture puts no eye behind a wall: it tests nothing");
   // A cut with no usable eye (`CLEAR.radius` m of room and sight of the hit, at the cut's start, middle and end) is left to the chase / reel camera (`direct`),

@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { makeWorld, type World } from "../world/race-world.test-util.ts";
@@ -37,10 +37,10 @@ describe("given a highlight clip recorded from a crash and replayed from its key
     const track = new Track(oval);
     const pt = blankPoint();
     const w: World = makeWorld();
-    before(() => {
+    beforeAll(() => {
       w.race.enter();
     });
-    after(() => {
+    afterAll(() => {
       w.race.exit();
       setGround(null);
     });
@@ -258,5 +258,5 @@ describe("given a highlight clip recorded from a crash and replayed from its key
     });
   }
 
-  it("when every crash above has been replayed, then the worst pose, velocity and crush errors of each are reported as a diagnostic table", (t) => t.diagnostic(rows.join("\n")));
+  it("when every crash above has been replayed, then the worst pose, velocity and crush errors of each are reported as a diagnostic table", (t) => t.annotate(rows.join("\n")));
 });

@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { applyDrive, idleDrive } from "./car-drive.ts";
@@ -169,7 +169,7 @@ for (const cls of ["sedan", "monster"] as const) {
       describe(`when it drives along ${name} of the road`, () => {
         it(`then every tyre stays within ${BOUND * 100} cm of the ground`, (t) => {
           const r = bankRun(stunt, cls, lat);
-          t.diagnostic(`${cls} ${name}: tread clearance ${(r.low * 100).toFixed(1)}..${(r.high * 100).toFixed(1)} cm, worst ${r.at}`);
+          t.annotate(`${cls} ${name}: tread clearance ${(r.low * 100).toFixed(1)}..${(r.high * 100).toFixed(1)} cm, worst ${r.at}`);
           assert.ok(r.low >= -BOUND && r.high <= BOUND, `${cls} on ${name}: ${(r.low * 100).toFixed(1)}..${(r.high * 100).toFixed(1)} cm, worst ${r.at}`);
         });
       });

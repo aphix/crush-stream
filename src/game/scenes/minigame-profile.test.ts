@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import { DRIVER_CARS } from "../match/types.ts";
 import {
@@ -201,7 +202,7 @@ describe("given each of the 7 car types parked on the pad of each station and re
         assert.ok(run.lipCentreSpeed >= minimum.lip, `${type.id} at the lip ${run.lipCentreSpeed} against ${minimum.lip}`);
         assert.ok(run.slowestOnClimb >= minimum.lip / (1 + LIP_LAUNCH_PUSH.highJump) - CLIMB_STALL_ALLOWANCE - 1e-9 || mode !== "highJump", `${type.id} slowest ${run.slowestOnClimb}`);
       }
-      t.diagnostic(`${mode}, speeds in m/s:\n${table(rows)}`);
+      t.annotate(`${mode}, speeds in m/s:\n${table(rows)}`);
     });
   }
 
@@ -214,7 +215,7 @@ describe("given each of the 7 car types parked on the pad of each station and re
         assert.ok(run.reachedLip, `${type.id} at cell ${cell}`);
         assert.ok(run.lipCentreSpeed >= MINIMUM_SPEED.highJump[type.id]!.lip, `${type.id} at cell ${cell}: ${run.lipCentreSpeed}`);
       }
-      t.diagnostic(`high jump, cell ${cell} m:\n${table(rows)}`);
+      t.annotate(`high jump, cell ${cell} m:\n${table(rows)}`);
     }
   });
 });
@@ -244,7 +245,7 @@ describe("given the high jump's kicker made steeper, an arc of the shipped radiu
         assert.ok(run.reachedLip, `${type.id} at ${pitch} deg stopped at x = ${run.endX}`);
         if (type.id === "sedan") sedanCentre.push(run.lipCentreSpeed);
       }
-      t.diagnostic(`arc radius ${HIGH_JUMP_KICKER.radius} m to ${pitch} deg:\n${table(rows)}`);
+      t.annotate(`arc radius ${HIGH_JUMP_KICKER.radius} m to ${pitch} deg:\n${table(rows)}`);
     }
     for (let i = 1; i < sedanCentre.length; i++) assert.ok(sedanCentre[i]! <= sedanCentre[i - 1]! + LIP_SPEED_RISE_ALLOWED, `sedan lip speeds ${sedanCentre.join(", ")}`);
     assert.ok(sedanCentre[0]! >= LIP_SPEED_FLOOR, `the sedan's lip speed at the shipped pitch ${sedanCentre[0]}: the climb has no wall at the pitch the station ships`);
@@ -304,7 +305,7 @@ describe("given each of the 7 car types released at full throttle from the high 
   const shipped = flightsOn(stationDriveProfile("highJump"));
 
   it("when each is thrown at the shipped kicker's lip, then every class's unboosted apex is at least the minimum", (t) => {
-    t.diagnostic(`shipped kicker (radius ${HIGH_JUMP_KICKER.radius} m, ${HIGH_JUMP_KICKER.lipPitchDegrees} deg, run-up ${RUN_UP_LENGTH.highJump} m), full throttle, minimum apex ${HIGH_JUMP_MIN_APEX} m, best over worst ${spreadOf(shipped).toFixed(2)}:\n${flightTable(shipped)}`);
+    t.annotate(`shipped kicker (radius ${HIGH_JUMP_KICKER.radius} m, ${HIGH_JUMP_KICKER.lipPitchDegrees} deg, run-up ${RUN_UP_LENGTH.highJump} m), full throttle, minimum apex ${HIGH_JUMP_MIN_APEX} m, best over worst ${spreadOf(shipped).toFixed(2)}:\n${flightTable(shipped)}`);
     for (const { id, flight } of shipped) assert.ok(flight.apexHeight >= HIGH_JUMP_MIN_APEX, `${id} apex ${flight.apexHeight} under the minimum`);
   });
 
@@ -331,7 +332,7 @@ describe("given each of the 7 car types released at full throttle from the high 
       assert.ok(Math.abs(flight.horizontalSpeed / full.horizontalSpeed - MID_SHARE) <= MID_SHARE_TOLERANCE, `${type.id} lip speed ${flight.horizontalSpeed} of ${full.horizontalSpeed}`);
       assert.ok(flight.apexHeight < full.apexHeight && flight.landingDistance < full.landingDistance, `${type.id} mid run ${flight.apexHeight} m / ${flight.landingDistance} m against full ${full.apexHeight} m / ${full.landingDistance} m`);
     }
-    t.diagnostic(`governed to ${MID_SHARE} of the full-throttle lip speed:\n${flightTable(middle)}`);
+    t.annotate(`governed to ${MID_SHARE} of the full-throttle lip speed:\n${flightTable(middle)}`);
   });
 });
 
@@ -353,7 +354,7 @@ describe("given the high jump's run-up made shorter", () => {
         rows.push([type.id, run]);
       }
       best.push(Math.max(...feet));
-      t.diagnostic(`run-up ${runUp} m:\n${table(rows)}`);
+      t.annotate(`run-up ${runUp} m:\n${table(rows)}`);
       if (runUp === RUN_UP_LENGTH.highJump) {
         assert.ok(Math.max(...feet) >= BEST_FOOT_SPEED_MIN && Math.max(...feet) <= BEST_FOOT_SPEED_MAX, `best at the foot ${Math.max(...feet)}`);
         assert.ok(Math.min(...feet) >= SLOWEST_FOOT_SPEED_MIN, `slowest at the foot ${Math.min(...feet)}`);
@@ -397,13 +398,13 @@ describe("given the long jump's driver in the monster truck, driven at full thro
     const flat = await bestDistance(false, false);
     const incline = await bestDistance(true, false);
     const inclineWithCarry = await bestDistance(true, true);
-    t.diagnostic(`long jump, best of lifts at ${LIFT_CHOICES.join(", ")}: flat ${flat.toFixed(1)} m (sign ${farthestSign(flat)}), incline ${incline.toFixed(1)} m, incline with the vertical carry ${inclineWithCarry.toFixed(1)} m`);
+    t.annotate(`long jump, best of lifts at ${LIFT_CHOICES.join(", ")}: flat ${flat.toFixed(1)} m (sign ${farthestSign(flat)}), incline ${incline.toFixed(1)} m, incline with the vertical carry ${inclineWithCarry.toFixed(1)} m`);
     assert.ok(flat > 0 && farthestSign(flat) <= FARTHEST_SIGN_FLAT, `flat ${flat.toFixed(1)} m, sign ${farthestSign(flat)}`);
     assert.equal(incline, 0, `incline: thrown ${incline.toFixed(1)} m`);
     assert.equal(inclineWithCarry, 0, `incline with the carry: thrown ${inclineWithCarry.toFixed(1)} m`);
   });
 
-  it("when he is thrown from the flat range and from the incline, then the incline throws him over 3 m farther", { todo: "after the overhaul: the monster flies the incline's barrier (nobody thrown), so the incline's throw is the best class thrown there; union f2a8062d: flat 51.9 m, incline 49.4 m (the monster's flat throw kept, Main)" }, async () => {
+  todoRow("when he is thrown from the flat range and from the incline, then the incline throws him over 3 m farther", "after the overhaul: the monster flies the incline's barrier (nobody thrown), so the incline's throw is the best class thrown there; union f2a8062d: flat 51.9 m, incline 49.4 m (the monster's flat throw kept, Main)", async () => {
     const flat = await bestDistance(false, false);
     const incline = await bestDistance(true, false);
     assert.ok(incline > flat + 3, `incline ${incline} against flat ${flat}`);
@@ -456,7 +457,7 @@ describe("given each of the 7 car types released at full throttle from the long 
   const shippedHits = hitsOf(longJumpVariant(shipped), Infinity);
 
   it("when each is released at full throttle on the shipped approach, then every class but the monster is thrown exactly once at every phase and the monster flies the barrier and lands past it, its driver in, the slowest arrives at least 3 m/s over the slowest speed it throws at (the monster's flying one) and the fastest at least 3 m/s under the lowest it fails at", (t) => {
-    t.diagnostic(`shipped approach (hill ${shipped.hillLength} m, run-up ${shipped.runUp} m, incline ${shipped.inclineLength} m, crest radius ${shipped.crestRadius} m), window ${floorOf("sedan")} (the monster ${floorOf("monster")}) to ${ARRIVAL_CEILING.toFixed(1)} m/s:\n${hitTable(shippedHits)}`);
+    t.annotate(`shipped approach (hill ${shipped.hillLength} m, run-up ${shipped.runUp} m, incline ${shipped.inclineLength} m, crest radius ${shipped.crestRadius} m), window ${floorOf("sedan")} (the monster ${floorOf("monster")}) to ${ARRIVAL_CEILING.toFixed(1)} m/s:\n${hitTable(shippedHits)}`);
     for (const { id, hits } of shippedHits) {
       for (const [index, hit] of hits.entries()) {
         assert.ok(asPinned(id, hit), `${id} at phase ${START_PHASES[index]}: ${hit.ejections} throws, at x ${hit.endX.toFixed(1)} (arrival ${hit.arrivalSpeed})`);
@@ -468,7 +469,7 @@ describe("given each of the 7 car types released at full throttle from the long 
 
   it("when the approach is the pre-retune one, then every class but the monster is thrown once at every phase, its truck at 31.4 m/s too, the monster flies the barrier, but the fastest arrives over the ceiling", (t) => {
     const old = hitsOf(longJumpVariant(PRE_RETUNE), Infinity);
-    t.diagnostic(`pre-retune approach:\n${hitTable(old)}`);
+    t.annotate(`pre-retune approach:\n${hitTable(old)}`);
     assert.ok(allAsPinned(old), "a class not thrown once, or the monster not flying the barrier, on the old approach");
     assert.ok(fastest(old) > ARRIVAL_CEILING, `the old fastest arrival ${fastest(old)}`);
   });

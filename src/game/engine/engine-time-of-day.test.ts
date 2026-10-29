@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -72,7 +72,7 @@ describe("given the real engine in a race, lit for a time of day", () => {
       [hazeOf(), "dome haze"],
     ]);
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = new CrashEngine(element(), new HudStore(), element());
     // Nothing draws, but each visible object gets three's per-draw callback, as the renderer gives it.
@@ -90,13 +90,13 @@ describe("given the real engine in a race, lit for a time of day", () => {
     engine.setSky("on");
     engine.toggleRace();
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });
 
   for (const testCase of cases) {
-    it(`when ${testCase.it} runs ${FRAMES} frames, then nothing the time of day sets is written again (colours, intensities, shadow camera, sun axes) and the drawn frames really ran`, (t) => {
+    it(`when ${testCase.it} runs ${FRAMES} frames, then nothing the time of day sets is written again (colours, intensities, shadow camera, sun axes) and the drawn frames really ran`, () => {
       race(testCase.trackId, testCase.timeOfDay);
       const sun = stage().sun;
       const intensityWrites: Record<string, number> = { sun: 0, hemisphere: 0, fill: 0 };
@@ -105,16 +105,16 @@ describe("given the real engine in a race, lit for a time of day", () => {
         let value = light.intensity;
         Object.defineProperty(light, "intensity", { configurable: true, get: () => value, set: (v: number) => { intensityWrites[label] = intensityWrites[label]! + 1; value = v; } });
       }
-      const projection = t.mock.method(sun.shadow.camera, "updateProjectionMatrix");
-      const cross = t.mock.method(THREE.Vector3.prototype, "cross");
+      const projection = vi.spyOn(sun.shadow.camera, "updateProjectionMatrix");
+      const cross = vi.spyOn(THREE.Vector3.prototype, "cross");
       const drawn0 = drawn;
       const writes = colorWrites(watchedColors(), () => run(FRAMES));
       for (const [, light] of lights) Object.defineProperty(light, "intensity", { configurable: true, writable: true, enumerable: true, value: light.intensity });
       assert.ok(drawn - drawn0 >= FRAMES, "the frames were drawn (the dome's per-draw callback ran with them)");
       assert.equal(Object.keys(writes).length, 0, `colour writes ${JSON.stringify(writes)}`);
       for (const [label] of lights) assert.equal(intensityWrites[label], 0, `${label} intensity writes`);
-      assert.equal(projection.mock.callCount(), 0, "shadow camera projection rebuilds");
-      assert.equal(cross.mock.callCount(), 0, "cross products (the sun's axes are made when the time of day is set)");
+      assert.equal(projection.mock.calls.length, 0, "shadow camera projection rebuilds");
+      assert.equal(cross.mock.calls.length, 0, "cross products (the sun's axes are made when the time of day is set)");
     });
   }
 

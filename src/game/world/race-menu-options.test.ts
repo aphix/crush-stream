@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { DEFAULT_RACE_OPTIONS, type RaceMode, type RaceOptions } from "../match/types.ts";
 import { courseTap, selectAll } from "../hud/setup-patch.ts";

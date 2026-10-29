@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { dismissStatus, getStatus, sendSubmission, subscribeStatus, type Status } from "./status.ts";
 import type { submit } from "./client.ts";

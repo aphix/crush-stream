@@ -1,5 +1,5 @@
+import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
 import type { RacePhase } from "../match/types.ts";
 import { warmUp } from "./engine-bench-warm.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";

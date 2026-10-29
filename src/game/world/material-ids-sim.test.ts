@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { MAT, MATERIALS } from "../kernel/material-ids.ts";
 import { PREFABS, PREFAB_IDS, SURFACES, SURFACE_IDS, type SurfaceId } from "./catalog.ts";

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { physicsSlice } from "../contact/sat.ts";
 import * as THREE from "three";
@@ -106,7 +106,7 @@ describe("given the Survival hunter pack (the cops that chase the player) on a s
     for (const v of [16, 30]) {
       const near = approach(v);
       const worst = near.length > 0 ? near.reduce((a, b) => (b.near < a.near ? b : a)) : null;
-      t.diagnostic(`${v} m/s: ${near.length} of ${SEEDS} seeds dropped in; nearest judged ${Math.min(...near.map((n) => n.judged)).toFixed(3)} m, nearest at the show ${worst?.near.toFixed(3)} m`);
+      t.annotate(`${v} m/s: ${near.length} of ${SEEDS} seeds dropped in; nearest judged ${Math.min(...near.map((n) => n.judged)).toFixed(3)} m, nearest at the show ${worst?.near.toFixed(3)} m`);
       assert.equal(near.length, SEEDS, `${v} m/s: ${SEEDS - near.length} seeds never dropped in`);
       assert.ok(worst!.near >= HUNT.dropMin - 1e-6, `${v} m/s: seed ${worst!.seed} judged its spot ${worst!.judged.toFixed(3)} m off, and the player was ${worst!.near.toFixed(3)} m from it as the cop showed`);
     }
@@ -118,7 +118,7 @@ describe("given the Survival hunter pack (the cops that chase the player) on a s
     try {
       for (const v of [16, 30]) {
         const near = approach(v);
-        t.diagnostic(`${v} m/s: ${near.filter((n) => n.near < HUNT.dropMin).length} of ${near.length} drop-ins inside the minimum at the show, nearest ${Math.min(...near.map((n) => n.near)).toFixed(3)} m`);
+        t.annotate(`${v} m/s: ${near.filter((n) => n.near < HUNT.dropMin).length} of ${near.length} drop-ins inside the minimum at the show, nearest ${Math.min(...near.map((n) => n.near)).toFixed(3)} m`);
         assert.ok(near.some((n) => n.near < HUNT.dropMin), `${v} m/s: no seed dropped a cop inside the minimum`);
       }
     } finally {

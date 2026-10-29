@@ -1,5 +1,5 @@
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
 import { setImmediate as yieldToLoop } from "node:timers/promises";
 import { MATERIAL_DETAIL, MATERIAL_DETAIL_READY } from "../vehicle/material-class.ts";
 import { setConcreteDetailTier } from "./concrete-detail.ts";
@@ -13,7 +13,7 @@ const requested: string[] = [];
 const realFetch = globalThis.fetch;
 const realCreateImageBitmap = Reflect.get(globalThis, "createImageBitmap");
 
-before(() => {
+beforeAll(() => {
   Object.assign(globalThis, {
     fetch: async (url: string) => {
       requested.push(String(url));
@@ -26,7 +26,7 @@ before(() => {
   });
 });
 
-after(() => {
+afterAll(() => {
   Object.assign(globalThis, { fetch: realFetch, createImageBitmap: realCreateImageBitmap });
 });
 

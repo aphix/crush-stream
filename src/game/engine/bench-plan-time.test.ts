@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { BETWEEN_STEPS_S, extendedPlanS, planText, quickPlanS } from "./bench-plan-time.ts";
 import { QUICK } from "./bench-measure.ts";

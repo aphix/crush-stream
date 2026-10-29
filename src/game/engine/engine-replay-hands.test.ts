@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { makeWorld } from "../world/race-world.test-util.ts";
@@ -59,7 +59,7 @@ describe("given a driven oval field with two racers put head-on 4 s into the rac
           for (let j = 0; j < n; j++) if (steer(0, j) !== 0 && steer(0, j) !== steer(LOOK, j)) moving++;
           assert.ok(moving > 0, `seed ${seed}: no wheel is moving in the clip's first ${LOOK} steps (${n} cars)`);
           const a = agreement(rec, () => w.race.resetProps());
-          t.diagnostic(`${n} clip cars, ${moving} wheels moving at its start, impact at ${clip.firstImpact.toFixed(2)} s: ${a.steps} steps, worst pose ${a.pose.max} m, velocity ${a.vel.max} m/s`);
+          t.annotate(`${n} clip cars, ${moving} wheels moving at its start, impact at ${clip.firstImpact.toFixed(2)} s: ${a.steps} steps, worst pose ${a.pose.max} m, velocity ${a.vel.max} m/s`);
           assert.ok(a.steps >= 100, `${a.steps} steps compared`);
           assert.deepEqual({ pose: a.pose.max, vel: a.vel.max, crush: a.crush.max, wreck: a.wreckMismatch }, { pose: 0, vel: 0, crush: 0, wreck: 0 }, `seed ${seed}: a car strays from the live sim (m, m/s, m)`);
         }

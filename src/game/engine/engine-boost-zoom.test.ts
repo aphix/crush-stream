@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -19,12 +19,12 @@ const COASTING: Play = { ...DRIVING_CAR_BOOSTING, boosting: [] };
 
 describe("given the real engine and two live cars cruising at the zoom's full speed", () => {
   let engine: CrashEngine;
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine();
     engine.setFxTier("low");
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

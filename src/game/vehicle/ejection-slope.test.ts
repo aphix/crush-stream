@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { VEHICLE_CLASS_IDS } from "./vehicle-classes.ts";
@@ -17,7 +17,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
     for (const pace of [20, 30, 38]) {
       it(`when a ${cls} hit on its flank drives over the stunt course's CRUSH crest and down the kicker at ${pace} m/s, then the engine block stays put and nobody is thrown`, (t) => {
         const r = crashedRun(stunt, cls, pace, "side", 860, 960);
-        t.diagnostic(`${cls} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm, ended at s ${r.endS.toFixed(0)}`);
+        t.annotate(`${cls} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm, ended at s ${r.endS.toFixed(0)}`);
         assertHeld(r, "s 960");
         assert.deepEqual(r.thrown, []);
       });
@@ -33,7 +33,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
     for (const pace of [20, 30, 38]) {
       it(`when a ${cls} hit on its flank is touched all the way over the stunt course's CRUSH crest (s 885-902) at ${pace} m/s, then the touch adds under 5 mm of engine-block travel`, (t) => {
         const r = crashedRun(stunt, cls, pace, "side", 860, 960, [885, 902]);
-        t.diagnostic(`${cls} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm`);
+        t.annotate(`${cls} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm`);
         assertHeld(r, "s 960");
       });
     }
@@ -58,7 +58,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
       const end = hit === "side" && pace === SIDE_30_END ? SIDE_30_END_S : BANK_END_S;
       it(`when a sedan hit on its ${hit} is touched all the way up the stunt bowl's banks (s 200-340) at ${pace} m/s, then the touch adds under 5 mm of engine-block travel`, (t) => {
         const r = crashedRun(stunt, "sedan", pace, hit, 200, end, [200, 340]);
-        t.diagnostic(`${hit} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm`);
+        t.annotate(`${hit} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm`);
         assertHeld(r, `s ${end}`);
         assert.deepEqual(r.thrown, []);
       });
@@ -71,7 +71,7 @@ describe("given a car that was hit once earlier and drives on, which the ground 
       it(`when a damaged sedan drives the whole ${course} loop at ${pace} m/s (banks, crests, climbs), then the engine block stays put and nobody is thrown`, (t) => {
         const trk = track(course);
         const r = loopRun(trk, pace);
-        t.diagnostic(`${course} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm, ended at s ${r.endS.toFixed(0)} of ${trk.length.toFixed(0)}`);
+        t.annotate(`${course} ${pace} m/s: block travel ${(r.settled * 1000).toFixed(1)} -> ${(r.end * 1000).toFixed(1)} mm, ended at s ${r.endS.toFixed(0)} of ${trk.length.toFixed(0)}`);
         assertHeld(r, `its end, s ${trk.length.toFixed(0)}`);
         assert.deepEqual(r.thrown, []);
       });

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
@@ -34,7 +34,7 @@ describe("given a sedan doing 130 km/h on the flat, freewheeling in neutral (a t
   it("when it runs 2.5 s with no pedals in neutral, then it sheds far less speed than with the lift-off engine braking (decelerations reported)", (t) => {
     const liftDecel = (v0 - lift.speed) / SECS;
     const freeDecel = (v0 - free.speed) / SECS;
-    t.diagnostic(`130 km/h, ${SECS} s: lift-off ${liftDecel.toFixed(2)} m/s² (${(lift.speed / KPH).toFixed(0)} km/h left), neutral ${freeDecel.toFixed(2)} m/s² (${(free.speed / KPH).toFixed(0)} km/h left)`);
+    t.annotate(`130 km/h, ${SECS} s: lift-off ${liftDecel.toFixed(2)} m/s² (${(lift.speed / KPH).toFixed(0)} km/h left), neutral ${freeDecel.toFixed(2)} m/s² (${(free.speed / KPH).toFixed(0)} km/h left)`);
     // Rolling resistance (asphalt's Crr) + air drag alone: about 0.5 m/s² at this speed.
     const roll = SURFACES.asphalt.roll * FRICTION_G;
     assert.ok(freeDecel > 0.3 * (roll + DRIVE.drag * v0 * v0) && freeDecel < 1.5 * (roll + DRIVE.drag * v0 * v0), `neutral sheds ${freeDecel.toFixed(2)} m/s²`);

@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { setGround } from "./ground.ts";
@@ -27,10 +27,10 @@ const PLAYER = 0;
 const RIVAL = 1;
 
 const w: World = makeWorld();
-before(() => {
+beforeAll(() => {
   w.race.enter();
 });
-after(() => {
+afterAll(() => {
   w.race.exit();
   setGround(null);
 });

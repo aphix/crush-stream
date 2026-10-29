@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { EPICENTER_KNOBS } from "../deform/epicenter.ts";
 import { CHASE_KNOBS } from "../present/drive-cam.ts";

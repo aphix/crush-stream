@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
@@ -70,8 +70,8 @@ class DoorsBench {
 }
 
 const bench = new DoorsBench();
-before(() => bench.start());
-after(() => bench.stop());
+beforeAll(() => bench.start());
+afterAll(() => bench.stop());
 
 const HARD_SHOTS = [
   { lane: "mirror", reacts: "the mirror is knocked off", kph: 12, kg: 300, expected: "mirrorR" },

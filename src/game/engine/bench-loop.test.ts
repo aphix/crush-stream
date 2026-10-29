@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import { Track } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
@@ -112,7 +112,7 @@ describe("given a loop whose state is in the address of its bench page", () => {
   const base = "https://game.test/crush/";
   const searchOf = (href: string): string => new URL(href).search;
 
-  it("when the address's loopultra is turned on during a cycle, then that cycle's benches run unchanged and the next cycle's benches each run their Ultra arm, as the same eight steps", { skip: !ULTRA_AVAILABLE && "this build has no Ultra" }, () => {
+  it("when the address's loopultra is turned on during a cycle, then that cycle's benches run unchanged and the next cycle's benches each run their Ultra arm, as the same eight steps", { skip: !ULTRA_AVAILABLE }, () => {
     const ran: string[] = [];
     let href = stepHref(base, { ...RUN, keep: true });
     for (let run = parseRun(searchOf(href)); run !== null && run.loop <= 2; run = parseRun(searchOf(href))) {
@@ -322,8 +322,8 @@ describe("given a page whose address carries a share # (a stale one, or one past
 });
 
 describe("given a page outside a secure context (a build opened over plain http on the LAN), where crypto.randomUUID is missing", () => {
-  it("when the Benchmark entry starts a loop, then it gets a session its own bench page reads back as that loop", (t) => {
-    t.mock.method(crypto, "randomUUID", () => {
+  it("when the Benchmark entry starts a loop, then it gets a session its own bench page reads back as that loop", () => {
+    vi.spyOn(crypto, "randomUUID").mockImplementation(() => {
       throw new TypeError("crypto.randomUUID is not a function");
     });
     const run = startRun(newSession());

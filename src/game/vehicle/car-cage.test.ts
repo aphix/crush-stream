@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import * as THREE from "three";
 import { CAGE_PART_VERTICES, CAGE_STEP, CAGE_VERTICES, type CageLive, type CageSource, CarCage } from "./car-cage.ts";
 import { CageRig, cageLift, cageOf, cageSourceOf } from "./car-cage-rig.ts";
@@ -142,7 +142,7 @@ for (const body of BODIES) {
         const wrong: string[] = [];
         for (const [part, region] of Object.entries(topParts(body.style))) {
           const g = cageGaps(car, cage, field, region);
-          t.diagnostic(`${part}: cells ${g.cells} p95 ${g.p95.toFixed(3)} up ${g.worstUp.toFixed(3)} down ${g.worstDown.toFixed(3)} missing ${g.missing}`);
+          t.annotate(`${part}: cells ${g.cells} p95 ${g.p95.toFixed(3)} up ${g.worstUp.toFixed(3)} down ${g.worstDown.toFixed(3)} missing ${g.missing}`);
           if (cliffs.some((c) => c.part === part)) continue;
           wrong.push(...topGapsOff(part, g));
         }
@@ -251,7 +251,7 @@ describe("given the cage's vertex budget", () => {
     for (let i = 0; i < vertexCount; i++) if (source[i]! >= partFrom) parts++;
     let partTris = 0;
     for (let k = 0; k < tris.length; k += 3) if (tris[k]! >= vertexCount - parts && tris[k]! < vertexCount) partTris++;
-    t.diagnostic(`${vertexCount} vertices (${heldCount} of them the underside held over the ${CAGE_VERTICES}, ${kept} the C-post's kept points, ${parts} the bumpers' and doors'), ${triCount} triangles (${partTris} theirs)`);
+    t.annotate(`${vertexCount} vertices (${heldCount} of them the underside held over the ${CAGE_VERTICES}, ${kept} the C-post's kept points, ${parts} the bumpers' and doors'), ${triCount} triangles (${partTris} theirs)`);
     assert.equal(apart.length, 4, "two bumpers and two front doors, each decimated alone");
     assert.ok(vertexCount - parts <= CAGE_VERTICES + heldCount + kept + 2 && vertexCount - parts >= CAGE_VERTICES / 2, `${vertexCount - parts} hull vertices, ${heldCount} held, ${kept} kept`);
     assert.ok(triCount - partTris >= 150 && triCount - partTris <= 330 + 2 * (heldCount + kept), `${triCount - partTris} hull triangles`);
@@ -273,7 +273,7 @@ describe("given every body style's cage and the bottom corners of its drawn bump
         let nearest = Infinity;
         for (let k = 0; k < vertexCount; k++) nearest = Math.min(nearest, Math.hypot(rest[k * 3]! - under[i]!, rest[k * 3 + 1]! - under[i + 2]!, rest[k * 3 + 2]! - under[i + 1]!));
         const corner = `${under[i]! > 0 ? "+" : "-"}x ${under[i + 1]! > 0 ? "front" : "rear"}`;
-        t.diagnostic(`${corner}: nearest cage vertex ${(nearest * 100).toFixed(1)} cm`);
+        t.annotate(`${corner}: nearest cage vertex ${(nearest * 100).toFixed(1)} cm`);
         if (nearest > TOP_P95_M) far.push(`${corner} ${(nearest * 100).toFixed(1)} cm`);
       }
       assert.deepEqual(far, []);
@@ -291,7 +291,7 @@ describe("given a cruiser with its push bar", () => {
     const drawn = drawnTriangles(car);
     let face = -Infinity;
     for (let i = 2; i < drawn.length; i += 3) face = Math.max(face, drawn[i]!);
-    t.diagnostic(`cage nose ${nose.toFixed(3)} m, drawn nose ${face.toFixed(3)} m`);
+    t.annotate(`cage nose ${nose.toFixed(3)} m, drawn nose ${face.toFixed(3)} m`);
     assert.ok(face - nose <= NOSE_REACH_M, `the cage's nose stands ${(face - nose).toFixed(3)} m behind the bar`);
   });
 });
@@ -372,7 +372,7 @@ function barAfterCrash(): CrashedBar {
 describe("given a cruiser after an 18 km/h head-on crash that leaves its front bumper on", () => {
   it("when its cage's nose and bumper are read, then the bumper is on and crushed, so the bar is read where a crash puts it", (t) => {
     const { car, cage, rest } = barAfterCrash();
-    t.diagnostic(`cage nose ${cage.fields.planBox[3]!.toFixed(3)} m at ${cage.style.pristine.planBox[3]!.toFixed(3)} at rest`);
+    t.annotate(`cage nose ${cage.fields.planBox[3]!.toFixed(3)} m at ${cage.style.pristine.planBox[3]!.toFixed(3)} at rest`);
     assert.ok(car.crashed && !car["parts"].some((p) => p.bumper && p.cage === "bumperFront" && p.detached), "the cruiser is crashed with its front bumper on");
     assert.ok(cage.fields.planBox[3]! < cage.style.pristine.planBox[3]! - 0.1, `the cage's nose stands ${cage.fields.planBox[3]!.toFixed(3)} m`);
     assert.ok(Math.abs(rest.ahead - PUSH_BAR_REACH) < 1e-3, `the bar's rest face stands ${rest.ahead.toFixed(3)} m ahead of its bumper's, not its reach ${PUSH_BAR_REACH}`);
@@ -381,13 +381,13 @@ describe("given a cruiser after an 18 km/h head-on crash that leaves its front b
   it("when the bar is read against its bumper, then its pads stand as far ahead of the bumper's face as the drawn bar's, within 1 cm", (t) => {
     const { car, crashed } = barAfterCrash();
     const drawn = drawnBarAhead(car);
-    t.diagnostic(`cage ${crashed.ahead.toFixed(3)} m ahead of its bumper's face, drawn ${drawn.toFixed(3)} m`);
+    t.annotate(`cage ${crashed.ahead.toFixed(3)} m ahead of its bumper's face, drawn ${drawn.toFixed(3)} m`);
     assert.ok(Math.abs(crashed.ahead - drawn) <= BAR_FOLLOW_M, `the cage's bar face stands ${crashed.ahead.toFixed(3)} m ahead of its bumper's, the drawn bar's ${drawn.toFixed(3)} m`);
   });
 
   it("when the bar is read against its bumper, then its top stands as high over the bumper's top as at rest, within 1 cm", (t) => {
     const { rest, crashed } = barAfterCrash();
-    t.diagnostic(`cage ${crashed.over.toFixed(3)} m over its bumper's top, ${rest.over.toFixed(3)} m at rest`);
+    t.annotate(`cage ${crashed.over.toFixed(3)} m over its bumper's top, ${rest.over.toFixed(3)} m at rest`);
     assert.ok(Math.abs(crashed.over - rest.over) <= BAR_FOLLOW_M, `the cage's bar top stands ${crashed.over.toFixed(3)} m over its bumper's, ${rest.over.toFixed(3)} m at rest`);
   });
 });
@@ -572,7 +572,7 @@ describe("given a parked car of each body with its doors shut and latched, and i
             const cageX = cageSideX(cage, side, z, y - STRIKER_HALF, y + STRIKER_HALF);
             const skinX = drawnDoorX(car.style, side, y, z);
             const text = `${body.body} ${side > 0 ? "right" : "left"} z ${z.toFixed(2)} y ${y.toFixed(2)}: cage ${cageX.toFixed(3)} against skin ${skinX.toFixed(3)} (${((cageX - skinX) * 100).toFixed(1)} cm)`;
-            t.diagnostic(text);
+            t.annotate(text);
             if (!(Math.abs(cageX - skinX) <= DOOR_SIDE_M)) wrong.push(text);
           }
         }

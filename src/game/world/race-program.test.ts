@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { BENCH_RACE } from "../engine/engine-bench-plan.ts";
 import { decodeShare } from "../hud/share-url.ts";

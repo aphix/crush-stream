@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { INITIAL_HUD } from "../game/hud/hud-store.ts";
 import { MINIGAME_MODES, MODE_LABELS, THROWS_PER_SET } from "../game/scenes/minigame-constants.ts";

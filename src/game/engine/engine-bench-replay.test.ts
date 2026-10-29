@@ -1,5 +1,5 @@
+import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
 import type { RagdollStats } from "../present/engine-ragdoll.ts";
 import { ragdollCost, replayTier, type ReplayFrames } from "./engine-bench-replay.ts";
 

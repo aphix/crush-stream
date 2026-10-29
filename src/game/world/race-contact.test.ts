@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { AI_DIFFICULTIES, type AiDifficulty } from "../ai/constants.ts";
 import { fieldAggression } from "../ai/ai-aggression.ts";

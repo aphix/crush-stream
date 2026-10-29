@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { CELL as GROUND_CELL, Track, type TrackGround } from "../world/track.ts";

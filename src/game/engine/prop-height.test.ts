@@ -1,10 +1,10 @@
+import { afterEach, describe, it } from "vitest";
 import { zipBound } from "../contact/zip-bound.test-util.ts";
 import { PUSH_SPEED } from "../deform/push-budget.ts";
 import { launch, makeCar as makeCrashCar } from "../contact/crash-scenarios.test-util.ts";
 import { arenaWorld } from "../scenes/derby-arena.test-util.ts";
 import { DERBY_BOXES } from "../scenes/derby-ground.ts";
 import { stepWorld } from "./world-step.ts";
-import { afterEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { PREFABS, type PrefabId } from "../world/catalog.ts";

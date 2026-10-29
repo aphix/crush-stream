@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -49,7 +49,7 @@ describe("given the real engine booted on #scene=showcase", () => {
     return [((at.x + 1) / 2) * 800, ((1 - at.y) / 2) * 600];
   };
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     globalThis.location.hash = "#scene=showcase";
     engine = await bootEngine();
@@ -57,7 +57,7 @@ describe("given the real engine booted on #scene=showcase", () => {
     await engine["ragdolls"].preload();
     runSeconds(engine, 0.5);
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

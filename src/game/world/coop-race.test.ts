@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import type { RaceBrain } from "../ai/race-ai.ts";
 import { CAMPAIGN_POINTS } from "../match/campaign.ts";
@@ -46,13 +46,13 @@ function leave(w: World): void {
 describe("given a co-op race on the oval: the host and a peer who never touches the pedals against two AI cars", () => {
   it("when the scripted host drives flat out, then the team's place is the better of the two humans' places, the peer is a DNF, and the team won exactly when a human crossed first", (t) => {
     const w = coopWorld();
-    t.after(() => leave(w));
+    t.onTestFinished(() => leave(w));
     const o = playerRace(w, track, { lat: 0 }, LAPS, FIELD, 240);
     const hud = w.race.hud();
     assert.equal(hud.phase, "finished");
     const rows = hud.results!;
     const humans = rows.filter((r) => r.kind !== "ai");
-    t.diagnostic(`host P${o.you.place} ${o.you.status}; peer ${rows.find((r) => r.id === 1)!.status}; AI ${rows.filter((r) => r.kind === "ai").map((r) => `P${r.place} ${r.status}`)}`);
+    t.annotate(`host P${o.you.place} ${o.you.status}; peer ${rows.find((r) => r.id === 1)!.status}; AI ${rows.filter((r) => r.kind === "ai").map((r) => `P${r.place} ${r.status}`)}`);
     assert.equal(humans.length, 2);
     assert.equal(rows.length, 4, "each car keeps its own row and place");
     const team = hud.team!;
@@ -65,7 +65,7 @@ describe("given a co-op race on the oval: the host and a peer who never touches 
 
   it("when the AI cars sit on the grid and the host drives flat out, then the host finishes first, the team won with place 1, and the race ends with the peer and the AI DNF", (t) => {
     const w = coopWorld();
-    t.after(() => leave(w));
+    t.onTestFinished(() => leave(w));
     parkAi(w);
     const o = playerRace(w, track, { lat: 0 }, LAPS, FIELD, 240);
     assert.equal(o.you.place, 1);
@@ -80,7 +80,7 @@ describe("given a co-op race on the oval: the host and a peer who never touches 
 describe("given a co-op race on the oval with both humans sitting on the grid", () => {
   it("when the AI cars finish and the grace after the winner runs out, then the race ends with both humans DNF and the team lost, its place the better of their two", (t) => {
     const w = coopWorld();
-    t.after(() => leave(w));
+    t.onTestFinished(() => leave(w));
     w.race.command({ type: "options", options: { trackId: track.id, laps: LAPS, aiCount: FIELD, noReset: false } });
     w.race.command({ type: "start" });
     const state = { acc: 0 };
@@ -106,7 +106,7 @@ describe("given a co-op race on the oval with both humans sitting on the grid", 
 describe("given a co-op campaign whose first round is the oval, the peer sitting on the grid", () => {
   it("when the team does not win the round and the host presses Next, then the round is raced again with nothing scored; and when the host wins it, then Next scores the round and shows the standings", (t) => {
     const w = coopWorld();
-    t.after(() => leave(w));
+    t.onTestFinished(() => leave(w));
     const toResults = (): void => {
       const state = { acc: 0 };
       for (let n = 0; n < 400 && w.race.hud().menu !== "results"; n++) frame(w, state);

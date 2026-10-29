@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
@@ -47,7 +47,7 @@ describe("given a rear hit on a car with its lid shut", () => {
       runWall(14, 1, "rear", { car: soft });
       const hard = parked(id);
       runWall(30, 1, "rear", { car: hard });
-      t.diagnostic(`${id}: 14 km/h hinge ${soft.lidAngle().toFixed(3)} rad, 30 km/h ${hard.lidAngle().toFixed(3)} rad`);
+      t.annotate(`${id}: 14 km/h hinge ${soft.lidAngle().toFixed(3)} rad, 30 km/h ${hard.lidAngle().toFixed(3)} rad`);
       assert.ok(soft.lidHinge().latched, `${id} lid sprang at 14 km/h`);
       assert.ok(!hard.lidHinge().latched && !hard.lidOff(), `${id} lid at 30 km/h: latched ${hard.lidHinge().latched}, off ${hard.lidOff()}`);
     });
@@ -128,7 +128,7 @@ describe("given a rear hit on a car whose lid is already open", () => {
     runWall(40, 1, "rear", { car });
     const open = !car.lidHinge().latched && !car.lidOff();
     const r = runWall(24, 1, "rear", { car });
-    t.diagnostic(`after the second hit: hinge ${r.hinge[LID.trunk]?.toFixed(3)}, detached ${r.detached.join(",")}, stop load ${car.lidHinge().load.toFixed(1)} J, ebs ${car.deform.hitSpeedValue.toFixed(2)}`);
+    t.annotate(`after the second hit: hinge ${r.hinge[LID.trunk]?.toFixed(3)}, detached ${r.detached.join(",")}, stop load ${car.lidHinge().load.toFixed(1)} J, ebs ${car.deform.hitSpeedValue.toFixed(2)}`);
     assert.ok(open, "the first hit left the lid shut or tore it off");
     assert.ok(car.lidOff() && r.detached.includes(LID.trunk) && car.hasLoosePart());
   });

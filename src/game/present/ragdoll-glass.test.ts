@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -113,9 +114,9 @@ describe("given a parked car's glass (each pane intact, then cracked, then shatt
     { it: "when his torso strikes the left door window at 3 m/s, under the 4 m/s that breaks glass, then the window stays intact and he bounces back off it", pane: "doorL", up: DOOR_UP, along: 0, speeds: [3], expected: "intact", goesThrough: false },
   ] as const;
   for (const testCase of torsoStrikeCases) {
-    it(testCase.it, { todo: testCase.pane === "doorL" ? doorTooShort : false }, async (t) => {
+    todoRow(testCase.it, testCase.pane === "doorL" ? doorTooShort : false, async (t) => {
       const { throws, glass } = await strikes(testCase.pane, testCase.up, testCase.along, "chest", true, testCase.speeds);
-      t.diagnostic(`glass ${JSON.stringify(glass)}; throws ${show(throws)}`);
+      t.annotate(`glass ${JSON.stringify(glass)}; throws ${show(throws)}`);
       for (const [name, state] of Object.entries(glass)) assert.equal(state, name === testCase.pane ? testCase.expected : "intact", `${name}'s state`);
       const last = throws.at(-1)!;
       assert.ok(last.before < -0.9 * testCase.speeds.at(-1)!, `the torso came at the pane at ${(-last.before).toFixed(2)} m/s`);
@@ -135,7 +136,7 @@ describe("given a parked sedan's intact glass and a thrown dummy whose torso alo
   // window's front, and a door strike cracked the windshield (union 44c33a2a). The door window's own state is the door rows' (todo).
   it("when his torso strikes the left door window at 10 m/s, then the windshield stays intact", async (t) => {
     const { throws, glass } = await strikes("doorL", DOOR_UP, 0, "chest", true, [10]);
-    t.diagnostic(`glass ${JSON.stringify(glass)}; throws ${show(throws)}`);
+    t.annotate(`glass ${JSON.stringify(glass)}; throws ${show(throws)}`);
     assert.ok(throws[0]!.before < -9, `the torso came at the door at ${(-throws[0]!.before).toFixed(2)} m/s`);
     assert.equal(glass.windshield, "intact", "the windshield's state");
   });
@@ -145,14 +146,14 @@ describe("given a parked car's intact windshield and whole thrown dummies", () =
   it("when two dummies strike it chest first at 10 m/s, one after the other, then the first leaves it cracked and the second shatters it", async (t) => {
     const once = await strikes("windshield", 0.1, 0, "chest", false, [10]);
     const twice = await strikes("windshield", 0.1, 0, "chest", false, [10, 10]);
-    t.diagnostic(`once ${show(once.throws)}; twice ${show(twice.throws)}`);
+    t.annotate(`once ${show(once.throws)}; twice ${show(twice.throws)}`);
     assert.equal(once.glass.windshield, "cracked");
     assert.equal(twice.glass.windshield, "shattered");
   });
 
   it("when a dummy strikes it head first at 10 m/s, arms up, then his arms and head stop him at the glass before his torso reaches it, and the windshield stays intact (only a torso breaks glass)", async (t) => {
     const { throws, glass } = await strikes("windshield", 0, 0, "head", false, [10]);
-    t.diagnostic(`glass ${JSON.stringify(glass)}; torso ${show(throws)}`);
+    t.annotate(`glass ${JSON.stringify(glass)}; torso ${show(throws)}`);
     const torso = throws[0]!;
     assert.ok(torso.before < -9 && torso.peakOut > -5, `the torso came at ${(-torso.before).toFixed(2)} m/s and went on at ${(-torso.peakOut).toFixed(2)} m/s or slower`);
     assert.ok(torso.through < -TORSO_HALF_LENGTH, `the torso's centre got within ${(-torso.through).toFixed(3)} m of the glass`);

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import { setGround } from "./ground.ts";
 import { assertSameDigest } from "../vehicle/test-support.ts";
 import { makeWorld, raceOnce, type World } from "./race-world.test-util.ts";

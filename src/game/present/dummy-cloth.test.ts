@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { DECAL_FACE_AT, DECAL_FLAT, DECAL_H, DECAL_HALF_X, DECAL_HALF_Z, DECAL_NO_PAINT, DECAL_RAISE_STEP, DECAL_W, DECAL_Y, decalMap, FABRIC, fabricTexels } from "./dummy-cloth.ts";
 import type { Decal } from "./dummy-rig.ts";

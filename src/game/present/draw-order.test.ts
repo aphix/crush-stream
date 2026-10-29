@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import * as THREE from "three";
 import type { RenderItem } from "three";
 import { DeformableCar } from "../vehicle/car.ts";

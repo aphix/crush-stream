@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { audioLevels, type AudioSetters } from "./audio-levels.ts";
 import { INITIAL_HUD } from "./hud-store.ts";

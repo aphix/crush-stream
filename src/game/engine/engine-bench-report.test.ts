@@ -1,5 +1,5 @@
+import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
 import type { FrameStats } from "./bench-frames.ts";
 import { browserName, describeBench, perSecond, stat, type Block, type BenchResult, type PhaseCard, type RagdollCost, type ReplayResult, type ReplayTier } from "./engine-bench-report.ts";
 import { HITCH } from "./bench-hitch.ts";

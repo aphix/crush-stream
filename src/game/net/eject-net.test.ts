@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { blankIntent, readIntent } from "../vehicle/drive-input.ts";
 import { blankPad, mergeTouch, PAD_BUTTON, type TouchPad } from "../vehicle/gamepad.ts";

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { newWorld, settleStep, stepWorld } from "../engine/world-step.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";

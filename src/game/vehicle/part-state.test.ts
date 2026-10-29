@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
@@ -144,7 +144,7 @@ describe("given a rear-ended hatch or SUV whose roof-hinged gate, carrying its D
       assert.ok(twinGate.detached, "the client's gate tore from the net state alone");
       boxShape(twinGate.shape, twinGate.object);
       const [client, host] = [twinGate.shape, gate.shape].map((s) => [s.count, s.reach, ...s.centre.toArray(), ...s.invI.toArray(), ...s.points.subarray(0, 3 * s.count)]);
-      t.diagnostic(`${id} torn gate: count ${gate.shape.count}, reach ${gate.shape.reach.toFixed(4)}, centre ${gate.shape.centre.toArray().map((v) => v.toFixed(4))}, invI ${gate.shape.invI.toArray().map((v) => v.toFixed(3))}`);
+      t.annotate(`${id} torn gate: count ${gate.shape.count}, reach ${gate.shape.reach.toFixed(4)}, centre ${gate.shape.centre.toArray().map((v) => v.toFixed(4))}, invI ${gate.shape.invI.toArray().map((v) => v.toFixed(3))}`);
       assertSameNumbers(client!, host!, `the client's torn ${id} gate shape`);
     });
   }

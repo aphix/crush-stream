@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { nowPlayingCorner, type NowPlayingContext } from "./now-playing.ts";
 

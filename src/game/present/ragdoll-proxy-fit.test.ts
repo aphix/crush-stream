@@ -1,5 +1,6 @@
+import { describe, it, type TestContext } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
-import { describe, it, type TestContext } from "node:test";
 import type { RayColliderHit } from "@dimforge/rapier3d-simd";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -97,7 +98,7 @@ async function proxyGaps(t: TestContext, testCase: ProxyCase): Promise<Record<st
         return String(R.ShapeType[shape] ?? shape);
       },
     );
-    t.diagnostic(`${part}: cells ${g.cells} p95 ${g.p95.toFixed(3)} up ${g.worstUp.toFixed(3)} down ${g.worstDown.toFixed(3)} missing ${g.missing}`);
+    t.annotate(`${part}: cells ${g.cells} p95 ${g.p95.toFixed(3)} up ${g.worstUp.toFixed(3)} down ${g.worstDown.toFixed(3)} missing ${g.missing}`);
     off[part] = topGapsOff(part, g);
   }
   return off;
@@ -113,7 +114,7 @@ for (const testCase of proxyCases) {
       );
     });
     for (const part of testCase.todoParts) {
-      it(`${testCase.it}, over its ${part}`, { todo: testCase.todoCauses[part] ?? todoCause[part] }, async (t) => {
+      todoRow(`${testCase.it}, over its ${part}`, testCase.todoCauses[part] ?? todoCause[part], async (t) => {
         assert.deepEqual((await proxyGaps(t, testCase))[part], []);
       });
     }

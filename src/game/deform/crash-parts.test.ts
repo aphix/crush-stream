@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
@@ -670,7 +671,7 @@ describe("given the recorded 16-car pile-up in which wrecks spun on the spot, in
   // todo -> Stage 5 (item 6's wreck split left Khaki at 5.85 rad/s), the same cause as derby-ai's contact peaks. Measured (SPIN_FLEET at squash 0.4) before item 6: Khaki 5.48 rad/s over 0.1 s (Bronze 7.29 with the
   // pair's friction off, Khaki 6.16 and 7.20 with the one-body motion and the kill subtraction off: no toggle of the kernel's terms removes it); the
   // last-2-s row above (no wreck still turning) passes. A pile's wreck struck at a lever spins by J·lever/I; the yaw grip that ends it is the wreck split's.
-  it("when the squash setting is 0.4 and the buckle setting 0.45, then no wreck turns faster than 5 rad/s over any 0.1 s of the first 2.5 s", { todo: "Khaki 5.32 rad/s over 0.1 s in the 16-car pile (bar 5; its nose struck Oxide-2 off its axis; lever torque of the pair kernel; the wreck's yaw grip is the tyres'): Stage 5" }, () => {
+  todoRow("when the squash setting is 0.4 and the buckle setting 0.45, then no wreck turns faster than 5 rad/s over any 0.1 s of the first 2.5 s", "Khaki 5.32 rad/s over 0.1 s in the 16-car pile (bar 5; its nose struck Oxide-2 off its axis; lever torque of the pair kernel; the wreck's yaw grip is the tyres'): Stage 5", () => {
     const cars = SPIN_FLEET.map(([name, x, z, yaw, speed], i) => {
       const car = new DeformableCar({ body: 0xffffff, accent: 0x444444, name }, new THREE.Scene(), null, fleetStyle(i));
       car.deform.setMode("shape");

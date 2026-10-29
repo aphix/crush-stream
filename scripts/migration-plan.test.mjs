@@ -1,7 +1,7 @@
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
-import { test } from "node:test";
 import { isMigrationFile, migrationName, pendingMigrations, projectRoot } from "./migration-plan.mjs";
 
 test("_migrations keys on basename, not path", () => {

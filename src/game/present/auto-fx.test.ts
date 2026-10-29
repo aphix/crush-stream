@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import type { FxTier } from "./engine-post.ts";
 import { AutoFx, deviceClass, gpuRenderer } from "./auto-fx.ts";

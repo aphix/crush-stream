@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -136,7 +136,7 @@ describe("given a car driven end-on up a ramp, with a slab between the ramps", (
   ] as const) {
     it(`when it drives up at ${v} m/s, then it ${name}, its centre on the parabola of its velocity and its spin unchanged while it flies, no tyre sinks or snaps on landing and all four wheels end on the ground`, (t) => {
       const r = jump(v);
-      t.diagnostic(
+      t.annotate(
         `air ${r.air.toFixed(2)} s, peak ${r.peak.toFixed(2)} m, centre off the parabola ≤ ${r.flightError.toExponential(1)} m, spin change ≤ ${r.spinChange.toExponential(1)} rad/s, most turn in a frame ${r.turn.toFixed(1)}°, deepest tyre ${r.sink.toFixed(3)} m, end z ${r.endZ.toFixed(1)}, gaps ${r.gaps.map((g) => g.toFixed(3)).join("/")} m, slab hit ${r.slabHit}`,
       );
       const failures: string[] = [];
@@ -184,7 +184,7 @@ describe("given a car driven end-on up a ramp, with a slab between the ramps", (
         body.localToWorld(sill.set(0, 0.25, 0));
         low = Math.min(low, sill.y - ramps.heightAt(sill.x, sill.z, sill.y));
       });
-      t.diagnostic(`${cls}: peak compression ${(peak * 100).toFixed(1)} cm, swinging until ${swung.toFixed(2)} s after touchdown, sill ≥ ${low.toFixed(3)} m`);
+      t.annotate(`${cls}: peak compression ${(peak * 100).toFixed(1)} cm, swinging until ${swung.toFixed(2)} s after touchdown, sill ≥ ${low.toFixed(3)} m`);
       if (touch < 0) failures.push(`${cls} never came down`);
       if (peak < SETTLED) failures.push(`${cls} springs took ${(peak * 100).toFixed(1)} cm`);
       const swingBar = cls === "monster" ? MONSTER_SWING_S : SWING_S;
@@ -212,7 +212,7 @@ describe("given the ramps with no slab between them", () => {
     });
     const tail = car.group.localToWorld(new THREE.Vector3(0, 0, -car.frame.half.z));
     const speed = Math.hypot(car.velocity.x, car.velocity.z);
-    t.diagnostic(`peak ${peak.toFixed(2)} m, end z ${p.z.toFixed(1)} y ${p.y.toFixed(3)} tail y ${tail.y.toFixed(3)} speed ${speed.toFixed(3)} m/s`);
+    t.annotate(`peak ${peak.toFixed(2)} m, end z ${p.z.toFixed(1)} y ${p.y.toFixed(3)} tail y ${tail.y.toFixed(3)} speed ${speed.toFixed(3)} m/s`);
     assert.ok(peak < RAMP.top + 0.4, `peak ${peak.toFixed(2)} m`);
     assert.ok(Math.abs(p.z) < RAMP.start, `origin z ${p.z.toFixed(2)} m: not in the gap between the high ends (±${RAMP.start.toFixed(2)} m)`);
     assert.ok(tail.y < RAMP.top + 0.05, `tail ${tail.y.toFixed(3)} m up, over the lip's ${RAMP.top} m`);
@@ -233,7 +233,7 @@ describe("given the ramps with no slab between them", () => {
       deepest = Math.max(deepest, bodyReachX(car) + RAMP.halfW);
       highest = Math.max(highest, p.y);
     });
-    t.diagnostic(`face ${ramps.heightAt(0, z).toFixed(2)} m high; nose reached ${deepest.toFixed(3)} m past it, highest ${highest.toFixed(3)} m, end vx ${car.velocity.x.toFixed(2)} m/s, crashed ${car.crashed}`);
+    t.annotate(`face ${ramps.heightAt(0, z).toFixed(2)} m high; nose reached ${deepest.toFixed(3)} m past it, highest ${highest.toFixed(3)} m, end vx ${car.velocity.x.toFixed(2)} m/s, crashed ${car.crashed}`);
     const failures: string[] = [];
     if (deepest > 0.15) failures.push(`nose ${deepest.toFixed(3)} m into the ramp`);
     if (highest > SPRINGS.sedan.travel) failures.push(`climbed to ${highest.toFixed(3)} m`);
@@ -268,7 +268,7 @@ describe("given a car driven at 14 m/s up the ramp and over the slab", () => {
       stopped += FRAME;
       if (car.airborne) stuck += FRAME;
     });
-    t.diagnostic(`struck at ${hitAt.toFixed(2)} s, stopped ${stopped.toFixed(2)} s, of it flying ${stuck.toFixed(2)} s; masses ${car.deform.massActive}`);
+    t.annotate(`struck at ${hitAt.toFixed(2)} s, stopped ${stopped.toFixed(2)} s, of it flying ${stuck.toFixed(2)} s; masses ${car.deform.massActive}`);
     assert.ok(hitAt > 0 && stopped > 1, `struck at ${hitAt.toFixed(2)} s, stopped ${stopped.toFixed(2)} s`);
     assert.ok(stuck < 0.25, `stopped yet flying for ${stuck.toFixed(2)} s`);
   });
@@ -302,7 +302,7 @@ describe("given two cars driving head-on at each other up the two ramps, with no
       lastY = a.group.position.y;
       flags.frame();
     }, flags.slice);
-    t.diagnostic(`struck at ${struckAt.toFixed(2)} s, ${struckY.toFixed(2)} m up; flagged ${flags.list.length}: ${flags.list.slice(0, 4).join("; ")}`);
+    t.annotate(`struck at ${struckAt.toFixed(2)} s, ${struckY.toFixed(2)} m up; flagged ${flags.list.length}: ${flags.list.slice(0, 4).join("; ")}`);
     assert.ok(struckAt > 0 && struckY > 1, `struck at ${struckAt.toFixed(2)} s, ${struckY.toFixed(2)} m up: not a mid-air hit`);
     assert.deepEqual(flags.list, []);
   });
@@ -320,7 +320,7 @@ describe("given two cars driving head-on at each other up the two ramps, with no
       const { w, cars } = pair(testCase.vA, testCase.vB, testCase.dx);
       const flags = watch(cars);
       run(w, 4, flags.frame, flags.slice);
-      t.diagnostic(`flagged ${flags.list.length}: ${flags.list.slice(0, 4).join("; ")}`);
+      t.annotate(`flagged ${flags.list.length}: ${flags.list.slice(0, 4).join("; ")}`);
       assert.deepEqual(flags.list, []);
     });
   }
@@ -346,7 +346,7 @@ describe("given the ramps with no slab between them, and a car that is or become
     const top = ramps.heightAt(car.group.position.x, car.group.position.z, y0);
     stepWorld(w, 0.0079);
     const rise = car.group.position.y - y0;
-    t.diagnostic(`wedge top ${top.toFixed(2)} m over a middle at ${y0.toFixed(2)} m; one slice: y ${y0.toFixed(4)} → ${car.group.position.y.toFixed(4)} (${rise >= 0 ? "+" : ""}${rise.toFixed(4)}), vy ${car.velocity.y.toFixed(2)}, flying ${car.airborne}, masses ${car.deform.massActive}`);
+    t.annotate(`wedge top ${top.toFixed(2)} m over a middle at ${y0.toFixed(2)} m; one slice: y ${y0.toFixed(4)} → ${car.group.position.y.toFixed(4)} (${rise >= 0 ? "+" : ""}${rise.toFixed(4)}), vy ${car.velocity.y.toFixed(2)}, flying ${car.airborne}, masses ${car.deform.massActive}`);
     assert.ok(rise <= 0, `a wreck falling at ${car.velocity.y.toFixed(1)} m/s rose ${rise.toFixed(3)} m in one slice (landed ${!car.airborne})`);
   });
 
@@ -374,7 +374,7 @@ const STRUCK_SPEED = 15.4;
       if (struck && p.z > -RAMP.start) flew = Math.max(flew, p.y - ramps.heightAt(p.x, p.z, p.y));
       flags.frame();
     }, flags.slice);
-    t.diagnostic(`crashed ${car.crashed}; past the lip ${flew.toFixed(2)} m over the ground; end y ${p.y.toFixed(3)} at z ${p.z.toFixed(1)}; flagged ${flags.list.length}: ${flags.list.slice(0, 4).join("; ")}`);
+    t.annotate(`crashed ${car.crashed}; past the lip ${flew.toFixed(2)} m over the ground; end y ${p.y.toFixed(3)} at z ${p.z.toFixed(1)}; flagged ${flags.list.length}: ${flags.list.slice(0, 4).join("; ")}`);
     assert.ok(car.crashed, "the hit did not wreck the car");
     assert.ok(flew > 0.5, `past the lip only ${flew.toFixed(2)} m over the ground: it did not fly`);
     assert.ok(Math.abs(p.y - ramps.heightAt(p.x, p.z, p.y)) < 0.15, `ended ${p.y.toFixed(2)} m up: it did not land`);
@@ -406,7 +406,7 @@ const AT_REST_TILT_DEGREES = 1.72;
     });
     // Where it comes down is the flight's: a slower run up the ramp lands it on the far ramp's foot (a 5.7° face), not the flat between them.
     const rest = fit(car, ramps);
-    t.diagnostic(`at rest: y ${p.y.toFixed(3)}, vy ${car.velocity.y.toFixed(3)}, worst vy with y still ${stale.toFixed(3)} m/s, pitch ${rest.pitch.toFixed(2)}° on a ground pitched ${rest.groundPitch.toFixed(2)}°, tilt from it ${rest.tilt.toFixed(2)}°`);
+    t.annotate(`at rest: y ${p.y.toFixed(3)}, vy ${car.velocity.y.toFixed(3)}, worst vy with y still ${stale.toFixed(3)} m/s, pitch ${rest.pitch.toFixed(2)}° on a ground pitched ${rest.groundPitch.toFixed(2)}°, tilt from it ${rest.tilt.toFixed(2)}°`);
     assert.ok(stale < 0.05, `y still while vy ${stale.toFixed(3)} m/s`);
     assert.ok(rest.tilt < AT_REST_TILT_DEGREES, `${rest.tilt.toFixed(2)}° off the ground under it (pitch ${rest.pitch.toFixed(2)}° on ${rest.groundPitch.toFixed(2)}°, roll ${rest.roll.toFixed(2)}° on ${rest.groundRoll.toFixed(2)}°)`);
   });
@@ -429,7 +429,7 @@ describe("given a parked car lying across the track, with another car flying 2 m
     let hits = 0;
     w.pairHit = () => void hits++;
     run(w, 0.7, () => {});
-    t.diagnostic(`pair hits ${hits}; crashed low ${low.crashed} high ${high.crashed}; high at z ${high.group.position.z.toFixed(1)} y ${high.group.position.y.toFixed(2)}`);
+    t.annotate(`pair hits ${hits}; crashed low ${low.crashed} high ${high.crashed}; high at z ${high.group.position.z.toFixed(1)} y ${high.group.position.y.toFixed(2)}`);
     assert.ok(high.group.position.z > 3 && high.group.position.y > 1.9, `the high car is at z ${high.group.position.z.toFixed(1)} y ${high.group.position.y.toFixed(2)}: it never passed over`);
     assert.equal(hits, 0);
     assert.ok(!low.crashed && !high.crashed, "a car crashed");
@@ -451,7 +451,7 @@ describe("given a car driven at walking pace into a ramp's side", () => {
         }
       }
     }
-    t.diagnostic(`\n${rows.join("\n")}`);
+    t.annotate(`\n${rows.join("\n")}`);
     assert.deepEqual(failures, []);
   });
 
@@ -464,7 +464,7 @@ describe("given a car driven at walking pace into a ramp's side", () => {
       rows.push(`wall ${wall} m: worst roll ${r.roll.toFixed(0)}°, reached z ${r.z.toFixed(1)}`);
       assert.ok(r.roll <= 30, `monster 30° off the run, wall ${wall} m: worst roll ${r.roll.toFixed(0)}°, reached z ${r.z.toFixed(1)}`);
     }
-    t.diagnostic(rows.join("; "));
+    t.annotate(rows.join("; "));
   });
 });
 
@@ -489,7 +489,7 @@ describe("given a settled sedan with its nose crushed and its bonnet torn off, a
     run(w, 2, () => {});
     const pushed = car.group.position.x - x0;
     const quiet = car.deform.quietTime() - quiet0;
-    t.diagnostic(`body nose x ${body.toFixed(3)}, parked bonnet x ${bonnet.toFixed(3)}, flank x ${flank.toFixed(3)}: side contacts ${contacts}, contact clock +${quiet.toFixed(3)} s, pushed ${pushed.toFixed(4)} m`);
+    t.annotate(`body nose x ${body.toFixed(3)}, parked bonnet x ${bonnet.toFixed(3)}, flank x ${flank.toFixed(3)}: side contacts ${contacts}, contact clock +${quiet.toFixed(3)} s, pushed ${pushed.toFixed(4)} m`);
     assert.ok(bonnet < flank - 0.1 && body > flank + 0.1, `the flank at ${flank.toFixed(3)} is not between the parked bonnet ${bonnet.toFixed(3)} and the body ${body.toFixed(3)}`);
     assert.equal(contacts, 0);
     assert.ok(quiet > 1.9, `the contact clock ran ${quiet.toFixed(3)} s of 2 s`);

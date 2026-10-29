@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { CHEVRON_GAP, CHEVRON_RUN, CHEVRON_SLOTS, CHEVRON_TURN, PREFAB } from "./constants.ts";
 import { junctionsOf } from "./junctions.ts";

@@ -1,5 +1,6 @@
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import { carDoorPass, carSandwich, carStrike, copIntoSide, crushMismatch, DOOR_FORMS, doorGap, doorHit, onGround, pistonStrike, pressByForce, pressUntil, ramDoorPass, shortening, type CarState, type DoorGap, type Strike } from "./contact-parity.test-util.ts";
 import { assertSameDigest } from "../vehicle/test-support.ts";
 
@@ -46,7 +47,7 @@ describe("given the Doors ram lane's three scenes (mirror: the striker grazes a 
 });
 
 describe("given two cars driving into the nose and tail of a middle car, and a press closed to the same shortening", () => {
-  it("when each car hits at 20 km/h, then the middle car's parts and crush match the press's", { todo: "after the plan: close the sandwich's car-car crush to the press's at the same shortening; at 20 km/h the car crushes less than the press (car / press mm: engineL 18 / 37, engineR 18 / 37, railL 13 / 25, railR 13 / 25, tank 17 / 36, axleR 20 / 40, bumperRL 22 / 65, bumperRR 22 / 65, wingFL 17 / 28, wingFR 17 / 28)" }, () => {
+  todoRow("when each car hits at 20 km/h, then the middle car's parts and crush match the press's", "after the plan: close the sandwich's car-car crush to the press's at the same shortening; at 20 km/h the car crushes less than the press (car / press mm: engineL 18 / 37, engineR 18 / 37, railL 13 / 25, railR 13 / 25, tank 17 / 36, axleR 20 / 40, bumperRL 22 / 65, bumperRR 22 / 65, wingFL 17 / 28, wingFR 17 / 28)", () => {
     const s = carSandwich(20);
     const press = pressUntil((p) => shortening(p.car!) * 1000 >= s.a.shortenMm).state;
     sameParts(s.a, press, "sandwich");
@@ -56,7 +57,7 @@ describe("given two cars driving into the nose and tail of a middle car, and a p
 
 describe("given two cars driving into the nose and tail of a middle car, and a press whose plates are pushed by the same force over time as the two cars pushed (not closed to a shortening)", () => {
   for (const kph of [10, 20, 30, 40, 60]) {
-    it(`when each car hits at ${kph} km/h, then the middle car's parts and crush match the force-driven press's`, { todo: "after the plan: give the force-driven press a crush force independent of the first slice's arming speed, or the sandwich the same law; the press tears no part the sandwich spares, but at 10 km/h it crushes the middle car's particles 0.39-1.66 m where the sandwich's travel 0-39 mm, and from 20 km/h it also kills the drivetrain the sandwich leaves alive (5 of 5 speeds red)" }, () => {
+    todoRow(`when each car hits at ${kph} km/h, then the middle car's parts and crush match the force-driven press's`, "after the plan: give the force-driven press a crush force independent of the first slice's arming speed, or the sandwich the same law; the press tears no part the sandwich spares, but at 10 km/h it crushes the middle car's particles 0.39-1.66 m where the sandwich's travel 0-39 mm, and from 20 km/h it also kills the drivetrain the sandwich leaves alive (5 of 5 speeds red)", () => {
       const s = carSandwich(kph);
       const press = pressByForce(s.force).state;
       sameParts(s.a, press, `sandwich ${kph} km/h`);
@@ -83,7 +84,7 @@ describe("given a piston and a car of the same mass and speed striking a crushab
     // masses the struck car gets half the reduced-mass energy, the piston's hardness 0.5. Each at
     // main's squash 0.4 and the calibrated 0.32: at 0.32 the 40 km/h block sank 72 mm under a car's
     // nose vs 61 mm under the piston, a bounce frozen when the shorter car-car contact closed the solve.
-    it(`when a ${CAR_KG} kg car and a ${CAR_KG} kg piston each hit at ${kph} km/h at crush softness 0.4 and 0.32, then the car's parts and crush match the piston's`, { todo: FROZEN_SPRINGBACK }, () => {
+    todoRow(`when a ${CAR_KG} kg car and a ${CAR_KG} kg piston each hit at ${kph} km/h at crush softness 0.4 and 0.32, then the car's parts and crush match the piston's`, FROZEN_SPRINGBACK, () => {
       for (const squash of [0.4, 0.32]) {
         const car = carStrike("front", kph, squash).a;
         const piston = pistonStrike("front", kph, CAR_KG, 0.5, squash);
@@ -105,7 +106,7 @@ describe("given a piston and a car of the same mass and speed striking the parke
   };
   for (const [at, kph] of hits) {
     const todo = PISTON_TODO[`${at} ${kph}`] ?? false;
-    it(`when a ${CAR_KG} kg car and a ${CAR_KG} kg piston each hit the ${at} at ${kph} km/h at crush softness 0.4 and 0.32, then the car's parts and crush match the piston's`, { todo }, () => {
+    todoRow(`when a ${CAR_KG} kg car and a ${CAR_KG} kg piston each hit the ${at} at ${kph} km/h at crush softness 0.4 and 0.32, then the car's parts and crush match the piston's`, todo, () => {
       for (const squash of [0.4, 0.32]) {
         const car = carStrike(at, kph, squash).a;
         const piston = pistonStrike(at, kph, CAR_KG, 0.5, squash);
@@ -125,7 +126,7 @@ describe("given a police sedan driving nose-first into the right side of a parke
     for (const coarse of [false, true]) {
       it(`when it hits at ${mps} m/s with the sim stepped at 1/${coarse ? 120 : 240} s, then the drawn bodies never overlap by more than ${SKIN} m, and any overlap shows as dent depth in the struck side and the police nose after they separate`, (t) => {
         const hit = copIntoSide(mps, coarse);
-        t.diagnostic(`overlap ${hit.overlapM.toFixed(3)} m, struck side intrusion ${hit.intrusionMm} mm, police nose crush ${hit.noseMm} mm`);
+        t.annotate(`overlap ${hit.overlapM.toFixed(3)} m, struck side intrusion ${hit.intrusionMm} mm, police nose crush ${hit.noseMm} mm`);
         const failures: string[] = [];
         if (hit.overlapM > SKIN) failures.push(`overlap ${hit.overlapM.toFixed(3)} m`);
         const dentM = (hit.intrusionMm + hit.noseMm) / 1000;
@@ -156,7 +157,7 @@ describe("given every door scene (mirror, overOpen, shut, panelPush, panelPull) 
           // A car stands in for the ram only at a car's own mass.
           const forms = kg === CAR_KG ? DOOR_FORMS : DOOR_FORMS.slice(0, 2);
           const todo = scenario === "shut" && kph === 12 && kg === CAR_KG ? "after the plan: find why the car as the ram folds the shut door's mirror 0.6 deg with no tyre grip (bound 0.5 deg) and 0.8 deg with grip (bound tyre term 0.0 + 0.5 deg) at 12 km/h, left and right; the carStrikes and reversingCar forms only" : false;
-          it(`when the ${scenario} hit runs on the ${side < 0 ? "left" : "right"} side at ${kph} km/h with a ${kg} kg striker (${forms.length} forms), then every form breaks off the same parts and leaves the door, latch, mirror, drivetrain and crush as the ram-moves form does, to ${TIGHT.crushMm} mm and ${TIGHT.doorDeg}° with no tyre grip and to that plus the tyres' own effect with grip`, { todo }, (t) => {
+          todoRow(`when the ${scenario} hit runs on the ${side < 0 ? "left" : "right"} side at ${kph} km/h with a ${kg} kg striker (${forms.length} forms), then every form breaks off the same parts and leaves the door, latch, mirror, drivetrain and crush as the ram-moves form does, to ${TIGHT.crushMm} mm and ${TIGHT.doorDeg}° with no tyre grip and to that plus the tyres' own effect with grip`, todo, (t) => {
             const hit = cached((form: (typeof DOOR_FORMS)[number], grip: boolean) => doorHit(form, scenario, kph, kg, grip, side));
             const reference = hit("ramMoves", true);
             const referenceFree = hit("ramMoves", false);
@@ -174,7 +175,7 @@ describe("given every door scene (mirror, overOpen, shut, panelPush, panelPull) 
                 if (gripped[k] > tyre[k] + TIGHT[k]) failures.push(`${form} with grip: ${k} ${gripped[k].toFixed(1)} > tyre term ${tyre[k].toFixed(1)} + ${TIGHT[k]}`);
               }
             }
-            t.diagnostic(rows.join("\n"));
+            t.annotate(rows.join("\n"));
             assert.deepEqual(failures, []);
           });
         }
@@ -196,7 +197,7 @@ const SWAPPED_TODO: Record<string, string> = {
 describe("given the same hit on the nose, tail and right side of a parked car delivered by a moving piston, by a moving car, and in the swapped frame (the head, or the striker car, standing still while the struck car drives into it)", () => {
   for (const at of ["front", "rear", "right"] as const) {
     for (const kph of [10, 30]) {
-      it(`when a ${CAR_KG} kg striker hits the ${at} at ${kph} km/h, then the struck car's parts and crush are the same whichever of the four runs it is, to ${TIGHT.crushMm} mm with no tyre grip and to that plus the tyres' own effect with grip`, { todo: SWAPPED_TODO[`${at} ${kph}`] }, (t) => {
+      todoRow(`when a ${CAR_KG} kg striker hits the ${at} at ${kph} km/h, then the struck car's parts and crush are the same whichever of the four runs it is, to ${TIGHT.crushMm} mm with no tyre grip and to that plus the tyres' own effect with grip`, SWAPPED_TODO[`${at} ${kph}`], (t) => {
         const runs = {
           pistonMoves: cached((grip: boolean) => onGround(grip, () => pistonStrike(at, kph, CAR_KG, 0.5))),
           carMovesIntoPiston: cached((grip: boolean) => onGround(grip, () => pistonStrike(at, kph, CAR_KG, 0.5, undefined, true))),
@@ -218,7 +219,7 @@ describe("given the same hit on the nose, tail and right side of a parked car de
             if (gripped[k] > tyre[k] + TIGHT[k]) failures.push(`${form} with grip: ${k} ${gripped[k].toFixed(1)} > tyre term ${tyre[k].toFixed(1)} + ${TIGHT[k]}`);
           }
         }
-        t.diagnostic(rows.join("\n"));
+        t.annotate(rows.join("\n"));
         assert.deepEqual(failures, []);
       });
     }

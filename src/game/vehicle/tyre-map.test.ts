@@ -1,6 +1,6 @@
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { describe, it } from "node:test";
 import type * as THREE from "three";
 import type * as CarMaterials from "./car-materials.ts";
 import {

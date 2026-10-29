@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { makeWorld } from "../world/race-world.test-util.ts";
@@ -77,7 +77,7 @@ describe("given the oval race with 11 AI and police on, where two racers are put
           const { clip } = rec;
           const held = clip.cars.filter((c) => placed.includes(c.slot)).map((c) => c.slot);
           const a = agreement(rec, () => w.race.resetProps());
-          t.diagnostic(
+          t.annotate(
             `cops ${held.join(",")} put on a spot (the head-on staged beside ${cop}) of ${clip.cars.length} clip cars, ${(clipBytes(clip) / 1024).toFixed(0)} KB, ${clip.keyStep.length} keyframes, impact at ${clip.firstImpact.toFixed(2)} s: ` +
               `${a.steps} steps, worst pose ${a.pose.max} m, velocity ${a.vel.max} m/s, crush ${a.crush.max} m, wreck flags differ ${a.wreckMismatch}`,
           );

@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { epicenterOn } from "../deform/epicenter.ts";
 import { KNOB_DEFAULTS, KNOBS } from "../hud/knobs.ts";
@@ -61,14 +61,14 @@ describe("given one page that runs the bench's steps in turn, as the loop does (
     wrecks[name] = engine.benchParts().live().filter((car) => car.crashed).length;
   };
 
-  before(async () => {
+  beforeAll(async () => {
     engine = await benchPlanEngine("?bench=city");
     step("city first", "?bench=city");
     step("city with the activation", "?bench=city&epi=1");
     step("strip", "?bench=strip");
     step("city again", "?bench=city", true);
   });
-  after(() => disposeBenchEngine(engine));
+  afterAll(() => disposeBenchEngine(engine));
 
   it("when the city bench is entered again after the epicenter arm and the strip, this time with the window's recording on (phase clock, counters, per-second series), then its sim is bit for bit the first one's, which ran unrecorded: nothing a step leaves behind reaches the next, and recording changes nothing", () => {
     assert.equal(digests["city again"], digests["city first"]);

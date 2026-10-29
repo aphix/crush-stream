@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import * as THREE from "three";
@@ -130,7 +130,7 @@ describe("given the real engine headless", () => {
     }
   };
 
-  before(async () => {
+  beforeAll(async () => {
     // The crash is recorded on a flat field before the engine boots: a race's ground would tilt it out of the highlight ranking.
     setGround(null);
     recorded = recordFlat(HEAD_ON, 8, true).clip;
@@ -140,7 +140,7 @@ describe("given the real engine headless", () => {
     globalThis.localStorage = { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => void store.set(key, value), removeItem: (key: string) => void store.delete(key) } as Storage;
     engine = await bootEngine({ pacer: true });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     rivalsOracle.dispose();
     setGround(null);

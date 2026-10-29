@@ -1,5 +1,6 @@
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import { PAIR_MU } from "./constants.ts";
 import { ownerHit, rigidExchange } from "./off-centre-hit.test-util.ts";
 
@@ -26,7 +27,7 @@ describe("given a hatchback at 98 km/h driving across a coupe's path, its nose m
       const [a1, b1] = hit.after;
 
       const middleTurnTodo = testCase.spot === "middle" && "coupe's turn is the crush's lever drift over 29 ms against the instant rigid answer (4.63 vs 3.07 rad/s): Stage 4 item 6 (wreck split)";
-      it("then the coupe turns at the rate a rigid body's impulse at that lever gives, in the same direction", { todo: middleTurnTodo }, () => {
+      todoRow("then the coupe turns at the rate a rigid body's impulse at that lever gives, in the same direction", middleTurnTodo, () => {
         const got = b1.yawRate - b0.yawRate;
         const lever = Math.hypot(hit.point.x - b0.x, hit.point.z - b0.z);
         assert.ok(
@@ -52,7 +53,7 @@ describe("given a hatchback at 98 km/h driving across a coupe's path, its nose m
       // dvz -0.50 against the rigid -0.53), where the single-instant reference turns it 0.13: the coupe turns 0.08 rad while the nose crushes
       // (flank normal tilting -0.06 to +0.02) and the lever moves from +0.08 to -0.06 m, and the turn is J·Δ(lever)/I = 9941·0.1/940 = 1.1 rad/s
       // per 0.1 m of either. Owner's clip: 1.98 against 0.88 rad/s, the same mechanism. The speeds and the coupe's spin rows pass.
-      it("then the hatchback is turned by the reaction at its own corner, in the same direction", { todo: "hatchback's turn is the crush's friction torque over 29 ms against the instant rigid answer (1.98 vs 0.88, 0.88 vs 0.13 rad/s): Stage 4 item 6 (wreck split)" }, () => {
+      todoRow("then the hatchback is turned by the reaction at its own corner, in the same direction", "hatchback's turn is the crush's friction torque over 29 ms against the instant rigid answer (1.98 vs 0.88, 0.88 vs 0.13 rad/s): Stage 4 item 6 (wreck split)", () => {
         const got = a1.yawRate - a0.yawRate;
         assert.ok(
           Math.abs(got - rigid.dwA) <= Math.max(0.5, TOLERANCE * Math.abs(rigid.dwA)),

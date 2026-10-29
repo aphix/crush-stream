@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DerbyMatch, snapshotAiCar } from "./derby.ts";
@@ -219,7 +220,7 @@ describe("given derby matches between AI cars", () => {
     // with no pair hit and no car within 3.3 m moves its masses 2-5.6 cm a step for 1-7 steps (seed 1: 4.3, 4.7, 4.9 cm at t = 7.83 s,
     // mass velocity 0.17-0.52 m/s; seed 2: 5.6 cm at 11.75 s): seeds 1/2/3/default give 3/4/1/7 events, max 4.9/5.6/2.1/2.7 cm on the lane
     // against 0/0/1/6, max 0/0/5.0/5.4 cm on da39401. Closes with the above.
-    it(`when a car crashes, then its body never moves more than 3 times its speed times the slice length plus 2 cm in one slice, from the spawn speed ${POP_SPAWN_MPS} m/s where the pop shows`, { todo: "after the plan (still open after Stage 4 item 6, the wreck split): a wreck at rest against the ring wall takes the wall's drawn-body shove (`wallBounce`) once per wall piece it meets in a slice: spawn 11.80 m/s, o6 at 4.78-4.85 s, three or four 12-13 mm shoves in one 8.8 ms slice (group 0.03-0.047 m at 0.0 m/s). Limiting the slice's total to one reach moved the pops to spawn 11.65 (o6 0.032-0.047 m at 0.3 m/s, mid-contact), cleared the stucco second-hit sink row, and reshuffled derby-ai (seeds 5-7 zipped, a spin) and engine-replay seed 1; closes with the masses carried as a crush layer of the rigid body" }, () => {
+    todoRow(`when a car crashes, then its body never moves more than 3 times its speed times the slice length plus 2 cm in one slice, from the spawn speed ${POP_SPAWN_MPS} m/s where the pop shows`, "after the plan (still open after Stage 4 item 6, the wreck split): a wreck at rest against the ring wall takes the wall's drawn-body shove (`wallBounce`) once per wall piece it meets in a slice: spawn 11.80 m/s, o6 at 4.78-4.85 s, three or four 12-13 mm shoves in one 8.8 ms slice (group 0.03-0.047 m at 0.0 m/s). Limiting the slice's total to one reach moved the pops to spawn 11.65 (o6 0.032-0.047 m at 0.3 m/s, mid-contact), cleared the stucco second-hit sink row, and reshuffled derby-ai (seeds 5-7 zipped, a spin) and engine-replay seed 1; closes with the masses carried as a crush layer of the rigid body", () => {
       const run = ownerDerby(15, ARCADE, POP_SPAWN_MPS);
       assert.equal(run.pops.length, 0, `${run.pops.length} pops: ${run.pops.slice(0, 4).join("; ")}`);
     });

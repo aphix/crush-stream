@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
@@ -54,12 +54,12 @@ describe("given the real engine in a running derby, and a canvas that carries po
     ray.setFromCamera({ x: (x / CANVAS_W) * 2 - 1, y: -(y / CANVAS_H) * 2 + 1 } as never, engine["camera"]);
     return ray.intersectObjects(engine["live"]().map((c) => c.group), true).length > 0;
   };
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     canvas = pointerCanvas();
     engine = await bootEngine({ canvas, pacer: true });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

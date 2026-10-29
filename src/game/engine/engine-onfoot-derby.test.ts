@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { FRAME, OnFootRig } from "./engine-onfoot.test-util.ts";
 
@@ -19,7 +19,7 @@ describe("given the real engine in a derby, the player at the wheel of his car o
   let rig: OnFootRig;
   const derby = () => rig.engine["derby"];
 
-  before(async () => {
+  beforeAll(async () => {
     rig = await OnFootRig.boot();
     rig.engine["looping"] = false;
     rig.engine.toggleDerby();
@@ -29,7 +29,7 @@ describe("given the real engine in a derby, the player at the wheel of his car o
     rig.run(FRAME);
     assert.equal(rig.engine["seat"].mode, "drive", "the player has the wheel");
   });
-  after(() => rig.dispose());
+  afterAll(() => rig.dispose());
 
   it("when he gets out on the grid, is run down by a rival, and every rival's engine then dies, then his car is the last one alive and wins while he is still on foot, and he gets back in and drives", () => {
     const self = rig.engine["seat"].carIndex;

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { Track, blankPoint, blankProjection, pointOn } from "../world/track.ts";
 import { BUST, CLEARANCE, COUNTDOWN, DRAFT, FINISH_GRACE, GRID_TIME, RESPAWN_BRAKE, RESPAWN_DELAY, RaceSession, WRONG_WAY_ON, startLights } from "./session.ts";

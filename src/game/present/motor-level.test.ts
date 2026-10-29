@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { REV_IDLE, VEHICLE_CLASS_IDS, type DamageStage, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { voiceLevels, type Level } from "./motor-level.test-util.ts";

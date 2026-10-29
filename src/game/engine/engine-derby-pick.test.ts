@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
@@ -24,14 +24,14 @@ describe("given the real engine in a derby match past its green light, nobody se
     if (spot.z > 1 || Math.abs(spot.x) > 0.95 || Math.abs(spot.y) > 0.95) return null;
     return { x: (spot.x * 0.5 + 0.5) * CANVAS_W, y: (-spot.y * 0.5 + 0.5) * CANVAS_H };
   };
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine({ pacer: true });
     engine.toggleDerby();
     runSeconds(engine, 8);
     frameCamera();
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

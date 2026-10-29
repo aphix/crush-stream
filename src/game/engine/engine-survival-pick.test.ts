@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { TRACK_ID } from "../world/constants.ts";
@@ -18,7 +18,7 @@ describe("given the real engine booted on #scene=survival&track=national-mall", 
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
   const bar: string[] = [];
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     globalThis.location.hash = "#scene=survival&track=national-mall";
     // The address bar as the browser keeps it: a write lands in `location.hash`.
@@ -28,7 +28,7 @@ describe("given the real engine booted on #scene=survival&track=national-mall", 
     };
     engine = await bootEngine({ pacer: true });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

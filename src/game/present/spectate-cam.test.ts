@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -60,7 +60,7 @@ describe("given the trackside cinematic camera (a fixed eye beside the course th
           for (const why of eyeProblems(track, cols, e, car.group.position)) bad.push(`s ${s}: ${why}`);
           if (e.y - ground.heightAt(e.x, e.z, e.y) > CINE.heights.at(-1)! + 0.01) bad.push(`s ${s}: eye ${e.y.toFixed(1)} m too high`);
         }
-        t.diagnostic(`${track.id}: ${found}/${spots} spots framed, pick ${(total / spots).toFixed(2)} ms mean, ${worst.toFixed(2)} ms worst`);
+        t.annotate(`${track.id}: ${found}/${spots} spots framed, pick ${(total / spots).toFixed(2)} ms mean, ${worst.toFixed(2)} ms worst`);
         assert.deepEqual(bad, []);
         assert.ok(found >= spots * 0.9, `${track.id}: only ${found}/${spots} spots found a clear eye`);
       } finally {
@@ -191,7 +191,7 @@ describe("given the wheel-well dutch camera (an eye mounted in each wheel well, 
         mine += dutch.seen(car, rivals, dutch.mount, camera);
         for (let j = 0; j < MOUNT_COUNT; j++) fixed[j]! += dutch.seen(car, rivals, j, camera);
       }
-      t.diagnostic(`rival-samples in view: dutch ${mine}, fixed wells ${fixed.join(" ")}; ${cuts} cuts`);
+      t.annotate(`rival-samples in view: dutch ${mine}, fixed wells ${fixed.join(" ")}; ${cuts} cuts`);
       assert.ok(cuts >= 15, `${cuts} cuts in 70 s`);
       // The rivals trail the watched car for most of the lap, so the best fixed well (one looking back) sees nearly all of them at every sample
       // (1104 of the 1120 possible at reseed 3) and the cam, holding each cut 1.2-3.5 s, can trail it by a sample or two when a rival
@@ -341,7 +341,7 @@ describe("given the Auto spectator camera (the shot director that cuts between s
           checked++;
           for (const why of eyeProblems(track, cols, camera.position, car.group.position)) bad.push(`cut ${cuts} (${kind}) at ${(n * FRAME).toFixed(1)} s: ${why}`);
         }
-        t.diagnostic(`${track.id}: ${cuts} cuts in 90 s (${[...kinds].join(", ")}), ${checked} searched spots checked`);
+        t.annotate(`${track.id}: ${cuts} cuts in 90 s (${[...kinds].join(", ")}), ${checked} searched spots checked`);
         assert.deepEqual(bad, []);
         assert.ok(cuts >= 8, `${cuts} cuts in 90 s`);
         assert.ok(kinds.size >= 3, `only ${[...kinds].join(", ")}`);
@@ -428,7 +428,7 @@ describe("given the Auto spectator camera (the shot director that cuts between s
         prevEye.copy(camera.position);
         prevCar.copy(car.group.position);
       }
-      t.diagnostic(`${hz} Hz: the eye steps at most ${worst.toFixed(4)} m a frame beyond the car's own`);
+      t.annotate(`${hz} Hz: the eye steps at most ${worst.toFixed(4)} m a frame beyond the car's own`);
       assert.ok(worst < 0.1, `${hz} Hz: the eye steps ${worst.toFixed(3)} m a frame beyond the car's own`);
     }
   });

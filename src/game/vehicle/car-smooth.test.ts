@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import * as THREE from "three";
-import { describe, it } from "node:test";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { CAR_STYLES, CAR_STYLE_IDS, drawnStyle, type BodyStyle, type CarStyleId, type DrawnTwin } from "./car-variants.ts";

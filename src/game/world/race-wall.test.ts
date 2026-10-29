@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld, type World } from "./race-world.test-util.ts";
@@ -356,7 +356,7 @@ describe("given the city course's inner wall at the top of the bend past the cou
         }
         const { inside } = reachWall(car, CITY_WALLS, from);
         const note = `hit at ${hardest.toFixed(1)} m/s, ${car.deform.massActive ? "wreck" : "rigid"}, ${(Math.hypot(car.velocity.x, car.velocity.z) * 3.6).toFixed(1)} km/h at the end, deepest ${deepest.toFixed(3)} m in the wall, ${past.toFixed(3)} m past its far face, ${inside.toFixed(3)} m left in it`;
-        t.diagnostic(note);
+        t.annotate(note);
         assert.ok(hardest > 5, `${a.label}: met the wall at ${hardest.toFixed(1)} m/s, not the owner's hard hit (${note})`);
         assert.ok(past <= PAST, `${a.label}: the body reached ${past.toFixed(3)} m past the wall's far face (${note})`);
         assert.ok(inside <= INSIDE, `${a.label}: ${inside.toFixed(3)} m of the body left in the wall (${note})`);

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { frame, makeWorld } from "./race-world.test-util.ts";
@@ -69,7 +69,7 @@ describe("given a field of 36 or 40 cars on a ring, each driving at its centre, 
   for (const n of SIZES) {
     it(`when ${n} cars meet and pile up for ${PILE_S} s after a car past the 32nd first touches another, then the step runs, every car stays at a real position and cars past the 32nd collide`, (t) => {
       const r = pileup(n);
-      t.diagnostic(`contacts ${r.contacts}, on a car past the 32nd ${r.pastCap}, fine slice ${r.fine.toFixed(5)} s`);
+      t.annotate(`contacts ${r.contacts}, on a car past the 32nd ${r.pastCap}, fine slice ${r.fine.toFixed(5)} s`);
       assert.equal(r.thrown, "");
       assert.ok(r.fine > 0, `fine floor ${r.fine}`);
       assert.equal(r.nonFinite, 0);

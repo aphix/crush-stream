@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { makeWorld } from "../world/race-world.test-util.ts";
@@ -79,7 +79,7 @@ describe("given a race on the oval where the player's car is driven flat out int
           assert.equal(a.crush.max, 0, `seed ${seed}: a car's crush strays from the live sim\n${rows.join("\n")}`);
           assert.equal(a.wreckMismatch, 0, `seed ${seed}: a car's wreck flags differ from the live sim\n${rows.join("\n")}`);
         }
-        t.diagnostic(rows.join("\n"));
+        t.annotate(rows.join("\n"));
       } finally {
         w.race.exit();
         setGround(null);

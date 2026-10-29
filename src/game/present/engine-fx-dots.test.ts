@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
@@ -51,10 +51,10 @@ const POOLS: readonly Pool[] = [
   },
 ];
 
-before(() => {
+beforeAll(() => {
   Object.defineProperty(globalThis, "document", { value: CANVAS, configurable: true });
 });
-after(() => {
+afterAll(() => {
   Reflect.deleteProperty(globalThis, "document");
 });
 

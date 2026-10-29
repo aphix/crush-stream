@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { launch, makeCar, relaunchDamaged, runWall } from "./crash-scenarios.test-util.ts";
 import { faceDepth, faceExit, makeBox, solidFace, type ContactBox } from "./external-contact.ts";

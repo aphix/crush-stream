@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { makeWorld } from "../world/race-world.test-util.ts";
@@ -225,7 +225,7 @@ describe("given a sedan driven at 40 m/s into Havana's alley wall from the flat 
       let moved = 0;
       for (const m of moves) moved += m;
       const perStep = (moved / moves.length) * 1000;
-      t.diagnostic(`from ${gap} m, ${lone ? "lone" : "sliced"}: ${perStep.toFixed(2)} mm a step away from the wall over ${moves.length} free steps`);
+      t.annotate(`from ${gap} m, ${lone ? "lone" : "sliced"}: ${perStep.toFixed(2)} mm a step away from the wall over ${moves.length} free steps`);
       if (perStep < 0) walks.push(`${lone ? "lone" : "sliced"}: ${(-perStep).toFixed(2)} mm a step toward the wall over ${moves.length} steps from ${gap} m`);
     }
     assert.deepEqual(walks, [], "the frame walked toward the face it rests on");
@@ -243,7 +243,7 @@ describe("given a sedan driven at 20 m/s into Havana's alley wall from 11 m with
       const on = rows.filter((r) => r.face > 0).length;
       const off = rows.slice(first).filter((r) => r.near > rest + OFF_FACE);
       const stale = off.filter((r) => r.face > 0).length;
-      t.diagnostic(`${lone ? "lone" : "sliced"}: ${on} steps with masses on the face, ${off.length} clear of it, ${stale} of those counting masses on it`);
+      t.annotate(`${lone ? "lone" : "sliced"}: ${on} steps with masses on the face, ${off.length} clear of it, ${stale} of those counting masses on it`);
       assert.ok(on > 0 && off.length > 0, `${lone ? "lone" : "sliced"}: ${on} steps on the face, ${off.length} clear of it`);
       if (stale > 0) counted.push(`${lone ? "lone" : "sliced"}: ${stale} of ${off.length} steps clear of the face`);
     }

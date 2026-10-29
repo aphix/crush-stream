@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import { runField } from "./derby-field.test-util.ts";
 import { SPIN_RATE_BAR } from "./vertical-turn.test-util.ts";
@@ -41,7 +42,7 @@ describe(`given ten AI cars at the default aggression, one fixed heat (seed ${SE
 
   // The struck car's spin is the pair kernel's lever (`bodyContact`: dw = J·lever/I); what slows a spinning wreck is the tyres' yaw grip,
   // which the wreck split (`tyre-yaw.ts`, `followGroup`) still owns until Stage 5 makes the wreck one rigid body on the same solve.
-  it("when the heat is played, then the turn rate over 0.1 s while cars are in contact never exceeds 6.5 rad/s, and no car spins in contact", { todo: "contact peaks over 6.5 rad/s (lever torque of the pair kernel; the tyres' yaw grip is the wreck's): Stage 5" }, () => {
+  todoRow("when the heat is played, then the turn rate over 0.1 s while cars are in contact never exceeds 6.5 rad/s, and no car spins in contact", "contact peaks over 6.5 rad/s (lever torque of the pair kernel; the tyres' yaw grip is the wreck's): Stage 5", () => {
     assert.deepEqual(r.contactSpins, [], row);
     assert.ok(r.contactPeak.rate <= 6.5, row);
   });

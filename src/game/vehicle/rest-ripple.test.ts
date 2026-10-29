@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import * as THREE from "three";
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
 import { DeformableCar } from "./car.ts";

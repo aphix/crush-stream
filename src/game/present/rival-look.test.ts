@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { CAR_SPRAY, SPRAY_PALETTE } from "../match/look-data.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";

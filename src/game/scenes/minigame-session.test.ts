@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { REST_HOLD, THROWS_PER_SET, type MinigameMode } from "./minigame-constants.ts";
 import { FIELD_HALF_WIDTH, SCORE_BAND_HALF_DEPTH } from "./minigame-high-jump.ts";

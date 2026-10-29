@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -150,7 +151,7 @@ describe("given a knockable prop standing in the infield of a course", () => {
       const gap = lowestPoint(testCase.prefab, body) - ground.heightAt(end.x, end.z, end.y);
       const [sx, sy, sz] = PREFABS[testCase.prefab].size;
       sys.dispose();
-      t.diagnostic(`tilted ${((tilt * 180) / Math.PI).toFixed(0)}°, rests ${(end.x - 60).toFixed(1)} m on, middle ${rise.toFixed(2)} m up, lowest point ${(gap * 1000).toFixed(1)} mm off the ground (deepest ${(sink * 1000).toFixed(1)}), ${speed.toFixed(3)} m/s, ${spin.toFixed(3)} rad/s, asleep ${asleep}`);
+      t.annotate(`tilted ${((tilt * 180) / Math.PI).toFixed(0)}°, rests ${(end.x - 60).toFixed(1)} m on, middle ${rise.toFixed(2)} m up, lowest point ${(gap * 1000).toFixed(1)} mm off the ground (deepest ${(sink * 1000).toFixed(1)}), ${speed.toFixed(3)} m/s, ${spin.toFixed(3)} rad/s, asleep ${asleep}`);
       if (testCase.tips) assert.ok(tilt > Math.PI / 4, `it never tipped past 45° (${((tilt * 180) / Math.PI).toFixed(0)}°)`);
       else assert.ok(tilt < (5 * Math.PI) / 180, `it tipped ${((tilt * 180) / Math.PI).toFixed(0)}°`);
       assert.ok(sink > -LANDING_SLOP, `its lowest point went ${(-sink * 1000).toFixed(1)} mm under the ground`);
@@ -323,7 +324,7 @@ describe("given a cone lying asleep against the foot of a course's road wall, wh
     { it: "when a car scrapes along the wall at 20 m/s, then the cone is shoved along and never goes into the wall", speed: 20 },
   ];
   for (const testCase of scrapeCases) {
-    it(testCase.it, { todo: testCase.todo }, async () => {
+    todoRow(testCase.it, testCase.todo, async () => {
       const sys = await system(course("cone", ROAD.x, ROAD.z));
       const world = sys["world"]!;
       const body = bodyOf(sys);
@@ -554,8 +555,7 @@ describe("given a cone knocked over by a car's bumper, lying asleep where it cam
     { it: "when a car drives into it at 40 m/s with its middle line 0.8 m to one side, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 40, acrossM: 0.8, headingDeg: 107, todo: coneRestsOnItsOtherSide },
   ] as const;
   for (const testCase of runOverCases) {
-    const options = "todo" in testCase ? { todo: testCase.todo } : {};
-    it(testCase.it, options, async (t) => {
+    todoRow(testCase.it, "todo" in testCase ? testCase.todo : false, async (t) => {
       const track = course("cone", 60, 60);
       const ground = track.ground();
       const sys = await system(track);
@@ -583,7 +583,7 @@ describe("given a cone knocked over by a car's bumper, lying asleep where it cam
       const gap = lowestPoint("cone", body) - ground.heightAt(end.x, end.z, end.y);
       const asleep = body.isSleeping();
       sys.dispose();
-      t.diagnostic(`deepest ${(sink * 1000).toFixed(1)} mm, rests ${(gap * 1000).toFixed(1)} mm off the ground, asleep ${asleep}`);
+      t.annotate(`deepest ${(sink * 1000).toFixed(1)} mm, rests ${(gap * 1000).toFixed(1)} mm off the ground, asleep ${asleep}`);
       assert.ok(sink > -LANDING_SLOP, `its lowest point went ${(-sink * 1000).toFixed(1)} mm under the ground`);
       assert.ok(Math.abs(gap) < REST_SLOP && asleep, `it rests with its lowest point ${(gap * 1000).toFixed(1)} mm off the ground (asleep: ${asleep})`);
     });

@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import { armedCar } from "../world/solid-parity.test-util.ts";
 import { FREEWHEEL, launch, strikeReach } from "./crash-scenarios.test-util.ts";
@@ -119,7 +120,7 @@ describe("given a fixed solid standing at the side of a sedan's path", () => {
     for (const speed of SPEEDS) {
       if (shape === KNIFE_EDGE.shape && speed === KNIFE_EDGE.speed) continue;
       const todo = shape === SLIVER && speed === 55 ? SLIVER_TODO : false;
-      it(`when the sedan drives at ${shape.it} at ${speed} m/s, started eight times one eighth of a physics step apart, then every run ends with the same drivetrain health (within ${HEALTH_BAND}) and leaves the contact at the same speed (within ${SPEED_BAND} m/s)`, { todo }, () => {
+      todoRow(`when the sedan drives at ${shape.it} at ${speed} m/s, started eight times one eighth of a physics step apart, then every run ends with the same drivetrain health (within ${HEALTH_BAND}) and leaves the contact at the same speed (within ${SPEED_BAND} m/s)`, todo, () => {
         const runs: Outcome[] = [];
         for (let k = 0; k < PHASES; k++) runs.push(strike(shape, speed, k));
         const health = runs.map((r) => r.health);

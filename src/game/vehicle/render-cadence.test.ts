@@ -1,4 +1,4 @@
-import { it } from "node:test";
+import { it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";

@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { applyDrive, type DriveInput } from "./car-drive.ts";
 import { G } from "./car-air-body.ts";
@@ -38,10 +38,10 @@ function largest(series: readonly number[]): number {
 
 describe("given a driven car on flat ground with stiff, short springs, knocked in pitch and roll", () => {
   let restoreSprings = (): void => {};
-  before(() => {
+  beforeAll(() => {
     restoreSprings = useStiffSprings();
   });
-  after(() => restoreSprings());
+  afterAll(() => restoreSprings());
 
   for (const hz of SLICE_RATES_HZ) {
     it(`when it cruises on slices of ${hz} Hz after the knock has died away, then its pitch and roll stay within the tilt of one spring's static sag and never reverse from slice to slice`, () => {

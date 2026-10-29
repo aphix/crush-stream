@@ -1,4 +1,4 @@
-import { beforeEach, describe, it } from "node:test";
+import { beforeEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { encodeSaved } from "../net/reel-codec.ts";
 import { makeClip } from "../net/reel-clip.test-util.ts";

@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -36,7 +36,7 @@ describe("given the real engine booted on #scene=showcase with a cam= pose, writ
   /** The eye turned by a drag of `px` pixels, as the pointer does. */
   const turn = (px: number): void => engine["view"].free.lookBy(px, 0);
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     const set = (url: unknown): void => {
       globalThis.location.hash = String(url).slice(String(url).indexOf("#"));
@@ -60,7 +60,7 @@ describe("given the real engine booted on #scene=showcase with a cam= pose, writ
     await engine["ragdolls"].preload();
     runSeconds(engine, 0.5);
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

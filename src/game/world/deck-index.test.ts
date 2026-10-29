@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { Track, segmentAt, blankSegment } from "./track.ts";
 import { OFF_MENU, TRACKS } from "./tracks/index.ts";

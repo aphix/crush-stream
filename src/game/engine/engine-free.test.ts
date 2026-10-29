@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { PAD_BUTTON, blankPad } from "../vehicle/gamepad.ts";
 import { blankFreeInput } from "../present/free-cam.ts";

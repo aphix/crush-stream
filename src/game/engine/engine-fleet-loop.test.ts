@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore, INITIAL_HUD } from "../hud/hud-store.ts";
@@ -14,12 +14,12 @@ describe("given the real engine on Fleet's default settings, every car driving s
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
   let hud: HudStore;
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     hud = new HudStore();
     engine = await bootEngine({ hud, fades: true });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });
@@ -51,7 +51,7 @@ describe("given the real engine on Fleet's default settings, every car driving s
     assert.ok(lastLeft >= 0, "every car left the disc");
     assert.ok(resetAt >= 0, "the scene never reset");
     const delay = resetAt - lastLeft;
-    t.diagnostic(`reset ${delay.toFixed(3)} s after the last car left (FLEET_EMPTY_S ${FLEET_EMPTY_S})`);
+    t.annotate(`reset ${delay.toFixed(3)} s after the last car left (FLEET_EMPTY_S ${FLEET_EMPTY_S})`);
     assert.ok(delay >= FLEET_EMPTY_S - FRAME, `reset ${delay.toFixed(3)} s after the last car left: before the disc had been empty ${FLEET_EMPTY_S} s`);
     assert.ok(delay <= FLEET_EMPTY_S + 1, `reset ${delay.toFixed(3)} s after the last car left, over ${FLEET_EMPTY_S + 1} s`);
   });

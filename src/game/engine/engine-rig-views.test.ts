@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore } from "../hud/hud-store.ts";
@@ -46,14 +46,14 @@ describe("given the real engine in a rig scene, watching its car", () => {
     runSeconds(engine, 0.1);
     engine["keys"].clear();
   };
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     hud = new HudStore();
     engine = await bootEngine({ hud, pacer: true });
     // The rig car's spawn speed is drawn from the speed range at a random scene seed (10-32 m/s): a slow draw loses more than 10% in a second to rolling drag, which the 0.9 coast bars read as a stall. A fixed 24 m/s coasts the same every run.
     engine.setSpeedRange(24, 24);
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import type { RaceHudRow } from "../match/types.ts";
 import { GREEN_WINDOW_SECONDS, nextFlashUntil, PASS_FLASH_MS, STANDING_LI, standingsVisible, withLeavers, type StandingsVisibility } from "./standings-motion.ts";

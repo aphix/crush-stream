@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -113,7 +113,7 @@ describe("given the real engine drawing on the stub GL", () => {
     return held;
   };
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine({ pacer: true, draw: true });
     await engine["ragdolls"].preload();
@@ -128,7 +128,7 @@ describe("given the real engine drawing on the stub GL", () => {
       targetDispose.call(this);
     };
   });
-  after(() => {
+  afterAll(() => {
     THREE.Texture.prototype.dispose = textureDispose;
     THREE.RenderTarget.prototype.dispose = targetDispose;
     engine.dispose();
@@ -150,7 +150,7 @@ describe("given the real engine drawing on the stub GL", () => {
 
   describe(`when every scene and mode is toured ${TOURS} times after a warm-up tour`, () => {
     let tours: Tour[];
-    before(() => {
+    beforeAll(() => {
       tour();
       tours = Array.from({ length: TOURS }, tour);
       assert.equal(engine["ragdolls"].placement, "inline", "the dummies' world runs on this thread, where its counts can be read");

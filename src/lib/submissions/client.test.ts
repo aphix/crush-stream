@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { gunzipSync } from "node:zlib";
 import { MAX_JSON_BYTES, MAX_WIRE_BYTES } from "./kinds.ts";

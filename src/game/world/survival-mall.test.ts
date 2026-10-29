@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { FRAME, frame, makeWorld, type World } from "./race-world.test-util.ts";
 import { TRACK_ID } from "./constants.ts";
@@ -91,7 +91,7 @@ describe("given a Survival run on the National Mall", () => {
     const w = mallWorld();
     try {
       const r = dropInsAtPoses(w, track.path, POSES, DRIVE_SPEED);
-      t.diagnostic(`${r.spawns.length} drop-ins in ${r.seconds.toFixed(0)} s, nearest ${Math.min(...r.spawns.map((s) => s.dist)).toFixed(0)} m, ${r.spawns.filter((s) => s.visible).length} visible`);
+      t.annotate(`${r.spawns.length} drop-ins in ${r.seconds.toFixed(0)} s, nearest ${Math.min(...r.spawns.map((s) => s.dist)).toFixed(0)} m, ${r.spawns.filter((s) => s.visible).length} visible`);
       assertDropInsHidden(r, POSES);
     } finally {
       leaveSurvival(w);
@@ -173,7 +173,7 @@ describe("given the National Mall as a Survival course, a city closed by a rim o
         if (!blocked(x0 + u * CELL, z0 + v * CELL)) queue.push(v * nx + u);
       }
     }
-    t.diagnostic(`${queue.length} cells reachable from the start; ${edge} on the edge of the ${nx} x ${nz} window of ${CELL} m cells; ${rim.length} rim blocks`);
+    t.annotate(`${queue.length} cells reachable from the start; ${edge} on the edge of the ${nx} x ${nz} window of ${CELL} m cells; ${rim.length} rim blocks`);
     assert.ok(queue.length > 100_000, `the disc spread to ${queue.length} cells only: the streets and lawns are open`);
     assert.equal(edge, 0, `a car can drive from the start to the edge of the world (${edge} edge cells reached)`);
   });
@@ -215,6 +215,6 @@ describe("given the National Mall as a Survival course, a city closed by a rim o
     const reach = rimReach(TRACK_ID.nationalMall, launches, past);
     const deepest = Math.max(...reach.map((r) => r.far));
     for (const r of reach) assert.ok(r.far < 0, `${r.name}: the car got ${r.far.toFixed(1)} m through the rim`);
-    t.diagnostic(`${launches.length} launches at ${LAUNCH_SPEED} m/s; the car that got furthest stopped ${(-deepest).toFixed(1)} m inside the blocks' inner faces`);
+    t.annotate(`${launches.length} launches at ${LAUNCH_SPEED} m/s; the car that got furthest stopped ${(-deepest).toFixed(1)} m inside the blocks' inner faces`);
   });
 });

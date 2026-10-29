@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { CAR_SPRAY, carPickText, NO_CAR_PICK, NO_PERSON_PICK, packSpray, PERSON_SPRAY, personPickText, SPRAY_PALETTE } from "../match/look-data.ts";

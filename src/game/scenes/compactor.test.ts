@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { CompactorRig as Rig, compactorStage } from "./compactor.ts";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";

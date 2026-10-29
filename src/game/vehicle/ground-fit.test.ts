@@ -1,4 +1,4 @@
-import { after, afterEach, before, describe, it } from "node:test";
+import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
@@ -78,10 +78,10 @@ const oval = new Track(TRACKS.find((j) => parseTrack(j).id === "oval")!);
 
 describe("given a braked car placed at every heading across a matrix of ground sites, on springs so stiff and short that no sag excuses a gap", () => {
   let restoreSprings = (): void => {};
-  before(() => {
+  beforeAll(() => {
     restoreSprings = useStiffSprings();
   });
-  after(() => restoreSprings());
+  afterAll(() => restoreSprings());
   afterEach(() => setGround(null));
 
   it("when the car sits on fleet ramp faces, ends, rear lips and straddling the side edges, then it sits on the ground at every heading", (t) => report(t, rampSites()));

@@ -1,4 +1,4 @@
-import { before, describe, it } from "node:test";
+import { beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { launch, makeCar, makeWorld } from "../contact/crash-scenarios.test-util.ts";
 import { blankStrike, type FigureStrike } from "../scenes/figure-strike.ts";
@@ -64,7 +64,7 @@ describe("given a head-on crash of two cars with a third car 400 m off, and the 
   let run: Recorded;
   let clip: HighlightClip;
   let firstStep: number;
-  before(() => {
+  beforeAll(() => {
     run = record(STRIKES, true);
     assert.ok(run.clip, "the head-on made no clip");
     clip = run.clip;

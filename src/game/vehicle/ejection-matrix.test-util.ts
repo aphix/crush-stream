@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { collide as collideOnce, ejectBar, strikerShare, type Hit, type Outcome } from "./ejection.test-util.ts";
 import { VEHICLE_CLASS_IDS, type VehicleClassId } from "./vehicle-classes.ts";

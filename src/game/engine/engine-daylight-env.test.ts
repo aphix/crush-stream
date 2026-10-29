@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -11,13 +11,13 @@ describe("given the real engine with a studio environment loaded", () => {
   let engine: CrashEngine;
   const studio = new THREE.Texture();
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine({ hud: new HudStore(), fades: true });
     engine["envMap"] = studio;
     engine["envChoice"] = -2;
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

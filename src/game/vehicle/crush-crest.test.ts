@@ -1,4 +1,4 @@
-import { after, afterEach, before, describe, it } from "node:test";
+import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "../world/ground.ts";
 import { Track } from "../world/track.ts";
@@ -92,10 +92,10 @@ function slicePenetration(closing: number): number {
 
 describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboards) and the kicker and descent beyond it, with every car on very stiff springs", () => {
   let restoreSprings = (): void => {};
-  before(() => {
+  beforeAll(() => {
     restoreSprings = useStiffSprings();
   });
-  after(() => restoreSprings());
+  afterAll(() => restoreSprings());
   afterEach(() => setGround(null));
 
   for (const cls of VEHICLE_CLASS_IDS) {
@@ -103,7 +103,7 @@ describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboa
       const failures: string[] = [];
       for (const v of [4, 8]) {
         const w = worst(crestRun(cls, 890, 945, v).run, 890, 945);
-        t.diagnostic(`${cls} ${v} m/s: hull under the road ${(w.pen * 100).toFixed(1)} cm, drawn pitch ${w.pitch.toFixed(2)}°, frame pitch ${w.framePitch.toFixed(2)}° off the slope, ${w.airFrames} airborne frames`);
+        t.annotate(`${cls} ${v} m/s: hull under the road ${(w.pen * 100).toFixed(1)} cm, drawn pitch ${w.pitch.toFixed(2)}°, frame pitch ${w.framePitch.toFixed(2)}° off the slope, ${w.airFrames} airborne frames`);
         if (w.airFrames > 0) failures.push(`${v} m/s: flew (${w.airFrames} frames)`);
         if (w.pen > PLAIN.pen) failures.push(`${v} m/s: hull ${(w.pen * 100).toFixed(1)} cm into the road`);
         if (w.framePitch > PLAIN.pose) failures.push(`${v} m/s: frame pitch ${w.framePitch.toFixed(2)}° off the slope`);
@@ -124,7 +124,7 @@ describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboa
       const failures: string[] = [];
       for (const v of [4, 8]) {
         const w = worst(crestRun(cls, 890, 945, v).run, 890, 945);
-        t.diagnostic(`${cls} ${v} m/s: tyre gap ${(w.gap * 100).toFixed(1)} cm, drawn pitch ${w.pitch.toFixed(2)}°, frame pitch ${w.framePitch.toFixed(2)}° off the slope, ${w.airFrames} airborne frames`);
+        t.annotate(`${cls} ${v} m/s: tyre gap ${(w.gap * 100).toFixed(1)} cm, drawn pitch ${w.pitch.toFixed(2)}°, frame pitch ${w.framePitch.toFixed(2)}° off the slope, ${w.airFrames} airborne frames`);
         if (w.airFrames > 0) failures.push(`${v} m/s: flew (${w.airFrames} frames)`);
         if (w.gap > gap) failures.push(`${v} m/s: a tyre ${(w.gap * 100).toFixed(1)} cm off the road`);
         if (w.framePitch > pitch) failures.push(`${v} m/s: frame pitch ${w.framePitch.toFixed(2)}° off the slope`);
@@ -147,7 +147,7 @@ describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboa
       }
       const after = worst(run.slice(Math.max(0, landed) + 60), 0, Infinity);
       const whole = worst(run, 0, Infinity);
-      t.diagnostic(`${cls}: ${(air * FRAME).toFixed(2)} s in the air, landed at s ${landed >= 0 ? run[landed]!.s.toFixed(0) : "-"}; a second later gap ${(after.gap * 100).toFixed(1)} cm, pitch ${after.pitch.toFixed(2)}°; hull under the road all run ${(whole.pen * 100).toFixed(1)} cm of ${(slicePenetration(closing) * 100).toFixed(1)}`);
+      t.annotate(`${cls}: ${(air * FRAME).toFixed(2)} s in the air, landed at s ${landed >= 0 ? run[landed]!.s.toFixed(0) : "-"}; a second later gap ${(after.gap * 100).toFixed(1)} cm, pitch ${after.pitch.toFixed(2)}°; hull under the road all run ${(whole.pen * 100).toFixed(1)} cm of ${(slicePenetration(closing) * 100).toFixed(1)}`);
       assert.ok(air * FRAME >= 0.6 && air * FRAME <= 2, `${(air * FRAME).toFixed(2)} s in the air`);
       assert.ok(landed > 0, "never landed");
       assert.ok(after.gap <= PLAIN.gap, `a second after landing a tyre is ${(after.gap * 100).toFixed(1)} cm off the road`);
@@ -187,7 +187,7 @@ describe("given the stunt course's CRUSH crest (the hill under the CRUSH billboa
       // reach the road (a hatch landing nose-down 15.9°: 5.1° nose-up at 13 frames, 3.8° at 21, 3.0° at 23, 0° at 29), so no fixed frame is settled.
       const settled = settledFrom(run, first + fallFrames);
       const w = worst(run.slice(Math.max(0, settled), settled + READ_FRAMES), 0, Infinity);
-      t.diagnostic(`${cls}: touched down at s ${run[first]!.s.toFixed(0)} with the tail ${(hung * 100).toFixed(0)} cm up, all down ${down - first} of ${fallFrames} frames later, pitch settled ${settled - first} frames after touchdown; the next 0.5 s: most turn in a frame ${turn.toFixed(2)}°, deepest tyre ${(sunk * 100).toFixed(1)} cm, underside ${(pen * 100).toFixed(1)} cm of ${(slicePenetration(closing) * 100).toFixed(1)}; once settled: frame ${w.framePitch.toFixed(2)}° off the slope of ${springPitch(cls).toFixed(1)}°`);
+      t.annotate(`${cls}: touched down at s ${run[first]!.s.toFixed(0)} with the tail ${(hung * 100).toFixed(0)} cm up, all down ${down - first} of ${fallFrames} frames later, pitch settled ${settled - first} frames after touchdown; the next 0.5 s: most turn in a frame ${turn.toFixed(2)}°, deepest tyre ${(sunk * 100).toFixed(1)} cm, underside ${(pen * 100).toFixed(1)} cm of ${(slicePenetration(closing) * 100).toFixed(1)}; once settled: frame ${w.framePitch.toFixed(2)}° off the slope of ${springPitch(cls).toFixed(1)}°`);
       assert.ok(turn <= SNAP, `the body turned ${turn.toFixed(2)}° in one frame after touchdown`);
       assert.ok(sunk <= PLAIN.gap, `a tyre ${(sunk * 100).toFixed(1)} cm into the road after touchdown`);
       assert.ok(pen <= slicePenetration(closing), `underside ${(pen * 100).toFixed(1)} cm into the road after touchdown`);

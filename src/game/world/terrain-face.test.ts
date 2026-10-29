@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { launch } from "../contact/crash-scenarios.test-util.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
@@ -121,7 +121,7 @@ function driveAt(ny: number, speed: number): { past: number; climb: number; top:
   return { past, climb: rose - metY, top, met: !Number.isNaN(metY) };
 }
 
-after(() => setGround(null));
+afterAll(() => setGround(null));
 
 describe(`given a face rising ${HEIGHT} m on level ground, the body friction's limit ny ${STOPS_BELOW.toFixed(3)}`, () => {
   for (const ny of STOPPING_NY) {
@@ -150,7 +150,7 @@ describe(`given the terrain of ${COURSE}`, () => {
   let cuts = 0;
   let flanks = 0;
 
-  before(() => {
+  beforeAll(() => {
     raceWorld().race.showLobby(COURSE);
     const track = new Track([...TRACKS, ...OFF_MENU].find((j) => parseTrack(j).id === COURSE));
     const ground = activeGround();

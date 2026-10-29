@@ -1,4 +1,4 @@
-import { after, afterEach, before, describe, it } from "node:test";
+import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import type { DeformableCar } from "./car.ts";
 import { G } from "./car-air-body.ts";
@@ -99,10 +99,10 @@ describe("given a car coasting along a steep wedge face on its tyre springs", ()
 
 describe("given a car coasting along a steep wedge face on springs so stiff that none of its energy is stored in them", () => {
   let restoreSprings = (): void => {};
-  before(() => {
+  beforeAll(() => {
     restoreSprings = useStiffSprings();
   });
-  after(() => restoreSprings());
+  afterAll(() => restoreSprings());
   afterEach(() => setGround(null));
 
   for (const c of steepCases) {
@@ -160,16 +160,16 @@ function mountGain(c: MountCase): { gain: number; start: number; at: number } {
 
 describe("given a car coasting from flat road onto a wedge face, on springs so stiff that none of its energy is stored in them", () => {
   let restoreSprings = (): void => {};
-  before(() => {
+  beforeAll(() => {
     restoreSprings = useStiffSprings();
   });
-  after(() => restoreSprings());
+  afterAll(() => restoreSprings());
   afterEach(() => setGround(null));
 
   for (const c of mountCases) {
     it(`when a ${c.cls} coasts onto the ${c.deg}° face at ${c.speed} m/s, then it never holds more energy than it came with`, (t) => {
       const { gain, start, at } = mountGain(c);
-      t.diagnostic(`${c.cls} ${c.deg}° at ${c.speed} m/s: ${gain >= 0 ? "+" : ""}${gain.toFixed(2)} J/kg of the ${start.toFixed(1)} it came with, ${at.toFixed(1)} m past the foot`);
+      t.annotate(`${c.cls} ${c.deg}° at ${c.speed} m/s: ${gain >= 0 ? "+" : ""}${gain.toFixed(2)} J/kg of the ${start.toFixed(1)} it came with, ${at.toFixed(1)} m past the foot`);
       assert.ok(gain <= MOUNT_GAIN_ROUNDING, `the car held ${gain.toFixed(2)} J/kg more than the ${start.toFixed(1)} it came with, ${at.toFixed(1)} m past the foot`);
     });
   }

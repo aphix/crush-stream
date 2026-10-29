@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { VoicePool } from "./motor-voices.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";

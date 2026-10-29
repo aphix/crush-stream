@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { outlineOf } from "../contact/cage-outline.ts";
@@ -74,7 +75,7 @@ class Probe extends DeformableCar {
 describe("given a quarter panel smushed back by a 56 km/h rear crash into a wall", () => {
   // todo -> after the plan: recalibrate the off-centre wall hit's crush against the lever's spin. The 56 km/h rear corner hit leaves the panel
   // at hinge 0.055 where the test needs more than 0.25 to push back: the lever spins the car away, so the corner crushes less.
-  it.todo("when the car steps 60 frames of its own hinge target, then the pushed-back panel stays at its dent instead of rising, while a panel that was not pushed does rise above 0.25", () => {
+  todoRow("when the car steps 60 frames of its own hinge target, then the pushed-back panel stays at its dent instead of rising, while a panel that was not pushed does rise above 0.25", true, () => {
     const hit = (smush: boolean): number => {
       const car = new Probe(paint(), new THREE.Scene());
       car.deform.setMode("shape");

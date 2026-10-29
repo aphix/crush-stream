@@ -1,4 +1,5 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
@@ -47,7 +48,7 @@ function leastClearance(engine: CrashEngine, seed: number): { least: number; end
 describe("given the owner's five-car fleet crash on seeds where the pickup's nose is destroyed", () => {
   let engine: CrashEngine;
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine({ fades: true });
     engine.setCarCount(FLEET);
@@ -61,15 +62,14 @@ describe("given the owner's five-car fleet crash on seeds where the pickup's nos
       engine["onThrow"](args[0].car);
     };
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });
 
   for (const seed of SEEDS) {
-    it(
-      `when the cars hit and settle for ${TO_S} s on seed ${seed}, then the pickup's front tyres keep 5 mm under its drawn skin in every frame`,
-      { todo: "after the plan: a destroyed nose leaves the tyre standing through the arch liner: the crushed hood and fender must buckle around the tyre, not pass it" },
+    todoRow(
+      `when the cars hit and settle for ${TO_S} s on seed ${seed}, then the pickup's front tyres keep 5 mm under its drawn skin in every frame`, "after the plan: a destroyed nose leaves the tyre standing through the arch liner: the crushed hood and fender must buckle around the tyre, not pass it",
       () => {
         const { least, endsAt } = leastClearance(engine, seed);
         assert.ok(least >= CLEARANCE_M, `first frame under the 5 mm bar: ${(least * 1000).toFixed(1)} mm at sim ${endsAt.toFixed(2)} s`);

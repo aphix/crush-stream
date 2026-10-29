@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { humanSlot } from "../match/survival.ts";

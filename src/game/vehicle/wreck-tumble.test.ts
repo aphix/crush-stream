@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
@@ -72,7 +72,7 @@ describe("given a monster wreck tumbling in the air at 9 rad/s about its length,
       const up = 1 - 2 * (car.group.quaternion.x ** 2 + car.group.quaternion.z ** 2);
       at = `step ${f}: body ${car.velocity.y.toFixed(2)} m/s, masses ${massesAtCentre(car).toFixed(2)}, up ${up.toFixed(2)}`;
     }
-    t.diagnostic(`worst ${worst.toFixed(2)} m/s (${at})`);
+    t.annotate(`worst ${worst.toFixed(2)} m/s (${at})`);
     assert.ok(car.deform.massActive, "the monster is no wreck");
     assert.ok(worst < OFF_MAX, `the masses stood ${worst.toFixed(2)} m/s off the body (${at})`);
   });
@@ -90,7 +90,7 @@ describe("given a monster wreck tumbling in the air at 9 rad/s about its length,
       worst = off;
       at = `step ${f}: body ${car.velocity.y.toFixed(2)} m/s, −g t ${fall.toFixed(2)}, lift ${centreLift(car).toFixed(2)} m`;
     }
-    t.diagnostic(`worst ${worst.toFixed(2)} m/s (${at})`);
+    t.annotate(`worst ${worst.toFixed(2)} m/s (${at})`);
     assert.ok(worst < FALL_OFF_MAX, `the body's fall stood ${worst.toFixed(2)} m/s off gravity's (${at})`);
   });
 });

@@ -1,5 +1,5 @@
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
 import * as THREE from "three";
 import { applySpray, BARE_SPRAY, sprayUniforms } from "../present/spray.ts";
 import { CAR_SPRAY, NO_CAR_PICK } from "../match/look-data.ts";
@@ -394,13 +394,13 @@ const engineTierCases = [
 // Last in the file: the engine's browser stand-ins define `document`, which the headless paint map row above must not see.
 describe("given the real engine with its cars on the screen", () => {
   let engine: CrashEngine;
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = new CrashEngine(element(), new HudStore(), element());
     Object.assign(engine["renderer"], { render() {}, compile() {}, compileAsync: () => Promise.resolve() });
     await engine.ready;
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

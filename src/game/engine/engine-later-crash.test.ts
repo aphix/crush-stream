@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import type { ContactHit } from "../scenes/engine-props.ts";
@@ -28,13 +28,13 @@ type Reach = {
 describe("given the real engine's fleet sandbox with two cars wrecked head-on and its slow-mo handed back to 1×", () => {
   let engine: CrashEngine;
   let e: Reach;
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine({ pacer: true });
     e = engine as unknown as Reach;
     engine.pace.pin = true;
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

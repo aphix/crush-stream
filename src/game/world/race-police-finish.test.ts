@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld, type World } from "./race-world.test-util.ts";
@@ -48,7 +48,7 @@ function afterFinish(seed: number): { atFinish: number; after: number; finishedA
 describe("given a seeded three-lap police race on the oval that finishes with given-up cops still driving the course", () => {
   it(`when the race is over and no player can see them, then every one is put away within ${GONE_IN} s of the finish`, (t) => {
     const { atFinish, after, finishedAt } = afterFinish(1);
-    t.diagnostic(`finished at ${finishedAt.toFixed(1)} s with ${atFinish} given-up cops out; ${after} still out ${GONE_IN} s later`);
+    t.annotate(`finished at ${finishedAt.toFixed(1)} s with ${atFinish} given-up cops out; ${after} still out ${GONE_IN} s later`);
     assert.ok(atFinish > 0, "no cop had given up by the finish: the test proves nothing");
     assert.equal(after, 0, `${after} given-up cops still drive the course ${GONE_IN} s after the finish`);
   });

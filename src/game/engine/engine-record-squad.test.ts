@@ -1,4 +1,4 @@
-import { before, describe, it } from "node:test";
+import { beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { launch, makeCar, makeWorld } from "../contact/crash-scenarios.test-util.ts";
 import { CLIP_OUT_CAR, type HighlightClip } from "../match/highlights.ts";
@@ -141,7 +141,7 @@ describe("given the squad running out of the White House when the clip starts, o
   let run: Run;
   let frames: ReplayFrame[];
   let sim: ClipSim;
-  before(() => {
+  beforeAll(() => {
     const post = guardPost();
     run = race({ x: post.x, z: post.z + 8 }, 1);
     ({ sim, frames } = replay(run));
@@ -203,7 +203,7 @@ describe("given the squad running out of the White House when the clip starts, o
 describe("given the squad firing on a parked car and a car run down a guard that the clip leaves out, the clip's own pair crashing 300 m away", () => {
   let run: Run;
   let frames: ReplayFrame[];
-  before(() => {
+  beforeAll(() => {
     const post = guardPost();
     run = race({ x: post.x + 300, z: post.z + 8 }, 3);
     ({ frames } = replay(run));

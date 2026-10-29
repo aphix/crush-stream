@@ -1,4 +1,4 @@
-import { after, afterEach, before, describe, it } from "node:test";
+import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -269,10 +269,10 @@ function cross(v: number, thDeg: number, e: number, mirrored = false): Result {
 }
 
 describe("given a sedan cruising at the fleet's jump ramp with steer 0 and the throttle holding its speed", () => {
-  before(() => {
+  beforeAll(() => {
     restoreSprings = useStiffSprings();
   });
-  after(() => restoreSprings());
+  afterAll(() => restoreSprings());
   afterEach(() => setGround(null));
 
   for (const v of SPEEDS) {
@@ -280,7 +280,7 @@ describe("given a sedan cruising at the fleet's jump ramp with steer 0 and the t
       for (const e of ES) {
         it(`when it drives at ${v} m/s at ${th}° to the ramp's axis and its centreline crosses the toe ${e} m inside the ramp's edge, then through the crossing (until every tyre is past the toe line) it keeps its heading within ${BAR.heading}°, is never shoved sideways by more than 1 cm or changes speed in a slice by more than 0.3 m/s and what its chin scraping onto the face takes, stays within 1.5° of the plane through its tyres standing in their springs, and is airborne only while all four tyres are over 3 cm off the ground`, (t) => {
           const r = cross(v, th, e);
-          t.diagnostic(
+          t.annotate(
             `yaw ${r.yaw.toFixed(2)}°, velocity heading ${r.heading.toFixed(2)}°, shove ${(r.shove * 100).toFixed(2)} cm, dv ${r.dv.toFixed(3)} m/s, plane ${r.tilt.toFixed(2)}° (${r.tiltAt}), airborne with a tyre down in ${r.airWhileTouching} of ${r.slices} slices`,
           );
           const failures: string[] = [];
@@ -299,10 +299,10 @@ describe("given a sedan cruising at the fleet's jump ramp with steer 0 and the t
 });
 
 describe("given the same crossing built twice, once over the ramp's -x edge and once reflected in the ramp's axis", () => {
-  before(() => {
+  beforeAll(() => {
     restoreSprings = useStiffSprings();
   });
-  after(() => restoreSprings());
+  afterAll(() => restoreSprings());
   afterEach(() => setGround(null));
 
   for (const v of SPEEDS) {
@@ -324,10 +324,10 @@ describe("given the same crossing built twice, once over the ramp's -x edge and 
 });
 
 describe("given a sedan driving up the middle of the ramp's wedge, so its tyres stand on the level floor and then on the wedge's one plane", () => {
-  before(() => {
+  beforeAll(() => {
     restoreSprings = useStiffSprings();
   });
-  after(() => restoreSprings());
+  afterAll(() => restoreSprings());
   afterEach(() => setGround(null));
 
   it("when the plane through its touching wheels is fitted through their resting hubs and through the ground under their hubs, then the two planes agree within 0.01° wherever the ground under every tyre is one plane", () => {

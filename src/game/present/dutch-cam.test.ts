@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FREEWHEEL, launch, makeWorld, PARKED, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -167,7 +167,7 @@ describe("given a fixed staged side hit (a sedan at 40 km/h into the parked car'
         new DutchCam().place(seeded, subject, RIGHT_REAR_FORWARD);
         const aim = targets(seeded, subject);
         const covered = crosses(parts, seeded.position, aim.centre) || crosses(parts, seeded.position, aim.subject);
-        t.diagnostic(`${cls}: ${parts.length} displaced meshes, doors ${subject.doorAngle(-1).toFixed(2)} / ${subject.doorAngle(1).toFixed(2)} rad, seeded mount covered: ${covered}`);
+        t.annotate(`${cls}: ${parts.length} displaced meshes, doors ${subject.doorAngle(-1).toFixed(2)} / ${subject.doorAngle(1).toFixed(2)} rad, seeded mount covered: ${covered}`);
         assert.ok(sc.found, `${cls}: no clear wheel mount`);
         const cam = lens();
         sc.pose(cam, subject, shot, { x: 0, y: 1 });

@@ -1,5 +1,5 @@
+import { describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { describe, test } from "node:test";
 import { benchPlan, type BenchPlan } from "../engine/engine-bench-plan.ts";
 import { placeProps } from "./placements.ts";
 import { stripCourse, type StripSpec } from "./bench-strip.ts";

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { humanSlot } from "../match/survival.ts";
 import type { DriveInput } from "../vehicle/car-drive.ts";
@@ -31,7 +31,7 @@ function coopWorld(peers: readonly number[]): World {
 describe("given a hosted Survival run with the host and two peers seated", () => {
   it("when the run starts, then all three humans stand on their own start slots, abreast of the start anchor, and the team reads three humans free", (t) => {
     const w = coopWorld([1, 2]);
-    t.after(() => leaveSurvival(w));
+    t.onTestFinished(() => leaveSurvival(w));
     const state = { acc: 0 };
     for (let n = 0; n < 60; n++) {
       hold(w);
@@ -53,10 +53,10 @@ describe("given a hosted Survival run with the host and two peers seated", () =>
 
   it("when the pack launches, then it is sized for the three humans: more units than a lone player meets", (t) => {
     const w = coopWorld([1, 2]);
-    t.after(() => leaveSurvival(w));
+    t.onTestFinished(() => leaveSurvival(w));
     const solo = makeWorld();
     solo.race.enter(true);
-    t.after(() => leaveSurvival(solo));
+    t.onTestFinished(() => leaveSurvival(solo));
     assert.ok(w.live().length - 3 > solo.live().length - 1, `${w.live().length - 3} units for three humans, ${solo.live().length - 1} for one`);
   });
 });
@@ -64,7 +64,7 @@ describe("given a hosted Survival run with the host and two peers seated", () =>
 describe("given a hosted Survival run with one human", () => {
   it("when the run starts, then there is no team: the HUD and the rules read as a lone player's", (t) => {
     const w = coopWorld([]);
-    t.after(() => leaveSurvival(w));
+    t.onTestFinished(() => leaveSurvival(w));
     assert.equal(w.race.hud().team, null);
   });
 });
@@ -74,7 +74,7 @@ describe("given a hosted Survival run with the host and one peer, the host sitti
     // The bust hold is shortened (its own constant): the falls are what is under test, not the owner's 12 s (`match/survival.test.ts`).
     shortenBustHold(t, BUST_HOLD);
     const w = coopWorld([1]);
-    t.after(() => leaveSurvival(w));
+    t.onTestFinished(() => leaveSurvival(w));
     const state = { acc: 0 };
     let sitting = false;
     let firstFall = Infinity;
@@ -97,7 +97,7 @@ describe("given a hosted Survival run with the host and one peer, the host sitti
         break;
       }
     }
-    t.diagnostic(`first fall ${firstFall.toFixed(1)} s, run over ${finishedAt.toFixed(1)} s`);
+    t.annotate(`first fall ${firstFall.toFixed(1)} s, run over ${finishedAt.toFixed(1)} s`);
     assert.ok(finishedAt > 0, "the run ended: no human is free");
     assert.ok(firstFall < finishedAt, `the first fall (${firstFall.toFixed(1)} s) came before the run's end (${finishedAt.toFixed(1)} s)`);
     const result = w.race.hud().survival!.result!;
@@ -109,7 +109,7 @@ describe("given a hosted Survival run with the host and one peer, the host sitti
 describe("given a hosted Survival run seating a peer in car 2 only, car 1 empty", () => {
   it("when the run starts, then car 1 is nobody's: parked out of the way, never hunted and never keeping the run alive", (t) => {
     const w = coopWorld([2]);
-    t.after(() => leaveSurvival(w));
+    t.onTestFinished(() => leaveSurvival(w));
     const state = { acc: 0 };
     for (let n = 0; n < 120; n++) {
       hold(w);
@@ -127,7 +127,7 @@ describe("given a hosted Survival run seating a peer in car 2 only, car 1 empty"
 describe("given a hosted Survival run with the host and a peer seated", () => {
   it("when a second peer joins mid-run, then the run stays as it was; and when the run is retried, then the field takes the new peer in, and drops the first when it has gone", (t) => {
     const w = coopWorld([1]);
-    t.after(() => leaveSurvival(w));
+    t.onTestFinished(() => leaveSurvival(w));
     const state = { acc: 0 };
     for (let n = 0; n < 30; n++) frame(w, state);
     w.race.setSeats(new Map([[1, "Peer 1"], [2, "Peer 2"]]));

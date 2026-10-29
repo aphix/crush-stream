@@ -1,4 +1,4 @@
-import { before, describe, it, mock } from "node:test";
+import { beforeAll, describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
@@ -92,7 +92,7 @@ function builtArt(): MinigameArt {
 }
 
 describe("given the minigame stations' composer", () => {
-  before(stubBrowser);
+  beforeAll(stubBrowser);
 
   it("when it is built, then it starts invisible, and each station group sits at its anchor's x and z on the ground", () => {
     const art = builtArt();
@@ -159,14 +159,14 @@ describe("given the minigame stations' composer", () => {
       station.traverse((object) => {
         if (object instanceof THREE.Mesh && object.name !== "") oldGeometries.push(object.geometry);
       });
-      const disposals = oldGeometries.map((geometry) => mock.method(geometry, "dispose"));
+      const disposals = oldGeometries.map((geometry) => vi.spyOn(geometry, "dispose"));
       art.setHighJumpLayout(layout, LIP_Y);
       assert.equal(station.children.length, childCount, `rebuild ${rebuild + 1}: child count`);
       assert.equal(descendantCount(art.group), descendants, `rebuild ${rebuild + 1}: descendant count`);
       assert.notEqual(groundMeshNamed(art, OUTER_GROUND_NAME), oldGround, `rebuild ${rebuild + 1}: a new ground`);
       assert.equal(oldGround.parent, null, `rebuild ${rebuild + 1}: the old ground is out of the scene graph`);
       assert.ok(
-        disposals.every((spy) => spy.mock.callCount() >= 1),
+        disposals.every((spy) => spy.mock.calls.length >= 1),
         `rebuild ${rebuild + 1}: every old geometry freed`,
       );
     }
@@ -292,11 +292,11 @@ describe("given the minigame stations' composer", () => {
       }
     });
     assert.ok(geometries.size > 0 && textures.size > 0, "there is something to free");
-    const geometryDisposals = [...geometries].map((geometry) => ({ geometry, spy: mock.method(geometry, "dispose") }));
-    const textureDisposals = [...textures].map((texture) => ({ texture, spy: mock.method(texture, "dispose") }));
+    const geometryDisposals = [...geometries].map((geometry) => ({ geometry, spy: vi.spyOn(geometry, "dispose") }));
+    const textureDisposals = [...textures].map((texture) => ({ texture, spy: vi.spyOn(texture, "dispose") }));
     art.dispose();
-    const liveGeometries = geometryDisposals.filter(({ spy }) => spy.mock.callCount() === 0).map(({ geometry }) => geometry.type + ":" + geometry.uuid);
-    const liveTextures = textureDisposals.filter(({ spy }) => spy.mock.callCount() === 0).map(({ texture }) => texture.uuid);
+    const liveGeometries = geometryDisposals.filter(({ spy }) => spy.mock.calls.length === 0).map(({ geometry }) => geometry.type + ":" + geometry.uuid);
+    const liveTextures = textureDisposals.filter(({ spy }) => spy.mock.calls.length === 0).map(({ texture }) => texture.uuid);
     assert.deepEqual(liveGeometries, [], "no live geometry");
     assert.deepEqual(liveTextures, [], "no live texture");
   });

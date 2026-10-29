@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -52,7 +52,7 @@ describe("given the engine warming its programs before the loop starts", () => {
       if (main) for (const m of [(object as THREE.Mesh).material ?? []].flat()) if (m.visible) drawnMaterials.add(m);
     });
   };
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     const listening = listeningCanvas();
     fire = listening.fire;
@@ -67,7 +67,7 @@ describe("given the engine warming its programs before the loop starts", () => {
     Object.assign(engine["renderer"], { render, compileAsync });
     await engine.ready;
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

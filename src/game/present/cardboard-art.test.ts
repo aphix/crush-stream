@@ -1,4 +1,4 @@
-import { before, describe, it } from "node:test";
+import { beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { stubBrowser } from "../engine/engine-headless.test-util.ts";
@@ -38,7 +38,7 @@ function drawnBox(boxes: CardboardBoxes, boxIndex: number) {
 }
 
 describe("given the dynamic box piles' drawing", () => {
-  before(stubBrowser);
+  beforeAll(stubBrowser);
 
   it("when it is built, then it is one instanced mesh of one material (one draw), its box textured and never frustum-culled", () => {
     const boxes = new CardboardBoxes(placements.length);

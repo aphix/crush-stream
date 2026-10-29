@@ -1,4 +1,4 @@
-import { describe } from "node:test";
+import { describe, it } from "vitest";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import * as THREE from "three";
@@ -18,6 +18,11 @@ export const MODES: DeformMode[] = ["lattice", "shape"];
 
 export function forModes(title: string, fn: (mode: DeformMode) => void): void {
   for (const mode of MODES) describe(`${title}, in ${mode} deform mode`, () => fn(mode));
+}
+
+/** One row per deform mode: `fn` is the row's body. */
+export function itModes(title: string, fn: (mode: DeformMode) => void): void {
+  for (const mode of MODES) it(`${title}, in ${mode} deform mode`, () => fn(mode));
 }
 
 /** Low-poly sedan-sized box standing in for the body mesh. */

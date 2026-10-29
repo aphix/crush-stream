@@ -1,4 +1,4 @@
-import { after, afterEach, before, describe, it } from "node:test";
+import { afterAll, afterEach, beforeAll, describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import { COUNTER_NAMES, phaseCard, readBattery, watchLongTasks, watchWork, type WorkSeries } from "./bench-measure.ts";
 import { benchRaceEngine, disposeBenchEngine, FRAME_S, runFrames } from "./engine-bench-headless.test-util.ts";
@@ -67,18 +67,18 @@ describe("given a phase table made of a window's phase ms and counter difference
 describe("given the real engine on the city bench's race, headless", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
-  before(async () => {
+  beforeAll(async () => {
     engine = await benchRaceEngine();
     runFrames(engine, WARM_FRAMES);
   });
-  after(() => disposeBenchEngine(engine));
+  afterAll(() => disposeBenchEngine(engine));
   afterEach(() => {
     assert.equal(engine["world"].phases.on, false, "a window left the phase clock on");
   });
 
-  it("when a window is watched on a clock that ticks once per read, then its phases plus the unattributed equal the sim's reads, no phase is negative, the unattributed is only the pacer's own reads, and the phases a race always runs each hold time", (t) => {
+  it("when a window is watched on a clock that ticks once per read, then its phases plus the unattributed equal the sim's reads, no phase is negative, the unattributed is only the pacer's own reads, and the phases a race always runs each hold time", () => {
     let reads = 0;
-    t.mock.method(performance, "now", () => ++reads);
+    vi.spyOn(performance, "now").mockImplementation(() => ++reads);
     const parts = engine.benchParts();
     const pace = engine.pace;
     const run = pace.run;
@@ -192,10 +192,10 @@ describe("given a browser with a battery, without one, or that refuses it", () =
     assert.equal(await readBattery(), null);
   });
 
-  it("when getBattery is refused, then the refusal is logged and the reading is none", async (t) => {
-    const warn = t.mock.method(console, "warn", () => {});
+  it("when getBattery is refused, then the refusal is logged and the reading is none", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     withNavigator({ getBattery: async () => Promise.reject(new Error("blocked by permissions policy")) });
     assert.equal(await readBattery(), null);
-    assert.equal(warn.mock.callCount(), 1, "the refusal was logged");
+    assert.equal(warn.mock.calls.length, 1, "the refusal was logged");
   });
 });

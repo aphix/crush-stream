@@ -1,4 +1,4 @@
-import { before, describe, it } from "node:test";
+import { beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -201,7 +201,7 @@ function playOnKernel(s: Scenario, mutate?: (d: SkinDynamic) => void): { leg: Le
 
 describe("given the WASM skin kernel (the compiled skin and normals maths), loaded after the JS skin has played each scenario", () => {
   const js = new Map<Scenario, Leg>();
-  before(async () => {
+  beforeAll(async () => {
     assert.equal(skinKernel(), null, "the JS legs run before the kernel loads");
     for (const s of SCENARIOS) js.set(s, play(s));
     await loadSkinKernelForTest();

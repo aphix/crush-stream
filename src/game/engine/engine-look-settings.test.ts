@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore, INITIAL_HUD, type CrashHudState } from "../hud/hud-store.ts";
@@ -58,14 +58,14 @@ describe("given the real engine and the look sliders under Cel in the Playback s
   let hud: HudStore;
   const keys = (): string[] => encodeShare(engine["shareState"]()).split("&");
   const keyOf = (key: keyof ShareState): string[] => keys().filter((kv) => kv.startsWith(`${key}=`));
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     hud = new HudStore();
     engine = await bootEngine({ hud, fades: true });
     // Under auto a fresh page's minimal tier draws no sky.
     engine["stage"].setSkyTier("high");
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

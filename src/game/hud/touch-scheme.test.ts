@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { blankPad, mergeTouch, readPad } from "../vehicle/gamepad.ts";
 import { DEFAULT_TOUCH_SCHEME, discReading, EBRAKE_PULL, parseMirror, parseTouchScheme, pedalsFor, pulledDown, schemeLayout, sliderSteer, STRIP, stripReading, TOUCH_SCHEMES, TOUCH_SCHEME_HINT, TOUCH_SCHEME_LABEL } from "./touch-scheme.ts";

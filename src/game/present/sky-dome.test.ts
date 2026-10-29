@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { TIME_OF_DAY, TIMES_OF_DAY } from "../match/types.ts";

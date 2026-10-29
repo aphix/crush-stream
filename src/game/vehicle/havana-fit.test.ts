@@ -1,5 +1,5 @@
+import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
 import * as THREE from "three";
-import { after, afterEach, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { COMPASS, report, type Run, type Site } from "./ground-judge.test-util.ts";
 import { drop, frame, fit, FRAME, makeCar, worldOf } from "./ground-probe.test-util.ts";
@@ -184,10 +184,10 @@ const dropSiteCases = [
 
 /** The ground's fit is the subject, not the springs': every run of the file rides on springs so stiff and short that no sag or droop excuses a gap or a flight (`useStiffSprings`). */
 let restoreSprings = (): void => {};
-before(() => {
+beforeAll(() => {
   restoreSprings = useStiffSprings();
 });
-after(() => restoreSprings());
+afterAll(() => restoreSprings());
 
 describe("given a braked car dropped at every compass heading on Havana's grass embankment, plaza, alley and landing lawn", () => {
   afterEach(() => setGround(null));
@@ -227,7 +227,7 @@ function driveMatrix(): Row[] {
 describe("given every class driving up Havana's face and over the crest at 10, 20 and 30 m/s, from the start at full throttle, and 30° across it", () => {
   afterEach(() => setGround(null));
   let rows: Row[] = [];
-  before(() => {
+  beforeAll(() => {
     rows = driveMatrix();
   });
 
@@ -237,7 +237,7 @@ describe("given every class driving up Havana's face and over the crest at 10, 2
       const land = r.landing ? `${f(r.landing.x)}, ${f(r.landing.z)}, ${r.landing.surface}, ${f(r.landing.speed)}` : "-";
       lines.push(`| ${cls} | ${run} | ${f(r.air, 2)} | ${f(r.apex)} | ${f(r.rise)} | ${r.takeoff ? f(r.takeoff.z) : "-"} | ${land} | ${f(r.pen * 100)} | ${f(r.grass * 100)} | ${r.ejections} | ${r.killedAt === null ? "no" : f(r.killedAt)} | ${f(r.end.speed)} | ${r.speedAt === null ? "-" : `${f(r.speedAt)} (${f((100 * r.speedAt) / CLASSES[cls].topSpeed, 0)} %)`} |`);
     }
-    t.diagnostic(`\n${lines.join("\n")}`);
+    t.annotate(`\n${lines.join("\n")}`);
   });
 
   it("when every class has driven its run, then nobody is thrown out, killed or moved but by his own speed, and a class that was given a run finishes it", () => {
@@ -296,7 +296,7 @@ describe("given a car driving at 30 m/s up Havana's face and over the crest, wit
 describe("given Havana's approach boulevard and its set piece", () => {
   afterEach(() => setGround(null));
   let rows: Row[] = [];
-  before(() => {
+  beforeAll(() => {
     rows = driveMatrix();
   });
   const start = (cls: VehicleClassId) => rows.find((x) => x.cls === cls && x.run === "start, full throttle")!.r;
@@ -308,7 +308,7 @@ describe("given Havana's approach boulevard and its set piece", () => {
   it("when a cop arrives at the player's foot speed, then it launches at the crest, lands on the lawn beyond the island and keeps going", (t) => {
     const foot = start("sedan").speedAt!;
     const r = runLine(ground, "police", FOOT, { ...LIMITS, lead: 60, speed: foot, stopZ: -215, at: FOOT_ROAD });
-    t.diagnostic(`police at ${f(foot)} m/s: ${f(r.air, 2)} s in the air, apex ${f(r.apex)} m over the ground (${f(r.rise)} m over the crest), landed at (${f(r.landing!.x)}, ${f(r.landing!.z)}) on ${r.landing!.surface} at ${f(r.landing!.speed)} m/s, ends at z ${f(r.end.z)} doing ${f(r.end.speed)} m/s`);
+    t.annotate(`police at ${f(foot)} m/s: ${f(r.air, 2)} s in the air, apex ${f(r.apex)} m over the ground (${f(r.rise)} m over the crest), landed at (${f(r.landing!.x)}, ${f(r.landing!.z)}) on ${r.landing!.surface} at ${f(r.landing!.speed)} m/s, ends at z ${f(r.end.z)} doing ${f(r.end.speed)} m/s`);
     assert.ok(r.air > 2 && r.rise > 4, `${f(r.air, 2)} s in the air, ${f(r.rise)} m up`);
     // Beyond the ring road's far side (z -66) and inside the lawn and paseo (z -215), upright and moving.
     assert.ok(r.landing && r.landing.z < -66 && r.landing.z > -215 && Math.abs(r.landing.x) < 90, `landed at ${JSON.stringify(r.landing)}`);

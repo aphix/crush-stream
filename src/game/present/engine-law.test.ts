@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { REV_IDLE, VEHICLE_CLASS_IDS } from "../vehicle/vehicle-classes.ts";
 import { easeLoad, engineLawDb, engineLawGain, naturalDb } from "./engine-law.ts";

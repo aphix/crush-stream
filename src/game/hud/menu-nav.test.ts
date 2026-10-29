@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { NAV_REPEAT_DELAY, NAV_REPEAT_RATE, NavRepeat, navTarget, nearestNav, stickDir, textKeepsKey, type NavRect } from "./menu-nav.ts";
 

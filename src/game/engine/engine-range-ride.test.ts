@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -28,13 +28,13 @@ const screens = [
 
 describe("given the real engine in the Range, its thrown driver ridden through the slow-mo", () => {
   let engine: CrashEngine;
-  before(async () => {
+  beforeAll(async () => {
     setGround(null);
     stubBrowser();
     engine = await bootEngine({ pacer: true });
     await engine["ragdolls"].preload();
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

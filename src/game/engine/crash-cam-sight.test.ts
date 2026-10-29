@@ -1,4 +1,4 @@
-import { after, before, describe, it, type TestContext } from "node:test";
+import { afterAll, beforeAll, describe, it, type TestContext } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -142,7 +142,7 @@ function crashPicksSee(picked: Sight, judged: Sight, spots: readonly Spot[], bli
       if (!v.seen) unseen.push(`${tag} cut ${cut}: ndc ${v.ndcX.toFixed(2)},${v.ndcY.toFixed(2)}${v.front ? "" : " behind"}, ${v.clear ? "clear" : "BLOCKED"}, share ${v.share.toFixed(3)}`);
     }
   }
-  t.diagnostic(`${label}: ${picks} picks in ${Math.round(performance.now() - started)} ms, ${bitten} turned or pulled in by a solid, ${blind.length} left every cut with no eye, ${unseen.length} unseen`);
+  t.annotate(`${label}: ${picks} picks in ${Math.round(performance.now() - started)} ms, ${bitten} turned or pulled in by a solid, ${blind.length} left every cut with no eye, ${unseen.length} unseen`);
   assert.ok(picks >= MIN_PICKS && bitten > 0, `${label}: the fixture puts no eye behind a wall or a prop: it tests nothing`);
   assert.deepEqual(unseen.slice(0, 5), [], `${label}: ${unseen.length}/${picks} eyes the crash cam holds miss the subject (margin ${VIEW.margin}, share ${VIEW.share.toFixed(3)})`);
   assert.ok(blind.length <= picks * blindMost, `${label}: ${blind.length}/${picks} subjects leave the crash cam no eye on any cut: ${blind.slice(0, 5).join(", ")}`);
@@ -164,13 +164,13 @@ describe("given the crash camera choosing eyes for a car hit anywhere on a cours
 describe("given the real engine's crash camera choosing eyes for a car hit anywhere in the derby arena (its floor, its glass wall, its prisms)", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine();
     engine.toggleDerby();
     engine.reset();
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

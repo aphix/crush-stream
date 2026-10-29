@@ -1,4 +1,4 @@
-import { before, describe, it } from "node:test";
+import { beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -39,7 +39,7 @@ describe("given Ultra's nine photographs, KTX2 files transcoded by three's Basis
   const scene = new THREE.Scene();
   const sun = new THREE.DirectionalLight();
   let ultra: Ultra;
-  before(async () => {
+  beforeAll(async () => {
     ultra = await Ultra.create({ renderer, scene, stage: { sun, envGain: 1, envIntensity: 1, setUltraShadow() {} }, queueWarm() {}, alive: () => true, phone: false });
   });
 

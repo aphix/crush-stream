@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { blankAiCar } from "./derby-ai.ts";
 import { RacerSight, SIGHT_MARGIN } from "./cop-sight.ts";

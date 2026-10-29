@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -38,7 +38,7 @@ describe("given the real engine, with a pad that records the effects it is sent"
     engine.advance(FRAME, { frameDt: FRAME });
     return sent;
   };
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     store = new HudStore();
     engine = await bootEngine({ hud: store });
@@ -59,7 +59,7 @@ describe("given the real engine, with a pad that records the effects it is sent"
     e.seat.carIndex = 0;
     e.seat.view = "third";
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

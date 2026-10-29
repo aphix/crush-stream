@@ -1,4 +1,4 @@
-import { afterEach, describe, it, mock } from "node:test";
+import { afterEach, describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { EPICENTER,  epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
@@ -29,7 +29,7 @@ function film(scene: "settled head-on" | "driven wreck", skip: boolean): Rec {
   loadEpicenter(EPICENTER_AT_LOAD);
   EPICENTER.presentSkip = skip ? 1 : 0;
   const proto = DeformableCar.prototype as unknown as { posePart: (p: unknown) => void };
-  const posePart = mock.method(proto, "posePart");
+  const posePart = vi.spyOn(proto, "posePart");
   try {
     const a = makeCar("shape");
     const b = scene === "settled head-on" ? makeCar("shape") : null;
@@ -55,9 +55,9 @@ function film(scene: "settled head-on" | "driven wreck", skip: boolean): Rec {
         }
       }
     }
-    return { poses, calls: posePart.mock.callCount() };
+    return { poses, calls: posePart.mock.calls.length };
   } finally {
-    posePart.mock.restore();
+    posePart.mockRestore();
   }
 }
 

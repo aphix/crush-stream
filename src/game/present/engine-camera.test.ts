@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -283,7 +283,7 @@ describe("given the chase eye drifting toward a wall along the course", () => {
         }
         last = d;
       }
-      t.diagnostic(`${hz} Hz: the wall pushed the eye up to ${pushed.toFixed(2)} m, by at most ${step.toFixed(4)} m a frame`);
+      t.annotate(`${hz} Hz: the wall pushed the eye up to ${pushed.toFixed(2)} m, by at most ${step.toFixed(4)} m a frame`);
       assert.ok(pushed > 1, `${hz} Hz: the wall pushed the eye ${pushed.toFixed(2)} m (the test needs it to reach in)`);
       assert.ok(step < 0.1, `${hz} Hz: the pull-in moved the eye ${step.toFixed(3)} m in one frame, at ${at.toFixed(2)} s`);
     }
@@ -555,9 +555,9 @@ describe("given the chase camera and a hit on the car it follows", () => {
     assert.ok(Math.abs(view.trauma - 8 / 18) < 1e-12, `trauma ${view.trauma} after 60 hits`);
   });
 
-  it("when the eye's sideways shake is sampled every millisecond for a second, then it swings at most 12 times a second (a jolt, not a strobing flicker)", (t) => {
+  it("when the eye's sideways shake is sampled every millisecond for a second, then it swings at most 12 times a second (a jolt, not a strobing flicker)", () => {
     let ms = 0;
-    t.mock.method(performance, "now", () => ms);
+    vi.spyOn(performance, "now").mockImplementation(() => ms);
     const { camera, view, look } = rig("global");
     view.look.copy(look);
     for (let f = 0; f < 120; f++) view.orbit(DT, 0, false);
@@ -576,8 +576,8 @@ describe("given the chase camera and a hit on the car it follows", () => {
     assert.ok(crossings <= 24, `${crossings} sign changes in 1 s (${crossings / 2} Hz)`);
   });
 
-  it("when the orbit shakes, then the eye moves across the view and never along it, so the road far ahead holds still", (t) => {
-    t.mock.method(performance, "now", () => 5000);
+  it("when the orbit shakes, then the eye moves across the view and never along it, so the road far ahead holds still", () => {
+    vi.spyOn(performance, "now").mockImplementation(() => 5000);
     const frame = (trauma: number) => {
       const { camera, view, look } = rig("global");
       view.look.copy(look);
@@ -618,8 +618,8 @@ describe("given the chase camera and a hit on the car it follows", () => {
     }
   });
 
-  it("when the shake runs in the chase, far chase and hood views, then each moves the eye, and the hood by CHASE.shakeHood of the chase's amount", (t) => {
-    t.mock.method(performance, "now", () => 5000);
+  it("when the shake runs in the chase, far chase and hood views, then each moves the eye, and the hood by CHASE.shakeHood of the chase's amount", () => {
+    vi.spyOn(performance, "now").mockImplementation(() => 5000);
     const chase = shaken("third", 0.7);
     const far = shaken("far", 0.7);
     const hood = shaken("first", 0.7);

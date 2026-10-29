@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { SKIN_SSS } from "../present/dummy-shader.ts";
@@ -9,11 +9,11 @@ import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 describe("given the real engine and the people's skin switch", () => {
   let engine: CrashEngine;
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine();
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

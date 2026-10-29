@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -80,7 +80,7 @@ describe("given two cars hooked together (the front car's rear corner inside the
         }
       }
     }
-    t.diagnostic(`cage ${length.toFixed(3)} x ${width.toFixed(3)} m: ${hits} of ${GAP_SHARES.length * LATERAL_SHARES.length * YAWS.length} poses overlap`);
+    t.annotate(`cage ${length.toFixed(3)} x ${width.toFixed(3)} m: ${hits} of ${GAP_SHARES.length * LATERAL_SHARES.length * YAWS.length} poses overlap`);
     assert.ok(hits > MIN_OVERLAPPING_POSES, `only ${hits} overlapping poses: the grid missed the cars`);
     assert.equal(together, 0, `${together} of ${hits} contact axes pushed the cars' centres together, first at ${first}`);
   });
@@ -169,7 +169,7 @@ describe("given two cars hooked together (the front car's rear corner inside the
           // Not hooked is apart and staying apart, not a distance: two cars driven flat out side by side part by their speeds' difference
           // alone (a truck ahead of a muscle: 3.4 m at the start, 5.85 m at 3 s after 0.15 s of contact, the muscle 3.6 m/s faster).
           const gap = gapOf();
-          t.diagnostic(`contact ${contact.toFixed(2)} s, last at ${lastContact.toFixed(2)} s; centres ${start.toFixed(2)} -> ${gap.toFixed(2)} m`);
+          t.annotate(`contact ${contact.toFixed(2)} s, last at ${lastContact.toFixed(2)} s; centres ${start.toFixed(2)} -> ${gap.toFixed(2)} m`);
           assert.ok(contact < 1, `in contact ${contact.toFixed(2)} s of 3 s, centres ${gap.toFixed(1)} m apart: hooked`);
           assert.ok(lastContact < 2, `still in contact at ${lastContact.toFixed(2)} s: hooked`);
           assert.ok(gap > start, `centres ${start.toFixed(2)} -> ${gap.toFixed(2)} m apart after 3 s: held together`);

@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import { makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { PISTON, PISTON_IDS, PistonRig, type PistonId } from "./piston-rig.ts";
@@ -156,7 +157,7 @@ describe("given the piston rig attached to a parked car (eight impactors, one at
 
 describe("given a parked car and any one piston firing the standard shot (1500 kg, 40 km/h, rigid face, car free to be shoved)", () => {
   for (const id of PISTON_IDS) {
-    it(`when the ${id} piston fires, then the struck particles go in by the depth expected for that piston (corner bumper at least 0.12 m and the wing behind it neither pushed out nor deeper, doors at least 0.12 m, front and rear even left to right)`, { todo: TODO[`${id}:struck`] }, () => {
+    todoRow(`when the ${id} piston fires, then the struck particles go in by the depth expected for that piston (corner bumper at least 0.12 m and the wing behind it neither pushed out nor deeper, doors at least 0.12 m, front and rear even left to right)`, TODO[`${id}:struck`], () => {
       const r = shoot(id);
       assert.ok(r.contacted, "never touched");
       const got = r.struck.map((s) => `${s.name}=${f3(s.inward)}`).join(" ");
@@ -202,18 +203,18 @@ describe("given a parked car and any one piston firing the standard shot (1500 k
 describe(`given a parked car and any one piston firing the standard shot, judged on the parts of the car more than ${PISTON_FAR} m away by their extra movement over a 3 km/h tap of the same piston (allowed ${LOCAL_TOL} m)`, () => {
   for (const id of PISTON_IDS) {
     const loc = () => pistonLocality(shoot(id), shoot(id, TAP));
-    it(`when the ${id} piston fires, then the far particles stay put`, { todo: TODO[`${id}:far-particles`] }, () => {
+    todoRow(`when the ${id} piston fires, then the far particles stay put`, TODO[`${id}:far-particles`], () => {
       const l = loc();
       assert.ok(l.farParticle <= LOCAL_TOL, `${l.farParticleName} moved ${f3(l.farParticle)} m`);
     });
-    it(`when the ${id} piston fires, then the far skin stays put`, { todo: TODO[`${id}:far-skin`] }, () => {
+    todoRow(`when the ${id} piston fires, then the far skin stays put`, TODO[`${id}:far-skin`], () => {
       assert.ok(loc().farSkin <= LOCAL_TOL, `far skin moved ${f3(loc().farSkin)} m`);
     });
-    it(`when the ${id} piston fires, then the half of the car opposite the piston stays put`, { todo: TODO[`${id}:opposite-half`] }, () => {
+    todoRow(`when the ${id} piston fires, then the half of the car opposite the piston stays put`, TODO[`${id}:opposite-half`], () => {
       const l = loc();
       assert.ok(l.oppositeParticle <= LOCAL_TOL && l.oppositeSkin <= LOCAL_TOL, `particle ${f3(l.oppositeParticle)} skin ${f3(l.oppositeSkin)}`);
     });
-    it(`when the ${id} piston fires, then cabin intrusion stays under ${CABIN_TOL} m, except at the struck door`, { todo: TODO[`${id}:cabin`] }, () => {
+    todoRow(`when the ${id} piston fires, then cabin intrusion stays under ${CABIN_TOL} m, except at the struck door`, TODO[`${id}:cabin`], () => {
       const r = shoot(id);
       const doors = id === "left" ? [r.doorR] : id === "right" ? [r.doorL] : [r.doorL, r.doorR];
       for (const d of doors) assert.ok(d <= CABIN_TOL, `door ${f3(d)} m (target < ${CABIN_TOL} m)`);
@@ -224,12 +225,12 @@ describe(`given a parked car and any one piston firing the standard shot, judged
 
 describe("given a parked car and any one piston fired as a 3 km/h tap (0.2 kJ) that only arms the crash", () => {
   for (const id of PISTON_IDS) {
-    it(`when the ${id} piston taps, then no body particle moves`, { todo: TODO[`${id}:tap-particles`] }, () => {
+    todoRow(`when the ${id} piston taps, then no body particle moves`, TODO[`${id}:tap-particles`], () => {
       const r = shoot(id, TAP);
       assert.ok(r.farParticle <= LOCAL_TOL, `${r.farParticleName} moved ${f3(r.farParticle)} m`);
       for (const s of r.struck) assert.ok(Math.abs(s.inward) <= LOCAL_TOL, `${s.name} ${f3(s.inward)} m`);
     });
-    it(`when the ${id} piston taps, then no skin moves`, { todo: TODO[`${id}:tap-skin`] }, () => {
+    todoRow(`when the ${id} piston taps, then no skin moves`, TODO[`${id}:tap-skin`], () => {
       const r = shoot(id, TAP);
       assert.ok(r.farSkin <= LOCAL_TOL, `far skin moved ${f3(r.farSkin)} m (panels ${f3(r.farBodySkin)} m)`);
       assert.ok(Math.abs(r.skinInward) <= LOCAL_TOL, `struck paint moved ${f3(r.skinInward)} m`);
@@ -263,7 +264,7 @@ describe("given a parked car and pistons firing 1500 kg rigid shots of growing s
   for (const id of PISTON_IDS) {
     const side = id === "left" || id === "right";
     const speeds = side ? SIDE_SPEEDS : SPEEDS;
-    it(`when the ${id} piston fires at ${speeds.join("/")} km/h, then crush never shrinks as the energy grows`, { todo: TODO[`${id}:monotonic`] }, () => {
+    todoRow(`when the ${id} piston fires at ${speeds.join("/")} km/h, then crush never shrinks as the energy grows`, TODO[`${id}:monotonic`], () => {
       const row = speeds.map((kph) => crushOf(shoot(id, { ...STANDARD, speedKph: kph })));
       const msg = `crush by speed ${row.map(f3).join(" ")}`;
       let strictEnd = row.length;
@@ -310,7 +311,7 @@ describe("given a parked car and pistons firing 1500 kg rigid shots of growing s
     assert.ok(k != null, "front-middle never killed it up to 150 km/h");
   });
 
-  it("when the front piston's kill speed is found, then it sits at the barrier path's kill equivalent speed (alive at 56 km/h, dead at 64 km/h)", { todo: TODO["front:kill-ebs"] }, () => {
+  todoRow("when the front piston's kill speed is found, then it sits at the barrier path's kill equivalent speed (alive at 56 km/h, dead at 64 km/h)", TODO["front:kill-ebs"], () => {
     const k = killSpeed("front")!;
     const ebsKph = shoot("front", { ...STANDARD, speedKph: k }).ebs * 3.6;
     assert.ok(ebsKph > 56 && ebsKph <= 64, `kills at ${k} km/h = EBS ${ebsKph.toFixed(1)} km/h`);
@@ -324,7 +325,7 @@ describe("given a parked car and pistons firing 1500 kg rigid shots of growing s
   }
 
   for (const id of ["frontLeft", "frontRight"] as const) {
-    it(`when the ${id} piston's kill speed is found, then a corner needs at least the front piston's kill speed to kill the drivetrain`, { todo: TODO[`${id}:corner-kill`] }, () => {
+    todoRow(`when the ${id} piston's kill speed is found, then a corner needs at least the front piston's kill speed to kill the drivetrain`, TODO[`${id}:corner-kill`], () => {
       const front = killSpeed("front")!;
       const corner = killSpeed(id);
       assert.ok(corner == null || corner >= front, `corner kills at ${corner} km/h, front-middle at ${front} km/h`);
@@ -338,7 +339,7 @@ describe("given a car in lattice deform mode and any one piston firing the stand
       const r = shoot(id, STANDARD, "lattice");
       for (const s of r.struck.slice(0, isCorner(id) ? 1 : 2)) assert.ok(s.inward >= 0.11, `${s.name} ${f3(s.inward)} m`);
     });
-    it(`when the ${id} piston fires a 3 km/h tap, then no skin moves`, { todo: TODO[`${id}:lattice-tap-skin`] }, () => {
+    todoRow(`when the ${id} piston fires a 3 km/h tap, then no skin moves`, TODO[`${id}:lattice-tap-skin`], () => {
       const r = shoot(id, TAP, "lattice");
       assert.ok(r.farSkin <= LOCAL_TOL, `far skin moved ${f3(r.farSkin)} m (panels ${f3(r.farBodySkin)} m)`);
     });

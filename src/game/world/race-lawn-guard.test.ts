@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "./ground.ts";
 import { GUARD_AT_POST, GUARD_DEPLOY_S, GUARD_DOWN, GUARD_IN } from "../scenes/lawn-guard.ts";
@@ -16,10 +16,10 @@ const PLAYER = 0;
 const NORTH_LAWN = { x: -1000, z: -1090 };
 
 const w: World = makeWorld();
-before(() => {
+beforeAll(() => {
   w.race.enter();
 });
-after(() => {
+afterAll(() => {
   w.race.exit();
   setGround(null);
 });

@@ -1,5 +1,5 @@
+import { beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { before, describe, it } from "node:test";
 import * as THREE from "three";
 import { DERBY_PROP, DerbyGround } from "../scenes/derby-ground.ts";
 import { GLASS_MESH_NAME, makeDerbyArena } from "../scenes/derby-arena.ts";
@@ -100,7 +100,7 @@ describe("given the prefabs drawn on the shared per-vertex materials", () => {
   let materials: PrefabMaterials;
   const onPerVertexMaterial = (part: PrefabPart): boolean => ([materials.plain, materials.building, materials.billboard] as readonly THREE.Material[]).includes(part.material);
 
-  before(() => {
+  beforeAll(() => {
     stubBrowser();
     materials = makePrefabMaterials(raceTextures());
   });

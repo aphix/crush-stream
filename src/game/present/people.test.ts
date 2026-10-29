@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
@@ -276,14 +276,17 @@ describe("given the VIP riding with the squad inside", () => {
 
 describe("given the secret's flash over a view", () => {
   it("when it is stopped before its peak, then the glare is gone at once and the sky picture never comes out", (t) => {
-    t.mock.timers.enable({ apis: ["setTimeout"] });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const glare = { style: { cssText: "" }, removed: false, cancelled: false, remove: () => void (glare.removed = true), animate: () => ({ cancel: () => void (glare.cancelled = true) }) };
     Object.defineProperty(globalThis, "document", { value: { createElement: () => glare }, configurable: true });
-    t.after(() => void Reflect.deleteProperty(globalThis, "document"));
+    t.onTestFinished(() => {
+      Reflect.deleteProperty(globalThis, "document");
+      vi.useRealTimers();
+    });
     let peaked = false;
     const stop = nukeFlash({ appendChild: (node) => node }, () => void (peaked = true));
     stop();
-    t.mock.timers.tick(10_000);
+    vi.advanceTimersByTime(10_000);
     assert.equal(peaked, false, "the picture's moment never comes");
     assert.ok(glare.removed && glare.cancelled, "the glare is taken down");
   });

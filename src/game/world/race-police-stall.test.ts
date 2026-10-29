@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "./ground.ts";
 import { FRAME, frame, makeWorld } from "./race-world.test-util.ts";
@@ -60,7 +60,7 @@ function frozenCops(seed: number): number[] {
 describe("given a police race on the oval whose cops have their drive cut from the moment they wake", () => {
   it("when a woken cop sits in place with nothing touching it, then it is put away once its stall window has run out: none stays out driving longer", (t) => {
     const spent = frozenCops(1);
-    t.diagnostic(`seconds out driving: ${spent.map((s) => s.toFixed(2)).join(", ")}`);
+    t.annotate(`seconds out driving: ${spent.map((s) => s.toFixed(2)).join(", ")}`);
     assert.ok(spent.length > 0, "a cop woke");
     assert.ok(Math.max(...spent) < WINDOW + 1, `a cop sat in place for ${Math.max(...spent).toFixed(2)} s, past its ${WINDOW} s window`);
   });

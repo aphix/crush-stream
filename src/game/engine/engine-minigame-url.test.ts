@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { decodeShare } from "../hud/share-url.ts";
@@ -15,7 +15,7 @@ describe("given the real engine on the Range and a browser address bar that reco
   let engine: CrashEngine;
   const entries: string[] = [""];
   const hashOf = (url: unknown): string => String(url).slice(String(url).indexOf("#"));
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     globalThis.history.replaceState = (_state, _unused, url) => {
       entries[entries.length - 1] = hashOf(url);
@@ -27,7 +27,7 @@ describe("given the real engine on the Range and a browser address bar that reco
     };
     engine = await bootEngine();
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

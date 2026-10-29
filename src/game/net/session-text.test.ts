@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { sessionText } from "./session-text.ts";
 import type { NetStatus } from "./net-ports.ts";

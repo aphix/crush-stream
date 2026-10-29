@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { FREEWHEEL, launch, makeCar, makeWorld } from "./crash-scenarios.test-util.ts";
 import { stepWorld } from "../engine/world-step.ts";

@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import * as THREE from "three";
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { doorAperture, lerp, makeHoodGeometry, makeTrunkGeometry, sampleSlice, SEDAN } from "./car-mesh.ts";
 import { makeChassisGeometry } from "./car-chassis-mesh.ts";

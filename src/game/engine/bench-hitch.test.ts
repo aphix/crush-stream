@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { scavengesDuring } from "../kernel/gc.test-util.ts";
 import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";

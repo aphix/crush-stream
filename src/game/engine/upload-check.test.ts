@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -66,8 +66,8 @@ describe("given a page opened without ?debug=uploads", () => {
 describe("given a page opened with ?debug=uploads", () => {
   let engine: CrashEngine;
   let wrapped: Map<string | symbol, unknown>;
-  before(async () => ({ engine, wrapped } = await engineOn("?debug=uploads")));
-  after(() => engine.dispose());
+  beforeAll(async () => ({ engine, wrapped } = await engineOn("?debug=uploads")));
+  afterAll(() => engine.dispose());
 
   it("when a mesh's attribute is updated past its array's end, then the first refused bufferSubData is logged once, naming the attribute, geometry, mesh, sizes, range, FX tier and stack", () => {
     assert.ok(wrapped.has("bufferSubData") && wrapped.has("texSubImage2D"), "wrapped upload calls");

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { hash01 } from "../kernel/scalar.ts";
 import { holdLine, leaveSurvival, play, survivalWorld } from "./survival-run.test-util.ts";
@@ -80,7 +80,7 @@ function together(foot: readonly number[]): number {
 describe(`given Survival's opening scene on the Havana course (five cops in a staggered formation behind the player), rolled with seed ${SEED}`, () => {
   it("when the player holds the boulevard line at full throttle, then three cops reach the embankment's foot within half a second of each other and leave the ground at the crest", (t) => {
     const p = setPiece(SEED, false);
-    t.diagnostic(`foot ${p.foot.map((x) => x.toFixed(2)).join(" ")}; ${together(p.foot)} within ${WINDOW} s; ${p.takeoffs.length} took off; the player strayed ${p.stray.toFixed(1)} m, clean ${p.clean}`);
+    t.annotate(`foot ${p.foot.map((x) => x.toFixed(2)).join(" ")}; ${together(p.foot)} within ${WINDOW} s; ${p.takeoffs.length} took off; the player strayed ${p.stray.toFixed(1)} m, clean ${p.clean}`);
     assert.equal(p.foot.length, 5, "the pack never reached the foot");
     assert.ok(together(p.foot) >= 3, `only ${together(p.foot)} cops within ${WINDOW} s at the foot (${p.foot.map((x) => x.toFixed(2)).join(" ")})`);
     assert.ok(p.takeoffs.length >= 3, `only ${p.takeoffs.length} cops left the ground at the crest`);
@@ -90,7 +90,7 @@ describe(`given Survival's opening scene on the Havana course (five cops in a st
 
   it("when the player brakes hard near the crest's left, then the cops overshoot and fly past", (t) => {
     const p = setPiece(SEED, true);
-    t.diagnostic(`${p.passed} passed the player; ${p.takeoffs.length} took off at the crest`);
+    t.annotate(`${p.passed} passed the player; ${p.takeoffs.length} took off at the crest`);
     assert.ok(p.passed >= 3, `only ${p.passed} cops overshot the braking player`);
     assert.ok(p.takeoffs.length >= 3, `only ${p.takeoffs.length} cops flew off the crest`);
   });

@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -36,12 +36,12 @@ describe("given the real engine in the fleet, watching a car", () => {
   const eye = (): THREE.Vector3 => engine["camera"].position.clone();
   const level = (a: THREE.Vector3, b: THREE.Vector3): number => Math.hypot(a.x - b.x, a.z - b.z);
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     hud = new HudStore();
     engine = await bootEngine({ hud, pacer: true });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -120,7 +120,7 @@ describe("given the corkscrew ramp as the ground, and a driverless car launched 
   for (const b of BANDS) {
     it(`when it is launched at ${b.v} m/s, then ${b.name}, and after takeoff it never goes deeper into the ground than the suspension's stop`, (t) => {
       const r = launch(b.v);
-      t.diagnostic(`${b.v} m/s: air ${r.air.toFixed(2)} s, touchdown roll ${r.landRoll.toFixed(0)}°, up.y ${r.upY.toFixed(2)} (${r.rest}, meant to rest on its ${b.rest}), deepest ${r.dip.toFixed(3)} m`);
+      t.annotate(`${b.v} m/s: air ${r.air.toFixed(2)} s, touchdown roll ${r.landRoll.toFixed(0)}°, up.y ${r.upY.toFixed(2)} (${r.rest}, meant to rest on its ${b.rest}), deepest ${r.dip.toFixed(3)} m`);
       const failures: string[] = [];
       if (b.air !== r.air > 0.2) failures.push(`air ${r.air.toFixed(2)} s`);
       if (r.landRoll < b.roll[0] || r.landRoll > b.roll[1]) failures.push(`touchdown roll ${r.landRoll.toFixed(0)}° outside ${b.roll[0]}–${b.roll[1]}°`);
@@ -145,7 +145,7 @@ describe(`given the corkscrew ramp as the ground, and a car launched at it at ${
 
   it(`when it stands on its wheels at rest and holds full throttle for ${DRIVE_S} s, then it covers ${DRIVE_MIN_M} m or more: the car flips and can land and keep driving`, (t) => {
     const r = launch(DRIVE_LAUNCH_SPEED, DRIVE_S);
-    t.diagnostic(`${DRIVE_LAUNCH_SPEED} m/s: touchdown roll ${r.landRoll.toFixed(0)}°, rest ${r.rest}${r.rest === "wheels" ? `, drove ${r.drove.toFixed(1)} m` : ""}`);
+    t.annotate(`${DRIVE_LAUNCH_SPEED} m/s: touchdown roll ${r.landRoll.toFixed(0)}°, rest ${r.rest}${r.rest === "wheels" ? `, drove ${r.drove.toFixed(1)} m` : ""}`);
     assert.equal(r.rest, "wheels", `it came to rest on its ${r.rest} (touchdown roll ${r.landRoll.toFixed(0)}°)`);
     assert.ok(r.drove >= DRIVE_MIN_M, `it drove ${r.drove.toFixed(1)} m in ${DRIVE_S} s of full throttle, under ${DRIVE_MIN_M} m`);
   });

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { fleetProp, SCENE_IDS, type SceneId } from "./scene-id.ts";
 

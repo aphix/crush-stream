@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
@@ -31,7 +31,7 @@ describe("given a crashed car on its wheels with its masses at rest and its driv
     it(`when a ${cls} holds full throttle for 0.5 s, then it reaches at least half the speed of a fresh ${cls}`, (t) => {
       const fresh = throttleSpeed(cls, false);
       const wreck = throttleSpeed(cls, true);
-      t.diagnostic(`${cls}: fresh ${fresh.toFixed(3)} m/s, crashed ${wreck.toFixed(3)} m/s`);
+      t.annotate(`${cls}: fresh ${fresh.toFixed(3)} m/s, crashed ${wreck.toFixed(3)} m/s`);
       assert.ok(fresh > 1, `the fresh ${cls} reached only ${fresh.toFixed(3)} m/s`);
       assert.ok(wreck >= 0.5 * fresh, `the crashed ${cls} reached ${wreck.toFixed(3)} m/s against the fresh car's ${fresh.toFixed(3)}`);
     });

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { AutoFx } from "../auto-fx.ts";
 import { describePost, FX_TIERS, type FxTier } from "../engine-post.ts";

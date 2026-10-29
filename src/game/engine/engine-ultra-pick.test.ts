@@ -1,4 +1,4 @@
-import { after, afterEach, before, describe, it, mock } from "node:test";
+import { afterAll, afterEach, beforeAll, describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import { setImmediate as yieldToLoop } from "node:timers/promises";
 import * as THREE from "three";
@@ -94,7 +94,7 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
   /** `polls` link polls of the held warm, each its interval of the mocked clock and the microtasks it starts. */
   const passLinkPolls = async (polls: number): Promise<void> => {
     for (let poll = 0; poll < polls; poll++) {
-      mock.timers.tick(LINK_POLL_MS);
+      vi.advanceTimersByTime(LINK_POLL_MS);
       await yieldToLoop();
     }
   };
@@ -123,7 +123,7 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     }
   };
 
-  before(async () => {
+  beforeAll(async () => {
     const linking = linkingCanvas();
     hold = linking.hold;
     engine = new CrashEngine(linking.canvas, new HudStore(), element());
@@ -151,22 +151,22 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     assert.equal(await engine.loadUltra(), true, "Ultra loaded");
     await engine.warmsIdle();
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });
 
-  afterEach(() => mock.timers.reset());
+  afterEach(() => vi.useRealTimers());
 
   it("when Ultra is picked while its programs link, then the frames meanwhile draw High's look, and the first Ultra frame after links nothing and draws only linked programs", { timeout: HANG_GUARD_MS }, async () => {
-    mock.timers.enable({ apis: ["setTimeout"] });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const { picking } = await pickHeld();
     const heldFirst = drawFrames(HELD_FRAMES);
     await passLinkPolls(HELD_POLLS);
     const heldLater = drawFrames(HELD_FRAMES);
     const heldTier = engine["cine"].tier;
     hold(false);
-    mock.timers.tick(LINK_POLL_MS);
+    vi.advanceTimersByTime(LINK_POLL_MS);
     await picking;
     await engine.warmsIdle();
     const first = drawFrames(1);
@@ -184,12 +184,12 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     const late = surface("ultra-pick-late");
     const ownMap = late.material.map;
     engine["scene"].add(late);
-    mock.timers.enable({ apis: ["setTimeout"] });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const { picking } = await pickHeld();
     await engine.setFxTier("low");
     hold(false);
-    mock.timers.tick(LINK_POLL_MS);
-    mock.timers.reset();
+    vi.advanceTimersByTime(LINK_POLL_MS);
+    vi.useRealTimers();
     await picking;
     await engine.warmsIdle();
     assert.equal(engine["cine"].tier, "low");

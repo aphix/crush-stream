@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { DRIVE } from "../vehicle/car-drive.ts";

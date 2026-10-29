@@ -1,4 +1,5 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -17,10 +18,10 @@ const FRAME_S = 1 / FRAME_HZ;
 
 /** The rows read poses, masses and roof sink, never a drawn skin: no car is skinned each frame (`updateSkin` writes meshes only). */
 const skin = DeformableCar.prototype.updateSkin;
-before(() => {
+beforeAll(() => {
   DeformableCar.prototype.updateSkin = () => {};
 });
-after(() => {
+afterAll(() => {
   DeformableCar.prototype.updateSkin = skin;
 });
 
@@ -105,7 +106,7 @@ describe("given the owner's drops (11 cars, 0.15 m, one a second), run for 8 s a
     const todo = bodies === "sedans"
       ? "after the plan: find why the sedan column still wanders now that a car on a car is one pair solved through the kernel; it ends 0.10 m off its axis (bar 0.05 m), leaning 0.1° (bar 3°), with no car off it by 0.1 m on the way"
       : "after the plan: find why the fleet column without the monster collapses; a car leaves it by 5.69 m (bar 0.1 m): cars 0-7 end on the ground, car 1 5.69 m and car 0 4.43 m off the axis by 19 s. Mechanism (11 cars, police base): car 1 lands at 1.7 m/s on the drawn lightbar, rolls 9° and its tilted sill (4-9 cm under its pan) overlaps the base's shoulder by 0.07 m, over `VERTICAL_CLEAR` (0.05 m), so the plan SAT reads a level side hit (closing 0.36 m/s) and wakes car 0's masses, which read the ground alone (`sampleGround`), so car 1 falls through it. Tried and withdrawn: a wider clear (0.25 m, the store's reach `SKIN`) for a pair whose upper belly is within `SKIN` of the lower top holds the column to 0.49 m, but it also drops the plan hit of a car sliding off a roof it was thrown onto (engine-lab 'thrown at its top car at 10 m/s': 1.8 m/s relative) and of a car landing on a roof at 1.3-1.5 m/s (the mixed fleet's -12 m/s read); a relative-speed gate cannot separate them (the column's own landing is 1.0-1.2 m/s). The one law needed: a car standing on a roof is the surface store's, and a landing or a slide is the plan's, decided by what holds the car, not by a speed";
-    it(`when the column is made of ${bodies}, then no car leaves it by 0.1 m or more, it ends within 5 cm of its axis leaning under 3°, every car reads a load, and the roof sink never grows toward the top, from over 300 mm at the bottom to under 5 mm at the top`, { todo }, () => {
+    todoRow(`when the column is made of ${bodies}, then no car leaves it by 0.1 m or more, it ends within 5 cm of its axis leaning under 3°, every car reads a load, and the roof sink never grows toward the top, from over 300 mm at the bottom to under 5 mm at the top`, todo, () => {
       let worst = 0;
       // The first frame a car is 0.1 m off the column ends the run: nothing later can bring it back under the bar.
       const { cars, rig } = column(OWNER, bodies, OWNER_S, (cs) => {
@@ -133,7 +134,7 @@ describe("given the stack scene's defaults (4 cars, 0.02 m, one every 8 s), run 
   // roof under it with its tyres 0.21-0.32 m clear of the hood and boot. The first bad commit is e7252ffa (the car's top is the cage, not
   // the plate: 18ecaba9 passes); the cage's refit threshold (REFIT_EPSILON to 0.1 mm) and the per-node follow of the crush change no
   // millimetre of it.
-  it("when the column is made of sedans, then each roof is crushed more than the roof above it by over 20 mm, and the top roof under 2 mm", { todo: "after the plan: recalibrate the roof strength law's constants and SKIN_STRAIN with their sources; the roofs read 159/112/94/0 mm bottom to top, the 112 -> 94 step 18 mm against the bar's 20 mm (the top roof at 0 mm passes)" }, () => {
+  todoRow("when the column is made of sedans, then each roof is crushed more than the roof above it by over 20 mm, and the top roof under 2 mm", "after the plan: recalibrate the roof strength law's constants and SKIN_STRAIN with their sources; the roofs read 159/112/94/0 mm bottom to top, the 112 -> 94 step 18 mm against the bar's 20 mm (the top roof at 0 mm passes)", () => {
     const { cars, rig } = column(DEFAULTS, "sedans", DEFAULTS_S);
     const { crushMm } = stackLoads(cars, rig.dropped);
     assert.ok(crushMm[3]! < 2, `top ${crushMm[3]!.toFixed(1)} mm`);
@@ -145,9 +146,8 @@ describe("given the stack scene's defaults (4 cars, 0.02 m, one every 8 s), run 
   // hood's rear edge, and 1 mm of drop height flips it. Moved over the 5 s, car 3 (worker, 2d0b497e): hood z0 0.88 / 0.985 / 0.99 0 / 0 /
   // 1689 mm, the 0.99 hood with drops of 0.019 / 0.021 m 5.9 / 1053 mm. Every 0 mm run was a collapsed column (cars at rest on the
   // ground 1.6-3.2 m off the axis); the red ones stood, the muscle on its side (up 0.21) on the police's front, toppling at 0.02 to 0.86 m/s.
-  it(
-    `when the column is made of the fleet and left alone for 5 s after it settles, then it stands (every car within ${ON_AXIS_M} m of its axis) and no car moves 5 mm`,
-    { todo: "after the plan: the fleet column does not hold (the owner's-drops fleet column's todo above): it falls to the ground or stands with a car balanced on its side, chaotically (1 mm of drop height flips it)" },
+  todoRow(
+    `when the column is made of the fleet and left alone for 5 s after it settles, then it stands (every car within ${ON_AXIS_M} m of its axis) and no car moves 5 mm`, "after the plan: the fleet column does not hold (the owner's-drops fleet column's todo above): it falls to the ground or stands with a car balanced on its side, chaotically (1 mm of drop height flips it)",
     () => {
       const { cars } = column(DEFAULTS, "fleet", DEFAULTS_S);
       const { off } = spread(cars);
@@ -188,7 +188,7 @@ describe("given the owner's drops (11 cars, 0.15 m, one a second) of the mixed f
         }
       }
     });
-    t.diagnostic(`${judged} car-frames judged; the worst reported ${worst.toFixed(2)} m/s off its body (${at})`);
+    t.annotate(`${judged} car-frames judged; the worst reported ${worst.toFixed(2)} m/s off its body (${at})`);
     assert.ok(judged > 0, "no car was judged");
     assert.ok(worst < 4, `a car reported ${worst.toFixed(1)} m/s off its body (${at})`);
   });

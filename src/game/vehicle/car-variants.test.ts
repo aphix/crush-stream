@@ -1,6 +1,6 @@
+import { describe, it } from "vitest";
 import * as THREE from "three";
 import { createHash } from "node:crypto";
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import type { LooseShape } from "./car-core.ts";
@@ -844,7 +844,7 @@ describe("given the police cruiser", () => {
     };
     const cop = wingCrush("police");
     const sedan = wingCrush("sedan");
-    t.diagnostic(`wing crush: police ${cop.toFixed(3)} m, sedan ${sedan.toFixed(3)} m`);
+    t.annotate(`wing crush: police ${cop.toFixed(3)} m, sedan ${sedan.toFixed(3)} m`);
     assert.ok(Math.abs(cop - sedan) <= 0.03, `the cruiser's wing crushed ${cop.toFixed(3)} m, the sedan's ${sedan.toFixed(3)} m`);
   });
 
@@ -1633,10 +1633,10 @@ describe("given a body style's H2 hardpoints", () => {
       );
     };
     const stock = clearances(coupe);
-    for (const { z, y, clear } of stock) t.diagnostic(`ramp clear z=${z.toFixed(3)} y=${y.toFixed(2)} mm=${(clear * 1000).toFixed(2)}`);
+    for (const { z, y, clear } of stock) t.annotate(`ramp clear z=${z.toFixed(3)} y=${y.toFixed(2)} mm=${(clear * 1000).toFixed(2)}`);
     assert.ok(stock.length > 0, "the door's skin and the body are met at the cut's ends");
     const control = clearances({ ...coupe, door: { ...coupe.door, lowProud: undefined } });
-    for (const { z, y, clear } of control) t.diagnostic(`control ramp clear z=${z.toFixed(3)} y=${y.toFixed(2)} mm=${(clear * 1000).toFixed(2)}`);
+    for (const { z, y, clear } of control) t.annotate(`control ramp clear z=${z.toFixed(3)} y=${y.toFixed(2)} mm=${(clear * 1000).toFixed(2)}`);
     for (const { z, y, clear } of stock) assert.ok(clear >= MIN_CLEAR, `the skin stands ${(clear * 1000).toFixed(2)} mm off the ramp at z ${z.toFixed(3)} y ${y}, ${MIN_CLEAR * 1000} mm asked`);
     assert.ok(Math.min(...control.map((r) => r.clear)) < MIN_CLEAR, "the control: without lowProud the skin lies within the ramp's z-fight band");
   });
@@ -2148,8 +2148,8 @@ describe("given a body style's H2 hardpoints", () => {
     };
     const coupe = CAR_STYLES.coupe;
     const { shares, a, b, radius } = read(coupe);
-    t.diagnostic(`rear bar depth share by ring from the face: ${shares.map((s) => s.toFixed(2)).join(" ")}`);
-    t.diagnostic(`rear bar corner ${(a * 1000).toFixed(0)} mm out by ${(b * 1000).toFixed(0)} mm back: plan radius ${(radius * 1000).toFixed(0)} mm`);
+    t.annotate(`rear bar depth share by ring from the face: ${shares.map((s) => s.toFixed(2)).join(" ")}`);
+    t.annotate(`rear bar corner ${(a * 1000).toFixed(0)} mm out by ${(b * 1000).toFixed(0)} mm back: plan radius ${(radius * 1000).toFixed(0)} mm`);
     assert.ok(Math.min(...shares) >= FULL_DEPTH, `the section thins to ${(Math.min(...shares) * 100).toFixed(0)}% of its face's depth round the corner, ${FULL_DEPTH * 100}% asked`);
     assert.ok(radius >= MIN_RADIUS, `the corner turns on a ${(radius * 1000).toFixed(0)} mm radius in plan, ${MIN_RADIUS * 1000} mm asked`);
     const { rear } = coupe.bumpers;

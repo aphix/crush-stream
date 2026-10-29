@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import { BODIES, carInState, drawnField, STATES, TOP_P95_M, TOP_WORST_M, topGaps, topGapsOff, topParts } from "./drawn-body.test-util.ts";
 
 /**
@@ -41,7 +41,7 @@ for (const testCase of topCases) {
       const wrong: string[] = [];
       for (const [part, region] of Object.entries(topParts(testCase.style))) {
         const g = topGaps(car, field, region);
-        t.diagnostic(`${part}: cells ${g.cells} p95 ${g.p95.toFixed(3)} up ${g.worstUp.toFixed(3)} down ${g.worstDown.toFixed(3)} missing ${g.missing}`);
+        t.annotate(`${part}: cells ${g.cells} p95 ${g.p95.toFixed(3)} up ${g.worstUp.toFixed(3)} down ${g.worstDown.toFixed(3)} missing ${g.missing}`);
         if (cliffs.some((c) => c.part === part)) continue;
         wrong.push(...topGapsOff(part, g));
       }

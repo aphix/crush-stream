@@ -1,4 +1,4 @@
-import { describe, it, mock } from "node:test";
+import { describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { creditLines, DEFAULT_STATION, loadManifest, musicBase, stationIdOrDefault, stationOf, trackUrl, type MusicTrack } from "./music-manifest.ts";
@@ -15,13 +15,13 @@ const TRACK = {
 
 /** `loadManifest` against a fetch that answers `body` with `status`; returns the outcome and the URL it asked for. */
 async function load(body: unknown, status = 200): Promise<{ outcome: Promise<unknown>; asked: () => string }> {
-  const fetchMock = mock.method(globalThis, "fetch", async () => new Response(typeof body === "string" ? body : JSON.stringify(body), { status }));
+  const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(typeof body === "string" ? body : JSON.stringify(body), { status }));
   const outcome = loadManifest(BASE);
   outcome.then(
-    () => mock.restoreAll(),
-    () => mock.restoreAll(),
+    () => vi.restoreAllMocks(),
+    () => vi.restoreAllMocks(),
   );
-  return { outcome, asked: () => String(fetchMock.mock.calls[0]!.arguments[0]) };
+  return { outcome, asked: () => String(fetchMock.mock.calls[0]![0]) };
 }
 
 describe("given the music folder's base URL", () => {

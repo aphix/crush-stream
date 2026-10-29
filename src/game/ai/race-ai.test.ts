@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import * as THREE from "three";
-import { describe, it } from "node:test";
 import { BOOST } from "../vehicle/car-drive.ts";
 import assert from "node:assert/strict";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
@@ -65,7 +65,7 @@ describe("given 8 clean AI cars (aggression 0) on the grid of the oval", () => {
   for (const difficulty of AI_DIFFICULTIES) {
     it(`when they race 3 laps at ${difficulty} difficulty, then all 8 finish, they stay on the road at least 95% of the time, and the winner finishes within the time bound`, (t) => {
       const r = raced(oval, difficulty);
-      t.diagnostic(`${oval.id} ${difficulty}: winner ${r.winner.toFixed(1)} s, best lap ${Math.min(...r.lapTimes).toFixed(2)} s, slowest lap ${Math.max(...r.lapTimes).toFixed(2)} s, on road ${(100 * r.share).toFixed(1)}%, mistakes ${r.mistakes}`);
+      t.annotate(`${oval.id} ${difficulty}: winner ${r.winner.toFixed(1)} s, best lap ${Math.min(...r.lapTimes).toFixed(2)} s, slowest lap ${Math.max(...r.lapTimes).toFixed(2)} s, on road ${(100 * r.share).toFixed(1)}%, mistakes ${r.mistakes}`);
       assert.equal(r.finished, 8, `finished ${r.finished}/8 by ${r.time.toFixed(0)} s (bound ${r.limit.toFixed(0)} s); laps ${r.laps}`);
       assert.ok(r.share >= 0.95, `on the road ${(r.share * 100).toFixed(1)}% of ${r.samples} samples`);
       assert.ok(r.winner < r.limit);
@@ -372,7 +372,7 @@ describe("given a hard sedan brain flat out at the oval's sharpest bend (33 m/s 
     brain.think(me, [me], { next: 1, lap: 0 }, DT);
     const tune = brain["tunes"][0]!;
     const want = sedan.brake * BRAKE_SHARE;
-    t.diagnostic(`onsets ${far.toFixed(1)} m / ${near.toFixed(1)} m: plan sheds ${planned.toFixed(1)} m/s², guard ${tune[GUARD_BRAKE_IDX]!.toFixed(1)} m/s², a car ahead ${tune[GUARD_LEAD_IDX]!.toFixed(1)} m/s², real full brake ${real.toFixed(1)} m/s²`);
+    t.annotate(`onsets ${far.toFixed(1)} m / ${near.toFixed(1)} m: plan sheds ${planned.toFixed(1)} m/s², guard ${tune[GUARD_BRAKE_IDX]!.toFixed(1)} m/s², a car ahead ${tune[GUARD_LEAD_IDX]!.toFixed(1)} m/s², real full brake ${real.toFixed(1)} m/s²`);
     assert.equal(tune[GUARD_BRAKE_IDX], want, "the guard's own braking");
     assert.equal(tune[GUARD_LEAD_IDX], sedan.brake, "what a car ahead is taken to shed: the whole class brake, the most it can (the guard never counts on a leader stopping gentler than it can)");
     // The onsets are found to 0.25 m but the plan reads the road every 3 m: against the 23 m the two speeds' stops differ by (measured) a 3 m step is 13 % of it, so 15 % is the least the reading can be trusted to; the old 0.5 share reads 14.0 m/s², 31 % under.

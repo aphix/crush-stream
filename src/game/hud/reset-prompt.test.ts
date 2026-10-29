@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import type { RaceView } from "../match/types.ts";
 import { NO_DRIFT } from "../vehicle/car-drive.ts";

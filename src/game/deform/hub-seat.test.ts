@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
@@ -254,7 +255,7 @@ function strikeStillWreckAtQuiet(quiet: number, speed: number, nose: number): { 
 describe("given a still sedan wreck that a car is driven straight at", () => {
   for (const strikeCase of strikeCases) {
     // The 80 m/s row is a todo until Stage 4 replaces the wreck split: a planted wreck crushes differently from the same wreck 0.02 s earlier (0.966 vs 0.840 m at 80 m/s) while `HUB_SLIP` keeps the wheels' own slide; fitting the rigid motion over every attached mass instead left 0.970 vs 0.890 m at 80 m/s and broke frame-motion's angular momentum and slope's T-bone sweeps. The 30 m/s row passes.
-    (strikeCase.todo ? it.todo : it)(strikeCase.it, () => {
+    todoRow(strikeCase.it, strikeCase.todo, () => {
       const unplanted = strikeStillWreckAtQuiet(PLANT_QUIET - 0.01, strikeCase.speed, strikeCase.nose);
       const planted = strikeStillWreckAtQuiet(PLANT_QUIET + 0.01, strikeCase.speed, strikeCase.nose);
       assert.ok(Math.abs(unplanted.firstContactAt - (PLANT_QUIET - 0.01)) < 0.005 && Math.abs(planted.firstContactAt - (PLANT_QUIET + 0.01)) < 0.005, `the hits landed at ${unplanted.firstContactAt.toFixed(3)} and ${planted.firstContactAt.toFixed(3)} s quiet`);

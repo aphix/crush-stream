@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { CRASH } from "../deform/physics-util.ts";
@@ -718,7 +718,7 @@ describe("given a torn panel lying flat on the road, sliding into a 0.5 m kerb",
         if (!(after >= KERB_KEEPS * before)) dead.push(`${speed} m/s at ${yaw}°: ${after.toFixed(2)} m/s 0.05 s after meeting it at ${before.toFixed(2)}`);
       }
     }
-    t.diagnostic(rows.join("; "));
+    t.annotate(rows.join("; "));
     assert.deepEqual(dead, []);
   });
 });

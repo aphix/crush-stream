@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -21,10 +21,10 @@ import { PoseBlend } from "../present/pose-blend.ts";
 const track = new Track(oval);
 const pt = blankPoint();
 const w: World = makeWorld();
-before(() => {
+beforeAll(() => {
   w.race.enter();
 });
-after(() => {
+afterAll(() => {
   w.race.exit();
   setGround(null);
 });
@@ -143,6 +143,6 @@ describe("given an oval race of 3 AI rivals in which two cars meet head-on at 20
         if (frames === 10) assert.ok(d < 0.5, `car ${car}'s dummy is ${d.toFixed(2)} m from the live one 10 frames on`);
       }
     }
-    t.diagnostic(`live vs replay dummy: ${report.join("; ")}`);
+    t.annotate(`live vs replay dummy: ${report.join("; ")}`);
   });
 });

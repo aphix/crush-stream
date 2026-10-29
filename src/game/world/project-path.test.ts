@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { blankProjection, projectPath, Track, WINDOW, type Projection, type TrackPath } from "./track.ts";
 import { OFF_MENU, TRACKS } from "./tracks/index.ts";

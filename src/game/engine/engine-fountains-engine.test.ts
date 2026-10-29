@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -38,7 +38,7 @@ describe("given the real engine", () => {
       .filter((s) => fountains().jets["run"][s]! > 0)
       .map((s) => ({ x: fountains().jets["jx"][s]!, z: fountains().jets["jz"][s]! }));
 
-  before(async () => {
+  beforeAll(async () => {
     setGround(null);
     stubBrowser();
     globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} } as unknown as Storage;
@@ -48,14 +48,14 @@ describe("given the real engine", () => {
     const look = fountains().setLook.bind(fountains());
     fountains().setLook = (_tier, density) => look("high", density);
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });
 
   describe("given the Range", () => {
     const launches: number[] = [];
-    before(() => {
+    beforeAll(() => {
       const ragdolls = engine["ragdolls"];
       const launch = ragdolls.launch.bind(ragdolls);
       ragdolls.launch = (e, cars, rides, releaseScale) => {
@@ -117,7 +117,7 @@ describe("given the real engine", () => {
     /** The player's record, and the course's length (m). */
     const me = () => session().cars[director()["rowOf"][director().self]!]!;
 
-    before(() => {
+    beforeAll(() => {
       engine.toggleRace();
       engine.raceCommand({ type: "options", options: { trackId: "oval", aiCount: 1, laps: LAPS, police: false, campaign: ["oval", "rally"] } });
       engine.raceCommand({ type: "start" });

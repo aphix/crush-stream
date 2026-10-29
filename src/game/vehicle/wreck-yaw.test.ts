@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { CRASH } from "../deform/physics-util.ts";
 import { DEG, FRAME, frame, makeCar as probeCar, worldOf } from "./ground-probe.test-util.ts";

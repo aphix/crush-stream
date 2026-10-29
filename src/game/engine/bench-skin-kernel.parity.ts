@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { skinKernel } from "../deform/skin-kernel.ts";
 import { loadSkinKernelForTest } from "../deform/skin-kernel.test-util.ts";

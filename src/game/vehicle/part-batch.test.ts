@@ -1,5 +1,5 @@
+import { afterAll, describe, test } from "vitest";
 import assert from "node:assert/strict";
-import { after, describe, test } from "node:test";
 import * as THREE from "three";
 import { DETAIL_LEVELS } from "../present/car-detail.ts";
 import { DeformableCar } from "./car.ts";
@@ -277,7 +277,7 @@ describe("given the part batch and a car whose style has its own mirror", () => 
   const wagon = CAR_STYLES.wagon;
   const door = wagon.door;
   wagon.door = { ...door, mirror: { cap: "rounded", finish: "body" } };
-  after(() => {
+  afterAll(() => {
     wagon.door = door;
   });
 

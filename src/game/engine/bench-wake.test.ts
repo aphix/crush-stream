@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import { WakeHold } from "./bench-wake.ts";
 
@@ -105,13 +105,13 @@ describe("given a loop that holds the screen wake lock", () => {
     await hold.release();
   });
 
-  it("when the browser refuses the lock, then the refusal is logged, held is false, and the hold does not throw", async (t) => {
+  it("when the browser refuses the lock, then the refusal is logged, held is false, and the hold does not throw", async () => {
     stubPage({ refuse: true });
-    const warn = t.mock.method(console, "warn", () => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const hold = new WakeHold();
     await hold.acquire();
     assert.equal(hold.held, false, "held");
-    assert.equal(warn.mock.callCount(), 1, "logged");
+    assert.equal(warn.mock.calls.length, 1, "logged");
     await hold.release();
   });
 });

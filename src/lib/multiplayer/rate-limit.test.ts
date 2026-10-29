@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { LIMITS, RateLimiter } from "./rate-limit.ts";
 import { ROOM_MAX } from "./rooms.ts";

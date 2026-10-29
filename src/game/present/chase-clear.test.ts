@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -132,8 +132,8 @@ function follow(drive: Drive, keep: boolean) {
 }
 
 describe("given the chase camera on a car driven through the derby bowl", () => {
-  before(() => setGround(new DerbyGround()));
-  after(() => setGround(null));
+  beforeAll(() => setGround(new DerbyGround()));
+  afterAll(() => setGround(null));
 
   const drives: Drive[] = [
     { it: "away from the red container, whose face the eye starts behind", ...beforeContainer, speed: 8, seconds: 6, lookDown: 0, rivals: [] },
@@ -391,7 +391,7 @@ describe("given the chase camera on a car racing down a flat straight, a rival c
   it(`when the rival tailgates with its roof ${(ROOF_OVER_LINE * 100).toFixed(1)} cm over the eye's line to the car, then the eye lifts over it: never into the car, in along the line or out to the side, and never off the rig's path faster than the rival closes`, (t) => {
     const gap = tailGapUnderRoofline();
     const run = overtake(gap);
-    t.diagnostic(`tail gap ${gap.toFixed(3)} m, eye lifted ${run.lift.toFixed(3)} m`);
+    t.annotate(`tail gap ${gap.toFixed(3)} m, eye lifted ${run.lift.toFixed(3)} m`);
     assert.ok(gap > 0, `the rival's nose stands ${gap.toFixed(2)} m behind the car's tail: no tailgate sits its roof ${ROOF_OVER_LINE} m over the eye's line`);
     assert.ok(run.bareHidden > 30, `frames with the rival on the bare eye's line: ${run.bareHidden} (the tailgate must hide the car)`);
     assert.equal(run.hidden, 0, "frames with the rival on the eye's line");

@@ -1,4 +1,4 @@
-import { after, describe, it } from "node:test";
+import { afterAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FREEWHEEL } from "../contact/crash-scenarios.test-util.ts";
@@ -54,7 +54,7 @@ const GOVERNOR_GAIN = 1;
 
 const sedan = DRIVER_CARS.find((type) => type.id === "sedan")!;
 
-after(() => setGround(null));
+afterAll(() => setGround(null));
 
 /** A sedan facing the throw at the station's lane middle, moving at `speed` m/s along the lip's pitch. */
 function carMovingAtLip(mode: LipMode, speed: number): DeformableCar {
@@ -439,7 +439,7 @@ describe("given each car type driven up each station's ramp under the real lip t
         }
         lines.push(`${label}: ${cells.join("")} | bar ${limit.toFixed(1)} lip ${lipSpeed.toFixed(1)} m/s`);
       }
-      t.diagnostic(lines.join("\n"));
+      t.annotate(lines.join("\n"));
       keepsClearing.set(mode, new Set(CANDIDATE_KEEPS.filter((keep) => clearsAll.get(keep))));
       assert.ok(keepsClearing.get(mode)!.has(LIP_CAR_SPEED_KEEP), `LIP_CAR_SPEED_KEEP ${LIP_CAR_SPEED_KEEP} clears every bar on the ${mode}`);
       assert.equal(clearsAll.get(NO_CUT_KEEP), false, "with no cut the bars fail");

@@ -1,5 +1,5 @@
+import { afterEach, beforeEach, describe, test, vi } from "vitest";
 import assert from "node:assert/strict";
-import { afterEach, beforeEach, describe, mock, test } from "node:test";
 import { PAGE_PHASES, PHASE_AB_DETAIL, PHASE_AB_FX, PHASE_AB_PACE, PHASE_AB_SKY, PHASE_REPLAY, PHASE_WARM, PHASE_WINDOW } from "./engine-bench-report.ts";
 import { watchPage } from "./engine-bench-page.ts";
 import { FRAME } from "./bench-hitch.ts";
@@ -35,7 +35,7 @@ function stubPage(): StubPage {
   const page: PageState = { hidden: false, focused: true, fullscreen: false, installedFullscreen: false, clockMs: 1000 };
   Object.defineProperty(globalThis, "document", { value: { ...target, get hidden() { return page.hidden; }, hasFocus: () => page.focused, get fullscreenElement() { return page.fullscreen ? {} : null; } }, configurable: true });
   Object.defineProperty(globalThis, "window", { value: { ...target, matchMedia: (query: string) => ({ matches: query === "(display-mode: fullscreen)" && page.installedFullscreen }) }, configurable: true });
-  mock.method(performance, "now", () => page.clockMs);
+  vi.spyOn(performance, "now").mockImplementation(() => page.clockMs);
   return {
     page,
     fire: (type) => {
@@ -51,7 +51,7 @@ describe("given the bench page with a stub document and window (watchPage record
     stub = stubPage();
   });
   afterEach(() => {
-    mock.restoreAll();
+    vi.restoreAllMocks();
     Reflect.deleteProperty(globalThis, "document");
     Reflect.deleteProperty(globalThis, "window");
   });

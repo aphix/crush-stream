@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { CHASE_KNOBS, type ChaseKnobId } from "../present/drive-cam.ts";
 import { activeCameraPreset, CAMERA_PRESETS, cameraPresetValues } from "./camera-presets.ts";

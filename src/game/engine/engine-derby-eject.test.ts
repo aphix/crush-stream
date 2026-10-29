@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { carRuns } from "../vehicle/car-drive.ts";
@@ -50,7 +50,7 @@ describe("given the real engine in a derby, past the green light, the player at 
     assert.equal(car.driverOut, "windshield", "his seat stays empty");
   }
 
-  before(async () => {
+  beforeAll(async () => {
     rig = await OnFootRig.boot();
     rig.engine["looping"] = false;
     rig.engine["pinnedSeed"] = DERBY_SEED;
@@ -62,7 +62,7 @@ describe("given the real engine in a derby, past the green light, the player at 
     while (derby().time < RUN_TO_S) rig.run(FRAME);
     rig.engine["keys"].delete("KeyW");
   });
-  after(() => rig.dispose());
+  afterAll(() => rig.dispose());
 
   it("when the player's driver is thrown out with the gas held, then his car takes no pedals, coasts, and is out of the heat", () => {
     const self = rig.engine["seat"].carIndex;

@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -36,12 +36,12 @@ describe("given the real engine and a hit on the car the camera follows", () => 
     engine.advance(FRAME, { frameDt: FRAME });
     return e.view.trauma;
   };
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine();
     e = engine as unknown as Reach;
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

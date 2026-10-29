@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -244,7 +244,7 @@ describe("given a head-on recorded as a highlight, its torn parts lying asleep o
     const slices = clip.partStirs.reduce((n, x) => n + x.slices, 0);
     // A saved clip is the deflated bytes in base64 (3 bytes to 4 characters).
     const [withRuns, without] = await Promise.all([encodeSaved(clip), encodeSaved({ ...clip, partStirs: [] })]);
-    t.diagnostic(`head-on at ${STAGED.speed} m/s; clip cars ${clip.cars.map((c) => c.slot).join(",")}, steps ${s0} to ${s0 + clip.h.length}; passer nearest at step ${run.closest.step} (${run.closest.gap.toFixed(2)} m); ${clip.partStirs.length} part stirs over ${slices} slices cost ${bytes} bytes raw of ${clipBytes(clip)}, ${Math.round(((withRuns.length - without.length) * 3) / 4)} deflated of ${Math.round((withRuns.length * 3) / 4)}`);
+    t.annotate(`head-on at ${STAGED.speed} m/s; clip cars ${clip.cars.map((c) => c.slot).join(",")}, steps ${s0} to ${s0 + clip.h.length}; passer nearest at step ${run.closest.step} (${run.closest.gap.toFixed(2)} m); ${clip.partStirs.length} part stirs over ${slices} slices cost ${bytes} bytes raw of ${clipBytes(clip)}, ${Math.round(((withRuns.length - without.length) * 3) / 4)} deflated of ${Math.round((withRuns.length * 3) / 4)}`);
     assert.ok(clip.cars.some((c) => c.slot === A) && clip.cars.some((c) => c.slot === B), "the pair is in the clip");
     assert.ok(!clip.cars.some((c) => c.slot === PASSER), "the car that joined the field after the clip began is left out");
     assert.ok(s0 + clip.h.length > run.closest.step, "the passer comes by inside the clip");
@@ -261,7 +261,7 @@ describe("given a head-on recorded as a highlight, its torn parts lying asleep o
 
   it("when the same clip is replayed without its part stirs, then the parts the passer woke lie still while the live ones settled, so the replay strays (the case holds what it is for)", (t) => {
     const strayed = replayLooseBodies(run, { ...clip, partStirs: [] });
-    t.diagnostic(`without the part stirs the replay is first off at clip step ${strayed.firstOff} (race step ${s0 + strayed.firstOff}), worst ${strayed.worst.toExponential(2)} m`);
+    t.annotate(`without the part stirs the replay is first off at clip step ${strayed.firstOff} (race step ${s0 + strayed.firstOff}), worst ${strayed.worst.toExponential(2)} m`);
     assert.ok(strayed.firstOff >= 0, `without the part stirs the replay stays exact: ${JSON.stringify(strayed)}`);
   });
 });
@@ -269,7 +269,7 @@ describe("given a head-on recorded as a highlight, its torn parts lying asleep o
 describe("given the same head-on recorded with no car outside the clip", () => {
   it("when it is replayed without part stirs, then every torn part is where the live sim had it, to the bit (the passer is what the stirs are for)", (t) => {
     const run = record(STAGED.speed, null);
-    t.diagnostic(`its own cars' wrecks alone stir ${run.clip.partStirs.length} part runs over ${run.clip.partStirs.reduce((n, x) => n + x.slices, 0)} slices`);
+    t.annotate(`its own cars' wrecks alone stir ${run.clip.partStirs.length} part runs over ${run.clip.partStirs.reduce((n, x) => n + x.slices, 0)} slices`);
     assert.deepEqual(replayLooseBodies(run, { ...run.clip, partStirs: [] }), { firstOff: -1, worst: 0 });
   });
 });

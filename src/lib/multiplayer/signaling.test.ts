@@ -1,4 +1,4 @@
-import { before, describe, it } from "node:test";
+import { beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import type { PGlite } from "@electric-sql/pglite";
 import type { Sql } from "@/lib/db";
@@ -45,7 +45,7 @@ function tab(sql: Sql, room: string, id: string, name = "client", ip = `10.0.${l
 
 describe("given the signaling relay running on a freshly migrated database, with each browser tab polling it from its own address", () => {
   let sql: Sql;
-  before(async () => {
+  beforeAll(async () => {
     sql = await relayDb();
   });
 

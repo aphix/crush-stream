@@ -1,4 +1,4 @@
-import { before, describe, it } from "node:test";
+import { beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -146,14 +146,14 @@ function replayWorst({ clip, cars, trace, dress }: Recorded): Map<number, number
 
 describe("given a flat-field head-on recorded as a highlight with 19 bystander cars around it (near, far, touching, respawned, wrecked, torn-mirror)", () => {
   let run: Recorded;
-  before(() => {
+  beforeAll(() => {
     run = record();
   });
 
   it("when the clip is read back and replayed, then cars near the hit (and one a bystander touched, and one respawned after the hit) are in the clip and match the sim at every step, and a car 300 m away is not in it", (t) => {
     const { clip } = run;
     const slots = clip.cars.map((c) => c.slot);
-    t.diagnostic(`clip cars: ${slots.join(",")} (${(clipBytes(clip) / 1024).toFixed(0)} KB)`);
+    t.annotate(`clip cars: ${slots.join(",")} (${(clipBytes(clip) / 1024).toFixed(0)} KB)`);
     assert.ok(slots.includes(A) && slots.includes(B), "the head-on pair is in the clip");
     assert.ok(slots.includes(NEAR), "a car 40 m from the hit is in the clip");
     assert.ok(slots.includes(TOUCHER), "a car that touched a bystander since the clip's start is in the clip, wherever it is");
@@ -165,13 +165,13 @@ describe("given a flat-field head-on recorded as a highlight with 19 bystander c
     const jump = clip.keyStep.indexOf(JUMP_STEP - s0);
     assert.ok(jump > 0 && ((clip.keyCars[jump]! >>> slots.indexOf(JUMPER)) & 1) === 1 && clip.keyCars[jump] === 1 << slots.indexOf(JUMPER), "the respawn has a keyframe of its own, with the respawned car alone");
     const worst = replayWorst(run);
-    t.diagnostic([...worst].map(([slot, d]) => `car ${slot}: ${d} m off`).join("\n"));
+    t.annotate([...worst].map(([slot, d]) => `car ${slot}: ${d} m off`).join("\n"));
     assert.deepEqual([...worst.values()].filter((d) => d !== 0), [], "every car of the clip is where the sim had it at every step");
   });
 
   it("when the clip's byte share is spent on the wrecks 50 to 74 m out, then it takes the nearer wrecks and drops the farther ones", (t) => {
     const taken = WRECKS.filter((i) => run.clip.cars.some((c) => c.slot === i));
-    t.diagnostic(`wrecks taken: ${taken.join(",")} of ${WRECKS.join(",")} (${(clipBytes(run.clip) / 1024).toFixed(0)} KB)`);
+    t.annotate(`wrecks taken: ${taken.join(",")} of ${WRECKS.join(",")} (${(clipBytes(run.clip) / 1024).toFixed(0)} KB)`);
     assert.ok(taken.length >= 1, "the nearest wreck (50 m) is in the clip");
     assert.ok(taken.length < WRECKS.length, "the farthest wreck (74 m) would take the clip past its share");
     assert.ok(taken.every((slot, k) => slot === WRECKS[k]), "the wrecks taken are the nearest ones");
@@ -289,11 +289,11 @@ describe("given a flat-field head-on recorded as a highlight while 300 m away a 
   it("when the clip is read back and replayed, then the car under the top car is in it with the top car, and both are where the sim had them at every step", (t) => {
     const run = recordStack();
     const slots = run.clip.cars.map((c) => c.slot);
-    t.diagnostic(`clip cars: ${slots.join(",")}`);
+    t.annotate(`clip cars: ${slots.join(",")}`);
     assert.ok(slots.includes(ON_TOP), "the grazed top car is in the clip");
     assert.ok(slots.includes(UNDER), "the car the top car stands on is in the clip, 300 m from the hit");
     const worst = replayWorst(run);
-    t.diagnostic([...worst].map(([slot, d]) => `car ${slot}: ${d} m off`).join("\n"));
+    t.annotate([...worst].map(([slot, d]) => `car ${slot}: ${d} m off`).join("\n"));
     assert.deepEqual([...worst.values()].filter((d) => d !== 0), [], "every car of the clip is where the sim had it at every step");
   });
 });
@@ -355,17 +355,17 @@ function recordArrival(): Recorded {
 
 describe("given a head-on whose car A was put on the road a second before the impact, out of a pile of six wrecks 300 m away that it stood in for the clip's first two seconds", () => {
   let arrival: Recorded;
-  before(() => {
+  beforeAll(() => {
     arrival = recordArrival();
   });
   it("when the clip is read back and replayed, then the cars parked near the hit are in it, the pile 300 m from the hit is not, and every car is where the sim had it at every step", (t) => {
     const run = arrival;
     const slots = run.clip.cars.map((c) => c.slot);
-    t.diagnostic(`clip cars: ${slots.join(",")} (${(clipBytes(run.clip) / 1024).toFixed(0)} KB)`);
+    t.annotate(`clip cars: ${slots.join(",")} (${(clipBytes(run.clip) / 1024).toFixed(0)} KB)`);
     assert.ok(PARKED.every((i) => slots.includes(i)), "the cars parked 30 to 45 m from the hit are in the clip");
     assert.deepEqual(PILE.filter((i) => slots.includes(i)), [], "no wreck of the pile A left is in the clip");
     const worst = replayWorst(run);
-    t.diagnostic([...worst].map(([slot, d]) => `car ${slot}: ${d} m off`).join("\n"));
+    t.annotate([...worst].map(([slot, d]) => `car ${slot}: ${d} m off`).join("\n"));
     assert.deepEqual([...worst.values()].filter((d) => d !== 0), [], "every car of the clip is where the sim had it at every step");
   });
 

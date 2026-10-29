@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { dressRow } from "./dummy-dress.ts";
 import { OUTFIT, type DriverLook } from "./driver-look.ts";

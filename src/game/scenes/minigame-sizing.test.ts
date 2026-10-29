@@ -1,4 +1,4 @@
-import { after, describe, it } from "node:test";
+import { afterAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -180,7 +180,7 @@ type RagdollRange = { system: RagdollSystem; ground: Ground };
 const systems: RagdollSystem[] = [];
 let launchCar: DeformableCar | null = null;
 
-after(() => {
+afterAll(() => {
   for (const system of systems.splice(0)) system.dispose();
   launchCar?.dispose();
 });
@@ -457,7 +457,7 @@ describe("given the high jump with THROW_BOOST.highJump on the free pad (no fram
     const slowRuns = await slowRunHeights(THROW_BOOST.highJump);
     const layout = highJumpLayout(measuredBest(rows, 0), lipHeight("highJump"));
     const slowLines = [...slowRuns].map(([id, height]) => `${id} ${metres(height)} m`).join(", ");
-    t.diagnostic(`THROW_BOOST.highJump ${JSON.stringify(THROW_BOOST.highJump)}; posts ${layout.postsX} m, net ${layout.netX} m, box piles end ${metres(layout.boxes.reduce((end, box) => Math.max(end, box.x), 0))} m, frame top ${layout.frameTop} m\nscore of a run at ${SLOW_RUN_SHARE * 100}% of full lip speed: ${slowLines}\n${TABLE_HEADER}\n${tableOf(rows, (flight) => `scores ${metres(flight.height)} m, crosses the posts' plane at ${metres(flight.crossingHeight)} m`)}`);
+    t.annotate(`THROW_BOOST.highJump ${JSON.stringify(THROW_BOOST.highJump)}; posts ${layout.postsX} m, net ${layout.netX} m, box piles end ${metres(layout.boxes.reduce((end, box) => Math.max(end, box.x), 0))} m, frame top ${layout.frameTop} m\nscore of a run at ${SLOW_RUN_SHARE * 100}% of full lip speed: ${slowLines}\n${TABLE_HEADER}\n${tableOf(rows, (flight) => `scores ${metres(flight.height)} m, crosses the posts' plane at ${metres(flight.crossingHeight)} m`)}`);
     assert.deepEqual(highJumpViolations(rows), []);
     assert.deepEqual(slowRunViolations(slowRuns), []);
   });
@@ -522,7 +522,7 @@ describe("given the high jump's posts and slats as ragdoll colliders, with the r
     const framed = await framedBestRuns();
     const free = bestRunsOf(await measure("highJump", THROW_BOOST.highJump, BEST_ONCE));
     const cost = framed.map((row) => free.find((candidate) => candidate.type.id === row.type.id)!.flights[0]!.height - row.flights[0]!.height);
-    t.diagnostic(`with the frame (score on the free pad minus score with it: ${framed.map((row, index) => `${row.type.id} ${metres(cost[index]!)} m`).join(", ")}; lands NaN: caught on the frame, he falls back short of his apex's distance)\n${TABLE_HEADER}\n${tableOf(framed, (flight) => `scores ${metres(flight.height)} m`)}`);
+    t.annotate(`with the frame (score on the free pad minus score with it: ${framed.map((row, index) => `${row.type.id} ${metres(cost[index]!)} m`).join(", ")}; lands NaN: caught on the frame, he falls back short of his apex's distance)\n${TABLE_HEADER}\n${tableOf(framed, (flight) => `scores ${metres(flight.height)} m`)}`);
     assert.deepEqual(framedViolations(framed), []);
     assert.ok(Math.max(...cost) >= FRAME_COSTS_BY, `no best run scores ${FRAME_COSTS_BY} m less with the frame: ${cost.map((gap) => metres(gap)).join(", ")}`);
   });
@@ -531,7 +531,7 @@ describe("given the high jump's posts and slats as ragdoll colliders, with the r
 describe("given Ring Fling with THROW_BOOST.ringFling on the real ground, car and ragdoll", () => {
   it("when each of the 7 classes' best and mid runs is thrown, then the standard classes' full-throttle runs come down in the mid cups and the backstop holds the rest", async (t) => {
     const rows = await measure("ringFling", THROW_BOOST.ringFling, SHIPPED_THROWS);
-    t.diagnostic(`THROW_BOOST.ringFling ${JSON.stringify(THROW_BOOST.ringFling)}\n${TABLE_HEADER}\n${tableOf(rows, (flight) => `cup ${ringScore(flight.restDistance, flight.restLateral)}`)}`);
+    t.annotate(`THROW_BOOST.ringFling ${JSON.stringify(THROW_BOOST.ringFling)}\n${TABLE_HEADER}\n${tableOf(rows, (flight) => `cup ${ringScore(flight.restDistance, flight.restLateral)}`)}`);
     assert.deepEqual(ringFlingViolations(rows), []);
   });
 
@@ -557,7 +557,7 @@ describe("given Ring Fling with THROW_BOOST.ringFling on the real ground, car an
       sweepRows.push(`${share.toFixed(2)} x lip speed (${metres(share * thrown.horizontalSpeed)} m/s): lands ${metres(flight.landingDistance)} rests ${metres(flight.restDistance)} cup ${cup}`);
       if (cup > 0) cupsHeld.add(cup);
     }
-    t.diagnostic(`lip speed share -> where the sedan's dummy lands:\n${sweepRows.join("\n")}`);
+    t.annotate(`lip speed share -> where the sedan's dummy lands:\n${sweepRows.join("\n")}`);
     for (const cup of [10, 20, 30]) assert.ok(cupsHeld.has(cup), `no run in the sweep rested in the ${cup} cup: ${[...cupsHeld].join(", ")}`);
   });
 });
@@ -599,7 +599,7 @@ describe("given the long jump's timed bail with THROW_BOOST.longJump on the real
     const byOffset = await bailMeasurements();
     const perfect = byOffset.get(0)!;
     const none = byOffset.get(null)!;
-    t.diagnostic(`THROW_BOOST.longJump ${JSON.stringify(THROW_BOOST.longJump)}; bail window ${BAIL_WINDOW_SECONDS} s, perfect within ${BAIL_PERFECT_SECONDS} s\n${bailTable(byOffset)}\nperfect, all runs\n${TABLE_HEADER}\n${tableOf(perfect, (flight) => `sign ${Math.min(LONG_JUMP_LAST_SIGN, Math.floor(flight.restDistance / RANGE.signStep) * RANGE.signStep)} m`)}\nno press, all runs\n${TABLE_HEADER}\n${tableOf(none, (flight) => `sign ${Math.min(LONG_JUMP_LAST_SIGN, Math.floor(flight.restDistance / RANGE.signStep) * RANGE.signStep)} m`)}`);
+    t.annotate(`THROW_BOOST.longJump ${JSON.stringify(THROW_BOOST.longJump)}; bail window ${BAIL_WINDOW_SECONDS} s, perfect within ${BAIL_PERFECT_SECONDS} s\n${bailTable(byOffset)}\nperfect, all runs\n${TABLE_HEADER}\n${tableOf(perfect, (flight) => `sign ${Math.min(LONG_JUMP_LAST_SIGN, Math.floor(flight.restDistance / RANGE.signStep) * RANGE.signStep)} m`)}\nno press, all runs\n${TABLE_HEADER}\n${tableOf(none, (flight) => `sign ${Math.min(LONG_JUMP_LAST_SIGN, Math.floor(flight.restDistance / RANGE.signStep) * RANGE.signStep)} m`)}`);
     assert.deepEqual(perfectBailViolations(perfect), [], "the perfect bail");
     assert.deepEqual(midRunViolations(perfect), [], "the mid runs");
     assert.deepEqual(noBailViolations(none), [], "no bail");

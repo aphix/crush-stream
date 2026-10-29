@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -31,10 +31,10 @@ const STILL = new THREE.Vector3();
 const CAMERA = new THREE.PerspectiveCamera();
 const PANE = new THREE.Vector3(0.5, 0.3, 0.05);
 
-before(() => {
+beforeAll(() => {
   Object.defineProperty(globalThis, "document", { value: CANVAS, configurable: true });
 });
-after(() => {
+afterAll(() => {
   Reflect.deleteProperty(globalThis, "document");
 });
 

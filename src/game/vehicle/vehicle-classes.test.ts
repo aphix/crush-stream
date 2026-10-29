@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { applyDrive, DriverSeat, idleDrive, type DriveInput } from "./car-drive.ts";
@@ -178,7 +178,7 @@ for (const H of RATES) {
         const times = VEHICLE_CLASS_IDS.map((id) => lapTime(id, loop));
         const mean = times.reduce((a, b) => a + b, 0) / times.length;
         const table = VEHICLE_CLASS_IDS.map((id, i) => `${id} ${times[i]!.toFixed(2)} s`).join(", ");
-        t.diagnostic(`${loop.length.toFixed(0)} m loop: ${table}`);
+        t.annotate(`${loop.length.toFixed(0)} m loop: ${table}`);
         for (const lap of times) assert.ok(Math.abs(lap / mean - 1) <= 0.05, `laps: ${table} (mean ${mean.toFixed(2)})`);
       });
     });

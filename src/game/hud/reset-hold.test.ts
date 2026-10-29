@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { RESET_HOLD, ResetHold } from "./reset-hold.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";

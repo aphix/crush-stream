@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import { restSink, strike, strikeSink, type Outcome, type Target } from "./solid-parity.test-util.ts";
 import { PREFABS } from "./catalog.ts";
@@ -75,7 +76,7 @@ describe("given a fixed solid (a course wall, a solid box prop, the flank of a m
         for (const speed of cls === "monster" && target === "oval" ? [SURVIVABLE, LETHAL, THIN_WALL_MPS] : [SURVIVABLE, LETHAL]) {
           it(`when a ${cls} drives into the ${target} at ${speed} m/s, then it throws the driver as the barrier does, crushes within ${HEALTH_BAND} of the barrier's drivetrain health, and the car comes off no faster`, (t) => {
             const solid = strike(target, cls, speed);
-            if (solid[0]!.staged > 0) t.diagnostic(`${cls} started ${solid[0]!.staged.toFixed(1)} m further out than the run-in: its footprint there met a solid`);
+            if (solid[0]!.staged > 0) t.annotate(`${cls} started ${solid[0]!.staged.toFixed(1)} m further out than the run-in: its footprint there met a solid`);
             matches(`${cls} ${target} ${speed}`, solid, strike("barrier", cls, speed));
           });
         }
@@ -153,7 +154,7 @@ describe("given a sedan hitting a flat solid at the clip's 113 km/h and the jers
   // Measured (sedan, stucco, second hit): the drawn body's deepest reach past the face is 0.164 m since the wreck split (0.279 m before it, 0.58 m when
   // first measured, the clip's 0.95 m). Limiting a slice's wall shoves to one reach in total took it under 5 cm but reshuffled the derby rows (derby.test's
   // pops todo has the numbers).
-  it.todo("when a wreck is sent back at 113 km/h into the stucco, then its drawn body never goes more than 5 cm past the face (0.164 m deep today, the clip's 0.95 m; after the plan, with the wall shoves of a slice limited in total)", () => {
+  todoRow("when a wreck is sent back at 113 km/h into the stucco, then its drawn body never goes more than 5 cm past the face (0.164 m deep today, the clip's 0.95 m; after the plan, with the wall shoves of a slice limited in total)", true, () => {
     const { peak } = strikeSink("stucco", "sedan", CLIP_SPEED, 1);
     assert.ok(peak.mesh <= LEFT_IN, `${peak.mesh.toFixed(3)} m`);
   });

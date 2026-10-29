@@ -1,5 +1,6 @@
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -404,7 +405,7 @@ for (const shotCase of shotCases) {
       // main (REPLAY 56): 40 of 40 red, 12-24 mismatched lines each; at the piston's deepest region the drop crushes 0.00-0.83x the piston
       // (nose 0 / 187 mm at the front corners, 20 km/h; 550 / 660 mm at the nose, scene speed), the side rows overshoot 1.2-1.8x in the cabin,
       // and the engine block's travel is 0 against the piston's 13-163 mm wherever it is listed.
-      it.todo(`when it lands on ${pointCase.name} the same way the piston strikes it, then the crush depth at every point and region, the engine block's travel, the parts that come off and the drivetrain match the piston hit's within 15 % or 10 mm`, () => {
+      todoRow(`when it lands on ${pointCase.name} the same way the piston strikes it, then the crush depth at every point and region, the engine block's travel, the parts that come off and the drivetrain match the piston hit's within 15 % or 10 mm`, true, () => {
         const { piston, drop } = strikeAndDrop(pointCase.id, shot);
         assert.deepEqual(dropMismatch(drop, piston), [], `${pointCase.id}: drop / piston (crush window ${drop.windowMs} / ${piston.windowMs} ms, fall ${drop.fromM.toFixed(2)} m)`);
       });

@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
 import { TRACK_ID } from "../world/constants.ts";
@@ -22,7 +22,7 @@ describe("given the real engine in a race on the oval, the player at the wheel o
   const session = () => race()["session"]!;
   const row = () => session().cars[race()["rowOf"][race().self]!]!;
 
-  before(async () => {
+  beforeAll(async () => {
     rig = await OnFootRig.boot();
     rig.engine["looping"] = false;
     rig.engine.toggleRace();
@@ -32,7 +32,7 @@ describe("given the real engine in a race on the oval, the player at the wheel o
     assert.equal(race().phase, "racing", "the lights went green");
     assert.equal(rig.engine["seat"].mode, "drive", "the player has the wheel");
   });
-  after(() => rig.dispose());
+  afterAll(() => rig.dispose());
 
   it("when he gets out at green, walks off, is run down by a rival, stands out for 9 s and gets back in, then his car was held, his row stayed racing, and he drives again", () => {
     const self = race().self;

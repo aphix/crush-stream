@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { beginImpact, easeTimeScale, holdForThrow, impactScale, pairEta, phaseClock, PRE_IMPACT_LEAD, preImpact, SLOMO_HELD, stepPhase, THROW_ONSET, type PhaseClock } from "./phase.ts";

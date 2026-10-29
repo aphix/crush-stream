@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "./three-trig.ts";
 import { Euler, Object3D, Quaternion, Vector3 } from "three";

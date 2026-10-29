@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "./ground.ts";
 import { makeWorld, playerRace, type PlayerLine, type World } from "./race-world.test-util.ts";
@@ -29,18 +29,18 @@ const LINES: Record<string, PlayerLine> = {
 
 describe(`given a ${LAPS}-lap race on the oval with the player's car driven through the real seat and three AI rivals`, () => {
   let w: World;
-  before(() => {
+  beforeAll(() => {
     w = makeWorld();
     w.race.enter();
   });
-  after(() => {
+  afterAll(() => {
     w.race.exit();
     setGround(null);
   });
   for (const [name, line] of Object.entries(LINES)) {
     it(`when the player's line is ${name}, then he is home on the full distance, and the HUD's lap and place match the rules' count`, (t) => {
       const o = playerRace(w, track, line, LAPS, 3, 220);
-      t.diagnostic(`${name}: you ${o.you.status} P${o.you.place} ${o.you.time?.toFixed(1) ?? "-"} s, ${o.you.laps} laps; AI ${o.ai.map((a) => `${a.status}/${a.laps}`).join(" ")}`);
+      t.annotate(`${name}: you ${o.you.status} P${o.you.place} ${o.you.time?.toFixed(1) ?? "-"} s, ${o.you.laps} laps; AI ${o.ai.map((a) => `${a.status}/${a.laps}`).join(" ")}`);
       assert.equal(o.you.status, "finished", `you ${o.you.status} on ${o.you.laps} laps`);
       assert.equal(o.you.laps, LAPS);
       assert.ok(o.ai.every((a) => a.laps === LAPS), "the AI on the same distance");

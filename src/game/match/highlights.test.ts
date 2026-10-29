@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { clipScore, countsAsImpact, HighlightLedger, IMPACT_MIN, impactEnergy, MAX_SPAN, MIN_SCORE, QUIET_GAP, REHIT_S, TOP, type CrashCluster } from "./highlights.ts";
 

@@ -1,4 +1,4 @@
-import { after, before, describe, it, mock } from "node:test";
+import { afterAll, beforeAll, describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import type { ContactHit, PredictedHit } from "../scenes/engine-props.ts";
@@ -23,12 +23,12 @@ type Reach = {
 /** The real engine booted headless for one describe (`before`), disposed after it: the returned call reaches it. */
 function booted(): () => { engine: CrashEngine; e: Reach } {
   let engine: CrashEngine | null = null;
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine();
     engine["looping"] = false;
   });
-  after(() => {
+  afterAll(() => {
     engine?.dispose();
     setGround(null);
   });
@@ -61,11 +61,11 @@ function watch(engine: CrashEngine, e: Reach, gaps: (x: number, z: number) => [n
   const debris = engine["debris"];
   const poof = sparks.poof.bind(sparks);
   const burst = debris.burst.bind(debris);
-  mock.method(sparks, "poof", (at: THREE.Vector3, n: THREE.Vector3, count: number) => {
+  vi.spyOn(sparks, "poof").mockImplementation((at: THREE.Vector3, n: THREE.Vector3, count: number) => {
     if (!touched()) seen.early.push(gaps(at.x, at.z)[1]);
     poof(at, n, count);
   });
-  mock.method(debris, "burst", (at: THREE.Vector3, n: THREE.Vector3, count: number) => {
+  vi.spyOn(debris, "burst").mockImplementation((at: THREE.Vector3, n: THREE.Vector3, count: number) => {
     if (!touched()) seen.early.push(gaps(at.x, at.z)[1]);
     burst(at, n, count);
   });
@@ -78,7 +78,7 @@ function watch(engine: CrashEngine, e: Reach, gaps: (x: number, z: number) => [n
       seen.lopsided ||= near <= FUDGE_FULL && far >= FUDGE_NONE;
     }
   } finally {
-    mock.restoreAll();
+    vi.restoreAllMocks();
   }
   return seen;
 }

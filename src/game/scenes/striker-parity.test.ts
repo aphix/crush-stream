@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";

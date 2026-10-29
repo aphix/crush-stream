@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";

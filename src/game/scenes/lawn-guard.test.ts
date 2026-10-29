@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { parseTrack } from "../world/track-schema.ts";

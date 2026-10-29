@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FLEET_MIN_SEP, LAMP_POSTS, LAMP_RING_R, MAX_CARS, fleetClass, fleetStyle, layoutDerby, layoutFleet, slotType } from "./fleet.ts";

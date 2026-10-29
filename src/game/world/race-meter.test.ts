@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { TRACK_ID } from "./constants.ts";
 import { setGround } from "./ground.ts";

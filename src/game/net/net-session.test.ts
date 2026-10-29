@@ -1,4 +1,4 @@
-import { afterEach, describe, it, type TestContext } from "node:test";
+import { afterEach, describe, it, type TestContext, vi } from "vitest";
 import assert from "node:assert/strict";
 import { DriverSeat, type DriveInput } from "../vehicle/car-drive.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -816,7 +816,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     });
     open.push(client);
     const searches = recordSearches(client);
-    t.mock.method(globalThis, "fetch", listing(names.map((room) => ({ room, players: 1, meta: "lobby.oval" }))));
+    vi.spyOn(globalThis, "fetch").mockImplementation(listing(names.map((room) => ({ room, players: 1, meta: "lobby.oval" }))));
     await client.publicMatch("race");
     /** Waits out the silence that makes the guest give up on its room, and the search that follows. */
     const dwell = async () => {
@@ -826,7 +826,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     return { hub, v, client, linked, dwell };
   };
 
-  it("given a guest in a public room, when the host of that room leaves, then the stranded guest hosts a fresh public room of its own", async (t) => {
+  it("given a guest in a public room, when the host of that room leaves, then the stranded guest hosts a fresh public room of its own", async () => {
     const hub = new Hub();
     const v = virtual();
     const host = new NetPlay(fakeGame(), { connect: hub.connect, now: v.opts.now });
@@ -834,7 +834,7 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     open.push(host, client);
     const searches = recordSearches(client);
     host.host(dead, "rtc");
-    t.mock.method(globalThis, "fetch", listing([{ room: dead, players: 1, meta: "lobby.oval" }]));
+    vi.spyOn(globalThis, "fetch").mockImplementation(listing([{ room: dead, players: 1, meta: "lobby.oval" }]));
     await client.publicMatch("race");
     const step = (frames: number, who: NetPlay[]) => {
       for (let k = 0; k < frames; k++) {
@@ -856,14 +856,14 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     assert.equal(st.finding, false);
   });
 
-  it("given a public guest in an open room, when its page loads with its engine running no frames for 9 s and again when it stalls 9 s mid-session, then it stays in the room as car 1 both times", async (t) => {
+  it("given a public guest in an open room, when its page loads with its engine running no frames for 9 s and again when it stalls 9 s mid-session, then it stays in the room as car 1 both times", async () => {
     const hub = new Hub();
     let now = 1000;
     const host = new NetPlay(fakeGame(), { connect: hub.connect, now: () => now });
     const client = new NetPlay(fakeGame(), { connect: hub.connect, now: () => now });
     open.push(host, client);
     host.host(dead, "rtc");
-    t.mock.method(globalThis, "fetch", listing([{ room: dead, players: 1 }]));
+    vi.spyOn(globalThis, "fetch").mockImplementation(listing([{ room: dead, players: 1 }]));
     const run = (ms: number, client_ = true) => {
       for (let k = 0; k < ms / FRAME_MS; k++) {
         now += FRAME_MS;
@@ -884,13 +884,13 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     assert.deepEqual([client.status().role, client.status().room === dead, client.status().car], ["client", true, 1]);
   });
 
-  it("given a weak device with nothing to join, when it presses Play online, then it looks, hosts a field of 4 (the player plus 3 AI cars) without changing the player's own AI count, and drops that field on leaving", async (t) => {
+  it("given a weak device with nothing to join, when it presses Play online, then it looks, hosts a field of 4 (the player plus 3 AI cars) without changing the player's own AI count, and drops that field on leaving", async () => {
     const v = virtual();
     const g = fakeGame([]);
     g.fit = false;
     const np = new NetPlay(g, { connect: new Hub().connect, ...v.opts });
     open.push(np);
-    t.mock.method(globalThis, "fetch", listing([]));
+    vi.spyOn(globalThis, "fetch").mockImplementation(listing([]));
     const searching = np.publicMatch("race");
     assert.equal(np.status().finding, true);
     await searching;
@@ -903,24 +903,24 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     assert.equal(race.options.aiCount, DEFAULT_RACE_OPTIONS.aiCount);
   });
 
-  it("given a device able to host with nothing to join, when it presses Play online, then it hosts a full field at once, within 5 s of the start", async (t) => {
+  it("given a device able to host with nothing to join, when it presses Play online, then it hosts a full field at once, within 5 s of the start", async () => {
     const v = virtual();
     const g = fakeGame([]);
     const np = new NetPlay(g, { connect: new Hub().connect, ...v.opts });
     open.push(np);
-    t.mock.method(globalThis, "fetch", listing([]));
+    vi.spyOn(globalThis, "fetch").mockImplementation(listing([]));
     await np.publicMatch("race");
     assert.equal(np.status().role, "host");
     assert.equal(g.race()!.options.aiCount, DEFAULT_RACE_OPTIONS.aiCount);
     assert.ok(v.t.now - 1000 < 5000, "no long search before hosting");
   });
 
-  it("given a Play online search in progress, when the player leaves, then no room is joined or hosted afterwards", async (t) => {
+  it("given a Play online search in progress, when the player leaves, then no room is joined or hosted afterwards", async () => {
     const v = virtual();
     const np = new NetPlay(fakeGame(), { connect: new Hub().connect, ...v.opts });
     open.push(np);
     let release = (): void => {};
-    t.mock.method(globalThis, "fetch", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       await new Promise<void>((resolve) => (release = resolve));
       return new Response(JSON.stringify({ rooms: [{ room: dead, players: 1 }] }));
     });
@@ -998,13 +998,13 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     assert.equal(g.linked.at(-1), `client ${x}`, "first in the list again");
   });
 
-  it("given a weak host, when race mode closes before it leaves, then the player's own AI count was never changed and is the default once race mode is on again", async (t) => {
+  it("given a weak host, when race mode closes before it leaves, then the player's own AI count was never changed and is the default once race mode is on again", async () => {
     const v = virtual();
     const g = fakeGame([]);
     g.fit = false;
     const np = new NetPlay(g, { connect: new Hub().connect, ...v.opts });
     open.push(np);
-    t.mock.method(globalThis, "fetch", listing([]));
+    vi.spyOn(globalThis, "fetch").mockImplementation(listing([]));
     await np.publicMatch("race");
     assert.equal(g.race()!.options.aiCount, DEFAULT_RACE_OPTIONS.aiCount);
     g.raceOn = false;
@@ -1013,11 +1013,11 @@ describe("given public matches played over a stubbed relay on a virtual clock", 
     assert.equal(g.race()!.options.aiCount, DEFAULT_RACE_OPTIONS.aiCount);
   });
 
-  it("given a public host on the real WebRTC transport against a stubbed relay, when it makes its first relay poll, then that poll already carries the lobby tag", async (t) => {
+  it("given a public host on the real WebRTC transport against a stubbed relay, when it makes its first relay poll, then that poll already carries the lobby tag", async () => {
     const polls: string[] = [];
     let polled: () => void = () => {};
     const firstPoll = new Promise<void>((resolve) => (polled = resolve));
-    t.mock.method(globalThis, "fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (init?.method !== "POST") {
         polls.push(String(input));
         polled();

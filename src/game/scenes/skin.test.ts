@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import * as THREE from "three";
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { makeCar, runWall } from "../contact/crash-scenarios.test-util.ts";
 import { PISTON, PISTON_IDS } from "./piston-rig.ts";

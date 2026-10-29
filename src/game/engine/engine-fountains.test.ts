@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 import { scavengesDuring } from "../kernel/gc.test-util.ts";
@@ -35,10 +35,10 @@ const ALLOC_SECONDS = 600;
 const BOUND_B = 16;
 
 let scene: THREE.Scene;
-before(() => {
+beforeAll(() => {
   Object.defineProperty(globalThis, "document", { value: CANVAS, configurable: true });
 });
-after(() => {
+afterAll(() => {
   Reflect.deleteProperty(globalThis, "document");
 });
 

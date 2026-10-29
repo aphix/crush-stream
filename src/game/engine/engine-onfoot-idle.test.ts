@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { NO_PERSON_PICK } from "../match/look-data.ts";
@@ -66,12 +66,12 @@ const cases: readonly { it: string; key: string; seconds: number; resetMidWalk: 
 /** One engine for the file: a second `CrashEngine` in the same process never resolves `ready`. */
 describe("given the real engine in the fleet, his player out of the car at zero input", () => {
   let rig: OnFootRig;
-  before(async () => {
+  beforeAll(async () => {
     rig = await OnFootRig.boot();
     rig.engine["looping"] = false;
     rig.run(FRAME);
   });
-  after(() => rig.dispose());
+  afterAll(() => rig.dispose());
 
   /** The scene put back (as a reset does it) with his player a woman or a man, and him out at the door. */
   function getOutAs(woman: boolean): void {

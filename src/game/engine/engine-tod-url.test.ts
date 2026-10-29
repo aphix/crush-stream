@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { decodeShare } from "../hud/share-url.ts";
@@ -11,14 +11,14 @@ describe("given the real engine and a browser address bar that records every wri
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
   let engine: CrashEngine;
   const todIn = (hash: string): string | null => new URLSearchParams(hash.replace(/^#/, "")).get("tod");
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     globalThis.history.pushState = globalThis.history.replaceState = (_state, _unused, url) => {
       globalThis.location.hash = String(url).slice(String(url).indexOf("#"));
     };
     engine = await bootEngine();
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

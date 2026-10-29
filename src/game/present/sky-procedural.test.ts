@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { TIME_OF_DAY } from "../match/types.ts";
 import { PROCEDURAL_LOOKS, SANDBOX_SKY, type ProceduralLook, type SkyStops } from "./sky-procedural.ts";

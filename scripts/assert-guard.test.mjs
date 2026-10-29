@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 
 /** Past the guard's diff budget, yet one differing entry keeps Node's own diff cheap if the guard is missing. */
 const BIG = 100_000;
@@ -30,11 +30,6 @@ const bounded = (err) =>
 describe("given a test process (the guard is imported first by every test runner)", () => {
   it("when a strict deep compare fails on objects holding a big typed array, then the error's message, actual and expected are bounded prints, not the values", () => {
     const err = caught(() => assert.deepEqual(texture(0), texture(1)));
-    assert.ok(bounded(err), `${err.message.length} message chars, actual ${typeof err.actual}`);
-  });
-
-  it("when t.assert fails the same compare, then its error is bounded too", (t) => {
-    const err = caught(() => t.assert.deepStrictEqual(texture(0), texture(1)));
     assert.ok(bounded(err), `${err.message.length} message chars, actual ${typeof err.actual}`);
   });
 

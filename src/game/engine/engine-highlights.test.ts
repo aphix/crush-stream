@@ -1,4 +1,4 @@
-import { after, before, describe, it, mock } from "node:test";
+import { afterAll, beforeAll, describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { setGround } from "../world/ground.ts";
@@ -94,10 +94,10 @@ async function recordedReel(w: World, clips = 1): Promise<Reel> {
 /** A scenario's world and the reel its crash recorded (`record`, run in `before`), the world exited in `after`: the tests of one describe replay the one reel, on the cars that recorded it. */
 function recorded(record: (w: World) => Promise<Reel>): { w: World; reel: Reel } {
   const rec = { w: makeWorld() } as { w: World; reel: Reel };
-  before(async () => {
+  beforeAll(async () => {
     rec.reel = await record(rec.w);
   });
-  after(() => {
+  afterAll(() => {
     rec.w.race.exit();
     setGround(null);
   });
@@ -206,7 +206,7 @@ function playTwice(w: World, reel: Reel): { touch: number[]; widest: number[]; l
   const wallHit = w.race.onWallHit;
   const slot = clip.cars[clip.firstA]!.slot;
   let clockS = 0;
-  mock.method(performance, "now", () => clockS * 1000);
+  vi.spyOn(performance, "now").mockImplementation(() => clockS * 1000);
   try {
     const note = (path: string, strength: number): void => void thrown.push({ pass: d["pass"], done: d["cur"]!.sim.step, path, strength, gap: hitGap(d, clip, Math.max) });
     const d: ReelDirector = new ReelDirector({
@@ -238,7 +238,7 @@ function playTwice(w: World, reel: Reel): { touch: number[]; widest: number[]; l
       if (far >= FUDGE_NONE && hitGap(d, clip, Math.min) <= FUDGE_FULL) lopsided[d["pass"]] = true;
     }
   } finally {
-    mock.restoreAll();
+    vi.restoreAllMocks();
     w.race.onWallHit = wallHit;
   }
   return { touch, widest, lopsided, thrown };
@@ -433,7 +433,7 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
   it("when its reel loops and a clip is watched alone and put back, then no spark or debris of one play is alive on the next play's first frame, and a reel that rejoins a clip late hovers over its opening with none", () => {
     const { w: a, reel } = fast;
     let clockS = 0;
-    mock.method(performance, "now", () => clockS * 1000);
+    vi.spyOn(performance, "now").mockImplementation(() => clockS * 1000);
     const fx = { live: 0, hits: 0 };
     const starts: { pass: number; before: number; after: number }[] = [];
     try {
@@ -472,7 +472,7 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
       assert.deepEqual(hover.filter((n) => n > 0), [], `${throwing} bursts of the watched clip were still alive in the hover (${hover.join(",")})`);
       assert.equal(d["cur"]!.sim.time, 0, "the hover shows the clip's opening, not where the watched clip ended");
     } finally {
-      mock.restoreAll();
+      vi.restoreAllMocks();
     }
     assert.ok(starts.length >= 3, `${starts.length} play starts seen`);
     for (const s of starts) {
@@ -484,7 +484,7 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
   it("when a clip watched alone has run its last step and its view holds the last frame, then the hold throws no sparks of that step again", () => {
     const { w: a, reel } = fast;
     let clockS = 0;
-    mock.method(performance, "now", () => clockS * 1000);
+    vi.spyOn(performance, "now").mockImplementation(() => clockS * 1000);
     const fx = { live: 0, hits: 0 };
     let held = 0;
     let heldFrames = 0;
@@ -506,7 +506,7 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
       }
       held = fx.hits - before;
     } finally {
-      mock.restoreAll();
+      vi.restoreAllMocks();
     }
     assert.ok(heldFrames > 60, `${heldFrames} frames of the hold`);
     assert.equal(held, 0, `${held} spark showers over the ${heldFrames}-frame hold after the last step, for a contact that step left`);
@@ -528,7 +528,7 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
   it("when its reel plays twice, then every frame of the second play (its first frames after the flight included) has the camera, the focus car and the crash and impact calls where the first play had them", () => {
     const { w: a, reel } = fast;
     let clockS = 0;
-    mock.method(performance, "now", () => clockS * 1000);
+    vi.spyOn(performance, "now").mockImplementation(() => clockS * 1000);
     type Frame = { eye: number[]; focus: boolean; crash: number; impact: number };
     const plays: Frame[][] = [[], []];
     try {
@@ -549,7 +549,7 @@ describe("given a city race whose first crash is a 30 m/s car meeting a 10 m/s c
         }
       }
     } finally {
-      mock.restoreAll();
+      vi.restoreAllMocks();
     }
     const [first, second] = plays as [Frame[], Frame[]];
     assert.ok(first.length > 600, `${first.length} frames compared`);

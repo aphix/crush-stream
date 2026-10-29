@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { frame } from "../world/race-world.test-util.ts";
 import { leaveSurvival, survivalWorld } from "../world/survival-run.test-util.ts";

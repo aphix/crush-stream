@@ -1,4 +1,4 @@
-import { after, describe, it } from "node:test";
+import { afterAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FREEWHEEL, launch, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
@@ -46,7 +46,7 @@ const SEED_FRAMES = 1;
 const NO_HITS: PropHits = { knock() {}, fx() {}, wall() {} };
 const UP = new THREE.Vector3(0, 1, 0);
 
-after(() => setGround(null));
+afterAll(() => setGround(null));
 
 /** Flat road to x = 0, then `height` m lower sand: a car driven +x leaves the edge and falls. */
 class Ledge extends Ground {

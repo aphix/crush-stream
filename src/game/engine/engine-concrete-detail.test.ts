@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setImmediate as yieldToLoop } from "node:timers/promises";
 import "../kernel/rapier-node.test-util.ts";
@@ -39,10 +39,10 @@ async function mapLoaded(): Promise<void> {
 
 describe("given the engine's FX tiers and the worn-concrete detail map", () => {
   let engine: CrashEngine;
-  before(async () => {
+  beforeAll(async () => {
     engine = await bootEngine();
   });
-  after(() => engine.dispose());
+  afterAll(() => engine.dispose());
 
   it("when the engine runs on the plain tiers, then the map is never fetched and the detail stays off", () => {
     for (const tier of ["off", "minimal", "low"] as const) {

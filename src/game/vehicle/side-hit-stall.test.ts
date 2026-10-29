@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { firePiston } from "../scenes/piston-rig.test-util.ts";
 import type { PistonId } from "../scenes/piston-rig.ts";

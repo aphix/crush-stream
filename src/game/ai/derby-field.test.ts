@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { runField } from "./derby-field.test-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";

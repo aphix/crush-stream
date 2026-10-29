@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import type { HighlightClip } from "./highlights.ts";
 import { makeClip } from "../net/reel-clip.test-util.ts";

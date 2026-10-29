@@ -1,5 +1,6 @@
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import * as THREE from "three";
 import { applyDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -297,10 +298,10 @@ function mismatches(real: Run, cars: Run, tol: Tol): string[] {
 }
 
 /** The same drive over the real feature (`real`) and over `held` on flat ground: what the cars' run does differently. */
-function compare(real: DriveSetup, held: readonly Held[], tol: Tol, t: { diagnostic: (m: string) => void }): string[] {
+function compare(real: DriveSetup, held: readonly Held[], tol: Tol, t: { annotate: (m: string) => unknown }): string[] {
   const a = driveOver(real);
   const b = driveOver({ ...real, ground: FLAT_GROUND, collide: undefined, held });
-  t.diagnostic(`real: ${JSON.stringify(a)}\ncars: ${JSON.stringify(b)}`);
+  t.annotate(`real: ${JSON.stringify(a)}\ncars: ${JSON.stringify(b)}`);
   return mismatches(a, b, tol);
 }
 
@@ -323,7 +324,7 @@ describe("given a flat strip of ground 0.894 m high over four car lengths, and t
   it("when each pressed car's drawn top is read against the pressed height, then the skin follows the masses within the skin's 0.2 m", (t) => {
     const [first] = road();
     const gap = skinGap(first!, flat);
-    t.diagnostic(`skin vs layer ${gap.toFixed(3)} m`);
+    t.annotate(`skin vs layer ${gap.toFixed(3)} m`);
     assert.ok(gap <= 0.2, `skin ${gap.toFixed(3)} m off the pressed height`);
   });
 
@@ -345,7 +346,7 @@ describe("given a flat strip of ground 0.894 m high over four car lengths, and t
     const row = testCase.v <= 12 ? it.todo : it;
     row(`when a sedan drives onto the strip itself at ${testCase.v} m/s, then it ends at ${testCase.speed} m/s within 5 %, rises to ${H} m within 5 cm, turns within 1 deg and never crashes (the road the cars must match)`, (t) => {
       const run = driveOver({ x: 0, z: -14, v: testCase.v, ground: strip, ref: strip, held: [], seconds: 7, stopZ: END + 6 });
-      t.diagnostic(JSON.stringify(run));
+      t.annotate(JSON.stringify(run));
       const wrong: string[] = [];
       if (Math.abs(run.speedEnd - testCase.speed) > 0.05 * testCase.speed) wrong.push(`speed ${run.speedEnd.toFixed(2)} m/s`);
       if (Math.abs(run.yMax - H) > 0.05) wrong.push(`rise ${run.yMax.toFixed(2)} m`);
@@ -361,7 +362,7 @@ describe("given a flat strip of ground 0.894 m high over four car lengths, and t
   // / 0.12 vs 7.81 / 11.42 / 19.46 / 27.24 m/s (bound 5 %), rise 0.00 / 0.00 / 0.06 / 0.00 vs 1.29 / 1.08 / 0.94 / 0.92 m (bound 0.05), crashed
   // true vs false at every speed, heading turn 0 / 4.16 / 1.26 / 0 deg vs 0 (bound 1), wheels [4] vs the reference's sequence.
   for (const v of [8, 12, 20, 28]) {
-    it.todo(`when a sedan drives onto each at ${v} m/s, then its speed is within 5 %, it rises within 0.05 m, turns within 1 deg, drives over the same wheel sequence and never crashes`, (t) => {
+    todoRow(`when a sedan drives onto each at ${v} m/s, then its speed is within 5 %, it rises within 0.05 m, turns within 1 deg, drives over the same wheel sequence and never crashes`, true, (t) => {
       const real: DriveSetup = { x: 0, z: -14, v, ground: strip, ref: strip, held: [], seconds: 7, stopZ: END + 6 };
       assert.deepEqual(compare(real, road(), { speed: 0.05, y: 0.05, heading: 1 }, t), []);
     });
@@ -378,7 +379,7 @@ describe("given the fleet's jump wedge, and a car pressed into its profile and h
 
   it("when the drawn top of the pressed car is read against the wedge's, then the skin follows the masses within the skin's 0.2 m", (t) => {
     const gap = skinGap(wedge()[0]!, layer);
-    t.diagnostic(`skin vs wedge ${gap.toFixed(3)} m`);
+    t.annotate(`skin vs wedge ${gap.toFixed(3)} m`);
     assert.ok(gap <= 0.2, `skin ${gap.toFixed(3)} m off the wedge`);
   });
 
@@ -386,7 +387,7 @@ describe("given the fleet's jump wedge, and a car pressed into its profile and h
   // fits the skin, not `cage.fields.top`). Measured on main (REPLAY 56), real vs reference at 8 / 12 m/s: rise 0.02 / 0.03 vs 1.36 / 1.72 m
   // (bound 0.1), crashed true vs false, air 0.00 vs 0.13 / 0.68 s (bound 0.1), wheels [4] vs [4,2,0,2,4].
   for (const v of [8, 12]) {
-    it.todo(`when a sedan drives up each at ${v} m/s, then it rises within 0.1 m, stays in the air within 0.1 s, lands within 0.5 m, turns within ${HEADING} deg and touches down on the same wheels`, (t) => {
+    todoRow(`when a sedan drives up each at ${v} m/s, then it rises within 0.1 m, stays in the air within 0.1 s, lands within 0.5 m, turns within ${HEADING} deg and touches down on the same wheels`, true, (t) => {
       // Past the landing: a flight is recorded when it ends, and the 12 m/s jump comes down about 10 m beyond the high end.
       const real: DriveSetup = { x: 0, z: -16, v, ground: ramps, collide: (c, h) => collideOn(ramps)(c, 0, h), ref: ramps, held: [], seconds: 6, stopZ: 30 };
       assert.deepEqual(compare(real, wedge(), { y: 0.1, air: 0.1, land: 0.5, heading: HEADING }, t), []);
@@ -411,7 +412,7 @@ describe("given the corkscrew channel, and cars pressed into its floor along its
   // 0.00 vs 1.96 / 6.07 / 11.31 / 15.16 m (bound 0.1), air 0.00 vs 0 / 1.42 / 2.45 / 2.98 s (bound 0.1), heading turn 0.00 vs 0 / 179.95 / 70.64 /
   // 103.56 deg, crashed at 6 m/s, wheels [4] vs the reference's sequence.
   for (const v of [6, 14, 22, 27]) {
-    it.todo(`when a driverless sedan is launched at ${v} m/s 6 m short of each, then it rises within 0.1 m, stays in the air within 0.1 s, lands within 0.5 m, turns within ${HEADING} deg and touches down on the same wheels`, (t) => {
+    todoRow(`when a driverless sedan is launched at ${v} m/s 6 m short of each, then it rises within 0.1 m, stays in the air within 0.1 s, lands within 0.5 m, turns within ${HEADING} deg and touches down on the same wheels`, true, (t) => {
       const real: DriveSetup = { x: 0, z: CORKSCREW.mouthZ - 6, v, ground: cork, collide: (c) => cork.contact(c), ref: cork, held: [], seconds: 12, coast: true, stopStill: 90 };
       assert.deepEqual(compare(real, floor(), { y: 0.1, air: 0.1, land: 0.5, heading: HEADING }, t), []);
     });

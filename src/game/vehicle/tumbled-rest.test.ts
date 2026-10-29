@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
@@ -204,7 +204,7 @@ describe("given a car dropped onto its left or right flank on the flat pad, from
           const { car, lowest } = dropped(style, cls, side, height);
           const tag = `${cls} dropped on its ${side} flank from ${height} m`;
           const [down, up] = side === "left" ? (["mirrorL", "mirrorR"] as const) : (["mirrorR", "mirrorL"] as const);
-          t.diagnostic(`${tag}: body ${cm(lowest.body)}, mirrors ${cm(lowest.mirrors)}, lamps ${cm(lowest.lamps)} over the ground`);
+          t.annotate(`${tag}: body ${cm(lowest.body)}, mirrors ${cm(lowest.mirrors)}, lamps ${cm(lowest.lamps)} over the ground`);
           assert.ok(lowest.body > -BODY_SINK_M, `${tag}: body ${cm(-lowest.body)} into the ground`);
           assert.ok(lowest.mirrors > -PART_SINK_M, `${tag}: a mirror ${cm(-lowest.mirrors)} into the ground`);
           assert.ok(car.partOff(down), `${tag}: the mirror under the car is still on it`);
@@ -221,7 +221,7 @@ describe("given any class dropped onto its left or right flank on the flat pad f
     it(`when it is a ${cls}, then no tyre sinks more than its sidewall flattens: the tyres it lies on carry its whole weight, each its half`, (t) => {
       for (const side of ["left", "right"] as const) {
         const { lowest } = dropped(CLASSES[cls].style, cls, side, 0.5);
-        t.diagnostic(`${cls} dropped on its ${side} flank from 0.5 m: lowest tyre ${cm(lowest.tyres)} over the ground`);
+        t.annotate(`${cls} dropped on its ${side} flank from 0.5 m: lowest tyre ${cm(lowest.tyres)} over the ground`);
         assert.ok(lowest.tyres > -TYRE_SQUASH_M, `${cls} dropped on its ${side} flank from 0.5 m: a tyre ${cm(-lowest.tyres)} into the ground`);
       }
     });
@@ -235,7 +235,7 @@ describe("given a monster that lost the two wheels on one side, dropped onto tha
         const { car, lowest } = dropped("sedan", "monster", side, height, 0.5, LOW_HUBS[side]);
         const tag = `monster without its ${side} wheels dropped on its ${side} flank from ${height} m`;
         const [down, up] = side === "left" ? (["mirrorL", "mirrorR"] as const) : (["mirrorR", "mirrorL"] as const);
-        t.diagnostic(`${tag}: body ${cm(lowest.body)}, mirrors ${cm(lowest.mirrors)} over the ground`);
+        t.annotate(`${tag}: body ${cm(lowest.body)}, mirrors ${cm(lowest.mirrors)} over the ground`);
         assert.ok(lowest.body > -BODY_SINK_M, `${tag}: body ${cm(-lowest.body)} into the ground`);
         assert.ok(lowest.mirrors > -PART_SINK_M, `${tag}: a mirror ${cm(-lowest.mirrors)} into the ground`);
         assert.ok(car.partOff(down), `${tag}: the mirror under the car is still on it`);
@@ -265,7 +265,7 @@ describe("given any class that lost one of the two wheels it lies on, dropped on
           const { car, lowest } = dropped(style, cls, side, height, 0.5, [hub], REST_SECONDS);
           const cage = cageClearance(car);
           const tag = `${cls} without its ${hub} dropped on its ${side} flank from ${height} m`;
-          t.diagnostic(`${tag}: ${car.asleep ? "asleep" : `awake at ${car.velocity.length().toFixed(2)} m/s`}, cage ${cm(cage)}, body ${cm(lowest.body)} over the ground`);
+          t.annotate(`${tag}: ${car.asleep ? "asleep" : `awake at ${car.velocity.length().toFixed(2)} m/s`}, cage ${cm(cage)}, body ${cm(lowest.body)} over the ground`);
           assert.ok(car.asleep, `${tag}: still awake after ${REST_SECONDS} s, moving at ${car.velocity.length().toFixed(2)} m/s`);
           assert.ok(cage > -BODY_SINK_M, `${tag}: cage ${cm(-cage)} into the ground`);
           assert.ok(lowest.body > -BODY_SINK_M, `${tag}: body ${cm(-lowest.body)} into the ground`);
@@ -281,7 +281,7 @@ describe("given a car struck on the nose, its front bumper torn off, and dropped
       for (const attitude of ["roof", "roofNoseDown", "roofNoseUp", "left", "right"] as const) {
         const { lowest } = dropped(style, cls, attitude, 0.5, HOOD_OFF_MPS, [], DROP_SECONDS, true);
         const tag = `${cls} struck at ${HOOD_OFF_MPS} m/s and dropped on its ${attitude}`;
-        t.diagnostic(`${tag}: lowest rigid under-part ${cm(lowest.kit)} over the ground`);
+        t.annotate(`${tag}: lowest rigid under-part ${cm(lowest.kit)} over the ground`);
         assert.ok(lowest.kit < Infinity, `${tag}: none of the cabin shell, engine bay, crash bar, frame or axles shows, so nothing here could stand in the ground`);
         assert.ok(lowest.kit > 0, `${tag}: a rigid under-part ${cm(-lowest.kit)} into the ground`);
       }

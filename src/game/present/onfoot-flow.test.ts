@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { OnFootFlow, type OnFootPhase, type OnFootRefusal, type OnFootStep } from "./onfoot-flow.ts";
 

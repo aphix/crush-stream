@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import * as THREE from "three";
 import { makeGlassMaterial, makePaintMaterial, makeWheelGeometry, makeWheelMaterial, partsMaterial, trimMaterial } from "./car-materials.ts";
 import { CANDY_FILM, CANDY_STRENGTH, CANDY_TIER } from "./car-candy.ts";

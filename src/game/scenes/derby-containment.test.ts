@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { DERBY_ARENA } from "./constants.ts";
 import { bodyRadius, carOfClass, wallCases } from "./derby-containment.test-util.ts";

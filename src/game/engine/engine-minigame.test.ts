@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -107,7 +107,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     return mode === "longJump" ? Math.max(0, atRest.x) : ringScore(atRest.x, atRest.z);
   };
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     Object.defineProperty(globalThis, "localStorage", { value: memoryStorage(), configurable: true, writable: true });
     hud = new HudStore();
@@ -121,7 +121,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
     };
     engine["setScene"]("range");
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });
@@ -181,7 +181,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         camera.updateMatrixWorld(true);
         const inFrame = car().group.position.clone().project(camera);
         const distance = camera.position.distanceTo(car().group.position);
-        t.diagnostic(`${mode}: car at (${inFrame.x.toFixed(2)}, ${inFrame.y.toFixed(2)}) of the frame, ${distance.toFixed(1)} m from the eye`);
+        t.annotate(`${mode}: car at (${inFrame.x.toFixed(2)}, ${inFrame.y.toFixed(2)}) of the frame, ${distance.toFixed(1)} m from the eye`);
         assert.ok(inFrame.z <= 1 && Math.abs(inFrame.x) < PARKED_CAR_FRAME_LIMIT && Math.abs(inFrame.y) < PARKED_CAR_FRAME_LIMIT, `car at (${inFrame.x}, ${inFrame.y})`);
         assert.ok(distance < PARKED_CAR_EYE_DISTANCE_LIMIT, `${distance} m from the eye`);
       });
@@ -193,7 +193,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         const metresBehind = -behind.dot(forward);
         const metresAside = Math.abs(behind.x * forward.z - behind.z * forward.x);
         const looking = camera.getWorldDirection(new THREE.Vector3()).dot(forward);
-        t.diagnostic(`${mode}: eye ${metresBehind.toFixed(1)} m behind, ${metresAside.toFixed(1)} m aside, looking ${looking.toFixed(2)} along the heading`);
+        t.annotate(`${mode}: eye ${metresBehind.toFixed(1)} m behind, ${metresAside.toFixed(1)} m aside, looking ${looking.toFixed(2)} along the heading`);
         assert.ok(metresBehind >= PARKED_EYE_BEHIND_MIN && metresAside <= PARKED_EYE_ASIDE_MAX, `${metresBehind} m behind, ${metresAside} m aside`);
         assert.ok(looking >= PARKED_EYE_LOOKING_MIN, `looking ${looking} along the heading`);
       });
@@ -446,7 +446,7 @@ describe("given the real engine on the Range, with a spy on every dummy launch",
         const samples = throwAndRead("longJump");
         assert.equal(launches.length, 1, "exactly one throw");
         assert.equal(minigameHud().phase, "scored", "scored");
-        t.diagnostic(`${driverCar.id}: scored ${minigameHud().lastScore!.toFixed(1)} m`);
+        t.annotate(`${driverCar.id}: scored ${minigameHud().lastScore!.toFixed(1)} m`);
         assert.equal(minigameHud().lastScore, expectedScore("longJump", samples), "the score is the torso's x at rest");
         assert.ok(minigameHud().lastScore! > LONG_JUMP_NO_BAIL_MINIMUM, `he rested at ${minigameHud().lastScore} m, not past ${LONG_JUMP_NO_BAIL_MINIMUM} m`);
         assert.ok(minigameHud().lastScore! < LONG_JUMP_NO_BAIL_MAXIMUM, `he rested at ${minigameHud().lastScore} m, past ${LONG_JUMP_NO_BAIL_MAXIMUM} m`);

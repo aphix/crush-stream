@@ -1,11 +1,12 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import { idleDrive } from "../vehicle/car-drive.ts";
 import { DerbyMatch } from "../match/derby.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { FREEWHEEL, launch, makeCar, makeWorld, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { buildCar } from "../vehicle/drawn-body.test-util.ts";
-import { assertSameDigest, assertSameNumbers, forModes } from "../vehicle/test-support.ts";
+import { assertSameDigest, assertSameNumbers, itModes } from "../vehicle/test-support.ts";
 import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import {
@@ -266,7 +267,7 @@ describe("given a drive input of throttle, steer, brake, handbrake and boost, se
 });
 
 describe("given a client car that applies the host car's state from the wire", () => {
-  forModes("when the host hits a wall at 64 km/h with 40% overlap and the client applies its state, then the client's skin, cage, part states and graded engine damage match the host's", (mode) => {
+  itModes("when the host hits a wall at 64 km/h with 40% overlap and the client applies its state, then the client's skin, cage, part states and graded engine damage match the host's", (mode) => {
     const host = makeCar(mode);
     // An arcade-end kill travel the client's default does not share: graded damage must come over the wire.
     host.deform.killTravel = 0.5;
@@ -322,7 +323,7 @@ describe("given a client car that applies the host car's state from the wire", (
 
   // todo -> after the plan: recalibrate the off-centre wall hit's crush against the lever's spin. The 58 km/h rear corner hit tears no quarter
   // panel (0 of the 1 the test needs): the lever spins the car away, so the corner crushes less.
-  it.todo("when a body panel is torn off and another hinged loose, then the client shows the same hole and shell, throws its own loose panel, and the next wreck clears them", () => {
+  todoRow("when a body panel is torn off and another hinged loose, then the client shows the same hole and shell, throws its own loose panel, and the next wreck clears them", true, () => {
     type Row = { name: string; detached: boolean; hingeT: number; pos: { x: number; y: number; z: number } };
     const panels = (c: DeformableCar) => (c.snapshot().parts as Row[]).filter((p) => /^(quarter|arch)/.test(p.name));
     const primer = (c: DeformableCar) => (c.body.geometry.getAttribute("primer").array as Float32Array).reduce((a, b) => a + b, 0);

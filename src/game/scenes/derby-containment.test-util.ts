@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -277,7 +277,7 @@ export function sideWedgeCases(): void {
       // The owner's two traces were a boosting monster at these planes: the rigid tyre rows' straight-up push kept the speed it lifted the body on.
       it("when the monster meets each ramp's two sides, then it never holds more energy than its drive gave it", (t) => {
         const over = flown().flatMap((flight, i) => (flight.excess > ENERGY_ROUNDING ? [`${launches[i]!.label}: ${flight.excess.toFixed(0)} J/kg over the drive's ${flight.excessDrive.toFixed(0)}, ${flight.excessAt.toFixed(2)} s in`] : []));
-        t.diagnostic(`the worst of ${launches.length} launches holds ${Math.max(...flown().map((f) => f.excess)).toFixed(1)} J/kg over its drive`);
+        t.annotate(`the worst of ${launches.length} launches holds ${Math.max(...flown().map((f) => f.excess)).toFixed(1)} J/kg over its drive`);
         assert.deepEqual(over, []);
       });
     }

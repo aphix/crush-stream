@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -48,14 +48,14 @@ describe("given the real engine, its sandbox sky as a fresh page has it", () => 
   let fresh: Record<string, string | number | boolean>;
   let freshDrawn: number;
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine();
     runSeconds(engine, 1);
     fresh = sandboxSky();
     freshDrawn = stage().sky.drawn;
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

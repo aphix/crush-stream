@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "./ground.ts";
 import { makeWorld, type World } from "./race-world.test-util.ts";
@@ -6,11 +6,11 @@ import { makeWorld, type World } from "./race-world.test-util.ts";
 /** A race start, a retry and the next race are scene resets like a sandbox one: the last run's debris, dummies and fx go first. */
 describe("given an entered race, where starting, retrying or moving to the next race resets the scene like a sandbox reset (the last run's debris, dummies and fx go first)", () => {
   let w: World;
-  before(() => {
+  beforeAll(() => {
     w = makeWorld();
     w.race.enter();
   });
-  after(() => {
+  afterAll(() => {
     w.race.exit();
     setGround(null);
   });

@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setGround } from "./ground.ts";
 import { solidsOf, type PropCollider } from "./placements.ts";
@@ -131,7 +131,7 @@ describe("given a wall of two pieces bending at a joint, and a sedan aimed at th
       }
       const { inside } = reach(car, walls, side);
       const note = `hit the wall at ${hardest.toFixed(1)} m/s, ${past.toFixed(3)} m past the far face, ${inside.toFixed(3)} m in the wall, ended at ${(Math.hypot(car.velocity.x, car.velocity.z) * 3.6).toFixed(1)} km/h`;
-      t.diagnostic(note);
+      t.annotate(note);
       assert.ok(hardest > 0.8 * testCase.speed, `the car hit the wall hard (${note})`);
       assert.ok(past <= PAST, note);
       assert.ok(inside <= INSIDE, note);

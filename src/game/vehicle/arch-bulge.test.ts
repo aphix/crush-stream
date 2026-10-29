@@ -1,6 +1,6 @@
+import { describe, it } from "vitest";
 import * as THREE from "three";
 import { readFileSync } from "node:fs";
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { DeformableCar } from "./car.ts";
 import { carFrame } from "./car-rig.ts";

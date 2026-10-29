@@ -1,4 +1,5 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { setGround } from "./ground.ts";
@@ -72,7 +73,7 @@ describe("given the player's car in a respawn race with a mirror torn off and a 
     holdThenTap(8);
   });
 
-  it("when the car has run flat out into the oval's first wall and the reset is held, then it is back on the road at once with the wreck state kept", { todo: "after the plan: calibrate the crush feed's reach to the cage's corner: the oval's first wall glance packs the engine 0.162 m, 12 mm past the 0.15 m kill, so the driver is thrown out and the run reads respawning (main 0.053 m, Stage 4 items 1-4 (rigs and strikers) alone 0.107 m, Stage 3 alone 0.025 m); the feed's reach was calibrated on the hulls' contact point, now the cage's corner" }, () => {
+  todoRow("when the car has run flat out into the oval's first wall and the reset is held, then it is back on the road at once with the wreck state kept", "after the plan: calibrate the crush feed's reach to the cage's corner: the oval's first wall glance packs the engine 0.162 m, 12 mm past the 0.15 m kill, so the driver is thrown out and the run reads respawning (main 0.053 m, Stage 4 items 1-4 (rigs and strikers) alone 0.107 m, Stage 3 alone 0.025 m); the feed's reach was calibrated on the hulls' contact point, now the cage's corner", () => {
     holdThenTap(12);
   });
 });

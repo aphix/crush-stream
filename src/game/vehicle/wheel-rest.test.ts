@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
@@ -137,7 +137,7 @@ describe("given a parked car of each vehicle class, hit once so it is a wreck, w
         const tipped = 2 * Math.max(...lost.map((i) => r.fresh[i]!)) - low + 0.01;
         const bound = diagonal && rise > PLATFORM_DIMS.rideHeight ? tipped : 0.1 + 0.2 * rise + (diagonal ? 0.2 : 0);
         const down = 0.03 + 0.12 * rise;
-        t.diagnostic(`${tag}: body low ${(r.low * 100).toFixed(1)} cm, empty corners ${r.corners.map((c) => (c * 100).toFixed(1)).join("/")} cm (bound ${(bound * 100).toFixed(1)}), wheels down ${r.down.toString(2)}, speed ${r.speed.toFixed(3)} m/s`);
+        t.annotate(`${tag}: body low ${(r.low * 100).toFixed(1)} cm, empty corners ${r.corners.map((c) => (c * 100).toFixed(1)).join("/")} cm (bound ${(bound * 100).toFixed(1)}), wheels down ${r.down.toString(2)}, speed ${r.speed.toFixed(3)} m/s`);
         assert.ok(r.speed < 0.05, `${tag}: still moving at ${r.speed.toFixed(3)} m/s`);
         // The drawn body leans on its resting rigid body's slice-to-slice jitter, with a gain of cg / (track · ω²) (`car-load.ts`): up to
         // 1 cm on a body riding higher than the platform by more than the platform's own ride (the pickup's own 0.34 m: its drawn corner
@@ -160,7 +160,7 @@ describe("given a parked car of each vehicle class, hit once so it is a wreck, w
 describe("given a sedan with its front-left and rear-right wheels popped off", () => {
   it("when 3 s pass after the wheels go, then the body is down on its corners, having eased down rather than dropped at once", (t) => {
     const r = rest("sedan", [0, 3], 3);
-    t.diagnostic(`the third second's end against its start: ${(r.drift * 1000).toFixed(2)} mm`);
+    t.annotate(`the third second's end against its start: ${(r.drift * 1000).toFixed(2)} mm`);
     const early = rest("sedan", [0, 3], 0.1);
     assert.ok(early.low > r.low + 0.01, `after 0.1 s the body is already ${(early.low * 100).toFixed(1)} cm over the ground (at rest ${(r.low * 100).toFixed(1)} cm)`);
   });

@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import type * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -34,13 +34,13 @@ describe("given the real engine on a page whose URL says ?draw=max&scale=1.5&sha
   /** The knobs in force: far plane, pixel ratio, sun map edge, and the FX tier's Auto. */
   const inForce = (): string => `${engine["camera"].far} ${engine["quality"].pixelRatio} ${engine["sun"].shadow.mapSize.x} ${engine["autoFx"].auto}`;
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     Object.assign(globalThis, { location: { pathname: "/", search: "?draw=max&scale=1.5&shadow=high", hash: "", href: "http://x/", origin: "http://x" } });
     hud = new HudStore();
     engine = await bootEngine({ hud });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { BODIES, carInState, cellI, cellJ, drawnField, NX } from "./drawn-body.test-util.ts";
 import { CAR_STYLES } from "./car-variants.ts";

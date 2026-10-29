@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { BENCH, blocksOf } from "./bench-measure.ts";
 import { alternate } from "./bench-frame.ts";

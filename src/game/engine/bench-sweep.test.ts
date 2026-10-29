@@ -1,4 +1,4 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { BENCH, QUICK, type BenchParts } from "./bench-measure.ts";
 import { display, restoreFrame, rig, STEADY_MS } from "./bench-frame.test-util.ts";

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { placeProps, propColliders } from "./placements.ts";
 import { LAUNCH_SPEED, rimReach, type Launch } from "./survival-rim.test-util.ts";
@@ -56,7 +56,7 @@ describe("given Havana's Survival course, a closed city with a ring of stucco bl
         if (!blocked(x0 + u, z0 + v)) queue.push(v * nx + u);
       }
     }
-    t.diagnostic(`${queue.length} cells reachable from the start; ${edge} on the edge of the ${nx} x ${nz} m window`);
+    t.annotate(`${queue.length} cells reachable from the start; ${edge} on the edge of the ${nx} x ${nz} m window`);
     assert.equal(edge, 0, `a car can drive from the start to the edge of the world (${edge} edge cells reached)`);
   });
 
@@ -92,6 +92,6 @@ describe("given Havana's Survival course, a closed city with a ring of stucco bl
     const reach = rimReach("havana", launches, past);
     const deepest = Math.max(...reach.map((r) => r.far));
     for (const r of reach) assert.ok(r.far < 0, `${r.name}: the car got ${r.far.toFixed(1)} m through the rim`);
-    t.diagnostic(`${launches.length} launches at ${LAUNCH_SPEED} m/s; the car that got furthest stopped ${(-deepest).toFixed(1)} m inside the blocks' inner faces`);
+    t.annotate(`${launches.length} launches at ${LAUNCH_SPEED} m/s; the car that got furthest stopped ${(-deepest).toFixed(1)} m inside the blocks' inner faces`);
   });
 });

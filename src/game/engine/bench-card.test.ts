@@ -1,6 +1,6 @@
+import { describe, test } from "vitest";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { describe, test } from "node:test";
 import { INITIAL_HUD, type CrashHudState } from "../hud/hud-store.ts";
 import { DECIMALS, hudSettings, roundCard } from "./bench-card.ts";
 

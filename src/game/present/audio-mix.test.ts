@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { approach, CEILING, ceilingCurve, crashDuck, engineBusGain, engineDuck, IMPACT, MASTER_LIMITER, musicGain, slowmoCutoff, squealHz, squealLevel, thudGain, TYRE } from "./audio-mix.ts";
 

@@ -1,4 +1,4 @@
-import { before, describe, it } from "node:test";
+import { beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import type { PlanGrid } from "../deform/tyre-sag-kernel.ts";
@@ -308,7 +308,7 @@ function crushedHatchback(): CrushedHatchback {
 
 describe(`given a hatchback crushed against a wall at ${KERNEL_ROW_KPH} km/h, its body and bonnet skins as the writer left them`, () => {
   let fixture: CrushedHatchback;
-  before(() => {
+  beforeAll(() => {
     fixture = crushedHatchback();
   });
 

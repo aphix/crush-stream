@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { DerbyBrain } from "./derby-ai.ts";
 import { aiCar } from "../vehicle/test-support.ts";

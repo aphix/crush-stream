@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import * as THREE from "three";
 import { StreamedDeformation } from "./streamed-deform.ts";
 import { assertSameNumbers, dummyGeom, mass, MODES } from "../vehicle/test-support.ts";

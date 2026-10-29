@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { Radio, ShuffleBag, shuffledOrder } from "./playlist.ts";
 import type { MusicTrack, StationId } from "./music-manifest.ts";

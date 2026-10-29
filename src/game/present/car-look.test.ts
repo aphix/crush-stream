@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
 import * as THREE from "three";
 import { CAR_SPRAY, NO_CAR_PICK, sprayFace, sprayPlace, SPRAY_FACE } from "../match/look-data.ts";
 import { REST_POSITION } from "../vehicle/car-detail-map.ts";

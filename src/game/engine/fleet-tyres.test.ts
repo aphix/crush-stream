@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
@@ -35,7 +35,7 @@ describe("given the real engine running the owner's five-car fleet crash with th
   let least = { clearance: Infinity, sim: 0 };
   let sill = { depth: 0, sim: 0 };
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine({ fades: true });
     engine.setCarCount(FLEET);
@@ -70,7 +70,7 @@ describe("given the real engine running the owner's five-car fleet crash with th
       }
     }
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

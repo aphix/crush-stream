@@ -1,4 +1,4 @@
-import { before, describe, it } from "node:test";
+import { beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
@@ -100,7 +100,7 @@ function poleSpans(bottoms: THREE.Vector3[]): { centre: number; width: number }[
 }
 
 describe("given the High jump's art built from a layout", () => {
-  before(() => {
+  beforeAll(() => {
     stubBrowser();
     recordCanvases();
   });

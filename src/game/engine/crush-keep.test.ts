@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import { FREEWHEEL, launch, makeWorld, runWall, tickWorld, type CrashWorld } from "../contact/crash-scenarios.test-util.ts";
 import { pushCar } from "../contact/pair-contact.ts";
@@ -137,7 +138,7 @@ for (const [style, cls] of STYLES) {
   describe(`given a ${style} that hits a wall at 50 km/h nose first and is held on it by its driver once the hit's crash window closes`, () => {
     // The pickup still pops 2.1 mm at the freeze step itself (no drift before it: its front masses' car-frame z re-derived from the wall-held world).
     const todo = style === "pickup" ? "the freeze step's own re-derive moves the pickup's nose 2.1 mm" : undefined;
-    it("when it settles there 3 s, then its drawn nose never jumps more than 2 mm between frames, its next bake included", { todo }, () => {
+    todoRow("when it settles there 3 s, then its drawn nose never jumps more than 2 mm between frames, its next bake included", todo, () => {
       const car = makeCar(cls);
       launch(car, 6.2, 0, -Math.PI / 2, -50 / 3.6, 0);
       const w = makeWorld([car], true, false, FREEWHEEL);

@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore, INITIAL_HUD } from "../hud/hud-store.ts";
@@ -20,12 +20,12 @@ describe("given the real engine and a camera slider of the debug panel", () => {
     encodeShare(engine["shareState"]())
       .split("&")
       .filter((kv) => kv.startsWith("cam."));
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     hud = new HudStore();
     engine = await bootEngine({ hud, fades: true });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

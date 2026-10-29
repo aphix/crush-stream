@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { FACE, FACES } from "./dummy-faces.ts";
 import { EYE_U, EYES_AT, FACE_SPAN, LIP_AT } from "./dummy-head.ts";

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { checkPlateaus, plateauHeight, type Plateau } from "./terrain.ts";
 import { Track } from "./track.ts";

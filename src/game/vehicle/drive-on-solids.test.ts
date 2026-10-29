@@ -1,4 +1,5 @@
-import { afterEach, describe, it } from "node:test";
+import { afterEach, describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "./car.ts";
@@ -174,7 +175,7 @@ describe("given a car standing on another car's roof, at full throttle", () => {
   // Measured on this lane: a sedan on a sedan's roof rests belly-down with its tyres 0.3 m off the hood and trunk (the plate under a crushed roof
   // is not the drawn hood and trunk), so it has no tyre to drive and stands still (stack-drive.test.ts keeps that as the sedan stack's rest state).
   // Stage 3 landed the roof as the drawn body's cage and the number did not move: 0.00 m/s at 0.5 s against the platform's 7.31 (100 % short of the 5 % bar).
-  it.todo(`when a sedan stands on a sedan's roof, then its speed after ${TIMES.join(", ")} s is within ${BAND * 100} % of the same sedan on a flat platform at its rest height (0.00 m/s against the platform's 7.31 at 0.5 s today, 100 % short of a 5 % bar: the upper sedan sinks belly-down on the crushed roof and no tyre reaches the hood or trunk; after the plan: hold the stacked sedan's tyres on the hood and trunk, not the roof plate)`, () => {
+  todoRow(`when a sedan stands on a sedan's roof, then its speed after ${TIMES.join(", ")} s is within ${BAND * 100} % of the same sedan on a flat platform at its rest height (0.00 m/s against the platform's 7.31 at 0.5 s today, 100 % short of a 5 % bar: the upper sedan sinks belly-down on the crushed roof and no tyre reaches the hood or trunk; after the plan: hold the stacked sedan's tyres on the hood and trunk, not the roof plate)`, true, () => {
     const on = driveOnRoof("sedan", TIMES, true, 1.19);
     const flat = driveOnRoof("sedan", TIMES, false, on.rest);
     matches("the sedan's roof", on.run, flat.run, TIMES.length);
@@ -235,7 +236,7 @@ describe("given a sedan driven off the edge of a solid's top", () => {
     it(`when it leaves ${name} (${top.toFixed(2)} m), then it flies ballistically: its centre of mass follows y0 + vy0 t - g t^2 / 2 from the first slice with nothing under it, and its flight is the free fall sqrt(2 h / g) of what that centre dropped, to within one slice`, (t) => {
       const r = flight(new Block(top, role, -LENGTH, 0), top);
       const fall = Math.sqrt((2 * top) / G);
-      t.diagnostic(`flew ${r.time.toFixed(4)} s, origin fell ${r.fell.toFixed(3)} m (the edge ${top} m: free fall ${fall.toFixed(4)} s), at most ${r.stray.toExponential(2)} m from the free fall`);
+      t.annotate(`flew ${r.time.toFixed(4)} s, origin fell ${r.fell.toFixed(3)} m (the edge ${top} m: free fall ${fall.toFixed(4)} s), at most ${r.stray.toExponential(2)} m from the free fall`);
       assert.ok(r.time > 5 * SLICE, `flew only ${r.time.toFixed(4)} s`);
       assert.ok(r.stray <= 0.5 * G * SLICE * SLICE + 1e-6, `${r.stray.toExponential(2)} m from the free fall`);
       const freeFall = (r.vy0 + Math.sqrt(r.vy0 * r.vy0 + 2 * G * r.fell)) / G;

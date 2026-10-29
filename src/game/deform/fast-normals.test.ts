@@ -1,5 +1,5 @@
+import { describe, it } from "vitest";
 import * as THREE from "three";
-import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { computeNormalsFast, computeNormalsNear } from "./fast-normals.ts";
 import { makeHoodGeometry } from "../vehicle/car-mesh.ts";

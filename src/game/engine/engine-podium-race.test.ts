@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -100,7 +100,7 @@ describe("given the real engine and a race ended with every car dented", () => {
   let skinAtTheLine: Float32Array = new Float32Array(0);
   let skinAtTheEnd: Float32Array = new Float32Array(0);
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine({ pacer: true });
     engine.pace.pin = true;
@@ -154,7 +154,7 @@ describe("given the real engine and a race ended with every car dented", () => {
     engine.raceCommand({ type: "podium", on: true });
     run(0.2);
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

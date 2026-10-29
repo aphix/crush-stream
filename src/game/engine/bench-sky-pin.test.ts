@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { SKY_DRAWN, type SkyDrawn } from "../present/sky-dome.ts";
 import { skyPinOf, tap } from "./bench-measure.ts";
@@ -20,14 +20,14 @@ const settled = (): Promise<void> => new Promise((resolve) => setImmediate(resol
 describe("given the real engine on the city bench, whose sky is a picture the page decodes (a one-pixel stand-in here)", () => {
   let engine: CrashEngine;
   const real = { fetch: globalThis.fetch, createImageBitmap: (globalThis as { createImageBitmap?: unknown }).createImageBitmap };
-  before(async () => {
+  beforeAll(async () => {
     Object.assign(globalThis, {
       fetch: async () => ({ ok: true, status: 200, blob: async () => new Blob([]) }),
       createImageBitmap: async () => ({ width: 1, height: 1, close() {} }),
     });
     engine = await benchPlanEngine("?bench=city");
   });
-  after(async () => {
+  afterAll(async () => {
     await settled();
     disposeBenchEngine(engine);
     Object.assign(globalThis, real);

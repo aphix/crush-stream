@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { ROOM_MAX } from "../../lib/multiplayer/rooms.ts";
 import { NAME_MAX } from "../match/types.ts";

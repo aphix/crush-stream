@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { assertSameDigest } from "../vehicle/test-support.ts";
 import { driverLook, HAIRS, SHIRTS, WOMAN_RATE } from "./driver-look.ts";

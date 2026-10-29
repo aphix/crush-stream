@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { REST_SPEED } from "../vehicle/car-air-body.ts";
 import { DT, fleetPair, frames, tick } from "./fleet-rest.test-util.ts";

@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { decodeShare, encodeShare, isShareableRoom, joinsRoom, roomLink, shareFragment, type ShareState } from "./share-url.ts";
 import { INITIAL_HUD, KNOB_RANGES } from "./hud-store.ts";

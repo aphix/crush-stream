@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { Damped, FOLLOW_RADIUS, FollowFocus, followFov, PIVOT_OVER_TORSO, RECENTER_DELAY } from "./walker-camera.ts";
 import { RUN_SPEED, WALK_SPEED } from "./walker-locomotion.ts";

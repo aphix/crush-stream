@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import "../kernel/rapier-node.test-util.ts";
@@ -60,7 +60,7 @@ describe("given a three-course campaign whose every round recorded a head-on", (
     engine.raceCommand({ type: "next" });
   };
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine();
     // Every round's clips as the engine's reel start hears them, and every clip the player is then shown.
@@ -89,7 +89,7 @@ describe("given a three-course campaign whose every round recorded a head-on", (
     }
     await run(0.2);
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

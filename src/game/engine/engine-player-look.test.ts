@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -40,7 +40,7 @@ describe("given the real engine and a player who customized his driver in the ga
   const worn: Worn[] = [];
   const mine = () => engine["looks"].mine;
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     const store = new Map<string, string>();
     globalThis.localStorage = { getItem: (key: string) => store.get(key) ?? null, setItem: (key: string, value: string) => void store.set(key, value), removeItem: (key: string) => void store.delete(key) } as Storage;
@@ -51,7 +51,7 @@ describe("given the real engine and a player who customized his driver in the ga
     const spray = mine().personSpray;
     spray.load({ texels: new Uint8Array(spray.texels.length).fill(SPRAY_INK), palette: spray.palette });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

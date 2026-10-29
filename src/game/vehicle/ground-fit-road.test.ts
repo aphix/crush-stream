@@ -1,4 +1,4 @@
-import { after, afterEach, before, describe, it } from "node:test";
+import { afterAll, afterEach, beforeAll, describe, it } from "vitest";
 import { ALONG, COMPASS, report, roadSite, type Site } from "./ground-judge.test-util.ts";
 import { drive } from "./ground-probe.test-util.ts";
 import { useStiffSprings } from "./stiff-springs.test-util.ts";
@@ -61,10 +61,10 @@ function bankSites(): Site[] {
 
 describe("given a braked car placed at every heading across a matrix of ground sites, on springs so stiff and short that no sag excuses a gap", () => {
   let restoreSprings = (): void => {};
-  before(() => {
+  beforeAll(() => {
     restoreSprings = useStiffSprings();
   });
-  after(() => restoreSprings());
+  afterAll(() => restoreSprings());
   afterEach(() => setGround(null));
 
   it("when the car brakes on the stunt course's CRUSH crest and descent, then it sits on the ground at every heading", (t) => report(t, crestSites()));

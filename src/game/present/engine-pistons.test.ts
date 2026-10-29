@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { pistonAhead, pistonBearing, pistonToGo } from "./engine-pistons.ts";
 import { PistonRig } from "../scenes/piston-rig.ts";

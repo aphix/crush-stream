@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { BAIL_ELEVATION_DEGREES, BAIL_NO_PRESS_RANGE_SHARE, BAIL_PERFECT_SECONDS, BAIL_WINDOW_SECONDS, bailRelease, bailVerdict, LongJumpBail } from "./minigame-bail.ts";
 

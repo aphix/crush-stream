@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { PREFAB_IDS, PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";

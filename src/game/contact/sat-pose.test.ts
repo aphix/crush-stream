@@ -1,4 +1,5 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
+import { todoRow } from "../kernel/todo-row.test-util.ts";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
@@ -235,7 +236,7 @@ describe("given two sedans, one standing with its keel a little into the other's
 });
 
 describe("given a monster truck pitched 27° nose-up with its centre 1 m up and a level cop facing its tail", () => {
-  it("when the cop is 3.6 m back, then the plan SAT reads no deeper than the graze-free cages' overlap by a lattice step", { todo: "the outline's stretched band reads a one-level graze of the tail's top as a plan contact: SAT 0.750 m against the graze-free overlap 0 m (old behaviour, the pitched rows above read the same before and after; the tilt past 30° reads every node's own column instead)" }, () => {
+  todoRow("when the cop is 3.6 m back, then the plan SAT reads no deeper than the graze-free cages' overlap by a lattice step", "the outline's stretched band reads a one-level graze of the tail's top as a plan contact: SAT 0.750 m against the graze-free overlap 0 m (old behaviour, the pitched rows above read the same before and after; the tilt past 30° reads every node's own column instead)", () => {
     stage(monster, cop, 1, 3.6);
     const sat = satCars(cop, monster, normal, contact, 0) ?? 0;
     const overlap = Math.max(cageDepthIn(cop, monster, true), cageDepthIn(monster, cop, true));

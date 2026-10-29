@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
@@ -30,7 +30,7 @@ describe("given the real engine drawing a city race and then the derby", () => {
     }
   };
 
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = new CrashEngine(element(), new HudStore(), element());
     const render = (drawn: THREE.Object3D): void => {
@@ -53,7 +53,7 @@ describe("given the real engine drawing a city race and then the derby", () => {
     engine.raceCommand({ type: "start" });
     await run(RACE_SECONDS);
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

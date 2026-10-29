@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it } from "vitest";
 import assert from "node:assert/strict";
 import { Track, blankProjection, projectPath } from "../world/track.ts";
 import { square as squareFile } from "../world/track.test-util.ts";

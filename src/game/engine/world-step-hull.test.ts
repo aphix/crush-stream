@@ -1,4 +1,4 @@
-import { after, describe, it } from "node:test";
+import { afterAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { launch, makeCar, relaunchDamaged } from "../contact/crash-scenarios.test-util.ts";
@@ -77,7 +77,7 @@ describe("given 16 sedans in two columns, 5 m nose to tail and 3.5 m abeam, at 1
     runs = { on, off, rows: drive(on.w, 240), cut: drive(off.w, 240) };
     return runs;
   };
-  after(() => {
+  afterAll(() => {
     if (runs) dispose([...runs.on.cars, ...runs.off.cars]);
   });
 

@@ -1,4 +1,4 @@
-import { after, before, describe, it } from "node:test";
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
 import "../kernel/rapier-node.test-util.ts";
 import { decodeShare, encodeShare } from "../hud/share-url.ts";
@@ -36,11 +36,11 @@ describe("given the frame-time panel (the Backslash key) up on the real engine",
     encodeShare(engine["shareState"]())
       .split("&")
       .filter((kv) => kv.startsWith("stats="));
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine();
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

@@ -1,5 +1,5 @@
+import { afterAll, beforeAll, describe, it } from "vitest";
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
 import * as THREE from "three";
 import type { CrashEngine } from "../engine/engine.ts";
 import { bootEngine, stubBrowser } from "../engine/engine-headless.test-util.ts";
@@ -90,11 +90,11 @@ function paintKeys(car: DeformableCar): string[] {
 // Last in the file: the engine's browser stand-ins define `document`.
 describe("given the real engine with every car built as police", () => {
   let engine: CrashEngine;
-  before(async () => {
+  beforeAll(async () => {
     stubBrowser();
     engine = await bootEngine({ fades: true });
   });
-  after(() => {
+  afterAll(() => {
     engine.dispose();
     setGround(null);
   });

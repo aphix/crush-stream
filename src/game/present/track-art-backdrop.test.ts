@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { describe, it, vi } from "vitest";
 import assert from "node:assert/strict";
 import * as THREE from "three";
 import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
@@ -13,9 +13,9 @@ import { TrackArt } from "./track-art.ts";
 const CLOUD_CANVAS = { w: 1024, h: 640 };
 
 /** A document that remembers each canvas made, and answers a flash's glare. */
-function recordingDocument(t: { mock: { timers: { enable(options: { apis: ["setTimeout"] }): void } }; after(fn: () => void): void }) {
+function recordingDocument(t: { onTestFinished(fn: () => void): void }) {
   stubBrowser();
-  t.mock.timers.enable({ apis: ["setTimeout"] });
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
   const canvases: HTMLCanvasElement[] = [];
   const glare = { style: { cssText: "" }, remove() {}, animate: () => ({ cancel() {}, onfinish: null }) };
   const document = {
@@ -27,7 +27,10 @@ function recordingDocument(t: { mock: { timers: { enable(options: { apis: ["setT
     },
   };
   Object.defineProperty(globalThis, "document", { value: document, configurable: true, writable: true });
-  t.after(() => void Reflect.deleteProperty(globalThis, "document"));
+  t.onTestFinished(() => {
+    Reflect.deleteProperty(globalThis, "document");
+    vi.useRealTimers();
+  });
   return { clouds: () => canvases.filter((c) => c.width === CLOUD_CANVAS.w && c.height === CLOUD_CANVAS.h).length };
 }
 
@@ -51,7 +54,7 @@ describe("given the National Mall's secret mushroom cloud (a backdrop hidden unt
     const art = mallArt();
     art.reveal({ appendChild: (node) => node });
     assert.equal(doc.clouds(), 0, "painted before the peak");
-    t.mock.timers.tick(10_000);
+    vi.advanceTimersByTime(10_000);
     assert.equal(doc.clouds(), 1, "painted at the peak");
     const [cloud] = cloudMeshes(art) as THREE.Mesh[];
     assert.ok(cloud?.visible, "the cloud stands");
@@ -65,15 +68,15 @@ describe("given the National Mall's secret mushroom cloud (a backdrop hidden unt
     const art = mallArt();
     art.reveal({ appendChild: (node) => node });
     art.resetSecret();
-    t.mock.timers.tick(10_000);
+    vi.advanceTimersByTime(10_000);
     assert.equal(doc.clouds(), 0, "a stopped flash never reaches its peak");
     art.reveal({ appendChild: (node) => node });
-    t.mock.timers.tick(10_000);
+    vi.advanceTimersByTime(10_000);
     assert.equal(cloudMeshes(art).length, 1, "stands after the second code");
     art.resetSecret();
     assert.equal(cloudMeshes(art).length, 0, "gone again after the restart");
     art.reveal({ appendChild: (node) => node });
-    t.mock.timers.tick(10_000);
+    vi.advanceTimersByTime(10_000);
     assert.equal(doc.clouds(), 2, "painted again for the third code");
     art.dispose();
   });
