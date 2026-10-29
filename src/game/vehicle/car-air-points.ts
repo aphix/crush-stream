@@ -14,6 +14,7 @@ import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift, centreLift } from "./car-cage-rig.ts";
 import { HUB_POP_MPS } from "../deform/deform-solve.ts";
+import { PUSH_SPEED } from "../deform/push-budget.ts";
 import { POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, S_HELD_FROM, S_HELD_TO, N, DIR, TYRE, SOFT, SHARE, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_SAMPLE_GAP, TYRE_ALONG_MAX, GROUND_LIFT_V, REST_SPEED, body, carrier, pointVel } from "./car-air-body.ts";
 
 /** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
@@ -34,7 +35,7 @@ export function bodyContact(n: number, hit: Float64Array, hull: boolean): void {
   const { q, v, w, surf, mass, part } = body;
   // A part is on the world's faces whatever it stands on: a car's top is no budget of that car's face, and bears nothing of it.
   const own = part ? -1 : hit[C_OWNER]!;
-  if (part && hit[C_OWNER]! >= 0) body.met(body.skip, hit[C_OWNER]!);
+  if (part && hit[C_OWNER]! >= 0 && hit[C_OWNER]! !== body.owner) body.met(body.owner, hit[C_OWNER]!);
   N[n]!.set(hit[C_NX]!, hit[C_NY]!, hit[C_NZ]!);
   TYRE[n] = false;
   HUB[n] = false;
@@ -52,8 +53,8 @@ export function bodyContact(n: number, hit: Float64Array, hull: boolean): void {
   SINK[n] = hit[C_H] === NO_FLOOR ? pen : pen * N[n]!.y;
   carrier(surf, n, own, mass);
   CLOSING[n] = Math.max(0, -pointVel(n, v, w, _vp).dot(N[n]!));
-  // A torn panel's row is solved to part at `RESTITUTION` of its closing on every pass: a bounce given on the first pass alone, the later passes took back.
-  GAPV[n] = body.panel && CLOSING[n]! > BOUNCE_V ? -RESTITUTION * CLOSING[n]! : 0;
+  // A torn panel's or a popped wheel's row is solved to part at `RESTITUTION` of its closing on every pass: a bounce given on the first pass alone, the later passes took back.
+  GAPV[n] = part && CLOSING[n]! > BOUNCE_V ? -RESTITUTION * CLOSING[n]! : 0;
   if (own >= 0) {
     if (CLOSING[n]! < WALL_CRUSH) surf.touch(own);
     else surf.strike(own);
@@ -65,13 +66,14 @@ const PART_PQ = new Float64Array(PQ_SIZE);
 PART_PQ[PQ_BODY] = 1;
 PART_PQ[PQ_FLANK] = 1;
 
-/** A loose point's depth (m) in a car's flank: where the flank closes on it faster than rest, no more than that closing carries it in over a slice (the rest lift on top): a car driven into a part pushes it out as it comes and never lifts it over itself in one step. Where nothing closes it is put out whole, as a wall's side puts a part out. */
+/** A loose point's depth (m) in a car's flank: where the flank closes on it faster than rest, no more than that closing carries it in over a slice (the rest lift on top): a car driven into a part pushes it out as it comes and never lifts it over itself in one step. Where nothing closes it is put out whole, as a wall's side puts a part out, except in its own car's hull (a part whose seat ran out deep in it): that is eased out at the solver's push-out speed (`PUSH_SPEED`), not snapped. */
 function flankDepth(depth: number, r: THREE.Vector3): number {
   _vp.crossVectors(body.w, r).add(body.v);
   const car = body.cars[HIT[C_OWNER]!];
   let closing = -(_vp.x * HIT[C_NX]! + _vp.y * HIT[C_NY]! + _vp.z * HIT[C_NZ]!);
   if (car !== undefined) closing += car.velocity.x * HIT[C_NX]! + car.velocity.y * HIT[C_NY]! + car.velocity.z * HIT[C_NZ]!;
-  return closing < REST_SPEED ? depth : Math.min(depth, (closing + GROUND_LIFT_V) * body.dt);
+  if (closing >= REST_SPEED) return Math.min(depth, (closing + GROUND_LIFT_V) * body.dt);
+  return HIT[C_OWNER] === body.owner ? Math.min(depth, PUSH_SPEED * body.dt) : depth;
 }
 
 const CHK_Q = new Float64Array(PQ_SIZE);
@@ -247,6 +249,11 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
         body.nearing = (_vp.x * HIT[C_NX]! + _vp.y * HIT[C_NY]! + _vp.z * HIT[C_NZ]!) * -dt >= -pen * HIT[C_NY]!;
       }
       continue;
+    }
+    // A part at its seat is in or at its own car's hull, which it meets nothing of: no row, and its seat holds this step.
+    if (part && HIT[C_OWNER]! === body.owner && body.owner >= 0) {
+      body.touchedOwn = true;
+      if (body.seated) continue;
     }
     // A body point closing on another car's top faster than a crash (`WALL_CRUSH`) onto a face steeper than the body's friction cone
     // (`HOLDING_NY`: a car's nose into another's edge or flank) is the car pair's hit: its SAT (the cage outlines) takes it and its crush

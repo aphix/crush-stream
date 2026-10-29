@@ -68,8 +68,8 @@ export abstract class RagdollStepper extends RagdollPool {
     return false;
   }
 
-  /** The frame's physics and its draw, here: what `update` does in this thread and the world's worker does for each posted frame. */
-  stepWorld(dt: number, cars: readonly RagCar[], authority: boolean, sandbox: boolean, barrier: THREE.Object3D | null): void {
+  /** The frame's physics and its draw, here: what `update` does in this thread and the world's worker does for each posted frame. `loose`: the frame's loose car bodies (`recordLoose`). */
+  stepWorld(dt: number, cars: readonly RagCar[], authority: boolean, sandbox: boolean, barrier: THREE.Object3D | null, loose: Float64Array): void {
     this.authority = authority;
     this.sandbox = sandbox;
     const world = this.world;
@@ -80,11 +80,13 @@ export abstract class RagdollStepper extends RagdollPool {
     this.wake();
     this.props.here(this.course !== null && activeGround() === this.course.ground);
     if (this.live === 0 && this.props.count === 0 && this.boxes.asleep()) {
+      this.loose.clear();
       for (let i = 0; i < MAX_CARS; i++) this.proxies.follow(i, null);
       if (this.hosted) this.wanted.fill(0);
       return;
     }
     this.proxies.at(++this.frameNo);
+    this.loose.follow(loose, this.dolls, this.proxies.teleport || this.slept);
     const dormant = this.dormant(cars, barrier, dt);
     // The proxies stood still while nothing stepped: jump them to where the cars are now instead of flinging dummies.
     this.proxies.teleport ||= this.slept;
@@ -124,6 +126,7 @@ export abstract class RagdollStepper extends RagdollPool {
     }
     for (let j = 1; j <= steps; j++) {
       this.proxies.move(Math.min(1, (j * step - lead) / dt));
+      this.loose.move(Math.min(1, (j * step - lead) / dt));
       // One step this frame: the pose before it is the last frame's last (nothing moves a part between steps but a step).
       if (j === steps) {
         for (const d of this.dolls) {
@@ -197,7 +200,7 @@ export abstract class RagdollStepper extends RagdollPool {
   protected dormant(cars: readonly RagCar[], barrier: THREE.Object3D | null, dt: number): boolean {
     if (this.purses && !this.purses.asleep()) return false;
     if (!this.props.asleep()) return false;
-    if (!this.boxes.asleep()) return false;
+    if (!this.boxes.asleep() || this.loose.count > 0) return false;
     for (const d of this.dolls) {
       if (!d.live) continue;
       if (!d.bodies[0]!.isSleeping() || this.stirred(_r.set(d.cur[0]!, d.cur[1]!, d.cur[2]!), cars, barrier)) return false;

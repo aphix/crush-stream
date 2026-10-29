@@ -20,6 +20,7 @@ import { windshieldEdge } from "./windshield-edge.test-util.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, toned, trimMaterial } from "./car-materials.ts";
 import { boxShape, newLooseShape, partMass, stepLoose } from "./loose-step.ts";
+import { HULL_TOL, insideHull } from "./loose-hull.test-util.ts";
 import { armSolids, Surface } from "../world/surfaces.ts";
 import { wearCarLook } from "../present/car-look.ts";
 import { NO_CAR_PICK } from "../match/look-data.ts";
@@ -848,11 +849,15 @@ describe("given the police cruiser", () => {
     expect(Math.abs(cop - sedan), `the cruiser's wing crushed ${cop.toFixed(3)} m, the sedan's ${sedan.toFixed(3)} m`).toBeLessThanOrEqual(0.03);
   });
 
-  it("when it hits a wall square-on at 64 km/h, then the light bar is thrown clear onto the ground with its sirens dark, and the rest tears as it does on a sedan", () => {
+  it("when it hits a wall square-on at 64 km/h, then the light bar is torn off with its sirens dark and no point of it is inside the car's body (it lies on the roof or the road), and the rest tears as it does on a sedan", () => {
     const { car, detached, bar } = copThroughWall(64);
     expect(detached.includes("lightBar"), `parts off: ${detached}`).toBeTruthy();
     assertSameDigest(detached.filter((n) => n !== "lightBar"), sedanThroughWall(64), "other parts off at 64 km/h");
-    expect(bar.parent !== car.group && bar.position.y < 0.5, `the bar is still up at y=${bar.position.y.toFixed(2)}, not on the ground`).toBeTruthy();
+    expect(bar.parent !== car.group, "the bar is still on its mount").toBeTruthy();
+    const torn = car["parts"].find((p) => p.name === "lightBar");
+    must(torn, "police car has no light bar part");
+    const inside = insideHull(car, torn);
+    expect(inside, `the bar's deepest point is ${inside.toFixed(3)} m inside the car's body, at y=${bar.position.y.toFixed(2)}`).toBeLessThanOrEqual(HULL_TOL);
     car.setSirens(true);
     const p = new THREE.Vector3();
     for (const now of [0.1, 0.35]) {

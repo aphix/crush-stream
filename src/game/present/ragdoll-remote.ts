@@ -7,6 +7,7 @@ import { carClass, classStats } from "../vehicle/vehicle-classes.ts";
 import type { TrackJson } from "../world/track-schema.ts";
 import type { Throw } from "./engine-ragdoll.ts";
 import { store3d, store4d } from "../kernel/store.ts";
+import { recordLoose } from "./ragdoll-loose.ts";
 import {
   CAR_FLAGS,
   CAR_FLOATS,
@@ -181,7 +182,8 @@ export class RagdollRemote {
     this.sendCages(cars, count);
     const block = new Float64Array(count * CAR_FLOATS);
     for (let i = 0; i < count; i++) this.record(cars[i]!, block, i * CAR_FLOATS);
-    this.send({ type: "frame", seq, epoch: this.epoch, dt, authority, sandbox, lookSeed, count, cars: block }, [block.buffer]);
+    const loose = recordLoose(cars);
+    this.send({ type: "frame", seq, epoch: this.epoch, dt, authority, sandbox, lookSeed, count, cars: block, loose }, [block.buffer, loose.buffer]);
   }
 
   /** The answers that came since the last call, for drawing. */

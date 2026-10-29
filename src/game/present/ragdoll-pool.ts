@@ -14,6 +14,7 @@ import { Purses } from "./ragdoll-purse.ts";
 import { type PropDraw, PropBodies } from "./ragdoll-props.ts";
 import { BoxPile } from "./ragdoll-boxes.ts";
 import { CarProxies, PROP_BAND_HIGH, PROP_BAND_LOW } from "./ragdoll-cars.ts";
+import { LooseProxies } from "./ragdoll-loose.ts";
 import { dollGroups, FIXED_GROUPS, knockedGroups, propGroups, SLOTS, STEP, thrownGroups } from "./ragdoll-config.ts";
 import { RagdollDebug } from "./ragdoll-debug.ts";
 import { RagdollRemote, type PostTraffic } from "./ragdoll-remote.ts";
@@ -161,6 +162,8 @@ export abstract class RagdollPool {
   protected lastSlot = 0;
   /** The cars' proxies in the dummies' world. */
   protected readonly proxies = new CarProxies(this.dolls);
+  /** The sim's loose car parts and wheels as kinematic bodies the dummies meet. */
+  protected readonly loose = new LooseProxies();
   /** The ride-along camera over the dummies (`follow`, `frameCamera`). */
   protected readonly ride = new RideAlong();
   /** One walker per pool slot: a dummy of the pool (`startWalker`) held up and walked by motors, in this world with the cars and the ground. The player on foot is the one in `WALKER_SLOT`. */
@@ -205,6 +208,7 @@ export abstract class RagdollPool {
     world.numSolverIterations = ITERATIONS;
     world.integrationParameters.numInternalPgsIterations = INTERNAL_PASSES;
     this.proxies.load(R, world);
+    this.loose.load(R, world);
     for (let s = 0; s < SLOTS; s++) {
       const bodies = PARTS.map((p, k) => {
         const body = world.createRigidBody(

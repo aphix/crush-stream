@@ -356,6 +356,8 @@ export interface LooseShape {
   airborne: boolean;
   /** Seconds it has rested on two points or more at no more than rest speed (`stepLoose`): on two it sleeps once this reaches `TWO_POINT_REST_S`. Kept while it sleeps, so a stir that finds it still resting puts it back to sleep at once. */
   restFor: number;
+  /** Seconds it may still sit at its car's seat (`SEAT_S` when it is torn or popped, 0 once away): in or at that car's hull it meets nothing of that car's (`stepLoose`), so a part does not meet the hull it is leaving. A step that finds it clear of the hull ends it; so does the time running out (it is then put out of the hull as a wall puts a part out). */
+  seatFor: number;
 }
 
 export interface LooseBody {

@@ -118,7 +118,7 @@ function handle(world: RagdollSystem, m: ToWorker): void {
     cars.length = m.count;
     world.lookSeed = m.lookSeed;
     world.frameNo = m.seq - 1;
-    world.stepWorld(m.dt, cars, m.authority, m.sandbox, null);
+    world.stepWorld(m.dt, cars, m.authority, m.sandbox, null, m.loose);
     answer(world, m.seq);
   }
 }

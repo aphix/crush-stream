@@ -65,11 +65,14 @@ const B_X = 2 * carFrame(CAR_STYLES.sedan).half.x + 1;
 
 type Lot = { w: World; cars: DeformableCar[]; part: DetachPart };
 
-/** Car A parked at the origin and, with `withB`, car B parked at `B_X` beside it, both facing +z; A's front bumper torn off (at rest). */
+/** Car A, the one the bumper is torn from, parked this far (m) down the road from where the bumper flies: it meets every car's flank, its own's too, so a bumper let fly over A's own plan would meet A. */
+const A_Z = -30;
+
+/** Car A parked at (0, `A_Z`) and, with `withB`, car B parked at `B_X` beside the bumper's lane, both facing +z; A's front bumper torn off (at rest). */
 function lot(withB: boolean): Lot {
   const scene = new THREE.Scene();
   const a = new DeformableCar(paint(), scene);
-  a.spawnFacing(0, 0, 0, 0);
+  a.spawnFacing(0, A_Z, 0, 0);
   const cars = [a];
   if (withB) {
     const b = new DeformableCar(paint(), scene);

@@ -226,7 +226,7 @@ const NO_CARS: readonly StirCar[] = [];
  * The body the rigid step moves, set by `bindBody`. Every body takes the same step (`moveBody`, `placeBody`, `readPoints`, `openRows`,
  * `solveRows`): `stepFree` adds a car's tyres, springs, belly and face budgets between them, `stepLoose` a part's sleep and its gating
  * of the point reads. `q`, `pos`, `v`, `w` are the body's own pose and its velocity and spin (unit mass), `centre` its centre of mass in
- * its own frame, `invI` its inverse inertia per unit mass about its own axes, `skip` its slot asked of the world, `surf` the faces it
+ * its own frame, `invI` its inverse inertia per unit mass about its own axes, `skip` its slot asked of the world, `owner` the slot of the car a part belongs to (a part leaves no car out of what it meets: `seated`, still at its seat, meets nothing of its own car's, and `touchedOwn` says a point of it was in or at that car's hull this step), `surf` the faces it
  * shares with other cars, `mass` its mass over theirs. `driven`, `parked`, `powered` are a car's drive state (its tyres' friction),
  * `nearing` that a point not yet in a surface reaches it within the slice at its closing speed, `met` what a part's point on a car's top reports,
  * `panel` that the part is a torn panel (`stepLoose` with its mass), not a popped wheel, `cars` the world's cars a part's points may meet the flank of.
@@ -239,6 +239,9 @@ export const body = {
   centre: PLATFORM.centre,
   invI: PLATFORM.invI,
   skip: -1,
+  owner: -1,
+  seated: false,
+  touchedOwn: false,
   part: false,
   dt: 0,
   wreck: false,
@@ -259,7 +262,7 @@ export const body = {
  * popped wheel) meets a prism's side face through rows of its own, takes a car's top for the world (no face budget, no weight on that
  * car) and rubs at a locked tyre's μ times its face's grip, a torn panel (`panel`) at the body's `MU_BODY`; a car's tyres, belly and `sideContact` do all that.
  */
-export function bindBody(object: THREE.Object3D, v: THREE.Vector3, w: THREE.Vector3, centre: THREE.Vector3, invI: THREE.Vector3, skip: number, part: boolean, dt: number): void {
+export function bindBody(object: THREE.Object3D, v: THREE.Vector3, w: THREE.Vector3, centre: THREE.Vector3, invI: THREE.Vector3, skip: number, part: boolean, dt: number, owner = skip): void {
   body.q = object.quaternion;
   body.pos = object.position;
   body.v = v;
@@ -267,6 +270,7 @@ export function bindBody(object: THREE.Object3D, v: THREE.Vector3, w: THREE.Vect
   body.centre = centre;
   body.invI = invI;
   body.skip = skip;
+  body.owner = owner;
   body.part = part;
   body.dt = dt;
   body.wreck = false;

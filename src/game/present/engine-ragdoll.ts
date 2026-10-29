@@ -27,6 +27,7 @@ import type { Sight } from "./spectate-cam.ts";
 import { LAG, type GlassHit } from "./ragdoll-wire.ts";
 import { GLASS_NAMES } from "../vehicle/car-glass.ts";
 import { LIFE } from "./ragdoll-pool.ts";
+import { NO_LOOSE, recordLoose } from "./ragdoll-loose.ts";
 import { RagdollThrower } from "./ragdoll-throw.ts";
 
 export type { RagdollStats, Throw } from "./ragdoll-pool.ts";
@@ -56,6 +57,7 @@ export class RagdollSystem extends RagdollThrower {
     for (let s = 0; s < this.dolls.length; s++) this.despawn(s);
     this.props.clear();
     this.boxes.clear();
+    this.loose.clear();
     this.thrownLife = LIFE;
     this.tumble?.reset();
     for (const c of this.statics) this.world?.removeCollider(c, false);
@@ -81,7 +83,7 @@ export class RagdollSystem extends RagdollThrower {
     }
     this.followWalkerGround();
     this.applyStruck(cars);
-    this.stepWorld(dt, cars, authority, sandbox, barrier);
+    this.stepWorld(dt, cars, authority, sandbox, barrier, this.live > 0 ? recordLoose(cars) : NO_LOOSE);
     for (const hit of this.proxies.strikes.splice(0)) this.struck.push({ frame: this.frameNo, ...hit });
   }
 

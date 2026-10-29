@@ -88,6 +88,8 @@ interface FrameMessage {
   lookSeed: number;
   count: number;
   cars: Float64Array;
+  /** The awake loose bodies (`recordLoose`), `LOOSE_FLOATS` each. */
+  loose: Float64Array;
 }
 
 export type ToWorker =

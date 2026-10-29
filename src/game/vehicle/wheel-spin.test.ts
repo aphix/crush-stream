@@ -33,6 +33,9 @@ function roll(car: DeformableCar, vx: number, vz: number, secs: number): { angle
 
 const radius = (cls: VehicleClassId) => carFrame(CAR_STYLES[CLASSES[cls].style]).rig.tyre.r * CLASSES[cls].wheelScale;
 
+/** How high (m) the loose wheel is held: it falls 1.2 m in the 0.5 s the row runs, so it never lands. */
+const AIRBORNE_M = 50;
+
 for (const cls of ["sedan", "monster"] as const) {
   describe(`given a ${cls} whose drawn wheels turn with the ground (the distance the car moves along its nose over the tyre's drawn radius)`, () => {
     it("when it drives 10 m/s forward and 3 m/s back for 1 s, then the wheel turns +10/r rad forward and −3/r rad back (r is the class's own tyre radius)", () => {
@@ -97,7 +100,10 @@ describe("given a sedan in the air whose wheels were spun up by driving at 10 m/
 describe("given a sedan with a wheel that has left the car", () => {
   it("when the car rolls at 10 m/s for 0.5 s, then the loose wheel is not turned by it while a wheel still on the car turns", () => {
     const car = parked("sedan");
-    car["looseWheels"][0]!.loose = true;
+    const loose = car["looseWheels"][0]!;
+    loose.loose = true;
+    // Held in the air (it is stepped as a world body): a landing bounces it and turns it by the contact's own spin, which is no wheel-spin drive.
+    loose.object.position.y += AIRBORNE_M;
     roll(car, 0, 10, 0.5);
     expect(car.wheels[0]!.rotation.x).toBe(0);
     expect(car.wheels[1]!.rotation.x, "a wheel on the car stopped turning").toBeGreaterThan(1);

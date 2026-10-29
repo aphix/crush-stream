@@ -14,11 +14,11 @@ import { setBare } from "./interior.ts";
 import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { applyDents } from "./loose-dent.ts";
 import { doorCardDent } from "./car-door-mesh.ts";
-import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
+import { fitWheelShape, partMass, SEAT_S, stepLoose } from "./loose-step.ts";
 import type { TopMet } from "./car-air-body.ts";
 import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
-import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, LATCH_CATCH_RATE, LID_LATCH_CRUSH_M, type Lamp, type PartNetState } from "./car-core.ts";
+import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, LATCH_CATCH_RATE, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, type PartNetState } from "./car-core.ts";
 import {
   DOOR_ACC_MAX,
   DOOR_QUIET_S,
@@ -1174,6 +1174,7 @@ export abstract class CarParts extends CarGlass {
     this.posePart(p, false);
     p.detached = true;
     p.shape.count = 0;
+    p.shape.seatFor = SEAT_S;
     // ponytail: a torn door flies as its rest shell (its loose shape is sim and is read off the shell drawn, `boxShape`); flying dented moves the sim.
     if (p === this.doorParts[0]) this.restoreRest(this.doorMeshL.geometry, this.doorLRest, this.drawnRest("doorL"));
     else if (p === this.doorParts[1]) this.restoreRest(this.doorMeshR.geometry, this.doorRRest, this.drawnRest("doorR"));
@@ -1339,6 +1340,16 @@ export abstract class CarParts extends CarGlass {
     return n;
   }
 
+  /** Loose body `i` (`LOOSE_BODIES` order: a part by its slot, then a popped wheel by its hub) while it flies, drawn and measured, else null: what the dummies' world takes a collider of. */
+  looseBody(i: number): LooseBody | null {
+    if (i >= PART_SLOTS) {
+      const w = this.looseWheels[i - PART_SLOTS];
+      return w?.loose && w.shape.count > 0 ? w : null;
+    }
+    const p = this.parts[i];
+    return p?.detached && p.object.visible && p.shape.count > 0 ? p : null;
+  }
+
   /** Into `out` from index `n` on: the parts drawn off their rest (a door or lid swung open, a hinged or hanging panel or bumper, a shown hood) and the torn ones still drawn. Returns the count past the last one written. */
   displacedParts(out: THREE.Object3D[], n: number): number {
     for (const p of this.parts) if (p.object.visible && (p.detached || p.shown || p.hingeT > 0 || (p.swing !== null && p.swing.theta > 0))) out[n++] = p.object;
@@ -1373,6 +1384,7 @@ export abstract class CarParts extends CarGlass {
     _n.set(1, 0, 0).applyQuaternion(this.group.quaternion);
     w.angular.copy(_n).multiplyScalar(hypot2(w.velocity.x, w.velocity.z) / this.frame.rig.tyre.r);
     fitWheelShape(w);
+    w.shape.seatFor = SEAT_S;
   }
 
   /** Netplay: array sizes for a `PartNetState`; parts are `PART_SLOTS` on every style (one shared layout). */
