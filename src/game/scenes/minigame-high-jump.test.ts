@@ -197,7 +197,7 @@ for (const layoutCase of LAYOUT_CASES) {
     const measured = layoutCase.measured;
     const layout = highJumpLayout(measured, LIP_Y);
 
-    it("when the layout is made, then the posts stand POSTS_DISTANCE past the lip whatever was measured, and the net 30 m behind them", () => {
+    it("when the layout is made, then the posts stand 11 m past the lip whatever was measured, and the net 30 m behind them", () => {
       expect(POSTS_DISTANCE, "the posts' distance").toBe(11);
       expect(layout.postsX, "postsX").toBe(POSTS_DISTANCE);
       expect(layout.netX, "netX is the posts plus 30 m").toBe(POSTS_DISTANCE + 30);
@@ -210,7 +210,7 @@ for (const layoutCase of LAYOUT_CASES) {
       expect(layout.frameTop, "at least one board above the best height").toBeGreaterThanOrEqual(measured.bestHeight + BOARD_STEP);
     });
 
-    it("when the layout is made, then a board stands every BOARD_STEP (5) m from the lip up to under the frame top", () => {
+    it("when the layout is made, then a board stands every 5 m from the lip up to under the frame top", () => {
       expect(layout.boards.length, "board count").toBe(layoutCase.expectedBoardCount);
       expect(layout.boards[0].heightAboveLip, "the first board is the lip line").toBe(0);
       for (let index = 0; index < layout.boards.length; index++) {
@@ -231,7 +231,7 @@ for (const layoutCase of LAYOUT_CASES) {
       expect(layout.boards.length, "small boards exist between them").toBeGreaterThan(bigHeights.length);
     });
 
-    it("when the layout is made, then a height mark stands at every SIGN_EVERY_METRES from the lip, at its slat's height", () => {
+    it("when the layout is made, then a height mark stands at every 10 m from the lip, at its slat's height", () => {
       const expectedHeights = layout.boards.filter((board) => board.heightAboveLip % SIGN_EVERY_METRES === 0).map((board) => board.heightAboveLip);
       expect(JSON.stringify(layout.signs.map((sign) => sign.heightAboveLip)), "the marks' heights").toBe(JSON.stringify(expectedHeights));
       expect(layout.signs.length, "one per SIGN_EVERY_METRES below the frame top").toBe(Math.ceil(layout.frameTop / SIGN_EVERY_METRES));
@@ -243,7 +243,7 @@ for (const layoutCase of LAYOUT_CASES) {
       expect(layout.netHeight, "net height").toBe(layoutCase.expectedNetHeight);
     });
 
-    it("when the layout is made, then BOX_COUNT boxes come back with sizes in range", () => {
+    it("when the layout is made, then 48 boxes come back with sizes in range", () => {
       expect(layout.boxes.length, "box count").toBe(BOX_COUNT);
       for (const box of layout.boxes) {
         for (const side of [box.width, box.height, box.depth]) {
@@ -322,7 +322,7 @@ for (const layoutCase of LAYOUT_CASES) {
 }
 
 describe("given a landing so near the posts that the piles cannot hold one cell", () => {
-  it("when the layout is made, then it refuses with a RangeError naming the footprint", () => {
+  it("when the layout is made, then it refuses to lay out the boxes", () => {
     const measured = { bestHeight: 12, landingDistance: POSTS_DISTANCE - BOX_PILE_LEAD - BOX_PILE_TRAIL + BOX_CELL_PITCH / 2 };
     expect(() => highJumpLayout(measured, LIP_Y)).toThrow(RangeError);
   });

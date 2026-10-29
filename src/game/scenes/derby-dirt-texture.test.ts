@@ -98,7 +98,7 @@ describe("given the dirt texture", () => {
     expect(firstMismatch, "first mismatching byte index").toBe(-1);
   });
 
-  it("keeps every byte of the dirt the per-texel closure painted", () => {
+  it("when it is built, then every byte hashes to the recorded dirt, so a rewrite of how it is painted changes no texel", () => {
     let hash = FNV_OFFSET;
     for (let index = 0; index < dirtPixels.length; index++) hash = Math.imul(hash ^ dirtPixels[index]!, FNV_PRIME) >>> 0;
     expect(hash, "FNV-1a of every byte").toBe(DIRT_BYTES_HASH);
@@ -230,7 +230,7 @@ describe("given one straight skid laid alone", () => {
 
   for (const testCase of fieldCases) {
     it(testCase.it, () => {
-      const read = testCase.read === "lane" ? lane : rut;
+      const read = { lane, rut }[testCase.read];
       expect(read(testCase.centre), "value at the centre").toBeGreaterThanOrEqual(testCase.leastCentre);
       expect(read(testCase.away), "value away from it").toBeLessThanOrEqual(testCase.mostAway);
     });

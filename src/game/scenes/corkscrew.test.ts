@@ -107,10 +107,10 @@ function launch(v: number, driveSeconds = 0): Run {
  * to 0.78, whatever the roll (22 m/s at bank 0.62: rolls 347-367, all in the window, rests wheels/roof/roof/roof/roof).
  */
 const BANDS = [
-  { v: 6, name: "it is too slow to climb, so it rolls back out of the mouth without leaving the ground", air: false, roll: [0, 0], rest: "wheels" },
-  { v: 14, name: "it flies and rolls half a turn", air: true, roll: [130, 230], rest: "roof" },
-  { v: 22, name: "it flies and rolls a full turn", air: true, roll: [310, 410], rest: "wheels" },
-  { v: 27, name: "it flies and rolls a turn and a half", air: true, roll: [490, 620], rest: "roof" },
+  { v: 6, name: "it is too slow to climb, so it rolls back out of the mouth without leaving the ground", air: false, rollMin: 0, rollMax: 0, rest: "wheels" },
+  { v: 14, name: "it flies and rolls half a turn", air: true, rollMin: 130, rollMax: 230, rest: "roof" },
+  { v: 22, name: "it flies and rolls a full turn", air: true, rollMin: 310, rollMax: 410, rest: "wheels" },
+  { v: 27, name: "it flies and rolls a turn and a half", air: true, rollMin: 490, rollMax: 620, rest: "roof" },
 ] as const;
 
 describe("given the corkscrew ramp as the ground, and a driverless car launched at it from 6 m short of its mouth until the car comes to rest", () => {
@@ -122,7 +122,7 @@ describe("given the corkscrew ramp as the ground, and a driverless car launched 
       t.annotate(`${b.v} m/s: air ${r.air.toFixed(2)} s, touchdown roll ${r.landRoll.toFixed(0)}°, up.y ${r.upY.toFixed(2)} (${r.rest}, meant to rest on its ${b.rest}), deepest ${r.dip.toFixed(3)} m`);
       const failures: string[] = [];
       if (b.air !== r.air > 0.2) failures.push(`air ${r.air.toFixed(2)} s`);
-      if (r.landRoll < b.roll[0] || r.landRoll > b.roll[1]) failures.push(`touchdown roll ${r.landRoll.toFixed(0)}° outside ${b.roll[0]}–${b.roll[1]}°`);
+      if (r.landRoll < b.rollMin || r.landRoll > b.rollMax) failures.push(`touchdown roll ${r.landRoll.toFixed(0)}° outside ${b.rollMin}–${b.rollMax}°`);
       if (r.dip > 2 * droop("sedan") + 0.001) failures.push(`body ${r.dip.toFixed(3)} m into the ground`);
       expect(failures).toHaveLength(0);
     });
@@ -142,7 +142,7 @@ const DRIVE_MIN_M = 10;
 describe(`given the corkscrew ramp as the ground, and a car launched at it at ${DRIVE_LAUNCH_SPEED} m/s until it comes to rest`, () => {
   afterEach(() => setGround(null));
 
-  it(`when it stands on its wheels at rest and holds full throttle for ${DRIVE_S} s, then it covers ${DRIVE_MIN_M} m or more: the car flips and can land and keep driving`, (t) => {
+  it(`when it is launched, comes to rest and holds full throttle for ${DRIVE_S} s, then it rests on its wheels and covers ${DRIVE_MIN_M} m or more: the car flips and can land and keep driving`, (t) => {
     const r = launch(DRIVE_LAUNCH_SPEED, DRIVE_S);
     t.annotate(`${DRIVE_LAUNCH_SPEED} m/s: touchdown roll ${r.landRoll.toFixed(0)}°, rest ${r.rest}${r.rest === "wheels" ? `, drove ${r.drove.toFixed(1)} m` : ""}`);
     expect(r.rest, `it came to rest on its ${r.rest} (touchdown roll ${r.landRoll.toFixed(0)}°)`).toBe("wheels");

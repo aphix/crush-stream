@@ -186,7 +186,12 @@ describe("given a parked car and any one piston firing the standard shot (1500 k
   }
 
   it("when the mirrored pistons fire (frontLeft and frontRight, rearLeft and rearRight, left and right), then each pair crushes the car by the same depth within 5 mm", () => {
-    for (const [a, b] of [["frontLeft", "frontRight"], ["rearLeft", "rearRight"], ["left", "right"]] as const) {
+    const pairs = [
+      { a: "frontLeft", b: "frontRight" },
+      { a: "rearLeft", b: "rearRight" },
+      { a: "left", b: "right" },
+    ] as const;
+    for (const { a, b } of pairs) {
       expect(Math.abs(crushOf(shoot(a)) - crushOf(shoot(b))), `${a} ${f3(crushOf(shoot(a)))} vs ${b} ${f3(crushOf(shoot(b)))}`).toBeLessThan(0.005);
     }
   });

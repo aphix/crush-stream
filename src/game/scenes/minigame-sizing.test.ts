@@ -451,7 +451,7 @@ function tableOf(rows: readonly Measurement[], zone: (flight: Flight) => string)
 
 const TABLE_HEADER = "| class | run | lip h/v (m/s) | release h/v (m/s) | apex (m @ m) | lands (m) | rests (m) | zone |";
 
-describe("given the high jump with THROW_BOOST.highJump on the free pad (no frame in the ragdoll's world), with the real car, ground and ragdoll", () => {
+describe("given the high jump with its chosen throw boost on the free pad (no frame in the ragdoll's world), with the real car, ground and ragdoll", () => {
   it("when each of the 7 classes' best and mid runs is thrown, then the best class scores 163-174 m, every class's best run is well up the boards and lands in the box field, and every class's 80% run still scores 50 m", async (t) => {
     const rows = await measure("highJump", THROW_BOOST.highJump, SHIPPED_THROWS);
     const slowRuns = await slowRunHeights(THROW_BOOST.highJump);
@@ -483,7 +483,7 @@ describe("given the high jump with THROW_BOOST.highJump on the free pad (no fram
     expect(violations.length).toBeGreaterThan(0);
   });
 
-  it("when the best class's best run is thrown again, then HIGH_JUMP_MEASURED is its crossing height and the farthest best landing, within 2%", async () => {
+  it("when the best class's best run is thrown again, then the pinned best height and landing distance are its crossing height and the farthest best landing, within 2%", async () => {
     const rows = await measure("highJump", THROW_BOOST.highJump, SHIPPED_THROWS);
     for (let repeat = 0; repeat < REPEATS; repeat++) {
       const measured = measuredBest(rows, repeat);
@@ -528,7 +528,7 @@ describe("given the high jump's posts and slats as ragdoll colliders, with the r
   });
 });
 
-describe("given Ring Fling with THROW_BOOST.ringFling on the real ground, car and ragdoll", () => {
+describe("given Ring Fling with its chosen throw boost on the real ground, car and ragdoll", () => {
   it("when each of the 7 classes' best and mid runs is thrown, then the standard classes' full-throttle runs come down in the mid cups and the backstop holds the rest", async (t) => {
     const rows = await measure("ringFling", THROW_BOOST.ringFling, SHIPPED_THROWS);
     t.annotate(`THROW_BOOST.ringFling ${JSON.stringify(THROW_BOOST.ringFling)}\n${TABLE_HEADER}\n${tableOf(rows, (flight) => `cup ${ringScore(flight.restDistance, flight.restLateral)}`)}`);
@@ -594,7 +594,7 @@ async function bailMeasurements(): Promise<Map<number | null, Measurement[]>> {
   return byOffset;
 }
 
-describe("given the long jump's timed bail with THROW_BOOST.longJump on the real ground, car, barrier and ragdoll", () => {
+describe("given the long jump's timed bail with its chosen throw boost on the real ground, car, barrier and ragdoll", () => {
   it("when the best and mid run of every class the long jump throws (all but the monster, which flies the barrier) is thrown at each bail offset, then the perfect bail lands the best class near the far end short of the last sign, every no-press run lands mid-field, and the metres fade smoothly and alike for an early and a late press", async (t) => {
     const byOffset = await bailMeasurements();
     const perfect = byOffset.get(0)!;

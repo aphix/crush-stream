@@ -361,7 +361,7 @@ describe("given a flat strip of ground 0.894 m high over four car lengths, and t
   // / 0.12 vs 7.81 / 11.42 / 19.46 / 27.24 m/s (bound 5 %), rise 0.00 / 0.00 / 0.06 / 0.00 vs 1.29 / 1.08 / 0.94 / 0.92 m (bound 0.05), crashed
   // true vs false at every speed, heading turn 0 / 4.16 / 1.26 / 0 deg vs 0 (bound 1), wheels [4] vs the reference's sequence.
   for (const v of [8, 12, 20, 28]) {
-    todoRow(`when a sedan drives onto each at ${v} m/s, then its speed is within 5 %, it rises within 0.05 m, turns within 1 deg, drives over the same wheel sequence and never crashes`, true, (t) => {
+    todoRow(`when a sedan drives onto the strip built from held cars at ${v} m/s, then, against the strip itself, its speed is within 5 %, it rises within 0.05 m, turns within 1 deg, drives over the same wheel sequence and crashes just as the strip run does`, true, (t) => {
       const real: DriveSetup = { x: 0, z: -14, v, ground: strip, ref: strip, held: [], seconds: 7, stopZ: END + 6 };
       expect(compare(real, road(), { speed: 0.05, y: 0.05, heading: 1 }, t)).toHaveLength(0);
     });
@@ -386,7 +386,7 @@ describe("given the fleet's jump wedge, and a car pressed into its profile and h
   // fits the skin, not `cage.fields.top`). Measured on main (REPLAY 56), real vs reference at 8 / 12 m/s: rise 0.02 / 0.03 vs 1.36 / 1.72 m
   // (bound 0.1), crashed true vs false, air 0.00 vs 0.13 / 0.68 s (bound 0.1), wheels [4] vs [4,2,0,2,4].
   for (const v of [8, 12]) {
-    todoRow(`when a sedan drives up each at ${v} m/s, then it rises within 0.1 m, stays in the air within 0.1 s, lands within 0.5 m, turns within ${HEADING} deg and touches down on the same wheels`, true, (t) => {
+    todoRow(`when a sedan drives up the held car pressed into the wedge at ${v} m/s, then, against the wedge itself, it rises within 0.1 m, stays in the air within 0.1 s, lands within 0.5 m, turns within ${HEADING} deg and touches down on the same wheels`, true, (t) => {
       // Past the landing: a flight is recorded when it ends, and the 12 m/s jump comes down about 10 m beyond the high end.
       const real: DriveSetup = { x: 0, z: -16, v, ground: ramps, collide: (c, h) => collideOn(ramps)(c, 0, h), ref: ramps, held: [], seconds: 6, stopZ: 30 };
       expect(compare(real, wedge(), { y: 0.1, air: 0.1, land: 0.5, heading: HEADING }, t)).toHaveLength(0);
@@ -411,7 +411,7 @@ describe("given the corkscrew channel, and cars pressed into its floor along its
   // 0.00 vs 1.96 / 6.07 / 11.31 / 15.16 m (bound 0.1), air 0.00 vs 0 / 1.42 / 2.45 / 2.98 s (bound 0.1), heading turn 0.00 vs 0 / 179.95 / 70.64 /
   // 103.56 deg, crashed at 6 m/s, wheels [4] vs the reference's sequence.
   for (const v of [6, 14, 22, 27]) {
-    todoRow(`when a driverless sedan is launched at ${v} m/s 6 m short of each, then it rises within 0.1 m, stays in the air within 0.1 s, lands within 0.5 m, turns within ${HEADING} deg and touches down on the same wheels`, true, (t) => {
+    todoRow(`when a driverless sedan is launched at ${v} m/s 6 m short of the held cars lining the channel, then, against the channel itself, it rises within 0.1 m, stays in the air within 0.1 s, lands within 0.5 m, turns within ${HEADING} deg and touches down on the same wheels`, true, (t) => {
       const real: DriveSetup = { x: 0, z: CORKSCREW.mouthZ - 6, v, ground: cork, collide: (c) => cork.contact(c), ref: cork, held: [], seconds: 12, coast: true, stopStill: 90 };
       expect(compare(real, floor(), { y: 0.1, air: 0.1, land: 0.5, heading: HEADING }, t)).toHaveLength(0);
     });

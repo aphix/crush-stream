@@ -122,9 +122,9 @@ function isUnderBox(x: number, z: number, box: Placement): boolean {
   return Math.abs(across) <= box.hx + EDGE_REACH && Math.abs(along) <= box.hz + EDGE_REACH;
 }
 
-describe("derby arena", () => {
+describe("given the derby arena as built from its box list over the derby ground", () => {
   for (const kind of Object.values(DERBY_PROP)) {
-    it(`given the drawn arena, when every ${kind} instance is read back, then each is exactly one box of the list and each box is drawn once`, () => {
+    it(`when every ${kind} instance of the drawn arena is read back, then each is exactly one box of the list and each box is drawn once`, () => {
       const expected = drawnBoxes.filter((box) => box.kind === kind);
       const mesh = boxMesh(kind);
       expect(mesh.count, `${kind} instance count`).toBe(expected.length);
@@ -134,7 +134,7 @@ describe("derby arena", () => {
     });
   }
 
-  it("given the ground built from the list, when its prism patches are read, then each is sunk deep enough, each is a listed box and each box is a prism", () => {
+  it("when the prism patches of the ground built from the list are read, then each is sunk deep enough, each is a listed box and each box is a prism", () => {
     const prisms = prismPlacements();
     for (const prism of prisms) expect(prism.base, `prism at (${prism.x}, ${prism.z}) has base ${prism.base}, above ${DEEPEST_REACHED_BASE}`).toBeLessThanOrEqual(DEEPEST_REACHED_BASE);
     const { missing, extra } = leftOvers(
@@ -145,7 +145,7 @@ describe("derby arena", () => {
     expect(missing, "boxes that are no prism").toHaveLength(0);
   });
 
-  it("given the drawn floor, when each vertex is compared with the ground's height query, then it is the surface a car meets", () => {
+  it("when each vertex of the drawn floor is compared with the ground's height query, then it is the surface a car meets", () => {
     const floor = arena.getObjectByName("derby-floor");
     must(floor instanceof THREE.Mesh, "the arena draws a floor");
     const positions = floor.geometry.getAttribute("position");
@@ -160,7 +160,7 @@ describe("derby arena", () => {
     expect(compared, `${compared} of ${positions.count} vertices compared`).toBeGreaterThan(positions.count * LEAST_COMPARED_SHARE);
   });
 
-  it("given the drawn arena, when its draw calls are counted, then there are at most twelve and it is hidden until the engine shows it", () => {
+  it("when the drawn arena's draw calls are counted, then there are at most twelve and it is hidden until the engine shows it", () => {
     let drawCalls = 0;
     arena.traverse((object) => {
       if (object instanceof THREE.Mesh) drawCalls++;
@@ -170,7 +170,7 @@ describe("derby arena", () => {
     expect(arena.visible).toBe(false);
   });
 
-  it("given the wall boxes as drawn, when each is read back, then its long axis runs along the wall and its inner face stands on the arena radius", () => {
+  it("when the drawn wall boxes are read back, then there is one per wall piece, its long axis runs along the wall and its inner face stands on the arena radius", () => {
     const pieces = placementsOf(boxMesh(DERBY_PROP.wall));
     expect(pieces.length).toBe(DERBY_ARENA.wallPieces);
     for (const piece of pieces) {
@@ -229,17 +229,21 @@ function cellsOf(mesh: THREE.Mesh): Map<string, string> {
 /** The least a floor vertex's colour may be, of the floor's mean in each channel (linear light): the scrap hump is damp earth, not a black blob. */
 const LEAST_FLOOR_SHARE = 0.25;
 
-describe("derby arena floor colour", () => {
+describe("given the derby arena's drawn floor, and its vertex colours", () => {
   const colours = meshNamed("derby-floor").geometry.getAttribute("color");
-  const channels = [0, 1, 2].map((channel) => ({ channel, read: (vertex: number) => colours.getComponent(vertex, channel) }));
+  const channels = [
+    { name: "red", channel: 0 },
+    { name: "green", channel: 1 },
+    { name: "blue", channel: 2 },
+  ] as const;
 
-  for (const { channel, read } of channels) {
-    it(`given the drawn floor, when each vertex's colour channel ${channel} is read, then none is under ${LEAST_FLOOR_SHARE} of the floor's mean`, () => {
+  for (const { name, channel } of channels) {
+    it(`when each vertex's ${name} channel is read, then none is under ${LEAST_FLOOR_SHARE} of the floor's mean`, () => {
       let total = 0;
-      for (let vertex = 0; vertex < colours.count; vertex++) total += read(vertex);
+      for (let vertex = 0; vertex < colours.count; vertex++) total += colours.getComponent(vertex, channel);
       const mean = total / colours.count;
       let darkest = Infinity;
-      for (let vertex = 0; vertex < colours.count; vertex++) darkest = Math.min(darkest, read(vertex));
+      for (let vertex = 0; vertex < colours.count; vertex++) darkest = Math.min(darkest, colours.getComponent(vertex, channel));
       expect(darkest, `darkest ${darkest} of mean ${mean}`).toBeGreaterThanOrEqual(mean * LEAST_FLOOR_SHARE);
     });
   }
@@ -254,7 +258,7 @@ const TOP_FROM_SHARE = 0.98;
 const MID_SLOPE_SHARES = [0.4, 0.6] as const;
 const FOOT_UNDER_SHARE = 0.1;
 
-describe("derby arena rise colour", () => {
+describe("given the derby arena's drawn floor, its level middle and its two rises (the table-top and the pit plateau)", () => {
   const floor = meshNamed("derby-floor");
   const positions = floor.geometry.getAttribute("position");
   const colours = floor.geometry.getAttribute("color");
@@ -278,29 +282,30 @@ describe("derby arena rise colour", () => {
   const shareBetween = (rise: Plateau, vertex: number, from: number, to: number) => onRise(rise, vertex) && positions.getY(vertex) / rise.height >= from && positions.getY(vertex) / rise.height <= to;
   const pit = DERBY_PLATEAUS.find((plateau) => plateau.height === PIT_HEIGHT);
   must(pit, "the arena has a pit plateau");
+  const rises = { tableTop: DERBY_TABLE_TOP, pit };
   const riseCases = [
-    { name: "table-top's flat top", rise: DERBY_TABLE_TOP, from: TOP_FROM_SHARE, to: 1, least: 1.5, most: Infinity },
-    { name: "pit plateau's flat top", rise: pit, from: TOP_FROM_SHARE, to: 1, least: 1.5, most: Infinity },
-    { name: "table-top's mid slope", rise: DERBY_TABLE_TOP, from: MID_SLOPE_SHARES[0], to: MID_SLOPE_SHARES[1], least: 0, most: 0.9 },
-    { name: "pit plateau's mid slope", rise: pit, from: MID_SLOPE_SHARES[0], to: MID_SLOPE_SHARES[1], least: 0, most: 0.9 },
-    { name: "table-top's foot", rise: DERBY_TABLE_TOP, from: 0.001, to: FOOT_UNDER_SHARE, least: 0, most: 0.8 },
-    { name: "pit plateau's foot", rise: pit, from: 0.001, to: FOOT_UNDER_SHARE, least: 0, most: 0.8 },
-  ];
+    { name: "table-top's flat top", rise: "tableTop", from: TOP_FROM_SHARE, to: 1, least: 1.5, most: Infinity },
+    { name: "pit plateau's flat top", rise: "pit", from: TOP_FROM_SHARE, to: 1, least: 1.5, most: Infinity },
+    { name: "table-top's mid slope", rise: "tableTop", from: MID_SLOPE_SHARES[0], to: MID_SLOPE_SHARES[1], least: 0, most: 0.9 },
+    { name: "pit plateau's mid slope", rise: "pit", from: MID_SLOPE_SHARES[0], to: MID_SLOPE_SHARES[1], least: 0, most: 0.9 },
+    { name: "table-top's foot", rise: "tableTop", from: 0.001, to: FOOT_UNDER_SHARE, least: 0, most: 0.8 },
+    { name: "pit plateau's foot", rise: "pit", from: 0.001, to: FOOT_UNDER_SHARE, least: 0, most: 0.8 },
+  ] as const;
 
   for (const { name, rise, from, to, least, most } of riseCases) {
-    it(`given the drawn floor, when the ${name} is compared with the level floor, then its mean red is ${least} to ${most} times the floor's`, () => {
-      const ratio = meanRed((vertex) => shareBetween(rise, vertex, from, to)) / meanRed(level);
+    it(`when the ${name} is compared with the level floor, then its mean red is ${least} to ${most} times the floor's`, () => {
+      const ratio = meanRed((vertex) => shareBetween(rises[rise], vertex, from, to)) / meanRed(level);
       expect(ratio, `${name} ratio ${ratio} under ${least}`).toBeGreaterThanOrEqual(least);
       expect(ratio, `${name} ratio ${ratio} over ${most}`).toBeLessThanOrEqual(most);
     });
   }
 });
 
-describe("derby arena ramp decks", () => {
+describe("given the derby arena's ramp decks drawn over the floor", () => {
   const decks = meshNamed("derby-ramp-decks");
   const deckCells = cellsOf(decks);
 
-  it("given the drawn decks, when each vertex is compared with the ground's height query, then it lies on the surface a car meets", () => {
+  it("when each vertex of the drawn decks is compared with the ground's height query, then it lies on the surface a car meets", () => {
     const positions = decks.geometry.getAttribute("position");
     expect(positions.count, "the decks have vertices").toBeGreaterThan(0);
     for (let vertex = 0; vertex < positions.count; vertex++) {
@@ -310,7 +315,7 @@ describe("derby arena ramp decks", () => {
     }
   });
 
-  it("given the ramps' decks as designed, when the drawn cells are compared with the cells whose centre is on one, then none is missing and none is extra", () => {
+  it("when the drawn deck cells are compared with the cells whose centre is on a ramp's deck as designed, then none is missing and none is extra", () => {
     const expected = new Set<string>();
     for (let z = -DERBY_ARENA.gridHalf; z < DERBY_ARENA.gridHalf; z++) {
       for (let x = -DERBY_ARENA.gridHalf; x < DERBY_ARENA.gridHalf; x++) {
@@ -324,65 +329,75 @@ describe("derby arena ramp decks", () => {
     expect(expected.size, "the ramps have deck cells").toBeGreaterThan(0);
   });
 
-  it("given the floor's cells and the deck's, when a cell is in both, then both split it into the same two triangles", () => {
+  it("when a cell is in both the floor's and the deck's, then both split it into the same two triangles", () => {
     const floorCells = cellsOf(meshNamed("derby-floor"));
     for (const [key, split] of deckCells) expect(split, `cell ${key} is split like the floor's`).toBe(floorCells.get(key));
   });
 });
 
-describe("derby arena glass", () => {
+describe("given the derby arena's drawn glass above the wall's concrete foot", () => {
   const glass = boxMesh(GLASS_MESH_NAME);
   const panes = placementsOf(glass);
   const wallPieces = listedBoxes.filter((box) => box.kind === DERBY_PROP.wall);
 
-  it("given the drawn glass, when its instances are counted, then there is one pane per wall piece", () => {
+  it("when the glass instances are counted, then there is one pane per wall piece", () => {
     expect(glass.count).toBe(DERBY_ARENA.wallPieces);
   });
 
-  it("given each glass pane, when its base and top are read back, then it spans the concrete's top to the wall's top", () => {
+  it("when each pane's base and top are read back, then it spans the concrete's top to the wall's top", () => {
     for (const pane of panes) {
       expect(Math.abs(pane.base - DERBY_ARENA.concreteHeight), `pane at (${pane.x}, ${pane.z}) starts at the concrete's top`).toBeLessThan(TOLERANCE);
       expect(Math.abs(pane.base + pane.height - DERBY_ARENA.wallHeight), `pane at (${pane.x}, ${pane.z}) ends at the wall's top`).toBeLessThan(TOLERANCE);
     }
   });
 
-  it("given each glass pane, when its place is read back, then it stands over a wall piece with its inner face on the arena radius", () => {
+  it("when each pane's place is read back, then it stands over a wall piece with its inner face on the arena radius", () => {
     for (const pane of panes) {
       expect(wallPieces.some((piece) => isUnderBox(pane.x, pane.z, piece)), `pane at (${pane.x}, ${pane.z}) is over a wall piece`).toBeTruthy();
       expect(Math.abs(Math.hypot(pane.x, pane.z) - pane.hx - DERBY_ARENA.radius), `pane at (${pane.x}, ${pane.z}) has its inner face on the radius`).toBeLessThan(WALL_FACE_TOLERANCE);
     }
   });
 
+  const material = standardMaterialOf(glass);
+  const readings = { transparent: material.transparent, depthWrite: material.depthWrite, side: material.side, castShadow: glass.castShadow, receiveShadow: glass.receiveShadow };
   const glassCases = [
-    { field: "transparent", read: () => standardMaterialOf(glass).transparent, expected: true, then: "it blends over the scene" },
-    { field: "depthWrite", read: () => standardMaterialOf(glass).depthWrite, expected: false, then: "it writes no depth" },
-    { field: "side", read: () => standardMaterialOf(glass).side, expected: THREE.FrontSide, then: "only its front faces draw" },
-    { field: "castShadow", read: () => glass.castShadow, expected: false, then: "it casts no shadow" },
-    { field: "receiveShadow", read: () => glass.receiveShadow, expected: false, then: "it receives no shadow" },
-  ];
-  for (const { field, read, expected, then } of glassCases) {
-    it(`given the glass draw, when its ${field} is read, then ${then}`, () => {
-      expect(read()).toBe(expected);
+    { field: "transparent", expected: true, then: "it blends over the scene" },
+    { field: "depthWrite", expected: false, then: "it writes no depth" },
+    { field: "side", expected: THREE.FrontSide, then: "only its front faces draw" },
+    { field: "castShadow", expected: false, then: "it casts no shadow" },
+    { field: "receiveShadow", expected: false, then: "it receives no shadow" },
+  ] as const;
+  for (const { field, expected, then } of glassCases) {
+    it(`when the glass draw's ${field} is read, then ${then}`, () => {
+      expect(readings[field], `glass ${field}`).toBe(expected);
     });
   }
 });
 
-describe("derby arena materials", () => {
+describe("given the derby arena's floor and ramp decks and their materials", () => {
   const floorMap = standardMaterialOf(meshNamed("derby-floor")).map;
   must(floorMap instanceof THREE.DataTexture, "the floor's map is a painted texture");
   const floorMapImage = floorMap.image;
   const deckMaterial = standardMaterialOf(meshNamed("derby-ramp-decks"));
+  const readings = {
+    "floor map width": floorMapImage.width,
+    "floor map height": floorMapImage.height,
+    "floor map horizontal wrap": floorMap.wrapS,
+    "ramp deck map horizontal wrap": deckMaterial.map?.wrapS,
+    "ramp deck map vertical wrap": deckMaterial.map?.wrapT,
+    "ramp deck depth write": deckMaterial.depthWrite,
+  };
   const mapCases = [
-    { name: "floor map width", read: () => floorMapImage.width, expected: DIRT_TEXTURE_SIZE, then: "it is one 1024 texel square" },
-    { name: "floor map height", read: () => floorMapImage.height, expected: DIRT_TEXTURE_SIZE, then: "it is one 1024 texel square" },
-    { name: "floor map horizontal wrap", read: () => floorMap?.wrapS, expected: THREE.ClampToEdgeWrapping, then: "it clamps: one map covers the arena, no tiling" },
-    { name: "ramp deck map horizontal wrap", read: () => deckMaterial.map?.wrapS, expected: THREE.RepeatWrapping, then: "the planks repeat" },
-    { name: "ramp deck map vertical wrap", read: () => deckMaterial.map?.wrapT, expected: THREE.RepeatWrapping, then: "the planks repeat" },
-    { name: "ramp deck depth write", read: () => deckMaterial.depthWrite, expected: false, then: "it writes no depth (a decal over the floor)" },
-  ];
-  for (const { name, read, expected, then } of mapCases) {
-    it(`given the drawn arena, when the ${name} is read, then ${then}`, () => {
-      expect(read()).toBe(expected);
+    { name: "floor map width", expected: DIRT_TEXTURE_SIZE, then: "it is one 1024 texel square" },
+    { name: "floor map height", expected: DIRT_TEXTURE_SIZE, then: "it is one 1024 texel square" },
+    { name: "floor map horizontal wrap", expected: THREE.ClampToEdgeWrapping, then: "it clamps: one map covers the arena, no tiling" },
+    { name: "ramp deck map horizontal wrap", expected: THREE.RepeatWrapping, then: "the planks repeat" },
+    { name: "ramp deck map vertical wrap", expected: THREE.RepeatWrapping, then: "the planks repeat" },
+    { name: "ramp deck depth write", expected: false, then: "it writes no depth (a decal over the floor)" },
+  ] as const;
+  for (const { name, expected, then } of mapCases) {
+    it(`when the ${name} is read, then ${then}`, () => {
+      expect(readings[name], name).toBe(expected);
     });
   }
 });
@@ -397,9 +412,9 @@ const tileCases = [
   { name: DERBY_PROP.tyres, across: 1.3, up: 1.3 },
 ];
 
-describe("derby arena metric uv", () => {
+describe("given each derby arena box mesh drawn with a texture on its side faces", () => {
   for (const { name, across, up } of tileCases) {
-    it(`given the ${name} box, when its side face's uv is read, then it spans that face's metres over the texture's tile`, () => {
+    it(`when the ${name} box's side face uv is read, then it spans that face's metres over the texture's tile`, () => {
       const { geometry } = boxMesh(name);
       must(geometry instanceof THREE.BoxGeometry, `${name} is drawn from a box`);
       const uv = geometry.getAttribute("uv");

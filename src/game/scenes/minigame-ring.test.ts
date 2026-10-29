@@ -313,7 +313,7 @@ describe("given the board sampled into a triangle mesh", () => {
   const vertexCount = mesh.vertices.length / 3;
   const MESH_HEIGHT_TOLERANCE = STEEPEST_SURFACE_SLOPE * RING_BOARD_BOUNDS.maxX * FLOAT32_EPSILON;
 
-  it("when a vertex is compared with the height function, then its height is the function's at the vertex's own x and z", () => {
+  it("when a vertex is compared with the height function, then its height is the function's at the vertex's own x and z, and the mesh reaches the pocket rims", () => {
     let largestError = 0;
     for (let vertex = 0; vertex < vertexCount; vertex++) {
       const localX = mesh.vertices[vertex * 3]!;
@@ -365,7 +365,7 @@ describe("given the board sampled into a triangle mesh", () => {
     }
   });
 
-  it("when every index is checked, then it names a vertex that exists", () => {
+  it("when every triangle corner of the mesh is checked, then it is a vertex that exists, and the mesh has over 1000 vertices", () => {
     for (let corner = 0; corner < mesh.indices.length; corner++) expect(mesh.indices[corner]!, `index ${corner}`).toBeLessThan(vertexCount);
     expect(vertexCount, `${vertexCount} vertices`).toBeGreaterThan(1000);
   });

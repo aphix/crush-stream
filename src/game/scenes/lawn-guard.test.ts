@@ -89,21 +89,23 @@ function runAtGuard(mps: number) {
   return { guard, strikes, post };
 }
 
-const speedCases = [
-  { it: "when a car drives through his post at 15 m/s, then he is run down", mps: 15, expectedDown: true },
-  { it: "when a car drives through his post at 5 m/s, then he is run down", mps: 5, expectedDown: true },
-  { it: "when a car rolls through his post at 3 m/s, then he stays standing", mps: STRIKE_SPEED - 1, expectedDown: false },
-  { it: "when a car creeps through his post at 1 m/s, then he stays standing", mps: 1, expectedDown: false },
+const runDownCases = [
+  { it: "when a car drives through his post at 15 m/s, then he is run down", mps: 15 },
+  { it: "when a car drives through his post at 5 m/s, then he is run down", mps: 5 },
+] as const;
+
+const standingCases = [
+  { it: "when a car rolls through his post at 3 m/s, then he stays standing", mps: STRIKE_SPEED - 1 },
+  { it: "when a car creeps through his post at 1 m/s, then he stays standing", mps: 1 },
 ] as const;
 
 describe("given the squad out at its posts, firing on a parked car (owner, 2026-10-15: guards ragdoll once a vehicle hits them)", () => {
-  for (const testCase of speedCases) {
+  for (const testCase of runDownCases) {
     it(testCase.it, () => {
       const { guard, strikes, post } = runAtGuard(testCase.mps);
-      expect(guard.mode[0] === GUARD_DOWN, "guard 0 down").toBe(testCase.expectedDown);
-      expect(strikes.length > 0, "guards struck").toBe(testCase.expectedDown);
+      expect(guard.mode[0] === GUARD_DOWN, "guard 0 down").toBe(true);
+      expect(strikes.length > 0, "guards struck").toBe(true);
       expect(strikes.length, "each guard down was struck once, and no other").toBe(Array.from(guard.mode).filter((mode) => mode === GUARD_DOWN).length);
-      if (!testCase.expectedDown) return;
       const strike = strikes.find((s) => s.guard === 0)!;
       expect(strike, "the guard struck").toBeTruthy();
       expect(strike.car, "the car that struck him").toBe(1);
@@ -112,6 +114,15 @@ describe("given the squad out at its posts, firing on a parked car (owner, 2026-
       expect(Math.abs(strike.vx), "and kicked clear of its centre line").toBeGreaterThan(1);
       expect(strike.vy, "with a lift").toBeGreaterThan(0);
       expect(Math.abs(strike.faceX * strike.faceX + strike.faceZ * strike.faceZ - 1), "facing a unit vector").toBeLessThan(1e-6);
+    });
+  }
+
+  for (const testCase of standingCases) {
+    it(testCase.it, () => {
+      const { guard, strikes } = runAtGuard(testCase.mps);
+      expect(guard.mode[0] === GUARD_DOWN, "guard 0 down").toBe(false);
+      expect(strikes.length > 0, "guards struck").toBe(false);
+      expect(strikes.length, "each guard down was struck once, and no other").toBe(Array.from(guard.mode).filter((mode) => mode === GUARD_DOWN).length);
     });
   }
 

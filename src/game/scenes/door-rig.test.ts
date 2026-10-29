@@ -31,45 +31,65 @@ type Case = {
   kg: number;
   /** Parts off the car, as door/mirror without the L/R suffix. */
   off: ("door" | "mirror")[];
-  check: (r: RamShot) => void;
+  /** What else the title promises, in words (empty: nothing beyond the parts off and the still body). */
+  also: string;
+  /** 1: the door must end shut and latched. */
+  latchedLeast: 0 | 1;
+  mirrorFoldLeast: number;
+  doorDegLeast: number;
+  doorDegMost: number;
+  hingeLoadLeast: number;
+  hingeLoadMost: number;
+  /** 1: the ram must end stopped. */
+  ramStoppedLeast: 0 | 1;
 };
+
+/** The bounds a case leaves open. */
+const UNCHECKED = { mirrorFoldLeast: -Infinity, doorDegLeast: -Infinity, doorDegMost: Infinity, hingeLoadLeast: -Infinity, hingeLoadMost: Infinity, ramStoppedLeast: 0 } as const;
 
 const CASES: Case[] = [
   {
+    ...UNCHECKED,
     scenario: "mirror",
     level: "carrying 0.8× the mirror's break energy, where its fold stop holds",
     kph: 4,
     kg: kgFor(0.8, 4),
     off: [],
-    check: (r) => {
-      expect(r.mirrorFoldDeg, `mirror folded only ${r.mirrorFoldDeg}°`).toBeGreaterThan(MIRROR_FOLD_MAX * R2D - 1);
-      expect(r.ramStopped, "the folded mirror's stop should have stopped the ram").toBeTruthy();
-    },
+    also: ", the door stays shut and latched, the mirror folds fully onto its stop and stops the ram",
+    latchedLeast: 1,
+    mirrorFoldLeast: MIRROR_FOLD_MAX * R2D - 1,
+    ramStoppedLeast: 1,
   },
-  { scenario: "mirror", level: "carrying 1.25× the mirror's break energy", kph: 4, kg: kgFor(1.25, 4), off: ["mirror"], check: () => {} },
-  { scenario: "mirror", level: "as a fast heavy ram", kph: 50, kg: 1500, off: ["mirror"], check: () => {} },
+  { ...UNCHECKED, scenario: "mirror", level: "carrying 1.25× the mirror's break energy", kph: 4, kg: kgFor(1.25, 4), off: ["mirror"], also: ", the door stays shut and latched", latchedLeast: 1 },
+  { ...UNCHECKED, scenario: "mirror", level: "as a fast heavy ram", kph: 50, kg: 1500, off: ["mirror"], also: ", the door stays shut and latched", latchedLeast: 1 },
   {
+    ...UNCHECKED,
     scenario: "overOpen",
     level: "below the hinge tear threshold",
     kph: 5,
     kg: 120,
     off: [],
-    check: (r) => {
-      expect(Math.abs(r.doorDeg - DOOR_OPEN_MAX * R2D), `door at ${r.doorDeg}°, not on its stop`).toBeLessThan(0.5);
-      expect(r.hingeLoadJ > 0 && r.hingeLoadJ < HINGE_TEAR_J, `hinge load ${r.hingeLoadJ} J`).toBeTruthy();
-      expect(r.ramStopped, "the strap should have stopped the ram").toBeTruthy();
-    },
+    also: ", the door rests on its stop with the hinge loaded under its tear limit, and the strap stops the ram",
+    latchedLeast: 0,
+    doorDegLeast: DOOR_OPEN_MAX * R2D - 0.5,
+    doorDegMost: DOOR_OPEN_MAX * R2D + 0.5,
+    hingeLoadLeast: 0,
+    hingeLoadMost: HINGE_TEAR_J,
+    ramStoppedLeast: 1,
   },
-  { scenario: "overOpen", level: "above the hinge tear threshold", kph: 15, kg: 300, off: ["door", "mirror"], check: () => {} },
+  { ...UNCHECKED, scenario: "overOpen", level: "above the hinge tear threshold", kph: 15, kg: 300, off: ["door", "mirror"], also: "", latchedLeast: 0 },
   {
+    ...UNCHECKED,
     scenario: "shut",
     level: "with low force, which re-closes the door",
     kph: 4,
     kg: 300,
     off: [],
-    check: (r) => expect(r.doorDeg, `door left ${r.doorDeg}° open`).toBeLessThan(0.01),
+    also: ", the door stays latched and is shut under 0.01°",
+    latchedLeast: 1,
+    doorDegMost: 0.01,
   },
-  { scenario: "shut", level: "with high force, which slams the door off", kph: 40, kg: 300, off: ["door", "mirror"], check: () => {} },
+  { ...UNCHECKED, scenario: "shut", level: "with high force, which slams the door off", kph: 40, kg: 300, off: ["door", "mirror"], also: "", latchedLeast: 0 },
 ];
 
 /** The cars the sketch cases run on: the sedan the rows were written on (`makeCar`), then every other style, the muscle (coupe) with its short bullet mirror among them. */
@@ -80,14 +100,18 @@ for (const sketchCar of SKETCH_CARS) {
     for (const side of [-1, 1] as const) {
       const suffix = side < 0 ? "L" : "R";
       for (const c of CASES) {
-        it(`when the ${c.scenario} ram hits the ${suffix} side ${c.level}, then the parts that come off are [${c.off.join(", ")}] and the body does not move more than 1 mm`, () => {
+        it(`when the ${c.scenario} ram hits the ${suffix} side ${c.level}, then the parts that come off are [${c.off.join(", ")}] and the body does not move more than 1 mm${c.also}`, () => {
           const r = fireRam(sketchCar.park(), c.scenario, { kph: c.kph, kg: c.kg, side });
           assertSameDigest([...r.detached].sort(), c.off.map((p) => p + suffix).sort(), `detached [${[...r.detached].sort()}]`);
-          const doorOn = !c.off.includes("door");
-          if (doorOn && c.scenario !== "overOpen") expect(r.latched, "door should be shut and latched").toBeTruthy();
+          expect(Number(r.latched), "door should be shut and latched").toBeGreaterThanOrEqual(c.latchedLeast);
           expect(r.bodyParticleMm, `control particles moved ${r.bodyParticleMm} mm`).toBeLessThanOrEqual(BODY_TOL_MM);
           expect(r.bodyVertexMm, `skinned vertices moved ${r.bodyVertexMm} mm`).toBeLessThanOrEqual(BODY_TOL_MM);
-          c.check(r);
+          expect(r.mirrorFoldDeg, `mirror folded only ${r.mirrorFoldDeg}°`).toBeGreaterThan(c.mirrorFoldLeast);
+          expect(r.doorDeg, `door at ${r.doorDeg}°, outside its allowed range`).toBeGreaterThan(c.doorDegLeast);
+          expect(r.doorDeg, `door at ${r.doorDeg}°, outside its allowed range`).toBeLessThan(c.doorDegMost);
+          expect(r.hingeLoadJ, `hinge load ${r.hingeLoadJ} J`).toBeGreaterThan(c.hingeLoadLeast);
+          expect(r.hingeLoadJ, `hinge load ${r.hingeLoadJ} J`).toBeLessThan(c.hingeLoadMost);
+          expect(Number(r.ramStopped), "the ram should have stopped").toBeGreaterThanOrEqual(c.ramStoppedLeast);
         });
       }
     }

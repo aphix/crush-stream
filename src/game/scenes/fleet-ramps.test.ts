@@ -129,10 +129,11 @@ function bodyReachX(car: DeformableCar): number {
 describe("given a car driven end-on up a ramp, with a slab between the ramps", () => {
   afterEach(() => setGround(null));
 
-  for (const [v, name, landZ] of [
-    [14, "flies the slab end-on and lands on the flat past the far ramp", RAMP.start + RAMP.len],
-    [11, "flies the slab end-on and lands on the far ramp's face", RAMP.start],
-  ] as const) {
+  const jumps = [
+    { v: 14, name: "flies the slab end-on and lands on the flat past the far ramp", landZ: RAMP.start + RAMP.len },
+    { v: 11, name: "flies the slab end-on and lands on the far ramp's face", landZ: RAMP.start },
+  ] as const;
+  for (const { v, name, landZ } of jumps) {
     it(`when it drives up at ${v} m/s, then it ${name}, its centre on the parabola of its velocity and its spin unchanged while it flies, no tyre sinks or snaps on landing and all four wheels end on the ground`, (t) => {
       const r = jump(v);
       t.annotate(
@@ -471,7 +472,7 @@ describe("given a settled sedan with its nose crushed and its bonnet torn off, a
   afterEach(() => setGround(null));
 
   // The flank cuts through the torn bonnet's parked vertices and the stock underside's front row, never the drawn body.
-  it("when 2 s run, then nothing of the car is in the flank: no side contact, its contact clock runs on and it is not pushed", (t) => {
+  it("when the car and the flank are left to run for 2 s, then nothing of the car is in the flank: no side contact, its contact clock runs on and it is not pushed", (t) => {
     const { ramps, w, car, wedge } = tornBonnetWreck();
     const body = noseX(car, false);
     const bonnet = noseX(car, true);

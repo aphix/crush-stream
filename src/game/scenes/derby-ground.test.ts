@@ -188,7 +188,7 @@ describe("given the design's rises", () => {
   }
 
   for (const design of DESIGN_RAMPS) {
-    describe(`the ${design.name} ramp`, () => {
+    describe(`given the design's ${design.name} ramp`, () => {
       it("when its crest is read from the ground, then its deck reaches the design height and no more", () => {
         const { plateau, toward } = rampNamed(design.name);
         let peak = 0;

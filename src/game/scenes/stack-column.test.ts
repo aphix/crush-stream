@@ -101,10 +101,17 @@ describe("given the owner's drops (11 cars, 0.15 m, one a second), run for 8 s a
   // roof stands, it does not follow) and `faceFollow`'s old lowering at the head change no number to the millimetre of the roof row or
   // the creep: the wander is the open lagged coupling between stacked cars (the weight a car bears on the one under it lands at that
   // car's next step), packed roofs were what held the column before.
-  for (const bodies of ["sedans", "fleet without the monster"] as const) {
-    const todo = bodies === "sedans"
-      ? "after the plan: find why the sedan column still wanders now that a car on a car is one pair solved through the kernel; it ends 0.10 m off its axis (bar 0.05 m), leaning 0.1° (bar 3°), with no car off it by 0.1 m on the way"
-      : "after the plan: find why the fleet column without the monster collapses; a car leaves it by 5.69 m (bar 0.1 m): cars 0-7 end on the ground, car 1 5.69 m and car 0 4.43 m off the axis by 19 s. Mechanism (11 cars, police base): car 1 lands at 1.7 m/s on the drawn lightbar, rolls 9° and its tilted sill (4-9 cm under its pan) overlaps the base's shoulder by 0.07 m, over `VERTICAL_CLEAR` (0.05 m), so the plan SAT reads a level side hit (closing 0.36 m/s) and wakes car 0's masses, which read the ground alone (`sampleGround`), so car 1 falls through it. Tried and withdrawn: a wider clear (0.25 m, the store's reach `SKIN`) for a pair whose upper belly is within `SKIN` of the lower top holds the column to 0.49 m, but it also drops the plan hit of a car sliding off a roof it was thrown onto (engine-lab 'thrown at its top car at 10 m/s': 1.8 m/s relative) and of a car landing on a roof at 1.3-1.5 m/s (the mixed fleet's -12 m/s read); a relative-speed gate cannot separate them (the column's own landing is 1.0-1.2 m/s). The one law needed: a car standing on a roof is the surface store's, and a landing or a slide is the plan's, decided by what holds the car, not by a speed";
+  const ownerColumnCases = [
+    {
+      bodies: "sedans",
+      todo: "after the plan: find why the sedan column still wanders now that a car on a car is one pair solved through the kernel; it ends 0.10 m off its axis (bar 0.05 m), leaning 0.1° (bar 3°), with no car off it by 0.1 m on the way",
+    },
+    {
+      bodies: "fleet without the monster",
+      todo: "after the plan: find why the fleet column without the monster collapses; a car leaves it by 5.69 m (bar 0.1 m): cars 0-7 end on the ground, car 1 5.69 m and car 0 4.43 m off the axis by 19 s. Mechanism (11 cars, police base): car 1 lands at 1.7 m/s on the drawn lightbar, rolls 9° and its tilted sill (4-9 cm under its pan) overlaps the base's shoulder by 0.07 m, over `VERTICAL_CLEAR` (0.05 m), so the plan SAT reads a level side hit (closing 0.36 m/s) and wakes car 0's masses, which read the ground alone (`sampleGround`), so car 1 falls through it. Tried and withdrawn: a wider clear (0.25 m, the store's reach `SKIN`) for a pair whose upper belly is within `SKIN` of the lower top holds the column to 0.49 m, but it also drops the plan hit of a car sliding off a roof it was thrown onto (engine-lab 'thrown at its top car at 10 m/s': 1.8 m/s relative) and of a car landing on a roof at 1.3-1.5 m/s (the mixed fleet's -12 m/s read); a relative-speed gate cannot separate them (the column's own landing is 1.0-1.2 m/s). The one law needed: a car standing on a roof is the surface store's, and a landing or a slide is the plan's, decided by what holds the car, not by a speed",
+    },
+  ] as const;
+  for (const { bodies, todo } of ownerColumnCases) {
     todoRow(`when the column is made of ${bodies}, then no car leaves it by 0.1 m or more, it ends within 5 cm of its axis leaning under 3°, every car reads a load, and the roof sink never grows toward the top, from over 300 mm at the bottom to under 5 mm at the top`, todo, () => {
       let worst = 0;
       // The first frame a car is 0.1 m off the column ends the run: nothing later can bring it back under the bar.

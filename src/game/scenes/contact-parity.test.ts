@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import { carDoorPass, carSandwich, carStrike, copIntoSide, crushMismatch, DOOR_FORMS, doorGap, doorHit, onGround, pistonStrike, pressByForce, pressUntil, ramDoorPass, shortening, type CarState, type DoorGap, type Strike } from "./contact-parity.test-util.ts";
+import { carDoorPass, carSandwich, carStrike, copIntoSide, crushMismatch, DOOR_FORMS, doorGap, doorHit, onGround, pistonStrike, pressByForce, pressUntil, ramDoorPass, shortening, type CarState, type DoorGap } from "./contact-parity.test-util.ts";
 import { assertSameDigest } from "../vehicle/test-support.ts";
 
 // docs/CONTACT_PARITY.md: one hit, two deliveries (scene rig vs other cars), same outcome.
@@ -95,16 +95,14 @@ describe("given a piston and a car of the same mass and speed striking a crushab
 });
 
 describe("given a piston and a car of the same mass and speed striking the parked car's nose at the speeds the cases above leave out, and its tail and right side", () => {
-  const hits: [Strike, number][] = [["front", 10], ["front", 30], ["front", 60], ["rear", 30], ["right", 30]];
-  const PISTON_TODO: Record<string, string> = {
-    "front 10": "after the plan: put the car side's push on the same impulse the piston side takes; front 10 km/h at softness 0.4 crushes the engine block 33 mm car / 45 mm piston, tank 32 / 44, bumperRL 32 / 44, rails 6 / 18, wings 4 / 16 (the 15 % bound)",
-    "front 30": "after the plan: put the car side's push on the same impulse the piston side takes; front 30 km/h at softness 0.32 crushes bumperFL and bumperFR 76 mm car / 63 mm piston (the 15 % bound)",
-    "front 60": "after the plan: put the car side's push on the same impulse the piston side takes; front 60 km/h at softness 0.4 crushes the engine block 63 mm car / 50 mm piston, wings 40 / 21 (the 15 % bound)",
-    "right 30": "after the plan: put the car side's push on the same impulse the piston side takes; right 30 km/h at softness 0.4 swings the door 0.0 deg car / 23.1 deg piston (3 deg bound)",
-    "rear 30": FROZEN_SPRINGBACK,
-  };
-  for (const [at, kph] of hits) {
-    const todo = PISTON_TODO[`${at} ${kph}`] ?? false;
+  const hits = [
+    { at: "front", kph: 10, todo: "after the plan: put the car side's push on the same impulse the piston side takes; front 10 km/h at softness 0.4 crushes the engine block 33 mm car / 45 mm piston, tank 32 / 44, bumperRL 32 / 44, rails 6 / 18, wings 4 / 16 (the 15 % bound)" },
+    { at: "front", kph: 30, todo: "after the plan: put the car side's push on the same impulse the piston side takes; front 30 km/h at softness 0.32 crushes bumperFL and bumperFR 76 mm car / 63 mm piston (the 15 % bound)" },
+    { at: "front", kph: 60, todo: "after the plan: put the car side's push on the same impulse the piston side takes; front 60 km/h at softness 0.4 crushes the engine block 63 mm car / 50 mm piston, wings 40 / 21 (the 15 % bound)" },
+    { at: "rear", kph: 30, todo: FROZEN_SPRINGBACK },
+    { at: "right", kph: 30, todo: "after the plan: put the car side's push on the same impulse the piston side takes; right 30 km/h at softness 0.4 swings the door 0.0 deg car / 23.1 deg piston (3 deg bound)" },
+  ] as const;
+  for (const { at, kph, todo } of hits) {
     todoRow(`when a ${CAR_KG} kg car and a ${CAR_KG} kg piston each hit the ${at} at ${kph} km/h at crush softness 0.4 and 0.32, then the car's parts and crush match the piston's`, todo, () => {
       for (const squash of [0.4, 0.32]) {
         const car = carStrike(at, kph, squash).a;

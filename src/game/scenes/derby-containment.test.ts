@@ -19,7 +19,7 @@ function truckOnItsEnd(offFace: number, tilt: number): ReturnType<typeof carOfCl
   return car;
 }
 
-describe("given the end the containment rows read (where the car's drawn body rests, not its group origin)", () => {
+describe("given a truck stood on its nose or tail at the arena wall, its drawn body hanging off its group origin along the radius", () => {
   it("when a truck on its end has its origin inside the inner face and its body outside it, then it ends outside", () => {
     const [nose, tail] = [truckOnItsEnd(-ORIGIN_OFF_FACE, STOOD_ON_ITS_NOSE), truckOnItsEnd(-ORIGIN_OFF_FACE, -STOOD_ON_ITS_NOSE)];
     const outer = bodyRadius(nose) > bodyRadius(tail) ? nose : tail;

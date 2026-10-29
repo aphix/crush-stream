@@ -276,7 +276,7 @@ describe("given a high jump session", () => {
     return session;
   }
 
-  it("when he is begun without his posts and lip, then it fails loudly", () => {
+  it("when a high jump is begun without the posts' and lip's numbers, then it throws an error naming the posts", () => {
     const session = new MinigameSession(fakeBests());
     expect(() => session.begin("highJump", LONG_JUMP_OPTIONS), "begin without the high jump's numbers").toThrow(/posts/);
   });

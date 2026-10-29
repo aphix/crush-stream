@@ -142,22 +142,27 @@ function strike(part: "door" | "panel", dir: 1 | -1, kph: number, kg: number, ca
 }
 
 describe("given a still box with the car driven at it, and the same box driven along a parked car", () => {
-  type Strike = ReturnType<typeof strike>;
-  const CASES: [string, "door" | "panel", 1 | -1, number, number, (r: Strike) => boolean][] = [
-    ["door driven shut, light", "door", -1, 4, 300, (r) => r.off.length === 0 && r.latched],
-    ["door slammed off", "door", -1, 40, 300, (r) => r.off.join() === "doorR"],
-    ["door driven past its stop, soft", "door", 1, 5, 120, (r) => r.off.length === 0 && !r.latched && r.door > 1.1],
-    ["door torn off the other way", "door", 1, 15, 300, (r) => r.off.join() === "doorR"],
-    ["panel pushed back", "panel", 1, 3, 120, (r) => r.off.length === 0 && r.panel < 0.4],
-    ["panel torn off from behind", "panel", 1, 12, 300, (r) => r.off.join() === "quarterR"],
-    ["panel pulled out, soft", "panel", -1, 2, 60, (r) => r.off.length === 0 && r.panel > 0.8],
-    ["panel torn off from the front", "panel", -1, 4, 300, (r) => r.off.join() === "quarterR"],
-  ];
-  for (const [name, part, dir, kph, kg, meaningful] of CASES) {
-    it(`when the shot is "${name}", then the moving car ends with the same parts off, latch, door and panel as the moving box`, () => {
-      const box = strike(part, dir, kph, kg, false);
-      const car = strike(part, dir, kph, kg, true);
-      expect(meaningful(box), `the shot did not do what it is named for: ${JSON.stringify(box)}`).toBeTruthy();
+  const CASES = [
+    { name: "door driven shut, light", part: "door", dir: -1, kph: 4, kg: 300, expectedOff: "", latchedLeast: 1, latchedMost: 1, doorLeast: -Infinity, panelLeast: -Infinity, panelMost: Infinity },
+    { name: "door slammed off", part: "door", dir: -1, kph: 40, kg: 300, expectedOff: "doorR", latchedLeast: 0, latchedMost: 1, doorLeast: -Infinity, panelLeast: -Infinity, panelMost: Infinity },
+    { name: "door driven past its stop, soft", part: "door", dir: 1, kph: 5, kg: 120, expectedOff: "", latchedLeast: 0, latchedMost: 0, doorLeast: 1.1, panelLeast: -Infinity, panelMost: Infinity },
+    { name: "door torn off the other way", part: "door", dir: 1, kph: 15, kg: 300, expectedOff: "doorR", latchedLeast: 0, latchedMost: 1, doorLeast: -Infinity, panelLeast: -Infinity, panelMost: Infinity },
+    { name: "panel pushed back", part: "panel", dir: 1, kph: 3, kg: 120, expectedOff: "", latchedLeast: 0, latchedMost: 1, doorLeast: -Infinity, panelLeast: -Infinity, panelMost: 0.4 },
+    { name: "panel torn off from behind", part: "panel", dir: 1, kph: 12, kg: 300, expectedOff: "quarterR", latchedLeast: 0, latchedMost: 1, doorLeast: -Infinity, panelLeast: -Infinity, panelMost: Infinity },
+    { name: "panel pulled out, soft", part: "panel", dir: -1, kph: 2, kg: 60, expectedOff: "", latchedLeast: 0, latchedMost: 1, doorLeast: -Infinity, panelLeast: 0.8, panelMost: Infinity },
+    { name: "panel torn off from the front", part: "panel", dir: -1, kph: 4, kg: 300, expectedOff: "quarterR", latchedLeast: 0, latchedMost: 1, doorLeast: -Infinity, panelLeast: -Infinity, panelMost: Infinity },
+  ] as const;
+  for (const testCase of CASES) {
+    it(`when the shot is "${testCase.name}", then the moving car ends with the same parts off, latch, door and panel as the moving box`, () => {
+      const box = strike(testCase.part, testCase.dir, testCase.kph, testCase.kg, false);
+      const car = strike(testCase.part, testCase.dir, testCase.kph, testCase.kg, true);
+      const named = `the shot did not do what it is named for: ${JSON.stringify(box)}`;
+      expect(box.off.join(), `${named} (parts off)`).toBe(testCase.expectedOff);
+      expect(Number(box.latched), `${named} (latch)`).toBeGreaterThanOrEqual(testCase.latchedLeast);
+      expect(Number(box.latched), `${named} (latch)`).toBeLessThanOrEqual(testCase.latchedMost);
+      expect(box.door, `${named} (door)`).toBeGreaterThan(testCase.doorLeast);
+      expect(box.panel, `${named} (panel)`).toBeGreaterThan(testCase.panelLeast);
+      expect(box.panel, `${named} (panel)`).toBeLessThan(testCase.panelMost);
       assertSameDigest(car.off, box.off, "parts off");
       expect(car.latched, "latch").toBe(box.latched);
       expect(Math.abs(car.door - box.door), `door ${car.door} vs ${box.door} rad`).toBeLessThan(0.01);
@@ -167,7 +172,12 @@ describe("given a still box with the car driven at it, and the same box driven a
 });
 
 describe("given a panel folded by the sim's step on a car no frame ever drew", () => {
-  for (const [name, dir, kph, kg] of [["pushed back", 1, 3, 120], ["torn off from behind", 1, 12, 300], ["pulled out, soft", -1, 2, 60]] as const) {
+  const cases = [
+    { name: "pushed back", dir: 1, kph: 3, kg: 120 },
+    { name: "torn off from behind", dir: 1, kph: 12, kg: 300 },
+    { name: "pulled out, soft", dir: -1, kph: 2, kg: 60 },
+  ] as const;
+  for (const { name, dir, kph, kg } of cases) {
     it(`when it is struck and ${name}, then it ends as the same panel posed by a frame does`, () => {
       const drawn = strike("panel", dir, kph, kg, true);
       const sim = strike("panel", dir, kph, kg, true, false);

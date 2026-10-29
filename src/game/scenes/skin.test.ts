@@ -284,7 +284,7 @@ function crushedCar(mode: DeformMode): { car: DeformableCar; d: Internals } {
 }
 
 forModes("given a car crushed by a 64 km/h full-width wall hit with its front-left hub popped", (mode) => {
-  it("when the production skinner and the slow reference skinner kept in this file both skin it, then body skin, cage corners and the bonnet and boot panels agree within 1e-5 m", () => {
+  it("when it is skinned by the shipped code and by an independent slow reference kept in this file, then the body skin, cage corners and bonnet and boot panels agree within 1e-5 m", () => {
     const { car, d } = crushedCar(mode);
     expect(d.wrinkleAmp * Math.min(1, d.elapsed * 6), "the wrinkle pass must run").toBeGreaterThan(0.02);
     if (mode === "shape") {
@@ -433,7 +433,7 @@ describe("given a car shot on its right side at 40 km/h by a piston, its cell pu
     expect(worst, `${at} stands ${worst.toFixed(3)} m from where the skin last saw it`).toBeLessThanOrEqual(SEATED_SKIN_SLACK);
   });
 
-  it("when its shape rest is rebased after a bake and before the mesh is written, then the mesh is the bake's", () => {
+  it("when its rest shape is re-based after its skin was last built and before it is drawn, then the drawn skin does not move", () => {
     const car = makeCar("shape");
     firePiston(car, "right", { ...TAP, speedKph: 40 });
     const geo = car.body.geometry;

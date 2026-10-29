@@ -191,10 +191,10 @@ describe("given the tyre stack texture's finish", () => {
   const BLOCK_EDGE_RATIO = 1.6;
   const LEAST_BLOCK_EDGES = 40;
   const TREAD_RING_AT_ANGLE_ZERO = [
-    [59, 32],
-    [123, 32],
-    [91, 96],
-    [27, 96],
+    { column: 59, row: 32 },
+    { column: 123, row: 32 },
+    { column: 91, row: 96 },
+    { column: 27, row: 96 },
   ] as const;
   const LEAST_GREY_SPREAD = 10;
 
@@ -222,7 +222,7 @@ describe("given the tyre stack texture's finish", () => {
 
   it("when four tyres of the tile are read at the same point of their tread, then their greys differ by 10 levels or more", () => {
     const texture = textureOf("tyre");
-    const greys = TREAD_RING_AT_ANGLE_ZERO.map(([column, row]) => luminanceAt(texture, column, row));
+    const greys = TREAD_RING_AT_ANGLE_ZERO.map(({ column, row }) => luminanceAt(texture, column, row));
     expect(Math.max(...greys) - Math.min(...greys), "spread of the four greys (levels)").toBeGreaterThanOrEqual(LEAST_GREY_SPREAD);
   });
 
@@ -308,7 +308,7 @@ describe("given the barrier texture", () => {
   const BELOW_SHOULDER_ROW = 76;
   const SEAM_COLUMN = 0;
   const PANEL_COLUMN = 64;
-  it("when the base, the shoulder and the seam meet the body, then the base is darker, the shoulder lighter, the seam darker", () => {
+  it("when the base row meets the body row, the shoulder row meets the row below it and the seam column meets the panel's middle, then the base is darker, the shoulder lighter and the seam darker", () => {
     const texture = textureOf("barrier");
     expect(rowMean(texture, BASE_ROW), "base row mean under body row mean").toBeLessThan(rowMean(texture, BODY_ROW));
     expect(rowMean(texture, SHOULDER_ROW), "shoulder row mean over body row mean").toBeGreaterThan(rowMean(texture, BELOW_SHOULDER_ROW));

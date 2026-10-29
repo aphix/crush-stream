@@ -89,7 +89,7 @@ function crossing(lip: LipThrow, car: DeformableCar, mode: LipMode, localXs: rea
 describe("given a car whose centre crosses the lip plane going forward at speed v", () => {
   for (const mode of LIP_MODES) {
     for (const speed of CROSSING_SPEEDS) {
-      it(`when it crosses the ${mode} lip at ${speed} m/s in one step, then the lip pushes it on, one windshield ejection launches the driver at the pushed car's velocity plus the usual pop (out along its nose, then up) and the car keeps LIP_CAR_SPEED_KEEP of its speed`, () => {
+      it(`when it crosses the ${mode} lip at ${speed} m/s in one step, then the lip pushes it on, one windshield ejection launches the driver at the pushed car's velocity plus the usual pop (out along its nose, then up) and the car keeps the chosen share of its speed`, () => {
         const car = carMovingAtLip(mode, speed);
         const { lip, watch } = lipThrowFor(mode, car);
         const step = speed * FRAME;
@@ -420,7 +420,7 @@ describe("given each car type driven up each station's ramp under the real lip t
       }
     });
 
-    it(`when each lands driverless on the ${mode}, then the table of keeps shows the chosen LIP_CAR_SPEED_KEEP is the largest candidate that clears the bars for every type at both speeds, and no cut fails them`, (t) => {
+    it(`when each lands driverless on the ${mode}, then the table of kept speed shares shows the chosen share is the largest candidate that clears the bars for every type at both speeds, and no cut fails them`, (t) => {
       const cases = measures(mode);
       const lines = [`${mode}: the driverless car's landing x (m from the lip) by keep ${[...CANDIDATE_KEEPS, NO_CUT_KEEP].join(" ")} (the last: no cut), then the bar and the lip speed`];
       const clearsAll = new Map<number, boolean>();
@@ -446,7 +446,7 @@ describe("given each car type driven up each station's ramp under the real lip t
     });
   }
 
-  it("when the keeps that clear every bar on each station are read together, then LIP_CAR_SPEED_KEEP is the largest candidate clearing both", () => {
+  it("when the shares that clear every bar on each station are read together, then the chosen kept share of speed is the largest candidate clearing both", () => {
     const both = CANDIDATE_KEEPS.filter((keep) => LIP_MODES.every((mode) => keepsClearing.get(mode)!.has(keep)));
     expect(LIP_CAR_SPEED_KEEP, `candidates clearing both stations: ${both.join(", ")}`).toBe(Math.max(...both));
   });
