@@ -804,7 +804,7 @@ export abstract class EngineScenes extends EngineMinigames {
     this.rigs.syncSlab(this.barrierUp ? this.barrier : null);
     this.rigs.syncPoles(this.poles, this.rigKnocked);
     this.rigs.syncBalls(this.balls, this.ballsUp);
-    // The press steps its own plates (`stepCompactor`); every other scene has none, or they stay where the press left them, unseen.
+    // Outside the press its plates are out of play; `stepCompactor` places them while the press runs.
     if (!this.showCompactor) this.rigs.syncPlates(NaN, 0);
   }
 
