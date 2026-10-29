@@ -6,6 +6,7 @@ import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { decodeShare } from "../hud/share-url.ts";
 
 const FRAME = 1 / FRAME_HZ;
 
@@ -78,5 +79,24 @@ describe("given the real engine on Fleet's default settings, every car driving s
     expect(cars[0]!.crashed && cars[1]!.crashed, "the two cars crashed").toBeTruthy();
     for (let frame = 0; frame < 3 * 60; frame++) engine.advance(FRAME, { frameDt: FRAME });
     for (const [k, car] of cars.entries()) expect(car.velocity.length(), `car ${k} still moves at ${car.velocity.length().toFixed(2)} m/s 3 s after the crash`).toBeLessThan(0.5);
+  });
+
+  it("when the press scene has been visited and Fleet is picked again, then one car driven through the centre at 24 m/s meets nothing and stays whole", () => {
+    engine.fadeScenes = false;
+    engine["applyShare"](decodeShare("#scene=press&cars=1"), false);
+    engine.advance(FRAME, { frameDt: FRAME });
+    const opened = engine["compactor"].face;
+    for (let frame = 0; frame < 2 * 60; frame++) engine.advance(FRAME, { frameDt: FRAME });
+    expect(engine["compactor"].face, "the press's plates closed in from where they opened").toBeLessThan(opened);
+    engine["applyShare"](decodeShare("#cars=1"), false);
+    engine["looping"] = false;
+    const car = engine["live"]()[0]!;
+    car.spawnFacing(5.25, 9.09, -2.618, 0);
+    car.velocity.set(-12.01, 0, -20.81);
+    car.speed = 24.03;
+    car.spawnSpeed = car.speed;
+    for (let frame = 0; frame < 60; frame++) engine.advance(FRAME, { frameDt: FRAME });
+    expect(car.crashed, "the car crashed in the middle of an empty disc").toBe(false);
+    expect(car.velocity.length(), "speed after crossing the centre").toBeGreaterThan(23);
   });
 });
