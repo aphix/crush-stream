@@ -6,6 +6,11 @@ import type { DeformMode } from "../deform/deform-rig.ts";
 import type { StreamedDeformation } from "../deform/streamed-deform.ts";
 import { forModes } from "../vehicle/test-support.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import * as THREE from "three";
+import { DeformableCar } from "../vehicle/car.ts";
+import { CAR_STYLE_IDS, type CarStyleId } from "../vehicle/car-variants.ts";
+import { assignClass, STYLE_CLASS } from "../vehicle/vehicle-classes.ts";
+import { paint } from "../vehicle/test-support.ts";
 
 function travelOf(d: StreamedDeformation, name: string): number {
   const m = d.masses.find((n) => n.name === name);
@@ -176,15 +181,12 @@ forModes("given a parked car in the compactor press, as the plates go past the w
     expect(leftoverCrumple(r.d.crumpleTravel()), "still a full crumple zone at max").toBeLessThan(0.55);
   });
 
-  it("when the plates close to the maximum, then the car is flattened like a pancake and not launched: it stays under 0.25 m off the ground and the hubs stay within a height band", () => {
+  it("when the plates close to the maximum, then the car is flattened like a pancake and not launched: it stays under 0.25 m off the ground and every wheel the plates passed has been torn off", () => {
     const r = pressRig(mode);
     r.runTo(r.faces.maxFace);
     expect(r.maxGroupY, `group lofted to ${r.maxGroupY.toFixed(3)}`).toBeLessThan(0.25);
     expect(r.group.position.y).toBeLessThan(0.22);
-    const hubY = r.d.masses.filter((m) => m.name.startsWith("hub")).map((m) => m.world.y);
-    const hubCap = mode === "shape" ? 0.9 : 0.7;
-    const hubMin = mode === "shape" ? 0.12 : 0.2;
-    expect(hubY.every((y) => y < hubCap && y > hubMin), `hubs ${hubY}`).toBeTruthy();
+    for (const m of r.d.masses) if (m.hub) expect(m.popped, `${m.name} still on with the plates at ${r.face.toFixed(2)} m, past its hub at ${Math.abs(m.rest.z).toFixed(2)} m`).toBe(true);
   });
 
   it("when the plates close to the maximum rather than only to the wheel wells, then the cabin has crushed at least 1.4 times as far and the plates are over 0.5 m closer", () => {
@@ -408,6 +410,57 @@ describe("given a shape-deform-mode car at squash setting 0.32 and at 0.4, press
         }
       }
       expect(drop, `squash ${squash}: ${worst} during the hold`).toBeLessThanOrEqual(0.08 + HOLD_SLACK);
+    }
+  });
+});
+
+/** Every body style as its class dresses it (a monster on its big wheels), parked in the press. */
+function styledPress(id: CarStyleId): Rig {
+  const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
+  assignClass(car, STYLE_CLASS[id]);
+  car.spawnFacing(0, 0, 0, 0);
+  return new Rig(car);
+}
+
+const HUB_NAMES = ["hubFL", "hubFR", "hubRL", "hubRR"] as const;
+/** How far (m) a drawn tyre may stand inside a plate: a slice's plate travel and the contact's skin. */
+const TYRE_IN_PLATE = 0.03;
+
+/** How far (m) a drawn tyre still on the car stands inside a plate: the wheel's place along the car plus its drawn radius, past the face. */
+const _wheelAt = new THREE.Vector3();
+function deepestTyre(r: Rig): number {
+  const car = r.car!;
+  let deepest = -Infinity;
+  for (const [i, w] of car.wheels.entries()) {
+    if (car.deform.masses.find((m) => m.name === HUB_NAMES[i])!.popped) continue;
+    w.getWorldPosition(_wheelAt);
+    deepest = Math.max(deepest, Math.abs(_wheelAt.z) + car.frame.rig.tyre.r * w.scale.x - r.face);
+  }
+  return deepest;
+}
+
+describe("given every body style parked in the compactor press, as its class dresses it", () => {
+  it("when the plates close to the maximum, then every wheel comes off as the plates carry it in, and no tyre still on the car stands inside a plate", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const r = styledPress(id);
+      let deepest = -Infinity;
+      for (let n = 0; r.face > r.faces.maxFace + 1e-4 && n < 2400; n++) {
+        r.step(1 / FRAME_HZ, r.faces.maxFace);
+        r.car!.afterContacts(1 / FRAME_HZ);
+        r.car!.stepBreakage(1 / FRAME_HZ);
+        r.car!.updateSkin();
+        deepest = Math.max(deepest, deepestTyre(r));
+      }
+      expect(deepest, `${id}: a tyre still on the car stood ${deepest.toFixed(3)} m inside a plate`).toBeLessThanOrEqual(TYRE_IN_PLATE);
+      for (const name of HUB_NAMES) expect(r.d.masses.find((m) => m.name === name)!.popped, `${id}: ${name} still on at the maximum`).toBe(true);
+    }
+  });
+
+  it("when the plates stop at the wheel wells, then every wheel stays on", () => {
+    for (const id of CAR_STYLE_IDS) {
+      const r = styledPress(id);
+      r.runTo(r.faces.wellFace);
+      for (const name of HUB_NAMES) expect(r.d.masses.find((m) => m.name === name)!.popped, `${id}: ${name} came off with the plates at the wells`).toBe(false);
     }
   });
 });

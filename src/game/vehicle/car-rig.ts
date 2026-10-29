@@ -257,6 +257,7 @@ function rigOf(style: BodyStyle, w: Warp, wheels: readonly V3[]): RigTables {
     noseReach: style.pushBar ? PUSH_BAR_REACH : 0,
     packGap: P.packGap + (named(masses, "bumperFL").rest[2] - named(P.masses, "bumperFL").rest[2]) - (named(masses, "engineL").rest[2] - named(P.masses, "engineL").rest[2]),
     hubHoldMps: CLASSES[STYLE_CLASS[style.id]].hubHoldMps,
+    wheelScale: CLASSES[STYLE_CLASS[style.id]].wheelScale,
   };
 }
 

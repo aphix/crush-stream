@@ -142,7 +142,11 @@ the struck car takes). The scene props only move their box; the car meets it thr
   squeeze sets `deepCrush`; both clear as soon as either end stops being struck. The press and
   front/rear pistons report ends; the press no longer sets either flag by fiat.
   `projectOutOfBox` holds planted hubs too once `deepCrush` is on (the plates no longer pass
-  through the wheels).
+  through the wheels). Wheel loss is one law under any crush (REPLAY 167): a face meets the drawn
+  tyre (`RigTables.wheelScale`, the monster's 1.73) and shoves its hub; a hub carried a stock tyre's
+  diameter off its seat comes off, by a face's shove or, in a deep crush, with the yielding cage.
+  The press, a car sandwich and a wall take wheels by the same rules; a still-attached wheel is drawn
+  on its hub's place (`DeformState.hubTravel`), so it is never drawn inside the face pushing it.
 
 ### After (this branch)
 

@@ -134,19 +134,21 @@ export abstract class DeformState extends DeformHit {
 
   /**
    * A rigid face moved planted hub `m` by (dx, dz) in world: keep it as the hub's shove (car frame), the
-   * pin clampLocal holds it at. Without detachable wheels the shove stops at a wheel diameter.
+   * pin clampLocal holds it at. Without detachable wheels the shove stops at a wheel diameter (the stock tyre's: the hub hardware's travel).
    */
   shoveHub(m: MassNode, dx: number, dz: number): void {
     this.thaw();
     const gc = detCos(this.prevYaw);
     const gs = detSin(this.prevYaw);
-    m.shoveX += dx * gc - dz * gs;
-    m.shoveZ += dx * gs + dz * gc;
+    const px = dx * gc - dz * gs;
+    const pz = dx * gs + dz * gc;
+    const r = this.rig.tyre.r;
+    m.shoveX += px;
+    m.shoveZ += pz;
     const len = hypot2(m.shoveX, m.shoveZ);
-    const diameter = 2 * this.rig.tyre.r;
-    if (!this.wheelsDetach && len > diameter) {
-      m.shoveX *= diameter / len;
-      m.shoveZ *= diameter / len;
+    if (!this.wheelsDetach && len > 2 * r) {
+      m.shoveX *= (2 * r) / len;
+      m.shoveZ *= (2 * r) / len;
     }
   }
 
@@ -158,6 +160,16 @@ export abstract class DeformState extends DeformHit {
 
   massLocal(name: MassName): THREE.Vector3 {
     return this.massByName(name).local;
+  }
+
+  /**
+   * Hub `name`'s travel off its rest seat along the car (m, car frame) into `out[at]` (x) and `out[at + 1]` (z): its face shove
+   * (`shoveHub`), or in a deep crush (hubs unpinned, riding the yielding cage) where its mass has gone. Where a wreck's drawn wheel stands.
+   */
+  hubTravel(name: MassName, out: Float64Array, at: number): void {
+    const m = this.massByName(name);
+    out[at] = this.deepCrush ? m.local.x - m.rest.x : m.shoveX;
+    out[at + 1] = this.deepCrush ? m.local.z - m.rest.z : m.shoveZ;
   }
 
   massRest(name: MassName): THREE.Vector3 {

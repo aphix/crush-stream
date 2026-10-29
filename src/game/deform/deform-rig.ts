@@ -35,7 +35,7 @@ export type DeformMode = "shape" | "lattice";
  *  same threshold stays driveable from the rear well past 80 km/h. */
 export const ENGINE_KILL_TRAVEL = 0.15;
 /** A corner crushed to within this of its hub (m) takes the wheel on any real hit, however wide and from whichever end: the
- *  bumper has overrun the tyre (`clampMass`, `hubReach`). Not a press: the compactor's plates ride the hubs back at under 1 m/s. */
+ *  bumper has overrun the tyre (`clampMass`, `hubReach`). A face too slow for a hit (the press's plates) takes it by its shove (`shoveHub`). */
 export const HUB_OVERRUN = 0.12;
 /** Sim time (s) a driven wreck's steer turn stays in its reported spin after `applyDrive` set it (`keptSpin`). */
 const DRIVE_TURN_HOLD = 1 / 30;
@@ -68,6 +68,8 @@ export interface RigTables {
   readonly packGap: number;
   /** The hit speed (m/s EBS) under which no hit takes a wheel off, whatever the crush: 0 on the platform (the gates of `clampMass` stand alone), more where the hub hardware is built for heavier wheels. */
   readonly hubHoldMps: number;
+  /** The drawn wheels' scale on `tyre` (the class's `wheelScale`): a face meets the drawn tyre (`faceHits`), not the stock one under it. */
+  readonly wheelScale: number;
 }
 /** Platform bonnet top (m): where the top band starts following the roof's crush. */
 const PLATFORM_BONNET_TOP = CAGES.find((cage) => cage.name === "bonnet")!.max[1];
@@ -95,6 +97,7 @@ export const PLATFORM_RIG: RigTables = {
   noseReach: 0,
   packGap: 0.54,
   hubHoldMps: 0,
+  wheelScale: 1,
 };
 /** Depth (m) inside the chassisCell span's front/rear face over which non-cell skin weight blends back in. */
 const CELL_FACE_BLEND = 0.3;

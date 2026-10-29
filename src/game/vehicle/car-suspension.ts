@@ -139,6 +139,8 @@ export class Suspension {
    * edge, a crest, a twist the frame's one plane can't take), within its spring's stops of the body.
    */
   readonly seat = new Float64Array(4);
+  /** A wreck's hub travel off the rest seats along the car (x, z per wheel, `frame.wheels` order; `DeformState.hubTravel`), written by the car before `step`: its drawn wheels are seated there. */
+  readonly hubPlace = new Float64Array(8);
   /** The ground pose's load transfer (squat, dive, roll): the springs' resting offsets while it lasts. */
   private readonly load: LoadTransfer;
   private readonly target = new Float64Array(4);
@@ -219,7 +221,7 @@ export class Suspension {
     const off = this.offset;
     const sunk = this.rise > 0 || off[0]! < 0 || off[1]! < 0 || off[2]! < 0 || off[3]! < 0;
     const bottom = wreck || (air && !sunk) ? 0 : this.bottomOut(e, lift);
-    if (this.seatWheels(e, hit, wheels, stop, room, air, gone, unheld, dt, invertedHang(cls, e[5]!) - (CLASSES[cls].lift - lift)) || moved || bottom !== this.rise || lift !== this.posedLift) {
+    if (this.seatWheels(e, hit, wheels, stop, room, air, gone, unheld, dt, invertedHang(cls, e[5]!) - (CLASSES[cls].lift - lift), wreck) || moved || bottom !== this.rise || lift !== this.posedLift) {
       this.rise = bottom;
       this.pose(lift);
     }
@@ -249,9 +251,9 @@ export class Suspension {
    * A wheel hangs down to its droop (`stop`, half the travel) below its rest ride on the physics frame, as far as the physics tyre
    * reaches; up into its arch it stops `room` (`archStop`) above the body's ride there and lifts
    * that corner of the body beyond. A wheel in `gone` is a world object of its own (`stepLoose`): not seated. One in `unheld` eases back onto its
-   * hub, as off the ground. True when it lifted one.
+   * hub, as off the ground. A `wreck`'s wheel stands where its hub is along the car (`followHubs` put it there this slice): a face's shove carries it. True when it lifted one.
    */
-  private seatWheels(e: readonly number[], hit: Float64Array, wheels: readonly THREE.Object3D[], stop: number, room: number, air: boolean, gone: number, unheld: number, dt: number, shift: number): boolean {
+  private seatWheels(e: readonly number[], hit: Float64Array, wheels: readonly THREE.Object3D[], stop: number, room: number, air: boolean, gone: number, unheld: number, dt: number, shift: number, wreck: boolean): boolean {
     const uy = e[5]!;
     let lifted = false;
     for (let i = 0; i < 4; i++) {
@@ -271,7 +273,9 @@ export class Suspension {
       }
       // Along the world's vertical (the body's up leans a rolled wheel's hub sideways: over a ramp's edge it stood on the wrong side of it).
       const hub = this.frame.wheels[i]!;
-      w.position.set(hub[0] + s * e[1]!, hub[1] + s * uy + shift, hub[2] + s * e[9]!);
+      const hx = hub[0] + (wreck ? this.hubPlace[i * 2]! : 0);
+      const hz = hub[2] + (wreck ? this.hubPlace[i * 2 + 1]! : 0);
+      w.position.set(hx + s * e[1]!, hub[1] + s * uy + shift, hz + s * e[9]!);
       this.seat[i] = s;
     }
     return lifted;

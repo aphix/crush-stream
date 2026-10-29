@@ -578,7 +578,8 @@ export abstract class DeformContact extends DeformState {
     // which the slab clip reads) in step with the projected world positions.
     const gc = detCos(this.prevYaw);
     const gs = detSin(this.prevYaw);
-    const tyre = this.rig.tyre;
+    const tyreR = this.rig.tyre.r * this.rig.wheelScale;
+    const tyreHalfW = this.rig.tyre.halfW * this.rig.wheelScale;
     let n = 0;
     this.faceContacts = 0;
     for (let mi = 0; mi < this.masses.length; mi++) {
@@ -588,15 +589,15 @@ export abstract class DeformContact extends DeformState {
       // centres (`deepCrush`) meets the tyres.
       if (!m.dynamic || (planted && !this.bidirectional && !this.deepCrush)) continue;
       // A mass whose bottom stands within `STAND_SKIN` of the solid's top (or over it) is on the top, whatever its plan overlap with the box.
-      if (m.world.y - (planted ? tyre.r : m.radius * 0.5) >= topY - STAND_SKIN) continue;
+      if (m.world.y - (planted ? tyreR : m.radius * 0.5) >= topY - STAND_SKIN) continue;
       const ox = m.world.x - cx;
       const oz = m.world.z - cz;
       let r = m.radius * 0.5 + (m.bumper && m.rest.z > 0 ? this.rig.noseReach : 0);
       let rEnd = r;
       if (planted) {
         // The face meets the tyre: its tread (radius) along the car, its sidewall across it.
-        r = hypot2(tyre.halfW * (rx * gc - rz * gs), tyre.r * (rx * gs + rz * gc));
-        rEnd = hypot2(tyre.halfW * (fx * gc - fz * gs), tyre.r * (fx * gs + fz * gc));
+        r = hypot2(tyreHalfW * (rx * gc - rz * gs), tyreR * (rx * gs + rz * gc));
+        rEnd = hypot2(tyreHalfW * (fx * gc - fz * gs), tyreR * (fx * gs + fz * gc));
       }
       const lz = ox * fx + oz * fz;
       const penX = hx + r - (ox * rx + oz * rz) * side;
@@ -631,7 +632,7 @@ export abstract class DeformContact extends DeformState {
     m.world.z += dz;
     m.local.x += dx * gc - dz * gs;
     m.local.z += dx * gs + dz * gc;
-    if (m.hub && !m.popped && !this.deepCrush) this.shoveHub(m, dx, dz);
+    if (m.hub && !m.popped) this.shoveHub(m, dx, dz);
   }
 
   /**

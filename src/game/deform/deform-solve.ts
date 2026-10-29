@@ -297,7 +297,7 @@ export abstract class DeformSolve extends DeformFreeze {
       dz = along * iz + pz + bz;
     }
     if ((m.name === "engineL" || m.name === "engineR") && !squeeze && !sideHit && iz < 0) dz = this.engineMountDz(m, dz, bz, stroke);
-    if (m.hub && !deep) {
+    if (m.hub) {
       if (!m.popped && this.hitSpeed >= HUB_OVERRUN_MPS && this.hitSpeed >= this.rig.hubHoldMps) {
         const front = m.rest.z > 0;
         const corner = front ? (m.rest.x < 0 ? this.at.bumperFL : this.at.bumperFR) : m.rest.x < 0 ? this.at.bumperRL : this.at.bumperRR;
@@ -307,8 +307,10 @@ export abstract class DeformSolve extends DeformFreeze {
         const c4 = !sideHit && front === iz < 0 && this.hitSpeed >= HUB_POP_MPS && Math.abs(this.impactLocal.x) >= 0.2 && cw > 0.6 && crushed >= reach - this.rig.tyreReach;
         if (c4 || (front ? corner.rest.z - corner.local.z : corner.local.z - corner.rest.z) >= reach - HUB_OVERRUN) this.popHub(m);
       }
-      if (!m.popped && hypot2(m.shoveX, m.shoveZ) > 2 * this.rig.tyre.r) this.popHub(m);
-      if (!m.popped) {
+      // Past a wheel's diameter off its seat it goes (the stock tyre's: the hub hardware's travel, whatever wheel a class bolts on): a face's
+      // shove, or in a deep crush (the cage yielding, its hubs carried with it) the hub's own travel.
+      if (!m.popped && (deep ? hypot2(dx, dz) : hypot2(m.shoveX, m.shoveZ)) > 2 * this.rig.tyre.r) this.popHub(m);
+      if (!m.popped && !deep) {
         dx = m.shoveX;
         dz = m.shoveZ;
       }
