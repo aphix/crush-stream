@@ -137,10 +137,18 @@ the struck car takes). The scene props only move their box; the car meets it thr
   plane projection `enforceWalls`, the box-mesh `CompactorRig` and the fixed 18 m/s
   `beginCrush` are gone), piston heads (`PistonRig.contact`), the Doors ram (dents the body only
   if a lane reaches the skin; the stock lanes do not).
-- **`DeformableCar.noteContactEnd(end, reach)`**: the squeeze rule. Both ends struck within
+- **`DeformableCar.noteContactEnd(end, reach)`**: the squeeze rule, one for every delivery. Both ends struck within
   0.25 s set `bidirectional`; a striker face inboard of the wheel centres (|z| < 1.34 m) during a
-  squeeze sets `deepCrush`; both clear as soon as either end stops being struck. The press and
-  front/rear pistons report ends; the press no longer sets either flag by fiat.
+  squeeze sets `deepCrush`; both clear after 0.25 s without a strike on either end. The press, the
+  front/rear pistons and the car-car pair (`resolveCarPair`, `reportEnd`: a contact whose normal runs
+  within `END_FACE_COS` of a car's length, closing above `ARM_CLOSING`) report ends, so a car in a
+  sandwich of two cars is squeezed exactly as in the press; a flank hit reports no end. The squeeze's
+  cabin fold (`foldCabin`) once aimed at the world origin, which only a parked press car stands at (a free
+  squeezed car's cabin was dragged toward (0, 0): a 0.26 m jump in a slice at 14 m out); it now folds the
+  cell and roof down to heights above the ground under them (the press's flat pad: unchanged) and the cell
+  toward the car's middle in the masses' own body frame. Aimed in the group's frame instead, the seat of the
+  group on the cell pulled the cell back to its rest every slice and the fold pushed a pressed pickup 37 mm
+  into a plate; with the seat held off in a deep squeeze, the pressed cabin settled 83 mm more in the hold.
   `projectOutOfBox` holds planted hubs too once `deepCrush` is on (the plates no longer pass
   through the wheels). Wheel loss is one law under any crush (REPLAY 167): a face meets the drawn
   tyre (`RigTables.wheelScale`, the monster's 1.73) and shoves its hub; a hub carried a stock tyre's
@@ -186,14 +194,17 @@ the particle-level split under "Open" below.
 
 ### Open
 
-- **Car-car squeeze.** Car-car does not report struck ends, so a car sandwiched by two others
-  crushes its first-struck end and barely the other (nose 176 / tail 27 mm at 40 km/h). Turning
-  the squeeze rule on for car-car was measured: with `followGroup`'s origin pin
-  (`streamed-deform.ts:1429`, a `bidirectional` car is held at the world origin) derby wrecks
-  teleport 10 m in one slice; without the pin a 16-car pile-up keeps turning (0.51 rad in 2 s) and
-  the middle car crushes a fifth of the strikers. The `bidirectional` deform rules (origin pin,
-  no planting, re-arm refused) assume the press; they need to work for a free car before car-car
-  can share the rule (CrashRealism5's `followGroup` / plant code).
+- **Car-car squeeze.** The pair reports struck ends (above): at 20 km/h the sandwich's middle car
+  crushes nose 120 / tail 38 mm (before: 179 / 0) against the press's 119 / 48 at the same 158-166 mm
+  shortening, and the row's mismatches fall from 8 particles to 4 (engine block 23 / 10 mm, tank 53 / 31,
+  rear axle 54 / 34: the sandwich crushes the interior about twice the press). The interior excess does
+  not move with the pair's feed (× 0.5, 0.25, 0 measured) or the plate's speed (0.55 to 5.56 m/s), nor
+  with the strikers' hardness (squash 0, 0.1, 0.2 take the mismatch to 4, 2, 4 particles, and move it
+  between the bumpers and the interior: no value closes it). What is left is the pair's exchange (the
+  impulse at the patch, `takeRow`/`shiftBody` spread over every driving mass) against the plate's hold
+  on the face (`holdOnFace`), not isolated by an experiment; the rigs adopting the pair's law is the way
+  to close it. A 16-car derby pile squeezes 2-4 cars at once with no step past the zip bound
+  (3·v·h + 5 cm) in five seeds.
 - **Particle-level contact.** Car-car meets through the pair kernel (`collideWith`'s sphere contact is gone) plus `feedOverlap`; rigs meet through the slab (`projectOutOfBox`). Feeding the
   face overlap through `feedOverlap` in `bodyContact` was tried and moved the piston further from
   car-car (rails 29→32, wings 47→49 mm) and broke the piston wing grading, so it was dropped. The

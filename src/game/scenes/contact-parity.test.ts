@@ -46,7 +46,7 @@ describe("given the Doors ram lane's three scenes (mirror: the striker grazes a 
 });
 
 describe("given two cars driving into the nose and tail of a middle car, and a press closed to the same shortening", () => {
-  todoRow("when each car hits at 20 km/h, then the middle car's parts and crush match the press's", "after the plan: close the sandwich's car-car crush to the press's at the same shortening; at 20 km/h the car crushes less than the press (car / press mm: engineL 18 / 37, engineR 18 / 37, railL 13 / 25, railR 13 / 25, tank 17 / 36, axleR 20 / 40, bumperRL 22 / 65, bumperRR 22 / 65, wingFL 17 / 28, wingFR 17 / 28)", () => {
+  todoRow("when each car hits at 20 km/h, then the middle car's parts and crush match the press's", "after the plan: the sandwich's interior crush must follow the press's at the same shortening; with the pair reporting struck ends (squeeze) the ends agree (nose 120 / 119 mm, tail 38 / 48) but the sandwich crushes the interior about twice the press (car / press mm: engineL 23 / 10, engineR 23 / 10, tank 53 / 31, axleR 54 / 34); the pair's feed, the plate's speed and the strikers' hardness do not move it, what is left is the pair's exchange against the plate's hold on the face", () => {
     const s = carSandwich(20);
     const press = pressUntil((p) => shortening(p.car!) * 1000 >= s.a.shortenMm).state;
     sameParts(s.a, press, "sandwich");
@@ -56,7 +56,7 @@ describe("given two cars driving into the nose and tail of a middle car, and a p
 
 describe("given two cars driving into the nose and tail of a middle car, and a press whose plates are pushed by the same force over time as the two cars pushed (not closed to a shortening)", () => {
   for (const kph of [10, 20, 30, 40, 60]) {
-    todoRow(`when each car hits at ${kph} km/h, then the middle car's parts and crush match the force-driven press's`, "after the plan: give the force-driven press a crush force independent of the first slice's arming speed, or the sandwich the same law; the press tears no part the sandwich spares, but at 10 km/h it crushes the middle car's particles 0.39-1.66 m where the sandwich's travel 0-39 mm, and from 20 km/h it also kills the drivetrain the sandwich leaves alive (5 of 5 speeds red)", () => {
+    todoRow(`when each car hits at ${kph} km/h, then the middle car's parts and crush match the force-driven press's`, "after the plan: give the force-driven press a crush force independent of the first slice's arming speed, or the sandwich the same law; the press tears no part the sandwich spares, but at 10 km/h it crushes the middle car's particles 0.39-1.66 m where the sandwich's largest travel is 6 mm (the press ploughs through at every speed: 1.58-1.72 m against the sandwich's 6-198 mm over 10-60 km/h), and it also kills the drivetrain the sandwich leaves alive (5 of 5 speeds red)", () => {
       const s = carSandwich(kph);
       const press = pressByForce(s.force).state;
       sameParts(s.a, press, `sandwich ${kph} km/h`);

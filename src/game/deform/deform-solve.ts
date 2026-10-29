@@ -678,41 +678,43 @@ export abstract class DeformSolve extends DeformFreeze {
     }
   }
 
-  /** Plates past the hubs: cabin must actually yield, not stay a rigid Müller cell. */
+  /**
+   * Plates past the hubs: cabin must actually yield, not stay a rigid Müller cell. The cell and the roof fold down to a height above the ground under them
+   * (the press's flat pad: the heights a parked car's frame stands at) and the cell toward the car's middle in the masses' own body frame
+   * (`syncShapeFromMasses`: the heading and centre the masses stand at), so a car squeezed anywhere, on a ramp too, folds as the press's does at the origin.
+   */
   private foldCabin(dt: number): void {
     const k = Math.min(1, dt * 3.6);
+    this.syncShapeFromMasses();
     for (let i = 0; i < this.masses.length; i++) {
       const m = this.masses[i]!;
-      const p = this.shapeParticles[i];
-      if (m.name === "cell") {
-        const ty = m.rest.y - 0.22;
-        const tz = m.rest.z * 0.25;
-        m.world.y += (ty - m.world.y) * k;
-        m.world.z += (tz - m.world.z) * k;
-        m.local.y += (ty - m.local.y) * k;
-        m.local.z += (tz - m.local.z) * k;
-        if (p) {
-          p.y = m.world.y;
-          p.z = m.world.z;
-        }
-      } else if (m.name === "roof") {
-        const ty = m.rest.y - 0.15;
-        m.world.y += (ty - m.world.y) * k;
-        m.local.y += (ty - m.local.y) * k;
-        if (p) p.y = m.world.y;
-      }
+      const p = this.shapeParticles[i]!;
+      const floor = this.floorPost[i]!;
+      if (m.name === "cell") this.stepInBodyFrame(m, p, Number.isFinite(floor) ? (floor + m.rest.y - 0.22 - m.world.y) * k : 0, (m.rest.z * 0.25 - p.z) * k);
+      else if (m.name === "roof") this.stepInBodyFrame(m, p, Number.isFinite(floor) ? (floor + m.rest.y - 0.15 - m.world.y) * k : 0, 0);
     }
   }
 
   private nudgeLatticeRails(dt: number): void {
     const k = Math.min(1, dt * 2.2);
-    for (const m of this.masses) {
-      if (!m.rail) continue;
-      if (m.local.distanceTo(m.rest) >= 0.22) continue;
-      const tz = m.rest.z * 0.68;
-      m.world.z += (tz - m.world.z) * k;
-      m.local.z += (tz - m.local.z) * k;
+    this.syncShapeFromMasses();
+    for (let i = 0; i < this.masses.length; i++) {
+      const m = this.masses[i]!;
+      if (!m.rail || m.local.distanceTo(m.rest) >= 0.22) continue;
+      const p = this.shapeParticles[i]!;
+      this.stepInBodyFrame(m, p, 0, (m.rest.z * 0.68 - p.z) * k);
     }
+  }
+
+  /** Moves mass `m` (and its shape particle `p`, which stands in the body frame) by `dy` up and `dz` along the car: the world position turned by the heading, the car-frame one by the same step. */
+  private stepInBodyFrame(m: MassNode, p: { y: number; z: number }, dy: number, dz: number): void {
+    p.y += dy;
+    p.z += dz;
+    m.local.y += dy;
+    m.local.z += dz;
+    m.world.y += dy;
+    m.world.x += this.bodySin * dz;
+    m.world.z += this.bodyCos * dz;
   }
 
   /** The contact window: shape matching runs and the wreck stays on its masses (a flying one too, `syncPose`). */

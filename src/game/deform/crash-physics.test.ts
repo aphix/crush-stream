@@ -879,6 +879,26 @@ forModes("given a car whose wheels stay on until a hard enough hit knocks them o
     expect(Math.abs(h.local.z - h.rest.z), "deepCrush pinned the hub anyway").toBeGreaterThan(0.04);
   });
 
+  it("when a deep-squeezed car 26 m from the world origin steps its structure for 0.5 s with nothing pushing it, then its cabin folds down in the car frame and stays within 6 cm of where it stood (the fold aims in the car frame, not at the world origin)", () => {
+    const d = new StreamedDeformation(dummyGeom());
+    d.mode = "shape";
+    const group = new THREE.Group();
+    group.position.set(22, 0, -14);
+    group.updateMatrixWorld();
+    const vel = new THREE.Vector3();
+    const omega = new THREE.Vector3();
+    d.beginCrush(new THREE.Vector3(22, 0.36, -14 + 2.06), new THREE.Vector3(0, 0, -1), 0, 0, group, vel, omega);
+    d.deepCrush = true;
+    d.bidirectional = true;
+    const cell = mass(d, "cell");
+    const start = cell.world.clone();
+    for (let i = 0; i < 0.5 / DT; i++) stepWreck({ d, group, vel, omega }, DT);
+    const folded = cell.rest.y - cell.local.y;
+    const moved = Math.hypot(cell.world.x - start.x, cell.world.z - start.z);
+    expect(folded, `the cell folded down ${(folded * 1000).toFixed(0)} mm in the car frame`).toBeGreaterThan(0.1);
+    expect(moved, `the cell moved ${(moved * 1000).toFixed(0)} mm over the ground`).toBeLessThanOrEqual(0.06);
+  });
+
   // A planted wreck's frame sits on the mean of its hubs, each held at its pin (`rest` + shove) in the car frame while its
   // world position stands wherever the world left it. A hub knocked 0.3 m off its axle stood 0.22 m off its pin in the
   // anchor's read; the hub then popping re-anchored the frame on the other three and jumped the whole wreck by the

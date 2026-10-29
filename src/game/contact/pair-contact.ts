@@ -193,6 +193,17 @@ function strokeLeftOn(car: DeformableCar, nx: number, nz: number): number {
   return onFace ? car.deform.hitStroke() * (1 - car.deform.strokeUsed()) : 0;
 }
 
+/** Cosine within which a contact's normal runs along a car's length: a struck end, as against a flank. */
+const END_FACE_COS = 0.7;
+
+/** Reports the end of `car` the contact presses on (`noteContactEnd`), as the press and the pistons do; `sx` is +1 for the car the normal points at and -1 for the other. */
+function reportEnd(car: DeformableCar, nx: number, nz: number, sx: 1 | -1, px: number, pz: number): void {
+  const dot = (nx * car.fwdFlat.x + nz * car.fwdFlat.z) * sx;
+  if (Math.abs(dot) <= END_FACE_COS) return;
+  const reach = Math.abs((px - car.group.position.x) * car.fwdFlat.x + (pz - car.group.position.z) * car.fwdFlat.z);
+  car.noteContactEnd(dot < 0 ? 1 : -1, reach);
+}
+
 /**
  * The closing speed (m/s) a face's crush feed is sized by (`feedOverlap`): while the pair closes faster than a graze and the face the hit struck has stroke left, its
  * hit's (`impulseValue`, the closing that armed it), not the slice's, which the exchange takes away as the structure yields. The force that crushes the face (`crushForce`)
@@ -595,6 +606,10 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   // Where the contact masses of both cars are driven to along the normal: the speed each car's contact point has once the plastic
   // exchange at the patch is done (the pair's common speed when the hit goes through both centres).
   faceSpeeds(carA, carB, n, _p);
+  if (closing > ARM_CLOSING) {
+    reportEnd(carA, n.x, n.z, 1, _p.x, _p.z);
+    reportEnd(carB, n.x, n.z, -1, _p.x, _p.z);
+  }
   // A wreck that had been quiet and refused the hit (a brush too soft to re-arm, `rearmHit`): its quiet clock is left running, so the
   // harder hit the same contact grows into (a car shoved on past it) still finds the wreck quiet and arms. Notified, it would be a
   // contact already on and never arm: the contact would stay as soft as its first slice.
