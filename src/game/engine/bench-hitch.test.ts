@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { scavengesDuring } from "../kernel/gc.test-util.ts";
 import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
 import { CAUSE, FRAME, HITCH, HitchLog } from "./bench-hitch.ts";
 
@@ -81,5 +82,22 @@ describe("given the hitch log called a million times", () => {
     );
     assert.ok(log.table().count > 50, "the control: hitches were stored and dropped during the run");
     assert.ok(bytesPerFrame <= BOUND_B, `${bytesPerFrame.toFixed(1)} B a frame, over ${BOUND_B} B`);
+  });
+
+  it("when frames are logged with hitches stored and dropped, then the engine's garbage collector never runs (a collection is a frozen frame)", async () => {
+    const log = new HitchLog();
+    feed(log, 500, { 300: 90 });
+    const calls = 1_000_000;
+    const logFrames = (count: number): void => {
+      for (let i = 0; i < count; i++) {
+        row[FRAME.interval] = i % 9973 === 0 ? 200 + (i % 7) : STEADY_MS;
+        row[FRAME.atS] = i * 0.006;
+        log.frame(row, 2, i & 7);
+      }
+    };
+    // The same loop first, so it runs optimised in the window: the interpreter boxes the loop's own doubles, garbage of the test's, not the log's.
+    logFrames(calls / 10);
+    const minor = await scavengesDuring(() => logFrames(calls));
+    assert.equal(minor, 0, `${minor} minor collections in ${calls} frames`);
   });
 });

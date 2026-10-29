@@ -1,6 +1,7 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
+import { scavengesDuring } from "../kernel/gc.test-util.ts";
 import * as THREE from "three";
 import { FRAME_HZ, GRAVITY, KPH_PER_MS } from "../kernel/constants.ts";
 import { FountainSystem, JET_FADE_S, JET_RATE, JET_SLOTS, JET_UP_MAX } from "../present/fountain-system.ts";
@@ -175,6 +176,14 @@ describe("given a fountain jet", () => {
     const frames = Math.round(ALLOC_SECONDS / STEP);
     const bytesPerFrame = untilQuiet(() => allocatedBytes(() => run(sys, ALLOC_SECONDS)) / frames, BOUND_B);
     assert.ok(bytesPerFrame <= BOUND_B, `${bytesPerFrame.toFixed(1)} B a frame over ${frames} frames of eight running jets, over ${BOUND_B} B`);
+  });
+
+  it("when eight jets run at 60 Hz, then no minor collection runs (a collection is a frozen frame)", async () => {
+    const sys = pool();
+    for (let k = 0; k < 8; k++) sys.jet(k * 4, 0, 0, 0, 1000, k < 2 ? LINE_POWER : 1);
+    run(sys, 120);
+    const minor = await scavengesDuring(() => run(sys, ALLOC_SECONDS));
+    assert.equal(minor, 0, `a minor collection ran inside ${Math.round(ALLOC_SECONDS / STEP)} frames of eight running jets`);
   });
 });
 

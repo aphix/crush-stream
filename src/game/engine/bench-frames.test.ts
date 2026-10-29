@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
+import { scavengesDuring } from "../kernel/gc.test-util.ts";
 import { analyzeFrames, BUCKET_MS, FRAME_COLUMNS, FrameRecord, SERIES_COLUMNS, SPIKE_CAP, type FrameSources } from "./bench-frames.ts";
 import { FRAME } from "./bench-hitch.ts";
 import { PHASE, PHASE_COUNT, WORK, WORK_COUNT } from "./sim-phases.ts";
@@ -12,6 +13,8 @@ const BOUND_B = 16;
 /** A block of frames the recorder, the rig and the profiler are warm on, and the blocks one allocation read spans. */
 const BLOCK_FRAMES = 10_000;
 const READ_BLOCKS = 100;
+/** Blocks the zero-collection row runs before its window, so the watched loop is already optimised. */
+const WARM_BLOCKS = 10;
 
 /** A bench whose frames a test writes: the frame row, the pacer, the phase clock and counters, the ragdoll posts, the wrecks. */
 function source(): { from: FrameSources; row: Float64Array; work: Float64Array; ms: Float64Array; traffic: { messages: number }; pace: { steps: number }; wrecks: { n: number } } {
@@ -76,6 +79,26 @@ describe("given the frames of a window recorded as the bench runs them", () => {
       BOUND_B,
     );
     assert.ok(bytesPerFrame <= BOUND_B, `${bytesPerFrame.toFixed(1)} B a recorded frame, over ${BOUND_B} B`);
+  });
+
+  it("when a million frames are recorded, then the garbage collector never runs (a collection is a frozen frame)", async () => {
+    const s = source();
+    const rec = new FrameRecord(BLOCK_FRAMES, s.from);
+    const record = (blocks: number): void => {
+      for (let block = 0; block < blocks; block++) {
+        rec.begin();
+        for (let i = 0; i < BLOCK_FRAMES; i++) {
+          s.row[FRAME.interval] = 10 + (i % 7);
+          s.work[WORK.pairContacts] = s.work[WORK.pairContacts]! + 3.5;
+          s.ms[PHASE.wreck] = s.ms[PHASE.wreck]! + 0.25;
+          rec.push();
+        }
+      }
+    };
+    // The same loop first, so it runs optimised in the window: the interpreter boxes the rig's own doubles, garbage of the test's, not the recorder's.
+    record(WARM_BLOCKS);
+    const minor = await scavengesDuring(() => record(READ_BLOCKS));
+    assert.equal(minor, 0, `${minor} minor collections across ${READ_BLOCKS * BLOCK_FRAMES} recorded frames`);
   });
 
   it("when 1000 frames of 10 ms hold ten of 50 ms, then the median, percentiles, lows and spike count are those frames'", () => {
