@@ -356,27 +356,35 @@ for (const [f, p] of parsed) {
 }
 check("C8", "size caps exceeded", c8);
 
-// C9: tests never deep-compare two computed values. node:assert diffs both sides on failure (Myers diff,
-// O((N+M)·D)); two ~75k-element float arrays took one failing assert to 14.7 GB. One side must be a literal
-// (its size is then fixed by the source); compare buffers by first-mismatch index + max |diff|, or a hash.
-const DEEP = new Set(["deepEqual", "deepStrictEqual", "notDeepEqual", "notDeepStrictEqual"]);
-const isLiteral = (n) =>
-  ts.isStringLiteralLike(n) || ts.isNumericLiteral(n) || n.kind === ts.SyntaxKind.TrueKeyword || n.kind === ts.SyntaxKind.FalseKeyword ||
-  n.kind === ts.SyntaxKind.NullKeyword || (ts.isPrefixUnaryExpression(n) && ts.isNumericLiteral(n.operand)) ||
-  (ts.isArrayLiteralExpression(n) && n.elements.every(isLiteral)) ||
-  (ts.isObjectLiteralExpression(n) && n.properties.every((pr) => ts.isPropertyAssignment(pr) && isLiteral(pr.initializer)));
+// C9: tests never deep-compare computed values. A failing deep compare prints and diffs both sides whole (two ~75k-element
+// float arrays took one failing assert to 14.7 GB). Computed against computed, typed arrays, buffers and sim state go through
+// `firstMismatch` (a failure is three numbers, a tolerance when floats) or field by field, one `expect` each; buffers by
+// first-mismatch index + max |diff| or a hash. A `toEqual`-family matcher is fine only against a small literal (at most
+// MAX_LITERAL_LEAVES scalars, no spread, no reference). No `node:assert` import in a test.
+const DEEP_MATCHERS = new Set(["toEqual", "toStrictEqual", "toMatchObject", "toContainEqual"]);
+const MAX_LITERAL_LEAVES = 12;
+const scalarLeaves = (n) => {
+  if (ts.isStringLiteralLike(n) || ts.isNumericLiteral(n) || n.kind === ts.SyntaxKind.TrueKeyword || n.kind === ts.SyntaxKind.FalseKeyword || n.kind === ts.SyntaxKind.NullKeyword) return 1;
+  if (ts.isPrefixUnaryExpression(n) && ts.isNumericLiteral(n.operand)) return 1;
+  if (ts.isArrayLiteralExpression(n)) return n.elements.reduce((sum, e) => sum + scalarLeaves(e), 0);
+  if (ts.isObjectLiteralExpression(n)) return n.properties.reduce((sum, pr) => sum + (ts.isPropertyAssignment(pr) ? scalarLeaves(pr.initializer) : Infinity), 0);
+  return Infinity;
+};
 const c9 = [];
 for (const [f, p] of parsed) {
-  if (!/\.(test|ai-long-run)\.ts$/.test(f) || (f.startsWith("src/lib/") && !f.startsWith("src/lib/multiplayer/"))) continue;
+  if (!isTest(f) || (f.startsWith("src/lib/") && !f.startsWith("src/lib/multiplayer/"))) continue;
   const visit = (n) => {
-    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && DEEP.has(n.expression.name.text) && n.arguments.length >= 2 && !isLiteral(n.arguments[0]) && !isLiteral(n.arguments[1])) {
-      c9.push(`${f}:${p.sf.getLineAndCharacterOfPosition(n.getStart()).line + 1} ${n.expression.name.text}(${n.arguments[0].getText().slice(0, 50)}, ${n.arguments[1].getText().slice(0, 50)})`);
+    if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && DEEP_MATCHERS.has(n.expression.name.text) && !(n.arguments[0] && scalarLeaves(n.arguments[0]) <= MAX_LITERAL_LEAVES)) {
+      c9.push(`${f}:${p.sf.getLineAndCharacterOfPosition(n.getStart()).line + 1} ${n.expression.name.text}(${n.arguments[0]?.getText().slice(0, 50) ?? ""})`);
+    }
+    if (ts.isImportDeclaration(n) && /^node:assert(\/strict)?$/.test(n.moduleSpecifier.text)) {
+      c9.push(`${f}:${p.sf.getLineAndCharacterOfPosition(n.getStart()).line + 1} import of ${n.moduleSpecifier.text}`);
     }
     ts.forEachChild(n, visit);
   };
   visit(p.sf);
 }
-check("C9", "test deep-compares of two computed values", c9);
+check("C9", "test deep compares and node:assert imports", c9);
 
 // C10: no module-level mutable bindings in production game/UI code. State lives on an object the engine owns
 // (a second engine, a test or a replay must not inherit it). `let` and `var` at module scope count.

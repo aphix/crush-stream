@@ -292,20 +292,23 @@ remove it while you are there, or report why the structural fix is a separate ch
 
 ### Rule
 
-Every test must express a complete behavioural contract using the BDD structure: **Given** (context) → **When**
-(action) → **Then** (observable outcome). The test output alone — without reading the code — must tell a reader
-exactly what the system does and why the test exists.
+A test is one behavioural contract, and its output alone must tell a reader what the game does, without opening the file.
 
-`describe` labels: `given <noun phrase describing starting state>`. `it` labels: `when <action>, then <expected
-outcome>`. Both labels must be readable without the source file open.
+- **Given = `describe`**: the starting state, never the module. `given a sedan parked against the barrier with its engine
+  running`, not `given car.ts`.
+- **When = `it`**: the action that happens, in the player's or the sim's terms. `when it is hit at 30 m/s`.
+- **Then = `expect`**: the observable outcome, stated in the `it` label as well: `when a sedan hits the barrier at
+  30 m/s, then its engine is killed`.
+
+Labels name what happens, not how the code does it: no function names, field names or internals unless the player can see
+them (`the standings board lists the winner first`, not `sortStandings returns index 0`). A label is readable on its own.
+Every `expect` carries a message naming the thing checked when the matcher's own failure text would not (`expect(car.speed,
+"speed after the crash")`).
 
 ### Parametrize same-shaped cases
 
-*When several tests share the same body and differ only by inputs + expected output, drive them from an array of
-pure-data cases with one shared loop body.* This is the test-side of the DRY rule.
-
-The case objects MUST be flat data only — *no functions, no closures, no test bodies inside a case object.* A case is
-`{ it: 'message for the it()', ...inputs, expected: <obj-or-string> }`. The loop is the only place with logic:
+When several tests share the same body and differ only by inputs and expected outputs, drive them from an array of
+flat-data cases with one shared loop body: `{ it, ...inputs, expected }`, and the loop is the only place with logic.
 
 ```ts
 const testCases = [
@@ -314,36 +317,70 @@ const testCases = [
 ] as const;
 
 for (const testCase of testCases) {
-  it(testCase.it, () => { /* setup → act → assert, shared */ });
+  it(testCase.it, () => {
+    const car = buildCar(testCase.carClass);
+    crashInto(car, BARRIER, testCase.speed);
+    expect(car.engine.killed, "engine killed").toBe(testCase.expectedEngineKilled);
+  });
 }
 ```
 
-- **Never `describe.each` / `it.each` / `test.each`, and never bare positional arrays** (`[["sedan", 30, true], ...]`):
-  they are ugly to read and the reader has to count columns to know what `30` means. Use the named case objects and
-  `for (const testCase of testCases)` above.
-- Values that only exist at run time (built cars, generated ids, sorted lists) are referenced *by name* in the case
-  data (e.g. `carClass: "sedan"`) and resolved inside the loop. *Never* put a `() => …` builder in the case.
-- Expected strings that embed run-time values hold literal `{token}` placeholders the loop fills; the *exact* full
-  expected string/object is still asserted, never a partial/regex match.
-- A case whose shape genuinely differs (extra setup step, different assertion) stays its own `it()` — *don't* force it
-  into the table with a special-case branch. Forcing dissimilar cases into one table is the same smell as a
-  god-function.
-- Assert every field of the expected result, not just one: one `assert.equal` per field (or per index), each with a
-  message naming the field, e.g. `assert.equal(result.engineKilled, testCase.expectedEngineKilled, "engine killed")`.
-  Never `assert.deepEqual` two computed values, and never `deepEqual` large numeric arrays: boundaries rule C9 rejects
-  the first, and a failing `deepEqual` on tens of thousands of floats renders a diff large enough to exhaust memory.
+- **Never `describe.each` / `it.each` / `test.each`, and never bare positional arrays** (`[["sedan", 30, true], ...]`): the
+  reader would have to count columns. Named case objects and `for (const testCase of testCases)`.
+- **Cases are data, never functions or closures.** A value that only exists at run time (a built car, a generated race id,
+  a sorted standings list) is referenced by name in the case (`carClass: "sedan"`, `winner: "second place"`) and resolved
+  in the loop.
+- Expected strings that embed run-time values hold literal `{token}` placeholders the loop fills; the full expected text is
+  still asserted, never a partial or regex match.
+- A case whose shape differs (an extra setup step, a different assertion) stays its own `it`. Forcing dissimilar cases into
+  one table with a special-case branch is the same smell as a god-function. The reverse holds too: copy-pasted `it`s that
+  differ only in a number are a table waiting to happen.
+- Check every field of the result, as a stack of `expect`s, one per field, each message naming the field.
+
+### No deep equality, ever
+
+`toEqual`, `toStrictEqual`, `toMatchObject` and `toContainEqual` walk both sides, and on failure print and diff both sides
+whole: two 75,000-float arrays took a failing compare to 14.7 GB and once took the whole machine down. So:
+
+- **Arrays**: `expect(firstMismatch(actual, expected, tolerance), "lap times").toBeUndefined()` from
+  `src/game/kernel/compare-arrays.test-util.ts`. It checks the length first, then the elements (numbers within `tolerance`,
+  everything else by `Object.is`), and a failure prints `{ index, actual, expected }`: three values, never the arrays. An
+  array of arrays or objects is walked row by row with a message naming the row.
+- **Objects**: one `expect` per field, each message naming the field: `expect(result.signalled, "signalled pids")`. No
+  `Object.keys` loop that hides which field is under test.
+- **Empty means `toHaveLength(0)`**, and an empty-expected check needs a populated companion where the test would also
+  pass if nothing ran (see below).
+- A `toEqual`-family matcher is allowed against one small literal only (at most a dozen scalars: `[1, 0, 0]`,
+  `["hubFL"]`, `{ min: 2, kind: "race" }`). Computed against computed, typed arrays, buffers and sim state are never
+  compared that way. Boundary rule C9 enforces this line, and bans `node:assert` in tests.
+- `expect` does not narrow types the way `assert.ok` did. Where code after a check relies on the narrowing, use `must(value,
+  "what")` from `src/game/kernel/must.test-util.ts` (it throws and narrows), never a `!` or an `as`.
+- A failing compare cannot take the box down in any case: vitest's diff output is capped in `vitest.config.ts` and each test
+  process has a heap cap (`docs/TOOLCHAIN.md`).
 
 ### Assertions must discriminate
 
 **An action whose success is indistinguishable from its absence is not an action.** The same holds for an assertion:
 if it passes when the code under test never runs, it proves nothing and it will pass forever.
 
-- **Every absence assertion passes when NOTHING HAPPENS.** Never let one stand alone. Pair it with a POPULATED
-  companion in the same test that a not-running path fails.
-- **An assertion can only discriminate producers whose outputs differ.** If two different producers satisfy the
-  expected value equally, add a second, orthogonal observation.
-- **A red test proves a pin bites.** Break the line deliberately, watch the pin fail for the RIGHT reason, restore it.
-  A pin never observed red is a claim, not a gate.
+- **Every absence assertion passes when NOTHING HAPPENS.** Never let one stand alone: `expect(crashes, "crashes during the
+  lap").toHaveLength(0)` beside a populated companion such as `expect(framesDriven, "frames driven").toBeGreaterThan(0)`,
+  so a race that never started fails.
+- **An assertion can only discriminate producers whose outputs differ.** If two different producers satisfy the expected
+  value equally (a car that never moved and one that coasted to the finish both end below 5 m/s), add a second, orthogonal
+  observation.
+- **A red test proves a pin bites.** Break the line deliberately, watch the pin fail for the RIGHT reason, restore it. A pin
+  never observed red is a claim, not a gate.
+
+### Reviewer checklist
+
+- The `describe` names a starting state; each `it` reads `when <action>, then <outcome>` without the source.
+- No function name or internal field in a label unless the player can see it.
+- Parametrized cases are flat data with one loop body; nothing in a case is a function; dissimilar cases are their own `it`.
+- Every `expect` after an absence or empty check has a populated companion that fails when nothing ran.
+- No `toEqual`-family matcher on computed values, no `node:assert`, no `!` to appease the compiler (`must` instead).
+- Arrays go through `firstMismatch`; objects are checked field by field with named messages.
+- A new pin was seen red once for the right reason.
 
 ### A measurement is a reading at a timestamp
 

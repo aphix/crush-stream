@@ -15,6 +15,8 @@ const defaults = {
   testTimeout: 0,
   hookTimeout: 0,
   restoreMocks: true,
+  /** A failing compare prints and diffs both sides whole: two 75k-float arrays took one machine down. The diff keeps this many lines of each side. */
+  diff: { truncateThreshold: 60 },
 };
 
 /** WASM skin kernel loaded first, as in the browser (`scripts/test-setup.mjs`). */
@@ -25,7 +27,7 @@ export default defineConfig({
     reporters: ["default", "./scripts/test-reporter.mjs"],
     projects: [
       /** Runs before everything else (`npm run test:parity`): the JS skin against the kernel, which must not be loaded yet. */
-      { test: { ...defaults, name: "parity", include: ["src/**/*.parity.ts"], setupFiles: ["./scripts/assert-guard.mjs"] } },
+      { test: { ...defaults, name: "parity", include: ["src/**/*.parity.ts"] } },
       {
         test: {
           ...defaults,
@@ -34,7 +36,7 @@ export default defineConfig({
           setupFiles: appSetup,
         },
       },
-      { test: { ...defaults, name: "scripts", include: ["scripts/**/*.test.mjs"], setupFiles: ["./scripts/assert-guard.mjs"] } },
+      { test: { ...defaults, name: "scripts", include: ["scripts/**/*.test.mjs"] } },
       { test: { ...defaults, name: "ai-long-run", include: ["src/game/**/*.ai-long-run.ts"], setupFiles: appSetup } },
     ],
   },
