@@ -6,6 +6,7 @@ import type { PropCollider } from "../world/placements.ts";
 import type { SurvivalSpec } from "../world/track-schema.ts";
 import type { Track } from "../world/track.ts";
 import { ATTACK, attackTarget, CATCH_UP, CopBrain, HEAD_ON, PULL_OUT, pursuitSteer, RAM_TIME, TAIL_LANE, WAIT_BEHIND, type HunterWorld } from "./cop-brain.ts";
+import { BRAKE_RISE } from "./pedals.ts";
 
 /** Survival's pack (docs/SURVIVAL.md): how many cops, how fast more come, where a cop that is lost or wrecked is put back. */
 export const HUNT = {
@@ -284,6 +285,7 @@ export class HunterBrain extends CopBrain {
     this.aim[u] = target;
     if (!self.alive || self.crashed || this.state[u] !== HUNTING || !this.go || target < 0) return out;
     out.brake = 0;
+    this.driven = true;
     if (this.wedge.backing(u, dt, out)) return out;
     const speed = hypot2(self.vx, self.vz);
     const tg = cars[target]!;
@@ -298,12 +300,12 @@ export class HunterBrain extends CopBrain {
     const reach = along > 0 ? Math.max(ATTACK, tv * (headOn ? RAM_TIME : PULL_OUT)) : ATTACK;
     if (dist <= reach) {
       this.slot(u, self, tg, dist, cars);
-      attackTarget(self, tg, this.role[u]!, this.turn[self.id]!, speed, dist, headOn, out, tv > BLOCKABLE, this.lane, this.row);
+      attackTarget(self, tg, this.role[u]!, this.turn[self.id]!, speed, dist, headOn, out, tv > BLOCKABLE, this.lane, this.row, this.pedals.isBraking(self.id));
       this.dodge(u, self, tg, speed, dist, out);
     } else this.chase(u, self, tg, speed, dist, out);
     // A ram throws a stopped player car over the bust's 20 km/h and restarts its hold, so the unit brakes in time to arrive slowly.
     const closing = Math.max(0, (self.vx * dx + self.vz * dz) / Math.max(dist, 1));
-    if (tv <= BLOCKABLE && speed > CREEP && dist < SETTLE + (closing * closing) / (2 * DRIVE.brake)) {
+    if (tv <= BLOCKABLE && speed > CREEP && dist < SETTLE + (closing * closing) / (2 * DRIVE.brake) + closing / BRAKE_RISE) {
       out.throttle = 0;
       out.brake = 1;
       out.boost = false;

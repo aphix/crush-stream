@@ -1,6 +1,7 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { guardMates } from "./pack-guard.ts";
 import { idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
+import { Pedals } from "./pedals.ts";
 import { classStats, type ClassStats } from "../vehicle/vehicle-classes.ts";
 import type { AiCar } from "./derby-ai.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
@@ -54,6 +55,9 @@ const CHECK = 9;
 const STUCK_FOR = 1.2;
 const BACK_FOR = 0.9;
 const PROGRESS = 1.5;
+/** A unit brakes once it is this far (m/s) over the speed its attack wants (a queued one: at it), and stays on the brake until it is `ATTACK_BRAKE_BAND` under that. */
+const ATTACK_OVERSPEED = 2;
+const ATTACK_BRAKE_BAND = 1;
 
 /** An aim past this angle (rad) off the nose is behind the shoulder (`pursuitSteer`, `PoliceBrain.lead`). */
 export const BEHIND = 1.5;
@@ -127,7 +131,7 @@ export class Backoff {
  * gives (by `role` by default); go straight on when it closes faster than it can brake (`OVERRUN`). The one attack geometry of every
  * police drive; `turn` is the class's full-lock yaw rate. `block` false drops the getting-ahead-and-braking part, for a stopped target.
  */
-export function attackTarget(self: AiCar, tg: AiCar, role: number, turn: number, speed: number, dist: number, headOn: boolean, out: DriveInput, block = true, lane = (role % 3) - 1, row = role % 5): void {
+export function attackTarget(self: AiCar, tg: AiCar, role: number, turn: number, speed: number, dist: number, headOn: boolean, out: DriveInput, block = true, lane = (role % 3) - 1, row = role % 5, braking = false): void {
   const tfx = detSin(tg.yaw);
   const tfz = detCos(tg.yaw);
   // Left of the target's travel = (fz, −fx).
@@ -195,7 +199,7 @@ export function attackTarget(self: AiCar, tg: AiCar, role: number, turn: number,
     out.brake = 1;
     return;
   }
-  if (speed > want + (queue ? 0 : 2)) out.brake = 0.4;
+  if (speed > want + (queue ? 0 : ATTACK_OVERSPEED) - (braking ? ATTACK_BRAKE_BAND : 0)) out.brake = 0.4;
   else out.throttle = 1;
   out.boost = out.throttle > 0 && (queue ? want > tv + 7 : along < -6 || headOn) && Math.abs(alpha) < 0.35;
 }
@@ -232,6 +236,10 @@ export abstract class CopBrain {
   protected readonly role: Uint8Array;
   protected readonly since: Float64Array;
   protected readonly wedge: Backoff;
+  /** The hands every unit's drive passes through (the pack-mate guard comes after them, so its brake is not lagged). */
+  protected readonly pedals = new Pedals();
+  /** Set by `drive` when the unit really drove this step (not parked, waiting for the green or knocked out): only that output goes through the hands. */
+  protected driven = false;
   /** Per car id: a class's full-lock yaw rate and grip. */
   protected readonly turn = new Float64Array(MAX_CARS).fill(1.5);
   protected readonly grip = new Float64Array(MAX_CARS).fill(classStats("sedan").grip);
@@ -280,9 +288,14 @@ export abstract class CopBrain {
     this.store(id - this.first, world);
   }
 
-  /** A unit's input for this physics slice (scratch output: apply it before the next call): its drive, then the pack-mate guard. */
+  /** A unit's input for this physics slice (scratch output: apply it before the next call): its drive through the hands (a parked or held unit's is as it is), then the pack-mate guard. */
   think(self: AiCar, cars: readonly AiCar[], dt: number): DriveInput {
+    this.driven = false;
     const out = this.drive(self, cars, dt);
+    if (this.driven) {
+      this.pedals.shape(self.id, out, dt);
+      out.boost = this.pedals.holdBoost(self.id, out.boost, dt, false);
+    } else this.pedals.follow(self.id, out);
     guardMates(self, cars, this.first, this.count, out, this.pullsOut, this.turn[self.id]!, this.grip[self.id]!);
     return out;
   }

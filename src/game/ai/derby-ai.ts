@@ -8,6 +8,8 @@ import { DerbyPocket } from "./derby-pocket.ts";
 import { clamp, hash01 } from "../kernel/scalar.ts";
 import { OpeningWatch } from "./derby-opening.ts";
 import { personality, type Personality } from "./personality.ts";
+import { Pedals } from "./pedals.ts";
+import { PlanClock } from "./plan-clock.ts";
 import { TURN_ROUND_THROTTLE } from "./constants.ts";
 
 export type AiCar = {
@@ -114,6 +116,8 @@ const BOOST_FACED = 0.5;
 const BOARD_MARGIN = 2.4;
 /** The throttle a driver crawls at with no open space worth heading for. */
 const CRAWL_THROTTLE = 0.35;
+/** A boost burst is let go at once with the meter this empty. */
+const BOOST_EMPTY = 0.02;
 
 /** What a driver is doing this tick (`tacticOf`). */
 const TACTICS = ["idle", "unstick", "hold", "layback", "reverse", "jturn", "nose", "swing", "sideswipe"] as const;
@@ -177,6 +181,15 @@ export class DerbyBrain {
   /** Boost meter per car, 0–1: the seat's (`BOOST`), earned by takedowns and kept by `driveBoost`. */
   readonly meter = new Float64Array(MAX_CARS);
   private readonly caution = new OpeningWatch();
+  /** When each car plans again (`THINK_HZ`) and the hands its pedals, wheel and boost button go through every step. */
+  private readonly clock = new PlanClock();
+  private readonly pedals = new Pedals();
+  /** Per car, its last plan's pedals and wheel, handbrake and the boost it asks for: what every step until the next plan drives toward. */
+  private readonly planThrottle = new Float64Array(MAX_CARS);
+  private readonly planSteer = new Float64Array(MAX_CARS);
+  private readonly planBrake = new Float64Array(MAX_CARS);
+  private readonly planEbrake = new Uint8Array(MAX_CARS);
+  private readonly planBoost = new Uint8Array(MAX_CARS);
 
   constructor(radius = DERBY_RADIUS) {
     this.radius = radius;
@@ -211,6 +224,8 @@ export class DerbyBrain {
     this.pocket.reset();
     this.caution.reset();
     this.meter.fill(1);
+    this.clock.forgetAll();
+    this.pedals.reset();
   }
 
   /** Driver `id`'s aggression, 0 … 1 (the match rolls it with `fieldAggression`). */
@@ -241,14 +256,31 @@ export class DerbyBrain {
   }
 
   /**
-   * One decision for `self`. The returned input is scratch owned by the brain —
-   * apply it before the next call.
+   * One step for `self`: plans at `THINK_HZ` (target, tactic, the pedals and wheel it asks for), then drives its pedals, wheel and boost button to that plan
+   * every step. The returned input is scratch owned by the brain — apply it before the next call.
    */
   think(self: AiCar, others: readonly AiCar[], dt: number): DriveInput {
-    const out = this.decide(self, others, dt);
     const i = self.id;
-    if (i < 0 || i >= MAX_CARS || dt <= 0) return out;
-    this.driveBoost(self, others, out, dt);
+    if (i < 0 || i >= MAX_CARS || dt <= 0) return this.decide(self, others, dt);
+    if (this.clock.due(i, dt)) this.replan(self, others);
+    const out = clearDrive(this.out);
+    out.throttle = this.planThrottle[i]!;
+    out.steer = this.planSteer[i]!;
+    out.brake = this.planBrake[i]!;
+    out.ebrake = this.planEbrake[i] === 1;
+    this.pedals.shape(i, out, dt);
+    const empty = this.meter[i]! <= BOOST_EMPTY;
+    out.boost = this.pedals.holdBoost(i, this.planBoost[i] === 1 && !empty, dt, empty);
+    this.meter[i] = chargeBoost(this.meter[i]!, out.boost, dt);
+    return out;
+  }
+
+  /** Car `self`'s plan over the `dt` s since its last: the decision, the boost it asks for, the opening's caution and the spin damping on its wheel. */
+  private replan(self: AiCar, others: readonly AiCar[]): void {
+    const i = self.id;
+    const dt = this.clock.ageOf(i);
+    const out = this.decide(self, others, dt);
+    out.boost = this.wantsBoost(self, others, out);
     this.caution.apply(out, self, others, this.age[i]!);
     if (Number.isNaN(this.yawWas[i]!)) this.yawWas[i] = self.yaw;
     const rate = wrapPi(self.yaw - this.yawWas[i]!) / dt;
@@ -260,29 +292,28 @@ export class DerbyBrain {
       if (o.id !== i && hypot2(o.x - self.x, o.z - self.z) < SPIN_NEAR) this.nearFor[i] = SPIN_HOLD;
     }
     if (this.nearFor[i]! > 0 && out.steer * this.spin[i]! > 0) out.steer *= 1 - smooth(SPIN_EASE, SPIN_LET_GO, Math.abs(this.spin[i]!));
-    return out;
+    this.planBoost[i] = out.boost ? 1 : 0;
+    this.planThrottle[i] = out.throttle;
+    this.planSteer[i] = out.steer;
+    this.planBrake[i] = out.brake;
+    this.planEbrake[i] = out.ebrake ? 1 : 0;
+    this.clock.planned(i);
   }
 
   /**
-   * Boost by the seat's rules (`BOOST`, `chargeBoost`): on while this driver charges its target nose first, the target
-   * between BOOST_RELEASE and BOOST_RANGE m away, within BOOST_CONE of its heading and not facing back at us (BOOST_FACED),
-   * on the gas, with meter left. The meter drains while boosting and refills otherwise; a takedown tops it up (`addBoost`).
+   * Whether this driver asks for boost by the seat's rules (`BOOST`): charging its target nose first, the target between BOOST_RELEASE and
+   * BOOST_RANGE m away, within BOOST_CONE of its heading and not facing back at us (BOOST_FACED), on the gas. The button and the meter are `think`'s.
    */
-  private driveBoost(self: AiCar, others: readonly AiCar[], out: DriveInput, dt: number): void {
+  private wantsBoost(self: AiCar, others: readonly AiCar[], out: DriveInput): boolean {
     const i = self.id;
     const tgt = this.tactic[i] === T_NOSE ? findCar(others, this.target[i]!) : null;
-    let want = false;
-    if (tgt && tgt.alive && out.throttle > 0.05) {
-      const dx = tgt.x - self.x;
-      const dz = tgt.z - self.z;
-      const d = hypot2(dx, dz);
-      const ahead = detSin(self.yaw) * dx + detCos(self.yaw) * dz;
-      const faced = -(detSin(tgt.yaw) * dx + detCos(tgt.yaw) * dz) / d;
-      want = d < BOOST_RANGE && d > BOOST_RELEASE && ahead > d * BOOST_CONE && faced < BOOST_FACED;
-    }
-    const m = this.meter[i]!;
-    out.boost = want && m > 0.02;
-    this.meter[i] = chargeBoost(m, want && m > 0, dt);
+    if (!tgt || !tgt.alive || out.throttle <= 0.05) return false;
+    const dx = tgt.x - self.x;
+    const dz = tgt.z - self.z;
+    const d = hypot2(dx, dz);
+    const ahead = detSin(self.yaw) * dx + detCos(self.yaw) * dz;
+    const faced = -(detSin(tgt.yaw) * dx + detCos(tgt.yaw) * dz) / d;
+    return d < BOOST_RANGE && d > BOOST_RELEASE && ahead > d * BOOST_CONE && faced < BOOST_FACED;
   }
 
   private decide(self: AiCar, others: readonly AiCar[], dt: number): DriveInput {

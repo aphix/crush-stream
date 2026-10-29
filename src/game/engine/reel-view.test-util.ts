@@ -332,21 +332,35 @@ export function raceOn(trackId: string, seed: number, aiCount: number): World {
 /** A staged jump's car runs at the crest from this far (m) short of it: too short for its driver to brake for it. */
 const JUMP_RUN = 10;
 
+/**
+ * A staged jump: `a` starts `JUMP_RUN` m short of the crest at `c.speed`; `b` (empty: its driver out, it coasts as a wreck does and stays put) is laid across the line `a`
+ * flies, `JUMP_RUN + c.land` m on from where `a` started. The AI at `a`'s wheel steers for its first few tenths of a second (its lane is not the staged one), so `b` is
+ * placed once `a` is in the air, where its heading is fixed, not on the staged tangent. Returns the step that places it: call it before each frame until it returns true.
+ */
+function stageJump(track: Track, a: World["cars"][number], b: World["cars"][number], c: { at: number; speed: number; land?: number }): () => boolean {
+  track.pointAt(c.at - JUMP_RUN, pt);
+  const { x, z, tx, tz } = pt;
+  put(track, a, x, z, Math.atan2(tx, tz), c.speed);
+  b.driverOut = "windshield";
+  const reach = JUMP_RUN + (c.land ?? 0);
+  return () => {
+    if (!a.airborne) return false;
+    const pos = a.group.position;
+    const speed = Math.hypot(a.velocity.x, a.velocity.z);
+    const dx = a.velocity.x / speed;
+    const dz = a.velocity.z / speed;
+    const left = reach - Math.hypot(pos.x - x, pos.z - z);
+    put(track, b, pos.x + dx * left, pos.z + dz * left, Math.atan2(dz, -dx), 0);
+    return true;
+  };
+}
+
 /** Put cars `a` and `b` (`b` unused by a wall hit or a ramp; a chain's third car is `third`) on course `track` for `c`: each a few metres from the meeting point, closing at `c.speed` each. */
 export function stage(track: Track, a: World["cars"][number], b: World["cars"][number], c: Crash, third: World["cars"][number] = b): void {
+  if (c.kind === "jump") throw new Error("a staged jump places its second car once the first is in the air: use stageJump");
   if (c.kind === "ramp") {
     pt.y = track.ground().heightAt(c.x, c.z);
     put(track, a, c.x, c.z, c.yaw, c.speed);
-    return;
-  }
-  if (c.kind === "jump") {
-    track.pointAt(c.at - JUMP_RUN, pt);
-    const { x, z, tx, tz } = pt;
-    put(track, a, x, z, Math.atan2(tx, tz), c.speed);
-    // `b` stands across `a`'s line (it flies straight), empty: its driver out, it coasts as a wreck does and stays put.
-    const d = JUMP_RUN + (c.land ?? 0);
-    put(track, b, x + tx * d, z + tz * d, Math.atan2(tz, -tx), 0);
-    b.driverOut = "windshield";
     return;
   }
   track.pointAt(c.at, pt);
@@ -416,16 +430,19 @@ export function recordRace(w: World, track: Track, crashes: readonly Crash[], se
   const state = { acc: 0 };
   const stagedAt: number[] = [];
   let next = 0;
+  const settling: (() => boolean)[] = [];
   for (let n = 0; n * FRAME < seconds && r.recorder.on && (crashes.length === 0 || next < crashes.length || r.recorder.ledger.kept.length < crashes.length); n++) {
     if (next < crashes.length && r.time >= 1 + next * 2.5) {
       const cars = w.live();
       const c = crashes[next]!;
       const a = cars[c.cars?.[0] ?? (1 + 2 * next) % cars.length]!;
-      stage(track, a, cars[c.cars?.[1] ?? (2 + 2 * next) % cars.length]!, c, cars[c.cars?.[2] ?? (3 + 2 * next) % cars.length]!);
+      if (c.kind === "jump") settling.push(stageJump(track, a, cars[c.cars?.[1] ?? (2 + 2 * next) % cars.length]!, c));
+      else stage(track, a, cars[c.cars?.[1] ?? (2 + 2 * next) % cars.length]!, c, cars[c.cars?.[2] ?? (3 + 2 * next) % cars.length]!);
       if (w.seat.mode === "drive" && a === cars[w.seat.carIndex]) floor(w);
       stagedAt.push(r.recorder.now);
       next++;
     }
+    for (let k = settling.length - 1; k >= 0; k--) if (settling[k]!()) settling.splice(k, 1);
     frame(w, state);
   }
   r.recorder.end();

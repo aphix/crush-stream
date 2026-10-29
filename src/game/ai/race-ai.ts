@@ -1,13 +1,18 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
-import { chargeBoost, idleDrive, topUpBoost, type DriveInput } from "../vehicle/car-drive.ts";
+import { chargeBoost, clearDrive, idleDrive, topUpBoost, type DriveInput } from "../vehicle/car-drive.ts";
 import { mood } from "./ai-aggression.ts";
-import { AI_EVERY_SLICE, AI_SKILL, GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_DUE_SLACK, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
+import { AI_SKILL, GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_TURN_IDX, REVERSE_THROTTLE, SKILL_SALT, SLIP_COOL, SLIP_CORNER, SLIP_RECOVER, SLIP_WINDOW, STRAIGHT_CURV, THINK_HZ, THINK_SALT, TURN_ROUND_THROTTLE, WOBBLE_K, type AiDifficulty } from "./constants.ts";
 import { guardContact } from "./contact-guard.ts";
 import { DERBY_RULES, STUCK_SPEED, type AiCar } from "./derby-ai.ts";
 import { personality, type Personality } from "./personality.ts";
+import { PlanClock } from "./plan-clock.ts";
+import { Pedals } from "./pedals.ts";
+import { WreckPass } from "./wreck-pass.ts";
+import { Standoff } from "./standoff.ts";
+import { closingSpeed, lookDistance, SEEN_BEHIND, SEEN_CORRIDOR, SEEN_NEAR, SEEN_OFFROAD, Sighting, SIGHT_MAX, visibleStretch } from "./sight.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { SURFACE_IDS, SURFACES, type Surface } from "../world/catalog.ts";
-import { blankPoint, blankProjection, pointOn, projectPath, type Track, type TrackPath, type TrackPoint } from "../world/track.ts";
+import { blankPoint, blankProjection, pointOn, projectPath, sampleAt, type Projection, type Track, type TrackPath, type TrackPoint } from "../world/track.ts";
 import { junctionsOf } from "../world/junctions.ts";
 import { assists, classStats, cornerSpeed, HANDLING, rollingOver, terminalSpeed, type Assists, type ClassStats } from "../vehicle/vehicle-classes.ts";
 import { clamp, hash01, wrapPi } from "../kernel/scalar.ts";
@@ -56,6 +61,40 @@ const COMMIT = 45;
 const BURST_MIN = 0.5;
 /** A burst runs while the plan at the boosted top wants this much (m/s) more than the car has: boost pulls harder (and past top by `boostTop`). */
 const BOOST_SHORT = 2;
+/** Once a burst runs it keeps on while the plan wants this much more speed (m/s): the start margin less a band, so a plan on its edge does not end it. */
+const BOOST_KEEP_SHORT = 0.5;
+/** A burst starts with the car's heading this near its aim (rad; `BOOST_ALPHA_CHASE` chasing a rival) and runs on to `BOOST_ALPHA_KEEP`: boost on a tail-happy class past a wide lock slides it. */
+const BOOST_ALPHA = 0.3;
+const BOOST_ALPHA_CHASE = 0.45;
+const BOOST_ALPHA_KEEP = 0.45;
+/** A burst gives up when the meter is this empty. */
+const BURST_STOP = 0.02;
+/** Brake band (m/s over the target): the brake comes on above `BRAKE_ON` (the old dead band's edge) and stays on until the car is under `BRAKE_HOLD`, so a target wobbling on the edge does not pulse the lamps; the brake's least size is `BRAKE_MIN` (as it was). */
+const BRAKE_ON = 1.5;
+const BRAKE_HOLD = 0.5;
+const BRAKE_MIN = 0.2;
+/** Speed over the target (m/s) at which the brake is full. */
+const BRAKE_SPAN = 6;
+/** Lane change rate share added (× `LANE_RATE`) while passing stopped cars: a swerve round a wreck is a quick one (an oncoming car's is 2). */
+const WRECK_SWERVE = 1;
+/** A car this near on the nose (m, centre to centre: a car's length and a margin) and within this far sideways (m: a car's width) is against it. */
+const NOSE_GAP = 6;
+const NOSE_HALF = 1.9;
+/** Seconds a standoff's back-off reverses: about a car length at the back-out's pace. */
+const STANDOFF_BACKOFF_S = 1;
+/** The least a pass looks ahead for stopped cars (m): a lane change needs this much room even at a crawl. */
+const PASS_LOOK_FLOOR = 12;
+/** A moving car's sideways drift (m/s, in our frame) is carried this many seconds ahead, at most this far (m), to where it will be as we reach it. */
+const PREDICT_S = 1.5;
+const PREDICT_MAX = 2.5;
+/** Cars ahead (and this far behind the nose, m) a plan weighs as holding a lane, at most; a lane is held by one within this far (m) beyond the car being passed. */
+const NEAR_CARS = 8;
+const HELD_TAIL = 4.5;
+const HELD_BEYOND = 8;
+/** A pass keeps its speed when the lane change takes under this share of the time left to the car (the rest is the driver's margin). */
+const CLEAR_MARGIN = 0.75;
+/** Gap (m) a driver boxed in behind a car (both sides held) closes to before matching its speed. */
+const FOLLOW_STOP_GAP = 6;
 /** Pursuit look-ahead (m) at speed; a junction's turn is planned as spread over it. */
 const LOOK = 18;
 /** An aggressive driver hunts a rival up to this far (m) ahead within this far sideways. */
@@ -105,12 +144,6 @@ const ARG_COUNT = 11;
 
 export function surfaceAt(path: TrackPath, k: number): Surface {
   return SURFACES[SURFACE_IDS[path.surface[k]!]!];
-}
-
-export function sampleAt(path: TrackPath, s: number): number {
-  const segs = path.closed ? path.count : path.count - 1;
-  const u = Math.floor((s / path.length) * segs);
-  return path.closed ? ((u % path.count) + path.count) % path.count : clamp(u, 0, path.count - 1);
 }
 
 /** Gravity (m/s²) and the half-span (m) a crest's vertical curvature is read over. */
@@ -171,8 +204,6 @@ export class RaceBrain {
   private readonly recover = new Float64Array(MAX_CARS);
   private readonly recoverSteer = new Float64Array(MAX_CARS);
   private readonly lastThrottle = new Float64Array(MAX_CARS);
-  /** Per car: seconds between thinks (0: every slice, `AI_EVERY_SLICE`) and the sim time since the last one. */
-  private readonly thinkEvery = new Float64Array(MAX_CARS);
   /** Per car skill multipliers rolled in `setDifficulty` (1 = hard; police and unset cars stay 1): corner speed, brake decel, steer gain, look-ahead, apex share. */
   private readonly push = new Float64Array(MAX_CARS);
   private readonly brakeK = new Float64Array(MAX_CARS);
@@ -188,6 +219,12 @@ export class RaceBrain {
   private readonly shaken = new Float64Array(MAX_CARS);
   /** Per car, `AI_SKILL.calm` (m): another car this close holds its errors (0: only one it follows or swerves for). */
   private readonly calm = new Float64Array(MAX_CARS);
+  /** Per car, from `AI_SKILL`: reaction time (s) before it acts on a car that has come into view, and how many seconds of closing speed it looks ahead. */
+  private readonly reaction = new Float64Array(MAX_CARS).fill(AI_SKILL.hard.react[0]);
+  private readonly lookSeconds = new Float64Array(MAX_CARS).fill(AI_SKILL.hard.seconds[0]);
+  /** How long each car has had each other in view, and the scratch projection of a sight test. */
+  private readonly sighting = new Sighting();
+  private readonly seeProj = blankProjection();
   /** Per car: seconds left of the mistake in progress and of the wait before the next, whether a corner was ahead last think, and the corners rolled for. */
   private readonly slip = new Float64Array(MAX_CARS);
   private readonly cool = new Float64Array(MAX_CARS);
@@ -197,12 +234,49 @@ export class RaceBrain {
   readonly mistakes = new Int32Array(MAX_CARS);
   /** Per car, from its last think: a car close on its line (following, swerving or nudged). Skill errors and slips are for an open road: in traffic every tier drives like hard, so a gentle rival never runs into anyone. */
   private readonly busy = new Uint8Array(MAX_CARS);
-  private readonly sinceThink = new Float64Array(MAX_CARS);
+  /** When each car plans again, and whether the guard had it in danger last step. */
+  private readonly clock = new PlanClock();
+  private readonly endangered = new Uint8Array(MAX_CARS);
+  /** Per car, the plan its steps drive to: the lateral line (m) and the rate (m/s) the lane moves to it, the speed target (m/s) with and without boost, the speed of the car it is boxed in behind (NaN: none) and its chase share. */
+  private readonly planWant = new Float64Array(MAX_CARS);
+  private readonly planRate = new Float64Array(MAX_CARS);
+  private readonly planTarget = new Float64Array(MAX_CARS);
+  private readonly planBoosted = new Float64Array(MAX_CARS);
+  private readonly planFollow = new Float64Array(MAX_CARS).fill(Number.NaN);
+  private readonly planChase = new Float64Array(MAX_CARS);
+  /** Every AI pedal and the wheel go through these hands. */
+  private readonly pedals = new Pedals();
+  /** The pass round stopped cars and wrecks in the road ahead. */
+  private readonly pass = new WreckPass();
+  /** Nose to nose pushing at a crawl: the count (`Standoff`), and per car whether the last plan found a car on its nose with a side free to go round it. */
+  private readonly standoff = new Standoff();
+  private readonly planNosed = new Uint8Array(MAX_CARS);
+  /** This call: a car is on the nose, and a side is free to go round it. */
+  private nosed = false;
+  /** This call: a car is on the line being passed, whatever it comes to (a pass is traffic, not an open road). */
+  private passing = false;
+  private nosedFree = false;
+  /** This call's cars within reach ahead (id, metres on the nose, lateral metres): what holds a lane while a car is passed. */
+  private nearCount = 0;
+  private readonly nearId = new Int16Array(NEAR_CARS);
+  private readonly nearAhead = new Float64Array(NEAR_CARS);
+  private readonly nearLat = new Float64Array(NEAR_CARS);
+  /** This step's place on the road, set by `projectRoute`: the projection and path being driven, the shortcut (−1 none), the speed along the heading, the turn limit, the surface, and whether it is on the run in to a shortcut's mouth. */
+  private proj: Projection;
+  private path: TrackPath;
+  private routeNow = -1;
+  private along = 0;
+  private turnMax = 0;
+  private surf: Surface;
+  private toMouth = 0;
+  private early = false;
+  /** This step's aim: heading error (rad) to the point ahead on the lane, the yaw rate (rad/s) pure pursuit asks, and the distance (m) to the point. */
+  private alpha = 0;
+  private omega = 0;
+  private reach = 0;
   private readonly mainProj = blankProjection();
   private readonly subProj = blankProjection();
   private readonly args = new Float64Array(ARG_COUNT);
-  /** The contact guard runs after the driver's hands, not inside `think`, so the avoidance is never lagged by them. */
-  guardLate = false;
   /** Per car id: the tune `guardContact` reads (`GUARD_*_IDX`), as of its last think. */
   private readonly tunes = Array.from({ length: MAX_CARS }, () => new Float64Array(GUARD_COUNT));
   private readonly pt: TrackPoint = blankPoint();
@@ -214,7 +288,7 @@ export class RaceBrain {
   private nudge = false;
   /** Fight (0–1) toward the rival being hunted or rammed this call, 0 when none. */
   private chase = 0;
-  /** Per car id, this call: 1 for a rival this driver is fighting (the contact guard leaves it alone), else 0. */
+  /** Per car id, this call: 1 for a car the contact guard leaves alone: a rival this driver is fighting, or one it cannot see (yet). */
   private readonly hit = new Uint8Array(MAX_CARS);
   /** Per car id: the `hit` of its last think, kept for `guard` between thinks (only for drivers that hold their input). */
   private readonly hitOf = Array.from({ length: MAX_CARS }, () => new Uint8Array(MAX_CARS));
@@ -233,6 +307,9 @@ export class RaceBrain {
   constructor(track: Track, racers: number) {
     this.track = track;
     this.racers = racers;
+    this.proj = this.mainProj;
+    this.path = track.path;
+    this.surf = surfaceAt(track.path, 0);
     this.guarded = racers;
     this.push.fill(1);
     this.brakeK.fill(1);
@@ -264,7 +341,13 @@ export class RaceBrain {
     this.lastThrottle.fill(0);
     this.meter.fill(1);
     this.burst.fill(0);
-    this.sinceThink.fill(0);
+    this.clock.forgetAll();
+    for (let i = 0; i < MAX_CARS; i++) this.pass.forget(i);
+    this.standoff.reset();
+    this.sighting.reset();
+    this.planNosed.fill(0);
+    this.endangered.fill(0);
+    this.pedals.reset();
     this.slip.fill(0);
     this.cool.fill(0);
     this.wasCorner.fill(0);
@@ -278,10 +361,10 @@ export class RaceBrain {
     this.aggression[id] = clamp(a, 0, 1);
   }
 
-  /** The car's think rate: `AI_EVERY_SLICE` thinks every physics slice, the others once per 1 / (a rate rolled once in the difficulty's `THINK_HZ` band) s. */
+  /** The car's plan rate: once per 1 / (a rate rolled once in the difficulty's `THINK_HZ` band) s. */
   setDifficulty(id: number, d: AiDifficulty): void {
     const [lo, hi] = THINK_HZ[d];
-    this.thinkEvery[id] = d === AI_EVERY_SLICE ? 0 : 1 / (lo + (hi - lo) * hash01(id, THINK_SALT));
+    this.clock.setRate(id, lo + (hi - lo) * hash01(id, THINK_SALT));
     const k = AI_SKILL[d];
     this.push[id] = k.push[0] + (k.push[1] - k.push[0]) * hash01(id, SKILL_SALT.push);
     this.brakeK[id] = k.brake[0] + (k.brake[1] - k.brake[0]) * hash01(id, SKILL_SALT.brake);
@@ -295,40 +378,33 @@ export class RaceBrain {
     this.slipBrake[id] = k.slipBrake;
     this.shaken[id] = k.shaken;
     this.calm[id] = k.calm;
+    this.reaction[id] = k.react[0] + (k.react[1] - k.react[0]) * hash01(id, SKILL_SALT.react);
+    this.lookSeconds[id] = k.seconds[0] + (k.seconds[1] - k.seconds[0]) * hash01(id, SKILL_SALT.seconds);
   }
 
-  /** A step of `dt` s passed for car `i`: true when it is due to think (always, at `AI_EVERY_SLICE`). */
-  due(i: number, dt: number): boolean {
-    this.sinceThink[i]! += dt;
-    return this.thinkEvery[i] === 0 || this.sinceThink[i]! >= this.thinkEvery[i]! - THINK_DUE_SLACK;
-  }
-
-  /** The sim time (s) since car `i` last thought, restarting the count: `think`'s `dt` (the slice itself at `AI_EVERY_SLICE`). */
-  elapsed(i: number): number {
-    const s = this.sinceThink[i]!;
-    this.sinceThink[i] = 0;
-    return s;
-  }
-
-  /** The input car `self` drives this slice from its held one: final at `AI_EVERY_SLICE` (`think` guarded it); else the contact guard runs every slice, so a reaction to a car ahead never waits for the next think (scratch output). `asked`: what the driver asked for when `held` is its hands' lagging take on it (`guardContact`'s `steer`). */
+  /** The input car `self` drives this step from its held one, after its hands: the contact guard runs every step, so a reaction to a car ahead never waits for the next plan (scratch output). `asked`: what the driver asked for when `held` is its hands' lagging take on it (`guardContact`'s `steer`). A car the guard newly finds in danger plans again next step. */
   guard(self: AiCar, others: readonly AiCar[], held: DriveInput, dt = 0, asked = held): DriveInput {
     const i = self.id;
-    // A car that has not thought has no tune (`GUARD_LEAD_IDX` is never 0 once set): the guard would read zeros as a stopped leader.
-    if ((this.thinkEvery[i] === 0 && !this.guardLate) || i >= this.racers || !self.alive || this.recover[i]! > 0 || this.tunes[i]![GUARD_LEAD_IDX] === 0) return held;
-    copyDrive(held, this.out);
-    this.tunes[i]![GUARD_DT_IDX] = dt;
-    guardContact(self, others, this.guarded, this.hitOf[i]!, this.tunes[i]!, this.out, asked.steer);
-    // A brain that thinks every slice had the guard inside `think`: the guarded throttle fed the next stuck test and a cancelled boost was never drained. The late guard keeps both.
-    if (this.thinkEvery[i] === 0) {
-      const out = this.out;
-      this.lastThrottle[i] = out.throttle;
-      if (out.throttle <= 0) out.boost = false;
-      if (held.boost && !out.boost) {
-        this.meter[i] = this.meterWas[i]!;
-        this.charge(i, false);
-      }
+    const tune = this.tunes[i]!;
+    // A car that has not planned has no tune (`GUARD_LEAD_IDX` is never 0 once set): the guard would read zeros as a stopped leader.
+    if (i >= this.racers || !self.alive || this.recover[i]! > 0 || tune[GUARD_LEAD_IDX] === 0) return held;
+    const out = this.out;
+    copyDrive(held, out);
+    tune[GUARD_DT_IDX] = dt;
+    guardContact(self, others, this.guarded, this.hitOf[i]!, tune, out, asked.steer);
+    this.pedals.holdGuardBrake(i, out, dt);
+    // The guarded throttle feeds the next stuck test, and a boost it cancelled is given back to the meter.
+    this.lastThrottle[i] = out.throttle;
+    if (out.throttle <= 0) out.boost = false;
+    if (held.boost && !out.boost) {
+      this.meter[i] = this.meterWas[i]!;
+      this.charge(i, false);
+      this.pedals.stopBoost(i);
     }
-    return this.out;
+    const danger = tune[GUARD_NEED_IDX]! > 0 || tune[GUARD_PUSH_IDX] !== 0;
+    if (danger && this.endangered[i] === 0) this.clock.hurry(i);
+    this.endangered[i] = danger ? 1 : 0;
+    return out;
   }
 
   setClass(id: number, s: ClassStats): void {
@@ -347,39 +423,61 @@ export class RaceBrain {
     this.cool[id] = 0;
     this.wasCorner[id] = 0;
     this.busy[id] = 0;
+    this.clock.forget(id);
+    this.pass.forget(id);
+    this.standoff.forget(id);
+    this.sighting.forget(id);
+    this.planNosed[id] = 0;
+    this.pedals.forget(id);
   }
 
-  /** One decision for `self` (scratch output: apply it before the next call). */
+  /** One step for `self`: plans again when due (`THINK_HZ`, staggered by car id), then drives its wheel and pedals to the plan (scratch output: apply it before the next call). */
   think(self: AiCar, others: readonly AiCar[], race: RaceAiState, dt: number): DriveInput {
-    const out = this.out;
-    out.throttle = 0;
-    out.steer = 0;
-    out.brake = 0;
-    out.ebrake = false;
-    out.boost = false;
+    const out = clearDrive(this.out);
     const i = self.id;
     if (i < 0 || i >= MAX_CARS || !self.alive) return out;
-    const p = this.traits[i]!;
+    this.args[ARG_DT_IDX] = dt;
+    if (this.recover[i]! > 0) return this.backOut(i, dt);
     const speed = hypot2(self.vx, self.vz);
-    const a = this.args;
-    a[ARG_DT_IDX] = dt;
-    if (this.recover[i]! > 0) {
-      this.recover[i]! -= dt;
-      out.throttle = REVERSE_THROTTLE;
-      out.steer = this.recoverSteer[i]!;
-      this.lastThrottle[i] = 0;
-      this.charge(i, false);
-      return out;
-    }
-    const tr = this.track;
     const fresh = this.seg[i] === -1;
-    const main = projectPath(tr.path, self.x, self.z, this.seg[i]!, this.mainProj);
+    this.projectMain(i, self, fresh);
+    const replan = this.clock.due(i, dt);
+    if (replan) this.pickRoute(i, race, self, others);
+    this.projectRoute(i, self, speed);
+    if (replan) this.replan(i, self, others, race);
+    this.steer(i, self, speed, dt);
+    this.pedal(i, speed, dt);
+    this.finish(i, speed, dt);
+    return out;
+  }
+
+  /** Seconds of the back-out left for `i`: reverse with the nose swinging toward the line; it plans again when it ends. */
+  private backOut(i: number, dt: number): DriveInput {
+    const out = this.out;
+    this.recover[i]! -= dt;
+    if (this.recover[i]! <= 0) this.clock.hurry(i);
+    out.throttle = REVERSE_THROTTLE;
+    out.steer = this.recoverSteer[i]!;
+    this.lastThrottle[i] = 0;
+    this.charge(i, false);
+    this.pedals.follow(i, out);
+    return out;
+  }
+
+  private projectMain(i: number, self: AiCar, fresh: boolean): void {
+    const half = this.track.path.half;
+    const main = projectPath(this.track.path, self.x, self.z, this.seg[i]!, this.mainProj);
     this.seg[i] = main.k;
-    if (fresh) this.lane[i] = clamp(main.lateral, -tr.path.half[main.k]!, tr.path.half[main.k]!);
-    a[ARG_MAIN_S_IDX] = main.s;
-    this.pickRoute(i, race, self, others);
+    if (fresh) this.lane[i] = clamp(main.lateral, -half[main.k]!, half[main.k]!);
+    this.args[ARG_MAIN_S_IDX] = main.s;
+  }
+
+  /** This step's place on the road: the loop or the shortcut being driven (a shortcut's end hands back to the loop), the car's heading and speed along it, and the slots of `args` a plan reads. */
+  private projectRoute(i: number, self: AiCar, speed: number): void {
+    const a = this.args;
+    const tr = this.track;
     let route = this.route[i]!;
-    let proj = main;
+    let proj = this.mainProj;
     let path: TrackPath = tr.path;
     if (route >= 0) {
       const sc = tr.shortcuts[route]!;
@@ -394,119 +492,195 @@ export class RaceBrain {
         path = sc.path;
       }
     }
-    const k = proj.k;
-    const surf = surfaceAt(path, k);
-    const turnMax = this.cls[i]!.turn * (0.35 + 0.65 * Math.min(1, speed / 8)) * steerGrip(surf.grip);
+    this.proj = proj;
+    this.path = path;
+    this.routeNow = route;
+    this.surf = surfaceAt(path, proj.k);
+    this.turnMax = this.cls[i]!.turn * (0.35 + 0.65 * Math.min(1, speed / 8)) * steerGrip(this.surf.grip);
     const fx = detSin(self.yaw);
     const fz = detCos(self.yaw);
-    const along = self.vx * fx + self.vz * fz;
-    // A shortcut is narrow, drive its middle: only the following gap (`follow`) applies there.
-    this.follow = Number.NaN;
-    this.chase = 0;
-    this.swerve = 0;
-    this.nudge = false;
+    this.along = self.vx * fx + self.vz * fz;
+    this.toMouth = route >= 0 ? hypot2(self.x - path.x[0]!, self.z - path.z[0]!) : 0;
+    this.early = route >= 0 && proj.s < 0.5 && this.toMouth > 4;
     a[ARG_S_IDX] = proj.s;
-    a[ARG_HALF_IDX] = path.half[k]!;
+    a[ARG_HALF_IDX] = path.half[proj.k]!;
     a[ARG_LAT_IDX] = proj.lateral;
     a[ARG_FX_IDX] = fx;
     a[ARG_FZ_IDX] = fz;
-    a[ARG_ALONG_IDX] = along;
-    const wanted = this.line(self, p, others);
-    const want = route < 0 ? wanted : 0;
-    const step = (this.nudge ? SHOVE_LAT : LANE_RATE * (1 + this.swerve)) * dt;
-    this.lane[i] = route < 0 ? this.lane[i]! + clamp(want - this.lane[i]!, -step, step) : 0;
-    const lane = this.lane[i]!;
+    a[ARG_ALONG_IDX] = this.along;
+    a[ARG_SPEED_IDX] = speed;
+  }
+
+  /** Re-plan car `i`: the lateral line (and the rate its lane moves to it), the speed target with and without boost, and what boxes it in. */
+  private replan(i: number, self: AiCar, others: readonly AiCar[], race: RaceAiState): void {
+    this.follow = Number.NaN;
+    this.nosed = false;
+    this.passing = false;
+    this.nosedFree = false;
+    this.chase = 0;
+    this.swerve = 0;
+    this.nudge = false;
+    const wanted = this.line(self, this.traits[i]!, others);
+    this.planWant[i] = this.routeNow < 0 ? wanted : 0;
+    this.planRate[i] = this.nudge ? SHOVE_LAT : LANE_RATE * (1 + this.swerve);
     const clear = this.openRoad(i, self, others);
     this.busy[i] = clear ? 0 : 1;
+    this.aimAtMouth(i, self, race);
+    this.planSpeed(i, clear);
+    this.planChase[i] = this.chase;
+    this.planFollow[i] = this.follow;
+    this.planNosed[i] = this.nosed && this.nosedFree ? 1 : 0;
+    if (i < this.racers) this.hitOf[i]!.set(this.hit);
+    this.clock.planned(i);
+  }
 
-    const ld = clamp(5 + 0.5 * speed, 7, LOOK) * (clear ? this.lookK[i]! : 1);
-    const toMouth = route >= 0 ? hypot2(self.x - path.x[0]!, self.z - path.z[0]!) : 0;
-    const early = route >= 0 && proj.s < 0.5 && toMouth > 4;
-    // Onto a shortcut, until a look-ahead into it: the turn still to make onto its heading, from the car's heading and (short of the mouth,
-    // `lead` m on) from the run in to the mouth. On the loop: the next mouth this lap's coin will take, planned before the coin is tossed.
+  /**
+   * Onto a shortcut, until a look-ahead into it: the turn still to make onto its heading, from the car's heading and (short of the mouth,
+   * `lead` m on) from the run in to the mouth. On the loop: the next mouth this lap's coin will take, planned before the coin is tossed.
+   */
+  private aimAtMouth(i: number, self: AiCar, race: RaceAiState): void {
+    const route = this.routeNow;
+    const path = this.path;
     this.entry = route;
-    this.lead = early ? toMouth : 0;
-    this.turnIn = route >= 0 && proj.s < LOOK ? Math.abs(wrapPi(this.mouthYaw[route]! - self.yaw)) : 0;
-    if (early) this.turnIn = Math.max(this.turnIn, Math.abs(wrapPi(this.mouthYaw[route]! - detAtan2(path.x[0]! - self.x, path.z[0]! - self.z))));
+    this.lead = this.early ? this.toMouth : 0;
+    this.turnIn = route >= 0 && this.proj.s < LOOK ? Math.abs(wrapPi(this.mouthYaw[route]! - self.yaw)) : 0;
+    if (this.early) this.turnIn = Math.max(this.turnIn, Math.abs(wrapPi(this.mouthYaw[route]! - detAtan2(path.x[0]! - self.x, path.z[0]! - self.z))));
     if (route < 0) this.upcoming(i, race);
-    a[ARG_AHEAD_IDX] = early ? 2 : proj.s + ld;
-    const pt = this.pointAhead(path, route);
-    const tx = pt.x + pt.tz * lane;
-    const tz = pt.z - pt.tx * lane;
-    const alpha = wrapPi(detAtan2(tx - self.x, tz - self.z) - self.yaw);
-    const reach = early ? Math.max(4, hypot2(tx - self.x, tz - self.z)) : ld;
-    const omega = (2 * Math.max(speed, 4) * detSin(alpha)) / reach;
-    out.steer = clamp((omega * (clear ? this.steerK[i]! : 1)) / Math.max(0.2, turnMax), -1, 1);
+  }
+
+  /** The plan's speed targets: the road's, and (with meter in the bottle and nothing in the way) the one at the boosted top. */
+  private planSpeed(i: number, clear: boolean): void {
+    const a = this.args;
     const cls = this.cls[i]!;
     const top = cls.topSpeed;
-    a[ARG_SPEED_IDX] = speed;
     a[ARG_TOP_IDX] = top;
-    let target = this.plan(i, path, route);
-    if (this.slipP[i]! > 0 && this.slipCheck(i, target < SLIP_CORNER * top, clear, dt)) target = this.plan(i, path, route);
-    if (!Number.isNaN(this.follow)) target = Math.min(target, Math.max(0, this.follow - 0.5));
-    else if (this.meter[i]! > (this.burst[i] ? 0.02 : BURST_MIN) && Math.abs(alpha) < (this.chase > 0 ? 0.45 : 0.3)) {
+    let target = this.plan(i, this.path, this.routeNow);
+    if (this.slipP[i]! > 0 && this.slipCheck(i, target < SLIP_CORNER * top, clear, this.clock.ageOf(i))) target = this.plan(i, this.path, this.routeNow);
+    this.planTarget[i] = target;
+    this.planBoosted[i] = 0;
+    if (Number.isNaN(this.follow) && this.meter[i]! > BURST_STOP) {
       a[ARG_TOP_IDX] = top * cls.boostTop;
-      const boosted = this.plan(i, path, route);
-      if (boosted > along + BOOST_SHORT) {
-        out.boost = true;
-        target = boosted;
-      }
+      this.planBoosted[i] = this.plan(i, this.path, this.routeNow);
     }
-    // Off the road, a pursuit asking for more than full lock is a corner the plan does not see: slow to what the car can turn back onto the line at.
-    if (Math.abs(proj.lateral) > path.half[k]! && Math.abs(omega) > turnMax) {
-      const arc = cornerSpeed(cls, reach / (2 * Math.abs(detSin(alpha))), surf.grip);
-      if (arc < target) {
-        target = arc;
-        out.boost = false;
-      }
-    }
-    const err = target - along;
-    if (Math.abs(alpha) > 1.9 && speed < 6) {
+  }
+
+  /** Wheel: pure pursuit to the point a look-ahead on along the lane, which moves to the plan's line at its rate. */
+  private steer(i: number, self: AiCar, speed: number, dt: number): void {
+    const a = this.args;
+    const proj = this.proj;
+    const rate = this.planRate[i]! * dt;
+    this.lane[i] = this.routeNow < 0 ? this.lane[i]! + clamp(this.planWant[i]! - this.lane[i]!, -rate, rate) : 0;
+    const lane = this.lane[i]!;
+    const clear = this.busy[i] === 0;
+    const ld = clamp(5 + 0.5 * speed, 7, LOOK) * (clear ? this.lookK[i]! : 1);
+    a[ARG_AHEAD_IDX] = this.early ? 2 : proj.s + ld;
+    const pt = this.pointAhead(this.path, this.routeNow);
+    const tx = pt.x + pt.tz * lane;
+    const tz = pt.z - pt.tx * lane;
+    this.alpha = wrapPi(detAtan2(tx - self.x, tz - self.z) - self.yaw);
+    this.reach = this.early ? Math.max(4, hypot2(tx - self.x, tz - self.z)) : ld;
+    this.omega = (2 * Math.max(speed, 4) * detSin(this.alpha)) / this.reach;
+    this.out.steer = clamp((this.omega * (clear ? this.steerK[i]! : 1)) / Math.max(0.2, this.turnMax), -1, 1);
+  }
+
+  /** Off the road, a pursuit asking for more than full lock is a corner the plan does not see: the speed the car can turn back onto the line at (Infinity: none). */
+  private offRoadArc(i: number): number {
+    if (Math.abs(this.proj.lateral) <= this.path.half[this.proj.k]! || Math.abs(this.omega) <= this.turnMax) return Infinity;
+    return cornerSpeed(this.cls[i]!, this.reach / (2 * Math.abs(detSin(this.alpha))), this.surf.grip);
+  }
+
+  /** Boost button: asked for on a clear run while the plan at the boosted top wants more speed, held for a minimum burst, let go at once when boxed in, braking, off the road or out of meter. */
+  private boostButton(i: number, arc: number, dt: number): boolean {
+    const follow = this.planFollow[i]!;
+    const burst = this.burst[i] === 1;
+    const boosted = this.planBoosted[i]!;
+    const gate = Math.max(this.planChase[i]! > 0 ? BOOST_ALPHA_CHASE : BOOST_ALPHA, burst ? BOOST_ALPHA_KEEP : 0);
+    const want = Number.isNaN(follow) && this.meter[i]! > (burst ? BURST_STOP : BURST_MIN) && Math.abs(this.alpha) < gate && boosted > this.along + (burst ? BOOST_KEEP_SHORT : BOOST_SHORT);
+    const cut = !Number.isNaN(follow) || arc < boosted || this.meter[i]! <= BURST_STOP || this.pedals.isBraking(i);
+    return this.pedals.holdBoost(i, want, dt, cut);
+  }
+
+  /** Throttle and brake for the plan's speed: gas to the target itself (`applyDrive` runs to throttle × top at full rate), brake over a band, both slewed by the hands. */
+  private pedal(i: number, speed: number, dt: number): void {
+    const out = this.out;
+    const cls = this.cls[i]!;
+    const follow = this.planFollow[i]!;
+    const arc = this.offRoadArc(i);
+    const boost = this.boostButton(i, arc, dt);
+    out.boost = boost;
+    const target = Math.min(Number.isNaN(follow) ? (boost ? this.planBoosted[i]! : this.planTarget[i]!) : Math.min(this.planTarget[i]!, Math.max(0, follow - 0.5)), arc);
+    const excess = this.along - target;
+    const braking = this.pedals.latch(i, excess, BRAKE_ON, -BRAKE_HOLD);
+    if (Math.abs(this.alpha) > 1.9 && speed < 6) {
       out.throttle = TURN_ROUND_THROTTLE;
-      out.steer = Math.sign(alpha) || p.side;
-    } else if (err >= -1.5) {
-      // `applyDrive` runs to throttle × top at full rate: ask for the target itself (proportional-to-error settles ~10% short). A soft surface's
-      // drag is the drive's own: a target over its terminal is simply not reached (`plan` caps the targets at it), and one under it needs no more
+      out.steer = Math.sign(this.alpha) || this.traits[i]!.side;
+    } else if (!braking) {
+      // A soft surface's drag is the drive's own: a target over its terminal is simply not reached (`plan` caps the targets at it), and one under it needs no more
       // throttle than its share of the top (the push is the full engine whenever the car is under `want`).
-      out.throttle = clamp(target / (top * (out.boost ? cls.boostTop : 1)), err > 0.4 ? 0.35 : 0, 1);
-    } else {
-      out.brake = clamp(-err / 6, 0.2, 1);
-    }
-    // Last rule, for a racer (police drive this line too and hit on purpose): no car it is closing on is driven into, except the ones it means to hit (`hit`). It counts on `BRAKE_SHARE` of its own brake, and a car ahead is taken to shed the car's whole class brake (what the leader really can: measured 26-28 m/s²): the leader braking harder only raises the closing speed, so the follower is never counting on a gentler stop than the leader can make. A rival that holds its input between thinks is guarded every slice by `guard`, on what it saw now.
-    if (i < this.racers) {
-      const g = this.tunes[i]!;
-      g[GUARD_BRAKE_IDX] = cls.brake * BRAKE_SHARE;
-      g[GUARD_LEAD_IDX] = cls.brake;
-      g[GUARD_TURN_IDX] = turnMax;
-      g[GUARD_GRIP_IDX] = cls.grip * surf.grip * assists(HANDLING.realism, _assist).grip;
-      g[GUARD_DT_IDX] = dt;
-      if (this.thinkEvery[i] === 0 && !this.guardLate) guardContact(self, others, this.guarded, this.hit, g, out);
-      else this.hitOf[i]!.set(this.hit);
-    }
+      out.throttle = clamp(target / (cls.topSpeed * (boost ? cls.boostTop : 1)), excess < -0.4 ? 0.35 : 0, 1);
+    } else out.brake = clamp(excess / BRAKE_SPAN, BRAKE_MIN, 1);
+    this.pedals.shape(i, out, dt);
+  }
+
+  /** The contact guard's tune for a racer, the stuck test (throttle held without motion starts a back-out: unchanged) and the boost meter. */
+  private finish(i: number, speed: number, dt: number): void {
+    const out = this.out;
+    const p = this.traits[i]!;
+    if (i < this.racers) this.tuneGuard(i, dt);
     if (this.lastThrottle[i]! > 0.35 && speed < STUCK_SPEED) this.stuck[i]! += dt;
     else this.stuck[i] = Math.max(0, this.stuck[i]! - dt * 2);
-    if (this.stuck[i]! > p.patience + 0.4) {
+    const standoff = i < this.racers && this.standoff.watch(i, speed, this.lastThrottle[i]!, this.planNosed[i] === 1, dt);
+    if (standoff || this.stuck[i]! > p.patience + 0.4) {
       this.stuck[i] = 0;
-      this.recover[i] = 0.9 + 0.4 * p.patience;
-      this.recoverSteer[i] = Math.sign(alpha) || p.side;
+      this.recover[i] = standoff ? STANDOFF_BACKOFF_S : 0.9 + 0.4 * p.patience;
+      this.recoverSteer[i] = Math.sign(this.alpha) || p.side;
       out.throttle = REVERSE_THROTTLE;
       out.brake = 0;
+      out.boost = false;
       out.steer = this.recoverSteer[i]!;
+      this.pedals.follow(i, out);
     }
     this.lastThrottle[i] = out.throttle;
-    if (out.throttle <= 0) out.boost = false;
+    if (out.throttle <= 0 && out.boost) {
+      out.boost = false;
+      this.pedals.stopBoost(i);
+    }
     this.meterWas[i] = this.meter[i]!;
     this.charge(i, out.boost);
-    return out;
+  }
+
+  /**
+   * Last rule, for a racer (police drive this line too and hit on purpose): no car it is closing on is driven into, except the ones it means to hit (`hit`).
+   * It counts on `BRAKE_SHARE` of its own brake, and a car ahead is taken to shed the car's whole class brake (what the leader really can: measured 26-28 m/s²): the leader
+   * braking harder only raises the closing speed, so the follower is never counting on a gentler stop than the leader can make. `guard` runs it every step, on what the car sees now.
+   */
+  private tuneGuard(i: number, dt: number): void {
+    const cls = this.cls[i]!;
+    const g = this.tunes[i]!;
+    g[GUARD_BRAKE_IDX] = cls.brake * BRAKE_SHARE;
+    g[GUARD_LEAD_IDX] = cls.brake;
+    g[GUARD_TURN_IDX] = this.turnMax;
+    g[GUARD_GRIP_IDX] = cls.grip * this.surf.grip * assists(HANDLING.realism, _assist).grip;
+    g[GUARD_DT_IDX] = dt;
+  }
+
+  /** The lane (m) round the stopped cars ahead (`WreckPass`), and the speed the pass allows: the brake only where every lane is held. */
+  private passRound(i: number, want: number, room: number, look: number): number {
+    const cls = this.cls[i]!;
+    const lane = this.pass.choose(i, want, this.lane[i]!, room, look, cls.brake * BRAKE_SHARE, cls.topSpeed, LANE_RATE * (1 + WRECK_SWERVE));
+    this.swerve = Math.max(this.swerve, WRECK_SWERVE);
+    if (this.pass.speedCap < cls.topSpeed) this.follow = this.pass.speedCap + 0.5;
+    this.nosedFree = !Number.isNaN(lane);
+    return Number.isNaN(lane) ? want : lane;
   }
 
   /** No car close on its line this call (`follow`, `swerve`, `nudge`) and none within `calm` m: skill errors and the skill line are for an open road. */
   private openRoad(i: number, self: AiCar, others: readonly AiCar[]): boolean {
-    if (!Number.isNaN(this.follow) || this.swerve !== 0 || this.nudge) return false;
+    if (!Number.isNaN(this.follow) || this.swerve !== 0 || this.nudge || this.passing) return false;
     const calm = this.calm[i]!;
     for (let j = 0; calm > 0 && j < others.length; j++) {
       const o = others[j]!;
-      if (o.id !== i && o.alive && hypot2(o.x - self.x, o.z - self.z) < calm) return false;
+      if (o.id !== i && hypot2(o.x - self.x, o.z - self.z) < calm) return false;
     }
     return true;
   }
@@ -656,6 +830,47 @@ export class RaceBrain {
     return crestSpeed(this.track.path, s + ahead) > Math.max(along, oAlong);
   }
 
+  /** Whether the car `o` (`dist` m away; `onRoute`: projected onto the road in `seeProj`; the driver at arc `s` seeing `sightArc` m of road) is in view: near, in the mirrors, or on the road within the stretch the bends leave open. */
+  private inView(o: AiCar, dist: number, ahead: number, onRoute: boolean, s: number, sightArc: number): boolean {
+    if (dist < SEEN_NEAR) return true;
+    if (ahead <= 0) return dist < SEEN_BEHIND;
+    if (!onRoute) return true;
+    const path = this.path;
+    const at = this.seeProj;
+    if (Math.abs(at.lateral) > path.half[at.k]! + SEEN_CORRIDOR) return dist < SEEN_OFFROAD;
+    let arc = at.s - s;
+    if (path.closed) arc -= path.length * Math.round(arc / path.length);
+    return arc <= sightArc;
+  }
+
+  /** The sideways distance (m, + = left of travel) the car `o` (projected in `seeProj`), `ahead` m on, will have moved across the road by the time we reach it, from its speed across the road now. */
+  private driftBy(o: AiCar, onRoute: boolean, ahead: number, closing: number): number {
+    if (!onRoute) return 0;
+    const k = this.seeProj.k;
+    const acrossSpeed = o.vx * this.path.tz[k]! - o.vz * this.path.tx[k]!;
+    return clamp(acrossSpeed * Math.min(PREDICT_S, ahead / Math.max(closing, 1)), -PREDICT_MAX, PREDICT_MAX);
+  }
+
+  /** Whether a car other than `blocker` holds `lane` (m): one of this call's cars ahead, up to `HELD_BEYOND` past the blocker, within a lane width of it. */
+  private laneHeld(lane: number, blocker: number, blockerAhead: number): boolean {
+    for (let k = 0; k < this.nearCount; k++) {
+      if (this.nearId[k] !== blocker && this.nearAhead[k]! < blockerAhead + HELD_BEYOND && Math.abs(this.nearLat[k]! - lane) < LINE_W + 0.4) return true;
+    }
+    return false;
+  }
+
+  /** Both sides of a car are held: follow it (its speed, a car's length behind), and wait for a gap. */
+  private followBoxedIn(i: number, blockerAlong: number, blockerAhead: number): void {
+    const decel = this.cls[i]!.brake * BRAKE_SHARE;
+    this.follow = blockerAlong + Math.sqrt(2 * decel * Math.max(0, blockerAhead - FOLLOW_STOP_GAP));
+  }
+
+  /** Whether moving to lane `want` takes well under the time left to a car `ahead` m on that it closes on at `closing` m/s. */
+  private clearsInTime(i: number, want: number, closing: number, ahead: number): boolean {
+    const rate = LANE_RATE * (1 + this.swerve);
+    return Math.abs(want - this.lane[i]!) / rate < (CLEAR_MARGIN * ahead) / Math.max(closing, 1);
+  }
+
   /** Lateral target (m, + = left of travel) on the main loop; sets `follow` when boxed in. */
   private line(self: AiCar, p: Personality, others: readonly AiCar[]): number {
     const a = this.args;
@@ -666,6 +881,15 @@ export class RaceBrain {
     const fz = a[ARG_FZ_IDX]!;
     const along = a[ARG_ALONG_IDX]!;
     const i = self.id;
+    this.pass.begin(i, this.clock.ageOf(i));
+    // A car going round another does so at a creep at least: two cars stopped nose to nose have no closing speed, but each is a blocker to the other.
+    const driveAlong = Math.max(along, PASS_CREEP);
+    const age = this.clock.ageOf(i);
+    const sightArc = this.routeNow < 0 ? visibleStretch(this.path, s, 1) : SIGHT_MAX;
+    const seconds = this.lookSeconds[i]!;
+    const reaction = this.reaction[i]!;
+    const passLook = lookDistance(driveAlong, seconds, PASS_LOOK_FLOOR, sightArc);
+    this.nearCount = 0;
     const tr = this.track;
     const room = Math.max(0, half - EDGE);
     // Traffic distances below were tuned at `PACE`; faster, they stretch with speed (the same time ahead).
@@ -694,15 +918,36 @@ export class RaceBrain {
     let preyFight = 0;
     for (let n = 0; n < others.length; n++) {
       const o = others[n]!;
-      if (o.id === i || !o.alive) continue;
+      if (o.id === i) continue;
       const dx = o.x - self.x;
       const dz = o.z - self.z;
       const ahead = dx * fx + dz * fz;
       // Left of travel = (fz, −fx).
       const side = dx * fz - dz * fx;
+      const dist = hypot2(dx, dz);
+      const onRoute = ahead > 0 && this.routeNow < 0;
+      if (onRoute) projectPath(this.path, o.x, o.z, sampleAt(this.path, s + ahead), this.seeProj);
+      // A car not in view (round a bend, behind a wall) or not yet noticed is nobody's business: the contact guard leaves it alone too.
+      if (!this.sighting.reacts(i, o.id, this.inView(o, dist, ahead, onRoute, s, sightArc), age, reaction)) {
+        this.hit[o.id] = 1;
+        continue;
+      }
       const oAlong = o.vx * fx + o.vz * fz;
-      const inWay = Math.abs(side) < LINE_W + 0.4 || Math.abs(lat + side - this.lane[i]!) < LINE_W;
+      const closing = closingSpeed(self.vx, self.vz, o.vx, o.vz, dx, dz, dist);
+      const look = lookDistance(closing, seconds, SCAN * pace, sightArc);
+      const predicted = ahead > 0 ? side + this.driftBy(o, onRoute, ahead, closing) : side;
+      if (ahead > 0 && ahead < NOSE_GAP && Math.abs(side) < NOSE_HALF) this.nosed = true;
+      const inWay = Math.abs(predicted) < LINE_W + 0.4 || Math.abs(lat + predicted - this.lane[i]!) < LINE_W;
+      if (o.id >= this.racers && ahead > -HELD_TAIL && ahead < look && this.nearCount < NEAR_CARS) {
+        this.nearId[this.nearCount] = o.id;
+        this.nearAhead[this.nearCount] = ahead;
+        this.nearLat[this.nearCount] = lat + predicted;
+        this.nearCount++;
+      }
       const rival = o.id < this.racers;
+      // A cop (stopped or crawling) and a dead car steer the lane choice but never slow the pass (`WreckPass` soft): they are passed at speed.
+      if (oAlong < CRAWL && driveAlong > oAlong + 0.3 && ahead < passLook) this.pass.note(ahead, lat + side, o.id >= this.guarded || !o.alive);
+      if (rival) this.pass.noteRival(o.id, ahead);
       // Rivals: fight or keep clear by mood (aggression, both cars' damage); traffic is only avoided. Only at racing pace, both
       // cars rolling on: two hungry cars that met slow or stopped brawled on a wall until both were out of the race.
       const rolling = along > FIGHT_PACE && oAlong > 0.6 * FIGHT_PACE;
@@ -716,13 +961,13 @@ export class RaceBrain {
       const shy = clamp(-m, 0, 1);
       this.hit[o.id] = fight > 0 ? 1 : 0;
       if (fight > 0 && aggr <= CAREFUL) this.nudge = true;
-      if (ahead > 0.5 && ahead < SCAN * Math.max(pace, (along - oAlong) / PACE) && inWay) {
-        if (along > oAlong + 0.3) {
+      if (ahead > 0.5 && ahead < look && inWay) {
+        if (driveAlong > oAlong + 0.3) {
           if (ahead < blockerAhead) {
             blockerFight = fight;
             blocker = o.id;
             blockerAhead = ahead;
-            blockerSide = side;
+            blockerSide = predicted;
             blockerAlong = oAlong;
           }
         } else if (fight <= 0 && oAlong >= CRAWL) {
@@ -767,29 +1012,27 @@ export class RaceBrain {
       want += (aim - want) * Math.min(1, preyFight * 1.5);
       this.chase = preyFight;
     }
+    if (blocker >= 0 && blockerFight > 0) {
+      this.chase = blockerFight;
+      return clamp(lat + blockerSide, -room, room);
+    }
+    if (blocker >= 0 && blockerAlong < 0) this.swerve = Math.max(this.swerve, 2);
+    if (this.pass.blocks(want, this.lane[i]!)) return this.passRound(i, want, room, passLook);
     if (blocker >= 0) {
+      this.passing = true;
       const oLat = lat + blockerSide;
-      if (blockerFight > 0) {
-        this.chase = blockerFight;
-        return clamp(oLat, -room, room);
-      }
-      // Met head-on, or on a car stopped or crawling (it closes at our whole speed, or most of it; an oncoming traffic car brakes to a stop as the racer closes, so its speed along
-      // the road reaches 0 and stays under `CRAWL`): round it on the side with more road beside the passing line, at three times the lane change rate when it comes on. The planned lane is no guide
-      // here: it carries the yield nudge for a faster car behind (2 m), which steered a racer round an oncoming car on its narrow side, where it stopped and crept nose first into it.
-      const meet = blockerAlong < CRAWL;
-      if (blockerAlong < 0) this.swerve = Math.max(this.swerve, 2);
       const left = oLat + LINE_W + 0.9;
       const right = oLat - LINE_W - 0.9;
-      const leftOk = left <= room;
-      const rightOk = right >= -room;
-      const leftFirst = meet ? room - left >= right + room : Math.abs(left - want) <= Math.abs(right - want);
+      const leftOk = left <= room && !this.laneHeld(left, blocker, blockerAhead);
+      const rightOk = right >= -room && !this.laneHeld(right, blocker, blockerAhead);
+      // Met head-on, or on a car stopped or crawling (it closes at our whole speed, or most of it): round it on the side with more road beside it. The planned lane is no guide here: it carries the yield nudge for a faster car behind.
+      const leftFirst = blockerAlong < CRAWL ? room - left >= right + room : Math.abs(left - want) <= Math.abs(right - want);
       if (leftOk && (!rightOk || leftFirst)) want = left;
       else if (rightOk) want = right;
-      if (!leftOk && !rightOk) {
-        if (blockerAhead < 10) this.follow = blockerAlong;
-      } else if (blockerAlong >= CRAWL && Math.abs(blockerSide) < LINE_W + 0.5) {
-        // Passing a moving car, not yet clear sideways: close no faster than the gap allows (a pass at boost speed side-swiped
-        // the car it was going round). A stopped or crawling car is just driven round (capping speed behind one jammed the city's hairpins).
+      this.nosedFree = leftOk || rightOk;
+      if (!leftOk && !rightOk) this.followBoxedIn(i, blockerAlong, blockerAhead);
+      else if (blockerAlong >= CRAWL && Math.abs(blockerSide) < LINE_W + 0.5 && (blocker < this.racers || !this.clearsInTime(i, want, along - blockerAlong, blockerAhead))) {
+        // Passing a moving car it cannot get clear of in time: close no faster than the gap allows (a pass at boost speed side-swiped the car it was going round).
         this.follow = blockerAlong + 0.5 + clamp((blockerAhead - PASS_NOSE) * 0.8, blockerAhead > PASS_NOSE ? PASS_CREEP : -2, 6);
       }
     } else if (keep >= 0) {

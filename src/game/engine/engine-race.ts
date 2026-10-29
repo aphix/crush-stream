@@ -637,11 +637,11 @@ export class RaceDirector extends RaceHudLayer {
         if (kind === "remote") input = this.remote[i]!;
         else if (this.seatDrives(i)) input = this.host.seat.input(car, dt);
         else {
-          if (brain.due(i, dt)) copyDrive(brain.think(snaps[i]!, snaps, rec, brain.elapsed(i)), this.held[i]!);
+          copyDrive(brain.think(snaps[i]!, snaps, rec, dt), this.held[i]!);
           // A wreck that still drives (`crashed`) has no hands to steady.
           if (car.crashed) {
             this.hands.follow(i, this.held[i]!);
-            input = brain.guard(snaps[i]!, snaps, this.held[i]!);
+            input = brain.guard(snaps[i]!, snaps, this.held[i]!, dt);
           } else input = brain.guard(snaps[i]!, snaps, this.hands.fade(i, this.held[i]!, dt, car.velocity.length(), car.placements), dt, this.held[i]!);
           ai = true;
         }

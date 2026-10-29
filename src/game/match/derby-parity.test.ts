@@ -157,9 +157,7 @@ describe("given a derby AI car hunting a target by the player's boost rules", ()
     const faced = charging(18, {}, { yaw: Math.PI });
     expect(faced.brain.think(faced.self, faced.all, DT).boost, "boosted into a nose (head-on)").toBe(false);
     expect(faced.brain.tacticOf(0), "head-on case: not a charge").toBe("nose");
-    const side = charging(18);
-    side.all[1]!.x = 18;
-    side.all[1]!.z = 2;
+    const side = charging(18, {}, { x: 18, z: 2 });
     expect(side.brain.think(side.self, side.all, DT).boost, "target off the nose").toBe(false);
     const empty = charging(18);
     empty.brain.meter[0] = 0;

@@ -54,6 +54,9 @@ const LOSE_TIME = 4;
 const PURSUIT_MAX = 40;
 /** Seconds a respawned racer is left alone. */
 const IMMUNE = 4;
+/** A unit ahead of its target crawls: it brakes above this speed (m/s) plus half `CRAWL_BAND`, and stops braking under it less half the band. */
+const CRAWL_SPEED = 4;
+const CRAWL_BAND = 1;
 /**
  * A parked unit nobody came near is put away after `PARK_MAX` s and a knocked-out one after `DOWN_STORE` s, a given-up one with no other racer to take
  * up at once, none of them while a player can see it (`mayStore`). A unit put on the road is not put away for
@@ -191,6 +194,7 @@ export class PoliceBrain extends CopBrain {
     const u = self.id - this.first;
     if (u < 0 || u >= this.count || !self.alive || this.state[u] !== "pursuit") return out;
     out.brake = 0;
+    this.driven = true;
     const speed = hypot2(self.vx, self.vz);
     if (this.wedge.backing(u, dt, out)) return out;
     const p = this.pack[u]!;
@@ -229,8 +233,9 @@ export class PoliceBrain extends CopBrain {
       out.steer = line.steer;
       if (arc < -WAIT_BEHIND) {
         // Ahead of its target: crawl until it comes up.
-        out.throttle = speed > 4 ? 0 : 0.3;
-        out.brake = speed > 4 ? 0.5 : 0;
+        const slow = this.pedals.isBraking(self.id) ? speed > CRAWL_SPEED - CRAWL_BAND / 2 : speed > CRAWL_SPEED + CRAWL_BAND / 2;
+        out.throttle = slow ? 0 : 0.3;
+        out.brake = slow ? 0.5 : 0;
         return out;
       }
       out.throttle = line.throttle;
@@ -238,7 +243,7 @@ export class PoliceBrain extends CopBrain {
       out.boost = arc > CATCH_UP && line.throttle > 0.5;
       return out;
     }
-    attackTarget(self, tg, this.role[u]!, this.turn[self.id]!, speed, dist, headOn, out);
+    attackTarget(self, tg, this.role[u]!, this.turn[self.id]!, speed, dist, headOn, out, true, undefined, undefined, this.pedals.isBraking(self.id));
     // Wedged (against its target on a wall, or a car): back off for another run.
     this.wedge.watch(u, self.x, self.z, dt, out);
     return out;

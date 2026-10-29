@@ -9,6 +9,9 @@ import { chain, CREST, crashes, reelViewClaims, survivalOn } from "./reel-view-c
 /** The chain's place on the city's straight, as a share of its 60 m: the middle of the 0.3-0.6 where the shoved car drives into the third whichever way it veers off the hit (at 0 it can pass 2.8 m wide of it, and the clip then has no later hit). */
 const CHAIN_SHIFT = 0.45;
 
+/** The city wall hit's place, 0.02 of the lap on from its usual 0.86: at 0.86 a street-traffic car stands in the staged car's way and the AI brakes for it before the wall, which then throws no driver. */
+const WALL_SHIFT = 0.02;
+
 /**
  * One staged crash of each kind, each in a race of only its own cars (`reel-view-{city,stunt,havana}.ai-long-run.ts` walk each kind along the lap and
  * add a ramming race's own clips): a head-on that throws both drivers on the stunt course and a head-on, a T-bone, a wall hit and a
@@ -25,7 +28,7 @@ reelViewClaims(
     const cityShift0 = crashes(cityTrack.length, 0);
     await scene("city head-on", raceOn("city", 8, 2), cityTrack, [{ ...cityShift0[0]!, cars: [1, 2] }], 14);
     await scene("city T-bone", raceOn("city", 8, 2), cityTrack, [{ ...cityShift0[2]!, cars: [1, 2] }], 14);
-    await scene("city wall", raceOn("city", 8, 1), cityTrack, [{ ...cityShift0[4]!, cars: [1] }], 14);
+    await scene("city wall", raceOn("city", 8, 1), cityTrack, [{ ...crashes(cityTrack.length, WALL_SHIFT)[4]!, cars: [1] }], 14);
     await scene("city chain gap 16 m", raceOn("city", 6, 3), cityTrack, chain(CHAIN_SHIFT, 16), 14);
     await scene("stunt head-on", raceOn("stunt", 3, 2), stuntTrack, [{ ...crashes(stuntTrack.length, 0)[0]!, cars: [1, 2] }], 14);
     await scene("stunt jump +28 m", raceOn("stunt", 3, 2), stuntTrack, [{ kind: "jump", at: CREST, speed: 30, land: 28, cars: [1, 2] }], 14);

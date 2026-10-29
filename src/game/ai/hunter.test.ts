@@ -201,7 +201,8 @@ describe("given one cop at the origin facing +z, driven by the hunter brain, wit
     Object.assign(r.cars[0]!, { x: 0, z: 100 });
     expect(r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ).brake).toBe(1);
     r.run(0.25);
-    const out = r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ);
+    let out = r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ);
+    for (let k = 0; k < FRAME_HZ / 2; k++) out = r.brain.think(r.cars[1]!, r.cars, 1 / FRAME_HZ);
     expect(firstMismatch([out.brake, out.throttle], [0, 1])).toBeUndefined();
   });
 
@@ -219,7 +220,9 @@ describe("given one cop at the origin facing +z, driven by the hunter brain, wit
     const o = d.out();
     expect(firstMismatch([o.throttle, o.brake, o.boost], [0, 1, false])).toBeUndefined();
     d.cop.crashed = false;
-    expect(d.out().throttle).toBe(1);
+    let again = d.out();
+    for (let k = 0; k < FRAME_HZ / 2; k++) again = d.out();
+    expect(again.throttle).toBe(1);
   });
 
   it("when a solid wall stands between it and the target, then the cop bends round the wall and keeps to the side it chose on the next call, and without the wall it steers straight", () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
+import { must } from "../kernel/must.test-util.ts";
 import { applyAiDrive } from "./input-fade.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
@@ -11,7 +12,6 @@ import { Track, blankProjection, projectPath } from "../world/track.ts";
 import { SPAWN_FAR, SPAWN_NEAR, TrafficBrain } from "./traffic.ts";
 import city from "../world/tracks/city.json" with { type: "json" };
 import { DT } from "../vehicle/test-support.ts";
-import { must } from "../kernel/must.test-util.ts";
 
 const track = new Track(city);
 
@@ -141,6 +141,31 @@ describe("given the city track's ambient traffic (cars that drive the lanes arou
     const sameWay = swing(0);
     expect(facing.kerb > 1 && facing.centre < 1, `facing blocker: ${facing.kerb.toFixed(2)} m toward its own kerb, ${facing.centre.toFixed(2)} m toward the centre`).toBeTruthy();
     expect(sameWay.centre > 2.5 && sameWay.kerb < 0.5, `same-way blocker: ${sameWay.centre.toFixed(2)} m toward the centre, ${sameWay.kerb.toFixed(2)} m toward its own kerb`).toBeTruthy();
+  });
+
+  it("when a racer bears down on a car in its lane on an open stretch (head-on 30 m ahead, or from behind), then it holds to its own kerb without stopping, and with the racer beyond what the road shows it keeps its lane", () => {
+    brain.reset();
+    const slot = brain.slotOf(0);
+    const kerb = slot.offset + Math.sign(slot.offset || 1) * 1.5;
+    const pt = (s: number) => track.pointAt(s, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
+    const at = (id: number, s: number, yaw: number, speed: number): AiCar => {
+      const p = pt(s);
+      const heading = Math.atan2(p.tx, p.tz) + yaw;
+      return { ...blankAiCar(id), alive: true, x: p.x + p.tz * slot.offset, z: p.z - p.tx * slot.offset, yaw: heading, vx: Math.sin(heading) * speed, vz: Math.cos(heading) * speed };
+    };
+    const cases = [
+      { it: "head-on", racer: at(20, 130, Math.PI, 30), expectedOffset: kerb },
+      { it: "from behind", racer: at(20, 70, 0, 30), expectedOffset: kerb },
+      { it: "out of view", racer: at(20, 230, Math.PI, 30), expectedOffset: slot.offset },
+    ];
+    for (const testCase of cases) {
+      brain.reset();
+      const self = at(0, 100, 0, brain.speed);
+      let out = idleDrive();
+      for (let step = 0; step < 0.5 / DT; step++) out = brain.think(self, [self, testCase.racer], DT);
+      expect(Math.abs(brain["planOffset"][0]! - testCase.expectedOffset), `${testCase.it}: steers for offset ${brain["planOffset"][0]!.toFixed(2)}, expected ${testCase.expectedOffset.toFixed(2)}`).toBeLessThan(1e-9);
+      expect(out.brake, `${testCase.it}: no braking`).toBe(0);
+    }
   });
 
   it("when a car on the throttle stays pinned where it is, then after about a second it backs off in reverse", () => {

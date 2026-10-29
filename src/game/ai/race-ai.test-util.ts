@@ -53,11 +53,9 @@ export function race(track: Track, n: number, aggression: number, laps: number, 
     for (const [i, c] of cars.entries()) {
       const rec = session.cars[i]!;
       if (session.phase === "racing" && rec.status === "racing") {
-        if (brain.due(i, DT)) {
-          const out = brain.think(snaps[i]!, snaps, rec, brain.elapsed(i));
-          tap?.(i, out);
-          copyDrive(out, held[i]!);
-        }
+        const out = brain.think(snaps[i]!, snaps, rec, DT);
+        tap?.(i, out);
+        copyDrive(out, held[i]!);
         applyAiDrive(c, brain.guard(snaps[i]!, snaps, held[i]!, DT), DT);
       } else applyDrive(c, hold, DT);
       c.integrate(DT);

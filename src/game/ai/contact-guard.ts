@@ -30,6 +30,8 @@ const NEED_STEER_RATE = 4;
 const PUSH_FLOOR = 0.002;
 /** A contact within this (m) of the path's centre line clears about as well to either side, so the push keeps the side it already steers to: at 55 m/s the look-ahead's lateral at 1.3 s swung ±0.6 m with the push's own yaw and flipped its side every 3 steps. */
 const SIDE_BAND = LAT / 2;
+/** A contact this close to the path's centre line (m) has no side to speak of even while the guard brakes: a push already steering keeps its side, or the sign of a few centimetres flipped it every step. */
+const DEAD_AHEAD = 0.1;
 
 /**
  * The look-ahead's sample times: 0 to `HORIZON` in steps of `STEP`, accumulated as the first version of the guard did. The last,
@@ -106,9 +108,13 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
   let steerable = false;
   // The hardest braking any car ahead calls for, as a share of `brake`: the deceleration that takes its closing speed off in the time left.
   let need = 0;
-  for (let k = 0; k < count; k++) {
+  let braking = false;
+  for (let k = 0; k < cars.length; k++) {
     const o = cars[k]!;
-    if (o.id === self.id || !o.alive || spare[o.id] === 1) continue;
+    if (o.id === self.id || spare[o.id] === 1) continue;
+    // Past `count` are the police: a moving live one is the racer's to be rammed by; a dead or stopped one, like a dead car, is a wreck to steer round at speed, never a reason to brake (`soft`).
+    const soft = !o.alive || k >= count;
+    if (k >= count && o.alive && hypot2(o.vx, o.vz) > DERBY_RULES.hitSpeed) continue;
     const ospeed = hypot2(o.vx, o.vz);
     // Out of reach: the two centres are further apart than the zone and the most they can close in `HORIZON` s.
     const gap = hypot2(o.x - self.x, o.z - self.z) - (speed + ospeed) * last;
@@ -198,7 +204,8 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
     // The sideways room the car can make by then: a contact it can steer clear of is not braked for. Only a car ahead is braked for (`ahead`: a stopped car's near end counts, it lies across the way).
     const room = 0.5 * STEER_ACC * tc * tc;
     const clear = room >= ca - Math.abs(cl);
-    if (cn + reach > 0 && !clear) need = Math.max(need, Math.max(0, cw - TAP) / (2 * Math.max(tc, 0.05) * brake));
+    if (!soft && cn + reach > 0 && !clear) need = Math.max(need, Math.max(0, cw - TAP) / (2 * Math.max(tc, 0.05) * brake));
+    if (!soft && tc <= 0) braking = true;
     if (tc < soonest) {
       soonest = tc;
       lateral = cl;
@@ -217,13 +224,13 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
   const u = STEER_CAP * clamp(2 * (1 - soonest / HORIZON), 0, 1) * (steerable ? 1 : offset) * (1 - need);
   const held = tune[GUARD_DT_IDX]! > 0 ? tune[GUARD_PUSH_IDX]! : 0;
   // A braking guard takes the side away from the contact: a held side would steer toward a car crossing the centre line.
-  const away = held !== 0 && need === 0 && Math.abs(lateral) < SIDE_BAND ? Math.sign(held) : lateral >= 0 ? -1 : 1;
+  const away = held !== 0 && Math.abs(lateral) < (need === 0 ? SIDE_BAND : DEAD_AHEAD) ? Math.sign(held) : lateral >= 0 ? -1 : 1;
   const toward = out.steer * away < 0;
   const target = away * u;
   const push = tune[GUARD_DT_IDX]! > 0 ? holdPush(tune, target) : target;
   tune[GUARD_PUSH_IDX] = push;
   out.steer = clamp((toward ? out.steer * (1 - steerNeed) : out.steer) * (1 - Math.abs(push)) + push, -1, 1);
-  brakeFor(out, need, soonest <= 0);
+  brakeFor(out, need, braking);
 }
 
 /** The steer push held from the calls before, faded by this call's step; a one-off call (step 0) holds nothing, or a wreck would steer on its last contact's push for good. */

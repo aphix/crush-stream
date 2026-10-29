@@ -9,7 +9,7 @@ import { setGround } from "../world/ground.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { BRAKE_SHARE, RaceBrain, copyDrive } from "./race-ai.ts";
 import { race, raced, summarize } from "./race-ai.test-util.ts";
-import { AI_DIFFICULTIES, AI_EVERY_SLICE, GUARD_BRAKE_IDX, GUARD_LEAD_IDX, SLIP_RECOVER, SLIP_WINDOW, type AiDifficulty } from "./constants.ts";
+import { AI_DIFFICULTIES, AI_EVERY_SLICE, GUARD_BRAKE_IDX, GUARD_LEAD_IDX, SLIP_RECOVER, SLIP_WINDOW } from "./constants.ts";
 import { fieldAggression, mood } from "./ai-aggression.ts";
 import { Track } from "../world/track.ts";
 import { parseTrack } from "../world/track-schema.ts";
@@ -52,22 +52,20 @@ function hardMarks(track: Track): string[] {
  * and when a coasting car's rigid tyre rows' straight-up lift came off its plan speed instead of adding to it (stunt's cars 0 and 1 between thinks 300 and 600: 6c1aa909 -> 480dfde1 and 27444265 -> 1bbd006a; the other 14 marks, and oval's and rally's, stand),
  * and when the pull down a face became the plan part of each tyre's real load (the spring's push over the face's normal, not a fixed share of the weight): every rally and stunt mark changes (a loaded bank and a crest read their own load), oval is flat and keeps its marks,
  * and when a rigid tread on the world's ground began to push along the face's normal, not straight up (stunt's cars 0 to 7 between thinks 300 and 600, 9 of its 16 marks: its kicker and crests meet the normal's plan push; oval's and rally's stand),
- * and when the contact guard's arc was held to the yaw rate the tyres give (`GUARD_GRIP_IDX`: grip / speed, as `applyDrive` caps it) and began to count a stopped car lying across the way at its true reach (rally's cars 1 to 7 and stunt's 3 to 7 between thinks 300 and 600: the cars that meet traffic; oval's marks stand).
+ * and when the contact guard's arc was held to the yaw rate the tyres give (`GUARD_GRIP_IDX`: grip / speed, as `applyDrive` caps it) and began to count a stopped car lying across the way at its true reach (rally's cars 1 to 7 and stunt's 3 to 7 between thinks 300 and 600: the cars that meet traffic; oval's marks stand),
+ * and when the contact guard began to see dead-engine wrecks and the brain began to plan at 12 Hz with human pedal rates, a brake band, a boost burst hold and a wreck pass (`pedals.ts`, `plan-clock.ts`, `wreck-pass.ts`): every mark changes, as every output does,
+ * and when drivers began to see only what the road's bends leave open, to react after a reaction time and to look seconds of closing speed ahead (`sight.ts`), to pass moving cars by predicted lane and to back off a nose-to-nose standoff: every mark changes again,
+ * and when a rival racer was passed at the capped closing speed again, only traffic and cops being passed at speed when the lane change finishes in time (`clearsInTime`: a rival passed at 14 m/s over cut back in front of the car it passed and was rear-ended on corner entry), and the contact guard kept its steer side on a contact within 0.1 m of its path's centre while it brakes (`DEAD_AHEAD`: the sign of a few centimetres flipped the push every step in a pack): oval's and stunt's marks all change, rally's all but car 0's and car 1's first.
  */
 const HARD_MARKS: Record<string, string[]> = {
-  oval: ["e9df8473", "7e9593ab", "6b5fc308", "9be8ec8e", "1da391b9", "15cb62d5", "b81974e2", "f9f01605", "1eb60b86", "92a70774", "5aed2cd0", "ccaba551", "c3295f1d", "cd39d90a", "7cb6e26c", "52acf03f"],
-  rally: ["91996808", "275c4c87", "67b6acec", "11693bb", "e3754e83", "5156843b", "9249d068", "ec6998a4", "fff59221", "6d696987", "a0554cfe", "bb3c5113", "b8c140d", "a77c0348", "c3de18f", "faa65b07"],
-  stunt: ["10806970", "5d6c0a38", "1437e3fe", "5252720a", "258a4215", "b2a128c8", "fd72ae50", "45f7eca6", "bb9a8610", "c2e3138b", "614dbfdd", "cf40067b", "39fef24f", "890af02a", "33160d2d", "c4f91e59"],
+  oval: ["e0fc741b", "c8d226fc", "f144f7f7", "8cd99adb", "8ee47727", "e3cb079b", "f47b888", "49ffa627", "904b70e5", "87abd5d0", "7ea8c69a", "e318b895", "afd4ec53", "7706304", "5f4b8806", "ea2b2cd9"],
+  rally: ["5d869197", "bd9b1e1c", "66fcc6c8", "a16d9c88", "48bb3e44", "5c631396", "934a0352", "b133c92f", "6b204328", "19de19d9", "b4cc547", "ae971fa7", "166383eb", "28e9e088", "8bd69309", "ad66d25f"],
+  stunt: ["b2c61908", "b7e45091", "522ca52a", "7dcf5edd", "59feb672", "544cd7b5", "f1adfd4d", "ffbc5557", "a723b927", "b1497eae", "81c9562c", "3d3afa57", "678b1009", "79bdc801", "4d8cacde", "7e2955c"],
 };
 
 describe("given 8 clean AI cars (aggression 0) on the grid of the oval", () => {
-  const testCases = AI_DIFFICULTIES.map((difficulty) => ({
-    it: `when they race 3 laps at ${difficulty} difficulty, then all 8 finish, they stay on the road at least 95% of the time, and the winner finishes within the time bound`,
-    difficulty,
-  }));
-  for (const testCase of testCases) {
-    it(testCase.it, (t) => {
-      const { difficulty } = testCase;
+  for (const difficulty of AI_DIFFICULTIES) {
+    it(`when they race 3 laps at ${difficulty} difficulty, then all 8 finish, they stay on the road at least 95% of the time, and the winner finishes within the time bound`, (t) => {
       const r = raced(oval, difficulty);
       t.annotate(`${oval.id} ${difficulty}: winner ${r.winner.toFixed(1)} s, best lap ${Math.min(...r.lapTimes).toFixed(2)} s, slowest lap ${Math.max(...r.lapTimes).toFixed(2)} s, on road ${(100 * r.share).toFixed(1)}%, mistakes ${r.mistakes}`);
       expect(r.finished, `finished ${r.finished}/8 by ${r.time.toFixed(0)} s (bound ${r.limit.toFixed(0)} s); laps ${r.laps}`).toBe(8);
@@ -98,36 +96,26 @@ describe("given the same 8 easy AI cars raced twice from the grid of the oval", 
   });
 });
 
-describe("given a stale medium driver holding its last drive between thinks, with a stopped car 8 m ahead of it at 17 m/s", () => {
-  it("when the slice's contact guard reads the held drive, then it brakes where the held input drove on, and a hard (every-slice) brain's guard leaves the drive it was given", () => {
-    const me = at(0, pt.x, pt.z, 17);
-    const parked = at(1, pt.x, pt.z + 8, 0);
-    const far = at(1, pt.x, pt.z - 400, 0);
-    const clear = (difficulty: AiDifficulty) => {
+describe("given a driver holding the drive it planned on clear road, with a stopped car 8 m ahead of it at 17 m/s", () => {
+  for (const difficulty of AI_DIFFICULTIES) {
+    it(`when the step's contact guard reads the held drive at ${difficulty} difficulty, then it brakes where the held input drove on`, () => {
+      const me = at(0, pt.x, pt.z, 17);
+      const parked = at(1, pt.x, pt.z + 8, 0);
+      const far = at(2, pt.x, pt.z - 400, 0);
       const brain = new RaceBrain(oval, 2);
       brain.setDifficulty(0, difficulty);
       const held = idleDrive();
       copyDrive(brain.think(me, [me, far], { next: 1, lap: 0 }, DT), held);
-      return { brain, held };
-    };
-    const medium = clear("medium");
-    expect(medium.held.throttle > 0 && medium.held.brake === 0, `the held drive is clear road: throttle ${medium.held.throttle}, brake ${medium.held.brake}`).toBeTruthy();
-    const guarded = medium.brain.guard(me, [me, parked], medium.held);
-    expect(guarded.brake > 0 && guarded.throttle === 0, `guard brakes for the stopped car: brake ${guarded.brake.toFixed(2)}, throttle ${guarded.throttle.toFixed(2)}`).toBeTruthy();
-    const hard = clear(AI_EVERY_SLICE);
-    expect(hard.brain.guard(me, [me, parked], hard.held), "a hard brain guarded inside think, so its guard hands the drive back").toBe(hard.held);
-  });
+      expect(held.throttle > 0 && held.brake === 0, `the held drive is clear road: throttle ${held.throttle}, brake ${held.brake}`).toBeTruthy();
+      const guarded = brain.guard(me, [me, parked], held);
+      expect(guarded.brake > 0 && guarded.throttle === 0, `guard brakes for the stopped car: brake ${guarded.brake.toFixed(2)}, throttle ${guarded.throttle.toFixed(2)}`).toBeTruthy();
+    });
+  }
 });
 
 describe("given a hard brain driving 8 cars from the grid of a course", () => {
-  const testCases = Object.keys(HARD_MARKS).map((id) => ({
-    it: `when each thinks 600 times on ${id}, then every checkpoint of its output is bit for bit what it was before the tiers existed`,
-    id,
-  }));
-  for (const testCase of testCases) {
-    it(testCase.it, () => {
-      const { id } = testCase;
-      const expected = HARD_MARKS[id]!;
+  for (const [id, expected] of Object.entries(HARD_MARKS)) {
+    it(`when each thinks 600 times on ${id}, then every checkpoint of its output is bit for bit what it was before the tiers existed`, () => {
       const got = hardMarks(new Track(TRACKS.find((j) => parseTrack(j).id === id)!));
       const first = got.findIndex((m, k) => m !== expected[k]);
       expect(first < 0 && got.length === expected.length, `${got.length}/${expected.length} checkpoints, first differing: ${first} (car ${first >> 1}, think ${first % 2 ? 600 : 300})`).toBeTruthy();
@@ -324,7 +312,7 @@ describe("given an AI driver at 30 m/s on the oval's back straight, alone, its n
 });
 
 describe("given an easy driver whose slip starts on the oval's open road, then held in traffic past the slip's whole length", () => {
-  it("when the road clears, then its slip has run out and it plans its full top speed, not the shaken fraction of it", () => {
+  it("when the road clears, then its slip timer has run out and it plans unshaken top speed, not `shaken` x top", () => {
     const brain = new RaceBrain(oval, 2);
     brain.setDifficulty(0, "easy");
     brain["slipP"][0] = 1;
@@ -337,7 +325,8 @@ describe("given an easy driver whose slip starts on the oval's open road, then h
     const slow = onRoad(oval, 1, 349, 0, 8);
     for (let k = 0; k < Math.ceil((SLIP_WINDOW + SLIP_RECOVER + 1) / DT); k++) brain.think(me, [me, slow], race, DT);
     expect(brain["busy"][0], "the slow car held it in traffic").toBe(1);
-    const out = brain.think(me, [me], race, DT);
+    let out = brain.think(me, [me], race, DT);
+    for (let k = 0; k < Math.ceil(1.5 / DT); k++) out = brain.think(me, [me], race, DT);
     expect(brain["busy"][0], "the road cleared").toBe(0);
     expect(brain["slip"][0], "the slip aged out in traffic").toBe(0);
     expect(out.throttle === 1 && out.brake === 0, `unshaken: throttle ${out.throttle} brake ${out.brake}`).toBeTruthy();
@@ -364,10 +353,9 @@ describe("given a hard sedan brain flat out at the oval's sharpest bend (33 m/s 
   const bend = (112 / oval.path.count) * oval.path.length;
   /** The distance (m) before the bend, scanning in from 60 m (the road before that is other bends), at which the brain first brakes a car doing `v` m/s down the road's centre. */
   const onset = (v: number): number => {
-    const brain = new RaceBrain(oval, 1);
     for (let d = 60; d >= 0; d -= 0.25) {
       const me = onRoad(oval, 0, bend - d, 0, v);
-      if (brain.think(me, [me], { next: 1, lap: 0 }, DT).brake > 0) return d;
+      if (new RaceBrain(oval, 1).think(me, [me], { next: 1, lap: 0 }, DT).brake > 0) return d;
     }
     return NaN;
   };
@@ -404,8 +392,8 @@ describe("given a racer on the oval's back straight with a car 12 m ahead at 2.3
   };
   it("when the blocker is stopped, or oncoming at 10 m/s, then the racer rounds it on the side with more road (right: the blocker's lane less the 3.3 m a pass needs), not the narrow one the nudge points at", () => {
     for (const speed of [0, -10]) {
-      const { want } = chosen(speed);
-      expect(want < -1 && want > -1.5, `blocker doing ${speed} m/s: chose ${want.toFixed(2)} m, the wide side is about -1.2 m (right of the centre line), the narrow one 5.4 m`).toBeTruthy();
+      const { want, room } = chosen(speed);
+      expect(want <= 2.3 - 3.3 + 1e-9 && want >= -room, `blocker doing ${speed} m/s: chose ${want.toFixed(2)} m, right of the blocker's lane (2.3 m) by the 3.3 m a pass needs: -1 m or further right; the narrow side is 5.6 m`).toBeTruthy();
     }
   });
   it("when the blocker moves with it at 8 m/s, then the pass is unchanged: the side nearest the planned lane (left, with the nudge)", () => {
@@ -414,11 +402,10 @@ describe("given a racer on the oval's back straight with a car 12 m ahead at 2.3
   });
 });
 
-describe("given an every-slice brain whose contact guard runs after it has planned, as the engine runs it, with a car 10 m or 14 m ahead of it at 28 m/s on a boost it wants", () => {
+describe("given a racer whose contact guard runs after its think, with a car 10 m or 14 m ahead of it at 28 m/s on a boost it wants", () => {
   /** The oval at 100 m round, the brain's car doing 28 m/s along it with a car `gap` m ahead; 20 steps of think and guard. */
-  function steps(gap: number, late: boolean): { out: DriveInput; meter: number } {
+  function steps(gap: number): { out: DriveInput; meter: number } {
     const brain = new RaceBrain(oval, 2);
-    brain.guardLate = late;
     brain.setDifficulty(0, AI_EVERY_SLICE);
     brain.setAggression(0, 1);
     const p = oval.pointAt(100, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
@@ -428,20 +415,16 @@ describe("given an every-slice brain whose contact guard runs after it has plann
     let out = held;
     for (let k = 0; k < 20; k++) {
       copyDrive(brain.think(me, all, { next: 1, lap: 0 }, DT), held);
-      out = late ? brain.guard(me, all, held, DT) : held;
+      out = brain.guard(me, all, held, DT);
     }
     return { out: { ...out }, meter: brain.meter[0]! };
   }
 
-  it("when the guard cancels the boost and the throttle, then the boost meter is as full as with the guard inside think: a boost never used is never drained", () => {
+  it("when the guard cancels the boost and the throttle, then the boost meter stays full: a boost never used is never drained", () => {
     for (const gap of [10, 14]) {
-      const inside = steps(gap, false);
-      const late = steps(gap, true);
-      expect(inside.out.brake > 0.5 && !inside.out.boost, `${gap} m: the guard brakes and cancels the boost (brake ${inside.out.brake.toFixed(2)})`).toBeTruthy();
-      expect(inside.meter, `${gap} m: the meter inside think ${inside.meter}`).toBe(1);
-      expect(late.out.brake, `${gap} m: the late guard's brake`).toBe(inside.out.brake);
-      expect(late.out.boost, `${gap} m: the late guard's boost`).toBe(inside.out.boost);
-      expect(late.meter, `${gap} m: the late guard's meter`).toBe(inside.meter);
+      const late = steps(gap);
+      expect(late.out.brake > 0.5 && !late.out.boost, `${gap} m: the guard brakes and cancels the boost (brake ${late.out.brake.toFixed(2)})`).toBeTruthy();
+      expect(late.meter, `${gap} m: the meter ${late.meter}`).toBe(1);
     }
   });
 });

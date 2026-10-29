@@ -138,17 +138,18 @@ describe("given a Watch race on the oval with 4 AI rivals, whose driver list is 
       w.race.command({ type: "watch", id: -1 });
       expect(w.race.hud().auto, "the standings' Auto row").toBe(true);
       expect(w.seat.carIndex).toBe(4);
-      w.race.command({ type: "watch", id: 2 });
+      w.race.command({ type: "watch", id: 0 });
       expect(w.race.hud().auto, "a car picked by hand").toBe(false);
-      expect(w.seat.carIndex).toBe(2);
+      expect(w.seat.carIndex).toBe(0);
 
-      // Off, autoStep leaves the camera alone; on, it switches only to racing cars, no faster than once a second.
+      // Off, autoStep leaves the camera alone; on, it switches only to racing cars, no faster than once a second. Car 0 is watched: when it
+      // finishes with others still racing, Auto must leave it (the car that finishes last has no such cue).
       const state = { acc: 0 };
       for (let n = 0; n < 300; n++) {
         frame(w, state);
         w.race.autoStep(-1, true);
       }
-      expect(w.seat.carIndex).toBe(2);
+      expect(w.seat.carIndex).toBe(0);
       w.race.command({ type: "watch", id: -1 });
       let prev = w.seat.carIndex;
       let at = -Infinity;

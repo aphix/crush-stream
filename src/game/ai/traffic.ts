@@ -2,15 +2,25 @@ import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { clearDrive, DRIVE, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import type { AiCar } from "./derby-ai.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
+import { closingSpeed, lookDistance, SEEN_BEHIND, SEEN_NEAR, Sighting, visibleStretch } from "./sight.ts";
 import { steerGrip } from "./race-ai.ts";
 import { Backoff } from "./cop-brain.ts";
+import { Pedals } from "./pedals.ts";
+import { PlanClock } from "./plan-clock.ts";
 import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
 import { blankPoint, blankProjection, pointOn, projectPath, type Track, type TrackPath } from "../world/track.ts";
 import { clamp, wrapPi } from "../kernel/scalar.ts";
 import { STRAIGHT_CURV } from "./constants.ts";
 
-/** Look this far (m) ahead in the lane for anything in the way. */
+/** The least a traffic car looks ahead in its lane (m), and how many seconds of closing speed it looks when that is more: a racer closing at 35 m/s is seen 2.5 s out, not 0.5 s. */
 const LANE_LOOK = 18;
+const LANE_LOOK_S = 2.5;
+/** A traffic driver's reaction time (s) to a car that has come into view: the typical driver's, a rested PVT median. */
+const REACTION_S = 0.25;
+/** Sideways reach (m) in which a racer coming up from behind, or head-on, is a car to make room for. */
+const YIELD_LAT = 3;
+/** A car coming up from behind is a yield only above this closing speed (m/s). */
+const YIELD_CLOSING = 3;
 /** Half lane (m): a car this close sideways is in our lane. */
 const LANE_HALF = 2.1;
 /** Gap (m) traffic keeps to whatever is stopped ahead. */
@@ -21,6 +31,12 @@ const STOPPED_SPEED = 0.8;
 const WAIT = 2.5;
 /** Seconds spent edging round once started (long enough to clear a car at walking pace). */
 const EDGE_TIME = 4.5;
+/** Speed over its target (m/s) at which a traffic car's brake comes on, and under it by which it goes off; the brake is full at `BRAKE_SPAN` over. */
+const BRAKE_ON = 1;
+const BRAKE_OFF = 0.5;
+const BRAKE_SPAN = 4;
+/** A target under this (m/s) is a stop: the brake is held on. */
+const STOP_TARGET = 0.3;
 /** How far (m) past its lane a car facing a racer head-on edges toward its own kerb. */
 const KERB_SHIFT = 1.5;
 /** Grid zone (m) behind and ahead of the line kept clear of loop traffic at the start (16 cars reach back ~66 m). */
@@ -57,6 +73,16 @@ export class TrafficBrain {
   readonly speed: number;
   readonly slots: TrafficSlot[];
   private readonly out: DriveInput = idleDrive();
+  private readonly clock = new PlanClock();
+  private readonly pedals = new Pedals();
+  private readonly sighting = new Sighting();
+  /** Per car, its last plan: the gap (m) and speed along (m/s) of what is in its lane ahead, the lane offset it steers for and whether it is edging round. */
+  private readonly planGap = new Float64Array(MAX_CARS);
+  private readonly planGapAlong = new Float64Array(MAX_CARS);
+  private readonly planOffset = new Float64Array(MAX_CARS);
+  private readonly planEdging = new Uint8Array(MAX_CARS);
+  /** 1 while a racer bears down on the car (head-on or from behind) and it holds to its own kerb. */
+  private readonly planYield = new Uint8Array(MAX_CARS);
   private readonly wedge = new Backoff(MAX_CARS);
   private readonly seg = new Int32Array(MAX_CARS);
   private readonly waited = new Float64Array(MAX_CARS);
@@ -97,6 +123,9 @@ export class TrafficBrain {
     this.waited.fill(0);
     this.edge.fill(0);
     this.kerb.fill(0);
+    this.clock.forgetAll();
+    this.pedals.reset();
+    this.sighting.reset();
     for (let i = 0; i < MAX_CARS; i++) {
       this.scan[i] = ((i * 97.31) % 1) * 1e3;
       this.wedge.reset(i);
@@ -164,6 +193,9 @@ export class TrafficBrain {
     this.waited[id] = 0;
     this.edge[id] = 0;
     this.kerb[id] = 0;
+    this.clock.forget(id);
+    this.pedals.forget(id);
+    this.sighting.forget(id);
     this.wedge.reset(id);
   }
 
@@ -179,31 +211,72 @@ export class TrafficBrain {
     };
   }
 
+  /** One step for traffic car `self`: plans at `THINK_HZ` (what is in its lane ahead, whether it waits or edges round), drives its wheel and pedals every step. */
   think(self: AiCar, others: readonly AiCar[], dt: number): DriveInput {
     const out = clearDrive(this.out);
     const i = self.id;
     if (!self.alive) return out;
-    if (this.wedge.backing(i, dt, out)) return out;
+    if (this.wedge.backing(i, dt, out)) {
+      this.pedals.follow(i, out);
+      return out;
+    }
     const slot = this.slotOf(i);
     const path = slot.path;
     const proj = projectPath(path, self.x, self.z, this.seg[i]!, this.proj);
     this.seg[i] = proj.k;
+    if (this.clock.due(i, dt)) this.replan(self, others, proj.s);
     const speed = hypot2(self.vx, self.vz);
+    const ld = clamp(4 + 0.5 * speed, 6, 14);
+    const p = pointOn(path, proj.s + slot.dir * ld, this.pt);
+    const offset = this.planOffset[i]!;
+    const tx = p.x + p.tz * offset;
+    const tz = p.z - p.tx * offset;
+    const alpha = wrapPi(detAtan2(tx - self.x, tz - self.z) - self.yaw);
+    const surf = SURFACES[SURFACE_IDS[path.surface[proj.k]!]!];
+    const turnMax = DRIVE.turn * (0.35 + 0.65 * Math.min(1, speed / 8)) * steerGrip(surf.grip);
+    out.steer = clamp((2 * Math.max(speed, 3) * detSin(alpha)) / ld / Math.max(0.2, turnMax), -1, 1);
+    const edging = this.planEdging[i] === 1;
+    const curv = Math.abs(path.curv[proj.k]!);
+    let target = Math.min(this.speed, curv > STRAIGHT_CURV ? (DRIVE.turn * 0.6) / curv : Infinity);
+    // Speed that still stops STOP_GAP short of it at a gentle 4 m/s².
+    if (this.planGap[i]! < Infinity) target = Math.min(target, Math.max(0, this.planGapAlong[i]!) + Math.sqrt(8 * Math.max(0, this.planGap[i]! - STOP_GAP)));
+    if (edging) target = Math.min(this.speed, 4);
+    const along = self.vx * detSin(self.yaw) + self.vz * detCos(self.yaw);
+    const stop = target < STOP_TARGET && !edging;
+    if (this.pedals.latch(i, stop ? Infinity : along - target, BRAKE_ON, BRAKE_OFF)) out.brake = stop ? 1 : clamp((along - target + BRAKE_OFF) / BRAKE_SPAN, 0, 1);
+    else out.throttle = clamp(target / DRIVE.maxFwd + (target - along) * 0.15, 0, 1);
+    this.pedals.shape(i, out, dt);
+    this.wedge.watch(i, self.x, self.z, dt, out);
+    return out;
+  }
+
+  /** Car `self` (at arc `s` on its road)'s plan: what is in its lane ahead, whether a racer bears down on it, the wait behind a stopped blocker and the edge round it (the timers age by the time since its last plan). */
+  private replan(self: AiCar, others: readonly AiCar[], s: number): void {
+    const i = self.id;
+    const age = this.clock.ageOf(i);
+    const slot = this.slotOf(i);
     const fx = detSin(self.yaw);
     const fz = detCos(self.yaw);
-
-    // Anything in our lane ahead?
+    const sightArc = visibleStretch(slot.path, s, slot.dir);
     let gap = Infinity;
     let gapAlong = 0;
     let gapYaw = 0;
+    let yielding = false;
     for (let q = 0; q < others.length; q++) {
       const o = others[q]!;
       if (o.id === i) continue;
       const dx = o.x - self.x;
       const dz = o.z - self.z;
+      const dist = hypot2(dx, dz);
       const ahead = dx * fx + dz * fz;
-      if (ahead <= 0.5 || ahead > LANE_LOOK) continue;
-      if (Math.abs(dx * fz - dz * fx) > LANE_HALF) continue;
+      const inView = dist < SEEN_NEAR || (ahead > 0 ? ahead <= sightArc : dist < SEEN_BEHIND);
+      if (!this.sighting.reacts(i, o.id, inView, age, REACTION_S)) continue;
+      const side = dx * fz - dz * fx;
+      const closing = closingSpeed(self.vx, self.vz, o.vx, o.vz, dx, dz, dist);
+      const sameWay = detCos(o.yaw - self.yaw);
+      const look = lookDistance(closing, LANE_LOOK_S, LANE_LOOK, sightArc);
+      if (Math.abs(side) <= YIELD_LAT && ((ahead > 0.5 && ahead <= look && sameWay < -0.5) || (ahead < 0 && -ahead <= look && sameWay > 0.5 && closing > YIELD_CLOSING))) yielding = true;
+      if (ahead <= 0.5 || ahead > look || Math.abs(side) > LANE_HALF || (sameWay < -0.5 && o.alive && closing > 0)) continue;
       if (ahead < gap) {
         gap = ahead;
         gapAlong = o.vx * fx + o.vz * fz;
@@ -211,43 +284,22 @@ export class TrafficBrain {
       }
     }
     const blocked = gap < STOP_GAP + 3 && gapAlong < 1;
-    this.waited[i] = blocked && speed < STOPPED_SPEED ? this.waited[i]! + dt : blocked ? this.waited[i]! : 0;
+    this.waited[i] = blocked && hypot2(self.vx, self.vz) < STOPPED_SPEED ? this.waited[i]! + age : blocked ? this.waited[i]! : 0;
     if (this.waited[i]! > WAIT) {
       this.waited[i] = 0;
       this.edge[i] = EDGE_TIME;
       // A car facing us (a racer met head-on in our lane): make room at our own kerb, not across its path.
       this.kerb[i] = detCos(gapYaw - self.yaw) < -0.5 ? 1 : 0;
     }
-    // Edging round: toward the centreline (and a little past it) at walking pace until clear, or to our
-    // own kerb for a car facing us.
+    // Edging round: toward the centreline (and a little past it) at walking pace until clear, or to our own kerb for a car facing us.
     const edging = this.edge[i]! > 0;
-    if (edging) this.edge[i]! -= dt;
+    if (edging) this.edge[i]! -= age;
     const kerbSide = Math.sign(slot.offset || 1);
-    const offset = !edging ? slot.offset : this.kerb[i] ? slot.offset + kerbSide * KERB_SHIFT : slot.offset - kerbSide * 3.6;
-
-    const ld = clamp(4 + 0.5 * speed, 6, 14);
-    const p = pointOn(path, proj.s + slot.dir * ld, this.pt);
-    const tx = p.x + p.tz * offset;
-    const tz = p.z - p.tx * offset;
-    const alpha = wrapPi(detAtan2(tx - self.x, tz - self.z) - self.yaw);
-    const surf = SURFACES[SURFACE_IDS[path.surface[proj.k]!]!];
-    const turnMax = DRIVE.turn * (0.35 + 0.65 * Math.min(1, speed / 8)) * steerGrip(surf.grip);
-    out.steer = clamp((2 * Math.max(speed, 3) * detSin(alpha)) / ld / Math.max(0.2, turnMax), -1, 1);
-
-    const curv = Math.abs(path.curv[proj.k]!);
-    let target = Math.min(this.speed, curv > STRAIGHT_CURV ? (DRIVE.turn * 0.6) / curv : Infinity);
-    // Speed that still stops STOP_GAP short of it at a gentle 4 m/s².
-    if (gap < Infinity) target = Math.min(target, Math.max(0, gapAlong) + Math.sqrt(8 * Math.max(0, gap - STOP_GAP)));
-    if (edging) target = Math.min(this.speed, 4);
-    const along = self.vx * fx + self.vz * fz;
-    if (target < 0.3 && !edging) {
-      out.brake = 1;
-    } else if (along > target + 1) {
-      out.brake = clamp((along - target) / 4, 0.2, 1);
-    } else {
-      out.throttle = clamp(target / DRIVE.maxFwd + (target - along) * 0.15, 0, 1);
-    }
-    this.wedge.watch(i, self.x, self.z, dt, out);
-    return out;
+    this.planEdging[i] = edging ? 1 : 0;
+    this.planYield[i] = yielding ? 1 : 0;
+    this.planOffset[i] = edging ? (this.kerb[i] ? slot.offset + kerbSide * KERB_SHIFT : slot.offset - kerbSide * 3.6) : yielding ? slot.offset + kerbSide * KERB_SHIFT : slot.offset;
+    this.planGap[i] = gap;
+    this.planGapAlong[i] = gapAlong;
+    this.clock.planned(i);
   }
 }

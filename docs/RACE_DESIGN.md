@@ -194,21 +194,22 @@ setup menu shows a change at once on the course behind it.
 - **Leaving a race.** The sandbox's background and fog are kept whole while a race runs (the race installs its own before its art relights the scene) and given back as they were, so a fleet, corkscrew or derby after a race at any time of day, or with Night toggled in the settings, has the sky of a fresh load (`engine-scene-sky.test.ts`).
 - A course's own `backdrop` (the National Mall's secret mushroom cloud, once out) stands in front of every time's sky. A secret one is not built with the course: its 1024 × 640 canvas is painted and its mesh added at the flash's peak (`TrackArt.reveal`, under the white-out) and freed again when a run restarts (`resetSecret`); a course whose backdrop is no secret builds it at load (`track-art-backdrop.test.ts`).
 
-## AI difficulty (`ai/constants.ts`, `RaceBrain.due`)
+## AI difficulty (`ai/constants.ts`, `ai/plan-clock.ts`)
 
-The setup's **AI difficulty** (`RaceOptions.aiDifficulty`: easy, medium, hard; share link `diff`) sets how often a rival re-decides
-and how well it drives. Each rival rolls its think rate, its skill factors, its sway and its slip chance once per race in the
-tier's band (`hash01(id, salt)`: `THINK_SALT` 11, `SKILL_SALT` 40–48; `AI_SKILL`, `THINK_HZ` in `ai/constants.ts`). Between thinks
-the car holds its last input (`engine-race-field.ts` `held`); `think`'s `dt` is the time since its last think. Police, traffic
-and the cool-down lap think every slice. Only the host thinks and a replay stores inputs, so neither the wire nor replays change.
+The setup's **AI difficulty** (`RaceOptions.aiDifficulty`: easy, medium, hard; share link `diff`) sets how often a rival re-plans
+and how well it drives. Each rival rolls its plan rate, its skill factors, its sway and its slip chance once per race in the
+tier's band (`hash01(id, salt)`: `THINK_SALT` 11, `SKILL_SALT` 40–48; `AI_SKILL`, `THINK_HZ` in `ai/constants.ts`). A brain **plans** (its lateral line, the speed
+target with and without boost, what boxes it in; `RaceBrain.replan`, `TrafficBrain.replan`, `DerbyBrain.replan`) at its band's rate (hard 12 Hz), each car's first plan offset by its id (`PLAN_PHASE_STEP`, `plan-clock.ts`)
+so the field's plans land on different steps; its wheel and pedals are driven every step toward the plan (`think`). A car newly in danger by the contact guard, and one that just backed out, plans again next step. The contact guard runs every step.
+Only the host thinks and a replay stores inputs, so neither the wire nor replays' decoding change (the AI's outputs do: `REPLAY_VERSION`).
 **Hard** is the AI as it was before the dial (the default, the bench's setting): every factor is exactly 1 and every chance 0, so
 its output is bit for bit unchanged (`race-ai.test.ts` pins checkpoints of it). The lower tiers err, they do not just drive slower:
 
 | Tier | Think (Hz) | Corner speed | Braking | Steer gain | Look-ahead | Apex share | Sway (m) | Slip chance per corner | Slip: speed / braking | Shaken (× top) |
 |---|---|---|---|---|---|---|---|---|---|---|
 | easy | 8–20 | ×0.78–0.86 | ×0.6–0.9 | ×0.85–0.95 | ×0.75–0.95 | ×0.5–0.9 | 0.4–0.9 | 0.30–0.50 | ×1.3 / ×1.75 | 0.65 |
-| medium | 96–192 | ×0.97–1 | ×0.95–1 | ×0.97–1 | ×0.95–1 | ×0.9–1 | 0.05–0.2 | 0.05–0.10 | ×1.1 / ×1.5 | 0.93 |
-| hard | 192–240 (every slice) | ×1 | ×1 | ×1 | ×1 | ×1 | 0 | 0 | ×1 / ×1 | 1 |
+| medium | 10–14 | ×0.97–1 | ×0.95–1 | ×0.97–1 | ×0.95–1 | ×0.9–1 | 0.05–0.2 | 0.05–0.10 | ×1.1 / ×1.5 | 0.93 |
+| hard | 12 | ×1 | ×1 | ×1 | ×1 | ×1 | 0 | 0 | ×1 / ×1 | 1 |
 
 Corner speed and braking scale what the planner assumes (`RaceBrain.plan`); steer gain and look-ahead scale the pursuit; the apex share
 scales how far the line leans toward the inside of a bend, and the sway (`WOBBLE_K`) is a slow seeded sideways drift about it. A
@@ -268,22 +269,34 @@ tuned at 18 m/s and stretch × `pace = v / 18`.
 - Junctions: a shortcut's mouth is planned as a corner turning its angle over an 18 m look-ahead.
 - Boost: a burst starts on a half-full meter on a clear run, pointed down the line; the plan at the boosted top still wants
   2 m/s more than the car has.
-- A slower car on our line: pass on the side with room, closing sideways no faster than 0.8 m/s per m beyond 7 m
-  (`PASS_NOSE`). A stopped or crawling car (< 3 m/s) or one met head-on (an oncoming traffic car brakes to a stop as the
-  racer closes, so its speed along the road is 0 by the end) is driven round on the side with more road beside the passing line, not the
-  side nearest the planned lane (which carries a 2 m yield nudge for a faster car behind, and put a racer on the narrow side of an
-  oncoming car, where it stopped and crept into it); only a car moving with us is passed on the side nearest the planned lane. A car met head-on is seen sooner.
+- **Perception** (`ai/sight.ts`): a driver reacts only to a car it could see. A car is in view when it is within 12 m (`SEEN_NEAR`), within 40 m behind (the mirrors), on the road
+  within the stretch ahead the bends leave open (`visibleStretch`: the road's heading change summed in 3 m steps, sight ends past 60°, at most 150 m: nothing is seen through a building),
+  or off the road's corridor (8 m past its edge) within 45 m. A car that comes into view is acted on only after the driver's reaction time (`AI_SKILL.react`: hard 0.15-0.2 s,
+  medium 0.2-0.3, easy 0.3-0.5; 150 ms for the best, 250 ms typical, from the PVT and driving studies in `.extraResearch`), kept per observer and car (`Sighting`); a pair never seen before counts as noticed (a start, a respawn).
+  A car that is not in view or not yet noticed is skipped by the racer scan, the wreck pass and the contact guard (the guard still extrapolates what it sees at its current velocity). Shortcuts see `SIGHT_MAX`.
+- **Look-ahead is time × closing speed** (`lookDistance`): a driver looks `AI_SKILL.seconds` of the speed it closes on a car at (hard 2.8-3.0 s, medium 2.4-2.8, easy 1.8-2.4), never under the old 18 m × pace
+  (12 m for the wreck pass), never past the road it can see. A racer at 25 m/s sees an oncoming 18 m/s car 120 m out (3 s of its 43 m/s closing) where it saw it 43 m out (1 s); a stopped car at 30 m/s, 90 m out (30 m before). The contact guard's 1.5 s look is already time × closing. Traffic looks 2.5 s of closing speed, at least 18 m.
+- A slower car on our line: passed on the side with room, at the lane the car will be in when we reach it (its sideways speed carried over up to 1.5 s, at most 2.5 m). A side held by traffic, a cop or a wreck beside it
+  (`laneHeld`; rival racers do not hold a lane against each other: seven racers that did jammed one junction) is skipped; with both held the racer follows the car at its speed plus what it can still stop from 6 m behind it
+  and waits for a gap. A pass of traffic or a cop that finishes its lane change in under 0.75 of the time left to the car (`CLEAR_MARGIN`) keeps its speed; a rival racer is always passed, and any other pass closes, no faster than 0.8 m/s per m beyond 7 m (`PASS_NOSE`)
+  (a rival passed at speed: 3 racer-initiated hits and 5 touches in 80 clean kinematic races, 0 and 1 with the cap). A stopped or crawling car (< 3 m/s)
+  or one met head-on is driven round on the side with more road beside the passing line, not the side nearest the planned lane (which carries a 2 m yield nudge for a faster car behind); only a car moving with us is passed on the side nearest the planned lane. An oncoming car is passed with a quick lane change (`swerve` 2) and no braking.
 - Abreast: two rolling racers within 6.5 m lengthwise (`ABREAST`) keep their lanes 3.3 m apart.
 - Shortcuts: a seeded coin per car, lap and shortcut (0.3 + 0.4·aggression). A car with another racer within 12 m when the
   coin is tossed stays on the loop.
-- Unstick: throttle without motion → reverse with the nose swinging toward the line.
+- Unstick: throttle without motion → reverse with the nose swinging toward the line. Nose to nose (`ai/standoff.ts`): a racer under 2 m/s with its throttle down and a car within 6 m on its nose, a side free to go round, for 0.7 s backs off for 1 s (about a car length) and plans again.
+- **Human pedals** (`ai/pedals.ts` `Pedals`: racers, traffic, police, Survival hunters, the derby AI): the brake is a band (on 1.5 m/s over the target, off at it; traffic and cops have their own bands), the gas rises at 8 a second and falls at 10, the brake rises and falls at 10,
+  the wheel moves at a pad's 12 of lock a second, and the boost button, once pressed, runs 0.6 s at least and rests 0.4 s: a plan sitting on an edge no longer flickers the brake lights or the nitrous. The contact guard's brake comes on at once and is held down at 10 a second (`holdGuardBrake`: its look-ahead grid flipped it every step at a crawl, and a wreck's guard ran with no step).
+  A car with no history starts at what the driver asks. Racers' `InputFade` (below) stays under it.
+- **The wreck pass** (`ai/wreck-pass.ts`): the racer's scan and the contact guard see dead-engine wrecks and every stopped car. With a stopped car on its line it scores lanes across the road (free run, room to spare, risk, path and lane-change cost, the lane a rival has committed to, its own seeded side bias) and takes the best; the pass sets only the speed the lane change and the gap need (floor 10 m/s), and it brakes short only when every lane is held.
+  Stopped or dead cops and dead cars are `soft`: they steer the lane choice and are passed at speed, the pass and the contact guard never brake for them (a racer that braked to a crawl beside a stopped cop was busted in four seconds); only a car that can really block the way (a racer, traffic) holds the speed down.
 - **The AI's hands** (`ai/input-fade.ts` `InputFade`): every input a racing AI driver hands the drive passes through it, per car slot, before `applyDrive` (police, hunter, traffic and the derby AI do not:
   measured on the city bench none of them chatters, and their stopping and chasing is timed on the plain drive; a lag on the traffic and police brains wrecked the clean-start and pursuit rows). The wheel, gas and brake fade toward
   what the driver asks over `FADE_S` (0.05, 0.06 and 0.03 s: a first-order lag, the same in seconds at any step), the handbrake and boost change only after the other state has been asked for 0.1 s; every one of those scales with
   the car's speed (full from 15 m/s, none at a standstill: a car turning round or backing out needs its hands now). A driver that thinks every step and corrects what it just did swung its wheel between two values at the
   step rate (the bench strip's racer: 32 reversals of the wheel a second, a third of lock apart, the drawn roll rocking to its class cap of 3 degrees 16 to 22 times a second; gas and brake flipping 4 to 8 times a second).
   The root was the contact guard: its push and its braking demand came and went with the contact on its 0.1 s look-ahead grid (a path grazing the zone is a contact at one step and none at the next). The guard now holds its
-  push and demand and lets them go over 0.3 s, moves its push at 3.5 of lock a second at most and straightens the steer by a demand rising at 4 a second (`contact-guard.ts`), and it runs after the hands (`RaceBrain.guardLate`),
+  push and demand and lets them go over 0.3 s, moves its push at 3.5 of lock a second at most and straightens the steer by a demand rising at 4 a second (`contact-guard.ts`), and it runs after the hands (`RaceBrain.guard`),
   and works out the car's arc on the wheel the driver asked for, not on where the hands have it yet (on the hands' wheel a car steering into a crossing car was braked for 0.05 s late, stopped against
   it and wrecked on it: the city clean-start row, car 5 on traffic car 13; `contact-guard.test.ts`, the crossing car at 10 m),
   so its avoidance is never lagged. The player's and a peer's inputs do not pass through the hands. A wreck that still drives (`crashed`) has no hands, and its guard does not hold: its inputs are the brain's, as before (the hands changed where wrecks came to rest). A car put on a spot (`DeformableCar.placements` moves: a respawn, a recovery) starts the hands at what the driver asks there, not at the pedals it had where it was. A highlight clip needs none of this state: it records the pedals the sim ran after the hands and the guard, and its replay applies them (`engine-replay-hands.test.ts`: clips that start with a wheel in motion replay to the bit). Rows: `engine/ai-hands.test.ts` (the strip's first 30 s: at most 0.25 wheel jumps over 0.2 of lock, 2 pedal and 3 wheel
@@ -294,14 +307,16 @@ tuned at 18 m/s and stretch × `pace = v / 18`.
   (`engine/ai-steer-rate.test.ts`: every AI kind in the real engine no faster than the pad, and the player's wheel bit for bit what the seat shaped, the handbrake's jump included). The steer fade of the racers' hands
   stays: the limit caps big moves, the fade is what quiets the step-rate dither (without it the strip's racer swung its wheel 5.8 times a second against the row's 3). The contact guard keeps its push's side on a contact within
   half its zone's width of the path's centre (`SIDE_BAND`): at 55 m/s the look-ahead's lateral at 1.3 s swung ±0.6 m with the push's own yaw and flipped its side every 3 steps (car 0 on the strip, seeds 1-6: 4.2 wheel
-  swings a second on main, 2.9 with it). It keeps that side only while it steers clear: a braking guard takes the side away from the contact, or the held push steered toward a car crossing the
+  swings a second on main, 2.9 with it). It keeps that side only while it steers clear: a braking guard takes the side away from the contact (except one within 0.1 m of the centre, `DEAD_AHEAD`, which has no side to take: behind two cars on the strip the sign of a few centimetres flipped the push every step, 3.7 wheel reversals a second against the row's 3, 1.3 with it), or the held push steered toward a car crossing the
   centre line and straightened out the driver's own steer away from it (city race-start, 5 rivals, seeds 1-48: 7 wrecks with the side held while braking, 3 without, 1 before the limit). Clips record the pedals the sim ran, so replays need no REPLAY change.
 
 ## Traffic (`TrafficBrain`)
 
 Cars fill the race loop's lanes (`traffic.count`), then each side street (`routes[].count`), lanes round-robin. Each
 cruises its lane at `traffic.speed`, slows for curvature, stops 7 m short of anything in its lane (`√(8·gap)` profile) and
-after 2.5 s stopped edges round for 4.5 s. Side streets cross the race loop at grade, so racers meet cross traffic that does
+after 2.5 s stopped edges round for 4.5 s. It plans at about 12 Hz and drives through the human pedals (the brake a band: on 1 m/s over its target, off at 0.5), sees a car only
+within the road's open stretch and after a 0.25 s reaction (`ai/sight.ts`), and looks 2.5 s of closing speed ahead (at least 18 m). A racer head-on in its lane (a racer 25 m out
+at 30 m/s is 0.8 s away) or coming up from behind at over 3 m/s makes it hold to its own kerb, 1.5 m over, without stopping (it used to stop and wait 2.5 s in the racer's way). Side streets cross the race loop at grade, so racers meet cross traffic that does
 not stop for them. Observer bubble (every racer still on track, checked every 0.25 s): a traffic car farther than 120 m
 from all of them, dead for 6 s, or off the end of an open street is put away (hidden, no AI, no contacts); it wakes on its
 lane 55–100 m from the nearest observer, 14 m clear of every car, never inside the local camera's view.

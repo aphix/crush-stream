@@ -20,12 +20,14 @@ export const STRAIGHT_CURV = 1e-4;
 /** The AI difficulties a race offers (menu order). */
 export const AI_DIFFICULTIES = ["easy", "medium", "hard"] as const;
 export type AiDifficulty = (typeof AI_DIFFICULTIES)[number];
-/** The difficulty whose rivals think every physics slice (today's AI, bit for bit); the default. */
+/** The difficulty a race plays at by default: rivals that never err (`AI_SKILL`), planning at `THINK_HZ`. */
 export const AI_EVERY_SLICE: AiDifficulty = AI_DIFFICULTIES[2];
-/** Think rate band per difficulty (Hz of sim time); each rival rolls its own rate in the band once (`hash01`, salt `THINK_SALT`). `hard` is documentation: it thinks every slice. */
-export const THINK_HZ: Readonly<Record<AiDifficulty, readonly [number, number]>> = { hard: [192, 240], medium: [96, 192], easy: [8, 20] };
+/** Plan rate band per difficulty (Hz of sim time): how often a brain re-plans (its line, target speed and boost intent); its pedals and wheel are driven every step. Each rival rolls its own rate in the band once (`hash01`, salt `THINK_SALT`). About 12 Hz is a driver's reaction pace; easy's slower end reacts late. */
+export const THINK_HZ: Readonly<Record<AiDifficulty, readonly [number, number]>> = { hard: [12, 12], medium: [10, 14], easy: [8, 20] };
 /** `hash01` salt of a rival's think rate roll (`personality.ts` takes 2-10). */
 export const THINK_SALT = 11;
+/** Share of a plan interval each car id is offset by, in golden-ratio steps, so the field's plans spread over the steps instead of all landing on one. */
+export const PLAN_PHASE_STEP = 0.6180339887498949;
 type Range = readonly [number, number];
 /**
  * Per-tier skill a rival rolls once (`lo+(hi-lo)*hash01(id, SKILL_SALT.k)`). `push` scales the corner speed it plans for, `brake` the braking it plans for,
@@ -40,13 +42,14 @@ type Range = readonly [number, number];
  * with its class: 0.76–0.84 reads 57.0 s (13.2 % behind hard), 0.78–0.86 reads 55.6 s (10.4 %; four-count 304 s, 12.8 %), 0.79–0.87 reads 54.9 s (9.0 %).
  * Easy's `slipBrake` keeps a mistake's planned braking where it was, 1.25 x the class brake, past what the car sheds (2.5 x 0.5 then, 1.75 x 0.72 now; at 2.5 x 0.72 four-count's easy mean lap read 116 s against 106 s).
  */
-type AiSkill = { push: Range; brake: Range; steer: Range; look: Range; apex: Range; wobble: Range; slipP: Range; slipPush: number; slipBrake: number; shaken: number; calm: number };
+type AiSkill = { push: Range; brake: Range; steer: Range; look: Range; apex: Range; wobble: Range; slipP: Range; slipPush: number; slipBrake: number; shaken: number; calm: number; react: Range; seconds: Range };
+/** Reaction time (s) from a car coming into view to a driver acting on it: 150 ms for the best (fast simple RT), 250 ms typical (rested PVT median), longer for the weakest; and how many seconds ahead of closing speed a driver looks (drivers look 2-4 s ahead). */
 export const AI_SKILL: Record<AiDifficulty, AiSkill> = {
-  easy: { push: [0.78, 0.86], brake: [0.6, 0.9], steer: [0.85, 0.95], look: [0.75, 0.95], apex: [0.5, 0.9], wobble: [0.4, 0.9], slipP: [0.3, 0.5], slipPush: 1.3, slipBrake: 1.75, shaken: 0.65, calm: 0 },
-  medium: { push: [0.97, 1.0], brake: [0.95, 1.0], steer: [0.97, 1.0], look: [0.95, 1.0], apex: [0.9, 1.0], wobble: [0.05, 0.2], slipP: [0.05, 0.1], slipPush: 1.1, slipBrake: 1.5, shaken: 0.93, calm: 40 },
-  hard: { push: [1, 1], brake: [1, 1], steer: [1, 1], look: [1, 1], apex: [1, 1], wobble: [0, 0], slipP: [0, 0], slipPush: 1, slipBrake: 1, shaken: 1, calm: 0 },
+  easy: { push: [0.78, 0.86], brake: [0.6, 0.9], steer: [0.85, 0.95], look: [0.75, 0.95], apex: [0.5, 0.9], wobble: [0.4, 0.9], slipP: [0.3, 0.5], slipPush: 1.3, slipBrake: 1.75, shaken: 0.65, calm: 0, react: [0.3, 0.5], seconds: [1.8, 2.4] },
+  medium: { push: [0.97, 1.0], brake: [0.95, 1.0], steer: [0.97, 1.0], look: [0.95, 1.0], apex: [0.9, 1.0], wobble: [0.05, 0.2], slipP: [0.05, 0.1], slipPush: 1.1, slipBrake: 1.5, shaken: 0.93, calm: 40, react: [0.2, 0.3], seconds: [2.4, 2.8] },
+  hard: { push: [1, 1], brake: [1, 1], steer: [1, 1], look: [1, 1], apex: [1, 1], wobble: [0, 0], slipP: [0, 0], slipPush: 1, slipBrake: 1, shaken: 1, calm: 0, react: [0.15, 0.2], seconds: [2.8, 3] },
 };
-export const SKILL_SALT = { push: 40, brake: 41, steer: 42, look: 43, apex: 44, wobble: 45, phase: 46, slipP: 47, slipRoll: 48 } as const;
+export const SKILL_SALT = { push: 40, brake: 41, steer: 42, look: 43, apex: 44, wobble: 45, phase: 46, slipP: 47, slipRoll: 48, react: 49, seconds: 50 } as const;
 /**
  * A mistake overcooks for `SLIP_WINDOW` s, then holds back for `SLIP_RECOVER` s; the next waits `SLIP_COOL` s after one starts,
  * and a corner is "ahead" when the plan wants under `SLIP_CORNER` x top speed.

@@ -3,6 +3,7 @@ import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { AI_EVERY_SLICE } from "../ai/constants.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { TRACK_ID } from "../world/constants.ts";
 import { setGround } from "../world/ground.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -92,6 +93,8 @@ describe("given the real engine and a race ended with every car dented", () => {
   const podiumHud = () => engine["reelHud"]().podium;
 
   let results: RaceResultRow[] = [];
+  /** Which of the field's cars were drawn when the podium rose: a traffic car the bubble had put away far from the racers stays hidden. */
+  let drawnBeforePodium: boolean[] = [];
   const skinsAtTheFinish = new Map<number, Float32Array>();
   const lostAtTheFinish = new Map<number, number>();
   const partsAtTheFinish = new Map<number, PartState[]>();
@@ -150,6 +153,7 @@ describe("given the real engine and a race ended with every car dented", () => {
     for (const row of results) if (row.id !== FINISHER) capture(row.id);
     // The results reel respawns the field's cars from its clips: stand in for it, so a podium that read the live cars would show none of the damage.
     for (const car of live()) car.spawnFacing(0, 0, 0, 0);
+    drawnBeforePodium = live().map((c) => c.group.visible);
     engine.raceCommand({ type: "podium", on: true });
     run(0.2);
   });
@@ -275,7 +279,8 @@ describe("given the real engine and a race ended with every car dented", () => {
     run(0.1);
     expect(podiumHud()).toBe(null);
     expect(engine["highlights"].playing).toBe(false);
-    expect(live().every((c) => c.group.visible), "the field is drawn again").toBeTruthy();
+    expect(firstMismatch(live().map((c) => c.group.visible), drawnBeforePodium), "the field is drawn as it was").toBeUndefined();
+    expect(drawnBeforePodium.filter(Boolean).length, "the control: some of the field was drawn").toBeGreaterThan(0);
     expect(engine["podium"].cars().length, "no podium car is standing").toBe(0);
   });
 

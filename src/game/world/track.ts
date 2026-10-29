@@ -295,7 +295,7 @@ function openNear(path: TrackPath, wall: Uint8Array, k: number): boolean {
 
 function gateAt(path: TrackPath, s: number): Gate {
   const pt = pointOn(path, s, blankPoint());
-  const k = sampleIndex(path, s);
+  const k = sampleAt(path, s);
   const lx = pt.tz;
   const lz = -pt.tx;
   const left = pt.half + path.runL[k]! + (openNear(path, path.wallL, k) ? OPEN_REACH : WALL_REACH);
@@ -311,7 +311,8 @@ export function inCorridor(path: TrackPath, p: Projection): boolean {
   return Math.abs(p.lateral) <= path.half[p.k]! + (p.lateral > 0 ? path.runL[p.k]! : path.runR[p.k]!) + WALL_REACH;
 }
 
-function sampleIndex(path: TrackPath, s: number): number {
+/** Sample index at arc length `s` on `path` (wrapped on a loop, clamped on an open path). */
+export function sampleAt(path: TrackPath, s: number): number {
   const segs = path.closed ? path.count : path.count - 1;
   const u = (s / path.length) * segs;
   const k = Math.floor(u);

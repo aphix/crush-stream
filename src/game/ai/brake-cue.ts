@@ -1,6 +1,6 @@
 import { STRAIGHT_CURV } from "./constants.ts";
-import { BRAKE_SHARE, CORNER_MARGIN, sampleAt } from "./race-ai.ts";
-import type { TrackPath } from "../world/track.ts";
+import { BRAKE_SHARE, CORNER_MARGIN } from "./race-ai.ts";
+import { sampleAt, type TrackPath } from "../world/track.ts";
 import { cornerSpeed, type ClassStats } from "../vehicle/vehicle-classes.ts";
 
 /** Metres between the look-ahead's samples (the AI's own spacing). */
