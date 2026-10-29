@@ -6,7 +6,9 @@
   ],
   "type": "module",
   "packageManager": "pnpm@11.17.0",
-  "engines": { "node": ">=22.18" },
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "dev": "node scripts/with-app-env.mjs vite dev --host 0.0.0.0 --port 8080",
     "dev_alt": "node scripts/with-app-env.mjs vite dev --host 0.0.0.0 --port 5555",
@@ -22,11 +24,12 @@
     "check:boundaries": "node scripts/check-boundaries.mjs --ratchet",
     "check:programs": "node scripts/check-programs.mjs",
     "check:phone-hud": "node scripts/check-phone-hud.mjs",
-    "test": "node --max-old-space-size=1536 --import=./scripts/assert-guard.mjs --test 'scripts/**/*.test.mjs' && npm run --silent test:parity && node scripts/run-tests.mjs src/lib/multiplayer/rate-limit.test.ts 'src/lib/submissions/**/*.test.ts' 'src/lib/deploy/**/*.test.ts' 'src/game/**/*.test.ts'",
-    "test:parity": "node --max-old-space-size=1536 --import=./scripts/assert-guard.mjs --test src/game/deform/skin-kernel.parity.ts src/game/engine/bench-skin-kernel.parity.ts",
-    "test:app": "npm run --silent test:parity && node scripts/run-tests.mjs 'src/game/**/*.test.ts' 'src/lib/multiplayer/**/*.test.ts' 'src/lib/submissions/**/*.test.ts' 'src/lib/deploy/**/*.test.ts' scripts/with-app-env.test.mjs scripts/assert-guard.test.mjs",
-    "test:ai-long-run": "npm run --silent test:parity && node scripts/run-tests.mjs 'src/game/**/*.ai-long-run.ts'",
-    "test:all": "npm run --silent test:parity && node scripts/run-tests.mjs 'src/game/**/*.test.ts' 'src/lib/multiplayer/**/*.test.ts' 'src/lib/submissions/**/*.test.ts' 'src/lib/deploy/**/*.test.ts' scripts/with-app-env.test.mjs scripts/assert-guard.test.mjs 'src/game/**/*.ai-long-run.ts'",
+    "test": "npm run --silent test:app",
+    "test:parity": "vitest run --project parity",
+    "test:app": "npm run --silent test:parity && vitest run --project app --project scripts",
+    "test:ai-long-run": "npm run --silent test:parity && vitest run --project ai-long-run",
+    "test:all": "npm run --silent test:parity && vitest run --project app --project scripts --project ai-long-run",
+    "test:todos": "node scripts/with-app-env.mjs RUN_TODOS=1 vitest run --project app",
     "bench": "node scripts/bench/kernels.mjs",
     "bench:scenarios": "node scripts/bench/bench.mjs",
     "sweep": "node --no-warnings scripts/crush-sweep.mjs",
@@ -67,6 +70,7 @@
     "playwright": "^1.62.0",
     "tsrs": "0.20.0-ts7.1.0-beta",
     "typescript": "^5.7.0",
-    "vite": "^8.2.0"
+    "vite": "^8.2.0",
+    "vitest": "^5.0.5"
   }
 }

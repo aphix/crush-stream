@@ -129,8 +129,8 @@ run it through `scripts/with-app-env.mjs`. `npm run build` then `npm run preview
 
 | Command | What it does |
 |---|---|
-| `npm run test:app` | the `src/game`, `src/lib/multiplayer`, `src/lib/submissions` and `src/lib/deploy` suites plus `scripts/with-app-env.test.mjs` (`node --test`); **the gate** |
-| `npm test` | `src/game`, `src/lib/submissions`, `src/lib/deploy`, the multiplayer rate-limit test and every `scripts/**/*.test.mjs` |
+| `npm run test:app` | Vitest over the `src/game`, `src/lib/multiplayer`, `src/lib/submissions` and `src/lib/deploy` suites and every `scripts/**/*.test.mjs`; **the gate** |
+| `npm test` | the same as `test:app` |
 | `npm run test:ai-long-run` | the full-sanity suite (`src/game/**/*.ai-long-run.ts`): long AI-driven runs that watch whole fields for stuck cars and false ejections; not part of the gate |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run check:boundaries` | the structural rules of [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), ratcheted against `scripts/boundary-caps.json` |

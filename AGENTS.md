@@ -30,11 +30,12 @@ are in `docs/ARCHITECTURE.md` and enforced by `npm run check:boundaries`.
 
 | Command | What it does |
 |---|---|
-| `npm run test:app` | the `src/game`, `src/lib/multiplayer`, `src/lib/submissions` and `src/lib/deploy` suites; the per-commit gate. It runs `test:parity` first and stops if it fails |
+| `npm run test:app` | Vitest over the `src/game`, `src/lib/multiplayer`, `src/lib/submissions` and `src/lib/deploy` suites and `scripts/**/*.test.mjs`; the per-commit gate. It runs `test:parity` first and stops if it fails. A test process that writes to stderr fails the run |
 | `npm run test:parity` | the WASM skin kernel against the JS skin (`deform/skin-kernel.parity.ts`), alone: every other test process skins with the kernel |
-| `node scripts/run-tests.mjs <files or globs> [--concurrency=2]` | the same runner on just the files named (one process per file); `--concurrency=` also works after `test:app` |
+| `npx vitest run --project app <filters> [--maxWorkers=2]` | the same runner on just the files whose path contains a filter (one process per file); `--maxWorkers=` also works after `test:app`, `--shard=i/n` splits a run across machines |
 | `npm run test:ai-long-run` | the long suite, `src/game/**/*.ai-long-run.ts`: AI-driven runs (whole fields watched for stuck cars, false ejections). Not in the per-commit gate; part of `test:all`. Linted, typechecked and boundary-checked like tests |
-| `npm run test:all` | `test:app` and `test:ai-long-run` in one pass, longest files first across both: what a landing on `main` must pass (`--concurrency=` as above) |
+| `npm run test:all` | `test:app` and `test:ai-long-run` in one pass: what a landing on `main` must pass (`--maxWorkers=` as above) |
+| `npm run test:todos` | the `todoRow` rows (open problems, listed but not run by the others) with their bodies run: each reports green, or skipped with the failed assertion; never fails the run |
 | `npm run typecheck` | `tsrs --noEmit --fast`, oxc's Rust port of the TypeScript checker (`docs/TOOLCHAIN.md`) |
 | `npm run check:boundaries` | the structural rules, ratcheted against `scripts/boundary-caps.json` |
 | `npm run lint` | `oxlint` (`docs/TOOLCHAIN.md`) |

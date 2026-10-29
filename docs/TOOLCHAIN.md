@@ -25,7 +25,7 @@ and interleaved where the effect is small; "n" is the number of pairs.
 
 | Item | Before | After | Measured | Side effects |
 |---|---|---|---|---|
-| Test file order (`scripts/run-tests.mjs`, `scripts/test-cost.json`) | `node --test` sorts files by path; the 204 s `world/survival-chase` starts last | the files in `test-cost.json` start first, longest first | 12 gate logs: 421-527 s (median 470 s), 637 s on a red run. Simulated from the same per-test costs: 479 s in path order (matches the gates), 331 s longest first, which is the floor (1325 CPU-s / 4) | none to the tests: same files, same one-process-per-file isolation, same spec output, summary lines and exit code (checked on a passing, a failing and a missing file). A stale table only costs speed; `--learn` rewrites it |
+| Test runner: Vitest 5 (`vitest.config.ts`, `scripts/test-reporter.mjs`) instead of `node --test` through `scripts/run-tests.mjs` | one forked process per file, Node's flags on the command line, `test-cost.json` for the file order | one forked process per file, the same flags in `execArgv`, Vitest's own duration cache orders the files | full `test:app`, same box, back to back, both with the todo bodies run: node:test 912 s wall / 4636 CPU-s, Vitest 908 s / 4667 (parity). Latest run of this tree, `npm run test:app` (parity first), default workers on the shared box: 555 s wall, 6294 user + 182 sys CPU-s, 552 files and 9057 tests green, 180 todo rows listed not run, 5 skipped (main's node:test count was 9175 with the todo bodies run) | see the next section |
 | tsc `incremental` (`.cache/tsc.tsbuildinfo`, ignored by git) | 6.4-9.3 s | cold 6.1 s, warm 1.8-1.9 s, after editing the hub file `vehicle/car.ts` 5.0 s | warm -75% | a cached error is reported again on the next run (checked with a seeded error: exit non-zero until fixed; the exit code is 1 on a warm run, 2 on the run that wrote the file) |
 | Deploy: skip `corepack pnpm install` when `package.json`, the lockfile, the workspace file and `node -v` are unchanged (`state/deps-key`) | an install on every deploy | skipped | `npm ci` 8.9-9.6 s here with a warm npm cache vs 2.8-3.4 s for the whole `build:node`: 72% of the build phase. The VPS number is Main's | the key is removed before an install starts and written after it finishes, so a killed install is never trusted (10 stubbed cases in `.bench`, incl. failed and killed installs). The deploy log now prints the seconds of each phase |
 | Rapier SIMD build (`@dimforge/rapier3d-simd` 0.19.3, same API) for the ragdoll world | plain wasm build | SIMD wasm build | Node A/B at the ragdoll's settings (4 dummies, 1/480 s steps), 10 interleaved process pairs: p50 0.159 -> 0.163 ms (unresolved), p90 0.623 -> 0.519 (SE 0.010), p99 0.747 -> 0.636 (SE 0.007), mean 0.311 -> 0.274 ms (-11.7%, SE 0.006); 221 of 221 tests in the 17 Rapier-touching files pass. V8 profile of the production build in Chromium, 3 s of sim at 1/120 s with render, 2 dummies tumbling, 2 interleaved pairs (n too small to resolve): Rapier wasm self time 33.0 -> 19.7 ms and 24.0 -> 13.1 ms, against 691 and 563 ms of three.js self time in the same profiles (4.8% -> 4.1% and 4.3% -> 3.7% of it); in this light scene Rapier is under 2.5% of the frame's CPU, so the gain there is about 0.04 ms a frame | the bits differ from the plain build, so reels with dummies or knocked props change (REPLAY bump); ragdolls are cosmetic (nothing reaches the sim or netplay). WebAssembly SIMD needs Chrome 91, Firefox 89, Safari 16.4: inside Vite's default target. The wasm is 52 KB larger |
@@ -62,25 +62,35 @@ and interleaved where the effect is small; "n" is the number of pairs.
 
 - A test-result cache keyed by the import closure would skip unchanged files outright; tests would have to be proven hermetic first.
 
-## Test memory guards (2026-10-21)
+## Test runner: Vitest 5
 
-A failing `node:assert` comparison of two big values (a texture, a geometry) took the whole WSL VM from 9 GB free to 0 in
-18 s. Node builds the failure message by printing both sides whole (`maxArrayLength: Infinity`, one line per element) and,
-for `strictEqual` / `deepStrictEqual`, diffing those lines with a trace that is a typed array per diff step: off the V8 heap,
-so `--max-old-space-size` does not stop it (measured: heap held at 1315 MB of a 1536 MB cap while RSS climbed to 4 GB).
+`npm run test:app` runs `test:parity` first (the JS skin against the WASM kernel, which must not be loaded yet), then the `app`, `scripts` projects; `test:ai-long-run` and `test:all` add the long suite; `test:todos` runs the `todoRow` bodies (`RUN_TODOS=1`), each reporting green or skipped with the failed assertion and the reason kept verbatim. Facts the config depends on:
 
-- **`scripts/assert-guard.mjs`**, imported first by every test process (`test-setup.mjs`, and `--import` in `test` /
-  `test:parity`): when a comparison fails and its sides would print past `MAX_DIFF_LINES` lines (array elements, keys and
-  long strings counted), the error carries a bounded print (`util.inspect`, 20 elements, depth 4) as its message, `actual`
-  and `expected`. Covers `strictEqual` / `deepStrictEqual` of `assert/strict` (default and named imports) and `t.assert`;
-  the other comparisons build no diff, and every `throws` / `rejects` in the repo checks a small value. Passing comparisons
-  and failures on small values are Node's own: same message, fields and stack (checked on 25 small cases, identical with
-  and without the guard). `scripts/assert-guard.test.mjs` pins it.
-- **`--max-old-space-size=1536`** on every test process (`run-tests.mjs` `HEAP_MB`, `test`, `test:parity`): a runaway
+- **`experimental.viteModuleRunner: false` is mandatory.** Vite's SSR transform (import indirection) made the heaviest file, `wall-crush`, 23 s -> 34-37 s, and loaded Rapier twice (`wasm` undefined in `__wbindgen_memory`). With Node's own loader the pilot of 24 files ran at node:test's cost (23.6-26.2 s against 25.0-26.6 s; Vite runner 35-45 s).
+- **`pool: "forks"`, `isolate: true`.** `threads` does not start (the heap flags in `execArgv` are invalid for worker threads). One process per file, as with `node --test`.
+- **The `parity` project** is its own project so the kernel is never loaded in it; `scripts/test-setup.mjs` (kernel first) is the `setupFiles` of `app` and `ai-long-run` only.
+- **The Rapier alias**: `@dimforge/rapier3d-simd` is written for bundlers (no `exports`, extensionless imports). `src/game/kernel/rapier-node.test-util.ts` `registerHooks`-resolves the specifier to `rapier.js` and the extensionless imports to `.js` / `/index.js`, which only works with Node's own loader (the reason for `viteModuleRunner: false`).
+- **A test process that writes to stderr fails the run** (`scripts/test-reporter.mjs`, which also lists the slowest files).
+- **`isolate: false` is not adopted.** Measured on the part of the suite that touches nothing process-wide (a split into an isolated and a shared project, files chosen by scanning for stubs, globals, fake clocks, the engine, `setGround`, writes into module constants): 255 files, 4 workers, isolated 162 s wall / 811 user + 41 sys CPU-s, all green; shared 98-115 s / 452-475 user CPU-s (-41-44%), but red in every one of 7 runs, each time a different victim (92, 34, 20 and 83 failing tests, then one file, 4 tests and 3 tests: wreck and ground physics, the highlight recorder, the contact solver, the race AI). The leaks come from state the tests read and a neighbour changed without restoring it (`EPICENTER`, `HANDLING.realism`, the ground, a document stub); each fix found the next. At 4 shared workers the process heap also grows (an unbounded 14 workers hit the 8 GB cap and were OOM-killed). The subset that could be shared is 13% of the suite's CPU (811 of 6,294 CPU-s), so the saving over the whole suite would be about 5% (340 CPU-s). Not worth a suite that depends on file order; revisit when the tests restore what they change.
+
+
+## Test memory guards (2026-10-21, ported to Vitest)
+
+A failing comparison of two big values (a texture, a geometry, two 75k-float arrays) can take the whole WSL VM from 9 GB
+free to 0 in 18 s: the runner prints both sides whole, one line per element, and diffs those lines with a trace that grows
+with the square of the line count, off the V8 heap, so `--max-old-space-size` does not stop it. It first happened under
+`node:assert`; Vitest's `toEqual` / `toBe` fail the same way (a 75k-float compare ran past 90 s and was killed by `timeout`).
+
+- **`diff: { truncateThreshold: 60 }`** in `vitest.config.ts`: the diff keeps 60 lines of each side and says so ("Diff result
+  is truncated"). Four failing compares of 75,000-float arrays (`toEqual` of two `Float32Array`s, `toBe` of two,
+  `toEqual` of two objects holding them, `toEqual` of two plain `number[]`) end in 0.99 s at 335 MB peak RSS with a 15 KB
+  report; without the line, each ran past 90 s and was killed. `scripts/diff-cap.test.mjs` pins it: a child Vitest runs a
+  fixture that fails such a compare and must exit 1 inside 30 s with a report under 100 KB (red without the line: the child
+  is killed at 30 s).
+- **No deep equality in tests** (`docs/CODING_STANDARDS.md` §10, boundary rule C9): arrays go through
+  `firstMismatch` (a failure is three numbers), objects field by field; the cap is the second line of defence, not the first.
+- **`--max-old-space-size=1536`** on every test process (`execArgv` in `vitest.config.ts`): a runaway
   held on the heap aborts there. The heaviest of the 400+ suite files peaks at 711 MB of heap (`present/ground-overlap`).
-- Failing compare of two objects holding a 4096² `Float32Array`, under a 2-3 GB memory cap: before, OOM-killed at the cap
-  after 8-10 s on each of `assert.equal`, `deepStrictEqual` and `t.assert.deepStrictEqual`; after, each fails in 40 ms at
-  184 MB RSS with a 2.7 KB report.
 
 ## Headless frame (`scripts/headless-frame.mjs`, 2026-10-21)
 

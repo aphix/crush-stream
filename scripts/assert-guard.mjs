@@ -1,7 +1,7 @@
 /**
  * Imported first by every test process. A failing node:assert comparison prints both sides whole and diffs them; the
  * diff's trace lives off the V8 heap, so no heap cap stops it (two differing 4096² textures took the VM down). Sides too
- * big for that fail with a bounded print; everything else, `t.assert` included, is Node's own, message and all.
+ * big for that fail with a bounded print; everything else is Node's own, message and all.
  */
 import assert from "node:assert";
 import { syncBuiltinESMExports } from "node:module";
