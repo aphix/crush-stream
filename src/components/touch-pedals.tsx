@@ -4,10 +4,9 @@ import type { HudProps } from "@/components/hud";
 import { Button } from "@/components/ui/button";
 import { PedalStrip } from "@/components/touch-strip";
 import { thumbSideClass } from "@/components/thumb-side";
-import { useBoostTap } from "@/components/use-boost-tap";
 import { usePadHold } from "@/components/use-pad-hold";
 import type { FootHud } from "@/game/hud/hud-store";
-import { tapOnFoot, type SchemeLayout } from "@/game/hud/touch-scheme";
+import { releaseTouchButton, tapOnFoot, type SchemeLayout } from "@/game/hud/touch-scheme";
 import { PAD_BUTTON } from "@/game/vehicle/gamepad";
 import { cn } from "@/lib/utils";
 
@@ -97,18 +96,17 @@ function AutoGasLight({ on }: { on: boolean }) {
   );
 }
 
-/** Boost as a tap (`useBoostTap`): one press is a burst, no finger stays on it. */
-function BoostTap({ boost, bail }: { boost: { tap: () => void }; bail: boolean }) {
+/** Easy's Boost: held on the pad while a finger is on it (`usePadHold`), like the Disc's; a short press is a short boost. */
+function BoostHold({ engine, bail }: Pick<HudProps, "engine"> & { bail: boolean }) {
   return (
     <Button
       variant="ghost"
-      aria-label="Boost (tap)"
-      title="Boost (tap)"
+      aria-label="Boost (hold)"
+      title="Boost (hold)"
       data-touch-control="boost"
       data-keep-idle
       className={cn(ZONE, "pointer-events-auto touch-none select-none flex-col gap-0.5 px-0 [&_svg]:size-6", bail ? SIZE.bail : SIZE.button)}
-      onPointerDown={boost.tap}
-      onContextMenu={(e) => e.preventDefault()}
+      {...usePadHold(engine, PAD_BUTTON.south)}
     >
       <Zap />
       <span className="font-display text-[10px] font-semibold uppercase leading-none tracking-wider">Boost</span>
@@ -148,15 +146,14 @@ function OnFootTap({ engine, foot, mirror, className }: Pick<HudProps, "engine">
   );
 }
 
-/** Easy's right thumb: the gas is automatic, so it holds Brake in the corner and taps Boost above it; braking ends a Boost. */
+/** Easy's right thumb: the gas is automatic, so it holds Brake in the corner and Boost above it; braking ends a Boost. */
 function BrakeAndBoost({ engine, bail, gasOn, foot, mirror, onBrake, onArm }: Pick<HudProps, "engine"> & { bail: boolean; gasOn: boolean; foot: FootHud | null; mirror: boolean; onBrake: (down: boolean) => void; onArm: () => void }) {
-  const boost = useBoostTap(engine);
   return (
     <div className="flex flex-col items-end gap-2">
       <AutoGasLight on={gasOn} />
       <div className={cn("flex items-end gap-2", mirror && "flex-row-reverse")}>
         <OnFootTap engine={engine} foot={foot} mirror={mirror} className={SIZE.button} />
-        <BoostTap boost={boost} bail={bail} />
+        <BoostHold engine={engine} bail={bail} />
       </div>
       <Pedal
         name="brake"
@@ -166,7 +163,8 @@ function BrakeAndBoost({ engine, bail, gasOn, foot, mirror, onBrake, onArm }: Pi
         onHold={(down) => {
           if (down) {
             onArm();
-            boost.release();
+            const touch = engine.current?.touch;
+            if (touch) releaseTouchButton(touch, PAD_BUTTON.south);
           }
           onBrake(down);
         }}
@@ -199,7 +197,7 @@ function DiscButtons({ engine, bail }: Pick<HudProps, "engine"> & { bail: boolea
 }
 
 /**
- * The right thumb, above the drive dial's corner. Its control is the layout's `right`: the pedal strip (Pedals, Tilt), a Brake pad with a Boost tap over
+ * The right thumb, above the drive dial's corner. Its control is the layout's `right`: the pedal strip (Pedals, Tilt), a Brake pad with a Boost button over
  * automatic gas (Easy), or the Disc's Handbrake and Boost beside the dial's slot. The bottom row's height is the dial's box (80 px wide) in every scene, dial or
  * not, so the control above stands at one height. `mirror` puts the cluster at the left edge. Fingers go to `onThumb` (gas and brake, 0..1; the caller writes the pad from them).
  */

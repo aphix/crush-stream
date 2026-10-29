@@ -4,7 +4,7 @@ import { blankIntent, readIntent, shapeDrive } from "../vehicle/drive-input.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { idleDrive } from "../vehicle/car-drive.ts";
 import { blankPad, mergeTouch, PAD_BUTTON, type TouchPad } from "../vehicle/gamepad.ts";
-import { discReading, pedalsFor, pulledDown, schemeLayout, sliderSteer, stripReading, type TouchScheme } from "./touch-scheme.ts";
+import { discReading, pedalsFor, pressTouchButton, pulledDown, releaseTouchButton, schemeLayout, sliderSteer, stripReading, type TouchScheme } from "./touch-scheme.ts";
 
 /** Where each thumb is, as the controls read it: the steering thumb (px from the bar's centre, px pulled down), the pedal thumb (strip height 0..1, or a Brake pad). */
 type Thumbs = {
@@ -87,4 +87,46 @@ describe("given a scripted two-thumb drive at speed", () => {
       assert.equal(out.throttle > 0, testCase.pulls, `throttle ${out.throttle.toFixed(2)}`);
     });
   }
+});
+
+/** What a thumb does to the touch Boost between two polls: presses it, or lets go (a lift, a cancel and a lost pointer capture all call the same release). */
+type ThumbEvent = "down" | "up";
+
+/** Per poll, whether the car is asked to boost and whether the pad read a press, as the thumb's events fall in the frames between the polls. */
+function boostPolls(frames: readonly (readonly ThumbEvent[])[]): { boost: boolean; pressed: boolean }[] {
+  const touch: TouchPad = { x: 0, y: 0, gas: 1, brake: 0, held: 0, tapped: 0 };
+  const intent = blankIntent();
+  let previous = 0;
+  return frames.map((events) => {
+    for (const event of events) {
+      if (event === "down") pressTouchButton(touch, PAD_BUTTON.south);
+      else releaseTouchButton(touch, PAD_BUTTON.south);
+    }
+    const pad = blankPad();
+    mergeTouch(touch, pad, previous);
+    previous = pad.held;
+    readIntent(new Set(), pad, intent);
+    return { boost: intent.boost, pressed: (pad.pressed & (1 << PAD_BUTTON.south)) !== 0 };
+  });
+}
+
+const NO_EVENT: readonly ThumbEvent[] = [];
+
+describe("given a thumb on the touch Boost control", () => {
+  it("when it presses down and later lifts, then Boost is asked for on every poll while it is down and on none after", () => {
+    const polls = boostPolls([NO_EVENT, ["down"], NO_EVENT, NO_EVENT, ["up"], NO_EVENT, NO_EVENT]);
+    assert.deepEqual(polls.map((poll) => poll.boost), [false, true, true, true, false, false, false]);
+  });
+
+  it("when a short press ends after two polls, then Boost lasts those two polls and nothing carries on after the thumb leaves", () => {
+    const polls = boostPolls([["down"], NO_EVENT, ["up"], ...Array<readonly ThumbEvent[]>(FRAME_HZ * 5).fill(NO_EVENT)]);
+    assert.deepEqual(polls.slice(0, 3).map((poll) => poll.boost), [true, true, false]);
+    assert.equal(polls.slice(2).some((poll) => poll.boost), false, "boost after the thumb left");
+  });
+
+  it("when a press and its release fall between two polls, then the pad reads the press once, and Boost is asked for on no poll", () => {
+    const polls = boostPolls([NO_EVENT, ["down", "up"], NO_EVENT]);
+    assert.deepEqual(polls.map((poll) => poll.pressed), [false, true, false], "pressed");
+    assert.deepEqual(polls.map((poll) => poll.boost), [false, false, false], "boost");
+  });
 });

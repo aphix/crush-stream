@@ -4,7 +4,7 @@
  * notch, or leave a control smaller than a fingertip. This opens the game in headless Chromium as a phone (Playwright's device
  * descriptors, touch on, the safe-area insets of a notch phone through CDP), walks every place a phone player goes, and checks
  * each screen against the numbers below. Then it drives with real multi-touch (CDP touch points) through a two-thumb script per
- * control scheme (gas + steer, brake + steer, e-brake mid-steer, a drift, Boost as a tap), and tilts the emulated phone.
+ * control scheme (gas + steer, brake + steer, e-brake mid-steer, a drift, Boost held), and tilts the emulated phone.
  *
  *   node scripts/check-phone-hud.mjs [--url http://127.0.0.1:8109/] [--out DIR] [--only screen,screen] [--devices pixel-7-landscape,...]
  *
@@ -305,8 +305,8 @@ const THUMB_SCRIPTS = {
     { it: "e-brake mid-steer: the steering thumb pulls down with gas held (a drift)", fingers: [{ id: 1, on: "steer", dx: 60, dy: 60 }, { id: 2, on: "strip", at: 0.6 }], x: [0.3, 1], gas: [0.3, 1], ebrake: true },
     { it: "the steering thumb comes back up: the e-brake lets go, the wheel and gas stay", fingers: [{ id: 1, on: "steer", dx: 60 }, { id: 2, on: "strip", at: 0.6 }], x: [0.3, 1], gas: [0.3, 1], ebrake: false },
     { it: "the strip thumb slides into the cap: full gas and a Boost press", fingers: [{ id: 1, on: "steer" }, { id: 2, on: "strip", at: 0.95 }], gas: [1, 1], boost: true },
-    { it: "the thumb slides back to half gas: the Boost burst plays on (a tap, not a hold)", fingers: [{ id: 1, on: "steer" }, { id: 2, on: "strip", at: 0.6 }], gas: [0.3, 1], boost: true },
-    { it: "the thumb eases to the coast band: the burst ends", fingers: [{ id: 1, on: "steer" }, { id: 2, on: "strip", at: 0.34 }], gas: [0, 0], boost: false },
+    { it: "the thumb slides back to half gas: Boost lets go (held only in the cap)", fingers: [{ id: 1, on: "steer" }, { id: 2, on: "strip", at: 0.6 }], gas: [0.3, 1], boost: false },
+    { it: "the thumb eases to the coast band: still no Boost", fingers: [{ id: 1, on: "steer" }, { id: 2, on: "strip", at: 0.34 }], gas: [0, 0], boost: false },
     { it: "every finger up: nothing is pressed", fingers: [], x: [-0.05, 0.05], gas: [0, 0], brake: [0, 0], ebrake: false, boost: false },
   ],
   autogas: [
@@ -315,8 +315,9 @@ const THUMB_SCRIPTS = {
     { it: "brake lifts, the wheel stays: the gas is back", fingers: [{ id: 1, on: "steer", dx: 60 }], x: [0.3, 1], gas: [1, 1], brake: [0, 0] },
     { it: "e-brake mid-steer: the steering thumb pulls down under the automatic gas", fingers: [{ id: 1, on: "steer", dx: 60, dy: 60 }], x: [0.3, 1], gas: [1, 1], ebrake: true },
     { it: "every finger up: the e-brake lets go", fingers: [], ebrake: false },
-    { it: "a tap on Boost: the burst is on with no finger down", fingers: [], tap: "boost", boost: true, gas: [1, 1] },
-    { it: "brake on the pad: the burst ends", fingers: [{ id: 1, on: "brake" }], boost: false, brake: [1, 1] },
+    { it: "a finger held on Boost: Boost is held", fingers: [{ id: 1, on: "boost" }], boost: true, gas: [1, 1] },
+    { it: "the finger lifts: Boost lets go", fingers: [], boost: false, gas: [1, 1] },
+    { it: "Boost and Brake together: braking ends the Boost", fingers: [{ id: 1, on: "boost" }, { id: 2, on: "brake" }], boost: false, brake: [1, 1] },
   ],
   tilt: [
     { it: "level phone, no finger: nothing steers, nothing is pressed", fingers: [], tilt: "level", x: [-0.05, 0.05], gas: [0, 0], brake: [0, 0], ebrake: false },
@@ -364,14 +365,9 @@ async function checkSchemeTouch(browser, device, scheme) {
     for (const row of THUMB_SCRIPTS[scheme]) {
       if (row.tilt) await cdp.send("DeviceOrientation.setDeviceOrientationOverride", attitudeFor(device, row.tilt));
       const wanted = row.fingers.map((finger) => ({ id: finger.id, ...fingerPoint(rects, finger) }));
-      if (row.fingers.some((finger) => !rects[finger.on]) || (row.tap && !rects[row.tap])) return fail(context, `row "${row.it}" needs a control this scheme does not draw`);
+      if (row.fingers.some((finger) => !rects[finger.on])) return fail(context, `row "${row.it}" needs a control this scheme does not draw`);
       await moveFingers(cdp, down, wanted);
       down = wanted;
-      if (row.tap) {
-        const at = { id: 9, ...centre(rects[row.tap]) };
-        await touch(cdp, "touchStart", [...wanted, at]);
-        await touch(cdp, "touchEnd", [at]);
-      }
       await settle(page, row.tilt ? 450 : 200);
       const found = mismatches(row, await readTouch(page));
       if (found.length > 0) fail(context, `${row.it}: ${found.join("; ")}`);

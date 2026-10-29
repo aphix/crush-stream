@@ -5,7 +5,6 @@
  */
 
 import { hypot2 } from "../kernel/physics-core.js";
-import { BOOST } from "../vehicle/car-drive.ts";
 import { PAD_BUTTON, PAD_DEAD, type TouchPad } from "../vehicle/gamepad.ts";
 
 export const TOUCH_SCHEMES = ["stick", "pedals", "autogas", "tilt"] as const;
@@ -14,7 +13,7 @@ export type TouchScheme = (typeof TOUCH_SCHEMES)[number];
 /**
  * The driving disc is what a phone opens with (the owner's pick: forward, back and a little of either are all one thumb on one thing).
  * Every other scheme gives each thumb one region: the left steers, the right holds the pedals (Pedals: a strip from brake through coast to gas
- * and a Boost cap; Easy: automatic gas, a Brake pad and a Boost tap; Tilt: the phone steers, the left thumb holds the e-brake, the right the strip).
+ * and a Boost cap; Easy: automatic gas, a Brake pad and a Boost button; Tilt: the phone steers, the left thumb holds the e-brake, the right the strip).
  */
 export const DEFAULT_TOUCH_SCHEME: TouchScheme = TOUCH_SCHEMES[0];
 
@@ -28,10 +27,10 @@ export const TOUCH_SCHEME_LABEL: Readonly<Record<TouchScheme, string>> = { autog
 
 /** One line under each scheme in the Controls section. */
 export const TOUCH_SCHEME_HINT: Readonly<Record<TouchScheme, string>> = {
-  autogas: "Left thumb: slide to steer, pull down for the e-brake. Right thumb: gas is automatic; hold Brake to slow and reverse, tap Boost.",
-  pedals: "Left thumb: slide to steer, pull down for the e-brake. Right thumb: one strip, slide down to brake, up to coast, gas, then Boost.",
+  autogas: "Left thumb: slide to steer, pull down for the e-brake. Right thumb: gas is automatic; hold Brake to slow and reverse, hold Boost to boost.",
+  pedals: "Left thumb: slide to steer, pull down for the e-brake. Right thumb: one strip, slide down to brake, up to coast, gas, then to the top and hold for Boost.",
   stick: "One disc under the thumb: push up to go (a little or a lot), down to brake and then reverse, sideways to steer.",
-  tilt: "Tilt the phone like a wheel. Left thumb: E-brake pad. Right thumb: one strip, slide down to brake, up to coast, gas, then Boost.",
+  tilt: "Tilt the phone like a wheel. Left thumb: E-brake pad. Right thumb: one strip, slide down to brake, up to coast, gas, then to the top and hold for Boost.",
 };
 
 /** What a scheme draws: what steers, what the right thumb holds, where the e-brake is, and whether the gas is automatic. */
@@ -104,8 +103,16 @@ export function pulledDown(held: boolean, fingerY: number, referenceY: number): 
   return fingerY - referenceY > (held ? EBRAKE_PULL.off : EBRAKE_PULL.on);
 }
 
-/** A Boost tap holds the Boost button for one full meter's burn (seconds): a tap is a burst, the meter says when it is over. */
-export const BOOST_TAP_SECONDS = BOOST.full;
+/** A touch press of the pad's `button`: held while the finger is down, and `tapped` so a press shorter than a poll still counts as pressed. Boost is one of these, held as long as the finger is. */
+export function pressTouchButton(touch: TouchPad, button: number): void {
+  touch.held |= 1 << button;
+  touch.tapped |= 1 << button;
+}
+
+/** The finger left (lifted, cancelled, lost its capture, or slid off the control): the button lets go at once. */
+export function releaseTouchButton(touch: TouchPad, button: number): void {
+  touch.held &= ~(1 << button);
+}
 
 /** The Out / In tap: the pad's B for one poll, never held, so one tap is one get out or get in. */
 export function tapOnFoot(touch: TouchPad): void {

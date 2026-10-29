@@ -1,8 +1,9 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { ChevronsUp, OctagonX, Zap } from "lucide-react";
-import { useBoostTap } from "@/components/use-boost-tap";
+import { useReleaseOnUnmount } from "@/components/use-pad-hold";
 import type { HudProps } from "@/components/hud";
-import { STRIP, stripReading } from "@/game/hud/touch-scheme";
+import { pressTouchButton, releaseTouchButton, STRIP, stripReading } from "@/game/hud/touch-scheme";
+import { PAD_BUTTON } from "@/game/vehicle/gamepad";
 import { cn } from "@/lib/utils";
 
 /** The strip is a thumb's width (72 px, `w-18`) and tall enough that each zone is a thumb-nail's travel. On a phone on its side the dial stands beside it, so it runs from under the top strip to the bottom edge. */
@@ -23,20 +24,21 @@ type StripProps = Pick<HudProps, "engine"> & {
 
 /**
  * The right thumb's pedals as one strip: the foot of it brakes (full at the bottom), the middle coasts, the upper part is gas rising to full, and the cap
- * above is Boost, a tap-style latch (`useBoostTap`) taken by sliding into it and ended by sliding back below the gas zone or letting go. Absolute like the steering bar:
+ * above is Boost, held for as long as the thumb stays in it: sliding out of the cap or letting go (lift, cancel, lost capture) ends it. Absolute like the steering bar:
  * the knob follows the finger's height, so a thumb always knows where coasting is.
  */
 export function PedalStrip({ engine, onThumb, onArm }: StripProps) {
   const strip = useRef<HTMLDivElement>(null);
   const knob = useRef<HTMLDivElement>(null);
   const finger = useRef({ id: -1, inCap: false });
-  const boost = useBoostTap(engine);
+  useReleaseOnUnmount(engine, PAD_BUTTON.south);
   const put = (position: number): void => {
     if (knob.current) knob.current.style.bottom = knobBottom(position);
     const reading = stripReading(position);
-    if (reading.boost && !finger.current.inCap) boost.tap();
+    const touch = engine.current?.touch;
+    if (touch && reading.boost && !finger.current.inCap) pressTouchButton(touch, PAD_BUTTON.south);
+    if (touch && !reading.boost) releaseTouchButton(touch, PAD_BUTTON.south);
     finger.current.inCap = reading.boost;
-    if (reading.gas === 0) boost.release();
     onThumb(reading.gas, reading.brake);
   };
   const move = (e: ReactPointerEvent<HTMLDivElement>): void => {
