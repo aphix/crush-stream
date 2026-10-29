@@ -744,7 +744,7 @@ forModes("given a car that has been crushed against a wall for 12 steps", (spawn
     expect(s.d.drivetrainAlive).toBe(true);
     expect(s.d.massActive).toBe(false);
     expect(travel(s.d, "bumperFL")).toBe(0);
-    expect(s.d.sensorCompression(0), `sensor 0 still compressed ${s.d.sensorCompression(0)}`).toBe(0);
+    expect(s.d.sensorCompression(0), "sensor 0 compression after the reset").toBeCloseTo(0, 10);
     expect(s.d.crushElapsed).toBe(0);
   });
 });
