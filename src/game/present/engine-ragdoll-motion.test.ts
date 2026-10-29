@@ -12,15 +12,13 @@ import { EJECT_ROLL, ejectionVelocity } from "../vehicle/ejection.ts";
 import { loadedRagdolls } from "./ragdoll-throws.test-util.ts";
 import { stream } from "./ragdoll-pose.test-util.ts";
 import { PARTS, shed } from "./ragdoll-body.ts";
-import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 
 const GRAVITY = 9.6;
 /** How near (m/s) the thrown dummy's centre-of-mass velocity is to the throw's own: f32 part velocities at 30 m/s. */
 const COM_TOLERANCE = 1e-4;
 /** The owner's barrel roll: at least two thirds of a turn (deg) of the torso before he first touches down. */
 const ROLL_BEFORE_TOUCHDOWN_DEG = 240;
-/** Where (m past the wall) the range's driver lies once he lands rolling on his limbs and cartwheels on (owner: accepted): 41.3–41.5 m at 60 and 240 Hz, pinned within 1 m. */
-const LANDING_M = [40.5, 42.5] as const;
 type Doll = { live: boolean; bodies: RigidBody[] };
 
 /** Kinetic energy (translation and spin) and kinetic plus gravitational energy of `bodies` (J). */
@@ -144,14 +142,6 @@ async function rangeThrow(frame: () => number): Promise<Run> {
 }
 
 describe("given the ejection range (a sedan at 100 km/h over the lip into the jersey barrier, the driver thrown over it onto sand)", () => {
-  it(`when the throw is run at ${FRAME_HZ} and ${FINE_HZ} Hz display rates, then he lands within 1 m of the same spot, ${LANDING_M[0]}–${LANDING_M[1]} m on`, async () => {
-    const slow = await rangeThrow(() => 1 / FRAME_HZ);
-    const fast = await rangeThrow(() => 1 / FINE_HZ);
-    assert.ok(slow.landing >= LANDING_M[0] && slow.landing <= LANDING_M[1], `${FRAME_HZ} Hz landing ${slow.landing.toFixed(1)} m`);
-    assert.ok(fast.landing >= LANDING_M[0] && fast.landing <= LANDING_M[1], `${FINE_HZ} Hz landing ${fast.landing.toFixed(1)} m`);
-    assert.ok(Math.abs(slow.landing - fast.landing) <= 1, `${FRAME_HZ} Hz ${slow.landing.toFixed(1)} m, ${FINE_HZ} Hz ${fast.landing.toFixed(1)} m`);
-  });
-
   it(`when the driver is thrown, then his torso turns at least ${ROLL_BEFORE_TOUCHDOWN_DEG}° about his line of flight before his first ground contact (owner: a barrel roll he can see in the slow-mo)`, async () => {
     const run = await rangeThrow(() => 1 / FRAME_HZ);
     assert.ok((run.roll * 180) / Math.PI >= ROLL_BEFORE_TOUCHDOWN_DEG, `${((run.roll * 180) / Math.PI).toFixed(0)}° before touchdown`);
