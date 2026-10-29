@@ -217,7 +217,7 @@ describe("given force transfer bands (the crush distances at which a region pass
     expect(bumper.yield < bumper.middle && bumper.middle < bumper.max).toBeTruthy();
   });
 
-  it("when the crush is read at rest, just under the middle, at the middle, just under the max, at the max, and packed, then the transfer steps 0.1, 0.1, 0.5, 0.5, 0.62, and 1 when packed", () => {
+  it("when the crush is read at rest, just under the middle, at the middle, just under the max, at the max, and packed, then the transfer steps up through its below-middle, at-middle and above-max levels, and a packed region takes the packed level", () => {
     const b = regionCrushBands("bumperFL");
     expect(forceTransfer(0, b, false)).toBe(TRANSFER.belowMiddle);
     expect(forceTransfer(b.middle - 1e-4, b, false)).toBe(TRANSFER.belowMiddle);
@@ -234,7 +234,7 @@ describe("given force transfer bands (the crush distances at which a region pass
     expect(forceTransfer(b.max, b, false)).toBeLessThan(1);
   });
 
-  it("when the crush is just under the middle (0.999 of it), then the transfer is the 0.1 step, and exactly at the middle it is the 0.5 step", () => {
+  it("when the crush is just under the middle (0.999 of it), then the transfer is the below-middle level, and exactly at the middle it is the at-middle level", () => {
     const b = regionCrushBands("wingFL");
     expect(forceTransfer(b.middle * 0.999, b, false)).toBe(TRANSFER.belowMiddle);
     expect(forceTransfer(b.middle, b, false)).toBe(TRANSFER.atMiddle);

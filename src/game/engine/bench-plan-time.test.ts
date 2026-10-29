@@ -12,7 +12,7 @@ const QUALITY_ABS_S = 417;
 const EXTENDED_BOUND_S = EXTENDED_BEFORE_S + QUALITY_ABS_S;
 
 describe("given the planned lengths of the benches the start screen shows", () => {
-  it("when the quick bench is planned, with or without Ultra, then it is under the 4 minute bound and over 2 minutes of measuring", () => {
+  it("when the quick bench is planned, with or without Ultra, then it is under the 4 minute bound and longer than its four measuring windows", () => {
     for (const ultra of [false, true]) {
       const planned = quickPlanS(ultra);
       expect(planned, `${planned} s planned (ultra ${ultra})`).toBeLessThan(QUICK_BOUND_S);
