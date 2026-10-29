@@ -22,7 +22,7 @@ function worldPoints(mesh: THREE.Mesh): THREE.Vector3[] {
   return Array.from({ length: pos.count }, (_, i) => new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld));
 }
 
-describe("given every style's car parked and posed open for show (`showPose`)", () => {
+describe("given every style's car parked and posed open for show", () => {
   for (const id of CAR_STYLE_IDS) {
     it(`when the ${id}'s door glass is read, then each pane is drawn on its open door: every vertex within ${FOLLOW_M * 100} cm of the door shell's move from its shut place`, () => {
       const shut = parked(id);
@@ -30,7 +30,8 @@ describe("given every style's car parked and posed open for show (`showPose`)", 
       open.showPose("open");
       open.group.updateMatrixWorld(true);
       let swung = 0;
-      for (const [side, name] of [[0, "doorL"], [1, "doorR"]] as const) {
+      const doorSides = [{ side: 0, name: "doorL" }, { side: 1, name: "doorR" }] as const;
+      for (const { side, name } of doorSides) {
         const paneShut = shut.glassPanes.find((g) => g.name === name)!;
         const pane = open.glassPanes.find((g) => g.name === name)!;
         expect(pane.state === "intact" && pane.mesh.parent !== null, `${id} ${name}: the pane is present (state ${pane.state})`).toBeTruthy();

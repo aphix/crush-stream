@@ -84,7 +84,7 @@ function skinTravel(skin: THREE.BufferGeometry, rest: Float32Array): number {
 const styles = CAR_STYLE_IDS.filter((id) => lidFittings(spawnedCar(id)).length > 0);
 
 describe("given the styles whose hood or boot lid carries a lamp fitting", () => {
-  it("when the table is read, then the hood's share (pickup) and the boot's (sedan, hatchback, wagon) with the gate's high brake lamp (hatchback) are all in it", () => {
+  it("when every car style is built, then only the hatchback, pickup, sedan and wagon carry a lamp fitting on a hood or boot lid", () => {
     expect(firstMismatch([...styles].sort(), ["hatchback", "pickup", "sedan", "wagon"])).toBeUndefined();
   });
 

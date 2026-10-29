@@ -20,9 +20,9 @@ const STRIP_FOLLOW_M = 0.05;
  */
 const DENT_M = 0.015;
 /** The wall hits that dent the front (the windshield, left whole, and its frame) and the side (the strips): approach, km/h, whether the frames or the strips are read, and the bar. */
-const HITS: readonly (readonly [WallApproach, number, boolean, number])[] = [
-  ["front", 52, true, FRAME_FOLLOW_M],
-  ["side", 48, false, STRIP_FOLLOW_M],
+const HITS: readonly { approach: WallApproach; kph: number; frames: boolean; bar: number }[] = [
+  { approach: "front", kph: 52, frames: true, bar: FRAME_FOLLOW_M },
+  { approach: "side", kph: 48, frames: false, bar: STRIP_FOLLOW_M },
 ];
 
 const _m = new THREE.Matrix4();
@@ -67,7 +67,7 @@ function stoodOn(car: DeformableCar, t: Trim): THREE.Mesh {
 }
 
 describe("given a coupe whose chrome window trim frames its glass and runs along its sides", () => {
-  for (const [approach, kph, frames, bar] of HITS) {
+  for (const { approach, kph, frames, bar } of HITS) {
     it(`when it is crushed ${approach} on at ${kph} km/h, then each ${frames ? "pane frame" : "strip"} point moves with the drawn point it stood nearest at rest, to within ${bar * 100} cm`, () => {
       const crushed = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
       crushed.deform.setMode("shape");
@@ -107,7 +107,7 @@ const rawPoints = (mesh: THREE.Mesh): Float32Array => (mesh.geometry.getAttribut
 const largestMove = (a: Float32Array, b: Float32Array): number => a.reduce((worst, value, i) => Math.max(worst, Math.abs(value - b[i]!)), 0);
 
 describe("given a coupe crushed, then reset", () => {
-  for (const [approach, kph] of HITS) {
+  for (const { approach, kph } of HITS) {
     it(`when it is crushed ${approach} on at ${kph} km/h and reset, then every trim point and glass pane is back within ${RESET_BAR_M * 1000} mm and ${RESET_TURN_DEG} degrees of the built one`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, "coupe");
       car.deform.setMode("shape");

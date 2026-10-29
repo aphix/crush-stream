@@ -123,7 +123,7 @@ function mixedLoop(): Loop {
 }
 
 for (const H of RATES) {
-  describe(`at ${Math.round(1 / H)} Hz`, () => {
+  describe(`given the sim stepped at ${Math.round(1 / H)} Hz`, () => {
     function step(car: DeformableCar, input: DriveInput, h = H): void {
       applyDrive(car, input, h);
       car.group.position.x += car.velocity.x * h;
@@ -266,10 +266,11 @@ for (const H of RATES) {
     describe("given each vehicle class driven under the chase camera", () => {
       for (const id of VEHICLE_CLASS_IDS) {
         it(`when W+A and then W+D are held, then the ${id}'s nose swings left on screen with W+A and right with W+D`, () => {
-          for (const [key, sign] of [
-            ["KeyA", -1],
-            ["KeyD", 1],
-          ] as const) {
+          const steerKeys = [
+            { key: "KeyA", sign: -1 },
+            { key: "KeyD", sign: 1 },
+          ] as const;
+          for (const { key, sign } of steerKeys) {
             const car = classCar(id);
             car.spawnFacing(0, 0, 0, 10);
             const seat = new DriverSeat();
@@ -297,7 +298,7 @@ for (const H of RATES) {
       }
     });
 
-    describe("given the sedan's gear buckets (the speed ranges of each gear)", () => {
+    describe("given the sedan's gears (the speed range of each)", () => {
       it("when its speed climbs from near standstill past the top of the last gear, then the gauge's engine revs climb within each gear to near the redline, drop once at each upshift in step with the gauge's gear, fall below 35 % at the foot of the next gear, and idle at 0.18 in reverse", () => {
         const k = CLASSES.sedan;
         const at = (v: number) => carRpm({ style: { id: "sedan" }, velocity: { x: 0, z: v }, fwdFlat: { x: 0, z: 1 }, drive: { spinSpeed: 0 } });
@@ -393,7 +394,7 @@ for (const H of RATES) {
       });
     });
 
-    describe("given the drivability rules (how a car's health, crash state, wheels left and the realism slider limit its power and top speed)", () => {
+    describe("given a car's health, crash state, wheels left and the realism slider, limiting its power and top speed", () => {
       const out: Drivability = { stage: "healthy", power: 1, top: 1, pull: 0 };
 
       it("when health falls from full to 0.9, 0.5 and 0.1 after a crash and then the car is dead, then the stage goes healthy, dented, damaged, limping, dead, and a lost wheel makes a 0.9-health car damaged, never merely dented", () => {

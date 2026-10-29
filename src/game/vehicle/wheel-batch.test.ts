@@ -30,8 +30,8 @@ function stage() {
 const triangles = (mesh: THREE.Mesh): number => mesh.geometry.index!.count / 3;
 const passRuns = (renderer: { shadowMap: { render: THREE.WebGLShadowMap["render"] } }) => renderer.shadowMap.render([], new THREE.Scene(), new THREE.PerspectiveCamera());
 
-describe("given the wheel batch and cars at two distances from the camera", () => {
-  test("when a car is inside the farthest rung's distance and another beyond it, then the near car's four wheels take its design's full wheel and the far car's four the far wheel", () => {
+describe("given a near car and a far car, at two distances from the camera", () => {
+  test("when a car is inside the far distance and another beyond it, then the near car's four wheels take its design's full wheel and the far car's four the far wheel", () => {
     const { batch, car, draw } = stage();
     const cars = [car(10), car(FAR_BEYOND + 20)];
     draw(cars);
@@ -66,13 +66,13 @@ describe("given the wheel batch and cars at two distances from the camera", () =
     }
   });
 
-  test("when the batch is built, then every wheel draw's material uses the one shared tread normal map", () => {
+  test("when the wheels are drawn, then every wheel design uses the one shared tread texture", () => {
     const { batch } = stage();
     for (const mesh of batch.meshes.slice(0, -1)) expect((mesh.material as THREE.MeshStandardMaterial).normalMap).toBe(treadNormalMap());
   });
 });
 
-describe("given the wheel batch synced for a renderer's shadow pass", () => {
+describe("given wheels drawn for a renderer's shadow pass", () => {
   test("when the shadow pass runs, then the prisms are shown during it and hidden before and after, and the wheel draws cast nothing", () => {
     const { batch, car, draw, renderer, seen, shadow } = stage();
     draw([car(10)]);
@@ -92,7 +92,7 @@ describe("given the wheel batch synced for a renderer's shadow pass", () => {
     for (const full of batch.meshes.slice(0, WHEEL_DESIGNS.length)) expect(triangles(shadow) * 10, `${triangles(shadow)} of ${triangles(full)}`).toBeLessThanOrEqual(triangles(full));
   });
 
-  test("when the batch is synced twice, then the shadow pass is wrapped once", () => {
+  test("when the wheels are drawn twice before the shadow pass, then the pass shows the prisms once, not once per draw", () => {
     const { car, draw, renderer, seen } = stage();
     const cars = [car(10)];
     draw(cars);
@@ -101,7 +101,7 @@ describe("given the wheel batch synced for a renderer's shadow pass", () => {
     expect(seen.length).toBe(1);
   });
 
-  test("when the batch is disposed, then the renderer's own shadow pass is back", () => {
+  test("when the wheels are discarded, then the renderer's own shadow pass no longer shows the prisms", () => {
     const { batch, car, draw, renderer, seen } = stage();
     draw([car(10)]);
     batch.dispose();
@@ -123,7 +123,7 @@ function drawnAlone(id: CarStyleId) {
   return { batch, car, sync, mesh: nearOf(batch, id) };
 }
 
-describe("given every body style's tyre (its dims' wheel), drawn by the one platform-sized wheel mesh", () => {
+describe("given every body style drawn with its own tyre size on the one shared wheel shape", () => {
   for (const id of CAR_STYLE_IDS) {
     test(`when a ${id} is drawn, then its wheels are drawn at its tyre's width and radius`, () => {
       const { mesh } = drawnAlone(id);

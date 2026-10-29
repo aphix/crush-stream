@@ -67,7 +67,7 @@ function run(car: Probe, frames: number, v: number | null = null): void {
   }
 }
 
-describe("given a car body of any style with a hinged quarter panel (a quarter panel stands off the body at most STAND_MAX, the longest stand-off a panel may take)", () => {
+describe("given a car body of any style with a hinged quarter panel, which may stand off the body only so far", () => {
   it("when the panel is at full hinge, then the free end of every style's quarter panel is within the longest stand-off", () => {
     for (const id of CAR_STYLE_IDS) {
       const body = makeChassisGeometry(CAR_STYLES[id]);
@@ -101,11 +101,11 @@ describe("given a car body of any style with a hinged quarter panel (a quarter p
   });
 });
 
-describe("given a stretched panel on a crashed car (a panel stretched past its fragile hinge is easy to break)", () => {
+describe("given a stretched panel on a crashed car, which is easy to break once hinged past its fragile hinge value", () => {
   it("when a fresh contact touches a panel hinged past the fragile hinge value or one hinged 0.2 less, then the more hinged panel comes off and the other stays on", () => {
-    for (const [t, off] of [
-      [PANEL_FRAGILE_T + 0.1, true],
-      [PANEL_FRAGILE_T - 0.2, false],
+    for (const { t, off } of [
+      { t: PANEL_FRAGILE_T + 0.1, off: true },
+      { t: PANEL_FRAGILE_T - 0.2, off: false },
     ] as const) {
       const car = crashed();
       run(car, 40);
@@ -134,9 +134,9 @@ describe("given a stretched panel on a crashed car (a panel stretched past its f
   });
 
   it("when the car sits 0.5 m below the ground, then a panel hinged to 0.7 scrapes off and one hinged to 0.3 does not", () => {
-    for (const [t, off] of [
-      [0.7, true],
-      [0.3, false],
+    for (const { t, off } of [
+      { t: 0.7, off: true },
+      { t: 0.3, off: false },
     ] as const) {
       const car = crashed();
       run(car, 40);
@@ -151,9 +151,9 @@ describe("given a stretched panel on a crashed car (a panel stretched past its f
   it("when the drawn body skin is thrown far below or high above the car, then whether the panel scrapes off is still decided on the simulation's state, never on the drawn skin (a replay draws at other times than the simulation it re-ran)", () => {
     // The same car and hinge, the body's drawn vertices (the skin the shell is posed on) thrown far below the car or high above it:
     // the scrape is the sim's, so no change.
-    for (const [y, drawn, off] of [
-      [-0.5, 5, true],
-      [3, -5, false],
+    for (const { y, drawn, off } of [
+      { y: -0.5, drawn: 5, off: true },
+      { y: 3, drawn: -5, off: false },
     ] as const) {
       const car = crashed();
       run(car, 40);
@@ -325,7 +325,7 @@ describe("given a front bumper hung by one corner on a car standing on the road 
     expect(lowest(p), `the torn bumper starts ${(-lowest(p)).toFixed(3)} m under the road`).toBeGreaterThanOrEqual(-1e-6);
   });
 
-  it("when the hanging bumper searches for its roll on the road, then the car's ancestors are brought up to date once, not once per probe", () => {
+  it("when a hanging bumper is posed on the road, then the car's scene transforms are refreshed once, not once per ground probe", () => {
     const car = cornerCrashed();
     const parent = car.part("bumperF").object.parent!;
     const walk = parent.updateWorldMatrix.bind(parent);

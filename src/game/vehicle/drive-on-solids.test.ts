@@ -107,7 +107,11 @@ function matches(label: string, on: Run, flat: Run, count: number, times: readon
 describe("given a sedan with all four tyres on the top of a solid, at full throttle", () => {
   afterEach(() => setGround(null));
 
-  for (const [name, top, role] of [["a box prop", BOX_TOP, WALL], ["the jersey slab", BARRIER_TOP, RIG]] as const) {
+  const solids = [
+    { name: "a box prop", top: BOX_TOP, role: WALL },
+    { name: "the jersey slab", top: BARRIER_TOP, role: RIG },
+  ] as const;
+  for (const { name, top, role } of solids) {
     it(`when it stands on ${name} (${top.toFixed(2)} m), then its speed after ${TIMES.join(", ")} s is within ${BAND * 100} % of the same sedan on a flat platform at that height`, () => {
       const on = drive(new Block(top, role, -10, LENGTH), 0, 0, top);
       const flat = drive(new Platform(top), 0, 0, top);
@@ -231,7 +235,11 @@ function flight(ground: Ground, top: number): { time: number; fell: number; stra
 describe("given a sedan driven off the edge of a solid's top", () => {
   afterEach(() => setGround(null));
 
-  for (const [name, top, role] of [["a box prop", BOX_TOP, WALL], ["the jersey slab", BARRIER_TOP, RIG]] as const) {
+  const solids = [
+    { name: "a box prop", top: BOX_TOP, role: WALL },
+    { name: "the jersey slab", top: BARRIER_TOP, role: RIG },
+  ] as const;
+  for (const { name, top, role } of solids) {
     it(`when it leaves ${name} (${top.toFixed(2)} m), then it flies ballistically: its centre of mass follows y0 + vy0 t - g t^2 / 2 from the first slice with nothing under it, and its flight is the free fall sqrt(2 h / g) of what that centre dropped, to within one slice`, (t) => {
       const r = flight(new Block(top, role, -LENGTH, 0), top);
       const fall = Math.sqrt((2 * top) / G);

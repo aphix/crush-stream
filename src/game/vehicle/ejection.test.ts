@@ -44,7 +44,7 @@ describe("given two cars crashing, where a disabling head-on or side hit, or a d
     expect(b.driverOut).toBe("windshield");
   });
 
-  it("when a T-bone finishes a worn-out car, then its driver is thrown out of the struck side's window (doorR: +x, the car's left and the driver's own door) and the striking car's driver stays in", () => {
+  it("when a T-bone finishes a worn-out car, then its driver is thrown out of the struck side's window (the car's left, the driver's own door) and the striking car's driver stays in", () => {
     const struck = worn(makeCar());
     const bullet = makeCar();
     launch(struck, 0, 0, 0, 0, 0);
@@ -333,7 +333,7 @@ describe("given a fleet sedan hit on its nose (its engine block packed past the 
     expect(noseHit(between, true), "anywhere else").toHaveLength(0);
   });
 
-  it("when its block is packed past the kill with the drivetrain running at 1.0375 x its killSpeed, between the tuned 1.025 bar and the old 1.05 one, then the driver is thrown out of the windshield", () => {
+  it("when its block is packed past the kill with the drivetrain running at 1.0375 x its kill speed, between the tuned 1.025 bar and the old 1.05 one, then the driver is thrown out of the windshield", () => {
     expect(firstMismatch(noseHit(1.0375 * killSpeed(fleetCar()), true).map((e) => e.exit), ["windshield"])).toBeUndefined();
   });
 

@@ -61,8 +61,12 @@ function fleetCrash(ground: Ground): number[] {
 describe("given the fleet course's disc-shaped ground (a round pad with a rim past which the ground ends)", () => {
   afterEach(() => setGround(null));
 
-  for (const wreck of [false, true]) {
-    it(`when a ${wreck ? "wreck sliding" : "car driven"} goes past the rim at 16 m/s, then it stays in one piece until its lowest point is 10 mm under the disc's top off the rim, and is vaporized (removed) in that frame`, () => {
+  const rimCrossings = [
+    { subject: "a car driven", wreck: false },
+    { subject: "a wreck sliding", wreck: true },
+  ] as const;
+  for (const { subject, wreck } of rimCrossings) {
+    it(`when ${subject} goes past the rim at 16 m/s, then it stays in one piece until its lowest point is 10 mm under the disc's top off the rim, and is vaporized (removed) in that frame`, () => {
       setGround(DISC_GROUND);
       const car = launch(40, 16, wreck);
       const w = makeWorld([car], false, false, FREEWHEEL);
@@ -131,15 +135,15 @@ describe("given the fleet course's disc-shaped ground (a round pad with a rim pa
   });
 
   const rimCases = [
-    { it: "when it sits on the disc 2 cm under its top, then it stays (a sunk car on the pad is no fall)", x: 0, y: -0.02, flipped: false, expectedFellOff: false },
-    { it: "when it stands on the disc on its wheels, then it stays", x: 0, y: 0, flipped: false, expectedFellOff: false },
-    { it: "when it is off the rim and its lowest point is 5 mm under the disc's top, then it stays", x: 60, y: -0.005, flipped: false, expectedFellOff: false },
-    { it: "when it is off the rim and its lowest point is 20 mm under the disc's top, then it has fallen off", x: 60, y: -0.02, flipped: false, expectedFellOff: true },
-    { it: "when it hangs off the rim on its roof with the roof's lowest corner 0.36 m under the disc's top, then it has fallen off", x: 60, y: 1, flipped: true, expectedFellOff: true },
-    { it: "when it lies on its roof on the disc, then it stays", x: 0, y: 1, flipped: true, expectedFellOff: false },
+    { it: "when a car sits on the disc 2 cm under its top, then it stays (a sunk car on the pad is no fall)", x: 0, y: -0.02, flipped: false, expectedFellOff: false },
+    { it: "when a car stands on the disc on its wheels, then it stays", x: 0, y: 0, flipped: false, expectedFellOff: false },
+    { it: "when a car is off the rim and its lowest point is 5 mm under the disc's top, then it stays", x: 60, y: -0.005, flipped: false, expectedFellOff: false },
+    { it: "when a car is off the rim and its lowest point is 20 mm under the disc's top, then it has fallen off", x: 60, y: -0.02, flipped: false, expectedFellOff: true },
+    { it: "when a car hangs off the rim on its roof with the roof's lowest corner 0.36 m under the disc's top, then it has fallen off", x: 60, y: 1, flipped: true, expectedFellOff: true },
+    { it: "when a car lies on its roof on the disc, then it stays", x: 0, y: 1, flipped: true, expectedFellOff: false },
   ];
   for (const testCase of rimCases) {
-    it(`given a car beside the fleet disc, ${testCase.it}`, () => {
+    it(testCase.it, () => {
       setGround(DISC_GROUND);
       const car = makeCar();
       car.group.position.set(testCase.x, testCase.y, 0);

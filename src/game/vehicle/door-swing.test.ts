@@ -41,7 +41,7 @@ function open(deg: number, side: -1 | 1 = 1, yaw = 0, v0 = 0): DeformableCar {
 const deg = (car: DeformableCar, side: -1 | 1 = 1): number => car.doorHinge(side).theta / D2R;
 const SPEC = makeCar().doorHinge(1).spec;
 
-describe("given swingAccel (the swing push the car's own acceleration puts on an unlatched door's hinge)", () => {
+describe("given an unlatched door whose hinge is pushed by the car's own acceleration", () => {
   it("when the car brakes at 6 m/s² or accelerates at 6 m/s², then braking pushes a door on either side open and accelerating pushes it shut", () => {
     for (const sx of [-1, 1]) {
       expect(swingAccel(SPEC, sx, 0.5, 0, -6, 0, 0), `side ${sx} braking`).toBeGreaterThan(0);
@@ -52,10 +52,15 @@ describe("given swingAccel (the swing push the car's own acceleration puts on an
   it("when the car turns, then the door on the outside of the turn is pushed open and the one on the inside shut, by one law mirrored left to right", () => {
     // A turn toward +x pushes the frame's contents toward −x: the −x (left) door opens, the +x one shuts.
     expect(swingAccel(SPEC, -1, 0.6, 8, 0, 0, 0) > 0 && swingAccel(SPEC, 1, 0.6, 8, 0, 0, 0) < 0).toBeTruthy();
-    for (const [ax, az, w, al] of [
-      [5, -3, 0.4, 0.2],
-      [-2, 4, 1, -3],
-    ] as const) expect(Math.abs(swingAccel(SPEC, -1, 0.7, -ax, az, w, -al) - swingAccel(SPEC, 1, 0.7, ax, az, w, al)), "mirror").toBeLessThan(1e-9);
+    const mirroredTurns = [
+      { ax: 5, az: -3, w: 0.4, al: 0.2 },
+      { ax: -2, az: 4, w: 1, al: -3 },
+    ] as const;
+    for (const turn of mirroredTurns) {
+      const leftDoor = swingAccel(SPEC, -1, 0.7, -turn.ax, turn.az, turn.w, -turn.al);
+      const rightDoor = swingAccel(SPEC, 1, 0.7, turn.ax, turn.az, turn.w, turn.al);
+      expect(Math.abs(leftDoor - rightDoor), "mirror").toBeLessThan(1e-9);
+    }
   });
 
   it("when a car brakes at 9 m/s² with a door shut, then the shut door gets no swing push, because the force is along its slab", () => {
@@ -118,11 +123,12 @@ describe("given an unlatched open door that swings with the car's acceleration",
     };
     const base = at(0, 0);
     expect(base[7]!, "the base case did not swing").toBeGreaterThan(50);
-    for (const [yaw, v0] of [
-      [Math.PI / 2, 0],
-      [2.2, 0],
-      [0, 30],
-    ] as const) {
+    const otherStarts = [
+      { yaw: Math.PI / 2, v0: 0 },
+      { yaw: 2.2, v0: 0 },
+      { yaw: 0, v0: 30 },
+    ] as const;
+    for (const { yaw, v0 } of otherStarts) {
       const other = at(yaw, v0);
       for (let k = 0; k < 8; k++) expect(Math.abs(other[k]! - base[k]!), `yaw ${yaw} v0 ${v0} step ${k}: ${other[k]} vs ${base[k]}`).toBeLessThan(1e-6);
     }
@@ -136,12 +142,13 @@ describe("given an unlatched open door that swings with the car's acceleration",
     expect(deg(car)).toBeLessThanOrEqual(DOOR_OPEN_MAX / D2R + 1e-9);
   });
 
-  it("when the open door swings shut carrying 0.85× then 1.15× the slam-tear energy, then it latches at 0.85× and tears off at 1.15×, as the Doors ram's slam rule says (past the slam-tear energy limit the door leaves)", () => {
+  it("when the open door swings shut carrying 0.85× then 1.15× the energy that tears a slammed door off, then it latches at 0.85× and tears off at 1.15×", () => {
     // The rule is `closeSwing` (door-rig.test.ts pins its energies); here the car's own swing reaches it.
-    for (const [share, off] of [
-      [0.85, false],
-      [1.15, true],
-    ] as const) {
+    const slams = [
+      { share: 0.85, off: false },
+      { share: 1.15, off: true },
+    ] as const;
+    for (const { share, off } of slams) {
       const car = open(30);
       car.doorHinge(1).omega = -Math.sqrt((2 * share * SLAM_TEAR_J) / SPEC.inertia);
       for (let k = 0; k < 240; k++) car.swingHinges(H);
@@ -219,7 +226,7 @@ class Probe extends DeformableCar {
 }
 
 describe("given a car whose door a side hit has sprung open", () => {
-  it("when it hits a wall side-on at 40 km/h in shape deform mode, then exactly one door is left unlatched and hangs open at least as far as its crash jam (how far the crash bent it open)", () => {
+  it("when it hits a wall side-on at 40 km/h in shape deform mode, then exactly one door is left unlatched and hangs open at least as far as the crash bent it open", () => {
     const car = new Probe(paint(), new THREE.Scene());
     car.deform.setMode("shape");
     runWall(40, 1, "side", { car });
@@ -230,7 +237,7 @@ describe("given a car whose door a side hit has sprung open", () => {
     expect(car.doorHinge(sides[0]!).theta, "the door hangs shut past its jam").toBeGreaterThanOrEqual(Math.min(jam * 1.45, DOOR_OPEN_MAX) - 1e-9);
   });
 
-  it("when it hits a wall side-on at 40 km/h in shape deform mode, then its cage drops the sprung door's panel and keeps the latched door's (the doors are the cage's last two panels, left then right)", () => {
+  it("when it hits a wall side-on at 40 km/h in shape deform mode, then its crash cage drops the sprung door's panel and keeps the latched door's", () => {
     const car = new Probe(paint(), new THREE.Scene());
     car.deform.setMode("shape");
     runWall(40, 1, "side", { car });

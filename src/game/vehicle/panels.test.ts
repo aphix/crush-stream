@@ -214,7 +214,7 @@ describe("given a car whose quarter panels and arch flares are torn off", () => 
   // the road (lowest point 0.0000 m) every time.
   it.todo("when the car steps on, then a torn arch lies flat on the road (thin axis up), as a torn hood does, at any tear speed");
 
-  it("when a panel is torn and posed again, then it is culled by a sphere that follows each pose", () => {
+  it("when a panel is torn and posed again, then it stays hidden when off screen and its cull bounds enclose every vertex of each new pose", () => {
     const car = probe();
     car.tear("quarterR", 20);
     const part = car.part("quarterR");

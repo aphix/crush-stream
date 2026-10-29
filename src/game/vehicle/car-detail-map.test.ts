@@ -31,7 +31,7 @@ function within(actual: number, expected: number, share: number, label: string):
   expect(Math.abs(actual - expected), `${label}: ${actual} is not within ${share * 100}% of ${expected}`).toBeLessThanOrEqual(Math.abs(expected) * share);
 }
 
-describe("given a style's detail table baked to its atlas", () => {
+describe("given a car style's detail strokes and patches, read back from its detail map", () => {
   it("when a v groove runs along the side, then its centre reads its depth and cavity and nothing lies past half its width", () => {
     const read = detailReader(sedanWith({ lines: [{ view: "side", points: [[-1, 0.5], [1, 0.5]], width: 0.04, depth: -0.004, profile: "v", cavity: 0.85 }], patches: [] }));
     const centre = read("side", 0, 0.5);
@@ -197,7 +197,7 @@ const CHAINS = [
   { it: "when the spray is chained before the detail hook, then the composed vertex shader declares each rest attribute once", detailFirst: false },
 ] as const;
 
-describe("given the detail compile hook on a paint material", () => {
+describe("given a car paint material carrying a style's detail map", () => {
   const style = sedanWith(SEDAN_DETAILS);
 
   it("when the finish is on, then the shader samples the detail map inside the finish's draw gate", () => {

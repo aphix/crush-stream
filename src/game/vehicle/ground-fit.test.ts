@@ -56,16 +56,18 @@ function rampSites(): Site[] {
   add("top (h 1.10)", "edge", 0, RAMP.start + 0.4, SEDAN);
   add("low end (h 0.08)", "plain", 0, RAMP.start + RAMP.len - 0.3, SEDAN);
   // Straddling the side edge: left wheels on the slope, right wheels on the flat beside it.
-  for (const [lip, z] of [
-    ["front lip", RAMP.start + RAMP.len - 0.8],
-    ["mid-face", MID],
-    ["rear lip", RAMP.start + 1],
-  ] as const) {
-    for (const [where, x] of [
-      ["on edge", RAMP.halfW],
-      ["0.4 in", RAMP.halfW - 0.4],
-      ["0.4 out", RAMP.halfW + 0.4],
-    ] as const) {
+  const lips = [
+    { lip: "front lip", z: RAMP.start + RAMP.len - 0.8 },
+    { lip: "mid-face", z: MID },
+    { lip: "rear lip", z: RAMP.start + 1 },
+  ] as const;
+  const edges = [
+    { where: "on edge", x: RAMP.halfW },
+    { where: "0.4 in", x: RAMP.halfW - 0.4 },
+    { where: "0.4 out", x: RAMP.halfW + 0.4 },
+  ] as const;
+  for (const { lip, z } of lips) {
+    for (const { where, x } of edges) {
       add(`${lip}: ${where}`, "edge", x, z, SEDAN_MONSTER);
     }
   }

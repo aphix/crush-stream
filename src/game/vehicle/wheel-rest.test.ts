@@ -173,8 +173,8 @@ describe("given a sedan with all four wheels on", () => {
   });
 });
 
-describe("given all four wheels on, for the suspension's sag offsets (how far each body corner drops or lifts for the wheels that are missing)", () => {
-  it("when the sag offsets are computed, then every corner's offset is zero, so nothing sags where nothing is missing", () => {
+describe("given a sedan with all four wheels on, its body corners' sag (how far each drops or lifts for the wheels that are missing)", () => {
+  it("when each corner's sag is worked out, then it is zero, so nothing sags where nothing is missing", () => {
     const o = new Float64Array(4).fill(7);
     sagOffsets(SEDAN, 0, 0.065, 0, o);
     expect(firstMismatch([...o], [0, 0, 0, 0])).toBeUndefined();
@@ -182,7 +182,7 @@ describe("given all four wheels on, for the suspension's sag offsets (how far ea
 });
 
 describe("given a missing front-left wheel at each class lift (0, 0.08 and 0.48 m)", () => {
-  it("when the sag offsets are computed, then the front-left corner of the body drops by over 3 cm and the diagonal corner sits above it", () => {
+  it("when each corner's sag is worked out, then the front-left corner of the body drops by over 3 cm and the diagonal corner sits above it", () => {
     for (const lift of [0, 0.08, 0.48]) {
       const o = new Float64Array(4);
       sagOffsets(SEDAN, lift, 0.065 + lift, 1, o);

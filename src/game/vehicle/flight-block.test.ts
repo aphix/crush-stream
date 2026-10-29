@@ -64,7 +64,7 @@ function headingsWhereTheyDiffer(placeAt: (car: DeformableCar, heading: number) 
 }
 
 describe("given a car and a twin rebuilt from its flight block, driven on with the same pedals", () => {
-  it("when the car has been driven on for some slices (its quaternion turned by the rigid step after the drive set it), at every heading, then both take every next slice to the bit", () => {
+  it("when the car has been driven on for some slices, at every heading, then both take every next slice to the bit", () => {
     const bad = headingsWhereTheyDiffer((car, heading) => {
       car.spawnFacing(3, -5, heading, SPAWN_SPEED);
       const warm = newWorld([car], null);
@@ -76,7 +76,7 @@ describe("given a car and a twin rebuilt from its flight block, driven on with t
     expect(bad).toHaveLength(0);
   });
 
-  it("when the car was just placed facing a yaw a full turn past its heading (its Euler angles are not the quaternion's derived copy), at every heading, then both take every next slice to the bit", () => {
+  it("when the car was just placed facing a yaw a full turn past its heading, at every heading, then both take every next slice to the bit", () => {
     const bad = headingsWhereTheyDiffer((car, heading) => car.spawnFacing(3, -5, heading + FULL_TURN, SPAWN_SPEED));
     expect(bad).toHaveLength(0);
   });

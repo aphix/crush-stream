@@ -140,7 +140,11 @@ function skinReachPastCage(wreck: DeformableCar): { gap: number; at: string } {
 describe("given two cars crushed head-on, left to rest on the ground", () => {
   afterEach(() => setGround(null));
 
-  for (const [site, pitch] of [["flat ground", 0], ["a 10° slope", 10]] as const) {
+  const sites = [
+    { site: "flat ground", pitch: 0 },
+    { site: "a 10° slope", pitch: 10 },
+  ] as const;
+  for (const { site, pitch } of sites) {
     for (const hit of HITS) {
       it(`when ${hit.name} on ${site}, then no point of either wreck is drawn more than 3 cm in the ground under it`, () => {
         const ground = pitch === 0 ? FLAT_GROUND : new Slope(pitch);
@@ -193,7 +197,7 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
   // 30°, a 15° slope and the tilt a wreck settles at), no vertex of its drawn body stands more than 3 cm beyond them, so none can be
   // in the ground. The truck and monster stand on a body lift the sim's own pose sync sets (`cageLift`): not read here.
   for (const hit of HITS.filter((h) => h.a !== "truck")) {
-    it(`when ${hit.name} leaves wrecks, then the cage's points under each reach within 3 cm of its drawn body's skin whichever way it lies`, () => {
+    it(`when ${hit.name} leaves wrecks, then the points each rests on reach within 3 cm of its drawn body's skin whichever way it lies`, () => {
       const wrecks = wrecksAtRest(hit, new Slope(15), 1);
       expect(wrecks.length, "the hit left no wreck").toBeGreaterThan(0);
       for (const wreck of wrecks) {

@@ -143,7 +143,7 @@ describe("given a parked car struck by a 858 kg piston", () => {
     expect(struck("front", 50).stalledS).toBe(0);
   });
 
-  it("when the stall is read against the sensor's own threshold, then 50 km/h on the side is past it and 8 km/h is under it", () => {
+  it("when the side hit's average deceleration is compared with the crash sensor's trigger, then 50 km/h is past it and 8 km/h is under it", () => {
     // The crush stroke the hit gets (`crushStroke`, squash 0.32) is affine in its barrier speed: average deceleration = ebs² / (2 · stroke).
     const stroke = (ebs: number) => (0.035 * ebs + 0.02) * (0.6 + 0.32);
     const decel = (kph: number) => (kph / 3.6) ** 2 / (2 * stroke(kph / 3.6)) / 9.81;
@@ -189,7 +189,7 @@ describe("given a sedan rolling on flat ground with its fuel cut", () => {
     expect(car.drive.drift, `drift ${car.drive.drift.toFixed(2)}`).toBeGreaterThan(0);
   });
 
-  it("when the stall time is out, then the fuel is back: stalledS is 0 and the gas pushes again", () => {
+  it("when the stall time is out, then the fuel is back and the gas pushes again", () => {
     const { car, world } = rollingCar(20, STALL_S);
     world.pedals.set(car, FULL_GAS);
     for (let t = 0; t < STALL_S + DT; t += DT) tickWorld(world);

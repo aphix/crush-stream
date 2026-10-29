@@ -160,7 +160,7 @@ describe("given a car missing wheels (their hubs popped off)", () => {
     expect(c.speed, `a bare front axle held the car to ${c.speed.toFixed(1)} m/s`).toBeGreaterThan(12);
   });
 
-  it("when wheels are lost, then the wheels-on mask names the wheels in front-left, front-right, rear-left, rear-right order, every wheel on leaves every control whole, and a rear pair alone gives no steering and half the drive", () => {
+  it("when wheels are lost, then the surviving wheels are recorded in front-left, front-right, rear-left, rear-right order, every wheel on leaves every control whole, and a rear pair alone gives no steering and half the drive", () => {
     expect(car([]).deform.wheelsOnMask).toBe(15);
     expect(car([0, 3]).deform.wheelsOnMask).toBe(6);
     const out = wheelLoss(15, new Float64Array(LOSS_SIZE));

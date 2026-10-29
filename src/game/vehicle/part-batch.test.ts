@@ -58,7 +58,7 @@ const looseMeshes = (seat: THREE.Object3D): THREE.Mesh[] => seat.children.filter
 
 const positions = (g: THREE.BufferGeometry): ArrayLike<number> => g.getAttribute("position").array;
 
-describe("given the part batch and a few cars near the camera", () => {
+describe("given a few cars near the camera, their parts drawn in batches", () => {
   test("when the cars are synced, then every kind shown at rest has its seats per car, the bay and crash bars none, and the parts cost one draw per shown plain kind plus one for all the styled kinds, whatever the car count", () => {
     for (const n of [1, CARS]) {
       const { batch, car, draw } = stage();
@@ -86,7 +86,7 @@ describe("given the part batch and a few cars near the camera", () => {
     assertSameNumbers(m.elements, cars[1]!.group.matrixWorld.elements, "the second sedan's caster instance", FLOAT32_SLACK);
   });
 
-  test("when a car is synced, then its mirror's row stands where the seat does", () => {
+  test("when a car is synced, then its mirror is drawn where its mirror seat stands", () => {
     const { batch, car, draw } = stage();
     const only = car(10);
     draw([only]);
@@ -99,7 +99,7 @@ describe("given the part batch and a few cars near the camera", () => {
     assertSameNumbers(matrix.elements, seat.matrixWorld.elements, "the mirror row is the seat's world matrix", FLOAT32_SLACK);
   });
 
-  test("when every kind's draws are read, then it draws the kind's one shared geometry (a door card's: the one inside every door skin), or, for a kind a style draws its own way (mirrors, grille, tail trim, wipers), has no draw of its own and its variants in the one styled draw start with the platform part", () => {
+  test("when the batches are built, then each plain kind draws its one shared geometry (a door card's: the one inside every door skin), and each kind a style draws its own way (mirrors, grille, tail trim, wipers) has no draw of its own, its variants in the one styled draw starting with the platform part", () => {
     const { batch } = stage();
     for (const kind of PART_KINDS) {
       const mesh = batch.kinds[kind];
@@ -118,7 +118,7 @@ describe("given the part batch and a few cars near the camera", () => {
   });
 });
 
-describe("given the part batch and one car of each style", () => {
+describe("given one car of each style, its parts drawn in batches", () => {
   const tris = (g: THREE.BufferGeometry): number => (g.index ? g.index.count : g.getAttribute("position").count) / 3;
 
   // Runs while the wagon's own mirror (set when the describe below registers, put back after its rows) is on, as the fleet table was built with it.
@@ -143,7 +143,7 @@ describe("given the part batch and one car of each style", () => {
   });
 });
 
-describe("given the part batch and one car of each style, its windshield whole and then shattered", () => {
+describe("given one car of each style, its windshield whole and then shattered", () => {
   /** Off the glass (m): nothing of the wipers deeper than this into it, and the pivot cap, standing highest, under the other. */
   const [INTO_GLASS, OVER_GLASS] = [0.001, 0.06];
 
@@ -271,7 +271,7 @@ describe("given the part batch and one car of each style, its windshield whole a
   });
 });
 
-describe("given the part batch and a car whose style has its own mirror", () => {
+describe("given a car whose style has its own mirror, beside a car with the platform mirror", () => {
   // Set before the first batch or car reads the fleet's mirror variants; the per-style row above builds a wagon too, and runs while this mirror is set.
   const wagon = CAR_STYLES.wagon;
   const door = wagon.door;
@@ -330,7 +330,7 @@ describe("given the part batch and a car whose style has its own mirror", () => 
   });
 });
 
-describe("given the part batch and a car whose right mirror snaps off", () => {
+describe("given cars in batches, one whose right mirror snaps off", () => {
   test("when the mirror is torn, then its seat grows a mesh of its own geometry and leaves the mirror batch", () => {
     const { batch, car, draw } = stage();
     const cars = Array.from({ length: CARS }, () => car(10));
@@ -380,7 +380,7 @@ describe("given the part batch and a car whose right mirror snaps off", () => {
   });
 });
 
-describe("given the part batch and a car that loses a door or its front bumper", () => {
+describe("given cars in batches, one that loses a door or its front bumper", () => {
   test("when the right door is torn, then its lining and mirror are loose and leave their batches, the left ones stay", () => {
     const { batch, car, draw } = stage();
     const cars = Array.from({ length: CARS }, () => car(10));
@@ -441,7 +441,7 @@ describe("given the part batch and a car that loses a door or its front bumper",
   });
 });
 
-describe("given the part batch and a car the distance detail cuts", () => {
+describe("given a car the distance detail cuts, among cars drawn in batches", () => {
   test("when one of three cars is beyond the far distance, then each kind draws the other two only; when it comes back, all three", () => {
     const { batch, car, draw } = stage();
     const cars = [car(10), car(10), car(FAR_BEYOND + 20)];
@@ -464,7 +464,7 @@ describe("given the part batch and a car the distance detail cuts", () => {
   });
 });
 
-describe("given a part batch smaller than the cars it is asked to draw", () => {
+describe("given more cars than the parts batches have room for", () => {
   test("when more cars than the capacity are synced, then every kind stops at the capacity", () => {
     const capacity = CARS - 1;
     const { batch, car, draw } = stage(capacity);
@@ -478,7 +478,7 @@ describe("given a part batch smaller than the cars it is asked to draw", () => {
   });
 });
 
-describe("given the part batch is disposed", () => {
+describe("given the parts batches are no longer needed", () => {
   test("when it is disposed, then each mesh is released and the shared geometries are not", () => {
     const { batch, car, draw } = stage();
     draw([car(10)]);
@@ -504,7 +504,7 @@ describe("given the part batch is disposed", () => {
   });
 });
 
-describe("given the part batch over a resting field", () => {
+describe("given a resting field of cars drawn in batches", () => {
   test("when it syncs again with nothing moved, then no draw uploads; when the cars move, every kind, caster and the styled draw upload again", () => {
     const { batch, car, draw } = stage();
     const cars = [car(8), car(12, "wagon")];
@@ -538,8 +538,8 @@ describe("given the part batch over a resting field", () => {
   });
 });
 
-describe("given the part batch's styled draw after a sync that built its geometry", () => {
-  test("when its buffers are read, then every one keeps three's static usage hint (a dynamic one may sit in host memory the GPU reads every frame)", () => {
+describe("given a field of cars whose styled parts were drawn once", () => {
+  test("when its buffers are read, then every one is static, never dynamic (a dynamic one may sit in host memory the GPU reads every frame)", () => {
     const { batch, car, draw } = stage();
     draw([car(8), car(12, "wagon")]);
     const geo = batch.styled.mesh.geometry;

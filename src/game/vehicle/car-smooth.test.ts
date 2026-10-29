@@ -359,21 +359,40 @@ describe("given the lids as built", () => {
   });
 });
 
-type PartCase = { readonly name: string; readonly make: (id: CarStyleId) => THREE.BufferGeometry; readonly creaseDegrees: number; readonly capsAreCuts: boolean };
+type PartName = "bonnet" | "boot" | "left door" | "right door" | "front bumper" | "rear bumper";
+type PartCase = { readonly name: PartName; readonly creaseDegrees: number; readonly capsAreCuts: boolean };
 const partCases: readonly PartCase[] = [
-  { name: "bonnet", make: (id) => makeHoodGeometry(CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.deckLid, capsAreCuts: true },
-  { name: "boot", make: (id) => makeTrunkGeometry(CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.deckLid, capsAreCuts: true },
-  { name: "left door", make: (id) => makeDoorGeometry(-1, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.door, capsAreCuts: false },
-  { name: "right door", make: (id) => makeDoorGeometry(1, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.door, capsAreCuts: false },
-  { name: "front bumper", make: (id) => makeBumperGeometry(true, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.bumper, capsAreCuts: true },
-  { name: "rear bumper", make: (id) => makeBumperGeometry(false, CAR_STYLES[id]), creaseDegrees: CREASE_DEGREES.bumper, capsAreCuts: true },
+  { name: "bonnet", creaseDegrees: CREASE_DEGREES.deckLid, capsAreCuts: true },
+  { name: "boot", creaseDegrees: CREASE_DEGREES.deckLid, capsAreCuts: true },
+  { name: "left door", creaseDegrees: CREASE_DEGREES.door, capsAreCuts: false },
+  { name: "right door", creaseDegrees: CREASE_DEGREES.door, capsAreCuts: false },
+  { name: "front bumper", creaseDegrees: CREASE_DEGREES.bumper, capsAreCuts: true },
+  { name: "rear bumper", creaseDegrees: CREASE_DEGREES.bumper, capsAreCuts: true },
 ];
+
+function makePart(name: PartName, id: CarStyleId): THREE.BufferGeometry {
+  const style = CAR_STYLES[id];
+  switch (name) {
+    case "bonnet":
+      return makeHoodGeometry(style);
+    case "boot":
+      return makeTrunkGeometry(style);
+    case "left door":
+      return makeDoorGeometry(-1, style);
+    case "right door":
+      return makeDoorGeometry(1, style);
+    case "front bumper":
+      return makeBumperGeometry(true, style);
+    case "rear bumper":
+      return makeBumperGeometry(false, style);
+  }
+}
 
 describe("given every part whose hard edges are declared, as built for every body style", () => {
   for (const id of CAR_STYLE_IDS) {
     for (const testCase of partCases) {
       it(`when a ${id} ${testCase.name}'s edges are read against its ${testCase.creaseDegrees}° crease, then every sharper edge has vertices of its own and every softer one shares them`, () => {
-        const geometry = testCase.make(id);
+        const geometry = makePart(testCase.name, id);
         const census = censusOfEdges(geometry, testCase.creaseDegrees, testCase.capsAreCuts);
         expect(census.sharpEdges, `${id} ${testCase.name} has no sharp edge at all`).toBeGreaterThan(0);
         expect(census.sharpEdgesStillShared, `${id} ${testCase.name}: sharp edges still share vertices (${JSON.stringify(census)})`).toBe(0);
@@ -495,7 +514,7 @@ describe("given every body style's drawn nose, whose plan and fender line turn h
 /** A drawn flank's chord over a split range (`ringSplit`) may sag this far (m) off the section at its middle, as the nose's may. */
 const FLANK_CHORD_SAG = 0.005;
 
-describe("given every body style whose drawn body splits its loft gaps over a z range (`ringSplit`)", () => {
+describe("given every body style whose drawn body splits its loft gaps over a z range", () => {
   for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].ringSplit)) {
     it(`when a ${id}'s body chords over that range are read, then every ring point's chord lies within ${FLANK_CHORD_SAG * 1000} mm of the section at its middle`, () => {
       const style = CAR_STYLES[id];
@@ -522,7 +541,7 @@ describe("given every body style whose drawn body splits its loft gaps over a z 
   }
 });
 
-describe("given every body style whose drawn loft keeps only its knots' rings inside the front door's cut (`bareDoorCut`)", () => {
+describe("given every body style whose drawn loft keeps only its knots' rings inside the front door's cut", () => {
   for (const id of CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].bareDoorCut)) {
     it(`when a ${id}'s loft stations are read, then inside the door cut the drawn build drops plain stations and adds none, and the cage keeps every ring`, () => {
       const style = CAR_STYLES[id];
@@ -675,8 +694,8 @@ describe("given every body style's drawn hood over its open engine bay", () => {
 
 /** Of each side's greenhouse parts the B pillar and the rail are the near-rectangular ones (the A and C pillars lean in plan, so their section is a sheared parallelogram). */
 const roundedPartCases = [
-  { name: "B pillar", pick: (parts: THREE.BufferGeometry[]) => parts.find((g) => g.name === "b")! },
-  { name: "side rail", pick: (parts: THREE.BufferGeometry[]) => parts.find((g) => g.name === "beltRail")! },
+  { name: "B pillar", part: "b" },
+  { name: "side rail", part: "beltRail" },
 ] as const;
 
 /** At the cant line the drawn roof's side keeps normals of its own, pointing out at least this much (x share), not down with its underside's. */
@@ -802,7 +821,7 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
     });
   }
 
-  for (const [id, style] of [...CAR_STYLE_IDS.map((id) => [id, drawnStyle(CAR_STYLES[id])] as const), ["wrapped sedan", WRAPPED_SEDAN] as const]) {
+  for (const { id, style } of [...CAR_STYLE_IDS.map((id) => ({ id: id as string, style: drawnStyle(CAR_STYLES[id]) })), { id: "wrapped sedan", style: WRAPPED_SEDAN }]) {
     it(`when a ${id}'s A-posts are laid along its windshield, then each laps the windshield's side edge within ${A_POST_EDGE_FOLLOW * 100} cm at every station under the roof and in side view its centre's offset from that edge varies under ${A_POST_EDGE_FOLLOW * 100} cm`, () => {
       const last = WINDSHIELD_EDGE_STEPS;
       for (const post of makeGreenhouseFrame(style, "drawn").filter((g) => g.name === "a")) {
@@ -836,7 +855,7 @@ describe("given every body style's drawn A-, B-, C- and divider posts", () => {
     });
   }
 
-  it("when a drawn windshield rounds its top corners (`windshield.round`), then the A-post's rail follows the arc: each station under the roof laps the rounded edge within the follow bar, and its top ring's front stands over 2 cm further in than a post laid along the straight edge's", () => {
+  it("when a drawn windshield rounds its top corners, then the A-post's rail follows the arc: each station under the roof laps the rounded edge within the follow bar, and its top ring's front stands over 2 cm further in than a post laid along the straight edge's", () => {
     const style = drawnStyle(CAR_STYLES.pickup);
     expect(style.windshield.round, "the pickup's drawn windshield rounds its top corners").not.toBe(undefined);
     // The post's foot starts at the belt, below the pane's base: the edge's first chord carried on down past it.
@@ -904,9 +923,9 @@ const PINCHED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, cPillar: { ...CAR_STYLES
 /** The control: the coupe unpinched with its quarter glass's sill held at the door's belt (before it rose to the window's point), whose sail cut across the window's point. */
 const UNPINCHED_COUPE: BodyStyle = { ...CAR_STYLES.coupe, cPillar: { ...CAR_STYLES.coupe.cPillar, pinch: undefined }, belt: { ...CAR_STYLES.coupe.belt, y: [[-0.981, 0.885], ...CAR_STYLES.coupe.belt.y.slice(1)] } };
 const SAIL_STYLES = [
-  ...CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar).map((id) => [id, CAR_STYLES[id]] as const),
-  ["domed coupe", DOMED_COUPE] as const,
-  ["pinched coupe", PINCHED_COUPE] as const,
+  ...CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].cPillar).map((id) => ({ id: id as string, style: CAR_STYLES[id] })),
+  { id: "domed coupe", style: DOMED_COUPE },
+  { id: "pinched coupe", style: PINCHED_COUPE },
 ];
 /** In the side view a pinched window's glass shows from at most this far (m) ahead of its point on, so the point reads sharp. */
 const WINDOW_POINT_SHOWS = 0.01;
@@ -998,8 +1017,8 @@ function sailCovers(style: BodyStyle): (z: number, y: number) => boolean {
   };
 }
 
-describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", () => {
-  for (const [id, style] of SAIL_STYLES) {
+describe("given every body style whose drawn C-pillar is a sail", () => {
+  for (const { id, style } of SAIL_STYLES) {
     it(`when a ${id}'s sail is read along its haunch, then each section's foot sits on the body's shoulder and its face leaves it within ${SAIL_LEAN_DEGREES}° of the shoulder's tangent`, (t) => {
       if (style.cPillar?.flat) return t.skip("a flat sail leaves the body where its line touches the section: its own row");
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
@@ -1052,7 +1071,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
     });
   }
 
-  for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.flat)) {
+  for (const { id, style } of SAIL_STYLES.filter((s) => s.style.cPillar?.flat)) {
     it(`when a ${id}'s flat sail is read along its haunch, then each section's outer face is straight within ${SAIL_FLAT_BOW * 1000} mm behind its ${(style.cPillar?.blend ?? SAIL_ROLL_BLEND_TEST) * 100} cm ease into the roof end's roll, no body point stands outside its line by more than its ${SAIL_SINK_TEST * 1000} mm sink, and one touches it (tangent, no crease)`, () => {
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const haunchZ = Math.fround((style.cPillar?.tip?.[1] ?? drawnQuarter(style).zRearBot) - (style.cPillar?.sweep ?? SAIL_SWEEP));
@@ -1116,7 +1135,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       expect(off.length, `${id}: the outer face folds across ${off.join("; ")}`).toBe(0);
     });
   }
-  it(`when the coupe's flat sail sets \`cPillar.reachLip\`, then ahead of its roof end every section's outer face meets the roof's cant lip within ${SAIL_LIP_GAP * 1000} mm at the lip's height, not a chord to a head under the roof's edge`, () => {
+  it(`when the coupe's flat sail is made to reach the roof's cant lip, then ahead of its roof end every section's outer face meets the roof's cant lip within ${SAIL_LIP_GAP * 1000} mm at the lip's height, not a chord to a head under the roof's edge`, () => {
     const coupe = CAR_STYLES.coupe;
     const stock: BodyStyle = { ...coupe, cPillar: { ...coupe.cPillar!, reachLip: undefined } };
     const reach: BodyStyle = { ...stock, cPillar: { ...stock.cPillar!, reachLip: 1 } };
@@ -1133,7 +1152,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
     const gap = lipGap(coupe, first);
     expect(gap, `the lip stands ${(gap * 1000).toFixed(1)} mm past the face at z ${first[0]!.z.toFixed(3)}`).toBeLessThanOrEqual(COUPE_FIN_GAP);
   });
-  it("when the coupe's flat sail sets `cPillar.rollShare` 0.5, then each ring behind its roof end carries half the stock's offset off its chord and every vertex at or ahead of the roof end is the stock's", () => {
+  it("when the coupe's flat sail is set to carry half its roll, then each ring behind its roof end carries half the stock's offset off its chord and every vertex at or ahead of the roof end is the stock's", () => {
     const coupe = CAR_STYLES.coupe;
     const stock: BodyStyle = { ...coupe, cPillar: { ...coupe.cPillar!, rollShare: undefined } };
     const [base, halved] = [stock, { ...stock, cPillar: { ...stock.cPillar!, rollShare: 0.5 } }].map(sailRings);
@@ -1159,7 +1178,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
     expect(carried, `the stock's roll offsets stand at most ${(carried * 1000).toFixed(2)} mm off the chord: the row would not catch a wrong share`).toBeGreaterThan(0.001);
     expect(off.length, off.join("; ")).toBe(0);
   });
-  for (const [id, style] of SAIL_STYLES.filter(([, s]) => (s.cPillar?.pinch ?? 0) > 0)) {
+  for (const { id, style } of SAIL_STYLES.filter((s) => (s.style.cPillar?.pinch ?? 0) > 0)) {
     it(`when a ${id}'s pinched side window is read in the side view, then its glass shows within ${WINDOW_POINT_SHOWS * 1000} mm of the window's point: the sail never cuts across it`, () => {
       const blunt = windowPointCover(UNPINCHED_COUPE);
       expect(blunt, `the control: the coupe's unpinched window shows its glass ${(blunt * 1000).toFixed(0)} mm past its point`).toBeGreaterThan(WINDOW_POINT_SHOWS);
@@ -1174,7 +1193,7 @@ describe("given every body style whose drawn C-pillar is a sail (`cPillar`)", ()
       expect(under, `${id}: at z ${points[0]!.z.toFixed(3)} the sail reaches ${(under * 1000).toFixed(1)} mm under the glass's top line`).toBeLessThanOrEqual(PINCH_FRONT_UNDER);
     });
   }
-  for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.dEnd)) {
+  for (const { id, style } of SAIL_STYLES.filter((s) => s.style.cPillar?.dEnd)) {
     it(`when a ${id}'s side window's rear end is read in the side view, then its glass's visible top edge keeps the D end's arc's shape within ${D_END_SHAPE * 1000} mm from its rearmost to the line: a round end, not a point`, () => {
       const q = drawnQuarter(style);
       const [tipY, tipZ] = style.cPillar?.tip ?? [beltY(q.zRearBot, style), q.zRearBot];
@@ -1230,7 +1249,7 @@ const BARRED_SEDAN: BodyStyle = {
   blackout: { ...CAR_STYLES.sedan.blackout, divider: true },
 };
 
-describe("given a style that stands a bar on its side glass (`pillars.glassBar`)", () => {
+describe("given a style that stands a bar on its side glass", () => {
   it(`when its drawn greenhouse is read, then each side carries one black strip on the glass, within ${GLASS_BAR_STAND * 1000} mm off its plane and never under it, its width about its centre line at the belt and at the top; the cage carries none`, () => {
     const { width, z } = BARRED_SEDAN.pillars!.glassBar!;
     const bars = makeGreenhouseFrame(BARRED_SEDAN, "drawn").filter((g) => g.name === "glassBar");
@@ -1270,7 +1289,7 @@ const REAR_SQUARE_LAP = 0.01;
 /** The monster with its cab's back corners squared. */
 const SQUARED_MONSTER: BodyStyle = { ...CAR_STYLES.monster, pillars: { ...CAR_STYLES.monster.pillars, rearSquare: true } };
 
-describe("given a truck cab whose rear post is squared (`pillars.rearSquare`)", () => {
+describe("given a truck cab whose rear post is squared", () => {
   it(`when its drawn greenhouse is read, then each rear post's outer face runs along the car within ${REAR_SQUARE_TURN * 100} cm from its rear third to its front third at the belt (its head tucks under the roof's rolled rear end), a flat cab back panel facing the tail laps at least ${REAR_SQUARE_LAP * 100} cm over the rear glass's side edge on each side, and the cage is the plain monster's`, () => {
     const drawn = makeGreenhouseFrame(SQUARED_MONSTER, "drawn");
     const off: string[] = [];
@@ -1301,8 +1320,8 @@ describe("given a truck cab whose rear post is squared (`pillars.rearSquare`)", 
 const SAIL_FLUSH_HEIGHT = 0.0085;
 const SAIL_FLUSH_LAP_MIN = 0.005;
 
-describe("given every body style whose drawn sail laps the rear glass (`cPillar.flush`)", () => {
-  for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.flush)) {
+describe("given every body style whose drawn sail laps the rear glass", () => {
+  for (const { id, style } of SAIL_STYLES.filter((s) => s.style.cPillar?.flush)) {
     it(`when a ${id}'s sail is read along the rear glass, then each section's head stands within ${SAIL_FLUSH_HEIGHT * 1000} mm over the drawn glass (fallen with the dome) and laps its side edge (round at the top corners) by at least ${SAIL_FLUSH_LAP_MIN * 1000} mm`, () => {
       const rg = style.rearGlass;
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
@@ -1323,7 +1342,7 @@ describe("given every body style whose drawn sail laps the rear glass (`cPillar.
     });
   }
 
-  for (const [id, style] of SAIL_STYLES.filter(([, s]) => s.cPillar?.flush && s.roofSection && s.rearGlass.round)) {
+  for (const { id, style } of SAIL_STYLES.filter((s) => s.style.cPillar?.flush && s.style.roofSection && s.style.rearGlass.round)) {
     it(`when a ${id}'s sail is read at its curved roof's rear end, then its head reaches in over the rear glass's round top corner's mid-arc by at least ${SAIL_FLUSH_LAP_MIN * 1000} mm (the ring behind follows the arc's lower half, the roof end meets its upper half: no notch), and that section stands behind the roof's bowed end at every point (no skin over skin)`, () => {
       const sail = makeGreenhouseFrame(style, "drawn").find((g) => g.name === "rear" && positionAt(g, 0).x > 0)!;
       const { ring, slices } = loftOf(sail);
@@ -1348,7 +1367,7 @@ describe("given every body style whose drawn sail laps the rear glass (`cPillar.
     });
   }
 
-  it("when a curved-roof coupe's flush sail sets cPillar.corner, then its roof-end head laps the rear glass's round top corner at that share of the arc, where the mid-arc head stands outboard of it", () => {
+  it("when a curved-roof coupe's flush sail is set to lap the rear glass's round top corner at 0.8 of the arc, then its roof-end head laps that corner at that share of the arc, where the mid-arc head stands outboard of it", () => {
     /** A share past the mid-arc, so the corner's upper half is covered from the roof end. */
     const SHARE = 0.8;
     const coupe = CAR_STYLES.coupe;
@@ -1371,7 +1390,7 @@ describe("given every body style's greenhouse frame", () => {
   for (const id of CAR_STYLE_IDS) {
     for (const testCase of roundedPartCases) {
       it(`when a ${id}'s ${testCase.name} is read, then no lengthwise edge turns ${ROLLED_EDGE_LIMIT_DEGREES}° or more (the box's 90° corners are rolled)`, () => {
-        const part = testCase.pick(makeGreenhouseFrame(CAR_STYLES[id]));
+        const part = makeGreenhouseFrame(CAR_STYLES[id]).find((g) => g.name === testCase.part)!;
         const loft = loftOf(part);
         for (let line = 0; line < loft.ring; line++) {
           const angles = ringLineDihedrals(part, line);
@@ -1780,7 +1799,7 @@ const SEDAN_TWIN: DrawnTwin = {
   aPillarFoot: CAR_STYLES.sedan.aPillarFoot - 0.04,
 };
 
-describe("given a style whose windshield is drawn apart from its cage (`drawn`)", () => {
+describe("given a style whose windshield is drawn apart from its cage", () => {
   it("when a car of it is built, then its windshield pane and its body's A-post and sail are the twin's, while its cage source, its sim masses at rest and the windshield's exit point stay the style's own", () => {
     const joined = (geo: THREE.BufferGeometry) => Array.from(geo.getAttribute("position").array).join(",");
     const paneOf = (car: DeformableCar) => car["glassPanes"].find((g) => g.name === "windshield")!.mesh.geometry;
@@ -1810,8 +1829,8 @@ const PANE_PROBE_LIFT_M = 0.05;
 /** The drawn A-post's lowest point stands at most this far (m) over the windshield's side base. */
 const A_POST_FOOT_SLACK_M = 0.005;
 
-describe("given a sedan whose windshield wraps in plan and bulges in side view, its hood following it (`windshield.sideBow`, `hood.followGlass`)", () => {
-  it("when its pane, A-post and hood are built, then the pane's side edge stands sideBow forward of its chord at mid-height, the drawn A-post laps that edge within 1 cm at every height, and the hood's rear edge runs the cowl's width in front of the pane's base at every point across", () => {
+describe("given a sedan whose windshield wraps in plan and bulges in side view, its hood following it", () => {
+  it("when its pane, A-post and hood are built, then the pane's side edge stands its side bow forward of its chord at mid-height, the drawn A-post laps that edge within 1 cm at every height, and the hood's rear edge runs the cowl's width in front of the pane's base at every point across", () => {
     const off: string[] = [];
     const { base, sideBow } = WRAPPED_SEDAN.windshield;
     const [, topZ] = WRAPPED_SEDAN.windshieldTop;

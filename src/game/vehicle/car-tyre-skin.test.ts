@@ -192,7 +192,7 @@ function compare(p: Pair, drives: readonly DriveInput[] = []): { skipped: Record
   return { skipped, apart };
 }
 
-describe("given a wreck's skin held over its tyres and the parts under its bonnet, the lift found again only when what it stands on moves", () => {
+describe("given a wreck whose skin is held over its tyres and the parts under its bonnet", () => {
   it(`when a sedan is hit in its flank at 25 km/h and drives on in a slalom, then its drawn body and bonnet stand within ${DRAWN_SLACK_M * 1000} mm of the full hold's every frame, and the hold leaves its clear bonnet alone`, () => {
     const drives: DriveInput[] = [];
     const pair = (): { w: CrashWorld; car: DeformableCar } => {
@@ -312,10 +312,11 @@ describe(`given a hatchback crushed against a wall at ${KERNEL_ROW_KPH} km/h, it
     fixture = crushedHatchback();
   });
 
-  for (const [which, label, sagLifts] of [
-    [0, "body", true],
-    [1, "bonnet", false],
-  ] as const) {
+  const skinCases = [
+    { which: 0, label: "body", sagLifts: true },
+    { which: 1, label: "bonnet", sagLifts: false },
+  ] as const;
+  for (const { which, label, sagLifts } of skinCases) {
     it(`when its ${label} is held in JS and in the kernel, then every lift, drawn position and normal is the same bit for bit`, () => {
       expect(skinKernel(), "the test preload loaded the kernel").toBeTruthy();
       const crushed = fixture.meshes[which]!;

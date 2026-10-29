@@ -31,7 +31,18 @@ class Wedge extends Ground {
 }
 
 /** Yaw (forward = (sin yaw, 0, cos yaw)) for each heading, seen from the foot of the ramp looking up it (+X). */
-const HEADINGS = { up: Math.PI / 2, down: -Math.PI / 2, left: Math.PI, right: 0 } as const;
+const HEADINGS = [
+  { name: "up", yaw: Math.PI / 2 },
+  { name: "down", yaw: -Math.PI / 2 },
+  { name: "left", yaw: Math.PI },
+  { name: "right", yaw: 0 },
+] as const;
+/** The slopes under test: the steepest may slide as far as it likes, the others at most half a metre. */
+const SLOPES = [
+  { deg: 10, maxSlideM: 0.5, slideNote: ", having slid no more than 0.5 m" },
+  { deg: 20, maxSlideM: 0.5, slideNote: ", having slid no more than 0.5 m" },
+  { deg: 30, maxSlideM: Infinity, slideNote: "" },
+] as const;
 
 type Settled = { gaps: number[]; pitchErr: number; rollErr: number; tiltErr: number; pitch: number; roll: number; slide: number };
 
@@ -90,9 +101,9 @@ describe("given a car with brake and handbrake held, dropped 0.5 m onto the midd
   afterAll(() => restoreSprings());
   afterEach(() => setGround(null));
 
-  for (const deg of [10, 20, 30]) {
-    for (const [name, yaw] of Object.entries(HEADINGS)) {
-      it(`when the wedge slopes ${deg}° and the car faces ${name}, then it settles with all 4 tyres within 2 cm of the face and pitch and roll within 1.5° of the slope${deg < 30 ? ", having slid no more than 0.5 m" : ""}`, (t) => {
+  for (const { deg, maxSlideM, slideNote } of SLOPES) {
+    for (const { name, yaw } of HEADINGS) {
+      it(`when the wedge slopes ${deg}° and the car faces ${name}, then it settles with all 4 tyres within 2 cm of the face and pitch and roll within 1.5° of the slope${slideNote}`, (t) => {
         const r = settle(deg, yaw);
         t.annotate(
           `${deg}° ${name}: gaps ${r.gaps.map((v) => v.toFixed(3)).join("/")} m, pitch ${r.pitch.toFixed(2)}° (err ${r.pitchErr.toFixed(2)}), roll ${r.roll.toFixed(2)}° (err ${r.rollErr.toFixed(2)}), tilt ${r.tiltErr.toFixed(2)}°, slide ${r.slide.toFixed(3)} m`,
@@ -104,7 +115,7 @@ describe("given a car with brake and handbrake held, dropped 0.5 m onto the midd
         if (Math.abs(r.pitchErr) > 1.5) failures.push(`pitch ${r.pitch.toFixed(2)}° vs face ${(r.pitch - r.pitchErr).toFixed(2)}°`);
         if (Math.abs(r.rollErr) > 1.5) failures.push(`roll ${r.roll.toFixed(2)}° vs face ${(r.roll - r.rollErr).toFixed(2)}°`);
         if (r.tiltErr > 1.5) failures.push(`body up ${r.tiltErr.toFixed(2)}° off the face normal`);
-        if (deg < 30 && r.slide > 0.5) failures.push(`slid ${r.slide.toFixed(3)} m`);
+        if (r.slide > maxSlideM) failures.push(`slid ${r.slide.toFixed(3)} m`);
         expect(failures).toHaveLength(0);
       });
     }

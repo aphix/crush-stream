@@ -42,17 +42,17 @@ function stoppedSites(): Site[] {
 
 /** The bank run: stunt bowl (steepest bank at node 6, then its run-out), nodes 14-15 (-8..-12°), the rally hairpin. */
 function bankSites(): Site[] {
-  const spots: [Track, string, number][] = [
-    [stunt, "stunt bowl n5", stunt.nodeS[5]!],
-    [stunt, "stunt bowl n6", stunt.nodeS[6]!],
-    [stunt, "stunt bowl n7", stunt.nodeS[7]!],
-    [stunt, "stunt bowl run-out", (stunt.nodeS[8]! + stunt.nodeS[9]!) / 2],
-    [stunt, "stunt n14", stunt.nodeS[14]!],
-    [stunt, "stunt n15", stunt.nodeS[15]!],
-    [stunt, "stunt n15 run-out", (stunt.nodeS[15]! + stunt.nodeS[16]!) / 2],
-    ...[7, 8, 9, 10].map((n): [Track, string, number] => [rally, `rally hairpin n${n}`, rally.nodeS[n]!]),
+  const spots = [
+    { track: stunt, name: "stunt bowl n5", s: stunt.nodeS[5]! },
+    { track: stunt, name: "stunt bowl n6", s: stunt.nodeS[6]! },
+    { track: stunt, name: "stunt bowl n7", s: stunt.nodeS[7]! },
+    { track: stunt, name: "stunt bowl run-out", s: (stunt.nodeS[8]! + stunt.nodeS[9]!) / 2 },
+    { track: stunt, name: "stunt n14", s: stunt.nodeS[14]! },
+    { track: stunt, name: "stunt n15", s: stunt.nodeS[15]! },
+    { track: stunt, name: "stunt n15 run-out", s: (stunt.nodeS[15]! + stunt.nodeS[16]!) / 2 },
+    ...[7, 8, 9, 10].map((n) => ({ track: rally, name: `rally hairpin n${n}`, s: rally.nodeS[n]! })),
   ];
-  return spots.flatMap(([track, name, s]) => {
+  return spots.flatMap(({ track, name, s }) => {
     const half = pointOn(track.path, s, _pt).half;
     // Across the width, then a shoulder point either side (the crease where the bank's plane meets the runoff).
     return [-(half - 1), -2, 0, 2, half - 1, half + 1, -(half + 1)].map((lat) => roadSite(track, `${name} lat=${lat.toFixed(1)}`, s, lat, COMPASS, ALONG, SEDAN));

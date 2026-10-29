@@ -204,7 +204,7 @@ describe("given the assembled rest-pose sedan (chassis, hood, trunk, doors and g
   });
 });
 
-describe("given the road wheel mesh (tyre, rim and hub) the wheel batch scales to each car's tyre by r / PLATFORM_TYRE.r", () => {
+describe("given the road wheel mesh (tyre, rim and hub) that every car's wheels are scaled from, to each car's own tyre size", () => {
   const geo = makeWheelGeometry();
   const pos = geo.getAttribute("position");
   const nrm = geo.getAttribute("normal");

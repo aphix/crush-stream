@@ -540,7 +540,7 @@ describe("given a torn bumper laid level across two posts, one under the middle 
 });
 
 describe("given a body with unequal inertias turned to any orientation", () => {
-  it("when a vector goes through its world-frame inverse inertia, then it is what the body-frame inertia gives it turned to the world and back (within 1e-9)", () => {
+  it("when it is turned to 100 random orientations, then its spin response to a push is what its own-frame inertia gives, turned to the world and back (within 1e-9)", () => {
     const shape = newLooseShape();
     shape.invI.set(3.1, 0.7, 1.9);
     let seed = 12345;

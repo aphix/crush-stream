@@ -41,7 +41,7 @@ function drawnSomehow(part: THREE.Mesh, covers: readonly Shown[]): boolean {
   return true;
 }
 
-describe("given the cover batch and an intact car broadside to the camera", () => {
+describe("given an intact car broadside to the camera, whose far-cut parts are drawn by a shared batch", () => {
   for (const style of CAR_STYLE_IDS) {
     test(`when a ${style} stands ${FAR} m away (the far cut), then both doors, the hood over its engine bay, the boot lid over its boot and all six panes are still drawn, by the cover batch`, () => {
       const { batch, car, draw } = stage();
@@ -85,7 +85,7 @@ describe("given the cover batch and an intact car broadside to the camera", () =
   });
 });
 
-describe("given the cover batch and a far-cut car that has lost parts", () => {
+describe("given a far-cut car that has lost parts, drawn by a shared batch", () => {
   test("when its left door is torn off, then the batch covers neither that door nor the pane it carries: the hole is real", () => {
     const { batch, car, draw } = stage();
     const probe = car(FAR);
@@ -129,7 +129,7 @@ describe("given the cover batch and a far-cut car that has lost parts", () => {
   });
 });
 
-describe("given a cover batch with room for one car", () => {
+describe("given a shared batch of far-cut parts with room for one car", () => {
   test("when three fields of three far cars come and go, then every car is covered whole and the old fields' parts leave", () => {
     const { batch, car, draw } = stage(1);
     for (let field = 0; field < 3; field++) {
@@ -147,7 +147,7 @@ describe("given a cover batch with room for one car", () => {
   });
 });
 
-describe("given the cover batch's lanes holding a far car", () => {
+describe("given a far car whose parts a shared batch draws in two lanes (paint and glass)", () => {
   test("when their buffers are read, then every one keeps three's static usage hint (a dynamic one may sit in host memory the GPU reads every frame)", () => {
     const { batch, car, draw } = stage();
     draw([car(FAR)]);

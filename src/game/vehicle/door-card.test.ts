@@ -73,8 +73,8 @@ function tbone(cls: (typeof VEHICLE_CLASS_IDS)[number], sign: -1 | 1): { outside
 }
 
 describe(`given a parked car of each class hit in a door by a sedan at ${SPEED} m/s`, () => {
-  const doors = [...VEHICLE_CLASS_IDS.map((cls) => [cls, 1] as const), ["sedan", -1] as const];
-  for (const [cls, sign] of doors) {
+  const doors = [...VEHICLE_CLASS_IDS.map((cls) => ({ cls, sign: 1 as const })), { cls: "sedan" as const, sign: -1 as const }];
+  for (const { cls, sign } of doors) {
     it(`when the ${cls}'s ${sign < 0 ? "left" : "right"} door skin is dented and the door swings, then every vertex of its drawn card stands under the skin's outer face`, (t) => {
       const { outside, ride, at, crush } = tbone(cls, sign);
       t.annotate(`crushed ${crush.toFixed(3)} m; card worst ${(outside * 1000).toFixed(1)} mm out (negative: under), rode in ${(ride * 1000).toFixed(0)} mm, worst at ${at.toFixed(2)} s`);

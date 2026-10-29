@@ -48,11 +48,24 @@ for (let a = 0; a < 48; a++) {
   }
 }
 
+type LaneId = "low" | "centre" | "high";
+const LANES = [
+  { name: "the low edge", lane: "low" },
+  { name: "the centre", lane: "centre" },
+  { name: "the high edge", lane: "high" },
+] as const;
+
+/** Lateral offset (m) of a run's line: `lane` of a road `half` m wide, kept `inset` m in from its edge. */
+function lateralOf(lane: LaneId, half: number, inset: number): number {
+  if (lane === "centre") return 0;
+  return (lane === "low" ? 1 : -1) * (half - inset) * LOW;
+}
+
 /**
- * A `cls` car driven at 25 m/s along lateral `lat(half)` through the main loop's steepest bank (50 m either
+ * A `cls` car driven at 25 m/s along `lane` through the main loop's steepest bank (50 m either
  * side); the worst tread clearance (m, negative = sunk) of any drawn tyre on a grounded frame.
  */
-function bankRun(track: Track, cls: VehicleClassId, lat: (half: number, inset: number) => number): { low: number; high: number; at: string } {
+function bankRun(track: Track, cls: VehicleClassId, lane: LaneId): { low: number; high: number; at: string } {
   const path = track.path;
   let kMax = 0;
   for (let k = 0; k < path.count; k++) if (Math.abs(path.bank[k]!) > Math.abs(path.bank[kMax]!)) kMax = k;
@@ -64,7 +77,7 @@ function bankRun(track: Track, cls: VehicleClassId, lat: (half: number, inset: n
   const pt = blankPoint();
   const at = (s: number) => {
     pointOn(path, s, pt);
-    const l = lat(pt.half, inset);
+    const l = lateralOf(lane, pt.half, inset);
     return [pt.x + pt.tz * l, pt.z - pt.tx * l] as const;
   };
   pointOn(path, sMax - 50, pt);
@@ -160,14 +173,11 @@ for (const cls of ["sedan", "monster"] as const) {
   describe(`given a ${cls} driving at 25 m/s through the stunt course's steepest bank`, () => {
     afterEach(() => setGround(null));
 
-    for (const [name, lat] of [
-      ["the low edge", (h: number, inset: number) => (h - inset) * LOW],
-      ["the centre", () => 0],
-      ["the high edge", (h: number, inset: number) => -(h - inset) * LOW],
-    ] as const) {
+    for (const lane of LANES) {
+      const name = lane.name;
       describe(`when it drives along ${name} of the road`, () => {
         it(`then every tyre stays within ${BOUND * 100} cm of the ground`, (t) => {
-          const r = bankRun(stunt, cls, lat);
+          const r = bankRun(stunt, cls, lane.lane);
           t.annotate(`${cls} ${name}: tread clearance ${(r.low * 100).toFixed(1)}..${(r.high * 100).toFixed(1)} cm, worst ${r.at}`);
           expect(r.low >= -BOUND && r.high <= BOUND, `${cls} on ${name}: ${(r.low * 100).toFixed(1)}..${(r.high * 100).toFixed(1)} cm, worst ${r.at}`).toBeTruthy();
         });

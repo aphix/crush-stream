@@ -93,7 +93,7 @@ describe("given the wreck of a 64 km/h, 40 % overlap wall hit (a popped front hu
     });
   }
 
-  it("when it is spun at 9 rad/s and 0.45 s pass (past the 0.35 s after the last hit when every mass would be set to the mean velocity), then it still turns, with more than a fifth of its momentum", () => {
+  it("when it is spun at 9 rad/s and 0.45 s pass, then it still turns, with more than a fifth of its momentum", () => {
     const car = makeCar();
     runWall(64, 0.4, "front", { car, after: 2.5 });
     car.deform.drivetrainAlive = false;
@@ -119,11 +119,13 @@ class Slope extends Ground {
 describe("given a sedan wreck, spun at 6 rad/s after a hit, on flat ground and on a 6.8° slope", () => {
   afterEach(() => setGround(null));
 
-  for (const [name, ground] of [
-    ["flat ground", new Slope(0)],
-    ["a 6.8° slope", new Slope(6.8)],
-  ] as const) {
+  const sites = [
+    { name: "flat ground", pitch: 0 },
+    { name: "a 6.8° slope", pitch: 6.8 },
+  ] as const;
+  for (const { name, pitch } of sites) {
     it(`when it is spun on ${name}, then 5 s on it has no spin (under 1 % of its angular momentum) and no creep (under 1 cm in the last second)`, () => {
+      const ground = new Slope(pitch);
       setGround(ground);
       const car = probeCar("sedan");
       car.spawnFacing(0, 0, Math.PI / 2, 0);

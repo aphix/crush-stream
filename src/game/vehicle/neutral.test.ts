@@ -41,7 +41,7 @@ describe("given a sedan doing 130 km/h on the flat, freewheeling in neutral (a t
     expect(free.speed, `${(free.speed / KPH).toFixed(0)} km/h left of 130`).toBeGreaterThan(0.9 * v0);
   });
 
-  it("when the neutral flag is set, then the car carries it (the recorder's input byte reads it) and an ordinary input does not", () => {
+  it("when the driver is thrown out, then the car is in neutral and a car on ordinary input is not", () => {
     expect(free.car.drive.neutral).toBe(true);
     expect(lift.car.drive.neutral).toBe(false);
   });

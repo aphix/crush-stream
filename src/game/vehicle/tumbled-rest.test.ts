@@ -31,12 +31,12 @@ const FLANK_FLEET: Fleet = [...FLEET, ...VEHICLE_CLASS_IDS.filter((cls) => !FLEE
 const LOW_HUBS = { left: ["hubFL", "hubRL"], right: ["hubFR", "hubRR"] } as const;
 /** The attitudes a car is dropped in (pitch, yaw, roll about the car's own axes, radians): flat on its roof, on its roof nose down or up by 0.5 rad, on its left flank, on its right flank. */
 const ATTITUDE = {
-  roof: [0, 0, Math.PI],
-  roofNoseDown: [0.5, 0, Math.PI],
-  roofNoseUp: [-0.5, 0, Math.PI],
-  left: [0, 0, Math.PI / 2],
-  right: [0, 0, -Math.PI / 2],
-  wheels: [0, 0, 0],
+  roof: { pitch: 0, yaw: 0, roll: Math.PI },
+  roofNoseDown: { pitch: 0.5, yaw: 0, roll: Math.PI },
+  roofNoseUp: { pitch: -0.5, yaw: 0, roll: Math.PI },
+  left: { pitch: 0, yaw: 0, roll: Math.PI / 2 },
+  right: { pitch: 0, yaw: 0, roll: -Math.PI / 2 },
+  wheels: { pitch: 0, yaw: 0, roll: 0 },
 } as const;
 type Attitude = keyof typeof ATTITUDE;
 const DROP_SECONDS = 5;
@@ -147,7 +147,7 @@ function dropped(style: CarStyleId, cls: VehicleClassId, attitude: Attitude, hei
   if (strike > 0) car.applyImpact(car.group.position.clone().addScaledVector(car.forward, NOSE_HIT_M), car.forward.clone().negate(), strike, strike);
   for (const name of popped) car.deform.popHub(car.deform.masses.find((m) => m.name === name)!);
   if (bumperOff) car["detachPart"](car["parts"].find((p) => p.name === BUMPER_F)!, 0);
-  const [pitch, yaw, roll] = ATTITUDE[attitude];
+  const { pitch, yaw, roll } = ATTITUDE[attitude];
   car.group.rotation.set(pitch, yaw, roll, "YXZ");
   car.group.updateMatrixWorld(true);
   car.group.position.y += height - new THREE.Box3().setFromObject(car.group).min.y;
@@ -175,7 +175,7 @@ describe("given a car dropped onto its roof on the flat pad, from 0.5 and from 2
     // On union 9d49c86f the sedan rests on its roof (0.5 and 2 m alike) pitched 8.7° with its drawn A-pillar foot, car (-0.66, 0.98, 0.75),
     // 4.0 cm in the ground: on the 4 cm bar (`BODY_SINK_M`). Its cage keeps the cowl's sides there, (±0.670, 0.960, 0.900) and (±0.715,
     // 0.871, 0.990); a cage without them read 7.3 cm (CarRig rig-lip, before its held underside left the budget).
-    it(`when it is a ${cls}, then the drawn body and roof crown stay out of the ground, and its mirrors and lamps with them`, () => {
+    it(`when a ${cls} comes to rest, then the drawn body and roof crown stay out of the ground, and its mirrors and lamps with them`, () => {
       for (const height of [0.5, 2]) {
         const { car, lowest } = dropped(style, cls, "roof", height);
         const tag = `${cls} dropped on its roof from ${height} m`;
@@ -197,7 +197,7 @@ describe("given a car dropped onto its roof on the flat pad, from 0.5 and from 2
 
 describe("given a car dropped onto its left or right flank on the flat pad, from 0.5 and from 2 m, and left to rest", () => {
   for (const { style, cls } of FLANK_FLEET) {
-    it(`when it is a ${cls}, then the drawn body stays out of the ground, the mirror it lies on is torn off and rests on the ground, and the other mirror is left as it was`, (t) => {
+    it(`when a ${cls} comes to rest, then the drawn body stays out of the ground, the mirror it lies on is torn off and rests on the ground, and the other mirror is left as it was`, (t) => {
       for (const side of ["left", "right"] as const) {
         for (const height of [0.5, 2]) {
           const { car, lowest } = dropped(style, cls, side, height);
@@ -217,7 +217,7 @@ describe("given a car dropped onto its left or right flank on the flat pad, from
 describe("given any class dropped onto its left or right flank on the flat pad from 0.5 m, and left to rest", () => {
   for (const cls of VEHICLE_CLASS_IDS) {
     // From 2 m a class tips on past flat onto its roof's edge (up -0.3 to -0.5) and the drawn tyre's shoulder reaches 2-4 cm under the footprint the sim rests on.
-    it(`when it is a ${cls}, then no tyre sinks more than its sidewall flattens: the tyres it lies on carry its whole weight, each its half`, (t) => {
+    it(`when a ${cls} comes to rest, then no tyre sinks more than its sidewall flattens: the tyres it lies on carry its whole weight, each its half`, (t) => {
       for (const side of ["left", "right"] as const) {
         const { lowest } = dropped(CLASSES[cls].style, cls, side, 0.5);
         t.annotate(`${cls} dropped on its ${side} flank from 0.5 m: lowest tyre ${cm(lowest.tyres)} over the ground`);
@@ -258,9 +258,11 @@ describe("given a monster that lost the two wheels on one side, dropped onto tha
 
 describe("given any class that lost one of the two wheels it lies on, dropped onto that flank on the flat pad, from 0.5 m (front wheel gone) and from 2 m (rear wheel gone)", () => {
   for (const { style, cls } of FLANK_FLEET) {
-    it(`when it is a ${cls}, then it is asleep within ${REST_SECONDS} s with its cage and its drawn body out of the ground: a single tyre under the car does not pivot it`, (t) => {
+    it(`when a ${cls} comes to rest, then it is asleep within ${REST_SECONDS} s with its cage and its drawn body out of the ground: a single tyre under the car does not pivot it`, (t) => {
       for (const side of ["left", "right"] as const) {
-        for (const [height, hub] of [[0.5, LOW_HUBS[side][0]], [2, LOW_HUBS[side][1]]] as const) {
+        const lostHubs = [{ height: 0.5, hubIndex: 0 }, { height: 2, hubIndex: 1 }] as const;
+        for (const { height, hubIndex } of lostHubs) {
+          const hub = LOW_HUBS[side][hubIndex];
           const { car, lowest } = dropped(style, cls, side, height, 0.5, [hub], REST_SECONDS);
           const cage = cageClearance(car);
           const tag = `${cls} without its ${hub} dropped on its ${side} flank from ${height} m`;
@@ -276,7 +278,7 @@ describe("given any class that lost one of the two wheels it lies on, dropped on
 
 describe("given a car struck on the nose, its front bumper torn off, and dropped onto its roof (flat, nose down or up) or a flank on the flat pad, and left to rest", () => {
   for (const { style, cls } of FLANK_FLEET) {
-    it(`when it is a ${cls}, then every rigid under-part of it that shows (cabin shell, engine bay, crash bar, frame, axles) stands out of the ground`, (t) => {
+    it(`when a ${cls} comes to rest, then every rigid under-part of it that shows (cabin shell, engine bay, crash bar, frame, axles) stands out of the ground`, (t) => {
       for (const attitude of ["roof", "roofNoseDown", "roofNoseUp", "left", "right"] as const) {
         const { lowest } = dropped(style, cls, attitude, 0.5, HOOD_OFF_MPS, [], DROP_SECONDS, true);
         const tag = `${cls} struck at ${HOOD_OFF_MPS} m/s and dropped on its ${attitude}`;

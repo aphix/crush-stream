@@ -182,7 +182,7 @@ describe("given a sedan driven at 20 m/s with the handbrake held", () => {
 });
 
 describe("given a sedan driven at 30 m/s at the realistic end of the realism slider with a hard brake", () => {
-  it("when it brakes for 0.3 s so the tyres lock (the drive's lock share is over 0.5), then every wheel turns less than 70 % of the distance its contact point travels", () => {
+  it("when it brakes for 0.3 s so the tyres lock up (over half locked), then every wheel turns less than 70 % of the distance its contact point travels", () => {
     const was = HANDLING.realism;
     HANDLING.realism = 1;
     try {

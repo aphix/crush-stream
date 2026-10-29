@@ -60,7 +60,7 @@ function film(scene: "settled head-on" | "driven wreck", skip: boolean): Rec {
   }
 }
 
-describe("given a crash filmed with and without presentSkip", () => {
+describe("given a crash filmed with and without skipping the re-posing of parts that have not changed", () => {
   for (const scene of ["settled head-on", "driven wreck"] as const) {
     it(`when the ${scene} is run both ways, then every part's pose in every filmed frame is the same to a nanometre`, () => {
       const every = film(scene, false);

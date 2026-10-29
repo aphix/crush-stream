@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { DeformableCar } from "./car.ts";
-import { CAR_STYLE_IDS, type BodyStyle, type CarStyleId } from "./car-variants.ts";
+import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
 import { LID } from "./constants.ts";
 import { paint } from "./test-support.ts";
 import { must } from "../kernel/must.test-util.ts";
@@ -141,8 +141,14 @@ function rearPaneAt(car: DeformableCar): THREE.Vector3 {
   return new THREE.Vector3().fromBufferAttribute(mesh.geometry.getAttribute("position") as THREE.BufferAttribute, 0).applyMatrix4(mesh.matrixWorld);
 }
 
-describe("given a car's rear window and its lid (docs/DOOR_RIG.md, Lids)", () => {
-  for (const [id, gate] of [["hatchback", true], ["wagon", true], ["sedan", false], ["pickup", false]] as const) {
+describe("given a car's rear window and its lid", () => {
+  const testCases = [
+    { id: "hatchback", gate: true },
+    { id: "wagon", gate: true },
+    { id: "sedan", gate: false },
+    { id: "pickup", gate: false },
+  ] as const;
+  for (const { id, gate } of testCases) {
     it(`when the ${id}'s lid opens to its stop and then tears off, then its rear pane ${gate ? "swings and leaves with it" : "stays on the body"}`, () => {
       const car = parked(id);
       const shut = rearPaneAt(car);
@@ -239,8 +245,8 @@ describe("given a roof-hinged gate's frame and spoiler (hatchback, wagon)", () =
   }
 });
 
-describe("given every style parked and posed open for show (`showPose`)", () => {
-  it("when its hood is read, then it stands up as far as the owner's open-hood photos show, turned about its rear edge, which stays down on the cowl", () => {
+describe("given every style parked and posed open for show", () => {
+  it("when the hood is opened, then it stands up as far as the owner's open-hood photos show, turned about its rear edge, which stays down on the cowl", () => {
     const rows: string[] = [];
     const bad: string[] = [];
     const at = new THREE.Vector3();

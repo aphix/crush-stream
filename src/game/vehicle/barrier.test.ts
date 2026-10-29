@@ -135,7 +135,7 @@ function runFor(car: DeformableCar, simSec: number, frameDt: number): void {
 }
 
 const slabStopCases = [
-  { it: "when it hits at 22 m/s at full speed in shape deform mode, then it does not tunnel through the slab", frameDt: 1 / FRAME_HZ, tunnelledMessage: "tunneled" },
+  { it: "when it hits at 22 m/s at full speed in shape deform mode, then it does not tunnel through the slab and is flagged crashed", frameDt: 1 / FRAME_HZ, tunnelledMessage: "tunneled" },
   { it: "when the same 22 m/s hit runs in slow motion (tiny frame steps), then it also stops on the slab and is flagged crashed", frameDt: 1 / FINE_HZ, tunnelledMessage: "slomo tunneled" },
 ] as const;
 

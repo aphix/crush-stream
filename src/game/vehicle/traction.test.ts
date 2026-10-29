@@ -57,7 +57,7 @@ function drive(cls: VehicleClassId, ground: Ground, seconds: number, h: number, 
   return car;
 }
 
-describe("given the traction law of each driveline layout (a pure function of the axle grips)", () => {
+describe("given a sedan built with each driveline layout (front, rear, all-wheel, locked four-wheel), its axles on grips that differ", () => {
   const on = (drive: Driveline, muF: number, muR: number, realism: number) => tractionLimit(carFrame(CAR_STYLES.sedan), { ...CLASSES.sedan, drive } as ClassStats, muF, muR, realism);
 
   it("when both axles stand on dry asphalt, then every layout passes the class's launch pull at both ends of the slider (the sourced launch was driven on real tyres: a cap under it would count the tyre twice)", () => {
@@ -93,7 +93,7 @@ describe("given the traction law of each driveline layout (a pure function of th
 });
 
 for (const H of RATES) {
-  describe(`at ${Math.round(1 / H)} Hz`, () => {
+  describe(`given the sim stepped at ${Math.round(1 / H)} Hz`, () => {
     describe("given a car launched flat out with its front wheels on asphalt and its rear wheels on grass", () => {
       it("when it is front-driven (the sedan), then its wheels never spin; when it is rear-driven (the police car), then they spin past 0.3 within 0.3 s; with the surfaces swapped, the reverse", () => {
         const peak = (cls: VehicleClassId, front: SurfaceId, rear: SurfaceId) => {
@@ -346,13 +346,13 @@ for (const H of RATES) {
         return { v: along(car), gear: carGear(car), rpm: carRpm(car) };
       }
 
-      it("when the sedan runs on grass, then it settles where its power meets the grass's rolling resistance over asphalt's, in 5th off the redline; on sand lower, in 4th; and the truck on grass in 4th: each at the law's terminalSpeed", () => {
-        const cases: [VehicleClassId, SurfaceId, number][] = [
-          ["sedan", SURFACE.grass, 5],
-          ["sedan", SURFACE.sand, 4],
-          ["truck", SURFACE.grass, 4],
-        ];
-        for (const [cls, surface, gear] of cases) {
+      it("when the sedan runs on grass, then it settles where its power meets the grass's rolling resistance over asphalt's, in 5th off the redline; on sand lower, in 4th; and the truck on grass in 4th: each at the law's terminal speed", () => {
+        const cases = [
+          { cls: "sedan", surface: SURFACE.grass, gear: 5 },
+          { cls: "sedan", surface: SURFACE.sand, gear: 4 },
+          { cls: "truck", surface: SURFACE.grass, gear: 4 },
+        ] as const;
+        for (const { cls, surface, gear } of cases) {
           const k = CLASSES[cls];
           const law = terminalSpeed(k, rollingOver(SURFACES[surface].roll));
           expect(law, `${cls} on ${surface}: the law's terminal ${law.toFixed(1)} is under the class top`).toBeLessThan(k.topSpeed);

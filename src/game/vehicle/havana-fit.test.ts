@@ -163,8 +163,8 @@ function runLine(
 }
 
 /** Braked drops at `at` (x, z) at every compass heading, for every class. */
-function sites(group: readonly (readonly [name: string, x: number, z: number])[]): Site[] {
-  return group.map(([name, x, z]) => ({
+function sites(group: readonly { name: string; x: number; z: number }[]): Site[] {
+  return group.map(({ name, x, z }) => ({
     name,
     kind: "plain",
     classes: VEHICLE_CLASS_IDS,
@@ -174,11 +174,11 @@ function sites(group: readonly (readonly [name: string, x: number, z: number])[]
 
 // One site per kind of ground: a flat site whose footprint is all one surface stands for every other flat site of that surface.
 const dropSiteCases = [
-  { it: "when it is dropped on the approach and the lawn before the face, then it sits on the ground at every heading", places: [["approach (0, 300)", 0, 300], ["approach edge (10, 300)", 10, 300], ["approach kerb (14, 300)", 14, 300], ["foot lawn (0, 41)", 0, 41]] },
-  { it: "when it is dropped on the grass face (foot, low, mid, high, crest) and the top just past it, then it sits on the ground at every heading", places: [["face foot (0, 38)", 0, 38], ["face low (0, 33)", 0, 33], ["face mid (0, 27)", 0, 27], ["face high (0, 22)", 0, 22], ["crest (0, 18)", 0, 18], ["crest top (0, 14)", 0, 14], ["face edge (11, 27)", 11, 27]] },
-  { it: "when it is dropped on the plaza (the clear strip, the left edge and the slope under it, the corner, the far side), then it sits on the ground at every heading", places: [["plaza strip (-8, 0)", -8, 0], ["plaza left edge (-12, 0)", -12, 0], ["left slope (-20, 0)", -20, 0], ["left foot (-28, 0)", -28, 0], ["corner (-14, 19)", -14, 19], ["far crest (0, -18)", 0, -18], ["far slope (0, -29)", 0, -29], ["far foot (0, -40)", 0, -40]] },
-  { it: "when it is dropped in the alley (cobble beside the slope) and on its kerb, then it sits on the ground at every heading", places: [["alley kerb (-33.5, 0)", -33.5, 0], ["alley (-36.5, 0)", -36.5, 0], ["alley south (-36.5, -30)", -36.5, -30]] },
-  { it: "when it is dropped on the landing lawn and the paseo's edge, then it sits on the ground at every heading", places: [["landing lawn (30, -140)", 30, -140], ["paseo kerb (12, -100)", 12, -100]] },
+  { it: "when it is dropped on the approach and the lawn before the face, then it sits on the ground at every heading", places: [{ name: "approach (0, 300)", x: 0, z: 300 }, { name: "approach edge (10, 300)", x: 10, z: 300 }, { name: "approach kerb (14, 300)", x: 14, z: 300 }, { name: "foot lawn (0, 41)", x: 0, z: 41 }] },
+  { it: "when it is dropped on the grass face (foot, low, mid, high, crest) and the top just past it, then it sits on the ground at every heading", places: [{ name: "face foot (0, 38)", x: 0, z: 38 }, { name: "face low (0, 33)", x: 0, z: 33 }, { name: "face mid (0, 27)", x: 0, z: 27 }, { name: "face high (0, 22)", x: 0, z: 22 }, { name: "crest (0, 18)", x: 0, z: 18 }, { name: "crest top (0, 14)", x: 0, z: 14 }, { name: "face edge (11, 27)", x: 11, z: 27 }] },
+  { it: "when it is dropped on the plaza (the clear strip, the left edge and the slope under it, the corner, the far side), then it sits on the ground at every heading", places: [{ name: "plaza strip (-8, 0)", x: -8, z: 0 }, { name: "plaza left edge (-12, 0)", x: -12, z: 0 }, { name: "left slope (-20, 0)", x: -20, z: 0 }, { name: "left foot (-28, 0)", x: -28, z: 0 }, { name: "corner (-14, 19)", x: -14, z: 19 }, { name: "far crest (0, -18)", x: 0, z: -18 }, { name: "far slope (0, -29)", x: 0, z: -29 }, { name: "far foot (0, -40)", x: 0, z: -40 }] },
+  { it: "when it is dropped in the alley (cobble beside the slope) and on its kerb, then it sits on the ground at every heading", places: [{ name: "alley kerb (-33.5, 0)", x: -33.5, z: 0 }, { name: "alley (-36.5, 0)", x: -36.5, z: 0 }, { name: "alley south (-36.5, -30)", x: -36.5, z: -30 }] },
+  { it: "when it is dropped on the landing lawn and the paseo's edge, then it sits on the ground at every heading", places: [{ name: "landing lawn (30, -140)", x: 30, z: -140 }, { name: "paseo kerb (12, -100)", x: 12, z: -100 }] },
 ] as const;
 
 /** The ground's fit is the subject, not the springs': every run of the file rides on springs so stiff and short that no sag or droop excuses a gap or a flight (`useStiffSprings`). */

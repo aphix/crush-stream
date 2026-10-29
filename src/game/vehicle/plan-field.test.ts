@@ -122,8 +122,8 @@ function masksOf(nu: number, nv: number, step: number): { text: string; covered:
   return masks;
 }
 
-describe("given a cage whose covered nodes are set to a mask", () => {
-  it("when its plan field is read, then every node equals the full two-axis distance transform's to the bit", () => {
+describe("given a car's cage with its covered nodes set to each of many masks", () => {
+  it("when the distance from each node to the nearest covered node is measured, then every node equals the full two-axis distance transform's to the bit", () => {
     const cage = cageOf(carInState("untouched", "sedan", "sedan"));
     const { nu, nv, step } = cage.style;
     const f = cage.fields;

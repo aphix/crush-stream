@@ -133,7 +133,7 @@ function flatPatch(columns: number, rows: number, normals: number[][]): { geomet
 }
 
 describe("given two flat faces meeting at a right angle with noisy normals", () => {
-  it("when the pass runs, then the noise on a face is pulled together and the edge between the faces keeps its step", () => {
+  it("when the normals are smoothed, then the noise on a face is pulled together and the edge between the faces keeps its step", () => {
     const columns = 6;
     const { geometry, positions } = flatPatch(columns, 3, [UP]);
     const normals = geometry.getAttribute("normal") as THREE.BufferAttribute;
@@ -275,7 +275,7 @@ describe(`given a sedan built round and then crushed by a ${GENTLE_KPH} km/h wal
 });
 
 describe("given a skin with its border at rest and its interior moved, and rest normals to give", () => {
-  it("when the pass runs, then the vertices at rest take the rest normals to the bit and the moved ones are relaxed toward them", () => {
+  it("when the normals are smoothed, then the vertices at rest take the rest normals to the bit and the moved ones are relaxed toward them", () => {
     const { geometry, positions, interior } = flatPatch(6, 3, [SIDEWAYS]);
     const restNormals = new Float32Array(Array.from({ length: 18 }, () => UP).flat());
     smoothNormals(geometry, positions.map((value, i) => (interior.includes(Math.floor(i / 3)) ? value + 1 : value)), 1, restNormals);
@@ -288,7 +288,7 @@ describe("given a skin with its border at rest and its interior moved, and rest 
 });
 
 describe("given a patch whose border is an open edge and noisy normals everywhere", () => {
-  it("when the pass runs with every vertex moved, then the interior is pulled together and the border vertices keep their own normals to the bit", () => {
+  it("when every vertex has moved and the normals are smoothed, then the interior is pulled together and the border vertices keep their own normals to the bit", () => {
     const noisy = [[0, 0, 1], [0.2, 0, 0.98], [0, 0.2, 0.98], [-0.2, 0, 0.98], [0, -0.2, 0.98]];
     const { geometry, positions, interior } = flatPatch(5, 5, noisy);
     const before = geometry.getAttribute("normal").array.slice();

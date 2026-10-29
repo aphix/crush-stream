@@ -19,17 +19,17 @@ const NOSE_HIT_M = 2.05;
 const HIT_MPS = 30;
 const SECONDS = 4;
 /** The attitudes a wreck is dropped in (pitch, yaw, roll about the car's own axes). */
-const ATTITUDES: readonly (readonly [number, number, number])[] = [
-  [0, 0, Math.PI],
-  [0.5, 0, Math.PI],
-  [-0.5, 0, Math.PI],
-  [0, 0, Math.PI / 2],
-  [0, 0, -Math.PI / 2],
-  [0.3, 0, 0.6],
+const ATTITUDES: readonly { pitch: number; yaw: number; roll: number }[] = [
+  { pitch: 0, yaw: 0, roll: Math.PI },
+  { pitch: 0.5, yaw: 0, roll: Math.PI },
+  { pitch: -0.5, yaw: 0, roll: Math.PI },
+  { pitch: 0, yaw: 0, roll: Math.PI / 2 },
+  { pitch: 0, yaw: 0, roll: -Math.PI / 2 },
+  { pitch: 0.3, yaw: 0, roll: 0.6 },
 ];
 
 /** A wreck of `cls` dropped in `attitude` 0.5 m up on the stunt course's start straight and left `SECONDS` s. */
-function restedWreck(cls: VehicleClassId, attitude: readonly [number, number, number]): void {
+function restedWreck(cls: VehicleClassId, attitude: (typeof ATTITUDES)[number]): void {
   const trk = track("stunt");
   const ground = trk.ground();
   setGround(ground);
@@ -39,7 +39,7 @@ function restedWreck(cls: VehicleClassId, attitude: readonly [number, number, nu
   car.spawnFacing(pt.x, pt.z, Math.atan2(pt.tx, pt.tz), 0);
   car.updateSkin();
   car.applyImpact(car.group.position.clone().addScaledVector(car.forward, NOSE_HIT_M), car.forward.clone().negate(), HIT_MPS, HIT_MPS);
-  car.group.rotation.set(attitude[0], attitude[1], attitude[2], "YXZ");
+  car.group.rotation.set(attitude.pitch, attitude.yaw, attitude.roll, "YXZ");
   car.group.updateMatrixWorld(true);
   car.group.position.y += ground.heightAt(pt.x, pt.z, pt.y) + 0.5 - new THREE.Box3().setFromObject(car.group).min.y;
   car.airborne = true;
@@ -49,7 +49,7 @@ function restedWreck(cls: VehicleClassId, attitude: readonly [number, number, nu
   for (let f = 0; f < SECONDS * FRAME_HZ; f++) frame(world, null, st);
 }
 
-describe("given a wreck dropped in six attitudes on the stunt course's start straight and left to rest, with the ground clock verifying the whole-body gate", () => {
+describe("given a wreck dropped in six attitudes on the stunt course's start straight and left to rest, with every skipped ground check cross-checked", () => {
   afterEach(() => {
     GQ.on = false;
     GQ.check = false;
@@ -57,7 +57,7 @@ describe("given a wreck dropped in six attitudes on the stunt course's start str
   });
 
   for (const cls of ["sedan", "truck", "monster"] as const) {
-    it(`when it is a ${cls}, then every slice the gate skipped the points of is one where reading them anyway makes no contact row`, () => {
+    it(`when a ${cls} comes to rest, then every slice where the ground check skipped the wreck's body points is one where reading them anyway makes no contact row`, () => {
       GQ.allClear.slices = GQ.allClear.wreckSlices = GQ.allClear.rowSlices = GQ.allClear.rows = GQ.allClear.wreckRowSlices = 0;
       GQ.on = true;
       GQ.check = true;

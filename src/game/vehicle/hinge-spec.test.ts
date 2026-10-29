@@ -9,7 +9,7 @@ const DROP: BootSpec = { kind: "tailgate", y0: 0.58, origin: [1.19, -2.18], pivo
 const HATCH: BootSpec = { kind: "tailgate", y0: 0.57, z0: -1.758, origin: [0.93, -1.6], pivot: [1.245, -1.095] };
 const SUV: BootSpec = { kind: "tailgate", y0: 0.66, z0: -2.11, origin: [1.09, -2.088], pivot: [1.52, -1.6], swing: LIFTGATE };
 
-describe("lid hinges from each style's boot", () => {
+describe("given a deck lid, a drop tailgate, a hatch and a liftgate hinged on each style's boot", () => {
   it("when a deck lid is read, then it opens about +x, its chord level and rearward, to its swing's rise", () => {
     const s = lidSpec(DECK);
     expect(s.dir).toBe(1);
@@ -37,7 +37,7 @@ describe("lid hinges from each style's boot", () => {
   });
 });
 
-describe("the lid's swing law (gravity, struts, the car's acceleration)", () => {
+describe("given an unlatched lid under gravity, its struts and the car's own acceleration", () => {
   const lid = lidSpec(DECK);
 
   it("when a shut deck lid is unlatched on a level car, then struts lift it, a bare lid falls shut, a balanced one stays", () => {

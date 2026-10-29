@@ -150,17 +150,17 @@ describe("given a world material tagged with a class", () => {
 
   const table = envTable(shader.fragmentShader);
 
-  it("when its table is read, then it has one row per class", () => {
+  it("when the material classes are counted, then the reflection table has exactly one row per class", () => {
     expect(table.length, "rows").toBe(FAMILY_COUNT);
   });
 
   for (const testCase of CLASS_BOUNDS) {
-    it(`when the ${testCase.it} class is read from the table, then it keeps a share of the reflection no larger than ${testCase.expectedMaxShare}`, () => {
+    it(`when the ${testCase.it} class reflects the studio, then it keeps a share of the reflection no larger than ${testCase.expectedMaxShare}`, () => {
       expect(table[MAT[testCase.materialClass]]!, `share ${table[MAT[testCase.materialClass]]}`).toBeLessThanOrEqual(testCase.expectedMaxShare);
     });
   }
 
-  it("when the glass, metal and untagged rows are read, then they keep the whole reflection", () => {
+  it("when glass, metal or an untagged material reflects the studio, then it keeps the whole reflection", () => {
     expect(table[MAT.GLASS], "glass").toBe(1);
     expect(table[MAT.METAL], "metal").toBe(1);
     expect(table[MAT.GENERIC], "generic").toBe(1);
@@ -259,12 +259,12 @@ describe("given the worn-concrete detail map shared by the concrete family", () 
   });
 
   for (const testCase of detailCases) {
-    it(`when the ${testCase.it} class is read from the detail table, then it takes the map: ${testCase.expectedOn === 1}`, () => {
+    it(`when the ${testCase.it} class is drawn, then it ${testCase.expectedOn === 1 ? "takes" : "does not take"} the worn-concrete detail map`, () => {
       expect(glslTable(shader.fragmentShader, "MATERIAL_DETAIL_ON")[MAT[testCase.materialClass]], "flag").toBe(testCase.expectedOn);
     });
   }
 
-  it("when the asphalt row is read, then it takes the map darker than the concrete and never smoother (a smoother road mirrors more sky at grazing angles and comes out brighter)", () => {
+  it("when asphalt takes the detail map, then it is darker than concrete and never smoothed (a smoother road mirrors more sky at grazing angles and comes out brighter)", () => {
     const tint = glslTable(shader.fragmentShader, "MATERIAL_TINT");
     const smooth = glslTable(shader.fragmentShader, "MATERIAL_SMOOTH");
     expect(tint[MAT.ASPHALT]!, "darker").toBeLessThan(tint[MAT.CONCRETE]!);
@@ -280,7 +280,7 @@ describe("given the worn-concrete detail map shared by the concrete family", () 
     expect(share > 0 && share < 0.5, `share ${share}`).toBeTruthy();
   });
 
-  it("when the stone row is read, then it takes a weaker normal than the concrete", () => {
+  it("when stone takes the detail map, then its normal is weaker than concrete's", () => {
     const normal = glslTable(shader.fragmentShader, "MATERIAL_NORMAL");
     expect(normal[MAT.STONE]!, "weaker").toBeLessThan(normal[MAT.CONCRETE]!);
   });
@@ -298,20 +298,20 @@ describe("given the share of a light's specular each class keeps", () => {
   const relief = glslTable(fragment, "MATERIAL_RELIEF");
 
   for (const testCase of softGround) {
-    it(`when the ${testCase.it} class is read, then a low sun keeps at most a quarter of its specular there, so a lawn does not shine like wet ground`, () => {
+    it(`when a low sun lights the ${testCase.it} class, then it keeps at most a quarter of its specular, so a lawn does not shine like wet ground, and a photograph's relief is cut`, () => {
       expect(direct[MAT[testCase.materialClass]]!, `share ${direct[MAT[testCase.materialClass]]}`).toBeLessThanOrEqual(0.25);
       expect(relief[MAT[testCase.materialClass]]!, "a photograph's relief is cut where the class is not the material's own").toBeLessThan(1);
     });
   }
 
-  it("when the roads, walls, glass, metal and paint are read, then their lights' specular and photographs' relief are whole", () => {
+  it("when a low sun lights roads, walls, glass, metal or paint, then their specular and photographs' relief are whole", () => {
     for (const name of hardSurfaces) {
       expect(direct[MAT[name]], `${name} specular`).toBe(1);
       expect(relief[MAT[name]], `${name} relief`).toBe(1);
     }
   });
 
-  it("when its tables are read, then each has one row per class", () => {
+  it("when the specular and relief tables are counted, then each has one row per class", () => {
     expect(direct.length, "direct rows").toBe(FAMILY_COUNT);
     expect(relief.length, "relief rows").toBe(FAMILY_COUNT);
   });

@@ -60,18 +60,18 @@ function centre(mesh: THREE.Mesh, verts?: readonly number[]): THREE.Vector3 {
   return sum.divideScalar(ids.length);
 }
 
-const CASES: readonly (readonly [VehicleClassId, number | null])[] = [
-  ["sedan", null],
-  ["sedan", 0],
-  ["sedan", 3],
-  ["truck", null],
-  ["truck", 1],
-  ["monster", null],
-  ["monster", 2],
+const CASES: readonly { cls: VehicleClassId; lost: number | null }[] = [
+  { cls: "sedan", lost: null },
+  { cls: "sedan", lost: 0 },
+  { cls: "sedan", lost: 3 },
+  { cls: "truck", lost: null },
+  { cls: "truck", lost: 1 },
+  { cls: "monster", lost: null },
+  { cls: "monster", lost: 2 },
 ];
 
 describe("given a wreck settled for 3 s (a sedan, truck or monster class, intact or minus a hub), a hinged panel's shell rides the body it is cut from", () => {
-  for (const [cls, lost] of CASES) {
+  for (const { cls, lost } of CASES) {
     const tag = `${cls}${lost === null ? "" : ` minus ${HUBS[lost]}`}`;
 
     it(`when the ${tag} wreck's panels are hinged to 0.5, then each shell's hinge line stands on the body skin (4 mm proud), whatever the lift and sag`, () => {

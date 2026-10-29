@@ -74,8 +74,12 @@ describe("given 4 cars in a row and a camera orbiting them slowly at night", () 
 });
 
 describe("given a fixed camera and one car driving across the frame", () => {
-  for (const dir of [1, -1]) {
-    it(`when the car crosses ${dir > 0 ? "left to right" : "right to left"}, then a headlamp's real light ramps up to the middle and back down, never jumping, and the painted pool is the rest`, () => {
+  const crossings = [
+    { it: "left to right", dir: 1 },
+    { it: "right to left", dir: -1 },
+  ] as const;
+  for (const { it: crossing, dir } of crossings) {
+    it(`when the car crosses ${crossing}, then a headlamp's real light ramps up to the middle and back down, never jumping, and the painted pool is the rest`, () => {
       const scene = new THREE.Scene();
       const car = new DeformableCar(paint(), scene);
       const lights = new LampLights(scene, 4);

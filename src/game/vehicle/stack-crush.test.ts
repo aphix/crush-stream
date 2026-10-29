@@ -265,7 +265,12 @@ describe("given a car's roof another car presses, which takes the belly's imprin
 describe("given the roof's strength law (the load a roof carries at each crush depth, in car weights)", () => {
   it("when the strength is read at 127 mm and at the depths where 1, 2 and 3 car weights settle, then it carries 3 car weights at 127 mm (the FMVSS 216 roof test), 1, 2 and 3 settle at 31, 81 and 122 mm, and it is unbounded at its packed depth", () => {
     expect(faceStrength(FACE_TOP, 0.127) >= 3 && faceStrength(FACE_TOP, 0.127) < 3.5, `strength at 127 mm: ${faceStrength(FACE_TOP, 0.127).toFixed(2)} W`).toBeTruthy();
-    for (const [w, d] of [[1, 0.031], [2, 0.081], [3, 0.122]] as const) expect(Math.abs(faceStrength(FACE_TOP, d) - w), `${w} W settles at ${d} m, strength there ${faceStrength(FACE_TOP, d).toFixed(3)} W`).toBeLessThan(0.03);
+    const settleDepths = [
+      { weights: 1, depth: 0.031 },
+      { weights: 2, depth: 0.081 },
+      { weights: 3, depth: 0.122 },
+    ] as const;
+    for (const settleDepth of settleDepths) expect(Math.abs(faceStrength(FACE_TOP, settleDepth.depth) - settleDepth.weights), `${settleDepth.weights} W settles at ${settleDepth.depth} m, strength there ${faceStrength(FACE_TOP, settleDepth.depth).toFixed(3)} W`).toBeLessThan(0.03);
     expect(faceStrength(FACE_TOP, faceMax(FACE_TOP))).toBe(Infinity);
   });
 });

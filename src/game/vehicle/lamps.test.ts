@@ -141,8 +141,8 @@ describe("given a car whose front bumper is torn off with no corner crush (a det
 });
 
 describe("given every body style fitted with its own lamps", () => {
-  const bodies: [CarStyleId, VehicleClassId][] = [...CAR_STYLE_IDS.map((s): [CarStyleId, VehicleClassId] => [s, STYLE_CLASS[s]]), ["pickup", "monster"]];
-  for (const [style, cls] of bodies) {
+  const bodies = [...CAR_STYLE_IDS.map((s) => ({ style: s, cls: STYLE_CLASS[s] })), { style: "pickup", cls: "monster" }] as { style: CarStyleId; cls: VehicleClassId }[];
+  for (const { style, cls } of bodies) {
     it(`when a ${style} body is given the ${cls} class, then each lamp lies on its end panel's skin, faces out, and lights from where it is drawn`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, style);
       assignClass(car, cls);
@@ -256,7 +256,7 @@ describe("given the hatchback's tail lamps, whose outer lens wraps the tail corn
 
 describe("given each style with a high-mount brake lamp", () => {
   const styles = CAR_STYLE_IDS.filter((s) => CAR_STYLES[s].lamps.brake);
-  it("the control: some style has one", () => expect(styles.length).toBeGreaterThan(0));
+  it("when the styles are listed, then at least one has a high-mount brake lamp, so the checks below run", () => expect(styles.length).toBeGreaterThan(0));
   for (const style of styles) {
     it(`when a ${style} is built, then its brake lamp sits on the first surface met from behind, the body, the rear glass or a roof-hinged gate's spoiler, not inside the cabin`, () => {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, style);
@@ -303,7 +303,7 @@ describe("given the pickup's high-mount stop lamp", () => {
   });
 });
 
-describe("given the monster's side markers with and without a `tint`", () => {
+describe("given the monster's side markers, tinted and untinted", () => {
   it("when the lamp batch packs them, then a tinted marker's colour is its look times the tint and an untinted one keeps the look", () => {
     const plain = CAR_STYLES.monster;
     const tint = 0x806040;
@@ -333,7 +333,7 @@ describe("given the monster's side markers with and without a `tint`", () => {
   });
 });
 
-describe("given the hatchback's lit head lamp under each `lamps.bulb` (none, halogen, LED), and under a dark lens", () => {
+describe("given the hatchback's lit head lamp with no bulb, a halogen bulb and an LED bulb, and with a dark lens", () => {
   const BULBS = [undefined, "halogen", "led"] as const;
   const styled = (bulb: (typeof BULBS)[number]): BodyStyle => ({ ...CAR_STYLES.hatchback, lamps: { ...CAR_STYLES.hatchback.lamps, bulb } });
   /** Bluest blue/red of the first `n` `rgb` triples. */
@@ -394,7 +394,7 @@ describe("given a monster-class car, whose lamp seats ride its lift", () => {
     return car;
   };
 
-  it("when its group is walked, then no lamp seat is one of its nodes", () => {
+  it("when the car is built, then its lamps are not separate nodes of the car's scene group", () => {
     const car = dressed();
     const seats = new Set<THREE.Object3D>(car.lamps.map((l) => l.seat));
     let found = 0;
@@ -402,7 +402,7 @@ describe("given a monster-class car, whose lamp seats ride its lift", () => {
     expect(found).toBe(0);
   });
 
-  it("when the batch packs its lamps, then each instance is the seat's pose in the lift's frame", () => {
+  it("when the lamps are packed for drawing, then each is drawn at its place on the lifted body with its own style's lamp shape", () => {
     const car = dressed();
     const lift = car.group.getObjectByName(CLASS_LIFT)!;
     expect(lift.position.y, "the control: the monster class raises the body").toBeGreaterThan(0.1);
@@ -421,7 +421,7 @@ describe("given a monster-class car, whose lamp seats ride its lift", () => {
     }
   });
 
-  it("when the car moves and its lamps are read and packed again, then no lamp seat composes its matrix, and each still follows the lift", () => {
+  it("when the lifted car moves and its lamps are lit and drawn again, then each lamp still follows the lift and no lamp placement is recomputed", () => {
     const car = dressed();
     const batch = new LampBatch(8);
     const pos = new THREE.Vector3();
@@ -467,7 +467,7 @@ describe("given the lamp batch and one car of each style", () => {
     return sum;
   };
 
-  it("when one car of each style is packed, then its head and tail draws bill only its own lamp units' triangles, not the fleet's", () => {
+  it("when one car of each style is drawn, then its head and tail draws count only its own lamps' triangles, not the fleet's", () => {
     for (const id of CAR_STYLE_IDS) {
       const car = new DeformableCar(paint(), new THREE.Scene(), null, id);
       assignClass(car, STYLE_CLASS[id]);
@@ -850,7 +850,7 @@ describe("given a device class and the page's ?lamps setting", () => {
 });
 
 describe("given the lamp pool updating a lit car's glows every frame", () => {
-  it("when it stores each lamp's glow and stash, then it never goes through three's shared Vector3.toArray (megamorphic once the cars are built)", () => {
+  it("when it stores each lamp's glow, then no per-lamp vector-to-array conversion runs (it slows every frame once the cars are built)", () => {
     const scene = new THREE.Scene();
     const car = new DeformableCar(paint(), scene);
     car.spawnFacing(0, 10, 0, 0);

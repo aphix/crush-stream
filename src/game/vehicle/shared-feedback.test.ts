@@ -6,7 +6,7 @@ import { paint } from "./test-support.ts";
 
 // Its own file (one process per file): the cars here are the process's first, so no cache built elsewhere hides a call.
 describe("given every body style's car built in a fresh process", () => {
-  it("when it is built, then no part of it grows a fresh array through three's shared Vector3.toArray (that sends its stores megamorphic for every per-frame caller)", () => {
+  it("when it is built, then no part of it allocates a fresh array through the shared vector-to-array call (that slows every per-frame caller)", () => {
     const toArray = THREE.Vector3.prototype.toArray;
     const fresh = new Set<string>();
     let typed = 0;

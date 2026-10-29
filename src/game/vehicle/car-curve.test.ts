@@ -15,8 +15,8 @@ function tangentAt(bow: number, t: number, out: THREE.Vector3): THREE.Vector3 {
 
 const middleCases = [
   { it: "when it bows 0.3 m toward +y, then its middle stands 0.3 m off the chord along +y", bow: 0.3, toward: [0, 1, 0] as const, expectedMiddle: [1, 0.3, 0] },
-  { it: "when `toward` also leans along the chord, then only its square part counts and the middle still stands 0.3 m along +y", bow: 0.3, toward: [1, 1, 0] as const, expectedMiddle: [1, 0.3, 0] },
-  { it: "when `toward` is longer than a unit, then its length doesn't scale the bow", bow: 0.3, toward: [0, 4, 0] as const, expectedMiddle: [1, 0.3, 0] },
+  { it: "when its bow direction also leans along the chord, then only its square part counts and the middle still stands 0.3 m along +y", bow: 0.3, toward: [1, 1, 0] as const, expectedMiddle: [1, 0.3, 0] },
+  { it: "when its bow direction is longer than a unit, then its length doesn't scale the bow", bow: 0.3, toward: [0, 4, 0] as const, expectedMiddle: [1, 0.3, 0] },
   { it: "when the bow is negative, then the middle stands that far the other way", bow: -0.3, toward: [0, 1, 0] as const, expectedMiddle: [1, -0.3, 0] },
   { it: "when it bows toward +z, then the middle leaves the xy plane by the bow", bow: 0.2, toward: [0, 0, 1] as const, expectedMiddle: [1, 0, 0.2] },
 ] as const;
@@ -43,8 +43,8 @@ const turnCases = [
   { it: "when it bows 1 m at 2° a step, then 64 steps cover it", bow: 1, toward: [0, 1, 0] as const, maxTurnDegrees: 2, expectedSteps: 64 },
   { it: "when it bows 0.04 m (9.15° of turn) at 10° a step, then one step covers it", bow: 0.04, toward: [0, 1, 0] as const, maxTurnDegrees: 10, expectedSteps: 1 },
   { it: "when it bows 0.05 m (11.42° of turn) at 10° a step, then two steps cover it", bow: 0.05, toward: [0, 1, 0] as const, maxTurnDegrees: 10, expectedSteps: 2 },
-  { it: "when `toward` also leans along the chord, then only its square part counts: the same 13 steps", bow: 1, toward: [1, 1, 0] as const, maxTurnDegrees: 10, expectedSteps: 13 },
-  { it: "when `toward` is longer than a unit, then its length doesn't scale the bow: the same 13 steps", bow: 1, toward: [0, 4, 0] as const, maxTurnDegrees: 10, expectedSteps: 13 },
+  { it: "when its bow direction also leans along the chord, then only its square part counts: the same 13 steps", bow: 1, toward: [1, 1, 0] as const, maxTurnDegrees: 10, expectedSteps: 13 },
+  { it: "when its bow direction is longer than a unit, then its length doesn't scale the bow: the same 13 steps", bow: 1, toward: [0, 4, 0] as const, maxTurnDegrees: 10, expectedSteps: 13 },
 ] as const;
 
 describe("given a bowed edge 2 m long along x, sampled by turn", () => {

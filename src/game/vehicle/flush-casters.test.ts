@@ -170,7 +170,7 @@ const hitCases = [
   { it: "its right side is hit at 28 m/s", side: "right", speed: 28, frames: 45 },
 ] as const;
 
-describe("given a car", () => {
+describe("given a car whose hood, boot lid, doors and bumpers lie flush on its body", () => {
   for (const testCase of hitCases) {
     it(`when ${testCase.it}, then its hood, boot lid, doors and bumpers cast shadows as they are`, () => {
       const car = standingCar("sedan");

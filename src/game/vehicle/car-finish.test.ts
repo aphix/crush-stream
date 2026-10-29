@@ -155,7 +155,7 @@ const tierCases = [
   { it: "when the tier is off, then the finish is off", tier: "off", expectedOn: false },
 ] as const;
 
-describe("given the FX tiers", () => {
+describe("given each graphics quality tier", () => {
   for (const testCase of tierCases) {
     it(testCase.it, () => {
       expect(finishForTier(testCase.tier)).toBe(testCase.expectedOn);
@@ -276,9 +276,14 @@ describe("given a car material being compiled", () => {
     });
   }
 
-  for (const kind of ["paint", "trim"] as const) {
-    it(`when a ${kind} material compiles with the finish on, then after the finish perturbs its normals and three adds its own geometry roughness, the perturbation's screen-space change widens the base${kind === "paint" ? " and clear coat" : ""} lobe before any light is summed: a peel or grain finer than a pixel blurs instead of sparkling`, () => {
-      const material = materialOfKind(kind, kind === "paint" ? 0x203047 : 0x203048);
+  const lobeCases = [
+    { kind: "paint", color: 0x203047, lobes: "base and clear coat" },
+    { kind: "trim", color: 0x203048, lobes: "base" },
+  ] as const;
+  for (const testCase of lobeCases) {
+    const { kind } = testCase;
+    it(`when a ${kind} material compiles with the finish on, then after the finish perturbs its normals and three adds its own geometry roughness, the perturbation's screen-space change widens the ${testCase.lobes} lobe before any light is summed: a peel or grain finer than a pixel blurs instead of sparkling`, () => {
+      const material = materialOfKind(kind, testCase.color);
       switchFinish(material, true);
       const { fragment } = compile(material);
       const perturbed = fragment.indexOf("normal = finishPerturbedNormal(normal, ");
@@ -336,8 +341,9 @@ describe("given a car material being compiled", () => {
       kind: "paint",
       gates: ["if (meshNear < 90.0) heights.x = (finishTriplanar(p, w, 2.4)", "if (meshNear < 18.0) heights.yz = (finishTriplanar(p, w, 0.12)"],
       fetchLines: 2,
+      gateBeforeFetch: false,
     },
-    { it: "when a trim material compiles with the finish on, then its grain fetch and the whole block stop past 16 m from the mesh, reach 4 m", kind: "trim", gates: ["if (finishMeshNear() >= 16.0) return vec3(0.0);"], fetchLines: 1 },
+    { it: "when a trim material compiles with the finish on, then its grain fetch and the whole block stop past 16 m from the mesh, reach 4 m", kind: "trim", gates: ["if (finishMeshNear() >= 16.0) return vec3(0.0);"], fetchLines: 1, gateBeforeFetch: true },
   ] as const;
   for (const testCase of gateCases) {
     it(testCase.it, () => {
@@ -352,7 +358,7 @@ describe("given a car material being compiled", () => {
       expect(fetchLines.length, `fetch lines: ${fetchLines.join(" / ")}`).toBe(testCase.fetchLines);
       const gateAt = testCase.gates.map((gate) => lines.findIndex((line) => line.startsWith(gate)));
       expect(gateAt.every((at) => at >= 0), `gates found at lines ${gateAt.join(", ")}`).toBeTruthy();
-      if (testCase.kind === "trim") expect(gateAt[0]!, "the trim gate comes before its fetch").toBeLessThan(lines.findIndex((line) => line.includes("texture2D(finishMap")));
+      if (testCase.gateBeforeFetch) expect(gateAt[0]!, "the trim gate comes before its fetch").toBeLessThan(lines.findIndex((line) => line.includes("texture2D(finishMap")));
     });
   }
 });
@@ -462,7 +468,7 @@ function boundFinish(renderer: THREE.WebGLRenderer, material: THREE.Material): {
   return { finishProgram: program.cacheKey.includes(FINISH_KEY_MARK), finishMap: map instanceof THREE.Texture ? map : null };
 }
 
-describe("given a police car whose paint and trim the renderer built with the finish on, then off (Auto drops to minimal as a match starts)", () => {
+describe("given a police car whose paint and trim the renderer built with the finish on and then off (Auto drops to minimal as a match starts)", () => {
   it("when the finish comes back on and the renderer returns to the programs it built first, then each is handed its finish map", () => {
     const renderer = new THREE.WebGLRenderer({ canvas: element() });
     const scene = new THREE.Scene();

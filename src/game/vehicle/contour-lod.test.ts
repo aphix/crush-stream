@@ -33,7 +33,7 @@ function crashedSedan(): DeformableCar {
   return car;
 }
 
-describe("given a crashed sedan whose drawn normals follow the FX tier and the engine's LoD verdict", () => {
+describe("given a crashed sedan whose drawn normals follow the graphics tier and whether the car is near the camera", () => {
   CONTOUR_SMOOTHING.value = 1;
 
   it("when the tier does not draw the finish, then its normals are the sim's own, and the tier going up smooths them on the next skin", () => {

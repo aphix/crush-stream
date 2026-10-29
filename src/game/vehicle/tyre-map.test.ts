@@ -87,7 +87,7 @@ describe("given the tyre normal map built twice from scratch", () => {
 
 describe("given the rows of the tyre normal map", () => {
   const testCases = [
-    { it: "row 0 (the rim's and spokes' uv1 row)", firstRow: 0, lastRow: 0, expectedRelief: false },
+    { it: "row 0 (the rim's and spokes' row)", firstRow: 0, lastRow: 0, expectedRelief: false },
     { it: "the outer guard rows between the bead edge and the bead ring", firstRow: 0, lastRow: BEAD_RING_CENTRE_ROW - BEAD_RING_HALF_ROWS - 1, expectedRelief: false },
     { it: "the outer bead ring", firstRow: BEAD_RING_CENTRE_ROW - BEAD_RING_HALF_ROWS, lastRow: BEAD_RING_CENTRE_ROW + BEAD_RING_HALF_ROWS, expectedRelief: true },
     { it: "the flat row between the outer bead ring and the lettering", firstRow: BEAD_RING_CENTRE_ROW + BEAD_RING_HALF_ROWS + 1, lastRow: LETTER_FIRST_ROW - 2, expectedRelief: false },
@@ -140,7 +140,7 @@ describe("given the near and far wheel geometry", () => {
     expect(makeWheelGeometryFar().index!.count / 3, "far wheel").toBe(FAR_WHEEL_TRIANGLES);
   });
 
-  it("when the near tyre's uv1 is read, then its two points on each sidewall sample interior sidewall rows and the tread edge samples the lug start", () => {
+  it("when the near tyre's texture coordinates are read, then its two points on each sidewall sample interior sidewall rows and the tread edge samples the lug start", () => {
     const sidewallV = distinctV(makeWheelGeometry()).filter((v) => v > 0 && v < TREAD_CENTRE_V);
     expect(sidewallV.length, "outer: two sidewall points and the tread edge").toBe(3);
     expect(sidewallV[0]! * TYRE_MAP_HEIGHT, "the first sidewall point is past the bead ring").toBeGreaterThan(BEAD_RING_CENTRE_ROW);
@@ -149,7 +149,7 @@ describe("given the near and far wheel geometry", () => {
     expect(innerV.length, "inner: the tread edge and two sidewall points").toBe(3);
   });
 
-  it("when the far tyre's uv1 is read, then its five points land in the outer sidewall, the tread centre and the inner sidewall", () => {
+  it("when the far tyre's texture coordinates are read, then its five points land in the outer sidewall, the tread centre and the inner sidewall", () => {
     const [beadEdge, outerShoulder, crown, innerShoulder, innerBeadEdge] = distinctV(makeWheelGeometryFar());
     expect(distinctV(makeWheelGeometryFar()).length, "five distinct v values").toBe(5);
     expect(beadEdge, "the outer bead edge is the flat row").toBe(0);

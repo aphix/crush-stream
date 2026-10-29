@@ -226,7 +226,7 @@ describe("given a driver using the keyboard pedals (brake, reverse, handbrake)",
   });
 });
 
-describe("given a DriverSeat (the player's control mode: watching the whole field, following one car, or driving it)", () => {
+describe("given the player's seat, which watches the whole field, follows one car, or drives it", () => {
   it("when a car is clicked, W with Shift is pressed and Esc is pressed twice, then the click follows it, the pedal drives it with full throttle and boost, and Esc steps back to following and then to the whole field", () => {
     const s = new DriverSeat();
     s.focus(1);
@@ -314,10 +314,11 @@ describe("given a DriverSeat (the player's control mode: watching the whole fiel
 describe("given a driving camera, whose A and D keys must look like left and right to the player in every view", () => {
   for (const view of ["third", "far"] as const) {
     it(`when W with A or D is held in the ${view} chase view, then W+A swings the nose left on screen and W+D swings it right`, () => {
-      for (const [key, sign] of [
-        ["KeyA", -1],
-        ["KeyD", 1],
-      ] as const) {
+      const swings = [
+        { key: "KeyA", sign: -1 },
+        { key: "KeyD", sign: 1 },
+      ] as const;
+      for (const { key, sign } of swings) {
         const r = rigAt(view, 10);
         const before = screenX(r, 0, 0.6, 2.2) - screenX(r, 0, 0.6, 0);
         expect(Math.abs(before), `${view} not settled behind: ${before}`).toBeLessThan(0.01);
@@ -329,10 +330,11 @@ describe("given a driving camera, whose A and D keys must look like left and rig
   }
 
   it("when W with A or D is held in the hood cam, then W+A turns the view left, so a point dead ahead slides right on screen, and W+D mirrors it", () => {
-    for (const [key, sign] of [
-      ["KeyA", 1],
-      ["KeyD", -1],
-    ] as const) {
+    const swings = [
+      { key: "KeyA", sign: 1 },
+      { key: "KeyD", sign: -1 },
+    ] as const;
+    for (const { key, sign } of swings) {
       const r = rigAt("first", 10);
       const ahead = r.car.group.localToWorld(new THREE.Vector3(0, PLATFORM_CAMERA.hood[0], 60));
       const before = ahead.clone().project(r.cam).x;
@@ -457,7 +459,7 @@ describe("given a driver who slides the car with the handbrake", () => {
     expect(hit, `boost ${hit.toFixed(3)}`).toBeLessThanOrEqual(0.3 + 1e-9);
   });
 
-  it("when the car slides, then the seat's drift view counts the seconds up from 0, stays clean, and pays out once when the slide ends: `driftPay` of the seconds it reached", () => {
+  it("when the car slides, then the seat's drift view counts the seconds up from 0, stays clean, and pays out once when the slide ends, by the seconds it reached", () => {
     const r = rigAt("third", 30);
     r.seat.boost = 0.3;
     expect(r.seat.drift.s, "before any slide: s").toBe(0);

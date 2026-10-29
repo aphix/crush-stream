@@ -14,7 +14,7 @@ function restoreWreck(from: DeformableCar, to: DeformableCar): void {
   to.writeNetState(f.deform, f.parts);
 }
 
-describe("given a car whose engine is killed from outside the crash sim (a guard's gunfire: `DeformableCar.disable`)", () => {
+describe("given a car whose engine is killed from outside the crash sim (a guard's gunfire)", () => {
   it("when it was doing 15 m/s and nobody drives it, then it rolls to a stop and sleeps like a crash-killed wreck, not on at its speed for good", () => {
     const car = makeCar();
     launch(car, 0, 0, 0, 0, 15);

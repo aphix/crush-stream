@@ -103,7 +103,7 @@ for (const dt of RATES) {
       expect(sum(taps[0]!) < sum(taps[1]!) && sum(taps[1]!) < sum(taps[2]!), `impulses ${taps.map((s) => sum(s).toFixed(4)).join(" ")}`).toBeTruthy();
     });
 
-    it("when the tap ends, then the grip comes in and goes out at no more than 1/ebrakeIn and 1/ebrakeOut per second and is back to 0 well inside 0.6 s: no step at the window's edges", () => {
+    it("when the tap ends, then the grip comes in and goes out no faster than its set ramp rates and is back to 0 well inside 0.6 s: no step at the window's edges", () => {
       for (const tap of [0.03, 0.24]) {
         const s = grip(tap);
         let prev = 0;

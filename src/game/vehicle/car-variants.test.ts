@@ -282,7 +282,7 @@ function shellBox(car: DeformableCar): THREE.Box3 {
   return box;
 }
 
-describe("given every body style's spec dimensions (`BodyStyle.dims`)", () => {
+describe("given every body style's spec dimensions", () => {
   for (const id of CAR_STYLE_IDS) {
     const d = CAR_STYLES[id].dims;
 
@@ -452,7 +452,7 @@ describe("given a sedan whose windshield and rear glass bow deep in plan", () =>
   });
 });
 
-describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", () => {
+describe("given a coupe whose roof's ends roll onto its glass tops", () => {
   /** Each end's run (m), and a rear glass top 6 cm under the dome's edge (the coupe's fastback read), so the rear's whole section drops. */
   const RUNS = { rear: 0.15, front: 0.12 } as const;
   const FASTBACK_DROP = 0.06;
@@ -509,7 +509,7 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
     }
   });
 
-  it("when its roof's rear end bows with the rear glass's whole bow (roofEnds.glassBow.rear), then its crown meets the glass top's centre in plan (no slit), where the plain end stands the default bow ahead of it", () => {
+  it("when its roof's rear end bows with the rear glass's whole bow, then its crown meets the glass top's centre in plan (no slit), where the plain end stands the default bow ahead of it", () => {
     // The roof's rear crown z (its centre-line skin's rearmost) less the rear glass top's centre z.
     const endGap = (style: BodyStyle): number => {
       const [roof, glass] = [makeRoofGeometry(style).getAttribute("position"), makeRearGlass(style).getAttribute("position")];
@@ -526,7 +526,7 @@ describe("given a coupe whose roof's ends roll onto its glass tops (roofEnds)", 
   });
 });
 
-describe("given a coupe whose roof's section is one curve from crown to cant (roofSection)", () => {
+describe("given a coupe whose roof's section is one curve from crown to cant", () => {
   /** The curve's handles, and how steeply (°) its chord across half its half-width falls at mid-roof: a dome there, where the plain coupe's flat top lies within 4°. */
   const SECTION = { crown: 0.5, blend: 0.5 } as const;
   const DOME_SLOPE_DEGREES = 6;
@@ -570,8 +570,8 @@ describe("given a coupe whose roof's section is one curve from crown to cant (ro
   });
 });
 
-describe("given the pickup whose roof's rear corners sit flush over its posts (roofEnds.flush.rear 1)", () => {
-  it("when its roof is drawn, then no skin vertex at the rear end stands past the dome's edge, while without `flush` the side lip reaches past it there", () => {
+describe("given the pickup whose roof's rear corners sit flush over its posts", () => {
+  it("when its roof is drawn, then no skin vertex at the rear end stands past the dome's edge, while without the flush corners the side lip reaches past it there", () => {
     const pickup = CAR_STYLES.pickup;
     const lipped: BodyStyle = { ...pickup, roofEnds: { ...pickup.roofEnds, flush: undefined } };
     const z0 = pickup.roofZ[0];
@@ -651,14 +651,14 @@ describe("given the pickup's door and B-post against its side plate", () => {
   });
 });
 
-describe("given a coupe whose rear glass has round corners (rearGlass.round)", () => {
+describe("given a coupe whose rear glass has round corners", () => {
   const ROUND = 0.09;
   const coupe = CAR_STYLES.coupe;
   const square: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: undefined, roundOutline: undefined } };
   const rounded: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: ROUND, roundOutline: undefined } };
   const outlined: BodyStyle = { ...coupe, rearGlass: { ...coupe.rearGlass, round: ROUND, roundOutline: true } };
 
-  it("when its rear glass is built with a round outline (roundOutline: the coupe's), then its glass keeps the corner's arc in from each square corner, as the bead does, and its frit corners stand 1 cm in behind the plain build's as a backing", () => {
+  it("when its rear glass is built with a round outline (the coupe's), then its glass keeps the corner's arc in from each square corner, as the bead does, and its frit corners stand 1 cm in behind the plain build's as a backing", () => {
     /** The backing's inset (m) behind the pane. */
     const INSET = 0.01;
     const geo = makeRearGlass(outlined);
@@ -708,7 +708,7 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
     expect(`${geo.userData.centre}`, `centre ${geo.userData.centre}`).toBe(`${makeRearGlass(square).userData.centre}`);
   });
 
-  it("when its chrome bead is built (windowTrim), then the bead keeps the corner's arc in from each square corner too, not a sharp mitre on it", () => {
+  it("when its chrome bead is built, then the bead keeps the corner's arc in from each square corner too, not a sharp mitre on it", () => {
     /** The bead's nearest point to a square corner: at least half the arc's middle's r(√2 − 1) off it (a sharp mitre sits on it, the section's outward offset away). */
     const BEAD_ARC = 0.5 * ROUND * (Math.SQRT2 - 1);
     const near = (style: BodyStyle): number[] => {
@@ -730,14 +730,14 @@ describe("given a coupe whose rear glass has round corners (rearGlass.round)", (
 });
 
 /** The owner's lids (docs/DOOR_RIG.md, Lids): a sedan's lid hinged at the rear window's base wraps the tail down to its lamps; a hatch is a roof-hinged lid wrapping down a leaning tail face to just above the bumper. */
-const WRAPPED: readonly [string, BodyStyle][] = [
-  ["sedan", CAR_STYLES.sedan],
-  ["hatchback", { ...CAR_STYLES.hatchback, boot: { kind: "lid", z0: -1.61, z1: -1.716, origin: [0.94, -1.61], pivot: [1.28, -1.15], drop: { y: 0.57, w: 0.43, z: -1.775 } } }],
+const WRAPPED: readonly { id: string; style: BodyStyle }[] = [
+  { id: "sedan", style: CAR_STYLES.sedan },
+  { id: "hatchback", style: { ...CAR_STYLES.hatchback, boot: { kind: "lid", z0: -1.61, z1: -1.716, origin: [0.94, -1.61], pivot: [1.28, -1.15], drop: { y: 0.57, w: 0.43, z: -1.775 } } } },
 ];
 
-describe("given a deck lid that wraps the tail (boot.drop)", () => {
-  for (const [id, style] of WRAPPED) {
-    it(`when a ${id}'s wrapping lid is built, then it folds down the rear face to drop.y, its bottom edge at drop.z (else z1), drop.w wide, inside its cage with no clamping`, () => {
+describe("given a deck lid that wraps the tail", () => {
+  for (const { id, style } of WRAPPED) {
+    it(`when a ${id}'s wrapping lid is built, then it folds down the rear face to its drop height, its bottom edge at its drop depth (else the lid's end), its drop width wide, inside its cage with no clamping`, () => {
       const boot = style.boot;
       must(boot.kind === "lid" && boot.drop !== undefined, `${id}: the wrapping boot is a lid with a drop`);
       const [py, pz] = bootPivot(boot);
@@ -762,7 +762,7 @@ describe("given a deck lid that wraps the tail (boot.drop)", () => {
   }
 
   it("when their hinges are read, then the sedan's lid is a torsion-bar deck lid and the roof-hinged hatch a strutted hatch carrying its glass", () => {
-    const [sedan, hatch] = WRAPPED.map(([, s]) => s.boot);
+    const [sedan, hatch] = WRAPPED.map((w) => w.style.boot);
     expect(!roofHinged(sedan!) && lidSpec(sedan!).kg === 12.4 && lidSpec(sedan!).dir === 1, `sedan ${JSON.stringify(lidSpec(sedan!))}`).toBeTruthy();
     expect(roofHinged(hatch!) && lidSpec(hatch!).kg === 18 && lidSpec(hatch!).dir === 1, `hatch ${JSON.stringify(lidSpec(hatch!))}`).toBeTruthy();
   });
@@ -1007,7 +1007,7 @@ function bumperReachAt(geo: THREE.BufferGeometry, lo: number, hi: number): numbe
 /** The cage A-pillar's rear top corner stands at least this far (m) behind the windshield's top: the sedan's 7 mm stood the dummies' roof proxy over the pane. */
 const A_PILLAR_TOP_CLEAR = 0.01;
 
-describe("given a body style's H2 hardpoints", () => {
+describe("given a body style's underside, door aperture, mirror and pillar hardpoints", () => {
   // The sedan's body on the platform's hardpoints and flat floor: the rows move one hardpoint from known values.
   const sedan: BodyStyle = { ...CAR_STYLES.sedan, ...PLATFORM_HARDPOINTS, underside: undefined };
   const ride = sedan.dims.rideHeight;
@@ -1113,7 +1113,7 @@ describe("given a body style's H2 hardpoints", () => {
     assertSameNumbers([doorTopFrontZ(unset), aPillarTopZ(unset)], [stock, stock], "unset: 5 cm behind the windshield's top", 1e-5);
   });
 
-  it("when any style's drawn A-pillar is read, then it is a post along the windshield's edge: never proud of the glass, its width in side view (6 cm unless the style sets `pillars.a`), its top under the roof skin; also with its top at the windshield's", () => {
+  it("when any style's drawn A-pillar is read, then it is a post along the windshield's edge: never proud of the glass, its width in side view (6 cm unless the style sets its own), its top under the roof skin; also with its top at the windshield's", () => {
     for (const id of CAR_STYLE_IDS) {
       const stock = CAR_STYLES[id];
       for (const style of [stock, { ...stock, aPillarTop: stock.windshieldTop[1] - 0.02 }]) {
@@ -1156,7 +1156,7 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
-  it("when a curved-roof style's (`roofSection`) drawn greenhouse parts are read against its drawn roof mesh, then no vertex over the roof's z span stands over the roof's skin as drawn: a ray down from above meets the roof at or over every vertex (the rolled squared front and the loft's chords between its rings included)", () => {
+  it("when a curved-roof style's drawn greenhouse parts are read against its drawn roof mesh, then no vertex over the roof's z span stands over the roof's skin as drawn: a ray down from above meets the roof at or over every vertex (the rolled squared front and the loft's chords between its rings included)", () => {
     const ids = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].roofSection !== undefined);
     expect(ids.length, `only ${ids.length} styles set a roofSection`).toBeGreaterThanOrEqual(3);
     const ray = new THREE.Raycaster();
@@ -1199,7 +1199,7 @@ describe("given a body style's H2 hardpoints", () => {
     expect(old, `the sedan's old 0.143 reads ${old.toFixed(4)} m behind: the row would not catch it`).toBeLessThan(A_PILLAR_TOP_CLEAR);
   });
 
-  it("when a style without a drip (roofDrip 0: the coupe's) is read, then its drawn roof's side stands nowhere out past the cant line (the side glass's plane): it rolls into the glass, no rail", () => {
+  it("when a style without a drip (the coupe's) is read, then its drawn roof's side stands nowhere out past the cant line (the side glass's plane): it rolls into the glass, no rail", () => {
     const ids = CAR_STYLE_IDS.filter((id) => CAR_STYLES[id].roofDrip === 0);
     expect(ids.length, "no style sets roofDrip 0").toBeGreaterThan(0);
     for (const id of ids) {
@@ -1224,7 +1224,7 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
-  it(`when any style's drawn windshield top and A-post tops are read against its drawn roof, then each pane top vertex (corners too) is tucked under the roof (a ray along the pane's outward normal meets it) or within ${ROOF_JOIN_M * 1000} mm of it, and each post's front-top vertex stands under the roof's skin within ${ROOF_JOIN_M * 1000} mm: no see-through slot ahead of the roof, no corner standing out of its roll, no post top open under it or through it; the wagon without its twin's roofEnds reads open`, () => {
+  it(`when any style's drawn windshield top and A-post tops are read against its drawn roof, then each pane top vertex (corners too) is tucked under the roof (a ray along the pane's outward normal meets it) or within ${ROOF_JOIN_M * 1000} mm of it, and each post's front-top vertex stands under the roof's skin within ${ROOF_JOIN_M * 1000} mm: no see-through slot ahead of the roof, no corner standing out of its roll, no post top open under it or through it; the wagon without its twin's rolled roof ends reads open`, () => {
     const off: string[] = [];
     for (const id of CAR_STYLE_IDS) off.push(...openRoofJoins(drawnStyle(CAR_STYLES[id])).map((text) => `${id} ${text}`));
     expect(off.length, off.join("; ")).toBe(0);
@@ -1251,7 +1251,7 @@ describe("given a body style's H2 hardpoints", () => {
   /** The pickup windshield's top-corner turn (°) from its flat pane: at 3.1° the corner mirrored the garage's key light into a bloom blob in the landing iso; at 0.76° (a quarter of the dome) it did not. */
   const PICKUP_CORNER_TURN_DEG = 1;
 
-  it("when any style's raked panes are built, then each top edge follows its style's share of the roof's dome across the car (`domeFall`; every top-edge vertex stands as far over the roof at its x as the edge's middle does, less the dome it does not take; no vertex of the pane, frit or round corner further), while the corners the thrown dummies fit their slab to stay on the pane's plane through its middle", () => {
+  it("when any style's raked panes are built, then each top edge follows its style's share of the roof's dome across the car (every top-edge vertex stands as far over the roof at its x as the edge's middle does, less the dome it does not take; no vertex of the pane, frit or round corner further), while the corners the thrown dummies fit their slab to stay on the pane's plane through its middle", () => {
     const off: string[] = [];
     for (const id of CAR_STYLE_IDS) {
       const plain = CAR_STYLES[id];
@@ -1320,7 +1320,7 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
-  it("when a windshield rounds its top corners (`windshield.round`), then its clear glass stands off the square top corner by the arc's cut and keeps its base corners square, and the cage's plain pane keeps its 10 x 8 grid", () => {
+  it("when a windshield rounds its top corners, then its clear glass stands off the square top corner by the arc's cut and keeps its base corners square, and the cage's plain pane keeps its 10 x 8 grid", () => {
     const style = drawnStyle(CAR_STYLES.pickup);
     const { round } = style.windshield;
     expect(round, "the pickup's drawn windshield rounds its top corners").not.toBe(undefined);
@@ -1353,7 +1353,7 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
-  it("when the hatchback's plank rear post fans its foot onto the shoulder (pillars.rearFoot), then no ray down between its rear glass's edge and the shoulder sees the cabin's floor through the opening behind the quarter glass, and the cage is unchanged", () => {
+  it("when the hatchback's plank rear post fans its foot onto the shoulder, then no ray down between its rear glass's edge and the shoulder sees the cabin's floor through the opening behind the quarter glass, and the cage is unchanged", () => {
     /** A ray down that hits under this height (m) has passed the body's top into the cabin: the shoulder stands at 0.86-0.91 there. */
     const FLOOR_Y = 0.8;
     /** The D-pillar's zone behind the quarter glass [x, z] (m): from the rear glass's base edge out to the shoulder, glass base to the quarter's rear. */
@@ -1506,7 +1506,7 @@ describe("given a body style's H2 hardpoints", () => {
     expect(outside.length, `glass top vertices outside the slab: ${outside.join("; ")}`).toBe(0);
   });
 
-  it("when the pickup's cab back post fans its foot onto the shoulder (pillars.rearFoot), then no ray down between its rear glass's edge and the shoulder sees the cabin's floor through the opening beside the cab back, and the cage is unchanged", () => {
+  it("when the pickup's cab back post fans its foot onto the shoulder, then no ray down between its rear glass's edge and the shoulder sees the cabin's floor through the opening beside the cab back, and the cage is unchanged", () => {
     /** A ray down that hits under this height (m) has passed the body's top into the cabin: the shoulder stands at 1.17 beside the cab back. */
     const FLOOR_Y = 0.8;
     /** The cab back post's zone [x, z] (m): from the rear glass's base edge out to the shoulder, the cab back to the B-post's rear. */
@@ -1595,7 +1595,7 @@ describe("given a body style's H2 hardpoints", () => {
     expect(point - tail, `the crest rises ${((point - tail) * 100).toFixed(1)} cm from the tail to the window's point, ${CREST_RISE * 100} cm asked: ${readings}`).toBeGreaterThanOrEqual(CREST_RISE);
   });
 
-  it("when the coupe's door is drawn, then its skin is flush with the body side inside its cut (door.proud 0), not a lit 3 mm step at the shut line", () => {
+  it("when the coupe's door is drawn, then its skin is flush with the body side inside its cut, not a lit 3 mm step at the shut line", () => {
     /** Flush within this (m): the skin's chords between its rows. */
     const FLUSH = 0.001;
     const coupe = CAR_STYLES.coupe;
@@ -1641,7 +1641,7 @@ describe("given a body style's H2 hardpoints", () => {
     expect(Math.min(...control.map((r) => r.clear)), "the control: without lowProud the skin lies within the ramp's z-fight band").toBeLessThan(MIN_CLEAR);
   });
 
-  it("when a lowProud door's chrome strips are read at their own ends and 2 cm in, then the stand they lose toward the end is the drawn door face's own within 1 mm (the face's stand tapers to nothing at its cut ends), not the full stand held to it", () => {
+  it("when a low-proud door's chrome strips are read at their own ends and 2 cm in, then the stand they lose toward the end is the drawn door face's own within 1 mm (the face's stand tapers to nothing at its cut ends), not the full stand held to it", () => {
     /** The strip's stand drop and the drawn face's agree within this (m). The drop, not the stand itself: below the door's lowest ring row the face is flat triangles, its chord about 1 mm under the smooth side line the strip follows, the same at both readings. */
     const AGREE = 0.001;
     /** The second reading is this far (m) inside the strip's end, past the cut-end taper's run (2 cm), where the stand is full. */
@@ -1677,7 +1677,7 @@ describe("given a body style's H2 hardpoints", () => {
     expect(fullest, `the fullest strip stand 2 cm in is ${(fullest * 1000).toFixed(2)} mm, ${AGREE * 1000} mm asked: no taper to read`).toBeGreaterThan(AGREE);
   });
 
-  it("when the coupe's drawn A-post is seated on its deck (pillars.aSeat), then no level ray in from the side between the fender's top and the belt under the post's foot sees into the cabin, and the cage is unchanged", () => {
+  it("when the coupe's drawn A-post is seated on its deck, then no level ray in from the side between the fender's top and the belt under the post's foot sees into the cabin, and the cage is unchanged", () => {
     /** The post's foot ahead of the door's cut [z] (m), and the band between the deck there (.876-.887) and the belt (.913) [y]. */
     const ZONE = { z: [0.65, 0.73], y: [0.88, 0.91] } as const;
     /** A level ray in from the side whose first hit lies inboard of this (m) has passed under the post (its inner face x .656) into the cabin. */
@@ -1703,7 +1703,7 @@ describe("given a body style's H2 hardpoints", () => {
     expect(bits(makeChassisGeometry(without, "cage")), "the cage moved with the drawn seat").toBe(bits(makeChassisGeometry(coupe, "cage")));
   });
 
-  it("when the coupe's body is drawn (door.shutCrease), then at each end of its door cut the side's shoulder and feature line keep the panel's own normal up to the shut line, not rolled off by the cut's ramp into a round cap", () => {
+  it("when the coupe's body is drawn with a shut crease at its door, then at each end of its door cut the side's shoulder and feature line keep the panel's own normal up to the shut line, not rolled off by the cut's ramp into a round cap", () => {
     /** Within this (°) of the same points one ring further onto the panel: the ramp's faces tilted them 17-73°. */
     const PANEL_TURN = 10;
     /** The side's ring points from the shoulder down to the feature line (half-ring points 2 to 4, +x side). */
@@ -1743,7 +1743,7 @@ describe("given a body style's H2 hardpoints", () => {
         }).filter((turn) => !Number.isNaN(turn));
       });
 
-  it("when a style sets `pillars.aCrown`, then the turn across its drawn A-post's outer face is that of a face crowned that share of its width (the plank's 15-20°, the default's 25° and over, the pickup's .25 at 40° and over)", () => {
+  it("when a style crowns its A-post's outer face, then the turn across its drawn A-post's outer face is that of a face crowned that share of its width (the plank's 15-20°, the default's 25° and over, the pickup's .25 at 40° and over)", () => {
     const pickup = CAR_STYLES.pickup;
     const plain: BodyStyle = { ...pickup, pillars: { ...pickup.pillars, aCrown: undefined } };
     expect(pickup.pillars?.aCrown, "the pickup sets aCrown .25").toBe(0.25);
@@ -1794,7 +1794,7 @@ describe("given a body style's H2 hardpoints", () => {
     assertSameNumbers([sailRear, sailFront], [moved.aPillarFoot, postRear!], "the sail at the belt runs from the door glass's front edge to the post's rear (z)", 1e-5);
   });
 
-  it("when a style knees its door glass onto the A-post (aPillarKnee), then the glass's front edge meets the post's rear edge there and the sail ends there: a small triangle at the foot, glass over it", () => {
+  it("when a style knees its door glass onto the A-post, then the glass's front edge meets the post's rear edge there and the sail ends there: a small triangle at the foot, glass over it", () => {
     // The control has no knee: the sedan's own off.
     const sedan: BodyStyle = { ...CAR_STYLES.sedan, aPillarKnee: undefined };
     const gap: BodyStyle = { ...sedan, pillars: undefined, aPillarFoot: sedan.windshield.base[1] - 0.4 };
@@ -1811,7 +1811,7 @@ describe("given a body style's H2 hardpoints", () => {
     expect(Math.abs(front - (aPostRearZ(knee, kneed) + 0.01)), `the door glass's front edge at the knee stands at z ${front}, 1 cm under the post's rear edge ${aPostRearZ(knee, kneed)}`).toBeLessThan(1e-5);
   });
 
-  it("when a style with no knee sets `aPillarSailGlass`, then no level ray in from the side, 5 mm ahead of the door glass's front edge, passes its drawn sail to the far side: the sail's rear edge follows the glass's straight front edge up to its top, not one chord from its middle to the post's top over a see-through wedge", () => {
+  it("when a style with no knee sets a sail glass, then no level ray in from the side, 5 mm ahead of the door glass's front edge, passes its drawn sail to the far side: the sail's rear edge follows the glass's straight front edge up to its top, not one chord from its middle to the post's top over a see-through wedge", () => {
     // The drawn sedan: no knee, the glass's front edge straight from the belt to the post's top. The control is its twin with the field and the one loft (whose stations sample the glass's edge) removed.
     const stock = CAR_STYLES.sedan;
     const sedan = drawnStyle(stock);
@@ -1982,7 +1982,7 @@ describe("given a body style's H2 hardpoints", () => {
     }
   });
 
-  it("when the sedan's belt rail runs on behind the quarter glass's point (cPillar.railRun), then no level ray in from the side between its deck and the window's line behind the point passes under the sail into the cabin", () => {
+  it("when the sedan's belt rail runs on behind the quarter glass's point, then no level ray in from the side between its deck and the window's line behind the point passes under the sail into the cabin", () => {
     /** The band over the deck's crown (belt .99 + 12 mm kick = 1.002) up to the window's line: the belt at the point, 1.045 [y], 2 mm steps; its columns 2 mm apart behind the point, short of the rail's end. */
     const [DECK_Y, STEP, COLUMNS] = [1.003, 0.002, 9] as const;
     /** A level ray in from the side whose first hit lies inboard of this (m) has passed under the sail's foot and over the deck: the rail's face stands at .65, the sail's foot outboard of it. */
@@ -2080,7 +2080,7 @@ describe("given a body style's H2 hardpoints", () => {
     expect(Math.abs(sedanGap), `platform-wrap bumper's corner at |x| 0.35-0.45 stands ${sedanGap} m behind its middle, under 0.01`).toBeLessThan(0.01);
   });
 
-  it("when a bumper has lofted ends, then each runs on along the body side to `back`, its face `stand` off the skin there, where the plain wrap of the same bumper stays inside the skin", () => {
+  it("when a bumper has lofted ends, then each runs on along the body side to its back, its face standing off the skin there, where the plain wrap of the same bumper stays inside the skin", () => {
     const coupe = CAR_STYLES.coupe;
     const { front } = coupe.bumpers;
     must(front.wrap.end, "the control: the coupe's front bumper has lofted ends");
@@ -2473,7 +2473,7 @@ const ROUND_TIP_SPAN = 0.97;
 /** A tip ends within this (m) inside the bumper's rearmost face: flush in the lower band, not proud of the tail. */
 const TIP_FLUSH = 0.01;
 
-describe("given a body style's P1 parts", () => {
+describe("given a body style's hood, boot, roof and bumper fittings", () => {
   const sedan = CAR_STYLES.sedan;
 
   it("when a hood carries a bulge with a twin scoop, then the bulge stands over the lid only inside its width and z span, the scoop tops out its height over the bulge with its dark mouths facing forward at its z, and the cage builds are unchanged", () => {
@@ -2693,7 +2693,7 @@ describe("given a body style's P1 parts", () => {
   for (const id of CAR_STYLE_IDS) {
     const style = CAR_STYLES[id];
     if (style.boot.edgeRoll === undefined) continue;
-    it(`when the ${id}'s ${style.boot.kind === "lid" ? "boot lid" : "tailgate"} is drawn with its edgeRoll, then its side edges turn under ${ROLLED_TURN_MAX}° (the field-less build turns ~90°), and the cage builds are unchanged`, () => {
+    it(`when the ${id}'s ${style.boot.kind === "lid" ? "boot lid" : "tailgate"} is drawn with rolled side edges, then its side edges turn under ${ROLLED_TURN_MAX}° (the unrolled build turns ~90°), and the cage builds are unchanged`, () => {
       const plain: BodyStyle = { ...style, boot: { ...style.boot, edgeRoll: undefined } };
       /** The sharpest turn (°) along a ring at mid panel over its right-hand top and upper side (the upper share of its height). */
       const edgeTurn = (s: BodyStyle) => {
@@ -2754,7 +2754,7 @@ describe("given a body style's P1 parts", () => {
     expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
-  it("when a spoiler's ends slope and taper, then its top's ends stand `slope` inboard of its underside's and its tip's `taper` inboard of its front edge's", () => {
+  it("when a spoiler's ends slope and taper, then its top's ends stand its slope inboard of its underside's and its tip's taper inboard of its front edge's", () => {
     const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5, ends: [0.06, 0.1] } as const;
     const { body, from } = roofParts({ spoiler });
     const pos = body.getAttribute("position");
@@ -2769,7 +2769,7 @@ describe("given a body style's P1 parts", () => {
     assertSameNumbers(widest, [0.44, 0.5, 0.4], "the front top's, front underside's and tip underside's half-widths", POSITION_TOL);
   });
 
-  it("when a spoiler's top carries a crown, then its front edge's top stands `crown` higher at its middle than at its sloped ends, and without it the top is level", () => {
+  it("when a spoiler's top carries a crown, then its front edge's top stands its crown higher at its middle than at its sloped ends, and without it the top is level", () => {
     const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5, ends: [0.06, 0.1] } as const;
     const crown = 0.02;
     // The highest front-edge vertex at |x| (the front cap's fan centre sits lower, on the centre line).
@@ -2786,7 +2786,7 @@ describe("given a body style's P1 parts", () => {
     assertSameNumbers([topAt(crowned, 0), topAt(crowned, 0.44), topAt({ spoiler }, 0.44)], [spoiler.y[1], spoiler.y[1] - crown, spoiler.y[1]], "the crowned top's height at its middle and its sloped ends, and the level top's at its ends", POSITION_TOL);
   });
 
-  it("when a spoiler's front edge bows (bow), then its middle stands `bow` behind its front corners in plan, its tip unmoved, and the cage builds are unchanged", () => {
+  it("when a spoiler's front edge bows, then its middle stands its bow behind its front corners in plan, its tip unmoved, and the cage builds are unchanged", () => {
     const spoiler = { z: [-0.95, -0.8], y: [1.15, 1.22], halfWidth: 0.5, ends: [0.06, 0.1], crown: 0.02 } as const;
     const bow = 0.015;
     const { style, body, from } = roofParts({ spoiler: { ...spoiler, bow } });
@@ -2935,7 +2935,7 @@ describe("given a body style's P1 parts", () => {
     });
   }
 
-  it("when a rear bumper sets a band, then the fascia rows in it carry a black inlay across the face between its heights, out to its `bandHalfWidth` and no further round the corners, and the cage builds are unchanged", () => {
+  it("when a rear bumper sets a band, then the fascia rows in it carry a black inlay across the face between its heights, out to its band half-width and no further round the corners, and the cage builds are unchanged", () => {
     const { seat, band, wrap, bandHalfWidth } = sedan.bumpers.rear;
     const plain: BodyStyle = { ...sedan, bumpers: { ...sedan.bumpers, rear: { ...sedan.bumpers.rear, band: undefined } } };
     const [inlay, bare] = [sedan, plain].map((style) => toneBox(withRearFittings(makeBumperGeometry(false, style), style), FITTING_ATTRIBUTE, FITTING_TONE.black));
@@ -3281,7 +3281,7 @@ describe("given the trucks' drawn A-posts", () => {
   });
 });
 
-describe("given a body style's P2 parts", () => {
+describe("given a body style's mirrors, grille, badges and lamps", () => {
   it("when a door carries its own mirror, then its cap is its own size, unsquashed, its outer face at the door's mirror reach, its foot on the drawn skin at the seat, and the seat and cage builds are unchanged", () => {
     const size = [0.14, 0.09, 0.07] as const;
     const style = mirrorStyle({ cap: "rounded", finish: "body", size });
@@ -3360,7 +3360,7 @@ describe("given a body style's P2 parts", () => {
     expect(mirrorSeatX(full!.style) === mirrorSeatX(plain!.style) && cageHash(full!.style) === cageHash(CAR_STYLES.sedan), "the seat and cage builds are unchanged").toBeTruthy();
   });
 
-  it("when a mirror's cap is rounder (`round`), then its outer face's flat run is shorter by twice the radius it grows, and the seat and cage builds are unchanged", () => {
+  it("when a mirror's cap is rounder, then its outer face's flat run is shorter by twice the radius it grows, and the seat and cage builds are unchanged", () => {
     const size = [0.06, 0.12, 0.15] as const;
     const [w, h] = size;
     const [plain, round] = ([undefined, 0.48] as const).map((share) => {
@@ -3714,7 +3714,7 @@ describe("given a body style's P2 parts", () => {
     expect(cageHash(style), "the cage builds are unchanged").toBe(cageHash(sedan));
   });
 
-  it("when a grille is a trapezoid hex mesh with a badge, then its surround is its width at the top and `bottom` at the bottom, and a chrome badge sits at its centre", () => {
+  it("when a grille is a trapezoid hex mesh with a badge, then its surround is its width at the top and its bottom width at the bottom, and a chrome badge sits at its centre", () => {
     const sedan = CAR_STYLES.sedan;
     const seat = sedan.bumpers.front.seat;
     const grille = { y: 0.45, size: [0.7, 0.24], bottom: 0.5, kind: "hex", badge: 0.03, finish: "black" } as const;
@@ -4217,8 +4217,8 @@ function wheelsInFloors(style: BodyStyle): [number, number, number, number][] {
 }
 
 describe("given a body style's boot opening, its open floors and its arch lips (drawn only)", () => {
-  const cases: readonly [string, BodyStyle][] = [...CAR_STYLE_IDS.map((id): [string, BodyStyle] => [id, CAR_STYLES[id]]), ...WRAPPED.map(([id, s]): [string, BodyStyle] => [`${id} (wrapped lid)`, s])];
-  for (const [id, style] of cases) {
+  const cases: readonly { id: string; style: BodyStyle }[] = [...CAR_STYLE_IDS.map((id) => ({ id, style: CAR_STYLES[id] })), ...WRAPPED.map((w) => ({ id: `${w.id} (wrapped lid)`, style: w.style }))];
+  for (const { id, style } of cases) {
     it(`when a ${id}'s drawn body is built, then nothing of it stands in its boot's opening: under its lid between the lid's edges, in its face's cut`, () => {
       const hits = openingCrossings(style);
       expect(hits.length, `${id}: ${hits.length} rays meet body in the opening, first ${hits.slice(0, 4).join(" ")}`).toBe(0);
@@ -4621,7 +4621,7 @@ describe("given every style's doors and the shared door card", () => {
     return [...outerAt].map(([y, x]) => ({ x, y })).sort((a, b) => b.y - a.y);
   };
 
-  it("when a door skin is built, then its face meets the drawn body side (its ring's chords over the ring rows it carries, the side's curve past them) at both cut ends (hinge and latch slices: a shut line, not a step) and stands its style's proud (3 mm unless `door.proud`) 2 cm inside them", () => {
+  it("when a door skin is built, then its face meets the drawn body side (its ring's chords over the ring rows it carries, the side's curve past them) at both cut ends (hinge and latch slices: a shut line, not a step) and stands its style's proud (3 mm unless the style sets its own) 2 cm inside them", () => {
     /** The face's stand-off (m) over the body side at a cut end, and 2 cm inside it (null: the style's `door.proud`, else `DOOR_PROUD`). */
     const WANT = [[0, 0], [0.02, null]] as const;
     /** Rows this near (m) the skin's top or bottom roll over its edge: left out. */
@@ -4797,7 +4797,7 @@ describe("given a style with chrome window trim", () => {
   });
 });
 
-describe("given a style's paint finish (paintFinish)", () => {
+describe("given a style's paint finish", () => {
   it("when the coupe (which sets one) and the sedan (which does not) are built, then the coupe's body paint takes its roughness and clear coat and the sedan's keeps the platform paint's", () => {
     const finish = CAR_STYLES.coupe.paintFinish!;
     const read = (id: CarStyleId) => {

@@ -218,7 +218,7 @@ describe("given cars whose crash moves the engine bay, the crash bars and the ca
     return far;
   };
 
-  test("when a car is crashed and refitted, then every static part seat keeps matrixAutoUpdate off and its world matrix is its parent's times its own pose", () => {
+  test("when a car is crashed and refitted, then every static part seat stays out of the per-frame matrix update and its world matrix is its parent's times its own pose", () => {
     const scene = new THREE.Scene();
     for (const id of CAR_STYLE_IDS) {
       const car = new DeformableCar(paint(), scene, null, id);
@@ -226,7 +226,11 @@ describe("given cars whose crash moves the engine bay, the crash bars and the ca
       assertSeats(car, `${id} built`);
     }
     const rest = carInState("untouched", "sedan", STYLE_CLASS.sedan);
-    for (const [state, kinds] of [["loaded", [PART_KIND.interior]], ["headon", [PART_KIND.engineBay, PART_KIND.crashBar]]] as const) {
+    const crashes = [
+      { state: "loaded", kinds: [PART_KIND.interior] },
+      { state: "headon", kinds: [PART_KIND.engineBay, PART_KIND.crashBar] },
+    ] as const;
+    for (const { state, kinds } of crashes) {
       const car = carInState(state, "sedan", STYLE_CLASS.sedan);
       car.flushDeferredSkin();
       car.updateSkin();
@@ -264,10 +268,11 @@ describe("given a monster truck of its class at rest on flat ground", () => {
   test("when its axles are read, then each sits on its wheels' hubs, at the class's hub height (the drawn tyre's radius)", () => {
     const hub = carFrame(monster.style).rig.tyre.r * CLASSES.monster.wheelScale;
     const w = monster.wheels.map((wheel) => wheel.getWorldPosition(new THREE.Vector3()));
-    for (const [k, [a, b]] of [[0, 1], [2, 3]].entries()) {
+    const axles = [{ left: 0, right: 1 }, { left: 2, right: 3 }];
+    for (const [k, { left, right }] of axles.entries()) {
       batch.kinds[PART_KIND.axle]!.getMatrixAt(k, m);
       v.setFromMatrixPosition(m);
-      const mid = w[a!]!.clone().add(w[b!]!).multiplyScalar(0.5);
+      const mid = w[left]!.clone().add(w[right]!).multiplyScalar(0.5);
       expect(v.distanceTo(mid) < 1e-4 && Math.abs(v.y - hub) < 1e-4, `axle ${k} at ${mm(v)}, hubs' midpoint ${mm(mid)}, hub height ${hub.toFixed(3)}`).toBeTruthy();
     }
   });
@@ -477,10 +482,10 @@ describe("given every style's drawn body and hood", () => {
     /** The least clearance (m) between the hood's top and the deck it covers. */
     const CLEAR = 0.001;
     const clamshell: BodyStyle = { ...CAR_STYLES.wagon, hood: { ...CAR_STYLES.wagon.hood, kind: "clamshell" } };
-    const cases: readonly (readonly [string, BodyStyle])[] = [...CAR_STYLE_IDS.map((id) => [id, CAR_STYLES[id]] as const), ["wagon with a clamshell", clamshell]];
+    const cases = [...CAR_STYLE_IDS.map((id) => ({ id, plain: CAR_STYLES[id] })), { id: "wagon with a clamshell", plain: clamshell }];
     const ray = new THREE.Raycaster();
     const down = new THREE.Vector3(0, -1, 0);
-    for (const [id, plain] of cases) {
+    for (const { id, plain } of cases) {
       const style = drawnStyle(plain);
       const body = makeChassisGeometry(style);
       const { ring, slices } = body.userData.loft as { ring: number; slices: number };

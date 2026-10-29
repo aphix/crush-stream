@@ -12,10 +12,10 @@ import type { CarStyleId } from "./car-variants.ts";
 const FRONT_WHEELS = [0, 1] as const;
 /** The clearance (m) every drawn tyre top keeps under the skin. */
 const CLEARANCE_M = 0.005;
-const LANDERS: readonly (readonly [CarStyleId, VehicleClassId])[] = [
-  ["coupe", "muscle"],
-  ["pickup", "truck"],
-];
+const LANDERS = [
+  { style: "coupe", cls: "muscle" },
+  { style: "pickup", cls: "truck" },
+] as const satisfies readonly { style: CarStyleId; cls: VehicleClassId }[];
 const SQUASH = 0.32;
 const BUCKLE = 0.45;
 const SEEN_EVERY = 2;
@@ -45,7 +45,7 @@ function leastClearance(w: CrashWorld, car: DeformableCar, wheels: readonly numb
 const fmt = (m: number): string => `${(m * 1000).toFixed(1)} mm`;
 
 describe("given a car let down from a metre onto flat ground, its tyres driven up their arches", () => {
-  for (const [style, cls] of LANDERS) {
+  for (const { style, cls } of LANDERS) {
     it(`when a ${cls} lands, then its front tyres keep ${CLEARANCE_M * 1000} mm under the drawn skin all through`, () => {
       const car = crashCar(style, cls);
       const w = makeWorld([car], false, false);
