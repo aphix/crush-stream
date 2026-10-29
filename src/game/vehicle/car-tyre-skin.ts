@@ -16,6 +16,8 @@ const FALL = 1;
 const ENDS_ZONE = 0.9;
 /** How far (m) a body vertex leaving a tyre's steep end stands clear of it: its edges there are short, so the chord gap (`TYRE_GAP`, the bonnet's 25 cm edges) is not owed. */
 const END_GAP = 0.01;
+/** The steepest (m of lift per m of written skin) the hold's lift may change between two neighbouring skin points: a crushed row inside a tyre drags its neighbours up to a slope, never leaves a cliff of stretched triangles. */
+const LEVEL_SLOPE = 1;
 /** How far (m) over the tyre's surface a skin point may rest and still be held: the hood and fenders, not the roof. */
 const REACH = 0.5;
 /** How far (m) a triangle spanning a tyre's top must stand over it at the samples `SAG_AHEAD` x `SAG_ALONG`: twice the 5 mm the drawn skin keeps over a tyre, so a stretched triangle's chord is lifted before it dips through. */
@@ -239,6 +241,53 @@ function restEdges(rest: Float32Array, index: THREE.BufferAttribute | null): Res
   return { weld, start, to, drop };
 }
 
+/** Each welded point's neighbours over every edge of the mesh (CSR, `start`/`to`), and `rep`, a vertex standing for each point. */
+type SkinNeighbours = { start: Int32Array; to: Int32Array; rep: Int32Array };
+
+function skinNeighbours(weld: Int32Array, points: number, index: THREE.BufferAttribute | null): SkinNeighbours {
+  const rep = new Int32Array(points).fill(-1);
+  for (let v = 0; v < weld.length; v++) if (rep[weld[v]!]! < 0) rep[weld[v]!] = v;
+  const corners = index ? index.count : weld.length;
+  const corner = (k: number): number => weld[index ? index.getX(k) : k]!;
+  const raw = new Int32Array(points + 1);
+  for (let t = 0; t + 2 < corners; t += 3) {
+    for (let k = 0; k < 3; k++) {
+      const a = corner(t + k);
+      const b = corner(t + ((k + 1) % 3));
+      if (a === b) continue;
+      raw[a + 1]!++;
+      raw[b + 1]!++;
+    }
+  }
+  for (let p = 0; p < points; p++) raw[p + 1] = raw[p + 1]! + raw[p]!;
+  const filled = raw.slice(0, points);
+  const all = new Int32Array(raw[points]!);
+  for (let t = 0; t + 2 < corners; t += 3) {
+    for (let k = 0; k < 3; k++) {
+      const a = corner(t + k);
+      const b = corner(t + ((k + 1) % 3));
+      if (a === b) continue;
+      all[filled[a]!++] = b;
+      all[filled[b]!++] = a;
+    }
+  }
+  // An edge shared by two triangles was listed twice: keep each neighbour once per point.
+  const start = new Int32Array(points + 1);
+  const seen = new Int32Array(points).fill(-1);
+  let n = 0;
+  for (let p = 0; p < points; p++) {
+    for (let e = raw[p]!; e < raw[p + 1]!; e++) {
+      const q = all[e]!;
+      if (seen[q] === p) continue;
+      seen[q] = p;
+      all[n++] = q;
+    }
+    start[p + 1] = n;
+  }
+  const to = all.slice(0, n);
+  return { start, to, rep };
+}
+
 /**
  * A crushed hood or fender drawn over a standing tyre is held on it: every skin point that rests over the tyre's upper surface stands at least `TYRE_GAP` over it
  * (its rest clearance if less: the uncrushed skin never moves), and lifts the skin resting above it with it (`ROW_KEEP`), so the skin keeps the order it rested in.
@@ -249,6 +298,10 @@ export class TyreSkin {
   private readonly mesh: THREE.Mesh;
   private readonly rest: Float32Array;
   private readonly edges: RestEdges;
+  private readonly neighbours: SkinNeighbours;
+  /** `levelLift`'s worklist (a ring: a point is queued once at a time) and whether each point is in it. */
+  private readonly levelQueue: Int32Array;
+  private readonly levelQueued: Uint8Array;
   /** Per welded rest point (`RestEdges.weld`), the lift (m, up the mesh) this hold gives it. */
   private readonly lift: Float32Array;
   /** Per welded rest point, the push (m, along `pushDir`, the axle turned outward) this hold gives it instead of a lift. */
@@ -312,6 +365,9 @@ export class TyreSkin {
     this.rest = rest;
     this.edges = restEdges(rest, mesh.geometry.index);
     const points = this.edges.start.length - 1;
+    this.neighbours = skinNeighbours(this.edges.weld, points, mesh.geometry.index);
+    this.levelQueue = new Int32Array(points);
+    this.levelQueued = new Uint8Array(points);
     this.lift = new Float32Array(points);
     this.push = new Float32Array(points);
     this.bump = new Float32Array(points);
@@ -447,6 +503,7 @@ export class TyreSkin {
       if (!sagged) break;
       this.carryLift();
     }
+    this.levelLift(pos);
     const held = this.applyLift(pos);
     const changed = this.changedSince(reset);
     const wasHeld = this.held;
@@ -455,6 +512,38 @@ export class TyreSkin {
     if (!held && (fresh || !wasHeld)) return;
     attr.needsUpdate = true;
     computeNormalsNear(this.mesh.geometry, this.near, changed);
+  }
+
+  /** Raises each point's lift to at least its neighbours' less `LEVEL_SLOPE` of written edge, until none is short (lifts only rise, so it ends): the skin between a held row and its neighbours stays a slope. */
+  private levelLift(pos: Float32Array): void {
+    const { start, to, rep } = this.neighbours;
+    const { lift, levelQueue: queue, levelQueued: queued } = this;
+    const points = lift.length;
+    let head = 0;
+    let size = 0;
+    for (let p = 0; p < points; p++) {
+      if (lift[p]! <= REST_SLACK) continue;
+      queue[size++] = p;
+      queued[p] = 1;
+    }
+    while (size > 0) {
+      const p = queue[head]!;
+      head = head + 1 === points ? 0 : head + 1;
+      size--;
+      queued[p] = 0;
+      const a = rep[p]! * 3;
+      for (let e = start[p]!; e < start[p + 1]!; e++) {
+        const q = to[e]!;
+        const b = rep[q]! * 3;
+        const carried = lift[p]! - LEVEL_SLOPE * hypot3(pos[a]! - pos[b]!, pos[a + 1]! - pos[b + 1]!, pos[a + 2]! - pos[b + 2]!);
+        if (carried <= lift[q]!) continue;
+        lift[q] = carried;
+        if (queued[q] === 1) continue;
+        queued[q] = 1;
+        queue[(head + size) % points] = q;
+        size++;
+      }
+    }
   }
 
   /** Adds each welded point's lift and push to its vertices in `pos`, listing those vertices (`lifted`); true when a drawn position changed (a resting skin's points read lifts of a nanometre, the rest clearance's rounding, under a float's step). */
