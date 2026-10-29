@@ -35,7 +35,7 @@ function contactAt(skip: number): number {
 }
 
 describe("given a ground of one plain 3 × 3 grid at height 1 with a 0.2 m crush drop that has answered a query", () => {
-  it("when per-node factors of 0.5 are set, then heightAt and contactIn answer the height less the drop times the factor", () => {
+  it("when per-node factors of 0.5 are set, then the ground's height and its contact query both answer the height less the drop times the factor", () => {
     const { g, i, heights } = plainGround();
     expect(g.heightAt(0.5, 0.5), "sealed as it was built: no factor, the whole drop").toBe(H - DROP);
     g.setGridData(i, N, N, 1, 1, 0, 0, heights, new Float32Array(N * N).fill(AUX), H);

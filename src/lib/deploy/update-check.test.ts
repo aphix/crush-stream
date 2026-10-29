@@ -41,16 +41,18 @@ describe("given the running build and the sha the server's version file names", 
 
 describe("given the version file the build emits", () => {
   const cases = [
-    { it: "it names a sha", fetcher: replying('{"sha":"3295bad"}'), expected: "3295bad" },
-    { it: "the server answers an error page", fetcher: replying("<html>404</html>", 404), expected: null },
-    { it: "the server answers HTML with a 200 (a single-page fallback)", fetcher: replying("<html></html>"), expected: null },
-    { it: "the sha holds a path", fetcher: replying('{"sha":"../../x"}'), expected: null },
-    { it: "the sha is not text", fetcher: replying('{"sha":12}'), expected: null },
-    { it: "there is no network", fetcher: (async () => Promise.reject(new TypeError("offline"))) as typeof fetch, expected: null },
+    { it: "it names a sha", offline: false, status: 200, body: '{"sha":"3295bad"}', expected: "3295bad" },
+    { it: "the server answers an error page", offline: false, status: 404, body: "<html>404</html>", expected: null },
+    { it: "the server answers HTML with a 200 (a single-page fallback)", offline: false, status: 200, body: "<html></html>", expected: null },
+    { it: "the sha holds a path", offline: false, status: 200, body: '{"sha":"../../x"}', expected: null },
+    { it: "the sha is not text", offline: false, status: 200, body: '{"sha":12}', expected: null },
+    { it: "there is no network", offline: true, status: 0, body: "", expected: null },
   ];
+  const unreachable = (async () => Promise.reject(new TypeError("offline"))) as typeof fetch;
   for (const testCase of cases) {
     it(`when ${testCase.it}, then the deployed sha read is ${testCase.expected ?? "none"}`, async () => {
-      expect(await fetchDeployedSha(testCase.fetcher)).toBe(testCase.expected);
+      const fetcher = testCase.offline ? unreachable : replying(testCase.body, testCase.status);
+      expect(await fetchDeployedSha(fetcher)).toBe(testCase.expected);
     });
   }
 });

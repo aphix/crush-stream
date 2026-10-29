@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { todoRow } from "../kernel/todo-row.test-util.ts";
-import { restSink, strike, strikeSink, type Outcome, type Target } from "./solid-parity.test-util.ts";
+import { restSink, strike, strikeSink, type Outcome } from "./solid-parity.test-util.ts";
 import { PREFABS } from "./catalog.ts";
-import type { VehicleClassId } from "../vehicle/vehicle-classes.ts";
 
 /**
  * Owner, 2026-10-04: "environment and map components should not be doing anything different than hard walls like the
@@ -41,7 +40,7 @@ function matches(label: string, solid: readonly Outcome[], slab: readonly Outcom
 /** What the slab does, from CRUSH_CALIBRATION.md's barrier table: the reference of the reference. */
 describe("given the jersey barrier (the range's slab, the reference every other fixed solid is held to)", () => {
   for (const cls of ["sedan", "truck", "monster"] as const) {
-    it(`when a ${cls} hits it at ${SURVIVABLE} m/s and then at ${LETHAL} m/s, then the slow hit dents it and leaves the engine and driver alone, and the fast hit packs the crush block past the realistic kill and throws the driver`, () => {
+    it(`when a ${cls} hits it at ${SURVIVABLE} m/s and then at ${LETHAL} m/s, then the slow hit dents it and leaves the engine and driver alone, and the fast hit crushes the car past its engine's kill and throws the driver`, () => {
       const [easy] = strike("barrier", cls, SURVIVABLE);
       expect(easy!.alive && easy!.health > 0.95 && !easy!.ejected, JSON.stringify(easy)).toBeTruthy();
       const [hard] = strike("barrier", cls, LETHAL);
@@ -51,17 +50,6 @@ describe("given the jersey barrier (the range's slab, the reference every other 
 });
 
 describe("given a fixed solid (a course wall, a solid box prop, the flank of a monument's star arm or a palm's trunk) and the jersey barrier as the reference", () => {
-  const CELLS: [Target, VehicleClassId[]][] = [
-    // Course walls (`wallColliders` pieces, met like props), solid box props (`props`): a rim block, a thin wall; the flank of a monument's star arm (a box turned to the arm), a palm's trunk (a circle).
-    ["oval", ["sedan", "truck", "monster"]],
-    ["rally", ["sedan"]],
-    ["stucco", ["sedan", "monster"]],
-    ["wall", ["sedan", "truck"]],
-    ["monument", ["sedan", "truck"]],
-    // The arm's tip met end-on along the arm's own axis, on its embankment as Havana places it (the thin end of a 0.5 m wide piece, 4 m up).
-    ["monument-tip", ["sedan", "truck"]],
-    ["palm", ["sedan", "truck"]],
-  ];
   /**
    * The monster's lethal hit on the oval's wall: its body clears the wall (its keel stands over the wall's top), so only its tyres meet it.
    * The wall is thinner than the slab (`WALL_PROFILE` against `BARRIER_HALF`) and than a tyre is long, so a tyre straddles it with neither
@@ -69,20 +57,36 @@ describe("given a fixed solid (a course wall, a solid box prop, the flank of a m
    * 16.0) until a tyre's edge was read between its corners where they read nothing (`TYRE_SAMPLE_GAP`).
    */
   const THIN_WALL_MPS = 56;
-  describe("when a car drives into it once", () => {
-    for (const [target, classes] of CELLS) {
-      for (const cls of classes) {
-        for (const speed of cls === "monster" && target === "oval" ? [SURVIVABLE, LETHAL, THIN_WALL_MPS] : [SURVIVABLE, LETHAL]) {
-          it(`when a ${cls} drives into the ${target} at ${speed} m/s, then it throws the driver as the barrier does, crushes within ${HEALTH_BAND} of the barrier's drivetrain health, and the car comes off no faster`, (t) => {
-            const solid = strike(target, cls, speed);
-            if (solid[0]!.staged > 0) t.annotate(`${cls} started ${solid[0]!.staged.toFixed(1)} m further out than the run-in: its footprint there met a solid`);
-            matches(`${cls} ${target} ${speed}`, solid, strike("barrier", cls, speed));
-          });
-        }
+  // Course walls (`wallColliders` pieces, met like props), solid box props (`props`): a rim block, a thin wall; the flank of a monument's star arm (a box turned to the arm), a palm's trunk (a circle).
+  // The monument's tip is met end-on along the arm's own axis, on its embankment as Havana places it (the thin end of a 0.5 m wide piece, 4 m up).
+  const SOLID_CASES = [
+    { target: "oval", cls: "sedan", speeds: [SURVIVABLE, LETHAL] },
+    { target: "oval", cls: "truck", speeds: [SURVIVABLE, LETHAL] },
+    { target: "oval", cls: "monster", speeds: [SURVIVABLE, LETHAL, THIN_WALL_MPS] },
+    { target: "rally", cls: "sedan", speeds: [SURVIVABLE, LETHAL] },
+    { target: "stucco", cls: "sedan", speeds: [SURVIVABLE, LETHAL] },
+    { target: "stucco", cls: "monster", speeds: [SURVIVABLE, LETHAL] },
+    { target: "wall", cls: "sedan", speeds: [SURVIVABLE, LETHAL] },
+    { target: "wall", cls: "truck", speeds: [SURVIVABLE, LETHAL] },
+    { target: "monument", cls: "sedan", speeds: [SURVIVABLE, LETHAL] },
+    { target: "monument", cls: "truck", speeds: [SURVIVABLE, LETHAL] },
+    { target: "monument-tip", cls: "sedan", speeds: [SURVIVABLE, LETHAL] },
+    { target: "monument-tip", cls: "truck", speeds: [SURVIVABLE, LETHAL] },
+    { target: "palm", cls: "sedan", speeds: [SURVIVABLE, LETHAL] },
+    { target: "palm", cls: "truck", speeds: [SURVIVABLE, LETHAL] },
+  ] as const;
+  describe("given a car about to drive into it once", () => {
+    for (const testCase of SOLID_CASES) {
+      for (const speed of testCase.speeds) {
+        it(`when a ${testCase.cls} drives into the ${testCase.target} at ${speed} m/s, then it throws the driver as the barrier does, crushes within ${HEALTH_BAND} of the barrier's drivetrain health, and the car comes off no faster`, (t) => {
+          const solid = strike(testCase.target, testCase.cls, speed);
+          if (solid[0]!.staged > 0) t.annotate(`${testCase.cls} started ${solid[0]!.staged.toFixed(1)} m further out than the run-in: its footprint there met a solid`);
+          matches(`${testCase.cls} ${testCase.target} ${speed}`, solid, strike("barrier", testCase.cls, speed));
+        });
       }
     }
   });
-  describe("when a sedan is sent back at it for a second hit", () => {
+  describe("given a sedan sent back at it for a second hit", () => {
     for (const target of ["oval", "stucco", "monument"] as const) {
       it(`when a sedan hits the ${target} twice at 30 m/s, then the second hit hurts the car as the barrier's second hit does`, () => {
         matches(`sedan ${target} 30 x2`, strike(target, "sedan", 30, 2), strike("barrier", "sedan", 30, 2));
@@ -91,9 +95,9 @@ describe("given a fixed solid (a course wall, a solid box prop, the flank of a m
   });
   // A palm stands between a car's bumpers: its crush hulls reach the face before any particle does. Unless the hulls on the face count as
   // the hit's contact, the quiet clock runs out, the hit re-arms at 0.3 s and the tap reads 0.016 m of block travel (the slab's 0).
-  describe("when the solid is a palm standing between the car's bumpers", () => {
+  describe("given the solid is a palm standing between the car's bumpers", () => {
     for (const cls of ["sedan", "truck"] as const) {
-      it(`when a ${cls} taps the palm at ${SURVIVABLE} m/s, then the crush block stays where it was, as the slab's does, and the car's health and driver are untouched`, () => {
+      it(`when a ${cls} taps the palm at ${SURVIVABLE} m/s, then the car's crush stays where it was, as the slab's does, and the car's health and driver are untouched`, () => {
         const [tap] = strike("palm", cls, SURVIVABLE);
         expect(tap!.travel < 0.002 && tap!.health > 0.99 && !tap!.ejected, JSON.stringify(tap)).toBeTruthy();
       });
@@ -111,7 +115,7 @@ describe("given a sedan at 55 m/s square into each hard surface and the slab as 
   const KILL_TRAVEL = 0.45;
   const slab = strike("barrier", "sedan", LETHAL)[0]!;
   for (const target of ["oval", "rally", "stucco", "wall", "monument", "monument-tip"] as const) {
-    it(`when it hits the ${target}, then its health and block travel are the slab's within the band, and it stops`, () => {
+    it(`when it hits the ${target}, then its health and crush depth are the slab's within the band, and it stops`, () => {
       const o = strike(target, "sedan", LETHAL)[0]!;
       const at = `${JSON.stringify(o)} against the slab's ${JSON.stringify(slab)}`;
       expect(Math.abs(o.health - slab.health), `health: ${at}`).toBeLessThanOrEqual(HEALTH_BAND);

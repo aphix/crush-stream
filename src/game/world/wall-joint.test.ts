@@ -89,14 +89,24 @@ function reach(car: DeformableCar, walls: readonly PropCollider[], side: number)
 
 type Row = { it: string; bend: number; fromRoad: boolean; speed: number };
 
-const jointCases: Row[] = [];
-for (const [shape, bend] of [["a 30° corner pocket", Math.PI / 6], ["a 15° corner pocket", Math.PI / 12], ["a 15° bulge", -Math.PI / 12], ["a 30° bulge", -Math.PI / 6]] as const) {
-  for (const fromRoad of [true, false]) {
-    for (const speed of [20, 30]) {
-      jointCases.push({ it: `when a sedan coasts into the joint of ${shape} from the ${fromRoad ? "road" : "pavement"} side at ${speed} m/s, then no part of it ends more than ${PAST * 100} cm past the wall's far face and at most ${INSIDE * 100} cm of it is left in the wall`, bend, fromRoad, speed });
-    }
-  }
-}
+const jointCases: Row[] = [
+  { it: "when a sedan coasts into the joint of a 30° corner pocket from the road side at 20 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: Math.PI / 6, fromRoad: true, speed: 20 },
+  { it: "when a sedan coasts into the joint of a 30° corner pocket from the road side at 30 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: Math.PI / 6, fromRoad: true, speed: 30 },
+  { it: "when a sedan coasts into the joint of a 30° corner pocket from the pavement side at 20 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: Math.PI / 6, fromRoad: false, speed: 20 },
+  { it: "when a sedan coasts into the joint of a 30° corner pocket from the pavement side at 30 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: Math.PI / 6, fromRoad: false, speed: 30 },
+  { it: "when a sedan coasts into the joint of a 15° corner pocket from the road side at 20 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: Math.PI / 12, fromRoad: true, speed: 20 },
+  { it: "when a sedan coasts into the joint of a 15° corner pocket from the road side at 30 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: Math.PI / 12, fromRoad: true, speed: 30 },
+  { it: "when a sedan coasts into the joint of a 15° corner pocket from the pavement side at 20 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: Math.PI / 12, fromRoad: false, speed: 20 },
+  { it: "when a sedan coasts into the joint of a 15° corner pocket from the pavement side at 30 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: Math.PI / 12, fromRoad: false, speed: 30 },
+  { it: "when a sedan coasts into the joint of a 15° bulge from the road side at 20 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: -Math.PI / 12, fromRoad: true, speed: 20 },
+  { it: "when a sedan coasts into the joint of a 15° bulge from the road side at 30 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: -Math.PI / 12, fromRoad: true, speed: 30 },
+  { it: "when a sedan coasts into the joint of a 15° bulge from the pavement side at 20 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: -Math.PI / 12, fromRoad: false, speed: 20 },
+  { it: "when a sedan coasts into the joint of a 15° bulge from the pavement side at 30 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: -Math.PI / 12, fromRoad: false, speed: 30 },
+  { it: "when a sedan coasts into the joint of a 30° bulge from the road side at 20 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: -Math.PI / 6, fromRoad: true, speed: 20 },
+  { it: "when a sedan coasts into the joint of a 30° bulge from the road side at 30 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: -Math.PI / 6, fromRoad: true, speed: 30 },
+  { it: "when a sedan coasts into the joint of a 30° bulge from the pavement side at 20 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: -Math.PI / 6, fromRoad: false, speed: 20 },
+  { it: "when a sedan coasts into the joint of a 30° bulge from the pavement side at 30 m/s, then no part of it ends more than 2 cm past the wall's far face and at most 5 cm of it is left in the wall", bend: -Math.PI / 6, fromRoad: false, speed: 30 },
+];
 
 describe("given a wall of two pieces bending at a joint, and a sedan aimed at the joint along the two faces' common normal", () => {
   for (const testCase of jointCases) {

@@ -32,7 +32,7 @@ function cliffHeights(): Float32Array {
 }
 
 /** Drawn cells (by index along u and v from the lattice's first) read as their four unit cells. */
-type FineCells = readonly (readonly [number, number])[];
+type FineCells = readonly { u: number; v: number }[];
 
 /** The node where the drawn cell holding unit cell `c` starts along one axis, or -1 where it runs off the grid. */
 function drawnStart(c: number): number {
@@ -43,7 +43,7 @@ function drawnStart(c: number): number {
 /** The side in nodes (2: its drawn cell, 1: itself) of the triangle pair unit cell (`cellX`, `cellZ`) reads, and the first node of that cell. */
 function drawnCell(fine: FineCells, cellX: number, cellZ: number): { side: number; firstX: number; firstZ: number } {
   const [startX, startZ] = [drawnStart(cellX), drawnStart(cellZ)];
-  const wide = startX >= 0 && startZ >= 0 && !fine.some(([u, v]) => u === (startX - LATTICE_FROM) / SPAN && v === (startZ - LATTICE_FROM) / SPAN);
+  const wide = startX >= 0 && startZ >= 0 && !fine.some((cell) => cell.u === (startX - LATTICE_FROM) / SPAN && cell.v === (startZ - LATTICE_FROM) / SPAN);
   return wide ? { side: SPAN, firstX: startX, firstZ: startZ } : { side: 1, firstX: cellX, firstZ: cellZ };
 }
 
@@ -80,8 +80,8 @@ function probePoints(): [number, number][] {
 const fields = [
   { name: "a rough 8 × 8 grid", heights: roughHeights(), fine: [] },
   { name: "an 8 × 8 grid with a 5 m cliff across its fifth column", heights: cliffHeights(), fine: [] },
-  { name: "a rough 8 × 8 grid with three of its nine drawn cells fine", heights: roughHeights(), fine: [[0, 0], [1, 1], [2, 1]] },
-  { name: "an 8 × 8 grid with a 5 m cliff across its fifth column, the cells on it fine", heights: cliffHeights(), fine: [[1, 0], [1, 1], [1, 2]] },
+  { name: "a rough 8 × 8 grid with three of its nine drawn cells fine", heights: roughHeights(), fine: [{ u: 0, v: 0 }, { u: 1, v: 1 }, { u: 2, v: 1 }] },
+  { name: "an 8 × 8 grid with a 5 m cliff across its fifth column, the cells on it fine", heights: cliffHeights(), fine: [{ u: 1, v: 0 }, { u: 1, v: 1 }, { u: 1, v: 2 }] },
 ] as const satisfies readonly { name: string; heights: Float32Array; fine: FineCells }[];
 
 for (const { name, heights, fine } of fields) {

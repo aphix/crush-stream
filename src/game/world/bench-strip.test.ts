@@ -93,31 +93,27 @@ describe("given a page's bench query", () => {
     return p.strip;
   };
 
-  const queries: { q: string; check: (p: BenchPlan) => void; what: string }[] = [
-    { q: "?bench=strip&props=off", what: "props off", check: (p) => expect(p.strip!.props).toHaveLength(0) },
-    { q: "?bench=strip&traffic=off", what: "traffic off", check: (p) => expect(p.strip!.traffic).toBe(null) },
-    { q: "?bench=strip&traffic=1x6", what: "one traffic lane, 6 cars", check: (p) => {
-      const traffic = stripOf(p).traffic;
-      if (!traffic) throw new Error("no traffic");
-      expect(traffic.lanes, "traffic lanes").toBe(1);
-      expect(traffic.count, "traffic cars").toBe(6);
-    } },
-    { q: "?bench=strip&props=tree:100", what: "100 trees only", check: (p) => {
-      const props = stripOf(p).props;
-      expect(props, "prop rows").toHaveLength(1);
-      expect(props[0]?.prefab, "prop kind").toBe("tree");
-      expect(props[0]?.count, "tree count").toBe(100);
-    } },
-    { q: "?bench=strip&cars=4&same=off", what: "4 racers on the fleet's mix", check: (p) => expect(firstMismatch([p.racers, p.body], [4, null])).toBeUndefined() },
-    { q: "?bench=strip&cars=99", what: "racers capped at 16", check: (p) => expect(p.racers).toBe(16) },
-    { q: "?bench=strip&len=100", what: "the straight is at least 1.5 km", check: (p) => expect(p.strip!.length).toBe(1500) },
-    { q: "?bench=strip&same=hatchback&traffic=banana&props=nonsense:5", what: "junk values fall back: a hatchback body, no traffic, no props", check: (p) => {
-      expect(p.body, "body").toBe("hatchback");
-      expect(stripOf(p).traffic, "traffic").toBe(null);
-      expect(stripOf(p).props, "prop rows").toHaveLength(0);
-    } },
-  ];
-  for (const c of queries) test(`when the query is ${c.q}, then ${c.what}`, () => c.check(benchPlan(c.q)!));
+  const queries = [
+    { it: "when the query is ?bench=strip&props=off, then props are off and the rest stays baseline", q: "?bench=strip&props=off", expectedRacers: 16, expectedBody: "sedan", expectedLength: 6000, expectedProps: "", expectedTraffic: "2x12" },
+    { it: "when the query is ?bench=strip&traffic=off, then traffic is off and the rest stays baseline", q: "?bench=strip&traffic=off", expectedRacers: 16, expectedBody: "sedan", expectedLength: 6000, expectedProps: "building:20,tree:40,rock:20", expectedTraffic: "none" },
+    { it: "when the query is ?bench=strip&traffic=1x6, then there is one traffic lane of 6 cars", q: "?bench=strip&traffic=1x6", expectedRacers: 16, expectedBody: "sedan", expectedLength: 6000, expectedProps: "building:20,tree:40,rock:20", expectedTraffic: "1x6" },
+    { it: "when the query is ?bench=strip&props=tree:100, then there are 100 trees only", q: "?bench=strip&props=tree:100", expectedRacers: 16, expectedBody: "sedan", expectedLength: 6000, expectedProps: "tree:100", expectedTraffic: "2x12" },
+    { it: "when the query is ?bench=strip&cars=4&same=off, then 4 racers drive the fleet's mix", q: "?bench=strip&cars=4&same=off", expectedRacers: 4, expectedBody: null, expectedLength: 6000, expectedProps: "building:20,tree:40,rock:20", expectedTraffic: "2x12" },
+    { it: "when the query is ?bench=strip&cars=99, then racers are capped at 16", q: "?bench=strip&cars=99", expectedRacers: 16, expectedBody: "sedan", expectedLength: 6000, expectedProps: "building:20,tree:40,rock:20", expectedTraffic: "2x12" },
+    { it: "when the query is ?bench=strip&len=100, then the straight is at least 1.5 km", q: "?bench=strip&len=100", expectedRacers: 16, expectedBody: "sedan", expectedLength: 1500, expectedProps: "building:20,tree:40,rock:20", expectedTraffic: "2x12" },
+    { it: "when the query is ?bench=strip&same=hatchback&traffic=banana&props=nonsense:5, then junk values fall back: a hatchback body, no traffic, no props", q: "?bench=strip&same=hatchback&traffic=banana&props=nonsense:5", expectedRacers: 16, expectedBody: "hatchback", expectedLength: 6000, expectedProps: "", expectedTraffic: "none" },
+  ] as const;
+  for (const testCase of queries) {
+    test(testCase.it, () => {
+      const plan = benchPlan(testCase.q)!;
+      const strip = stripOf(plan);
+      expect(plan.racers, "racers").toBe(testCase.expectedRacers);
+      expect(plan.body, "body").toBe(testCase.expectedBody);
+      expect(strip.length, "straight length").toBe(testCase.expectedLength);
+      expect(strip.props.map((row) => `${row.prefab}:${row.count}`).join(","), "prop rows").toBe(testCase.expectedProps);
+      expect(strip.traffic ? `${strip.traffic.lanes}x${strip.traffic.count}` : "none", "traffic lanes x cars").toBe(testCase.expectedTraffic);
+    });
+  }
 
   test("when the query names no known bench, then there is no plan; and ?bench=city is the city race with police", () => {
     expect(benchPlan("?bench=nope")).toBe(null);

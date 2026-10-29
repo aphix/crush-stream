@@ -122,9 +122,9 @@ function driveAt(ny: number, speed: number): { past: number; climb: number; top:
 
 afterAll(() => setGround(null));
 
-describe(`given a face rising ${HEIGHT} m on level ground, the body friction's limit ny ${STOPS_BELOW.toFixed(3)}`, () => {
+describe(`given a face rising ${HEIGHT} m on level ground, the body friction's limit being a normal tilted ${STOPS_BELOW.toFixed(3)} up`, () => {
   for (const ny of STOPPING_NY) {
-    it(`when a sedan drives square into the ny ${ny.toFixed(2)} face at ${SPEED} m/s, then the face stops it: its origin never reaches the foot (${PAST_FOOT} m) and never rises over its height at the touch by more than ${CLIMB} m`, () => {
+    it(`when a sedan drives square into the face with its normal tilted ${ny.toFixed(2)} up at ${SPEED} m/s, then the face stops it: its origin never reaches the foot (${PAST_FOOT} m) and never rises over its height at the touch by more than ${CLIMB} m`, () => {
       const r = driveAt(ny, SPEED);
       const at = `${r.past.toFixed(2)} m past the foot, rose ${r.climb.toFixed(2)} m, highest ${r.top.toFixed(2)} m`;
       expect(r.met, `never met the face: ${at}`).toBeTruthy();
@@ -133,7 +133,7 @@ describe(`given a face rising ${HEIGHT} m on level ground, the body friction's l
     });
   }
 
-  it(`when it drives into the ny ${FLANK_NY.toFixed(2)} flank at ${FLANK_SPEED} m/s, then it is a ramp: the origin rides up it onto the top`, () => {
+  it(`when a sedan drives into the flank with its normal tilted ${FLANK_NY.toFixed(2)} up at ${FLANK_SPEED} m/s, then it is a ramp: the origin rides up it onto the top`, () => {
     const r = driveAt(FLANK_NY, FLANK_SPEED);
     const run = new FaceGround(FLANK_NY).run;
     expect(r.past > run && r.top >= HEIGHT, `${r.past.toFixed(2)} m past the foot (the flank is ${run.toFixed(2)} m), highest ${r.top.toFixed(2)} m`).toBeTruthy();

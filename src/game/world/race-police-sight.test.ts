@@ -1,3 +1,4 @@
+import { must } from "../kernel/must.test-util.ts";
 import { describe, expect, it } from "vitest";
 import { blankAiCar } from "../ai/derby-ai.ts";
 import { RacerSight } from "../ai/cop-sight.ts";
@@ -19,7 +20,7 @@ const SPOTS = [
 ];
 
 describe("given a racer on Four-Count's skip-city shortcut, off the main road's corridor, and the spots a stakeout put on the road behind it", () => {
-  it("when the judge reads the spots, then it agrees with the game's sight: an off-road racer sees the ahead range round it, not the main road's arc", () => {
+  it("when the spots are checked from the racer, then neither the game nor the check these tests use sees them: an off-road racer sees the ahead range round it, not the main road's arc", () => {
     const sight = new RacerSight(track, 1);
     sight.watch([{ ...blankAiCar(0), ...SHORTCUT_RACER }]);
     const proj = blankProjection();
@@ -58,19 +59,22 @@ function stakeout(on: Track, lead: number, gap: number, target: number, seed: nu
 }
 
 // Each layout's spots, parked blind to all but the target, are seen by another racer (the shortcut racer, or the pack ahead of the back marker).
+const COURSE_TRACKS: Record<string, Track> = { "four-count": track, city: new Track(city) };
 const LAYOUTS = [
-  { course: "four-count", on: track, why: "the stakeout for the leader, racer 7 on the skip-city shortcut", lead: 1904, gap: 20, target: 0, seed: 1, seventh: SHORTCUT_RACER },
-  { course: "four-count", on: track, why: "the stakeout for the back marker of a pack 20 m apart", lead: 1500, gap: 20, target: 6, seed: 2, seventh: SHORTCUT_RACER },
-  { course: "city", on: new Track(city), why: "the stakeout for the back marker of a pack 15 m apart", lead: 200, gap: 15, target: 6, seed: 1 },
+  { course: "four-count", why: "the stakeout for the leader, racer 7 on the skip-city shortcut", lead: 1904, gap: 20, target: 0, seed: 1, seventh: SHORTCUT_RACER },
+  { course: "four-count", why: "the stakeout for the back marker of a pack 20 m apart", lead: 1500, gap: 20, target: 6, seed: 2, seventh: SHORTCUT_RACER },
+  { course: "city", why: "the stakeout for the back marker of a pack 15 m apart", lead: 200, gap: 15, target: 6, seed: 1 },
 ];
 
 describe("given a field of 8 racers strung out on the road and a stakeout of two cops parked for one of them", () => {
   for (const l of LAYOUTS) {
     it(`when ${l.course} parks ${l.why}, then both cops are put on the road and no racer sees either spot`, () => {
-      const { parks, racers } = stakeout(l.on, l.lead, l.gap, l.target, l.seed, l.seventh);
+      const on = COURSE_TRACKS[l.course];
+      must(on, `the ${l.course} track`);
+      const { parks, racers } = stakeout(on, l.lead, l.gap, l.target, l.seed, l.seventh);
       expect(parks.length, "both cops parked").toBe(2);
       for (const p of parks) {
-        const seen = racerSeeing(l.on, racers, p.x, p.z);
+        const seen = racerSeeing(on, racers, p.x, p.z);
         expect(seen.sees, `cop put on the road at (${p.x.toFixed(0)}, ${p.z.toFixed(0)}) in sight of ${seen.text}`).toBe(false);
       }
     });

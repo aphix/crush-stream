@@ -59,7 +59,7 @@ const same = (a: Projection, b: Projection) =>
 
 for (const json of [...TRACKS, ...OFF_MENU]) {
   const id = parseTrack(json).id;
-  describe(`given the ${id} course, and the plain scans of a path (a window of samples round a hint, else the whole path) as the reference for projectPath (the nearest centreline point)`, () => {
+  describe(`given the ${id} course, and the plain scans of a path (a window of samples round a hint, else the whole path) as the reference for the nearest centreline point`, () => {
     it("when random points near the road, off it and far away are projected, with and without a hint, then every path answers exactly as the plain scans do", () => {
       const track = new Track(json);
       const rand = mulberry32(21);
@@ -102,7 +102,7 @@ for (const json of [...TRACKS, ...OFF_MENU]) {
   });
 }
 
-describe("given a point far outside the path's box, and the plain scan as the reference for projectPath (the nearest centreline point)", () => {
+describe("given a point far outside the path's box, and the plain scan as the reference for the nearest centreline point", () => {
   it("when it is projected without a hint, then the answer is the plain scan's", () => {
     const track = new Track(TRACKS[0]);
     const want = blankProjection();

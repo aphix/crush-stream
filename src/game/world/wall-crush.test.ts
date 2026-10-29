@@ -100,12 +100,16 @@ const SAME_MEAN = 0.025;
 const SAME_WORST = 0.075;
 
 describe(`given a sedan flat out into the oval's straight wall at 30 to 66 m/s, from ${PHASES.length} approach phases against the step grid`, () => {
-  for (const [floor, coarse] of [["1/240 s", false], ["1/80 s", true]] as const) {
-    it(`when the pacer steps at ${floor}, then every hit kills the engine and throws the driver`, () => {
+  const floorCases = [
+    { it: "when the pacer steps at 1/240 s, then every hit kills the engine and throws the driver", coarse: false },
+    { it: "when the pacer steps at 1/80 s, then every hit kills the engine and throws the driver", coarse: true },
+  ] as const;
+  for (const testCase of floorCases) {
+    it(testCase.it, () => {
       const missed: string[] = [];
       for (const speed of SPEEDS) {
         for (const phase of PHASES) {
-          const h = hit(speed, coarse, phase);
+          const h = hit(speed, testCase.coarse, phase);
           if (!h.killed || !h.thrown) missed.push(`${speed} m/s phase ${phase}: block ${h.travel.toFixed(3)} m, killed ${h.killed}, thrown ${h.thrown}`);
         }
       }

@@ -192,12 +192,12 @@ describe("given the signaling relay running on a freshly migrated database, with
 
   it("when public rooms of all four games and a private room are up, then the list of every game shows the public ones with their tags, a game's filter shows only its rooms, an unknown game is refused with 400, and the private room is never listed", async () => {
     const games = [
-      ["race", "pub-race-ALLK01", "lobby.oval"],
-      ["campaign", "pub-campaign-ALLK01", "lobby.3"],
-      ["survival", "pub-survival-ALLK01", "running.havana"],
-      ["derby", "pub-derby-ALLK01", "lobby"],
+      { game: "race", room: "pub-race-ALLK01", meta: "lobby.oval" },
+      { game: "campaign", room: "pub-campaign-ALLK01", meta: "lobby.3" },
+      { game: "survival", room: "pub-survival-ALLK01", meta: "running.havana" },
+      { game: "derby", room: "pub-derby-ALLK01", meta: "lobby" },
     ] as const;
-    for (const [game, room, meta] of games) {
+    for (const { game, room, meta } of games) {
       const host = tab(sql, room, `kindhost-${game}`, "host");
       host.meta = meta;
       expect((await host.poll()).status, game).toBe(200);
@@ -214,7 +214,7 @@ describe("given the signaling relay running on a freshly migrated database, with
     };
     const mine = (rooms: { room: string; meta: string }[]) => rooms.filter((r) => r.room.endsWith("-ALLK01"));
     expect(mine((await list("")).rooms).map((r) => `${r.room} ${r.meta}`).sort().join(", "), "every game's room is listed with its host's tag").toBe("pub-campaign-ALLK01 lobby.3, pub-derby-ALLK01 lobby, pub-race-ALLK01 lobby.oval, pub-survival-ALLK01 running.havana");
-    for (const [game, room] of games) expect(mine((await list(`&kind=${game}`)).rooms).map((r) => r.room).join(), `kind=${game} lists only ${game}`).toBe(room);
+    for (const { game, room } of games) expect(mine((await list(`&kind=${game}`)).rooms).map((r) => r.room).join(), `kind=${game} lists only ${game}`).toBe(room);
     expect((await list("")).rooms.some((r) => r.room === "SECRET77"), "a private room is not listed").toBe(false);
     expect((await list("&kind=tournament")).status).toBe(400);
   });

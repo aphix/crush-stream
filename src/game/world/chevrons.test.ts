@@ -60,7 +60,7 @@ const runCounts = [
 const withShortcuts = TRACKS.map((json) => new Track(json)).filter((track) => track.shortcuts.length > 0);
 
 describe("given the courses that have shortcuts", () => {
-  it("when they are listed against the run-count table, then none is missing from it and none is extra", () => {
+  it("when the courses with shortcuts are listed, then they are exactly the eight whose chevron runs are checked here", () => {
     expect(withShortcuts.map((track) => track.id).join(","), "courses with shortcuts, in course order").toBe(runCounts.map((testCase) => testCase.track).join(","));
   });
 

@@ -13,11 +13,11 @@ import { OFF_MENU, TRACKS } from "./tracks/index.ts";
 /** Half the width (m) of the cars' contact footprint: a car at the edge of the road reaches this far beyond it. */
 const CAR_HALF_WIDTH = 0.95;
 
-const COURSES = [...TRACKS, ...OFF_MENU].map((json) => ({ it: parseTrack(json).id, json }));
+const COURSES = [...TRACKS, ...OFF_MENU].map((json) => ({ it: `when the ${parseTrack(json).id} course is built, then no wall run ends within a road's half-width plus a car's half-width of that road's edge`, json }));
 
 describe("given each course's wall runs and the other roads of the course (shortcuts, side streets, branches)", () => {
   for (const testCase of COURSES) {
-    it(`when the ${testCase.it} course is built, then no wall run ends within a road's half-width plus a car's half-width of that road's edge`, () => {
+    it(testCase.it, () => {
       const track = new Track(testCase.json);
       const paths = track.paths();
       const ground = track.ground();

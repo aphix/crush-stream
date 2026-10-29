@@ -111,7 +111,7 @@ describe("given a lone car in the city race, racing down the back alley to its e
   });
 });
 
-describe("given a lone car in the city race driving at 20 m/s along the loop with its footprint 0.7 m past the wall line, in an open mouth 7 samples before a wall starts", () => {
+describe("given a lone car in the city race driving at 20 m/s along the loop with its footprint 0.7 m past the wall line, in an open mouth just before a wall starts", () => {
   // Measured: 0.82 m at 28 m/s (city, 54 s) and 0.18 m (rally) where a wall starts under a car whose footprint is already past the line.
   it("when the wall starts under it, then the wall moves it no more than its step's travel", () => {
     const w = raceWorld("city", 0);
@@ -142,7 +142,7 @@ describe("given a lone car in the city race driving at 20 m/s along the loop wit
 });
 
 describe("given a lone car in the city race on a walled stretch of the loop, 2 m inside the wall line on the road side", () => {
-  it("when it is shoved 1.35 m toward the wall in one step (a car-car shove, five times a slice's passes at their cap), its flank 0.3 m into the 0.6 m wall, then the wall returns it to the road, having left it alone before the shove", () => {
+  it("when it is shoved 1.35 m toward the wall in one step (a hard car-car shove), its flank 0.3 m into the 0.6 m wall, then the wall returns it to the road, having left it alone before the shove", () => {
     const w = raceWorld("city", 0);
     try {
       const track = new Track(TRACKS.find((j) => parseTrack(j).id === "city"));

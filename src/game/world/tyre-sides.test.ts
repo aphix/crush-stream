@@ -150,7 +150,7 @@ describe("given a monster whose tyres alone meet the oval's wall, thinner than a
     expect(hit!.wheels, JSON.stringify(hit)).toBe(0);
   });
 
-  it("when each class's tyre is sampled, then its edge's samples are no further apart than the gap and the most a body holds rows for covers the largest tyre", () => {
+  it("when each class's tyre is sampled along an edge at the sampling gap, then no class needs more samples than a body holds rows for", () => {
     for (const cls of VEHICLE_CLASS_IDS) {
       const r = carFrame(CAR_STYLES[CLASSES[cls].style]).rig.tyre.r * CLASSES[cls].wheelScale;
       const along = Math.ceil((2 * r) / TYRE_SAMPLE_GAP) + 1;

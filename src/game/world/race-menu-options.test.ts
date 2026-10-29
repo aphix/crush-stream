@@ -32,7 +32,7 @@ function untilMenu(w: World, menu: "results" | "standings"): void {
 const NON_DEFAULT: Partial<RaceOptions> = { spectate: true, police: true, noReset: true, laps: 5, aiCount: 4, aggression: 0.8, aiDifficulty: "easy" };
 
 describe("given the setup card with watch, police, no reset, 5 laps, 4 AI cars, 80% aggression and easy AI", () => {
-  it("when a course is picked through the options command the menu sends, then only the course changes, before a race and back at the card after one", () => {
+  it("when a course is picked on the card, then only the course changes, before a race and back at the card after one", () => {
     inRaceMode((w) => {
       w.race.command({ type: "options", options: NON_DEFAULT });
       const before = optionsOf(w);
@@ -84,7 +84,7 @@ describe("given the setup card", () => {
     });
   });
 
-  it("when the campaign is commanded with no course ticked, then nothing starts and the card stays up", () => {
+  it("when Campaign is started with no course ticked, then nothing starts and the card stays up", () => {
     inRaceMode((w) => {
       w.race.command({ type: "options", options: { campaign: [] } });
       w.race.command({ type: "campaign" });
@@ -125,7 +125,7 @@ describe("given a Watch campaign of the rally and then the oval, the reverse of 
 });
 
 describe("given the setup card's Mode row set to Campaign", () => {
-  it("when a campaign is started and quit again, then the Mode is still Campaign with its picks (it lives in the options, not in the menu's mount), and an unknown mode is ignored", () => {
+  it("when a campaign is started and quit again, then the Mode is still Campaign with its picks, and an unknown mode is ignored", () => {
     inRaceMode((w) => {
       expect(optionsOf(w).mode).toBe("single");
       w.race.command({ type: "options", options: { mode: "campaign", laps: 1, aiCount: 3, spectate: true, campaign: ["oval"] } });

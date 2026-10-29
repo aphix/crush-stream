@@ -55,7 +55,7 @@ describe("given the player's car crashed in a race with a mirror torn off and ly
     }
   });
 
-  it("when only a mirror is torn (no hit: no skin was ever baked) and the reset is held, then the drawn body is the whole, undented one, not collapsed by the net state's zero skin inputs", () => {
+  it("when only a mirror is torn (no hit: no skin was ever baked) and the reset is held, then the drawn body is the whole, undented one, not collapsed", () => {
     const { w, car, state } = crashed(false);
     const skin = car.skinGeometries().map((g) => Float32Array.from(g.getAttribute("position").array));
     expect(!car.deform.massActive && car.hasLoosePart(), "the fixture's car has a part off and no crash").toBeTruthy();

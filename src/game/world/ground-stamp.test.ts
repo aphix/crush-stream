@@ -24,8 +24,8 @@ function distanceToSegment(px: number, pz: number, ax: number, az: number, bx: n
   return Math.hypot(px - (ax + ex * along), pz - (az + ez * along));
 }
 
-describe("given the ground bake's row cull for a street segment", () => {
-  it("when a row crosses the segment's reach, then every point on it within the reach lies inside the x run returned, and a row out of reach is refused", () => {
+describe("given a street segment painted into the ground's rows of cells", () => {
+  it("when a row crosses the street's reach, then every point on it within the reach lies inside the stretch painted, and a row out of reach is painted not at all", () => {
     const random = seededRandom(7);
     const run = new Float64Array(2);
     const reach = 20;

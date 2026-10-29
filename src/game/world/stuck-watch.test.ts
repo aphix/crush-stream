@@ -20,7 +20,7 @@ const testCases = [
   { it: "when it sits for 10 s with its drivetrain dead, then it is not a driven car and nothing is reported", throttle: 1, airThrottle: 0, creepMps: 0, touching: 0, replaceAtS: Infinity, alive: false, expectedEpisode: null },
 ] as const;
 
-describe("given the stuck watch of the AI-field canary, fed one car's pedals and position every 1/60 s", () => {
+describe("given one AI-field car whose pedals and position are sampled every 1/60 s for 10.6 s, watched for sitting still while asked to drive", () => {
   for (const testCase of testCases) {
     it(testCase.it, () => {
       const car = makeCar();

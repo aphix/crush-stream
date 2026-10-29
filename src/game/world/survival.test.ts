@@ -267,7 +267,7 @@ const POSES = 12;
 const DRIVE_SPEED = 16;
 
 describe("given Survival's cops dropped in during a run", () => {
-  it("when a car sits in front of the chase camera, then the camera's own visibility check sees it, so the check below is not blind", () => {
+  it("when a spot is 30 m ahead of the chase camera and another 60 m behind it, then the camera sees the first and not the second, so the drop-in check below is not blind", () => {
     const w = survivalWorld();
     try {
       const state = { acc: 0 };

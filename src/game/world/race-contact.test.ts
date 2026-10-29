@@ -28,7 +28,8 @@ const handCheckedContactCases: {
   b: Kin;
   knockedA: boolean;
   knockedB: boolean;
-  want: [Role, Role];
+  wantA: Role;
+  wantB: Role;
 }[] = [
   {
     // Oval, slider 1, seed 1, frame 1209. B sits 1.5 m behind and 1.7 m right of A at 41 against 31 m/s, both
@@ -39,7 +40,8 @@ const handCheckedContactCases: {
     b: { x: -21.52, z: -129.35, vx: -32.09, vz: 21.03, yaw: -0.991, throttle: 0.68, steer: 0.39, brake: 0 },
     knockedA: false,
     knockedB: false,
-    want: ["suffered", "initiated"],
+    wantA: "suffered",
+    wantB: "initiated",
   },
   {
     // Stunt, slider 0.5, seed 1, frame 2969. B at 39 m/s closes on A at 26 m/s ahead of it; B's brake is already
@@ -49,7 +51,8 @@ const handCheckedContactCases: {
     b: { x: 150.3, z: -84.16, vx: -33.5, vz: -20.41, yaw: -2.118, throttle: 0, steer: 0.29, brake: 1 },
     knockedA: false,
     knockedB: false,
-    want: ["suffered", "initiated"],
+    wantA: "suffered",
+    wantB: "initiated",
   },
   {
     // City, slider 1, seed 1, frame 879. Side by side 1.85 m apart on a straight, A (22 m/s) braking then
@@ -59,7 +62,8 @@ const handCheckedContactCases: {
     b: { x: -4.21, z: 62.79, vx: -2.2, vz: 34.3, yaw: -0.064, throttle: 0, steer: -0.05, brake: 1 },
     knockedA: false,
     knockedB: false,
-    want: ["suffered", "initiated"],
+    wantA: "suffered",
+    wantB: "initiated",
   },
   {
     // Stunt, slider 0.5, seed 3, frame 2828. A (36 m/s, steer 0.32) comes up behind-right of B, which swings
@@ -69,7 +73,8 @@ const handCheckedContactCases: {
     b: { x: 152.09, z: -77.86, vx: -10.12, vz: -22.35, yaw: -2.716, throttle: 0.72, steer: 0.92, brake: 0 },
     knockedA: false,
     knockedB: false,
-    want: ["converging", "converging"],
+    wantA: "converging",
+    wantB: "converging",
   },
   {
     // Oval, slider 1, seed 1, frame 885: the same two cars scrape again 20+ frames after their last bump
@@ -79,7 +84,8 @@ const handCheckedContactCases: {
     b: { x: 52.41, z: 19.88, vx: 5.56, vz: -41.95, yaw: 3.009, throttle: 0.99, steer: 0.11, brake: 0 },
     knockedA: true,
     knockedB: true,
-    want: ["none", "none"],
+    wantA: "none",
+    wantB: "none",
   },
   {
     // City, slider 0, frame 537: A (car 1) was in a traffic car 11 frames ago and is 5 m/s slower than B (car 4),
@@ -89,7 +95,8 @@ const handCheckedContactCases: {
     b: { x: -3.47, z: -33.85, vx: -0.86, vz: 21.36, yaw: -0.04, throttle: 0, steer: 0.18, brake: 1 },
     knockedA: true,
     knockedB: false,
-    want: ["suffered", "initiated"],
+    wantA: "suffered",
+    wantB: "initiated",
   },
   {
     // Rally, slider 0, frame 2684: car 0 merges off a shortcut at 25 m/s into the loop lane car 4 is passing at 34 m/s.
@@ -100,7 +107,8 @@ const handCheckedContactCases: {
     b: { x: 175.97, z: 99.71, vx: 8.75, vz: -32.88, yaw: 9.165, throttle: 0.68, steer: 0.27, brake: 0 },
     knockedA: false,
     knockedB: false,
-    want: ["initiated", "suffered"],
+    wantA: "initiated",
+    wantB: "suffered",
   },
   {
     // City, slider 0, frame 2923. A (car 1) is wedged on a stopped traffic car and backs out under its reverse pedal
@@ -111,15 +119,16 @@ const handCheckedContactCases: {
     b: { x: 89.93, z: 59.22, vx: 12.74, vz: 0.59, yaw: 1.524, throttle: 0, steer: -0.3, brake: 1 },
     knockedA: true,
     knockedB: false,
-    want: ["converging", "converging"],
+    wantA: "converging",
+    wantB: "converging",
   },
 ];
 
-describe("given the contact classifier (it says which car of a racer-racer contact started the hit) reading the last frame's speeds, steering and pedals of eight real race contacts", () => {
+describe("given eight real race contacts, each read from the last frame's speeds, steering and pedals of the two cars", () => {
   for (const testCase of handCheckedContactCases) {
     it(testCase.it, () => {
       const v = classifyContact(window(testCase.a, testCase.knockedA), window(testCase.b, testCase.knockedB));
-      expect(`${v.a} ${v.b}`, `toward A ${v.towardA.toFixed(1)}, toward B ${v.towardB.toFixed(1)}, closing ${v.closing.toFixed(1)}`).toBe(testCase.want.join(" "));
+      expect(`${v.a} ${v.b}`, `toward A ${v.towardA.toFixed(1)}, toward B ${v.towardB.toFixed(1)}, closing ${v.closing.toFixed(1)}`).toBe(`${testCase.wantA} ${testCase.wantB}`);
     });
   }
 });

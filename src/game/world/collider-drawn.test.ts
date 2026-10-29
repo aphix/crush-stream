@@ -86,7 +86,7 @@ const KIND_TOL: Partial<Record<PrefabId, number>> = {
 
 const COURSES = [...TRACKS, ...OFF_MENU].map((json) => ({ id: parseTrack(json).id, json }));
 
-describe("given each course's drawn walls (`addWalls`) and its wall colliders (`wallColliders`)", () => {
+describe("given each course's drawn race walls and the wall colliders the cars hit", () => {
   for (const course of COURSES) {
     const track = new Track(course.json);
     const pieces = wallColliders(track);
@@ -127,7 +127,7 @@ describe("given each course's drawn walls (`addWalls`) and its wall colliders (`
   }
 });
 
-describe("given every solid and knock prefab at scale 1: the colliders the game meets, and the geometry `prefabParts` draws", () => {
+describe("given every solid and knock prop kind at scale 1: the colliders the game meets, and the shape drawn for it", () => {
   for (const id of PREFAB_IDS) {
     if (PREFABS[id].body === "none") continue;
     const { pieces, inward, outward } = prefabGap(id);
@@ -201,8 +201,8 @@ describe("given the colliders the cars meet and the solids the cosmetic Rapier w
   }
 });
 
-describe("given the Rapier solids of a prop piece list", () => {
-  it("when colliderSolids is given a store holding knock pieces, then it builds none of them (a knocked prop is a body of its own)", () => {
+describe("given the cosmetic Rapier solids built for a prop's collider pieces", () => {
+  it("when the solids are built from a prop whose pieces are all knock pieces, then none of them is built (a knocked prop is a body of its own)", () => {
     const pieces = propColliders([{ prefab: "cone", x: 0, y: 0, z: 0, yaw: 0, sx: 1, sy: 1, sz: 1 }]);
     expect(pieces.length).toBe(3);
     expect(colliderSolids(solidsOf([], pieces), [])).toHaveLength(0);

@@ -10,7 +10,7 @@ import { must } from "../kernel/must.test-util.ts";
 describe("given the Survival course Havana", () => {
   const track = new Track(HAVANA);
 
-  it("when it is loaded through the Track loader, then it is a closed ring with checkpoints and is not a race course (the race menu does not list it and the race loader resolves it by id)", () => {
+  it("when the course is loaded, then it has checkpoints and is not a race course (the race menu does not list it and the race loader resolves it by id)", () => {
     expect(track.id).toBe("havana");
     expect(track.gates.length, `${track.gates.length} checkpoints`).toBeGreaterThanOrEqual(3);
     expect(!TRACKS.some((j) => new Track(j).id === "havana"), "the race menu must not list the survival course").toBe(true);
@@ -34,7 +34,7 @@ describe("given the Survival course Havana", () => {
   });
 
   describe("given the square course, which has no Survival anchors", () => {
-    it("when it is loaded, then its Survival anchors are null", () => {
+    it("when it is loaded, then it has no Survival start or cop formation", () => {
       expect(new Track(square()).survival).toBe(null);
     });
   });

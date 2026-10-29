@@ -26,7 +26,7 @@ function flatWith(raised: readonly (readonly [number, number, number])[]): Float
 const noRoad = new Float32Array(0);
 const bake = (heights: Float32Array, lat = noRoad) => bakeTerrainCells(heights, lat, NODES, NODES, 0, 0, FINE_MISS);
 
-describe("given a flat grid with the centre node of its first drawn cell raised over the course's fineMiss", () => {
+describe("given a flat grid with the centre node of its first drawn cell raised over the height miss that makes a cell fine", () => {
   const cells = bake(flatWith([[1, 1, BUMP]]));
 
   it("when its cells are baked, then only that cell is fine", () => {
@@ -39,7 +39,7 @@ describe("given a flat grid with the centre node of its first drawn cell raised 
   });
 });
 
-describe("given a fine drawn cell beside a coarse one whose shared edge's middle node is raised under fineMiss", () => {
+describe("given a fine drawn cell beside a coarse one whose shared edge's middle node is raised under the height miss that makes a cell fine", () => {
   const heights = flatWith([[1, 1, BUMP], [2, 1, SMALL_BUMP]]);
   const cells = bake(heights);
 
@@ -56,7 +56,7 @@ describe("given a fine drawn cell beside a coarse one whose shared edge's middle
   });
 });
 
-describe("given a cell with a miss over the seam's limit and under fineMiss", () => {
+describe("given a cell whose height miss is over the seam's limit and under the one that makes a cell fine", () => {
   const heights = flatWith([[5, 1, CREASE_BUMP]]);
 
   it("when it is off the road, then it is coarse", () => {

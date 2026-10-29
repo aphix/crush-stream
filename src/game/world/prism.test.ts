@@ -57,7 +57,7 @@ const BOX = { x: 0, z: 0, yaw: 0, hx: 1, hz: 2, base: 0, top: 1, id: 0 } as cons
 const TALL = { ...BOX, top: 3 } as const;
 
 describe("given a box prism in the scene's solids", () => {
-  it("when a point is above its top then it answers the top's height as a floor with a gap under it", () => {
+  it("when a point is above its top, then it answers the top's height as a floor with a gap under it", () => {
     solids(BOX);
     const hit = ask(0.2, 1.05, 0.3);
     expect(hit[C_H]).toBe(1);
@@ -66,7 +66,7 @@ describe("given a box prism in the scene's solids", () => {
     armSolids(null);
   });
 
-  it("when a point is in it deeper than a tyre mounts then it answers a side: no floor, a level normal and the way out", () => {
+  it("when a point is in it deeper than a tyre mounts, then it answers a side: no floor, a level normal and the way out", () => {
     solids(BOX);
     const hit = ask(0.9, 0.5, 0, 0, 0);
     expect(hit[C_H]).toBe(-Infinity);
@@ -76,7 +76,7 @@ describe("given a box prism in the scene's solids", () => {
     armSolids(null);
   });
 
-  it("when a point is in it no deeper than the step a tyre mounts then it stands on the top if it is a tyre's or no deeper under it than the face it is in is deep: a body point in a side face is in a wall", () => {
+  it("when a point is in it no deeper than the step a tyre mounts, then it stands on the top if it is a tyre's or no deeper under it than the face it is in is deep: a body point in a side face is in a wall", () => {
     solids(BOX);
     const kerb = ask(0.9, 1 - STEP_MAX * 0.9, 0);
     expect(kerb[C_H]).toBe(1);
@@ -89,14 +89,14 @@ describe("given a box prism in the scene's solids", () => {
     armSolids(null);
   });
 
-  it("when a body point is under the top by less than the face it is in is deep then it stands on the top", () => {
+  it("when a body point is under the top by less than the face it is in is deep, then it stands on the top", () => {
     solids(BOX);
     const hit = ask(0.2, 1 - 0.002, 0.3, 0, 0, true);
     expect(hit[C_H]).toBe(1);
     armSolids(null);
   });
 
-  it("when a point under its base is asked then the prism is no floor and no wall: a body passes beneath", () => {
+  it("when a point under its base is asked, then the prism is no floor and no wall: a body passes beneath", () => {
     solids({ ...BOX, base: 3, top: 4 });
     const hit = ask(0, 1, 0);
     expect(hit[C_H], "the ground answers, as if the prism were not there").toBe(0);
@@ -104,7 +104,7 @@ describe("given a box prism in the scene's solids", () => {
     armSolids(null);
   });
 
-  it("when a point near a corner is closing on the near flank then it leaves through the flank it came in by, not the end that is nearer", () => {
+  it("when a point near a corner is closing on the near flank, then it leaves through the flank it came in by, not the end that is nearer", () => {
     solids(BOX);
     // 0.3 m in from the +x flank and 0.05 m in from the +z end: nearest exit is the end, but it is moving in along -x, fast enough
     // to have crossed the flank within the step (`ENTRY_WINDOW`) it is asked in.
@@ -116,7 +116,7 @@ describe("given a box prism in the scene's solids", () => {
     armSolids(null);
   });
 
-  it("when a point is deeper than its speed could have taken it in one step then it leaves through the nearest face, whatever way it drifts", () => {
+  it("when a point is deeper than its speed could have taken it in one step, then it leaves through the nearest face, whatever way it drifts", () => {
     solids(BOX);
     // 0.3 m in from the +x flank, drifting in along -x at half the speed that would cross it within `ENTRY_WINDOW`: it came in earlier.
     const drifting = ask(0.7, 0.5, 1.95, -(0.3 / ENTRY_WINDOW) / 2, 0);
@@ -125,20 +125,20 @@ describe("given a box prism in the scene's solids", () => {
     armSolids(null);
   });
 
-  it("when a point is moving no faster than the rest speed then it leaves through the nearest face", () => {
+  it("when a point is moving no faster than the rest speed, then it leaves through the nearest face", () => {
     solids(BOX);
     const hit = ask(0.7, 0.5, 1.95, -SOLID_AT_REST * 0.5, 0);
     expect(Math.abs(hit[C_NZ]! - 1)).toBeLessThan(1e-12);
     armSolids(null);
   });
 
-  describe("when a body's point is at rest in the prism past its middle", () => {
+  describe("given a body's point at rest in the prism past its middle", () => {
     afterEach(() => {
       ASKER[0] = NaN;
       ASKER[1] = NaN;
     });
 
-    it("then it leaves by the face the body's centre is outside of, through the middle of the prism, not by the nearer far face", () => {
+    it("when the point is asked, then it leaves by the face the body's centre is outside of, through the middle of the prism, not by the nearer far face", () => {
       solids(TALL);
       // 0.3 m past the middle of the 2 m wide box, toward -x: the -x face is the nearer (0.7 m), the body stands outside the +x face (1.3 m).
       const alone = ask(-0.3, 0.5, 0, 0, 0);
@@ -150,7 +150,7 @@ describe("given a box prism in the scene's solids", () => {
       armSolids(null);
     });
 
-    it("then a body over the prism, outside no face, leaves by the nearest, and a point moving fast enough to have come in keeps its entry face", () => {
+    it("when the body is over the prism, outside every face, then the point leaves by the nearest, and one moving fast enough to have come in keeps its entry face", () => {
       solids(TALL);
       ASKER[0] = 0;
       ASKER[1] = 0;
@@ -162,7 +162,7 @@ describe("given a box prism in the scene's solids", () => {
       armSolids(null);
     });
 
-    it("then in a circle prism it leaves out toward its body, the depth along that way", () => {
+    it("when the prism is a circle, then the point leaves out toward its body, the depth along that way", () => {
       solids({ x: 3, z: 0, yaw: 0, hx: 0.5, hz: 0.5, circle: true, base: 0, top: 3, id: 0 });
       ASKER[0] = 6;
       ASKER[1] = 0;
@@ -171,7 +171,7 @@ describe("given a box prism in the scene's solids", () => {
       armSolids(null);
     });
 
-    it("then the top is the way out only when it is nearer than the nearest side, whichever side its body then takes it out by", () => {
+    it("when the point is near the top, then the top is the way out only when it is nearer than the nearest side, whichever side its body then takes it out by", () => {
       solids(BOX);
       // 0.3 m past the middle of the 1 m tall box and 0.1 m up in it: the top is 0.9 m over it, the -x face 0.7 m, the +x face its body's side, 1.3 m.
       ASKER[0] = 3;
@@ -182,7 +182,7 @@ describe("given a box prism in the scene's solids", () => {
       armSolids(null);
     });
 
-    it("then a point moving slowly in it, which came in by no face within the entry window, leaves by the face its body stands on too, and by the nearest with no body asking", () => {
+    it("when the point moves slowly and came in by no face within the entry window, then it leaves by the face its body stands on too, and by the nearest with no body asking", () => {
       solids(TALL);
       // 0.3 m past the middle toward -x, moving +x at 0.5 m/s: the -x face it would have entered by is 1.4 s back, outside the window.
       const alone = ask(-0.3, 0.5, 0, 0.5, 0);
@@ -195,7 +195,7 @@ describe("given a box prism in the scene's solids", () => {
     });
   });
 
-  it("when the point is the same distance in however far along the step it started then the face it entered by is the same", () => {
+  it("when the point is the same distance in however far along the step it started, then the face it entered by is the same", () => {
     solids(BOX);
     const faces = new Set<string>();
     for (let k = 0; k < 8; k++) {
@@ -207,14 +207,14 @@ describe("given a box prism in the scene's solids", () => {
     armSolids(null);
   });
 
-  it("when its end is a joint then the end is no face and a point at the end leaves across", () => {
+  it("when its end is a joint, then the end is no face and a point at the end leaves across", () => {
     solids({ ...BOX, ends: 1 });
     const hit = ask(0.5, 0.5, 1.95, 0, 0);
     expect(Math.abs(Math.abs(hit[C_NX]!) - 1), `normal ${hit[C_NX]} ${hit[C_NZ]}`).toBeLessThan(1e-12);
     armSolids(null);
   });
 
-  it("when it is a prop knocked off its spot by a hit then a point query does not meet it", () => {
+  it("when it is a prop knocked off its spot by a hit, then a point query does not meet it", () => {
     solids({ ...BOX, role: KNOCK });
     const hit = ask(0.9, 0.5, 0);
     expect(hit[C_H], "the ground answers").toBe(0);
@@ -224,14 +224,14 @@ describe("given a box prism in the scene's solids", () => {
 });
 
 describe("given a circle prism and a ramp prism", () => {
-  it("when a point is inside the circle then it leaves along the radius by the way out", () => {
+  it("when a point is inside the circle, then it leaves along the radius by the way out", () => {
     solids({ x: 3, z: 0, yaw: 0, hx: 0.5, hz: 0.5, circle: true, base: 0, top: 3, id: 0 });
     const hit = ask(3.3, 1, 0, -1, 0);
     expect(Math.abs(hit[C_DEPTH]! - 0.2) < 1e-12 && Math.abs(hit[C_NX]! - 1) < 1e-12, `depth ${hit[C_DEPTH]} nx ${hit[C_NX]}`).toBeTruthy();
     armSolids(null);
   });
 
-  it("when the top is tilted then the floor's normal leans away from the high side and its height is the plane's", () => {
+  it("when the top is tilted, then the floor's normal leans away from the high side and its height is the plane's", () => {
     solids({ ...BOX, top: 1, gw: -0.25 });
     const hit = ask(0, 3, 1);
     expect(Math.abs(hit[C_H]! - 0.75), `height ${hit[C_H]}`).toBeLessThan(1e-12);
@@ -239,7 +239,7 @@ describe("given a circle prism and a ramp prism", () => {
     armSolids(null);
   });
 
-  it("when its pose is moved after the seal then the point query follows it", () => {
+  it("when its pose is moved after the seal, then the point query follows it", () => {
     const s = new Surface();
     const i = s.addPrism({ ...BOX, moves: true });
     armSolids(s);
@@ -254,7 +254,7 @@ describe("given the step a tyre mounts", () => {
   // A row that fails leaves no solids armed for the next one.
   afterEach(() => armSolids(null));
 
-  it("when it is derived from the classes then it is the biggest tyre's share of its radius", () => {
+  it("when it is derived from the classes, then it is the biggest tyre's share of its radius", () => {
     const biggest = Math.max(...CAR_STYLE_IDS.map((id) => carFrame(CAR_STYLES[id]).rig.tyre.r * CLASSES[STYLE_CLASS[id]].wheelScale));
     expect(Math.abs(STEP_MAX - MOUNT * biggest), `${STEP_MAX} against ${MOUNT * biggest}`).toBeLessThan(1e-9);
   });
@@ -321,7 +321,7 @@ describe("given the step a tyre mounts", () => {
     armSolids(null);
   });
 
-  it("when prisms are listed near a point then each one is listed once, and the ones far away are not", () => {
+  it("when prisms are listed near a point, then each one is listed once, and the ones far away are not", () => {
     const s = new Surface();
     for (let k = 0; k < 20; k++) s.addPrism({ ...BOX, x: k * 30, id: k, role: WALL });
     s.seal();
@@ -363,13 +363,13 @@ describe("given a car's footprint over a circle prism at its flank", () => {
     return { pen: hit[FF_PEN]!, nx: hit[FF_NX]!, nz: hit[FF_NZ]! };
   }
 
-  it("when the car drives on at 30 m/s then it met the prism through the footprint's front, the walk back's depth", () => {
+  it("when the car drives on at 30 m/s, then it met the prism through the footprint's front, the walk back's depth", () => {
     const { pen, nx, nz } = meet(30);
     expect(nz, `normal ${nx} ${nz}`).toBeLessThan(-0.99);
     expect(pen, `depth ${pen}`).toBeGreaterThan(RADIUS - 0.006 + 0.05);
   });
 
-  it("when the car drifts at 1 m/s then it leaves the way it is nearest, across the flank, by the flank's own depth", () => {
+  it("when the car drifts at 1 m/s, then it leaves the way it is nearest, across the flank, by the flank's own depth", () => {
     const { pen, nx, nz } = meet(1);
     expect(Math.abs(nx + 1) < 1e-12 && Math.abs(nz) < 1e-12, `normal ${nx} ${nz}`).toBeTruthy();
     expect(Math.abs(pen - (RADIUS - 0.006)), `depth ${pen}`).toBeLessThan(1e-12);

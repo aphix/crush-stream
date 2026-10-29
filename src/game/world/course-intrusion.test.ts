@@ -185,9 +185,10 @@ describe("given a building beside a straight of the oval course, set by how far 
       const placed = { prefab: "building", x: loop.x[node]! + loop.tz[node]! * lateral, y: loop.y[node]!, z: loop.z[node]! - loop.tx[node]! * lateral, yaw: Math.atan2(loop.tx[node]!, loop.tz[node]!) + testCase.turn, sx: 1, sy: 1, sz: 1 } as const;
       const hits = intrusions(track, reaches, placed, 0);
       expect(hits.length, "pieces reported").toBe(testCase.expectedHits);
-      if (testCase.expectedHits === 0) return;
-      expect(hits[0]!.path, "the corridor reached").toBe(0);
-      expect(Math.abs(hits[0]!.depth - Math.min(inward, edge)), `depth ${hits[0]!.depth}`).toBeLessThan(1e-6);
+      for (const hit of hits) {
+        expect(hit.path, "the corridor reached").toBe(0);
+        expect(Math.abs(hit.depth - Math.min(inward, edge)), `depth ${hit.depth}`).toBeLessThan(1e-6);
+      }
     });
   }
 });
