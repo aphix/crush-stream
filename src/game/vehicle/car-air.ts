@@ -803,7 +803,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // the road, so the world's faces neither drag it nor grip its tyres along their tread (a rear tyre meeting a ramp's toe at 30° with the
   // front in the air turned its travel 2-3° through the face's slope and the tyre's friction against the body's spin).
   // A wreck's tyres are the same rows: a crashed car whose drivetrain lives is a dented car and rolls on its drive's law (the throttle's
-  // push, else its coast, the brakes when held), a side hit's fuel cut included (`applyDrive` zeroes the gas, nothing else); one with no drivetrain
+  // push, else its coast, the brakes when held); one with no drivetrain
   // is wrecked running gear, its wheels dragged (they rub in every direction, as a parked car's do). So are the tyres of a car lying on
   // their flanks (`onTreads`: none whose tread meets the surface under it): driven there, none of its rows gripped, and a monster wreck on
   // its side with its brakes held rolled down a 10° slope on its two low tyres, 1.3 to 4.5 m/s over 9 s. Judged by the world's up, a sedan

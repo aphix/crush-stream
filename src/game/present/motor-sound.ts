@@ -282,12 +282,12 @@ export class MotorSound {
 
   /**
    * Retunes one voice to its car at a tick: class and damage tuning and the class's channel levels (a re-tune swaps in the
-   * voice's kept generator for that tuning, so it happens under a fade or a misfire dip), rpm from the gauge's revs lifted by the load, misfires. A dead,
-   * stalled or parked engine winds down to silence.
+   * voice's kept generator for that tuning, so it happens under a fade or a misfire dip), rpm from the gauge's revs lifted by the load, misfires. A dead
+   * or parked engine winds down to silence.
    */
   private driveVoice(slot: number, car: DeformableCar, isPriority: boolean, tick: number, rate: number, parked: boolean, now: number): void {
     const voice = this.voices[slot]!;
-    if (!car.deform.drivetrainAlive || car.stalledS > 0 || parked) {
+    if (!car.deform.drivetrainAlive || parked) {
       this.silentS[slot]! += tick;
       if (this.gainOn[slot]) {
         voice.gain.gain.setTargetAtTime(0, now, DIE_TAU_S);

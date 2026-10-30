@@ -8,7 +8,6 @@ import { propContact } from "../contact/prop-contact.ts";
 import { physicsSlice, sliceSpeed } from "../contact/sat.ts";
 import { VEHICLE_CLASS_IDS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import { newWorld, settleStep, stepWorld } from "./world-step.ts";
-import { STALL_S } from "../vehicle/constants.ts";
 import { UPRIGHT_UP_Y } from "../vehicle/car-suspension.ts";
 import { FRAME_HZ, QUIET_HZ } from "../kernel/constants.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
@@ -22,7 +21,7 @@ import { COARSE, FINE, parkedPair } from "./world-step-lone.test-util.ts";
  */
 
 const FRAME = 1 / FRAME_HZ;
-/** Seconds the driver keeps backing out once the engine runs after a hit. */
+/** Seconds the driver backs out after the hit. */
 const RECOVER = 3;
 /**
  * How far (m) off the near face a car must stand when its recovery ends to be out of the wall: seven times the 7 cm a slice carries a
@@ -111,11 +110,7 @@ function hit(w: World, cls: VehicleClassId, o: { dw: number; alpha: number; vdir
   let acc = 0;
   let past = 0;
   const SECS = 2;
-  const hitEndFrame = Math.round(SECS / FRAME);
-  const recoverFrames = Math.round(RECOVER / FRAME);
-  // A side hit past the crash sensor cuts the fuel (`stalledS`): the car cannot back out before the engine restarts, so its recovery is the RECOVER seconds from there.
-  let restart = -1;
-  for (let f = 0; f < (SECS + STALL_S + RECOVER) / FRAME && (restart < 0 || f < restart + recoverFrames); f++) {
+  for (let f = 0; f < (SECS + RECOVER) / FRAME; f++) {
     const t = f * FRAME;
     acc = Math.min(0.05, acc + FRAME);
     // After the hit the driver backs out the way the nose does not point: gas if the nose is off the wall, reverse if it is on it.
@@ -129,7 +124,6 @@ function hit(w: World, cls: VehicleClassId, o: { dw: number; alpha: number; vdir
       acc -= h;
     }
     past = Math.max(past, reach(car).past);
-    if (restart < 0 && f >= hitEndFrame && car.stalledS <= 0) restart = f;
   }
   const end = reach(car);
   car.group.updateWorldMatrix(true, false);
@@ -158,7 +152,7 @@ describe("given the Havana alley wall and a car swung into it with the handbrake
           expect(r.past, `${JSON.stringify(c)}: ${r.past.toFixed(2)} m past the far face`).toBeLessThan(0.02);
           expect(r.inside, `${JSON.stringify(c)}: left ${r.inside.toFixed(2)} m inside the slab`).toBeLessThan(0.05);
           // Alone, a car that lived through the hit and stands on its wheels drives out of the wall. (A pinned car can lose its wheel hubs to the cop; that is the pair contact's, not the wall's. A truck that rolled onto its side has no tyre to drive on: under `UPRIGHT_UP_Y` the sim itself takes its springs off.)
-          if (!pinned && r.alive && r.upY >= UPRIGHT_UP_Y) expect(r.off, `${JSON.stringify(c)}: stuck, ${r.off.toFixed(2)} m off the wall's face ${RECOVER} s after the engine ran`).toBeGreaterThanOrEqual(OFF_WALL);
+          if (!pinned && r.alive && r.upY >= UPRIGHT_UP_Y) expect(r.off, `${JSON.stringify(c)}: stuck, ${r.off.toFixed(2)} m off the wall's face ${RECOVER} s after the hit`).toBeGreaterThanOrEqual(OFF_WALL);
         }
       });
     }
@@ -230,5 +224,45 @@ describe("given the Havana alley wall and a sedan driven into it at 40 m/s from 
       if (r.passes > 0) left.push(`${lone ? "lone" : "sliced"}: ${r.passes} passes, deepest ${r.deepest.toExponential(3)} m`);
     }
     expect(left, "spheres left in the face").toHaveLength(0);
+  });
+});
+
+/** A sedan at 30 m/s on full gas glancing into the alley wall at `angle` (rad) off its face, on `after` from the crash on: its along-nose speed per frame and the crash's frame. */
+function sideswipe(angle: number, after: DriveInput): { speeds: number[]; contact: number } {
+  const w = alley();
+  const car = pooled("sedan");
+  const world = newWorld([car]);
+  world.collide = (c, i, h) => w.race.courseHit(c, i, h);
+  // Running +z along the wall, the nose turned `angle` toward it (−x).
+  const yaw = -angle;
+  car.spawnFacing(NEAR + 3, WALL_Z[0] + 3, yaw, 30);
+  car.velocity.set(Math.sin(yaw) * 30, 0, Math.cos(yaw) * 30);
+  const gas: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
+  const speeds: number[] = [];
+  let contact = -1;
+  let acc = 0;
+  for (let f = 0; f < 2 / FRAME; f++) {
+    acc = Math.min(0.05, acc + FRAME);
+    while (acc > 1e-5) {
+      const h = Math.fround(physicsSlice(acc, sliceSpeed(world.cars)));
+      applyDrive(car, contact < 0 ? gas : after, h);
+      stepWorld(world, h);
+      settleStep(world.cars, h, false);
+      acc -= h;
+    }
+    if (contact < 0 && car.crashed) contact = f;
+    speeds.push(car.velocity.x * car.fwdFlat.x + car.velocity.z * car.fwdFlat.z);
+  }
+  return { speeds, contact };
+}
+
+describe("given the Havana alley wall and a sedan at 30 m/s on full gas sideswiping it at 15°, hard enough to crash it", () => {
+  it("when the gas stays down through the contact, then within 0.3 s it pulls ahead of the same swipe with the gas lifted", () => {
+    const gas = sideswipe(15 * D, { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false });
+    const lifted = sideswipe(15 * D, { throttle: 0, steer: 0, brake: 0, ebrake: false, boost: false });
+    expect(gas.contact, "the sedan crashed on the wall").toBeGreaterThanOrEqual(0);
+    expect(lifted.contact, "the same frame of crash").toBe(gas.contact);
+    const k = gas.contact + Math.round(0.3 / FRAME);
+    expect(gas.speeds[k]! - lifted.speeds[k]!, `${gas.speeds[k]!.toFixed(2)} m/s on the gas vs ${lifted.speeds[k]!.toFixed(2)} m/s lifted, 0.3 s after the crash`).toBeGreaterThan(0.1);
   });
 });

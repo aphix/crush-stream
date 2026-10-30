@@ -94,7 +94,7 @@ function drives(car: DeformableCar): boolean {
 /**
  * The car's last applied pedals and wheel: all zero and freewheeling is neutral. A car with nothing to drive on the frame's last step reads idle
  * instead (`applyDrive`'s idle state: pedals zero, nothing driven): its drivetrain is dead, no wheel is on the ground, or the wheels down have
- * no bite (`standingBite`: on a side, a roof or against a wall), sampled before the step. A side hit's fuel cut (`stalledS`) is no idle state.
+ * no bite (`standingBite`: on a side, a roof or against a wall), sampled before the step.
  */
 function neutral(car: DeformableCar): boolean {
   const d = car.drive;

@@ -1,12 +1,12 @@
 import * as THREE from "three";
 import { detAtan2 } from "../kernel/physics-core.js";
 import type { DeformNetState } from "../deform/streamed-deform.ts";
-import { applyGroundFriction, CRASH, FRICTION_G, hypot2 } from "../deform/physics-util.ts";
+import { applyGroundFriction, CRASH, hypot2 } from "../deform/physics-util.ts";
 import { activeGround } from "../world/ground.ts";
 import { CarParts } from "./car-parts.ts";
 import { END_WINDOW, type PartNetState, REARM_QUIET_S, SHELLS, type ShellName } from "./car-core.ts";
 import { HUBS, REST_SPEED, _s, S_LIFTING } from "./car-air-body.ts";
-import { FLIGHT_BORNE, FLIGHT_CONTACT, FLIGHT_DOWN, FLIGHT_DRIFT, FLIGHT_END_AGO, FLIGHT_END_REACH, FLIGHT_END_SQUEEZE, FLIGHT_EULER, FLIGHT_INV_YAW, FLIGHT_POSITION, FLIGHT_QUATERNION, FLIGHT_RAMPS, FLIGHT_REST, FLIGHT_SLEEP, FLIGHT_SPIN, FLIGHT_STALL, FLIGHT_VELOCITY, FLIGHT_WHEEL_RATE, FLIGHT_WHEEL_SPIN } from "./car-flight.ts";
+import { FLIGHT_BORNE, FLIGHT_CONTACT, FLIGHT_DOWN, FLIGHT_DRIFT, FLIGHT_END_AGO, FLIGHT_END_REACH, FLIGHT_END_SQUEEZE, FLIGHT_EULER, FLIGHT_INV_YAW, FLIGHT_POSITION, FLIGHT_QUATERNION, FLIGHT_RAMPS, FLIGHT_REST, FLIGHT_SLEEP, FLIGHT_SPIN, FLIGHT_VELOCITY, FLIGHT_WHEEL_RATE, FLIGHT_WHEEL_SPIN } from "./car-flight.ts";
 import { onWreckTop, readContact } from "./car-air-points.ts";
 import { stepFree, wreckCentre, wreckInvI } from "./car-air.ts";
 import { bodyLift, Suspension, UPRIGHT_UP_Y, tyresUnderSkin } from "./car-suspension.ts";
@@ -20,7 +20,7 @@ import type { CarCage } from "./car-cage.ts";
 import { CageRig, centreY } from "./car-cage-rig.ts";
 import { PART_KIND, PartSeat } from "./part-geometry.ts";
 import { setBare } from "./interior.ts";
-import { CLASS_HUBS, CLASS_LIFT, LID, FUEL_CUTOFF_G, SIDE_HIT_X, STALL_S } from "./constants.ts";
+import { CLASS_HUBS, CLASS_LIFT, LID } from "./constants.ts";
 import { HUB_PIN_MAX, HUB_PULL_STEP } from "../deform/constants.ts";
 import { passesFor, smoothingNow, smoothNormals } from "./normal-smooth.ts";
 
@@ -57,8 +57,6 @@ export class DeformableCar extends CarParts {
   parked = false;
   /** The race put this car away (`EngineRaceField.putAway`): reset, hidden and still at its spot off the course until the race places it again; `stepWorld` leaves it unstepped (`EPICENTER.storedSkip`). */
   stored = false;
-  /** Seconds the fuel stays cut after a side hit (`stallOnSideHit`): `applyDrive` counts it down and zeroes the gas and boost meanwhile. */
-  stalledS = 0;
   /** Moved by the rigid contact solve (`stepFree`), not by its crush masses: derived, never stored. `velocity` is then its centre of mass's. */
   get rigid(): boolean {
     return !this.deform.massActive;
@@ -204,7 +202,6 @@ export class DeformableCar extends CarParts {
     this.speed = speed;
     this.spawnSpeed = speed;
     this.parked = false;
-    this.stalledS = 0;
     this.stopDrive();
     this.crashed = false;
     this.resetContact();
@@ -335,18 +332,10 @@ export class DeformableCar extends CarParts {
       }
       this.bodyMat.roughness = rough;
     }
-    this.stallOnSideHit(localN, ebs);
     this.deform.markMotion();
     this.deform.impulseAt(worldPoint, _in, impulse);
     this.deform.takeMotion(this.velocity, this.angular);
     return true;
-  }
-
-  /** A side hit past the crash sensor's average deceleration (`FUEL_CUTOFF_G`) cuts the fuel for `STALL_S` seconds (`applyDrive` gives no drive until then); a hit already on the books does not extend it. */
-  private stallOnSideHit(localInward: THREE.Vector3, ebs: number): void {
-    if (Math.abs(localInward.x) < SIDE_HIT_X) return;
-    const decel = (ebs * ebs) / (2 * Math.max(0.05, this.deform.hitStroke()));
-    if (decel >= FUEL_CUTOFF_G * FRICTION_G && this.stalledS <= 0) this.stalledS = STALL_S;
   }
 
   syncPose(dt: number): void {
@@ -376,7 +365,6 @@ export class DeformableCar extends CarParts {
       this.endReach = buf[o + FLIGHT_END_REACH]!;
       this.endSqueeze = buf[o + FLIGHT_END_SQUEEZE] !== 0;
       this.drive.drift = buf[o + FLIGHT_DRIFT]!;
-      this.stalledS = buf[o + FLIGHT_STALL]!;
       this.drive.ebrakeK = buf[o + FLIGHT_RAMPS]!;
       this.drive.boostK = buf[o + FLIGHT_RAMPS + 1]!;
       this.drive.spinSpeed = buf[o + FLIGHT_SPIN]!;
@@ -406,7 +394,6 @@ export class DeformableCar extends CarParts {
     buf[o + FLIGHT_END_REACH] = this.endReach;
     buf[o + FLIGHT_END_SQUEEZE] = this.endSqueeze ? 1 : 0;
     buf[o + FLIGHT_DRIFT] = this.drive.drift;
-    buf[o + FLIGHT_STALL] = this.stalledS;
     if (this.surfaces) this.surfaces.borneState(this.slot, buf, o + FLIGHT_BORNE, false);
     else buf.fill(0, o + FLIGHT_BORNE, o + FLIGHT_BORNE + 6);
     this.contact(buf, o, false);

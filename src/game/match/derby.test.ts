@@ -216,7 +216,7 @@ describe("given a derby car driven at the arena wall at 25 m/s from 12 m out (th
       const slice = physicsSlice(1 / FRAME_HZ, Math.max(car.speed, 4));
       applyDrive(car, { ...idleDrive(), throttle: 1 }, slice);
       stepWorld(world, slice);
-      if (elapsed === 0) expect(car.stalledS, "the engine was cut in the first slice: the car starts in a prop, not on its run at the wall").toBe(0);
+      if (elapsed === 0) expect(car.crashed, "the car crashed in the first slice: it starts in a prop, not on its run at the wall").toBe(false);
       elapsed += slice;
     }
     const reach = Math.hypot(car.group.position.x, car.group.position.z);

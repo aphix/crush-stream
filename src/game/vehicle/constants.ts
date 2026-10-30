@@ -60,18 +60,8 @@ export const UNDERBODY_SEAT = "underbodySeat";
 /** The paint of a throwaway car (warm-up, a layout read): mid grey body, dark grey accent. */
 export const STOCK_PAINT = { body: 0x808080, accent: 0x404040 };
 
-/**
- * A side hit whose average deceleration (the crush stroke's `ebs² / (2 · stroke)`) reaches this many g trips the crash sensor and the
- * fuel pump's inertia switch (docs/UNIFIED_CONTACT.md, T-bone fuel cut-off; `.extraResearch/perplexity/2026-10-07-fuel-cutoff-threshold.md`:
- * the mechanical switch trips at 10–12 g on a short pulse, an airbag at 13–23 km/h of delta-v), and how much of the hit's lateral part
- * (`|local x|` of the inward direction) makes it a side hit.
- */
-export const FUEL_CUTOFF_G = 10;
-export const SIDE_HIT_X = 0.7;
 /** The driver's side as a car-local x sign: +1, the car's left (an American car; nose +z, up +y). The pane and door names' L is -x, so doorR is his window. */
 export const DRIVER_SIDE = 1;
-/** How long (s) the engine stays cut before it restarts (the switch is resettable; design pillar 2: a car that dies at once is lame). A short pick, no source: the stall is felt, not the end of the run. */
-export const STALL_S = 3;
 /** A car whose body's up·world-up (`upY`) is below this is on its roof or side; and the facing (the contact normal against the body's up) at which a tyre's drive fades to nothing (`standingBite`). */
 export const FLIPPED_UP_Y = 0.35;
 /** The facing (cos 65°) from which a tyre's drive is whole (`standingBite`). A pick, no source: a narrow band above the flip line (a car tipping over crosses it in a few frames). A tyre on a car's hood reads facings of 0.63 and over, and the corkscrew's floor, the steepest the game has, 0.955. */

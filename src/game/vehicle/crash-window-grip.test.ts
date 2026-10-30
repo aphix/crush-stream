@@ -3,13 +3,12 @@ import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/cra
 import { CONTACT_WINDOW } from "../deform/constants.ts";
 import { CRASH, FRICTION_G } from "../deform/physics-util.ts";
 import { DT } from "./test-support.ts";
-import type { DeformableCar } from "./car.ts";
 
 // A struck car's tyres give the sliding friction of a locked tyre while it is in contact, and their arcade grip comes back over the contact window
-// after it (`DeformSolve.settledShare`), not in one slice: the hit's sideways exchange is the contact's, whether the engine runs or the fuel is cut.
+// after it (`DeformSolve.settledShare`), not in one slice: the hit's sideways exchange is the contact's.
 
-/** The bullet's speed (km/h) that leaves the struck car's engine running (under the crash sensor), and one that cuts its fuel. */
-const BULLET_KPH = { running: 49, stalled: 55 } as const;
+/** Two bullet speeds (km/h): a door hit and a harder one. */
+const BULLET_KPH = [49, 55] as const;
 /** The sliding grip a tyre on flat asphalt gives (m/s²). */
 const SLIDING_GRIP = CRASH.muSlide * FRICTION_G;
 /** What the drive's speed change per second may exceed the sliding grip by: the freewheel's rolling resistance and air drag (`Surface.roll`, `DRIVE.drag`). */
@@ -24,7 +23,7 @@ const MOST_RISE_SHARE = 0.25;
 type Slice = { acceleration: number; quiet: number; windowOpen: boolean };
 
 /** The struck sedan of a t-bone at `bulletKph`, at rest on its start, in neutral: the drive's speed change per second in each slice, and whether the contact window was open. */
-function driveSlices(bulletKph: number): { slices: Slice[]; struck: DeformableCar; massesCommonShare: number } {
+function driveSlices(bulletKph: number): { slices: Slice[]; massesCommonShare: number } {
   const struck = makeCar();
   const bullet = makeCar();
   launch(struck, 0, 0, 0, 0, 0);
@@ -54,15 +53,14 @@ function driveSlices(bulletKph: number): { slices: Slice[]; struck: DeformableCa
     return out;
   };
   for (let t = 0; t < WATCH_S; t += DT) tickWorld(world);
-  return { slices, struck, massesCommonShare };
+  return { slices, massesCommonShare };
 }
 
-for (const [engine, kph] of Object.entries(BULLET_KPH)) {
-  describe(`given a sedan at rest t-boned at its right door by a bullet at ${kph} km/h (its engine ${engine === "running" ? "keeps running" : "is cut by the side hit"})`, () => {
-    const { slices, struck, massesCommonShare } = driveSlices(kph);
+for (const kph of BULLET_KPH) {
+  describe(`given a sedan at rest t-boned at its right door by a bullet at ${kph} km/h`, () => {
+    const { slices, massesCommonShare } = driveSlices(kph);
 
     it(`when it is in contact, then the drive takes no more sideways speed per second than a sliding tyre's grip and the fade's share of one frame`, () => {
-      expect(struck.stalledS > 0, "the engine is cut as staged").toBe(engine === "stalled");
       // The contact clock moves once a frame: a car touched this frame reads under one frame of quiet, so the grip's return may have begun by that frame's share.
       const touching = slices.filter((slice) => slice.quiet < DT);
       expect(touching.length, `${touching.length} slices in contact with the car sliding sideways`).toBeGreaterThan(10);

@@ -252,11 +252,8 @@ export function applyDrive(car: DeformableCar, input: DriveInput, dt: number, to
   if (dt <= 0) return;
   const d = car.drive;
   car.parked = false;
-  // A side hit past the crash sensor cuts the fuel (`DeformableCar.stallOnSideHit`) for `STALL_S`: the engine gives no push and no boost meanwhile, and the tyres, brakes, handbrake and lift-off engine braking run as ever.
-  const fuelCut = car.stalledS > 0;
-  if (fuelCut) car.stalledS = Math.max(0, car.stalledS - dt);
-  // The pedals the sim runs: clamped and on the grid a clip stores them on, so a replay of the recording runs the very same numbers (a cut fuel's gas is the zero it records).
-  const throttle = fuelCut ? 0 : pedal(input.throttle, -1, THROTTLE_STEPS);
+  // The pedals the sim runs: clamped and on the grid a clip stores them on, so a replay of the recording runs the very same numbers.
+  const throttle = pedal(input.throttle, -1, THROTTLE_STEPS);
   const command = pedal(input.steer, -1, THROTTLE_STEPS);
   const brake = pedal(input.brake, 0, BRAKE_STEPS);
   // No wheel within its springs' reach of a surface (flight, a belly on a roof) or no drivetrain: the car keeps its ballistic velocity and spin.

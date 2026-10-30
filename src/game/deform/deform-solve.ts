@@ -744,7 +744,7 @@ export abstract class DeformSolve extends DeformFreeze {
 
     this.stepSuspension(dt);
     this.sampleGround(this.floorPre, null);
-    // A car with its drivetrain running turns by applyDrive's tyres, not the wreck's (a fuel cut leaves them as they are); one with no drivetrain turns on its own spin.
+    // A car with its drivetrain running turns by applyDrive's tyres, not the wreck's; one with no drivetrain turns on its own spin.
     const rigid = this.drivetrainAlive;
     if (!rigid) this.yawMomentum(3, false);
     this.sampleGround(this.floorPost, this.gripPost);
