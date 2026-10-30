@@ -6,7 +6,7 @@ import { applyAiDrive } from "./input-fade.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { massCentroid } from "../vehicle/test-support.ts";
-import { applyDrive, carRuns, COAST, type DriveInput } from "../vehicle/car-drive.ts";
+import { applyDrive, carRuns, COAST } from "../vehicle/car-drive.ts";
 import { EjectionWatch } from "../vehicle/ejection.ts";
 import { physicsSlice } from "../contact/sat.ts";
 import { settleStep, stepWorld } from "../engine/world-step.ts";
@@ -26,16 +26,13 @@ export type Field = {
   zips: string[];
   /** Largest zip, in metres (0 when none). */
   zipMax: number;
-  /** Each driver thrown out (`EjectionWatch`): match time and car. His car coasts from then on and is a wreck to the rules (`carRuns`). */
-  thrown: { t: number; car: number }[];
 };
 
 
-/** A watcher on a heat: `step` after every physics slice of `h` s at match time `t` (`running(i)`: car i alive and not out), `pair` on every car pair in contact, `drive` on car i's AI input before it is applied (a control may change it). */
+/** A watcher on a heat: `step` after every physics slice of `h` s at match time `t`, `pair` on every car pair in contact. */
 export type FieldWatch = {
-  step?: (cars: DeformableCar[], t: number, h: number, running: (i: number) => boolean) => void;
+  step?: (cars: DeformableCar[], t: number, h: number) => void;
   pair?: (a: number, b: number) => void;
-  drive?: (i: number, t: number, input: DriveInput) => void;
 };
 
 /**
@@ -92,7 +89,6 @@ function runFieldHeat(n: number, seed: number, on: FieldWatch | undefined, until
     zips: [],
     zipMax: 0,
     contactPeak: { rate: 0, note: "none" },
-    thrown: [],
   };
   /** Per car: its orientation one step ago, and the turn about the vertical it has made since the start (rad, unwrapped). */
   const lastTurn = cars.map((c) => c.group.quaternion.clone());
@@ -119,9 +115,7 @@ function runFieldHeat(n: number, seed: number, on: FieldWatch | undefined, until
         applyDrive(c, COAST, h);
         continue;
       }
-      const input = match.think(snaps[i]!, snaps, h);
-      on?.drive?.(i, t, input);
-      applyAiDrive(c, input, h);
+      applyAiDrive(c, match.think(snaps[i]!, snaps, h), h);
     }
     w.pairHit = (a, b, pair) => {
       on?.pair?.(a, b);
@@ -138,15 +132,15 @@ function runFieldHeat(n: number, seed: number, on: FieldWatch | undefined, until
       match.noteHit(a, b, aInto, bInto, pair.impulse);
     };
     stepWorld(w, h);
-    for (const e of ejections.take()) out.thrown.push({ t: +t.toFixed(2), car: e.car });
+    // The engine drains the watch's throws each step; a thrown driver's car coasts above.
+    ejections.take();
     // No bleed: the engine's derby never starts the crash clock.
     settleStep(cars, h, false);
     state = match.step(
       h,
       cars.map((c, i) => ({ id: i, name: `c${i}`, alive: carRuns(c), x: c.group.position.x, z: c.group.position.z })),
     );
-    const running = (i: number) => carRuns(cars[i]!) && !match.board[i]!.out;
-    on?.step?.(cars, t, h, running);
+    on?.step?.(cars, t, h);
     for (const [i, c] of cars.entries()) {
       if (alive[i] && !c.deform.drivetrainAlive) out.deaths.push(+t.toFixed(1));
       alive[i] = c.deform.drivetrainAlive;
