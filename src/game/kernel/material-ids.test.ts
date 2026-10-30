@@ -34,13 +34,13 @@ describe("given the material registry", () => {
   });
 });
 
-/** Each striker's cut and whether the surface shows cut lines when struck, against the collision-repair note's verdict on it. */
+/** Each striker's cut and whether the surface shows cut lines when struck, against the collision-repair note's verdict on it; the bumpers take strokes by the owner's ruling ("the name bumper is because it's the most common to bump, so yeah it should probably scratch too"), each in its finish's look. */
 const SCRATCH_RULE = [
   { it: "painted steel cuts paint readily at an edge, and its panel shows the lines", material: "CAR_PAINT", cut: 1, takes: true },
-  { it: "chrome cuts paint locally as hard metal, and shows its own scuffs, not cut lines", material: "BUMPER_CHROME", cut: 1, takes: false },
-  { it: "a painted plastic bumper cuts sometimes, at its edge", material: "BUMPER_PAINTED", cut: 0.6, takes: false },
-  { it: "satin accent trim cuts as painted trim", material: "BUMPER_SATIN", cut: 0.6, takes: false },
-  { it: "black plastic usually cuts nothing with a broad face, yes at an edge, and whitens instead of showing lines", material: "BUMPER_BLACK", cut: 0.4, takes: false },
+  { it: "chrome cuts paint locally as hard metal, and by the owner's bumper ruling takes strokes, scuffed bright", material: "BUMPER_CHROME", cut: 1, takes: true },
+  { it: "a painted plastic bumper cuts sometimes, at its edge, and by the owner's bumper ruling takes strokes as the body", material: "BUMPER_PAINTED", cut: 0.6, takes: true },
+  { it: "satin accent trim cuts as painted trim, and by the owner's bumper ruling takes strokes", material: "BUMPER_SATIN", cut: 0.6, takes: true },
+  { it: "black plastic usually cuts nothing with a broad face, yes at an edge, and by the owner's bumper ruling takes strokes, whitened grey", material: "BUMPER_BLACK", cut: 0.4, takes: true },
   { it: "a tyre transfers rubber and never cuts", material: "TYRE", cut: 0, takes: false },
   { it: "glass cuts nothing in v1", material: "GLASS", cut: undefined, takes: false },
 ] as const;

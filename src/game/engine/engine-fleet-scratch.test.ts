@@ -5,9 +5,9 @@ import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { bootEngine, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
-import { REST_NORMAL, REST_POSITION } from "../vehicle/car-detail-map.ts";
+import { REST_NORMAL, REST_POSITION, restNormals, restPositions } from "../vehicle/car-detail-map.ts";
 import { PRIMER_ATTRIBUTE, PRIMER_MATERIAL } from "../vehicle/constants.ts";
-import { TAKES_SCRATCH } from "../kernel/material-ids.ts";
+import { TAKES_SCRATCH, type MaterialId } from "../kernel/material-ids.ts";
 import { CAR_SPRAY, SPRAY_FACE, sprayFace } from "../vehicle/spray-box.ts";
 import { FACE_MASK, FACE_WIDTH, STROKE_BYTES, U0, U1, V0, V1 } from "../vehicle/paint-scrapes.ts";
 import { must } from "../kernel/must.test-util.ts";
@@ -19,20 +19,29 @@ const RUN_S = 20;
 const SUB = 3;
 const PAINT_CODES = PRIMER_MATERIAL.filter(([, id]) => TAKES_SCRATCH.has(id)).map(([code]) => code);
 
-/** A car's paints (body, lids, door skins) as built: the rest points and normals their shader reads, and their primer codes before a tear bares any. */
+/** A paint as `paints` raycasts it: `geometry`'s triangles at rest points `rest`, with rest normals `normal` and primer codes `primer` (all paint without). */
+function paintMesh(geometry: THREE.BufferGeometry, rest: THREE.BufferAttribute, normal: THREE.BufferAttribute, primer: THREE.BufferAttribute | undefined): THREE.Mesh {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", rest);
+  geo.setAttribute("restNormal", normal);
+  geo.setAttribute("primer", new THREE.BufferAttribute(primer ? Float32Array.from(primer.array) : new Float32Array(rest.count), 1));
+  geo.setIndex(geometry.index);
+  return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+}
+
+/** A car's paints as built: its skins (body, lids, door skins) with the rest frame and primer codes their shader reads before a tear bares any, and its bumpers whose finish takes scratches, at rest where they are attached (their trim has no primer: all of it scratches). */
 function restPaints(car: DeformableCar): THREE.Mesh[] {
   const m = car.lookMeshes();
-  return [m.body, m.hood, m.trunk, ...m.doors].map((mesh) => {
-    const geo = new THREE.BufferGeometry();
-    const rest = mesh.geometry.getAttribute(REST_POSITION);
+  const skins = [m.body, m.hood, m.trunk, ...m.doors].map((mesh) => {
+    const rest = mesh.geometry.getAttribute(REST_POSITION) as THREE.BufferAttribute | undefined;
     must(rest, `the control: the ${car.style.id}'s paint has its rest frame`);
-    geo.setAttribute("position", rest);
-    geo.setAttribute("restNormal", mesh.geometry.getAttribute(REST_NORMAL));
-    const primer = mesh.geometry.getAttribute(PRIMER_ATTRIBUTE);
-    geo.setAttribute("primer", new THREE.BufferAttribute(primer ? Float32Array.from(primer.array) : new Float32Array(rest.count), 1));
-    geo.setIndex(mesh.geometry.index);
-    return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    return paintMesh(mesh.geometry, rest, mesh.geometry.getAttribute(REST_NORMAL) as THREE.BufferAttribute, mesh.geometry.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute | undefined);
   });
+  const bumpers = m.bumpers.filter((mesh) => TAKES_SCRATCH.has((mesh.material as THREE.Material).userData.materialId as MaterialId));
+  return [
+    ...skins,
+    ...bumpers.map((mesh) => paintMesh(mesh.geometry, new THREE.BufferAttribute(restPositions(mesh, mesh.geometry, car.group), 3), new THREE.BufferAttribute(restNormals(mesh, mesh.geometry, car.group), 3), undefined)),
+  ];
 }
 
 /** The paint weight the shader gives primer `p` (`bare-metal.ts`'s `SCRATCH_PAINT_WEIGHT`). */
