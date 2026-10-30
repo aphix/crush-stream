@@ -6,8 +6,9 @@ import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
 import { activeGround } from "../world/ground.ts";
 import { propColliders, type Placed, type PropCollider } from "../world/placements.ts";
-import { AIR_ANGULAR, AIR_LINEAR, blendPose, readPose } from "./ragdoll-body.ts";
+import { AIR_ANGULAR, AIR_LINEAR, blendPose, type Doll, readPose } from "./ragdoll-body.ts";
 import type { PropTumble } from "./prop-tumble.ts";
+import { knocksDown } from "../scenes/figure-strike.ts";
 
 /** What the props' world needs of their drawing: where one is placed, and all back on their spots. */
 export type PropDraw = Pick<PropTumble, "place" | "reset">;
@@ -59,6 +60,14 @@ const NONE = 0;
 const REST_SPEED = 0.1;
 const REST_SPIN = 0.1;
 const REST_FOR = 0.25;
+/** A standing dummy's farthest point from his torso's middle (m): his feet's soles 1.11 m under it, a foot's toe 0.22 m ahead (`PARTS`). */
+const DOLL_SPAN = 1.15;
+/** How far out (m) a knocked prop looks at a coming touch of a dummy, the near (m) that counts as on him, and how far (m) past their reaches he must get before it may strike him again: as a loose part's (`LooseProxies`). */
+const TOUCH_SEE = 0.15;
+const TOUCH_SKIN = 0.005;
+const CLEAR_M = 1;
+/** A knocked prop moving this fast (m/s) or faster is flying, not settling where it lies: as a loose part's `BLOCK_MPS`. */
+const FLYING_MPS = 1;
 /**
  * A knocked prop a car's lower box pushes against a static box (a wall or a box solid; the ground is a heightfield) is
  * squeezed when the two pushes oppose: the cosine between them is under `SQUEEZE`. Each push is read from the boxes'
@@ -223,6 +232,8 @@ export class PropBodies {
   private age = new Float32Array(0);
   private half = new Float32Array(0);
   private out = new Int32Array(0);
+  /** Per placement: a bit per pool slot, the dummies it has struck and that are not clear of it yet (`strikeDolls`). */
+  private met = new Uint8Array(0);
   /** Pose (position xyz of the middle, rotation xyzw) after the step before the last and after the last; `drawn`: drawn at rest since it slept. */
   private prev = new Float32Array(0);
   private cur = new Float32Array(0);
@@ -290,6 +301,7 @@ export class PropBodies {
     this.prev = new Float32Array(n * 7);
     this.cur = new Float32Array(n * 7);
     this.drawn = new Uint8Array(n);
+    this.met = new Uint8Array(n);
     this.settled = new Uint8Array(n);
     this.speed = new Float32Array(n);
     this.sweep = new Float32Array(n);
@@ -348,6 +360,24 @@ export class PropBodies {
     this.held[i] = 0;
     if (this.state[i] === STAND) this.state[i] = DUE;
     if (this.built) this.fly(i);
+  }
+
+  /**
+   * Knockable prop `i` thrown by a hand, no car's: its middle put at `at`, flying at (vx, vy, vz) m/s from wherever it stood or
+   * lay. False while its bodies are not built (no Rapier yet, or its scene's ground is not the active one).
+   */
+  throwFrom(i: number, at: THREE.Vector3, vx: number, vy: number, vz: number): boolean {
+    const body = this.bodies[i];
+    if (!this.built || !body) return false;
+    body.setTranslation(at, false);
+    if (this.state[i] === OUT) {
+      const o = i * 7;
+      readPose(body, this.cur, o);
+      for (let k = o; k < o + 7; k++) this.prev[k] = this.cur[k]!;
+    }
+    this.met[i] = 0;
+    this.knock(i, -1, vx, vy, vz);
+    return true;
   }
 
   /**
@@ -518,6 +548,61 @@ export class PropBodies {
     const u = this.bodies[i]!.linvel();
     v.set(u.x, u.y, u.z);
     return true;
+  }
+
+  /** Is a knocked prop flying (`FLYING_MPS`) within `r` m of `p`, plus its reach and how far it travels in `dt` s (as last stepped)? */
+  flyingNear(p: THREE.Vector3, r: number, dt: number): boolean {
+    for (let k = 0; k < this.count; k++) {
+      const i = this.out[k]!;
+      if (this.speed[i]! < FLYING_MPS) continue;
+      const o = i * 7;
+      const reach = r + this.reach[i]! + this.speed[i]! * dt;
+      if (hypot3(this.cur[o]! - p.x, this.cur[o + 1]! - p.y, this.cur[o + 2]! - p.z) < reach) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Before a step of `step` s: a knocked prop about to touch a dummy his walker holds up (`driven`) strikes him once by the one law,
+   * `knocksDown` at its mass and its closing speed along the contact normal, and `knock(slot)` lets him go limp; Rapier gives the
+   * push. A held walker soaks a prop's push up otherwise, as a loose part's (`LooseProxies.strike`). It may strike him again once
+   * his torso is `CLEAR_M` past their reaches.
+   */
+  strikeDolls(dolls: readonly Doll[], step: number, knock: (slot: number) => void): void {
+    const c = this.cur;
+    for (let k = 0; k < this.count; k++) {
+      const i = this.out[k]!;
+      const o = i * 7;
+      for (let s = 0; s < dolls.length; s++) {
+        const d = dolls[s]!;
+        const bit = 1 << s;
+        const gap = hypot3(d.cur[0]! - c[o]!, d.cur[1]! - c[o + 1]!, d.cur[2]! - c[o + 2]!) - this.reach[i]! - DOLL_SPAN;
+        if ((this.met[i]! & bit) !== 0) {
+          if (!d.live || gap > CLEAR_M) this.met[i] = this.met[i]! & ~bit;
+          continue;
+        }
+        if (!d.live || !d.driven || this.speed[i] === 0 || gap > this.speed[i]! * step + TOUCH_SEE) continue;
+        const closing = this.closingOn(i, d, step);
+        if (Number.isNaN(closing)) continue;
+        this.met[i] = this.met[i]! | bit;
+        if (knocksDown(this.bodies[i]!.mass(), closing)) knock(s);
+      }
+    }
+  }
+
+  /** Prop `i`'s closing speed (m/s, along the contact normal) on the first part of `d` it touches within this step of `step` s; NaN: none. Reads its velocity (a Rapier getter that allocates) only once it is near. */
+  private closingOn(i: number, d: Doll, step: number): number {
+    const v = this.bodies[i]!.linvel();
+    for (const own of this.own[i]!) {
+      for (const part of d.bodies) {
+        const hit = own.contactCollider(part.collider(0), TOUCH_SEE);
+        if (hit === null) continue;
+        const n = hit.normal1;
+        const closing = v.x * n.x + v.y * n.y + v.z * n.z;
+        if (hit.distance <= Math.max(0, closing) * step + TOUCH_SKIN) return closing;
+      }
+    }
+    return NaN;
   }
 
   /** Poses after the last step (`cur`) or the one before it, for `pose`'s blend; a sleeping prop's only until it has been read asleep. */

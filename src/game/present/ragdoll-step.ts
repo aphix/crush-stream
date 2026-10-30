@@ -139,6 +139,7 @@ export abstract class RagdollStepper extends RagdollPool {
       if (j === steps) this.props.capture(false);
       this.proxies.glassTouch(cars, authority);
       this.loose.partTouch(step, authority);
+      this.props.strikeDolls(this.dolls, step, this.goLimp);
       const stepAt = performance.now();
       world.step();
       this.stepMs[this.steps++ % STEP_LOG] = performance.now() - stepAt;

@@ -12,6 +12,8 @@ const FACING_BACK = 0.12;
 const GIVE_UP = 30;
 /** He slows over the last metres: the pace (m/s) never falls under this until he arrives. */
 const SLOWEST = 0.5;
+/** A figure who stepped into the ragdoll world standing (`stepIn`) stays there at least this long (s), so a thrown prop that only bumps him bounces off him before the set takes him back. */
+const BUMP_HOLD = 1;
 
 /** A figure the ragdoll world has: which one of the set he is, the pool slot his dummy is in, and how long he has been away (s). */
 type Away = { figure: number; slot: number; seconds: number };
@@ -41,19 +43,35 @@ export class ShowcaseWalks {
     return this.away.some((a) => a.slot === slot);
   }
 
+  /** Whether figure `figure` stands on the set, not away in the ragdoll world. */
+  onSet(figure: number): boolean {
+    for (const a of this.away) if (a.figure === figure) return false;
+    return true;
+  }
+
   /** Figure `figure` of the set is pushed at the world `point`, the way `facing` (a unit vector: the camera's) points. Whether the ragdoll world took him (not while Rapier loads). */
   knock(figure: number, point: THREE.Vector3, facing: THREE.Vector3): boolean {
+    const slot = this.stepIn(figure);
+    if (slot < 0) return false;
+    this.push(slot, point, facing);
+    return true;
+  }
+
+  /**
+   * Figure `figure` of the set steps into the ragdoll world as he stands, on his mark and unpushed, a walker held up: a thrown prop on
+   * its way meets his body there, and knocks him down or bounces off him by the one law (`PropBodies.strikeDolls`). His pool slot, or -1
+   * while Rapier loads. The pool holds four: a fifth sends the one longest away home at once.
+   */
+  stepIn(figure: number): number {
     let slot = this.ragdolls.freeSlot();
     if (slot < 0 && this.away.length > 0) slot = this.sendHome(this.away[0]!);
-    if (slot < 0) return false;
+    if (slot < 0) return -1;
     this.art.markOf(figure, _mark);
-    const dress = this.art.figureOf(figure);
-    const placed = this.ragdolls.startWalker(_mark, this.art.yawOf(figure), dress, slot);
-    if (placed < 0) return false;
+    const placed = this.ragdolls.startWalker(_mark, this.art.yawOf(figure), this.art.figureOf(figure), slot);
+    if (placed < 0) return -1;
     this.away.push({ figure, slot: placed, seconds: 0 });
     this.art.take(figure);
-    this.push(placed, point, facing);
-    return true;
+    return placed;
   }
 
   /** The dummy in pool slot `slot`, a figure already away (lying, getting up, walking home), is pushed again at `point`: he goes limp where he is, and his way home starts over. */
@@ -92,7 +110,7 @@ export class ShowcaseWalks {
       }
       walker.command = 0;
       walker.heading = this.art.yawOf(away.figure);
-      if (Math.abs(wrapAngle(walker.heading - walker.facing)) < FACING_BACK) this.sendHome(away);
+      if (Math.abs(wrapAngle(walker.heading - walker.facing)) < FACING_BACK && away.seconds >= BUMP_HOLD) this.sendHome(away);
     }
   }
 

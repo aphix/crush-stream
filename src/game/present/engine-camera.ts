@@ -166,6 +166,9 @@ export class ChaseCamera {
    */
   take: { down(x: number, y: number, t: number): boolean; move(e: PointerEvent): void; up(x: number, y: number, t: number, cancel: boolean): void } | null = null;
   private taking = false;
+  /** Where the pointer last moved over the canvas (client px; NaN: not yet): what a key aims at (the showcase's thrown props). */
+  hoverX = NaN;
+  hoverY = NaN;
 
   readonly camera: THREE.PerspectiveCamera;
   private readonly canvas: HTMLCanvasElement;
@@ -661,6 +664,8 @@ export class ChaseCamera {
   };
 
   private onPointerMove = (e: PointerEvent): void => {
+    this.hoverX = e.clientX;
+    this.hoverY = e.clientY;
     if (e.pointerId === this.pinchId) {
       this.pinchX = e.clientX;
       this.pinchY = e.clientY;

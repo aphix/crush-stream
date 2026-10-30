@@ -10,7 +10,11 @@ import { CAR_STYLE_IDS } from "../vehicle/car-variants.ts";
 import { PART_KIND } from "../vehicle/part-geometry.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
-import { runSeconds, bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
+import { runSeconds, bootEngine, pressKey, stubBrowser } from "./engine-headless.test-util.ts";
+import { SHOWCASE_THROWN, THROWN_KINDS, THROWN_PER_KIND } from "../present/showcase-art.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
+
+const FRAME = 1 / FRAME_HZ;
 
 /**
  * The showcase (`#scene=showcase`, by link only): every kind of person the game draws standing in rows in one draw, a press on
@@ -40,12 +44,22 @@ describe("given the real engine booted on #scene=showcase", () => {
   const chestOf = (slot: number): [number, number] => {
     const at = art().markOf(slot, new THREE.Vector3());
     at.y = CHEST_Y;
+    return screenOf(at);
+  };
+  /** Client coordinates of world point `at` in the camera now. */
+  const screenOf = (at: THREE.Vector3): [number, number] => {
     engine["camera"].clearViewOffset();
     engine["camera"].aspect = 800 / 600;
     engine["camera"].updateProjectionMatrix();
     engine["camera"].updateMatrixWorld(true);
-    at.project(engine["camera"]);
-    return [((at.x + 1) / 2) * 800, ((1 - at.y) / 2) * 600];
+    const p = at.clone().project(engine["camera"]);
+    return [((p.x + 1) / 2) * 800, ((1 - p.y) / 2) * 600];
+  };
+  /** The cursor over client point (`x`, `y`), then number key `digit`. */
+  const throwAt = ([x, y]: [number, number], digit: number): void => {
+    engine["view"].hoverX = x;
+    engine["view"].hoverY = y;
+    pressKey(engine, `Digit${digit}`);
   };
 
   beforeAll(async () => {
@@ -161,5 +175,49 @@ describe("given the real engine booted on #scene=showcase", () => {
     const batch = engine["partBatch"];
     batch.sync(engine["drawnCars"]());
     expect(`${batch.drawn(PART_KIND.interior)} ${batch.drawn(PART_KIND.seatFront)} ${batch.drawn(PART_KIND.mirrorL)} ${batch.drawn(PART_KIND.liningL)} ${batch.drawn(PART_KIND.engineBay)}`, "every car's cabin and both front seats drawn; mirrors and door linings on the first two rows only; the bay under every open and stripped hood").toBe(`${3 * styles} ${2 * 3 * styles} ${2 * styles} ${2 * styles} ${2 * styles}`);
+  });
+
+  it("when the cursor is over the floor and 2 is pressed, then the set's first crate flies from in front of the eye and comes down on that point", () => {
+    engine.reset();
+    runSeconds(engine, FRAME);
+    const target = art().markOf(0, new THREE.Vector3()).lerp(engine["camera"].position.clone().setY(0), 0.5).setY(0);
+    throwAt(screenOf(target), 2);
+    const crate = THROWN_KINDS.indexOf("crate") * THROWN_PER_KIND;
+    const p = new THREE.Vector3();
+    const v = new THREE.Vector3();
+    const out = SHOWCASE_THROWN.map((_, i) => engine["ragdolls"].propAt(i, p, v));
+    expect(out.map((o, i) => (o ? SHOWCASE_THROWN[i]!.prefab : "")).filter(Boolean), "the props out").toEqual(["crate"]);
+    expect(out[crate], "the kind's first").toBe(true);
+    let nearest = Infinity;
+    for (let f = 0; f < FRAME_HZ; f++) {
+      runSeconds(engine, FRAME);
+      engine["ragdolls"].propAt(crate, p, v);
+      nearest = Math.min(nearest, Math.hypot(p.x - target.x, p.z - target.z));
+    }
+    expect(nearest, `its middle passed ${nearest.toFixed(2)} m from the point in plan`).toBeLessThan(0.5);
+  });
+
+  it("when a crate is thrown at a standing figure's chest, then he goes down; when a cone is thrown the same way, then it bounces off him and he stays on his feet", () => {
+    /** Whether the figure in slot 0, a prop of key `digit` thrown at his chest, was knocked down within a second; and whether he left the set at all. */
+    const hit = (digit: number): { down: boolean; met: boolean } => {
+      engine.reset();
+      runSeconds(engine, FRAME);
+      throwAt(chestOf(0), digit);
+      let down = false;
+      let met = false;
+      for (let f = 0; f < FRAME_HZ; f++) {
+        runSeconds(engine, FRAME);
+        const away: { figure: number; slot: number }[] = engine["showcase"]!["walks"]["away"];
+        const him = away.find((a) => a.figure === 0);
+        if (him === undefined) continue;
+        met = true;
+        down ||= engine["ragdolls"].walkers[him.slot]!.state === "down";
+      }
+      return { down, met };
+    };
+    const crate = hit(2);
+    const cone = hit(1);
+    expect(crate, "the crate (30 kg at 15 m/s: 3.4 m/s into his 101 kg)").toEqual({ down: true, met: true });
+    expect(cone, "the cone (4 kg: 0.6 m/s, under the 1 m/s that knocks a man down)").toEqual({ down: false, met: true });
   });
 });

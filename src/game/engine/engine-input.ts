@@ -805,6 +805,8 @@ export abstract class EngineInput extends EngineRigs {
     } else if (this.showPistons && /^Digit[0-8]$/.test(e.code)) {
       const n = Number(e.code.slice(5));
       this.firePiston(n === 0 ? PISTON_IDS.length : n - 1);
+    } else if (this.showShowcase && /^Digit[1-9]$/.test(e.code)) {
+      this.showcase!.throwProp(Number(e.code.slice(5)) - 1, this.view.hoverX, this.view.hoverY);
     } else if (e.code === "KeyO") {
       this.toggleOrbit();
     } else if (e.code === "KeyM") {

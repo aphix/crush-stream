@@ -118,6 +118,15 @@ export const SHOWCASE_GALLERY: readonly Placed[] = [
   ...galleryRow(38, [PREFAB.building, PREFAB.stucco], 2),
 ];
 
+/** The number keys' props, in key order (Digit1 the first): every knockable prefab (`body: "knock"`); a carton is the high-jump pile's, not a prefab. */
+export const THROWN_KINDS = [PREFAB.cone, PREFAB.crate, PREFAB.tyreStack, PREFAB.hayBale] as const;
+/** Props of each kind out at once: a key past them throws its kind's oldest again. Four kinds of four: 16 bodies in the world at most. */
+export const THROWN_PER_KIND = 4;
+/** Where the thrown props stand until thrown (m under the disc's floor): out of sight and out of reach of everything. */
+const THROWN_DEPTH = 20;
+/** The showcase's thrown props, kind by kind (`THROWN_KINDS`), `THROWN_PER_KIND` each, standing under the floor until a key throws one. */
+export const SHOWCASE_THROWN: readonly Placed[] = THROWN_KINDS.flatMap((prefab) => Array.from({ length: THROWN_PER_KIND }, () => ({ prefab, x: 0, y: -THROWN_DEPTH, z: 0, yaw: 0, sx: 1, sy: 1, sz: 1 })));
+
 /** The light posts' feet (x, z; m) and where each spot aims (x, z; m): the front pair flank the people (out of the opening frame), the back pair the car rows. */
 const POSTS: readonly { x: number; z: number; aimX: number; aimZ: number }[] = [
   { x: -11, z: -3, aimX: 1, aimZ: -1 },
@@ -140,18 +149,22 @@ export class ShowcaseArt {
   private readonly floor = groundMesh(new THREE.CircleGeometry(STAGE_DIAMETER / 2, 64), tagMaterial(new THREE.MeshStandardMaterial({ color: STUDIO_FLOOR, roughness: 1, metalness: 0 }), MAT.STUDIO_FLOOR, FLOOR_WET_SHARE), GROUND_LEVEL.runoff);
   /** The posts' spots, in the set whenever it stands (a light shown or hidden relinks every lit shader) and dark by day (`setNight`). */
   private readonly postLights: THREE.SpotLight[] = [];
+  /** The number keys' props (`SHOWCASE_THROWN`), drawn where the dummies' world has them. */
+  readonly thrown: PropTumble;
 
   constructor() {
     this.group.name = "showcase";
     this.group.visible = false;
     this.group.add(this.floor, this.people.group, this.gallery);
     this.galleryMaterials = makePrefabMaterials(raceTextures());
-    new PropTumble(SHOWCASE_GALLERY, this.galleryMaterials, (mesh, _id, shared) => {
+    const add = (mesh: THREE.InstancedMesh, into: THREE.Group, shared: THREE.Material | null): void => {
       mesh.castShadow = !shared;
       mesh.receiveShadow = true;
       mesh.customDepthMaterial = DEPTH_INSTANCED;
-      this.gallery.add(mesh);
-    });
+      into.add(mesh);
+    };
+    new PropTumble(SHOWCASE_GALLERY, this.galleryMaterials, (mesh, _id, shared) => add(mesh, this.gallery, shared));
+    this.thrown = new PropTumble(SHOWCASE_THROWN, this.galleryMaterials, (mesh, _id, shared) => add(mesh, this.group, shared));
     this.erectPosts();
     this.floor.rotation.x = -Math.PI / 2;
     this.floor.receiveShadow = true;

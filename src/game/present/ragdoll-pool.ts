@@ -166,8 +166,10 @@ export abstract class RagdollPool {
   protected lastSlot = 0;
   /** The cars' proxies in the dummies' world. */
   protected readonly proxies = new CarProxies(this.dolls);
-  /** The sim's loose car parts and wheels in the dummies' world: slow ones block them, fast ones strike them; a walker struck hard enough goes limp. Near a knocked prop or carton, they and the parts that stand out of a car's body meet it. */
-  protected readonly loose = new LooseProxies((slot) => this.walkers[slot]!.struck(), this.proxies.strikes, (x, y, z, r) => this.props.touches(_near.set(x, y, z), r, 0, 0) || this.boxes.touches(_near, r));
+  /** A walker struck hard enough (`knocksDown`) by a loose part or a knocked prop goes limp: the walker of pool slot `slot`. */
+  protected readonly goLimp = (slot: number): void => this.walkers[slot]!.struck();
+  /** The sim's loose car parts and wheels in the dummies' world: slow ones block them, fast ones strike them (`goLimp`). Near a knocked prop or carton, they and the parts that stand out of a car's body meet it. */
+  protected readonly loose = new LooseProxies(this.goLimp, this.proxies.strikes, (x, y, z, r) => this.props.touches(_near.set(x, y, z), r, 0, 0) || this.boxes.touches(_near, r));
   /** The ride-along camera over the dummies (`follow`, `frameCamera`). */
   protected readonly ride = new RideAlong();
   /** One walker per pool slot: a dummy of the pool (`startWalker`) held up and walked by motors, in this world with the cars and the ground. The player on foot is the one in `WALKER_SLOT`. */

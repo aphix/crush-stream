@@ -8,12 +8,13 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { HIT_DOOR, HIT_HOOD, HIT_LID, HIT_MIRROR, HIT_PANEL, MIRROR_BREAK_J } from "../vehicle/car-core.ts";
 import { assertSameNumbers, paint } from "../vehicle/test-support.ts";
 import { PREFABS, type PrefabId } from "../world/catalog.ts";
-import { activeGround, setGround } from "../world/ground.ts";
+import { activeGround, DISC_GROUND, setGround } from "../world/ground.ts";
 import { placeProps } from "../world/placements.ts";
 import { Track } from "../world/track.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { square } from "../world/track.test-util.ts";
 import { RagdollSystem } from "./engine-ragdoll.ts";
+import { SHOWCASE_THROWN, THROWN_KINDS, THROWN_PER_KIND } from "./showcase-art.ts";
 import { fireRam, parkedStyle } from "../scenes/door-rig.test-util.ts";
 
 /**
@@ -164,6 +165,23 @@ describe("given a sedan parked on the road and a knocked prop thrown at its left
     const run = await strike("crate", (car) => (before = simState(car)), thrownAt("crate", HIT_MIRROR, LEFT, THROW_MPS), 1, frozenWreck);
     expect(run.car.partOff("mirrorL"), "the crate knocked the mirror off").toBe(true);
     assertSameNumbers(simState(run.car), before, "the car's sim state");
+  });
+
+  it("when the showcase's number key throws its crate at the mirror, from under the floor where it stood, then it knocks the mirror off as a knocked crate does", async (t) => {
+    setGround(DISC_GROUND);
+    const car = new DeformableCar(paint(), new THREE.Scene(), null, "sedan");
+    launch(car, 0, 0, 0, 0, 0);
+    const sys = (system = new RagdollSystem(new THREE.Scene(), () => {}, () => {}));
+    await sys.preload();
+    sys.setSolids(DISC_GROUND, [], SHOWCASE_THROWN, null);
+    const hits: Hit[] = [];
+    sys.onPartHit = (_car, part, energy) => hits.push({ part, energy });
+    sys.update(FRAME, [car], true, false, null);
+    const { at, v } = thrownAt("crate", HIT_MIRROR, LEFT, THROW_MPS)(car);
+    expect(sys.throwProp(THROWN_KINDS.indexOf("crate") * THROWN_PER_KIND, at, v), "the crate flew").toBe(true);
+    for (let f = 0; f < FRAME_HZ; f++) sys.update(FRAME, [car], true, false, null);
+    t.annotate(`hits ${JSON.stringify(hits)}`);
+    expect(car.partOff("mirrorL"), "the thrown crate knocked the mirror off").toBe(true);
   });
 });
 

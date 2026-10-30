@@ -164,6 +164,8 @@ export abstract class EngineScenes extends EngineMinigames {
     if (this.race.active && next !== this.sceneId) this.setRace(false);
     // The workshop's lights go with the Lab, the garage and the showcase, before a race lights its course.
     if ((wasLab && next !== "lab") || ((wasGarage || wasShowcase) && next !== "garage" && next !== "showcase")) this.stage.look(null);
+    // The showcase's thrown props stand on the fleet's disc, which other sandbox scenes share: they leave with it.
+    if (wasShowcase && next !== "showcase") this.ragdolls.clearScene();
     if (this.derbyMode !== (next === "derby")) this.setDerby(next === "derby");
     if (next === "range" || next === "stack" || next === "lab" || next === "garage" || next === "showcase") {
       this.sandboxCars = this.carCount;

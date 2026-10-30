@@ -265,6 +265,15 @@ export abstract class RagdollThrower extends RagdollStepper {
     if (this.live === 0) this.mode = null;
   }
 
+  /** No scene's solids or props any more: leaving the showcase, whose ground (the fleet's disc) the other sandbox scenes share. */
+  clearScene(): void {
+    this.course = null;
+    this.solids = null;
+    this.props.set([], null);
+    this.tumble = null;
+    if (this.live === 0) this.mode = null;
+  }
+
   /**
    * Knockable prop `i` of the course or scene knocked off its spot by car `car` (-1: none) at (vx, vy, vz) m/s: it flies,
    * tumbles and comes to rest in this world (cosmetic: nothing here reaches the sim); knocked before Rapier is in, once it is.
@@ -277,6 +286,22 @@ export abstract class RagdollThrower extends RagdollStepper {
     }
     this.wake();
     this.props.knock(i, car, vx, vy, vz);
+  }
+
+  /**
+   * Knockable prop `i` of the scene thrown by a hand from `at` at `v` m/s (the showcase's number keys): it flies as a knocked one,
+   * meeting dummies and cars' parts the same way. This thread's world only, as a scene's solids are. False while it cannot fly yet.
+   */
+  throwProp(i: number, at: THREE.Vector3, v: THREE.Vector3): boolean {
+    this.pick();
+    if (this.mode === "remote") return false;
+    this.wake();
+    return this.props.throwFrom(i, at, v.x, v.y, v.z);
+  }
+
+  /** Is a knocked prop flying within `r` m of `p`, plus its reach and how far it travels in `dt` s? */
+  flyingPropNear(p: THREE.Vector3, r: number, dt: number): boolean {
+    return this.props.flyingNear(p, r, dt);
   }
 
   /** Knocked prop `i`'s middle after the last step into `p`, and its velocity into `v`; false while it is not out. */
