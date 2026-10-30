@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
-import { HIT_SIZE, PQ_BODY, PQ_SIZE, type StirCar } from "../world/surfaces.ts";
+import { HIT_SIZE, PQ_BODY, PQ_SIZE } from "../world/surfaces.ts";
 import { ASKER } from "../world/prism.ts";
 import { carFrame, type CarFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
@@ -173,6 +173,8 @@ export const UNDER = Array.from({ length: CONTACTS }, () => false);
 export const HELD = Array.from({ length: CONTACTS }, (): DeformableCar | null => null);
 const ARM = Array.from({ length: CONTACTS }, () => new THREE.Vector3());
 export const RATIO = new Float64Array(CONTACTS);
+/** Per contact of a loose part: its surface's own velocity at the point (`partSurface`), which its row closes at and rubs against; the surface feels nothing of it. */
+export const SURF_V = Array.from({ length: CONTACTS }, () => new THREE.Vector3());
 /** Per contact: the friction impulse (world, per unit mass) it has given over the passes, held within its friction of `ACC`. */
 export const FRA = Array.from({ length: CONTACTS }, () => new THREE.Vector3());
 /**
@@ -220,13 +222,13 @@ export const _crushBack = new THREE.Vector3();
 /** A torn part or popped wheel of car `own` met car `top`'s top (`stepLoose`): what moved it is in the world, which a highlight clip with `own` must keep. */
 export type TopMet = (own: number, top: number) => void;
 const NO_MET: TopMet = () => {};
-const NO_CARS: readonly StirCar[] = [];
+const NO_CARS: readonly DeformableCar[] = [];
 
 /**
  * The body the rigid step moves, set by `bindBody`. Every body takes the same step (`moveBody`, `placeBody`, `readPoints`, `openRows`,
  * `solveRows`): `stepFree` adds a car's tyres, springs, belly and face budgets between them, `stepLoose` a part's sleep and its gating
  * of the point reads. `q`, `pos`, `v`, `w` are the body's own pose and its velocity and spin (unit mass), `centre` its centre of mass in
- * its own frame, `invI` its inverse inertia per unit mass about its own axes, `skip` its slot asked of the world, `owner` the slot of the car a part belongs to (a part leaves no car out of what it meets: `seated`, still at its seat, meets nothing of its own car's, and `touchedOwn` says a point of it was in or at that car's hull this step), `surf` the faces it
+ * its own frame, `invI` its inverse inertia per unit mass about its own axes, `skip` its slot asked of the world, `owner` the slot of the car a part belongs to (a part leaves no car out of what it meets), `surf` the faces it
  * shares with other cars, `mass` its mass over theirs. `driven`, `parked`, `powered` are a car's drive state (its tyres' friction),
  * `nearing` that a point not yet in a surface reaches it within the slice at its closing speed, `met` what a part's point on a car's top reports,
  * `panel` that the part is a torn panel (`stepLoose` with its mass), not a popped wheel, `cars` the world's cars a part's points may meet the flank of.
@@ -240,8 +242,6 @@ export const body = {
   invI: PLATFORM.invI,
   skip: -1,
   owner: -1,
-  seated: false,
-  touchedOwn: false,
   part: false,
   dt: 0,
   wreck: false,
@@ -348,6 +348,7 @@ export function pointVel(c: number, v: THREE.Vector3, w: THREE.Vector3, out: THR
   out.crossVectors(w, R[c]!).add(v);
   const o = HELD[c];
   if (o !== null) out.sub(_ov.crossVectors(o.angular, ARM[c]!).add(o.velocity));
+  else if (body.part) out.sub(SURF_V[c]!);
   return out;
 }
 

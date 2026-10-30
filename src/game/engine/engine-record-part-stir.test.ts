@@ -246,7 +246,7 @@ describe("given a head-on recorded as a highlight, its torn parts lying asleep o
     t.annotate(`head-on at ${STAGED.speed} m/s; clip cars ${clip.cars.map((c) => c.slot).join(",")}, steps ${s0} to ${s0 + clip.h.length}; passer nearest at step ${run.closest.step} (${run.closest.gap.toFixed(2)} m); ${clip.partStirs.length} part stirs over ${slices} slices cost ${bytes} bytes raw of ${clipBytes(clip)}, ${Math.round(((withRuns.length - without.length) * 3) / 4)} deflated of ${Math.round((withRuns.length * 3) / 4)}`);
     expect(clip.cars.some((c) => c.slot === A) && clip.cars.some((c) => c.slot === B), "the pair is in the clip").toBeTruthy();
     expect(!clip.cars.some((c) => c.slot === PASSER), "the car that joined the field after the clip began is left out").toBe(true);
-    expect(s0 + clip.h.length, "the passer comes by inside the clip").toBeGreaterThan(run.closest.step);
+    expect(s0 + clip.h.length, "the passer comes by the part inside the clip").toBeGreaterThan(run.reached.step);
     expect(clip.partStirs.length, "no torn part was recorded woken").toBeGreaterThanOrEqual(1);
     const { reached } = run;
     expect(reached.gap, `the passer came within ${reached.gap.toFixed(2)} m of a resting part, not within its reach`).toBeLessThan(run.cars[PASSER]!.frame.half.x + reached.reach);

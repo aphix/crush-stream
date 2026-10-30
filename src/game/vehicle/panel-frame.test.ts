@@ -90,14 +90,14 @@ describe("given a wreck settled for 3 s (a sedan, truck or monster class, intact
       }
     });
 
-    it(`when the ${tag} wreck's panels are hinged and torn off, then each torn panel starts on its patch of body (0.14 m out, 0.08 m up), not at the stock ride`, () => {
+    it(`when the ${tag} wreck's panels are hinged and torn off, then each torn panel starts where it tore, on its patch of body, not at the stock ride`, () => {
       const car = wreck(cls, lost);
       for (const name of ["quarterR", "archFL"]) {
         const p = car.hang(name, 0.05);
         const patch = centre(car.body, [...p.region!.verts]);
         car.tear(name);
         const d = centre(p.object as THREE.Mesh).sub(patch);
-        expect(Math.abs(d.y - 0.08), `${name}: torn shell starts ${(d.y * 100).toFixed(1)} cm above its patch of body (launch lift 8 cm)`).toBeLessThan(0.03);
+        expect(Math.abs(d.y), `${name}: torn shell starts ${(d.y * 100).toFixed(1)} cm above its patch of body`).toBeLessThan(0.03);
         expect(Math.hypot(d.x, d.z), `${name}: torn shell starts ${Math.hypot(d.x, d.z).toFixed(2)} m sideways of its patch of body`).toBeLessThan(0.2);
       }
     });

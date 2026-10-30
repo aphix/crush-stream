@@ -24,7 +24,7 @@ const STEPS = 6 * FINE_HZ;
 const SPEED = 60 / 3.6;
 /** The second car starts this far down the road (m) and this far off the first's line, so the two do not meet square. */
 const GAP = 40;
-const OFFSET = 0.4;
+const OFFSET = 0.8;
 /** Per car: its pose (position, quaternion), then its parts' keyframe state, then its loose bodies'. */
 const POSE = 7;
 const EACH = POSE + PART_STATE + LOOSE_STATE_MAX;

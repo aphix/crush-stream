@@ -35,7 +35,6 @@ function wheelOff(z: number, vz: number): { car: DeformableCar; step: () => void
   wheel.object.position.set(0, WHEEL_Y, z);
   wheel.velocity.set(0, 0, vz);
   wheel.angular.set(0, 0, 0);
-  wheel.shape.seatFor = 0;
   return { car, step: () => tickWorld(w), at: () => wheel.object.position.toArray() };
 }
 

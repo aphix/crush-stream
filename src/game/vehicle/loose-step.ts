@@ -3,8 +3,9 @@ import { applyGroundFriction } from "../deform/physics-util.ts";
 import { GRAVITY } from "../kernel/constants.ts";
 import { detAsin, detCos, detSin } from "../kernel/physics-core.js";
 import { NO_FLOOR } from "../world/ground.ts";
-import { C_DEPTH, C_GRIP, C_H, C_NX, C_NZ, clearOf, HIT_SIZE, holdTops, pointContact, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, stirNear, type StirCar } from "../world/surfaces.ts";
+import { C_DEPTH, C_GRIP, C_H, C_NX, C_NZ, clearOf, HIT_SIZE, holdTops, pointContact, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, stirNear } from "../world/surfaces.ts";
 import { body, centreOfMass, moveBody, placeBody, standAtCentre, bindBody, type TopMet } from "./car-air-body.ts";
+import type { DeformableCar } from "./car.ts";
 import { loadShape, readPoints } from "./car-air-points.ts";
 import { openRows, solveRows } from "./car-air.ts";
 import { DENT_MIN_DV, recordDent, type DentState } from "./loose-dent.ts";
@@ -32,9 +33,6 @@ const BOX_CORNERS = 8;
 const REST_SPEED = (2 * GRAVITY) / 120;
 /** How long (s) a part rests on two points before it sleeps (on three it sleeps at once): a bumper across two wreck tops holds there, where one rocking through still moves on (a slab tipping off two posts from 0.01 rad/s passes rest speed 0.8 s in). */
 const TWO_POINT_REST_S = 1;
-/** The longest (s) a part just torn off a car, or a wheel just popped from its hub, may sit in its own car's hull without meeting it: of 20 tears (all styles, parked and at 20 m/s) the parts that fly clear leave it within 1 s; one still in it then is put out. */
-export const SEAT_S = 1;
-
 /**
  * A free point (an FX bit: a spark, a glass dot, a metal chip) meets what is under it and beside it by the one point query
  * (`pointContact`: the ground, the prisms of the scene and the cars' tops, car `skip`'s left out; -1: none). A side it is in
@@ -81,7 +79,7 @@ export const SHAPE_POINTS = 20;
 
 /** A shape for a body of at most `SHAPE_POINTS` points, empty until `boxShape` or `wheelShape` fills it; `shell`: it may fly as its drawn shell's own points (`LooseShape.shell`). */
 export function newLooseShape(shell = false): LooseShape {
-  return { points: new Float64Array(3 * SHAPE_POINTS), count: 0, centre: new THREE.Vector3(), half: new THREE.Vector3(), plate: 0, box: false, shell, invI: new THREE.Vector3(), reach: 0, asleep: false, sleepX: 0, sleepZ: 0, airborne: false, restFor: 0, seatFor: 0 };
+  return { points: new Float64Array(3 * SHAPE_POINTS), count: 0, centre: new THREE.Vector3(), half: new THREE.Vector3(), plate: 0, box: false, shell, invI: new THREE.Vector3(), reach: 0, asleep: false, sleepX: 0, sleepZ: 0, airborne: false, restFor: 0 };
 }
 
 /** `shape` as `newLooseShape` made it: not measured, awake, no sleep place. A body back on its car (`resetVisual`) flies afresh when next torn, as a new car's would. */
@@ -99,7 +97,6 @@ export function clearShape(shape: LooseShape): void {
   shape.sleepZ = 0;
   shape.airborne = false;
   shape.restFor = 0;
-  shape.seatFor = 0;
 }
 
 /** The thinnest a box's half extent is taken (m): a sheet of no thickness would have no spin about its own length. */
@@ -463,13 +460,13 @@ function blow(p: LooseBody, mass: number, dt: number): void {
  * One slice of a torn part's or a popped wheel's flight (`p.velocity` its middle's, `p.angular` its spin) by the rigid step every body
  * takes (`car-air.ts`: `moveBody`, `readPoints`, `openRows`, `solveRows`): the body's points (a part's box's eight corners, a wheel's
  * rims) meet what is under and beside them by the one point query, with the point's own velocity (`pointContact`: the ground, every
- * prism, every car's top and flank: its own car `owner`'s only once it has stood clear of it since it left its seat, `LooseShape.seated`), as every body's points do, so a part topples, rolls, slides off an edge and stops
+ * prism, every car's top and flank, its own car's among them), as every body's points do, so a part topples, rolls, slides off an edge and stops
  * at a wall. Here: its sleep, the gate that asks no point when nothing is near, its spin dying in the air, and its dent. A torn panel of `mass`
  * kg flies in the wind (`blow`) and meets surfaces as the body's metal (`body.panel`); 0, a popped wheel: no wind, its rims a locked tyre's
  * contact. True when a sleeper at rest woke because something came near it (`stirNear`; with `cars`, the world's, only a top whose car moves): a body woken by speed given it is not a stir. `met`
  * hears each of its points on a car's top (not its own's). No car feels a part: its contacts take no impulse, crush or touch.
  */
-export function stepLoose(p: LooseBody, dt: number, owner: number, dent?: DentState, met?: TopMet, mass = 0, cars: readonly StirCar[] | null = null): boolean {
+export function stepLoose(p: LooseBody, dt: number, owner: number, dent?: DentState, met?: TopMet, mass = 0, cars: readonly DeformableCar[] | null = null): boolean {
   const shape = p.shape;
   const object = p.object;
   const v = p.velocity;
@@ -485,8 +482,6 @@ export function stepLoose(p: LooseBody, dt: number, owner: number, dent?: DentSt
   }
   if (mass > 0) blow(p, mass, dt);
   bindBody(object, v, w, shape.centre, shape.invI, -1, true, dt, owner);
-  body.seated = shape.seatFor > 0;
-  body.touchedOwn = false;
   if (met) body.met = met;
   if (cars !== null) body.cars = cars;
   body.panel = mass > 0;
@@ -509,15 +504,13 @@ export function stepLoose(p: LooseBody, dt: number, owner: number, dent?: DentSt
     if (n > 0 && first < end) n = readPoints(first, end, end, n, false);
   }
   shape.airborne = n === 0;
-  // A step that found none of its points in its own car's hull ends its seat; else it runs down.
-  shape.seatFor = body.touchedOwn ? Math.max(0, shape.seatFor - dt) : 0;
   openRows(n);
   solveRows(n);
   standAtCentre();
   const slow = v.x * v.x + v.y * v.y + v.z * v.z < REST_SPEED * REST_SPEED && w.x * w.x + w.y * w.y + w.z * w.z < REST_SPEED * REST_SPEED;
   shape.restFor = slow && n >= 2 ? shape.restFor + dt : 0;
-  // Resting on three points or more at no more than `REST_SPEED`, or on two for `TWO_POINT_REST_S`: at rest (not while it still sits at its seat: it would sleep in the hull it is to leave).
-  if (slow && shape.seatFor === 0 && (n >= 3 || shape.restFor >= TWO_POINT_REST_S)) {
+  // Resting on three points or more at no more than `REST_SPEED`, or on two for `TWO_POINT_REST_S`: at rest.
+  if (slow && (n >= 3 || shape.restFor >= TWO_POINT_REST_S)) {
     v.set(0, 0, 0);
     w.set(0, 0, 0);
     shape.asleep = true;

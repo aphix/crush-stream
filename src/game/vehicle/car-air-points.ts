@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import type { LooseShape } from "./car-core.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, MU_TYRE, patchOf, pointContact, pointContactHeld, pointContactNear, pointContactSolids, PQ_BODY, PQ_FLANK, PQ_MOUNT, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, topsTop, topsTopLive, topsTopNear, treadMount, wheelContact, type Surface } from "../world/surfaces.ts";
+import { answerPlanVelocity, BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, MU_TYRE, patchOf, pointContact, pointContactHeld, pointContactNear, pointContactSolids, PQ_BODY, PQ_FLANK, PQ_MOUNT, PQ_SIZE, PQ_TOP_CAP, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, topsTop, topsTopLive, topsTopNear, treadMount, wheelContact, type Surface } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { G, GQ } from "../world/ground-clock.ts";
 import { CRASH, hypot2 } from "../deform/physics-util.ts";
@@ -12,10 +12,9 @@ import type { CarFrame } from "./car-rig.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
-import { cageLift, centreLift } from "./car-cage-rig.ts";
+import { cageLift, centreLift, centreY } from "./car-cage-rig.ts";
 import { HUB_POP_MPS } from "../deform/deform-solve.ts";
-import { PUSH_SPEED } from "../deform/push-budget.ts";
-import { POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, S_HELD_FROM, S_HELD_TO, N, DIR, TYRE, SOFT, SHARE, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_SAMPLE_GAP, TYRE_ALONG_MAX, GROUND_LIFT_V, REST_SPEED, body, carrier, pointVel } from "./car-air-body.ts";
+import { POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, S_HELD_FROM, S_HELD_TO, SURF_V, N, DIR, TYRE, SOFT, SHARE, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_SAMPLE_GAP, TYRE_ALONG_MAX, GROUND_LIFT_V, body, carrier, pointVel } from "./car-air-body.ts";
 
 /** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
 export function readBelly(i: number, slot: number, travel2 = NaN): boolean {
@@ -66,14 +65,30 @@ const PART_PQ = new Float64Array(PQ_SIZE);
 PART_PQ[PQ_BODY] = 1;
 PART_PQ[PQ_FLANK] = 1;
 
-/** A loose point's depth (m) in a car's flank: where the flank closes on it faster than rest, no more than that closing carries it in over a slice (the rest lift on top): a car driven into a part pushes it out as it comes and never lifts it over itself in one step. Where nothing closes it is put out whole, as a wall's side puts a part out, except in its own car's hull (a part whose seat ran out deep in it): that is eased out at the solver's push-out speed (`PUSH_SPEED`), not snapped. */
-function flankDepth(depth: number, r: THREE.Vector3): number {
-  _vp.crossVectors(body.w, r).add(body.v);
+const SOLID_V = new Float64Array(2);
+const _arm = new THREE.Vector3();
+const _lift = new THREE.Vector3();
+
+/** The velocity (m/s) at world point (`px`, `py`, `pz`) of what `HIT` answered, into `SURF_V[n]`: a car's top or flank moves with its car, spin and all (`carrier`'s arm), a moving prism at its plan velocity (`answerPlanVelocity`); the rest stands still. */
+function partSurface(n: number, px: number, py: number, pz: number): void {
+  const out = SURF_V[n]!;
   const car = body.cars[HIT[C_OWNER]!];
-  let closing = -(_vp.x * HIT[C_NX]! + _vp.y * HIT[C_NY]! + _vp.z * HIT[C_NZ]!);
-  if (car !== undefined) closing += car.velocity.x * HIT[C_NX]! + car.velocity.y * HIT[C_NY]! + car.velocity.z * HIT[C_NZ]!;
-  if (closing >= REST_SPEED) return Math.min(depth, (closing + GROUND_LIFT_V) * body.dt);
-  return HIT[C_OWNER] === body.owner ? Math.min(depth, PUSH_SPEED * body.dt) : depth;
+  if (car === undefined) {
+    answerPlanVelocity(HIT, SOLID_V);
+    out.set(SOLID_V[0]!, 0, SOLID_V[1]!);
+    return;
+  }
+  _arm.set(px, py, pz).sub(car.group.position).sub(_lift.set(0, centreY(car), 0).applyQuaternion(car.group.quaternion));
+  out.crossVectors(car.angular, _arm).add(car.velocity);
+}
+
+/** Whether `HIT` is a car's top standing over part point `n` (arm `r`) deeper than its closing on the top's own motion (`SURF_V`) carried it in this slice, a speculative gap on top: it did not come in through the top. */
+function underCarTop(n: number, px: number, py: number, pz: number, r: THREE.Vector3): boolean {
+  if (HIT[C_H]! === NO_FLOOR || HIT[C_OWNER]! < 0) return false;
+  partSurface(n, px, py, pz);
+  _vp.crossVectors(body.w, r).add(body.v).sub(SURF_V[n]!);
+  const closing = -(_vp.x * HIT[C_NX]! + _vp.y * HIT[C_NY]! + _vp.z * HIT[C_NZ]!);
+  return (HIT[C_H]! - py) * HIT[C_NY]! > Math.max(0, closing) * body.dt + SPECULATIVE_GAP;
 }
 
 const CHK_Q = new Float64Array(PQ_SIZE);
@@ -226,7 +241,13 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
         PART_PQ[PQ_VX] = _vp.x;
         PART_PQ[PQ_VY] = _vp.y;
         PART_PQ[PQ_VZ] = _vp.z;
+        PART_PQ[PQ_TOP_CAP] = Infinity;
         far = pointContactHeld(PART_PQ, skip, HIT, travel2, SPECULATIVE_GAP);
+        // A car's top holds a part's point only if it came in through the top this slice; one already in the body meets its side, or falls out under it.
+        if (!far && underCarTop(n, px, py, pz, r)) {
+          PART_PQ[PQ_TOP_CAP] = 0;
+          far = pointContactHeld(PART_PQ, skip, HIT, travel2, SPECULATIVE_GAP);
+        }
       } else {
         PQ[PQ_X] = px;
         PQ[PQ_Z] = pz;
@@ -240,7 +261,10 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
     }
     const gy = HIT[C_H]!;
     if (gy === NO_FLOOR && !(part && HIT[C_DEPTH]! > 0)) continue;
-    const pen = gy === NO_FLOOR ? (part && HIT[C_OWNER]! >= 0 ? flankDepth(HIT[C_DEPTH]!, r) : HIT[C_DEPTH]!) : gy - py;
+    if (part) partSurface(n, px, py, pz);
+    let pen = gy === NO_FLOOR ? HIT[C_DEPTH]! : gy - py;
+    // A top puts out a part's point that came down onto it; a side it is in (a car's, a prism's) moves it only by closing on it (`SURF_V`), gravity does the rest.
+    if (part && gy === NO_FLOOR) pen = 0;
     if (pen <= 0 && -pen > SPECULATIVE_GAP) {
       if (GQ.on) GQ.calls[G.ptFar] = GQ.calls[G.ptFar]! + 1;
       // A point that reaches the surface within this slice's travel at its closing speed: the next slice is cut finer.
@@ -249,11 +273,6 @@ export function readPoints(from: number, to: number, bellyFrom: number, n: numbe
         body.nearing = (_vp.x * HIT[C_NX]! + _vp.y * HIT[C_NY]! + _vp.z * HIT[C_NZ]!) * -dt >= -pen * HIT[C_NY]!;
       }
       continue;
-    }
-    // A part at its seat is in or at its own car's hull, which it meets nothing of: no row, and its seat holds this step.
-    if (part && HIT[C_OWNER]! === body.owner && body.owner >= 0) {
-      body.touchedOwn = true;
-      if (body.seated) continue;
     }
     // A body point closing on another car's top faster than a crash (`WALL_CRUSH`) onto a face steeper than the body's friction cone
     // (`HOLDING_NY`: a car's nose into another's edge or flank) is the car pair's hit: its SAT (the cage outlines) takes it and its crush

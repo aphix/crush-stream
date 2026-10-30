@@ -11,12 +11,14 @@ import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
 import { crownY } from "./car-cage-rig.ts";
 import { SKIN } from "./car-surfaces.ts";
-import { MU_BODY, REST_SPEED, RESTITUTION, invInertia } from "./car-air-body.ts";
+import { MU_BODY, RESTITUTION, invInertia } from "./car-air-body.ts";
 import { AIR_DENSITY, boxShape, newLooseShape, partMass, PLATE_CN_BROADSIDE, stepLoose } from "./loose-step.ts";
 import { corner, highest, LIES_FLAT, lowest, plateUp, RESTS } from "./loose-step.test-util.ts";
 import { assertSameDigest, paint } from "./test-support.ts";
+import { HULL_TOL, insideHull } from "./loose-hull.test-util.ts";
 
 const H = 1 / QUIET_HZ;
+const UP = new THREE.Vector3(0, 1, 0);
 
 /** A flat road at height `raise`, under everything. */
 class RaisedRoad extends Ground {
@@ -89,9 +91,9 @@ function lot(withB: boolean): Lot {
 }
 
 /** The part with its object at (x, y, z), its axes the world's, moving at `vel`, then the world run `seconds` through the engine's step (`stepWorld`: the cars move its loose parts). */
-function throwPart(l: Lot, x: number, y: number, z: number, vel: THREE.Vector3, seconds: number): void {
+function throwPart(l: Lot, x: number, y: number, z: number, vel: THREE.Vector3, seconds: number, yaw = 0): void {
   l.part.object.position.set(x, y, z);
-  l.part.object.quaternion.identity();
+  l.part.object.quaternion.setFromAxisAngle(UP, yaw);
   l.part.angular.set(0, 0, 0);
   l.part.velocity.copy(vel);
   for (let t = 0; t < seconds; t += H) stepWorld(l.w, H);
@@ -213,30 +215,34 @@ const OFF_ROOF_S = 3;
  * down the roof's sides (0.54 m on the sedan), so neither its lowest point nor its box's middle (1.036 m up under a 1.332 m crown, flying as
  * its shell: ticket B) says whether the roof holds it; its top does.
  */
-function roofDrop(l: Lot, at: number, rest: number, slide: number): { onRoof: boolean; middle: THREE.Vector3; top: number; restSpeed: number; end: THREE.Vector3; endLow: number; roofY: number } {
+function roofDrop(l: Lot, at: number, rest: number, slide: number, yaw = 0): { onRoof: boolean; middle: THREE.Vector3; top: number; restSpeed: number; end: THREE.Vector3; endLow: number; endTop: number; endInside: number; roofY: number } {
   const b = l.cars[1]!;
   const roofY = b.group.position.y + crownY(b);
-  throwPart(l, at, roofY + DROP, b.group.position.z, new THREE.Vector3(), rest);
+  throwPart(l, at, roofY + DROP, b.group.position.z, new THREE.Vector3(), rest, yaw);
   const middle = l.part.shape.centre.clone().applyQuaternion(l.part.object.quaternion).add(l.part.object.position);
   const top = highest(l.part);
   const onRoof = Math.abs(middle.x - b.group.position.x) < b.frame.half.x && top >= roofY - SKIN;
   const restSpeed = l.part.velocity.length();
-  const o = l.part.object.position;
-  throwPart(l, o.x, o.y, o.z, new THREE.Vector3(PUSH_V, 0, 0), slide);
-  return { onRoof, middle, top, restSpeed, end: l.part.object.position.clone(), endLow: lowest(l.part), roofY };
+  l.part.shape.asleep = false;
+  l.part.velocity.set(PUSH_V, 0, 0);
+  for (let t = 0; t < slide; t += H) stepWorld(l.w, H);
+  return { onRoof, middle, top, restSpeed, end: l.part.object.position.clone(), endLow: lowest(l.part), endTop: highest(l.part), endInside: insideHull(b, l.part), roofY };
 }
+
+/** The bumper's yaw (rad) as it is dropped: its length along B's, so no end hangs down a side of the roof the push takes it across (draped across, its U's ends catch the far flank). */
+const ALONG_ROOF = Math.PI / 2;
 
 /** How long (s) the dropped bumper is left on the roof before it is read as resting there: a bumper whose seams stop short of the arches still rocks 0.26 m/s at 1 s and is asleep by 1.25 s. */
 const ROOF_SETTLE_S = 2;
 
-describe("given a front bumper torn off a parked car and dropped 0.5 m onto the roof of a second car parked beside it", () => {
-  it("when it lands, then it rests on the roof; when pushed across it at 5 m/s, then it slides off the roof's edge and comes to rest on the road", () => {
+describe("given a front bumper torn off a parked car and dropped 0.5 m onto the roof of a second car parked beside it, its length along the car's", () => {
+  it("when it lands, then it rests on the roof; when pushed across it at 5 m/s, then it leaves the roof and comes to rest on the road, not inside the car", () => {
     const l = lot(true);
-    const { onRoof, middle, top, restSpeed, end, endLow, roofY } = roofDrop(l, B_X, ROOF_SETTLE_S, OFF_ROOF_S);
+    const { onRoof, middle, top, restSpeed, endTop, endInside, endLow, roofY } = roofDrop(l, B_X, ROOF_SETTLE_S, OFF_ROOF_S, ALONG_ROOF);
     expect(onRoof, `its middle at x ${(middle.x - B_X).toFixed(3)} m off B's, its top ${top.toFixed(3)} m up, roof crown ${roofY.toFixed(3)} m (a point ${SKIN} m under a top stands on it)`).toBeTruthy();
     expect(restSpeed, `its speed resting on the roof: ${restSpeed.toFixed(4)} m/s, at most the jitter a step's gravity gives (${(2 * GRAVITY * H).toFixed(4)} m/s)`).toBeLessThanOrEqual(2 * GRAVITY * H);
-    const flank = B_X + l.cars[1]!.frame.half.x;
-    expect(end.x, `ended at x ${end.x.toFixed(2)}, B's flank at ${flank.toFixed(2)}`).toBeGreaterThan(flank);
+    expect(endTop, `it ended with its top ${endTop.toFixed(3)} m up, the roof's crown ${roofY.toFixed(3)} m`).toBeLessThan(roofY - SKIN);
+    expect(endInside, `it ended ${endInside.toFixed(3)} m inside B`).toBeLessThanOrEqual(HULL_TOL);
     expect(endLow >= -RESTS && endLow <= RESTS, `ended with its lowest point ${endLow.toFixed(3)} m over the road`).toBeTruthy();
     expect(planSpeed(l.part), "plan speed on the road").toBe(0);
   });
@@ -313,42 +319,58 @@ describe("given a front bumper torn off a parked car, flying along the road at t
 
 /** A bumper let down this far (m) inside the door's face of a parked car. */
 const SUNK = 0.2;
-/** The flank has put it out of the car's side within this long (s). */
-const PUT_OUT_S = 1;
-/** Out of the flank to within one cage lattice step (m). */
-const FACE_TOL = 0.05;
+/** How long (s) the sunk bumper is run. */
+const SUNK_S = 1;
 /** The car beside it driven away from its door at this speed (m/s): the flank closes on the sunk bumper at it. */
 const DRIVE_AWAY = 8;
 
-/** The bumper let down `SUNK` inside the far flank of car B, B's velocity `drive` (x); the bumper's leading end's distance inside B's side (m) after `PUT_OUT_S`, and the most (m) one step moved it in x. */
-function sunkBumper(drive: number): { inside: number; widest: number } {
+/**
+ * The bumper let down `SUNK` inside the far flank of car B, B's velocity `drive` (x), run `SUNK_S`: how deep it is in B by B's own surfaces
+ * (`insideHull`) at the start and deepest after it, the most (m) one step moved it in x, how far (m) it ended from where it was let down in x,
+ * how high (m) it rose over where it was let down, and its fastest x velocity (m/s).
+ */
+function sunkBumper(drive: number): { start: number; deepest: number; widest: number; drift: number; rise: number; fastest: number } {
   const l = besideB();
-  const side = B_X + l.cars[1]!.frame.half.x;
+  const b = l.cars[1]!;
+  const side = B_X + b.frame.half.x;
   l.part.shape.asleep = false;
   l.part.object.position.set(side - SUNK + l.part.shape.half.x, 0.3, DOOR_Z);
   l.part.object.quaternion.identity();
   l.part.velocity.set(0, 0, 0);
-  l.cars[1]!.velocity.set(drive, 0, 0);
-  let x = l.part.object.position.x;
+  b.velocity.set(drive, 0, 0);
+  const start = insideHull(b, l.part);
+  const x0 = l.part.object.position.x;
+  const y0 = l.part.object.position.y;
+  let x = x0;
   let widest = 0;
-  for (let s = 0; s < PUT_OUT_S * QUIET_HZ; s++) {
+  let deepest = 0;
+  let rise = 0;
+  let fastest = 0;
+  for (let s = 0; s < SUNK_S * QUIET_HZ; s++) {
     stepWorld(l.w, H);
     widest = Math.max(widest, Math.abs(l.part.object.position.x - x));
     x = l.part.object.position.x;
+    deepest = Math.max(deepest, insideHull(b, l.part));
+    rise = Math.max(rise, l.part.object.position.y - y0);
+    fastest = Math.max(fastest, l.part.velocity.x);
   }
-  return { inside: side + farthest(l.part, new THREE.Vector3(-1, 0, 0)), widest };
+  return { start, deepest, widest, drift: Math.abs(x - x0), rise, fastest };
 }
 
 describe("given a front bumper lying 0.2 m inside the front door's face of a second car parked beside it", () => {
-  it(`when that car stays parked, then the flank puts the bumper out of its side within ${PUT_OUT_S} s, as a wall puts a part out`, () => {
-    const { inside } = sunkBumper(0);
-    expect(inside, `its leading end is ${inside.toFixed(3)} m inside B's side after ${PUT_OUT_S} s`).toBeLessThanOrEqual(FACE_TOL);
+  it(`when that car stays parked, then its side moves the bumper not at all: over ${SUNK_S} s it falls where it lies, never rising and never put out sideways`, () => {
+    const { start, drift, rise } = sunkBumper(0);
+    expect(start, `the control: it starts ${start.toFixed(3)} m inside B`).toBeGreaterThan(HULL_TOL);
+    expect(drift <= STRAIGHT && rise <= STRAIGHT, `it ended ${drift.toFixed(4)} m off where it was let down in x, and rose ${rise.toFixed(4)} m`).toBeTruthy();
   });
 
-  it(`when that car is driven away from it at ${DRIVE_AWAY} m/s, then no step moves the bumper farther than that closing carries it with the rest lift on top: it is pushed out as the door comes, not flung over the car`, () => {
-    const { widest } = sunkBumper(DRIVE_AWAY);
-    const most = (DRIVE_AWAY + REST_SPEED) * H;
-    expect(widest, `one step moved it ${widest.toFixed(4)} m, more than the ${most.toFixed(4)} m the closing and the rest lift carry`).toBeLessThanOrEqual(most * 1.05);
+  it(`when that car is driven away from it at ${DRIVE_AWAY} m/s, then the door's face carries the bumper along at the car's speed: no step moves it farther than that closing with its bounce, and it is never deeper in than one step of the face's travel past where it started`, () => {
+    const { start, deepest, widest, fastest } = sunkBumper(DRIVE_AWAY);
+    const most = DRIVE_AWAY * (1 + RESTITUTION) * H;
+    expect(start, `the control: it starts ${start.toFixed(3)} m inside B`).toBeGreaterThan(HULL_TOL);
+    expect(fastest, `its fastest along B's travel was ${fastest.toFixed(2)} m/s`).toBeGreaterThanOrEqual(DRIVE_AWAY);
+    expect(widest, `one step moved it ${widest.toFixed(4)} m, more than the ${most.toFixed(4)} m the closing with its bounce carries`).toBeLessThanOrEqual(most);
+    expect(deepest, `it was ${deepest.toFixed(3)} m inside B at its deepest (it started ${start.toFixed(3)} m in)`).toBeLessThanOrEqual(start + DRIVE_AWAY * H);
   });
 });
 
@@ -457,6 +479,13 @@ function settled(): LooseBody {
   return part;
 }
 
+/** The moving solid's half side (m), its speed (m/s) driven onto the part, and how long (s) it is driven. */
+const PLATE_HALF = 1;
+const PLATE_V = 2;
+const PLATE_S = 1;
+/** The plate's near face starts this far (m) off the part's end. */
+const PLATE_GAP = 0.3;
+
 describe("given a torn part at rest on the road", () => {
   it("when nothing is near, then it sleeps and a step leaves its pose as it was", () => {
     const part = settled();
@@ -482,9 +511,9 @@ describe("given a torn part at rest on the road", () => {
     expect(!part.shape.asleep && part.object.position.y > y + 0.01, `woke and rose ${(part.object.position.y - y).toFixed(3)} m`).toBeTruthy();
   });
 
-  it("when a moving solid is far, then it sleeps on, and when the solid is moved onto it, then it wakes and is put out of it", () => {
+  it(`when a moving solid is far, then it sleeps on, and when the solid is driven onto it at ${PLATE_V} m/s, then it wakes and is shoved ahead of the solid's face, never inside it`, () => {
     const solids = new Surface();
-    const plate = solids.addPrism({ x: 30, z: 30, yaw: 0, hx: 1, hz: 1, base: 0, top: 2, id: 0, moves: true });
+    const plate = solids.addPrism({ x: 30, z: 30, yaw: 0, hx: PLATE_HALF, hz: PLATE_HALF, base: 0, top: 2, id: 0, moves: true });
     armSolids(solids);
     try {
       const part = settled();
@@ -492,9 +521,20 @@ describe("given a torn part at rest on the road", () => {
       solids.movePrism(plate, 10, 10, 0, 0, 0);
       stepLoose(part, H, -1);
       expect(part.shape.asleep, "a solid 10 m away leaves it asleep").toBeTruthy();
-      solids.movePrism(plate, at.x + 0.9, at.z, 0, 0, 0);
-      stepLoose(part, H, -1);
-      expect(part.object.position.distanceTo(at), `moved ${part.object.position.distanceTo(at).toFixed(3)} m`).toBeGreaterThan(0.05);
+      let px = farthest(part, new THREE.Vector3(1, 0, 0)) + PLATE_GAP + PLATE_HALF;
+      let deepest = 0;
+      for (let t = 0; t < PLATE_S; t += H) {
+        px -= PLATE_V * H;
+        solids.movePrism(plate, px, at.z, 0, -PLATE_V, 0);
+        stepLoose(part, H, -1);
+        for (let k = 0; k < part.shape.count; k++) {
+          const p = corner(part, k);
+          deepest = Math.max(deepest, Math.min(PLATE_HALF - Math.abs(p.x - px), PLATE_HALF - Math.abs(p.z - at.z)));
+        }
+      }
+      const shoved = at.x - part.object.position.x;
+      expect(shoved, `it was shoved ${shoved.toFixed(3)} m by a face that came ${(PLATE_V * PLATE_S - PLATE_GAP).toFixed(2)} m past where its end lay`).toBeGreaterThanOrEqual(PLATE_V * PLATE_S - PLATE_GAP - HULL_TOL);
+      expect(deepest, `its deepest point was ${deepest.toFixed(3)} m inside the solid`).toBeLessThanOrEqual(HULL_TOL);
     } finally {
       armSolids(null);
     }
@@ -580,14 +620,15 @@ describe("given a front bumper torn off a car with no linear velocity spinning a
     expect(part.velocity.x, `a bumper ${r.z.toFixed(2)} m ahead of the centre is flung sideways at ${part.velocity.x.toFixed(2)} m/s`).toBeGreaterThan(4);
   });
 
-  it("when it is torn off by the crash launch, then it leaves with the car's spin on top of the tumble and ω × r on top of the launch, as against the same car at rest", () => {
+  it("when it is torn off by a crash (no push), then it leaves where it sat at its seat's velocity, ω × r about the centre of mass: the tear adds no speed, upward or outward, and spins it with the car on top of its own tumble", () => {
     const spun = tear(SPIN, undefined, 20);
     const still = tear(0, undefined, 20);
     const turn = new THREE.Vector3(0, SPIN, 0);
     expect(spun.part.angular.distanceTo(still.part.angular.clone().add(turn)), `spin ${spun.part.angular.toArray()} vs ${still.part.angular.toArray()} + ${turn.toArray()}`).toBeLessThan(1e-9);
-    const carried = spun.part.velocity.clone().sub(still.part.velocity);
-    expect(carried.distanceTo(turn.clone().cross(spun.r)), `carried ${carried.toArray()} vs ω × r ${turn.clone().cross(spun.r).toArray()}`).toBeLessThan(0.5);
-    expect(carried.x, `carried ${carried.x.toFixed(2)} m/s sideways`).toBeGreaterThan(4);
+    expect(still.part.velocity.length(), `torn off a car at rest it leaves at ${still.part.velocity.toArray()}`).toBe(0);
+    expect(spun.part.velocity.distanceTo(turn.clone().cross(spun.r)), `velocity ${spun.part.velocity.toArray()} vs ω × r ${turn.clone().cross(spun.r).toArray()}`).toBeLessThan(1e-9);
+    const placed = tear(0, new THREE.Vector3(), 20).part.object.position;
+    expect(still.part.object.position.distanceTo(placed), `it leaves ${still.part.object.position.distanceTo(placed).toFixed(4)} m from where a tear with no push leaves it`).toBeLessThan(1e-9);
   });
 });
 

@@ -74,11 +74,11 @@ export function partState(car: CarParts, parts: readonly DetachPart[], buf: Floa
 
 /**
  * Numbers a loose body takes in a keyframe's loose block: pose (position, quaternion), velocity, spin, the flags, the sleep place (x, z), the
- * dents' count and their hits, a part's shape (its middle and box half extents, 0: not measured yet), how long it has rested (`restFor`) and how long it may still sit at its car's seat (`seatFor`), then
+ * dents' count and their hits, a part's shape (its middle and box half extents, 0: not measured yet) and how long it has rested (`restFor`), then
  * its shape's points (a part that flies as its shell's own, `LOOSE_SHELL`).
  */
 const LOOSE_BOX = 17 + DENT_MAX * 4;
-const LOOSE_POINTS = LOOSE_BOX + 8;
+const LOOSE_POINTS = LOOSE_BOX + 7;
 const LOOSE_EACH = LOOSE_POINTS + SHAPE_POINTS * 3;
 const LOOSE_ASLEEP = 1;
 const LOOSE_AIRBORNE = 2;
@@ -142,7 +142,6 @@ function readLooseBody(body: LooseBody, dent: DentState | undefined, buf: Float6
   s.centre.toArray(buf, at + LOOSE_BOX);
   for (let k = 0; k < 3; k++) buf[at + LOOSE_BOX + 3 + k] = s.count === 0 ? 0 : s.half.getComponent(k);
   buf[at + LOOSE_BOX + 6] = s.restFor;
-  buf[at + LOOSE_BOX + 7] = s.seatFor;
   for (let k = 0; k < SHAPE_POINTS * 3; k++) buf[at + LOOSE_POINTS + k] = s.points[k]!;
 }
 
@@ -167,7 +166,6 @@ function putLooseBody(body: LooseBody, wheel: LooseWheel | undefined, dent: Dent
   s.sleepX = buf[at + 14]!;
   s.sleepZ = buf[at + 15]!;
   s.restFor = buf[at + LOOSE_BOX + 6]!;
-  s.seatFor = buf[at + LOOSE_BOX + 7]!;
   o.visible = (flags & LOOSE_SHOWN) !== 0;
   if (!dent) return;
   dent.count = buf[at + 16]!;

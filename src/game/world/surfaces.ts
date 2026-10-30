@@ -1331,7 +1331,8 @@ function offer(s: Surface, i: number, q: Float64Array, skip: number, need: numbe
   const y = q[PQ_Y]!;
   const reach = kind === PRISM ? _s[S_CREACH]! : P[o + P_REACH]!;
   if (h !== h || h < _s[S_BEST]) return;
-  if (h > y + (owner >= 0 && reach > live.topCap ? live.topCap : reach)) {
+  const cap = q[PQ_FLANK] === 1 ? q[PQ_TOP_CAP]! : live.topCap;
+  if (h > y + (owner >= 0 && reach > cap ? cap : reach)) {
     if (q[PQ_FLANK] === 1 && owner >= 0) flankSide(s, i, q);
     return;
   }
@@ -1618,7 +1619,7 @@ export function heightGrip(): number {
 export const PQ_X = 0;
 export const PQ_Z = 1;
 export const PQ_Y = 2;
-export const PQ_SIZE = 9;
+export const PQ_SIZE = 10;
 /** The point's own velocity (m/s): the face it came in through is the one this opposes (`exitFace`); 0 for a point at rest or one that never asks a wall. */
 export const PQ_VX = 3;
 export const PQ_VZ = 4;
@@ -1629,6 +1630,8 @@ export const PQ_BODY = 6;
 export const PQ_MOUNT = 7;
 /** 1 for a point of a loose part: a car's side it is in answers its face (`Surface.flank`), as a prism's does; 0 for every other asker. */
 export const PQ_FLANK = 8;
+/** With `PQ_FLANK`: the most (m) a car's top may stand over the point and hold it (`Infinity`: the top's own reach); one deeper is in that car's side. */
+export const PQ_TOP_CAP = 9;
 
 /**
  * The surface at plan (x, z) of the query point `q` (`PQ_X`, `PQ_Z`, `PQ_Y`) under a body asking from height y (`Infinity`: the
@@ -1766,6 +1769,16 @@ function answer(q: Float64Array, out: Float64Array): void {
   out[C_AUX] = 1;
 }
 
+/** The plan velocity (m/s: x into `v[0]`, z into `v[1]`) of the patch that gave the last point query's answer `out`: a moving prism's (`movePrism`: a press plate, the slab), else 0. A car's top or flank moves with its car, which `C_OWNER` names. */
+export function answerPlanVelocity(out: Float64Array, v: Float64Array): void {
+  const side = out[C_H] === NONE;
+  const s = side ? live.side : live.surf;
+  const i = side ? _s[S_SPATCH]! : _s[S_PATCH]!;
+  const prism = s !== null && s.q[i * Q_STRIDE + Q_KIND] === PRISM;
+  v[0] = prism ? s.p[i * P_STRIDE + PR_VX]! : 0;
+  v[1] = prism ? s.p[i * P_STRIDE + PR_VZ]! : 0;
+}
+
 /** The point queries' kinds, by the car tops each asks (`seekPoint`), and `GQ.verify`'s slot of the wheel's contact after them. */
 const POINT_ALL = 0;
 const POINT_HELD = 1;
@@ -1853,8 +1866,8 @@ function checkPoint(kind: number, q: Float64Array, out: Float64Array, far: boole
   if (v.first === "") v.first = `point kind ${kind} entry ${bad} far ${far}: baked ${out[bad]} live ${_live[bad]} at ${q[PQ_X]}, ${q[PQ_Z]}, ${q[PQ_Y]}`;
 }
 
-/** What `stirNear` asks of a car: whether it moves (speed or spin at or above rest); a part's flank contact its velocity (m/s). */
-export type StirCar = { readonly moving: boolean; readonly velocity: { readonly x: number; readonly y: number; readonly z: number } };
+/** What `stirNear` asks of a car: whether it moves (speed or spin at or above rest). */
+type StirCar = { readonly moving: boolean };
 
 /**
  * Whether anything that moves or changes has its box over the square of half side `r` about plan (`x`, `z`): a static's or a solid's patch rewritten

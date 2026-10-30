@@ -6,7 +6,6 @@ import { bootPivot, lidAccel } from "./hinge-spec.ts";
 import { cellIsOver, clearanceCellsOf } from "./clearance-cells.ts";
 import { hingePose, INTERIOR_MASSES, interiorPose, notePosed, posesFromOwnState, standsAsPosed } from "./part-pose.ts";
 import { activeGround, groundTopOver, NO_FLOOR } from "../world/ground.ts";
-import type { StirCar } from "../world/surfaces.ts";
 import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 import type { MassName } from "../kernel/rig-spec.ts";
 import { flutterShell, makeShell, poseShell, recentre, setPrimer, shellBox, shellReaches } from "./car-panels.ts";
@@ -14,8 +13,9 @@ import { setBare } from "./interior.ts";
 import { carClass, CLASSES } from "./vehicle-classes.ts";
 import { applyDents } from "./loose-dent.ts";
 import { doorCardDent } from "./car-door-mesh.ts";
-import { fitWheelShape, partMass, SEAT_S, stepLoose } from "./loose-step.ts";
+import { fitWheelShape, partMass, stepLoose } from "./loose-step.ts";
 import type { TopMet } from "./car-air-body.ts";
+import type { DeformableCar } from "./car.ts";
 import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
 import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, LATCH_CATCH_RATE, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, type PartNetState } from "./car-core.ts";
@@ -1179,8 +1179,7 @@ export abstract class CarParts extends CarGlass {
     }
   }
 
-  /** Hand a part to the world. `push` (car-space m/s on top of the car's velocity) replaces the
-   *  crash launch: outward from the body by `impulse`, popped up by `hingeT`. */
+  /** Hand a part to the world where it tore, at the velocity its car had at its seat (the car's, ω × r on top); `push` is car-space m/s on top of that. */
   protected detachPart(p: DetachPart, impulse: number, push?: THREE.Vector3): void {
     if (p.detached) return;
     // The part leaves in the pose its state gives now, not the last frame's (poses are written once a frame, `poseParts`; a door
@@ -1188,7 +1187,6 @@ export abstract class CarParts extends CarGlass {
     this.posePart(p, false);
     p.detached = true;
     p.shape.count = 0;
-    p.shape.seatFor = SEAT_S;
     // ponytail: a torn door flies as its rest shell (its loose shape is sim and is read off the shell drawn, `boxShape`); flying dented moves the sim.
     if (p === this.doorParts[0]) this.restoreRest(this.doorMeshL.geometry, this.doorLRest, this.drawnRest("doorL"));
     else if (p === this.doorParts[1]) this.restoreRest(this.doorMeshR.geometry, this.doorRRest, this.drawnRest("doorR"));
@@ -1215,18 +1213,8 @@ export abstract class CarParts extends CarGlass {
     _n.crossVectors(this.angular, _n.copy(wpos).sub(_com));
     p.object.position.copy(wpos);
     p.object.quaternion.copy(wquat);
-    if (push) {
-      p.velocity.copy(push).applyQuaternion(this.group.quaternion).add(this.velocity).add(_n);
-    } else {
-      _p.copy(wpos).sub(this.group.position).setY(0);
-      if (_p.lengthSq() < 1e-6) _p.set(p.restPos.x, 0, p.restPos.z).applyQuaternion(this.group.quaternion);
-      _p.normalize();
-      p.velocity.copy(this.velocity).add(_n);
-      p.velocity.addScaledVector(_p, 2.2 + Math.min(5, impulse * 0.06));
-      p.velocity.y += 2.1 + p.hingeT * 1.2;
-      p.object.position.addScaledVector(_p, 0.14);
-      p.object.position.y += 0.08;
-    }
+    p.velocity.copy(this.velocity).add(_n);
+    if (push) p.velocity.add(_p.copy(push).applyQuaternion(this.group.quaternion));
     // A fixed hash of the part and the hit, not Math.random: a replay throws it the same way, so its dents land the same.
     const hash = (k: number): number => {
       const s = detSin((this.parts.indexOf(p) + 1) * 12.9898 + k * 78.233 + impulse * 0.37) * 43758.5453;
@@ -1315,7 +1303,7 @@ export abstract class CarParts extends CarGlass {
    * `roofs` (the world's `CarSurfaces`): its `partMet` hears them meet another car's top, and a sleeper wakes only for a top whose car moves (`cars`).
    * `wheels` false: the parts only (a netplay client's wheels ride the host's poses on the wire; its parts are its own, debris is per player).
    */
-  protected stepLooseParts(dt: number, slot: number, roofs: { readonly partMet: TopMet | undefined; readonly cars: readonly StirCar[] } | null, wheels = true): void {
+  protected stepLooseParts(dt: number, slot: number, roofs: { readonly partMet: TopMet | undefined; readonly cars: readonly DeformableCar[] } | null, wheels = true): void {
     const met = roofs?.partMet;
     const cars = roofs?.cars ?? null;
     for (let k = 0; k < this.parts.length; k++) {
@@ -1380,7 +1368,7 @@ export abstract class CarParts extends CarGlass {
     return !this.parts[i]!.detached;
   }
 
-  /** A popped hub's wheel leaves the car: a world object launched at the hub's speed, out and up. */
+  /** A popped hub's wheel leaves the car: a world object where its hub is, at the hub's velocity. */
   protected dropWheel(i: number, hub: MassName): void {
     const w = this.looseWheels[i]!;
     w.loose = true;
@@ -1390,15 +1378,11 @@ export abstract class CarParts extends CarGlass {
     this.world.add(w.object);
     w.object.position.copy(this.deform.massWorld(hub));
     w.object.quaternion.copy(_lampQ);
-    _p.copy(w.object.position).sub(this.group.position).setY(0);
-    if (_p.lengthSq() > 1e-6) _p.normalize();
-    w.velocity.copy(this.deform.massVel(hub)).addScaledVector(_p, 1.2);
-    w.velocity.y = Math.max(w.velocity.y, 0) + 1;
+    w.velocity.copy(this.deform.massVel(hub));
     // Rolls on about its axle (the car's x) at the hub's ground speed.
     _n.set(1, 0, 0).applyQuaternion(this.group.quaternion);
     w.angular.copy(_n).multiplyScalar(hypot2(w.velocity.x, w.velocity.z) / this.frame.rig.tyre.r);
     fitWheelShape(w);
-    w.shape.seatFor = SEAT_S;
   }
 
   /** Netplay: array sizes for a `PartNetState`; parts are `PART_SLOTS` on every style (one shared layout). */

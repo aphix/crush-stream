@@ -311,8 +311,8 @@ export function solveRows(n: number): void {
   // world's ground only resists (impulse, no bounce, no lift while it moves): lifting a moving body out by a belly point's
   // depth pumped energy into a car resting on a ramp's edge (it tipped off) and hopped a car rolling back out of the corkscrew's mouth.
   // Nor does a point already moving off its surface lift anything: its impulse is nil, so the lift raised the body with no speed to
-  // show for it (a wreck's pitching tail moved it 1-3 cm a frame over another car's roof, fleet-ramps D1). A part is put out of a face
-  // that moved onto it (a solid driven over a part at rest: no closing at all) whatever its speed.
+  // show for it (a wreck's pitching tail moved it 1-3 cm a frame over another car's roof, fleet-ramps D1). A part is put out of a top it
+  // came down onto whatever its speed (a side it is in leaves it no depth: `readPoints`).
   // The lift takes out only the depth the move leaves: the solve's change already moves the body half its way (the trapezoid rule).
   // Lifted by the whole depth too, a car on another's roof rose G dt² (0.03 mm) over it, fell free the next slice, and hopped so.
   _dvSolve.copy(v).sub(_vMove);
