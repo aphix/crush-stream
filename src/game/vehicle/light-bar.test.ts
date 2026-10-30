@@ -100,7 +100,7 @@ describe("given the police light bar on its base hinge", () => {
         const free = edge(-side * LIGHT_BAR_FOOT.z);
         for (const t of [0, 0.1, 0.5, 0.95, 1]) {
           car.bar.hingeT = t;
-          hingePose(car.bar, car.deform, pose, 0);
+          hingePose(car.bar, car.deform, pose, 0, true);
           const q = new THREE.Quaternion(pose[3], pose[4], pose[5], pose[6]);
           const at = new THREE.Vector3(pose[0], pose[1], pose[2]);
           const label = `${state}, inward z ${inwardZ}, hinge ${t}`;

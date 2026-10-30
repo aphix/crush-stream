@@ -454,7 +454,7 @@ export const STATES = [
   { id: "airborne", text: "airborne, pitched 25 degrees and rolled 15 degrees" },
 ] as const;
 
-/** A `style` body of class `cls` in the state `id`, posed upright at the origin (the airborne one tilted 3 m up); the head-on's cars each drive at `kph`. */
+/** A `style` body of class `cls` in the state `id`, posed upright at the origin (the airborne one tilted 3 m up), a sprung hood or lid at its crash pose; the head-on's cars each drive at `kph`. */
 export function carInState(id: (typeof STATES)[number]["id"], style: CarStyleId, cls: VehicleClassId, kph = 50): DeformableCar {
   const car = buildCar(style, cls);
   if (id === "headon") {
@@ -478,6 +478,8 @@ export function carInState(id: (typeof STATES)[number]["id"], style: CarStyleId,
     }
     stepFrames(makeWorld([car], false, false, null), 0.5);
   }
+  // A sprung hood or lid swung open lives with the detachable parts, outside the collision cage: drawn back at its crash pose, the drawn body is the one the cage fits.
+  for (const lid of [car["hoodPart"], car["lidPart"]]) car["setSwingOpen"](lid, 0);
   car.airborne = id === "airborne";
   car.group.position.set(0, id === "airborne" ? 3 : 0, 0);
   car.group.rotation.set(id === "airborne" ? 25 * RAD : 0, 0, id === "airborne" ? 15 * RAD : 0, "YXZ");

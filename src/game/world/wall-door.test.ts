@@ -89,7 +89,7 @@ const passCases = [
   { it: "when its door is jammed open by the crash and it passes at 3 m/s, then the wall tears the door off before the door is drawn into it", jam: 0.9, speed: 3, torn: true },
   { it: "when its door swings free, open to its stop, and it passes at 4 m/s, then the wall shuts the door only as far as it must and the door is never drawn into the wall", jam: 0, speed: 4, torn: false },
   { it: "when its door swings free, open to its stop, and it passes at 9 m/s, then the wall shuts the door only as far as it must, faster, and the door is never drawn into the wall", jam: 0, speed: 9, torn: false },
-  { it: "when its door swings free, open to its stop, and it passes at 20 m/s, then the wall slams the door shut so hard it tears off, and it is never drawn into the wall first", jam: 0, speed: 20, torn: true },
+  { it: "when its door swings free, open to its stop, and it passes at 20 m/s, then the air it drives through blows the door shut before the wall's end, and it is never drawn into the wall", jam: 0, speed: 20, torn: false },
 ] as const;
 
 type Solids = { walls: PropCollider[]; props: PropCollider[] };

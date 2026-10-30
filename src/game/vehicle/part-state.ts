@@ -9,8 +9,8 @@ export const PART_SLOTS = 15;
 const WHEEL_SLOTS = 4;
 /** The bodies a car can fly in the world: its `PART_SLOTS` parts, then its `WHEEL_SLOTS` wheels (a body's index in `CarParts.stirredBodies` and in a clip's part stirs). */
 export const LOOSE_BODIES = PART_SLOTS + WHEEL_SLOTS;
-/** Numbers in a `CarParts.partState` block: ten for the car, then nine per part slot. */
-const PART_STATE_HEAD = 10;
+/** Numbers in a `CarParts.partState` block: twelve for the car, then nine per part slot. */
+const PART_STATE_HEAD = 12;
 const PART_STATE_EACH = 9;
 export const PART_STATE = PART_STATE_HEAD + PART_SLOTS * PART_STATE_EACH;
 
@@ -26,17 +26,17 @@ export function partState(car: CarParts, parts: readonly DetachPart[], buf: Floa
   const m = car.motion;
   const d = car.swingDrive;
   if (write) {
-    for (let i = 0; i < 3; i++) m[i] = buf[i]!;
-    for (let i = 0; i < 4; i++) d[i] = buf[3 + i]!;
-    car.quietPrev = buf[7]!;
-    car.flapClock = buf[8]!;
-    car.flapSpeed = buf[9]!;
+    for (let i = 0; i < 4; i++) m[i] = buf[i]!;
+    for (let i = 0; i < 5; i++) d[i] = buf[4 + i]!;
+    car.quietPrev = buf[9]!;
+    car.flapClock = buf[10]!;
+    car.flapSpeed = buf[11]!;
   } else {
-    for (let i = 0; i < 3; i++) buf[i] = m[i]!;
-    for (let i = 0; i < 4; i++) buf[3 + i] = d[i]!;
-    buf[7] = car.quietPrev;
-    buf[8] = car.flapClock;
-    buf[9] = car.flapSpeed;
+    for (let i = 0; i < 4; i++) buf[i] = m[i]!;
+    for (let i = 0; i < 5; i++) buf[4 + i] = d[i]!;
+    buf[9] = car.quietPrev;
+    buf[10] = car.flapClock;
+    buf[11] = car.flapSpeed;
   }
   for (let i = 0; i < PART_SLOTS; i++) {
     const o = PART_STATE_HEAD + i * PART_STATE_EACH;

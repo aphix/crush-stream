@@ -253,7 +253,7 @@ export function hitLid(car: DeformableCar, lane: Lane, lx: number, ex: number): 
 function strikeLidStrap(car: DeformableCar, lane: Lane, energy: number): void {
   const hinge = car.lidHinge();
   const left = Math.sqrt(Math.max(0, lane.u * lane.u - (2 * Math.max(0, hinge.spec.tearJ - hinge.load)) / lane.kg));
-  lane.u = car.loadLidStop(energy, _push.set(0, 0.8, Math.max(left, 1))) ? left : 0;
+  lane.u = car.loadLidStop(energy, _push.set(0, 0, left)) ? left : 0;
 }
 
 /** Plan samples along a door, hinge to trailing edge, a fixed solid is asked about: dense enough that no thin solid (a lamp post) fits between two. */

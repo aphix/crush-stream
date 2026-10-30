@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BootSpec } from "./car-variants.ts";
+import { GRAVITY } from "../kernel/constants.ts";
 import { LIFTGATE, lidAccel, lidSpec } from "./hinge-spec.ts";
 
 const LEVEL = { upY: 1, upZ: 0 };
@@ -41,30 +42,37 @@ describe("given an unlatched lid under gravity, its struts and the car's own acc
   const lid = lidSpec(DECK);
 
   it("when a shut deck lid is unlatched on a level car, then struts lift it, a bare lid falls shut, a balanced one stays", () => {
-    expect(lidAccel(lid, 0, LEVEL.upY, LEVEL.upZ, 0)).toBeGreaterThan(0);
-    expect(lidAccel({ ...lid, lift: 0 }, 0.3, LEVEL.upY, LEVEL.upZ, 0)).toBeLessThan(0);
-    expect(lidAccel({ ...lid, lift: 1 }, 0.3, LEVEL.upY, LEVEL.upZ, 0)).toBe(0);
+    expect(lidAccel(lid, 0, LEVEL.upY, LEVEL.upZ, 0, 0)).toBeGreaterThan(0);
+    expect(lidAccel({ ...lid, lift: 0 }, 0.3, LEVEL.upY, LEVEL.upZ, 0, 0)).toBeLessThan(0);
+    expect(lidAccel({ ...lid, lift: 1 }, 0.3, LEVEL.upY, LEVEL.upZ, 0, 0)).toBe(0);
   });
 
   it("when the car is upside down, then even a balanced lid falls open", () => {
-    expect(lidAccel({ ...lid, lift: 1 }, 0.3, -1, 0, 0)).toBeGreaterThan(0);
+    expect(lidAccel({ ...lid, lift: 1 }, 0.3, -1, 0, 0, 0)).toBeGreaterThan(0);
   });
 
   it("when the car brakes, then an open lid swings further open; when it accelerates, then it swings shut", () => {
     const balanced = { ...lid, lift: 1 };
-    expect(lidAccel(balanced, 0.8, LEVEL.upY, LEVEL.upZ, -6)).toBeGreaterThan(0);
-    expect(lidAccel(balanced, 0.8, LEVEL.upY, LEVEL.upZ, 6)).toBeLessThan(0);
+    expect(lidAccel(balanced, 0.8, LEVEL.upY, LEVEL.upZ, -6, 0)).toBeGreaterThan(0);
+    expect(lidAccel(balanced, 0.8, LEVEL.upY, LEVEL.upZ, 6, 0)).toBeLessThan(0);
+  });
+
+  it("when the car lands on its wheels, then the jolt weighs an open deck lid down past its struts toward shut", () => {
+    expect(lidAccel(lid, lid.stop, LEVEL.upY, LEVEL.upZ, 0, 0), "on its stop at rest").toBeGreaterThan(0);
+    expect(lidAccel(lid, lid.stop, LEVEL.upY, LEVEL.upZ, 0, 3 * GRAVITY), "on its stop as a 3 g landing stops the car").toBeLessThan(0);
   });
 
   it("when a drop gate is unlatched, then its weight lets it down, and once level it presses on its stop", () => {
     const gate = lidSpec(DROP);
-    expect(lidAccel(gate, 0.1, LEVEL.upY, LEVEL.upZ, 0)).toBeGreaterThan(0);
-    expect(lidAccel(gate, gate.stop, LEVEL.upY, LEVEL.upZ, 0)).toBeGreaterThan(0);
+    expect(lidAccel(gate, 0.1, LEVEL.upY, LEVEL.upZ, 0, 0)).toBeGreaterThan(0);
+    expect(lidAccel(gate, gate.stop, LEVEL.upY, LEVEL.upZ, 0, 0)).toBeGreaterThan(0);
   });
 
-  it("when a liftgate is unlatched shut, then its gas struts lift it", () => {
+  it("when a liftgate is unlatched shut, then its weight holds it down where its gas struts have no arm; from where the latch's pop leaves it they lift it, and hold it on its stop", () => {
     const suv = lidSpec(SUV);
-    expect(lidAccel(suv, 0, LEVEL.upY, LEVEL.upZ, 0)).toBeGreaterThan(0);
-    expect(lidAccel(suv, suv.stop, LEVEL.upY, LEVEL.upZ, 0), "still pressing on its stop when open").toBeGreaterThan(0);
+    expect(lidAccel(suv, 0, LEVEL.upY, LEVEL.upZ, 0, 0), "shut, the struts' arm gone").toBeLessThan(0);
+    expect(lidAccel(suv, 0.05, LEVEL.upY, LEVEL.upZ, 0, 0), "a few degrees open, still in the struts' dead band").toBeLessThan(0);
+    expect(lidAccel(suv, suv.taper, LEVEL.upY, LEVEL.upZ, 0, 0), "popped past the dead band").toBeGreaterThan(0);
+    expect(lidAccel(suv, suv.stop, LEVEL.upY, LEVEL.upZ, 0, 0), "still pressing on its stop when open").toBeGreaterThan(0);
   });
 });

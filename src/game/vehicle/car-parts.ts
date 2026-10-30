@@ -1,7 +1,7 @@
 import { hypot2, detSin, detCos, detAtan2, PART_FAMILY } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { BUMPER_F, LID } from "./constants.ts";
+import { BUMPER_F } from "./constants.ts";
 import { bootPivot, lidAccel } from "./hinge-spec.ts";
 import { cellIsOver, clearanceCellsOf } from "./clearance-cells.ts";
 import { hingePose, INTERIOR_MASSES, interiorPose, notePosed, posesFromOwnState, standsAsPosed } from "./part-pose.ts";
@@ -18,7 +18,7 @@ import type { TopMet } from "./car-air-body.ts";
 import type { DeformableCar } from "./car.ts";
 import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
-import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, LATCH_CATCH_RATE, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, type PartNetState } from "./car-core.ts";
+import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, LATCH_CATCH_RATE, LATCH_REACH_M, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, type PartNetState } from "./car-core.ts";
 import {
   DOOR_ACC_MAX,
   DOOR_QUIET_S,
@@ -29,6 +29,7 @@ import {
   PANEL_FRAGILE_T,
   PANEL_SMUSH_MIN,
   swingAccel,
+  windPush,
   windWear,
 } from "./car-wear.ts";
 import { LOOSE_BODIES, looseState, partState, PART_SLOTS } from "./part-state.ts";
@@ -60,10 +61,6 @@ const _com = new THREE.Vector3();
 const _drawn = new THREE.Box3();
 const _lidBox = new THREE.Box3();
 const _carInverse = new THREE.Matrix4();
-const _hoodHinge = new THREE.Vector3();
-const _hoodSwung = new THREE.Vector3();
-const _hoodTurn = new THREE.Quaternion();
-const _xAxis = new THREE.Vector3(1, 0, 0);
 
 /**
  * Grows `box` by `local` under world matrix `m`, the corners as `Box3.applyMatrix4` puts them; an affine `m` leaves that divisor at exactly 1, so none is taken.
@@ -175,10 +172,6 @@ const PANEL_TEAR = 0.8;
 const PANEL_TEAR_MPS = 50 / 3.6;
 /** A hood or lid crushed past this hinge value tears off (`evaluateBreakage`): the furthest a crash opens it on the car. */
 const LID_TEAR_T = 0.78;
-/** The angle (rad) a shown open hood stands at about its rear edge: the owner's open-hood photos, hood against belt line in their side views. */
-const HOOD_SHOW_OPEN = THREE.MathUtils.degToRad(32);
-/** The hood's rear-edge band (m, from its rearmost point): the vertices it hinges along. */
-const HOOD_EDGE_BAND = 0.01;
 /** A panel's shell stands from this hinge value. */
 const PANEL_OPEN = 0.03;
 /** At most `LIVE_SHELLS` of a car's torn shells are drawn: the oldest vanish (each is a draw). */
@@ -233,6 +226,11 @@ function foldAt(p: DetachPart): number {
   return p.region ? PANEL_OPEN : Infinity;
 }
 
+/** Whether hood or lid `p` hangs off its latch, still on the car: its swing steps. */
+function lidSwings(p: DetachPart): boolean {
+  return !p.detached && !p.swing!.latched;
+}
+
 /** The bumpers' masses `posePart` reads, and the signature of a pose being built (`poseInputsChanged`; a car has at most 20 attached parts). */
 const POSE_BUMPERS = ["bumperFL", "bumperFR", "bumperRL", "bumperRR"] as const;
 const _poseSig = new Float64Array(7 * 20 + 20);
@@ -265,15 +263,17 @@ export abstract class CarParts extends CarGlass {
   anyBodyStirred = false;
   /** The bit of the slice `stepWorld` is running (`stirredBodies`); 0 outside a world step, where nothing is kept. */
   sliceBit = 0;
-  /** The flap clock (rad) turns with speed and shakes every hinged panel and bumper (`flapAngle`). Cosmetic: no rule reads it. */
+  /** The flap clock (rad) turns with speed: it shakes every hinged panel and bumper (`flapAngle`) and beats the wind on an open door or lid (`windPush`). */
   flapClock = 0;
   flapSpeed = 0;
   /** Seconds since the last contact, as of the last frame: tells a fresh touch from a continuing one (`evaluateBreakage`). */
   quietPrev = 0;
-  /** The car's velocity (x, z) and yaw rate at the last door-swing sample: their change is the pendulum's drive. */
-  readonly motion = new Float64Array(3);
-  /** Pendulum drive, car frame: acceleration right, acceleration forward (m/s²), yaw rate (rad/s), yaw acceleration (rad/s²). */
-  readonly swingDrive = new Float64Array(4);
+  /** The car's velocity (x, z), yaw rate and vertical velocity at the last door-swing sample: their change is the pendulum's drive. */
+  readonly motion = new Float64Array(4);
+  /** Pendulum drive, car frame: acceleration right, acceleration forward (m/s²), yaw rate (rad/s), yaw acceleration (rad/s²), acceleration up (m/s², world). */
+  readonly swingDrive = new Float64Array(5);
+  /** The air's velocity (world x, z; m/s) the wind on an open door or lid is read against: still air, but a frame swap (`DoorRig.carMoves`) carries it with the car. */
+  readonly air = new Float64Array(2);
   /**
    * Once a frame, with the skin: an undamaged car casts its sun shadow from `restCaster` alone (body and every flush part
    * at rest as one decimated shell, one draw per style), so overhanging parts are not missing from it. Once the car has been hit or a part has hinged,
@@ -321,10 +321,12 @@ export abstract class CarParts extends CarGlass {
         else if (p.hinge === "tail") target = THREE.MathUtils.clamp((this.deform.partCompression("bumperRear") - LID_CRUSH_ON) / LID_CRUSH_RANGE, 0, 1);
         else if (p.region) target = THREE.MathUtils.clamp((crush - PANEL_HINGE[p.region.kind].on) / PANEL_HINGE[p.region.kind].range, 0, 1);
       }
+      const was = p.hingeT;
       p.hingeT = Math.min(p.hingeMax, Math.max(p.hingeT, Math.min(target, p.hingeT + Math.max(dt * HINGE_RATE, 0.012))));
       // `folding` is read by the net state and the recorder's keyframes at every step, so it is set here, not in the frame's pose.
       p.folding = p.hingeT > foldAt(p);
-      if ((p.hinge === "door" || p.hinge === "tail") && onHit) this.springSwing(p);
+      // Only fresh crush springs a latch: a part pushed shut and latched again over an old crush stays latched.
+      if ((p.hinge === "door" || p.hinge === "tail" || p.hinge === "cowl") && onHit && p.hingeT > was) this.springSwing(p);
     }
     this.partsDirty = true;
   }
@@ -441,7 +443,7 @@ export abstract class CarParts extends CarGlass {
         p.object.position.x += side * t * 0.18;
       }
     } else if (p.hinge === "cowl" || p.hinge === "tail" || p.hinge === "bar") {
-      hingePose(p, this.deform, _hinge, 0);
+      hingePose(p, this.deform, _hinge, 0, true);
       p.object.position.set(_hinge[0]!, _hinge[1]!, _hinge[2]!);
       p.object.quaternion.set(_hinge[3]!, _hinge[4]!, _hinge[5]!, _hinge[6]!);
     } else if (p.hinge === "door") {
@@ -557,6 +559,11 @@ export abstract class CarParts extends CarGlass {
     return this.lidPart.swing!;
   }
 
+  /** The hood's hinge state. */
+  hoodHinge(): DoorHinge {
+    return this.hoodPart.swing!;
+  }
+
   /** Whether the trunk lid has left the car. */
   lidOff(): boolean {
     return this.lidPart.detached;
@@ -568,6 +575,8 @@ export abstract class CarParts extends CarGlass {
     if (this.lidPart.detached || !hinge.latched) return;
     hinge.latched = false;
     hinge.omega = 0;
+    // The latch's pop spring lifts a strut gate past the strut's dead band near shut, where its weight would hold it down.
+    hinge.theta = Math.max(hinge.theta, hinge.spec.taper);
     this.sampleMotion();
   }
 
@@ -626,7 +635,7 @@ export abstract class CarParts extends CarGlass {
 
   /** Whether the bonnet has left the car. */
   hoodOff(): boolean {
-    return this.parts.some((p) => p.detached && p.name === LID.hood);
+    return this.hoodPart.detached;
   }
 
   /** Whether a door, mirror or quarter panel has left the car; a mirror rides off on its torn door. */
@@ -661,10 +670,7 @@ export abstract class CarParts extends CarGlass {
       this.setDoorOpen(-1, this.doorHinge(-1).spec.stop);
       this.setDoorOpen(1, this.doorHinge(1).spec.stop);
       this.setLidOpen(this.lidHinge().spec.stop);
-      for (const p of this.parts) {
-        if (p.hinge !== "cowl") continue;
-        this.showHoodOpen(p);
-      }
+      this.setSwingOpen(this.hoodPart, this.hoodPart.swing!.spec.stop);
       return;
     }
     for (const p of this.parts) {
@@ -678,22 +684,6 @@ export abstract class CarParts extends CarGlass {
       g.state = "shattered";
       g.mesh.visible = false;
     }
-  }
-
-  /** The hood turned nose-up `HOOD_SHOW_OPEN` about its rear edge at the cowl, as a real one opens; its hinge value stays 0, so the crash's pop and the cage keep it shut. */
-  private showHoodOpen(p: DetachPart): void {
-    const pos = (p.object as THREE.Mesh).geometry.getAttribute("position") as THREE.BufferAttribute;
-    let zMin = Infinity;
-    for (let i = 0; i < pos.count; i++) zMin = Math.min(zMin, pos.getZ(i));
-    let yEdge = -Infinity;
-    for (let i = 0; i < pos.count; i++) if (pos.getZ(i) < zMin + HOOD_EDGE_BAND) yEdge = Math.max(yEdge, pos.getY(i));
-    _hoodHinge.set(0, yEdge, zMin);
-    _hoodTurn.setFromAxisAngle(_xAxis, -HOOD_SHOW_OPEN);
-    p.object.quaternion.copy(p.restQuat).multiply(_hoodTurn);
-    _hoodSwung.copy(_hoodHinge).applyQuaternion(_hoodTurn);
-    p.object.position.copy(_hoodHinge).sub(_hoodSwung).applyQuaternion(p.restQuat).add(p.restPos);
-    p.shown = true;
-    this.partWrites++;
   }
 
   private setSwingOpen(p: DetachPart, theta: number): void {
@@ -785,11 +775,13 @@ export abstract class CarParts extends CarGlass {
   }
 
   /**
-   * Free swing of the doors and the trunk lid: the car's acceleration drives a door's pendulum (`swingAccel`), weight, struts and
-   * the car's surge a lid's (`lidAccel`); hinge friction damps either, and it ends on its stop, on the crash jam (`hingeT`) or in
+   * Free swing of the doors, the hood and the trunk lid: the car's acceleration drives a door's pendulum (`swingAccel`), weight, struts and
+   * the car's surge a lid's (`lidAccel`), and the wind either's; hinge friction damps them, and each ends on its stop, on the crash jam (`hingeT`) or in
    * the latch (`closeSwing`: the ram's shut scene and the car's own swing alike).
    */
   swingHinges(dt: number): void {
+    // A crashed car's flap clock turns with its crash rules (`syncAttachedParts`); the wind beats on an uncrashed car's open door or lid too.
+    if (!this.crashed) this.advanceFlap(dt);
     this.sampleDrive(dt);
     const doors = !this.doorParts[0]!.swing!.latched || !this.doorParts[1]!.swing!.latched;
     for (let i = 0; i < 2 && doors; i++) {
@@ -799,13 +791,13 @@ export abstract class CarParts extends CarGlass {
       const m = this.mirrorParts[i]!;
       if (!m.detached) this.posePart(m);
     }
-    const lid = this.lidPart;
-    if (!lid.detached && !lid.swing!.latched && !this.swingStep(lid, dt)) this.posePart(lid);
+    if (lidSwings(this.hoodPart) && !this.swingStep(this.hoodPart, dt)) this.posePart(this.hoodPart);
+    if (lidSwings(this.lidPart) && !this.swingStep(this.lidPart, dt)) this.posePart(this.lidPart);
   }
 
-  /** Whether a door or the trunk lid hangs off its latch (`swingHinges` has work). */
+  /** Whether a door, the hood or the trunk lid hangs off its latch (`swingHinges` has work). */
   protected swingFree(): boolean {
-    return !this.doorParts[0]!.swing!.latched || !this.doorParts[1]!.swing!.latched || (!this.lidPart.detached && !this.lidPart.swing!.latched);
+    return !this.doorParts[0]!.swing!.latched || !this.doorParts[1]!.swing!.latched || lidSwings(this.hoodPart) || lidSwings(this.lidPart);
   }
 
   /** One step of an unlatched part's swing. True if it tore off. */
@@ -844,10 +836,18 @@ export abstract class CarParts extends CarGlass {
   private hingeAccel(p: DetachPart): number {
     const h = p.swing!;
     const d = this.swingDrive;
-    if (p.hinge === "door") return swingAccel(h.spec, p.name === "doorL" ? -1 : 1, h.theta, d[0]!, d[1]!, d[2]!, d[3]!);
+    // The airflow's rearward push acts as a forward acceleration's pseudo force does.
+    const surge = d[1]! + this.windOn(p);
+    if (p.hinge === "door") return swingAccel(h.spec, p.name === "doorL" ? -1 : 1, h.theta, d[0]!, surge, d[2]!, d[3]!);
     // The world's up in the car's frame (its y and z): the column of the car's rotation that turns car y.
     const q = this.group.quaternion;
-    return lidAccel(h.spec, h.theta, 1 - 2 * (q.x * q.x + q.z * q.z), 2 * (q.y * q.z - q.w * q.x), d[1]!);
+    return lidAccel(h.spec, h.theta, 1 - 2 * (q.x * q.x + q.z * q.z), 2 * (q.y * q.z - q.w * q.x), surge, d[4]!);
+  }
+
+  /** The airflow's push (m/s², rearward along the car) on open part `p`, beating at its flutter's phase; forward when the car backs through the air. */
+  private windOn(p: DetachPart): number {
+    const forward = (this.velocity.x - this.air[0]!) * this.fwdFlat.x + (this.velocity.z - this.air[1]!) * this.fwdFlat.z;
+    return forward >= 0 ? windPush(forward, this.flapPhase(p)) : -windPush(-forward, this.flapPhase(p));
   }
 
   /** The free edge's velocity (car-frame m/s) as part `p` swings: what its stop takes, and what it leaves with if that tears it off. */
@@ -869,8 +869,8 @@ export abstract class CarParts extends CarGlass {
   }
 
   /**
-   * A part swung into its frame at closing rate ω < 0: the latch takes it at `jam` 0 (a crash jam above stops it there), or past
-   * its `slamJ` it is wrenched off. True if it tore off.
+   * A part swung into its frame at closing rate ω < 0: it stops at `jam` (0, or the crash's), where the latch takes it if the jam leaves its free edge within
+   * the latch's reach (`LATCH_REACH_M`), or past its `slamJ` it is wrenched off. True if it tore off.
    */
   private closeSwing(p: DetachPart, jam: number): boolean {
     const h = p.swing!;
@@ -880,7 +880,7 @@ export abstract class CarParts extends CarGlass {
       return true;
     }
     h.omega = 0;
-    h.latched = jam === 0;
+    h.latched = jam * h.spec.length <= LATCH_REACH_M;
     return false;
   }
 
@@ -891,6 +891,7 @@ export abstract class CarParts extends CarGlass {
       if (p.hingeT <= h.spec.ajar) return;
       h.latched = false;
       h.omega = 0;
+      h.theta = Math.max(h.theta, h.spec.taper);
       this.sampleMotion();
     }
     h.theta = Math.max(h.theta, Math.min(p.hingeT * h.spec.jam, h.spec.stop));
@@ -901,9 +902,13 @@ export abstract class CarParts extends CarGlass {
     this.motion[0] = this.velocity.x;
     this.motion[1] = this.velocity.z;
     this.motion[2] = this.yawRate;
+    this.motion[3] = this.velocity.y;
   }
 
-  /** The car-frame acceleration since the last sample, capped (`DOOR_ACC_MAX`), into `swingDrive`; zero while the car is in contact (the crash rules own that moment). */
+  /**
+   * The car-frame acceleration since the last sample, the level ones capped (`DOOR_ACC_MAX`), into `swingDrive`; zero while the car is in contact (the crash
+   * rules own that moment). The vertical is not capped: a landing's jolt on its wheels, which no contact rule reads, is what swings an open lid shut.
+   */
   private sampleDrive(dt: number): void {
     const m = this.motion;
     const inv = dt > 0 ? 1 / dt : 0;
@@ -915,6 +920,7 @@ export abstract class CarParts extends CarGlass {
     d[1] = free ? THREE.MathUtils.clamp(ax * this.fwdFlat.x + az * this.fwdFlat.z, -DOOR_ACC_MAX, DOOR_ACC_MAX) : 0;
     d[2] = free ? this.yawRate : 0;
     d[3] = free ? THREE.MathUtils.clamp((this.yawRate - m[2]!) * inv, -DOOR_YAW_ACC_MAX, DOOR_YAW_ACC_MAX) : 0;
+    d[4] = free ? (this.velocity.y - m[3]!) * inv : 0;
     this.sampleMotion();
   }
 
@@ -927,6 +933,7 @@ export abstract class CarParts extends CarGlass {
   /** A fresh car's flutter, contact timing and door motion sample (`resetVisual`): a reused car replays as a new one. */
   protected resetWear(): void {
     this.flapClock = 0;
+    this.air.fill(0);
     this.flapSpeed = 0;
     this.quietPrev = 0;
     this.sampleMotion();
@@ -938,10 +945,15 @@ export abstract class CarParts extends CarGlass {
     this.sampleMotion();
   }
 
-  /** Flutter of `p` now (rad, ≥ 0): 0 at rest and for a part not hinged; each part beats at its own phase (its rest spot's). */
+  /** Flutter of `p` now (rad, ≥ 0): 0 at rest and for a part not hinged. */
   private flapAngle(p: DetachPart): number {
     const a = flapAmp(this.flapSpeed, p.hingeT);
-    return a > 0 ? a * flapWave(this.flapClock + p.restPos.x * 13.1 + p.restPos.z * 7.7) : 0;
+    return a > 0 ? a * flapWave(this.flapPhase(p)) : 0;
+  }
+
+  /** The phase `p` beats at in the wind: the car's flap clock, offset by its rest spot so no two parts beat together. */
+  private flapPhase(p: DetachPart): number {
+    return this.flapClock + p.restPos.x * 13.1 + p.restPos.z * 7.7;
   }
 
   /** Netplay client, every frame: the flap clock turns with the car's speed and hinged panels and bumpers are re-posed with it. */
@@ -1361,9 +1373,9 @@ export abstract class CarParts extends CarGlass {
     return WHEEL_KG_PER_M3 * Math.PI * half.y * half.y * 2 * half.x;
   }
 
-  /** Into `out` from index `n` on: the parts drawn off their rest (a door or lid swung open, a hinged or hanging panel or bumper, a shown hood) and the torn ones still drawn. Returns the count past the last one written. */
+  /** Into `out` from index `n` on: the parts drawn off their rest (a door, the hood or lid swung open, a hinged or hanging panel or bumper) and the torn ones still drawn. Returns the count past the last one written. */
   displacedParts(out: THREE.Object3D[], n: number): number {
-    for (const p of this.parts) if (p.object.visible && (p.detached || p.shown || p.hingeT > 0 || (p.swing !== null && p.swing.theta > 0))) out[n++] = p.object;
+    for (const p of this.parts) if (p.object.visible && (p.detached || p.hingeT > 0 || (p.swing !== null && p.swing.theta > 0))) out[n++] = p.object;
     return n;
   }
 

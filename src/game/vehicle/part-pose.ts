@@ -15,26 +15,38 @@ export const BAR_FOLD = 0.45;
 
 /**
  * Where a hinged lid (`cowl` hood, `tail` boot), a door or the light bar stands at hinge value `t = p.hingeT` (from rest, which turns nothing): position x, y, z
- * then quaternion x, y, z, w into `out` at `o`. The lids turn about x through their rest origin, the boot by its free swing too; a door turns about y through
+ * then quaternion x, y, z, w into `out` at `o`. The lids turn about x through their rest origin by the crash, and past it by their free swing about their hinge line; a door turns about y through
  * its hinge, by the crash's jam or its free swing, as `CarParts.posePart` draws it. The bar (`bar`) turns about x too, but about the line
  * along its base's edge on the side the car's inertia sends it (`deform.impactInward.z`: a hit on the nose, inward −z, tips it forward, a hit on the tail back):
  * the edge of both feet's soles stays where it is and the other edge rises, as a door's hinge side stays and its free edge swings. The bar is skinned
  * with the roof (`skinPanel`), which carries that edge down and back with the crushed roof (0.15 m back in a frontal crush: turning about its rest place
  * stood the edge 5 cm off the skin), so the line it turns about is where the roof's lattice puts the edge now (`panelPoint`). The bar spans the roof across the car
  * (feet 0.8 m apart on the gutters), so a hinge along that line is the one a clamped pair of feet can fold on; the old turn about one foot, along the car,
- * lifted the far end 0.35 m off the roof. The one pose the drawn mesh (`CarParts.posePart`) and the car's cage (`CageRig`) both take, from the part's
- * state and the deformation's lattice alone.
+ * lifted the far end 0.35 m off the roof. The pose the drawn mesh (`CarParts.posePart`, `withSwing`) and the car's cage (`CageRig`, without: a lid's
+ * swing lives with the detachable parts, outside the collision cage, as a door's does) take, from the part's state and the deformation's lattice alone.
  */
-export function hingePose(p: DetachPart, deform: StreamedDeformation, out: Float64Array, o: number): void {
+export function hingePose(p: DetachPart, deform: StreamedDeformation, out: Float64Array, o: number, withSwing: boolean): void {
   const t = p.hingeT;
   const x = p.restPos.x;
   let y = p.restPos.y;
   let z = p.restPos.z;
   let turn: number;
-  if (p.hinge === "cowl") {
-    z -= t * 0.08;
-    y += t * 0.26;
-    turn = -t * 0.5;
+  if (p.hinge === "cowl" || p.hinge === "tail") {
+    const cowl = p.hinge === "cowl";
+    z += cowl ? -t * 0.08 : t * 0.08;
+    y += t * (cowl ? 0.26 : 0.22);
+    // The crash's jam or (`withSwing`: the drawn part, not the cage) the free swing, whichever holds it further open, the way its hinge opens.
+    const s = p.swing!;
+    const jam = t * s.spec.jam;
+    const theta = withSwing ? s.theta : 0;
+    turn = s.spec.dir * Math.max(jam, theta);
+    // The swing past the jam turns about the hinge line (`py`, `pz`; the boot's origin is on it): its place moved by the crash's turn, less by the whole turn.
+    if (theta > jam) {
+      const crash = s.spec.dir * jam;
+      const { py, pz } = s.spec;
+      y += py * detCos(crash) - pz * detSin(crash) - (py * detCos(turn) - pz * detSin(turn));
+      z += py * detSin(crash) + pz * detCos(crash) - (py * detSin(turn) + pz * detCos(turn));
+    }
   } else if (p.hinge === "door") {
     // About y, sideways: the crash's jam or the free swing, whichever holds it further open, out from the hinge as the jam springs it.
     const sign = p.name === "doorL" ? -1 : 1;
@@ -47,12 +59,6 @@ export function hingePose(p: DetachPart, deform: StreamedDeformation, out: Float
     out[o + 5] = 0;
     out[o + 6] = detCos(half);
     return;
-  } else if (p.hinge === "tail") {
-    z += t * 0.08;
-    y += t * 0.22;
-    // The crash's jam or the free swing, whichever holds it further open, the way its hinge opens.
-    const s = p.swing!;
-    turn = s.spec.dir * Math.max(t * s.spec.jam, s.theta);
   } else {
     const side = deform.impactInward.z > 0 ? -1 : 1;
     turn = side * t * BAR_FOLD;
@@ -80,7 +86,7 @@ export const POSE_MEMO_LENGTH = 2 + 13;
 
 /** The swing value, past the hinge value, that a part's pose reads (`posesFromOwnState`). */
 function swingInput(p: DetachPart): number {
-  return p.hinge === "tail" ? p.swing!.theta : p.mirror ? p.swing!.mirrorFold : 0;
+  return p.hinge === "tail" || p.hinge === "cowl" ? p.swing!.theta : p.mirror ? p.swing!.mirrorFold : 0;
 }
 
 /** Whether `p`'s pose is a function of its hinge value and swing alone, with no road, car pose or skin read: the hood, the boot lid, a mirror, a panel at rest. */

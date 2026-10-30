@@ -294,6 +294,8 @@ function assertSamePlans(plans: readonly PlanGrid[], expected: readonly PlanGrid
 function crushedHatchback(): CrushedHatchback {
   const car = buildCar("hatchback", "hatch");
   runWall(KERNEL_ROW_KPH, HOOD_COVER_OVERLAP, "front", { car });
+  // The wall springs the hood and its struts lift it off the tyres: shut back onto its crash pose, it is the crushed bonnet the hold works on.
+  car["setSwingOpen"](car["hoodPart"], 0);
   car.updateSkin();
   car.group.updateMatrixWorld(true);
   const underHood = car.partSeats.filter((seat) => seat.kind === PART_KIND.interior || seat.kind === PART_KIND.engineBay);

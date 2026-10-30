@@ -111,27 +111,41 @@ describe("given an unlatched open door that swings with the car's acceleration",
     expect(inside.doorHinge(1).latched && !inside.partOff("doorR"), "the inside door should latch").toBeTruthy();
   });
 
-  it("when the car faces any heading or is carried at 30 m/s, then the door swings exactly as it does on a car at rest facing forward, because only the acceleration in the car's own frame counts", () => {
-    const at = (yaw: number, v0: number) => {
-      const car = open(35, 1, yaw, v0);
-      const trace: number[] = [];
-      for (let k = 0; k < 8; k++) {
-        push(car, -2, -5, 0.05);
-        trace.push(deg(car));
-      }
-      return trace;
-    };
-    const base = at(0, 0);
-    expect(base[7]!, "the base case did not swing").toBeGreaterThan(50);
-    const otherStarts = [
-      { yaw: Math.PI / 2, v0: 0 },
-      { yaw: 2.2, v0: 0 },
-      { yaw: 0, v0: 30 },
-    ] as const;
-    for (const { yaw, v0 } of otherStarts) {
-      const other = at(yaw, v0);
-      for (let k = 0; k < 8; k++) expect(Math.abs(other[k]! - base[k]!), `yaw ${yaw} v0 ${v0} step ${k}: ${other[k]} vs ${base[k]}`).toBeLessThan(1e-6);
+  const swingTrace = (yaw: number, v0: number): number[] => {
+    const car = open(35, 1, yaw, v0);
+    const trace: number[] = [];
+    for (let k = 0; k < 8; k++) {
+      push(car, -2, -5, 0.05);
+      trace.push(deg(car));
     }
+    return trace;
+  };
+
+  it("when the car faces any heading, then the door swings exactly as it does on a car facing forward, because only the acceleration in the car's own frame counts", () => {
+    const base = swingTrace(0, 0);
+    expect(base[7]!, "the base case did not swing").toBeGreaterThan(50);
+    const otherHeadings = [{ yaw: Math.PI / 2 }, { yaw: 2.2 }] as const;
+    for (const { yaw } of otherHeadings) {
+      const other = swingTrace(yaw, 0);
+      for (let k = 0; k < 8; k++) expect(Math.abs(other[k]! - base[k]!), `yaw ${yaw} step ${k}: ${other[k]} vs ${base[k]}`).toBeLessThan(1e-6);
+    }
+  });
+
+  it("when the car is carried forward at 30 m/s, then the air it drives through holds the door shut against a braking that swings it open on a car at rest", () => {
+    const rest = swingTrace(0, 0);
+    const carried = swingTrace(0, 30);
+    expect(rest[0]! - carried[0]!, `first step: carried ${carried[0]}° vs at rest ${rest[0]}°`).toBeGreaterThan(0.3);
+    expect(rest[7]!, "at rest the braking swung the door open (°)").toBeGreaterThan(50);
+    expect(carried[7]!, "carried, the door after the braking (°)").toBeLessThan(35);
+  });
+
+  it("when the car cruises steadily at highway speed (30 m/s), then the wind swings a 35° door shut and it latches; at walking speed (1.5 m/s) the door stays as it hangs", () => {
+    const highway = open(35, 1, 0, 30);
+    push(highway, 0, 0, 2);
+    const walking = open(35, 1, 0, 1.5);
+    push(walking, 0, 0, 2);
+    expect(highway.doorHinge(1).latched && !highway.partOff("doorR"), `highway: door at ${deg(highway).toFixed(1)}°, latched ${highway.doorHinge(1).latched}`).toBeTruthy();
+    expect(Math.abs(deg(walking) - 35), `walking: door at ${deg(walking)}°`).toBeLessThan(1e-6);
   });
 
   it("when a crash's 15 m/s jolt lands in a single step, then the door does not tear off and opens no further than its stop", () => {

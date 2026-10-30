@@ -133,7 +133,7 @@ for (const body of BODIES) {
   for (const state of STATES) {
     const cliffs = edgeCliffs.filter((c) => c.key === `${body.body}/${state.id}`);
     describe(`given a ${body.body} body ${state.text} and a ${CAGE_STEP * 100} cm cage`, () => {
-      it(`when the cage's top is read over its hood, cabin and deck, then it lies within ${TOP_P95_M * 100} cm of the drawn top (95th percentile), ${TOP_WORST_M * 100} cm at worst, and answers over the drawn part`, (t) => {
+      it(`when the cage's top is read over its hood, cabin and deck, a sprung hood or lid drawn at its crash pose (the cage takes no swing), then it lies within ${TOP_P95_M * 100} cm of the drawn top (95th percentile), ${TOP_WORST_M * 100} cm at worst, and answers over the drawn part`, (t) => {
         const car = carInState(state.id, body.style, body.cls);
         const cage = cageOf(car);
         fitToDrawn(car, cage);

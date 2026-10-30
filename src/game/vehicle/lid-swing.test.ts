@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { runWall } from "../contact/crash-scenarios.test-util.ts";
-import { FINE_HZ } from "../kernel/constants.ts";
+import { makeWorld, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { FINE_HZ, FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
 import { DeformableCar } from "./car.ts";
 import { CAR_STYLE_IDS, type CarStyleId } from "./car-variants.ts";
 import { LID } from "./constants.ts";
 import { paint } from "./test-support.ts";
 import { must } from "../kernel/must.test-util.ts";
+import type { DoorHinge } from "./car-core.ts";
+import { lidAccel } from "./hinge-spec.ts";
+import { fireRam, parkedStyle } from "../scenes/door-rig.test-util.ts";
 
 /**
  * The trunk lid, hatch, liftgate and drop gate swing on the doors' hinge model (docs/DOOR_RIG.md, "Lids"): a rear hit past the
@@ -73,12 +76,16 @@ describe("given an unlatched lid on a parked car", () => {
   });
 
   for (const id of ["wagon", "hatchback"] as const) {
-    it(`when a ${id}'s top-hinged gate is let go, then its gas struts lift it up to its stop and hold it there`, () => {
+    it(`when a ${id}'s top-hinged gate is let go where its latch's pop leaves it, then its gas struts lift it up to its stop and hold it there; let go 1° open, its weight holds it down`, () => {
       const car = parked(id);
-      car.setLidOpen(0.02);
+      car.setLidOpen(car.lidHinge().spec.taper);
       swing(car, 3);
-      expect(car.lidHinge().theta).toBe(car.lidHinge().spec.stop);
+      expect(car.lidHinge().theta, "let go at the pop (rad)").toBe(car.lidHinge().spec.stop);
       expect(!car.lidOff()).toBe(true);
+      const low = parked(id);
+      low.setLidOpen(0.02);
+      swing(low, 3);
+      expect(low.lidHinge().theta, "let go 1° open (rad)").toBeLessThanOrEqual(0.02);
     });
   }
 
@@ -131,6 +138,164 @@ describe("given a rear hit on a car whose lid is already open", () => {
     t.annotate(`after the second hit: hinge ${r.hinge[LID.trunk]?.toFixed(3)}, detached ${r.detached.join(",")}, stop load ${car.lidHinge().load.toFixed(1)} J, ebs ${car.deform.hitSpeedValue.toFixed(2)}`);
     expect(open, "the first hit left the lid shut or tore it off").toBeTruthy();
     expect(car.lidOff() && r.detached.includes(LID.trunk) && car.hasLoosePart()).toBeTruthy();
+  });
+});
+
+/** A sedan carried forward at `speed` (m/s, steady: no acceleration) for 4 s with its lid let go on its stop: how near shut it swung, and how often it turned back over the last 2 s. */
+function carriedOpen(speed: number): { nearest: number; turns: number; stop: number } {
+  const car = parked("sedan");
+  car.velocity.copy(car.fwdFlat).multiplyScalar(speed);
+  car.setLidOpen(car.lidHinge().spec.stop);
+  const h = car.lidHinge();
+  let nearest = h.theta;
+  let turns = 0;
+  let heading = 0;
+  for (let k = 0; k < 4 * FINE_HZ; k++) {
+    const was = h.theta;
+    car.swingHinges(H);
+    nearest = Math.min(nearest, h.theta);
+    const now = Math.sign(h.theta - was);
+    if (k >= 2 * FINE_HZ && now !== 0 && now !== heading) turns++;
+    if (now !== 0) heading = now;
+  }
+  return { nearest, turns, stop: h.spec.stop };
+}
+
+describe("given a sedan driven with its boot lid open on its stop", () => {
+  it("when it cruises at highway speed (30 m/s), then the wind swings the lid more than halfway shut and it keeps flapping; at walking speed (1.5 m/s) it stays as it hangs", (t) => {
+    const highway = carriedOpen(30);
+    const walking = carriedOpen(1.5);
+    t.annotate(`highway: nearest ${highway.nearest.toFixed(3)} rad of stop ${highway.stop.toFixed(3)}, ${highway.turns} turns; walking: nearest ${walking.nearest.toFixed(3)}, ${walking.turns} turns`);
+    expect(highway.nearest, "highway: the lid's nearest approach to shut (rad open)").toBeLessThan(highway.stop / 2);
+    expect(highway.turns, "highway: the lid's turns back over the last 2 s (flaps)").toBeGreaterThan(10);
+    expect(walking.nearest, "walking: the lid's nearest approach to shut (rad open)").toBe(walking.stop);
+  });
+});
+
+/** How long (s) a dropped car is followed: it lands, settles and its lid comes to rest well within it. */
+const DROP_S = 3;
+
+const dropCases = [
+  { it: "when a sedan with its lid on its stop is dropped 0.3 m onto its wheels, then the lid dips and comes back to its stop, unlatched", id: "sedan", drop: 0.3, expectedLatched: false, expectedOnStop: true },
+  { it: "when a sedan with its lid on its stop is dropped 2.5 m onto its wheels, then the landing swings the lid shut and it latches", id: "sedan", drop: 2.5, expectedLatched: true, expectedOnStop: false },
+  { it: "when a hatchback with its gate on its stop is dropped 0.3 m onto its wheels, then the gate dips and comes back to its stop, unlatched", id: "hatchback", drop: 0.3, expectedLatched: false, expectedOnStop: true },
+  { it: "when a hatchback with its gate on its stop is dropped 2 m onto its wheels, then the landing swings the gate shut and it latches", id: "hatchback", drop: 2, expectedLatched: true, expectedOnStop: false },
+] as const;
+
+describe("given a car with its boot lid popped open on its stop, dropped flat onto its wheels", () => {
+  for (const testCase of dropCases) {
+    it(testCase.it, (t) => {
+      const car = parked(testCase.id);
+      car.group.position.y += testCase.drop;
+      car.airborne = true;
+      car.setLidOpen(car.lidHinge().spec.stop);
+      const h = car.lidHinge();
+      const world = makeWorld([car], false, false, null);
+      let nearest = h.theta;
+      let fastestFall = 0;
+      for (let f = 0; f < DROP_S * FRAME_HZ; f++) {
+        tickWorld(world, 1 / FRAME_HZ);
+        nearest = Math.min(nearest, h.theta);
+        fastestFall = Math.min(fastestFall, car.velocity.y);
+      }
+      t.annotate(`${testCase.id} ${testCase.drop} m: landed at ${(-fastestFall).toFixed(2)} m/s, nearest ${nearest.toFixed(3)} rad, ends ${h.theta.toFixed(3)} of stop ${h.spec.stop.toFixed(3)}, latched ${h.latched}`);
+      expect(-fastestFall, "the car's speed as it landed (m/s)").toBeGreaterThan(Math.sqrt(2 * GRAVITY * testCase.drop) * 0.8);
+      expect(nearest, "the lid's nearest approach to shut (rad open)").toBeLessThan(h.spec.stop);
+      expect(h.latched, "the lid latched").toBe(testCase.expectedLatched);
+      expect(h.theta === h.spec.stop, "the lid back on its stop").toBe(testCase.expectedOnStop);
+      expect(car.lidOff(), "the lid torn off").toBe(false);
+    });
+  }
+});
+
+/** A person's hand closing a boot lid or bonnet: a steady push (N) at its free edge, a few tens of newtons (guessed: a palm pressing down, not a slam). */
+const HAND_N = 50;
+/** A push (N) too light to beat the struts: a fingertip's. */
+const FINGER_N = 10;
+
+/** The edge push (N) a strut gate on its stop holds against, from its own struts' lift, weight and hinge friction (`lidAccel` at the stop on a level car). */
+function strutHoldN(h: DoorHinge): number {
+  return ((lidAccel(h.spec, h.spec.stop, 1, 0, 0, 0) + h.spec.dry) * h.spec.inertia) / h.spec.length;
+}
+
+/** The lightest of the 2 km/h steps of the sedan's front wall hit that springs its hood (42 km/h leaves it latched). */
+const HOOD_POP_KPH = 44;
+
+/** `seconds` of `newtons` held down on the free edge of the lid on hinge `h` while it swings; the hand lets go once it latches. */
+function press(car: DeformableCar, h: DoorHinge, newtons: number, seconds: number): void {
+  for (let t = 0; t < seconds - 1e-9; t += H) {
+    if (!h.latched) h.omega -= ((newtons * h.spec.length) / h.spec.inertia) * H;
+    car.swingHinges(H);
+  }
+}
+
+/** A car of style `id` whose shut boot lid a rear ram (Doors scene F, 12 km/h with 100 kg) has sprung: it rises on its torsion bars or struts to its stop. */
+function lidPopped(id: CarStyleId): DeformableCar {
+  const car = parkedStyle(id);
+  fireRam(car, "lidPop", { kph: 12, kg: 100 });
+  return car;
+}
+
+/** A sedan whose hood a front wall hit at `HOOD_POP_KPH` has sprung: it rises on its struts toward its stop. */
+function hoodPopped(): DeformableCar {
+  const car = parked("sedan");
+  runWall(HOOD_POP_KPH, 1, "front", { car });
+  return car;
+}
+
+const handCases = [
+  { it: "when a hand holds the popped boot lid's edge down with 50 N, then it swings shut and latches over its crash dent", id: "sedan", lid: "boot", newtons: HAND_N, expectedLatched: true },
+  { it: "when a fingertip holds the popped boot lid's edge down with 10 N, then the torsion bars keep it up, unlatched", id: "sedan", lid: "boot", newtons: FINGER_N, expectedLatched: false },
+  { it: "when a hand holds a hatchback's popped gate down with the sedan lid's 50 N, then its struts keep it up, unlatched", id: "hatchback", lid: "boot", newtons: HAND_N, expectedLatched: false },
+  { it: "when a hand holds a hatchback's popped gate down with a liftgate's closing push (1.5× what its struts hold at the stop), then it swings shut, its weight wins over the struts' dead band, and it latches", id: "hatchback", lid: "boot", newtons: "liftgate", expectedLatched: true },
+  { it: "when a hand holds a wagon's popped gate down with a liftgate's closing push (1.5× what its struts hold at the stop), then it swings shut, its weight wins over the struts' dead band, and it latches", id: "wagon", lid: "boot", newtons: "liftgate", expectedLatched: true },
+  { it: "when a hand holds the popped hood's edge down with 50 N, then it swings shut and latches over its crash dent", id: "sedan", lid: "hood", newtons: HAND_N, expectedLatched: true },
+  { it: "when a fingertip holds the popped hood's edge down with 10 N, then the struts keep it up, unlatched", id: "sedan", lid: "hood", newtons: FINGER_N, expectedLatched: false },
+] as const;
+
+describe("given a boot lid sprung by a rear hit or a sedan's hood by a front hit, swung up off its latch", () => {
+  for (const testCase of handCases) {
+    it(testCase.it, (t) => {
+      const car = testCase.lid === "boot" ? lidPopped(testCase.id) : hoodPopped();
+      const h = testCase.lid === "boot" ? car.lidHinge() : car.hoodHinge();
+      const popped = h.theta;
+      expect(h.latched, "the hit left it latched").toBe(false);
+      expect(popped, "how far the sprung part stood open (rad)").toBeGreaterThan(0.3);
+      const newtons = testCase.newtons === "liftgate" ? 1.5 * strutHoldN(h) : testCase.newtons;
+      press(car, h, newtons, 3);
+      // Then half a second of the crash rules on the dented car: an old dent does not spring a latch again.
+      for (let k = 0; k < FINE_HZ / 2; k++) car.stepBreakage(H);
+      t.annotate(`${testCase.id} ${testCase.lid} ${newtons.toFixed(1)} N: from ${popped.toFixed(3)} rad to ${h.theta.toFixed(3)}, latched ${h.latched}`);
+      expect(h.latched, "latched after the push and the crash rules' half second").toBe(testCase.expectedLatched);
+      expect(h.theta < 0.1, "within 0.1 rad of shut after the push").toBe(testCase.expectedLatched);
+      expect(testCase.lid === "boot" ? car.lidOff() : car.hoodOff(), "torn off").toBe(false);
+    });
+  }
+
+  it("when the Doors scene's G ram strikes the sprung boot lid on its stop with 35 J, then it holds; with 555 J, then it tears off as a loose part", () => {
+    const soft = lidPopped("sedan");
+    fireRam(soft, "lidTear", { kph: 3, kg: 100 });
+    const hard = lidPopped("sedan");
+    const torn = fireRam(hard, "lidTear", { kph: 12, kg: 100 });
+    expect(soft.lidOff(), "35 J tore the lid off").toBe(false);
+    expect(torn.detached.includes("trunk") && hard.hasLoosePart(), `555 J left the lid on: [${torn.detached}]`).toBe(true);
+  });
+
+  it("when the sprung hood is flung onto its stop with 0.8× its hinge's tear energy, then it holds; with 1.25×, then it tears off as a loose part", () => {
+    const fling = (share: number): DeformableCar => {
+      const car = hoodPopped();
+      const h = car.hoodHinge();
+      // From below its stop: a part already resting on its stop takes no strap load from a push.
+      h.theta = h.spec.stop / 2;
+      h.omega = Math.sqrt((2 * share * h.spec.tearJ) / h.spec.inertia);
+      swing(car, 0.5);
+      return car;
+    };
+    const soft = fling(0.8);
+    const hard = fling(1.25);
+    expect(soft.hoodOff(), `0.8×: stop load ${soft.hoodHinge().load} J`).toBe(false);
+    expect(soft.hoodHinge().theta, "0.8×: the hood on its stop (rad)").toBe(soft.hoodHinge().spec.stop);
+    expect(hard.hoodOff() && hard.hasLoosePart(), "1.25× left the hood on").toBe(true);
   });
 });
 

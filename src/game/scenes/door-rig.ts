@@ -225,6 +225,9 @@ export class DoorRig {
     const drive = this.carMoves ? -this.lane.dir * (this.kph / KPH_PER_MS) : 0;
     car.velocity.set(car.fwdFlat.x * drive, 0, car.fwdFlat.z * drive);
     car.speed = Math.abs(drive);
+    // The whole frame swaps, the air with it: the moving car meets the ram in air moving with it, as the still car does in still air.
+    car.air[0] = car.velocity.x;
+    car.air[1] = car.velocity.z;
     // After the velocity, so the door's pendulum starts from this motion rather than a jump to it.
     if (this.lane.part === "panel") {
       car.setDoorOpen(side, 0);

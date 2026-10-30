@@ -39,7 +39,7 @@ import { panelRegions, type PanelName, type PanelRegion } from "./car-panels.ts"
 import { newDentState, type DentState } from "./loose-dent.ts";
 import { newLooseShape } from "./loose-step.ts";
 import { carClass, CLASSES, drivenAxles } from "./vehicle-classes.ts";
-import { bootPivot, lidSpec, roofHinged, type HingeSpec } from "./hinge-spec.ts";
+import { bootPivot, hoodSpec, lidSpec, roofHinged, type HingeSpec } from "./hinge-spec.ts";
 import { POSE_MEMO_LENGTH } from "./part-pose.ts";
 import { restShell } from "./shadow-caster.ts";
 /** What a chrome trim follows in a crush: the cage of the pane it frames, or (`strip`) the body paint's A5 rules about its seat, `cage` then the lattice mode's stand-in; `door` the door it rides. */
@@ -139,6 +139,8 @@ export const MIRROR_BREAK_J = 30;
 export const LID_LATCH_CRUSH_M = 0.02;
 /** A swinging door or lid must reach its frame at least this fast (rad/s) for the latch to catch: one creeping home (a sprung gate with no struts settling against its seal at 0.0001 rad/s) rests unlatched, as a real latch needs a push to engage; a hand's close is several rad/s, guessed. */
 export const LATCH_CATCH_RATE = 0.2;
+/** A crash jam (m at the free edge) a latch still reaches when the part is pushed shut onto it: the striker's play and the seal's squeeze, guessed. */
+export const LATCH_REACH_M = 0.05;
 /** A door's drawn angle (rad) per unit of crash hinge value (`hingeT`): the jam that holds a door ajar. */
 const DOOR_JAM = 1.45;
 /** C1: a side hit that raises a door's hinge value past this at `DOOR_TEAR_MPS` tears it off. */
@@ -165,6 +167,9 @@ function doorSpec(door: BodyStyle["door"]): HingeSpec {
     uy: 0,
     uz: 0,
     lift: 0,
+    taper: 0,
+    py: 0,
+    pz: 0,
   };
 }
 
@@ -194,7 +199,7 @@ export interface DoorHinge {
 
 /** Netplay state of a car's detachable parts, lamps and glass, preallocated from `partNetSizes()`. */
 export interface PartNetState {
-  /** Per part: 1 detached, 2 folding, 4 its swing (a door's, the lid's) is latched. */
+  /** Per part: 1 detached, 2 folding, 4 its swing (a door's, the hood's, the lid's) is latched. */
   readonly flags: Uint8Array;
   /** Per part × 3: hingeT, swing theta (rad), swing mirrorFold (rad); 0 without a swing. */
   readonly hinge: Float32Array;
@@ -294,8 +299,6 @@ export interface DetachPart {
   hinge: "cowl" | "tail" | "two-point" | "door" | "bar" | "quarter" | "arch";
   detached: boolean;
   folding: boolean;
-  /** Posed open for show (`showPose`), not by its hinge: the bay under a shown hood draws. */
-  shown: boolean;
   hingeT: number;
   /** The most `syncAttachedParts` may raise `hingeT` to: a panel pushed back onto the body stays dented below it. Host state, not netted. */
   hingeMax: number;
@@ -304,7 +307,7 @@ export interface DetachPart {
   velocity: THREE.Vector3;
   angular: THREE.Vector3;
   radius: number;
-  /** Doors and the trunk lid own their hinge; a mirror shares its door's. */
+  /** Doors, the hood and the trunk lid own their hinge; a mirror shares its door's. */
   swing: DoorHinge | null;
   /** Quarter panels and arch flares: the patch of body skin they are (null on every other part); once hinged, whether the shell is in the scene (the body under it is primer). */
   region: PanelRegion | null;
@@ -445,6 +448,8 @@ export abstract class CarCore {
   protected quarterParts: DetachPart[] = [];
   /** The trunk lid, hatch or tailgate, also listed in `parts`. */
   protected lidPart!: DetachPart;
+  /** The hood, also listed in `parts`: it swings on the lid's law. */
+  protected hoodPart!: DetachPart;
   /** Seconds since the [front, rear] end was last struck (`noteContactEnd`). */
   protected readonly endAgo = new Float64Array([9, 9]);
   /** Smallest striker reach (m from centre along the length) since the squeeze began. */
@@ -900,7 +905,6 @@ export abstract class CarCore {
         hinge,
         detached: false,
         folding: false,
-        shown: false,
         hingeT: 0,
         hingeMax: 1,
         fatigue: 0,
@@ -925,9 +929,9 @@ export abstract class CarCore {
     };
     add(BUMPER_F, this.bumperF, "bumperFront", 1, 2, "two-point", 0.42).bare = bumperBare(this.style, this.body.geometry, true);
     add("bumperR", this.bumperR, "bumperRear", 16, 17, "two-point", 0.4).bare = bumperBare(this.style, this.body.geometry, false);
-    const hood = add(LID.hood, this.hood, "bonnet", 3, 3, "cowl", 0.5);
+    this.hoodPart = add(LID.hood, this.hood, "bonnet", 3, 3, "cowl", 0.5, newSwing(hoodSpec(this.hoodRest)));
     this.lidPart = add(LID.trunk, this.trunk, "boot", 18, 18, "tail", 0.48, newSwing(lidSpec(this.style.boot)));
-    for (const f of this.lampFittings) if (f.share) f.share.lid = f.kind === "hood" ? hood : this.lidPart;
+    for (const f of this.lampFittings) if (f.share) f.share.lid = f.kind === "hood" ? this.hoodPart : this.lidPart;
     const doors = doorSpec(this.style.door);
     const doorL = add("doorL", this.doorL, "doorLeft", 6, 6, "door", 0.4, newSwing(doors));
     const doorR = add("doorR", this.doorR, "doorRight", 7, 7, "door", 0.4, newSwing(doors));

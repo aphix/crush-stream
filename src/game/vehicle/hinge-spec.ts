@@ -27,13 +27,18 @@ export interface HingeSpec {
   /** Doors: the right door's hinge in plan (car x, z). */
   hx: number;
   hz: number;
-  /** Lids: +1 opens turning about +x (front or top hinge), −1 about −x (a drop gate's bottom hinge). */
+  /** Lids: +1 opens turning about +x (front or top hinge), −1 about −x (a drop gate's bottom hinge, the hood's rear one). */
   dir: number;
   /** Lids: the unit chord, hinge to free edge, at rest (car y, z). */
   uy: number;
   uz: number;
   /** Lids: the struts' share of its weight; 1 holds it wherever it is left on a level car. */
   lift: number;
+  /** Lids: the opening (rad) under which a gas strut's lift fades to none as its moment arm about the hinge goes (0: torsion bars or none, the same lift all the way). */
+  taper: number;
+  /** Lids: the hinge line in the part's own frame (y, z): the boot's mesh is built on it (0, 0), the hood's turns about its rear edge. */
+  py: number;
+  pz: number;
 }
 
 /** A style's lid (`BodyStyle.boot.swing`): a new car picks a preset or writes its own. */
@@ -42,6 +47,7 @@ export interface LidSwing {
   /** The chord's rise above level, rearward, on the stop (rad). */
   rise: number;
   lift: number;
+  taper: number;
   ajar: number;
   tearT: number;
   tearMps: number;
@@ -57,16 +63,18 @@ const LID_DRY = 2;
 /** Latch and tear bars shared by the presets: the doors' (C1), a rear hit for a side one. */
 const LID_LATCH = { ajar: 0.2, tearT: 0.5, tearMps: 12.5 } as const;
 
-/** Deck lid: 12.4 kg (2011 Accord teardown, NHTSA DOT HS 811 666); torsion bars lift a released lid to ~63°. Hinge energies guessed under a door's. */
-const TRUNK_LID: LidSwing = { kg: 12.4, rise: 1.1, lift: 1.5, ...LID_LATCH, tearJ: 150, slamJ: 250 };
+/** Deck lid: 12.4 kg (2011 Accord teardown, NHTSA DOT HS 811 666); torsion bars lift a released lid to ~63°, wound tightest when it is shut. Hinge energies guessed under a door's. */
+const TRUNK_LID: LidSwing = { kg: 12.4, rise: 1.1, lift: 1.5, taper: 0, ...LID_LATCH, tearJ: 150, slamJ: 250 };
 /** Gas struts hold a hatch or liftgate's chord this far above level (rad, ~17°): head room under its edge. */
 const STRUT_RISE = 0.3;
+/** A gas strut's line runs close to the hinge near shut: over the last ~17° (rad) its arm, and its lift, fade to none, so the gate's weight wins and a hand shuts it; the latch's pop lifts a sprung one past it. */
+const STRUT_TAPER = 0.3;
 /** Hatch with its glass (guessed 18 kg), on gas struts. */
-const HATCH_LID: LidSwing = { kg: 18, rise: STRUT_RISE, lift: 1.5, ...LID_LATCH, tearJ: 200, slamJ: 300 };
+const HATCH_LID: LidSwing = { kg: 18, rise: STRUT_RISE, lift: 1.5, taper: STRUT_TAPER, ...LID_LATCH, tearJ: 200, slamJ: 300 };
 /** SUV liftgate, glass and all (guessed 26 kg), on gas struts. */
-export const LIFTGATE: LidSwing = { kg: 26, rise: STRUT_RISE, lift: 1.5, ...LID_LATCH, tearJ: 300, slamJ: 400 };
+export const LIFTGATE: LidSwing = { kg: 26, rise: STRUT_RISE, lift: 1.5, taper: STRUT_TAPER, ...LID_LATCH, tearJ: 300, slamJ: 400 };
 /** Pickup drop gate: 22 kg steel (20–30 kg typical), let down level on two cables, rated far above its own ~60 J drop. */
-const DROP_GATE: LidSwing = { kg: 22, rise: 0, lift: 0, ...LID_LATCH, tearJ: 450, slamJ: 400 };
+const DROP_GATE: LidSwing = { kg: 22, rise: 0, lift: 0, taper: 0, ...LID_LATCH, tearJ: 450, slamJ: 400 };
 
 /** Where the boot turns (car [y, z]): its `pivot`, else the panel's own hinge edge. */
 export function bootPivot(boot: BootSpec): YZ {
@@ -105,12 +113,46 @@ export function lidSpec(boot: BootSpec): HingeSpec {
   const uz = (fz - pz) / length;
   const dir = uy > UPRIGHT_CHORD ? -1 : 1;
   const s = boot.swing ?? (dir < 0 ? DROP_GATE : boot.kind === "lid" && !roofHinged(boot) ? TRUNK_LID : HATCH_LID);
+  // The boot's mesh is built on its pivot: it turns about its own origin.
+  return lidSlab(s, length, dir, uy, uz, dir * (s.rise - detAtan2(uy, -uz)), 0, 0);
+}
+
+/** The hood's stop (rad, about its rear edge at the cowl): the owner's open-hood photos, hood against belt line in their side views. */
+const HOOD_OPEN = (32 * Math.PI) / 180;
+/** The hood's rear-edge and front-edge bands (m, from its rearmost and foremost points): the vertices its hinge line and free edge are read along. */
+const HOOD_EDGE_BAND = 0.01;
+/**
+ * Steel hood, 16 kg (guessed: 14-18 kg), on gas struts just over its weight, so a sprung one rises to its stop. Its latch sits at the nose, the
+ * first thing a front hit crushes: it springs at a quarter of the boot's crush (`ajar`). Tear and slam energies as a deck lid's.
+ */
+const HOOD: Omit<LidSwing, "rise"> = { kg: 16, lift: 1.2, taper: STRUT_TAPER, ajar: 0.05, tearT: 0.5, tearMps: 12.5, tearJ: 150, slamJ: 250 };
+
+/** The hood's hinge from its mesh's own vertices (x, y, z triples): it turns about its rear edge's top, nose up, to `HOOD_OPEN`. */
+export function hoodSpec(position: ArrayLike<number>): HingeSpec {
+  let zMin = Infinity;
+  let zMax = -Infinity;
+  for (let i = 2; i < position.length; i += 3) {
+    zMin = Math.min(zMin, position[i]!);
+    zMax = Math.max(zMax, position[i]!);
+  }
+  let py = -Infinity;
+  let fy = -Infinity;
+  for (let i = 0; i < position.length; i += 3) {
+    if (position[i + 2]! < zMin + HOOD_EDGE_BAND) py = Math.max(py, position[i + 1]!);
+    if (position[i + 2]! > zMax - HOOD_EDGE_BAND) fy = Math.max(fy, position[i + 1]!);
+  }
+  const length = hypot2(fy - py, zMax - zMin);
+  return lidSlab(HOOD, length, -1, (fy - py) / length, (zMax - zMin) / length, HOOD_OPEN, py, zMin);
+}
+
+/** A lid's uniform slab on `s`: `length` from its hinge line (`py`, `pz` in its own frame) along the chord (`uy`, `uz`), opening the way `dir` turns it to `stop`. */
+function lidSlab(s: Omit<LidSwing, "rise">, length: number, dir: number, uy: number, uz: number, stop: number, py: number, pz: number): HingeSpec {
   return {
     length,
     kg: s.kg,
     inertia: (s.kg * length * length) / 3,
     dry: LID_DRY,
-    stop: dir * (s.rise - detAtan2(uy, -uz)),
+    stop,
     jam: LID_JAM,
     ajar: s.ajar,
     tearJ: s.tearJ,
@@ -123,21 +165,27 @@ export function lidSpec(boot: BootSpec): HingeSpec {
     uy,
     uz,
     lift: s.lift,
+    taper: s.taper,
+    py,
+    pz,
   };
 }
 
 /**
  * Opening acceleration (rad/s²) of lid `s` open `theta`, a uniform slab turning about car x: its weight (`upY`, `upZ`: the world's up in
- * car y and z), the struts' `lift` against it, and the car's forward acceleration `az` (m/s²) as a pseudo force. Its virtual work per rad
+ * car y and z) under gravity plus the car's upward acceleration `ay` (a landing's jolt weighs it down), the struts' `lift` against it (fading
+ * to none under `taper` as a gas strut's arm goes), and the car's forward acceleration `az` (m/s²) as a pseudo force. Its virtual work per rad
  * is ∫ r (∂p/∂θ)·F dm = m·L/2 · n·F, with n the chord turned a quarter toward opening.
  */
-export function lidAccel(s: HingeSpec, theta: number, upY: number, upZ: number, az: number): number {
+export function lidAccel(s: HingeSpec, theta: number, upY: number, upZ: number, az: number, ay: number): number {
   const turn = s.dir * theta;
   const c = detCos(turn);
   const sn = detSin(turn);
   const cy = s.uy * c - s.uz * sn;
   const cz = s.uy * sn + s.uz * c;
-  const fy = GRAVITY * (s.lift - upY);
-  const fz = -GRAVITY * upZ - az;
+  const g = GRAVITY + ay;
+  const lift = theta < s.taper ? (s.lift * theta) / s.taper : s.lift;
+  const fy = GRAVITY * lift - g * upY;
+  const fz = -g * upZ - az;
   return (s.dir * 3 * (fz * cy - fy * cz)) / (2 * s.length);
 }

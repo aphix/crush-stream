@@ -21,10 +21,15 @@ const FLAP_FULL_T = 0.25;
 const FLAP_HZ0 = 3;
 const FLAP_HZ1 = 0.2;
 
+/** The airflow's share of its full push at `speed`: 0 at rest, ∝ v², 1 from `FLAP_V`. Every hinged part's wind reads it. */
+function airflow(speed: number): number {
+  const v = Math.min(1, speed / FLAP_V);
+  return v * v;
+}
+
 /** Flutter amplitude (rad): 0 at rest, ∝ v², full at `FLAP_V`; a barely hinged part hardly moves. */
 export function flapAmp(speed: number, hingeT: number): number {
-  const v = Math.min(1, speed / FLAP_V);
-  return FLAP_MAX * v * v * Math.min(1, hingeT / FLAP_FULL_T);
+  return FLAP_MAX * airflow(speed) * Math.min(1, hingeT / FLAP_FULL_T);
 }
 
 /** The flap clock's rate (rad/s) at `speed`. */
@@ -35,6 +40,14 @@ export function flapRate(speed: number): number {
 /** 0..1, never negative: a part lifts off its body and settles back, it does not fold into it. Two beats that never line up. */
 export function flapWave(phase: number): number {
   return 0.5 + 0.35 * detSin(phase) + 0.15 * detSin(2.7 * phase + 1.3);
+}
+
+/** Peak push (m/s²) of the airflow on an open door or lid at `FLAP_V`, its beat's mean half that: ½ρv² (980 Pa) on ~0.8 m² of a 12-26 kg lid (guessed). */
+const WIND_PUSH_MAX = 80;
+
+/** Rearward push (m/s² along the car, for `speed` forward) of the airflow on an open door or lid, beating at `phase` as a panel flutters. */
+export function windPush(speed: number, phase: number): number {
+  return WIND_PUSH_MAX * airflow(speed) * flapWave(phase);
 }
 
 /** Above this speed (m/s, 80 km/h) a hinged part wears: faster, and quicker still once stretched. */

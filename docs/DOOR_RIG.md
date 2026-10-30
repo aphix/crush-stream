@@ -33,14 +33,15 @@ taken at the stop, and its mirror's fold. The door is a thin slab about its fron
 I = m·L²/3, with m = 25 kg and L the car's own door length (`style.door.length`): the sedan's
 L = 0.98 m, so I = 8.00 kg·m².
 
-`swingHinges(dt)` runs the free swing of every unlatched door and lid:
+`swingHinges(dt)` runs the free swing of every unlatched door, hood and lid:
 
 - Hinge friction: ω decays at 0.8 /s.
 - **Check-strap stop** at θ = 68°. The door's swing energy ½Iω² at the stop goes into `load`. The
   strap's detent then holds it (ω = 0). Once `load` reaches `HINGE_TEAR_J` the door tears off
   with its trailing edge's velocity.
-- **Latch** at θ = 0: a door or lid closing at `LATCH_CATCH_RATE` (0.2 rad/s) or faster latches (θ = 0, ω = 0). One creeping home slower than that
-  rests unlatched against its seal (a real latch needs a push to engage: a sprung drop gate, which has no struts, settled to 0.0001 rad/s and latched again).
+- **Latch** at θ = 0, or at a crash jam that leaves the free edge within `LATCH_REACH_M` (5 cm): a door or lid closing at `LATCH_CATCH_RATE` (0.2 rad/s)
+  or faster latches (ω = 0). One creeping home slower than that rests unlatched against its seal (a real latch needs a push to engage: a sprung drop gate,
+  which has no struts, settled to 0.0001 rad/s and latched again). A deeper jam stops it there, unlatched.
   If one slam carries ½Iω² ≥ `SLAM_TEAR_J`, the door is wrenched off instead and leaves outward and rearward.
 
 The ram calls `loadDoorStop` when it pushes a door that already sits on its stop. The car is rigid
@@ -103,22 +104,39 @@ The trunk lid, hatch, SUV liftgate and pickup/monster drop gate (part slot 3, `L
 - **Swing data:** `boot.swing` (`LidSwing`), or the preset for its kind: `TRUNK_LID` (deck lid, 12.4 kg), `HATCH_LID` (18 kg,
   any other gate opening up, a roof-hinged deck lid included), `LIFTGATE` (26 kg, the SUV sets it), `DROP_GATE` (22 kg). `rise`
   is the chord's angle above level on the stop; a drop gate's 0 stops it level (90°) on its cables. A new car only adds data.
-- **Drive law (`lidAccel`):** a uniform slab about one edge, I = m·L²/3, pushed by its weight, its struts or torsion bars
-  (`lift`: 0 none, 1 balanced, 1.5 lifts it to the stop) and the car's fore-aft acceleration. A hard launch swings an open deck lid
-  down off its stop; coasting lets it rise back.
+- **Drive law (`lidAccel`):** a uniform slab about one edge, I = m·L²/3, pushed by its weight under gravity plus the car's vertical
+  acceleration (a landing on the wheels weighs it down), its struts or torsion bars (`lift`: 0 none, 1 balanced, 1.5 lifts it to the
+  stop), the car's fore-aft acceleration and the wind (`windPush`, docs/PANEL_FLAP.md). A hard launch swings an open deck lid down off
+  its stop; coasting lets it rise back; a sedan dropped 2.5 m onto its wheels (a hatch 2 m) slams its open lid shut and latches it.
 - **Pop:** rear crush drives the lid's crash hinge value, `hingeT = (c − 0.1) / 0.3` of the rear bumper cage's compression c
   (sensor 18 alone stays under 0.08 even at 55 km/h). Past `ajar` 0.2 the latch springs at the jam angle `min(hingeT·0.5, stop)`.
-- **Re-latch:** shut (`shutLid`, or its own swing) under `slamJ` it latches; a harder slam wrenches it off.
+  Only fresh crush springs it: a lid latched again over an old dent stays latched.
+- **Re-latch:** shut (`shutLid`, or its own swing) under `slamJ` it latches, onto a crash jam too if the jam leaves its free edge within
+  `LATCH_REACH_M` (5 cm); a harder slam wrenches it off. A hand's 50 N held on the free edge closes and latches a sedan's lid sprung by F;
+  a fingertip's 10 N does not beat its torsion bars.
+- **Hood:** the same `DoorHinge` and law (`hoodSpec`, from the hood mesh's own rear and front edges): 16 kg on struts at `lift` 1.2,
+  turning nose-up about its rear edge's top to `HOOD_OPEN` (32°, the owner's open-hood photos; the show pose's open hood is this swing).
+  Its crash hinge value runs on the bonnet's crush as before; past its `ajar` 0.05 (its latch is at the nose) a front hit springs it:
+  the sedan's at 44 km/h into the wall, not 42. Same re-latch (a hand's 50 N latches the 44 km/h one), stop tear and slam rules as
+  the boot; its crash tear (crush past `hingeT` 0.78) is unchanged.
 - **Tear:** stop energy past `tearJ`; crush past `hingeT` 0.78; or an open lid hit past `tearT` 0.5 at EBS ≥ 12.5 m/s. A torn lid
   flies as a loose part at its own mass and tumbles the way it opens. A door or lid already resting on its stop takes no strap
   load from the push holding it there (else a drop gate on its cables would tear off on its own).
 - **Rear glass:** a roof-hinged hatch or liftgate carries its rear pane: the pane is the trunk mesh's child at −pivot, so it
   swings, tears off and resets with the gate. The contact cage keeps the pane at rest while it is on (it does not swing).
 - **Cage:** a wrapping lid's boot cage reaches 2 cm below and behind its face, so the face skins without clamping.
-- `hingesLatched` counts the lid with the doors. API: `setLidOpen`, `lidAngle`, `shutLid`, `lidHinge`, `lidOff`, `ripLid`.
+- `hingesLatched` counts the hood and lid with the doors. API: `setLidOpen`, `lidAngle`, `shutLid`, `lidHinge`, `lidOff`, `ripLid`, `hoodHinge`, `hoodOff`.
+- **Gas struts** (hatch, liftgate, hood; `taper` `STRUT_TAPER` 0.3 rad): a strut's line runs close to the hinge near shut, so its lift fades
+  to none over the last ~17°, where the gate's weight wins; a deck lid's torsion bars (`taper` 0) lift all the way. A latch's pop lifts a
+  sprung strut gate past that dead band (`springSwing`, `springLidLatch`), and its struts then raise it to its stop. A gate on its stop
+  takes a liftgate's closing push to start down (1.5× what its struts hold there: 79 N for the hatchback, 112 N for the wagon); the
+  sedan lid's 50 N leaves a hatch up. Pushed into the dead band, it falls shut and latches.
+- **Cage:** the collision cage takes a hood's and lid's crash pose only (`hingePose(..., false)`): a swing lives with the detachable
+  parts, as a door's does, so host and client fit the same cage whatever the swing.
 
 Rows: `hinge-spec.test.ts`, `lid-swing.test.ts` (pop at 30 km/h but not 14 km/h on the rear wall, drop gate at exactly 90°, gates
-on their stop, surge, re-latch and slam, stop tear, a hit on an open lid, the rear pane), `engine-replay-lid.test.ts` (a sprung
+on their stop, surge, re-latch and slam, stop tear, a hit on an open lid, the rear pane, the wind at highway and walking speed, the
+landing, a hand closing a sprung lid and hood, the G tear of a sprung lid and the stop tear of a sprung hood), `engine-replay-lid.test.ts` (a sprung
 and a torn lid replay bit-exact on a peer's cars), and the Doors-scene F/G rows in `door-rig.test.ts`.
 
 ## Rig (`door-rig.ts`)

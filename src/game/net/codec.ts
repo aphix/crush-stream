@@ -68,8 +68,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 37: a clip's keyframes carry each loose body's rest time (one more number per torn part or popped wheel, REPLAY 155), so peers on 36 would misread a host's clip.
 38: a car's body style may be the monster's own (`CAR_STYLE_IDS` appends `monster`) and its class the hatch or the SUV (`VEHICLE_CLASS_IDS` appends `hatch`, `suv`), and the trunk slot's two floats carry its lid's swing and latch (REPLAY 159), so peers on 37 would misread those cars' body, class and lid.
 39: a snapshot car's flags byte carries `dented` (bit 7: a face carries a load crush) and its wreck section carries each face's load crush and baked depth (`DeformNetState.crush`, `crushBaked`: 10 i16 after the engine travels), sent for a dented car under the crash's depth too (`SPRING_YIELD`), so peers on 38 would misread the wreck section and show such a dent as none (REPLAY 159).
+40: the hood slot's two floats carry its swing and latch, as the trunk slot's do, and a clip's keyframes carry the door-swing sample's vertical velocity and drive (two more part-state doubles), so peers on 39 would misread a host's hood and clips.
 */
-export const NET_VERSION = 39;
+export const NET_VERSION = 40;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 58.3 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;

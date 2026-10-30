@@ -89,7 +89,7 @@ export class DeformableCar extends CarParts {
     this.asleep = false;
     this.stirred = true;
   }
-  /** Both doors and the trunk lid shut (`swing.latched`; a torn lid is no lid): nothing of the car stands out past its hull and its mirrors; an unlatched door swings out up to its hinge plus its length, a lid past the tail or roof. */
+  /** Both doors, the hood and the trunk lid shut (`swing.latched`; a torn one is none): nothing of the car stands out past its hull and its mirrors; an unlatched door swings out up to its hinge plus its length, a lid past the tail or roof. */
   get hingesLatched(): boolean {
     return !this.swingFree();
   }
@@ -277,7 +277,6 @@ export class DeformableCar extends CarParts {
       if (p.bare) setBare(p.bare, this.body.geometry, false);
       p.detached = false;
       p.folding = false;
-      p.shown = false;
       p.hingeT = 0;
       p.hingeMax = 1;
       p.fatigue = 0;

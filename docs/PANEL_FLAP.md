@@ -59,17 +59,31 @@ shuts it, the outside of a turn opens it, the inside shuts it; a shut door has n
 car's velocity since the last sample, rotated into the car frame and capped at 1.5 g (a crash's spike saturates; the crash rules
 C1 tear or spare a door), α the same for the yaw rate. Hinge friction: 0.8/s viscous plus a dry detent: a door's holds it against a
 car-frame push of up to 0.76 m/s² across its slab whatever its length (`DOOR_DETENT_ACC`, as the swing it drives: 3/(2L) rad/s² per
-m/s²); a lid's is 2 rad/s² (`LID_DRY`), so a jostle leaves either hanging. Because only Δv enters, a car carried at any constant speed, or turned any way, swings the same.
+m/s²); a lid's is 2 rad/s² (`LID_DRY`), so a jostle leaves either hanging. Turned any way, a car's door swings the same.
 
-The door ends on the check-strap stop (`loadDoorStop`), on its crash jam, or in the latch: `closeDoor` is the one rule for
-reaching shut, used by the car's own swing and by the Doors ram alike (latched below `SLAM_TEAR_J`, wrenched off above it).
+**Wind on an open door or lid** (`windPush`): the panels' airflow, `WIND_PUSH_MAX` 80 m/s² × min(1, v/40 m/s)² × `flapWave` at the
+part's flutter phase (the beat's mean is half the peak), pushes it rearward along the car (forward when it reverses), added to the
+fore-aft drive as the pseudo force of a forward acceleration. At 30 m/s it swings a 35° door shut and latches it and swings a sedan's
+deck lid more than halfway shut, flapping about 6 times a second; at walking pace it moves nothing. The air is not carried with the
+car, so a car carried at a steady 30 m/s no longer swings its door as one at rest does. An uncrashed car's flap clock turns in
+`swingHinges` (a crashed one's with its crash rules).
 
-A door a **side hit** opens past `DOOR_AJAR` is sprung (`springDoor`): unlatched, hanging at least as far open as its crash
+The door ends on the check-strap stop (`loadDoorStop`), on its crash jam, or in the latch: `closeSwing` is the one rule for
+reaching shut, used by the car's own swing and by the Doors ram alike (latched below `SLAM_TEAR_J`, wrenched off above it). A
+crash jam that leaves the free edge within `LATCH_REACH_M` (5 cm: the striker's play and the seal's squeeze) still latches; a
+deeper one stops it unlatched. Only fresh crush (the hinge value rising) springs a latch, so a part latched again over an old dent
+stays latched.
+
+A door a **side hit** opens past `DOOR_AJAR` is sprung (`springSwing`): unlatched, hanging at least as far open as its crash
 jam (`hingeT × 1.45`, which it can never shut past), swinging with the car. Frontal and rear hits still only jam it ajar,
 latched (C1).
 
-The trunk lid, hatch, liftgate and drop gate swing on the same hinge once a rear hit springs them, turning about car x with their
-own law (`lidAccel`: weight, struts, fore-aft acceleration; [`DOOR_RIG.md`](DOOR_RIG.md), Lids).
+The trunk lid, hatch, liftgate and drop gate swing on the same hinge once a rear hit springs them, and the hood once a front hit
+does, turning about car x with their own law (`lidAccel`: weight under gravity plus the car's vertical acceleration, struts,
+fore-aft acceleration and wind; [`DOOR_RIG.md`](DOOR_RIG.md), Lids). The vertical acceleration is not capped: a landing's jolt
+on the wheels, which no contact rule reads, weighs an open lid down (a sedan's deck lid dropped 0.3 m dips and rises back, from
+2 m swings to 14° of shut and rises back on its torsion bars, from 2.5 m latches; a hatch latches from 2 m; a drop gate is
+pressed onto its cables).
 
 ## The Doors scene: panels (D, E) and frame parity
 
@@ -108,3 +122,7 @@ Lids: the trunk slot (3) now has a swing, so its two free hinge slots carry the 
 `1 − hingeMax`, always 0 for it) and part flag bit 4 its latch. Same layout, new meaning: a NET_VERSION bump (it rides the car
 rig's combined bump) and a REPLAY entry (lids swing, spring, re-latch and tear; a part resting on its stop takes no strap load; the
 lid's crash hinge runs on rear crush).
+
+The hood slot (2) now has a swing too: its two free hinge slots carry its `theta` and 0 and flag bit 4 its latch (NET_VERSION 40). A
+keyframe's part state carries the door-swing sample's vertical velocity and drive (`motion[3]`, `swingDrive[4]`) and the flap clock,
+which the wind on an open door or lid reads.
