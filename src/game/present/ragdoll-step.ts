@@ -141,7 +141,7 @@ export abstract class RagdollStepper extends RagdollPool {
       this.loose.partTouch(step, authority);
       this.props.strikeDolls(this.dolls, step, this.goLimp);
       const stepAt = performance.now();
-      world.step();
+      this.untangle.step(world);
       this.stepMs[this.steps++ % STEP_LOG] = performance.now() - stepAt;
       if (++this.tick % WATCH_EVERY !== 0) continue;
       this.purses?.advance(WATCH_EVERY * STEP);
@@ -153,6 +153,7 @@ export abstract class RagdollStepper extends RagdollPool {
       }
     }
     this.acc = Math.max(0, this.acc - steps * step);
+    if (steps > 0 && this.live > 0) this.untangle.frame(world, this.dolls, steps * step);
     this.alpha = dormant ? 1 : Math.min(1, this.acc / step);
     if (steps > 0) for (const d of this.dolls) if (d.live) this.capture(d, d.cur);
     if (steps > 0) this.purses?.capture(true);

@@ -23,6 +23,7 @@ import { RideAlong } from "./ragdoll-ride.ts";
 import { AIR_ANGULAR, AIR_LINEAR, ARM, blendPose, type Doll, JOINTS, limp, PARTS, partDensity, readPose, SHOULDER_Y } from "./ragdoll-body.ts";
 import { brace, joinUp, loosen } from "./ragdoll-joints.ts";
 import { Walker } from "./ragdoll-walker.ts";
+import { Untangle } from "./ragdoll-untangle.ts";
 import { groundColliders, PATCH_AHEAD, PATCH_HALF, type Pole } from "./ragdoll-ground.ts";
 import { courseSolids, type Solid } from "./ragdoll-solids.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
@@ -95,6 +96,8 @@ export abstract class RagdollPool {
   protected readonly props = new PropBodies(knockedGroups, FIXED_GROUPS, GRACE, PROP_BAND_LOW, PROP_BAND_HIGH, (cx, cz, y, half) => this.patchAt(cx, cz, y, half));
   /** The range minigames' cardboard boxes (`setBoxes`): dynamic cuboids in this world, asleep until hit. */
   protected readonly boxes = new BoxPile();
+  /** Parts stuck inside another collider, eased out (`Untangle`). */
+  protected readonly untangle = new Untangle();
   /** Seconds a thrown dummy lies about (`LIFE`; for ever between `holdThrown` and `releaseThrown`). */
   protected thrownLife = LIFE;
   protected readonly onExit: (at: THREE.Vector3, frame: THREE.Quaternion, inherit: THREE.Vector3) => void;
@@ -213,6 +216,7 @@ export abstract class RagdollPool {
     world.timestep = STEP;
     world.numSolverIterations = ITERATIONS;
     world.integrationParameters.numInternalPgsIterations = INTERNAL_PASSES;
+    this.untangle.load(R);
     this.proxies.load(R, world);
     this.loose.load(R, world);
     for (let s = 0; s < SLOTS; s++) {
