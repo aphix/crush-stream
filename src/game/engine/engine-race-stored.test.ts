@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { frame } from "../world/race-world.test-util.ts";
+import { frame, makeWorld } from "../world/race-world.test-util.ts";
+import { setGround } from "../world/ground.ts";
 import { leaveSurvival, survivalWorld } from "../world/survival-run.test-util.ts";
 
 /**
@@ -25,6 +26,31 @@ describe("given a Survival run: its hunters are put away off the course until th
       expect(hidden > 0 && placed > 0, `${hidden} hidden and ${placed} drawn car-frames: the run put no car away or none on the road`).toBeTruthy();
     } finally {
       leaveSurvival(w);
+    }
+  });
+});
+
+describe("given a city race with every traffic car put away by the observer bubble", () => {
+  it("when one bubble pass wakes them, then every two woken cars stand at least 14 m apart (each wake keeps clear of the ones woken before it in the pass)", () => {
+    const w = makeWorld();
+    w.race.enter();
+    try {
+      w.race.command({ type: "options", options: { trackId: "city", laps: 2, aiCount: 5, noReset: false, aggression: 0 } });
+      w.race.command({ type: "start" });
+      const state = { acc: 0 };
+      for (let n = 0; w.race.phase !== "racing" && n < 600; n++) frame(w, state);
+      const first = w.race.racers.length;
+      const last = w.race["policeFrom"];
+      for (let i = first; i < last; i++) w.race["putAway"](i, w.cars[i]!);
+      w.race["bubble"]();
+      const woken = w.cars.slice(first, last).filter((car) => car.group.visible);
+      expect(woken.length, "cars woken").toBeGreaterThan(1);
+      for (const [k, a] of woken.entries()) {
+        for (const b of woken.slice(k + 1)) expect(a.group.position.distanceTo(b.group.position), "two woken cars apart").toBeGreaterThanOrEqual(14);
+      }
+    } finally {
+      w.race.exit();
+      setGround(null);
     }
   });
 });

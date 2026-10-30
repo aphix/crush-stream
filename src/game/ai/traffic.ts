@@ -22,8 +22,11 @@ const REACTION_S = 0.25;
 const YIELD_LAT = 3;
 /** A car coming up from behind is a yield only above this closing speed (m/s). */
 const YIELD_CLOSING = 3;
-/** Half lane (m): a car this close sideways is in our lane. */
-const LANE_HALF = 2.1;
+/** A car's half length and half width (m), a family car's 4.6 × 2 m. */
+const HALF_LENGTH = 2.3;
+const HALF_WIDTH = 1;
+/** Sideways reach (m) of our path: a car this close sideways is in our way (both half widths and half a metre). */
+const LANE_HALF = 2 * HALF_WIDTH + 0.5;
 /** Cross traffic: another traffic car on another road whose heading is at least this sine off ours, so its path meets ours at a junction. */
 const CROSS_SIN = 0.5;
 /** A car whose centre is this close (m) to where the two paths meet is in the crossing (half a car length and half a width, and a margin): it goes, and the other waits. */
@@ -36,6 +39,9 @@ const STOPPED_SPEED = 0.8;
 const WAIT = 2.5;
 /** Seconds spent edging round once started (long enough to clear a car at walking pace). */
 const EDGE_TIME = 4.5;
+/** Edging round, a car still stops this far (m, centre to centre) short of a car it would touch, one within `EDGE_SIDE` sideways: two half lengths and a hand's breadth; two half widths. */
+const EDGE_GAP = 2 * HALF_LENGTH + 0.2;
+const EDGE_SIDE = 2 * HALF_WIDTH;
 /** Speed over its target (m/s) at which a traffic car's brake comes on, and under it by which it goes off; the brake is full at `BRAKE_SPAN` over. */
 const BRAKE_ON = 1;
 const BRAKE_OFF = 0.5;
@@ -89,6 +95,8 @@ export class TrafficBrain {
   private readonly planGap = new Float64Array(MAX_CARS);
   private readonly planGapAlong = new Float64Array(MAX_CARS);
   private readonly planOffset = new Float64Array(MAX_CARS);
+  /** The nearest car ahead (m) the car would touch going straight on (`EDGE_SIDE`), what an edge round stops short of. */
+  private readonly planTouch = new Float64Array(MAX_CARS);
   private readonly planEdging = new Uint8Array(MAX_CARS);
   /** 1 while a racer bears down on the car (head-on or from behind) and it holds to its own kerb. */
   private readonly planYield = new Uint8Array(MAX_CARS);
@@ -263,9 +271,9 @@ export class TrafficBrain {
     let target = Math.min(this.speed, curv > STRAIGHT_CURV ? (cls.turn * 0.6) / curv : Infinity);
     // Speed that still stops STOP_GAP short of it at a gentle 4 m/s².
     if (this.planGap[i]! < Infinity) target = Math.min(target, Math.max(0, this.planGapAlong[i]!) + Math.sqrt(8 * Math.max(0, this.planGap[i]! - STOP_GAP)));
-    if (edging) target = Math.min(this.speed, 4);
+    if (edging) target = Math.min(this.speed, 4, Math.sqrt(8 * Math.max(0, this.planTouch[i]! - EDGE_GAP)));
     const along = self.vx * detSin(self.yaw) + self.vz * detCos(self.yaw);
-    const stop = target < STOP_TARGET && !edging;
+    const stop = target < STOP_TARGET;
     if (this.pedals.latch(i, stop ? Infinity : along - target, BRAKE_ON, BRAKE_OFF)) out.brake = stop ? 1 : clamp((along - target + BRAKE_OFF) / BRAKE_SPAN, 0, 1);
     else out.throttle = clamp(target / DRIVE.maxFwd + (target - along) * 0.15, 0, 1);
     this.pedals.shape(i, out, dt);
@@ -286,6 +294,7 @@ export class TrafficBrain {
     let gapYaw = 0;
     let yielding = false;
     let cross = Infinity;
+    let touch = Infinity;
     const along = self.vx * fx + self.vz * fz;
     const reach = lookDistance(along, LANE_LOOK_S, LANE_LOOK, sightArc);
     for (let q = 0; q < others.length; q++) {
@@ -303,7 +312,8 @@ export class TrafficBrain {
       const look = lookDistance(closing, LANE_LOOK_S, LANE_LOOK, sightArc);
       cross = Math.min(cross, this.crossingAhead(self, slot, o, along, reach));
       if (Math.abs(side) <= YIELD_LAT && ((ahead > 0.5 && ahead <= look && sameWay < -0.5) || (ahead < 0 && -ahead <= look && sameWay > 0.5 && closing > YIELD_CLOSING))) yielding = true;
-      if (ahead <= 0.5 || ahead > look || Math.abs(side) > LANE_HALF || (sameWay < -0.5 && o.alive && closing > 0)) continue;
+      if (ahead > 0.5 && Math.abs(side) < EDGE_SIDE) touch = Math.min(touch, ahead);
+      if (ahead <= 0.5 || ahead > look || Math.abs(side) > LANE_HALF) continue;
       if (ahead < gap) {
         gap = ahead;
         gapAlong = o.vx * fx + o.vz * fz;
@@ -328,6 +338,7 @@ export class TrafficBrain {
     // Crossing traffic stops us short of where the paths meet; the wait to edge round counts only a blocker in our lane.
     this.planGap[i] = Math.min(gap, cross);
     this.planGapAlong[i] = cross < gap ? 0 : gapAlong;
+    this.planTouch[i] = touch;
     this.clock.planned(i);
   }
 

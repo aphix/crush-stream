@@ -187,6 +187,50 @@ describe("given the city track's ambient traffic (cars that drive the lanes arou
     expect(sameWay.centre > 2.5 && sameWay.kerb < 0.5, `same-way blocker: ${sameWay.centre.toFixed(2)} m toward the centre, ${sameWay.kerb.toFixed(2)} m toward its own kerb`).toBeTruthy();
   });
 
+  it("when a car comes up on a racer stopped facing it, square in its lane or over toward its kerb where the edge round goes, then in 14 s it never touches it", () => {
+    const slot = brain.slotOf(0);
+    const kerbSide = Math.sign(slot.offset);
+    const at = (s: number, off: number) => {
+      const pt = track.pointAt(s, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
+      return { x: pt.x + pt.tz * (slot.offset + off), z: pt.z - pt.tx * (slot.offset + off), yaw: Math.atan2(pt.tx, pt.tz) };
+    };
+    for (const off of [0, kerbSide * 1.2]) {
+      const [mover, blocker] = cars(2, new THREE.Scene());
+      brain.reset();
+      const a = at(200, 0);
+      const b = at(235, off);
+      mover!.spawnFacing(a.x, a.z, a.yaw, brain.speed);
+      blocker!.spawnFacing(b.x, b.z, b.yaw + Math.PI, 0);
+      let closest = Infinity;
+      run(brain, [mover!, blocker!], 14, () => {
+        closest = Math.min(closest, Math.hypot(mover!.group.position.x - blocker!.group.position.x, mover!.group.position.z - blocker!.group.position.z));
+      }, 1);
+      // Nose to nose, two half lengths and a hand's breadth.
+      expect(closest, `blocker ${off.toFixed(1)} m over: closest ${closest.toFixed(2)} m centre to centre`).toBeGreaterThan(4.6);
+    }
+  });
+
+  it("when a racer comes at it head-on 2.3 m to the side of its lane, its door a hand's breadth from ours as they pass, then it brakes; 3 m to the side, it does not", () => {
+    const slot = brain.slotOf(0);
+    const toCentre = -Math.sign(slot.offset);
+    const pt = (s: number) => track.pointAt(s, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
+    const at = (id: number, s: number, off: number, yaw: number, speed: number): AiCar => {
+      const p = pt(s);
+      const heading = Math.atan2(p.tx, p.tz) + yaw;
+      return { ...blankAiCar(id), x: p.x + p.tz * (slot.offset + off), z: p.z - p.tx * (slot.offset + off), yaw: heading, vx: Math.sin(heading) * speed, vz: Math.cos(heading) * speed };
+    };
+    const brakes = (off: number): number => {
+      brain.reset();
+      const self = at(0, 100, 0, 0, brain.speed);
+      const racer = at(20, 112, toCentre * off, Math.PI, 30);
+      let brake = 0;
+      for (let step = 0; step < 0.5 / DT; step++) brake = Math.max(brake, brain.think(self, [self, racer], DT).brake);
+      return brake;
+    };
+    expect(brakes(2.3), "2.3 m over").toBeGreaterThan(0);
+    expect(brakes(3), "3 m over").toBe(0);
+  });
+
   it("when a racer bears down on a car in its lane on an open stretch (head-on 30 m ahead, or from behind), then it holds to its own kerb without stopping, and with the racer beyond what the road shows it keeps its lane", () => {
     brain.reset();
     const slot = brain.slotOf(0);

@@ -655,6 +655,9 @@ export abstract class RaceField {
         car.group.visible = true;
         this.place(car, spot.x, spot.z, spot.yaw, spot.y);
         traffic.respawned(i);
+        // The next car woken this pass keeps clear of this one (`spawnPoint` reads the snaps, refreshed only at the next drive step).
+        this.snaps[i]!.x = spot.x;
+        this.snaps[i]!.z = spot.z;
         continue;
       }
       const p = car.group.position;
