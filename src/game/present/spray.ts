@@ -146,7 +146,7 @@ export function colourDistance(a: number, b: number): number {
 type SprayDepth = { readonly map: THREE.Texture; readonly band?: number; readonly torn?: THREE.Vector4 };
 
 /** The face mapping's uniforms (`SPRAY_FACE_GLSL`) for a bitmap of `layout`: its rest-frame box and its faces' rectangles (0..1 of the bitmap). */
-function sprayFaceUniforms(layout: SprayLayout): Record<string, THREE.IUniform> {
+export function sprayFaceUniforms(layout: SprayLayout): Record<string, THREE.IUniform> {
   return {
     sprayMin: { value: new THREE.Vector3(...layout.min) },
     spraySpan: { value: new THREE.Vector3(layout.max[0] - layout.min[0], layout.max[1] - layout.min[1], layout.max[2] - layout.min[2]) },

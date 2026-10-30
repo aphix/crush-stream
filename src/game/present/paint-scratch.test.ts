@@ -14,7 +14,8 @@ import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { applyScratch, PaintScratches } from "./paint-scratch.ts";
-import { wearOf } from "./paint-scratch.test-util.ts";
+import { sampledScratch, wearOf } from "./paint-scratch.test-util.ts";
+import { must } from "../kernel/must.test-util.ts";
 
 /** Bytes a frame may allocate: one boxed double, as the other allocation rows hold. */
 const FRAME_BOUND_B = 16;
@@ -102,5 +103,18 @@ describe("given the real engine with its cars on the screen", () => {
     expect(compileHooks(paint).uniforms.scratchTier!.value, "off").toBe(0);
     engine.setFxTier("minimal");
     expect(compileHooks(paint).uniforms.scratchTier!.value, "minimal").toBe(1);
+  });
+
+  it("when a fleet car that wears no spray has its left flank scraped and a frame runs, then its paint's program samples the stroke where it lies", () => {
+    engine["setScene"]("fleet");
+    runSeconds(engine, 1 / FRAME_HZ);
+    const car = engine["live"]().find((c) => compileHooks(c.lookMeshes().bodyPaint).uniforms.sprayMap === undefined);
+    must(car, "the control: a fleet car with no spray");
+    car.group.updateMatrixWorld(true);
+    const rest = car.restPointOf(car.group.localToWorld(new THREE.Vector3(-0.85, 0.5, -0.5)), new THREE.Vector3());
+    scraped(car, [[0.5, -0.5]]);
+    runSeconds(engine, 1 / FRAME_HZ);
+    expect(car.scratches.count, "the control: the scrape made a stroke").toBeGreaterThan(0);
+    expect(sampledScratch(car.lookMeshes().bodyPaint, rest, new THREE.Vector3(-1, 0, 0)), "the scratch the paint draws there").toBeGreaterThan(0);
   });
 });

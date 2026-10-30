@@ -7,7 +7,7 @@ import type { BodyPartName } from "../kernel/rig-spec.ts";
 import type { MaterialId } from "../kernel/material-ids.ts";
 import { BUMPER_F, LAMP_SEAT, LID, LIGHT_BAR } from "./constants.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
-import { PaintScrapes } from "./paint-scrapes.ts";
+import { PaintScrapes, STROKE_BYTES } from "./paint-scrapes.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
 import { roofTopY } from "./car-mesh.ts";
@@ -1227,6 +1227,8 @@ export abstract class CarCore {
       })),
       lamps: this.lamps.map((l) => ({ kind: l.kind, side: l.side, intact: l.intact })),
       glass: this.glassPanes.map((g) => g.state),
+      // Hex of the stroke bytes (6 a stroke: u0 u1 v0 v1 face|width severity), as the wire carries them.
+      scratches: { count: this.scratches.count, bytes: Array.from(this.scratches.list.subarray(0, this.scratches.count * STROKE_BYTES), (b) => b.toString(16).padStart(2, "0")).join("") },
     };
   }
 }

@@ -6,6 +6,7 @@ import { JerseyBarrier } from "../scenes/engine-props.ts";
 import { TraceRecorder, type TraceClock, type TraceSetup } from "./engine-trace.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
+import { STROKE_BYTES } from "../vehicle/paint-scrapes.ts";
 
 const setup: TraceSetup = {
   barrier: true,
@@ -95,5 +96,19 @@ describe("given the trace recorder (the debug recording of a crash run) begun on
     const { cars, trace, clock } = rig();
     trace.begin(setup, cars, clock);
     expect(JSON.stringify(trace.samples[0]!.camera).length).toBeLessThan(200);
+  });
+
+  it("when the second car's flank is scraped before the first sample, then the written trace carries its strokes byte for byte and none on the first", () => {
+    const { cars, trace, clock } = rig();
+    const car = cars[1]!;
+    car.group.updateMatrixWorld(true);
+    car.scrape(car.group.localToWorld(new THREE.Vector3(-0.85, 0.5, 0)), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 8), 0.3, 3, 1);
+    car.scratches.slice(0.25);
+    car.scratches.slice(0.25);
+    const count = car.scratches.count;
+    expect(count, "the control: the scrape made a stroke").toBeGreaterThan(0);
+    trace.begin(setup, cars, clock);
+    const shown = JSON.stringify(JSON.parse(trace.traceJson(setup)).samples[0].cars.map((c: { scratches: unknown }) => c.scratches));
+    expect(shown).toBe(JSON.stringify([{ count: 0, bytes: "" }, { count, bytes: Buffer.from(car.scratches.list.subarray(0, count * STROKE_BYTES)).toString("hex") }]));
   });
 });

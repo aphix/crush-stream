@@ -3,7 +3,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { REST_FRAME_ATTRIBUTES } from "../vehicle/car-detail-map.ts";
 import { FACE_BITS, FACE_MASK, FACE_METRES, FACE_WIDTH, SCRAPE_MAX, SEVERITY, STROKE_BYTES, U0, U1, V0, V1, WIDTH_STEP } from "../vehicle/paint-scrapes.ts";
 import { CAR_SPRAY } from "../vehicle/spray-box.ts";
-import { declareSprayFace } from "./spray.ts";
+import { declareSprayFace, sprayFaceUniforms } from "./spray.ts";
 
 /** The FX tier's share of the scratches: 0 only at `off`. Shared by every car's paint. */
 export const SCRATCH_TIER = { value: 1 };
@@ -11,6 +11,8 @@ export const SCRATCH_TIER = { value: 1 };
 /** What a car with no strokes samples: no wear. Shared, never disposed. */
 const BARE_SCRATCH = new THREE.DataTexture(new Uint8Array(2), 1, 1, THREE.RGFormat);
 BARE_SCRATCH.needsUpdate = true;
+/** The `CAR_SPRAY` face mapping the strokes are made in: a paint with no spray of its own has no other, and unset it maps every fragment to texel (0, 0). Every car layout's normalized faces are these. */
+const FACE_UNIFORMS = sprayFaceUniforms(CAR_SPRAY);
 
 const SIDE = CAR_SPRAY.w;
 const FACES = CAR_SPRAY.faces.length;
@@ -19,25 +21,30 @@ const MIN_RADIUS_TEXELS = 0.75;
 /** `WearMask.pending` once more rows wait than it has ranges for: only a whole upload covers them. */
 const FULL = -1;
 
-/** Line pitch (m) across the slide: each 1.6 mm row holds at most one scratch line. */
-const PITCH = 0.0016;
-/** A line's half width as a share of its row at the lightest wear: hashed per row between these, so lines differ in weight; heavier wear widens them by `WIDEN` at full severity until neighbours merge. */
-const LINE_MIN = 0.08;
-const LINE_MAX = 0.22;
-const WIDEN = 2.4;
-/** Rows that carry a line per unit severity: a light brush strikes a few, a hard shove nearly all. */
-const DENSITY = 1.3;
-/** Dash length (m) along the slide, and the share of dashes a line skips at the lightest wear (none at full): grit lifts off and bites again. */
-const DASH = 0.05;
-const DASH_GAP = 0.45;
-/** Severity (mask R, 0..1) above which a line cuts from primer through to steel, full at the second, jittered per line by `STEEL_JITTER` so a band keeps grey strands. */
-const STEEL_FROM = 0.45;
-const STEEL_FULL = 0.85;
-const STEEL_JITTER = 0.35;
+/** Row pitch (m) across the slide: each 6 mm row holds at most one scratch line, set off its middle by up to `JITTER` of the row, so lines stand apart at uneven spacing with paint between them. */
+const PITCH = 0.006;
+const JITTER = 0.6;
+/** A line's half width as a share of its row, hashed per line between these (0.5-1.2 mm wide): a scratch, never a band. */
+const LINE_MIN = 0.04;
+const LINE_MAX = 0.1;
+/** Rows that carry a line per unit severity: a light brush strikes a few, a hard shove most; deeper is more lines, not wider ones. */
+const DENSITY = 0.85;
+/** A line's dash length (m) along the slide, hashed per line between these shares of it, and the share of dashes it skips at the lightest wear (`DASH_GAP_DEEP` at full): grit lifts off and bites again. */
+const DASH = 0.06;
+const DASH_SHORT = 0.4;
+const DASH_LONG = 1.8;
+const DASH_GAP = 0.55;
+const DASH_GAP_DEEP = 0.2;
+/** Up to this share of a dash's length frays off each of its ends, hashed per dash: lines start and stop at their own places. */
+const DASH_FRAY = 0.35;
+/** The share of lines cut through to steel at full severity (the rest are grey primer), and of gouges among them: twice as wide, twice as long, always steel. */
+const STEEL_SHARE = 0.18;
+const GOUGE_SHARE = 0.06;
+const GOUGE_WIDEN = 2;
 
 const f = (x: number): string => (Number.isInteger(x) ? `${x}.0` : `${x}`);
 
-/** `paintScratch()` (the seam in `vehicle/bare-metal.ts`): hash lines along the slide where the wear mask's R is up, more, wider and steelier the higher it is. */
+/** `paintScratch()` (the seam in `vehicle/bare-metal.ts`): thin dashed lines along the slide where the wear mask's R is up, mostly primer grey, the more of them, and of steel ones and gouges, the higher it is. */
 const SCRATCH_GLSL = /* glsl */ `
 #define PAINT_SCRATCH
 uniform sampler2D wearMap;
@@ -54,21 +61,26 @@ vec2 paintScratch() {
   float row = (top ? vSprayP.x : vSprayP.y) / ${f(PITCH)};
   float id = floor(row);
   float pick = scratchHash(id);
-  float hw = min(0.5, mix(${f(LINE_MIN)}, ${f(LINE_MAX)}, scratchHash(id + 0.37)) * (1.0 + ${f(WIDEN)} * s * s));
+  float gouge = step(1.0 - ${f(GOUGE_SHARE)} * s, scratchHash(id + 0.53));
+  float hw = mix(${f(LINE_MIN)}, ${f(LINE_MAX)}, scratchHash(id + 0.37)) * (1.0 + ${f(GOUGE_WIDEN - 1)} * gouge);
+  float centre = 0.5 + ${f(JITTER)} * (scratchHash(id + 0.13) - 0.5);
   float aa = fwidth(row);
-  float line = 1.0 - smoothstep(hw - aa, hw + aa, abs(fract(row) - 0.5));
-  // Rows under a pixel: their mean cover, not a moire.
+  float line = 1.0 - smoothstep(hw - aa, hw + aa, abs(fract(row) - centre));
+  // Rows under a pixel: their mean cover (thin lines fade with distance), not a moire.
   line = mix(line, 2.0 * hw, clamp(aa - 0.5, 0.0, 1.0));
-  float along = (!top && a.z > a.x ? vSprayP.x : vSprayP.z) / ${f(DASH)};
-  float dash = step(${f(DASH_GAP)} * (1.0 - s), scratchHash(floor(along + pick * 7.0) + id * 0.01));
+  float len = ${f(DASH)} * mix(${f(DASH_SHORT)}, ${f(DASH_LONG)}, scratchHash(id + 0.29)) * (1.0 + gouge);
+  float along = (!top && a.z > a.x ? vSprayP.x : vSprayP.z) / len + pick * 7.0;
+  float cell = floor(along) + id * 0.01;
+  float t = fract(along);
+  float dash = step(mix(${f(DASH_GAP)}, ${f(DASH_GAP_DEEP)}, s), scratchHash(cell))
+    * step(${f(DASH_FRAY)} * scratchHash(cell + 0.41), t) * step(t, 1.0 - ${f(DASH_FRAY)} * scratchHash(cell + 0.83));
   float hair = line * dash * step(pick, s * ${f(DENSITY)});
-  float bite = s * (1.0 - ${f(STEEL_JITTER)} * scratchHash(id + 0.71));
-  return hair * vec2(1.0, smoothstep(${f(STEEL_FROM)}, ${f(STEEL_FULL)}, bite));
+  return hair * vec2(1.0, max(gouge, step(scratchHash(id + 0.71), ${f(STEEL_SHARE)} * s)));
 }`;
 
 /** A car's wear: the uniforms every paint of it samples, its mask while it has strokes, and the list the mask was drawn from. */
 type Wear = {
-  readonly uniforms: { wearMap: THREE.IUniform<THREE.Texture>; scratchTier: typeof SCRATCH_TIER };
+  readonly uniforms: Record<string, THREE.IUniform> & { wearMap: THREE.IUniform<THREE.Texture>; scratchTier: typeof SCRATCH_TIER };
   mask: WearMask | null;
   owner: PaintScratches | null;
   version: number;
@@ -87,7 +99,14 @@ export function applyScratch(car: DeformableCar): void {
   let wear = wears.get(car);
   const m = car.lookMeshes();
   if (!wear) {
-    const own: Wear = { uniforms: { wearMap: { value: BARE_SCRATCH }, scratchTier: SCRATCH_TIER }, mask: null, owner: null, version: -1, count: 0, list: new Uint8Array(SCRAPE_MAX * STROKE_BYTES) };
+    const own: Wear = {
+      uniforms: { ...FACE_UNIFORMS, wearMap: { value: BARE_SCRATCH }, scratchTier: SCRATCH_TIER },
+      mask: null,
+      owner: null,
+      version: -1,
+      count: 0,
+      list: new Uint8Array(SCRAPE_MAX * STROKE_BYTES),
+    };
     wears.set(car, (wear = own));
     // A discarded car (every path frees its body paint) hands its mask back.
     m.bodyPaint.addEventListener("dispose", () => own.owner?.draw(own, own.list, 0));
@@ -116,8 +135,8 @@ class WearMask {
   readonly data = new Uint8Array(SIDE * SIDE * 2);
   readonly texture = new THREE.DataTexture(this.data, SIDE, SIDE, THREE.RGFormat);
   private readonly rows = Array.from({ length: SIDE }, () => ({ start: 0, count: 0 }));
-  /** Ranges handed to three since its last upload (it clears them as it sends them), or `FULL`. */
-  private pending = 0;
+  /** Ranges handed to three since its last upload (it clears them as it sends them), or `FULL`: also before the first, as a partial upload to an unallocated texture makes Firefox clear it first. */
+  private pending = FULL;
 
   constructor() {
     const t = this.texture;
