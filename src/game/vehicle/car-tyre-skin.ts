@@ -45,8 +45,6 @@ const REST_SLACK = 1e-3;
 const HELD_ELEMENTS = [0, 1, 2, 12, 13, 14] as const;
 /** How far (m, and in unit rotation components) a wheel or a part under the skin may move from where the last lift read it before the lift is found again: a millimetre of the 5 mm clearance the skin keeps over either. */
 const WHEEL_SLACK = 1e-3;
-/** Per wheel, the top of its tyre in the mesh's frame this hold (`capAtRest`). */
-const _tyreTop = new Float64Array(4);
 /** How far (m) the skin stands over a part under it (`liftOverParts`): the 5 mm the drawn skin keeps over a tyre. */
 const PART_CLEAR = 0.005;
 /** A part's top is read at its highest vertex in each plan cell this wide (m): a skin over the part clears every vertex of the cell to within its tilt over 5 cm. */
@@ -554,23 +552,24 @@ export class TyreSkin {
   }
 
   /**
-   * No carried, sag or levelled lift raises a point over where it rested, or over the top of a tyre it rests over (plus `SAG_CLEAR`): past both, a crushed chord's lever stood a
-   * cone of bare bay wall through the fender, and the rows over it carried the fender up. A point's own tyre lift (`needOver`) stays whole.
+   * No carried, sag or levelled lift raises a point over the higher of where it rested and the standing tyres' top plus the gap `needOver` holds over them; its own tyre lift stays whole.
+   * One top for every point keeps the cap rising with rest height, so it keeps the rest order `carryLift` holds: a per-point tyre folded rows the crush moved over a tyre.
    */
   private capAtRest(wheels: number, gone: number): void {
-    const { lift, ownLift, rest, written, liftable, heldAt } = this;
+    const { lift, ownLift, rest, written, heldAt } = this;
     const { rep } = this.neighbours;
     const { r, halfW } = this.frame.rig.tyre;
+    const gap = this.pushSide ? BODY_TYRE_GAP : TYRE_GAP;
+    let tyreTop = -Infinity;
     for (let w = 0; w < wheels; w++) {
+      if ((gone >> w) & 1) continue;
       const e = heldAt.subarray(w * HELD_ELEMENTS.length, (w + 1) * HELD_ELEMENTS.length);
-      // The highest of the sag pass's samples (`liftSaggingTriangles`): the axle's columns carry the wheel's scale.
-      _tyreTop[w] = (gone >> w) & 1 ? -Infinity : e[4]! + Math.abs(e[1]!) * halfW + hypot2(e[0]!, e[2]!) * r + SAG_CLEAR;
+      // The axle's columns carry the wheel's scale.
+      tyreTop = Math.max(tyreTop, e[4]! + Math.abs(e[1]!) * halfW + hypot2(e[0]!, e[2]!) * r + gap);
     }
     for (let p = 0; p < lift.length; p++) {
-      const v = rep[p]!;
-      let top = rest[v * 3 + 1]!;
-      for (let w = 0; w < wheels; w++) if ((liftable[v]! >> w) & 1 && _tyreTop[w]! > top) top = _tyreTop[w]!;
-      const cap = Math.max(ownLift[p]!, top - written[v * 3 + 1]!);
+      const y = rep[p]! * 3 + 1;
+      const cap = Math.max(ownLift[p]!, Math.max(rest[y]!, tyreTop) - written[y]!);
       if (lift[p]! > cap) lift[p] = cap;
     }
   }
