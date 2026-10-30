@@ -1,6 +1,7 @@
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import type { Collider, ImpulseJoint, RigidBody } from "@dimforge/rapier3d-simd";
+import { readAngvel, readLinvel, readRotation, readTranslation } from "../kernel/rapier.ts";
 
 /**
  * The thrown dummy's body (`RagdollSystem` builds and steps it): its parts and joints, its damping, and the only
@@ -96,14 +97,11 @@ export const CALM_FOR = 0.5;
 
 const _v = { x: 0, y: 0, z: 0 };
 const _w = { x: 0, y: 0, z: 0 };
-/** `limit`'s spins, 3 per part: each part read once (a Rapier getter allocates), again only after a shed changed it. */
+/** `limit`'s spins, 3 per part: each part read once, again only after a shed changed it. */
 const SPIN = new Float64Array(PARTS.length * 3);
 
 function readSpin(bodies: readonly RigidBody[], k: number): void {
-  const w = bodies[k]!.angvel();
-  SPIN[3 * k] = w.x;
-  SPIN[3 * k + 1] = w.y;
-  SPIN[3 * k + 2] = w.z;
+  readAngvel(bodies[k]!, SPIN, 3 * k);
 }
 
 /** Part `k` of the dummy `bodies` was just hit: the skin gives at each joint of it. */
@@ -125,13 +123,17 @@ export function limit(bodies: readonly RigidBody[]): void {
   }
 }
 
+/** `isCalm`'s part velocities: linear xyz, angular xyz. */
+const MOTION = new Float64Array(6);
+
 /** Is the whole dummy's kinetic energy under `CALM_ENERGY`? */
 export function isCalm(bodies: readonly RigidBody[]): boolean {
   let energy = 0;
   for (let k = 0; energy < CALM_ENERGY && k < PARTS.length; k++) {
-    const v = bodies[k]!.linvel();
-    const w = bodies[k]!.angvel();
-    energy += 0.5 * MASS[k]! * (v.x * v.x + v.y * v.y + v.z * v.z) + 0.5 * INERTIA[k]! * (w.x * w.x + w.y * w.y + w.z * w.z);
+    readLinvel(bodies[k]!, MOTION, 0);
+    readAngvel(bodies[k]!, MOTION, 3);
+    const m = MOTION;
+    energy += 0.5 * MASS[k]! * (m[0]! * m[0]! + m[1]! * m[1]! + m[2]! * m[2]!) + 0.5 * INERTIA[k]! * (m[3]! * m[3]! + m[4]! * m[4]! + m[5]! * m[5]!);
   }
   return energy < CALM_ENERGY;
 }
@@ -227,15 +229,8 @@ const _qb = new THREE.Quaternion();
 
 /** `body`'s pose into `into` at `o`: position xyz, rotation xyzw (what the dummies, purses and props capture after a step). */
 export function readPose(body: RigidBody, into: Float32Array, o: number): void {
-  const t = body.translation();
-  const r = body.rotation();
-  into[o] = t.x;
-  into[o + 1] = t.y;
-  into[o + 2] = t.z;
-  into[o + 3] = r.x;
-  into[o + 4] = r.y;
-  into[o + 5] = r.z;
-  into[o + 6] = r.w;
+  readTranslation(body, into, o);
+  readRotation(body, into, o + 3);
 }
 
 /** The pose `alpha` (0–1) of the way from the one at `o` in `a` to the one at `o` in `c` (position lerped, rotation slerped) into `p` and `q`: a body drawn between its last two steps. */

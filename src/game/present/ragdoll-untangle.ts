@@ -1,6 +1,6 @@
 import type { Collider, EventQueue, Ray, RigidBody, SolverFlags, World } from "@dimforge/rapier3d-simd";
 import { hypot3 } from "../kernel/physics-core.js";
-import type { Rapier } from "../kernel/rapier.ts";
+import { readRotation, readTranslation, type Rapier } from "../kernel/rapier.ts";
 import { type Doll, PARTS } from "./ragdoll-body.ts";
 import { SLOTS } from "./ragdoll-config.ts";
 
@@ -35,6 +35,8 @@ const _run = [0, 0, 0];
 const _half = [0, 0, 0];
 const _lo = [0, 0, 0];
 const _hi = [0, 0, 0];
+/** A part's pose read from Rapier: position xyz, rotation xyzw. */
+const _pose = new Float64Array(7);
 
 /** Half the long axis (m) of part `k`: its local y, or z for a foot; each box spans its joints, so a shin's runs ankle to knee. */
 const axisHalf = (k: number): number => {
@@ -160,13 +162,13 @@ export class Untangle {
 
   /** The collider `part`'s middle is in, or else one its long axis runs through (its middle outside), with `_at` a point of the part inside it; null for none. */
   private inside(world: World, part: RigidBody, k: number, query: number): Collider | null {
-    const c = part.translation();
-    _at.x = c.x;
-    _at.y = c.y;
-    _at.z = c.z;
+    readTranslation(part, _pose, 0);
+    _at.x = _pose[0]!;
+    _at.y = _pose[1]!;
+    _at.z = _pose[2]!;
     // Not `projectPoint`: Rapier 0.19's traps (wasm unreachable) when no collider passes its filter; these two return nothing.
     this.found = null;
-    world.intersectionsWithPoint(c, this.take, this.flags, query);
+    world.intersectionsWithPoint(_at, this.take, this.flags, query);
     this.byAxis = this.found === null;
     if (this.found !== null) return this.found;
     this.axis(part, k);
@@ -189,21 +191,25 @@ export class Untangle {
   /** `part`'s long axis (part `k`'s local y, or z for a foot) into `_o` (one end), `_d` (unit) and `this.length`. */
   private axis(part: RigidBody, k: number): void {
     const h = PARTS[k]!.h;
-    const c = part.translation();
-    const q = part.rotation();
+    readTranslation(part, _pose, 0);
+    readRotation(part, _pose, 3);
+    const qx = _pose[3]!;
+    const qy = _pose[4]!;
+    const qz = _pose[5]!;
+    const qw = _pose[6]!;
     if (h[2] > h[1]) {
-      _d.x = 2 * (q.x * q.z + q.w * q.y);
-      _d.y = 2 * (q.y * q.z - q.w * q.x);
-      _d.z = 1 - 2 * (q.x * q.x + q.y * q.y);
+      _d.x = 2 * (qx * qz + qw * qy);
+      _d.y = 2 * (qy * qz - qw * qx);
+      _d.z = 1 - 2 * (qx * qx + qy * qy);
     } else {
-      _d.x = 2 * (q.x * q.y - q.w * q.z);
-      _d.y = 1 - 2 * (q.x * q.x + q.z * q.z);
-      _d.z = 2 * (q.y * q.z + q.w * q.x);
+      _d.x = 2 * (qx * qy - qw * qz);
+      _d.y = 1 - 2 * (qx * qx + qz * qz);
+      _d.z = 2 * (qy * qz + qw * qx);
     }
     const half = axisHalf(k);
-    _o.x = c.x - _d.x * half;
-    _o.y = c.y - _d.y * half;
-    _o.z = c.z - _d.z * half;
+    _o.x = _pose[0]! - _d.x * half;
+    _o.y = _pose[1]! - _d.y * half;
+    _o.z = _pose[2]! - _d.z * half;
     this.length = 2 * half;
   }
 

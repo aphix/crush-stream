@@ -11,12 +11,16 @@ import { brace } from "./ragdoll-joints.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { FIT_AHEAD, WANT_PARTS } from "./ragdoll-wire.ts";
 import { GRACE, INTERNAL_PASSES, ITERATIONS, RagdollPool, STEP_LOG } from "./ragdoll-pool.ts";
+import { readLinvel, readTranslation } from "../kernel/rapier.ts";
 
 const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
 const _r = new THREE.Vector3();
 const _c = new THREE.Vector3();
 const _cq = new THREE.Quaternion();
+/** A part's position and velocity read from Rapier (`readTranslation`, `readLinvel`). */
+const _pos = new Float64Array(3);
+const _lin = new Float64Array(3);
 
 /** Torso speed (m/s) under which a dummy counts as lying still. */
 const REST_SPEED = 0.4;
@@ -165,15 +169,12 @@ export abstract class RagdollStepper extends RagdollPool {
       const before = d.age;
       d.age += dt;
       if (before < GRACE && d.age >= GRACE) for (const b of d.bodies) b.collider(0).setCollisionGroups(dollGroups(s));
-      if (d.age > d.life || d.bodies[0]!.translation().y < -30 || this.fellOff(d)) {
+      if (d.age > d.life || torsoY(d) < -30 || this.fellOff(d)) {
         this.despawn(s);
         continue;
       }
-      const v = d.bodies[0]!.linvel();
-      d.speed = hypot3(v.x, v.y, v.z);
-      d.vel[0] = v.x;
-      d.vel[1] = v.y;
-      d.vel[2] = v.z;
+      readLinvel(d.bodies[0]!, d.vel, 0);
+      d.speed = hypot3(d.vel[0]!, d.vel[1]!, d.vel[2]!);
       d.still = d.speed < REST_SPEED ? d.still + dt : 0;
       if (!d.driven) this.calm(d, dt);
       if (this.hosted) continue;
@@ -271,45 +272,38 @@ export abstract class RagdollStepper extends RagdollPool {
    * After a step: a part that has just hit something (`HIT_DV`) gives at each of its joints (`give`), once per hit (a hit
    * runs a few steps; only its first counts). His torso touching down for the first time damps him harder from then on.
    * Velocities are recorded after the giving, so its own change is not read as the next hit: read again only when a
-   * part gave (each read is a Rapier getter that allocates).
+   * part gave.
    */
   protected hits(s: number, d: Doll): void {
     const o = s * PARTS.length * 4;
     let gave = false;
     for (let k = 0; k < PARTS.length; k++) {
-      const v = d.bodies[k]!.linvel();
+      readLinvel(d.bodies[k]!, _lin, 0);
       const i = o + 4 * k;
       const fresh = this.vel[i + 3] === 3;
-      const jump = !fresh && hypot3(v.x - this.vel[i]!, v.y - this.vel[i + 1]!, v.z - this.vel[i + 2]!) > HIT_DV;
+      const jump = !fresh && hypot3(_lin[0]! - this.vel[i]!, _lin[1]! - this.vel[i + 1]!, _lin[2]! - this.vel[i + 2]!) > HIT_DV;
       if (jump && this.vel[i + 3] === 0) {
         give(d.bodies, k);
         gave = true;
       }
-      this.vel[i] = v.x;
-      this.vel[i + 1] = v.y;
-      this.vel[i + 2] = v.z;
+      this.vel[i] = _lin[0]!;
+      this.vel[i + 1] = _lin[1]!;
+      this.vel[i + 2] = _lin[2]!;
       this.vel[i + 3] = jump ? 1 : 0;
     }
     if (gave && d.braced) {
       brace(this.world!, d.joints, false);
       d.braced = false;
     }
-    if (gave) {
-      for (let k = 0; k < PARTS.length; k++) {
-        const v = d.bodies[k]!.linvel();
-        const i = o + 4 * k;
-        this.vel[i] = v.x;
-        this.vel[i + 1] = v.y;
-        this.vel[i + 2] = v.z;
-      }
-    }
+    if (gave) for (let k = 0; k < PARTS.length; k++) readLinvel(d.bodies[k]!, this.vel, o + 4 * k);
     if (d.ground) return;
-    const t = d.bodies[0]!.translation();
+    readTranslation(d.bodies[0]!, _pos, 0);
     // At his own height: under a bridge the road is his ground, not the deck over him.
-    const g = activeGround().heightAt(t.x, t.z, t.y);
-    if (t.y - (Number.isFinite(g) ? g : 0) >= GROUND_REACH) return;
+    const g = activeGround().heightAt(_pos[0]!, _pos[2]!, _pos[1]!);
+    if (_pos[1]! - (Number.isFinite(g) ? g : 0) >= GROUND_REACH) return;
     // Flung from lying, his torso starts under GROUND_REACH: ground damping waits until he comes down.
-    if (d.bodies[0]!.linvel().y > 0) return;
+    readLinvel(d.bodies[0]!, _lin, 0);
+    if (_lin[1]! > 0) return;
     d.ground = true;
     for (const body of d.bodies) {
       body.setLinearDamping(GROUND_LINEAR);
@@ -332,4 +326,10 @@ export abstract class RagdollStepper extends RagdollPool {
     d.calm = d.ground && isCalm(d.bodies) ? d.calm + dt : 0;
     if (d.calm >= CALM_FOR && !d.bodies[0]!.isSleeping()) for (const b of d.bodies) b.sleep();
   }
+}
+
+/** `d`'s torso height (m). */
+function torsoY(d: Doll): number {
+  readTranslation(d.bodies[0]!, _pos, 0);
+  return _pos[1]!;
 }
