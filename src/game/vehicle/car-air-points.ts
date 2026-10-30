@@ -2,7 +2,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "./car.ts";
 import type { LooseShape } from "./car-core.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { answerPlanVelocity, BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_TOUCH, HIT_SIZE, holdNearTops, MU_TYRE, patchOf, pointContact, pointContactHeld, pointContactNear, pointContactSolids, PQ_BODY, PQ_FLANK, PQ_MOUNT, PQ_SIZE, PQ_TOP_CAP, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, topsTop, topsTopLive, topsTopNear, treadMount, wheelContact, type Surface } from "../world/surfaces.ts";
+import { answerPlanVelocity, BAKE, C_AUX, C_DEPTH, C_GRIP, C_H, C_NX, C_NY, C_NZ, C_OWNER, C_SURF, C_TOUCH, HIT_SIZE, holdNearTops, MU_TYRE, patchOf, pointContact, pointContactHeld, pointContactNear, pointContactSolids, PQ_BODY, PQ_FLANK, PQ_MOUNT, PQ_SIZE, PQ_TOP_CAP, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, solidTop, staticTop, SURFACE_CUT, topsTop, topsTopLive, topsTopNear, treadMount, wheelContact, type Surface } from "../world/surfaces.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
 import { G, GQ } from "../world/ground-clock.ts";
 import { CRASH, hypot2 } from "../deform/physics-util.ts";
@@ -14,7 +14,7 @@ import { CarSurfaces, REACH } from "./car-surfaces.ts";
 import { SAMPLE, sampleAt, type CageFields } from "./car-cage.ts";
 import { cageLift, centreLift, centreY } from "./car-cage-rig.ts";
 import { HUB_POP_MPS } from "../deform/deform-solve.ts";
-import { POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, S_HELD_FROM, S_HELD_TO, SURF_V, N, DIR, TYRE, SOFT, SHARE, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_SAMPLE_GAP, TYRE_ALONG_MAX, GROUND_LIFT_V, body, carrier, pointVel } from "./car-air-body.ts";
+import { POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, HUBS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, MU_BODY, CONTACT_HZ, HOLDING_NY, SIDE_ENTRY_SLICES, SIDE_ENTRY_SLACK, _r, centreOfMass, _dq, _eul, UP, _vp, R, _s, S_PEN, S_POINT_REACH, S_HELD_FROM, S_HELD_TO, SURF_V, N, DIR, TYRE, SOFT, SHARE, HUB, SLOT, OWN, FOLLOW, SINK, CLOSING, CUT, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, UNDER, BX, BY, BZ, BRISE, BPATCH, UNREAD, LOCAL, HIT, PQ, MU, TYRE_SAMPLE_GAP, TYRE_ALONG_MAX, GROUND_LIFT_V, body, carrier, pointVel } from "./car-air-body.ts";
 
 /** Belly point `i`'s reading at (`BX`, `BY`, `BZ`) for body `slot`: its contact in `HIT`, its rise in `BRISE` and its patch in `BPATCH`. With `travel2` (`pointContact`'s) the far answer is allowed: `C_H`, `C_OWNER` and `C_ARG` are all of `HIT` that is read then, and the return is true. */
 export function readBelly(i: number, slot: number, travel2 = NaN): boolean {
@@ -45,6 +45,7 @@ export function bodyContact(n: number, hit: Float64Array, hull: boolean): void {
   DIR[n] = N[n]!;
   OWN[n] = own;
   UNDER[n] = !hull && own < 0;
+  CUT[n] = own < 0 ? SURFACE_CUT[hit[C_SURF]!]! : 0;
   FOLLOW[n] = own >= 0 ? hit[C_AUX]! : 1;
   SLOT[n] = part ? -1 : surf.slot(own, N[n]!, true, q, FOLLOW[n]!);
   SOFT[n] = false;

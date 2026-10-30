@@ -419,7 +419,7 @@ export function propColliders(placed: readonly Placed[]): PropCollider[] {
  * through, whatever made the collider (a placed prop, a wall piece, a rig's plate, the Lab's room). Returns its patch index.
  */
 function addCollider(solids: Surface, c: PropCollider, role: number, moves = false): number {
-  return solids.addPrism({ x: c.x, z: c.z, yaw: c.yaw, hx: c.hx, hz: c.hz, circle: c.kind === "circle", base: c.base, top: c.top, ends: c.ends, hardness: c.hardness, mass: c.mass, id: c.index, role, moves });
+  return solids.addPrism({ x: c.x, z: c.z, yaw: c.yaw, hx: c.hx, hz: c.hz, circle: c.kind === "circle", base: c.base, top: c.top, ends: c.ends, hardness: c.hardness, mass: c.mass, id: c.index, role, moves, material: c.prefab === null ? undefined : PREFABS[c.prefab].material });
 }
 
 /**

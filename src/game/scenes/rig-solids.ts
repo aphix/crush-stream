@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { MAT } from "../kernel/material-ids.ts";
 import { hypot2 } from "../kernel/physics-core.js";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { BARRIER_HALF, BARRIER_TOP } from "../contact/sat.ts";
@@ -36,7 +37,7 @@ export class RigSolids extends Surface {
     super();
     this.addPrism({ x: 0, z: 0, yaw: 0, hx: BARRIER_HALF.x, hz: BARRIER_HALF.z, base: 0, top: BARRIER_TOP, id: RIG_SLAB, role: RIG, moves: true });
     for (const id of [RIG_PLATE_FRONT, RIG_PLATE_REAR]) this.addPrism({ x: 0, z: 0, yaw: 0, hx: PLATE.hx, hz: PLATE.hz, base: PLATE.y - PLATE.hy, top: PLATE.y + PLATE.hy, id, role: RIG, moves: true });
-    for (let k = 0; k < RIG_POLES; k++) this.addPrism({ x: 0, z: 0, yaw: 0, hx: 0.12, hz: 0.12, circle: true, base: 0, top: LAMP_POST_HEIGHT, id: RIG_POLE_FIRST + k, role: KNOCK, mass: LAMP_POST_MASS, knockSpeed: POLE_FOLD_CLOSING, moves: true });
+    for (let k = 0; k < RIG_POLES; k++) this.addPrism({ x: 0, z: 0, yaw: 0, hx: 0.12, hz: 0.12, circle: true, base: 0, top: LAMP_POST_HEIGHT, id: RIG_POLE_FIRST + k, role: KNOCK, mass: LAMP_POST_MASS, knockSpeed: POLE_FOLD_CLOSING, moves: true, material: MAT.LAMP_POLE });
     for (let k = 0; k < RIG_BALLS; k++) this.addPrism({ x: 0, z: 0, yaw: 0, hx: 0.5, hz: 0.5, circle: true, base: 0, top: RIG_BALL_TOP, id: RIG_BALL_FIRST + k, role: PROP, moves: true });
     for (let i = 0; i < this.count; i++) this.disable(i);
     this.seal();

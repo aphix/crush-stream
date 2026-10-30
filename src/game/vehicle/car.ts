@@ -24,6 +24,7 @@ import { CLASS_HUBS, CLASS_LIFT, LID } from "./constants.ts";
 import { MAT, SCRATCH_CUT, TAKES_SCRATCH, type MaterialId } from "../kernel/material-ids.ts";
 import { HUB_PIN_MAX, HUB_PULL_STEP } from "../deform/constants.ts";
 import { passesFor, smoothingNow, smoothNormals } from "./normal-smooth.ts";
+import { SCRATCH_MIN_SLIP } from "./paint-scrapes.ts";
 
 const _p = new THREE.Vector3();
 const _m = new THREE.Matrix4();
@@ -1065,12 +1066,12 @@ export class DeformableCar extends CarParts {
   }
 
   /**
-   * A striker slides on this car at world `point`, pressing along `inward` (unit, horizontal) at `strength` m/s over a patch `half` m
+   * A striker slides on this car at world `point`, pressing along `inward` (unit) at `strength` m/s over a patch `half` m
    * long either side, moving `slide` (m/s, world) against it, with cut `cut`: a scratch on its paint where that surface takes one, its
    * lines over the world heights `band` (low, high) the two bodies share there; none, the point's height alone.
    */
   scrape(point: THREE.Vector3, inward: THREE.Vector3, slide: THREE.Vector3, half: number, strength: number, cut: number, band?: THREE.Vector2): void {
-    if (cut <= 0) return;
+    if (cut <= 0 || slide.lengthSq() < SCRATCH_MIN_SLIP * SCRATCH_MIN_SLIP) return;
     const rest = this.restPointOf(point, _scrapeRest);
     if (!TAKES_SCRATCH.has(this.surfaceAt(rest))) return;
     _restTurn.copy(this.group.quaternion).invert();

@@ -9,10 +9,11 @@ import { barrierSpeed, CRASH, hypot2, plasticEnergy } from "../deform/physics-ut
 import { droop, FLANK_UP_Y, SPRINGS, UPRIGHT_UP_Y } from "./car-suspension.ts";
 import { carClass } from "./vehicle-classes.ts";
 import { EPICENTER } from "../deform/epicenter.ts";
-import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
+import { G, POINT_X, POINT_Y, POINT_Z, BELLY_ABSENT, SEGS, CONTACTS, TOUCH, RESTITUTION, BOUNCE_V, WALL_CRUSH, CLIMB_NY, centreOfMass, _dq, _eul, UP, _up, _fd, YAW_HOLD, _x, _z, _vp, _tn, R, _lift, _s, S_J, S_JD, S_REACH, S_WEIGHT, S_PEN, S_POINT_REACH, S_LIFTING, N, DIR, TYRE, SOFT, HUB, SLOT, OWN, FOLLOW, SINK, PRESS, SHARE, ASK, ACC, FIRST, ROOM, DEMAND, SUMF, CLOSING, CUT, GAPV, SPECULATIVE_GAP, CLEAR_ROUND, PASSES, REST_PASSES, REST_SPEED, SOLVE_MOVE_G, GROUND_LIFT_V, LEFT, UNDER, HELD, RATIO, FRA, REST, DYN, RIMP, _lv, _lw, _vMove, _dvSolve, BX, BY, BZ, BRISE, BPATCH, UNREAD, MU, NOTED, CLOSE_FIRST, CRUSH_POINT, _crushPoint, _crushNormal, _crushBack, GIVEN, GIVEN_STRIDE, body, bindBody, moveBody, standAtCentre, placeBody, carrier, push, pointVel, give, reach, weightClosing, springPushes } from "./car-air-body.ts";
 import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, beginContacts, _e, wheelsAt, worldWheels, hardContactNear, landing, onWreckTop, readTyreSides, wreckShares, ROW_WHEEL } from "./car-air-points.ts";
 import { centreLift, centreY } from "./car-cage-rig.ts";
 import { store3d } from "../kernel/store.ts";
+import { rigidPress, SCRATCH_MIN_SLIP } from "./paint-scrapes.ts";
 
 /** Crossings `wreckTop` let a wreck skip since `takeCrossingsSkipped` last read (a field of a const: the bench's work counter reads and zeroes it once a slice). */
 const prune = { skipped: 0 };
@@ -363,6 +364,25 @@ export function solveRows(n: number): void {
     centreOfMass.add(_lift);
   }
   centreOfMass.y += under;
+}
+
+const _scrapeAt = new THREE.Vector3();
+const _scrapeSlide = new THREE.Vector3();
+
+/** `car`'s paint where its body slides on the world (ground, ramp, a prism's top) this slice: its most loaded sliding body row, cut by `CUT`, pressed as a rigid face presses (`rigidPress`). One row, so the stroke's end follows one place. */
+function scrapeWorld(car: DeformableCar, n: number): void {
+  const { v, w } = body;
+  let best = -1;
+  for (let c = 0; c < n; c++) {
+    if (TYRE[c] || HUB[c] || OWN[c]! >= 0 || CUT[c]! <= 0 || ACC[c]! <= 0 || (best >= 0 && ACC[c]! <= ACC[best]!)) continue;
+    pointVel(c, v, w, _vp);
+    if (_vp.addScaledVector(N[c]!, -_vp.dot(N[c]!)).lengthSq() >= SCRATCH_MIN_SLIP * SCRATCH_MIN_SLIP) best = c;
+  }
+  if (best < 0) return;
+  // The face stands still: what the body slides along it, against the body.
+  pointVel(best, v, w, _scrapeSlide);
+  _scrapeSlide.addScaledVector(N[best]!, -_scrapeSlide.dot(N[best]!)).negate();
+  car.scrape(_scrapeAt.copy(centreOfMass).add(R[best]!), N[best]!, _scrapeSlide, 0, rigidPress(CLOSING[best]!, _scrapeSlide.length()), CUT[best]!);
 }
 
 /** A row's normal needs at least this plan part (its horizontal length) to be a side a crush can run along: a roof landed on has none. */
@@ -1085,6 +1105,7 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   surf.commit();
   const hard = hardContactNear(tyres, n, body.nearing);
   standAtCentre();
+  scrapeWorld(car, n);
   // What the body touches now: each wheel's tread gap moved by the lift.
   // No wheel within its springs' reach and no hull point in a surface is flight; a belly or a roof resting on something is not.
   const dy = pos.y - y0;

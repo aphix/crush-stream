@@ -3,13 +3,14 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { cameThroughTop, FF_CLOSING, FF_CX, FF_CZ, FF_FD, FF_FNX, FF_FNZ, FF_FW, FF_FX, FF_FZ, FF_GAP, FF_NX, FF_NZ, FF_PEN, FF_SIZE, FOOT_FX, FOOT_FZ, FOOT_HL, FOOT_HW, FOOT_RX, FOOT_RZ, FOOT_SIZE, FOOT_X, FOOT_Z, footFace, PR_BASE, PR_COS, PR_ENDS, PR_GU, PR_GW, PR_HARD, PR_HX, PR_HZ, PR_ID, PR_KNOCK_V, PR_MASS, PR_R, PR_SIN, PR_TOP, PR_VX, PR_VZ, PR_WALL, PR_X, PR_YAW, PR_Z, sideFace } from "../world/prism.ts";
 import { ENTRY_WINDOW, SOLID_AT_REST } from "../world/constants.ts";
-import { C_ARG, C_DEPTH, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, P_STRIDE, pointContact, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, RIG, WALL, type Surface } from "../world/surfaces.ts";
+import { C_ARG, C_DEPTH, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, P_STRIDE, pointContact, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, prismCut, RIG, WALL, type Surface } from "../world/surfaces.ts";
 import { type ContactBox, makeBox, partContact, solidFace } from "./external-contact.ts";
 import { PUSH_SPEED } from "../deform/push-budget.ts";
 import { HIT_AHEAD, impulseCar, markApproach, wallBounce } from "./pair-contact.ts";
 import { BELLY_ABSENT, POINT_X, POINT_Y, POINT_Z, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { loadPoints } from "../vehicle/car-air-points.ts";
 import { cageLift, centreY } from "../vehicle/car-cage-rig.ts";
+import { rigidPress } from "../vehicle/paint-scrapes.ts";
 
 /** What a scene does with a car's prop contacts (`propContact`): the race records and draws them, the Lab reads them back. */
 export type PropHits = {
@@ -299,6 +300,7 @@ function solidContact(car: DeformableCar, i: number, s: Surface, k: number, knoc
     box.hardness = hardness;
     box.openEnds = true;
     wallBounce(car, box, nx, nz, pen, dt, false, _span.wreck, P[o + PR_TOP]!);
+    scrapeSide(car, s, k, closing);
     if (closing > 1.5) hits.fx(_c, _n, closing);
     hits.wall(id, i, closing, _hit[FF_CX]!, _hit[FF_CZ]!, nx, nz);
     return;
@@ -316,8 +318,31 @@ function solidContact(car: DeformableCar, i: number, s: Surface, k: number, knoc
   _span.nx = fnx;
   _span.nz = fnz;
   _span.off = off;
+  scrapeSide(car, s, k, closing);
   if (closing > 1.5) hits.fx(_c, _n, closing);
   hits.wall(id, i, closing, _hit[FF_CX]!, _hit[FF_CZ]!, nx, nz);
+}
+
+const _sideAt = new THREE.Vector3();
+const _sideSlide = new THREE.Vector3();
+const _sideBand = new THREE.Vector2();
+
+/** `car`'s paint where it slides along prism `k` of `s`, closing at `closing`: over the patch its footprint has in the face (`_hit`, `_n`) and the heights the two share, pressed as a rigid face presses (`rigidPress`). */
+function scrapeSide(car: DeformableCar, s: Surface, k: number, closing: number): void {
+  const o = k * P_STRIDE;
+  const v = car.velocity;
+  _sideSlide.set(s.p[o + PR_VX]! - v.x, 0, s.p[o + PR_VZ]! - v.z);
+  _sideSlide.addScaledVector(_n, -_sideSlide.dot(_n));
+  // The patch runs from the deepest point along the footprint's edge nearer the face's line, until the edge leaves the face: `pen` over its tilt to the face, at most the edge.
+  const nf = _n.x * _foot[FOOT_FX]! + _n.z * _foot[FOOT_FZ]!;
+  const nr = _n.x * _foot[FOOT_RX]! + _n.z * _foot[FOOT_RZ]!;
+  const flank = Math.abs(nf) < Math.abs(nr);
+  const tilt = flank ? nf : nr;
+  const half = Math.min(flank ? _foot[FOOT_HL]! : _foot[FOOT_HW]!, _hit[FF_PEN]! / (2 * Math.abs(tilt)));
+  const along = Math.sign(tilt) * half;
+  _sideBand.set(Math.max(_span.low, s.p[o + PR_BASE]!), Math.min(_span.high, s.p[o + PR_TOP]!));
+  _sideAt.set(_hit[FF_CX]! + along * (flank ? _foot[FOOT_FX]! : _foot[FOOT_RX]!), (_sideBand.x + _sideBand.y) / 2, _hit[FF_CZ]! + along * (flank ? _foot[FOOT_FZ]! : _foot[FOOT_RZ]!));
+  car.scrape(_sideAt, _n, _sideSlide, half, rigidPress(closing, _sideSlide.length()), prismCut(s, k), _sideBand);
 }
 
 /**

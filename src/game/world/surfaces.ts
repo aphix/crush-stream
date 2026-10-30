@@ -1,5 +1,6 @@
 import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { SURFACE_IDS, SURFACES } from "./catalog.ts";
+import { MAT, SCRATCH_CUT, type MaterialId } from "../kernel/material-ids.ts";
 import { TERRAIN_SPAN } from "./terrain-cells.ts";
 import { SURFACE } from "./constants.ts";
 import { exitFace, F_DEPTH, F_NX, F_NZ, F_SIZE, F_TIME, IN_SIDE, IN_TOP, PR_BASE, PR_COS, PR_ENDS, PR_GU, PR_GW, PR_HARD, PR_HX, PR_HZ, PR_ID, PR_KNOCK_V, PR_MASS, PR_R, PR_SIN, PR_TOP, PR_VX, PR_VZ, PR_WALL, PR_X, PR_YAW, PR_Z, topAt } from "./prism.ts"
@@ -115,7 +116,7 @@ const D_RUNR = 11;
 const D_TAN = 12;
 
 /** Patch integers, `Q_STRIDE` each. */
-export const Q_STRIDE = 13;
+export const Q_STRIDE = 14;
 export const Q_KIND = 0;
 export const Q_NU = 1;
 export const Q_NV = 2;
@@ -138,6 +139,8 @@ const Q_STIR = 10;
 /** A lattice grid (`GridSpec.lattice`): the first node of a row and of a column on its lattice of drawn cells. */
 const Q_LATTICE_U = 11;
 const Q_LATTICE_V = 12;
+/** A prism's material (`MaterialId`): what its sides cut a body sliding on them by (`prismCut`). */
+const Q_MAT = 13;
 
 /** A patch's slots grow by this many at a time. */
 const GROW = 8;
@@ -164,6 +167,14 @@ for (let i = 0; i < SURFACE_IDS.length; i++) GRIPS[i] = SURFACES[SURFACE_IDS[i]!
 /** Each surface's rolling-resistance coefficient (`Surface.roll`) by surface index: the drive reads it off a wheel's contact (`C_SURF`). */
 export const ROLLS = new Float64Array(SURFACE_IDS.length);
 for (let i = 0; i < SURFACE_IDS.length; i++) ROLLS[i] = SURFACES[SURFACE_IDS[i]!].roll;
+/** How hard each surface cuts the paint of a body sliding on it (`SCRATCH_CUT` of its ribbon material), by surface index (`C_SURF`). */
+export const SURFACE_CUT = new Float64Array(SURFACE_IDS.length);
+for (let i = 0; i < SURFACE_IDS.length; i++) SURFACE_CUT[i] = SCRATCH_CUT.get(SURFACES[SURFACE_IDS[i]!].ribbon) ?? 0;
+
+/** How hard prism `k` of `s` cuts the paint of a body sliding on its sides (`SCRATCH_CUT` of its material). */
+export function prismCut(s: Surface, k: number): number {
+  return SCRATCH_CUT.get(s.q[k * Q_STRIDE + Q_MAT]!) ?? 0;
+}
 
 /** The surface index of asphalt. */
 const ASPHALT = 0;
@@ -204,6 +215,8 @@ type PrismSpec = {
   role?: number;
   /** Index (`SURFACE_IDS`) of its surface; concrete when omitted. */
   surface?: number;
+  /** Its material (a prop's prefab's); a course wall's concrete when omitted. */
+  material?: MaterialId;
   /** It moves after the seal (`Surface.movePrism`). */
   moves?: boolean;
 };
@@ -506,6 +519,7 @@ export class Surface {
     this.q[qo + Q_SURF] = spec.surface ?? CONCRETE;
     this.q[qo + Q_SURF2] = spec.surface ?? CONCRETE;
     this.q[qo + Q_SOLID] = 0;
+    this.q[qo + Q_MAT] = spec.material ?? MAT.TRACK_WALL;
     P[o + P_REACH] = STEP_MAX;
     P[o + PR_R] = spec.circle ? spec.hx : 0;
     P[o + PR_GU] = spec.gu ?? 0;

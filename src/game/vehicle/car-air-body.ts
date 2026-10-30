@@ -147,6 +147,8 @@ export const SUMF = new Float64Array(CONTACTS);
  * 55 m/s each rode up it as a ramp, read as resting on it, and the pair's crush never ran.
  */
 export const CLOSING = new Float64Array(CONTACTS);
+/** Per body contact: how hard its surface cuts the body's paint as it slides on it (`SURFACE_CUT`; a car's top 0, which its own pair contact scratches). */
+export const CUT = new Float64Array(CONTACTS);
 /** Per contact: the speed (m/s) its gap to the surface lets it close at over this slice (0 for a point in the surface). */
 export const GAPV = new Float64Array(CONTACTS);
 /** A point this close (m) over its surface is a contact already: it is held where it would arrive within the slice, not after it. */

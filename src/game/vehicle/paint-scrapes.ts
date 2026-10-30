@@ -20,8 +20,15 @@ const WIDTH_QUANTA = 31;
 /** A width quantum (m): a stroke `q` wide is `(q + 1)` of them, 6.5 to 208 mm (a flank texel is 18 mm, so a hairline's width below one is the stamp's minimum either way). */
 export const WIDTH_STEP = 0.0065;
 
-/** A slide pressing softer than this (m/s of strength × cut) only rubs: a lean leaves the paint as it was. */
+/** A slide pressing softer than this (m/s) only rubs: a lean leaves the paint as it was. Under the sparks' `SPARK_MIN_IMPULSE`, so a contact that sparks cuts. */
 const STRENGTH_MIN = 0.75;
+/** A striker sliding slower than this (m/s) cuts no line: a head-on or a resting pile slides about 0, and under it a commit's 0.2 s moves the end a few texels at most. */
+export const SCRATCH_MIN_SLIP = 0.5;
+
+/** How hard (m/s) a body held on a rigid face (the ground, a ramp, a wall) presses as it slides `slide` m/s on it, closing at `closing`: the face never gives, so no depth measures the press, and the body grinds as hard as it slides, as a scraping hub sparks by its slip. */
+export function rigidPress(closing: number, slide: number): number {
+  return Math.max(closing, slide);
+}
 /** Band widths (m): a press up to `S_HAIR` cuts hairlines `W_MIN` wide, a harder one a band `W_PER_STRENGTH` wider per m/s past it, to `W_MAX` (sideswipe estimates: a light brush 5-30 mm, a firm sideswipe 20-100 mm, a hard grind 50-200 mm): the owner's "deeper slides scrape off a wider line". */
 const W_MIN = WIDTH_STEP;
 const W_MAX = 0.2;
@@ -96,8 +103,9 @@ export class PaintScrapes {
 
   /** A slide at rest point `p` (outward rest normal `n`) along unit plan direction `dir` (x, z), over the rest heights `band` (low, high) the bodies share there, patch `half` m either side, pressing at `strength` m/s with cut `cut`: feeds that face's episode. Vectors in: a call TurboFan doesn't inline boxes every double argument. */
   scrape(p: THREE.Vector3, n: THREE.Vector3, dir: THREE.Vector3, band: THREE.Vector2, half: number, strength: number, cut: number): void {
+    // The press gates, as it gates the sparks; the striker's cut only shapes the line.
+    if (strength < STRENGTH_MIN) return;
     const press = strength * cut;
-    if (press < STRENGTH_MIN) return;
     const reach = Math.min(half, EPISODE_HALF_MAX);
     // The face is the normal's alone, so one call finds it and places the pending end: each call site spends the inlining budget.
     _end.x = p.x + dir.x * reach;

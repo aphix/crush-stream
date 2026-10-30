@@ -327,17 +327,29 @@ export type MaterialId = number;
 export type MaterialFamily = Family;
 export const MAT = Object.fromEntries(MATERIALS.map(([name], id) => [name, id])) as Record<(typeof MATERIALS)[number][0], MaterialId>;
 
+/** A world face's cut by its role: a stationary abrasive, so concrete and stone deeper than steel, a steel rail or post a little less. */
+const ROLE_CUT: Partial<Record<Role, number>> = { concrete: 1.3, stone: 1.3, metal: 1.2, "sheet-metal": 1.2, "cast-metal": 1.2 };
+
 /**
  * How hard a striker of each material cuts paint in a slide (0..1.5; unlisted cuts nothing), from collision-repair guidance:
  * hard metal cuts readily at an edge, painted plastic sometimes, smooth black plastic rarely, rubber transfers and never cuts.
+ * The ground by its ribbon (loose ground lightly, grass not); every other material by its role (`ROLE_CUT`), the rows below over it.
  */
 export const SCRATCH_CUT: ReadonlyMap<MaterialId, number> = new Map([
+  ...MATERIALS.flatMap(([, , role], id): [MaterialId, number][] => (ROLE_CUT[role] === undefined ? [] : [[id, ROLE_CUT[role]]])),
   [MAT.CAR_PAINT, 1],
   [MAT.BUMPER_CHROME, 1],
   [MAT.BUMPER_PAINTED, 0.6],
   [MAT.BUMPER_SATIN, 0.6],
   [MAT.BUMPER_BLACK, 0.4],
   [MAT.TYRE, 0],
+  [MAT.ROAD_ASPHALT, 1],
+  [MAT.ROAD_CONCRETE, 1.3],
+  [MAT.ROAD_COBBLE, 1.3],
+  [MAT.ROAD_GRAVEL, 1],
+  [MAT.ROAD_DIRT, 0.4],
+  [MAT.ROAD_SAND, 0.4],
+  [MAT.ROAD_GRASS, 0],
 ]);
 
 /** Struck surfaces that show cut lines: painted steel panels. Chrome scuffs and plastic whitening are looks of their own. */

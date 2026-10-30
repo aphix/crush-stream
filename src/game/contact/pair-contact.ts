@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { REARM_QUIET_S } from "../vehicle/car-core.ts";
+import { SCRATCH_MIN_SLIP } from "../vehicle/paint-scrapes.ts";
 import { armPairWithRows, rewindRows, wreckCentre, wreckInvI } from "../vehicle/car-air.ts";
 import { MU_BODY, REST_SPEED, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { leftoverCrumple, satPushCap, hypot2, CRASH } from "../deform/physics-util.ts";
@@ -30,9 +31,6 @@ const _inward = new THREE.Vector3();
 /** The world heights (low, high) the pair's bodies share over the patch (`patch`), where the slide's lines fall. */
 const _band = new THREE.Vector2();
 
-/** A striker sliding along the other car slower than this (m/s) cuts no scratch: a head-on or a resting pile slides about 0. */
-const SCRATCH_MIN_SLIP = 1.5;
-
 /** The world velocity of `car`'s body at world point `p` into `out`. */
 function pointVelocity(car: DeformableCar, p: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
   return out.crossVectors(car.angular, _arm.subVectors(p, car.group.position)).add(car.velocity);
@@ -47,6 +45,7 @@ function scrapePair(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector3, 
   pointVelocity(carA, p, _slide).sub(pointVelocity(carB, p, _slideB));
   _slide.addScaledVector(n, -_slide.dot(n));
   _slide.y = 0;
+  // The same gate `scrape` holds, first: a pair that does not slide asks neither car its cut.
   if (hypot2(_slide.x, _slide.z) < SCRATCH_MIN_SLIP) return;
   const cutByA = carA.cutAt(p);
   const cutByB = carB.cutAt(p);
