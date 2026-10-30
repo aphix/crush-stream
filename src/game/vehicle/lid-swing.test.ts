@@ -9,7 +9,6 @@ import { paint } from "./test-support.ts";
 import { must } from "../kernel/must.test-util.ts";
 import type { DoorHinge } from "./car-core.ts";
 import { hingePose } from "./part-pose.ts";
-import { lidAccel } from "./hinge-spec.ts";
 import { fireRam, parkedStyle } from "../scenes/door-rig.test-util.ts";
 
 /**
@@ -214,10 +213,8 @@ const HAND_N = 50;
 /** A push (N) too light to beat the struts: a fingertip's. */
 const FINGER_N = 10;
 
-/** The edge push (N) a strut gate on its stop holds against, from its own struts' lift, weight and hinge friction (`lidAccel` at the stop on a level car). */
-function strutHoldN(h: DoorHinge): number {
-  return ((lidAccel(h.spec, h.spec.stop, 1, 0, 0, 0) + h.spec.dry) * h.spec.inertia) / h.spec.length;
-}
+/** A firm hand closing a liftgate against its gas struts (N): inside the 60-150 N latch-engagement range in `.extraResearch/perplexity/2026-10-30-liftgate-gas-struts.md`. */
+const LIFTGATE_N = 120;
 
 /** The lightest of the 2 km/h steps of the sedan's front wall hit that springs its hood (42 km/h leaves it latched). */
 const HOOD_POP_KPH = 44;
@@ -311,8 +308,8 @@ const handCases = [
   { it: "when a hand holds the popped boot lid's edge down with 50 N, then it swings shut and latches over its crash dent", id: "sedan", lid: "boot", newtons: HAND_N, expectedLatched: true },
   { it: "when a fingertip holds the popped boot lid's edge down with 10 N, then the torsion bars keep it up, unlatched", id: "sedan", lid: "boot", newtons: FINGER_N, expectedLatched: false },
   { it: "when a hand holds a hatchback's popped gate down with the sedan lid's 50 N, then its struts keep it up, unlatched", id: "hatchback", lid: "boot", newtons: HAND_N, expectedLatched: false },
-  { it: "when a hand holds a hatchback's popped gate down with a liftgate's closing push (1.5× what its struts hold at the stop), then it swings shut, its weight wins over the struts' dead band, and it latches", id: "hatchback", lid: "boot", newtons: "liftgate", expectedLatched: true },
-  { it: "when a hand holds a wagon's popped gate down with a liftgate's closing push (1.5× what its struts hold at the stop), then it swings shut, its weight wins over the struts' dead band, and it latches", id: "wagon", lid: "boot", newtons: "liftgate", expectedLatched: true },
+  { it: `when a hand holds a hatchback's popped gate down with a liftgate's closing push (${LIFTGATE_N} N), then it swings shut, its weight wins over the struts' dead band, and it latches`, id: "hatchback", lid: "boot", newtons: LIFTGATE_N, expectedLatched: true },
+  { it: `when a hand holds a wagon's popped gate down with a liftgate's closing push (${LIFTGATE_N} N), then it swings shut, its weight wins over the struts' dead band, and it latches`, id: "wagon", lid: "boot", newtons: LIFTGATE_N, expectedLatched: true },
   { it: "when a hand holds the popped hood's edge down with 50 N, then it swings shut and latches over its crash dent", id: "sedan", lid: "hood", newtons: HAND_N, expectedLatched: true },
   { it: "when a fingertip holds the popped hood's edge down with 10 N, then the struts keep it up on its catch, unlatched", id: "sedan", lid: "hood", newtons: FINGER_N, expectedLatched: false },
 ] as const;
@@ -326,7 +323,7 @@ describe("given a boot lid sprung by a rear hit or a sedan's hood by a front hit
       const popped = h.theta;
       expect(h.latched, "the hit left it latched").toBe(false);
       expect(popped, "how far the sprung part stood open (rad)").toBeGreaterThan(0);
-      const newtons = testCase.newtons === "liftgate" ? 1.5 * strutHoldN(h) : testCase.newtons;
+      const newtons = testCase.newtons;
       press(car, h, newtons, 3);
       // Then half a second of the crash rules on the dented car: an old dent does not spring a latch again.
       for (let k = 0; k < FINE_HZ / 2; k++) car.stepBreakage(H);
