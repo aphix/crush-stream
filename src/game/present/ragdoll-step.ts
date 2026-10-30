@@ -200,7 +200,7 @@ export abstract class RagdollStepper extends RagdollPool {
   protected dormant(cars: readonly RagCar[], barrier: THREE.Object3D | null, dt: number): boolean {
     if (this.purses && !this.purses.asleep()) return false;
     if (!this.props.asleep()) return false;
-    if (!this.boxes.asleep() || this.loose.count > 0) return false;
+    if (!this.boxes.asleep() || this.loose.moving > 0) return false;
     for (const d of this.dolls) {
       if (!d.live) continue;
       if (!d.bodies[0]!.isSleeping() || this.stirred(_r.set(d.cur[0]!, d.cur[1]!, d.cur[2]!), cars, barrier)) return false;

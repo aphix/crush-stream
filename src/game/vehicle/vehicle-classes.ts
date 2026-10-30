@@ -69,6 +69,10 @@ export interface ClassStats {
   crashMass: number;
   /** The hit speed (m/s EBS) under which no hit takes this class's wheels off (`RigTables.hubHoldMps`); 0: only the platform's gates stand. Hub hardware is built for loads that follow its wheel's mass, so a Monster Jam truck's is the platform's `HUB_POP_MPS` times the square root of its corner's unsprung share of the car over a sedan's (380 of 5440 kg a corner against 40 of 1500): 24. */
   hubHoldMps: number;
+  /** A torn front and rear bumper's mass (kg): what tears off, the cover or face bar, the beam behind it staying on the car (car-part and bumper-masses research, 2026-10-30). What it flies and strikes a dummy with. */
+  bumperKg: readonly [front: number, rear: number];
+  /** A torn door mirror's mass (kg), its base car's (mirror-masses research, 2026-10-30). */
+  mirrorKg: number;
 }
 
 const SEDAN: ClassStats = {
@@ -95,6 +99,8 @@ const SEDAN: ClassStats = {
   wheelScale: 1,
   crashMass: 1,
   hubHoldMps: 0,
+  bumperKg: [5, 6], // 2006 Corolla (E130): a plastic cover
+  mirrorKg: 2.3, // 2006 Corolla: a power mirror
 };
 
 /**
@@ -127,6 +133,8 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
     wheelScale: 1,
     crashMass: 1,
     hubHoldMps: 0,
+    bumperKg: [27, 25], // 1970 Nova SS: a chrome steel bar, the bumper's structure itself
+    mirrorKg: 2, // 1970 Nova SS: a chrome mirror
   },
   truck: {
     id: "truck",
@@ -152,6 +160,8 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
     wheelScale: 1,
     crashMass: 1,
     hubHoldMps: 0,
+    bumperKg: [28, 30], // 1998-2011 Ford Ranger: a steel bar, a step bumper behind
+    mirrorKg: 2, // Ford Ranger: Ford's listing, 4.3-4.5 lb
   },
   monster: {
     id: "monster",
@@ -178,6 +188,8 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
     wheelScale: 1.73,
     crashMass: 1,
     hubHoldMps: 24,
+    bumperKg: [80, 65], // a lifted pickup's aftermarket steel bar
+    mirrorKg: 9, // a pickup's towing mirror: Chevrolet's listing, 8.98 kg
   },
   /**
    * The sedan's drive on the black-and-white body with the light bar, rear-driven: the archetype is a rear-drive pursuit sedan
@@ -185,11 +197,11 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
    * HUD's default realism (0.45 → 0.52 m; ×1.25 gives only +13.5 %), +14.5 % at the arcade end, where `KILL_CEILING` caps it, and
    * +30 % at the realistic end. A player's police car keeps the sedan's (`killClass`).
    */
-  police: { ...SEDAN, id: "police", label: "Police", style: "police", drive: "rwd", redlineRpm: 7000, durability: 1.3 },
+  police: { ...SEDAN, id: "police", label: "Police", style: "police", drive: "rwd", redlineRpm: 7000, durability: 1.3, bumperKg: [7, 7], mirrorKg: 2.3 }, // Crown Victoria Police Interceptor: its cover (the steel push bar stays on the car), a 2.3 kg mirror
   /** A front-driven compact hatchback (2017 Golf 1.8T: 0-60 mph 7.3 s, 127 mph, 3061 lb, 0.84 g, Car and Driver): lighter and quicker to turn than the sedan, a little slower flat out, and it takes less before it dies. */
-  hatch: { ...SEDAN, id: "hatch", label: "Hatchback", style: "hatchback", mass: 1390, topSpeed: 192 / 3.6, launch: [17, 6.5], power: [178.5, 58.4], cgHeight: 0.52, redlineRpm: 6500, turn: 1.62, grip: 40.5, drift: 0.3, durability: 0.95 },
+  hatch: { ...SEDAN, id: "hatch", label: "Hatchback", style: "hatchback", mass: 1390, topSpeed: 192 / 3.6, launch: [17, 6.5], power: [178.5, 58.4], cgHeight: 0.52, redlineRpm: 6500, turn: 1.62, grip: 40.5, drift: 0.3, durability: 0.95, bumperKg: [4.5, 5.5], mirrorKg: 2.5 }, // Golf GTI, Peugeot 206-208 GTi: a plastic cover; Golf GTI / Peugeot 207 mirror
   /** A front-driven luxury SUV on the wagon body (2018 Range Rover Velar P250: 0-60 mph 7.4 s, 4392 lb, 0.84 g, Car and Driver), front-driven as the sedan it replaces: tall and heavy, slower to turn, tougher in a crash. */
-  suv: { ...SEDAN, id: "suv", label: "SUV", style: "wagon", mass: 1990, topSpeed: 198 / 3.6, revSpeed: 10, launch: [16.6, 6], power: [178.05, 58.6], cgHeight: 0.7, redlineRpm: 6000, brake: 27, turn: 1.42, grip: 37, drift: 0.25, boostTop: 1.22, boostAccel: 1.6, durability: 1.2 },
+  suv: { ...SEDAN, id: "suv", label: "SUV", style: "wagon", mass: 1990, topSpeed: 198 / 3.6, revSpeed: 10, launch: [16.6, 6], power: [178.05, 58.6], cgHeight: 0.7, redlineRpm: 6000, brake: 27, turn: 1.42, grip: 37, drift: 0.25, boostTop: 1.22, boostAccel: 1.6, durability: 1.2, bumperKg: [7, 7], mirrorKg: 3.5 }, // Range Rover (L322): a plastic cover, a power-folding mirror
 };
 
 /** The class each body style drives as unless assigned another. */

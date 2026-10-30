@@ -162,8 +162,8 @@ export abstract class RagdollPool {
   protected lastSlot = 0;
   /** The cars' proxies in the dummies' world. */
   protected readonly proxies = new CarProxies(this.dolls);
-  /** The sim's loose car parts and wheels as kinematic bodies the dummies meet. */
-  protected readonly loose = new LooseProxies();
+  /** The sim's loose car parts and wheels in the dummies' world: slow ones block them, fast ones strike them; a walker struck hard enough goes limp. */
+  protected readonly loose = new LooseProxies((slot) => this.walkers[slot]!.struck());
   /** The ride-along camera over the dummies (`follow`, `frameCamera`). */
   protected readonly ride = new RideAlong();
   /** One walker per pool slot: a dummy of the pool (`startWalker`) held up and walked by motors, in this world with the cars and the ground. The player on foot is the one in `WALKER_SLOT`. */

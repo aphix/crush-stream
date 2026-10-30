@@ -88,7 +88,7 @@ interface FrameMessage {
   lookSeed: number;
   count: number;
   cars: Float64Array;
-  /** The awake loose bodies (`recordLoose`), `LOOSE_FLOATS` each. */
+  /** The loose bodies, asleep or not, with their velocity and mass (`recordLoose`), `LOOSE_FLOATS` each. */
   loose: Float64Array;
 }
 

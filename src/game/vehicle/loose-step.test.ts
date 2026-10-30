@@ -134,7 +134,7 @@ function slide(withB: boolean): DetachPart {
 function assertSlideStop(part: DetachPart): void {
   const travelled = part.object.position.z;
   const [, mid, big] = part.shape.half.toArray().sort((a, b) => a - b);
-  const k = (0.5 * AIR_DENSITY * PLATE_CN_BROADSIDE * 4 * mid! * big!) / partMass(part);
+  const k = (0.5 * AIR_DENSITY * PLATE_CN_BROADSIDE * 4 * mid! * big!) / partMass(part, "sedan");
   const stop = Math.log(1 + (k * SLIDE_V ** 2) / (MU_BODY * GRAVITY)) / (2 * k);
   expect(planSpeed(part), "plan speed after twice its stopping time").toBe(0);
   expect(Math.abs(travelled - stop), `slid ${travelled.toFixed(3)} m; at μ ${MU_BODY} and the wind's k ${k.toFixed(4)}/m: ${stop.toFixed(3)} m ± one step's ${(SLIDE_V * H).toFixed(3)} m`).toBeLessThanOrEqual(SLIDE_V * H);
@@ -655,9 +655,9 @@ function laidFlat(name: string, speed: number, yawDeg = 0): DetachPart {
   return part;
 }
 
-/** One slice of `part` as its car steps it (`stepLooseParts`): the wind on it at its mass. */
+/** One slice of `part` as its car (a sedan) steps it (`stepLooseParts`): the wind on it at its mass. */
 function stepTorn(part: DetachPart): void {
-  stepLoose(part, H, -1, undefined, undefined, partMass(part));
+  stepLoose(part, H, -1, undefined, undefined, partMass(part, "sedan"));
 }
 
 describe(`given a torn sheet panel lying flat on the road, sliding at ${TORN_AT} m/s`, () => {

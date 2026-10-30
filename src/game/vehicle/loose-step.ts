@@ -10,6 +10,8 @@ import { loadShape, readPoints } from "./car-air-points.ts";
 import { openRows, solveRows } from "./car-air.ts";
 import { DENT_MIN_DV, recordDent, type DentState } from "./loose-dent.ts";
 import type { DetachPart, LooseBody, LooseShape, LooseWheel } from "./car-core.ts";
+import { CLASSES, type VehicleClassId } from "./vehicle-classes.ts";
+import { BUMPER_F } from "./constants.ts";
 
 const _c = new THREE.Vector3();
 const _dv = new THREE.Vector3();
@@ -393,17 +395,14 @@ const DOOR_KG = 29.5;
 const FENDER_KG = 3.7;
 /** A rear quarter's outer skin: the fender's 0.85 mm steel (6.7 kg/m²) over a quarter's 1.3 m². */
 const QUARTER_KG = 8.7;
-/** A mid-size car's plastic bumper cover: fascias run 6-10 kg. */
-const BUMPER_KG = 8;
-/** A door mirror assembly: 1-2 kg with its glass and motor. */
-const MIRROR_KG = 1.3;
 /** A full-width police light bar: about 30 lb. */
 const LIGHT_BAR_KG = 14;
-const PART_KG: Record<Exclude<DetachPart["hinge"], "tail">, number> = { cowl: HOOD_KG, door: DOOR_KG, "two-point": BUMPER_KG, bar: LIGHT_BAR_KG, quarter: QUARTER_KG, arch: FENDER_KG };
+const PART_KG: Record<Exclude<DetachPart["hinge"], "tail" | "two-point">, number> = { cowl: HOOD_KG, door: DOOR_KG, bar: LIGHT_BAR_KG, quarter: QUARTER_KG, arch: FENDER_KG };
 
-/** Torn part `p`'s mass (kg): what the wind on its plan area moves (`blow`). */
-export function partMass(p: DetachPart): number {
-  if (p.mirror) return MIRROR_KG;
+/** Torn part `p`'s mass (kg) on a car of class `cls`: what the wind on its plan area moves (`blow`); a bumper is its class's (`ClassStats.bumperKg`). */
+export function partMass(p: DetachPart, cls: VehicleClassId): number {
+  if (p.mirror) return CLASSES[cls].mirrorKg;
+  if (p.hinge === "two-point") return CLASSES[cls].bumperKg[p.name === BUMPER_F ? 0 : 1];
   return p.hinge === "tail" ? p.swing!.spec.kg : PART_KG[p.hinge];
 }
 

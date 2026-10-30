@@ -156,6 +156,8 @@ const GLASS_CRACK = 0.003;
 const GLASS_TEMPERED = 0.03;
 /** The laminated windscreen "shatters" (extensive cracking, the bond line letting go) at about 30 mm of racking. */
 const GLASS_LAMINATED = 0.03;
+/** A popped wheel's mass per m³ of its disk: a sedan's 20 kg wheel and tyre on its 0.081 m³ disk (a monster's 44" set, about 110 kg, comes out near 100). */
+const WHEEL_KG_PER_M3 = 247;
 
 /** Police light bar: shears off once the roof mass under it sinks this far (m below its rest height; a
  *  56 km/h frontal sinks it ~0.07), or on any hit at or above this EBS (60 km/h, arcade: a big crash throws
@@ -1310,7 +1312,7 @@ export abstract class CarParts extends CarGlass {
       const p = this.parts[k]!;
       // A torn shell past `LIVE_SHELLS` is hidden for good (until the reset): nothing to see, nothing to move.
       if (!p.detached || !p.object.visible) continue;
-      if (stepLoose(p, dt, slot, p.dent, met, partMass(p), cars)) this.noteStirred(k);
+      if (stepLoose(p, dt, slot, p.dent, met, partMass(p, carClass(this)), cars)) this.noteStirred(k);
       applyDents(p.dent, p.object);
     }
     if (!wheels) return;
@@ -1350,6 +1352,13 @@ export abstract class CarParts extends CarGlass {
     }
     const p = this.parts[i];
     return p?.detached && p.object.visible && p.shape.count > 0 ? p : null;
+  }
+
+  /** Loose body `i`'s mass (kg): a torn part's (`partMass`), a popped wheel's its disk's at `WHEEL_KG_PER_M3`. What it strikes a dummy with. */
+  looseKg(i: number): number {
+    if (i < PART_SLOTS) return partMass(this.parts[i]!, carClass(this));
+    const half = this.looseWheels[i - PART_SLOTS]!.shape.half;
+    return WHEEL_KG_PER_M3 * Math.PI * half.y * half.y * 2 * half.x;
   }
 
   /** Into `out` from index `n` on: the parts drawn off their rest (a door or lid swung open, a hinged or hanging panel or bumper, a shown hood) and the torn ones still drawn. Returns the count past the last one written. */

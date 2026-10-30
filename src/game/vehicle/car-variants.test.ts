@@ -4093,7 +4093,7 @@ describe("given a body style's mirrors, grille, badges and lamps", () => {
         part.object.quaternion.setFromEuler(new THREE.Euler(...c.euler));
         part.velocity.set(0, 0, c.wall ? 4 : 0);
         part.angular.set(c.wall ? 0 : 0.3, c.wall ? 0 : 0.2, c.wall ? 0 : -0.25);
-        for (let t = 0; t < 5 && !part.shape.asleep; t += H) stepLoose(part, H, -1, undefined, undefined, partMass(part));
+        for (let t = 0; t < 5 && !part.shape.asleep; t += H) stepLoose(part, H, -1, undefined, undefined, partMass(part, "sedan"));
         part.object.updateMatrixWorld(true);
         const s = part.shape;
         const corners = Array.from({ length: s.count }, (_, k) => new THREE.Vector3().fromArray(s.points, 3 * k).add(s.centre).applyQuaternion(part.object.quaternion).add(part.object.position));

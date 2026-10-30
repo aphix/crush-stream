@@ -3,7 +3,7 @@ import type { Rapier } from "../kernel/rapier.ts";
 import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { GRAVITY } from "../kernel/constants.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { type Doll, MASS } from "./ragdoll-body.ts";
+import { type Doll, TOTAL_MASS } from "./ragdoll-body.ts";
 import { joinUp } from "./ragdoll-joints.ts";
 import { chooseRoute, GETUP_ROUTES, type GetUpRoute, smooth, STAGE, stageAt, standingBearing } from "./walker-getup.ts";
 import { Gait, GAIT } from "./walker-gait.ts";
@@ -50,7 +50,6 @@ const LIFT_WEIGHT_SHARE = 0.7;
 const LIFT_STIFFNESS = 3000;
 const LIFT_DAMPING = 600;
 const LIFT_MAX_WEIGHTS = 1.25;
-const TOTAL_MASS = MASS.reduce((sum, m) => sum + m, 0);
 const WEIGHT = TOTAL_MASS * GRAVITY;
 /** Standing again needs this tilt cosine (32°) and torso height (m). */
 const STANDING_UPRIGHT = 0.85;

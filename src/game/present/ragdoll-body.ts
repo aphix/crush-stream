@@ -192,7 +192,7 @@ const SUBTREE = JOINTS.map(([, b]) => {
   for (const part of parts) for (const [parent, child] of JOINTS) if (parent === part) parts.push(child);
   return parts;
 });
-const TOTAL_MASS = MASS.reduce((sum, m) => sum + m, 0);
+export const TOTAL_MASS = MASS.reduce((sum, m) => sum + m, 0);
 const _pivot = new THREE.Vector3();
 const _r = new THREE.Vector3();
 const _dw = new THREE.Vector3();

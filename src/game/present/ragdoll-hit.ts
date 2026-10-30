@@ -12,7 +12,7 @@ const _spin = new THREE.Vector3();
 const _v = { x: 0, y: 0, z: 0 };
 
 /** The part of `bodies` (`PARTS` order) the world `point` is nearest, by each part's own box: the part whose box it is deepest in, or nearest to. */
-function partAt(bodies: readonly RigidBody[], point: THREE.Vector3): number {
+export function partAt(bodies: readonly RigidBody[], point: THREE.Vector3): number {
   let best = 0;
   let bestReach = Infinity;
   for (let k = 0; k < PARTS.length; k++) {

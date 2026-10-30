@@ -197,9 +197,11 @@ always:      net.frame → PoseBlend.present (bodies, loose parts, attached part
              The thrown drivers' world (`RagdollRemote` ↔ `ragdoll-worker.ts`, a module Web Worker, race courses only) is posted its
              frame in the `ragdolls` step above and answers a frame or two later; the sim holds a frame (`RagdollSystem.waiting`) until the
              answer it is to hear (panes struck, cars wanted) is in, so that feedback lands at a fixed step. See docs/CINEMATIC.md.
-            The sim's awake torn parts and popped wheels ride each frame to that world too (`recordLoose`, `ragdoll-loose.ts`): near a live
-            dummy each is a kinematic box or disk walked to its pose (`LooseProxies`), so a thrown wheel knocks a dummy over and he never
-            pushes it back.
+            The sim's torn parts and popped wheels ride each frame to that world too, with their velocity and mass (`recordLoose`,
+            `ragdoll-loose.ts`, `LooseProxies`). Near a live dummy, one slower than 1 m/s is a solid box or disk put at its pose with no
+            speed of its own, so a dummy can't pass through it. A faster one is swept along its path, and its first touch of a dummy is the
+            showcase press (`strikeAt`) at the point it lands, its push the part's momentum over the struck part's mass. A walker struck
+            past `KNOCK_MPS` (momentum over his whole mass) goes limp as the press makes him. One way: he never pushes it back.
 ```
 
 **Epicenter activation** (`deform/epicenter.ts`, `deform/deform-freeze.ts`; Debug panel group Epicenter and the Activation Whole | Epicenter row under Solver, both on `epi.on`; share-URL keys `epi.*`, default on = `epicenter`; `epi.on=0` is `whole`). With `epi.on` a crashed car whose quiet time has reached `epi.relockHold` (0.35 s, the contact window) is *frozen* at the end of the slice: `stepWorld` skips its `stepStructure` and `syncPose` (`DeformFreeze.stepFrozen`: the clock and the rigid velocity field, one pass), `Car.integrateFrozen` runs its rigid step on the centre of mass and inertia cached at the freeze and places its masses from its frame, and `applyDrive` turns the body only. Anything that writes a mass or restarts the contact clock calls `DeformRig.thaw` first (`epi.frozenCheck` asserts none was missed). It is a cost cut, not a model change: the cage is already rigid once the window is over (`rideBody`), so a frozen wreck differs from `whole` by the seat step and clamp relaxation it skips (a few millimetres; `contact/epicenter-equivalence.test.ts` bounds them). A clip records the knobs (`HighlightClip.epicenter`) and a replay runs under them. Phase A (8 scenes, the owner's fleet traces, the piston matrix of five classes x eight pistons) found no radius that leaves a part of the struck car alone, so there is no spatial ring: the epicenter is the whole car, in time.
