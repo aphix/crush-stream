@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { RigidBody, World } from "@dimforge/rapier3d-simd";
 import type { Rapier } from "../kernel/rapier.ts";
+import { hypot3 } from "../kernel/physics-core.js";
 import { readPose } from "./ragdoll-body.ts";
 import { knockedGroups } from "./ragdoll-config.ts";
 
@@ -81,6 +82,20 @@ export class BoxPile {
   /** Is every box asleep (as of the last `capture`)? Nothing needs stepping for the pile then. */
   asleep(): boolean {
     return this.awake === 0;
+  }
+
+  /** Is a box (as last read) within `r` m of `p`, plus its own reach (half its diagonal)? */
+  touches(p: THREE.Vector3, r: number): boolean {
+    for (let i = 0; i < this.bodies.length; i++) {
+      const o = i * BOX_POSE_FLOATS;
+      const { width, height, depth } = this.placements[i]!;
+      const reach = r + hypot3(width, height, depth) / 2;
+      const dx = this.poses[o]! - p.x;
+      const dy = this.poses[o + 1]! - p.y;
+      const dz = this.poses[o + 2]! - p.z;
+      if (dx * dx + dy * dy + dz * dz < reach * reach) return true;
+    }
+    return false;
   }
 
   /** Every box back at its placement, still, asleep. */

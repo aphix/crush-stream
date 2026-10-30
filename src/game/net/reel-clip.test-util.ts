@@ -97,6 +97,7 @@ export function makeClip(): { clip: HighlightClip; car: DeformableCar } {
       { step: 0, car: 0, body: 3, slice: 0, slices: 1500 },
       { step: 300, car: 1, body: 17, slice: 5, slices: 65535 },
     ],
+    partHits: [{ step: 3, car: 0, part: 7, energy: 42.5, px: 0.5, py: -1.25, pz: 2 }],
     strikes: [
       { step: 120, s: { guard: 4, car: 0, x: 12.5, y: 0.25, z: -30.75, faceX: 0.5, faceZ: -0.875, vx: 9.5, vy: 1.5, vz: -4.25, wx: 0.75, wy: 0, wz: 2.125, loose: false } },
       { step: 361, s: { guard: -1, car: 1, x: -3.5, y: 0.125, z: 8, faceX: 0, faceZ: 1, vx: 0, vy: 0, vz: 0, wx: 0, wy: 0, wz: 0, loose: true } },
@@ -182,6 +183,7 @@ export function sameClip(got: HighlightClip, want: HighlightClip): void {
   sameRows(got.knocks, want.knocks, ["step", "prop"], "knocked prop");
   sameRows(got.stirs, want.stirs, ["step", "car", "slice"], "stirred wreck");
   sameRows(got.partStirs, want.partStirs, ["step", "car", "body", "slice", "slices"], "stirred part");
+  sameRows(got.partHits, want.partHits, ["step", "car", "part", "energy", "px", "py", "pz"], "part hit");
   expect(got.strikes.length).toBe(want.strikes.length);
   for (const [i, x] of got.strikes.entries()) {
     const w = want.strikes[i]!;

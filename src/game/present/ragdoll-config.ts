@@ -39,5 +39,7 @@ export const DOLL_FLOOR_GROUPS = (G_STATIC << 16) | G_DOLLS;
 export const PROP_FLOOR_GROUPS = (G_STATIC << 16) | G_PROPS;
 /** Car i's leaves (`ProxyFitter`) and standing panes; a gone pane's slab collides with nothing (Rapier kept a disabled slab on a moving kinematic body in contact). */
 export const carGroups = (i: number) => (carBit(i) << 16) | G_DOLLS | G_PROPS;
+/** Car i's part that stands out of its body (a mirror, an unlatched door or lid, a hanging quarter panel) or a loose part flying fast (`LooseProxies`): the knocked props and cartons meet it, the dummies keep passing it (a fast one strikes them by its sweep). */
+export const partGroups = (i: number) => (carBit(i) << 16) | G_PROPS;
 /** A sweep of car i's loose part (`LooseProxies`' strike): it finds the dummies only, those its car may meet (not one it threw in his `GRACE`). */
 export const looseSweepGroups = (i: number) => (carBit(i) << 16) | G_DOLLS;

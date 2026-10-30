@@ -2,8 +2,9 @@ import { FLIGHT } from "../vehicle/car-flight.ts";
 import { EPICENTER_FIELDS } from "../deform/epicenter.ts";
 import { CAR_STYLE_IDS } from "../vehicle/car-variants.ts";
 import { VEHICLE_CLASS_IDS } from "../vehicle/vehicle-classes.ts";
-import { CLIP_NO_CAR, CLIP_OUT_CAR, INPUT_BYTES, MAX_HITS, MAX_KNOCKS, MAX_PART_STIRS, MAX_SQUAD, MAX_SQUAD_EVENTS, MAX_STIRS, MAX_STRIKES, MAX_VIP_EVENTS, MEMORY, simFingerprint, type ClipEjection, type ClipHit, type ClipKnock, type ClipPartStir, type ClipSquad, type ClipStir, type ClipStrike, type ClipVip, type HighlightClip, type Reel, type ReelCar } from "../match/highlights.ts";
+import { CLIP_NO_CAR, CLIP_OUT_CAR, INPUT_BYTES, MAX_HITS, MAX_KNOCKS, MAX_PART_HITS, MAX_PART_STIRS, MAX_SQUAD, MAX_SQUAD_EVENTS, MAX_STIRS, MAX_STRIKES, MAX_VIP_EVENTS, MEMORY, simFingerprint, type ClipEjection, type ClipHit, type ClipKnock, type ClipPartHit, type ClipPartStir, type ClipSquad, type ClipStir, type ClipStrike, type ClipVip, type HighlightClip, type Reel, type ReelCar } from "../match/highlights.ts";
 import { LOOSE_BODIES } from "../vehicle/part-state.ts";
+import { HIT_PARTS } from "../vehicle/car-core.ts";
 import { blankStrike } from "../scenes/figure-strike.ts";
 import { blankEjection } from "../vehicle/ejection.ts";
 import { GUARD_DOWN, SQUAD_ALARM, SQUAD_DOWN, SQUAD_SHOT, SQUAD_TARGET, squadStateLength } from "../scenes/lawn-guard.ts";
@@ -522,9 +523,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 174: an open door, hood or boot lid feels the wind (`windPush`: the panels' airflow, ∝ v² to 40 m/s, beating at the flutter's clock, as a rearward push on its swing), so at highway speed an open boot lid swings toward shut and flaps and an open door is swung shut; and a lid's swing reads the car's vertical acceleration (uncapped; the door-swing sample carries the vertical velocity, two more part-state doubles), so a landing on the wheels swings an open lid shut (a sedan's latches from 2.5 m, a hatch's from 2 m). The hood swings on the boot lid's hinge law (16 kg on struts, rear-edge hinge, 32° stop): a front crush past its ajar (0.05) springs it, and it rises open. A gas strut's lift fades to none over the last 0.3 rad to shut (`STRUT_TAPER`: its arm about the hinge goes; hatches, liftgates and the hood, not a deck lid's torsion bars), so a strut gate's weight wins there, and a latch's pop lifts a sprung one past it. A swing lives outside the car's collision cage: the cage takes a hood's and lid's crash pose alone. A part swung shut onto a crash jam latches if the jam leaves its free edge within 5 cm (`LATCH_REACH_M`), and only fresh crush springs a latch again. A lid torn off its stop by a striker leaves with the striker's speed alone (no 0.8 m/s lift, no 1 m/s floor). A clip of 173 or before no longer reads.
  * 175: the side-hit fuel cut-off is gone (at the owner's call): a side hit past 10 g no longer zeroes the gas and the boost for 3 s, so a car sideswiped or t-boned drives on under its pedals at once, and a clip's keyframe flight block no longer carries `stalledS` (one double fewer; NET_VERSION 41). A clip of 174 or before no longer reads.
  * 176: one knock law for every striker (`knocksDown`): a standing figure's speed change in a sticking hit, the striker's mass × its own velocity toward him over its mass plus his 101.4 kg, at 1 m/s or more. A car runs a lawn guard, the VIP or the walker down from about 1.1 m/s along its touched face's normal (it took 4 m/s of ground speed at any angle); a torn part or popped wheel now reaches a guard or the VIP too (`looseRunsDown`): he is thrown standing still (a strike's `loose` byte) and the part strikes his dummy where it lands. A clip of 175 or before no longer reads.
+ * 177: a clip carries the hits the dummies' world struck its cars with (`ClipPartHit`: a torso on a pane, a knocked prop or carton on a mirror, an unlatched door, hood or boot lid, a hanging quarter panel), and a replay applies each at its step instead of re-running that world; a clip of 176 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 176;
+const REPLAY_VERSION = 177;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
@@ -543,6 +545,8 @@ const STIR_BYTES = 4 + 1 + 1;
 const PART_STIR_BYTES = 4 + 1 + 1 + 1 + 2;
 /** A clip's strike: its step (u32), the car (u8), the guard (u8: 255 for the VIP, -1), 11 x f32 (position, facing, velocity, spin) and whether a loose part struck (u8). */
 const STRIKE_BYTES = 4 + 1 + 1 + 11 * 4 + 1;
+/** A clip's part hit: its step (u32), the car (u8), the part (u8), the energy (f32) and the push (3 x f32). */
+const PART_HIT_BYTES = 4 + 1 + 1 + 4 + 3 * 4;
 /** A clip's squad decision: its step (u32), kind, and its three operands (u8 each). */
 const SQUAD_EVENT_BYTES = 4 + 4;
 /** A clip's VIP change: its step (u32) and the car (u8). */
@@ -568,7 +572,7 @@ export function clipBytes(c: HighlightClip): number {
   for (const k of c.keys) n += 12 + k.length;
   const squad = c.squad ? 1 + c.squad.state.length * 4 + 2 + c.squad.events.length * SQUAD_EVENT_BYTES : 1;
   const vip = 2 + c.vip.events.length * VIP_EVENT_BYTES;
-  return n + 1 + c.ejections.length * EJECTION_BYTES + 2 + c.knocks.length * KNOCK_BYTES + 2 + c.stirs.length * STIR_BYTES + 2 + c.partStirs.length * PART_STIR_BYTES + 1 + c.strikes.length * STRIKE_BYTES + squad + vip + 1 + c.hits.length * HIT_BYTES;
+  return n + 1 + c.ejections.length * EJECTION_BYTES + 2 + c.knocks.length * KNOCK_BYTES + 2 + c.stirs.length * STIR_BYTES + 2 + c.partStirs.length * PART_STIR_BYTES + 2 + c.partHits.length * PART_HIT_BYTES + 1 + c.strikes.length * STRIKE_BYTES + squad + vip + 1 + c.hits.length * HIT_BYTES;
 }
 
 export function writeClip(w: Writer, c: HighlightClip): void {
@@ -649,6 +653,16 @@ export function writeClip(w: Writer, c: HighlightClip): void {
     w.u8(x.body);
     w.u8(x.slice);
     w.u16(x.slices);
+  }
+  w.u16(c.partHits.length);
+  for (const x of c.partHits) {
+    w.u32(x.step);
+    w.u8(x.car);
+    w.u8(x.part);
+    w.f32(x.energy);
+    w.f32(x.px);
+    w.f32(x.py);
+    w.f32(x.pz);
   }
   w.u8(c.strikes.length);
   for (const x of c.strikes) {
@@ -854,6 +868,20 @@ export function readClip(r: Reader, L: NetLayout): HighlightClip {
     if (step >= steps || car >= nc || body >= LOOSE_BODIES || slice >= 8 || slices === 0 || (k > 0 && step < partStirs[k - 1]!.step)) throw new RangeError("clip part stir");
     partStirs.push({ step, car, body, slice, slices });
   }
+  const nph = r.u16();
+  if (nph > MAX_PART_HITS) throw new RangeError("clip part hits");
+  const partHits: ClipPartHit[] = [];
+  for (let k = 0; k < nph; k++) {
+    const step = r.u32();
+    const car = r.u8();
+    const part = r.u8();
+    const energy = r.fin32();
+    const px = r.fin32();
+    const py = r.fin32();
+    const pz = r.fin32();
+    if (step >= steps || car >= nc || part >= HIT_PARTS.length || energy < 0 || (k > 0 && step < partHits[k - 1]!.step)) throw new RangeError("clip part hit");
+    partHits.push({ step, car, part, energy, px, py, pz });
+  }
   const nsk = r.u8();
   if (nsk > MAX_STRIKES) throw new RangeError("clip strikes");
   const strikes: ClipStrike[] = [];
@@ -894,7 +922,7 @@ export function readClip(r: Reader, L: NetLayout): HighlightClip {
     if (!Number.isFinite(t) || a >= nc || b >= nc || (k > 0 && t < hits[k - 1]!.t)) throw new RangeError("clip hit");
     hits.push({ t, x: hx, y: hy, z: hz, a, b });
   }
-  return { trackId, score, impacts, kills, ejects, hit, ejections, knocks, stirs, partStirs, strikes, squad, vip, peakKph, hitKph, deform, hits, t0, firstImpact, lastImpact, firstStep, x, z, focus, firstA, firstB, realism, bleed, squash, buckle, deformMode, epicenter, look, cars, h, shape, lone, inputs, keyStep, keyCars, keys };
+  return { trackId, score, impacts, kills, ejects, hit, ejections, knocks, stirs, partStirs, partHits, strikes, squad, vip, peakKph, hitKph, deform, hits, t0, firstImpact, lastImpact, firstStep, x, z, focus, firstA, firstB, realism, bleed, squash, buckle, deformMode, epicenter, look, cars, h, shape, lone, inputs, keyStep, keyCars, keys };
 }
 
 /** A clip's squad block (`squadBytes`); throws RangeError on one that names a guard, a car or a step the clip has not. */

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { GLASS_NAMES } from "../vehicle/car-glass.ts";
+import type { PartHeard } from "./ragdoll-wire.ts";
 import { CLASS_LIFT } from "../vehicle/constants.ts";
 import { carClass, classStats } from "../vehicle/vehicle-classes.ts";
 import type { TrackJson } from "../world/track-schema.ts";
@@ -22,6 +22,7 @@ import {
   FLAG_LIFT,
   FLAG_VAPORIZED,
   LAG,
+  applyHit,
   type FromWorker,
   type ResultMessage,
   type ToWorker,
@@ -164,13 +165,13 @@ export class RagdollRemote {
   }
 
   /**
-   * One frame of the world: the answers due (`LAG` frames old) are heard by the sim (`apply`: the panes struck are struck on the
-   * cars, the wanted cars set), the cages wanted are sent, and the cars as they stand now are posted. Nothing is posted while
+   * One frame of the world: the answers due (`LAG` frames old) are heard by the sim (`apply`: the panes and parts struck are struck on the
+   * cars, `heard` told, the wanted cars set), the cages wanted are sent, and the cars as they stand now are posted. Nothing is posted while
    * the world has nothing out and nothing was thrown or knocked.
    */
-  post(dt: number, cars: readonly DeformableCar[], authority: boolean, sandbox: boolean, lookSeed: number): void {
+  post(dt: number, cars: readonly DeformableCar[], authority: boolean, sandbox: boolean, lookSeed: number, heard: PartHeard | null): void {
     const due = this.posted + 1 - LAG;
-    while (this.lagged.length > 0 && this.lagged[0]!.seq <= due) this.apply(this.lagged.shift()!, cars);
+    while (this.lagged.length > 0 && this.lagged[0]!.seq <= due) this.apply(this.lagged.shift()!, cars, heard);
     if (this.failed || !this.active()) return;
     const seq = ++this.posted;
     if (this.commanded) {
@@ -182,7 +183,7 @@ export class RagdollRemote {
     this.sendCages(cars, count);
     const block = new Float64Array(count * CAR_FLOATS);
     for (let i = 0; i < count; i++) this.record(cars[i]!, block, i * CAR_FLOATS);
-    const loose = recordLoose(cars);
+    const loose = recordLoose(cars, this.wanted);
     this.send({ type: "frame", seq, epoch: this.epoch, dt, authority, sandbox, lookSeed, count, cars: block, loose }, [block.buffer, loose.buffer]);
   }
 
@@ -196,11 +197,11 @@ export class RagdollRemote {
     return this.commanded || this.heardFrame < this.commandFrame || this.heardActive;
   }
 
-  private apply(r: ResultMessage, cars: readonly DeformableCar[]): void {
+  private apply(r: ResultMessage, cars: readonly DeformableCar[], heard: PartHeard | null): void {
     this.heardFrame = r.seq;
     this.heardActive = r.active;
     this.wanted.set(r.wanted);
-    for (const hit of r.hits) cars[hit.car]?.hitGlass(GLASS_NAMES[hit.pane]!);
+    for (const hit of r.hits) applyHit(hit, cars, heard);
   }
 
   private hear(m: FromWorker): void {

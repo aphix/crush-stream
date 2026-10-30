@@ -1,6 +1,11 @@
+import * as THREE from "three";
 import type { TrackJson } from "../world/track-schema.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
+import type { DeformableCar } from "../vehicle/car.ts";
 import { PARTS } from "./ragdoll-body.ts";
+
+const _push = new THREE.Vector3();
+const _inverse = new THREE.Quaternion();
 
 /**
  * What the main thread and the dummies' world (a Web Worker, `ragdoll-worker.ts`) say to each other. The world's answer to
@@ -11,6 +16,8 @@ import { PARTS } from "./ragdoll-body.ts";
 export const LAG = 2;
 /** The cars' wanted-fit test looks this many frames of travel further out than a proxy's own, so a fit asked for arrives before the car is touched. */
 export const FIT_AHEAD = LAG + 2;
+/** A car's `wanted` when a knocked prop or an awake carton may reach it within `FIT_AHEAD` frames: its parts that stand out of its body are recorded for them to meet (`recordLoose`). */
+export const WANT_PARTS = 2;
 
 /** A frame's car record, floats: the group's pose, its class body's pose in it, its velocity, speed, flags, glass state. */
 export const CAR_FLOATS = 20;
@@ -100,10 +107,26 @@ export type ToWorker =
   | CageMessage
   | FrameMessage;
 
-/** A pane of car `car` a torso struck (`GLASS_NAMES` index `pane`). */
-export interface GlassHit {
+/** What a body in the dummies' world struck on car `car`: `HIT_PARTS[part]` (a pane a torso struck, a part a prop or carton met), the striker's energy (J) and push (world m/s: its closing velocity along the contact normal). */
+export interface PartHit {
   car: number;
-  pane: number;
+  part: number;
+  energy: number;
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** Told of each hit the sim applied (`applyHit`), its push in the car's frame: the reel's record. */
+export type PartHeard = (car: number, part: number, energy: number, push: THREE.Vector3) => void;
+
+/** The sim applies `hit` (`DeformableCar.hitPart`), its push turned into the car's frame, and `heard` is told. */
+export function applyHit(hit: PartHit, cars: readonly DeformableCar[], heard: PartHeard | null): void {
+  const car = cars[hit.car];
+  if (!car) return;
+  _push.set(hit.x, hit.y, hit.z).applyQuaternion(_inverse.copy(car.group.quaternion).invert());
+  car.hitPart(hit.part, hit.energy, _push);
+  heard?.(hit.car, hit.part, hit.energy, _push);
 }
 
 export interface ResultMessage {
@@ -119,8 +142,8 @@ export interface ResultMessage {
   props: Float32Array;
   propsReset: boolean;
   spawned: { id: number; slot: number }[];
-  hits: GlassHit[];
-  /** Per car, 1 when a dummy, purse thing or knocked prop may reach it within `FIT_AHEAD` frames: the cars the main thread sends cages of. */
+  hits: PartHit[];
+  /** Per car, nonzero when a dummy, purse thing or knocked prop may reach it within `FIT_AHEAD` frames (the cars the main thread sends cages of); `WANT_PARTS` when a knocked prop or awake carton may. */
   wanted: Uint8Array;
   /** Anything is out: a dummy, a purse thing or a knocked prop. */
   active: boolean;

@@ -9,6 +9,8 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
 const WINDSHIELD = 0;
+/** A torso's strike on the windshield of car 0, as the world reports it. */
+const PANE_HIT = { car: 0, part: WINDSHIELD, energy: 0, x: 0, y: 0, z: 0 };
 const CRACKED = 1;
 
 /** A Worker that records what is posted to it and says only what the test has it say. */
@@ -50,10 +52,10 @@ function glassAfterFrame(arrive: number, frames: number): number[] {
   remote.knock(0, -1, 0, 0, 0);
   const seen: number[] = [];
   for (let frame = 1; frame <= frames; frame++) {
-    if (frame === 1 + arrive) worker.say(answer(1, [{ car: 0, pane: WINDSHIELD }]));
+    if (frame === 1 + arrive) worker.say(answer(1, [PANE_HIT]));
     if (frame === LAG + 1 && arrive < 0) expect(remote.behind(true), "the sim waits for the answer it is to hear").toBe(true);
-    if (frame === LAG + 1 && arrive < 0) worker.say(answer(1, [{ car: 0, pane: WINDSHIELD }]));
-    remote.post(FRAME, cars, true, false, 0);
+    if (frame === LAG + 1 && arrive < 0) worker.say(answer(1, [PANE_HIT]));
+    remote.post(FRAME, cars, true, false, 0, null);
     seen.push((car.glassBits() >> (2 * WINDSHIELD)) & 3);
   }
   remote.dispose();
@@ -87,9 +89,9 @@ describe("given the dummies' world has something out and its answer to a frame t
     worker.say({ type: "ready" });
     remote.knock(0, -1, 0, 0, 0);
     const cars = [makeCar()];
-    for (let frame = 1; frame < LAG; frame++) remote.post(FRAME, cars, true, false, 0);
+    for (let frame = 1; frame < LAG; frame++) remote.post(FRAME, cars, true, false, 0, null);
     expect(remote.behind(true), "no answer is due yet").toBe(false);
-    remote.post(FRAME, cars, true, false, 0);
+    remote.post(FRAME, cars, true, false, 0, null);
     expect(remote.behind(true), "answer to frame 1 is due").toBe(true);
     expect(remote.behind(false), "a client's glass is the host's").toBe(false);
     worker.say(answer(1, []));
@@ -105,7 +107,7 @@ async function inlineGlassAfterFrame(frames: number): Promise<{ glass: number[];
   world.place(new THREE.Vector3(40, 3, 40), new THREE.Quaternion(), new THREE.Vector3(), new THREE.Vector3(), 10, 0);
   const glass: number[] = [];
   for (let frame = 1; frame <= frames; frame++) {
-    if (frame === 1) world["proxies"].strikes.push({ car: 0, pane: WINDSHIELD });
+    if (frame === 1) world["proxies"].strikes.push({ ...PANE_HIT });
     world.update(FRAME, [car], true, false, null);
     glass.push((car.glassBits() >> (2 * WINDSHIELD)) & 3);
   }

@@ -9,7 +9,7 @@ import { dollGroups, MAX_ACC, SLOTS, STEP } from "./ragdoll-config.ts";
 import { CALM_FOR, type Doll, GROUND_ANGULAR, GROUND_LINEAR, give, isCalm, limit, lowestPoint, PARTS, SETTLE_AFTER, SETTLE_ANGULAR, SETTLE_LINEAR } from "./ragdoll-body.ts";
 import { brace } from "./ragdoll-joints.ts";
 import { hypot2, hypot3 } from "../kernel/physics-core.js";
-import { FIT_AHEAD } from "./ragdoll-wire.ts";
+import { FIT_AHEAD, WANT_PARTS } from "./ragdoll-wire.ts";
 import { GRACE, INTERNAL_PASSES, ITERATIONS, RagdollPool, STEP_LOG } from "./ragdoll-pool.ts";
 
 const _q = new THREE.Quaternion();
@@ -82,7 +82,7 @@ export abstract class RagdollStepper extends RagdollPool {
     if (this.live === 0 && this.props.count === 0 && this.boxes.asleep()) {
       this.loose.clear();
       for (let i = 0; i < MAX_CARS; i++) this.proxies.follow(i, null);
-      if (this.hosted) this.wanted.fill(0);
+      this.wanted.fill(0);
       return;
     }
     this.proxies.at(++this.frameNo);
@@ -93,17 +93,17 @@ export abstract class RagdollStepper extends RagdollPool {
     this.slept = dormant;
     for (let i = 0; i < MAX_CARS; i++) {
       const alive = i < cars.length && !cars[i]!.falling && !cars[i]!.vaporized;
-      if (this.hosted) this.wanted[i] = alive && this.near(i, cars[i]!, dt, FIT_AHEAD) ? 1 : 0;
+      this.wanted[i] = alive ? this.near(i, cars[i]!, dt, FIT_AHEAD) : 0;
       // In the worker a car whose cage has not been sent has no proxy yet.
-      const car = alive && (!this.hosted || cars[i]!.cage !== null) && this.near(i, cars[i]!, dt) ? cars[i]! : null;
+      const car = alive && (!this.hosted || cars[i]!.cage !== null) && this.near(i, cars[i]!, dt) !== 0 ? cars[i]! : null;
       if (car) this.proxies.frame(i, car);
       this.proxies.follow(i, car ? this.proxies.frames[i]! : null);
       if (car) {
         this.proxies.fitProxy(i, car);
         this.proxies.cull(i, cars, false, dt);
       }
-      // Its lower box where this frame's steps take it: a knocked prop it would squeeze against a wall lets it by.
-      if (car) this.props.press(i, car.group.position, car.group.quaternion, this.proxies.boxes);
+      // Its lower box where this frame's steps take it: a knocked prop it would squeeze against a wall, or has swallowed, lets it by.
+      if (car) this.props.press(i, car.group.position, car.group.quaternion, car.velocity, dt, this.proxies.boxes);
     }
     this.proxies.follow(MAX_CARS, barrier);
     this.proxies.teleport = false;
@@ -138,6 +138,7 @@ export abstract class RagdollStepper extends RagdollPool {
       if (j === steps) this.purses?.capture(false);
       if (j === steps) this.props.capture(false);
       this.proxies.glassTouch(cars, authority);
+      this.loose.partTouch(step, authority);
       const stepAt = performance.now();
       world.step();
       this.stepMs[this.steps++ % STEP_LOG] = performance.now() - stepAt;
@@ -228,15 +229,16 @@ export abstract class RagdollStepper extends RagdollPool {
    * of the car's box (`CAR_BOX`; its sphere of `reach` before its first fit), a purse thing within its reach, or a knocked prop it can
    * touch within a frame of `dt` (`touches`)? A proxy already in the world stays until `NEAR_HOLD` m further out. A car that gets in
    * from outside in one frame moved over 4 m, which `CarProxies.follow` teleports for anyway, so the proxy it gets is the one it had.
-   * `frames` > 1: whether it will within that many frames (the cars the main thread should send cages of, `FIT_AHEAD`).
+   * `frames` > 1: whether it will within that many frames (the cars the main thread should send cages of, `FIT_AHEAD`), and an awake carton
+   * within its reach counts too. `WANT_PARTS` when a knocked prop or carton is the reason (its parts that stand out meet them), 1 a dummy or purse, 0 none.
    */
-  protected near(i: number, car: RagCar, dt: number, frames = 1): boolean {
+  protected near(i: number, car: RagCar, dt: number, frames = 1): number {
     const { boxes, reach: reaches, whole, on } = this.proxies;
     const p = car.group.position;
     // The props first, as before any dummy: a car that can touch a knocked prop this frame gets its whole proxy (`cull`).
     const touched = this.props.touches(p, reaches[i]!, car.velocity.length(), dt * frames);
     if (frames === 1) whole[i] = touched ? 1 : 0;
-    if (touched) return true;
+    if (touched || (frames > 1 && !this.boxes.asleep() && this.boxes.touches(p, reaches[i]! + car.velocity.length() * dt * frames))) return WANT_PARTS;
     const hold = on[i] ? NEAR_HOLD : 0;
     const frame = Math.min(dt, MAX_ACC) * frames;
     const speed = car.velocity.length();
@@ -251,16 +253,16 @@ export abstract class RagdollStepper extends RagdollPool {
       _c.set(d.cur[0]! - p.x, d.cur[1]! - p.y, d.cur[2]! - p.z);
       if (!boxed) {
         const reach = r + reaches[i]!;
-        if (_c.lengthSq() < reach * reach) return true;
+        if (_c.lengthSq() < reach * reach) return 1;
         continue;
       }
       _c.applyQuaternion(_cq);
       const ex = Math.max(Math.abs(_c.x) - boxes[b + 2]!, 0);
       const ey = Math.max(Math.abs(_c.y - boxes[b]!) - boxes[b + 3]!, 0);
       const ez = Math.max(Math.abs(_c.z - boxes[b + 1]!) - boxes[b + 4]!, 0);
-      if (ex * ex + ey * ey + ez * ez < r * r) return true;
+      if (ex * ex + ey * ey + ez * ez < r * r) return 1;
     }
-    return this.purses !== null && this.purses.near(p, reaches[i]! + PURSE_REACH + NEAR_MARGIN + hold);
+    return this.purses !== null && this.purses.near(p, reaches[i]! + PURSE_REACH + NEAR_MARGIN + hold) ? 1 : 0;
   }
 
   /**

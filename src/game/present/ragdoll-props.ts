@@ -4,6 +4,7 @@ import type { Collider, ColliderDesc, RigidBody, World } from "@dimforge/rapier3
 import type { Rapier } from "../kernel/rapier.ts";
 import { PREFABS } from "../world/catalog.ts";
 import { PREFAB } from "../world/constants.ts";
+import { activeGround } from "../world/ground.ts";
 import { propColliders, type Placed, type PropCollider } from "../world/placements.ts";
 import { AIR_ANGULAR, AIR_LINEAR, blendPose, readPose } from "./ragdoll-body.ts";
 import type { PropTumble } from "./prop-tumble.ts";
@@ -155,6 +156,11 @@ function wayOut(): boolean {
   _way[1] = inY ? (py < 0 ? -1 : 1) : 0;
   _way[2] = !inX && !inY ? (pz < 0 ? -1 : 1) : 0;
   return true;
+}
+
+/** Is (x, y, z), a point in a box's frame, inside the box (half extents `_box[0..2]`)? */
+function inBox(x: number, y: number, z: number): boolean {
+  return Math.abs(x) <= _box[0]! && Math.abs(y) <= _box[1]! && Math.abs(z) <= _box[2]!;
 }
 
 /** `_in` turned by `_turn` (`inverse`: by its inverse), into `_rotated`. */
@@ -391,12 +397,14 @@ export class PropBodies {
   /**
    * Car `car`'s lower box this frame, before its steps (its pose `at`/`turn`; the box from `boxes`, `CAR_BOX` floats per
    * car: its centre's height and its offset forward in the car's frame, then its half extents): a knocked prop within its
-   * reach of the box and of a static box of its patch, the ways out of the two opposing (`SQUEEZE`), lets the car by while
+   * reach of the box and of a static box of its patch, the ways out of the two opposing (`SQUEEZE`), or swallowed by it (its middle
+   * inside the box where it stood a frame's travel, `vel`·`dt`, back and inside it now, the ground within its reach: the box reaches
+   * `UNDER` the car, so the ground closes it below, and the box carries it along), lets the car by while
    * the box covers it (`held`, `covers`); one that lets the car by already is marked covered. The box is kinematic, so it
    * would drive the prop into the static; the props are cosmetic, so the car is the one that gives and passes over it.
    * Arithmetic on poses already read: no allocation.
    */
-  press(car: number, at: THREE.Vector3, turn: THREE.Quaternion, boxes: Float64Array): void {
+  press(car: number, at: THREE.Vector3, turn: THREE.Quaternion, vel: THREE.Vector3, dt: number, boxes: Float64Array): void {
     const c = this.cur;
     const cb = car * CAR_BOX;
     for (let k = 0; k < this.count; k++) {
@@ -420,6 +428,19 @@ export class PropBodies {
       if (this.by[i] === car) {
         this.covers[i] = 1;
         continue;
+      }
+      if (inBox(_rotated[0]!, _rotated[1]!, _rotated[2]!) && c[o + 1]! - activeGround().heightAt(c[o]!, c[o + 2]!, c[o + 1]!) <= this.reach[i]!) {
+        const x = _rotated[0]!;
+        const y = _rotated[1]!;
+        const z = _rotated[2]!;
+        _in[0] = vel.x * dt;
+        _in[1] = vel.y * dt;
+        _in[2] = vel.z * dt;
+        rotate(true);
+        if (inBox(x + _rotated[0]!, y + _rotated[1]!, z + _rotated[2]!)) {
+          this.letBy(i, car);
+          continue;
+        }
       }
       const s = this.patchOf[i]!;
       if (s < 0) continue;
@@ -446,13 +467,18 @@ export class PropBodies {
         _in.set(_way);
         rotate(false);
         if (_rotated[0]! * cx + _rotated[1]! * cy + _rotated[2]! * cz >= SQUEEZE) continue;
-        this.by[i] = car;
-        this.held[i] = 1;
-        this.covers[i] = 1;
-        this.regroup(i, car);
+        this.letBy(i, car);
         break;
       }
     }
+  }
+
+  /** Prop `i` lets car `car` by while that car's box covers it (`press`). */
+  private letBy(i: number, car: number): void {
+    this.by[i] = car;
+    this.held[i] = 1;
+    this.covers[i] = 1;
+    this.regroup(i, car);
   }
 
   /** Is every knocked prop asleep? */

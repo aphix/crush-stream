@@ -364,6 +364,7 @@ export const PREFABS: Record<PrefabId, PrefabSpec> = {
   },
   [PREFAB.tyreStack]: { body: "knock", collider: [{ kind: "circle", r: 0.375 }], foot: 0.4, size: [0.75, 1, 0.75], mass: 60, material: MAT.TYRE_STACK },
   [PREFAB.hayBale]: { body: "knock", collider: [{ kind: "box", hx: 0.6, hz: 0.45 }], foot: 0.75, size: [1.2, 0.9, 0.9], mass: 180, material: MAT.HAY },
+  // 30 kg: shuts a sprung hatch dropped 1 m on it (18 kg is the least) and costs a car 2.1 % (`KNOCK_CAR_MASS`); its drawn build, 9 mm softwood ply (4.95 kg/m², a 2440×1220 sheet is 14.74 kg) over 5.53 m² plus 0.03 m³ of pine posts, is ~43 kg, a 3 % cost.
   crate: { body: "knock", collider: [{ kind: "box", hx: 0.5, hz: 0.5 }], foot: Math.SQRT1_2, size: [1, 1, 1], mass: 30, material: MAT.CRATE_WOOD },
   [PREFAB.barrierBlock]: {
     body: "solid",

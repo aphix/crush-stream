@@ -538,6 +538,12 @@ export const MAX_PART_STIRS = 4096;
  */
 export type ClipPartStir = { step: number; car: number; body: number; slice: number; slices: number };
 
+/** Most part hits a clip carries: a prop pile on a car makes a few dozen; more are dropped oldest first. */
+export const MAX_PART_HITS = 256;
+
+/** A hit from the dummies' world the sim applied before step `step` (`DeformableCar.hitPart`): clip car `car`, part `HIT_PARTS[part]`, its energy (J) and push (car-space m/s). */
+export type ClipPartHit = { step: number; car: number; part: number; energy: number; px: number; py: number; pz: number };
+
 /** Most figures a clip lists as run down by its cars (a clip is under 18 s; a decoder takes no more). */
 export const MAX_STRIKES = 16;
 
@@ -596,6 +602,8 @@ export type HighlightClip = {
    * is for wrecks (`World.partStirs`). A stir by one of the clip's own moving cars is listed too, which the replay would make anyway.
    */
   partStirs: ClipPartStir[];
+  /** Every hit from the dummies' world the live sim applied to the clip's cars (a torso on a pane, a prop on a mirror), at most `MAX_PART_HITS`, in step order: the replay applies each at its step without Rapier. */
+  partHits: ClipPartHit[];
   /** Every figure (a lawn guard, the VIP) the clip's cars ran down, in step order, at most `MAX_STRIKES` (one a car the clip leaves out ran down is not listed): the replay throws him again at that step. */
   strikes: ClipStrike[];
   /** The course's guard squad (the National Mall's White House lawn) at the clip's start and every decision it made in the clip's steps (shots at a car the clip leaves out are not listed), null on a course without; the replay steps a squad from them, so the standing guards are drawn as they were. */

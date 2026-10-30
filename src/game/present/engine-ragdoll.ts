@@ -24,8 +24,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import type { BoxPlacement } from "./ragdoll-boxes.ts";
 import type { RideFrame } from "./ride-cam.ts";
 import type { Sight } from "./spectate-cam.ts";
-import { LAG, type GlassHit } from "./ragdoll-wire.ts";
-import { GLASS_NAMES } from "../vehicle/car-glass.ts";
+import { applyHit, LAG, type PartHit } from "./ragdoll-wire.ts";
 import { LIFE } from "./ragdoll-pool.ts";
 import { NO_LOOSE, recordLoose } from "./ragdoll-loose.ts";
 import { RagdollThrower } from "./ragdoll-throw.ts";
@@ -83,24 +82,21 @@ export class RagdollSystem extends RagdollThrower {
     }
     this.followWalkerGround();
     this.applyStruck(cars);
-    this.stepWorld(dt, cars, authority, sandbox, barrier, this.live > 0 ? recordLoose(cars) : NO_LOOSE);
+    this.stepWorld(dt, cars, authority, sandbox, barrier, this.live > 0 || this.props.count > 0 || this.boxes.count > 0 ? recordLoose(cars, this.wanted) : NO_LOOSE);
     for (const hit of this.proxies.strikes.splice(0)) this.struck.push({ frame: this.frameNo, ...hit });
   }
 
   /**
-   * The panes the dummies struck, applied to the cars `LAG` frames after the frame they were struck in: the same frame whether
+   * The panes and parts the world struck, applied to the cars `LAG` frames after the frame they were struck in: the same frame whether
    * the dummies' world runs here or in the worker (`RagdollRemote.post`), so the sim hears of a strike at a fixed step in both.
    */
   private applyStruck(cars: readonly DeformableCar[]): void {
     const due = this.frameNo + 1 - LAG;
-    while (this.struck.length > 0 && this.struck[0]!.frame <= due) {
-      const hit = this.struck.shift()!;
-      cars[hit.car]?.hitGlass(GLASS_NAMES[hit.pane]!);
-    }
+    while (this.struck.length > 0 && this.struck[0]!.frame <= due) applyHit(this.struck.shift()!, cars, this.onPartHit);
   }
 
-  /** The panes struck since the last call, emptied (the worker's answer carries them to the main thread). */
-  takeStrikes(): GlassHit[] {
+  /** The panes and parts struck since the last call, emptied (the worker's answer carries them to the main thread). */
+  takeStrikes(): PartHit[] {
     return this.proxies.strikes.splice(0);
   }
 

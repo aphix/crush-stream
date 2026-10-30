@@ -1,18 +1,23 @@
 import * as THREE from "three";
 import type { Collider, Cuboid, Cylinder, RigidBody, Shape, World } from "@dimforge/rapier3d-simd";
 import type { DeformableCar } from "../vehicle/car.ts";
+import { HIT_HOOD, HIT_MIRROR } from "../vehicle/car-core.ts";
 import { LOOSE_BODIES } from "../vehicle/part-state.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { disable, type Rapier } from "../kernel/rapier.ts";
 import { store3d, store4d } from "../kernel/store.ts";
 import { hypot3 } from "../kernel/physics-core.js";
 import { knocksDown } from "../scenes/figure-strike.ts";
-import { carGroups, looseSweepGroups } from "./ragdoll-config.ts";
+import { carGroups, looseSweepGroups, partGroups } from "./ragdoll-config.ts";
 import type { Doll } from "./ragdoll-body.ts";
 import { partAt, strikeAt } from "./ragdoll-hit.ts";
+import { type PartHit, WANT_PARTS } from "./ragdoll-wire.ts";
 
-/** A loose body's record in a frame, floats: its id (car × `LOOSE_BODIES` + body), 1 for a wheel's disk else 0 for a box, half extents, its middle in the world, its turn, its velocity (0 asleep), its mass (kg). */
-const LOOSE_FLOATS = 16;
+/**
+ * A body's record in a frame, floats: its id (car × `LOOSE_BODIES` + body), 1 for a wheel's disk else 0 for a box, half extents, its middle in the world, its turn,
+ * its velocity (0 asleep), its mass (kg), and the `HIT_PARTS` code of a part still on its car (`strikeSlot`; -1 a loose body).
+ */
+const LOOSE_FLOATS = 17;
 const LOOSE_ID = 0;
 const LOOSE_DISK = 1;
 const LOOSE_HALF = 2;
@@ -20,6 +25,7 @@ const LOOSE_AT = 5;
 const LOOSE_TURN = 8;
 const LOOSE_VEL = 12;
 const LOOSE_KG = 15;
+const LOOSE_PART = 16;
 /** Every loose body of every car: a part lying still is one a dummy may fall on. */
 const MAX_RECORDS = MAX_CARS * LOOSE_BODIES;
 /** Most loose bodies the dummies' world holds at once: each is a kinematic body that costs every step it is in. */
@@ -36,6 +42,12 @@ const JUMP = 4;
 const BLOCK_MPS = 1;
 /** A body struck a dummy is clear of him once his torso is farther than its reach plus this (m) from its middle. */
 const CLEAR_M = 1;
+/** A prop resting or rocking on a part strikes nothing: a hit is a touch closing at this (m/s) or faster. */
+const PART_FLOOR = 0.5;
+/** How far out (m) a stand-in looks at a coming touch, the gap past which a touch has ended, and the near (m) that counts as on it: as a pane's (`GLASS_SEE`, `GLASS_SEP`, `GLASS_SKIN`). */
+const PART_SEE = 0.15;
+const PART_SEP = 0.03;
+const PART_SKIN = 0.005;
 /** A wheel's collider turned so a cylinder's axis (y) lies along the wheel's own x. */
 const DISK_TURN = new THREE.Quaternion(0, 0, Math.SQRT1_2, Math.SQRT1_2);
 const NO_TURN = { x: 0, y: 0, z: 0, w: 1 };
@@ -51,12 +63,15 @@ const _at = { x: 0, y: 0, z: 0 };
 const _from = { x: 0, y: 0, z: 0 };
 const _move = { x: 0, y: 0, z: 0 };
 const _rot = { x: 0, y: 0, z: 0, w: 1 };
+const _s = new THREE.Vector3();
+const _box = new THREE.Box3();
 
 /**
  * Every loose body of `cars` (torn parts, popped wheels) as a frame record, up to `MAX_RECORDS`: the sim's own bodies, as they stand, each
- * with the velocity and mass it strikes a dummy with.
+ * with the velocity and mass it strikes a dummy with; then, of each car a knocked prop or awake carton may reach (`wanted` is `WANT_PARTS`), the parts that stand out of its body as
+ * they are drawn (a still box, its slot's id: a part that tears keeps its slot).
  */
-export function recordLoose(cars: readonly DeformableCar[]): Float64Array {
+export function recordLoose(cars: readonly DeformableCar[], wanted: Uint8Array): Float64Array {
   let n = 0;
   for (let i = 0; i < cars.length && i < MAX_CARS; i++) {
     const car = cars[i]!;
@@ -74,6 +89,25 @@ export function recordLoose(cars: readonly DeformableCar[]): Float64Array {
       if (s.asleep) SCRATCH.fill(0, o + LOOSE_VEL, o + LOOSE_VEL + 3);
       else store3d(SCRATCH, o + LOOSE_VEL, body.velocity);
       SCRATCH[o + LOOSE_KG] = car.looseKg(b);
+      SCRATCH[o + LOOSE_PART] = -1;
+      n++;
+    }
+    for (let code = HIT_MIRROR; code <= HIT_HOOD && wanted[i] === WANT_PARTS; code++) {
+      const slot = car.strikeSlot(code);
+      if (slot < 0) continue;
+      const object = car.partBox(slot, _box);
+      if (_box.isEmpty()) continue;
+      const o = n * LOOSE_FLOATS;
+      object.matrixWorld.decompose(_c, _q, _s);
+      SCRATCH[o + LOOSE_ID] = i * LOOSE_BODIES + slot;
+      SCRATCH[o + LOOSE_DISK] = 0;
+      // To the millimetre: re-read on a moving car its size changes in the last bits, and each change rebuilds the collider.
+      _box.getSize(_n).multiply(_s).multiplyScalar(500).round().multiplyScalar(0.001);
+      store3d(SCRATCH, o + LOOSE_HALF, _n);
+      store3d(SCRATCH, o + LOOSE_AT, _box.getCenter(_c).applyMatrix4(object.matrixWorld));
+      store4d(SCRATCH, o + LOOSE_TURN, _q);
+      SCRATCH.fill(0, o + LOOSE_VEL, o + LOOSE_KG + 1);
+      SCRATCH[o + LOOSE_PART] = code;
       n++;
     }
   }
@@ -109,6 +143,13 @@ export class LooseProxies {
   private readonly fast = new Uint8Array(MAX_LOOSE);
   private readonly swept = new Float32Array(MAX_LOOSE * 7);
   private readonly struck = new Uint8Array(MAX_LOOSE);
+  /** Per slot, the `HIT_PARTS` code of the part on its car it stands in for (-1: a loose body). */
+  private readonly part = new Int8Array(MAX_LOOSE).fill(-1);
+  /** Slot × other body touching a stand-in as of the last step, and this step: a touch strikes once (`partTouch`). */
+  private touching = new Set<number>();
+  private touchNow = new Set<number>();
+  /** Stand-ins in the world after the last `follow`. */
+  private parts = 0;
   /** The dummies a sweep looks past (`struck` of the slot sweeping). */
   private passed = 0;
   private readonly unstruck = (c: Collider): boolean => (this.passed & (1 << this.dollOf(c))) === 0;
@@ -117,9 +158,14 @@ export class LooseProxies {
   moving = 0;
 
   private readonly knock: (slot: number) => void;
+  private readonly hits: PartHit[];
+  private readonly nearProp: (x: number, y: number, z: number, r: number) => boolean;
 
-  constructor(knock: (slot: number) => void) {
+  /** `knock(slot)`: a walker struck limp; `hits`: where a part's strikes go (`CarProxies.strikes`); `nearProp(x, y, z, r)`: a knocked prop or carton within `r` of the point. */
+  constructor(knock: (slot: number) => void, hits: PartHit[], nearProp: (x: number, y: number, z: number, r: number) => boolean) {
     this.knock = knock;
+    this.hits = hits;
+    this.nearProp = nearProp;
   }
 
   load(R: Rapier, world: World): void {
@@ -137,22 +183,24 @@ export class LooseProxies {
   /** Every body out of the world (a new run). */
   clear(): void {
     for (let s = 0; s < MAX_LOOSE; s++) this.release(s);
-    this.count = this.moving = 0;
+    this.count = this.moving = this.parts = 0;
+    this.touching.clear();
   }
 
   /** Slot `s` out of the world and free. */
   private release(s: number): void {
     this.ids[s] = -1;
     this.struck[s] = 0;
+    this.part[s] = -1;
     if (!this.on[s]) return;
     disable(this.bodies[s]!);
     this.on[s] = 0;
   }
 
   /**
-   * The frame's records `loose` (`recordLoose`) that a live dummy's torso is near, each put on its slot (the one it held, else a free one),
-   * its pose this frame the end of the path `move` walks; the slots of bodies no longer near are freed. `teleport`: the world sat still, so
-   * every body is put where it is.
+   * The frame's records `loose` (`recordLoose`) near a live dummy's torso or a knocked prop or carton (a part still on its car: near a prop or
+   * carton only), each put on its slot (the one it held, else a free one), its pose this frame the end of the path `move` walks; the slots of
+   * bodies no longer near are freed. `teleport`: the world sat still, so every body is put where it is.
    */
   follow(loose: Float64Array, dolls: readonly Doll[], teleport: boolean): void {
     this.dolls = dolls;
@@ -170,29 +218,90 @@ export class LooseProxies {
     }
     let n = 0;
     let fast = 0;
+    let parts = 0;
     for (let s = 0; s < MAX_LOOSE; s++) {
       if (this.seen[s] === 0) this.release(s);
       else {
         n++;
         fast += this.fast[s]!;
+        if (this.part[s]! >= 0) parts++;
       }
     }
     this.count = n;
     this.moving = fast;
+    this.parts = parts;
   }
 
-  /** Whether a live dummy's torso is within `reach` and `LOOSE_NEAR` (and the travel of the body since last frame, twice) of the body's middle. */
+  /** Whether a knocked prop or carton, or (a loose body) a live dummy's torso, is within `reach` and `LOOSE_NEAR` (and the travel of the body since last frame, twice) of the body's middle. */
   private near(loose: Float64Array, o: number, reach: number, held: boolean, dolls: readonly Doll[]): boolean {
     const x = loose[o + LOOSE_AT]!;
     const y = loose[o + LOOSE_AT + 1]!;
     const z = loose[o + LOOSE_AT + 2]!;
     const r = reach + LOOSE_NEAR + (held ? LOOSE_NEAR : 0);
+    if (this.nearProp(x, y, z, r)) return true;
+    if (loose[o + LOOSE_PART]! >= 0) return false;
     for (const d of dolls) {
       if (!d.live) continue;
       if (hypot3(d.cur[0]! - x, d.cur[1]! - y, d.cur[2]! - z) < r) return true;
     }
     return false;
   }
+
+  /**
+   * Before a step of `step` s: each stand-in against the props, cartons and purse things it meets that are within `PART_SEE` of it. A touch
+   * closing at `PART_FLOOR` or faster strikes the part once (this peer's only, `authority`), with the striker's energy over its closing speed and
+   * its push along the contact normal (`PartHit`); the stand-in stays, so Rapier bounces the striker off it. A touch lasts until it is `PART_SEP`
+   * off again. Asked before the step that touches (the world's own contact pairs come after Rapier has bounced it), and by the stand-in, as a
+   * pane asks (`CarProxies.glassTouch`).
+   */
+  partTouch(step: number, authority: boolean): void {
+    this.touchNow.clear();
+    this.touchStep = step;
+    this.touchAuthority = authority;
+    const a = this.aim;
+    for (let s = 0; s < MAX_LOOSE && this.parts > 0; s++) {
+      if (this.part[s]! < 0 || !this.on[s]) continue;
+      this.touchSlot = s;
+      const reach = hypot3(this.shaped[4 * s + 1]!, this.shaped[4 * s + 2]!, this.shaped[4 * s + 3]!) + PART_SEE;
+      _at.x = a[14 * s + 7]!;
+      _at.y = a[14 * s + 8]!;
+      _at.z = a[14 * s + 9]!;
+      _move.x = _move.y = _move.z = reach;
+      this.world!.collidersWithAabbIntersectingAabb(_at, _move, this.touchOther);
+    }
+    const was = this.touching;
+    this.touching = this.touchNow;
+    this.touchNow = was;
+  }
+
+  /** `partTouch`'s slot, step and authority, read by its query's callback (`touchOther`, made once: a closure a stand-in a step allocates). */
+  private touchSlot = 0;
+  private touchStep = 0;
+  private touchAuthority = false;
+  private readonly touchOther = (other: Collider): boolean => {
+    const s = this.touchSlot;
+    const c = this.colliders[s]!;
+    const groups = c.collisionGroups();
+    const body = other.parent();
+    const its = other.collisionGroups();
+    if (body === null || !body.isDynamic() || ((its >>> 16) & groups) === 0 || ((groups >>> 16) & its) === 0) return true;
+    const hit = c.contactCollider(other, PART_SEE);
+    const key = other.handle * MAX_LOOSE + s;
+    const held = this.touching.has(key);
+    if (hit === null || (held && hit.distance > PART_SEP)) return true;
+    if (held) {
+      this.touchNow.add(key);
+      return true;
+    }
+    const v = body.linvel();
+    const n = hit.normal2;
+    const closing = v.x * n.x + v.y * n.y + v.z * n.z;
+    // Not on the part within this step yet.
+    if (hit.distance > Math.max(0, closing) * this.touchStep + PART_SKIN) return true;
+    this.touchNow.add(key);
+    if (closing >= PART_FLOOR && this.touchAuthority) this.hits.push({ car: Math.floor(this.ids[s]! / LOOSE_BODIES), part: this.part[s]!, energy: 0.5 * body.mass() * closing * closing, x: n.x * closing, y: n.y * closing, z: n.z * closing });
+    return true;
+  };
 
   /** Slot `s`'s struck dummies that are dead or whose torso is `CLEAR_M` past its `reach`: it may strike them again. */
   private clearOf(s: number, reach: number, dolls: readonly Doll[]): void {
@@ -216,7 +325,8 @@ export class LooseProxies {
     const hx = loose[o + LOOSE_HALF]!;
     const hy = loose[o + LOOSE_HALF + 1]!;
     const hz = loose[o + LOOSE_HALF + 2]!;
-    const fresh = this.ids[s] !== id || !this.on[s];
+    const part = loose[o + LOOSE_PART]!;
+    const fresh = this.ids[s] !== id || !this.on[s] || this.part[s] !== part;
     if (fresh || this.shaped[4 * s] !== disk || this.shaped[4 * s + 1] !== hx || this.shaped[4 * s + 2] !== hy || this.shaped[4 * s + 3] !== hz) this.shape(collider, disk, hx, hy, hz);
     this.shaped[4 * s] = disk;
     this.shaped[4 * s + 1] = hx;
@@ -227,7 +337,9 @@ export class LooseProxies {
     for (let k = 0; k < 3; k++) this.vel[3 * s + k] = loose[o + LOOSE_VEL + k]!;
     this.kg[s] = loose[o + LOOSE_KG]!;
     const fast = this.struck[s] !== 0 || hypot3(loose[o + LOOSE_VEL]!, loose[o + LOOSE_VEL + 1]!, loose[o + LOOSE_VEL + 2]!) >= BLOCK_MPS ? 1 : 0;
-    if (!this.on[s] || fast !== this.fast[s]) collider.setCollisionGroups(fast ? 0 : carGroups(Math.floor(id / LOOSE_BODIES)));
+    const car = Math.floor(id / LOOSE_BODIES);
+    if (fresh || fast !== this.fast[s]) collider.setCollisionGroups(part >= 0 || fast ? partGroups(car) : carGroups(car));
+    this.part[s] = part;
     this.fast[s] = fast;
     if (!this.on[s]) {
       body.setEnabled(true);
@@ -238,9 +350,13 @@ export class LooseProxies {
     for (let k = 0; k < 3; k++) a[p + 7 + k] = loose[o + LOOSE_AT + k]!;
     for (let k = 0; k < 4; k++) a[p + 10 + k] = loose[o + LOOSE_TURN + k]!;
     if (!jump) return;
-    // Put where it is: its path starts here, and no sweep crosses the jump.
+    // Put where it is: its path starts here, no sweep crosses the jump, and no walk to it flings a prop.
     a.copyWithin(p, p + 7, p + 14);
     this.swept.set(a.subarray(p + 7, p + 14), 7 * s);
+    _at.x = a[p]!;
+    _at.y = a[p + 1]!;
+    _at.z = a[p + 2]!;
+    body.setTranslation(_at, false);
   }
 
   /** `collider` as a box of half extents (`hx`, `hy`, `hz`), or (`disk`) the wheel's disk: radius `hy`, half width `hx`, axle along the body's x. */
@@ -277,11 +393,15 @@ export class LooseProxies {
       _at.z = a[p + 2]! + (a[p + 9]! - a[p + 2]!) * f;
       _q.set(a[p + 3]!, a[p + 4]!, a[p + 5]!, a[p + 6]!).slerp(_qb.set(a[p + 10]!, a[p + 11]!, a[p + 12]!, a[p + 13]!), f);
       if (this.fast[s]) this.sweep(s);
-      else {
-        _rot.x = _q.x;
-        _rot.y = _q.y;
-        _rot.z = _q.z;
-        _rot.w = _q.w;
+      _rot.x = _q.x;
+      _rot.y = _q.y;
+      _rot.z = _q.z;
+      _rot.w = _q.w;
+      if (this.fast[s] || this.part[s]! >= 0) {
+        // Walked, not put: the props it meets take its speed (the dummies meet a fast one's sweep alone).
+        this.bodies[s]!.setNextKinematicTranslation(_at);
+        this.bodies[s]!.setNextKinematicRotation(_rot);
+      } else {
         this.bodies[s]!.setTranslation(_at, false);
         this.bodies[s]!.setRotation(_rot, false);
       }

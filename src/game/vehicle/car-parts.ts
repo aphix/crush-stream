@@ -18,7 +18,8 @@ import type { TopMet } from "./car-air-body.ts";
 import type { DeformableCar } from "./car.ts";
 import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
-import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, LATCH_CATCH_RATE, LATCH_REACH_M, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, type PartNetState } from "./car-core.ts";
+import { GLASS_NAMES } from "./car-glass.ts";
+import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, HIT_DOOR, HIT_HOOD, HIT_LID, HIT_MIRROR, HIT_PANEL, LATCH_CATCH_RATE, LATCH_REACH_M, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, MIRROR_BREAK_J, type PartNetState } from "./car-core.ts";
 import {
   DOOR_ACC_MAX,
   DOOR_QUIET_S,
@@ -26,16 +27,24 @@ import {
   flapAmp,
   flapRate,
   flapWave,
+  PANEL_FRAGILE_J,
   PANEL_FRAGILE_T,
+  PANEL_PULL_J,
+  PANEL_SLAM_J,
   PANEL_SMUSH_MIN,
   swingAccel,
   windPush,
+  swingImpulse,
   windWear,
 } from "./car-wear.ts";
 import { LOOSE_BODIES, looseState, partState, PART_SLOTS } from "./part-state.ts";
 import { PART_KIND, PartSeat, looseOnCamera, partGeometry } from "./part-geometry.ts";
 
 const _interior = new Float64Array(4);
+const _rel = new THREE.Matrix4();
+const _frame = new THREE.Matrix4();
+const _hit = new THREE.Vector3();
+const _open = new THREE.Vector3();
 
 /** `CarParts.lidProfile`'s answer. */
 export interface LidProfile {
@@ -90,14 +99,14 @@ function growByTransformed(box: THREE.Box3, local: THREE.Box3, m: THREE.Matrix4)
  * part. A part seat's `geometry` is the platform part the sim measures, not where the style draws its own (`Box3.setFromObject` read it: a
  * pickup's bumper box reached 4.2 m off the bumper, and the bumper was lifted 2.6 m to clear the road under that phantom).
  */
-export function growDrawn(o: THREE.Object3D, box: THREE.Box3): void {
+export function growDrawn(o: THREE.Object3D, box: THREE.Box3, frame: THREE.Matrix4 | null = null): void {
   if (!o.visible) return;
   const geometry = o instanceof PartSeat ? o.drawn : o instanceof THREE.Mesh ? (o.geometry as THREE.BufferGeometry) : null;
   if (geometry !== null) {
     if (geometry.boundingBox === null) geometry.computeBoundingBox();
-    growByTransformed(box, geometry.boundingBox!, o.matrixWorld);
+    growByTransformed(box, geometry.boundingBox!, frame ? _rel.multiplyMatrices(frame, o.matrixWorld) : o.matrixWorld);
   }
-  for (let i = 0; i < o.children.length; i++) growDrawn(o.children[i]!, box);
+  for (let i = 0; i < o.children.length; i++) growDrawn(o.children[i]!, box, frame);
 }
 
 /**
@@ -853,13 +862,19 @@ export abstract class CarParts extends CarGlass {
   /** The free edge's velocity (car-frame m/s) as part `p` swings: what its stop takes, and what it leaves with if that tears it off. */
   private edgeVelocity(p: DetachPart, out: THREE.Vector3): THREE.Vector3 {
     const h = p.swing!;
+    return this.openDir(p, out).multiplyScalar(h.omega * h.spec.length);
+  }
+
+  /** The way (car frame, unit) part `p`'s free edge moves as it opens. */
+  private openDir(p: DetachPart, out: THREE.Vector3): THREE.Vector3 {
+    const h = p.swing!;
     const s = h.spec;
-    if (p.hinge === "door") return out.set((p.name === "doorL" ? -1 : 1) * detCos(h.theta), 0, detSin(h.theta)).multiplyScalar(h.omega * s.length);
+    if (p.hinge === "door") return out.set((p.name === "doorL" ? -1 : 1) * detCos(h.theta), 0, detSin(h.theta));
     const turn = s.dir * h.theta;
     const c = detCos(turn);
     const sn = detSin(turn);
     // The chord's rate of turn: the chord turned a quarter toward opening.
-    return out.set(0, -(s.uy * sn + s.uz * c), s.uy * c - s.uz * sn).multiplyScalar(s.dir * h.omega * s.length);
+    return out.set(0, -(s.uy * sn + s.uz * c), s.uy * c - s.uz * sn).multiplyScalar(s.dir);
   }
 
   /** A part torn out of its hinges against its frame leaves outward (a door, rearward at its centre's swing rate `omega`) or up and back (a lid). */
@@ -1002,6 +1017,82 @@ export abstract class CarParts extends CarGlass {
   /** Tear the trunk lid off with `push` (car-space m/s on top of the car's velocity). */
   ripLid(push: THREE.Vector3): void {
     this.detachPart(this.lidPart, 0, push);
+  }
+
+  /** The energy (J) that tears quarter panel `side` off: pushed back onto the body (`back`) or pulled out, or a nudge once it is stretched (`PANEL_FRAGILE_T`). */
+  panelTearJ(side: number, back: boolean): number {
+    return this.quarterPanel(side).hingeT >= PANEL_FRAGILE_T ? PANEL_FRAGILE_J : back ? PANEL_SLAM_J : PANEL_PULL_J;
+  }
+
+  /**
+   * A hit from the dummies' world (`HIT_PARTS[code]`): a pane takes it as a torso's (`hitGlass`); a mirror snaps off and a hanging quarter panel tears
+   * off past the gates the ram meets (`MIRROR_BREAK_J`, `panelTearJ`); an unlatched door, boot lid or hood swings (`strikeSwing`). `energy` (J) and `push` (car-space
+   * m/s: the striker's closing velocity along the contact normal) are the striker's. Writes part state only: the car neither wakes nor thaws.
+   */
+  hitPart(code: number, energy: number, push: THREE.Vector3Like): void {
+    if (code < HIT_MIRROR) {
+      this.hitGlass(GLASS_NAMES[code]!);
+      return;
+    }
+    const p = this.struckPart(code);
+    if (p === null) return;
+    _hit.copy(push);
+    const side = (code & 1) === 0 ? -1 : 1;
+    if (code >= HIT_DOOR) this.strikeSwing(p, energy, _hit);
+    else if (code >= HIT_PANEL) {
+      if (energy >= this.panelTearJ(side, _hit.x * side < 0)) this.ripPanel(side, _hit);
+    } else if (energy >= MIRROR_BREAK_J) this.breakMirror(side, _hit);
+  }
+
+  /** Part `HIT_PARTS[code]` while it stands out of the body for a knocked prop to meet (a mirror on its door, a hanging quarter panel, an unlatched door, boot lid or hood): its `parts` slot, else -1. */
+  strikeSlot(code: number): number {
+    const p = this.struckPart(code);
+    return p === null ? -1 : this.parts.indexOf(p);
+  }
+
+  /** Part `slot`'s drawn box in its own frame into `out`; returns its object, its world matrix current: the dummies' world's stand-in for it. */
+  partBox(slot: number, out: THREE.Box3): THREE.Object3D {
+    const o = this.parts[slot]!.object;
+    o.updateWorldMatrix(true, true);
+    growDrawn(o, out.makeEmpty(), _frame.copy(o.matrixWorld).invert());
+    return o;
+  }
+
+  private struckPart(code: number): DetachPart | null {
+    if (code === HIT_HOOD) return this.hoodPart.detached || this.hoodPart.swing!.latched ? null : this.hoodPart;
+    if (code === HIT_LID) return this.lidPart.detached || this.lidPart.swing!.latched ? null : this.lidPart;
+    const i = code & 1;
+    if (code >= HIT_DOOR) {
+      const d = this.doorParts[i]!;
+      return d.detached || d.swing!.latched ? null : d;
+    }
+    if (code >= HIT_PANEL) {
+      const q = this.quarterParts[i];
+      return q !== undefined && !q.detached && q.folding ? q : null;
+    }
+    const m = this.mirrorParts[i]!;
+    return m.detached || this.doorParts[i]!.detached ? null : m;
+  }
+
+  /**
+   * A striker meets free door or lid `p`: pushed further open on its stop, the stop takes its energy (`loadStop`); else it kicks the swing by the
+   * ram's own impulse law (`swingImpulse`), met at the slab's middle (no contact point rides the hit), and `swingHinges` carries it on to its latch or stop.
+   */
+  private strikeSwing(p: DetachPart, energy: number, push: THREE.Vector3): void {
+    const h = p.swing!;
+    const s = h.spec;
+    const speed2 = push.lengthSq();
+    const u = push.dot(this.openDir(p, _open));
+    if (u === 0 || speed2 === 0) return;
+    if (u > 0 && h.theta >= s.stop - 1e-4) {
+      this.loadStop(p, energy, push);
+      return;
+    }
+    const way = Math.sign(u);
+    const k = s.length / 2;
+    const closing = way * u - way * k * h.omega;
+    if (closing <= 0) return;
+    h.omega += (way * swingImpulse(s.inertia, (2 * energy) / speed2, closing, k) * k) / s.inertia;
   }
 
   protected fitInterior(): void {

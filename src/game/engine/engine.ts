@@ -249,6 +249,9 @@ export class CrashEngine extends EngineGarage {
     this.ragdolls.poles = this.poles;
     this.ragdolls.lookOf = (car) => this.looks.of(car, this.ownCar());
     this.lab.dolls = this.ragdolls;
+    this.ragdolls.onPartHit = (car, part, energy, push) => {
+      if (this.race.active) this.race.recorder.partHit(car, part, energy, push.x, push.y, push.z);
+    };
     this.onFoot = new OnFootDirector({
       ragdolls: this.ragdolls,
       seat: this.seat,
@@ -635,7 +638,8 @@ export class CrashEngine extends EngineGarage {
       const rate = presentedRate(reelDt, wallDt, this.clock.timeScale, this.cine.timeWarp);
       this.ragdolls.pickMesh.timeScale = rate;
       this.seated.mesh.timeScale = rate;
-      this.ragdolls.update(simDt, cars, !this.net.client, sandbox, this.barrierUp ? this.barrier.group : null);
+      // A clip's own hits ride its record (`ClipPartHit`): its replayed dummies' world strikes nothing.
+      this.ragdolls.update(simDt, cars, !this.net.client && reelDt === null, sandbox, this.barrierUp ? this.barrier.group : null);
       for (let i = 0; i < cars.length; i++) {
         const car = cars[i]!;
         if (reelDt !== null && !car.group.visible) continue;

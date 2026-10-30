@@ -5,7 +5,7 @@ import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import type { LidProfile } from "../vehicle/car-parts.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";
 import { MIRROR_REACH } from "../vehicle/part-geometry.ts";
-import { PANEL_BEND_NM, PANEL_FRAGILE_J, PANEL_FRAGILE_T, PANEL_PULL_J, PANEL_SLAM_J } from "../vehicle/car-wear.ts";
+import { PANEL_BEND_NM, swingImpulse } from "../vehicle/car-wear.ts";
 import { detAcos, detSin, detCos, hypot2 } from "../kernel/physics-core.js";
 import type { ContactBox } from "./external-contact.ts";
 
@@ -35,8 +35,6 @@ type Door = BodyStyle["door"];
 export const _lane: Lane = { dir: 1, inner: 0, width: 0, bottom: 0, top: 0, face: 0, length: 0, u: 0, kg: 0 };
 const _push = new THREE.Vector3();
 export const SIDES = [-1, 1] as const;
-/** Striker ↔ door restitution. */
-const DOOR_RESTITUTION = 0.2;
 
 /** Result of the last `partContact` (reused, read it before the next call). */
 export const partHit = {
@@ -154,8 +152,7 @@ export function hitDoor(car: DeformableCar, side: -1 | 1, lane: Lane): void {
     return;
   }
   if (closing > 0) {
-    const mEff = door.spec.inertia / (k * k);
-    const j = ((1 + DOOR_RESTITUTION) * closing) / (1 / lane.kg + 1 / mEff);
+    const j = swingImpulse(door.spec.inertia, lane.kg, closing, k);
     lane.u -= j / lane.kg;
     door.omega += (s * j * k) / door.spec.inertia;
   }
@@ -191,7 +188,7 @@ export function hitPanel(car: DeformableCar, side: -1 | 1, lane: Lane): void {
   const depth = s * (lane.face - (r.pivot[1] + at * along));
   if (depth <= 0 || depth > lane.length) return;
   partHit.touched = true;
-  const limit = t >= PANEL_FRAGILE_T ? PANEL_FRAGILE_J : s > 0 ? PANEL_SLAM_J : PANEL_PULL_J;
+  const limit = car.panelTearJ(side, s > 0);
   if (0.5 * lane.kg * lane.u * lane.u >= limit) {
     // What the striker still carries after paying for the tear.
     lane.u = Math.sqrt(Math.max(0, lane.u * lane.u - (2 * limit) / lane.kg));

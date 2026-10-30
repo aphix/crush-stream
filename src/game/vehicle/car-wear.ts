@@ -96,3 +96,12 @@ export function swingAccel(h: HingeSpec, sx: number, theta: number, ax: number, 
   const drive = -(sx * c * ax + s * az) + w * w * (h.hx * c + h.hz * s);
   return k * drive - al * sx * (k * (h.hz * c - h.hx * s) - 1);
 }
+
+/** Striker ↔ door or lid restitution. */
+const SWING_RESTITUTION = 0.2;
+
+/** The impulse (N·s) a striker of `kg` closing at `closing` m/s, `k` m from the hinge, gives a free door or lid of `inertia` (kg·m²): through its effective mass I/k². */
+export function swingImpulse(inertia: number, kg: number, closing: number, k: number): number {
+  const mEff = inertia / (k * k);
+  return ((1 + SWING_RESTITUTION) * closing) / (1 / kg + 1 / mEff);
+}

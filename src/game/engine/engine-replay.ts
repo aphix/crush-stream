@@ -44,6 +44,7 @@ const NO_EJECTIONS: readonly FiredEjection[] = [];
 /** `ClipSim.vipRide` while the VIP rides in no car. */
 export const NO_RIDE = -1;
 const NO_STRIKES: readonly FigureStrike[] = [];
+const _push = new THREE.Vector3();
 
 /**
  * One highlight clip re-run through the real sim (docs/HIGHLIGHTS.md): its cars respawned from keyframe 0 (a wreck
@@ -86,6 +87,8 @@ export class ClipSim {
   private knockAt = 0;
   /** Next of `clip.stirs` to hand the world. */
   private stirAt = 0;
+  /** Next of `clip.partHits` to apply. */
+  private partHitAt = 0;
   /** Next of `clip.partStirs` to open, the runs open now (from, end: the replay's slice count, as the recorder's), and the slices run so far. */
   private partStirAt = 0;
   private readonly partStirRuns: { car: number; body: number; from: number; end: number }[] = [];
@@ -320,6 +323,7 @@ export class ClipSim {
     this.ejectAt = 0;
     this.strikeAt = 0;
     this.knockAt = 0;
+    this.partHitAt = 0;
     this.stirAt = 0;
     this.partStirAt = 0;
     this.partStirRuns.length = 0;
@@ -378,6 +382,11 @@ export class ClipSim {
       }
       // The props a car the clip leaves out knocked off their spot in this step: gone before the clip's cars reach them, as in the record. (A clip car at one in the same step would have knocked it itself.)
       for (const ks = clip.knocks; this.knockAt < ks.length && ks[this.knockAt]!.step <= s; this.knockAt++) this.knockProp(ks[this.knockAt]!.prop);
+      // The hits from the dummies' world the live sim applied before this step (`HighlightClip.partHits`): applied here, with no Rapier.
+      for (const ph = clip.partHits; this.partHitAt < ph.length && ph[this.partHitAt]!.step <= s; this.partHitAt++) {
+        const x = ph[this.partHitAt]!;
+        cars[x.car]?.hitPart(x.part, x.energy, _push.set(x.px, x.py, x.pz));
+      }
       // The sleeping wrecks the record woke in this step by a mover the clip leaves out (or its own): woken at the same slice (`World.stirs`).
       const stirs = this.world.stirs;
       stirs.length = 0;

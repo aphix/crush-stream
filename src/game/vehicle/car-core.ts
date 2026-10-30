@@ -220,6 +220,15 @@ export type GlassName = "windshield" | "rear" | "doorL" | "doorR" | "quarterL" |
 
 export type ExitPane = Extract<GlassName, "windshield" | "doorL" | "doorR">;
 
+/** What a hit from the dummies' world strikes (`hitPart`), by code: a pane by its `GLASS_NAMES` index, then the parts that stand out of the body. */
+export const HIT_PARTS = ["windshield", "rear", "doorL", "doorR", "quarterL", "quarterR", "mirrorL", "mirrorR", "panelL", "panelR", "swingDoorL", "swingDoorR", "lid", "hood"] as const;
+/** The first part code past the panes, and each kind's left code (its right is the next). */
+export const HIT_MIRROR = 6;
+export const HIT_PANEL = 8;
+export const HIT_DOOR = 10;
+export const HIT_LID = 12;
+export const HIT_HOOD = 13;
+
 /** `ExitPane`s by wire code: `EXIT_PANES.indexOf(car.driverOut)` is a snapshot frame's 2 bits (0: still at the wheel). */
 export const EXIT_PANES: readonly (ExitPane | null)[] = [null, "windshield", "doorL", "doorR"];
 

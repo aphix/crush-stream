@@ -1,5 +1,4 @@
 import { describe, expect, it, type TestContext } from "vitest";
-import { todoRow } from "../kernel/todo-row.test-util.ts";
 import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import type { Collider, RigidBody, World } from "@dimforge/rapier3d-simd";
@@ -321,16 +320,12 @@ describe("given a cone lying asleep against the foot of a course's road wall, wh
   // Knocked across the road at the wall 7 m off (car 0's bumper, 12 m/s), it comes to rest lying against the wall's face.
   // A car then drives along the road from 12 m back to 15 m past it with its wall side (its cage's plan box, local +x) 0.1 m off the
   // wall's face: its box sweeps along the wall's foot, over the cone.
-  // 17 m/s todo (measured, ReelTrap): the cage-fitted nose row tiles 5 cm sliver columns (leaves 128 = the cap) whose internal faces
-  // carry contradictory normals; a step at 17 m/s (3.5 cm) exceeds a sliver's half width, so Rapier's minimum axis flips to the
-  // internal lateral face and the cone ends 4.3 mm into the wall against the 3 mm bound (20 m/s passes). A minimum-width law keeps the cone out but breaks
-  // ragdoll-proxy-fit's bars (N=4 nodes: fit 9/11), so the proxy's tiling needs a representation without internal faces (after the plan: tile the proxy without them).
-  const scrapeCases: readonly { it: string; speed: number; todo?: string }[] = [
-    { it: "when a car scrapes along the wall at 17 m/s, then the cone is shoved along and never goes into the wall", speed: 17, todo: "after the plan: tile the cage-fitted proxy without internal faces: its nose-row sliver leaves have contradictory internal normals (4.3 mm into the wall against the 3 mm bound)" },
+  const scrapeCases = [
+    { it: "when a car scrapes along the wall at 17 m/s, then the cone is shoved along and never goes into the wall", speed: 17 },
     { it: "when a car scrapes along the wall at 20 m/s, then the cone is shoved along and never goes into the wall", speed: 20 },
-  ];
+  ] as const;
   for (const testCase of scrapeCases) {
-    todoRow(testCase.it, testCase.todo, async () => {
+    it(testCase.it, async () => {
       const sys = await system(course("cone", ROAD.x, ROAD.z));
       const world = sys["world"]!;
       const body = bodyOf(sys);
@@ -561,16 +556,14 @@ describe("given a cone standing on a course's infield, knocked off by a car's bu
 describe("given a cone knocked over by a car's bumper, lying asleep where it came to rest on a course's infield", () => {
   // The car drives straight at it from 12 m back to 15 m past it (inside the infield's walls), then leaves; `acrossM` is
   // how far its middle line passes to the cone's left, `headingDeg` its heading (0: along +z, 90: along +x).
-  const coneRestsOnItsOtherSide =
-    "after the plan: derive the rest bound from the cone's collider and its ground patch instead of one tolerance: which side the cone lies on is decided by the order its contacts are solved in, and the car proxies' colliders now being built only where a dummy or prop is near (`RagdollSystem.cull`) changed that order (building them all, as at 4212c3d7, gives back -1.8 mm): this offset rests -5.1 mm off the ground, 2.1 mm past the 3 mm bound, while 13 of the 14 offsets from 0.7 to 0.95 m rest at -0.9 to -2.5 mm (14 of 14 at 4212c3d7)";
   const runOverCases = [
-    { it: "when a car drives into it at 30 m/s, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 30, acrossM: 0, headingDeg: 287, todo: false },
-    { it: "when a car drives into it at 40 m/s, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 40, acrossM: 0, headingDeg: 287, todo: false },
-    { it: "when a car drives into it at 40 m/s with its middle line 0.4 m to one side, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 40, acrossM: 0.4, headingDeg: 107, todo: false },
-    { it: "when a car drives into it at 40 m/s with its middle line 0.8 m to one side, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 40, acrossM: 0.8, headingDeg: 107, todo: coneRestsOnItsOtherSide },
+    { it: "when a car drives into it at 30 m/s, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 30, acrossM: 0, headingDeg: 287 },
+    { it: "when a car drives into it at 40 m/s, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 40, acrossM: 0, headingDeg: 287 },
+    { it: "when a car drives into it at 40 m/s with its middle line 0.4 m to one side, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 40, acrossM: 0.4, headingDeg: 107 },
+    { it: "when a car drives into it at 40 m/s with its middle line 0.8 m to one side, then it is never pressed more than 32 mm into the ground and comes to rest lying on it", speed: 40, acrossM: 0.8, headingDeg: 107 },
   ] as const;
   for (const testCase of runOverCases) {
-    todoRow(testCase.it, testCase.todo, async (t) => {
+    it(testCase.it, async (t) => {
       const track = course("cone", 60, 60);
       const ground = track.ground();
       const sys = await system(track);
@@ -603,4 +596,27 @@ describe("given a cone knocked over by a car's bumper, lying asleep where it cam
       expect(Math.abs(gap) < REST_SLOP && asleep, `it rests with its lowest point ${(gap * 1000).toFixed(1)} mm off the ground (asleep: ${asleep})`).toBeTruthy();
     });
   }
+  it("when a car starts with the cone under its front, inside its lower box, and drives off at 20 m/s, then the car passes over it: it is not carried along or pressed into the ground", async (t) => {
+    const track = course("cone", 60, 60);
+    const ground = track.ground();
+    const sys = await system(track);
+    sys.knockProp(0, 0, 11, 4.5, 0);
+    const body = bodyOf(sys);
+    for (let f = 0; f < Math.round(10 / FRAME) && !body.isSleeping(); f++) sys.update(FRAME, [], true, false, null);
+    const at = new THREE.Vector3();
+    sys.propAt(0, at, new THREE.Vector3());
+    let sink = Infinity;
+    const p = new THREE.Vector3();
+    const v = new THREE.Vector3();
+    drive(sys, makeCar(), at.x - 1, at.z, 1, 0, 20, 0.5, (frame) => {
+      frame();
+      if (sys.propAt(0, p, v)) sink = Math.min(sink, lowestPoint("cone", body) - ground.heightAt(p.x, p.z, p.y));
+    });
+    sys.propAt(0, p, v);
+    const moved = p.distanceTo(at);
+    sys.dispose();
+    t.annotate(`moved ${moved.toFixed(2)} m, deepest ${(sink * 1000).toFixed(1)} mm`);
+    expect(moved, "the car carried it along").toBeLessThan(0.5);
+    expect(sink, `its lowest point went ${(-sink * 1000).toFixed(1)} mm under the ground`).toBeGreaterThan(-LANDING_SLOP);
+  });
 });

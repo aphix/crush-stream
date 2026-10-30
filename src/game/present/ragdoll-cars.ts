@@ -4,7 +4,7 @@ import type { CageView, RagCar } from "./ragdoll-car-view.ts";
 import { CLASS_LIFT } from "../vehicle/constants.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { glassCorners } from "../vehicle/car-glass.ts";
-import { LAG, type GlassHit } from "./ragdoll-wire.ts";
+import { LAG, type PartHit } from "./ragdoll-wire.ts";
 import { carClass, classStats } from "../vehicle/vehicle-classes.ts";
 import { disable, type Rapier } from "../kernel/rapier.ts";
 import { BARRIER_HALF } from "../contact/sat.ts";
@@ -149,8 +149,8 @@ export class CarProxies {
     this.nearN[s] = 0;
   }
 
-  /** The panes struck since `takeStrikes` last emptied it; the sim hears of each `LAG` frames later (`RagdollSystem`, `RagdollRemote`). */
-  readonly strikes: GlassHit[] = [];
+  /** The panes and parts struck since `takeStrikes` last emptied it (`LooseProxies` adds the parts); the sim hears of each `LAG` frames later (`RagdollSystem`, `RagdollRemote`). */
+  readonly strikes: PartHit[] = [];
   /** Strikes the car's own glass has not caught up with yet: the frame they were struck in, the car, the pane, the pane's state after. */
   private overlay: { frame: number; car: number; pane: number; state: number }[] = [];
   private frameNo = 0;
@@ -181,7 +181,7 @@ export class CarProxies {
   private struck(i: number, pane: number): void {
     const state = Math.min(PANE_GONE, ((this.paneBits[i]! >> (2 * pane)) & 3) + 1);
     this.overlay.push({ frame: this.frameNo, car: i, pane, state });
-    this.strikes.push({ car: i, pane });
+    this.strikes.push({ car: i, part: pane, energy: 0, x: 0, y: 0, z: 0 });
   }
 
   /**

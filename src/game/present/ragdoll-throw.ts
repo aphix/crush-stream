@@ -350,7 +350,7 @@ export abstract class RagdollThrower extends RagdollStepper {
   /** A frame in the worker's world: post it, then draw what the worker has answered with since. */
   protected updateRemote(dt: number, cars: readonly DeformableCar[]): void {
     const remote = this.remote!;
-    remote.post(dt, cars, this.authority, this.sandbox, this.lookSeed);
+    remote.post(dt, cars, this.authority, this.sandbox, this.lookSeed, this.onPartHit);
     for (const result of remote.drain()) this.adopt(result);
   }
 

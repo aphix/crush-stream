@@ -26,11 +26,13 @@ import {
   type ClipHit,
   type ClipKnock,
   type ClipPartStir,
+  type ClipPartHit,
   type ClipStrike,
   type ClipStir,
   type HighlightClip,
   type ReelCar,
   MAX_PART_STIRS,
+  MAX_PART_HITS,
   MAX_STRIKES,
   MAX_SQUAD_EVENTS,
   CLIP_NO_CAR,
@@ -229,6 +231,8 @@ export class CrashRecorder {
   private readonly knocked: { step: number; prop: number; car: number }[] = [];
   /** Every sleeping wreck woken by a mover near it this race (`endStep`): the step, the car and the slice; a clip takes those of its steps and cars. Older than the ring, none is wanted again (`endStep` drops them). */
   private readonly stirred: { step: number; car: number; slice: number }[] = [];
+  /** Every hit from the dummies' world a car took this race (`partHit`): the step about to run, the car (race slot), the part, its energy and push; a clip takes those of its steps and cars. */
+  private readonly partHitLog: { step: number; car: number; part: number; energy: number; px: number; py: number; pz: number }[] = [];
   /**
    * Every spell of slices in which a sleeping torn part or popped wheel was woken by something moving near it this race (`endStep`), by when it began: a run, not a slice each, so a
    * car parked by a part costs one entry. `from`: the race's slice count at its first slice; `last`: the step it was last stirred in. Older than the ring, none is wanted again (`endStep` drops them).
@@ -276,6 +280,7 @@ export class CrashRecorder {
     this.vipLog.length = 0;
     this.knocked.length = 0;
     this.stirred.length = 0;
+    this.partHitLog.length = 0;
     this.bodyStirs.length = 0;
     this.bodyRuns.fill(null);
     this.sliceCount = 0;
@@ -565,6 +570,13 @@ export class CrashRecorder {
     if (!this.on) return;
     if (this.knocked.length >= MAX_KNOCKS) this.knocked.shift();
     this.knocked.push({ step: this.step, prop, car });
+  }
+
+  /** Car `car` (race slot) took part hit `part` from the dummies' world between steps: stamped with the step about to run, as `vipRides`. */
+  partHit(car: number, part: number, energy: number, px: number, py: number, pz: number): void {
+    if (!this.on || !this.cars[car]) return;
+    if (this.partHitLog.length >= MAX_PART_HITS) this.partHitLog.shift();
+    this.partHitLog.push({ step: this.step, car, part, energy, px, py, pz });
   }
 
   /** Most bytes a keyframe of `n` cars takes: the snapshot, the prop flags, then per car its flight block, course memory, loose block and solver state. */
@@ -924,6 +936,12 @@ export class CrashRecorder {
       if (j >= 0 && x.step >= start && x.step < this.step) stirs.push({ step: x.step - start, car: j, slice: x.slice });
     }
     const partStirs = this.clipPartStirs(slots, start);
+    // The hits from the dummies' world during the clip's steps (strictly after `start`: one applied before it is in that step's keyframe): the replay applies them at those steps.
+    const partHits: ClipPartHit[] = [];
+    for (const x of this.partHitLog) {
+      const j = slots.indexOf(x.car);
+      if (j >= 0 && x.step > start && x.step < this.step) partHits.push({ step: x.step - start, car: j, part: x.part, energy: x.energy, px: x.px, py: x.py, pz: x.pz });
+    }
     this.ledger.keep({
       trackId: this.trackId,
       score,
@@ -935,6 +953,7 @@ export class CrashRecorder {
       knocks,
       stirs,
       partStirs,
+      partHits,
       strikes,
       squad,
       vip,

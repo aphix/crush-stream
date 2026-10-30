@@ -14,6 +14,7 @@ import { Purses } from "./ragdoll-purse.ts";
 import { type PropDraw, PropBodies } from "./ragdoll-props.ts";
 import { BoxPile } from "./ragdoll-boxes.ts";
 import { CarProxies, PROP_BAND_HIGH, PROP_BAND_LOW } from "./ragdoll-cars.ts";
+import type { PartHeard, PartHit } from "./ragdoll-wire.ts";
 import { LooseProxies } from "./ragdoll-loose.ts";
 import { dollGroups, FIXED_GROUPS, knockedGroups, propGroups, SLOTS, STEP, thrownGroups } from "./ragdoll-config.ts";
 import { RagdollDebug } from "./ragdoll-debug.ts";
@@ -37,6 +38,7 @@ const _r = new THREE.Vector3();
 const _v = { x: 0, y: 0, z: 0 };
 const Y = new THREE.Vector3(0, 1, 0);
 const _w = new THREE.Vector3();
+const _near = new THREE.Vector3();
 
 /** Seconds a dummy lies about before it goes. */
 export const LIFE = 10;
@@ -139,12 +141,14 @@ export abstract class RagdollPool {
   protected readonly dressing = new Map<number, Dressing>();
   /** This system is the world's worker's (`host`): it draws nothing and reports the cars it `wanted` cages of. */
   protected hosted = false;
-  /** Per car, 1 when a dummy, purse thing or knocked prop may reach it within `FIT_AHEAD` frames (set by `stepWorld` while hosted). */
+  /** Per car, nonzero when a dummy, purse thing or knocked prop may reach it within `FIT_AHEAD` frames (set by `stepWorld`; hosted, the cars the main thread sends cages of), `WANT_PARTS` when a knocked prop or awake carton may: the cars whose parts that stand out are recorded (`recordLoose`). */
   readonly wanted = new Uint8Array(MAX_CARS);
   /** Busy frames stepped this run (the world's worker is told its frame's number, `RagdollRemote`'s count): a strike is applied to the cars `LAG` frames after its frame. */
   frameNo = 0;
-  /** Panes struck here and not yet applied to the cars (`applyStruck`): the frame struck in, the car, the pane. */
-  protected readonly struck: { frame: number; car: number; pane: number }[] = [];
+  /** Panes and parts struck here and not yet applied to the cars (`applyStruck`), with the frame struck in. */
+  protected readonly struck: (PartHit & { frame: number })[] = [];
+  /** Told of each hit applied to a car (the race recorder's `partHit`); null: nobody. */
+  onPartHit: PartHeard | null = null;
   protected cars: readonly DeformableCar[] = [];
   protected authority = true;
   /** Neither a race nor a derby: only here does `onThrow` fire. */
@@ -162,8 +166,8 @@ export abstract class RagdollPool {
   protected lastSlot = 0;
   /** The cars' proxies in the dummies' world. */
   protected readonly proxies = new CarProxies(this.dolls);
-  /** The sim's loose car parts and wheels in the dummies' world: slow ones block them, fast ones strike them; a walker struck hard enough goes limp. */
-  protected readonly loose = new LooseProxies((slot) => this.walkers[slot]!.struck());
+  /** The sim's loose car parts and wheels in the dummies' world: slow ones block them, fast ones strike them; a walker struck hard enough goes limp. Near a knocked prop or carton, they and the parts that stand out of a car's body meet it. */
+  protected readonly loose = new LooseProxies((slot) => this.walkers[slot]!.struck(), this.proxies.strikes, (x, y, z, r) => this.props.touches(_near.set(x, y, z), r, 0, 0) || this.boxes.touches(_near, r));
   /** The ride-along camera over the dummies (`follow`, `frameCamera`). */
   protected readonly ride = new RideAlong();
   /** One walker per pool slot: a dummy of the pool (`startWalker`) held up and walked by motors, in this world with the cars and the ground. The player on foot is the one in `WALKER_SLOT`. */
