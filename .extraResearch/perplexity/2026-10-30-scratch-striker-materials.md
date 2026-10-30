@@ -1,0 +1,32 @@
+> Question: In a car-to-car sideswipe at 10-50 km/h, which striking surfaces actually cut through a factory clear coat and base coat on a painted steel body panel, and which only leave transfer or a scuff with no paint removed? Cover each striker separately: another painted steel panel, a chrome-plated steel bumper or trim, an unpainted black PP/ABS plastic bumper or trim, a painted plastic (PP) bumper cover, a rubber tyre sidewall, and glass. Give the typical visible result for each (clear-coat haze, base-coat line, primer showing, bare metal) and cite sources such as collision-repair or paint-damage guides.
+
+At **10–50 km/h**, the striker alone does not determine whether paint is removed: contact pressure, edge sharpness, sliding distance, panel flex, contamination, and impact angle matter more than speed. In a typical sideswipe, broad smooth surfaces usually cause **transfer or clear-coat scuffing**; a hard edge or trapped grit can cut through the base coat and primer. A clear-coat-only mark may polish out, whereas base coat, primer, or metal exposure requires refinishing.[3][6]
+
+| Striker | Typical visible result on the struck painted steel panel | Can it cut through base coat? |
+|---|---|---|
+| **Another painted steel panel** | Usually paint transfer in the other vehicle’s colour, plus a dull clear-coat haze or narrow clear-coat scratch. A projecting flange, sharp crease, or debris between panels can produce a base-coat line; severe concentrated contact may show primer or bare metal. | **Yes, readily if an edge or grit concentrates the load; not usually with a smooth, flush rub.** Paint transfer from another painted object commonly sits on top of the finish rather than being a true scratch.[7][8] |
+| **Chrome-plated steel bumper or trim** | Chrome transfer or a bright/dark linear scuff is common. A smooth chrome face generally produces clear-coat haze or transfer; a sharp chrome edge, damaged plating, or dirt can make a base-coat line and, locally, primer or bare metal. | **Yes, locally.** Chrome is hard and can act abrasively, particularly at an edge, but it does not automatically cut through the paint across its whole contact area. |
+| **Unpainted black PP/ABS bumper or trim** | Black plastic transfer, a grey/black smear, or a matte clear-coat scuff. After cleaning, the struck panel may have no paint loss; stronger rubbing can reveal a base-coat line, and an edge can reach primer or metal. | **Usually no with a broad smooth surface; yes at a sharp edge or with grit.** Plastic and rubber are specifically recognized sources of surface marks or transfer, and many such marks are removable rather than paint loss.[7][8] |
+| **Painted plastic PP bumper cover** | Usually transfer of the bumper’s paint colour, a clear-coat haze, or a shallow scuff. If both finishes are similar, the contact may leave little visible damage apart from gloss loss. A torn edge, moulding seam, or broken paint can expose base coat, primer, or bare metal on the steel panel. | **Sometimes.** The painted plastic itself is not inherently a cutter; the decisive factors are its edge, broken coating, trapped grit, and sliding pressure. |
+| **Rubber tyre sidewall** | Usually black rubber transfer, a smeared scuff, or clear-coat haze. After solvent/detailing, the underlying paint is often intact. A heavily loaded tyre rubbing while rotating can create heat and abrasive contamination, causing a base-coat line; primer or metal is uncommon without grit or an edge. | **Normally no.** Rubber generally transfers material or abrades the clear coat rather than cleanly cutting through the coating stack.[7][8] |
+| **Glass** | Clean glass commonly leaves a narrow clear-coat scuff or haze, with little or no transferred material. A chipped, fractured, sharp glass edge—or grit trapped against it—can produce a sharply defined base-coat line and, at concentrated points, primer or bare metal. | **Yes, at an edge or damaged area; generally no with a smooth glass face.** Smooth glass is hard but not normally abrasive enough to remove the entire paint system in broad contact. |
+
+### How to identify the depth
+
+- **Clear-coat haze:** dull or whitish-looking area; the vehicle colour remains uniform. It may improve substantially with polishing.[2][3][6]
+- **Base-coat line:** the groove is a different, flatter shade of the vehicle colour and catches a fingernail; polishing alone will not restore missing colour.[3][6]
+- **Primer showing:** usually grey, white, or beige and noticeably flatter than the surrounding paint.[3]
+- **Bare metal:** silver or dark steel; orange-brown indicates corrosion beginning.[3]
+
+The most likely outcome for a normal, smooth sideswipe is therefore **transfer or clear-coat damage**, not a clean cut through to metal. **Primer or bare metal requires a concentrated defect**—a sharp edge, torn trim, exposed fastener, broken glass, panel crease, or abrasive grit—rather than merely the identity of the contacting material.
+
+[1] What is the difference between a scratch and a scuff on a car? (https://us.ok.com/ask/what-is-the-difference-between-a-scratch-and-a-scuff-on-a-car/)
+[2] Collision Paint Restoration in Charlotte, NC (https://www.deluxeautonc.com/collision-paint-restoration-in-charlotte-nc-practical-guidance-from-local-experts)
+[3] AMA Collision | Expert Collision Repair & Vehicle Restoration (https://amacollision.com.au/car-scratch-repair/)
+[4] Car Paint Repair Dubai | Chips, Scuffs & Respray from AED 300 (https://dentguy.ae/car-paint-repair-dubai)
+[5] Automotive Painting (https://www.stanmcnabbcollisioncenter.com/automotive-painting)
+[6] How to fix car paint scratches, dents and chips - NRMA (https://www.mynrma.com.au/open-road/advice-and-how-to/car-maintenance/fix-scratches-dents-car-paint)
+[7] How to Get Scuffs Off Your Car: Step-by-Step Guide (https://engineerfix.com/how-to-get-scuffs-off-your-car-step-by-step-guide/)
+[8] Cutter Chrysler Dodge Jeep Ram Fiat Honolulu Blog | Chrysler Dealership in Honolulu, HI (https://www.cutterchryslerjeepdodgeramhonolulu.com/blog/category/cutter-chrysler-dodge-jeep-ram-fiat-honolulu-service)
+[9] Can Bumper Scratches Be Buffed Out or Need Paint Repair? (https://erpsocal.com/can-bumper-scratches-be-buffed-out/)
+[10] [PDF] 31 - Collision Information - Mopar Repair Connect (https://www.moparrepairconnect.com/dA/010df08ffe/Collision_Body_Repair_Manual_Fiat_500L_2014_48-document.pdf)
