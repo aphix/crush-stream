@@ -196,7 +196,7 @@ describe("given a sedan parked on the road with its left door unlatched and open
   });
 });
 
-/** A hatchback whose shut gate a rear ram has sprung (Doors scene F, 12 km/h with 100 kg), and a sedan whose hood a front wall hit at 44 km/h has: each rises off its latch onto its stop. */
+/** A hatchback whose shut gate a rear ram has sprung (Doors scene F, 12 km/h with 100 kg): it rises off its latch onto its stop. A sedan whose hood a front wall hit at 44 km/h has sprung: it sits a few cm up on its safety catch. */
 function lidPopped(): DeformableCar {
   const car = parkedStyle("hatchback");
   fireRam(car, "lidPop", { kph: 12, kg: 100 });
@@ -222,7 +222,7 @@ const droppedOn =
     return { at: at.setY(top + drop + PREFABS[prefab].size[1] / 2), v: new THREE.Vector3() };
   };
 
-describe("given a hatchback whose gate a rear ram sprang, or a sedan whose hood a front wall hit sprang, standing open on its struts, unlatched", () => {
+describe("given a hatchback whose gate a rear ram sprang, standing open on its struts, or a sedan whose hood a front wall hit sprang onto its safety catch, unlatched", () => {
   it(`when a crate drops ${LID_DROP_M} m onto the gate, then it swings shut and latches; dropped ${LID_NUDGE_M} m, then it stays open`, async (t) => {
     const hard = await strike("crate", () => {}, droppedOn("crate", HIT_LID, LID_DROP_M), 3, lidPopped);
     const shut = hard.car.lidHinge().latched && !hard.car.lidOff();

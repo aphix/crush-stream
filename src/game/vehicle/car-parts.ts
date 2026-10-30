@@ -19,7 +19,7 @@ import type { DeformableCar } from "./car.ts";
 import { rigidCentre } from "./car-air.ts";
 import { CarGlass } from "./car-glass-break.ts";
 import { GLASS_NAMES } from "./car-glass.ts";
-import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, HIT_DOOR, HIT_HOOD, HIT_LID, HIT_MIRROR, HIT_PANEL, LATCH_CATCH_RATE, LATCH_REACH_M, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, MIRROR_BREAK_J, type PartNetState } from "./car-core.ts";
+import { BUMPER_TEAR_MPS, type DetachPart, DOOR_AJAR, DOOR_DAMP, type DoorHinge, type GlassPart, HIT_DOOR, HIT_HOOD, HIT_LID, HIT_MIRROR, HIT_PANEL, LATCH_CATCH_RATE, LATCH_POP_MPS, LATCH_REACH_M, LID_LATCH_CRUSH_M, type Lamp, type LooseBody, MIRROR_BREAK_J, type PartNetState } from "./car-core.ts";
 import {
   DOOR_ACC_MAX,
   DOOR_QUIET_S,
@@ -583,10 +583,7 @@ export abstract class CarParts extends CarGlass {
     const hinge = this.lidPart.swing!;
     if (this.lidPart.detached || !hinge.latched) return;
     hinge.latched = false;
-    hinge.omega = 0;
-    // The latch's pop spring lifts a strut gate past the strut's dead band near shut, where its weight would hold it down.
-    hinge.theta = Math.max(hinge.theta, hinge.spec.taper);
-    this.sampleMotion();
+    this.popLatch(hinge);
   }
 
   /** How far (m) the tail's rear bumper masses stand pushed forward of their rest: the crush at the lid's latch end of the car. */
@@ -815,14 +812,16 @@ export abstract class CarParts extends CarGlass {
     const s = h.spec;
     // A part the crash jammed open never shuts past its jam.
     const jam = Math.min(p.hingeT * s.jam, s.stop);
-    const resting = h.theta >= s.stop;
+    // A safety catch hooks a part rising from under it a little past its jam; a hand-opened one is above it.
+    const top = s.catch === undefined || h.theta > jam + s.catch ? s.stop : Math.min(s.stop, jam + s.catch);
+    const resting = h.theta >= top;
     h.omega += this.hingeAccel(p) * dt;
     const dry = s.dry * dt;
     h.omega = Math.abs(h.omega) <= dry ? 0 : h.omega - Math.sign(h.omega) * dry;
     h.theta += h.omega * dt;
     h.omega *= Math.exp(-DOOR_DAMP * dt);
-    if (h.theta >= s.stop && h.omega > 0) {
-      h.theta = s.stop;
+    if (h.theta >= top && h.omega > 0) {
+      h.theta = top;
       // The stop takes the free edge's blow when it arrives; the detent then holds it, and the push that keeps it there loads nothing.
       const e = resting ? 0 : 0.5 * s.inertia * h.omega * h.omega;
       this.edgeVelocity(p, _push);
@@ -905,11 +904,19 @@ export abstract class CarParts extends CarGlass {
     if (h.latched) {
       if (p.hingeT <= h.spec.ajar) return;
       h.latched = false;
-      h.omega = 0;
-      h.theta = Math.max(h.theta, h.spec.taper);
-      this.sampleMotion();
+      if (p.hinge !== "door") this.popLatch(h);
+      else {
+        h.omega = 0;
+        this.sampleMotion();
+      }
     }
     h.theta = Math.max(h.theta, Math.min(p.hingeT * h.spec.jam, h.spec.stop));
+  }
+
+  /** A lid's latch lets go: its pop spring throws the free edge up at `LATCH_POP_MPS`, and the swing carries it on from where it is. */
+  private popLatch(h: DoorHinge): void {
+    h.omega = LATCH_POP_MPS / h.spec.length;
+    this.sampleMotion();
   }
 
   /** Remember the car's velocity and yaw rate: the next `sampleDrive` reads their change as acceleration. Call after setting either by hand. */

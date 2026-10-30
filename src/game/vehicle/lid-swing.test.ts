@@ -8,6 +8,7 @@ import { LID } from "./constants.ts";
 import { paint } from "./test-support.ts";
 import { must } from "../kernel/must.test-util.ts";
 import type { DoorHinge } from "./car-core.ts";
+import { hingePose } from "./part-pose.ts";
 import { lidAccel } from "./hinge-spec.ts";
 import { fireRam, parkedStyle } from "../scenes/door-rig.test-util.ts";
 
@@ -220,6 +221,10 @@ function strutHoldN(h: DoorHinge): number {
 
 /** The lightest of the 2 km/h steps of the sedan's front wall hit that springs its hood (42 km/h leaves it latched). */
 const HOOD_POP_KPH = 44;
+/** A safety catch lets the sprung hood's nose rise this far (m) at most above its crash pose: real catches hold it 2-5 cm up. */
+const CATCH_MAX_M = 0.05;
+/** The fastest a swing may carry a lid's free edge past its crash pose in a crash (m/s): a strut-lifted hatch peaks near 3 (measured 2.8), a pose set in one step runs at tens. */
+const SWING_EDGE_MAX_MPS = 5;
 
 /** `seconds` of `newtons` held down on the free edge of the lid on hinge `h` while it swings; the hand lets go once it latches. */
 function press(car: DeformableCar, h: DoorHinge, newtons: number, seconds: number): void {
@@ -236,12 +241,71 @@ function lidPopped(id: CarStyleId): DeformableCar {
   return car;
 }
 
-/** A sedan whose hood a front wall hit at `HOOD_POP_KPH` has sprung: it rises on its struts toward its stop. */
+/** A sedan whose hood a front wall hit at `HOOD_POP_KPH` has sprung: it sits up on its safety catch. */
 function hoodPopped(): DeformableCar {
   const car = parked("sedan");
   runWall(HOOD_POP_KPH, 1, "front", { car });
   return car;
 }
+
+const _pose = new Float64Array(7);
+/** The angle (rad) the car's `hinge` lid is drawn turned from rest: with its swing (`swing`) or by the crash alone. */
+function drawnTurn(car: DeformableCar, hinge: "cowl" | "tail", swing: boolean): number {
+  const p = car["parts"].find((q) => q.hinge === hinge);
+  must(p, `${hinge} lid`);
+  hingePose(p, car.deform, _pose, 0, swing);
+  return Math.abs(2 * Math.atan2(_pose[3]!, _pose[6]!));
+}
+
+/** A wall hit on a fresh `id` with the drawn angle of its `hinge` lid read after every step: the fastest its free edge moved past what the crash's fold moved it (m/s). */
+function swingEdgeRate(id: CarStyleId, kph: number, approach: "front" | "rear", hinge: "cowl" | "tail"): { car: DeformableCar; rate: number } {
+  const car = parked(id);
+  const length = (hinge === "cowl" ? car.hoodHinge() : car.lidHinge()).spec.length;
+  let drawn = 0;
+  let crash = 0;
+  let rate = 0;
+  const step = car.stepBreakage.bind(car);
+  car.stepBreakage = (dt: number): void => {
+    step(dt);
+    const d = drawnTurn(car, hinge, true);
+    const c = drawnTurn(car, hinge, false);
+    if (dt > 0) rate = Math.max(rate, (Math.abs(d - drawn - (c - crash)) * length) / dt);
+    drawn = d;
+    crash = c;
+  };
+  runWall(kph, 1, approach, { car });
+  return { car, rate };
+}
+
+describe("given a front hit on a sedan with its hood shut", () => {
+  it(`when it noses into a wall at ${HOOD_POP_KPH - 2} km/h, then the hood stays latched; at ${HOOD_POP_KPH} km/h, then it slightly unlatches: up a few cm onto its safety catch, still on the car`, (t) => {
+    const soft = parked("sedan");
+    runWall(HOOD_POP_KPH - 2, 1, "front", { car: soft });
+    const car = hoodPopped();
+    swing(car, 3);
+    const h = car.hoodHinge();
+    const lift = (drawnTurn(car, "cowl", true) - drawnTurn(car, "cowl", false)) * h.spec.length;
+    t.annotate(`${HOOD_POP_KPH} km/h: nose ${(lift * 100).toFixed(1)} cm over its crash pose, theta ${h.theta.toFixed(3)} rad`);
+    expect(soft.hoodHinge().latched, `${HOOD_POP_KPH - 2} km/h sprang the hood`).toBe(true);
+    expect(h.latched || car.hoodOff(), `${HOOD_POP_KPH} km/h: latched ${h.latched}, off ${car.hoodOff()}`).toBe(false);
+    expect(lift, "the nose's rise over its crash pose (m)").toBeGreaterThan(0.01);
+    expect(lift, "the nose's rise over its crash pose (m)").toBeLessThanOrEqual(CATCH_MAX_M);
+  });
+
+  const rateCases = [
+    { it: "when a sedan noses into a wall at 64 km/h, folding its hood and popping its latch, then no step moves the drawn hood faster than its swing can", id: "sedan", kph: 64, approach: "front", hinge: "cowl" },
+    { it: "when a hatchback backs into a wall at 30 km/h, popping its gate's latch, then no step moves the drawn gate faster than its swing can", id: "hatchback", kph: 30, approach: "rear", hinge: "tail" },
+  ] as const;
+  for (const testCase of rateCases) {
+    it(testCase.it, (t) => {
+      const { car, rate } = swingEdgeRate(testCase.id, testCase.kph, testCase.approach, testCase.hinge);
+      const h = testCase.hinge === "cowl" ? car.hoodHinge() : car.lidHinge();
+      t.annotate(`${testCase.id}: fastest swing edge ${rate.toFixed(2)} m/s, latched ${h.latched}, theta ${h.theta.toFixed(3)} rad`);
+      expect(h.latched, "the hit sprang the latch").toBe(false);
+      expect(rate, "the free edge's fastest swing past the crash's fold (m/s)").toBeLessThan(SWING_EDGE_MAX_MPS);
+    });
+  }
+});
 
 const handCases = [
   { it: "when a hand holds the popped boot lid's edge down with 50 N, then it swings shut and latches over its crash dent", id: "sedan", lid: "boot", newtons: HAND_N, expectedLatched: true },
@@ -250,24 +314,26 @@ const handCases = [
   { it: "when a hand holds a hatchback's popped gate down with a liftgate's closing push (1.5× what its struts hold at the stop), then it swings shut, its weight wins over the struts' dead band, and it latches", id: "hatchback", lid: "boot", newtons: "liftgate", expectedLatched: true },
   { it: "when a hand holds a wagon's popped gate down with a liftgate's closing push (1.5× what its struts hold at the stop), then it swings shut, its weight wins over the struts' dead band, and it latches", id: "wagon", lid: "boot", newtons: "liftgate", expectedLatched: true },
   { it: "when a hand holds the popped hood's edge down with 50 N, then it swings shut and latches over its crash dent", id: "sedan", lid: "hood", newtons: HAND_N, expectedLatched: true },
-  { it: "when a fingertip holds the popped hood's edge down with 10 N, then the struts keep it up, unlatched", id: "sedan", lid: "hood", newtons: FINGER_N, expectedLatched: false },
+  { it: "when a fingertip holds the popped hood's edge down with 10 N, then the struts keep it up on its catch, unlatched", id: "sedan", lid: "hood", newtons: FINGER_N, expectedLatched: false },
 ] as const;
 
-describe("given a boot lid sprung by a rear hit or a sedan's hood by a front hit, swung up off its latch", () => {
+describe("given a boot lid sprung by a rear hit or a sedan's hood by a front hit, off its latch", () => {
   for (const testCase of handCases) {
     it(testCase.it, (t) => {
       const car = testCase.lid === "boot" ? lidPopped(testCase.id) : hoodPopped();
       const h = testCase.lid === "boot" ? car.lidHinge() : car.hoodHinge();
+      swing(car, 2);
       const popped = h.theta;
       expect(h.latched, "the hit left it latched").toBe(false);
-      expect(popped, "how far the sprung part stood open (rad)").toBeGreaterThan(0.3);
+      expect(popped, "how far the sprung part stood open (rad)").toBeGreaterThan(0);
       const newtons = testCase.newtons === "liftgate" ? 1.5 * strutHoldN(h) : testCase.newtons;
       press(car, h, newtons, 3);
       // Then half a second of the crash rules on the dented car: an old dent does not spring a latch again.
       for (let k = 0; k < FINE_HZ / 2; k++) car.stepBreakage(H);
       t.annotate(`${testCase.id} ${testCase.lid} ${newtons.toFixed(1)} N: from ${popped.toFixed(3)} rad to ${h.theta.toFixed(3)}, latched ${h.latched}`);
       expect(h.latched, "latched after the push and the crash rules' half second").toBe(testCase.expectedLatched);
-      expect(h.theta < 0.1, "within 0.1 rad of shut after the push").toBe(testCase.expectedLatched);
+      if (testCase.expectedLatched) expect(h.theta, "open after the push (rad)").toBeLessThan(0.1);
+      else expect(h.theta, "where the push left it (rad), against where the hit had it").toBeGreaterThan(popped - 0.01);
       expect(testCase.lid === "boot" ? car.lidOff() : car.hoodOff(), "torn off").toBe(false);
     });
   }

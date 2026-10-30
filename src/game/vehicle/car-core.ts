@@ -141,6 +141,8 @@ export const LID_LATCH_CRUSH_M = 0.02;
 export const LATCH_CATCH_RATE = 0.2;
 /** A crash jam (m at the free edge) a latch still reaches when the part is pushed shut onto it: the striker's play and the seal's squeeze, guessed. */
 export const LATCH_REACH_M = 0.05;
+/** The free edge's speed (m/s) a lid's latch pop spring throws it up at as the latch lets go: the lightest 0.5 m/s step that carries a hatchback's gate past its struts' dead band (1.5 lets it fall back). */
+export const LATCH_POP_MPS = 2;
 /** A door's drawn angle (rad) per unit of crash hinge value (`hingeT`): the jam that holds a door ajar. */
 const DOOR_JAM = 1.45;
 /** C1: a side hit that raises a door's hinge value past this at `DOOR_TEAR_MPS` tears it off. */

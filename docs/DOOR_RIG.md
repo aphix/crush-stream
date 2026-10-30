@@ -117,8 +117,11 @@ The trunk lid, hatch, SUV liftgate and pickup/monster drop gate (part slot 3, `L
 - **Hood:** the same `DoorHinge` and law (`hoodSpec`, from the hood mesh's own rear and front edges): 16 kg on struts at `lift` 1.2,
   turning nose-up about its rear edge's top to `HOOD_OPEN` (32°, the owner's open-hood photos; the show pose's open hood is this swing).
   Its crash hinge value runs on the bonnet's crush as before; past its `ajar` 0.05 (its latch is at the nose) a front hit springs it:
-  the sedan's at 44 km/h into the wall, not 42. Same re-latch (a hand's 50 N latches the 44 km/h one), stop tear and slam rules as
-  the boot; its crash tear (crush past `hingeT` 0.78) is unchanged.
+  the sedan's at 44 km/h into the wall, not 42. A sprung hood only slightly unlatches: the pop lifts its nose onto the **safety catch**
+  (`HingeSpec.catch`, `HOOD_CATCH_M` 4 cm above its crash pose), where its pop spring and struts (no dead band: `taper` 0) hold it, as
+  real hoods do (FMVSS 113's second latch position; in 56-64 km/h frontals a hood stays latched or on its catch and buckles). Opened by
+  hand above the catch it swings to its stop. Same re-latch (a hand's 50 N latches the 44 km/h one), stop tear and slam rules as the boot;
+  its crash tear (crush past `hingeT` 0.78) is unchanged. A two-sedan head-on springs it from 48 km/h each (46 leaves it latched).
 - **Tear:** stop energy past `tearJ`; crush past `hingeT` 0.78; or an open lid hit past `tearT` 0.5 at EBS ≥ 12.5 m/s. A torn lid
   flies as a loose part at its own mass and tumbles the way it opens. A door or lid already resting on its stop takes no strap
   load from the push holding it there (else a drop gate on its cables would tear off on its own).
@@ -126,9 +129,11 @@ The trunk lid, hatch, SUV liftgate and pickup/monster drop gate (part slot 3, `L
   swings, tears off and resets with the gate. The contact cage keeps the pane at rest while it is on (it does not swing).
 - **Cage:** a wrapping lid's boot cage reaches 2 cm below and behind its face, so the face skins without clamping.
 - `hingesLatched` counts the hood and lid with the doors. API: `setLidOpen`, `lidAngle`, `shutLid`, `lidHinge`, `lidOff`, `ripLid`, `hoodHinge`, `hoodOff`.
-- **Gas struts** (hatch, liftgate, hood; `taper` `STRUT_TAPER` 0.3 rad): a strut's line runs close to the hinge near shut, so its lift fades
-  to none over the last ~17°, where the gate's weight wins; a deck lid's torsion bars (`taper` 0) lift all the way. A latch's pop lifts a
-  sprung strut gate past that dead band (`springSwing`, `springLidLatch`), and its struts then raise it to its stop. A gate on its stop
+- **Gas struts** (hatch, liftgate; `taper` `STRUT_TAPER` 0.3 rad): a strut's line runs close to the hinge near shut, so its lift fades
+  to none over the last ~17°, where the gate's weight wins; a deck lid's torsion bars (`taper` 0) lift all the way. A latch that lets go sets
+  no angle: its pop spring throws the free edge up at `LATCH_POP_MPS` (2 m/s, the lightest 0.5 m/s step that carries a hatchback's gate past
+  that dead band) and the swing integrates from where the lid is (`popLatch`, from `springSwing` and `springLidLatch`); its struts then
+  raise it to its stop over real frames (a 30 km/h rear hit's hatch edge peaks at 2.8 m/s). A gate on its stop
   takes a liftgate's closing push to start down (1.5× what its struts hold there: 79 N for the hatchback, 112 N for the wagon); the
   sedan lid's 50 N leaves a hatch up. Pushed into the dead band, it falls shut and latches.
 - **Cage:** the collision cage takes a hood's and lid's crash pose only (`hingePose(..., false)`): a swing lives with the detachable
