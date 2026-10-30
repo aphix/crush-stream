@@ -1,0 +1,32 @@
+> Question: Front vs rear bumper masses (kg), with sources (OEM/aftermarket part listings, restoration suppliers, teardown data), for these specific vehicle types, giving the complete bumper as it would tear off in a crash (face bar/cover plus reinforcement beam and brackets) and noting what each figure includes: (1) 1968-1974 Chevrolet Nova SS: front chrome steel bumper and rear chrome steel bumper (with brackets); (2) a modern compact hatchback (e.g. VW Golf, Honda Civic hatch): front bumper assembly vs rear bumper assembly (rear often larger), cover vs beam; (3) a modern midsize sedan (Camry/Accord) front vs rear; (4) a midsize station wagon front vs rear; (5) a full-size pickup (Ford F-150 / Silverado): front steel bumper vs rear steel step bumper; (6) Ford Crown Victoria Police Interceptor front vs rear bumper assembly; (7) a lifted monster-truck-style pickup with aftermarket steel bumpers. Concise table: front kg, rear kg, what is included.
+
+The figures below are **engineering estimates**, not universal specifications: exact mass changes with trim, sensors, tow hardware, parking systems, and whether crash boxes remain attached. A complete bumper system normally means cover/face bar, absorber, reinforcement beam, brackets or crash boxes, and attached trim—not merely the visible cover.[1][2]
+
+| Vehicle type | Front mass | Rear mass | What the estimate includes |
+|---|---:|---:|---|
+| **1968–74 Chevrolet Nova SS** | **32–45 kg** | **28–42 kg** | Chrome-plated steel face bar, inner steel reinforcement or folded structure, bumper brackets, bolts, and small guards/trim. The rear is usually similar but can be slightly lighter. Restoration listings confirm separate steel-style bumper and bracket components, but generally do not publish complete weights.[3] |
+| **Modern compact hatchback** — Golf/Civic hatch class | **15–24 kg** | **16–27 kg** | Plastic cover, foam/energy absorber, steel or aluminum beam, crash boxes/brackets, and ordinary trim. Cover alone: approximately **3–6 kg front** and **4–7 kg rear**; beam plus mounts: approximately **7–14 kg**. A modern bumper assembly commonly falls around **8–20 kg** before substantial sensors or trim.[1] |
+| **Modern midsize sedan** — Camry/Accord class | **18–28 kg** | **20–32 kg** | Cover, absorber, reinforcement beam, crash boxes/brackets, grilles or lower trim, and normal sensors. Cover alone is commonly about **4–7 kg front** and **5–8 kg rear**; the rear can be heavier because of a broad fascia, parking sensors, exhaust cutouts, and additional trim. |
+| **Midsize station wagon** | **20–30 kg** | **23–36 kg** | Same basic contents as the sedan, but typically a larger rear cover, more extensive tailgate-side trim, and sometimes a tow hitch or parking-sensor hardware. Excluding the tow hitch itself; including a factory hitch can add roughly **15–30 kg**. |
+| **Full-size pickup** — F-150/Silverado | **25–40 kg** factory steel | **30–50 kg** factory steel step bumper | Steel bumper shell/face, reinforcement beam, frame brackets, end caps, step structure, and standard sensors. A representative F-150 factory front bumper listing is about **37 lb / 17 kg** for the bumper component; adding brackets, end caps, and valance brings a typical half-ton front assembly to roughly **18–25 kg**.[6] Heavy-duty trims, tow equipment, parking sensors, and integrated recovery points can raise these values substantially. |
+| **Ford Crown Victoria Police Interceptor** | **22–32 kg** | **20–30 kg** | Plastic fascia, absorber, reinforcement beam, brackets/crash mounts, and police-package trim. The front may be slightly heavier where push-bar mounting hardware or heavy-duty reinforcement is included; an external push bar is **not** included in the estimate and can add roughly **15–30 kg**. |
+| **Lifted monster-truck-style pickup with aftermarket steel bumpers** | **70–120 kg** | **55–100 kg** | Heavy-gauge steel bumper assembly, mounting plates, recovery points, D-rings, grille/brush protection, tire-clearance structure, and hardware. Winch, fairlead, winch plate, swing-out tire carrier, and lighting are excluded unless stated. A winch-equipped front bumper can reach approximately **140–180 kg**; aftermarket steel bumpers are reported to add about **190 lb / 86 kg net** in some configurations, and about **350 lb / 159 kg** with a winch.[6] |
+
+### Interpretation
+
+- For a **classic Nova**, the chrome steel face bar is the dominant mass; the brackets and mounting hardware are substantial but normally add only several kilograms.
+- For modern cars, the **cover alone is not the crash-relevant bumper**. The reinforcement beam and crash boxes carry most of the structural load; the cover and foam are comparatively light.[2]
+- On modern passenger vehicles, the **rear assembly is often equal to or heavier than the front**, especially on hatchbacks and wagons.
+- On pickups, the apparent bumper mass varies greatly: a light factory component listing is not equivalent to a fully equipped assembly with brackets, end caps, sensors, tow hardware, or a winch.
+- These should not be treated as certified crash-model inputs. For simulation or salvage-weight accounting, weigh the exact removed assembly with every component still bolted to it.
+
+[1] How much does a car bumper weigh? - kevinsautos.com (https://kevinsautos.com/faq/how-much-does-a-car-bumper-weigh.html)
+[2] Safe bumper - what should it be made of? (https://knaufautomotive.com/safe-bumper-what-should-it-be-made-of/)
+[3] CHEVY II NOVA 68-74 (https://www.up22.com/nova68.htm)
+[4] 1968–1974 Chevrolet Nova Base (3rd Gen) Buyer's Guide (https://motogallery.com/blogs/automotive-resource-guide/1968-1974-chevrolet-nova)
+[5] What material is a car bumper made of? (https://kevinsautos.com/faq/what-material-is-a-car-bumper-made-of.html)
+[6] Will a Steel Bumper's Weight Hurt Your Truck? The Real ... (https://bumperstock.com/blogs/resources/will-an-aftermarket-bumper-s-weight-cause-problems-for-my-truck)
+[7] Is the Bumper in the Front or Back of a Car? - Engineer Fix (https://engineerfix.com/is-the-bumper-in-the-front-or-back-of-a-car/)
+[8] Bumpers | Automotive Glossary | MCG (https://automotive.mcgc.com/glossary_term/bumpers/)
+[9] engineerfix.com › what-is-a-bumper-on-a-car-andWhat Is a Bumper on a Car and How Does It Work? (https://engineerfix.com/what-is-a-bumper-on-a-car-and-how-does-it-work/)
+[10] Understanding the Bumper on the Car: Types, Functions, and Benefits (https://www.hizuno.com/blog/motor/bumper-on-the-car-guide-types-safety-protection)
