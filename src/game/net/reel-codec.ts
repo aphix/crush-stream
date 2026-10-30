@@ -529,9 +529,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 180: a car-car slide's paint strokes lie on lanes across the heights the two bodies share at the contact (`satCars`' `patch.low`/`patch.high`), each 0.2 s commit on the next lane (golden-ratio steps, 10% clear of each end), not all at the patch's mean height; the scratch tracker per face carries the band rows and the lane (65 doubles in the part state, was 55); a clip of 179 or before no longer reads.
  * 181: a paint stroke is kept only where the car's paint is drawn: each commit cuts its stroke to the run on the style's paint cover (the `CAR_SPRAY` texels whose rest fragments pick that face and take scratches by their primer) and drops one off it, and a band of no heights makes none; a clip of 180 or before no longer reads.
  * 182: every contact where the painted body slides cuts its paint through `DeformableCar.scrape`: a body row on the ground, a ramp or a prism's top (`scrapeWorld`, its normal kept whole, so a roof slide marks the roof; cut by the surface's ribbon material) and the footprint along a wall or prop's side (`scrapeSide`, over the patch the footprint has in the face; cut by the prism's prefab material: a course wall's concrete 1.3, steel 1.2, wood and rubber 0); a stroke needs a slide of 0.5 m/s (was 1.5) and a press of 0.75 m/s (was press × cut); a clip of 181 or before no longer reads.
+ * 183: the bumpers take paint strokes: a slide on an attached bumper (its rest box) feeds a stroke as the body's paint does (`TAKES_SCRATCH` gains the four bumper finishes), and the paint cover counts the bumper skins but not the fittings drawn in their meshes (exhaust tips, tow hitch, band inlays), so their strokes are kept where they show; a clip of 182 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 182;
+const REPLAY_VERSION = 183;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
