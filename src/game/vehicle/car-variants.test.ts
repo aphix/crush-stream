@@ -15,7 +15,7 @@ import { drawnLamp, drawnPart, GRILLE_BACKING, lampRest, lampSeatAt, withSeamCov
 import { RAIL_LIP, RAIL_PROUD, gatePosts, makeGreenhouseFrame, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { makeChassisGeometry, withGateSurround } from "./car-chassis-mesh.ts";
 import { gateLip, gateSpoiler, makeRoofFittings, withFrontBand, withHoodBulge, withRearFittings } from "./car-fittings-mesh.ts";
-import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassTrim, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield, windshieldPoint, windshieldSideX } from "./car-glass.ts";
+import { DOOR_GLASS_SEAT, domeFall, glassCorners, makeBodyGlassTrim, makeRearGlass, makeRearSideGlass, makeSideGlass, makeWindshield, rearGlassInset, windshieldPoint, windshieldSideX } from "./car-glass.ts";
 import { windshieldEdge } from "./windshield-edge.test-util.ts";
 import { archLipGeometry, makeWellLiners } from "./car-well-mesh.ts";
 import { LIGHT_BAR_FOOT, PAINT_COLOR_TONE, PAINTED_ATTRIBUTE, PUSH_BAR_REACH, TRIM_BLACK, TRIM_CHROME, TRIM_FINISH, bumperMaterial, makeLightBar, toned, trimMaterial } from "./car-materials.ts";
@@ -1491,6 +1491,37 @@ describe("given a body style's underside, door aperture, mirror and pillar hardp
       expect(outside.length, `side ${side}: gate post head vertices outside the slab's thickness: ${outside.join("; ")}`).toBe(0);
     }
     expect(gatePosts(CAR_STYLES.hatchback).length, "the hatchback's gate carries a D-post share").toBe(0);
+  });
+
+  it("when a roof-hinged gate is read beside its glass, then every point up each side edge of the glass has the gate's own mesh within 6 mm (its rails hang 5 mm under the pane): a gone glass leaves a window framed at its edge, not a panel and a spoiler floating apart", () => {
+    /** A frame further than this (m) off the glass's edge leaves a slit beside it. */
+    const AT_EDGE = 0.006;
+    const STATIONS = 10;
+    const triangle = new THREE.Triangle();
+    const closest = new THREE.Vector3();
+    const gates = CAR_STYLE_IDS.filter((id) => roofHinged(CAR_STYLES[id].boot));
+    expect(gates, "the glass-carrying gates").toEqual(["hatchback", "wagon"]);
+    for (const id of gates) {
+      const style = drawnStyle(CAR_STYLES[id]);
+      const gate = withGateSurround(makeTrunkGeometry(CAR_STYLES[id]), style);
+      gate.translate(0, ...bootPivot(style.boot));
+      const pos = gate.getAttribute("position");
+      const index = gate.getIndex()!;
+      const { base, top } = style.rearGlass;
+      const slits: string[] = [];
+      for (const sign of [1, -1]) {
+        for (let k = 0; k <= STATIONS; k++) {
+          const edge = rearGlassInset(style, lerp(base[1], top[1], k / STATIONS), 0).multiply(new THREE.Vector3(sign, 1, 1));
+          let gap = Infinity;
+          for (let f = 0; f < index.count; f += 3) {
+            triangle.setFromAttributeAndIndices(pos, index.getX(f), index.getX(f + 1), index.getX(f + 2));
+            gap = Math.min(gap, triangle.closestPointToPoint(edge, closest).distanceTo(edge));
+          }
+          if (gap > AT_EDGE) slits.push(`(${edge.toArray().map((v) => v.toFixed(3)).join(", ")}) ${(gap * 1000).toFixed(1)} mm`);
+        }
+      }
+      expect(slits.length, `${id}: glass edge points with no gate frame within ${AT_EDGE * 1000} mm: ${slits.join("; ")}`).toBe(0);
+    }
   });
 
   it("when the wagon's rear glass top edge is read against the gate's slab and its flange, then every vertex of it is inside their thickness: no slit between the glass and the spoiler over its dome-fallen corners", () => {

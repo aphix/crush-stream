@@ -21,7 +21,7 @@
  * the point x,y,z (default the origin), looking at it. The showcase's own `cam=` (the owner's link, the same six numbers) in `--hash`
  * puts the eye there with no `--camera`, which wins when both are given.
  * `--sirens` flashes every light bar (with `night=1` in the hash: the lamps as seen in a night pursuit). `--break headL,headR,tailL,tailR`
- * breaks those lamps on every car, as a corner crush does. `--brake` holds every car's brake pedal down (its brake lamps lit).
+ * breaks those lamps on every car, as a corner crush does. `--smash rear,windshield,...` shatters those panes (`GLASS_NAMES`) on every car. `--brake` holds every car's brake pedal down (its brake lamps lit).
  * `--view side|top|iso|rear-iso` draws the hash's car through the camera spec trace-car writes for that view (`--camera-out`,
  * `trace-camera.mjs`: car space, orthographic for side and top), at the spec's size, so the shot lines up with trace-car's overlay;
  * `scripts/landing-shots.mjs` runs the pair. `--backdrop <colour>` draws the car alone over that colour (no garage room, no fog).
@@ -88,6 +88,7 @@ const { values } = parseArgs({
     state: { type: "string", default: "intact" },
     sirens: { type: "boolean" },
     break: { type: "string" },
+    smash: { type: "string" },
     brake: { type: "boolean" },
     "gas-only": { type: "boolean" },
     boost: { type: "string" },
@@ -310,6 +311,9 @@ const LAMP_AT = { headL: 0, headR: 1, tailL: 2, tailR: 3 };
 for (const name of values.break?.split(",") ?? []) {
   if (!(name in LAMP_AT)) throw new Error(`--break ${name}: one of ${Object.keys(LAMP_AT).join(", ")}`);
   for (const car of engine["live"]()) car["breakLamp"](car["lamps"][LAMP_AT[name]]);
+}
+for (const name of values.smash?.split(",") ?? []) {
+  for (const car of engine["live"]()) if (!car.smashGlass(name) && !car["glassPanes"].some((g) => g.name === name)) throw new Error(`--smash ${name}: no such pane on the ${car.style.id}`);
 }
 if (camera !== undefined) {
   const [radius, pitch, angle, x = 0, y = 0, z = 0] = camera;

@@ -37,7 +37,9 @@ half-width, beltline, roof height and width, how much greenhouse), `roofZ`, `win
 optional `z0` leans its panel from its bottom edge `[y0, z0]` up to its hinge; a deck lid's optional `drop` `{ y, w, z? }` wraps it
 over the tail edge (8 cm fold) and down the rear face to `y`, `w` its half-width there, the face's top at `z1` and its bottom at `z` (default `z1`); optional
 `pivot` `[y, z]` is the hinge line the lid turns about, default its `origin`, and decides the swing: a chord rising over 45° from
-it is a drop gate, a pivot over 0.2 m above the panel's top edge is a roof-hinged hatch or liftgate that carries the rear glass;
+it is a drop gate, a pivot over 0.2 m above the panel's top edge is a roof-hinged hatch or liftgate that carries the rear glass
+(and, drawn only, a painted rail up each side of it from the panel to the spoiler: behind the glass's frit band, and out under a
+`postShare` post, so a gone glass leaves its window framed at the edge);
 optional `swing` is its `LidSwing` (mass, struts, stop rise, latch and tear bars), default the preset for its kind;
 [`DOOR_RIG.md`](DOOR_RIG.md), Lids), `lamps`, and the
 optional `livery` and `lightBar`. `rig` overrides the soft-body cages a body's panels need.

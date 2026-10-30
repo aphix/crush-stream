@@ -4,7 +4,7 @@ import { detSin } from "../kernel/physics-core.js";
 import { BLACKOUT, CABIN_TRIM, INNER_PANEL, MATTE_BLACKOUT, PRIMER_ATTRIBUTE, WELL_PANEL } from "./constants.ts";
 import { markSkinDynamic } from "../deform/fast-normals.ts";
 import type { BodyStyle, ProfileStation } from "./car-variants.ts";
-import { gatePosts, makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
+import { gatePosts, gateRails, makeGreenhouseFrame, makeBox, makeRoofGeometry } from "./car-greenhouse-mesh.ts";
 import { gateLip, gateSpoiler, makeRoofFittings, withTone } from "./car-fittings-mesh.ts";
 import { archLipGeometry, makeWellLiners, wellHumpGeometry } from "./car-well-mesh.ts";
 import {
@@ -356,11 +356,11 @@ export function makeChassisGeometry(style: BodyStyle = SEDAN, source: BodySource
 }
 
 /**
- * `lid` (the drawn roof-hinged gate, local to `bootPivot(style.boot)`) with its surround merged after it: the D-post and spoiler shares that ride the gate when it opens
+ * `lid` (the drawn roof-hinged gate, local to `bootPivot(style.boot)`) with its surround merged after it: the D-post shares or glass rails and the spoiler share that ride the gate when it opens
  * or tears (`userData.surround` is the surround's first vertex). Without any, `lid` itself.
  */
 export function withGateSurround(lid: THREE.BufferGeometry, style: BodyStyle): THREE.BufferGeometry {
-  const posts = gatePosts(style);
+  const posts = [...gatePosts(style), ...gateRails(style)];
   const spoiler = gateSpoiler(style);
   const lip = gateLip(style);
   if (posts.length === 0 && !spoiler) return lid;

@@ -1178,10 +1178,15 @@ function postPiece(sign: number, style: BodyStyle, held: PostCorners, share: rea
   const geo = roundedPillarFromCorners(sign, held, 0.05, true, { share, side });
   splitLoftOnLowDiagonals(geo);
   splitCreases(geo, CREASE_DEGREES.post);
+  geo.name = "rear";
+  return toneAsRearPost(geo, style);
+}
+
+/** `geo` toned as `style`'s rear post (`blackout.rear`). */
+function toneAsRearPost(geo: THREE.BufferGeometry, style: BodyStyle): THREE.BufferGeometry {
   const tone = style.blackout?.rear;
   geo.userData.blackout = tone === true || tone === "matte";
   geo.userData.matte = tone === "matte";
-  geo.name = "rear";
   return geo;
 }
 
@@ -1189,6 +1194,46 @@ function postPiece(sign: number, style: BodyStyle, held: PostCorners, share: rea
 export function gatePosts(style: BodyStyle): THREE.BufferGeometry[] {
   const { held, share } = rearPostCorners(style, "drawn");
   return share ? [-1, 1].map((sign) => postPiece(sign, style, held, share, "gate")) : [];
+}
+
+/**
+ * A gate's glass rail (m): how far under the glass its face hangs (a pane over paint any closer fights it at range) and its depth down from there, both
+ * straight down so it never reaches forward past the gate's shut line (a torn gate flies as its drawn box); and its reach out from the glass's edge under a
+ * gate's D-post share (inside the post's 2 cm overhang of the edge), filling the slit the post's rounded inner corner leaves.
+ */
+const GATE_RAIL = { under: 0.005, depth: 0.025, underPost: 0.015 } as const;
+/** A gate glass rail's segments up the glass's side edge. */
+const GATE_RAIL_SEGMENTS = 4;
+
+/**
+ * A roof-hinged gate's rails up each side of its glass (drawn, car frame, both sides), toned as the rear post, joining its panel to its spoiler so a gone glass
+ * leaves a window framed at its edge: from the edge in behind the frit band (if any), and out under the gate's D-post share (if any); none for a deck lid.
+ */
+export function gateRails(style: BodyStyle): THREE.BufferGeometry[] {
+  if (!roofHinged(style.boot)) return [];
+  const { base, top, frame } = style.rearGlass;
+  const [inside, outside] = [frame?.[0] ?? 0, rearPostCorners(style, "drawn").share ? GATE_RAIL.underPost : 0];
+  if (inside + outside === 0) throw new Error(`${style.id}: a gate's glass rails stand behind a frit band or under a D-post share, and its gate has neither`);
+  const ts = Array.from({ length: GATE_RAIL_SEGMENTS + 1 }, (_, k) => k / GATE_RAIL_SEGMENTS);
+  // Unit section: x from the rail's outer edge (0) to its inner edge (1), y from its face (0) down to its back (1).
+  const section: Pt[] = [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 },
+  ];
+  return [1, -1].map((sign) => {
+    const geo = loftFromRings(ts.map(() => section), ts, 0, 1);
+    const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      const inset = lerp(-outside, inside, pos.getX(i));
+      const p = rearGlassInset(style, lerp(base[1], top[1], pos.getZ(i)), inset);
+      pos.setXYZ(i, sign * p.x, p.y - GATE_RAIL.under - pos.getY(i) * GATE_RAIL.depth, p.z);
+    }
+    ensureOutwardNormals(geo);
+    splitCreases(geo, CREASE_DEGREES.post);
+    return toneAsRearPost(geo, style);
+  });
 }
 
 export function makeGreenhouseFrame(style: BodyStyle, source: BodySource = "drawn"): THREE.BufferGeometry[] {
