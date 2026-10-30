@@ -407,7 +407,7 @@ const P_TYRE = 22;
 /** The tyre side rows' points summed by their closing (x, y, z) and that closing's sum: where a tyre hit lands. */
 const P_TX = 23;
 const P_TW = 26;
-/** What the rows' impulses against the other car changed (`GIVEN`, summed over those rows): the stepping car's velocity and spin, the other's at once, and the weight it bears for its next step. */
+/** What the rows' impulses against the other car changed (`GIVEN`, summed over those rows): the stepping car's velocity and spin, the other's at once, and the weight it bears for its next step (per second until it takes it, then that over the slice). */
 const P_GAVE_A = 27;
 const P_GAVE_B = 33;
 const P_BORNE = 39;
@@ -799,8 +799,14 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   const surf = beginContacts(car);
   body.surf = surf;
   // The weight the cars on its top bore on it since its last step, taken after its move so its contacts hold it (no sinking under it).
-  surf.takeBorne(car.slot, _lv, _lw);
-  for (let i = 0; i < queue.size; i++) if (PENDING_B[i] === car) PENDING[i * PENDING_STRIDE + P_TAKEN] = 1;
+  surf.takeBorne(car.slot, _lv, _lw, dt);
+  // A hit's rows bore that weight this slice, so the slice's `dt` is theirs too: what `rewindRows` then takes back of the motion is that rate over it.
+  for (let i = 0; i < queue.size; i++) {
+    const f = i * PENDING_STRIDE;
+    if (PENDING_B[i] !== car || PENDING[f + P_TAKEN] === 1) continue;
+    PENDING[f + P_TAKEN] = 1;
+    for (let k = 0; k < 6; k++) PENDING[f + P_BORNE + k] = PENDING[f + P_BORNE + k]! * dt;
+  }
   v.add(_lv);
   w.add(_lw);
   const cls = carClass(car);

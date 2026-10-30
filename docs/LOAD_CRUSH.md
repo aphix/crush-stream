@@ -25,7 +25,10 @@ Load crush is how `stepAir`, the rigid flight step, meets a body's five faces (r
 - A car resting on another car's top presses it back (`CarSurfaces.press`): the lower car takes the upper's reaction as a
   velocity change, so the bottom roof carries every car above it, and a car's yield is judged against **its own** weight
   in the lower car's roof (`mOwner / mSelf`). A car carried this way stays in `stepAir`; the plan SAT leaves it alone because the
-  two cages' heights do not overlap at the contact.
+  two cages' heights do not overlap at the contact. The weight a car bears onto the car under it is a force: it is kept per second
+  (`CarSurfaces.bear`) and taken over the carrier's own next slice (`takeBorne`), so a long slice followed by a short one does not
+  hand the carrier more than the weight above it (kept as the slice's impulse, a settled 4-stack's second car bobbed at 12-15 mm/s
+  in 1/110 s frames, an 8.75 ms step and a 0.34 ms remainder; now under 2 mm/s).
 - A face's crush grows by `pen / follow` (`FOLLOW`: how far the drawn top follows the face's crush at the contact), so a contact's **dynamic** impulse spends only `FOLLOW` of its crush's work on the face's budget; the weight it bears stays at the law's force. A car set 2 cm over another's roof by its belly rows then crushes that roof as the law gives for a car released that high, within 10 mm at 60, 144 and 240 Hz (`vehicle/stack-roof-law.test.ts`).
 - A step runs at 480 Hz (`stepWorld`: up to 8 slices, `CONTACT_HZ`) only while a body in flight touched something last
   slice (`contactHz`); free flight, a body frozen at rest, and every car with no flight cost what they cost otherwise. No
@@ -47,16 +50,18 @@ and the same law under impact gives the numbers below: the work a drop does is `
 
 ## Bars
 
-Stack, wagons, each car dropped 2 cm onto the roof below (bottom car first) and turned 180° from it, read once no roof's crush moves 1 mm in 0.5 s (about 1 s after the drop; within 8 s or the test fails), then again 5 s on:
+Stack, wagons, each car falling 2 cm before it first touches the roof below (bottom car first; a turned wagon's front tyres meet that roof 46 mm under its keel) and turned 180° from it, stepped in even steps per frame as the engine's pacer steps (`tickWorld`'s `"even"`), read once no roof's crush moves 1 mm in 0.5 s (about 1 s after the drop; within 8 s or the test fails), then again 5 s on:
 
 | cars | bottom | 2nd | 3rd | top | 5 s on |
 |---|---|---|---|---|---|
-| 2 | 116 mm | 0 | | | same |
-| 3 | 191 mm | 108 mm | 0 | | same |
-| 4 | **250 mm** | 211 mm | 138 mm | **0 mm** | roofs 0 mm moved, the base car 1.7 mm off its spot (bar 20 mm), cars sink 0 / 0 / 0.4 / 4.1 mm |
+| 2 | 115 mm | 0 | | | same |
+| 3 | 181 mm | 117 mm | 0 | | same |
+| 4 | **232 mm** | 186 mm | 150 mm | **0 mm** | roofs 0 mm moved, the base car 1.6 mm off its spot (bar 20 mm), cars sink 0 / 0 / 3.9 / 6.0 mm |
 
 Strictly increasing from the top; the bottom roof under three cars lands in the **0.12-0.26 m** band (FMVSS 216's static
-122 mm for 3 W, plus the overshoot of the cars' 2 cm fall). The same 4-stack at 60 / 144 / 240 Hz reads within 4 % + 2 mm.
+122 mm for 3 W, plus the overshoot of the cars' 2 cm fall). The same 4-stack at 60 / 72 / 90 / 120 / 144 / 180 / 200 / 240 Hz reads
+within 4 % + 2 mm (224-232 / 184-188 / 149-153 mm). Set 2 cm over the roof by the keel, the tyres started 26 mm in it and that
+overlap was booked as crush the moment the roof first yielded: a 1 µm change of the start then moved the third roof 7 mm.
 The stack only has to stand while that ordering is read: the top cars of every non-sedan stack keep a 0.1-0.2 mm, 1-5 mm/s chatter (a rigid belly pair and one tyre spring), so stillness is not asked of it. The sedan's roof sits 0.45 m behind its belly pan, so an aligned stack of them leans once its C-post is the drawn sail; the wagon's long flat roof carries the car above.
 
 A car dropped on a face, 60 Hz, crush after settling (mm):

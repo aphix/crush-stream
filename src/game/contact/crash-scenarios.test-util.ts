@@ -199,10 +199,12 @@ let slabSolids: RigSolids | null = null;
 
 /**
  * One rendered frame of `CrashEngine.tickInner`: the physics part and the phase clock (sandbox impact rule). With `pace` the
- * frame is stepped as the engine does (`SimPacer`: whole slices of its floor); without it the frame's time is cut into
- * `physicsSlice`s that end exactly on it. A world with a slab arms it as the engine's range does, and puts back what was armed.
+ * frame is stepped as the engine does (`SimPacer`: whole slices of its floor); with `"even"` the frame's time is cut into the
+ * fewest equal steps no longer than a `physicsSlice`, so like `SimPacer` it runs no short remainder step; without either it is cut
+ * into `physicsSlice`s that end exactly on it, the last one the remainder. A world with a slab arms it as the engine's range does,
+ * and puts back what was armed.
  */
-export function tickWorld(w: CrashWorld, wallDt = DT, pace?: SimPacer): void {
+export function tickWorld(w: CrashWorld, wallDt = DT, pace?: SimPacer | "even"): void {
   easeTimeScale(w.clock, wallDt);
   const simDt = wallDt * w.clock.timeScale;
   const vmax = sliceSpeed(w.cars);
@@ -214,7 +216,7 @@ export function tickWorld(w: CrashWorld, wallDt = DT, pace?: SimPacer): void {
       slabSolids.syncSlab(slab);
       armSolids(slabSolids);
     }
-    if (pace) w.world.fine = pace.fine;
+    if (typeof pace === "object") w.world.fine = pace.fine;
     stepWorld(w.world, h);
     for (const e of w.world.ejection?.take() ?? []) {
       w.ejections.push(e);
@@ -228,12 +230,12 @@ export function tickWorld(w: CrashWorld, wallDt = DT, pace?: SimPacer): void {
       car.stepBreakage(h);
     }
   };
-  if (pace) pace.run(simDt, w.clock.timeScale, vmax, true, Infinity, step);
+  if (typeof pace === "object") pace.run(simDt, w.clock.timeScale, vmax, true, Infinity, step);
   else {
     w.acc = Math.min(0.05, w.acc + simDt);
     let steps = 0;
     while (w.acc > 1e-5 && steps < 8) {
-      const h = physicsSlice(w.acc, vmax);
+      const h = pace === "even" ? w.acc / Math.ceil(w.acc / physicsSlice(w.acc, vmax) - 1e-9) : physicsSlice(w.acc, vmax);
       step(h);
       w.acc -= h;
       steps++;

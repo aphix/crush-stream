@@ -16,18 +16,28 @@ import type { CarStyleId } from "./car-variants.ts";
  * weight above it, and a car dropped on its roof, nose, tail or flank crushes that face by its own weight and drop.
  * Headless, through the engine's own step (`stepWorld`), on the flat pad.
  */
-/** Belly-to-roof gap of a car above (m): its belly starts this far over the drawn roof of the car below. */
+/** Gap (m) a car above falls before it first touches the roof of the car below. */
 const GAP = 0.02;
-/** What a stack is built of: the car, whether each is turned 180° from the one under it, and whether it is read once the roofs stop crushing (else once every car stands still). */
+/** What a stack is built of: the car, whether each is turned 180° from the one under it, how far under its keel (m) a car first meets the roof below it, and whether it is read once the roofs stop crushing (else once every car stands still). */
 interface StackRig {
   readonly style: CarStyleId;
   readonly turn: boolean;
+  readonly reach: number;
   readonly still: boolean;
 }
-/** The stacks of the crush claims: wagons, whose long flat roof carries the car above, each turned from the one under it (an aligned stack of the sedan, whose roof sits 0.45 m behind its belly pan, leans). */
-const WAGONS: StackRig = { style: "wagon", turn: true, still: false };
+/**
+ * The stacks of the crush claims: wagons, whose long flat roof carries the car above, each turned from the one under it (an aligned stack of the sedan, whose roof sits 0.45 m behind its belly pan, leans).
+ * A turned wagon's front tyres meet the roof below 46 mm under its keel: set 2 cm over it by the keel, they started 26 mm past their spring stop in that roof, which booked the overlap as crush.
+ */
+const WAGONS: StackRig = { style: "wagon", turn: true, reach: 0.046, still: false };
 /** The pair of the stillness row: aligned sedans, read once both stand still. */
-const SEDAN_PAIR: StackRig = { style: "sedan", turn: false, still: true };
+const SEDAN_PAIR: StackRig = { style: "sedan", turn: false, reach: 0, still: true };
+/** The frame rates the rate claim steps a stack at. */
+const RATES = [60, 72, 90, 120, 144, 180, 200, 240] as const;
+/** A frame rate whose frame is an 8.75 ms step (`physicsSlice` at rest) and a 0.34 ms remainder, as `tickWorld` steps it without even steps: slices of 1.75 and 0.34 ms. */
+const SPLIT_HZ = 110;
+/** A carrying car in a settled stack stands under this vertical speed (m/s): read as the slice's impulse, the weight above it bobbed it at 15 mm/s. */
+const CARRIER_STILL_MPS = 0.002;
 /** A stack has settled once no roof's crush moves `SETTLE_SINK` in `STILL_S`: the crush the claims read is done. It has done so within this many seconds of the drop (measured about 1 s). */
 const SETTLE_S = 8;
 const SETTLE_SINK = 1e-3;
@@ -35,11 +45,14 @@ const SETTLE_SINK = 1e-3;
 const STILL_SPEED = 1e-3;
 const STILL_S = 0.5;
 
-/** Run `w` until no roof's crush moves `SETTLE_SINK` over `STILL_S`: the stack the claims are about has crushed what it will. One whose roofs keep crushing fails here, not as a wrong number below. */
+/**
+ * Run `w` until no roof's crush moves `SETTLE_SINK` over `STILL_S`: the stack the claims are about has crushed what it will. One whose roofs keep crushing fails here, not as a wrong number below.
+ * Each frame runs in even steps, as the engine's pacer runs it (`tickWorld`'s `"even"`): no short remainder step.
+ */
 function settle(w: CrashWorld, cars: readonly DeformableCar[], hz: number): void {
   let from = cars.map(roofSink);
   for (let f = 1; f <= SETTLE_S * hz; f++) {
-    tickWorld(w, 1 / hz);
+    tickWorld(w, 1 / hz, "even");
     if (f % Math.round(STILL_S * hz) !== 0) continue;
     const now = cars.map(roofSink);
     if (now.every((s, i) => Math.abs(s - from[i]!) < SETTLE_SINK)) return;
@@ -68,7 +81,7 @@ function run(w: CrashWorld, seconds: number, hz = 60): void {
   for (let f = 0; f < seconds * hz; f++) tickWorld(w, 1 / hz);
 }
 
-/** `n` cars one above the other, bottom first: the bottom on the ground, the rest falling from `GAP` over the drawn roof below. */
+/** `n` cars one above the other, bottom first: the bottom on the ground, the rest falling `GAP` onto the roof below. */
 function stack(n: number, hz = 60, rig: StackRig = WAGONS): { cars: DeformableCar[]; w: CrashWorld } {
   const cars: DeformableCar[] = [];
   for (let i = 0; i < n; i++) {
@@ -76,7 +89,7 @@ function stack(n: number, hz = 60, rig: StackRig = WAGONS): { cars: DeformableCa
     c.spawnFacing(0, 0, rig.turn && i % 2 === 1 ? Math.PI : 0, 0);
     if (i > 0) {
       const under = cars[i - 1]!;
-      c.group.position.y = under.group.position.y + crownY(under) - keelY(c) + GAP;
+      c.group.position.y = under.group.position.y + crownY(under) - keelY(c) + rig.reach + GAP;
     }
     c.airborne = i > 0;
     c.parked = true;
@@ -142,12 +155,23 @@ describe("given a stack of cars dropped one on the next on the flat pad, each ro
     expect(bottom[1]! > bottom[0]! + 0.02 && bottom[2]! > bottom[1]! + 0.02, `bottom roof under 1, 2, 3 cars: ${bottom.map((b) => b.toFixed(3)).join(", ")} m`).toBeTruthy();
   });
 
-  it("when a stack of four settles while simulated at 60, 144 and 240 Hz, then every roof is crushed the same amount at all three rates", () => {
-    const sinks = [60, 144, 240].map((hz) => stack(4, hz).cars.map(roofSink));
+  it("when a stack of four settles while simulated at 60, 72, 90, 120, 144, 180, 200 and 240 Hz, then every roof is crushed the same amount at every rate", () => {
+    const sinks = RATES.map((hz) => stack(4, hz).cars.map(roofSink));
     for (let i = 0; i < 3; i++) {
       const v = sinks.map((s) => s[i]!);
-      expect(Math.max(...v) - Math.min(...v), `car ${i}'s roof at 60/144/240 Hz: ${v.map((x) => x.toFixed(3)).join(" / ")} m`).toBeLessThan(0.04 * Math.max(...v) + 0.002);
+      expect(Math.max(...v) - Math.min(...v), `car ${i}'s roof at ${RATES.join("/")} Hz: ${v.map((x) => x.toFixed(3)).join(" / ")} m`).toBeLessThan(0.04 * Math.max(...v) + 0.002);
     }
+  });
+
+  it("when a settled stack of four runs 3 s in frames of an 8.75 ms step and a 0.34 ms remainder, then the second car, which carries the two above it, stays still: the weight borne on it is a force, not a slice's impulse", () => {
+    const { cars, w } = stack(4, 144);
+    run(w, 1, 144);
+    let fastest = 0;
+    for (let f = 0; f < 3 * SPLIT_HZ; f++) {
+      tickWorld(w, 1 / SPLIT_HZ);
+      fastest = Math.max(fastest, Math.abs(cars[1]!.velocity.y));
+    }
+    expect(fastest, `the second car moves at up to ${(fastest * 1000).toFixed(1)} mm/s`).toBeLessThan(CARRIER_STILL_MPS);
   });
 
   it("when a settled stack of four is restored from a clip keyframe into fresh cars, then the roofs show the crush they had live, carry on from it for 3 s, and the crushed cars are wrecks", () => {
@@ -242,7 +266,7 @@ function drawnTopSink(c: DeformableCar): number {
 
 describe("given a car's roof another car presses, which takes the belly's imprint for good", () => {
   it("when a car settles on its roof, then the roof takes the imprint and its drawn top sinks no further than the roof's packed depth", () => {
-    const lower = stack(2).cars[0]!;
+    const lower = stack(2, 60, SEDAN_PAIR).cars[0]!;
     expect(lower.deform.imprint[0], "the control: a belly resting on the roof imprints it").not.toBe(IMPRINT_NONE);
     const sink = drawnTopSink(lower);
     expect(sink > 0.01 && sink <= faceMax(FACE_TOP) + DRAWN_SLACK, `the drawn roof sank ${sink.toFixed(3)} m`).toBeTruthy();

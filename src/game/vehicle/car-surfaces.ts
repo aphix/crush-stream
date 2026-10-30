@@ -159,7 +159,7 @@ export class CarSurfaces extends Surface {
   /** Per car, 1 if the stepping car struck its top at a crash's closing speed this slice: met, but resting on nothing. */
   private struck = new Uint8Array(1);
   /**
-   * Per car, 6 numbers (velocity, spin): the weight the cars resting on its top bore on it at their contacts (`bear`), which its next
+   * Per car, 6 numbers (velocity, spin, each per second): the weight the cars resting on its top bore on it at their contacts (`bear`), which its next
    * rigid step takes after its move and before its own contacts, so they hold it and bear it on in turn (`takeBorne`). Pushed into its
    * velocity at once, after its own step, a stack's bottom car moved down at the weight of the nine above (0.19 m/s) every slice and its
    * contacts lifted it back 0.4 mm a slice (1.9 mm a slice at the top): 28-34 kJ of lift every 0.5 s, and the column fell at 13-17 s.
@@ -278,7 +278,7 @@ export class CarSurfaces extends Surface {
     this.react[own]! += j;
   }
 
-  /** Car `own`, under the stepping car, takes `k` of velocity change `dv` and spin change `dw` (the weight borne on it) at its next rigid step. */
+  /** Car `own`, under the stepping car, takes `k` of velocity change `dv` and spin change `dw` per second (the weight borne on it) over its next rigid step. */
   bear(own: number, dv: THREE.Vector3, dw: THREE.Vector3, k: number): void {
     const o = 6 * own;
     const b = this.borne;
@@ -290,8 +290,8 @@ export class CarSurfaces extends Surface {
     b[o + 5] = b[o + 5]! + dw.z * k;
   }
 
-  /** The weight borne on car `i` since its last rigid step, into `dv`, `dw` (zero when none), and spent. */
-  takeBorne(i: number, dv: THREE.Vector3, dw: THREE.Vector3): void {
+  /** The weight borne on car `i` since its last rigid step, over that step's slice `dt` (s), into `dv`, `dw` (zero when none), and spent. */
+  takeBorne(i: number, dv: THREE.Vector3, dw: THREE.Vector3, dt: number): void {
     const o = 6 * i;
     const b = this.borne;
     if (i < 0 || o >= b.length) {
@@ -299,8 +299,8 @@ export class CarSurfaces extends Surface {
       dw.set(0, 0, 0);
       return;
     }
-    dv.set(b[o]!, b[o + 1]!, b[o + 2]!);
-    dw.set(b[o + 3]!, b[o + 4]!, b[o + 5]!);
+    dv.set(b[o]!, b[o + 1]!, b[o + 2]!).multiplyScalar(dt);
+    dw.set(b[o + 3]!, b[o + 4]!, b[o + 5]!).multiplyScalar(dt);
     b.fill(0, o, o + 6);
   }
 

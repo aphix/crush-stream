@@ -351,7 +351,7 @@ export function stepWorld(w: World, dt: number): void {
       // A put-away car (`EPICENTER.storedSkip`) is not stepped: reset, hidden and still 4 km off the course until the race places it again. What a stepped one takes of
       // the weight carried on its roof (`takeBorne`, zeroed by the take) is taken and dropped: left in the slot it would reach the car's first step after it is placed again.
       if (idle(car)) {
-        w.surfaces.takeBorne(ci, _borneV, _borneW);
+        w.surfaces.takeBorne(ci, _borneV, _borneW, h);
         continue;
       }
       const hc = lonely.flag[ci] ? dt : h;
