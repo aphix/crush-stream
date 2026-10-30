@@ -239,13 +239,14 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
 - **Bare metal:** the paint's `primer` attribute draws procedural riveted steel (`bare-metal.ts`: object-space seams, rivet
   rows, a tint per sheet), so a torn panel's or bumper's under-panel bends with the body and costs no texture or draw. A torn
   bumper bares the painted body it covered (`bumperBare`), a reset paints it again.
-- **Paint scratches:** wherever sparks fly, the paint takes a stroke (every spark speed is over the strokes' press gate), through one entry
+- **Paint scratches:** every contact where the painted body slides on something cuts a stroke, through one entry
   (`DeformableCar.scrape`): a car's slide on another (`scrapePair`), its body on the ground, a ramp or a prism's top (`car-air.ts`
   `scrapeWorld`: the most loaded sliding body row, its normal kept whole, so a roof slide marks the roof), and its footprint along a
   wall or prop's side (`prop-contact.ts` `scrapeSide`, over the patch the footprint has in the face, where the wall's sparks fly). A
   slide under 0.5 m/s (`SCRATCH_MIN_SLIP`) or pressing under 0.75 m/s cuts nothing (a rigid face presses as hard as the body closes
   or slides on it, `rigidPress`); the striker's cut (`SCRATCH_CUT`: chrome 1, black plastic 0.4, concrete and stone 1.3, steel 1.2,
-  asphalt 1, dirt 0.4, rubber and grass 0) shapes the line. Strokes live in the car's list (`vehicle/paint-scrapes.ts`, sim state on
+  asphalt 1, dirt 0.4, rubber and grass 0) shapes the line. Sparks with no stroke: a popped hub's on the ground (the bare hub, no
+  paint; the body beside it cuts once it slides) and a hit with no slide (a head-on's impact burst). Strokes live in the car's list (`vehicle/paint-scrapes.ts`, sim state on
   the wire and in the keyframe), over the heights the two bodies share at the contact (`satCars`'s `patch.low`/`high`): each 0.2 s commit lays its
   stroke level on the next lane across that band (golden-ratio steps, 10 % clear of each end), so a sideswipe's lines lie at many
   heights, a tall car's on a low one's where they really meet. Each stroke is cut to the run of it that lies on drawn paint: the
