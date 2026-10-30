@@ -86,6 +86,12 @@ export class Untangle {
   /** The box (handle; NaN: none yet) the dummy now being looked at is leaving, and by which face. */
   private shared = NaN;
   private sharedFace = -1;
+  /** The collider `intersectionsWithPoint` found the part's middle in (`take`), null for none. */
+  private found: Collider | null = null;
+  private readonly take = (collider: Collider): boolean => {
+    this.found = collider;
+    return false;
+  };
 
   load(rapier: Rapier): void {
     this.flags = rapier.QueryFilterFlags.EXCLUDE_SENSORS;
@@ -137,8 +143,7 @@ export class Untangle {
     const groups = own.collisionGroups();
     // Every collider the part hits but its own dummy's: the filter half without his own bit.
     const query = groups & ~(groups >>> 16);
-    // A part that hits nothing (groups 0: the glass rows' torso-only dummy) is in nothing; Rapier 0.19's projectPoint traps (wasm unreachable)
-    // instead of returning null when no collider passes its filter, so it is not asked.
+    // A part that hits nothing (groups 0: the glass rows' torso-only dummy) is in nothing.
     if ((query & 0xffff) === 0 || query >>> 16 === 0) return false;
     const k = i % PARTS.length;
     const inside = this.inside(world, part, k, query);
@@ -159,13 +164,11 @@ export class Untangle {
     _at.x = c.x;
     _at.y = c.y;
     _at.z = c.z;
-    const hit = world.projectPoint(c, true, this.flags, query);
-    if (hit === null) return null;
-    this.byAxis = false;
-    if (hit.isInside) return hit.collider;
-    this.byAxis = true;
-    // Nothing within half its length of its middle: the axis is clear, so the cast (and what it allocates) is skipped.
-    if (hypot3(hit.point.x - c.x, hit.point.y - c.y, hit.point.z - c.z) > axisHalf(k)) return null;
+    // Not `projectPoint`: Rapier 0.19's traps (wasm unreachable) when no collider passes its filter; these two return nothing.
+    this.found = null;
+    world.intersectionsWithPoint(c, this.take, this.flags, query);
+    this.byAxis = this.found === null;
+    if (this.found !== null) return this.found;
     this.axis(part, k);
     const ray = this.ray!;
     ray.origin.x = _o.x;

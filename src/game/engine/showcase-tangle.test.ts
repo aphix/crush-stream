@@ -7,6 +7,7 @@ import { SLOTS } from "../present/ragdoll-config.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
+import { limbThrough } from "../present/ragdoll-tangle.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const FRAME = 1 / FRAME_HZ;
@@ -27,34 +28,9 @@ const PRESSES: readonly { frame: number; at: readonly [number, number, number] }
   { frame: 97, at: [1.2900612354278564, 0.13658347725868225, -3.896531343460083] },
   { frame: 105, at: [0.30558690428733826, 0.04920406639575958, -2.313683032989502] },
 ];
-/** A point of a limb this far (m) inside a torso's box is through it, not touching it. */
-const INSIDE = 0.01;
-const TORSO = PARTS[0].h;
 /** How long (s) a limb may stay through another dummy's torso: the time the contacts take to push it out. */
 const FREED_WITHIN = 0.5;
 const WATCH_SECONDS = 8;
-
-const _q = new THREE.Quaternion();
-const _r = new THREE.Quaternion();
-const _a = new THREE.Vector3();
-
-/** Whether a point of part `k`'s long axis (its ends, quarters and middle) is `INSIDE` m inside `torso`'s box. */
-function through(limb: RigidBody, k: number, torso: RigidBody): boolean {
-  const t = torso.translation();
-  const tr = torso.rotation();
-  _q.set(tr.x, tr.y, tr.z, tr.w).invert();
-  const p = limb.translation();
-  const pr = limb.rotation();
-  _r.set(pr.x, pr.y, pr.z, pr.w);
-  const h = PARTS[k]!.h;
-  const long = h[2] > h[1] ? 2 : 1;
-  for (let s = -1; s <= 1; s += 0.5) {
-    _a.set(0, long === 1 ? s * h[1] : 0, long === 2 ? s * h[2] : 0).applyQuaternion(_r);
-    _a.set(p.x + _a.x - t.x, p.y + _a.y - t.y, p.z + _a.z - t.z).applyQuaternion(_q);
-    if (Math.abs(_a.x) < TORSO[0] - INSIDE && Math.abs(_a.y) < TORSO[1] - INSIDE && Math.abs(_a.z) < TORSO[2] - INSIDE) return true;
-  }
-  return false;
-}
 
 describe("given the real engine booted on #scene=showcase", () => {
   let engine: CrashEngine;
@@ -66,7 +42,7 @@ describe("given the real engine booted on #scene=showcase", () => {
     for (let a = 0; a < SLOTS; a++) {
       for (let b = 0; b < SLOTS; b++) {
         if (a === b || !all[a]!.live || !all[b]!.live) continue;
-        for (let k = 2; k < PARTS.length; k++) if (through(all[a]!.bodies[k]!, k, all[b]!.bodies[0]!)) return true;
+        for (let k = 2; k < PARTS.length; k++) if (limbThrough(all[a]!.bodies[k]!, k, all[b]!.bodies[0]!)) return true;
       }
     }
     return false;
