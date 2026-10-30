@@ -183,10 +183,18 @@ function carAt(mps: number) {
 }
 
 describe("given a car coming at a walker standing on open ground", () => {
-  it("when a car at 3 m/s reaches him, then it does not run him down", () => {
+  it("when a car at 1 m/s reaches him, then it does not run him down (a sedan does from 1.12 m/s, `knocksDown`)", () => {
     frames(1);
-    const car = carAt(3);
-    expect(runsDown(car, 0, 0, 0), "the car's footprint meets him at this speed").toBe(false);
+    const car = carAt(1);
+    expect(runsDown(car, 0, 0, 0), "the car runs him down at this speed").toBe(false);
+  });
+
+  it("when a car at 10 m/s passes with its side 0.2 m off him, then it does not run him down: its side moves along him, not at him", () => {
+    frames(1);
+    const car = makeCar();
+    const plan = car.cage.fields.planBox;
+    launch(car, Math.max(-plan[0]!, plan[1]!) + 0.2, 0, 0, 0, 10);
+    expect(runsDown(car, 0, 0, 0), "the car runs him down").toBe(false);
   });
 
   for (const testCase of struckCases) {

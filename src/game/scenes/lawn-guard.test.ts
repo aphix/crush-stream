@@ -3,7 +3,6 @@ import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { parseTrack } from "../world/track-schema.ts";
 import { TRACKS } from "../world/tracks/index.ts";
 import { TRACK_ID } from "../world/constants.ts";
-import { STRIKE_SPEED } from "./figure-strike.ts";
 import { FIRE_EVERY, GUARD_AT_POST, GUARD_DEPLOY_S, GUARD_DOWN, GUARD_IN, KILL_HITS_MIN, KILL_HITS_SPREAD, LawnGuard, NO_TARGET, SHOT_RING } from "./lawn-guard.ts";
 import { KILL_WINDOW_S } from "./lawn-guard.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
@@ -89,15 +88,17 @@ function runAtGuard(mps: number) {
   return { guard, strikes, post };
 }
 
+/** A run-down guard is kicked off the car's centre line at more than this share of its speed. */
+const KICK_SHARE = 0.25;
+
+// One knock law (`knocksDown`): a sedan (858 kg) runs a guard down from 1.12 m/s.
 const runDownCases = [
   { it: "when a car drives through his post at 15 m/s, then he is run down", mps: 15 },
   { it: "when a car drives through his post at 5 m/s, then he is run down", mps: 5 },
+  { it: "when a car rolls through his post at 3 m/s, then he is run down", mps: 3 },
 ] as const;
 
-const standingCases = [
-  { it: "when a car rolls through his post at 3 m/s, then he stays standing", mps: STRIKE_SPEED - 1 },
-  { it: "when a car creeps through his post at 1 m/s, then he stays standing", mps: 1 },
-] as const;
+const standingCases = [{ it: "when a car creeps through his post at 1 m/s, then he stays standing", mps: 1 }] as const;
 
 describe("given the squad out at its posts, firing on a parked car (owner, 2026-10-15: guards ragdoll once a vehicle hits them)", () => {
   for (const testCase of runDownCases) {
@@ -111,7 +112,7 @@ describe("given the squad out at its posts, firing on a parked car (owner, 2026-
       expect(strike.car, "the car that struck him").toBe(1);
       expect(Math.abs(strike.x - post.x) < 1e-3 && Math.abs(strike.z - post.z) < 1e-3, "where his feet stood").toBeTruthy();
       expect(Math.abs(strike.vz - testCase.mps), "launched at the car's speed along its way").toBeLessThan(1e-3);
-      expect(Math.abs(strike.vx), "and kicked clear of its centre line").toBeGreaterThan(1);
+      expect(Math.abs(strike.vx), "and kicked clear of its centre line").toBeGreaterThan(KICK_SHARE * testCase.mps);
       expect(strike.vy, "with a lift").toBeGreaterThan(0);
       expect(Math.abs(strike.faceX * strike.faceX + strike.faceZ * strike.faceZ - 1), "facing a unit vector").toBeLessThan(1e-6);
     });

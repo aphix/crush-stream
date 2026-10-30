@@ -191,7 +191,7 @@ export class OnFootRig {
    * `hitter` is put `runUp` m short of where he stands and driven through him at `mps` along his own car's heading (`from` "behind" his car:
    * toward its nose) or against it (`from` "ahead": toward its tail, where the car's back is to a wall), a little outward of him so it clears
    * the car he left. The car must be one nobody drives, or one that holds its speed (a coasting fleet car); a car that brakes (a derby grid's) needs
-   * the speed and the short run-up to reach him above `STRIKE_SPEED` still.
+   * the speed and the short run-up to reach him fast enough to knock him down (`knocksDown`) still.
    */
   runDownBy(hitter: DeformableCar, own: DeformableCar, from: "behind" | "ahead" = "behind", mps = HIT_MPS, runUp = RUN_UP_M): void {
     const torso = this.torso();

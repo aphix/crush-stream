@@ -4,7 +4,7 @@ import { activeGround } from "../world/ground.ts";
 import { mulberry32 } from "../world/placements.ts";
 import { insidePolygon } from "../world/terrain.ts";
 import type { GuardSpec } from "../world/track-schema.ts";
-import { blankStrike, fell, runsDown, type FigureStrike } from "./figure-strike.ts";
+import { blankStrike, fell, looseRunsDown, runsDown, stood, type FigureStrike } from "./figure-strike.ts";
 
 /** Seconds from the alarm until the guards are out of the doors and firing (guessed: a few strides out of the porticos). */
 export const GUARD_DEPLOY_S = 2.5;
@@ -67,8 +67,8 @@ const NONE: readonly FigureStrike[] = [];
  * The guards of a house's grounds (`GuardSpec`): a car driving onto the lawn raises the alarm, and the squad runs out of the doors
  * to its posts, then once it is out (`GUARD_DEPLOY_S`) it fires on that car while it stays alive and within `RANGE`, a shot every
  * `FIRE_EVERY` s at full strength, `HIT_SHARE` of them hits; the hit drawn from `KILL_HITS_MIN`/`KILL_HITS_SPREAD` kills its engine (`DeformableCar.disable`, which
- * the recorder keys, so a replay holds the kill). A car moving over `STRIKE_SPEED` that meets a guard on the grounds runs him down
- * (`runsDown`): he is out of the squad until the next race (`GUARD_DOWN`, never the shooter, his gun gone from the rate), and the
+ * the recorder keys, so a replay holds the kill). A car, or a loose part of one, that meets a guard on the grounds and knocks him down runs him down
+ * (`runsDown`, `looseRunsDown`): he is out of the squad until the next race (`GUARD_DOWN`, never the shooter, his gun gone from the rate), and the
  * strike is queued for the ragdoll (`takeStrikes`); the car feels nothing. SIM state: `step` runs once per fixed step, after the
  * world, on a stream seeded per race, so the same steps give the same shots, runs and strikes. With `standDown` (the course's secret
  * is out: the VIP comes out instead) nobody fires and the squad stays in. The art reads the alarm, the target, the guards' places and
@@ -293,7 +293,7 @@ export class LawnGuard {
     }
   }
 
-  /** One step of every guard on the lawn: called out by the alarm (two a beat) he runs to his post and turns to the target, once it is down he runs home; a car moving fast enough over him runs him down. */
+  /** One step of every guard on the lawn: called out by the alarm (two a beat) he runs to his post and turns to the target, once it is down he runs home; a car or a loose part of one may run him down (`runOver`). */
   private moveGuards(cars: readonly (DeformableCar | undefined)[], dt: number, runsDownGuards: boolean): void {
     const target = this.target !== NO_TARGET ? cars[this.target] : undefined;
     this.armed = 0;
@@ -337,24 +337,28 @@ export class LawnGuard {
     this.faceZ[i] = dz / away;
   }
 
-  /** Is guard `i` under a car that is moving fast enough (`runsDown`)? Then he is down, and the strike waits for `takeStrikes`. */
+  /** Is guard `i` run down by a car or a loose part of one (`runsDown`, `looseRunsDown`)? Then he is down, and the strike waits for `takeStrikes`. */
   private runOver(cars: readonly DeformableCar[], i: number): void {
     const x = this.guardX[i]!;
     const z = this.guardZ[i]!;
+    const y = activeGround().heightAt(x, z);
     for (let c = 0; c < cars.length; c++) {
       const car = cars[c]!;
-      if (hypot2(car.group.position.x - x, car.group.position.z - z) > CAR_REACH) continue;
-      const y = activeGround().heightAt(x, z);
-      if (!runsDown(car, x, z, y)) continue;
-      this.knockDown(i, c, car, y);
-      return;
+      if (hypot2(car.group.position.x - x, car.group.position.z - z) <= CAR_REACH && runsDown(car, x, z, y)) {
+        this.knockDown(i, fell(car, c, i, x, y, z, this.faceX[i]!, this.faceZ[i]!, blankStrike()));
+        return;
+      }
+      if (looseRunsDown(car, x, z, y)) {
+        this.knockDown(i, stood(c, i, x, y, z, this.faceX[i]!, this.faceZ[i]!, blankStrike()));
+        return;
+      }
     }
   }
 
-  private knockDown(i: number, carIndex: number, car: DeformableCar, groundY: number): void {
+  private knockDown(i: number, strike: FigureStrike): void {
     this.mode[i] = GUARD_DOWN;
     this.note(SQUAD_DOWN, i, 0, 0);
-    this.struck.push(fell(car, carIndex, i, this.guardX[i]!, groundY, this.guardZ[i]!, this.faceX[i]!, this.faceZ[i]!, blankStrike()));
+    this.struck.push(strike);
   }
 
   /** The car on the grounds the squad should fire on: the one it is already on, else the lowest slot there; `NO_TARGET` for none. */

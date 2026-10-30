@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
-import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
+import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { PART_SLOTS } from "../vehicle/part-state.ts";
 import type { FigureStrike } from "../scenes/figure-strike.ts";
 import { GUARD_DOWN, LawnGuard, SHOT_RING } from "../scenes/lawn-guard.ts";
 import { parseTrack } from "../world/track-schema.ts";
@@ -30,6 +31,11 @@ const FRAME = 1 / FRAME_HZ;
 const NORTH_LAWN = { x: -990, z: -1104 };
 /** A spot out on the Ellipse's road past the south fence, off the grounds. */
 const OFF_GROUNDS = { x: -1000, z: -760 };
+
+/** A popped wheel's leave speed (m/s): 9.43 measured off a 2 × 80 km/h sedan head-on. It is let go at his chest's height, its middle this far (m) from him. */
+const WHEEL_LEAVE_MPS = 9.4;
+const CHEST_M = 1.1;
+const WHEEL_GAP_M = 0.5;
 
 /** The VIP's escort over a car parked on the lawn: `seconds` of frames, the secret out or not; the throws it asked for. */
 function escort(secretOut: boolean, seconds: number) {
@@ -103,6 +109,26 @@ describe("given the National Mall's VIP and the player's car parked on the White
     return { vip, figures, where };
   }
 
+  it(`when a popped wheel at its leave speed (${WHEEL_LEAVE_MPS} m/s) reaches him as he walks, then he is thrown once where he stood, standing still, for the wheel to strike`, () => {
+    const { vip, cars, throwPassenger, throwFigure, figures } = escort(true, 3);
+    const where = { x: vip["x"], z: vip["z"] };
+    const off = makeCar();
+    launch(off, where.x + 40, where.z + 40, 0, 0, 0);
+    const w = makeWorld([off], false, false, FREEWHEEL);
+    off["dropWheel"](0, "hubFL");
+    tickWorld(w);
+    const wheel = off.looseBody(PART_SLOTS)!;
+    wheel.object.position.set(where.x, ground.heightAt(where.x, where.z) + CHEST_M, where.z + WHEEL_GAP_M).sub(wheel.shape.centre.clone().applyQuaternion(wheel.object.quaternion));
+    wheel.velocity.set(0, 0, -WHEEL_LEAVE_MPS);
+    cars.push(off);
+    vip.frame(FRAME, true, 0, cars, throwPassenger, throwFigure);
+    expect(figures.length, "figures thrown").toBe(1);
+    expect(vip["phase"], "his phase").toBe("thrown");
+    expect(figures[0]!.loose, "by a loose part").toBe(true);
+    expect(figures[0]!.car, "of the second car").toBe(1);
+    expect(Math.hypot(figures[0]!.vx, figures[0]!.vy, figures[0]!.vz), "standing still").toBe(0);
+  });
+
   it("when a car at 15 m/s is on him as he walks, then he is thrown once where he stood by the car, and is drawn no more", () => {
     const { vip, figures, where } = runDownAt(15);
     expect(figures.length, "figures thrown").toBe(1);
@@ -113,8 +139,8 @@ describe("given the National Mall's VIP and the player's car parked on the White
     expect((vip["people"]["mesh"]["shown"] >> 0) & 1, "his figure is hidden").toBe(0);
   });
 
-  it("when a car at 2 m/s is on him as he walks, then he is left standing", () => {
-    const { vip, figures } = runDownAt(2);
+  it("when a car at 1 m/s is on him as he walks, then he is left standing (a sedan runs him down from 1.12 m/s, `knocksDown`)", () => {
+    const { vip, figures } = runDownAt(1);
     expect(figures.length, "figures thrown").toBe(0);
     expect(vip["phase"], "his phase").toBe("walking");
   });

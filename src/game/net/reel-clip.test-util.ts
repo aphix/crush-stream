@@ -98,8 +98,8 @@ export function makeClip(): { clip: HighlightClip; car: DeformableCar } {
       { step: 300, car: 1, body: 17, slice: 5, slices: 65535 },
     ],
     strikes: [
-      { step: 120, s: { guard: 4, car: 0, x: 12.5, y: 0.25, z: -30.75, faceX: 0.5, faceZ: -0.875, vx: 9.5, vy: 1.5, vz: -4.25, wx: 0.75, wy: 0, wz: 2.125 } },
-      { step: 361, s: { guard: -1, car: 1, x: -3.5, y: 0.125, z: 8, faceX: 0, faceZ: 1, vx: -6, vy: 0.5, vz: 11.25, wx: -1.5, wy: 0, wz: 0.25 } },
+      { step: 120, s: { guard: 4, car: 0, x: 12.5, y: 0.25, z: -30.75, faceX: 0.5, faceZ: -0.875, vx: 9.5, vy: 1.5, vz: -4.25, wx: 0.75, wy: 0, wz: 2.125, loose: false } },
+      { step: 361, s: { guard: -1, car: 1, x: -3.5, y: 0.125, z: 8, faceX: 0, faceZ: 1, vx: 0, vy: 0, vz: 0, wx: 0, wy: 0, wz: 0, loose: true } },
     ],
     // Three guards: one at his post aiming at clip car 1, one running out, one run down; then a hit shot at car 1, the run-down of guard 1, the target lost and the alarm lowered.
     squad: {

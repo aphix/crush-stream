@@ -6,8 +6,9 @@ import { MAX_CARS } from "../scenes/fleet.ts";
 import { disable, type Rapier } from "../kernel/rapier.ts";
 import { store3d, store4d } from "../kernel/store.ts";
 import { hypot3 } from "../kernel/physics-core.js";
+import { knocksDown } from "../scenes/figure-strike.ts";
 import { carGroups, looseSweepGroups } from "./ragdoll-config.ts";
-import { type Doll, TOTAL_MASS } from "./ragdoll-body.ts";
+import type { Doll } from "./ragdoll-body.ts";
 import { partAt, strikeAt } from "./ragdoll-hit.ts";
 
 /** A loose body's record in a frame, floats: its id (car × `LOOSE_BODIES` + body), 1 for a wheel's disk else 0 for a box, half extents, its middle in the world, its turn, its velocity (0 asleep), its mass (kg). */
@@ -35,8 +36,6 @@ const JUMP = 4;
 const BLOCK_MPS = 1;
 /** A body struck a dummy is clear of him once his torso is farther than its reach plus this (m) from its middle. */
 const CLEAR_M = 1;
-/** A walker goes limp (`Walker.struck`, as at the showcase press) once a strike's momentum over his whole mass is this (m/s): about the body speed a standing man stops without a step (push-recovery research, 2026-10-30). */
-const KNOCK_MPS = 0.6;
 /** A wheel's collider turned so a cylinder's axis (y) lies along the wheel's own x. */
 const DISK_TURN = new THREE.Quaternion(0, 0, Math.SQRT1_2, Math.SQRT1_2);
 const NO_TURN = { x: 0, y: 0, z: 0, w: 1 };
@@ -85,7 +84,8 @@ export function recordLoose(cars: readonly DeformableCar[]): Float64Array {
  * The loose bodies as the dummies' world sees them (`recordLoose`), those a live dummy is near. One slower than `BLOCK_MPS` is a kinematic box
  * or disk put at its pose each step: a dummy cannot pass through it and it gives him no speed. A faster one is swept along its path each step
  * and its first touch of a dummy is the showcase press (`strikeAt`) at the point it lands, its push the body's momentum on the part it meets;
- * a walker it strikes past `KNOCK_MPS` goes limp (`knock`, his pool slot), as the press makes him. One way: nothing a dummy does reaches the sim.
+ * a walker it knocks down (`knocksDown`, the one law for every striker) goes limp (`knock`, his pool slot), as the press makes him. One way:
+ * nothing a dummy does reaches the sim.
  */
 export class LooseProxies {
   private readonly bodies: RigidBody[] = [];
@@ -332,7 +332,7 @@ export class LooseProxies {
   /**
    * Slot `s`'s body, its middle at `centre`, touches the dummy part `collider`: the showcase press (`strikeAt`) lands where it touches, along
    * the line from its middle to there, at the body's momentum along that line over the mass of the part it lands on. He is struck once; a
-   * walker struck past `KNOCK_MPS` goes limp.
+   * walker it knocks down (`knocksDown`, at its own velocity along that line) goes limp.
    */
   private strike(s: number, collider: Collider, centre: THREE.Vector3): void {
     const k = this.dollOf(collider);
@@ -350,6 +350,6 @@ export class LooseProxies {
     if (closing <= 0) return;
     const momentum = this.kg[s]! * closing;
     strikeAt(doll.bodies, _point, _n, momentum / landed.mass());
-    if (doll.driven && momentum >= KNOCK_MPS * TOTAL_MASS) this.knock(k);
+    if (doll.driven && knocksDown(this.kg[s]!, this.vel[3 * s]! * _n.x + this.vel[3 * s + 1]! * _n.y + this.vel[3 * s + 2]! * _n.z)) this.knock(k);
   }
 }

@@ -3,7 +3,12 @@ import * as THREE from "three";
 import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ, GRAVITY } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
-import { FREEWHEEL, launch, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { FREEWHEEL, launch, makeCar, makeWorld, tickWorld } from "../contact/crash-scenarios.test-util.ts";
+import { FIGURE_KG, type FigureStrike } from "../scenes/figure-strike.ts";
+import { GUARD_DOWN, LawnGuard } from "../scenes/lawn-guard.ts";
+import { TRACK_ID } from "../world/constants.ts";
+import { parseTrack } from "../world/track-schema.ts";
+import { TRACKS } from "../world/tracks/index.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
 import { paint } from "../vehicle/test-support.ts";
@@ -11,7 +16,7 @@ import type { LooseBody } from "../vehicle/car-core.ts";
 import { PART_SLOTS } from "../vehicle/part-state.ts";
 import { driverLook } from "./driver-look.ts";
 import type { RagdollSystem } from "./engine-ragdoll.ts";
-import { type Doll, PARTS } from "./ragdoll-body.ts";
+import { type Doll, PARTS, TOTAL_MASS } from "./ragdoll-body.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
 import { SLOTS } from "./ragdoll-config.ts";
 import { WALK_SPEED } from "./walker-locomotion.ts";
@@ -173,26 +178,27 @@ describe(`given a walker standing at the origin facing +z and a part off a car p
 
   const rows: { speed: string; kind: Kind; style?: CarStyleId; mps: number; knocked: boolean }[] = [
     { speed: "the shared", kind: "wheel", mps: SHARED_MPS, knocked: true },
-    { speed: "the shared", kind: "quarterL", mps: SHARED_MPS, knocked: true },
+    { speed: "the shared", kind: "quarterL", mps: SHARED_MPS, knocked: false },
     { speed: "its own leave", kind: "wheel", mps: LEAVE_MPS.wheel, knocked: true },
     { speed: "its own leave", kind: "quarterL", mps: LEAVE_MPS.quarterL, knocked: false },
   ];
-  // Each class's torn front bumper and mirror (`ClassStats.bumperKg`, `mirrorKg`). Bumpers: at its leave speed only the monster's 80 kg steel
-  // bar knocks him over (the coupe's 27 and pickup's 28 kg bars bump him, as every plastic cover does); at the shared speed every steel bar
-  // and the 7 kg covers knock him over. Mirrors: only the monster's 9 kg towing mirror knocks him over, at either speed; the 2-3.5 kg ones bump.
-  for (const [style, bumperAtLeave, bumperAtShared, mirror] of [
-    ["sedan", false, false, false],
-    ["hatchback", false, false, false],
-    ["wagon", false, true, false],
-    ["police", false, true, false],
-    ["coupe", false, true, false],
-    ["pickup", false, true, false],
-    ["monster", true, true, true],
+  // Each class's torn front bumper and mirror (`ClassStats.bumperKg`, `mirrorKg`), by the one knock law (`knocksDown`: Δv ≥ 1 m/s). Bumpers:
+  // at its leave speed every one bumps him, the monster's 80 kg steel bar too (Δv 0.70); at the shared speed the 25-80 kg steel bars knock
+  // him over and every plastic cover bumps (the 7 kg ones Δv 0.65). Mirrors: only the monster's 9 kg towing mirror at its leave speed knocks
+  // him over (Δv 1.04; 0.82 at the shared speed); the 2-3.5 kg ones bump.
+  for (const [style, bumperAtShared, mirrorAtLeave] of [
+    ["sedan", false, false],
+    ["hatchback", false, false],
+    ["wagon", false, false],
+    ["police", false, false],
+    ["coupe", true, false],
+    ["pickup", true, false],
+    ["monster", true, true],
   ] as const) {
-    rows.push({ speed: "its own leave", kind: "bumperF", style, mps: LEAVE_MPS.bumperF, knocked: bumperAtLeave });
+    rows.push({ speed: "its own leave", kind: "bumperF", style, mps: LEAVE_MPS.bumperF, knocked: false });
     rows.push({ speed: "the shared", kind: "bumperF", style, mps: SHARED_MPS, knocked: bumperAtShared });
-    rows.push({ speed: "its own leave", kind: "mirrorL", style, mps: LEAVE_MPS.mirrorL, knocked: mirror });
-    rows.push({ speed: "the shared", kind: "mirrorL", style, mps: SHARED_MPS, knocked: mirror });
+    rows.push({ speed: "its own leave", kind: "mirrorL", style, mps: LEAVE_MPS.mirrorL, knocked: mirrorAtLeave });
+    rows.push({ speed: "the shared", kind: "mirrorL", style, mps: SHARED_MPS, knocked: false });
   }
   for (const row of rows) {
     const outcome = row.knocked
@@ -258,5 +264,60 @@ describe("given a part lying still on the road", () => {
     }
     const z = sys["dolls"][WALKER]!.bodies[TORSO]!.translation().z;
     expect(deepest, `his deepest corner went ${deepest.toFixed(3)} m into the wheel; his torso ended at z ${z.toFixed(2)}`).toBeLessThan(THROUGH_M);
+  });
+});
+
+/** The National Mall's guard squad (`TrackJson.guards`) and a spot on its North Lawn: a car parked there calls the squad out to its posts. */
+const GUARDS = TRACKS.map((j) => parseTrack(j)).find((t) => t.id === TRACK_ID.nationalMall)!.guards!;
+const NORTH_LAWN = { x: -1000, z: -1090 };
+/** Seconds the squad runs out to its posts before the throw. */
+const DEPLOY_S = 3;
+
+/** Guard 0 at his post, then `kind` off a sedan thrown at `mps` along -z to pass his axis at his torso's height; the squad's strikes, each thrown into the dummies' world, and the lowest a thrown figure's head came. */
+async function throwAtGuard(kind: Kind, mps: number): Promise<{ guard: LawnGuard; strikes: FigureStrike[]; lowestHead: number }> {
+  const sys = (system = await flatSystem());
+  const guard = new LawnGuard(GUARDS, 4);
+  guard.reset(7);
+  const parked = makeCar();
+  launch(parked, NORTH_LAWN.x, NORTH_LAWN.z, 0, 0, 0);
+  for (let t = 0; t < DEPLOY_S; t += FRAME) guard.step([parked], FRAME);
+  const thrown = looseOff(kind, new THREE.Vector3(), new THREE.Vector3(0, 0, -mps));
+  const t = THROW_FROM_M / mps;
+  const at = new THREE.Vector3(guard.guardX[0]!, TORSO_Y + 0.5 * GRAVITY * t * t, guard.guardZ[0]! + THROW_FROM_M);
+  thrown.body.object.position.copy(at).sub(thrown.body.shape.centre.clone().applyQuaternion(thrown.body.object.quaternion));
+  const cars = [parked, thrown.car];
+  const strikes: FigureStrike[] = [];
+  let lowestHead = Infinity;
+  for (let f = 0; f < FRAMES; f++) {
+    thrown.step();
+    guard.step(cars, FRAME);
+    for (const s of guard.takeStrikes()) {
+      strikes.push({ ...s });
+      sys.throwFigure(s, cars);
+    }
+    sys.update(FRAME, cars, true, true, null);
+    for (const d of sys["dolls"]) if (d.live) lowestHead = Math.min(lowestHead, d.bodies[HEAD]!.translation().y);
+  }
+  return { guard, strikes, lowestHead };
+}
+
+describe("given a lawn guard standing at his post (a figure: drawn, not a dummy, until something runs him down)", () => {
+  it("when the knock law reads a figure's mass, then it is the dummy's", () => {
+    expect(FIGURE_KG).toBeCloseTo(TOTAL_MASS, 9);
+  });
+
+  it(`when a popped wheel at its leave speed (${LEAVE_MPS.wheel} m/s) reaches his torso, then he is thrown standing where he stood, the wheel strikes him and he falls: his head comes down below ${KNOCKED_HEAD_M} m`, async () => {
+    const { guard, strikes, lowestHead } = await throwAtGuard("wheel", LEAVE_MPS.wheel);
+    expect(guard.mode[0], "guard 0 down").toBe(GUARD_DOWN);
+    const strike = strikes.find((s) => s.guard === 0);
+    expect(strike?.loose, "struck by the loose wheel").toBe(true);
+    expect(strike?.car, "of the thrown part's car").toBe(1);
+    expect(lowestHead, `his head came down to ${lowestHead.toFixed(2)} m`).toBeLessThan(KNOCKED_HEAD_M);
+  });
+
+  it(`when a sedan's torn mirror at the wheel's leave speed (${LEAVE_MPS.wheel} m/s) reaches his torso, then he stays at his post: nobody is thrown`, async () => {
+    const { guard, strikes } = await throwAtGuard("mirrorL", LEAVE_MPS.wheel);
+    expect(guard.mode[0], "guard 0 still up").not.toBe(GUARD_DOWN);
+    expect(strikes.length, "figures thrown").toBe(0);
   });
 });

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { detAtan2, detSin, hypot2 } from "../kernel/physics-core.js";
-import { blankStrike, fell, runsDown, type FigureStrike } from "../scenes/figure-strike.ts";
+import { blankStrike, fell, looseRunsDown, runsDown, stood, type FigureStrike } from "../scenes/figure-strike.ts";
 import { GUARD_AT_POST, GUARD_DOWN, GUARD_IN, GUARD_RUNNING_IN, GUARD_RUNNING_OUT, NO_TARGET, SHOT_RING, type LawnGuard } from "../scenes/lawn-guard.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { cageLift, crownY, keelY } from "../vehicle/car-cage-rig.ts";
@@ -591,12 +591,16 @@ export class VipEscort {
     this.people.stand(this.slot, this.x, this.ground.heightAt(this.x, this.z), this.z, this.yaw, this.stance, false);
   }
 
-  /** A car moving fast enough over him (`runsDown`) throws him, out of the place he stood, and ends his walk; whether one did. */
+  /** A car or a loose part of one that runs him down (`runsDown`, `looseRunsDown`) throws him, out of the place he stood, and ends his walk; whether one did. */
   private runOver(cars: readonly DeformableCar[], throwFigure: (strike: FigureStrike) => void): boolean {
     const y = this.ground.heightAt(this.x, this.z);
+    const faceX = Math.sin(this.yaw);
+    const faceZ = Math.cos(this.yaw);
     for (let c = 0; c < cars.length; c++) {
-      if (!runsDown(cars[c]!, this.x, this.z, y)) continue;
-      throwFigure(fell(cars[c]!, c, -1, this.x, y, this.z, Math.sin(this.yaw), Math.cos(this.yaw), this.struck));
+      const car = cars[c]!;
+      if (runsDown(car, this.x, this.z, y)) throwFigure(fell(car, c, -1, this.x, y, this.z, faceX, faceZ, this.struck));
+      else if (looseRunsDown(car, this.x, this.z, y)) throwFigure(stood(c, -1, this.x, y, this.z, faceX, faceZ, this.struck));
+      else continue;
       this.phase = "thrown";
       this.people.hide(this.slot);
       return true;

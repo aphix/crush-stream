@@ -521,9 +521,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 173: a torn bumper's mass is its class's torn piece, front or rear (`ClassStats.bumperKg`: the cover or face bar, the beam and the police push bar staying on the car): sedan 5/6, hatch 4.5/5.5, suv 7/7, police 7/7, muscle 27/25, truck 28/30, monster 80/65 kg, where every bumper was 8 kg (`BUMPER_KG`); a torn mirror's is its class's (`ClassStats.mirrorKg`): sedan 2.3, hatch 2.5, suv 3.5, police 2.3, muscle 2, truck 2, monster 9 kg, where every mirror was 1.3 kg (`MIRROR_KG`). The wind moves a flying bumper or mirror by its own mass. A clip of 172 or before no longer reads.
  * 174: an open door, hood or boot lid feels the wind (`windPush`: the panels' airflow, ∝ v² to 40 m/s, beating at the flutter's clock, as a rearward push on its swing), so at highway speed an open boot lid swings toward shut and flaps and an open door is swung shut; and a lid's swing reads the car's vertical acceleration (uncapped; the door-swing sample carries the vertical velocity, two more part-state doubles), so a landing on the wheels swings an open lid shut (a sedan's latches from 2.5 m, a hatch's from 2 m). The hood swings on the boot lid's hinge law (16 kg on struts, rear-edge hinge, 32° stop): a front crush past its ajar (0.05) springs it, and it rises open. A gas strut's lift fades to none over the last 0.3 rad to shut (`STRUT_TAPER`: its arm about the hinge goes; hatches, liftgates and the hood, not a deck lid's torsion bars), so a strut gate's weight wins there, and a latch's pop lifts a sprung one past it. A swing lives outside the car's collision cage: the cage takes a hood's and lid's crash pose alone. A part swung shut onto a crash jam latches if the jam leaves its free edge within 5 cm (`LATCH_REACH_M`), and only fresh crush springs a latch again. A lid torn off its stop by a striker leaves with the striker's speed alone (no 0.8 m/s lift, no 1 m/s floor). A clip of 173 or before no longer reads.
  * 175: the side-hit fuel cut-off is gone (at the owner's call): a side hit past 10 g no longer zeroes the gas and the boost for 3 s, so a car sideswiped or t-boned drives on under its pedals at once, and a clip's keyframe flight block no longer carries `stalledS` (one double fewer; NET_VERSION 41). A clip of 174 or before no longer reads.
+ * 176: one knock law for every striker (`knocksDown`): a standing figure's speed change in a sticking hit, the striker's mass × its own velocity toward him over its mass plus his 101.4 kg, at 1 m/s or more. A car runs a lawn guard, the VIP or the walker down from about 1.1 m/s along its touched face's normal (it took 4 m/s of ground speed at any angle); a torn part or popped wheel now reaches a guard or the VIP too (`looseRunsDown`): he is thrown standing still (a strike's `loose` byte) and the part strikes his dummy where it lands. A clip of 175 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 175;
+const REPLAY_VERSION = 176;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
@@ -540,8 +541,8 @@ const KNOCK_BYTES = 4 + 2;
 const STIR_BYTES = 4 + 1 + 1;
 /** A clip's part stir: its step (u32), the car (u8), the body (u8), the slice (u8) and the slice count (u16). */
 const PART_STIR_BYTES = 4 + 1 + 1 + 1 + 2;
-/** A clip's strike: its step (u32), the car (u8), the guard (u8: 255 for the VIP, -1) and 11 x f32 (position, facing, velocity, spin). */
-const STRIKE_BYTES = 4 + 1 + 1 + 11 * 4;
+/** A clip's strike: its step (u32), the car (u8), the guard (u8: 255 for the VIP, -1), 11 x f32 (position, facing, velocity, spin) and whether a loose part struck (u8). */
+const STRIKE_BYTES = 4 + 1 + 1 + 11 * 4 + 1;
 /** A clip's squad decision: its step (u32), kind, and its three operands (u8 each). */
 const SQUAD_EVENT_BYTES = 4 + 4;
 /** A clip's VIP change: its step (u32) and the car (u8). */
@@ -666,6 +667,7 @@ export function writeClip(w: Writer, c: HighlightClip): void {
     w.f32(s.wx);
     w.f32(s.wy);
     w.f32(s.wz);
+    w.u8(s.loose ? 1 : 0);
   }
   w.u8(c.squad ? (c.squad.state.length - 2) / 5 : 0);
   if (c.squad) {
@@ -872,6 +874,7 @@ export function readClip(r: Reader, L: NetLayout): HighlightClip {
     s.wx = r.fin32();
     s.wy = r.fin32();
     s.wz = r.fin32();
+    s.loose = r.u8() === 1;
     if (step >= steps || s.car >= nc || (k > 0 && step < strikes[k - 1]!.step)) throw new RangeError("clip strike");
     strikes.push({ step, s });
   }
