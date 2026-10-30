@@ -1,3 +1,5 @@
+import type * as THREE from "three";
+
 /** Face order in a layout's `faces` and in the shader's `sprayFaces`. */
 export const SPRAY_FACE = { left: 0, right: 1, top: 2, front: 3, back: 4 } as const;
 
@@ -32,26 +34,27 @@ export function carSprayLayout(side: number): SprayLayout {
 export const CAR_SPRAY = carSprayLayout(SPRAY_SIDE);
 
 /**
- * The face (`SPRAY_FACE`) rest point (px, py, pz) with normal (nx, ny, nz) is painted on, and its place across that face
- * (0..1 each) into `uv`; -1 for the underside, which takes no paint. The shader's `sprayTexel` is this, line for line.
+ * The face (`SPRAY_FACE`) rest point `p` with normal `n` is painted on, and its place across that face (0..1 each) into `uv`;
+ * -1 for the underside, which takes no paint. The shader's `sprayTexel` is this, line for line.
  */
-export function sprayFace(layout: SprayLayout, px: number, py: number, pz: number, nx: number, ny: number, nz: number, uv: Float64Array): number {
-  const ax = Math.abs(nx);
-  const ay = Math.abs(ny);
-  const az = Math.abs(nz);
-  const face = ax >= ay && ax >= az ? (nx < 0 ? SPRAY_FACE.left : SPRAY_FACE.right) : ay >= az ? (ny < 0 ? -1 : SPRAY_FACE.top) : nz > 0 ? SPRAY_FACE.front : SPRAY_FACE.back;
-  if (face >= 0) sprayPlace(layout, face, px, py, pz, uv);
+// Vectors, not loose doubles: an uninlined call boxes each double argument (the scrape's hot path).
+export function sprayFace(layout: SprayLayout, p: THREE.Vector3Like, n: THREE.Vector3Like, uv: Float64Array): number {
+  const ax = Math.abs(n.x);
+  const ay = Math.abs(n.y);
+  const az = Math.abs(n.z);
+  const face = ax >= ay && ax >= az ? (n.x < 0 ? SPRAY_FACE.left : SPRAY_FACE.right) : ay >= az ? (n.y < 0 ? -1 : SPRAY_FACE.top) : n.z > 0 ? SPRAY_FACE.front : SPRAY_FACE.back;
+  if (face >= 0) sprayPlace(layout, face, p, uv);
   return face;
 }
 
 /**
- * The rest point (px, py, pz)'s place across `face` (0..1 each) into `uv`, and its depth: how far out along the face's axis it
- * lies in the layout's box (0..1, the face's own side being 1). The shader's `sprayTexel` is this, line for line.
+ * Rest point `p`'s place across `face` (0..1 each) into `uv`, and its depth: how far out along the face's axis it lies in the
+ * layout's box (0..1, the face's own side being 1). The shader's `sprayTexel` is this, line for line.
  */
-export function sprayPlace(layout: SprayLayout, face: number, px: number, py: number, pz: number, uv: Float64Array): number {
-  const tx = across(px, layout.min[0], layout.max[0]);
-  const ty = across(py, layout.min[1], layout.max[1]);
-  const tz = across(pz, layout.min[2], layout.max[2]);
+export function sprayPlace(layout: SprayLayout, face: number, p: THREE.Vector3Like, uv: Float64Array): number {
+  const tx = across(p.x, layout.min[0], layout.max[0]);
+  const ty = across(p.y, layout.min[1], layout.max[1]);
+  const tz = across(p.z, layout.min[2], layout.max[2]);
   if (face === SPRAY_FACE.left || face === SPRAY_FACE.right) {
     uv[0] = tz;
     uv[1] = ty;

@@ -17,11 +17,11 @@ import { clearDents } from "./loose-dent.ts";
 import { clearShape } from "./loose-step.ts";
 import { REACH, type CarSurfaces } from "./car-surfaces.ts";
 import type { CarCage } from "./car-cage.ts";
-import { CageRig, centreY } from "./car-cage-rig.ts";
+import { CageRig, cageLift, centreY } from "./car-cage-rig.ts";
 import { PART_KIND, PartSeat } from "./part-geometry.ts";
 import { setBare } from "./interior.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID } from "./constants.ts";
-import { MAT, type MaterialId } from "../kernel/material-ids.ts";
+import { MAT, SCRATCH_CUT, TAKES_SCRATCH, type MaterialId } from "../kernel/material-ids.ts";
 import { HUB_PIN_MAX, HUB_PULL_STEP } from "../deform/constants.ts";
 import { passesFor, smoothingNow, smoothNormals } from "./normal-smooth.ts";
 
@@ -35,6 +35,9 @@ const _in = new THREE.Vector3();
 const _zero = new THREE.Vector3();
 const _wantQuaternion = new THREE.Quaternion();
 const _restTurn = new THREE.Quaternion();
+const _scrapeRest = new THREE.Vector3();
+const _scrapeNormal = new THREE.Vector3();
+const _scrapeSlide = new THREE.Vector3();
 
 /** A wreck rests this long (s) before it sleeps: a toppling pile pauses on the way over, and a monster settling on a bank creeps to its pose for most of a second after it first slows under `REST_SPEED`. */
 export const WRECK_REST_S = 1;
@@ -223,6 +226,7 @@ export class DeformableCar extends CarParts {
     this.driverOut = null;
     this.group.scale.setScalar(1);
     this.deform.reset();
+    this.scratches.clear();
     // Before the rest restores below: a dent's saved copy may be a crumpled skin the rest restore then overwrites.
     for (const p of this.parts) if (!keepTorn || !p.detached) clearDents(p.dent);
     this.deform.restoreRest(this.body.geometry, this.drawnRest("body"));
@@ -944,6 +948,7 @@ export class DeformableCar extends CarParts {
     this.followGlass();
     this.fitInterior();
     if (this.hullHelper?.visible) this.updateHullHelper();
+    this.scratches.load(parts.scrapes, parts.scrapeCount);
   }
 
   /** Netplay client, every frame: wheels spin and ride their hubs as `afterContacts` does on the host; the torn parts fly in the client's own world (the wheels' poses come on the wire). */
@@ -1013,11 +1018,13 @@ export class DeformableCar extends CarParts {
     return n;
   }
 
-  /** `world` in the rest frame (`ensureRestFrame`'s: the group's, the class lift taken off), less the crush of the body mass nearest it, into `out`: where on the undented car that point of the dented one sits. */
+  /**
+   * `world` in the rest frame (`ensureRestFrame`'s: the group's, the class lift taken off), less the crush of the body mass nearest it, into `out`:
+   * where on the undented car that point of the dented one sits. The lift is the pose's (`cageLift`), never the drawn body's ride, which no keyframe carries.
+   */
   restPointOf(world: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
     out.copy(world).sub(this.group.position).applyQuaternion(_restTurn.copy(this.group.quaternion).invert());
-    const lift = this.classBodyObject();
-    if (lift) out.sub(lift.position).applyQuaternion(_restTurn.copy(lift.quaternion).invert());
+    out.y -= cageLift(this);
     const masses = this.deform.masses;
     let nearest = -1;
     let best = Infinity;
@@ -1039,7 +1046,7 @@ export class DeformableCar extends CarParts {
     const scale = this.wheels[0]!.scale.x;
     const r = this.frame.rig.tyre.r * scale;
     const halfW = this.frame.rig.tyre.halfW * scale;
-    const liftY = this.classBodyObject()?.position.y ?? 0;
+    const liftY = cageLift(this);
     for (let i = 0; i < 4; i++) {
       if (this.looseWheels[i]!.loose) continue;
       const hubs = this.wheels[i]!.parent;
@@ -1049,6 +1056,27 @@ export class DeformableCar extends CarParts {
       if (dy * dy + dz * dz < r * r && Math.abs(rest.x) > Math.abs(hub[0]) - halfW) return MAT.TYRE;
     }
     return MAT.CAR_PAINT;
+  }
+
+  /** How hard this car cuts paint where it touches at world `point` (`SCRATCH_CUT` of its surface there): a chrome bumper 1, a tyre 0. */
+  cutAt(point: THREE.Vector3): number {
+    return SCRATCH_CUT.get(this.surfaceAt(this.restPointOf(point, _scrapeRest))) ?? 0;
+  }
+
+  /**
+   * A striker slides on this car at world `point`, pressing along `inward` (unit, horizontal) at `strength` m/s over a patch `half` m
+   * long either side, moving `slide` (m/s, world) against it, with cut `cut`: a scratch on its paint where that surface takes one.
+   */
+  scrape(point: THREE.Vector3, inward: THREE.Vector3, slide: THREE.Vector3, half: number, strength: number, cut: number): void {
+    if (cut <= 0) return;
+    const rest = this.restPointOf(point, _scrapeRest);
+    if (!TAKES_SCRATCH.has(this.surfaceAt(rest))) return;
+    _restTurn.copy(this.group.quaternion).invert();
+    const n = _scrapeNormal.copy(inward).negate().applyQuaternion(_restTurn);
+    const t = _scrapeSlide.copy(slide).applyQuaternion(_restTurn);
+    const along = hypot2(t.x, t.z);
+    if (along === 0) return;
+    this.scratches.scrape(rest, n, t.set(t.x / along, 0, t.z / along), half, strength, cut);
   }
 
 }

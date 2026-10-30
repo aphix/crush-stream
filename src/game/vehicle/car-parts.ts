@@ -1534,6 +1534,8 @@ export abstract class CarParts extends CarGlass {
       this.wheels[i]!.quaternion.toArray(out.wheels, i * 7 + 3);
     }
     out.wheelLoose = wheels;
+    out.scrapes.set(this.scratches.list);
+    out.scrapeCount = this.scratches.count;
   }
 
   /** A part is off the car (a torn mirror, panel or bumper): its net state rides a highlight keyframe even if the car is no wreck. */

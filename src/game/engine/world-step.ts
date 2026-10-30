@@ -486,6 +486,7 @@ export function stepWorld(w: World, dt: number): void {
     }
     lap(ph, PHASE.course);
     for (let ci = 0; ci < n; ci++) if ((i === 0 || !lonely.flag[ci]) && !idle(cars[ci]!)) cars[ci]!.deform.endSlice();
+    for (let ci = 0; ci < n; ci++) if (i === 0 || !lonely.flag[ci]) cars[ci]!.scratches.slice(lonely.flag[ci] ? dt : h);
     // A step's last slice is baked by its caller (`stepBreakage`); the slices before it take their own, so the next slice reads the body
     // as this one's crush left it, not as the step began (a hit cut in two slices crushed what its first slice did not see). A lone car's one slice is its last.
     if (i < slices - 1) for (let ci = 0; ci < n; ci++) if (!lonely.flag[ci] && !idle(cars[ci]!)) cars[ci]!.bakeBetweenSlices(h);

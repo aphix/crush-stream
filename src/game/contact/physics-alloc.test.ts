@@ -4,12 +4,15 @@ import { DeformableCar } from "../vehicle/car.ts";
 import { applyDrive, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
 import { arenaWorld, placeDerby } from "../scenes/derby-arena.test-util.ts";
 import { setGround } from "../world/ground.ts";
-import { fleetStyle } from "../scenes/fleet.ts";
+import { fleetClass, fleetStyle } from "../scenes/fleet.ts";
+import { assignClass } from "../vehicle/vehicle-classes.ts";
 import { resolveCarPair } from "./pair-contact.ts";
 import { partContactPair } from "./external-contact.ts";
 import { physicsSlice, sliceSpeed } from "./sat.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { allocatedBytes, COMPILE_WAIT_S, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
+import { scavengesDuring } from "../kernel/gc.test-util.ts";
+import { SCRAPE_MAX } from "../vehicle/paint-scrapes.ts";
 
 /**
  * docs/PERF_HITCH.md "GC during races": physics garbage is what drives the race GC pauses. A warmed 24-car
@@ -27,6 +30,8 @@ const MEASURE = 300;
 const BOUND_KB = 540;
 /** Vectors the control makes each frame: far more than the bar's worth (over 50 B each). */
 const CONTROL_VECTORS = 12000;
+/** Bytes a scrape may allocate: one boxed double is 16 (as the other allocation rows hold). */
+const SCRAPE_BOUND_B = 16;
 
 function pileUp(): { cars: DeformableCar[]; step: () => void } {
   const scene = new THREE.Scene();
@@ -68,6 +73,8 @@ function pileUp(): { cars: DeformableCar[]; step: () => void } {
       c.afterContacts(h);
     }
     for (let i = 0; i < CARS; i++) world.collide?.(cars[i]!, i, h);
+    // As `stepWorld` ends a slice: each car commits its scrapes.
+    for (let i = 0; i < CARS; i++) cars[i]!.scratches.slice(h);
   };
   return { cars, step };
 }
@@ -109,5 +116,40 @@ describe("given the allocation measure on a derby pile-up", () => {
       for (let i = 0; i < CONTROL_VECTORS; i++) kept[i % 8] = new THREE.Vector3();
     });
     expect(kb, `${kb.toFixed(0)} KB per frame for ${CONTROL_VECTORS} vectors a frame: the measure sees nothing`).toBeGreaterThan(BOUND_KB);
+  });
+});
+
+describe("given a sedan sliding along another's flank, called a million times", () => {
+  const scene = new THREE.Scene();
+  const a = new DeformableCar({ body: 0xc5c8ce, accent: 0, name: "a" }, scene, null, fleetStyle(0));
+  const b = new DeformableCar({ body: 0xc5c8ce, accent: 0, name: "b" }, scene, null, fleetStyle(0));
+  // In their classes, as every engine car is: a classless car looks its class lift up by name on every rest point.
+  assignClass(a, fleetClass(0));
+  assignClass(b, fleetClass(0));
+  a.spawnFacing(-1.9, 0, 0, 0);
+  b.spawnFacing(0, 0, 0, 0);
+  const point = new THREE.Vector3();
+  const inward = new THREE.Vector3(1, 0, 0);
+  const slide = new THREE.Vector3(0, 0, 8);
+  /** `scrapePair`'s work on the struck car: the striker's cut there, the scrape, and every seventh call a slice's commit; the row and run move so strokes append, extend and merge. */
+  const scrapes = (count: number): void => {
+    for (let i = 0; i < count; i++) {
+      point.set(-0.85, 0.3 + 0.02 * (i % 37), -2 + 0.004 * (i % 1000));
+      b.scrape(point, inward, slide, 0.3, 3, a.cutAt(point));
+      if (i % 7 === 0) b.scratches.slice(0.25);
+    }
+  };
+
+  it(`when it scrapes, commits and merges, then a call allocates at most ${SCRAPE_BOUND_B} B`, () => {
+    const calls = 1_000_000;
+    const perCall = untilQuiet(() => allocatedBytes(() => scrapes(calls)) / calls, SCRAPE_BOUND_B);
+    expect(b.scratches.count, "the control: the list filled and merges ran").toBe(SCRAPE_MAX);
+    expect(perCall, `${perCall.toFixed(1)} B a call`).toBeLessThanOrEqual(SCRAPE_BOUND_B);
+  });
+
+  it("when it scrapes, commits and merges, then the garbage collector never runs", async () => {
+    scrapes(100_000);
+    const minor = await scavengesDuring(() => scrapes(1_000_000));
+    expect(minor, `${minor} minor collections`).toBe(0);
   });
 });

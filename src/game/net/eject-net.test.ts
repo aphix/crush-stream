@@ -39,7 +39,7 @@ describe("given a network snapshot whose per-car flags byte records whether the 
       s.cars[i]!.driverOut = code;
       s.cars[i]!.crashed = i % 2 === 1;
       s.cars[i]!.sirens = i === 3;
-      s.cars[i]!.dented = i === 2;
+      s.cars[i]!.marked = i === 2;
     }
     const w = new Writer();
     writeSnapshot(w, s, L);
@@ -48,7 +48,7 @@ describe("given a network snapshot whose per-car flags byte records whether the 
     expect(firstMismatch(got.cars.slice(0, 4).map((c) => c.driverOut), [0, 1, 2, 3])).toBeUndefined();
     expect(firstMismatch(got.cars.slice(0, 4).map((c) => c.crashed), [false, true, false, true]), "the neighbouring flag bits are untouched").toBeUndefined();
     expect(firstMismatch(got.cars.slice(0, 4).map((c) => c.sirens), [false, false, false, true])).toBeUndefined();
-    expect(firstMismatch(got.cars.slice(0, 4).map((c) => c.dented), [false, false, true, false]), "the dent bit is its own").toBeUndefined();
+    expect(firstMismatch(got.cars.slice(0, 4).map((c) => c.marked), [false, false, true, false]), "the dent bit is its own").toBeUndefined();
   });
 
   it("when a host car's driver leaves, then the host's frame carries it, a client car takes it from the drawn snapshot, and loses it again when the host puts him back", () => {

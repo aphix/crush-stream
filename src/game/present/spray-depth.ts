@@ -60,12 +60,13 @@ function spraySurfaceOf(layout: SprayLayout, rest: ArrayLike<number>, index: Arr
   const surface = { depth: new Uint8Array(w * h), part: new Uint8Array(w * h) };
   const corner: [Float64Array, Float64Array, Float64Array] = [new Float64Array(2), new Float64Array(2), new Float64Array(2)];
   const depth: [number, number, number] = [0, 0, 0];
+  const at = new THREE.Vector3();
   for (const [face, rect] of layout.faces.entries()) {
     const [fx, fy, fw, fh] = rect;
     for (let t = 0; t < index.length; t += 3) {
       for (let c = 0; c < 3; c++) {
         const v = index[t + c]!;
-        depth[c] = sprayPlace(layout, face, rest[3 * v]!, rest[3 * v + 1]!, rest[3 * v + 2]!, corner[c]!);
+        depth[c] = sprayPlace(layout, face, at.set(rest[3 * v]!, rest[3 * v + 1]!, rest[3 * v + 2]!), corner[c]!);
         corner[c]![0] = fx + corner[c]![0]! * fw;
         corner[c]![1] = fy + corner[c]![1]! * fh;
       }

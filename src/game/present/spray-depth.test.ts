@@ -79,10 +79,10 @@ function texelOf(face: number, uv: Float64Array): number {
 
 /** Whether fragment `f` shows its texel's paint, the shader's rule: not under the texel's outermost surface (`surface`; null: any face's texel draws). */
 function drawsPaint(f: Fragment, surface: SpraySurface | null): boolean {
-  const face = sprayFace(PERSON_SPRAY, f.p.x, f.p.y, f.p.z, f.n.x, f.n.y, f.n.z, _uv);
+  const face = sprayFace(PERSON_SPRAY, f.p, f.n, _uv);
   if (face < 0) return false;
   const code = surface?.depth[texelOf(face, _uv)] ?? 0;
-  return code === 0 || sprayPlace(PERSON_SPRAY, face, f.p.x, f.p.y, f.p.z, _uv) >= (code - 1) / DEPTH_STEPS - SPRAY_DEPTH_BAND / axisSpan(face);
+  return code === 0 || sprayPlace(PERSON_SPRAY, face, f.p, _uv) >= (code - 1) / DEPTH_STEPS - SPRAY_DEPTH_BAND / axisSpan(face);
 }
 
 /** The fragments that draw paint after the can's puffs, each landing on a fragment (the second, a mirror's, one of the other flank), given the `surface` map. */
@@ -90,7 +90,7 @@ function paintedAfter(fragments: readonly Fragment[], puffs: readonly Fragment[]
   const bitmap = new SprayBitmap(PERSON_SPRAY);
   for (const puff of puffs) bitmap.spray(puff.p, puff.n, RADIUS, INK, () => 0, surface, puff.part + 1);
   const painted = fragments.filter((f) => {
-    const face = sprayFace(PERSON_SPRAY, f.p.x, f.p.y, f.p.z, f.n.x, f.n.y, f.n.z, _uv);
+    const face = sprayFace(PERSON_SPRAY, f.p, f.n, _uv);
     return face >= 0 && bitmap.texels[texelOf(face, _uv)] !== 0 && drawsPaint(f, surface);
   });
   bitmap.dispose();
@@ -155,7 +155,7 @@ describe("given a driver's spray, a box projection every surface facing the same
     for (let v = 0; v < BODY_VERTICES; v += EVERY_NTH_VERTEX) {
       const p = new THREE.Vector3().fromBufferAttribute(rest, v);
       const n = new THREE.Vector3().fromBufferAttribute(normal, v);
-      const face = sprayFace(PERSON_SPRAY, p.x, p.y, p.z, n.x, n.y, n.z, _uv);
+      const face = sprayFace(PERSON_SPRAY, p, n, _uv);
       if (face < 0) continue;
       ray.set(p.clone().addScaledVector(axes[face]!, RAY_START), axes[face]!.clone().negate());
       const first = ray.intersectObject(mesh, false)[0];

@@ -70,7 +70,7 @@ export class SprayBitmap {
    * False when the point's face takes no paint.
    */
   spray(p: THREE.Vector3, n: THREE.Vector3, radius: number, ink: number, rand: () => number, surface: SpraySurface | null = null, part = 0): boolean {
-    const face = sprayFace(this.layout, p.x, p.y, p.z, n.x, n.y, n.z, _uv);
+    const face = sprayFace(this.layout, p, n, _uv);
     if (face < 0) return false;
     const [fx, fy, fw, fh] = this.layout.faces[face]!;
     const { min, max } = this.layout;

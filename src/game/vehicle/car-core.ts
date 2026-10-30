@@ -7,6 +7,7 @@ import type { BodyPartName } from "../kernel/rig-spec.ts";
 import type { MaterialId } from "../kernel/material-ids.ts";
 import { BUMPER_F, LAMP_SEAT, LID, LIGHT_BAR } from "./constants.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
+import { PaintScrapes } from "./paint-scrapes.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
 import { roofTopY } from "./car-mesh.ts";
@@ -215,6 +216,9 @@ export interface PartNetState {
   wheelLoose: number;
   /** Per wheel × 7: world position xyz and quaternion xyzw, while loose. */
   readonly wheels: Float32Array;
+  /** The paint's scratch strokes (`PaintScrapes.list`): `scrapeCount` of them, 6 bytes each. */
+  readonly scrapes: Uint8Array;
+  scrapeCount: number;
 }
 
 type GlassState = "intact" | "cracked" | "shattered";
@@ -397,6 +401,8 @@ export abstract class CarCore {
   readonly wheels: THREE.Group[] = [];
   /** Per wheel: off its popped hub and loose in the world (`dropWheel`), with its own motion. */
   protected readonly looseWheels: LooseWheel[] = [];
+  /** The paint's scratches from slides (`DeformableCar.scrape`): damage state, carried with the wreck section. */
+  readonly scratches = new PaintScrapes();
   readonly velocity = new THREE.Vector3();
   readonly angular = new THREE.Vector3();
   readonly forward = new THREE.Vector3(0, 0, 1);

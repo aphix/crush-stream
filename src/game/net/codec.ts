@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { DriveInput } from "../vehicle/car-drive.ts";
 import { EXIT_PANES, type PartNetState } from "../vehicle/car-core.ts";
+import { SCRAPE_MAX, STROKE_BYTES } from "../vehicle/paint-scrapes.ts";
 import type { DerbyBoardRow, DerbyDecided } from "../match/derby.ts";
 import type { RaceSnapshot } from "../match/types.ts";
 import type { DeformNetState } from "../deform/streamed-deform.ts";
@@ -70,8 +71,9 @@ carries the peer's own meter (a sixth byte), so every browser shows any viewed c
 39: a snapshot car's flags byte carries `dented` (bit 7: a face carries a load crush) and its wreck section carries each face's load crush and baked depth (`DeformNetState.crush`, `crushBaked`: 10 i16 after the engine travels), sent for a dented car under the crash's depth too (`SPRING_YIELD`), so peers on 38 would misread the wreck section and show such a dent as none (REPLAY 159).
 40: the hood slot's two floats carry its swing and latch, as the trunk slot's do, and a clip's keyframes carry the door-swing sample's vertical velocity and drive (two more part-state doubles), so peers on 39 would misread a host's hood and clips.
 41: a clip's keyframe flight block no longer carries the side-hit fuel cut's seconds (`stalledS`, one double fewer), so peers on 40 would misread a host's clip.
+42: a wreck section ends with the car's paint scratch strokes (a count byte, then 6 bytes a stroke), and a snapshot car's flags byte bit 7 is `marked` (a load crush or scratched paint), so a car with only scratches rides the wreck section; peers on 41 would misread the wreck section.
 */
-export const NET_VERSION = 41;
+export const NET_VERSION = 42;
 
 /** m/s per wire step of a car's wheelspin: 255 steps reach 63.75 m/s, past every class's unboosted top (muscle 58.3 m/s); a spin beyond reads as the max, where the dial is on the redline anyway. */
 const SPIN_STEP = 0.25;
@@ -148,8 +150,8 @@ export interface CarFrame {
   meter: number;
   /** m/s the driven wheels' tread runs ahead of the body (`drive.spinSpeed`); the gauge's gear and revs and the drawn wheelspin read it on a client. */
   spin: number;
-  /** A face carries a load crush (`StreamedDeformation.loadCrushed`): a car dented under the crash's depth is not `crashed` but its wreck section rides, and a client that holds a dent clears it when this reads false. */
-  dented: boolean;
+  /** A face carries a load crush (`StreamedDeformation.loadCrushed`) or the paint carries scratch strokes: such a car is not `crashed` but its wreck section rides, and a client that holds a dent or scratches clears them when this reads false. */
+  marked: boolean;
   /** The wreck section (deform + parts) rides with this frame. */
   wreck: boolean;
   readonly deform: DeformNetState;
@@ -198,7 +200,7 @@ export function makeCarFrame(L: NetLayout): CarFrame {
     cls: 0,
     meter: -1,
     spin: 0,
-    dented: false,
+    marked: false,
     wreck: false,
     deform: {
       local: new Float32Array(L.masses * 3),
@@ -221,6 +223,8 @@ export function makeCarFrame(L: NetLayout): CarFrame {
       glass: 0,
       wheelLoose: 0,
       wheels: new Float32Array(L.wheels * 7),
+      scrapes: new Uint8Array(SCRAPE_MAX * STROKE_BYTES),
+      scrapeCount: 0,
     },
   };
 }
@@ -360,9 +364,9 @@ export class Reader {
   }
 }
 
-/** Most bytes `writeSnapshot` writes for `n` cars: each with a wreck section, every part (a flag byte and 3 hinge values of 2 bytes: 7) and wheel (20) loose. */
+/** Most bytes `writeSnapshot` writes for `n` cars: each with a wreck section, every part (a flag byte and 3 hinge values of 2 bytes: 7) and wheel (20) loose, and a full stroke list. */
 export function snapshotMaxBytes(n: number, L: NetLayout): number {
-  const wreck = L.masses * 12 + L.clusters * 18 + L.sensors * 2 + IMPACT * 2 + 13 + FACES * 4 + L.parts * 7 + 4 + L.wheels * 20;
+  const wreck = L.masses * 12 + L.clusters * 18 + L.sensors * 2 + IMPACT * 2 + 13 + FACES * 4 + L.parts * 7 + 4 + L.wheels * 20 + 1 + SCRAPE_MAX * STROKE_BYTES;
   return 17 + n * (30 + wreck);
 }
 
@@ -400,6 +404,8 @@ export function writeWreck(w: Writer, f: CarFrame, L: NetLayout): void {
     w.f32s(p.wheels, 3, o);
     w.q16s(p.wheels, 4, Q_PER.quat, o + 3);
   }
+  w.u8(p.scrapeCount);
+  for (let i = 0; i < p.scrapeCount * STROKE_BYTES; i++) w.u8(p.scrapes[i]!);
 }
 
 function readWreck(r: Reader, f: CarFrame, L: NetLayout): void {
@@ -435,6 +441,10 @@ function readWreck(r: Reader, f: CarFrame, L: NetLayout): void {
     p.wheels[o + 2] = r.fin32();
     for (let k = 3; k < 7; k++) p.wheels[o + k] = r.q16(Q.quat);
   }
+  const strokes = r.u8();
+  if (strokes > SCRAPE_MAX) throw new RangeError(`a wreck section with ${strokes} paint strokes, past the ${SCRAPE_MAX} a car keeps`);
+  p.scrapeCount = strokes;
+  for (let i = 0; i < strokes * STROKE_BYTES; i++) p.scrapes[i] = r.u8();
 }
 
 export function writeSnapshot(w: Writer, s: Snapshot, L: NetLayout): void {
@@ -448,7 +458,7 @@ export function writeSnapshot(w: Writer, s: Snapshot, L: NetLayout): void {
   w.u16(Math.round(Math.max(0, Math.min(6, s.timeScale)) * 10000));
   for (let i = 0; i < s.count; i++) {
     const f = s.cars[i]!;
-    w.u8((f.crashed ? 1 : 0) | (f.wreck ? 2 : 0) | (f.vaporized ? 4 : 0) | (f.falling ? 8 : 0) | (f.sirens ? 16 : 0) | ((f.driverOut & 3) << 5) | (f.dented ? 128 : 0));
+    w.u8((f.crashed ? 1 : 0) | (f.wreck ? 2 : 0) | (f.vaporized ? 4 : 0) | (f.falling ? 8 : 0) | (f.sirens ? 16 : 0) | ((f.driverOut & 3) << 5) | (f.marked ? 128 : 0));
     w.u8((f.style & 15) | ((f.cls & 15) << 4));
     w.u8(f.meter < 0 ? METER_NONE : Math.round(Math.min(1, f.meter) * METER_FULL));
     w.u8(Math.min(255, Math.round(f.spin / SPIN_STEP)));
@@ -494,7 +504,7 @@ export function readSnapshot(r: Reader, s: Snapshot, L: NetLayout): void {
     f.vaporized = (flags & 4) !== 0;
     f.falling = (flags & 8) !== 0;
     f.sirens = (flags & 16) !== 0;
-    f.dented = (flags & 128) !== 0;
+    f.marked = (flags & 128) !== 0;
     f.driverOut = (flags >> 5) & 3;
     const body = r.u8();
     f.style = body & 15;

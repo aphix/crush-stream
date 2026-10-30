@@ -23,6 +23,33 @@ const _aim = new THREE.Vector3();
 const _tn = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _turnCentre = new THREE.Vector3();
+const _slide = new THREE.Vector3();
+const _slideB = new THREE.Vector3();
+const _arm = new THREE.Vector3();
+const _inward = new THREE.Vector3();
+
+/** A striker sliding along the other car slower than this (m/s) cuts no scratch: a head-on or a resting pile slides about 0. */
+const SCRATCH_MIN_SLIP = 1.5;
+
+/** The world velocity of `car`'s body at world point `p` into `out`. */
+function pointVelocity(car: DeformableCar, p: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+  return out.crossVectors(car.angular, _arm.subVectors(p, car.group.position)).add(car.velocity);
+}
+
+/**
+ * Each car of a touching pair takes the scratch the other's slide cuts at the patch `p` (`DeformableCar.scrape`): `n` the plan normal
+ * from B to A, `strength` how hard they press (m/s: the hit's `impulse`), `half` the patch's half length (m). Nothing the sim reads is written.
+ */
+function scrapePair(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector3, p: THREE.Vector3, strength: number, half: number): void {
+  pointVelocity(carA, p, _slide).sub(pointVelocity(carB, p, _slideB));
+  _slide.addScaledVector(n, -_slide.dot(n));
+  _slide.y = 0;
+  if (hypot2(_slide.x, _slide.z) < SCRATCH_MIN_SLIP) return;
+  const cutByA = carA.cutAt(p);
+  const cutByB = carB.cutAt(p);
+  carB.scrape(p, _inward.copy(n).negate(), _slide, half, strength, cutByA);
+  carA.scrape(p, n, _slide.negate(), half, strength, cutByB);
+}
 
 type PairHit = {
   impulse: number;
@@ -693,6 +720,7 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   if (spent && closing > 0 && dist > 1e-4) holdComGap(carA, carB, leftoverA, leftoverB, dist, dt);
   _hit.closing = Math.max(0, closing);
   _hit.impulse = Math.max(_hit.closing, hit * 6);
+  scrapePair(carA, carB, n, _p, _hit.impulse, half);
   _hit.contact.copy(_p);
   _hit.normal.copy(n);
   return _hit;

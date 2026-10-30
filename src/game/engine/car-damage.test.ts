@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { PART_STATE, LOOSE_STATE_MAX } from "../vehicle/part-state.ts";
+import { STROKE_BYTES } from "../vehicle/paint-scrapes.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { assertSameDigest } from "../vehicle/test-support.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
@@ -111,6 +113,28 @@ describe("given a damaged car put back on the road keeping its damage (a held re
     expect(now.deform.squash).toBe(1.1);
     expect(now.deform.buckle).toBe(0.3);
     expect(now.deform.squash, "the control: the dress differs from the car's own").not.toBe(ENGINE_DRESS.squash);
+  });
+});
+
+describe("given a car whose paint a slide scratched", () => {
+  const scratched = (): DeformableCar => {
+    const car = new DeformableCar({ body: 0x808080, accent: 0, name: "kept" }, new THREE.Scene(), null, fleetStyle(0));
+    car.spawnFacing(0, 0, 0, 0);
+    car.scrape(new THREE.Vector3(-0.85, 0.5, -0.5), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 8), 0.3, 3, 1);
+    car.scratches.slice(0.25);
+    car.scratches.slice(0.25);
+    return car;
+  };
+
+  it("when a held reset puts it back keeping its damage, then its strokes are kept byte for byte; when it respawns repaired, they are gone", () => {
+    const held = scratched();
+    const strokes = Array.from(held.scratches.list.subarray(0, held.scratches.count * STROKE_BYTES));
+    expect(strokes.length, "the control: scratched").toBeGreaterThan(0);
+    placeKeepingNow(held);
+    expect(firstMismatch(held.scratches.list.subarray(0, held.scratches.count * STROKE_BYTES), strokes), "kept through the held reset").toBeUndefined();
+    const tapped = scratched();
+    tapped.spawnFacing(PLACE.x, PLACE.z, PLACE.yaw, 0);
+    expect(tapped.scratches.count, "a tap respawn repairs the paint").toBe(0);
   });
 });
 

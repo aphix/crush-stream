@@ -98,6 +98,11 @@ interface CourseMemory {
 /** A car on no road segment, as a placement leaves one (and what a recorder with no course writes). */
 const NO_MEMORY = [-1];
 
+/** Whether a keyframe carries `car`'s solver state: a crash, a part torn off, or a dent under the crash's depth (`SPRING_YIELD`), on a car neither falling nor vaporized. Scratches alone are not solver state. */
+function keyframeSolver(car: DeformableCar): boolean {
+  return (car.crashed || car.hasLoosePart() || car.deform.loadCrushed()) && !car.falling && !car.vaporized;
+}
+
 /** A spell of slices in which a loose body was stirred (`CrashRecorder.bodyStirs`): the step and slice it began in, its car (race slot) and body, the race's slice count at its start, its length in slices, and the step it was last stirred in. */
 interface BodyStir {
   step: number;
@@ -366,7 +371,7 @@ export class CrashRecorder {
     }
     this.keyVip[slot] = this.vipCar;
     let wrecks = 0;
-    for (let i = 0; i < n; i++) if (s.cars[i]!.wreck) wrecks |= 1 << i;
+    for (let i = 0; i < n; i++) if (keyframeSolver(cars[i]!)) wrecks |= 1 << i;
     this.keyWreck[slot] = wrecks >>> 0;
     this.keyPlaced[slot] = placed >>> 0;
     this.keyShot[slot] = shot >>> 0;
@@ -596,8 +601,8 @@ export class CrashRecorder {
       const car = this.cars[i]!;
       const f = s.cars[i]!;
       // As the netplay host: a falling fake or a vaporized car carries no wreck. A car with a part torn off carries one, wreck or not, and so does one with a dent under the crash's depth
-      // (`SPRING_YIELD`): its load crush is solver state a replay would otherwise restore as none.
-      f.wreck = (car.crashed || car.hasLoosePart() || car.deform.loadCrushed()) && !car.falling && !car.vaporized;
+      // (`SPRING_YIELD`): its load crush is solver state a replay would otherwise restore as none. A car with scratched paint and nothing else carries the section for its strokes alone.
+      f.wreck = keyframeSolver(car) || (car.scratches.count > 0 && !car.falling && !car.vaporized);
       if (!f.wreck) continue;
       car.deform.readNetState(f.deform);
       car.readPartNetState(f.parts);
@@ -623,7 +628,7 @@ export class CrashRecorder {
       w.off += this.memBytes.length;
       // Every car's parts state; the solver state of a wreck in front of it (the deform's and its cage's refit history: `solverState`). A car with a torn part is a wreck here whether or not it is crashed: its net state alone would leave its hit frame zeroed (a zero `impactInward`, where the intact car has (0, 0, -1)).
       // In front of both, where each torn part lies (the net state says only that it is off): a replay puts it back there, not thrown off the car afresh.
-      const solver = s.cars[i]!.wreck;
+      const solver = keyframeSolver(car);
       const own = solver ? car.solverSize() : 0;
       if (own > this.sim.length) throw new RangeError("a car's solver state outgrew the keyframe's scratch");
       const loose = car.looseState(this.loose, false);

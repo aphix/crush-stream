@@ -327,5 +327,18 @@ export type MaterialId = number;
 export type MaterialFamily = Family;
 export const MAT = Object.fromEntries(MATERIALS.map(([name], id) => [name, id])) as Record<(typeof MATERIALS)[number][0], MaterialId>;
 
+/**
+ * How hard a striker of each material cuts paint in a slide (0..1.5; unlisted cuts nothing), from collision-repair guidance:
+ * hard metal cuts readily at an edge, painted plastic sometimes, smooth black plastic rarely, rubber transfers and never cuts.
+ */
+export const SCRATCH_CUT: ReadonlyMap<MaterialId, number> = new Map([
+  [MAT.CAR_PAINT, 1],
+  [MAT.BUMPER_CHROME, 1],
+  [MAT.BUMPER_PAINTED, 0.6],
+  [MAT.BUMPER_SATIN, 0.6],
+  [MAT.BUMPER_BLACK, 0.4],
+  [MAT.TYRE, 0],
+]);
+
 /** Struck surfaces that show cut lines: painted steel panels. Chrome scuffs and plastic whitening are looks of their own. */
 export const TAKES_SCRATCH: ReadonlySet<MaterialId> = new Set([MAT.CAR_PAINT]);

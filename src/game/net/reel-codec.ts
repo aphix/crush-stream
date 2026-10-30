@@ -525,9 +525,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 176: one knock law for every striker (`knocksDown`): a standing figure's speed change in a sticking hit, the striker's mass × its own velocity toward him over its mass plus his 101.4 kg, at 1 m/s or more. A car runs a lawn guard, the VIP or the walker down from about 1.1 m/s along its touched face's normal (it took 4 m/s of ground speed at any angle); a torn part or popped wheel now reaches a guard or the VIP too (`looseRunsDown`): he is thrown standing still (a strike's `loose` byte) and the part strikes his dummy where it lands. A clip of 175 or before no longer reads.
  * 177: a clip carries the hits the dummies' world struck its cars with (`ClipPartHit`: a torso on a pane, a knocked prop or carton on a mirror, an unlatched door, hood or boot lid, a hanging quarter panel), and a replay applies each at its step instead of re-running that world; a clip of 176 or before no longer reads.
  * 178: a latch that lets go no longer sets a lid's angle: its pop spring throws the free edge up at `LATCH_POP_MPS` (2 m/s) and the swing carries it on from where it is (a hatch's struts then lift it to its stop over real frames). A sprung hood only slightly unlatches: it rises onto its safety catch (`HOOD_CATCH_M`, 4 cm above its crash pose), held there by its pop spring and struts. Before, the first step past the hood's ajar set it 17° open in one step and its struts swung it to its 32° stop. A clip of 177 or before no longer reads.
+ * 179: a car scratches another's paint where it slides along it in a pair contact (a stroke list per car; its episode tracker rides the keyframe's part state, 55 doubles more); a keyframe carries a car with only scratches in its wreck section, without solver state; a clip of 178 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 178;
+const REPLAY_VERSION = 179;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

@@ -91,7 +91,7 @@ function sprayedPolice() {
 
 /** Whether fragment `f` shows its texel's paint, the shader's `sprayTexel` with `uniforms` (the depth map, its band and the torn flags, where it has them). */
 function drawsPaint(f: Fragment, uniforms: Record<string, THREE.IUniform>): boolean {
-  const face = sprayFace(CAR_SPRAY, f.p.x, f.p.y, f.p.z, f.n.x, f.n.y, f.n.z, _uv);
+  const face = sprayFace(CAR_SPRAY, f.p, f.n, _uv);
   if (face < 0) return false;
   const map = uniforms.sprayDepth?.value as THREE.DataTexture | undefined;
   if (!map) return true;
@@ -99,7 +99,7 @@ function drawsPaint(f: Fragment, uniforms: Record<string, THREE.IUniform>): bool
   const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!.map((v) => (v * width) / CAR_SPRAY.w) as [number, number, number, number];
   const texel = (fy + Math.min(fh - 1, Math.floor(_uv[1]! * fh))) * width + fx + Math.min(fw - 1, Math.floor(_uv[0]! * fw));
   const code = data[2 * texel]!;
-  const under = ((code - 1) / DEPTH_STEPS - sprayPlace(CAR_SPRAY, face, f.p.x, f.p.y, f.p.z, _uv)) * axisSpan(face);
+  const under = ((code - 1) / DEPTH_STEPS - sprayPlace(CAR_SPRAY, face, f.p, _uv)) * axisSpan(face);
   const cover = data[2 * texel + 1]!;
   const torn = uniforms.sprayTorn?.value as THREE.Vector4 | undefined;
   return code === 0 || under <= (uniforms.sprayBand!.value as number) || (torn !== undefined && torn.getComponent(cover - 1) < 0.5);
@@ -143,7 +143,7 @@ describe("given a police car sprayed all over", () => {
 
   /** Whether the left door (skin, glass or card) at rest covers `f` along its face's axis, more than the band out, at it and `OUTLINE_CLEAR` round it. */
   function underLeftDoor(f: Fragment): boolean {
-    const face = sprayFace(CAR_SPRAY, f.p.x, f.p.y, f.p.z, f.n.x, f.n.y, f.n.z, _uv);
+    const face = sprayFace(CAR_SPRAY, f.p, f.n, _uv);
     if (face < 0 || f.p.x > 0 || !police.doorBox.containsPoint(new THREE.Vector3(police.doorBox.min.x, f.p.y, f.p.z))) return false;
     const axis = AXES[face]!;
     const spots = [f.p, ...AXES.filter((a) => Math.abs(a.dot(axis)) < 0.5).map((a) => f.p.clone().addScaledVector(a, OUTLINE_CLEAR))];
@@ -155,7 +155,7 @@ describe("given a police car sprayed all over", () => {
 
   /** Whether a ray down `f`'s face's axis meets it first on the whole car. */
   function seenDownAxis(f: Fragment): boolean {
-    const face = sprayFace(CAR_SPRAY, f.p.x, f.p.y, f.p.z, f.n.x, f.n.y, f.n.z, _uv);
+    const face = sprayFace(CAR_SPRAY, f.p, f.n, _uv);
     if (face < 0) return false;
     const hit = firstHit(ray, police.all, f.p, AXES[face]!);
     return hit !== undefined && Math.abs(RAY_START - hit.distance) < SURFACE_HIT;

@@ -2,6 +2,7 @@ import type { DetachPart, LooseBody, LooseShape, LooseWheel } from "./car-core.t
 import type { CarParts } from "./car-parts.ts";
 import { DENT_MAX, type DentState } from "./loose-dent.ts";
 import { fitWheelShape, keyedShape, SHAPE_POINTS } from "./loose-step.ts";
+import { SCRAPE_TRACK } from "./paint-scrapes.ts";
 
 /** Netplay part slots: the most parts any style has (8, six body panels, plus the police light bar), so every car shares one layout. */
 export const PART_SLOTS = 15;
@@ -9,8 +10,9 @@ export const PART_SLOTS = 15;
 const WHEEL_SLOTS = 4;
 /** The bodies a car can fly in the world: its `PART_SLOTS` parts, then its `WHEEL_SLOTS` wheels (a body's index in `CarParts.stirredBodies` and in a clip's part stirs). */
 export const LOOSE_BODIES = PART_SLOTS + WHEEL_SLOTS;
-/** Numbers in a `CarParts.partState` block: twelve for the car, then nine per part slot. */
-const PART_STATE_HEAD = 12;
+/** Numbers in a `CarParts.partState` block: twelve for the car and its paint-scratch tracker's (`SCRAPE_TRACK`), then nine per part slot. */
+const PART_STATE_CAR = 12;
+const PART_STATE_HEAD = PART_STATE_CAR + SCRAPE_TRACK;
 const PART_STATE_EACH = 9;
 export const PART_STATE = PART_STATE_HEAD + PART_SLOTS * PART_STATE_EACH;
 
@@ -31,12 +33,14 @@ export function partState(car: CarParts, parts: readonly DetachPart[], buf: Floa
     car.quietPrev = buf[9]!;
     car.flapClock = buf[10]!;
     car.flapSpeed = buf[11]!;
+    for (let i = 0; i < SCRAPE_TRACK; i++) car.scratches.track[i] = buf[PART_STATE_CAR + i]!;
   } else {
     for (let i = 0; i < 4; i++) buf[i] = m[i]!;
     for (let i = 0; i < 5; i++) buf[4 + i] = d[i]!;
     buf[9] = car.quietPrev;
     buf[10] = car.flapClock;
     buf[11] = car.flapSpeed;
+    buf.set(car.scratches.track, PART_STATE_CAR);
   }
   for (let i = 0; i < PART_SLOTS; i++) {
     const o = PART_STATE_HEAD + i * PART_STATE_EACH;

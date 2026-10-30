@@ -105,9 +105,7 @@ describe("given a spray bitmap wrapped round a car or a driver as a box", () => 
   for (const testCase of faces) {
     it(testCase.it, () => {
       const uv = new Float64Array(2);
-      const [px, py, pz] = testCase.p;
-      const [nx, ny, nz] = testCase.n;
-      expect(sprayFace(LAYOUTS[testCase.layout]!, px, py, pz, nx, ny, nz, uv)).toBe(testCase.face);
+      expect(sprayFace(LAYOUTS[testCase.layout]!, new THREE.Vector3(...testCase.p), new THREE.Vector3(...testCase.n), uv)).toBe(testCase.face);
     });
   }
 

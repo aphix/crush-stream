@@ -3,6 +3,7 @@ import { todoRow } from "../kernel/todo-row.test-util.ts";
 import { idleDrive } from "../vehicle/car-drive.ts";
 import { DerbyMatch } from "../match/derby.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
+import * as THREE from "three";
 import { FREEWHEEL, launch, makeCar, makeWorld, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { buildCar } from "../vehicle/drawn-body.test-util.ts";
 import { assertSameDigest, assertSameNumbers, itModes } from "../vehicle/test-support.ts";
@@ -31,6 +32,8 @@ import { carLayout, readCarPose } from "./car-pose.ts";
 import { tyreClearance } from "../vehicle/tyre-clearance.test-util.ts";
 import { drawnTriangles } from "../vehicle/drawn-body.test-util.ts";
 import { drawSnapshots } from "./net-view.ts";
+import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { SCRAPE_MAX } from "../vehicle/paint-scrapes.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 
 const L: NetLayout = { masses: 20, clusters: 16, sensors: 21, parts: 8, wheels: 4 };
@@ -121,7 +124,7 @@ describe("given a two-car network snapshot with every field filled in", () => {
     for (let c = 0; c < 2; c++) {
       const f = s.cars[c]!;
       // Car 0 a falling fake, car 1 vaporized with its sirens on: each flag must come back on its own car only.
-      Object.assign(f, { x: 12.345 + c, y: 0.0123, z: -40.5, yaw: 3.1, pitch: -0.12, roll: 0.4, vx: 17.3, vy: -1.2, vz: -0.07, wy: 2.345, crashed: true, wreck: c === 0, falling: c === 0, vaporized: c === 1, sirens: c === 1, dented: c === 1, style: 4 + c, cls: 3 - c, meter: c === 0 ? 0.4 : -1, spin: c === 0 ? 12.37 : 0 });
+      Object.assign(f, { x: 12.345 + c, y: 0.0123, z: -40.5, yaw: 3.1, pitch: -0.12, roll: 0.4, vx: 17.3, vy: -1.2, vz: -0.07, wy: 2.345, crashed: true, wreck: c === 0, falling: c === 0, vaporized: c === 1, sirens: c === 1, marked: c === 1, style: 4 + c, cls: 3 - c, meter: c === 0 ? 0.4 : -1, spin: c === 0 ? 12.37 : 0 });
       const d = f.deform;
       for (let i = 0; i < d.local.length; i++) d.local[i] = Math.sin(i * 1.7) * 2.2;
       for (let i = 0; i < d.skinPos.length; i++) d.skinPos[i] = Math.cos(i * 0.9) * 2.1;
@@ -171,7 +174,7 @@ describe("given a two-car network snapshot with every field filled in", () => {
       expect(b.falling).toBe(c === 0);
       expect(b.vaporized).toBe(c === 1);
       expect(b.sirens).toBe(c === 1);
-      expect(b.dented).toBe(c === 1);
+      expect(b.marked).toBe(c === 1);
       if (c === 0) expect(Math.abs(b.meter - 0.4), `meter ${b.meter}`).toBeLessThanOrEqual(0.5 / 254);
       else expect(b.meter, "a car with no nitrous reads back as none").toBe(-1);
       expect(Math.abs(b.spin - a.spin), `spin ${b.spin}`).toBeLessThanOrEqual(0.125 + 1e-9);
@@ -199,8 +202,8 @@ describe("given a two-car network snapshot with every field filled in", () => {
       for (let k = 0; k < 3; k++) expect(b.parts.wheels[i * 7 + k]).toBe(Math.fround(a.parts.wheels[i * 7 + k]!));
       for (let k = 3; k < 7; k++) expect(Math.abs(b.parts.wheels[i * 7 + k]! - a.parts.wheels[i * 7 + k]!)).toBeLessThanOrEqual(Q.quat);
     }
-    // 17-byte header, 30-byte poses (body, meter, spin, pose), a 687-byte wreck (its impact block is 12 numbers of 2 bytes, its load crush 10) with 20 more per loose wheel (2): a loose part's pose is not sent.
-    expect(w.off).toBe(17 + 30 + (687 + 20 * 2) + 30);
+    // 17-byte header, 30-byte poses (body, meter, spin, pose), a 688-byte wreck (its impact block is 12 numbers of 2 bytes, its load crush 10, its paint's stroke count 1) with 20 more per loose wheel (2): a loose part's pose is not sent.
+    expect(w.off).toBe(17 + 30 + (688 + 20 * 2) + 30);
   });
 });
 
@@ -231,20 +234,21 @@ describe("given a host car whose driven wheels spin ahead of the body", () => {
   });
 });
 
-describe("given two cars wrecked as far as a snapshot can carry: every part and wheel loose", () => {
+describe("given 32 cars wrecked as far as a snapshot can carry: every part and wheel loose, every paint stroke used", () => {
   it("when they are written, then the snapshot is exactly the most bytes a snapshot is allowed to hold (the recorder sizes its fixed buffers from it)", () => {
     const s = makeSnapshot();
-    ensureFrames(s, 2, L);
-    s.count = 2;
-    for (let c = 0; c < 2; c++) {
+    ensureFrames(s, 32, L);
+    s.count = 32;
+    for (let c = 0; c < 32; c++) {
       const f = s.cars[c]!;
       Object.assign(f, { crashed: true, wreck: true, meter: 0.5 });
       f.parts.flags.fill(1);
       f.parts.wheelLoose = (1 << L.wheels) - 1;
+      f.parts.scrapeCount = SCRAPE_MAX;
     }
     const w = new Writer();
     writeSnapshot(w, s, L);
-    expect(w.off).toBe(snapshotMaxBytes(2, L));
+    expect(w.off).toBe(snapshotMaxBytes(32, L));
   });
 });
 
@@ -561,5 +565,50 @@ describe("given snapshots and derby boards of values a host never sends", () => 
     expect(read({ ...base, board: [row(0)], winnerId: 40, winnerName: "x", decided: "wreck" })).toThrow(RangeError);
     expect(read({ ...base, radius: Number.NaN })).toThrow(RangeError);
     expect(read({ ...base, time: Number.POSITIVE_INFINITY })).toThrow(RangeError);
+  });
+});
+
+describe("given a host car whose paint a slide scratched, and nothing else: not crashed, no load crush", () => {
+  it("when its snapshots cross the wire and a client draws them, then the client's strokes are the host's byte for byte, and once the host repairs the car the client's are gone", () => {
+    const host = makeCar();
+    const client = makeCar();
+    host.spawnFacing(0, 0, 0, 0);
+    client.spawnFacing(0, 0, 0, 0);
+    const inward = new THREE.Vector3(1, 0, 0);
+    const slide = new THREE.Vector3(0, 0, 8);
+    for (const z of [-1, -0.4]) {
+      host.scrape(new THREE.Vector3(-0.85, 0.5, z), inward, slide, 0.3, 3, 1);
+      host.scratches.slice(0.25);
+    }
+    host.scratches.slice(0.25);
+    expect(host.scratches.count > 0 && !host.crashed && !host.deform.loadCrushed(), "the control: scratched only").toBeTruthy();
+    const layout = carLayout(host);
+    // The host's frame as `NetPlay.hostFrame` builds it: a crashed or marked car sends its wreck section.
+    const hostSnapshot = (time: number): Snapshot => {
+      const s = makeSnapshot();
+      ensureFrames(s, 1, layout);
+      s.count = 1;
+      s.time = time;
+      const f = s.cars[0]!;
+      readCarPose(host, f);
+      f.wreck = f.crashed || f.marked;
+      if (f.wreck) {
+        host.deform.readNetState(f.deform);
+        host.readPartNetState(f.parts);
+      }
+      const w = new Writer();
+      writeSnapshot(w, s, layout);
+      const got = makeSnapshot();
+      readSnapshot(new Reader().reset(w.done()), got, layout);
+      return got;
+    };
+    const game = { setVaporized: () => {}, clearScene: () => {} };
+    const applied: number[] = [];
+    drawSnapshots([hostSnapshot(5)], [1], applied, [client], 5, 1 / FRAME_HZ, game, -1);
+    expect(client.scratches.count, "the client's stroke count").toBe(host.scratches.count);
+    expect(firstMismatch(client.scratches.list, host.scratches.list), "the client's stroke bytes").toBeUndefined();
+    host.spawnFacing(0, 0, 0, 0);
+    drawSnapshots([hostSnapshot(6)], [2], applied, [client], 6, 1 / FRAME_HZ, game, -1);
+    expect(client.scratches.count, "repaired on the client").toBe(0);
   });
 });

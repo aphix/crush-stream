@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAT, MATERIALS, TAKES_SCRATCH } from "./material-ids.ts";
+import { MAT, MATERIALS, SCRATCH_CUT, TAKES_SCRATCH } from "./material-ids.ts";
 
 const FAMILY_COUNT = 14;
 const ROLES: readonly string[] = [
@@ -48,6 +48,7 @@ const SCRATCH_RULE = [
 describe("given the paint-scratch rule over the material registry", () => {
   for (const testCase of SCRATCH_RULE) {
     it(`when ${testCase.material} slides along a painted panel or is slid along, then ${testCase.it}`, () => {
+      expect(SCRATCH_CUT.get(MAT[testCase.material]), `${testCase.material} cut`).toBe(testCase.cut);
       expect(TAKES_SCRATCH.has(MAT[testCase.material]), `${testCase.material} takes scratches`).toBe(testCase.takes);
     });
   }

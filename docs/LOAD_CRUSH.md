@@ -88,8 +88,8 @@ What holds a column up, in the shared car-on-car rule:
   `crushBaked`). A car whose face a load crushed past its elastic range (`SPRING_YIELD`, 15 mm: a dent that shallow springs back whole in the
   structure) is `crashed`, whatever presses the face (the ground, a wall, a ramp, another car's belly); a shallower dent (a belly's soft touch
   on a ramp's edge, 1.7 mm) leaves the car uncrashed, and it still rides a keyframe (`CrashRecorder`, `loadCrushed`) and a netplay wreck section,
-  which the snapshot's `dented` flag (flags bit 7) asks for: a guest draws the dent the host has, and clears it when the host's car reads neither
-  crashed nor dented (`net-view.ts`; `net-session.test.ts`). The depth is the face's total, so touches add up to a crash. `crashed` is a car's
+  which the snapshot's `marked` flag (flags bit 7: a load crush or paint scratches) asks for: a guest draws the dent the host has, and clears it when the host's car reads neither
+  crashed nor marked (`net-view.ts`; `net-session.test.ts`). The depth is the face's total, so touches add up to a crash. `crashed` is a car's
   wreck state, not a drawing switch: a car carrying a load crush draws it as a wreck does (`DeformableCar.panelsFollow`: its panels, glass and tyre
   hold follow the dented body, and the cage's panels with them), so the surface a car above stands on is the drawn one from the first mm. Held to
   `crashed` (past 15 mm) the panels stood at rest under a dented roof until it passed, and the roof under a car dropped 2 cm crushed 94.8 mm at

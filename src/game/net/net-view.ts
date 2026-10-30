@@ -43,8 +43,8 @@ export function drawSnapshots(
     const fa = sa.cars[i]!;
     const fb = i < sb.count ? sb.cars[i]! : fa;
     if (cleared) applied[i] = orderA - 1;
-    // A car the host repaired (neither crashed nor dented on its side) is repaired here: its torn parts, its wreck and the dent its wreck section carried.
-    if ((car.crashed || car.deform.loadCrushed()) && !fa.crashed && !fa.dented) {
+    // A car the host repaired (neither crashed nor marked on its side) is repaired here: its torn parts, its wreck, and the dent and scratches its wreck section carried.
+    if ((car.crashed || car.deform.loadCrushed() || car.scratches.count > 0) && !fa.crashed && !fa.marked) {
       car.resetVisual();
       applied[i] = orderA;
     }

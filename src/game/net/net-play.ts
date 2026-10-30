@@ -642,8 +642,8 @@ export class NetPlay extends NetPlayClient {
       const f = s.cars[i]!;
       readCarPose(car, f);
       f.meter = this.game.meterOf(i) ?? -1;
-      // A falling fake or a vaporized car shows no wreck: its mesh is frozen (falling) or hidden. A car dented under the crash's depth shows its dent (`dented`), no wreck.
-      if (!(car.crashed || f.dented) || car.falling || car.vaporized) {
+      // A falling fake or a vaporized car shows no wreck: its mesh is frozen (falling) or hidden. A car dented under the crash's depth or scratched shows its marks (`marked`), no wreck.
+      if (!(car.crashed || f.marked) || car.falling || car.vaporized) {
         this.lastWreckLen[i] = 0;
         continue;
       }

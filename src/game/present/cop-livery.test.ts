@@ -25,7 +25,7 @@ const UP = [0, 1, 0] as const;
 /** The texel of `layout` that rest point `p` with normal `n` paints (`SprayBitmap.spray`'s rounding). */
 function texelAt(layout: SprayLayout, p: readonly number[], n: readonly number[]): number {
   const uv = new Float64Array(2);
-  const face = sprayFace(layout, p[0]!, p[1]!, p[2]!, n[0]!, n[1]!, n[2]!, uv);
+  const face = sprayFace(layout, new THREE.Vector3(p[0], p[1], p[2]), new THREE.Vector3(n[0], n[1], n[2]), uv);
   const [fx, fy, fw, fh] = layout.faces[face]!;
   return (fy + Math.min(fh - 1, Math.floor(uv[1]! * fh))) * layout.w + fx + Math.min(fw - 1, Math.floor(uv[0]! * fw));
 }
