@@ -185,6 +185,28 @@ describe("given a striker's nose ramming along a parked sedan's tail at 8 m/s, 5
   });
 });
 
+describe("given a sedan's nose sliding along a parked sedan's tail at 8 m/s, 52° in", () => {
+  it("when it slides, then the striker's own front bumper takes strokes where it rubbed", () => {
+    const { a } = pass(car("sedan"), car("sedan"), { x: -2.4, z: -4.5, yaw: 0.9 });
+    const box = a["bumperBoxes"][0];
+    must(box, "the control: a front bumper");
+    const span = (k: 0 | 1 | 2) => CAR_SPRAY.max[k] - CAR_SPRAY.min[k];
+    // A stroke end's rest place across its face (the two axes it maps), against the bumper's rest box with one texel to spare.
+    const onBumper = (s: Stroke, u: number, v: number): boolean => {
+      const [, , fw, fh] = CAR_SPRAY.faces[s.face]!;
+      const side = s.face === SPRAY_FACE.left || s.face === SPRAY_FACE.right;
+      const across = side ? 2 : 0;
+      const at = CAR_SPRAY.min[across] + ((u + 0.5) / fw) * span(across);
+      const y = CAR_SPRAY.min[1] + ((v + 0.5) / fh) * span(1);
+      const slack = span(across) / fw + span(1) / fh;
+      return at >= box.min.getComponent(across) - slack && at <= box.max.getComponent(across) + slack && y >= box.min.y - slack && y <= box.max.y + slack;
+    };
+    const all = strokes(a);
+    const bumper = all.filter((s) => s.face !== SPRAY_FACE.top && s.face !== SPRAY_FACE.back && onBumper(s, s.u0, s.v0) && onBumper(s, s.u1, s.v1));
+    expect(bumper.length, `the striker's strokes: ${show(all)}`).toBeGreaterThan(0);
+  });
+});
+
 describe("given a sedan whose front was crushed into a wall at 50 km/h", () => {
   it("when it grinds its nose along a parked sedan's flank with the paint clip off, then every stroke on its flank lands ahead of its door and ahead of every contact's drawn place: where it sat before the crush", () => {
     const crushed = car("sedan");

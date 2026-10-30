@@ -352,5 +352,5 @@ export const SCRATCH_CUT: ReadonlyMap<MaterialId, number> = new Map([
   [MAT.ROAD_GRASS, 0],
 ]);
 
-/** Struck surfaces that show cut lines: painted steel panels. Chrome scuffs and plastic whitening are looks of their own. */
-export const TAKES_SCRATCH: ReadonlySet<MaterialId> = new Set([MAT.CAR_PAINT]);
+/** Struck surfaces that show cut lines: painted steel panels and the bumpers, the parts most often bumped (each finish scuffs as itself). */
+export const TAKES_SCRATCH: ReadonlySet<MaterialId> = new Set([MAT.CAR_PAINT, MAT.BUMPER_PAINTED, MAT.BUMPER_SATIN, MAT.BUMPER_BLACK, MAT.BUMPER_CHROME]);

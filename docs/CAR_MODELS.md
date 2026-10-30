@@ -252,7 +252,7 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
   heights, a tall car's on a low one's where they really meet. Each stroke is cut to the run of it that lies on drawn paint: the
   style's paint cover (`paintCover`, built once per style from the body, lid and door skins at rest: the `CAR_SPRAY` texels where a
   fragment's rest normal picks that face and its interpolated primer takes scratches, as the shader weighs it), so a slide at window,
-  roof-rail, under-sill or bumper height burns none of the 32; the arch lips are paint and take them. The cover also holds each
+  roof-rail or under-sill height burns none of the 32; the arch lips are paint and take them, and so do the bumpers (in the cover from their own skins). The cover also holds each
   painted texel's recess: how far (mm) it lies behind the outermost surface of its face within 0.3 m along and 0.2 m across, which a
   striker meets first (the sim reads only paint or not). Present draws each scratched car's RG8 wear mask from that list (`present/paint-scratch.ts` `PaintScratches`, once a
   frame for every drawn car, only when the list's version moves, redrawing only the changed strokes' rects and uploading their rows):
@@ -268,9 +268,13 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
   crisp-edged patches. A light brush is a few whitish hairlines, a hard grind a packed streaky zone with flakes and bright steel.
   Far off (rows under 4 px) only every 2^k-th row keeps its line, at least a pixel wide at full contrast, standing for its rows, so a
   scratched panel reads as a few distinct streaks rather than a faint mean. Only `TAKES_SCRATCH` surfaces show them (the
-  painted panels; bumpers, trim and bare steel don't). One extra key (`|scratch`) on every car paint, no new variant; `SCRATCH_TIER`
+  painted panels and the bumpers; other trim and bare steel don't). One extra key (`|scratch`) on every car paint, no new variant; `SCRATCH_TIER`
   turns it off at the `off` tier. A car with no strokes samples a shared 1×1 and hands its mask back to the pool; torn lids and
-  doors drawn by the cover batch show no scratches.
+  doors drawn by the cover batch show no scratches. **Bumpers**, the parts most often bumped, draw the same mask: every bumper trim
+  is patched once with the scratch seam (one `|scratch` program for every finish, its scuff in uniforms: painted and satin as the
+  body's paint, black plastic whitening grey, chrome bright lines), sampling no wear; a car's first stroke gives each of its bumpers
+  a copy of its trim of its own bound to the car's mask (same program, no compile) and its rest frame (`ensureRestFrame`), and a
+  look that swaps the trim gets a new copy. A torn bumper flies as the same mesh and keeps its marks.
 - **The cage** reads `cageInterior()`, the first interior box byte-for-byte: the drawn kit moves no sim reading.
 
 ## References and scale

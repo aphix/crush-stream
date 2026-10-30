@@ -624,13 +624,13 @@ export abstract class CarCore {
     for (const mesh of [this.doorMeshL, this.doorMeshR]) mesh.geometry.computeBoundingBox();
     this.flushCasters.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
     if (this.style.details) for (const mesh of [this.body, this.hood, this.trunk, this.doorMeshL, this.doorMeshR]) ensureRestFrame(mesh, this.group);
-    this.scratches.cover = paintCover(this.style, [this.body, this.hood, this.trunk, this.doorMeshL, this.doorMeshR], this.group);
     for (const material of new Set([this.bodyMat, doorMat])) applyDetailMap(material, this.style);
     this.apertureParts.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
 
     const accent = livery?.accent ?? paint.accent;
     this.bumperF = this.makeBumper(true, accent, livery?.body ?? paint.body);
     this.bumperR = this.makeBumper(false, accent, livery?.body ?? paint.body);
+    this.scratches.cover = paintCover(this.style, [this.body, this.hood, this.trunk, this.doorMeshL, this.doorMeshR, ...this.bumperMeshes], this.group);
     this.group.add(this.bumperF, this.bumperR);
     this.restCaster = this.styleRestCaster();
     this.addLamps();

@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { REST_FRAME_ATTRIBUTES } from "../vehicle/car-detail-map.ts";
+import { ensureRestFrame, REST_FRAME_ATTRIBUTES } from "../vehicle/car-detail-map.ts";
 import { FACE_BITS, FACE_MASK, FACE_METRES, FACE_WIDTH, SCRAPE_MAX, SEVERITY, STROKE_BYTES, U0, U1, V0, V1, WIDTH_STEP } from "../vehicle/paint-scrapes.ts";
 import { CAR_SPRAY } from "../vehicle/spray-box.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { declareSprayFace, sprayFaceUniforms } from "./spray.ts";
 
 /** The FX tier's share of the scratches: 0 only at `off`. Shared by every car's paint. */
@@ -113,7 +114,7 @@ vec3 paintScratch() {
   return vec3((hair - steel) * (1.0 - flake), flake, steel);
 }`;
 
-/** A car's wear: the uniforms every paint of it samples, its mask while it has strokes, and the list the mask was drawn from. */
+/** A car's wear: the uniforms every paint of it samples, its mask while it has strokes, the list the mask was drawn from, and its bumpers with the own materials they draw it in once it has strokes. */
 type Wear = {
   readonly uniforms: Record<string, THREE.IUniform> & { wearMap: THREE.IUniform<THREE.Texture>; scratchTier: typeof SCRATCH_TIER };
   mask: WearMask | null;
@@ -121,6 +122,9 @@ type Wear = {
   version: number;
   count: number;
   readonly list: Uint8Array;
+  readonly car: DeformableCar;
+  readonly bumpers: readonly THREE.Mesh[];
+  readonly bumperOwn: (THREE.MeshStandardMaterial | null)[];
 };
 
 const wears = new WeakMap<DeformableCar, Wear>();
@@ -128,7 +132,8 @@ const patched = new WeakSet<THREE.Material>();
 
 /**
  * Car `car`'s paints (body, lids, doors) draw its scratches: each samples the car's wear mask in the `CAR_SPRAY` layout. Once per
- * material, and before `applySpray` on every paint of a car, so every car paint compiles to the same program key.
+ * material, and before `applySpray` on every paint of a car, so every car paint compiles to the same program key. Its bumpers' shared
+ * trims learn to draw them too (sampling no wear until the car has strokes: `PaintScratches.frame` gives it its own).
  */
 export function applyScratch(car: DeformableCar): void {
   let wear = wears.get(car);
@@ -141,12 +146,86 @@ export function applyScratch(car: DeformableCar): void {
       version: -1,
       count: 0,
       list: new Uint8Array(SCRAPE_MAX * STROKE_BYTES),
+      car,
+      bumpers: m.bumpers,
+      bumperOwn: m.bumpers.map(() => null),
     };
     wears.set(car, (wear = own));
-    // A discarded car (every path frees its body paint) hands its mask back.
-    m.bodyPaint.addEventListener("dispose", () => own.owner?.draw(own, own.list, 0));
+    // A discarded car (every path frees its body paint) hands its mask back and frees its bumpers' own trims.
+    m.bodyPaint.addEventListener("dispose", () => {
+      own.owner?.draw(own, own.list, 0);
+      for (const trim of own.bumperOwn) trim?.dispose();
+    });
   }
   for (const mesh of [m.body, m.hood, m.trunk, ...m.doors]) patchPaint(mesh.material as THREE.Material, wear.uniforms);
+  for (const mesh of m.bumpers) patchTrim(mesh.material as THREE.MeshStandardMaterial);
+}
+
+/**
+ * How each bumper finish scuffs: the colour its abraded lines and flakes turn, how far over the trim (0..1), the colour its deep
+ * lines cut to, and the scuff's roughness. Paint as the body's; black plastic whitens grey; chrome scratches bright.
+ */
+const TRIM_SCUFF: ReadonlyMap<MaterialId, { scuff: readonly number[]; lift: number; deep: readonly number[]; rough: number }> = new Map([
+  [MAT.BUMPER_PAINTED, { scuff: [0.78, 0.78, 0.76], lift: 0.7, deep: [0.62, 0.63, 0.65], rough: 0.85 }],
+  [MAT.BUMPER_SATIN, { scuff: [0.78, 0.78, 0.76], lift: 0.7, deep: [0.62, 0.63, 0.65], rough: 0.85 }],
+  [MAT.BUMPER_BLACK, { scuff: [0.42, 0.42, 0.41], lift: 0.8, deep: [0.6, 0.6, 0.58], rough: 0.9 }],
+  [MAT.BUMPER_CHROME, { scuff: [0.95, 0.95, 0.95], lift: 0.85, deep: [1, 1, 1], rough: 0.5 }],
+]);
+
+/** Each patched trim's compile without its uniforms, and its scuff's uniforms: a car's own copy compiles through the first with its own wear. */
+const trimCompile = new WeakMap<THREE.Material, (shader: THREE.WebGLProgramParametersWithUniforms, renderer: THREE.WebGLRenderer) => void>();
+const trimScuff = new WeakMap<THREE.Material, Record<string, THREE.IUniform>>();
+const BARE_TRIM_WEAR = { wearMap: { value: BARE_SCRATCH }, scratchTier: SCRATCH_TIER };
+
+/** Shared trim `material` draws scratches (its finish's scuff, `TRIM_SCUFF`) from the wear its uniforms bind; a fitting drawn in it shows none. One program for every finish. */
+function patchTrim(material: THREE.MeshStandardMaterial): void {
+  if (patched.has(material)) return;
+  patched.add(material);
+  const look = TRIM_SCUFF.get(material.userData.materialId as MaterialId) ?? TRIM_SCUFF.get(MAT.BUMPER_SATIN)!;
+  const scuff = { scratchScuff: { value: new THREE.Vector3().fromArray(look.scuff) }, scratchLift: { value: look.lift }, scratchDeep: { value: new THREE.Vector3().fromArray(look.deep) }, scratchRough: { value: look.rough } };
+  const prev = material.onBeforeCompile;
+  const prevKey = material.customProgramCacheKey;
+  const compile = (shader: THREE.WebGLProgramParametersWithUniforms, renderer: THREE.WebGLRenderer): void => {
+    prev.call(material, shader, renderer);
+    Object.assign(shader.uniforms, FACE_UNIFORMS, scuff);
+    declareSprayFace(shader, REST_FRAME_ATTRIBUTES);
+    shader.vertexShader = shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\nvSprayP = sprayPos;\nvSprayN = sprayNrm;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("void main() {", `${SCRATCH_GLSL}\nuniform vec3 scratchScuff;\nuniform float scratchLift;\nuniform vec3 scratchDeep;\nuniform float scratchRough;\nvoid main() {`)
+      .replace("#include <color_fragment>", "#include <color_fragment>\nvec3 trimScratch = paintScratch();\ndiffuseColor.rgb = mix(diffuseColor.rgb, scratchScuff, max(trimScratch.x, trimScratch.y) * scratchLift);\ndiffuseColor.rgb = mix(diffuseColor.rgb, scratchDeep, trimScratch.z);")
+      .replace("#include <roughnessmap_fragment>", "#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, scratchRough, max(trimScratch.x, max(trimScratch.y, trimScratch.z)));");
+  };
+  trimCompile.set(material, compile);
+  trimScuff.set(material, scuff);
+  material.onBeforeCompile = (shader, renderer) => {
+    compile(shader, renderer);
+    Object.assign(shader.uniforms, BARE_TRIM_WEAR);
+  };
+  material.customProgramCacheKey = () => `${prevKey.call(material)}|scratch`;
+  material.needsUpdate = true;
+}
+
+/** `wear`'s car's bumpers each draw in a copy of their trim of their own that samples the car's mask (one program with the shared trim's), made the first time it is needed: a bumper's rest frame with it. */
+function wearBumpers(wear: Wear): void {
+  for (let i = 0; i < wear.bumpers.length; i++) {
+    const mesh = wear.bumpers[i]!;
+    const trim = mesh.material as THREE.MeshStandardMaterial;
+    if (trim === wear.bumperOwn[i]) continue;
+    patchTrim(trim);
+    ensureRestFrame(mesh, wear.car.group);
+    const own = trim.clone();
+    own.userData.shared = false;
+    const compile = trimCompile.get(trim)!;
+    const uniforms = { ...trimScuff.get(trim), ...wear.uniforms };
+    own.onBeforeCompile = (shader, renderer) => {
+      compile(shader, renderer);
+      Object.assign(shader.uniforms, uniforms);
+    };
+    own.customProgramCacheKey = trim.customProgramCacheKey;
+    wear.bumperOwn[i]?.dispose();
+    wear.bumperOwn[i] = own;
+    mesh.material = own;
+  }
 }
 
 function patchPaint(material: THREE.Material, uniforms: Wear["uniforms"]): void {
@@ -218,7 +297,10 @@ export class PaintScratches {
     for (let i = 0; i < cars.length; i++) {
       const car = cars[i]!;
       const wear = wears.get(car);
-      if (wear === undefined || wear.version === car.scratches.version) continue;
+      if (wear === undefined) continue;
+      // A scratched car's bumpers draw in trims of its own; a look that swapped one for a shared trim gets a new own copy.
+      if (car.scratches.count > 0) wearBumpers(wear);
+      if (wear.version === car.scratches.version) continue;
       wear.version = car.scratches.version;
       this.draw(wear, car.scratches.list, car.scratches.count, car.scratches.cover);
     }
