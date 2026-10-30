@@ -41,6 +41,8 @@ const DASH_FRAY = 0.35;
 const STEEL_SHARE = 0.18;
 const GOUGE_SHARE = 0.06;
 const GOUGE_WIDEN = 2;
+/** The least screen pitch (px) between the rows a line may stand on: farther off, only every 2^k-th row keeps its line, at least a pixel wide, so a scratched panel reads as a few distinct streaks, not as their faded mean. */
+const SPARSE_PX = 4;
 
 const f = (x: number): string => (Number.isInteger(x) ? `${x}.0` : `${x}`);
 
@@ -59,22 +61,26 @@ vec2 paintScratch() {
   vec3 a = abs(vSprayN);
   bool top = a.y > a.x && a.y > a.z;
   float row = (top ? vSprayP.x : vSprayP.y) / ${f(PITCH)};
-  float id = floor(row);
+  float aa = fwidth(row);
+  // Rows thinner than \`SPARSE_PX\` px: keep the lines of every \`span\`-th row only, where they are, each at least a pixel wide.
+  float span = exp2(max(0.0, ceil(log2(aa * ${f(SPARSE_PX)}))));
+  float cell = row / span;
+  float id = floor(cell) * span;
   float pick = scratchHash(id);
   float gouge = step(1.0 - ${f(GOUGE_SHARE)} * s, scratchHash(id + 0.53));
   float hw = mix(${f(LINE_MIN)}, ${f(LINE_MAX)}, scratchHash(id + 0.37)) * (1.0 + ${f(GOUGE_WIDEN - 1)} * gouge);
   float centre = 0.5 + ${f(JITTER)} * (scratchHash(id + 0.13) - 0.5);
-  float aa = fwidth(row);
-  float line = 1.0 - smoothstep(hw - aa, hw + aa, abs(fract(row) - centre));
-  // Rows under a pixel: their mean cover (thin lines fade with distance), not a moire.
-  line = mix(line, 2.0 * hw, clamp(aa - 0.5, 0.0, 1.0));
-  float len = ${f(DASH)} * mix(${f(DASH_SHORT)}, ${f(DASH_LONG)}, scratchHash(id + 0.29)) * (1.0 + gouge);
+  float ac = aa / span;
+  float hc = max(hw / span, 0.5 * ac);
+  float line = 1.0 - smoothstep(hc - ac, hc + ac, abs(fract(cell) - centre / span));
+  float len = ${f(DASH)} * span * mix(${f(DASH_SHORT)}, ${f(DASH_LONG)}, scratchHash(id + 0.29)) * (1.0 + gouge);
   float along = (!top && a.z > a.x ? vSprayP.x : vSprayP.z) / len + pick * 7.0;
-  float cell = floor(along) + id * 0.01;
+  float dashCell = floor(along) + id * 0.01;
   float t = fract(along);
-  float dash = step(mix(${f(DASH_GAP)}, ${f(DASH_GAP_DEEP)}, s), scratchHash(cell))
-    * step(${f(DASH_FRAY)} * scratchHash(cell + 0.41), t) * step(t, 1.0 - ${f(DASH_FRAY)} * scratchHash(cell + 0.83));
-  float hair = line * dash * step(pick, s * ${f(DENSITY)});
+  float dash = step(mix(${f(DASH_GAP)}, ${f(DASH_GAP_DEEP)}, s), scratchHash(dashCell))
+    * step(${f(DASH_FRAY)} * scratchHash(dashCell + 0.41), t) * step(t, 1.0 - ${f(DASH_FRAY)} * scratchHash(dashCell + 0.83));
+  // A kept row stands for its \`span\` rows: it carries a line where any of them would.
+  float hair = line * dash * step(pick, 1.0 - pow(1.0 - min(1.0, s * ${f(DENSITY)}), span));
   return hair * vec2(1.0, max(gouge, step(scratchHash(id + 0.71), ${f(STEEL_SHARE)} * s)));
 }`;
 
