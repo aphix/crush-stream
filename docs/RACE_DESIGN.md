@@ -315,7 +315,7 @@ tuned at 18 m/s and stretch × `pace = v / 18`.
 
 Cars fill the race loop's lanes (`traffic.count`), then each side street (`routes[].count`), lanes round-robin. Each
 cruises its lane at `traffic.speed`, slows for curvature, stops 7 m short of anything in its path (within 2.5 m sideways: both half widths and half a metre; `√(8·gap)` profile), a car facing it included, and
-after 2.5 s stopped edges round for 4.5 s, still stopping 4.8 m short of a car it would touch going straight on. It plans at about 12 Hz and drives through the human pedals (the brake a band: on 1 m/s over its target, off at 0.5), sees a car only
+after 2.5 s stopped edges round for 4.5 s, aiming 4 m ahead at its swung-out line and still stopping 4.8 m short of a car it would touch going straight on; with under 5 m between bumpers it first backs up straight at 1.5 m/s for that room while it has over 1 m behind (from closer, a wreck turned 30° across the lane caught its pull-out). It plans at about 12 Hz and drives through the human pedals (the brake a band: on 1 m/s over its target, off at 0.5), sees a car only
 within the road's open stretch and after a 0.25 s reaction (`ai/sight.ts`), and looks 2.5 s of closing speed ahead (at least 18 m). A racer head-on in its lane (a racer 25 m out
 at 30 m/s is 0.8 s away) or coming up from behind at over 3 m/s makes it hold to its own kerb, 1.5 m over; it brakes too only while the racer is still in its path (it used to stop and wait 2.5 s in the racer's way, then never braked for a car facing it, stopped or not). Side streets cross the race loop at grade, so racers meet cross traffic that does
 not stop for them. Traffic does stop for traffic: a car whose path meets another road's traffic car within what it looks

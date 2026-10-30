@@ -20,8 +20,8 @@ function cars(n: number, scene: THREE.Scene): DeformableCar[] {
   return Array.from({ length: n }, (_, i) => new DeformableCar({ body: 0x808080, accent: 0x404040, name: `t${i}` }, scene, null, fleetStyle(i)));
 }
 
-/** Drive `fleet` (traffic cars `ids`, by default its indices) with `brain` for `seconds`; `sample(i, car)` every 6th step; car `frozen` stays parked. */
-function run(brain: TrafficBrain, fleet: DeformableCar[], seconds: number, sample: (i: number, c: DeformableCar) => void, frozen = -1, ids = fleet.map((_, i) => i)): void {
+/** Drive `fleet` (traffic cars `ids`, by default its indices) with `brain` for `seconds`; `sample(i, car)` every `every`th step; car `frozen` stays parked. */
+function run(brain: TrafficBrain, fleet: DeformableCar[], seconds: number, sample: (i: number, c: DeformableCar) => void, frozen = -1, ids = fleet.map((_, i) => i), every = 6): void {
   const ground = track.ground();
   setGround(ground);
   const snaps: AiCar[] = ids.map((id) => blankAiCar(id));
@@ -33,9 +33,29 @@ function run(brain: TrafficBrain, fleet: DeformableCar[], seconds: number, sampl
       else applyAiDrive(c, brain.think(snaps[i]!, snaps, DT), DT);
       c.integrate(DT);
     }
-    if (step % 6 === 0) for (const [i, c] of fleet.entries()) sample(i, c);
+    if (step % every === 0) for (const [i, c] of fleet.entries()) sample(i, c);
   }
   setGround(null);
+}
+
+/** How far apart (m) the bodies of two cars posed as `a` and `b` are, each a family car's 4.6 × 2 m: the widest gap along the four sides' normals (at most the true distance), negative when they overlap. */
+function bodyGap(a: AiCar, b: AiCar): number {
+  const corners = (c: AiCar): number[][] => {
+    const fx = Math.sin(c.yaw);
+    const fz = Math.cos(c.yaw);
+    return [[1, 1], [1, -1], [-1, -1], [-1, 1]].map(([l, w]) => [c.x + l! * 2.3 * fx + w! * fz, c.z + l! * 2.3 * fz - w! * fx]);
+  };
+  const ca = corners(a);
+  const cb = corners(b);
+  let gap = -Infinity;
+  for (const yaw of [a.yaw, a.yaw + Math.PI / 2, b.yaw, b.yaw + Math.PI / 2]) {
+    const ax = Math.sin(yaw);
+    const az = Math.cos(yaw);
+    const pa = ca.map(([x, z]) => x! * ax + z! * az);
+    const pb = cb.map(([x, z]) => x! * ax + z! * az);
+    gap = Math.max(gap, Math.min(...pb) - Math.max(...pa), Math.min(...pa) - Math.max(...pb));
+  }
+  return gap;
 }
 
 describe("given the city track's ambient traffic (cars that drive the lanes around the player)", () => {
@@ -207,6 +227,34 @@ describe("given the city track's ambient traffic (cars that drive the lanes arou
       }, 1);
       // Nose to nose, two half lengths and a hand's breadth.
       expect(closest, `blocker ${off.toFixed(1)} m over: closest ${closest.toFixed(2)} m centre to centre`).toBeGreaterThan(4.6);
+    }
+  });
+
+  it("when a car comes up on a wreck stopped in its lane, square or turned 30° across it either way, then it edges round it with its body never within a hand's breadth of the wreck's, and is past it in 16 s", () => {
+    const slot = brain.slotOf(0);
+    const at = (s: number) => {
+      const pt = track.pointAt(s, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
+      return { x: pt.x + pt.tz * slot.offset, z: pt.z - pt.tx * slot.offset, yaw: Math.atan2(pt.tx, pt.tz) };
+    };
+    for (const turn of [0, Math.PI / 6, -Math.PI / 6]) {
+      const [mover, wreck] = cars(2, new THREE.Scene());
+      brain.reset();
+      const a = at(200);
+      const b = at(235);
+      mover!.spawnFacing(a.x, a.z, a.yaw, brain.speed);
+      wreck!.spawnFacing(b.x, b.z, b.yaw + turn, 0);
+      const sm = blankAiCar(0);
+      const sw = blankAiCar(1);
+      let clear = Infinity;
+      run(brain, [mover!, wreck!], 16, () => {
+        snapshotAiCar(sm, 0, mover!, true);
+        snapshotAiCar(sw, 1, wreck!, true);
+        clear = Math.min(clear, bodyGap(sm, sw));
+      }, 1, undefined, 1);
+      const p = blankProjection();
+      projectPath(track.path, mover!.group.position.x, mover!.group.position.z, -1, p);
+      expect(clear, `turned ${((turn * 180) / Math.PI).toFixed(0)}°: bodies ${clear.toFixed(2)} m apart at the closest`).toBeGreaterThan(0.1);
+      expect(p.s, `turned ${((turn * 180) / Math.PI).toFixed(0)}°: got past the wreck (s ${p.s.toFixed(1)})`).toBeGreaterThan(240);
     }
   });
 

@@ -11,7 +11,7 @@ import { PlanClock } from "./plan-clock.ts";
 import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
 import { blankPoint, blankProjection, pointOn, projectPath, type Track, type TrackPath } from "../world/track.ts";
 import { clamp, hash01, wrapPi } from "../kernel/scalar.ts";
-import { STRAIGHT_CURV } from "./constants.ts";
+import { REVERSE_THROTTLE, STRAIGHT_CURV } from "./constants.ts";
 
 /** The least a traffic car looks ahead in its lane (m), and how many seconds of closing speed it looks when that is more: a racer closing at 35 m/s is seen 2.5 s out, not 0.5 s. */
 const LANE_LOOK = 18;
@@ -42,6 +42,12 @@ const EDGE_TIME = 4.5;
 /** Edging round, a car still stops this far (m, centre to centre) short of a car it would touch, one within `EDGE_SIDE` sideways: two half lengths and a hand's breadth; two half widths. */
 const EDGE_GAP = 2 * HALF_LENGTH + 0.2;
 const EDGE_SIDE = 2 * HALF_WIDTH;
+/** Edging round from a stop with under `EDGE_ROOM` m between bumpers ahead, a car first backs up for it at `BACK_SPEED` (m/s) while it has over `BACK_ROOM` m behind: a turned wreck's corner sticks out past a car-width pull-out from closer. */
+const EDGE_ROOM = 5;
+const BACK_SPEED = 1.5;
+const BACK_ROOM = 1;
+/** How far ahead (m) an edging car aims at its swung-out line: a sharp pull-out at walking pace. */
+const EDGE_LOOK = 4;
 /** Speed over its target (m/s) at which a traffic car's brake comes on, and under it by which it goes off; the brake is full at `BRAKE_SPAN` over. */
 const BRAKE_ON = 1;
 const BRAKE_OFF = 0.5;
@@ -72,7 +78,7 @@ type TrafficSlot = { path: TrackPath; offset: number; dir: 1 | -1 };
  * cars, its lanes round-robin). Each cruises its lane (offset from the path's centreline, + = left
  * of the path direction; `dir` −1 drives against it), slows for turns, brakes for anything in its
  * lane ahead (racers, wrecks, other traffic) and for traffic crossing its road at a junction that
- * gets there first, and, after waiting behind a stopped obstacle, edges
+ * gets there first, and, after waiting behind a stopped obstacle (backing up first when too close to pull out), edges
  * round it, or to its own kerb when the obstacle faces it (a racer met head-on: edging toward the
  * centre put it back across the racer's path, and the two danced nose to nose until the racer was
  * DNF). Cross streets meet the race loop at grade, so racers get cross traffic at junctions.
@@ -98,6 +104,8 @@ export class TrafficBrain {
   /** The nearest car ahead (m) the car would touch going straight on (`EDGE_SIDE`), what an edge round stops short of. */
   private readonly planTouch = new Float64Array(MAX_CARS);
   private readonly planEdging = new Uint8Array(MAX_CARS);
+  /** 1 while the car backs up for room to edge round (`EDGE_ROOM`). */
+  private readonly planBacking = new Uint8Array(MAX_CARS);
   /** 1 while a racer bears down on the car (head-on or from behind) and it holds to its own kerb. */
   private readonly planYield = new Uint8Array(MAX_CARS);
   private readonly wedge = new Backoff(MAX_CARS);
@@ -256,7 +264,8 @@ export class TrafficBrain {
     this.seg[i] = proj.k;
     if (this.clock.due(i, dt)) this.replan(self, others, proj.s);
     const speed = hypot2(self.vx, self.vz);
-    const ld = clamp(4 + 0.5 * speed, 6, 14);
+    const edging = this.planEdging[i] === 1;
+    const ld = edging ? EDGE_LOOK : clamp(4 + 0.5 * speed, 6, 14);
     const p = pointOn(path, proj.s + slot.dir * ld, this.pt);
     const offset = this.planOffset[i]!;
     const tx = p.x + p.tz * offset;
@@ -266,13 +275,18 @@ export class TrafficBrain {
     const cls = this.cls[i]!;
     const turnMax = cls.turn * (0.35 + 0.65 * Math.min(1, speed / 8)) * steerGrip(tyreGrip(cls.tyre, surf));
     out.steer = clamp((2 * Math.max(speed, 3) * detSin(alpha)) / ld / Math.max(0.2, turnMax), -1, 1);
-    const edging = this.planEdging[i] === 1;
     const curv = Math.abs(path.curv[proj.k]!);
     let target = Math.min(this.speed, curv > STRAIGHT_CURV ? (cls.turn * 0.6) / curv : Infinity);
     // Speed that still stops STOP_GAP short of it at a gentle 4 m/s².
     if (this.planGap[i]! < Infinity) target = Math.min(target, Math.max(0, this.planGapAlong[i]!) + Math.sqrt(8 * Math.max(0, this.planGap[i]! - STOP_GAP)));
     if (edging) target = Math.min(this.speed, 4, Math.sqrt(8 * Math.max(0, this.planTouch[i]! - EDGE_GAP)));
     const along = self.vx * detSin(self.yaw) + self.vz * detCos(self.yaw);
+    if (this.planBacking[i] === 1) {
+      out.steer = 0;
+      out.throttle = -along < BACK_SPEED ? REVERSE_THROTTLE : 0;
+      this.pedals.follow(i, out);
+      return out;
+    }
     const stop = target < STOP_TARGET;
     if (this.pedals.latch(i, stop ? Infinity : along - target, BRAKE_ON, BRAKE_OFF)) out.brake = stop ? 1 : clamp((along - target + BRAKE_OFF) / BRAKE_SPAN, 0, 1);
     else out.throttle = clamp(target / DRIVE.maxFwd + (target - along) * 0.15, 0, 1);
@@ -295,6 +309,7 @@ export class TrafficBrain {
     let yielding = false;
     let cross = Infinity;
     let touch = Infinity;
+    let room = Infinity;
     const along = self.vx * fx + self.vz * fz;
     const reach = lookDistance(along, LANE_LOOK_S, LANE_LOOK, sightArc);
     for (let q = 0; q < others.length; q++) {
@@ -313,6 +328,7 @@ export class TrafficBrain {
       cross = Math.min(cross, this.crossingAhead(self, slot, o, along, reach));
       if (Math.abs(side) <= YIELD_LAT && ((ahead > 0.5 && ahead <= look && sameWay < -0.5) || (ahead < 0 && -ahead <= look && sameWay > 0.5 && closing > YIELD_CLOSING))) yielding = true;
       if (ahead > 0.5 && Math.abs(side) < EDGE_SIDE) touch = Math.min(touch, ahead);
+      if (ahead < -0.5 && Math.abs(side) < EDGE_SIDE) room = Math.min(room, -ahead);
       if (ahead <= 0.5 || ahead > look || Math.abs(side) > LANE_HALF) continue;
       if (ahead < gap) {
         gap = ahead;
@@ -331,6 +347,8 @@ export class TrafficBrain {
     // Edging round: toward the centreline (and a little past it) at walking pace until clear, or to our own kerb for a car facing us.
     const edging = this.edge[i]! > 0;
     if (edging) this.edge[i]! -= age;
+    const stopped = hypot2(self.vx, self.vz) < STOPPED_SPEED;
+    this.planBacking[i] = edging && room - EDGE_GAP > BACK_ROOM && touch - EDGE_GAP < EDGE_ROOM && (this.planBacking[i] === 1 || stopped) ? 1 : 0;
     const kerbSide = Math.sign(slot.offset || 1);
     this.planEdging[i] = edging ? 1 : 0;
     this.planYield[i] = yielding ? 1 : 0;
