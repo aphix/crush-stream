@@ -244,6 +244,9 @@ export interface CageStyle {
   readonly panelGlass: Uint8Array;
   /** Per panel: how far (m) its farthest vertex stands from its pivot at rest: what a turn of the panel moves its tip by, per radian. */
   readonly panelReach: Float64Array;
+  /** The most a hull or sill vertex moves per unit change of one cluster-map entry (its offset's L1 from its rest centroid), and per metre summed over one axis of a cage's coefficients (its largest trilinear term): `movedSince` bounds a vertex's move by them. */
+  readonly mapReach: number;
+  readonly coReach: number;
   /** The interior's vertices follow the sill samples in `pos` (`vertexCount` is the body's alone: the rigid step's hull points are those), and its triangles the body's, in group `panelCount + 1`: never a lid, never cut by the roof imprint. */
   readonly interiorCount: number;
   /** A rest vertex over this height (m) is roof: the skin's roof clamp holds it (the rig's `roofClampY`). */
@@ -474,20 +477,22 @@ function unpackInputs(inputs: Float64Array, out: CageLive): void {
 }
 
 /**
- * How far (m) a mass or hub may be from where the last raster saw it before the cage is re-skinned and re-rasterised: a fifth of the
- * 5 cm fit bar (`CAGE_STEP`'s), so the cage never stands more than 1 cm off what the last raster read, well inside the bar.
+ * How far (m) a mass, a hub or (by a cluster map's or a cage's change) a vertex may be from where the last raster saw it before the cage is
+ * re-skinned and re-rasterised: a fifth of the 5 cm fit bar (`CAGE_STEP`'s), so the cage never stands more than 1 cm off what the last raster read.
  */
 const REFIT_EPSILON = CAGE_STEP / 5;
+/** `cageCoeffs` writes 8 coefficients per axis, 3 axes per cage. */
+const CO_AXIS = 8;
 /** Per panel in `packInputs`' layout: its pose is a position (x, y, z), then a quaternion (x, y, z, w). */
 const POSE_STRIDE = 7;
 const POSE_QUATERNION = 3;
 
 /**
- * Whether `now` differs from `last` (same layout) enough to refit: a mass or a hub more than `epsilon` away, a panel whose tip (its farthest vertex,
- * `panelReach` from the pivot) has moved more than `epsilon` by its pose's shift and turn together, or any panel flag, roof clamp or imprint cut
- * at all. A torn-off or shattered pane's pose is none of the cage's (`skinCage` leaves its vertices at rest), so it never counts. With no `epsilon` (an
- * exact fit) every input counts as it is. The cluster maps and cage coefficients are fitted from the masses, so they move only when a mass does and
- * are not read here.
+ * Whether `now` differs from `last` (same layout) enough to refit: a mass or a hub more than `epsilon` away, a cluster map or a cage's
+ * coefficients changed by enough to move a vertex more than `epsilon` (`mapReach`, `coReach`: a map carries its fit's past turns, so it moves
+ * with every mass standing), a panel whose tip (its farthest vertex, `panelReach` from the pivot) has moved more than `epsilon` by its pose's
+ * shift and turn together, or any panel flag, roof clamp or imprint cut at all. A torn-off or shattered pane's pose is none of the cage's
+ * (`skinCage` leaves its vertices at rest), so it never counts. With no `epsilon` (an exact fit) every input counts as it is.
  */
 function movedSince(style: CageStyle, last: Float64Array, now: Float64Array, epsilon: number): boolean {
   const massEnd = style.massCount * 3;
@@ -499,6 +504,14 @@ function movedSince(style: CageStyle, last: Float64Array, now: Float64Array, eps
   const poseEnd = poseStart + panels * POSE_STRIDE;
   for (let k = 0; k < massEnd; k++) if (Math.abs(now[k]! - last[k]!) > epsilon) return true;
   for (let k = hubStart; k < hubEnd; k++) if (Math.abs(now[k]! - last[k]!) > epsilon) return true;
+  let map = 0;
+  for (let k = massEnd; k < hubStart; k++) map = Math.max(map, Math.abs(now[k]! - last[k]!));
+  if (map * style.mapReach > epsilon) return true;
+  for (let k = hubEnd; k < flagsStart; k += CO_AXIS) {
+    let co = 0;
+    for (let j = k; j < k + CO_AXIS; j++) co += Math.abs(now[j]! - last[j]!);
+    if (co * style.coReach > epsilon) return true;
+  }
   for (let k = flagsStart; k < poseStart; k++) if (now[k] !== last[k]) return true;
   for (let panel = 0; panel < panels; panel++) {
     const pose = poseStart + panel * POSE_STRIDE;
@@ -565,7 +578,7 @@ export class CarCage {
   }
 
   /**
-   * Fits the cage to `live`: a no-op (false) while every mass and hub is within `REFIT_EPSILON` of where the last fit saw it (and no
+   * Fits the cage to `live`: a no-op (false) while no mass, hub or vertex has moved more than `REFIT_EPSILON` since the last fit (`movedSince`, and no
    * panel or imprint input changed), else the cage's vertices re-skinned and its fields re-rasterised (true, `serial` and `refits` up).
    * With `exact`, any change of an input refits (the bake a crush window ends on, which a client fits fresh). A car back at rest goes back to
    * its style's shared fields. Allocates once, the first time a car leaves rest (its own fields); never again.
@@ -825,6 +838,21 @@ function panelReachOf(panelCount: number, origin: Float64Array, rest: Float64Arr
   return reach;
 }
 
+/** `CageStyle.mapReach` and `coReach` of the vertex tables `t`. */
+function reachesOf(t: VertexTables): { mapReach: number; coReach: number } {
+  let mapReach = 0;
+  let coReach = 0;
+  const far = (a: number): number => Math.max(1, Math.abs(a));
+  for (let i = 0, r = 0; i < t.skinN.length; i++, r += 3) {
+    if ((t.skinN[i]! & SKIN_COUNT_MASK) > 0) {
+      mapReach = Math.max(mapReach, Math.abs(t.rest[r]! - t.resC[r]!) + Math.abs(t.rest[r + 1]! - t.resC[r + 1]!) + Math.abs(t.rest[r + 2]! - t.resC[r + 2]!));
+      continue;
+    }
+    for (let k = i * INF_K, e = k + t.infN[i]!; k < e; k++) coReach = Math.max(coReach, far(t.infUvw[k * 4]!) * far(t.infUvw[k * 4 + 1]!) * far(t.infUvw[k * 4 + 2]!));
+  }
+  return { mapReach, coReach };
+}
+
 function buildStyle(src: CageSource, step: number): CageStyle {
   const body = hullOf(src);
   const top = upFacing(src.interiorRest, src.interiorIndex);
@@ -856,6 +884,7 @@ function buildStyle(src: CageSource, step: number): CageStyle {
     source,
     tris,
     ...tables,
+    ...reachesOf(tables),
     restInputs: restInputsOf(src),
     massCount: src.massRest.length / 3,
     clusterCount: src.clusterCount,

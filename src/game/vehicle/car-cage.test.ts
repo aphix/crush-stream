@@ -452,6 +452,48 @@ describe("given a fitted car whose panel poses are moved", () => {
   }
 });
 
+// A wreck's cluster maps (a fit carries its past turns) and cage corners move while its masses stand within the refit's 1 cm.
+describe("given a fitted car whose skin inputs change while its masses stand", () => {
+  const REFIT_BAR_M = CAGE_STEP / 5;
+  const testCases = [
+    {
+      it: "when every cluster map grows 10 %, then the refit leaves no cage vertex more than 1 cm off a fresh fit",
+      move: (live: CageLive) => {
+        for (let k = 0; k < live.X.length; k += 9) for (const d of [0, 4, 8]) live.X[k + d]! += 0.1;
+      },
+    },
+    {
+      it: "when every lattice cage rises 3 cm, then the refit leaves no cage vertex more than 1 cm off a fresh fit",
+      move: (live: CageLive) => {
+        for (let k = 8; k < live.co.length; k += 24) live.co[k]! += 0.03;
+      },
+    },
+  ];
+
+  for (const testCase of testCases) {
+    it(testCase.it, () => {
+      const car = carInState("loaded", "sedan", "sedan");
+      const cage = cageOf(car);
+      const live = cageLiveOf(car);
+      cage.refit(live);
+      const before = Float64Array.from(cage.fields.pos);
+      testCase.move(live);
+      cage.refit(live);
+      const fresh = new CarCage(cage.style);
+      fresh.refit(live);
+      let moved = 0;
+      let off = 0;
+      for (let k = 0; k < (cage.style.vertexCount + cage.style.sillCount) * 3; k += 3) {
+        const at = (pos: Float64Array) => Math.hypot(pos[k]! - fresh.fields.pos[k]!, pos[k + 1]! - fresh.fields.pos[k + 1]!, pos[k + 2]! - fresh.fields.pos[k + 2]!);
+        moved = Math.max(moved, at(before));
+        off = Math.max(off, at(cage.fields.pos));
+      }
+      expect(moved, "fixture: the change moves the fresh fit's vertices past the refit bar").toBeGreaterThan(2 * REFIT_BAR_M);
+      expect(off, `a cage vertex stands ${(off * 100).toFixed(1)} cm off a fresh fit`).toBeLessThanOrEqual(REFIT_BAR_M);
+    });
+  }
+});
+
 describe("given a crushed car refitted over and over", () => {
   it("when its masses move each time, then the cage's own buffers are the ones written, never new ones", () => {
     const car = carInState("loaded", "sedan", "sedan");

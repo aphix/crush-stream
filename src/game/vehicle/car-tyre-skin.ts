@@ -16,6 +16,8 @@ const FALL = 1;
 const ENDS_ZONE = 0.9;
 /** How far (m) a body vertex leaving a tyre's steep end stands clear of it: its edges there are short, so the chord gap (`TYRE_GAP`, the bonnet's 25 cm edges) is not owed. */
 const END_GAP = 0.01;
+/** How much shorter (m) leaving along the road must be than going over, and how far (m) into the steep end a vertex must stand, before it leaves whole; between, it does both in shares: a choice with a step flipped a vertex 3 cm between the two on a hub move of a tenth of a mm. */
+const END_BLEND = 0.03;
 /** The steepest (m of lift per m of written skin) the hold's lift may change between two neighbouring skin points: a crushed row inside a tyre drags its neighbours up to a slope, never leaves a cliff of stretched triangles. */
 const LEVEL_SLOPE = 1;
 /** How far (m) over the tyre's surface a skin point may rest and still be held: the hood and fenders, not the roof. */
@@ -904,15 +906,15 @@ export class TyreSkin {
       const rise = -c / flat;
       // A vertex just inside the tyre's end (a lip beside it) leaves along the road, the few mm that clear the steep end, not over the whole tyre (7 mm in took 18 cm of lift): the body skin only.
       const out = r - Math.abs(ahead) + END_GAP;
-      if (this.pushSide && Math.abs(ahead) > endsAhead && out < rise) {
-        if (out > push[p]!) {
-          push[p] = out;
-          const sign = Math.sign(ahead);
-          pushDir[p * 3] = sign * fx;
-          pushDir[p * 3 + 1] = 0;
-          pushDir[p * 3 + 2] = sign * fz;
-        }
-      } else lift[p] = Math.max(lift[p]!, rise);
+      const leave = this.pushSide ? Math.min(1, Math.max(0, (rise - out) / END_BLEND)) * Math.min(1, Math.max(0, (Math.abs(ahead) - endsAhead) / END_BLEND)) : 0;
+      if (leave * out > push[p]!) {
+        push[p] = leave * out;
+        const sign = Math.sign(ahead);
+        pushDir[p * 3] = sign * fx;
+        pushDir[p * 3 + 1] = 0;
+        pushDir[p * 3 + 2] = sign * fz;
+      }
+      lift[p] = Math.max(lift[p]!, (1 - leave) * rise);
       dirty[p] = 1;
     }
   }
