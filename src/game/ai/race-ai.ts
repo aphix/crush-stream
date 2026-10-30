@@ -657,7 +657,8 @@ export class RaceBrain {
     if (i < this.racers) this.tuneGuard(i, dt);
     if (this.lastThrottle[i]! > 0.35 && speed < STUCK_SPEED) this.stuck[i]! += dt;
     else this.stuck[i] = Math.max(0, this.stuck[i]! - dt * 2);
-    const standoff = i < this.racers && this.standoff.watch(i, speed, this.lastThrottle[i]!, this.planNosed[i] === 1, dt);
+    // The plan's own throttle: the guard holds a clean car short of the one on its nose, and its guarded throttle is 0.
+    const standoff = i < this.racers && this.standoff.watch(i, speed, out.throttle, this.planNosed[i] === 1, dt);
     if (standoff || this.stuck[i]! > p.patience + 0.4) {
       this.stuck[i] = 0;
       this.recover[i] = standoff ? STANDOFF_BACKOFF_S : 0.9 + 0.4 * p.patience;

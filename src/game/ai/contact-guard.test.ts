@@ -6,6 +6,7 @@ import { GUARD_BRAKE_IDX, GUARD_COUNT, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_
 import { guardContact } from "./contact-guard.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { ARM_CLOSING } from "../contact/constants.ts";
 
 /** A car at (`x`, `z`) doing `speed` m/s along +z (`dir` 1) or −z (−1). */
 function car(id: number, x: number, z: number, speed: number, dir: 1 | -1 = 1): AiCar {
@@ -173,5 +174,29 @@ describe("given the contact guard called every step for one car (its held push a
     run(tune, [car(1, 0.3, 47, 0)], 0.3);
     const braked = run(tune, [car(1, -0.3, 20, 15)], 0.3);
     expect(braked.brake > 0.5 && braked.steer > 0, `braking: brake ${braked.brake.toFixed(2)}, steer ${braked.steer.toFixed(4)}`).toBeTruthy();
+  });
+});
+
+describe("given a clean driver whose plan creeps straight at a stopped car 3 m ahead (bumper to bumper), the guard called every step, its brake taking speed off at the class's 20 m/s² and its throttle gaining up to 3 m/s² back to the crawl", () => {
+  it("when it creeps at 0.5, 1 or 1.5 m/s (all under the derby's hit speed), then it never meets the car closing faster than the touch that arms a crash", () => {
+    const STEP = 1 / QUIET_HZ;
+    for (const crawl of [0.5, 1, 1.5]) {
+      const tune = new Float64Array(GUARD_COUNT);
+      tune[GUARD_BRAKE_IDX] = 20;
+      tune[GUARD_LEAD_IDX] = 11;
+      tune[GUARD_TURN_IDX] = 1.5;
+      tune[GUARD_DT_IDX] = STEP;
+      const me = car(0, 0, 0, crawl);
+      const stopped = car(1, 0, 7.6, 0);
+      let met = -1;
+      for (let t = 0; t < 10 && met < 0; t += STEP) {
+        const out: DriveInput = { ...idleDrive(), throttle: 1 };
+        guardContact(me, [me, stopped], 2, new Uint8Array(32), tune, out);
+        me.vz = out.brake > 0 ? Math.max(0, me.vz - out.brake * 20 * STEP) : Math.min(crawl, me.vz + out.throttle * 3 * STEP);
+        me.z += me.vz * STEP;
+        if (stopped.z - me.z <= 4.6) met = me.vz;
+      }
+      expect(met, `${crawl} m/s: met it at ${met.toFixed(2)} m/s (-1: never)`).toBeLessThanOrEqual(ARM_CLOSING);
+    }
   });
 });

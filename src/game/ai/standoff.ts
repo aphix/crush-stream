@@ -1,7 +1,7 @@
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { DERBY_RULES } from "./derby-ai.ts";
 
-/** A car pushing on under this speed (m/s) with a car on its nose is in a standoff: the contact guard's own floor, under which nothing else steers it round. */
+/** A car wanting to go under this speed (m/s) with a car on its nose is in a standoff: the derby's hit speed, a crawl that nothing else steers round it. */
 const STANDOFF_SPEED = DERBY_RULES.hitSpeed;
 /** Seconds a car must sit in a standoff before it backs off: long enough that a car about to ease clear is left alone (the owner's 0.5-1 s, the middle). */
 const STANDOFF_S = 0.7;

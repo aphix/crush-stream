@@ -153,7 +153,7 @@ into `fight = clamp(mood, 0, 1)` and `shy = clamp(−mood, 0, 1)`. The derby AI 
   (not police) except the rivals it means to hit (`fight > 0`), the soonest contact within 1.5 s is found by following the
   guarded car round the arc its steer asks for and every other car on the line it drives, each a car-shaped zone (2.4 × 6 m
   half-axes). The contact is steered clear of (at most 0.35 of full lock) and every contact ahead that sideways room
-  cannot clear is braked for, down to a nudge (1.5 m/s) on 0.72 of the class brake (`BRAKE_SHARE`, the share the race plan brakes at too); a car
+  cannot clear is braked for, down to a touch that arms no crash (`TAP`, half the sim's `ARM_CLOSING` of 0.2 m/s, at any speed over it) on 0.72 of the class brake (`BRAKE_SHARE`, the share the race plan brakes at too); a car
   ahead is taken to shed the whole class brake, the most it can, so the closing speed is never under-counted. It keeps no state.
 - **Aggression 0.5: aggressive only when safe** (`RaceBrain.safeShove`): a driver up to 0.5 (`CAREFUL`) fights a rival
   only while the shove is safe (adds `SAFE_SHOVE` 0.25 to its mood): the rival within reach, the cars' speeds along the road
@@ -284,7 +284,7 @@ tuned at 18 m/s and stretch × `pace = v / 18`.
 - Abreast: two rolling racers within 6.5 m lengthwise (`ABREAST`) keep their lanes 3.3 m apart.
 - Shortcuts: a seeded coin per car, lap and shortcut (0.3 + 0.4·aggression). A car with another racer within 12 m when the
   coin is tossed stays on the loop.
-- Unstick: throttle without motion → reverse with the nose swinging toward the line. Nose to nose (`ai/standoff.ts`): a racer under 2 m/s with its throttle down and a car within 6 m on its nose, a side free to go round, for 0.7 s backs off for 1 s (about a car length) and plans again.
+- Unstick: throttle without motion → reverse with the nose swinging toward the line. Nose to nose (`ai/standoff.ts`): a racer under 2 m/s asking for throttle (the guard holds a clean one short) with a car within 6 m on its nose, a side free to go round, for 0.7 s backs off for 1 s (about a car length) and plans again.
 - **Human pedals** (`ai/pedals.ts` `Pedals`: racers, traffic, police, Survival hunters, the derby AI): the brake is a band (on 1.5 m/s over the target, off at it; traffic and cops have their own bands), the gas rises at 8 a second and falls at 10, the brake rises and falls at 10,
   the wheel moves at a pad's 12 of lock a second, and the boost button, once pressed, runs 0.6 s at least and rests 0.4 s: a plan sitting on an edge no longer flickers the brake lights or the nitrous. The contact guard's brake comes on at once and is held down at 10 a second (`holdGuardBrake`: its look-ahead grid flipped it every step at a crawl, and a wreck's guard ran with no step).
   A car with no history starts at what the driver asks. Racers' `InputFade` (below) stays under it.

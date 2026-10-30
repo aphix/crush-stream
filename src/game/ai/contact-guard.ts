@@ -4,6 +4,7 @@ import { DERBY_RULES, type AiCar } from "./derby-ai.ts";
 import { clamp } from "../kernel/scalar.ts";
 import { GRIP_YAW_CAP } from "../vehicle/constants.ts";
 import { GUARD_BRAKE_IDX, GUARD_DT_IDX, GUARD_GRIP_IDX, GUARD_LEAD_IDX, GUARD_NEED_IDX, GUARD_PUSH_IDX, GUARD_STEER_NEED_IDX, GUARD_TURN_IDX } from "./constants.ts";
+import { ARM_CLOSING } from "../contact/constants.ts";
 
 /** Seconds ahead the guard looks for a contact, in steps of `STEP`. */
 const HORIZON = 1.5;
@@ -11,8 +12,8 @@ const STEP = 0.1;
 /** Half-axes (m) of the contact zone around a car, in its own frame (a car is 1.9 × 4.6 m: the zone is the car plus 0.5 m at the sides and 1.4 m at the ends). */
 const LAT = 2.4;
 const LON = 6;
-/** Closing speed (m/s) at a contact that is a nudge, not a hit (3/4 of the derby's own hit threshold): a car edging round a stopped one is not held in front of it. */
-const TAP = DERBY_RULES.hitSpeed * 0.75;
+/** Closing speed (m/s) a contact may still meet at: half the closing that arms a crash (`ARM_CLOSING`), the margin on the guard's straight-line read of it. */
+const TAP = ARM_CLOSING / 2;
 /** Sideways acceleration (m/s²) a car can steer away with. */
 const STEER_ACC = 6;
 /** The most the guard moves the wheel (of full lock): a nudge to clear a side-swipe, never a swerve off the road or the route. */
@@ -87,8 +88,8 @@ export function guardContact(self: AiCar, cars: readonly AiCar[], count: number,
   const sx = self.vx;
   const sz = self.vz;
   const speed = hypot2(sx, sz);
-  // A nudge cannot start a hit, and a crawl is the plan's business.
-  if (speed <= DERBY_RULES.hitSpeed) {
+  // At a crawl under a touch, its own motion arms no crash.
+  if (speed <= TAP) {
     tune[GUARD_PUSH_IDX] = 0;
     tune[GUARD_NEED_IDX] = 0;
     tune[GUARD_STEER_NEED_IDX] = 0;

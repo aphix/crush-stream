@@ -89,19 +89,20 @@ describe("given a racer at 25 m/s whose contact guard sees a stopped car 14 m ah
   }
 });
 
-describe("given a racer crawling at 1.6 m/s with its throttle down", () => {
+describe("given a racer crawling at 1.6 m/s with its throttle down, its contact guard run after each think as in a race", () => {
   const s = firstS(true);
   const crawl = (nose: boolean) => {
     const brain = new RaceBrain(oval, 2);
     const me = onRoad(0, s, 0, 1.6);
     let lowest = 0;
     for (let k = 0; k < 2 / DT; k++) {
-      const out = brain.think(me, nose ? [me, onRoad(1, s + 4, 0, -0.2)] : [me], RACE, DT);
+      const others = nose ? [me, onRoad(1, s + 4, 0, -0.2)] : [me];
+      const out = brain.guard(me, others, brain.think(me, others, RACE, DT), DT);
       lowest = Math.min(lowest, out.throttle);
     }
     return lowest;
   };
-  it("when a car faces it 4 m ahead, then it backs off to go round (reverses within 2 s); with nothing on its nose it drives on", () => {
+  it("when a car faces it 4 m ahead, then it backs off to go round (reverses within 2 s) though the guard holds it short; with nothing on its nose it drives on", () => {
     expect(crawl(true), "nose to nose").toBe(REVERSE_THROTTLE);
     expect(crawl(false), "nothing in the way").toBeGreaterThanOrEqual(0);
   });
