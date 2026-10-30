@@ -37,30 +37,54 @@ const DASH_GAP = 0.55;
 const DASH_GAP_DEEP = 0.2;
 /** Up to this share of a dash's length frays off each of its ends, hashed per dash: lines start and stop at their own places. */
 const DASH_FRAY = 0.35;
-/** The share of lines cut through to steel at full severity (the rest are grey primer), and of gouges among them: twice as wide, twice as long, always steel. */
+/** The share of lines cut through to steel at full severity (the rest abrade the clear coat and paint to a whitish streak), and of gouges among them: twice as wide, twice as long, always steel. */
 const STEEL_SHARE = 0.18;
 const GOUGE_SHARE = 0.06;
 const GOUGE_WIDEN = 2;
 /** The least screen pitch (px) between the rows a line may stand on: farther off, only every 2^k-th row keeps its line, at least a pixel wide, so a scratched panel reads as a few distinct streaks, not as their faded mean. */
 const SPARSE_PX = 4;
+/** A bundle's sway (rows) across the slide, and its two wavelengths (m) along it: the lines ride the panel's bulges together, so a zone's edges are wavy. */
+const WAVE_ROWS = 2.5;
+const WAVE_LONG = 0.9;
+const WAVE_SHORT = 0.35;
+/** How much of a zone's line density comes and goes along the slide (0 none): the striker bites harder in places. */
+const DENSITY_SWAY = 0.45;
+/** Past this severity paint flakes off to the primer in crisp patches (`FLAKE_CELL` m across, a finer `FLAKE_FINE` m edge), up to `FLAKE_SHARE` of the zone at full. */
+const FLAKE_FROM = 0.6;
+const FLAKE_SHARE = 0.4;
+const FLAKE_CELL = 0.035;
+const FLAKE_FINE = 0.012;
 
 const f = (x: number): string => (Number.isInteger(x) ? `${x}.0` : `${x}`);
 
-/** `paintScratch()` (the seam in `vehicle/bare-metal.ts`): thin dashed lines along the slide where the wear mask's R is up, mostly primer grey, the more of them, and of steel ones and gouges, the higher it is. */
+/**
+ * `paintScratch()` (the seam in `vehicle/bare-metal.ts`): thin dashed lines along the slide where the wear mask's R is up, in wavy
+ * bundles whose density comes and goes along it, mostly abraded paint, some cut to steel, and past `FLAKE_FROM` primer flakes: the
+ * shares (abraded, primer, steel).
+ */
 const SCRATCH_GLSL = /* glsl */ `
 #define PAINT_SCRATCH
 uniform sampler2D wearMap;
 uniform float scratchTier;
 float scratchHash(float x) { return fract(sin(x * 127.1) * 43758.5453); }
-vec2 paintScratch() {
-  if (scratchTier == 0.0) return vec2(0.0);
+float scratchNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 u = fract(p);
+  u = u * u * (3.0 - 2.0 * u);
+  float n = i.x + i.y * 57.0;
+  return mix(mix(scratchHash(n), scratchHash(n + 1.0), u.x), mix(scratchHash(n + 57.0), scratchHash(n + 58.0), u.x), u.y);
+}
+vec3 paintScratch() {
+  if (scratchTier == 0.0) return vec3(0.0);
   vec4 face = sprayFaceAt();
-  if (face.x < 0.0) return vec2(0.0);
+  if (face.x < 0.0) return vec3(0.0);
   float s = texture2D(wearMap, face.xy).r;
-  if (s == 0.0) return vec2(0.0);
+  if (s == 0.0) return vec3(0.0);
   vec3 a = abs(vSprayN);
   bool top = a.y > a.x && a.y > a.z;
+  float m = !top && a.z > a.x ? vSprayP.x : vSprayP.z;
   float row = (top ? vSprayP.x : vSprayP.y) / ${f(PITCH)};
+  row += ${f(WAVE_ROWS)} * (sin(m * ${f((2 * Math.PI) / WAVE_LONG)} + row * 0.09) + 0.5 * sin(m * ${f((2 * Math.PI) / WAVE_SHORT)} - row * 0.05));
   float aa = fwidth(row);
   // Rows thinner than \`SPARSE_PX\` px: keep the lines of every \`span\`-th row only, where they are, each at least a pixel wide.
   float span = exp2(max(0.0, ceil(log2(aa * ${f(SPARSE_PX)}))));
@@ -74,14 +98,19 @@ vec2 paintScratch() {
   float hc = max(hw / span, 0.5 * ac);
   float line = 1.0 - smoothstep(hc - ac, hc + ac, abs(fract(cell) - centre / span));
   float len = ${f(DASH)} * span * mix(${f(DASH_SHORT)}, ${f(DASH_LONG)}, scratchHash(id + 0.29)) * (1.0 + gouge);
-  float along = (!top && a.z > a.x ? vSprayP.x : vSprayP.z) / len + pick * 7.0;
+  float along = m / len + pick * 7.0;
   float dashCell = floor(along) + id * 0.01;
   float t = fract(along);
   float dash = step(mix(${f(DASH_GAP)}, ${f(DASH_GAP_DEEP)}, s), scratchHash(dashCell))
     * step(${f(DASH_FRAY)} * scratchHash(dashCell + 0.41), t) * step(t, 1.0 - ${f(DASH_FRAY)} * scratchHash(dashCell + 0.83));
+  float sway = 0.5 + 0.5 * sin(m * 4.1 + row * 0.03) * sin(m * 9.7 + 1.3);
   // A kept row stands for its \`span\` rows: it carries a line where any of them would.
-  float hair = line * dash * step(pick, 1.0 - pow(1.0 - min(1.0, s * ${f(DENSITY)}), span));
-  return hair * vec2(1.0, max(gouge, step(scratchHash(id + 0.71), ${f(STEEL_SHARE)} * s)));
+  float hair = line * dash * step(pick, 1.0 - pow(1.0 - min(1.0, s * ${f(DENSITY)} * (1.0 - ${f(DENSITY_SWAY)} * sway)), span));
+  float steel = hair * max(gouge, step(scratchHash(id + 0.71), ${f(STEEL_SHARE)} * s));
+  vec2 q = vec2(m, row * ${f(PITCH)});
+  float flaky = 0.65 * scratchNoise(q / ${f(FLAKE_CELL)}) + 0.35 * scratchNoise(q / ${f(FLAKE_FINE)} + 31.0);
+  float flake = step(1.0 - ${f(FLAKE_SHARE)} * smoothstep(${f(FLAKE_FROM)}, 1.0, s), flaky) * (1.0 - steel);
+  return vec3((hair - steel) * (1.0 - flake), flake, steel);
 }`;
 
 /** A car's wear: the uniforms every paint of it samples, its mask while it has strokes, and the list the mask was drawn from. */
@@ -191,12 +220,12 @@ export class PaintScratches {
       const wear = wears.get(car);
       if (wear === undefined || wear.version === car.scratches.version) continue;
       wear.version = car.scratches.version;
-      this.draw(wear, car.scratches.list, car.scratches.count);
+      this.draw(wear, car.scratches.list, car.scratches.count, car.scratches.cover);
     }
   }
 
-  /** `wear` drawn to `count` strokes of `list`; a car that has none hands its mask back and samples `BARE_SCRATCH`. */
-  draw(wear: Wear, list: Uint8Array, count: number): void {
+  /** `wear` drawn to `count` strokes of `list` over the style's paint cover `cover` (`paintCover`: recess per texel); a car that has none hands its mask back and samples `BARE_SCRATCH`. */
+  draw(wear: Wear, list: Uint8Array, count: number, cover: Uint8Array | null = null): void {
     if (count > 0 && wear.mask === null) this.take(wear);
     const mask = wear.mask;
     const rects = this.rects;
@@ -228,7 +257,7 @@ export class PaintScratches {
         for (let x = rects[o]!; x <= rects[o + 2]!; x++) mask.data[((fy + y) * SIDE + fx + x) * 2] = 0;
       }
       for (let k = 0; k < count; k++) {
-        if ((list[k * STROKE_BYTES + FACE_WIDTH]! & FACE_MASK) === face) stamp(mask.data, list, k * STROKE_BYTES, rects, o);
+        if ((list[k * STROKE_BYTES + FACE_WIDTH]! & FACE_MASK) === face) stamp(mask.data, list, k * STROKE_BYTES, rects, o, cover);
       }
       mask.touch(fx + rects[o]!, fy + rects[o + 1]!, fx + rects[o + 2]!, fy + rects[o + 3]!);
     }
@@ -286,8 +315,11 @@ function growRect(rects: Int32Array, list: Uint8Array, s: number): void {
   rects[o + 3] = Math.max(rects[o + 3]!, Math.min(fh - 1, Math.floor(Math.max(list[s + V0]!, list[s + V1]!) + rv)));
 }
 
-/** The stroke at `s` of `list` into R of `data`, inside face rect `o` of `rects`: a capsule, severity × (1 − (d/r)²) at distance d, the higher of it and what is there. */
-function stamp(data: Uint8Array, list: Uint8Array, s: number, rects: Int32Array, o: number): void {
+/**
+ * The stroke at `s` of `list` into R of `data`, inside face rect `o` of `rects`: a capsule, severity × (1 − (d/r)²) at distance d, the
+ * higher of it and what is there; on a texel recessed in `cover` past the stroke's reach (`proudShare`), less.
+ */
+function stamp(data: Uint8Array, list: Uint8Array, s: number, rects: Int32Array, o: number, cover: Uint8Array | null): void {
   const face = list[s + FACE_WIDTH]! & FACE_MASK;
   const fx = CAR_SPRAY.faces[face]![0];
   const fy = CAR_SPRAY.faces[face]![1];
@@ -314,7 +346,19 @@ function stamp(data: Uint8Array, list: Uint8Array, s: number, rects: Int32Array,
       const q = (ex * ex + ey * ey) / (r * r);
       if (q >= 1) continue;
       const i = ((fy + y) * SIDE + fx + x) * 2;
-      data[i] = Math.max(data[i]!, Math.round(severity * (1 - q)));
+      const recess = cover === null ? 0 : Math.max(0, cover[(fy + y) * SIDE + fx + x]! - 1);
+      data[i] = Math.max(data[i]!, Math.round(severity * (1 - q) * proudShare(recess, severity)));
     }
   }
+}
+
+/** A striker meets the outermost paint first: it reaches this far (mm) behind it at the lightest stroke and at the hardest, and fades out over `PROUD_FADE` past that. */
+const PROUD_REACH_LIGHT = 6;
+const PROUD_REACH_HARD = 40;
+const PROUD_FADE = 12;
+
+/** The share of a stroke of `severity` (0..255) a texel `recess` mm behind the outermost paint near it shows: the high places first, deeper ones as the stroke gets harder. */
+function proudShare(recess: number, severity: number): number {
+  const reach = PROUD_REACH_LIGHT + ((PROUD_REACH_HARD - PROUD_REACH_LIGHT) * severity) / 255;
+  return Math.min(1, Math.max(0, 1 - (recess - reach) / PROUD_FADE));
 }

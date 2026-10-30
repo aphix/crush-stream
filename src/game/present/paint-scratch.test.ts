@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { DeformableCar } from "../vehicle/car.ts";
 import { fleetClass, fleetStyle } from "../scenes/fleet.ts";
 import { assignClass } from "../vehicle/vehicle-classes.ts";
-import { FACE_MASK, FACE_WIDTH, SCRAPE_MAX, SEVERITY, STROKE_BYTES, U0, V0 } from "../vehicle/paint-scrapes.ts";
+import { FACE_BITS, FACE_MASK, FACE_WIDTH, SCRAPE_MAX, SEVERITY, STROKE_BYTES, U0, U1, V0, V1 } from "../vehicle/paint-scrapes.ts";
 import { CAR_SPRAY, SPRAY_FACE } from "../vehicle/spray-box.ts";
 import { compileHooks } from "../vehicle/car-detail-map.test-util.ts";
 import { allocatedBytes, untilQuiet } from "../kernel/alloc-sample.test-util.ts";
@@ -14,7 +14,7 @@ import "../kernel/rapier-node.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { applyScratch, PaintScratches } from "./paint-scratch.ts";
-import { sampledScratch, wearOf } from "./paint-scratch.test-util.ts";
+import { sampledScratch, wearOf, wearTexels } from "./paint-scratch.test-util.ts";
 import { must } from "../kernel/must.test-util.ts";
 
 /** Bytes a frame may allocate: one boxed double, as the other allocation rows hold. */
@@ -61,6 +61,62 @@ describe("given a car with a full stroke list whose list changes before every fr
     frames(FRAMES);
     const minor = await scavengesDuring(() => frames(FRAMES));
     expect(minor, `${minor} minor collections`).toBe(0);
+  });
+});
+
+/** A moderate grind's severity byte (of 255), and the rows of the left flank its six lanes run along, nose to tail: sill to belt. */
+const GRIND_SEVERITY = 128;
+const GRIND_ROWS = [6, 12, 18, 24, 30, 36];
+/** Recess (mm behind the outermost paint near it) of the paint that counts as proud, and as recessed. */
+const PROUD_MM = 3;
+const RECESSED_MM = 30;
+
+describe("given a pickup whose left flank, flared arches and the recessed panels below the belt, takes a moderate grind over its whole length", () => {
+  const slot = Array.from({ length: 16 }, (_, i) => i).find((i) => fleetStyle(i) === "pickup");
+  must(slot !== undefined, "the control: the fleet has a pickup");
+  const car = new DeformableCar({ body: 0x808080, accent: 0, name: "p" }, new THREE.Scene(), null, fleetStyle(slot));
+  assignClass(car, fleetClass(slot));
+  const bytes = new Uint8Array(GRIND_ROWS.length * STROKE_BYTES);
+  for (const [k, v] of GRIND_ROWS.entries()) {
+    const s = k * STROKE_BYTES;
+    bytes[s + U0] = 0;
+    bytes[s + U1] = CAR_SPRAY.faces[SPRAY_FACE.left]![2] - 1;
+    bytes[s + V0] = v;
+    bytes[s + V1] = v;
+    bytes[s + FACE_WIDTH] = SPRAY_FACE.left | (30 << FACE_BITS);
+    bytes[s + SEVERITY] = GRIND_SEVERITY;
+  }
+  car.scratches.load(bytes, GRIND_ROWS.length);
+  applyScratch(car);
+  new PaintScratches().frame([car]);
+
+  it("when its wear mask is drawn, then the proud paint and the arch lips take the grind and paint recessed 3 cm behind them takes under a third of it", () => {
+    const cover = car.scratches.cover;
+    must(cover, "the control: the pickup has a paint cover");
+    const mask = wearTexels(car);
+    const [fx, fy, fw] = CAR_SPRAY.faces[SPRAY_FACE.left]!;
+    const at = (u: number, v: number): number => (fy + v) * CAR_SPRAY.w + fx + u;
+    const sums = { proud: [0, 0], lip: [0, 0], recessed: [0, 0] };
+    const add = (sum: number[], r: number): void => {
+      sum[0]! += r;
+      sum[1]!++;
+    };
+    for (let v = GRIND_ROWS[0]!; v <= GRIND_ROWS.at(-1)!; v++) {
+      for (let u = 0; u < fw; u++) {
+        const c = cover[at(u, v)]!;
+        if (c === 0) continue;
+        const r = mask[at(u, v) * 2]!;
+        // The arch's lip: paint just over the wheel's opening (no paint one or two rows below).
+        if (cover[at(u, v - 1)] === 0 || cover[at(u, v - 2)] === 0) add(sums.lip, r);
+        if (c - 1 <= PROUD_MM) add(sums.proud, r);
+        if (c - 1 >= RECESSED_MM) add(sums.recessed, r);
+      }
+    }
+    const mean = (k: keyof typeof sums): number => sums[k][0]! / sums[k][1]!;
+    const note = `mean R: proud ${mean("proud").toFixed(1)} (${sums.proud[1]} texels), lip ${mean("lip").toFixed(1)} (${sums.lip[1]}), recessed ${mean("recessed").toFixed(1)} (${sums.recessed[1]})`;
+    expect(Math.min(sums.proud[1]!, sums.lip[1]!, sums.recessed[1]!), `the control: each kind of paint lies under the grind; ${note}`).toBeGreaterThan(20);
+    expect(mean("recessed") * 3, note).toBeLessThan(mean("proud"));
+    expect(mean("recessed") * 3, note).toBeLessThan(mean("lip"));
   });
 });
 

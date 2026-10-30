@@ -251,7 +251,7 @@ export class PaintScrapes {
     const c = this.cover;
     if (c === null) return true;
     const f = CAR_SPRAY.faces[face]!;
-    return c[(f[1] + v) * CAR_SPRAY.w + f[0] + u] === 1;
+    return c[(f[1] + v) * CAR_SPRAY.w + f[0] + u] !== 0;
   }
 
   /** Whether stroke `k` is on `face`, near `width` and `severity`, and the end (u, v) lies within `CONTINUE_COS` of its run from its start. */
@@ -395,20 +395,29 @@ function along(a: number, b: number, i: number, steps: number): number {
 const covers = new WeakMap<object, Uint8Array>();
 /** Samples across a texel each way: a texel is paint if a fragment anywhere in it is. */
 const COVER_SUB = 3;
+/** How far (m) along and across a face the surface a stroke's striker touches reaches: a texel this near a prouder one is recessed by the difference. */
+const PROUD_ALONG = 0.3;
+const PROUD_ACROSS = 0.2;
+/** Each face's depth axis (m): the box's x span for the flanks, y for the roof, z for the nose and tail (`sprayPlace`'s depth is 0..1 of it). */
+const FACE_DEPTH = [0, 0, 1, 2, 2].map((axis) => CAR_SPRAY.max[axis]! - CAR_SPRAY.min[axis]!);
 const _tri = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] as const;
 const _nrm = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] as const;
 const _n = new THREE.Vector3();
 const _tx = new Float64Array(6);
+const _dp = new Float64Array(3);
 const _pr = new Float64Array(3);
 
 /**
- * The `CAR_SPRAY` texels where some fragment of `meshes` (in `group`'s rest frame, as built) draws a stroke, as the shader does:
- * the face its interpolated rest normal picks, and its interpolated primer taking scratches. One per `style`: its cars are built alike.
+ * The `CAR_SPRAY` texels where some fragment of `meshes` (in `group`'s rest frame, as built) draws a stroke, as the shader does
+ * (the face its interpolated rest normal picks, its interpolated primer taking scratches): 0 none, else 1 + how far (mm, to 254)
+ * the texel lies behind the outermost surface of the face within `PROUD_ALONG` × `PROUD_ACROSS` of it, which a striker meets first.
+ * One per `style`: its cars are built alike.
  */
 export function paintCover(style: object, meshes: readonly THREE.Mesh[], group: THREE.Object3D): Uint8Array {
   const cached = covers.get(style);
   if (cached) return cached;
   const cover = new Uint8Array(CAR_SPRAY.w * CAR_SPRAY.h);
+  const depth = new Float32Array(CAR_SPRAY.w * CAR_SPRAY.h).fill(-Infinity);
   for (const mesh of meshes) {
     const geo = mesh.geometry;
     const pos = restPositions(mesh, geo, group);
@@ -430,19 +439,20 @@ export function paintCover(style: object, meshes: readonly THREE.Mesh[], group: 
       }
       // Corners on one face keep every fragment between them on it; else each fragment picks its own.
       if (same) {
-        if (face >= 0) rasterize(cover, face, false);
-      } else for (let f = 0; f < FACES; f++) rasterize(cover, f, true);
+        if (face >= 0) rasterize(cover, depth, face, false);
+      } else for (let f = 0; f < FACES; f++) rasterize(cover, depth, f, true);
     }
   }
+  for (let face = 0; face < FACES; face++) markRecess(cover, depth, face);
   covers.set(style, cover);
   return cover;
 }
 
-/** Marks in `cover` the texels of `face` where a sample of triangle `_tri` (corner normals `_nrm`, primers `_pr`) takes scratches, and with `pick` its interpolated normal picks `face`. */
-function rasterize(cover: Uint8Array, face: number, pick: boolean): void {
+/** Marks in `cover` the texels of `face` where a sample of triangle `_tri` (corner normals `_nrm`, primers `_pr`) takes scratches, and in `depth` the outermost (m) any sample reaches; with `pick` only samples whose interpolated normal picks `face`. */
+function rasterize(cover: Uint8Array, depth: Float32Array, face: number, pick: boolean): void {
   const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!;
   for (let k = 0; k < 3; k++) {
-    sprayPlace(CAR_SPRAY, face, _tri[k], _uv);
+    _dp[k] = sprayPlace(CAR_SPRAY, face, _tri[k], _uv) * FACE_DEPTH[face]!;
     _tx[2 * k] = _uv[0]! * fw;
     _tx[2 * k + 1] = _uv[1]! * fh;
   }
@@ -456,19 +466,44 @@ function rasterize(cover: Uint8Array, face: number, pick: boolean): void {
   if (area === 0) return;
   const v1 = Math.min(fh - 1, Math.floor(Math.max(ay, by, cy)));
   const u1 = Math.min(fw - 1, Math.floor(Math.max(ax, bx, cx)));
-  for (let v = Math.floor(Math.min(ay, by, cy)); v <= v1; v++) {
-    for (let u = Math.floor(Math.min(ax, bx, cx)); u <= u1; u++) {
+  for (let v = Math.max(0, Math.floor(Math.min(ay, by, cy))); v <= v1; v++) {
+    for (let u = Math.max(0, Math.floor(Math.min(ax, bx, cx))); u <= u1; u++) {
       const at = (fy + v) * CAR_SPRAY.w + fx + u;
-      for (let s = 0; s < COVER_SUB * COVER_SUB && cover[at] === 0; s++) {
+      for (let s = 0; s < COVER_SUB * COVER_SUB; s++) {
         const px = u + ((s % COVER_SUB) + 0.5) / COVER_SUB;
         const py = v + (Math.floor(s / COVER_SUB) + 0.5) / COVER_SUB;
         const wa = ((bx - px) * (cy - py) - (cx - px) * (by - py)) / area;
         const wb = ((cx - px) * (ay - py) - (ax - px) * (cy - py)) / area;
         const wc = 1 - wa - wb;
-        if (wa < 0 || wb < 0 || wc < 0 || !takesScratch(wa * _pr[0]! + wb * _pr[1]! + wc * _pr[2]!)) continue;
+        if (wa < 0 || wb < 0 || wc < 0) continue;
         if (pick && sprayFace(CAR_SPRAY, _tri[0], _n.copy(_nrm[0]).multiplyScalar(wa).addScaledVector(_nrm[1], wb).addScaledVector(_nrm[2], wc), _uv) !== face) continue;
-        cover[at] = 1;
+        depth[at] = Math.max(depth[at]!, wa * _dp[0]! + wb * _dp[1]! + wc * _dp[2]!);
+        if (takesScratch(wa * _pr[0]! + wb * _pr[1]! + wc * _pr[2]!)) cover[at] = 1;
       }
+    }
+  }
+}
+
+/** Each painted texel of `face` in `cover` becomes 1 + its recess (mm, to 254) behind the outermost `depth` within `PROUD_ALONG` × `PROUD_ACROSS`: a separable max over the face. */
+function markRecess(cover: Uint8Array, depth: Float32Array, face: number): void {
+  const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!;
+  const ru = Math.round(PROUD_ALONG / FACE_METRES[2 * face]!);
+  const rv = Math.round(PROUD_ACROSS / FACE_METRES[2 * face + 1]!);
+  const rows = new Float32Array(fw * fh);
+  for (let v = 0; v < fh; v++) {
+    for (let u = 0; u < fw; u++) {
+      let top = -Infinity;
+      for (let x = Math.max(0, u - ru); x <= Math.min(fw - 1, u + ru); x++) top = Math.max(top, depth[(fy + v) * CAR_SPRAY.w + fx + x]!);
+      rows[v * fw + u] = top;
+    }
+  }
+  for (let v = 0; v < fh; v++) {
+    for (let u = 0; u < fw; u++) {
+      const at = (fy + v) * CAR_SPRAY.w + fx + u;
+      if (cover[at] === 0) continue;
+      let top = -Infinity;
+      for (let y = Math.max(0, v - rv); y <= Math.min(fh - 1, v + rv); y++) top = Math.max(top, rows[y * fw + u]!);
+      cover[at] = 1 + Math.min(254, Math.round((top - depth[at]!) * 1000));
     }
   }
 }

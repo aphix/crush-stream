@@ -51,8 +51,14 @@ vec3 bareMetal(vec3 p, vec3 n) {
   return mix(mix(steel, steel * 0.35, seam), steel * 1.6, rivet);
 }`;
 
-/** A scratch's primer (linear RGB, a light flat grey) and its roughness; a deep one's freshly scraped steel (linear RGB), brighter than a torn panel's weathered sheet. */
-const SCRATCH_PRIMER = [0.33, 0.33, 0.32] as const;
+/**
+ * A scratch's abraded paint: the clear coat and colour ground to a whitish streak (linear RGB, mixed `SCRATCH_ABRADED_LIFT` of the
+ * way over the paint, so it stays the paint's own lighter tint); a flake's bared primer (a light flat grey); a matte roughness for both;
+ * a deep line's freshly scraped steel, brighter than a torn panel's weathered sheet.
+ */
+const SCRATCH_ABRADED = [0.78, 0.78, 0.76] as const;
+const SCRATCH_ABRADED_LIFT = 0.7;
+const SCRATCH_PRIMER = [0.52, 0.52, 0.5] as const;
 const SCRATCH_PRIMER_ROUGHNESS = 0.85;
 const SCRATCH_STEEL = [0.62, 0.63, 0.65] as const;
 
@@ -71,14 +77,14 @@ export function takesScratch(primer: number): boolean {
 }
 
 /**
- * Where a material defines `PAINT_SCRATCH` and declares `vec2 paintScratch()` (the primer and steel shares a slide cut here), the paint
- * shows them on the surfaces that take scratches and gives way to them as to bare steel (`bareW`): no clear coat, no candy.
+ * Where a material defines `PAINT_SCRATCH` and declares `vec3 paintScratch()` (the abraded, primer and steel shares a slide cut here), the
+ * paint shows them on the surfaces that take scratches and gives way to them as to bare steel (`bareW`): no clear coat, no candy.
  */
 const SCRATCH = {
-  weigh: `#ifdef PAINT_SCRATCH\nvec2 scratchW = paintScratch() * (${SCRATCH_PAINT_WEIGHT});\n#endif`,
-  color: `#ifdef PAINT_SCRATCH\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_PRIMER.map(f).join(", ")}), scratchW.x);\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_STEEL.map(f).join(", ")}), scratchW.y);\nbareW = max(bareW, max(scratchW.x, scratchW.y));\n#endif`,
-  roughness: `#ifdef PAINT_SCRATCH\nroughnessFactor = mix(roughnessFactor, ${f(SCRATCH_PRIMER_ROUGHNESS)}, scratchW.x * (1.0 - scratchW.y));\n#endif`,
-  metalness: `#ifdef PAINT_SCRATCH\nmetalnessFactor *= 1.0 - scratchW.x * (1.0 - scratchW.y);\n#endif`,
+  weigh: `#ifdef PAINT_SCRATCH\nvec3 scratchW = paintScratch() * (${SCRATCH_PAINT_WEIGHT});\nfloat scratchMatte = max(scratchW.x, scratchW.y) * (1.0 - scratchW.z);\n#endif`,
+  color: `#ifdef PAINT_SCRATCH\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_ABRADED.map(f).join(", ")}), scratchW.x * ${f(SCRATCH_ABRADED_LIFT)});\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_PRIMER.map(f).join(", ")}), scratchW.y);\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_STEEL.map(f).join(", ")}), scratchW.z);\nbareW = max(bareW, max(scratchW.x, max(scratchW.y, scratchW.z)));\n#endif`,
+  roughness: `#ifdef PAINT_SCRATCH\nroughnessFactor = mix(roughnessFactor, ${f(SCRATCH_PRIMER_ROUGHNESS)}, scratchMatte);\n#endif`,
+  metalness: `#ifdef PAINT_SCRATCH\nmetalnessFactor *= 1.0 - scratchMatte;\n#endif`,
 } as const;
 
 /** Fragment replacements, each appended after its include: the colour, roughness, metalness and clearcoat give way to the steel by `bareW`. */

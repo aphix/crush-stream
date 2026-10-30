@@ -252,14 +252,22 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
   heights, a tall car's on a low one's where they really meet. Each stroke is cut to the run of it that lies on drawn paint: the
   style's paint cover (`paintCover`, built once per style from the body, lid and door skins at rest: the `CAR_SPRAY` texels where a
   fragment's rest normal picks that face and its interpolated primer takes scratches, as the shader weighs it), so a slide at window,
-  roof-rail, arch or bumper height burns none of the 32. Present draws each scratched car's RG8 wear mask from that list (`present/paint-scratch.ts` `PaintScratches`, once a
+  roof-rail, under-sill or bumper height burns none of the 32; the arch lips are paint and take them. The cover also holds each
+  painted texel's recess: how far (mm) it lies behind the outermost surface of its face within 0.3 m along and 0.2 m across, which a
+  striker meets first (the sim reads only paint or not). Present draws each scratched car's RG8 wear mask from that list (`present/paint-scratch.ts` `PaintScratches`, once a
   frame for every drawn car, only when the list's version moves, redrawing only the changed strokes' rects and uploading their rows):
-  R is a stroke's severity in a capsule its width wide on the `CAR_SPRAY` box, G is reserved for dents. The paint's `paintScratch()`
+  R is a stroke's severity in a capsule its width wide on the `CAR_SPRAY` box, less where the paint is recessed past the stroke's
+  reach (6 mm behind the proud surface at the lightest, 40 mm at the hardest: flares, arch lips, a door's widest bulge and crease
+  lines first), G is reserved for dents. The paint's `paintScratch()`
   (`applyScratch`, the `PAINT_SCRATCH` seam in `bare-metal.ts`; it binds `CAR_SPRAY`'s face mapping itself, since an unsprayed car's
   paint has no other) turns R into thin scratch lines along the slide at fragment resolution (at most one per 6 mm row, set off
-  its middle at random, 0.5-1.2 mm wide, in dashes of their own length with frayed ends): the higher R, the more rows carry a line
-  and the more of them cut through to steel, a few twice-wide, twice-long steel gouges among them; deeper is more lines, never a
-  band. A light brush is a few grey primer hairlines, a hard shove many with bright steel ones; from afar thin lines fade. Only `TAKES_SCRATCH` surfaces show them (the
+  its middle at random, 0.5-1.2 mm wide, in dashes of their own length with frayed ends), swaying together across the slide so a
+  zone's edges are wavy and its density comes and goes along it: the higher R, the more rows carry a line and the more of them cut
+  through to steel, a few twice-wide, twice-long steel gouges among them; deeper is more lines, never a band. Most lines abrade the
+  clear coat and colour to a lighter, whitish streak of the paint; past 0.6 severity paint flakes off to the light primer in
+  crisp-edged patches. A light brush is a few whitish hairlines, a hard grind a packed streaky zone with flakes and bright steel.
+  Far off (rows under 4 px) only every 2^k-th row keeps its line, at least a pixel wide at full contrast, standing for its rows, so a
+  scratched panel reads as a few distinct streaks rather than a faint mean. Only `TAKES_SCRATCH` surfaces show them (the
   painted panels; bumpers, trim and bare steel don't). One extra key (`|scratch`) on every car paint, no new variant; `SCRATCH_TIER`
   turns it off at the `off` tier. A car with no strokes samples a shared 1×1 and hands its mask back to the pool; torn lids and
   doors drawn by the cover batch show no scratches.
