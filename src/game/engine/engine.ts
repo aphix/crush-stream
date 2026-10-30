@@ -470,6 +470,7 @@ export class CrashEngine extends EngineGarage {
     this.resizeObs.disconnect();
     for (const car of this.cars) car.dispose();
     this.podium.dispose();
+    this.paintScratches.dispose();
     this.race.dispose();
     this.labArt?.dispose();
     this.garage?.dispose();
@@ -693,6 +694,7 @@ export class CrashEngine extends EngineGarage {
     this.updateCamera(wallDt);
     this.rumbleFrame(this.playing && !held ? wallDt : 0);
     this.flushVisibleSkins();
+    this.paintScratches.frame(this.drawnCars());
     this.detail.update(this.cars, this.camera, this.followedCar(), this.highlights.playing ? this.highlights.focus() : null);
     this.lampLights.night = this.stage.night;
     this.showcase?.art.setNight(this.stage.night);

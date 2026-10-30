@@ -237,6 +237,17 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
 - **Bare metal:** the paint's `primer` attribute draws procedural riveted steel (`bare-metal.ts`: object-space seams, rivet
   rows, a tint per sheet), so a torn panel's or bumper's under-panel bends with the body and costs no texture or draw. A torn
   bumper bares the painted body it covered (`bumperBare`), a reset paints it again.
+- **Paint scratches:** a car-car slide leaves strokes in the car's list (`vehicle/paint-scrapes.ts`, sim state on the wire and in
+  the keyframe). Present draws each scratched car's RG8 wear mask from that list (`present/paint-scratch.ts` `PaintScratches`, once a
+  frame for every drawn car, only when the list's version moves, redrawing only the changed strokes' rects and uploading their rows):
+  R is a stroke's severity in a capsule its width wide on the `CAR_SPRAY` box, G is reserved for dents. The paint's `paintScratch()`
+  (`applyScratch`, the `PAINT_SCRATCH` seam in `bare-metal.ts`) turns R into hash lines along the slide at fragment resolution (one
+  line at most per 1.6 mm row, dashed): the higher R, the more rows carry a line, the wider they run until they merge, and the more
+  of them cut through to steel (past `STEEL_FROM`), so a light brush is a few thin grey primer hairlines and a hard shove a bright
+  steel stripe with a frayed grey edge. Only `TAKES_SCRATCH` surfaces show them (the
+  painted panels; bumpers, trim and bare steel don't). One extra key (`|scratch`) on every car paint, no new variant; `SCRATCH_TIER`
+  turns it off at the `off` tier. A car with no strokes samples a shared 1×1 and hands its mask back to the pool; torn lids and
+  doors drawn by the cover batch show no scratches.
 - **The cage** reads `cageInterior()`, the first interior box byte-for-byte: the drawn kit moves no sim reading.
 
 ## References and scale

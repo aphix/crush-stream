@@ -17,6 +17,8 @@ import { ClipSim } from "./engine-replay.ts";
 import { PoseBlend } from "../present/pose-blend.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
+import { applyScratch, PaintScratches } from "../present/paint-scratch.ts";
+import { wearTexels } from "../present/paint-scratch.test-util.ts";
 
 /**
  * A head-on makes the clip; one of its cars carries scratches from before the run and nothing else until it crashes, after the clip's
@@ -178,5 +180,36 @@ describe("given a head-on's clip whose keyframe falls mid-sideswipe beside the h
     const last = trace[keyStep + sim.step - 1]!;
     expect(last.markedSolver, "the control: the scratched car crashed in the clip").toBe(true);
     for (const [slot, i] of shown) expect(firstMismatch(strokesOf(cars[slot]!), last.strokes[i]!), `car ${slot} at the clip's end`).toBeUndefined();
+  });
+
+  it("when the clip is replayed over masks drawn at the end of the live run, then each scratched car's wear mask is the one its keyframe strokes draw at the clip's first step, and its live strokes' at the last", () => {
+    const drawn = [A, ...sliders.filter((slot) => clip.cars.some((c) => c.slot === slot))].map((slot) => cars[slot]!);
+    const strokesAt = (row: Recorded["trace"][number], car: DeformableCar) => (car === cars[A] ? row.markedStrokes : row.strokes[sliders.indexOf(cars.indexOf(car))]!);
+    const end = trace.at(-1)!;
+    const ref = new DeformableCar({ body: 0x808080, accent: 0, name: "ref" }, new THREE.Scene(), null, "sedan");
+    const refView = new PaintScratches();
+    applyScratch(ref);
+    /** The mask a fresh viewer draws from `strokes` (count, then bytes). */
+    const maskOf = (strokes: number[]) => {
+      ref.scratches.load(Uint8Array.from(strokes.slice(1)), strokes[0]!);
+      refView.frame([ref]);
+      return Array.from(wearTexels(ref));
+    };
+    const view = new PaintScratches();
+    for (const car of drawn) {
+      applyScratch(car);
+      car.scratches.load(Uint8Array.from(strokesAt(end, car).slice(1)), strokesAt(end, car)[0]!);
+    }
+    view.frame(drawn);
+    const sim = new ClipSim(clip, clip.cars.map((c) => cars[c.slot]!), { dress, collide: () => {}, blend: new PoseBlend() });
+    sim.restart();
+    view.frame(drawn);
+    const atKey = trace[keyStep - 1]!;
+    expect(drawn.some((car) => strokesAt(end, car)[0]! > strokesAt(atKey, car)[0]!), "the control: a car had more strokes at the run's end than at the keyframe").toBe(true);
+    for (const car of drawn) expect(firstMismatch(Array.from(wearTexels(car)), maskOf(strokesAt(atKey, car))), `${car.paint.name}'s mask at the clip's start`).toBeUndefined();
+    while (!sim.done) sim.advanceTo(sim.time + 1e-6);
+    view.frame(drawn);
+    const last = trace[keyStep + sim.step - 1]!;
+    for (const car of drawn) expect(firstMismatch(Array.from(wearTexels(car)), maskOf(strokesAt(last, car))), `${car.paint.name}'s mask at the clip's end`).toBeUndefined();
   });
 });

@@ -3,6 +3,7 @@ import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { applyCarFinish, finishForTier } from "../vehicle/car-finish.ts";
 import { CANDY_FILM, CANDY_TIER } from "../vehicle/car-candy.ts";
+import { SCRATCH_TIER } from "./paint-scratch.ts";
 import { MATERIAL_GRAIN } from "../vehicle/material-class.ts";
 import { SMOOTHING_TIER } from "../vehicle/normal-smooth.ts";
 import { setConcreteDetailTier } from "./concrete-detail.ts";
@@ -597,6 +598,7 @@ export class Cinematics {
     SMOOTHING_TIER.value = finishForTier(tier) ? 1 : 0;
     CANDY_TIER.value = tier === "off" || tier === "minimal" ? 0 : 1;
     CANDY_FILM.value = finishForTier(tier) ? 1 : 0;
+    SCRATCH_TIER.value = on ? 1 : 0;
     setConcreteDetailTier(finishForTier(tier));
     if (!on) this.reset();
   }

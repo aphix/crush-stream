@@ -71,6 +71,7 @@ import type { Garage } from "./garage.ts";
 import type { Showcase } from "./showcase.ts";
 import { PlayerLooks } from "./player-looks.ts";
 import { lookColours, wearCarLook } from "../present/car-look.ts";
+import { applyScratch, PaintScratches } from "../present/paint-scratch.ts";
 import { copPaint, copSpray } from "../present/cop-livery.ts";
 import { RivalLooks } from "../present/rival-look.ts";
 import { rivalSeedOf } from "./rival-seed.ts";
@@ -207,6 +208,8 @@ export abstract class EngineCore {
   protected scene = new ParkingScene();
   protected camera!: THREE.PerspectiveCamera;
   protected cars: DeformableCar[] = [];
+  /** Every drawn car's wear mask, drawn from its stroke list. */
+  protected readonly paintScratches = new PaintScratches();
   private liveBuf: DeformableCar[] = [];
   protected carCount = INITIAL_HUD.carCount;
   protected get carA(): DeformableCar {
@@ -546,6 +549,7 @@ export abstract class EngineCore {
     const seed = look || !this.race ? null : rivalSeedOf(slot, this.race, this.derbyMode ? { round: this.derbyRound, seated: this.derbySeated } : null);
     if (seed === null) wearCarLook(car, look?.car ?? NO_CAR_PICK, look?.carSpray ?? copSpray(drawnStyle(car.style), this.deviceClass));
     else wearCarLook(car, NO_CAR_PICK, this.rivals.of(seed, slot, lookColours(car, NO_CAR_PICK).body));
+    applyScratch(car);
     applyCarFinish(car.group, finishForTier(this.cine.tier));
   }
 

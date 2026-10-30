@@ -4,18 +4,18 @@ import { CAR_SPRAY, sprayFace, sprayPlace } from "./spray-box.ts";
 /** Strokes a car keeps (6 bytes each): a full list merges its two nearest strokes on one face to make room, so a new scrape always shows. */
 export const SCRAPE_MAX = 32;
 export const STROKE_BYTES = 6;
-/** A stroke's bytes: texel column and row of each end on its face, the face (3 bits) with the width quantum (5 bits above it), and the severity. */
-const U0 = 0;
-const U1 = 1;
-const V0 = 2;
-const V1 = 3;
-const FACE_WIDTH = 4;
-const SEVERITY = 5;
-const FACE_BITS = 3;
-const FACE_MASK = 7;
+/** A stroke's bytes: texel column and row of each end on its face, the face (3 bits) with the width quantum (5 bits above it), and the severity. The wear mask (`present/paint-scratch.ts`) reads them as they are. */
+export const U0 = 0;
+export const U1 = 1;
+export const V0 = 2;
+export const V1 = 3;
+export const FACE_WIDTH = 4;
+export const SEVERITY = 5;
+export const FACE_BITS = 3;
+export const FACE_MASK = 7;
 const WIDTH_QUANTA = 31;
 /** A width quantum (m): a stroke `q` wide is `(q + 1)` of them, 6.5 to 208 mm (a flank texel is 18 mm, so a hairline's width below one is the stamp's minimum either way). */
-const WIDTH_STEP = 0.0065;
+export const WIDTH_STEP = 0.0065;
 
 /** A slide pressing softer than this (m/s of strength × cut) only rubs: a lean leaves the paint as it was. */
 const STRENGTH_MIN = 0.75;
@@ -55,7 +55,7 @@ const FACES = CAR_SPRAY.faces.length;
 export const SCRAPE_TRACK = FACES * TRACK_EACH;
 
 /** Metres per texel across (`2 × face`) and up (`2 × face + 1`) each face: `CAR_SPRAY`'s box over its faces' texels; flat, so the hot reads destructure nothing. */
-const FACE_METRES = Float64Array.from(
+export const FACE_METRES = Float64Array.from(
   CAR_SPRAY.faces.flatMap(([, , w, h], face) => {
     const span = (axis: number) => CAR_SPRAY.max[axis]! - CAR_SPRAY.min[axis]!;
     const [across, up] = face < 2 ? [2, 1] : face === 2 ? [2, 0] : [0, 1];

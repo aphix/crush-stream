@@ -134,6 +134,12 @@ there again from its keyframe; nothing else corrects the replay. It is the sim t
 and every step of it. The clip also carries its crumple settings (`squash`, `buckle`, `deformMode`), so every peer dents
 the same way.
 
+Paint scratches replay as dents do: a keyframe carries each car's stroke list (a scratch-only car's wreck section without solver
+state) and its episode tracker, so the re-run cuts the live strokes. The drawn wear masks follow the list's version
+(`PaintScratches.frame`, every frame over the drawn cars), so a clip's first step redraws each car's mask from the keyframe's
+strokes and it grows as the clip re-cuts them; guests play the host's bytes and draw the same texels
+(`engine-record-scrape.test.ts`).
+
 **Fidelity** (held since `REPLAY_VERSION` 26 (the constant lives in `net/reel-codec.ts`); `engine/replay-fidelity.test.ts`, `engine/engine-replay.ai-long-run.ts` (the seeded-race sweep: `npm run test:ai-long-run`, not per commit), `engine/engine-replay-police.test.ts`).**
 A replay is held to the sim that recorded it, step by step over the whole clip and every car in it: position, velocity and
 crush errors are all exactly 0, and no car is a wreck in one run and not in the other. The rows are the race and derby

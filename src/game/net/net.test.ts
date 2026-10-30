@@ -31,6 +31,8 @@ import {
 import { carLayout, readCarPose } from "./car-pose.ts";
 import { tyreClearance } from "../vehicle/tyre-clearance.test-util.ts";
 import { drawnTriangles } from "../vehicle/drawn-body.test-util.ts";
+import { applyScratch, PaintScratches } from "../present/paint-scratch.ts";
+import { wearTexels } from "../present/paint-scratch.test-util.ts";
 import { drawSnapshots } from "./net-view.ts";
 import { firstMismatch } from "../kernel/compare-arrays.test-util.ts";
 import { SCRAPE_MAX } from "../vehicle/paint-scrapes.ts";
@@ -569,7 +571,7 @@ describe("given snapshots and derby boards of values a host never sends", () => 
 });
 
 describe("given a host car whose paint a slide scratched, and nothing else: not crashed, no load crush", () => {
-  it("when its snapshots cross the wire and a client draws them, then the client's strokes are the host's byte for byte, and once the host repairs the car the client's are gone", () => {
+  it("when its snapshots cross the wire and a client draws them, then the client's strokes and wear mask are the host's byte for byte, and once the host repairs the car the client's are gone", () => {
     const host = makeCar();
     const client = makeCar();
     host.spawnFacing(0, 0, 0, 0);
@@ -607,8 +609,21 @@ describe("given a host car whose paint a slide scratched, and nothing else: not 
     drawSnapshots([hostSnapshot(5)], [1], applied, [client], 5, 1 / FRAME_HZ, game, -1);
     expect(client.scratches.count, "the client's stroke count").toBe(host.scratches.count);
     expect(firstMismatch(client.scratches.list, host.scratches.list), "the client's stroke bytes").toBeUndefined();
+    // Each peer draws its own masks.
+    const hostView = new PaintScratches();
+    const clientView = new PaintScratches();
+    applyScratch(host);
+    applyScratch(client);
+    hostView.frame([host]);
+    clientView.frame([client]);
+    expect(wearTexels(host).some((v) => v > 0), "the control: the host's mask is marked").toBe(true);
+    expect(firstMismatch(wearTexels(client), wearTexels(host)), "the client's wear mask").toBeUndefined();
+    const clientMask = wearTexels(client);
     host.spawnFacing(0, 0, 0, 0);
     drawSnapshots([hostSnapshot(6)], [2], applied, [client], 6, 1 / FRAME_HZ, game, -1);
     expect(client.scratches.count, "repaired on the client").toBe(0);
+    clientView.frame([client]);
+    expect(wearTexels(client).length, "the repaired car samples no mask").toBeLessThan(clientMask.length);
+    expect(clientMask.some((v) => v > 0), "its old mask, back in the pool, is clean").toBe(false);
   });
 });

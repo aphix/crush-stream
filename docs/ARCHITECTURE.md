@@ -192,7 +192,8 @@ if playing:  simDt = wallDt × timeScale × cine.timeWarp
              stepEdge → scheduleSkins (Witness: off-camera cars defer, small ones stride) → updateSkin
              updatePhase → rigs → FX, ragdolls, smoke, trace → stepDerby → seat.step → cine.update
 always:      net.frame → PoseBlend.present (bodies, loose parts, attached parts and the crush skin drawn at the frame's time between
-             the last two sim states) → race.frame → updateCamera → flushVisibleSkins → detail / lamps → audio frame
+             the last two sim states) → race.frame → updateCamera → flushVisibleSkins → paintScratches.frame (wear masks of the
+             drawn cars whose stroke list moved) → detail / lamps → audio frame
              (audio on) → cine.render → PoseBlend.restore (the sim's own poses and skin back) → emitHud every 0.05–0.12 s
              The thrown drivers' world (`RagdollRemote` ↔ `ragdoll-worker.ts`, a module Web Worker, race courses only) is posted its
              frame in the `ragdolls` step above and answers a frame or two later; the sim holds a frame (`RagdollSystem.waiting`) until the
@@ -262,6 +263,7 @@ was several times slower on these loops). `deform/skin-kernel.wasm` is the skin 
 - Car parts: `carTone(MAT.X)` in `vehicle/car-tones.ts` (`CAR_TONE`, id to tone), the one place a car part's look is edited. No car vertex attribute.
 - `userData.materialIds` on materials whose existing per-vertex codes need ids: the car primer, fitting and glass-tone codes (`PRIMER_MATERIAL`, `car-materials.ts`) and the dummy's fabrics and roles (`FABRIC_MATERIAL`, `ROLE_MATERIAL`).
 - `world/catalog.ts`: `SURFACES[*].ribbon`, `.terrain` and `.patch` and `PrefabSpec.material`. Pure data: nothing in physics, contact or replay reads them, so the sim, `REPLAY_VERSION` and `NET_VERSION` are unchanged.
+- `SCRATCH_CUT` and `TAKES_SCRATCH` (`kernel/material-ids.ts`): the contact reads a striker's cut to make cosmetic paint strokes (`scrapePair`), and the paint shader draws them only on the materials that take them (`bare-metal.ts`). Physics reads neither; the strokes ride the wreck section and the keyframe, never a sim reading.
 - `WINDOW_BAY` (`world/catalog.ts`): the building window texture's rectangles in canvas pixels; `present/prefabs.ts` `makeWindows` paints from it. It is data only so far; the shader does not read it.
 
 Adding a material: append a row (never insert), give it the family it shades with today, and stamp it at one of the sites above. `kernel/material-ids.test.ts` pins unique names, the legacy rows' own-index families and the role set.

@@ -7,6 +7,7 @@ import { carPickText, NO_CAR_PICK, type CarPart, type CarPick } from "../match/l
 import { CAR_SPRAY } from "../vehicle/spray-box.ts";
 import { applySpray, BARE_SPRAY, sprayUniforms, type SprayBitmap } from "./spray.ts";
 import { CAR_SPRAY_DEPTH_BAND, carSprayDepthTexture, type RestTriangles, type SprayCover } from "./spray-depth.ts";
+import { applyScratch } from "./paint-scratch.ts";
 
 /** What wearing a look changed on a car: its own lid and door paints, the spray's uniforms, and the colours it had before. */
 type Worn = {
@@ -120,6 +121,8 @@ function firstWear(car: DeformableCar): Worn {
   m.trunk.material = w.trunk;
   for (const door of m.doors) door.material = w.doors;
   for (const paint of [w.hood, w.trunk, w.doors]) applyDetailMap(paint, car.style);
+  // Before the spray, as `dressCar` scratches an unworn car's body: every car paint keeps one program key.
+  applyScratch(car);
   for (const paint of [m.bodyPaint, w.hood, w.trunk, w.doors]) {
     applySpray(paint, w.uniforms, REST_FRAME_ATTRIBUTES, "vSprayP = sprayPos;\nvSprayN = sprayNrm;\nvSprayRow = 0.0;", "car-depth");
   }

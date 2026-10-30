@@ -85,6 +85,7 @@ const HOT = {
   "src/game/present/motor-voices.ts": ["assign"],
   "src/game/present/motor-tone.ts": ["motorRev", "accelLoad", "motorLoad", "motorRpm", "channelGains"],
   "src/game/present/game-audio.ts": ["frame"],
+  "src/game/present/paint-scratch.ts": ["frame", "draw", "touch", "sameStroke", "radiusOf", "growRect", "stamp"],
 };
 const KNOB_CONTEXTS = new Set(["kernel", "world", "deform", "vehicle", "contact", "scenes", "ai"]);
 const MAX_FILE_LINES = 800;
@@ -425,7 +426,7 @@ const PLATFORM_WORDS = new Set([
   "cut", "paste", "connected", "connecting", "standard", "stylesheet", "preconnect", "rel", "navigate", "same-origin", "include",
   "gamepadconnected", "gamepaddisconnected", "webglcontextrestored", "http:", "https:", "module",
   // canvas / three.js
-  "position", "uv", "uv1", "color", "normal", "index", "2d", "canvas", "YXZ", "WEBGL_debug_renderer_info", "EXT_disjoint_timer_query_webgl2", "div", "textarea", "button",
+  "position", "uv", "uv1", "color", "normal", "index", "2d", "canvas", "YXZ", "WEBGL_debug_renderer_info", "EXT_disjoint_timer_query_webgl2", "div", "textarea", "button", "dispose",
   // HTTP / encodings
   "GET", "POST", "PUT", "DELETE", "content-type", "application/json", "accept", "cookie", "set-cookie", "host", "cache-control",
   "no-store", "x-forwarded-host", "Authorization", "origin", "localhost", "utf8", "utf-8", "sha256", "base64", "base64url", "hex",

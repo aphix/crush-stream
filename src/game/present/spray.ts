@@ -219,7 +219,7 @@ vec4 sprayTexel() {
 }`;
 
 /** The face mapping declared in `shader` (and its rest-frame `attributes` in the vertex) unless an earlier patch did; a patch's own functions go in before `main`, after it. */
-function declareSprayFace(shader: THREE.WebGLProgramParametersWithUniforms, attributes: string): void {
+export function declareSprayFace(shader: THREE.WebGLProgramParametersWithUniforms, attributes: string): void {
   const vertex = shader.vertexShader;
   shader.vertexShader = vertex.replace("#include <common>", `#include <common>\n${vertex.includes(attributes) ? "" : attributes}\n${vertex.includes(SPRAY_FACE_VARYINGS) ? "" : SPRAY_FACE_VARYINGS}`);
   if (!shader.fragmentShader.includes(SPRAY_FACE_GLSL)) shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>\n${SPRAY_FACE_GLSL}`);
