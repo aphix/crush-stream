@@ -2,12 +2,13 @@
 
 import * as THREE from "three";
 import { hypot2, detSin, detCos, detAtan2, detAsin } from "../kernel/physics-core.js";
-import { FLEET_STYLE_IDS, type CarStyleId } from "../vehicle/car-variants.ts";
+import { CAR_STYLES, FLEET_STYLE_IDS, type CarStyleId } from "../vehicle/car-variants.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { fellOffRim } from "../world/ground.ts";
-import { FLEET_HALF } from "../vehicle/car-rig.ts";
+import { FLEET_HALF, carFrame } from "../vehicle/car-rig.ts";
 import { DERBY_ARENA } from "./constants.ts";
 import { CLASSES, STYLE_CLASS, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
+import { RAMP } from "./fleet-ramps.ts";
 
 /** Car pool size: the per-car typed arrays (derby/race AI, race, traffic), wheel batch and lamp pool are sized for it,
  *  `setCarCount` clamps to it and the HUD Cars slider stops at it. Set in the initial export (7a09b34), not measured. */
@@ -20,6 +21,8 @@ export const LAMP_RING_R = 16;
 export const LAMP_POSTS = 6;
 /** A spawn keeps this far (m) from every lamp post and from the straight path its car drives (a car's half width 1 + the post 0.12 + a margin). */
 const LAMP_CLEAR = 2;
+/** A spawn's straight path passes a jump-ramp wedge at least this far (m) outside its car's half width: the mirrors and a margin. */
+const RAMP_CLEAR = 0.15;
 
 /**
  * How close (m) a car at (x, z), driving straight at the centre and on through it out to the far side of the post ring, passes to a
@@ -39,6 +42,58 @@ function lampClearance(x: number, z: number): number {
     least = Math.min(least, hypot2(px - x * (1 - t / len), pz - z * (1 - t / len)));
   }
   return least;
+}
+
+/**
+ * Whether a car `w` m half-wide at (x, z), driving straight through the centre, meets a jump-ramp wedge (`FleetRamps`: on the axis
+ * through the centre toward (ax, az)) other than by running up the toe of the one before it, its whole box starting clear of it.
+ */
+function rampInPath(x: number, z: number, ax: number, az: number, w: number): boolean {
+  const axis = hypot2(ax, az);
+  const u = Math.abs(x * ax + z * az) / axis;
+  const c = Math.abs(x * az - z * ax) / axis;
+  const r = hypot2(u, c);
+  const cos = u / r;
+  const sin = c / r;
+  const toe = RAMP.start + RAMP.len;
+  // Within the wedge's width where the path reaches its toe, so it runs up the face: the jump.
+  if (cos > 0 && toe * sin + w <= RAMP.halfW * cos && u - FLEET_HALF.footHalfL * cos - w * sin >= toe) return false;
+  // The path's band passes the near wedge's inner corner (the far one mirrors it through the centre): it meets a flank or the high end.
+  return RAMP.start * sin - RAMP.halfW * cos < w;
+}
+
+/** Plan half width (m) of slot `i`'s car (`fleetStyle`), its tyres included: a monster's stand 0.7 m out past its body. */
+function slotHalfWidth(i: number): number {
+  const f = carFrame(CAR_STYLES[fleetStyle(i)]);
+  return Math.max(f.half.x, f.halfTrack + f.rig.tyre.halfW * CLASSES[fleetClass(i)].wheelScale);
+}
+
+/** Whether car slot `i` at (x, z) meets a wedge. They lie on slot 0's bearing (`JerseyBarrier.orient` end-on): slot 0 (no `lead`) runs up a toe whatever its width, so it only stands clear of it. */
+function rampBlocked(i: number, x: number, z: number, lead: { x: number; z: number } | undefined): boolean {
+  return lead ? rampInPath(x, z, lead.x, lead.z, slotHalfWidth(i) + RAMP_CLEAR) : rampInPath(x, z, x, z, 0);
+}
+
+/** Radial step (m) of `rampClearSpot`'s search outward: a fraction of a car's length, so a moved car keeps near its ring. */
+const SPOT_STEP = 0.5;
+
+/**
+ * The spot nearest (x, z) where car slot `i` starts clear of the jump ramps, the posts and every one of `slots` (`FLEET_MIN_SEP`):
+ * round its ring a degree at a time either side, then on rings further out to `RESPAWN_R`; (x, z) itself if none is.
+ */
+function rampClearSpot(i: number, x: number, z: number, slots: readonly FleetSlot[]): { x: number; z: number } {
+  const ang = detAtan2(x, z);
+  for (let r = hypot2(x, z); r <= RESPAWN_R; r += SPOT_STEP) {
+    for (let step = 0; step <= 180; step++) {
+      for (const sign of [1, -1]) {
+        const b = ang + (sign * step * Math.PI) / 180;
+        const sx = detSin(b) * r;
+        const sz = detCos(b) * r;
+        if (lampClearance(sx, sz) < LAMP_CLEAR || rampBlocked(i, sx, sz, slots[0])) continue;
+        if (slots.every((o) => hypot2(sx - o.x, sz - o.z) >= FLEET_MIN_SEP)) return { x: sx, z: sz };
+      }
+    }
+  }
+  return { x, z };
 }
 
 /**
@@ -100,13 +155,15 @@ function speedInRange(min: number, max: number, rng: () => number): number {
 /**
  * Place `count` cars on the pad, non-intersecting, aimed at the origin
  * (DeformableCar.spawn lookAt(0,0,0)). 1–2 cars sit opposite for a
- * reliable crash; 3+ scatter on a ring.
+ * reliable crash; 3+ scatter on a ring, with `ramps` on each clear of
+ * the jump ramps' wedges (`rampClearSpot`).
  */
 export function layoutFleet(
   count: number,
   speedMin: number,
   speedMax: number,
   rng: () => number = Math.random,
+  ramps = false,
 ): FleetSlot[] {
   const n = Math.max(1, Math.min(MAX_CARS, Math.round(count) || 1));
   const spd = () => speedInRange(speedMin, speedMax, rng);
@@ -154,6 +211,8 @@ export function layoutFleet(
       x = detSin(ang) * r;
       z = detCos(ang) * r;
     }
+    // Only a car that would meet a ramp moves, and the seed's draws stay in step, so the rest of the field keeps its spots.
+    if (ramps && rampBlocked(i, x, z, slots[0])) ({ x, z } = rampClearSpot(i, x, z, slots));
     slots.push({ x, z, speed: spd() });
   }
   return slots;

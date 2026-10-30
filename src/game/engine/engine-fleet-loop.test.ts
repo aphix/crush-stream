@@ -2,6 +2,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import "../kernel/rapier-node.test-util.ts";
 import { HudStore, INITIAL_HUD } from "../hud/hud-store.ts";
 import { FLEET_EMPTY_S } from "../scenes/fleet.ts";
+import { planHalfWidth, wedgeBoxes, wedgeHitAhead } from "../scenes/fleet-ramps.test-util.ts";
+import { CLASSES, carClass } from "../vehicle/vehicle-classes.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
@@ -9,6 +11,8 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 import { decodeShare } from "../hud/share-url.ts";
 
 const FRAME = 1 / FRAME_HZ;
+/** The owner's capture of a truck wrecked on a wedge's flank on its first frame: 5 cars, ramps on, seed 4315555. */
+const TRUCK_WRECK_LINK = `#scene=fleet&cars=5&smin=10&smax=32&real=0.25&squash=0.32&buckle=0.45&loop=0&deform=shape&car=muscle&ramps=1&barrier=0&balls=0&seed=${(4315555).toString(16)}`;
 
 describe("given the real engine on Fleet's default settings, every car driving straight out from the centre on its own bearing", () => {
   // One engine for the file: a second `CrashEngine` in the same process never resolves `ready`.
@@ -98,5 +102,36 @@ describe("given the real engine on Fleet's default settings, every car driving s
     for (let frame = 0; frame < 60; frame++) engine.advance(FRAME, { frameDt: FRAME });
     expect(car.crashed, "the car crashed in the middle of an empty disc").toBe(false);
     expect(car.velocity.length(), "speed after crossing the centre").toBeGreaterThan(23);
+  });
+
+  it("when the owner's ramps link (seed 4315555) is opened, re-rolled on 8 fresh seeds, and its seed is laid out with the ramps off and then switched on, then no car starts in a wedge or drives into one in its first second other than up the toe before it", (t) => {
+    engine.fadeScenes = false;
+    const hits: string[] = [];
+    const seeds: number[] = [];
+    const check = (): void => {
+      seeds.push(engine["sceneSeed"]);
+      const wedges = wedgeBoxes(engine["ramps"]);
+      for (const car of engine["live"]()) {
+        const p = car.group.position;
+        const hit = wedgeHitAhead(p.x, p.z, car.speed, planHalfWidth(car.frame, CLASSES[carClass(car)].wheelScale), car.frame.footHalfL, wedges);
+        if (hit) hits.push(`seed ${engine["sceneSeed"]} ${car.paint.name}: ${hit}`);
+      }
+    };
+    engine["applyShare"](decodeShare(TRUCK_WRECK_LINK), false);
+    expect(engine["rampsUp"] && engine["live"]().length === 5 && engine["sceneSeed"] === 4315555, "the link's 5 cars, ramps and seed").toBe(true);
+    check();
+    for (let roll = 0; roll < 8; roll++) {
+      engine["randomizeAndReset"]();
+      check();
+    }
+    engine.toggleRamps();
+    engine["pinnedSeed"] = 4315555;
+    engine["randomizeAndReset"]();
+    engine["pinnedSeed"] = null;
+    engine.toggleRamps();
+    expect(engine["rampsUp"] && engine["sceneSeed"] === 4315555, "the ramps switched back on over the same seed").toBe(true);
+    check();
+    t.annotate(`seeds ${seeds.join(", ")}`);
+    expect(hits).toEqual([]);
   });
 });

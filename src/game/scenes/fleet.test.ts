@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FLEET_MIN_SEP, LAMP_POSTS, LAMP_RING_R, MAX_CARS, fleetClass, fleetStyle, layoutDerby, layoutFleet, slotType } from "./fleet.ts";
-import { scatterRampBalls, type RampBall } from "./engine-props.ts";
+import { JerseyBarrier, scatterRampBalls, type RampBall } from "./engine-props.ts";
+import { FleetRamps } from "./fleet-ramps.ts";
+import { planHalfWidth, wedgeBoxes, wedgeHitAhead } from "./fleet-ramps.test-util.ts";
 import { mulberry32 } from "../world/placements.ts";
+import { carFrame } from "../vehicle/car-rig.ts";
+import { CAR_STYLES } from "../vehicle/car-variants.ts";
+import { CLASSES } from "../vehicle/vehicle-classes.ts";
 
 describe("given a player's car pick, hatchback", () => {
   const hatchback = { cls: "sedan", style: "hatchback" } as const;
@@ -67,7 +72,7 @@ describe("given a fleet of cars laid out around the arena (where each car spawns
 });
 
 describe("given the six lamp posts on the 16 m ring", () => {
-  it("when fleets of 3 to 32 cars are laid out over 200 seeds, then no car spawns within 2 m of a post or has one within 2 m of its straight path to the centre", () => {
+  it("when fleets of 3 to 32 cars are laid out over 200 seeds, ramps off and on, then no car spawns within 2 m of a post or has one within 2 m of its straight path to the centre", () => {
     const posts = Array.from({ length: LAMP_POSTS }, (_, k) => {
       const a = (k / LAMP_POSTS) * Math.PI * 2;
       return { x: Math.sin(a) * LAMP_RING_R, z: Math.cos(a) * LAMP_RING_R };
@@ -83,11 +88,13 @@ describe("given the six lamp posts on the 16 m ring", () => {
     };
     let worst = Infinity;
     let cases = 0;
-    for (const n of [3, 5, 8, 14, 20, 32]) {
-      for (let seed = 1; seed <= 200; seed++) {
-        for (const s of layoutFleet(n, 10, 30, mulberry32(seed))) {
-          worst = Math.min(worst, clearance(s.x, s.z));
-          cases++;
+    for (const ramps of [false, true]) {
+      for (const n of [3, 5, 8, 14, 20, 32]) {
+        for (let seed = 1; seed <= 200; seed++) {
+          for (const s of layoutFleet(n, 10, 30, mulberry32(seed), ramps)) {
+            worst = Math.min(worst, clearance(s.x, s.z));
+            cases++;
+          }
         }
       }
     }
@@ -147,6 +154,34 @@ describe("given the six lamp posts on the 16 m ring", () => {
       }
     }
     expect(worst, `after ${cases} spawn paths the closest a post comes to one is ${worst.toFixed(2)} m (${where})`).toBeGreaterThanOrEqual(2 - 1e-9);
+  });
+});
+
+describe("given the fleet's jump ramps, laid end-on to slot 0's bearing (`JerseyBarrier.orient`)", () => {
+  it("when fleets of 1 to 32 cars are laid out with the ramps on over 200 seeds and the owner's 4315555, then no car's box starts in a wedge or drives into one in its first second other than up the toe before it, and every pair stands the minimum separation apart", () => {
+    const three = new THREE.Scene();
+    const ramps = new FleetRamps(three);
+    const barrier = new JerseyBarrier(three, new THREE.Group());
+    const hits: string[] = [];
+    let worstSep = Infinity;
+    let cars = 0;
+    for (const n of [1, 2, 3, 5, 8, 14, 32]) {
+      for (const seed of [4315555, ...Array.from({ length: 200 }, (_, k) => k + 1)]) {
+        const slots = layoutFleet(n, 10, 32, mulberry32(seed), true);
+        barrier.orient(new THREE.Vector3(slots[0]!.x, 0, slots[0]!.z), true);
+        ramps.place(barrier.yaw, null);
+        const wedges = wedgeBoxes(ramps);
+        for (const [i, s] of slots.entries()) {
+          const frame = carFrame(CAR_STYLES[fleetStyle(i)]);
+          const hit = wedgeHitAhead(s.x, s.z, s.speed, planHalfWidth(frame, CLASSES[fleetClass(i)].wheelScale), frame.footHalfL, wedges);
+          if (hit) hits.push(`${n} cars seed ${seed} car ${i} (${fleetStyle(i)}): ${hit}`);
+          for (const o of slots.slice(i + 1)) worstSep = Math.min(worstSep, Math.hypot(s.x - o.x, s.z - o.z));
+          cars++;
+        }
+      }
+    }
+    expect(hits, `${hits.length} of ${cars} cars meet a wedge: ${hits.slice(0, 6).join("; ")}`).toEqual([]);
+    expect(worstSep, "closest two cars of a field").toBeGreaterThanOrEqual(FLEET_MIN_SEP - 0.05);
   });
 });
 

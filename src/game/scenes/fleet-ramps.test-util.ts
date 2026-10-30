@@ -13,6 +13,9 @@ import { newWorld, stepWorld, type World } from "../engine/world-step.ts";
 import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
 import { assignClass, CLASSES, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import type { CarStyleId } from "../vehicle/car-variants.ts";
+import type { CarFrame } from "../vehicle/car-rig.ts";
+import { P_STRIDE } from "../world/surfaces.ts";
+import { PR_COS, PR_HX, PR_HZ, PR_SIN, PR_X, PR_Z } from "../world/prism.ts";
 import { frame, FRAME } from "../vehicle/ground-probe.test-util.ts";
 
 /**
@@ -222,4 +225,69 @@ export function noseX(car: DeformableCar, torn: boolean): number {
     x = Math.min(x, v.set(pos[k * 3]!, pos[k * 3 + 1]! + cageLift(car), pos[k * 3 + 2]!).applyQuaternion(car.group.quaternion).add(car.group.position).x);
   }
   return x;
+}
+
+/** A plan box: its middle, its local x across (cos, −sin) and z along (sin, cos), and its half extents (m). */
+type PlanBox = { x: number; z: number; cos: number; sin: number; hx: number; hz: number };
+
+/** The two wedges' plan boxes where `ramps` has them placed. */
+export function wedgeBoxes(ramps: FleetRamps): PlanBox[] {
+  return ramps["wedges"].map((k) => {
+    const o = k * P_STRIDE;
+    const p = ramps.p;
+    return { x: p[o + PR_X]!, z: p[o + PR_Z]!, cos: p[o + PR_COS]!, sin: p[o + PR_SIN]!, hx: p[o + PR_HX]!, hz: p[o + PR_HZ]! };
+  });
+}
+
+/** The plan half width (m) a car on `frame` of a class whose wheels scale `wheelScale` meets a wedge with: its body or its tyres, whichever stand further out. */
+export function planHalfWidth(frame: CarFrame, wheelScale: number): number {
+  return Math.max(frame.half.x, frame.halfTrack + frame.rig.tyre.halfW * wheelScale);
+}
+
+/** Whether a box of half extents `halfW` across and `halfL` along unit (fx, fz), at (px, pz), overlaps `b` in plan (no separating axis of either). */
+function boxesOverlap(px: number, pz: number, fx: number, fz: number, halfW: number, halfL: number, b: PlanBox): boolean {
+  const axes = [
+    [fx, fz],
+    [fz, -fx],
+    [b.cos, -b.sin],
+    [b.sin, b.cos],
+  ] as const;
+  for (const [ax, az] of axes) {
+    const gap = Math.abs((b.x - px) * ax + (b.z - pz) * az);
+    const car = halfL * Math.abs(fx * ax + fz * az) + halfW * Math.abs(fz * ax - fx * az);
+    const box = b.hx * Math.abs(b.cos * ax - b.sin * az) + b.hz * Math.abs(b.sin * ax + b.cos * az);
+    if (gap >= car + box) return false;
+  }
+  return true;
+}
+
+/** Travel step (m) of `wedgeHitAhead`'s sweep: well under a wedge's width and a car's, so no crossing falls between two steps. */
+const SWEEP_STEP = 0.05;
+
+/**
+ * What a car `halfW` m half-wide and `halfL` m half-long standing at (x, z), driving straight at the centre at `speed`, meets of
+ * `wedges` in its first second: null if nothing, or the wedge and how far along its box first overlaps one. Running up a toe (the
+ * end away from the centre) with both front corners inside its width is the jump: null, and what comes after it is not asked.
+ */
+export function wedgeHitAhead(x: number, z: number, speed: number, halfW: number, halfL: number, wedges: readonly PlanBox[]): string | null {
+  const r = Math.hypot(x, z);
+  const fx = -x / r;
+  const fz = -z / r;
+  for (let d = 0; d <= speed; d += SWEEP_STEP) {
+    const px = x + fx * d;
+    const pz = z + fz * d;
+    for (const [k, b] of wedges.entries()) {
+      if (!boxesOverlap(px, pz, fx, fz, halfW, halfL, b)) continue;
+      const toe = Math.sign(b.x * b.sin + b.z * b.cos);
+      const beyondToe = ((px - b.x) * b.sin + (pz - b.z) * b.cos) * toe > b.hz;
+      const frontInside = [-1, 1].every((side) => {
+        const cx = px + fx * halfL + fz * halfW * side;
+        const cz = pz + fz * halfL - fx * halfW * side;
+        return Math.abs((cx - b.x) * b.cos - (cz - b.z) * b.sin) <= b.hx;
+      });
+      if (d > 0 && beyondToe && frontInside) return null;
+      return `wedge ${k} ${d.toFixed(2)} m along`;
+    }
+  }
+  return null;
 }

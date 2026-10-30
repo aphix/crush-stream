@@ -97,10 +97,14 @@ export abstract class EngineScenes extends EngineMinigames {
       this.setDerby(false);
       this.randomizeAndReset();
     } else {
-      if (!this.showBarrier) this.barrier.orient(this.carA.group.position, true);
-      this.ramps.place(this.barrier.yaw, this.showBarrier ? this.barrier : null);
-      this.ramps.group.visible = this.showRamps;
-      setGround(this.showRamps ? this.ramps : DISC_GROUND);
+      // The fleet's spawns keep clear of its ramps (`layoutFleet`): the run's seed is laid out again, with the ramps end-on to car A.
+      const pinned = this.pinnedSeed;
+      this.pinnedSeed = pinned ?? this.sceneSeed;
+      try {
+        this.randomizeAndReset();
+      } finally {
+        this.pinnedSeed = pinned;
+      }
     }
     this.tryUnlockAudio();
     this.emitHud();
@@ -459,7 +463,7 @@ export abstract class EngineScenes extends EngineMinigames {
 
   private spawnFleet(): void {
     const cars = this.live();
-    const slots = layoutFleet(cars.length, this.speedMin, this.speedMax, this.sceneRng(0));
+    const slots = layoutFleet(cars.length, this.speedMin, this.speedMax, this.sceneRng(0), this.rampsUp);
     for (let i = 0; i < cars.length; i++) {
       const slot = slots[i]!;
       const car = cars[i]!;
