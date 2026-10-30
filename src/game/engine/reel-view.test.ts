@@ -9,8 +9,8 @@ import { chain, CREST, crashes, reelViewClaims, survivalOn } from "./reel-view-c
 /** The chain's place on the city's straight, as a share of its 60 m: the middle of the 0.3-0.6 where the shoved car drives into the third whichever way it veers off the hit (at 0 it can pass 2.8 m wide of it, and the clip then has no later hit). */
 const CHAIN_SHIFT = 0.45;
 
-/** The city wall hit's place, 0.02 of the lap on from its usual 0.86: at 0.86 a street-traffic car stands in the staged car's way and the AI brakes for it before the wall, which then throws no driver. */
-const WALL_SHIFT = 0.02;
+/** The city wall hit's place, 0.03 of the lap on from its usual 0.86: there the wall alone throws the driver, with the street traffic about or cleared away (from 0.86 to 0.885 the car bounces off the wall uncrashed). */
+const WALL_SHIFT = 0.03;
 
 /**
  * One staged crash of each kind, each in a race of only its own cars (`reel-view-{city,stunt,havana}.ai-long-run.ts` walk each kind along the lap and
