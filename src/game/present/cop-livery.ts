@@ -1,4 +1,5 @@
-import { carSprayLayout, SPRAY_FACE, SPRAY_PALETTE, type SprayLayout, type SprayPaint } from "../match/look-data.ts";
+import { SPRAY_PALETTE, type SprayPaint } from "../match/look-data.ts";
+import { carSprayLayout, SPRAY_FACE, type SprayLayout } from "../vehicle/spray-box.ts";
 import { beltY } from "../vehicle/car-lines.ts";
 import { COP_LIVERY } from "../vehicle/car-styles/police.ts";
 import type { BodyStyle } from "../vehicle/car-variants.ts";

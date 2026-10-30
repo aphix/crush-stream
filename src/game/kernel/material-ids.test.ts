@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAT, MATERIALS } from "./material-ids.ts";
+import { MAT, MATERIALS, TAKES_SCRATCH } from "./material-ids.ts";
 
 const FAMILY_COUNT = 14;
 const ROLES: readonly string[] = [
@@ -32,4 +32,23 @@ describe("given the material registry", () => {
     const legacy = ["GENERIC", "PAINTED_METAL", "PLASTIC", "RUBBER", "CONCRETE", "ASPHALT", "SOIL", "WOOD", "FOLIAGE", "GLASS", "STONE", "LEATHER", "METAL", "INTERIOR"] as const;
     for (let id = 0; id < legacy.length; id++) expect(MAT[legacy[id]!]).toBe(id);
   });
+});
+
+/** Each striker's cut and whether the surface shows cut lines when struck, against the collision-repair note's verdict on it. */
+const SCRATCH_RULE = [
+  { it: "painted steel cuts paint readily at an edge, and its panel shows the lines", material: "CAR_PAINT", cut: 1, takes: true },
+  { it: "chrome cuts paint locally as hard metal, and shows its own scuffs, not cut lines", material: "BUMPER_CHROME", cut: 1, takes: false },
+  { it: "a painted plastic bumper cuts sometimes, at its edge", material: "BUMPER_PAINTED", cut: 0.6, takes: false },
+  { it: "satin accent trim cuts as painted trim", material: "BUMPER_SATIN", cut: 0.6, takes: false },
+  { it: "black plastic usually cuts nothing with a broad face, yes at an edge, and whitens instead of showing lines", material: "BUMPER_BLACK", cut: 0.4, takes: false },
+  { it: "a tyre transfers rubber and never cuts", material: "TYRE", cut: 0, takes: false },
+  { it: "glass cuts nothing in v1", material: "GLASS", cut: undefined, takes: false },
+] as const;
+
+describe("given the paint-scratch rule over the material registry", () => {
+  for (const testCase of SCRATCH_RULE) {
+    it(`when ${testCase.material} slides along a painted panel or is slid along, then ${testCase.it}`, () => {
+      expect(TAKES_SCRATCH.has(MAT[testCase.material]), `${testCase.material} takes scratches`).toBe(testCase.takes);
+    });
+  }
 });

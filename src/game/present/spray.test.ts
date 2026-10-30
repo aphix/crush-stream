@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { CAR_SPRAY, packSpray, PERSON_SPRAY, SPRAY_PALETTE, sprayFace, unpackSpray, type SprayLayout } from "../match/look-data.ts";
+import { packSpray, PERSON_SPRAY, SPRAY_PALETTE, unpackSpray } from "../match/look-data.ts";
+import { CAR_SPRAY, sprayFace, type SprayLayout } from "../vehicle/spray-box.ts";
 import { compileHooks } from "../vehicle/car-detail-map.test-util.ts";
 import { applySpray, BARE_SPRAY, SprayBitmap, sprayUniforms } from "./spray.ts";
 import { personSprayDepthTexture } from "./spray-depth.ts";

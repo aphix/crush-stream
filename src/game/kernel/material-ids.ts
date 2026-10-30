@@ -326,3 +326,6 @@ export const MATERIALS = [
 export type MaterialId = number;
 export type MaterialFamily = Family;
 export const MAT = Object.fromEntries(MATERIALS.map(([name], id) => [name, id])) as Record<(typeof MATERIALS)[number][0], MaterialId>;
+
+/** Struck surfaces that show cut lines: painted steel panels. Chrome scuffs and plastic whitening are looks of their own. */
+export const TAKES_SCRATCH: ReadonlySet<MaterialId> = new Set([MAT.CAR_PAINT]);

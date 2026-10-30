@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { StreamedDeformation } from "../deform/streamed-deform.ts";
 import type { PointSkin } from "../deform/deform-rig.ts";
 import type { BodyPartName } from "../kernel/rig-spec.ts";
+import type { MaterialId } from "../kernel/material-ids.ts";
 import { BUMPER_F, LAMP_SEAT, LID, LIGHT_BAR } from "./constants.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
@@ -21,6 +22,7 @@ import {
   LIGHT_BAR_LENS,
   GLASS_COLOR,
   bumperMaterial,
+  bumperMaterialId,
   glassMaterial,
   type GlassLook,
   makePaintMaterial,
@@ -482,6 +484,11 @@ export abstract class CarCore {
   private bumperR: THREE.Group;
   /** The front and rear bumper meshes, in that order: a player's bumper colour recolours them (`car-look.ts`). */
   protected readonly bumperMeshes: THREE.Mesh[] = [];
+  /** The [front, rear] bumper's box in the rest frame (`ensureRestFrame`'s), as built, and the material it draws in. */
+  protected readonly bumperBoxes: THREE.Box3[] = [];
+  protected readonly bumperMaterials: MaterialId[] = [];
+  /** The [front, rear] bumper parts, also listed in `parts`. */
+  protected bumperParts!: readonly [DetachPart, DetachPart];
   protected hood: THREE.Mesh;
   protected trunk: THREE.Mesh;
   protected doorL: THREE.Group;
@@ -728,6 +735,9 @@ export abstract class CarCore {
     g.add(mesh);
     if (!front) g.add(this.partSeats[PART_KIND.tailTrim]!);
     g.position.set(0, spec.seat.y, front ? spec.seat.z : -spec.seat.z);
+    mesh.geometry.computeBoundingBox();
+    this.bumperBoxes.push(new THREE.Box3().copy(mesh.geometry.boundingBox ?? new THREE.Box3()).translate(g.position));
+    this.bumperMaterials.push(bumperMaterialId(spec.trim));
     if (front) {
       const grille = this.partSeats[PART_KIND.grille]!;
       grille.position.set(0, GRILLE_SEAT.y, GRILLE_SEAT.z);
@@ -938,8 +948,9 @@ export abstract class CarCore {
       this.parts.push(p);
       return p;
     };
-    add(BUMPER_F, this.bumperF, "bumperFront", 1, 2, "two-point", 0.42).bare = bumperBare(this.style, this.body.geometry, true);
-    add("bumperR", this.bumperR, "bumperRear", 16, 17, "two-point", 0.4).bare = bumperBare(this.style, this.body.geometry, false);
+    this.bumperParts = [add(BUMPER_F, this.bumperF, "bumperFront", 1, 2, "two-point", 0.42), add("bumperR", this.bumperR, "bumperRear", 16, 17, "two-point", 0.4)];
+    this.bumperParts[0].bare = bumperBare(this.style, this.body.geometry, true);
+    this.bumperParts[1].bare = bumperBare(this.style, this.body.geometry, false);
     this.hoodPart = add(LID.hood, this.hood, "bonnet", 3, 3, "cowl", 0.5, newSwing(hoodSpec(this.hoodRest)));
     this.lidPart = add(LID.trunk, this.trunk, "boot", 18, 18, "tail", 0.48, newSwing(lidSpec(this.style.boot)));
     for (const f of this.lampFittings) if (f.share) f.share.lid = f.kind === "hood" ? this.hoodPart : this.lidPart;

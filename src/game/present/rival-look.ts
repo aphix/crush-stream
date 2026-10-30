@@ -1,4 +1,5 @@
-import { SPRAY_PALETTE, carSprayLayout } from "../match/look-data.ts";
+import { SPRAY_PALETTE } from "../match/look-data.ts";
+import { carSprayLayout } from "../vehicle/spray-box.ts";
 import { mulberry32 } from "../world/placements.ts";
 import { shuffledOrder } from "./playlist.ts";
 import type { FxTier } from "./engine-post.ts";

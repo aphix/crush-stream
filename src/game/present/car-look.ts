@@ -3,7 +3,8 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { bumperMaterial, makePaintMaterial, trimMaterial } from "../vehicle/car-materials.ts";
 import { applyDetailMap, ensureRestFrame, REST_FRAME_ATTRIBUTES, restPositions } from "../vehicle/car-detail-map.ts";
 import { PART_KIND } from "../vehicle/part-geometry.ts";
-import { CAR_SPRAY, carPickText, NO_CAR_PICK, type CarPart, type CarPick } from "../match/look-data.ts";
+import { carPickText, NO_CAR_PICK, type CarPart, type CarPick } from "../match/look-data.ts";
+import { CAR_SPRAY } from "../vehicle/spray-box.ts";
 import { applySpray, BARE_SPRAY, sprayUniforms, type SprayBitmap } from "./spray.ts";
 import { CAR_SPRAY_DEPTH_BAND, carSprayDepthTexture, type RestTriangles, type SprayCover } from "./spray-depth.ts";
 

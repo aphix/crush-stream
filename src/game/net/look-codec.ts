@@ -1,4 +1,5 @@
-import { CAR_SPRAY, carPickText, packSpray, parseCarPick, parsePersonPick, PERSON_SPRAY, personPickText, unpackSpray, type CarPick, type PersonPick, type SprayPaint } from "../match/look-data.ts";
+import { carPickText, packSpray, parseCarPick, parsePersonPick, PERSON_SPRAY, personPickText, unpackSpray, type CarPick, type PersonPick, type SprayPaint } from "../match/look-data.ts";
+import { CAR_SPRAY } from "../vehicle/spray-box.ts";
 import { MSG } from "./codec.ts";
 
 /** A player's look as the wire carries it: the picks and both spray bitmaps' paint (an ink per texel, the inks' colours). */

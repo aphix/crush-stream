@@ -54,7 +54,7 @@ const HOT = {
   "src/game/engine/engine-race-field.ts": ["drain"],
   "src/game/scenes/lawn-guard.ts": ["step", "alert", "moveGuards", "faceToward", "runOver", "intruder", "inSights", "fire", "shooter"],
   "src/game/scenes/figure-strike.ts": ["runsDown", "inCarFrame"],
-  "src/game/vehicle/car.ts": ["syncPose", "stepBreakage", "updateSkin"],
+  "src/game/vehicle/car.ts": ["syncPose", "stepBreakage", "updateSkin", "restPointOf", "surfaceAt"],
   "src/game/vehicle/car-parts.ts": ["syncAttachedParts", "advanceFlap", "poseParts", "followGlass", "evaluateBreakage", "stepLooseParts", "freeObjects"],
   "src/game/vehicle/loose-step.ts": ["stepLoose", "landOn"],
   "src/game/vehicle/loose-dent.ts": ["recordDent", "applyDents", "carve"],

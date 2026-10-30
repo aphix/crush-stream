@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CAR_SPRAY, SPRAY_PALETTE } from "../match/look-data.ts";
+import { SPRAY_PALETTE } from "../match/look-data.ts";
+import { CAR_SPRAY } from "../vehicle/spray-box.ts";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
 import { RIVAL_INK_CONTRAST, RIVAL_PATTERNS, RivalLooks, rivalLook } from "./rival-look.ts";
 import type { SprayBitmap } from "./spray.ts";

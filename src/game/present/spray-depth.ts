@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { once } from "../kernel/scalar.ts";
-import { carSprayLayout, depthCode, PERSON_SPRAY, SPRAY_FACE, sprayPlace, type SprayLayout, type SpraySurface } from "../match/look-data.ts";
+import { depthCode, PERSON_SPRAY, type SpraySurface } from "../match/look-data.ts";
+import { carSprayLayout, SPRAY_FACE, sprayPlace, type SprayLayout } from "../vehicle/spray-box.ts";
 import { BONES_ATTRIBUTE } from "./dummy-rig.ts";
 import { PARTS } from "./ragdoll-body.ts";
 import { bodyIndex } from "./dummy-bodies.ts";

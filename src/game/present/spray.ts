@@ -1,11 +1,12 @@
 import * as THREE from "three";
 import { hypot3 } from "../kernel/physics-core.js";
-import { SPRAY_DEPTH_BAND, SPRAY_FACE, SPRAY_PALETTE, sprayFace, type SprayLayout, type SprayPaint, type SpraySurface } from "../match/look-data.ts";
+import { SPRAY_DEPTH_BAND, SPRAY_PALETTE, type SprayPaint, type SpraySurface } from "../match/look-data.ts";
+import { SPRAY_FACE, sprayFace, type SprayLayout } from "../vehicle/spray-box.ts";
 
 /**
  * Spray paint drawn: a bitmap's texels as the premultiplied texture the paint shader samples (`SprayBitmap`), the can's
  * stamp, and the shader patch that lays the paint over a material (`applySpray`), with the face mapping of `sprayFace`
- * (`match/look-data.ts`) in GLSL.
+ * (`vehicle/spray-box.ts`) in GLSL.
  */
 
 /** Along a stroke, a puff every this many dot radii of its travel (world), so a fast drag leaves a line, not dots: the garage's can and the rivals' pen (`rival-pen.ts`) both step by it. */
@@ -144,25 +145,53 @@ export function colourDistance(a: number, b: number): number {
  */
 type SprayDepth = { readonly map: THREE.Texture; readonly band?: number; readonly torn?: THREE.Vector4 };
 
+/** The face mapping's uniforms (`SPRAY_FACE_GLSL`) for a bitmap of `layout`: its rest-frame box and its faces' rectangles (0..1 of the bitmap). */
+function sprayFaceUniforms(layout: SprayLayout): Record<string, THREE.IUniform> {
+  return {
+    sprayMin: { value: new THREE.Vector3(...layout.min) },
+    spraySpan: { value: new THREE.Vector3(layout.max[0] - layout.min[0], layout.max[1] - layout.min[1], layout.max[2] - layout.min[2]) },
+    sprayFaces: { value: layout.faces.map(([x, y, w, h]) => new THREE.Vector4(x / layout.w, y / layout.h, w / layout.w, h / layout.h)) },
+  };
+}
+
 /** The shader's spray uniforms for a bitmap of `layout` sampled from `map`, `rows` bitmaps stacked up it (one per dummy slot), with `depth`'s test. */
 export function sprayUniforms(layout: SprayLayout, map: THREE.Texture, rows: number, depth: SprayDepth | null = null): Record<string, THREE.IUniform> {
   return {
     sprayMap: { value: map },
-    sprayMin: { value: new THREE.Vector3(...layout.min) },
-    spraySpan: { value: new THREE.Vector3(layout.max[0] - layout.min[0], layout.max[1] - layout.min[1], layout.max[2] - layout.min[2]) },
-    sprayFaces: { value: layout.faces.map(([x, y, w, h]) => new THREE.Vector4(x / layout.w, y / layout.h, w / layout.w, h / layout.h)) },
+    ...sprayFaceUniforms(layout),
     sprayRows: { value: rows },
     ...(depth && { sprayDepth: { value: depth.map }, sprayBand: { value: depth.band ?? SPRAY_DEPTH_BAND } }),
     ...(depth?.torn && { sprayTorn: { value: depth.torn } }),
   };
 }
 
-/** `sprayFace` and `sprayDraws` on the GPU: the premultiplied spray over this fragment (none off the box's painted faces, or with no rest normal). */
-const SPRAY_FRAGMENT = /* glsl */ `
-uniform sampler2D sprayMap;
+/** The varyings a patch's vertex sets from the rest frame: every patch declares them unless an earlier one did. */
+const SPRAY_FACE_VARYINGS = "varying vec3 vSprayP;\nvarying vec3 vSprayN;";
+
+/** `sprayFace` on the GPU: `sprayFaceAt()` is this fragment's bitmap st, its depth along its face's axis (0..1) and that axis' span (m); st.x < 0 off the box's painted faces or with no rest normal. */
+const SPRAY_FACE_GLSL = /* glsl */ `
 uniform vec3 sprayMin;
 uniform vec3 spraySpan;
 uniform vec4 sprayFaces[5];
+${SPRAY_FACE_VARYINGS}
+vec4 sprayFaceAt() {
+  vec3 n = vSprayN;
+  vec3 a = abs(n);
+  if (a.x + a.y + a.z < 0.5) return vec4(-1.0);
+  vec3 t = clamp((vSprayP - sprayMin) / spraySpan, 0.0, 1.0);
+  vec4 f;
+  vec2 uv;
+  float depth;
+  float axis;
+  if (a.x >= a.y && a.x >= a.z) { if (n.x < 0.0) { f = sprayFaces[0]; depth = 1.0 - t.x; } else { f = sprayFaces[1]; depth = t.x; } uv = t.zy; axis = spraySpan.x; }
+  else if (a.y >= a.z) { if (n.y < 0.0) return vec4(-1.0); f = sprayFaces[2]; uv = t.zx; depth = t.y; axis = spraySpan.y; }
+  else { if (n.z > 0.0) { f = sprayFaces[3]; depth = t.z; } else { f = sprayFaces[4]; depth = 1.0 - t.z; } uv = t.xy; axis = spraySpan.z; }
+  return vec4(f.xy + uv * f.zw, depth, axis);
+}`;
+
+/** `sprayDraws` on the GPU: the premultiplied spray over this fragment (none off the box's painted faces, or with no rest normal). */
+const SPRAY_FRAGMENT = /* glsl */ `
+uniform sampler2D sprayMap;
 uniform float sprayRows;
 #ifdef SPRAY_DEPTH
 uniform sampler2D sprayDepth;
@@ -171,27 +200,16 @@ uniform float sprayBand;
 #ifdef SPRAY_TORN
 uniform vec4 sprayTorn;
 #endif
-varying vec3 vSprayP;
-varying vec3 vSprayN;
 varying float vSprayRow;
 vec4 sprayTexel() {
-  vec3 n = vSprayN;
-  vec3 a = abs(n);
-  if (a.x + a.y + a.z < 0.5) return vec4(0.0);
-  vec3 t = clamp((vSprayP - sprayMin) / spraySpan, 0.0, 1.0);
-  vec4 f;
-  vec2 uv;
-  float depth;
-  float axis;
-  if (a.x >= a.y && a.x >= a.z) { if (n.x < 0.0) { f = sprayFaces[0]; depth = 1.0 - t.x; } else { f = sprayFaces[1]; depth = t.x; } uv = t.zy; axis = spraySpan.x; }
-  else if (a.y >= a.z) { if (n.y < 0.0) return vec4(0.0); f = sprayFaces[2]; uv = t.zx; depth = t.y; axis = spraySpan.y; }
-  else { if (n.z > 0.0) { f = sprayFaces[3]; depth = t.z; } else { f = sprayFaces[4]; depth = 1.0 - t.z; } uv = t.xy; axis = spraySpan.z; }
-  vec2 st = f.xy + uv * f.zw;
+  vec4 face = sprayFaceAt();
+  if (face.x < 0.0) return vec4(0.0);
+  vec2 st = face.xy;
 #ifdef SPRAY_DEPTH
   vec4 cover = texture2D(sprayDepth, st);
   float code = floor(cover.r * 255.0 + 0.5);
-  float under = (code - 1.0) / 254.0 - depth;
-  bool hidden = code > 0.0 && under > sprayBand / axis;
+  float under = (code - 1.0) / 254.0 - face.z;
+  bool hidden = code > 0.0 && under > sprayBand / face.w;
 #ifdef SPRAY_TORN
   hidden = hidden && dot(sprayTorn, vec4(equal(vec4(floor(cover.g * 255.0 + 0.5)), vec4(1.0, 2.0, 3.0, 4.0)))) > 0.5;
 #endif
@@ -199,6 +217,13 @@ vec4 sprayTexel() {
 #endif
   return texture2D(sprayMap, vec2(st.x, (vSprayRow + st.y) / sprayRows));
 }`;
+
+/** The face mapping declared in `shader` (and its rest-frame `attributes` in the vertex) unless an earlier patch did; a patch's own functions go in before `main`, after it. */
+function declareSprayFace(shader: THREE.WebGLProgramParametersWithUniforms, attributes: string): void {
+  const vertex = shader.vertexShader;
+  shader.vertexShader = vertex.replace("#include <common>", `#include <common>\n${vertex.includes(attributes) ? "" : attributes}\n${vertex.includes(SPRAY_FACE_VARYINGS) ? "" : SPRAY_FACE_VARYINGS}`);
+  if (!shader.fragmentShader.includes(SPRAY_FACE_GLSL)) shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>\n${SPRAY_FACE_GLSL}`);
+}
 
 /**
  * Patch `material` to lay its spray over the paint. `vertex` sets `vSprayP` / `vSprayN` (the rest point and normal) and
@@ -211,11 +236,12 @@ export function applySpray(material: THREE.Material, uniforms: Record<string, TH
   material.onBeforeCompile = (shader, renderer) => {
     prev.call(material, shader, renderer);
     Object.assign(shader.uniforms, uniforms);
+    declareSprayFace(shader, attributes);
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", `#include <common>\n${shader.vertexShader.includes(attributes) ? "" : attributes}\nvarying vec3 vSprayP;\nvarying vec3 vSprayN;\nvarying float vSprayRow;`)
+      .replace("#include <common>", "#include <common>\nvarying float vSprayRow;")
       .replace("#include <begin_vertex>", `#include <begin_vertex>\n${vertex}`);
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", `#include <common>\n${"sprayDepth" in uniforms ? "#define SPRAY_DEPTH\n" : ""}${"sprayTorn" in uniforms ? "#define SPRAY_TORN\n" : ""}${SPRAY_FRAGMENT}`)
+      .replace("void main() {", `${"sprayDepth" in uniforms ? "#define SPRAY_DEPTH\n" : ""}${"sprayTorn" in uniforms ? "#define SPRAY_TORN\n" : ""}${SPRAY_FRAGMENT}\nvoid main() {`)
       .replace("#include <color_fragment>", "#include <color_fragment>\nvec4 sprayS = sprayTexel();\ndiffuseColor.rgb = diffuseColor.rgb * (1.0 - sprayS.a) + sprayS.rgb;");
   };
   material.customProgramCacheKey = () => `${prevKey.call(material)}|spray-${key}`;

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries, mergeVertices } from "three/addons/utils/BufferGeometryUtils.js";
 import { once } from "../kernel/scalar.ts";
-import { MAT } from "../kernel/material-ids.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { detSin, detCos } from "../kernel/physics-core.js";
 import { applyFinish, glslFloat } from "./car-finish.ts";
 import { BARE_METAL_FRAGMENT, BARE_METAL_VERTEX } from "./bare-metal.ts";
@@ -272,11 +272,17 @@ export function trimMaterial(color: number, finish: keyof typeof TRIM_FINISH = "
   return m;
 }
 
-/** A bumper's material for its style's `trim` (`BumperSpec.trim`): the car's `accent` trim when unset, else black, chrome, or its body colour `body` in a painted finish. */
-export function bumperMaterial(trim: BodyStyle["bumpers"]["front"]["trim"], accent: number, body: number): THREE.MeshStandardMaterial {
-  if (trim === "chrome") return trimMaterial(TRIM_CHROME, "chrome");
-  if (trim === "black") return trimMaterial(TRIM_BLACK, "plastic");
-  return trim === "body" ? trimMaterial(body, "paint") : trimMaterial(accent);
+type BumperTrim = BodyStyle["bumpers"]["front"]["trim"];
+/** The trim finish each bumper `trim` (`BumperSpec.trim`) draws in; unset, the car's accent trim in satin. */
+const BUMPER_FINISH = { chrome: "chrome", black: "plastic", body: "paint" } as const;
+
+/** The material id a bumper of `trim` draws in: what it cuts as a striker and whether it takes scratches. */
+export const bumperMaterialId = (trim: BumperTrim): MaterialId => (trim === undefined ? FINISH_MATERIAL.satin : FINISH_MATERIAL[BUMPER_FINISH[trim]]);
+
+/** A bumper's material for its style's `trim`: the car's `accent` trim when unset, else black, chrome, or its body colour `body` in a painted finish. */
+export function bumperMaterial(trim: BumperTrim, accent: number, body: number): THREE.MeshStandardMaterial {
+  if (trim === undefined) return trimMaterial(accent);
+  return trimMaterial(trim === "chrome" ? TRIM_CHROME : trim === "black" ? TRIM_BLACK : body, BUMPER_FINISH[trim]);
 }
 
 /** Roughness/metalness lookup in 0.01 steps: texel (i, j) = roughness i/100 (G), metalness j/100 (B). */

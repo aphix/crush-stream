@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { CAR_SPRAY, NO_CAR_PICK, sprayFace, sprayPlace, SPRAY_FACE } from "../match/look-data.ts";
+import { NO_CAR_PICK } from "../match/look-data.ts";
+import { CAR_SPRAY, sprayFace, sprayPlace, SPRAY_FACE } from "../vehicle/spray-box.ts";
 import { REST_POSITION } from "../vehicle/car-detail-map.ts";
 import { compileHooks } from "../vehicle/car-detail-map.test-util.ts";
 import { DeformableCar } from "../vehicle/car.ts";

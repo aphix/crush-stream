@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { CAR_SPRAY, carPickText, NO_CAR_PICK, NO_PERSON_PICK, packSpray, PERSON_SPRAY, personPickText, SPRAY_PALETTE } from "../match/look-data.ts";
+import { carPickText, NO_CAR_PICK, NO_PERSON_PICK, packSpray, PERSON_SPRAY, personPickText, SPRAY_PALETTE } from "../match/look-data.ts";
+import { CAR_SPRAY } from "../vehicle/spray-box.ts";
 import { packLook, readLook } from "../net/look-codec.ts";
 import { RELAY_MSG_MAX } from "../net/net-hub.test-util.ts";
 import { PlayerLooks } from "./player-looks.ts";

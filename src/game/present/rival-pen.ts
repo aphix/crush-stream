@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { hypot2 } from "../kernel/physics-core.js";
-import { CAR_SPRAY, SPRAY_FACE } from "../match/look-data.ts";
+import { CAR_SPRAY, SPRAY_FACE } from "../vehicle/spray-box.ts";
 import { PUFF_STEP, type SprayBitmap } from "./spray.ts";
 
 /**

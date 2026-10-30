@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { assertSameNumbers } from "../vehicle/test-support.ts";
-import { PERSON_SPRAY, SPRAY_DEPTH_BAND, SPRAY_FACE, sprayFace, sprayPlace, type SpraySurface } from "../match/look-data.ts";
+import { PERSON_SPRAY, SPRAY_DEPTH_BAND, type SpraySurface } from "../match/look-data.ts";
+import { SPRAY_FACE, sprayFace, sprayPlace } from "../vehicle/spray-box.ts";
 import { BODY_VERTICES, bodyIndex } from "./dummy-bodies.ts";
 import { BARE, BELTED, BONES_ATTRIBUTE, BUILD, isDrawn, KINDS_ATTRIBUTE, SHORT_SLEEVES, SNEAKERS } from "./dummy-rig.ts";
 import { dummyGeometry } from "./dummy-skin.ts";

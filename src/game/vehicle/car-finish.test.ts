@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applySpray, BARE_SPRAY, sprayUniforms } from "../present/spray.ts";
-import { CAR_SPRAY, NO_CAR_PICK } from "../match/look-data.ts";
+import { NO_CAR_PICK } from "../match/look-data.ts";
+import { CAR_SPRAY } from "./spray-box.ts";
 import { wearCarLook } from "../present/car-look.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { CrashEngine } from "../engine/engine.ts";

@@ -21,6 +21,7 @@ import { CageRig, centreY } from "./car-cage-rig.ts";
 import { PART_KIND, PartSeat } from "./part-geometry.ts";
 import { setBare } from "./interior.ts";
 import { CLASS_HUBS, CLASS_LIFT, LID } from "./constants.ts";
+import { MAT, type MaterialId } from "../kernel/material-ids.ts";
 import { HUB_PIN_MAX, HUB_PULL_STEP } from "../deform/constants.ts";
 import { passesFor, smoothingNow, smoothNormals } from "./normal-smooth.ts";
 
@@ -33,6 +34,7 @@ const _v = new THREE.Vector3();
 const _in = new THREE.Vector3();
 const _zero = new THREE.Vector3();
 const _wantQuaternion = new THREE.Quaternion();
+const _restTurn = new THREE.Quaternion();
 
 /** A wreck rests this long (s) before it sleeps: a toppling pile pauses on the way over, and a monster settling on a bank creeps to its pose for most of a second after it first slows under `REST_SPEED`. */
 export const WRECK_REST_S = 1;
@@ -1009,6 +1011,44 @@ export class DeformableCar extends CarParts {
     if (body) out[n++] = body;
     for (let i = 0; i < this.wheels.length; i++) if (!this.looseWheels[i]!.loose) out[n++] = this.wheels[i]!;
     return n;
+  }
+
+  /** `world` in the rest frame (`ensureRestFrame`'s: the group's, the class lift taken off), less the crush of the body mass nearest it, into `out`: where on the undented car that point of the dented one sits. */
+  restPointOf(world: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
+    out.copy(world).sub(this.group.position).applyQuaternion(_restTurn.copy(this.group.quaternion).invert());
+    const lift = this.classBodyObject();
+    if (lift) out.sub(lift.position).applyQuaternion(_restTurn.copy(lift.quaternion).invert());
+    const masses = this.deform.masses;
+    let nearest = -1;
+    let best = Infinity;
+    for (let i = 0; i < masses.length; i++) {
+      const m = masses[i]!;
+      const d = m.local.distanceToSquared(out);
+      if (m.hub || d >= best) continue;
+      best = d;
+      nearest = i;
+    }
+    if (nearest < 0) return out;
+    const m = masses[nearest]!;
+    return out.set(out.x - m.local.x + m.rest.x, out.y - m.local.y + m.rest.y, out.z - m.local.z + m.rest.z);
+  }
+
+  /** The material at rest point `rest` (`restPointOf`): an attached bumper's inside its rest box, a tyre's on a wheel still on, else the body's paint. */
+  surfaceAt(rest: THREE.Vector3): MaterialId {
+    for (let i = 0; i < 2; i++) if (!this.bumperParts[i]!.detached && this.bumperBoxes[i]!.containsPoint(rest)) return this.bumperMaterials[i]!;
+    const scale = this.wheels[0]!.scale.x;
+    const r = this.frame.rig.tyre.r * scale;
+    const halfW = this.frame.rig.tyre.halfW * scale;
+    const liftY = this.classBodyObject()?.position.y ?? 0;
+    for (let i = 0; i < 4; i++) {
+      if (this.looseWheels[i]!.loose) continue;
+      const hubs = this.wheels[i]!.parent;
+      const hub = this.frame.wheels[i]!;
+      const dy = rest.y - hub[1] - (hubs === null || hubs === this.group ? 0 : hubs.position.y) + liftY;
+      const dz = rest.z - hub[2];
+      if (dy * dy + dz * dz < r * r && Math.abs(rest.x) > Math.abs(hub[0]) - halfW) return MAT.TYRE;
+    }
+    return MAT.CAR_PAINT;
   }
 
 }

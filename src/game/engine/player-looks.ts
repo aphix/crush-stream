@@ -1,5 +1,6 @@
 import type { LookData } from "../net/look-codec.ts";
-import { carPickText, CAR_SPRAY, NO_CAR_PICK, NO_PERSON_PICK, packSpray, parseCarPick, parsePersonPick, PERSON_SPRAY, personPickText, unpackSpray, type CarPick, type PersonPick, type SprayPaint } from "../match/look-data.ts";
+import { carPickText, NO_CAR_PICK, NO_PERSON_PICK, packSpray, parseCarPick, parsePersonPick, PERSON_SPRAY, personPickText, unpackSpray, type CarPick, type PersonPick, type SprayPaint } from "../match/look-data.ts";
+import { CAR_SPRAY } from "../vehicle/spray-box.ts";
 import { SprayBitmap } from "../present/spray.ts";
 
 /** A player's look as worn: the picks and both spray bitmaps, drawn. */

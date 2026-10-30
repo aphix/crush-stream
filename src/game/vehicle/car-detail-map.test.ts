@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { applySpray, BARE_SPRAY, sprayUniforms } from "../present/spray.ts";
-import { CAR_SPRAY } from "../match/look-data.ts";
+import { CAR_SPRAY } from "./spray-box.ts";
 import { runWall } from "../contact/crash-scenarios.test-util.ts";
 import { DeformableCar } from "./car.ts";
 import { applyDetailMap, REST_FRAME_ATTRIBUTES } from "./car-detail-map.ts";
