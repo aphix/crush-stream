@@ -20,9 +20,9 @@ const RATES = [1 / QUIET_HZ, 1 / FINE_HZ] as const;
 const DEFAULT_REALISM = HANDLING.realism;
 const LAYOUTS: readonly Driveline[] = ["fwd", "rwd", "awd", "4wd"];
 const FULL: DriveInput = { ...idleDrive(), throttle: 1 };
-/** Seconds a launch is watched for its spin to build, and a lift for it to fade: on grass a road tyre's 0.45 grip and its 0.45 rolling-resistance floor (`TYRES.road`) slow the fade to about 1.4 s (1 s on the bare grass's). */
+/** Seconds a launch is watched for its spin to build, and a lift for it to fade. */
 const BUILD_S = 1;
-const FADE_S = 1.5;
+const FADE_S = 1;
 /** The slip ratio a launch on grass passes (measured peak 0.79) and the gauge drop that reads as an upshift. */
 const SPIN_PASSED = 0.6;
 const SHIFT_DROP = 0.3;
@@ -248,10 +248,12 @@ for (const H of RATES) {
       });
     });
 
-    describe("given the sedan launched flat out on grass, then lifted off at 10 m/s", () => {
-      it("when it launches, then the spin passes 0.6 within a second and is 0 on asphalt; when it lifts, then the spin fades over the driveline's rotating mass, never in one slice, and is gone within 1.5 s", () => {
+    // On the truck: grass is ground its all-terrain tyre suits (`TYRES`): its spin peaks at 0.81 and is gone 0.56 s after the lift. The sedan's road tyre
+    // grips 0.45 there and rolls at its 0.45 floor by design, so its spin, 0.98 s to fade on the bare grass, took 1.41 s (the class-pace ruling's).
+    describe("given the truck launched flat out on grass, then lifted off at 10 m/s", () => {
+      it("when it launches, then the spin passes 0.6 within a second and is 0 on asphalt; when it lifts, then the spin fades over the driveline's rotating mass, never in one slice, and is gone within a second", () => {
         let most = 0;
-        const car = drive("sedan", flat(SURFACE.grass), BUILD_S, H, FULL, (c) => (most = Math.max(most, c.drive.spin)));
+        const car = drive("truck", flat(SURFACE.grass), BUILD_S, H, FULL, (c) => (most = Math.max(most, c.drive.spin)));
         expect(most, `the spin peaked at ${most.toFixed(2)}`).toBeGreaterThan(SPIN_PASSED);
         // Up to 10 m/s, still on the gas, on the grass.
         while (along(car) < 10) {
@@ -259,12 +261,12 @@ for (const H of RATES) {
           car.integrate(H);
         }
         expect(car.drive.spinSpeed, `lifting with ${car.drive.spinSpeed.toFixed(2)} m/s of spin`).toBeGreaterThan(1);
-        const k = CLASSES.sedan;
+        const k = CLASSES.truck;
         let gone = Infinity;
         let steps = 0;
         let was = car.drive.spinSpeed;
         let bodyWas = along(car);
-        drive("sedan", flat(SURFACE.grass), FADE_S, H, idleDrive(), (c, t) => {
+        drive("truck", flat(SURFACE.grass), FADE_S, H, idleDrive(), (c, t) => {
           // The most the tyres take off the spin in a slice: the road's traction on the wheel's rotating mass (`rotatingShare` at the wheel speed the slice began at), plus what the body itself lost.
           const most = tractionLimit(car.frame, k, tyreGrip(k.tyre, SURFACES.grass), tyreGrip(k.tyre, SURFACES.grass), HANDLING.realism) * (1 + 1 / rotatingShare(car.frame, k, bodyWas + was)) * H + Math.max(0, bodyWas - along(c));
           if (was - c.drive.spinSpeed > most * 1.01 + 1e-9) steps++;
@@ -276,7 +278,7 @@ for (const H of RATES) {
         expect(gone, `the spin was gone ${gone.toFixed(2)} s after the lift`).toBeLessThanOrEqual(FADE_S);
         let onAsphalt = 0;
         HANDLING.realism = 0;
-        drive("sedan", flat(SURFACE.asphalt), BUILD_S, H, FULL, (c) => (onAsphalt = Math.max(onAsphalt, c.drive.spin)));
+        drive("truck", flat(SURFACE.asphalt), BUILD_S, H, FULL, (c) => (onAsphalt = Math.max(onAsphalt, c.drive.spin)));
         expect(onAsphalt, "no spin on asphalt at the arcade end").toBe(0);
       });
     });

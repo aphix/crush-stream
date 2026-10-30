@@ -9,6 +9,7 @@ import {
   armKill,
   assignClass,
   CLASSES,
+  cornerSpeed,
   enginePower,
   gearAt,
   gearHi,
@@ -68,6 +69,59 @@ function timeToTop(id: VehicleClassId, v: number, realism: number): number {
   return knee / launch + (v * v - knee * knee) / (2 * power);
 }
 
+// --- a mixed test loop: rounded rectangle, two hairpins and two sweepers ------
+
+type Loop = { x: number[]; z: number[]; r: number[]; s: number[]; length: number };
+
+/** 110 × 60 m box, corner radii 8 / 24 / 8 / 24, sampled every ~1 m, counter-clockwise from the bottom straight. */
+function mixedLoop(): Loop {
+  const W = 110;
+  const D = 60;
+  const radii = [8, 24, 8, 24];
+  const corners = [
+    [W, 0],
+    [W, D],
+    [0, D],
+    [0, 0],
+  ] as const;
+  const x: number[] = [];
+  const z: number[] = [];
+  const r: number[] = [];
+  const add = (px: number, pz: number, rad: number) => {
+    x.push(px);
+    z.push(pz);
+    r.push(rad);
+  };
+  for (let c = 0; c < 4; c++) {
+    const rad = radii[c]!;
+    const prevRad = radii[(c + 3) % 4]!;
+    const [cx, cz] = corners[c]!;
+    const [px, pz] = corners[(c + 3) % 4]!;
+    // Straight from the previous corner's exit to this corner's entry.
+    const dx = Math.sign(cx - px);
+    const dz = Math.sign(cz - pz);
+    const len = Math.hypot(cx - px, cz - pz) - prevRad - rad;
+    for (let t = 0; t < len; t += 1) add(px + dx * (prevRad + t), pz + dz * (prevRad + t), Infinity);
+    // Quarter arc turning left (CCW seen from +y: heading (dx,dz) → (−dz… )) round the inside centre.
+    const nx = -dz;
+    const nz = dx;
+    const ox = cx - dx * rad + nx * rad;
+    const oz = cz - dz * rad + nz * rad;
+    const a0 = Math.atan2(-nz, -nx);
+    const steps = Math.ceil((Math.PI / 2) * rad);
+    for (let i = 0; i < steps; i++) {
+      const a = a0 + (i / steps) * (Math.PI / 2) * Math.sign(dx * nz - dz * nx);
+      add(ox + Math.cos(a) * rad, oz + Math.sin(a) * rad, rad);
+    }
+  }
+  const s: number[] = [0];
+  for (let i = 1; i <= x.length; i++) {
+    const j = i % x.length;
+    s.push(s[i - 1]! + Math.hypot(x[j]! - x[i - 1]!, z[j]! - z[i - 1]!));
+  }
+  return { x, z, r, s, length: s[x.length]! };
+}
+
 for (const H of RATES) {
   describe(`given the sim stepped at ${Math.round(1 / H)} Hz`, () => {
     function step(car: DeformableCar, input: DriveInput, h = H): void {
@@ -76,6 +130,65 @@ for (const H of RATES) {
       car.group.position.z += car.velocity.z * h;
       car.refreshBasis();
     }
+
+    /** Flying-lap time (s) of class `id` round `loop`, driven by a planner that knows only `classStats`. */
+    function lapTime(id: VehicleClassId, loop: Loop): number {
+      const k = CLASSES[id];
+      const car = classCar(id);
+      const n = loop.x.length;
+      car.spawnFacing(loop.x[0]!, loop.z[0]!, Math.atan2(loop.x[1]! - loop.x[0]!, loop.z[1]! - loop.z[0]!), 0);
+      const input = idleDrive();
+      let idx = 0;
+      let travelled = 0;
+      let lapStart = -1;
+      for (let t = 0; t < 120; t += H) {
+        const px = car.group.position.x;
+        const pz = car.group.position.z;
+        // Progress: walk the index forward while the next sample is closer.
+        for (let g = 0; g < 8; g++) {
+          const j = (idx + 1) % n;
+          if (Math.hypot(loop.x[j]! - px, loop.z[j]! - pz) > Math.hypot(loop.x[idx]! - px, loop.z[idx]! - pz)) break;
+          travelled += loop.s[idx + 1]! - loop.s[idx]!;
+          idx = j;
+        }
+        if (lapStart < 0 && travelled >= loop.length) lapStart = t;
+        if (lapStart >= 0 && travelled >= 2 * loop.length) return t - lapStart;
+        const v = Math.hypot(car.velocity.x, car.velocity.z);
+        const look = (idx + Math.round(4 + 0.35 * v)) % n;
+        const want = Math.atan2(loop.x[look]! - px, loop.z[look]! - pz);
+        const heading = Math.atan2(car.fwdFlat.x, car.fwdFlat.z);
+        const err = Math.atan2(Math.sin(want - heading), Math.cos(want - heading));
+        let target = k.topSpeed;
+        for (let ahead = 0; ahead < 60; ahead += 2) {
+          const r = loop.r[(idx + ahead) % n]!;
+          if (r === Infinity) continue;
+          target = Math.min(target, Math.sqrt(cornerSpeed(k, r) ** 2 * 0.85 + 2 * k.brake * 0.6 * ahead));
+        }
+        input.steer = THREE.MathUtils.clamp(err * 2.4, -1, 1);
+        input.throttle = v < target ? 1 : 0;
+        input.brake = v > target + 1 ? 1 : 0;
+        step(car, input);
+      }
+      throw new Error(`${id} never finished two laps`);
+    }
+
+    // Every class held within 5 % of the field's mean here (the stat budget) until the owner's class-pace ruling: each class keeps it among the
+    // classes on its own tyre (the road ones: measured within 2.6 %), the truck laps behind every road class (14.09 s against the SUV's 13.94)
+    // and the monster is last by far (17.15 s, 28 % over the hatch's 13.35): no straight here is long enough for the muscle's top to tell.
+    describe("given the mixed test loop (a 110 m by 60 m rounded rectangle with two hairpins and two sweepers), driven by a planner that knows only each class's published stats", () => {
+      it("when every vehicle class laps it, then each road-tyred class is within 5 % of their mean, the truck is slower than every one of them and the monster at least 20 % slower than the fastest", (t) => {
+        const loop = mixedLoop();
+        const times = VEHICLE_CLASS_IDS.map((id) => lapTime(id, loop));
+        const lap = (id: VehicleClassId) => times[VEHICLE_CLASS_IDS.indexOf(id)]!;
+        const road = VEHICLE_CLASS_IDS.filter((id) => CLASSES[id].tyre === "road").map(lap);
+        const mean = road.reduce((a, b) => a + b, 0) / road.length;
+        const table = VEHICLE_CLASS_IDS.map((id, i) => `${id} ${times[i]!.toFixed(2)} s`).join(", ");
+        t.annotate(`${loop.length.toFixed(0)} m loop: ${table}`);
+        for (const time of road) expect(Math.abs(time / mean - 1), `laps: ${table} (road mean ${mean.toFixed(2)})`).toBeLessThanOrEqual(0.05);
+        expect(lap("truck"), `laps: ${table}`).toBeGreaterThan(Math.max(...road));
+        expect(lap("monster") / Math.min(...times), `laps: ${table}`).toBeGreaterThanOrEqual(1.2);
+      });
+    });
 
     describe("given the published stats of the vehicle classes", () => {
       it("when the classes are compared, then muscle is fastest flat out, the monster is slowest to turn, muscle slides more than the sedan and the truck is heavier than the sedan", () => {

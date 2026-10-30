@@ -50,7 +50,10 @@ each surface, shortcuts included), seconds and gap to the best:
 
 Before the tyres every class sat within 6 % of the best on every course, the monster ahead of the sedan, hatchback, SUV and truck on
 the paved City and Mall, and the muscle best on Razor Shelf. `class-pace.test.ts` holds the Mall (monster ≥ 15 % off the muscle) and
-Razor Shelf (monster within 5 % of the best, muscle at least 10 % off it).
+Razor Shelf (monster within 5 % of the best, muscle at least 10 % off it). `vehicle-classes.test.ts` laps each class on a 313 m paved
+loop with two 8 m hairpins and two 24 m sweepers (once the stat budget's: every class within 5 % of the mean): the road-tyred classes
+stay within 5 % of their mean, the truck laps behind all of them and the monster at least 20 % off the fastest (measured 28 %); its
+straights are too short for the muscle's top to tell.
 
 - **Drift** is how readily boost at full lock kicks the tail out and how long the slide runs before the assist catches it.
 - **Mass** sets the launch and brake feel through `gears` / `brake`; collision masses are the shared rig's.
