@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { PaintScrapes, SCRAPE_MAX, STROKE_BYTES } from "./paint-scrapes.ts";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { PaintScrapes, SCRAPE_MAX, STROKE_BYTES, paintCover } from "./paint-scrapes.ts";
 import { CAR_SPRAY, SPRAY_FACE } from "./spray-box.ts";
+import { FITTING_ATTRIBUTE, FITTING_TONE } from "./constants.ts";
 
 /** A flank's texel column of rest z (m) and texel row of rest height y (m). */
 const flankU = (z: number) => Math.floor(((z - CAR_SPRAY.min[2]) / (CAR_SPRAY.max[2] - CAR_SPRAY.min[2])) * CAR_SPRAY.faces[SPRAY_FACE.left]![2]);
@@ -35,5 +37,29 @@ describe("given a car whose 32 strokes are full: a 4 x 8 grid on its left flank 
     expect(after.some((b) => { const [u0, u1] = b.split(",").map(Number); return Math.min(u0!, u1!) <= merged[0]! + 1 && Math.max(u0!, u1!) >= merged[1]! - 1; }), `one stroke spans the first and the short one: ${after.join(" | ")}`).toBeTruthy();
     const kept = before.slice(1, SCRAPE_MAX - 1);
     expect(kept.every((b) => after.includes(b)), "every other stroke kept, byte for byte").toBeTruthy();
+  });
+});
+
+describe("given a rear bumper's one mesh: its own trim left of the middle, a black fitting drawn in it right of the middle, both facing back at 0.3-0.5 m", () => {
+  const quad = (x: number, tone: number) => {
+    const geo = new THREE.PlaneGeometry(0.4, 0.2).rotateY(Math.PI).translate(x, 0.4, CAR_SPRAY.min[2] + 0.05);
+    return geo.setAttribute(FITTING_ATTRIBUTE, new THREE.Float32BufferAttribute(new Float32Array(geo.getAttribute("position").count).fill(tone), 1));
+  };
+  const group = new THREE.Group();
+  group.add(new THREE.Mesh(mergeGeometries([quad(-0.3, 0), quad(0.3, FITTING_TONE.black)])));
+  const cover = paintCover({}, group.children as THREE.Mesh[], group);
+  /** A car with that bumper's cover after one hard 30 cm slide along its back at 0.4 m, centred at `x`. */
+  const slid = (x: number) => {
+    const s = new PaintScrapes();
+    s.cover = cover;
+    s.scrape(new THREE.Vector3(x, 0.4, CAR_SPRAY.min[2]), new THREE.Vector3(0, 0, -1), new THREE.Vector3(1, 0, 0), new THREE.Vector2(0.4, 0.4), 0.15, 3, 1);
+    s.slice(0.25);
+    s.slice(0.25);
+    return s;
+  };
+
+  it("when it slides along the fitting, then no stroke is kept (the fitting shows none), and along the trim one is", () => {
+    expect(slid(-0.3).count, "the control: the trim keeps the slide").toBe(1);
+    expect(list(slid(0.3)), "the fitting's strokes").toEqual([]);
   });
 });

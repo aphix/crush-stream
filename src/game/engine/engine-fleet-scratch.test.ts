@@ -6,7 +6,7 @@ import type { CrashEngine } from "./engine.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
 import { bootEngine, runSeconds, stubBrowser } from "./engine-headless.test-util.ts";
 import { REST_NORMAL, REST_POSITION, restNormals, restPositions } from "../vehicle/car-detail-map.ts";
-import { PRIMER_ATTRIBUTE, PRIMER_MATERIAL } from "../vehicle/constants.ts";
+import { FITTED_OVER, FITTING_ATTRIBUTE, PRIMER_ATTRIBUTE, PRIMER_MATERIAL } from "../vehicle/constants.ts";
 import { TAKES_SCRATCH, type MaterialId } from "../kernel/material-ids.ts";
 import { CAR_SPRAY, SPRAY_FACE, sprayFace } from "../vehicle/spray-box.ts";
 import { FACE_MASK, FACE_WIDTH, STROKE_BYTES, U0, U1, V0, V1 } from "../vehicle/paint-scrapes.ts";
@@ -19,28 +19,32 @@ const RUN_S = 20;
 const SUB = 3;
 const PAINT_CODES = PRIMER_MATERIAL.filter(([, id]) => TAKES_SCRATCH.has(id)).map(([code]) => code);
 
-/** A paint as `paints` raycasts it: `geometry`'s triangles at rest points `rest`, with rest normals `normal` and primer codes `primer` (all paint without). */
-function paintMesh(geometry: THREE.BufferGeometry, rest: THREE.BufferAttribute, normal: THREE.BufferAttribute, primer: THREE.BufferAttribute | undefined): THREE.Mesh {
+/** `geometry`'s per-vertex `name` as built (all 0 without it): copied, so a tear that bares a primer later doesn't move it. */
+const builtTone = (geometry: THREE.BufferGeometry, name: string, count: number) => new THREE.BufferAttribute(geometry.hasAttribute(name) ? Float32Array.from(geometry.getAttribute(name).array) : new Float32Array(count), 1);
+
+/** A paint as `paints` raycasts it: `geometry`'s triangles at rest points `rest`, with rest normals `normal`, and its primer codes and fitting tones (`FITTING_ATTRIBUTE`). */
+function paintMesh(geometry: THREE.BufferGeometry, rest: THREE.BufferAttribute, normal: THREE.BufferAttribute): THREE.Mesh {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", rest);
   geo.setAttribute("restNormal", normal);
-  geo.setAttribute("primer", new THREE.BufferAttribute(primer ? Float32Array.from(primer.array) : new Float32Array(rest.count), 1));
+  geo.setAttribute("primer", builtTone(geometry, PRIMER_ATTRIBUTE, rest.count));
+  geo.setAttribute("fitting", builtTone(geometry, FITTING_ATTRIBUTE, rest.count));
   geo.setIndex(geometry.index);
   return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
 }
 
-/** A car's paints as built: its skins (body, lids, door skins) with the rest frame and primer codes their shader reads before a tear bares any, and its bumpers whose finish takes scratches, at rest where they are attached (their trim has no primer: all of it scratches). */
+/** A car's paints as built: its skins (body, lids, door skins) with the rest frame and primer codes their shader reads before a tear bares any, and its bumpers whose finish takes scratches, at rest where they are attached (their trim has no primer; the fittings drawn in it show none). */
 function restPaints(car: DeformableCar): THREE.Mesh[] {
   const m = car.lookMeshes();
   const skins = [m.body, m.hood, m.trunk, ...m.doors].map((mesh) => {
     const rest = mesh.geometry.getAttribute(REST_POSITION) as THREE.BufferAttribute | undefined;
     must(rest, `the control: the ${car.style.id}'s paint has its rest frame`);
-    return paintMesh(mesh.geometry, rest, mesh.geometry.getAttribute(REST_NORMAL) as THREE.BufferAttribute, mesh.geometry.getAttribute(PRIMER_ATTRIBUTE) as THREE.BufferAttribute | undefined);
+    return paintMesh(mesh.geometry, rest, mesh.geometry.getAttribute(REST_NORMAL) as THREE.BufferAttribute);
   });
   const bumpers = m.bumpers.filter((mesh) => TAKES_SCRATCH.has((mesh.material as THREE.Material).userData.materialId as MaterialId));
   return [
     ...skins,
-    ...bumpers.map((mesh) => paintMesh(mesh.geometry, new THREE.BufferAttribute(restPositions(mesh, mesh.geometry, car.group), 3), new THREE.BufferAttribute(restNormals(mesh, mesh.geometry, car.group), 3), undefined)),
+    ...bumpers.map((mesh) => paintMesh(mesh.geometry, new THREE.BufferAttribute(restPositions(mesh, mesh.geometry, car.group), 3), new THREE.BufferAttribute(restNormals(mesh, mesh.geometry, car.group), 3))),
   ];
 }
 
@@ -68,7 +72,8 @@ function onPaint(paints: THREE.Mesh[], face: number, u: number, v: number): bool
         const n = THREE.Triangle.getInterpolatedAttribute(g.getAttribute("restNormal") as THREE.BufferAttribute, ia, ib, ic, hit.barycoord!, new THREE.Vector3());
         if (sprayFace(CAR_SPRAY, hit.point, n, uv) !== face) continue;
         const p = THREE.Triangle.getInterpolatedAttribute(g.getAttribute("primer") as THREE.BufferAttribute, ia, ib, ic, hit.barycoord!, new THREE.Vector4()).x;
-        if (paintWeight(p) > 0) return true;
+        const fitting = THREE.Triangle.getInterpolatedAttribute(g.getAttribute("fitting") as THREE.BufferAttribute, ia, ib, ic, hit.barycoord!, new THREE.Vector4()).x;
+        if (paintWeight(p) > 0 && fitting <= FITTED_OVER) return true;
       }
     }
   }

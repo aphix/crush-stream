@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { CAR_SPRAY, sprayFace, sprayPlace } from "./spray-box.ts";
 import { takesScratch } from "./bare-metal.ts";
 import { restNormals, restPositions } from "./car-detail-map.ts";
-import { PRIMER_ATTRIBUTE } from "./constants.ts";
+import { FITTED_OVER, FITTING_ATTRIBUTE, PRIMER_ATTRIBUTE } from "./constants.ts";
 
 /** Strokes a car keeps (6 bytes each): a full list merges its two nearest strokes on one face to make room, so a new scrape always shows. */
 export const SCRAPE_MAX = 32;
@@ -406,10 +406,11 @@ const _n = new THREE.Vector3();
 const _tx = new Float64Array(6);
 const _dp = new Float64Array(3);
 const _pr = new Float64Array(3);
+const _ft = new Float64Array(3);
 
 /**
  * The `CAR_SPRAY` texels where some fragment of `meshes` (in `group`'s rest frame, as built) draws a stroke, as the shader does
- * (the face its interpolated rest normal picks, its interpolated primer taking scratches): 0 none, else 1 + how far (mm, to 254)
+ * (the face its interpolated rest normal picks, its interpolated primer taking scratches, its interpolated fitting tone not a fitting's): 0 none, else 1 + how far (mm, to 254)
  * the texel lies behind the outermost surface of the face within `PROUD_ALONG` × `PROUD_ACROSS` of it, which a striker meets first.
  * One per `style`: its cars are built alike.
  */
@@ -423,6 +424,7 @@ export function paintCover(style: object, meshes: readonly THREE.Mesh[], group: 
     const pos = restPositions(mesh, geo, group);
     const nrm = restNormals(mesh, geo, group);
     const primer = geo.getAttribute(PRIMER_ATTRIBUTE)?.array;
+    const fitting = geo.getAttribute(FITTING_ATTRIBUTE)?.array;
     const index = geo.index;
     const count = index ? index.count : pos.length / 3;
     for (let i = 0; i + 2 < count; i += 3) {
@@ -433,6 +435,7 @@ export function paintCover(style: object, meshes: readonly THREE.Mesh[], group: 
         _tri[k].fromArray(pos, v * 3);
         _nrm[k].fromArray(nrm, v * 3);
         _pr[k] = primer ? primer[v]! : 0;
+        _ft[k] = fitting ? fitting[v]! : 0;
         const f = sprayFace(CAR_SPRAY, _tri[k], _nrm[k], _uv);
         if (k > 0 && f !== face) same = false;
         face = f;
@@ -448,7 +451,7 @@ export function paintCover(style: object, meshes: readonly THREE.Mesh[], group: 
   return cover;
 }
 
-/** Marks in `cover` the texels of `face` where a sample of triangle `_tri` (corner normals `_nrm`, primers `_pr`) takes scratches, and in `depth` the outermost (m) any sample reaches; with `pick` only samples whose interpolated normal picks `face`. */
+/** Marks in `cover` the texels of `face` where a sample of triangle `_tri` (corner normals `_nrm`, primers `_pr`, fitting tones `_ft`) takes scratches, and in `depth` the outermost (m) any sample reaches; with `pick` only samples whose interpolated normal picks `face`. */
 function rasterize(cover: Uint8Array, depth: Float32Array, face: number, pick: boolean): void {
   const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!;
   for (let k = 0; k < 3; k++) {
@@ -478,7 +481,7 @@ function rasterize(cover: Uint8Array, depth: Float32Array, face: number, pick: b
         if (wa < 0 || wb < 0 || wc < 0) continue;
         if (pick && sprayFace(CAR_SPRAY, _tri[0], _n.copy(_nrm[0]).multiplyScalar(wa).addScaledVector(_nrm[1], wb).addScaledVector(_nrm[2], wc), _uv) !== face) continue;
         depth[at] = Math.max(depth[at]!, wa * _dp[0]! + wb * _dp[1]! + wc * _dp[2]!);
-        if (takesScratch(wa * _pr[0]! + wb * _pr[1]! + wc * _pr[2]!)) cover[at] = 1;
+        if (wa * _ft[0]! + wb * _ft[1]! + wc * _ft[2]! <= FITTED_OVER && takesScratch(wa * _pr[0]! + wb * _pr[1]! + wc * _pr[2]!)) cover[at] = 1;
       }
     }
   }

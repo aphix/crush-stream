@@ -43,6 +43,8 @@ export const PRIMER_MATERIAL: readonly (readonly [code: number, id: MaterialId])
 /** A bumper's per-vertex trim attribute: 0 the bumper's own trim, `FITTING_TONE` black or chrome (its exhaust tips and tow hitch, drawn in its one mesh). */
 export const FITTING_ATTRIBUTE = "fitting";
 export const FITTING_TONE = { black: 1, chrome: 2 } as const;
+/** A fragment whose interpolated `FITTING_ATTRIBUTE` is over this draws as a fitting (`withFittings`), not the trim: no scratch shows there. */
+export const FITTED_OVER = FITTING_TONE.black - 0.5;
 /**
  * A glass pane's per-vertex tone, a vec2 (`glassMaterial`'s hook reads it; a mesh without it reads 0, 0: clear glass): x 1 on black frit,
  * y 1 on a privacy pane (darker, its opacity floored), `MATTE_PRIVACY` on a matte one (rougher too).

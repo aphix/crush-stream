@@ -252,7 +252,7 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
   heights, a tall car's on a low one's where they really meet. Each stroke is cut to the run of it that lies on drawn paint: the
   style's paint cover (`paintCover`, built once per style from the body, lid and door skins at rest: the `CAR_SPRAY` texels where a
   fragment's rest normal picks that face and its interpolated primer takes scratches, as the shader weighs it), so a slide at window,
-  roof-rail or under-sill height burns none of the 32; the arch lips are paint and take them, and so do the bumpers (in the cover from their own skins). The cover also holds each
+  roof-rail or under-sill height burns none of the 32; the arch lips are paint and take them, and so do the bumpers (in the cover from their own skins), but not the exhaust tips, tow hitch and band inlays drawn in a bumper's mesh (its fitting tone, as the shader reads it: they show no marks). The cover also holds each
   painted texel's recess: how far (mm) it lies behind the outermost surface of its face within 0.3 m along and 0.2 m across, which a
   striker meets first (the sim reads only paint or not). Present draws each scratched car's RG8 wear mask from that list (`present/paint-scratch.ts` `PaintScratches`, once a
   frame for every drawn car, only when the list's version moves, redrawing only the changed strokes' rects and uploading their rows):

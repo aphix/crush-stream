@@ -7,7 +7,7 @@ import { detSin, detCos } from "../kernel/physics-core.js";
 import { applyFinish, glslFloat } from "./car-finish.ts";
 import { BARE_METAL_FRAGMENT, BARE_METAL_VERTEX } from "./bare-metal.ts";
 import { CANDY_COAT_GLSL, CANDY_COLOR_GLSL, CANDY_FILM, CANDY_FILM_GLSL, CANDY_METALNESS_GLSL, CANDY_PARS_GLSL, CANDY_ROUGHNESS_GLSL, CANDY_STRENGTH, CANDY_TIER } from "./car-candy.ts";
-import { FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE, PRIMER_MATERIAL } from "./constants.ts";
+import { FITTED_OVER, FITTING_ATTRIBUTE, FITTING_TONE, GLASS_ATTRIBUTE, PRIMER_MATERIAL } from "./constants.ts";
 import { CAR_MATERIAL_ENV_GLSL, MATERIAL_STRENGTH, MATERIAL_STRENGTH_GLSL } from "./material-class.ts";
 import type { BodySource } from "./car-mesh.ts";
 import type { BodyStyle } from "./car-variants.ts";
@@ -237,7 +237,7 @@ const FITTING_MATERIAL = [[FITTING_TONE.black, MAT.FITTING_BLACK], [FITTING_TONE
 /** Fittings drawn in the trim's one mesh: a `FITTING_ATTRIBUTE` vertex (0 on a mesh without one) of a `FITTING_TONE` takes that tone's colour and finish. Wraps `capHighlights`' compile hook. */
 function withFittings<T extends THREE.MeshStandardMaterial>(m: T): T {
   const cap = m.onBeforeCompile;
-  const fitted = `vFitting > ${FITTING_TONE.black - 0.5}`;
+  const fitted = `vFitting > ${FITTED_OVER}`;
   const chrome = `vFitting > ${FITTING_TONE.chrome - 0.5}`;
   const { chrome: shine, plastic } = TRIM_FINISH;
   m.onBeforeCompile = (shader, renderer) => {
