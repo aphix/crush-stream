@@ -242,7 +242,10 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
 - **Paint scratches:** a car-car slide leaves strokes in the car's list (`vehicle/paint-scrapes.ts`, sim state on the wire and in
   the keyframe), over the heights the two bodies share at the contact (`satCars`'s `patch.low`/`high`): each 0.2 s commit lays its
   stroke level on the next lane across that band (golden-ratio steps, 10 % clear of each end), so a sideswipe's lines lie at many
-  heights, a tall car's on a low one's where they really meet. Present draws each scratched car's RG8 wear mask from that list (`present/paint-scratch.ts` `PaintScratches`, once a
+  heights, a tall car's on a low one's where they really meet. Each stroke is cut to the run of it that lies on drawn paint: the
+  style's paint cover (`paintCover`, built once per style from the body, lid and door skins at rest: the `CAR_SPRAY` texels where a
+  fragment's rest normal picks that face and its interpolated primer takes scratches, as the shader weighs it), so a slide at window,
+  roof-rail, arch or bumper height burns none of the 32. Present draws each scratched car's RG8 wear mask from that list (`present/paint-scratch.ts` `PaintScratches`, once a
   frame for every drawn car, only when the list's version moves, redrawing only the changed strokes' rects and uploading their rows):
   R is a stroke's severity in a capsule its width wide on the `CAR_SPRAY` box, G is reserved for dents. The paint's `paintScratch()`
   (`applyScratch`, the `PAINT_SCRATCH` seam in `bare-metal.ts`; it binds `CAR_SPRAY`'s face mapping itself, since an unsprayed car's

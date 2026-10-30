@@ -47,7 +47,7 @@ type Tile = { a0: number; b0: number; width: number; height: number; x: number; 
 
 /** The rest frame's two attributes: each vertex and its normal in the car frame (`ensureRestFrame`), read by the spray and the detail map. */
 export const REST_POSITION = "sprayPos";
-const REST_NORMAL = "sprayNrm";
+export const REST_NORMAL = "sprayNrm";
 
 /** The rest frame's attribute declarations: a compile hook adds them only where the shader lacks them, so chained hooks declare them once. */
 export const REST_FRAME_ATTRIBUTES = `attribute vec3 ${REST_POSITION};\nattribute vec3 ${REST_NORMAL};`;
@@ -76,18 +76,22 @@ export function restPositions(object: THREE.Object3D, geometry: THREE.BufferGeom
   return out;
 }
 
+/** `geometry`'s vertex normals, drawn by `object`, in the car frame (`restMatrix`), read as they are now: xyz each, unit. */
+export function restNormals(object: THREE.Object3D, geometry: THREE.BufferGeometry, group: THREE.Object3D): Float32Array {
+  _n.getNormalMatrix(restMatrix(object, group, _m));
+  const nrm = geometry.getAttribute("normal");
+  const out = new Float32Array(nrm.count * 3);
+  for (let i = 0; i < nrm.count; i++) _v.fromBufferAttribute(nrm, i).applyMatrix3(_n).normalize().toArray(out, i * 3);
+  return out;
+}
+
 /** The rest frame on `mesh`'s geometry unless it has one: each vertex and its normal in the car frame (`restMatrix`), read off the mesh as it is now. */
 // ponytail: a car without details is read at its first look (`wearCarLook`); one already dented or with a lid open maps its spray off that shape.
 export function ensureRestFrame(mesh: THREE.Mesh, group: THREE.Object3D): void {
   const geo = mesh.geometry;
   if (geo.hasAttribute(REST_POSITION)) return;
-  const outP = restPositions(mesh, geo, group);
-  _n.getNormalMatrix(_m);
-  const nrm = geo.getAttribute("normal");
-  const outN = new Float32Array(nrm.count * 3);
-  for (let i = 0; i < nrm.count; i++) _v.fromBufferAttribute(nrm, i).applyMatrix3(_n).normalize().toArray(outN, i * 3);
-  geo.setAttribute(REST_POSITION, new THREE.BufferAttribute(outP, 3));
-  geo.setAttribute(REST_NORMAL, new THREE.BufferAttribute(outN, 3));
+  geo.setAttribute(REST_POSITION, new THREE.BufferAttribute(restPositions(mesh, geo, group), 3));
+  geo.setAttribute(REST_NORMAL, new THREE.BufferAttribute(restNormals(mesh, geo, group), 3));
 }
 
 // --- the bake ----------------------------------------------------------------------------------------------------------

@@ -7,7 +7,7 @@ import type { BodyPartName } from "../kernel/rig-spec.ts";
 import type { MaterialId } from "../kernel/material-ids.ts";
 import { BUMPER_F, LAMP_SEAT, LID, LIGHT_BAR } from "./constants.ts";
 import { computeNormalsFast } from "../deform/fast-normals.ts";
-import { PaintScrapes, STROKE_BYTES } from "./paint-scrapes.ts";
+import { PaintScrapes, paintCover, STROKE_BYTES } from "./paint-scrapes.ts";
 import { hypot2, round4 } from "../deform/physics-util.ts";
 import { PART_FAMILY } from "../kernel/physics-core.js";
 import { roofTopY } from "./car-mesh.ts";
@@ -624,6 +624,7 @@ export abstract class CarCore {
     for (const mesh of [this.doorMeshL, this.doorMeshR]) mesh.geometry.computeBoundingBox();
     this.flushCasters.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
     if (this.style.details) for (const mesh of [this.body, this.hood, this.trunk, this.doorMeshL, this.doorMeshR]) ensureRestFrame(mesh, this.group);
+    this.scratches.cover = paintCover(this.style, [this.body, this.hood, this.trunk, this.doorMeshL, this.doorMeshR], this.group);
     for (const material of new Set([this.bodyMat, doorMat])) applyDetailMap(material, this.style);
     this.apertureParts.push(this.hood, this.trunk, this.doorMeshL, this.doorMeshR);
 

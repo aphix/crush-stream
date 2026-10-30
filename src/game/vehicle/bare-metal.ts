@@ -56,11 +56,19 @@ const SCRATCH_PRIMER = [0.33, 0.33, 0.32] as const;
 const SCRATCH_PRIMER_ROUGHNESS = 0.85;
 const SCRATCH_STEEL = [0.62, 0.63, 0.65] as const;
 
+/** The primer codes of the surfaces taking scratches (`TAKES_SCRATCH`), and the distance from one where a fragment's share of it starts to fall and where it is gone. */
+const SCRATCH_CODES = PRIMER_MATERIAL.filter(([, id]) => TAKES_SCRATCH.has(id)).map(([code]) => code);
+const SCRATCH_FADE = 0.3;
+const SCRATCH_GONE = 0.6;
+
 /** The share of a fragment at `vPrimer` that is a surface taking scratches: 1 on each `TAKES_SCRATCH` material's primer code. */
-const SCRATCH_PAINT_WEIGHT =
-  PRIMER_MATERIAL.filter(([, id]) => TAKES_SCRATCH.has(id))
-    .map(([code]) => `(1.0 - smoothstep(0.3, 0.6, abs(vPrimer - ${f(code)})))`)
-    .join(" + ") || "0.0";
+const SCRATCH_PAINT_WEIGHT = SCRATCH_CODES.map((code) => `(1.0 - smoothstep(${f(SCRATCH_FADE)}, ${f(SCRATCH_GONE)}, abs(vPrimer - ${f(code)})))`).join(" + ") || "0.0";
+
+/** Whether a fragment at primer `primer` draws a scratch at all: `SCRATCH_PAINT_WEIGHT` above 0 there. */
+export function takesScratch(primer: number): boolean {
+  for (const code of SCRATCH_CODES) if (Math.abs(primer - code) < SCRATCH_GONE) return true;
+  return false;
+}
 
 /**
  * Where a material defines `PAINT_SCRATCH` and declares `vec2 paintScratch()` (the primer and steel shares a slide cut here), the paint

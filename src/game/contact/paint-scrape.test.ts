@@ -186,8 +186,10 @@ describe("given a striker's nose ramming along a parked sedan's tail at 8 m/s, 5
 });
 
 describe("given a sedan whose front was crushed into a wall at 50 km/h", () => {
-  it("when it grinds its nose along a parked sedan's flank, then every stroke on its flank lands ahead of its door and ahead of every contact's drawn place: on the fender's paint where it sat before the crush", () => {
+  it("when it grinds its nose along a parked sedan's flank with the paint clip off, then every stroke on its flank lands ahead of its door and ahead of every contact's drawn place: where it sat before the crush", () => {
     const crushed = car("sedan");
+    // Where a stroke goes, not whether paint shows it: before the crush this corner sat on the bumper's wrap, where the paint clip drops it.
+    crushed.scratches.cover = null;
     runWall(50, 1, "front", { car: crushed });
     expect(crushed.crashed, "the control: crushed").toBe(true);
     const at = new THREE.Vector3();

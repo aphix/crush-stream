@@ -1,5 +1,8 @@
 import * as THREE from "three";
 import { CAR_SPRAY, sprayFace, sprayPlace } from "./spray-box.ts";
+import { takesScratch } from "./bare-metal.ts";
+import { restNormals, restPositions } from "./car-detail-map.ts";
+import { PRIMER_ATTRIBUTE } from "./constants.ts";
 
 /** Strokes a car keeps (6 bytes each): a full list merges its two nearest strokes on one face to make room, so a new scrape always shows. */
 export const SCRAPE_MAX = 32;
@@ -75,6 +78,8 @@ const _uv = new Float64Array(2);
 const _end = new THREE.Vector3();
 /** `gap`'s out: returned, its double was boxed on every pair of the merge loop (`gap` is past the inlining budget). */
 const _gap = new Float64Array(1);
+/** `clip`'s out: the painted part's ends (u0, v0, u1, v1). */
+const _clip = new Float64Array(4);
 
 /**
  * A car's paint scratches as data: at most `SCRAPE_MAX` strokes on the faces of its `CAR_SPRAY` box, each two texel ends, a
@@ -86,6 +91,8 @@ export class PaintScrapes {
   count = 0;
   version = 0;
   readonly track = new Float64Array(SCRAPE_TRACK);
+  /** Where the car's paint draws a stroke (`paintCover`): a stroke ends only there, so none burns the list where nothing would show it. Null: a list no car draws, every texel paint. */
+  cover: Uint8Array | null = null;
 
   /** A slide at rest point `p` (outward rest normal `n`) along unit plan direction `dir` (x, z), over the rest heights `band` (low, high) the bodies share there, patch `half` m either side, pressing at `strength` m/s with cut `cut`: feeds that face's episode. Vectors in: a call TurboFan doesn't inline boxes every double argument. */
   scrape(p: THREE.Vector3, n: THREE.Vector3, dir: THREE.Vector3, band: THREE.Vector2, half: number, strength: number, cut: number): void {
@@ -169,7 +176,7 @@ export class PaintScrapes {
     this.version++;
   }
 
-  /** The pending end into the face's last stroke when it runs on from it, else a new stroke from the last end to it; one that slid no texel is a touch, no line. Over a band of lanes, each commit's stroke runs level on its lane and the next starts on the next lane. */
+  /** The pending end into the face's last stroke when it runs on from it, else a new stroke from the last end to it, each cut to the run of it on paint (`cover`); one that slid no texel is a touch, no line. Over a band of lanes, each commit's stroke runs level on its lane and the next starts on the next lane. */
   private commit(face: number): void {
     const t = this.track;
     const o = face * TRACK_EACH;
@@ -183,19 +190,26 @@ export class PaintScrapes {
     const u = t[o + PEND_U]!;
     const v = laneRow(t, o);
     const k = t[o + STROKE]!;
-    if (k >= 0 && this.runsOn(k, face, u, v, width, severity)) {
-      const s = k * STROKE_BYTES;
-      const l = this.list;
-      const wide = Math.max(l[s + FACE_WIDTH]! >> FACE_BITS, width);
-      const hard = Math.max(l[s + SEVERITY]!, severity);
-      if (l[s + U1] === u && l[s + V1] === v && l[s + FACE_WIDTH]! >> FACE_BITS === wide && l[s + SEVERITY] === hard) return;
-      l[s + U1] = u;
-      l[s + V1] = v;
-      l[s + FACE_WIDTH] = face | (wide << FACE_BITS);
-      l[s + SEVERITY] = hard;
-      this.version++;
-    } else if (u !== t[o + LAST_U] || v !== t[o + LAST_V]) {
-      t[o + STROKE] = this.append(face, t[o + LAST_U]!, t[o + LAST_V]!, u, v, width, severity);
+    if (this.onPaint(face, t[o + LAST_U]!, t[o + LAST_V]!, u, v)) {
+      const u0 = _clip[0]!;
+      const v0 = _clip[1]!;
+      const u1 = _clip[2]!;
+      const v1 = _clip[3]!;
+      if (k >= 0 && this.runsOn(k, face, u1, v1, width, severity)) {
+        const s = k * STROKE_BYTES;
+        const l = this.list;
+        const wide = Math.max(l[s + FACE_WIDTH]! >> FACE_BITS, width);
+        const hard = Math.max(l[s + SEVERITY]!, severity);
+        if (l[s + U1] !== u1 || l[s + V1] !== v1 || l[s + FACE_WIDTH]! >> FACE_BITS !== wide || l[s + SEVERITY] !== hard) {
+          l[s + U1] = u1;
+          l[s + V1] = v1;
+          l[s + FACE_WIDTH] = face | (wide << FACE_BITS);
+          l[s + SEVERITY] = hard;
+          this.version++;
+        }
+      } else if (u0 !== u1 || v0 !== v1) {
+        t[o + STROKE] = this.append(face, u0, v0, u1, v1, width, severity);
+      }
     }
     t[o + LAST_U] = u;
     t[o + LAST_V] = v;
@@ -203,6 +217,33 @@ export class PaintScrapes {
     t[o + LANE] = (t[o + LANE]! + LANE_STEP) % 1;
     t[o + LAST_V] = laneRow(t, o);
     t[o + STROKE] = -1;
+  }
+
+  /** Whether the texel run (u0, v0)-(u1, v1) on `face` crosses paint, its first and last painted texels into `_clip`. */
+  private onPaint(face: number, u0: number, v0: number, u1: number, v1: number): boolean {
+    // A NaN end (a band of no heights) runs no steps: no stroke.
+    const steps = Math.max(Math.abs(u1 - u0), Math.abs(v1 - v0));
+    let first = -1;
+    let last = -1;
+    for (let i = 0; i <= steps; i++) {
+      if (!this.painted(face, along(u0, u1, i, steps), along(v0, v1, i, steps))) continue;
+      if (first < 0) first = i;
+      last = i;
+    }
+    if (first < 0) return false;
+    _clip[0] = along(u0, u1, first, steps);
+    _clip[1] = along(v0, v1, first, steps);
+    _clip[2] = along(u0, u1, last, steps);
+    _clip[3] = along(v0, v1, last, steps);
+    return true;
+  }
+
+  /** Whether texel (u, v) of `face` shows a stroke: some paint draws there (`cover`). */
+  private painted(face: number, u: number, v: number): boolean {
+    const c = this.cover;
+    if (c === null) return true;
+    const f = CAR_SPRAY.faces[face]!;
+    return c[(f[1] + v) * CAR_SPRAY.w + f[0] + u] === 1;
   }
 
   /** Whether stroke `k` is on `face`, near `width` and `severity`, and the end (u, v) lies within `CONTINUE_COS` of its run from its start. */
@@ -336,6 +377,92 @@ export class PaintScrapes {
 /** The texel of `n` across a face that place `x` (0..1) falls in. */
 function texelOf(x: number, n: number): number {
   return Math.min(n - 1, Math.floor(x * n));
+}
+
+/** Texel `i` of `steps` along the run from `a` to `b`. */
+function along(a: number, b: number, i: number, steps: number): number {
+  return steps === 0 ? a : Math.round(a + ((b - a) * i) / steps);
+}
+
+const covers = new WeakMap<object, Uint8Array>();
+/** Samples across a texel each way: a texel is paint if a fragment anywhere in it is. */
+const COVER_SUB = 3;
+const _tri = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] as const;
+const _nrm = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] as const;
+const _n = new THREE.Vector3();
+const _tx = new Float64Array(6);
+const _pr = new Float64Array(3);
+
+/**
+ * The `CAR_SPRAY` texels where some fragment of `meshes` (in `group`'s rest frame, as built) draws a stroke, as the shader does:
+ * the face its interpolated rest normal picks, and its interpolated primer taking scratches. One per `style`: its cars are built alike.
+ */
+export function paintCover(style: object, meshes: readonly THREE.Mesh[], group: THREE.Object3D): Uint8Array {
+  const cached = covers.get(style);
+  if (cached) return cached;
+  const cover = new Uint8Array(CAR_SPRAY.w * CAR_SPRAY.h);
+  for (const mesh of meshes) {
+    const geo = mesh.geometry;
+    const pos = restPositions(mesh, geo, group);
+    const nrm = restNormals(mesh, geo, group);
+    const primer = geo.getAttribute(PRIMER_ATTRIBUTE)?.array;
+    const index = geo.index;
+    const count = index ? index.count : pos.length / 3;
+    for (let i = 0; i + 2 < count; i += 3) {
+      let same = true;
+      let face = -1;
+      for (let k = 0; k < 3; k++) {
+        const v = index ? index.getX(i + k) : i + k;
+        _tri[k].fromArray(pos, v * 3);
+        _nrm[k].fromArray(nrm, v * 3);
+        _pr[k] = primer ? primer[v]! : 0;
+        const f = sprayFace(CAR_SPRAY, _tri[k], _nrm[k], _uv);
+        if (k > 0 && f !== face) same = false;
+        face = f;
+      }
+      // Corners on one face keep every fragment between them on it; else each fragment picks its own.
+      if (same) {
+        if (face >= 0) rasterize(cover, face, false);
+      } else for (let f = 0; f < FACES; f++) rasterize(cover, f, true);
+    }
+  }
+  covers.set(style, cover);
+  return cover;
+}
+
+/** Marks in `cover` the texels of `face` where a sample of triangle `_tri` (corner normals `_nrm`, primers `_pr`) takes scratches, and with `pick` its interpolated normal picks `face`. */
+function rasterize(cover: Uint8Array, face: number, pick: boolean): void {
+  const [fx, fy, fw, fh] = CAR_SPRAY.faces[face]!;
+  for (let k = 0; k < 3; k++) {
+    sprayPlace(CAR_SPRAY, face, _tri[k], _uv);
+    _tx[2 * k] = _uv[0]! * fw;
+    _tx[2 * k + 1] = _uv[1]! * fh;
+  }
+  const ax = _tx[0]!;
+  const ay = _tx[1]!;
+  const bx = _tx[2]!;
+  const by = _tx[3]!;
+  const cx = _tx[4]!;
+  const cy = _tx[5]!;
+  const area = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay);
+  if (area === 0) return;
+  const v1 = Math.min(fh - 1, Math.floor(Math.max(ay, by, cy)));
+  const u1 = Math.min(fw - 1, Math.floor(Math.max(ax, bx, cx)));
+  for (let v = Math.floor(Math.min(ay, by, cy)); v <= v1; v++) {
+    for (let u = Math.floor(Math.min(ax, bx, cx)); u <= u1; u++) {
+      const at = (fy + v) * CAR_SPRAY.w + fx + u;
+      for (let s = 0; s < COVER_SUB * COVER_SUB && cover[at] === 0; s++) {
+        const px = u + ((s % COVER_SUB) + 0.5) / COVER_SUB;
+        const py = v + (Math.floor(s / COVER_SUB) + 0.5) / COVER_SUB;
+        const wa = ((bx - px) * (cy - py) - (cx - px) * (by - py)) / area;
+        const wb = ((cx - px) * (ay - py) - (ax - px) * (cy - py)) / area;
+        const wc = 1 - wa - wb;
+        if (wa < 0 || wb < 0 || wc < 0 || !takesScratch(wa * _pr[0]! + wb * _pr[1]! + wc * _pr[2]!)) continue;
+        if (pick && sprayFace(CAR_SPRAY, _tri[0], _n.copy(_nrm[0]).multiplyScalar(wa).addScaledVector(_nrm[1], wb).addScaledVector(_nrm[2], wc), _uv) !== face) continue;
+        cover[at] = 1;
+      }
+    }
+  }
 }
 
 /** The distance from (px, py) to the segment (ax, ay)-(bx, by). */
