@@ -90,7 +90,8 @@ export function clipCarToBarrier(
 /**
  * Per direction of `deepestIn`, sums over the overlap patch, each node weighted by its depth: the weight, the place in the world (x, z,
  * then height), and the container's outline normal (x, z) in its frame there; then the deepest node's depth and the second moments of
- * (x, z) about the origin (xx, zz, xz), from which `satCars` reads the patch's width.
+ * (x, z) about the origin (xx, zz, xz), from which `satCars` reads the patch's width, and the world heights of the bottom and top of
+ * the heights the two share there (low, high).
  */
 const F_W = 0;
 const F_X = 1;
@@ -102,12 +103,14 @@ const F_BEST = 6;
 const F_XX = 7;
 const F_ZZ = 8;
 const F_XZ = 9;
-const _inA = new Float64Array(10);
-const _inB = new Float64Array(10);
+const F_LOW = 10;
+const F_HIGH = 11;
+const _inA = new Float64Array(12);
+const _inB = new Float64Array(12);
 const _grad = new Float64Array(2);
 
-/** The last `satCars` overlap's half width (m) along the contact's tangent, both cars' nodes together (reused): a broad flat contact is not a point, and the crush it feeds spreads over it (`feedOverlap`). */
-export const patch = { half: 0 };
+/** The last `satCars` overlap's half width (m) along the contact's tangent, both cars' nodes together (reused): a broad flat contact is not a point, and the crush it feeds spreads over it (`feedOverlap`). `low` and `high`: the world heights (m) the two bodies share over the patch, depth-weighted, where its paint is cut (`scrapePair`). */
+export const patch = { half: 0, low: 0, high: 0 };
 
 /** A uniform strip's half width in standard deviations of its length (√3). */
 const STRIP_HALF_PER_SIGMA = Math.sqrt(3);
@@ -603,6 +606,8 @@ function addToPatch(found: Float64Array, eb: readonly number[], plan: Float32Arr
   found[F_X] += depth * wx;
   found[F_Z] += depth * wz;
   found[F_Y] += depth * (eb[13]! + eb[1]! * bx + eb[5]! * by + eb[9]! * bz);
+  found[F_LOW] += depth * (eb[13]! + eb[1]! * bx + eb[5]! * _meet[M_LOW]! + eb[9]! * bz);
+  found[F_HIGH] += depth * (eb[13]! + eb[1]! * bx + eb[5]! * _meet[M_HIGH]! + eb[9]! * bz);
   found[F_NX] += depth * _grad[0]!;
   found[F_NZ] += depth * _grad[1]!;
   found[F_XX] += depth * wx * wx;
@@ -700,5 +705,7 @@ export function satCars(a: DeformableCar, b: DeformableCar, normalOut: THREE.Vec
   const vzz = (_inA[F_ZZ]! + _inB[F_ZZ]!) / w - cz * cz;
   const vxz = (_inA[F_XZ]! + _inB[F_XZ]!) / w - cx * cz;
   patch.half = STRIP_HALF_PER_SIGMA * Math.sqrt(Math.max(0, nz * nz * vxx - 2 * nx * nz * vxz + nx * nx * vzz));
+  patch.low = (_inA[F_LOW]! + _inB[F_LOW]!) / w;
+  patch.high = (_inA[F_HIGH]! + _inB[F_HIGH]!) / w;
   return Math.max(depthA, depthB) - look;
 }

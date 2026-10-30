@@ -131,11 +131,14 @@ describe("given a sedan sliding along another's flank, called a million times", 
   const point = new THREE.Vector3();
   const inward = new THREE.Vector3(1, 0, 0);
   const slide = new THREE.Vector3(0, 0, 8);
+  /** The heights the pair shares: a 40 cm band every third call, so commits step lanes, else one height, so strokes extend. */
+  const band = new THREE.Vector2();
   /** `scrapePair`'s work on the struck car: the striker's cut there, the scrape, and every seventh call a slice's commit; the row and run move so strokes append, extend and merge. */
   const scrapes = (count: number): void => {
     for (let i = 0; i < count; i++) {
       point.set(-0.85, 0.3 + 0.02 * (i % 37), -2 + 0.004 * (i % 1000));
-      b.scrape(point, inward, slide, 0.3, 3, a.cutAt(point));
+      band.set(point.y, i % 3 === 0 ? point.y + 0.4 : point.y);
+      b.scrape(point, inward, slide, 0.3, 3, a.cutAt(point), band);
       if (i % 7 === 0) b.scratches.slice(0.25);
     }
   };

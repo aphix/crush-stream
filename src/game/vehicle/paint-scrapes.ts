@@ -36,20 +36,28 @@ const EPISODE_HALF_MAX = 0.3;
 const SCRATCH_COMMIT_S = 0.2;
 /** A commit extends the face's last stroke in place when its new end runs within this angle of it: cos 15°. */
 const CONTINUE_COS = 0.9659258262890683;
+/** Each commit over a band the bodies share draws its line on the next lane, this fraction of the band on (the golden ratio's, mod 1): a slide's lines spread over the heights the cars touch, never two at one. */
+const LANE_STEP = 0.6180339887498949;
+/** Lanes keep this share of the band clear at each end, where the bodies only graze (the sill's and the shoulder's curve). */
+const LANE_INSET = 0.1;
+/** A band fewer texel rows tall is one lane: its commits extend one line in place. */
+const LANE_MIN_ROWS = 2;
 
-/** Per face tracker doubles: whether an episode is open, the last committed end and the pending end (texels), the sums of its slices' strength × cut and severity share and their count since the last commit, the clock since the last commit, whether it was scraped this slice, and the stroke it extends (-1 none). */
+/** Per face tracker doubles: whether an episode is open, the last committed end and the pending end (texels: its column and the rows of the band's bottom and top), the sums of its slices' strength × cut and severity share and their count since the last commit, the clock since the last commit, whether it was scraped this slice, the stroke it extends (-1 none), and the lane (0..1 of the band) its line runs on. */
 const OPEN = 0;
 const LAST_U = 1;
 const LAST_V = 2;
 const PEND_U = 3;
-const PEND_V = 4;
-const PRESS_SUM = 5;
-const SEVERITY_SUM = 6;
-const PRESSES = 7;
-const CLOCK = 8;
-const SEEN = 9;
-const STROKE = 10;
-const TRACK_EACH = 11;
+const PEND_LOW = 4;
+const PEND_HIGH = 5;
+const PRESS_SUM = 6;
+const SEVERITY_SUM = 7;
+const PRESSES = 8;
+const CLOCK = 9;
+const SEEN = 10;
+const STROKE = 11;
+const LANE = 12;
+const TRACK_EACH = 13;
 const FACES = CAR_SPRAY.faces.length;
 /** The tracker's doubles: replay state (`partState`), never the net's. */
 export const SCRAPE_TRACK = FACES * TRACK_EACH;
@@ -79,8 +87,8 @@ export class PaintScrapes {
   version = 0;
   readonly track = new Float64Array(SCRAPE_TRACK);
 
-  /** A slide at rest point `p` (outward rest normal `n`) along unit plan direction `dir` (x, z), patch `half` m either side, pressing at `strength` m/s with cut `cut`: feeds that face's episode. Vectors in: a call TurboFan doesn't inline boxes every double argument. */
-  scrape(p: THREE.Vector3, n: THREE.Vector3, dir: THREE.Vector3, half: number, strength: number, cut: number): void {
+  /** A slide at rest point `p` (outward rest normal `n`) along unit plan direction `dir` (x, z), over the rest heights `band` (low, high) the bodies share there, patch `half` m either side, pressing at `strength` m/s with cut `cut`: feeds that face's episode. Vectors in: a call TurboFan doesn't inline boxes every double argument. */
+  scrape(p: THREE.Vector3, n: THREE.Vector3, dir: THREE.Vector3, band: THREE.Vector2, half: number, strength: number, cut: number): void {
     const press = strength * cut;
     if (press < STRENGTH_MIN) return;
     const reach = Math.min(half, EPISODE_HALF_MAX);
@@ -92,8 +100,16 @@ export class PaintScrapes {
     if (face < 0) return;
     const t = this.track;
     const o = face * TRACK_EACH;
+    const rows = CAR_SPRAY.faces[face]![3];
     t[o + PEND_U] = texelOf(_uv[0]!, CAR_SPRAY.faces[face]![2]);
-    t[o + PEND_V] = texelOf(_uv[1]!, CAR_SPRAY.faces[face]![3]);
+    _end.y = band.x;
+    sprayPlace(CAR_SPRAY, face, _end, _uv);
+    const low = texelOf(_uv[1]!, rows);
+    _end.y = band.y;
+    sprayPlace(CAR_SPRAY, face, _end, _uv);
+    const high = texelOf(_uv[1]!, rows);
+    t[o + PEND_LOW] = Math.min(low, high);
+    t[o + PEND_HIGH] = Math.max(low, high);
     t[o + SEEN] = 1;
     t[o + PRESS_SUM] = t[o + PRESS_SUM]! + press;
     // The severity share (`V_MIN` to 1 by strength, before the cut) inline: an uninlined helper's double return is boxed.
@@ -106,7 +122,9 @@ export class PaintScrapes {
     sprayPlace(CAR_SPRAY, face, _end, _uv);
     t[o + OPEN] = 1;
     t[o + LAST_U] = texelOf(_uv[0]!, CAR_SPRAY.faces[face]![2]);
-    t[o + LAST_V] = texelOf(_uv[1]!, CAR_SPRAY.faces[face]![3]);
+    // Each episode opens on the face's next lane, so a second slide there cuts other heights than the first.
+    t[o + LANE] = (t[o + LANE]! + LANE_STEP) % 1;
+    t[o + LAST_V] = laneRow(t, o);
     t[o + CLOCK] = 0;
     t[o + STROKE] = -1;
   }
@@ -151,7 +169,7 @@ export class PaintScrapes {
     this.version++;
   }
 
-  /** The pending end into the face's last stroke when it runs on from it, else a new stroke from the last end to it; one that slid no texel is a touch, no line. */
+  /** The pending end into the face's last stroke when it runs on from it, else a new stroke from the last end to it; one that slid no texel is a touch, no line. Over a band of lanes, each commit's stroke runs level on its lane and the next starts on the next lane. */
   private commit(face: number): void {
     const t = this.track;
     const o = face * TRACK_EACH;
@@ -163,7 +181,7 @@ export class PaintScrapes {
     t[o + SEVERITY_SUM] = 0;
     t[o + PRESSES] = 0;
     const u = t[o + PEND_U]!;
-    const v = t[o + PEND_V]!;
+    const v = laneRow(t, o);
     const k = t[o + STROKE]!;
     if (k >= 0 && this.runsOn(k, face, u, v, width, severity)) {
       const s = k * STROKE_BYTES;
@@ -181,6 +199,10 @@ export class PaintScrapes {
     }
     t[o + LAST_U] = u;
     t[o + LAST_V] = v;
+    if (t[o + PEND_HIGH]! - t[o + PEND_LOW]! < LANE_MIN_ROWS) return;
+    t[o + LANE] = (t[o + LANE]! + LANE_STEP) % 1;
+    t[o + LAST_V] = laneRow(t, o);
+    t[o + STROKE] = -1;
   }
 
   /** Whether stroke `k` is on `face`, near `width` and `severity`, and the end (u, v) lies within `CONTINUE_COS` of its run from its start. */
@@ -331,4 +353,10 @@ function pointToSegment(px: number, py: number, ax: number, ay: number, bx: numb
 function scrapeWidth(press: number): number {
   const width = Math.min(W_MAX, W_MIN + W_PER_STRENGTH * Math.max(0, press - S_HAIR));
   return Math.min(WIDTH_QUANTA, Math.round(width / WIDTH_STEP) - 1);
+}
+
+/** The texel row of the lane (`LANE`) face tracker `o` of `t` runs on, across its pending band inside `LANE_INSET`. */
+function laneRow(t: Float64Array, o: number): number {
+  const low = t[o + PEND_LOW]!;
+  return Math.round(low + (t[o + PEND_HIGH]! - low) * (LANE_INSET + (1 - 2 * LANE_INSET) * t[o + LANE]!));
 }

@@ -27,6 +27,8 @@ const _slide = new THREE.Vector3();
 const _slideB = new THREE.Vector3();
 const _arm = new THREE.Vector3();
 const _inward = new THREE.Vector3();
+/** The world heights (low, high) the pair's bodies share over the patch (`patch`), where the slide's lines fall. */
+const _band = new THREE.Vector2();
 
 /** A striker sliding along the other car slower than this (m/s) cuts no scratch: a head-on or a resting pile slides about 0. */
 const SCRATCH_MIN_SLIP = 1.5;
@@ -37,8 +39,9 @@ function pointVelocity(car: DeformableCar, p: THREE.Vector3, out: THREE.Vector3)
 }
 
 /**
- * Each car of a touching pair takes the scratch the other's slide cuts at the patch `p` (`DeformableCar.scrape`): `n` the plan normal
- * from B to A, `strength` how hard they press (m/s: the hit's `impulse`), `half` the patch's half length (m). Nothing the sim reads is written.
+ * Each car of a touching pair takes the scratch the other's slide cuts at the patch `p` (`DeformableCar.scrape`), its lines over the
+ * heights the two share there (`_band`): `n` the plan normal from B to A, `strength` how hard they press (m/s: the hit's `impulse`),
+ * `half` the patch's half length (m). Nothing the sim reads is written.
  */
 function scrapePair(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector3, p: THREE.Vector3, strength: number, half: number): void {
   pointVelocity(carA, p, _slide).sub(pointVelocity(carB, p, _slideB));
@@ -47,8 +50,8 @@ function scrapePair(carA: DeformableCar, carB: DeformableCar, n: THREE.Vector3, 
   if (hypot2(_slide.x, _slide.z) < SCRATCH_MIN_SLIP) return;
   const cutByA = carA.cutAt(p);
   const cutByB = carB.cutAt(p);
-  carB.scrape(p, _inward.copy(n).negate(), _slide, half, strength, cutByA);
-  carA.scrape(p, n, _slide.negate(), half, strength, cutByB);
+  carB.scrape(p, _inward.copy(n).negate(), _slide, half, strength, cutByA, _band);
+  carA.scrape(p, n, _slide.negate(), half, strength, cutByB, _band);
 }
 
 type PairHit = {
@@ -621,6 +624,7 @@ export function resolveCarPair(carA: DeformableCar, carB: DeformableCar, dt: num
   const eaten = crushedSoFar(carA.deform) + crushedSoFar(carB.deform);
   const hit = satCars(carA, carB, _n, _p, hypot2(carA.velocity.x - carB.velocity.x, carA.velocity.z - carB.velocity.z) * dt + eaten);
   const half = patch.half;
+  _band.set(patch.low, patch.high);
   const n = _n;
   n.y = 0;
   if (n.lengthSq() > 1e-8) n.normalize();

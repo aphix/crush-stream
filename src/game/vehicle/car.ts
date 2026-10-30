@@ -38,6 +38,7 @@ const _restTurn = new THREE.Quaternion();
 const _scrapeRest = new THREE.Vector3();
 const _scrapeNormal = new THREE.Vector3();
 const _scrapeSlide = new THREE.Vector3();
+const _scrapeBand = new THREE.Vector2();
 
 /** A wreck rests this long (s) before it sleeps: a toppling pile pauses on the way over, and a monster settling on a bank creeps to its pose for most of a second after it first slows under `REST_SPEED`. */
 export const WRECK_REST_S = 1;
@@ -1065,9 +1066,10 @@ export class DeformableCar extends CarParts {
 
   /**
    * A striker slides on this car at world `point`, pressing along `inward` (unit, horizontal) at `strength` m/s over a patch `half` m
-   * long either side, moving `slide` (m/s, world) against it, with cut `cut`: a scratch on its paint where that surface takes one.
+   * long either side, moving `slide` (m/s, world) against it, with cut `cut`: a scratch on its paint where that surface takes one, its
+   * lines over the world heights `band` (low, high) the two bodies share there; none, the point's height alone.
    */
-  scrape(point: THREE.Vector3, inward: THREE.Vector3, slide: THREE.Vector3, half: number, strength: number, cut: number): void {
+  scrape(point: THREE.Vector3, inward: THREE.Vector3, slide: THREE.Vector3, half: number, strength: number, cut: number, band?: THREE.Vector2): void {
     if (cut <= 0) return;
     const rest = this.restPointOf(point, _scrapeRest);
     if (!TAKES_SCRATCH.has(this.surfaceAt(rest))) return;
@@ -1076,7 +1078,9 @@ export class DeformableCar extends CarParts {
     const t = _scrapeSlide.copy(slide).applyQuaternion(_restTurn);
     const along = hypot2(t.x, t.z);
     if (along === 0) return;
-    this.scratches.scrape(rest, n, t.set(t.x / along, 0, t.z / along), half, strength, cut);
+    // The band rides the point's rest height: the heights are the world's, the same offsets from it on the undented car.
+    _scrapeBand.set(band === undefined ? rest.y : rest.y + band.x - point.y, band === undefined ? rest.y : rest.y + band.y - point.y);
+    this.scratches.scrape(rest, n, t.set(t.x / along, 0, t.z / along), _scrapeBand, half, strength, cut);
   }
 
 }

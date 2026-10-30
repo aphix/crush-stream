@@ -7,6 +7,7 @@ import { layOnGround } from "../vehicle/car-air-points.ts";
 import { CAR_SPRAY, SPRAY_FACE } from "../vehicle/spray-box.ts";
 import { STROKE_BYTES } from "../vehicle/paint-scrapes.ts";
 import { must } from "../kernel/must.test-util.ts";
+import { patch } from "./sat.ts";
 import { FREEWHEEL, launch, makeWorld, PARKED, relaunchDamaged, runWall, tickWorld } from "./crash-scenarios.test-util.ts";
 
 /** The pass's speed along the struck car (m/s) and the frames it runs (2 s at 60 Hz: the striker clears the parked car). */
@@ -95,6 +96,17 @@ describe("given a sedan sliding past a parked sedan's flank at 8 m/s", () => {
     expect(sa.every((s) => s.face === SPRAY_FACE.right) && sb.every((s) => s.face === SPRAY_FACE.left), `the striker's right flank, the parked car's left: ${note}`).toBeTruthy();
     expect(both({ a, b, changes: [0, 0] }).every((s) => Math.min(s.v0, s.v1) >= heights[0] && Math.max(s.v0, s.v1) <= heights[1]), `within the door's heights: ${note}`).toBeTruthy();
     expect(sa.some((s) => Math.min(s.u0, s.u1) <= doorU[1] && Math.max(s.u0, s.u1) >= doorU[0]), `a stroke over the striker's door: ${note}`).toBeTruthy();
+  });
+
+  it("when it slides along flank to flank where the bodies share at least 20 cm of height, then each car's lines lie at two heights or more", () => {
+    const a = car("sedan");
+    const plan = a.cage.fields.planBox;
+    let shared = 0;
+    const { b } = pass(a, car("sedan"), { press: 1, x: -(plan[1]! - plan[0]!) - 0.01, z: -2, onHit: () => (shared = Math.max(shared, patch.high - patch.low)) });
+    const rows = (c: DeformableCar) => new Set(strokes(c).flatMap((s) => [s.v0, s.v1]));
+    const note = `shared ${shared.toFixed(2)} m | A: ${show(strokes(a))} | B: ${show(strokes(b))}`;
+    expect(shared, `the control: the overlap's heights: ${note}`).toBeGreaterThanOrEqual(0.2);
+    expect(rows(a).size >= 2 && rows(b).size >= 2, `heights per car: ${note}`).toBeTruthy();
   });
 
   it("when it leans in at 0.5 m/s, presses at 1 m/s, shoves at 3 m/s, and grinds at 2 m/s along a side-crushed wreck, then the lean leaves nothing, the press thin hairlines, the shove and the grind wide steel bands", () => {

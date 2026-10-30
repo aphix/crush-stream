@@ -9,7 +9,7 @@ const flankV = (y: number) => Math.floor(((y - CAR_SPRAY.min[1]) / (CAR_SPRAY.ma
 
 /** One slide along the left flank at height `y` from rest z `z0` to `z1` (at most 0.6 m), hard, closed by two slices. */
 function slide(s: PaintScrapes, y: number, z0: number, z1: number): void {
-  s.scrape(new THREE.Vector3(CAR_SPRAY.min[0], y, (z0 + z1) / 2), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 1), (z1 - z0) / 2, 3, 1);
+  s.scrape(new THREE.Vector3(CAR_SPRAY.min[0], y, (z0 + z1) / 2), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector2(y, y), (z1 - z0) / 2, 3, 1);
   s.slice(0.25);
   s.slice(0.25);
 }
