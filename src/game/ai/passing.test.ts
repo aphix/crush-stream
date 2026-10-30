@@ -7,6 +7,7 @@ import { DT } from "../vehicle/test-support.ts";
 import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { RaceBrain } from "./race-ai.ts";
 import { SIGHT_MAX, visibleStretch } from "./sight.ts";
+import city from "../world/tracks/city.json" with { type: "json" };
 
 /** Four-Count's back straight: dead straight for over `SIGHT_MAX` m, 20 m wide, so a car `d` m down the road is `d` m down the racer's heading too. */
 const road = new Track(TRACKS.find((json) => parseTrack(json).id === TRACK_ID.fourCount));
@@ -78,5 +79,45 @@ describe("given a racer doing 8 m/s 14 m behind a slower car (6 m/s)", () => {
     const brain = behind([NEXT_LANE]);
     expect(want(brain), `line ${want(brain).toFixed(2)} m, to the side no car holds`).toBeLessThanOrEqual(-MIN_SWING);
     expect(Number.isNaN(follow(brain)), "not held to the car's speed").toBeTruthy();
+  });
+});
+
+describe("given a racer doing 25 m/s on a straight with a side street's car crossing it 50 m ahead at 8 m/s", () => {
+  /** A car `off` m to the side (+ left) of the point 50 m ahead, driving across the road toward the racer's left. */
+  const crossing = (off: number): AiCar => {
+    const p = road.pointAt(STRAIGHT_S + 50, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
+    const yaw = Math.atan2(p.tz, -p.tx);
+    return { ...blankAiCar(2), x: p.x + off * p.tz, z: p.z - off * p.tx, yaw, vx: Math.sin(yaw) * 8, vz: Math.cos(yaw) * 8, alive: true };
+  };
+  const cases = [
+    { it: "when it gets to the crossing first (16 m off), then the racer slows to reach it only once the car is through", off: -16, yields: true },
+    { it: "when it is 40 m off, so the racer is through well before it, then the racer keeps its speed", off: -40, yields: false },
+    { it: "when it is already across (8 m beyond the racer's line), then the racer keeps its speed", off: 8, yields: false },
+  ];
+  for (const testCase of cases) {
+    it(testCase.it, () => {
+      const brain = think(RACER_SPEED, [crossing(testCase.off)]);
+      // Through the crossing (4.5 m past where the headings meet, plus 0.5 s) at 8 m/s, the racer 45.5 m from its near edge: 15 m/s.
+      if (testCase.yields) expect(follow(brain), `follows at ${follow(brain).toFixed(1)} m/s`).toBeLessThan(16);
+      else expect(Number.isNaN(follow(brain)), `follow ${follow(brain).toFixed(1)}`).toBeTruthy();
+    });
+  }
+});
+
+describe("given a racer doing 25 m/s 25 m short of the city course's first corner, a blind 90° bend", () => {
+  const lineInto = (json: typeof city): number => {
+    const track = new Track(json);
+    const p = track.pointAt(10, { x: 0, y: 0, z: 0, tx: 0, tz: 1, half: 0 });
+    const yaw = Math.atan2(p.tx, p.tz);
+    const me = { ...blankAiCar(0), x: p.x, z: p.z, yaw, vx: Math.sin(yaw) * RACER_SPEED, vz: Math.cos(yaw) * RACER_SPEED, alive: true };
+    const brain = new RaceBrain(track, 1);
+    for (let k = 0; k < 1 / DT; k++) brain.think(me, [me], RACE, DT);
+    return want(brain);
+  };
+  it("when the loop's traffic drives both ways, then its line keeps to its own half of the road, out of the oncoming lane round the bend; with one-way traffic it takes the apex across the middle", () => {
+    const twoWay = lineInto(city);
+    const oneWay = lineInto({ ...city, traffic: { ...city.traffic, lanes: city.traffic.lanes.map((lane) => ({ ...lane, dir: 1 as const })) } });
+    expect(twoWay, `two-way line ${twoWay.toFixed(2)} m`).toBeLessThanOrEqual(-1.5);
+    expect(oneWay, `one-way line ${oneWay.toFixed(2)} m`).toBeGreaterThan(0);
   });
 });

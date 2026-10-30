@@ -87,6 +87,14 @@ const PASS_LOOK_FLOOR = 12;
 /** A moving car's sideways drift (m/s, in our frame) is carried this many seconds ahead, at most this far (m), to where it will be as we reach it. */
 const PREDICT_S = 1.5;
 const PREDICT_MAX = 2.5;
+/** A car whose heading is at least this sine off ours cuts across our way (a side street's traffic at a junction), not along it. */
+const CROSS_SIN = 0.5;
+/** Its centre and our nose are clear of a crossing this far (m) past where the two headings meet: half a car length plus half a width (3.4 m) and a metre. */
+const CROSS_CLEAR = 4.5;
+/** Seconds kept between a crossing car leaving the crossing and our nose reaching it, and the other way round. */
+const CROSS_MARGIN_S = 0.5;
+/** Round a blind stretch of a road with oncoming loop traffic the line keeps to its own half, this far (m) off the centre: our half width and half a metre (a pursuit chord cuts a corner up to 1.2 m inside its lane, so the oncoming lane's edge is no margin). */
+const ONCOMING_KEEP = 1.5;
 /** Cars ahead (and this far behind the nose, m) a plan weighs as holding a lane, at most; a lane is held by one within this far (m) beyond the car being passed. */
 const NEAR_CARS = 8;
 const HELD_TAIL = 4.5;
@@ -282,6 +290,8 @@ export class RaceBrain {
   private readonly pt: TrackPoint = blankPoint();
   /** Speed of the car we are boxed in behind this call, NaN when the way is clear. */
   private follow = Number.NaN;
+  /** This call: the speed (m/s) that reaches the crossing of a car cutting across our way only once it has cleared it; Infinity when none. */
+  private crossCap = Infinity;
   /** Fight (0–1) of a shove or block this call: the lane swings over faster by this much. */
   private swerve = 0;
   /** This call: a careful driver is shoving a rival, so its lane moves at no more than `SHOVE_LAT`. */
@@ -303,6 +313,11 @@ export class RaceBrain {
   private readonly mouthYaw: number[];
   private readonly mouthTurn: number[];
   private readonly exitTurn: number[];
+  /** The lateral range (m) the line keeps to where the road ahead is blind: clear of the loop's oncoming traffic lanes (unbounded with none). */
+  private readonly blindMin: number;
+  private readonly blindMax: number;
+  /** That oncoming traffic's speed (m/s): what it adds to our closing speed. */
+  private readonly oncomingSpeed: number;
 
   constructor(track: Track, racers: number) {
     this.track = track;
@@ -312,6 +327,17 @@ export class RaceBrain {
     this.surf = surfaceAt(track.path, 0);
     this.guarded = racers;
     this.push.fill(1);
+    const traffic = track.json.traffic;
+    let lo = -Infinity;
+    let hi = Infinity;
+    for (const lane of traffic ? traffic.lanes.slice(0, traffic.count) : []) {
+      if (lane.dir > 0) continue;
+      if (lane.offset > 0) hi = -ONCOMING_KEEP;
+      else lo = ONCOMING_KEEP;
+    }
+    this.blindMin = lo;
+    this.blindMax = hi;
+    this.oncomingSpeed = traffic ? traffic.speed : 0;
     this.brakeK.fill(1);
     this.steerK.fill(1);
     this.lookK.fill(1);
@@ -514,6 +540,7 @@ export class RaceBrain {
   /** Re-plan car `i`: the lateral line (and the rate its lane moves to it), the speed target with and without boost, and what boxes it in. */
   private replan(i: number, self: AiCar, others: readonly AiCar[], race: RaceAiState): void {
     this.follow = Number.NaN;
+    this.crossCap = Infinity;
     this.nosed = false;
     this.passing = false;
     this.nosedFree = false;
@@ -521,6 +548,7 @@ export class RaceBrain {
     this.swerve = 0;
     this.nudge = false;
     const wanted = this.line(self, this.traits[i]!, others);
+    if (this.crossCap < Infinity) this.follow = Math.min(Number.isNaN(this.follow) ? Infinity : this.follow, this.crossCap + 0.5);
     this.planWant[i] = this.routeNow < 0 ? wanted : 0;
     this.planRate[i] = this.nudge ? SHOVE_LAT : LANE_RATE * (1 + this.swerve);
     const clear = this.openRoad(i, self, others);
@@ -851,6 +879,29 @@ export class RaceBrain {
     return clamp(acrossSpeed * Math.min(PREDICT_S, ahead / Math.max(closing, 1)), -PREDICT_MAX, PREDICT_MAX);
   }
 
+  /**
+   * The speed that reaches the crossing of car `o` (cutting across our way, moving at least `CRAWL`), within `look` m along our heading,
+   * only after it has cleared it; Infinity when we clear it first with time to spare at `go` m/s, are in it already, or it is gone.
+   */
+  private crossingCap(self: AiCar, o: AiCar, go: number, look: number): number {
+    const fx = detSin(self.yaw);
+    const fz = detCos(self.yaw);
+    const gx = detSin(o.yaw);
+    const gz = detCos(o.yaw);
+    const sin = fx * gz - fz * gx;
+    const oAlong = o.vx * gx + o.vz * gz;
+    if (Math.abs(sin) < CROSS_SIN || oAlong < CRAWL) return Infinity;
+    // Where the two headings meet: `t` m along ours, `u` m along its.
+    const dx = o.x - self.x;
+    const dz = o.z - self.z;
+    const t = (dx * gz - dz * gx) / sin;
+    const u = (dx * fz - dz * fx) / sin;
+    if (t <= CROSS_CLEAR || t > look + CROSS_CLEAR || u < -CROSS_CLEAR) return Infinity;
+    const itLeaves = (u + CROSS_CLEAR) / oAlong + CROSS_MARGIN_S;
+    if ((t + CROSS_CLEAR) / go + CROSS_MARGIN_S < (u - CROSS_CLEAR) / oAlong) return Infinity;
+    return (t - CROSS_CLEAR) / itLeaves;
+  }
+
   /** Whether a car other than `blocker` holds `lane` (m): one of this call's cars ahead, up to `HELD_BEYOND` past the blocker, within a lane width of it. */
   private laneHeld(lane: number, blocker: number, blockerAhead: number): boolean {
     for (let k = 0; k < this.nearCount; k++) {
@@ -889,6 +940,8 @@ export class RaceBrain {
     const seconds = this.lookSeconds[i]!;
     const reaction = this.reaction[i]!;
     const passLook = lookDistance(driveAlong, seconds, PASS_LOOK_FLOOR, sightArc);
+    // The speed a crossing is taken at if we go first: halfway from now to the last plan's target (we pick up speed on the way).
+    const goSpeed = (driveAlong + Math.max(driveAlong, this.planTarget[i]!)) / 2;
     this.nearCount = 0;
     const tr = this.track;
     const room = Math.max(0, half - EDGE);
@@ -906,6 +959,8 @@ export class RaceBrain {
     let raw = Math.sign(curv) * Math.min(1, Math.abs(curv) * 30) * half * (0.45 * (open ? this.apexK[i]! : 1)) + p.side * LINE_SIDE_BIAS;
     if (open && this.wobble[i]! !== 0) raw += this.wobble[i]! * detSin(WOBBLE_K * s + this.phase[i]!);
     let want = clamp(raw, -room, room);
+    // A driver who can't see far enough round the bend to meet oncoming traffic in time keeps to its own half of the road.
+    if (this.routeNow < 0 && sightArc < (driveAlong + this.oncomingSpeed) * seconds) want = clamp(want, Math.max(-room, this.blindMin), Math.min(room, this.blindMax));
     const aggr = this.aggression[i]!;
     let blocker = -1;
     let blockerAhead = Infinity;
@@ -935,6 +990,7 @@ export class RaceBrain {
       const oAlong = o.vx * fx + o.vz * fz;
       const closing = closingSpeed(self.vx, self.vz, o.vx, o.vz, dx, dz, dist);
       const look = lookDistance(closing, seconds, SCAN * pace, sightArc);
+      if (o.id >= this.racers) this.crossCap = Math.min(this.crossCap, this.crossingCap(self, o, goSpeed, passLook));
       const predicted = ahead > 0 ? side + this.driftBy(o, onRoute, ahead, closing) : side;
       if (ahead > 0 && ahead < NOSE_GAP && Math.abs(side) < NOSE_HALF) this.nosed = true;
       const inWay = Math.abs(predicted) < LINE_W + 0.4 || Math.abs(lat + predicted - this.lane[i]!) < LINE_W;

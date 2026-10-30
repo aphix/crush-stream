@@ -107,16 +107,19 @@ export class WreckPass {
       const candidate = room > 0 ? -room + k * step : 0;
       const margin = this.marginAt(candidate, look, room);
       if (margin < 0) continue;
-      let score = FREE_W * (this.freeRun(candidate, look) / look) - RISK_W * clamp(1 - margin / PASS_COMFORT, 0, 1) - PATH_W * Math.abs(candidate - want) - LANE_W * Math.abs(candidate - lane);
+      const free = this.freeRun(candidate, look);
+      let score = FREE_W * (free / look) - RISK_W * clamp(1 - margin / PASS_COMFORT, 0, 1) - PATH_W * Math.abs(candidate - want) - LANE_W * Math.abs(candidate - lane);
       score += SPREAD_W * bias * Math.sign(candidate - centre);
-      if (this.commitFor[i]! > 0 && Math.abs(candidate - this.commitLane[i]!) < COMMIT_BAND) score += COMMIT_W;
+      // A committed lane a stopped car now holds is no longer worth keeping: the commitment outweighed a lane held 6 m on and drove a racer into it.
+      if (free === look && this.commitFor[i]! > 0 && Math.abs(candidate - this.commitLane[i]!) < COMMIT_BAND) score += COMMIT_W;
       for (let r = 0; r < this.rivals; r++) if (Math.abs(this.rivalLateral[r]! - candidate) < PASS_CLEAR) score -= TAKEN_W;
       if (score > bestScore) {
         bestScore = score;
         best = candidate;
       }
     }
-    this.speedCap = Number.isNaN(best) ? this.stopSpeed(lane, decel) : this.passSpeed(lane, best, this.marginAt(best, look, room, true), look, top, rate);
+    // A lane a stopped car holds further on is driven at a speed that still stops short of it (`stopSpeed`), until a replan finds the way round.
+    this.speedCap = Number.isNaN(best) ? this.stopSpeed(lane, decel, false) : Math.min(this.passSpeed(lane, best, this.marginAt(best, look, room, true), look, top, rate), this.stopSpeed(best, decel, true));
     if (!Number.isNaN(best)) {
       this.commitLane[i] = best;
       this.commitFor[i] = COMMIT_S;
@@ -175,9 +178,9 @@ export class WreckPass {
     return cap;
   }
 
-  /** The speed that still stops `STOP_BUFFER` short of the first stopped car in `lane` at `decel`. */
-  private stopSpeed(lane: number, decel: number): number {
-    const blocker = this.nearestIn(lane, false);
+  /** The speed that still stops `STOP_BUFFER` short of the first stopped car in `lane` at `decel` (Infinity when none); `hardOnly` leaves out the soft ones. */
+  private stopSpeed(lane: number, decel: number, hardOnly: boolean): number {
+    const blocker = this.nearestIn(lane, hardOnly);
     return Math.sqrt(2 * decel * Math.max(0, blocker - STOP_BUFFER));
   }
 }
