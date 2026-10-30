@@ -20,14 +20,14 @@ function cars(n: number, scene: THREE.Scene): DeformableCar[] {
   return Array.from({ length: n }, (_, i) => new DeformableCar({ body: 0x808080, accent: 0x404040, name: `t${i}` }, scene, null, fleetStyle(i)));
 }
 
-/** Drive `fleet` with `brain` for `seconds`; `sample(i, car)` every 6th step; car `frozen` stays parked. */
-function run(brain: TrafficBrain, fleet: DeformableCar[], seconds: number, sample: (i: number, c: DeformableCar) => void, frozen = -1): void {
+/** Drive `fleet` (traffic cars `ids`, by default its indices) with `brain` for `seconds`; `sample(i, car)` every 6th step; car `frozen` stays parked. */
+function run(brain: TrafficBrain, fleet: DeformableCar[], seconds: number, sample: (i: number, c: DeformableCar) => void, frozen = -1, ids = fleet.map((_, i) => i)): void {
   const ground = track.ground();
   setGround(ground);
-  const snaps: AiCar[] = fleet.map((_, i) => blankAiCar(i));
+  const snaps: AiCar[] = ids.map((id) => blankAiCar(id));
   const park = { ...idleDrive(), brake: 1 };
   for (let step = 0; step < seconds / DT; step++) {
-    for (const [i, c] of fleet.entries()) snapshotAiCar(snaps[i]!, i, c, true);
+    for (const [i, c] of fleet.entries()) snapshotAiCar(snaps[i]!, ids[i]!, c, true);
     for (const [i, c] of fleet.entries()) {
       if (i === frozen) applyDrive(c, park, DT);
       else applyAiDrive(c, brain.think(snaps[i]!, snaps, DT), DT);
@@ -39,7 +39,7 @@ function run(brain: TrafficBrain, fleet: DeformableCar[], seconds: number, sampl
 }
 
 describe("given the city track's ambient traffic (cars that drive the lanes around the player)", () => {
-  const brain = new TrafficBrain(track, 0);
+  const brain = new TrafficBrain(track, 0, 1);
 
   it("when the traffic is first laid out, then it fills the loop lanes and then every side street, each car in its lane facing its lane's direction", () => {
     expect(brain.count).toBe(4 + 4 + 4);
@@ -110,6 +110,49 @@ describe("given the city track's ambient traffic (cars that drive the lanes arou
     const p = blankProjection();
     projectPath(track.path, mover!.group.position.x, mover!.group.position.z, -1, p);
     expect(p.s, `got past the blocker (s ${p.s.toFixed(1)})`).toBeGreaterThan(240);
+  });
+
+  it("when a loop car and a cross-street car head for the same junction to arrive together, then one waits for the other to cross: they never touch, and both are through within 12 s", () => {
+    const [loopCar, streetCar] = cars(2, new THREE.Scene());
+    brain.reset();
+    // Slot 0 (a loop lane, heading +z there) and slot 4 (a harbour road lane, heading +x) cross at the (0, 0) junction.
+    const ids = [0, 4];
+    const p = blankProjection();
+    const near = ids.map((id) => brain["placeAt"](id, projectPath(brain.slotOf(id).path, 0, 0, -1, p).s));
+    const meet = { x: near[0]!.x, z: near[1]!.z };
+    const starts = ids.map((id) => {
+      const slot = brain.slotOf(id);
+      return brain["placeAt"](id, projectPath(slot.path, meet.x, meet.z, -1, p).s - slot.dir * 30);
+    });
+    for (const [k, c] of [loopCar!, streetCar!].entries()) c.spawnFacing(starts[k]!.x, starts[k]!.z, starts[k]!.yaw, brain.speed);
+    let closest = Infinity;
+    // Two cars cross at a right angle without touching while their centres stay over a car length plus a width apart.
+    run(brain, [loopCar!, streetCar!], 12, () => {
+      closest = Math.min(closest, Math.hypot(loopCar!.group.position.x - streetCar!.group.position.x, loopCar!.group.position.z - streetCar!.group.position.z));
+    }, -1, ids);
+    expect(closest, `closest ${closest.toFixed(2)} m centre to centre`).toBeGreaterThan(4.6);
+    for (const [k, c] of [loopCar!, streetCar!].entries()) {
+      const slot = brain.slotOf(ids[k]!);
+      const past = slot.dir * (projectPath(slot.path, c.group.position.x, c.group.position.z, -1, p).s - projectPath(slot.path, meet.x, meet.z, -1, p).s);
+      expect(past, `car ${ids[k]} is ${past.toFixed(1)} m past the junction`).toBeGreaterThan(10);
+    }
+  });
+
+  it("when a traffic car driving its lane is wrecked (crashed, its engine still running), then it stops driving and comes to rest", () => {
+    const [car] = cars(1, new THREE.Scene());
+    brain.reset();
+    const start = brain["placeAt"](0, 200);
+    car!.spawnFacing(start.x, start.z, start.yaw, brain.speed);
+    setGround(track.ground());
+    const snap = blankAiCar(0);
+    for (let step = 0; step < 4 / DT; step++) {
+      snapshotAiCar(snap, 0, car!, true);
+      snap.crashed = true;
+      applyAiDrive(car!, brain.think(snap, [snap], DT), DT);
+      car!.integrate(DT);
+    }
+    setGround(null);
+    expect(car!.velocity.length(), "speed after 4 s").toBeLessThan(0.3);
   });
 
   it("when a car comes up on a racer stopped in its lane and facing it, then after the wait it edges out to its own kerb, and for a blocker facing the same way it edges toward the road's centre instead", () => {

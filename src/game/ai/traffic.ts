@@ -10,7 +10,7 @@ import { Pedals } from "./pedals.ts";
 import { PlanClock } from "./plan-clock.ts";
 import { SURFACE_IDS, SURFACES } from "../world/catalog.ts";
 import { blankPoint, blankProjection, pointOn, projectPath, type Track, type TrackPath } from "../world/track.ts";
-import { clamp, wrapPi } from "../kernel/scalar.ts";
+import { clamp, hash01, wrapPi } from "../kernel/scalar.ts";
 import { STRAIGHT_CURV } from "./constants.ts";
 
 /** The least a traffic car looks ahead in its lane (m), and how many seconds of closing speed it looks when that is more: a racer closing at 35 m/s is seen 2.5 s out, not 0.5 s. */
@@ -24,6 +24,10 @@ const YIELD_LAT = 3;
 const YIELD_CLOSING = 3;
 /** Half lane (m): a car this close sideways is in our lane. */
 const LANE_HALF = 2.1;
+/** Cross traffic: another traffic car on another road whose heading is at least this sine off ours, so its path meets ours at a junction. */
+const CROSS_SIN = 0.5;
+/** A car whose centre is this close (m) to where the two paths meet is in the crossing (half a car length and half a width, and a margin): it goes, and the other waits. */
+const CROSS_BOX = 4;
 /** Gap (m) traffic keeps to whatever is stopped ahead. */
 const STOP_GAP = 7;
 /** Below this speed (m/s) a blocked car is stopped, and its wait begins. */
@@ -61,17 +65,21 @@ type TrafficSlot = { path: TrackPath; offset: number; dir: 1 | -1 };
  * (`traffic.count`, lanes round-robin) and then each side street (`traffic.routes`: its `count`
  * cars, its lanes round-robin). Each cruises its lane (offset from the path's centreline, + = left
  * of the path direction; `dir` −1 drives against it), slows for turns, brakes for anything in its
- * lane ahead (racers, wrecks, other traffic) and, after waiting behind a stopped obstacle, edges
+ * lane ahead (racers, wrecks, other traffic) and for traffic crossing its road at a junction that
+ * gets there first, and, after waiting behind a stopped obstacle, edges
  * round it, or to its own kerb when the obstacle faces it (a racer met head-on: edging toward the
  * centre put it back across the racer's path, and the two danced nose to nose until the racer was
  * DNF). Cross streets meet the race loop at grade, so racers get cross traffic at junctions.
- * The host keeps traffic in a bubble round the observers (`dormantFar`, `spawnPoint`).
+ * A wreck (`crashed`) stops driving. The host keeps traffic in a bubble round the observers
+ * (`dormantFar`, `spawnPoint`). Its start spots and wake-up scan come from the field's seed.
  * Deterministic; no allocation per call.
  */
 export class TrafficBrain {
   readonly track: Track;
   readonly firstId: number;
   readonly speed: number;
+  /** The field's seed: each car's start spot within its share of its road (`spawns`) and where its wake-up scan starts (`spawnPoint`). */
+  readonly seed: number;
   readonly slots: TrafficSlot[];
   private readonly out: DriveInput = idleDrive();
   private readonly clock = new PlanClock();
@@ -97,11 +105,12 @@ export class TrafficBrain {
   /** Per car: class figures (sedan until `setClass`): a traffic truck steers and corners as a truck. */
   private readonly cls: ClassStats[] = Array.from({ length: MAX_CARS }, () => classStats("sedan"));
 
-  constructor(track: Track, firstId: number) {
+  constructor(track: Track, firstId: number, seed: number) {
     const t = track.json.traffic;
     if (!t) throw new Error(`${track.id} has no traffic`);
     this.track = track;
     this.firstId = firstId;
+    this.seed = seed;
     this.speed = t.speed;
     this.slots = [];
     for (let k = 0; k < t.count; k++) {
@@ -134,7 +143,7 @@ export class TrafficBrain {
     this.pedals.reset();
     this.sighting.reset();
     for (let i = 0; i < MAX_CARS; i++) {
-      this.scan[i] = ((i * 97.31) % 1) * 1e3;
+      this.scan[i] = hash01(i, this.seed) * 1e3;
       this.wedge.reset(i);
     }
   }
@@ -143,7 +152,7 @@ export class TrafficBrain {
     return this.slots[id - this.firstId]!;
   }
 
-  /** Start spots: loop cars spread round the loop clear of the grid, street cars spread along their street. */
+  /** Start spots: loop cars spread round the loop clear of the grid, street cars spread along their street clear of its ends, each at a seeded spot in its share. */
   spawns(): TrafficSpawn[] {
     const L = this.track.length;
     const loop = this.slots.filter((s) => s.path === this.track.path).length;
@@ -152,7 +161,8 @@ export class TrafficBrain {
       const n = slot.path === this.track.path ? loop : this.slots.filter((s) => s.path === slot.path).length;
       const j = perPath.get(slot.path) ?? 0;
       perPath.set(slot.path, j + 1);
-      const s = slot.path === this.track.path ? GRID_CLEAR + ((j + 0.5) / n) * (L - 2 * GRID_CLEAR) : ((j + 0.5) / n) * slot.path.length;
+      const u = hash01(MAX_CARS + k, this.seed);
+      const s = slot.path === this.track.path ? GRID_CLEAR + ((j + u) / n) * (L - 2 * GRID_CLEAR) : END_MARGIN + ((j + u) / n) * (slot.path.length - 2 * END_MARGIN);
       return this.placeAt(this.firstId + k, s);
     });
   }
@@ -223,6 +233,11 @@ export class TrafficBrain {
     const out = clearDrive(this.out);
     const i = self.id;
     if (!self.alive) return out;
+    // A wreck stops driving: no throttle, the brake held (a crashed Survival cop's rule); the bubble puts it away once it has stood dead for long enough.
+    if (self.crashed) {
+      out.brake = 1;
+      return out;
+    }
     if (this.wedge.backing(i, dt, out)) {
       this.pedals.follow(i, out);
       return out;
@@ -258,7 +273,7 @@ export class TrafficBrain {
     return out;
   }
 
-  /** Car `self` (at arc `s` on its road)'s plan: what is in its lane ahead, whether a racer bears down on it, the wait behind a stopped blocker and the edge round it (the timers age by the time since its last plan). */
+  /** Car `self` (at arc `s` on its road)'s plan: what is in its lane ahead, which traffic crossing its road it waits for, whether a racer bears down on it, the wait behind a stopped blocker and the edge round it (the timers age by the time since its last plan). */
   private replan(self: AiCar, others: readonly AiCar[], s: number): void {
     const i = self.id;
     const age = this.clock.ageOf(i);
@@ -270,6 +285,9 @@ export class TrafficBrain {
     let gapAlong = 0;
     let gapYaw = 0;
     let yielding = false;
+    let cross = Infinity;
+    const along = self.vx * fx + self.vz * fz;
+    const reach = lookDistance(along, LANE_LOOK_S, LANE_LOOK, sightArc);
     for (let q = 0; q < others.length; q++) {
       const o = others[q]!;
       if (o.id === i) continue;
@@ -283,6 +301,7 @@ export class TrafficBrain {
       const closing = closingSpeed(self.vx, self.vz, o.vx, o.vz, dx, dz, dist);
       const sameWay = detCos(o.yaw - self.yaw);
       const look = lookDistance(closing, LANE_LOOK_S, LANE_LOOK, sightArc);
+      cross = Math.min(cross, this.crossingAhead(self, slot, o, along, reach));
       if (Math.abs(side) <= YIELD_LAT && ((ahead > 0.5 && ahead <= look && sameWay < -0.5) || (ahead < 0 && -ahead <= look && sameWay > 0.5 && closing > YIELD_CLOSING))) yielding = true;
       if (ahead <= 0.5 || ahead > look || Math.abs(side) > LANE_HALF || (sameWay < -0.5 && o.alive && closing > 0)) continue;
       if (ahead < gap) {
@@ -306,8 +325,35 @@ export class TrafficBrain {
     this.planEdging[i] = edging ? 1 : 0;
     this.planYield[i] = yielding ? 1 : 0;
     this.planOffset[i] = edging ? (this.kerb[i] ? slot.offset + kerbSide * KERB_SHIFT : slot.offset - kerbSide * 3.6) : yielding ? slot.offset + kerbSide * KERB_SHIFT : slot.offset;
-    this.planGap[i] = gap;
-    this.planGapAlong[i] = gapAlong;
+    // Crossing traffic stops us short of where the paths meet; the wait to edge round counts only a blocker in our lane.
+    this.planGap[i] = Math.min(gap, cross);
+    this.planGapAlong[i] = cross < gap ? 0 : gapAlong;
     this.clock.planned(i);
+  }
+
+  /**
+   * How far ahead (m) `self` (on `slot`, `along` m/s, looking `reach` m) meets the path of traffic car `o` crossing its road, when it
+   * must wait for it: `o` is in the crossing, or gets there first (a tie: the lower id goes). Infinity when it need not.
+   */
+  private crossingAhead(self: AiCar, slot: TrafficSlot, o: AiCar, along: number, reach: number): number {
+    if (o.id < this.firstId || o.id >= this.firstId + this.slots.length || !o.alive || o.crashed || this.slotOf(o.id).path === slot.path) return Infinity;
+    const fx = detSin(self.yaw);
+    const fz = detCos(self.yaw);
+    const gx = detSin(o.yaw);
+    const gz = detCos(o.yaw);
+    const sin = fx * gz - fz * gx;
+    if (Math.abs(sin) < CROSS_SIN) return Infinity;
+    // Where the two headings meet: `t` m along ours, `u` m along its.
+    const dx = o.x - self.x;
+    const dz = o.z - self.z;
+    const t = (dx * gz - dz * gx) / sin;
+    const u = (dx * fz - dz * fx) / sin;
+    // Already in the crossing ourselves, past it, beyond what we look, or it has cleared it: go.
+    if (t < CROSS_BOX || t > reach + CROSS_BOX || u < -CROSS_BOX) return Infinity;
+    if (u < CROSS_BOX) return t;
+    // A stopped car counts as 1 m/s, so two waiting at one junction still settle who goes.
+    const mine = t / Math.max(along, 1);
+    const its = u / Math.max(o.vx * gx + o.vz * gz, 1);
+    return its < mine || (its === mine && o.id < self.id) ? t : Infinity;
   }
 }

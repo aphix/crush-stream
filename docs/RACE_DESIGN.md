@@ -317,7 +317,11 @@ cruises its lane at `traffic.speed`, slows for curvature, stops 7 m short of any
 after 2.5 s stopped edges round for 4.5 s. It plans at about 12 Hz and drives through the human pedals (the brake a band: on 1 m/s over its target, off at 0.5), sees a car only
 within the road's open stretch and after a 0.25 s reaction (`ai/sight.ts`), and looks 2.5 s of closing speed ahead (at least 18 m). A racer head-on in its lane (a racer 25 m out
 at 30 m/s is 0.8 s away) or coming up from behind at over 3 m/s makes it hold to its own kerb, 1.5 m over, without stopping (it used to stop and wait 2.5 s in the racer's way). Side streets cross the race loop at grade, so racers meet cross traffic that does
-not stop for them. Observer bubble (every racer still on track, checked every 0.25 s): a traffic car farther than 120 m
+not stop for them. Traffic does stop for traffic: a car whose path meets another road's traffic car within what it looks
+ahead waits short of the crossing for it when that car is in the crossing (within 4 m of where the paths meet) or gets
+there first (a stopped car counts as 1 m/s; a tie goes to the lower id). A wreck (`crashed`, as a crashed Survival cop)
+stops driving and holds the brake. Each car starts at a spot in its share of its road drawn from the field's seed
+(`reseed` pins it), and its wake-up scan starts at a seeded spot too. Observer bubble (every racer still on track, checked every 0.25 s): a traffic car farther than 120 m
 from all of them, dead for 6 s, or off the end of an open street is put away (hidden, no AI, no contacts); it wakes on its
 lane 55–100 m from the nearest observer, 14 m clear of every car, never inside the local camera's view.
 

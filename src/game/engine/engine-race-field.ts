@@ -394,7 +394,7 @@ export abstract class RaceField {
     const sv = this.survival ? tr.survival : null;
     if (this.survival && !sv) throw new Error(`${tr.id} has no survival anchors`);
     const racers = this.entrants.length;
-    const traffic = !sv && tr.json.traffic ? new TrafficBrain(tr, racers) : null;
+    const traffic = !sv && tr.json.traffic ? new TrafficBrain(tr, racers, this.seed) : null;
     const tcount = traffic ? Math.min(traffic.count, MAX_CARS - racers) : 0;
     this.traffic = tcount > 0 ? traffic : null;
     this.policeFrom = racers + tcount;
