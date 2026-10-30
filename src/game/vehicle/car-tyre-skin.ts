@@ -45,6 +45,8 @@ const REST_SLACK = 1e-3;
 const HELD_ELEMENTS = [0, 1, 2, 12, 13, 14] as const;
 /** How far (m, and in unit rotation components) a wheel or a part under the skin may move from where the last lift read it before the lift is found again: a millimetre of the 5 mm clearance the skin keeps over either. */
 const WHEEL_SLACK = 1e-3;
+/** Per wheel, the top of its tyre in the mesh's frame this hold (`capAtRest`). */
+const _tyreTop = new Float64Array(4);
 /** How far (m) the skin stands over a part under it (`liftOverParts`): the 5 mm the drawn skin keeps over a tyre. */
 const PART_CLEAR = 0.005;
 /** A part's top is read at its highest vertex in each plan cell this wide (m): a skin over the part clears every vertex of the cell to within its tilt over 5 cm. */
@@ -339,6 +341,8 @@ export class TyreSkin {
   private partsShown = 0;
   /** Per welded rest point, the lift (m) that keeps the skin as last written over the parts under it (`liftOverParts`): every hold's tyre lift starts from it. */
   private readonly partFloor: Float32Array;
+  /** Per welded rest point, the lift its own tyres and the parts under it ask (`needOver` over `partFloor`): what `capAtRest` never cuts. */
+  private readonly ownLift: Float32Array;
   /** Per welded rest point, whether it rose since it last carried its lift and push up the mesh (`carryLift`). */
   private readonly dirty: Uint8Array;
   /** `dirty`'s bytes a `DIRTY_WORD` at a time (the bytes past the last point stay zero): a word with none dirty is passed in one read. */
@@ -372,6 +376,7 @@ export class TyreSkin {
     this.push = new Float32Array(points);
     this.bump = new Float32Array(points);
     this.partFloor = new Float32Array(points);
+    this.ownLift = new Float32Array(points);
     const dirtyBytes = new ArrayBuffer(Math.ceil(points / DIRTY_WORD) * DIRTY_WORD);
     this.dirty = new Uint8Array(dirtyBytes);
     this.dirtyWords = new Uint32Array(dirtyBytes);
@@ -488,6 +493,7 @@ export class TyreSkin {
       }
       this.needOver(pos, w, scale);
     }
+    this.ownLift.set(this.lift);
     this.carryLift();
     // Bit w: wheel w's last read lifted nothing; until a corner of its triangles rises, reading it again finds the same.
     let quiet = 0;
@@ -503,6 +509,7 @@ export class TyreSkin {
       if (!sagged) break;
       this.carryLift();
     }
+    this.capAtRest(wheels.length, gone);
     this.levelLift(pos);
     const held = this.applyLift(pos);
     const changed = this.changedSince(reset);
@@ -543,6 +550,28 @@ export class TyreSkin {
         queue[(head + size) % points] = q;
         size++;
       }
+    }
+  }
+
+  /**
+   * No carried, sag or levelled lift raises a point over where it rested, or over the top of a tyre it rests over (plus `SAG_CLEAR`): past both, a crushed chord's lever stood a
+   * cone of bare bay wall through the fender, and the rows over it carried the fender up. A point's own tyre lift (`needOver`) stays whole.
+   */
+  private capAtRest(wheels: number, gone: number): void {
+    const { lift, ownLift, rest, written, liftable, heldAt } = this;
+    const { rep } = this.neighbours;
+    const { r, halfW } = this.frame.rig.tyre;
+    for (let w = 0; w < wheels; w++) {
+      const e = heldAt.subarray(w * HELD_ELEMENTS.length, (w + 1) * HELD_ELEMENTS.length);
+      // The highest of the sag pass's samples (`liftSaggingTriangles`): the axle's columns carry the wheel's scale.
+      _tyreTop[w] = (gone >> w) & 1 ? -Infinity : e[4]! + Math.abs(e[1]!) * halfW + hypot2(e[0]!, e[2]!) * r + SAG_CLEAR;
+    }
+    for (let p = 0; p < lift.length; p++) {
+      const v = rep[p]!;
+      let top = rest[v * 3 + 1]!;
+      for (let w = 0; w < wheels; w++) if ((liftable[v]! >> w) & 1 && _tyreTop[w]! > top) top = _tyreTop[w]!;
+      const cap = Math.max(ownLift[p]!, top - written[v * 3 + 1]!);
+      if (lift[p]! > cap) lift[p] = cap;
     }
   }
 

@@ -15,6 +15,7 @@ import { assertSameNumbers } from "./test-support.ts";
 import { tyreClearance } from "./tyre-clearance.test-util.ts";
 import { CLASSES, carClass } from "./vehicle-classes.ts";
 import { must } from "../kernel/must.test-util.ts";
+import { worstHoldOverRest } from "./skin-stretch.test-util.ts";
 
 /**
  * A crushed skin's triangles stretched across a front tyre: one corner held over the tyre, every other point of the skin far away and low. The held corner stands on the tyre at
@@ -340,5 +341,34 @@ describe(`given a hatchback crushed against a wall at ${KERNEL_ROW_KPH} km/h, it
     const reference = holdWritten(fixture.car, crushed, false);
     const { result: outcome } = countKernelCalls(1.2, () => holdWritten(fixture.car, crushed, true));
     expect(outcome.lift.some((lift, point) => lift !== reference.lift[point]), "a sag pass over larger tyres must not match").toBeTruthy();
+  });
+});
+
+/** Owner: the wall over a muscle's front right wheel grew and a cone of bare bay wall stood up through the fender, in a Fleet corner hit. This strike crushes that corner's arch and bay. */
+const CORNER_HIT_KPH = 40;
+/** The striker's heading off the muscle's nose (rad): from ahead and to its right. */
+const CORNER_HIT_ANGLE = Math.PI / 4;
+/** The point it drives at (m, the muscle's frame: its right front corner, -x, the rig's `hubFL` side) and how far out it starts. */
+const CORNER = [-0.7, 2] as const;
+const CORNER_RUN_IN_M = 4.5;
+/** How far (m) past the envelope a drawn point may stand: the envelope reads the drawn tyre, the hold its own copy of it. */
+const OVER_ENVELOPE_SLACK_M = 0.005;
+
+describe(`given a hatchback driven at ${CORNER_HIT_KPH} km/h into a standing muscle car's right front corner, from 45 degrees off its nose`, () => {
+  it("when the muscle's skin is held off its tyres through the hit, then no body point stands higher than its rest, the tyres' top or its neighbours ask", () => {
+    const car = buildCar("coupe", "muscle");
+    const striker = buildCar("hatchback", "hatch");
+    launch(car, 0, 0, 0, 0, 0);
+    const [vx, vz] = [Math.sin(CORNER_HIT_ANGLE) * (CORNER_HIT_KPH / 3.6), -Math.cos(CORNER_HIT_ANGLE) * (CORNER_HIT_KPH / 3.6)];
+    launch(striker, CORNER[0] - Math.sin(CORNER_HIT_ANGLE) * CORNER_RUN_IN_M, CORNER[1] + Math.cos(CORNER_HIT_ANGLE) * CORNER_RUN_IN_M, Math.atan2(vx, vz), vx, vz);
+    const world = makeWorld([car, striker], false, false, FREEWHEEL);
+    let worst = { over: 0, at: "" };
+    for (let f = 0; f < FRAMES; f++) {
+      tickWorld(world, FRAME);
+      const held = car["bodyTyres"] ? worstHoldOverRest(car) : worst;
+      if (held.over > worst.over) worst = held;
+    }
+    expect(car.crashed, "the muscle's corner crushed").toBe(true);
+    expect(worst.over, `${(worst.over * 1000).toFixed(0)} mm over: ${worst.at}`).toBeLessThanOrEqual(OVER_ENVELOPE_SLACK_M);
   });
 });
