@@ -5,7 +5,7 @@ import { FLIGHT } from "./car-flight.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
 import { carFrame } from "./car-rig.ts";
 import { CAR_STYLES } from "./car-variants.ts";
-import { carGear, carRpm, CLASSES, gearHi, gearLo, HANDLING, rollingOver, rotatingShare, terminalSpeed, tractionLimit, VEHICLE_CLASS_IDS, type ClassStats, type Driveline, type VehicleClassId } from "./vehicle-classes.ts";
+import { carGear, carRpm, CLASSES, gearHi, gearLo, HANDLING, rollingOver, rotatingShare, terminalSpeed, tractionLimit, tyreGrip, tyreRoll, VEHICLE_CLASS_IDS, type ClassStats, type Driveline, type VehicleClassId } from "./vehicle-classes.ts";
 import { Ground, setGround } from "../world/ground.ts";
 import { SURFACE } from "../world/constants.ts";
 import { C_NX, C_NY, C_NZ, HIT_SIZE } from "../world/surfaces.ts";
@@ -20,9 +20,9 @@ const RATES = [1 / QUIET_HZ, 1 / FINE_HZ] as const;
 const DEFAULT_REALISM = HANDLING.realism;
 const LAYOUTS: readonly Driveline[] = ["fwd", "rwd", "awd", "4wd"];
 const FULL: DriveInput = { ...idleDrive(), throttle: 1 };
-/** Seconds a launch is watched for its spin to build, and a lift for it to fade. */
+/** Seconds a launch is watched for its spin to build, and a lift for it to fade: on grass a road tyre's 0.45 grip and its 0.45 rolling-resistance floor (`TYRES.road`) slow the fade to about 1.4 s (1 s on the bare grass's). */
 const BUILD_S = 1;
-const FADE_S = 1;
+const FADE_S = 1.5;
 /** The slip ratio a launch on grass passes (measured peak 0.79) and the gauge drop that reads as an upshift. */
 const SPIN_PASSED = 0.6;
 const SHIFT_DROP = 0.3;
@@ -235,7 +235,7 @@ for (const H of RATES) {
     describe("given the sedan launched flat out on grass at the arcade end", () => {
       it("when its wheels spin, then the body gains exactly the road's traction less the grass's rolling resistance per second, never the engine's pull", () => {
         HANDLING.realism = 0;
-        const cap = CLASSES.sedan.launch[0] * SURFACES.grass.grip - rollingOver(SURFACES.grass.roll);
+        const cap = CLASSES.sedan.launch[0] * tyreGrip(CLASSES.sedan.tyre, SURFACES.grass) - rollingOver(tyreRoll(CLASSES.sedan.tyre, SURFACES.grass));
         const pulls: number[] = [];
         let last = 0;
         drive("sedan", flat(SURFACE.grass), BUILD_S, H, FULL, (car) => {
@@ -249,7 +249,7 @@ for (const H of RATES) {
     });
 
     describe("given the sedan launched flat out on grass, then lifted off at 10 m/s", () => {
-      it("when it launches, then the spin passes 0.6 within a second and is 0 on asphalt; when it lifts, then the spin fades over the driveline's rotating mass, never in one slice, and is gone within a second", () => {
+      it("when it launches, then the spin passes 0.6 within a second and is 0 on asphalt; when it lifts, then the spin fades over the driveline's rotating mass, never in one slice, and is gone within 1.5 s", () => {
         let most = 0;
         const car = drive("sedan", flat(SURFACE.grass), BUILD_S, H, FULL, (c) => (most = Math.max(most, c.drive.spin)));
         expect(most, `the spin peaked at ${most.toFixed(2)}`).toBeGreaterThan(SPIN_PASSED);
@@ -266,7 +266,7 @@ for (const H of RATES) {
         let bodyWas = along(car);
         drive("sedan", flat(SURFACE.grass), FADE_S, H, idleDrive(), (c, t) => {
           // The most the tyres take off the spin in a slice: the road's traction on the wheel's rotating mass (`rotatingShare` at the wheel speed the slice began at), plus what the body itself lost.
-          const most = tractionLimit(car.frame, k, SURFACES.grass.grip, SURFACES.grass.grip, HANDLING.realism) * (1 + 1 / rotatingShare(car.frame, k, bodyWas + was)) * H + Math.max(0, bodyWas - along(c));
+          const most = tractionLimit(car.frame, k, tyreGrip(k.tyre, SURFACES.grass), tyreGrip(k.tyre, SURFACES.grass), HANDLING.realism) * (1 + 1 / rotatingShare(car.frame, k, bodyWas + was)) * H + Math.max(0, bodyWas - along(c));
           if (was - c.drive.spinSpeed > most * 1.01 + 1e-9) steps++;
           if (c.drive.spinSpeed === 0 && gone === Infinity) gone = t;
           was = c.drive.spinSpeed;
@@ -346,15 +346,15 @@ for (const H of RATES) {
         return { v: along(car), gear: carGear(car), rpm: carRpm(car) };
       }
 
-      it("when the sedan runs on grass, then it settles where its power meets the grass's rolling resistance over asphalt's, in 5th off the redline; on sand lower, in 4th; and the truck on grass in 4th: each at the law's terminal speed", () => {
+      it("when the sedan runs on grass, then it settles where its power meets its road tyre's rolling-resistance floor over asphalt's, in 4th; the truck on grass where its power meets the grass's, in 4th, and on sand lower, in 4th: each at the law's terminal speed", () => {
         const cases = [
-          { cls: "sedan", surface: SURFACE.grass, gear: 5 },
-          { cls: "sedan", surface: SURFACE.sand, gear: 4 },
+          { cls: "sedan", surface: SURFACE.grass, gear: 4 },
           { cls: "truck", surface: SURFACE.grass, gear: 4 },
+          { cls: "truck", surface: SURFACE.sand, gear: 4 },
         ] as const;
         for (const { cls, surface, gear } of cases) {
           const k = CLASSES[cls];
-          const law = terminalSpeed(k, rollingOver(SURFACES[surface].roll));
+          const law = terminalSpeed(k, rollingOver(tyreRoll(k.tyre, SURFACES[surface])));
           expect(law, `${cls} on ${surface}: the law's terminal ${law.toFixed(1)} is under the class top`).toBeLessThan(k.topSpeed);
           const got = settled(cls, surface, 60);
           const share = (law - gearLo(k, gear - 1)) / (gearHi(k, gear - 1) - gearLo(k, gear - 1));
@@ -381,7 +381,7 @@ for (const H of RATES) {
           if (along(c) > last) falling = false;
           last = along(c);
         }, seeded);
-        const law = terminalSpeed(k, rollingOver(SURFACES.sand.roll));
+        const law = terminalSpeed(k, rollingOver(tyreRoll(k.tyre, SURFACES.sand)));
         // The sag is the law's approach from above (`power / v − resist` per second, a few hundredths near the terminal): still falling and within 1 m/s at 30 s.
         expect(falling && along(sag) > law && along(sag) - law <= 1, `90 % throttle on sand sags to ${along(sag).toFixed(2)} (law ${law.toFixed(2)}, ${falling ? "still falling" : "rose"})`).toBeTruthy();
       });
@@ -395,7 +395,7 @@ for (const H of RATES) {
         };
         const grass = decel(SURFACE.grass);
         const asphalt = decel(SURFACE.asphalt);
-        const law = SURFACES.grass.roll * FRICTION_G + DRIVE.drag * 20 * 20;
+        const law = tyreRoll(CLASSES.sedan.tyre, SURFACES.grass) * FRICTION_G + DRIVE.drag * 20 * 20;
         expect(Math.abs(grass / law - 1), `neutral on grass sheds ${grass.toFixed(2)} m/s² (law about ${law.toFixed(2)})`).toBeLessThanOrEqual(0.3);
         expect(grass, `grass ${grass.toFixed(2)} against asphalt ${asphalt.toFixed(2)} m/s²`).toBeGreaterThan(3 * asphalt);
       });

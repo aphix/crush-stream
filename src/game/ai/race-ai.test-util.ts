@@ -10,26 +10,41 @@ import { AI_EVERY_SLICE, type AiDifficulty } from "./constants.ts";
 import { RaceSession } from "../match/session.ts";
 import { Track, blankProjection, projectPath } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
-import { setGround } from "../world/ground.ts";
+import { activeGround, setGround } from "../world/ground.ts";
 import type { CarPose, Entrant } from "../match/types.ts";
 import { DT } from "../vehicle/test-support.ts";
-import { carClass, classStats } from "../vehicle/vehicle-classes.ts";
+import { assignClass, carClass, classStats, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
+import { SURFACE_IDS, type SurfaceId } from "../world/catalog.ts";
 
 export type Run = { session: RaceSession; onRoad: number; samples: number; mistakes: number };
 
 /** The race cars of the process, by grid slot: no car is ever hit here, so each is stood up again (`spawnFacing`) for the next race instead of built anew. */
 const carPool: DeformableCar[] = [];
+/** Cars built on a named class's body (`classes`), by slot and class. */
+const classPool = new Map<string, DeformableCar>();
 
 /**
  * Real cars on the real drive model (kinematic, as every car is until it crashes) on the course's
  * ground, no car-to-car contact: the AI alone has to keep them on the road and round the laps. Each car's brain plans with its own class's
- * figures (`setClass`), as the game's race field does: a muscle car plans as a muscle car. `each` sees the cars after every step.
+ * figures (`setClass`), as the game's race field does: a muscle car plans as a muscle car. `each` sees the cars after every step. `classes` puts
+ * slot i on class `classes[i]`'s body and class (a fleet body and its style's class otherwise).
  */
-export function race(track: Track, n: number, aggression: number, laps: number, limit: number, difficulty: AiDifficulty = AI_EVERY_SLICE, tap?: (id: number, out: DriveInput) => void, each?: (cars: readonly DeformableCar[], session: RaceSession) => void): Run {
+export function race(track: Track, n: number, aggression: number, laps: number, limit: number, difficulty: AiDifficulty = AI_EVERY_SLICE, tap?: (id: number, out: DriveInput) => void, each?: (cars: readonly DeformableCar[], session: RaceSession) => void, classes?: readonly VehicleClassId[]): Run {
   const scene = new THREE.Scene();
   const ground = track.ground();
   setGround(ground);
-  const cars = Array.from({ length: n }, (_, i) => (carPool[i] ??= new DeformableCar({ body: 0x808080, accent: 0x404040, name: `ai${i}` }, scene, null, fleetStyle(i))));
+  const cars = Array.from({ length: n }, (_, i) => {
+    const id = classes?.[i];
+    if (id === undefined) return (carPool[i] ??= new DeformableCar({ body: 0x808080, accent: 0x404040, name: `ai${i}` }, scene, null, fleetStyle(i)));
+    const key = `${i}/${id}`;
+    let car = classPool.get(key);
+    if (!car) {
+      car = new DeformableCar({ body: 0x808080, accent: 0x404040, name: `ai${i}` }, scene, null, classStats(id).style);
+      assignClass(car, id);
+      classPool.set(key, car);
+    }
+    return car;
+  });
   const entrants: Entrant[] = cars.map((_, i) => ({ id: i, name: `ai${i}`, kind: "ai", aggression }));
   const session = new RaceSession(track, entrants, { laps, noReset: false });
   const brain = new RaceBrain(track, n);
@@ -115,4 +130,28 @@ export function raced(track: Track, difficulty: AiDifficulty): Summary {
   const key = `${track.id}/${difficulty}`;
   if (!memo.has(key)) memo.set(key, summarize(track, difficulty));
   return memo.get(key)!;
+}
+
+export type HotLap = { time: number; distance: number; mix: Partial<Record<SurfaceId, number>> };
+
+/**
+ * Flying lap of class `id` alone on `track` (aggression 0, no traffic): the second of two laps, the first started off the grid. `mix` is the
+ * share of that lap's driven distance on each surface, read under the car, on whatever line (shortcuts included) the AI took.
+ */
+export function hotLap(track: Track, id: VehicleClassId): HotLap {
+  const metres: Partial<Record<SurfaceId, number>> = {};
+  let total = 0;
+  const each = (cars: readonly DeformableCar[], session: RaceSession) => {
+    if (session.cars[0]!.lapTimes.length !== 1) return;
+    const c = cars[0]!;
+    const d = Math.hypot(c.velocity.x, c.velocity.z) * DT;
+    const s = activeGround().surfaceAt(c.group.position.x, c.group.position.z);
+    metres[s] = (metres[s] ?? 0) + d;
+    total += d;
+  };
+  // 8 m/s average over both laps, plus the countdown: a stuck car misses it.
+  const { session } = race(track, 1, 0, 2, (2 * track.length) / 8 + 10, AI_EVERY_SLICE, undefined, each, [id]);
+  const mix: Partial<Record<SurfaceId, number>> = {};
+  for (const s of SURFACE_IDS) if (metres[s] !== undefined) mix[s] = metres[s] / total;
+  return { time: session.cars[0]!.lapTimes[1] ?? Infinity, distance: total, mix };
 }

@@ -5,7 +5,7 @@ import { clamp } from "../kernel/scalar.ts";
 import { surfaceAt } from "../ai/race-ai.ts";
 import { brakeCueAt } from "../ai/brake-cue.ts";
 import { projectPath, type TrackPath } from "../world/track.ts";
-import { carClass, classStats } from "../vehicle/vehicle-classes.ts";
+import { carClass, classStats, tyreGrip } from "../vehicle/vehicle-classes.ts";
 import { RACE_MODE, type RaceHud, type RaceHudRow, type RaceView } from "../match/types.ts";
 import { podiumPlaces, type PodiumPlace } from "../match/podium.ts";
 import type { CarDamage } from "./car-damage.ts";
@@ -44,7 +44,8 @@ export abstract class RaceHudLayer extends RaceWatch {
     const p = car.group.position;
     const pr = projectPath(path, p.x, p.z, this.seg[id]!, this.proj);
     const along = car.velocity.x * car.fwdFlat.x + car.velocity.z * car.fwdFlat.z;
-    return brakeCueAt(path, classStats(carClass(car)), pr.s, along, surfaceAt(path, pr.k).grip);
+    const cls = classStats(carClass(car));
+    return brakeCueAt(path, cls, pr.s, along, tyreGrip(cls.tyre, surfaceAt(path, pr.k)));
   }
 
   /** The race's part of the HUD read model; the engine adds the reel's (`reel`, `solo`, `shown`, `saved`, `outdated`, `autoPurge`). */

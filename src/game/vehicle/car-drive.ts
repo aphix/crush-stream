@@ -5,8 +5,8 @@ import type { CarFrame } from "./car-rig.ts";
 import { blankIntent, readIntent, shapeDrive, type DriveFeel } from "./drive-input.ts";
 import type { PadState } from "./gamepad.ts";
 import { CRASH, FRICTION_G, hypot2 } from "../deform/physics-util.ts";
-import { C_GRIP, C_SURF, HIT_SIZE, ROLLS } from "../world/surfaces.ts";
-import { assists, carClass, carDrivability, CLASSES, drivenAxles, enginePull, HANDLING, rollingOver, rotatingShare, SELF_RIGHT_SLOWEST, tractionLimit, type Assists, type Drivability } from "./vehicle-classes.ts";
+import { C_GRIP, C_SURF, HIT_SIZE } from "../world/surfaces.ts";
+import { assists, carClass, carDrivability, CLASSES, drivenAxles, enginePull, HANDLING, rollingOver, rotatingShare, SELF_RIGHT_SLOWEST, tractionLimit, TYRE_GRIP, TYRE_ROLL, type Assists, type Drivability } from "./vehicle-classes.ts";
 import { LOSS_SIZE, wheelLoss } from "./wheel-loss.ts";
 import { detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { GRIP_YAW_CAP, SLIDE_SPEED, FLIPPED_UP_Y } from "./constants.ts";
@@ -295,17 +295,21 @@ export function applyDrive(car: DeformableCar, input: DriveInput, dt: number, to
   const vz = car.velocity.z;
   const along = vx * fx0 + vz * fz0;
   const lat0 = vx * fz0 - vz * fx0;
-  // Each wheel bites with the grip of what it stands on (none where it hangs past its springs): an axle's is the mean of its two. The rolling
-  // resistance is the mean of the standing wheels' surfaces' (a car past the `wheelsDown === 0` return above has one).
+  // Each wheel bites with the grip of what it stands on under the class's tyre (`TYRE_GRIP`; none where it hangs past its springs): an axle's is the
+  // mean of its two. The rolling resistance is the mean of the standing wheels' surfaces' under that tyre (a car past the `wheelsDown === 0` return above has one).
   const hit = car.wheelHit;
   const down = car.wheelsDown;
-  _grip[0] = ((down & 1) !== 0 ? hit[C_GRIP]! : 0) / 2 + ((down & 2) !== 0 ? hit[HIT_SIZE + C_GRIP]! : 0) / 2;
-  _grip[1] = ((down & 4) !== 0 ? hit[2 * HIT_SIZE + C_GRIP]! : 0) / 2 + ((down & 8) !== 0 ? hit[3 * HIT_SIZE + C_GRIP]! : 0) / 2;
+  const tg = TYRE_GRIP[k.tyre];
+  const tr = TYRE_ROLL[k.tyre];
+  _grip[0] = 0;
+  _grip[1] = 0;
   let crr = 0;
   let standing = 0;
   for (let i = 0; i < 4; i++) {
     if ((down & (1 << i)) === 0) continue;
-    crr += ROLLS[hit[i * HIT_SIZE + C_SURF]!]!;
+    const surf = hit[i * HIT_SIZE + C_SURF]!;
+    _grip[i >> 1] += (hit[i * HIT_SIZE + C_GRIP]! * tg[surf]!) / 2;
+    crr += tr[surf]!;
     standing++;
   }
   crr /= standing;

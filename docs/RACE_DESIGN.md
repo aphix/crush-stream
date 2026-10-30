@@ -423,7 +423,9 @@ follows they fly and land on whatever layer is below. Car pairs more than 2.5 m 
 
 There is no speed cap per surface: grip is applied per axle in `applyDrive` (steering, the driven axles' traction, the sideways
 hold), and the surface's rolling resistance over asphalt's drags a driven car to where its power meets it
-(`terminalSpeed`; [`HANDLING.md`](HANDLING.md) § Acceleration). The AI caps its planned speeds at the same terminal and asks for a
+(`terminalSpeed`; [`HANDLING.md`](HANDLING.md) § Acceleration). On loose ground (dirt, gravel, grass, sand; `Surface.paved` false) each
+class's tyre scales the grip and floors the rolling resistance (`TYRES`; [`HANDLING.md`](HANDLING.md) § Classes), so a road car falls
+back off the pavement and the truck and the monster come forward. The AI caps its planned speeds at the same terminal and asks for a
 target as its share of the class top: a target the drag will not let it reach is simply not reached.
 
 **Ground layers** (`scenes/ground-stack.ts` `GROUND_STACK`) order every flat layer: terrain, bridge top (`deck`), run-off,

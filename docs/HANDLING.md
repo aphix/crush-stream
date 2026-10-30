@@ -9,16 +9,48 @@ Reverse steers like a real car: holding A while backing swings the tail left.
 
 ## Classes
 
-Every class runs the same stat budget: whatever it gains on the straights it pays back in the corners
-(`vehicle-classes.test.ts` laps each class on a 313 m mixed loop with two 8 m hairpins and two 24 m sweepers).
+Pace follows the ground. On pavement muscle > sedan > hatchback, SUV > truck > monster, the monster at least 15 % off a muscle's lap
+on the open paved courses; on loose ground the truck's and the monster's tyres put them ahead and the road cars fall back, so a
+lobby of mixed picks is fair on the mixed courses. Mass and durability stay each class's own: pace is the lever.
 
-| Class | Body | Mass | Top | Gears | Turn (rad/s) | Grip (m/s²) | Brake (m/s²) | Drift | Durability |
-|---|---|---|---|---|---|---|---|---|---|
-| Sedan | sedan, hatchback, wagon | 1400 kg | 200 km/h | 5 | 1.55 | 39 | 28 | 0.35 | 1.0 |
-| Muscle | coupe | 1650 kg | 210 km/h | 5 | 1.36 | 35.5 | 26 | 0.85 | 1.15 |
-| Truck | pickup | 2100 kg | 195 km/h | 4 | 1.50 | 41 | 27 | 0.25 | 1.25 |
-| Monster | pickup on big wheels, lifted body | 2900 kg | 190 km/h | 4 | 1.30 | 37 | 26 | 0.20 | 1.7 |
-| Police | the sedan's drive on the police body | 1400 kg | 200 km/h | 5 | 1.55 | 39 | 28 | 0.35 | 1.3 (AI units only) |
+| Class | Body | Mass | Top | Gears | Turn (rad/s) | Grip (m/s²) | Brake (m/s²) | Drift | Durability | Tyre |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Sedan | sedan | 1400 kg | 200 km/h | 5 | 1.55 | 39 | 28 | 0.35 | 1.0 | road |
+| Hatchback | hatchback | 1390 kg | 192 km/h | 5 | 1.55 | 40.5 | 28 | 0.3 | 0.95 | road |
+| SUV | wagon | 1990 kg | 190 km/h | 5 | 1.42 | 37 | 27 | 0.25 | 1.2 | road |
+| Muscle | coupe | 1650 kg | 215 km/h | 5 | 1.36 | 35.5 | 26 | 0.85 | 1.15 | road |
+| Truck | pickup | 2100 kg | 175 km/h | 4 | 1.40 | 35 | 27 | 0.25 | 1.25 | all-terrain |
+| Monster | pickup on big wheels, lifted body | 2900 kg | 160 km/h | 4 | 0.90 | 30 | 26 | 0.20 | 1.7 | mud |
+| Police | the sedan's drive on the police body | 1400 kg | 200 km/h | 5 | 1.55 | 39 | 28 | 0.35 | 1.3 (AI units only) | road |
+
+**Tyres** (`TYRES`, `vehicle-classes.ts`): one rule for every class. Paved ground (`Surface.paved`: asphalt, concrete, cobbles) reads
+as it is for every tyre, since each class's figures were sourced on asphalt on its own tyre. On loose ground (dirt, gravel, grass,
+sand) the tyre multiplies the surface's grip and rolls at no less than its rolling-resistance floor: road ×0.9 and Crr 0.45,
+all-terrain ×1.15, mud ×1.4 (class-pace research, 2026-10-30: dirt cornering on a road tyre 0.50–0.65 of its pavement grip, on an
+all-terrain 0.75–0.90, on a monster's as on pavement or better; a road car holds 0.60–0.75 of its top on dirt). Surface Crr is the
+sim's only ground-speed lever (a flat off-road cap was removed for it; [`RACE_DESIGN.md`](RACE_DESIGN.md) § Ground, surfaces, decks), and dirt's 0.05
+meets the arcade powers far past every top, so the road tyre's floor is what holds a road car to 0.64–0.78 of its top on loose
+ground at the default slider (`terminalSpeed`). A floor, not a multiplier: grass's and sand's Crr are 7–8 times dirt's, and a
+multiplier that bit on dirt left a road car crawling on grass. The drive reads the tyre per wheel (`TYRE_GRIP`, `TYRE_ROLL` by
+the wheel's surface), the race AI and the HUD's brake cue plan with the same (`tyreGrip`, `tyreRoll`).
+
+Solo hot laps (`hotLap`: the hard AI, aggression 0, the second of two laps; the mix is the share of the lap's driven distance on
+each surface, shortcuts included), seconds and gap to the best:
+
+| Course (mix) | Muscle | Sedan | Hatch | SUV | Truck | Monster |
+|---|---|---|---|---|---|---|
+| National Mall (asphalt 100) | 61.99 | 64.50 +4.0 | 65.11 +5.0 | 66.42 +7.1 | 68.42 +10.4 | 73.17 +18.0 |
+| Breaker Yard (concrete 100) | 41.29 | 42.24 +2.3 | 42.85 +3.8 | 43.76 +6.0 | 45.64 +10.6 | 49.21 +19.2 |
+| City (asphalt 74, concrete 9, cobble 17) | 21.95 | 22.36 +1.9 | 22.39 +2.0 | 22.93 +4.5 | 23.03 +4.9 | 24.48 +11.5 |
+| Dam Spine (asphalt 45, concrete 28, gravel 27) | 82.71 | 88.38 +6.9 | 90.62 +9.6 | 91.49 +10.6 | 87.66 +6.0 | 93.25 +12.7 |
+| Four Count (asphalt 32, concrete 39, dirt 16, gravel 14) | 91.46 | 95.17 +4.1 | 95.81 +4.8 | 97.69 +6.8 | 91.76 +0.3 | 96.74 +5.8 |
+| Oval (asphalt 74, dirt 24 on its shortcut) | 16.91 +1.7 | 17.31 +4.1 | 17.22 +3.6 | 17.73 +6.6 | 16.63 | 17.53 +5.4 |
+| Rally (asphalt 46, dirt 10, gravel 20, grass 17, sand 6) | 29.13 +7.6 | 29.41 +8.7 | 29.58 +9.3 | 30.52 +12.8 | 27.07 | 29.50 +9.0 |
+| Razor Shelf (dirt 65, gravel 32, cobble 3) | 38.49 +11.0 | 43.53 +25.5 | 44.04 +27.0 | 44.74 +29.0 | 34.68 | 35.71 +3.0 |
+
+Before the tyres every class sat within 6 % of the best on every course, the monster ahead of the sedan, hatchback, SUV and truck on
+the paved City and Mall, and the muscle best on Razor Shelf. `class-pace.test.ts` holds the Mall (monster ≥ 15 % off the muscle) and
+Razor Shelf (monster within 5 % of the best, muscle at least 10 % off it).
 
 - **Drift** is how readily boost at full lock kicks the tail out and how long the slide runs before the assist catches it.
 - **Mass** sets the launch and brake feel through `gears` / `brake`; collision masses are the shared rig's.
@@ -27,7 +59,7 @@ Every class runs the same stat budget: whatever it gains on the straights it pay
 - A police cruiser in the player's slot keeps the sedan's kill limits; only AI police units are tougher.
 
 Fleets cycle slots sedan, hatchback, wagon, coupe (muscle), pickup (truck), monster; slot 0 is the player's pick
-(HUD → Driving → Car). Race AI plans with `classStats(id)` and `cornerSpeed(stats, radius, grip)`.
+(HUD → Driving → Car). Race AI plans with `classStats(id)` and `cornerSpeed(stats, radius, tyreGrip(stats.tyre, surface))`.
 
 ## Acceleration
 
@@ -72,9 +104,9 @@ monster quickest, truck slowest off the line). Time to top is the law's.
 | Class | 0–100 km/h, arcade / realistic | Time to top, arcade / realistic (the law's) |
 |---|---|---|
 | Sedan | 2.45 / 6.1 s | 8.8 / 21.9 s |
-| Muscle | 1.95 / 4.3 s | 7.6 / 16.7 s |
-| Truck | 2.5 / 7.9 s | 8.5 / 26.6 s |
-| Monster | 2 / 4 s | 6.1 / 12.0 s |
+| Muscle | 1.95 / 4.3 s | 8.0 / 17.6 s |
+| Truck | 2.5 / 7.9 s | 7.0 / 21.8 s |
+| Monster | 2 / 4 s | 4.5 / 8.9 s |
 
 | Class | Real vehicle | 0–60 mph | Top speed | Source |
 |---|---|---|---|---|
@@ -109,7 +141,7 @@ monster quickest, truck slowest off the line). Time to top is the law's.
   slider; past 0.6 only R rights it. While it lies on its side or roof its tyres give it little or no drive: they bite as far as the
   surface under them carries the car (§ Graded assists, *Tyre bite*), so a truck lying against the arena wall cannot drive itself
   through the 1 m wall at 0.5 m/s it once did (`vehicle/traction.test.ts`).
-- **Surface grip** comes from the active `Ground` (`frictionAt`) under each axle: low front grip loses steering, and low grip under
+- **Surface grip** comes from the active `Ground` (`frictionAt`) under each axle, times the class's tyre on loose ground (§ Classes): low front grip loses steering, and low grip under
   the driven axles caps the launch and spins the wheels (§ Acceleration). Tyre FX read `car.drive.spin`, `lock` and `slide`, each 0–1.
 - **Speed readouts** read mph when the browser's locale region is the US, km/h everywhere else (`speed-units.ts`); physics
   stays in m/s.

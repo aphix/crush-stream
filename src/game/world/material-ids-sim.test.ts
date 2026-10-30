@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MAT, MATERIALS } from "../kernel/material-ids.ts";
 import { PREFABS, PREFAB_IDS, SURFACES, SURFACE_IDS, type SurfaceId } from "./catalog.ts";
-import { ROLLS } from "./surfaces.ts";
 import { placeProps, propColliders } from "./placements.ts";
 import { Track } from "./track.ts";
 import { parseTrack } from "./track-schema.ts";
@@ -46,7 +45,6 @@ describe("given the sim's surface table", () => {
     for (const [i, id] of SURFACE_IDS.entries()) {
       expect(SURFACES[id].grip, `${id} grip`).toBe(SIM_GRIP[i]);
       expect(SURFACES[id].roll, `${id} roll`).toBe(SIM_ROLL[i]);
-      expect(ROLLS[i], `${id} ROLLS`).toBe(SIM_ROLL[i]);
     }
   });
 });

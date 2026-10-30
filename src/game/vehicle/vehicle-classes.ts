@@ -7,7 +7,7 @@ import * as THREE from "three";
 import type { CarStyleId } from "./car-variants.ts";
 import { CLASS_HUBS, CLASS_LIFT } from "./constants.ts";
 import { MU_TYRE } from "../world/surfaces.ts";
-import { SURFACES } from "../world/catalog.ts";
+import { SURFACE_IDS, SURFACES, type Surface } from "../world/catalog.ts";
 import { FRICTION_G } from "../deform/physics-util.ts";
 
 /** What the traction and driveline laws read of a car's frame: its half wheelbase and its tyre. */
@@ -22,6 +22,36 @@ export const VEHICLE_CLASS_IDS: readonly VehicleClassId[] = ["sedan", "muscle", 
  * first axle to slip limits both: Uncharted 4 13:11–13:26); `4wd` both locked together (the axles' grip adds).
  */
 export type Driveline = "fwd" | "rwd" | "awd" | "4wd";
+
+type Tyre = "road" | "allTerrain" | "mud";
+
+/**
+ * What a tyre makes of loose ground (`Surface.paved` false): a multiplier on its grip, and the least rolling-resistance coefficient it rolls at there.
+ * Paved ground reads as it is for every tyre: the class figures were sourced on asphalt on the car's own tyre. Research 2026-10-30 (class pace): on
+ * dirt a road tyre corners at 0.50-0.65 of its pavement grip, an all-terrain 0.75-0.90, a monster's as on pavement or better, and a road car holds
+ * 0.60-0.75 of its top there; the road tyre's floor gives 0.64-0.78 at the default slider (`terminalSpeed`).
+ */
+const TYRES: Readonly<Record<Tyre, { readonly grip: number; readonly rollFloor: number }>> = {
+  road: { grip: 0.9, rollFloor: 0.45 },
+  allTerrain: { grip: 1.15, rollFloor: 0 },
+  mud: { grip: 1.4, rollFloor: 0 },
+};
+
+/** Surface `s`'s grip (1 = dry asphalt) under tyre `t`. */
+export function tyreGrip(t: Tyre, s: Surface): number {
+  return s.paved ? s.grip : s.grip * TYRES[t].grip;
+}
+
+/** Surface `s`'s rolling-resistance coefficient under tyre `t`. */
+export function tyreRoll(t: Tyre, s: Surface): number {
+  return s.paved ? s.roll : Math.max(s.roll, TYRES[t].rollFloor);
+}
+
+/** Per tyre, by surface index (`C_SURF`), for the drive: the multiplier the tyre puts on a wheel's contact grip, and the surface's Crr under it. */
+const byTyre = (f: (t: Tyre, s: Surface) => number) =>
+  Object.fromEntries((Object.keys(TYRES) as Tyre[]).map((t) => [t, Float64Array.from(SURFACE_IDS, (id) => f(t, SURFACES[id]))])) as Record<Tyre, Float64Array>;
+export const TYRE_GRIP = byTyre((t, s) => (s.paved ? 1 : TYRES[t].grip));
+export const TYRE_ROLL = byTyre(tyreRoll);
 
 export interface ClassStats {
   id: VehicleClassId;
@@ -45,6 +75,8 @@ export interface ClassStats {
   power: readonly [arcade: number, real: number];
   /** The driveline layout: the axles whose grip and load carry the engine's pull (`tractionLimit`) and lay the stripes. */
   drive: Driveline;
+  /** What its tyres make of a loose surface (`TYRES`). */
+  tyre: Tyre;
   /** Height of the centre of gravity over the ground (m): the load the launch moves between the axles (`tractionLimit`) and the drawn squat / dive (`LoadTransfer`). */
   cgHeight: number;
   /** The engine's redline (rpm): the motor voice's top (`motorRpm`) and the driveline's overall ratio at a wheel speed (`rotatingShare`). */
@@ -86,6 +118,7 @@ const SEDAN: ClassStats = {
   launch: [17.2, 6.9],
   power: [179.7, 72.2],
   drive: "fwd", // the sourced car (2018 Accord Sport) is front-drive, as are the hatchback and wagon bodies that borrow its stats
+  tyre: "road",
   cgHeight: 0.5,
   redlineRpm: 6800,
   brake: 28,
@@ -104,8 +137,8 @@ const SEDAN: ClassStats = {
 };
 
 /**
- * Stat budget: what a class wins on the straights it pays back in corners, so
- * a mixed loop lands within ~5 % (vehicle-classes.test.ts runs that lap).
+ * Pace: on pavement muscle > sedan > hatch, SUV > truck > monster, the monster at least 15 % off a muscle's lap on the open paved courses; on loose
+ * ground the truck's and the monster's tyres (`TYRES`) put them ahead and the road cars behind (`class-pace.test.ts` laps both).
  */
 export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
   sedan: SEDAN,
@@ -114,12 +147,13 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
     label: "Muscle",
     style: "coupe",
     mass: 1650,
-    topSpeed: 210 / 3.6,
+    topSpeed: 215 / 3.6, // the class-pace research's Chevelle SS 454
     revSpeed: 11,
     gears: [0.24, 0.42, 0.6, 0.8, 1],
     launch: [20.4, 9.2],
     power: [230.5, 104.8],
     drive: "rwd", // 2018 Mustang GT: rear-drive muscle
+    tyre: "road",
     cgHeight: 0.5,
     redlineRpm: 6200,
     brake: 26,
@@ -141,17 +175,18 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
     label: "Truck",
     style: "pickup",
     mass: 2100,
-    topSpeed: 195 / 3.6,
+    topSpeed: 175 / 3.6, // the Tacoma TRD Off-Road's governed 174 km/h
     revSpeed: 10,
     gears: [0.3, 0.53, 0.76, 1],
     launch: [16.3, 5],
     power: [178.2, 57.1],
     drive: "4wd", // 2026 Tacoma TRD Off-Road: part-time 4WD, a locked transfer case
+    tyre: "allTerrain", // the TRD Off-Road's all-terrain tyres
     cgHeight: 0.8,
     redlineRpm: 5000,
     brake: 27,
-    turn: 1.5,
-    grip: 41,
+    turn: 1.4,
+    grip: 35,
     drift: 0.25,
     boostTop: 1.22,
     boostAccel: 1.6,
@@ -168,17 +203,18 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
     label: "Monster",
     style: "monster",
     mass: 2900,
-    topSpeed: 190 / 3.6,
+    topSpeed: 160 / 3.6, // a real one does 113 km/h: raised so it still races, last on pavement
     revSpeed: 10,
     gears: [0.3, 0.53, 0.76, 1],
     launch: [17.1, 8.4],
     power: [243.6, 123.4],
     drive: "4wd", // Monster Jam trucks: solid axles, all four driven and locked
+    tyre: "mud",
     cgHeight: 1.2,
     redlineRpm: 5500,
     brake: 26,
-    turn: 1.3,
-    grip: 37,
+    turn: 0.9,
+    grip: 30,
     drift: 0.2,
     boostTop: 1.22,
     boostAccel: 1.6,
@@ -198,10 +234,10 @@ export const CLASSES: Readonly<Record<VehicleClassId, ClassStats>> = {
    * +30 % at the realistic end. A player's police car keeps the sedan's (`killClass`).
    */
   police: { ...SEDAN, id: "police", label: "Police", style: "police", drive: "rwd", redlineRpm: 7000, durability: 1.3, bumperKg: [7, 7], mirrorKg: 2.3 }, // Crown Victoria Police Interceptor: its cover (the steel push bar stays on the car), a 2.3 kg mirror
-  /** A front-driven compact hatchback (2017 Golf 1.8T: 0-60 mph 7.3 s, 127 mph, 3061 lb, 0.84 g, Car and Driver): lighter and quicker to turn than the sedan, a little slower flat out, and it takes less before it dies. */
-  hatch: { ...SEDAN, id: "hatch", label: "Hatchback", style: "hatchback", mass: 1390, topSpeed: 192 / 3.6, launch: [17, 6.5], power: [178.5, 58.4], cgHeight: 0.52, redlineRpm: 6500, turn: 1.62, grip: 40.5, drift: 0.3, durability: 0.95, bumperKg: [4.5, 5.5], mirrorKg: 2.5 }, // Golf GTI, Peugeot 206-208 GTi: a plastic cover; Golf GTI / Peugeot 207 mirror
+  /** A front-driven compact hatchback (2017 Golf 1.8T: 0-60 mph 7.3 s, 127 mph, 3061 lb, 0.84 g, Car and Driver): lighter than the sedan, turning as it does, a little slower flat out, and it takes less before it dies. */
+  hatch: { ...SEDAN, id: "hatch", label: "Hatchback", style: "hatchback", mass: 1390, topSpeed: 192 / 3.6, launch: [17, 6.5], power: [178.5, 58.4], cgHeight: 0.52, redlineRpm: 6500, turn: 1.55, grip: 40.5, drift: 0.3, durability: 0.95, bumperKg: [4.5, 5.5], mirrorKg: 2.5 }, // Golf GTI, Peugeot 206-208 GTi: a plastic cover; Golf GTI / Peugeot 207 mirror
   /** A front-driven luxury SUV on the wagon body (2018 Range Rover Velar P250: 0-60 mph 7.4 s, 4392 lb, 0.84 g, Car and Driver), front-driven as the sedan it replaces: tall and heavy, slower to turn, tougher in a crash. */
-  suv: { ...SEDAN, id: "suv", label: "SUV", style: "wagon", mass: 1990, topSpeed: 198 / 3.6, revSpeed: 10, launch: [16.6, 6], power: [178.05, 58.6], cgHeight: 0.7, redlineRpm: 6000, brake: 27, turn: 1.42, grip: 37, drift: 0.25, boostTop: 1.22, boostAccel: 1.6, durability: 1.2, bumperKg: [7, 7], mirrorKg: 3.5 }, // Range Rover (L322): a plastic cover, a power-folding mirror
+  suv: { ...SEDAN, id: "suv", label: "SUV", style: "wagon", mass: 1990, topSpeed: 190 / 3.6, revSpeed: 10, launch: [16.6, 6], power: [178.05, 58.6], cgHeight: 0.7, redlineRpm: 6000, brake: 27, turn: 1.42, grip: 37, drift: 0.25, boostTop: 1.22, boostAccel: 1.6, durability: 1.2, bumperKg: [7, 7], mirrorKg: 3.5 }, // Range Rover (L322): a plastic cover, a power-folding mirror
 };
 
 /** The class each body style drives as unless assigned another. */

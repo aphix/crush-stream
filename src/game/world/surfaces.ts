@@ -164,9 +164,6 @@ const EMPTY8 = new Uint8Array(0);
 
 const GRIPS = new Float64Array(SURFACE_IDS.length);
 for (let i = 0; i < SURFACE_IDS.length; i++) GRIPS[i] = SURFACES[SURFACE_IDS[i]!].grip;
-/** Each surface's rolling-resistance coefficient (`Surface.roll`) by surface index: the drive reads it off a wheel's contact (`C_SURF`). */
-export const ROLLS = new Float64Array(SURFACE_IDS.length);
-for (let i = 0; i < SURFACE_IDS.length; i++) ROLLS[i] = SURFACES[SURFACE_IDS[i]!].roll;
 /** How hard each surface cuts the paint of a body sliding on it (`SCRATCH_CUT` of its ribbon material), by surface index (`C_SURF`). */
 export const SURFACE_CUT = new Float64Array(SURFACE_IDS.length);
 for (let i = 0; i < SURFACE_IDS.length; i++) SURFACE_CUT[i] = SCRATCH_CUT.get(SURFACES[SURFACE_IDS[i]!].ribbon) ?? 0;

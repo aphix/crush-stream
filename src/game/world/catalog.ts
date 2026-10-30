@@ -21,6 +21,8 @@ export type Surface = {
    * speed on a surface is `power / ((Crr − asphalt's) · g)` (`terminalSpeed`).
    */
   roll: number;
+  /** A sealed or laid surface (asphalt, concrete, cobbles), else loose ground: which of its two rows a class's tyre reads (`ClassStats.tyre`). */
+  paved: boolean;
   /** The ribbon's material id when this surface is a road, run-off, shortcut or deck top. */
   ribbon: MaterialId;
   /** The terrain cell's id when this is the course's own terrain. */
@@ -32,13 +34,13 @@ export type Surface = {
 };
 
 export const SURFACES: Record<SurfaceId, Surface> = {
-  asphalt: { grip: 1, roll: 0.015, color: 0x2b2d33, ribbon: MAT.ROAD_ASPHALT, terrain: MAT.TERRAIN_ASPHALT, patch: MAT.PATCH_ASPHALT }, // ToolBox: ordinary car tyres on concrete / new asphalt 0.01–0.015
-  concrete: { grip: 1, roll: 0.015, color: 0x8d8a84, ribbon: MAT.ROAD_CONCRETE, terrain: MAT.TERRAIN_CONCRETE, patch: MAT.PATCH_CONCRETE }, // the same row
-  cobble: { grip: 0.85, roll: 0.03, color: 0x5d5a56, ribbon: MAT.ROAD_COBBLE, terrain: MAT.TERRAIN_COBBLE, patch: MAT.PATCH_COBBLE }, // ToolBox: cobbles, large worn 0.03
-  dirt: { grip: 0.72, roll: 0.05, color: 0x6e5640, ribbon: MAT.ROAD_DIRT, terrain: MAT.TERRAIN_DIRT, patch: MAT.PATCH_DIRT }, // Bosch: unpaved road 0.05
-  gravel: { grip: 0.62, roll: 0.06, color: 0x8a7d68, ribbon: MAT.ROAD_GRAVEL, terrain: MAT.TERRAIN_GRAVEL, patch: MAT.PATCH_GRAVEL }, // ToolBox: gravel loose worn 0.04–0.08 (mid)
-  grass: { grip: 0.5, roll: 0.35, color: 0x3f5a34, ribbon: MAT.ROAD_GRASS, terrain: MAT.TERRAIN_GRASS, patch: MAT.PATCH_GRASS }, // Bosch: field 0.1–0.35 (the top of the range)
-  sand: { grip: 0.45, roll: 0.4, color: 0xc2ad84, ribbon: MAT.ROAD_SAND, terrain: MAT.TERRAIN_SAND, patch: MAT.PATCH_SAND }, // ToolBox: car tyre on loose sand 0.2–0.4 (the top of the range)
+  asphalt: { grip: 1, roll: 0.015, paved: true, color: 0x2b2d33, ribbon: MAT.ROAD_ASPHALT, terrain: MAT.TERRAIN_ASPHALT, patch: MAT.PATCH_ASPHALT }, // ToolBox: ordinary car tyres on concrete / new asphalt 0.01–0.015
+  concrete: { grip: 1, roll: 0.015, paved: true, color: 0x8d8a84, ribbon: MAT.ROAD_CONCRETE, terrain: MAT.TERRAIN_CONCRETE, patch: MAT.PATCH_CONCRETE }, // the same row
+  cobble: { grip: 0.85, roll: 0.03, paved: true, color: 0x5d5a56, ribbon: MAT.ROAD_COBBLE, terrain: MAT.TERRAIN_COBBLE, patch: MAT.PATCH_COBBLE }, // ToolBox: cobbles, large worn 0.03
+  dirt: { grip: 0.72, roll: 0.05, paved: false, color: 0x6e5640, ribbon: MAT.ROAD_DIRT, terrain: MAT.TERRAIN_DIRT, patch: MAT.PATCH_DIRT }, // Bosch: unpaved road 0.05
+  gravel: { grip: 0.62, roll: 0.06, paved: false, color: 0x8a7d68, ribbon: MAT.ROAD_GRAVEL, terrain: MAT.TERRAIN_GRAVEL, patch: MAT.PATCH_GRAVEL }, // ToolBox: gravel loose worn 0.04–0.08 (mid)
+  grass: { grip: 0.5, roll: 0.35, paved: false, color: 0x3f5a34, ribbon: MAT.ROAD_GRASS, terrain: MAT.TERRAIN_GRASS, patch: MAT.PATCH_GRASS }, // Bosch: field 0.1–0.35 (the top of the range)
+  sand: { grip: 0.45, roll: 0.4, paved: false, color: 0xc2ad84, ribbon: MAT.ROAD_SAND, terrain: MAT.TERRAIN_SAND, patch: MAT.PATCH_SAND }, // ToolBox: car tyre on loose sand 0.2–0.4 (the top of the range)
 };
 
 export const PREFAB_IDS = [

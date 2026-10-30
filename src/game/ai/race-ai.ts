@@ -14,7 +14,7 @@ import { MAX_CARS } from "../scenes/fleet.ts";
 import { SURFACE_IDS, SURFACES, type Surface } from "../world/catalog.ts";
 import { blankPoint, blankProjection, pointOn, projectPath, sampleAt, type Projection, type Track, type TrackPath, type TrackPoint } from "../world/track.ts";
 import { junctionsOf } from "../world/junctions.ts";
-import { assists, classStats, cornerSpeed, HANDLING, rollingOver, terminalSpeed, type Assists, type ClassStats } from "../vehicle/vehicle-classes.ts";
+import { assists, classStats, cornerSpeed, HANDLING, rollingOver, terminalSpeed, tyreGrip, tyreRoll, type Assists, type ClassStats } from "../vehicle/vehicle-classes.ts";
 import { clamp, hash01, wrapPi } from "../kernel/scalar.ts";
 /** The assists' scratch (`assists` fills it): the guard reads the tyres' share of grip from it. */
 const _assist: Assists = { grip: 1, slipCap: 0, catchRate: 0, scrub: 0, selfRight: 0 };
@@ -496,7 +496,7 @@ export class RaceBrain {
     this.path = path;
     this.routeNow = route;
     this.surf = surfaceAt(path, proj.k);
-    this.turnMax = this.cls[i]!.turn * (0.35 + 0.65 * Math.min(1, speed / 8)) * steerGrip(this.surf.grip);
+    this.turnMax = this.cls[i]!.turn * (0.35 + 0.65 * Math.min(1, speed / 8)) * steerGrip(tyreGrip(this.cls[i]!.tyre, this.surf));
     const fx = detSin(self.yaw);
     const fz = detCos(self.yaw);
     this.along = self.vx * fx + self.vz * fz;
@@ -586,7 +586,7 @@ export class RaceBrain {
   /** Off the road, a pursuit asking for more than full lock is a corner the plan does not see: the speed the car can turn back onto the line at (Infinity: none). */
   private offRoadArc(i: number): number {
     if (Math.abs(this.proj.lateral) <= this.path.half[this.proj.k]! || Math.abs(this.omega) <= this.turnMax) return Infinity;
-    return cornerSpeed(this.cls[i]!, this.reach / (2 * Math.abs(detSin(this.alpha))), this.surf.grip);
+    return cornerSpeed(this.cls[i]!, this.reach / (2 * Math.abs(detSin(this.alpha))), tyreGrip(this.cls[i]!.tyre, this.surf));
   }
 
   /** Boost button: asked for on a clear run while the plan at the boosted top wants more speed, held for a minimum burst, let go at once when boxed in, braking, off the road or out of meter. */
@@ -660,7 +660,7 @@ export class RaceBrain {
     g[GUARD_BRAKE_IDX] = cls.brake * BRAKE_SHARE;
     g[GUARD_LEAD_IDX] = cls.brake;
     g[GUARD_TURN_IDX] = this.turnMax;
-    g[GUARD_GRIP_IDX] = cls.grip * this.surf.grip * assists(HANDLING.realism, _assist).grip;
+    g[GUARD_GRIP_IDX] = cls.grip * tyreGrip(cls.tyre, this.surf) * assists(HANDLING.realism, _assist).grip;
     g[GUARD_DT_IDX] = dt;
   }
 
@@ -805,7 +805,7 @@ export class RaceBrain {
       const surf = surfaceAt(pp, k);
       const curv = Math.abs(pp.curv[k]!);
       // The AI lifts over a crest it would fly, like a driver over a blind crest (`crestSpeed`); a soft surface's drag caps the straight at `terminalSpeed`.
-      const corner = Math.min(top, terminalSpeed(cls, rollingOver(surf.roll)), curv > STRAIGHT_CURV ? cornerSpeed(cls, CORNER_MARGIN / curv, surf.grip) * push : Infinity, crestSpeed(pp, ss));
+      const corner = Math.min(top, terminalSpeed(cls, rollingOver(tyreRoll(cls.tyre, surf))), curv > STRAIGHT_CURV ? cornerSpeed(cls, CORNER_MARGIN / curv, tyreGrip(cls.tyre, surf)) * push : Infinity, crestSpeed(pp, ss));
       const allow = Math.sqrt(corner * corner + 2 * decel * d);
       if (allow < best) best = allow;
     }
@@ -815,7 +815,7 @@ export class RaceBrain {
   /** Speed now that still makes a `turn` (rad) junction `d` m on, the turn spread over the pursuit's look-ahead. */
   private junction(cls: ClassStats, turn: number, surf: Surface, d: number, decel: number): number {
     if (turn < 0.05) return Infinity;
-    const corner = cornerSpeed(cls, (CORNER_MARGIN * LOOK) / turn, surf.grip);
+    const corner = cornerSpeed(cls, (CORNER_MARGIN * LOOK) / turn, tyreGrip(cls.tyre, surf));
     return Math.sqrt(corner * corner + 2 * decel * d);
   }
 
