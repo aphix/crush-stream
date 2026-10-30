@@ -155,7 +155,7 @@ describe("given a wheel popped from a parked car and rolled back at its flank at
 
 describe("given a parked car with a part inside its body: its front wheel popped at its hub, or its front bumper torn off at rest and put back into its nose", () => {
   for (const which of ["wheel", "bumper"] as const) {
-    it(`when the ${which} is let go, then it is never lifted (no upward speed, no rise above where it started: not put out up through the bonnet) and within ${LEAVE_S} s it rests where it fell`, () => {
+    it(`when the ${which} is let go, then it is never lifted (no upward speed, no rise above where it started: not put out up through the bonnet) and within ${LEAVE_S} s gravity has it resting on the road, held up by nothing of its car`, () => {
       const { w, a } = lot();
       let part: LooseBody;
       if (which === "wheel") {
@@ -173,15 +173,19 @@ describe("given a parked car with a part inside its body: its front wheel popped
       let start = -1;
       let rise = 0;
       let up = 0;
+      let landed = false;
       for (let s = 0; s < LEAVE_S * QUIET_HZ; s++) {
         stepWorld(w, H);
         if (start < 0) start = insideHull(a, part);
         rise = Math.max(rise, part.object.position.y - y0);
-        up = Math.max(up, part.velocity.y);
+        // Its car gives it no upward speed; the road's bounce once it lands is the road's.
+        landed ||= lowestY(part) <= ON_ROAD_M;
+        if (!landed) up = Math.max(up, part.velocity.y);
       }
       expect(start, `the control: one step after the let-go it is ${start.toFixed(3)} m inside its car`).toBeGreaterThan(HULL_TOL);
       expect(rise <= RISE_TOL && up <= RISE_V, `it rose ${rise.toFixed(3)} m, at up to ${up.toFixed(3)} m/s`).toBeTruthy();
-      expect(part.shape.asleep, `it still moves ${part.velocity.length().toFixed(3)} m/s after ${LEAVE_S} s`).toBeTruthy();
+      const low = lowestY(part);
+      expect(part.shape.asleep && low <= ON_ROAD_M, `after ${LEAVE_S} s it moves ${part.velocity.length().toFixed(3)} m/s with its lowest point ${low.toFixed(3)} m up`).toBeTruthy();
     });
   }
 });

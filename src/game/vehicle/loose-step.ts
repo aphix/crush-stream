@@ -4,7 +4,7 @@ import { GRAVITY } from "../kernel/constants.ts";
 import { detAsin, detCos, detSin } from "../kernel/physics-core.js";
 import { NO_FLOOR } from "../world/ground.ts";
 import { C_DEPTH, C_GRIP, C_H, C_NX, C_NZ, clearOf, HIT_SIZE, holdTops, pointContact, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, stirNear } from "../world/surfaces.ts";
-import { body, centreOfMass, moveBody, placeBody, standAtCentre, bindBody, type TopMet } from "./car-air-body.ts";
+import { body, centreOfMass, moveBody, placeBody, standAtCentre, bindBody, HOLDING_NY, N, type TopMet } from "./car-air-body.ts";
 import type { DeformableCar } from "./car.ts";
 import { loadShape, readPoints } from "./car-air-points.ts";
 import { openRows, solveRows } from "./car-air.ts";
@@ -508,9 +508,12 @@ export function stepLoose(p: LooseBody, dt: number, owner: number, dent?: DentSt
   solveRows(n);
   standAtCentre();
   const slow = v.x * v.x + v.y * v.y + v.z * v.z < REST_SPEED * REST_SPEED && w.x * w.x + w.y * w.y + w.z * w.z < REST_SPEED * REST_SPEED;
-  shape.restFor = slow && n >= 2 ? shape.restFor + dt : 0;
+  // A side it is in (a car's flank, a wall) holds nothing up: only rows on a face flatter than the friction cone count as resting points.
+  let held = 0;
+  for (let c = 0; c < n; c++) if (N[c]!.y >= HOLDING_NY) held++;
+  shape.restFor = slow && held >= 2 ? shape.restFor + dt : 0;
   // Resting on three points or more at no more than `REST_SPEED`, or on two for `TWO_POINT_REST_S`: at rest.
-  if (slow && (n >= 3 || shape.restFor >= TWO_POINT_REST_S)) {
+  if (slow && (held >= 3 || shape.restFor >= TWO_POINT_REST_S)) {
     v.set(0, 0, 0);
     w.set(0, 0, 0);
     shape.asleep = true;

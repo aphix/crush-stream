@@ -27,7 +27,7 @@ const STEPS = 10 * FINE_HZ;
 const A = 0;
 const B = 1;
 const PARKED = 2;
-const IMPACT_X = 130;
+const IMPACT_X = 160;
 const PARKED_Z = 25;
 /** A car standing 100 m from the hit with the parked car's trunk lid on its roof. */
 const CARRIER = 3;
