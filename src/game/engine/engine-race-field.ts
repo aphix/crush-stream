@@ -421,6 +421,7 @@ export abstract class RaceField {
         const car = cars[racers + k]!;
         car.group.visible = true;
         this.place(car, spot.x, spot.z, spot.yaw, spot.y);
+        this.traffic.setClass(racers + k, classStats(carClass(car)));
       }
     }
     for (let i = this.policeFrom; i < n; i++) {

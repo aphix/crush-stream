@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { assignClass, classStats, type VehicleClassId } from "../vehicle/vehicle-classes.ts";
 import * as THREE from "three";
 import { applyDrive, idleDrive } from "../vehicle/car-drive.ts";
 import { must } from "../kernel/must.test-util.ts";
@@ -191,5 +192,37 @@ describe("given the city track's ambient traffic (cars that drive the lanes arou
     expect(d >= SPAWN_NEAR && d <= SPAWN_FAR, `distance ${d.toFixed(1)}`).toBeTruthy();
     expect(Math.hypot(spot.x - 2, spot.z)).toBeGreaterThanOrEqual(14);
     expect(brain.spawnPoint(id, [observer], others, () => true), "never pops in where the player is looking").toBe(null);
+  });
+
+  // The loop lanes, driven by the slowest-turning classes: a brain that planned every car on the sedan's figures (1.5 rad/s, asphalt grip)
+  // asked a monster (0.9 rad/s, mud tyres) for too little lock and too much corner speed.
+  it("when the slowest-turning classes drive the loop lanes 40 s, each planned on its own class's figures, then each stays within its lane's 1.5 m all the way round", (t) => {
+    const worst = (ownFigures: boolean): Map<VehicleClassId, number> => {
+      const scene = new THREE.Scene();
+      const classes: VehicleClassId[] = ["monster", "truck", "suv", "muscle"];
+      const fleet = classes.map((cls, i) => {
+        const c = new DeformableCar({ body: 0x808080, accent: 0x404040, name: `t${i}` }, scene, null, classStats(cls).style);
+        assignClass(c, cls);
+        return c;
+      });
+      brain.reset();
+      for (const [i, s] of brain.spawns().slice(0, classes.length).entries()) {
+        fleet[i]!.spawnFacing(s.x, s.z, s.yaw, 0);
+        brain.setClass(i, classStats(ownFigures ? classes[i]! : "sedan"));
+      }
+      const off = new Map<VehicleClassId, number>();
+      const p = blankProjection();
+      run(brain, fleet, 40, (i, c) => {
+        const slot = brain.slotOf(i);
+        projectPath(slot.path, c.group.position.x, c.group.position.z, -1, p);
+        off.set(classes[i]!, Math.max(off.get(classes[i]!) ?? 0, Math.abs(p.lateral - slot.offset)));
+      });
+      for (let i = 0; i < classes.length; i++) brain.setClass(i, classStats("sedan"));
+      return off;
+    };
+    const own = worst(true);
+    const sedan = worst(false);
+    t.annotate(`worst off the lane (m), own figures / sedan's: ${[...own].map(([cls, d]) => `${cls} ${d.toFixed(2)} / ${sedan.get(cls)!.toFixed(2)}`).join(", ")}`);
+    for (const [cls, d] of own) expect(d, `${cls} ${d.toFixed(2)} m off its lane`).toBeLessThan(1.5);
   });
 });

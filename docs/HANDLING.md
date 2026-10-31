@@ -32,7 +32,7 @@ sim's only ground-speed lever (a flat off-road cap was removed for it; [`RACE_DE
 meets the arcade powers far past every top, so the road tyre's floor is what holds a road car to 0.64–0.78 of its top on loose
 ground at the default slider (`terminalSpeed`). A floor, not a multiplier: grass's and sand's Crr are 7–8 times dirt's, and a
 multiplier that bit on dirt left a road car crawling on grass. The drive reads the tyre per wheel (`TYRE_GRIP`, `TYRE_ROLL` by
-the wheel's surface), the race AI and the HUD's brake cue plan with the same (`tyreGrip`, `tyreRoll`).
+the wheel's surface), the race AI, street traffic (`TrafficBrain.setClass`) and the HUD's brake cue plan with the same (`tyreGrip`, `tyreRoll`).
 
 Solo hot laps (`hotLap`: the hard AI, aggression 0, the second of two laps; the mix is the share of the lap's driven distance on
 each surface, shortcuts included), seconds and gap to the best:

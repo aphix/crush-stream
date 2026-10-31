@@ -1,5 +1,6 @@
 import { hypot2, detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { clearDrive, DRIVE, idleDrive, type DriveInput } from "../vehicle/car-drive.ts";
+import { classStats, tyreGrip, type ClassStats } from "../vehicle/vehicle-classes.ts";
 import type { AiCar } from "./derby-ai.ts";
 import { MAX_CARS } from "../scenes/fleet.ts";
 import { closingSpeed, lookDistance, SEEN_BEHIND, SEEN_NEAR, Sighting, visibleStretch } from "./sight.ts";
@@ -93,6 +94,8 @@ export class TrafficBrain {
   private readonly scan = new Float64Array(MAX_CARS);
   private readonly proj = blankProjection();
   private readonly pt = blankPoint();
+  /** Per car: class figures (sedan until `setClass`): a traffic truck steers and corners as a truck. */
+  private readonly cls: ClassStats[] = Array.from({ length: MAX_CARS }, () => classStats("sedan"));
 
   constructor(track: Track, firstId: number) {
     const t = track.json.traffic;
@@ -116,6 +119,10 @@ export class TrafficBrain {
 
   get count(): number {
     return this.slots.length;
+  }
+
+  setClass(id: number, s: ClassStats): void {
+    this.cls[id] = s;
   }
 
   reset(): void {
@@ -233,11 +240,12 @@ export class TrafficBrain {
     const tz = p.z - p.tx * offset;
     const alpha = wrapPi(detAtan2(tx - self.x, tz - self.z) - self.yaw);
     const surf = SURFACES[SURFACE_IDS[path.surface[proj.k]!]!];
-    const turnMax = DRIVE.turn * (0.35 + 0.65 * Math.min(1, speed / 8)) * steerGrip(surf.grip);
+    const cls = this.cls[i]!;
+    const turnMax = cls.turn * (0.35 + 0.65 * Math.min(1, speed / 8)) * steerGrip(tyreGrip(cls.tyre, surf));
     out.steer = clamp((2 * Math.max(speed, 3) * detSin(alpha)) / ld / Math.max(0.2, turnMax), -1, 1);
     const edging = this.planEdging[i] === 1;
     const curv = Math.abs(path.curv[proj.k]!);
-    let target = Math.min(this.speed, curv > STRAIGHT_CURV ? (DRIVE.turn * 0.6) / curv : Infinity);
+    let target = Math.min(this.speed, curv > STRAIGHT_CURV ? (cls.turn * 0.6) / curv : Infinity);
     // Speed that still stops STOP_GAP short of it at a gentle 4 m/s².
     if (this.planGap[i]! < Infinity) target = Math.min(target, Math.max(0, this.planGapAlong[i]!) + Math.sqrt(8 * Math.max(0, this.planGap[i]! - STOP_GAP)));
     if (edging) target = Math.min(this.speed, 4);
