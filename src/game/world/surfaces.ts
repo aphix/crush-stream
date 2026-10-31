@@ -2821,8 +2821,8 @@ function wheelContactRead(hub: Float64Array, axes: Float64Array, scale: number, 
       }
       if (!(rb > best)) continue;
       const kb = KOF[ring * ARCS + jb + STEPS]!;
-      // The ring's centre: the hub moved along the axle by the ring's offset.
-      const lx = RINGS[ring]![0] * scale;
+      // The ring's centre: the hub moved along the axle by the ring's offset, at the tread's width as `tread` puts its points.
+      const lx = RINGS[ring]![0] * across;
       const rad = RINGS[ring]![1] * scale;
       for (let side = -1; side <= 1; side += 2) {
         const jn = jb + side;
