@@ -1,5 +1,5 @@
 import type { Collider, EventQueue, Ray, RigidBody, SolverFlags, World } from "@dimforge/rapier3d-simd";
-import { hypot3 } from "../kernel/physics-core.js";
+import { hypot2, hypot3 } from "../kernel/physics-core.js";
 import { readRotation, readTranslation, type Rapier } from "../kernel/rapier.ts";
 import { type Doll, PARTS } from "./ragdoll-body.ts";
 import { SLOTS } from "./ragdoll-config.ts";
@@ -21,6 +21,8 @@ const SCAN_EVERY = 8;
 const AXIS_IN = 0.03;
 /** Below this (of 1) a way out across a limb's axis is mostly along it: the face's own normal is taken instead. */
 const ACROSS_MIN = 0.3;
+/** Below this horizontal share (of 1) a face's way out is mostly up or down: a standing walker cannot step out that way. */
+const LEVEL_MIN = 0.5;
 
 const ZERO = { x: 0, y: 0, z: 0 };
 const _imp = { x: 0, y: 0, z: 0 };
@@ -88,6 +90,16 @@ export class Untangle {
   /** The box (handle; NaN: none yet) the dummy now being looked at is leaving, and by which face. */
   private shared = NaN;
   private sharedFace = -1;
+  /** `carry`'s index for the dummy now being looked at, -1 when he is not driven. */
+  private carryAt = -1;
+  /**
+   * Per slot (world x, z m; up m), a driven dummy's way out: along the ground, and the lift over what he is in that frees his parts and clears his soles
+   * (0 for none). His root and foot locks are kinematic, so `Walker` carries them out by it.
+   */
+  readonly carry = new Float64Array(SLOTS * 3);
+  /** The box a driven dummy's first stuck part is in, and per face of it the furthest (m) any of his stuck parts in it must go to leave by it (Infinity: further than that part is long). */
+  private carryBox: Collider | null = null;
+  private readonly reach = new Float64Array(6);
   /** The collider `intersectionsWithPoint` found the part's middle in (`take`), null for none. */
   private found: Collider | null = null;
   private readonly take = (collider: Collider): boolean => {
@@ -116,6 +128,10 @@ export class Untangle {
     for (let s = 0; s < dolls.length; s++) {
       const d = dolls[s]!;
       this.shared = NaN;
+      this.carryAt = d.live && d.driven ? s * 3 : -1;
+      this.carry.fill(0, s * 3, s * 3 + 3);
+      this.carryBox = null;
+      this.reach.fill(0);
       for (let k = 0; k < PARTS.length; k++) {
         const i = s * PARTS.length + k;
         this.since[i] = this.since[i]! + dt;
@@ -124,6 +140,7 @@ export class Untangle {
         this.since[i] = 0;
         if (this.held[i] === 0) this.restore(d.bodies[k]!.collider(0), i);
       }
+      if (this.carryBox !== null) this.stepOut();
     }
   }
 
@@ -155,8 +172,11 @@ export class Untangle {
     this.axis(part, k);
     const depth = inside.shapeType() === this.cuboid ? this.boxWay(world, part, inside, query) : this.roundWay(world, inside, query);
     if (depth === 0) return true;
-    if (this.aside) this.setAside(own, i, inside.handle);
-    this.push(part, inside.parent(), depth);
+    // A driven dummy steps out through it: a live contact would drag what he is in along with him.
+    if (this.aside || this.carryAt >= 0) this.setAside(own, i, inside.handle);
+    // A driven dummy steps out (`carry`): his anchors eat a push on the part, and the other's half, along the part's own way, only kicks what he is in.
+    if (this.carryAt >= 0) this.carryOut(depth);
+    else this.push(part, inside.parent(), depth);
     return true;
   }
 
@@ -221,6 +241,7 @@ export class Untangle {
    */
   private boxWay(world: World, part: RigidBody, inside: Collider, query: number): number {
     if (!this.runIn(inside)) return 0;
+    if (this.carryAt >= 0) this.gather(inside);
     const across = this.byAxis || (this.s0 > 0 && this.s1 < 1);
     this.spans(inside, across);
     let pierced = -1;
@@ -250,10 +271,7 @@ export class Untangle {
   /** The part's span in `inside`'s own frame, per axis (`_lo`, `_hi`): its run inside when `across` (`_at` its middle), else the point `_at`. */
   private spans(inside: Collider, across: boolean): void {
     if (across) {
-      for (let j = 0; j < 3; j++) {
-        _lo[j] = _from[j]! + _run[j]! * this.s0;
-        _hi[j] = _from[j]! + _run[j]! * this.s1;
-      }
+      this.runSpan();
       const mid = ((this.s0 + this.s1) / 2) * this.length;
       _at.x = _o.x + _d.x * mid;
       _at.y = _o.y + _d.y * mid;
@@ -441,7 +459,7 @@ export class Untangle {
 
   /**
    * `part` and `other` (when it moves) are pushed apart along `_n` until they part at `depth` / `EASE` m/s, each taking half that speed with its
-   * own mass: a walker's foot lock or hold keeps his part where it is, and a push shared by their masses then hardly moves the dummy it is in.
+   * own mass: a push shared by their masses hardly moves the dummy a held part is in.
    */
   private push(part: RigidBody, other: RigidBody | null, depth: number): void {
     const moves = other !== null && other.isDynamic();
@@ -453,6 +471,57 @@ export class Untangle {
     const each = moves ? (want - closing) / 2 : want - closing;
     this.shove(part, each);
     if (moves) this.shove(other, -each);
+  }
+
+  /** The driven dummy's way out is `depth` m along `_n`, unless another of his parts must go further along the ground. */
+  private carryOut(depth: number): void {
+    const c = this.carry;
+    const at = this.carryAt;
+    const x = _n.x * depth;
+    const z = _n.z * depth;
+    if (hypot2(x, z) <= hypot2(c[at]!, c[at + 1]!)) return;
+    c[at] = x;
+    c[at + 1] = z;
+  }
+
+  /** This stuck part's way out of `inside` by each face, into `reach`: `runIn` set its run in the box. */
+  private gather(inside: Collider): void {
+    if (this.carryBox === null) this.carryBox = inside;
+    else if (this.carryBox.handle !== inside.handle) return;
+    this.runSpan();
+    for (let f = 0; f < 6; f++) {
+      const depth = this.depthOf(f);
+      this.reach[f] = depth > this.length ? Infinity : Math.max(this.reach[f]!, depth);
+    }
+  }
+
+  /** The part's run inside the box (`runIn`) as its span per axis (`_lo`, `_hi`). */
+  private runSpan(): void {
+    for (let j = 0; j < 3; j++) {
+      _lo[j] = _from[j]! + _run[j]! * this.s0;
+      _hi[j] = _from[j]! + _run[j]! * this.s1;
+    }
+  }
+
+  /**
+   * A driven dummy leaves `carryBox` as a whole (his anchors carry every part at once), by the face along the ground his furthest part clears soonest,
+   * and over it by the face up: a part's own way out (`carry` from `carryOut`) is often one no other part of his can take (a foot's along its length).
+   */
+  private stepOut(): void {
+    let best = Infinity;
+    for (let f = 0; f < 6; f++) {
+      this.face(this.carryBox!, f, false);
+      const level = hypot2(_n.x, _n.z);
+      if (level < LEVEL_MIN) {
+        if (_n.y > 0 && this.reach[f]! < Infinity) this.carry[this.carryAt + 2] = this.reach[f]! / _n.y + CLEAR;
+        continue;
+      }
+      const go = this.reach[f]! / level;
+      if (go >= best) continue;
+      best = go;
+      this.carry[this.carryAt] = (_n.x / level) * go;
+      this.carry[this.carryAt + 1] = (_n.z / level) * go;
+    }
   }
 
   /** `body` sped up by `dv` m/s along `_n`. */

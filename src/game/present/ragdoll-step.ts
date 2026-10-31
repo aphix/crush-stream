@@ -122,7 +122,7 @@ export abstract class RagdollStepper extends RagdollPool {
       this.step = step;
       world.timestep = step;
     }
-    if (steps > 0) for (let s = 0; s < SLOTS; s++) this.walkers[s]!.control(steps * step);
+    if (steps > 0) for (let s = 0; s < SLOTS; s++) this.walkers[s]!.control(steps * step, this.untangle.carry, s * 3);
     if (steps > 0) {
       const thrown = this.thrownOut();
       world.numSolverIterations = thrown ? THROWN_ITERATIONS : ITERATIONS;

@@ -140,6 +140,8 @@ export class Gait {
   twist = 0;
   /** Both feet are home and he stands: the cycle is parked. */
   standing = true;
+  /** How far (m) over their spots both planted feet are held, the pelvis riding on them: a hop out of something he stands in (`Walker`). */
+  hop = 0;
   private pathX = 0;
   private pathZ = 0;
   private hipY = 0;
@@ -184,7 +186,7 @@ export class Gait {
   seed(x: number, y: number, z: number, yaw: number, ground: GroundAt): void {
     this.pathX = x;
     this.pathZ = z;
-    this.twist = this.sway = this.hipRise = 0;
+    this.twist = this.sway = this.hipRise = this.hop = 0;
     this.hipY = y - HIP_DROP;
     this.dirX = detSin(yaw);
     this.dirZ = detCos(yaw);
@@ -209,7 +211,7 @@ export class Gait {
     const o = f * 3;
     ankleFromPivot(this.rock, this.pivot[f]!, this.pitch[f]!);
     this.foot[o] = this.plant[o]! + this.dirX * this.rock[0]!;
-    this.foot[o + 1] = this.plant[o + 1]! + this.rock[1]!;
+    this.foot[o + 1] = this.plant[o + 1]! + this.hop + this.rock[1]!;
     this.foot[o + 2] = this.plant[o + 2]! + this.dirZ * this.rock[0]!;
     this.rise[f] = this.rock[1]! - ANKLE_Y;
   }

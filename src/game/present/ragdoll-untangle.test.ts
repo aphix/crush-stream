@@ -5,8 +5,10 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 import { driverLook } from "./driver-look.ts";
 import type { RagdollSystem } from "./engine-ragdoll.ts";
 import { PARTS } from "./ragdoll-body.ts";
+import { WALKER_SLOT } from "./ragdoll-pool.ts";
 import { limbThrough } from "./ragdoll-tangle.test-util.ts";
 import { flatSystem } from "./ragdoll-throws.test-util.ts";
+import { RUN_SPEED } from "./walker-locomotion.ts";
 
 const FRAME = 1 / FRAME_HZ;
 /** Placed in a dress, a figure's arms hang (`PARTS` as he stands). */
@@ -15,6 +17,14 @@ const STILL = new THREE.Vector3();
 /** How long (s) a limb may stay through the other's chest, and how long it is watched: without the untangle it stays the whole watch. */
 const FREED_WITHIN = 1.5;
 const WATCH_SECONDS = 3;
+/** How long (s) the walker's legs may stay in the chest he was stood in: found stuck in 0.15-0.27 s, then stepped out at no more than a walk. */
+const WALKER_OUT_WITHIN = 0.5;
+/** The fastest (m/s) any part of either may move while they part: a run; a pop flings parts faster. */
+const NO_POP_SPEED = RUN_SPEED;
+/** The lying dummy settles this long (s) before the walker is stood in his chest. */
+const SETTLE_SECONDS = 0.6;
+/** His foot's middle (m) no higher than its half height plus half a lying arm's 10 cm: down on the ground, not on an arm. */
+const FOOT_ON_GROUND = PARTS[10].h[1] + 0.05;
 
 type Pose = readonly [p: readonly [number, number, number], q: readonly [number, number, number, number]];
 
@@ -82,6 +92,37 @@ describe("given a dummy lying on the ground and another placed with a limb throu
       expect(longest, `the limb stayed through the chest for ${longest.toFixed(2)} s`).toBeLessThan(FREED_WITHIN);
     });
   }
+});
+
+describe("given a dummy lying on his back and the player's walker stood with both feet in his chest", () => {
+  it(`when he stands there, then his legs are out of the chest within ${WALKER_OUT_WITHIN} s, no part moving faster than a run, and he is on his feet on the ground`, () => {
+    place([[0, 0.12, 0], [-Math.SQRT1_2, 0, 0, Math.SQRT1_2]], 0);
+    for (let f = 0; f < SETTLE_SECONDS * FRAME_HZ; f++) system.update(FRAME, [], true, true, null);
+    const lying = system["dolls"][0]!;
+    const chest = lying.bodies[0]!.translation();
+    system.startWalker(new THREE.Vector3(chest.x, 0, chest.z), Math.PI / 2, DRESS);
+    const walker = system["dolls"][WALKER_SLOT]!;
+    let inside = 0;
+    let longest = 0;
+    let fastest = 0;
+    for (let f = 0; f < WATCH_SECONDS * FRAME_HZ; f++) {
+      system.update(FRAME, [], true, true, null);
+      let through = false;
+      for (let k = 2; k < PARTS.length && !through; k++) through = limbThrough(walker.bodies[k]!, k, lying.bodies[0]!);
+      inside = through ? inside + FRAME : 0;
+      longest = Math.max(longest, inside);
+      for (const doll of [walker, lying]) {
+        for (const body of doll.bodies) {
+          const v = body.linvel();
+          fastest = Math.max(fastest, Math.hypot(v.x, v.y, v.z));
+        }
+      }
+    }
+    expect(longest, `his legs stayed in the chest for ${longest.toFixed(2)} s`).toBeLessThan(WALKER_OUT_WITHIN);
+    expect(fastest, `a part moved at ${fastest.toFixed(2)} m/s`).toBeLessThan(NO_POP_SPEED);
+    expect(system.walker.state, "he stepped out on his feet").toBe("stand");
+    for (const k of [10, 11]) expect(walker.bodies[k]!.translation().y, "his feet came down on the ground, not on the lying dummy's arm").toBeLessThan(FOOT_ON_GROUND);
+  });
 });
 
 describe("given a dummy alone in the dummies' world, its ground taken out", () => {

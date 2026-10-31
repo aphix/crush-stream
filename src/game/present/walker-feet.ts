@@ -12,6 +12,7 @@ const AXIS = { x: 0, y: 0, z: 1 };
 /** No axis of a lock is rigid: only its motors hold the foot. */
 const NO_LOCKED_AXES: number = 0;
 const _spot = { x: 0, y: 0, z: 0 };
+const _drift = { x: 0, y: 0, z: 0 };
 
 /** The foot's two pivots on its box (the sole's back and front edges, in the part's own frame): heel, then toe. */
 const FOOT_HALF = PARTS[10].h;
@@ -34,6 +35,8 @@ export class FootLocks {
   private readonly feet: RigidBody[] = [];
   private readonly held = new Float64Array(6);
   private readonly grip = new Float64Array(2);
+  /** The spots' speed (x, y, z m/s) over this frame (`shift`), 0 when they stay. */
+  private readonly drift = new Float64Array(3);
   private readonly pivots = new Uint8Array(2);
   private world: World | null = null;
 
@@ -70,15 +73,31 @@ export class FootLocks {
       this.grip[f] = down ? Math.min(1, this.grip[f]! + dt / FOOT_LOCK.rampSeconds) : 0;
       if (down) {
         if (this.grip[f]! < 1 || gait.pivot[f]! !== this.pivots[f]!) this.rollOnto(f, gait.pivot[f]!);
-        _spot.x = this.held[f * 2]!;
-        _spot.y = gait.plant[f * 3 + 1]!;
-        _spot.z = this.held[f * 2 + 1]!;
+        _spot.x = this.held[f * 2]! - this.drift[0]! * dt;
+        _spot.y = gait.plant[f * 3 + 1]! + gait.hop - this.drift[1]! * dt;
+        _spot.z = this.held[f * 2 + 1]! - this.drift[2]! * dt;
         this.anchors[f]!.setTranslation(_spot, false);
       }
+      _drift.x = this.drift[0]!;
+      _drift.y = this.drift[1]!;
+      _drift.z = this.drift[2]!;
+      this.anchors[f]!.setLinvel(_drift, false);
       const share = this.grip[f]! * strength;
       const handle = this.joints[f]!.handle;
       for (const axis of LIN) raw.jointConfigureMotorPosition(handle, axis, 0, Math.max(MOTOR_FLOOR, FOOT_LOCK.stiffness * share), Math.max(MOTOR_FLOOR, FOOT_LOCK.damping * share));
     }
+    this.drift.fill(0);
+  }
+
+  /** The feet's spots move by (`dx`, `dy`, `dz`) m over the next `dt` s (`dy`: the gait's `hop`): each lock's anchor travels there through the steps, carrying its foot. */
+  shift(dx: number, dy: number, dz: number, dt: number): void {
+    for (let f = 0; f < 2; f++) {
+      this.held[f * 2]! += dx;
+      this.held[f * 2 + 1]! += dz;
+    }
+    this.drift[0] = dx / dt;
+    this.drift[1] = dy / dt;
+    this.drift[2] = dz / dt;
   }
 
   /** Foot `f` turns on `pivot` from now: the lock moves to that point of its sole and holds it where it is now (x and z), not where the gait meant it to be. */

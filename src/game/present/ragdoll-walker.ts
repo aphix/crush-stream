@@ -1,14 +1,14 @@
-import type { ImpulseJoint, RigidBody, World } from "@dimforge/rapier3d-simd";
+import type { ImpulseJoint, Ray, RigidBody, World } from "@dimforge/rapier3d-simd";
 import type { Rapier } from "../kernel/rapier.ts";
 import { detCos, detSin, hypot2, hypot3 } from "../kernel/physics-core.js";
 import { GRAVITY } from "../kernel/constants.ts";
 import { activeGround, NO_FLOOR } from "../world/ground.ts";
-import { type Doll, TOTAL_MASS } from "./ragdoll-body.ts";
+import { type Doll, PARTS, TOTAL_MASS } from "./ragdoll-body.ts";
 import { joinUp } from "./ragdoll-joints.ts";
 import { chooseRoute, GETUP_ROUTES, type GetUpRoute, smooth, STAGE, stageAt, standingBearing } from "./walker-getup.ts";
 import { Gait, GAIT } from "./walker-gait.ts";
 import { FootLocks } from "./walker-feet.ts";
-import { Locomotion } from "./walker-locomotion.ts";
+import { Locomotion, WALK_SPEED } from "./walker-locomotion.ts";
 import { ANG, FORCE_BASED, GETUP_GIMBAL, HIP_BACK, HIP_FORWARD, HIP_L, HIP_R, HOLD, LIN, MOTOR_FLOOR, MOTORS, ROLL_IN, ROLL_OUT, STAND_GIMBAL } from "./walker-motors.ts";
 import { leanedQuaternion, nlerp, pitchedQuaternion, spinBetween, uprightness } from "./walker-math.ts";
 
@@ -61,6 +61,11 @@ const LEASH = 0.2;
 const BLOCKED_MARGIN = 1;
 /** The hold's spring rate (rad/s) on his whole mass: displacement times it is the speed a displaced torso springs back at. */
 const HOLD_RATE = Math.sqrt(HOLD.stiffness / TOTAL_MASS);
+/** A hop out goes on at most this far (m, a stride) past the way out to find ground clear of everything to come down on. */
+const HOP_ON = 0.5;
+/** His feet's parts (`PARTS`), and a foot's half extents. */
+const FEET = [10, 11] as const;
+const FOOT_HALF = PARTS[10].h;
 
 type WalkState = "stand" | "down" | "getUp";
 
@@ -113,6 +118,12 @@ export class Walker {
   private readonly anchorPos = new Float64Array(3);
   private readonly anchorVel = new Float64Array(3);
   private readonly push = new Float64Array(3);
+  /** The hop out of what he stands in (`out`): how high (m; 0: none) his feet rise, and the way (x, z m) still to go over it before they come down. */
+  private hopUp = 0;
+  private readonly hopWay = new Float64Array(2);
+  /** How far (m) he has gone on past the way out looking for clear ground to come down on (`HOP_ON`). */
+  private hopOn = 0;
+  private ray: Ray | null = null;
   /** The ground under (x, z), the last known one where there is none. */
   private readonly groundAt = (x: number, z: number): number => {
     const height = activeGround().heightAt(x, z);
@@ -143,6 +154,7 @@ export class Walker {
     this.gimbal = world.createImpulseJoint(rapier.JointData.generic(ZERO, ZERO, GIMBAL_AXIS, NO_LOCKED_AXES), this.anchor, doll.bodies[0]!, true);
     for (const axis of [...ANG, ...LIN]) raw.jointConfigureMotorModel(this.gimbal.handle, axis, FORCE_BASED);
     this.feet.attach(rapier, world, doll.bodies);
+    this.ray = new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
     for (const row of MOTORS) raw.jointConfigureMotorModel(doll.joints[row.joint]!.handle, row.axis, FORCE_BASED);
     this.heading = yaw;
     pitchedQuaternion(this.reference, yaw, 0);
@@ -187,8 +199,8 @@ export class Walker {
     this.sinceStruck = 0;
   }
 
-  /** One frame of `dt` sim seconds: read where the body is, decide what he can do, and set the frame, the forces and every motor for the steps to come. */
-  control(dt: number): void {
+  /** One frame of `dt` sim seconds: read where the body is, decide what he can do, and set the frame, the forces and every motor for the steps to come. `out` (x, z m at `at`: `Untangle.carry`) is his stuck part's way out. */
+  control(dt: number, out: ArrayLike<number>, at: number): void {
     const doll = this.doll;
     if (doll === null || dt <= 0) return;
     const step = Math.min(dt, MAX_DT);
@@ -198,7 +210,7 @@ export class Walker {
     doll.bodies[0]!.wakeUp();
     this.feelHits(doll, step);
     this.decideState(doll, upright, doll.cur[1]!, step);
-    if (this.state === "stand") this.walk(doll, step);
+    if (this.state === "stand") this.walk(doll, step, out, at);
     this.steer(step);
     this.driveGimbal(upright);
     this.driveMotors(step);
@@ -295,6 +307,7 @@ export class Walker {
     this.state = "stand";
     this.loco.reset(yaw);
     this.framesOnFoot = 0;
+    this.hopUp = 0;
     this.gait.seed(at.x, at.y, at.z, yaw, this.groundAt);
     this.anchorPos[0] = at.x;
     this.anchorPos[1] = at.y;
@@ -308,12 +321,93 @@ export class Walker {
     this.anchor!.setLinvel(ZERO, false);
   }
 
-  /** On his feet: the root's speed and facing follow the controls, the gait follows the root, and the frame moves to where the gait puts his torso. */
-  private walk(doll: Doll, dt: number): void {
+  /** On his feet: the root's speed and facing follow the controls, the gait follows the root, and the frame moves to where the gait puts his torso. `out` at `at`: `control`'s. */
+  private walk(doll: Doll, dt: number, out: ArrayLike<number>, at: number): void {
     this.holdRootToBody(doll);
+    this.getOut(dt, out, at);
     this.loco.update(dt, this.heading, this.command);
     this.gait.update(dt, this.loco, this.groundAt, doll.cur, 3);
     this.moveAnchor(dt);
+  }
+
+  /**
+   * A part stuck in something (`out` at `at`: `Untangle.carry`, the way along the ground and the lift over it) is carried out at a walk, root and planted
+   * feet together (his anchors are kinematic: a push on the part dies in them). Where it can be lifted over, he hops: feet up, over, and down where
+   * nothing lies under them, for a foot dragged along the ground levers whatever limb lies in its way. Else he steps out along the ground.
+   */
+  private getOut(dt: number, out: ArrayLike<number>, at: number): void {
+    const pace = WALK_SPEED * dt;
+    let x = out[at]!;
+    let z = out[at + 1]!;
+    // Found, or still rising: as high and as far as any of his parts found stuck so far needs.
+    if (out[at + 2]! > 0 && (x !== 0 || z !== 0) && (this.hopUp === 0 || this.gait.hop < this.hopUp)) {
+      if (this.hopUp === 0) this.hopOn = 0;
+      this.hopUp = Math.max(this.hopUp, out[at + 2]!);
+      if (hypot2(x, z) > hypot2(this.hopWay[0]!, this.hopWay[1]!)) {
+        this.hopWay[0] = x;
+        this.hopWay[1] = z;
+      }
+    }
+    let y = 0;
+    if (this.hopUp > 0) {
+      x = this.hopWay[0]!;
+      z = this.hopWay[1]!;
+      const far = hypot2(x, z);
+      if (far > 0 && this.gait.hop < this.hopUp) {
+        y = Math.min(pace, this.hopUp - this.gait.hop);
+        x = z = 0;
+      } else if (far > 0) {
+        const share = Math.min(1, pace / far);
+        x *= share;
+        z *= share;
+        this.hopWay[0]! -= x;
+        this.hopWay[1]! -= z;
+        // Over: on to where his feet come down on nothing but the ground.
+        if (share === 1 && this.hopOn < HOP_ON && this.landsOnSomething()) {
+          this.hopWay[0] = (x / far) * pace;
+          this.hopWay[1] = (z / far) * pace;
+          this.hopOn += pace;
+        }
+      } else {
+        y = -Math.min(pace, this.gait.hop);
+        x = z = 0;
+        if (this.gait.hop + y <= 0) this.hopUp = 0;
+      }
+    } else {
+      const far = hypot2(x, z);
+      const share = far > 0 ? Math.min(1, pace / far) : 0;
+      x *= share;
+      z *= share;
+    }
+    this.gait.hop += y;
+    this.gait.shift(x, z);
+    this.feet.shift(x, y, z, dt);
+  }
+
+  /** Whether a foot set down from its hop would land on something but the ground: rays down from points along each sole. */
+  private landsOnSomething(): boolean {
+    const ray = this.ray!;
+    const flags = this.rapier!.QueryFilterFlags.EXCLUDE_FIXED | this.rapier!.QueryFilterFlags.EXCLUDE_SENSORS;
+    const groups = this.doll!.bodies[FEET[0]]!.collider(0).collisionGroups();
+    // Everything his feet hit but him: the filter half without his own bit.
+    const query = groups & ~(groups >>> 16);
+    for (const k of FEET) {
+      const foot = this.doll!.bodies[k]!;
+      const p = foot.translation();
+      const q = foot.rotation();
+      // The foot's long axis (its local z) in the world.
+      const ax = 2 * (q.x * q.z + q.w * q.y);
+      const ay = 2 * (q.y * q.z - q.w * q.x);
+      const az = 1 - 2 * (q.x * q.x + q.y * q.y);
+      for (let s = -1; s <= 1; s += 0.5) {
+        ray.origin.x = p.x + ax * s * FOOT_HALF[2];
+        ray.origin.y = p.y + ay * s * FOOT_HALF[2] - FOOT_HALF[1];
+        ray.origin.z = p.z + az * s * FOOT_HALF[2];
+        // Down to a sole's thickness over where it lands: lower than that is the ground's own bumps.
+        if (this.world!.castRay(ray, this.gait.hop - FOOT_HALF[1], true, flags, query) !== null) return true;
+      }
+    }
+    return false;
   }
 
   /** A torso held back by the world (a wall, a car) brings the root back to within `LEASH` of it, and he goes no faster than he is moving. */
