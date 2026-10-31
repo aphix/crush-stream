@@ -168,8 +168,8 @@ export class DeformableCar extends CarParts {
   private hoodTyres: TyreSkin | null = null;
   /** The parts the bonnet folds down onto, which its hold keeps under it: the cabin shell (its dash) and the engine bay. */
   private underHood: readonly PartSeat[] | null = null;
-  /** The `placements` count the tyre holds last ran at: a car put on a spot since is held afresh. */
-  private heldPlacements = -1;
+  /** The skins were rewritten outside `updateSkin` since the tyre holds last ran (a reset, a net or replay state): the next hold starts from them, not from the skin it kept. */
+  private skinUnheld = true;
   private classBody: THREE.Object3D | null = null;
 
   spawn(x: number, z: number, speed: number): void {
@@ -232,6 +232,7 @@ export class DeformableCar extends CarParts {
     // Before the rest restores below: a dent's saved copy may be a crumpled skin the rest restore then overwrites.
     for (const p of this.parts) if (!keepTorn || !p.detached) clearDents(p.dent);
     this.deform.restoreRest(this.body.geometry, this.drawnRest("body"));
+    this.skinUnheld = true;
     this.restoreRest(this.hood.geometry, this.hoodRest, this.drawnRest("hood"));
     this.restoreRest(this.trunk.geometry, this.trunkRest, this.drawnRest("trunk"));
     this.restoreRest(this.doorMeshL.geometry, this.doorLRest, this.drawnRest("doorL"));
@@ -742,10 +743,9 @@ export class DeformableCar extends CarParts {
     let gone = 0;
     for (let i = 0; i < this.wheels.length; i++) if (this.looseWheels[i]!.loose) gone |= 1 << i;
     const lift = CLASSES[carClass(this)].lift;
-    // A car put on a spot since the last hold (a reset, held or tapped) is held afresh: the hold redoes only when its wheels drift past a
-    // slack, and a held reset rewrites the skin from the kept state while its wheels land where they stood (the drawn body lost its lift).
-    const fresh = skinWritten || this.placements !== this.heldPlacements;
-    this.heldPlacements = this.placements;
+    // Not fresh, the hold redoes its lift from the skin it kept, which a reset or a net state rewrote: on a deferred frame (LoD) that drew the last crash.
+    const fresh = skinWritten || this.skinUnheld;
+    this.skinUnheld = false;
     this.bodyTyres.hold(this.group, this.wheels, gone, lift, fresh);
     this.underHood ??= this.partSeats.filter((s) => s.kind === PART_KIND.interior || s.kind === PART_KIND.engineBay);
     if (!this.hoodOff()) this.hoodTyres.hold(this.group, this.wheels, gone, lift, fresh, this.underHood);
@@ -882,6 +882,7 @@ export class DeformableCar extends CarParts {
    */
   writeNetState(deform: DeformNetState, parts: PartNetState): void {
     this.deform.writeNetState(deform, this.group, this.body.geometry, this.drawnRest("body"));
+    this.skinUnheld = true;
     this.restoreWear();
     for (let i = 0; i < this.parts.length; i++) {
       const p = this.parts[i]!;

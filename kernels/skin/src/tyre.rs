@@ -1,46 +1,31 @@
-// Rust -> WASM port of the tyre hold's plan grid and sag pass (`planGrid`, `TyreSkin.liftSaggingTriangles`): the JS's operations in
-// its order (f64 over f32 loads, f32 stores, `Math.min` / `Math.max` / `Math.hypot` as V8 has them), so the bits are the JS's.
+// Rust -> WASM port of the tyre hold's sag pass (`TyreSkin.liftSaggingTriangles`, `sagTriangle`): the JS's operations in its order
+// (f64 over f32 loads, f32 stores, `Math.min` / `Math.max` / `Math.hypot` as V8 has them), so the bits are the JS's.
 // Nothing lives here between calls: the caller copies a call's inputs into a scratch arena and its results out.
 
-// car-tyre-skin.ts: `PLAN_CELL`, `SAG_CLEAR`, `SAG_STEP`, `SAG_AHEAD_COUNT`, `SAG_ALONG`, `SAG_LIFTABLE`.
-const PLAN_CELL: f64 = 0.06;
+// car-tyre-skin.ts: `FALL`, `SAG_CLEAR`, `SAG_STEP`, `SAG_FLOOR_SLACK`, `SAG_EDGE_FADE`, `SAG_LIFTABLE`, `SAG_LIFT_FROM`.
+const FALL: f64 = 1.0;
 const SAG_CLEAR: f64 = 0.01;
 const SAG_STEP: f64 = 0.05;
-const SAG_AHEAD_COUNT: usize = 39;
-const SAG_ALONG: [f64; 5] = [-1.0, -0.5, 0.0, 0.5, 1.0];
-const SAG_COUNT: usize = SAG_AHEAD_COUNT * 5;
+const SAG_FLOOR_SLACK: f64 = 1e-9;
+// car-tyre-skin.ts `ROW_SLOPE_MIN`.
+const ROW_SLOPE_MIN: f64 = 1e-9;
+// car-tyre-skin.ts `ROW_TOP_SLACK`.
+const ROW_TOP_SLACK: f64 = 1e-6;
+const SAG_EDGE_FADE: f64 = 0.1;
 const SAG_LIFTABLE: f64 = 0.5;
+const SAG_LIFT_FROM: f64 = 0.25;
 
-// A plan grid past these is no skin's: `plan_grid` declines it and the JS builds it.
-const PLAN_CELLS_MAX: f64 = 4194304.0;
-const PLAN_FILED_MAX: usize = 16777216;
-
-// What a triangle's blend of its corner heights may stand over the highest of them (m), for the rounding of its weights.
-const SAG_BLEND_SLACK: f64 = 1e-9;
-// A sag record: the plan determinant, the plan terms of the two weights, the third corner's plan place, the corner heights and the highest.
-const RECORD_LEN: usize = 11;
-const REC_DEN: usize = 0;
-const REC_C1: usize = 1;
-const REC_C2: usize = 2;
-const REC_C3: usize = 3;
-const REC_C4: usize = 4;
-const REC_CX: usize = 5;
-const REC_CZ: usize = 6;
-const REC_YA: usize = 7;
-const REC_YB: usize = 8;
-const REC_YC: usize = 9;
-const REC_YMAX: usize = 10;
-
-// `sag_look` lays the samples out across the tyre, then step by step ahead: this far back is the sample one step back on the same line.
-const SAG_STEP_BACK: usize = SAG_ALONG.len();
-
-// `sag_look`'s return, bit by bit.
-const LOOK_CLEAR: i32 = 1;
-const LOOK_FINITE: i32 = 2;
-
-const PLAN_OK: i32 = 0;
-const PLAN_SHORT: i32 = 1;
-const PLAN_DECLINED: i32 = 2;
+// The job block (f64, `tyre-sag-kernel.ts` `SAG_JOB`): the wheel's axle and hub at the last hold, the tyre's radius and half width at
+// scale 1, its hub and scale when the rest skin's clearances were read, the wheel's index (its bit in `liftable`), and the shares of the
+// radius the top is read whole to and not past.
+const JOB_HELD: usize = 0;
+const JOB_TYRE_R: usize = 6;
+const JOB_TYRE_HALF_W: usize = 7;
+const JOB_REST_HUB: usize = 8;
+const JOB_REST_SCALE: usize = 11;
+const JOB_WHEEL: usize = 12;
+const JOB_TOP_FULL: usize = 13;
+const JOB_TOP_NONE: usize = 14;
 
 #[inline(always)]
 fn js_min(a: f64, b: f64) -> f64 {
@@ -133,345 +118,304 @@ unsafe fn load(p: *const f32, i: usize) -> f64 {
     *p.add(i) as f64
 }
 
+// A tyre: hub, unit axle, and its radius and half width at its scale; the rest are the axle's derived terms `clearOver` computes per call,
+// computed once here in its operations (so in its bits): the road's direction across the axle (`fx`, `fz`) and the up of the clearance (`u`).
+struct Tyre {
+    h: [f64; 3],
+    a: [f64; 3],
+    r: f64,
+    half_w: f64,
+    flat: f64,
+    fx: f64,
+    fz: f64,
+    u: [f64; 3],
+}
+
+impl Tyre {
+    fn new(h: [f64; 3], a: [f64; 3], scale: f64, r: f64, half_w: f64) -> Tyre {
+        let flat = hypot2(a[0], a[2]);
+        let fx = -a[2] / flat;
+        let fz = a[0] / flat;
+        Tyre { h, a, r: r * scale, half_w: half_w * scale, flat, fx, fz, u: [-fz * a[1], fz * a[0] - fx * a[2], fx * a[1]] }
+    }
+}
+
+// car-tyre-skin.ts `clearOver`: how far (m) point `p` stands over the tyre's upper surface, less `gap`.
 #[inline(always)]
-fn plan_cell(v: f64, from: f64) -> f64 {
-    ((v - from) / PLAN_CELL).floor()
+fn clear_over(t: &Tyre, p: &[f64; 3], gap: f64) -> f64 {
+    let dx = p[0] - t.h[0];
+    let dy = p[1] - t.h[1];
+    let dz = p[2] - t.h[2];
+    let up = t.u[0] * dx + t.u[1] * dy + t.u[2] * dz;
+    let ahead = dx * t.fx + dz * t.fz;
+    let along = dx * t.a[0] + dy * t.a[1] + dz * t.a[2];
+    let r = t.r;
+    let top = js_max(0.0, r * r - ahead * ahead).sqrt() - FALL * (js_max(0.0, ahead.abs() - r) + js_max(0.0, along.abs() - t.half_w));
+    up - top - gap
 }
 
-// ---- planGrid: the triangles over a tyre filed by plan cell ----------------------------------------------------
-// hdr (out, f64): x0, z0, nx, nz, filed length, then (PLAN_SHORT) the start length and filed length the grid needs.
-// Returns PLAN_OK, PLAN_SHORT (`start` or `filed` too small: hdr says how big, call again) or PLAN_DECLINED (no
-// triangles, or an extent that is not a finite grid of sane size: the JS builds it).
-#[no_mangle]
-pub unsafe extern "C" fn plan_grid(
-    pos: *const f32,
-    tris: *const i32,
-    count: usize,
-    box_: *mut f64,
-    den: *mut f64,
-    start: *mut i32,
-    start_cap: usize,
-    filed: *mut i32,
-    filed_cap: usize,
-    hdr: *mut f64,
-) -> i32 {
-    if count == 0 {
-        return PLAN_DECLINED;
+// car-tyre-skin.ts `sagLift`.
+fn sag_lift(short: f64, share: f64) -> f64 {
+    let ramp = js_min(1.0, (share - SAG_LIFT_FROM) / (SAG_LIFTABLE - SAG_LIFT_FROM));
+    if ramp > 0.0 {
+        (short * ramp) / share
+    } else {
+        0.0
     }
-    let mut x0 = f64::INFINITY;
-    let mut z0 = f64::INFINITY;
-    let mut x1 = f64::NEG_INFINITY;
-    let mut z1 = f64::NEG_INFINITY;
-    for i in 0..count {
-        let a = *tris.add(i * 3) as usize * 3;
-        let b = *tris.add(i * 3 + 1) as usize * 3;
-        let c = *tris.add(i * 3 + 2) as usize * 3;
-        *den.add(i) = (load(pos, b + 2) - load(pos, c + 2)) * (load(pos, a) - load(pos, c)) + (load(pos, c) - load(pos, b)) * (load(pos, a + 2) - load(pos, c + 2));
-        *box_.add(i * 4) = js_min(js_min(load(pos, a), load(pos, b)), load(pos, c));
-        *box_.add(i * 4 + 1) = js_max(js_max(load(pos, a), load(pos, b)), load(pos, c));
-        *box_.add(i * 4 + 2) = js_min(js_min(load(pos, a + 2), load(pos, b + 2)), load(pos, c + 2));
-        *box_.add(i * 4 + 3) = js_max(js_max(load(pos, a + 2), load(pos, b + 2)), load(pos, c + 2));
-        x0 = js_min(x0, *box_.add(i * 4));
-        x1 = js_max(x1, *box_.add(i * 4 + 1));
-        z0 = js_min(z0, *box_.add(i * 4 + 2));
-        z1 = js_max(z1, *box_.add(i * 4 + 3));
-    }
-    let nx_f = plan_cell(x1, x0) + 1.0;
-    let nz_f = plan_cell(z1, z0) + 1.0;
-    if !(nx_f >= 1.0 && nz_f >= 1.0 && nx_f * nz_f <= PLAN_CELLS_MAX) {
-        return PLAN_DECLINED;
-    }
-    let nx = nx_f as usize;
-    let nz = nz_f as usize;
-    let cells = nx * nz;
-    *hdr = x0;
-    *hdr.add(1) = z0;
-    *hdr.add(2) = nx_f;
-    *hdr.add(3) = nz_f;
-    if start_cap < cells + 1 {
-        *hdr.add(5) = (cells + 1) as f64;
-        *hdr.add(6) = filed_cap as f64;
-        return PLAN_SHORT;
-    }
-    for k in 0..cells + 1 {
-        *start.add(k) = 0;
-    }
-    for i in 0..count {
-        if (*den.add(i)).abs() < 1e-12 {
-            continue;
-        }
-        let cz_hi = plan_cell(*box_.add(i * 4 + 3), z0) as usize;
-        let cx_hi = plan_cell(*box_.add(i * 4 + 1), x0) as usize;
-        let mut cz = plan_cell(*box_.add(i * 4 + 2), z0) as usize;
-        while cz <= cz_hi {
-            let mut cx = plan_cell(*box_.add(i * 4), x0) as usize;
-            while cx <= cx_hi {
-                *start.add(cz * nx + cx + 1) += 1;
-                cx += 1;
-            }
-            cz += 1;
-        }
-    }
-    for k in 0..cells {
-        *start.add(k + 1) += *start.add(k);
-    }
-    let total = *start.add(cells) as usize;
-    if total > PLAN_FILED_MAX {
-        return PLAN_DECLINED;
-    }
-    if filed_cap < total {
-        *hdr.add(5) = (cells + 1) as f64;
-        *hdr.add(6) = total as f64;
-        return PLAN_SHORT;
-    }
-    // `start[cell]` is the cursor while filing, so each ends at the next cell's start; shifted back after.
-    for i in 0..count {
-        if (*den.add(i)).abs() < 1e-12 {
-            continue;
-        }
-        let cz_hi = plan_cell(*box_.add(i * 4 + 3), z0) as usize;
-        let cx_hi = plan_cell(*box_.add(i * 4 + 1), x0) as usize;
-        let mut cz = plan_cell(*box_.add(i * 4 + 2), z0) as usize;
-        while cz <= cz_hi {
-            let mut cx = plan_cell(*box_.add(i * 4), x0) as usize;
-            while cx <= cx_hi {
-                let cursor = start.add(cz * nx + cx);
-                *filed.add(*cursor as usize) = i as i32;
-                *cursor += 1;
-                cx += 1;
-            }
-            cz += 1;
-        }
-    }
-    for k in (1..cells).rev() {
-        *start.add(k) = *start.add(k - 1);
-    }
-    *start = 0;
-    *hdr.add(4) = total as f64;
-    PLAN_OK
 }
 
-// ---- liftSaggingTriangles: the tyre's top samples read against the skin's triangles -----------------------------
-// job (f64): the wheel's axle (3) and hub (3) in the mesh's frame, the tyre's radius and half width at scale 1, the plan
-// grid's x0, z0, nx, nz, then the wheel's index (its bit in `liftable`, per vertex: it rests over that tyre).
-// `sag_look` takes each corner's lift into `read` and the samples (x, z, y) into `samples`, and returns `LOOK_CLEAR` when every corner stands
-// over the highest sample: no triangle can stand short, and the caller need not load the plan for `sag_pass`. `LOOK_FINITE`: every corner height is finite.
-#[no_mangle]
-pub unsafe extern "C" fn sag_look(pos: *const f32, weld: *const i32, tris: *const i32, corners: usize, lift: *const f32, read: *mut f32, samples: *mut f64, job: *const f64) -> i32 {
-    let (e0, e1, e2) = (*job, *job.add(1), *job.add(2));
-    let (h0, h1, h2) = (*job.add(3), *job.add(4), *job.add(5));
-    let (tyre_r, tyre_half_w) = (*job.add(6), *job.add(7));
-    let scale = hypot3(e0, e1, e2);
-    let ax = e0 / scale;
-    let ay = e1 / scale;
-    let az = e2 / scale;
-    let flat = hypot2(ax, az);
-    let fx = -az / flat;
-    let fz = ax / flat;
-    let ux = fz * ay;
-    let uy = fz * ax - fx * az;
-    let uz = -fx * ay;
-    let r = tyre_r * scale;
-    let half_w = tyre_half_w * scale;
-    let mut lowest = f64::INFINITY;
-    let mut heights = 0.0;
-    for k in 0..corners {
-        let v = *tris.add(k) as usize;
-        let corner_lift = *lift.add(*weld.add(v) as usize);
-        *read.add(k) = corner_lift;
-        let height = load(pos, v * 3 + 1) + corner_lift as f64;
-        lowest = js_min(lowest, height);
-        heights += height;
-    }
-    let mut highest = f64::NEG_INFINITY;
-    let mut n = 0usize;
-    for i in 0..SAG_AHEAD_COUNT {
-        let ahead = (i as f64 - (SAG_AHEAD_COUNT - 1) as f64 / 2.0) * SAG_STEP;
-        let top = (1.0 - ahead * ahead).sqrt() * r;
-        for k in 0..SAG_ALONG.len() {
-            let across = SAG_ALONG[k] * half_w;
-            let sample_y = h1 + ay * across + uy * top + SAG_CLEAR;
-            *samples.add(n) = h0 + fx * ahead * r + ax * across + ux * top;
-            *samples.add(SAG_COUNT + n) = h2 + fz * ahead * r + az * across + uz * top;
-            *samples.add(2 * SAG_COUNT + n) = sample_y;
-            highest = js_max(highest, sample_y);
-            n += 1;
-        }
-    }
-    // A triangle's height inside it is a blend of its corners': with every corner over the highest sample, none can stand short.
-    ((lowest > highest + 1e-9) as i32 * LOOK_CLEAR) | ((heights.is_finite() as i32) * LOOK_FINITE)
-}
-
-// Triangle `i`'s plan terms, corner heights (lift included) and the highest of them, once for the many samples that read it.
-#[inline(always)]
-unsafe fn fill_record(record: *mut f64, i: usize, pos: *const f32, weld: *const i32, tris: *const i32, den: *const f64, lift: *const f32) {
-    let t = i * 3;
-    let va = *tris.add(t) as usize;
-    let vb = *tris.add(t + 1) as usize;
-    let vc = *tris.add(t + 2) as usize;
-    let (a, b, c) = (va * 3, vb * 3, vc * 3);
-    *record.add(REC_DEN) = *den.add(i);
-    *record.add(REC_C1) = load(pos, b + 2) - load(pos, c + 2);
-    *record.add(REC_C2) = load(pos, c) - load(pos, b);
-    *record.add(REC_C3) = load(pos, c + 2) - load(pos, a + 2);
-    *record.add(REC_C4) = load(pos, a) - load(pos, c);
-    *record.add(REC_CX) = load(pos, c);
-    *record.add(REC_CZ) = load(pos, c + 2);
-    let ya = load(pos, a + 1) + *lift.add(*weld.add(va) as usize) as f64;
-    let yb = load(pos, b + 1) + *lift.add(*weld.add(vb) as usize) as f64;
-    let yc = load(pos, c + 1) + *lift.add(*weld.add(vc) as usize) as f64;
-    *record.add(REC_YA) = ya;
-    *record.add(REC_YB) = yb;
-    *record.add(REC_YC) = yc;
-    *record.add(REC_YMAX) = js_max(js_max(ya, yb), yc);
-}
-
-// What reading a triangle needs: the skin's points and lift, the plan's boxes and determinants, and the pass's scratch.
+// What the pass reads and writes of the skin.
 struct Skin {
     pos: *const f32,
+    rest: *const f32,
     weld: *const i32,
-    tris: *const i32,
-    den: *const f64,
+    liftable: *const u8,
     lift: *const f32,
-    box_: *const f64,
-    records: *mut f64,
-    built: *mut u8,
+    bump: *mut f32,
+    bit: u8,
 }
 
-// A triangle's height at a sample inside it and the sample's weights of its three corners.
-struct Reading {
-    y: f64,
-    l1: f64,
-    l2: f64,
-    l3: f64,
+// The wheel's tyre as held (`held`), as the rest skin's clearances read it (`rest`), and the shares of the radius the top is read whole to and not past.
+struct Read {
+    held: Tyre,
+    rest: Tyre,
+    full: f64,
+    none: f64,
 }
 
-// Triangle `i` read at the sample (x, z): true, with its height there in `out`, when the sample is inside its plan box and the triangle and the height is over `best`.
-#[inline(always)]
-unsafe fn read_triangle(s: &Skin, i: usize, x: f64, z: f64, best: f64, out: &mut Reading) -> bool {
-    if (x < *s.box_.add(i * 4)) | (x > *s.box_.add(i * 4 + 1)) | (z < *s.box_.add(i * 4 + 2)) | (z > *s.box_.add(i * 4 + 3)) {
-        return false;
-    }
-    let record = s.records.add(i * RECORD_LEN);
-    if *s.built.add(i) == 0 {
-        fill_record(record, i, s.pos, s.weld, s.tris, s.den, s.lift);
-        *s.built.add(i) = 1;
-    }
-    // Its blend of the corner heights stands no higher than the highest of them (a rounding's width over): under the best so far, it cannot replace it.
-    if *record.add(REC_YMAX) + SAG_BLEND_SLACK < best {
-        return false;
-    }
-    let to_x = x - *record.add(REC_CX);
-    let to_z = z - *record.add(REC_CZ);
-    let l1 = (*record.add(REC_C1) * to_x + *record.add(REC_C2) * to_z) / *record.add(REC_DEN);
-    let l2 = (*record.add(REC_C3) * to_x + *record.add(REC_C4) * to_z) / *record.add(REC_DEN);
-    let l3 = 1.0 - l1 - l2;
-    if (l1 < 0.0) | (l2 < 0.0) | (l3 < 0.0) {
-        return false;
-    }
-    let y = l1 * *record.add(REC_YA) + l2 * *record.add(REC_YB) + l3 * *record.add(REC_YC);
-    if y <= best {
-        return false;
-    }
-    *out = Reading { y, l1, l2, l3 };
-    true
+// car-tyre-skin.ts `sidesPast`: bits of the read's bounds the point (x, y, z) lies past.
+fn sides_past(q: &Read, x: f64, y: f64, z: f64, reach: f64, edge: f64) -> u32 {
+    let t = &q.held;
+    let dx = x - t.h[0];
+    let dz = z - t.h[2];
+    let ahead = dx * t.fx + dz * t.fz;
+    let along = dx * t.a[0] + (y - t.h[1]) * t.a[1] + dz * t.a[2];
+    (if ahead > reach { 1 } else { 0 }) | (if ahead < -reach { 2 } else { 0 }) | (if along > edge { 4 } else { 0 }) | (if along < -edge { 8 } else { 0 })
 }
 
-// `lift` and `dirty` are written when a sample is short; `bump` is zero on entry and on return; `records` is scratch,
-// `RECORD_LEN` f64 a triangle, filled when a sample first reads it (`built`, a byte a triangle, is scratch too). `look` is
-// `sag_look`'s return. Returns 1 when any corner was lifted.
+// car-tyre-skin.ts `sagOffTop`: the triangle lies wholly where the read takes nothing.
+fn off_top(q: &Read, pa: &[f64; 2], ya: f64, pb: &[f64; 2], yb: f64, pc: &[f64; 2], yc: f64) -> bool {
+    let t = &q.held;
+    if js_min(js_min(ya, yb), yc) > t.h[1] + t.a[1].abs() * t.half_w + t.flat * t.r + SAG_CLEAR {
+        return true;
+    }
+    let reach = q.none * t.r;
+    let edge = t.half_w * (1.0 + SAG_EDGE_FADE);
+    sides_past(q, pa[0], ya, pa[1], reach, edge) & sides_past(q, pb[0], yb, pb[1], reach, edge) & sides_past(q, pc[0], yc, pc[1], reach, edge) != 0
+}
+
+// car-tyre-skin.ts `sagFloor`: under the clearance of every point of the triangle within the tyre's radius out along the road.
+fn sag_floor(q: &Read, pa: &[f64; 2], ya: f64, pb: &[f64; 2], yb: f64, pc: &[f64; 2], yc: f64) -> f64 {
+    let t = &q.held;
+    let cx = (pa[0] + pb[0] + pc[0]) / 3.0;
+    let cy = (ya + yb + yc) / 3.0;
+    let cz = (pa[1] + pb[1] + pc[1]) / 3.0;
+    let dx = cx - t.h[0];
+    let dy = cy - t.h[1];
+    let dz = cz - t.h[2];
+    let ahead = dx * t.fx + dz * t.fz;
+    if ahead.abs() >= t.r {
+        return f64::NEG_INFINITY;
+    }
+    let along = dx * t.a[0] + dy * t.a[1] + dz * t.a[2];
+    let root = (t.r * t.r - ahead * ahead).sqrt();
+    let clear = t.u[0] * dx + t.u[1] * dy + t.u[2] * dz - root + FALL * js_max(0.0, along.abs() - t.half_w);
+    let slope = ahead / root;
+    let fall = if along.abs() > t.half_w {
+        if along > 0.0 {
+            FALL
+        } else {
+            -FALL
+        }
+    } else {
+        0.0
+    };
+    let gx = t.u[0] + slope * t.fx + fall * t.a[0];
+    let gy = t.u[1] + fall * t.a[1];
+    let gz = t.u[2] + slope * t.fz + fall * t.a[2];
+    let to_a = gx * (pa[0] - cx) + gy * (ya - cy) + gz * (pa[1] - cz);
+    let to_b = gx * (pb[0] - cx) + gy * (yb - cy) + gz * (pb[1] - cz);
+    let to_c = gx * (pc[0] - cx) + gy * (yc - cy) + gz * (pc[1] - cz);
+    clear + js_min(js_min(to_a, to_b), to_c)
+}
+
+// car-tyre-skin.ts `narrowRow`: `row` (first and last `j`) narrowed to the points whose `q0 + j·qd` may lie strictly between `lo` and `hi`.
+fn narrow_row(row: &mut (f64, f64), q0: f64, qd: f64, lo: f64, hi: f64, n: f64) {
+    if qd.abs() < ROW_SLOPE_MIN {
+        let spread = (n + 1.0) * ROW_SLOPE_MIN;
+        if q0 + spread <= lo || q0 - spread >= hi {
+            row.1 = -1.0;
+        }
+        return;
+    }
+    let j1 = (lo - q0) / qd;
+    let j2 = (hi - q0) / qd;
+    row.0 = js_max(row.0, js_min(j1, j2).floor() - 1.0);
+    row.1 = js_min(row.1, js_max(j1, j2).ceil() + 1.0);
+}
+
+// car-tyre-skin.ts `sagTriangle` for the triangle of corners `va`, `vb`, `vc`; true when it asked any corner up (into `bump`).
+unsafe fn sag_triangle(s: &Skin, q: &Read, va: usize, vb: usize, vc: usize) -> bool {
+    let (a, b, c) = (va * 3, vb * 3, vc * 3);
+    let ya = load(s.pos, a + 1) + *s.lift.add(*s.weld.add(va) as usize) as f64;
+    let yb = load(s.pos, b + 1) + *s.lift.add(*s.weld.add(vb) as usize) as f64;
+    let yc = load(s.pos, c + 1) + *s.lift.add(*s.weld.add(vc) as usize) as f64;
+    let la = *s.liftable.add(va) & s.bit != 0;
+    let lb = *s.liftable.add(vb) & s.bit != 0;
+    let lc = *s.liftable.add(vc) & s.bit != 0;
+    let pa = [load(s.pos, a), load(s.pos, a + 2)];
+    let pb = [load(s.pos, b), load(s.pos, b + 2)];
+    let pc = [load(s.pos, c), load(s.pos, c + 2)];
+    if off_top(q, &pa, ya, &pb, yb, &pc, yc) || sag_floor(q, &pa, ya, &pb, yb, &pc, yc) >= SAG_CLEAR + SAG_FLOOR_SLACK {
+        return false;
+    }
+    let t = &q.held;
+    let longest = js_max(
+        js_max(hypot3(pa[0] - pb[0], ya - yb, pa[1] - pb[1]), hypot3(pb[0] - pc[0], yb - yc, pb[1] - pc[1])),
+        hypot3(pc[0] - pa[0], yc - ya, pc[1] - pa[1]),
+    );
+    let order = js_max(2.0, (longest / SAG_STEP).ceil());
+    let mut asked = false;
+    let mut p = [0.0f64; 3];
+    let mut rp = [0.0f64; 3];
+    let reach = q.none * t.r;
+    let edge = t.half_w * (1.0 + SAG_EDGE_FADE);
+    // car-tyre-skin.ts `sagTriangle`: along a row the share, the reach along the road and across the tread are linear (`narrow_row`).
+    let sx = (pb[0] - pc[0]) / order;
+    let sy = (yb - yc) / order;
+    let sz = (pb[1] - pc[1]) / order;
+    let ahead_step = sx * t.fx + sz * t.fz;
+    let along_step = sx * t.a[0] + sy * t.a[1] + sz * t.a[2];
+    let share_step = ((if lb { 1.0 } else { 0.0 }) - (if lc { 1.0 } else { 0.0 })) / order;
+    // car-tyre-skin.ts `sagTriangle`: `clear_over`'s up is linear along a row too, read only under the top at the run's least reach.
+    let up_step = sx * t.u[0] + sy * t.u[1] + sz * t.u[2];
+    let mut i = 0.0f64;
+    while i <= order {
+        let n = order - i;
+        let u1 = i / order;
+        let u3 = n / order;
+        let x0 = u1 * pa[0] + u3 * pc[0] - t.h[0];
+        let y0 = u1 * ya + u3 * yc - t.h[1];
+        let z0 = u1 * pa[1] + u3 * pc[1] - t.h[2];
+        let mut row = (0.0f64, n);
+        narrow_row(&mut row, (if la { u1 } else { 0.0 }) + (if lc { u3 } else { 0.0 }), share_step, SAG_LIFT_FROM, f64::INFINITY, n);
+        let ahead0 = x0 * t.fx + z0 * t.fz;
+        narrow_row(&mut row, ahead0, ahead_step, -reach, reach, n);
+        narrow_row(&mut row, x0 * t.a[0] + y0 * t.a[1] + z0 * t.a[2], along_step, -edge, edge, n);
+        if row.0 <= row.1 {
+            let ahead_from = ahead0 + row.0 * ahead_step;
+            let ahead_to = ahead0 + row.1 * ahead_step;
+            let least = if ahead_from * ahead_to <= 0.0 { 0.0 } else { js_min(ahead_from.abs(), ahead_to.abs()) };
+            narrow_row(&mut row, x0 * t.u[0] + y0 * t.u[1] + z0 * t.u[2], up_step, f64::NEG_INFINITY, js_max(0.0, t.r * t.r - least * least).sqrt() + SAG_CLEAR + ROW_TOP_SLACK, n);
+        }
+        let mut j = row.0;
+        while j <= row.1 {
+            let l1 = i / order;
+            let l2 = j / order;
+            let l3 = (order - i - j) / order;
+            j += 1.0;
+            let share = (if la { l1 } else { 0.0 }) + (if lb { l2 } else { 0.0 }) + (if lc { l3 } else { 0.0 });
+            if share <= SAG_LIFT_FROM {
+                continue;
+            }
+            p[0] = l1 * pa[0] + l2 * pb[0] + l3 * pc[0];
+            p[1] = l1 * ya + l2 * yb + l3 * yc;
+            p[2] = l1 * pa[1] + l2 * pb[1] + l3 * pc[1];
+            let dx = p[0] - t.h[0];
+            let dz = p[2] - t.h[2];
+            let ahead = (dx * t.fx + dz * t.fz).abs();
+            let along = (dx * t.a[0] + (p[1] - t.h[1]) * t.a[1] + dz * t.a[2]).abs();
+            let on_top = js_min(1.0, js_max(0.0, (q.none * t.r - ahead) / ((q.none - q.full) * t.r)))
+                * js_min(1.0, js_max(0.0, (t.half_w * (1.0 + SAG_EDGE_FADE) - along) / (SAG_EDGE_FADE * t.half_w)));
+            if on_top <= 0.0 {
+                continue;
+            }
+            let bare = clear_over(t, &p, 0.0);
+            if bare >= SAG_CLEAR {
+                continue;
+            }
+            for k in 0..3 {
+                rp[k] = l1 * load(s.rest, a + k) + l2 * load(s.rest, b + k) + l3 * load(s.rest, c + k);
+            }
+            let clear = bare - js_min(SAG_CLEAR, clear_over(&q.rest, &rp, 0.0));
+            if clear >= 0.0 {
+                continue;
+            }
+            let by = on_top * sag_lift(-clear / t.flat, share);
+            if by <= 0.0 {
+                continue;
+            }
+            for (lifts, v) in [(la, va), (lb, vb), (lc, vc)] {
+                let pt = *s.weld.add(v) as usize;
+                if lifts && by > *s.bump.add(pt) as f64 {
+                    *s.bump.add(pt) = by as f32;
+                }
+            }
+            asked = true;
+        }
+        i += 1.0;
+    }
+    asked
+}
+
+// ---- liftSaggingTriangles: every triangle over a tyre read at points fixed on it ----------------------------------------
+// `read` holds each corner's lift at the wheel's last read (`again`: an earlier pass of this hold) and takes its lift now; `lift` and `dirty`
+// are written when a corner is lifted; `bump` is zero on entry and on return. `sag_free` (per vertex, 1: never read). Returns 1 when any corner was lifted.
 #[no_mangle]
 pub unsafe extern "C" fn sag_pass(
     pos: *const f32,
+    rest: *const f32,
     weld: *const i32,
     liftable: *const u8,
+    sag_free: *const u8,
     tris: *const i32,
     corners: usize,
-    box_: *const f64,
-    den: *const f64,
-    start: *const i32,
-    filed: *const i32,
     lift: *mut f32,
     bump: *mut f32,
     dirty: *mut u8,
-    records: *mut f64,
-    built: *mut u8,
-    samples: *const f64,
+    read: *mut f32,
+    again: i32,
     job: *const f64,
-    look: i32,
 ) -> i32 {
-    let (x0, z0) = (*job.add(8), *job.add(9));
-    let (nx_f, nz_f) = (*job.add(10), *job.add(11));
-    let bit = 1u8 << (*job.add(12) as u32);
-    // With every corner height finite a blend of them is finite, so a sample's best height only rises: once it stands at the sample's own
-    // height it is not short and no later triangle changes that.
-    let settles = look & LOOK_FINITE != 0;
-    core::ptr::write_bytes(built, 0, corners / 3);
-    let skin = Skin { pos, weld, tris, den, lift, box_, records, built };
-    let mut sample_skin = [f64::NEG_INFINITY; SAG_COUNT];
-    let mut sample_corner = [-1i32; SAG_COUNT];
-    let mut sample_share = [0.0f64; SAG_COUNT];
-    let mut settled_by = [-1i32; SAG_COUNT];
-    let nx = nx_f as usize;
-    let mut r = Reading { y: 0.0, l1: 0.0, l2: 0.0, l3: 0.0 };
-    for n in 0..SAG_COUNT {
-        let x = *samples.add(n);
-        let z = *samples.add(SAG_COUNT + n);
-        let sample_y = *samples.add(2 * SAG_COUNT + n);
-        // The triangle that settled the sample a step back on its line mostly holds this one too. A sample inside a plan box is inside the grid, so no cell is read.
-        if settles && n >= SAG_STEP_BACK && settled_by[n - SAG_STEP_BACK] >= 0 {
-            let i = settled_by[n - SAG_STEP_BACK];
-            if read_triangle(&skin, i as usize, x, z, f64::NEG_INFINITY, &mut r) && r.y >= sample_y {
-                settled_by[n] = i;
-                continue;
-            }
-        }
-        let cx = plan_cell(x, x0);
-        let cz = plan_cell(z, z0);
-        // A NaN cell reads no triangle in the JS (its start entries are undefined), as out of the grid does.
-        if !(cx >= 0.0 && cx < nx_f && cz >= 0.0 && cz < nz_f) {
-            continue;
-        }
-        let cell = cz as usize * nx + cx as usize;
-        let mut j = *start.add(cell);
-        let end = *start.add(cell + 1);
-        while j < end {
-            let i = *filed.add(j as usize) as usize;
-            j += 1;
-            if !read_triangle(&skin, i, x, z, sample_skin[n], &mut r) {
-                continue;
-            }
-            let t = i * 3;
-            sample_skin[n] = r.y;
-            sample_corner[n] = t as i32;
-            sample_share[n] = (if *liftable.add(*tris.add(t) as usize) & bit != 0 { r.l1 } else { 0.0 })
-                + (if *liftable.add(*tris.add(t + 1) as usize) & bit != 0 { r.l2 } else { 0.0 })
-                + (if *liftable.add(*tris.add(t + 2) as usize) & bit != 0 { r.l3 } else { 0.0 });
-            if settles && r.y >= sample_y {
-                settled_by[n] = i as i32;
-                break;
-            }
-        }
+    let e = |k: usize| *job.add(JOB_HELD + k);
+    let scale = hypot3(e(0), e(1), e(2));
+    let a = [e(0) / scale, e(1) / scale, e(2) / scale];
+    let (tyre_r, tyre_half_w) = (*job.add(JOB_TYRE_R), *job.add(JOB_TYRE_HALF_W));
+    let q = Read {
+        held: Tyre::new([e(3), e(4), e(5)], a, scale, tyre_r, tyre_half_w),
+        rest: Tyre::new([*job.add(JOB_REST_HUB), *job.add(JOB_REST_HUB + 1), *job.add(JOB_REST_HUB + 2)], [1.0, 0.0, 0.0], *job.add(JOB_REST_SCALE), tyre_r, tyre_half_w),
+        full: *job.add(JOB_TOP_FULL),
+        none: *job.add(JOB_TOP_NONE),
+    };
+    let t = &q.held;
+    let mut lowest = f64::INFINITY;
+    for k in 0..corners {
+        let v = *tris.add(k) as usize;
+        lowest = js_min(lowest, load(pos, v * 3 + 1) + *lift.add(*weld.add(v) as usize) as f64);
     }
+    // A triangle's point is a blend of its corners': with every corner over the tyre's top and the clearance, none can stand short.
+    let over_top = lowest > t.h[1] + t.a[1].abs() * t.half_w + t.flat * t.r + SAG_CLEAR;
+    let s = Skin { pos, rest, weld, liftable, lift, bump, bit: 1u8 << (*job.add(JOB_WHEEL) as u32) };
     let mut raised = false;
-    for n in 0..SAG_COUNT {
-        let t = sample_corner[n];
-        if t < 0 || sample_share[n] < SAG_LIFTABLE {
-            continue;
-        }
-        let short = *samples.add(2 * SAG_COUNT + n) - sample_skin[n];
-        if short <= 0.0 {
-            continue;
-        }
-        let by = short / sample_share[n];
-        for corner in 0..3 {
-            let v = *tris.add(t as usize + corner) as usize;
-            let p = *weld.add(v) as usize;
-            if *liftable.add(v) & bit != 0 && by > *bump.add(p) as f64 {
-                *bump.add(p) = by as f32;
+    let mut k = 0;
+    while k < corners {
+        // Read again, a triangle whose corners kept the lifts of its last read asks what it asked then: nothing, or a corner would have risen.
+        let mut rose = again == 0;
+        for c in k..k + 3 {
+            let now = *lift.add(*weld.add(*tris.add(c) as usize) as usize);
+            if now != *read.add(c) {
+                rose = true;
             }
+            *read.add(c) = now;
         }
-        raised = true;
+        let (va, vb, vc) = (*tris.add(k) as usize, *tris.add(k + 1) as usize, *tris.add(k + 2) as usize);
+        k += 3;
+        if !rose || over_top || *sag_free.add(va) as u32 + *sag_free.add(vb) as u32 + *sag_free.add(vc) as u32 > 0 {
+            continue;
+        }
+        if sag_triangle(&s, &q, va, vb, vc) {
+            raised = true;
+        }
     }
     if !raised {
         return 0;

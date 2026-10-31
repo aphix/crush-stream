@@ -49,8 +49,6 @@ function isExports(e: WebAssembly.Exports): e is Exports {
     e.memory instanceof WebAssembly.Memory &&
     typeof e.skin_shape === "function" &&
     typeof e.normals === "function" &&
-    typeof e.plan_grid === "function" &&
-    typeof e.sag_look === "function" &&
     typeof e.sag_pass === "function"
   );
 }
@@ -102,7 +100,7 @@ export class SkinKernel {
   /** Cars skinned so far (`run` calls) and the vertices they carried: the bench reads the difference over its window, a count free of timer noise. */
   calls = 0;
   verts = 0;
-  /** The tyre hold's plan grid and sag pass (`car-tyre-skin.ts`), over one scratch arena. */
+  /** The tyre hold's sag pass (`car-tyre-skin.ts`), over one scratch arena. */
   readonly tyre: TyreSagArena;
 
   constructor(ex: Exports) {

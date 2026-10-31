@@ -10,7 +10,8 @@ import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
 /**
  * The owner's piston capture (2026-10-30): one front piston shot into the parked sedan at a tenth of real time, where the crushed bay
- * floor and its walls stood up through the drawn hood for a third of a second (sim 0.44-0.47 s, 241 mm past where they may stand).
+ * floor and its walls stood up through the drawn hood for a third of a second (sim 0.44-0.47 s, 241 mm past where they may stand), and
+ * the crushed fascia beside the tyre jumped up and down between frames as the hit landed.
  */
 const FRAME = 1 / FRAME_HZ;
 const LINK = "#scene=pistons&seed=79a4b8&ts=0.1&slomo=0&squash=0.32&buckle=0.45&real=0.25&deform=shape&car=sedan&loop=0";
@@ -30,28 +31,68 @@ const CRUSHED = 0.3;
 const TIME_SCALE = 0.1;
 const HIT_S = 0.39;
 const HIT_SLACK_S = 0.03;
+/**
+ * How far (m) a drawn body point may go up and then back down (or down, then up) on the frames it changes: a crushed fold's sag lift
+ * switching on and off took one 116 mm up and down, where the hold that follows the crush moves none past 25 mm (measured 19).
+ */
+const UP_DOWN_M = 0.03;
+
+type Shot = { over: number; at: string; crush: number; hitAt: number; upDown: number; upDownAt: string };
+
+/** Per vertex, the last height change of `now` against `last` (the vertex's `change`, kept over frames it did not move); the worst up-then-down since. */
+function upDownOf(now: ArrayLike<number>, last: Float32Array, change: Float32Array, worst: { by: number; at: number }): void {
+  for (let v = 0; v < change.length; v++) {
+    const step = now[v * 3 + 1]! - last[v * 3 + 1]!;
+    if (step === 0) continue;
+    if (step * change[v]! < 0 && Math.min(Math.abs(step), Math.abs(change[v]!)) > worst.by) {
+      worst.by = Math.min(Math.abs(step), Math.abs(change[v]!));
+      worst.at = v;
+    }
+    change[v] = step;
+  }
+  last.set(now);
+}
 
 describe("given the owner's front piston shot into the parked sedan at a tenth of real time", () => {
   let engine: CrashEngine;
 
-  /** Runs the shot from a fresh park to `TO_S`, skinned on one frame of `stride`; the worst a drawn body point stands past what the hold may ask, over `FROM_S`..`TO_S`. */
-  function shoot(stride: number): { over: number; at: string; crush: number; hitAt: number } {
+  const shots = new Map<number, Shot>();
+
+  /** The shot from a fresh park to `TO_S`, skinned on one frame of `stride`: over `FROM_S`..`TO_S`, the worst a drawn body point stands past what the hold may ask, and the worst it goes up and down. */
+  function shoot(stride: number): Shot {
+    const cached = shots.get(stride);
+    if (cached) return cached;
+    // The sparse shot resets the car the full shot crushed: a hold that kept that crash's skin draws it on the deferred hit frame.
+    if (stride !== 1) shoot(1);
     engine["applyShare"](decodeShare(LINK), false);
     engine.reset();
     engine.setTimeScale(TIME_SCALE);
-    if (stride > 1) Object.assign(engine, { followedCar: () => null, skinStride: () => stride });
+    Object.assign(engine, { followedCar: () => null, skinStride: () => stride });
     const car = engine["live"]()[0]!;
+    const drawn = car.body.geometry.getAttribute("position").array;
+    const last = Float32Array.from(drawn);
+    const change = new Float32Array(drawn.length / 3);
+    const upDown = { by: 0, at: -1, sim: 0 };
     let worst = { over: 0, at: "" };
     let hitAt = NaN;
     for (let frame = 0; engine["elapsedSim"] < TO_S; frame++) {
       if (frame === FIRE_FRAME) engine.firePiston(FRONT_PISTON);
       engine.advance(FRAME, { frameDt: FRAME });
       if (Number.isNaN(hitAt) && car.crashed) hitAt = engine["elapsedSim"];
+      // From the shot on: the park before it rewrites the last shot's crushed skin to rest.
+      if (frame === FIRE_FRAME) last.set(drawn);
+      if (frame > FIRE_FRAME) {
+        const before = upDown.by;
+        upDownOf(drawn, last, change, upDown);
+        if (upDown.by > before) upDown.sim = engine["elapsedSim"];
+      }
       if (engine["elapsedSim"] < FROM_S) continue;
       const held = worstHoldOverRest(car);
       if (held.over > worst.over) worst = { over: held.over, at: `${held.at} at sim ${engine["elapsedSim"].toFixed(3)} s` };
     }
-    return { ...worst, crush: car.deform.crushAmount, hitAt };
+    const shot = { ...worst, crush: car.deform.crushAmount, hitAt, upDown: upDown.by, upDownAt: `vertex ${upDown.at} at sim ${upDown.sim.toFixed(3)} s` };
+    shots.set(stride, shot);
+    return shot;
   }
 
   beforeAll(async () => {
@@ -69,6 +110,12 @@ describe("given the owner's front piston shot into the parked sedan at a tenth o
       expect(shot.crush, "fixture: the shot crushed the nose").toBeGreaterThan(CRUSHED);
       expect(Math.abs(shot.hitAt - HIT_S), `fixture: the head met the nose at sim ${shot.hitAt.toFixed(3)} s`).toBeLessThan(HIT_SLACK_S);
       expect(shot.over, `${(shot.over * 1000).toFixed(1)} mm over: ${shot.at}`).toBeLessThanOrEqual(OVER_SLACK_M);
+    });
+
+    it(`when its skin is drawn on one frame of ${stride} through the hit, then no drawn body point jumps up and back down (or down and back up) between the frames it moves`, () => {
+      const shot = shoot(stride);
+      expect(shot.crush, "fixture: the shot crushed the nose").toBeGreaterThan(CRUSHED);
+      expect(shot.upDown, `${(shot.upDown * 1000).toFixed(1)} mm up and down: ${shot.upDownAt}`).toBeLessThanOrEqual(UP_DOWN_M);
     });
   }
 });

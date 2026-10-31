@@ -1,6 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import type { PlanGrid } from "../deform/tyre-sag-kernel.ts";
 import { type CrashWorld, FREEWHEEL, launch, makeWorld, runWall, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import type { DeformableCar } from "./car.ts";
@@ -237,58 +236,48 @@ describe("given a wreck whose skin is held over its tyres and the parts under it
 
 /** The wall hit the kernel row crushes a hatchback with: hard enough to fold the bonnet, on the nose's corner so a front tyre sits under the crush. */
 const KERNEL_ROW_KPH = 65;
+/** How much higher (m) the re-hold row lifts the class body: the points resting over the tyres are found again, and nothing else moves. */
+const RELIFT_M = 0.02;
+/** Half what that lift moves the held skin (m; measured 60.8 mm): a second hold that kept the first one's skin stands at least this far off. */
+const RELIFT_MOVES_M = 0.03;
 
-type HoldOutcome = { lift: Float32Array; positions: Float32Array; normals: Float32Array; plans: PlanGrid[]; held: boolean };
-type KernelCalls = { sagPasses: number; raised: number; planGrids: number };
+type HoldOutcome = { lift: Float32Array; positions: Float32Array; normals: Float32Array; held: boolean };
+type KernelCalls = { sagPasses: number; raised: number };
 type CrushedMesh = { mesh: THREE.Mesh; rest: Float32Array; pushSide: boolean; written: Float32Array; under: readonly PartSeat[] };
 type CrushedHatchback = { car: DeformableCar; meshes: CrushedMesh[] };
 
-/** `run` with the kernel's tyre calls counted, and every sag pass read over tyres `tyreScale` times the car's (1: as they are). */
+/** `run` with the kernel's sag passes counted, and every sag pass read over tyres `tyreScale` times the car's (1: as they are). */
 function countKernelCalls<T>(tyreScale: number, run: () => T): { calls: KernelCalls; result: T } {
-  const calls: KernelCalls = { sagPasses: 0, raised: 0, planGrids: 0 };
+  const calls: KernelCalls = { sagPasses: 0, raised: 0 };
   const realSag = TyreSagArena.prototype.sagPass;
-  const realPlan = TyreSagArena.prototype.planGrid;
-  TyreSagArena.prototype.sagPass = function (this: TyreSagArena, skin, pos, wheel, tyre) {
-    const raised = realSag.call(this, skin, pos, wheel, { r: tyre.r * tyreScale, halfW: tyre.halfW });
+  TyreSagArena.prototype.sagPass = function (this: TyreSagArena, skin, pos, wheel, again, tyre) {
+    const raised = realSag.call(this, skin, pos, wheel, again, { r: tyre.r * tyreScale, halfW: tyre.halfW });
     calls.sagPasses++;
     if (raised) calls.raised++;
     return raised;
-  };
-  TyreSagArena.prototype.planGrid = function (this: TyreSagArena, ...args: Parameters<TyreSagArena["planGrid"]>) {
-    const grid = realPlan.apply(this, args);
-    if (grid) calls.planGrids++;
-    return grid;
   };
   try {
     return { calls, result: run() };
   } finally {
     TyreSagArena.prototype.sagPass = realSag;
-    TyreSagArena.prototype.planGrid = realPlan;
   }
 }
 
-/** A fresh `TyreSkin` over `crushed` holds its written skin over `car`'s tyres, the plan grid and sag pass in the kernel or, with `inKernel` false, in JS. */
-function holdWritten(car: DeformableCar, crushed: CrushedMesh, inKernel: boolean): HoldOutcome {
+/** A fresh `TyreSkin` over `crushed` holds its written skin over `car`'s tyres at the class lift `lift`, the sag pass in the kernel or, with `inKernel` false, in JS. */
+function holdWritten(car: DeformableCar, crushed: CrushedMesh, inKernel: boolean, lift = CLASSES[carClass(car)].lift): HoldOutcome {
   const skin = new TyreSkin(car.frame, crushed.mesh, crushed.rest, crushed.pushSide);
   if (!inKernel) Object.defineProperty(skin, "kernel", { get: () => null });
   const positions = crushed.mesh.geometry.getAttribute("position");
   positions.array.set(crushed.written);
-  skin.hold(car.group, car.wheels, 0, CLASSES[carClass(car)].lift, true, crushed.under);
-  return { lift: skin["lift"].slice(), positions: Float32Array.from(positions.array), normals: Float32Array.from(crushed.mesh.geometry.getAttribute("normal").array), plans: [...skin["plans"]], held: skin["held"] };
+  skin.hold(car.group, car.wheels, 0, lift, true, crushed.under);
+  return { lift: skin["lift"].slice(), positions: Float32Array.from(positions.array), normals: Float32Array.from(crushed.mesh.geometry.getAttribute("normal").array), held: skin["held"] };
 }
 
-/** Every wheel's plan grid in `plans` is `expected`'s, array for array. */
-function assertSamePlans(plans: readonly PlanGrid[], expected: readonly PlanGrid[], label: string): void {
-  expect(plans.length, `${label} plan grids`).toBe(expected.length);
-  for (const [wheel, plan] of plans.entries()) {
-    const want = expected[wheel]!;
-    const at = `${label} wheel ${wheel} plan`;
-    assertSameNumbers(plan.box, want.box, `${at} boxes`);
-    assertSameNumbers(plan.den, want.den, `${at} determinants`);
-    assertSameNumbers(plan.start, want.start, `${at} cell starts`);
-    assertSameNumbers(plan.tris, want.tris, `${at} filed triangles`);
-    assertSameNumbers([plan.x0, plan.z0, plan.nx, plan.nz], [want.x0, want.z0, want.nx, want.nz], `${at} extent`);
-  }
+/** The farthest (m) a drawn coordinate of `a` stands from `b`'s. */
+function farthestApart(a: Float32Array, b: Float32Array): number {
+  let far = 0;
+  for (let i = 0; i < a.length; i++) far = Math.max(far, Math.abs(a[i]! - b[i]!));
+  return far;
 }
 
 /** A hatchback crushed by the wall hit and settled, with its body's and bonnet's skins as the writer left them. */
@@ -325,13 +314,12 @@ describe(`given a hatchback crushed against a wall at ${KERNEL_ROW_KPH} km/h, it
       const crushed = fixture.meshes[which]!;
       const reference = holdWritten(fixture.car, crushed, false);
       const { calls, result: outcome } = countKernelCalls(1, () => holdWritten(fixture.car, crushed, true));
-      expect(calls.sagPasses > 0 && calls.planGrids > 0, `${calls.sagPasses} sag passes and ${calls.planGrids} plan grids ran in the kernel`).toBeTruthy();
+      expect(calls.sagPasses, `${calls.sagPasses} sag passes ran in the kernel`).toBeGreaterThan(0);
       expect(calls.raised > 0, `${calls.raised} of ${calls.sagPasses} sag passes lifted a corner`).toBe(sagLifts);
       expect(reference.held && reference.lift.some((lift) => lift > 0), "the hold lifted the crushed skin: the row compares a hold that moved something").toBeTruthy();
       assertSameNumbers(outcome.lift, reference.lift, `${label} lift`);
       assertSameNumbers(outcome.positions, reference.positions, `${label} positions`);
       assertSameNumbers(outcome.normals, reference.normals, `${label} normals`);
-      assertSamePlans(outcome.plans, reference.plans, label);
       expect(outcome.held).toBe(reference.held);
     });
   }
@@ -341,6 +329,23 @@ describe(`given a hatchback crushed against a wall at ${KERNEL_ROW_KPH} km/h, it
     const reference = holdWritten(fixture.car, crushed, false);
     const { result: outcome } = countKernelCalls(1.2, () => holdWritten(fixture.car, crushed, true));
     expect(outcome.lift.some((lift, point) => lift !== reference.lift[point]), "a sag pass over larger tyres must not match").toBeTruthy();
+  });
+
+  it(`when its body is held, then held again with the wheels still and the class lift ${RELIFT_M * 100} cm higher, then the drawn skin is a fresh hold's at that lift bit for bit`, () => {
+    const crushed = fixture.meshes[0]!;
+    const { car } = fixture;
+    const lift = CLASSES[carClass(car)].lift;
+    const atLift = holdWritten(car, crushed, true);
+    const reference = holdWritten(car, crushed, true, lift + RELIFT_M);
+    const skin = new TyreSkin(car.frame, crushed.mesh, crushed.rest, crushed.pushSide);
+    const positions = crushed.mesh.geometry.getAttribute("position");
+    positions.array.set(crushed.written);
+    skin.hold(car.group, car.wheels, 0, lift, true, crushed.under);
+    skin.hold(car.group, car.wheels, 0, lift + RELIFT_M, false, crushed.under);
+    const moved = farthestApart(atLift.positions, reference.positions);
+    expect(moved, `the higher lift moves the held skin ${(moved * 1000).toFixed(1)} mm: the row can fail`).toBeGreaterThan(RELIFT_MOVES_M);
+    const apart = farthestApart(Float32Array.from(positions.array), reference.positions);
+    expect(apart, `the second hold stands ${(apart * 1000).toFixed(2)} mm off a fresh hold at the higher lift`).toBe(0);
   });
 });
 
