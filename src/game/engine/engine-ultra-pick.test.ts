@@ -108,8 +108,8 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     framing = false;
     return { unlinked: [...drawn.unlinked].sort().join(), made: drawn.made };
   };
-  /** `picking` ends, a frame drawn per loop turn the way a running loop would; the programs made between two frames are pushed to `between`. */
-  const framesUntilSettled = async (picking: Promise<void>, between: number[]): Promise<void> => {
+  /** `picking` ends, a frame drawn per loop turn the way a running loop would (`beforeFrame` run before each); the programs made between two frames are pushed to `between`. */
+  const framesUntilSettled = async (picking: Promise<void>, between: number[], beforeFrame = (): void => {}): Promise<void> => {
     let settled = false;
     void picking.then(() => void (settled = true));
     let last = programCount();
@@ -117,6 +117,7 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
       await yieldToLoop();
       between.push(programCount() - last);
       if (settled) return;
+      beforeFrame();
       drawFrames(1);
       last = programCount();
     }
@@ -217,5 +218,30 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     expect(framesBeforeSwitch, `frames between the warm-up's last draws and the switch: ${framesBeforeSwitch}`).toBeGreaterThanOrEqual(STEP_FRAMES);
     expect(made.filter((p) => !drawn.programs.has(p)).length, "programs the pick made that the first Ultra frame does not draw").toBe(0);
     expect(first.made, "programs the first Ultra frame linked").toBe(0);
+  });
+
+  it("when a surface's program key changes in the frames after the pick's step linked it (a car's first scratch), then the pick links its new program too and the first Ultra frame links nothing", { timeout: HANG_GUARD_MS }, async () => {
+    await engine.setFxTier("low");
+    await engine.warmsIdle();
+    const scratched = surface("ultra-pick-scratch");
+    let mark = "";
+    scratched.material.customProgramCacheKey = () => `ultra-pick-scratch${mark}`;
+    // First in the scene: the pick's first step links it, and the steps after start past it.
+    engine["scene"].add(scratched);
+    engine["scene"].children.unshift(engine["scene"].children.pop()!);
+    drawFrames(1);
+    engine["loopDraws"] = true;
+    try {
+      await framesUntilSettled(engine.setFxTier("ultra"), [], () => {
+        if (mark !== "") return;
+        mark = "|scratch";
+        scratched.material.needsUpdate = true;
+      });
+    } finally {
+      engine["loopDraws"] = false;
+    }
+    expect(mark, "the key changed while the pick ran").toBe("|scratch");
+    expect(engine["cine"].tier, "tier after the pick").toBe("ultra");
+    expect(drawFrames(1).made, "programs the first Ultra frame linked").toBe(0);
   });
 });

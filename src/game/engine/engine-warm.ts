@@ -244,8 +244,10 @@ export abstract class EngineWarm extends EngineCore {
   /**
    * Link and draw `ultra`'s programs (its sky as the environment, its dressed surfaces, the car finish its tier draws) into the HDR target,
    * the only output its tier draws the scene into, while the frames still draw the current look: a few programs a step, with frames
-   * between (`ULTRA_STEP_PROGRAMS`), so neither a step nor the switch after the last stalls a frame. Stops once `wanted` reads false, or
-   * once a context restore disposes `ultra` (the restore's pick loads another).
+   * between (`ULTRA_STEP_PROGRAMS`), so neither a step nor the switch after the last stalls a frame. The frames between steps run the
+   * race, so a mesh added or a program key changed there (a car's first scratch) after its step went by is linked by another pass over
+   * the scene; the warm-up ends on a pass that links nothing, which draws no frame, so the switch follows it. Stops once `wanted` reads
+   * false, or once a context restore disposes `ultra` (the restore's pick loads another).
    */
   protected async warmUltra(ultra: Ultra, wanted: () => boolean): Promise<void> {
     this.warmsInFlight++;
@@ -255,27 +257,31 @@ export abstract class EngineWarm extends EngineCore {
   }
 
   private async warmUltraSteps(ultra: Ultra, going: () => boolean): Promise<void> {
-    this.scene.unparkAll();
-    const drawn: THREE.Object3D[] = [];
-    this.scene.traverse((o) => {
-      if ((o as THREE.Mesh).material !== undefined) drawn.push(o);
-    });
     const hdr = this.cine.post.sceneRT;
-    for (let next = 0; next < drawn.length && going(); ) {
-      const before = new Set(this.renderer.info.programs ?? []);
-      next = this.wearingUltra(ultra, () => this.compileInto(hdr, drawn, next, before.size + ULTRA_STEP_PROGRAMS));
-      const gained = this.materialsWithNewPrograms(before);
-      if (gained.size === 0) continue;
-      await this.linkedSince(before);
-      if (!going()) return;
-      this.wearingUltra(ultra, () =>
-        this.staged(gained, () => {
-          this.renderer.setRenderTarget(hdr);
-          this.renderer.render(this.scene, this.camera);
-        }),
-      );
-      this.renderer.setRenderTarget(null);
-      await this.framesPass(ULTRA_STEP_FRAMES);
+    for (let linked = true; linked && going(); ) {
+      linked = false;
+      this.scene.unparkAll();
+      const drawn: THREE.Object3D[] = [];
+      this.scene.traverse((o) => {
+        if ((o as THREE.Mesh).material !== undefined) drawn.push(o);
+      });
+      for (let next = 0; next < drawn.length && going(); ) {
+        const before = new Set(this.renderer.info.programs ?? []);
+        next = this.wearingUltra(ultra, () => this.compileInto(hdr, drawn, next, before.size + ULTRA_STEP_PROGRAMS));
+        const gained = this.materialsWithNewPrograms(before);
+        if (gained.size === 0) continue;
+        linked = true;
+        await this.linkedSince(before);
+        if (!going()) return;
+        this.wearingUltra(ultra, () =>
+          this.staged(gained, () => {
+            this.renderer.setRenderTarget(hdr);
+            this.renderer.render(this.scene, this.camera);
+          }),
+        );
+        this.renderer.setRenderTarget(null);
+        await this.framesPass(ULTRA_STEP_FRAMES);
+      }
     }
   }
 

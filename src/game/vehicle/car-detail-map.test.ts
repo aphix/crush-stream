@@ -70,7 +70,7 @@ describe("given a car style's detail strokes and patches, read back from its det
 
   it("when the shader is built, then a down-facing pixel reads the bottom tile in the top's place", () => {
     const { fragmentShader } = compileHooks(detailPaint(SEDAN));
-    expect(fragmentShader.includes("bool detailUnder = vDetailNormal.y < 0.0;") && fragmentShader.includes("detailUnder ? detailTiles[4] : detailTiles[1]"), "the bottom tile replaces the top's under the car").toBeTruthy();
+    expect(fragmentShader.includes("bool detailUnder = vDetailNormal.y < 0.0;") && fragmentShader.includes("under ? detailTiles[4] : detailTiles[1]"), "the bottom tile replaces the top's under the car").toBeTruthy();
   });
 
   it("when a step runs forward along the side, then its left (above) stands its depth proud and its right (below) reads nothing", () => {
@@ -204,7 +204,7 @@ describe("given a car paint material carrying a style's detail map", () => {
     const { fragmentShader } = compileHooks(detailPaint(style));
     expect(fragmentShader.includes("uniform sampler2D detailMap;"), "the sampler is declared").toBeTruthy();
     expect(fragmentShader.includes("float detailNear = finishMeshNear();"), "the detail reads the finish's mesh distance gate").toBeTruthy();
-    expect(fragmentShader.includes("float detailX = abs(vDetailPos.x);"), "the top and end tiles are read at |x|, mirroring the x >= 0 strokes").toBeTruthy();
+    expect(fragmentShader.includes("vec2 top = vec2(p.z, abs(p.x));") && fragmentShader.includes("vec2 end = vec2(abs(p.x), p.y);"), "the top and end tiles are read at |x|, mirroring the x >= 0 strokes").toBeTruthy();
   });
 
   it("when its atlas is read, then it is mip-mapped and anisotropically filtered as the finish's maps are: a hood seen from the chase camera and a flank seen edge-on keep their shut lines and vents instead of taking the blurred mip", () => {

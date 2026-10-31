@@ -34,11 +34,12 @@
  * `--boost <seconds>` takes the driver's seat and holds its gas for that many sim seconds, then the Boost button too (the touch pad's) through the drawn frames
  * (`--gas-only` leaves the Boost button up: the same drive camera without the boost). The JSON's `boostZoom` is the seat's mode and the zoom strength the director then reads.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
+import { loadHeadlessGl, NO_CONTEXT } from "./headless-gl.mjs";
 
 /** Any fixed seed: the same derby field in both trees of a diff. */
 const SEED = 12641919;
@@ -121,14 +122,13 @@ const out = resolve(values.out ?? `screenshots/headless-frame-${tier}.png`);
 const detail = values.detail === undefined ? null : values.detail === "off" ? "off" : Number(values.detail);
 if (typeof detail === "number" && !(Number.isInteger(detail) && detail >= 0)) throw new Error(`--detail ${values.detail}: a rung of the distance-detail ladder (0 or more) or off`);
 
-// WSL: Mesa's d3d12 driver reaches the host GPU through /dev/dxg; without it Mesa draws on the CPU. Elsewhere Mesa has no d3d12 driver.
-if (existsSync("/dev/dxg")) process.env.GALLIUM_DRIVER ??= "d3d12";
-const glDir = dirname(fileURLToPath(import.meta.resolve("@kmamal/gl")));
-if (!existsSync(join(glDir, "dist/webgl.node"))) {
-  console.error(`headless-frame: @kmamal/gl has no native binary (installs never run its GitHub download). Fetch it once:\n  node ${join(glDir, "scripts/install.mjs")}`);
+let createGL;
+try {
+  createGL = await loadHeadlessGl();
+} catch (err) {
+  console.error(`headless-frame: ${err.message}`);
   process.exit(2);
 }
-const { default: createGL } = await import("@kmamal/gl");
 const { createCanvas, ImageData, loadImage } = await import("@napi-rs/canvas");
 // This checkout's, not `--root`'s: an older tree draws through the same page `Worker`.
 const { PageWorker } = await import("../src/game/engine/page-worker.test-util.ts");
@@ -525,7 +525,7 @@ function hideQuirkMeshes() {
 /** A W x H WebGL2 context from headless GL. */
 function webgl2(attributes) {
   const context = createGL(W, H, { createWebGL2Context: true, ...attributes });
-  if (context === null) throw new Error("headless-frame: headless GL made no WebGL2 context");
+  if (context === null) throw new Error(`headless-frame: ${NO_CONTEXT}`);
   return context;
 }
 
