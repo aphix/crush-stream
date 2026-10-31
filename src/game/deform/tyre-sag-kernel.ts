@@ -33,6 +33,8 @@ export interface SagSkin {
   restScale: Float64Array;
   /** The shares of the tyre's radius out along the road the top is read whole to and not past. */
   sagTop: Float64Array;
+  /** Per wheel, the share of its hold it keeps: under 1 while a torn-off wheel leaves its seat. */
+  fade: Float64Array;
 }
 
 export type TyreSagExports = {
@@ -69,8 +71,8 @@ class Scratch<T extends Lanes> {
   }
 }
 
-/** Elements of the job block (`tyre.rs` `JOB_*`): the wheel's axle and hub, the tyre's size, the rest hub and scale, the wheel's index, the top's extent. */
-const SAG_JOB = { held: 0, tyreR: 6, tyreHalfW: 7, restHub: 8, restScale: 11, wheel: 12, topFull: 13, topNone: 14 } as const;
+/** Elements of the job block (`tyre.rs` `JOB_*`): the wheel's axle and hub, the tyre's size, the rest hub and scale, the wheel's index, the top's extent, the hold's share. */
+const SAG_JOB = { held: 0, tyreR: 6, tyreHalfW: 7, restHub: 8, restScale: 11, wheel: 12, topFull: 13, topNone: 14, fade: 15 } as const;
 const JOB_LENGTH = 16;
 const HELD_LENGTH = 6;
 
@@ -128,6 +130,7 @@ export class TyreSagArena {
     job[SAG_JOB.wheel] = wheel;
     job[SAG_JOB.topFull] = skin.sagTop[0]!;
     job[SAG_JOB.topNone] = skin.sagTop[1]!;
+    job[SAG_JOB.fade] = skin.fade[wheel]!;
     const raised =
       this.ex.sag_pass(this.pos.at, this.rest.at, this.weld.at, this.liftable.at, this.sagFree.at, this.tris.at, tris.length, this.lift.at, this.bump.at, this.dirty.at, this.read.at, again ? 1 : 0, this.job.at) !== 0;
     skin.sagRead[wheel]!.set(this.read.view.subarray(0, tris.length));

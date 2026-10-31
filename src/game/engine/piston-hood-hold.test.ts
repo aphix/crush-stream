@@ -3,7 +3,7 @@ import "../kernel/rapier-node.test-util.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { decodeShare } from "../hud/share-url.ts";
-import { worstHoldOverRest } from "../vehicle/skin-stretch.test-util.ts";
+import { UP_DOWN_M, upDownOf, worstHoldOverRest } from "../vehicle/skin-stretch.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import type { CrashEngine } from "./engine.ts";
 import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
@@ -31,27 +31,7 @@ const CRUSHED = 0.3;
 const TIME_SCALE = 0.1;
 const HIT_S = 0.39;
 const HIT_SLACK_S = 0.03;
-/**
- * How far (m) a drawn body point may go up and then back down (or down, then up) on the frames it changes: a crushed fold's sag lift
- * switching on and off took one 116 mm up and down, where the hold that follows the crush moves none past 25 mm (measured 19).
- */
-const UP_DOWN_M = 0.03;
-
 type Shot = { over: number; at: string; crush: number; hitAt: number; upDown: number; upDownAt: string };
-
-/** Per vertex, the last height change of `now` against `last` (the vertex's `change`, kept over frames it did not move); the worst up-then-down since. */
-function upDownOf(now: ArrayLike<number>, last: Float32Array, change: Float32Array, worst: { by: number; at: number }): void {
-  for (let v = 0; v < change.length; v++) {
-    const step = now[v * 3 + 1]! - last[v * 3 + 1]!;
-    if (step === 0) continue;
-    if (step * change[v]! < 0 && Math.min(Math.abs(step), Math.abs(change[v]!)) > worst.by) {
-      worst.by = Math.min(Math.abs(step), Math.abs(change[v]!));
-      worst.at = v;
-    }
-    change[v] = step;
-  }
-  last.set(now);
-}
 
 describe("given the owner's front piston shot into the parked sedan at a tenth of real time", () => {
   let engine: CrashEngine;

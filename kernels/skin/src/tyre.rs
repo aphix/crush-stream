@@ -17,7 +17,7 @@ const SAG_LIFT_FROM: f64 = 0.25;
 
 // The job block (f64, `tyre-sag-kernel.ts` `SAG_JOB`): the wheel's axle and hub at the last hold, the tyre's radius and half width at
 // scale 1, its hub and scale when the rest skin's clearances were read, the wheel's index (its bit in `liftable`), and the shares of the
-// radius the top is read whole to and not past.
+// radius the top is read whole to and not past, and the share of its hold the wheel keeps (under 1 while a torn-off wheel leaves).
 const JOB_HELD: usize = 0;
 const JOB_TYRE_R: usize = 6;
 const JOB_TYRE_HALF_W: usize = 7;
@@ -26,6 +26,7 @@ const JOB_REST_SCALE: usize = 11;
 const JOB_WHEEL: usize = 12;
 const JOB_TOP_FULL: usize = 13;
 const JOB_TOP_NONE: usize = 14;
+const JOB_FADE: usize = 15;
 
 #[inline(always)]
 fn js_min(a: f64, b: f64) -> f64 {
@@ -181,6 +182,7 @@ struct Read {
     rest: Tyre,
     full: f64,
     none: f64,
+    fade: f64,
 }
 
 // car-tyre-skin.ts `sidesPast`: bits of the read's bounds the point (x, y, z) lies past.
@@ -326,7 +328,8 @@ unsafe fn sag_triangle(s: &Skin, q: &Read, va: usize, vb: usize, vc: usize) -> b
             let ahead = (dx * t.fx + dz * t.fz).abs();
             let along = (dx * t.a[0] + (p[1] - t.h[1]) * t.a[1] + dz * t.a[2]).abs();
             let on_top = js_min(1.0, js_max(0.0, (q.none * t.r - ahead) / ((q.none - q.full) * t.r)))
-                * js_min(1.0, js_max(0.0, (t.half_w * (1.0 + SAG_EDGE_FADE) - along) / (SAG_EDGE_FADE * t.half_w)));
+                * js_min(1.0, js_max(0.0, (t.half_w * (1.0 + SAG_EDGE_FADE) - along) / (SAG_EDGE_FADE * t.half_w)))
+                * q.fade;
             if on_top <= 0.0 {
                 continue;
             }
@@ -386,6 +389,7 @@ pub unsafe extern "C" fn sag_pass(
         rest: Tyre::new([*job.add(JOB_REST_HUB), *job.add(JOB_REST_HUB + 1), *job.add(JOB_REST_HUB + 2)], [1.0, 0.0, 0.0], *job.add(JOB_REST_SCALE), tyre_r, tyre_half_w),
         full: *job.add(JOB_TOP_FULL),
         none: *job.add(JOB_TOP_NONE),
+        fade: *job.add(JOB_FADE),
     };
     let t = &q.held;
     let mut lowest = f64::INFINITY;

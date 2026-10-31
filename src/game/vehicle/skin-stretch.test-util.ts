@@ -101,3 +101,23 @@ export function worstHoldOverRest(car: DeformableCar): { over: number; at: strin
   }
   return worst;
 }
+
+/**
+ * How far (m) a drawn body point may go up and then back down (or down, then up) on the frames it changes: a crushed fold's sag lift
+ * switching on and off took one 116 mm up and down, where the hold that follows the crush moves none past 25 mm (measured 19).
+ */
+export const UP_DOWN_M = 0.03;
+
+/** Per vertex, the last height change of `now` against `last` (the vertex's `change`, kept over frames it did not move); the worst up-then-down since. */
+export function upDownOf(now: ArrayLike<number>, last: Float32Array, change: Float32Array, worst: { by: number; at: number }): void {
+  for (let v = 0; v < change.length; v++) {
+    const step = now[v * 3 + 1]! - last[v * 3 + 1]!;
+    if (step === 0) continue;
+    if (step * change[v]! < 0 && Math.min(Math.abs(step), Math.abs(change[v]!)) > worst.by) {
+      worst.by = Math.min(Math.abs(step), Math.abs(change[v]!));
+      worst.at = v;
+    }
+    change[v] = step;
+  }
+  last.set(now);
+}

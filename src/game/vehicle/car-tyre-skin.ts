@@ -25,6 +25,8 @@ const LEAVE_BLEND = 0.03;
 const LEVEL_SLOPE = 1;
 /** The band (share of the tyre's radius) over the hub across which the hold takes up a point under the tyre's surface: under the hub it is the tyre's lower half, whose top no crushed bumper can reach. */
 const UPPER_FADE = 0.1;
+/** How many tyre radii off its seat a torn-off wheel's hub has gone when the hold over it has let go: it fades out as the wheel leaves, no one-frame drop. */
+const LEAVE_FADE = 2;
 /** How far (m) over the tyre's surface a skin point may rest and still be held: the hood and fenders, not the roof. */
 const REACH = 0.5;
 /** How far (m) a triangle spanning a tyre's top must stand over it: twice the 5 mm the drawn skin keeps over a tyre, so a stretched triangle's chord is lifted before it dips through. */
@@ -113,10 +115,11 @@ function topSamples(geometry: THREE.BufferGeometry): Float32Array {
 
 const _mesh = new THREE.Matrix4();
 const _wheel = new THREE.Matrix4();
+const _root = new THREE.Matrix4();
 const _hub = new THREE.Vector3();
 
-/** `obj`'s matrix in the frame of `root`, from the local matrices alone (the world matrices are a frame old until the render). */
-function matrixIn(root: THREE.Object3D, obj: THREE.Object3D, out: THREE.Matrix4): THREE.Matrix4 {
+/** `obj`'s matrix in the frame of `root` (null: the world), from the local matrices alone (the world matrices are a frame old until the render). */
+function matrixIn(root: THREE.Object3D | null, obj: THREE.Object3D, out: THREE.Matrix4): THREE.Matrix4 {
   out.identity();
   for (let p: THREE.Object3D | null = obj; p && p !== root; p = p.parent) {
     p.updateMatrix();
@@ -381,6 +384,10 @@ export class TyreSkin {
   private readonly dirtyWords: Uint32Array;
   /** Per wheel, its axle and hub as this hold read them; `heldAt` takes them when the lift is found again. */
   private readonly wheelNow = new Float64Array(4 * HELD_ELEMENTS.length).fill(NaN);
+  /** Per wheel, its matrix in the mesh's frame while it was last on the car: where a torn-off wheel's fading hold stands (`leaveShare`). */
+  private readonly seat = new Float64Array(4 * 16).fill(NaN);
+  /** Per wheel, the share of its hold it keeps (`leaveShare`): 1 on the car. */
+  private readonly fade = new Float64Array(4).fill(1);
   /** Whether the skin as last written stands off its rest anywhere (`movedOffRest`): only then may anything under it stand through it. */
   private crushed = false;
   /** The vertices the last `applyLift` moved (`liftedCount` of them), the hold's before (`liftedBefore`), and the scratch `changedSince` lists into. */
@@ -429,7 +436,7 @@ export class TyreSkin {
     this.lifted = new Int32Array(rest.length / 3);
     this.liftedBefore = new Int32Array(rest.length / 3);
     this.near = new Int32Array((2 * rest.length) / 3);
-    this.sagSkin = { serial: 0, weld: this.edges.weld, liftable: this.liftable, sagFree: this.sagFree, rest, lift: this.lift, dirty: this.dirty, overTris: this.overTris, sagRead: this.sagRead, heldAt: this.heldAt, restHub: this.restHub, restScale: this.overFor, sagTop: this.sagTop };
+    this.sagSkin = { serial: 0, weld: this.edges.weld, liftable: this.liftable, sagFree: this.sagFree, rest, lift: this.lift, dirty: this.dirty, overTris: this.overTris, sagRead: this.sagRead, heldAt: this.heldAt, restHub: this.restHub, restScale: this.overFor, sagTop: this.sagTop, fade: this.fade };
   }
 
   /** The skin as last written, before this hold lifted any of it; null until a hold has read one. */
@@ -498,14 +505,27 @@ export class TyreSkin {
     return Int32Array.from(found);
   }
 
-  /** Holds the skin over each tyre of `wheels` not in `gone` (bit i: wheel i is the world's), and over `under` (parts drawn under it, those whose `showIf` holds). `skinWritten`: the mesh's positions were just written from the cage. */
+  /** Holds the skin over each tyre of `wheels` not in `gone` (bit i: wheel i is the world's) and, fading as it leaves (`leaveShare`), over a gone one at its last seat; and over `under` (parts drawn under it, those whose `showIf` holds). `skinWritten`: the mesh's positions were just written from the cage. */
   hold(group: THREE.Object3D, wheels: readonly THREE.Object3D[], gone: number, lift: number, skinWritten: boolean, under: readonly PartSeat[] = []): void {
     const overFound = this.findOver(group, wheels, lift);
     matrixIn(group, this.mesh, _mesh).invert();
     let wheelMoved = false;
+    // Bit w: wheel w's hold has ended (gone and left its seat).
+    let out = 0;
     for (let w = 0; w < wheels.length; w++) {
-      _wheel.multiplyMatrices(_mesh, matrixIn(group, wheels[w]!, _wheel));
-      if (this.noteWheel(w, (gone >> w) & 1 ? null : _wheel.elements)) wheelMoved = true;
+      const seat = this.seat.subarray(w * 16, w * 16 + 16);
+      let fade = 1;
+      if ((gone >> w) & 1) {
+        fade = this.leaveShare(group, wheels[w]!, seat);
+        if (fade <= 0) out |= 1 << w;
+        if (this.noteWheel(w, fade > 0 ? seat : null)) wheelMoved = true;
+      } else {
+        _wheel.multiplyMatrices(_mesh, matrixIn(group, wheels[w]!, _wheel));
+        seat.set(_wheel.elements);
+        if (this.noteWheel(w, _wheel.elements)) wheelMoved = true;
+      }
+      if (fade !== this.fade[w]) wheelMoved = true;
+      this.fade[w] = fade;
     }
 
     const attr = this.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
@@ -527,7 +547,7 @@ export class TyreSkin {
     this.lift.set(this.partFloor);
     this.push.fill(0);
     for (let w = 0; w < wheels.length; w++) {
-      if ((gone >> w) & 1) continue;
+      if ((out >> w) & 1) continue;
       const e = this.heldAt.subarray(w * HELD_ELEMENTS.length, (w + 1) * HELD_ELEMENTS.length);
       const scale = hypot3(e[0]!, e[1]!, e[2]!);
       for (let k = 0; k < 3; k++) {
@@ -544,7 +564,7 @@ export class TyreSkin {
     for (let pass = 0; pass < SAG_PASSES; pass++) {
       let sagged = false;
       for (let w = 0; w < wheels.length; w++) {
-        if ((gone >> w) & 1 || ((quiet >> w) & 1 && !this.cornersRose(w))) continue;
+        if ((out >> w) & 1 || ((quiet >> w) & 1 && !this.cornersRose(w))) continue;
         if (this.liftSaggingTriangles(pos, w, pass > 0)) {
           sagged = true;
           quiet &= ~(1 << w);
@@ -553,7 +573,7 @@ export class TyreSkin {
       if (!sagged) break;
       this.carryLift();
     }
-    this.capAtRest(wheels.length, gone);
+    this.capAtRest(wheels.length, out);
     this.levelLift(pos);
     const held = this.applyLift(pos);
     const changed = this.changedSince(reset);
@@ -563,6 +583,16 @@ export class TyreSkin {
     if (!held && (fresh || !wasHeld)) return;
     attr.needsUpdate = true;
     computeNormalsNear(this.mesh.geometry, this.near, changed);
+  }
+
+  /** How much of its hold a gone wheel keeps at its last `seat` (mesh frame): whole in its arch, none once its hub is `LEAVE_FADE` tyre radii off it. */
+  private leaveShare(group: THREE.Object3D, wheel: THREE.Object3D, seat: Float64Array): number {
+    _root.copy(matrixIn(null, group, _root)).invert();
+    _wheel.multiplyMatrices(_mesh, _root.multiply(matrixIn(null, wheel, _wheel)));
+    const e = _wheel.elements;
+    const off = hypot3(e[12]! - seat[12]!, e[13]! - seat[13]!, e[14]! - seat[14]!);
+    const fade = 1 - off / (LEAVE_FADE * this.frame.rig.tyre.r * hypot3(seat[0]!, seat[1]!, seat[2]!));
+    return Number.isNaN(fade) ? 0 : Math.min(1, Math.max(0, fade));
   }
 
   /** Raises each point's lift to at least its neighbours' less `LEVEL_SLOPE` of written edge, until none is short (lifts only rise, so it ends): the skin between a held row and its neighbours stays a slope. */
@@ -920,7 +950,7 @@ export class TyreSkin {
         const dz = _pt[2] - _h[2]!;
         const ahead = Math.abs(dx * _sag.fx + dz * _sag.fz);
         const along = Math.abs(dx * _a[0]! + (_pt[1] - _h[1]!) * _a[1]! + dz * _a[2]!);
-        const onTop = Math.min(1, Math.max(0, (none * _sag.r - ahead) / ((none - full) * _sag.r))) * Math.min(1, Math.max(0, (_sag.halfW * (1 + SAG_EDGE_FADE) - along) / (SAG_EDGE_FADE * _sag.halfW)));
+        const onTop = Math.min(1, Math.max(0, (none * _sag.r - ahead) / ((none - full) * _sag.r))) * Math.min(1, Math.max(0, (_sag.halfW * (1 + SAG_EDGE_FADE) - along) / (SAG_EDGE_FADE * _sag.halfW))) * this.fade[w]!;
         if (onTop <= 0) continue;
         // Its clearance with no gap first: the rest skin's own (the gap, never over `SAG_CLEAR`) is read only for a point that may be short.
         const bare = clearOver(tyre, _pt, 0, _h, _a, _sag.scale, 0);
@@ -1016,15 +1046,15 @@ export class TyreSkin {
       // The push takes over from the lift across `END_BLEND` into the end zone and `LEAVE_BLEND` of going over against leaving, so neither crossing moves a step.
       const out = r - Math.abs(ahead) + END_GAP;
       const leave = this.pushSide ? Math.min(1, Math.max(0, (rise - out) / LEAVE_BLEND)) * Math.min(1, Math.max(0, (Math.abs(ahead) - endsAhead) / (END_BLEND * r) + 1)) : 0;
-      if (leave * out > push[p]!) {
-        push[p] = leave * out;
+      if (leave * out * this.fade[w]! > push[p]!) {
+        push[p] = leave * out * this.fade[w]!;
         const sign = Math.sign(ahead);
         pushDir[p * 3] = sign * fx;
         pushDir[p * 3 + 1] = 0;
         pushDir[p * 3 + 2] = sign * fz;
       }
       // Under the hub a point cannot reach the top: a bumper the crush drove into the tyre's front was lifted 0.45 m over it for a frame.
-      lift[p] = Math.max(lift[p]!, Math.min(1, Math.max(0, height / (UPPER_FADE * r))) * (1 - leave) * rise);
+      lift[p] = Math.max(lift[p]!, Math.min(1, Math.max(0, height / (UPPER_FADE * r))) * (1 - leave) * rise * this.fade[w]!);
       dirty[p] = 1;
     }
   }
