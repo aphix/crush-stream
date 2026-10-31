@@ -111,11 +111,40 @@ function ownerDerby(seconds: number, knobs = ARCADE, spawnMps = OWNER_SPAWN_MPS)
 const OWNER_SPAWN_MPS = 12;
 const POP_SPAWN_MPS = 11.8;
 
+/** Where a slice's move is read from on a car: its masses' centroid, or, where R placed it this slice (`frame`), its frame origin at both ends (its masses re-arm about another point). */
+type Mark = { x: number; z: number; frame: boolean };
+
+function markOf(c: DeformableCar, frame: boolean): Mark | null {
+  if (frame) return { x: c.group.position.x, z: c.group.position.z, frame };
+  if (!c.deform.massActive) return null;
+  const m = massCentroid(c.deform.masses);
+  return { x: m.x, z: m.z, frame };
+}
+
+/** A slice's start as `readJumps` reads it: each car's mark, its crashed frame origin, its plan speed, and the hull push it took (filled by the slice's pair hits). */
+type SliceStart = { before: (Mark | null)[]; group0: ({ x: number; z: number } | null)[]; speed0: number[]; shove: number[] };
+
+/** Each live wreck's zip (its mark moved more than 3·v·h + 5 cm) and frame pop (3·v·h + 2 cm) over the slice of `h` s at `t`. */
+function readJumps(cars: readonly DeformableCar[], s: SliceStart, h: number, t: number, zips: string[], pops: string[]): void {
+  for (const [i, c] of cars.entries()) {
+    const a = s.before[i];
+    if (!a || !c.deform.massActive) continue;
+    const b = a.frame ? c.group.position : massCentroid(c.deform.masses);
+    const moved = Math.hypot(b.x - a.x, b.z - a.z);
+    const v = Math.max(s.speed0[i]!, Math.hypot(c.velocity.x, c.velocity.z), s.shove[i]!);
+    const name = c.paint.name;
+    if (moved > 3 * v * h + 0.05) zips.push(`t=${t.toFixed(2)} ${name} moved ${moved.toFixed(2)} m in ${(h * 1000).toFixed(1)} ms at ${v.toFixed(1)} m/s`);
+    const g = s.group0[i];
+    const jump = g ? Math.hypot(c.group.position.x - g.x, c.group.position.z - g.z) : 0;
+    if (g && jump > 3 * v * h + 0.02) pops.push(`t=${t.toFixed(2)} ${name} group ${jump.toFixed(3)} m in ${(h * 1000).toFixed(1)} ms at ${v.toFixed(1)} m/s quiet ${c.deform.quietTime().toFixed(2)}`);
+  }
+}
+
 /**
  * AI cars in the bowl in the engine's contact order, until `seconds` after the green light or the match ends. A
  * zip is a slice where a live wreck's mass centroid moves more than 3× its speed allows (+5 cm); the slice its
- * masses go live is skipped (the group origin sits 0.23 m behind the mass centroid). `start`: seconds of start
- * lights (default the match's).
+ * masses go live is skipped (the group origin sits 0.23 m behind the mass centroid), and a car R righted is read
+ * from where R put it (`markOf`). `start`: seconds of start lights (default the match's).
  */
 function runDerby(cars: DeformableCar[], seconds: number, knobs: Knobs, start?: number): DerbyRun {
     const n = cars.length;
@@ -139,7 +168,7 @@ function runDerby(cars: DeformableCar[], seconds: number, knobs: Knobs, start?: 
     const zips: string[] = [];
     const pops: string[] = [];
     while (t < seconds && state === "running") {
-      const before = cars.map((c) => (c.deform.massActive ? massCentroid(c.deform.masses) : null));
+      const before = cars.map((c) => markOf(c, false));
       const group0 = cars.map((c) => (c.crashed && c.deform.massActive ? { x: c.group.position.x, z: c.group.position.z } : null));
       const speed0 = cars.map((c) => Math.hypot(c.velocity.x, c.velocity.z));
       const shove = new Array<number>(n).fill(0);
@@ -149,8 +178,8 @@ function runDerby(cars: DeformableCar[], seconds: number, knobs: Knobs, start?: 
       const snaps = match.snapshots(n);
       for (const [i, c] of cars.entries()) snapshotAiCar(snaps[i]!, i, c, c.deform.drivetrainAlive);
       for (const [i, c] of cars.entries()) applyAiDrive(c, match.think(snaps[i]!, snaps, h), h);
-      // The AI presses R as the engine's derby does (`recoverDue`), so a flipped car that still runs is back in the match.
-      for (const [i, c] of cars.entries()) if (match.recoverDue(i, c, h)) recoverInPlace(c, mayRecoverFlipped);
+      // The AI presses R as the engine's derby does (`recoverDue`), so a flipped car that still runs is back in the match. R is a placement, not a move.
+      for (const [i, c] of cars.entries()) if (match.recoverDue(i, c, h) && recoverInPlace(c, mayRecoverFlipped)) before[i] = markOf(c, true);
       w.pairHit = (a, b, pair) => {
         const ca = cars[a]!;
         const cb = cars[b]!;
@@ -173,17 +202,7 @@ function runDerby(cars: DeformableCar[], seconds: number, knobs: Knobs, start?: 
         wedged[i] = stuck ? wedged[i]! + h : 0;
         worstWedge = Math.max(worstWedge, wedged[i]!);
       }
-      for (const [i, c] of cars.entries()) {
-        const a = before[i];
-        if (!a || !c.deform.massActive) continue;
-        const b = massCentroid(c.deform.masses);
-        const moved = Math.hypot(b.x - a.x, b.z - a.z);
-        const v = Math.max(speed0[i]!, Math.hypot(c.velocity.x, c.velocity.z), shove[i]!);
-        if (moved > 3 * v * h + 0.05) zips.push(`t=${t.toFixed(2)} ${names[i]} moved ${moved.toFixed(2)} m in ${(h * 1000).toFixed(1)} ms at ${v.toFixed(1)} m/s`);
-        const g = group0[i];
-        const jump = g ? Math.hypot(c.group.position.x - g.x, c.group.position.z - g.z) : 0;
-        if (g && jump > 3 * v * h + 0.02) pops.push(`t=${t.toFixed(2)} ${names[i]} group ${jump.toFixed(3)} m in ${(h * 1000).toFixed(1)} ms at ${v.toFixed(1)} m/s quiet ${c.deform.quietTime().toFixed(2)}`);
-      }
+      readJumps(cars, { before, group0, speed0, shove }, h, t, zips, pops);
       t += h;
     }
     return { hits, noseToNose, worstWedge, t, state, deaths, zips, pops };

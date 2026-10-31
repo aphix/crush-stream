@@ -1,11 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { DerbyBrain, type AiCar } from "../ai/derby-ai.ts";
 import { DerbyMatch } from "./derby.ts";
-import { aiRecoverDelay, applyDrive, BOOST, DriverSeat, mayRecoverFlipped, selfRightDelay } from "../vehicle/car-drive.ts";
+import { aiRecoverDelay, applyDrive, BOOST, DriverSeat, mayRecoverFlipped, recoverInPlace, selfRightDelay } from "../vehicle/car-drive.ts";
 import { DeformableCar } from "../vehicle/car.ts";
 import { HANDLING, SELF_RIGHT_SLOWEST } from "../vehicle/vehicle-classes.ts";
 import { aiCar, DT } from "../vehicle/test-support.ts";
+import { arenaWorld } from "../scenes/derby-arena.test-util.ts";
+import { DERBY_RAMPS } from "../scenes/derby-ground.ts";
+import { fleetStyle } from "../scenes/fleet.ts";
+import { setGround } from "../world/ground.ts";
+import { physicsSlice } from "../contact/sat.ts";
+import { stepWorld } from "../engine/world-step.ts";
+import { zipBound } from "../contact/zip-bound.test-util.ts";
+import { FRAME_HZ } from "../kernel/constants.ts";
 
 /** A car at rest at the origin, upside down (roll π) when `over`, its engine alive unless `dead`. */
 function parked(over: boolean, dead = false): DeformableCar {
@@ -109,6 +117,34 @@ describe("given a derby AI car flipped onto its roof, which turns itself back ov
       const slices = firstYes(() => match.recoverDue(0, car, DT), SELF_RIGHT_SLOWEST + 1);
       expect(slices !== null && Math.abs(slices * DT - SELF_RIGHT_SLOWEST) <= DT, `AI pressed R at ${slices} slices`).toBeTruthy();
     });
+  });
+});
+
+/** How far (m) past the north ramp's lip foot the flipped car's origin lies: a sedan's half width puts its near side 0.4 m into the slope. */
+const LIP_OVERLAP = 0.5;
+
+describe("given a car that still runs lying on its roof at the foot of the north bowl ramp's lip, along the lip, half its width in the slope", () => {
+  afterEach(() => setGround(null));
+
+  it("when R rights it, then no step of the next second moves it past its zip bound", () => {
+    const { plateau } = DERBY_RAMPS.find((r) => r.name === "north")!;
+    const car = new DeformableCar({ body: 0xffffff, accent: 0x444444, name: "o0" }, new THREE.Scene(), null, fleetStyle(0));
+    car.spawnFacing(plateau.x, plateau.z + plateau.halfZ + plateau.run[3] + LIP_OVERLAP, Math.PI / 2, 0);
+    car.group.rotation.set(0, Math.PI / 2, Math.PI, "YXZ");
+    car.refreshBasis();
+    const { world } = arenaWorld([car]);
+    expect(recoverInPlace(car, mayRecoverFlipped), "R righted the flipped car").toBe(true);
+    const h = physicsSlice(1 / FRAME_HZ, 0);
+    const jumps: string[] = [];
+    for (let step = 0; step < FRAME_HZ; step++) {
+      const { x, z } = car.group.position;
+      const speed = Math.hypot(car.velocity.x, car.velocity.z);
+      stepWorld(world, h);
+      const moved = Math.hypot(car.group.position.x - x, car.group.position.z - z);
+      const bound = zipBound(Math.max(speed, Math.hypot(car.velocity.x, car.velocity.z)), h);
+      if (moved > bound) jumps.push(`step ${step}: ${moved.toFixed(3)} m, bound ${bound.toFixed(3)} m`);
+    }
+    expect(jumps).toEqual([]);
   });
 });
 

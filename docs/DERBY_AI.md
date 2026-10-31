@@ -78,7 +78,8 @@ failed the rear-first rule and the J-turn share fell to 0.19.
   AI-driven car) run one timer, `FlipClock`: on its roof or side (up·world-up < 0.35), under 2.5 m/s, for the slider's
   self-right delay (1.2 s arcade … 3 s at realism 0.6). The reset prompt has no delay of its own. Where the slider leaves
   righting to R alone (realism ≥ 0.6) the player must press it, and the AI waits `SELF_RIGHT_SLOWEST` (3 s) instead.
-  Then `recoverCar` rights it exactly as the R key does.
+  Then `recoverCar` rights it exactly as the R key does (`recoverInPlace`): upright where its frame stands, laid on the
+  ground layer under it (`layOnGround`). Set down at y 0 it stood in a ramp's lip and the next slice shoved it 0.29 m out.
 - Boost: each driver keeps the seat's meter (`BOOST.full` s to drain, `BOOST.recharge` s to refill: `chargeBoost`, also
   `RaceBrain`'s), full at the start of a match; a takedown tops it up by `BOOST.takedown` (`DerbyMatch.consumeBoosts`,
   `takedownBoost`). It boosts while charging its target nose first (tactic `nose`) with the target between 8 and 25 m

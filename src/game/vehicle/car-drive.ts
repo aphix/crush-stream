@@ -11,6 +11,8 @@ import { LOSS_SIZE, wheelLoss } from "./wheel-loss.ts";
 import { detSin, detCos, detAtan2 } from "../kernel/physics-core.js";
 import { GRIP_YAW_CAP, SLIDE_SPEED, FLIPPED_UP_Y } from "./constants.ts";
 import { standingBite } from "./wheel-bite.ts";
+import { activeGround, NO_FLOOR } from "../world/ground.ts";
+import { layOnGround } from "./car-air-points.ts";
 
 /** Shared by derby AI and the player seat. */
 export type DriveInput = {
@@ -593,11 +595,21 @@ export function mayRecoverFlipped(car: Pick<DeformableCar, "group" | "deform" | 
   return !(car.group.matrixWorld.elements[5]! > 0.5) && carRuns(car);
 }
 
-/** R for `car` (the player's or a derby AI's): back on its wheels where it stands, at rest and repaired, when `may` lets it. */
+/** How far (m) over the righted car's origin R looks for the ground it stands on: the layer under a car lying on a rise, never one over it. */
+const RECOVER_PROBE = 0.5;
+
+/**
+ * R for `car` (the player's or a derby AI's): back on its wheels where it stands, at rest and repaired, when `may` lets it, on the ground layer under
+ * it (`layOnGround`). Set down at y 0, a car righted at a derby ramp's lip stood in the slope, and the next slice shoved it out 0.29 m sideways.
+ */
 export function recoverInPlace(car: DeformableCar, may: (car: DeformableCar) => boolean): boolean {
   car.refreshBasis();
   if (!may(car)) return false;
-  car.spawnFacing(car.group.position.x, car.group.position.z, detAtan2(car.fwdFlat.x, car.fwdFlat.z), 0);
+  const { x, y, z } = car.group.position;
+  car.spawnFacing(x, z, detAtan2(car.fwdFlat.x, car.fwdFlat.z), 0);
+  const ground = activeGround().heightAt(x, z, y + RECOVER_PROBE);
+  if (ground !== NO_FLOOR) car.group.position.y = ground;
+  layOnGround(car);
   return true;
 }
 
