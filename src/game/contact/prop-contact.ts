@@ -1,7 +1,7 @@
 import { detCos, hypot2 } from "../kernel/physics-core.js";
 import * as THREE from "three";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { cameThroughTop, FF_CLOSING, FF_CX, FF_CZ, FF_FD, FF_FNX, FF_FNZ, FF_FW, FF_FX, FF_FZ, FF_GAP, FF_NX, FF_NZ, FF_PEN, FF_SIZE, FOOT_FX, FOOT_FZ, FOOT_HL, FOOT_HW, FOOT_RX, FOOT_RZ, FOOT_SIZE, FOOT_X, FOOT_Z, footFace, PR_BASE, PR_COS, PR_ENDS, PR_GU, PR_GW, PR_HARD, PR_HX, PR_HZ, PR_ID, PR_KNOCK_V, PR_MASS, PR_R, PR_SIN, PR_TOP, PR_VX, PR_VZ, PR_WALL, PR_X, PR_YAW, PR_Z, sideFace } from "../world/prism.ts";
+import { cameThroughTop, FF_CLOSING, FF_CX, FF_CZ, FF_FD, FF_FNX, FF_FNZ, FF_FW, FF_FX, FF_FZ, FF_GAP, FF_NX, FF_NZ, FF_PEN, FF_SIZE, FOOT_FX, FOOT_FZ, FOOT_HL, FOOT_HW, FOOT_MX, FOOT_MZ, FOOT_RX, FOOT_RZ, FOOT_SIZE, FOOT_X, FOOT_Z, footFace, PR_BASE, PR_COS, PR_ENDS, PR_GU, PR_GW, PR_HARD, PR_HX, PR_HZ, PR_ID, PR_KNOCK_V, PR_MASS, PR_R, PR_SIN, PR_TOP, PR_VX, PR_VZ, PR_WALL, PR_X, PR_YAW, PR_Z, sideFace } from "../world/prism.ts";
 import { ENTRY_WINDOW, SOLID_AT_REST } from "../world/constants.ts";
 import { C_ARG, C_DEPTH, C_NX, C_NY, C_NZ, HIT_SIZE, KNOCK, P_STRIDE, pointContact, PQ_BODY, PQ_SIZE, PQ_VX, PQ_VY, PQ_VZ, PQ_X, PQ_Y, PQ_Z, prismCut, RIG, WALL, type Surface } from "../world/surfaces.ts";
 import { type ContactBox, makeBox, partContact, solidFace } from "./external-contact.ts";
@@ -99,7 +99,7 @@ const _hit = new Float64Array(FF_SIZE);
  * plane of the wall piece whose hold face it was last held on (`braked`, the face's unit normal and its offset): the pieces of one
  * wall hold a car once.
  */
-const _span = { low: 0, high: 0, fall: 0, wreck: false, cx: 0, cz: 0, hw: 0, hl: 0, reach: 0, ahead: 0, braked: false, nx: 0, nz: 0, off: 0 };
+const _span = { low: 0, high: 0, fall: 0, wreck: false, cx: 0, cz: 0, hw: 0, hl: 0, mx: 0, mz: 0, reach: 0, ahead: 0, braked: false, nx: 0, nz: 0, off: 0 };
 
 /** Two wall faces are one wall's: normals within 5° (cos), planes within this many metres of each other. */
 const SAME_WALL_COS = 0.996;
@@ -190,11 +190,29 @@ function aheadOf(car: DeformableCar): number {
   return v.x * v.x + v.z * v.z > WALL_CRUSH * WALL_CRUSH ? hypot2(v.x, v.z) * HIT_AHEAD : 0;
 }
 
+/** The plan point of `car`'s centre of mass into `_span.mx`, `mz`: a wreck's masses' centroid, else its origin (on its axis). */
+function centreOfMass(car: DeformableCar): void {
+  let m = 0;
+  let x = 0;
+  let z = 0;
+  if (car.deform.massActive) {
+    for (const n of car.deform.masses) {
+      if (!n.dynamic) continue;
+      m += n.mass;
+      x += n.world.x * n.mass;
+      z += n.world.z * n.mass;
+    }
+  }
+  _span.mx = m > 1e-8 ? x / m : car.group.position.x;
+  _span.mz = m > 1e-8 ? z / m : car.group.position.z;
+}
+
 /** The car as every solid meets it this slice: `_span` filled from its drawn body (`bodySpan`) and its footprint (`footprint`). */
 function measure(car: DeformableCar): void {
   const v = car.velocity;
   bodySpan(car, _span, _tilt);
   footprint(car);
+  centreOfMass(car);
   const plan = _plan;
   _span.cx = (plan[0]! + plan[1]!) / 2;
   _span.cz = (plan[2]! + plan[3]!) / 2;
@@ -293,6 +311,8 @@ function solidContact(car: DeformableCar, i: number, s: Surface, k: number, knoc
   _foot[FOOT_FZ] = car.fwdFlat.z;
   _foot[FOOT_HW] = _span.hw;
   _foot[FOOT_HL] = _span.hl;
+  _foot[FOOT_MX] = _span.mx;
+  _foot[FOOT_MZ] = _span.mz;
   if (role !== KNOCK) partContact(car, prismBox(_solid, s, k), dt);
   const touched = footFace(P, o, _foot, v.x, v.z, dt, _hit);
   if (touched) s.prismTouches++;

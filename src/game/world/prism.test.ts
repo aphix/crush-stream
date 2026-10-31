@@ -7,7 +7,7 @@ import { carFrame } from "../vehicle/car-rig.ts";
 import { CAR_STYLE_IDS, CAR_STYLES } from "../vehicle/car-variants.ts";
 import { PLATFORM_TYRE } from "../kernel/rig-spec.ts";
 import { ENTRY_WINDOW, SOLID_AT_REST } from "./constants.ts";
-import { FF_NX, FF_NZ, FF_PEN, FF_SIZE, FOOT_FX, FOOT_FZ, FOOT_HL, FOOT_HW, FOOT_RX, FOOT_RZ, FOOT_SIZE, FOOT_X, FOOT_Z, footFace } from "./prism.ts";
+import { FF_NX, FF_NZ, FF_PEN, FF_SIZE, FOOT_FX, FOOT_FZ, FOOT_HL, FOOT_HW, FOOT_MX, FOOT_MZ, FOOT_RX, FOOT_RZ, FOOT_SIZE, FOOT_X, FOOT_Z, footFace } from "./prism.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 
 /** A surface of the given prisms, armed as the scene's solids for the test that asks. */
@@ -373,5 +373,33 @@ describe("given a car's footprint over a circle prism at its flank", () => {
     const { pen, nx, nz } = meet(1);
     expect(Math.abs(nx + 1) < 1e-12 && Math.abs(nz) < 1e-12, `normal ${nx} ${nz}`).toBeTruthy();
     expect(Math.abs(pen - (RADIUS - 0.006)), `depth ${pen}`).toBeLessThan(1e-12);
+  });
+});
+
+/**
+ * A wreck lying across a thin wall: its footprint's middle (a box grown over the tilted body and its masses) is 6 cm past the wall's
+ * midplane while its centre of mass stands 0.4 m inside it. The footprint is 1.4 m half wide and 2.1 m half long, turned 30° to the wall.
+ */
+describe("given a car's footprint over a thin wall whose midplane its middle has passed and its centre of mass has not", () => {
+  const foot = new Float64Array(FOOT_SIZE);
+  const hit = new Float64Array(FF_SIZE);
+
+  it("when the wall meets it, then it pushes the car out the side its centre of mass is on, by the depth that clears the whole footprint", () => {
+    const s = new Surface();
+    s.addPrism({ x: 0, z: 0, yaw: 0, hx: 0.5, hz: 5, base: 0, top: 3, id: 0, role: WALL });
+    const turn = Math.PI / 6;
+    foot[FOOT_X] = 0.06;
+    foot[FOOT_Z] = 0;
+    foot[FOOT_RX] = Math.cos(turn);
+    foot[FOOT_RZ] = -Math.sin(turn);
+    foot[FOOT_FX] = Math.sin(turn);
+    foot[FOOT_FZ] = Math.cos(turn);
+    foot[FOOT_HW] = 1.4;
+    foot[FOOT_HL] = 2.1;
+    foot[FOOT_MX] = -0.4;
+    foot[FOOT_MZ] = 0;
+    expect(footFace(s.p, 0, foot, 0, 0, 1 / FINE_HZ, hit), "they overlap").toBeTruthy();
+    expect(hit[FF_NX], `normal ${hit[FF_NX]} ${hit[FF_NZ]}`).toBeCloseTo(-1, 12);
+    expect(hit[FF_PEN], `depth ${hit[FF_PEN]}`).toBeCloseTo(0.5 + 1.4 * Math.cos(turn) + 2.1 * Math.sin(turn) + 0.06, 12);
   });
 });

@@ -238,7 +238,11 @@ export function exitFace(P: Float64Array, o: number, x: number, y: number, z: nu
   return IN_SIDE;
 }
 
-/** A body's plan footprint for `footFace`: its middle (x, z), its right and forward axes (plan unit vectors), and its half width and half length (m). */
+/**
+ * A body's plan footprint for `footFace`: its middle (x, z), its right and forward axes (plan unit vectors), its half width and half
+ * length (m), and its centre of mass (mx, mz). A box's side the body is on is the centre of mass's: the footprint's middle is off a
+ * tilted wreck's body, so a thin wall sent it through to the far side.
+ */
 export const FOOT_X = 0;
 export const FOOT_Z = 1;
 export const FOOT_RX = 2;
@@ -247,7 +251,9 @@ export const FOOT_FX = 4;
 export const FOOT_FZ = 5;
 export const FOOT_HW = 6;
 export const FOOT_HL = 7;
-export const FOOT_SIZE = 8;
+export const FOOT_MX = 8;
+export const FOOT_MZ = 9;
+export const FOOT_SIZE = 10;
 
 /**
  * `footFace`'s output row. A hit: the overlap `FF_PEN` (m) along the unit normal (`FF_NX`, `FF_NZ`, out of the prism toward
@@ -327,7 +333,7 @@ export function sideFace(P: Float64Array, o: number, nx: number, nz: number, out
  * body's own axes there would shove it along the wall at every joint, and the piece's face taken on past its end would stand out
  * of a bend's inner wall into the road.
  */
-function jointFace(P: Float64Array, o: number, foot: Float64Array, du: number, dw: number, ru: number, rw: number, fu: number, fw: number, out: Float64Array): boolean {
+function jointFace(P: Float64Array, o: number, foot: Float64Array, du: number, dw: number, ru: number, rw: number, fu: number, fw: number, side: number, out: Float64Array): boolean {
   const hw = foot[FOOT_HW]!;
   const hl = foot[FOOT_HL]!;
   const hx = P[o + PR_HX]!;
@@ -336,7 +342,6 @@ function jointFace(P: Float64Array, o: number, foot: Float64Array, du: number, d
     _cu[q] = du + CORNER_R[q]! * hw * ru + CORNER_F[q]! * hl * fu;
     _cw[q] = dw + CORNER_R[q]! * hw * rw + CORNER_F[q]! * hl * fw;
   }
-  const side = sign(du);
   let deep = Infinity;
   let ud = 0;
   let wd = 0;
@@ -497,6 +502,8 @@ export function footFace(P: Float64Array, o: number, foot: Float64Array, vx: num
   const fw = fx * s + fz * c;
   const du = dx * c - dz * s;
   const dw = dx * s + dz * c;
+  const su = sign((foot[FOOT_MX]! - P[o + PR_X]!) * c - (foot[FOOT_MZ]! - P[o + PR_Z]!) * s);
+  const sw = sign((foot[FOOT_MX]! - P[o + PR_X]!) * s + (foot[FOOT_MZ]! - P[o + PR_Z]!) * c);
   const dr = dx * rx + dz * rz;
   const df = dx * fx + dz * fz;
   const oU = hx + hw * Math.abs(ru) + hl * Math.abs(fu) - Math.abs(du);
@@ -515,13 +522,13 @@ export function footFace(P: Float64Array, o: number, foot: Float64Array, vx: num
     }
     return false;
   }
-  if (jointEnd) return jointFace(P, o, foot, du, dw, ru, rw, fu, fw, out);
-  _ax[0] = sign(du) * c;
-  _az[0] = -sign(du) * s;
-  _ao[0] = oU;
-  _ax[1] = sign(dw) * s;
-  _az[1] = sign(dw) * c;
-  _ao[1] = oW;
+  if (jointEnd) return jointFace(P, o, foot, du, dw, ru, rw, fu, fw, su, out);
+  _ax[0] = su * c;
+  _az[0] = -su * s;
+  _ao[0] = su === sign(du) ? oU : oU + 2 * Math.abs(du);
+  _ax[1] = sw * s;
+  _az[1] = sw * c;
+  _ao[1] = sw === sign(dw) ? oW : oW + 2 * Math.abs(dw);
   _ax[2] = sign(dr) * rx;
   _az[2] = sign(dr) * rz;
   _ao[2] = oR;
@@ -540,6 +547,6 @@ export function footFace(P: Float64Array, o: number, foot: Float64Array, vx: num
   const alignU = Math.abs(nx * c - nz * s);
   const alignW = Math.abs(nx * s + nz * c);
   const wide = k < 2 ? k === 0 : Math.max(alignU, alignW) > PARALLEL ? alignU > alignW : oU <= oW;
-  setFace(P, o, wide ? sign(du) * c : sign(dw) * s, wide ? -sign(du) * s : sign(dw) * c, !wide, out);
+  setFace(P, o, wide ? su * c : sw * s, wide ? -su * s : sw * c, !wide, out);
   return true;
 }
