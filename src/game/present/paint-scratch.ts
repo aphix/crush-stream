@@ -270,7 +270,9 @@ const BARE_TRIM_WEAR = { wearMap: { value: BARE_SCRATCH }, scratchTier: SCRATCH_
 
 /** Shared trim `material` draws scratches (its finish's scuff, `TRIM_SCUFF`) from the wear its uniforms bind; a fitting drawn in it shows none. One program for every finish. */
 function patchTrim(material: THREE.MeshStandardMaterial): void {
-  if (patched.has(material)) return;
+  // A car dressed again (`applyScratch` on a reused car) still wears its own copies: they compile the scratch already, and patching one
+  // again compiles it twice (`redefinition`: the program fails to link, and three recompiles it every frame).
+  if (patched.has(material) || material.userData.sharedTrim) return;
   patched.add(material);
   const look = TRIM_SCUFF.get(material.userData.materialId as MaterialId) ?? TRIM_SCUFF.get(MAT.BUMPER_SATIN)!;
   const scuff = { scratchScuff: { value: new THREE.Vector3().fromArray(look.scuff) }, scratchLift: { value: look.lift }, scratchDeep: { value: new THREE.Vector3().fromArray(look.deep) }, scratchRough: { value: look.rough } };
@@ -305,11 +307,15 @@ function wearBumpers(wear: Wear): void {
 /** `wear`'s bumper `i` drawn in a new own copy of its trim. */
 function ownTrim(wear: Wear, i: number): void {
   const mesh = wear.bumpers[i]!;
-  const trim = mesh.material as THREE.MeshStandardMaterial;
+  // A bumper re-skinned (a new wear on the same car) wears an earlier own copy: copy the shared trim it came from, never the copy (that
+  // compiles the scratch twice: `redefinition`, and the program fails to link).
+  const worn = mesh.material as THREE.MeshStandardMaterial;
+  const trim = (worn.userData.sharedTrim as THREE.MeshStandardMaterial | undefined) ?? worn;
   patchTrim(trim);
   ensureRestFrame(mesh, wear.car.group);
   const own = trim.clone();
   own.userData.shared = false;
+  own.userData.sharedTrim = trim;
   const compile = trimCompile.get(trim)!;
   const uniforms = { ...trimScuff.get(trim), ...wear.uniforms };
   own.onBeforeCompile = (shader, renderer) => {

@@ -332,4 +332,18 @@ describe("given the real engine with its cars on the screen", () => {
     expect(car.scratches.count, "the control: the scrape made a stroke").toBeGreaterThan(0);
     expect(sampledScratch(car.lookMeshes().bodyPaint, rest, new THREE.Vector3(-1, 0, 0)), "the scratch the paint draws there").toBeGreaterThan(0);
   });
+
+  it("when a scraped car that wears its own bumper trims is dressed again, then each bumper's program compiles the scratch once (twice is a redefinition: the program fails to link, and three recompiles it every frame)", () => {
+    const car = engine["live"]()[0]!;
+    for (let round = 0; round < 2; round++) {
+      applyScratch(car);
+      scraped(car, [[0.5, -0.5 + round * 0.1]]);
+      runSeconds(engine, 1 / FRAME_HZ);
+      for (const mesh of car.lookMeshes().bumpers) {
+        const material = mesh.material as THREE.Material;
+        expect(material.userData.shared, `round ${round}: the control: the bumper wears its own copy`).toBe(false);
+        expect(compileHooks(material).fragmentShader.split("#define PAINT_SCRATCH").length - 1, `round ${round}: scratch compiles`).toBe(1);
+      }
+    }
+  });
 });
