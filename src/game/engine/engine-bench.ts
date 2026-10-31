@@ -27,6 +27,7 @@ interface BenchEngine extends SweepEngine, SceneEngine {
   readonly pace: SimPacer;
   fadeScenes: boolean;
   start(): void;
+  stop(): void;
   setFxTier(tier: FxTier): void;
   setFxAuto(): void;
   /** The Sky setting. */
@@ -369,7 +370,7 @@ export async function runBench(engine: BenchEngine, hud: () => CrashHudState, se
   const fxTiers: FxTier[] = plan.ultra ? ["minimal", "low", "high", "ultra"] : ["minimal", "low", "high"];
   engine.resetAdaptiveQuality();
   let parts = engine.benchParts();
-  parts.renderer.setAnimationLoop(null);
+  engine.stop();
   engine.fadeScenes = false;
   // The step's own cold load (the card's `load:` line), then the sweep warms the page on that scene, then the step starts over from a fresh page's state.
   const setupMs = enterBenchScene(engine, parts, plan);

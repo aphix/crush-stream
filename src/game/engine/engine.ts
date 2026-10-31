@@ -455,6 +455,17 @@ export class CrashEngine extends EngineGarage {
     this.renderer.setAnimationLoop(this.tick);
   }
 
+  /**
+   * The page's loop stops: the bench draws its frames itself, and only once a setting is in force. So a warm-up stops waiting for
+   * frames between its steps (`framesPass`): with the loop counted as drawing, an Ultra switch waited for frames nobody drew and the
+   * bench never left that setting. `start` gives the loop back.
+   */
+  stop(): void {
+    this.loopDraws = false;
+    this.releaseFrameWaiters();
+    this.renderer.setAnimationLoop(null);
+  }
+
   dispose(): void {
     this.mouseLook.exit();
     this.disposed = true;

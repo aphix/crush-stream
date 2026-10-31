@@ -84,21 +84,13 @@ export async function sweep(engine: SweepEngine, parts: BenchParts, plan: BenchP
   beat.switching = true;
   for (const [i, stop] of stops.entries()) {
     ui.set(`CRUSH BENCH: warming up, ${stop.name} (${i + 1} / ${stops.length})`);
-    // The bench owns the frame loop (the page's is stopped), and the Ultra stop settles only once its pick's warm-up has had frames
-    // between its steps (`framesPass`): draw them here, or the pick waits for frames nobody draws and the bench never leaves this stop.
-    let settled = false;
-    let failed: unknown = null;
-    void Promise.resolve(stop.set()).then(
-      () => void (settled = true),
-      (err: unknown) => void ((failed = err), (settled = true)),
-    );
+    await stop.set();
     t.timing = false;
     let wall = 0;
-    for (let frames = 0; !settled || (wall < capS && (wall < seconds || frames < minFrames)); frames++) {
+    for (let frames = 0; wall < capS && (wall < seconds || frames < minFrames); frames++) {
       await frame(engine, parts.renderer, t, beat);
-      if (settled) wall += beat.frame[FRAME.interval]! / 1000;
+      wall += beat.frame[FRAME.interval]! / 1000;
     }
-    if (failed !== null) throw failed;
   }
   beat.switching = false;
   parts.quality.restore(own);

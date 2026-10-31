@@ -272,4 +272,17 @@ describe("given a page with Ultra loaded (a second pick, or the bench's Ultra ar
     expect(frames, `frames the pick ran through (${FRAMES_CAP} is the cap: the pick never settled)`).toBeLessThanOrEqual(FRAMES_CAP);
     expect(engine["cine"].tier, "tier after the pick").toBe("ultra");
   });
+
+  it("when the page's loop ran and the bench then takes it over (it draws its frames itself, only once a setting is in force), then an Ultra pick settles with no frame drawn: it never waits for frames nobody draws", { timeout: HANG_GUARD_MS }, async () => {
+    await engine.setFxTier("low");
+    await engine.warmsIdle();
+    engine["loopDraws"] = true;
+    engine.stop();
+    let settled = false;
+    void engine.setFxTier("ultra").then(() => void (settled = true));
+    // Loop turns, no frames: the pick's links resolve on the loop; a pick waiting for frames never does.
+    for (let turn = 0; turn < 2000 && !settled; turn++) await yieldToLoop();
+    expect(settled, "the pick settled with no frame drawn").toBe(true);
+    expect(engine["cine"].tier, "tier after the pick").toBe("ultra");
+  });
 });
