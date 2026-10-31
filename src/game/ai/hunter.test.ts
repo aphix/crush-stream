@@ -158,6 +158,20 @@ describe("given the Survival hunter pack (the cops that chase the player) on a s
     expect(q.stored.filter((s) => s.id === 3).length).toBe(1);
   });
 
+  it("when a cop's car is crashed with a live drivetrain, then the pack counts it down as a wrecked one: put away once unseen after 6 s, and a replacement drops in", () => {
+    const r = rig();
+    r.run(1);
+    const cop = r.cars.find((c) => c.id > 0 && c.x !== FAR)!;
+    const t0 = r.now();
+    cop.crashed = true;
+    r.run(t0 + HUNT.gap + BEAT);
+    expect(r.drops.some((d) => d.t >= t0 && d.id !== cop.id), "no cop dropped in for the crashed one").toBeTruthy();
+    r.run(r.now() + HUNT.wreckStore + HUNT.gap + 1);
+    expect(r.stored.filter((s) => s.id === cop.id).length, "the crashed cop put away").toBe(1);
+    expect(r.brain.hunting, "the pack is back to what the schedule wants").toBe(copsWanted(r.now(), spec.formation.length));
+    expect(r.brain.stats.disabled).toBe(1);
+  });
+
   it("when a cop is lost far from the player, then it is put away after 5 s out of sight and never while seen, and another cop drops in to take its place", () => {
     let visible = false;
     const r = rig({ hidden: () => !visible });

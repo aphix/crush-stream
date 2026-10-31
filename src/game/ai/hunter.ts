@@ -412,7 +412,8 @@ export class HunterBrain extends CopBrain {
         if (this.since[u]! > HUNT.wreckStore && world.hidden(car.x, car.z)) this.store(u, world);
         continue;
       }
-      if (world.down(id)) {
+      // A crashed cop no longer drives (`drive`), so it is down for the pack too: left counted, a pile of them held off every drop-in.
+      if (world.down(id) || car.crashed) {
         this.state[u] = DOWN;
         this.since[u] = 0;
         world.sirens(id, false);

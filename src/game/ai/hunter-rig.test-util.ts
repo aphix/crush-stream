@@ -46,7 +46,7 @@ export function rig({ humans = 1, at = (k) => humanSlot(spec.start, k), hidden, 
     park: (id, x, _y, z, yaw) => {
       // The room it found: the nearest other car on the road at that moment.
       const room = Math.min(...cars.filter((c) => c.id !== id && c.x !== FAR).map((c) => Math.hypot(c.x - x, c.z - z)));
-      Object.assign(cars[id]!, { x, z, yaw, vx: 0, vz: 0 });
+      Object.assign(cars[id]!, { x, z, yaw, vx: 0, vz: 0, crashed: false });
       down.delete(id);
       drops.push({ t: now, id, x, z, yaw, room });
     },
