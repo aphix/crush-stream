@@ -95,7 +95,7 @@ export function kinematicContacts(track: Track, n: number, slider: number, laps:
         const key = a * 64 + b;
         const prev = lastPair.get(key);
         lastPair.set(key, step);
-        // A finished car is held on the brakes where it crossed the line (the kinematic race has no results screen to clear it): not racing.
+        // A finished car drives its cool-down lap: not racing.
         const racing = session.cars[a]!.status === "racing" && session.cars[b]!.status === "racing";
         if (session.phase !== "racing" || !racing || (prev !== undefined && step - prev <= SAME) || hist[a]!.length === 0) continue;
         const v = classifyContact(hist[a]!, hist[b]!);

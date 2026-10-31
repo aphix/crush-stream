@@ -12,7 +12,7 @@ import { HunterBrain } from "../ai/hunter.ts";
 import type { AiCar } from "../ai/derby-ai.ts";
 import { applyAiDrive, InputFade } from "../ai/input-fade.ts";
 import { copyDrive } from "../ai/race-ai.ts";
-import { AI_DIFFICULTIES } from "../ai/constants.ts";
+import { AI_DIFFICULTIES, COOL_DOWN_THROTTLE } from "../ai/constants.ts";
 import { DRAFT, RaceSession } from "../match/session.ts";
 import { cleanName, RACE_MODES, TIMES_OF_DAY, type Entrant, type RaceCommand, type RacePhase, type RaceSnapshot } from "../match/types.ts";
 import type { Cand, Wreck } from "../match/auto-watch.ts";
@@ -648,7 +648,7 @@ export class RaceDirector extends RaceHudLayer {
       } else if (rec.status === "finished") {
         // Cool-down lap on the racing line.
         const think = brain.think(snaps[i]!, snaps, rec, dt);
-        this.cruise.throttle = Math.min(think.throttle, 0.55);
+        this.cruise.throttle = Math.min(think.throttle, COOL_DOWN_THROTTLE);
         this.cruise.steer = think.steer;
         this.cruise.brake = think.brake;
         input = brain.guard(snaps[i]!, snaps, this.hands.fade(i, this.cruise, dt, car.velocity.length(), car.placements), dt, this.cruise);

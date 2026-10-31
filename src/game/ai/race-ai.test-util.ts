@@ -6,7 +6,7 @@ import { blankAiCar, type AiCar } from "./derby-ai.ts";
 import { snapshotAiCar } from "../match/derby.ts";
 import { fleetStyle } from "../scenes/fleet.ts";
 import { RaceBrain, copyDrive } from "./race-ai.ts";
-import { AI_EVERY_SLICE, type AiDifficulty } from "./constants.ts";
+import { AI_EVERY_SLICE, COOL_DOWN_THROTTLE, type AiDifficulty } from "./constants.ts";
 import { RaceSession } from "../match/session.ts";
 import { Track, blankProjection, projectPath } from "../world/track.ts";
 import { TRACKS } from "../world/tracks/index.ts";
@@ -71,6 +71,11 @@ export function race(track: Track, n: number, aggression: number, laps: number, 
         const out = brain.think(snaps[i]!, snaps, rec, DT);
         tap?.(i, out);
         copyDrive(out, held[i]!);
+        applyAiDrive(c, brain.guard(snaps[i]!, snaps, held[i]!, DT), DT);
+      } else if (session.phase === "racing" && rec.status === "finished") {
+        // The engine's cool-down lap (`EngineRace.drive`): held on the brakes where it crossed the line, it stood in the way of the field still racing.
+        copyDrive(brain.think(snaps[i]!, snaps, rec, DT), held[i]!);
+        held[i]!.throttle = Math.min(held[i]!.throttle, COOL_DOWN_THROTTLE);
         applyAiDrive(c, brain.guard(snaps[i]!, snaps, held[i]!, DT), DT);
       } else applyDrive(c, hold, DT);
       c.integrate(DT);

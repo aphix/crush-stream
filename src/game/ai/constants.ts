@@ -17,6 +17,8 @@ export const REVERSE_THROTTLE = -0.9;
 export const TURN_ROUND_THROTTLE = 0.6;
 /** A road's curvature (1/m) below this is a straight: no corner to slow for. */
 export const STRAIGHT_CURV = 1e-4;
+/** Throttle a finished racer drives its cool-down lap at, at most: off the pace, out of the field still racing's way. */
+export const COOL_DOWN_THROTTLE = 0.55;
 /** The AI difficulties a race offers (menu order). */
 export const AI_DIFFICULTIES = ["easy", "medium", "hard"] as const;
 export type AiDifficulty = (typeof AI_DIFFICULTIES)[number];
