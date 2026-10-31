@@ -48,6 +48,7 @@ const NX = new THREE.Vector3(-1, 0, 0);
 // Pile-up re-pinned for land-163, the other three unchanged: the creeping wreck's 2 mm skin rebake (5eba324a, `SKIN_DRIFT`: the cage follows the creep) 89f13dd0b4f77e81 -> dd2e1cfe38b39d3b, a striker along the car springing the shut lid's latch by contact (0714f314) -> b7ebb3306d68d636, and that latch springing on 2 cm of tail crush instead of the striker's energy (31bd7f13) -> 9808dbe9f7b483e3.
 // Re-pinned for the cage refitting when a cluster map or a cage corner moves a vertex past 1 cm, not only a mass (`movedSince`): door a5928a5241b57ca2 -> 5111dbba1807e959, pile-up fc11e97a2bb17e08 -> f75772b22e2a2f31; the head-on and barrier are unchanged.
 // Pile-up re-pinned for a squeezed wreck's seat on its cell's rest, as its clamp reads it (`seatOffset`): f75772b22e2a2f31 -> df77ad3c11d7b56d; the other three have no squeeze and are unchanged.
+// Pile-up re-pinned for a squeeze's set pulling a sprung-back mass in again in plan, its height kept (`clampMass`, REPLAY 199): df77ad3c11d7b56d -> 8d4ffb4a9531934d; the other three are unchanged.
 describe("given four staged crashes with the epicenter activation off", () => {
   it("when the owner's head-on, 20 m/s each, runs 5 s, then every mass and pose is the pinned one", () => {
     const a = makeCar("shape");
@@ -78,6 +79,6 @@ describe("given four staged crashes with the epicenter activation off", () => {
     launch(a, -4, 0, Math.PI / 2, 50 * KPH, 0);
     launch(b, 4, 0, -Math.PI / 2, -50 * KPH, 0);
     launch(c, 28, 0, -Math.PI / 2, -90 * KPH, 0);
-    expect(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6)).toBe("df77ad3c11d7b56d");
+    expect(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6)).toBe("8d4ffb4a9531934d");
   });
 });
