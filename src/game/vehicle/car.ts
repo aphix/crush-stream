@@ -403,7 +403,7 @@ export class DeformableCar extends CarParts {
     buf[o + FLIGHT_END_SQUEEZE] = this.endSqueeze ? 1 : 0;
     buf[o + FLIGHT_DRIFT] = this.drive.drift;
     if (this.surfaces) this.surfaces.borneState(this.slot, buf, o + FLIGHT_BORNE, false);
-    else buf.fill(0, o + FLIGHT_BORNE, o + FLIGHT_BORNE + 6);
+    else buf.fill(0, o + FLIGHT_BORNE, o + FLIGHT_CONTACT);
     this.contact(buf, o, false);
     buf[o + FLIGHT_INV_YAW] = this.invYaw;
     buf[o + FLIGHT_REST] = this.restS;

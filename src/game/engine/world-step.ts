@@ -170,10 +170,6 @@ function mayFreeze(car: DeformableCar): boolean {
   return (d.powered || (!car.moving && !car.airborne)) && d.seated(car.group);
 }
 
-/** Scratch for the weight an unstepped car's roof drops (`stepWorld`). */
-const _borneV = new THREE.Vector3();
-const _borneW = new THREE.Vector3();
-
 /** Fills `near.pairs` with the pairs of `cars` within `NEAR_PAIR2` of each other in plan; the count of ints written. */
 function collectNear(cars: readonly DeformableCar[]): number {
   const n = cars.length;
@@ -348,10 +344,10 @@ export function stepWorld(w: World, dt: number): void {
     for (let ci = 0; ci < n; ci++) {
       if (i > 0 && lonely.flag[ci]) continue;
       const car = cars[ci]!;
-      // A put-away car (`EPICENTER.storedSkip`) is not stepped: reset, hidden and still 4 km off the course until the race places it again. What a stepped one takes of
-      // the weight carried on its roof (`takeBorne`, zeroed by the take) is taken and dropped: left in the slot it would reach the car's first step after it is placed again.
+      // A put-away car (`EPICENTER.storedSkip`) is not stepped: reset, hidden and still 4 km off the course until the race places it again. The weight carried
+      // on its roof is dropped: left in the slot it would reach the car's first step after it is placed again.
       if (idle(car)) {
-        w.surfaces.takeBorne(ci, _borneV, _borneW, h);
+        w.surfaces.dropBorne(ci);
         continue;
       }
       const hc = lonely.flag[ci] ? dt : h;

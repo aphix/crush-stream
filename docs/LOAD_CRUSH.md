@@ -25,10 +25,12 @@ Load crush is how `stepAir`, the rigid flight step, meets a body's five faces (r
 - A car resting on another car's top presses it back (`CarSurfaces.press`): the lower car takes the upper's reaction as a
   velocity change, so the bottom roof carries every car above it, and a car's yield is judged against **its own** weight
   in the lower car's roof (`mOwner / mSelf`). A car carried this way stays in `stepAir`; the plan SAT leaves it alone because the
-  two cages' heights do not overlap at the contact. The weight a car bears onto the car under it is a force: it is kept per second
-  (`CarSurfaces.bear`) and taken over the carrier's own next slice (`takeBorne`), so a long slice followed by a short one does not
-  hand the carrier more than the weight above it (kept as the slice's impulse, a settled 4-stack's second car bobbed at 12-15 mm/s
-  in 1/110 s frames, an 8.75 ms step and a 0.34 ms remainder; now under 2 mm/s).
+  two cages' heights do not overlap at the contact. The weight a car bears onto the car under it is a force: it is kept with the time
+  it was borne over (`CarSurfaces.bear`), and the carrier's next slice takes it at that rate (`takeBorne`), the rest waiting for the
+  slices after. So a long slice followed by a short one does not hand the carrier more than the weight above it (taken whole, a
+  settled 4-stack's second car bobbed at 12-15 mm/s in 1/110 s frames, an 8.75 ms step and a 0.34 ms remainder; now under 2 mm/s),
+  and none of it is lost: taken as a rate over the carrier's slice alone, a landing's 8.75 ms slice taken over a 1.98 ms one lost
+  77 % of what the landing passed, and a pair landing in free flight lost 4 % of its plan momentum (`vehicle/stack-crush.test.ts`).
 - A face's crush grows by `pen / follow` (`FOLLOW`: how far the drawn top follows the face's crush at the contact), so a contact's **dynamic** impulse spends only `FOLLOW` of its crush's work on the face's budget; the weight it bears stays at the law's force. A car set 2 cm over another's roof by its belly rows then crushes that roof as the law gives for a car released that high, within 10 mm at 60, 144 and 240 Hz (`vehicle/stack-roof-law.test.ts`).
 - A step runs at 480 Hz (`stepWorld`: up to 8 slices, `CONTACT_HZ`) only while a body in flight touched something last
   slice (`contactHz`); free flight, a body frozen at rest, and every car with no flight cost what they cost otherwise. No

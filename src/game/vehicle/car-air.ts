@@ -14,6 +14,7 @@ import { readBelly, bodyContact, crossedPlanFromSide, readPoints, loadPoints, be
 import { centreLift, centreY } from "./car-cage-rig.ts";
 import { store3d } from "../kernel/store.ts";
 import { rigidPress, SCRATCH_MIN_SLIP } from "./paint-scrapes.ts";
+import { BORNE_STATE } from "./car-surfaces.ts";
 
 /** Crossings `wreckTop` let a wreck skip since `takeCrossingsSkipped` last read (a field of a const: the bench's work counter reads and zeroes it once a slice). */
 const prune = { skipped: 0 };
@@ -407,11 +408,11 @@ const P_TYRE = 22;
 /** The tyre side rows' points summed by their closing (x, y, z) and that closing's sum: where a tyre hit lands. */
 const P_TX = 23;
 const P_TW = 26;
-/** What the rows' impulses against the other car changed (`GIVEN`, summed over those rows): the stepping car's velocity and spin, the other's at once, and the weight it bears for its next step (per second until it takes it, then that over the slice). */
+/** What the rows' impulses against the other car changed (`GIVEN`, summed over those rows): the stepping car's velocity and spin, the other's at once, and the weight it bears for its next steps. */
 const P_GAVE_A = 27;
 const P_GAVE_B = 33;
 const P_BORNE = 39;
-/** 1 once the other car has taken its borne weight into its motion (its own step came after the rows'): `rewindRows` then takes it from the velocity, else from what is waiting. */
+/** The share of that borne weight the other car has taken into its motion (its own step came after the rows'): `rewindRows` takes it from the velocity, the rest from what is waiting. */
 const P_TAKEN = 45;
 const PENDING_STRIDE = 46;
 const PENDING = new Float64Array(PENDING_CAPACITY * PENDING_STRIDE);
@@ -542,7 +543,7 @@ function commonSpeed(a: DeformableCar, b: DeformableCar, n: THREE.Vector3): numb
 /** What `rewindRows` takes back, per car of a pair (`a` then `b`: velocity, spin) from its motion (0), and from the weight waiting on it (12). */
 const REWIND = new Float64Array(24);
 /** A car's borne weight (`CarSurfaces.borneState`), read and written back by `rewindRows`. */
-const BORNE = new Float64Array(6);
+const BORNE = new Float64Array(BORNE_STATE);
 
 /**
  * Takes back the exchange the rows of the rigid step made between cars `a` and `b` this slice (`collectCrush`), so the pair contact
@@ -561,12 +562,11 @@ export function rewindRows(a: DeformableCar, b: DeformableCar, n: THREE.Vector3,
     const f = i * PENDING_STRIDE;
     const steps = same ? 0 : 6;
     const rests = same ? 6 : 0;
-    const taken = PENDING[f + P_TAKEN] === 1;
+    const taken = PENDING[f + P_TAKEN]!;
     for (let k = 0; k < 6; k++) {
       REWIND[steps + k] = REWIND[steps + k]! + PENDING[f + P_GAVE_A + k]!;
-      REWIND[rests + k] = REWIND[rests + k]! + PENDING[f + P_GAVE_B + k]!;
-      const waiting = taken ? rests : 12 + rests;
-      REWIND[waiting + k] = REWIND[waiting + k]! + PENDING[f + P_BORNE + k]!;
+      REWIND[rests + k] = REWIND[rests + k]! + PENDING[f + P_GAVE_B + k]! + PENDING[f + P_BORNE + k]! * taken;
+      REWIND[12 + rests + k] = REWIND[12 + rests + k]! + PENDING[f + P_BORNE + k]! * (1 - taken);
     }
   }
   if (!met) return false;
@@ -799,13 +799,11 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   const surf = beginContacts(car);
   body.surf = surf;
   // The weight the cars on its top bore on it since its last step, taken after its move so its contacts hold it (no sinking under it).
-  surf.takeBorne(car.slot, _lv, _lw, dt);
-  // A hit's rows bore that weight this slice, so the slice's `dt` is theirs too: what `rewindRows` then takes back of the motion is that rate over it.
+  const share = surf.takeBorne(car.slot, _lv, _lw, dt);
+  // A hit's rows bore that weight this slice: `rewindRows` takes the share taken now back from the motion, the rest from what waits.
   for (let i = 0; i < queue.size; i++) {
     const f = i * PENDING_STRIDE;
-    if (PENDING_B[i] !== car || PENDING[f + P_TAKEN] === 1) continue;
-    PENDING[f + P_TAKEN] = 1;
-    for (let k = 0; k < 6; k++) PENDING[f + P_BORNE + k] = PENDING[f + P_BORNE + k]! * dt;
+    if (PENDING_B[i] === car) PENDING[f + P_TAKEN] = PENDING[f + P_TAKEN]! + (1 - PENDING[f + P_TAKEN]!) * share;
   }
   v.add(_lv);
   w.add(_lw);

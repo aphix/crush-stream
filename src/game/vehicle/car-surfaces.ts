@@ -35,6 +35,8 @@ export const REACH = 2.5;
 const NEAR_SLACK = 2;
 /** A top point that follows its car's roof crush less than this is rigid (bonnet and boot ends carry, never yield). */
 const YIELDS = 0.3;
+/** Numbers a car's borne weight holds (`borne`): velocity and spin change (6), the time borne over, the arriving batch's slice. */
+export const BORNE_STATE = 8;
 const ROOFS = new WeakMap<CageStyle, { crown: number; follow: Float32Array }>();
 
 /** A style's pristine roof: its crown (the highest node, m over the car's origin at the stock ride) and per node how far the drawn top follows the roof's crush (`faceFollow` over the style's `bands` at the node's height, times the share of a mass's travel the skin takes: `SKIN_STRAIN`; NaN where there is no top). */
@@ -159,10 +161,8 @@ export class CarSurfaces extends Surface {
   /** Per car, 1 if the stepping car struck its top at a crash's closing speed this slice: met, but resting on nothing. */
   private struck = new Uint8Array(1);
   /**
-   * Per car, 6 numbers (velocity, spin, each per second): the weight the cars resting on its top bore on it at their contacts (`bear`), which its next
-   * rigid step takes after its move and before its own contacts, so they hold it and bear it on in turn (`takeBorne`). Pushed into its
-   * velocity at once, after its own step, a stack's bottom car moved down at the weight of the nine above (0.19 m/s) every slice and its
-   * contacts lifted it back 0.4 mm a slice (1.9 mm a slice at the top): 28-34 kJ of lift every 0.5 s, and the column fell at 13-17 s.
+   * Per car, `BORNE_STATE` numbers (`bear`): the weight the cars on its top bore on it, the time it was borne over, the arriving batch's slice.
+   * Its next rigid steps take it at the rate it was borne (`takeBorne`), so none is lost when a short slice follows a long one.
    */
   private borne = new Float64Array(0);
   /** The slot whose roofs within reach `carList` lists (`reach`), `carCount` of them. */
@@ -278,9 +278,9 @@ export class CarSurfaces extends Surface {
     this.react[own]! += j;
   }
 
-  /** Car `own`, under the stepping car, takes `k` of velocity change `dv` and spin change `dw` per second (the weight borne on it) over its next rigid step. */
-  bear(own: number, dv: THREE.Vector3, dw: THREE.Vector3, k: number): void {
-    const o = 6 * own;
+  /** Car `own`, under the stepping car, takes velocity change `dv` and spin change `dw` times `k`, borne over the stepping car's slice `h` (s). */
+  bear(own: number, dv: THREE.Vector3, dw: THREE.Vector3, k: number, h: number): void {
+    const o = BORNE_STATE * own;
     const b = this.borne;
     b[o] = b[o]! + dv.x * k;
     b[o + 1] = b[o + 1]! + dv.y * k;
@@ -288,38 +288,52 @@ export class CarSurfaces extends Surface {
     b[o + 3] = b[o + 3]! + dw.x * k;
     b[o + 4] = b[o + 4]! + dw.y * k;
     b[o + 5] = b[o + 5]! + dw.z * k;
+    // The contacts of one slice bear one batch: its time counts once.
+    if (b[o + 7] === 0) {
+      b[o + 6] = b[o + 6]! + h;
+      b[o + 7] = h;
+    }
   }
 
-  /** The weight borne on car `i` since its last rigid step, over that step's slice `dt` (s), into `dv`, `dw` (zero when none), and spent. */
-  takeBorne(i: number, dv: THREE.Vector3, dw: THREE.Vector3, dt: number): void {
-    const o = 6 * i;
+  /** Of the weight borne on car `i`, what its step of `dt` (s) takes, into `dv`, `dw` (zero when none): the share `dt` is of the time it was borne over, returned. */
+  takeBorne(i: number, dv: THREE.Vector3, dw: THREE.Vector3, dt: number): number {
+    const o = BORNE_STATE * i;
     const b = this.borne;
     if (i < 0 || o >= b.length) {
       dv.set(0, 0, 0);
       dw.set(0, 0, 0);
-      return;
+      return 1;
     }
-    dv.set(b[o]!, b[o + 1]!, b[o + 2]!).multiplyScalar(dt);
-    dw.set(b[o + 3]!, b[o + 4]!, b[o + 5]!).multiplyScalar(dt);
-    b.fill(0, o, o + 6);
+    const f = b[o + 6]! > dt ? dt / b[o + 6]! : 1;
+    dv.set(b[o]!, b[o + 1]!, b[o + 2]!).multiplyScalar(f);
+    dw.set(b[o + 3]!, b[o + 4]!, b[o + 5]!).multiplyScalar(f);
+    for (let k = 0; k < 6; k++) b[o + k] = b[o + k]! * (1 - f);
+    b[o + 6] = f === 1 ? 0 : b[o + 6]! - dt;
+    b[o + 7] = 0;
+    return f;
+  }
+
+  /** Drops the weight borne on car `i` (a car put away is not stepped). */
+  dropBorne(i: number): void {
+    if (i >= 0) this.borne.fill(0, BORNE_STATE * i, BORNE_STATE * (i + 1));
   }
 
   /**
-   * Car `i`'s borne weight (6 doubles) into `buf` at `o`, or with `write` restored from it: the carry of a rider that stepped after its
+   * Car `i`'s borne weight (`BORNE_STATE` doubles) into `buf` at `o`, or with `write` restored from it: the carry of a rider that stepped after its
    * carrier crosses the step boundary, so a highlight keyframe holds it (`DeformableCar.flight`).
    */
   borneState(i: number, buf: Float64Array, o: number, write: boolean): void {
     if (i < 0) return;
     if (write) {
       this.growBorne(i + 1);
-      this.borne.set(buf.subarray(o, o + 6), 6 * i);
-    } else if (6 * i < this.borne.length) buf.set(this.borne.subarray(6 * i, 6 * i + 6), o);
-    else buf.fill(0, o, o + 6);
+      this.borne.set(buf.subarray(o, o + BORNE_STATE), BORNE_STATE * i);
+    } else if (BORNE_STATE * i < this.borne.length) buf.set(this.borne.subarray(BORNE_STATE * i, BORNE_STATE * (i + 1)), o);
+    else buf.fill(0, o, o + BORNE_STATE);
   }
 
   private growBorne(cars: number): void {
-    if (this.borne.length >= 6 * cars) return;
-    const grown = new Float64Array(6 * cars);
+    if (this.borne.length >= BORNE_STATE * cars) return;
+    const grown = new Float64Array(BORNE_STATE * cars);
     grown.set(this.borne);
     this.borne = grown;
   }
@@ -394,7 +408,7 @@ export class CarSurfaces extends Surface {
     this.nearOf = -1;
     this.growBorne(this.cars.length);
     // Only the rigid step takes the weight borne on it: a car its wheels or its masses carry drops it.
-    if (!car.rigid) this.borne.fill(0, 6 * i, 6 * i + 6);
+    if (!car.rigid) this.dropBorne(i);
     for (let k = this.count; k <= i; k++) {
       this.addGrid({ nu: 2, nv: 2, step: 1, stepV: 1, u0: 0, v0: 0, heights: NO_TOP, ox: 0, oy: 0, oz: 0, reach: SKIN, hmax: 0 });
       this.own(k, k);

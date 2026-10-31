@@ -30,7 +30,7 @@ plays one clip alone with no HUD; **Save** keeps it in this browser.
 into a typed-array ring of `RING` (5120) steps, at least 17 s at a race's
 240–300 steps/s. Every `KEY_EVERY` (1 s) it encodes a keyframe: the netplay snapshot of every car (`writeSnapshot`,
 with each wreck's deform and parts), the course's knocked props (a bit each), then per car its flight block
-(`DeformableCar.flight`: `FLIGHT` (103) doubles, the whole spin, the takeoff spin, pitch, yaw, roll, velocity and position,
+(`DeformableCar.flight`: `FLIGHT` (104) doubles, the whole spin, the takeoff spin, pitch, yaw, roll, velocity and position,
 the squeeze clocks, the drift state, a wreck's rest timer and sleep spot (`restS`: at `WRECK_REST_S` the restored wreck sleeps again, stirred about the spot it fell asleep at, `sleepX`, `sleepZ`), the handbrake and boost ramps (`drive.ebrakeK`, `drive.boostK`), the weight borne on the car by riders stepped after it (`CarSurfaces.borneState`) and what its
 wheels touch (`DeformableCar.contact`); a wreck on its masses touches what its hubs' last slice left, read again, `readContact`), the course's memory of it (`MEMORY` doubles: where
 the wall contact last stood, how far past the line, the road segment the projection hint is on) and, for a wreck, its

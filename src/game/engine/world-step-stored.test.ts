@@ -3,6 +3,7 @@ import { launch, makeCar } from "../contact/crash-scenarios.test-util.ts";
 import { EPICENTER, epicenterValues, loadEpicenter } from "../deform/epicenter.ts";
 import { EPICENTER_AT_LOAD } from "../deform/epicenter.test-util.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
+import { BORNE_STATE } from "../vehicle/car-surfaces.ts";
 import { QUIET_HZ } from "../kernel/constants.ts";
 import { newWorld, stepWorld, type World } from "./world-step.ts";
 import { carSlices } from "./world-step-lone.test-util.ts";
@@ -51,16 +52,16 @@ describe("given a car the race put away beside a car driving on", () => {
     for (const car of cars) car.dispose();
   });
 
-  it("when the put-away car's roof carries weight (a rider's) and the knob is at 1, then the weight is taken and dropped each slice as a step would take it, not left in the slot for the car's first step after it is placed again", () => {
+  it("when the put-away car's roof carries weight (a rider's, borne over a second) and the knob is at 1, then the weight is dropped, not left in the slot for the car's first step after it is placed again", () => {
     loadEpicenter(EPICENTER_AT_LOAD);
     EPICENTER.storedSkip = 1;
     const { cars, w } = field();
     stepWorld(w, STEP);
     const surfaces = w.surfaces;
-    surfaces.borneState(1, Float64Array.of(0, -0.05, 0, 0, 0, 0), 0, true);
+    surfaces.borneState(1, Float64Array.of(0, -0.05, 0, 0, 0, 0, 1, 0), 0, true);
     expect(w.surfaces.cars.length, "the world's roofs hold both cars").toBe(2);
     stepWorld(w, STEP);
-    const left = new Float64Array(6);
+    const left = new Float64Array(BORNE_STATE);
     surfaces.borneState(1, left, 0, false);
     expect(left.some((v) => v !== 0), "the put-away car's slot holds no borne weight after a step").toBe(false);
     for (const car of cars) car.dispose();
@@ -74,7 +75,7 @@ describe("given a car the race put away beside a car driving on", () => {
       cars[1]!.drive.spin = 1;
       cars[1]!.drive.spinSpeed = 1.7;
       for (let s = 0; s < 160; s++) stepWorld(w, STEP);
-      w.surfaces.borneState(1, Float64Array.of(0, -0.05, 0, 0, 0, 0), 0, true);
+      w.surfaces.borneState(1, Float64Array.of(0, -0.05, 0, 0, 0, 0, 0, 0), 0, true);
       stepWorld(w, STEP);
       cars[1]!.stored = false;
       cars[1]!.spawnFacing(6, 5, 0, 12);

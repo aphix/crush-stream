@@ -9,6 +9,8 @@ import { crownY, keelY } from "./car-cage-rig.ts";
 import { FRAME_HZ } from "../kernel/constants.ts";
 import { STYLE_CLASS } from "./vehicle-classes.ts";
 import { makeCar } from "./ground-probe.test-util.ts";
+import { BORNE_STATE } from "./car-surfaces.ts";
+import { placeDrop } from "../scenes/stack-rig.ts";
 import type { CarStyleId } from "./car-variants.ts";
 
 /**
@@ -212,6 +214,41 @@ describe("given one car resting on another car's roof by its belly", () => {
       fastest = Math.max(fastest, cars[1]!.velocity.length() + cars[1]!.angular.length());
     }
     expect(fastest, `the top car ends a frame at ${fastest.toExponential(2)} (speed plus spin)`).toBeLessThan(STILL_SPEED);
+  });
+});
+
+/** How high (m) a pair falls in the momentum row: no ground within its run. */
+const MOMENTUM_HIGH = 30;
+/** The momentum the pair may gain or lose in plan, as a share of what the landing passes from one car to the other: float rounding only. */
+const MOMENTUM_SHARE = 1e-3;
+
+describe("given two wagons in free fall, the upper one turned on the lower one's roof (8.6° off its axis) and falling a stack drop onto it", () => {
+  it("when it lands and the pair falls on as one, then the pair's plan momentum, with the weight still waiting on a car, is unchanged at every frame", () => {
+    const cars = [0, 1].map(() => makeCar(STYLE_CLASS.wagon));
+    cars[0]!.spawnFacing(0, 0, 0.15, 0);
+    cars[0]!.group.position.y = MOMENTUM_HIGH;
+    for (const c of cars) {
+      c.parked = true;
+      c.airborne = true;
+    }
+    placeDrop(cars, 1, GAP);
+    const w = makeWorld(cars, false, false);
+    const borne = new Float64Array(BORNE_STATE);
+    let passed = 0;
+    let worst = 0;
+    for (let f = 0; f < 36; f++) {
+      tickWorld(w, 1 / FRAME_HZ);
+      const p = new THREE.Vector3();
+      for (const c of cars) {
+        w.world.surfaces.borneState(c.slot, borne, 0, false);
+        p.x += (c.velocity.x + borne[0]!) * c.deform.totalMass;
+        p.z += (c.velocity.z + borne[2]!) * c.deform.totalMass;
+      }
+      passed = Math.max(passed, Math.hypot(cars[0]!.velocity.x, cars[0]!.velocity.z) * cars[0]!.deform.totalMass);
+      worst = Math.max(worst, Math.hypot(p.x, p.z));
+    }
+    expect(passed, "the landing passed the lower car plan momentum").toBeGreaterThan(0);
+    expect(worst / passed, `plan momentum off by ${worst.toFixed(3)} kg m/s of ${passed.toFixed(1)} passed`).toBeLessThan(MOMENTUM_SHARE);
   });
 });
 
