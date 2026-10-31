@@ -8,6 +8,7 @@ import type { World } from "./race-world.test-util.ts";
 import { Track } from "./track.ts";
 import { activeGround } from "./ground.ts";
 import { crestLimit } from "../ai/race-ai.ts";
+import { COUNTDOWN, GRID_TIME } from "../match/session.ts";
 import { HAVANA } from "./tracks/havana.ts";
 
 /**
@@ -203,7 +204,8 @@ export type CopTamper = (input: DriveInput) => void;
 type ChaseOpts = { tamper?: CopTamper; release?: number; aimless?: boolean; each?: (w: World, time: number) => void; pair?: (a: number, b: number) => void };
 
 /**
- * One Survival run on `course` (Havana) with `fleer` at the wheel, `seed` pinning the field's dice, for at most `seconds` of game time.
+ * One Survival run on `course` (Havana) with `fleer` at the wheel, `seed` pinning the field's dice, until race second `seconds` (the grid
+ * and the countdown before the green come on top: a window of 30 s after a release counted from the countdown ran 25.5).
  * `release` (s): the hunters' clock reads `time − release`, so the formation sits braked, with no drop-ins and no growth, as before a
  * green, until race second `release`; from then on it is the real pack on the real rules. Cop contacts count only from the release.
  * `Chase.time` stays on the race clock.
@@ -257,7 +259,7 @@ export function chase(fleer: Fleer, seed: number, seconds: number, course?: unkn
     let speed = 0;
     let gap = -1;
     const played = play(w, {
-      seconds,
+      seconds: GRID_TIME + COUNTDOWN + seconds,
       retry: false,
       player: (ww) => {
         each?.(ww, ww.race.time);

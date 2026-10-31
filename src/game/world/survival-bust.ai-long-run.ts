@@ -10,8 +10,8 @@ import { miss, release } from "./survival-pack.test-util.ts";
  */
 /** The staged run: its pack, released at 9.7 s, busts the creeping player at race second 28.7. */
 const SEED = 10;
-/** Twice the staged bust's 19 s from the release, plus the grid and countdown: the window the frozen cops are watched for. */
-const BUST_T = 45;
+/** Twice the staged bust's 19 s from the release, plus margin: the window the frozen cops are watched for (45 s from the grid; `chase` runs the grid and countdown on top). */
+const BUST_T = 40.5;
 const FROZEN: CopTamper = (input) => Object.assign(input, { throttle: 0, steer: 0, brake: 1, ebrake: false, boost: false });
 
 describe("given the closed arena with a player that runs for the far corner and creeps there at 3 m/s", () => {
