@@ -251,19 +251,13 @@ export abstract class DeformContact extends DeformState {
    * `Car.integrateWreck`), and its velocity and spin are the body's own: contact impulses land on it (`shiftBody`, `markMotion`/`takeMotion`),
    * never read back off the masses. The masses are re-read into the group's frame (the crush state) and the clamp run. The body seats on
    * its cell no faster than `SEAT_SPEED` (still needed: without it the struck cell's springback leaves the frame off by the cabin's offset,
-   * which reds the wall-bump, police-side and IIHS door rows): what the cell drifts from its seat the body follows, slowly. The seat is the
-   * cell's rest plus its earlier hits' damage (`baseX/baseZ`): a kept cabin offset never seats, and the step walked a tilted wreck into the ground.
+   * which reds the wall-bump, police-side and IIHS door rows): what the cell drifts from its seat the body follows, slowly (`seatOffset`).
    */
   followGroup(group: THREE.Object3D, velocityOut: THREE.Vector3, angularOut: THREE.Vector3, dt: number): void {
     this.bodyV = velocityOut;
     this.bodyW = angularOut;
-    const cell = this.at.cell;
     this.measurePose();
-    group.updateWorldMatrix(false, false);
-    _toLocal.copy(group.matrixWorld).invert();
-    _a.copy(cell.world).applyMatrix4(_toLocal);
-    _a.set(_a.x - cell.rest.x - cell.baseX, 0, _a.z - cell.rest.z - cell.baseZ);
-    const off = _a.length();
+    const off = this.seatOffset(group);
     if (dt > 0 && off > 1e-9) {
       _a.multiplyScalar(Math.min(1, (dt * SEAT_SPEED) / off)).applyQuaternion(group.quaternion);
       // The seat steps in the body's x-z plane. Upright that plane is (near) level and a tilted wreck's small vertical part is its settle
@@ -331,11 +325,21 @@ export abstract class DeformContact extends DeformState {
    * sprang 0.12 m off its seat in the hit is still seating for a tenth of a second after its contact window, and a freeze then (`DeformFreeze.settleFreeze`) leaves the frame short of its cell for good.
    */
   seated(group: THREE.Object3D): boolean {
+    return this.seatOffset(group) < SEATED_M;
+  }
+
+  /**
+   * The cell's drift off its seat in the frame, into `_a` (y 0), and its length. The seat is the cell's rest plus its earlier hits' damage as `clampLocal` reads it: a seat
+   * the clamp never lets the cell reach is followed at `SEAT_SPEED` for good, so under a squeeze's shape (whose clamp reads no damage) it is the rest alone.
+   */
+  private seatOffset(group: THREE.Object3D): number {
     const cell = this.at.cell;
     group.updateWorldMatrix(false, false);
     _toLocal.copy(group.matrixWorld).invert();
     _a.copy(cell.world).applyMatrix4(_toLocal);
-    return hypot2(_a.x - cell.rest.x - cell.baseX, _a.z - cell.rest.z - cell.baseZ) < SEATED_M;
+    const base = this.squeezeShape ? 0 : 1;
+    _a.set(_a.x - cell.rest.x - cell.baseX * base, 0, _a.z - cell.rest.z - cell.baseZ * base);
+    return _a.length();
   }
 
   /** Marks the masses' mean motion: `takeMotion` hands the body what contact work on them changed since. */

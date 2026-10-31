@@ -6,6 +6,7 @@ import { dummyGeom, mass } from "../vehicle/test-support.ts";
 import { stepWreck, type WreckRig } from "./physics-util.test-util.ts";
 import { FINE_HZ } from "../kernel/constants.ts";
 import { Ground, setGround } from "../world/ground.ts";
+import { CONTACT_WINDOW } from "./constants.ts";
 
 /**
  * A wreck seats on its cell (`followGroup`: the body follows what the cell drifts off its seat, no faster than SEAT_SPEED), along the
@@ -94,4 +95,33 @@ describe("given a wreck held against a prism with its cell 1-6 cm off its seat f
       expect(Math.abs(moved[c.along] / want - 1), `moved ${moved[c.along].toFixed(3)} m along ${c.along}, ${want} m wanted`).toBeLessThan(0.1);
     });
   }
+});
+
+/**
+ * A squeezed shape's clamp holds every mass within its rest length plus 4 cm (`clampMass`), measured from rest: an earlier hit's damage
+ * on the cell (`baseZ`) does not count there. Derby seed 1's c5, squeezed and dented, had its cell's seat (rest plus damage) 8 mm past that
+ * cap: each seat step was clamped back, the body walked 1 m/s through its masses, those the clamp leaves alone rode it, and over 13 s with
+ * no contact window its shape changed by 1.2 m, which the next window's shape match pulled back at 0.4 m a slice (a 10 cm zip).
+ */
+describe("given a squeezed wreck at rest whose cell carries an earlier hit's damage 2 cm past the squeeze's length cap", () => {
+  const RIDE_S = 1;
+  /** The most (m) any body mass moves in the car's frame over the ride once the contact window has closed: float noise. */
+  const SHAPE_LIMIT = 1e-6;
+
+  it(`when it rides its body for ${RIDE_S} s past its contact window, then no body mass moves in the car's frame`, () => {
+    const s = wreckAt(0, 0);
+    s.d["squeezeShape"] = true;
+    const cell = mass(s.d, "cell");
+    const ahead = cell.rest.z >= 0 ? 1 : -1;
+    cell.baseZ = ahead * (Math.abs(cell.rest.z) + 0.06) - cell.rest.z;
+    cell.world.set(cell.rest.x, cell.rest.y, cell.rest.z + cell.baseZ).applyMatrix4(s.group.matrixWorld);
+    const windowSteps = Math.ceil(2 * CONTACT_WINDOW * FINE_HZ);
+    for (let i = 0; i < windowSteps; i++) stepWreck(s, STEP);
+    expect(s.d.live(), "the contact window is still open").toBe(false);
+    const body = s.d.masses.filter((m) => !m.hub);
+    const start = body.map((m) => m.local.clone());
+    for (let i = 0; i < RIDE_S * FINE_HZ; i++) stepWreck(s, STEP);
+    const moved = Math.max(...body.map((m, k) => m.local.distanceTo(start[k]!)));
+    expect(moved, `a body mass moved ${(moved * 1000).toFixed(1)} mm in the car's frame over ${RIDE_S} s (seat step ${(STEP * SEAT_SPEED * 1000).toFixed(1)} mm)`).toBeLessThan(SHAPE_LIMIT);
+  });
 });
