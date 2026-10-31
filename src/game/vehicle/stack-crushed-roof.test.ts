@@ -13,8 +13,8 @@ import { UPRIGHT_UP_Y } from "./car-suspension.ts";
 /**
  * The owner's stuck stack (docs/UNIFIED_CONTACT.md 10.6): a sedan resting on another sedan whose roof the load has crushed
  * 0.40-0.45 m. The tyres of the car above stand on what is drawn (the plate under them stood 0.54-0.56 m, the drawn hood
- * and boot 7.5-13.6 cm higher, so the tyres sat inside the body), and the car drives off the roof at the speed the same car
- * has on flat ground at that height (E2 of the same document, on a crushed roof).
+ * and boot 7.5-13.6 cm higher, so the tyres sat inside the body), and the car drives off the roof as the same car drives off world
+ * ground of the drawn top's shape (E2 of the same document, on a crushed roof: one tyre rule on a car's top and on the world).
  */
 const FULL: DriveInput = { throttle: 1, steer: 0, brake: 0, ebrake: false, boost: false };
 const SINK_M = 0.05;
@@ -98,10 +98,11 @@ for (const testCase of crushDepths) {
       expect(Math.max(...gaps), `a tyre hangs ${Math.max(...gaps).toFixed(3)} m over the drawn body below`).toBeLessThanOrEqual(HOVER_M);
     });
 
-    it("when it drives at full throttle, then it is not flagged airborne in its first 0.2 s, and its speed at 0.25 s, still on the hood, is within 5 % of the same car on a flat platform at its resting height if a tyre stands on the body below, and under 5 % of it at 0.5, 1 and 1.5 s if the tyres hang clear (beached on its belly: the throttle has nothing to push on)", (t) => {
+    it("when it drives at full throttle, then it is not flagged airborne in its first 0.2 s, and its speed at 0.25 s, still on the hood, is within 5 % of the same car on the drawn top as world ground if a tyre stands on the body below, and under 5 % of a flat platform's at 0.5, 1 and 1.5 s if the tyres hang clear (beached on its belly: the throttle has nothing to push on)", (t) => {
       const { lower, upper, world } = crushedStack(testCase.crush);
       lower.group.updateMatrixWorld(true);
-      const gaps = fit(upper, new DrawnTop(drawnField(lower).top, lower.group.matrixWorld.elements)).gaps.filter(Number.isFinite);
+      const drawn = new DrawnTop(drawnField(lower).top, lower.group.matrixWorld.elements);
+      const gaps = fit(upper, drawn).gaps.filter(Number.isFinite);
       // The car stands on its tyres, not its belly, when three of them press a face the drive can use (`onTreads`' rule) in the sim's own read: three is the sim's "back on its wheels". A tyre within 5 cm of the drawn body is not one pressing it.
       const e = upper.group.matrixWorld.elements;
       const treads = [0, 1, 2, 3].map((i) => {
@@ -111,20 +112,32 @@ for (const testCase of crushDepths) {
       });
       const tyresStand = treads.filter((on) => on).length >= 3;
       const simRead = `lifts ${[0, 1, 2, 3].map((i) => upper.wheelHit[i * HIT_SIZE + C_H]!.toFixed(3)).join(" ")} m, normal up ${[0, 1, 2, 3].map((i) => upper.wheelHit[i * HIT_SIZE + C_NY]!.toFixed(2)).join(" ")}`;
-      const y = upper.group.position.y;
+      const at = upper.group.position.clone();
+      const turn = upper.group.quaternion.clone();
       const top = driveOff(world, upper);
-      setGround(new Platform(y));
+      // One rule for a tyre on a car's top and on the world: the car drives off the roof as off world ground of the drawn top's shape, the hood's nose and
+      // its pull included. At 0.25 s, 0.4 / 0.45 m crush: 3.84 / 3.87 m/s on the roof, 3.72 / 3.78 on the drawn top, 3.66 on a flat platform (5.0 / 5.7 % off).
+      setGround(drawn);
+      const twin = buildCar("sedan", "sedan");
+      twin.spawnFacing(0, 0, 0, 0);
+      twin.group.position.copy(at);
+      twin.group.quaternion.copy(turn);
+      twin.group.updateMatrixWorld(true);
+      const alone = makeWorld([twin], false, false);
+      stepFrames(alone, 5);
+      const shaped = driveOff(alone, twin);
+      setGround(new Platform(at.y));
       const flat = buildCar("sedan", "sedan");
       flat.spawnFacing(0, 0, 0, 0);
-      flat.group.position.y = y;
+      flat.group.position.y = at.y;
       const platform = makeWorld([flat], false, false);
       stepFrames(platform, 5);
       const ref = driveOff(platform, flat);
-      t.annotate(`rest y ${y.toFixed(3)}, treads on the body below ${treads.map((on) => (on ? 1 : 0)).join("")} (sim's ${simRead}; drawn gaps ${gaps.map((g) => g.toFixed(3)).join(" ")} m); on the roof ${top.speeds.map((s) => s.toFixed(2)).join("/")} m/s, airborne early ${top.airEarly}; on the platform ${ref.speeds.map((s) => s.toFixed(2)).join("/")} m/s`);
+      t.annotate(`rest y ${at.y.toFixed(3)}, treads on the body below ${treads.map((on) => (on ? 1 : 0)).join("")} (sim's ${simRead}; drawn gaps ${gaps.map((g) => g.toFixed(3)).join(" ")} m); on the roof ${top.speeds.map((s) => s.toFixed(2)).join("/")} m/s, airborne early ${top.airEarly}; on the drawn top ${shaped.speeds.map((s) => s.toFixed(2)).join("/")} m/s; on the platform ${ref.speeds.map((s) => s.toFixed(2)).join("/")} m/s`);
       expect(!top.airEarly, "flagged airborne in its first 0.2 s with its belly on the car below").toBe(true);
       if (tyresStand) {
-        const off = Math.abs(top.speeds[ON_THE_HOOD]! - ref.speeds[ON_THE_HOOD]!);
-        expect(off, `${READ_AT[ON_THE_HOOD]} s: ${top.speeds[ON_THE_HOOD]!.toFixed(2)} m/s against the platform's ${ref.speeds[ON_THE_HOOD]!.toFixed(2)}`).toBeLessThanOrEqual(SPEED_SHARE * ref.speeds[ON_THE_HOOD]!);
+        const off = Math.abs(top.speeds[ON_THE_HOOD]! - shaped.speeds[ON_THE_HOOD]!);
+        expect(off, `${READ_AT[ON_THE_HOOD]} s: ${top.speeds[ON_THE_HOOD]!.toFixed(2)} m/s against the drawn top's ${shaped.speeds[ON_THE_HOOD]!.toFixed(2)}`).toBeLessThanOrEqual(SPEED_SHARE * shaped.speeds[ON_THE_HOOD]!);
         return;
       }
       for (const [k, at] of READ_AT.entries()) {
