@@ -213,6 +213,8 @@ type Wear = {
   /** Per face: the texel rect (x0, y0, x1, y1) G is up in; x1 < x0 is none. */
   readonly dents: Int32Array;
   dented: boolean;
+  /** Whether the dents were last drawn with their creases (`SCRATCH_TIER` 2, the relief's tiers): a tier that crosses into the relief redraws them. */
+  creased: boolean;
 };
 
 const wears = new WeakMap<DeformableCar, Wear>();
@@ -251,6 +253,7 @@ export function applyScratch(car: DeformableCar): void {
       touchedAt: -Infinity,
       dents,
       dented: false,
+      creased: false,
     };
     wears.set(car, (wear = own));
     // A discarded car (every path frees its body paint) hands its mask back and frees its bumpers' own trims.
@@ -452,10 +455,12 @@ export class PaintScratches {
   private dentDue(car: DeformableCar): boolean {
     const wear = wears.get(car);
     if (wear === undefined || !car.panelsFollow) return false;
-    if (wear.dentAt > wear.touchedAt + DENT_SETTLE_S) return false;
+    const crease = SCRATCH_TIER.value > 1.5;
+    const stale = wear.dented && wear.creased !== crease;
+    if (!stale && wear.dentAt > wear.touchedAt + DENT_SETTLE_S) return false;
     let skin = 0;
     for (let k = 0; k < wear.positions.length; k++) skin += wear.positions[k]!.version;
-    if (skin === wear.skin || this.clock < wear.dentAt + DENT_REBUILD_S) return false;
+    if (!stale && (skin === wear.skin || this.clock < wear.dentAt + DENT_REBUILD_S)) return false;
     wear.skin = skin;
     wear.dentAt = this.clock;
     this.dent(wear, true);
@@ -540,7 +545,10 @@ export class PaintScratches {
         }
       }
       for (let k = 0; k < wear.shells.length; k++) this.layShell(depths, wear, k, now);
-      for (let face = 0; face < FACES; face++) creaseFace(mask.data, depths, this.blurs, now, face);
+      // The creases feed only the relief (`DENT_NORMALS`, `SCRATCH_TIER` 2): on the tiers below, the depth alone, and no blur (on a phone, 11 % of a fleet frame).
+      const crease = SCRATCH_TIER.value > 1.5;
+      for (let face = 0; face < FACES; face++) creaseFace(mask.data, depths, this.blurs, now, face, crease);
+      wear.creased = crease;
       this.laid.set(now);
     }
     wear.dented = false;
@@ -844,19 +852,21 @@ const FAR_KERNEL = gaussian(CREASE_FAR);
  * `DENT_FULL` deep, and a crease over the rest as far as its skin blurred at `CREASE_NEAR` sinks below it blurred at `CREASE_FAR`:
  * a fold's trough, one smooth broad band per fold, never its crest too; paint that never moved stays 0.
  */
-function creaseFace(data: Uint8Array, depths: Float32Array, blurs: Blurs, rects: Int32Array, face: number): void {
+function creaseFace(data: Uint8Array, depths: Float32Array, blurs: Blurs, rects: Int32Array, face: number, creased: boolean): void {
   const o = face * 4;
   if (rects[o + 2]! < rects[o]!) return;
   const box = CAR_SPRAY.faces[face]!;
   const base = box[1] * SIDE + box[0];
-  blurFace(blurs.near, depths, blurs.pass, box, rects, o, NEAR_KERNEL);
-  blurFace(blurs.far, depths, blurs.pass, box, rects, o, FAR_KERNEL);
+  if (creased) {
+    blurFace(blurs.near, depths, blurs.pass, box, rects, o, NEAR_KERNEL);
+    blurFace(blurs.far, depths, blurs.pass, box, rects, o, FAR_KERNEL);
+  }
   for (let y = rects[o + 1]!; y <= rects[o + 3]!; y++) {
     for (let x = rects[o]!; x <= rects[o + 2]!; x++) {
       const i = base + y * SIDE + x;
       const d = depths[i]!;
       if (d <= 0) continue;
-      const crease = Math.min(1, Math.max(0, blurs.near[i]! - blurs.far[i]!) / BEND_FULL);
+      const crease = creased ? Math.min(1, Math.max(0, blurs.near[i]! - blurs.far[i]!) / BEND_FULL) : 0;
       data[i * 2 + 1] = Math.round(255 * Math.min(1, d / DENT_FULL) * (DENT_FLOOR + (1 - DENT_FLOOR) * crease));
     }
   }

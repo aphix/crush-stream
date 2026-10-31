@@ -184,13 +184,14 @@ function creaseRidges(car: DeformableCar, face: number): number {
   return ridges;
 }
 
-describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never crashed, and each one's wear mask drawn", () => {
+describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never crashed, and each one's wear mask drawn at the relief's tier (`SCRATCH_TIER` 2: the creases draw only there)", () => {
   const crushed = crushedSedan();
   const intact = makeCar();
   applyScratch(crushed);
   applyScratch(intact);
   const view = new PaintScratches();
   const cars = [crushed, intact];
+  SCRATCH_TIER.value = 2;
   view.frame(cars, 1 / FRAME_HZ);
   const mask = () => wearOf(crushed.lookMeshes().bodyPaint);
 
@@ -210,6 +211,22 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
     expect(shaded.find((i) => !(depths[i]! > 0)), "a shaded texel whose skin did not move").toBeUndefined();
     const ridges = CAR_SPRAY.faces.map((_, face) => creaseRidges(crushed, face));
     expect(Math.max(...ridges), `ridges per face: ${ridges.join(" ")}`).toBeLessThanOrEqual(CREASE_RIDGES_MAX);
+  });
+
+  it("when the tier drops below the relief's and the dents are redrawn, then they draw the dulled paint alone (no crease), and back at the relief's tier they redraw with their creases at once, the crush long settled", () => {
+    const ridgesAtRelief = creaseRidges(crushed, SPRAY_FACE.front);
+    expect(ridgesAtRelief, "the control: the nose draws a crease").toBeGreaterThan(0);
+    try {
+      SCRATCH_TIER.value = 1;
+      view.frame(cars, DENT_REBUILD_S);
+      const floor = Math.round(255 * DENT_FLOOR);
+      expect(Math.max(...dentsOn(crushed, SPRAY_FACE.front)), "the nose's G below the relief's tier: the dulled paint, no crease").toBeLessThanOrEqual(floor);
+      expect(Math.max(...dentsOn(crushed, SPRAY_FACE.front)), "the control: still dented").toBeGreaterThan(0);
+    } finally {
+      SCRATCH_TIER.value = 2;
+    }
+    view.frame(cars, DENT_REBUILD_S);
+    expect(creaseRidges(crushed, SPRAY_FACE.front), "the nose's creases back at the relief's tier").toBe(ridgesAtRelief);
   });
 
   it("when the crushed car's skin is written again and its dents are redrawn, then its scratches (R) are untouched", () => {
