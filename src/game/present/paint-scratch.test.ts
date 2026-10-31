@@ -194,6 +194,7 @@ describe("given a sedan whose nose hit a wall at 50 km/h, a sedan that never cra
   SCRATCH_TIER.value = 2;
   view.frame(cars, 1 / FRAME_HZ);
   const mask = () => wearOf(crushed.lookMeshes().bodyPaint);
+  afterAll(() => void (SCRATCH_TIER.value = 1));
 
   it("when the masks are drawn, then the crushed car's dents (G) are up on its nose and nowhere on its tail or the rear of its flanks, and the car that never crashed samples no mask", () => {
     expect(Math.max(...dentsOn(crushed, SPRAY_FACE.front)), "the nose").toBeGreaterThan(0);
