@@ -23,6 +23,8 @@ const END_GAP = 0.01;
 const LEAVE_BLEND = 0.03;
 /** The steepest (m of lift per m of written skin) the hold's lift may change between two neighbouring skin points: a crushed row inside a tyre drags its neighbours up to a slope, never leaves a cliff of stretched triangles. */
 const LEVEL_SLOPE = 1;
+/** The band (share of the tyre's radius) over the hub across which the hold takes up a point under the tyre's surface: under the hub it is the tyre's lower half, whose top no crushed bumper can reach. */
+const UPPER_FADE = 0.1;
 /** How far (m) over the tyre's surface a skin point may rest and still be held: the hood and fenders, not the roof. */
 const REACH = 0.5;
 /** How far (m) a triangle spanning a tyre's top must stand over it: twice the 5 mm the drawn skin keeps over a tyre, so a stretched triangle's chord is lifted before it dips through. */
@@ -1005,7 +1007,8 @@ export class TyreSkin {
       const ahead = dx * fx + dz * fz;
       const along = dx * a0 + dy * a1 + dz * a2;
       const top = Math.sqrt(Math.max(0, r * r - ahead * ahead)) - FALL * (Math.max(0, Math.abs(ahead) - r) + Math.max(0, Math.abs(along) - halfW));
-      const c = upX * dx + upY * dy + upZ * dz - top - Math.min(gapCap, over[v]!);
+      const height = upX * dx + upY * dy + upZ * dz;
+      const c = height - top - Math.min(gapCap, over[v]!);
       if (c >= 0) continue;
       const p = weld[v]!;
       const rise = -c / flat;
@@ -1020,7 +1023,8 @@ export class TyreSkin {
         pushDir[p * 3 + 1] = 0;
         pushDir[p * 3 + 2] = sign * fz;
       }
-      lift[p] = Math.max(lift[p]!, (1 - leave) * rise);
+      // Under the hub a point cannot reach the top: a bumper the crush drove into the tyre's front was lifted 0.45 m over it for a frame.
+      lift[p] = Math.max(lift[p]!, Math.min(1, Math.max(0, height / (UPPER_FADE * r))) * (1 - leave) * rise);
       dirty[p] = 1;
     }
   }
