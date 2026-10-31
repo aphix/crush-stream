@@ -66,7 +66,11 @@ const SCRATCH_STEEL = [0.62, 0.63, 0.65] as const;
 const SCRATCH_CODES = PRIMER_MATERIAL.filter(([, id]) => TAKES_SCRATCH.has(id)).map(([code]) => code);
 const SCRATCH_FADE = 0.3;
 const SCRATCH_GONE = 0.6;
-
+/** A crease trough's tint (linear RGB, crushed paint's shadowed grime) and its share in a full crease; the roughness a full dent's paint and clear coat take: crumpled paint is crazed and dull. */
+const DENT_FOLD_TINT = [0.03, 0.03, 0.032] as const;
+const DENT_FOLD_DARK = 0.6;
+const DENT_ROUGHNESS = 0.6;
+const DENT_COAT_ROUGHNESS = 0.35;
 /** The share of a fragment at `vPrimer` that is a surface taking scratches: 1 on each `TAKES_SCRATCH` material's primer code. */
 const SCRATCH_PAINT_WEIGHT = SCRATCH_CODES.map((code) => `(1.0 - smoothstep(${f(SCRATCH_FADE)}, ${f(SCRATCH_GONE)}, abs(vPrimer - ${f(code)})))`).join(" + ") || "0.0";
 
@@ -77,14 +81,17 @@ export function takesScratch(primer: number): boolean {
 }
 
 /**
- * Where a material defines `PAINT_SCRATCH` and declares `vec3 paintScratch()` (the abraded, primer and steel shares a slide cut here), the
- * paint shows them on the surfaces that take scratches and gives way to them as to bare steel (`bareW`): no clear coat, no candy.
+ * Where a material defines `PAINT_SCRATCH` and declares `vec2 paintWear(out vec3 lines)` (`lines` the abraded, primer and steel shares
+ * a slide cut here; it returns the dent's dulled share 0..1 and its crease 0..1), the paint shows them on the surfaces that take
+ * scratches: the scratches give way as to bare steel (`bareW`: no clear coat, no candy), a crease's trough darkens and a dent dulls
+ * the paint and coat. `creaseW` is left for the relief's normal hook.
  */
 const SCRATCH = {
-  weigh: `#ifdef PAINT_SCRATCH\nvec3 scratchW = paintScratch() * (${SCRATCH_PAINT_WEIGHT});\nfloat scratchMatte = max(scratchW.x, scratchW.y) * (1.0 - scratchW.z);\n#endif`,
-  color: `#ifdef PAINT_SCRATCH\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_ABRADED.map(f).join(", ")}), scratchW.x * ${f(SCRATCH_ABRADED_LIFT)});\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_PRIMER.map(f).join(", ")}), scratchW.y);\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_STEEL.map(f).join(", ")}), scratchW.z);\nbareW = max(bareW, max(scratchW.x, max(scratchW.y, scratchW.z)));\n#endif`,
-  roughness: `#ifdef PAINT_SCRATCH\nroughnessFactor = mix(roughnessFactor, ${f(SCRATCH_PRIMER_ROUGHNESS)}, scratchMatte);\n#endif`,
+  weigh: `#ifdef PAINT_SCRATCH\nvec3 scratchW;\nvec2 wearW = paintWear(scratchW);\nfloat wearOn = ${SCRATCH_PAINT_WEIGHT};\nscratchW *= wearOn;\nfloat dentW = wearW.x * wearOn;\nfloat creaseW = wearW.y * wearOn;\nfloat scratchMatte = max(scratchW.x, scratchW.y) * (1.0 - scratchW.z);\n#endif`,
+  color: `#ifdef PAINT_SCRATCH\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${DENT_FOLD_TINT.map(f).join(", ")}), ${f(DENT_FOLD_DARK)} * creaseW);\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_ABRADED.map(f).join(", ")}), scratchW.x * ${f(SCRATCH_ABRADED_LIFT)});\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_PRIMER.map(f).join(", ")}), scratchW.y);\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${SCRATCH_STEEL.map(f).join(", ")}), scratchW.z);\nbareW = max(bareW, max(scratchW.x, max(scratchW.y, scratchW.z)));\n#endif`,
+  roughness: `#ifdef PAINT_SCRATCH\nroughnessFactor = mix(roughnessFactor, ${f(DENT_ROUGHNESS)}, dentW);\nroughnessFactor = mix(roughnessFactor, ${f(SCRATCH_PRIMER_ROUGHNESS)}, scratchMatte);\n#endif`,
   metalness: `#ifdef PAINT_SCRATCH\nmetalnessFactor *= 1.0 - scratchMatte;\n#endif`,
+  clearcoat: `#if defined(PAINT_SCRATCH) && defined(USE_CLEARCOAT)\nmaterial.clearcoatRoughness = mix(material.clearcoatRoughness, ${f(DENT_COAT_ROUGHNESS)}, dentW);\n#endif`,
 } as const;
 
 /** Fragment replacements, each appended after its include: the colour, roughness, metalness and clearcoat give way to the steel by `bareW`. */
@@ -93,5 +100,5 @@ export const BARE_METAL_FRAGMENT = {
   color: `float bareW = smoothstep(0.3, 0.6, vPrimer);\n${SCRATCH.weigh}\nfloat wellW = smoothstep(2.2, 2.8, vPrimer);\ndiffuseColor.rgb = mix(diffuseColor.rgb, bareMetal(vBarePos, vBareN), bareW);\ndiffuseColor.rgb *= mix(1.0, ${f(INNER_SHADE)}, smoothstep(1.2, 1.8, vPrimer));\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${f(WELL_DARK)}), wellW);\n${SCRATCH.color}`,
   roughness: `roughnessFactor = mix(mix(roughnessFactor, ${f(STEEL_ROUGHNESS)}, bareW), 1.0, wellW);\n${SCRATCH.roughness}`,
   metalness: `metalnessFactor = mix(metalnessFactor, ${f(STEEL_METALNESS)}, bareW) * (1.0 - wellW);\n${SCRATCH.metalness}`,
-  clearcoat: "#ifdef USE_CLEARCOAT\nmaterial.clearcoat *= 1.0 - bareW;\n#endif",
+  clearcoat: `#ifdef USE_CLEARCOAT\nmaterial.clearcoat *= 1.0 - bareW;\n#endif\n${SCRATCH.clearcoat}`,
 } as const;

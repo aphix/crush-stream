@@ -258,7 +258,7 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
   frame for every drawn car, only when the list's version moves, redrawing only the changed strokes' rects and uploading their rows):
   R is a stroke's severity in a capsule its width wide on the `CAR_SPRAY` box, less where the paint is recessed past the stroke's
   reach (6 mm behind the proud surface at the lightest, 40 mm at the hardest: flares, arch lips, a door's widest bulge and crease
-  lines first), G is reserved for dents. The paint's `paintScratch()`
+  lines first), G the dent height (next bullet). The paint's `paintWear()`
   (`applyScratch`, the `PAINT_SCRATCH` seam in `bare-metal.ts`; it binds `CAR_SPRAY`'s face mapping itself, since an unsprayed car's
   paint has no other) turns R into thin scratch lines along the slide at fragment resolution (at most one per 6 mm row, set off
   its middle at random, 0.5-1.2 mm wide, in dashes of their own length with frayed ends), swaying together across the slide so a
@@ -269,12 +269,38 @@ see it; each axle's shock shafts slide into the frame's shock bodies, so the pai
   Far off (rows under 4 px) only every 2^k-th row keeps its line, at least a pixel wide at full contrast, standing for its rows, so a
   scratched panel reads as a few distinct streaks rather than a faint mean. Only `TAKES_SCRATCH` surfaces show them (the
   painted panels and the bumpers; other trim and bare steel don't). One extra key (`|scratch`) on every car paint, no new variant; `SCRATCH_TIER`
-  turns it off at the `off` tier. A car with no strokes samples a shared 1×1 and hands its mask back to the pool; torn lids and
-  doors drawn by the cover batch show no scratches. **Bumpers**, the parts most often bumped, draw the same mask: every bumper trim
+  turns it off at the `off` tier. A car with no strokes and no dents samples a shared 1×1 and hands its mask back to the pool; torn
+  lids and doors drawn by the cover batch show no scratches or dents. **Bumpers**, the parts most often bumped, draw the same mask's
+  scratches (`paintScratch()`): every bumper trim
   is patched once with the scratch seam (one `|scratch` program for every finish, its scuff in uniforms: painted and satin as the
   body's paint, black plastic whitening grey, chrome bright lines), sampling no wear; a car's first stroke gives each of its bumpers
   a copy of its trim of its own bound to the car's mask (same program, no compile) and its rest frame (`ensureRestFrame`), and a
   look that swaps the trim gets a new copy. A torn bumper flies as the same mesh and keeps its marks.
+- **Dent relief:** the wear mask's G is drawn from how far each painted shell's skin (body, hood, trunk, door skins) has moved from
+  its rest skin along its rest normal (`sprayNrm`), in or out (a crumpled panel buckles both ways), past `DENT_MIN` (3 cm: a 50
+  km/h wall hit's untouched rear settles up to 2.7 cm). The skin is the one before the drawn tyre hold
+  (`TyreSkin.unheld`, `DeformableCar.unheldSkin`): the host and a replay hold their drawn body and bonnet over their own tyres, a
+  guest's net state does not, so the held skin's G differed by up to 255 round the wheels. That skin is what every viewer already
+  has (the host's and replay's sim, a guest's wreck section, the podium's `CarDamage`), so dents need no wire, keyframe or
+  `REPLAY`/`NET` bump. `PaintScratches.frame` redraws a crashed or
+  load-crushed car's G when its skin's position versions move, at most every `DENT_REBUILD_S` (0.25 s) and one car a frame (the
+  cars take turns), laying each triangle with a vertex past `DENT_MIN` on every box face its corners map to that it faces
+  (`DENT_FACING`) and, off the roof, lies in the near half of (`DENT_NEAR`: a crushed nose's inner walls are not the tail's paint),
+  grown 0.75 texel so neighbours and box edges close, as depth, the sink interpolated across it, max-combined. Each texel that
+  moved then takes G from its depth and its bend: `DENT_FLOOR` (0.4) as it nears `DENT_FULL` (8 cm) deep, plus a crease over the
+  rest as far as the skin blurred at `CREASE_NEAR` (Gaussian σ 1.5 texels, ~3 cm) sinks below it blurred at `CREASE_FAR` (σ 4,
+  ~7 cm), full at `BEND_FULL` (2.5 cm). That is a fold's trough, where the skin bends most: one smooth, broad crease per fold,
+  never its crest too, never a crinkle and never a texel step (a 50 km/h nose crush draws at most 8 a face; paint that never
+  moved stays 0). The blurs run separably, in buffers pooled once per `PaintScratches`, over the dented rects only, a face's
+  edge texels standing in past it. Only the old and new rects' rows upload, and R is untouched. Each
+  shell's rest vertices are placed on the mask once a car (`RestPlaces`, 15 floats a vertex, ~0.28 MB a dented sedan). A repaired
+  car (`panelsFollow` false) clears its G the next frame. The paint draws G under the real crush, never instead of it: at every
+  tier but `off` a dent dulls the paint and clear coat (`DENT_ROUGHNESS`, `DENT_COAT_ROUGHNESS`, full at `DENT_FLOOR`) and a
+  crease's trough takes a near-black grime tint (`DENT_FOLD_TINT`, `DENT_FOLD_DARK`); at `high` and `ultra` (`SCRATCH_TIER` 2)
+  the normal and clear coat normal also tilt (screen-space bump, `perturbedNormalGlsl`) into each crease, `DENT_CREASE` (5 cm)
+  deep, so the light catches its shoulders. Where G is up it is read again as a cubic B-spline (four bilinear fetches):
+  bilinear G kinks at every texel, which the bump draws as blocky steps. No pattern of the shader's own; same program at every
+  tier.
 - **The cage** reads `cageInterior()`, the first interior box byte-for-byte: the drawn kit moves no sim reading.
 
 ## References and scale

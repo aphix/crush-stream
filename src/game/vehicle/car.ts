@@ -857,6 +857,17 @@ export class DeformableCar extends CarParts {
     return { body: this.body, bodyPaint: this.bodyMat, hood: this.hood, trunk: this.trunk, doors: [this.doorMeshL, this.doorMeshR], glass: this.glassPanes.map((g) => g.mesh), bumpers: this.bumperMeshes };
   }
 
+  /** The rest skins of `lookMeshes`' painted shells in their own mesh frames, in the order body, hood, trunk, left and right door skin: what the drawn skin is dented from. */
+  shellRests(): readonly Float32Array[] {
+    return [this.deform.restSkin, this.hoodRest, this.trunkRest, this.doorLRest, this.doorRRest];
+  }
+
+  /** Painted shell `k`'s skin (`shellRests` order) before the drawn tyre hold, which a guest's net state never runs; null where nothing holds it: the drawn skin is that. */
+  unheldSkin(k: number): Float32Array | null {
+    if (k === 0) return this.bodyTyres?.unheld ?? null;
+    return k === 1 && !this.hoodOff() ? (this.hoodTyres?.unheld ?? null) : null;
+  }
+
   /** The meshes the crush skin writes (`updateSkin`): the body, the lids, the door skins, the light bar and the skinned panes. */
   skinGeometries(): THREE.BufferGeometry[] {
     const geometries = [this.body.geometry, this.hood.geometry, this.trunk.geometry, this.doorMeshL.geometry, this.doorMeshR.geometry];

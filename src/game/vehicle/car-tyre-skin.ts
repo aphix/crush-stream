@@ -389,6 +389,11 @@ export class TyreSkin {
     this.sagSkin = { weld: this.edges.weld, liftable: this.liftable, lift: this.lift, dirty: this.dirty, overTris: this.overTris, plans: this.plans, sagRead: this.sagRead, heldAt: this.heldAt };
   }
 
+  /** The skin as last written, before this hold lifted any of it; null until a hold has read one. */
+  get unheld(): Float32Array | null {
+    return this.hasWritten ? this.written : null;
+  }
+
   /** The kernel the plan grid and sag pass run in once it is loaded; null: the JS below, which is its reference. */
   private get kernel(): SkinKernel | null {
     return skinKernel();
