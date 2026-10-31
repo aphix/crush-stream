@@ -2,8 +2,8 @@
 const ERROR_KINDS = 6;
 
 /**
- * The WebGL error flags read since load. `getError` waits for the GPU process, a frame's stall, so it is read only at an FX tier
- * switch and when a submission is sent: a flag stays set until read, so none is missed, but one repeated between reads counts once.
+ * The WebGL error flags read since load. `getError` waits for the GPU process (everything queued, seconds after a warm-up), so it is
+ * read only when a submission is sent: a flag stays set until read, so none is missed, but one repeated between reads counts once.
  */
 export class GlErrors {
   count = 0;

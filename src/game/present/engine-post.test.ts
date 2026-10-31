@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { element, stubBrowser } from "../engine/engine-headless.test-util.ts";
 import { makeRenderer } from "../engine/engine-renderer.ts";
@@ -65,6 +65,13 @@ describe("given the post chain on a headless renderer and a print look's strengt
         expect(renderer.info.autoReset, `${tier} tier changed autoReset from ${hold}`).toBe(hold);
       }
     }
+  });
+
+  it("when the tier switches, then the WebGL error flags are not read: getError drains the GPU queue, seconds of warm-up at a switch, and Firefox's watchdog killed the bench page in it", () => {
+    const read = vi.spyOn(post.glErrors, "read");
+    for (const tier of FX_TIERS) if (tier !== "ultra") post.setTier(tier);
+    expect(read).not.toHaveBeenCalled();
+    read.mockRestore();
   });
 });
 

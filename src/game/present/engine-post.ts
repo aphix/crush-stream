@@ -287,7 +287,7 @@ export class PostFX {
   private readonly renderer: THREE.WebGLRenderer;
   /** The device's pixel ratio (`window.devicePixelRatio`, not the Render scale): low draws with MSAA only at 1 (`sceneSamples`). */
   private readonly deviceRatio: number;
-  /** Read at every tier switch: a switch changes the passes drawn and the programs a car's paint uses. */
+  /** Read when a submission is sent (`GlErrors`): a switch's passes and paint programs set flags that stay until then. */
   readonly glErrors = new GlErrors();
   /** The low / high tiers' HDR scene target (the warm-up draws into it once). */
   readonly sceneRT: THREE.WebGLRenderTarget;
@@ -364,10 +364,10 @@ export class PostFX {
   /**
    * A tier with no post chain (`off`, `minimal`) leaves the strengths at nothing, so the next post tier fades in from the plain frame; a
    * switch between post tiers keeps them and eases the grain. The scene target takes the tier's MSAA samples on this device
-   * (`sceneSamples`): three rebuilds a disposed target's storage, at its size, on its next draw.
+   * (`sceneSamples`): three rebuilds a disposed target's storage, at its size, on its next draw. No `getError` here: it drains the GPU
+   * queue, and at a switch the queue holds the warm-up's links and draws (seconds on the bench; Firefox's watchdog killed the page).
    */
   setTier(tier: FxTier): void {
-    this.glErrors.read(this.renderer.getContext());
     if (tier === "off" || tier === "minimal") {
       this.fade = 0;
       this.grain = DITHER;
