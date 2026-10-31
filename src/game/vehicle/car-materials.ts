@@ -39,27 +39,19 @@ if (capM > 0.7) outgoingLight *= (0.7 + 0.4 * (1.0 - exp((0.7 - capM) / 0.4))) /
  * perturbation finer than a pixel at play distance aliased into sparkle and crawl along feature lines and shut lines. The perturbation's
  * own screen-space variance widens each lobe instead (Tokuyoshi and Kaplanyan's kernel, on alpha = roughness²): `SPEC_AA_SIGMA2` the pixel
  * filter's variance, `SPEC_AA_KAPPA` the most any lobe widens. A surface no hook perturbs is untouched.
- * `dFdx` is one value per 2x2 pixel quad, so a bend that turns inside a quad (a detail line's edge) widened alternate quads into a
- * checker; the detail map hands its own bend (`detailBend`, left out of the derivative) and its change over each pixel
- * (`detailVariance`, from the map one pixel right and down) instead.
  */
 const SPEC_AA_SIGMA2 = 0.25;
 const SPEC_AA_KAPPA = 0.18;
 const SPECULAR_AA = /* glsl */ `#include <lights_physical_fragment>
-#ifndef DETAIL_SPEC_AA
-vec3 detailBend = vec3( 0.0 );
-vec3 detailCoatBend = vec3( 0.0 );
-float detailVariance = 0.0;
-#endif
-vec3 specAaDx = dFdx( normal - nonPerturbedNormal - detailBend );
-vec3 specAaDy = dFdy( normal - nonPerturbedNormal - detailBend );
+vec3 specAaDx = dFdx( normal - nonPerturbedNormal );
+vec3 specAaDy = dFdy( normal - nonPerturbedNormal );
 float specAaAlpha = pow2( material.roughness );
-material.roughness = min( sqrt( sqrt( pow2( specAaAlpha ) + min( ${SPEC_AA_SIGMA2 * 2} * ( dot( specAaDx, specAaDx ) + dot( specAaDy, specAaDy ) + detailVariance ), ${SPEC_AA_KAPPA} ) ) ), 1.0 );
+material.roughness = min( sqrt( sqrt( pow2( specAaAlpha ) + min( ${SPEC_AA_SIGMA2 * 2} * ( dot( specAaDx, specAaDx ) + dot( specAaDy, specAaDy ) ), ${SPEC_AA_KAPPA} ) ) ), 1.0 );
 #ifdef USE_CLEARCOAT
-specAaDx = dFdx( clearcoatNormal - nonPerturbedNormal - detailCoatBend );
-specAaDy = dFdy( clearcoatNormal - nonPerturbedNormal - detailCoatBend );
+specAaDx = dFdx( clearcoatNormal - nonPerturbedNormal );
+specAaDy = dFdy( clearcoatNormal - nonPerturbedNormal );
 specAaAlpha = pow2( material.clearcoatRoughness );
-material.clearcoatRoughness = min( sqrt( sqrt( pow2( specAaAlpha ) + min( ${SPEC_AA_SIGMA2 * 2} * ( dot( specAaDx, specAaDx ) + dot( specAaDy, specAaDy ) + detailVariance ), ${SPEC_AA_KAPPA} ) ) ), 1.0 );
+material.clearcoatRoughness = min( sqrt( sqrt( pow2( specAaAlpha ) + min( ${SPEC_AA_SIGMA2 * 2} * ( dot( specAaDx, specAaDx ) + dot( specAaDy, specAaDy ) ), ${SPEC_AA_KAPPA} ) ) ), 1.0 );
 #endif`;
 
 function capHighlights<T extends THREE.MeshStandardMaterial>(m: T): T {
