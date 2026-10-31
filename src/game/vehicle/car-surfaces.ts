@@ -235,10 +235,13 @@ export class CarSurfaces extends Surface {
     return k;
   }
 
-  /** The face slot a contact presses: car `own`'s top where the point (hit factor `follow`) follows its crush, else the stepping car's face under normal `nrm` (body points only; -1: rigid). */
+  /**
+   * The face slot a contact presses: car `own`'s top where the point (hit factor `follow`) follows its crush, else the stepping car's face under normal `nrm` (body points only; -1: rigid).
+   * A wreck (`massActive`) takes no load crush, under another car or against the ground: its own face yielding would sink its points with nothing crushed.
+   */
   slot(own: number, nrm: THREE.Vector3, body: boolean, q: THREE.Quaternion, follow: number): number {
     if (own >= 0) return follow >= YIELDS && !this.cars[own]!.deform.massActive ? FACES * (1 + own) + FACE_TOP : -1;
-    if (!body) return -1;
+    if (!body || this.self!.deform.massActive) return -1;
     _t.copy(nrm).applyQuaternion(_qi.copy(q).invert());
     let best = -1;
     let score = 0.5;

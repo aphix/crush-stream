@@ -104,7 +104,10 @@ What holds a column up, in the shared car-on-car rule:
   flank drops of `tumbled-rest.test.ts` read as before the threshold (13 of its and `wreck-rest.test.ts`'s 241 readings differ, none by more than
   7 mm, mirror heights above all: a mirror's tear timing, which `crashed` does gate). `stack-crush.test.ts` restores a 4-stack from a keyframe: the same roofs, the same 3 s later.
 - A wreck (`massActive`) keeps its lattice: it takes no load crush, and a car that load-crushed and is then hit re-fits its
-  shape-match rests to the undamaged shape (the roof's vertical cap keeps its sag: `maxLift`).
+  shape-match rests to the undamaged shape (the roof's vertical cap keeps its sag: `maxLift`). Its faces never yield, under another car
+  or against the ground and walls (`CarSurfaces.slot`): a wreck's own face yielding booked a crush its masses never took and left its
+  points sinking, so a monster wreck that landed on its roof stood 12.9 cm in a 15° slope (roof "crushed" 0.45 m, not moved), and a muscle
+  wreck's flank, its wall push cut to what the face carries, put a cage vertex 9 cm past the derby wall's outer face (`wreck-rest.test.ts`).
 - Forces between stacked cars are vertical only: a tilted pair does not pass friction to the car below, and there is no
   rigid-body torque on the carrier. The monster truck carrying four cars or more rolls and the column above it falls (an
   open `todo` in `stack-column.test.ts`).

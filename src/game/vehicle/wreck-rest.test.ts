@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { FRAME_HZ } from "../kernel/constants.ts";
+import { FACE_TOP } from "../deform/load-crush.ts";
 import { FREEWHEEL, launch, makeWorld, PARKED, tickWorld } from "../contact/crash-scenarios.test-util.ts";
 import { FLAT_GROUND, Ground, setGround } from "../world/ground.ts";
 import { layOnGround, loadPoints } from "./car-air-points.ts";
@@ -206,4 +207,48 @@ describe("given two cars crushed head-on, left to rest on the ground", () => {
       }
     });
   }
+});
+
+/** Height (m) a wreck's lowest drawn point is dropped from: it lands at 3.1 m/s, under a crash's closing speed, its weight and landing pressing its roof past what the roof carries. */
+const ROOF_DROP_M = 0.5;
+const ROOF_DROP_S = 2;
+
+/** The rigid step's lowest point (the cage's vertices and sill samples, and the belly where it is drawn) over the ground (m; negative: in it). */
+function lowestStepPoint(wreck: DeformableCar, ground: Ground): number {
+  const bellyFrom = loadPoints(wreck);
+  let lowest = Infinity;
+  for (let k = 0; k < bellyFrom + wreck.frame.belly.length; k++) {
+    if (k >= bellyFrom && BELLY_ABSENT[k - bellyFrom] !== 0) continue;
+    _v.set(POINT_X[k]!, POINT_Y[k]!, POINT_Z[k]!).applyMatrix4(wreck.group.matrixWorld);
+    lowest = Math.min(lowest, _v.y - ground.heightAt(_v.x, _v.z, _v.y));
+  }
+  return lowest;
+}
+
+// A wreck keeps its lattice: it takes no load crush, so its own face yielding to the ground would book a crush its masses never take and sink its points.
+describe("given a monster wreck dropped upside down onto flat ground", () => {
+  afterEach(() => setGround(null));
+
+  it(`when it lands on its roof from ${ROOF_DROP_M} m, then its roof takes no load crush and no point it rests on is more than 3 cm in the ground`, () => {
+    setGround(FLAT_GROUND);
+    const wreck = buildCar(CLASSES.monster.style, "monster");
+    wreck.spawnFacing(0, 0, 0, 0);
+    wreck.group.rotation.set(0, 0, Math.PI, "YXZ");
+    wreck.group.updateMatrixWorld(true);
+    wreck.group.position.y += ROOF_DROP_M - new THREE.Box3().setFromObject(wreck.group).min.y;
+    wreck.group.updateMatrixWorld(true);
+    wreck.deform.armMasses(wreck.group, wreck.velocity, wreck.angular);
+    wreck.crashed = true;
+    wreck.airborne = true;
+    const world = makeWorld([wreck], false, false);
+    world.pedals.set(wreck, PARKED);
+    let deepest = Infinity;
+    for (let f = 0; f < ROOF_DROP_S * FRAME_HZ; f++) {
+      tickWorld(world, 1 / FRAME_HZ);
+      deepest = Math.min(deepest, lowestStepPoint(wreck, FLAT_GROUND));
+    }
+    expect(wreck.deform.massActive, "the control: the car is a wreck").toBe(true);
+    expect(wreck.deform.crush[FACE_TOP], `the wreck's roof booked a load crush of ${wreck.deform.crush[FACE_TOP]!.toFixed(3)} m`).toBe(0);
+    expect(deepest, `a point the wreck rests on stood ${(-deepest * 100).toFixed(1)} cm in the ground`).toBeGreaterThanOrEqual(-SINK_M);
+  });
 });
