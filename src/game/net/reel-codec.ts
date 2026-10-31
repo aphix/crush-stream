@@ -543,9 +543,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 194: the weight a car bears on the car under it is kept with the time it was borne over and taken at that rate over the carrier's slices, the rest waiting, so none is lost when a short slice follows a long one; a keyframe's flight block carries it (`FLIGHT` 102 -> 104 doubles); a clip of 193 or before no longer reads.
  * 195: the cage's two header boxes stand with their tops on their glass's top edge, front and rear, for every style, so a tyre or a belly on a roof meets the drawn roof there, not a cage-only ridge; a clip of 194 or before no longer reads.
  * 196: a police light bar tears once the contacts of a slice press it into the roof harder than its mounts hold (100 kg), whoever presses it (another car, a prop, the ground on a roll), not when the roof under it has sunk 12 cm; a clip of 195 or before no longer reads.
+ * 197: a wreck at rest on two contact rows falls asleep after a second at rest speed, as a loose part on two points does: one rocking on its flank between its rows no longer stays awake; a clip of 196 or before no longer reads.
+ * 198: a wreck's own faces never yield to the ground or a wall (a wreck takes no load crush): a wreck landing on its roof or flank no longer records a crush its body never shows and sinks its points into the ground, or has its push off a wall cut short; a clip of 197 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 196;
+const REPLAY_VERSION = 198;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
