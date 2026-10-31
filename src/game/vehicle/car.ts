@@ -578,11 +578,12 @@ export class DeformableCar extends CarParts {
   }
 
   /**
-   * A wreck at rest for `WRECK_REST_S` on three wheels or more and not crushing falls asleep where it lies, once out of the ground
+   * A wreck at rest for `WRECK_REST_S` on two contact rows or more and not crushing falls asleep where it lies, once out of the ground
    * (`SLEEP_SINK`): its rest runs while it rises out (under `REST_SPEED`), so a shallow sink costs it no time and a deep one keeps it awake.
+   * Two rows, as a loose part on two points (`TWO_POINT_REST_S`): a wreck on its flank rocks under rest speed between its rows for good.
    */
   private restOrSleep(dt: number): void {
-    if (!this.deform.crushing && this.contacts >= 3 && !this.moving) {
+    if (!this.deform.crushing && this.contacts >= 2 && !this.moving) {
       if ((this.restS += dt) >= WRECK_REST_S && _s[S_LIFTING]! <= SLEEP_SINK) {
         this.velocity.set(0, 0, 0);
         this.angular.set(0, 0, 0);
