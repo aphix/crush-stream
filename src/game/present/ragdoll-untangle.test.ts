@@ -25,6 +25,14 @@ const NO_POP_SPEED = RUN_SPEED;
 const SETTLE_SECONDS = 0.6;
 /** His foot's middle (m) no higher than its half height plus half a lying arm's 10 cm: down on the ground, not on an arm. */
 const FOOT_ON_GROUND = PARTS[10].h[1] + 0.05;
+/** A block this half size (m) round a lying chest's middle is left by a push of under 0.3 m/s (its half over the ease), slow enough that he reads as calm. */
+const BLOCK_HALF = 0.04;
+/** The block's half height (m): deeper than its sides, so its way out is to the side. */
+const BLOCK_TALL = 0.3;
+/** A dummy lying still is asleep by then (s): `SETTLE_AFTER` and `CALM_FOR` after he lands. */
+const ASLEEP_AFTER = 1.5;
+/** Where (m, x y z) a dummy dropped to keep the world stepping is: 30 m up he falls for 2.5 s, longer than he is watched. */
+const FAR_OFF = 30;
 
 type Pose = readonly [p: readonly [number, number, number], q: readonly [number, number, number, number]];
 
@@ -122,6 +130,24 @@ describe("given a dummy lying on his back and the player's walker stood with bot
     expect(fastest, `a part moved at ${fastest.toFixed(2)} m/s`).toBeLessThan(NO_POP_SPEED);
     expect(system.walker.state, "he stepped out on his feet").toBe("stand");
     for (const k of [10, 11]) expect(walker.bodies[k]!.translation().y, "his feet came down on the ground, not on the lying dummy's arm").toBeLessThan(FOOT_ON_GROUND);
+  });
+});
+
+describe("given a dummy lying asleep on his back and a small fixed block found in the middle of his chest", () => {
+  it(`when the untangle pushes him out of it (a slow push: ${BLOCK_HALF} m over its ease), then he moves out by at least that much within ${FREED_WITHIN} s instead of being put back to sleep`, () => {
+    place([[0, 0.12, 0], [-Math.SQRT1_2, 0, 0, Math.SQRT1_2]], 0);
+    for (let f = 0; f < ASLEEP_AFTER * FRAME_HZ; f++) system.update(FRAME, [], true, true, null);
+    const chest = system["dolls"][0]!.bodies[0]!;
+    expect(chest.isSleeping(), "he lay still long enough to be put to sleep").toBe(true);
+    const at = chest.translation();
+    // Tall, so its way out is to the side: across his chest's long axis, the up and down faces far deeper.
+    system["world"]!.createCollider(system["R"]!.ColliderDesc.cuboid(BLOCK_HALF, BLOCK_TALL, BLOCK_HALF).setTranslation(at.x, at.y, at.z));
+    // Another dummy falling far off keeps the world stepping (with every dummy asleep it does not step).
+    place([[FAR_OFF, FAR_OFF, FAR_OFF], [0, 0, 0, 1]], 1);
+    for (let f = 0; f < FREED_WITHIN * FRAME_HZ; f++) system.update(FRAME, [], true, true, null);
+    const now = chest.translation();
+    const moved = Math.hypot(now.x - at.x, now.z - at.z);
+    expect(moved, `his chest moved ${moved.toFixed(3)} m`).toBeGreaterThanOrEqual(BLOCK_HALF);
   });
 });
 

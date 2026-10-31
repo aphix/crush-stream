@@ -176,7 +176,7 @@ export abstract class RagdollStepper extends RagdollPool {
       readLinvel(d.bodies[0]!, d.vel, 0);
       d.speed = hypot3(d.vel[0]!, d.vel[1]!, d.vel[2]!);
       d.still = d.speed < REST_SPEED ? d.still + dt : 0;
-      if (!d.driven) this.calm(d, dt);
+      if (!d.driven) this.calm(d, dt, this.untangle.pushed[s] === 1);
       if (this.hosted) continue;
       for (let k = 0; k < PARTS.length; k++) {
         this.blend(d, k, _p, _q);
@@ -313,9 +313,9 @@ export abstract class RagdollStepper extends RagdollPool {
 
   /**
    * A dummy on the ground whose torso has lain still damps hard (`SETTLE_*`), then goes to sleep once his whole body
-   * is calm (Rapier's own thresholds cannot be set from JS).
+   * is calm (Rapier's own thresholds cannot be set from JS); one the untangle is pushing (`pushed`) is not calm.
    */
-  protected calm(d: Doll, dt: number): void {
+  protected calm(d: Doll, dt: number, pushed: boolean): void {
     if (d.ground && !d.settled && d.still >= SETTLE_AFTER) {
       d.settled = true;
       for (const b of d.bodies) {
@@ -323,7 +323,7 @@ export abstract class RagdollStepper extends RagdollPool {
         b.setAngularDamping(SETTLE_ANGULAR);
       }
     }
-    d.calm = d.ground && isCalm(d.bodies) ? d.calm + dt : 0;
+    d.calm = d.ground && !pushed && isCalm(d.bodies) ? d.calm + dt : 0;
     if (d.calm >= CALM_FOR && !d.bodies[0]!.isSleeping()) for (const b of d.bodies) b.sleep();
   }
 }

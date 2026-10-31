@@ -100,6 +100,11 @@ export class Untangle {
   /** The box a driven dummy's first stuck part is in, and per face of it the furthest (m) any of his stuck parts in it must go to leave by it (Infinity: further than that part is long). */
   private carryBox: Collider | null = null;
   private readonly reach = new Float64Array(6);
+  /** Per slot, 1 when a part of that dummy was pushed this frame, or something out of one: he is not calm, however slow the push (a calm one is put to sleep, which undoes it). */
+  readonly pushed = new Uint8Array(SLOTS);
+  /** The dummies being looked at, and the slot of the one now. */
+  private dolls: readonly Doll[] = [];
+  private slot = 0;
   /** The collider `intersectionsWithPoint` found the part's middle in (`take`), null for none. */
   private found: Collider | null = null;
   private readonly take = (collider: Collider): boolean => {
@@ -125,8 +130,11 @@ export class Untangle {
   /** One frame of `dt` s after the world's steps. */
   frame(world: World, dolls: readonly Doll[], dt: number): void {
     this.turn = (this.turn + 1) % SCAN_EVERY;
+    this.dolls = dolls;
+    this.pushed.fill(0);
     for (let s = 0; s < dolls.length; s++) {
       const d = dolls[s]!;
+      this.slot = s;
       this.shared = NaN;
       this.carryAt = d.live && d.driven ? s * 3 : -1;
       this.carry.fill(0, s * 3, s * 3 + 3);
@@ -462,7 +470,9 @@ export class Untangle {
    * own mass: a push shared by their masses hardly moves the dummy a held part is in.
    */
   private push(part: RigidBody, other: RigidBody | null, depth: number): void {
+    this.pushed[this.slot] = 1;
     const moves = other !== null && other.isDynamic();
+    if (moves) this.markPushed(other);
     const v = part.linvel();
     const w = moves ? other.linvel() : ZERO;
     const closing = (v.x - w.x) * _n.x + (v.y - w.y) * _n.y + (v.z - w.z) * _n.z;
@@ -471,6 +481,19 @@ export class Untangle {
     const each = moves ? (want - closing) / 2 : want - closing;
     this.shove(part, each);
     if (moves) this.shove(other, -each);
+  }
+
+  /** The dummy `body` is a part of, if any, is being pushed this frame (`pushed`). */
+  private markPushed(body: RigidBody): void {
+    const dolls = this.dolls;
+    for (let s = 0; s < dolls.length; s++) {
+      const bodies = dolls[s]!.bodies;
+      for (let k = 0; k < bodies.length; k++) {
+        if (bodies[k]!.handle !== body.handle) continue;
+        this.pushed[s] = 1;
+        return;
+      }
+    }
   }
 
   /** The driven dummy's way out is `depth` m along `_n`, unless another of his parts must go further along the ground. */
