@@ -31,6 +31,14 @@ const PARTS_MAX = 20;
 const STATE = 14 + 2 * PARTS_MAX;
 /** The angle (rad) the door-ajar stage opens car 3's doors to. */
 const DOOR_AJAR_RAD = 0.9;
+/**
+ * The door-ajar stage: car 2 starts this far (m) behind car 3, this far (m) to its own side of the centre (away from the loop's oncoming lanes),
+ * car 3 the gap (centre to centre) the other way. A racer keeps its own half round the city's blind bend: one put on the centre drew clear of the door.
+ */
+const DOOR_BACK_M = 3;
+const DOOR_OWN_HALF_M = 1.5;
+const DOOR_GAP_M = 2.2;
+const DOOR_CAR = 3;
 
 /** Cars 2 and 3 put head-on 8 m apart on the city road, intact, at `HEAD_ON_MPS`. */
 function stageHeadOn(w: World): void {
@@ -48,15 +56,26 @@ function firstDifference(a: Float64Array[], b: Float64Array[]): { step: number; 
   return { step: -1, at: -1 };
 }
 
-/** Cars 2 and 3 abeam on the city road, 2.2 m apart, car 3's doors both open `DOOR_AJAR_RAD`: car 2 comes up alongside and meets an open door. */
+/** The most car `DOOR_CAR`'s doors swung (rad) from `DOOR_AJAR_RAD` after the stage opened them (before it, they are shut: not a swing). */
+function doorSwing(trace: Float64Array[]): number {
+  const o = DOOR_CAR * STATE + 10;
+  const from = trace.findIndex((row) => row[o] === DOOR_AJAR_RAD && row[o + 2] === DOOR_AJAR_RAD);
+  let swing = 0;
+  if (from >= 0) for (const row of trace.slice(from)) for (let d = 0; d < 2; d++) swing = Math.max(swing, Math.abs(row[o + 2 * d]! - DOOR_AJAR_RAD));
+  return swing;
+}
+
+/** Car 3 on the city road, its doors both open `DOOR_AJAR_RAD`; car 2 a little behind and abeam of it, faster: it comes up alongside and meets an open door. */
 function stageDoorAjar(w: World): void {
   const track = new Track(city);
   const pt = blankPoint();
-  track.pointAt(150, pt);
-  const heading = Math.atan2(pt.tx, pt.tz);
-  w.cars[2]!.spawnFacing(pt.x, pt.z, heading, 14);
-  w.cars[3]!.spawnFacing(pt.x + pt.tz * 2.2, pt.z - pt.tx * 2.2, heading, 8);
-  for (const side of [-1, 1]) w.cars[3]!.doorHinge(side).theta = DOOR_AJAR_RAD;
+  const lateral = (car: number, at: number, off: number, mps: number): void => {
+    track.pointAt(at, pt);
+    w.cars[car]!.spawnFacing(pt.x + pt.tz * off, pt.z - pt.tx * off, Math.atan2(pt.tx, pt.tz), mps);
+  };
+  lateral(2, 150 - DOOR_BACK_M, -DOOR_OWN_HALF_M, 14);
+  lateral(DOOR_CAR, 150, DOOR_GAP_M - DOOR_OWN_HALF_M, 8);
+  for (const side of [-1, 1]) w.cars[DOOR_CAR]!.doorHinge(side).theta = DOOR_AJAR_RAD;
 }
 
 /** Every car's state at the start of every recorder step of a race, with `draw` run on every car ahead of it; `skip` is `EPICENTER.presentSkip`. */
@@ -135,12 +154,11 @@ describe("given a staged crash run twice, the second drawing every car before ev
       expect(drawn.length, "the two races ran a different number of steps").toBe(plain.length);
       let wrecked = 0;
       let refits = 0;
-      let doorMoved = 0;
       for (const row of plain) for (let o = 0; o < row.length; o += STATE) {
         wrecked = Math.max(wrecked, row[o + 7]!);
         refits = Math.max(refits, row[o + 8]!);
-        for (let d = 0; d < 2; d++) doorMoved = Math.max(doorMoved, Math.abs(row[o + 10 + 2 * d]! - DOOR_AJAR_RAD));
       }
+      const doorMoved = doorSwing(plain);
       expect(wrecked === 1 && refits >= 2, `the race crushed no car (${wrecked}) or fitted no cage twice (${refits}): the comparison proves nothing`).toBeTruthy();
       if (stage === "door ajar") expect(doorMoved, `no open door was struck or swung (${doorMoved} rad): the comparison proves nothing about part contacts`).toBeGreaterThan(0.01);
       const first = firstDifference(plain, drawn);
@@ -156,8 +174,7 @@ describe("given a staged crash drawn every frame with frame skipping off and the
       const skipped = run(true, { skip: true, stage });
       expect(skipped.length, "the two races ran a different number of steps").toBe(every.length);
       const first = firstDifference(every, skipped);
-      let doorMoved = 0;
-      for (const row of every) for (let o = 0; o < row.length; o += STATE) for (let d = 0; d < 2; d++) doorMoved = Math.max(doorMoved, Math.abs(row[o + 10 + 2 * d]! - DOOR_AJAR_RAD));
+      const doorMoved = doorSwing(every);
       if (stage === "door ajar") expect(doorMoved, `no open door was struck or swung (${doorMoved} rad): the comparison proves nothing about part contacts`).toBeGreaterThan(0.01);
       expect(first.step, `a car differs at step ${first.step}, car ${Math.floor(first.at / STATE)}, number ${first.at % STATE}: ${every[first.step]?.[first.at]} against ${skipped[first.step]?.[first.at]}`).toBe(-1);
     });
