@@ -367,24 +367,24 @@ function accumulate(at: number, x: THREE.Vector3, k: number): void {
 }
 
 /**
- * Impulse `j` along unit `dir` at contact `c` on the stepping body (unit mass `v`, `w`, orientation `q`), and its reaction at the same
+ * Impulse `j` along unit `dir` at contact `c` on the stepping body (unit mass `v`, `w`, orientation `q`; at arm `r`, the contact's own unless given), and its reaction at the
  * point on the car under it (`HELD`), centre and spin both: the part `jd` that stops closing beyond this slice's weight at once, the
  * weight's part (`j - jd`) borne on it for its next step (`CarSurfaces.bear`), which its own contacts then hold and bear on. Taken at
  * that car's centre alone, a load off the middle of its roof never turned it, and a car turning back under a still rider lifted it
  * 48 mm in 0.1 s (329 J) on 54 J of its own spin. What a contact with a car under it changes is kept in `GIVEN`.
  */
-export function give(c: number, v: THREE.Vector3, w: THREE.Vector3, q: THREE.Quaternion, dir: THREE.Vector3, surf: CarSurfaces): void {
+export function give(c: number, v: THREE.Vector3, w: THREE.Vector3, q: THREE.Quaternion, dir: THREE.Vector3, surf: CarSurfaces, r: THREE.Vector3 = R[c]!): void {
   const j = _s[S_J]!;
   const jd = _s[S_JD]!;
   const o = HELD[c];
   if (o === null) {
-    push(v, w, q, R[c]!, dir);
+    push(v, w, q, r, dir);
     return;
   }
   const g = c * GIVEN_STRIDE;
   accumulate(g, v, -1);
   accumulate(g + 3, w, -1);
-  push(v, w, q, R[c]!, dir);
+  push(v, w, q, r, dir);
   accumulate(g, v, 1);
   accumulate(g + 3, w, 1);
   const oq = o.group.quaternion;

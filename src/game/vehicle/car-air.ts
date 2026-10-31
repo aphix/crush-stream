@@ -770,20 +770,8 @@ export function stepFree(car: DeformableCar, dt: number): boolean {
   return landed;
 }
 
-/**
- * Whether an up push at arm `r` leaves contact `n`'s closing to fall: the push's pitch (about the body's lateral axis, `_e`'s first
- * column, which `wheelsAt` set) and the closing that pitch adds at the point agree in sign. A tread pair's roll and yaw cancel and their
- * pitches add: under and ahead of the centre on a steep face (a monster's rear treads as it tips over a kicker's lip) the pair's push
- * pitched both back in and their solve fed itself.
- */
-function pitchHolds(r: THREE.Vector3, n: THREE.Vector3): boolean {
-  const ax = _e[0]!;
-  const ay = _e[1]!;
-  const az = _e[2]!;
-  const push = az * r.x - ax * r.z;
-  const closes = ax * (r.y * n.z - r.z * n.y) + ay * (r.z * n.x - r.x * n.z) + az * (r.x * n.y - r.y * n.x);
-  return push * closes >= 0;
-}
+/** A push's arm at the body's centre of mass: no spin. */
+const AT_CENTRE = new THREE.Vector3();
 
 function stepFreeBody(car: DeformableCar, dt: number): boolean {
   const q = car.group.quaternion;
@@ -868,12 +856,9 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
     HUB[n] = false;
     MU[n] = MU_TYRE;
     OWN[n] = own;
-    // Up on another car's top, where the push passes to the car under (`give`). On the world's ground a rigid tread (past its springs' travel) is a contact along the
-    // face's normal: its closing speed is absorbed and the speed along the face kept, as a tyre and its springs take a hit. Straight up, the push added to the body's
-    // energy the speed it lifts it on, and a 45° wedge's side turned the whole closing speed into lift (a monster at 27.5 m/s hopped 20 m, 7.7 m along the normal).
-    const climb = own >= 0 && N[n]!.y >= CLIMB_NY && pitchHolds(R[n]!, N[n]!);
-    if (climb) reach(n, UP, N[n]!, q, false);
-    DIR[n] = climb && 1 / _s[S_REACH]! >= N[n]!.y ? UP : N[n]!;
+    // A rigid tread (past its springs' travel) is a contact along the face's normal, on the world and on a car's top: straight up, a 45° wedge's side
+    // turned the whole closing speed into lift (a monster at 27.5 m/s hopped 20 m), and a car's tread perched on a roof's 50-80° side edge.
+    DIR[n] = N[n]!;
     UNDER[n] = false;
     FOLLOW[n] = own >= 0 ? hit[o + C_AUX]! : 1;
     SLOT[n] = surf.slot(own, N[n]!, false, q, FOLLOW[n]!);
@@ -1085,18 +1070,12 @@ function stepFreeBody(car: DeformableCar, dt: number): boolean {
   // Where the grip holds the tyre (a car not driven) the push acts at the tread: at the centre it rolled a monster parked across a 10° face
   // to 6.9°. A driven car's drive owns its travel along the ground, so its push stays at the centre.
   for (let c = 0; c < tyres; c++) {
-    if (!SOFT[c] || OWN[c]! >= 0 || N[c]!.y < CLIMB_NY) continue;
-    const load = ASK[c]! / N[c]!.y;
-    if (driven) {
-      v.x += load * N[c]!.x;
-      v.z += load * N[c]!.z;
-      continue;
-    }
+    if (!SOFT[c] || N[c]!.y < CLIMB_NY) continue;
     const along = hypot2(N[c]!.x, N[c]!.z);
-    if (along > 0) {
-      _s[S_J] = load * along;
-      push(v, w, q, R[c]!, _vp.set(N[c]!.x / along, 0, N[c]!.z / along));
-    }
+    if (!(along > 0)) continue;
+    _s[S_J] = (ASK[c]! / N[c]!.y) * along;
+    _s[S_JD] = ((ASK[c]! - Math.min(ASK[c]!, REST[c]!)) / N[c]!.y) * along;
+    give(c, v, w, q, _vp.set(N[c]!.x / along, 0, N[c]!.z / along), surf, driven ? AT_CENTRE : R[c]!);
   }
   snapshotRows(car, n);
   noteTyreSides(tyres, tyreSides);
