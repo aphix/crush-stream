@@ -49,13 +49,14 @@ const NX = new THREE.Vector3(-1, 0, 0);
 // Re-pinned for the cage refitting when a cluster map or a cage corner moves a vertex past 1 cm, not only a mass (`movedSince`): door a5928a5241b57ca2 -> 5111dbba1807e959, pile-up fc11e97a2bb17e08 -> f75772b22e2a2f31; the head-on and barrier are unchanged.
 // Pile-up re-pinned for a squeezed wreck's seat on its cell's rest, as its clamp reads it (`seatOffset`): f75772b22e2a2f31 -> df77ad3c11d7b56d; the other three have no squeeze and are unchanged.
 // Pile-up re-pinned for a squeeze's set pulling a sprung-back mass in again in plan, its height kept (`clampMass`, REPLAY 199): df77ad3c11d7b56d -> 8d4ffb4a9531934d; the other three are unchanged.
+// Head-on, barrier and pile-up again for the free shape step taking the cloud's net roll out as it does its pitch and yaw (REPLAY 200): head-on baff0220de6d5ea7 -> a9e5d843b205f29b, barrier ca2e30a830f5a144 -> 764e368f5c244b74, pile-up 8d4ffb4a9531934d -> 39522b68d93e08e0; the door is unchanged.
 describe("given four staged crashes with the epicenter activation off", () => {
   it("when the owner's head-on, 20 m/s each, runs 5 s, then every mass and pose is the pinned one", () => {
     const a = makeCar("shape");
     const b = makeCar("shape");
     launch(a, -5, 0, Math.PI / 2, 20, 0);
     launch(b, 5, 0, -Math.PI / 2, -20, 0);
-    expect(staged([a, b], false, [new Probe(a, X), new Probe(b, NX)], [FREEWHEEL, FREEWHEEL], 5)).toBe("baff0220de6d5ea7");
+    expect(staged([a, b], false, [new Probe(a, X), new Probe(b, NX)], [FREEWHEEL, FREEWHEEL], 5)).toBe("a9e5d843b205f29b");
   });
 
   it("when a car meets a parked one's door at 50 km/h, 5 s, then every mass and pose is the pinned one", () => {
@@ -69,7 +70,7 @@ describe("given four staged crashes with the epicenter activation off", () => {
   it("when a car hits the held barrier at 50 km/h, 5 s, then every mass and pose is the pinned one", () => {
     const a = makeCar("shape");
     launch(a, 6.2, 0, -Math.PI / 2, -50 * KPH, 0);
-    expect(staged([a], true, [new Probe(a, a.velocity)], [FREEWHEEL], 5)).toBe("ca2e30a830f5a144");
+    expect(staged([a], true, [new Probe(a, a.velocity)], [FREEWHEEL], 5)).toBe("764e368f5c244b74");
   });
 
   it("when three cars pile up, 6 s, then every mass and pose is the pinned one", () => {
@@ -79,6 +80,6 @@ describe("given four staged crashes with the epicenter activation off", () => {
     launch(a, -4, 0, Math.PI / 2, 50 * KPH, 0);
     launch(b, 4, 0, -Math.PI / 2, -50 * KPH, 0);
     launch(c, 28, 0, -Math.PI / 2, -90 * KPH, 0);
-    expect(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6)).toBe("8d4ffb4a9531934d");
+    expect(staged([a, b, c], false, [new Probe(a, X), new Probe(b, NX), new Probe(c, NX)], [FREEWHEEL, FREEWHEEL, FREEWHEEL], 6)).toBe("39522b68d93e08e0");
   });
 });
