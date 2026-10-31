@@ -95,8 +95,8 @@ and demands no `missed`, no `wrongWay` and the laps done.
 
 ## Death, respawn, elimination
 
-- Dead for the rules: drivetrain dead, upside down for 2.5 s, or still for 8 s while the race AI drives it (not while a
-  human has it, who can press R).
+- Dead for the rules: drivetrain dead, upside down for 2.5 s, or still for 8 s while the race AI drives it in a no-reset race
+  (not while a human has it, who can press R; in a reset race a still AI car is the AI reset's below, a 1.5 s tap, not a 3 s death).
 - Player reset: R / D-pad ↓ / the thumb pad's button. A **tap** (released inside 0.8 s, `RESET_HOLD`) takes 1.5 s and puts
   a repaired car back. A **hold** (0.8 s, a fill shows under the banners; `ResetHold`) puts the car back **at once with its
   damage kept** (the host captures its net state and writes it over the fresh placement, `placeKeeping`), at rest and

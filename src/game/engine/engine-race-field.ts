@@ -102,7 +102,7 @@ interface RaceHost {
 
 /** Seconds upside down before a car counts as dead. */
 const FLIP_DEAD = 2.5;
-/** Seconds a car no human drives (a rival; a peer or this browser's driver may sit, and press R) sits still mid-race before it counts as dead (respawned). */
+/** Seconds a car no human drives and no stall rule resets (a rival in a no-reset race, traffic) sits still mid-race before it counts as dead. */
 const STILL_DEAD = 8;
 /**
  * A car the race AI drives (a rival, or the player's car while its seat isn't driving) that gains
@@ -864,7 +864,9 @@ export abstract class RaceField {
     const upY = car.group.matrixWorld.elements[5]!;
     this.flipFor[i] = upY < FLIPPED_UP_Y ? this.flipFor[i]! + dt : 0;
     if (this.flipFor[i]! > FLIP_DEAD) return false;
-    const still = racing && !this.humanDrives(i) && car.velocity.lengthSq() < 0.36;
+    // A still AI racer gains no track: its reset is the stall rule's, which this one's 3 s death would otherwise pre-empt at the same 8 s.
+    const stallResets = this.aiDrives(i) && this.session?.noReset === false;
+    const still = racing && !this.humanDrives(i) && !stallResets && car.velocity.lengthSq() < 0.36;
     this.stillFor[i] = still ? this.stillFor[i]! + dt : 0;
     return this.stillFor[i]! <= STILL_DEAD;
   }
