@@ -2,7 +2,7 @@
 // (f64 over f32 loads, f32 stores, `Math.min` / `Math.max` / `Math.hypot` as V8 has them), so the bits are the JS's.
 // Nothing lives here between calls: the caller copies a call's inputs into a scratch arena and its results out.
 
-// car-tyre-skin.ts: `FALL`, `SAG_CLEAR`, `SAG_STEP`, `SAG_FLOOR_SLACK`, `SAG_EDGE_FADE`, `SAG_LIFTABLE`, `SAG_LIFT_FROM`.
+// car-tyre-skin.ts: `FALL`, `SAG_CLEAR`, `SAG_STEP`, `SAG_FLOOR_SLACK`, `SAG_EDGE_FADE`, `SAG_LIFTABLE`, `SAG_LIFT_FROM`, `UPPER_FADE`.
 const FALL: f64 = 1.0;
 const SAG_CLEAR: f64 = 0.01;
 const SAG_STEP: f64 = 0.05;
@@ -14,6 +14,7 @@ const ROW_TOP_SLACK: f64 = 1e-6;
 const SAG_EDGE_FADE: f64 = 0.1;
 const SAG_LIFTABLE: f64 = 0.5;
 const SAG_LIFT_FROM: f64 = 0.25;
+const UPPER_FADE: f64 = 0.1;
 
 // The job block (f64, `tyre-sag-kernel.ts` `SAG_JOB`): the wheel's axle and hub at the last hold, the tyre's radius and half width at
 // scale 1, its hub and scale when the rest skin's clearances were read, the wheel's index (its bit in `liftable`), and the shares of the
@@ -256,6 +257,68 @@ fn narrow_row(row: &mut (f64, f64), q0: f64, qd: f64, lo: f64, hi: f64, n: f64) 
     row.1 = js_min(row.1, js_max(j1, j2).ceil() + 1.0);
 }
 
+// car-tyre-skin.ts `cornerRoom`: how much more lift (m) a corner (x, z) at height `y` may take, up to `SAG_CLEAR` over the tyre's surface at its own ahead.
+fn corner_room(t: &Tyre, p: &[f64; 2], y: f64) -> f64 {
+    let dx = p[0] - t.h[0];
+    let dy = y - t.h[1];
+    let dz = p[1] - t.h[2];
+    let ahead = dx * t.fx + dz * t.fz;
+    let along = dx * t.a[0] + dy * t.a[1] + dz * t.a[2];
+    let top = js_max(0.0, t.r * t.r - ahead * ahead).sqrt() - FALL * (js_max(0.0, ahead.abs() - t.r) + js_max(0.0, along.abs() - t.half_w));
+    let height = t.u[0] * dx + t.u[1] * dy + t.u[2] * dz;
+    js_max(0.0, (top + SAG_CLEAR - height) / t.flat)
+}
+
+// car-tyre-skin.ts `cornerCarried`: how far the tyre carries a corner (x, z) at its written height `y`, needOver's fade over the hub.
+fn corner_carried(t: &Tyre, p: &[f64; 2], y: f64) -> f64 {
+    let height = t.u[0] * (p[0] - t.h[0]) + t.u[1] * (y - t.h[1]) + t.u[2] * (p[1] - t.h[2]);
+    js_min(1.0, js_max(0.0, height / (UPPER_FADE * t.r)))
+}
+
+// car-tyre-skin.ts `besideTread`: whether a corner (x, z) at height `y` lies past the sag's read `edge` across the tread.
+fn beside_tread(t: &Tyre, p: &[f64; 2], y: f64, edge: f64) -> bool {
+    ((p[0] - t.h[0]) * t.a[0] + (y - t.h[1]) * t.a[1] + (p[1] - t.h[2]) * t.a[2]).abs() > edge
+}
+
+// car-tyre-skin.ts `spreadSagLift`: a sag point's lift `by` over its corners (weights `l`, shares `s`, room under their own target `k`,
+// carry over the hub `c`, beside the tread `beside`).
+fn spread_sag_lift(by: f64, l: &[f64; 3], s: &[f64; 3], k: &[f64; 3], c: &[f64; 3], beside: &[bool; 3]) -> [f64; 3] {
+    let mut u = [0.0f64; 3];
+    let mut short = 0.0f64;
+    for m in 0..3 {
+        u[m] = js_min(by * s[m], k[m]);
+        short += l[m] * (by * s[m] - u[m]);
+    }
+    let mut pass = 0;
+    while pass < 3 && short > 0.0 {
+        let mut most_at = usize::MAX;
+        let mut most = 0.0f64;
+        for m in 0..3 {
+            let room = k[m] - u[m];
+            if s[m] > 0.0 && l[m] > 0.0 && room > most {
+                most = room;
+                most_at = m;
+            }
+        }
+        if most_at == usize::MAX {
+            break;
+        }
+        let take = js_min(most, short / l[most_at]);
+        u[most_at] += take;
+        short -= l[most_at] * take;
+        pass += 1;
+    }
+    if short <= 0.0 || (0..3).any(|m| l[m] > 0.0 && s[m] < 1.0 && !beside[m]) {
+        return u;
+    }
+    for m in 0..3 {
+        if l[m] > 0.0 {
+            u[m] += short * s[m] * c[m];
+        }
+    }
+    u
+}
+
 // car-tyre-skin.ts `sagTriangle` for the triangle of corners `va`, `vb`, `vc`; true when it asked any corner up (into `bump`).
 unsafe fn sag_triangle(s: &Skin, q: &Read, va: usize, vb: usize, vc: usize) -> bool {
     let (a, b, c) = (va * 3, vb * 3, vc * 3);
@@ -282,6 +345,19 @@ unsafe fn sag_triangle(s: &Skin, q: &Read, va: usize, vb: usize, vc: usize) -> b
     let mut rp = [0.0f64; 3];
     let reach = q.none * t.r;
     let edge = t.half_w * (1.0 + SAG_EDGE_FADE);
+    // car-tyre-skin.ts `sagTriangle`: how far each corner may rise before it is past its own target (`corner_room`), needOver's.
+    let s3 = [if la { 1.0 } else { 0.0 }, if lb { 1.0 } else { 0.0 }, if lc { 1.0 } else { 0.0 }];
+    let k3 = [
+        if la { corner_room(t, &pa, ya) } else { 0.0 },
+        if lb { corner_room(t, &pb, yb) } else { 0.0 },
+        if lc { corner_room(t, &pc, yc) } else { 0.0 },
+    ];
+    let c3 = [
+        if la { corner_carried(t, &pa, load(s.pos, a + 1)) } else { 0.0 },
+        if lb { corner_carried(t, &pb, load(s.pos, b + 1)) } else { 0.0 },
+        if lc { corner_carried(t, &pc, load(s.pos, c + 1)) } else { 0.0 },
+    ];
+    let b3 = [!la && beside_tread(t, &pa, ya, edge), !lb && beside_tread(t, &pb, yb, edge), !lc && beside_tread(t, &pc, yc, edge)];
     // car-tyre-skin.ts `sagTriangle`: along a row the share, the reach along the road and across the tread are linear (`narrow_row`).
     let sx = (pb[0] - pc[0]) / order;
     let sy = (yb - yc) / order;
@@ -348,10 +424,11 @@ unsafe fn sag_triangle(s: &Skin, q: &Read, va: usize, vb: usize, vc: usize) -> b
             if by <= 0.0 {
                 continue;
             }
-            for (lifts, v) in [(la, va), (lb, vb), (lc, vc)] {
+            let u = spread_sag_lift(by, &[l1, l2, l3], &s3, &k3, &c3, &b3);
+            for (v, up) in [(va, u[0]), (vb, u[1]), (vc, u[2])] {
                 let pt = *s.weld.add(v) as usize;
-                if lifts && by > *s.bump.add(pt) as f64 {
-                    *s.bump.add(pt) = by as f32;
+                if up > *s.bump.add(pt) as f64 {
+                    *s.bump.add(pt) = up as f32;
                 }
             }
             asked = true;

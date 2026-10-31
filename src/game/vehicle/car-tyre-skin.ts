@@ -77,6 +77,44 @@ function sagLift(short: number, share: number): number {
   return ramp > 0 ? (short * ramp) / share : 0;
 }
 
+/** A sag point's corners: weights (`_cl`), shares (`_cs`: 1 liftable, else 0), room under their own target (`_ck`), carry over the hub (`_cc`), beside the tread (`_cb`), lift (`_cu`). */
+const _cl = new Float64Array(3);
+const _cs = new Float64Array(3);
+const _ck = new Float64Array(3);
+const _cc = new Float64Array(3);
+const _cb = new Uint8Array(3);
+const _cu = new Float64Array(3);
+
+/**
+ * Splits a sag point's lift `by` over its corners into `_cu`: each to its own target, then to corners with room left. Past the targets only
+ * when every corner holding the point down lies beside the tread (a fender falling off the tyre sideways, not a bumper down its face), on carried corners.
+ */
+function spreadSagLift(by: number): void {
+  let short = 0;
+  for (let m = 0; m < 3; m++) {
+    _cu[m] = Math.min(by * _cs[m]!, _ck[m]!);
+    short += _cl[m]! * (by * _cs[m]! - _cu[m]!);
+  }
+  for (let pass = 0; pass < 3 && short > 0; pass++) {
+    let c = -1;
+    let most = 0;
+    for (let m = 0; m < 3; m++) {
+      const room = _ck[m]! - _cu[m]!;
+      if (_cs[m]! > 0 && _cl[m]! > 0 && room > most) {
+        most = room;
+        c = m;
+      }
+    }
+    if (c < 0) break;
+    const take = Math.min(most, short / _cl[c]!);
+    _cu[c] = _cu[c]! + take;
+    short -= _cl[c]! * take;
+  }
+  if (short <= 0) return;
+  for (let m = 0; m < 3; m++) if (_cl[m]! > 0 && _cs[m]! < 1 && _cb[m] === 0) return;
+  for (let m = 0; m < 3; m++) if (_cl[m]! > 0) _cu[m] = _cu[m]! + short * _cs[m]! * _cc[m]!;
+}
+
 /** The first corner (index in `tris`) of each distinct welded point among `tris`' corners, ascending. */
 function firstCorners(tris: Int32Array, weld: Int32Array, points: number): Int32Array {
   const seen = new Uint8Array(points);
@@ -886,7 +924,8 @@ export class TyreSkin {
   /**
    * Triangle `t` (its first corner in wheel `w`'s `overTris`) read at points of a lattice fixed on it, `SAG_STEP` apart along its longest edge:
    * a point under the tyre's surface plus `SAG_CLEAR` (or its rest clearance, if less: the uncrushed skin never moves), over the tyre's top
-   * (`sagTop`, `SAG_EDGE_FADE`), asks the triangle's liftable corners up by `sagLift`, into `bump`. True when it asked any.
+   * (`sagTop`, `SAG_EDGE_FADE`), asks the triangle's liftable corners up by `sagLift`, each up to its own target and past it only as `spreadSagLift` allows, into `bump`.
+   * True when it asked any.
    */
   private sagTriangle(pos: Float32Array, w: number, t: number): boolean {
     const tris = this.overTris[w]!;
@@ -915,6 +954,19 @@ export class TyreSkin {
     let asked = false;
     const reach = none * _sag.r;
     const edge = _sag.halfW * (1 + SAG_EDGE_FADE);
+    // How far each corner may rise before it is past its own target: the clearance over the tyre's surface at its own ahead (`cornerRoom`), needOver's.
+    _cs[0] = la ? 1 : 0;
+    _cs[1] = lb ? 1 : 0;
+    _cs[2] = lc ? 1 : 0;
+    _ck[0] = la ? this.cornerRoom(pos, a, ya) : 0;
+    _ck[1] = lb ? this.cornerRoom(pos, b, yb) : 0;
+    _ck[2] = lc ? this.cornerRoom(pos, c, yc) : 0;
+    _cc[0] = la ? this.cornerCarried(pos, a) : 0;
+    _cc[1] = lb ? this.cornerCarried(pos, b) : 0;
+    _cc[2] = lc ? this.cornerCarried(pos, c) : 0;
+    _cb[0] = !la && this.besideTread(pos, a, ya, edge) ? 1 : 0;
+    _cb[1] = !lb && this.besideTread(pos, b, yb, edge) ? 1 : 0;
+    _cb[2] = !lc && this.besideTread(pos, c, yc, edge) ? 1 : 0;
     // Along a row (`i`) the points step by (b - c) / order: the share, the reach along the road and across the tread change linearly, so only
     // the run of points inside all three is read (`narrowRow`).
     const sx = (pos[b]! - pos[c]!) / order;
@@ -970,13 +1022,40 @@ export class TyreSkin {
         if (clear >= 0) continue;
         const by = onTop * sagLift(-clear / _sag.flat, share);
         if (by <= 0) continue;
-        if (la && by > bump[weld[va]!]!) bump[weld[va]!] = by;
-        if (lb && by > bump[weld[vb]!]!) bump[weld[vb]!] = by;
-        if (lc && by > bump[weld[vc]!]!) bump[weld[vc]!] = by;
+        _cl[0] = l1;
+        _cl[1] = l2;
+        _cl[2] = l3;
+        spreadSagLift(by);
+        if (_cu[0]! > bump[weld[va]!]!) bump[weld[va]!] = _cu[0]!;
+        if (_cu[1]! > bump[weld[vb]!]!) bump[weld[vb]!] = _cu[1]!;
+        if (_cu[2]! > bump[weld[vc]!]!) bump[weld[vc]!] = _cu[2]!;
         asked = true;
       }
     }
     return asked;
+  }
+
+  /** How far the tyre carries corner `i` of `pos` as written (no lift, so a lift never feeds back): needOver's fade over the hub (`UPPER_FADE`). */
+  private cornerCarried(pos: Float32Array, i: number): number {
+    const height = -_sag.fz * _a[1]! * (pos[i]! - _h[0]!) + (_sag.fz * _a[0]! - _sag.fx * _a[2]!) * (pos[i + 1]! - _h[1]!) + _sag.fx * _a[1]! * (pos[i + 2]! - _h[2]!);
+    return Math.min(1, Math.max(0, height / (UPPER_FADE * _sag.r)));
+  }
+
+  /** Whether corner `i` of `pos` (height `y` with its lift) lies beside the tread, past the sag's read `edge` across it. */
+  private besideTread(pos: Float32Array, i: number, y: number, edge: number): boolean {
+    return Math.abs((pos[i]! - _h[0]!) * _a[0]! + (y - _h[1]!) * _a[1]! + (pos[i + 2]! - _h[2]!) * _a[2]!) > edge;
+  }
+
+  /** How much more lift (m) corner `i` of `pos` (height `y` with its lift) may take: up to `SAG_CLEAR` over the tyre's surface at its own ahead, falling past the tyre's end and edge as needOver's does. */
+  private cornerRoom(pos: Float32Array, i: number, y: number): number {
+    const dx = pos[i]! - _h[0]!;
+    const dy = y - _h[1]!;
+    const dz = pos[i + 2]! - _h[2]!;
+    const ahead = dx * _sag.fx + dz * _sag.fz;
+    const along = dx * _a[0]! + dy * _a[1]! + dz * _a[2]!;
+    const top = Math.sqrt(Math.max(0, _sag.r * _sag.r - ahead * ahead)) - FALL * (Math.max(0, Math.abs(ahead) - _sag.r) + Math.max(0, Math.abs(along) - _sag.halfW));
+    const height = -_sag.fz * _a[1]! * dx + (_sag.fz * _a[0]! - _sag.fx * _a[2]!) * dy + _sag.fx * _a[1]! * dz;
+    return Math.max(0, (top + SAG_CLEAR - height) / _sag.flat);
   }
 
   /**

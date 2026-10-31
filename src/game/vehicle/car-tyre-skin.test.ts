@@ -70,6 +70,80 @@ describe("given a pickup's skin of which one point rests over its front tyre and
   });
 });
 
+/** The tyre's sag clearance (`SAG_CLEAR`): a corner the tyre does not carry rises to it over the tyre's surface at its own place and no further. */
+const SAG_CLEAR_M = 0.01;
+/** Where the deep corner is driven into the tyre's front: this share of the radius ahead of the hub, and this far (m) under it. */
+const DEEP_AHEAD = 0.6;
+const DEEP_UNDER_M = 0.1;
+/** The lone carrier's place (the first row's): this share of the radius ahead of the hub and this far (m) over it, half way up the hold's fade over the hub. */
+const CARRIER_AHEAD = 0.55;
+const CARRIER_OVER_M = 0.02;
+/** Where the points that rested under the tyre's top are driven: under the hub, this share of the radius ahead of it, inside the tread. */
+const LOWER_HALF_AHEAD = 0.3;
+
+type Placer = (hub: THREE.Vector3, r: number) => THREE.Vector3;
+
+/** A pickup whose resting point `pick` chooses is placed by `corner` and every other point by `other`, then held off its tyres: how far under its target that point started, and how far over it it ended. */
+function loneCorner(pick: (over: Float32Array, index: ArrayLike<number>) => number, corner: Placer, other: (vertex: number, rests: boolean, ...at: Parameters<Placer>) => THREE.Vector3): { under: number; over: number } {
+  const car = buildCar("pickup", "truck");
+  const mesh = car["body"] as THREE.Mesh;
+  const skin = new TyreSkin(car.frame, mesh, car.deform.restSkin, true);
+  const lift = CLASSES[carClass(car)].lift;
+  car.group.updateMatrixWorld(true);
+  skin.hold(car.group, car.wheels, 0, lift, true);
+  const over = skin["over"][FRONT_RIGHT_WHEEL]!;
+  const held = pick(over, mesh.geometry.index!.array);
+  expect(held, "fixture: a skin point resting over the tyre").toBeGreaterThanOrEqual(0);
+  const fromCar = new THREE.Matrix4().multiplyMatrices(car.group.matrixWorld.clone().invert(), car.wheels[FRONT_RIGHT_WHEEL]!.matrixWorld);
+  const hub = new THREE.Vector3().setFromMatrixPosition(fromCar);
+  const r = car.frame.rig.tyre.r;
+  const toMesh = new THREE.Matrix4().multiplyMatrices(car.group.matrixWorld.clone().invert(), mesh.matrixWorld).invert();
+  const positions = mesh.geometry.getAttribute("position");
+  const start = corner(hub, r);
+  for (let vertex = 0; vertex < positions.count; vertex++) {
+    const place = vertex === held ? start.clone() : other(vertex, !Number.isNaN(over[vertex]!), hub, r);
+    positions.setXYZ(vertex, ...place.applyMatrix4(toMesh).toArray());
+  }
+  skin.hold(car.group, car.wheels, 0, lift, true);
+  const drawn = new THREE.Vector3().fromBufferAttribute(positions, held).applyMatrix4(toMesh.clone().invert());
+  const target = hub.y + Math.sqrt(r * r - (drawn.z - hub.z) ** 2) + SAG_CLEAR_M;
+  return { under: target - start.y, over: drawn.y - target };
+}
+
+const firstResting = (over: Float32Array): number => Array.from(over).findIndex((rest) => !Number.isNaN(rest));
+const farAndLow = (vertex: number): THREE.Vector3 => new THREE.Vector3(FAR_POINT[0] + FAR_SPREAD_X * (vertex % 5), FAR_POINT[1], FAR_POINT[2] + FAR_SPREAD_Z * (vertex % FAR_SPREAD_COUNT));
+
+describe("given a pickup's skin of which one point is driven deep into its front tyre's front, under the hub, and the rest is far and low", () => {
+  it("when the skin is held off the tyres, then that corner rises no higher than the clearance over the tyre's surface at its own place", () => {
+    const { under, over } = loneCorner(firstResting, (hub, r) => new THREE.Vector3(hub.x, hub.y - DEEP_UNDER_M, hub.z + DEEP_AHEAD * r), farAndLow);
+    expect(under, "fixture: the corner starts deep under its target").toBeGreaterThan(10 * SAG_CLEAR_M);
+    expect(over, `${(over * 1000).toFixed(1)} mm over its target`).toBeLessThanOrEqual(0.001);
+  });
+});
+
+/** The first resting point with a triangle whose other two corners rested off the tyre: a panel the crush can tie to the tyre's lower half. */
+function restingBesideUnheld(over: Float32Array, index: ArrayLike<number>): number {
+  for (let t = 0; t < index.length; t += 3) {
+    for (let k = 0; k < 3; k++) {
+      const [v, a, b] = [index[t + k]!, index[t + ((k + 1) % 3)]!, index[t + ((k + 2) % 3)]!];
+      if (!Number.isNaN(over[v]!) && Number.isNaN(over[a]!) && Number.isNaN(over[b]!)) return v;
+    }
+  }
+  return -1;
+}
+
+describe("given a pickup's skin of which one point is crushed into its front tyre's front just over the hub, the points that rested off the tyre are driven into its lower half, and the rest is high beside it", () => {
+  it("when the skin is held off the tyres, then that corner rises no higher than the clearance over the tyre's surface at its own place: a panel tied to the tyre's lower half is not pried over its top", () => {
+    const { under, over } = loneCorner(
+      restingBesideUnheld,
+      (hub, r) => new THREE.Vector3(hub.x, hub.y + CARRIER_OVER_M, hub.z + CARRIER_AHEAD * r),
+      (vertex, rests, hub, r) => (rests ? farAndLow(vertex).setY(hub.y + 1) : new THREE.Vector3(hub.x, hub.y - DEEP_UNDER_M, hub.z + LOWER_HALF_AHEAD * r + FAR_SPREAD_X * (vertex % 5))),
+    );
+    expect(under, "fixture: the corner starts deep under its target").toBeGreaterThan(10 * SAG_CLEAR_M);
+    expect(over, `${(over * 1000).toFixed(1)} mm over its target`).toBeLessThanOrEqual(0.001);
+  });
+});
+
 /** Owner: interior and engine shapes showed through a crushed hatch's bonnet. A corner hit folds the bonnet down onto the dash and the bay (drawn once the bonnet springs open). */
 const HOOD_COVER_KPH = [55, 65, 70] as const;
 /** The share of the car's width on the wall, from its left: the struck corner folds the bonnet down. */

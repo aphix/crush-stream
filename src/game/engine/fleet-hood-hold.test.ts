@@ -4,11 +4,11 @@ import { FRAME_HZ } from "../kernel/constants.ts";
 import { HudStore } from "../hud/hud-store.ts";
 import { decodeShare } from "../hud/share-url.ts";
 import type { DeformableCar } from "../vehicle/car.ts";
-import { UP_DOWN_M } from "../vehicle/skin-stretch.test-util.ts";
+import { UP_DOWN_M, upDownOf } from "../vehicle/skin-stretch.test-util.ts";
 import { setGround } from "../world/ground.ts";
 import { bootEngine, stubBrowser } from "./engine-headless.test-util.ts";
 
-/** The owner's fleet capture (2026-10-30, five cars, auto slow-mo): as the cars met, a wheel tore loose under a crushed fender and the fender dropped in one frame. */
+/** The owner's fleet capture (2026-10-30, five cars, auto slow-mo): as the cars met, crushed noses and fenders jumped up and down between frames. */
 const FRAME = 1 / FRAME_HZ;
 const LINK = "#scene=fleet&cars=5&smin=10&smax=32&real=0.25&squash=0.32&buckle=0.45&seed=753fbe&deform=shape&loop=0&fx=high&car=sedan&slomo=1";
 /** His capture's clock, (wall s, sim s) at each trace sample: the auto slow-mo ran on his frame times, which the headless frames do not have. */
@@ -20,6 +20,10 @@ const CLOCK = [
 ] as const;
 /** The end (wall s) of the window he flagged (5.52-6.60 s), the hit before it included. */
 const TO_WALL_S = 6.6;
+/** A car skinned on one frame of this many (the LoD's small-on-screen stride). */
+const SPARSE_STRIDE = 3;
+/** The crush the hit leaves the most crushed car (measured 1.0): the fixture's cars met. */
+const CRUSHED = 0.5;
 
 /** His sim time at wall `t`, linear between his samples. */
 function simAt(t: number): number {
@@ -31,12 +35,12 @@ function simAt(t: number): number {
   return CLOCK[CLOCK.length - 1]![1];
 }
 
-/** One car's drawn body over the run: its worst drop on a frame one of its wheels tore loose. */
-type Track = { car: DeformableCar; drawn: ArrayLike<number>; last: Float32Array; gone: number; tearDrop: number };
+/** One car's drawn body over the run: its worst up-and-down, and its worst drop on a frame one of its wheels tore loose. */
+type Track = { car: DeformableCar; drawn: ArrayLike<number>; last: Float32Array; change: Float32Array; worst: { by: number; at: number }; sim: number; gone: number; tearDrop: number };
 
 function trackOf(car: DeformableCar): Track {
   const drawn = car.body.geometry.getAttribute("position").array;
-  return { car, drawn, last: Float32Array.from(drawn), gone: 0, tearDrop: 0 };
+  return { car, drawn, last: Float32Array.from(drawn), change: new Float32Array(drawn.length / 3), worst: { by: 0, at: -1 }, sim: 0, gone: 0, tearDrop: 0 };
 }
 
 function goneOf(car: DeformableCar): number {
@@ -52,38 +56,75 @@ function dropOf(drawn: ArrayLike<number>, last: Float32Array): number {
   return drop;
 }
 
-function follow(t: Track): void {
+function follow(t: Track, sim: number): void {
   const gone = goneOf(t.car);
   if (gone & ~t.gone) t.tearDrop = Math.max(t.tearDrop, dropOf(t.drawn, t.last));
   t.gone = gone;
-  t.last.set(t.drawn);
+  const before = t.worst.by;
+  upDownOf(t.drawn, t.last, t.change, t.worst);
+  if (t.worst.by > before) t.sim = sim;
 }
 
-/** Every car's drawn body from his spawn to `TO_WALL_S`, skinned on every frame: a fresh engine, as a reset rolls a new spawn. */
-async function shoot(): Promise<Track[]> {
+type Shot = { tracks: Track[]; crush: number };
+
+/** Every car's drawn body from his spawn to `TO_WALL_S`, skinned on one frame of `stride`: a fresh engine, as a reset rolls a new spawn. */
+async function shoot(stride: number): Promise<Shot> {
   const engine = await bootEngine({ hud: new HudStore(), pacer: true });
   // The auto slow-mo still decides its phases and its cut-ins; each frame's sim step is his.
   let slope = 1;
   Object.defineProperty(engine["clock"], "timeScale", { get: () => slope / engine["cine"].timeWarp, set: () => {}, configurable: true });
   engine["applyShare"](decodeShare(LINK), false);
-  Object.assign(engine, { followedCar: () => null, skinStride: () => 1 });
+  Object.assign(engine, { followedCar: () => null, skinStride: () => stride });
   const cars = engine["live"]();
   const tracks = cars.map(trackOf);
   while (engine["elapsedWall"] < TO_WALL_S) {
     slope = (simAt(engine["elapsedWall"] + FRAME) - engine["elapsedSim"]) / FRAME;
     engine.advance(FRAME, { frameDt: FRAME });
-    for (const t of tracks) follow(t);
+    for (const t of tracks) follow(t, engine["elapsedSim"]);
   }
+  const crush = Math.max(...cars.map((c) => c.deform.crushAmount));
   engine.dispose();
-  return tracks;
+  return { tracks, crush };
+}
+
+function where(t: Track): string {
+  return `${(t.worst.by * 1000).toFixed(1)} mm up and down: ${t.car.paint.name} (${t.car.style.id}) vertex ${t.worst.at} at sim ${t.sim.toFixed(3)} s`;
+}
+
+function named(shot: Shot, paint: string): Track {
+  const t = shot.tracks.find((k) => k.car.paint.name === paint);
+  if (!t) throw new Error(`fixture: no ${paint} car in the fleet`);
+  return t;
 }
 
 describe("given the owner's five-car fleet at his seed, on his slow-mo clock", () => {
+  const shots = new Map<number, Promise<Shot>>();
+  const shotAt = (stride: number) => shots.get(stride) ?? (shots.set(stride, shoot(stride)), shots.get(stride)!);
+
   beforeAll(() => stubBrowser());
   afterAll(() => setGround(null));
 
+  it(`when every car's skin is drawn on one frame of ${SPARSE_STRIDE} through the hit and his slow-mo, then no drawn body point jumps up and back down (or down and back up)`, async () => {
+    const shot = await shotAt(SPARSE_STRIDE);
+    expect(shot.crush, "fixture: the cars met").toBeGreaterThan(CRUSHED);
+    for (const t of shot.tracks) expect(t.worst.by, where(t)).toBeLessThanOrEqual(UP_DOWN_M);
+  });
+
+  // Oxide's fascia, driven into a tyre's front at bumper height, was lifted over the tyre for a frame.
+  it("when every car's skin is drawn on every frame, then Oxide's bumper driven into a tyre's front is never thrown over it for a frame", async () => {
+    const t = named(await shotAt(1), "Oxide");
+    expect(t.worst.by, where(t)).toBeLessThanOrEqual(UP_DOWN_M);
+  });
+
+  // Bronze's sag lifted a crushed corner past the tyre's surface at its own place for a frame, then let it fall.
+  it("when every car's skin is drawn on every frame, then Bronze's sag lifts no corner past its own target and no point jumps up and down", async () => {
+    const t = named(await shotAt(1), "Bronze");
+    expect(t.worst.by, where(t)).toBeLessThanOrEqual(UP_DOWN_M);
+  });
+
   it("when a wheel tears loose under a crushed fender, then the hold over its seat fades and no drawn point drops on that frame", async () => {
-    const torn = (await shoot()).filter((t) => t.gone !== 0);
+    const shot = await shotAt(1);
+    const torn = shot.tracks.filter((t) => t.gone !== 0);
     expect(torn.length, "fixture: a wheel tore loose").toBeGreaterThan(0);
     for (const t of torn) expect(t.tearDrop, `${t.car.paint.name}: ${(t.tearDrop * 1000).toFixed(1)} mm dropped on the frame its wheel tore`).toBeLessThanOrEqual(UP_DOWN_M);
   });
