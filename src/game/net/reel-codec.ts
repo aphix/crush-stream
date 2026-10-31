@@ -534,9 +534,10 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 185: a fixed face's shove stops the whole spin that sweeps the wreck's deepest drawn vertex into it, roll and pitch with yaw (`stopTurnInto`, `faceExit.offY`, `tipBody`: the plastic impulse at that vertex goes through the body's world inverse inertia), so a vertex above or below the centre also tips the body, and a lying wreck no longer rolls through a wall while a rail pins it; and R sets the righted car on the ground layer under it (`recoverInPlace` with `layOnGround`) instead of at y 0; a clip of 184 or before no longer reads.
  * 186: a tyre's footprint reads a tread ring's crossing of a face's edge on the drawn ring, its centre off the hub by the ring's offset at the tread's width as its points stand, not at its radius scale (a monster's shoulder grazing a ramp's side read 5 mm inside its tread and missed a crossing 2.3 cm deep); a clip of 185 or before no longer reads.
  * 187: a box prism (a course wall's piece, a prop's box) is met on the face of the axis the footprint entered by, else of one a body axis lies along, else the one it is least deep along (`footFace`). A race wall's panel is no longer always met on its wide side, and a long box no longer defaults to its wide side, so a nose-on hit on a wall's free end arms a crash at its barrier speed instead of bouncing; a clip of 186 or before no longer reads.
+ * 188: the cage (a car's contact shape) refits when a cluster map or a cage corner has changed enough to move one of its vertices more than 1 cm, not only when a mass or hub has moved that far (`movedSince`): a wreck whose maps kept turning while its masses stood rested on a cage up to 8 cm off its drawn body; a clip of 187 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 187;
+const REPLAY_VERSION = 188;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;
