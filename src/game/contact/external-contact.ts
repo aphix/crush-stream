@@ -180,8 +180,8 @@ function faceOverlap(car: DeformableCar, box: ContactBox, point: THREE.Vector3):
   return best;
 }
 
-/** What the last `faceDepth` found (reused): the unit normal (plan) the deepest vertex is out along, the face's or an open end's (`atEnd`), and that vertex's plan offset from the car's origin (world axes). */
-export const faceExit = { nx: 0, nz: 0, atEnd: false, offX: 0, offZ: 0 };
+/** What the last `faceDepth` found (reused): the unit normal (plan) the deepest vertex is out along, the face's or an open end's (`atEnd`), and that vertex's offset from the car's origin (world axes). */
+export const faceExit = { nx: 0, nz: 0, atEnd: false, offX: 0, offY: 0, offZ: 0 };
 
 /**
  * How far (m, ≤ 0 clear) the box's leading face has passed the deepest vertex of the car's cage across the face's span (the mesh's
@@ -248,6 +248,7 @@ export function faceDepth(car: DeformableCar, box: ContactBox): number {
   const dy = pos[deepest * 3 + 1]! + lift;
   const dz = pos[deepest * 3 + 2]!;
   faceExit.offX = r00 * dx + r01 * dy + r02 * dz;
+  faceExit.offY = 2 * (q.x * q.y + q.z * q.w) * dx + (1 - 2 * (q.x * q.x + q.z * q.z)) * dy + 2 * (q.y * q.z - q.x * q.w) * dz;
   faceExit.offZ = r20 * dx + r21 * dy + r22 * dz;
   // A body with a point in the slab is as deep as its farthest point, however far past the back face (the pushed-through corner is
   // what the push-out must bring back); one wholly beyond the back face is on the slab's other side, no contact of this face.

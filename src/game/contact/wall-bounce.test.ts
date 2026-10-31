@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as THREE from "three";
 import { launch, makeCar, relaunchDamaged, runWall } from "./crash-scenarios.test-util.ts";
 import { faceDepth, faceExit, makeBox, solidFace, type ContactBox } from "./external-contact.ts";
 import { wallBounce } from "./pair-contact.ts";
@@ -125,11 +126,12 @@ function turningSedanOnFace(): { car: DeformableCar; face: ContactBox } {
   return { car, face: solidFace(makeBox(), END_NX, 0, faceX, 0, faceX, 0, SOLID_HALF_SPAN, SOLID_HALF_THICK) };
 }
 
-/** The speed (m/s) of the drawn body's deepest vertex (the last `faceDepth`'s, `faceExit`) along the unit (nx, nz): the centre's and the turn's. Negative closes on the face. */
+/** The speed (m/s) of the drawn body's deepest vertex (the last `faceDepth`'s, `faceExit`) along the unit (nx, nz): the centre's and the whole spin's. Negative closes on the face. */
 function vertexAlong(car: DeformableCar, nx: number, nz: number): number {
   const centre = wreckCentre(car).clone().applyQuaternion(car.group.quaternion);
-  const turn = car.angular.y * ((faceExit.offZ - centre.z) * nx - (faceExit.offX - centre.x) * nz);
-  return car.velocity.x * nx + car.velocity.z * nz + turn;
+  const arm = new THREE.Vector3(faceExit.offX - centre.x, faceExit.offY - centre.y, faceExit.offZ - centre.z);
+  const point = new THREE.Vector3().crossVectors(car.angular, arm).add(car.velocity);
+  return point.x * nx + point.z * nz;
 }
 
 describe("given a side-hit sedan wreck driving at 15 m/s into the open end of a 2 m thick solid (a monument's arm), its drawn door 4 cm round the end and no mass on the solid", () => {

@@ -3,7 +3,7 @@ import type { DeformableCar } from "../vehicle/car.ts";
 import { REARM_QUIET_S } from "../vehicle/car-core.ts";
 import { SCRATCH_MIN_SLIP } from "../vehicle/paint-scrapes.ts";
 import { armPairWithRows, rewindRows, wreckCentre, wreckInvI } from "../vehicle/car-air.ts";
-import { MU_BODY, REST_SPEED, WALL_CRUSH } from "../vehicle/car-air-body.ts";
+import { invInertia, MU_BODY, REST_SPEED, WALL_CRUSH } from "../vehicle/car-air-body.ts";
 import { leftoverCrumple, satPushCap, hypot2, CRASH } from "../deform/physics-util.ts";
 import { patch, satCars } from "./sat.ts";
 import { bandsMeet, OUTLINE_REACH } from "./cage-outline.ts";
@@ -24,6 +24,9 @@ const _aim = new THREE.Vector3();
 const _tn = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _turnCentre = new THREE.Vector3();
+const _turnLever = new THREE.Vector3();
+const _turnSpin = new THREE.Vector3();
+const _turnQi = new THREE.Quaternion();
 const _slide = new THREE.Vector3();
 const _slideB = new THREE.Vector3();
 const _arm = new THREE.Vector3();
@@ -168,18 +171,42 @@ function stopInto(car: DeformableCar, nx: number, nz: number): void {
  * The drawn body rides the rigid body, so a shove also answers what the body's turn swept in, which `strikeCar` (the centre's closing) never
  * reads: the face takes it at the deepest vertex (`faceExit`), the rigid plastic impulse that leaves that point closing no faster than the centre.
  * A centre leaving the face carries the vertex out with it, so only the closing the sweep still has beyond that is stopped (none where the vertex
- * opens): stopping the sweep alone kicked a wreck wrapping a post on every slice and it exited at either of two spins.
+ * opens): stopping the sweep alone kicked a wreck wrapping a post on every slice and it exited at either of two spins. The turn is the whole spin:
+ * a lying truck's roll swept its top through an arena wall it was pinned on by a K-rail, at 4.5 rad/s, while the yaw alone was stopped.
  */
 function stopTurnInto(car: DeformableCar, nx: number, nz: number): void {
-  const centre = _turnCentre.copy(wreckCentre(car)).applyQuaternion(car.group.quaternion);
+  const q = car.group.quaternion;
+  const centre = _turnCentre.copy(wreckCentre(car)).applyQuaternion(q);
   const rx = faceExit.offX - centre.x;
+  const ry = faceExit.offY - centre.y;
   const rz = faceExit.offZ - centre.z;
-  const lever = rz * nx - rx * nz;
-  const closing = car.angular.y * lever + Math.max(0, car.velocity.x * nx + car.velocity.z * nz);
+  // r × n: what a spin about each world axis sweeps the vertex along the normal.
+  const lever = _turnLever.set(ry * nz, rz * nx - rx * nz, -ry * nx);
+  const closing = car.angular.dot(lever) + Math.max(0, car.velocity.x * nx + car.velocity.z * nz);
   if (closing >= 0) return;
-  const dvn = -closing / (1 + lever * lever * wreckInvI.y);
+  const spin = invInertia(_turnSpin.copy(lever), q, _turnQi.copy(q).invert(), wreckInvI);
+  const dvn = -closing / (1 + lever.dot(spin));
   const pos = car.group.position;
-  car.deform.shiftBody(car.velocity, car.angular, nx * dvn, nz * dvn, dvn * lever * wreckInvI.y, pos.x + centre.x, pos.z + centre.z, nx, nz, Infinity);
+  const cx = pos.x + centre.x;
+  const cy = pos.y + centre.y;
+  const cz = pos.z + centre.z;
+  car.deform.shiftBody(car.velocity, car.angular, nx * dvn, nz * dvn, dvn * spin.y, cx, cz, nx, nz, Infinity);
+  tipBody(car, dvn * spin.x, dvn * spin.z, cx, cy, cz);
+}
+
+/** The rigid body's spin about the world's x and z axes changes by (`dwx`, `dwz`) about its centre (`cx`, `cy`, `cz`), and every dynamic mass rides the change. */
+function tipBody(car: DeformableCar, dwx: number, dwz: number, cx: number, cy: number, cz: number): void {
+  car.angular.x += dwx;
+  car.angular.z += dwz;
+  for (const m of car.deform.masses) {
+    if (!m.dynamic) continue;
+    const rx = m.world.x - cx;
+    const ry = m.world.y - cy;
+    const rz = m.world.z - cz;
+    m.vel.x -= dwz * ry;
+    m.vel.y += dwz * rx - dwx * rz;
+    m.vel.z += dwx * ry;
+  }
 }
 
 /**
