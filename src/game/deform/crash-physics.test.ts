@@ -1245,28 +1245,6 @@ forModes("given a car crashing at 14 m/s whose front bumper hands a share of eac
   });
 });
 
-describe("given a car squeezed from both ends whose right-front wing mass was crushed 30 cm back, so it holds a permanent set toward the cell", () => {
-  it("when it springs 3 cm back out 40 times (shape matching's push, the set's pull back in), then the set still holds its distance to the cell and it stands no higher than it rested", () => {
-    const s = spawn(0, 0, undefined, undefined, "shape");
-    s.d.bidirectional = true;
-    const wing = mass(s.d, "wingFR");
-    const cell = mass(s.d, "cell");
-    wing.world.z -= 0.3;
-    s.d.followGroup(s.group, s.vel, s.omega, 0);
-    expect(wing.crushSet, "the crush took no set").toBeGreaterThan(0.1);
-    let highest = -Infinity;
-    for (let k = 0; k < 40; k++) {
-      wing.world.z += 0.03;
-      s.d.followGroup(s.group, s.vel, s.omega, 0);
-      highest = Math.max(highest, wing.local.y - wing.rest.y);
-    }
-    const held = wing.rest.distanceTo(cell.rest) - wing.crushSet;
-    expect(wing.local.distanceTo(cell.local), "the set let the wing spring back out").toBeLessThanOrEqual(held + 1e-3);
-    // Every push is in plan, so the crush itself lifts nothing: any rise past float noise is the set's.
-    expect(highest, `the wing climbed ${(highest * 1000).toFixed(1)} mm over its rest`).toBeLessThanOrEqual(1e-3);
-  });
-});
-
 describe("given the crash path's boot warm-up (a pre-run that compiles the crush path before the first real crash, see docs/PERF_HITCH.md)", () => {
   it("when two cars crash head-on at 48 km/h, the warm-up hits are run and the head-on is run again, then every warm-up hit crashes both cars and the second head-on is bit-identical to the first", () => {
     const before = runPair(48, 48, "head-on");

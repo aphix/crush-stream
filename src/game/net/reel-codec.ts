@@ -545,10 +545,11 @@ import { makeSnapshot, MAX_NET_CARS, MSG, NET_VERSION, readEjection, readSnapsho
  * 196: a police light bar tears once the contacts of a slice press it into the roof harder than its mounts hold (100 kg), whoever presses it (another car, a prop, the ground on a roll), not when the roof under it has sunk 12 cm; a clip of 195 or before no longer reads.
  * 197: a wreck at rest on two contact rows falls asleep after a second at rest speed, as a loose part on two points does: one rocking on its flank between its rows no longer stays awake; a clip of 196 or before no longer reads.
  * 198: a wreck's own faces never yield to the ground or a wall (a wreck takes no load crush): a wreck landing on its roof or flank no longer records a crush its body never shows and sinks its points into the ground, or has its push off a wall cut short; a clip of 197 or before no longer reads.
- * 199: a squeezed body's permanent set pulls a mass that springs back past it in again in plan, its height kept (`clampMass`), not radially toward the cell: a wing or bumper under the cell no longer climbs toward the cell's height with every spring-back and pull-in. A wreck past its contact hold (nothing pressing it) has the net roll of its shape step's goals taken out as its pitch and yaw already were: a wreck rolling out of a hit no longer turns its mass cloud against its frame each step, with the clamp drawing its bumpers 0.3-0.7 m back every call (a 6.5 cm centroid slip in one slice); a clip of 198 or before no longer reads.
+ * 199: withdrawn (a squeezed body's set kept its height, and a free shape step took the cloud's net roll out): it went live with four rows red; a clip of 198 or before no longer reads.
+ * 200: 199 taken back, the simulation of 198 again; a clip of 199 or before no longer reads.
  * A saved clip also records `NET_VERSION` (its snapshots' layout).
  */
-const REPLAY_VERSION = 199;
+const REPLAY_VERSION = 200;
 /** Bounds a decoder enforces (a clip is ≤ 13 s at ≤ 300 steps/s, ≤ 15 keyframes). */
 const MAX_STEPS = 8192;
 const MAX_KEYS = 64;

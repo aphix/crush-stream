@@ -226,19 +226,10 @@ export abstract class DeformSolve extends DeformFreeze {
         if (kept > Math.abs(set)) m.crushSet = Math.sign(dev) * kept;
         // A bowed-out set holds only out of contact: a face still pressing may push the panel back in.
         else if (len > 1e-6 && (set > 0 ? dev < set : dev > set && this.quietTime() > 0.025)) {
-          // Pulled back in plan, dy kept: pulled back radially, a mass under the cell climbed toward its height with every push out and pull in.
-          const plan = (restLen - set) ** 2 - ry * ry;
-          const hz = hypot2(rx, rz);
-          if (plan > 0 && hz > 1e-6) {
-            const k = Math.sqrt(plan) / hz;
-            dx = c.local.x + rx * k - m.rest.x;
-            dz = c.local.z + rz * k - m.rest.z;
-          } else {
-            const k = (restLen - set) / len;
-            dx = c.local.x + rx * k - m.rest.x;
-            dy = c.local.y + ry * k - m.rest.y;
-            dz = c.local.z + rz * k - m.rest.z;
-          }
+          const k = (restLen - set) / len;
+          dx = c.local.x + rx * k - m.rest.x;
+          dy = c.local.y + ry * k - m.rest.y;
+          dz = c.local.z + rz * k - m.rest.z;
         }
       }
     } else {
@@ -587,9 +578,9 @@ export abstract class DeformSolve extends DeformFreeze {
       }
     }
     // Internal goals exert no net torque. Yaw is always removed (nothing restores it, so overlapping plastic rests would turn
-    // the wreck); once nothing pushes the body pitch and roll go too: left in, the front clusters' nose-up fit (17 deg after a 50 km/h
-    // wall) lifted the wing and bumper 0.12 m above their seat, and a wreck rolling out of a hit kept a 0.1-0.3 rad net roll a slice that
-    // the clamp drew back each call, its bumpers 0.3-0.7 m (derby seed 1's c0: 6.5 cm of centroid in one slice, a zip).
+    // the wreck); once nothing pushes the body pitch goes too: left in, the front clusters' nose-up fit (17 deg after a 50 km/h
+    // wall) lifted the wing and bumper 0.12 m above their seat, and a quiet wreck holds them there. Roll stays: the planted
+    // hubs restore it, and a side shove's spin is real motion that removal turned into a permanent tilt (far side 0.07-0.10 m off).
     this.removeNetSpin(comX / comM, comY / comM, comZ / comM, contacting || this.faceContacts > 0);
     if (!contacting) {
       let comX1 = 0,
@@ -628,8 +619,8 @@ export abstract class DeformSolve extends DeformFreeze {
 
   /**
    * Takes the net turn out of this step's shape-match correction (`startX/Y/Z` to the particles now) about the centroid
-   * `(cx, cy, cz)`: a small-angle `ω = I⁻¹ Σ m r × Δ`, then each particle takes `-ω × r` back. While the body is `pushed` only the turn about up
-   * goes: the push is the external torque on pitch and roll.
+   * `(cx, cy, cz)`: a small-angle `ω = I⁻¹ Σ m r × Δ`, then each particle takes the yaw and pitch part of `-ω × r` (roll is the
+   * planted hubs' to restore and a side shove's to keep). While the body is `pushed` only the turn about up goes: the push is the external torque on pitch.
    */
   private removeNetSpin(cx: number, cy: number, cz: number, pushed: boolean): void {
     let lx = 0,
@@ -661,8 +652,7 @@ export abstract class DeformSolve extends DeformFreeze {
       iyz -= p.mass * ry * rz;
     }
     let wx = 0,
-      wy = 0,
-      wz = 0;
+      wy = 0;
     if (pushed) {
       if (iyy < 1e-8) return;
       wy = ly / iyy;
@@ -675,7 +665,6 @@ export abstract class DeformSolve extends DeformFreeze {
       if (Math.abs(det) < 1e-12) return;
       wx = (c0 * lx + c1 * ly + c2 * lz) / det;
       wy = (c1 * lx + (ixx * izz - ixz * ixz) * ly + (ixy * ixz - ixx * iyz) * lz) / det;
-      wz = (c2 * lx + (ixy * ixz - ixx * iyz) * ly + (ixx * iyy - ixy * ixy) * lz) / det;
     }
     for (let i = 0; i < this.shapeParticles.length; i++) {
       if (this.masses[i]!.hub && !this.deepCrush) continue;
@@ -683,8 +672,8 @@ export abstract class DeformSolve extends DeformFreeze {
       const rx = this.startX[i]! - cx,
         ry = this.startY[i]! - cy,
         rz = this.startZ[i]! - cz;
-      p.x -= wy * rz - wz * ry;
-      p.y += wx * rz - wz * rx;
+      p.x -= wy * rz;
+      p.y += wx * rz;
       p.z -= wx * ry - wy * rx;
     }
   }

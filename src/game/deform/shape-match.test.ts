@@ -24,7 +24,6 @@ import { makeCar, runWall, type CrashResult } from "../contact/crash-scenarios.t
 import { CAGES, MASS_SPECS, SHAPE_CLUSTERS } from "../kernel/rig-spec.ts";
 import { stepWreck } from "./physics-util.test-util.ts";
 import { FINE_HZ, FRAME_HZ } from "../kernel/constants.ts";
-import { CONTACT_HOLD } from "./deform-solve.ts";
 
 const FRAME = 1 / FRAME_HZ;
 
@@ -537,22 +536,6 @@ describe("given a skin fit to a cluster by the per-cell (local) skin fit", () =>
   });
 });
 
-/** The net turn (rad) about the car's length (z) of the masses' move from `before` to `after`, about their own centroids. */
-function turnAboutLength(ms: readonly { mass: number }[], before: readonly THREE.Vector3[], after: readonly THREE.Vector3[]): number {
-  const total = ms.reduce((t, m) => t + m.mass, 0);
-  const cb = before.reduce((c, p, i) => c.addScaledVector(p, ms[i]!.mass), new THREE.Vector3()).divideScalar(total);
-  const ca = after.reduce((c, p, i) => c.addScaledVector(p, ms[i]!.mass), new THREE.Vector3()).divideScalar(total);
-  let torque = 0;
-  let inertia = 0;
-  for (const [i, m] of ms.entries()) {
-    const rx = before[i]!.x - cb.x;
-    const ry = before[i]!.y - cb.y;
-    torque += m.mass * (rx * (after[i]!.y - ca.y - ry) - ry * (after[i]!.x - ca.x - rx));
-    inertia += m.mass * (rx * rx + ry * ry);
-  }
-  return torque / inertia;
-}
-
 describe("given a car's crash deformation (the object that dents a car's body)", () => {
   it("when it is created, then it starts in shape-matching mode", () => {
     const d = new StreamedDeformation(new THREE.BoxGeometry(1.7, 1.3, 4.3, 2, 2, 4));
@@ -719,36 +702,6 @@ describe("given a car's crash deformation (the object that dents a car's body)",
     const lo = Math.min(...t);
     const hi = Math.max(...t);
     expect(hi, `railL travel at 1/4/8 sub-slices ${t.map((v) => v.toFixed(3)).join(" / ")}`).toBeLessThanOrEqual(lo * 1.3);
-  });
-
-  /**
-   * A wreck in its free window (past `CONTACT_HOLD`, inside `CONTACT_WINDOW`) is only reshaped by its own shape match: nothing turns it. The cluster goals' net
-   * roll was kept, and a wreck rolling out of a hit (derby seed 1's c0) had its masses turned against its frame each step, the clamp drawing the bumpers back 0.3-0.7 m.
-   */
-  it("when a front corner crushed by a 16 m/s pulse springs back through its free window, then no structure step turns the mass cloud about the car's length", () => {
-    const FREE_FRAMES = 8;
-    /** The most (rad) one free structure step may turn the cloud about its length: the rotation solve's last step. */
-    const STEP_TURN_LIMIT = 1e-4;
-    const r = crashRig(new THREE.Vector3(0.6, 0.36, 2.06), new THREE.Vector3(0, 0, -1), 16);
-    const fl = node(r.d, "bumperFL");
-    for (let i = 0; i < 24; i++) {
-      stepWreck(r, FRAME, () => {
-        r.d.notifyContact();
-        r.d.feedOverlap(fl.world, new THREE.Vector3(0, 0, -1), 0.1, 16, FRAME);
-      });
-      r.d.stepCrush(FRAME);
-    }
-    while (r.d.quietTime() <= CONTACT_HOLD) stepWreck(r, FRAME);
-    const body = r.d.masses.filter((m) => m.dynamic && !m.hub);
-    let worst = 0;
-    for (let i = 0; i < FREE_FRAMES; i++) {
-      const before = body.map((m) => m.world.clone());
-      r.d.stepStructure(FRAME);
-      worst = Math.max(worst, Math.abs(turnAboutLength(body, before, body.map((m) => m.world))));
-      r.d.followGroup(r.group, r.vel, r.omega, FRAME);
-    }
-    expect(r.d.live(), `quiet ${r.d.quietTime().toFixed(3)} s: the contact window is over`).toBe(true);
-    expect(worst, `a structure step turned the cloud ${worst.toExponential(2)} rad about the length axis`).toBeLessThan(STEP_TURN_LIMIT);
   });
 });
 
