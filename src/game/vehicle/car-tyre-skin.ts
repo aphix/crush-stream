@@ -390,6 +390,8 @@ export class TyreSkin {
   private readonly fade = new Float64Array(4).fill(1);
   /** Whether the skin as last written stands off its rest anywhere (`movedOffRest`): only then may anything under it stand through it. */
   private crushed = false;
+  /** The skin was rewritten outside the writer since the last hold (`rewritten`): the next hold starts from it. */
+  private skinRewritten = false;
   /** The vertices the last `applyLift` moved (`liftedCount` of them), the hold's before (`liftedBefore`), and the scratch `changedSince` lists into. */
   private lifted: Int32Array;
   private liftedCount = 0;
@@ -442,6 +444,11 @@ export class TyreSkin {
   /** The skin as last written, before this hold lifted any of it; null until a hold has read one. */
   get unheld(): Float32Array | null {
     return this.hasWritten ? this.written : null;
+  }
+
+  /** The mesh's positions were rewritten outside the writer (a reset, a net or replay state): the next hold starts from them, not from the skin it kept. */
+  rewritten(): void {
+    this.skinRewritten = true;
   }
 
   /** The kernel the sag pass runs in once it is loaded; null: the JS below, which is its reference. */
@@ -530,7 +537,9 @@ export class TyreSkin {
 
     const attr = this.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
     const pos = attr.array as Float32Array;
-    const fresh = skinWritten || !this.hasWritten;
+    const rewritten = this.skinRewritten && !skinWritten;
+    const fresh = skinWritten || rewritten || !this.hasWritten;
+    this.skinRewritten = false;
     if (fresh) {
       this.written.set(pos);
       this.hasWritten = true;
@@ -540,7 +549,8 @@ export class TyreSkin {
     const partsMoved = this.notePartPoses(group, this.crushed ? under : NO_PARTS);
     // The lift is a function of the skin, the points resting over the tyres, the wheels and the parts: none changed, the drawn skin already carries it.
     if (!fresh && !overFound && !wheelMoved && !partsMoved) return;
-    this.heldAt.set(this.wheelNow);
+    // A skin rewritten under wheels within the slack (a held reset) is held where the drawn lift read them: it draws the same body.
+    if (!rewritten || wheelMoved) this.heldAt.set(this.wheelNow);
     const reset = !fresh && this.held;
     if (reset) pos.set(this.written);
     if (fresh || partsMoved) this.findPartFloor(pos, this.partsShown > 0 ? this.partSamples(group, under) : 0);

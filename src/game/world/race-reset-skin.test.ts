@@ -42,6 +42,9 @@ function skinDrift(before: Float32Array[], car: DeformableCar): number {
   return worst;
 }
 
+/** How far (m) a held reset's drawn body may stand off the damaged car's: none (measured 0.000 mm). Held where the wheels stood, not where its lift read them, it stood 0.576 mm off. */
+const HELD_DRIFT_M = 0.0001;
+
 describe("given the player's car crashed in a race with a mirror torn off and lying on the road", () => {
   afterEach(() => setGround(null));
   it("when the reset is held again and again, then the drawn body is the one the car had before the first hold, on the first frame of each", () => {
@@ -51,7 +54,7 @@ describe("given the player's car crashed in a race with a mirror torn off and ly
     for (let k = 1; k <= 3; k++) {
       w.race.holdReset();
       frame(w, state);
-      expect(skinDrift(skin, car), `hold ${k}: the drawn body drifted ${skinDrift(skin, car).toFixed(3)} m from the damaged car's`).toBeLessThan(0.001);
+      expect(skinDrift(skin, car), `hold ${k}: the drawn body drifted ${(skinDrift(skin, car) * 1000).toFixed(3)} mm from the damaged car's`).toBeLessThan(HELD_DRIFT_M);
     }
   });
 
