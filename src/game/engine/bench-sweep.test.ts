@@ -83,6 +83,34 @@ describe("given a sweep over every setting at a page's first step, on a race", (
     expect(table.count, "the one hang in the sweep").toBe(1);
     expect(table.rows[0]!.causes.includes(CAUSE_NAMES[0]), "it is a setting switch").toBeTruthy();
   });
+
+  it("when a tier's pick settles only after frames are drawn (the Ultra pick's warm-up waits for frames between its steps), then the sweep draws them and moves on: it never waits for frames nobody draws", async () => {
+    const base = sweepRig();
+    const NEEDS = 5;
+    let drawnAtPick = 0;
+    const engine: SweepEngine = {
+      ...base.engine,
+      setFxTier: (tier) => {
+        base.log.push({ what: `fx ${tier}`, frame: display.shown });
+        if (tier !== "ultra") return Promise.resolve();
+        drawnAtPick = display.shown;
+        // Polled on the loop the rig's frames arrive on (`setImmediate`), a bounded number of turns: a sweep that draws no frame while
+        // the pick waits rejects here, the way the real one hangs.
+        return new Promise<void>((resolve, reject) => {
+          let turns = 0;
+          const poll = (): void => {
+            if (display.shown >= drawnAtPick + NEEDS) resolve();
+            else if (++turns > 200) reject(new Error(`no frame drawn while the pick waited (${display.shown - drawnAtPick} of ${NEEDS})`));
+            else setImmediate(poll);
+          };
+          poll();
+        });
+      },
+    };
+    await sweep(engine, base.parts, RACE, TIERS, "short", base.t, base.beat, ui);
+    const after = base.log.find((l) => l.what === "epi.on 1")!;
+    expect(after.frame - drawnAtPick, "frames between the Ultra pick and the next stop").toBeGreaterThanOrEqual(NEEDS + BENCH.sweepMinFrames);
+  });
 });
 
 describe("given the same sweep on a slow display and at a page's later step", () => {
