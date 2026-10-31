@@ -69,7 +69,7 @@ describe("given the post chain on a headless renderer and a print look's strengt
 
   it("when the tier switches, then the WebGL error flags are not read: getError drains the GPU queue, seconds of warm-up at a switch, and Firefox's watchdog killed the bench page in it", () => {
     const read = vi.spyOn(post.glErrors, "read");
-    for (const tier of FX_TIERS) if (tier !== "ultra") post.setTier(tier);
+    for (const tier of FX_TIERS) post.setTier(tier);
     expect(read).not.toHaveBeenCalled();
     read.mockRestore();
   });
