@@ -21,16 +21,19 @@ are in `docs/ARCHITECTURE.md` and enforced by `npm run check:boundaries`.
 - Playwright drives the repo's own browser scripts (`scripts/bench-browser.mjs`, `scripts/bake-env.mjs`,
   `scripts/check-programs.mjs`, `scripts/readme-shots.mjs`, which remakes the README's pictures at the Ultra tier from a
   served build). QA screenshots go under `screenshots/` (git-ignored).
-- `scripts/headless-frame.mjs` draws the real engine in node, no browser: WebGL2 from `@kmamal/gl` (ANGLE; on WSL the
-  script sets `GALLIUM_DRIVER=d3d12` itself so Mesa reaches the GPU) and the game's canvases from `@napi-rs/canvas`. pnpm
-  never runs `@kmamal/gl`'s download of its native binary from GitHub (`allowBuilds` in `pnpm-workspace.yaml`: the deploy
-  installs dev dependencies too), so fetch it once per `node_modules`: `node node_modules/@kmamal/gl/scripts/install.mjs`.
+- `scripts/headless-frame.mjs` draws the real engine in node, no browser: WebGL2 from `@kmamal/gl` (ANGLE; on WSL
+  `scripts/headless-gl.mjs` sets `GALLIUM_DRIVER=d3d12` itself so Mesa reaches the GPU, elsewhere Mesa draws on the CPU) and
+  the game's canvases from `@napi-rs/canvas`. pnpm never runs `@kmamal/gl`'s download of its native binary from GitHub
+  (`allowBuilds` in `pnpm-workspace.yaml`: the deploy installs dev dependencies too), so fetch it once per `node_modules`,
+  every checkout and worktree that runs `test:app` too (its GL rows fail with this command until then):
+  `node node_modules/@kmamal/gl/scripts/install.mjs`. ANGLE also needs an X display, headless or not: with none it makes no
+  context (and logs "Could not open the default X display"); under WSLg set `DISPLAY=:0` where `/tmp/.X11-unix/X0` exists.
 
 ## Checks
 
 | Command | What it does |
 |---|---|
-| `npm run test:app` | Vitest over the `src/game`, `src/lib/multiplayer`, `src/lib/submissions` and `src/lib/deploy` suites and `scripts/**/*.test.mjs`; the per-commit gate. It runs `test:parity` first and stops if it fails. A test process that writes to stderr fails the run |
+| `npm run test:app` | Vitest over the `src/game`, `src/lib/multiplayer`, `src/lib/submissions` and `src/lib/deploy` suites and `scripts/**/*.test.mjs`; the per-commit gate. It runs `test:parity` first and stops if it fails. A test process that writes to stderr fails the run. The GL rows (`scripts/detail-spec-aa.test.mjs`) draw through `@kmamal/gl`: they need its binary in this `node_modules` and an X display (Environment) |
 | `npm run test:parity` | the WASM skin kernel against the JS skin (`deform/skin-kernel.parity.ts`), alone: every other test process skins with the kernel |
 | `npx vitest run --project app <filters> [--maxWorkers=2]` | the same runner on just the files whose path contains a filter (one process per file); `--maxWorkers=` also works after `test:app`, `--shard=i/n` splits a run across machines |
 | `npm run test:ai-long-run` | the long suite, `src/game/**/*.ai-long-run.ts`: AI-driven runs (whole fields watched for stuck cars, false ejections). Not in the per-commit gate; part of `test:all`. Linted, typechecked and boundary-checked like tests |

@@ -292,7 +292,7 @@ describe("given a car material being compiled", () => {
       const widened = fragment.indexOf("material.roughness = min( sqrt( sqrt( pow2( specAaAlpha )");
       const coatWidened = fragment.indexOf("material.clearcoatRoughness = min( sqrt( sqrt( pow2( specAaAlpha )");
       const lit = fragment.indexOf("vec3 geometryPosition = - vViewPosition;");
-      expect(fragment.includes("vec3 specAaDx = dFdx( normal - nonPerturbedNormal );"), `${kind}: the variance reads the perturbation alone (three already widens for the vertex normal's own change)`).toBeTruthy();
+      expect(fragment.includes("vec3 specAaDx = dFdx( normal - nonPerturbedNormal - detailBend );"), `${kind}: the variance reads the perturbation alone (three already widens for the vertex normal's own change; the detail map hands its own per pixel)`).toBeTruthy();
       expect(perturbed >= 0 && perturbed < threeWidens && threeWidens < widened && widened < lit, `${kind}: perturbation ${perturbed}, three's widening ${threeWidens}, the perturbation's ${widened}, lighting ${lit}`).toBeTruthy();
       expect(coatWidened > widened && coatWidened < lit, `${kind}: the clear coat's widening (${coatWidened}) follows the base's, before lighting`).toBeTruthy();
     });

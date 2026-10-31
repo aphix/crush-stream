@@ -3,9 +3,10 @@
  * through headless GL (no engine boot), orthographic frames calibrated to a reference picture in metres, the reference's
  * silhouette and glass masks, and one view's overlay PNG with its fit metrics.
  */
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
+import { loadHeadlessGl, NO_CONTEXT } from "./headless-gl.mjs";
 import * as THREE from "three";
 import { makeCamera, orthoSpec } from "./trace-camera.mjs";
 import { checklist, compare, fillHoles, gapRegions, glassCompare, maskBox, outline, sideCorners, sideHubs } from "./trace-metrics.mjs";
@@ -37,14 +38,10 @@ export const OMIT_PARTS = ["doors", "glass", "bumpers", "mirrors", "hood", "trun
 
 /** The game's car modules from the checkout at `root` (default this one), headless GL and Skia, with the WASM skin kernel loaded. */
 export async function openGame(root = join(import.meta.dirname, "..")) {
-  // WSL: Mesa's d3d12 driver reaches the host GPU through /dev/dxg; without it Mesa draws on the CPU.
-  if (existsSync("/dev/dxg")) process.env.GALLIUM_DRIVER ??= "d3d12";
-  const glDir = dirname(fileURLToPath(import.meta.resolve("@kmamal/gl")));
-  if (!existsSync(join(glDir, "dist/webgl.node"))) throw new Error(`@kmamal/gl has no native binary. Fetch it once: node ${join(glDir, "scripts/install.mjs")}`);
+  const createGL = await loadHeadlessGl();
   const game = (path) => import(pathToFileURL(join(root, "src/game", path)).href);
   await (await game("deform/skin-kernel.test-util.ts")).loadSkinKernelForTest();
-  const [gl, canvas, car, variants, classes, wheels, lamps, parts, partGeometry, depthProbe] = await Promise.all([
-    import("@kmamal/gl"),
+  const [canvas, car, variants, classes, wheels, lamps, parts, partGeometry, depthProbe] = await Promise.all([
     import("@napi-rs/canvas"),
     game("vehicle/car.ts"),
     game("vehicle/car-variants.ts"),
@@ -56,7 +53,7 @@ export async function openGame(root = join(import.meta.dirname, "..")) {
     game("present/depth-probe.ts"),
   ]);
   return {
-    createGL: gl.default,
+    createGL,
     createCanvas: canvas.createCanvas,
     ImageData: canvas.ImageData,
     loadImage: canvas.loadImage,
@@ -218,7 +215,7 @@ export class ViewPort {
     this.W = W;
     this.H = H;
     this.gl = game.createGL(W, H, { createWebGL2Context: true, alpha: true, antialias: false, premultipliedAlpha: false, preserveDrawingBuffer: true });
-    if (this.gl === null) throw new Error("trace: headless GL made no WebGL2 context");
+    if (this.gl === null) throw new Error(`trace: ${NO_CONTEXT}`);
     this.renderer = new THREE.WebGLRenderer({ canvas: { width: W, height: H, style: {}, addEventListener() {}, removeEventListener() {} }, context: this.gl });
     this.renderer.setSize(W, H, false);
     this.renderer.setClearColor(0x000000, 0);
