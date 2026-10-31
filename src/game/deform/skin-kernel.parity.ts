@@ -20,7 +20,7 @@ import { must } from "../kernel/must.test-util.ts";
  * The WASM skin (kernels/skin) is the JS skin's exact bits. The engine's own frame loop (accumulator of fixed steps,
  * `stepWorld`, `settleStep`, then `updateSkin` per car) runs the same seeded scenario twice: with no kernel loaded
  * (every car skins in JS), then with it. Every car's body and bonnet position and normal attribute (and their versions and the skin
- * flag) is hashed each frame, and the final arrays are compared element by element. The tyre hold's sag pass runs in the kernel too.
+ * flag) is hashed each frame, and the final arrays are compared element by element. The tyre hold's plan grid and sag pass run in the kernel too.
  */
 
 type Seen = Record<"skins" | "wrinkled" | "hubs" | "lattice" | "deep" | "held" | "sagRaised", number>;
@@ -169,26 +169,33 @@ function play(s: Scenario): Leg {
   }
 }
 
-/** `play` with every `SkinKernel.run` and tyre sag pass counted, and `mutate` (a deliberately wrong input) applied before each skin run. */
-function playOnKernel(s: Scenario, mutate?: (d: SkinDynamic) => void): { leg: Leg; runs: number; sagPasses: number } {
+/** `play` with every `SkinKernel.run`, tyre sag pass and kernel-built plan grid counted, and `mutate` (a deliberately wrong input) applied before each skin run. */
+function playOnKernel(s: Scenario, mutate?: (d: SkinDynamic) => void): { leg: Leg; runs: number; tyreCalls: { sagPasses: number; planGrids: number } } {
   const real = SkinKernel.prototype.run;
   const realSag = TyreSagArena.prototype.sagPass;
+  const realPlan = TyreSagArena.prototype.planGrid;
   let runs = 0;
-  let sagPasses = 0;
+  const tyreCalls = { sagPasses: 0, planGrids: 0 };
   SkinKernel.prototype.run = function (this: SkinKernel, ...args: Parameters<SkinKernel["run"]>) {
     runs++;
     mutate?.(args[1]);
     return real.apply(this, args);
   };
   TyreSagArena.prototype.sagPass = function (this: TyreSagArena, ...args: Parameters<TyreSagArena["sagPass"]>) {
-    sagPasses++;
+    tyreCalls.sagPasses++;
     return realSag.apply(this, args);
   };
+  TyreSagArena.prototype.planGrid = function (this: TyreSagArena, ...args: Parameters<TyreSagArena["planGrid"]>) {
+    const grid = realPlan.apply(this, args);
+    if (grid) tyreCalls.planGrids++;
+    return grid;
+  };
   try {
-    return { leg: play(s), runs, sagPasses };
+    return { leg: play(s), runs, tyreCalls };
   } finally {
     SkinKernel.prototype.run = real;
     TyreSagArena.prototype.sagPass = realSag;
+    TyreSagArena.prototype.planGrid = realPlan;
   }
 }
 
@@ -205,9 +212,9 @@ describe("given the WASM skin kernel (the compiled skin and normals maths), load
     it(`when it plays ${s.label}, then every frame's skin, bonnet and normals are bit-for-bit the JS skin's`, () => {
       const ref = js.get(s)!;
       for (const key of s.covers) expect(ref.seen[key], `the scenario never skinned with ${key}`).toBeGreaterThan(0);
-      const { leg, runs, sagPasses } = playOnKernel(s);
+      const { leg, runs, tyreCalls } = playOnKernel(s);
       expect(runs, `${runs} kernel runs for ${ref.seen.skins} skinned car-frames: some skins stayed in JS`).toBeGreaterThanOrEqual(ref.seen.skins);
-      expect(sagPasses > 0 && sagPasses >= ref.seen.sagRaised, `${sagPasses} sag passes in the kernel: the hold stayed in JS`).toBeTruthy();
+      expect(tyreCalls.sagPasses >= ref.seen.sagRaised && tyreCalls.planGrids > 0, `${tyreCalls.sagPasses} sag passes and ${tyreCalls.planGrids} plan grids built in the kernel: the hold stayed in JS`).toBeTruthy();
       expect(leg.seen.held, "car-frames with a tyre hold that moved the skin").toBe(ref.seen.held);
       expect(leg.seen.sagRaised, "sag passes that lifted a corner").toBe(ref.seen.sagRaised);
       assertSameNumbers(leg.digests, ref.digests, "per-frame digest");
@@ -227,8 +234,8 @@ describe("given the WASM skin kernel (the compiled skin and normals maths), load
   it("when the sag pass is handed tyres a fifth larger than the car's, then at least one frame's digest differs from the JS hold's, so the hold comparison can fail", () => {
     const s = SCENARIOS[0]!;
     const real = TyreSagArena.prototype.sagPass;
-    TyreSagArena.prototype.sagPass = function (this: TyreSagArena, skin, pos, wheel, again, tyre) {
-      return real.call(this, skin, pos, wheel, again, { r: tyre.r * 1.2, halfW: tyre.halfW });
+    TyreSagArena.prototype.sagPass = function (this: TyreSagArena, skin, pos, wheel, tyre) {
+      return real.call(this, skin, pos, wheel, { r: tyre.r * 1.2, halfW: tyre.halfW });
     };
     try {
       const { leg } = playOnKernel(s);
