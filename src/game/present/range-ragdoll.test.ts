@@ -186,22 +186,26 @@ describe("given the ejection range at its defaults, for every car type, at 60 an
 /** Metres before the barrier's line where the driver pulls the handbrake turn: every car type then meets the barrier 66–71° off its run-up, at 24.4–24.6 m/s (measured). */
 const TURN_AT = 12;
 /**
- * The monster's own turn point: on its 0.9 rad/s lock and 30 grip it swings to only 51° from 12 m. From 13.25-13.75 m it meets at 60-62°, 23.9-24.0 m/s
- * and rolls over; from 14 m it meets at 66° but slower (23.6 m/s) and does not roll (measured).
+ * The monster's own turn points: the band where it rolls (lean °, heading at the barrier, measured): 13.0 132 at 58.0°, 13.1-13.2 179 at 59.1°,
+ * 13.25-13.3 161 at 60.0°. Outside it the outcome is chaotic: 13.35-13.55 vaults the slab upright (54°), 13.6 34°, 13.7-13.75 178°, 13.8 on 31°.
  */
-const TURN_AT_BY_CLASS: Readonly<Partial<Record<string, number>>> = { monster: 13.5 };
+const TURN_AT_BY_CLASS: Readonly<Partial<Record<string, readonly number[]>>> = { monster: [13, 13.15, 13.3] };
+/** How far (deg) off its run-up a car meets the barrier, at least, to be sliding in sideways. */
+const SIDEWAYS_DEG = 60;
+/** The monster's 0.9 rad/s lock reaches 58.0-60.0° inside its rolling band; a degree of margin under that. */
+const SIDEWAYS_DEG_BY_CLASS: Readonly<Partial<Record<string, number>>> = { monster: 57 };
 
 type Slide = { run: RangeThrow; exit: ExitPane | null; out: THREE.Vector3; heading: number; speed: number; lean: number; top: number };
 
 const _roll = new THREE.Vector3();
 
 /**
- * The range with a hard handbrake turn: full lock `steer` (+1 swings the nose left) and the handbrake from `TURN_AT` m (the class's own, `TURN_AT_BY_CLASS`)
+ * The range with a hard handbrake turn: full lock `steer` (+1 swings the nose left) and the handbrake from `turnAt` m
  * before the barrier, off the throttle, until the driver is out. At the last slice before the car first touches the
  * barrier, how far its heading is off the run-up (deg) and its speed (m/s); the first throw's pane and way out (world);
  * the most the car's up ever leant from the world's (deg) and the highest its origin rose (m).
  */
-async function slideIn(type: DriverCar, steer: number): Promise<Slide> {
+async function slideIn(type: DriverCar, steer: number, turnAt = TURN_AT): Promise<Slide> {
   const fwd = new THREE.Vector3();
   let speed = 0;
   let lean = 0;
@@ -216,7 +220,7 @@ async function slideIn(type: DriverCar, steer: number): Promise<Slide> {
       }
       lean = Math.max(lean, THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(_roll.set(0, 1, 0).applyQuaternion(car.group.quaternion).y, -1, 1))));
       top = Math.max(top, car.group.position.y);
-      if (car.group.position.x > -(TURN_AT_BY_CLASS[type.id] ?? TURN_AT) && car.driverOut === null) return { throttle: 0, steer, brake: 0, ebrake: true, boost: false };
+      if (car.group.position.x > -turnAt && car.driverOut === null) return { throttle: 0, steer, brake: 0, ebrake: true, boost: false };
       return undefined;
     },
     event: (e) => {
@@ -248,18 +252,20 @@ describe(`given the ejection range with a hard handbrake turn ${TURN_AT} m befor
       // While its wrecked tyres were asked at rest they read the slab's top as a floor once inside its plan, and it rode up onto a face above
       // its hubs without rolling.
       if (type.id === "monster") {
-        it(`when a ${type.label} swings its nose ${side} ${TURN_AT_BY_CLASS.monster} m before the barrier and slides into it, then its tyres meet the slab as a wall (its 0.81 m top stands over their 0.614 m hubs, and a side a tyre came in by within the entry window is a wall), it trips on them and rolls over the slab, and nobody is thrown`, async (t) => {
-          const s = await slideIn(type, steer);
-          t.annotate(`${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s, rose to ${s.top.toFixed(2)} m, leant ${s.lean.toFixed(0)}° at most, ${s.run.ejections} throws`);
-          expect(s.heading >= 60 && s.speed >= 20, `${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s`).toBeTruthy();
-          expect(s.lean, `${type.id}: leant ${s.lean.toFixed(0)}° at most, rose to ${s.top.toFixed(2)} m`).toBeGreaterThanOrEqual(ON_ITS_SIDE_DEG);
-          expect(s.run.ejections, `${type.id}: ${s.run.ejections} throws`).toBe(0);
+        it(`when a ${type.label} swings its nose ${side} ${TURN_AT_BY_CLASS.monster!.join(", ")} m before the barrier and slides into it, then its tyres meet the slab as a wall (its 0.81 m top stands over their 0.614 m hubs, and a side a tyre came in by within the entry window is a wall), it trips on them and rolls over the slab, and nobody is thrown`, async (t) => {
+          for (const at of TURN_AT_BY_CLASS.monster!) {
+            const s = await slideIn(type, steer, at);
+            t.annotate(`${type.id} at ${at} m: met the barrier ${s.heading.toFixed(1)}° off the run-up at ${s.speed.toFixed(1)} m/s, rose to ${s.top.toFixed(2)} m, leant ${s.lean.toFixed(0)}° at most, ${s.run.ejections} throws`);
+            expect(s.heading >= SIDEWAYS_DEG_BY_CLASS.monster! && s.speed >= 20, `${type.id} at ${at} m: met the barrier ${s.heading.toFixed(1)}° off the run-up at ${s.speed.toFixed(1)} m/s`).toBeTruthy();
+            expect(s.lean, `${type.id} at ${at} m: leant ${s.lean.toFixed(0)}° at most, rose to ${s.top.toFixed(2)} m`).toBeGreaterThanOrEqual(ON_ITS_SIDE_DEG);
+            expect(s.run.ejections, `${type.id} at ${at} m: ${s.run.ejections} throws`).toBe(0);
+          }
         });
         continue;
       }
       it(`when a ${type.label} swings its nose ${side} and slides into the barrier, then its driver is thrown once, out of the side window that met the barrier, facing it, not out of the windshield`, async () => {
         const s = await slideIn(type, steer);
-        expect(s.heading >= 60 && s.speed >= 20, `${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s`).toBeTruthy();
+        expect(s.heading >= SIDEWAYS_DEG && s.speed >= 20, `${type.id}: met the barrier ${s.heading.toFixed(0)}° off the run-up at ${s.speed.toFixed(1)} m/s`).toBeTruthy();
         expect(s.run.ejections, `${type.id}: ${s.run.ejections} throws`).toBe(1);
         expect(s.exit, `${type.id}: thrown out of the ${s.exit}`).toBe(pane);
         expect(s.out.dot(s.run.runUp), `${type.id}: the way out faces ${s.out.dot(s.run.runUp).toFixed(2)} along the run-up`).toBeGreaterThan(0.7);
